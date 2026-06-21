@@ -121,9 +121,9 @@ export class WorldScene extends Phaser.Scene {
   stress!: number;
   perfHud?: Phaser.GameObjects.Text;
   // Warp-Gates (Anti-Pingpong) + Zufalls-Gefahren
-  archipelArmed!: boolean;
-  lighthouseArmed!: boolean;
-  warehouseArmed!: boolean;
+  // #426: ein Set armierter Warp-IDs statt je ein benanntes Boolean pro Region –
+  // datengetrieben über REGION_WARPS, sodass eine neue Region kein neues Flag braucht.
+  warpArmed!: Set<string>;
   hazards!: Hazards;
   // #425: welche Registry-Karte diese Szene lädt. Default „harbor", damit Boot/
   // Erststart unverändert bleibt; eine zweite Tiled-Region kommt über die Init-Daten
@@ -159,9 +159,9 @@ export class WorldScene extends Phaser.Scene {
     this.slotUsed = new Array(36).fill(false);
     this.dynamic = { barrelsSig: "", flagsSig: "", svcSig: "", depSig: "" };
     this.hazards = { nextPirate: 0, pirate: null, nextKraken: 0, kraken: null, nextStorm: 0, storm: null, stormFlash: null };
-    this.archipelArmed = false;   // #92: Archipel-Warp erst nach Tasten-Loslassen scharf (kein Pingpong)
-    this.lighthouseArmed = false; // #111: Leuchtturm-Aufgang ebenso erst nach Tasten-Loslassen scharf
-    this.warehouseArmed = false;  // #124: Lager-Anleger ebenso erst nach Tasten-Loslassen scharf
+    // #426: Anti-Pingpong-Gate aller Region-Warps – leer = alle disarmt; updateWarps
+    // armiert jeden Warp, sobald man ihn verlassen und die Lauftaste losgelassen hat.
+    this.warpArmed = new Set();
 
     // Performance-Budget (#82): Off-screen-Culling + Messung.
     // cullables = statische Deko (Blumen, Gras, Büsche, Steine, Bäume …), die

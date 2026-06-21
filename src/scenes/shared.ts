@@ -6,6 +6,9 @@ import { KQContent } from "../content";
 import { type Spawn, type EntityObject } from "../content/entities";
 import { type Hitbox } from "../world";
 import { ATLAS_CHARS, CELL_W, CELL_H, GLYPH_W, GLYPH_H, glyphMatrix, sanitize } from "../pixelfont";
+import { SFX } from "../sfx";
+import { keys, setWorldScene, setInteriorOpen, type WorldSceneRef } from "../runtime";
+import { warpAt, type Warp } from "../warps";
 
 const T = 16;
 
@@ -49,6 +52,41 @@ export abstract class IslandScene extends Phaser.Scene {
   pSprite!: Phaser.GameObjects.Image;
   ePrev!: boolean;
   returnArmed!: boolean;
+
+  /** Insel→Welt-Rück-Warp: zurück nach Port Kubernia. In allen drei Region-Szenen
+   *  byte-gleich (#426) – hier zentral als Vorarbeit fürs Szenen-Zusammenlegen (#427).
+   *  Die WorldScene wurde beim Hinweg nur schlafen gelegt (ihr create() läuft beim
+   *  Aufwachen NICHT erneut), darum sie nur wecken + als aktive Szene zurückzeigen. */
+  exitToWorld() {
+    SFX.door();
+    setWorldScene(this.scene.get("World") as unknown as WorldSceneRef);
+    setInteriorOpen(false);
+    this.scene.wake("World");
+    this.scene.stop();
+  }
+
+  /** Gemeinsames Anti-Pingpong-Gate des Rück-Warps (#426, byte-gleich in allen drei
+   *  Region-Szenen – Vorarbeit fürs Szenen-Zusammenlegen #427): erst „scharf", wenn die
+   *  (vom Hinweg evtl. noch gehaltene) Lauftaste losgelassen wurde und man nicht schon auf
+   *  der Rück-Kachel steht – sonst pingpongt man mit gehaltener Taste sofort zurück, weil
+   *  die Ankunft direkt über dem Rück-Warp liegt. Warpt beim Betreten der Rück-Kachel
+   *  zurück; Notausgang per E/Enter, falls man am Rand feststeckt. Gibt true zurück, wenn
+   *  die Szene verlassen wurde – der Aufrufer bricht dann seinen update-Frame ab.
+   *
+   *  `emergencyExtra` weitet den Notausgang über die Rück-Kachel hinaus (Archipel erlaubt
+   *  E auf dem ganzen Steg, nicht nur am Anker); Default = nur auf der Rück-Kachel. */
+  updateReturn(warp: Warp, blocked: boolean, emergencyExtra = false): boolean {
+    const pl = this.pl;
+    const onRet = warpAt(pl.x, pl.y, warp);
+    const moveKeyDown = !!(keys["w"] || keys["s"] || keys["a"] || keys["d"] ||
+      keys["ArrowUp"] || keys["ArrowDown"] || keys["ArrowLeft"] || keys["ArrowRight"]);
+    if (!moveKeyDown && !onRet) this.returnArmed = true;
+    if (!blocked && this.returnArmed && onRet) { this.exitToWorld(); return true; }
+    const e = !blocked && (!!keys["e"] || !!keys["Enter"]);
+    if (e && !this.ePrev && (onRet || emergencyExtra)) { this.exitToWorld(); return true; }
+    this.ePrev = e;
+    return false;
+  }
 }
 
 /* SFX (Mini-Synthesizer) liegt jetzt in sfx.ts und wird oben importiert. */

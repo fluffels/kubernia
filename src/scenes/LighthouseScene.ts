@@ -1,11 +1,10 @@
 import Phaser from "phaser";
 import { UI } from "../ui";
-import { SFX } from "../sfx";
 import { resolveMove, circleHitbox, npcHitboxes, type Hitbox } from "../world";
 import { npcSpawnsForMap, objectsForMap } from "../content/entities";
-import { WATER as A_WATER, warpAt } from "../archipel";
+import { WATER as A_WATER } from "../archipel";
 import { PATH as L_PATH, buildLighthouse, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL, LIGHTHOUSE_QUEST_TRIGGER, LIGHTHOUSE_TOWER, LIGHTHOUSE_NPC } from "../lighthouse";
-import { keys, setWorldScene, setInteriorOpen, type WorldSceneRef } from "../runtime";
+import { keys, setWorldScene, setInteriorOpen } from "../runtime";
 import { T, FOAM, WANG, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText, IslandScene, type SceneNpc } from "./shared";
 
 /* ===== LighthouseScene (#111) – Monitoring-Leuchtturm-Klippe =====
@@ -237,14 +236,6 @@ export class LighthouseScene extends IslandScene {
     floatPixelText(this, x, y, str, color);
   }
 
-  exitToWorld() {
-    SFX.door();
-    setWorldScene(this.scene.get("World") as unknown as WorldSceneRef);
-    setInteriorOpen(false);
-    this.scene.wake("World");
-    this.scene.stop();
-  }
-
   update(_time: number, delta: number) {
     const dt = Math.min(0.05, delta / 1000);
     const pl = this.pl;
@@ -279,16 +270,8 @@ export class LighthouseScene extends IslandScene {
 
     UI.updatePrompt();
 
-    // Abstieg betreten? -> zurück nach Port Kubernia (gleiches Anti-Pingpong-Gate
-    // wie auf der Insel: erst scharf nach Loslassen + nicht schon auf der Kachel).
-    const onRet = warpAt(pl.x, pl.y, LIGHTHOUSE_TO_WORLD);
-    const moveKeyDown = !!(keys["w"] || keys["s"] || keys["a"] || keys["d"] ||
-      keys["ArrowUp"] || keys["ArrowDown"] || keys["ArrowLeft"] || keys["ArrowRight"]);
-    if (!moveKeyDown && !onRet) this.returnArmed = true;
-    if (!blocked && this.returnArmed && onRet) { this.exitToWorld(); return; }
-    // Notausgang per E/Enter, falls man am Klippenrand feststeht.
-    const e = !blocked && (!!keys["e"] || !!keys["Enter"]);
-    if (e && !this.ePrev && onRet) { this.exitToWorld(); return; }
-    this.ePrev = e;
+    // Abstieg betreten? -> zurück nach Port Kubernia (gemeinsames Anti-Pingpong-Gate
+    // mit Notausgang per E/Enter, #426).
+    if (this.updateReturn(LIGHTHOUSE_TO_WORLD, blocked)) return;
   }
 }

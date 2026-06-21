@@ -93,6 +93,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/archipel.ts`](src/archipel.ts) | pure Domäne | GitOps-Archipel-Insel: Geometrie + Warp. |
 | [`src/lighthouse.ts`](src/lighthouse.ts) | pure Domäne | Monitoring-Leuchtturm-Klippe: Geometrie + Warp (#111). |
 | [`src/warehouse.ts`](src/warehouse.ts) | pure Domäne | Lagerhallen-Viertel/Hafenkai: Geometrie + Warp (#124). |
+| [`src/warps.ts`](src/warps.ts) | pure Domäne | Region-Übergänge als Daten-Liste (`REGION_WARPS`) + reiner Anti-Pingpong-Kern `armWarps`/`triggeredWarp` (#426). |
 | [`src/decor.ts`](src/decor.ts) | pure Domäne | Deterministische Deko-Platzierung. |
 | [`src/clock.ts`](src/clock.ts) | pure Domäne | Zeit-/Datums-Ableitung für die HUD-Uhr. |
 | [`src/pixelfont.ts`](src/pixelfont.ts) | pure Domäne | Glyphen-Daten der In-Welt-Bitmap-Font (#188). |

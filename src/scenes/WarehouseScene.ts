@@ -1,11 +1,10 @@
 import Phaser from "phaser";
 import { UI } from "../ui";
-import { SFX } from "../sfx";
 import { resolveMove, circleHitbox, rectHitbox, npcHitboxes, type Hitbox } from "../world";
 import { npcSpawnsForMap, objectsForMap } from "../content/entities";
-import { WATER as A_WATER, warpAt } from "../archipel";
+import { WATER as A_WATER } from "../archipel";
 import { DOCK as WH_DOCK, buildWarehouse, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL, WAREHOUSE_QUEST_TRIGGER } from "../warehouse";
-import { keys, setWorldScene, setInteriorOpen, type WorldSceneRef } from "../runtime";
+import { keys, setWorldScene, setInteriorOpen } from "../runtime";
 import { T, FOAM, WANG, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText, IslandScene, type SceneNpc } from "./shared";
 
 /* ===== WarehouseScene (#124) – Lagerhallen-Viertel (Hafenkai) =====
@@ -188,14 +187,6 @@ export class WarehouseScene extends IslandScene {
     floatPixelText(this, x, y, str, color);
   }
 
-  exitToWorld() {
-    SFX.door();
-    setWorldScene(this.scene.get("World") as unknown as WorldSceneRef);
-    setInteriorOpen(false);
-    this.scene.wake("World");
-    this.scene.stop();
-  }
-
   update(_time: number, delta: number) {
     const dt = Math.min(0.05, delta / 1000);
     const pl = this.pl;
@@ -228,13 +219,8 @@ export class WarehouseScene extends IslandScene {
 
     UI.updatePrompt();
 
-    const onRet = warpAt(pl.x, pl.y, WAREHOUSE_TO_WORLD);
-    const moveKeyDown = !!(keys["w"] || keys["s"] || keys["a"] || keys["d"] ||
-      keys["ArrowUp"] || keys["ArrowDown"] || keys["ArrowLeft"] || keys["ArrowRight"]);
-    if (!moveKeyDown && !onRet) this.returnArmed = true;
-    if (!blocked && this.returnArmed && onRet) { this.exitToWorld(); return; }
-    const e = !blocked && (!!keys["e"] || !!keys["Enter"]);
-    if (e && !this.ePrev && onRet) { this.exitToWorld(); return; }
-    this.ePrev = e;
+    // Rück-Anleger betreten? -> zurück nach Port Kubernia (gemeinsames Anti-Pingpong-Gate
+    // mit Notausgang per E/Enter, #426).
+    if (this.updateReturn(WAREHOUSE_TO_WORLD, blocked)) return;
   }
 }

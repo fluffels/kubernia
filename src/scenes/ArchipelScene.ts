@@ -1,10 +1,9 @@
 import Phaser from "phaser";
 import { UI } from "../ui";
-import { SFX } from "../sfx";
 import { resolveMove, circleHitbox, npcHitboxes, type Hitbox } from "../world";
 import { npcSpawnsForMap, objectsForMap } from "../content/entities";
-import { WATER as A_WATER, SAND as A_SAND, PATH as A_PATH, DOCK as A_DOCK, buildArchipel, warpAt, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL, ARCHIPEL_NPC, ARCHIPEL_QUEST_TRIGGER } from "../archipel";
-import { keys, setWorldScene, setInteriorOpen, type WorldSceneRef } from "../runtime";
+import { WATER as A_WATER, SAND as A_SAND, PATH as A_PATH, DOCK as A_DOCK, buildArchipel, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL, ARCHIPEL_NPC, ARCHIPEL_QUEST_TRIGGER } from "../archipel";
+import { keys, setWorldScene, setInteriorOpen } from "../runtime";
 import { T, DEVICE, FOAM, WANG, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText, IslandScene, type SceneNpc } from "./shared";
 
 /* ===== ArchipelScene (#92) – die erste eigene Nachbar-Insel (GitOps-Archipel) =====
@@ -240,16 +239,6 @@ export class ArchipelScene extends IslandScene {
     floatPixelText(this, x, y, str, color);
   }
 
-  exitToWorld() {
-    SFX.door();
-    // Aktive WorldScene zurück auf die Hauptkarte zeigen lassen (sie wurde nur
-    // schlafen gelegt, ihr create() läuft beim Aufwachen nicht erneut).
-    setWorldScene(this.scene.get("World") as unknown as WorldSceneRef);
-    setInteriorOpen(false);
-    this.scene.wake("World");
-    this.scene.stop();
-  }
-
   update(_time: number, delta: number) {
     const dt = Math.min(0.05, delta / 1000);
     const pl = this.pl;
@@ -286,19 +275,10 @@ export class ArchipelScene extends IslandScene {
     // sichtbaren Reden-Hinweis.
     UI.updatePrompt();
 
-    // Rück-Anleger betreten? -> zurück nach Port Kubernia. Wie beim Hinweg gilt:
-    // erst „scharf", wenn die Lauftaste seit der Ankunft losgelassen wurde und man
-    // nicht schon auf dem Anker steht – sonst pingpongt man mit gehaltener Taste
-    // sofort zurück, weil die Ankunft direkt über dem Rück-Anleger liegt.
-    const onRet = warpAt(pl.x, pl.y, ARCHIPEL_TO_WORLD);
-    const moveKeyDown = !!(keys["w"] || keys["s"] || keys["a"] || keys["d"] ||
-      keys["ArrowUp"] || keys["ArrowDown"] || keys["ArrowLeft"] || keys["ArrowRight"]);
-    if (!moveKeyDown && !onRet) this.returnArmed = true;
-    if (!blocked && this.returnArmed && onRet) { this.exitToWorld(); return; }
-    // Notausgang per E/Enter, falls man am Steg feststeht.
-    const e = !blocked && (!!keys["e"] || !!keys["Enter"]);
+    // Rück-Anleger betreten? -> zurück nach Port Kubernia (gemeinsames Anti-Pingpong-
+    // Gate, #426). Der Notausgang per E greift hier auf dem GANZEN Steg (falls man dort
+    // feststeht), nicht nur auf der Anker-Kachel – darum onDock als emergencyExtra.
     const onDock = this.ground[Math.floor(pl.y / T) * this.W + Math.floor(pl.x / T)] === A_DOCK;
-    if (e && !this.ePrev && onDock) { this.exitToWorld(); return; }
-    this.ePrev = e;
+    if (this.updateReturn(ARCHIPEL_TO_WORLD, blocked, onDock)) return;
   }
 }
