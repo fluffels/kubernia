@@ -450,17 +450,16 @@
       },
       {
         "type": "teach",
-        "unlockAbbrev": "kubectl-netpol",
         "brief": "Mauern zählen",
         "cmd": {
           "id": "t-get-netpol",
-          "intro": "🆕 Neue Ressource: <code>kubectl get networkpolicies</code> (kurz <code>netpol</code>) – zeigt alle Hafenmauern.",
+          "intro": "🆕 Neue Ressource: <code>kubectl get networkpolicies</code> – zeigt alle Hafenmauern. Schreib die Langform aus; die Kurzform <code>netpol</code> verdienst du dir, wenn du <code>networkpolicies</code> oft genug benutzt hast.",
           "text": "Schau nach, welche NetworkPolicies schon stehen – noch ist der Hafen schutzlos!",
           "accept": [
             "^kubectl\\s+get\\s+(networkpolicies|networkpolicy|netpol|netpols)$"
           ],
           "solution": "kubectl get networkpolicies",
-          "hint": "Kurzform: kubectl get netpol"
+          "hint": "kubectl get networkpolicies (die Kurzform netpol verdienst du dir durch Nutzung)."
         }
       },
       {
@@ -496,7 +495,7 @@
             "accept": [
               "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+netpol\\.yaml$"
             ],
-            "solution": "kubectl apply -f netpol.yaml",
+            "solution": "kubectl apply --filename netpol.yaml",
             "hint": "Gleicher apply wie bei Adas Karten, Datei netpol.yaml."
           },
           {
@@ -507,16 +506,16 @@
             ],
             "check": {"some":"networkPolicies","where":{"name":"hafenmauer"}},
             "solution": "kubectl get networkpolicies",
-            "hint": "Kurzform 'netpol' geht auch."
+            "hint": "kubectl get networkpolicies (die Kurzform netpol verdienst du dir durch Nutzung)."
           },
           {
             "id": "t-juno-np-4",
-            "text": "Schau genau hin: <code>kubectl describe networkpolicy hafenmauer</code> – die Zeile <b>Allowing ingress traffic</b> verrät, wer durchdarf.",
+            "text": "Schau genau hin: <code>kubectl describe networkpolicies hafenmauer</code> – die Zeile <b>Allowing ingress traffic</b> verrät, wer durchdarf.",
             "accept": [
               "^kubectl\\s+describe\\s+(networkpolicy|networkpolicies|netpol|netpols)\\s+hafenmauer$"
             ],
-            "solution": "kubectl describe networkpolicy hafenmauer",
-            "hint": "kubectl describe networkpolicy <name>"
+            "solution": "kubectl describe networkpolicies hafenmauer",
+            "hint": "kubectl describe networkpolicies <name> (die Kurzformen netpol/networkpolicy verdienst du dir durch Nutzung)"
           }
         ]
       },

@@ -26,8 +26,8 @@
     "accept": [
       "^kubectl\\s+get\\s+(pods|pod|po)\\s+(-n|--namespace)[=\\s]?kube-system$"
     ],
-    "solution": "kubectl get pods -n kube-system",
-    "explain": "-n/--namespace wählt den Namespace; ohne ihn siehst du nur den aktuellen (default)."
+    "solution": "kubectl get pods --namespace kube-system",
+    "explain": "--namespace (Kurzform -n, durch Nutzung verdient) wählt den Namespace; ohne ihn siehst du nur den aktuellen (default)."
   },
   {
     "id": "c-ch3-1",

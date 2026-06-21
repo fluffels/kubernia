@@ -6,7 +6,7 @@
     "accept": [
       "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+app\\.yaml$"
     ],
-    "solution": "kubectl apply -f app.yaml",
+    "solution": "kubectl apply --filename app.yaml",
     "explain": "apply gleicht den Cluster an die Datei an – deklarativ und idempotent (zweimal apply schadet nicht)."
   },
   {

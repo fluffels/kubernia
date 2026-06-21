@@ -70,12 +70,12 @@
         "cmd": {
           "id": "t-sts-headless",
           "intro": "🆕 Ein StatefulSet braucht einen <b>headless Service</b> (<code>clusterIP: None</code>): keine gemeinsame virtuelle IP, sondern ein <b>stabiler DNS-Name pro Pod</b>. So bleibt jede Kiste einzeln adressierbar.",
-          "text": "Wende zuerst den headless Service an: <code>kubectl apply -f headless-service.yaml</code>.",
+          "text": "Wende zuerst den headless Service an: <code>kubectl apply --filename headless-service.yaml</code>.",
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+headless-service\\.yaml$"
           ],
-          "solution": "kubectl apply -f headless-service.yaml",
-          "hint": "kubectl apply -f <datei>"
+          "solution": "kubectl apply --filename headless-service.yaml",
+          "hint": "kubectl apply --filename <datei>"
         }
       },
       {
@@ -83,14 +83,14 @@
         "brief": "StatefulSet ausrollen",
         "cmd": {
           "id": "t-sts-apply",
-          "intro": "🆕 Neuer Workload-Typ: das <b>StatefulSet</b>. Wie ein Deployment wendest du es mit dem vertrauten <code>kubectl apply -f</code> an – aber jeder Pod bekommt feste Identität und ein eigenes Volume.",
-          "text": "Rolle das StatefulSet aus: <code>kubectl apply -f statefulset.yaml</code> – und schau zum Kai!",
+          "intro": "🆕 Neuer Workload-Typ: das <b>StatefulSet</b>. Wie ein Deployment wendest du es mit dem vertrauten <code>kubectl apply --filename</code> an – aber jeder Pod bekommt feste Identität und ein eigenes Volume.",
+          "text": "Rolle das StatefulSet aus: <code>kubectl apply --filename statefulset.yaml</code> – und schau zum Kai!",
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+statefulset\\.yaml$"
           ],
           "check": {"some":"statefulSets","where":{"name":"speicher-datenbank"}},
-          "solution": "kubectl apply -f statefulset.yaml",
-          "hint": "kubectl apply -f <datei>"
+          "solution": "kubectl apply --filename statefulset.yaml",
+          "hint": "kubectl apply --filename <datei>"
         }
       },
       {
@@ -237,13 +237,13 @@
         "cmd": {
           "id": "t-sc-apply",
           "intro": "🆕 Die <b>StorageClass</b> beschreibt, welche Sorte Speicher der Cluster auf Anforderung beschafft (Provisioner, Geschwindigkeit, reclaimPolicy). Sie ist die Vorlage – noch kein Speicher.",
-          "text": "Stell das Regal-System bereit: <code>kubectl apply -f storageclass.yaml</code>.",
+          "text": "Stell das Regal-System bereit: <code>kubectl apply --filename storageclass.yaml</code>.",
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+storageclass\\.yaml$"
           ],
           "check": {"some":"storageClasses","where":{"name":"kai-ssd"}},
-          "solution": "kubectl apply -f storageclass.yaml",
-          "hint": "kubectl apply -f <datei>"
+          "solution": "kubectl apply --filename storageclass.yaml",
+          "hint": "kubectl apply --filename <datei>"
         }
       },
       {
@@ -252,13 +252,13 @@
         "cmd": {
           "id": "t-pvc-apply",
           "intro": "🆕 Das <b>PVC</b> ist die Anforderung. Wendest du es an, sucht (bzw. provisioniert) die StorageClass ein passendes <b>PV</b> und <b>bindet</b> beide: Status <code>Pending</code> → <code>Bound</code>. Gebunden heißt: dein Anspruch hat echten Speicher bekommen.",
-          "text": "Fordere den Speicher an: <code>kubectl apply -f pvc.yaml</code> – das PVC <code>lager-daten</code> wird <b>Bound</b>.",
+          "text": "Fordere den Speicher an: <code>kubectl apply --filename pvc.yaml</code> – das PVC <code>lager-daten</code> wird <b>Bound</b>.",
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+pvc\\.yaml$"
           ],
           "check": {"some":"pvcs","where":{"name":"lager-daten","status":"Bound"}},
-          "solution": "kubectl apply -f pvc.yaml",
-          "hint": "kubectl apply -f <datei>"
+          "solution": "kubectl apply --filename pvc.yaml",
+          "hint": "kubectl apply --filename <datei>"
         }
       },
       {

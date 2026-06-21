@@ -59,7 +59,6 @@
       },
       {
         "type": "teach",
-        "unlockAbbrev": "kubectl-nodes",
         "brief": "Die Stege zählen",
         "cmd": {
           "id": "t-nodes",
@@ -81,7 +80,6 @@
       },
       {
         "type": "teach",
-        "unlockAbbrev": "kubectl-pods",
         "brief": "Die Fracht finden",
         "scenario": {
           "deployments": [
@@ -186,17 +184,16 @@
       },
       {
         "type": "teach",
-        "unlockAbbrev": "kubectl-namespace",
         "brief": "Hinter die Kulissen",
         "cmd": {
           "id": "t-ns",
-          "intro": "🆕 Neue Flag: <code>-n &lt;namespace&gt;</code> – in einen anderen Namespace schauen.",
+          "intro": "🆕 Neue Flag: <code>--namespace &lt;namespace&gt;</code> – in einen anderen Namespace schauen. Schreib die Langform aus; die Kurzform <code>-n</code> verdienst du dir, wenn du <code>--namespace</code> oft genug benutzt hast.",
           "text": "Zeig die Pods im Namespace <code>kube-system</code> – das Maschinenherz von Kubernetes.",
           "accept": [
             "^kubectl\\s+get\\s+(pods|pod|po)\\s+(-n|--namespace)[=\\s]?kube-system$"
           ],
-          "solution": "kubectl get pods -n kube-system",
-          "hint": "kubectl get pods -n kube-system"
+          "solution": "kubectl get pods --namespace kube-system",
+          "hint": "kubectl get pods --namespace kube-system (statt --namespace geht später auch die Kurzform -n)"
         }
       },
       {
@@ -424,18 +421,17 @@
       },
       {
         "type": "teach",
-        "unlockAbbrev": "kubectl-services",
         "brief": "Service-Liste",
         "cmd": {
           "id": "t-getsvc",
-          "intro": "🆕 Neuer Befehl: <code>kubectl get services</code> – alle festen Adressen.",
+          "intro": "🆕 Neuer Befehl: <code>kubectl get services</code> – alle festen Adressen. (Die Kurzform <code>svc</code> verdienst du dir, wenn du <code>services</code> oft genug ausgeschrieben hast.)",
           "text": "Zeig die Services an – deine <code>kasse</code> hat jetzt eine feste CLUSTER-IP.",
           "accept": [
             "^kubectl\\s+get\\s+(services|service|svc)$"
           ],
           "check": {"some":"services","where":{"name":"kasse"}},
           "solution": "kubectl get services",
-          "hint": "Kurzform svc geht auch."
+          "hint": "Schreib es aus: kubectl get services (die Kurzform svc verdienst du dir durch Nutzung)."
         }
       },
       {
@@ -529,7 +525,6 @@
       },
       {
         "type": "teach",
-        "unlockAbbrev": "kubectl-secrets",
         "brief": "Truhen zählen",
         "cmd": {
           "id": "t-getsecrets",

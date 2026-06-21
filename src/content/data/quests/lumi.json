@@ -154,14 +154,14 @@
         "brief": "Service ins Monitoring nehmen",
         "cmd": {
           "id": "t-sm-apply",
-          "intro": "🆕 Der ServiceMonitor ist ein ganz normales Manifest – du wendest ihn mit dem vertrauten <code>kubectl apply -f</code> an. Ab jetzt weiß Prometheus, dass es den <b>lager</b>-Service scrapen soll.",
+          "intro": "🆕 Der ServiceMonitor ist ein ganz normales Manifest – du wendest ihn mit dem vertrauten <code>kubectl apply --filename</code> an. Ab jetzt weiß Prometheus, dass es den <b>lager</b>-Service scrapen soll.",
           "text": "Nimm den Service ins Monitoring: wende <code>servicemonitor.yaml</code> an.",
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+servicemonitor\\.yaml$"
           ],
           "check": {"some":"serviceMonitors","where":{"name":"lager-monitor"}},
-          "solution": "kubectl apply -f servicemonitor.yaml",
-          "hint": "kubectl apply -f <datei> – der vertraute Befehl aus dem Kartenhaus."
+          "solution": "kubectl apply --filename servicemonitor.yaml",
+          "hint": "kubectl apply --filename <datei> – der vertraute Befehl aus dem Kartenhaus."
         }
       },
       {
@@ -281,14 +281,14 @@
         "brief": "Datasource anbinden",
         "cmd": {
           "id": "t-ds-apply",
-          "intro": "🆕 Neuer Befehl: <code>kubectl apply -f grafanadatasource.yaml</code> – wie alle Manifeste, nur dass hier eine CRD des Grafana-Operators entsteht. Ab jetzt hat Grafana eine Datenquelle.",
+          "intro": "🆕 Neuer Befehl: <code>kubectl apply --filename grafanadatasource.yaml</code> – wie alle Manifeste, nur dass hier eine CRD des Grafana-Operators entsteht. Ab jetzt hat Grafana eine Datenquelle.",
           "text": "Bind die Datenquelle an: wende <code>grafanadatasource.yaml</code> an.",
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+grafanadatasource\\.yaml$"
           ],
           "check": {"some":"grafanaDatasources","where":{"name":"prometheus-quelle"}},
-          "solution": "kubectl apply -f grafanadatasource.yaml",
-          "hint": "kubectl apply -f <datei> – der vertraute Befehl."
+          "solution": "kubectl apply --filename grafanadatasource.yaml",
+          "hint": "kubectl apply --filename <datei> – der vertraute Befehl."
         }
       },
       {
@@ -380,14 +380,14 @@
         "brief": "Dashboard anlegen",
         "cmd": {
           "id": "t-gd-apply",
-          "intro": "🆕 Neuer Befehl: <code>kubectl apply -f grafanadashboard.yaml</code> – legt das Dashboard deklarativ an. Grafana liest das JSON aus dem Manifest und zeigt es sofort in seiner Oberfläche.",
+          "intro": "🆕 Neuer Befehl: <code>kubectl apply --filename grafanadashboard.yaml</code> – legt das Dashboard deklarativ an. Grafana liest das JSON aus dem Manifest und zeigt es sofort in seiner Oberfläche.",
           "text": "Leg das Dashboard an: wende <code>grafanadashboard.yaml</code> an.",
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+grafanadashboard\\.yaml$"
           ],
           "check": {"some":"grafanaDashboards","where":{"name":"hafen-uebersicht"}},
-          "solution": "kubectl apply -f grafanadashboard.yaml",
-          "hint": "kubectl apply -f <datei> – wie immer."
+          "solution": "kubectl apply --filename grafanadashboard.yaml",
+          "hint": "kubectl apply --filename <datei> – wie immer."
         }
       },
       {
@@ -418,7 +418,7 @@
             "reply": "Genau! Ein <code>down</code>-Target heißt: Prometheus hat beim Scrapen keine Antwort bekommen. Der Pod läuft vielleicht nicht, horcht am falschen Port oder hat einen Fehler. <code>kubectl get pods</code> + <code>kubectl describe pod</code> sind dein Einstieg. 🔦"
           },
           {
-            "t": "Grafana hat die Verbindung zur Datasource verloren. Nächster Schritt: <code>kubectl apply -f grafanadatasource.yaml</code> erneut ausführen.",
+            "t": "Grafana hat die Verbindung zur Datasource verloren. Nächster Schritt: <code>kubectl apply --filename grafanadatasource.yaml</code> erneut ausführen.",
             "ok": false,
             "reply": "Nicht ganz. Wenn die Datasource fehlen würde, wären <i>alle</i> Panels leer oder fehlerhaft – nicht nur ein Target in der Tabelle. Ein einzelnes <code>down</code>-Target zeigt ein Problem beim <i>Dienst</i> selbst, nicht bei Grafana."
           },
@@ -696,14 +696,14 @@
         "brief": "Alert-Regel aktivieren",
         "cmd": {
           "id": "t-pr-apply",
-          "intro": "🆕 Eine <code>PrometheusRule</code> ist ein normales Manifest – du wendest sie mit <code>kubectl apply -f</code> an wie jede andere Ressource. Ab jetzt kennt Prometheus die Regel und prüft sie gegen seine Metriken.",
+          "intro": "🆕 Eine <code>PrometheusRule</code> ist ein normales Manifest – du wendest sie mit <code>kubectl apply --filename</code> an wie jede andere Ressource. Ab jetzt kennt Prometheus die Regel und prüft sie gegen seine Metriken.",
           "text": "Aktiviere die Regel: wende <code>prometheusrule.yaml</code> an.",
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+prometheusrule\\.yaml$"
           ],
           "check": {"some":"prometheusRules","where":{"name":"hafen-alarme"}},
-          "solution": "kubectl apply -f prometheusrule.yaml",
-          "hint": "kubectl apply -f <datei> – der vertraute Befehl."
+          "solution": "kubectl apply --filename prometheusrule.yaml",
+          "hint": "kubectl apply --filename <datei> – der vertraute Befehl."
         }
       },
       {

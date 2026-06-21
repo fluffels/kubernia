@@ -448,3 +448,70 @@ describe("#379: Docker-Flags -a/-d/-t sind nutzungs-verdient (kein unlockAbbrev-
     assert.deepEqual(nichtVerdienbar, [], "Nutzungs-verdiente Flags, deren Langform NICHT im Content tippbar ist:\n" + nichtVerdienbar.join("\n"));
   });
 });
+
+/* #380: Das Kubernetes-Kapitel führt die kubectl-Kürzel „Langform-zuerst" ein –
+ * symmetrisch zu Docker (#379). Die acht kubectl-Bausteine (Flags -n/-f sowie die
+ * Ressourcen-Aliasse po/no/svc/secret/ing/netpol) werden NICHT mehr per
+ * unlockAbbrev-Schritt freigeschaltet, sondern durch wiederholtes Tippen der
+ * Langform VERDIENT. Diese Wächter halten das fest: kein Schritt schaltet sie frei,
+ * jede Langform bleibt verdienbar, und – die stärkste Garantie – KEINE Musterlösung
+ * im ganzen Spiel zeigt eine noch gesperrte kubectl-Kurzform (sonst widerspräche der
+ * Auftrag „tippe das" dem Gating „das ist noch gesperrt, schreib die Langform"). */
+describe("#380: kubectl-Kürzel sind nutzungs-verdient (kein unlockAbbrev, Langform-zuerst)", () => {
+  const VERDIENT_PER_NUTZUNG = [
+    "kubectl-namespace", "kubectl-filename", "kubectl-pods", "kubectl-nodes",
+    "kubectl-services", "kubectl-secrets", "kubectl-ingress", "kubectl-netpol",
+  ];
+
+  function stepUnlockIds(): Set<string> {
+    const ids = new Set<string>();
+    for (const quest of KQContent.QUESTS) for (const step of quest.steps) if (step.unlockAbbrev) ids.add(step.unlockAbbrev);
+    return ids;
+  }
+
+  test("keiner dieser Bausteine wird per Quest-Schritt freigeschaltet", () => {
+    const unlocked = stepUnlockIds();
+    const fälschlich = VERDIENT_PER_NUTZUNG.filter(id => unlocked.has(id));
+    assert.deepEqual(fälschlich, [], "Diese kubectl-Bausteine sollen per Nutzung verdient werden, haben aber einen unlockAbbrev-Schritt:\n" + fälschlich.join("\n"));
+  });
+
+  test("jeder Baustein bleibt verdienbar: seine Langform steht in einer accept-Regex", () => {
+    const idToLong = new Map(ABBREVS.map(a => [a.id, a.long] as const));
+    const nichtVerdienbar = VERDIENT_PER_NUTZUNG.filter(id => {
+      const long = idToLong.get(id);
+      return !long || !appearsAnywhere(long);
+    });
+    assert.deepEqual(nichtVerdienbar, [], "Verdiente Bausteine, deren Langform NICHT im Content tippbar ist:\n" + nichtVerdienbar.join("\n"));
+  });
+
+  // Spielt jede Musterlösung gegen das Gating, in dem NUR die acht #380-Kürzel noch
+  // gesperrt sind (alles andere gilt als freigeschaltet, damit git -m / helm -f #381
+  // hier nicht stören). Trifft eine Lösung das Gating, zeigt sie eine gesperrte
+  // kubectl-Kurzform statt der Langform → Fehler (genau das ist die Regression, die
+  // #380 verhindert).
+  test("KEINE Musterlösung (Quests/Drills/Karten) zeigt eine noch gesperrte kubectl-Kurzform", () => {
+    const isUnlocked = (id: string) => !VERDIENT_PER_NUTZUNG.includes(id);
+    const sim = new KQSim({});
+    const norm = (s: string) => s.trim().replace(/\s+/g, " ");
+    const items: { label: string; solution: string }[] = [];
+    for (const c of KQContent.CMD_CARDS) items.push({ label: "Karte " + c.id, solution: c.solution });
+    for (const [id, make] of Object.entries(KQContent.DRILLS)) items.push({ label: "Drill " + id, solution: make(sim).solution });
+    for (const quest of KQContent.QUESTS) for (const step of quest.steps) {
+      if (step.type === "teach") items.push({ label: `${quest.id}/${step.cmd.id}`, solution: step.cmd.solution });
+      if (step.type === "terminal") for (const t of step.tasks) items.push({ label: `${quest.id}/${t.id}`, solution: t.solution });
+    }
+    const fehler: string[] = [];
+    for (const it of items) {
+      const hit = lockedAbbrevInInput(norm(it.solution), isUnlocked);
+      if (hit) fehler.push(`${it.label}: „${it.solution}" nutzt gesperrte Kurzform „${hit.used}" (${hit.pair.id}) – schreib die Langform „${hit.pair.long}"`);
+    }
+    assert.deepEqual(fehler, [], "Musterlösungen mit gesperrter kubectl-Kurzform:\n" + fehler.join("\n"));
+  });
+
+  test("kubectl logs -f bleibt erlaubt – -f ist hier --follow, nicht die gesperrte --filename-Kurzform", () => {
+    const isUnlocked = (id: string) => !VERDIENT_PER_NUTZUNG.includes(id); // --filename absichtlich gesperrt
+    // apply -f wäre gesperrt (echte filename-Kurzform), logs -f nicht (das ist --follow).
+    expect(lockedAbbrevInInput("kubectl apply -f deployment.yaml", isUnlocked)?.pair.id).toBe("kubectl-filename");
+    expect(lockedAbbrevInInput("kubectl logs -f signalgeber-pod-xyz", isUnlocked)).toBeUndefined();
+  });
+});

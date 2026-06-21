@@ -74,22 +74,20 @@
       },
       {
         "type": "teach",
-        "unlockAbbrev": "kubectl-filename",
         "brief": "Karte anwenden",
         "cmd": {
           "id": "t-apply",
-          "intro": "🆕 Neuer Befehl: <code>kubectl apply -f</code> – „Stelle her, was in der Datei steht.“",
+          "intro": "🆕 Neuer Befehl: <code>kubectl apply --filename</code> – „Stelle her, was in der Datei steht.“ Schreib die Langform <code>--filename</code> aus; die Kurzform <code>-f</code> verdienst du dir, wenn du sie oft genug benutzt hast.",
           "text": "Wende <code>deployment.yaml</code> auf den Cluster an – und schau zum Dock!",
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+deployment\\.yaml$"
           ],
-          "solution": "kubectl apply -f deployment.yaml",
-          "hint": "kubectl apply -f <datei>"
+          "solution": "kubectl apply --filename deployment.yaml",
+          "hint": "kubectl apply --filename <datei> (statt --filename geht später auch die Kurzform -f)"
         }
       },
       {
         "type": "terminal",
-        "unlockAbbrev": "kubectl-ingress",
         "brief": "Adas Doppeltrick",
         "tasks": [
           {
@@ -98,7 +96,7 @@
             "accept": [
               "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+service\\.yaml$"
             ],
-            "solution": "kubectl apply -f service.yaml",
+            "solution": "kubectl apply --filename service.yaml",
             "hint": "Gleicher Befehl, andere Datei."
           },
           {
@@ -107,7 +105,7 @@
             "accept": [
               "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+deployment\\.yaml$"
             ],
-            "solution": "kubectl apply -f deployment.yaml",
+            "solution": "kubectl apply --filename deployment.yaml",
             "hint": "Wirklich nochmal exakt derselbe Befehl."
           },
           {
@@ -116,7 +114,7 @@
             "accept": [
               "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+ingress\\.yaml$"
             ],
-            "solution": "kubectl apply -f ingress.yaml",
+            "solution": "kubectl apply --filename ingress.yaml",
             "hint": "Gleicher apply, Datei ingress.yaml."
           },
           {
@@ -127,7 +125,7 @@
             ],
             "check": {"some":"ingresses","where":{"name":"hafentor"}},
             "solution": "kubectl get ingress",
-            "hint": "Kurzform 'ing' geht auch."
+            "hint": "kubectl get ingress (die Kurzform ing verdienst du dir durch Nutzung)."
           }
         ]
       },
@@ -984,7 +982,7 @@
             "accept": [
               "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+ingress-tls\\.yaml$"
             ],
-            "solution": "kubectl apply -f ingress-tls.yaml",
+            "solution": "kubectl apply --filename ingress-tls.yaml",
             "hint": "Gleicher apply wie immer, Datei ingress-tls.yaml."
           },
           {

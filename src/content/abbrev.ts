@@ -42,7 +42,11 @@ export const ABBREVS: readonly AbbrevPair[] = [
   { id: "docker-run-detach",  context: "docker run",                    kind: "flag", long: "--detach",    short: ["-d"] },
   { id: "docker-build-tag",   context: "docker build",                  kind: "flag", long: "--tag",       short: ["-t"] },
   { id: "kubectl-namespace",  context: "kubectl … (Namespace)",         kind: "flag", long: "--namespace", short: ["-n"] },
-  { id: "kubectl-filename",   context: "kubectl apply/create/delete",   kind: "flag", long: "--filename",  short: ["-f"] },
+  // `-f` ist bei apply/create/delete die Kurzform von `--filename` – aber bei
+  // `kubectl logs -f` ist es `--follow` (ein völlig anderes Flag). `excludeVerbs`
+  // setzt das Gating aus, sobald `logs` vor dem `-f` steht, damit `kubectl logs -f`
+  // nie fälschlich als gesperrte filename-Kurzform behandelt wird (#380).
+  { id: "kubectl-filename",   context: "kubectl apply/create/delete",   kind: "flag", long: "--filename",  short: ["-f"], excludeVerbs: ["logs"] },
   { id: "helm-values",        context: "helm install/upgrade",          kind: "flag", long: "--values",    short: ["-f"] },
   { id: "git-commit-message", context: "git commit",                    kind: "flag", long: "--message",   short: ["-m"] },
 

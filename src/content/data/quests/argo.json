@@ -146,13 +146,13 @@
         "brief": "Auftrag ausrollen",
         "cmd": {
           "id": "t-argo-apply",
-          "intro": "🆕 Die <b>Application</b> selbst ist ein ganz normales Manifest – du wendest sie mit dem längst bekannten <code>kubectl apply -f</code> an. Damit kennt Argo ab jetzt deinen Auftrag.",
+          "intro": "🆕 Die <b>Application</b> selbst ist ein ganz normales Manifest – du wendest sie mit dem längst bekannten <code>kubectl apply --filename</code> an. Damit kennt Argo ab jetzt deinen Auftrag.",
           "text": "Lege die Application im Cluster an: wende <code>application.yaml</code> an.",
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+application\\.yaml$"
           ],
-          "solution": "kubectl apply -f application.yaml",
-          "hint": "Der vertraute Befehl aus dem Kartenhaus: kubectl apply -f <datei>."
+          "solution": "kubectl apply --filename application.yaml",
+          "hint": "Der vertraute Befehl aus dem Kartenhaus: kubectl apply --filename <datei>."
         }
       },
       {
@@ -326,14 +326,14 @@
         "brief": "Self-Heal aktivieren",
         "cmd": {
           "id": "t-sh-apply",
-          "intro": "🆕 <code>kubectl apply -f</code> ist idempotent: ändert sich die Konfiguration, gibt Kubernetes <b>configured</b> zurück (statt <i>unchanged</i>). So schaltest du Self-Heal für eine bestehende Application ein, ohne sie neu anlegen zu müssen.",
+          "intro": "🆕 <code>kubectl apply --filename</code> ist idempotent: ändert sich die Konfiguration, gibt Kubernetes <b>configured</b> zurück (statt <i>unchanged</i>). So schaltest du Self-Heal für eine bestehende Application ein, ohne sie neu anlegen zu müssen.",
           "text": "Aktiviere Self-Heal: wende <code>application-selfheal.yaml</code> an.",
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+application-selfheal\\.yaml$"
           ],
           "check": {"some":"argoApps","where":{"name":"hafen-lager","selfHeal":true}},
-          "solution": "kubectl apply -f application-selfheal.yaml",
-          "hint": "kubectl apply -f <datei> – der vertraute Befehl."
+          "solution": "kubectl apply --filename application-selfheal.yaml",
+          "hint": "kubectl apply --filename <datei> – der vertraute Befehl."
         }
       },
       {
@@ -509,8 +509,8 @@
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+app-of-apps\\.yaml$"
           ],
           "check": {"all":[{"some":"argoApps","where":{"name":"hafen-flotte","childApps":{"truthy":true}}},{"some":"argoApps","where":{"name":"flotte-lager"}},{"some":"argoApps","where":{"name":"flotte-funk"}},{"some":"argoApps","where":{"name":"flotte-kran"}}]},
-          "solution": "kubectl apply -f app-of-apps.yaml",
-          "hint": "kubectl apply -f app-of-apps.yaml – der vertraute Befehl, diesmal für die Wurzel."
+          "solution": "kubectl apply --filename app-of-apps.yaml",
+          "hint": "kubectl apply --filename app-of-apps.yaml – der vertraute Befehl, diesmal für die Wurzel."
         }
       },
       {

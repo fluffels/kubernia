@@ -133,12 +133,14 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   },
   "k-get-nodes": () => ({ text: "Zeig die Nodes des Clusters.", accept: [/^kubectl\s+get\s+(nodes|node|no)$/], solution: "kubectl get nodes", hint: "kubectl get &lt;ressourcentyp&gt;", why: "get listet Ressourcen eines Typs – Muster: kubectl get &lt;ressourcentyp&gt;, hier die Nodes (Server) des Clusters." }),
   "k-get-pods": () => ({ text: "Zeig alle Pods.", accept: [/^kubectl\s+get\s+(pods|pod|po)$/], solution: "kubectl get pods", hint: "kubectl get &lt;ressourcentyp&gt;", why: "Gleiches Muster wie bei nodes: kubectl get pods listet alle Pods." }),
-  "k-get-svc": () => ({ text: "Zeig alle Services.", accept: [/^kubectl\s+get\s+(services|service|svc)$/], solution: "kubectl get services", hint: "Kurzform svc geht auch.", why: "kubectl get services (Kurzform svc) listet die Services – die festen Adressen vor den Pods." }),
+  "k-get-svc": () => ({ text: "Zeig alle Services.", accept: [/^kubectl\s+get\s+(services|service|svc)$/], solution: "kubectl get services", hint: "Schreib es aus: kubectl get services (die Kurzform svc verdienst du dir durch Nutzung).", why: "kubectl get services listet die Services – die festen Adressen vor den Pods. Die Kurzform svc verdienst du dir, wenn du die Langform oft genug tippst." }),
   "k-describe": sim => {
     const d = ensureDeployment(sim);
     const pod = d.pods[0].name;
     return { text: "Beschreibe den Pod <code>" + pod + "</code> im Detail.", accept: [new RegExp("^kubectl\\s+describe\\s+pods?\\s+" + pod.replace(/[-]/g, "\\-") + "$")], solution: "kubectl describe pod " + pod, hint: "kubectl describe pod &lt;name&gt; – den Namen kannst du abtippen.", why: "describe zeigt die Detail-Akte eines Objekts inkl. Events – Muster: kubectl describe pod &lt;name&gt;." };
   },
+  // Übt die --namespace-Langform, damit man sich die Kurzform -n durch Nutzung verdient (#380).
+  "k-get-pods-ns": () => ({ text: "Schau ins Maschinenherz: zeig die Pods im Namespace <code>kube-system</code>.", accept: [/^kubectl\s+get\s+(pods|pod|po)\s+(-n|--namespace)[=\s]?kube-system$/], solution: "kubectl get pods --namespace kube-system", hint: "kubectl get pods --namespace kube-system (die Kurzform -n verdienst du dir durch Nutzung).", why: "Ohne Namespace siehst du nur den aktuellen (default); --namespace &lt;name&gt; wählt einen anderen, z.B. kube-system, das Maschinenherz von Kubernetes. Die Kurzform -n verdienst du dir, wenn du die Langform oft genug tippst." }),
   "k-create": sim => {
     let name = pick(NAMES);
     while (sim.deployments.some(d => d.name === name)) name = pick(NAMES) + rnd(2, 9);
@@ -166,7 +168,7 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     sim.files["uebung.yaml"] = "# Übungs-Manifest\nkind: Deployment\n…";
     sim.applyEffects["uebung.yaml"] = { deployment: { name: "uebung", image: "nginx", replicas: 1 } };
     if (sim.deployments.some(d => d.name === "uebung")) sim.exec("kubectl delete deployment uebung");
-    return { text: "Wende die Datei <code>uebung.yaml</code> deklarativ an.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+uebung\.yaml$/], solution: "kubectl apply -f uebung.yaml", hint: "kubectl apply -f &lt;datei&gt;", why: "apply gleicht den Cluster an die Datei an – deklarativ und idempotent (zweimal apply schadet nicht). Muster: kubectl apply -f &lt;datei&gt;." };
+    return { text: "Wende die Datei <code>uebung.yaml</code> deklarativ an.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+uebung\.yaml$/], solution: "kubectl apply --filename uebung.yaml", hint: "kubectl apply --filename &lt;datei&gt;", why: "apply gleicht den Cluster an die Datei an – deklarativ und idempotent (zweimal apply schadet nicht). Muster: kubectl apply --filename &lt;datei&gt;." };
   },
   "helm-install": sim => {
     if (!sim.helmRepos.includes("bitnami")) sim.exec("helm repo add bitnami https://charts.bitnami.com/bitnami");
@@ -229,7 +231,7 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     while (sim.secrets.some(s => s.name === name)) name = "tor-tls-" + rnd(100, 9999);
     return { text: "Lege ein TLS-Secret <code>" + name + "</code> aus <code>tls.crt</code> und <code>tls.key</code> an.", accept: [new RegExp("^kubectl\\s+create\\s+secret\\s+tls\\s+" + name + "\\s+(?:--cert[=\\s]\\S+\\s+--key[=\\s]\\S+|--key[=\\s]\\S+\\s+--cert[=\\s]\\S+)$")], solution: "kubectl create secret tls " + name + " --cert=tls.crt --key=tls.key", hint: "Muster: kubectl create secret tls &lt;name&gt; --cert=tls.crt --key=tls.key", why: "Ein TLS-Secret bündelt Zertifikat und Schlüssel; --cert zeigt auf die .crt-, --key auf die .key-Datei – Muster: kubectl create secret tls &lt;name&gt; --cert=tls.crt --key=tls.key." };
   },
-  "k-get-ingress": () => ({ text: "Zeig alle Hafentore (Ingresses) an.", accept: [/^kubectl\s+get\s+(ingress|ingresses|ing)$/], solution: "kubectl get ingress", hint: "Kurzform 'ing' geht auch.", why: "kubectl get ingress (Kurzform ing) zeigt die Hafentore – die Routen von außen ins Cluster." }),
+  "k-get-ingress": () => ({ text: "Zeig alle Hafentore (Ingresses) an.", accept: [/^kubectl\s+get\s+(ingress|ingresses|ing)$/], solution: "kubectl get ingress", hint: "Schreib es aus: kubectl get ingress (die Kurzform ing verdienst du dir durch Nutzung).", why: "kubectl get ingress zeigt die Hafentore – die Routen von außen ins Cluster. Die Kurzform ing verdienst du dir, wenn du die Langform oft genug tippst." }),
   "k-logs": sim => {
     const d = ensureDeployment(sim);
     const pod = d.pods[0].name;
@@ -311,7 +313,7 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   },
   "k-get-netpol": sim => {
     ensureNetworkPolicy(sim);
-    return { text: "Zeig alle Hafenmauern (NetworkPolicies) im Cluster.", accept: [/^kubectl\s+get\s+(networkpolicies|networkpolicy|netpol|netpols)$/], solution: "kubectl get networkpolicies", hint: "Kurzform 'netpol' geht auch.", why: "Gleiches get-Muster: kubectl get networkpolicies (Kurzform netpol) listet die Hafenmauern – wer mit wem reden darf." };
+    return { text: "Zeig alle Hafenmauern (NetworkPolicies) im Cluster.", accept: [/^kubectl\s+get\s+(networkpolicies|networkpolicy|netpol|netpols)$/], solution: "kubectl get networkpolicies", hint: "Schreib es aus: kubectl get networkpolicies (die Kurzform netpol verdienst du dir durch Nutzung).", why: "Gleiches get-Muster: kubectl get networkpolicies listet die Hafenmauern – wer mit wem reden darf. Die Kurzform netpol verdienst du dir, wenn du die Langform oft genug tippst." };
   },
   "k-apply-netpol": sim => {
     let name = pick(NETPOL_NAMES);
@@ -319,15 +321,15 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     const file = "drill-netpol.yaml";
     sim.files[file] = NETPOL_YAML;
     sim.applyEffects[file] = { networkPolicy: { name, podSelector: pick(NETPOL_APPS), allowFrom: "hafentor" } };
-    return { text: "Wende die Hafenmauer-Karte <code>" + file + "</code> deklarativ an.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+drill-netpol\.yaml$/], solution: "kubectl apply -f " + file, hint: "kubectl apply -f &lt;datei&gt;", why: "Auch eine NetworkPolicy ist ein ganz normales Manifest – mit kubectl apply -f &lt;datei&gt; wird sie deklarativ angewandt." };
+    return { text: "Wende die Hafenmauer-Karte <code>" + file + "</code> deklarativ an.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+drill-netpol\.yaml$/], solution: "kubectl apply --filename " + file, hint: "kubectl apply --filename &lt;datei&gt;", why: "Auch eine NetworkPolicy ist ein ganz normales Manifest – mit kubectl apply --filename &lt;datei&gt; wird sie deklarativ angewandt." };
   },
   "k-describe-netpol": sim => {
     const np = ensureNetworkPolicy(sim);
-    return { text: "Beschreibe die Hafenmauer <code>" + np.name + "</code> – wer darf rein?", accept: [new RegExp("^kubectl\\s+describe\\s+(networkpolicy|networkpolicies|netpol|netpols)\\s+" + np.name.replace(/[-]/g, "\\-") + "$")], solution: "kubectl describe networkpolicy " + np.name, hint: "kubectl describe networkpolicy &lt;name&gt;", why: "describe zeigt die Details der Policy: wen sie schützt (podSelector) und wer durchdarf (from) – Muster: kubectl describe networkpolicy &lt;name&gt;." };
+    return { text: "Beschreibe die Hafenmauer <code>" + np.name + "</code> – wer darf rein?", accept: [new RegExp("^kubectl\\s+describe\\s+(networkpolicy|networkpolicies|netpol|netpols)\\s+" + np.name.replace(/[-]/g, "\\-") + "$")], solution: "kubectl describe networkpolicies " + np.name, hint: "kubectl describe networkpolicies &lt;name&gt; (die Kurzformen netpol/networkpolicy verdienst du dir durch Nutzung)", why: "describe zeigt die Details der Policy: wen sie schützt (podSelector) und wer durchdarf (from) – Muster: kubectl describe networkpolicies &lt;name&gt;." };
   },
   "k-delete-netpol": sim => {
     const np = ensureNetworkPolicy(sim);
-    return { text: "Reiß die Hafenmauer <code>" + np.name + "</code> wieder ein.", accept: [new RegExp("^kubectl\\s+delete\\s+(networkpolicy|networkpolicies|netpol|netpols)\\s+" + np.name.replace(/[-]/g, "\\-") + "$")], solution: "kubectl delete networkpolicy " + np.name, hint: "kubectl delete networkpolicy &lt;name&gt;", why: "delete entfernt die NetworkPolicy wieder – danach ist das Netzwerk an dieser Stelle wieder offen. Muster: kubectl delete networkpolicy &lt;name&gt;." };
+    return { text: "Reiß die Hafenmauer <code>" + np.name + "</code> wieder ein.", accept: [new RegExp("^kubectl\\s+delete\\s+(networkpolicy|networkpolicies|netpol|netpols)\\s+" + np.name.replace(/[-]/g, "\\-") + "$")], solution: "kubectl delete networkpolicies " + np.name, hint: "kubectl delete networkpolicies &lt;name&gt; (die Kurzformen netpol/networkpolicy verdienst du dir durch Nutzung)", why: "delete entfernt die NetworkPolicy wieder – danach ist das Netzwerk an dieser Stelle wieder offen. Muster: kubectl delete networkpolicies &lt;name&gt;." };
   },
   // GitOps-Archipel (#98): Üben mit Argo CD – Application anlegen, Überblick, Akte lesen, Soll ziehen.
   "argo-apply": sim => {
@@ -337,7 +339,7 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     const file = "drill-application.yaml";
     sim.files[file] = ARGO_APPLICATION_MANUAL_YAML;
     sim.applyEffects[file] = { application: { name, repo: "https://github.com/port-kubernia/seekarten.git", path: name, autoSync: false, selfHeal: false, deployment: { name, image: "nginx:1.27", replicas: 2 } } };
-    return { text: "Eine Argo-<b>Application</b> ist ein ganz normales Manifest: wende die Seekarte <code>" + file + "</code> deklarativ an, damit Argo den neuen Auftrag kennt.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+drill-application\.yaml$/], solution: "kubectl apply -f " + file, hint: "Der vertraute Befehl: kubectl apply -f &lt;datei&gt;", why: "Eine Argo-Application ist selbst nur ein Manifest – mit dem vertrauten kubectl apply -f &lt;datei&gt; machst du Argo den Soll-Zustand bekannt." };
+    return { text: "Eine Argo-<b>Application</b> ist ein ganz normales Manifest: wende die Seekarte <code>" + file + "</code> deklarativ an, damit Argo den neuen Auftrag kennt.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+drill-application\.yaml$/], solution: "kubectl apply --filename " + file, hint: "Der vertraute Befehl: kubectl apply --filename &lt;datei&gt;", why: "Eine Argo-Application ist selbst nur ein Manifest – mit dem vertrauten kubectl apply --filename &lt;datei&gt; machst du Argo den Soll-Zustand bekannt." };
   },
   "argo-app-list": sim => {
     ensureArgoApp(sim);
@@ -364,7 +366,7 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     const file = "drill-servicemonitor.yaml";
     sim.files[file] = SERVICEMONITOR_YAML;
     sim.applyEffects[file] = { serviceMonitor: { name, selector: pick(["lager", "kasse", "funkdienst", "lotsen"]), port: "metrics", interval: "30s" } };
-    return { text: "Ein <b>ServiceMonitor</b> ist ein ganz normales Manifest: wende <code>" + file + "</code> deklarativ an, damit Prometheus den Service scrapt.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+drill-servicemonitor\.yaml$/], solution: "kubectl apply -f " + file, hint: "kubectl apply -f &lt;datei&gt;", why: "Ein ServiceMonitor ist der deklarative Scrape-Auftrag für Prometheus – mit dem vertrauten kubectl apply -f &lt;datei&gt; angewandt; selector wählt den Service, endpoints legen Port und Intervall fest." };
+    return { text: "Ein <b>ServiceMonitor</b> ist ein ganz normales Manifest: wende <code>" + file + "</code> deklarativ an, damit Prometheus den Service scrapt.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+drill-servicemonitor\.yaml$/], solution: "kubectl apply --filename " + file, hint: "kubectl apply --filename &lt;datei&gt;", why: "Ein ServiceMonitor ist der deklarative Scrape-Auftrag für Prometheus – mit dem vertrauten kubectl apply --filename &lt;datei&gt; angewandt; selector wählt den Service, endpoints legen Port und Intervall fest." };
   },
   "obs-sm-get": sim => {
     if (sim.serviceMonitors.length === 0) {
@@ -398,14 +400,14 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     const file = "drill-prometheusrule.yaml";
     sim.files[file] = PROMETHEUSRULE_YAML;
     sim.applyEffects[file] = { prometheusRule: { name, alert: "HighPodCPU", expr: "rate(container_cpu_usage_seconds_total[5m]) > 0.5", forDuration: "5m", severity: "warning" } };
-    return { text: "Eine <b>PrometheusRule</b> ist ein ganz normales Manifest: wende <code>" + file + "</code> an, damit Prometheus die Alert-Regel prüft.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+drill-prometheusrule\.yaml$/], solution: "kubectl apply -f " + file, hint: "kubectl apply -f &lt;datei&gt;", why: "Eine PrometheusRule deklariert eine Alert-Regel (expr als Bedingung, for als Wartezeit) – mit dem vertrauten kubectl apply -f &lt;datei&gt; bringt Prometheus sie in Kraft." };
+    return { text: "Eine <b>PrometheusRule</b> ist ein ganz normales Manifest: wende <code>" + file + "</code> an, damit Prometheus die Alert-Regel prüft.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+drill-prometheusrule\.yaml$/], solution: "kubectl apply --filename " + file, hint: "kubectl apply --filename &lt;datei&gt;", why: "Eine PrometheusRule deklariert eine Alert-Regel (expr als Bedingung, for als Wartezeit) – mit dem vertrauten kubectl apply --filename &lt;datei&gt; bringt Prometheus sie in Kraft." };
   },
 };
 
 /* Übungs-Pools pro NPC: freigeschaltet nach bestimmter Quest */
 export const PRACTICE: Record<string, { drill: string; after: string }[]> = {
   bo:   [{ drill: "docker-pull", after: "docker-first-container" }, { drill: "docker-run", after: "docker-first-container" }, { drill: "docker-ps", after: "docker-list-containers" }, { drill: "docker-stop", after: "docker-list-containers" }, { drill: "docker-ps-a", after: "docker-list-containers" }, { drill: "docker-run-named", after: "docker-run-options" }, { drill: "docker-build", after: "docker-build-image" }, { drill: "docker-tag", after: "docker-build-image" }],
-  ole:  [{ drill: "k-get-nodes", after: "k8s-first-deployment" }, { drill: "k-get-pods", after: "k8s-first-deployment" }, { drill: "k-describe", after: "k8s-inspect-pods" }, { drill: "k-create", after: "k8s-service" }, { drill: "k-scale", after: "k8s-service" }, { drill: "k-delete-pod", after: "k8s-self-healing" }, { drill: "k-expose", after: "k8s-self-healing" }, { drill: "k-get-svc", after: "k8s-self-healing" }, { drill: "k-secret", after: "kraken-boss" }, { drill: "k-get-secrets", after: "kraken-boss" }],
+  ole:  [{ drill: "k-get-nodes", after: "k8s-first-deployment" }, { drill: "k-get-pods", after: "k8s-first-deployment" }, { drill: "k-describe", after: "k8s-inspect-pods" }, { drill: "k-get-pods-ns", after: "k8s-inspect-pods" }, { drill: "k-create", after: "k8s-service" }, { drill: "k-scale", after: "k8s-service" }, { drill: "k-delete-pod", after: "k8s-self-healing" }, { drill: "k-expose", after: "k8s-self-healing" }, { drill: "k-get-svc", after: "k8s-self-healing" }, { drill: "k-secret", after: "kraken-boss" }, { drill: "k-get-secrets", after: "kraken-boss" }],
   ada:  [{ drill: "k-apply", after: "k8s-apply-manifests" }, { drill: "git-status", after: "git-version-control" }, { drill: "git-add", after: "git-version-control" }, { drill: "git-commit", after: "git-version-control" }, { drill: "git-branch", after: "git-feature-branch" }, { drill: "git-checkout", after: "git-feature-branch" }, { drill: "git-add-all", after: "git-pipeline" }, { drill: "ci-status", after: "git-pipeline" }, { drill: "git-pull", after: "git-merge-branches" }, { drill: "git-resolve", after: "git-merge-branches" }, { drill: "k-secret-tls", after: "secrets-encrypted" }, { drill: "k-get-ingress", after: "secrets-encrypted" }],
   runa: [{ drill: "helm-install", after: "helm-release-install" }, { drill: "helm-list", after: "helm-release-install" }, { drill: "helm-upgrade", after: "helm-upgrade-rollback" }, { drill: "helm-rollback", after: "helm-upgrade-rollback" }, { drill: "helm-create", after: "helm-umbrella-chart" }, { drill: "helm-lint", after: "helm-umbrella-chart" }, { drill: "helm-package", after: "helm-umbrella-chart" }, { drill: "helm-install-local", after: "helm-umbrella-chart" }],
   theo: [{ drill: "tf-plan", after: "terraform-intro" }, { drill: "tf-state", after: "terraform-state-destroy" }],

@@ -17,6 +17,19 @@ import { argoReconcile, cloneChildSpec } from "../argocd";
 import { admitPod } from "./security";
 import type { KubectlHost } from "./host";
 
+/** Den Dateinamen hinter `-f`/`--filename` herausziehen (beide Formen gleichwertig,
+ *  wie echtes kubectl und wie die accept-Regex; #380). Unterstützt Leerzeichen
+ *  (`-f datei`) und `=` (`--filename=datei`). `null`, wenn kein Filename-Flag dasteht. */
+function filenameArg(t: string[]): string | null {
+  for (let i = 0; i < t.length; i++) {
+    const tok = t[i];
+    if (tok === "-f" || tok === "--filename") return t[i + 1] ?? null;
+    const m = /^(?:-f|--filename)=(.+)$/.exec(tok);
+    if (m) return m[1];
+  }
+  return null;
+}
+
 
 export function kubectlCreate(host: KubectlHost, t: string[], raw: string) {
   if (t[2] === "secret") {
@@ -112,10 +125,11 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
   const what = (t[2] || "").toLowerCase();
   const name = t[3];
 
-  if (what === "-f") {
-    const file = t[3];
+  if (what === "-f" || what === "--filename" || /^(?:-f|--filename)=/.test(what)) {
+    const file = filenameArg(t);
+    if (!file) return host._err("error: must specify one of -f or -k", "Muster: 'kubectl delete --filename deployment.yaml'");
     const eff = host.applyEffects[file];
-    if (!eff || !host.files[file]) return host._err("error: the path \"" + (file || "?") + "\" does not exist", "Mit 'ls' siehst du, welche Dateien hier liegen.");
+    if (!eff || !host.files[file]) return host._err("error: the path \"" + file + "\" does not exist", "Mit 'ls' siehst du, welche Dateien hier liegen.");
     const out: string[] = [];
     const effDep = eff.deployment;
     if (effDep) {
@@ -267,9 +281,8 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
 
 
 export function kubectlApply(host: KubectlHost, t: string[]) {
-  const fIdx = t.indexOf("-f");
-  const file = fIdx >= 0 ? t[fIdx + 1] : null;
-  if (!file) return host._err("error: must specify one of -f or -k", "Muster: 'kubectl apply -f deployment.yaml'");
+  const file = filenameArg(t);
+  if (!file) return host._err("error: must specify one of -f or -k", "Muster: 'kubectl apply --filename deployment.yaml'");
   if (!host.files[file]) return host._err("error: the path \"" + file + "\" does not exist", "Mit 'ls' siehst du, welche Dateien hier liegen.");
   const eff = host.applyEffects[file];
   if (!eff) return host._err("error: unable to decode " + file);
