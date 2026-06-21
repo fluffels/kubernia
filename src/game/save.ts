@@ -276,6 +276,13 @@ export function sanitizeState(raw: unknown): GameState {
   };
 }
 
+/* Nach einem Slot-Wechsel (#306) wird die Seite gleich neu geladen; bis dahin darf KEIN
+ * `save()` mehr laufen, sonst trägt der noch im Speicher liegende ALTE Spielstand (oder ein
+ * im ~800-ms-Fenster feuernder 5-s-Auto-Save) sich in den jetzt aktiven (neuen) Slot ein – der
+ * „neue" Slot würde dann nicht von vorn starten. Das Flag wird beim Reload (frisches Modul)
+ * automatisch wieder false. */
+let saveSuspended = false;
+
 /** Persistenz-Methoden der Game-Fassade (Laden/Speichern/Reset/Export/Import). */
 export const saveBundle = part({
   load() {
@@ -325,6 +332,9 @@ export const saveBundle = part({
    *  überschreibt die noch lebende Szene die frische Position sofort wieder und
    *  der reload landet am alten Ort (#335 / Reset-Position-Falle #295/#296). */
   save(syncFromScene = true) {
+    // Nach einem Slot-Wechsel bis zum Reload nichts mehr schreiben (siehe saveSuspended) –
+    // sonst landet der alte Spielstand im frisch gewählten Slot.
+    if (saveSuspended) return;
     if (this.sim) this.state.clusterSnapshot = this.sim.snapshot();
     const ws = worldScene();
     if (syncFromScene && ws && ws.player) {
@@ -422,6 +432,9 @@ export const saveBundle = part({
     // dann wechseln wir auf den frischen Slot.
     this.save();
     SaveStore.switchSlot(id);
+    // Ab hier nichts mehr in den (jetzt aktiven, leeren) Slot schreiben, bis der Aufrufer
+    // neu lädt – sonst trüge ein später feuernder Auto-Save den alten Stand hinein (#306).
+    saveSuspended = true;
     return id;
   },
 
@@ -429,7 +442,11 @@ export const saveBundle = part({
    *  Ziel-ID unbekannt ist. Bei true lädt der Aufrufer neu. */
   switchSlot(id: string): boolean {
     this.save(); // die letzten Sekunden des aktuellen Slots nicht verlieren
-    return SaveStore.switchSlot(id);
+    const ok = SaveStore.switchSlot(id);
+    // Gewechselt → bis zum Reload keine Saves mehr (sonst überschreibt der alte In-Memory-
+    // Stand den Ziel-Slot, #306).
+    if (ok) saveSuspended = true;
+    return ok;
   },
 
   /** Einen Slot umbenennen. false, wenn die ID unbekannt ist. */
@@ -442,6 +459,10 @@ export const saveBundle = part({
   deleteSlot(id: string): { ok: boolean; reload: boolean } {
     const wasActive = id === SaveStore.activeSlotId();
     const ok = SaveStore.deleteSlot(id);
+    // Wurde der AKTIVE Slot gelöscht, zeigt der Zeiger jetzt woanders hin und der Aufrufer
+    // lädt neu – bis dahin keine Saves mehr, sonst landet der gelöschte In-Memory-Stand im
+    // neuen aktiven Slot (#306).
+    if (ok && wasActive) saveSuspended = true;
     return { ok, reload: ok && wasActive };
   },
 });
