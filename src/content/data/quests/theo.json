@@ -158,7 +158,7 @@
             "accept": [
               "^terraform\\s+plan$"
             ],
-            "check": "terraform-state-destroy/t-theo-2",
+            "check": {"flag":["tf","applied"]},
             "solution": "terraform plan",
             "hint": "Einfach nochmal plan."
           }

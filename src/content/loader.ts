@@ -73,6 +73,21 @@ const cmdCardModules = import.meta.glob<{ default: unknown }>("./data/cmdcards/*
 // Quiz-Karteikarten (#368) liegen pro THEMA in data/crabquiz/<thema>.json (nicht pro Geber).
 const crabQuizModules = import.meta.glob<{ default: unknown }>("./data/crabquiz/*.json", { eager: true });
 import { QUEST_CHECKS } from "./checks";
+import { compileCheck } from "./check-dsl";
+// Geteilte Parse-Primitiven liegen seit #411 im Leaf-Modul `parse.ts` (bricht den
+// Zyklus loader → check-dsl → loader, den #390 verbietet). `ContentValidationError`
+// wird hier re-exportiert, damit bestehende `import … from "./loader"` (entities.ts,
+// Tests) unverändert laufen.
+import {
+  ContentValidationError,
+  fail,
+  asRecord,
+  asNonEmptyString,
+  asInt,
+  asNonEmptyStringArray,
+  asBool,
+  asArray,
+} from "./parse";
 import type { Sim } from "../sim";
 import type {
   Quest,
@@ -84,52 +99,7 @@ import type {
 } from "../types";
 import type { Scenario } from "../sim";
 
-/** Wird geworfen, wenn eine Daten-Datei nicht zum erwarteten Schema passt.
- *  Eigene Klasse, damit Tests gezielt darauf prüfen können (statt nur „Error"). */
-export class ContentValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ContentValidationError";
-  }
-}
-
-/** Bricht die Validierung mit einer menschenlesbaren Pfadangabe ab.
- *  `never`-Rückgabe → der Aufrufer weiß danach, dass der Wert gültig ist. */
-function fail(path: string, msg: string): never {
-  throw new ContentValidationError(`Content „${path}": ${msg}`);
-}
-
-function asRecord(v: unknown, path: string): Record<string, unknown> {
-  if (typeof v !== "object" || v === null || Array.isArray(v)) fail(path, "Objekt erwartet");
-  return v as Record<string, unknown>;
-}
-
-function asNonEmptyString(v: unknown, path: string): string {
-  if (typeof v !== "string") fail(path, "String erwartet");
-  if (v.trim() === "") fail(path, "nicht-leerer String erwartet");
-  return v;
-}
-
-function asInt(v: unknown, path: string): number {
-  if (typeof v !== "number" || !Number.isInteger(v)) fail(path, "Ganzzahl erwartet");
-  return v;
-}
-
-function asNonEmptyStringArray(v: unknown, path: string): string[] {
-  if (!Array.isArray(v)) fail(path, "Array erwartet");
-  if (v.length === 0) fail(path, "nicht-leeres Array erwartet");
-  return v.map((x, i) => asNonEmptyString(x, `${path}[${i}]`));
-}
-
-function asBool(v: unknown, path: string): boolean {
-  if (typeof v !== "boolean") fail(path, "Boolean erwartet");
-  return v;
-}
-
-function asArray(v: unknown, path: string): unknown[] {
-  if (!Array.isArray(v)) fail(path, "Array erwartet");
-  return v;
-}
+export { ContentValidationError };
 
 /** NPC-Stammdaten: Anzeigename, Funktions-Titel, Spritesheet-Frame, Textur-Key. */
 export interface NpcMeta {
@@ -193,13 +163,22 @@ function reviveAccept(v: unknown, path: string): RegExp[] {
   });
 }
 
-/** Optionalen `check`-Key zur Mechanik-Funktion aus `QUEST_CHECKS` auflösen. */
+/** Optionalen `check` zur Mechanik-Funktion auflösen (#411).
+ *  Zwei Formen:
+ *   - **String** → Key in `QUEST_CHECKS` (die wenigen echten Code-Sonderfälle,
+ *     z.B. transiente Aktions-Marker wie `sim.lastDeletedPod`).
+ *   - **Objekt** → deklarative Check-DSL-Regel (`check-dsl.ts` → `compileCheck`),
+ *     die der Regelfall ist: existiert/heil/Anzahl/Flag gegen den Sim-Zustand,
+ *     komplett als Daten. Eine neue Standard-Quest braucht so KEINEN Code mehr. */
 function reviveCheck(v: unknown, path: string): ((sim: Sim) => unknown) | undefined {
   if (v === undefined) return undefined;
-  const key = asNonEmptyString(v, path);
-  const fn = QUEST_CHECKS[key];
-  if (!fn) fail(path, `unbekannter check-Key (nicht in QUEST_CHECKS): ${key}`);
-  return fn;
+  if (typeof v === "string") {
+    const key = asNonEmptyString(v, path);
+    const fn = QUEST_CHECKS[key];
+    if (!fn) fail(path, `unbekannter check-Key (nicht in QUEST_CHECKS): ${key}`);
+    return fn;
+  }
+  return compileCheck(v, path);
 }
 
 /** Gemeinsame Felder von Teach-Befehl und Terminal-Aufgabe (ohne `intro`). */

@@ -135,7 +135,7 @@
           "accept": [
             "^docker\\s+stop\\s+\\S+$"
           ],
-          "check": "docker-list-containers/t-stop",
+          "check": {"some":"containers","where":{"running":false}},
           "solution": "docker stop <name aus docker ps>",
           "hint": "Erst docker ps für den Namen, dann docker stop <name>."
         }

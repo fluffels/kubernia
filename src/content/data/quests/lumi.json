@@ -159,7 +159,7 @@
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+servicemonitor\\.yaml$"
           ],
-          "check": "observability-metrics/t-sm-apply",
+          "check": {"some":"serviceMonitors","where":{"name":"lager-monitor"}},
           "solution": "kubectl apply -f servicemonitor.yaml",
           "hint": "kubectl apply -f <datei> – der vertraute Befehl aus dem Kartenhaus."
         }
@@ -174,7 +174,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(servicemonitors|servicemonitor|smon)$"
             ],
-            "check": "observability-metrics/t-sm-get",
+            "check": {"some":"serviceMonitors","where":{"name":"lager-monitor"}},
             "solution": "kubectl get servicemonitors",
             "hint": "kubectl get servicemonitors (Kurzform: smon)."
           }
@@ -286,7 +286,7 @@
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+grafanadatasource\\.yaml$"
           ],
-          "check": "observability-grafana/t-ds-apply",
+          "check": {"some":"grafanaDatasources","where":{"name":"prometheus-quelle"}},
           "solution": "kubectl apply -f grafanadatasource.yaml",
           "hint": "kubectl apply -f <datei> – der vertraute Befehl."
         }
@@ -301,7 +301,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(grafanadatasources|grafanadatasource|grafanadatasrc)$"
             ],
-            "check": "observability-grafana/t-ds-get",
+            "check": {"some":"grafanaDatasources","where":{"name":"prometheus-quelle"}},
             "solution": "kubectl get grafanadatasources",
             "hint": "kubectl get grafanadatasources (Kurzform: grafanadatasrc)."
           }
@@ -385,7 +385,7 @@
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+grafanadashboard\\.yaml$"
           ],
-          "check": "observability-grafana/t-gd-apply",
+          "check": {"some":"grafanaDashboards","where":{"name":"hafen-uebersicht"}},
           "solution": "kubectl apply -f grafanadashboard.yaml",
           "hint": "kubectl apply -f <datei> – wie immer."
         }
@@ -400,7 +400,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(grafanadashboards|grafanadashboard|grafanadash)$"
             ],
-            "check": "observability-grafana/t-gd-get",
+            "check": {"some":"grafanaDashboards","where":{"name":"hafen-uebersicht"}},
             "solution": "kubectl get grafanadashboards",
             "hint": "kubectl get grafanadashboards (Kurzform: grafanadash)."
           }
@@ -701,7 +701,7 @@
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+prometheusrule\\.yaml$"
           ],
-          "check": "observability-alerts/t-pr-apply",
+          "check": {"some":"prometheusRules","where":{"name":"hafen-alarme"}},
           "solution": "kubectl apply -f prometheusrule.yaml",
           "hint": "kubectl apply -f <datei> – der vertraute Befehl."
         }
@@ -716,7 +716,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(prometheusrules|prometheusrule|promrule|promrules)$"
             ],
-            "check": "observability-alerts/t-pr-get",
+            "check": {"some":"prometheusRules","where":{"name":"hafen-alarme"}},
             "solution": "kubectl get prometheusrules",
             "hint": "kubectl get prometheusrules (Kurzform: promrules)."
           }
@@ -732,7 +732,7 @@
           "accept": [
             "^kubectl\\s+get\\s+alerts$"
           ],
-          "check": "observability-alerts/t-alerts-get",
+          "check": {"some":"alerts","where":{"name":"HighPodCPU","state":"firing"}},
           "solution": "kubectl get alerts",
           "hint": "kubectl get alerts"
         }
@@ -793,7 +793,7 @@
           "accept": [
             "^kubectl\\s+scale\\s+deployment\\s+rechenknecht\\s+--replicas[=\\s]0$"
           ],
-          "check": "observability-alerts/t-scale-zero",
+          "check": {"some":"alerts","where":{"name":"HighPodCPU","state":"resolved"}},
           "solution": "kubectl scale deployment rechenknecht --replicas=0",
           "hint": "kubectl scale deployment rechenknecht --replicas=0"
         }

@@ -125,7 +125,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(ingress|ingresses|ing)$"
             ],
-            "check": "k8s-apply-manifests/t-ada-6",
+            "check": {"some":"ingresses","where":{"name":"hafentor"}},
             "solution": "kubectl get ingress",
             "hint": "Kurzform 'ing' geht auch."
           }
@@ -726,7 +726,7 @@
           "accept": [
             "^git\\s+fetch$"
           ],
-          "check": "git-merge-branches/t-git-fetch",
+          "check": {"flag":["git","fetched"]},
           "solution": "git fetch",
           "hint": "git + ein Wort fürs „abholen, aber nicht einfügen“."
         }
@@ -748,7 +748,7 @@
           "accept": [
             "^git\\s+pull$"
           ],
-          "check": "git-merge-branches/t-git-pull",
+          "check": {"flag":["git","remoteAhead"],"eq":0},
           "solution": "git pull",
           "hint": "git + ein Wort fürs „herziehen“."
         }
@@ -771,7 +771,7 @@
           "accept": [
             "^git\\s+merge\\s+lennart-route$"
           ],
-          "check": "git-merge-branches/t-git-merge-conflict",
+          "check": {"flag":["git","conflict"]},
           "solution": "git merge lennart-route",
           "hint": "Muster: git merge <branch>"
         }
@@ -811,7 +811,7 @@
             "accept": [
               "^git\\s+checkout\\s+--theirs\\s+seekarte\\.md$"
             ],
-            "check": "git-merge-branches/t-conf-theirs",
+            "check": {"all":[{"flag":["files","seekarte.md"],"eq":"Nordpassage: weiter Bogen ums Riff – sicher, etwas laenger."},{"flag":["git","conflict"]}]},
             "solution": "git checkout --theirs seekarte.md",
             "hint": "git checkout --theirs <datei> wählt die hereinkommende Seite (--ours wäre deine)."
           },
@@ -821,7 +821,7 @@
             "accept": [
               "^git\\s+add\\s+seekarte\\.md$"
             ],
-            "check": "git-merge-branches/t-conf-add",
+            "check": {"all":[{"not":{"flag":["git","conflict"]}},{"includes":["git","staged"],"value":"seekarte.md"}]},
             "solution": "git add seekarte.md",
             "hint": "Wie immer: git add <datei> – das sagt Git „erledigt“."
           },
@@ -831,7 +831,7 @@
             "accept": [
               "^git\\s+commit\\s+(?:-m|--message)\\s+(\"[^\"]+\"|'[^']+'|\\S+)$"
             ],
-            "check": "git-merge-branches/t-conf-commit",
+            "check": {"not":{"flag":["git","conflict"]}},
             "solution": "git commit -m \"Konflikt geloest: Lennarts Route\"",
             "hint": "Muster: git commit -m \"Nachricht\""
           }
@@ -854,7 +854,7 @@
           "accept": [
             "^git\\s+push$"
           ],
-          "check": "git-merge-branches/t-git-push-resolved",
+          "check": {"flag":["git","pushed"]},
           "solution": "git push",
           "hint": "Wirklich nur: git push"
         }
@@ -993,7 +993,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(ingress|ingresses|ing)$"
             ],
-            "check": "secrets-encrypted/t-ada-tls-3",
+            "check": {"some":"ingresses","where":{"name":"hafentor","tls":{"truthy":true}}},
             "solution": "kubectl get ingress",
             "hint": "Kurzform 'ing' geht auch."
           },

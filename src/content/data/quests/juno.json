@@ -99,7 +99,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(pods|pod|po)$"
             ],
-            "check": "k8s-debug-imagepull/t-j15-3",
+            "check": {"some":"deployments","where":{"name":"leuchtfeuer","broken":{"truthy":false}}},
             "solution": "kubectl get pods",
             "hint": "get pods – STATUS muss Running sein."
           }
@@ -249,7 +249,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(pods|pod|po)$"
             ],
-            "check": "k8s-debug-crashloop/t-j16-4",
+            "check": {"some":"deployments","where":{"name":"funkboje","broken":{"truthy":false}}},
             "solution": "kubectl get pods",
             "hint": "STATUS muss Running sein."
           }
@@ -387,7 +387,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(nodes|node|no)$"
             ],
-            "check": "k8s-node-capacity/t-j17-6",
+            "check": {"count":"nodes","cmp":">","value":3},
             "solution": "kubectl get nodes",
             "hint": "kubectl, nicht terraform!"
           },
@@ -397,7 +397,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(pods|pod|po)$"
             ],
-            "check": "k8s-node-capacity/t-j17-7",
+            "check": {"some":"deployments","where":{"name":"frachtplaner","broken":{"truthy":false}}},
             "solution": "kubectl get pods",
             "hint": "get pods – STATUS lesen."
           }
@@ -505,7 +505,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(networkpolicies|networkpolicy|netpol|netpols)$"
             ],
-            "check": "network-policy/t-juno-np-3",
+            "check": {"some":"networkPolicies","where":{"name":"hafenmauer"}},
             "solution": "kubectl get networkpolicies",
             "hint": "Kurzform 'netpol' geht auch."
           },
@@ -645,7 +645,7 @@
             "accept": [
               "^kubectl\\s+expose\\s+deployment\\s+kombuese\\s+--port[=\\s]80$"
             ],
-            "check": "k8s-service-endpoints/t-j24-3",
+            "check": {"some":"services","where":{"name":"kombuese"}},
             "solution": "kubectl expose deployment kombuese --port=80",
             "hint": "Muster: kubectl expose deployment <name> --port=<zahl>"
           }
@@ -692,7 +692,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(endpoints|endpoint|ep)\\s+kombuese$"
             ],
-            "check": "k8s-service-endpoints/t-j24-5",
+            "check": {"all":[{"some":"deployments","where":{"name":"kombuese","broken":{"truthy":false}}},{"some":"services","where":{"name":"kombuese"}}]},
             "solution": "kubectl get endpoints kombuese",
             "hint": "Gleicher Befehl wie eben – jetzt steht eine Pod-IP drin statt <none>."
           },
@@ -702,7 +702,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(pods|pod|po)$"
             ],
-            "check": "k8s-service-endpoints/t-j24-6",
+            "check": {"some":"deployments","where":{"name":"kombuese","broken":{"truthy":false}}},
             "solution": "kubectl get pods",
             "hint": "READY 1/1, Status Running – ganz ohne Neustart."
           }
@@ -846,7 +846,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(pods|pod|po)$"
             ],
-            "check": "k8s-resource-limits/t-j26-4",
+            "check": {"some":"deployments","where":{"name":"kartograf","broken":{"truthy":false}}},
             "solution": "kubectl get pods",
             "hint": "STATUS muss Running sein, keine neuen Restarts."
           }

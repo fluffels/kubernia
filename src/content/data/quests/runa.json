@@ -152,7 +152,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(pods|pod|po)$"
             ],
-            "check": "helm-release-install/t-runa-4",
+            "check": {"count":"releases","cmp":">","value":0},
             "solution": "kubectl get pods",
             "hint": "Kennst du im Schlaf."
           }

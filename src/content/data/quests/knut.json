@@ -88,7 +88,7 @@
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+statefulset\\.yaml$"
           ],
-          "check": "storage-statefulset/t-sts-apply",
+          "check": {"some":"statefulSets","where":{"name":"speicher-datenbank"}},
           "solution": "kubectl apply -f statefulset.yaml",
           "hint": "kubectl apply -f <datei>"
         }
@@ -103,7 +103,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(statefulset|statefulsets|sts)$"
             ],
-            "check": "storage-statefulset/t-sts-get",
+            "check": {"some":"statefulSets","where":{"name":"speicher-datenbank"}},
             "solution": "kubectl get statefulset",
             "hint": "kubectl get statefulset (oder sts)."
           },
@@ -113,7 +113,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(pods|pod|po)$"
             ],
-            "check": "storage-statefulset/t-sts-pods",
+            "check": {"some":"statefulSets","where":{"name":"speicher-datenbank","pods":{"has":{"name":"speicher-datenbank-0"}}}},
             "solution": "kubectl get pods",
             "hint": "kubectl get pods"
           }
@@ -129,7 +129,7 @@
           "accept": [
             "^kubectl\\s+delete\\s+pod\\s+speicher-datenbank-0$"
           ],
-          "check": "storage-statefulset/t-sts-delete",
+          "check": {"some":"statefulSets","where":{"name":"speicher-datenbank","pods":{"has":{"name":"speicher-datenbank-0"}}}},
           "solution": "kubectl delete pod speicher-datenbank-0",
           "hint": "kubectl delete pod <name> – nimm speicher-datenbank-0."
         }
@@ -241,7 +241,7 @@
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+storageclass\\.yaml$"
           ],
-          "check": "storage-pvc/t-sc-apply",
+          "check": {"some":"storageClasses","where":{"name":"kai-ssd"}},
           "solution": "kubectl apply -f storageclass.yaml",
           "hint": "kubectl apply -f <datei>"
         }
@@ -256,7 +256,7 @@
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+pvc\\.yaml$"
           ],
-          "check": "storage-pvc/t-pvc-apply",
+          "check": {"some":"pvcs","where":{"name":"lager-daten","status":"Bound"}},
           "solution": "kubectl apply -f pvc.yaml",
           "hint": "kubectl apply -f <datei>"
         }
@@ -271,7 +271,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(pvc|persistentvolumeclaim|persistentvolumeclaims)$"
             ],
-            "check": "storage-pvc/t-pvc-get",
+            "check": {"some":"pvcs","where":{"name":"lager-daten","status":"Bound"}},
             "solution": "kubectl get pvc",
             "hint": "kubectl get pvc"
           },
@@ -281,7 +281,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(pv|persistentvolume|persistentvolumes)$"
             ],
-            "check": "storage-pvc/t-pv-get",
+            "check": {"some":"pvs","where":{"status":"Bound","claim":"default/lager-daten"}},
             "solution": "kubectl get pv",
             "hint": "kubectl get pv"
           }
@@ -297,7 +297,7 @@
             "accept": [
               "^kubectl\\s+create\\s+deployment\\s+datenbank\\s+--image[=\\s]postgres(:\\S+)?$"
             ],
-            "check": "storage-pvc/t-pvc-dep",
+            "check": {"some":"deployments","where":{"name":"datenbank"}},
             "solution": "kubectl create deployment datenbank --image=postgres",
             "hint": "kubectl create deployment <name> --image=<image>"
           },
@@ -307,7 +307,7 @@
             "accept": [
               "^kubectl\\s+delete\\s+deployment\\s+datenbank$"
             ],
-            "check": "storage-pvc/t-pvc-del",
+            "check": {"none":"deployments","where":{"name":"datenbank"}},
             "solution": "kubectl delete deployment datenbank",
             "hint": "kubectl delete deployment <name>"
           },
@@ -317,7 +317,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(pvc|persistentvolumeclaim|persistentvolumeclaims)$"
             ],
-            "check": "storage-pvc/t-pvc-still",
+            "check": {"all":[{"some":"pvcs","where":{"name":"lager-daten","status":"Bound"}},{"none":"deployments","where":{"name":"datenbank"}}]},
             "solution": "kubectl get pvc",
             "hint": "kubectl get pvc"
           }

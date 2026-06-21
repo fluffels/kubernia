@@ -433,7 +433,7 @@
           "accept": [
             "^kubectl\\s+get\\s+(services|service|svc)$"
           ],
-          "check": "k8s-self-healing/t-getsvc",
+          "check": {"some":"services","where":{"name":"kasse"}},
           "solution": "kubectl get services",
           "hint": "Kurzform svc geht auch."
         }
@@ -660,7 +660,7 @@
               "^kubectl\\s+set\\s+env\\s+deployment\\/passagierliste\\s+--from[=\\s]secret\\/passagier-geheim$"
             ],
             "solution": "kubectl set env deployment/passagierliste --from=secret/passagier-geheim",
-            "check": "k8s-configmap-secret/t-k8s-configmap-secret-bind-secret",
+            "check": {"some":"deployments","where":{"name":"passagierliste","envFrom":{"match":{"configMaps":{"includes":"passagier-config"},"secrets":{"includes":"passagier-geheim"}}}}},
             "hint": "kubectl set env deployment/passagierliste --from=secret/<secret-name>"
           }
         ]

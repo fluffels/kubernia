@@ -188,7 +188,7 @@
           "accept": [
             "^argocd\\s+app\\s+get\\s+hafen-lager$"
           ],
-          "check": "gitops-self-sync/t-argo-get",
+          "check": {"some":"argoApps","where":{"name":"hafen-lager"}},
           "solution": "argocd app get hafen-lager",
           "hint": "argocd app get <name> – den Namen zeigt 'argocd app list'."
         }
@@ -211,7 +211,7 @@
           "accept": [
             "^argocd\\s+app\\s+sync\\s+hafen-lager$"
           ],
-          "check": "gitops-self-sync/t-argo-sync",
+          "check": {"some":"deployments","where":{"name":"hafen-lager"}},
           "solution": "argocd app sync hafen-lager",
           "hint": "argocd app sync <name>."
         }
@@ -226,7 +226,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(deployments|deployment|deploy)$"
             ],
-            "check": "gitops-self-sync/t-argo-verify",
+            "check": {"some":"deployments","where":{"name":"hafen-lager"}},
             "solution": "kubectl get deployments",
             "hint": "kubectl get deployments (oder deploy)."
           }
@@ -331,7 +331,7 @@
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+application-selfheal\\.yaml$"
           ],
-          "check": "gitops-drift-detection/t-sh-apply",
+          "check": {"some":"argoApps","where":{"name":"hafen-lager","selfHeal":true}},
           "solution": "kubectl apply -f application-selfheal.yaml",
           "hint": "kubectl apply -f <datei> – der vertraute Befehl."
         }
@@ -353,7 +353,7 @@
             "accept": [
               "^argocd\\s+app\\s+get\\s+hafen-lager$"
             ],
-            "check": "gitops-drift-detection/t-sh-get-before",
+            "check": {"some":"argoApps","where":{"name":"hafen-lager","selfHeal":true}},
             "solution": "argocd app get hafen-lager",
             "hint": "argocd app get hafen-lager"
           },
@@ -363,7 +363,7 @@
             "accept": [
               "^kubectl\\s+scale\\s+(deployment\\/hafen-lager|deployment\\s+hafen-lager)\\s+--replicas[=\\s]+0$"
             ],
-            "check": "gitops-drift-detection/t-sh-scale",
+            "check": {"some":"deployments","where":{"name":"hafen-lager","replicas":0}},
             "solution": "kubectl scale deployment hafen-lager --replicas=0",
             "hint": "kubectl scale deployment hafen-lager --replicas=0"
           },
@@ -373,7 +373,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(deployments|deployment|deploy)$"
             ],
-            "check": "gitops-drift-detection/t-sh-get-after",
+            "check": {"some":"deployments","where":{"name":"hafen-lager","replicas":2}},
             "solution": "kubectl get deployments",
             "hint": "kubectl get deployments"
           }
@@ -508,7 +508,7 @@
           "accept": [
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+app-of-apps\\.yaml$"
           ],
-          "check": "gitops-app-of-apps/t-aoa-apply",
+          "check": {"all":[{"some":"argoApps","where":{"name":"hafen-flotte","childApps":{"truthy":true}}},{"some":"argoApps","where":{"name":"flotte-lager"}},{"some":"argoApps","where":{"name":"flotte-funk"}},{"some":"argoApps","where":{"name":"flotte-kran"}}]},
           "solution": "kubectl apply -f app-of-apps.yaml",
           "hint": "kubectl apply -f app-of-apps.yaml – der vertraute Befehl, diesmal für die Wurzel."
         }
@@ -530,7 +530,7 @@
             "accept": [
               "^argocd\\s+app\\s+(list|ls)$"
             ],
-            "check": "gitops-app-of-apps/t-aoa-list",
+            "check": {"all":[{"some":"argoApps","where":{"name":"flotte-lager"}},{"some":"argoApps","where":{"name":"flotte-funk"}},{"some":"argoApps","where":{"name":"flotte-kran"}}]},
             "solution": "argocd app list",
             "hint": "argocd app list (oder ls)."
           },
@@ -540,7 +540,7 @@
             "accept": [
               "^argocd\\s+app\\s+get\\s+hafen-flotte$"
             ],
-            "check": "gitops-app-of-apps/t-aoa-get",
+            "check": {"some":"argoApps","where":{"name":"hafen-flotte","childApps":{"len":3}}},
             "solution": "argocd app get hafen-flotte",
             "hint": "argocd app get hafen-flotte"
           },
@@ -550,7 +550,7 @@
             "accept": [
               "^kubectl\\s+get\\s+(deployments|deployment|deploy)$"
             ],
-            "check": "gitops-app-of-apps/t-aoa-deploys",
+            "check": {"all":[{"some":"deployments","where":{"name":"flotte-lager"}},{"some":"deployments","where":{"name":"flotte-funk"}},{"some":"deployments","where":{"name":"flotte-kran"}}]},
             "solution": "kubectl get deployments",
             "hint": "kubectl get deployments"
           }
