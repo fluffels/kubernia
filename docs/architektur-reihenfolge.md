@@ -1,6 +1,6 @@
 # Architektur-Reihenfolge
 
-> **Stand: 2026-06-21 (nach #410 – Quest-Fortschritt als Menge offener Quests `activeQuests` + datengesteuerte Voraussetzungen `requires`, Save-Format v4; davor #357 Entity-Registry auf Objekte, #414 Save-Migrations-Integrationstest, #401 Eviction-Schutz, #419 `main`-Branch-Protection, #418 LICENSE → [ADR 0007](adr/0007-spielsystem-fundamente.md)).** Kuratierte Umsetzungs-Reihenfolge für alle offenen Tickets mit Label `area:architektur`.
+> **Stand: 2026-06-21 (nach #411 – Quest-Checks deklarativ als Check-DSL in JSON statt Hand-Prädikate; `checks.ts` auf 1 echten Sonderfall geschrumpft, neue Module `check-dsl.ts`/`parse.ts`; davor #410 Quest-Fortschritt als Menge offener Quests `activeQuests` + Voraussetzungen `requires` Save v4, #357 Entity-Registry auf Objekte, #414 Save-Migrations-Integrationstest, #401 Eviction-Schutz, #419 `main`-Branch-Protection, #418 LICENSE → [ADR 0007](adr/0007-spielsystem-fundamente.md)).** Kuratierte Umsetzungs-Reihenfolge für alle offenen Tickets mit Label `area:architektur`.
 > Diese Liste **überschreibt** für Architektur-Tickets die generische Board-Auswahl (Prio→Nummer aus AGENTS.md):
 > Die Reihenfolge hier ist **abhängigkeitsbewusst** sortiert, nicht nur nach Prio-Label.
 
@@ -64,20 +64,19 @@ Erst **danach** der große Content-Ausbau (Quests/Orte/Charaktere) – auf dem d
 
 | # | Block | Ticket | Worum's geht | Warum hier / Abhängigkeit |
 |---|-------|--------|--------------|---------------------------|
-| 1 | Spielsystem-Fundament | **#411** | Quest-Checks deklarativ (DSL statt 56 Hand-Prädikate) | Vollendet „Content ist Daten" (ADR 0004→0007). Unabhängig; baut sinnvoll auf dem Quest-Modell (#410 ✓) auf. |
-| 2 | Spielsystem-Fundament | **#412** | Karten-Freischaltung konsolidieren (`EXTRA_CARDS`+`CONCEPT_INTRO`→JSON) | Kleiner Schwester-Schnitt zu #411. |
-| 3 | Spielsystem-Fundament | **#413** | Persistenter Spiel-Kalender im `GameState` | Isoliert; Fundament für saisonalen Content/Routinen. Save-Format-Änderung – Save-Netz #414 steht ✓, Save-Format ist seit #410 auf v4. |
-| 4 | Skalierungs-Enabler | **#415** | WorldScene auf Map-Registry generalisieren + TS-Inseln datengetrieben | Neue Region ohne Copy-Paste-Szene. Baut auf #57/#193 (✓); **nach #357** (Objekt-Registry ✓) liegen auch Trigger/Objekte als Daten vor. |
-| 5 | Skalierungs-Enabler | **#198** | Lazy-Asset-Loading pro Insel/Szene *(reaktiviert)* | Vor dem großen Asset-Wachstum, sonst eager-Lade-Bottleneck. |
-| 6 | Skalierungs-Enabler | **#339** | Texture-Atlas statt Einzel-Assets *(reaktiviert)* | Draw-Calls/Ladezeit bei vielen Sprites; nach Lazy-Loading. |
-| 7 | Skalierungs-Enabler | **#417** | Lazy-Content-Loading + `mergeScenario` entzerren | Content-Pendant zu #198 (Quest-/Karten-Daten statt Assets). |
-| 8 | Skalierungs-Enabler | **#416** | Cluster-Tags cullbar/gebündelt (Frame-Performance) | Rendering-Performance bei vielen Entities; unabhängig. |
-| 9 | Code-Hygiene | **#423** | Szenen-Layer von `any` befreien (10 no-explicit-any-Warnings, #389-Folge) | Typsicherheit in der Präsentation; unabhängig & niedrig-dringlich, blockt nichts – kann jederzeit nebenbei laufen. |
-| 10 | Features | **#306** | Mehrere Spielstände / Save-Slots | Baut auf IndexedDB (#350 ✓ erledigt). |
-| 11 | Features | **#332** | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-basierte Save (#353) + `repeatable`-Flag (#410 ✓) vorhanden. |
-| 12 | Features | **#334** | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
-| 13 | Sonderfall | **#314** ⚠️ | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen.** Übergreift #223. |
-| 14 | Sonderfall | **#293** ⚠️ | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der restliche Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 1 | Spielsystem-Fundament | **#412** | Karten-Freischaltung konsolidieren (`EXTRA_CARDS`+`CONCEPT_INTRO`→JSON) | Schwester-Schnitt zu den Quest-Check-Daten (#411 ✓): vollendet „Content ist Daten" (ADR 0004→0007). |
+| 2 | Spielsystem-Fundament | **#413** | Persistenter Spiel-Kalender im `GameState` | Isoliert; Fundament für saisonalen Content/Routinen. Save-Format-Änderung – Save-Netz #414 steht ✓, Save-Format ist seit #410 auf v4. |
+| 3 | Skalierungs-Enabler | **#415** | WorldScene auf Map-Registry generalisieren + TS-Inseln datengetrieben | Neue Region ohne Copy-Paste-Szene. Baut auf #57/#193 (✓); **nach #357** (Objekt-Registry ✓) liegen auch Trigger/Objekte als Daten vor. |
+| 4 | Skalierungs-Enabler | **#198** | Lazy-Asset-Loading pro Insel/Szene *(reaktiviert)* | Vor dem großen Asset-Wachstum, sonst eager-Lade-Bottleneck. |
+| 5 | Skalierungs-Enabler | **#339** | Texture-Atlas statt Einzel-Assets *(reaktiviert)* | Draw-Calls/Ladezeit bei vielen Sprites; nach Lazy-Loading. |
+| 6 | Skalierungs-Enabler | **#417** | Lazy-Content-Loading + `mergeScenario` entzerren | Content-Pendant zu #198 (Quest-/Karten-Daten statt Assets). |
+| 7 | Skalierungs-Enabler | **#416** | Cluster-Tags cullbar/gebündelt (Frame-Performance) | Rendering-Performance bei vielen Entities; unabhängig. |
+| 8 | Code-Hygiene | **#423** | Szenen-Layer von `any` befreien (10 no-explicit-any-Warnings, #389-Folge) | Typsicherheit in der Präsentation; unabhängig & niedrig-dringlich, blockt nichts – kann jederzeit nebenbei laufen. |
+| 9 | Features | **#306** | Mehrere Spielstände / Save-Slots | Baut auf IndexedDB (#350 ✓ erledigt). |
+| 10 | Features | **#332** | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-basierte Save (#353) + `repeatable`-Flag (#410 ✓) vorhanden. |
+| 11 | Features | **#334** | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 12 | Sonderfall | **#314** ⚠️ | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen.** Übergreift #223. |
+| 13 | Sonderfall | **#293** ⚠️ | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der restliche Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 ## Zurückgestellt — werden ignoriert
 
