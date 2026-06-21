@@ -280,6 +280,54 @@
     rawSet(BACKUP_KEY, raw);
   }
 
+  /* ===== Eviction-Schutz: dauerhafter Speicher + Quota-Monitoring (#401) =====
+   * Browser-Speicher ist "geliehen, nicht besessen": unter Speicherdruck löscht der
+   * Browser best-effort-Origins per LRU KOMPLETT (IndexedDB + Cache API + OPFS einer
+   * Origin zusammen). Ein Lernspiel, das man über Wochen nur sporadisch im Tab öffnet,
+   * ist genau ein LRU-Kandidat – der Stand kann stillschweigend verschwinden (ADR 0006,
+   * Befund 3). IndexedDB allein schützt NICHT davor; nur `navigator.storage.persist()`
+   * markiert den Origin als dauerhaft.
+   *
+   * Zusätzlich überwacht `navigator.storage.estimate()` die Belegung: läuft das
+   * Kontingent voll, soll früh gewarnt werden, BEVOR ein QuotaExceededError den
+   * 5-Sekunden-Auto-Save reißt. Der JSON-Export bleibt das verlässliche letzte Netz.
+   *
+   * Diese Schicht ist reine Persistenz: sie FORDERT an und MISST, gibt das Ergebnis
+   * aber nur als Datenobjekt (StorageHealth) zurück. Den eigentlichen Warn-Toast feuert
+   * der Aufrufer in der Präsentation/Einstieg (main.ts) – store.ts darf die UI nicht
+   * kennen (Schichtung). Alles ist feature-detected und wirft NIE.
+   */
+
+  /** Schwelle, ab der das Kontingent als "knapp" gilt (usage/quota) und früh gewarnt wird. */
+  export const QUOTA_WARN_RATIO = 0.8;
+
+  /** Ergebnis von {@link SaveStore.requestPersistentStorage}: Zustand des Speicher-Schutzes. */
+  export interface StorageHealth {
+    /** Unterstützt der Browser `navigator.storage.persist()` überhaupt? */
+    persistSupported: boolean;
+    /** Ist der Origin als dauerhaft markiert (kein LRU-Evict)? */
+    persisted: boolean;
+    /** Belegte Bytes laut `estimate()`, oder null wenn die API fehlt/scheitert. */
+    usage: number | null;
+    /** Verfügbares Kontingent in Bytes, oder null. */
+    quota: number | null;
+    /** usage/quota in [0,1], oder null wenn nicht ermittelbar (auch bei quota=0). */
+    usageRatio: number | null;
+    /** true, wenn das Kontingent knapp wird (>= QUOTA_WARN_RATIO) → früh warnen. */
+    nearQuota: boolean;
+  }
+
+  /** Den StorageManager holen – feature-detected. null, wenn die API nicht existiert
+   *  (alter Browser, `file://`-Offline-Build, Node-Test ohne Stub). Wirft nie. */
+  function getStorageManager(): StorageManager | null {
+    try {
+      const nav = (globalThis as unknown as { navigator?: { storage?: StorageManager } }).navigator;
+      return nav?.storage ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   export const SaveStore = {
     /**
      * Schaltet SaveStore – falls möglich – auf IndexedDB als unbegrenztes Backend um.
@@ -326,6 +374,51 @@
       // Modus erst NACH erfolgreicher Hydration aktivieren, damit kein synchroner
       // Leser je einen leeren Cache sieht.
       idb = db;
+    },
+
+    /**
+     * Eviction-Schutz anfordern (#401): den Origin als dauerhaften Speicher markieren
+     * (`navigator.storage.persist()`) und die Belegung messen (`estimate()`). EINMAL
+     * beim Boot aufrufen (nach init()). Muss NICHT awaitet werden, um den Boot zu
+     * blockieren – das Ergebnis dient nur dem Aufrufer für eine optionale Frühwarnung
+     * (Toast in main.ts) bei knappem Kontingent.
+     *
+     * Wirft NIE und ist gefahrlos mehrfach aufrufbar: jede Teil-API wird feature-detected,
+     * jeder Fehler/jede Ablehnung wird abgefangen und führt nur zu einem neutralen Feld
+     * im zurückgegebenen {@link StorageHealth}. Fehlt die API ganz, läuft das Spiel
+     * (ungeschützt, wie bisher) einfach weiter.
+     */
+    async requestPersistentStorage(): Promise<StorageHealth> {
+      const sm = getStorageManager();
+      const persistSupported = !!sm && typeof sm.persist === "function";
+      let persisted = false;
+      let usage: number | null = null;
+      let quota: number | null = null;
+
+      if (sm) {
+        // Schon dauerhaft? Dann NICHT erneut anfragen – ein zweiter persist()-Aufruf
+        // löst in Firefox sonst einen weiteren Berechtigungs-Prompt aus.
+        try {
+          if (typeof sm.persisted === "function") persisted = await sm.persisted();
+        } catch { /* best effort – als nicht-dauerhaft behandeln */ }
+        if (!persisted && persistSupported) {
+          try {
+            persisted = await sm.persist();
+          } catch { /* abgelehnt/Fehler → ungeschützt weiter, kein Crash */ }
+        }
+        if (typeof sm.estimate === "function") {
+          try {
+            const est = await sm.estimate();
+            usage = typeof est.usage === "number" ? est.usage : null;
+            quota = typeof est.quota === "number" ? est.quota : null;
+          } catch { /* best effort – ohne Schätzung keine Warnschwelle */ }
+        }
+      }
+
+      // quota=0 schützt vor Division durch null (manche Umgebungen melden 0).
+      const usageRatio = usage != null && quota != null && quota > 0 ? usage / quota : null;
+      const nearQuota = usageRatio != null && usageRatio >= QUOTA_WARN_RATIO;
+      return { persistSupported, persisted, usage, quota, usageRatio, nearQuota };
     },
 
     /** Roh-JSON des Spielstands lesen – oder null, wenn noch nichts gespeichert ist. */

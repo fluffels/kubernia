@@ -101,6 +101,16 @@ import { keys, clearKeys } from "./runtime";
     // Stand einmalig hinein). Wirft nie und fällt ohne IndexedDB auf localStorage zurück,
     // darum hält das await den Boot nicht auf, wenn kein IndexedDB da ist.
     await SaveStore.init();
+    // Eviction-Schutz (#401): Browser-Speicher ist "geliehen" – ohne `persist()` kann der
+    // Browser unter Speicherdruck den ganzen Origin (inkl. IndexedDB-Spielstand) per LRU
+    // löschen. Wir fordern dauerhaften Speicher an (best effort, feature-detected) und warnen
+    // früh, wenn das Kontingent knapp wird, bevor ein QuotaExceededError den Auto-Save reißt.
+    // Bewusst NICHT awaitet (`void`): das soll den Boot nicht aufhalten (#389/no-floating-promises).
+    void SaveStore.requestPersistentStorage().then(health => {
+      if (health.nearQuota) {
+        UI.toast("⚠️ <b>Browser-Speicher wird knapp.</b> Sichere deinen Fortschritt über Menü → Spielstand exportieren.");
+      }
+    });
     Game.load();
     wireKeyboard();
     UI.bindEvents();
