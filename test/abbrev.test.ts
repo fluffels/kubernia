@@ -414,3 +414,37 @@ describe("#313: longFormsInInput – Langform-Nutzung für den Zähler", () => {
     expect(longFormsInInput("docker ps")).toEqual([]);
   });
 });
+
+/* #379: Das Docker-Kapitel führt -d/-t „Langform-zuerst" ein – symmetrisch zu -a (#313).
+ * Diese Flags werden NICHT mehr per Quest-Schritt (unlockAbbrev) freigeschaltet,
+ * sondern durch wiederholtes Tippen der Langform VERDIENT. Der Wächter hält das fest,
+ * damit ein versehentlich wieder eingefügter unlockAbbrev-Schritt sofort auffliegt
+ * (und die docker-ps-all-Symmetrie erhalten bleibt). */
+describe("#379: Docker-Flags -a/-d/-t sind nutzungs-verdient (kein unlockAbbrev-Schritt)", () => {
+  const VERDIENT_PER_NUTZUNG = ["docker-ps-all", "docker-run-detach", "docker-build-tag"];
+
+  function stepUnlockIds(): Set<string> {
+    const ids = new Set<string>();
+    for (const quest of KQContent.QUESTS) {
+      for (const step of quest.steps) {
+        if (step.unlockAbbrev) ids.add(step.unlockAbbrev);
+      }
+    }
+    return ids;
+  }
+
+  test("keines dieser Flags wird per Quest-Schritt freigeschaltet", () => {
+    const unlocked = stepUnlockIds();
+    const fälschlichPerSchritt = VERDIENT_PER_NUTZUNG.filter(id => unlocked.has(id));
+    assert.deepEqual(fälschlichPerSchritt, [], "Diese Docker-Flags sollen per Nutzung verdient werden, haben aber einen unlockAbbrev-Schritt:\n" + fälschlichPerSchritt.join("\n"));
+  });
+
+  test("jedes dieser Flags bleibt verdienbar: seine Langform steht in einer accept-Regex", () => {
+    const idToLong = new Map(ABBREVS.map(a => [a.id, a.long] as const));
+    const nichtVerdienbar = VERDIENT_PER_NUTZUNG.filter(id => {
+      const long = idToLong.get(id);
+      return !long || !appearsAnywhere(long);
+    });
+    assert.deepEqual(nichtVerdienbar, [], "Nutzungs-verdiente Flags, deren Langform NICHT im Content tippbar ist:\n" + nichtVerdienbar.join("\n"));
+  });
+});

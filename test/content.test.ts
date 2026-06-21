@@ -95,7 +95,7 @@ test("docker run: Flag-Reihenfolge ist frei – Drill & Karte akzeptieren -d/--n
   const make = KQContent.DRILLS["docker-run-named"];
   for (let i = 0; i < 40; i++) {
     const task = make(new KQSim({}));
-    const m = norm(task.solution).match(/^docker run -d --name (\S+) (\S+)$/);
+    const m = norm(task.solution).match(/^docker run --detach --name (\S+) (\S+)$/);
     assert.ok(m, "unerwartete Musterlösung: " + task.solution);
     const [, name, img] = m!;
     const ok = (s: string) => task.accept.some(re => re.test(norm(s)));
@@ -121,7 +121,7 @@ test("docker build: -t UND --tag gelten gleichwertig in Teach-Schritt, Karte & D
   const make = KQContent.DRILLS["docker-build"];
   for (let i = 0; i < 40; i++) {
     const task = make(new KQSim({}));
-    const m = norm(task.solution).match(/^docker build -t (\S+) \.$/);
+    const m = norm(task.solution).match(/^docker build --tag (\S+) \.$/);
     assert.ok(m, "unerwartete Musterlösung: " + task.solution);
     const nameTag = m![1];
     const ok = (s: string) => task.accept.some(re => re.test(norm(s)));
@@ -224,8 +224,8 @@ test("Drills & Karten lehnen ungelehrte Extras ab (Supersets), erlaubte Variante
   // 1) docker-run-named: -p (Port-Mapping, noch nicht gelehrt) als Extra → ablehnen.
   //    Beide Flag-Reihenfolgen ohne Extra bleiben gültig (didaktisch gewollt).
   drillOk("docker-run-named", sol => sol, true);                                  // Musterlösung gilt
-  drillOk("docker-run-named", sol => sol.replace(/^(docker run )(-d --name \S+)( \S+)$/, "$1$2 -p 8080:80$3"), false); // +Port → raus
-  drillOk("docker-run-named", sol => sol.replace(/^(docker run )(-d) (--name \S+)( \S+)$/, "$1$3 $2$4"), true);        // Reihenfolge --name -d gilt
+  drillOk("docker-run-named", sol => sol.replace(/^(docker run )(--detach --name \S+)( \S+)$/, "$1$2 -p 8080:80$3"), false); // +Port → raus
+  drillOk("docker-run-named", sol => sol.replace(/^(docker run )(--detach) (--name \S+)( \S+)$/, "$1$3 $2$4"), true);        // Reihenfolge --name --detach gilt
 
   // 2) k-expose: zusätzliches --type=NodePort (nicht gelehrt) → ablehnen.
   drillOk("k-expose", sol => sol, true);
@@ -600,7 +600,7 @@ test("docker-run-named: diag benennt falschen Namen gezielt, nicht Reihenfolge (
   for (let i = 0; i < 60; i++) {
     const task = make(new KQSim({}));
     assert.ok("diag" in task, "docker-run-named muss ein diag-Feld haben (#321)");
-    const m = task.solution.match(/^docker run -d --name (\S+) (\S+)$/);
+    const m = task.solution.match(/^docker run --detach --name (\S+) (\S+)$/);
     if (!m) continue;
     const [, name, img] = m;
     const norm = (s: string) => s.trim().replace(/\s+/g, " ");
@@ -609,13 +609,13 @@ test("docker-run-named: diag benennt falschen Namen gezielt, nicht Reihenfolge (
     assert.equal(task.diag!(norm(task.solution)), null, "Musterlösung darf keinen diag auslösen");
 
     // Name falsch → diag nennt den richtigen Namen
-    const diagBadName = task.diag!(norm(`docker run -d --name x${name} ${img}`));
+    const diagBadName = task.diag!(norm(`docker run --detach --name x${name} ${img}`));
     assert.ok(diagBadName, "Namen-Tippfehler → diag muss nicht-null sein");
     assert.ok(diagBadName!.includes(name), `diag muss erwarteten Namen '${name}' nennen, war: ${diagBadName}`);
     assert.ok(!diagBadName!.includes("Reihenfolge"), `diag darf nicht Reihenfolge erwähnen bei Name-Tippfehler, war: ${diagBadName}`);
 
     // Kein --name → Strukturfehler, diag gibt null zurück (why greift)
-    assert.equal(task.diag!(norm(`docker run -d ${img}`)), null, "kein --name → diag muss null sein");
+    assert.equal(task.diag!(norm(`docker run --detach ${img}`)), null, "kein --name → diag muss null sein");
 
     tested = true;
     break;
@@ -628,13 +628,13 @@ test("docker-run-named: diag benennt falsches Image gezielt (#321)", () => {
   let tested = false;
   for (let i = 0; i < 60; i++) {
     const task = make(new KQSim({}));
-    const m = task.solution.match(/^docker run -d --name (\S+) (\S+)$/);
+    const m = task.solution.match(/^docker run --detach --name (\S+) (\S+)$/);
     if (!m) continue;
     const [, name, img] = m;
     const norm = (s: string) => s.trim().replace(/\s+/g, " ");
 
     // Image falsch → diag nennt das richtige Image
-    const diagBadImg = task.diag!(norm(`docker run -d --name ${name} wrong-image`));
+    const diagBadImg = task.diag!(norm(`docker run --detach --name ${name} wrong-image`));
     assert.ok(diagBadImg, "Image-Tippfehler → diag muss nicht-null sein");
     assert.ok(diagBadImg!.includes(img), `diag muss erwartetes Image '${img}' nennen, war: ${diagBadImg}`);
 

@@ -36,8 +36,8 @@
     "accept": [
       "^docker\\s+run\\s+(?:(?:-d|--detach)\\s+--name\\s+webserver|--name\\s+webserver\\s+(?:-d|--detach))\\s+nginx(:\\S+)?$"
     ],
-    "solution": "docker run -d --name webserver nginx",
-    "explain": "Die Optionen-Reihenfolge ist frei (-d --name oder --name -d, beides gilt) – nur: erst die Optionen, dann das Image (nginx) ganz zuletzt. <code>-d</code> hat auch die Langform <code>--detach</code> (gleichwertig)."
+    "solution": "docker run --detach --name webserver nginx",
+    "explain": "Die Optionen-Reihenfolge ist frei (--detach --name oder --name --detach, beides gilt) – nur: erst die Optionen, dann das Image (nginx) ganz zuletzt. (Die Kurzform <code>-d</code> verdienst du dir durch Nutzung der Langform <code>--detach</code>.)"
   },
   {
     "id": "c-ch1-5",
@@ -46,8 +46,8 @@
     "accept": [
       "^docker\\s+build\\s+(?:-t|--tag)\\s+hafenwache:1\\.0\\s+\\.$"
     ],
-    "solution": "docker build -t hafenwache:1.0 .",
-    "explain": "<code>build</code> baut nicht im Terminal, sondern in der <b>Docker-Engine</b> – einem eigenen Programm, das deine Ordner nicht sieht. Der Punkt am Ende ist der <b>Build-Kontext</b>: der Ordner, den du der Engine als Paket rüberreichst (<code>.</code> = der aktuelle) – die <b>Kiste mit Baumaterial</b>, die du der Werft gibst; ohne sie weiß sie nicht, woraus sie baut. Docker sucht darin das <code>Dockerfile</code>; alles, was <code>COPY</code> reinholt, muss in dieser Kiste liegen. <code>-t</code> (Langform <code>--tag</code>, beides gilt) vergibt den ganzen Namen <code>name:tag</code> – der Teil hinter dem <code>:</code> ist der Versions-Tag; nicht zu verwechseln mit dem eigenen Befehl <code>docker tag</code>, der einem fertigen Image nachträglich einen Zweitnamen gibt."
+    "solution": "docker build --tag hafenwache:1.0 .",
+    "explain": "<code>build</code> baut nicht im Terminal, sondern in der <b>Docker-Engine</b> – einem eigenen Programm, das deine Ordner nicht sieht. Der Punkt am Ende ist der <b>Build-Kontext</b>: der Ordner, den du der Engine als Paket rüberreichst (<code>.</code> = der aktuelle) – die <b>Kiste mit Baumaterial</b>, die du der Werft gibst; ohne sie weiß sie nicht, woraus sie baut. Docker sucht darin das <code>Dockerfile</code>; alles, was <code>COPY</code> reinholt, muss in dieser Kiste liegen. <code>--tag</code> vergibt den ganzen Namen <code>name:tag</code> – der Teil hinter dem <code>:</code> ist der Versions-Tag; nicht zu verwechseln mit dem eigenen Befehl <code>docker tag</code>, der einem fertigen Image nachträglich einen Zweitnamen gibt. (Die Kurzform <code>-t</code> verdienst du dir durch Nutzung der Langform <code>--tag</code>.)"
   },
   {
     "id": "c-ch1-6",
