@@ -1,0 +1,30 @@
+{
+  "v": 2,
+  "data": {
+    "xp": -50,
+    "coins": "viel",
+    "character": "Hans",
+    "player": { "x": "nope", "y": 200 },
+    "questIdx": -3,
+    "questStep": 2.7,
+    "taskIdx": "x",
+    "currentQuestId": 999,
+    "completedQuests": "docker-first-container,docker-list-containers",
+    "inventory": { "potion": 3, "ghost": -1, "bad": "x" },
+    "owned": ["pet-1", 42, null, "flag"],
+    "activePet": 7,
+    "activeFlag": [],
+    "review": { "good": { "box": 2, "due": 5 }, "bad": "kaputt", "over": { "box": 99, "due": 1 } },
+    "unlockedAbbrev": "alles",
+    "abbrevUsage": { "x": -1, "y": "no", "z": 4 },
+    "cmdHistoryUnlocked": "ja",
+    "stats": { "commands": "n/a", "reviews": 4 },
+    "streak": { "count": -5, "lastDay": "heute" },
+    "streakHintShown": "vielleicht",
+    "introSeen": "ja",
+    "lastSeen": 0,
+    "clusterSnapshot": [1, 2, 3],
+    "audio": { "music": false, "sfx": "ja", "musicVol": 5, "sfxVol": -2 },
+    "settings": { "events": "ultrahart" }
+  }
+}

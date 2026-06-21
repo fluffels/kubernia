@@ -1,0 +1,32 @@
+{
+  "v": 2,
+  "data": {
+    "xp": 230,
+    "coins": 410,
+    "character": 0,
+    "player": { "x": 512, "y": 400 },
+    "questIdx": 0,
+    "questStep": 0,
+    "taskIdx": 0,
+    "currentQuestId": "q5",
+    "completedQuests": ["q0", "q1", "q2", "q2b", "q3", "q3b", "q4"],
+    "inventory": {},
+    "owned": [],
+    "activePet": null,
+    "activeFlag": null,
+    "review": { "q-ch1-1": { "box": 2, "due": 100 } },
+    "unlockedAbbrev": [],
+    "abbrevUsage": {},
+    "cmdHistoryUnlocked": false,
+    "streak": { "count": 1, "lastDay": 19800 },
+    "streakHintShown": false,
+    "introSeen": true,
+    "questLogIntroShown": true,
+    "stats": { "commands": 120, "reviews": 30, "quizRight": 20, "quizWrong": 5, "piratesBeaten": 2, "krakenBeaten": 0, "stackBest": 25 },
+    "lastSeen": 1700000000000,
+    "clusterSnapshot": null,
+    "audio": { "music": true, "sfx": true, "musicVol": 0.5, "sfxVol": 0.8, "track": "hafen" },
+    "settings": { "events": "normal" },
+    "questsSinceGate": 1
+  }
+}

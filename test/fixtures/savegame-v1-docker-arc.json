@@ -1,0 +1,23 @@
+{
+  "v": 1,
+  "data": {
+    "xp": 95,
+    "coins": 120,
+    "character": 1,
+    "player": { "x": 416, "y": 248 },
+    "questIdx": 6,
+    "questStep": 1,
+    "taskIdx": 0,
+    "completedQuests": ["q0", "q1", "q2", "q2b", "q3", "q3b"],
+    "inventory": { "fernrohr": 1 },
+    "owned": ["pet-ratte"],
+    "activePet": "pet-ratte",
+    "activeFlag": null,
+    "review": {
+      "q-ch1-1": { "box": 2, "due": 0 },
+      "q-flag-ps-a": { "box": 1, "due": 0 }
+    },
+    "streak": { "count": 3, "lastDay": 19500 },
+    "stats": { "commands": 42, "reviews": 12, "quizRight": 8, "quizWrong": 3, "piratesBeaten": 1, "krakenBeaten": 0, "stackBest": 18 }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "v": 2,
+  "data": {
+    "xp": 4200,
+    "coins": 5000,
+    "character": 3,
+    "player": { "x": 400, "y": 248 },
+    "questIdx": 40,
+    "questStep": 0,
+    "taskIdx": 0,
+    "currentQuestId": "",
+    "completedQuests": [
+      "q0", "q1", "q2", "q2b", "q3", "q3b", "q4", "q5", "q6", "q7",
+      "q8", "q9", "q10", "q11", "q12", "q13", "q14", "q26", "q15", "q16",
+      "q17", "q18", "q19", "q20", "q25", "q21", "q22", "q23", "q24", "q27",
+      "q28", "q29", "q30", "q31", "q32", "q33", "q34", "q35", "q36", "q37"
+    ],
+    "inventory": { "fernrohr": 9 },
+    "owned": ["pet-ratte", "pet-moewe", "pet-katze", "flag-blau", "flag-rot"],
+    "activePet": "pet-katze",
+    "activeFlag": "flag-rot",
+    "review": {
+      "q-ch1-1": { "box": 5, "due": 20500 },
+      "q-flag-ps-a": { "box": 5, "due": 20480 },
+      "q-tools-stack": { "box": 5, "due": 20460 },
+      "q-tools-monitoring": { "box": 4, "due": 20440 }
+    },
+    "unlockedAbbrev": ["*"],
+    "abbrevUsage": {},
+    "cmdHistoryUnlocked": true,
+    "streak": { "count": 30, "lastDay": 20000 },
+    "streakHintShown": true,
+    "introSeen": true,
+    "questLogIntroShown": true,
+    "stats": { "commands": 1850, "reviews": 640, "quizRight": 410, "quizWrong": 72, "piratesBeaten": 28, "krakenBeaten": 1, "stackBest": 77, "stormsFixed": 19 },
+    "lastSeen": 1700000000000,
+    "clusterSnapshot": null,
+    "audio": { "music": true, "sfx": true, "musicVol": 0.5, "sfxVol": 0.8, "track": "hafen" },
+    "settings": { "events": "off" },
+    "questsSinceGate": 0
+  }
+}

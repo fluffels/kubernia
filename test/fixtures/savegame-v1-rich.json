@@ -1,0 +1,41 @@
+{
+  "v": 1,
+  "data": {
+    "xp": 540,
+    "coins": 860,
+    "character": 2,
+    "player": { "x": 720, "y": 512 },
+    "questIdx": 16,
+    "questStep": 2,
+    "taskIdx": 1,
+    "completedQuests": ["q0", "q1", "q2", "q2b", "q3", "q3b", "q4", "q5", "q6", "q7", "q8", "q9", "q10", "q11", "q12", "q13"],
+    "inventory": { "fernrohr": 3, "kompass": 1 },
+    "owned": ["pet-ratte", "pet-moewe", "flag-blau", "fernrohr-upgrade"],
+    "activePet": "pet-moewe",
+    "activeFlag": "flag-blau",
+    "review": {
+      "q-ch1-1": { "box": 5, "due": 19999 },
+      "q-flag-ps-a": { "box": 4, "due": 19990 },
+      "q-tools-stack": { "box": 3, "due": 19980 },
+      "q-tools-monitoring": { "box": 2, "due": 19970 },
+      "q-flag-run-d": { "box": 1, "due": 0 },
+      "q-flag-kubectl-n": { "box": 5, "due": 20100 }
+    },
+    "unlockedAbbrev": ["-a", "-n", "-d", "--name"],
+    "abbrevUsage": { "docker-ps-all": 19, "kubectl-get-pods": 7 },
+    "cmdHistoryUnlocked": true,
+    "streak": { "count": 8, "lastDay": 19990 },
+    "streakHintShown": true,
+    "introSeen": true,
+    "questLogIntroShown": true,
+    "stats": { "commands": 310, "reviews": 95, "quizRight": 60, "quizWrong": 14, "piratesBeaten": 6, "krakenBeaten": 0, "stackBest": 42, "stormsFixed": 4 },
+    "lastSeen": 1700000000000,
+    "clusterSnapshot": {
+      "deployments": [{ "name": "web", "image": "nginx", "replicas": 3 }],
+      "services": [{ "name": "web", "type": "ClusterIP", "clusterIP": "10.96.0.10", "port": 80 }]
+    },
+    "audio": { "music": false, "sfx": true, "musicVol": 0.3, "sfxVol": 0.9, "track": "leuchtturm" },
+    "settings": { "events": "cozy" },
+    "questsSinceGate": 2
+  }
+}
