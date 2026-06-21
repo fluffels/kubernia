@@ -8,22 +8,45 @@
 // zurück (ExecResult liegt jetzt in sim/state.ts) – die Kante types → sim ist einseitig, kein Zyklus.
 import type { Sim, Scenario } from "./sim";
 
+/** Fortschritt EINER offenen Quest: aktueller Schritt + Aufgabe innerhalb des Schritts.
+ *  Wert-Typ von `GameState.activeQuests` (#410). Pro offener Quest genau ein solcher Stand;
+ *  so trägt das Save-Format mehrere parallel offene Quests, ohne dass ein Umbau auf
+ *  parallele/optionale Quests später eine Migration über alle Nutzerstände braucht. */
+export interface QuestProgress {
+  step: number;
+  task: number;
+}
+
 /** Vollständiger, serialisierbarer Spielstand (genau die Form aus Game.defaultState). */
 export interface GameState {
   xp: number;
   coins: number;
   character: number | null;
   player: { x: number; y: number };
-  /** Aktive Quest als **ID** – die Persistenz-Autorität für den Quest-Fortschritt (#353).
-   *  Quests einschieben/umsortieren verschiebt damit keinen Spielstand mehr. Leerer
-   *  String = alle Quests durch (Endzustand). `questIdx` ist nur der daraus abgeleitete
-   *  Laufzeit-Index; bei Konflikt gewinnt diese ID. Alt-Stände ohne dieses Feld werden
-   *  aus `questIdx` migriert (game.ts › sanitizeState). */
+  /** Offene Quests als **Menge** (Quest-ID → Fortschritt). Die Persistenz-Autorität für
+   *  den Quest-Fortschritt seit #410 – erweitert #353 von EINER auf MEHRERE gleichzeitig
+   *  offene Quests, ohne dass das einen Spielstand bricht. Auf dem linearen Lernpfad ist
+   *  hier genau **ein** Eintrag (= die aktuelle Quest); das Modell trägt aber beliebig viele
+   *  parallel/optional offene Quests (Stardew-Scope: Nebenstränge, Voraussetzungen). Eine
+   *  Quest ist „offen" ⇔ sie steht hier; „erledigt" ⇔ sie steht in `completedQuests`
+   *  (beides gleichzeitig schließt sich aus). Leeres Objekt = keine offene Quest (Endzustand).
+   *  Die linearen Felder `currentQuestId`/`questIdx`/`questStep`/`taskIdx` sind die abgeleitete
+   *  **Arbeitskopie der fokussierten Quest** (= des linearen Lernpfads); sie werden beim Laden
+   *  aus `activeQuests` abgeleitet und beim Speichern dort eingefaltet. Alt-Stände ohne dieses
+   *  Feld werden aus der fokussierten Einzel-Quest migriert (game.ts › sanitizeState). */
+  activeQuests: Record<string, QuestProgress>;
+  /** Fokussierte Quest als **ID** (die lineare Lernpfad-Quest, deren Schritt die UI spielt).
+   *  Abgeleitete Arbeitskopie der entsprechenden `activeQuests`-Auswahl. Leerer String =
+   *  alle Quests durch (Endzustand). `questIdx` ist der daraus abgeleitete Laufzeit-Index;
+   *  bei Konflikt gewinnt diese ID. Seit #353 ID-basiert (Quests einschieben/umsortieren
+   *  verschiebt keinen Stand), seit #410 Spiegel des `activeQuests`-Eintrags. */
   currentQuestId: string;
-  /** Abgeleiteter Laufzeit-Index der aktiven Quest in `QUESTS` (= Index in quest-order.json).
+  /** Abgeleiteter Laufzeit-Index der fokussierten Quest in `QUESTS` (= Index in quest-order.json).
    *  Wird beim Laden aus `currentQuestId` aufgelöst – NICHT die Persistenz-Autorität (#353). */
   questIdx: number;
+  /** Schritt-Stand der fokussierten Quest. Arbeitskopie von `activeQuests[currentQuestId].step`. */
   questStep: number;
+  /** Aufgaben-Stand innerhalb des fokussierten Schritts. Arbeitskopie von `activeQuests[currentQuestId].task`. */
   taskIdx: number;
   completedQuests: string[];
   inventory: Record<string, number>;
@@ -213,6 +236,16 @@ export interface Quest {
    *  Troubleshooting UND die Security-Hafenmauer). Referenzielle Gültigkeit
    *  (Thema existiert) + „kein totes Thema" prüft `content/validate.ts`. */
   topic: string;
+  /** Optionale Voraussetzungen (#410): Quest-IDs, die ALLE erledigt sein müssen, bevor
+   *  diese Quest gestartet werden darf (`Game.questPrereqsMet`). Datengesteuert und beim
+   *  Laden validiert (content/validate.ts: jede ID existiert, kein Selbst-Verweis, keine
+   *  Zyklen). Fehlt das Feld = keine Voraussetzung (der lineare Lernpfad). Der Lernpfad
+   *  selbst bleibt über `quest-order.json` geordnet; `requires` ist das Gate für optionale
+   *  Nebenstränge, die quer zur Reihenfolge freischalten. */
+  requires?: string[];
+  /** Optionales Wiederholbar-Flag (#410): darf nach Abschluss erneut gestartet werden
+   *  (Grundlage fürs Wiederspielen/Sandbox, #332). Fehlt = einmalig. */
+  repeatable?: boolean;
   rewardXp: number;
   rewardCoins: number;
   steps: QuestStep[];

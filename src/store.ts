@@ -216,7 +216,7 @@
    *   2. Eine Migration migrations[n] ergänzen, die `data` von Version n auf n+1 bringt.
    * Die Kette läuft dann automatisch jede Zwischenstufe der Reihe nach durch.
    */
-  export const CURRENT_SAVE_VERSION = 3;
+  export const CURRENT_SAVE_VERSION = 4;
 
   /** Migration von Format-Version n auf n+1 (reine Funktion auf dem `data`-Objekt). */
   type Migration = (data: unknown) => unknown;
@@ -243,6 +243,14 @@
     //         sanitizeState (LEGACY_QUEST_ID_MAP), damit es ALLE Ladewege trifft (auch der
     //         rohe JSON-Import). Der Bump sichert jeden v2-Stand vor dem Überschreiben.
     2: (data) => data,
+    // 3 -> 4 (#410): Quest-Fortschritt von EINER fokussierten Quest (currentQuestId) auf eine
+    //         MENGE offener Quests (activeQuests: Quest-ID -> {step,task}) erweitert, damit das
+    //         Save-Format mehrere parallel/optional offene Quests trägt. Wie 1->2/2->3 strukturell
+    //         ein No-op auf store-Ebene: das Bauen von activeQuests aus der fokussierten Einzel-
+    //         Quest liegt ZENTRAL in game.ts › sanitizeState, weil es ALLE Ladewege treffen muss
+    //         (auch den rohen JSON-Import, der diese Kette umgeht). Der Bump sichert jeden v3-Stand
+    //         vor dem ersten Überschreiben in den Backup-Slot.
+    3: (data) => data,
   };
 
   /** Hebt `data` von `version` schrittweise auf CURRENT_SAVE_VERSION. */

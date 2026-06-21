@@ -1,0 +1,49 @@
+{
+  "v": 4,
+  "data": {
+    "xp": 1500,
+    "coins": 2000,
+    "character": 1,
+    "player": { "x": 640, "y": 480 },
+    "activeQuests": {
+      "gitops-argocd-intro": { "step": 1, "task": 0 },
+      "gitops-self-sync": { "step": 0, "task": 0 }
+    },
+    "currentQuestId": "gitops-argocd-intro",
+    "questIdx": 30,
+    "questStep": 1,
+    "taskIdx": 0,
+    "completedQuests": [
+      "onboarding-sign-on", "docker-first-container", "docker-list-containers", "docker-stack-minigame",
+      "docker-run-options", "docker-build-image", "k8s-first-deployment", "k8s-inspect-pods",
+      "k8s-service", "k8s-self-healing", "k8s-apply-manifests", "helm-intro", "helm-release-install",
+      "helm-upgrade-rollback", "terraform-intro", "terraform-state-destroy", "kraken-boss",
+      "k8s-configmap-secret", "k8s-debug-imagepull", "k8s-debug-crashloop", "k8s-node-capacity",
+      "git-version-control", "git-feature-branch", "git-pipeline", "git-merge-branches",
+      "helm-umbrella-chart", "network-policy", "secrets-encrypted", "k8s-service-endpoints",
+      "k8s-resource-limits"
+    ],
+    "inventory": { "fernrohr": 2 },
+    "owned": ["pet-ratte", "flag-blau"],
+    "activePet": "pet-ratte",
+    "activeFlag": "flag-blau",
+    "review": {
+      "q-ch1-1": { "box": 4, "due": 20300 },
+      "q-flag-ps-a": { "box": 3, "due": 20280 },
+      "q-tools-monitoring": { "box": 2, "due": 20260 }
+    },
+    "unlockedAbbrev": ["-a", "-n"],
+    "abbrevUsage": { "docker-ps-all": 5 },
+    "cmdHistoryUnlocked": true,
+    "streak": { "count": 12, "lastDay": 20300 },
+    "streakHintShown": true,
+    "introSeen": true,
+    "questLogIntroShown": true,
+    "stats": { "commands": 880, "reviews": 240, "quizRight": 160, "quizWrong": 30, "piratesBeaten": 14, "krakenBeaten": 1, "stackBest": 55, "stormsFixed": 9 },
+    "lastSeen": 1700000000000,
+    "clusterSnapshot": null,
+    "audio": { "music": true, "sfx": false, "musicVol": 0.6, "sfxVol": 0.4, "track": "archipel" },
+    "settings": { "events": "cozy" },
+    "questsSinceGate": 2
+  }
+}

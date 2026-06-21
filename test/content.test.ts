@@ -458,6 +458,67 @@ test("Red-Green: totes Thema ohne jede Quest macht den Check rot (#327)", () => 
   );
 });
 
+test("Red-Green: Quest mit unbekannter Voraussetzung (requires) macht den Check rot (#410)", () => {
+  const kaputt: ContentBundle = {
+    ...KQContent,
+    QUESTS: [
+      ...KQContent.QUESTS,
+      { id: "q-req-weg", title: "Voraussetzungslos", giver: "ole", topic: "docker", requires: ["gibt-es-nicht"], rewardXp: 1, rewardCoins: 1, steps: [] },
+    ],
+  };
+  const errors = validateContent(kaputt);
+  assert.ok(
+    errors.some(e => e.includes("q-req-weg") && e.includes("gibt-es-nicht")),
+    "unbekannte Voraussetzung wurde NICHT gemeldet:\n" + errors.join("\n"),
+  );
+});
+
+test("Red-Green: Quest, die sich selbst voraussetzt, macht den Check rot (#410)", () => {
+  const kaputt: ContentBundle = {
+    ...KQContent,
+    QUESTS: [
+      ...KQContent.QUESTS,
+      { id: "q-selbst", title: "Selbstbezug", giver: "ole", topic: "docker", requires: ["q-selbst"], rewardXp: 1, rewardCoins: 1, steps: [] },
+    ],
+  };
+  const errors = validateContent(kaputt);
+  assert.ok(
+    errors.some(e => e.includes("q-selbst") && e.includes("selbst")),
+    "Selbst-Voraussetzung wurde NICHT gemeldet:\n" + errors.join("\n"),
+  );
+});
+
+test("Red-Green: ein Voraussetzungs-Zyklus (A→B→A) macht den Check rot (#410)", () => {
+  const kaputt: ContentBundle = {
+    ...KQContent,
+    QUESTS: [
+      ...KQContent.QUESTS,
+      { id: "q-cycle-a", title: "A", giver: "ole", topic: "docker", requires: ["q-cycle-b"], rewardXp: 1, rewardCoins: 1, steps: [] },
+      { id: "q-cycle-b", title: "B", giver: "ole", topic: "docker", requires: ["q-cycle-a"], rewardXp: 1, rewardCoins: 1, steps: [] },
+    ],
+  };
+  const errors = validateContent(kaputt);
+  assert.ok(
+    errors.some(e => e.includes("Zyklus")),
+    "Voraussetzungs-Zyklus wurde NICHT gemeldet:\n" + errors.join("\n"),
+  );
+});
+
+test("Voraussetzungen: eine gültige requires-Kette (kein Zyklus) ist sauber (#410)", () => {
+  // Positiv-Gegenprobe zum Zyklen-Check: A→B, B→C ist eine gültige Kette, KEIN Zyklus.
+  const ok: ContentBundle = {
+    ...KQContent,
+    QUESTS: [
+      ...KQContent.QUESTS,
+      { id: "q-chain-c", title: "C", giver: "ole", topic: "docker", rewardXp: 1, rewardCoins: 1, steps: [] },
+      { id: "q-chain-b", title: "B", giver: "ole", topic: "docker", requires: ["q-chain-c"], rewardXp: 1, rewardCoins: 1, steps: [] },
+      { id: "q-chain-a", title: "A", giver: "ole", topic: "docker", requires: ["q-chain-b"], rewardXp: 1, rewardCoins: 1, steps: [] },
+    ],
+  };
+  const errors = validateContent(ok);
+  assert.ok(!errors.some(e => e.includes("Zyklus")), "gültige Kette fälschlich als Zyklus gemeldet:\n" + errors.join("\n"));
+});
+
 test("Red-Green: unbekannter Drill in einem Übungs-Pool macht den Check rot", () => {
   const kaputt: ContentBundle = {
     ...KQContent,

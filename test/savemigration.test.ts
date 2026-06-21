@@ -72,6 +72,16 @@ function slugs(n: number): string[] {
   return KQContent.QUESTS.slice(0, n).map(q => q.id);
 }
 
+/** #410: Ein linearer (Single-Active) Stand muss nach dem Laden genau die fokussierte
+ *  Quest als offene Menge tragen (oder die leere Menge im Endzustand). So beweist jeder
+ *  Alt-Stand-Lauf, dass die Migration „Einzel-Quest → activeQuests-Set mit einem Eintrag"
+ *  verlustfrei greift. */
+function expectFocusedActiveQuests(): void {
+  const cur = Game.state.currentQuestId;
+  if (cur === "") { expect(Game.state.activeQuests).toEqual({}); return; }
+  expect(Game.state.activeQuests).toEqual({ [cur]: { step: Game.state.questStep, task: Game.state.taskIdx } });
+}
+
 /**
  * Spielt einen Fixture-Stand roh in die Persistenz ein und lädt ihn. Pinnt die Uhr auf
  * den gespeicherten lastSeen, damit KEINE Offline-Einnahmen anfallen (Differenz 0) und
@@ -126,6 +136,10 @@ test("v1 (Docker-Bogen): currentQuestId aus questIdx abgeleitet, alte IDs gemapp
   expect(Game.state.settings).toEqual({ events: "normal" });
   expect(Game.state.cmdHistoryUnlocked).toBe(false);
 
+  // #410: lineare Single-Active-Migration – genau die fokussierte Quest ist offen.
+  expectFocusedActiveQuests();
+  expect(Game.state.activeQuests).toEqual({ "k8s-first-deployment": { step: Game.state.questStep, task: 0 } });
+
   // Migrierter Stand wurde VOR dem Überschreiben in den Backup-Slot gesichert.
   expect(SaveStore.readBackup()).toBe(fixtureRaw("savegame-v1-docker-arc.json"));
 
@@ -163,6 +177,7 @@ test("v1 (voller Stand): reiches Deck/Abkürzungen/Stats/Cluster-Snapshot laden 
   expect(Game.state.audio).toEqual({ music: false, sfx: true, musicVol: 0.3, sfxVol: 0.9, track: "leuchtturm" });
 
   expect(Game.state.coins).toBe(860); // Snapshot wirft Einkommen ab, aber Uhr gepinnt → 0 Offline-Einnahmen
+  expectFocusedActiveQuests(); // #410: kraken-boss ist die einzige offene Quest
   expectRoundTripFixedPoint();
 });
 
@@ -184,6 +199,7 @@ test("v2 (veralteter Zahl-Index): currentQuestId gewinnt über stale questIdx, I
   expect(Game.isAbbrevUnlocked("-a")).toBe(false);
 
   expect(Game.state.coins).toBe(410);
+  expectFocusedActiveQuests(); // #410: k8s-inspect-pods ist die einzige offene Quest
   expectRoundTripFixedPoint();
 });
 
@@ -201,18 +217,23 @@ test("v2 (alle Quests durch): Endzustand + vollständige completedQuests-Migrati
   expect(Game.state.settings).toEqual({ events: "off" });
   expect(Game.state.coins).toBe(5000);
   expect(Game.state.stats.stormsFixed).toBe(19);
+  expectFocusedActiveQuests(); // #410: Endzustand -> keine offene Quest
+  expect(Game.state.activeQuests).toEqual({});
   expectRoundTripFixedPoint();
 });
 
 /* ============================================================================
- * v3 (aktuelles Format): muss UNVERÄNDERT laden – kein Over-Sanitizing, kein Backup.
+ * v3 (vor #410): Fortschritt nur als fokussierte Einzel-Quest, KEIN activeQuests-Feld.
+ * Lädt jetzt als Alt-Stand -> wird auf v4 migriert (activeQuests aus der Einzel-Quest
+ * gebaut) und vorher gesichert.
  * ========================================================================== */
 
-test("v3 (aktueller voller Stand): lädt unverändert, kein Backup, Roundtrip stabil", () => {
+test("v3 (voller Stand, vor #410): Einzel-Quest -> activeQuests-Set, verlustfrei migriert + gesichert", () => {
   loadFixture("savegame-v3-current.json");
 
   expect(Game.state.questIdx).toBe(30);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
+  expect(Game.state.questStep).toBe(1);
   expect(Game.state.completedQuests).toEqual(slugs(30));
   expect(Game.state.xp).toBe(1500);
   expect(Game.state.coins).toBe(2000);
@@ -225,7 +246,39 @@ test("v3 (aktueller voller Stand): lädt unverändert, kein Backup, Roundtrip st
   expect(Game.state.settings).toEqual({ events: "cozy" });
   expect(Game.state.stats.stormsFixed).toBe(9);
 
-  // Aktuelle Version → kein Herauf-Migrieren → kein Sichern ins Backup (kein unnötiges Verdoppeln).
+  // #410: aus der fokussierten Einzel-Quest wird genau ein offener Eintrag.
+  expect(Game.state.activeQuests).toEqual({ "gitops-argocd-intro": { step: 1, task: 0 } });
+  expectFocusedActiveQuests();
+
+  // v3 < aktuelle Version (4) → Herauf-Migrieren → Original VORHER gesichert.
+  expect(SaveStore.readBackup()).toBe(fixtureRaw("savegame-v3-current.json"));
+
+  expectRoundTripFixedPoint();
+});
+
+/* ============================================================================
+ * v4 (aktuelles Format, #410): muss UNVERÄNDERT laden – kein Backup. Trägt MEHRERE
+ * gleichzeitig offene Quests; diese müssen verlustfrei round-trippen (Kern von #410).
+ * ========================================================================== */
+
+test("v4 (aktueller Stand, mehrere offene Quests): lädt unverändert, kein Backup, Roundtrip stabil", () => {
+  loadFixture("savegame-v4-current.json");
+
+  expect(Game.state.questIdx).toBe(30);
+  expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
+  expect(Game.state.questStep).toBe(1);
+  expect(Game.state.completedQuests).toEqual(slugs(30));
+
+  // Kern von #410: ZWEI parallel offene Quests überleben verlustfrei – die fokussierte
+  // (lineare) plus ein optionaler Strang. Schlüssel kanonisch in quest-order.
+  expect(Game.state.activeQuests).toEqual({
+    "gitops-argocd-intro": { step: 1, task: 0 },
+    "gitops-self-sync": { step: 0, task: 0 },
+  });
+  expect(Game.activeQuestIds()).toEqual(["gitops-argocd-intro", "gitops-self-sync"]);
+  expect(Game.isQuestActive("gitops-self-sync")).toBe(true);
+
+  // Aktuelle Version → kein Herauf-Migrieren → kein Sichern ins Backup.
   expect(SaveStore.readBackup()).toBeNull();
 
   expectRoundTripFixedPoint();

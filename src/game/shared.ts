@@ -10,7 +10,7 @@
  * Bewusst KEIN Import aus anderen game/*-Modulen – shared bleibt das zyklenfreie Blatt. */
 import { KQContent } from "../content";
 import type { Sim } from "../sim";
-import type { GameState, EventMode } from "../types";
+import type { GameState, EventMode, QuestProgress } from "../types";
 
 /** this-Typ der Game-Methodenbündel (this = das komponierte Game-Objekt). Anders als
  *  UISelf in ui/shared.ts behalten die VERÄNDERLICHEN DATEN-Felder hier ihren echten Typ
@@ -75,6 +75,24 @@ export function questIndexForId(id: string): number {
   return KQContent.QUESTS.findIndex(q => q.id === id);
 }
 
+/* ---------- Offene Quests als Menge: Kanonisierung (#410) ----------
+ * `activeQuests` (Quest-ID → Fortschritt) ist die Persistenz-Autorität für MEHRERE
+ * gleichzeitig offene Quests. Damit der Save byte-stabil bleibt (Roundtrip-Fixpunkt
+ * in savemigration.test.ts), bringen wir die Schlüssel in eine deterministische
+ * Reihenfolge: die der quest-order (QUESTS-Reihenfolge), unabhängig davon, in welcher
+ * Reihenfolge Einträge hinzukamen. Unbekannte IDs (entfernte Quests) fallen dabei weg. */
+
+/** Offene Quests kanonisch ordnen (Schlüssel in QUESTS-Reihenfolge, unbekannte raus).
+ *  Gibt ein NEUES Objekt zurück und kopiert die Fortschritts-Werte flach (keine Mutation). */
+export function canonicalActiveQuests(active: Record<string, QuestProgress>): Record<string, QuestProgress> {
+  const out: Record<string, QuestProgress> = {};
+  for (const q of KQContent.QUESTS) {
+    const p = active[q.id];
+    if (p) out[q.id] = { step: p.step, task: p.task };
+  }
+  return out;
+}
+
 /** Frischer Spielstand – genau die Form von GameState. */
 export function makeDefaultState(): GameState {
   return {
@@ -88,7 +106,10 @@ export function makeDefaultState(): GameState {
     // links davon (Pixel), begehbar und innerhalb der Redeweite (1,7 Kacheln).
     // Returning-Spieler überschreiben das mit ihrer gespeicherten Position.
     player: { x: 400, y: 248 },
-    currentQuestId: questIdForIndex(0), // erste Quest; Persistenz-Autorität (#353)
+    // Offene Quests (#410): die erste Quest ist der einzige offene Eintrag. Persistenz-
+    // Autorität; die linearen Felder darunter sind ihre abgeleitete Arbeitskopie.
+    activeQuests: { [questIdForIndex(0)]: { step: 0, task: 0 } },
+    currentQuestId: questIdForIndex(0), // fokussierte (lineare) Quest; Spiegel von activeQuests (#353/#410)
     questIdx: 0,
     questStep: 0,
     taskIdx: 0,

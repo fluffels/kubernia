@@ -7,8 +7,8 @@ import { KQContent } from "../content";
 import { Sim as KQSim } from "../sim";
 import { SaveStore } from "../store";
 import { worldScene, applyAudioConfig } from "../runtime";
-import type { GameState } from "../types";
-import { part, makeDefaultState, questIdForIndex, questIndexForId, isEventMode, ALL_ABBREV_UNLOCKED } from "./shared";
+import type { GameState, QuestProgress } from "../types";
+import { part, makeDefaultState, questIdForIndex, questIndexForId, canonicalActiveQuests, isEventMode, ALL_ABBREV_UNLOCKED } from "./shared";
 
 /** Save-Migration #354: alte numerische Quest-IDs (q0, q2b, …) → neue sprechende Slugs.
  *  Quest-IDs sind in Spielständen persistiert (completedQuests + currentQuestId aus #353),
@@ -167,15 +167,50 @@ export function sanitizeState(raw: unknown): GameState {
   if (questIdx > KQContent.QUESTS.length) questIdx = KQContent.QUESTS.length; // nie über den Endzustand
   const currentQuestId = questIdForIndex(questIdx);
 
+  // Schritt-/Aufgaben-Stand der fokussierten Quest defensiv lesen (Arbeitskopie der linearen Felder).
+  let questStep = safeCount(raw.questStep, def.questStep);
+  let taskIdx = safeCount(raw.taskIdx, def.taskIdx);
+
+  // Offene Quests als Menge auflösen (#410). Die Persistenz-Autorität ist `activeQuests`;
+  // die linearen Felder oben sind nur die Arbeitskopie der FOKUSSIERTEN (linearen) Quest.
+  //   - Stand ab v4: `raw.activeQuests` sanitisiert übernehmen – nur echte Quest-IDs (alte
+  //     numerische via #354-Map gehoben); bereits erledigte Quests fallen raus, weil „offen"
+  //     und „erledigt" sich ausschließen.
+  //   - Alt-Stand (≤ v3, kein `activeQuests`): aus der fokussierten Einzel-Quest bauen – genau
+  //     ein offener Eintrag (oder keiner im Endzustand). Das ist die verlustfreie Migration
+  //     „bestehender Einzel-Stand → Set mit einem Eintrag".
+  const completedSet = new Set(safeStrArray(raw.completedQuests).map(migrateQuestId));
+  const active: Record<string, QuestProgress> = {};
+  if (isPlainObject(raw.activeQuests)) {
+    for (const [rawId, prog] of Object.entries(raw.activeQuests)) {
+      const id = migrateQuestId(rawId);
+      if (questIndexForId(id) < 0) continue;   // unbekannte/entfernte Quest -> raus
+      if (completedSet.has(id)) continue;      // erledigt gewinnt -> nicht zugleich offen
+      if (!isPlainObject(prog)) continue;
+      active[id] = { step: safeCount(prog.step, 0), task: safeCount(prog.task, 0) };
+    }
+  } else if (currentQuestId !== "") {
+    active[currentQuestId] = { step: questStep, task: taskIdx };
+  }
+  // Invariante: die fokussierte Quest ist (außer im Endzustand) immer offen – fehlt sie in
+  // einem v4-Stand (kaputt/manipuliert), aus den linearen Feldern ergänzen.
+  if (currentQuestId !== "" && !active[currentQuestId]) active[currentQuestId] = { step: questStep, task: taskIdx };
+  const activeQuests = canonicalActiveQuests(active);
+  // Arbeitskopie aus der Autorität nachziehen: bei v4-Ständen kann der fokussierte Eintrag
+  // aktueller sein als die top-level questStep/taskIdx (Autorität gewinnt).
+  const focus = currentQuestId !== "" ? activeQuests[currentQuestId] : undefined;
+  if (focus) { questStep = focus.step; taskIdx = focus.task; }
+
   return {
     xp: safeCount(raw.xp, def.xp),
     coins: safeCount(raw.coins, def.coins),
     character: typeof raw.character === "number" && Number.isFinite(raw.character) ? raw.character : null,
     player: { x: safeNum(player.x, def.player.x), y: safeNum(player.y, def.player.y) },
+    activeQuests,
     currentQuestId,
     questIdx,
-    questStep: safeCount(raw.questStep, def.questStep),
-    taskIdx: safeCount(raw.taskIdx, def.taskIdx),
+    questStep,
+    taskIdx,
     completedQuests: safeStrArray(raw.completedQuests).map(migrateQuestId), // alte Quest-IDs -> neue Slugs (#354)
     inventory,
     owned: safeStrArray(raw.owned),
@@ -252,6 +287,13 @@ export const saveBundle = part({
     if (syncFromScene && ws && ws.player) {
       this.state.player = { x: ws.player.x, y: ws.player.y };
     }
+    // Fokussierte Quest in die Autorität (activeQuests) einfalten + kanonisieren (#410):
+    // so spiegelt der persistierte Stand die lineare Arbeitskopie (questStep/taskIdx) wider
+    // und die Schlüssel-Reihenfolge bleibt byte-stabil (Roundtrip-Fixpunkt).
+    if (this.state.currentQuestId) {
+      this.state.activeQuests[this.state.currentQuestId] = { step: this.state.questStep, task: this.state.taskIdx };
+    }
+    this.state.activeQuests = canonicalActiveQuests(this.state.activeQuests);
     this.state.lastSeen = Date.now();
     SaveStore.writeState(this.state); // legt den Stand in der aktuellen Versions-Hülle ab
   },

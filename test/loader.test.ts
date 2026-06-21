@@ -187,6 +187,44 @@ test("parseQuests: akzeptiert wohlgeformte Quest ohne check", () => {
   assert.equal(q[0].steps[0].type, "dialog");
 });
 
+/* ---------- parseQuests: optionale Voraussetzungen + Wiederholbar-Flag (#410) ----------
+ * Basis ohne den Test-`check`-Key (der sonst zuerst wirft), damit gezielt requires/repeatable
+ * geprüft werden. */
+const reqQuest = { ...minimalQuest, steps: [{ type: "dialog", npc: "ole", lines: ["Hi"] }] };
+
+test("parseQuests: requires/repeatable fehlen standardmäßig (optional)", () => {
+  const q = parseQuests([reqQuest]);
+  assert.equal(q[0].requires, undefined);
+  assert.equal(q[0].repeatable, undefined);
+});
+
+test("parseQuests: übernimmt gültige requires-Liste und repeatable-Flag", () => {
+  const q = parseQuests([{ ...reqQuest, requires: ["docker-first-container"], repeatable: true }]);
+  assert.deepEqual(q[0].requires, ["docker-first-container"]);
+  assert.equal(q[0].repeatable, true);
+});
+
+test("parseQuests: wirft bei requires mit leerem String (mit Pfad)", () => {
+  assert.throws(
+    () => parseQuests([{ ...reqQuest, requires: [""] }]),
+    (e: unknown) => e instanceof ContentValidationError && /requires\[0\]/.test((e as Error).message),
+  );
+});
+
+test("parseQuests: wirft bei requires, das kein Array ist", () => {
+  assert.throws(
+    () => parseQuests([{ ...reqQuest, requires: "docker-first-container" }]),
+    (e: unknown) => e instanceof ContentValidationError && /requires/.test((e as Error).message),
+  );
+});
+
+test("parseQuests: wirft bei repeatable mit falschem Typ", () => {
+  assert.throws(
+    () => parseQuests([{ ...reqQuest, repeatable: "ja" }]),
+    (e: unknown) => e instanceof ContentValidationError && /repeatable/.test((e as Error).message),
+  );
+});
+
 /* ---------- parseQuests: kaputte Daten MÜSSEN explizit werfen ---------- */
 
 test("parseQuests: wirft bei Nicht-Array", () => {

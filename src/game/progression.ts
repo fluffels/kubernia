@@ -34,9 +34,14 @@ export const progressionBundle = part({
     this.state.taskIdx = 0;
     if (this.state.questStep >= q.steps.length) {
       this.state.completedQuests.push(q.id);
+      delete this.state.activeQuests[q.id]; // abgeschlossene Quest ist nicht mehr offen (#410)
       this.state.questIdx++;
       this.state.currentQuestId = questIdForIndex(this.state.questIdx); // ID synchron halten (#353)
       this.state.questStep = 0;
+      this.state.taskIdx = 0;
+      // Nächste lineare Quest öffnen (außer im Endzustand). save() faltet sie ohnehin ein;
+      // hier explizit, damit die Menge auch zwischen zwei Saves im RAM stimmt (#410).
+      if (this.state.currentQuestId) this.state.activeQuests[this.state.currentQuestId] = { step: 0, task: 0 };
       this.state.questsSinceGate++;
       this.save();
       return { questDone: q };
@@ -96,6 +101,9 @@ export const progressionBundle = part({
     this.state.questStep = 0;
     this.state.taskIdx = 0;
     this.state.completedQuests = quests.slice(0, questIdx).map(q => q.id);
+    // Offene Quests (#410) auf genau die fokussierte (lineare) Zielquest setzen – beim Sprung
+    // gibt es keine parallel offenen Stränge; Endzustand (currentQuestId leer) -> keine offen.
+    this.state.activeQuests = this.state.currentQuestId ? { [this.state.currentQuestId]: { step: 0, task: 0 } } : {};
 
     // Cluster frisch aus den erreichten Schritt-Szenarien aufbauen – exakt wie
     // load() es nach diesem Stand täte, nur von leerem Cluster (kein Snapshot),
@@ -115,6 +123,52 @@ export const progressionBundle = part({
     // lebenden WorldScene überschreiben lassen (#335) – sonst spawnt man nach
     // dem reload wieder am alten Ort statt beim Quest-Giver.
     this.save(false);
+    return true;
+  },
+
+  /* ---------- Offene Quests als Menge: Voraussetzungen & Multi-Active (#410) ----------
+   * Das Save-Modell (GameState.activeQuests) trägt MEHRERE gleichzeitig offene Quests;
+   * diese API macht das nutzbar – die Grundlage für optionale/parallele Quest-Stränge bei
+   * Stardew-Scope. Der lineare Lernpfad läuft unverändert über advanceStep (genau eine
+   * fokussierte Quest offen); startQuest öffnet zusätzliche Quests daneben, ohne den Fokus
+   * zu verschieben. So braucht der spätere Ausbau auf parallele Quests KEINE Save-Migration. */
+
+  /** IDs aller aktuell offenen Quests (Schlüssel-Reihenfolge = quest-order). */
+  activeQuestIds(): string[] { return Object.keys(this.state.activeQuests); },
+
+  /** Steht die Quest aktuell offen? */
+  isQuestActive(id: string): boolean { return Object.prototype.hasOwnProperty.call(this.state.activeQuests, id); },
+
+  /** Ist die Quest bereits abgeschlossen? */
+  isQuestCompleted(id: string): boolean { return this.state.completedQuests.includes(id); },
+
+  /** Fortschritt einer offenen Quest, oder null wenn sie nicht offen ist. */
+  questProgress(id: string) { return this.state.activeQuests[id] ?? null; },
+
+  /** Sind ALLE Voraussetzungen (`requires`) einer Quest erfüllt (= alle erledigt)? Eine Quest
+   *  ohne `requires` hat keine -> immer erfüllt. Unbekannte Quest-ID -> false. */
+  questPrereqsMet(id: string): boolean {
+    const quest = KQContent.QUESTS.find(q => q.id === id);
+    if (!quest) return false;
+    return (quest.requires ?? []).every(r => this.state.completedQuests.includes(r));
+  },
+
+  /** Darf die Quest jetzt gestartet werden? Quest existiert, Voraussetzungen erfüllt, nicht
+   *  schon offen und nicht schon erledigt (außer sie ist `repeatable`, #332). */
+  canStartQuest(id: string): boolean {
+    const quest = KQContent.QUESTS.find(q => q.id === id);
+    if (!quest) return false;
+    if (this.isQuestActive(id)) return false;
+    if (this.isQuestCompleted(id) && !quest.repeatable) return false;
+    return this.questPrereqsMet(id);
+  },
+
+  /** Öffnet eine zusätzliche Quest parallel zum linearen Pfad, wenn `canStartQuest`. Gibt
+   *  zurück, ob geöffnet wurde. Persistiert. Verschiebt NICHT die fokussierte (lineare) Quest. */
+  startQuest(id: string): boolean {
+    if (!this.canStartQuest(id)) return false;
+    this.state.activeQuests[id] = { step: 0, task: 0 };
+    this.save();
     return true;
   },
 

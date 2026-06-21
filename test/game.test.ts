@@ -852,3 +852,86 @@ test("#354 Migration: neue Slugs bleiben unverändert (idempotent, kein Doppel-M
   expect(Game.state.questIdx).toBe(7);
   expect(Game.state.completedQuests).toEqual(["onboarding-sign-on", "docker-first-container"]);
 });
+
+/* ---------- #410: Quest-Fortschritt als Menge offener Quests (parallel/optional) ----------
+ * Die Persistenz-Autorität ist activeQuests (Quest-ID -> {step,task}); die linearen Felder
+ * sind die Arbeitskopie der fokussierten Quest. Das Modell trägt MEHRERE gleichzeitig offene
+ * Quests + datengesteuerte Voraussetzungen (requires) – das Fundament für optionale Stränge,
+ * ohne dass der spätere Ausbau eine Save-Migration über alle Nutzerstände braucht. */
+
+test("#410 defaultState: genau die erste Quest ist offen", () => {
+  Game.reset();
+  expect(Game.state.activeQuests).toEqual({ [KQContent.QUESTS[0].id]: { step: 0, task: 0 } });
+  expect(Game.activeQuestIds()).toEqual([KQContent.QUESTS[0].id]);
+  expect(Game.isQuestActive(KQContent.QUESTS[0].id)).toBe(true);
+  expect(Game.isQuestActive(KQContent.QUESTS[1].id)).toBe(false);
+});
+
+test("#410 Migration: Alt-Stand (v3, kein activeQuests) -> fokussierte Einzel-Quest wird offen", () => {
+  Game.importData(JSON.stringify({ v: 3, data: { questIdx: 5, questStep: 2, taskIdx: 1, currentQuestId: KQContent.QUESTS[5].id } }));
+  Game.load();
+  // Genau ein offener Eintrag, mit dem migrierten Schritt-Stand – verlustfrei.
+  expect(Game.state.activeQuests).toEqual({ [KQContent.QUESTS[5].id]: { step: 2, task: 1 } });
+  expect(Game.state.questStep).toBe(2);
+  expect(Game.state.taskIdx).toBe(1);
+});
+
+test("#410 Migration: Endzustand (alle durch) -> leere offene Menge", () => {
+  setWorldScene(null);
+  Game.jumpToQuest(KQContent.QUESTS.length);
+  expect(Game.state.activeQuests).toEqual({});
+  expect(Game.activeQuestIds()).toEqual([]);
+  Game.load();
+  expect(Game.state.activeQuests).toEqual({}); // round-trippt
+});
+
+test("#410 advanceStep: schließt die fokussierte Quest, entfernt sie aus der offenen Menge, öffnet die nächste", () => {
+  setWorldScene(null);
+  Game.jumpToQuest(0);
+  const q0 = KQContent.QUESTS[0], q1 = KQContent.QUESTS[1];
+  expect(Game.state.activeQuests).toEqual({ [q0.id]: { step: 0, task: 0 } });
+  for (let i = 0; i < q0.steps.length; i++) Game.advanceStep();
+  // q0 ist erledigt und NICHT mehr offen; q1 ist jetzt die einzige offene Quest.
+  expect(Game.isQuestCompleted(q0.id)).toBe(true);
+  expect(Game.isQuestActive(q0.id)).toBe(false);
+  expect(Game.state.activeQuests).toEqual({ [q1.id]: { step: 0, task: 0 } });
+});
+
+test("#410 startQuest: öffnet eine zweite Quest parallel, ohne den Fokus zu verschieben", () => {
+  setWorldScene(null);
+  Game.reset();
+  const fokus = Game.state.currentQuestId;
+  // Eine spätere, voraussetzungsfreie Quest parallel öffnen (k8s-inspect-pods hat keine requires).
+  expect(Game.startQuest("k8s-inspect-pods")).toBe(true);
+  expect(Game.isQuestActive("k8s-inspect-pods")).toBe(true);
+  expect(Game.isQuestActive(fokus)).toBe(true);            // Fokus bleibt offen
+  expect(Game.state.currentQuestId).toBe(fokus);           // Fokus unverschoben
+  expect(Game.activeQuestIds().length).toBe(2);            // ZWEI gleichzeitig offen
+  // persistiert: neu laden liefert beide offenen Quests verlustfrei zurück
+  Game.load();
+  expect(Game.isQuestActive("k8s-inspect-pods")).toBe(true);
+  expect(Game.isQuestActive(fokus)).toBe(true);
+});
+
+test("#410 startQuest: keine Dublette, kein erneutes Öffnen einer erledigten Quest", () => {
+  Game.reset();
+  expect(Game.startQuest("k8s-inspect-pods")).toBe(true);
+  expect(Game.startQuest("k8s-inspect-pods")).toBe(false); // schon offen -> kein zweites Mal
+  Game.state.completedQuests.push("k8s-service");
+  expect(Game.startQuest("k8s-service")).toBe(false);      // erledigt + nicht repeatable -> gesperrt
+  expect(Game.startQuest("gibt-es-nicht")).toBe(false);    // unbekannte Quest
+});
+
+test("#410 requires (datengesteuert): optionale Quest bleibt gesperrt, bis die Voraussetzung erledigt ist", () => {
+  Game.reset();
+  // helm-umbrella-chart deklariert in den Quest-DATEN requires:[helm-intro].
+  expect(Game.questPrereqsMet("helm-umbrella-chart")).toBe(false);
+  expect(Game.canStartQuest("helm-umbrella-chart")).toBe(false);
+  expect(Game.startQuest("helm-umbrella-chart")).toBe(false);
+  // Voraussetzung erfüllen -> Gate öffnet.
+  Game.state.completedQuests.push("helm-intro");
+  expect(Game.questPrereqsMet("helm-umbrella-chart")).toBe(true);
+  expect(Game.canStartQuest("helm-umbrella-chart")).toBe(true);
+  // Quest ohne requires hat keine Voraussetzung -> immer erfüllt.
+  expect(Game.questPrereqsMet("k8s-inspect-pods")).toBe(true);
+});

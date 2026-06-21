@@ -139,6 +139,19 @@ export function validateContent(c: ContentBundle): string[] {
     if (!topicIds.has(quest.topic)) err(`Quest ${quest.id}: unbekanntes Thema „${quest.topic}" (nicht in quest-topics.json)`);
     else usedTopics.add(quest.topic);
 
+    // Voraussetzungen (#410) referenziell prüfen: jede ID muss eine echte Quest sein und darf
+    // nicht auf sich selbst zeigen (eine Quest kann sich nie selbst freischalten). Zyklen über
+    // mehrere Quests fängt der eigene Pass unten ab.
+    if (quest.requires) {
+      const seenReq = new Set<string>();
+      for (const r of quest.requires) {
+        if (r === quest.id) err(`Quest ${quest.id}: Voraussetzung verweist auf sich selbst`);
+        else if (!questIds.has(r)) err(`Quest ${quest.id}: unbekannte Voraussetzung „${r}"`);
+        if (seenReq.has(r)) err(`Quest ${quest.id}: doppelte Voraussetzung „${r}"`);
+        seenReq.add(r);
+      }
+    }
+
     for (const step of quest.steps) {
       switch (step.type) {
         case "dialog":
@@ -179,6 +192,32 @@ export function validateContent(c: ContentBundle): string[] {
           break;
       }
     }
+  }
+
+  // ---------- Voraussetzungen: keine Zyklen im requires-Graph (#410) ----------
+  // Ein Zyklus (A braucht B, B braucht A) würde beide Quests unerreichbar machen –
+  // bei Stardew-Scope (viele optionale Stränge) ein leicht einzuschleichender Fehler.
+  // Tiefensuche mit Farben: grau = im aktuellen Pfad (Rückkante = Zyklus), schwarz = fertig.
+  {
+    const questById = new Map(c.QUESTS.map(q => [q.id, q]));
+    const color = new Map<string, 0 | 1 | 2>(); // 0 weiß (ungesehen), 1 grau, 2 schwarz
+    const cyclesReported = new Set<string>();
+    const visit = (id: string): boolean => {
+      color.set(id, 1);
+      for (const dep of questById.get(id)?.requires ?? []) {
+        if (!questById.has(dep)) continue; // unbekannte Referenz hat der Pass oben schon gemeldet
+        const cdep = color.get(dep) ?? 0;
+        if (cdep === 1) { // Rückkante in den aktuellen Pfad = Zyklus
+          const key = [id, dep].sort().join("|");
+          if (!cyclesReported.has(key)) { cyclesReported.add(key); err(`QUESTS: Voraussetzungs-Zyklus über „${dep}" (z.B. ${id} → ${dep})`); }
+          return true;
+        }
+        if (cdep === 0 && visit(dep)) return true;
+      }
+      color.set(id, 2);
+      return false;
+    };
+    for (const q of c.QUESTS) if ((color.get(q.id) ?? 0) === 0) visit(q.id);
   }
 
   // ---------- Themen-Taxonomie: IDs eindeutig, kein totes Thema (#327) ----------

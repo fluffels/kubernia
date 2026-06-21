@@ -300,7 +300,7 @@ function parseOneQuest(q: unknown, where: string): Quest {
   const o = asRecord(q, where);
   const id = asNonEmptyString(o.id, `${where}.id`);
   const path = `quest ${id}`;
-  return {
+  const quest: Quest = {
     id,
     title: asNonEmptyString(o.title, `${path}.title`),
     giver: asNonEmptyString(o.giver, `${path}.giver`),
@@ -313,6 +313,12 @@ function parseOneQuest(q: unknown, where: string): Quest {
     rewardCoins: asInt(o.rewardCoins, `${path}.rewardCoins`),
     steps: asArray(o.steps, `${path}.steps`).map((s, j) => reviveStep(s, `${path}.steps[${j}]`)),
   };
+  // Optionale Voraussetzungen (#410): hier nur STRUKTURELL (Liste nicht-leerer Strings) –
+  // dass jede ID auf eine echte Quest zeigt (und keine Zyklen/Selbst-Verweise), prüft
+  // referenziell validateContent (content/validate.ts), wie bei giver/topic.
+  if (o.requires !== undefined) quest.requires = asNonEmptyStringArray(o.requires, `${path}.requires`);
+  if (o.repeatable !== undefined) quest.repeatable = asBool(o.repeatable, `${path}.repeatable`);
+  return quest;
 }
 
 /** Validiert eine rohe Quest-Liste (eine Regionen-Datei) gegen das Schema und gibt
