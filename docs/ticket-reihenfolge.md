@@ -46,20 +46,20 @@ Leitlinie der Sortierung: **Prio zuerst** (höchste offene Prio oben), **innerha
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| 1 | **#198** | – | Lazy-Asset-Loading pro Insel/Szene | **Skalierungs-Enabler** — vor dem großen Asset-Wachstum, sonst eager-Lade-Bottleneck. |
-| 2 | **#339** | niedrig | Texture-Atlas statt Einzel-Assets | Draw-Calls/Ladezeit bei vielen Sprites; **nach** Lazy-Loading #198. |
-| 3 | **#417** | niedrig | Lazy-Content-Loading + `mergeScenario` entzerren | Content-Pendant zu #198 (Quest-/Karten-Daten statt Assets). |
-| 4 | **#428** | niedrig | `MapId`-Union aus der Registry ableiten | Abschluss-Härtung der #415-Kinder (Rest nach #425/#427 ✓). |
-| 5 | **#306** | niedrig | Mehrere Spielstände / Save-Slots | Feature auf IndexedDB-Fundament (#350 ✓). |
-| 6 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
-| 7 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
-| 8 | **#212** | niedrig | Inhalt: erklären, was nginx ist (Webserver) | Nachgefüllt aus dem Auto-Rest (niedrigste freie Nicht-Optik-Nummer); reines Content-Ticket, keine Abhängigkeit. |
-| 9 | **#218** | niedrig | Inhalt: Stapel-Spiel mehr Beispiele + Cache/Build erklären | Nachgefüllt aus dem Auto-Rest (nächste freie Nicht-Optik-Content-Nummer); keine Abhängigkeit. |
-| 10 | **#219** | niedrig | Lernpfad: Spaced Repetition auf Stapel-Spiel/Drills ausweiten | Nachgefüllt aus dem Auto-Rest; thematisch nahe #218 (Stapel-Spiel), keine harte Abhängigkeit. |
-| 11 | **#228** | niedrig | Inhalt: Fun Fact – woher die 8 in K8s kommt | Nachgefüllt aus dem Auto-Rest; nächste freie Nicht-Optik-Content-Nummer, keine Abhängigkeit. |
-| 12 | **#229** | niedrig | Inhalt: mehr (gute!) Fun Facts & Witze einstreuen | Nachgefüllt aus dem Auto-Rest; thematisch nahe #228, keine Abhängigkeit. |
-| 13 | **#236** | niedrig | Inhalt: Kralle-Meilenstein-Sprüche (Übungszähler) | Nachgefüllt aus dem Auto-Rest (#416 erledigt); nächste freie Nicht-Optik-Content-Nummer, keine Abhängigkeit. |
-| 14 | **#237** | niedrig | Inhalt: Kralle = Krabbe ohne Krallen – Running Gag draus machen | Nachgefüllt aus dem Auto-Rest (#422 erledigt); thematisch nahe #236 (Kralle-Sprüche), keine Abhängigkeit. |
+| 1 | **#339** | niedrig | Texture-Atlas statt Einzel-Assets | **Skalierungs-Enabler**: Draw-Calls/Ladezeit bei vielen Sprites; jetzt dran (Lazy-Asset-Loading #198 ✓). |
+| 2 | **#417** | niedrig | Lazy-Content-Loading + `mergeScenario` entzerren | Content-Pendant zu #198 ✓ (Quest-/Karten-Daten statt Assets). |
+| 3 | **#428** | niedrig | `MapId`-Union aus der Registry ableiten | Abschluss-Härtung der #415-Kinder (Rest nach #425/#427 ✓). |
+| 4 | **#306** | niedrig | Mehrere Spielstände / Save-Slots | Feature auf IndexedDB-Fundament (#350 ✓). |
+| 5 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
+| 6 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 7 | **#212** | niedrig | Inhalt: erklären, was nginx ist (Webserver) | Nachgefüllt aus dem Auto-Rest (niedrigste freie Nicht-Optik-Nummer); reines Content-Ticket, keine Abhängigkeit. |
+| 8 | **#218** | niedrig | Inhalt: Stapel-Spiel mehr Beispiele + Cache/Build erklären | Nachgefüllt aus dem Auto-Rest (nächste freie Nicht-Optik-Content-Nummer); keine Abhängigkeit. |
+| 9 | **#219** | niedrig | Lernpfad: Spaced Repetition auf Stapel-Spiel/Drills ausweiten | Nachgefüllt aus dem Auto-Rest; thematisch nahe #218 (Stapel-Spiel), keine harte Abhängigkeit. |
+| 10 | **#228** | niedrig | Inhalt: Fun Fact – woher die 8 in K8s kommt | Nachgefüllt aus dem Auto-Rest; nächste freie Nicht-Optik-Content-Nummer, keine Abhängigkeit. |
+| 11 | **#229** | niedrig | Inhalt: mehr (gute!) Fun Facts & Witze einstreuen | Nachgefüllt aus dem Auto-Rest; thematisch nahe #228, keine Abhängigkeit. |
+| 12 | **#236** | niedrig | Inhalt: Kralle-Meilenstein-Sprüche (Übungszähler) | Nachgefüllt aus dem Auto-Rest (#416 erledigt); nächste freie Nicht-Optik-Content-Nummer, keine Abhängigkeit. |
+| 13 | **#237** | niedrig | Inhalt: Kralle = Krabbe ohne Krallen – Running Gag draus machen | Nachgefüllt aus dem Auto-Rest (#422 erledigt); thematisch nahe #236 (Kralle-Sprüche), keine Abhängigkeit. |
+| 14 | **#239** | niedrig | Lernbogen: Cluster nach Sturm selbst neu aufbauen (Spät-Spiel) | Nachgefüllt aus dem Auto-Rest (#198 erledigt); Content/Spät-Spiel, keine harte Abhängigkeit. |
 | 15 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
 | 16 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
