@@ -57,7 +57,7 @@ Damit nichts doppelt gepflegt wird, lebt jedes Thema an **genau einer** Stelle:
 - **Datei-für-Datei-Landkarte** (welches Modul macht was): [CLAUDE.md › Repo-Landkarte](CLAUDE.md)
 - **Wie hier gearbeitet wird** (harte Regeln, Board-/Ticket-Workflow, Konventionen): [AGENTS.md](AGENTS.md)
 - **Was das Spiel ist** (Story, Steuerung, Lernpfad): [README.md](README.md)
-- **Architektur-Stand & Ausbau-Plan** (Stardew-Scope): [docs/architektur-analyse-2026-06.md](docs/architektur-analyse-2026-06.md) + [docs/architektur-reihenfolge.md](docs/architektur-reihenfolge.md)
+- **Architektur-Stand & Umsetzungs-Reihenfolge** (Stardew-Scope): [docs/architektur-analyse-2026-06.md](docs/architektur-analyse-2026-06.md) + [docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md)
 
 ## Bevor du committest
 
