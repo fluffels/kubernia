@@ -46,21 +46,22 @@ Leitlinie der Sortierung: **Prio zuerst** (höchste offene Prio oben), **innerha
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| 1 | **#391** | mittel | CI: Boot-Smoke-Test des gebauten Spiels (headless) | Höchste offene Prio (mittel); Qualitätsnetz — fängt Laufzeit-Boot-Fehler; unabhängig. |
-| 2 | **#416** | mittel | Cluster-Tags cullbar/gebündelt (Frame-Performance) | Rendering-Perf bei vielen Entities; unabhängig. |
-| 3 | **#422** | mittel | Dependabot-/PR-Policy festschreiben | Prozess-Doku; unabhängig. |
-| 4 | **#198** | – | Lazy-Asset-Loading pro Insel/Szene | **Skalierungs-Enabler** — vor dem großen Asset-Wachstum, sonst eager-Lade-Bottleneck. |
-| 5 | **#339** | niedrig | Texture-Atlas statt Einzel-Assets | Draw-Calls/Ladezeit bei vielen Sprites; **nach** Lazy-Loading #198. |
-| 6 | **#417** | niedrig | Lazy-Content-Loading + `mergeScenario` entzerren | Content-Pendant zu #198 (Quest-/Karten-Daten statt Assets). |
-| 7 | **#428** | niedrig | `MapId`-Union aus der Registry ableiten | Abschluss-Härtung der #415-Kinder (Rest nach #425/#427 ✓). |
-| 8 | **#306** | niedrig | Mehrere Spielstände / Save-Slots | Feature auf IndexedDB-Fundament (#350 ✓). |
-| 9 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
-| 10 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
-| 11 | **#212** | niedrig | Inhalt: erklären, was nginx ist (Webserver) | Nachgefüllt aus dem Auto-Rest (niedrigste freie Nicht-Optik-Nummer); reines Content-Ticket, keine Abhängigkeit. |
-| 12 | **#218** | niedrig | Inhalt: Stapel-Spiel mehr Beispiele + Cache/Build erklären | Nachgefüllt aus dem Auto-Rest (nächste freie Nicht-Optik-Content-Nummer); keine Abhängigkeit. |
-| 13 | **#219** | niedrig | Lernpfad: Spaced Repetition auf Stapel-Spiel/Drills ausweiten | Nachgefüllt aus dem Auto-Rest; thematisch nahe #218 (Stapel-Spiel), keine harte Abhängigkeit. |
-| 14 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 15 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 1 | **#416** | mittel | Cluster-Tags cullbar/gebündelt (Frame-Performance) | Höchste offene Prio (mittel); Rendering-Perf bei vielen Entities; unabhängig. |
+| 2 | **#422** | mittel | Dependabot-/PR-Policy festschreiben | Prozess-Doku; unabhängig. |
+| 3 | **#198** | – | Lazy-Asset-Loading pro Insel/Szene | **Skalierungs-Enabler** — vor dem großen Asset-Wachstum, sonst eager-Lade-Bottleneck. |
+| 4 | **#339** | niedrig | Texture-Atlas statt Einzel-Assets | Draw-Calls/Ladezeit bei vielen Sprites; **nach** Lazy-Loading #198. |
+| 5 | **#417** | niedrig | Lazy-Content-Loading + `mergeScenario` entzerren | Content-Pendant zu #198 (Quest-/Karten-Daten statt Assets). |
+| 6 | **#428** | niedrig | `MapId`-Union aus der Registry ableiten | Abschluss-Härtung der #415-Kinder (Rest nach #425/#427 ✓). |
+| 7 | **#306** | niedrig | Mehrere Spielstände / Save-Slots | Feature auf IndexedDB-Fundament (#350 ✓). |
+| 8 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
+| 9 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 10 | **#212** | niedrig | Inhalt: erklären, was nginx ist (Webserver) | Nachgefüllt aus dem Auto-Rest (niedrigste freie Nicht-Optik-Nummer); reines Content-Ticket, keine Abhängigkeit. |
+| 11 | **#218** | niedrig | Inhalt: Stapel-Spiel mehr Beispiele + Cache/Build erklären | Nachgefüllt aus dem Auto-Rest (nächste freie Nicht-Optik-Content-Nummer); keine Abhängigkeit. |
+| 12 | **#219** | niedrig | Lernpfad: Spaced Repetition auf Stapel-Spiel/Drills ausweiten | Nachgefüllt aus dem Auto-Rest; thematisch nahe #218 (Stapel-Spiel), keine harte Abhängigkeit. |
+| 13 | **#228** | niedrig | Inhalt: Fun Fact – woher die 8 in K8s kommt | Nachgefüllt aus dem Auto-Rest (#391 erledigt); nächste freie Nicht-Optik-Content-Nummer, keine Abhängigkeit. |
+| 14 | **#229** | niedrig | Inhalt: mehr (gute!) Fun Facts & Witze einstreuen | Nachgefüllt aus dem Auto-Rest (#391 erledigt); thematisch nahe #228, keine Abhängigkeit. |
+| 15 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 16 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
