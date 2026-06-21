@@ -122,7 +122,7 @@ Voller Einstieg (Voraussetzungen, Alltags-Befehle, „wo finde ich was"): **[CON
 
 - **Wo liegt was?** Datei-für-Datei-Landkarte: [CLAUDE.md](CLAUDE.md).
 - **Wie wird hier gearbeitet** (Regeln, Board-Workflow, Konventionen): [AGENTS.md](AGENTS.md).
-- **Architektur-Stand & Ausbau-Plan** (Stardew-Scope): [docs/architektur-analyse-2026-06.md](docs/architektur-analyse-2026-06.md) + [docs/architektur-reihenfolge.md](docs/architektur-reihenfolge.md).
+- **Architektur-Stand & Umsetzungs-Reihenfolge** (Stardew-Scope): [docs/architektur-analyse-2026-06.md](docs/architektur-analyse-2026-06.md) + [docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md).
 
 > Eine **containerisierte Dev-Umgebung** (devcontainer/`docker compose`) ist in Arbeit (#388) und macht den Einstieg künftig noch reproduzierbarer.
 

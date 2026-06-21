@@ -58,7 +58,7 @@ Tag/Nacht existiert nur als Render-Effekt aus der Frame-Zeit; `GameState` hat **
 | 4 | **#412** Karten-Freischaltung konsolidieren | kleiner Schwester-Schnitt zu #411 |
 | 5 | **#413** Persistenter Kalender | isoliert, Fundament für saisonalen Content |
 
-Volle, abhängigkeitsbewusste Gesamtsequenz: [architektur-reihenfolge.md](../architektur-reihenfolge.md).
+Volle, abhängigkeitsbewusste Gesamtsequenz: [ticket-reihenfolge.md](../ticket-reihenfolge.md).
 
 ## Verwandte ADRs
 

@@ -3,7 +3,7 @@
 > **Stand: 2026-06-20.** Kritische Gesamtanalyse vor dem großen Ausbau (viele Quests/Orte/Charaktere, Spielstände, Stardew-Scope).
 > **Nachtrag 2026-06-21:** Eine erneute, **ADR-blinde** Analyse hat drei übersehene **Spielsystem-/Mechanik-Schulden** ergänzt (diese Analyse war Infrastruktur-fokussiert). → Abschnitt „Nachtrag 2026-06-21" unten + [ADR 0007](adr/0007-spielsystem-fundamente.md).
 > Diese Analyse löst die ältere [architektur-analyse-stardew.md](architektur-analyse-stardew.md) (#46) als aktuellen Stand ab – die meisten ihrer Lücken sind inzwischen geschlossen (Tiled-Maps #191–196, Build-Split #58, Content-as-Data #348/#349, ID-basierte Saves #353/#354, sim/ui/scenes-Splits).
-> Die konkrete Umsetzungs-Reihenfolge steht in [architektur-reihenfolge.md](architektur-reihenfolge.md).
+> Die konkrete Umsetzungs-Reihenfolge steht in [ticket-reihenfolge.md](ticket-reihenfolge.md).
 
 ## Leitfrage (oberste Regel)
 
@@ -98,4 +98,4 @@ Die Analyse oben (Stand 2026-06-20) war auf **Infrastruktur** fokussiert (Persis
 | #420 | NPC-Tagesplan/Routinen | ⏸ zurückgestellt | Scope-Frage; setzt #413 voraus |
 | #421 | Item-/Inventar-Modell-Fundament | ⏸ zurückgestellt | Scope-Frage (Crafting?) |
 
-**Korrigiertes Verdikt:** Das Infrastruktur-Fundament trägt — aber „die Basis steht" stimmt erst, wenn auch die drei Spielsystem-Säulen (Quest-Modell, Checks-als-Daten, Zeit-Achse) und das Save-Netz stehen. Umsetzungsreihenfolge: [architektur-reihenfolge.md](architektur-reihenfolge.md).
+**Korrigiertes Verdikt:** Das Infrastruktur-Fundament trägt — aber „die Basis steht" stimmt erst, wenn auch die drei Spielsystem-Säulen (Quest-Modell, Checks-als-Daten, Zeit-Achse) und das Save-Netz stehen. Umsetzungsreihenfolge: [ticket-reihenfolge.md](ticket-reihenfolge.md).
