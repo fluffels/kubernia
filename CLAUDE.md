@@ -129,9 +129,8 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/scenes/worldscene/warps.ts`](src/scenes/worldscene/warps.ts) | Präsentation | Übergänge Haus/Archipel/Leuchtturm/Lager + Warp-Gates (#393). |
 | [`src/scenes/worldscene/types.ts`](src/scenes/worldscene/types.ts) | Präsentation | Struktur-Typ `WorldSceneLike` fürs System-Modul-Muster (#393). |
 | [`src/scenes/InteriorScene.ts`](src/scenes/InteriorScene.ts) | Präsentation | Betretbarer Hausinnenraum (#6). |
-| [`src/scenes/ArchipelScene.ts`](src/scenes/ArchipelScene.ts) | Präsentation | GitOps-Archipel-Insel (#92). |
-| [`src/scenes/LighthouseScene.ts`](src/scenes/LighthouseScene.ts) | Präsentation | Monitoring-Leuchtturm-Klippe (#111). |
-| [`src/scenes/WarehouseScene.ts`](src/scenes/WarehouseScene.ts) | Präsentation | Lagerhallen-Viertel/Hafenkai (#124). |
+| [`src/scenes/RegionScene.ts`](src/scenes/RegionScene.ts) | Präsentation | EINE datengetriebene Szene für alle Nachbar-Regionen (Archipel/Leuchtturm/Lager), gesteuert über eine `RegionConfig` (#427); ersetzt die drei früheren Insel-Szenen-Klassen. |
+| [`src/scenes/regions.ts`](src/scenes/regions.ts) | Präsentation | Die `RegionConfig`-Liste (`REGION_CONFIGS`): Archipel #92/Leuchtturm #111/Lager #124 als Daten + `decorate`-Hooks für echte Sondermechanik (Bäume/Statue, Lichtkegel, Lager-Güter), #427. |
 | [`src/scenes/TilemapTestScene.ts`](src/scenes/TilemapTestScene.ts) | Präsentation | Tiled-Loader-Testszene (`?maptest`, #191). |
 | [`src/ui.ts`](src/ui.ts) | Präsentation | UI-Orchestrator/Barrel (komponiert `UI` aus `src/ui/*`, #356). → [presentation.md](docs/module/presentation.md) |
 | [`src/ui/shared.ts`](src/ui/shared.ts) | Präsentation | Geteilte UI-Helfer + `part()`-Typ-Helper. |

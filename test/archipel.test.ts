@@ -1,7 +1,8 @@
 /* Tests für #92 – GitOps-Archipel: Insel-Geometrie + Anleger/Warp.
  *
  * scenes.ts ist Phaser-gekoppelt und nicht im Node-Lauf importierbar; geprüft
- * wird daher die pure Insel-Mathe aus src/archipel.ts, die ArchipelScene baut.
+ * wird daher die pure Insel-Mathe aus src/archipel.ts, aus der die datengetriebene
+ * RegionScene (#427) die Archipel-Region baut.
  * Bewusst auch Grenz-/Negativfälle: Insel rundum von Wasser umschlossen, kein
  * Re-Trigger-Loop am Anleger, und – der wichtigste Fall – die Lichtung (NPC +
  * Quest-Trigger) muss vom Anleger aus wirklich begehbar erreichbar sein, sonst

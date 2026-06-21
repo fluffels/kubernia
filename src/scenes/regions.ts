@@ -1,0 +1,145 @@
+/* ===== KubeQuest – Region-Konfigurationen (scenes/regions.ts) =====
+ * #427: die DATEN der drei Nachbar-Regionen (GitOps-Archipel #92, Monitoring-Leuchtturm
+ * #111, Lagerhallen-Viertel #124) als RegionConfig-Liste – die generische RegionScene baut
+ * daraus die jeweilige Szene. Eine neue Standard-Region ist ein weiterer Eintrag hier, KEINE
+ * neue Szenen-Klasse (Kern-AK von #415).
+ *
+ * Region-spezifische Geometrie/Konstanten bleiben SSOT in den puren Modulen
+ * (archipel.ts/lighthouse.ts/warehouse.ts); hier werden sie nur zu Config-Einträgen
+ * gebündelt. Die `decorate`-Hooks tragen die ECHTE Sondermechanik (Archipel-Bäume +
+ * Quest-Trigger-Statue, Leuchtturm-Lichtkegel, Lager-Güter-Hitboxen) – Phaser-Code, der auf
+ * die fertige Szene aufsetzt; der `build`-Parameter ist das Ergebnis des jeweiligen Builders
+ * und wird hier auf seinen konkreten Map-Typ gecastet (derselbe Builder hat es erzeugt).
+ */
+import Phaser from "phaser";
+import { circleHitbox, rectHitbox } from "../world";
+import { T, DEVICE } from "./shared";
+import type { RegionConfig, RegionScene } from "./RegionScene";
+import { buildArchipel, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL, ARCHIPEL_NPC, ARCHIPEL_QUEST_TRIGGER, type ArchipelMap } from "../archipel";
+import { buildLighthouse, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL, LIGHTHOUSE_NPC, LIGHTHOUSE_QUEST_TRIGGER, LIGHTHOUSE_TOWER, type LighthouseMap } from "../lighthouse";
+import { buildWarehouse, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL, type WarehouseMap } from "../warehouse";
+
+/** #343/#386: Hitbox-Maße der Lager-Güter – Fässer rund (Radius), Kisten als mittig
+ *  eingerücktes Rechteck (Kantenlänge). Wie in der früheren WarehouseScene. */
+const HIT_R = 6;
+const CRATE_HIT = 12;
+
+/** GitOps-Archipel (#92): organische Insel mit Sandstrand + Holz-Steg; Bäume als grüner
+ *  Saum, der Quest-Trigger als Stein-Statue. E-Notausgang auf dem ganzen Steg. */
+const archipel: RegionConfig = {
+  key: "Archipel",
+  map: "archipel",
+  build: buildArchipel,
+  regionReturn: ARCHIPEL_TO_WORLD,
+  arrival: ARCHIPEL_ARRIVAL,
+  title: "⚓ GitOps-Archipel",
+  hint: "Zum Steg laufen ⚓ – zurück nach Port Kubernia",
+  returnGlyph: "⚓",
+  returnSign: "Heimhafen",
+  questSignDy: -1,            // Schild ÜBER der Quest-Trigger-Statue
+  dockEmergencyExit: true,    // E-Notausgang auf dem ganzen Steg (falls man dort feststeht)
+  decor: {
+    reserved: [
+      { x: ARCHIPEL_NPC.x, y: ARCHIPEL_NPC.y },
+      { x: ARCHIPEL_QUEST_TRIGGER.x, y: ARCHIPEL_QUEST_TRIGGER.y },
+    ],
+    bands: [{ max: 5, kind: "bush" }, { max: 9, kind: "rock" }, { max: 16, kind: "flowers" }],
+  },
+  decorate(scene: RegionScene, build) {
+    const m = build as ArchipelMap;
+    // Bäume (grüner Saum) – gemischter Wald wie auf der Hauptkarte.
+    for (const t of m.trees) {
+      const kind = ((t.x * 7 + t.y * 13) % 3 === 0) ? "pine" : "tree";
+      scene.add.image(t.x * T + 8, (t.y + 1) * T, kind).setOrigin(0.5, 1)
+        .setScale(kind === "pine" ? 0.95 : 1.1).setDepth((t.y + 1) * T);
+    }
+    // Quest-Trigger-Statue: ein „dungeon"-Tile als Mahnmal, bis #94–97 echte Quests einhängen.
+    const cx = ARCHIPEL_QUEST_TRIGGER.x * T + 8, baseY = (ARCHIPEL_QUEST_TRIGGER.y + 1) * T;
+    scene.add.ellipse(cx, baseY - 1, 14, 5, 0x000000, 0.22).setDepth(baseY - 1);
+    scene.add.image(cx, baseY, "dungeon", DEVICE).setOrigin(0.5, 1).setScale(1.1).setDepth(baseY);
+  },
+};
+
+/** Monitoring-Leuchtturm (#111): Gras-Hochebene mit Stein-Klippenrand; Felsbrocken als Saum,
+ *  oben der große Leuchtturm mit rotierendem Lichtkegel + pulsierender Lampe. */
+const lighthouse: RegionConfig = {
+  key: "Lighthouse",
+  map: "lighthouse",
+  build: buildLighthouse,
+  regionReturn: LIGHTHOUSE_TO_WORLD,
+  arrival: LIGHTHOUSE_ARRIVAL,
+  title: "🔭 Monitoring-Leuchtturm",
+  hint: "Pfad hinab ⬇ – zurück nach Port Kubernia",
+  returnGlyph: "⬇",
+  returnSign: "Port Kubernia",
+  questSignDy: 1,
+  decor: {
+    reserved: [
+      { x: LIGHTHOUSE_QUEST_TRIGGER.x, y: LIGHTHOUSE_QUEST_TRIGGER.y },
+      { x: LIGHTHOUSE_NPC.x, y: LIGHTHOUSE_NPC.y },
+      { x: LIGHTHOUSE_ARRIVAL.tx, y: LIGHTHOUSE_ARRIVAL.ty },
+    ],
+    bands: [{ max: 5, kind: "bush" }, { max: 14, kind: "flowers" }],
+  },
+  decorate(scene: RegionScene, build) {
+    const m = build as LighthouseMap;
+    // Felsbrocken am Klippenrand – die pure Kachel-Solidität (buildLighthouse) wird durch
+    // eine runde Hitbox ersetzt (#386), sodass man weich vorbeigleitet statt eckig abzuprallen.
+    for (const r of m.rocks) {
+      scene.add.image(r.x * T + 8, (r.y + 1) * T, "rock").setOrigin(0.5, 1).setScale(0.5).setDepth((r.y + 1) * T);
+      scene.solid[r.y * scene.W + r.x] = 0;
+      scene.addSoftCircle(r.x, r.y);
+    }
+    // Großer Leuchtturm + rotierender Lichtkegel + pulsierende Lampe (PixelLab-Turm).
+    const lx = LIGHTHOUSE_TOWER.x * T + 8, lyB = (LIGHTHOUSE_TOWER.y + 1) * T, lhSc = 0.6;
+    scene.add.ellipse(lx, lyB - 1, 32, 10, 0x5a6470).setDepth(lyB - 2);   // Felsen-Sockel
+    scene.add.image(lx, lyB, "lighthouse").setOrigin(0.5, 1).setScale(lhSc).setDepth(lyB + 4);
+    const lampY = lyB - Math.round(100 * lhSc) + 9;
+    if (!scene.textures.exists("lhbeam")) {
+      const bw = 84, bh = 34, bg = scene.make.graphics({}, false);
+      bg.fillStyle(0xffe9a0, 1); bg.fillTriangle(0, bh / 2, bw, 0, bw, bh);
+      bg.generateTexture("lhbeam", bw, bh); bg.destroy();
+    }
+    const beam = scene.add.image(lx, lampY, "lhbeam").setOrigin(0, 0.5)
+      .setAlpha(0.13).setBlendMode(Phaser.BlendModes.ADD).setDepth(lyB + 3);
+    scene.tweens.add({ targets: beam, angle: 360, duration: 4600, repeat: -1, ease: "Linear" });
+    const lamp = scene.add.image(lx, lampY, "px").setScale(4.5, 2.5).setTint(0xffe28a).setDepth(lyB + 5);
+    scene.tweens.add({ targets: lamp, alpha: { from: 0.5, to: 1 }, duration: 1100, yoyo: true, repeat: -1, ease: "Sine.inOut" });
+  },
+};
+
+/** Lagerhallen-Viertel (#124): gepflasterter Hafenkai mit Stein-Kai-Wand + Holz-Steg;
+ *  keine Boden-Deko, dafür gestreute Lager-Güter (Kisten/Fässer) mit Sub-Tile-Hitboxen. */
+const warehouse: RegionConfig = {
+  key: "Warehouse",
+  map: "warehouse",
+  build: buildWarehouse,
+  regionReturn: WAREHOUSE_TO_WORLD,
+  arrival: WAREHOUSE_ARRIVAL,
+  title: "📦 Lagerhallen-Viertel",
+  hint: "Steg hinab ⬇ – zurück nach Port Kubernia",
+  returnGlyph: "⬇",
+  returnSign: "Port Kubernia",
+  questSignDy: 1,
+  // keine Boden-Deko (decor weggelassen) – die Quay-Fläche trägt stattdessen Lager-Güter.
+  decorate(scene: RegionScene, build) {
+    const m = build as WarehouseMap;
+    // Lager-Güter (Kisten/Fässer): die pure Kachel-Solidität (buildWarehouse) wird durch eine
+    // Sub-Tile-Hitbox ersetzt (#386) – Fässer rund, Kisten als leicht eingerücktes Rechteck.
+    for (const g of m.goods) {
+      scene.add.image(g.x * T + 8, (g.y + 1) * T, g.kind).setOrigin(0.5, 1).setScale(0.5).setDepth((g.y + 1) * T);
+      scene.solid[g.y * scene.W + g.x] = 0;
+      scene.softGrid[g.y * scene.W + g.x] = 1;
+      if (g.kind === "barrel") {
+        scene.softObstacles.push(circleHitbox(g.x * T + 8, g.y * T + 8, HIT_R));
+      } else {
+        const off = (T - CRATE_HIT) / 2;   // mittig in der Kachel
+        scene.softObstacles.push(rectHitbox(g.x * T + off, g.y * T + off, CRATE_HIT, CRATE_HIT));
+      }
+    }
+  },
+};
+
+/** Die EINE Liste aller Region-Szenen-Configs. Reihenfolge = Registrierungsreihenfolge in
+ *  scenes.ts (Szenen-Keys sind disjunkt, also nicht load-bearing). */
+export const REGION_CONFIGS: RegionConfig[] = [archipel, lighthouse, warehouse];

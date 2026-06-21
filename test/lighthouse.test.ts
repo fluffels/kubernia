@@ -1,7 +1,8 @@
 /* Tests für #111 – Monitoring-Leuchtturm: Klippen-Bereich + Aufgang/Warp.
  *
  * scenes.ts ist Phaser-gekoppelt und nicht im Node-Lauf importierbar; geprüft wird
- * daher die pure Klippen-Mathe aus src/lighthouse.ts, die LighthouseScene baut.
+ * daher die pure Klippen-Mathe aus src/lighthouse.ts, aus der die datengetriebene
+ * RegionScene (#427) die Leuchtturm-Region baut.
  * Bewusst auch Grenz-/Negativfälle: Klippe rundum von Meer umschlossen, kein
  * Re-Trigger-Loop am Aufgang, und – der wichtigste Fall – die Monitoring-Station
  * + der NPC-Standplatz müssen vom Ankunfts-Pfad aus wirklich begehbar erreichbar

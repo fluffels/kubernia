@@ -1,7 +1,8 @@
 /* Tests für #124 – Lagerhallen-Viertel: Hafenkai-Bereich + Anleger/Warp.
  *
  * scenes.ts ist Phaser-gekoppelt und nicht im Node-Lauf importierbar; geprüft wird
- * daher die pure Kai-Mathe aus src/warehouse.ts, die WarehouseScene baut. Bewusst auch
+ * daher die pure Kai-Mathe aus src/warehouse.ts, aus der die datengetriebene RegionScene
+ * (#427) die Lager-Region baut. Bewusst auch
  * Grenz-/Negativfälle: Kai rundum von Meer umschlossen, kein Re-Trigger-Loop am Anleger,
  * und – der wichtigste Fall – NPC-Standplatz + Quest-Trigger müssen vom Ankunfts-Steg aus
  * wirklich begehbar erreichbar sein, sonst wäre das Viertel eine hübsche, aber tote Karte.
