@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-21.** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
+> **Stand: 2026-06-21 (nach #436).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -42,25 +42,24 @@ Sagt die Maintainerin **„nächstes Ticket"** (für kubequest), dann:
 
 ## Reihenfolge — der Kopf
 
-Leitlinie der Sortierung: **Prio zuerst** (höchste offene Prio oben), **innerhalb gleicher Prio nach Abhängigkeit** (was etwas anderes ermöglicht, kommt davor), sonst niedrigste Nummer. Der **Skalierungs-Enabler-Block** ist bewusst über die anderen `prio:niedrig`-Tickets gezogen, weil „Umbau zuerst, dann der große Content-Push" gilt (Begründung: [architektur-analyse-2026-06.md](architektur-analyse-2026-06.md)). Stand des Blocks: **#198 ✓**, **#428 ✓** (erledigt); **#339 zurückgestellt** (Vite inlinet die kleinen Sprites bereits als Data-URI → Texture-Atlas aktuell ohne messbaren Nutzen, `status:zurückgestellt` mit Re-Eval-Trigger); **#417 aufgeteilt** in **#435 ✓** (Lazy-Content, erledigt) + **#436** (Save-Laden entzerren); **#436** ist der verbleibende Enabler-Rest und steht darum oben.
+Leitlinie der Sortierung: **Prio zuerst** (höchste offene Prio oben), **innerhalb gleicher Prio nach Abhängigkeit** (was etwas anderes ermöglicht, kommt davor), sonst niedrigste Nummer. Der **Skalierungs-Enabler-Block** ist bewusst über die anderen `prio:niedrig`-Tickets gezogen, weil „Umbau zuerst, dann der große Content-Push" gilt (Begründung: [architektur-analyse-2026-06.md](architektur-analyse-2026-06.md)). Stand des Blocks: **#198 ✓**, **#428 ✓** (erledigt); **#339 zurückgestellt** (Vite inlinet die kleinen Sprites bereits als Data-URI → Texture-Atlas aktuell ohne messbaren Nutzen, `status:zurückgestellt` mit Re-Eval-Trigger); **#417 aufgeteilt** in **#435 ✓** (Lazy-Content, erledigt) + **#436 ✓** (Save-Laden entzerren, erledigt). Der Skalierungs-Enabler-Block ist damit vollständig abgearbeitet.
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| 1 | **#436** | niedrig | Save-Laden entzerren: `mergeScenario`-Aufbau nicht mehr linear mit absolvierten Quests | **Skalierungs-Enabler** (aus #417): Snapshot-Rekonstruktion statt Replay. ⚠️ „Saves nie brechen" → Migration + Alt-Stand-Test. |
-| 2 | **#306** | niedrig | Mehrere Spielstände / Save-Slots | Feature auf IndexedDB-Fundament (#350 ✓). |
-| 3 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
-| 4 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
-| 5 | **#212** | niedrig | Inhalt: erklären, was nginx ist (Webserver) | Nachgefüllt aus dem Auto-Rest (niedrigste freie Nicht-Optik-Nummer); reines Content-Ticket, keine Abhängigkeit. |
-| 6 | **#218** | niedrig | Inhalt: Stapel-Spiel mehr Beispiele + Cache/Build erklären | Nachgefüllt aus dem Auto-Rest (nächste freie Nicht-Optik-Content-Nummer); keine Abhängigkeit. |
-| 7 | **#219** | niedrig | Lernpfad: Spaced Repetition auf Stapel-Spiel/Drills ausweiten | Nachgefüllt aus dem Auto-Rest; thematisch nahe #218 (Stapel-Spiel), keine harte Abhängigkeit. |
-| 8 | **#228** | niedrig | Inhalt: Fun Fact – woher die 8 in K8s kommt | Nachgefüllt aus dem Auto-Rest; nächste freie Nicht-Optik-Content-Nummer, keine Abhängigkeit. |
-| 9 | **#229** | niedrig | Inhalt: mehr (gute!) Fun Facts & Witze einstreuen | Nachgefüllt aus dem Auto-Rest; thematisch nahe #228, keine Abhängigkeit. |
-| 10 | **#236** | niedrig | Inhalt: Kralle-Meilenstein-Sprüche (Übungszähler) | Nachgefüllt aus dem Auto-Rest (#416 erledigt); nächste freie Nicht-Optik-Content-Nummer, keine Abhängigkeit. |
-| 11 | **#237** | niedrig | Inhalt: Kralle = Krabbe ohne Krallen – Running Gag draus machen | Nachgefüllt aus dem Auto-Rest (#422 erledigt); thematisch nahe #236 (Kralle-Sprüche), keine Abhängigkeit. |
-| 12 | **#239** | niedrig | Lernbogen: Cluster nach Sturm selbst neu aufbauen (Spät-Spiel) | Nachgefüllt aus dem Auto-Rest (#198 erledigt); Content/Spät-Spiel, keine harte Abhängigkeit. |
-| 13 | **#250** | niedrig | Lernpfad: `argocd app list` als teach-Schritt (q29) einführen | Nachgefüllt aus dem Auto-Rest (#435 erledigt); nächste freie Nicht-Optik-Lernpfad-Nummer, keine harte Abhängigkeit. |
-| 14 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 15 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 1 | **#306** | niedrig | Mehrere Spielstände / Save-Slots | Feature auf IndexedDB-Fundament (#350 ✓). |
+| 2 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
+| 3 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 4 | **#212** | niedrig | Inhalt: erklären, was nginx ist (Webserver) | Nachgefüllt aus dem Auto-Rest (niedrigste freie Nicht-Optik-Nummer); reines Content-Ticket, keine Abhängigkeit. |
+| 5 | **#218** | niedrig | Inhalt: Stapel-Spiel mehr Beispiele + Cache/Build erklären | Nachgefüllt aus dem Auto-Rest (nächste freie Nicht-Optik-Content-Nummer); keine Abhängigkeit. |
+| 6 | **#219** | niedrig | Lernpfad: Spaced Repetition auf Stapel-Spiel/Drills ausweiten | Nachgefüllt aus dem Auto-Rest; thematisch nahe #218 (Stapel-Spiel), keine harte Abhängigkeit. |
+| 7 | **#228** | niedrig | Inhalt: Fun Fact – woher die 8 in K8s kommt | Nachgefüllt aus dem Auto-Rest; nächste freie Nicht-Optik-Content-Nummer, keine Abhängigkeit. |
+| 8 | **#229** | niedrig | Inhalt: mehr (gute!) Fun Facts & Witze einstreuen | Nachgefüllt aus dem Auto-Rest; thematisch nahe #228, keine Abhängigkeit. |
+| 9 | **#236** | niedrig | Inhalt: Kralle-Meilenstein-Sprüche (Übungszähler) | Nachgefüllt aus dem Auto-Rest (#416 erledigt); nächste freie Nicht-Optik-Content-Nummer, keine Abhängigkeit. |
+| 10 | **#237** | niedrig | Inhalt: Kralle = Krabbe ohne Krallen – Running Gag draus machen | Nachgefüllt aus dem Auto-Rest (#422 erledigt); thematisch nahe #236 (Kralle-Sprüche), keine Abhängigkeit. |
+| 11 | **#239** | niedrig | Lernbogen: Cluster nach Sturm selbst neu aufbauen (Spät-Spiel) | Nachgefüllt aus dem Auto-Rest (#198 erledigt); Content/Spät-Spiel, keine harte Abhängigkeit. |
+| 12 | **#250** | niedrig | Lernpfad: `argocd app list` als teach-Schritt (q29) einführen | Nachgefüllt aus dem Auto-Rest (#435 erledigt); nächste freie Nicht-Optik-Lernpfad-Nummer, keine harte Abhängigkeit. |
+| 13 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 14 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
