@@ -25,6 +25,7 @@
     "lastSeen": 0,
     "clusterSnapshot": [1, 2, 3],
     "audio": { "music": false, "sfx": "ja", "musicVol": 5, "sfxVol": -2 },
-    "settings": { "events": "ultrahart" }
+    "settings": { "events": "ultrahart" },
+    "gameDays": "bald"
   }
 }

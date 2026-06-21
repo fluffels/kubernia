@@ -97,6 +97,17 @@ export interface GameState {
   /** Abgeschlossene Quests seit dem letzten Review-Gate-Feuern (#323).
    *  Zähler für das Quest-Count-Gate: ab 3 wird Kralle auch ohne fällige Karten vorgeschlagen. */
   questsSinceGate: number;
+  /** Persistente Spiel-Zeit-Achse (#413): vergangene In-Game-Tage als **fraktionale Zahl**.
+   *  Der Ganzzahl-Anteil + 1 ist der Anzeige-Tag (`gameDays` 0 = Tag 1), der Nachkomma-Anteil
+   *  die Tageszeit (Phase ab Mittag, wie der Tag-Nacht-Schleier). Daraus leiten `clock.ts`
+   *  (Uhr/Datum) und `updateDayNight` (Schleier) Tag/Saison/Uhrzeit ab – seit #413 überleben
+   *  die also einen Reload (vorher lief Tag/Nacht nur aus der flüchtigen Frame-Zeit, Reload =
+   *  wieder „Tag 1"). Bewusst in TAGEN statt ms gespeichert: so ist der Kalender vom Tempo
+   *  (`DAY_CYCLE_MS`) ENTKOPPELT – ein Tempo-Tuning ändert nur die künftige Laufgeschwindigkeit,
+   *  NICHT das Kalenderdatum bestehender Stände (Saves nie brechen). Fundament für saisonalen
+   *  Content/Festivals/Routinen; konkrete Inhalte sind Folge-Content. `game/clock.ts` ist die
+   *  Anwendungs-API darüber (advanceClock = vorrücken, calendar = abgeleiteter Kalender). */
+  gameDays: number;
 }
 
 /** Spiel-Feel-Stufe: regelt Häufigkeit & Härte der Zufalls-Events (Stürme,

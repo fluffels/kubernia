@@ -6,9 +6,15 @@
  * der Tageswechsel exakt um Mitternacht, Saison-/Wochentags-Rollover sowie
  * harte Invarianten und ein Red-Green-Schutz gegen eine konstante Ausgabe. */
 import { test, expect } from "vitest";
-import { gameClock } from "../src/clock";
+import { gameClock, DAY_CYCLE_MS } from "../src/clock";
 
 const CYCLE = 1440000; // wie in scenes.ts: 24 min realer Zeit = ein Spieltag
+
+test("DAY_CYCLE_MS ist die SSOT der Zykluslänge (Schleier + Kalender leiten daraus ab, #413)", () => {
+  // Wächter gegen erneutes Hartcodieren: der lokale CYCLE-Erwartungswert und die exportierte
+  // Konstante müssen übereinstimmen – sonst liefen scenery.ts und clock.ts auseinander.
+  expect(DAY_CYCLE_MS).toBe(CYCLE);
+});
 
 /* ---------- Uhrzeit-Eckpunkte (phase → HH:MM) ---------- */
 

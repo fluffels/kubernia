@@ -2,6 +2,21 @@
 // Speist sich aus derselben time/CYCLE-Quelle wie der Tag-Nacht-Lichtschleier
 // (scenes.ts, updateDayNight) – darum läuft die Anzeige garantiert synchron zum
 // Schleier. Bewusst ohne Phaser gehalten, damit unit-testbar (vgl. world.ts/decor.ts).
+//
+// Seit #413 ist diese „time" KEINE flüchtige Frame-Zeit mehr, sondern die PERSISTENTE
+// Spiel-Zeit-Achse aus dem Spielstand (`GameState.gameDays`, in ms umgerechnet): der
+// Tageszähler/die Saison/die Uhrzeit überleben damit einen Reload. Die Ableitung hier
+// bleibt unverändert rein (time → Uhr/Datum); wer sie speist (Frame-Zeit vs. Spielstand),
+// ist Sache des Aufrufers (game/clock.ts › advanceClock + scenes/worldscene/scenery.ts).
+
+/** Länge eines vollen Spiel-Tags in realen Millisekunden (Stardew-Tempo, #4).
+ *  Einzige Quelle dieser Konstante – Tag-Nacht-Schleier (scenery.ts) und der
+ *  persistente Kalender (game/clock.ts) leiten BEIDE hieraus ab, statt 1_440_000
+ *  mehrfach hartzucodieren. Tempo justieren = nur diesen Wert ändern. Wichtig (#413):
+ *  `GameState.gameDays` ist bewusst in TAGEN gespeichert, NICHT in ms – ein Tempo-Wechsel
+ *  hier ändert also nur, wie schnell die Zeit künftig läuft, und schreibt KEINEN
+ *  bestehenden Spielstand auf ein anderes Kalenderdatum um (Saves nie brechen). */
+export const DAY_CYCLE_MS = 1440000;             // 24 Minuten realer Zeit = ein voller Tag
 
 const SEASONS: [string, string][] = [
   ["🌱", "Frühling"], ["☀️", "Sommer"], ["🍂", "Herbst"], ["❄️", "Winter"],

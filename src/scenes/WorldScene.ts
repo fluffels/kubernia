@@ -8,6 +8,7 @@ import { type LayoutBox } from "../labellayout";
 import { keys, setWorldScene } from "../runtime";
 import { expandRect, cull, FrameSampler, type Cullable } from "../cull";
 import { getMapEntry } from "../mapregistry";
+import { DAY_CYCLE_MS } from "../clock";
 import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, type SceneNpc } from "./shared";
 // Spiel-Systeme als eigene, fokussierte Module (WorldScene.ts-Split #393, analog
 // scenes.ts-Split #345): freie Funktionen mit der Szene als Parameter (`scene`).
@@ -522,7 +523,12 @@ export class WorldScene extends Phaser.Scene {
 
     syncCluster(this);
     revealNearbyLabels(this);
-    updateDayNight(this, time);
+    // Persistente Spiel-Zeit (#413) um die reale Frame-Zeit vorrücken und den Tag-Nacht-
+    // Schleier/die HUD-Uhr daraus speisen – NICHT mehr aus der flüchtigen Phaser-`time`,
+    // die bei jedem Reload bei 0 begänne. So überlebt der Kalender den Reload (Auto-Save
+    // persistiert gameDays). Die übrigen Frame-Animationen unten nutzen weiter Phaser-`time`.
+    Game.advanceClock(delta);
+    updateDayNight(this, Game.state.gameDays * DAY_CYCLE_MS);
     this.cullDecor(delta);
 
     // Wirtschaft

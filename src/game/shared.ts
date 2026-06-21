@@ -137,5 +137,8 @@ export function makeDefaultState(): GameState {
     audio: { music: true, sfx: true, musicVol: 0.5, sfxVol: 0.8, track: "hafen" },
     settings: { events: "normal" },
     questsSinceGate: 0,
+    // Spiel-Zeit-Achse (#413): frischer Stand startet bei Tag 1, Mittag (gameDays 0) –
+    // exakt der Zeitpunkt, an dem der Tag-Nacht-Zyklus bisher (ohne Persistenz) begann.
+    gameDays: 0,
   };
 }

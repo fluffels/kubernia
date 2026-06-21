@@ -59,6 +59,11 @@ function safeCount(v: unknown, def: number): number {
 function safeNum(v: unknown, def: number): number {
   return typeof v === "number" && Number.isFinite(v) ? v : def;
 }
+/** Endliche, nicht-negative Zahl – anders als safeCount NICHT auf Ganzzahl gerundet
+ *  (für fraktionale Werte wie die Spiel-Zeit-Achse `gameDays`, #413). Sonst Default. */
+function safeNonNegNum(v: unknown, def: number): number {
+  return typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : def;
+}
 /** String oder null – jeder andere Typ wird zu null. */
 function safeStrOrNull(v: unknown): string | null {
   return typeof v === "string" ? v : null;
@@ -234,6 +239,11 @@ export function sanitizeState(raw: unknown): GameState {
     audio: safeAudio(raw.audio),
     settings: safeSettings(raw.settings),
     questsSinceGate: safeCount(raw.questsSinceGate, 0),
+    // Spiel-Zeit-Achse (#413): fraktionale, nicht-negative Tageszahl. Fehlt das Feld
+    // (jeder Stand ≤ v4) → Default 0 (= Tag 1, Mittag); kaputt/negativ → ebenfalls 0.
+    // Das ist die verlustfreie Migration: vorher war die Zeit nie persistiert, ein
+    // Alt-Stand startet also völlig korrekt am Tag-1-Anfang, ohne Fortschrittsverlust.
+    gameDays: safeNonNegNum(raw.gameDays, def.gameDays),
   };
 }
 

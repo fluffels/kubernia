@@ -12,6 +12,7 @@ import { KQContent } from "../src/content";
 import { NPC_SPAWNS, TILE, TALK_RANGE } from "../src/world";
 import { setWorldScene } from "../src/runtime";
 import { MAP_REGISTRY } from "../src/mapregistry";
+import { DAY_CYCLE_MS } from "../src/clock";
 
 let Game: typeof import("../src/game").Game;
 let Sim: typeof import("../src/sim").Sim;
@@ -943,4 +944,88 @@ test("#410 requires (datengesteuert): optionale Quest bleibt gesperrt, bis die V
   expect(Game.canStartQuest("helm-umbrella-chart")).toBe(true);
   // Quest ohne requires hat keine Voraussetzung -> immer erfüllt.
   expect(Game.questPrereqsMet("k8s-inspect-pods")).toBe(true);
+});
+
+/* ---------- #413: persistente Spiel-Zeit-Achse / Kalender ----------
+ * gameDays (fraktionale Tageszahl) ist die persistente Achse; advanceClock rückt sie um
+ * reale Frame-Zeit vor, calendar() leitet Tag/Saison/Uhrzeit daraus ab. Vorher lief
+ * Tag/Nacht nur aus flüchtiger Frame-Zeit (Reload = wieder Tag 1). Bewusst in TAGEN
+ * gespeichert (vom Tempo DAY_CYCLE_MS entkoppelt), damit ein Tempo-Tuning keinen Stand
+ * auf ein anderes Kalenderdatum umschreibt. */
+
+test("#413 defaultState: frischer Stand startet bei Tag 1, Mittag (gameDays 0)", () => {
+  Game.reset();
+  expect(Game.state.gameDays).toBe(0);
+  const cal = Game.calendar();
+  expect(cal.day).toBe(1);
+  expect(cal.hhmm).toBe("12:00");
+  expect(cal.seasonName).toBe("Frühling");
+});
+
+test("#413 advanceClock: typische Per-Frame-Deltas akkumulieren (über den Tempo-Faktor)", () => {
+  Game.reset();
+  Game.advanceClock(16);                       // ein 60fps-Frame
+  expect(Game.state.gameDays).toBeCloseTo(16 / DAY_CYCLE_MS, 12);
+  Game.advanceClock(16);
+  expect(Game.state.gameDays).toBeCloseTo(32 / DAY_CYCLE_MS, 12); // summiert sich auf
+});
+
+test("#413 calendar(): leitet Tag/Uhrzeit/Saison aus der gesetzten Achse ab", () => {
+  Game.reset();
+  Game.state.gameDays = 1;                     // exakt ein Tag vergangen
+  // gameDays 1.0 = wieder Mittag (phase 0), aber Mitternacht dazwischen -> Tag 2.
+  expect(Game.calendar().day).toBe(2);
+  expect(Game.calendar().hhmm).toBe("12:00");
+  Game.state.gameDays = 28.25;                 // Tag 29, 18:00 -> Saisonwechsel nach 28 Tagen
+  expect(Game.calendar().day).toBe(29);
+  expect(Game.calendar().hhmm).toBe("18:00");
+  expect(Game.calendar().seasonName).toBe("Sommer");
+});
+
+test("#413 advanceClock: ignoriert Unsinn (NaN/≤0) und deckelt einen Riesen-Frame", () => {
+  Game.reset();
+  Game.advanceClock(NaN);
+  Game.advanceClock(0);
+  Game.advanceClock(-5000);
+  expect(Game.state.gameDays).toBe(0);        // nichts davon hat die Achse bewegt
+  // Ein riesiges delta (Tab war im Hintergrund) darf nicht Stunden überspringen:
+  // gedeckelt auf 1 reale Sekunde Zuwachs (MAX_FRAME_MS), nicht 10 Tage.
+  Game.advanceClock(10 * DAY_CYCLE_MS);
+  expect(Game.state.gameDays).toBeCloseTo(1000 / DAY_CYCLE_MS, 12);
+  expect(Game.calendar().day).toBe(1);        // weiterhin Tag 1
+});
+
+test("#413 gameDays persistiert über load() (überlebt einen Reload)", () => {
+  setWorldScene(null);
+  Game.reset();
+  Game.state.gameDays = 5.25;                 // Tag 6, ~18:00
+  Game.save();
+  Game.load();
+  expect(Game.state.gameDays).toBe(5.25);     // verlustfrei zurückgelesen
+  expect(Game.calendar().day).toBe(6);
+});
+
+test("#413 Migration: Alt-Stand ohne gameDays bekommt Default 0 (verlustfrei)", () => {
+  // Stand wie vor #413: kein gameDays-Feld -> startet sauber am Tag-1-Anfang.
+  Game.importData(JSON.stringify({ v: 4, data: { xp: 50, questIdx: 3 } }));
+  Game.load();
+  expect(Game.state.gameDays).toBe(0);
+  expect(Game.state.xp).toBe(50);             // übriger Fortschritt unberührt
+});
+
+test("#413 Sanitize: gültiger Float überlebt, kaputter/negativer Wert fällt auf 0 (Red-Green)", () => {
+  // Gültiger fraktionaler Wert bleibt EXAKT (nicht auf Ganzzahl gerundet wie ein Index).
+  Game.importData(JSON.stringify({ v: 5, data: { gameDays: 12.5 } }));
+  Game.load();
+  expect(Game.state.gameDays).toBe(12.5);
+
+  // Falscher Typ -> Default 0 (würde der Sanitize-Guard fehlen, bliebe hier "bald" stehen).
+  Game.importData(JSON.stringify({ v: 5, data: { gameDays: "bald" } }));
+  Game.load();
+  expect(Game.state.gameDays).toBe(0);
+
+  // Negativ ist unplausibel (Zeit läuft nicht rückwärts) -> Default 0.
+  Game.importData(JSON.stringify({ v: 5, data: { gameDays: -3 } }));
+  Game.load();
+  expect(Game.state.gameDays).toBe(0);
 });

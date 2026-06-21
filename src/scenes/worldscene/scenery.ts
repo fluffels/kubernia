@@ -12,7 +12,7 @@
 import Phaser from "phaser";
 import { pickPlacements, strSeed, hash01, grassTuftStyle } from "../../decor";
 import { circleHitbox, rectHitbox, SHIP_DOOR } from "../../world";
-import { gameClock } from "../../clock";
+import { gameClock, DAY_CYCLE_MS } from "../../clock";
 import { UI } from "../../ui";
 import { WORLD_TO_ARCHIPEL } from "../../archipel";
 import { WORLD_TO_LIGHTHOUSE } from "../../lighthouse";
@@ -136,9 +136,12 @@ export function scatter(scene: WorldSceneLike, tex: string, count: number, scale
 }
 
 /** Tag-Nacht-Zyklus: sanft animierter Lichtschleier über der Welt + Laternen-Glühen,
- *  das bei Dämmerung/Nacht aufleuchtet. Ein voller Tag dauert CYCLE ms. (#4) */
+ *  das bei Dämmerung/Nacht aufleuchtet. Ein voller Tag dauert DAY_CYCLE_MS. (#4)
+ *  `time` ist seit #413 die PERSISTENTE Spiel-Zeit (aus `GameState.gameDays`, in ms),
+ *  nicht mehr die flüchtige Frame-Zeit – Schleier + Uhr setzen also nach einem Reload
+ *  am gespeicherten Zeitpunkt fort (die WorldScene reicht sie so herein). */
 export function updateDayNight(scene: WorldSceneLike, time: number) {
-  const CYCLE = 1440000;                         // 24 Minuten realer Zeit = ein voller Tag (Stardew-Tempo) – Tempo hier justieren
+  const CYCLE = DAY_CYCLE_MS;                    // Tempo zentral in clock.ts justieren (SSOT)
   const phase = (time % CYCLE) / CYCLE;          // 0 = Mittag … 0.5 = Mitternacht … 1 = Mittag
   // Keyframes [phase, r, g, b, alpha] – dazwischen wird linear interpoliert
   const keys: number[][] = [

@@ -257,11 +257,12 @@ test("v3 (voller Stand, vor #410): Einzel-Quest -> activeQuests-Set, verlustfrei
 });
 
 /* ============================================================================
- * v4 (aktuelles Format, #410): muss UNVERÄNDERT laden – kein Backup. Trägt MEHRERE
- * gleichzeitig offene Quests; diese müssen verlustfrei round-trippen (Kern von #410).
+ * v4 (vor #413): trägt schon MEHRERE offene Quests (#410), aber KEINE persistente
+ * Zeit-Achse. Lädt jetzt als Alt-Stand -> wird auf v5 migriert (gameDays default 0)
+ * und vorher gesichert. Die mehreren offenen Quests müssen dabei verlustfrei bleiben.
  * ========================================================================== */
 
-test("v4 (aktueller Stand, mehrere offene Quests): lädt unverändert, kein Backup, Roundtrip stabil", () => {
+test("v4 (vor #413): mehrere offene Quests bleiben, gameDays default 0, migriert + gesichert", () => {
   loadFixture("savegame-v4-current.json");
 
   expect(Game.state.questIdx).toBe(30);
@@ -269,14 +270,44 @@ test("v4 (aktueller Stand, mehrere offene Quests): lädt unverändert, kein Back
   expect(Game.state.questStep).toBe(1);
   expect(Game.state.completedQuests).toEqual(slugs(30));
 
-  // Kern von #410: ZWEI parallel offene Quests überleben verlustfrei – die fokussierte
-  // (lineare) plus ein optionaler Strang. Schlüssel kanonisch in quest-order.
+  // #410 bleibt unangetastet: ZWEI parallel offene Quests überleben verlustfrei.
   expect(Game.state.activeQuests).toEqual({
     "gitops-argocd-intro": { step: 1, task: 0 },
     "gitops-self-sync": { step: 0, task: 0 },
   });
   expect(Game.activeQuestIds()).toEqual(["gitops-argocd-intro", "gitops-self-sync"]);
   expect(Game.isQuestActive("gitops-self-sync")).toBe(true);
+
+  // #413: kein gameDays im v4-Stand -> Default 0 (Tag 1, Mittag), verlustfrei.
+  expect(Game.state.gameDays).toBe(0);
+
+  // v4 < aktuelle Version (5) → Herauf-Migrieren → Original VORHER gesichert.
+  expect(SaveStore.readBackup()).toBe(fixtureRaw("savegame-v4-current.json"));
+
+  expectRoundTripFixedPoint();
+});
+
+/* ============================================================================
+ * v5 (aktuelles Format, #413): muss UNVERÄNDERT laden – kein Backup. Trägt die
+ * persistente Zeit-Achse gameDays; sie muss EXAKT (fraktional) round-trippen.
+ * ========================================================================== */
+
+test("v5 (aktueller Stand): gameDays überlebt exakt, kein Backup, Roundtrip stabil", () => {
+  loadFixture("savegame-v5-current.json");
+
+  expect(Game.state.questIdx).toBe(30);
+  expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
+  expect(Game.state.activeQuests).toEqual({
+    "gitops-argocd-intro": { step: 1, task: 0 },
+    "gitops-self-sync": { step: 0, task: 0 },
+  });
+
+  // Kern von #413: die persistente Zeit-Achse lädt EXAKT (fraktional, nicht gerundet)
+  // und ergibt den richtigen Kalendertag. gameDays 47.625: der Tag springt an Mitternacht
+  // (day = floor(gameDays + 0.5) + 1 = floor(48.125) + 1 = 49), Saison Sommer (Tag 49).
+  expect(Game.state.gameDays).toBe(47.625);
+  expect(Game.calendar().day).toBe(49);
+  expect(Game.calendar().seasonName).toBe("Sommer");
 
   // Aktuelle Version → kein Herauf-Migrieren → kein Sichern ins Backup.
   expect(SaveStore.readBackup()).toBeNull();
@@ -341,6 +372,9 @@ test("Red-Green: kaputtes v2-Fixture lädt sanitisiert (kein Crash, Defaults sta
   expect(Game.state.introSeen).toBe(false);
   expect(Game.state.settings).toEqual({ events: "normal" }); // "ultrahart" verworfen
   expect(Game.state.audio).toEqual({ music: false, sfx: true, musicVol: 1, sfxVol: 0, track: "hafen" });
+
+  // #413: kaputte Zeit-Achse ("bald", kein number) → Default 0, nicht der Müll-String.
+  expect(Game.state.gameDays).toBe(0);
 
   // Array-Cluster-Snapshot [1,2,3] ist kein gültiger Sim-Zustand → in sanitizeState verworfen;
   // der Sim baut beim Laden einen frischen Default-Snapshot. Der Müll-Array darf NICHT

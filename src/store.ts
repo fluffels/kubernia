@@ -216,7 +216,7 @@
    *   2. Eine Migration migrations[n] ergänzen, die `data` von Version n auf n+1 bringt.
    * Die Kette läuft dann automatisch jede Zwischenstufe der Reihe nach durch.
    */
-  export const CURRENT_SAVE_VERSION = 4;
+  export const CURRENT_SAVE_VERSION = 5;
 
   /** Migration von Format-Version n auf n+1 (reine Funktion auf dem `data`-Objekt). */
   type Migration = (data: unknown) => unknown;
@@ -251,6 +251,13 @@
     //         (auch den rohen JSON-Import, der diese Kette umgeht). Der Bump sichert jeden v3-Stand
     //         vor dem ersten Überschreiben in den Backup-Slot.
     3: (data) => data,
+    // 4 -> 5 (#413): persistente Spiel-Zeit-Achse `gameDays` (fraktionale Tageszahl) neu im
+    //         GameState, damit Tag/Saison/Uhrzeit einen Reload überleben. Wie 1->2/2->3/3->4
+    //         strukturell ein No-op auf store-Ebene: das Ergänzen des Default-Werts (0 = Tag 1,
+    //         Mittag) liegt ZENTRAL in game.ts › sanitizeState (safeNonNegNum), damit es ALLE
+    //         Ladewege trifft (auch den rohen JSON-Import). Verlustfrei – vorher war die Zeit nie
+    //         gespeichert. Der Bump sichert jeden v4-Stand vor dem ersten Überschreiben ins Backup.
+    4: (data) => data,
   };
 
   /** Hebt `data` von `version` schrittweise auf CURRENT_SAVE_VERSION. */
