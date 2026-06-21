@@ -3,7 +3,7 @@
 // das datengesteuerte Insel-NPC-Rendering (#349). Phaser-Präsentation – darf Phaser anfassen.
 import Phaser from "phaser";
 import { KQContent } from "../content";
-import { type Spawn } from "../content/entities";
+import { type Spawn, type EntityObject } from "../content/entities";
 import { ATLAS_CHARS, CELL_W, CELL_H, GLYPH_W, GLYPH_H, glyphMatrix, sanitize } from "../pixelfont";
 
 const T = 16;
@@ -114,6 +114,30 @@ function spawnIslandNpc(scene: Phaser.Scene, s: Spawn) {
   return { id: s.id, x: s.x, y: s.y, sprite, marker };
 }
 
+/** Render-Tuning je prop-Sprite (#357): Skalierung + Schatten-Maße. Bewusst hier in der
+ *  Präsentation, NICHT in entities.json – das ist Optik-Feinschliff (hängt am erzeugten
+ *  Sprite), kein Karten-Datum. Ein neuer Sprite-Typ = eine Zeile hier; eine weitere
+ *  Platzierung eines bekannten Sprites = nur ein JSON-Eintrag (kein Code). Unbekanntes
+ *  Sprite fällt weich auf einen neutralen Default zurück. */
+const PROP_RENDER: Record<string, { scale: number; shw: number; shh: number }> = {
+  crane:         { scale: 0.34, shw: 30, shh: 10 },
+  container:     { scale: 0.3,  shw: 26, shh: 8 },
+  grafana_board: { scale: 0.32, shw: 26, shh: 9 },
+  alert_bell:    { scale: 0.32, shw: 18, shh: 7 },
+};
+
+/** Rendert ein registry-gesteuertes Map-Objekt (#357: Kran/Container/Monitoring-Tafel/
+ *  Glocke …) an seiner Kachel: Schatten-Ellipse + Sprite mit Fußlinien-Origin, y-tiefen-
+ *  sortiert. Spiegelbild zu `spawnIslandNpc` – seit #357 loopen die Insel-Szenen über
+ *  `objectsForMap(map)` statt jedes Objekt einzeln zu setzen, sodass ein neues platziertes
+ *  Objekt nur ein JSON-Eintrag in entities.json ist, kein Code-Edit. */
+function spawnIslandObject(scene: Phaser.Scene, o: EntityObject) {
+  const r = PROP_RENDER[o.sprite ?? ""] ?? { scale: 0.5, shw: 16, shh: 6 };
+  const cx = o.x * T + 8, baseY = (o.y + 1) * T;
+  scene.add.ellipse(cx, baseY - 1, r.shw, r.shh, 0x000000, 0.24).setDepth(baseY - 1);
+  scene.add.image(cx, baseY, o.sprite!).setOrigin(0.5, 1).setScale(r.scale).setDepth(baseY + 4);
+}
+
 // --- Orts-Schild (#254) -------------------------------------------------
 // Die 9-Slice-Ränder des Holzbretts (sign.png, 75×30): links/rechts/oben/unten.
 // Vertikal fressen Rahmen oben+unten 8+6=14px, horizontal 8+8=16px – das helle
@@ -172,5 +196,5 @@ function floatPixelText(scene: Phaser.Scene, x: number, y: number, str: string, 
 }
 
 export {
-  T, DIRT, STONE, WOOD, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, WELL, SIGN, CART, WATER, FOAM, WANG, hashHue, hueColor, hueColorLight, FONT_KEY, FONT_TEX, COIN_TEX, buildPixelFont, buildCoinIcon, fontColor, pixelText, spawnIslandNpc, SIGN_BORDER, SIGN_PAD, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText,
+  T, DIRT, STONE, WOOD, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, WELL, SIGN, CART, WATER, FOAM, WANG, hashHue, hueColor, hueColorLight, FONT_KEY, FONT_TEX, COIN_TEX, buildPixelFont, buildCoinIcon, fontColor, pixelText, spawnIslandNpc, spawnIslandObject, SIGN_BORDER, SIGN_PAD, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText,
 };

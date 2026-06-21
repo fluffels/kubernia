@@ -2,11 +2,11 @@ import Phaser from "phaser";
 import { UI } from "../ui";
 import { SFX } from "../sfx";
 import { resolveMove, circleHitbox, npcHitboxes, type Hitbox } from "../world";
-import { npcSpawnsForMap } from "../content/entities";
+import { npcSpawnsForMap, objectsForMap } from "../content/entities";
 import { WATER as A_WATER, warpAt } from "../archipel";
-import { PATH as L_PATH, buildLighthouse, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL, LIGHTHOUSE_QUEST_TRIGGER, LIGHTHOUSE_TOWER, LIGHTHOUSE_NPC, LIGHTHOUSE_GRAFANA, LIGHTHOUSE_BELL } from "../lighthouse";
+import { PATH as L_PATH, buildLighthouse, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL, LIGHTHOUSE_QUEST_TRIGGER, LIGHTHOUSE_TOWER, LIGHTHOUSE_NPC } from "../lighthouse";
 import { keys, setWorldScene, setInteriorOpen, type WorldSceneRef } from "../runtime";
-import { T, FOAM, WANG, pixelText, spawnIslandNpc, buildSign, floatPixelText } from "./shared";
+import { T, FOAM, WANG, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText } from "./shared";
 
 /* ===== LighthouseScene (#111) – Monitoring-Leuchtturm-Klippe =====
  * Eigener begehbarer Höhen-Bereich, den man von Port Kubernia über den Aufgang am
@@ -63,9 +63,11 @@ export class LighthouseScene extends Phaser.Scene {
     this.tweens.add({ targets: lamp, alpha: { from: 0.5, to: 1 }, duration: 1100, yoyo: true, repeat: -1, ease: "Sine.inOut" });
 
     // === Monitoring-Station: Grafana-Dashboard-Tafel + Alarm-Glocke (#111) ===
-    this.objSprite(LIGHTHOUSE_GRAFANA.x, LIGHTHOUSE_GRAFANA.y, "grafana_board", 0.32, 26, 9);
-    this.objSprite(LIGHTHOUSE_BELL.x, LIGHTHOUSE_BELL.y, "alert_bell", 0.32, 18, 7);
-    this.makeSign(LIGHTHOUSE_QUEST_TRIGGER.x * T + 8, (LIGHTHOUSE_QUEST_TRIGGER.y + 1) * T, "Monitoring");
+    // Seit #357 datengesteuert: eine Schleife über die prop-Objekte der Registry rendert
+    // Tafel + Glocke (und jedes künftige Deko-Objekt) – Standplatz/Sprite kommen aus
+    // entities.json, das Render-Tuning aus PROP_RENDER. Schild-Label ebenfalls aus den Daten.
+    for (const o of objectsForMap("lighthouse")) if (o.type === "prop") spawnIslandObject(this, o);
+    this.makeSign(LIGHTHOUSE_QUEST_TRIGGER.x * T + 8, (LIGHTHOUSE_QUEST_TRIGGER.y + 1) * T, LIGHTHOUSE_QUEST_TRIGGER.label!);
 
     // Observability-Wärterin „Lumi" (#112) & künftige Klippen-NPCs datengesteuert aus
     // der Entity-Registry (#349): eine Schleife über npcSpawnsForMap("lighthouse") statt
@@ -181,13 +183,6 @@ export class LighthouseScene extends Phaser.Scene {
         }
       }
     }
-  }
-
-  /** Map-Objekt an einer Kachel verankert (Origin Fußlinie) + weicher Schatten. */
-  objSprite(tx: number, ty: number, tex: string, scale: number, shw: number, shh: number) {
-    const cx = tx * T + 8, baseY = (ty + 1) * T;
-    this.add.ellipse(cx, baseY - 1, shw, shh, 0x000000, 0.24).setDepth(baseY - 1);
-    this.add.image(cx, baseY, tex).setOrigin(0.5, 1).setScale(scale).setDepth(baseY + 4);
   }
 
   /** Holz-Schild (9-Slice) wie auf der Hauptkarte – gemeinsamer Aufbau (#254). */

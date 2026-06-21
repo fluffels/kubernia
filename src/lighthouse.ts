@@ -13,7 +13,7 @@
  * von dort wiederverwendet statt ein zweites Mal definiert.
  */
 import { warpAt, type Warp } from "./archipel";
-import { npcSpawnForMap, type Spawn } from "./content/entities";
+import { npcSpawnForMap, objectForId, objectsForMap, objectFootprint, type Spawn } from "./content/entities";
 
 export { warpAt, type Warp };
 
@@ -30,8 +30,9 @@ export const STONE_CODES = [96, 97, 98] as const;
 
 const CX = 13, CY = 9;   // Mittelpunkt der Gras-Hochebene
 
-/** Standplatz des großen Leuchtturms (oben/Norden der Ebene). 2×2-Fußabdruck solide. */
-export const LIGHTHOUSE_TOWER = { x: CX, y: 5 } as const;
+/** Standplatz des großen Leuchtturms (oben/Norden der Ebene). 2×2-Fußabdruck solide.
+ *  Seit #357 aus der Entity-Registry (Karte "lighthouse", Typ "tower", w/h=2) gelesen. */
+export const LIGHTHOUSE_TOWER = objectForId("lighthouse", "leuchtturm");
 
 /** Standplatz des Observability-NPC „Lumi" (#112): die Leuchtturmwärterin, die ab
  *  den Phase-5-Quests (#113–116) das Monitoring vergibt. Seit #349 aus der Entity-
@@ -40,13 +41,15 @@ export const LIGHTHOUSE_TOWER = { x: CX, y: 5 } as const;
 export const LIGHTHOUSE_NPC: Spawn = npcSpawnForMap("lighthouse");
 
 /** Quest-Trigger = die Monitoring-Station (Dashboard + Alarmglocke). Hier docken die
- *  Phase-5-Observability-Quests an; bis dahin steht ein Schild als Platzhalter. */
-export const LIGHTHOUSE_QUEST_TRIGGER = { id: "monitoring-station", x: CX + 2, y: CY } as const;
+ *  Phase-5-Observability-Quests an; bis dahin steht ein Schild als Platzhalter. Seit #357
+ *  aus der Entity-Registry gelesen (Position + Schild-Label sind Daten). */
+export const LIGHTHOUSE_QUEST_TRIGGER = objectForId("lighthouse", "monitoring-station");
 
-/** Standplätze der neuen Monitoring-Deko (PixelLab, #111) – als Daten, damit
- *  scenes.ts Sprite und Kollisions-Solid deckungsgleich setzt. */
-export const LIGHTHOUSE_GRAFANA = { x: CX + 2, y: CY - 1 } as const;   // Grafana-Dashboard-Tafel
-export const LIGHTHOUSE_BELL = { x: CX + 3, y: CY + 1 } as const;      // Alarm-Glocke
+/** Standplätze der Monitoring-Deko (PixelLab, #111) – seit #357 aus der Entity-Registry
+ *  (Karte "lighthouse", Typ "prop"), damit Sprite und Kollisions-Solid deckungsgleich aus
+ *  denselben Daten kommen. */
+export const LIGHTHOUSE_GRAFANA = objectForId("lighthouse", "grafana-tafel");   // Grafana-Dashboard-Tafel
+export const LIGHTHOUSE_BELL = objectForId("lighthouse", "alarm-glocke");       // Alarm-Glocke
 
 /* ===== Hauptkarte ⇄ Klippe ===== */
 
@@ -128,12 +131,13 @@ export function buildLighthouse(): LighthouseMap {
   const edge = southEdgeRow();
   for (let y = CY; y <= edge; y++) { const i = y * W + CX; ground[i] = PATH; solid[i] = 0; }
 
-  // Leuchtturm-Fußabdruck (2×2) solide.
-  for (const [tx, ty] of [[CX - 1, 4], [CX, 4], [CX - 1, 5], [CX, 5]]) solid[ty * W + tx] = 1;
-
-  // Monitoring-Deko solide (Sprite-Standplätze).
-  solid[LIGHTHOUSE_GRAFANA.y * W + LIGHTHOUSE_GRAFANA.x] = 1;
-  solid[LIGHTHOUSE_BELL.y * W + LIGHTHOUSE_BELL.x] = 1;
+  // Solide Objekte (Leuchtturm-Fuß 2×2 + Monitoring-Deko) aus der Registry (#357) als
+  // Kachel-Solid markieren – der Turm über seinen w/h-Fußabdruck, props 1×1. Sprite und
+  // Solid kommen so aus denselben Daten; ein neues Objekt ist nur ein JSON-Eintrag.
+  for (const o of objectsForMap("lighthouse")) {
+    if (o.type === "quest_trigger") continue;
+    for (const t of objectFootprint(o)) solid[t.y * W + t.x] = 1;
+  }
 
   // Reserviert begehbar halten (NPC-Standplatz, Quest-Trigger, Ankunft, Warp, Pfad).
   const reserved = new Set([

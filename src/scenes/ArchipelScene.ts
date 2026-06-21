@@ -2,10 +2,10 @@ import Phaser from "phaser";
 import { UI } from "../ui";
 import { SFX } from "../sfx";
 import { resolveMove, circleHitbox, npcHitboxes, type Hitbox } from "../world";
-import { npcSpawnsForMap } from "../content/entities";
+import { npcSpawnsForMap, objectsForMap } from "../content/entities";
 import { WATER as A_WATER, SAND as A_SAND, PATH as A_PATH, DOCK as A_DOCK, buildArchipel, warpAt, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL, ARCHIPEL_NPC, ARCHIPEL_QUEST_TRIGGER } from "../archipel";
 import { keys, setWorldScene, setInteriorOpen, type WorldSceneRef } from "../runtime";
-import { T, DEVICE, FOAM, WANG, pixelText, spawnIslandNpc, buildSign, floatPixelText } from "./shared";
+import { T, DEVICE, FOAM, WANG, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText } from "./shared";
 
 /* ===== ArchipelScene (#92) – die erste eigene Nachbar-Insel (GitOps-Archipel) =====
  * Wird von WorldScene.enterArchipel() als eigene Szene gestartet, während die
@@ -47,9 +47,15 @@ export class ArchipelScene extends Phaser.Scene {
     this.tweens.add({ targets: anchor, y: ry - 8, duration: 900, yoyo: true, repeat: -1, ease: "Sine.inOut" });
     this.makeSign((ARCHIPEL_TO_WORLD.tx) * T + 8, (ARCHIPEL_TO_WORLD.ty - 1) * T, "Heimhafen");
 
+    // Platzierte Objekte (props) aus der Entity-Registry (#357): eine Schleife über
+    // objectsForMap("archipel") rendert jedes prop-Objekt – derzeit hat die Insel keins,
+    // aber so ist ein künftiges Insel-Objekt nur ein JSON-Eintrag, kein Code-Edit.
+    for (const o of objectsForMap("archipel")) if (o.type === "prop") spawnIslandObject(this, o);
+
     // Quest-Trigger: Wegweiser als sichtbarer Platzhalter, bis #94–97 hier Quests einhängen.
+    // Position + Schild-Label kommen aus der Registry (#357).
     this.objStatue(ARCHIPEL_QUEST_TRIGGER.x, ARCHIPEL_QUEST_TRIGGER.y);
-    this.makeSign(ARCHIPEL_QUEST_TRIGGER.x * T + 8, (ARCHIPEL_QUEST_TRIGGER.y - 1) * T, "GitOps");
+    this.makeSign(ARCHIPEL_QUEST_TRIGGER.x * T + 8, (ARCHIPEL_QUEST_TRIGGER.y - 1) * T, ARCHIPEL_QUEST_TRIGGER.label!);
 
     // Insel-NPCs datengesteuert aus der Entity-Registry (#349): u.a. die GitOps-Lotsin
     // „Argo" (#93), die ab #94 die Phase-4-Quests vergibt. Eine Schleife über

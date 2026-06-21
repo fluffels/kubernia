@@ -7,7 +7,7 @@
  * Hauptkarte (resolveMove/footprintSolid aus world.ts) – nichts dupliziert.
  */
 import { TILE } from "./world";
-import { npcSpawnForMap, type Spawn } from "./content/entities";
+import { npcSpawnForMap, objectForId, objectsForMap, objectFootprint, type Spawn } from "./content/entities";
 
 /** Inselraster (Kacheln). Kleiner als die Hauptkarte – eine kompakte, voll
  *  umrundbare Insel, die in einer Session sauber gefüllt werden kann. */
@@ -27,9 +27,11 @@ const CX = 14, CY = 9;   // Inselmittelpunkt (Lichtung mit NPC/Quest-Trigger)
  *  ist der primäre Standplatz (Pfad-/Erreichbarkeits-Geometrie + scatterDecor). */
 export const ARCHIPEL_NPC: Spawn = npcSpawnForMap("archipel");
 
-/** Quest-Trigger der Insel (#94–97 hängen hier ihre GitOps-Quests ein). Bis
- *  dahin steht hier ein Wegweiser als sichtbarer, bewusster Platzhalter. */
-export const ARCHIPEL_QUEST_TRIGGER = { id: "gitops-altar", x: 16, y: 8 } as const;
+/** Quest-Trigger der Insel (#94–97 hängen hier ihre GitOps-Quests ein). Bis dahin steht
+ *  hier ein Wegweiser als sichtbarer, bewusster Platzhalter. Seit #357 aus der Entity-
+ *  Registry (`content/data/entities.json`, Karte "archipel") gelesen statt hartcodiert –
+ *  Position + Schild-Label sind Daten, kein Geometrie-Konstanten-Edit. */
+export const ARCHIPEL_QUEST_TRIGGER = objectForId("archipel", "gitops-altar");
 
 /** Ein Übergang zwischen zwei Karten: betritt man die Kachel (tx,ty), wechselt
  *  die Szene. Analog zu world.ts › Door, aber für ganze Karten. */
@@ -130,6 +132,14 @@ export function buildArchipel(): ArchipelMap {
     ARCHIPEL_QUEST_TRIGGER.y * W + ARCHIPEL_QUEST_TRIGGER.x,
     CY * W + CX,
   ]);
+
+  // Solide Objekte (props/tower) aus der Registry (#357) als Kachel-Solid markieren.
+  // Der Archipel hat derzeit nur den begehbaren Quest-Trigger (übersprungen), aber so ist
+  // ein künftiges Insel-Objekt nur ein JSON-Eintrag (entities.json), kein Geometrie-Edit.
+  for (const o of objectsForMap("archipel")) {
+    if (o.type === "quest_trigger") continue;
+    for (const t of objectFootprint(o)) solid[t.y * W + t.x] = 1;
+  }
 
   // Bäume als grüner Saum nahe der Küste – deterministisch, nie auf Weg/Lichtung/Steg.
   const trees: { x: number; y: number }[] = [];

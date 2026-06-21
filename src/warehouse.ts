@@ -15,7 +15,7 @@
  * von dort wiederverwendet statt ein drittes Mal definiert (wie in lighthouse.ts).
  */
 import { warpAt, type Warp } from "./archipel";
-import { npcSpawnForMap, type Spawn } from "./content/entities";
+import { npcSpawnForMap, objectForId, objectsForMap, objectFootprint, type Spawn } from "./content/entities";
 
 export { warpAt, type Warp };
 
@@ -42,17 +42,16 @@ const CX = 14, CY = 8;   // Mitte der Quay-Fläche (Kontor-Platz mit NPC/Quest-T
  *  hartcodiert; der Eintrag dort liegt auf (CX-2, CY) der Quay-Fläche. */
 export const WAREHOUSE_NPC: Spawn = npcSpawnForMap("warehouse");
 
-/** Quest-Trigger = das Lager-Kontor. Hier docken die Phase-7-Quests an (#127/#129). */
-export const WAREHOUSE_QUEST_TRIGGER = { id: "lager-kontor", x: CX + 2, y: CY } as const;
+/** Quest-Trigger = das Lager-Kontor. Hier docken die Phase-7-Quests an (#127/#129). Seit
+ *  #357 aus der Entity-Registry gelesen (Position + Schild-Label sind Daten). */
+export const WAREHOUSE_QUEST_TRIGGER = objectForId("warehouse", "lager-kontor");
 
-/** Standplätze der Verladekräne (oben am Wasser, „über" der Kaikante). Daten, damit
- *  scenes.ts Sprite und Kollisions-Solid deckungsgleich setzt. */
-export const WAREHOUSE_CRANES = [{ x: 6, y: QY0 + 1 }, { x: 21, y: QY0 + 1 }] as const;
-
-/** Standplätze der Frachtcontainer-Stapel (Daten/Volumes-Metapher der Phase). */
-export const WAREHOUSE_CONTAINERS = [
-  { x: 8, y: 6 }, { x: 10, y: 6 }, { x: 18, y: 11 }, { x: 20, y: 11 }, { x: 9, y: 12 },
-] as const;
+/** Standplätze der Verladekräne (oben am Wasser, „über" der Kaikante) und der Frachtcontainer-
+ *  Stapel (Daten/Volumes-Metapher der Phase). Seit #357 aus der Entity-Registry abgeleitet
+ *  (Karte "warehouse", Typ "prop") – Sprite und Kollisions-Solid kommen aus denselben Daten,
+ *  ein zusätzlicher Kran/Container ist nur ein JSON-Eintrag. */
+export const WAREHOUSE_CRANES = objectsForMap("warehouse").filter((o) => o.sprite === "crane");
+export const WAREHOUSE_CONTAINERS = objectsForMap("warehouse").filter((o) => o.sprite === "container");
 
 /* ===== Hauptkarte ⇄ Lagerhallen-Viertel ===== */
 
@@ -142,15 +141,16 @@ export function buildWarehouse(): WarehouseMap {
   for (let x = WAREHOUSE_NPC.x; x <= WAREHOUSE_QUEST_TRIGGER.x; x++) reserved.add(CY * W + x);
   for (const idx of reserved) solid[idx] = 0;
 
-  // Kräne + Container als Solids (Sprite-Standplätze, deckungsgleich zu den Daten).
-  for (const c of WAREHOUSE_CRANES) solid[c.y * W + c.x] = 1;
-  for (const c of WAREHOUSE_CONTAINERS) solid[c.y * W + c.x] = 1;
+  // Solide Objekte (Kräne + Container) aus der Registry (#357) als Kachel-Solid markieren –
+  // deckungsgleich zu den Sprite-Standplätzen. Ein zusätzlicher Kran/Container ist nur ein
+  // JSON-Eintrag (entities.json), kein Geometrie-Edit.
+  const solidObjects = objectsForMap("warehouse").filter((o) => o.type !== "quest_trigger");
+  for (const o of solidObjects) for (const t of objectFootprint(o)) solid[t.y * W + t.x] = 1;
 
   // Lager-Güter (Kisten/Fässer) deterministisch auf der Quay-Fläche streuen – nie auf
-  // Pfad/Steg/Reserviert und nie auf Kran-/Container-Felder.
+  // Pfad/Steg/Reserviert und nie auf eine solide Objekt-Kachel (Kran/Container).
   const blocked = new Set<number>(reserved);
-  for (const c of WAREHOUSE_CRANES) blocked.add(c.y * W + c.x);
-  for (const c of WAREHOUSE_CONTAINERS) blocked.add(c.y * W + c.x);
+  for (const o of solidObjects) for (const t of objectFootprint(o)) blocked.add(t.y * W + t.x);
   const goods: { x: number; y: number; kind: "crate" | "barrel" }[] = [];
   for (let y = QY0; y <= QY1; y++) {
     for (let x = QX0; x <= QX1; x++) {

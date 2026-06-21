@@ -2,11 +2,11 @@ import Phaser from "phaser";
 import { UI } from "../ui";
 import { SFX } from "../sfx";
 import { resolveMove, circleHitbox, rectHitbox, npcHitboxes, type Hitbox } from "../world";
-import { npcSpawnsForMap } from "../content/entities";
+import { npcSpawnsForMap, objectsForMap } from "../content/entities";
 import { WATER as A_WATER, warpAt } from "../archipel";
-import { DOCK as WH_DOCK, buildWarehouse, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL, WAREHOUSE_QUEST_TRIGGER, WAREHOUSE_CRANES, WAREHOUSE_CONTAINERS } from "../warehouse";
+import { DOCK as WH_DOCK, buildWarehouse, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL, WAREHOUSE_QUEST_TRIGGER } from "../warehouse";
 import { keys, setWorldScene, setInteriorOpen, type WorldSceneRef } from "../runtime";
-import { T, FOAM, WANG, pixelText, spawnIslandNpc, buildSign, floatPixelText } from "./shared";
+import { T, FOAM, WANG, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText } from "./shared";
 
 /* ===== WarehouseScene (#124) – Lagerhallen-Viertel (Hafenkai) =====
  * Eigener begehbarer Hafenkai, den man von Port Kubernia über den Holz-Anleger am
@@ -37,11 +37,11 @@ export class WarehouseScene extends Phaser.Scene {
 
     this.renderGround();
 
-    // Verladekräne oben am Wasser (PixelLab, #124) – ragen über die Kaikante. Große,
-    // eckige Strukturen → bleiben volles Kachel-Solid (aus der puren Geometrie).
-    for (const c of WAREHOUSE_CRANES) this.objSprite(c.x, c.y, "crane", 0.34, 30, 10);
-    // Frachtcontainer-Stapel auf der Quay-Fläche – ebenfalls eckige Strukturen, volles Solid.
-    for (const c of WAREHOUSE_CONTAINERS) this.objSprite(c.x, c.y, "container", 0.3, 26, 8);
+    // Verladekräne + Frachtcontainer-Stapel (PixelLab, #124) – seit #357 datengesteuert:
+    // eine Schleife über die prop-Objekte der Registry rendert beide (und jedes künftige
+    // Kai-Objekt). Große, eckige Strukturen → volles Kachel-Solid kommt aus der puren
+    // Geometrie (buildWarehouse), Sprite/Schatten aus PROP_RENDER. Neues Objekt = JSON-Eintrag.
+    for (const o of objectsForMap("warehouse")) if (o.type === "prop") spawnIslandObject(this, o);
     // Lager-Güter (Kisten/Fässer) aus der puren Geometrie. Die pure Kachel-Solidität
     // (buildWarehouse) wird hier durch eine Sub-Tile-Hitbox ersetzt (#386): Fässer rund,
     // Kisten als leicht eingerücktes Rechteck – so gleitet man weich an ihnen vorbei.
@@ -58,7 +58,8 @@ export class WarehouseScene extends Phaser.Scene {
     }
 
     // Quest-Trigger = das Lager-Kontor (Schild; die Phase-7-Quests #127/#129 docken hier an).
-    this.makeSign(WAREHOUSE_QUEST_TRIGGER.x * T + 8, (WAREHOUSE_QUEST_TRIGGER.y + 1) * T, "Lager-Kontor");
+    // Position + Schild-Label kommen aus der Registry (#357).
+    this.makeSign(WAREHOUSE_QUEST_TRIGGER.x * T + 8, (WAREHOUSE_QUEST_TRIGGER.y + 1) * T, WAREHOUSE_QUEST_TRIGGER.label!);
 
     // Speicher-Verwalter „Knut" (#125) & künftige Quay-NPCs datengesteuert aus der
     // Entity-Registry (#349): eine Schleife über npcSpawnsForMap("warehouse") statt den
@@ -150,13 +151,6 @@ export class WarehouseScene extends Phaser.Scene {
         .setScale(2.5, 0.8).setTint(FOAM).setAlpha(0).setDepth(1);
       this.tweens.add({ targets: s, alpha: { from: 0, to: 0.55 }, duration: Phaser.Math.Between(900, 1800), yoyo: true, repeat: -1, delay: Phaser.Math.Between(0, 2000) });
     }
-  }
-
-  /** Map-Objekt an einer Kachel verankert (Origin Fußlinie) + weicher Schatten. */
-  objSprite(tx: number, ty: number, tex: string, scale: number, shw: number, shh: number) {
-    const cx = tx * T + 8, baseY = (ty + 1) * T;
-    this.add.ellipse(cx, baseY - 1, shw, shh, 0x000000, 0.24).setDepth(baseY - 1);
-    this.add.image(cx, baseY, tex).setOrigin(0.5, 1).setScale(scale).setDepth(baseY + 4);
   }
 
   makeSign(x: number, y: number, text: string, depth?: number) {

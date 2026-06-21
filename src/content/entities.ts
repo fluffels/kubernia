@@ -101,3 +101,114 @@ export function npcSpawnForMap(map: string): Spawn {
   if (all.length === 0) fail(`npcSpawnForMap(${map})`, "keine NPC-Platzierung für diese Karte");
   return all[0];
 }
+
+/* ===== Objekte / Interaktables in der Registry (#357, Folge zu #349) =====
+ * Zweiter Teil aus dem #349-Umfang, der dort bewusst noch ausstand: Nicht nur WO ein
+ * NPC steht ist jetzt ein Daten-Eintrag, sondern auch WO platzierte **Objekte** stehen
+ * (Quest-Trigger, Verladekräne, Container, Monitoring-Tafel/-Glocke, Leuchtturm). Vorher
+ * waren das Geometrie-Konstanten in den Insel-Modulen (z.B. `WAREHOUSE_CRANES`,
+ * `LIGHTHOUSE_TOWER`) – bei Stardew-Scope (viele Welten mit zahlreichen Triggern/Kränen/
+ * Schildern) reproduziert das genau das Problem, das #349 für NPCs gelöst hat. Jetzt gilt
+ * auch hier: ein neues platziertes Objekt = ein JSON-Eintrag, kein Code-Edit.
+ *
+ * Trennung wie bei NPCs: diese Registry trägt die **Platzierung** (Karte/Kachel/Typ);
+ * das **Render-Tuning** (Sprite-Skalierung, Schattengröße) bleibt Präsentation
+ * (`scenes/shared.ts` › `PROP_RENDER`), die **Sim-Mechanik** eines Triggers bleibt Code.
+ * Prozedural gestreute Deko (`decor.ts`/`scatterDecor`, Bäume/Felsen/Lager-Güter) ist
+ * bewusst KEIN Registry-Objekt – das ist eine eigene, generative Mechanik. */
+
+/** Objekt-Typ – steuert, wie Geometrie & Szene den Eintrag behandeln:
+ *  - `quest_trigger`: begehbarer Interaktionspunkt (Schild/Statue); Geometrie hält ihn frei.
+ *  - `prop`: solides 1×1-Sprite (Kran/Container/Tafel/Glocke …).
+ *  - `tower`: solides Mehr-Kachel-Bauwerk mit eigener Darstellung (Leuchtturm). */
+export type EntityObjectType = "quest_trigger" | "prop" | "tower";
+
+/** Ein platziertes Objekt auf einer Karte. `sprite` ist Pflicht für `prop`/`tower`
+ *  (Textur-Key) und bei `quest_trigger` verboten; `label` ist Pflicht für `quest_trigger`
+ *  (Schild-Text) und sonst verboten. `w`/`h` ist der Kachel-Fußabdruck (Default 1×1,
+ *  >1 nur für Bauwerke wie den Turm), verankert an (x,y) als rechte untere Ecke. */
+export interface EntityObject {
+  id: string; map: string; x: number; y: number;
+  type: EntityObjectType;
+  sprite?: string;
+  label?: string;
+  w?: number; h?: number;
+}
+
+const OBJECT_TYPES: readonly EntityObjectType[] = ["quest_trigger", "prop", "tower"];
+
+/** Positive ganze Zahl ≥1 (Fußabdruck-Maße). NaN/Brüche/0/negativ werden abgewiesen. */
+function asPositiveInt(v: unknown, path: string): number {
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 1) fail(path, "ganze Zahl ≥ 1 erwartet");
+  return v;
+}
+
+/** Validiert die rohe Objekt-Liste gegen das Schema und gibt sie typisiert + in
+ *  Datei-Reihenfolge zurück. `objects` ist **optional** (Karten ohne Objekte sind ok →
+ *  leeres Array); ist der Schlüssel da, muss er ein Array sein. Wirft `ContentValidationError`
+ *  beim ersten Verstoß (nie still durchwinken). */
+export function parseObjects(raw: unknown): EntityObject[] {
+  const obj = asRecord(raw, "entities");
+  if (obj.objects === undefined) return [];
+  const list = asArray(obj.objects, "entities.objects");
+  const seen = new Set<string>();
+  return list.map((entry, i) => {
+    const o = asRecord(entry, `entities.objects[${i}]`);
+    const id = asNonEmptyString(o.id, `entities.objects[${i}].id`);
+    const map = asNonEmptyString(o.map, `entities.objects[${i}].map`);
+    const x = asFiniteNumber(o.x, `entities.objects[${i}].x`);
+    const y = asFiniteNumber(o.y, `entities.objects[${i}].y`);
+    const typeStr = asNonEmptyString(o.type, `entities.objects[${i}].type`);
+    if (!OBJECT_TYPES.includes(typeStr as EntityObjectType)) {
+      fail(`entities.objects[${i}].type`, `unbekannter Typ „${typeStr}" (erlaubt: ${OBJECT_TYPES.join(", ")})`);
+    }
+    const type = typeStr as EntityObjectType;
+
+    // Typ-abhängige Pflicht-/Verbotsfelder, damit keine toten/widersprüchlichen Daten entstehen.
+    let sprite: string | undefined;
+    let label: string | undefined;
+    if (type === "quest_trigger") {
+      label = asNonEmptyString(o.label, `entities.objects[${i}].label`);
+      if (o.sprite !== undefined) fail(`entities.objects[${i}].sprite`, "quest_trigger trägt kein sprite");
+    } else {
+      sprite = asNonEmptyString(o.sprite, `entities.objects[${i}].sprite`);
+      if (o.label !== undefined) fail(`entities.objects[${i}].label`, `${type} trägt kein label`);
+    }
+
+    const w = o.w === undefined ? 1 : asPositiveInt(o.w, `entities.objects[${i}].w`);
+    const h = o.h === undefined ? 1 : asPositiveInt(o.h, `entities.objects[${i}].h`);
+
+    const key = `${map}/${id}`;
+    if (seen.has(key)) fail(`entities.objects[${i}]`, `doppeltes Objekt „${key}"`);
+    seen.add(key);
+    return { id, map, x, y, type, sprite, label, w, h };
+  });
+}
+
+/** Validierte Objekt-Registry – Quelle: `./data/entities.json`. */
+export const ENTITY_OBJECTS: EntityObject[] = parseObjects(entitiesData);
+
+/** Alle Objekte einer Karte, in Datei-Reihenfolge. Leeres Array, wenn die Karte keine
+ *  hat. Geometrie & Szenen loopen darüber → neues Objekt = nur JSON-Eintrag. */
+export function objectsForMap(map: string): EntityObject[] {
+  return ENTITY_OBJECTS.filter((o) => o.map === map);
+}
+
+/** Ein benanntes Objekt einer Karte per id. Für Geometrie-Module, die einen bestimmten
+ *  Standplatz brauchen (Turm, Quest-Trigger). Wirft laut bei Tippfehler/Fehlen – so fällt
+ *  ein falscher id/map-Bezug beim Laden sofort auf, statt dass das Objekt stumm verschwindet. */
+export function objectForId(map: string, id: string): EntityObject {
+  const hit = ENTITY_OBJECTS.find((o) => o.map === map && o.id === id);
+  if (!hit) fail(`objectForId(${map}, ${id})`, "kein Objekt mit dieser id auf dieser Karte");
+  return hit;
+}
+
+/** Die vom Objekt belegten Kacheln (Fußabdruck). Der Anker (x,y) ist die rechte untere
+ *  Ecke; ein w×h-Bauwerk erstreckt sich nach links/oben (so wie der 2×2-Leuchtturm-Fuß
+ *  schon vorher modelliert war). Für Default-1×1-Objekte genau die Ankerkachel. */
+export function objectFootprint(o: EntityObject): { x: number; y: number }[] {
+  const w = o.w ?? 1, h = o.h ?? 1;
+  const tiles: { x: number; y: number }[] = [];
+  for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) tiles.push({ x: o.x - dx, y: o.y - dy });
+  return tiles;
+}

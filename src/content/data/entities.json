@@ -10,5 +10,22 @@
     { "id": "argo",  "map": "archipel",   "x": 12,   "y": 8 },
     { "id": "lumi",  "map": "lighthouse", "x": 11,   "y": 9 },
     { "id": "knut",  "map": "warehouse",  "x": 12,   "y": 8 }
+  ],
+  "objects": [
+    { "id": "gitops-altar",       "map": "archipel",   "x": 16, "y": 8,  "type": "quest_trigger", "label": "GitOps" },
+    { "id": "monitoring-station", "map": "lighthouse", "x": 15, "y": 9,  "type": "quest_trigger", "label": "Monitoring" },
+    { "id": "lager-kontor",       "map": "warehouse",  "x": 16, "y": 8,  "type": "quest_trigger", "label": "Lager-Kontor" },
+
+    { "id": "leuchtturm",         "map": "lighthouse", "x": 13, "y": 5,  "type": "tower", "sprite": "lighthouse", "w": 2, "h": 2 },
+    { "id": "grafana-tafel",      "map": "lighthouse", "x": 15, "y": 8,  "type": "prop", "sprite": "grafana_board" },
+    { "id": "alarm-glocke",       "map": "lighthouse", "x": 16, "y": 10, "type": "prop", "sprite": "alert_bell" },
+
+    { "id": "kran-west",          "map": "warehouse",  "x": 6,  "y": 4,  "type": "prop", "sprite": "crane" },
+    { "id": "kran-ost",           "map": "warehouse",  "x": 21, "y": 4,  "type": "prop", "sprite": "crane" },
+    { "id": "container-1",        "map": "warehouse",  "x": 8,  "y": 6,  "type": "prop", "sprite": "container" },
+    { "id": "container-2",        "map": "warehouse",  "x": 10, "y": 6,  "type": "prop", "sprite": "container" },
+    { "id": "container-3",        "map": "warehouse",  "x": 18, "y": 11, "type": "prop", "sprite": "container" },
+    { "id": "container-4",        "map": "warehouse",  "x": 20, "y": 11, "type": "prop", "sprite": "container" },
+    { "id": "container-5",        "map": "warehouse",  "x": 9,  "y": 12, "type": "prop", "sprite": "container" }
   ]
 }
