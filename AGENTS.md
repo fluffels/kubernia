@@ -39,6 +39,7 @@
 | Offline-Build (eine self-contained `dist-offline/index.html`) | `npm run build:offline` |
 | Dev-Panel-Build (#331, Panel MIT, passwortgated via `VITE_KQ_DEVPANEL_PW`, nach `dist-devpanel/`) | `npm run build:devpanel` |
 | Tests | `npm test` (Vitest) |
+| Boot-Smoke-Test (headless Chromium gegen den Offline-Build, #391) | `npm run smoke` (Offline-Build + Playwright) bzw. `npm run test:smoke` (nur Lauf) |
 | Typen prüfen (ganzes Projekt, voll strict) | `npm run typecheck` |
 | Typen prüfen (Alias, identisch zu `typecheck`) | `npm run typecheck:strict` |
 | Linter (ESLint flat config, typbewusst, #389; `any` blockt seit #423) | `npm run lint` (`eslint . --max-warnings 0`) |
@@ -84,6 +85,8 @@ Vite + TypeScript + ES-Module. `index.html` lädt nur `src/main.ts`, Vite bünde
 > Welches Modul genau was macht (mit Links), steht **einmal** in der [CLAUDE.md › Repo-Landkarte](CLAUDE.md) – hier steht nur das *Warum* der Schichtung, nicht die Dateiliste.
 
 Tests in `test/` (Vitest), u.a.: `sim.test.ts` (Simulator-Kern/Dispatch; die Befehlsfamilien gespiegelt zu den `sim/`-Modulen unter `test/sim/`, Fixtures in `test/sim/helpers.ts` – Split #383), `content.test.ts` (Konsistenz aller Inhalte), `quests.test.ts` (spielt die ganze Story + alle Drills durch), `readme.test.ts` (Doku-Sync: Quest-Zahl der README gegen den Code).
+
+**Boot-Smoke-Test (#391, getrennt von Vitest).** Die Unit-Tests fassen die Präsentation (Phaser/DOM) bewusst nicht an – ein Fehler, der erst beim echten Boot auftritt (Phaser-Init, ein werfender Content-Loader, ein kaputtes Asset-Manifest), käme durch. Darum lädt ein **Playwright/headless-Chromium-Test** den **gebauten Offline-Build** (`dist-offline/index.html` per `file://`, also genau den Doppelklick-Pfad) und prüft: der Boot-Flag `body[data-kq-booted="1"]` erscheint, die Phaser-Canvas ist da, das index.html-Sicherheitsnetz tauchte **nicht** auf, und es fielen **keine** Konsolen-/Laufzeit-Fehler. Liegt in [`e2e/`](e2e/) (Config `playwright.config.ts`), läuft lokal mit `npm run smoke` (baut Offline + testet) und in der CI als eigener Schritt nach den Builds. **Vitest ignoriert `e2e/`** (Include ist `test/**/*.test.ts`) – die beiden Test-Welten überschneiden sich nicht.
 
 ## Konventionen
 

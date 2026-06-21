@@ -2,6 +2,11 @@ node_modules/
 dist/
 dist-offline/
 dist-devpanel/
+# Playwright-Boot-Smoke-Test (#391): Browser-Artefakte/Reports, nie ins Repo.
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
 # Lokale Umgebungsvariablen (#325): der Dev-Panel-Passwort-WERT darf nie ins Repo.
 # Die Vorlage `.env.example` (nur Variablen-Namen) bleibt versioniert.
 .env

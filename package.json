@@ -17,6 +17,8 @@
     "preview:offline": "vite preview --outDir dist-offline",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:smoke": "playwright test",
+    "smoke": "npm run build:offline && playwright test",
     "typecheck": "tsc --noEmit",
     "typecheck:strict": "tsc -p tsconfig.strict.json",
     "check:arch": "depcruise src --config .dependency-cruiser.cjs",
@@ -28,6 +30,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.0",
     "@types/node": "^25.9.3",
     "dependency-cruiser": "^17.4.3",
     "eslint": "^10.5.0",

@@ -60,6 +60,26 @@ jobs:
           path: dist-offline/index.html
           if-no-files-found: error
 
+      # Boot-Smoke-Test (#391): die Builds oben werden gebaut, aber nie GESTARTET.
+      # Unit-Tests fassen die Präsentation (Phaser/DOM) bewusst nicht an, also
+      # käme ein erst beim echten Boot auftretender Fehler (Phaser-Init, Content-
+      # Loader wirft, kaputtes Asset-Manifest) durch. Wir laden den eben gebauten
+      # Offline-Build headless in Chromium und prüfen, dass er ohne Konsolen-/
+      # Laufzeit-Fehler hochfährt (dist-offline/index.html ist hier schon da).
+      - name: Playwright-Browser installieren (Chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: Boot-Smoke-Test (headless, #391)
+        run: npm run test:smoke
+
+      - name: Smoke-Test-Trace bei Fehlschlag hochladen
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: kubequest-smoke-trace
+          path: test-results/
+          if-no-files-found: ignore
+
   # Security-Audit (#396): npm audit als CI-Gate. Bewusst ZWEISTUFIG, um die
   # ⚠️-Falle aus dem Ticket zu vermeiden – ein hartes high+-Gate über den GANZEN
   # Baum wäre durch die dev-only-Advisories aus #395 (vite high, vitest critical)

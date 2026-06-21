@@ -50,6 +50,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | Offline-Build (self-contained `dist-offline/index.html`) | `npm run build:offline` |
 | Dev-Panel-Build (#331, Panel MIT, passwortgated, `dist-devpanel/`) | `npm run build:devpanel` |
 | Tests | `npm test` (Vitest) |
+| Boot-Smoke-Test (headless, gegen den Offline-Build, #391) | `npm run smoke` (baut Offline + Playwright) bzw. `npm run test:smoke` (nur Lauf, Build muss da sein) |
 | Typen prüfen (voll strict) | `npm run typecheck` |
 | Linter (ESLint, #389) | `npm run lint` |
 | Architektur-Wächter (Schichtung + Zyklen + Orphans, #347/#390) | `npm run check:arch` |
@@ -172,6 +173,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | 🔤 Pixelschrift fürs HUD (`KQPixel`/Silkscreen) | [`fonts.css`](fonts.css) (base64-`@font-face`) + Quelle/Lizenz in [`assets/fonts/`](assets/fonts/) (#189) |
 | 🗺️ Tiled-Maps (`.tmj`) + Workflow | [assets/maps/README.md](assets/maps/README.md) |
 | 🧪 Tests (Vitest) | [`test/`](test/) – Kern/Dispatch in `sim.test.ts`; die Simulator-Befehlsfamilien gespiegelt zu den `sim/`-Modulen unter [`test/sim/`](test/sim/) (docker/kubectl/rbac/helm/git/terraform/argocd/glab, gemeinsame Fixtures in `test/sim/helpers.ts`, #383); dazu `content.test.ts`, `quests.test.ts` u.a. |
+| 🚦 Boot-Smoke-Test (Playwright, E2E) | [`e2e/`](e2e/) – lädt den gebauten Offline-Build headless und prüft den fehlerfreien Boot (#391); Config: [`playwright.config.ts`](playwright.config.ts). Bewusst getrennt von den Vitest-Unit-Tests (`npm run smoke`). |
 | ✅ Backlog / TODOs | GitHub Issues + Project-Board (`gh issue list --state open --limit 500`, `gh project list --owner fluffels`) |
 | 🥇 Nächstes Ticket (Umsetzungs-Reihenfolge) | [docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md) – Kopf (kuratiert) + Auto-Rest (Prio→Nummer) + Reaktivierungs-Pool |
 
