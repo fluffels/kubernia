@@ -46,19 +46,19 @@ Leitlinie der Sortierung: **Prio zuerst** (höchste offene Prio oben), **innerha
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| 1 | **#379** | mittel | Docker-Kapitel: Kürzel auf Langform-zuerst (Nutzungszähler #313) | Höchste offene Prio (mittel); Lernpfad-Konsistenz; **Dreier-Sequenz #379→#380→#381** zusammen abarbeiten. |
-| 2 | **#380** | mittel | K8s-Kapitel: kubectl-Kürzel auf Langform-zuerst | Teil der Dreier-Sequenz. |
-| 3 | **#381** | mittel | Helm/Git/ArgoCD-Kapitel: Kürzel auf Langform-zuerst | Abschluss der Dreier-Sequenz. |
-| 4 | **#391** | mittel | CI: Boot-Smoke-Test des gebauten Spiels (headless) | Qualitätsnetz — fängt Laufzeit-Boot-Fehler; unabhängig. |
-| 5 | **#416** | mittel | Cluster-Tags cullbar/gebündelt (Frame-Performance) | Rendering-Perf bei vielen Entities; unabhängig. |
-| 6 | **#422** | mittel | Dependabot-/PR-Policy festschreiben | Prozess-Doku; unabhängig. |
-| 7 | **#198** | – | Lazy-Asset-Loading pro Insel/Szene | **Skalierungs-Enabler** — vor dem großen Asset-Wachstum, sonst eager-Lade-Bottleneck. |
-| 8 | **#339** | niedrig | Texture-Atlas statt Einzel-Assets | Draw-Calls/Ladezeit bei vielen Sprites; **nach** Lazy-Loading #198. |
-| 9 | **#417** | niedrig | Lazy-Content-Loading + `mergeScenario` entzerren | Content-Pendant zu #198 (Quest-/Karten-Daten statt Assets). |
-| 10 | **#428** | niedrig | `MapId`-Union aus der Registry ableiten | Abschluss-Härtung der #415-Kinder (Rest nach #425/#427 ✓). |
-| 11 | **#306** | niedrig | Mehrere Spielstände / Save-Slots | Feature auf IndexedDB-Fundament (#350 ✓). |
-| 12 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
-| 13 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 1 | **#380** | mittel | K8s-Kapitel: kubectl-Kürzel auf Langform-zuerst | Höchste offene Prio (mittel); Fortsetzung der **Dreier-Sequenz #380→#381** (Muster aus #379 ✓ übernehmen). |
+| 2 | **#381** | mittel | Helm/Git/ArgoCD-Kapitel: Kürzel auf Langform-zuerst | Abschluss der Dreier-Sequenz. |
+| 3 | **#391** | mittel | CI: Boot-Smoke-Test des gebauten Spiels (headless) | Qualitätsnetz — fängt Laufzeit-Boot-Fehler; unabhängig. |
+| 4 | **#416** | mittel | Cluster-Tags cullbar/gebündelt (Frame-Performance) | Rendering-Perf bei vielen Entities; unabhängig. |
+| 5 | **#422** | mittel | Dependabot-/PR-Policy festschreiben | Prozess-Doku; unabhängig. |
+| 6 | **#198** | – | Lazy-Asset-Loading pro Insel/Szene | **Skalierungs-Enabler** — vor dem großen Asset-Wachstum, sonst eager-Lade-Bottleneck. |
+| 7 | **#339** | niedrig | Texture-Atlas statt Einzel-Assets | Draw-Calls/Ladezeit bei vielen Sprites; **nach** Lazy-Loading #198. |
+| 8 | **#417** | niedrig | Lazy-Content-Loading + `mergeScenario` entzerren | Content-Pendant zu #198 (Quest-/Karten-Daten statt Assets). |
+| 9 | **#428** | niedrig | `MapId`-Union aus der Registry ableiten | Abschluss-Härtung der #415-Kinder (Rest nach #425/#427 ✓). |
+| 10 | **#306** | niedrig | Mehrere Spielstände / Save-Slots | Feature auf IndexedDB-Fundament (#350 ✓). |
+| 11 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
+| 12 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 13 | **#212** | niedrig | Inhalt: erklären, was nginx ist (Webserver) | Nachgefüllt aus dem Auto-Rest (niedrigste freie Nicht-Optik-Nummer); reines Content-Ticket, keine Abhängigkeit. |
 | 14 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
 | 15 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
