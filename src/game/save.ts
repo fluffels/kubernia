@@ -263,16 +263,20 @@ export const saveBundle = part({
     // über den Laufzeit-Sink (#344), NICHT mehr per direktem sfx.ts-Import.
     applyAudioConfig(this.state.audio);
     this.sim = new KQSim(this.state.clusterSnapshot || {});
-    // Szenarien bereits erreichter Funk-Schritte wieder einmischen
-    for (let qi = 0; qi <= Math.min(this.state.questIdx, KQContent.QUESTS.length - 1); qi++) {
-      const quest = KQContent.QUESTS[qi];
-      quest.steps.forEach((step, si) => {
-        if (step.scenario && (qi < this.state.questIdx || si <= this.state.questStep)) {
-          const sc = Object.assign({}, step.scenario);
-          if (this.state.clusterSnapshot) delete sc.deployments;
-          this.sim.mergeScenario(sc);
-        }
-      });
+    // Vollständiger Snapshot (erkennbar am `files`-Schlüssel, den snapshot() immer mitschreibt,
+    // ältere Teil-Snapshots ihn aber nicht hatten) → Cluster-Zustand komplett eingefroren,
+    // kein Szenario-Replay nötig (#436). Ohne Snapshot oder mit altem Teil-Snapshot (kein
+    // `files`-Schlüssel): alle bereits erreichten Szenarien einmischen; der anschließende
+    // save() schreibt dann erstmals einen vollständigen Snapshot.
+    if (!this.state.clusterSnapshot || this.state.clusterSnapshot.files === undefined) {
+      for (let qi = 0; qi <= Math.min(this.state.questIdx, KQContent.QUESTS.length - 1); qi++) {
+        const quest = KQContent.QUESTS[qi];
+        quest.steps.forEach((step, si) => {
+          if (step.scenario && (qi < this.state.questIdx || si <= this.state.questStep)) {
+            this.sim.mergeScenario(Object.assign({}, step.scenario));
+          }
+        });
+      }
     }
     this.touchStreak();
     // Offline-Einnahmen: dein Hafen hat weitergearbeitet (max. 4 Stunden, halber Satz)

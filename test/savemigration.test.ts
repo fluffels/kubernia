@@ -386,3 +386,44 @@ test("Red-Green: kaputtes v2-Fixture lädt sanitisiert (kein Crash, Defaults sta
   // Trotz Müll-Eingabe ein konsistenter, stabiler Stand.
   expectRoundTripFixedPoint();
 });
+
+/* ============================================================================
+ * #436: load() mit vollständigem Snapshot – kein Szenario-Replay, Snapshot ist SSOT.
+ * RED: schlägt fehl, solange load() das Szenario re-merged (Object.assign überschreibt).
+ * GREEN: ab dem Moment, wo load() beim vollständigen Snapshot den Replay-Loop überspringt.
+ * ========================================================================== */
+
+test("#436: load() mit vollständigem Snapshot überschreibt Snapshot-Dateien NICHT durch Szenario-Replay", () => {
+  // „docker-build-image" (Reihenfolge-Index 5) trägt ein Szenario mit
+  //   files: { "Dockerfile": "FROM nginx:1.27..." }.
+  // Ein Stand bei questIdx 6 (eine Quest weiter) mit einem vollständigen Snapshot,
+  // der denselben Schlüssel mit einem ANDEREN Wert enthält, muss nach load() den
+  // Snapshot-Wert behalten. Der alte Code würde das Szenario re-mergen (Object.assign
+  // in mergeScenario ist für „files" nicht idempotent) und den Snapshot-Wert überschreiben.
+  const nextIdx = 6; // docker-build-image liegt bei Index 5; wir stehen eine Quest später
+  vi.setSystemTime(0);
+  lsMap.set(SAVE_KEY, JSON.stringify({
+    v: 5,
+    data: {
+      xp: 50, coins: 100, character: null,
+      player: { x: 400, y: 300 },
+      questIdx: nextIdx,
+      currentQuestId: KQContent.QUESTS[nextIdx].id,
+      questStep: 0, taskIdx: 0,
+      completedQuests: KQContent.QUESTS.slice(0, nextIdx).map((q: { id: string }) => q.id),
+      activeQuests: { [KQContent.QUESTS[nextIdx].id]: { step: 0, task: 0 } },
+      inventory: {}, owned: [], activePet: null, activeFlag: null,
+      review: {}, unlockedAbbrev: [], abbrevUsage: {}, cmdHistoryUnlocked: false,
+      streak: { count: 0, lastDay: 0 }, streakHintShown: false, introSeen: false,
+      questLogIntroShown: false, stats: {}, lastSeen: 0, gameDays: 0, questsSinceGate: 0,
+      audio: { music: true, sfx: true, musicVol: 0.5, sfxVol: 0.8, track: "hafen" },
+      settings: { events: "normal" },
+      // Vollständiger Snapshot (hat „files"-Schlüssel): trägt eine MODIFIZIERTE Dockerfile-Version.
+      // Kein Replay-Szenario darf diesen Wert überschreiben.
+      clusterSnapshot: { files: { "Dockerfile": "SNAPSHOT-VERSION-NIE-UEBERSCHREIBEN" } },
+    },
+  }));
+  Game.load();
+  // Snapshot-Version muss nach dem Laden unverändert erhalten bleiben.
+  expect(Game.sim.files["Dockerfile"]).toBe("SNAPSHOT-VERSION-NIE-UEBERSCHREIBEN");
+});
