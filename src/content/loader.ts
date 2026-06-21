@@ -101,6 +101,25 @@ import type { Scenario } from "../sim";
 
 export { ContentValidationError };
 
+/** Lazy-Memoizer (#435): `make` läuft beim ERSTEN Aufruf, das Ergebnis wird gecacht.
+ *  So wandert das Parsen+Validieren der Inhalte vom Modul-Import (Boot-Pfad) auf die
+ *  erste tatsächliche Nutzung und passiert pro Sammlung genau einmal. Wichtig für
+ *  Stardew-Scope: hunderte Quests/Karten werden nicht mehr alle beim Boot geparst,
+ *  sondern erst, wenn die jeweilige Sammlung gebraucht wird (Funkgerät/Quiz/Logbuch).
+ *  Der `import.meta.glob`-Import bleibt eager (der Single-File-Build inlinet die JSON-
+ *  Module weiterhin) – nur das AUSWERTEN ist verzögert. */
+function memo<T>(make: () => T): () => T {
+  let value: T;
+  let computed = false;
+  return () => {
+    if (!computed) {
+      value = make();
+      computed = true;
+    }
+    return value;
+  };
+}
+
 /** NPC-Stammdaten: Anzeigename, Funktions-Titel, Spritesheet-Frame, Textur-Key. */
 export interface NpcMeta {
   name: string;
@@ -345,14 +364,20 @@ export function assembleQuests(regions: Quest[][], order: string[]): Quest[] {
   return ordered;
 }
 
-/** Alle Regionen-Dateien geladen + validiert (deterministisch nach Pfad sortiert). */
-const QUEST_REGIONS: Quest[][] = Object.entries(questRegionModules)
-  .sort(([a], [b]) => a.localeCompare(b))
-  .map(([path, mod]) => parseQuests(mod.default, path));
-
 /** Validierte Quests in Laufzeit-Form, global geordnet – Quellen:
- *  `./data/quests/<giver>.json` + `./data/quest-order.json` + `./checks.ts`. */
-export const QUESTS: Quest[] = assembleQuests(QUEST_REGIONS, parseOrder(questOrder));
+ *  `./data/quests/<giver>.json` + `./data/quest-order.json` + `./checks.ts`.
+ *  Lazy (#435): die Regionen-Dateien werden erst beim ersten Zugriff geparst,
+ *  deterministisch nach Pfad sortiert und nach quest-order.json zusammengeführt;
+ *  danach gecacht. Die Reihenfolge bleibt load-bearing (`questIdx`), sie kommt
+ *  weiterhin allein aus quest-order.json (nicht aus der Glob-Reihenfolge). */
+export const getQuests = memo<Quest[]>(() =>
+  assembleQuests(
+    Object.entries(questRegionModules)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([path, mod]) => parseQuests(mod.default, path)),
+    parseOrder(questOrder),
+  ),
+);
 
 /* ===================== Quest-Themen / Kapitel (Content-as-Data, #327) =====================
  * Die Themen-Taxonomie (`./data/quest-topics.json`): eine GEORDNETE Liste von
@@ -389,8 +414,9 @@ export function parseQuestTopics(raw: unknown, where = "quest-topics"): QuestTop
   });
 }
 
-/** Validierte Themen-Taxonomie (geordnet) – Quelle: `./data/quest-topics.json`. */
-export const QUEST_TOPICS: QuestTopic[] = parseQuestTopics(questTopicsData);
+/** Validierte Themen-Taxonomie (geordnet) – Quelle: `./data/quest-topics.json`.
+ *  Lazy (#435): erst beim ersten Zugriff geparst (Logbuch-Accordion #326), dann gecacht. */
+export const getQuestTopics = memo<QuestTopic[]>(() => parseQuestTopics(questTopicsData));
 
 /** Eine Themen-Gruppe: das Thema + die ihm zugeordneten Quests (in Spielreihenfolge). */
 export interface TopicGroup {
@@ -482,13 +508,16 @@ export function assembleCmdCards(regions: CmdCard[][]): CmdCard[] {
   return out;
 }
 
-/** Alle Karten-Geber-Dateien geladen + validiert (deterministisch nach Pfad sortiert). */
-const CMD_CARD_REGIONS: CmdCard[][] = Object.entries(cmdCardModules)
-  .sort(([a], [b]) => a.localeCompare(b))
-  .map(([path, mod]) => parseCmdCards(mod.default, path));
-
-/** Validierte Befehls-Karten in Laufzeit-Form – Quelle: `./data/cmdcards/<giver>.json`. */
-export const CMD_CARDS: CmdCard[] = assembleCmdCards(CMD_CARD_REGIONS);
+/** Validierte Befehls-Karten in Laufzeit-Form – Quelle: `./data/cmdcards/<giver>.json`.
+ *  Lazy (#435): die Geber-Dateien werden erst beim ersten Zugriff geparst (Funkgerät/
+ *  Spaced-Repetition), deterministisch nach Pfad sortiert zusammengeführt; dann gecacht. */
+export const getCmdCards = memo<CmdCard[]>(() =>
+  assembleCmdCards(
+    Object.entries(cmdCardModules)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([path, mod]) => parseCmdCards(mod.default, path)),
+  ),
+);
 
 /* ===================== Quiz-Karteikarten (Content-as-Data, #368) =====================
  * Die Verständnis-Karten der Quiz-Krabbe Kralle (Multiple Choice): Frage (`q`),
@@ -563,10 +592,13 @@ export function assembleQuizCards(topics: QuizCard[][]): QuizCard[] {
   return out;
 }
 
-/** Alle Quiz-Thema-Dateien geladen + validiert (deterministisch nach Pfad sortiert). */
-const CRAB_QUIZ_TOPICS: QuizCard[][] = Object.entries(crabQuizModules)
-  .sort(([a], [b]) => a.localeCompare(b))
-  .map(([path, mod]) => parseQuizCards(mod.default, path));
-
-/** Validierte Quiz-Karteikarten in Laufzeit-Form – Quelle: `./data/crabquiz/<thema>.json`. */
-export const CRAB_QUIZ: QuizCard[] = assembleQuizCards(CRAB_QUIZ_TOPICS);
+/** Validierte Quiz-Karteikarten in Laufzeit-Form – Quelle: `./data/crabquiz/<thema>.json`.
+ *  Lazy (#435): die Thema-Dateien werden erst beim ersten Zugriff geparst (Krabben-Quiz),
+ *  deterministisch nach Pfad sortiert zusammengeführt; dann gecacht. */
+export const getQuizCards = memo<QuizCard[]>(() =>
+  assembleQuizCards(
+    Object.entries(crabQuizModules)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([path, mod]) => parseQuizCards(mod.default, path)),
+  ),
+);

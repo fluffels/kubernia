@@ -9,9 +9,19 @@ import { RANKS, SHOP } from "./content/progression";
 // NPCs, Smalltalk, Quests, Befehls-Karten und Quiz-Karten sind Content-as-Data
 // (#348/#352/#368): als JSON in content/data/, geladen & gegen ein Schema validiert vom
 // Loader (accept→RegExp, check→Mechanik-Registry). Siehe content/loader.ts + content/checks.ts.
-import { NPCS, SMALLTALK, QUESTS, CMD_CARDS, CRAB_QUIZ, QUEST_TOPICS, groupQuestsByTopic } from "./content/loader";
+import { NPCS, SMALLTALK, getQuests, getCmdCards, getQuizCards, getQuestTopics, groupQuestsByTopic } from "./content/loader";
 import { DRILLS, PRACTICE } from "./content/drills";
 import { STACK_ROUNDS, corruptImage } from "./content/minigame";
 import { GLOSSARY, applyGlossary } from "./content/glossary";
 
-export const KQContent = { RANKS, SHOP, NPCS, QUESTS, QUEST_TOPICS, SMALLTALK, CRAB_QUIZ, CMD_CARDS, DRILLS, PRACTICE, STACK_ROUNDS, corruptImage, GLOSSARY, applyGlossary, groupQuestsByTopic };
+// Quests, Themen, Quiz- und Befehls-Karten sind seit #435 LAZY: die Fassade exponiert sie
+// als Getter, die das (bei Stardew-Scope teure) Parsen+Validieren erst beim ersten Zugriff
+// auslösen (memoisiert im Loader). Die öffentliche API `KQContent.QUESTS` etc. bleibt
+// unverändert synchron. NPCS/SMALLTALK bleiben eager (winzig, schon beim Boot gebraucht).
+export const KQContent = {
+  RANKS, SHOP, NPCS, SMALLTALK, DRILLS, PRACTICE, STACK_ROUNDS, corruptImage, GLOSSARY, applyGlossary, groupQuestsByTopic,
+  get QUESTS() { return getQuests(); },
+  get QUEST_TOPICS() { return getQuestTopics(); },
+  get CRAB_QUIZ() { return getQuizCards(); },
+  get CMD_CARDS() { return getCmdCards(); },
+};

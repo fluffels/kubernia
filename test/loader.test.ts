@@ -9,9 +9,10 @@ import assert from "node:assert/strict";
 import {
   NPCS,
   SMALLTALK,
-  QUESTS,
-  CMD_CARDS,
-  CRAB_QUIZ,
+  getQuests,
+  getCmdCards,
+  getQuizCards,
+  getQuestTopics,
   parseNpcs,
   parseSmalltalk,
   parseQuests,
@@ -21,13 +22,19 @@ import {
   parseQuizCards,
   assembleQuizCards,
   parseQuestTopics,
-  QUEST_TOPICS,
   groupQuestsByTopic,
   ContentValidationError,
   type CmdCard,
   type QuizCard,
 } from "../src/content/loader";
 import type { Quest } from "../src/types";
+
+// #435: Quests/Karten/Quiz/Themen sind im Loader jetzt lazy (memoisierte Getter). Für die
+// „echte Daten"-Tests hier einmalig materialisieren – so bleiben alle Test-Bodies unverändert.
+const QUESTS = getQuests();
+const CMD_CARDS = getCmdCards();
+const CRAB_QUIZ = getQuizCards();
+const QUEST_TOPICS = getQuestTopics();
 
 /** Minimal-Quest für die Assembler-Tests (Inhalt egal, nur id/giver/topic zählen). */
 const mkQuest = (id: string): Quest => ({ id, title: id, giver: "ole", topic: "docker", rewardXp: 0, rewardCoins: 0, steps: [] });
@@ -590,4 +597,16 @@ test("assembleQuizCards: wirft bei doppelter Quiz-ID über Thema-Dateien hinweg"
     () => assembleQuizCards([[mkQuiz("q-dup")], [mkQuiz("q-dup")]]),
     (e: unknown) => e instanceof ContentValidationError && /doppelte Quiz-ID/.test((e as Error).message),
   );
+});
+
+/* ===================== Lazy-/memoisiertes Laden (#435) ===================== */
+
+test("loader: lazy Sammlungen sind memoisiert – zwei Aufrufe liefern dieselbe Referenz (pro Sammlung nur einmal geparst)", () => {
+  // get*() parst beim ERSTEN Aufruf und cached danach: zwei Aufrufe MÜSSEN exakt
+  // dieselbe Array-Referenz liefern. Ein nicht-memoisierter (bei jedem Aufruf neu
+  // parsender) Loader bräche das – die Red-Green-Absicherung der Lazy-Umstellung.
+  assert.equal(getQuests(), getQuests(), "QUESTS nicht memoisiert (jeder Zugriff parst neu)");
+  assert.equal(getCmdCards(), getCmdCards(), "CMD_CARDS nicht memoisiert");
+  assert.equal(getQuizCards(), getQuizCards(), "CRAB_QUIZ nicht memoisiert");
+  assert.equal(getQuestTopics(), getQuestTopics(), "QUEST_TOPICS nicht memoisiert");
 });
