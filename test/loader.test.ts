@@ -429,6 +429,19 @@ test("parseCmdCards: akzeptiert wohlgeformte Karte (accept → RegExp)", () => {
   assert.equal(cards.length, 1);
   assert.ok(cards[0].accept[0] instanceof RegExp, "accept nicht zu RegExp kompiliert");
   assert.ok(cards[0].accept[0].test("docker ps"), "kompiliertes RegExp matcht die Lösung nicht");
+  assert.equal(cards[0].introducedIn, undefined, "introducedIn ist optional (fehlt → undefined)");
+});
+
+test("parseCmdCards: übernimmt optionales introducedIn (#412)", () => {
+  const cards = parseCmdCards([{ ...minimalCard, introducedIn: "docker-list-containers" }]);
+  assert.equal(cards[0].introducedIn, "docker-list-containers");
+});
+
+test("parseCmdCards: wirft bei leerem introducedIn (mit Pfad)", () => {
+  assert.throws(
+    () => parseCmdCards([{ ...minimalCard, introducedIn: "" }]),
+    (e: unknown) => e instanceof ContentValidationError && /cmdcard c-x\.introducedIn/.test((e as Error).message),
+  );
 });
 
 /* ---------- parseCmdCards: kaputte Daten MÜSSEN explizit werfen (Negativfälle) ---------- */
@@ -515,6 +528,19 @@ test("parseQuizCards: akzeptiert wohlgeformte Karte", () => {
   assert.equal(cards.length, 1);
   assert.equal(cards[0].correct, 0);
   assert.equal(cards[0].options.length, 2);
+  assert.equal(cards[0].introducedIn, undefined, "introducedIn ist optional (fehlt → undefined)");
+});
+
+test("parseQuizCards: übernimmt optionales introducedIn (#412)", () => {
+  const cards = parseQuizCards([{ ...minimalQuiz, introducedIn: "docker-first-container" }]);
+  assert.equal(cards[0].introducedIn, "docker-first-container");
+});
+
+test("parseQuizCards: wirft bei leerem introducedIn (mit Pfad)", () => {
+  assert.throws(
+    () => parseQuizCards([{ ...minimalQuiz, introducedIn: "" }]),
+    (e: unknown) => e instanceof ContentValidationError && /quizcard q-x\.introducedIn/.test((e as Error).message),
+  );
 });
 
 /* ---------- parseQuizCards: kaputte Daten MÜSSEN explizit werfen (Negativfälle) ---------- */

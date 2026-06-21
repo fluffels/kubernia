@@ -425,7 +425,12 @@ export function groupQuestsByTopic(quests: Quest[], topics: QuestTopic[]): Topic
 /** Befehls-Karte in Laufzeit-Form (`accept` als kompiliertes RegExp). */
 export interface CmdCard {
   id: string;
+  /** Quest-ID, nach deren Abschluss die Karte in den SR-Pool kommt (Freischaltung). */
   chapter: string;
+  /** Quest-ID, in der das Konzept eingeführt wird (Lernreihenfolge-Wächter #235).
+   *  Optional (#412): fehlt es, gilt `chapter` – nur setzen, wenn das Konzept
+   *  FRÜHER eingeführt wird als die Karte freigeschaltet wird. */
+  introducedIn?: string;
   q: string;
   accept: RegExp[];
   solution: string;
@@ -438,9 +443,11 @@ function parseOneCmdCard(v: unknown, where: string): CmdCard {
   const o = asRecord(v, where);
   const id = asNonEmptyString(o.id, `${where}.id`);
   const path = `cmdcard ${id}`;
+  const introducedIn = o.introducedIn !== undefined ? asNonEmptyString(o.introducedIn, `${path}.introducedIn`) : undefined;
   return {
     id,
     chapter: asNonEmptyString(o.chapter, `${path}.chapter`),
+    ...(introducedIn !== undefined && { introducedIn }),
     q: asNonEmptyString(o.q, `${path}.q`),
     accept: reviveAccept(o.accept, `${path}.accept`),
     solution: asNonEmptyString(o.solution, `${path}.solution`),
@@ -497,6 +504,10 @@ export interface QuizCard {
   id: string;
   /** Quest-ID, nach deren Abschluss diese Karte in den SR-Pool kommt (analog zu CmdCard.chapter). */
   chapter?: string;
+  /** Quest-ID, in der das Konzept eingeführt wird (Lernreihenfolge-Wächter #235).
+   *  Optional (#412): fehlt es, gilt `chapter` – nur setzen, wenn das Konzept
+   *  FRÜHER eingeführt wird als die Karte freigeschaltet wird. */
+  introducedIn?: string;
   q: string;
   options: string[];
   correct: number;
@@ -516,9 +527,11 @@ function parseOneQuizCard(v: unknown, where: string): QuizCard {
     fail(`${path}.correct`, `Index ${correct} außerhalb der ${options.length} Optionen`);
   }
   const chapter = o.chapter !== undefined ? asNonEmptyString(o.chapter, `${path}.chapter`) : undefined;
+  const introducedIn = o.introducedIn !== undefined ? asNonEmptyString(o.introducedIn, `${path}.introducedIn`) : undefined;
   return {
     id,
     ...(chapter !== undefined && { chapter }),
+    ...(introducedIn !== undefined && { introducedIn }),
     q: asNonEmptyString(o.q, `${path}.q`),
     options,
     correct,

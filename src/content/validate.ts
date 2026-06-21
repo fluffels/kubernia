@@ -38,6 +38,8 @@ export interface QuizCard {
   id: string;
   /** Quest-ID, nach deren Abschluss diese Karte in den SR-Pool kommt (analog zu CmdCard.chapter). */
   chapter?: string;
+  /** Quest-ID, in der das Konzept eingeführt wird (#412); fehlt es, gilt `chapter`. */
+  introducedIn?: string;
   q: string;
   options: string[];
   correct: number;
@@ -48,6 +50,8 @@ export interface QuizCard {
 export interface CmdCard {
   id: string;
   chapter: string;
+  /** Quest-ID, in der das Konzept eingeführt wird (#412); fehlt es, gilt `chapter`. */
+  introducedIn?: string;
   q: string;
   accept: RegExp[];
   solution: string;
@@ -115,6 +119,7 @@ export function validateContent(c: ContentBundle): string[] {
     if (!(q.correct >= 0 && q.correct < q.options.length)) err(`CRAB_QUIZ ${q.id}: correct-Index ${q.correct} außerhalb der Optionen`);
     if (!isNonEmptyString(q.explain)) err(`CRAB_QUIZ ${q.id}: Erklärung fehlt`);
     if (q.chapter !== undefined && !questIds.has(q.chapter)) err(`CRAB_QUIZ ${q.id}: unbekannte Quest „${q.chapter}" in chapter`);
+    if (q.introducedIn !== undefined && !questIds.has(q.introducedIn)) err(`CRAB_QUIZ ${q.id}: unbekannte Quest „${q.introducedIn}" in introducedIn`);
   }
 
   // ---------- Befehls-Karten: ID eindeutig, Lösung matcht accept, chapter existiert ----------
@@ -125,6 +130,7 @@ export function validateContent(c: ContentBundle): string[] {
     if (card.accept.length === 0) err(`CMD_CARDS ${card.id}: keine accept-Regel`);
     else if (!card.accept.some(re => re.test(norm(card.solution)))) err(`CMD_CARDS ${card.id}: Musterlösung „${card.solution}" matcht keine eigene accept-Regex`);
     if (!questIds.has(card.chapter)) err(`CMD_CARDS ${card.id}: unbekannte Quest „${card.chapter}"`);
+    if (card.introducedIn !== undefined && !questIds.has(card.introducedIn)) err(`CMD_CARDS ${card.id}: unbekannte Quest „${card.introducedIn}" in introducedIn`);
   }
 
   // ---------- Quests: Geber/NPCs/Drills/reviewIds existieren, Choices wohlgeformt ----------

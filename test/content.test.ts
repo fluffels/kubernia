@@ -541,6 +541,19 @@ test("Red-Green: CMD-Karte mit unbekanntem chapter und nicht matchender Lösung 
   assert.ok(errors.some(e => e.includes("c-bad") && e.includes("accept")), "nicht matchende Musterlösung nicht gemeldet:\n" + errors.join("\n"));
 });
 
+test("Red-Green: Quiz-Karte mit unbekanntem introducedIn wird gemeldet (#412)", () => {
+  const kaputt: ContentBundle = {
+    ...KQContent,
+    CRAB_QUIZ: [
+      ...KQContent.CRAB_QUIZ,
+      { id: "q-bad-intro", chapter: "k8s-first-deployment", introducedIn: "q-existiert-nicht", q: "?", options: ["a", "b"], correct: 0, explain: "e" },
+    ],
+  };
+  const errors = validateContent(kaputt);
+  assert.ok(errors.some(e => e.includes("q-bad-intro") && e.includes("q-existiert-nicht") && e.includes("introducedIn")),
+    "unbekanntes introducedIn nicht gemeldet:\n" + errors.join("\n"));
+});
+
 /** Findet Drills, deren `why`- oder `hint`-Text bare HTML-Platzhalter enthält
  *  (z.B. `<name>`, `<image>`), die im Browser via innerHTML unsichtbar werden.
  *  Erlaubt: echte HTML-Elemente wie <code>, <b>. (#320) */

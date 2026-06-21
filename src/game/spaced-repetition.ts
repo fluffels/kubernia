@@ -6,40 +6,6 @@ import { part, today } from "./shared";
 
 const BOX_INTERVALS: Record<number, number> = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16 };
 
-// Welche Karteikarten zusätzlich zu den Choice-Fragen pro Quest freigeschaltet werden
-// Hinweis: Baustein-Karten (#231, q-flag-*) hängen an genau der Quest, in der ihr
-// Flag/Teil per teach-Schritt eingeführt wird – erst eingeführt, dann abgefragt (#227).
-const EXTRA_CARDS: Record<string, string[]> = {
-  "docker-list-containers": ["q-flag-ps-a"],                                  // docker ps -a (eingeführt in docker-list-containers)
-  "docker-run-options": ["q-ch1-3", "q-ch1-5", "q-flag-run-d", "q-flag-run-name"], // -d/--name (docker-run-options)
-  "docker-build-image": ["q-flag-build-t"],                              // docker build -t/--tag, „tag“ entwirrt (#285)
-  "k8s-first-deployment": ["q-ch2-1"],
-  "k8s-inspect-pods": ["q-flag-kubectl-n"],                             // kubectl -n (k8s-inspect-pods)
-  // q-ch2-4 (Self-Healing) bewusst erst ab k8s-self-healing: bewiesen wird Self-Healing dort,
-  // nicht schon in k8s-first-deployment – Lernreihenfolge-Wächter #235 (siehe content/learnorder.ts).
-  "k8s-self-healing": ["q-ch2-4", "q-ch3-2", "q-tools-ingress"],
-  "k8s-apply-manifests": ["q-ch4-1", "q-ch4-2", "q-ch4-3", "q-flag-apply-f"], // apply -f (k8s-apply-manifests)
-  "helm-release-install": ["q-ch5-3", "q-tools-stack", "q-tools-monitoring"],
-  "helm-upgrade-rollback": ["q-flag-helm-set"],                             // helm upgrade --set (helm-upgrade-rollback)
-  "terraform-state-destroy": ["q-ch6-1", "q-ch6-4"],
-  "kraken-boss": ["q-sec-2", "q-tools-keycloak"],
-  "k8s-debug-imagepull": ["q-ts-4"],
-  "k8s-debug-crashloop": ["q-ts-5"],
-  "git-version-control": ["q-flag-git-commit-m"],                         // git commit -m (git-version-control)
-  "git-feature-branch": ["q-flag-git-checkout-b"],                       // git checkout -b (git-feature-branch)
-  "git-pipeline": ["q-flag-git-add-dot"],                          // git add . (git-pipeline)
-  // Umbrella-/Bundle-Charts (#264): in helm-umbrella-chart im Schluss-Dialog erklärt (dependencies,
-  // inoffizieller Begriff, vendored vs. Registry, condition:-Toggle) – hier drillt Kralle nach.
-  "helm-umbrella-chart": ["q-helm-deps", "q-helm-lock", "q-helm-umbrella-term", "q-helm-condition", "q-helm-subchart-source"],
-  // Monitoring-Leuchtturm (#118, Phase 5): SR-Karten zu Begriffen, die NICHT als
-  // Choice-reviewId in den Quests auftauchen – Scrape-Targets (observability-metrics), Log-Follow (observability-logs),
-  // PrometheusRule/PromQL/Alertmanager (observability-alerts). Die übrigen q-obs-* hängen schon als
-  // Choice-Fragen in observability-metrics–observability-alerts und kommen darüber in den Pool.
-  "observability-metrics": ["q-obs-targets"],
-  "observability-logs": ["q-obs-logs-follow"],
-  "observability-alerts": ["q-obs-prom-rule", "q-obs-promql", "q-obs-alertmanager"],
-};
-
 /** Spaced-Repetition-Methoden der Game-Fassade (Leitner-Plan, Review-Gate, freies Üben). */
 export const spacedRepetitionBundle = part({
   /* ---------- Spaced Repetition (Leitner) ---------- */
@@ -49,6 +15,12 @@ export const spacedRepetitionBundle = part({
     }
   },
 
+  // Schaltet beim Abschluss einer Quest ihre Wiederhol-Karten frei. Zwei Quellen –
+  // beide als DATEN in den Karten/Quests (Single Source seit #412, die frühere
+  // EXTRA_CARDS-Hand-Map ist entfallen): das `chapter` der Karte (CMD/Quiz) und die
+  // Choice-`reviewId` im Quest-Ablauf. Beide sind per Konstruktion in-context –
+  // der Lernreihenfolge-Wächter (content/learnorder.ts + test/learnorder.test.ts)
+  // prüft das gegen die Daten.
   registerQuestCards(questId: string) {
     for (const c of KQContent.CMD_CARDS.filter(c => c.chapter === questId)) this.ensureReviewItem(c.id);
     for (const c of KQContent.CRAB_QUIZ.filter(c => c.chapter === questId)) this.ensureReviewItem(c.id);
@@ -58,7 +30,6 @@ export const spacedRepetitionBundle = part({
         if (step.type === "choice" && step.reviewId) this.ensureReviewItem(step.reviewId);
       }
     }
-    for (const id of EXTRA_CARDS[questId] || []) this.ensureReviewItem(id);
     this.save();
   },
 

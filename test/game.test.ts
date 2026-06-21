@@ -403,11 +403,20 @@ test("freeReviewItems: liefert ALLE Karten (auch nicht fällige) und ändert den
   expect(Game.freeReviewItems(1).length).toBe(1);
 });
 
-test("registerQuestCards: hängt die EXTRA_CARDS des Kapitels in die Wiederholung ein", () => {
-  Game.registerQuestCards("helm-release-install");
-  // aus EXTRA_CARDS helm-release-install (inkl. der in #5 ergänzten Tool-Karten)
+test("registerQuestCards: schaltet die chapter-Karten der Quest frei (Single Source #412)", () => {
+  // q-tools-stack/-monitoring tragen chapter=helm-intro (die frühere EXTRA_CARDS-Hand-Map
+  // ist entfallen) → sie kommen beim Abschluss von helm-intro in den Pool.
+  Game.registerQuestCards("helm-intro");
   expect(Game.state.review["q-tools-stack"]).toBeTruthy();
   expect(Game.state.review["q-tools-monitoring"]).toBeTruthy();
+});
+
+test("registerQuestCards: q-ts-4 (Debug-Mantra) kommt über sein chapter in den Pool (#412)", () => {
+  // q-ts-4 war die einzige Pool-Karte ohne `chapter` und hing an EXTRA_CARDS["k8s-debug-imagepull"];
+  // seine Choice-reviewId steht erst in der späteren Quest k8s-node-capacity. Seit #412 trägt es
+  // chapter=k8s-debug-imagepull als Single Source – sonst rutschte die Freischaltung 2 Quests nach hinten.
+  Game.registerQuestCards("k8s-debug-imagepull");
+  expect(Game.state.review["q-ts-4"]).toBeTruthy();
 });
 
 test("registerQuestCards: die Baustein-Karten (#231) landen an ihrer Einführungs-Quest", () => {
@@ -425,9 +434,9 @@ test("registerQuestCards: die Baustein-Karten (#231) landen an ihrer Einführung
 
 test("jede über alle Quests freigeschaltete Wiederholungskarte löst zu echtem Inhalt auf (#231)", () => {
   // Schaltet alles frei, was der Spieler im Lauf der Story je gesammelt hätte
-  // (Choice-reviewIds + Kapitel-CMD-Karten + EXTRA_CARDS). Jeder Eintrag MUSS
-  // eine echte Karte sein – sonst zeigt Kralle eine leere Karte. Fängt Tippfehler
-  // in EXTRA_CARDS/reviewId, bevor sie im Spiel auffallen.
+  // (Choice-reviewIds + chapter-Karten aus CMD_CARDS/CRAB_QUIZ – Single Source #412).
+  // Jeder Eintrag MUSS eine echte Karte sein – sonst zeigt Kralle eine leere Karte.
+  // Fängt Tippfehler in chapter/reviewId, bevor sie im Spiel auffallen.
   for (const q of KQContent.QUESTS) Game.registerQuestCards(q.id);
   const unbekannt = Object.keys(Game.state.review).filter(id => !Game.findReviewContent(id));
   expect(unbekannt, "Wiederholungs-IDs ohne Inhalt: " + unbekannt.join(", ")).toEqual([]);

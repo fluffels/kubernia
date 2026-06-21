@@ -84,8 +84,8 @@ module.exports = {
         pathNot: [
           // Reine Typdeklarationen sind per Definition „verwaist“ (kein Laufzeit-Import) – kein toter Code.
           "\\.d\\.ts$",
-          // Lernpfad-Wächter: enthält Domänenlogik (lernpfadVerstoesse + CONCEPT_INTRO), die
-          // bewusst NUR der Test-Wächter content.test.ts aufruft – kein src-Laufzeit-Import. Da
+          // Lernpfad-Wächter: enthält Domänenlogik (lernpfadVerstoesse + introOrderFromContent), die
+          // bewusst NUR der Test-Wächter test/learnorder.test.ts aufruft – kein src-Laufzeit-Import. Da
           // check:arch nur `src` cruist, gilt das Modul sonst fälschlich als verwaist (#390).
           "^src/content/learnorder\\.ts$",
         ],

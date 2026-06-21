@@ -37,6 +37,7 @@
   },
   {
     "id": "q-ts-4",
+    "chapter": "k8s-debug-imagepull",
     "q": "Das Debugging-Mantra für kaputte Pods?",
     "options": [
       "get pods → describe → logs, dann fixen und verifizieren.",
