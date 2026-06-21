@@ -36,7 +36,7 @@
     "accept": [
       "^git\\s+commit\\s+(?:-m|--message)\\s+(\"[^\"]+\"|'[^']+'|\\S+)$"
     ],
-    "solution": "git commit -m \"Erste Seekarte\"",
+    "solution": "git commit --message \"Erste Seekarte\"",
     "explain": "commit hält die vorgemerkten Änderungen als Schnappschuss fest; -m gibt die Nachricht. Hochgeladen wird erst mit push."
   },
   {

@@ -86,7 +86,7 @@
     "accept": [
       "^helm\\s+install\\s+hafen-prod\\s+\\.\\/funkdienst\\s+(?:-f|--values)\\s+base\\.yaml\\s+(?:-f|--values)\\s+prod\\.yaml$"
     ],
-    "solution": "helm install hafen-prod ./funkdienst -f base.yaml -f prod.yaml",
-    "explain": "Mehrere -f (Langform <code>--values</code>, gleichwertig) werden von links nach rechts überlagert – das spätere prod.yaml sticht base.yaml. So baut man gleiche Charts mit anderen Werten je Umgebung/Region."
+    "solution": "helm install hafen-prod ./funkdienst --values base.yaml --values prod.yaml",
+    "explain": "Mehrere <code>--values</code> (Kurzform <code>-f</code>, durch Nutzung verdient) werden von links nach rechts überlagert – das spätere prod.yaml sticht base.yaml. So baut man gleiche Charts mit anderen Werten je Umgebung/Region."
   }
 ]

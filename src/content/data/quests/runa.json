@@ -129,17 +129,16 @@
       },
       {
         "type": "teach",
-        "unlockAbbrev": "helm-list",
         "brief": "Releases auflisten",
         "cmd": {
           "id": "t-helmlist",
-          "intro": "🆕 Neuer Befehl: <code>helm list</code> (kurz <code>helm ls</code>) – zeigt alle <b>Releases</b>, also die installierten Charts mit Name, Revision und Status.",
+          "intro": "🆕 Neuer Befehl: <code>helm list</code> – zeigt alle <b>Releases</b>, also die installierten Charts mit Name, Revision und Status. (Die Kurzform <code>ls</code> verdienst du dir, wenn du <code>list</code> oft genug ausgeschrieben hast.)",
           "text": "Zeig die Releases mit <code>helm list</code>.",
           "accept": [
             "^helm\\s+(list|ls)$"
           ],
           "solution": "helm list",
-          "hint": "Englisch für „auflisten“."
+          "hint": "Schreib es aus: helm list (Englisch für „auflisten“; die Kurzform ls verdienst du dir durch Nutzung)."
         }
       },
       {
@@ -399,16 +398,15 @@
           "Drei Werft-Kniffe noch fürs echte Leben, Lotse: Im <code>Chart.yaml</code> stehen ZWEI Versionen – <code>version</code> ist die der <b>Verpackung</b> (SemVer: Major bricht was, Minor = neue Property, Patch = Kleinkram), <code>appVersion</code> die der <b>Fracht</b> (deiner App). Bei jeder Änderung die Chart-version hochziehen, sonst sind Rollback und Diffs blind.",
           "Charts können andere Charts <b>mitschleppen</b>: Unter <code>dependencies:</code> bündelt ein <b>Eltern-Chart</b> ganze Subcharts (backend, keycloak …), jedes mit gepinnter Version – eine <b>Sammelkiste, die mehrere Pakete enthält</b>. Im Job sagt man <b>Umbrella-Chart</b> (auch „Wrapper“ oder „Bundle“) dazu – aber Achtung: das ist <b>kein offizieller Helm-Begriff</b>, das Spec kennt nur <i>parent chart / subcharts / dependencies</i>. Gängiger Sprech ≠ Doku!",
           "Die Subcharts liegen entweder <b>mit im Ordner</b> (unter <code>charts/</code> – „vendored“) oder werden per <code>repository:</code>-URL <b>aus einer Registry gezogen</b>: <code>helm dependency update</code> holt sie und zurrt sie in <code>Chart.lock</code> fest (reproduzierbar, überall gleich). Der Clou für viele Setups: einzelne Subcharts per <code>condition:</code> an-/abschalten (z.B. <code>condition: permit.enabled</code>) – Kunde mit Permit → an, ohne → aus, alles aus EINEM Chart.",
-          "Und statt EINER <code>values.yaml</code> legst du mehrere übereinander: <code>helm install … -f base.yaml -f prod.yaml</code> – das spätere <code>-f</code> gewinnt. Gleiches Chart, andere Werte je Hafen (Test, Prod, je Region). Kralle drillt dich dazu ab! ⎈"
+          "Und statt EINER <code>values.yaml</code> legst du mehrere übereinander: <code>helm install … --values base.yaml --values prod.yaml</code> – die spätere <code>--values</code>-Datei gewinnt. Gleiches Chart, andere Werte je Hafen (Test, Prod, je Region). Kralle drillt dich dazu ab! ⎈"
         ]
       },
       {
         "type": "teach",
-        "unlockAbbrev": "helm-values",
         "brief": "Werte überschreiben",
         "cmd": {
           "id": "t-upgrade-values",
-          "intro": "🆕 Flag <code>--values</code> (kurz <code>-f</code>): beim Upgrade eine eigene Werte-Datei mitgeben – überschreibt die Defaults aus <code>values.yaml</code>.",
+          "intro": "🆕 Flag <code>--values</code>: beim Upgrade eine eigene Werte-Datei mitgeben – überschreibt die Defaults aus <code>values.yaml</code>. Schreib die Langform aus; die Kurzform <code>-f</code> verdienst du dir, wenn du <code>--values</code> oft genug benutzt hast.",
           "text": "Upgrade <code>mein-funk</code> mit der Chart-eigenen Werte-Datei: <code>helm upgrade mein-funk ./funkdienst --values funkdienst/values.yaml</code>.",
           "accept": [
             "^helm\\s+upgrade\\s+mein-funk\\s+\\.\\/funkdienst\\s+(--values|-f)\\s+funkdienst\\/values\\.yaml$"
@@ -419,11 +417,10 @@
       },
       {
         "type": "teach",
-        "unlockAbbrev": "helm-dependency",
         "brief": "Subcharts holen",
         "cmd": {
           "id": "t-helm-dep-update",
-          "intro": "🆕 Neuer Befehl: <code>helm dependency update</code> (kurz <code>dep</code>) – zieht alle in <code>Chart.yaml</code> deklarierten Subcharts und schreibt <code>Chart.lock</code>.",
+          "intro": "🆕 Neuer Befehl: <code>helm dependency update</code> – zieht alle in <code>Chart.yaml</code> deklarierten Subcharts und schreibt <code>Chart.lock</code>. (Die Kurzform <code>dep</code> verdienst du dir, wenn du <code>dependency</code> oft genug ausgeschrieben hast.)",
           "text": "Hole die Abhängigkeiten von <code>funkdienst</code>: <code>helm dependency update funkdienst</code>.",
           "accept": [
             "^helm\\s+(dependency|dep)\\s+(update|up)\\s+(\\.\\/)?funkdienst$"

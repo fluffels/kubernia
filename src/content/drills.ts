@@ -177,7 +177,7 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     const chart = pick(["nginx", "redis"]);
     return { text: "Installiere <code>bitnami/" + chart + "</code> als Release <code>" + rel + "</code>.", accept: [new RegExp("^helm\\s+install\\s+" + rel + "\\s+bitnami\\/" + chart + "$")], solution: "helm install " + rel + " bitnami/" + chart, hint: "Muster: helm install &lt;release&gt; &lt;repo&gt;/&lt;chart&gt;", why: "install rollt ein Chart als benanntes Release aus – der Release-Name kommt vor dem Chart: helm install &lt;release&gt; &lt;repo&gt;/&lt;chart&gt;." };
   },
-  "helm-list": () => ({ text: "Zeig alle installierten Releases.", accept: [/^helm\s+(list|ls)$/], solution: "helm list", hint: "Englisch für „auflisten“.", why: "list (Kurzform ls) zeigt alle installierten Releases mit Revision und Status." }),
+  "helm-list": () => ({ text: "Zeig alle installierten Releases.", accept: [/^helm\s+(list|ls)$/], solution: "helm list", hint: "Schreib es aus: helm list (Englisch für „auflisten“; die Kurzform ls verdienst du dir durch Nutzung).", why: "helm list zeigt alle installierten Releases mit Revision und Status. Die Kurzform ls verdienst du dir, wenn du die Langform oft genug tippst." }),
   "helm-upgrade": sim => {
     let r = sim.releases[0];
     if (!r) { sim.exec("helm repo add bitnami https://charts.bitnami.com/bitnami"); sim.exec("helm install uebung bitnami/nginx"); r = sim.releases[0]; }
@@ -211,6 +211,23 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     let rel = pick(NAMES);
     while (sim.releases.some(r => r.name === rel)) rel = pick(NAMES) + rnd(2, 99);
     return { text: "Installiere aus deinem eigenen Chart <code>./" + name + "</code> ein Release <code>" + rel + "</code>.", accept: [new RegExp("^helm\\s+install\\s+" + rel + "\\s+\\.\\/" + name + "$")], solution: "helm install " + rel + " ./" + name, hint: "Muster: helm install &lt;release&gt; ./&lt;chart&gt;", why: "Aus einem lokalen Chart-Ordner installierst du über den Pfad statt über &lt;repo&gt;/&lt;chart&gt; – Muster: helm install &lt;release&gt; ./&lt;chart&gt;." };
+  },
+  // Übt die --values-Langform, damit man sich die Kurzform -f durch Nutzung verdient (#381).
+  "helm-upgrade-values": sim => {
+    const name = ensureChart(sim);
+    let rel = sim.releases.find(r => r.chart === "./" + name || r.chart === name);
+    if (!rel) {
+      let rn = pick(NAMES);
+      while (sim.releases.some(r => r.name === rn)) rn = pick(NAMES) + rnd(2, 99);
+      sim.exec("helm install " + rn + " ./" + name);
+      rel = sim.releases.find(r => r.name === rn)!;
+    }
+    return { text: "Upgrade das Release <code>" + rel.name + "</code> mit der Werte-Datei <code>" + name + "/values.yaml</code>.", accept: [new RegExp("^helm\\s+upgrade\\s+" + rel.name + "\\s+(\\.\\/)?" + name + "\\s+(?:--values|-f)\\s+" + name + "\\/values\\.yaml$")], solution: "helm upgrade " + rel.name + " ./" + name + " --values " + name + "/values.yaml", hint: "Muster: helm upgrade &lt;release&gt; &lt;chart&gt; --values &lt;datei&gt; (die Kurzform -f verdienst du dir durch Nutzung)", why: "--values gibt eine eigene Werte-Datei mit, die die Defaults aus values.yaml überschreibt – Muster: helm upgrade &lt;release&gt; &lt;chart&gt; --values &lt;datei&gt;. Die Kurzform -f verdienst du dir durch Nutzung." };
+  },
+  // Übt die dependency-Langform, damit man sich die Kurzform dep durch Nutzung verdient (#381).
+  "helm-dep-update": sim => {
+    const name = ensureChart(sim);
+    return { text: "Hol die Subcharts von <code>" + name + "</code> – schreibt <code>Chart.lock</code> fest.", accept: [new RegExp("^helm\\s+(dependency|dep)\\s+(update|up)\\s+(\\.\\/)?" + name + "$")], solution: "helm dependency update " + name, hint: "Muster: helm dependency update &lt;chart&gt; (die Kurzform dep verdienst du dir durch Nutzung)", why: "dependency update zieht die in Chart.yaml deklarierten Subcharts und zurrt sie in Chart.lock fest (reproduzierbar) – Muster: helm dependency update &lt;chart&gt;. Die Kurzform dep verdienst du dir durch Nutzung." };
   },
   "tf-plan": sim => {
     if (!sim.tf.initialized) sim.tf.initialized = true; // Übung setzt ein initialisiertes Projekt voraus
@@ -262,7 +279,7 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     const fn = "notiz-" + sim.clock + "-" + rnd(100, 9999) + ".md";
     sim.files[fn] = "x"; sim.exec("git add " + fn);
     const msg = pick(["Seekarte ergänzt", "Tippfehler behoben", "Route aktualisiert", "Hafen kartiert"]);
-    return { text: "Halte die vorgemerkten Änderungen fest – Commit-Nachricht: <code>" + msg + "</code>.", accept: [new RegExp('^git\\s+commit\\s+(?:-m|--message)\\s+"' + msg + '"$')], solution: 'git commit -m "' + msg + '"', hint: 'Muster: git commit -m "Nachricht"', why: 'commit hält die vorgemerkten Änderungen als Schnappschuss mit Nachricht fest (lokal); hochgeladen wird erst mit push. Muster: git commit -m "Nachricht".' };
+    return { text: "Halte die vorgemerkten Änderungen fest – Commit-Nachricht: <code>" + msg + "</code>.", accept: [new RegExp('^git\\s+commit\\s+(?:-m|--message)\\s+"' + msg + '"$')], solution: 'git commit --message "' + msg + '"', hint: 'Muster: git commit --message "Nachricht" (statt --message geht auch die Kurzform -m)', why: 'commit hält die vorgemerkten Änderungen als Schnappschuss mit Nachricht fest (lokal); hochgeladen wird erst mit push. Muster: git commit --message "Nachricht" – die Kurzform -m verdienst du dir durch Nutzung.' };
   },
   "git-branch": sim => {
     ensureGit(sim);
@@ -343,7 +360,7 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   },
   "argo-app-list": sim => {
     ensureArgoApp(sim);
-    return { text: "Verschaff dir den Flotten-Überblick: zeig alle <b>Argo-Applications</b> mit ihrem Sync- und Health-Status.", accept: [/^argocd\s+app\s+(list|ls)$/], solution: "argocd app list", hint: "argocd app list (oder ls)", why: "argocd app list (oder ls) zeigt alle Applications mit ihrem Sync- (Synced/OutOfSync) und Health-Status auf einen Blick." };
+    return { text: "Verschaff dir den Flotten-Überblick: zeig alle <b>Argo-Applications</b> mit ihrem Sync- und Health-Status.", accept: [/^argocd\s+app\s+(list|ls)$/], solution: "argocd app list", hint: "Schreib es aus: argocd app list (die Kurzform ls verdienst du dir durch Nutzung).", why: "argocd app list zeigt alle Applications mit ihrem Sync- (Synced/OutOfSync) und Health-Status auf einen Blick. Die Kurzform ls verdienst du dir, wenn du die Langform oft genug tippst." };
   },
   "argo-app-get": sim => {
     const app = ensureArgoApp(sim);
@@ -409,7 +426,7 @@ export const PRACTICE: Record<string, { drill: string; after: string }[]> = {
   bo:   [{ drill: "docker-pull", after: "docker-first-container" }, { drill: "docker-run", after: "docker-first-container" }, { drill: "docker-ps", after: "docker-list-containers" }, { drill: "docker-stop", after: "docker-list-containers" }, { drill: "docker-ps-a", after: "docker-list-containers" }, { drill: "docker-run-named", after: "docker-run-options" }, { drill: "docker-build", after: "docker-build-image" }, { drill: "docker-tag", after: "docker-build-image" }],
   ole:  [{ drill: "k-get-nodes", after: "k8s-first-deployment" }, { drill: "k-get-pods", after: "k8s-first-deployment" }, { drill: "k-describe", after: "k8s-inspect-pods" }, { drill: "k-get-pods-ns", after: "k8s-inspect-pods" }, { drill: "k-create", after: "k8s-service" }, { drill: "k-scale", after: "k8s-service" }, { drill: "k-delete-pod", after: "k8s-self-healing" }, { drill: "k-expose", after: "k8s-self-healing" }, { drill: "k-get-svc", after: "k8s-self-healing" }, { drill: "k-secret", after: "kraken-boss" }, { drill: "k-get-secrets", after: "kraken-boss" }],
   ada:  [{ drill: "k-apply", after: "k8s-apply-manifests" }, { drill: "git-status", after: "git-version-control" }, { drill: "git-add", after: "git-version-control" }, { drill: "git-commit", after: "git-version-control" }, { drill: "git-branch", after: "git-feature-branch" }, { drill: "git-checkout", after: "git-feature-branch" }, { drill: "git-add-all", after: "git-pipeline" }, { drill: "ci-status", after: "git-pipeline" }, { drill: "git-pull", after: "git-merge-branches" }, { drill: "git-resolve", after: "git-merge-branches" }, { drill: "k-secret-tls", after: "secrets-encrypted" }, { drill: "k-get-ingress", after: "secrets-encrypted" }],
-  runa: [{ drill: "helm-install", after: "helm-release-install" }, { drill: "helm-list", after: "helm-release-install" }, { drill: "helm-upgrade", after: "helm-upgrade-rollback" }, { drill: "helm-rollback", after: "helm-upgrade-rollback" }, { drill: "helm-create", after: "helm-umbrella-chart" }, { drill: "helm-lint", after: "helm-umbrella-chart" }, { drill: "helm-package", after: "helm-umbrella-chart" }, { drill: "helm-install-local", after: "helm-umbrella-chart" }],
+  runa: [{ drill: "helm-install", after: "helm-release-install" }, { drill: "helm-list", after: "helm-release-install" }, { drill: "helm-upgrade", after: "helm-upgrade-rollback" }, { drill: "helm-rollback", after: "helm-upgrade-rollback" }, { drill: "helm-create", after: "helm-umbrella-chart" }, { drill: "helm-lint", after: "helm-umbrella-chart" }, { drill: "helm-package", after: "helm-umbrella-chart" }, { drill: "helm-install-local", after: "helm-umbrella-chart" }, { drill: "helm-upgrade-values", after: "helm-umbrella-chart" }, { drill: "helm-dep-update", after: "helm-umbrella-chart" }],
   theo: [{ drill: "tf-plan", after: "terraform-intro" }, { drill: "tf-state", after: "terraform-state-destroy" }],
   juno: [{ drill: "k-logs", after: "k8s-debug-crashloop" }, { drill: "k-describe", after: "k8s-debug-imagepull" }, { drill: "k-rollout", after: "k8s-debug-crashloop" }, { drill: "k-apply-netpol", after: "network-policy" }, { drill: "k-get-netpol", after: "network-policy" }, { drill: "k-describe-netpol", after: "network-policy" }, { drill: "k-delete-netpol", after: "network-policy" }, { drill: "k-set-resources", after: "k8s-resource-limits" }],
   argo: [{ drill: "argo-apply", after: "gitops-self-sync" }, { drill: "argo-app-list", after: "gitops-self-sync" }, { drill: "argo-app-get", after: "gitops-self-sync" }, { drill: "argo-app-sync", after: "gitops-self-sync" }],

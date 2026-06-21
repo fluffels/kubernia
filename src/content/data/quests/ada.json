@@ -236,17 +236,16 @@
       },
       {
         "type": "teach",
-        "unlockAbbrev": "git-commit-message",
         "brief": "Festhalten",
         "cmd": {
           "id": "t-git-commit",
-          "intro": "🆕 <code>git commit -m \"…\"</code> – hält die vorgemerkten Änderungen als Schnappschuss in der Historie fest, mit kurzer Nachricht.",
+          "intro": "🆕 <code>git commit --message \"…\"</code> – hält die vorgemerkten Änderungen als Schnappschuss in der Historie fest, mit kurzer Nachricht. Schreib die Langform <code>--message</code> aus; die Kurzform <code>-m</code> verdienst du dir, wenn du sie oft genug benutzt hast.",
           "text": "Halte die Karte fest – Commit-Nachricht z.B. <code>Erste Seekarte</code>.",
           "accept": [
             "^git\\s+commit\\s+(?:-m|--message)\\s+(\"[^\"]+\"|'[^']+'|\\S+)$"
           ],
-          "solution": "git commit -m \"Erste Seekarte\"",
-          "hint": "Muster: git commit -m \"deine Nachricht\""
+          "solution": "git commit --message \"Erste Seekarte\"",
+          "hint": "Muster: git commit --message \"deine Nachricht\" (statt --message geht später auch die Kurzform -m)"
         }
       },
       {
@@ -388,13 +387,13 @@
         "brief": "Festhalten",
         "cmd": {
           "id": "t-git-commit2",
-          "intro": "↩︎ Wiederholung: <code>git commit -m \"…\"</code> hält es fest.",
+          "intro": "↩︎ Wiederholung: <code>git commit --message \"…\"</code> hält es fest.",
           "text": "Committe die neue Route, z.B. mit <code>Neue Route skizziert</code>.",
           "accept": [
             "^git\\s+commit\\s+(?:-m|--message)\\s+(\"[^\"]+\"|'[^']+'|\\S+)$"
           ],
-          "solution": "git commit -m \"Neue Route skizziert\"",
-          "hint": "Muster: git commit -m \"Nachricht\""
+          "solution": "git commit --message \"Neue Route skizziert\"",
+          "hint": "Muster: git commit --message \"Nachricht\""
         }
       },
       {
@@ -568,13 +567,13 @@
         "brief": "Festhalten",
         "cmd": {
           "id": "t-ci-commit",
-          "intro": "↩︎ Wiederholung: <code>git commit -m \"…\"</code> hält die vorgemerkten Änderungen fest.",
+          "intro": "↩︎ Wiederholung: <code>git commit --message \"…\"</code> hält die vorgemerkten Änderungen fest.",
           "text": "Committe die Pipeline-Einrichtung, z.B. mit <code>CI-Pipeline eingerichtet</code>.",
           "accept": [
             "^git\\s+commit\\s+(?:-m|--message)\\s+(\"[^\"]+\"|'[^']+'|\\S+)$"
           ],
-          "solution": "git commit -m \"CI-Pipeline eingerichtet\"",
-          "hint": "Muster: git commit -m \"Nachricht\""
+          "solution": "git commit --message \"CI-Pipeline eingerichtet\"",
+          "hint": "Muster: git commit --message \"Nachricht\""
         }
       },
       {
@@ -825,13 +824,13 @@
           },
           {
             "id": "t-conf-commit",
-            "text": "Schließ den Merge ab mit einem Commit, z.B. <code>git commit -m \"Konflikt geloest: Lennarts Route\"</code>.",
+            "text": "Schließ den Merge ab mit einem Commit, z.B. <code>git commit --message \"Konflikt geloest: Lennarts Route\"</code>.",
             "accept": [
               "^git\\s+commit\\s+(?:-m|--message)\\s+(\"[^\"]+\"|'[^']+'|\\S+)$"
             ],
             "check": {"not":{"flag":["git","conflict"]}},
-            "solution": "git commit -m \"Konflikt geloest: Lennarts Route\"",
-            "hint": "Muster: git commit -m \"Nachricht\""
+            "solution": "git commit --message \"Konflikt geloest: Lennarts Route\"",
+            "hint": "Muster: git commit --message \"Nachricht\""
           }
         ]
       },

@@ -515,3 +515,85 @@ describe("#380: kubectl-Kürzel sind nutzungs-verdient (kein unlockAbbrev, Langf
     expect(lockedAbbrevInInput("kubectl logs -f signalgeber-pod-xyz", isUnlocked)).toBeUndefined();
   });
 });
+
+/** Alle vom Spieler getippten Musterlösungen einsammeln (Karten + instanziierte
+ *  Drills + Quest-Teach-/Terminal-Schritte) – dieselben Quellen wie der EQUIVS-Test
+ *  in content.test.ts, hier fürs Gating-Audit der Langform-zuerst-Tickets. */
+function allTaughtSolutions(): { label: string; solution: string }[] {
+  const sim = new KQSim({});
+  const items: { label: string; solution: string }[] = [];
+  for (const c of KQContent.CMD_CARDS) items.push({ label: "Karte " + c.id, solution: c.solution });
+  for (const [id, make] of Object.entries(KQContent.DRILLS)) items.push({ label: "Drill " + id, solution: make(sim).solution });
+  for (const quest of KQContent.QUESTS) for (const step of quest.steps) {
+    if (step.type === "teach") items.push({ label: `${quest.id}/${step.cmd.id}`, solution: step.cmd.solution });
+    if (step.type === "terminal") for (const t of step.tasks) items.push({ label: `${quest.id}/${t.id}`, solution: t.solution });
+  }
+  return items;
+}
+
+/* #381: Abschluss der Langform-zuerst-Sequenz – die Helm/Git/ArgoCD-Kürzel werden
+ * ebenfalls per Nutzung verdient (helm-values -f, helm-list ls, helm-dependency dep,
+ * argocd-app-list ls, git-commit-message -m). Gleiche Wächter wie #379/#380. */
+describe("#381: Helm/Git/ArgoCD-Kürzel sind nutzungs-verdient (kein unlockAbbrev, Langform-zuerst)", () => {
+  const VERDIENT_PER_NUTZUNG = ["helm-values", "helm-list", "helm-dependency", "argocd-app-list", "git-commit-message"];
+
+  test("keiner dieser Bausteine wird per Quest-Schritt freigeschaltet", () => {
+    const unlocked = new Set<string>();
+    for (const quest of KQContent.QUESTS) for (const step of quest.steps) if (step.unlockAbbrev) unlocked.add(step.unlockAbbrev);
+    const fälschlich = VERDIENT_PER_NUTZUNG.filter(id => unlocked.has(id));
+    assert.deepEqual(fälschlich, [], "Diese Bausteine sollen per Nutzung verdient werden, haben aber einen unlockAbbrev-Schritt:\n" + fälschlich.join("\n"));
+  });
+
+  test("jeder Baustein bleibt verdienbar: seine Langform steht in einer accept-Regex", () => {
+    const idToLong = new Map(ABBREVS.map(a => [a.id, a.long] as const));
+    const nichtVerdienbar = VERDIENT_PER_NUTZUNG.filter(id => { const long = idToLong.get(id); return !long || !appearsAnywhere(long); });
+    assert.deepEqual(nichtVerdienbar, [], "Verdiente Bausteine, deren Langform NICHT im Content tippbar ist:\n" + nichtVerdienbar.join("\n"));
+  });
+
+  test("KEINE Musterlösung zeigt eine noch gesperrte helm/git/argocd-Kurzform", () => {
+    const isUnlocked = (id: string) => !VERDIENT_PER_NUTZUNG.includes(id);
+    const norm = (s: string) => s.trim().replace(/\s+/g, " ");
+    const fehler: string[] = [];
+    for (const it of allTaughtSolutions()) {
+      const hit = lockedAbbrevInInput(norm(it.solution), isUnlocked);
+      if (hit) fehler.push(`${it.label}: „${it.solution}" nutzt gesperrte Kurzform „${hit.used}" (${hit.pair.id}) – schreib die Langform „${hit.pair.long}"`);
+    }
+    assert.deepEqual(fehler, [], "Musterlösungen mit gesperrter Kurzform:\n" + fehler.join("\n"));
+  });
+
+  test("git commit --message ist jetzt im Sim gültig (nicht nur -m) – #381-Sim-Fix", () => {
+    const sim = new KQSim({});
+    sim.exec("git init");
+    sim.files["seekarte.md"] = "x";
+    sim.exec("git add seekarte.md");
+    const viaLong = sim.exec('git commit --message "Lange Form"');
+    expect(viaLong.error).toBeFalsy();
+    // Gegenprobe: ohne Nachricht muss es weiterhin scheitern (Red-Green).
+    sim.files["zweite.md"] = "y";
+    sim.exec("git add zweite.md");
+    expect(sim.exec("git commit --message").error).toBeTruthy();
+  });
+});
+
+/* Gesamt-Garantie nach #379+#380+#381: Die „verdiente Abkürzung" ist jetzt
+ * durchgängig nutzungs-basiert. KEIN Quest-Schritt nutzt mehr unlockAbbrev, und mit
+ * NICHTS freigeschaltet ist KEINE Musterlösung im ganzen Spiel gegated – ein Spieler
+ * mit frischem Stand kann also jede gelehrte Lösung wortwörtlich tippen. */
+describe("Langform-zuerst durchgängig (Abschluss #379/#380/#381)", () => {
+  test("kein einziger Quest-Schritt nutzt noch unlockAbbrev", () => {
+    const übrig: string[] = [];
+    for (const quest of KQContent.QUESTS) for (const step of quest.steps) if (step.unlockAbbrev) übrig.push(`${quest.id}: ${step.unlockAbbrev}`);
+    assert.deepEqual(übrig, [], "Es gibt noch unlockAbbrev-Schritte (sollte nach #381 keine mehr geben):\n" + übrig.join("\n"));
+  });
+
+  test("mit NICHTS freigeschaltet ist KEINE Musterlösung gegated", () => {
+    const nichtsFrei = () => false;
+    const norm = (s: string) => s.trim().replace(/\s+/g, " ");
+    const fehler: string[] = [];
+    for (const it of allTaughtSolutions()) {
+      const hit = lockedAbbrevInInput(norm(it.solution), nichtsFrei);
+      if (hit) fehler.push(`${it.label}: „${it.solution}" → gesperrte Kurzform „${hit.used}" (${hit.pair.id})`);
+    }
+    assert.deepEqual(fehler, [], "Frischer Spieler kann diese Lösungen NICHT tippen (Kurzform gesperrt):\n" + fehler.join("\n"));
+  });
+});

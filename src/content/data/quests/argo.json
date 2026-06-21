@@ -164,7 +164,6 @@
       },
       {
         "type": "terminal",
-        "unlockAbbrev": "argocd-app-list",
         "brief": "Was sagt Argo?",
         "tasks": [
           {
@@ -174,7 +173,7 @@
               "^argocd\\s+app\\s+(list|ls)$"
             ],
             "solution": "argocd app list",
-            "hint": "argocd app list (oder ls)."
+            "hint": "Schreib es aus: argocd app list (die Kurzform ls verdienst du dir durch Nutzung)."
           }
         ]
       },

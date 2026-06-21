@@ -97,7 +97,7 @@ function gitAdd(host: GitHost, t: string[]): string {
     const file = g.conflict.file;
     if (!g.staged.includes(file)) g.staged.push(file);
     g.conflict = null;
-    return "Konflikt in '" + file + "' als gelöst markiert (vorgemerkt). ▸ Schließe den Merge jetzt mit 'git commit -m \"…\"' ab.";
+    return "Konflikt in '" + file + "' als gelöst markiert (vorgemerkt). ▸ Schließe den Merge jetzt mit 'git commit --message \"…\"' ab.";
   }
   let toAdd: string[];
   if (arg === ".") {
@@ -112,9 +112,10 @@ function gitAdd(host: GitHost, t: string[]): string {
 
 function gitCommit(host: GitHost, raw: string): string {
   const g = host.git;
-  const m = raw.match(/-m\s+"([^"]*)"|-m\s+'([^']*)'|-m\s+(\S+)/);
+  // -m und --message sind gleichwertig (wie echtes git + die accept-Regex, #381).
+  const m = raw.match(/(?:-m|--message)\s+"([^"]*)"|(?:-m|--message)\s+'([^']*)'|(?:-m|--message)\s+(\S+)/);
   const msg = m ? (m[1] || m[2] || m[3]) : null;
-  if (!msg) return host._err("git commit: Die Commit-Nachricht fehlt.", 'Muster: git commit -m "Was du geändert hast"');
+  if (!msg) return host._err("git commit: Die Commit-Nachricht fehlt.", 'Muster: git commit --message "Was du geändert hast"');
   if (g.conflict) return host._err("git commit: Der Konflikt in '" + g.conflict.file + "' ist noch nicht gelöst.",
     "Seite wählen ('git checkout --ours/--theirs " + g.conflict.file + "'), dann 'git add " + g.conflict.file + "', erst dann committen.");
   if (!g.staged.length) return host._err("git commit: Nichts vorgemerkt (nothing to commit).", "Erst 'git add <datei>', dann committen.");
@@ -128,7 +129,7 @@ function gitCommit(host: GitHost, raw: string): string {
 
 function gitLog(host: GitHost): string {
   const g = host.git;
-  if (!g.commits.length) return "Noch keine Commits. Mach deinen ersten mit 'git commit -m \"…\"'.";
+  if (!g.commits.length) return "Noch keine Commits. Mach deinen ersten mit 'git commit --message \"…\"'.";
   return g.commits.slice().reverse()
     .map(c => "commit " + c.hash + "  (" + c.branch + ")\n    " + c.msg).join("\n");
 }
