@@ -1,41 +1,23 @@
 /* ===== KubeQuest – WorldScene-Terrain (worldscene/terrain.ts) =====
- * Schritt des WorldScene.ts-Splits (#393). Hier wird die Hafenkarte aufgebaut:
- * Boden + Kollision aus harbor.tmj laden (loadHarborMap), die sichtbaren Hafen-
- * Objekte/Gebäude/Warpschilder setzen (placeHarborObjects), die Gebäudetüren
- * begehbar schneiden (carveDoors/makeDoor) und der Wang-Autotile-Boden zeichnen
- * (renderGround).
+ * Schritt des WorldScene.ts-Splits (#393). Hier wird die HAFEN-spezifische Welt
+ * aufgebaut: die sichtbaren Hafen-Objekte/Gebäude/Warpschilder setzen
+ * (placeHarborObjects), die Gebäudetüren begehbar schneiden (carveDoors/makeDoor)
+ * und der Wang-Autotile-Boden zeichnen (renderGround). Der gemeinsame, karten-
+ * unabhängige Terrain-Schritt (Boden/Kollision/Türen/NPCs aus der Registry) liegt
+ * seit #425 datengetrieben in worldscene/mapterrain.ts (loadMapTerrain) – die
+ * datengetriebene Region-Szenerie folgt mit #427 (RegionScene).
  *
  * Freie Funktionen mit der Szene als Parameter; die Zellen-/Deko-Primitive
  * (scene.tree/objDeco/deco/building/get) bleiben auf der Szene.
  */
 import Phaser from "phaser";
-import { NPC_SPAWNS, ENTRANCES, doorsFromObjectGroup, npcsFromObjectGroup, SHIP, type Door } from "../../world";
+import { SHIP, type Door } from "../../world";
 import { WORLD_TO_ARCHIPEL } from "../../archipel";
 import { WORLD_TO_LIGHTHOUSE, WORLD_RETURN_LH } from "../../lighthouse";
 import { DOCK as WH_DOCK, WORLD_JETTY_WH, WORLD_TO_WAREHOUSE } from "../../warehouse";
-import { collisionGrid, objectGroup } from "../../tilemap";
 import { PIER_XS } from "../../harbormap";
-import { getMapEntry } from "../../mapregistry";
 import { T, DIRT, ANVIL, TABLE, DEVICE, BOOK, WATER, FOAM, WANG } from "../shared";
 import type { WorldSceneLike } from "./types";
-
-/** (#192/#196, Epic #57): Boden + Kollision aus assets/maps/harbor.tmj laden;
- *  einziger Pfad seit #196 (buildMap() entfernt). Türen + NPC-Standplätze kommen
- *  datengetrieben aus dem Tiled-Objektlayer, Objekte setzt placeHarborObjects(). */
-export function loadHarborMap(scene: WorldSceneLike) {
-  const entry = getMapEntry("harbor");
-  const map = entry.parse(JSON.parse(entry.raw));
-  scene.ground = entry.decodeGround!(map);
-  scene.solidGrid = new Uint8Array(scene.W * scene.H);
-  collisionGrid(map, entry.collisionLayer).forEach((solid, i) => { if (solid) scene.solidGrid[i] = 1; });
-  // #194: Türen/Warps datengetrieben aus dem Objektlayer der .tmj statt aus der
-  // Hardcode-Liste – der Beweis, dass der Tiled-Loader auch die Türen trägt.
-  scene.doors = entry.warpLayer ? doorsFromObjectGroup(objectGroup(map, entry.warpLayer)) : ENTRANCES.slice();
-  // #195: NPC-Standplätze datengetrieben aus dem Objektlayer der .tmj statt aus
-  // der Hardcode-Liste – der Beweis, dass der Tiled-Loader auch die NPCs trägt.
-  scene.npcSpawns = entry.npcLayer ? npcsFromObjectGroup(objectGroup(map, entry.npcLayer)) : NPC_SPAWNS.slice();
-  placeHarborObjects(scene);
-}
 
 /** Sichtbare Hafen-Objekte (Bäume, Stege-Schilder, Schiff, Markt, Gebäude,
  *  Deko, Leuchtturm, Türen) + die davon abhängigen Szenen-Felder (piers, ship,

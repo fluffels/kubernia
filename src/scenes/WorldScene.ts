@@ -7,7 +7,7 @@ import { type Spawn } from "../content/entities";
 import { type LayoutBox } from "../labellayout";
 import { keys, setWorldScene } from "../runtime";
 import { expandRect, cull, FrameSampler, type Cullable } from "../cull";
-import { getMapEntry } from "../mapregistry";
+import { getMapEntry, type MapId } from "../mapregistry";
 import { DAY_CYCLE_MS } from "../clock";
 import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, type SceneNpc } from "./shared";
 // Spiel-Systeme als eigene, fokussierte Module (WorldScene.ts-Split #393, analog
@@ -16,7 +16,8 @@ import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, t
 // Per-Frame-Takt in update()) plus die geteilten Render-Primitive (set/get/deco/
 // tree/objDeco/building/registerCullable/makeSign/makeTechTag/addShadow), Spieler-/
 // NPC-Setup, Kollision/Bewegung, Effekte und das Off-screen-Culling.
-import { loadHarborMap, renderGround } from "./worldscene/terrain";
+import { loadMapTerrain } from "./worldscene/mapterrain";
+import { placeHarborObjects, renderGround } from "./worldscene/terrain";
 import { spawnGull, spawnFlowers, spawnGrassDetail, scatter, renderStatics, updateDayNight } from "./worldscene/scenery";
 import { syncCluster, revealNearbyLabels } from "./worldscene/clustersync";
 import { scheduleEvents, tickEvents } from "./worldscene/events";
@@ -124,12 +125,25 @@ export class WorldScene extends Phaser.Scene {
   lighthouseArmed!: boolean;
   warehouseArmed!: boolean;
   hazards!: Hazards;
+  // #425: welche Registry-Karte diese Szene lädt. Default „harbor", damit Boot/
+  // Erststart unverändert bleibt; eine zweite Tiled-Region kommt über die Init-Daten
+  // (`scene.start("World", { mapId })`) dazu, nicht über eine neue Szenen-Klasse.
+  mapId!: MapId;
   constructor() { super("World"); }
+
+  /** Phaser ruft init() vor create() mit den Start-Daten. Default-Karte „harbor"
+   *  (BootScene startet ohne Daten). Re-Entry aus den Insel-Szenen läuft über
+   *  scene.wake() – init() läuft dann NICHT, mapId bleibt also erhalten. */
+  init(data?: { mapId?: MapId }) {
+    this.mapId = data?.mapId ?? "harbor";
+  }
 
   /* ============ Aufbau ============ */
   create() {
     setWorldScene(this);
-    this.W = 52; this.H = 40;
+    // #425: Maße datengetrieben aus dem Registry-Eintrag der Karte statt fest 52×40.
+    const entry = getMapEntry(this.mapId);
+    this.W = entry.width; this.H = entry.height;
     this.ground = new Array(this.W * this.H).fill(0);
     this.solidGrid = new Uint8Array(this.W * this.H);
     // #343: runde Sub-Tile-Hindernisse (Steine/NPCs) + ihre Kachel-Belegung. Das
@@ -170,7 +184,12 @@ export class WorldScene extends Phaser.Scene {
     this.makeFxTextures();   // weiche Schatten- & Glüh-Textur (#4)
     this.lampGlows = [];     // Laternen-Glühen, das nachts aufleuchtet (#4)
 
-    loadHarborMap(this);  // #196: buildMap() entfernt; Hafenkarte immer aus harbor.tmj
+    // #425: gemeinsamer Terrain-Schritt datengetrieben aus getMapEntry(this.mapId)
+    // (Boden/Kollision/Türen/NPC-Standplätze), dann die HAFEN-spezifische Szenerie.
+    // Letztere wird mit #427 (RegionScene) selbst datengetrieben; bis dahin ist
+    // „harbor" die einzige WorldScene-Karte.
+    loadMapTerrain(this);
+    placeHarborObjects(this);
     renderGround(this);
     renderStatics(this);
     spawnFlowers(this);
@@ -362,7 +381,7 @@ export class WorldScene extends Phaser.Scene {
 
   spawnPlayer() {
     const sp = Game.state.player;
-    const spawn = getMapEntry("harbor").spawn;   // #193: Default-Spawn aus der Registry
+    const spawn = getMapEntry(this.mapId).spawn;   // #193/#425: Default-Spawn aus dem Registry-Eintrag der geladenen Karte
     this.playerPos = {
       x: sp && sp.x ? sp.x : spawn.x * T,
       y: sp && sp.y ? sp.y : spawn.y * T,
