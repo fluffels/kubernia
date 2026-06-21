@@ -1,6 +1,6 @@
 # Architektur-Reihenfolge
 
-> **Stand: 2026-06-21 (nach #418 – proprietäre LICENSE + Copyright in README/CONTRIBUTING; davor #388 + Spielsystem-Fundamente #410–#421 → [ADR 0007](adr/0007-spielsystem-fundamente.md)).** Kuratierte Umsetzungs-Reihenfolge für alle offenen Tickets mit Label `area:architektur`.
+> **Stand: 2026-06-21 (nach #419 – `main`-Branch-Protection; #418 LICENSE; davor #388 + Spielsystem-Fundamente #410–#421 → [ADR 0007](adr/0007-spielsystem-fundamente.md)).** Kuratierte Umsetzungs-Reihenfolge für alle offenen Tickets mit Label `area:architektur`.
 > Diese Liste **überschreibt** für Architektur-Tickets die generische Board-Auswahl (Prio→Nummer aus AGENTS.md):
 > Die Reihenfolge hier ist **abhängigkeitsbewusst** sortiert, nicht nur nach Prio-Label.
 
@@ -53,7 +53,7 @@ Sagt die Maintainerin **„nächstes Architektur"**, dann:
 2. **KI-/Dev-Hebel** – Onboarding + schlanke Doku, damit alle weiteren Schritte (gerade KI-getrieben) billig & sicher werden. (**#387 ✅** One-Command-Setup, **#388 ✅ erledigt 2026-06-21** containerisierte Dev-Umgebung – devcontainer + `docker compose up`, ohne lokales Node; Drift-Wächter `test/devcontainer.test.ts`.)
 3. **Qualitätsnetz** – Arch-Wächter/Lint/CI-Härtung, *bevor* groß refaktorisiert wird. (Arch-Wächter **#390 ✅ erledigt** – inkl. Zyklen-/Orphan-/Dateigröße-Wächter; **Lint #389 ✅ erledigt** – ESLint + CI-Gate. **Boot-Smoke #391 ist nicht mehr `area:architektur`** (nur noch `area:tests`) → läuft über die generische Board-Auswahl, nicht über diese Liste. **#396** (Dependabot + npm-audit-Gate) ✅ erledigt 2026-06-21 — Dependabot-Config + zweistufiges `npm audit`-Gate (Prod-Deps blockierend, Dev nur berichtend); **#398** (Actions v4→v5) ✅ erledigt 2026-06-21 — dabei `upload-artifact` bis **v7** gehoben, weil dessen `@v5` noch auf node20 lief und die Node-20-Deprecation sonst geblieben wäre. Der Qualitätsnetz-Block ist damit leer.)
 4. **God-File-Splits** – unter dem Netz (Schritt 3) gefahrlos. (**game.ts #392 ✅** – Fassade + `src/game/*`-Bündel; **WorldScene.ts #393 ✅** – Systeme in `src/scenes/worldscene/*` (terrain/scenery/clustersync/events/warps); Schwestern zu sim.ts #346 / ui.ts #356. **sim/kubectl.ts #397 ✅** – Dispatch-Barrel + Unterfamilien `src/sim/kubectl/*` (inspect/lifecycle/ops/security/host). Damit ist der God-File-Split-Block abgeschlossen.)
-5. **Recht/Schutz (NEU 2026-06-21)** – Lizenz + `main`-Branch-Protection. Klein, unabhängig, sofort wertvoll (#419; #418 ✅ erledigt 2026-06-21 – proprietäre LICENSE + Copyright-/Nutzungs-Hinweis in README & CONTRIBUTING).
+5. **Recht/Schutz (NEU 2026-06-21)** – ✅ **erledigt 2026-06-21**: #418 (proprietäre LICENSE + Copyright-/Nutzungs-Hinweis in README & CONTRIBUTING) und #419 (`main`-Branch-Protection: Force-Push/Löschen blockiert, Owner-Bypass an, damit der direkte-Merge-Workflow weiterläuft). Block ist damit leer.
 6. **Save-Härtung/Netz** – Eviction-Schutz (#401) + Save-Migrations-Integrationstest (#414). **Vor** jeder Save-Format-Änderung – schützt bestehende Stände, bevor migriert wird.
 7. **Spielsystem-Fundamente (NEU 2026-06-21, [ADR 0007](adr/0007-spielsystem-fundamente.md))** – Quest-Modell erweiterbar, Checks/Freischaltung als Daten, persistente Zeit-Achse (#410–#413). Die Content-**Mechanik**-Schulden, die die Analyse 2026-06 (Infrastruktur-fokussiert) übersah – vor dem Content-Push.
 8. **Skalierungs-Enabler** – Assets/Entities/Szenen für viele Welten.
@@ -64,24 +64,23 @@ Erst **danach** der große Content-Ausbau (Quests/Orte/Charaktere) – auf dem d
 
 | # | Block | Ticket | Worum's geht | Warum hier / Abhängigkeit |
 |---|-------|--------|--------------|---------------------------|
-| 1 | Recht/Schutz | **#419** ⚠️ | `main`-Branch-Protection (Owner-Bypass) | **Setting-Entscheidung mit der Maintainerin** (Schutz-Stufe). Owner-Bypass nötig, sonst bricht der direkte-Merge-Agenten-Workflow. Fremde müssen bei public ohnehin per PR beitragen. |
-| 2 | Save-Härtung | **#401** | `navigator.storage.persist()` + Quota-Monitoring | **ADR 0006/#400.** Schützt bestehende Stände **jetzt** vor stillem LRU-Löschen. Klein, client-seitig. |
-| 3 | Save-Härtung | **#414** | Save-Migrations-Integrationstest (echte Alt-Stand-Fixtures) | **Netz VOR jeder Save-Migration** (#410/#413). „Saves nie brechen" absichern, bevor das Format wächst. `area:tests`, hier als harte Voraussetzung vermerkt. |
-| 4 | Spielsystem-Fundament | **#410** | Quest-Modell erweiterbar statt linearem `questIdx` | Tiefster Umbau (Save-Migration über alle Stände) → je früher, desto billiger. **Nach #414.** ADR 0007. |
-| 5 | Spielsystem-Fundament | **#411** | Quest-Checks deklarativ (DSL statt 56 Hand-Prädikate) | Vollendet „Content ist Daten" (ADR 0004→0007). Unabhängig; sinnvoll nach dem Quest-Modell. |
-| 6 | Spielsystem-Fundament | **#412** | Karten-Freischaltung konsolidieren (`EXTRA_CARDS`+`CONCEPT_INTRO`→JSON) | Kleiner Schwester-Schnitt zu #411. |
-| 7 | Spielsystem-Fundament | **#413** | Persistenter Spiel-Kalender im `GameState` | Isoliert; Fundament für saisonalen Content/Routinen. **Nach #414** (Save-Format-Änderung). |
-| 8 | Skalierungs-Enabler | **#357** | Entity-Registry auf Objekte/Interaktables (Folge zu #349) | Vor dem Content-Push, wenn Bereiche viele platzierte Objekte/Trigger bekommen. |
-| 9 | Skalierungs-Enabler | **#415** | WorldScene auf Map-Registry generalisieren + TS-Inseln datengetrieben | Neue Region ohne Copy-Paste-Szene. Baut auf #57/#193 (✓). |
-| 10 | Skalierungs-Enabler | **#198** | Lazy-Asset-Loading pro Insel/Szene *(reaktiviert)* | Vor dem großen Asset-Wachstum, sonst eager-Lade-Bottleneck. |
-| 11 | Skalierungs-Enabler | **#339** | Texture-Atlas statt Einzel-Assets *(reaktiviert)* | Draw-Calls/Ladezeit bei vielen Sprites; nach Lazy-Loading. |
-| 12 | Skalierungs-Enabler | **#417** | Lazy-Content-Loading + `mergeScenario` entzerren | Content-Pendant zu #198 (Quest-/Karten-Daten statt Assets). |
-| 13 | Skalierungs-Enabler | **#416** | Cluster-Tags cullbar/gebündelt (Frame-Performance) | Rendering-Performance bei vielen Entities; unabhängig. |
-| 14 | Features | **#306** | Mehrere Spielstände / Save-Slots | Baut auf IndexedDB (#350 ✓ erledigt). |
-| 15 | Features | **#332** | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-basierte Save (#353) vorhanden. |
-| 16 | Features | **#334** | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
-| 17 | Sonderfall | **#314** ⚠️ | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen.** Übergreift #223. |
-| 18 | Sonderfall | **#293** ⚠️ | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der restliche Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 1 | Save-Härtung | **#401** | `navigator.storage.persist()` + Quota-Monitoring | **ADR 0006/#400.** Schützt bestehende Stände **jetzt** vor stillem LRU-Löschen. Klein, client-seitig. |
+| 2 | Save-Härtung | **#414** | Save-Migrations-Integrationstest (echte Alt-Stand-Fixtures) | **Netz VOR jeder Save-Migration** (#410/#413). „Saves nie brechen" absichern, bevor das Format wächst. `area:tests`, hier als harte Voraussetzung vermerkt. |
+| 3 | Spielsystem-Fundament | **#410** | Quest-Modell erweiterbar statt linearem `questIdx` | Tiefster Umbau (Save-Migration über alle Stände) → je früher, desto billiger. **Nach #414.** ADR 0007. |
+| 4 | Spielsystem-Fundament | **#411** | Quest-Checks deklarativ (DSL statt 56 Hand-Prädikate) | Vollendet „Content ist Daten" (ADR 0004→0007). Unabhängig; sinnvoll nach dem Quest-Modell. |
+| 5 | Spielsystem-Fundament | **#412** | Karten-Freischaltung konsolidieren (`EXTRA_CARDS`+`CONCEPT_INTRO`→JSON) | Kleiner Schwester-Schnitt zu #411. |
+| 6 | Spielsystem-Fundament | **#413** | Persistenter Spiel-Kalender im `GameState` | Isoliert; Fundament für saisonalen Content/Routinen. **Nach #414** (Save-Format-Änderung). |
+| 7 | Skalierungs-Enabler | **#357** | Entity-Registry auf Objekte/Interaktables (Folge zu #349) | Vor dem Content-Push, wenn Bereiche viele platzierte Objekte/Trigger bekommen. |
+| 8 | Skalierungs-Enabler | **#415** | WorldScene auf Map-Registry generalisieren + TS-Inseln datengetrieben | Neue Region ohne Copy-Paste-Szene. Baut auf #57/#193 (✓). |
+| 9 | Skalierungs-Enabler | **#198** | Lazy-Asset-Loading pro Insel/Szene *(reaktiviert)* | Vor dem großen Asset-Wachstum, sonst eager-Lade-Bottleneck. |
+| 10 | Skalierungs-Enabler | **#339** | Texture-Atlas statt Einzel-Assets *(reaktiviert)* | Draw-Calls/Ladezeit bei vielen Sprites; nach Lazy-Loading. |
+| 11 | Skalierungs-Enabler | **#417** | Lazy-Content-Loading + `mergeScenario` entzerren | Content-Pendant zu #198 (Quest-/Karten-Daten statt Assets). |
+| 12 | Skalierungs-Enabler | **#416** | Cluster-Tags cullbar/gebündelt (Frame-Performance) | Rendering-Performance bei vielen Entities; unabhängig. |
+| 13 | Features | **#306** | Mehrere Spielstände / Save-Slots | Baut auf IndexedDB (#350 ✓ erledigt). |
+| 14 | Features | **#332** | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-basierte Save (#353) vorhanden. |
+| 15 | Features | **#334** | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 16 | Sonderfall | **#314** ⚠️ | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen.** Übergreift #223. |
+| 17 | Sonderfall | **#293** ⚠️ | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der restliche Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > **Hinweis zu #414 (`area:tests`):** Streng genommen läuft es über die generische Board-Auswahl, ist aber als **harte Voraussetzung** für #410/#413 hier mitgeführt – vor diesen beiden Save-Umbauten muss das Netz stehen.
 
