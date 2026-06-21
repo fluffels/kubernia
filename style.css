@@ -447,7 +447,10 @@ button.danger:hover { background: var(--bad); color: #1a0606; filter: none; }
   border-radius: 10px;
   padding: 10px 16px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-  animation: toast-in 0.25s ease-out, toast-out 0.4s ease-in 3.4s forwards;
+  /* Der Fade-out startet nach --toast-fade-delay (von hud.ts aus der Lebensdauer
+     gesetzt, #370), damit er exakt beim Entfernen endet. Fallback 3.4s = die
+     frühere Standzeit, falls die Variable mal nicht gesetzt ist. */
+  animation: toast-in 0.25s ease-out, toast-out 0.4s ease-in var(--toast-fade-delay, 3.4s) forwards;
 }
 .toast.rankup { border-color: var(--accent2); font-size: 1.05em; }
 @keyframes toast-in { from { transform: translateX(120%); } to { transform: translateX(0); } }

@@ -108,7 +108,7 @@ import { keys, clearKeys } from "./runtime";
     // Bewusst NICHT awaitet (`void`): das soll den Boot nicht aufhalten (#389/no-floating-promises).
     void SaveStore.requestPersistentStorage().then(health => {
       if (health.nearQuota) {
-        UI.toast("⚠️ <b>Browser-Speicher wird knapp.</b> Sichere deinen Fortschritt über Menü → Spielstand exportieren.");
+        UI.hint("⚠️ <b>Browser-Speicher wird knapp.</b> Sichere deinen Fortschritt über Menü → Spielstand exportieren.");
       }
     });
     Game.load();
@@ -182,7 +182,7 @@ import { keys, clearKeys } from "./runtime";
     }
     // Einmaliger Erklär-Toast: was die 🔥-Flamme im HUD bedeutet (auch ohne Maus sichtbar).
     if (!Game.state.streakHintShown) {
-      setTimeout(() => UI.toast("🔥 <b>Tages-Streak:</b> Spiele täglich für bis zu <b>+50 % Dublonen</b> auf deine Belohnungen!"), 2600);
+      setTimeout(() => UI.hint("🔥 <b>Tages-Streak:</b> Spiele täglich für bis zu <b>+50 % Dublonen</b> auf deine Belohnungen!"), 2600);
       Game.state.streakHintShown = true;
       Game.save();
     }
@@ -202,7 +202,7 @@ import { keys, clearKeys } from "./runtime";
     // Build samt diesem Block weggestrippt – kein Gameplay-Einfluss.
     if (import.meta.hot) {
       import.meta.hot.on("kq:code-changed", () => {
-        UI.toast("🔄 Code geändert – zum Übernehmen neu laden (F5). Spielstand &amp; laufendes Gespräch bleiben erhalten.");
+        UI.hint("🔄 Code geändert – zum Übernehmen neu laden (F5). Spielstand &amp; laufendes Gespräch bleiben erhalten.");
       });
     }
   }

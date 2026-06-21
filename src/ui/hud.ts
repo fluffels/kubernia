@@ -2,6 +2,7 @@ import { Game } from "../game";
 import { SFX } from "../sfx";
 import { worldScene, interiorOpen } from "../runtime";
 import { part, $, NPCS, SMALLTALK } from "./shared";
+import { TOAST_LIFE_MS, HINT_LIFE_MS, toastFadeDelaySeconds } from "../toastlife";
 
 export const hudUI = part({
   /* ========== HUD, Toasts, Alarm ========== */
@@ -58,12 +59,27 @@ export const hudUI = part({
     }
   },
 
-  toast(msg: string, cls?: string) {
+  /** Kurzer Toast für Belohnungen/Bestätigungen (Standard-Standzeit, #370).
+   *  `lifeMs` steuert die Lebensdauer; für lesbare Tipps/Erklärungen `hint()`
+   *  nehmen, das bewusst >= 15 s setzt. */
+  toast(msg: string, cls?: string, lifeMs: number = TOAST_LIFE_MS) {
     const t = document.createElement("div");
     t.className = "toast" + (cls ? " " + cls : "");
     t.innerHTML = msg;
+    // JS-Auto-Remove und CSS-Fade-out aus EINER Quelle (#370): der Fade-out
+    // (toast-out in style.css) startet so spät, dass er exakt beim Entfernen
+    // endet – sonst fadet ein langer Hinweis schon nach der hartkodierten
+    // CSS-Default-Verzögerung weg und hinge danach unsichtbar herum.
+    t.style.setProperty("--toast-fade-delay", toastFadeDelaySeconds(lifeMs) + "s");
     $("toasts").appendChild(t);
-    setTimeout(() => t.remove(), 4200);
+    setTimeout(() => t.remove(), lifeMs);
+  },
+
+  /** Hinweis-Toast: bleibt mindestens 15 s lesbar (#370). Für Befehlstipps,
+   *  Erklärungen und „bitte tu X"-Hinweise, die der Spieler wirklich lesen
+   *  soll – anders als die kurzen Belohnungs-/Bestätigungs-Toasts. */
+  hint(msg: string, cls?: string) {
+    this.toast(msg, cls, HINT_LIFE_MS);
   },
 
   reward(xp: number, coins: number, label?: string) {

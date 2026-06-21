@@ -83,7 +83,7 @@ export function resolveStorm(scene: WorldSceneLike, success: boolean) {
     UI.reward(35, 50, "⛈️ Sturmschaden behoben!");
     SFX.fanfare();
   } else {
-    UI.toast("⛈️ Der Sturm zieht ab – aber <b>" + ev.dep + "</b> bleibt kaputt (und verdient nichts), bis du es reparierst!");
+    UI.hint("⛈️ Der Sturm zieht ab – aber <b>" + ev.dep + "</b> bleibt kaputt (und verdient nichts), bis du es reparierst!");
   }
   scheduleEvents(scene);
 }
@@ -130,7 +130,7 @@ export function resolvePirate(scene: WorldSceneLike, success: boolean) {
     UI.reward(25, bounty, "🏴‍☠️ Piraten vertrieben!");
     SFX.fanfare();
   } else {
-    UI.toast("🏴‍☠️ Die Piraten sind entkommen … Stell die Kopien trotzdem wieder her – deine Einnahmen leiden!");
+    UI.hint("🏴‍☠️ Die Piraten sind entkommen … Stell die Kopien trotzdem wieder her – deine Einnahmen leiden!");
   }
   scheduleEvents(scene);
 }
@@ -171,7 +171,7 @@ export function resolveKraken(scene: WorldSceneLike, success: boolean) {
     const stolen = Math.min(20, Game.state.coins);
     Game.state.coins -= stolen;
     Game.save();
-    UI.toast("🐙 Die Krake hat " + stolen + " 🪙 erbeutet! Leg beim nächsten Mal schnell ein Secret an.");
+    UI.hint("🐙 Die Krake hat " + stolen + " 🪙 erbeutet! Leg beim nächsten Mal schnell ein Secret an.");
   }
   scheduleEvents(scene);
 }
