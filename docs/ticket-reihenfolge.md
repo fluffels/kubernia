@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-21 (nach #436; Wachturm-Quartier / Phase 6 reaktiviert).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
+> **Stand: 2026-06-21 (nach #306; Wachturm-Quartier / Phase 6 reaktiviert).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -44,7 +44,7 @@ Sagt die Maintainerin **„nächstes Ticket"** (für kubequest), dann:
 
 Leitlinie der Sortierung: **Prio zuerst** (höchste offene Prio oben), **innerhalb gleicher Prio nach Abhängigkeit** (was etwas anderes ermöglicht, kommt davor), sonst niedrigste Nummer. Der **Skalierungs-Enabler-Block** ist bewusst über die anderen `prio:niedrig`-Tickets gezogen, weil „Umbau zuerst, dann der große Content-Push" gilt (Begründung: [architektur-analyse-2026-06.md](architektur-analyse-2026-06.md)). Stand des Blocks: **#198 ✓**, **#428 ✓** (erledigt); **#339 zurückgestellt** (Vite inlinet die kleinen Sprites bereits als Data-URI → Texture-Atlas aktuell ohne messbaren Nutzen, `status:zurückgestellt` mit Re-Eval-Trigger); **#417 aufgeteilt** in **#435 ✓** (Lazy-Content, erledigt) + **#436 ✓** (Save-Laden entzerren, erledigt). Der Skalierungs-Enabler-Block ist damit vollständig abgearbeitet.
 
-**Neu am 2026-06-21 — der „große Content-Push" beginnt:** Mit dem fertigen Enabler-Block wurde die nächste Story-Region **Wachturm-Quartier (Phase 6 — RBAC / ServiceAccounts / Pod-Security)** aus dem Reaktivierungs-Pool geholt (`status:zurückgestellt` von **#130–#139** entfernt; #137 Quiz war schon ✓) und als **zusammenhängender Arc an den Kopf der Liste** gezogen — genau das „dann der große Content-Push" nach „Umbau zuerst". Gut vorbereitet: **Sim-Grundlage** (`auth can-i` #126, Pod-Security #128) ✓ und die **Region-Maschinerie** seit #427 datengetrieben (`RegionScene`/`REGION_CONFIGS`), eine neue Region anzulegen ist also billig. Die früheren **no-dependency-Content-Füller** (#212/#218/#219/#228/#229/#236/#237/#239/#250) sind dafür in den **Auto-Rest** zurückgewandert — sie haben keine Abhängigkeit und gehören damit nicht in den Kopf (Prio→Nummer holt sie dort weiter, sobald sich der Kopf leert). Die Wachturm-Region steht **über** den QoL-/System-Features (#306/#332/#334), weil sie echten Lernpfad-Fortschritt bringt, jene nur Komfort.
+**Neu am 2026-06-21 — der „große Content-Push" beginnt:** Mit dem fertigen Enabler-Block wurde die nächste Story-Region **Wachturm-Quartier (Phase 6 — RBAC / ServiceAccounts / Pod-Security)** aus dem Reaktivierungs-Pool geholt (`status:zurückgestellt` von **#130–#139** entfernt; #137 Quiz war schon ✓) und als **zusammenhängender Arc an den Kopf der Liste** gezogen — genau das „dann der große Content-Push" nach „Umbau zuerst". Gut vorbereitet: **Sim-Grundlage** (`auth can-i` #126, Pod-Security #128) ✓ und die **Region-Maschinerie** seit #427 datengetrieben (`RegionScene`/`REGION_CONFIGS`), eine neue Region anzulegen ist also billig. Die früheren **no-dependency-Content-Füller** (#212/#218/#219/#228/#229/#236/#237/#239/#250) sind dafür in den **Auto-Rest** zurückgewandert — sie haben keine Abhängigkeit und gehören damit nicht in den Kopf (Prio→Nummer holt sie dort weiter, sobald sich der Kopf leert). Die Wachturm-Region steht **über** den QoL-/System-Features (#332/#334; #306 erledigt), weil sie echten Lernpfad-Fortschritt bringt, jene nur Komfort.
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
@@ -59,12 +59,11 @@ Leitlinie der Sortierung: **Prio zuerst** (höchste offene Prio oben), **innerha
 | 8 | **#138** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad; nach Quests + Drills. Phase 6 in README → ✅. |
 | 9 | **#139** | ohne | Tests für RBAC/Security-Quests & Sim | Zuletzt im Arc — sichert Quests + Sim ab (Red-Green). |
 | | **— QoL / System-Features (auf Fundament, kein Lernpfad-Fortschritt) —** | | | |
-| 10 | **#306** | niedrig | Mehrere Spielstände / Save-Slots | Feature auf IndexedDB-Fundament (#350 ✓). |
-| 11 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
-| 12 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 10 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
+| 11 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 13 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 14 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 12 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 13 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
