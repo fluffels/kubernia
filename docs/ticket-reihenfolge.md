@@ -46,22 +46,21 @@ Leitlinie der Sortierung: **Prio zuerst** (höchste offene Prio oben), **innerha
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| 1 | **#370** | mittel | Hint-Toasts mind. 15 s anzeigen | Höchste offene Prio (mittel), kleiner UX-Fix. |
-| 2 | **#379** | mittel | Docker-Kapitel: Kürzel auf Langform-zuerst (Nutzungszähler #313) | Lernpfad-Konsistenz; **Dreier-Sequenz #379→#380→#381** zusammen abarbeiten. |
-| 3 | **#380** | mittel | K8s-Kapitel: kubectl-Kürzel auf Langform-zuerst | Teil der Dreier-Sequenz. |
-| 4 | **#381** | mittel | Helm/Git/ArgoCD-Kapitel: Kürzel auf Langform-zuerst | Abschluss der Dreier-Sequenz. |
-| 5 | **#391** | mittel | CI: Boot-Smoke-Test des gebauten Spiels (headless) | Qualitätsnetz — fängt Laufzeit-Boot-Fehler; unabhängig. |
-| 6 | **#416** | mittel | Cluster-Tags cullbar/gebündelt (Frame-Performance) | Rendering-Perf bei vielen Entities; unabhängig. |
-| 7 | **#422** | mittel | Dependabot-/PR-Policy festschreiben | Prozess-Doku; unabhängig. |
-| 8 | **#198** | – | Lazy-Asset-Loading pro Insel/Szene | **Skalierungs-Enabler** — vor dem großen Asset-Wachstum, sonst eager-Lade-Bottleneck. |
-| 9 | **#339** | niedrig | Texture-Atlas statt Einzel-Assets | Draw-Calls/Ladezeit bei vielen Sprites; **nach** Lazy-Loading #198. |
-| 10 | **#417** | niedrig | Lazy-Content-Loading + `mergeScenario` entzerren | Content-Pendant zu #198 (Quest-/Karten-Daten statt Assets). |
-| 11 | **#428** | niedrig | `MapId`-Union aus der Registry ableiten | Abschluss-Härtung der #415-Kinder (Rest nach #425/#427 ✓). |
-| 12 | **#306** | niedrig | Mehrere Spielstände / Save-Slots | Feature auf IndexedDB-Fundament (#350 ✓). |
-| 13 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
-| 14 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
-| 15 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 16 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 1 | **#379** | mittel | Docker-Kapitel: Kürzel auf Langform-zuerst (Nutzungszähler #313) | Höchste offene Prio (mittel); Lernpfad-Konsistenz; **Dreier-Sequenz #379→#380→#381** zusammen abarbeiten. |
+| 2 | **#380** | mittel | K8s-Kapitel: kubectl-Kürzel auf Langform-zuerst | Teil der Dreier-Sequenz. |
+| 3 | **#381** | mittel | Helm/Git/ArgoCD-Kapitel: Kürzel auf Langform-zuerst | Abschluss der Dreier-Sequenz. |
+| 4 | **#391** | mittel | CI: Boot-Smoke-Test des gebauten Spiels (headless) | Qualitätsnetz — fängt Laufzeit-Boot-Fehler; unabhängig. |
+| 5 | **#416** | mittel | Cluster-Tags cullbar/gebündelt (Frame-Performance) | Rendering-Perf bei vielen Entities; unabhängig. |
+| 6 | **#422** | mittel | Dependabot-/PR-Policy festschreiben | Prozess-Doku; unabhängig. |
+| 7 | **#198** | – | Lazy-Asset-Loading pro Insel/Szene | **Skalierungs-Enabler** — vor dem großen Asset-Wachstum, sonst eager-Lade-Bottleneck. |
+| 8 | **#339** | niedrig | Texture-Atlas statt Einzel-Assets | Draw-Calls/Ladezeit bei vielen Sprites; **nach** Lazy-Loading #198. |
+| 9 | **#417** | niedrig | Lazy-Content-Loading + `mergeScenario` entzerren | Content-Pendant zu #198 (Quest-/Karten-Daten statt Assets). |
+| 10 | **#428** | niedrig | `MapId`-Union aus der Registry ableiten | Abschluss-Härtung der #415-Kinder (Rest nach #425/#427 ✓). |
+| 11 | **#306** | niedrig | Mehrere Spielstände / Save-Slots | Feature auf IndexedDB-Fundament (#350 ✓). |
+| 12 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
+| 13 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 14 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 15 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
