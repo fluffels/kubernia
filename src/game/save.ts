@@ -51,6 +51,35 @@ function migrateQuestId(id: string): string {
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
+
+/** Anzeigefertige Slot-Beschreibung für den Spielstand-Wähler (#306). Die Anwendungsschicht
+ *  leitet hier Rang/Quest-Titel aus den Roh-Zahlen ab, damit die UI dumm bleibt. */
+export interface SlotView {
+  id: string;
+  name: string;
+  /** Ist das der gerade gespielte Slot? */
+  active: boolean;
+  /** Frischer, noch nicht bespielter Slot (keine Vorschau/kein Charakter)? */
+  isNew: boolean;
+  xp: number;
+  rankIcon: string;
+  rankName: string;
+  /** Index der fokussierten Quest (0-basiert) bzw. = questTotal im Endzustand. */
+  questIdx: number;
+  questTotal: number;
+  questTitle: string;
+  /** Zeitstempel des letzten Speicherns (ms), 0 = noch nie. */
+  lastSeen: number;
+}
+
+/** Die opake Slot-Vorschau (summary) defensiv lesen: eine endliche Zahl unter `key`, sonst Default. */
+function summaryNum(sum: unknown, key: string, def: number): number {
+  if (isPlainObject(sum)) {
+    const v = sum[key];
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+  }
+  return def;
+}
 /** Endliche, nicht-negative Ganzzahl (XP, Münzen, Indizes, Zähler) – sonst Default. */
 function safeCount(v: unknown, def: number): number {
   return typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : def;
@@ -310,6 +339,9 @@ export const saveBundle = part({
     this.state.activeQuests = canonicalActiveQuests(this.state.activeQuests);
     this.state.lastSeen = Date.now();
     SaveStore.writeState(this.state); // legt den Stand in der aktuellen Versions-Hülle ab
+    // Vorschau des aktiven Slots für den Spielstand-Wähler aktualisieren (#306). Im
+    // Single-Slot-Fall (kein Index) ist das ein No-op – kein Churn beim 5-s-Auto-Save.
+    SaveStore.setActiveSlotSummary(this.slotSummary());
   },
 
   reset() {
@@ -334,5 +366,82 @@ export const saveBundle = part({
   importData(json: string) {
     JSON.parse(json); // wirft bei ungültiger Datei
     SaveStore.write(json);
+  },
+
+  /* ---------- Mehrere Spielstände / Save-Slots (#306) ----------
+   * game.ts kennt nur „aktiver Slot": die eigentliche Slot-Mechanik (Index, Keying,
+   * Hydration) liegt in SaveStore. Hier wird nur orchestriert + die opake Vorschau gefüllt. */
+
+  /** Kleine, opake Vorschau-Nutzlast des aktiven Slots für den Spielstand-Wähler. */
+  slotSummary() {
+    return {
+      xp: this.state.xp,
+      coins: this.state.coins,
+      questIdx: this.state.questIdx,
+      lastSeen: this.state.lastSeen,
+      character: this.state.character,
+    };
+  },
+
+  /** Anzeigefertige Liste aller Slots. Der AKTIVE Slot wird aus dem Live-Zustand beschrieben
+   *  (immer aktuell), die übrigen aus ihrer gespeicherten Vorschau. */
+  slots(): SlotView[] {
+    const activeId = SaveStore.activeSlotId();
+    const total = KQContent.QUESTS.length;
+    return SaveStore.listSlots().map((s) => {
+      const active = s.id === activeId;
+      const xp = active ? this.state.xp : summaryNum(s.summary, "xp", 0);
+      const rawQuest = active ? this.state.questIdx : summaryNum(s.summary, "questIdx", 0);
+      const questIdx = Math.max(0, Math.min(total, Math.floor(rawQuest)));
+      const lastSeen = active ? this.state.lastSeen : summaryNum(s.summary, "lastSeen", 0);
+      // „Neu" = aktiver Slot ohne gesetzten Charakter (Intro noch nicht durch) bzw. ein
+      // fremder Slot ganz ohne hinterlegte Vorschau (frisch angelegt, nie gespielt).
+      const isNew = active ? this.state.character === null : (s.summary === undefined || s.summary === null);
+      const r = KQContent.RANKS[this.rankIndex(xp)];
+      return {
+        id: s.id,
+        name: s.name,
+        active,
+        isNew,
+        xp,
+        rankIcon: r.icon,
+        rankName: r.name,
+        questIdx,
+        questTotal: total,
+        questTitle: questIdx < total ? KQContent.QUESTS[questIdx].title : "Alles geschafft 🎉",
+        lastSeen,
+      };
+    });
+  },
+
+  /** Neuen, leeren Slot anlegen und auf ihn wechseln (frischer Start). Gibt die neue ID
+   *  zurück; der Aufrufer (UI) lädt anschließend neu. */
+  newSlot(name?: string): string {
+    const id = SaveStore.createSlot(name ?? "");
+    // Jetzt existiert der Index → der bisher aktive Slot bekommt seine Vorschau gestempelt,
+    // dann wechseln wir auf den frischen Slot.
+    this.save();
+    SaveStore.switchSlot(id);
+    return id;
+  },
+
+  /** Auf einen bestehenden Slot wechseln. Sichert vorher den aktuellen Stand. false, wenn die
+   *  Ziel-ID unbekannt ist. Bei true lädt der Aufrufer neu. */
+  switchSlot(id: string): boolean {
+    this.save(); // die letzten Sekunden des aktuellen Slots nicht verlieren
+    return SaveStore.switchSlot(id);
+  },
+
+  /** Einen Slot umbenennen. false, wenn die ID unbekannt ist. */
+  renameSlot(id: string, name: string): boolean {
+    return SaveStore.renameSlot(id, name);
+  },
+
+  /** Einen Slot löschen. `reload` ist true, wenn der AKTIVE Slot getroffen wurde – dann muss
+   *  der Aufrufer neu laden, damit der jetzt aktive Slot ins Spiel kommt. */
+  deleteSlot(id: string): { ok: boolean; reload: boolean } {
+    const wasActive = id === SaveStore.activeSlotId();
+    const ok = SaveStore.deleteSlot(id);
+    return { ok, reload: ok && wasActive };
   },
 });
