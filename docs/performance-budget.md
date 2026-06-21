@@ -30,7 +30,35 @@ Sichtfelds aus und innerhalb wieder ein.
   Objekte (Bäume ragen weit über ihren Fuß-Anker) schon sichtbar sind, bevor der
   Anker ins Bild scrollt.
 
-### 2. Lazy-Asset-Loading pro Insel (offen → eigenes Ticket)
+### 2. Cluster-Tag-Culling & -Pool (#416, umgesetzt)
+
+Die Spielwelt **ist** der Cluster: bei großem Cluster (viele Deployments/Pods/Services)
+entstehen hunderte dynamische Tags (`nginx 3/3`, `kasse`, …). Früher hielt
+[`clustersync.ts`](../src/scenes/worldscene/clustersync.ts) **je Tag einen Phaser-
+Container** vor und lief pro Frame über **alle** Tags (Nähe-Fade + O(n²)-Entzerrung) –
+ein Frame-Killer, sobald das Spiel „groß" wird. Jetzt:
+
+- **Tags sind Daten, keine Dauer-Objekte.** `scene.dynTags` hält nur Position/Text/
+  Status. Nur die **wenigen JETZT sichtbaren** Tags bekommen pro Frame einen Container
+  aus einem **wiederverwendeten Pool** (`scene.tagPool`, gedeckelt auf 64). Die Zahl der
+  Tag-Render-Objekte wächst damit **nicht** mehr mit der Cluster-Größe.
+- **Sichtfeld + Nähe entscheiden.** Welche Tags sichtbar sind, wählt die pure, getestete
+  [`selectVisibleTags`](../src/cull.ts): im (erweiterten) Sichtfeld UND im Aufdeck-Radius,
+  nach Distanz gedeckelt. Off-screen-Tags werden **gar nicht** gerendert.
+- **Entzerrung nur über die sichtbaren Tags** → die O(n²)-Label-Entzerrung (#207) ist aufs
+  Sichtfeld begrenzt statt auf den ganzen Cluster.
+
+**Beleg (Dev-Build, Playwright, `?perf`):** Cluster künstlich auf **300 Services**
+aufgebläht → **300 Tag-Daten, aber nur 3 gerenderte Tags** (Pool 3), **60 FPS** gehalten,
+keine Laufzeit-Fehler. Ohne den Umbau wären alle 300 Container gleichzeitig im
+Display-Tree und würden pro Frame durchlaufen.
+
+> **Bewusst noch offen (eigenes Ticket):** Die *dekorativen* dynGroup-Sprites (Helm-
+> Flaggen je Release, Service-Laternen je Service) + ihre Dauer-Tweens skalieren weiter
+> 1:1 mit dem Cluster. Das ist ein separater Render-Pfad (Objekt-Visualisierung, nicht
+> „Tags") und in einem Folge-Ticket erfasst.
+
+### 3. Lazy-Asset-Loading pro Insel (offen → eigenes Ticket)
 
 Aktuell lädt die `BootScene` **alle** Assets aus dem `ASSET_MANIFEST` vorab. Das ist
 sinnvoll, solange es genau **eine** Insel (Port Kubernia) gibt. Sinnvolles

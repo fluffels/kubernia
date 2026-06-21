@@ -98,7 +98,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/decor.ts`](src/decor.ts) | pure Domäne | Deterministische Deko-Platzierung. |
 | [`src/clock.ts`](src/clock.ts) | pure Domäne | Zeit-/Datums-Ableitung für die HUD-Uhr. |
 | [`src/pixelfont.ts`](src/pixelfont.ts) | pure Domäne | Glyphen-Daten der In-Welt-Bitmap-Font (#188). |
-| [`src/cull.ts`](src/cull.ts) | pure Domäne | Off-screen-Culling & FPS-Messung (#82). |
+| [`src/cull.ts`](src/cull.ts) | pure Domäne | Off-screen-Culling & FPS-Messung (#82) + Cluster-Tag-Auswahl `selectVisibleTags` (#416). |
 | [`src/overlaykbd.ts`](src/overlaykbd.ts) | pure Domäne | Tastatur-Logik für Modals (#283) + Dialog-Blättern (#310). |
 | [`src/toastlife.ts`](src/toastlife.ts) | pure Domäne | Toast-Anzeigedauer-Politik: kurze Belohnung vs. lesbarer Hinweis (>= 15 s) + Fade-Timing (#370). |
 | [`src/cmdhistory.ts`](src/cmdhistory.ts) | pure Domäne | Befehlshistorie fürs Funkgerät-Terminal (#316). |
@@ -126,7 +126,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/scenes/worldscene/mapterrain.ts`](src/scenes/worldscene/mapterrain.ts) | Präsentation | Generischer, Phaser-freier Terrain-Lader: Boden/Kollision/Türen/NPCs aus `getMapEntry(scene.mapId)` statt fest „harbor" (#425). |
 | [`src/scenes/worldscene/terrain.ts`](src/scenes/worldscene/terrain.ts) | Präsentation | Hafen-Szenerie (Objekte/Gebäude/Türen-Optik) + Wang-Autotile-Boden (#393). |
 | [`src/scenes/worldscene/scenery.ts`](src/scenes/worldscene/scenery.ts) | Präsentation | Deko, statische Props/Effekte, Möwen, Tag-Nacht-Schleier (#393). |
-| [`src/scenes/worldscene/clustersync.ts`](src/scenes/worldscene/clustersync.ts) | Präsentation | Cluster→Welt-Sync: Pod-Kisten + dynamische Tags (#393). |
+| [`src/scenes/worldscene/clustersync.ts`](src/scenes/worldscene/clustersync.ts) | Präsentation | Cluster→Welt-Sync: Pod-Kisten + dynamische Tags als Daten + gedeckelter Render-Pool (#393/#416). |
 | [`src/scenes/worldscene/events.ts`](src/scenes/worldscene/events.ts) | Präsentation | Zufalls-Gefahren: Piraten/Krake/Sturm + Terminierung (#393). |
 | [`src/scenes/worldscene/warps.ts`](src/scenes/worldscene/warps.ts) | Präsentation | Übergänge Haus/Archipel/Leuchtturm/Lager + Warp-Gates (#393). |
 | [`src/scenes/worldscene/types.ts`](src/scenes/worldscene/types.ts) | Präsentation | Struktur-Typ `WorldSceneLike` fürs System-Modul-Muster (#393). |

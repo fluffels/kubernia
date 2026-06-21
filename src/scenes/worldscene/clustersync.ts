@@ -3,17 +3,39 @@
  * (Game.sim) auf die sichtbare Hafenwelt gespiegelt: Pods als Kisten an den
  * Stegen (syncCluster), Deployment-/Docker-/Helm-/Service-Tags neu bauen bei
  * Änderung (rebuildDynamic) und die Nähe-Aufdeckung + Entzerrung der dynamischen
- * Tags (revealNearbyLabels).
+ * Tags (updateDynamicTags).
  *
  * Freie Funktionen mit der Szene als Parameter; der Cluster-Zustand bleibt in
  * Game.sim, die Render-Primitive (addShadow/makeTechTag/burstAt) auf der Szene.
+ *
+ * Performance bei großem Cluster (#416, Stardew-Scope): Die Tags werden NICHT mehr
+ * je als eigener Container vorgehalten (das skalierte 1:1 mit der Entity-Zahl →
+ * Frame-Killer). Stattdessen sind die Tags reine DATEN (`scene.dynTags`), und nur
+ * die wenigen JETZT sichtbaren (im Sichtfeld + nah an der Figur, gedeckelt) bekommen
+ * einen Container aus einem wiederverwendeten POOL (`scene.tagPool`). So bleibt die
+ * Zahl der Tag-Render-Objekte UND die O(n²)-Entzerrung konstant, egal wie groß der
+ * Cluster wird. Welche Tags sichtbar sind, entscheidet die pure, getestete Auswahl
+ * `selectVisibleTags` in cull.ts.
  */
 import Phaser from "phaser";
 import { Game } from "../../game";
 import { SFX } from "../../sfx";
 import { spreadLabelsVertically, type LayoutBox } from "../../labellayout";
-import { T, hashHue, hueColor } from "../shared";
+import { selectVisibleTags, expandRect } from "../../cull";
+import { T, hashHue, hueColor, SIGN_FONT, SIGN_SCALE } from "../shared";
 import type { WorldSceneLike } from "./types";
+
+// Nähe-Aufdeckung: voll sichtbar bis FULL, ausgeblendet ab FADE (Welt-Pixel).
+const REVEAL_FULL = 42;
+const REVEAL_FADE = 84;
+// Höchstzahl gleichzeitig gerenderter Tags. Der Aufdeck-Radius (FADE) begrenzt die
+// realistisch sichtbaren Tags ohnehin auf wenige; der Deckel ist die harte Garantie,
+// dass Pool-Größe + Entzerrung auch im pathologischen Fall (sehr dichter Cluster)
+// konstant bleiben. Mehr als CAP Tags im Radius → die NÄCHSTEN gewinnen.
+const TAG_CAP = 64;
+// Sichtfeld fürs Tag-Culling großzügig erweitern, damit am Bildrand nichts aufpoppt
+// (Tags ragen über ihren Bezugspunkt + werden beim Entzerren nach oben geschoben).
+const TAG_VIEW_MARGIN = 2 * T;
 
 function podSlotPos(scene: WorldSceneLike, slot: number) {
   const pier = scene.piers[Math.floor(slot / 12)];
@@ -82,17 +104,12 @@ export function syncCluster(scene: WorldSceneLike) {
 
 export function rebuildDynamic(scene: WorldSceneLike) {
   scene.dynGroup.clear(true, true);
-  scene.dynLabels = [];
-  // Digitales Cluster-Tag bauen + für die Nähe-Aufdeckung registrieren.
-  // (lx,ly) = Tag-Position, (ax,ay) = Bezugspunkt des Objekts (Distanz zur Figur).
+  // Tags sind reine Daten (#416): hier nur sammeln, NICHT je einen Container bauen.
+  // (lx,ly) = Tag-Position, (ax,ay) = Bezugspunkt des Objekts (Distanz zur Figur +
+  // Tiefen-Sortierung). `ty` ist die Basis-Position fürs Entzerren.
+  scene.dynTags = [];
   const mkTag = (lx: number, ly: number, str: string, status: number, ax: number, ay: number, compact = false) => {
-    const tag = scene.makeTechTag(lx, ly, str, status, compact);
-    // Tiefe am Bezugs-Objekt (ay) ausrichten statt fix ganz oben: so rendert eine
-    // davorstehende Figur (größeres Fuß-y → größere Tiefe) ÜBER dem Tag und wird
-    // nicht mehr verdeckt (#207) – analog zur y-Sortierung der Holz-Schilder.
-    tag.setDepth(ay);
-    scene.dynGroup.add(tag);
-    scene.dynLabels.push({ obj: tag, x: ax, y: ay, ty: ly });
+    scene.dynTags.push({ tx: lx, ty: ly, ax, ay, text: str, status, compact });
   };
 
   // Deployment-Tags über der ersten Kiste (kaputte rot mit Status!)
@@ -136,32 +153,71 @@ export function rebuildDynamic(scene: WorldSceneLike) {
   });
 }
 
-/** Nähe-Aufdeckung: dynamische Cluster-Tags nur nahe der Figur einblenden
- *  (sanfter Fade), damit nie alle gleichzeitig sichtbar sind und überlappen.
- *  Zusätzlich werden die GERADE sichtbaren Tags vertikal entzerrt (#207), damit
- *  sich ihre Texte – und die der festen Holz-Schilder – nicht überlagern. */
-export function revealNearbyLabels(scene: WorldSceneLike) {
-  const pl = scene.playerPos;
-  const FULL = 42, FADE = 84;   // px: voll sichtbar <=FULL, ausgeblendet >=FADE
-  const visible = [];
-  for (const dl of scene.dynLabels) {
-    const d = Math.hypot(dl.x - pl.x, dl.y - pl.y);
-    const a = d <= FULL ? 1 : d >= FADE ? 0 : 1 - (d - FULL) / (FADE - FULL);
-    dl.obj.setAlpha(a).setVisible(a > 0.02);
-    if (a > 0.02) visible.push(dl);
-    else dl.obj.y = dl.ty;   // ausgeblendet → zurück auf die Basis-Position
+/** Vergrößert den Tag-Pool bei Bedarf auf `n` (≤ TAG_CAP) wiederverwendbare
+ *  Container. Die Pool-Container leben über die ganze Szene und werden NICHT in
+ *  `dynGroup` gehängt (das wird bei jedem Cluster-Wechsel geleert – der Pool nicht). */
+function ensureTagPool(scene: WorldSceneLike, n: number) {
+  const need = Math.min(n, TAG_CAP);
+  while (scene.tagPool.length < need) {
+    const cont = scene.makeTechTag(0, 0, "", 0x6fe09a, false) as Phaser.GameObjects.Container;
+    // Die native (nicht-compacte) Schriftgröße einmal merken, um beim Wiederverwenden
+    // zwischen compact/normal korrekt umschalten zu können.
+    if (scene.tagFontDefault == null) scene.tagFontDefault = (cont.list[1] as Phaser.GameObjects.BitmapText).fontSize;
+    cont.setVisible(false);
+    scene.tagPool.push(cont);
   }
-  // Entzerren: feste Schilder als unbewegliche Hindernisse zuerst, dann die
-  // sichtbaren Tags (gemessen an ihrer Basis-Position ty + Panel-Größe).
+}
+
+/** Setzt einen Pool-Container auf die Daten eines Tags um (Text/Status/Position/
+ *  Größe/Transparenz). Re-Sizing des Hintergrund-Panels analog zu makeTechTag. */
+function applyTag(scene: WorldSceneLike, cont: Phaser.GameObjects.Container, data: DynTagLike, alpha: number) {
+  const bg = cont.list[0] as Phaser.GameObjects.Rectangle;
+  const txt = cont.list[1] as Phaser.GameObjects.BitmapText;
+  const dot = cont.list[2] as Phaser.GameObjects.Arc;
+  if (txt.text !== data.text) txt.setText(data.text);
+  txt.setFontSize(data.compact ? SIGN_FONT : (scene.tagFontDefault as number));
+  const padL = 9, padR = 4, padY = 2;
+  const w = txt.width + padL + padR, h = txt.height + padY * 2;
+  bg.setSize(w, h);
+  txt.setPosition(-w / 2 + padL, 0);
+  dot.setPosition(-w / 2 + 4.5, 0).setFillStyle(data.status);
+  cont.setPosition(data.tx, data.ty).setDepth(data.ay).setScale(data.compact ? SIGN_SCALE : 1).setAlpha(alpha).setVisible(true);
+}
+
+/** Minimal-Sicht auf ein Tag-Datum (das WorldScene-Feld ist voll getippt). */
+interface DynTagLike { tx: number; ty: number; ax: number; ay: number; text: string; status: number; compact: boolean; }
+
+/** Pro Frame: die JETZT sichtbaren Cluster-Tags (im Sichtfeld + nah, gedeckelt)
+ *  aus dem Pool darstellen, den Rest ausblenden – und NUR die sichtbaren vertikal
+ *  entzerren (#207), sodass der O(n²)-Aufwand aufs Sichtfeld begrenzt bleibt (#416).
+ *  Ersetzt das frühere revealNearbyLabels, das je Tag einen Dauer-Container hielt
+ *  und pro Frame ALLE durchlief. */
+export function updateDynamicTags(scene: WorldSceneLike) {
+  const wv = scene.cameras.main.worldView;
+  if (wv.width <= 0) return; // worldView erst nach dem ersten Render gefüllt
+  const view = expandRect({ x: wv.x, y: wv.y, width: wv.width, height: wv.height }, TAG_VIEW_MARGIN);
+  const visible = selectVisibleTags(scene.dynTags as DynTagLike[], scene.playerPos, view, { full: REVEAL_FULL, fade: REVEAL_FADE, cap: TAG_CAP });
+  ensureTagPool(scene, visible.length);
+
+  const pool = scene.tagPool as Phaser.GameObjects.Container[];
+  // Feste Holz-Schilder als unbewegliche Hindernisse zuerst, dann die sichtbaren Tags.
   const boxes: LayoutBox[] = scene.signBoxes ? scene.signBoxes.slice() : [];
   const offset = boxes.length;
-  for (const dl of visible) {
-    const bg = dl.obj.list[0];   // Hintergrund-Rechteck des Tech-Tags (Maße = Panel)
-    // Container-Skalierung einrechnen (#255): compact-Fass-Tags sind um SIGN_SCALE
-    // verkleinert – das Entzerren muss die TATSÄCHLICHE Endgröße nehmen, sonst
-    // reserviert es zu viel Platz und schiebt die Tags unnötig auseinander.
-    boxes.push({ x: dl.obj.x, y: dl.ty, w: bg.width * dl.obj.scaleX, h: bg.height * dl.obj.scaleY });
+  for (let k = 0; k < visible.length; k++) {
+    const data = scene.dynTags[visible[k].i] as DynTagLike;
+    const cont = pool[k];
+    applyTag(scene, cont, data, visible[k].alpha);
+    const bg = cont.list[0] as Phaser.GameObjects.Rectangle;
+    // Tatsächliche Endgröße (Container-Skalierung einrechnen, #255), gemessen an der Basis-Position ty.
+    boxes.push({ x: data.tx, y: data.ty, w: bg.width * cont.scaleX, h: bg.height * cont.scaleY });
   }
+  // Ungenutzte Pool-Container ausblenden.
+  for (let k = visible.length; k < pool.length; k++) pool[k].setVisible(false);
+
   const dys = spreadLabelsVertically(boxes, 2);
-  visible.forEach((dl, i) => { dl.obj.y = dl.ty + dys[offset + i]; });
+  for (let k = 0; k < visible.length; k++) {
+    const data = scene.dynTags[visible[k].i] as DynTagLike;
+    pool[k].y = data.ty + dys[offset + k];
+  }
+  scene.visibleTags = visible.length;
 }

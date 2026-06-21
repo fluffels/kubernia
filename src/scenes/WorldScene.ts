@@ -19,7 +19,7 @@ import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, t
 import { loadMapTerrain } from "./worldscene/mapterrain";
 import { placeHarborObjects, renderGround } from "./worldscene/terrain";
 import { spawnGull, spawnFlowers, spawnGrassDetail, scatter, renderStatics, updateDayNight } from "./worldscene/scenery";
-import { syncCluster, revealNearbyLabels } from "./worldscene/clustersync";
+import { syncCluster, updateDynamicTags } from "./worldscene/clustersync";
 import { scheduleEvents, tickEvents } from "./worldscene/events";
 import { updateWarps } from "./worldscene/warps";
 
@@ -38,8 +38,11 @@ const LAMP_HIT: readonly [number, number] = [6, 10];   // Pfosten: schmale Recht
 interface DecoItem { x: number; y: number; sheet: string; idx?: number; obj?: boolean; scale?: number; }
 /** Festes Orts-Schild als Daten (gesammelt, bevor renderStatics es als 9-Slice baut). */
 interface LabelSpec { x: number; y: number; text: string; color?: string; depth?: number; }
-/** Dynamisches Cluster-Tag für Nähe-Aufdeckung + Entzerrung (#207). */
-interface DynLabel { obj: Phaser.GameObjects.Container; x: number; y: number; ty: number; }
+/** Dynamisches Cluster-Tag als DATEN (#416): kein Dauer-Container mehr je Tag,
+ *  sondern Position/Text/Status. Nur die JETZT sichtbaren bekommen pro Frame einen
+ *  Container aus `tagPool` (updateDynamicTags). `tx,ty` = Tag-Position (ty = Basis
+ *  fürs Entzerren), `ax,ay` = Bezugs-Objekt (Distanz zur Figur + Tiefe). */
+interface DynTagData { tx: number; ty: number; ax: number; ay: number; text: string; status: number; compact: boolean; }
 /** Pod-Kiste an einem Steg-Slot (Cluster→Welt-Sync). */
 interface PodSlot { slot: number; crate: Phaser.GameObjects.Image; band: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; dep: string; }
 /** Über die Wiese flatternder Schmetterling. */
@@ -71,7 +74,11 @@ export class WorldScene extends Phaser.Scene {
   decoList!: DecoItem[];
   labels!: LabelSpec[];
   signBoxes!: LayoutBox[];
-  dynLabels!: DynLabel[];
+  // Cluster-Tags als Daten + wiederverwendbarer Render-Pool (#416, statt je Tag ein Container).
+  dynTags!: DynTagData[];
+  tagPool!: Phaser.GameObjects.Container[];
+  tagFontDefault?: number;   // native (nicht-compacte) Tag-Schriftgröße, einmal gemerkt
+  visibleTags!: number;      // gerade dargestellte Tag-Zahl (Perf-HUD-Beleg)
   lampGlows!: Phaser.GameObjects.Image[];
   // Hafen-Objekt-Felder aus terrain.ts (Stege/Schiff/Flaggenmasten/Leuchtturm/Plateau)
   piers!: { x: number; name: string }[];
@@ -154,7 +161,9 @@ export class WorldScene extends Phaser.Scene {
     this.decoList = [];
     this.labels = [];
     this.signBoxes = [];   // feste Holz-Schilder als Hindernisse fürs Tag-Entzerren (#207)
-    this.dynLabels = [];   // dynamische Cluster-Tags (Nähe-Aufdeckung): { obj, x, y, ty }
+    this.dynTags = [];     // dynamische Cluster-Tags als Daten (#416)
+    this.tagPool = [];     // wiederverwendete Tag-Container (nur für die sichtbaren)
+    this.visibleTags = 0;
     this.podSlots = {};
     this.slotUsed = new Array(36).fill(false);
     this.dynamic = { barrelsSig: "", flagsSig: "", svcSig: "", depSig: "" };
@@ -470,7 +479,8 @@ export class WorldScene extends Phaser.Scene {
       this.perfHud.setText(
         "FPS " + this.fpsSampler.fps + "\n" +
         "Sprites sichtbar " + vis + "/" + total + "\n" +
-        "gecullt " + (total - vis) + "  ·  stress ×" + this.stress,
+        "gecullt " + (total - vis) + "  ·  stress ×" + this.stress + "\n" +
+        "Cluster-Tags " + this.visibleTags + "/" + this.dynTags.length + " (Pool " + this.tagPool.length + ")",
       );
     }
   }
@@ -541,7 +551,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     syncCluster(this);
-    revealNearbyLabels(this);
+    updateDynamicTags(this);
     // Persistente Spiel-Zeit (#413) um die reale Frame-Zeit vorrücken und den Tag-Nacht-
     // Schleier/die HUD-Uhr daraus speisen – NICHT mehr aus der flüchtigen Phaser-`time`,
     // die bei jedem Reload bei 0 begänne. So überlebt der Kalender den Reload (Auto-Save

@@ -64,6 +64,74 @@ export function cull(items: Cullable[], bounds: Rect): number {
   return visible;
 }
 
+/* ===== Sichtbare Cluster-Tags wählen (#416) =====
+ * Die dynamischen Cluster-Tags (Pod-/Deployment-/Service-Labels) dürfen bei großem
+ * Cluster (Stardew-Scope: hunderte Entities) nicht alle gleichzeitig gerendert und
+ * pro Frame neu entzerrt werden – das wäre ein Frame-Killer. Diese reine Funktion
+ * wählt aus ALLEN registrierten Tags die wenigen, die JETZT wirklich dargestellt
+ * werden: im Sichtfeld UND nah genug an der Figur, gedeckelt auf eine feste Zahl.
+ * Phaser-frei (wie der restliche cull.ts-Kern), darum im Node-Test prüfbar. */
+
+/** Ein Cluster-Tag aus Sicht der Auswahl: nur sein Bezugspunkt in Welt-Pixeln. */
+export interface TagAnchor {
+  /** Welt-x des Bezugs-Objekts (Distanz zur Figur + Sichtfeld-Prüfung). */
+  ax: number;
+  /** Welt-y des Bezugs-Objekts. */
+  ay: number;
+}
+
+/** Auswahl-Ergebnis für ein sichtbares Tag. */
+export interface VisibleTag {
+  /** Index in der übergebenen Tag-Liste. */
+  i: number;
+  /** Ziel-Transparenz (0..1) aus der Nähe-Aufdeckung. */
+  alpha: number;
+  /** Distanz zur Figur (Pixel) – nach ihr wird beim Deckeln gereiht. */
+  dist: number;
+}
+
+/** Parameter der Nähe-Aufdeckung + Mengen-Deckel. */
+export interface TagRevealOpts {
+  /** Distanz (px), bis zu der ein Tag voll sichtbar ist (alpha = 1). */
+  full: number;
+  /** Distanz (px), ab der ein Tag ganz ausgeblendet ist (nicht mehr gewählt). */
+  fade: number;
+  /** Höchstzahl gleichzeitig dargestellter Tags – deckelt Render-/Entzerr-Aufwand. */
+  cap: number;
+}
+
+/**
+ * Wählt die JETZT darzustellenden Cluster-Tags – der Kern des #416-Cullings.
+ *
+ * Ein Tag kommt nur durch, wenn sein Bezugspunkt (1) im (erweiterten) Sichtfeld
+ * `view` liegt – sonst wird es gar nicht gerendert – UND (2) näher als `fade` an der
+ * Figur ist. Das Ziel-Alpha fadet linear zwischen `full` (=1) und `fade` (→0). Die
+ * Treffer werden nach Distanz sortiert (nächste zuerst, bei Gleichstand der kleinere
+ * Index) und auf `cap` gedeckelt. Dadurch bleiben Renderkosten UND die O(n²)-
+ * Entzerrung konstant, egal wie groß der Cluster wird.
+ *
+ * Deterministisch und pur: gleiche Eingabe → gleiche Ausgabe.
+ */
+export function selectVisibleTags(
+  tags: readonly TagAnchor[],
+  player: { x: number; y: number },
+  view: Rect,
+  opts: TagRevealOpts,
+): VisibleTag[] {
+  const span = opts.fade - opts.full;
+  const out: VisibleTag[] = [];
+  for (let i = 0; i < tags.length; i++) {
+    const t = tags[i];
+    if (!inView(t.ax, t.ay, view)) continue; // außerhalb Sichtfeld → nicht rendern
+    const dist = Math.hypot(t.ax - player.x, t.ay - player.y);
+    if (dist >= opts.fade) continue; // außerhalb Aufdeck-Radius
+    const alpha = dist <= opts.full ? 1 : span > 0 ? 1 - (dist - opts.full) / span : 1;
+    out.push({ i, alpha, dist });
+  }
+  out.sort((a, b) => a.dist - b.dist || a.i - b.i); // nächste zuerst
+  return opts.cap >= 0 && out.length > opts.cap ? out.slice(0, opts.cap) : out;
+}
+
 /** Rollender FPS-Mittelwert über die letzten `size` Frame-Deltas – fürs
  *  Performance-HUD/Budget. Pur (nimmt nur das Delta in ms entgegen), daher im
  *  Node-Test prüfbar. Nicht-positive Deltas werden ignoriert (erster Frame,

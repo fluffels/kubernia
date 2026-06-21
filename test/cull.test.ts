@@ -5,7 +5,7 @@
  * Negativfällen (Kante, leere Liste, pausierter Tab) und Red-Green-Schutz
  * (ein Objekt weit draußen MUSS ausgeblendet werden, sonst cullt nichts). */
 import { test, expect } from "vitest";
-import { expandRect, inView, cull, FrameSampler, type Cullable, type Rect } from "../src/cull";
+import { expandRect, inView, cull, selectVisibleTags, FrameSampler, type Cullable, type Rect, type TagAnchor } from "../src/cull";
 
 const view: Rect = { x: 100, y: 100, width: 200, height: 120 };
 
@@ -70,6 +70,64 @@ test("cull: ein Objekt weit draußen MUSS ausgeblendet werden (Red-Green)", () =
 
 test("cull auf leerer Liste liefert 0 und wirft nicht", () => {
   expect(cull([], view)).toBe(0);
+});
+
+/* ---------- selectVisibleTags (#416) ---------- */
+
+// Großzügiges Sichtfeld; die meisten Tests steuern über die NÄHE zur Figur.
+const bigView: Rect = { x: 0, y: 0, width: 1000, height: 1000 };
+const opts = { full: 42, fade: 84, cap: 64 };
+
+test("selectVisibleTags: ein Tag im Sichtfeld und im Voll-Radius wird gewählt (alpha 1) – Red-Green", () => {
+  // Würde die Auswahl nichts durchlassen, wäre KEIN Tag je sichtbar.
+  const tags: TagAnchor[] = [{ ax: 100, ay: 100 }];
+  const r = selectVisibleTags(tags, { x: 100, y: 100 }, bigView, opts);
+  expect(r).toEqual([{ i: 0, alpha: 1, dist: 0 }]);
+});
+
+test("selectVisibleTags: außerhalb des Sichtfelds wird NICHT gewählt, selbst wenn nah an der Figur", () => {
+  // Tag direkt bei der Figur, aber beide außerhalb von `view` → nicht rendern.
+  const tags: TagAnchor[] = [{ ax: -500, ay: -500 }];
+  expect(selectVisibleTags(tags, { x: -500, y: -500 }, view, opts)).toEqual([]);
+});
+
+test("selectVisibleTags: außerhalb des Aufdeck-Radius (>= fade) fällt raus", () => {
+  const tags: TagAnchor[] = [{ ax: 200, ay: 100 }]; // 100 px entfernt, fade=84
+  expect(selectVisibleTags(tags, { x: 100, y: 100 }, bigView, opts)).toEqual([]);
+});
+
+test("selectVisibleTags: alpha fadet linear zwischen full und fade", () => {
+  const mid = (opts.full + opts.fade) / 2; // 63 px → genau halb ausgeblendet
+  const tags: TagAnchor[] = [{ ax: 100 + mid, ay: 100 }];
+  const r = selectVisibleTags(tags, { x: 100, y: 100 }, bigView, opts);
+  expect(r).toHaveLength(1);
+  expect(r[0].alpha).toBeCloseTo(0.5, 5);
+});
+
+test("selectVisibleTags: deckelt auf die `cap` NÄCHSTEN Tags", () => {
+  // Vier Tags in steigender Distanz; cap 2 → die zwei nächsten (i=0,1).
+  const tags: TagAnchor[] = [
+    { ax: 100, ay: 100 }, // d 0
+    { ax: 110, ay: 100 }, // d 10
+    { ax: 130, ay: 100 }, // d 30
+    { ax: 140, ay: 100 }, // d 40
+  ];
+  const r = selectVisibleTags(tags, { x: 100, y: 100 }, bigView, { full: 42, fade: 84, cap: 2 });
+  expect(r.map((v) => v.i)).toEqual([0, 1]);
+});
+
+test("selectVisibleTags: nach Distanz sortiert (nächste zuerst), stabil bei Gleichstand", () => {
+  const tags: TagAnchor[] = [
+    { ax: 130, ay: 100 }, // d 30
+    { ax: 110, ay: 100 }, // d 10
+    { ax: 110, ay: 100 }, // d 10 (gleich wie i=1 → kleinerer Index zuerst)
+  ];
+  const r = selectVisibleTags(tags, { x: 100, y: 100 }, bigView, opts);
+  expect(r.map((v) => v.i)).toEqual([1, 2, 0]);
+});
+
+test("selectVisibleTags: leere Liste liefert [] und wirft nicht", () => {
+  expect(selectVisibleTags([], { x: 0, y: 0 }, bigView, opts)).toEqual([]);
 });
 
 /* ---------- FrameSampler ---------- */
