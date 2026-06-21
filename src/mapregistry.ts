@@ -16,14 +16,12 @@ import { parseHarborMap, decodeHarborGround, HARBOR_W, HARBOR_H, WARP_LAYER, NPC
 import harborMapRaw from "../assets/maps/harbor.tmj?raw";
 import testMapRaw from "../assets/maps/test-map.tmj?raw";
 
-/** Bekannte Karten-IDs. Eine neue Karte = ein neuer Schlüssel hier + ein Eintrag
- *  in MAP_REGISTRY (plus das .tmj-Artefakt unter assets/maps/). */
-export type MapId = "harbor" | "test-map";
-
 /** Ein Registry-Eintrag bündelt Datei + Metadaten einer Karte. */
 export interface MapEntry {
-  /** Stabile ID (Schlüssel in MAP_REGISTRY). */
-  readonly id: MapId;
+  /** Stabile ID (= Schlüssel in MAP_REGISTRY). Bewusst `string`, nicht `MapId`:
+   *  `MapId` wird aus `MAP_REGISTRY` ABGELEITET (#428), eine Typisierung als `MapId`
+   *  hier wäre zirkulär (MapEntry → MapId → MAP_REGISTRY → MapEntry). */
+  readonly id: string;
   /** Sprechender Titel (Debug/HUD). */
   readonly title: string;
   /** Roher .tmj-Inhalt (Vite ?raw) – die „Datei" des Eintrags. */
@@ -53,8 +51,13 @@ export interface MapEntry {
   decodeGround?(map: TiledMap): number[];
 }
 
-/** Die zentrale Karten-Liste. */
-export const MAP_REGISTRY: Readonly<Record<MapId, MapEntry>> = {
+/** Roh-Daten der zentralen Karten-Liste – die EINE Quelle aller Karten. `satisfies`
+ *  prüft jeden Eintrag strukturell gegen `MapEntry`, bewahrt aber die literalen
+ *  Schlüssel, sodass `MapId` daraus ABGELEITET werden kann (#428). Nach außen wird
+ *  unten die einheitliche `Readonly<Record<MapId, MapEntry>>`-Sicht exportiert
+ *  (optionale Layer als `?:`-Felder, tief unveränderlich wie zuvor). Eine neue Karte
+ *  ist damit NUR ein Eintrag hier (plus das .tmj unter assets/maps/) – kein Union-Edit. */
+const MAP_REGISTRY_DATA = {
   harbor: {
     id: "harbor",
     title: "Hafen",
@@ -87,7 +90,17 @@ export const MAP_REGISTRY: Readonly<Record<MapId, MapEntry>> = {
     spawn: { x: 4, y: 3 },
     parse: parseTiledMap,
   },
-};
+} satisfies Record<string, MapEntry>;
+
+/** Bekannte Karten-IDs – aus `MAP_REGISTRY_DATA` ABGELEITET (#428), nicht separat als
+ *  Union gepflegt. Eine neue Karte = ein Eintrag dort; ihr Schlüssel ist damit
+ *  automatisch eine gültige `MapId`, ohne hier irgendetwas zu ändern. */
+export type MapId = keyof typeof MAP_REGISTRY_DATA;
+
+/** Die zentrale Karten-Liste als einheitliche, tief unveränderliche `MapEntry`-Sicht
+ *  (optionale Layer als `?:`-Felder). Identische Quelle wie `MAP_REGISTRY_DATA`,
+ *  nur einheitlich typisiert für die Loader. */
+export const MAP_REGISTRY: Readonly<Record<MapId, MapEntry>> = MAP_REGISTRY_DATA;
 
 /** Karten-Eintrag per ID holen; wirft mit klarer Meldung bei unbekannter ID –
  *  sonst lüde ein Loader ins Leere und die Szene bliebe leer. */

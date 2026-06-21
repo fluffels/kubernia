@@ -12,7 +12,7 @@
  *
  * Ausführen mit:  npm test
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, expectTypeOf } from "vitest";
 import { MAP_REGISTRY, getMapEntry, type MapId } from "../src/mapregistry";
 import { harborGeometry } from "../src/harbormap";
 import { collisionGrid } from "../src/tilemap";
@@ -71,5 +71,26 @@ describe("getMapEntry – Lookup & Negativfall", () => {
 
   it("wirft mit klarer Meldung bei unbekannter ID", () => {
     expect(() => getMapEntry("gibtsnicht")).toThrow(/unbekannte Map-ID|gibtsnicht/);
+  });
+});
+
+describe("Map-Registry – MapId ist aus der Registry abgeleitet (#428)", () => {
+  it("MapId deckt genau die registrierten Karten ab (Drift-Pin)", () => {
+    // Laufzeit-Pin: ändert sich die Registry, muss diese Liste mitgezogen werden.
+    expect(Object.keys(MAP_REGISTRY).sort()).toEqual(["harbor", "test-map"]);
+    // Typ-Pin: MapId ist exakt diese Schlüsselmenge. Wäre MapId wieder als feste Union
+    // hartcodiert und liefe sie von der Registry weg, bräche dieser Vergleich beim
+    // Typecheck (npm run typecheck prüft auch test/).
+    expectTypeOf<MapId>().toEqualTypeOf<"harbor" | "test-map">();
+  });
+
+  it("eine erfundene Karte ist ohne Union-Edit typbar – ein Registry-Eintrag genügt", () => {
+    // Kern der #428-Ableitung: eine um einen Eintrag erweiterte Registry liefert den
+    // neuen Schlüssel AUTOMATISCH als Teil ihrer Schlüssel-Union – ohne dass irgendwo
+    // ein Union-Type von Hand angefasst wird. Genau dieser Automatismus ist das Ziel
+    // („neue Karte = ein Eintrag, kein zusätzlicher Union-Edit").
+    const erweitert = { ...MAP_REGISTRY, "neue-insel": MAP_REGISTRY.harbor };
+    expectTypeOf<keyof typeof erweitert>().toEqualTypeOf<MapId | "neue-insel">();
+    expect(Object.keys(erweitert)).toContain("neue-insel");
   });
 });
