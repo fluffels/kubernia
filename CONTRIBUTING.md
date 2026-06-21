@@ -66,6 +66,22 @@ Damit nichts doppelt gepflegt wird, lebt jedes Thema an **genau einer** Stelle:
 - Sicht- oder spielbare Änderungen **im Browser** verifizieren, nicht nur „sollte gehen".
 - Der komplette Ablauf inkl. Branch-/Worktree-Workflow und Test-Disziplin: [AGENTS.md](AGENTS.md).
 
+## Pull Requests & Abhängigkeits-Updates (Policy)
+
+Dieses Repo ist **öffentlich – aber zur Sichtbarkeit für Kollegen**, nicht als offene Einladung für beliebige Fremdbeiträge. Aktiver Code kommt von der Maintainerin (+ KI-Agent); `main` ist seit #419 geschützt (Force-Push/Löschen blockiert). Für eingehende PRs gilt:
+
+### Dependabot-PRs (Bot, vertrauenswürdig – kein Fremd-Menschen-Code)
+
+1. **Grün (CI durch) → annehmen.** Patch/Minor-Updates zeitnah mergen, damit sie nicht liegenbleiben.
+2. **Rot (CI failt) → NICHT blind mergen.** Ein rotes Update bricht gerade etwas – erst Code anpassen (eigenes Ticket) oder zurückstellen. Gilt vor allem für **Major-Bumps**.
+3. **Gekoppelte Pakete zusammen behandeln.** Eslint + `@eslint/js`, vite + vitest, ein Tool + sein Plugin – einzeln gemergt entstehen inkonsistente Versionen (genau das passierte mit #405 eslint 9→10 grün / #409 `@eslint/js` 9→10 rot). Darum bündelt [`.github/dependabot.yml`](.github/dependabot.yml) die Dev-Toolchain in **Gruppen** (`eslint`, `vite-vitest`, `github-actions`) – inklusive ihrer Majors, sodass ein gekoppeltes Major-Upgrade als **ein** koordinierter PR kommt. Sonstige Majors (z.B. phaser) bleiben bewusst Einzel-PRs zum Einzel-Review. Grouping ist **kein** Auto-Merge: ein roter Gruppen-PR wird weiter manuell geprüft.
+
+> **Auto-Merge – erwogen, vorerst zurückgestellt (#422).** GitHub-natives Auto-Merge für grüne Patch/Minor-PRs setzt **Required Status Checks** auf `main` voraus (sonst mergt „Auto-Merge" sofort, ohne auf grün zu warten). Genau die würden aber den kubequest-Arbeitsablauf brechen, bei dem direkt auf `main` committet und `git push origin main` gemacht wird (kein PR) – Required Checks würden diesen Direkt-Push blockieren, weil die CI auf dem frischen Commit noch nicht gelaufen ist. Solange dieser Direkt-Push-Workflow gilt, bleibt das Mergen grüner Updates ein **bewusster, kurzer Handgriff**; das Grouping oben senkt das PR-Aufkommen bereits deutlich. **Wenn doch gewünscht:** `allow_auto_merge` am Repo aktivieren, in der Branch-Protection die CI-Jobs als Required Checks setzen **und** auf einen PR-basierten Merge-Workflow umstellen, dann via `dependabot/fetch-metadata` + `gh pr merge --auto` nur Patch/Minor automatisieren (Majors bleiben manuell).
+
+### PRs von fremden GitHub-Nutzern (Menschen)
+
+4. **Nie blind mergen.** Fremder Logik-Code wird **nur nach Review** der Maintainerin übernommen. Jeder darf forken und einen PR stellen – das ist zum Mitlesen erwünscht, aber Beiträge werden bewusst geprüft (public zur **Sichtbarkeit**, nicht als offene Beitrags-Einladung).
+
 ## Lizenz & Rechte an Beiträgen
 
 KubeQuest ist **proprietär**: © 2026 [fluffels](https://github.com/fluffels), **alle Rechte vorbehalten** (verbindlich ist die [`LICENSE`](LICENSE) im Repo-Root). Beiträge sind ausdrücklich willkommen – aber: mit dem Einreichen eines Pull Requests räumst du dem Rechteinhaber das nicht-exklusive, unbefristete Recht ein, deinen Beitrag unter dieser Lizenz zu nutzen und zu verbreiten; die Rechte am Gesamtwerk bleiben bei der Maintainerin. Forken/Klonen zur eigenständigen Weiterführung außerhalb von Beiträgen an dieses Repository ist nicht gestattet.

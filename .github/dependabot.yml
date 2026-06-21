@@ -5,6 +5,13 @@
 #
 # Stardew-Scope: mit wachsendem Dependency-Baum skaliert manuelle Pflege nicht.
 # Auto-Update-PRs halten Updates klein und häufig statt selten und riskant.
+#
+# Grouping-Strategie (#422): gekoppelte Pakete kommen in EINEM PR, damit keine
+# inkonsistenten Versionen entstehen (Auslöser: eslint 9→10 (#405, grün) und
+# @eslint/js 9→10 (#409, rot) kamen getrennt → ein halbes Major-Upgrade). Die
+# Dev-Toolchain wird darum nach Familien gebündelt; phaser & sonstige Majors
+# bleiben bewusst Einzel-PRs zum Einzel-Review. Umgangs-Policy mit den PRs:
+# siehe CONTRIBUTING.md › „Pull Requests & Abhängigkeits-Updates".
 version: 2
 updates:
   # --- npm-Pakete (phaser, vite, vitest, eslint, typescript …) ---
@@ -14,12 +21,45 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    # Minor + Patch in EINEN PR bündeln, damit es das Board nicht zuspammt.
-    # Major-Updates landen bewusst NICHT in der Gruppe -> Dependabot öffnet dafür
-    # eigene Einzel-PRs, weil ein vite-/vitest-Major geprüft werden will (#395).
-    # Security-Updates öffnet Dependabot ohnehin automatisch, unabhängig vom Plan.
+    # Reihenfolge ist load-bearing: ein Paket landet in der ERSTEN Gruppe, deren
+    # patterns passen. Darum die spezifischen Familien-Gruppen VOR die allgemeine
+    # minor/patch-Sammelgruppe. Familien laufen inkl. major, damit gekoppelte
+    # Majors (eslint-Familie, vite+vitest) als EIN koordinierter PR kommen statt
+    # verteilt grün/rot (#405/#409). Grouping ist KEIN Auto-Merge – ein roter
+    # (Major-)Gruppen-PR wird weiter manuell geprüft (CONTRIBUTING.md).
     groups:
+      # eslint-Toolchain (eslint, @eslint/js, typescript-eslint & Co.) als EIN PR.
+      eslint:
+        patterns:
+          - "eslint"
+          - "@eslint/*"
+          - "@eslint-community/*"
+          - "eslint-*"
+          - "typescript-eslint"
+          - "@typescript-eslint/*"
+        update-types:
+          - "major"
+          - "minor"
+          - "patch"
+      # Vite/Vitest gehören versionsmäßig zusammen → ein koordinierter PR. Majors
+      # brauchen Code-Anpassung (#395), bleiben aber gemeinsam und geprüft.
+      vite-vitest:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "vite-plugin-*"
+          - "vitest"
+          - "@vitest/*"
+        update-types:
+          - "major"
+          - "minor"
+          - "patch"
+      # Rest: Minor + Patch in EINEN PR, damit es das Board nicht zuspammt.
+      # Sonstige Majors (z.B. phaser, typescript) fallen hier RAUS und kommen als
+      # eigene Einzel-PRs zum bewussten Review (Policy: Major nie blind mergen).
       npm-minor-patch:
+        patterns:
+          - "*"
         update-types:
           - "minor"
           - "patch"
@@ -30,6 +70,8 @@ updates:
       - "dependencies"
 
   # --- GitHub-Actions in den Workflows aktuell halten (verwandt mit #398) ---
+  # Eine Gruppe über ALLE Action-Updates (auch major): Action-Bumps sind klein und
+  # gut als Batch zu reviewen, ein wöchentlicher Sammel-PR statt vieler Einzel-PRs.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -38,7 +80,10 @@ updates:
     open-pull-requests-limit: 5
     groups:
       github-actions:
+        patterns:
+          - "*"
         update-types:
+          - "major"
           - "minor"
           - "patch"
     commit-message:
