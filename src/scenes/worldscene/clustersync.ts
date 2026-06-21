@@ -59,7 +59,7 @@ export function syncCluster(scene: WorldSceneLike) {
   // Kaputte Deployments: Kisten rot einfärben
   const brokenMap: Record<string, boolean> = {};
   for (const d of Game.sim.deployments) brokenMap[d.name] = !!d.broken;
-  for (const info of Object.values(scene.podSlots) as any[]) {
+  for (const info of Object.values(scene.podSlots) as { crate: Phaser.GameObjects.Image; dep: string }[]) {
     info.crate.setTint(brokenMap[info.dep] ? 0xff8d8d : 0xffffff);
   }
 

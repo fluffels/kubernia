@@ -1,7 +1,7 @@
 import { Game } from "../game";
 import { SFX, MUSIC_THEMES } from "../sfx";
 import { resolveOverlayKey } from "../overlaykbd";
-import { part, $, sheetImgs } from "./shared";
+import { part, $, sheetImgs, type UINpc } from "./shared";
 
 export const overlayUI = part({
   /* ========== Event-Delegation ==========
@@ -80,7 +80,7 @@ export const overlayUI = part({
 
   // NPC-Porträt aus der PixelLab-Figur (Kopf/Schulter-Ausschnitt der 48x48-Textur),
   // mit Fallback aufs alte Kenney-Icon, falls die Figur (noch) keine tex hat.
-  drawNpcPortrait(canvas: HTMLCanvasElement, npc: any) {
+  drawNpcPortrait(canvas: HTMLCanvasElement, npc: UINpc) {
     const img = npc && npc.tex ? sheetImgs[npc.tex] : null;
     if (!img) { this.drawPortrait(canvas, npc.sprite); return; }
     const ctx = canvas.getContext("2d")!;

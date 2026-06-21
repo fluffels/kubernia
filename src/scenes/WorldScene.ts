@@ -2,11 +2,13 @@ import Phaser from "phaser";
 import { Game } from "../game";
 import { UI } from "../ui";
 import { KQContent } from "../content";
-import { npcSolidIndices, npcHitboxes, resolveMove, SHIP_KRALLE, type Hitbox } from "../world";
+import { npcSolidIndices, npcHitboxes, resolveMove, SHIP_KRALLE, type Hitbox, type Door } from "../world";
+import { type Spawn } from "../content/entities";
+import { type LayoutBox } from "../labellayout";
 import { keys, setWorldScene } from "../runtime";
 import { expandRect, cull, FrameSampler, type Cullable } from "../cull";
 import { getMapEntry } from "../mapregistry";
-import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText } from "./shared";
+import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, type SceneNpc } from "./shared";
 // Spiel-Systeme als eigene, fokussierte Module (WorldScene.ts-Split #393, analog
 // scenes.ts-Split #345): freie Funktionen mit der Szene als Parameter (`scene`).
 // WorldScene ist seither nur noch der schlanke Orchestrator (Aufbau in create(),
@@ -28,11 +30,99 @@ const ROCK_HIT_R = 6;
 const BUSH_HIT_R = 6;
 const LAMP_HIT: readonly [number, number] = [6, 10];   // Pfosten: schmale Rechteck-Hitbox (B×H)
 
+/* ── Laufzeit-Typen der WorldScene-Felder (#423): ersetzen die frühere
+ *    `[key: string]: any`-Index-Signatur durch echte Typen. ── */
+/** Gesetztes/gestreutes Deko-Element (Bäume/Möbel/Objekte) – renderStatics liest es. */
+interface DecoItem { x: number; y: number; sheet: string; idx?: number; obj?: boolean; scale?: number; }
+/** Festes Orts-Schild als Daten (gesammelt, bevor renderStatics es als 9-Slice baut). */
+interface LabelSpec { x: number; y: number; text: string; color?: string; depth?: number; }
+/** Dynamisches Cluster-Tag für Nähe-Aufdeckung + Entzerrung (#207). */
+interface DynLabel { obj: Phaser.GameObjects.Container; x: number; y: number; ty: number; }
+/** Pod-Kiste an einem Steg-Slot (Cluster→Welt-Sync). */
+interface PodSlot { slot: number; crate: Phaser.GameObjects.Image; band: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; dep: string; }
+/** Über die Wiese flatternder Schmetterling. */
+interface Butterfly { spr: Phaser.GameObjects.Image; ax: number; ay: number; ph: number; sp: number; }
+/** Spieler-Laufzeitzustand der Hauptkarte (wie `ScenePlayer`, plus `dir` für den Wurf). */
+interface PlayerPos { x: number; y: number; dir: number; moving: boolean; face: string; }
+/** Zufalls-Gefahren-Beutel der Hauptkarte (worldscene/events.ts schreibt/liest ihn).
+ *  Hieß früher `events` und überschrieb damit Phasers geerbten EventEmitter mit `any`
+ *  (genau das war die Warnung) – jetzt ein eigenes, getipptes Feld `hazards`. */
+interface Hazards {
+  nextPirate: number;
+  nextKraken: number;
+  nextStorm: number;
+  pirate: { dep: string; want: number; boat: Phaser.GameObjects.Container; until: number } | null;
+  kraken: { kraken: Phaser.GameObjects.Container; baseline: number; until: number } | null;
+  storm: { dep: string; until: number } | null;
+  stormFlash: Phaser.Time.TimerEvent | null;
+}
+
 export class WorldScene extends Phaser.Scene {
-  [key: string]: any;
-  // Das Spiel nutzt this.events als eigenen Event-/Timer-Beutel und überschreibt
-  // damit Phasers geerbten EventEmitter-Typ (reines Typ-Override, kein Verhalten).
-  events: any;
+  // Welt-Raster + Kollision
+  W!: number;
+  H!: number;
+  ground!: number[];
+  solidGrid!: Uint8Array;
+  softGrid!: Uint8Array;
+  softObstacles!: Hitbox[];
+  // Deko/Beschriftungen (von worldscene/terrain + scenery gefüllt)
+  decoList!: DecoItem[];
+  labels!: LabelSpec[];
+  signBoxes!: LayoutBox[];
+  dynLabels!: DynLabel[];
+  lampGlows!: Phaser.GameObjects.Image[];
+  // Hafen-Objekt-Felder aus terrain.ts (Stege/Schiff/Flaggenmasten/Leuchtturm/Plateau)
+  piers!: { x: number; name: string }[];
+  ship!: { x: number; y: number; w: number; h: number };
+  flagPoles!: { x: number; y: number }[];
+  lighthouse!: { x: number; y: number };
+  tfPlatform!: { x: number; y: number; w: number; h: number };
+  doors!: Door[];
+  npcSpawns!: Spawn[];
+  // Cluster→Welt-Sync
+  podSlots!: Record<string, PodSlot>;
+  slotUsed!: boolean[];
+  dynamic!: { barrelsSig: string; flagsSig: string; svcSig: string; depSig: string };
+  dynGroup!: Phaser.GameObjects.Group;
+  // statische Props/Effekte aus scenery.ts
+  shipFlag!: Phaser.GameObjects.Image;
+  lhBeam!: Phaser.GameObjects.Image;
+  lhLight!: Phaser.GameObjects.Image;
+  cannon!: Phaser.GameObjects.Text;
+  tfGroup!: Phaser.GameObjects.Container;
+  tfBuoys!: Phaser.GameObjects.Image[];
+  butterflies!: Butterfly[];
+  // Partikel + Wetter/Tag-Nacht
+  splash!: Phaser.GameObjects.Particles.ParticleEmitter;
+  dust!: Phaser.GameObjects.Particles.ParticleEmitter;
+  sparkle!: Phaser.GameObjects.Particles.ParticleEmitter;
+  rain!: Phaser.GameObjects.Particles.ParticleEmitter;
+  stormOverlay!: Phaser.GameObjects.Rectangle;
+  dayNight!: Phaser.GameObjects.Rectangle;
+  // Spieler + Haustier
+  playerPos!: PlayerPos;
+  playerShadow!: Phaser.GameObjects.Image;
+  playerSprite!: Phaser.GameObjects.Image;
+  petShadow!: Phaser.GameObjects.Image;
+  petSprite!: Phaser.GameObjects.Image;
+  petTrail!: { x: number; y: number }[];
+  bobT!: number;
+  stepAcc!: number;
+  npcs!: SceneNpc[];
+  // Performance/Culling (#82)
+  cullables!: Cullable[];
+  visibleCullables!: number;
+  lastCullX!: number;
+  lastCullY!: number;
+  fpsSampler!: FrameSampler;
+  debugPerf!: boolean;
+  stress!: number;
+  perfHud?: Phaser.GameObjects.Text;
+  // Warp-Gates (Anti-Pingpong) + Zufalls-Gefahren
+  archipelArmed!: boolean;
+  lighthouseArmed!: boolean;
+  warehouseArmed!: boolean;
+  hazards!: Hazards;
   constructor() { super("World"); }
 
   /* ============ Aufbau ============ */
@@ -53,7 +143,7 @@ export class WorldScene extends Phaser.Scene {
     this.podSlots = {};
     this.slotUsed = new Array(36).fill(false);
     this.dynamic = { barrelsSig: "", flagsSig: "", svcSig: "", depSig: "" };
-    this.events = { nextPirate: 0, pirate: null, nextKraken: 0, kraken: null, nextStorm: 0, storm: null, stormFlash: null };
+    this.hazards = { nextPirate: 0, pirate: null, nextKraken: 0, kraken: null, nextStorm: 0, storm: null, stormFlash: null };
     this.archipelArmed = false;   // #92: Archipel-Warp erst nach Tasten-Loslassen scharf (kein Pingpong)
     this.lighthouseArmed = false; // #111: Leuchtturm-Aufgang ebenso erst nach Tasten-Loslassen scharf
     this.warehouseArmed = false;  // #124: Lager-Anleger ebenso erst nach Tasten-Loslassen scharf
@@ -73,7 +163,7 @@ export class WorldScene extends Phaser.Scene {
     this.stress = Math.max(1, Math.min(20, Math.floor(Number(params.get("stress")) || 1)));
 
     // Pixel-Textur für Partikel
-    const g = this.make.graphics({ add: false } as any);
+    const g = this.make.graphics({}, false);
     g.fillStyle(0xffffff); g.fillRect(0, 0, 2, 2);
     g.generateTexture("px", 2, 2); g.destroy();
     this.makeFxTextures();   // weiche Schatten- & Glüh-Textur (#4)
@@ -226,7 +316,7 @@ export class WorldScene extends Phaser.Scene {
   makeFxTextures() {
     const steps = 10;
     // Schatten: konzentrische Ellipsen, außen fast transparent → innen dunkel
-    const sw = 48, sh = 24, sg = this.make.graphics({ add: false } as any);
+    const sw = 48, sh = 24, sg = this.make.graphics({}, false);
     for (let i = steps; i >= 1; i--) {
       const t = i / steps;
       sg.fillStyle(0x000000, 0.1);
@@ -234,7 +324,7 @@ export class WorldScene extends Phaser.Scene {
     }
     sg.generateTexture("shadowSoft", sw, sh); sg.destroy();
     // Glühen: konzentrische weiße Kreise mit weichem Rand
-    const gs = 40, gg = this.make.graphics({ add: false } as any);
+    const gs = 40, gg = this.make.graphics({}, false);
     for (let i = steps; i >= 1; i--) {
       const t = i / steps;
       gg.fillStyle(0xffffff, 0.09);
@@ -318,7 +408,7 @@ export class WorldScene extends Phaser.Scene {
 
   nearestNpc() {
     const pl = this.playerPos;
-    let best = null, bestD = 1.7 * T;
+    let best: SceneNpc | null = null, bestD = 1.7 * T;
     for (const n of this.npcs) {
       const d = Math.hypot(n.x * T + 8 - pl.x, n.y * T + 8 - pl.y);
       if (d < bestD) { bestD = d; best = n; }
@@ -410,7 +500,7 @@ export class WorldScene extends Phaser.Scene {
     const item = Game.state.activePet ? KQContent.SHOP.find(s => s.id === Game.state.activePet) : undefined;
     if (item) {
       const pos = this.petTrail[Math.max(0, this.petTrail.length - 16)] || pl;
-      this.petSprite.setVisible(true).setTexture(item.tex).setScale(0.4)
+      this.petSprite.setVisible(true).setTexture(item.tex!).setScale(0.4)
         .setPosition(pos.x, pos.y - 2 + Math.sin(time / 180) * 1.5)
         .setFlipX(pl.x < pos.x).setDepth(pos.y + 7);
       this.petShadow.setVisible(true).setPosition(pos.x, pos.y + 6);

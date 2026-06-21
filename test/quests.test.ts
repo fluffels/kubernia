@@ -29,7 +29,11 @@ function resolvePlaceholder(cmd: string, sim: KQSim) {
   return cmd;
 }
 
-function runTask(sim: KQSim, task: any, label: string) {
+/** Gemeinsamer Nenner aus Teach-Befehl, Terminal-Aufgabe und Drill-Aufgabe –
+ *  genau die Felder, die runTask braucht (check ist nur bei Quest-Aufgaben da). */
+type RunnableTask = { accept: RegExp[]; solution: string; check?: (sim: KQSim) => unknown };
+
+function runTask(sim: KQSim, task: RunnableTask, label: string) {
   const cmd = resolvePlaceholder(task.solution, sim);
   const norm = cmd.trim().replace(/\s+/g, " ");
   const result = sim.exec(cmd);

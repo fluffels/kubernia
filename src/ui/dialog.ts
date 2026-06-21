@@ -2,6 +2,7 @@ import { Game } from "../game";
 import { KQContent } from "../content";
 import { SFX } from "../sfx";
 import { dialogueNav } from "../overlaykbd";
+import type { ChoiceStep, ChoiceOption } from "../types";
 import { part, $, NPCS, shuffled } from "./shared";
 
 export const dialogUI = part({
@@ -54,7 +55,7 @@ export const dialogUI = part({
     }
   },
 
-  showChoice(step: any, onDone: () => void) {
+  showChoice(step: ChoiceStep, onDone: () => void) {
     const npc = NPCS[step.npc];
     this.dialogue = { npcId: step.npc, lines: [], idx: 0, onDone, choice: step };
     $("dlg-name").textContent = npc.name + " · " + npc.title;
@@ -64,7 +65,7 @@ export const dialogUI = part({
     $("dlg-next").classList.remove("hidden");
     const box = $("dlg-choices");
     box.innerHTML = "";
-    for (const opt of shuffled<any>(step.options)) {
+    for (const opt of shuffled<ChoiceOption>(step.options)) {
       const btn = document.createElement("button");
       btn.innerHTML = KQContent.applyGlossary(opt.t);
       btn.onclick = () => this.answerChoice(step, opt, btn);
@@ -74,7 +75,7 @@ export const dialogUI = part({
     this._initChoiceNav();
   },
 
-  answerChoice(step: any, opt: any, btn: HTMLButtonElement) {
+  answerChoice(step: ChoiceStep, opt: ChoiceOption, btn: HTMLButtonElement) {
     const d = this.dialogue;
     if (!d || d.answered) return;
     d.answered = true;
@@ -84,7 +85,9 @@ export const dialogUI = part({
       b.classList.remove("sel");
       if (b === btn) b.classList.add(opt.ok ? "correct" : "wrong");
     });
-    Game.choiceResult(step.reviewId, opt.ok);
+    // reviewId ist optional am Choice-Schritt; choiceResult behandelt einen leeren
+    // String identisch zu „keine Karte" (if (itemId)), daher ist "" hier verhaltensgleich.
+    Game.choiceResult(step.reviewId ?? "", opt.ok);
     if (opt.ok) this.reward(12, 6);
     else SFX.wrong();
     $("dlg-text").innerHTML = (opt.ok ? "✅ " : "❌ ") + KQContent.applyGlossary(opt.reply);

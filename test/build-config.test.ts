@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import type { HmrContext } from "vite";
 import viteConfig, { devNoFullReload, CODE_CHANGED_EVENT } from "../vite.config";
 
 /* Ticket #58: Der Build hat ZWEI getrennte Wege, die nicht wieder zusammenfallen
@@ -92,10 +93,20 @@ describe("Geheimhaltung #331/#325: Panel-Flag bleibt in öffentlichen Builds aus
 describe("Dev-Server #301: kein Auto-Full-Reload bei Code-Änderungen", () => {
   // Mini-HotUpdate-Kontext mit aufgezeichneten ws.send-Aufrufen.
   const runHotUpdate = (file: string) => {
-    const sent: any[] = [];
+    const sent: unknown[] = [];
     const plugin = devNoFullReload();
-    const ctx = { file, server: { ws: { send: (m: any) => sent.push(m) } } } as any;
-    const result = (plugin.handleHotUpdate as any)(ctx);
+    // Nur die vom Plugin genutzten Felder (file + server.ws.send) nachbilden; der
+    // Rest des echten HmrContext/ViteDevServer ist hier irrelevant, daher ein
+    // einmaliger Cast über unknown auf den echten Vite-Typ.
+    const ctx = {
+      file,
+      server: { ws: { send: (m: unknown) => sent.push(m) } },
+    } as unknown as HmrContext;
+    // handleHotUpdate ist ein ObjectHook (Funktion ODER { handler }); hier die
+    // Funktionsform herausziehen und aufrufen.
+    const hook = plugin.handleHotUpdate;
+    const fn = typeof hook === "function" ? hook : hook?.handler;
+    const result = fn?.call(undefined as never, ctx);
     return { result, sent };
   };
 

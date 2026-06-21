@@ -15,9 +15,11 @@ export const saveUI = part({
     this.toast("💾 Spielstand als Datei gesichert!");
   },
 
-  importSave(ev: any) {
-    const file = ev.target.files[0];
-    ev.target.value = "";
+  importSave(ev: Event) {
+    // Das change-Event kommt vom #save-import-Datei-Input (verdrahtet in overlay.ts).
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {

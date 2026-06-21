@@ -4,9 +4,52 @@
 import Phaser from "phaser";
 import { KQContent } from "../content";
 import { type Spawn, type EntityObject } from "../content/entities";
+import { type Hitbox } from "../world";
 import { ATLAS_CHARS, CELL_W, CELL_H, GLYPH_W, GLYPH_H, glyphMatrix, sanitize } from "../pixelfont";
 
 const T = 16;
+
+/** Laufzeit-Referenz eines gerenderten NPC (#423): Schatten/Tween bleiben anonym,
+ *  gemerkt werden nur Identität + Standplatz + die schaltbaren Sprites. Gemeinsame
+ *  Form für Welt- und Insel-Szenen (Rückgabe von `spawnIslandNpc`). */
+export interface SceneNpc {
+  id: string;
+  x: number;
+  y: number;
+  sprite: Phaser.GameObjects.Image;
+  marker: Phaser.GameObjects.BitmapText;
+}
+
+/** Spieler-Laufzeitzustand der einfachen Szenen (Insel/Innenraum): Pixel-Position,
+ *  Blickrichtung, ob gerade gelaufen wird. Die WorldScene hat eine eigene, um `dir`
+ *  erweiterte Variante (`playerPos`). */
+export interface ScenePlayer {
+  x: number;
+  y: number;
+  face: string;
+  moving: boolean;
+}
+
+/** Gemeinsame Basis der drei Nachbar-Insel-Szenen (Archipel/Leuchtturm/Lager, #423):
+ *  ersetzt die früheren `[key: string]: any`-Index-Signaturen durch echte, getippte
+ *  Laufzeit-Felder. Bewusst nur die FELDER zentral – die Methoden (renderGround/
+ *  scatterDecor/nearestNpc/…) definiert jede Szene weiter selbst, weil sie sich pro
+ *  Insel unterscheiden. So erlaubt der Typ nur noch, was die Szenen wirklich anhängen. */
+export abstract class IslandScene extends Phaser.Scene {
+  W!: number;
+  H!: number;
+  ground!: number[];
+  solid!: Uint8Array;
+  softGrid!: Uint8Array;
+  softObstacles!: Hitbox[];
+  npcs!: SceneNpc[];
+  pl!: ScenePlayer;
+  bobT!: number;
+  pShadow!: Phaser.GameObjects.Ellipse;
+  pSprite!: Phaser.GameObjects.Image;
+  ePrev!: boolean;
+  returnArmed!: boolean;
+}
 
 /* SFX (Mini-Synthesizer) liegt jetzt in sfx.ts und wird oben importiert. */
 
@@ -67,7 +110,7 @@ function buildPixelFont(scene: Phaser.Scene) {
 /** Pixel-Münz-Icon für schwebende Belohnungs-Texte (ersetzt das 🪙-Emoji, #188). */
 function buildCoinIcon(scene: Phaser.Scene) {
   if (scene.textures.exists(COIN_TEX)) return;
-  const g = scene.make.graphics({ add: false } as any);
+  const g = scene.make.graphics({}, false);
   g.fillStyle(0x8a5a12, 1); g.fillCircle(5, 5, 5);         // dunkler Rand
   g.fillStyle(0xf2b937, 1); g.fillCircle(5, 5, 4);         // Gold-Körper
   g.fillStyle(0xffe08a, 1); g.fillCircle(3.6, 3.6, 1.3);   // Glanzpunkt
@@ -102,7 +145,7 @@ function pixelText(
  *  ihn). Identisches Render-Schema für alle drei Insel-Szenen – seit #349 datengesteuert
  *  über `npcSpawnsForMap` (eine Schleife statt drei kopierter Blöcke), damit ein neuer
  *  Insel-NPC nur ein JSON-Eintrag in entities.json ist, kein Code-Edit. */
-function spawnIslandNpc(scene: Phaser.Scene, s: Spawn) {
+function spawnIslandNpc(scene: Phaser.Scene, s: Spawn): SceneNpc {
   const meta = KQContent.NPCS[s.id as keyof typeof KQContent.NPCS];
   const px = s.x * T + 8, baseY = s.y * T + 15;
   scene.add.ellipse(px, baseY, 12, 5, 0x000000, 0.26).setDepth(baseY - 1);

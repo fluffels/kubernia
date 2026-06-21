@@ -22,6 +22,11 @@ export type GameSelf = {
   sim: Sim;
   incomeAcc: number;
   offlineEarnings: number;
+  // Bewusster ThisType-Escape-Hatch (#356, analog UISelf): die quer über die Bündel
+  // aufgerufenen Methoden lassen sich hier nicht typisieren, ohne den this-Typ zirkulär
+  // zu machen (die Bündel definieren die Methoden ja erst). `unknown` würde sie
+  // unaufrufbar machen und die Game-API-Typisierung brechen – darum ein begründetes any.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
 };
 /** Typisiert ein Methodenbündel so, dass this = GameSelf ist, ohne die Methoden-Signaturen

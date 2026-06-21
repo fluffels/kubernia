@@ -10,6 +10,7 @@ import { ARCHIPEL_NPC } from "../src/archipel";
 import { LIGHTHOUSE_NPC } from "../src/lighthouse";
 import { WAREHOUSE_NPC } from "../src/warehouse";
 import { Sim as KQSim } from "../src/sim";
+import type { TeachStep } from "../src/types";
 
 /** Findet Befehls-Karten ohne nicht-leere Begründung (`explain`, #233) – sonst
  *  bliebe das Spaced-Repetition-Feedback bei „nur falsch ohne Warum". Als Helfer,
@@ -132,14 +133,16 @@ test("docker build: -t UND --tag gelten gleichwertig in Teach-Schritt, Karte & D
   // 3) Teach-Schritt t-build in docker-build-image (erster Tipp-Ort) akzeptiert beide Formen
   const buildQuest = KQContent.QUESTS.find(q => q.id === "docker-build-image");
   assert.ok(buildQuest, "docker-build-image nicht gefunden");
-  const teach = (buildQuest!.steps as any[]).find(s => s.type === "teach" && s.cmd?.id === "t-build");
+  const teach = buildQuest!.steps.find(
+    (s): s is TeachStep => s.type === "teach" && s.cmd.id === "t-build",
+  );
   assert.ok(teach, "Teach-Schritt t-build nicht gefunden");
   const teachOk = (s: string) => teach.cmd.accept.some((re: RegExp) => re.test(norm(s)));
   assert.ok(teachOk("docker build -t hafenwache:1.0 ."), "Teach: -t muss gelten");
   assert.ok(teachOk("docker build --tag hafenwache:1.0 ."), "Teach: --tag muss GENAUSO gelten");
 
   // 4) Neue Entwirr-Karte existiert, ist wohlgeformt und nennt alle drei 'tag'-Bedeutungen
-  const flag = KQContent.CRAB_QUIZ.find((c: any) => c.id === "q-flag-build-t");
+  const flag = KQContent.CRAB_QUIZ.find((c) => c.id === "q-flag-build-t");
   assert.ok(flag, "Entwirr-Karte q-flag-build-t fehlt");
   assert.ok(Array.isArray(flag!.options) && flag!.options.length >= 2, "q-flag-build-t: zu wenige Optionen");
   assert.ok(flag!.correct >= 0 && flag!.correct < flag!.options.length, "q-flag-build-t: correct-Index außerhalb");
@@ -183,7 +186,7 @@ test("Flag-Formen durchgängig: wo Kurz- UND Langform echtes CLI sind, akzeptier
     // mehrere Ziehungen, damit zufällige Namen/Tags abgedeckt sind
     for (let i = 0; i < 8; i++) { const t = make(new KQSim({})); items.push({ label: "Drill " + id, solution: t.solution, accept: t.accept }); }
   }
-  for (const quest of KQContent.QUESTS) for (const step of quest.steps as any[]) {
+  for (const quest of KQContent.QUESTS) for (const step of quest.steps) {
     if (step.type === "teach") items.push({ label: `${quest.id}/${step.cmd.id}`, solution: step.cmd.solution, accept: step.cmd.accept });
     if (step.type === "terminal") for (const t of step.tasks) items.push({ label: `${quest.id}/${t.id}`, solution: t.solution, accept: t.accept });
   }
@@ -261,7 +264,7 @@ test("kein accept-Muster nutzt das Superset-anfällige `.*` (Regressionswächter
   for (const card of KQContent.CMD_CARDS) pruefe("CMD " + card.id, card.accept);
   for (const [id, make] of Object.entries(KQContent.DRILLS)) pruefe("Drill " + id, make(new KQSim({})).accept);
   for (const quest of KQContent.QUESTS) {
-    for (const step of quest.steps as any[]) {
+    for (const step of quest.steps) {
       if (step.type === "teach") pruefe(`${quest.id}/${step.cmd.id}`, step.cmd.accept);
       if (step.type === "terminal") for (const t of step.tasks) pruefe(`${quest.id}/${t.id}`, t.accept);
     }
@@ -299,7 +302,7 @@ test("Quests: NPCs existieren, Choices haben genau richtige Antworten, reviewIds
         assert.ok(KQContent.NPCS[step.npc as keyof typeof KQContent.NPCS], quest.id + ": unbekannter NPC " + step.npc);
       }
       if (step.type === "choice") {
-        assert.equal(step.options.filter((o: any) => o.ok).length, 1, quest.id + ": Choice braucht genau eine richtige Antwort");
+        assert.equal(step.options.filter((o) => o.ok).length, 1, quest.id + ": Choice braucht genau eine richtige Antwort");
         if (step.reviewId) {
           assert.ok(KQContent.CRAB_QUIZ.some(q => q.id === step.reviewId), quest.id + ": unbekannte reviewId " + step.reviewId);
         }

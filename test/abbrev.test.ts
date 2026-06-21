@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import { ABBREVS, findAbbrevByShort, lockedAbbrevInInput, abbrevLockHint, flagNearMiss, flagNearMissHint, longFormsInInput } from "../src/content/abbrev";
 import { KQContent } from "../src/content";
 import { Sim as KQSim } from "../src/sim";
+import type { QuestStep } from "../src/types";
 
 /** Alle accept-Regex-Quellen des Spiel-Contents einsammeln: Befehlskarten,
  *  Drills (instanziiert – die Alternationen stehen unabhängig von Zufallsnamen
@@ -21,7 +22,7 @@ function allAcceptSources(): string[] {
   const out: string[] = [];
   for (const c of KQContent.CMD_CARDS) for (const re of c.accept) out.push(re.source);
   for (const make of Object.values(KQContent.DRILLS)) for (const re of make(new KQSim({})).accept) out.push(re.source);
-  for (const quest of KQContent.QUESTS) for (const step of quest.steps as any[]) {
+  for (const quest of KQContent.QUESTS) for (const step of quest.steps) {
     if (step.type === "teach") for (const re of step.cmd.accept) out.push(re.source);
     if (step.type === "terminal") for (const t of step.tasks) for (const re of t.accept) out.push(re.source);
   }
@@ -195,7 +196,7 @@ describe("unlockAbbrev-Lernpfad: jede Abkürzung ist freischaltbar – Quest-Sch
   function allUnlockIds(): Set<string> {
     const ids = new Set<string>();
     for (const quest of KQContent.QUESTS) {
-      for (const step of quest.steps as any[]) {
+      for (const step of quest.steps) {
         if (step.unlockAbbrev) ids.add(step.unlockAbbrev);
       }
     }
@@ -215,7 +216,7 @@ describe("unlockAbbrev-Lernpfad: jede Abkürzung ist freischaltbar – Quest-Sch
     const validIds = new Set(ABBREVS.map(a => a.id));
     const ungültig: string[] = [];
     for (const quest of KQContent.QUESTS) {
-      for (const step of quest.steps as any[]) {
+      for (const step of quest.steps) {
         if (step.unlockAbbrev && !validIds.has(step.unlockAbbrev)) {
           ungültig.push(`Quest ${quest.id}: unlockAbbrev="${step.unlockAbbrev}" nicht im Katalog`);
         }
@@ -257,7 +258,7 @@ describe("#366: Quest-/Lehrtexte nehmen keine gesperrten Abkürzungen vorweg", (
     const isUnlocked = (id: string) => unlocked.has(id);
     const verstoesse: string[] = [];
     for (const quest of KQContent.QUESTS) {
-      for (const step of quest.steps as any[]) {
+      for (const step of quest.steps) {
         const tasks = step.type === "teach" ? [step.cmd]
                     : step.type === "terminal" ? step.tasks
                     : [];
@@ -279,7 +280,7 @@ describe("#366: Quest-/Lehrtexte nehmen keine gesperrten Abkürzungen vorweg", (
     const unlockedThrough: Set<string>[] = [];
     const acc = new Set<string>();
     for (const quest of quests) {
-      for (const step of quest.steps as any[]) if (step.unlockAbbrev) acc.add(step.unlockAbbrev);
+      for (const step of quest.steps) if (step.unlockAbbrev) acc.add(step.unlockAbbrev);
       unlockedThrough.push(new Set(acc));
     }
     const codeSnippets = (text: string): string[] => {
@@ -291,12 +292,12 @@ describe("#366: Quest-/Lehrtexte nehmen keine gesperrten Abkürzungen vorweg", (
       }
       return out;
     };
-    const stepTexts = (step: any): string[] => {
+    const stepTexts = (step: QuestStep): string[] => {
       switch (step.type) {
         case "dialog": return step.lines;
-        case "choice": return [step.q, ...step.options.flatMap((o: any) => [o.t, o.reply])];
+        case "choice": return [step.q, ...step.options.flatMap((o) => [o.t, o.reply])];
         case "teach": return [step.cmd.intro, step.cmd.text, step.cmd.hint];
-        case "terminal": return step.tasks.flatMap((t: any) => [t.text, t.hint]);
+        case "terminal": return step.tasks.flatMap((t) => [t.text, t.hint]);
         case "drill": return [step.intro];
         default: return [];
       }
@@ -304,7 +305,7 @@ describe("#366: Quest-/Lehrtexte nehmen keine gesperrten Abkürzungen vorweg", (
     const verstoesse: string[] = [];
     quests.forEach((quest, qi) => {
       const frei = unlockedThrough[qi];
-      for (const step of quest.steps as any[]) {
+      for (const step of quest.steps) {
         for (const text of stepTexts(step)) {
           for (const snippet of codeSnippets(text)) {
             const hit = lockedAbbrevInInput(snippet, (id) => frei.has(id));

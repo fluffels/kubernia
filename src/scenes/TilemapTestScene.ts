@@ -11,7 +11,8 @@ import { pixelText } from "./shared";
  *  Zweite Karte ohne neuen Karten-Code – Akzeptanzkriterium für #196/#57
  *  (buildMap() ist entfernt; WorldScene lädt immer aus harbor.tmj). */
 export class TilemapTestScene extends Phaser.Scene {
-  [key: string]: any;
+  /** Row-major Kollisionsraster der Testkarte (Demo-Beleg #191, hier nur gesetzt). */
+  solidGrid!: boolean[];
   constructor() { super("MapTest"); }
 
   create() {

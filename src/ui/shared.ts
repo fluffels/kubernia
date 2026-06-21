@@ -5,7 +5,12 @@
 import { KQContent } from "../content";
 import { KQAssets } from "../assets-data";
 
-/** this-Typ der UI-Methodenbündel: permissiv, da Methoden quer über Bündel auf this.* zugreifen. */
+/** this-Typ der UI-Methodenbündel: permissiv, da Methoden quer über Bündel auf this.* zugreifen.
+ *  Bewusster ThisType-Escape-Hatch (analog `GameSelf` in game/shared.ts): die Index-Signatur
+ *  lässt sich hier NICHT durch `unknown` ersetzen, weil sonst die quer aufgerufenen Methoden
+ *  (this.foo()) nicht mehr aufrufbar wären (zirkulärer this-Typ). Darum hier – und nur hier –
+ *  ein begründetes `any`. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type UISelf = Record<string, any>;
 /** Typisiert ein Methodenbündel so, dass this = UISelf ist, ohne die Methoden-Signaturen zu verlieren. */
 export function part<T>(b: T & ThisType<UISelf>): T { return b; }
@@ -16,8 +21,26 @@ const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElemen
 
 // NPC-/Smalltalk-Tabellen werden per NPC-Id (Laufzeit-String) nachgeschlagen –
 // als String-indizierbare Maps typisiert, statt jeden Zugriff einzeln zu casten.
-const NPCS = KQContent.NPCS as Record<string, { name: string; title: string; sprite: number; tex?: string }>;
+/** NPC-Stammdaten, wie sie die Porträt-/Dialog-Schicht braucht (Name, Titel, Sprite,
+ *  optionale PixelLab-Textur). Eigener UI-Wert-Typ, damit Porträt-Helfer nicht `any` brauchen. */
+export type UINpc = { name: string; title: string; sprite: number; tex?: string };
+const NPCS = KQContent.NPCS as Record<string, UINpc>;
 const SMALLTALK = KQContent.SMALLTALK as Record<string, string[]>;
+
+/** Shop-Eintrag, wie ihn die Shop-/Vorlade-Schicht liest. Die Quell-Daten (content/progression.ts)
+ *  sind ein heterogenes Objekt-Literal; dieser Typ macht die je nach Item-Art optionalen Felder
+ *  (sprite/tex/color) explizit, statt jeden Zugriff per `any` zu öffnen. */
+export interface UIShopItem {
+  id: string;
+  icon: string;
+  name: string;
+  price: number;
+  type: string;
+  desc: string;
+  sprite?: number;
+  tex?: string;
+  color?: number;
+}
 
 function esc(s: unknown) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -46,7 +69,7 @@ for (const key of ["town", "dungeon"]) {
   sheetImgs[key] = img;
 }
 // PixelLab-NPC-Figuren fürs Dialog-Porträt vorladen (Kopf/Schulter-Ausschnitt)
-for (const npc of Object.values(KQContent.NPCS) as any[]) {
+for (const npc of Object.values(NPCS)) {
   if (npc.tex && assets[npc.tex] && !sheetImgs[npc.tex]) {
     const img = new Image();
     img.src = assets[npc.tex];
@@ -54,7 +77,7 @@ for (const npc of Object.values(KQContent.NPCS) as any[]) {
   }
 }
 // PixelLab-Shop-Grafiken (Haustiere) fürs Shop-Icon vorladen
-for (const item of KQContent.SHOP as any[]) {
+for (const item of KQContent.SHOP as UIShopItem[]) {
   if (item.tex && assets[item.tex] && !sheetImgs[item.tex]) {
     const img = new Image();
     img.src = assets[item.tex];

@@ -6,7 +6,7 @@ import { npcSpawnsForMap, objectsForMap } from "../content/entities";
 import { WATER as A_WATER, warpAt } from "../archipel";
 import { DOCK as WH_DOCK, buildWarehouse, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL, WAREHOUSE_QUEST_TRIGGER } from "../warehouse";
 import { keys, setWorldScene, setInteriorOpen, type WorldSceneRef } from "../runtime";
-import { T, FOAM, WANG, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText } from "./shared";
+import { T, FOAM, WANG, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText, IslandScene, type SceneNpc } from "./shared";
 
 /* ===== WarehouseScene (#124) – Lagerhallen-Viertel (Hafenkai) =====
  * Eigener begehbarer Hafenkai, den man von Port Kubernia über den Holz-Anleger am
@@ -22,8 +22,7 @@ import { T, FOAM, WANG, pixelText, spawnIslandNpc, spawnIslandObject, buildSign,
 const HIT_R = 6;
 const CRATE_HIT = 12;   // Kantenlänge der (mittig eingerückten) Kisten-Rechteck-Hitbox
 
-export class WarehouseScene extends Phaser.Scene {
-  [key: string]: any;
+export class WarehouseScene extends IslandScene {
   constructor() { super("Warehouse"); }
 
   create() {
@@ -173,7 +172,7 @@ export class WarehouseScene extends Phaser.Scene {
 
   nearestNpc() {
     const pl = this.pl;
-    let best = null, bestD = 1.7 * T;
+    let best: SceneNpc | null = null, bestD = 1.7 * T;
     for (const n of this.npcs) {
       const d = Math.hypot(n.x * T + 8 - pl.x, n.y * T + 8 - pl.y);
       if (d < bestD) { bestD = d; best = n; }

@@ -26,20 +26,20 @@ export function scheduleEvents(scene: WorldSceneLike, delaySec?: number) {
   // Spiel-Feel (#71): Cozy streckt die Wartezeit, "Aus" schiebt sie auf
   // Infinity (next* wird nie erreicht → keine Zufalls-Events).
   const scale = Game.eventProfile().spawnScale;
-  scene.events.nextPirate = now + (delaySec || Phaser.Math.Between(200, 360)) * scale;
-  scene.events.nextKraken = now + (delaySec ? delaySec + 90 : Phaser.Math.Between(300, 500)) * scale;
-  scene.events.nextStorm = now + (delaySec ? delaySec + 150 : Phaser.Math.Between(260, 430)) * scale;
+  scene.hazards.nextPirate = now + (delaySec || Phaser.Math.Between(200, 360)) * scale;
+  scene.hazards.nextKraken = now + (delaySec ? delaySec + 90 : Phaser.Math.Between(300, 500)) * scale;
+  scene.hazards.nextStorm = now + (delaySec ? delaySec + 150 : Phaser.Math.Between(260, 430)) * scale;
 }
 
 export function anyEventActive(scene: WorldSceneLike) {
-  return !!(scene.events.pirate || scene.events.kraken || scene.events.storm);
+  return !!(scene.hazards.pirate || scene.hazards.kraken || scene.hazards.storm);
 }
 
 /* ---------- Sturm: ein Deployment geht kaputt, du reparierst es ---------- */
 export function tryStartStorm(scene: WorldSceneLike) {
   if (!Game.eventProfile().enabled || anyEventActive(scene) || !Game.state.completedQuests.includes("k8s-node-capacity")) return;
   const victims = Game.sim.deployments.filter(d => !d.broken);
-  if (victims.length === 0 || UI.blocking()) { scene.events.nextStorm += 25; return; }
+  if (victims.length === 0 || UI.blocking()) { scene.hazards.nextStorm += 25; return; }
   const dep = Phaser.Utils.Array.GetRandom(victims);
   const kind = Math.random() < 0.5 ? "imagepull" : "crashloop";
   let hintCmd;
@@ -60,21 +60,21 @@ export function tryStartStorm(scene: WorldSceneLike) {
   SFX.thunder();
   scene.cameras.main.flash(180, 200, 210, 255);
   scene.cameras.main.shake(280, 0.004);
-  scene.events.stormFlash = scene.time.addEvent({ delay: 5200, loop: true, callback: () => {
+  scene.hazards.stormFlash = scene.time.addEvent({ delay: 5200, loop: true, callback: () => {
     scene.cameras.main.flash(140, 200, 210, 255);
     SFX.thunder();
   }});
 
   const deadline = Math.round(240 * Game.eventProfile().deadlineScale);
-  scene.events.storm = { dep: dep.name, until: scene.time.now / 1000 + deadline };
+  scene.hazards.storm = { dep: dep.name, until: scene.time.now / 1000 + deadline };
   UI.showAlarm("⛈️ <b>STURMSCHADEN!</b> Das Deployment <b>" + dep.name + "</b> ist ausgefallen – und verdient nichts mehr! " + hintCmd, deadline);
 }
 
 export function resolveStorm(scene: WorldSceneLike, success: boolean) {
-  const ev = scene.events.storm;
+  const ev = scene.hazards.storm;
   if (!ev) return;
-  scene.events.storm = null;
-  if (scene.events.stormFlash) { scene.events.stormFlash.remove(); scene.events.stormFlash = null; }
+  scene.hazards.storm = null;
+  if (scene.hazards.stormFlash) { scene.hazards.stormFlash.remove(); scene.hazards.stormFlash = null; }
   scene.rain.stop();
   scene.stormOverlay.setVisible(false);
   UI.hideAlarm();
@@ -91,7 +91,7 @@ export function resolveStorm(scene: WorldSceneLike, success: boolean) {
 export function tryStartPirate(scene: WorldSceneLike) {
   if (!Game.eventProfile().enabled || anyEventActive(scene) || !Game.state.completedQuests.includes("k8s-self-healing")) return;
   const victims = Game.sim.deployments.filter(d => d.replicas >= 2);
-  if (victims.length === 0 || UI.blocking()) { scene.events.nextPirate += 20; return; }
+  if (victims.length === 0 || UI.blocking()) { scene.hazards.nextPirate += 20; return; }
   const dep = Phaser.Utils.Array.GetRandom(victims);
   const want = dep.replicas;
   const steal = Math.max(1, Math.floor(dep.replicas / 2));
@@ -112,16 +112,16 @@ export function tryStartPirate(scene: WorldSceneLike) {
   SFX.alarm();
   scene.cameras.main.shake(250, 0.004);
   const deadline = Math.round(180 * Game.eventProfile().deadlineScale);
-  scene.events.pirate = { dep: dep.name, want, boat, until: scene.time.now / 1000 + deadline };
+  scene.hazards.pirate = { dep: dep.name, want, boat, until: scene.time.now / 1000 + deadline };
   UI.showAlarm("🏴‍☠️ <b>PIRATEN-ÜBERFALL!</b> Sie haben Kisten von <b>" + dep.name + "</b> geklaut (nur noch " + dep.replicas + "/" + want + ")! " +
     "Skaliere zurück auf <b>" + want + "</b>: <code>kubectl scale deployment " + dep.name + " --replicas=" + want + "</code>", deadline);
 }
 
 export function resolvePirate(scene: WorldSceneLike, success: boolean) {
-  const ev = scene.events.pirate;
+  const ev = scene.hazards.pirate;
   if (!ev) return;
   scene.tweens.add({ targets: ev.boat, x: scene.W * T + 40, duration: 1800, ease: "Sine.in", onComplete: () => ev.boat.destroy() });
-  scene.events.pirate = null;
+  scene.hazards.pirate = null;
   UI.hideAlarm();
   if (success) {
     const bounty = Math.round(40 * (Game.hasUpgrade("kanone") ? 1.5 : 1));
@@ -137,7 +137,7 @@ export function resolvePirate(scene: WorldSceneLike, success: boolean) {
 
 export function tryStartKraken(scene: WorldSceneLike) {
   if (!Game.eventProfile().enabled || anyEventActive(scene) || !Game.state.completedQuests.includes("kraken-boss")) return;
-  if (UI.blocking()) { scene.events.nextKraken += 20; return; }
+  if (UI.blocking()) { scene.hazards.nextKraken += 20; return; }
   const baseline = Game.sim.secrets.length;
 
   const kx = 26 * T, ky = 30 * T;
@@ -152,16 +152,16 @@ export function tryStartKraken(scene: WorldSceneLike) {
   SFX.alarm();
   scene.cameras.main.shake(250, 0.004);
   const deadline = Math.round(120 * Game.eventProfile().deadlineScale);
-  scene.events.kraken = { kraken, baseline, until: scene.time.now / 1000 + deadline };
+  scene.hazards.kraken = { kraken, baseline, until: scene.time.now / 1000 + deadline };
   UI.showAlarm("🐙 <b>DIE HACKER-KRAKE!</b> Sie schnüffelt nach Klartext-Daten! Vertreibe sie, indem du irgendein neues <b>Secret</b> anlegst: " +
     "<code>kubectl create secret generic &lt;name&gt; --from-literal=passwort=&lt;wert&gt;</code>", deadline);
 }
 
 export function resolveKraken(scene: WorldSceneLike, success: boolean) {
-  const ev = scene.events.kraken;
+  const ev = scene.hazards.kraken;
   if (!ev) return;
   scene.tweens.add({ targets: ev.kraken, y: "+=40", alpha: 0, duration: 700, ease: "Sine.in", onComplete: () => ev.kraken.destroy() });
-  scene.events.kraken = null;
+  scene.hazards.kraken = null;
   UI.hideAlarm();
   if (success) {
     Game.state.stats.krakenBeaten++;
@@ -181,24 +181,24 @@ export function resolveKraken(scene: WorldSceneLike, success: boolean) {
  *  inline-Event-Block der update()-Schleife. */
 export function tickEvents(scene: WorldSceneLike, time: number) {
   const now = time / 1000;
-  if (now > scene.events.nextPirate) tryStartPirate(scene);
-  if (now > scene.events.nextKraken) tryStartKraken(scene);
-  if (now > scene.events.nextStorm) tryStartStorm(scene);
-  if (scene.events.storm) {
-    const dep = Game.sim.deployments.find(d => d.name === scene.events.storm.dep);
+  if (now > scene.hazards.nextPirate) tryStartPirate(scene);
+  if (now > scene.hazards.nextKraken) tryStartKraken(scene);
+  if (now > scene.hazards.nextStorm) tryStartStorm(scene);
+  if (scene.hazards.storm) {
+    const dep = Game.sim.deployments.find(d => d.name === scene.hazards.storm.dep);
     if (!dep || !dep.broken) resolveStorm(scene, true);
-    else if (now > scene.events.storm.until) resolveStorm(scene, false);
-    else UI.updateAlarmTimer(Math.ceil(scene.events.storm.until - now));
+    else if (now > scene.hazards.storm.until) resolveStorm(scene, false);
+    else UI.updateAlarmTimer(Math.ceil(scene.hazards.storm.until - now));
   }
-  if (scene.events.pirate) {
-    const dep = Game.sim.deployments.find(d => d.name === scene.events.pirate.dep);
-    if (dep && dep.replicas >= scene.events.pirate.want) resolvePirate(scene, true);
-    else if (now > scene.events.pirate.until) resolvePirate(scene, false);
-    else UI.updateAlarmTimer(Math.ceil(scene.events.pirate.until - now));
+  if (scene.hazards.pirate) {
+    const dep = Game.sim.deployments.find(d => d.name === scene.hazards.pirate.dep);
+    if (dep && dep.replicas >= scene.hazards.pirate.want) resolvePirate(scene, true);
+    else if (now > scene.hazards.pirate.until) resolvePirate(scene, false);
+    else UI.updateAlarmTimer(Math.ceil(scene.hazards.pirate.until - now));
   }
-  if (scene.events.kraken) {
-    if (Game.sim.secrets.length > scene.events.kraken.baseline) resolveKraken(scene, true);
-    else if (now > scene.events.kraken.until) resolveKraken(scene, false);
-    else UI.updateAlarmTimer(Math.ceil(scene.events.kraken.until - now));
+  if (scene.hazards.kraken) {
+    if (Game.sim.secrets.length > scene.hazards.kraken.baseline) resolveKraken(scene, true);
+    else if (now > scene.hazards.kraken.until) resolveKraken(scene, false);
+    else UI.updateAlarmTimer(Math.ceil(scene.hazards.kraken.until - now));
   }
 }

@@ -3,6 +3,7 @@ import { KQContent } from "../content";
 import { SFX } from "../sfx";
 import { ABBREVS, lockedAbbrevInInput, abbrevLockHint, flagNearMissHint, longFormsInInput } from "../content/abbrev";
 import { pushHistory, navigateHistory } from "../cmdhistory";
+import type { QuestTask } from "../types";
 import { part, $, esc, NPCS } from "./shared";
 
 export const radioUI = part({
@@ -85,7 +86,7 @@ export const radioUI = part({
         if (task) html += `<div class="tt-item current">▶️ ${task.text}</div>`;
       } else {
         const taskIdx = Game.state.taskIdx || 0;
-        step.tasks.forEach((t: any, i: number) => {
+        step.tasks.forEach((t: QuestTask, i: number) => {
           const cls = i < taskIdx ? "done" : i === taskIdx ? "current" : "";
           const mark = i < taskIdx ? "✅" : i === taskIdx ? "▶️" : "·";
           html += `<div class="tt-item ${cls}">${mark} ${i <= taskIdx ? t.text : "???"}</div>`;

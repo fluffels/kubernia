@@ -5,7 +5,7 @@ import { SFX } from "../sfx";
 import { TALK_RANGE, interiorEAction, interiorEFlank, type Door } from "../world";
 import { keys, setInteriorOpen } from "../runtime";
 import { sanitize } from "../pixelfont";
-import { T, STONE, WOOD, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, pixelText } from "./shared";
+import { T, STONE, WOOD, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, pixelText, type ScenePlayer } from "./shared";
 
 /* ===== InteriorScene (#6) – betretbarer Hausinnenraum =====
  * Wird von WorldScene.enterInterior() als eigene Szene gestartet, während die
@@ -21,7 +21,24 @@ const INTERIORS: Record<string, { frame: number; tx: number; ty: number }[]> = {
 };
 
 export class InteriorScene extends Phaser.Scene {
-  [key: string]: any;
+  door!: Door;
+  RW!: number;
+  RH!: number;
+  solid!: Uint8Array;
+  exitTx!: number;
+  exitTy!: number;
+  npcId: string | undefined;
+  npcX!: number;
+  npcY!: number;
+  pl!: ScenePlayer;
+  bobT!: number;
+  pShadow!: Phaser.GameObjects.Ellipse;
+  pSprite!: Phaser.GameObjects.Image;
+  isShip!: boolean;
+  hintExit!: string;
+  hintTalk!: string;
+  hint!: Phaser.GameObjects.BitmapText;
+  ePrev!: boolean;
   constructor() { super("Interior"); }
 
   create(data: { door: Door }) {
@@ -65,7 +82,7 @@ export class InteriorScene extends Phaser.Scene {
     }
 
     // NPC-Figur des Hauses/Schiffs (#201: drinnen ansprechbar) + Namensschild
-    const meta = door.npc ? (KQContent.NPCS as any)[door.npc] : undefined;
+    const meta = door.npc ? KQContent.NPCS[door.npc] : undefined;
     const ntx = this.exitTx, nty = 2;
     this.solid[nty * RW + ntx] = 1;
     // #201: Standplatz des Bewohners merken, damit die E-Taste kontextabhängig
@@ -174,7 +191,7 @@ export class InteriorScene extends Phaser.Scene {
     this.ePrev = ePrev;
     if (!blocked) {
       const action = interiorEAction({ eFlank, onExit, nearNpc });
-      if (action === "talk") { UI.talkTo(this.npcId); return; }
+      if (action === "talk") { UI.talkTo(this.npcId!); return; }
       if (action === "exit") { this.exitInterior(); return; }
     }
   }

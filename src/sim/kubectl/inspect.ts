@@ -36,7 +36,7 @@ export function kubectlGet(host: KubectlHost, t: string[]) {
       return table(allNs ? ["NAMESPACE", "NAME", "READY", "STATUS", "RESTARTS", "AGE"] : ["NAME", "READY", "STATUS", "RESTARTS", "AGE"], rows);
     }
     host._reschedulePending();
-    const rows: any[] = [];
+    const rows: (string | number)[][] = [];
     for (const d of host.deployments) {
       const st = host._podStatus(d);
       for (const p of d.pods) rows.push([p.name, st.ready, st.status, String(st.restarts || p.restarts), host._age(p.created)]);

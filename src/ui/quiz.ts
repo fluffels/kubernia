@@ -207,11 +207,13 @@ export const quizUI = part({
     });
   },
 
-  answerReviewCmd(ev: any) {
+  answerReviewCmd(ev: KeyboardEvent) {
     if (ev.key !== "Enter") return;
     const r = this.review;
     if (!r || r.current.answered) return;
-    const line = ev.target.value.trim().replace(/\s+/g, " ");
+    // Das Event kommt vom #review-input-Feld (delegiert in overlay.ts) – ein Text-Input.
+    const input = ev.target as HTMLInputElement;
+    const line = input.value.trim().replace(/\s+/g, " ");
     if (!line) return;
     const card = r.current.content.card;
     const correct = card.accept.some((re: RegExp) => re.test(line));
@@ -221,14 +223,14 @@ export const quizUI = part({
     const lockedHit = correct ? lockedAbbrevInInput(line, (id) => Game.isAbbrevUnlocked(id)) : undefined;
     if (lockedHit) {
       $("review-explain").innerHTML = `<div class="quiz-explain">${abbrevLockHint(lockedHit)}</div>`;
-      ev.target.disabled = false; ev.target.focus(); ev.target.select();
+      input.disabled = false; input.focus(); input.select();
       return;
     }
     if (correct) {
       // Beim 1. Versuch richtig zählt voll; erst nach Retry richtig = "mit Hilfe gelöst" (#234).
       const assisted = r.current.attempts > 0;
       r.current.answered = true;
-      ev.target.disabled = true;
+      input.disabled = true;
       this.finishReviewItem(true, card.explain || "", assisted);
       return;
     }
@@ -244,9 +246,9 @@ export const quizUI = part({
         <div class="dim" style="margin-top:.4em">🦀 „Nochmal tippen, Matrose!“ – noch ${remaining} Versuch${remaining === 1 ? "" : "e"}.</div></div>
       <div class="actions"><button data-action="revealReviewCmd">Lösung zeigen ➡️</button></div>`;
     // Eingabefeld wieder freigeben und markieren, damit gleich neu getippt werden kann.
-    ev.target.disabled = false;
-    ev.target.focus();
-    ev.target.select();
+    input.disabled = false;
+    input.focus();
+    input.select();
   },
 
   /** Bricht den Tipp-Versuch bei einer Befehls-Karte ab: zeigt die Musterlösung

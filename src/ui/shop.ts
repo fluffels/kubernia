@@ -1,7 +1,7 @@
 import { Game } from "../game";
 import { KQContent } from "../content";
 import { SFX } from "../sfx";
-import { part, $ } from "./shared";
+import { part, $, type UIShopItem } from "./shared";
 
 export const shopUI = part({
   /* ========== Shop ========== */
@@ -12,7 +12,7 @@ export const shopUI = part({
     let html = `<p class="dim">„Willkommen! Frische Ware, faire Preise!“ – Du hast <b>${s.coins} 🪙</b>.
       Dein 🔥 Streak (${s.streak.count}) gibt bis zu +50% auf Belohnungen, dein Hafen verdient +${Math.round(Game.incomeRate() * 10) / 10}/min.</p>
       <div class="shop-grid">`;
-    for (const item of KQContent.SHOP as any[]) {
+    for (const item of KQContent.SHOP as UIShopItem[]) {
       const ownedCount = s.inventory[item.id] || 0;
       const ownedPerm = s.owned.includes(item.id);
       let action;

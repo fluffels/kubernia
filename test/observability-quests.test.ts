@@ -14,6 +14,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import { Sim as KQSim } from "../src/sim";
 import { KQContent } from "../src/content";
+import type { Quest, QuestTask } from "../src/types";
 
 const PHASE5 = ["observability-metrics", "observability-grafana", "observability-logs", "observability-alerts"];
 
@@ -21,9 +22,10 @@ function phase5Quests() {
   return KQContent.QUESTS.filter(q => PHASE5.includes(q.id));
 }
 
-/** Alle ausführbaren Aufgaben (teach-cmd + terminal-tasks) einer Quest mit Quest-Bezug. */
-function execTasks(quest: any): { id: string; accept: RegExp[]; solution: string; check?: (s: any) => boolean }[] {
-  const out: { id: string; accept: RegExp[]; solution: string; check?: (s: any) => boolean }[] = [];
+/** Alle ausführbaren Aufgaben (teach-cmd + terminal-tasks) einer Quest mit Quest-Bezug.
+ *  TeachCommand erweitert QuestTask, daher ist QuestTask der gemeinsame Rückgabetyp. */
+function execTasks(quest: Quest): QuestTask[] {
+  const out: QuestTask[] = [];
   for (const step of quest.steps) {
     if (step.type === "teach") out.push(step.cmd);
     else if (step.type === "terminal") for (const t of step.tasks) out.push(t);
@@ -104,11 +106,13 @@ test("Phase 5: jede accept-Regex matcht ihre eigene solution (teach + terminal)"
 test("Phase 5: jede Choice-Frage hat genau eine richtige Antwort + bekannte reviewId", () => {
   const quizIds = new Set(KQContent.CRAB_QUIZ.map(c => c.id));
   for (const q of phase5Quests()) {
-    for (const step of q.steps as any[]) {
+    for (const step of q.steps) {
       if (step.type !== "choice") continue;
-      const richtige = step.options.filter((o: any) => o.ok).length;
+      const richtige = step.options.filter((o) => o.ok).length;
       assert.equal(richtige, 1, q.id + "/" + step.reviewId + ": genau eine richtige Antwort");
-      assert.ok(quizIds.has(step.reviewId), q.id + ": reviewId „" + step.reviewId + "“ existiert in CRAB_QUIZ");
+      // reviewId ist auf ChoiceStep optional; `?? ""` hält das Verhalten von vorher
+      // (ein fehlender reviewId ist kein Treffer → Assertion schlägt fehl).
+      assert.ok(quizIds.has(step.reviewId ?? ""), q.id + ": reviewId „" + step.reviewId + "“ existiert in CRAB_QUIZ");
     }
   }
 });
@@ -124,7 +128,7 @@ test("Phase 5: die Musterlösungen laufen gegen die Sim ohne Fehler durch", () =
   // Vorlauf: bis zur ersten Phase-5-Quest die Szenarien aller vorherigen Quests anwenden,
   // damit der Cluster-Zustand stimmt (Deployments etc.).
   for (const quest of KQContent.QUESTS) {
-    for (const step of quest.steps as any[]) {
+    for (const step of quest.steps) {
       if (step.scenario) sim.mergeScenario(step.scenario);
       if (!PHASE5.includes(quest.id)) continue;
       if (step.type === "teach") {

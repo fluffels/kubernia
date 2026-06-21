@@ -210,8 +210,8 @@ describe("Türen-/Warp-Objektlayer (#194)", () => {
   it("harborWarpLayer ist ein eigenständiger gültiger Objektlayer", () => {
     // Red-Green-Absicherung: würde warpObject die Pixel-Umrechnung (tx*16) auf tx
     // verkürzen, kippt der Round-Trip-Test oben sofort (tx läge dann bei 26/16≈1).
-    expect((harborWarpLayer() as any).name).toBe(WARP_LAYER);
-    expect((harborWarpLayer() as any).objects).toHaveLength(ENTRANCES.length);
+    expect((harborWarpLayer() as { name: unknown }).name).toBe(WARP_LAYER);
+    expect((harborWarpLayer() as { objects: unknown[] }).objects).toHaveLength(ENTRANCES.length);
   });
 });
 
@@ -248,17 +248,19 @@ describe("NPC-Spawn-Objektlayer (#195)", () => {
   });
 
   it("harborNpcLayer ist ein eigenständiger gültiger Objektlayer", () => {
-    expect((harborNpcLayer() as any).name).toBe(NPC_LAYER);
-    expect((harborNpcLayer() as any).objects).toHaveLength(NPC_SPAWNS.length);
+    expect((harborNpcLayer() as { name: unknown }).name).toBe(NPC_LAYER);
+    expect((harborNpcLayer() as { objects: unknown[] }).objects).toHaveLength(NPC_SPAWNS.length);
   });
 });
 
 describe("parseHarborMap – Negativfälle", () => {
   it("lehnt eine Map mit falschen Maßen ab", () => {
     const wrong = harborTiledMap();
-    (wrong as any).width = 8;
+    wrong.width = 8;
     // Nur die Tile-Layer haben ein data-Raster; der Objektlayer (Türen) wird übersprungen.
-    (wrong as any).layers.forEach((l: any) => { if (Array.isArray(l.data)) { l.width = 8; l.data = l.data.slice(0, 8 * HARBOR_H); } });
+    (wrong.layers as { data?: unknown; width?: number }[]).forEach((l) => {
+      if (Array.isArray(l.data)) { l.width = 8; l.data = l.data.slice(0, 8 * HARBOR_H); }
+    });
     expect(() => parseHarborMap(wrong)).toThrow(/52×40|passt nicht/);
   });
 });

@@ -6,7 +6,7 @@ import { npcSpawnsForMap, objectsForMap } from "../content/entities";
 import { WATER as A_WATER, warpAt } from "../archipel";
 import { PATH as L_PATH, buildLighthouse, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL, LIGHTHOUSE_QUEST_TRIGGER, LIGHTHOUSE_TOWER, LIGHTHOUSE_NPC } from "../lighthouse";
 import { keys, setWorldScene, setInteriorOpen, type WorldSceneRef } from "../runtime";
-import { T, FOAM, WANG, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText } from "./shared";
+import { T, FOAM, WANG, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText, IslandScene, type SceneNpc } from "./shared";
 
 /* ===== LighthouseScene (#111) – Monitoring-Leuchtturm-Klippe =====
  * Eigener begehbarer Höhen-Bereich, den man von Port Kubernia über den Aufgang am
@@ -19,8 +19,7 @@ import { T, FOAM, WANG, pixelText, spawnIslandNpc, spawnIslandObject, buildSign,
 /** #343/#386: Radius der runden Sub-Tile-Hitboxen (Felsbrocken/Büsche/NPCs), wie in WorldScene. */
 const HIT_R = 6;
 
-export class LighthouseScene extends Phaser.Scene {
-  [key: string]: any;
+export class LighthouseScene extends IslandScene {
   constructor() { super("Lighthouse"); }
 
   create() {
@@ -52,7 +51,7 @@ export class LighthouseScene extends Phaser.Scene {
     this.add.image(lx, lyB, "lighthouse").setOrigin(0.5, 1).setScale(lhSc).setDepth(lyB + 4);
     const lampY = lyB - Math.round(100 * lhSc) + 9;
     if (!this.textures.exists("lhbeam")) {
-      const bw = 84, bh = 34, bg = this.make.graphics({ add: false } as any);
+      const bw = 84, bh = 34, bg = this.make.graphics({}, false);
       bg.fillStyle(0xffe9a0, 1); bg.fillTriangle(0, bh / 2, bw, 0, bw, bh);
       bg.generateTexture("lhbeam", bw, bh); bg.destroy();
     }
@@ -222,7 +221,7 @@ export class LighthouseScene extends Phaser.Scene {
    *  ui.ts ruft das über worldScene() auf, um Reden/Quests anzubieten. */
   nearestNpc() {
     const pl = this.pl;
-    let best = null, bestD = 1.7 * T;
+    let best: SceneNpc | null = null, bestD = 1.7 * T;
     for (const n of this.npcs) {
       const d = Math.hypot(n.x * T + 8 - pl.x, n.y * T + 8 - pl.y);
       if (d < bestD) { bestD = d; best = n; }

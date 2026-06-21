@@ -27,8 +27,16 @@ const rawTestMap = readFileSync(
   "utf8",
 );
 
+/* Roh-JSON-Knoten für die Negativfälle: bewusst lose (`any`), weil die Tests
+ * GEZIELT beliebige tiefe Felder kaputt machen (Typ ändern, Feld löschen, Array
+ * kürzen) – genau das, was parseTiledMap(raw: unknown) laut ablehnen soll. Ein
+ * präziser TiledMap-Typ würde die Korruptions-Zuweisungen schon am Compiler
+ * scheitern lassen und damit den Testzweck unterlaufen; ein rekursiver JSON-Typ
+ * ist hier nicht ergonomisch (Indizieren UND primitive Zuweisung zugleich). */
+
 /** Frisch geparste, gültige Map – als Klon-Basis für die Negativfälle, damit
  *  jeder Test gezielt EIN Feld kaputt macht (sonst maskieren sich Fehler). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- absichtlich loses Roh-JSON für gezielte Korruptions-Negativfälle (s.o.)
 function freshRaw(): Record<string, any> {
   return JSON.parse(rawTestMap);
 }
@@ -182,7 +190,9 @@ describe("parseTiledMap – Validierung (Negativfälle)", () => {
 /* ===== Objekt-Layer (#194, Teil 4) ===== */
 
 /** Baut eine minimale gültige Map mit einem Objekt-Layer „Warps" (ein Objekt mit
- *  Properties) – Basis für die Positiv-/Negativfälle. */
+ *  Properties) – Basis für die Positiv-/Negativfälle. Loses Roh-JSON wie freshRaw
+ *  (gezielte Korruption in den Negativfällen). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- absichtlich loses Roh-JSON für gezielte Korruptions-Negativfälle (s. freshRaw)
 function rawWithObjectLayer(): Record<string, any> {
   const base = freshRaw();
   base.layers.push({

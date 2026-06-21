@@ -21,7 +21,7 @@ class FakeNode {
   frequency = new FakeParam();
   type = "";
   connected = true;
-  connect(n: any) { return n; }
+  connect(n: unknown) { return n; }
   disconnect() { this.connected = false; }
   start() {}
   stop() {}

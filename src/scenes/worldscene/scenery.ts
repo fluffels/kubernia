@@ -211,7 +211,7 @@ export function renderStatics(scene: WorldSceneLike) {
   const lampY = lyB - Math.round(100 * lhSc) + 9;    // Laternenraum nahe der Bildoberkante
   // Lichtkegel: weiches Dreieck (Spitze = Lampe), per ADD-Blend, dreht sich 360° übers Wasser
   if (!scene.textures.exists("lhbeam")) {
-    const bw = 84, bh = 34, bg = scene.make.graphics({ add: false } as any);
+    const bw = 84, bh = 34, bg = scene.make.graphics({}, false);
     bg.fillStyle(0xffe9a0, 1); bg.fillTriangle(0, bh / 2, bw, 0, bw, bh);
     bg.generateTexture("lhbeam", bw, bh); bg.destroy();
   }

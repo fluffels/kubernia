@@ -116,7 +116,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/devpanel.ts`](src/devpanel.ts) | Anwendung | Dev-/Test-Panel (#325/#331). |
 | [`src/store.ts`](src/store.ts) | Persistenz | SaveStore: IndexedDB-Backend, sync API via In-Memory-Cache (#350); Eviction-Schutz `requestPersistentStorage()` (#401). |
 | [`src/scenes.ts`](src/scenes.ts) | Präsentation | Barrel der 7 Phaser-Szenen (`KQScenes`, #345). → [presentation.md](docs/module/presentation.md) |
-| [`src/scenes/shared.ts`](src/scenes/shared.ts) | Präsentation | Geteilte Szenen-Bausteine (Font/Schilder/NPC-Render). |
+| [`src/scenes/shared.ts`](src/scenes/shared.ts) | Präsentation | Geteilte Szenen-Bausteine (Font/Schilder/NPC-Render) + Insel-Szenen-Basisklasse `IslandScene` (#423). |
 | [`src/scenes/BootScene.ts`](src/scenes/BootScene.ts) | Präsentation | Lädt Assets + Frame-Slicing, startet World. |
 | [`src/scenes/WorldScene.ts`](src/scenes/WorldScene.ts) | Präsentation | Port Kubernia: schlanker Orchestrator (create/update) + Render-Primitive; Spiel-Systeme in `worldscene/*` (#393). |
 | [`src/scenes/worldscene/terrain.ts`](src/scenes/worldscene/terrain.ts) | Präsentation | Hafenkarte/Boden/Türen laden + Wang-Autotile-Boden (#393). |

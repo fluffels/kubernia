@@ -5,7 +5,7 @@ import { resolveMove, circleHitbox, npcHitboxes, type Hitbox } from "../world";
 import { npcSpawnsForMap, objectsForMap } from "../content/entities";
 import { WATER as A_WATER, SAND as A_SAND, PATH as A_PATH, DOCK as A_DOCK, buildArchipel, warpAt, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL, ARCHIPEL_NPC, ARCHIPEL_QUEST_TRIGGER } from "../archipel";
 import { keys, setWorldScene, setInteriorOpen, type WorldSceneRef } from "../runtime";
-import { T, DEVICE, FOAM, WANG, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText } from "./shared";
+import { T, DEVICE, FOAM, WANG, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText, IslandScene, type SceneNpc } from "./shared";
 
 /* ===== ArchipelScene (#92) – die erste eigene Nachbar-Insel (GitOps-Archipel) =====
  * Wird von WorldScene.enterArchipel() als eigene Szene gestartet, während die
@@ -17,8 +17,7 @@ import { T, DEVICE, FOAM, WANG, pixelText, spawnIslandNpc, spawnIslandObject, bu
 /** #343/#386: Radius der runden Sub-Tile-Hitboxen (Steine/Büsche/NPCs), wie in WorldScene. */
 const HIT_R = 6;
 
-export class ArchipelScene extends Phaser.Scene {
-  [key: string]: any;
+export class ArchipelScene extends IslandScene {
   constructor() { super("Archipel"); }
 
   create() {
@@ -223,7 +222,7 @@ export class ArchipelScene extends Phaser.Scene {
    *  ui.ts ruft das über worldScene() auf, um Reden/Quests anzubieten. */
   nearestNpc() {
     const pl = this.pl;
-    let best = null, bestD = 1.7 * T;
+    let best: SceneNpc | null = null, bestD = 1.7 * T;
     for (const n of this.npcs) {
       const d = Math.hypot(n.x * T + 8 - pl.x, n.y * T + 8 - pl.y);
       if (d < bestD) { bestD = d; best = n; }

@@ -66,11 +66,14 @@ export default tseslint.config(
         },
       ],
 
-      // `any` ist laut Konvention (AGENTS.md) zu vermeiden, aber der Bestand hat
-      // noch bewusste/historische Stellen. Pragmatisch als WARNUNG (blockt die CI
-      // nicht), damit NEUE any sichtbar werden, ohne hier einen 68-Stellen-Cleanup
-      // zu erzwingen – das ist ein eigenes Ticket wert.
-      "@typescript-eslint/no-explicit-any": "warn",
+      // `any` ist laut Konvention (AGENTS.md) zu vermeiden. Seit #423 ist der
+      // Alt-Bestand aufgeräumt (0 Treffer im ganzen Baum) – darum jetzt als FEHLER,
+      // der die CI blockt (zusammen mit `--max-warnings 0` im lint-Script): kein neues
+      // `any` rutscht mehr unbemerkt rein. Die wenigen bewusst nötigen Stellen
+      // (ThisType-Escape-Hatches GameSelf/UISelf, der lose WorldSceneLike-Struktur-Seam,
+      // die Roh-JSON-Korruptions-Fixtures in den Tests) tragen ein begründetes
+      // `// eslint-disable-next-line` – das ist der dokumentierte Weg für Ausnahmen.
+      "@typescript-eslint/no-explicit-any": "error",
     },
   },
 );

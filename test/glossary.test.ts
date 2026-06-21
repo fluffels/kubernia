@@ -10,8 +10,8 @@ import { GLOSSARY, applyGlossary, glossaryMarkerKeys } from "../src/content/glos
  *  dürfen [[…]]-Marker stehen – sonst würden sie nie zu Chips. */
 function collectGlossaryHostTexts(): string[] {
   const out: string[] = [];
-  for (const quest of KQContent.QUESTS as any[]) {
-    for (const step of quest.steps as any[]) {
+  for (const quest of KQContent.QUESTS) {
+    for (const step of quest.steps) {
       if (step.type === "dialog") out.push(...step.lines);
       else if (step.type === "teach") out.push(step.cmd.intro, step.cmd.text);
       else if (step.type === "choice") {

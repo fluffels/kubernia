@@ -3,7 +3,6 @@ import { ASSET_MANIFEST } from "../assets-data";
 import { T, buildPixelFont, buildCoinIcon } from "./shared";
 
 export class BootScene extends Phaser.Scene {
-  [key: string]: any;
   constructor() { super("Boot"); }
   preload() {
     // a.src ist im Dev-Server eine URL, im Single-File-Build eine Base64-Data-URI.
