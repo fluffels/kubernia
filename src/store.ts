@@ -8,13 +8,21 @@
  * ~5–10 MB-Decke von localStorage für Stardew-Scale-Stände). Fallback: localStorage
  * bzw. flüchtiger In-Memory-Speicher. Siehe den IndexedDB-Block weiter unten – dort
  * steht auch, warum die nach außen sichtbare API trotz async IndexedDB synchron bleibt.
+ *
+ * Mehrere Spielstände / Save-Slots (#306): read/write/readState/writeState routen auf den
+ * AKTIVEN Slot. Welche Slots es gibt + welcher aktiv ist, hält ein kleiner Slot-Index
+ * (SLOTS_KEY). Der Default-Slot speichert seine Daten weiterhin unter dem bisherigen
+ * Einzel-Key (LEGACY_SAVE_KEY) – damit ist ein bestehender Stand ohne Kopieren/Versions-Bump
+ * automatisch "Slot 1", und solange NUR der Default-Slot existiert, wird gar kein Index
+ * geschrieben (Single-Slot bleibt byte-identisch zu vor diesem Feature). Siehe Slot-Block unten.
  */
-  const SAVE_KEY = "kubequest-save-v3";
-  // Ein-Slot-Sicherungskopie der Roh-Spielstanddatei. Wird befüllt, BEVOR ein Stand
+  // Daten-Key des Default-Slots = der historische Einzel-Save-Key (Backward-Kompatibilität #306).
+  const LEGACY_SAVE_KEY = "kubequest-save-v3";
+  // Sicherungskopie der Roh-Spielstanddatei (pro Slot). Wird befüllt, BEVOR ein Stand
   // migriert/heruntergestuft/verworfen würde (siehe readState). Damit ist garantiert,
   // dass selbst eine fehlerhafte Migration oder eine kaputte Datei nicht den einzigen
   // vorhandenen Stand vernichtet – er bleibt hier wiederherstellbar (readBackup).
-  const BACKUP_KEY = "kubequest-save-backup-v1";
+  const LEGACY_BACKUP_KEY = "kubequest-save-backup-v1";
 
   // localStorage ist nicht überall verfügbar (privater Modus, blockierte Cookies,
   // Node-Tests). Dann fallen wir auf einen flüchtigen In-Memory-Speicher zurück,
@@ -50,7 +58,7 @@
     } catch (e) {
       if (!warnedWriteFailed) {
         warnedWriteFailed = true;
-         
+
         console.warn("SaveStore: Speichern fehlgeschlagen (localStorage voll/blockiert?) – Spiel läuft weiter, dieser Stand wurde nicht persistiert.", e);
       }
       return false;
@@ -80,7 +88,7 @@
    */
   const DB_NAME = "kubequest";
   const DB_VERSION = 1;
-  const OBJECT_STORE = "saves"; // ein simpler Key→Wert-Store; Keys = SAVE_KEY / BACKUP_KEY
+  const OBJECT_STORE = "saves"; // ein simpler Key→Wert-Store; Keys = Save-/Backup-/Slot-Index-Keys
 
   // idb != null ⇔ „IndexedDB-Modus aktiv" (init() lief erfolgreich durch). cache ist
   // dann die synchrone Lese-/Schreibspiegelung; im Legacy-Modus wird er nie benutzt.
@@ -164,7 +172,7 @@
   function warnIdbWrite(e: unknown): void {
     if (warnedIdbWriteFailed) return;
     warnedIdbWriteFailed = true;
-     
+
     console.warn("SaveStore: IndexedDB-Schreiben fehlgeschlagen – Spiel läuft weiter (Cache hält den Stand).", e);
   }
 
@@ -201,6 +209,101 @@
     backend.removeItem(key);
   }
 
+  /* ===== Mehrere Spielstände / Save-Slots (#306) =====
+   * Ein Slot ist ein benannter, eigenständiger Spielstand. Die Slot-Logik liegt bewusst
+   * hier in der Persistenz-Schicht (game.ts kennt nur „aktiver Slot"). Modell:
+   *
+   *  • Slot-Index (SLOTS_KEY): { activeId, slots: [{ id, name, summary? }] }. `summary` ist
+   *    eine OPAKE Vorschau-Nutzlast (xp/quest/…), die die Anwendungsschicht füllt und store.ts
+   *    nie interpretiert – so kann der Spielstand-Wähler die Slots anzeigen, ohne jeden ganzen
+   *    Stand laden zu müssen (Stardew-Scope: viele Slots, aber nur ein kleiner Index).
+   *  • Daten-Key je Slot: der Default-Slot ("slot-1") nutzt den HISTORISCHEN Einzel-Key
+   *    (LEGACY_SAVE_KEY) → ein bestehender Stand ist ohne Kopieren automatisch Slot 1; weitere
+   *    Slots bekommen "<LEGACY_SAVE_KEY>:<id>".
+   *  • Solange NUR der Default-Slot existiert, wird KEIN Index geschrieben: activeSlotId()/
+   *    listSlots() liefern dann einen synthetischen Default. Damit ist der Single-Slot-Fall
+   *    byte-identisch zu vor diesem Feature (keine neue Datei, kein Churn beim 5-s-Auto-Save).
+   *
+   * Slot-WECHSEL = aktiven Zeiger setzen + die Seite neu laden (der Aufrufer): nach dem Reload
+   * hydriert init() den jetzt aktiven Slot. So muss der synchrone Pfad nie einen fremden Slot
+   * asynchron nachladen.
+   */
+  const SLOTS_KEY = "kubequest-slots-v1";
+  const DEFAULT_SLOT_ID = "slot-1";
+  const DEFAULT_SLOT_NAME = "Spielstand 1";
+
+  /** Ein Slot im Index. `summary` ist eine von der Anwendungsschicht definierte, hier opake
+   *  Vorschau-Nutzlast (z.B. XP/Quest/zuletzt-gespielt) für den Spielstand-Wähler. */
+  export interface SlotMeta {
+    id: string;
+    name: string;
+    summary?: unknown;
+  }
+  interface SlotIndex {
+    activeId: string;
+    slots: SlotMeta[];
+  }
+
+  /** Daten-Key eines Slots. Default-Slot → Legacy-Einzel-Key (Backward-Kompatibilität). */
+  function saveKeyFor(id: string): string {
+    return id === DEFAULT_SLOT_ID ? LEGACY_SAVE_KEY : LEGACY_SAVE_KEY + ":" + id;
+  }
+  /** Backup-Key eines Slots (analog zum Daten-Key). */
+  function backupKeyFor(id: string): string {
+    return id === DEFAULT_SLOT_ID ? LEGACY_BACKUP_KEY : LEGACY_BACKUP_KEY + ":" + id;
+  }
+
+  /** Synthetischer Default-Index für den Single-Slot-Fall (NICHT persistiert). */
+  function defaultIndex(): SlotIndex {
+    return { activeId: DEFAULT_SLOT_ID, slots: [{ id: DEFAULT_SLOT_ID, name: DEFAULT_SLOT_NAME }] };
+  }
+
+  /** Den Slot-Index defensiv aus dem rohen JSON lesen – oder null (fehlt/kaputt → Default). */
+  function parseSlotIndex(raw: string | null): SlotIndex | null {
+    if (raw == null) return null;
+    let parsed: unknown;
+    try { parsed = JSON.parse(raw); } catch { return null; }
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const o = parsed as { activeId?: unknown; slots?: unknown };
+    if (!Array.isArray(o.slots)) return null;
+    const slots: SlotMeta[] = [];
+    for (const s of o.slots) {
+      if (typeof s !== "object" || s === null) continue;
+      const m = s as { id?: unknown; name?: unknown; summary?: unknown };
+      if (typeof m.id !== "string" || typeof m.name !== "string") continue;
+      const out: SlotMeta = { id: m.id, name: m.name };
+      if ("summary" in m) out.summary = m.summary;
+      slots.push(out);
+    }
+    if (slots.length === 0) return null; // kein gültiger Slot → wie „kein Index" (Default greift)
+    let activeId = typeof o.activeId === "string" ? o.activeId : "";
+    if (!slots.some(s => s.id === activeId)) activeId = slots[0].id; // hängender Zeiger geheilt
+    return { activeId, slots };
+  }
+
+  /** Persistierter Slot-Index oder null, wenn (noch) keiner existiert. */
+  function readIndex(): SlotIndex | null {
+    return parseSlotIndex(rawGet(SLOTS_KEY));
+  }
+  /** Wirksamer Index: der persistierte, sonst der synthetische Default (Single-Slot). */
+  function effectiveIndex(): SlotIndex {
+    return readIndex() ?? defaultIndex();
+  }
+  function writeIndex(idx: SlotIndex): void {
+    rawSet(SLOTS_KEY, JSON.stringify(idx));
+  }
+  /** ID des aktiven Slots (synchron, ohne den Index zu materialisieren). */
+  function activeSlotId(): string {
+    return effectiveIndex().activeId;
+  }
+  /** Die nächste freie "slot-N"-ID, die im Index noch nicht vergeben ist. */
+  function nextSlotId(idx: SlotIndex): { id: string; n: number } {
+    const used = new Set(idx.slots.map(s => s.id));
+    let n = 1;
+    while (used.has("slot-" + n)) n++;
+    return { id: "slot-" + n, n };
+  }
+
   /* ===== Versionierung der Spielstände =====
    * Persistierte Stände tragen eine Hülle: { v: <Format-Version>, data: <Spielstand> }.
    * So überleben alte Stände spätere Formatänderungen: beim Lesen wird die Hülle erkannt
@@ -209,7 +312,8 @@
    * WICHTIG: Diese Versionierung betrifft das SAVE-FORMAT (Struktur der Nutzlast), NICHT
    * das Speicher-Backend. Der Umzug localStorage → IndexedDB (#350) ändert das Format
    * NICHT (dieselbe { v, data }-Hülle, nur woanders abgelegt) – darum kein Versions-Bump,
-   * sondern eine einmalige Storage-Migration in init().
+   * sondern eine einmalige Storage-Migration in init(). Auch die Save-Slots (#306) ändern
+   * das FORMAT nicht: der Slot-Index liegt separat, jeder Slot trägt dieselbe { v, data }-Hülle.
    *
    * Erweitern bei einer Formatänderung:
    *   1. CURRENT_SAVE_VERSION um 1 erhöhen.
@@ -286,13 +390,22 @@
   }
 
   /**
-   * Sichert die Roh-Datei in den Backup-Slot, BEVOR der Hauptschlüssel durch einen
-   * migrierten/heruntergestuften/frischen Stand überschrieben wird. Best effort:
+   * Sichert die Roh-Datei in den Backup-Slot des AKTIVEN Slots, BEVOR dessen Hauptschlüssel
+   * durch einen migrierten/heruntergestuften/frischen Stand überschrieben wird. Best effort:
    * schlägt das Backup-Schreiben fehl (Kontingent voll), läuft das Laden trotzdem
    * weiter – wir wollten nur eine zusätzliche Rettungskopie, kein Muss.
    */
   function backup(raw: string): void {
-    rawSet(BACKUP_KEY, raw);
+    rawSet(backupKeyFor(activeSlotId()), raw);
+  }
+
+  /** Hydriert genau einen Key in den Cache: erst aus IndexedDB, sonst (einmalige
+   *  Storage-Migration) aus localStorage nach IndexedDB. Wirft nie. */
+  async function hydrate(db: IDBDatabase, key: string): Promise<void> {
+    const fromIdb = await idbGet(db, key);
+    if (fromIdb != null) { cache.set(key, fromIdb); return; }
+    const fromLs = backend.getItem(key);
+    if (fromLs != null) { cache.set(key, fromLs); idbPut(db, key, fromLs); }
   }
 
   /* ===== Eviction-Schutz: dauerhafter Speicher + Quota-Monitoring (#401) =====
@@ -347,9 +460,10 @@
     /**
      * Schaltet SaveStore – falls möglich – auf IndexedDB als unbegrenztes Backend um.
      * EINMAL beim Boot VOR Game.load() aufrufen UND awaiten. Hydriert den synchronen
-     * Cache aus IndexedDB und migriert einen bestehenden localStorage-Stand einmalig
-     * hinein. Ist IndexedDB nicht verfügbar oder schlägt etwas fehl, bleibt der
-     * bisherige localStorage-Modus aktiv (No-op). Wirft NIE und ist idempotent.
+     * Cache aus IndexedDB (Slot-Index + AKTIVER Slot) und migriert bestehende
+     * localStorage-Stände einmalig hinein. Ist IndexedDB nicht verfügbar oder schlägt
+     * etwas fehl, bleibt der bisherige localStorage-Modus aktiv (No-op). Wirft NIE und
+     * ist idempotent.
      */
     async init(): Promise<void> {
       if (idb) return; // schon im IndexedDB-Modus
@@ -363,27 +477,13 @@
       }
       if (!db) return; // kein IndexedDB → synchroner localStorage-Modus bleibt
       try {
-        const idbSave = await idbGet(db, SAVE_KEY);
-        if (idbSave != null) {
-          // IndexedDB ist die maßgebliche Quelle: Cache daraus hydrieren.
-          cache.set(SAVE_KEY, idbSave);
-          const idbBackup = await idbGet(db, BACKUP_KEY);
-          if (idbBackup != null) cache.set(BACKUP_KEY, idbBackup);
-        } else {
-          // Einmalige Storage-Migration: bestehenden localStorage-Stand nach IndexedDB
-          // heben. localStorage wird dabei NICHT gelöscht (bleibt als Zusatz-Backup des
-          // Vor-Migrations-Stands liegen) – ein Reset (rawRemove) räumt beides ab.
-          const lsSave = backend.getItem(SAVE_KEY);
-          if (lsSave != null) {
-            cache.set(SAVE_KEY, lsSave);
-            idbPut(db, SAVE_KEY, lsSave);
-          }
-          const lsBackup = backend.getItem(BACKUP_KEY);
-          if (lsBackup != null) {
-            cache.set(BACKUP_KEY, lsBackup);
-            idbPut(db, BACKUP_KEY, lsBackup);
-          }
-        }
+        // Zuerst den Slot-Index, dann gezielt den aktiven Slot (Daten + Backup) hydrieren.
+        // So liegt nur EIN Stand im Cache – nicht alle Slots (Stardew-Scope). hydrate()
+        // deckt zugleich die einmalige localStorage→IndexedDB-Migration je Key ab.
+        await hydrate(db, SLOTS_KEY);
+        const id = parseSlotIndex(cache.get(SLOTS_KEY) ?? null)?.activeId ?? DEFAULT_SLOT_ID;
+        await hydrate(db, saveKeyFor(id));
+        await hydrate(db, backupKeyFor(id));
       } catch {
         // Hydration/Migration fehlgeschlagen → lieber im sicheren localStorage-Modus bleiben.
         return;
@@ -438,34 +538,34 @@
       return { persistSupported, persisted, usage, quota, usageRatio, nearQuota };
     },
 
-    /** Roh-JSON des Spielstands lesen – oder null, wenn noch nichts gespeichert ist. */
+    /** Roh-JSON des Spielstands (aktiver Slot) lesen – oder null, wenn noch nichts gespeichert ist. */
     read() {
-      return rawGet(SAVE_KEY);
+      return rawGet(saveKeyFor(activeSlotId()));
     },
 
     /**
-     * Roh-JSON-String des Spielstands ablegen.
+     * Roh-JSON-String des Spielstands (aktiver Slot) ablegen.
      * Gibt zurück, ob das Schreiben geklappt hat (im IndexedDB-Modus immer true; im
      * Legacy-Modus false z.B. bei vollem localStorage) – wirft NIE, damit ein
      * fehlschlagendes Speichern den Aufrufer nicht reißt.
      */
     write(json: string): boolean {
-      return rawSet(SAVE_KEY, json);
+      return rawSet(saveKeyFor(activeSlotId()), json);
     },
 
-    /** Spielstand löschen (für „Zurücksetzen"). */
+    /** Spielstand (aktiver Slot) löschen (für „Zurücksetzen"). */
     remove() {
-      rawRemove(SAVE_KEY);
+      rawRemove(saveKeyFor(activeSlotId()));
     },
 
-    /** Roh-JSON der letzten Sicherungskopie lesen – oder null, wenn es keine gibt.
+    /** Roh-JSON der letzten Sicherungskopie (aktiver Slot) lesen – oder null, wenn es keine gibt.
      *  Quelle für eine Wiederherstellung, falls eine Migration einen Stand zerschossen hat. */
     readBackup(): string | null {
-      return rawGet(BACKUP_KEY);
+      return rawGet(backupKeyFor(activeSlotId()));
     },
 
     /**
-     * Spielstand lesen und auf das aktuelle Format migrieren.
+     * Spielstand (aktiver Slot) lesen und auf das aktuelle Format migrieren.
      * Liefert das Spielstand-Objekt (NICHT die Versions-Hülle) oder null,
      * wenn nichts gespeichert ist bzw. die Datei kaputt ist (→ frischer Start).
      *
@@ -476,7 +576,7 @@
      * Zurückschreiben in game.ts (load → save) niemals den einzigen Stand unrettbar.
      */
     readState(): unknown | null {
-      const raw = rawGet(SAVE_KEY);
+      const raw = rawGet(saveKeyFor(activeSlotId()));
       if (raw == null) return null;
       let parsed: unknown;
       try {
@@ -497,12 +597,99 @@
     },
 
     /**
-     * Spielstand in der aktuellen Versions-Hülle ablegen.
+     * Spielstand (aktiver Slot) in der aktuellen Versions-Hülle ablegen.
      * Gibt zurück, ob das Schreiben geklappt hat (im IndexedDB-Modus immer true; im
      * Legacy-Modus false z.B. bei vollem localStorage) – wirft NIE, damit der
      * Auto-Save den Aufrufer nicht reißt.
      */
     writeState(state: unknown): boolean {
-      return rawSet(SAVE_KEY, JSON.stringify({ v: CURRENT_SAVE_VERSION, data: state }));
+      return rawSet(saveKeyFor(activeSlotId()), JSON.stringify({ v: CURRENT_SAVE_VERSION, data: state }));
+    },
+
+    /* ===== Slot-Verwaltung (#306) ===== */
+
+    /** Liste aller Slots (mindestens der Default-Slot). Im Single-Slot-Fall synthetisch. */
+    listSlots(): SlotMeta[] {
+      return effectiveIndex().slots;
+    },
+
+    /** ID des aktiven Slots. */
+    activeSlotId(): string {
+      return activeSlotId();
+    },
+
+    /**
+     * Neuen, leeren Slot anlegen (materialisiert den Index, falls es noch keinen gibt) und
+     * dessen ID zurückgeben. Wechselt NICHT von selbst dorthin (der Aufrufer entscheidet,
+     * ob/wann gewechselt wird).
+     */
+    createSlot(name: string): string {
+      const idx = readIndex() ?? defaultIndex();
+      const { id, n } = nextSlotId(idx);
+      const trimmed = typeof name === "string" ? name.trim() : "";
+      idx.slots.push({ id, name: trimmed || ("Spielstand " + n) });
+      writeIndex(idx);
+      return id;
+    },
+
+    /**
+     * Aktiven Slot wechseln. Gibt false zurück, wenn die ID unbekannt ist (dann bleibt der
+     * aktive Slot unverändert). Persistiert nur den Zeiger – die DATEN des Ziel-Slots lädt
+     * erst der Reload des Aufrufers (init() hydriert sie dann).
+     */
+    switchSlot(id: string): boolean {
+      const idx = readIndex() ?? defaultIndex();
+      if (!idx.slots.some(s => s.id === id)) return false;
+      if (idx.activeId === id) return true; // schon aktiv – kein unnötiger Index-Schreibvorgang
+      idx.activeId = id;
+      writeIndex(idx);
+      return true;
+    },
+
+    /** Einen Slot umbenennen. false, wenn die ID unbekannt ist. */
+    renameSlot(id: string, name: string): boolean {
+      const idx = readIndex() ?? defaultIndex();
+      const slot = idx.slots.find(s => s.id === id);
+      if (!slot) return false;
+      const trimmed = typeof name === "string" ? name.trim() : "";
+      if (trimmed) slot.name = trimmed;
+      writeIndex(idx);
+      return true;
+    },
+
+    /**
+     * Einen Slot löschen (samt seiner Daten + Backup). false, wenn die ID unbekannt ist.
+     * Wird der AKTIVE Slot gelöscht, fällt der aktive Zeiger auf einen verbliebenen Slot;
+     * war es der letzte, wird ein frischer Default-Slot wiederhergestellt.
+     */
+    deleteSlot(id: string): boolean {
+      const idx = readIndex() ?? defaultIndex();
+      const i = idx.slots.findIndex(s => s.id === id);
+      if (i < 0) return false;
+      rawRemove(saveKeyFor(id));
+      rawRemove(backupKeyFor(id));
+      idx.slots.splice(i, 1);
+      if (idx.slots.length === 0) {
+        idx.slots.push({ id: DEFAULT_SLOT_ID, name: DEFAULT_SLOT_NAME });
+        idx.activeId = DEFAULT_SLOT_ID;
+      } else if (idx.activeId === id) {
+        idx.activeId = idx.slots[0].id;
+      }
+      writeIndex(idx);
+      return true;
+    },
+
+    /**
+     * Die opake Vorschau-Nutzlast (summary) des AKTIVEN Slots setzen (für den Spielstand-Wähler).
+     * Ohne persistierten Index ein No-op – so erzeugt der 5-s-Auto-Save im Single-Slot-Fall
+     * keinen Index-Churn und der pristine Zustand bleibt erhalten.
+     */
+    setActiveSlotSummary(summary: unknown): void {
+      const idx = readIndex();
+      if (!idx) return;
+      const slot = idx.slots.find(s => s.id === idx.activeId);
+      if (!slot) return;
+      slot.summary = summary;
+      writeIndex(idx);
     },
   };

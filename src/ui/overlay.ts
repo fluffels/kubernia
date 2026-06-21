@@ -1,7 +1,18 @@
 import { Game } from "../game";
 import { SFX, MUSIC_THEMES } from "../sfx";
 import { resolveOverlayKey } from "../overlaykbd";
-import { part, $, sheetImgs, type UINpc } from "./shared";
+import { part, $, esc, sheetImgs, type UINpc } from "./shared";
+
+/** „Zuletzt gespielt" grob als Text fürs Slot-Listing (#306). */
+function slotRelTime(ms: number): string {
+  if (!ms) return "noch nie gespielt";
+  const days = Math.floor((Date.now() - ms) / 86400000);
+  if (days <= 0) return "heute gespielt";
+  if (days === 1) return "gestern gespielt";
+  if (days < 30) return `vor ${days} Tagen`;
+  const months = Math.floor(days / 30);
+  return months <= 1 ? "vor 1 Monat" : `vor ${months} Monaten`;
+}
 
 export const overlayUI = part({
   /* ========== Event-Delegation ==========
@@ -21,6 +32,10 @@ export const overlayUI = part({
         case "exportSave": this.exportSave(); break;
         case "resetGame": this.resetGame(); break;
         case "importPick": ($("save-import") as HTMLInputElement).click(); break;
+        case "newSlot": this.newSlot(); break;
+        case "loadSlot": if (arg) this.loadSlot(arg); break;
+        case "renameSlot": if (arg) this.renameSlot(arg); break;
+        case "deleteSlot": if (arg) this.deleteSlot(arg); break;
         case "termHint": this.termHint(); break;
         case "termSolution": this.termSolution(); break;
         case "viewQuest": if (arg) this.viewQuest(arg); break;
@@ -134,9 +149,38 @@ export const overlayUI = part({
   /* ========== Menü / Pause ========== */
   openMenu() {
     this.closeOverlays();
+    this.renderSlots();
     this.renderAudioSettings();
     this.renderEventSettings();
     $("overlay-menu").classList.remove("hidden");
+  },
+
+  /** Spielstände-Block im Menü (#306): Liste aller Slots + Wechseln/Umbenennen/Löschen/Neu.
+   *  Der aktive Slot wird hervorgehoben und nicht „geladen"; den letzten Slot kann man nicht
+   *  löschen (es soll immer mindestens einer bleiben). */
+  renderSlots() {
+    const slots = Game.slots();
+    const canDelete = slots.length > 1;
+    const rows = slots.map(s => {
+      const meta = s.isNew
+        ? '<span class="slot-meta dim">🆕 noch nicht gespielt</span>'
+        : '<span class="slot-meta">' + s.rankIcon + " " + esc(s.rankName) +
+          " · Quest " + Math.min(s.questIdx + 1, s.questTotal) + "/" + s.questTotal +
+          " · " + slotRelTime(s.lastSeen) + "</span>";
+      const title = '<span class="slot-name">' + esc(s.name) + "</span>" +
+        (s.active ? ' <span class="slot-badge">▶ aktiv</span>' : "");
+      const btns: string[] = [];
+      if (!s.active) btns.push('<button data-action="loadSlot" data-arg="' + s.id + '">📂 Laden</button>');
+      btns.push('<button data-action="renameSlot" data-arg="' + s.id + '" title="Umbenennen">✏️</button>');
+      if (canDelete) btns.push('<button class="danger" data-action="deleteSlot" data-arg="' + s.id + '" title="Löschen">🗑️</button>');
+      return '<div class="slot-row' + (s.active ? " slot-active" : "") + '">' +
+        '<div class="slot-info">' + title + "<br>" + meta + "</div>" +
+        '<div class="slot-buttons">' + btns.join("") + "</div></div>";
+    }).join("");
+    $("menu-slots").innerHTML =
+      '<h3 class="menu-audio-title">💾 Spielstände</h3>' +
+      '<div class="slot-list">' + rows + "</div>" +
+      '<button data-action="newSlot" class="slot-new">➕ Neuer Spielstand</button>';
   },
 
   /** Spiel-Feel-Block im Menü (#71): Frequenz/Härte der Zufalls-Events regelbar
