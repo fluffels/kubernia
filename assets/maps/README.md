@@ -51,7 +51,7 @@ Default (Umschalt-Pfad); abgelöst wird sie erst in
   – ein Kachel-Sheet-`createLayer` könnte den Look nicht 1:1 reproduzieren; darum
   trägt `harbor.tmj` die Geometrie als **Daten** (Boden = semantische
   Terrain-Codes, leicht offset-kodiert für Tileds gid≥1; Kollision = solide
-  Kacheln) und `WorldScene.loadHarborMap()` speist damit denselben Renderer.
+  Kacheln) und der Terrain-Lader (`loadMapTerrain`, #425) speist damit denselben Renderer.
 
 ## Im Browser ansehen
 

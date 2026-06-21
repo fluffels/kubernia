@@ -3,8 +3,8 @@
  * Metadaten (Maße, Spawnpunkt, Tileset, Layer-Namen, map-spezifischer Parser/
  * Decoder). Damit kommt eine neue Karte künftig per Registry-Eintrag dazu statt
  * per fest verdrahtetem Pfad im Szenen-Code (Akzeptanz #57: zweite Karte ohne
- * neuen Karten-Code). Die Loader in scenes.ts (WorldScene.loadHarborMap,
- * TilemapTestScene, spawnPlayer-Fallback) holen ihre Karte über getMapEntry()
+ * neuen Karten-Code). Die Loader (WorldScene über loadMapTerrain (#425),
+ * TilemapTestScene, spawnPlayer-Fallback) holen ihre Karte über getMapEntry(mapId)
  * statt über fest importierte Pfade.
  *
  * Phaser-frei und im Node-Test prüfbar (wie tilemap.ts/harbormap.ts): die
