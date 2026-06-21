@@ -97,14 +97,11 @@ umzustellen. Maps dagegen gehören in Daten (siehe #57). Der größte Hebel ist
 
 → **Empfehlung: diskriminierte Union für `QuestStep` (#60, prio:mittel).**
 
-### 3. Save-System: Versionierung, Migration, Backend-Andock
+### 3. Save-System: Versionierung & Migration
 
 **Schon gut – kleine Restlücke.**
 
-`store.ts` ist der dokumentierte Andockpunkt fürs spätere Backend (Phase 10,
-#26): localStorage bleibt lokaler Cache, Server-Sync kommt intern dazu, ohne
-`game.ts` anzufassen. Versions-Hülle + Migrationskette sind vorhanden – genau
-das, was ein großes Spiel über viele Releases braucht.
+`store.ts` hält Versions-Hülle + Migrationskette vor; localStorage bleibt lokaler Cache, `game.ts` wird nicht angefasst – genau das, was ein großes Spiel über viele Releases braucht.
 
 Restlücke: Beim Laden macht `Game.load()` nur `Object.assign(defaultState,
 data)`. Fehlende Felder werden ergänzt, **kaputte/fremde Werte aber ungeprüft

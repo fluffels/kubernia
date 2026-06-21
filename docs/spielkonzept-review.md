@@ -63,8 +63,7 @@ Senior-Themen ab:
   existiert bereits; Ingress-Grundlagen stecken sogar schon in q8!)
 - GitOps/Argo CD → #21 · Observability/Prometheus/Grafana → #22
 - RBAC/Pod-Security → #23 · StatefulSets/Volumes/DBs → #24
-- Terraform-Module/Remote State/Cloud → #25 · eigenes Backend deployen → #26
-- Echter Modus gegen lokales Cluster → #28
+- Terraform-Module/Remote State/Cloud → #25
 
 Diese **Reihenfolge ist sinnvoll** (Grundlagen → Aufbau → Meisterschaft). Der Plan
 ist kohärent; ich würde nichts davon streichen.

@@ -148,12 +148,10 @@ Das Spiel deckt aktuell **Phase 1 – das Fundament** ab. Senior wird man durch 
 | 6 | RBAC, ServiceAccounts, Pod-Security | 🔜 geplant: „Wachturm-Quartier“ |
 | 7 | StatefulSets, Volumes, Backups, Datenbanken im Cluster | 🟡 im Spiel: Hafenkai „Lagerhallen-Viertel“ (Holz-Anleger am Westkai, Verladekräne, Frachtcontainer-Stapel) mit Speicher-Verwalter **Knut** – 2 Quests: StatefulSet & stabile Identität → PVC/PV & StorageClass (Speicher anfordern); Backups & DB-Betrieb noch offen |
 | 8 | Troubleshooting-Methodik (CrashLoop, ImagePull, Pending, Service-Endpoints, OOMKilled …) | ✅ im Spiel („Sturm-Saison“ + Service-Debugging + Resource-Management: 5 Quests + Zufalls-Stürme) |
-| 9 | Terraform-Module, Remote State, Cloud-Provider | 🔜 geplant: „Expeditions-Flotte“ |
-| 10 | Eigenes Backend für das Spiel bauen & selbst in K8s deployen | 🔜 der Meister-Abschluss: Spiel trifft Realität |
+| 9 | Terraform-Module, Remote State, Cloud-Provider | 🔜 geplant: „Expeditions-Flotte” |
 
 ## Roadmap (nächste Ausbaustufen)
 
 - Weitere Lernpfad-Inseln (siehe Tabelle oben) – **Wachturm-Quartier** (RBAC, Phase 6) und Ausbau des Lagerhallen-Viertels (Backups/Datenbank-Betrieb) u.a., je Insel eigene NPCs, Quests und Drills
 - **DNS** als letzter offener Baustein von Phase 3 (Ingress, TLS & NetworkPolicies sind schon im Spiel)
-- **Echter Modus**: dieselben Quests gegen ein lokales kind/minikube-Cluster
 - Mehr Grafik: weitere CC0-Packs, z.B. Innenräume für betretbare Gebäude

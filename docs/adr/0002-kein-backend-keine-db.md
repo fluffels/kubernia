@@ -53,6 +53,4 @@ Alle drei Trigger geprüft – **kein Trigger erfüllt**, Entscheidung bestätig
 - **Lern-Analytik:** kein Bedarf.
 - **Multiplayer:** durch ADR 0003 separat ausgeschlossen.
 
-**Klarstellung „Echter Modus" (#173–#178):** Diese Tickets beschreiben eine optionale lokale Proxy-Verbindung zu einem echten Cluster (kubectl/docker auf dem eigenen Rechner) – kein Cloud-Backend, keine Accounts, kein Online-Zwang. Sie widersprechen dieser ADR nicht und bleiben korrekt im Backlog als optionaler fortgeschrittener Scope.
-
 Nächste Re-Evaluierung: wenn einer der Trigger eintritt (kein Termin).
