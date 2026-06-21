@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ASSET_MANIFEST, KQAssets } from "../src/assets-data";
+import { ASSET_MANIFEST, KQAssets, COMMON_ASSETS, assetsForScene } from "../src/assets-data";
 
 /* Sichert das Asset-Manifest (#59) ab: Es ist die EINE Datenquelle, aus der
  * BootScene laden + Frame-Slicing ableitet und KQAssets erzeugt wird. Diese Tests
@@ -69,6 +69,56 @@ describe("KQAssets", () => {
     );
     for (const a of ASSET_MANIFEST) {
       expect(KQAssets[a.key], a.key).toBe(a.src);
+    }
+  });
+});
+
+describe("ASSET_MANIFEST – Szenen-Zuordnung (#198 Lazy-Loading)", () => {
+  // Die EINZIGEN region-exklusiv nachgeladenen Assets. Bewusst hartkodiert als Wächter aus
+  // dem Nutzungs-Audit (#198): wer ein Asset lazy taggt, das auch die WorldScene/eine andere
+  // Szene nutzt, würde im Spiel eine fehlende Textur erzeugen – genau das fängt dieser Block.
+  const EXPECTED_LAZY: Record<string, string[]> = {
+    Archipel: ["char_argos"],
+    Lighthouse: ["grafana_board", "alert_bell", "char_lumi"],
+    Warehouse: ["container", "crane", "char_knut"],
+  };
+  const REGIONS = Object.keys(EXPECTED_LAZY);
+
+  it("Common + alle Region-Sets partitionieren das Manifest lückenlos & überschneidungsfrei", () => {
+    const common = COMMON_ASSETS.map((a) => a.key);
+    const regional = REGIONS.flatMap((s) => assetsForScene(s).map((a) => a.key));
+    // keine Überschneidung (kein Asset ist common UND regional)
+    expect(common.filter((k) => regional.includes(k))).toEqual([]);
+    // zusammen = das GANZE Manifest (nichts geht beim Splitten verloren)
+    expect([...common, ...regional].sort()).toEqual(ASSET_MANIFEST.map((a) => a.key).sort());
+  });
+
+  it("genau die erwarteten Assets sind region-lazy getaggt (Wächter gegen Über-/Unter-Tagging)", () => {
+    for (const [scene, keys] of Object.entries(EXPECTED_LAZY)) {
+      expect(assetsForScene(scene).map((a) => a.key).sort(), scene).toEqual([...keys].sort());
+    }
+    // Summe der getaggten Assets = Summe der erwarteten (kein zusätzliches scene-Tag woanders)
+    const tagged = ASSET_MANIFEST.filter((a) => a.scene).length;
+    expect(tagged).toBe(Object.values(EXPECTED_LAZY).flat().length);
+  });
+
+  it("bekannte GETEILTE Assets bleiben common (Regression gegen Fehl-Tagging)", () => {
+    // Diese Keys nutzt die WorldScene ODER mehrere Szenen → dürfen NIE einen scene-Tag tragen,
+    // sonst fehlt im Hafen/anderswo die Textur. (tree/pine: Hafen-Wald; lighthouse: Hafen-Turm;
+    // barrel/crate: Cluster-Pods; coast…: Terrain überall; char_player/seagull/flowers: überall.)
+    const mustBeCommon = [
+      "tree", "pine", "lighthouse", "barrel", "crate", "coast", "meadow", "path", "kai", "dock",
+      "flowers", "seagull", "char_player", "dungeon", "sign", "rock", "bush",
+    ];
+    const commonSet = new Set(COMMON_ASSETS.map((a) => a.key));
+    for (const k of mustBeCommon) expect(commonSet.has(k), k).toBe(true);
+  });
+
+  it("KQAssets bleibt VOLLSTÄNDIG (Lazy-Tag ändert nichts an den DOM-Porträt-URLs)", () => {
+    // Porträts/UI laden über KQAssets[tex] (DOM-<img>-URL), nicht über den Phaser-Cache –
+    // darum müssen auch die lazy getaggten Region-Chars hier weiter auflösen.
+    for (const k of ["char_argos", "char_lumi", "char_knut"]) {
+      expect(KQAssets[k], k).toBeTruthy();
     }
   });
 });

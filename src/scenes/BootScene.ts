@@ -1,32 +1,25 @@
 import Phaser from "phaser";
-import { ASSET_MANIFEST } from "../assets-data";
-import { T, buildPixelFont, buildCoinIcon } from "./shared";
+import { COMMON_ASSETS } from "../assets-data";
+import { buildPixelFont, buildCoinIcon, queueAssetLoad, sliceSheets } from "./shared";
 
 export class BootScene extends Phaser.Scene {
   constructor() { super("Boot"); }
   preload() {
-    // a.src ist im Dev-Server eine URL, im Single-File-Build eine Base64-Data-URI.
-    // Der Phaser-Loader kommt mit beidem klar (Data-URIs laden ohne XHR – Doppelklick-tauglich).
-    // Laden ist für plain wie sheet identisch; das Frame-Slicing folgt erst in create().
-    for (const a of ASSET_MANIFEST) this.load.image(a.key, a.src);
+    // #198: NUR die gemeinsamen + Startinsel-Assets vorab laden (COMMON_ASSETS = alles ohne
+    // scene-Tag). Die region-exklusiven Assets (Archipel/Leuchtturm/Lager) lädt die jeweilige
+    // RegionScene erst beim Betreten nach – so lädt der Start nicht mehr Inseln, die man noch
+    // gar nicht besucht hat. a.src ist im Dev-/Host-Build eine URL, im Single-File-Build eine
+    // Base64-Data-URI (lädt ohne XHR – Doppelklick-tauglich); der Loader kommt mit beidem klar.
+    queueAssetLoad(this, COMMON_ASSETS);
   }
   create() {
     // Pixel-Bitmap-Font + Münz-Icon einmalig backen (#188) – global im Cache,
-    // damit World/Interior/Archipel/MapTest sie ohne erneutes Laden nutzen.
+    // damit World/Interior/Region/MapTest sie ohne erneutes Laden nutzen.
     buildPixelFont(this);
     buildCoinIcon(this);
-    // Nur Sheets in Frames schneiden; plains bleiben ganze Bilder. Spaltenzahl und
-    // Frame-Größe kommen aus dem Manifest (Default 16), nicht mehr aus Listen hier.
-    for (const a of ASSET_MANIFEST) {
-      if (a.kind !== "sheet") continue;
-      const frame = a.frame ?? T;
-      const tex = this.textures.get(a.key);
-      const img = tex.getSourceImage();
-      const rows = Math.floor(img.height / frame);
-      for (let i = 0; i < a.cols * rows; i++) {
-        tex.add(i, 0, (i % a.cols) * frame, Math.floor(i / a.cols) * frame, frame, frame);
-      }
-    }
+    // Sheets der gemeinsamen Assets in Frames schneiden (plains bleiben ganze Bilder);
+    // Region-Sheets schneidet später die jeweilige RegionScene (#198).
+    sliceSheets(this, COMMON_ASSETS);
     // #191: Mit ?maptest in der URL startet statt der Welt die Tiled-Loader-Testszene
     // (parallel zur prozeduralen buildMap()). Sonst ganz normal die WorldScene.
     const params = new URLSearchParams(typeof location !== "undefined" ? location.search : "");

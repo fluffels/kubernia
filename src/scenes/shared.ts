@@ -9,6 +9,7 @@ import { ATLAS_CHARS, CELL_W, CELL_H, GLYPH_W, GLYPH_H, glyphMatrix, sanitize } 
 import { SFX } from "../sfx";
 import { keys, setWorldScene, setInteriorOpen, type WorldSceneRef } from "../runtime";
 import { warpAt, type Warp } from "../warps";
+import { type AssetEntry } from "../assets-data";
 
 const T = 16;
 
@@ -156,6 +157,42 @@ function buildCoinIcon(scene: Phaser.Scene) {
   g.generateTexture(COIN_TEX, 10, 10); g.destroy();
 }
 
+/* ---------- Lazy-Asset-Loading pro Szene (#198) ----------
+ * Statt alle Assets vorab in der BootScene zu laden, lädt jede Szene ihre eigenen nach:
+ * BootScene die gemeinsamen + Startinsel-Assets (COMMON_ASSETS), jede Region in ihrer
+ * preload() die region-exklusiven (assetsForScene). Beides läuft über dieselben zwei
+ * Helfer, damit Laden + Frame-Slicing an EINER Stelle definiert sind (früher beides inline
+ * in BootScene). */
+
+/** Reiht eine Asset-Liste in den Scene-Loader ein – in preload() aufrufen, Phaser wartet
+ *  vor create() auf das Laden (darum kein sichtbares Pop-in). Idempotent: bereits im
+ *  (globalen) Textur-Cache liegende Keys werden übersprungen, sodass ein zweiter Region-
+ *  Besuch nichts neu lädt. Data-URIs (Offline-Single-File-Build) laden ohne XHR. */
+function queueAssetLoad(scene: Phaser.Scene, entries: readonly AssetEntry[]) {
+  for (const a of entries) {
+    if (scene.textures.exists(a.key)) continue;
+    scene.load.image(a.key, a.src);
+  }
+}
+
+/** Schneidet die Sheets einer Asset-Liste in `cols`×Zeilen Frames (Größe `frame`, Default T)
+ *  – in create() aufrufen, nachdem queueAssetLoad sie geladen hat. Idempotent: schon
+ *  geschnittene Sheets (mehr als der __BASE-Frame) bleiben unangetastet; plains werden
+ *  ignoriert. Spiegelt das frühere Inline-Slicing der BootScene (#59). */
+function sliceSheets(scene: Phaser.Scene, entries: readonly AssetEntry[]) {
+  for (const a of entries) {
+    if (a.kind !== "sheet") continue;
+    const tex = scene.textures.get(a.key);
+    if (tex.frameTotal > 1) continue;   // bereits geschnitten (oder fehlt) → nicht doppelt
+    const frame = a.frame ?? T;
+    const img = tex.getSourceImage();
+    const rows = Math.floor(img.height / frame);
+    for (let i = 0; i < a.cols * rows; i++) {
+      tex.add(i, 0, (i % a.cols) * frame, Math.floor(i / a.cols) * frame, frame, frame);
+    }
+  }
+}
+
 function fontColor(hex?: string) {
   return hex ? parseInt(hex.replace("#", ""), 16) : 0xffffff;
 }
@@ -277,5 +314,5 @@ function floatPixelText(scene: Phaser.Scene, x: number, y: number, str: string, 
 }
 
 export {
-  T, DIRT, STONE, WOOD, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, WELL, SIGN, CART, WATER, FOAM, WANG, hashHue, hueColor, hueColorLight, FONT_KEY, FONT_TEX, COIN_TEX, buildPixelFont, buildCoinIcon, fontColor, pixelText, spawnIslandNpc, spawnIslandObject, SIGN_BORDER, SIGN_PAD, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText,
+  T, DIRT, STONE, WOOD, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, WELL, SIGN, CART, WATER, FOAM, WANG, hashHue, hueColor, hueColorLight, FONT_KEY, FONT_TEX, COIN_TEX, buildPixelFont, buildCoinIcon, queueAssetLoad, sliceSheets, fontColor, pixelText, spawnIslandNpc, spawnIslandObject, SIGN_BORDER, SIGN_PAD, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText,
 };

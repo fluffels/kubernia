@@ -80,11 +80,19 @@ import pet_ratte from "../assets/pixellab/pet_ratte.png";
 import pet_fledermaus from "../assets/pixellab/pet_fledermaus.png";
 import pet_geist from "../assets/pixellab/pet_geist.png";
 
+/** Region-Szenen-Keys, deren Assets erst beim Betreten nachgeladen werden (#198,
+ *  Lazy-Loading). Wert = Phaser-Szenen-Key der Region (RegionConfig.key in
+ *  scenes/regions.ts). Ein Asset OHNE `scene` ist gemeinsam/Startinsel und wird in der
+ *  BootScene vorab geladen. */
+export type AssetScene = "Archipel" | "Lighthouse" | "Warehouse";
+
 /** Ein Asset im Manifest. `plain` = ganzes Bild, `sheet` = nach dem Laden in
- *  `cols`×Zeilen Frames der Größe `frame` (Default 16) geschnitten. */
+ *  `cols`×Zeilen Frames der Größe `frame` (Default 16) geschnitten. `scene` markiert
+ *  region-exklusive Assets, die erst beim Insel-/Szenenwechsel nachgeladen werden (#198);
+ *  fehlt es, ist das Asset gemeinsam + wird beim Start geladen. */
 export type AssetEntry =
-  | { key: string; src: string; kind: "plain" }
-  | { key: string; src: string; kind: "sheet"; cols: number; frame?: number };
+  | { key: string; src: string; kind: "plain"; scene?: AssetScene }
+  | { key: string; src: string; kind: "sheet"; cols: number; frame?: number; scene?: AssetScene };
 
 /** Die EINE Quelle: jedes Asset genau einmal. Neues Asset = ein Eintrag hier
  *  (plus den Import oben) – kein Nachziehen in scenes.ts mehr nötig. */
@@ -119,10 +127,11 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
   { key: "signpost", src: signpost, kind: "plain" },
   { key: "sign", src: sign, kind: "plain" },
   { key: "lighthouse", src: lighthouse, kind: "plain" },
-  { key: "grafana_board", src: grafana_board, kind: "plain" },   // Monitoring-Dashboard (#111)
-  { key: "alert_bell", src: alert_bell, kind: "plain" },         // Alarm-Glocke (#111)
-  { key: "container", src: container, kind: "plain" },           // Frachtcontainer-Stapel (#124)
-  { key: "crane", src: crane, kind: "plain" },                   // Hafen-Verladekran (#124)
+  // Region-exklusiv (#198, Lazy-Loading): erst beim Betreten der jeweiligen Region geladen.
+  { key: "grafana_board", src: grafana_board, kind: "plain", scene: "Lighthouse" },   // Monitoring-Dashboard (#111)
+  { key: "alert_bell", src: alert_bell, kind: "plain", scene: "Lighthouse" },         // Alarm-Glocke (#111)
+  { key: "container", src: container, kind: "plain", scene: "Warehouse" },           // Frachtcontainer-Stapel (#124)
+  { key: "crane", src: crane, kind: "plain", scene: "Warehouse" },                   // Hafen-Verladekran (#124)
   { key: "house_office", src: house_office, kind: "plain" },
   { key: "house_forge", src: house_forge, kind: "plain" },
   { key: "house_chart", src: house_chart, kind: "plain" },
@@ -144,9 +153,9 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
   { key: "char_theo", src: char_theo, kind: "plain" },
   { key: "char_kralle", src: char_kralle, kind: "plain" },
   { key: "char_juno", src: char_juno, kind: "plain" },
-  { key: "char_argos", src: char_argos, kind: "plain" },
-  { key: "char_lumi", src: char_lumi, kind: "plain" },
-  { key: "char_knut", src: char_knut, kind: "plain" },   // Speicher-Verwalter Knut (#125)
+  { key: "char_argos", src: char_argos, kind: "plain", scene: "Archipel" },     // Insel-NPC – nur im Archipel gerendert (Porträt läuft über KQAssets-URL)
+  { key: "char_lumi", src: char_lumi, kind: "plain", scene: "Lighthouse" },     // Insel-NPC – nur am Leuchtturm gerendert
+  { key: "char_knut", src: char_knut, kind: "plain", scene: "Warehouse" },   // Speicher-Verwalter Knut (#125) – nur im Lager gerendert
 
   // PixelLab-Shop-Haustiere
   { key: "pet_ratte", src: pet_ratte, kind: "plain" },
@@ -159,3 +168,16 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
 export const KQAssets: Record<string, string> = Object.fromEntries(
   ASSET_MANIFEST.map((a) => [a.key, a.src]),
 );
+
+/** Gemeinsame + Startinsel-Assets (#198): alles OHNE `scene`-Tag. Die BootScene lädt genau
+ *  diese vorab – Figuren/HUD/Terrain der Hauptkarte „Port Kubernia" + alle scene-übergreifend
+ *  genutzten Sprites. Die region-exklusiven Assets bleiben außen vor und werden erst beim
+ *  Betreten ihrer Region nachgeladen (assetsForScene + RegionScene.preload). */
+export const COMMON_ASSETS: readonly AssetEntry[] = ASSET_MANIFEST.filter((a) => !a.scene);
+
+/** Die region-exklusiven Assets einer Szene (#198): erst beim Insel-/Szenenwechsel
+ *  nachgeladen. `scene` ist der Phaser-Szenen-Key der Region (RegionConfig.key); ein
+ *  unbekannter Key liefert eine leere Liste (kein Nachladen nötig). */
+export function assetsForScene(scene: string): readonly AssetEntry[] {
+  return ASSET_MANIFEST.filter((a) => a.scene === scene);
+}

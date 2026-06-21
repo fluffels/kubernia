@@ -23,8 +23,9 @@ import { resolveMove, circleHitbox, npcHitboxes, type Hitbox } from "../world";
 import { npcSpawnsForMap, objectsForMap } from "../content/entities";
 import { WATER, SAND, PATH, DOCK } from "../archipel";
 import { keys, setWorldScene, setInteriorOpen } from "../runtime";
-import { T, FOAM, WANG, STONE, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText, IslandScene, type SceneNpc } from "./shared";
+import { T, FOAM, WANG, STONE, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText, queueAssetLoad, sliceSheets, IslandScene, type SceneNpc } from "./shared";
 import type { Warp } from "../warps";
+import { assetsForScene } from "../assets-data";
 
 /** #343/#386: Radius der runden Sub-Tile-Hitboxen (Steine/Büsche/NPCs) – in allen
  *  Regionen gleich (wie in WorldScene). */
@@ -95,8 +96,32 @@ export interface RegionConfig {
 export class RegionScene extends IslandScene {
   constructor(readonly cfg: RegionConfig) { super(cfg.key); }
 
+  /** #198 (Lazy-Asset-Loading): die region-exklusiven Assets erst beim Betreten nachladen,
+   *  nicht beim Spielstart. Läuft VOR create() – Phaser wartet auf den Loader, darum ist die
+   *  Region beim ersten Frame vollständig texturiert (kein Asset-Pop-in). Beim zweiten Besuch
+   *  liegt alles schon im Cache → queueAssetLoad reiht nichts ein, der Indikator bleibt aus. */
+  preload() {
+    const own = assetsForScene(this.cfg.key);
+    queueAssetLoad(this, own);
+    if (this.load.list.size > 0) this.showRegionLoading();
+  }
+
+  /** Kurzer Lade-Schleier beim Region-Warp (#198): nur sichtbar, wenn wirklich etwas
+   *  nachgeladen wird (sonst im selben Tick wieder weg). Wird auf „complete" – also noch
+   *  vor create() – entfernt, damit der frische Region-Aufbau ihn nicht überlagert. */
+  private showRegionLoading() {
+    const cam = this.cameras.main;
+    const cw = cam.width, ch = cam.height;
+    const veil = this.add.rectangle(0, 0, cw, ch, 0x0b1f33, 0.9).setOrigin(0).setScrollFactor(0).setDepth(60000);
+    const label = pixelText(this, cw / 2, ch / 2, "Lade Region …", { color: "#ffe9b0", size: 14, origin: 0.5, depth: 60001, shadow: true }).setScrollFactor(0);
+    this.load.once("complete", () => { veil.destroy(); label.destroy(); });
+  }
+
   create() {
     const cfg = this.cfg;
+    // #198: eigene Sheets in Frames schneiden (falls eine Region je ein Sheet bekommt) – die
+    // gemeinsamen Sheets hat die BootScene schon geschnitten, plains brauchen es nicht.
+    sliceSheets(this, assetsForScene(cfg.key));
     const m = cfg.build();
     this.W = m.W; this.H = m.H; this.ground = m.ground; this.solid = m.solid;
     // #343/#386: runde Sub-Tile-Hitboxen für Steine/Büsche/NPCs; `solid` bleibt für eckige
