@@ -96,3 +96,26 @@ test("deleteSlot: nicht-aktiv → reload:false; aktiv → reload:true + Rückfal
   expect(r2.ok).toBe(true);
   expect(r2.reload).toBe(true);
 });
+
+test("newSlot: ein späterer Auto-Save trägt den alten Stand NICHT in den neuen Slot (#306)", async () => {
+  // Falle: Nach newSlot zeigt der aktive Zeiger schon auf den neuen (leeren) Slot, der alte
+  // Spielstand liegt aber noch im Speicher. Feuert in den ~800 ms bis zum Reload der 5-s-Auto-
+  // Save, würde er den ALTEN Stand in den neuen Slot schreiben → der „neue" Slot startet nicht
+  // von vorn. Erwartung: Saves sind nach dem Wechsel unterdrückt, der neue Slot bleibt leer.
+  freshWindow();
+  vi.resetModules();
+  const { Game } = await import("../src/game");
+  const { SaveStore } = await import("../src/store");
+  Game.load();
+
+  Game.state.xp = 999;
+  Game.state.character = 0; // alter Slot: echter Fortschritt
+  Game.save();
+
+  Game.newSlot("Neu");      // wechselt auf den neuen, leeren Slot (+ Saves unterdrückt)
+  Game.state.xp = 777;      // der alte Spielstand „lebt" im Speicher weiter
+  Game.save();              // simulierter Auto-Save im Reload-Fenster → MUSS unterdrückt sein
+
+  // Aktiver Slot ist der neue: er darf keinen Stand haben → nach Reload startet er frisch.
+  expect(SaveStore.readState()).toBe(null);
+});
