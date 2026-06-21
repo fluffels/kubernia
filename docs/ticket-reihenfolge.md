@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-21 (nach #436).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
+> **Stand: 2026-06-21 (nach #436; Wachturm-Quartier / Phase 6 reaktiviert).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -44,20 +44,25 @@ Sagt die Maintainerin **„nächstes Ticket"** (für kubequest), dann:
 
 Leitlinie der Sortierung: **Prio zuerst** (höchste offene Prio oben), **innerhalb gleicher Prio nach Abhängigkeit** (was etwas anderes ermöglicht, kommt davor), sonst niedrigste Nummer. Der **Skalierungs-Enabler-Block** ist bewusst über die anderen `prio:niedrig`-Tickets gezogen, weil „Umbau zuerst, dann der große Content-Push" gilt (Begründung: [architektur-analyse-2026-06.md](architektur-analyse-2026-06.md)). Stand des Blocks: **#198 ✓**, **#428 ✓** (erledigt); **#339 zurückgestellt** (Vite inlinet die kleinen Sprites bereits als Data-URI → Texture-Atlas aktuell ohne messbaren Nutzen, `status:zurückgestellt` mit Re-Eval-Trigger); **#417 aufgeteilt** in **#435 ✓** (Lazy-Content, erledigt) + **#436 ✓** (Save-Laden entzerren, erledigt). Der Skalierungs-Enabler-Block ist damit vollständig abgearbeitet.
 
+**Neu am 2026-06-21 — der „große Content-Push" beginnt:** Mit dem fertigen Enabler-Block wurde die nächste Story-Region **Wachturm-Quartier (Phase 6 — RBAC / ServiceAccounts / Pod-Security)** aus dem Reaktivierungs-Pool geholt (`status:zurückgestellt` von **#130–#139** entfernt; #137 Quiz war schon ✓) und als **zusammenhängender Arc an den Kopf der Liste** gezogen — genau das „dann der große Content-Push" nach „Umbau zuerst". Gut vorbereitet: **Sim-Grundlage** (`auth can-i` #126, Pod-Security #128) ✓ und die **Region-Maschinerie** seit #427 datengetrieben (`RegionScene`/`REGION_CONFIGS`), eine neue Region anzulegen ist also billig. Die früheren **no-dependency-Content-Füller** (#212/#218/#219/#228/#229/#236/#237/#239/#250) sind dafür in den **Auto-Rest** zurückgewandert — sie haben keine Abhängigkeit und gehören damit nicht in den Kopf (Prio→Nummer holt sie dort weiter, sobald sich der Kopf leert). Die Wachturm-Region steht **über** den QoL-/System-Features (#306/#332/#334), weil sie echten Lernpfad-Fortschritt bringt, jene nur Komfort.
+
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| 1 | **#306** | niedrig | Mehrere Spielstände / Save-Slots | Feature auf IndexedDB-Fundament (#350 ✓). |
-| 2 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
-| 3 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
-| 4 | **#212** | niedrig | Inhalt: erklären, was nginx ist (Webserver) | Nachgefüllt aus dem Auto-Rest (niedrigste freie Nicht-Optik-Nummer); reines Content-Ticket, keine Abhängigkeit. |
-| 5 | **#218** | niedrig | Inhalt: Stapel-Spiel mehr Beispiele + Cache/Build erklären | Nachgefüllt aus dem Auto-Rest (nächste freie Nicht-Optik-Content-Nummer); keine Abhängigkeit. |
-| 6 | **#219** | niedrig | Lernpfad: Spaced Repetition auf Stapel-Spiel/Drills ausweiten | Nachgefüllt aus dem Auto-Rest; thematisch nahe #218 (Stapel-Spiel), keine harte Abhängigkeit. |
-| 7 | **#228** | niedrig | Inhalt: Fun Fact – woher die 8 in K8s kommt | Nachgefüllt aus dem Auto-Rest; nächste freie Nicht-Optik-Content-Nummer, keine Abhängigkeit. |
-| 8 | **#229** | niedrig | Inhalt: mehr (gute!) Fun Facts & Witze einstreuen | Nachgefüllt aus dem Auto-Rest; thematisch nahe #228, keine Abhängigkeit. |
-| 9 | **#236** | niedrig | Inhalt: Kralle-Meilenstein-Sprüche (Übungszähler) | Nachgefüllt aus dem Auto-Rest (#416 erledigt); nächste freie Nicht-Optik-Content-Nummer, keine Abhängigkeit. |
-| 10 | **#237** | niedrig | Inhalt: Kralle = Krabbe ohne Krallen – Running Gag draus machen | Nachgefüllt aus dem Auto-Rest (#422 erledigt); thematisch nahe #236 (Kralle-Sprüche), keine Abhängigkeit. |
-| 11 | **#239** | niedrig | Lernbogen: Cluster nach Sturm selbst neu aufbauen (Spät-Spiel) | Nachgefüllt aus dem Auto-Rest (#198 erledigt); Content/Spät-Spiel, keine harte Abhängigkeit. |
-| 12 | **#250** | niedrig | Lernpfad: `argocd app list` als teach-Schritt (q29) einführen | Nachgefüllt aus dem Auto-Rest (#435 erledigt); nächste freie Nicht-Optik-Lernpfad-Nummer, keine harte Abhängigkeit. |
+| | **— Wachturm-Quartier (Phase 6: RBAC / ServiceAccounts / Pod-Security) — die nächste Story-Region, in Abhängigkeitsreihenfolge —** | | | Reaktiviert 2026-06-21. Sim ✓ (`auth can-i` #126, Pod-Security #128), Quiz #137 ✓, Region-Infra datengetrieben (#427). Achtung: **#131 (NPC) gatet die Quests** → braucht erst Katharinas Design-Vorstellung. |
+| 1 | **#130** | ohne | Wachturm-Quartier: Insel/Bereich + Anleger/Warp | **Arc-Start** — die Region muss existieren, bevor NPC/Quests reinkommen. Datengetrieben via `RegionScene`/`REGION_CONFIGS` (#427), daher billig. |
+| 2 | **#131** ⚠️ | ohne | Wachturm-Quartier: neuer NPC (Sprite + Smalltalk) | **Optik/Grafik: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen.** Quest-Geber der vier Quests — gatet #132–#135. |
+| 3 | **#132** | ohne | Quest „ServiceAccounts — Identität für Pods" | Erste RBAC-Quest; braucht Region #130 + NPC #131. |
+| 4 | **#133** | ohne | Quest „RBAC — Role & RoleBinding (Least Privilege)" | Baut didaktisch auf #132 (ServiceAccounts) auf. |
+| 5 | **#134** | ohne | Quest „RBAC — ClusterRole & kubectl auth can-i" | Baut auf #133; Sim `auth can-i` (#126) ✓. |
+| 6 | **#135** | ohne | Quest „Pod-Security — SecurityContext & Pod Security Standards" | Letzte Quest der Region; Sim Pod-Security (#128) ✓. |
+| 7 | **#136** | ohne | Drills (RBAC/Security-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte (Muskelgedächtnis). |
+| 8 | **#138** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad; nach Quests + Drills. Phase 6 in README → ✅. |
+| 9 | **#139** | ohne | Tests für RBAC/Security-Quests & Sim | Zuletzt im Arc — sichert Quests + Sim ab (Red-Green). |
+| | **— QoL / System-Features (auf Fundament, kein Lernpfad-Fortschritt) —** | | | |
+| 10 | **#306** | niedrig | Mehrere Spielstände / Save-Slots | Feature auf IndexedDB-Fundament (#350 ✓). |
+| 11 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
+| 12 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| | **— Sonderfälle ans Ende —** | | | |
 | 13 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
 | 14 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
@@ -81,6 +86,8 @@ gh issue list --state open --limit 500 --json number,title,assignees,labels --jq
 ## Reaktivierungs-Pool — war hinter Architektur geparkt
 
 Die offenen Tickets mit Label **`status:zurückgestellt`** wurden zurückgestellt, weil **erst Architektur + Fundament fertig werden mussten** — sie sind **nicht** verworfen. Jetzt, wo dieses Gate fast fällt, sind sie der **Pool, aus dem der Kopf nachgefüllt wird**: leert sich der Kopf, werden die passenden **progressiv reaktiviert** (Label `status:zurückgestellt` entfernen → an die dependency-passende Stelle in den Kopf einsortieren). Es wird **nicht** alles auf einmal reaktiviert (das würde die Pflege sprengen).
+
+> **Erste progressive Reaktivierung (2026-06-21):** die **Wachturm-Quartier-Gruppe** (#130–#139, Phase 6 — RBAC/Security) als ganze Region-Einheit (Region → NPC → Quests → Drills → Progression → Tests). Steht jetzt im Kopf, siehe oben. Bewusst als *eine* Region reaktiviert, nicht der ganze Pool.
 
 Bei der Auswahl werden sie weiterhin **übersprungen**, solange das Label dran ist — **maßgeblich ist immer das Label**, nicht eine Aufzählung hier.
 
