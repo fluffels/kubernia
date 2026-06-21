@@ -89,7 +89,11 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
             chunkSizeWarningLimit: 2200,
             rollupOptions: {
               output: {
-                manualChunks: { vendor: ["phaser"] },
+                // Funktions-Form statt der früheren Objekt-Form `{ vendor: ["phaser"] }`:
+                // Vite 8 / Rollup 4 hat die deprecated Objekt-Form aus dem öffentlichen Typ
+                // entfernt (nur noch `ManualChunksFunction`). Alle Phaser-Module landen
+                // weiterhin im langlebigen `vendor`-Chunk; alles andere bleibt im Spielcode.
+                manualChunks: (id) => (id.includes("node_modules/phaser") ? "vendor" : undefined),
               },
             },
           }),

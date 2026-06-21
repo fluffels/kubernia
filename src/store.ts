@@ -346,7 +346,9 @@
      */
     async init(): Promise<void> {
       if (idb) return; // schon im IndexedDB-Modus
-      let db: IDBDatabase | null = null;
+      // Kein `= null`-Initializer: db wird in BEIDEN Zweigen (try/catch) gesetzt, bevor
+      // es unten gelesen wird – ein Startwert wäre toter Code (no-useless-assignment, ESLint 10).
+      let db: IDBDatabase | null;
       try {
         db = await openIdb();
       } catch {
