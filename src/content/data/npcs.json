@@ -9,5 +9,6 @@
   "juno":   { "name": "Juno",          "title": "Sturmwache",         "sprite": 97,  "tex": "char_juno" },
   "argo":   { "name": "Argo",          "title": "GitOps-Lotsin",      "sprite": 84,  "tex": "char_argos" },
   "lumi":   { "name": "Lumi",          "title": "Leuchtturmwärterin", "sprite": 97,  "tex": "char_lumi" },
-  "knut":   { "name": "Knut",          "title": "Speicher-Verwalter", "sprite": 100, "tex": "char_knut" }
+  "knut":   { "name": "Knut",          "title": "Speicher-Verwalter", "sprite": 100, "tex": "char_knut" },
+  "vidar":  { "name": "Vidar",         "title": "Wachveteran",        "sprite": 97,  "tex": "char_vidar" }
 }

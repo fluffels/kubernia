@@ -52,6 +52,7 @@ Gemeinsame Basis-Tile-IDs (zum Weiter-Verketten neuer Sets):
 `char_argos` 0904ac29 (GitOps-Archipel-NPC „Argo", GitOps-Lotsin, #93)
 `char_lumi` 4f187598 (Monitoring-Leuchtturm-NPC „Lumi", Leuchtturmwärterin, #112; gelbes Ölzeug + Spektiv, `view: low top-down`, `chibi`, `detailed shading`; wie unten size 48 → 68²-Canvas, auf 48² runtergerechnet)
 `char_knut` 4b1912ed (Lagerhallen-Viertel-NPC „Knut", Speicher-Verwalter, #125; älterer Hafen-Verwalter mit Mütze, dunklem Overall + Klemmbrett/Logbuch, `view: low top-down`, `chibi`, `selective outline`, `detailed shading`, `high detail`, size 48 → 68²-Canvas, 4 Richtungen, nur `south` genutzt)
+`char_vidar` 6a2a55d4 (Wachturm-Quartier-NPC „Vidar", Wachveteran am Tor, #131; grummeliger alter Wächter mit Graubart, Stahlbrust über schiefer­blauer Tunika + Klemmbrett/Gästeliste, `view: low top-down`, `chibi`, `selective outline`, `detailed shading`, `high detail`, size 48 → 68²-Canvas, **auf 48² runtergerechnet** (Nearest-Neighbor) wie der 48er-Cast/Spieler, 4 Richtungen, nur `south` genutzt)
 
 > Die 6 zuletzt ergänzten (Bo/Ada/Theo/Kralle/Juno/Argo) wurden mit `size 48` erzeugt
 > (Leinwand 68²) und auf **48²** runtergerechnet — gleiche Körperhöhe (~34px),

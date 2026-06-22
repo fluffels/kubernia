@@ -13,6 +13,7 @@
  */
 import Phaser from "phaser";
 import { circleHitbox, rectHitbox } from "../world";
+import { npcSpawnsForMap } from "../content/entities";
 import { T, DEVICE } from "./shared";
 import type { RegionConfig, RegionScene } from "./RegionScene";
 import { buildArchipel, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL, ARCHIPEL_NPC, ARCHIPEL_QUEST_TRIGGER, type ArchipelMap } from "../archipel";
@@ -142,10 +143,10 @@ const warehouse: RegionConfig = {
 };
 
 /** Wachturm-Quartier (#130): befestigter Gras-Bailey mit Stein-Wehrmauer + Tor + Holz-Steg;
- *  im Hof der namensgebende Wachturm. Thema: Zugriffskontrolle (RBAC/Security, Phase 6). NPC
- *  (#131) + Quests (#132–135) docken später an – die Karte trägt darum noch keinen Registry-
- *  Eintrag; der Wachturm ist bis zu seinem PixelLab-Asset ein bewusster prozeduraler
- *  Platzhalter (siehe decorate). */
+ *  im Hof der namensgebende Wachturm. Thema: Zugriffskontrolle (RBAC/Security, Phase 6). Der
+ *  NPC Vidar (#131, Wachveteran am Tor) steht jetzt als Registry-Eintrag (entities.json) im
+ *  Hof; die Quests (#132–135) docken später an. Der Wachturm selbst ist bis zu seinem
+ *  PixelLab-Asset (#440) ein bewusster prozeduraler Platzhalter (siehe decorate). */
 const watchtower: RegionConfig = {
   key: "Watchtower",
   map: "watchtower",
@@ -161,6 +162,10 @@ const watchtower: RegionConfig = {
     reserved: [
       { x: WATCHTOWER_ARRIVAL.tx, y: WATCHTOWER_ARRIVAL.ty },
       { x: WATCHTOWER_TO_WORLD.tx, y: WATCHTOWER_TO_WORLD.ty },
+      // Vidar (#131) + künftige Quartier-NPCs: Standplätze aus der Entity-Registry
+      // freihalten, damit keine Boden-Deko (Busch/Blume) auf ihnen landet. Datengetrieben
+      // statt Koordinaten-Literal, damit es nicht von entities.json driften kann.
+      ...npcSpawnsForMap("watchtower").map((s) => ({ x: s.x, y: s.y })),
     ],
     // Sparsame Begrünung – ein Stein-Festungshof, kein Garten: ein paar Büsche + Blumen.
     bands: [{ max: 4, kind: "bush" }, { max: 11, kind: "flowers" }],

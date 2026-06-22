@@ -74,6 +74,7 @@ import char_juno from "../assets/pixellab/char_juno.png";
 import char_argos from "../assets/pixellab/char_argos.png";
 import char_lumi from "../assets/pixellab/char_lumi.png";
 import char_knut from "../assets/pixellab/char_knut.png";   // Speicher-Verwalter Knut (#125)
+import char_vidar from "../assets/pixellab/char_vidar.png";   // Wachveteran Vidar (#131)
 
 // PixelLab-Shop-Haustiere
 import pet_ratte from "../assets/pixellab/pet_ratte.png";
@@ -84,7 +85,7 @@ import pet_geist from "../assets/pixellab/pet_geist.png";
  *  Lazy-Loading). Wert = Phaser-Szenen-Key der Region (RegionConfig.key in
  *  scenes/regions.ts). Ein Asset OHNE `scene` ist gemeinsam/Startinsel und wird in der
  *  BootScene vorab geladen. */
-export type AssetScene = "Archipel" | "Lighthouse" | "Warehouse";
+export type AssetScene = "Archipel" | "Lighthouse" | "Warehouse" | "Watchtower";
 
 /** Ein Asset im Manifest. `plain` = ganzes Bild, `sheet` = nach dem Laden in
  *  `cols`×Zeilen Frames der Größe `frame` (Default 16) geschnitten. `scene` markiert
@@ -156,6 +157,7 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
   { key: "char_argos", src: char_argos, kind: "plain", scene: "Archipel" },     // Insel-NPC – nur im Archipel gerendert (Porträt läuft über KQAssets-URL)
   { key: "char_lumi", src: char_lumi, kind: "plain", scene: "Lighthouse" },     // Insel-NPC – nur am Leuchtturm gerendert
   { key: "char_knut", src: char_knut, kind: "plain", scene: "Warehouse" },   // Speicher-Verwalter Knut (#125) – nur im Lager gerendert
+  { key: "char_vidar", src: char_vidar, kind: "plain", scene: "Watchtower" },   // Wachveteran Vidar (#131) – nur im Wachturm-Quartier gerendert
 
   // PixelLab-Shop-Haustiere
   { key: "pet_ratte", src: pet_ratte, kind: "plain" },

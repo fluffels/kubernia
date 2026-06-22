@@ -44,5 +44,11 @@
     "Ein <b>Pod</b> kommt, ein Pod geht. Sein <code>PersistentVolumeClaim</code> bleibt. Daten überleben die Pods, die sie tragen – schreib dir das hinters Ohr.",
     "Hier heißt keiner „web-7f9c-x2z9“. Im <b>StatefulSet</b> trägt jeder seine Nummer: <code>-0</code>, <code>-1</code>, <code>-2</code>. Stabile Namen, stabile Plätze. So muss das.",
     "Container drei, Reihe zwei, ganz oben links. <i>*blättert im Logbuch*</i> … steht alles hier. Ich verlege nichts. Ich bin kein <code>emptyDir</code>."
+  ],
+  "vidar": [
+    "Name? <i>*mustert dich übern Klemmbrettrand*</i> Steht hier nicht. Bei mir kriegt jeder nur die Rechte, die er <b>wirklich</b> braucht – keinen Deut mehr. Nennt sich <b>Least Privilege</b>. Merk dir das.",
+    "Jeder, der durch mein Tor will, braucht einen Ausweis. Bei Pods heißt der <code>ServiceAccount</code> – ohne den weiß keiner, <b>wer</b> da gerade anklopft. Kein Ausweis, kein Durchlass.",
+    "Vierzig Jahre an diesem Tor. <i>*schnaubt*</i> Am gefährlichsten ist immer der, der als <code>root</code> reinmarschiert, weil's bequem ist. Nicht in meiner Festung.",
+    "Hm. <i>*knappes Nicken*</i> Du siehst aus, als wüsstest du, was du tust. Na schön – geh durch. Aber ich behalt dich im Auge."
   ]
 }

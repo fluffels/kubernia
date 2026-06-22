@@ -12,14 +12,14 @@
  * Hauptkarte (Stein-Mauer + Holz-Steg); Bewegung/Kollision teilt sich der Bereich über
  * resolveMove/footprintSolid mit der Hauptkarte – nichts dupliziert.
  *
- * Scope-Grenze (#130): NUR Bereich + Anleger/Warp. Der NPC kommt mit #131, die Quests mit
- * #132–135, die Drills mit #136. Darum trägt die Karte „watchtower" (noch) KEINEN Eintrag
- * in der Entity-Registry (entities.json) – npcSpawnsForMap/objectsForMap liefern leere
- * Listen, die RegionScene verträgt das. Der Wachturm selbst ist bis zu seinem PixelLab-
- * Asset ein bewusster prozeduraler Platzhalter (decorate-Hook in scenes/regions.ts); seine
- * SSOT-Geometrie (Standplatz + Fußabdruck) liegt darum noch als Konstante HIER, nicht in
- * der Registry (die ein Sprite verlangt). Wenn das Turm-Sprite kommt, wandert er wie der
- * Leuchtturm (#357) in entities.json.
+ * Scope (Stand #131): Bereich + Anleger/Warp (#130) sowie der NPC Vidar (#131, Wachveteran
+ * am Tor) stehen; die Quests folgen mit #132–135, die Drills mit #136. Die Karte „watchtower"
+ * trägt seit #131 ihren NPC als Eintrag in der Entity-Registry (entities.json); objectsForMap
+ * ist noch leer (kein Quest-Trigger/prop), die RegionScene verträgt das. Der Wachturm selbst
+ * ist bis zu seinem PixelLab-Asset (#440) ein bewusster prozeduraler Platzhalter (decorate-
+ * Hook in scenes/regions.ts); seine SSOT-Geometrie (Standplatz + Fußabdruck) liegt darum noch
+ * als Konstante HIER, nicht in der Registry (die ein Sprite verlangt). Wenn das Turm-Sprite
+ * kommt, wandert er wie der Leuchtturm (#357) in entities.json.
  *
  * Der Warp-Primitive (Warp + warpAt) wohnt in archipel.ts und ist generisch – von dort
  * wiederverwendet statt erneut definiert (wie in lighthouse.ts/warehouse.ts).

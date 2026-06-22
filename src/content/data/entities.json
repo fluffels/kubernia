@@ -9,7 +9,8 @@
     { "id": "juno",  "map": "harbor",     "x": 45.8, "y": 24.2 },
     { "id": "argo",  "map": "archipel",   "x": 12,   "y": 8 },
     { "id": "lumi",  "map": "lighthouse", "x": 11,   "y": 9 },
-    { "id": "knut",  "map": "warehouse",  "x": 12,   "y": 8 }
+    { "id": "knut",  "map": "warehouse",  "x": 12,   "y": 8 },
+    { "id": "vidar", "map": "watchtower",  "x": 15,   "y": 9 }
   ],
   "objects": [
     { "id": "gitops-altar",       "map": "archipel",   "x": 16, "y": 8,  "type": "quest_trigger", "label": "GitOps" },
