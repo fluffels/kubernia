@@ -712,6 +712,72 @@ test("#101 gitops-drift-detection: kubectl scale auf 0 lehnt andere --replicas-W
   assert.ok(!accepts(task, "kubectl scale hafen-lager --replicas=0"),             "ohne 'deployment' muss scheitern");
 });
 
+/* ===== Lagerhallen-Viertel: Phase-7-Übungs-Drills (#142) =====
+ * Stateful-Workload-Drills bei Knut: StatefulSet, PVC/PV/StorageClass, Backup/Restore,
+ * plus der Negativfall „PVC bleibt Pending". Über die generischen Drill-Tests hinaus
+ * (why/accept/keine-Supersets) sichern diese die FACHLICHE Mechanik ab (Red-Green). */
+
+test("#142 PRACTICE.knut deckt die drei Storage-Quests mit existierenden Drills", () => {
+  const pool = KQContent.PRACTICE.knut;
+  assert.ok(pool && pool.length > 0, "Knut hat keinen Übungs-Pool");
+  const questIds = new Set(KQContent.QUESTS.map(q => q.id));
+  for (const p of pool) {
+    assert.ok(KQContent.DRILLS[p.drill], "unbekannter Drill im Knut-Pool: " + p.drill);
+    assert.ok(questIds.has(p.after), "unbekannte after-Quest im Knut-Pool: " + p.after);
+  }
+  const after = new Set(pool.map(p => p.after));
+  for (const q of ["storage-statefulset", "storage-pvc", "storage-backup-restore"]) {
+    assert.ok(after.has(q), "Knut-Pool deckt die Quest nicht ab: " + q);
+  }
+});
+
+test("#142 pvc-pending erzeugt einen wirklich auf Pending hängenden PVC (Negativfall)", () => {
+  const sim = new KQSim({});
+  KQContent.DRILLS["pvc-pending"](sim);
+  const pending = sim.pvcs.filter(p => p.status === "Pending");
+  assert.ok(pending.length >= 1, "pvc-pending muss ein Pending-PVC hinterlassen");
+  // Genau das Lehrbild: kein Volume gebunden, weil die StorageClass fehlt.
+  assert.ok(pending.some(p => p.volume === ""), "ein Pending-PVC darf kein gebundenes Volume haben");
+});
+
+test("#142 Red-Green: ein PVC mit existierender StorageClass wird NICHT Pending", () => {
+  // Beweist, dass der Pending-Test echt ist: derselbe Mechanismus mit gültiger
+  // StorageClass bindet sofort (Bound), wäre also nicht fälschlich „Pending".
+  const sim = new KQSim({});
+  KQContent.DRILLS["pvc-apply"](sim);
+  sim.exec("kubectl apply --filename pvc.yaml");
+  assert.ok(sim.pvcs.some(p => p.status === "Bound"), "pvc-apply muss ein Bound-PVC erzeugen");
+});
+
+test("#142 snap-apply erzeugt einen readyToUse-Snapshot der Quelle", () => {
+  const sim = new KQSim({});
+  const task = KQContent.DRILLS["snap-apply"](sim);
+  const before = sim.volumeSnapshots.length;
+  sim.exec(task.solution);
+  assert.equal(sim.volumeSnapshots.length, before + 1, "snap-apply muss genau einen Snapshot anlegen");
+  assert.ok(sim.volumeSnapshots.every(v => v.readyToUse), "der angelegte Snapshot muss readyToUse sein");
+});
+
+test("#142 snap-restore holt die gesicherten Daten zurück (dataSource)", () => {
+  const sim = new KQSim({});
+  const task = KQContent.DRILLS["snap-restore"](sim);
+  sim.exec(task.solution);
+  assert.ok(sim.pvcs.some(p => p.data === "stammkundenverzeichnis"),
+    "Restore muss ein PVC mit dem gesicherten Volume-Inhalt erzeugen");
+});
+
+test("#142 sts-delete-pod trifft -0, der Pod kehrt namensgleich zurück (stabile Identität)", () => {
+  const sim = new KQSim({});
+  const task = KQContent.DRILLS["sts-delete-pod"](sim);
+  const m = task.solution.match(/^kubectl delete pod (\S+)$/);
+  assert.ok(m, "Lösung muss 'kubectl delete pod <name>' sein, war: " + task.solution);
+  const podName = m![1];
+  assert.ok(podName.endsWith("-0"), "der Drill muss den Ordinal-0-Pod adressieren, war: " + podName);
+  sim.exec(task.solution);
+  const sts = sim.statefulSets.find(s => s.pods.some(p => p.name === podName));
+  assert.ok(sts, "nach dem Löschen muss der StatefulSet-Pod namensgleich zurück sein: " + podName);
+});
+
 test("#101 gitops-app-of-apps: argocd app get hafen-flotte lehnt anderen App-Namen ab", () => {
   const task = gitopsTask("gitops-app-of-apps", "t-aoa-get");
   assert.ok(accepts(task, "argocd app get hafen-flotte"),    "korrekte Eingabe muss gelten");

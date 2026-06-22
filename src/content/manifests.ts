@@ -328,6 +328,37 @@ export const STATEFULSET_YAML = [
   "            storage: 10Gi",
 ].join("\n");
 
+// VolumeSnapshot (Backup #140): ein Point-in-Time-Abzug des Volumes hinter einem PVC.
+// Ein EIGENES Objekt – es überlebt das Löschen seiner Quelle. `source` nennt das gesicherte
+// PVC, `volumeSnapshotClassName` den CSI-Treiber, der den Abzug anfertigt.
+export const VOLUMESNAPSHOT_YAML = [
+  "apiVersion: snapshot.storage.k8s.io/v1", "kind: VolumeSnapshot", "metadata:",
+  "  name: lager-daten-snap",
+  "spec:",
+  "  volumeSnapshotClassName: kai-snapclass    # der CSI-Treiber, der den Abzug anfertigt",
+  "  source:",
+  "    persistentVolumeClaimName: lager-daten   # WAS gesichert wird: das Volume dieses PVC",
+].join("\n");
+
+// Restore (#140): ein neues PVC, das per spec.dataSource auf einen VolumeSnapshot zeigt.
+// Statt eines leeren Volumes bekommt es den gesicherten Inhalt zurück. Der Snapshot muss
+// existieren UND readyToUse sein.
+export const PVC_RESTORE_YAML = [
+  "apiVersion: v1", "kind: PersistentVolumeClaim", "metadata:",
+  "  name: lager-daten             # gleicher Name: das verlorene Volume zurueckholen",
+  "spec:",
+  "  accessModes:",
+  "    - ReadWriteOnce",
+  "  storageClassName: kai-ssd",
+  "  resources:",
+  "    requests:",
+  "      storage: 5Gi",
+  "  dataSource:                    # HIER kommt das Backup ins Spiel:",
+  "    name: lager-daten-snap       # aus diesem Snapshot wird der Inhalt wiederhergestellt",
+  "    kind: VolumeSnapshot",
+  "    apiGroup: snapshot.storage.k8s.io",
+].join("\n");
+
 /* ===== Wachturm-Quartier: RBAC / ServiceAccounts / Pod-Security (#128) =====
  * Vorlagen für Phase 6. Sie passen zu den Sim-Mechaniken aus #126:
  * `kubectl apply -f` legt SA/Role/RoleBinding/ClusterRole/ClusterRoleBinding an,
