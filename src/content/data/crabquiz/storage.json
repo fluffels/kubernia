@@ -1,0 +1,184 @@
+[
+  {
+    "id": "q-sts-vs-deploy",
+    "chapter": "storage-statefulset",
+    "q": "Warum ein <b>StatefulSet</b> statt eines Deployments für eine Datenbank?",
+    "options": [
+      "Es gibt jedem Pod eine feste, durchnummerierte Identität (…-0, …-1) und über <code>volumeClaimTemplates</code> ein eigenes, dauerhaftes Volume – die Daten überleben Neustarts.",
+      "Ein StatefulSet ist einfach schneller und spart Speicher.",
+      "Ein StatefulSet ist neuer und ersetzt das veraltete Deployment vollständig.",
+      "Kein echter Unterschied – nur ein anderes Wort fürs Deployment."
+    ],
+    "correct": 0,
+    "explain": "Ein Deployment behandelt Pods als austauschbar: stirbt einer, kommt ein fremder mit neuem Namen und leerem Volume. Für eine DB wäre das fatal. Das StatefulSet bewahrt <b>stabile Identität</b> (fester Name) und <b>eigenes Volume</b> pro Pod – genau der Kern stateful Workloads. Tempo/Sparsamkeit ist nicht der Punkt (eher aufwändiger)."
+  },
+  {
+    "id": "q-sts-vct",
+    "chapter": "storage-statefulset",
+    "q": "Was bewirkt der Block <code>volumeClaimTemplates</code> in einem StatefulSet?",
+    "options": [
+      "Jeder Pod bekommt daraus sein <b>eigenes</b>, dauerhaftes Volume (Pod -0 sein eigenes, -1 sein eigenes …) – nicht ein geteiltes.",
+      "Alle Pods teilen sich ein einziges gemeinsames Volume.",
+      "Es ist eine Vorlage für die Container-Images der Pods.",
+      "Es legt die CPU- und Memory-Limits der Pods fest."
+    ],
+    "correct": 0,
+    "explain": "<code>volumeClaimTemplates</code> ist eine PVC-<b>Vorlage</b>: Kubernetes legt daraus für jeden Pod-Index ein separates PVC/Volume an. So hat jede Replica ihren eigenen Datenbestand – die Voraussetzung dafür, dass z.B. drei DB-Pods nicht in dieselben Daten schreiben."
+  },
+  {
+    "id": "q-sts-headless",
+    "chapter": "storage-statefulset",
+    "q": "Wozu braucht ein StatefulSet einen <b>headless Service</b> (<code>clusterIP: None</code>)?",
+    "options": [
+      "Statt einer gemeinsamen virtuellen IP gibt es einen <b>stabilen DNS-Namen pro Pod</b> – so ist jede Kiste einzeln adressierbar.",
+      "Er macht das StatefulSet von außen über das Internet erreichbar.",
+      "Er verteilt die Last gleichmäßig auf alle Pods wie ein LoadBalancer.",
+      "Er ist nur ein Platzhalter ohne echte Funktion."
+    ],
+    "correct": 0,
+    "explain": "Ein normaler Service verbirgt die Pods hinter <b>einer</b> virtuellen IP – gut für austauschbare Replicas, schlecht, wenn man Pod -0 gezielt ansprechen muss. <code>clusterIP: None</code> macht den Service „headless“: kein gemeinsames IP-Tor, sondern ein eigener DNS-Name je Pod (z.B. <code>db-0.db</code>). Stabile Identität braucht stabile Adressen."
+  },
+  {
+    "id": "q-sts-identity",
+    "chapter": "storage-statefulset",
+    "q": "Du löschst den Pod <code>speicher-datenbank-0</code> eines StatefulSets. Was passiert?",
+    "options": [
+      "Er kommt mit <b>exakt demselben Namen</b> (…-0) und seinem <b>alten Volume</b> zurück – gleiche Identität, gleiche Daten.",
+      "Ein neuer Pod mit zufälligem Namen und leerem Volume ersetzt ihn.",
+      "Das ganze StatefulSet wird ungültig und muss neu erstellt werden.",
+      "Die Daten des Pods sind unwiederbringlich verloren."
+    ],
+    "correct": 0,
+    "explain": "Genau das ist der Beweis für stateful: Anders als beim Deployment (fremder Ersatz, neuer Name) startet Kubernetes denselben Index neu und mountet wieder dessen persistentes Volume. Name und Daten überleben den Neustart."
+  },
+  {
+    "id": "q-pvc-roles",
+    "chapter": "storage-pvc",
+    "q": "Wie verhalten sich <b>StorageClass</b>, <b>PV</b> und <b>PVC</b> zueinander?",
+    "options": [
+      "StorageClass = Regal-System (Vorlage, welche Sorte Speicher), PV = das echte Regalfach, PVC = deine Anforderung „ich brauche X GB dieser Sorte“.",
+      "PV und PVC sind dasselbe; die StorageClass ist nur ein Label.",
+      "Das PVC ist der Speicher selbst; ohne PVC gibt es keine StorageClass.",
+      "Die StorageClass ist das Fach, das PV die Anforderung, das PVC die Cloud."
+    ],
+    "correct": 0,
+    "explain": "Drei Rollen aus Knuts Lagerbild: Die <b>StorageClass</b> sagt, welche Sorte Platz der Cluster beschafft (Provisioner/Geschwindigkeit). Das <b>PV</b> ist das konkrete Stück Speicher. Das <b>PVC</b> ist dein Anspruch. Du baust kein Fach von Hand – du reichst die Anforderung ein, die StorageClass <b>provisioniert</b> das PV und bindet es."
+  },
+  {
+    "id": "q-pvc-bound",
+    "chapter": "storage-pvc",
+    "q": "Ein PVC zeigt Status <code>Pending</code> statt <code>Bound</code>. Was bedeutet das?",
+    "options": [
+      "Die Anforderung hat noch <b>kein passendes PV</b> bekommen – z.B. keine passende StorageClass, kein Platz oder ein unpassender AccessMode.",
+      "<code>Pending</code> und <code>Bound</code> sind dasselbe.",
+      "<code>Pending</code> heißt, das Volume wurde bereits gelöscht.",
+      "<code>Pending</code> heißt, der Speicher ist voll und nur noch lesbar."
+    ],
+    "correct": 0,
+    "explain": "<code>Bound</code> heißt: Anforderung (PVC) und echtes Fach (PV) sind verheiratet, der Speicher steht bereit. <code>Pending</code> ist das Davor: noch kein passendes PV gefunden/provisioniert. Häufige Ursachen sind eine fehlende/falsche <code>storageClassName</code> oder ein AccessMode, den keine Sorte erfüllt."
+  },
+  {
+    "id": "q-pvc-accessmode",
+    "chapter": "storage-pvc",
+    "q": "Was bedeutet der AccessMode <code>ReadWriteOnce</code> (RWO) an einem PVC?",
+    "options": [
+      "Das Volume ist von genau <b>einem Node</b> gleichzeitig les- und schreibbar – typisch für eine einzelne Datenbank.",
+      "Genau ein Pod im ganzen Cluster darf es jemals benutzen.",
+      "Es kann nur einmal beschrieben und danach nie wieder gelesen werden.",
+      "Beliebig viele Nodes dürfen gleichzeitig darauf schreiben."
+    ],
+    "correct": 0,
+    "explain": "<code>ReadWriteOnce</code> bezieht sich auf <b>Nodes</b>, nicht auf Pods: das Volume kann von einem Node les-/schreibbar gemountet werden (mehrere Pods auf demselben Node dürfen es teilen). Für gleichzeitigen Zugriff von mehreren Nodes bräuchte man <code>ReadWriteMany</code> – das kann nicht jede Speichersorte. „Once“ meint einmal beschreibbar ist ein klassischer Irrtum."
+  },
+  {
+    "id": "q-pvc-reclaim",
+    "chapter": "storage-pvc",
+    "q": "Was bewirkt <code>reclaimPolicy: Retain</code> an einer StorageClass?",
+    "options": [
+      "Wird das PVC gelöscht, <b>bleibt</b> das zugehörige PV samt Daten erhalten – Schutz vor versehentlichem Datenverlust. <code>Delete</code> würde das Volume mitlöschen.",
+      "<code>Retain</code> löscht das Volume sofort zusammen mit dem PVC.",
+      "<code>Retain</code> verschlüsselt das Volume automatisch.",
+      "<code>Retain</code> verdoppelt das Volume zur Sicherheit."
+    ],
+    "correct": 0,
+    "explain": "Die reclaimPolicy entscheidet, was beim Löschen des PVC mit dem PV passiert. <code>Delete</code> (oft Default) räumt das Volume mit weg – praktisch, aber gefährlich bei wichtigen Daten. <code>Retain</code> behält das PV (man gibt es später manuell frei), genau um einen Fehlgriff nicht in Datenverlust umschlagen zu lassen."
+  },
+  {
+    "id": "q-pvc-survives",
+    "chapter": "storage-pvc",
+    "q": "Du löschst ein Deployment, das ein PVC genutzt hat. Was passiert mit dem Speicher?",
+    "options": [
+      "Das PVC bleibt <b>Bound</b> bestehen – es ist ein eigenes, dauerhaftes Objekt und hängt nicht am Pod. Pods kommen und gehen, die Daten bleiben.",
+      "Das PVC wird automatisch mitgelöscht.",
+      "Der Speicher wird auf 0 zurückgesetzt.",
+      "Das PVC wechselt zurück auf <code>Pending</code>."
+    ],
+    "correct": 0,
+    "explain": "Speicher ist bewusst vom Workload entkoppelt: Das PVC ist ein eigenständiges Objekt mit eigenem Lebenszyklus. Du kannst Deployments abreißen und neu ausrollen – der Anspruch auf den Speicher (und damit die Daten) bleibt, bis du das PVC selbst löschst."
+  },
+  {
+    "id": "q-bak-snapshot",
+    "chapter": "storage-backup-restore",
+    "q": "Was ist ein <b>VolumeSnapshot</b>?",
+    "options": [
+      "Ein <b>Point-in-Time-Abzug</b> des Volumes hinter einem PVC, als <b>eigenes Objekt</b> – nicht Teil des PVC.",
+      "Eine zweite, ständig live mitlaufende Kopie des Pods.",
+      "Eine Log-Datei aller Schreibzugriffe auf das Volume.",
+      "Ein Snapshot des YAML-Manifests, nicht der Daten."
+    ],
+    "correct": 0,
+    "explain": "Der CSI-Treiber friert den Stand des Volumes zu einem Zeitpunkt ein. Wichtig: Der Snapshot ist ein <b>separates</b> Objekt mit eigenem Lebenszyklus – darum überlebt er auch das Löschen des PVC und kann später zum Wiederherstellen dienen."
+  },
+  {
+    "id": "q-bak-restore",
+    "chapter": "storage-backup-restore",
+    "q": "Wie holst du die Daten aus einem VolumeSnapshot zurück?",
+    "options": [
+      "Du legst ein <b>neues PVC</b> an, das per <code>spec.dataSource</code> auf den Snapshot zeigt – das Volume entsteht mit dem gesicherten Inhalt statt leer.",
+      "Du benennst den Snapshot in den alten PVC-Namen um.",
+      "Restore geht nur, indem man den ganzen Cluster neu aufsetzt.",
+      "Du startest den alten Pod neu – das Volume füllt sich von selbst."
+    ],
+    "correct": 0,
+    "explain": "Restore ist deklarativ: Im neuen PVC verweist <code>spec.dataSource</code> auf den VolumeSnapshot (kind: VolumeSnapshot). Statt eines leeren Volumes provisioniert der Treiber eines mit dem gesicherten Inhalt. So macht man den Datenverlust rückgängig."
+  },
+  {
+    "id": "q-bak-offsite",
+    "chapter": "storage-backup-restore",
+    "q": "Warum ist ein <code>readyToUse</code>-Snapshot im Cluster noch <b>kein</b> vollwertiges Backup?",
+    "options": [
+      "Er liegt im <b>selben Speichersystem</b> – geht der Cluster bzw. das Rechenzentrum verloren (Brand, Ransomware, Region-Ausfall), ist der Snapshot mit weg. Ein echtes Backup wird zusätzlich <b>off-site</b> kopiert (3-2-1).",
+      "Snapshots sind grundsätzlich zu groß, um sie wiederherzustellen.",
+      "Ein Snapshot im Cluster ist sehr wohl ein vollwertiges Backup – mehr braucht niemand.",
+      "Snapshots veralten nach einer Stunde automatisch."
+    ],
+    "correct": 0,
+    "explain": "Ein Snapshot ist schnelle Wiederherstellung, teilt aber das Schicksal seines Speichersystems. Die <b>3-2-1-Regel</b>: drei Kopien, auf zwei Medien, eine davon off-site. Erst die Kopie an einem anderen Ort schützt gegen den echten Katastrophenfall."
+  },
+  {
+    "id": "q-bak-rpo-rto",
+    "chapter": "storage-backup-restore",
+    "q": "Was bedeuten <b>RPO</b> und <b>RTO</b> bei Backups?",
+    "options": [
+      "RPO = wie viel <b>Datenverlust</b> du verträgst (→ wie oft du sicherst); RTO = wie schnell du nach einem Ausfall wieder <b>online</b> sein musst.",
+      "RPO ist die Snapshot-Größe, RTO die Anzahl der Replicas.",
+      "Beides sind nur andere Namen für „VolumeSnapshot“.",
+      "RPO ist die CPU-Last, RTO der Speicherpreis."
+    ],
+    "correct": 0,
+    "explain": "RPO (Recovery <b>Point</b> Objective) blickt zurück: bis zu welchem Zeitpunkt darfst du Daten verlieren – sicherst du stündlich, ist der RPO maximal eine Stunde. RTO (Recovery <b>Time</b> Objective) blickt nach vorn: wie lange darf die Wiederherstellung dauern. Beide sind Geschäfts-Ziele, keine Größen oder Zahlen."
+  },
+  {
+    "id": "q-proddb-judgment",
+    "chapter": "storage-backup-restore",
+    "q": "Sollte man eine <b>Produktiv-Datenbank im Cluster</b> betreiben – ja oder nein?",
+    "options": [
+      "Es kommt drauf an: technisch geht es (StatefulSet + PV + Snapshots), aber Backups, Hochverfügbarkeit, Updates und Failover musst du dann <b>selbst</b> betreiben – ein gemanagter DB-Dienst nimmt genau diese Last ab. Bewusst abwägen.",
+      "Immer ja: im Cluster ist eine DB automatisch hochverfügbar und gesichert.",
+      "Immer nein: Datenbanken laufen technisch gar nicht in Kubernetes.",
+      "Egal – eine DB im Cluster braucht keine Backups."
+    ],
+    "correct": 0,
+    "explain": "Kubernetes <b>kann</b> stateful (das hast du am Kai geübt), aber „kann“ heißt nicht „muss“. Eine Prod-DB im Cluster bedeutet volle Betriebsverantwortung: Backup/Restore, HA, Patches, Failover. Ein Managed-Service kostet Geld, nimmt aber genau diese Arbeit ab. Die ehrliche Antwort ist eine Abwägung von Team-Größe, Know-how und Risiko – kein Dogma."
+  }
+]
