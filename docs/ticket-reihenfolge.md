@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-22 (nach #136 Drills/PRACTICE für RBAC & Security; Wachturm-Quest-Arc inkl. Drills komplett → Kopf jetzt 12 Einträge. Nächstes freies Kopf-Ticket ist #138 Progression einhängen + README-Phasentabelle).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
+> **Stand: 2026-06-22 (nach #140 Quest „Backup & Restore" inkl. VolumeSnapshot/Restore-Sim → Kopf jetzt 11 Einträge. Nächstes freies Kopf-Ticket ist #138 Progression einhängen + README-Phasentabelle (Wachturm); #136 lief parallel und ist erledigt).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -51,19 +51,18 @@ Leitlinie der Sortierung: **Prio zuerst** (höchste offene Prio oben), **innerha
 | | **— Wachturm-Quartier (Phase 6: RBAC / ServiceAccounts / Pod-Security) — Quest-Arc KOMPLETT, es folgen die Support-Tickets —** | | | **Region #130 ✓**, **NPC Vidar #131 ✓**, **Quest ServiceAccounts #132 ✓**, **Quest Role & RoleBinding #133 ✓**, **Quest ClusterRole & auth can-i #134 ✓**, **Quest Pod-Security & SecurityContext #135 ✓** (auf main, cee12b4: roh→restricted→gehärtet, Ablehnung im Sim-Test real abgesichert). Sim ✓ (`auth can-i` #126, Pod-Security #128), Quiz #137 ✓, **Drills/PRACTICE #136 ✓** (auf main, c953021: Vidars RBAC-/Security-Übungs-Pool), Region-Infra datengetrieben (#427). Es bleiben Progression/Tests. |
 | 1 | **#138** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad; nach Quests + Drills. Phase 6 in README → ✅ (aktuell 🟡 im Aufbau). |
 | 2 | **#139** | ohne | Tests für RBAC/Security-Quests & Sim | Zuletzt im Arc — sichert Quests + Sim ab (Red-Green). |
-| | **— Lagerhallen-Viertel (Phase 7: stateful Workloads & Datendauerhaftigkeit) — progressiv reaktiviert 2026-06-22, vervollständigt die schon bestehende Region —** | | | Region schon im Spiel: Hafenkai + **NPC Knut** ✓, **StatefulSet-Quest** ✓ (`storage-statefulset`), **PVC/PV/StorageClass-Quest** ✓ (`storage-pvc`). Es fehlen Backup/DB-Inhalt + Drills/Quiz/Progression/Tests. Abhängigkeitsordnung wie beim Wachturm-Arc (Quests → Drills → Quiz → Progression → Tests). |
-| 3 | **#140** | ohne | Quest „Backup & Restore — Daten sichern und wiederherstellen" | Kerninhalt der Region; baut auf den bestehenden StatefulSet-/PVC-Quests. |
-| 4 | **#141** | ohne | Quest „Prod-DB im Cluster: ja/nein?" — Urteil & Trade-offs | Reflexions-Quest; nach dem Backup-Handwerk. |
-| 5 | **#142** | ohne | Drills (stateful-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte. |
-| 6 | **#143** | ohne | Quiz-Karten (StatefulSets, Volumes, Backups, DBs) | Wissens-Sicherung zur Region. |
-| 7 | **#144** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad; nach Quests + Drills. |
-| 8 | **#145** | ohne | Tests für stateful-Quests & StatefulSet/Volume-Sim | Zuletzt im Arc — sichert ab (Red-Green). |
+| | **— Lagerhallen-Viertel (Phase 7: stateful Workloads & Datendauerhaftigkeit) — progressiv reaktiviert 2026-06-22, vervollständigt die schon bestehende Region —** | | | Region schon im Spiel: Hafenkai + **NPC Knut** ✓, **StatefulSet-Quest** ✓ (`storage-statefulset`), **PVC/PV/StorageClass-Quest** ✓ (`storage-pvc`), **Backup & Restore #140 ✓** (`storage-backup-restore`, b5ec1d0: VolumeSnapshot/Restore-Sim + `data`-Payload am PVC). Es fehlen #141 Reflexions-Quest + Drills/Quiz/Progression/Tests. Abhängigkeitsordnung wie beim Wachturm-Arc (Quests → Drills → Quiz → Progression → Tests). |
+| 3 | **#141** | ohne | Quest „Prod-DB im Cluster: ja/nein?" — Urteil & Trade-offs | Reflexions-Quest; nach dem Backup-Handwerk. |
+| 4 | **#142** | ohne | Drills (stateful-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte. |
+| 5 | **#143** | ohne | Quiz-Karten (StatefulSets, Volumes, Backups, DBs) | Wissens-Sicherung zur Region. |
+| 6 | **#144** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad; nach Quests + Drills. |
+| 7 | **#145** | ohne | Tests für stateful-Quests & StatefulSet/Volume-Sim | Zuletzt im Arc — sichert ab (Red-Green). |
 | | **— QoL / System-Features (auf Fundament, kein Lernpfad-Fortschritt) —** | | | |
-| 9 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
-| 10 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 8 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
+| 9 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 11 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 12 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 10 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 11 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
