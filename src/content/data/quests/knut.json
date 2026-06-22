@@ -562,5 +562,185 @@
         ]
       }
     ]
+  },
+  {
+    "id": "storage-prod-db-decision",
+    "title": "Prod-DB im Cluster: ja oder nein?",
+    "giver": "knut",
+    "topic": "storage",
+    "rewardXp": 60,
+    "rewardCoins": 50,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "knut",
+        "lines": [
+          "Setz dich, Kapitän. Du weißt jetzt, <b>wie</b> man Daten am Kai hält: StatefulSet, eigenes Volume, Backup und Wiederherstellung. Das ist Handwerk. Heute kommt die Frage, die einen Senior vom Anfänger trennt.",
+          "Die lautet nicht „wie“, sondern <b>„ob“</b>: Solltest du eine echte <b>Produktions-Datenbank</b> überhaupt selbst im Cluster betreiben? Anfänger streiten „immer“ gegen „nie“. Wer reif ist, <b>wägt ab</b>. Lass uns das einmal durchdenken."
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "knut",
+        "q": "Erste Grundhaltung: Gehört eine Produktions-Datenbank in den Cluster – ja oder nein?",
+        "options": [
+          {
+            "t": "Das ist keine Glaubensfrage, sondern eine Abwägung – es hängt von Team, Anforderungen und Betriebskompetenz ab.",
+            "ok": true,
+            "reply": "Genau die richtige Haltung. „Es kommt darauf an“ ist hier keine Ausrede, sondern die ehrliche Antwort. Lass uns anschauen, <b>worauf</b> es ankommt. 🗄️"
+          },
+          {
+            "t": "Immer rein – Kubernetes kann alles, was als Container läuft, läuft auch als Datenbank.",
+            "ok": false,
+            "reply": "Vorsicht. „Läuft“ ist nicht „läuft im Ernstfall sicher“. Eine DB im Cluster ist möglich, aber sie bringt echten Betriebsaufwand mit – das ist eine Entscheidung, kein Automatismus."
+          },
+          {
+            "t": "Niemals – Datenbanken haben in Kubernetes grundsätzlich nichts verloren.",
+            "ok": false,
+            "reply": "Auch zu pauschal. Mit Operator, Backups und einem fähigen Team läuft heute viel produktive Datenhaltung im Cluster. Ein Dogma ersetzt kein Urteil."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "knut",
+        "q": "Was ist der <b>eigentliche</b> Aufwand, wenn du die Datenbank selbst im Cluster fährst?",
+        "options": [
+          {
+            "t": "Der Betrieb danach: Backups, Replikation und Failover, Upgrades, Sicherheits-Patches, Tuning, Monitoring. Das Ausrollen ist der einfachste Teil.",
+            "ok": true,
+            "reply": "Richtig. Man nennt das <b>Day-2-Operations</b>. Die erste apply ist in fünf Minuten erledigt – die Pflege über Jahre ist die eigentliche Arbeit."
+          },
+          {
+            "t": "Vor allem CPU und RAM – sonst läuft eine DB ja wie jeder andere Pod.",
+            "ok": false,
+            "reply": "Ressourcen sind das kleinste Problem. Eine Datenbank ist <b>stateful</b>: ihr Wert sind die Daten, und die zu schützen kostet laufende Betriebsarbeit, nicht nur Rechenzeit."
+          },
+          {
+            "t": "Nur die YAML einmal schreiben; danach kümmert sich Kubernetes um alles Weitere.",
+            "ok": false,
+            "reply": "Wenn das stimmte, bräuchte es keine Datenbank-Teams. Kubernetes hält Pods am Leben – es macht keine Backups, keine Major-Upgrades und kein DB-Tuning für dich."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "knut",
+        "q": "Wann ist eine <b>Managed-Datenbank</b> (z.B. RDS oder Cloud SQL) die klügere Wahl?",
+        "options": [
+          {
+            "t": "Wenn das Team klein ist, die Engine Standard und ihr euch aufs Produkt konzentrieren wollt – den Betriebsaufwand kauft ihr euch einfach weg.",
+            "ok": true,
+            "reply": "Genau. Eine Managed-DB ist gekaufter Betrieb: Backups, Failover und Patches macht der Anbieter. Für die meisten Teams ist das die vernünftige Default-Wahl."
+          },
+          {
+            "t": "Nie – extern ist immer teurer, und man gibt die Kontrolle aus der Hand.",
+            "ok": false,
+            "reply": "Zu kurz gedacht. Der Aufschlag bezahlt fremde Betriebsarbeit, die du sonst selbst leistest – inklusive Nächten, in denen ein Failover schiefgeht. Oft ist das billiger als die eigene Zeit."
+          },
+          {
+            "t": "Immer – Managed-DBs sind grundsätzlich billiger und schneller als alles selbst Betriebene.",
+            "ok": false,
+            "reply": "Auch falsch herum pauschal. Managed kostet Aufschlag und schränkt bei Extras/Versionen ein. Sie ist meist die richtige Wahl, aber nicht durch ein Naturgesetz, sondern durch Abwägung."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "knut",
+        "q": "Und wann kann es trotzdem richtig sein, die Datenbank <b>selbst</b> im Cluster zu betreiben?",
+        "options": [
+          {
+            "t": "Bei echten Gründen: Datenhoheit/Compliance, On-Prem ohne Managed-Angebot, ein reifer Operator (z.B. CloudNativePG) und ein Team, das DB-Betrieb wirklich beherrscht.",
+            "ok": true,
+            "reply": "So ist es. Ein guter <b>Operator</b> automatisiert Failover und Backups, und manchmal lässt die Lage (Regulierung, On-Prem) gar keine andere Wahl. Dann ist die Cluster-DB die richtige Entscheidung – bewusst getroffen."
+          },
+          {
+            "t": "Wenn man Lust darauf hat – im Cluster ist es technisch eleganter und wirkt moderner.",
+            "ok": false,
+            "reply": "„Wirkt modern“ ist kein Betriebsgrund. Eleganz im Diagramm hilft nicht um drei Uhr nachts, wenn das Volume klemmt. Es braucht einen <b>echten</b> Grund."
+          },
+          {
+            "t": "Sobald die Datenbank klein ist – kleine Datenbanken brauchen sowieso keine Pflege.",
+            "ok": false,
+            "reply": "Trügerisch. Auch eine kleine DB braucht Backups und Upgrades; ist sie produktiv, ist ihr Verlust genauso schmerzhaft. Größe entscheidet das nicht."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "knut",
+        "q": "Angenommen, du entscheidest dich bewusst <b>für</b> die Cluster-DB. Wie betreibst du sie verantwortungsvoll?",
+        "options": [
+          {
+            "t": "StatefulSet mit eigenen Volumes, StorageClass auf reclaimPolicy: Retain, regelmäßige Backups off-cluster, Replikation/HA und ein Operator, der das Failover automatisiert.",
+            "ok": true,
+            "reply": "Genau dieses Paket. Stabile Identität, geschützter Speicher, off-site-Backup und automatisiertes Failover – damit überlebt die DB nicht nur den Alltag, sondern auch den Ernstfall. 🗄️"
+          },
+          {
+            "t": "Ein einzelner Pod mit emptyDir reicht – Hauptsache, die Datenbank läuft.",
+            "ok": false,
+            "reply": "Das ist ein Datenverlust mit Anlauf. <code>emptyDir</code> ist weg, sobald der Pod weg ist, und ein einzelner Pod hat keine Ausfallsicherheit. Für eine Prod-DB grob fahrlässig."
+          },
+          {
+            "t": "Backups kann man sich sparen; ein StatefulSet heilt sich ja selbst und die Daten bleiben.",
+            "ok": false,
+            "reply": "Der Trugschluss aus der letzten Lehre: das StatefulSet bewahrt die <b>Identität</b>, nicht den <b>Inhalt</b> gegen Löschen oder Korruption. Ohne Backup ist die DB ungeschützt."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "knut",
+        "q": "Urteilsprobe: Ein Drei-Personen-Startup, Standard-PostgreSQL, läuft auf AWS, will schnell live. Was rätst du?",
+        "options": [
+          {
+            "t": "Managed (RDS). Das winzige Team soll am Produkt arbeiten, nicht nachts Datenbank-Failover üben.",
+            "ok": true,
+            "reply": "Klar die richtige Wahl. Bei drei Leuten ist jede Stunde DB-Betrieb eine Stunde, die das Produkt nicht voranbringt. Standard-Engine plus Cloud-Anbieter: dafür gibt es Managed."
+          },
+          {
+            "t": "Selbst im Cluster betreiben – so lernt das Team am meisten über Kubernetes.",
+            "ok": false,
+            "reply": "Lernen ist gut, aber nicht auf dem Rücken der Produktionsdaten zahlender Kunden. Üben kann man in einer Spielwiese – die Prod-DB ist der falsche Ort dafür."
+          },
+          {
+            "t": "Selbst im Cluster, die App liegt ja schon dort – alles an einem Ort ist immer besser.",
+            "ok": false,
+            "reply": "„Alles an einem Ort“ klingt ordentlich, verlagert aber den ganzen DB-Betrieb auf ein Drei-Personen-Team. Nähe zur App wiegt diesen Aufwand hier nicht auf."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "knut",
+        "q": "Und der Gegenfall: eine Bank, strenge Datenhoheit, On-Prem-Pflicht, eigenes Plattform-Team mit Operator-Erfahrung. Jetzt?",
+        "options": [
+          {
+            "t": "Hier ist die Cluster-DB vertretbar – mit Operator, Backups und HA. Ein passendes Managed-Angebot gibt es nicht, und das Team kann den Betrieb stemmen.",
+            "ok": true,
+            "reply": "Richtig erkannt. Dieselbe Frage, andere Antwort – weil der Kontext kippt: Regulierung erzwingt On-Prem, und das reife Team kann den Betrieb wirklich tragen. <b>Das</b> ist Abwägen statt Dogma."
+          },
+          {
+            "t": "Trotzdem Managed – eine DB selbst zu betreiben ist nie eine gute Idee.",
+            "ok": false,
+            "reply": "„Nie“ hält dem Fall nicht stand: Datenhoheit und On-Prem-Pflicht können Managed schlicht ausschließen. Wer das Team und den Operator hat, darf und muss dann selbst betreiben."
+          },
+          {
+            "t": "Egal wie – Hauptsache, es läuft im Cluster, der Rest findet sich.",
+            "ok": false,
+            "reply": "Gerade bei einer Bank findet sich nichts von allein. Ohne Backups, HA und klare Verantwortung wird aus „läuft im Cluster“ schnell ein meldepflichtiger Vorfall."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "knut",
+        "lines": [
+          "Siehst du, Kapitän? Zweimal dieselbe Frage, zweimal eine andere richtige Antwort – weil der <b>Kontext</b> sie bestimmt, nicht ein Lehrsatz.",
+          "Das ist Senior-Denken: nicht „immer“ und nicht „nie“, sondern Aufwand gegen Nutzen, Team gegen Anspruch, Risiko gegen Kontrolle. Wer diese Frage mündig abwägen kann, hat mehr verstanden als jemand, der nur YAML tippt. Gute Wacht am Kai! 🪵"
+        ]
+      }
+    ]
   }
 ]

@@ -40,6 +40,7 @@
   "storage-statefulset",
   "storage-pvc",
   "storage-backup-restore",
+  "storage-prod-db-decision",
   "k8s-serviceaccount",
   "k8s-rbac-role",
   "k8s-rbac-clusterrole",
