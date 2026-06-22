@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-22 (nach #130; Wachturm-Quartier-Region steht, nächstes freies Kopf-Ticket ist #131 NPC ⚠️).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
+> **Stand: 2026-06-22 (nach #131; Vidar, Wachveteran als NPC am Tor steht, nächstes freies Kopf-Ticket ist #132 ServiceAccounts-Quest).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -48,21 +48,20 @@ Leitlinie der Sortierung: **Prio zuerst** (höchste offene Prio oben), **innerha
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| | **— Wachturm-Quartier (Phase 6: RBAC / ServiceAccounts / Pod-Security) — die nächste Story-Region, in Abhängigkeitsreihenfolge —** | | | **Region #130 ✓** (auf main, ec49c29: begehbarer Bereich + Anleger/Warp; Wachturm noch prozeduraler Platzhalter → Asset-Ticket #440). Sim ✓ (`auth can-i` #126, Pod-Security #128), Quiz #137 ✓, Region-Infra datengetrieben (#427). Achtung: **#131 (NPC) gatet die Quests** → braucht erst Katharinas Design-Vorstellung. |
-| 1 | **#131** ⚠️ | ohne | Wachturm-Quartier: neuer NPC (Sprite + Smalltalk) | **Optik/Grafik: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen.** Quest-Geber der vier Quests — gatet #132–#135. Region #130 ✓ vorhanden. |
-| 2 | **#132** | ohne | Quest „ServiceAccounts — Identität für Pods" | Erste RBAC-Quest; braucht Region #130 ✓ + NPC #131. |
-| 3 | **#133** | ohne | Quest „RBAC — Role & RoleBinding (Least Privilege)" | Baut didaktisch auf #132 (ServiceAccounts) auf. |
-| 4 | **#134** | ohne | Quest „RBAC — ClusterRole & kubectl auth can-i" | Baut auf #133; Sim `auth can-i` (#126) ✓. |
-| 5 | **#135** | ohne | Quest „Pod-Security — SecurityContext & Pod Security Standards" | Letzte Quest der Region; Sim Pod-Security (#128) ✓. |
-| 6 | **#136** | ohne | Drills (RBAC/Security-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte (Muskelgedächtnis). |
-| 7 | **#138** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad; nach Quests + Drills. Phase 6 in README → ✅ (aktuell 🟡 im Aufbau). |
-| 8 | **#139** | ohne | Tests für RBAC/Security-Quests & Sim | Zuletzt im Arc — sichert Quests + Sim ab (Red-Green). |
+| | **— Wachturm-Quartier (Phase 6: RBAC / ServiceAccounts / Pod-Security) — die nächste Story-Region, in Abhängigkeitsreihenfolge —** | | | **Region #130 ✓** (auf main, ec49c29: begehbarer Bereich + Anleger/Warp; Wachturm noch prozeduraler Platzhalter → Asset-Ticket #440). **NPC Vidar #131 ✓** (auf main, 4ffef41: Sprite + Smalltalk, Quest-Geber). Sim ✓ (`auth can-i` #126, Pod-Security #128), Quiz #137 ✓, Region-Infra datengetrieben (#427). Die Quests können jetzt an Vidar andocken. |
+| 1 | **#132** | ohne | Quest „ServiceAccounts — Identität für Pods" | Erste RBAC-Quest; Region #130 ✓ + NPC Vidar #131 ✓ vorhanden. |
+| 2 | **#133** | ohne | Quest „RBAC — Role & RoleBinding (Least Privilege)" | Baut didaktisch auf #132 (ServiceAccounts) auf. |
+| 3 | **#134** | ohne | Quest „RBAC — ClusterRole & kubectl auth can-i" | Baut auf #133; Sim `auth can-i` (#126) ✓. |
+| 4 | **#135** | ohne | Quest „Pod-Security — SecurityContext & Pod Security Standards" | Letzte Quest der Region; Sim Pod-Security (#128) ✓. |
+| 5 | **#136** | ohne | Drills (RBAC/Security-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte (Muskelgedächtnis). |
+| 6 | **#138** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad; nach Quests + Drills. Phase 6 in README → ✅ (aktuell 🟡 im Aufbau). |
+| 7 | **#139** | ohne | Tests für RBAC/Security-Quests & Sim | Zuletzt im Arc — sichert Quests + Sim ab (Red-Green). |
 | | **— QoL / System-Features (auf Fundament, kein Lernpfad-Fortschritt) —** | | | |
-| 9 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
-| 10 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 8 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
+| 9 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 11 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 12 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 10 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 11 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
