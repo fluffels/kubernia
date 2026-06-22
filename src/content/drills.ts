@@ -4,7 +4,7 @@
  */
 import type { Sim, Deployment, NetworkPolicyRes, ArgoApp } from "../sim";
 import { pick, rnd } from "./util";
-import { NETPOL_YAML, DOCKERFILE, ARGO_APPLICATION_MANUAL_YAML, SERVICEMONITOR_YAML, PROMETHEUSRULE_YAML, ROLE_YAML, ROLEBINDING_YAML, CLUSTERROLE_YAML, CLUSTERROLEBINDING_YAML, POD_SECURITY_YAML } from "./manifests";
+import { NETPOL_YAML, DOCKERFILE, ARGO_APPLICATION_MANUAL_YAML, SERVICEMONITOR_YAML, PROMETHEUSRULE_YAML, ROLE_YAML, ROLEBINDING_YAML, CLUSTERROLE_YAML, CLUSTERROLEBINDING_YAML, POD_SECURITY_YAML, STATEFULSET_YAML, STORAGECLASS_YAML, PVC_YAML, VOLUMESNAPSHOT_YAML, PVC_RESTORE_YAML } from "./manifests";
 
 const IMAGES = ["redis", "httpd", "busybox", "postgres", "rabbitmq"];
 const NAMES = ["leuchtfeuer", "fischtheke", "lotsenfunk", "ankerwinde", "kombuese", "seekiste"];
@@ -95,6 +95,56 @@ function ensureRole(sim: Sim, name: string, cluster: boolean) {
   sim.files[file] = cluster ? CLUSTERROLE_YAML : ROLE_YAML;
   sim.applyEffects[file] = { role: { name, cluster, rules: [{ verbs: ["get", "list", "watch"], resources: [cluster ? "nodes" : "pods"] }] } };
   sim.exec("kubectl apply -f " + file);
+}
+
+/* ---- Lagerhallen-Viertel (#142, Phase 7): stateful Workloads & Datendauerhaftigkeit ---- */
+/** StatefulSet-Namen (klein, mit Bindestrich) für die Speicher-Übungen. */
+const STS_NAMES = ["speicher-datenbank", "kai-archiv", "log-speicher", "stamm-db", "tresor-db"];
+/** StorageClass-Namen (das „Regal-System"). */
+const SC_NAMES = ["kai-ssd", "kai-archiv-hdd", "schnell-ssd", "lager-standard"];
+/** PVC-Namen (die Speicher-Anforderung). */
+const PVC_NAMES = ["lager-daten", "kai-volumen", "stamm-daten", "archiv-platz", "tresor-daten"];
+/** VolumeSnapshot-Namen (die Backups). */
+const SNAP_NAMES = ["lager-snap", "kai-backup", "stamm-snap", "tresor-sicherung"];
+
+/** Sorgt für eine StorageClass mit Provisioner (damit PVCs dynamisch binden) und gibt ihren
+ *  Namen zurück. Eine vorhandene (z.B. die Default "standard") wird wiederverwendet. */
+function ensureStorageClass(sim: Sim): string {
+  const existing = sim.storageClasses.find(s => s.provisioner);
+  if (existing) return existing.name;
+  const file = "ensure-storageclass.yaml";
+  sim.files[file] = STORAGECLASS_YAML;
+  sim.applyEffects[file] = { storageClass: { name: "kai-ssd", provisioner: "kubernetes.io/aws-ebs", reclaimPolicy: "Retain" } };
+  sim.exec("kubectl apply -f " + file);
+  return "kai-ssd";
+}
+
+/** Sorgt für ein gebundenes PVC (mit etwas Inhalt, damit ein Snapshot Sinn hat) und gibt
+ *  seinen Namen zurück – ein vorhandenes Bound-PVC wird wiederverwendet. */
+function ensurePvc(sim: Sim): string {
+  const bound = sim.pvcs.find(p => p.status === "Bound");
+  if (bound) return bound.name;
+  const sc = ensureStorageClass(sim);
+  let name = pick(PVC_NAMES);
+  while (sim.pvcs.some(p => p.name === name)) name = pick(PVC_NAMES) + rnd(2, 99);
+  const file = "ensure-pvc.yaml";
+  sim.files[file] = PVC_YAML;
+  sim.applyEffects[file] = { pvc: { name, storage: "5Gi", storageClass: sc, accessModes: "RWO", data: "lagerbestand" } };
+  sim.exec("kubectl apply -f " + file);
+  return name;
+}
+
+/** Sorgt für ein StatefulSet und gibt seinen Namen zurück (ein vorhandenes wird genutzt). */
+function ensureStatefulSet(sim: Sim): string {
+  if (sim.statefulSets.length > 0) return sim.statefulSets[0].name;
+  const sc = ensureStorageClass(sim);
+  let name = pick(STS_NAMES);
+  while (sim.statefulSets.some(s => s.name === name)) name = pick(STS_NAMES) + rnd(2, 99);
+  const file = "ensure-statefulset.yaml";
+  sim.files[file] = STATEFULSET_YAML;
+  sim.applyEffects[file] = { statefulSet: { name, image: "postgres:16", replicas: 3, serviceName: name, volumeClaimName: "daten", storage: "10Gi", storageClass: sc } };
+  sim.exec("kubectl apply -f " + file);
+  return name;
 }
 
 /** Eine generierte Übungsaufgabe (Drill).
@@ -502,6 +552,96 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     sim.applyEffects[file] = { deployment: { name, image: "nginx", replicas: 1, securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true } } };
     return { text: "Roll einen <b>gehärteten</b> Posten aus: wende <code>spaehposten.yaml</code> an – mit securityContext kommt er auch unter <code>restricted</code> durchs Tor.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+spaehposten\.yaml$/], solution: "kubectl apply --filename spaehposten.yaml", hint: "kubectl apply --filename &lt;datei&gt;", why: "Der securityContext im Manifest (runAsNonRoot, allowPrivilegeEscalation: false, readOnlyRootFilesystem) härtet den Pod – genau das verlangt die restricted-Stufe, darum wird er zugelassen, während ein roher Pod abgewiesen würde. Angewandt: kubectl apply --filename &lt;datei&gt;." };
   },
+  // Lagerhallen-Viertel (#142, Phase 7): stateful Workloads & Datendauerhaftigkeit – übt das
+  // bei Knut Gelernte: StatefulSet (stabile Identität), PVC/PV/StorageClass (Speicher anfordern),
+  // Backup/Restore (VolumeSnapshot). NPC: knut. Enthält bewusst einen Negativfall (PVC bleibt
+  // Pending) als Diagnose-Übung – verstehen statt auswendig (#233).
+  "sts-apply": sim => {
+    const sc = ensureStorageClass(sim);
+    let name = pick(STS_NAMES);
+    while (sim.statefulSets.some(s => s.name === name)) name = pick(STS_NAMES) + rnd(2, 99);
+    const file = "statefulset.yaml";
+    sim.files[file] = STATEFULSET_YAML;
+    sim.applyEffects[file] = { statefulSet: { name, image: "postgres:16", replicas: 3, serviceName: name, volumeClaimName: "daten", storage: "10Gi", storageClass: sc } };
+    return { text: "Roll ein <b>StatefulSet</b> aus: wende die Karte <code>statefulset.yaml</code> deklarativ an.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+statefulset\.yaml$/], solution: "kubectl apply --filename statefulset.yaml", hint: "kubectl apply --filename &lt;datei&gt;", why: "Ein StatefulSet ist auch nur ein Manifest – mit dem vertrauten kubectl apply --filename &lt;datei&gt; angewandt. Anders als ein Deployment gibt es seinen Pods feste Namen (…-0, …-1) und je Pod über volumeClaimTemplates ein eigenes, dauerhaftes Volume." };
+  },
+  "sts-get": sim => {
+    ensureStatefulSet(sim);
+    return { text: "Zeig alle <b>StatefulSets</b> – Spalte READY nennt z.B. <code>3/3</code>.", accept: [/^kubectl\s+get\s+(statefulsets|statefulset|sts)$/], solution: "kubectl get statefulset", hint: "kubectl get statefulset (Kurzform sts geht auch).", why: "Gleiches get-Muster wie sonst: kubectl get statefulset (Kurzform sts) listet die StatefulSets mit ihrem READY-Stand – wie viele der fest nummerierten Pods schon laufen." };
+  },
+  "sts-delete-pod": sim => {
+    const name = ensureStatefulSet(sim);
+    const sts = sim.statefulSets.find(s => s.name === name)!;
+    const pod = sts.pods[0].name; // <name>-0
+    return { text: "Beweis der stabilen Identität: versenke den Pod <code>" + pod + "</code> – und beobachte, dass er mit GLEICHEM Namen zurückkommt.", accept: [new RegExp("^kubectl\\s+delete\\s+pods?\\s+" + pod.replace(/[-]/g, "\\-") + "$")], solution: "kubectl delete pod " + pod, hint: "kubectl delete pod &lt;name&gt; – nimm " + pod + ".", why: "Anders als beim Deployment (Ersatz-Pod mit neuem Zufallsnamen und leerem Volume) kommt ein StatefulSet-Pod mit EXAKT demselben Namen (…-0) und demselben PVC zurück – seine Daten überleben. Genau das ist der Sinn stabiler Identität. Muster: kubectl delete pod &lt;name&gt;." };
+  },
+  "sc-apply": sim => {
+    let name = pick(SC_NAMES);
+    while (sim.storageClasses.some(s => s.name === name)) name = pick(SC_NAMES) + rnd(2, 99);
+    const file = "storageclass.yaml";
+    sim.files[file] = STORAGECLASS_YAML;
+    sim.applyEffects[file] = { storageClass: { name, provisioner: "kubernetes.io/aws-ebs", reclaimPolicy: "Retain" } };
+    return { text: "Stell ein <b>Regal-System</b> bereit: wende die <code>storageclass.yaml</code> deklarativ an.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+storageclass\.yaml$/], solution: "kubectl apply --filename storageclass.yaml", hint: "kubectl apply --filename &lt;datei&gt;", why: "Die StorageClass ist die Vorlage, nach der ein PVC dynamisch sein PV bekommt (Provisioner, Disk-Art, reclaimPolicy) – selbst noch kein Speicher. Angewandt wie jedes Manifest: kubectl apply --filename &lt;datei&gt;." };
+  },
+  "pvc-apply": sim => {
+    const sc = ensureStorageClass(sim);
+    let name = pick(PVC_NAMES);
+    while (sim.pvcs.some(p => p.name === name)) name = pick(PVC_NAMES) + rnd(2, 99);
+    const file = "pvc.yaml";
+    sim.files[file] = PVC_YAML;
+    sim.applyEffects[file] = { pvc: { name, storage: "5Gi", storageClass: sc, accessModes: "RWO" } };
+    return { text: "Fordere dauerhaften Speicher an: wende die <code>pvc.yaml</code> an – das PVC wird <b>Bound</b>.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+pvc\.yaml$/], solution: "kubectl apply --filename pvc.yaml", hint: "kubectl apply --filename &lt;datei&gt;", why: "Das PVC ist die Anforderung „so viel Platz, von dieser Klasse“. Beim Anwenden provisioniert die StorageClass ein passendes PV und bindet beide: Status Pending → Bound. Muster: kubectl apply --filename &lt;datei&gt;." };
+  },
+  "pvc-get": sim => {
+    ensurePvc(sim);
+    return { text: "Zeig alle <b>PVCs</b> – Spalte STATUS sollte <code>Bound</code> zeigen.", accept: [/^kubectl\s+get\s+(pvc|persistentvolumeclaim|persistentvolumeclaims)$/], solution: "kubectl get pvc", hint: "kubectl get pvc", why: "kubectl get pvc listet die Speicher-Anforderungen mit STATUS (Bound = hat Speicher, Pending = wartet noch), CAPACITY, ACCESS MODES und STORAGECLASS." };
+  },
+  "pv-get": sim => {
+    ensurePvc(sim);
+    return { text: "Zeig die echten <b>PersistentVolumes</b> – die Regalfächer hinter den Anforderungen.", accept: [/^kubectl\s+get\s+(pv|persistentvolume|persistentvolumes)$/], solution: "kubectl get pv", hint: "kubectl get pv", why: "Das PVC ist die Anforderung, das PV das echte Volume. kubectl get pv zeigt CAPACITY, RECLAIM POLICY, STATUS (Available/Bound/Released) und in CLAIM, an welches PVC ein PV gebunden ist." };
+  },
+  // Negativ-/Grenzfall: ein PVC, das auf eine nicht existierende StorageClass zeigt, findet
+  // keinen Provisioner und kein passendes PV -> es bleibt Pending. Bewusst KEIN Auto-Fix; die
+  // Übung ist die Diagnose über den Status, nicht die Reparatur.
+  "pvc-pending": sim => {
+    let name = pick(["verwaiste-daten", "lager-ohne-regal", "haengender-antrag"]);
+    while (sim.pvcs.some(p => p.name === name)) name = "antrag-" + rnd(100, 9999);
+    sim.mergeScenario({ pvcs: [{ name, storageClass: "gibt-es-nicht", storage: "5Gi", accessModes: "RWO" }] });
+    return { text: "Ein Antrag hängt fest: das PVC <code>" + name + "</code> wird nicht <b>Bound</b>. Sieh dir den Status an, um den Grund zu finden.", accept: [/^kubectl\s+get\s+(pvc|persistentvolumeclaim|persistentvolumeclaims)$/], solution: "kubectl get pvc", hint: "kubectl get pvc – schau in die STATUS-Spalte.", why: "STATUS <b>Pending</b> heißt: Kubernetes hat (noch) keinen Speicher gefunden. Häufigste Ursachen: die in storageClassName genannte StorageClass gibt es gar nicht (Tippfehler), oder es existiert keine, die dynamisch provisioniert, und auch kein passendes freies PV (richtige Größe/AccessMode). Pending ist also keine Fehlermeldung, sondern „ich warte auf passenden Speicher“ – prüf zuerst die StorageClass." };
+  },
+  "snap-apply": sim => {
+    const pvc = ensurePvc(sim);
+    let name = pick(SNAP_NAMES);
+    while (sim.volumeSnapshots.some(v => v.name === name)) name = pick(SNAP_NAMES) + rnd(2, 99);
+    const file = "snapshot.yaml";
+    sim.files[file] = VOLUMESNAPSHOT_YAML;
+    sim.applyEffects[file] = { volumeSnapshot: { name, sourcePvc: pvc } };
+    return { text: "Sichere ein Volume: wende die <code>snapshot.yaml</code> an – ein <b>VolumeSnapshot</b> des PVC <code>" + pvc + "</code>.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+snapshot\.yaml$/], solution: "kubectl apply --filename snapshot.yaml", hint: "kubectl apply --filename &lt;datei&gt;", why: "Ein VolumeSnapshot ist ein Point-in-Time-Abzug des Volumes hinter einem PVC – ein EIGENES Objekt, das den Verlust der Quelle überlebt. Angewandt wie jedes Manifest: kubectl apply --filename &lt;datei&gt;; danach ist er readyToUse." };
+  },
+  "snap-get": sim => {
+    const pvc = ensurePvc(sim);
+    if (sim.volumeSnapshots.length === 0) {
+      const file = "ensure-snapshot.yaml";
+      sim.files[file] = VOLUMESNAPSHOT_YAML;
+      sim.applyEffects[file] = { volumeSnapshot: { name: "lager-snap", sourcePvc: pvc } };
+      sim.exec("kubectl apply -f " + file);
+    }
+    return { text: "Zeig deine <b>VolumeSnapshots</b> – Spalte READYTOUSE sollte <code>true</code> sein.", accept: [/^kubectl\s+get\s+(volumesnapshot|volumesnapshots|vs)$/], solution: "kubectl get volumesnapshot", hint: "kubectl get volumesnapshot (Kurzform vs geht auch).", why: "kubectl get volumesnapshot (Kurzform vs) listet deine Backups mit READYTOUSE (fertig zum Wiederherstellen?) und SOURCEPVC (welches Volume gesichert wurde)." };
+  },
+  // Restore: der Snapshot lebt (readyToUse), das Quell-PVC ist verloren – ein neues PVC mit
+  // spec.dataSource holt den gesicherten Inhalt zurück.
+  "snap-restore": sim => {
+    let snap = pick(SNAP_NAMES);
+    while (sim.volumeSnapshots.some(v => v.name === snap)) snap = pick(SNAP_NAMES) + rnd(2, 99);
+    sim.mergeScenario({ volumeSnapshots: [{ name: snap, sourcePvc: "kai-datenbank", data: "stammkundenverzeichnis", readyToUse: true }] });
+    const sc = ensureStorageClass(sim);
+    let pvcName = pick(PVC_NAMES);
+    while (sim.pvcs.some(p => p.name === pvcName)) pvcName = pick(PVC_NAMES) + rnd(2, 99);
+    const file = "restore.yaml";
+    sim.files[file] = PVC_RESTORE_YAML;
+    sim.applyEffects[file] = { pvc: { name: pvcName, storage: "5Gi", storageClass: sc, accessModes: "RWO", dataSource: snap } };
+    return { text: "Das Volume ist weg, aber dein Snapshot <code>" + snap + "</code> lebt: stell die Daten wieder her – wende die <code>restore.yaml</code> an.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+restore\.yaml$/], solution: "kubectl apply --filename restore.yaml", hint: "kubectl apply --filename &lt;datei&gt;", why: "Wiederherstellen heißt: ein neues PVC anlegen, das per spec.dataSource auf den Snapshot zeigt – statt eines leeren Volumes bekommst du den gesicherten Inhalt zurück. Der Snapshot muss dafür existieren und readyToUse sein. Muster: kubectl apply --filename &lt;datei&gt;." };
+  },
 };
 
 /* Übungs-Pools pro NPC: freigeschaltet nach bestimmter Quest */
@@ -515,4 +655,5 @@ export const PRACTICE: Record<string, { drill: string; after: string }[]> = {
   argo: [{ drill: "argo-apply", after: "gitops-self-sync" }, { drill: "argo-app-list", after: "gitops-self-sync" }, { drill: "argo-app-get", after: "gitops-self-sync" }, { drill: "argo-app-sync", after: "gitops-self-sync" }],
   lumi: [{ drill: "obs-top-pods", after: "observability-metrics" }, { drill: "obs-top-nodes", after: "observability-metrics" }, { drill: "obs-sm-apply", after: "observability-metrics" }, { drill: "obs-sm-get", after: "observability-metrics" }, { drill: "k-logs", after: "observability-logs" }, { drill: "obs-logs-previous", after: "observability-logs" }, { drill: "obs-alerts", after: "observability-alerts" }, { drill: "obs-pr-apply", after: "observability-alerts" }],
   vidar: [{ drill: "rbac-sa-create", after: "k8s-serviceaccount" }, { drill: "rbac-sa-get", after: "k8s-serviceaccount" }, { drill: "rbac-can-i", after: "k8s-rbac-role" }, { drill: "rbac-apply-role", after: "k8s-rbac-role" }, { drill: "rbac-apply-rolebinding", after: "k8s-rbac-role" }, { drill: "rbac-describe-role", after: "k8s-rbac-role" }, { drill: "rbac-apply-clusterrole", after: "k8s-rbac-clusterrole" }, { drill: "rbac-apply-clusterrolebinding", after: "k8s-rbac-clusterrole" }, { drill: "pod-security-enforce", after: "k8s-pod-security" }, { drill: "pod-security-harden", after: "k8s-pod-security" }],
+  knut: [{ drill: "sts-apply", after: "storage-statefulset" }, { drill: "sts-get", after: "storage-statefulset" }, { drill: "sts-delete-pod", after: "storage-statefulset" }, { drill: "sc-apply", after: "storage-pvc" }, { drill: "pvc-apply", after: "storage-pvc" }, { drill: "pvc-get", after: "storage-pvc" }, { drill: "pv-get", after: "storage-pvc" }, { drill: "pvc-pending", after: "storage-pvc" }, { drill: "snap-apply", after: "storage-backup-restore" }, { drill: "snap-get", after: "storage-backup-restore" }, { drill: "snap-restore", after: "storage-backup-restore" }],
 };
