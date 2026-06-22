@@ -67,6 +67,18 @@ test("jede freigeschaltete Karte hat eine Einführungs-Position aus der Single S
   expect(ohneIntro, "freigeschaltete Karten ohne Einführungs-Quest: " + ohneIntro.join(", ")).toEqual([]);
 });
 
+test("jede Quiz-Karte ist erreichbar – kommt über chapter oder Choice-reviewId in den Pool (kein totes Quiz, #138)", () => {
+  // Gegenstück zum Test darüber: jener prüft nur Karten, die ÜBERHAUPT freigeschaltet
+  // werden. Eine Karte OHNE `chapter` UND ohne referenzierende Choice-`reviewId` wird
+  // dagegen NIE registriert – sie ist totes Content, das Kralle nie zeigt. Bei
+  // Stardew-Scope (immer mehr Themen-Dateien) ist das die typische Verdrahtungs-Lücke:
+  // Karten angelegt (#137), aber nirgends eingehängt. unlockOrder() fährt die echte
+  // registerQuestCards-Logik über ALLE Quests; jede CRAB_QUIZ-Karte muss darin auftauchen.
+  const erreichbar = unlockOrder();
+  const tot = KQContent.CRAB_QUIZ.filter(c => erreichbar[c.id] === undefined).map(c => c.id);
+  expect(tot, "Quiz-Karten ohne chapter und ohne Choice-reviewId (nie im Pool): " + tot.join(", ")).toEqual([]);
+});
+
 /* ---- introOrderFromContent: Ableitung aus der Single Source (#412) ---- */
 
 test("introOrderFromContent: introducedIn überschreibt chapter als Einführungs-Quest (#412)", () => {

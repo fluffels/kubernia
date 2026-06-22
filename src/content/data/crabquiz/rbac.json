@@ -13,6 +13,7 @@
   },
   {
     "id": "q-sa-2",
+    "chapter": "k8s-serviceaccount",
     "q": "Du legst einen Pod an, ohne einen <code>serviceAccountName</code> zu setzen. Welche Identität bekommt er?",
     "options": [
       "Den ServiceAccount <code>default</code> seines Namespaces – den hat jeder Namespace automatisch.",
@@ -49,6 +50,7 @@
   },
   {
     "id": "q-rbac-3",
+    "chapter": "k8s-rbac-role",
     "q": "Was meint das Prinzip <b>Least Privilege</b> bei RBAC?",
     "options": [
       "Jedes Subjekt bekommt nur genau die Rechte, die es wirklich braucht – nicht mehr.",
@@ -61,6 +63,7 @@
   },
   {
     "id": "q-rbac-4",
+    "chapter": "k8s-rbac-role",
     "q": "Du bist unsicher, ob der ServiceAccount <code>lager</code> Pods löschen darf. Wie prüfst du es, statt zu raten?",
     "options": [
       "<code>kubectl auth can-i delete pods --as=system:serviceaccount:&lt;ns&gt;:lager</code> – es antwortet schlicht yes/no.",
@@ -73,6 +76,7 @@
   },
   {
     "id": "q-podsec-1",
+    "chapter": "k8s-pod-security",
     "q": "Wofür ist der <code>securityContext</code> eines Pods/Containers da?",
     "options": [
       "Er legt Sicherheits-Eigenschaften fest – z.B. als welcher User der Container läuft oder ob er Root-Rechte bekommt.",
@@ -85,6 +89,7 @@
   },
   {
     "id": "q-podsec-2",
+    "chapter": "k8s-pod-security",
     "q": "Was bewirkt <code>runAsNonRoot: true</code> im securityContext?",
     "options": [
       "Kubernetes verweigert den Start, wenn der Container als Root (UID 0) laufen würde.",
@@ -97,6 +102,7 @@
   },
   {
     "id": "q-podsec-3",
+    "chapter": "k8s-pod-security",
     "q": "Pod Security Standards: Unterschied zwischen <code>baseline</code> und <code>restricted</code>?",
     "options": [
       "baseline verbietet die schlimmsten Risiken (z.B. privileged), restricted ist strenger und erzwingt zusätzlich Härtung wie runAsNonRoot.",

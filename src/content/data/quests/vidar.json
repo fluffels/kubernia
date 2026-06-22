@@ -146,6 +146,7 @@
       {
         "type": "choice",
         "npc": "vidar",
+        "reviewId": "q-sa-1",
         "q": "Sag's mir mit eigenen Worten: Was ist ein <b>ServiceAccount</b> – und was ist er <b>nicht</b>?",
         "options": [
           {
@@ -329,6 +330,7 @@
       {
         "type": "choice",
         "npc": "vidar",
+        "reviewId": "q-rbac-2",
         "q": "Role und RoleBinding – wer macht was, und was passiert <b>ohne</b> das Binding?",
         "options": [
           {
@@ -530,6 +532,7 @@
       {
         "type": "choice",
         "npc": "vidar",
+        "reviewId": "q-rbac-1",
         "q": "Wann brauchst du eine <b>ClusterRole</b> statt einer Role?",
         "options": [
           {
@@ -703,6 +706,7 @@
       {
         "type": "choice",
         "npc": "vidar",
+        "reviewId": "q-podsec-4",
         "q": "Warum ist ein Container mit Root-/privileged-Rechten so gefährlich – und was erzwingt <code>restricted</code>?",
         "options": [
           {
