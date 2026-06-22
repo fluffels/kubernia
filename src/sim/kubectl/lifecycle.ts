@@ -291,13 +291,24 @@ export function kubectlApply(host: KubectlHost, t: string[]) {
   if (effDep) {
     const existing = host.deployments.find(d => d.name === effDep.name);
     if (existing) {
-      out.push("deployment.apps/" + effDep.name + " unchanged");
+      // Deklarativ: eine geänderte SA-Zuordnung (spec.serviceAccountName, #132) wird
+      // beim erneuten apply übernommen ("configured") – sonst bleibt es "unchanged".
+      if (effDep.serviceAccountName && existing.serviceAccountName !== effDep.serviceAccountName) {
+        existing.serviceAccountName = effDep.serviceAccountName;
+        out.push("deployment.apps/" + effDep.name + " configured");
+      } else {
+        out.push("deployment.apps/" + effDep.name + " unchanged");
+      }
     } else {
       // Pod-Security-Admission (#126): unsichere Pods werden unter baseline/restricted
       // schon beim Anlegen abgewiesen – der Rest des Manifests wird nicht angewandt.
       const denied = admitPod(host, effDep.name, effDep.securityContext);
       if (denied) return host._err(denied, "Ergänze im Manifest einen passenden securityContext (z.B. runAsNonRoot: true) oder senke die enforce-Stufe.");
-      host.deployments.push(host._makeDeployment(effDep.name, effDep.image, effDep.replicas));
+      const dep = host._makeDeployment(effDep.name, effDep.image, effDep.replicas);
+      // ServiceAccount-Identität aus dem Pod-Template übernehmen (#132); fehlt sie, bleibt
+      // es die default-SA (Feld undefined).
+      if (effDep.serviceAccountName) dep.serviceAccountName = effDep.serviceAccountName;
+      host.deployments.push(dep);
       out.push("deployment.apps/" + effDep.name + " created");
     }
   }

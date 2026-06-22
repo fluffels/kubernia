@@ -206,11 +206,12 @@ test("v2 (veralteter Zahl-Index): currentQuestId gewinnt über stale questIdx, I
 test("v2 (alle Quests durch): Endzustand + vollständige completedQuests-Migration", () => {
   loadFixture("savegame-v2-allquests.json");
 
-  expect(Game.state.questIdx).toBe(KQContent.QUESTS.length); // 40
+  expect(Game.state.questIdx).toBe(KQContent.QUESTS.length); // alle durch
   expect(Game.state.currentQuestId).toBe("");                // Endzustand
   expect(Game.allQuestsDone()).toBe(true);
 
-  // Alle 40 alten numerischen IDs → die kompletten neuen Slugs (Menge identisch zum Content).
+  // Alle alten numerischen IDs (+ später als Slug ergänzte Quests) → die kompletten
+  // neuen Slugs (Menge identisch zum Content).
   expect(Game.state.completedQuests.length).toBe(KQContent.QUESTS.length);
   expect(new Set(Game.state.completedQuests)).toEqual(new Set(KQContent.QUESTS.map(q => q.id)));
 

@@ -29,6 +29,38 @@ test("#126 ServiceAccount: anlegen, Default-SA da, auflisten, Duplikat-Fehler", 
   assert.match(dup.output!, /already exists/);
 });
 
+/* ===================== #132 ServiceAccounts: Identität für Pods (Deployment ↔ SA) ===================== */
+
+test("#132 apply: Deployment-Manifest mit serviceAccountName verknüpft die SA", () => {
+  sim.exec("kubectl create serviceaccount wachdienst");
+  sim.files["wp.yaml"] = "kind: Deployment";
+  sim.applyEffects["wp.yaml"] = { deployment: { name: "wachposten", image: "nginx", replicas: 1, serviceAccountName: "wachdienst" } };
+  const r = sim.exec("kubectl apply -f wp.yaml");
+  assert.ok(!r.error, "apply geht durch");
+  assert.match(r.output!, /deployment\.apps\/wachposten created/);
+  const dep = sim.deployments.find(d => d.name === "wachposten")!;
+  assert.equal(dep.serviceAccountName, "wachdienst", "die SA-Zuordnung steht am Deployment");
+  // describe pod beweist die Zuordnung: die Service-Account-Zeile nennt die gesetzte SA.
+  const pod = dep.pods[0].name;
+  assert.match(sim.exec("kubectl describe pod " + pod).output!, /Service Account:\s*wachdienst/, "describe pod zeigt die zugeordnete SA");
+});
+
+test("#132 describe pod: ohne serviceAccountName läuft der Pod unter der default-SA", () => {
+  sim.exec("kubectl create deployment ohne-sa --image=nginx");
+  const pod = sim.deployments.find(d => d.name === "ohne-sa")!.pods[0].name;
+  assert.match(sim.exec("kubectl describe pod " + pod).output!, /Service Account:\s*default/, "Default-SA, wenn keine gesetzt ist");
+});
+
+test("#132 apply idempotent: gleiche SA → unchanged, geänderte SA → configured", () => {
+  sim.files["wp.yaml"] = "kind: Deployment";
+  sim.applyEffects["wp.yaml"] = { deployment: { name: "wp", image: "nginx", replicas: 1, serviceAccountName: "alt" } };
+  assert.match(sim.exec("kubectl apply -f wp.yaml").output!, /created/);
+  assert.match(sim.exec("kubectl apply -f wp.yaml").output!, /unchanged/, "gleiche SA → unchanged");
+  sim.applyEffects["wp.yaml"] = { deployment: { name: "wp", image: "nginx", replicas: 1, serviceAccountName: "neu" } };
+  assert.match(sim.exec("kubectl apply -f wp.yaml").output!, /configured/, "geänderte SA → configured");
+  assert.equal(sim.deployments.find(d => d.name === "wp")!.serviceAccountName, "neu");
+});
+
 test("#126 RBAC: Role + RoleBinding an SA → can-i liefert deterministisch yes/no", () => {
   sim.exec("kubectl create serviceaccount deploy-bot");
   sim.exec("kubectl create role pod-reader --verb=get,list,watch --resource=pods");

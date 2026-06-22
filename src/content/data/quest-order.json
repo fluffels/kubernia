@@ -38,5 +38,6 @@
   "observability-logs",
   "observability-alerts",
   "storage-statefulset",
-  "storage-pvc"
+  "storage-pvc",
+  "k8s-serviceaccount"
 ]

@@ -59,6 +59,7 @@ const COLLECTIONS: Record<string, (sim: Sim) => readonly unknown[]> = {
   pvcs: (s) => s.pvcs,
   pvs: (s) => s.pvs,
   storageClasses: (s) => s.storageClasses,
+  serviceAccounts: (s) => s.serviceAccounts,
   alerts: (s) => s.alerts(),
 };
 

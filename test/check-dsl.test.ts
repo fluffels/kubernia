@@ -229,7 +229,17 @@ test("Red-Green: flag mit leerem Pfad wirft", () => {
 });
 
 test("Allowlist enthält die erwarteten Kern-Sammlungen", () => {
-  for (const c of ["services", "deployments", "argoApps", "pvcs", "alerts"]) {
+  for (const c of ["services", "deployments", "argoApps", "pvcs", "serviceAccounts", "alerts"]) {
     assert.ok(CHECK_COLLECTIONS.includes(c), "Allowlist fehlt: " + c);
   }
+});
+
+test("serviceAccounts ist adressierbar (#132)", () => {
+  const rule = { some: "serviceAccounts", where: { name: "wachdienst" } };
+  assert.equal(evalRule(rule, { serviceAccounts: [{ name: "wachdienst" }] }), true);
+  assert.equal(evalRule(rule, { serviceAccounts: [{ name: "default" }] }), false);
+  // Deployment-SA-Zuordnung prüfbar (genau der #132-Quest-Check)
+  const dep = { some: "deployments", where: { name: "wachposten", serviceAccountName: "wachdienst" } };
+  assert.equal(evalRule(dep, { deployments: [{ name: "wachposten", serviceAccountName: "wachdienst" }] }), true);
+  assert.equal(evalRule(dep, { deployments: [{ name: "wachposten" }] }), false);
 });

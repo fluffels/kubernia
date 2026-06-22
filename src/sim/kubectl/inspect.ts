@@ -318,6 +318,9 @@ export function kubectlDescribe(host: KubectlHost, t: string[]) {
     "Ready:        " + st.ready,
     "IP:           " + (dep.broken && dep.broken.type === "pending" ? "<none>" : "10.244.1." + (10 + Math.floor(Math.random() * 200))),
     "Controlled By: ReplicaSet/" + dep.name,
+    // ServiceAccount-Identität des Pods (#132): die per spec.serviceAccountName gesetzte SA,
+    // sonst die default-SA des Namespaces – genau wie in echtem `kubectl describe pod`.
+    "Service Account: " + (dep.serviceAccountName || "default"),
     "Containers:",
     ...containerBlock,
     "Events:",

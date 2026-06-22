@@ -54,6 +54,10 @@ export interface Deployment {
   created: number;
   pods: PodInstance[];
   broken: Broken | null;
+  /** ServiceAccount-Identität der Pods (`spec.serviceAccountName`, #132). Fehlt das
+   *  Feld, laufen die Pods unter der `default`-SA des Namespaces – genau wie in echtem
+   *  Kubernetes. Wird per `kubectl apply` aus dem Pod-Template gesetzt. */
+  serviceAccountName?: string;
   /** Aktuelles memory-Limit in Mi (per `kubectl set resources` gesetzt). Laufzeit-Feld,
    *  nicht serialisiert – relevant nur für die OOMKilled-Diagnose innerhalb einer Sitzung. */
   memLimit?: number;
@@ -209,7 +213,7 @@ export interface ArgoApp {
 }
 /** Wirkung eines `kubectl apply -f <datei>` (was die Datei im Cluster erzeugt). */
 export interface ApplyEffect {
-  deployment?: { name: string; image: string; replicas: number; securityContext?: SecurityContext };
+  deployment?: { name: string; image: string; replicas: number; securityContext?: SecurityContext; serviceAccountName?: string };
   // RBAC-CRDs (#128): vom `kubectl apply -f` der Wachturm-Manifeste angelegt. `cluster`
   // unterscheidet Role/ClusterRole bzw. RoleBinding/ClusterRoleBinding (wie in roles/roleBindings).
   serviceAccount?: { name: string };

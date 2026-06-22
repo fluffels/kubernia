@@ -1,0 +1,178 @@
+[
+  {
+    "id": "k8s-serviceaccount",
+    "title": "ServiceAccounts: ein Ausweis für jeden Pod",
+    "giver": "vidar",
+    "topic": "security",
+    "rewardXp": 60,
+    "rewardCoins": 45,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "vidar",
+        "lines": [
+          "Halt. <i>*mustert dich übern Klemmbrettrand*</i> Vidar. Ich entscheide am Wachturm, wer rein darf. Vierzig Jahre Tor, da kennt man seine Pappenheimer.",
+          "Hier die erste Lektion, Kapitän: Auch deine <b>Pods</b> müssen sich ausweisen, wenn sie ans Cluster-API klopfen. Dieser Ausweis heißt <b>ServiceAccount</b> – eine Identität für <b>Programme</b>, nicht für Menschen.",
+          "Setzt du keinen, läuft ein Pod unter der <code>default</code>-SA seines Namespaces – die hat jeder Namespace von Haus aus. Bequem, aber unsauber: dann tragen <b>alle</b> denselben Ausweis. Wer Rechte braucht, kriegt einen <b>eigenen</b>. Merk dir: der ServiceAccount sagt <b>WER</b> – was er <b>darf</b>, regeln wir später mit RBAC. Eins nach dem anderen."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Wer ist schon da?",
+        "tasks": [
+          {
+            "id": "t-sa-default",
+            "text": "Schau nach, welche Ausweise schon ausliegen: <code>kubectl get serviceaccounts</code> (Kurzform <code>sa</code> geht auch). Die <code>default</code>-SA ist immer dabei.",
+            "accept": [
+              "^kubectl\\s+get\\s+(serviceaccounts|serviceaccount|sa)$"
+            ],
+            "check": {"some":"serviceAccounts","where":{"name":"default"}},
+            "solution": "kubectl get sa",
+            "hint": "kubectl get sa"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Eigenen Ausweis ausstellen",
+        "cmd": {
+          "id": "t-sa-create",
+          "intro": "🆕 Ein eigener <b>ServiceAccount</b> ist der saubere Weg: statt der allgemeinen <code>default</code>-SA bekommt dein Dienst eine <b>eigene Identität</b>, an die man später genau die nötigen Rechte hängt (Least Privilege).",
+          "text": "Stell einen Dienst-Ausweis aus: <code>kubectl create serviceaccount wachdienst</code>.",
+          "accept": [
+            "^kubectl\\s+create\\s+(serviceaccount|sa)\\s+wachdienst$"
+          ],
+          "check": {"some":"serviceAccounts","where":{"name":"wachdienst"}},
+          "solution": "kubectl create serviceaccount wachdienst",
+          "hint": "kubectl create serviceaccount <name>"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Ausweis kontrollieren",
+        "tasks": [
+          {
+            "id": "t-sa-list",
+            "text": "Kontrolle: <code>kubectl get sa</code> – jetzt steht <code>wachdienst</code> neben <code>default</code> in der Liste.",
+            "accept": [
+              "^kubectl\\s+get\\s+(serviceaccounts|serviceaccount|sa)$"
+            ],
+            "check": {"some":"serviceAccounts","where":{"name":"wachdienst"}},
+            "solution": "kubectl get sa",
+            "hint": "kubectl get sa"
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Dienstplan lesen",
+        "scenario": {
+          "files": {
+            "wachposten.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: wachposten\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: wachposten\n  template:\n    metadata:\n      labels:\n        app: wachposten\n    spec:\n      serviceAccountName: wachdienst   # <-- die Identität, unter der die Pods laufen\n      containers:\n        - name: wachposten\n          image: wachdienst-api:1.0\n          ports:\n            - containerPort: 8080"
+          },
+          "applyEffects": {
+            "wachposten.yaml": {
+              "deployment": {
+                "name": "wachposten",
+                "image": "wachdienst-api:1.0",
+                "replicas": 1,
+                "serviceAccountName": "wachdienst"
+              }
+            }
+          }
+        },
+        "tasks": [
+          {
+            "id": "t-sa-ls",
+            "text": "Schau mit <code>ls</code>, was an der Wachstube bereitliegt.",
+            "accept": [
+              "^ls$"
+            ],
+            "solution": "ls",
+            "hint": "Zwei Buchstaben."
+          },
+          {
+            "id": "t-sa-cat",
+            "text": "Lies <code>cat wachposten.yaml</code>. Im Pod-Template (<code>spec.template.spec</code>) steht <code>serviceAccountName: wachdienst</code> – genau dort heftet man den Ausweis an.",
+            "accept": [
+              "^cat\\s+wachposten\\.yaml$"
+            ],
+            "solution": "cat wachposten.yaml",
+            "hint": "cat <datei>"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Ausweis an den Workload heften",
+        "cmd": {
+          "id": "t-sa-apply",
+          "intro": "🆕 Den Ausweis hängst du nicht an den laufenden Pod, sondern ins <b>Pod-Template</b> des Workloads: <code>spec.serviceAccountName</code>. Jeder Pod, den das Deployment erzeugt, läuft dann unter dieser Identität.",
+          "text": "Rolle den Wachposten aus: <code>kubectl apply --filename wachposten.yaml</code> – seine Pods tragen ab jetzt den Ausweis <code>wachdienst</code>.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+wachposten\\.yaml$"
+          ],
+          "check": {"some":"deployments","where":{"name":"wachposten","serviceAccountName":"wachdienst"}},
+          "solution": "kubectl apply --filename wachposten.yaml",
+          "hint": "kubectl apply --filename <datei>"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Wirkt die Zuordnung?",
+        "tasks": [
+          {
+            "id": "t-sa-getpods",
+            "text": "Sieh die Pods: <code>kubectl get pods</code> – der <code>wachposten</code>-Pod läuft.",
+            "accept": [
+              "^kubectl\\s+get\\s+(pods|pod|po)$"
+            ],
+            "check": {"some":"deployments","where":{"name":"wachposten"}},
+            "solution": "kubectl get pods",
+            "hint": "kubectl get pods"
+          },
+          {
+            "id": "t-sa-describe",
+            "text": "Der Beweis: <code>kubectl describe pod &lt;pod-name&gt;</code> (Name aus der Liste oben). In der Zeile <code>Service Account:</code> steht <code>wachdienst</code> – nicht mehr <code>default</code>. Der Ausweis sitzt.",
+            "accept": [
+              "^kubectl\\s+describe\\s+pod\\s+wachposten-\\S+$"
+            ],
+            "check": {"some":"deployments","where":{"name":"wachposten","serviceAccountName":"wachdienst"}},
+            "solution": "kubectl describe pod <wachposten-pod>",
+            "hint": "Erst kubectl get pods, dann kubectl describe pod <name> mit dem wachposten-Pod."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "vidar",
+        "q": "Sag's mir mit eigenen Worten: Was ist ein <b>ServiceAccount</b> – und was ist er <b>nicht</b>?",
+        "options": [
+          {
+            "t": "Die Identität, unter der ein Pod auftritt (WER). Ohne eigenen SA nutzt er die default-SA. Welche Rechte er hat (WAS), regelt erst RBAC obendrauf.",
+            "ok": true,
+            "reply": "Genau so, Kapitän. Der Ausweis sagt nur, WER da anklopft – kein Recht hängt automatisch dran. Die Rechte kommen mit Role und Binding. Sauber getrennt, so muss das. 🛡️"
+          },
+          {
+            "t": "Das Benutzerkonto, mit dem sich ein Admin am Cluster anmeldet.",
+            "ok": false,
+            "reply": "Nein. Menschen melden sich über User-Accounts/Zertifikate an – ein ServiceAccount ist der Ausweis für <b>Programme</b> (Pods) im Cluster."
+          },
+          {
+            "t": "Ein Bündel Rechte – wer einen SA hat, darf damit automatisch im Cluster wirtschaften.",
+            "ok": false,
+            "reply": "Falsch herum. Der SA ist nur die Identität. Rechte bekommt er erst, wenn du ihm per RoleBinding eine Rolle zuteilst – ohne Binding darf er nichts."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "vidar",
+        "lines": [
+          "Ausweis ausgestellt, Workload trägt ihn. <i>*knappes Nicken*</i> Damit weiß das Cluster künftig, WER da anklopft.",
+          "Aber ein Ausweis allein öffnet noch keine Tür. Was <code>wachdienst</code> tatsächlich <b>darf</b>, hängen wir als Nächstes dran – mit <b>Role</b> und <b>RoleBinding</b>. Komm wieder, wenn du bereit bist. 🛡️"
+        ]
+      }
+    ]
+  }
+]
