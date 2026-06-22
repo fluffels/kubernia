@@ -41,5 +41,6 @@
   "storage-pvc",
   "k8s-serviceaccount",
   "k8s-rbac-role",
-  "k8s-rbac-clusterrole"
+  "k8s-rbac-clusterrole",
+  "k8s-pod-security"
 ]

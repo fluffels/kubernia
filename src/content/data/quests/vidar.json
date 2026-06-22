@@ -558,5 +558,178 @@
         ]
       }
     ]
+  },
+  {
+    "id": "k8s-pod-security",
+    "title": "Wer darf rein: Pod-Security & SecurityContext",
+    "giver": "vidar",
+    "topic": "security",
+    "rewardXp": 75,
+    "rewardCoins": 60,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "vidar",
+        "lines": [
+          "Die letzte Wache, Kapitän. <i>*lehnt sich an den Türrahmen*</i> Bisher ging's um Ausweis und Rechte. Jetzt um die Tür selbst: Welche Pods lasse ich überhaupt <b>herein</b>?",
+          "Merksatz: Ein Container, der als <b>root</b> oder gar <b>privileged</b> läuft, ist ein offenes Scheunentor. Wird so einer gekapert, hat der Eindringling faktisch den ganzen <b>Node</b> – der Blast Radius ist riesig. Drum: so wenig Rechte wie möglich, auch hier.",
+          "Kubernetes hat dafür die <b>Pod Security Standards</b> – drei Stufen, die du <b>pro Namespace</b> per Label durchsetzt: <code>privileged</code> (alles erlaubt), <code>baseline</code> (verbietet die grobe Eskalation wie privileged-Container) und <code>restricted</code> (zusätzlich gehärtet: <b>non-root</b>, keine Rechte-Eskalation). Lass uns das Tor scharf schalten – und einen Posten erst falsch, dann richtig bauen."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Der schnelle, ungehärtete Posten",
+        "scenario": {
+          "files": {
+            "spaehposten-roh.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: spaehposten\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: spaehposten\n  template:\n    metadata:\n      labels:\n        app: spaehposten\n    spec:\n      containers:                      # KEIN securityContext -> läuft per Default als root\n        - name: spaehposten\n          image: wachturm-spaeher:1.0\n          ports:\n            - containerPort: 8080",
+            "spaehposten.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: spaehposten\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: spaehposten\n  template:\n    metadata:\n      labels:\n        app: spaehposten\n    spec:\n      securityContext:                 # gilt für den ganzen Pod\n        runAsNonRoot: true             # NICHT als root starten\n      containers:\n        - name: spaehposten\n          image: wachturm-spaeher:1.0\n          securityContext:             # gilt für diesen Container\n            allowPrivilegeEscalation: false   # keine Rechte-Eskalation\n            readOnlyRootFilesystem: true      # Dateisystem nur lesbar\n          ports:\n            - containerPort: 8080"
+          },
+          "applyEffects": {
+            "spaehposten-roh.yaml": {
+              "deployment": { "name": "spaehposten", "image": "wachturm-spaeher:1.0", "replicas": 1 }
+            },
+            "spaehposten.yaml": {
+              "deployment": {
+                "name": "spaehposten",
+                "image": "wachturm-spaeher:1.0",
+                "replicas": 1,
+                "securityContext": { "runAsNonRoot": true, "allowPrivilegeEscalation": false, "readOnlyRootFilesystem": true }
+              }
+            }
+          }
+        },
+        "tasks": [
+          {
+            "id": "t-ps-ls",
+            "text": "Schau mit <code>ls</code>, was an der Wachstube bereitliegt – zwei Fassungen desselben Postens.",
+            "accept": [
+              "^ls$"
+            ],
+            "solution": "ls",
+            "hint": "Zwei Buchstaben."
+          },
+          {
+            "id": "t-ps-cat-roh",
+            "text": "Lies <code>cat spaehposten-roh.yaml</code>: Dem Pod-Template fehlt jeder <code>securityContext</code> – so ein Container läuft per Default als <b>root</b>.",
+            "accept": [
+              "^cat\\s+spaehposten-roh\\.yaml$"
+            ],
+            "solution": "cat spaehposten-roh.yaml",
+            "hint": "cat <datei>"
+          },
+          {
+            "id": "t-ps-apply-roh",
+            "text": "Roll ihn aus: <code>kubectl apply --filename spaehposten-roh.yaml</code>. Geht durch – noch steht die Stufe auf <code>privileged</code>, da fragt keiner nach. Genau das ist das Risiko.",
+            "accept": [
+              "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+spaehposten-roh\\.yaml$"
+            ],
+            "check": {"some":"deployments","where":{"name":"spaehposten"}},
+            "solution": "kubectl apply --filename spaehposten-roh.yaml",
+            "hint": "kubectl apply --filename <datei>"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Die strengste Stufe scharf schalten",
+        "cmd": {
+          "id": "t-ps-enforce",
+          "intro": "🆕 Die Pod-Security-Stufe setzt du als <b>Namespace-Label</b>: <code>pod-security.kubernetes.io/enforce=&lt;stufe&gt;</code>. Ab <code>restricted</code> prüft das Tor jeden <b>neu</b> ausgerollten Pod – ein ungehärteter bekäme dann: <code>Error from server (Forbidden): admission webhook \"pod-security\" denied the request: … runAsNonRoot muss true sein</code>. (Schon laufende Pods bleiben, bis sie neu starten.)",
+          "text": "Schalt die strengste Stufe scharf: <code>kubectl label namespace default pod-security.kubernetes.io/enforce=restricted</code>.",
+          "accept": [
+            "^kubectl\\s+label\\s+(?:namespace|ns)\\s+default\\s+pod-security\\.kubernetes\\.io/enforce=restricted$"
+          ],
+          "check": {"flag":["podSecurity"],"eq":"restricted"},
+          "solution": "kubectl label namespace default pod-security.kubernetes.io/enforce=restricted",
+          "hint": "kubectl label namespace default pod-security.kubernetes.io/enforce=restricted"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Den ungehärteten abräumen & den gehärteten lesen",
+        "tasks": [
+          {
+            "id": "t-ps-delete",
+            "text": "Räum den schlampigen Posten ab: <code>kubectl delete deployment spaehposten</code>. Den rollen wir gleich gehärtet neu aus – einen laufenden Pod härtet man nicht im Flug, man ersetzt ihn.",
+            "accept": [
+              "^kubectl\\s+delete\\s+(?:deployment|deploy)\\s+spaehposten$"
+            ],
+            "check": {"none":"deployments","where":{"name":"spaehposten"}},
+            "solution": "kubectl delete deployment spaehposten",
+            "hint": "kubectl delete deployment <name>"
+          },
+          {
+            "id": "t-ps-cat-safe",
+            "text": "Lies die gehärtete Fassung: <code>cat spaehposten.yaml</code>. Im Pod-Template steht <code>runAsNonRoot: true</code>, am Container <code>allowPrivilegeEscalation: false</code> und <code>readOnlyRootFilesystem: true</code> – genau die Härtung, die <code>restricted</code> verlangt.",
+            "accept": [
+              "^cat\\s+spaehposten\\.yaml$"
+            ],
+            "solution": "cat spaehposten.yaml",
+            "hint": "cat <datei>"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Gehärtet durchs Tor",
+        "cmd": {
+          "id": "t-ps-apply-safe",
+          "intro": "🆕 Der <b>securityContext</b> sitzt im Manifest (Pod- und Container-Ebene) und sagt dem Tor: dieser Pod läuft non-root und ohne Rechte-Eskalation. Genau deshalb lässt <code>restricted</code> ihn durch – während der rohe von vorhin jetzt abgewiesen würde.",
+          "text": "Roll den gehärteten Posten aus: <code>kubectl apply --filename spaehposten.yaml</code>. Unter <code>restricted</code> wird er <b>zugelassen</b> – der securityContext macht den Unterschied.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+spaehposten\\.yaml$"
+          ],
+          "check": {"some":"deployments","where":{"name":"spaehposten"}},
+          "solution": "kubectl apply --filename spaehposten.yaml",
+          "hint": "kubectl apply --filename <datei>"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Probe – der gehärtete läuft",
+        "tasks": [
+          {
+            "id": "t-ps-getpods",
+            "text": "Kontrolle: <code>kubectl get pods</code> – der <code>spaehposten</code> läuft, diesmal gehärtet und vom Tor durchgewinkt.",
+            "accept": [
+              "^kubectl\\s+get\\s+(?:pods|pod|po)$"
+            ],
+            "check": {"some":"deployments","where":{"name":"spaehposten"}},
+            "solution": "kubectl get pods",
+            "hint": "kubectl get pods"
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "vidar",
+        "q": "Warum ist ein Container mit Root-/privileged-Rechten so gefährlich – und was erzwingt <code>restricted</code>?",
+        "options": [
+          {
+            "t": "Wird so ein Container gekapert, hat der Angreifer faktisch den ganzen Node (großer Blast Radius). restricted erzwingt deshalb u.a. runAsNonRoot und verbietet Privilege-Escalation.",
+            "ok": true,
+            "reply": "Genau, Kapitän. Die Stufe ist keine Schikane, sie schrumpft den Schaden, falls doch mal einer reinkommt. non-root, keine Eskalation, read-only – kleine Angriffsfläche. So hält man ein Tor. 🛡️"
+          },
+          {
+            "t": "Root-Container sind nur langsamer; restricted beschleunigt sie wieder.",
+            "ok": false,
+            "reply": "Nein, mit Tempo hat das nichts zu tun. Es geht um den Schaden bei einem Einbruch: ein root-Container verschenkt im Ernstfall gleich den ganzen Node."
+          },
+          {
+            "t": "Gefährlich ist nur das Image; der securityContext betrifft nur das Logging und ändert an den Rechten nichts.",
+            "ok": false,
+            "reply": "Falsch. Der securityContext steuert genau die Laufzeit-Rechte (root ja/nein, Eskalation, Dateisystem) – er ist der Hebel, mit dem restricted die Angriffsfläche klein hält."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "vidar",
+        "lines": [
+          "Sauber, Kapitän. <i>*klappt das Klemmbrett zu*</i> Ausweis, Rechte, und jetzt das Tor selbst – das Wachturm-Quartier ist abgesichert. So wenig Rechte wie möglich, so viel wie nötig: vom ServiceAccount bis zur Pod-Security zieht sich derselbe Faden.",
+          "Geh deinen Weg, du hast hier alles gelernt, was eine gute Wache ausmacht. <i>*nickt knapp, fast anerkennend*</i> Wenn die Krake je anklopft, weiß sie: an diesem Tor kommt sie nicht durch. 🛡️"
+        ]
+      }
+    ]
   }
 ]

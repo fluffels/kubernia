@@ -278,3 +278,35 @@ test("#128 apply: securityContext-Manifest besteht restricted, plain wird abgele
   sim.applyEffects["plain.yaml"] = { deployment: { name: "barfuss", image: "nginx", replicas: 1 } };
   assert.ok(sim.exec("kubectl apply -f plain.yaml").error, "unsicherer Workload bleibt abgelehnt");
 });
+
+test("#135 Quest k8s-pod-security: roh läuft unter privileged, restricted weist ihn ab, gehärtet kommt durch", () => {
+  // Genau die applyEffects der Quest-Szenario-Dateien (roh = kein securityContext, gehärtet = mit).
+  const roh = { deployment: { name: "spaehposten", image: "wachturm-spaeher:1.0", replicas: 1 } };
+  const safe = { deployment: { name: "spaehposten", image: "wachturm-spaeher:1.0", replicas: 1, securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true } } };
+  sim.files["spaehposten-roh.yaml"] = "kind: Deployment";
+  sim.files["spaehposten.yaml"] = "kind: Deployment";
+
+  // Schritt 1: roh unter privileged (Default) -> läuft (genau das Risiko).
+  sim.applyEffects["spaehposten-roh.yaml"] = roh;
+  assert.ok(!sim.exec("kubectl apply -f spaehposten-roh.yaml").error, "unter privileged kommt der ungehärtete Posten durch");
+  assert.ok(sim.deployments.some(d => d.name === "spaehposten"), "der rohe Posten läuft");
+
+  // Schritt 2: restricted scharf schalten + abräumen.
+  sim.exec("kubectl label namespace default pod-security.kubernetes.io/enforce=restricted");
+  assert.equal(sim.podSecurity, "restricted", "die enforce-Stufe steht");
+  sim.exec("kubectl delete deployment spaehposten");
+  assert.ok(!sim.deployments.some(d => d.name === "spaehposten"), "der rohe Posten ist abgeräumt");
+
+  // Gegenprobe: derselbe ROHE Posten würde unter restricted jetzt ABGEWIESEN
+  // (das ist die Ablehnung, die die Quest im Intro zitiert, aber als Task nicht ausführen kann).
+  const rej = sim.exec("kubectl apply -f spaehposten-roh.yaml");
+  assert.ok(rej.error, "unter restricted weist das Tor den ungehärteten Posten ab");
+  assert.match(rej.output!, /restricted|runAsNonRoot|Forbidden|Pod Security/i, "klare Ablehnungs-Begründung");
+  assert.ok(!sim.deployments.some(d => d.name === "spaehposten"), "der abgewiesene Posten entsteht NICHT");
+
+  // Schritt 3: der GEHÄRTETE Posten kommt unter restricted durch.
+  sim.applyEffects["spaehposten.yaml"] = safe;
+  const ok = sim.exec("kubectl apply -f spaehposten.yaml");
+  assert.ok(!ok.error, "der gehärtete Posten (runAsNonRoot + keine Eskalation) wird zugelassen");
+  assert.ok(sim.deployments.some(d => d.name === "spaehposten"), "der gehärtete Posten läuft");
+});
