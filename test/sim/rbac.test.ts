@@ -235,6 +235,37 @@ test("#128 apply: ClusterRole + ClusterRoleBinding via Manifest → can-i für U
   assert.equal(sim.exec("kubectl auth can-i delete nodes --as=wache").output, "no");
 });
 
+test("#134 Quest k8s-rbac-clusterrole: namespaced Role reicht nicht für Nodes, ClusterRole + ClusterRoleBinding schon", () => {
+  // Spiegelt die Quest-Kette: wachdienst hat aus der Vorquest eine namespaced Role (pods).
+  sim.exec("kubectl create serviceaccount wachdienst");
+  sim.exec("kubectl create role pod-leser --verb=get,list,watch --resource=pods");
+  sim.exec("kubectl create rolebinding wachdienst-darf-lesen --role=pod-leser --serviceaccount=default:wachdienst");
+  const sub = "--as=system:serviceaccount:default:wachdienst";
+
+  // Gegenprobe: die namespaced Role kommt an die cluster-weiten Nodes NICHT heran.
+  assert.equal(sim.exec("kubectl auth can-i list nodes " + sub).output, "no", "namespaced Role deckt keine Nodes ab");
+  assert.equal(sim.exec("kubectl auth can-i get pods " + sub).output, "yes", "Pods darf wachdienst weiterhin lesen");
+
+  // Genau die applyEffects der Quest-Szenario-Dateien.
+  sim.files["clusterrole.yaml"] = "kind: ClusterRole";
+  sim.files["clusterrolebinding.yaml"] = "kind: ClusterRoleBinding";
+  sim.applyEffects["clusterrole.yaml"] = { role: { name: "knoten-spaeher", cluster: true, rules: [{ verbs: ["get", "list", "watch"], resources: ["nodes"] }] } };
+  sim.applyEffects["clusterrolebinding.yaml"] = { roleBinding: { name: "wachdienst-rundblick", cluster: true, roleRef: { kind: "ClusterRole", name: "knoten-spaeher" }, subjects: [{ kind: "ServiceAccount", name: "wachdienst", namespace: "default" }] } };
+
+  assert.match(sim.exec("kubectl apply -f clusterrole.yaml").output!, /clusterrole\.rbac\.authorization\.k8s\.io\/knoten-spaeher created/);
+  // Die ClusterRole allein gewährt noch nichts – erst das Binding macht sie scharf.
+  assert.equal(sim.exec("kubectl auth can-i list nodes " + sub).output, "no", "ClusterRole ohne Binding bleibt wirkungslos");
+  assert.match(sim.exec("kubectl apply -f clusterrolebinding.yaml").output!, /clusterrolebinding\.rbac\.authorization\.k8s\.io\/wachdienst-rundblick created/);
+
+  // Jetzt der Rundblick – aber nur lesen (Least Privilege).
+  assert.equal(sim.exec("kubectl auth can-i list nodes " + sub).output, "yes", "nach dem ClusterRoleBinding: Nodes lesen erlaubt");
+  assert.equal(sim.exec("kubectl auth can-i delete nodes " + sub).output, "no", "löschen bleibt verboten (nur gebundene verbs)");
+  // describe clusterrole zeigt die Regeln im Klartext.
+  const d = sim.exec("kubectl describe clusterrole knoten-spaeher").output!;
+  assert.match(d, /nodes/);
+  assert.match(d, /get list watch/);
+});
+
 test("#128 apply: securityContext-Manifest besteht restricted, plain wird abgelehnt", () => {
   sim.files["secure.yaml"] = POD_SECURITY_YAML;
   sim.applyEffects["secure.yaml"] = { deployment: { name: "wachposten", image: "nginx", replicas: 1, securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true } } };

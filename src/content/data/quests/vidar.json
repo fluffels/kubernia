@@ -357,5 +357,206 @@
         ]
       }
     ]
+  },
+  {
+    "id": "k8s-rbac-clusterrole",
+    "title": "Cluster-weite Rechte: ClusterRole & auth can-i",
+    "giver": "vidar",
+    "topic": "security",
+    "rewardXp": 70,
+    "rewardCoins": 55,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "vidar",
+        "lines": [
+          "Wieder da, Kapitän. <i>*tippt aufs Klemmbrett*</i> Letzte Wache hat dein <code>wachdienst</code> gelernt, Pods zu lesen – aber nur in <b>diesem</b> einen Namespace. Eine <b>Role</b> hört an der Namespace-Grenze auf.",
+          "Manche Dinge gehören aber <b>keinem</b> Namespace: die <b>Nodes</b> zum Beispiel – die Maschinen, auf denen der ganze Hafen läuft. Eine Role kann sie gar nicht abdecken, egal wie viele <code>verbs</code> du reinschreibst.",
+          "Dafür gibt's zwei cluster-weite Geschwister: die <b>ClusterRole</b> (eine Schlüsselliste <b>ohne</b> Namespace-Grenze) und das <b>ClusterRoleBinding</b> (die Übergabe, die <b>überall</b> gilt). Und geprüft wird wie immer mit <code>kubectl auth can-i</code> – nicht geraten. Auf geht's."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Die Knoten unter dem Hafen",
+        "tasks": [
+          {
+            "id": "t-cr-nodes",
+            "text": "Sieh dir die Maschinen an, auf denen alles läuft: <code>kubectl get nodes</code>. Diese <b>Nodes</b> gehören zu <b>keinem</b> Namespace – sie sind cluster-weit. Genau darum reicht hier keine Role.",
+            "accept": [
+              "^kubectl\\s+get\\s+(nodes|node|no)$"
+            ],
+            "check": {"some":"nodes"},
+            "solution": "kubectl get nodes",
+            "hint": "kubectl get nodes"
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Erst die Gegenprobe",
+        "tasks": [
+          {
+            "id": "t-cr-cant",
+            "text": "Frag das Tor, ob <code>wachdienst</code> die Knoten lesen darf: <code>kubectl auth can-i list nodes --as=system:serviceaccount:default:wachdienst</code>. Antwort: <b>no</b>. Logisch – seine Role <code>pod-leser</code> gilt nur für Pods in <b>einem</b> Namespace, an die Nodes kommt sie nicht heran.",
+            "accept": [
+              "^kubectl\\s+auth\\s+can-i\\s+list\\s+nodes\\s+--as=system:serviceaccount:default:wachdienst$"
+            ],
+            "solution": "kubectl auth can-i list nodes --as=system:serviceaccount:default:wachdienst",
+            "hint": "kubectl auth can-i list nodes --as=system:serviceaccount:default:wachdienst"
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "ClusterRole & Übergabe lesen",
+        "scenario": {
+          "files": {
+            "clusterrole.yaml": "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: knoten-spaeher          # ClusterRole hat KEINEN namespace – sie gilt cluster-weit\nrules:\n  - apiGroups: [\"\"]            # Kern-API-Gruppe (nodes liegen dort)\n    resources: [\"nodes\"]\n    verbs: [\"get\", \"list\", \"watch\"]   # nur zusehen – der Wachdienst späht, er fasst nichts an",
+            "clusterrolebinding.yaml": "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRoleBinding\nmetadata:\n  name: wachdienst-rundblick   # auch das Binding hat keinen namespace\nsubjects:\n  - kind: ServiceAccount      # WER bekommt den Rundblick\n    name: wachdienst\n    namespace: default\nroleRef:\n  kind: ClusterRole           # WAS er bekommt: die ClusterRole oben\n  name: knoten-spaeher\n  apiGroup: rbac.authorization.k8s.io"
+          },
+          "applyEffects": {
+            "clusterrole.yaml": {
+              "role": {
+                "name": "knoten-spaeher",
+                "cluster": true,
+                "rules": [{ "verbs": ["get", "list", "watch"], "resources": ["nodes"] }]
+              }
+            },
+            "clusterrolebinding.yaml": {
+              "roleBinding": {
+                "name": "wachdienst-rundblick",
+                "cluster": true,
+                "roleRef": { "kind": "ClusterRole", "name": "knoten-spaeher" },
+                "subjects": [{ "kind": "ServiceAccount", "name": "wachdienst", "namespace": "default" }]
+              }
+            }
+          }
+        },
+        "tasks": [
+          {
+            "id": "t-cr-ls",
+            "text": "Schau mit <code>ls</code>, was an der Wachstube bereitliegt.",
+            "accept": [
+              "^ls$"
+            ],
+            "solution": "ls",
+            "hint": "Zwei Buchstaben."
+          },
+          {
+            "id": "t-cr-cat-role",
+            "text": "Lies <code>cat clusterrole.yaml</code>: oben fehlt der <code>namespace</code> (Absicht!), und unter <code>resources</code> stehen die <code>nodes</code> – cluster-weite Dinge, die eine Role gar nicht adressieren könnte.",
+            "accept": [
+              "^cat\\s+clusterrole\\.yaml$"
+            ],
+            "solution": "cat clusterrole.yaml",
+            "hint": "cat <datei>"
+          },
+          {
+            "id": "t-cr-cat-binding",
+            "text": "Und <code>cat clusterrolebinding.yaml</code>: <code>subjects</code> ist wieder dein <code>wachdienst</code> (das WER), <code>roleRef</code> zeigt diesmal auf eine <code>ClusterRole</code> (das WAS). Ein ClusterRoleBinding kann nur eine ClusterRole binden.",
+            "accept": [
+              "^cat\\s+clusterrolebinding\\.yaml$"
+            ],
+            "solution": "cat clusterrolebinding.yaml",
+            "hint": "cat <datei>"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Cluster-weite Schlüsselliste anlegen",
+        "cmd": {
+          "id": "t-cr-apply-role",
+          "intro": "🆕 Die <b>ClusterRole</b> ist wie eine Role, aber <b>ohne</b> Namespace-Grenze. Sie kann cluster-weite Ressourcen wie <code>nodes</code> abdecken – und gilt, einmal gebunden, in <b>allen</b> Namespaces. Allein bewirkt auch sie nichts; erst das Binding macht sie scharf.",
+          "text": "Leg die cluster-weite Schlüsselliste an: <code>kubectl apply --filename clusterrole.yaml</code>.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+clusterrole\\.yaml$"
+          ],
+          "check": {"some":"roles","where":{"name":"knoten-spaeher","cluster":true}},
+          "solution": "kubectl apply --filename clusterrole.yaml",
+          "hint": "kubectl apply --filename <datei>"
+        }
+      },
+      {
+        "type": "teach",
+        "brief": "Cluster-weit übergeben",
+        "cmd": {
+          "id": "t-cr-apply-binding",
+          "intro": "🆕 Das <b>ClusterRoleBinding</b> übergibt die ClusterRole cluster-weit an ein Subjekt. Erst jetzt darf <code>wachdienst</code> die Knoten überall sehen. (Wolltest du das Recht nur in <b>einem</b> Namespace, nähme man ein normales RoleBinding, das auf die ClusterRole zeigt – hier brauchen wir aber den vollen Rundblick.)",
+          "text": "Übergib den Rundblick: <code>kubectl apply --filename clusterrolebinding.yaml</code>.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+clusterrolebinding\\.yaml$"
+          ],
+          "check": {"some":"roleBindings","where":{"name":"wachdienst-rundblick","cluster":true}},
+          "solution": "kubectl apply --filename clusterrolebinding.yaml",
+          "hint": "kubectl apply --filename <datei>"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Probe – jetzt der Rundblick",
+        "tasks": [
+          {
+            "id": "t-cr-can",
+            "text": "Dieselbe Frage wie vorhin: <code>kubectl auth can-i list nodes --as=system:serviceaccount:default:wachdienst</code>. Jetzt: <b>yes</b>. Der cluster-weite Schlüssel sitzt.",
+            "accept": [
+              "^kubectl\\s+auth\\s+can-i\\s+list\\s+nodes\\s+--as=system:serviceaccount:default:wachdienst$"
+            ],
+            "check": {"some":"roleBindings","where":{"name":"wachdienst-rundblick","cluster":true}},
+            "solution": "kubectl auth can-i list nodes --as=system:serviceaccount:default:wachdienst",
+            "hint": "kubectl auth can-i list nodes --as=system:serviceaccount:default:wachdienst"
+          },
+          {
+            "id": "t-cr-cant-delete",
+            "text": "Und die Grenze von Least Privilege: <code>kubectl auth can-i delete nodes --as=system:serviceaccount:default:wachdienst</code> → <b>no</b>. Zusehen ja, löschen nein – genau die Verben, die in der ClusterRole stehen.",
+            "accept": [
+              "^kubectl\\s+auth\\s+can-i\\s+delete\\s+nodes\\s+--as=system:serviceaccount:default:wachdienst$"
+            ],
+            "solution": "kubectl auth can-i delete nodes --as=system:serviceaccount:default:wachdienst",
+            "hint": "kubectl auth can-i delete nodes --as=system:serviceaccount:default:wachdienst"
+          },
+          {
+            "id": "t-cr-describe",
+            "text": "Sieh die cluster-weite Schlüsselliste im Klartext: <code>kubectl describe clusterrole knoten-spaeher</code> – Resources <code>nodes</code>, Verbs <code>get list watch</code>, und keine Namespace-Zeile.",
+            "accept": [
+              "^kubectl\\s+describe\\s+clusterrole\\s+knoten-spaeher$"
+            ],
+            "check": {"some":"roles","where":{"name":"knoten-spaeher","cluster":true}},
+            "solution": "kubectl describe clusterrole knoten-spaeher",
+            "hint": "kubectl describe clusterrole <name>"
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "vidar",
+        "q": "Wann brauchst du eine <b>ClusterRole</b> statt einer Role?",
+        "options": [
+          {
+            "t": "Für cluster-weite Rechte – über alle Namespaces hinweg oder für Ressourcen wie Nodes, die zu KEINEM Namespace gehören. Eine Role gilt nur in ihrem einen Namespace.",
+            "ok": true,
+            "reply": "Genau, Kapitän. Namespace-Grenze = Role, kein Namespace oder über alle hinweg = ClusterRole. Und das Binding bestimmt, ob das Recht cluster-weit (ClusterRoleBinding) oder nur in einem Namespace (RoleBinding auf die ClusterRole) gilt. 🛡️"
+          },
+          {
+            "t": "Immer dann, wenn ein ServiceAccount beteiligt ist – Roles sind nur für menschliche Nutzer.",
+            "ok": false,
+            "reply": "Nein. Beide – Role wie ClusterRole – binden an Subjekte jeder Art (User ODER ServiceAccount). Der Unterschied ist der Geltungsbereich, nicht die Art des Subjekts."
+          },
+          {
+            "t": "Nie nötig – eine Role mit genug verbs kann alles, was eine ClusterRole kann.",
+            "ok": false,
+            "reply": "Falsch. Eine Role endet an ihrer Namespace-Grenze und kann nicht-namespaced Ressourcen wie Nodes gar nicht abdecken – egal wie viele verbs du ihr gibst. Dafür MUSS es eine ClusterRole sein."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "vidar",
+        "lines": [
+          "Sitzt. <i>*hakt etwas ab*</i> Dein <code>wachdienst</code> hat jetzt den Rundblick über alle Knoten – und darf sie doch nur <b>lesen</b>. Genau so weit der Blick reicht, genau so kurz die Leine.",
+          "Wer da anklopft (ServiceAccount) und was er darf (Role/ClusterRole + Binding) – das sitzt. Bleibt die letzte Frage am Tor: Was lasse ich überhaupt <b>herein</b>? Welche Pods dürfen laufen, welche sind zu gefährlich? Das ist <b>Pod-Security</b> – komm wieder, wenn du die letzte Wache gehen willst. 🛡️"
+        ]
+      }
+    ]
   }
 ]
