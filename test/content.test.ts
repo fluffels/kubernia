@@ -847,3 +847,92 @@ test("#120 Phase-5-Quests (observability-metrics–observability-alerts): Belohn
   }
   assert.ok(quests[3].rewardXp >= quests[0].rewardXp, "observability-alerts soll mindestens so viel XP bringen wie observability-metrics");
 });
+
+/* ===== Wachturm-Quartier: False-Positive-Schutz (#139, Phase 6: RBAC/ServiceAccounts/Pod-Security) =====
+ * Die accept-Regexes der Vidar-Quests (k8s-serviceaccount–k8s-pod-security) müssen falsche Eingaben
+ * zuverlässig ablehnen – ein zu breiter Regex würde das Lernziel (Least Privilege: genau DIESE
+ * Identität / DIESE Datei / DIESE Stufe) aushebeln. Spiegelt die #101/#120-Blöcke für die neue Region.
+ * Die negativen `!accepts(...)`-Zeilen sind die Red-Green-Absicherung: würde der Regex aufgeweicht,
+ * würden sie sofort rot. */
+
+function secTask(questId: string, taskId: string) {
+  const q = KQContent.QUESTS.find(x => x.id === questId);
+  assert.ok(q, "Quest " + questId + " nicht gefunden");
+  for (const step of q!.steps) {
+    if (step.type === "terminal") {
+      const t = step.tasks.find(t => t.id === taskId);
+      if (t) return t;
+    } else if (step.type === "teach" && step.cmd.id === taskId) {
+      return step.cmd;
+    }
+  }
+  throw new Error(questId + "/" + taskId + " nicht gefunden");
+}
+
+test("#139 k8s-serviceaccount: create serviceaccount akzeptiert sa-Alias + genau 'wachdienst', lehnt fremden/fehlenden Namen ab", () => {
+  const task = secTask("k8s-serviceaccount", "t-sa-create");
+  assert.ok(accepts(task, "kubectl create serviceaccount wachdienst"), "Langform muss gelten");
+  assert.ok(accepts(task, "kubectl create sa wachdienst"),             "sa-Alias muss GENAUSO gelten");
+  assert.ok(!accepts(task, "kubectl create serviceaccount wachposten"), "fremder SA-Name muss scheitern");
+  assert.ok(!accepts(task, "kubectl create serviceaccount"),            "fehlender Name muss scheitern");
+  assert.ok(!accepts(task, "kubectl create role wachdienst"),           "'role' statt 'serviceaccount' muss scheitern");
+});
+
+test("#139 k8s-rbac-role: auth can-i hängt an genau der wachdienst-SA, --as ist Pflicht, das verb ist fix", () => {
+  const cant = secTask("k8s-rbac-role", "t-rb-cant");
+  assert.ok(accepts(cant, "kubectl auth can-i get pods --as=system:serviceaccount:default:wachdienst"), "korrekte Gegenprobe muss gelten");
+  assert.ok(!accepts(cant, "kubectl auth can-i get pods"), "ohne --as (Admin-Frage) verfehlt das Lernziel → scheitern");
+  assert.ok(!accepts(cant, "kubectl auth can-i get pods --as=system:serviceaccount:default:andere"), "fremde SA muss scheitern");
+  assert.ok(!accepts(cant, "kubectl auth can-i list pods --as=system:serviceaccount:default:wachdienst"), "anderes verb (list statt get) muss scheitern");
+
+  const cantDel = secTask("k8s-rbac-role", "t-rb-cant-delete");
+  assert.ok(accepts(cantDel, "kubectl auth can-i delete pods --as=system:serviceaccount:default:wachdienst"), "delete-Probe muss gelten");
+  assert.ok(!accepts(cantDel, "kubectl auth can-i get pods --as=system:serviceaccount:default:wachdienst"), "get statt delete verfehlt diesen Schritt → scheitern");
+});
+
+test("#139 k8s-rbac-clusterrole: auth can-i prüft genau 'list nodes' für die wachdienst-SA", () => {
+  const can = secTask("k8s-rbac-clusterrole", "t-cr-can");
+  assert.ok(accepts(can, "kubectl auth can-i list nodes --as=system:serviceaccount:default:wachdienst"), "korrekte Probe muss gelten");
+  assert.ok(!accepts(can, "kubectl auth can-i list pods --as=system:serviceaccount:default:wachdienst"),  "pods statt nodes muss scheitern");
+  assert.ok(!accepts(can, "kubectl auth can-i get nodes --as=system:serviceaccount:default:wachdienst"),   "get statt list (anderes verb dieses Schritts) muss scheitern");
+  assert.ok(!accepts(can, "kubectl auth can-i list nodes"),                                                "ohne --as muss scheitern");
+});
+
+test("#139 k8s-pod-security: enforce-Label akzeptiert ns-Alias + nur 'restricted', lehnt andere Stufen/Modi ab", () => {
+  const task = secTask("k8s-pod-security", "t-ps-enforce");
+  assert.ok(accepts(task, "kubectl label namespace default pod-security.kubernetes.io/enforce=restricted"), "Langform muss gelten");
+  assert.ok(accepts(task, "kubectl label ns default pod-security.kubernetes.io/enforce=restricted"),         "ns-Alias muss GENAUSO gelten");
+  assert.ok(!accepts(task, "kubectl label namespace default pod-security.kubernetes.io/enforce=baseline"),   "baseline (zu lasche Stufe) verfehlt diesen Schritt → scheitern");
+  assert.ok(!accepts(task, "kubectl label namespace default pod-security.kubernetes.io/enforce=privileged"), "privileged muss scheitern");
+  assert.ok(!accepts(task, "kubectl label namespace default pod-security.kubernetes.io/warn=restricted"),     "warn statt enforce muss scheitern");
+});
+
+test("#139 k8s-pod-security: roh- und gehärtetes Manifest sind nicht vertauschbar (genau die richtige Datei)", () => {
+  const roh = secTask("k8s-pod-security", "t-ps-apply-roh");
+  assert.ok(accepts(roh, "kubectl apply -f spaehposten-roh.yaml"),         "roh: -f muss gelten");
+  assert.ok(accepts(roh, "kubectl apply --filename spaehposten-roh.yaml"), "roh: --filename muss GENAUSO gelten");
+  assert.ok(!accepts(roh, "kubectl apply -f spaehposten.yaml"),            "roh-Schritt darf die gehärtete Datei NICHT akzeptieren");
+
+  const safe = secTask("k8s-pod-security", "t-ps-apply-safe");
+  assert.ok(accepts(safe, "kubectl apply -f spaehposten.yaml"),            "safe: -f muss gelten");
+  assert.ok(!accepts(safe, "kubectl apply -f spaehposten-roh.yaml"),       "safe-Schritt darf die rohe Datei NICHT akzeptieren");
+});
+
+test("#139 Wachturm-Quests (k8s-serviceaccount–k8s-pod-security): von Vidar, Thema 'security', Belohnungen gesetzt und ansteigend", () => {
+  const ids = ["k8s-serviceaccount", "k8s-rbac-role", "k8s-rbac-clusterrole", "k8s-pod-security"];
+  const quests = ids.map(id => {
+    const q = KQContent.QUESTS.find(x => x.id === id);
+    assert.ok(q, id + " fehlt in QUESTS");
+    return q!;
+  });
+  for (const q of quests) {
+    assert.equal(q.giver, "vidar",    q.id + ": Giver muss 'vidar' sein");
+    assert.equal(q.topic, "security", q.id + ": Thema muss 'security' sein");
+    assert.ok(q.rewardXp > 0,    q.id + ": rewardXp muss > 0 sein");
+    assert.ok(q.rewardCoins > 0, q.id + ": rewardCoins muss > 0 sein");
+  }
+  for (let i = 1; i < quests.length; i++) {
+    assert.ok(quests[i].rewardXp > quests[i - 1].rewardXp,       quests[i].id + ": XP muss über der Vorquest liegen");
+    assert.ok(quests[i].rewardCoins > quests[i - 1].rewardCoins, quests[i].id + ": Dublonen müssen über der Vorquest liegen");
+  }
+});

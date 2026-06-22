@@ -5,6 +5,7 @@
 import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./helpers";
+import { KQContent } from "../../src/content";
 import {
   SERVICEACCOUNT_YAML, ROLE_YAML, ROLEBINDING_YAML,
   CLUSTERROLE_YAML, CLUSTERROLEBINDING_YAML, POD_SECURITY_YAML,
@@ -309,4 +310,82 @@ test("#135 Quest k8s-pod-security: roh läuft unter privileged, restricted weist
   const ok = sim.exec("kubectl apply -f spaehposten.yaml");
   assert.ok(!ok.error, "der gehärtete Posten (runAsNonRoot + keine Eskalation) wird zugelassen");
   assert.ok(sim.deployments.some(d => d.name === "spaehposten"), "der gehärtete Posten läuft");
+});
+
+/* ===================== #139 Quest-Arc (content-driven): die ECHTEN Vidar-Quests
+ * erzeugen die richtigen can-i-/Admission-Ausgänge =====================
+ * Anders als die Tests oben (die Befehle hand-nachbauen) fährt dieser Test die echten
+ * `solution`/`scenario`-Daten aus KQContent (vidar.json) in Story-Reihenfolge durch.
+ * Damit fängt er Regressionen in der Quest-DATEI selbst (accept/applyEffects/solution),
+ * die der generische Durchspiel-Test (quests.test.ts) NICHT sieht: die can-i-Gegenproben-
+ * Schritte tragen bewusst KEIN check(), ihre Ausgabe wird sonst nirgends geprüft. */
+
+/** Ersetzt den `<...>`-Platzhalter (nur k8s-serviceaccount: `describe pod <wachposten-pod>`)
+ *  durch einen echten Pod-Namen aus dem laufenden Sim. */
+function resolveWachposten(cmd: string, s: KQSim): string {
+  if (!cmd.includes("<")) return cmd;
+  const dep = s.deployments.find(d => d.name === "wachposten") || s.deployments[0];
+  return cmd.replace(/<[^>]+>/, dep.pods[0].name);
+}
+
+/** Spielt die vier Wachturm-Quests in Story-Reihenfolge gegen EINEN Sim durch (wie im
+ *  echten Spiel) und sammelt die Ausgabe jedes terminal/teach-Befehls nach Task-ID ein. */
+function playWachturmArc() {
+  const s = freshSim();
+  const out: Record<string, string | null | undefined> = {};
+  const run = (task: { id: string; accept: RegExp[]; solution: string }) => {
+    const cmd = resolveWachposten(task.solution, s);
+    const norm = cmd.trim().replace(/\s+/g, " ");
+    const r = s.exec(cmd);
+    assert.ok(task.accept.some(re => re.test(norm)), task.id + ": Lösung matcht accept nicht: " + norm);
+    assert.ok(!r.error, task.id + ": Sim-Fehler: " + r.output);
+    out[task.id] = r.output;
+  };
+  for (const id of ["k8s-serviceaccount", "k8s-rbac-role", "k8s-rbac-clusterrole", "k8s-pod-security"]) {
+    const quest = KQContent.QUESTS.find(q => q.id === id);
+    assert.ok(quest, id + " fehlt in QUESTS");
+    for (const step of quest!.steps) {
+      if (step.scenario) s.mergeScenario(step.scenario);
+      if (step.type === "teach") run(step.cmd);
+      else if (step.type === "terminal") for (const t of step.tasks) run(t);
+    }
+  }
+  return { sim: s, out };
+}
+
+test("#139 Quest-Arc: auth can-i wandert mit den echten Quest-Daten von 'no' auf 'yes' (RBAC-Lernbogen)", () => {
+  const { sim: s, out } = playWachturmArc();
+  // Role/RoleBinding (k8s-rbac-role): vor dem Binden no, nach dem Binden yes, löschen bleibt no.
+  assert.equal(out["t-rb-cant"], "no", "vor Role+Binding darf wachdienst keine pods lesen");
+  assert.equal(out["t-rb-can"], "yes", "nach Role+RoleBinding darf wachdienst pods lesen");
+  assert.equal(out["t-rb-cant-delete"], "no", "Least Privilege: pods löschen bleibt verboten");
+  // ClusterRole (k8s-rbac-clusterrole): namespaced Role erreicht Nodes nicht, ClusterRoleBinding schon.
+  assert.equal(out["t-cr-cant"], "no", "namespaced Role erreicht die cluster-weiten Nodes nicht");
+  assert.equal(out["t-cr-can"], "yes", "nach ClusterRole+ClusterRoleBinding darf wachdienst Nodes lesen");
+  assert.equal(out["t-cr-cant-delete"], "no", "Least Privilege: Nodes löschen bleibt verboten");
+  // Endzustand: die enforce-Stufe steht, der gehärtete spaehposten läuft.
+  assert.equal(s.podSecurity, "restricted", "die Quest hat die enforce-Stufe scharf geschaltet");
+  assert.ok(s.deployments.some(d => d.name === "spaehposten"), "der gehärtete Posten läuft nach dem Arc");
+});
+
+test("#139 Red-Green: ohne den RoleBinding-Schritt bleibt can-i 'no' (der Arc-Test hat Zähne)", () => {
+  // Beweist, dass das 'yes' im Arc-Test wirklich vom Binding kommt (und nicht zufällig
+  // immer 'yes' wäre): dieselbe Quest, aber der Übergabe-Schritt wird ausgelassen.
+  const s = freshSim();
+  s.exec("kubectl create serviceaccount wachdienst"); // Voraussetzung aus Quest 1
+  const quest = KQContent.QUESTS.find(q => q.id === "k8s-rbac-role")!;
+  for (const step of quest.steps) {
+    if (step.scenario) s.mergeScenario(step.scenario);
+    if (step.type === "teach") {
+      if (step.cmd.id === "t-rb-apply-binding") continue; // genau die Schlüsselübergabe weglassen
+      s.exec(step.cmd.solution);
+    } else if (step.type === "terminal") {
+      for (const t of step.tasks) s.exec(t.solution);
+    }
+  }
+  assert.equal(
+    s.exec("kubectl auth can-i get pods --as=system:serviceaccount:default:wachdienst").output,
+    "no",
+    "ohne RoleBinding darf wachdienst NICHT lesen – sonst wäre das 'yes' im Arc bedeutungslos",
+  );
 });
