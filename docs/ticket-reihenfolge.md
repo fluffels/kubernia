@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-22 (nach #135; der Wachturm-Quest-Arc ist komplett — alle 4 Vidar-Quests stehen. Nächstes freies Kopf-Ticket ist #136 Drills/PRACTICE für RBAC & Security).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
+> **Stand: 2026-06-22 (nach #135 + Kopf aufgefüllt; Wachturm-Quest-Arc komplett, danach die Lagerhallen-Region #140–#145 progressiv reaktiviert → Kopf jetzt 13 Einträge. Nächstes freies Kopf-Ticket ist #136 Drills/PRACTICE für RBAC & Security).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -52,12 +52,19 @@ Leitlinie der Sortierung: **Prio zuerst** (höchste offene Prio oben), **innerha
 | 1 | **#136** | ohne | Drills (RBAC/Security-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte (Muskelgedächtnis). |
 | 2 | **#138** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad; nach Quests + Drills. Phase 6 in README → ✅ (aktuell 🟡 im Aufbau). |
 | 3 | **#139** | ohne | Tests für RBAC/Security-Quests & Sim | Zuletzt im Arc — sichert Quests + Sim ab (Red-Green). |
+| | **— Lagerhallen-Viertel (Phase 7: stateful Workloads & Datendauerhaftigkeit) — progressiv reaktiviert 2026-06-22, vervollständigt die schon bestehende Region —** | | | Region schon im Spiel: Hafenkai + **NPC Knut** ✓, **StatefulSet-Quest** ✓ (`storage-statefulset`), **PVC/PV/StorageClass-Quest** ✓ (`storage-pvc`). Es fehlen Backup/DB-Inhalt + Drills/Quiz/Progression/Tests. Abhängigkeitsordnung wie beim Wachturm-Arc (Quests → Drills → Quiz → Progression → Tests). |
+| 4 | **#140** | ohne | Quest „Backup & Restore — Daten sichern und wiederherstellen" | Kerninhalt der Region; baut auf den bestehenden StatefulSet-/PVC-Quests. |
+| 5 | **#141** | ohne | Quest „Prod-DB im Cluster: ja/nein?" — Urteil & Trade-offs | Reflexions-Quest; nach dem Backup-Handwerk. |
+| 6 | **#142** | ohne | Drills (stateful-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte. |
+| 7 | **#143** | ohne | Quiz-Karten (StatefulSets, Volumes, Backups, DBs) | Wissens-Sicherung zur Region. |
+| 8 | **#144** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad; nach Quests + Drills. |
+| 9 | **#145** | ohne | Tests für stateful-Quests & StatefulSet/Volume-Sim | Zuletzt im Arc — sichert ab (Red-Green). |
 | | **— QoL / System-Features (auf Fundament, kein Lernpfad-Fortschritt) —** | | | |
-| 4 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
-| 5 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 10 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
+| 11 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 6 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 7 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 12 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 13 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
@@ -80,7 +87,9 @@ gh issue list --state open --limit 500 --json number,title,assignees,labels --jq
 
 Die offenen Tickets mit Label **`status:zurückgestellt`** wurden zurückgestellt, weil **erst Architektur + Fundament fertig werden mussten** — sie sind **nicht** verworfen. Jetzt, wo dieses Gate fast fällt, sind sie der **Pool, aus dem der Kopf nachgefüllt wird**: leert sich der Kopf, werden die passenden **progressiv reaktiviert** (Label `status:zurückgestellt` entfernen → an die dependency-passende Stelle in den Kopf einsortieren). Es wird **nicht** alles auf einmal reaktiviert (das würde die Pflege sprengen).
 
-> **Erste progressive Reaktivierung (2026-06-21):** die **Wachturm-Quartier-Gruppe** (#130–#139, Phase 6 — RBAC/Security) als ganze Region-Einheit (Region → NPC → Quests → Drills → Progression → Tests). Steht jetzt im Kopf, siehe oben. Bewusst als *eine* Region reaktiviert, nicht der ganze Pool.
+> **Erste progressive Reaktivierung (2026-06-21):** die **Wachturm-Quartier-Gruppe** (#130–#139, Phase 6 — RBAC/Security) als ganze Region-Einheit (Region → NPC → Quests → Drills → Progression → Tests). Bewusst als *eine* Region reaktiviert, nicht der ganze Pool.
+>
+> **Zweite progressive Reaktivierung (2026-06-22):** die **Lagerhallen-Viertel-Resttickets** (#140–#145, Phase 7 — stateful Workloads) als Region-Einheit, nachdem der Wachturm-Quest-Arc fertig war und der Kopf auf 7 geschrumpft ist. Vervollständigt die schon bestehende Region (NPC Knut + 2 Quests stehen bereits). Steht jetzt im Kopf, siehe oben. Wieder bewusst nur *eine* Region — die Expeditions-Flotte (#146–#157), der Storage-Lernpfad (#240–#246) und Phase 10 (#158–#172) bleiben im Pool, bis sich der Kopf erneut leert.
 
 Bei der Auswahl werden sie weiterhin **übersprungen**, solange das Label dran ist — **maßgeblich ist immer das Label**, nicht eine Aufzählung hier.
 
