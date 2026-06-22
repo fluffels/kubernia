@@ -243,3 +243,14 @@ test("serviceAccounts ist adressierbar (#132)", () => {
   assert.equal(evalRule(dep, { deployments: [{ name: "wachposten", serviceAccountName: "wachdienst" }] }), true);
   assert.equal(evalRule(dep, { deployments: [{ name: "wachposten" }] }), false);
 });
+
+test("roles + roleBindings sind adressierbar (#133)", () => {
+  // Role nach Namespace-Scope (cluster:false = Role, nicht ClusterRole)
+  const role = { some: "roles", where: { name: "pod-leser", cluster: false } };
+  assert.equal(evalRule(role, { roles: [{ name: "pod-leser", cluster: false }] }), true);
+  assert.equal(evalRule(role, { roles: [{ name: "pod-leser", cluster: true }] }), false, "eine ClusterRole zählt nicht als Role");
+  // RoleBinding inkl. tiefem Subjekt-Match (genau der #133-Quest-Check)
+  const rb = { some: "roleBindings", where: { name: "wachdienst-darf-lesen", subjects: { has: { name: "wachdienst" } } } };
+  assert.equal(evalRule(rb, { roleBindings: [{ name: "wachdienst-darf-lesen", subjects: [{ kind: "ServiceAccount", name: "wachdienst" }] }] }), true);
+  assert.equal(evalRule(rb, { roleBindings: [{ name: "wachdienst-darf-lesen", subjects: [{ kind: "ServiceAccount", name: "andere" }] }] }), false);
+});

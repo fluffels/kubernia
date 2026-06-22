@@ -174,5 +174,188 @@
         ]
       }
     ]
+  },
+  {
+    "id": "k8s-rbac-role",
+    "title": "Rechte vergeben: Role & RoleBinding",
+    "giver": "vidar",
+    "topic": "security",
+    "rewardXp": 65,
+    "rewardCoins": 50,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "vidar",
+        "lines": [
+          "Zurück, Kapitän? Gut. Dein <code>wachdienst</code> hat einen Ausweis – aber <b>dürfen</b> tut er damit noch gar nichts. Ein Ausweis ist kein Schlüssel.",
+          "Zwei Teile, merk sie dir getrennt: Eine <b>Role</b> ist die <b>Schlüsselliste</b> – sie sagt, welche <b>Verben</b> (get, list, create …) auf welche <b>Ressourcen</b> (pods, services …) erlaubt sind. In <b>einem</b> Namespace.",
+          "Das <b>RoleBinding</b> ist die <b>Schlüsselübergabe</b>: es klebt die Role an ein <b>Subjekt</b> – deinen ServiceAccount. Erst <b>nach</b> der Übergabe gilt das Recht. Und Vidars eiserne Regel: <b>so wenig wie möglich, so viel wie nötig</b> – Least Privilege. Lass es uns vorführen."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Erst die Gegenprobe",
+        "tasks": [
+          {
+            "id": "t-rb-cant",
+            "text": "Frag das Tor, ob <code>wachdienst</code> Pods lesen darf – <b>ohne</b> zu raten: <code>kubectl auth can-i get pods --as=system:serviceaccount:default:wachdienst</code>. Antwort: <b>no</b>. Logisch – wir haben ihm noch nichts gegeben.",
+            "accept": [
+              "^kubectl\\s+auth\\s+can-i\\s+get\\s+pods\\s+--as=system:serviceaccount:default:wachdienst$"
+            ],
+            "solution": "kubectl auth can-i get pods --as=system:serviceaccount:default:wachdienst",
+            "hint": "kubectl auth can-i get pods --as=system:serviceaccount:default:wachdienst"
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Schlüsselliste & Übergabe lesen",
+        "scenario": {
+          "files": {
+            "role.yaml": "apiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  name: pod-leser\n  namespace: default\nrules:\n  - apiGroups: [\"\"]            # Kern-API-Gruppe (pods liegen dort)\n    resources: [\"pods\"]\n    verbs: [\"get\", \"list\", \"watch\"]   # nur lesen – mehr braucht der Wachdienst nicht",
+            "rolebinding.yaml": "apiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata:\n  name: wachdienst-darf-lesen\n  namespace: default\nsubjects:\n  - kind: ServiceAccount      # WER bekommt die Rechte\n    name: wachdienst\n    namespace: default\nroleRef:\n  kind: Role                  # WAS er bekommt: die Role oben\n  name: pod-leser\n  apiGroup: rbac.authorization.k8s.io"
+          },
+          "applyEffects": {
+            "role.yaml": {
+              "role": {
+                "name": "pod-leser",
+                "rules": [{ "verbs": ["get", "list", "watch"], "resources": ["pods"] }]
+              }
+            },
+            "rolebinding.yaml": {
+              "roleBinding": {
+                "name": "wachdienst-darf-lesen",
+                "roleRef": { "kind": "Role", "name": "pod-leser" },
+                "subjects": [{ "kind": "ServiceAccount", "name": "wachdienst", "namespace": "default" }]
+              }
+            }
+          }
+        },
+        "tasks": [
+          {
+            "id": "t-rb-ls",
+            "text": "Schau mit <code>ls</code>, was an der Wachstube bereitliegt.",
+            "accept": [
+              "^ls$"
+            ],
+            "solution": "ls",
+            "hint": "Zwei Buchstaben."
+          },
+          {
+            "id": "t-rb-cat-role",
+            "text": "Lies <code>cat role.yaml</code>: unter <code>rules</code> stehen die erlaubten <code>verbs</code> (get/list/watch) auf <code>resources</code> (pods) – bewusst nur Lesen.",
+            "accept": [
+              "^cat\\s+role\\.yaml$"
+            ],
+            "solution": "cat role.yaml",
+            "hint": "cat <datei>"
+          },
+          {
+            "id": "t-rb-cat-binding",
+            "text": "Und <code>cat rolebinding.yaml</code>: <code>subjects</code> ist das WER (dein <code>wachdienst</code>), <code>roleRef</code> das WAS (die Role <code>pod-leser</code>).",
+            "accept": [
+              "^cat\\s+rolebinding\\.yaml$"
+            ],
+            "solution": "cat rolebinding.yaml",
+            "hint": "cat <datei>"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Schlüsselliste anlegen",
+        "cmd": {
+          "id": "t-rb-apply-role",
+          "intro": "🆕 Die <b>Role</b> beschreibt nur, WAS erlaubt ist (verbs × resources) – sie hängt an noch keinem Subjekt. Allein bewirkt sie nichts; sie ist die Liste, noch nicht der Schlüssel in einer Hand.",
+          "text": "Leg die Schlüsselliste an: <code>kubectl apply --filename role.yaml</code>.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+role\\.yaml$"
+          ],
+          "check": {"some":"roles","where":{"name":"pod-leser","cluster":false}},
+          "solution": "kubectl apply --filename role.yaml",
+          "hint": "kubectl apply --filename <datei>"
+        }
+      },
+      {
+        "type": "teach",
+        "brief": "Schlüssel übergeben",
+        "cmd": {
+          "id": "t-rb-apply-binding",
+          "intro": "🆕 Das <b>RoleBinding</b> ist die Übergabe: es verbindet die Role (WAS) mit dem ServiceAccount (WER). Erst jetzt gelten die Rechte für <code>wachdienst</code>.",
+          "text": "Übergib die Schlüssel: <code>kubectl apply --filename rolebinding.yaml</code>.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+rolebinding\\.yaml$"
+          ],
+          "check": {"some":"roleBindings","where":{"name":"wachdienst-darf-lesen","subjects":{"has":{"name":"wachdienst"}}}},
+          "solution": "kubectl apply --filename rolebinding.yaml",
+          "hint": "kubectl apply --filename <datei>"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Probe – jetzt wirkt's",
+        "tasks": [
+          {
+            "id": "t-rb-can",
+            "text": "Dieselbe Frage wie vorhin: <code>kubectl auth can-i get pods --as=system:serviceaccount:default:wachdienst</code>. Jetzt: <b>yes</b>. Der Schlüssel sitzt.",
+            "accept": [
+              "^kubectl\\s+auth\\s+can-i\\s+get\\s+pods\\s+--as=system:serviceaccount:default:wachdienst$"
+            ],
+            "check": {"some":"roleBindings","where":{"name":"wachdienst-darf-lesen"}},
+            "solution": "kubectl auth can-i get pods --as=system:serviceaccount:default:wachdienst",
+            "hint": "kubectl auth can-i get pods --as=system:serviceaccount:default:wachdienst"
+          },
+          {
+            "id": "t-rb-cant-delete",
+            "text": "Und die Grenze von Least Privilege: <code>kubectl auth can-i delete pods --as=system:serviceaccount:default:wachdienst</code> → <b>no</b>. Lesen ja, löschen nein – genau die Verben, die in der Role stehen.",
+            "accept": [
+              "^kubectl\\s+auth\\s+can-i\\s+delete\\s+pods\\s+--as=system:serviceaccount:default:wachdienst$"
+            ],
+            "solution": "kubectl auth can-i delete pods --as=system:serviceaccount:default:wachdienst",
+            "hint": "kubectl auth can-i delete pods --as=system:serviceaccount:default:wachdienst"
+          },
+          {
+            "id": "t-rb-describe",
+            "text": "Sieh die Schlüsselliste im Klartext: <code>kubectl describe role pod-leser</code> – Resources <code>pods</code>, Verbs <code>get list watch</code>.",
+            "accept": [
+              "^kubectl\\s+describe\\s+role\\s+pod-leser$"
+            ],
+            "check": {"some":"roles","where":{"name":"pod-leser","cluster":false}},
+            "solution": "kubectl describe role pod-leser",
+            "hint": "kubectl describe role <name>"
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "vidar",
+        "q": "Role und RoleBinding – wer macht was, und was passiert <b>ohne</b> das Binding?",
+        "options": [
+          {
+            "t": "Die Role listet die Rechte (verbs × resources), das RoleBinding klebt sie an ein Subjekt. Ohne Binding ist die Role wirkungslos – ein Schlüssel, den niemand in der Hand hält.",
+            "ok": true,
+            "reply": "Genau. Role = WAS, Binding = WER bekommt's. Ohne Übergabe liegt die Liste nur rum. Und immer schön knapp halten: nur die Verben, die der Dienst wirklich braucht. 🛡️"
+          },
+          {
+            "t": "Das RoleBinding legt die Rechte fest, die Role verteilt sie an die Nutzer.",
+            "ok": false,
+            "reply": "Verdreht. Die <b>Role</b> legt die Rechte fest (verbs × resources), das <b>RoleBinding</b> verteilt sie an ein Subjekt. Erst zusammen wirken sie."
+          },
+          {
+            "t": "Eine Role wirkt sofort für alle Pods, ein RoleBinding braucht man nur für Menschen.",
+            "ok": false,
+            "reply": "Nein. Eine Role wirkt für NIEMANDEN, bis ein Binding sie an ein konkretes Subjekt (SA oder User) hängt. Ohne Binding bleibt sie folgenlos."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "vidar",
+        "lines": [
+          "Sauber gebunden, Kapitän. <code>wachdienst</code> darf jetzt Pods lesen – und sonst nichts. So sieht Least Privilege aus.",
+          "Eine Role gilt nur in <b>diesem</b> Namespace. Was tust du, wenn ein Recht <b>cluster-weit</b> gelten soll – über alle Namespaces, oder für Dinge wie <b>Nodes</b>, die keinem Namespace gehören? Dafür gibt's die <b>ClusterRole</b>. Aber das ist die nächste Wache. 🛡️"
+        ]
+      }
+    ]
   }
 ]
