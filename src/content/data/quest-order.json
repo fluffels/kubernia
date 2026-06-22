@@ -39,6 +39,7 @@
   "observability-alerts",
   "storage-statefulset",
   "storage-pvc",
+  "storage-backup-restore",
   "k8s-serviceaccount",
   "k8s-rbac-role",
   "k8s-rbac-clusterrole",

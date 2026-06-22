@@ -232,9 +232,13 @@ export interface ApplyEffect {
   grafanaDashboard?: { name: string; title: string; panels?: number };
   // Stateful-Workload-CRDs (#122): vom `kubectl apply -f` der Lagerhallen-Manifeste angelegt.
   statefulSet?: { name: string; image: string; replicas: number; serviceName?: string; volumeClaimName?: string; storage?: string; storageClass?: string };
-  pvc?: { name: string; storage?: string; storageClass?: string; accessModes?: string };
+  // `data` seedet den Volume-Inhalt beim Anlegen (Backup/Restore #140); `dataSource` stellt
+  // den Inhalt aus einem VolumeSnapshot wieder her (spec.dataSource → kind: VolumeSnapshot).
+  pvc?: { name: string; storage?: string; storageClass?: string; accessModes?: string; data?: string; dataSource?: string };
   pv?: { name: string; capacity?: string; storageClass?: string; accessModes?: string; reclaimPolicy?: string };
   storageClass?: { name: string; provisioner?: string; reclaimPolicy?: string; isDefault?: boolean };
+  // Backup/Restore-CRD (#140): VolumeSnapshot eines Quell-PVC.
+  volumeSnapshot?: { name: string; sourcePvc: string };
 }
 
 /* ---------- Observability-Manifeste als Cluster-Objekte (#110) ---------- */
@@ -295,6 +299,9 @@ export interface PvcRes {
   capacity: string;            // angeforderte/gebundene Größe, z.B. "1Gi"
   storageClass: string;        // genutzte StorageClass ("" = statische Bindung an vorhandenes PV)
   accessModes: string;         // z.B. "RWO" (ReadWriteOnce)
+  data?: string;               // Inhalt des Volumes (Backup/Restore #140): Platzhalter-Marke für die
+                               // gespeicherten Daten. Ein VolumeSnapshot sichert genau diese Marke; ein
+                               // Restore aus dem Snapshot setzt sie wieder. Undefiniert/"" = leeres Volume.
   created: number;
 }
 /** PersistentVolume: das konkrete Speicherstück im Cluster (statisch angelegt oder
@@ -315,6 +322,18 @@ export interface StorageClassRes {
   provisioner: string;         // wer das PV anlegt, z.B. "rancher.io/local-path"
   reclaimPolicy: string;       // "Delete" | "Retain"
   isDefault: boolean;          // greift, wenn ein PVC keine StorageClass nennt
+  created: number;
+}
+/** VolumeSnapshot (CSI, #140): ein Point-in-Time-Abzug des Volumes hinter einem PVC.
+ *  Ein EIGENSTÄNDIGES Objekt – es überlebt das Löschen seiner Quelle, genau das ist
+ *  der Sinn eines Backups. Aus einem readyToUse-Snapshot stellt man wieder her, indem
+ *  man ein neues PVC mit `dataSource` darauf zeigt (siehe ApplyEffect.pvc.dataSource). */
+export interface VolumeSnapshotRes {
+  name: string;
+  sourcePvc: string;           // spec.source.persistentVolumeClaimName – das gesicherte PVC
+  data: string;                // der zum Snapshot-Zeitpunkt eingefrorene Volume-Inhalt (Kopie)
+  restoreSize: string;         // status.restoreSize – Größe der Quelle zum Snapshot-Zeitpunkt
+  readyToUse: boolean;         // status.readyToUse – erst dann ist ein Restore möglich
   created: number;
 }
 /* === Wachturm-Quartier: RBAC / ServiceAccounts / Pod-Security (#126) === */
@@ -416,9 +435,10 @@ export interface Scenario {
   // Stateful Workloads & Speicher (#122). Eingabe-Schreibweisen bewusst locker –
   // reset()/_makeStatefulSet füllen Defaults und binden PVCs.
   statefulSets?: Array<{ name: string; image: string; replicas: number; serviceName?: string; volumeClaimName?: string; storage?: string; storageClass?: string }>;
-  pvcs?: Array<{ name: string; storage?: string; capacity?: string; storageClass?: string; accessModes?: string; status?: "Pending" | "Bound"; volume?: string }>;
+  pvcs?: Array<{ name: string; storage?: string; capacity?: string; storageClass?: string; accessModes?: string; status?: "Pending" | "Bound"; volume?: string; data?: string }>;
   pvs?: Array<{ name: string; capacity?: string; storageClass?: string; accessModes?: string; reclaimPolicy?: string; status?: "Available" | "Bound" | "Released"; claim?: string }>;
   storageClasses?: Array<{ name: string; provisioner?: string; reclaimPolicy?: string; isDefault?: boolean }>;
+  volumeSnapshots?: Array<{ name: string; sourcePvc: string; data?: string; restoreSize?: string; readyToUse?: boolean }>;
   // RBAC / ServiceAccounts / Pod-Security (#126). Strukturiert vorgegeben –
   // die imperativen `kubectl create …`-Handler bauen zur Laufzeit dieselben Formen.
   serviceAccounts?: string[];
@@ -475,6 +495,7 @@ export interface ClusterState {
   pvcs: PvcRes[];
   pvs: PvRes[];
   storageClasses: StorageClassRes[];
+  volumeSnapshots: VolumeSnapshotRes[];
   serviceAccounts: ServiceAccountRes[];
   roles: RoleRes[];
   roleBindings: RoleBindingRes[];

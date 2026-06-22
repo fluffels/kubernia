@@ -160,6 +160,12 @@ export function kubectlGet(host: KubectlHost, t: string[]) {
       host.storageClasses.map(s => [s.name + (s.isDefault ? " (default)" : ""), s.provisioner, s.reclaimPolicy, host._age(s.created)]));
   }
 
+  if (["volumesnapshots", "volumesnapshot", "vs"].includes(what)) {
+    if (host.volumeSnapshots.length === 0) return "No resources found in default namespace.";
+    return table(["NAME", "READYTOUSE", "SOURCEPVC", "RESTORESIZE", "AGE"],
+      host.volumeSnapshots.map(v => [v.name, String(v.readyToUse), v.sourcePvc, v.restoreSize, host._age(v.created)]));
+  }
+
   if (["serviceaccounts", "serviceaccount", "sa"].includes(what)) {
     return table(["NAME", "SECRETS", "AGE"],
       host.serviceAccounts.map(s => [s.name, "0", host._age(s.created)]));
@@ -197,7 +203,7 @@ export function kubectlGet(host: KubectlHost, t: string[]) {
   }
 
   if (!what) return host._err("kubectl get: Was möchtest du sehen?", "z.B. 'kubectl get pods' oder 'kubectl get nodes'");
-  return host._err('error: the server doesn\'t have a resource type "' + what + '"', "Gemeint war vielleicht: pods, deployments, services, endpoints, ingress, networkpolicies, servicemonitors, prometheusrules, grafanadashboards, alerts, secrets, configmaps, serviceaccounts, roles, rolebindings oder nodes?");
+  return host._err('error: the server doesn\'t have a resource type "' + what + '"', "Gemeint war vielleicht: pods, deployments, services, endpoints, ingress, networkpolicies, servicemonitors, prometheusrules, grafanadashboards, alerts, secrets, configmaps, serviceaccounts, roles, rolebindings, pvc, pv, storageclasses, volumesnapshots oder nodes?");
 }
 
 

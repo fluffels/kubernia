@@ -201,3 +201,139 @@ test("snapshot/Reload: StatefulSet + gebundenes PVC überleben, ohne PVs zu verd
   assert.equal(sim2.pvcs[0].volume, volBefore, "dasselbe Volume wie vor dem Speichern");
   assert.equal(sim2.pvs.length, pvCountBefore, "kein zusätzliches PV beim Reload provisioniert");
 });
+
+/* ===================== Backup & Restore: VolumeSnapshot (#140) ===================== */
+
+/* Legt ein PVC mit Inhalt per echtem `kubectl apply -f` an (testet den apply-Handler inkl. data-Seed). */
+function applyDataPvc(name: string, data: string, storage = "5Gi") {
+  const file = name + ".yaml";
+  sim.mergeScenario({
+    files: { [file]: "kind: PersistentVolumeClaim\n" },
+    applyEffects: { [file]: { pvc: { name, storage, storageClass: "standard", accessModes: "RWO", data } } },
+  });
+  return sim.exec("kubectl apply -f " + file);
+}
+
+/* Legt einen VolumeSnapshot eines Quell-PVC per apply an. */
+function applySnapshot(name: string, sourcePvc: string) {
+  const file = name + ".yaml";
+  sim.mergeScenario({
+    files: { [file]: "kind: VolumeSnapshot\n" },
+    applyEffects: { [file]: { volumeSnapshot: { name, sourcePvc } } },
+  });
+  return sim.exec("kubectl apply -f " + file);
+}
+
+/* Stellt ein PVC aus einem Snapshot wieder her (spec.dataSource). */
+function applyRestore(name: string, fromSnapshot: string, storage = "5Gi") {
+  const file = "restore-" + name + ".yaml";
+  sim.mergeScenario({
+    files: { [file]: "kind: PersistentVolumeClaim\n" },
+    applyEffects: { [file]: { pvc: { name, storage, storageClass: "standard", accessModes: "RWO", dataSource: fromSnapshot } } },
+  });
+  return sim.exec("kubectl apply -f " + file);
+}
+
+test("VolumeSnapshot anlegen: friert den Inhalt des Quell-PVC ein, ist readyToUse", () => {
+  applyDataPvc("kai-datenbank", "stammkundenverzeichnis");
+  const r = applySnapshot("kai-snap", "kai-datenbank");
+  assert.ok(!r.error, "apply darf kein Fehler sein");
+  assert.match(r.output!, /volumesnapshot\.snapshot\.storage\.k8s\.io\/kai-snap created/);
+
+  assert.equal(sim.volumeSnapshots.length, 1);
+  assert.equal(sim.volumeSnapshots[0].data, "stammkundenverzeichnis", "Inhalt zum Snapshot-Zeitpunkt gesichert");
+  assert.equal(sim.volumeSnapshots[0].readyToUse, true);
+  assert.equal(sim.volumeSnapshots[0].restoreSize, "5Gi", "restoreSize = Kapazität der Quelle");
+
+  const got = sim.exec("kubectl get volumesnapshot").output!;
+  assert.match(got, /kai-snap\s+true\s+kai-datenbank\s+5Gi/, "get zeigt READYTOUSE/SOURCEPVC/RESTORESIZE");
+  assert.match(sim.exec("kubectl get vs").output!, /kai-snap/, "Kurzform vs");
+});
+
+test("Snapshot eines NICHT existierenden PVC scheitert und legt nichts an (Negativfall)", () => {
+  const r = applySnapshot("geister-snap", "gibt-es-nicht");
+  assert.ok(r.error, "muss ein Fehler sein");
+  assert.match(r.output!, /source PVC "gibt-es-nicht" does not exist/);
+  assert.equal(sim.volumeSnapshots.length, 0, "kein Snapshot angelegt (kein False Positive)");
+});
+
+test("Snapshot ist eine KOPIE: spätere Datenänderung am PVC ändert den Snapshot nicht", () => {
+  applyDataPvc("kai-datenbank", "stand-A");
+  applySnapshot("kai-snap", "kai-datenbank");
+  // PVC-Inhalt nachträglich verändern (simuliert weiteres Schreiben nach dem Backup)
+  sim.pvcs.find(p => p.name === "kai-datenbank")!.data = "stand-B";
+  assert.equal(sim.volumeSnapshots[0].data, "stand-A", "Snapshot hält den eingefrorenen Stand, nicht die Live-Daten");
+});
+
+test("Restore: Datenverlust (PVC weg) – Snapshot überlebt – Wiederherstellung bringt die Daten zurück", () => {
+  applyDataPvc("kai-datenbank", "stammkundenverzeichnis");
+  applySnapshot("kai-snap", "kai-datenbank");
+
+  // Datenverlust: PVC samt Volume löschen
+  assert.ok(!sim.exec("kubectl delete pvc kai-datenbank").error);
+  assert.equal(sim.pvcs.find(p => p.name === "kai-datenbank"), undefined, "PVC ist weg");
+  // das Backup lebt unabhängig weiter
+  assert.equal(sim.volumeSnapshots.length, 1, "Snapshot überlebt den Verlust des Quell-PVC");
+  assert.equal(sim.volumeSnapshots[0].readyToUse, true);
+
+  // Restore aus dem Snapshot
+  const r = applyRestore("kai-datenbank", "kai-snap");
+  assert.ok(!r.error, "Restore darf kein Fehler sein");
+  assert.match(r.output!, /aus Snapshot 'kai-snap' wiederhergestellt/);
+  const restored = sim.pvcs.find(p => p.name === "kai-datenbank");
+  assert.ok(restored, "PVC ist wieder da");
+  assert.equal(restored!.data, "stammkundenverzeichnis", "die gesicherten Daten sind zurück");
+  assert.equal(restored!.status, "Bound");
+});
+
+test("Red-Green: ein frisches PVC OHNE dataSource hat KEINE Daten (Restore tut wirklich etwas)", () => {
+  applyDataPvc("kai-datenbank", "stammkundenverzeichnis");
+  applySnapshot("kai-snap", "kai-datenbank");
+  sim.exec("kubectl delete pvc kai-datenbank");
+  // Ein leeres PVC gleichen Namens anlegen (kein dataSource) → bleibt ohne Daten
+  sim.mergeScenario({
+    files: { "leer.yaml": "kind: PersistentVolumeClaim\n" },
+    applyEffects: { "leer.yaml": { pvc: { name: "leer-pvc", storage: "5Gi", storageClass: "standard", accessModes: "RWO" } } },
+  });
+  sim.exec("kubectl apply -f leer.yaml");
+  const leer = sim.pvcs.find(p => p.name === "leer-pvc")!;
+  assert.ok(!leer.data, "ohne dataSource bleibt das Volume leer – sonst wäre die Restore-Prüfung ein False Positive");
+});
+
+test("Restore aus unbekanntem Snapshot scheitert und legt kein PVC an (Negativfall)", () => {
+  const r = applyRestore("kai-datenbank", "gibt-es-nicht");
+  assert.ok(r.error, "muss ein Fehler sein");
+  assert.match(r.output!, /dataSource VolumeSnapshot "gibt-es-nicht" was not found/);
+  assert.equal(sim.pvcs.find(p => p.name === "kai-datenbank"), undefined, "kein PVC aus einem nicht existierenden Backup");
+});
+
+test("Restore aus einem noch nicht fertigen Snapshot scheitert (readyToUse=false)", () => {
+  applyDataPvc("kai-datenbank", "daten");
+  applySnapshot("kai-snap", "kai-datenbank");
+  sim.volumeSnapshots[0].readyToUse = false; // noch nicht fertig
+  sim.exec("kubectl delete pvc kai-datenbank");
+  const r = applyRestore("kai-datenbank", "kai-snap");
+  assert.ok(r.error, "ein unfertiger Snapshot darf nicht wiederherstellbar sein");
+  assert.match(r.output!, /not readyToUse yet/);
+});
+
+test("kubectl delete volumesnapshot: löscht das Backup; Unbekanntes -> NotFound (Negativfall)", () => {
+  applyDataPvc("kai-datenbank", "daten");
+  applySnapshot("kai-snap", "kai-datenbank");
+  assert.match(sim.exec("kubectl delete vs kai-snap").output!, /volumesnapshot\.snapshot\.storage\.k8s\.io "kai-snap" deleted/);
+  assert.equal(sim.volumeSnapshots.length, 0);
+  const r = sim.exec("kubectl delete volumesnapshot fehlt");
+  assert.ok(r.error);
+  assert.match(r.output!, /NotFound.*volumesnapshots.*"fehlt" not found/);
+});
+
+test("snapshot/Reload: VolumeSnapshot + PVC-Daten überleben den Roundtrip", () => {
+  applyDataPvc("kai-datenbank", "stammkundenverzeichnis");
+  applySnapshot("kai-snap", "kai-datenbank");
+
+  const sim2 = new KQSim(sim.snapshot());
+  assert.equal(sim2.volumeSnapshots.length, 1, "Snapshot kommt zurück");
+  assert.equal(sim2.volumeSnapshots[0].data, "stammkundenverzeichnis");
+  assert.equal(sim2.volumeSnapshots[0].readyToUse, true);
+  assert.equal(sim2.pvcs.find(p => p.name === "kai-datenbank")!.data, "stammkundenverzeichnis", "PVC-Inhalt überlebt Reload");
+});

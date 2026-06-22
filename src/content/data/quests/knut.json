@@ -354,5 +354,213 @@
         ]
       }
     ]
+  },
+  {
+    "id": "storage-backup-restore",
+    "title": "Backup & Restore: Daten sichern und zurückholen",
+    "giver": "knut",
+    "topic": "storage",
+    "rewardXp": 65,
+    "rewardCoins": 50,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "knut",
+        "lines": [
+          "Kapitän, eine ernste Frage zum Schluss meiner Lehre: Was, wenn die Daten <b>weg</b> sind? Nicht der Pod, nicht das StatefulSet, sondern der <b>Inhalt</b> des Volumes selbst – ein falscher Befehl, ein kaputtes Dateisystem, ein Verschlüsselungs-Trojaner.",
+          "Die stabile Identität eines StatefulSets rettet dich da <b>nicht</b>: der Pod kommt zwar mit gleichem Namen zurück, aber sein Volume ist leer. Gegen Datenverlust hilft nur eins – ein <b>Backup</b>, von dem du <b>wiederherstellen</b> kannst.",
+          "Das Werkzeug dafür heißt <b>VolumeSnapshot</b>: ein Abzug des Volumes zu einem Zeitpunkt. Wir üben den Ernstfall einmal durch – sichern, verlieren, zurückholen. Ich hab dir die Karten hingelegt."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Karten lesen",
+        "scenario": {
+          "files": {
+            "db.yaml": "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: kai-datenbank\n  labels:\n    app: hafen-datenbank          # auf diesem Volume liegen die Stammkundendaten\nspec:\n  accessModes:\n    - ReadWriteOnce\n  storageClassName: standard\n  resources:\n    requests:\n      storage: 5Gi",
+            "snapshot.yaml": "apiVersion: snapshot.storage.k8s.io/v1\nkind: VolumeSnapshot\nmetadata:\n  name: kai-datenbank-snap\nspec:\n  volumeSnapshotClassName: kai-snapclass    # der CSI-Treiber, der den Abzug anfertigt\n  source:\n    persistentVolumeClaimName: kai-datenbank   # WAS gesichert wird: das Volume dieses PVC",
+            "restore.yaml": "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: kai-datenbank             # gleicher Name: das verlorene Volume zurueckholen\nspec:\n  accessModes:\n    - ReadWriteOnce\n  storageClassName: standard\n  resources:\n    requests:\n      storage: 5Gi\n  dataSource:                    # HIER kommt das Backup ins Spiel:\n    name: kai-datenbank-snap     # aus diesem Snapshot wird der Inhalt wiederhergestellt\n    kind: VolumeSnapshot\n    apiGroup: snapshot.storage.k8s.io"
+          },
+          "applyEffects": {
+            "db.yaml": {
+              "pvc": {
+                "name": "kai-datenbank",
+                "storage": "5Gi",
+                "storageClass": "standard",
+                "accessModes": "RWO",
+                "data": "stammkundenverzeichnis"
+              }
+            },
+            "snapshot.yaml": {
+              "volumeSnapshot": {
+                "name": "kai-datenbank-snap",
+                "sourcePvc": "kai-datenbank"
+              }
+            },
+            "restore.yaml": {
+              "pvc": {
+                "name": "kai-datenbank",
+                "storage": "5Gi",
+                "storageClass": "standard",
+                "accessModes": "RWO",
+                "dataSource": "kai-datenbank-snap"
+              }
+            }
+          }
+        },
+        "tasks": [
+          {
+            "id": "t-bak-ls",
+            "text": "Schau mit <code>ls</code>, welche Karten am Kai liegen.",
+            "accept": [
+              "^ls$"
+            ],
+            "solution": "ls",
+            "hint": "Zwei Buchstaben."
+          },
+          {
+            "id": "t-bak-cat",
+            "text": "Lies <code>cat snapshot.yaml</code>. Unter <code>source</code> steht, <b>welches</b> PVC gesichert wird – hier <code>kai-datenbank</code>.",
+            "accept": [
+              "^cat\\s+snapshot\\.yaml$"
+            ],
+            "solution": "cat snapshot.yaml",
+            "hint": "cat <datei>"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Datenbank-Volume bereitstellen",
+        "cmd": {
+          "id": "t-bak-db",
+          "intro": "Zuerst das Volume, um das es geht: die Hafendatenbank schreibt ihre <b>Stammkundendaten</b> auf das PVC <code>kai-datenbank</code>. Stell es bereit – stell dir vor, die Datenbank läuft schon eine Weile und das Volume ist voller echter Daten.",
+          "text": "Leg das Datenbank-Volume an: <code>kubectl apply --filename db.yaml</code>.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+db\\.yaml$"
+          ],
+          "check": {"some":"pvcs","where":{"name":"kai-datenbank","status":"Bound"}},
+          "solution": "kubectl apply --filename db.yaml",
+          "hint": "kubectl apply --filename <datei>"
+        }
+      },
+      {
+        "type": "teach",
+        "brief": "Backup anlegen (Snapshot)",
+        "cmd": {
+          "id": "t-bak-snap",
+          "intro": "🆕 Der <b>VolumeSnapshot</b>: ein Point-in-Time-Abzug des Volumes hinter einem PVC. Du wendest ihn wie jedes Manifest mit <code>kubectl apply</code> an – der CSI-Treiber friert den aktuellen Stand ein. Wichtig: der Snapshot ist ein <b>eigenes Objekt</b>, kein Teil des PVC.",
+          "text": "Sichere das Volume: <code>kubectl apply --filename snapshot.yaml</code>. Danach ist der Snapshot <b>readyToUse</b> – bereit zum Wiederherstellen.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+snapshot\\.yaml$"
+          ],
+          "check": {"some":"volumeSnapshots","where":{"name":"kai-datenbank-snap","readyToUse":true}},
+          "solution": "kubectl apply --filename snapshot.yaml",
+          "hint": "kubectl apply --filename <datei>"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Backup prüfen",
+        "tasks": [
+          {
+            "id": "t-bak-getvs",
+            "text": "Sieh dein Backup: <code>kubectl get volumesnapshot</code> (Kurzform <code>vs</code>). Spalte <code>READYTOUSE</code> zeigt <code>true</code>, <code>SOURCEPVC</code> nennt <code>kai-datenbank</code>.",
+            "accept": [
+              "^kubectl\\s+get\\s+(volumesnapshot|volumesnapshots|vs)$"
+            ],
+            "check": {"some":"volumeSnapshots","where":{"name":"kai-datenbank-snap","readyToUse":true}},
+            "solution": "kubectl get volumesnapshot",
+            "hint": "kubectl get volumesnapshot (oder vs)."
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Der Ernstfall: Datenverlust",
+        "cmd": {
+          "id": "t-bak-loss",
+          "intro": "🆕 Jetzt der Ernstfall. Ein unbedachter Befehl reißt das Volume weg: <code>kubectl delete pvc</code> entfernt das PVC und – weil die Default-StorageClass <code>reclaimPolicy: Delete</code> nutzt – auch das Volume samt aller Daten. Genau <b>das</b> ist der Moment, für den man Backups hat.",
+          "text": "Simuliere den Verlust: <code>kubectl delete pvc kai-datenbank</code>. Die Stammkundendaten sind damit <b>weg</b>.",
+          "accept": [
+            "^kubectl\\s+delete\\s+pvc\\s+kai-datenbank$"
+          ],
+          "check": {"none":"pvcs","where":{"name":"kai-datenbank"}},
+          "solution": "kubectl delete pvc kai-datenbank",
+          "hint": "kubectl delete pvc <name> – nimm kai-datenbank."
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Das Backup lebt noch",
+        "tasks": [
+          {
+            "id": "t-bak-gone",
+            "text": "Erst der Schock: <code>kubectl get pvc</code> – <code>kai-datenbank</code> ist <b>weg</b>.",
+            "accept": [
+              "^kubectl\\s+get\\s+(pvc|persistentvolumeclaim|persistentvolumeclaims)$"
+            ],
+            "check": {"none":"pvcs","where":{"name":"kai-datenbank"}},
+            "solution": "kubectl get pvc",
+            "hint": "kubectl get pvc"
+          },
+          {
+            "id": "t-bak-survives",
+            "text": "Jetzt die Erleichterung: <code>kubectl get volumesnapshot</code> – der Snapshot ist <b>immer noch da</b> und readyToUse. Er ist ein eigenes Objekt und hat den Verlust des Volumes überlebt. <b>Das</b> ist der Sinn eines Backups.",
+            "accept": [
+              "^kubectl\\s+get\\s+(volumesnapshot|volumesnapshots|vs)$"
+            ],
+            "check": {"all":[{"none":"pvcs","where":{"name":"kai-datenbank"}},{"some":"volumeSnapshots","where":{"name":"kai-datenbank-snap","readyToUse":true}}]},
+            "solution": "kubectl get volumesnapshot",
+            "hint": "kubectl get volumesnapshot"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Wiederherstellen",
+        "cmd": {
+          "id": "t-bak-restore",
+          "intro": "🆕 <b>Restore:</b> Du legst ein neues PVC an, das per <code>spec.dataSource</code> auf den Snapshot zeigt. Statt eines leeren Volumes bekommst du den <b>gesicherten Inhalt</b> zurück. Schau in <code>restore.yaml</code> – genau dort steht der <code>dataSource</code>-Block.",
+          "text": "Hol die Daten zurück: <code>kubectl apply --filename restore.yaml</code>. Das PVC <code>kai-datenbank</code> entsteht neu – mit den Stammkundendaten aus dem Snapshot.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+restore\\.yaml$"
+          ],
+          "check": {"some":"pvcs","where":{"name":"kai-datenbank","data":"stammkundenverzeichnis"}},
+          "solution": "kubectl apply --filename restore.yaml",
+          "hint": "kubectl apply --filename <datei>"
+        }
+      },
+      {
+        "type": "choice",
+        "npc": "knut",
+        "q": "Der Snapshot hat uns gerettet. Warum sagt man trotzdem, ein echtes Backup muss <b>außerhalb</b> des Clusters liegen – und was bedeuten <b>RPO</b> und <b>RTO</b>?",
+        "options": [
+          {
+            "t": "Ein Snapshot liegt im selben Speichersystem – geht der ganze Cluster/das Rechenzentrum verloren, ist er mit weg. Ein echtes Backup wird zusätzlich off-cluster/off-site kopiert (3-2-1). RPO = wie viel Datenverlust du verträgst (→ wie oft du sicherst), RTO = wie schnell du wieder online bist.",
+            "ok": true,
+            "reply": "Genau. Der Snapshot ist schnelle Wiederherstellung (kleines RTO), aber er teilt das Schicksal seines Speichersystems. Erst die off-site-Kopie macht ihn katastrophensicher; RPO und RTO sagen dir, wie oft und wie schnell. 🗄️"
+          },
+          {
+            "t": "Weil Snapshots zu groß für den Cluster sind; RPO ist die Snapshot-Größe und RTO die Anzahl der Replicas.",
+            "ok": false,
+            "reply": "Nein. Größe ist nicht der Punkt, und RPO/RTO sind Zeit-/Datenverlust-Ziele, keine Größen oder Replica-Zahlen. RPO = tolerierbarer Datenverlust, RTO = tolerierbare Ausfallzeit."
+          },
+          {
+            "t": "Gar nicht nötig – ein readyToUse-Snapshot im Cluster ist ein vollwertiges Backup, mehr braucht niemand.",
+            "ok": false,
+            "reply": "Trügerisch. Verlierst du den Cluster oder das Speichersystem, ist der Snapshot mit verloren. Ein Backup, das nur am selben Ort liegt, ist gegen den Ernstfall – Brand, Ransomware, Region-Ausfall – kein echter Schutz."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "knut",
+        "lines": [
+          "Sauber wiederhergestellt, Kapitän. Sichern, verlieren, zurückholen – diesen Dreischritt hast du jetzt in den Händen.",
+          "Merk dir: ein Snapshot rettet schnell, aber das richtige Backup liegt zusätzlich <b>woanders</b>. Wie man off-cluster sichert, ist eine eigene Geschichte – aber heute hast du den Kern verstanden. Gute Wacht am Kai! 🪵"
+        ]
+      }
+    ]
   }
 ]

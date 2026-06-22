@@ -171,6 +171,11 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
       const i = host.storageClasses.findIndex(x => x.name === effScDel.name);
       if (i >= 0) { host.storageClasses.splice(i, 1); out.push('storageclass.storage.k8s.io "' + effScDel.name + '" deleted'); }
     }
+    const effVsDel = eff.volumeSnapshot;
+    if (effVsDel) {
+      const i = host.volumeSnapshots.findIndex(x => x.name === effVsDel.name);
+      if (i >= 0) { host.volumeSnapshots.splice(i, 1); out.push('volumesnapshot.snapshot.storage.k8s.io "' + effVsDel.name + '" deleted'); }
+    }
     return out.join("\n") || "nothing deleted";
   }
 
@@ -274,6 +279,13 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
     if (idx === -1) return host._err('Error from server (NotFound): storageclasses.storage.k8s.io "' + name + '" not found');
     host.storageClasses.splice(idx, 1);
     return 'storageclass.storage.k8s.io "' + name + '" deleted';
+  }
+
+  if (["volumesnapshot", "volumesnapshots", "vs"].includes(what)) {
+    const idx = host.volumeSnapshots.findIndex(v => v.name === name);
+    if (idx === -1) return host._err('Error from server (NotFound): volumesnapshots.snapshot.storage.k8s.io "' + name + '" not found');
+    host.volumeSnapshots.splice(idx, 1);
+    return 'volumesnapshot.snapshot.storage.k8s.io "' + name + '" deleted';
   }
 
   return host._err("kubectl delete: Ressourcentyp '" + what + "' kennt der Simulator nicht.");
@@ -471,12 +483,44 @@ export function kubectlApply(host: KubectlHost, t: string[]) {
     if (host.pvcs.some(p => p.name === effPvc.name)) {
       out.push("persistentvolumeclaim/" + effPvc.name + " unchanged");
     } else {
+      // Restore aus einem VolumeSnapshot (#140): spec.dataSource zeigt auf einen Snapshot.
+      // Der muss existieren UND readyToUse sein – sonst bekäme das PVC stillschweigend ein
+      // leeres Volume statt der gesicherten Daten (genau der Fehler, den die Quest vermeidet).
+      let restored: string | undefined;
+      if (effPvc.dataSource) {
+        const snap = host.volumeSnapshots.find(v => v.name === effPvc.dataSource);
+        if (!snap) return host._err('error: the dataSource VolumeSnapshot "' + effPvc.dataSource + '" was not found', "Aus einem Snapshot stellst du wieder her – schau mit 'kubectl get volumesnapshot', welche es gibt.");
+        if (!snap.readyToUse) return host._err('error: the VolumeSnapshot "' + effPvc.dataSource + '" is not readyToUse yet', "Ein Snapshot kann erst wiederhergestellt werden, wenn er fertig ist (READYTOUSE true).");
+        restored = snap.data;
+      }
       const pvc = host._makePvc(effPvc.name, effPvc.storage || "1Gi", effPvc.storageClass, effPvc.accessModes);
+      // Volume-Inhalt setzen: aus dem Snapshot wiederhergestellt, sonst frisch geseedet, sonst leer.
+      if (restored !== undefined) pvc.data = restored;
+      else if (effPvc.data !== undefined) pvc.data = effPvc.data;
       host.pvcs.push(pvc);
       out.push("persistentvolumeclaim/" + effPvc.name + " created");
-      out.push(pvc.status === "Bound"
-        ? "💡 PVC '" + pvc.name + "' ist Bound – es hat Speicher bekommen (PV " + pvc.volume + ")."
-        : "💡 PVC '" + pvc.name + "' ist Pending – kein passendes PV da und keine StorageClass, die eins anlegt.");
+      if (restored !== undefined) {
+        out.push("💡 PVC '" + pvc.name + "' aus Snapshot '" + effPvc.dataSource + "' wiederhergestellt – die gesicherten Daten sind zurück auf dem Volume.");
+      } else {
+        out.push(pvc.status === "Bound"
+          ? "💡 PVC '" + pvc.name + "' ist Bound – es hat Speicher bekommen (PV " + pvc.volume + ")."
+          : "💡 PVC '" + pvc.name + "' ist Pending – kein passendes PV da und keine StorageClass, die eins anlegt.");
+      }
+    }
+  }
+  // Backup/Restore (#140): VolumeSnapshot eines Quell-PVC. Der Snapshot friert den
+  // aktuellen Volume-Inhalt ein und ist ab dann ein eigenständiges Objekt – er überlebt
+  // das Löschen der Quelle (das ist der Sinn eines Backups).
+  const effVs = eff.volumeSnapshot;
+  if (effVs) {
+    if (host.volumeSnapshots.some(v => v.name === effVs.name)) {
+      out.push("volumesnapshot.snapshot.storage.k8s.io/" + effVs.name + " unchanged");
+    } else {
+      const src = host.pvcs.find(p => p.name === effVs.sourcePvc);
+      if (!src) return host._err('error: the source PVC "' + effVs.sourcePvc + '" does not exist', "Eine VolumeSnapshot braucht ein vorhandenes Quell-PVC. Schau mit 'kubectl get pvc'.");
+      host.volumeSnapshots.push({ name: effVs.name, sourcePvc: src.name, data: src.data || "", restoreSize: src.capacity, readyToUse: true, created: host.clock });
+      out.push("volumesnapshot.snapshot.storage.k8s.io/" + effVs.name + " created");
+      out.push("💡 Snapshot '" + effVs.name + "' sichert den Stand von PVC '" + src.name + "' (readyToUse). Er ist ein eigenes Objekt und überlebt das Löschen der Quelle.");
     }
   }
   const effSts = eff.statefulSet;

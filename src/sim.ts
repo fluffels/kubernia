@@ -14,7 +14,7 @@ import type {
   Chart, TfResource, GitCommit, GitConflict, GitPending,
   Pipeline, CiDeploy, ArgoApp, ApplyEffect,
   ServiceMonitorRes, PrometheusRuleRes, GrafanaDatasourceRes, GrafanaDashboardRes, StatefulSetRes, PvcRes,
-  PvRes, StorageClassRes, ServiceAccountRes, RoleRes,
+  PvRes, StorageClassRes, VolumeSnapshotRes, ServiceAccountRes, RoleRes,
   RoleBindingRes, PodSecurityLevel, PodStatus, NodeMetrics,
   ScrapeTarget, Alert, Scenario, ClusterState,
 } from "./sim/state";
@@ -25,7 +25,7 @@ export type {
   Chart, TfResource, GitCommit, GitConflict, GitPending, PipelineStage,
   Pipeline, CiDeploy, ArgoDesired, ArgoChildSpec, ArgoApp, ApplyEffect,
   ServiceMonitorRes, PrometheusRuleRes, GrafanaDatasourceRes, GrafanaDashboardRes, StatefulSetRes, PvcRes,
-  PvRes, StorageClassRes, ServiceAccountRes, PolicyRule, RoleRes, RbacSubject,
+  PvRes, StorageClassRes, VolumeSnapshotRes, ServiceAccountRes, PolicyRule, RoleRes, RbacSubject,
   RoleBindingRes, SecurityContext, PodSecurityLevel, PodStatus, PodMetrics, NodeMetrics,
   ScrapeTarget, Alert, Scenario, ClusterState,
 } from "./sim/state";
@@ -67,6 +67,7 @@ import { randSuffix, makePodName } from "./sim/util";
     pvcs!: PvcRes[];
     pvs!: PvRes[];
     storageClasses!: StorageClassRes[];
+    volumeSnapshots!: VolumeSnapshotRes[];   // Backup/Restore (#140)
     // RBAC / ServiceAccounts / Pod-Security (#126)
     serviceAccounts!: ServiceAccountRes[];
     roles!: RoleRes[];                 // Roles UND ClusterRoles (per .cluster unterschieden)
@@ -129,14 +130,22 @@ import { randSuffix, makePodName } from "./sim/util";
       this.pvs = (sc.pvs || []).map(p => ({ name: p.name, capacity: p.capacity || "1Gi", status: p.status || "Available", claim: p.claim || "", storageClass: p.storageClass || "", accessModes: p.accessModes || "RWO", reclaimPolicy: p.reclaimPolicy || "Retain", created: 0 }));
       this.pvcs = [];
       for (const p of sc.pvcs || []) {
+        let pvc: PvcRes;
         if (p.status === "Bound" && p.volume) {
           // schon gebunden (z.B. aus einem gespeicherten Stand) – nicht neu provisionieren
-          this.pvcs.push({ name: p.name, status: "Bound", volume: p.volume, capacity: p.storage || p.capacity || "1Gi", storageClass: p.storageClass || "", accessModes: p.accessModes || "RWO", created: 0 });
+          pvc = { name: p.name, status: "Bound", volume: p.volume, capacity: p.storage || p.capacity || "1Gi", storageClass: p.storageClass || "", accessModes: p.accessModes || "RWO", created: 0 };
         } else {
-          this.pvcs.push(this._makePvc(p.name, p.storage || p.capacity || "1Gi", p.storageClass, p.accessModes));
+          pvc = this._makePvc(p.name, p.storage || p.capacity || "1Gi", p.storageClass, p.accessModes);
         }
+        if (p.data !== undefined) pvc.data = p.data; // Volume-Inhalt mitgeben (Backup/Restore #140)
+        this.pvcs.push(pvc);
       }
       this.statefulSets = (sc.statefulSets || []).map(s => this._makeStatefulSet(s));
+      // Backup/Restore (#140): VolumeSnapshots sind eigenständige, persistierte Objekte.
+      this.volumeSnapshots = (sc.volumeSnapshots || []).map(v => ({
+        name: v.name, sourcePvc: v.sourcePvc, data: v.data || "",
+        restoreSize: v.restoreSize || "1Gi", readyToUse: v.readyToUse !== false, created: 0,
+      }));
 
       // RBAC / ServiceAccounts / Pod-Security (#126). Jeder Namespace hat von Haus
       // aus die "default"-SA; weitere kommen aus dem Szenario oder per `kubectl create`.
@@ -360,11 +369,17 @@ import { randSuffix, makePodName } from "./sim/util";
       }
       for (const p of sc.pvcs || []) {
         if (this.pvcs.some(x => x.name === p.name)) continue;
-        if (p.status === "Bound" && p.volume) this.pvcs.push({ name: p.name, status: "Bound", volume: p.volume, capacity: p.storage || p.capacity || "1Gi", storageClass: p.storageClass || "", accessModes: p.accessModes || "RWO", created: this.clock });
-        else this.pvcs.push(this._makePvc(p.name, p.storage || p.capacity || "1Gi", p.storageClass, p.accessModes));
+        const pvc = (p.status === "Bound" && p.volume)
+          ? { name: p.name, status: "Bound" as const, volume: p.volume, capacity: p.storage || p.capacity || "1Gi", storageClass: p.storageClass || "", accessModes: p.accessModes || "RWO", created: this.clock }
+          : this._makePvc(p.name, p.storage || p.capacity || "1Gi", p.storageClass, p.accessModes);
+        if (p.data !== undefined) pvc.data = p.data; // Volume-Inhalt mitgeben (Backup/Restore #140)
+        this.pvcs.push(pvc);
       }
       for (const s of sc.statefulSets || []) {
         if (!this.statefulSets.some(x => x.name === s.name)) this.statefulSets.push(this._makeStatefulSet(s));
+      }
+      for (const v of sc.volumeSnapshots || []) { // Backup/Restore (#140)
+        if (!this.volumeSnapshots.some(x => x.name === v.name)) this.volumeSnapshots.push({ name: v.name, sourcePvc: v.sourcePvc, data: v.data || "", restoreSize: v.restoreSize || "1Gi", readyToUse: v.readyToUse !== false, created: this.clock });
       }
       // RBAC / ServiceAccounts / Pod-Security (#126) – additiv, ohne Doppler.
       for (const name of sc.serviceAccounts || []) {
@@ -453,8 +468,10 @@ import { randSuffix, makePodName } from "./sim/util";
         // Namen) und bereits vorhandene PVCs baut reset() deterministisch wieder auf.
         storageClasses: this.storageClasses.map(s => Object.assign({}, s)),
         pvs: this.pvs.map(p => Object.assign({}, p)),
-        pvcs: this.pvcs.map(p => ({ name: p.name, storage: p.capacity, status: p.status, volume: p.volume, storageClass: p.storageClass, accessModes: p.accessModes })),
+        pvcs: this.pvcs.map(p => ({ name: p.name, storage: p.capacity, status: p.status, volume: p.volume, storageClass: p.storageClass, accessModes: p.accessModes, data: p.data })),
         statefulSets: this.statefulSets.map(s => ({ name: s.name, image: s.image, replicas: s.replicas, serviceName: s.serviceName, volumeClaimName: s.volumeClaimName, storage: s.storage, storageClass: s.storageClass })),
+        // Backup/Restore (#140): VolumeSnapshots überleben Reloads als eigenständige Objekte.
+        volumeSnapshots: this.volumeSnapshots.map(v => Object.assign({}, v)),
         // RBAC / ServiceAccounts / Pod-Security (#126). Die "default"-SA legt reset()
         // ohnehin wieder an – nur die selbst erstellten serialisieren.
         serviceAccounts: this.serviceAccounts.filter(s => s.name !== "default").map(s => s.name),
