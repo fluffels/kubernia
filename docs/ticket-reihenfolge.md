@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-22 (nach #142 Drills/PRACTICE für den Lagerhallen-Arc → Drills #142 ✓ und Quiz #143 ✓ erledigt, aus dem Kopf entfernt; Kopf jetzt 7 Einträge. #141 läuft aktuell parallel (geclaimt) — das oberste noch FREIE Kopf-Ticket ist #144 Progression. Nächster Refill aus dem Pool, sobald der Lagerhallen-Arc durch ist).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
+> **Stand: 2026-06-22 (nach #141 Urteils-Quest „Prod-DB im Cluster: ja/nein?" → #141 ✓ erledigt, aus dem Kopf entfernt. Kopf direkt aufgefüllt: die Expeditions-Flotte (Phase 9 — Terraform-Module/Remote-State/Provider, #146–#157) als dritte progressive Reaktivierung aus dem Pool geholt; Kopf jetzt 18 Einträge. Oberstes freies Kopf-Ticket ist #144 Progression (Lagerhallen-Arc-Rest)).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -48,16 +48,28 @@ Leitlinie der Sortierung: **Prio zuerst** (höchste offene Prio oben), **innerha
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| | **— Lagerhallen-Viertel (Phase 7: stateful Workloads & Datendauerhaftigkeit) — progressiv reaktiviert 2026-06-22, vervollständigt die schon bestehende Region —** | | | Region schon im Spiel: Hafenkai + **NPC Knut** ✓, **StatefulSet-Quest** ✓ (`storage-statefulset`), **PVC/PV/StorageClass-Quest** ✓ (`storage-pvc`), **Backup & Restore #140 ✓** (`storage-backup-restore`). **Drills/PRACTICE #142 ✓** (StatefulSet/PVC/Snapshot/Restore-Drills bei Knut + Pending-Negativfall, 38ecf06) und **Quiz #143 ✓** erledigt. Es fehlen #141 Reflexions-Quest (läuft parallel) + #144 Progression + #145 Tests. Abhängigkeitsordnung wie beim Wachturm-Arc (Quests → Drills → Quiz → Progression → Tests). |
-| 1 | **#141** | ohne | Quest „Prod-DB im Cluster: ja/nein?" — Urteil & Trade-offs | Reflexions-Quest; nach dem Backup-Handwerk. (Läuft aktuell parallel — geclaimt.) |
-| 2 | **#144** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad; nach Quests + Drills. |
-| 3 | **#145** | ohne | Tests für stateful-Quests & StatefulSet/Volume-Sim | Zuletzt im Arc — sichert ab (Red-Green). |
+| | **— Lagerhallen-Viertel (Phase 7: stateful Workloads & Datendauerhaftigkeit) — progressiv reaktiviert 2026-06-22, vervollständigt die schon bestehende Region —** | | | Region schon im Spiel: Hafenkai + **NPC Knut** ✓, **StatefulSet-Quest** ✓ (`storage-statefulset`), **PVC/PV/StorageClass-Quest** ✓ (`storage-pvc`), **Backup & Restore #140 ✓** (`storage-backup-restore`). **Drills/PRACTICE #142 ✓** (StatefulSet/PVC/Snapshot/Restore-Drills bei Knut + Pending-Negativfall, 38ecf06) und **Quiz #143 ✓** erledigt, **Reflexions-Quest #141 ✓** (`storage-prod-db-decision`, 6f4af5e). Es fehlen #144 Progression + #145 Tests. Abhängigkeitsordnung wie beim Wachturm-Arc (Quests → Drills → Quiz → Progression → Tests). |
+| 1 | **#144** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad; nach Quests + Drills. |
+| 2 | **#145** | ohne | Tests für stateful-Quests & StatefulSet/Volume-Sim | Zuletzt im Lagerhallen-Arc — sichert ab (Red-Green). |
+| | **— Expeditions-Flotte (Phase 9: Terraform-Module / Remote State / Provider) — dritte progressive Reaktivierung 2026-06-22, neuer Region-Arc —** | | | Sim-Teilgrundlage vorhanden (`src/sim/terraform.ts` deckt `init`/`apply`/`destroy`/`state` bereits ab), Region-Maschinerie datengetrieben (#427). Abhängigkeitsordnung wie bei Wachturm/Lagerhallen: Sim-Grundlage → Region/NPC → Quests → Drills → Quiz → Progression → Tests. |
+| 3 | **#146** | ohne | Sim-Grundlage: Module/Remote-State/Provider-Befehle im Simulator | Fundament des Arcs — ohne Sim keine Quests. |
+| 4 | **#147** | ohne | Terraform-Konfig-Inhalte (Modul-Struktur, backend.tf, provider.tf, outputs) | Spielinhalt auf der Sim-Grundlage (#146). |
+| 5 | **#148** | ohne | Insel/Bereich + Anleger/Warp zur Flotte | Region begehbar machen (RegionScene/#427); ⚠️ Grafik-Anteil — Stardew-Referenz beachten. |
+| 6 | **#149** | ohne | Neuer NPC (Sprite + Smalltalk) | Geber der Region; nach Insel. ⚠️ Grafik-Anteil. |
+| 7 | **#150** | ohne | Quest „Terraform-Module — wiederverwendbare Bausteine" | Erste Quest; nach Sim + Region + NPC. |
+| 8 | **#151** | ohne | Quest „Remote State — gemeinsamer State im Backend" | Baut auf #150. |
+| 9 | **#152** | ohne | Quest „Provider & Cloud — Ressourcen bei verschiedenen Anbietern" | Baut auf #151. |
+| 10 | **#153** | ohne | Quest „Variablen & Outputs — Konfiguration sauber durchreichen" | Letzte Quest des Arcs. |
+| 11 | **#154** | ohne | Drills (Module/Remote-State/Provider-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte. |
+| 12 | **#155** | ohne | Quiz-Karten (Terraform-Module, Remote State, Provider) | Wissens-Sicherung zur Region. |
+| 13 | **#156** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad. |
+| 14 | **#157** | ohne | Tests für Terraform-Aufbau-Quests & Modul/Remote-State/Provider-Sim | Zuletzt im Arc — sichert ab (Red-Green). |
 | | **— QoL / System-Features (auf Fundament, kein Lernpfad-Fortschritt) —** | | | |
-| 4 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
-| 5 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 15 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
+| 16 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 6 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 7 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 17 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 18 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
@@ -82,7 +94,9 @@ Die offenen Tickets mit Label **`status:zurückgestellt`** wurden zurückgestell
 
 > **Erste progressive Reaktivierung (2026-06-21):** die **Wachturm-Quartier-Gruppe** (#130–#139, Phase 6 — RBAC/Security) als ganze Region-Einheit (Region → NPC → Quests → Drills → Progression → Tests). Bewusst als *eine* Region reaktiviert, nicht der ganze Pool.
 >
-> **Zweite progressive Reaktivierung (2026-06-22):** die **Lagerhallen-Viertel-Resttickets** (#140–#145, Phase 7 — stateful Workloads) als Region-Einheit, nachdem der Wachturm-Quest-Arc fertig war und der Kopf auf 7 geschrumpft ist. Vervollständigt die schon bestehende Region (NPC Knut + 2 Quests stehen bereits). Steht jetzt im Kopf, siehe oben. Wieder bewusst nur *eine* Region — die Expeditions-Flotte (#146–#157), der Storage-Lernpfad (#240–#246) und Phase 10 (#158–#172) bleiben im Pool, bis sich der Kopf erneut leert.
+> **Zweite progressive Reaktivierung (2026-06-22):** die **Lagerhallen-Viertel-Resttickets** (#140–#145, Phase 7 — stateful Workloads) als Region-Einheit, nachdem der Wachturm-Quest-Arc fertig war und der Kopf auf 7 geschrumpft ist. Vervollständigt die schon bestehende Region (NPC Knut + 2 Quests stehen bereits). Steht jetzt im Kopf, siehe oben.
+>
+> **Dritte progressive Reaktivierung (2026-06-22):** die **Expeditions-Flotte** (#146–#157, Phase 9 — Terraform-Module / Remote State / Provider) als ganze Region-Einheit (Sim-Grundlage → Region/NPC → Quests → Drills → Quiz → Progression → Tests), nachdem #141 erledigt war und der Kopf auf 6 schrumpfte (Refill auf Wunsch der Maintainerin sofort, nicht erst nach dem Lagerhallen-Arc-Ende). Sim-Teilgrundlage steht bereits (`src/sim/terraform.ts`). Steht jetzt im Kopf, siehe oben. Wieder bewusst nur *eine* Region — der Storage-Lernpfad (#240–#246) und Phase 10 (#158–#172) bleiben im Pool, bis sich der Kopf erneut leert.
 
 Bei der Auswahl werden sie weiterhin **übersprungen**, solange das Label dran ist — **maßgeblich ist immer das Label**, nicht eine Aufzählung hier.
 
