@@ -18,6 +18,7 @@ import type { RegionConfig, RegionScene } from "./RegionScene";
 import { buildArchipel, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL, ARCHIPEL_NPC, ARCHIPEL_QUEST_TRIGGER, type ArchipelMap } from "../archipel";
 import { buildLighthouse, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL, LIGHTHOUSE_NPC, LIGHTHOUSE_QUEST_TRIGGER, LIGHTHOUSE_TOWER, type LighthouseMap } from "../lighthouse";
 import { buildWarehouse, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL, type WarehouseMap } from "../warehouse";
+import { buildWatchtower, WATCHTOWER_TO_WORLD, WATCHTOWER_ARRIVAL, WATCHTOWER_TOWER } from "../watchtower";
 
 /** #343/#386: Hitbox-Maße der Lager-Güter – Fässer rund (Radius), Kisten als mittig
  *  eingerücktes Rechteck (Kantenlänge). Wie in der früheren WarehouseScene. */
@@ -140,6 +141,59 @@ const warehouse: RegionConfig = {
   },
 };
 
+/** Wachturm-Quartier (#130): befestigter Gras-Bailey mit Stein-Wehrmauer + Tor + Holz-Steg;
+ *  im Hof der namensgebende Wachturm. Thema: Zugriffskontrolle (RBAC/Security, Phase 6). NPC
+ *  (#131) + Quests (#132–135) docken später an – die Karte trägt darum noch keinen Registry-
+ *  Eintrag; der Wachturm ist bis zu seinem PixelLab-Asset ein bewusster prozeduraler
+ *  Platzhalter (siehe decorate). */
+const watchtower: RegionConfig = {
+  key: "Watchtower",
+  map: "watchtower",
+  build: buildWatchtower,
+  regionReturn: WATCHTOWER_TO_WORLD,
+  arrival: WATCHTOWER_ARRIVAL,
+  title: "🛡️ Wachturm-Quartier",
+  hint: "Steg hinab ⬇ – zurück nach Port Kubernia",
+  returnGlyph: "⬇",
+  returnSign: "Port Kubernia",
+  questSignDy: 1,
+  decor: {
+    reserved: [
+      { x: WATCHTOWER_ARRIVAL.tx, y: WATCHTOWER_ARRIVAL.ty },
+      { x: WATCHTOWER_TO_WORLD.tx, y: WATCHTOWER_TO_WORLD.ty },
+    ],
+    // Sparsame Begrünung – ein Stein-Festungshof, kein Garten: ein paar Büsche + Blumen.
+    bands: [{ max: 4, kind: "bush" }, { max: 11, kind: "flowers" }],
+  },
+  decorate(scene: RegionScene) {
+    // Wachturm als prozeduraler Platzhalter (#130): bis das PixelLab-Asset existiert, ein
+    // klar erkennbarer Stein-Turm mit Zinnenkranz + Banner aus Primitiven (wie der Leucht-
+    // turm Sockel/Lampe teils prozedural sind). Mittig über dem 2×2-Fußabdruck, fußlinien-
+    // depth-sortiert. Asset-Ticket: echtes Wachturm-Sprite + Umzug in die Entity-Registry.
+    const cx = WATCHTOWER_TOWER.x * T;                  // Boundary zwischen den 2 Fuß-Spalten = Mitte
+    const baseY = (WATCHTOWER_TOWER.y + 1) * T;         // Fußlinie (untere Kante des Fußabdrucks)
+    scene.add.ellipse(cx, baseY - 1, 30, 9, 0x000000, 0.22).setDepth(baseY - 2);   // Schatten
+    // Turmschaft (Stein), leicht nach oben verjüngt.
+    const shaftH = 54, shaftW = 24;
+    scene.add.rectangle(cx, baseY, shaftW, shaftH, 0x7b8493).setOrigin(0.5, 1).setDepth(baseY);
+    scene.add.rectangle(cx - shaftW / 2 + 2, baseY, 3, shaftH, 0x9aa3b2).setOrigin(0.5, 1).setDepth(baseY + 0.1); // Lichtkante
+    scene.add.rectangle(cx + shaftW / 2 - 2, baseY, 3, shaftH, 0x5d6675).setOrigin(0.5, 1).setDepth(baseY + 0.1); // Schattenkante
+    // Tür + Arrow-Slit-Fenster (dunkle Öffnungen).
+    scene.add.rectangle(cx, baseY, 8, 12, 0x2a2f38).setOrigin(0.5, 1).setDepth(baseY + 0.2);           // Tor
+    scene.add.rectangle(cx, baseY - 30, 4, 9, 0x2a2f38).setOrigin(0.5, 1).setDepth(baseY + 0.2);        // Schießscharte
+    // Zinnenkranz: breitere Plattform + drei Zinnen-Zacken.
+    const topY = baseY - shaftH;
+    scene.add.rectangle(cx, topY + 4, shaftW + 8, 8, 0x6b7280).setOrigin(0.5, 1).setDepth(baseY + 0.3);
+    for (const dx of [-12, 0, 12]) {
+      scene.add.rectangle(cx + dx, topY - 4, 6, 6, 0x6b7280).setOrigin(0.5, 1).setDepth(baseY + 0.3);
+    }
+    // Banner (stahlblau – Wache/Security) am kurzen Fahnenmast.
+    scene.add.rectangle(cx + 14, topY - 6, 1.5, 16, 0x3a2f22).setOrigin(0.5, 1).setDepth(baseY + 0.4);  // Mast
+    const flag = scene.add.triangle(cx + 14, topY - 16, 0, 0, 12, 4, 0, 8, 0x3b6ea5).setOrigin(0, 0.5).setDepth(baseY + 0.4);
+    scene.tweens.add({ targets: flag, scaleX: { from: 1, to: 0.82 }, duration: 1300, yoyo: true, repeat: -1, ease: "Sine.inOut" });
+  },
+};
+
 /** Die EINE Liste aller Region-Szenen-Configs. Reihenfolge = Registrierungsreihenfolge in
  *  scenes.ts (Szenen-Keys sind disjunkt, also nicht load-bearing). */
-export const REGION_CONFIGS: RegionConfig[] = [archipel, lighthouse, warehouse];
+export const REGION_CONFIGS: RegionConfig[] = [archipel, lighthouse, warehouse, watchtower];

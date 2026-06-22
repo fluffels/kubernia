@@ -15,6 +15,7 @@ import { SHIP, type Door } from "../../world";
 import { WORLD_TO_ARCHIPEL } from "../../archipel";
 import { WORLD_TO_LIGHTHOUSE, WORLD_RETURN_LH } from "../../lighthouse";
 import { DOCK as WH_DOCK, WORLD_JETTY_WH, WORLD_TO_WAREHOUSE } from "../../warehouse";
+import { DOCK as WT_DOCK, WORLD_JETTY_WT, WORLD_TO_WATCHTOWER } from "../../watchtower";
 import { PIER_XS } from "../../harbormap";
 import { T, DIRT, ANVIL, TABLE, DEVICE, BOOK, WATER, FOAM, WANG } from "../shared";
 import type { WorldSceneLike } from "./types";
@@ -61,6 +62,18 @@ export function placeHarborObjects(scene: WorldSceneLike) {
     }
   }
   scene.labels.push({ x: WORLD_TO_WAREHOUSE.tx + 0.9, y: WORLD_TO_WAREHOUSE.ty - 0.7, text: "Zum Lager", color: "#ffe9b0" });
+
+  // #130: Holz-Anleger an der Südost-Ecke des Hafenkais → Wachturm-Quartier. Gleiches
+  // Muster wie der Lager-Anleger: die Wasserkacheln des Stegs zu begehbaren Planken (PIER
+  // -10) machen, damit renderGround sie als „dock" malt und man hinauslaufen kann. So
+  // bleibt harbor.tmj unberührt.
+  for (let y = WORLD_JETTY_WT.y0; y <= WORLD_JETTY_WT.y1; y++) {
+    for (let x = WORLD_JETTY_WT.x; x < WORLD_JETTY_WT.x + WORLD_JETTY_WT.w; x++) {
+      scene.ground[y * W + x] = WT_DOCK;
+      scene.solidGrid[y * W + x] = 0;
+    }
+  }
+  scene.labels.push({ x: WORLD_TO_WATCHTOWER.tx + 0.9, y: WORLD_TO_WATCHTOWER.ty - 0.7, text: "Zum Wachturm", color: "#ffe9b0" });
 
   // Marktplatz
   scene.objDeco(28, 18, "well", 0.55, true);
