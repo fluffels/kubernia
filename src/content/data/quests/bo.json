@@ -52,6 +52,13 @@
         }
       },
       {
+        "type": "dialog",
+        "npc": "bo",
+        "lines": [
+          "Eins noch, Landratte: <code>nginx</code> ist nicht der einzige Bauplan in der [[Registry]]. Gleich in der Übung tauchen andere auf – <code>redis</code> oder <code>postgres</code> sind fertige Dienste, und <b>[[BusyBox|busybox]]</b> ist die <b>winzige Allzweck-Kiste</b>: viele Mini-Werkzeuge (<code>ls</code>, <code>cat</code> und Co.) in einer einzigen, federleichten Box – die startet man für schnelle Tests und zum Reinschauen. Der Befehl bleibt derselbe, nur der Bauplan-Name wechselt. Bo ist Stein."
+        ]
+      },
+      {
         "type": "drill",
         "brief": "Bos Übungsrunde",
         "pool": [

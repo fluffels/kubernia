@@ -19,6 +19,7 @@ export const GLOSSARY: Record<string, GlossEntry> = {
   tag:      { begriff: "Tag",      def: "Ein Name/Zeiger auf ein bestimmtes Image (z.B. :1.0, :latest) – keine Kopie und keine eigene Version." },
   cache:    { begriff: "Cache",    def: "Zwischengespeicherte, unveränderte Image-Schichten, die beim Bauen wiederverwendet werden und Zeit sparen." },
   build:    { begriff: "Build",    def: "Aus einem Dockerfile ein eigenes Image schichten (docker build) – anders als pull, das nur Fertiges holt." },
+  busybox:  { begriff: "BusyBox",  def: "Ein winziges Image, das viele kleine Unix-Werkzeuge (ls, cat, wget …) in einer einzigen Datei bündelt – die handliche Allzweck-Kiste, oft für schnelle Tests und zum Reinschauen gestartet." },
 };
 
 /** Marker-Syntax im Lerntext: `[[Anzeige]]` oder `[[Anzeige|schlüssel]]`. */
