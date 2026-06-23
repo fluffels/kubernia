@@ -1,15 +1,13 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-23 (#332 erledigt — QoL: abgeschlossene Quests im Sandbox-/Review-Modus wiederspielen, ohne Live-Stand zu zerstören (9a11558); aus dem Kopf entfernt, **Kopf jetzt 15 Einträge**. Davor 2026-06-23: #146 erledigt — Terraform-Sim-Grundlage (Phase 9, 277d5cd), oberstes freies Ticket ist #147. Davor 2026-06-23: #337 erledigt — DNS-Quest „Adressbuch des Hafens" bei Ada (CoreDNS/Service-Discovery + ExternalName, `nslookup`-Sim-Befehl, 98ff7b9), womit **Phase 3 komplett** war; #145 — **Lagerhallen-Arc #140–#145 komplett** (1f304f5). Davor 2026-06-22: **Wachturm-Arc #130–#139 (Phase 6: RBAC/ServiceAccounts/Pod-Security) komplett** (c29c8e0).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
+> **Stand: 2026-06-23 — nächstes Ticket: #147. Kopf: 15 Einträge. Zuletzt abgeschlossen: #332 (QoL Sandbox-Replay), #146 (Terraform-Sim Phase 9), Phase 3 (Ingress/DNS/TLS), Wachturm-Arc (#130–#139 Phase 6), Lagerhallen-Arc (#140–#145 Phase 7).**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
 
 1. **Kopf (kuratiert, ~15–20 Tickets).** Die nächsten Tickets in **bewusster** Reihenfolge — abhängigkeitsbewusst und prio-informiert, nicht nur nach Label. **„Nächstes Ticket" = das oberste freie hier.** Siehe Tabelle unten.
 2. **Auto-Rest.** Alles, was **nicht** im Kopf steht, wird **nicht** handsortiert, sondern fällt auf die generische, deterministische Board-Sortierung zurück: **Prio (`hoch`→`mittel`→`niedrig`→ohne), innerhalb der Prio niedrigste Nummer** (Befehl unten). So bleibt die Pflege billig und die Liste skaliert Stardew-fest, auch wenn der Backlog wächst.
-3. **Reaktivierungs-Pool.** Die `status:zurückgestellt`-Tickets — waren hinter der Architektur/dem Fundament **geparkt**, nicht verworfen. Werden **progressiv** wieder hereingeholt, wenn der Kopf sich leert (siehe unten). Bis dahin bei der Auswahl übersprungen.
-
-> **Warum nicht alle ~70 aktiven Tickets durchsortieren?** Eine handgepflegte Gesamt-Reihenfolge über den ganzen Backlog wäre nach jedem Ticket teuer zu pflegen und würde bei Stardew-Scope veralten. Der Kopf trägt nur die nächste Vorausschau; den langen Schwanz erledigt die deterministische Prio→Nummer-Regel. **(Oberste Regel: skaliert das auch bei 10× Backlog? — ja.)**
+3. **Reaktivierungs-Pool.** Die `status:zurückgestellt`-Tickets — geparkt, nicht verworfen. Werden **progressiv** wieder hereingeholt, wenn der Kopf sich leert (siehe unten). Bis dahin bei der Auswahl übersprungen.
 
 ## Vor JEDEM Ticket — bewusst zweifeln (über allem)
 
@@ -24,7 +22,7 @@ Bevor irgendein Ticket angefasst wird, **zuerst zweifeln** — das steht über d
 
 Diese Tickets sind **keine „bau-X"-Tickets**, sondern Entscheidungen, die man *reviewt und offen hält* — sie färben alle anderen und stehen darum **nicht** im sortierten Kopf:
 
-- **#355** ⚠️ — **Auslieferungsform: Web-App vs. Desktop-Download (wie Stardew).** Bewusst **nicht** auf eine Option festlegen. Recherchieren, ob ein Spiel dieser Größe als reine Web-Anwendung trägt; Ergebnis als **ergebnisoffener ADR** (`docs/adr/0005-auslieferungsform.md`) mit Re-Eval-Trigger. Kein Code, kein Lock-in. Hängt mit der Backend-Frage zusammen ([ADR 0006](adr/0006-backend-und-skalierung.md)). → bei jeder save-/asset-/build-nahen Änderung mitdenken.
+- **#355** ⚠️ — **Auslieferungsform: Web-App vs. Desktop-Download (wie Stardew).** Bewusst **nicht** auf eine Option festlegen. Ergebnis als **ergebnisoffener ADR** (`docs/adr/0005-auslieferungsform.md`) mit Re-Eval-Trigger. → bei jeder save-/asset-/build-nahen Änderung mitdenken.
 
 ## Was „nächstes Ticket" heißt
 
@@ -42,16 +40,13 @@ Sagt die Maintainerin **„nächstes Ticket"** (für kubequest), dann:
 
 ## Reihenfolge — der Kopf
 
-Leitlinie der Sortierung: **Prio zuerst** (höchste offene Prio oben), **innerhalb gleicher Prio nach Abhängigkeit** (was etwas anderes ermöglicht, kommt davor), sonst niedrigste Nummer. Der **Skalierungs-Enabler-Block** ist bewusst über die anderen `prio:niedrig`-Tickets gezogen, weil „Umbau zuerst, dann der große Content-Push" gilt (Begründung: [architektur-analyse-2026-06.md](architektur-analyse-2026-06.md)). Stand des Blocks: **#198 ✓**, **#428 ✓** (erledigt); **#339 zurückgestellt** (Vite inlinet die kleinen Sprites bereits als Data-URI → Texture-Atlas aktuell ohne messbaren Nutzen, `status:zurückgestellt` mit Re-Eval-Trigger); **#417 aufgeteilt** in **#435 ✓** (Lazy-Content, erledigt) + **#436 ✓** (Save-Laden entzerren, erledigt). Der Skalierungs-Enabler-Block ist damit vollständig abgearbeitet.
-
-**Neu am 2026-06-21 — der „große Content-Push" beginnt:** Mit dem fertigen Enabler-Block wurde die nächste Story-Region **Wachturm-Quartier (Phase 6 — RBAC / ServiceAccounts / Pod-Security)** aus dem Reaktivierungs-Pool geholt (`status:zurückgestellt` von **#130–#139** entfernt; #137 Quiz war schon ✓) und als **zusammenhängender Arc an den Kopf der Liste** gezogen — genau das „dann der große Content-Push" nach „Umbau zuerst". Gut vorbereitet: **Sim-Grundlage** (`auth can-i` #126, Pod-Security #128) ✓ und die **Region-Maschinerie** seit #427 datengetrieben (`RegionScene`/`REGION_CONFIGS`), eine neue Region anzulegen ist also billig. Die früheren **no-dependency-Content-Füller** (#212/#218/#219/#228/#229/#236/#237/#239/#250) sind dafür in den **Auto-Rest** zurückgewandert — sie haben keine Abhängigkeit und gehören damit nicht in den Kopf (Prio→Nummer holt sie dort weiter, sobald sich der Kopf leert). Die Wachturm-Region steht **über** den QoL-/System-Features (#332 ✓, #334; #306 ✓), weil sie echten Lernpfad-Fortschritt bringt, jene nur Komfort.
+Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwas anderes ermöglicht, kommt davor), sonst niedrigste Nummer. Content-Arcs (echter Lernpfad-Fortschritt) stehen über QoL-/System-Features. No-dependency-Content-Füller (#212/#218/#219/#228/#229/#236/#237/#239/#250) leben im Auto-Rest — keine Abhängigkeit, kein Grund für den Kopf.
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| | **— Phase 3 (Ingress / DNS / TLS / NetworkPolicies) — KOMPLETT abgeschlossen 2026-06-23, aus dem Kopf entfernt —** | | | Ingress + TLS („Hafentor" bei Ada) ✓, NetworkPolicies („Hafenmauer" bei Juno) ✓ → **#338 als bereits umgesetzt geschlossen**, und jetzt **DNS #337 ✓** („Adressbuch des Hafens" bei Ada: CoreDNS/Service-Discovery + ExternalName, `nslookup`-Sim-Befehl, 98ff7b9). Phase 3 ist damit komplett. |
-| | **— Expeditions-Flotte (Phase 9: Terraform-Module / Remote State / Provider) — dritte progressive Reaktivierung 2026-06-22, neuer Region-Arc —** | | | **Sim-Grundlage #146 ✓** (2026-06-23): `src/sim/terraform.ts` deckt jetzt Module/Remote-State+Locking/Provider/Outputs ab. Region-Maschinerie datengetrieben (#427). Abhängigkeitsordnung wie bei Wachturm/Lagerhallen: Sim-Grundlage → Konfig-Inhalte → Region/NPC → Quests → Drills → Quiz → Progression → Tests. |
+| | **— Expeditions-Flotte (Phase 9: Terraform-Module / Remote State / Provider) —** | | | Sim-Grundlage #146 ✓. Reihenfolge: Konfig-Inhalte → Region/NPC → Quests → Drills → Quiz → Progression → Tests. |
 | 1 | **#147** | ohne | Terraform-Konfig-Inhalte (Modul-Struktur, backend.tf, provider.tf, outputs) | **Nächstes Ticket.** Spielinhalt auf der Sim-Grundlage (#146 ✓). |
-| 2 | **#444** | mittel | Pod-Security-Stufe nach Phase 6 bleibt dauerhaft `restricted` — blockiert freies Üben + Oles `k-create`-Drill | Gameplay-Bug der ab Phase 6 aktiv schadet; kein Lernpfad-Fortschritt, aber Regression-Fix vor weiteren Drill-/Üben-Arcs sinnvoll. |
+| 2 | **#444** | mittel | Pod-Security nach Phase 6 dauerhaft `restricted` — blockiert freies Üben + Oles `k-create`-Drill | Aktiver Gameplay-Bug; Fix vor weiteren Drill-/Üben-Arcs sinnvoll. |
 | 3 | **#148** | ohne | Insel/Bereich + Anleger/Warp zur Flotte | Region begehbar machen (RegionScene/#427); ⚠️ Grafik-Anteil — Stardew-Referenz beachten. |
 | 4 | **#149** | ohne | Neuer NPC (Sprite + Smalltalk) | Geber der Region; nach Insel. ⚠️ Grafik-Anteil. |
 | 5 | **#150** | ohne | Quest „Terraform-Module — wiederverwendbare Bausteine" | Erste Quest; nach Sim + Region + NPC. |
@@ -62,7 +57,7 @@ Leitlinie der Sortierung: **Prio zuerst** (höchste offene Prio oben), **innerha
 | 10 | **#155** | ohne | Quiz-Karten (Terraform-Module, Remote State, Provider) | Wissens-Sicherung zur Region. |
 | 11 | **#156** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad. |
 | 12 | **#157** | ohne | Tests für Terraform-Aufbau-Quests & Modul/Remote-State/Provider-Sim | Zuletzt im Arc — sichert ab (Red-Green). |
-| | **— QoL / System-Features (auf Fundament, kein Lernpfad-Fortschritt) —** | | | |
+| | **— QoL / System-Features —** | | | |
 | 13 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
 | 14 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
@@ -85,19 +80,13 @@ gh issue list --state open --limit 500 --json number,title,assignees,labels --jq
 
 (Branch/Worktree-Gegencheck trotzdem: `git worktree list` + `git branch -a`.) Diese Tickets müssen **nicht** in den Kopf gehoben werden — der Kopf wächst nur, wenn eine **Abhängigkeit** eine bewusste Vorziehung verlangt.
 
-## Reaktivierungs-Pool — war hinter Architektur geparkt
+## Reaktivierungs-Pool — zurückgestellt, nicht verworfen
 
-Die offenen Tickets mit Label **`status:zurückgestellt`** wurden zurückgestellt, weil **erst Architektur + Fundament fertig werden mussten** — sie sind **nicht** verworfen. Jetzt, wo dieses Gate fast fällt, sind sie der **Pool, aus dem der Kopf nachgefüllt wird**: leert sich der Kopf, werden die passenden **progressiv reaktiviert** (Label `status:zurückgestellt` entfernen → an die dependency-passende Stelle in den Kopf einsortieren). Es wird **nicht** alles auf einmal reaktiviert (das würde die Pflege sprengen).
+Die offenen Tickets mit Label **`status:zurückgestellt`** sind **nicht** verworfen. Leert sich der Kopf, werden die passenden **progressiv reaktiviert** (Label entfernen → an dependency-passende Stelle in den Kopf einsortieren). Nicht alles auf einmal — der Kopf wächst kontrolliert.
 
-> **Erste progressive Reaktivierung (2026-06-21):** die **Wachturm-Quartier-Gruppe** (#130–#139, Phase 6 — RBAC/Security) als ganze Region-Einheit (Region → NPC → Quests → Drills → Progression → Tests). Bewusst als *eine* Region reaktiviert, nicht der ganze Pool.
->
-> **Zweite progressive Reaktivierung (2026-06-22):** die **Lagerhallen-Viertel-Resttickets** (#140–#145, Phase 7 — stateful Workloads) als Region-Einheit, nachdem der Wachturm-Quest-Arc fertig war und der Kopf auf 7 geschrumpft ist. Vervollständigt die schon bestehende Region (NPC Knut + 2 Quests stehen bereits). Steht jetzt im Kopf, siehe oben.
->
-> **Dritte progressive Reaktivierung (2026-06-22):** die **Expeditions-Flotte** (#146–#157, Phase 9 — Terraform-Module / Remote State / Provider) als ganze Region-Einheit (Sim-Grundlage → Region/NPC → Quests → Drills → Quiz → Progression → Tests), nachdem #141 erledigt war und der Kopf auf 6 schrumpfte (Refill auf Wunsch der Maintainerin sofort, nicht erst nach dem Lagerhallen-Arc-Ende). Sim-Teilgrundlage steht bereits (`src/sim/terraform.ts`). Steht jetzt im Kopf, siehe oben. Wieder bewusst nur *eine* Region — der Storage-Lernpfad (#240–#246) und der verbliebene Phase-10-Rest bleiben im Pool, bis sich der Kopf erneut leert. **Hinweis Phase 10 (2026-06-22):** der echte-Backend-Track A (#158–#163) wurde als Widerspruch zu [ADR 0002](adr/0002-kein-backend-keine-db.md) geschlossen (kein echtes Backend fürs Spiel; gleiche Begründung wie die früher geschlossenen #168/#170); im Pool bleibt nur noch der **In-Game-Sim-Capstone Track B** (#164–167, 169, 171, 172). #221 (Hosting in K8s) ist eine Auslieferungs-/Hosting-Frage und gehört zum offenen Grundsatz-Review #355 (ADR 0005), nicht zu Phase 10.
+**Reaktivieren mit Augenmaß:** Manche können bedenkenlos reaktiviert werden. Andere brauchen zuerst eine **Scope-Klärung** (z.B. **#420** NPC-Tagesplan/Routinen, **#421** Item-/Inventar-Modell: was bedeutet „Stardew-Scope" für ein K8s-Lernspiel — Routinen/Crafting, oder vor allem Lern-Tiefe?) — die erst klären, dann reaktivieren.
 
-Bei der Auswahl werden sie weiterhin **übersprungen**, solange das Label dran ist — **maßgeblich ist immer das Label**, nicht eine Aufzählung hier.
-
-**Reaktivieren mit Augenmaß:** Manche waren *nur* hinter der Architektur geparkt → können bedenkenlos reaktiviert werden. Andere brauchen vorher eine **Scope-Klärung** (z.B. **#420** NPC-Tagesplan/Routinen, **#421** Item-/Inventar-Modell: bedeutet „Stardew-Scope" für ein K8s-Lernspiel überhaupt Routinen/Crafting, oder vor allem Lern-Tiefe?) — die erst klären, dann reaktivieren.
+Bei der Auswahl werden sie **übersprungen**, solange das Label dran ist — **maßgeblich ist immer das Label**, nicht eine Aufzählung hier.
 
 Aktuellen Pool ansehen:
 
@@ -124,7 +113,7 @@ Dann:
 
 - **Gerade erledigt / sonst geschlossen** → Zeile aus dem Kopf entfernen (GitHub-Issue-Status ist die SSOT für „erledigt"; erledigte Tickets werden hier **entfernt, nicht durchgestrichen**).
 - **Kopf zu kurz geworden** (< ~15) → von oben aus dem **Auto-Rest** (Prio→Nummer) **und/oder dem Reaktivierungs-Pool** nachfüllen, bis wieder ~15–20 erreicht sind. Aus dem Pool nur reaktivieren, was wirklich dran ist (Scope-Klärung beachten).
-- **Neues offenes Ticket mit echter Abhängigkeit** (etwas muss vor etwas anderem passieren) → an die dependency-passende Stelle in den Kopf einsortieren, nicht unten anhängen. Ein neues Ticket **ohne** besondere Abhängigkeit muss **nicht** in den Kopf — es lebt im Auto-Rest.
-- **Altentscheidung wackelt** (auch ein abgeschlossenes Ticket/ADR) → als Grundsatz-Review oben aufnehmen (wie #355), nicht stillschweigend fortschreiben.
-- **Driftet die Liste → Doku fixen, Stand-Datum oben aktualisieren, committen** (Doku-only → kein Test-Lauf). Hat sich nichts geändert, kein Commit nötig.
+- **Neues offenes Ticket mit echter Abhängigkeit** → an die dependency-passende Stelle in den Kopf einsortieren, nicht unten anhängen. Ein Ticket **ohne** besondere Abhängigkeit muss **nicht** in den Kopf — es lebt im Auto-Rest.
+- **Altentscheidung wackelt** → als Grundsatz-Review oben aufnehmen (wie #355), nicht stillschweigend fortschreiben.
+- **Driftet die Liste → Doku fixen, Stand-Datum oben aktualisieren, committen** (Doku-only → kein Test-Lauf).
 - Bei Unklarheit über die Position: „Ist das okay, wenn KubeQuest Stardew-groß wird?" (oberste Regel, [AGENTS.md](../AGENTS.md)) entscheidet vor dem Prio-Label.
