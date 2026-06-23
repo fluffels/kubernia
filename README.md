@@ -5,7 +5,7 @@
 > **🚧 Work in Progress** – KubeQuest ist in aktiver Entwicklung. Bugs und unfertige Ecken sind möglich.
 > Hast du etwas gefunden oder eine Idee? Meld dich gern in den **[GitHub Discussions](https://github.com/fluffels/kubequest/discussions)** – einfach lostippen (GitHub-Login nötig).
 
-Ein **2D-Lernspiel** (gebaut mit **Phaser 3**) für Docker, Kubernetes, Helm, Terraform und Security-Grundlagen – von „Helm? Das setzt man doch auf den Kopf?" bis zum souveränen Umgang mit den Profi-Werkzeugen. Du läufst durch die Hafenstadt **Port Kubernia**, löst Quests und funkst echte Befehle an den Cluster.
+Ein **2D-Lernspiel** (gebaut mit **Phaser 3**) für Docker, Kubernetes, Helm, Terraform und Security-Grundlagen – von „Helm? Das setzt man doch auf den Kopf?" bis zum souveränen Umgang mit den Profi-Werkzeugen. Du läufst durch die Hafenstadt **Port Kubernia**, löst Quests und schickst echte Befehle an den Cluster.
 
 **Die Spielwelt IST der Cluster:**
 
@@ -29,7 +29,7 @@ Spielstand speichert automatisch im Browser.
 | WASD / Pfeile | Laufen |
 | E | Reden / Benutzen / im Dialog weiter |
 | ← / Backspace | Im Dialog eine Zeile zurück (nachlesen) |
-| T | 📻 Funkgerät (Terminal) |
+| T | 💻 Terminal |
 | J | 📜 Logbuch (Questlog) |
 | Esc | Fenster schließen |
 
@@ -40,7 +40,7 @@ Im 📜 **Logbuch (J)** blätterst du durch alle Quests: abgeschlossene zum **Na
 Jeder Befehl wird **einzeln** eingeführt und sofort geübt:
 
 1. **🆕 Vormachen** – ein NPC erklärt EINEN neuen Befehl (kurz!)
-2. **⌨️ Nachtippen** – du tippst ihn selbst im Funkgerät
+2. **⌨️ Nachtippen** – du tippst ihn selbst im Terminal
 3. **🏋️ Drills** – Zufalls-Varianten („anderes Image, anderer Name, andere Zahl") bis es sitzt
 4. **🤔 Verständnisfrage** – ins Gespräch eingebaut, keine Quiz-Wände
 5. **🦀 Krabbe Kralle** – tägliche Karteikarten (Spaced Repetition), falsch Beantwortetes kommt öfter; bei Befehls-Karten darfst du nach einem Fehler den Befehl **erneut eintippen** (Lösung gibt's auf Wunsch oder nach ein paar Versuchen)
@@ -76,7 +76,7 @@ Grobe Aufteilung:
 ```
 kubequest/
 ├── index.html        Dev-Einstieg (lädt src/main.ts; braucht den Vite-Server)
-├── style.css         UI (HUD, Dialoge, Funkgerät, Shop, Alarm, Minispiel)
+├── style.css         UI (HUD, Dialoge, Terminal, Shop, Alarm, Minispiel)
 ├── src/              Spielcode
 │   ├── sim.ts         Cluster-Simulator (docker, kubectl, helm, terraform, secrets, git)
 │   ├── content.ts     Fassade über src/content/ (Quests, Drills, Quiz, NPCs, Minispiel …)

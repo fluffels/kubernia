@@ -1108,7 +1108,7 @@
         "brief": "Das Adressbuch fragen",
         "cmd": {
           "id": "t-nslookup",
-          "intro": "🆕 Neuer Befehl: <code>nslookup &lt;name&gt;</code> – fragt <b>CoreDNS</b> nach der Adresse hinter einem Namen. (Im echten Cluster läuft das aus einem Pod heraus, z.B. <code>kubectl exec … -- nslookup</code>; hier am Funkgerät fragst du das Adressbuch direkt.)",
+          "intro": "🆕 Neuer Befehl: <code>nslookup &lt;name&gt;</code> – fragt <b>CoreDNS</b> nach der Adresse hinter einem Namen. (Im echten Cluster läuft das aus einem Pod heraus, z.B. <code>kubectl exec … -- nslookup</code>; hier am Terminal fragst du das Adressbuch direkt.)",
           "text": "Frag CoreDNS nach der <code>kasse</code>: <code>nslookup kasse</code>. Achte auf den vollen Namen und die Adresse, die zurückkommt.",
           "accept": [
             "^nslookup\\s+kasse(\\.default(\\.svc\\.cluster\\.local)?)?$"

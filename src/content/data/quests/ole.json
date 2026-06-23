@@ -13,15 +13,15 @@
         "lines": [
           "Ahoi! Du musst die neue Crew sein. Willkommen in <b>Port Kubernia</b> – dem modernsten Hafen der sieben Meere!",
           "Ich bin Ole, Hafenmeister. Keine Sorge: Hier lernt jede:r in <b>kleinen Schritten</b> – einen Handgriff nach dem anderen, mit viel Übung.",
-          "Dein wichtigstes Werkzeug: dein <b>📻 Funkgerät</b>. Drück <b>T</b> und tippe <code>help</code> – mehr nicht!"
+          "Dein wichtigstes Werkzeug: dein <b>💻 Terminal</b>. Drück <b>T</b> und tippe <code>help</code> – mehr nicht!"
         ]
       },
       {
         "type": "teach",
-        "brief": "Funkgerät-Test",
+        "brief": "Terminal-Test",
         "cmd": {
           "id": "t-help",
-          "intro": "🆕 Dein erster Funkspruch!",
+          "intro": "🆕 Dein erster Befehl!",
           "text": "Tippe <code>help</code> und drück Enter.",
           "accept": [
             "^help$"
@@ -34,7 +34,7 @@
         "type": "dialog",
         "npc": "ole",
         "lines": [
-          "Du funkst ja schon wie ein alter Seebär! Geh als Nächstes runter zum <b>Dock im Südwesten</b> zu <b>Bo</b>, unserem Dock-Golem.",
+          "Du tippst ja schon wie ein alter Seebär! Geh als Nächstes runter zum <b>Dock im Südwesten</b> zu <b>Bo</b>, unserem Dock-Golem.",
           "Und merk dir: Bei jedem von uns kannst du später jederzeit <b>üben</b> – einfach ansprechen und „Üben“ wählen. Übung füllt den Geldbeutel!"
         ]
       }
@@ -54,7 +54,7 @@
         "lines": [
           "Bo lobt dich – das passiert alle hundert Jahre! Jetzt die Königsfrage: Eine Kiste kann jeder. Aber <b>hunderte Kisten auf vielen Stegen</b>? Wer startet nachts Ersatz, wenn eine über Bord geht?",
           "Dafür gibt es <b>Kubernetes</b> – griechisch für „Steuermann“, kurz <b>K8s</b>. Schau zum Wasser: Unsere <b>drei Stege</b> sind die <b>Nodes</b> (Arbeits-Server). Alles zusammen: der <b>Cluster</b>.",
-          "Dein Funkgerät spricht mit dem Cluster über <code>kubectl</code>. Erster Befehl, ganz harmlos: <code>kubectl get nodes</code> – zeig mir die Stege!"
+          "Dein Terminal spricht mit dem Cluster über <code>kubectl</code>. Erster Befehl, ganz harmlos: <code>kubectl get nodes</code> – zeig mir die Stege!"
         ]
       },
       {
@@ -570,7 +570,7 @@
         "npc": "ole",
         "lines": [
           "Eine Schatztruhe anlegen kannst du jetzt – aber eine verschlossene Truhe nützt der App noch gar nichts. Wie kommt das Geheimnis eigentlich IN den Dienst hinein? Und: nicht alles, was eine App braucht, ist überhaupt geheim!",
-          "Komm, das zeig ich dir noch – dann ist deine Grundausbildung wirklich rund. Funk mich gleich an. 📻"
+          "Komm, das zeig ich dir noch – dann ist deine Grundausbildung wirklich rund. Sprich mich gleich wieder an. 💻"
         ]
       }
     ]

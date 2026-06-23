@@ -12,7 +12,7 @@
         "npc": "argo",
         "lines": [
           "Willkommen auf dem <b>GitOps-Archipel</b>! Ich bin <b>Argo</b>, die Lotsin hier draußen. Schön ruhig, was? Das hat einen Grund.",
-          "Drüben im Hafen rennst du ans Funkgerät und rufst dem Cluster jeden Befehl einzeln zu – <code>apply</code> hier, <code>scale</code> da. Sogar deine Pipeline <b>schiebt</b> den neuen Stand von außen hinein. Funktioniert. Aber: Wer weiß morgen noch, was wirklich laufen SOLL?",
+          "Drüben im Hafen rennst du ans Terminal und rufst dem Cluster jeden Befehl einzeln zu – <code>apply</code> hier, <code>scale</code> da. Sogar deine Pipeline <b>schiebt</b> den neuen Stand von außen hinein. Funktioniert. Aber: Wer weiß morgen noch, was wirklich laufen SOLL?",
           "Auf meiner Insel machen wir es andersherum. Hier gibt es <b>ein</b> Logbuch – und das Logbuch hat immer recht."
         ]
       },
@@ -46,7 +46,7 @@
         "type": "dialog",
         "npc": "argo",
         "lines": [
-          "Und jetzt der Clou – das <b>Pull-Prinzip</b>. Drüben <b>pusht</b> jemand von außen in den Cluster: du am Funkgerät, oder die Pipeline. Der Cluster ist passiv, er lässt mit sich machen.",
+          "Und jetzt der Clou – das <b>Pull-Prinzip</b>. Drüben <b>pusht</b> jemand von außen in den Cluster: du am Terminal, oder die Pipeline. Der Cluster ist passiv, er lässt mit sich machen.",
           "Hier wohnt ein Crewmitglied <b>im</b> Cluster: <b>Argo CD</b>, mein Namensvetter. Es schaut unermüdlich ins Logbuch und <b>zieht</b> sich den Soll-Zustand selbst heran (<i>pull</i>). Niemand drückt von außen etwas rein – der Cluster holt sich seine Wahrheit ab.",
           "Push heißt also: von außen reingeschoben. Pull heißt: der Cluster zieht es sich selbst. Klingt nach einer Kleinigkeit – ist aber der ganze Unterschied."
         ]
@@ -60,7 +60,7 @@
           {
             "t": "Pull: ein Agent IM Cluster zieht den Soll-Zustand aus Git. Push: jemand von außen drückt ihn hinein (kubectl/Pipeline).",
             "ok": true,
-            "reply": "Sitzt! Beim Pull lebt der Abgleich im Cluster und läuft von allein weiter – auch wenn niemand am Funkgerät sitzt."
+            "reply": "Sitzt! Beim Pull lebt der Abgleich im Cluster und läuft von allein weiter – auch wenn niemand am Terminal sitzt."
           },
           {
             "t": "Push und Pull sind nur zwei Wörter für dasselbe – am Ende läuft derselbe Befehl.",
