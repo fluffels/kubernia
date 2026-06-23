@@ -40,6 +40,8 @@ export const overlayUI = part({
         case "termSolution": this.termSolution(); break;
         case "viewQuest": if (arg) this.viewQuest(arg); break;
         case "questLogBack": this.questLogBack(); break;
+        case "replayQuest": if (arg) this.replayQuest(arg); break;
+        case "exitReplay": this.exitReplay(); break;
         case "buyItem": if (arg) this.buyItem(arg); break;
         case "toggleItem": if (arg) this.toggleItem(arg, el.dataset.on === "1"); break;
         case "startFreePractice": this.startFreePractice(); break;

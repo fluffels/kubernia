@@ -41,6 +41,14 @@ export const hudUI = part({
 
   refreshQuestHint() {
     const el = $("hud-quest");
+    // Wiederspiel-Sandbox (#332): solange ein Replay läuft, zeigt das HUD statt der
+    // Quest-Aufgabe den Wiederspiel-Hinweis + Ausstieg (ohne erst das Logbuch zu öffnen).
+    if (Game.isReplaying()) {
+      const rq = Game.currentQuest();
+      el.innerHTML = "🔁 <b>Wiederspiel:</b> " + (rq ? rq.title : "—") +
+        ' <button class="hud-replay-exit" data-action="exitReplay">↩️ Zur aktuellen Quest</button>';
+      return;
+    }
     if (Game.allQuestsDone()) {
       el.innerHTML = "🏅 Grundausbildung geschafft! Halte den Hafen am Laufen – und übe bei der Crew (E → Üben).";
       return;

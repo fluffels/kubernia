@@ -406,6 +406,15 @@ export class WorldScene extends Phaser.Scene {
   }
   get player() { return this.playerPos; }
 
+  /** Spielfigur sofort an eine Weltposition setzen (Wiederspiel-Sandbox #332).
+   *  Bewegung stoppen, damit sie nicht weiterrutscht; Sprite/Schatten/Kamera ziehen
+   *  im nächsten update() automatisch nach (sie folgen playerPos). */
+  teleport(x: number, y: number) {
+    this.playerPos.x = x;
+    this.playerPos.y = y;
+    this.playerPos.moving = false;
+  }
+
   /* ============ Kollision & Bewegung ============ */
   /** Kachel (x,y) belegt? – fürs Deko-Streuen (#3): eckige Solids (solidGrid:
    *  Wände/Wasser/Gebäude/Büsche) ODER runde Objekte (softGrid: Steine/NPCs, #343).

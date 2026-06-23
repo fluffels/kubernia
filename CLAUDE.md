@@ -114,6 +114,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/game/save.ts`](src/game/save.ts) | Anwendung | Laden/Speichern/Reset/Export/Import + `sanitizeState` + `LEGACY_QUEST_ID_MAP`. |
 | [`src/game/economy.ts`](src/game/economy.ts) | Anwendung | Hafen-Wirtschaft, Streak, XP/Rang, Dublonen, Shop. |
 | [`src/game/progression.ts`](src/game/progression.ts) | Anwendung | Quest-Fortschritt, Dev-Sprung (#329), freies Üben. |
+| [`src/game/sandbox.ts`](src/game/sandbox.ts) | Anwendung | Wiederspiel-Sandbox (#332): abgeschlossene Quest erneut spielen, Live-Stand als RAM-Lesezeichen, `save()` währenddessen No-Op. |
 | [`src/game/unlocks.ts`](src/game/unlocks.ts) | Anwendung | Verdiente Abkürzungen (#313) + Befehlshistorie (#316). |
 | [`src/game/spaced-repetition.ts`](src/game/spaced-repetition.ts) | Anwendung | Leitner-Spaced-Repetition + Review-Gate. |
 | [`src/game/clock.ts`](src/game/clock.ts) | Anwendung | Persistente Spiel-Zeit/Kalender (#413): `advanceClock` (Achse `gameDays` vorrücken) + `calendar` (abgeleiteter Tag/Saison/Uhrzeit). |

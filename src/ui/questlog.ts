@@ -1,5 +1,6 @@
 import { Game } from "../game";
 import { KQContent } from "../content";
+import { worldScene } from "../runtime";
 import { buildQuestLogRows, questLogUnlocked, buildQuestDetail } from "../questlog";
 import { part, $, esc, NPCS } from "./shared";
 
@@ -55,11 +56,16 @@ export const questlogUI = part({
           const hint = this.hintForStep();
           if (hint) detail += `<div class="ql-line ql-hint">📍 <b>Jetzt dran:</b> ${hint}</div>`;
         }
-        const resumeBtn = !isActive && !Game.allQuestsDone()
+        const replaying = Game.isReplaying();
+        // Eine abgeschlossene Quest lässt sich in der Sandbox erneut spielen (#332) –
+        // außer es läuft schon ein Wiederspiel (dann zeigt das Banner den Ausstieg).
+        const replayBtn = !replaying && s.completedQuests.includes(quest.id)
+          ? `<button data-action="replayQuest" data-arg="${this.questLogViewIdx}">🔁 Quest erneut spielen</button>` : "";
+        const resumeBtn = !replaying && !isActive && !Game.allQuestsDone()
           ? `<button data-action="viewQuest" data-arg="${s.questIdx}">▶️ Zur aktuellen Quest</button>` : "";
-        $("quest-body").innerHTML = `<div class="ql-detail">
+        $("quest-body").innerHTML = `${this.replayBanner()}<div class="ql-detail">
           <div class="actions" style="margin-bottom:10px">
-            <button class="primary" data-action="questLogBack">← Übersicht</button>${resumeBtn}
+            <button class="primary" data-action="questLogBack">← Übersicht</button>${replayBtn}${resumeBtn}
           </div>
           <div class="ql-title">${isActive ? "▶️" : "✅"} ${esc(quest.title)}</div>
           ${detail}
@@ -71,7 +77,7 @@ export const questlogUI = part({
 
     // ----- Übersicht -----
     const unlocked = questLogUnlocked(s.completedQuests.length);
-    let html = "";
+    let html = this.replayBanner();
 
     // Einmaliges Bo-Onboarding beim ersten Öffnen nach der Freischaltung (#326).
     if (unlocked && !s.questLogIntroShown) {
@@ -127,6 +133,42 @@ export const questlogUI = part({
     if (Game.isFunkStep(step)) return "📻 Öffne dein Funkgerät (T) und erledige die Aufgaben.";
     const npc = NPCS[step.npc];
     return "💬 Sprich mit <b>" + npc.name + "</b> (" + npc.title + ").";
+  },
+
+  /* ========== Stufe 2 (#332): abgeschlossene Quest wiederspielen (Sandbox) ==========
+   * Springt in einer Sandbox an den Anfang einer abgeschlossenen Quest, ohne den
+   * Live-Stand zu zerstören (Logik in game/sandbox.ts: Lesezeichen im RAM, save()
+   * währenddessen No-Op). Die Welt wird LIVE umgestellt (kein Reload, sonst ginge das
+   * RAM-Lesezeichen verloren): die Figur springt zum Quest-Giver, Cluster/NPC-Marker
+   * ziehen pro Frame ohnehin aus Game.sim/Game.state nach. „Zur aktuellen Quest"
+   * (exitReplay) stellt die gemerkte Live-Position + den echten Fortschritt wieder her. */
+
+  /** Banner oben im Logbuch, solange ein Wiederspiel läuft – mit Ausstieg. */
+  replayBanner(): string {
+    if (!Game.isReplaying()) return "";
+    return `<div class="ql-replay">🔁 <b>Wiederspiel-Modus</b> – dein echter Fortschritt ist sicher gespeichert.
+      <button class="primary" data-action="exitReplay">↩️ Zur aktuellen Quest</button></div>`;
+  },
+
+  /** Eine abgeschlossene Quest erneut spielen: Sandbox starten, Logbuch schließen,
+   *  Figur live zum Giver setzen, Hinweis zeigen. */
+  replayQuest(idxStr: string) {
+    const idx = Number(idxStr);
+    if (!Game.startReplay(idx)) return; // nur abgeschlossene Quests, kein doppeltes Wiederspiel
+    this.closeOverlays();
+    worldScene()?.teleport?.(Game.state.player.x, Game.state.player.y);
+    this.refreshHud();
+    const q = KQContent.QUESTS[idx];
+    this.hint(`🔁 Wiederspiel: „${esc(q.title)}". Dein echter Fortschritt ist sicher – über „Zur aktuellen Quest" (📜 Logbuch oder oben links) kommst du jederzeit zurück.`);
+  },
+
+  /** Wiederspiel beenden: zurück an die gemerkte Live-Position + echter Fortschritt. */
+  exitReplay() {
+    if (!Game.endReplay()) return;
+    this.closeOverlays();
+    worldScene()?.teleport?.(Game.state.player.x, Game.state.player.y);
+    this.refreshHud();
+    this.toast("↩️ Zurück zur aktuellen Quest.");
   },
 
 });
