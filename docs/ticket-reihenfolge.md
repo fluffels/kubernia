@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-23 (#337 erledigt — DNS-Quest „Adressbuch des Hafens" bei Ada: CoreDNS/Service-Discovery (`<svc>.<ns>.svc.cluster.local`) + ExternalName, neuer `nslookup`-Sim-Befehl + ExternalName-Service-Typ, dazu 2 Drills, 2 Quiz- und 2 Befehls-Karten (98ff7b9). Damit ist **Phase 3 komplett** (Ingress/TLS/NetworkPolicies/DNS) — die Phase-3-Sektion + #337 aus dem Kopf entfernt, Kopf jetzt 16 Einträge. Oberstes freies Kopf-Ticket ist jetzt #146 Expeditions-Flotte (Sim-Grundlage). Davor 2026-06-23: #145 erledigt — **Lagerhallen-Arc #140–#145 komplett** (Tests `storage-drills.test.ts` + AccessMode-Pending, 1f304f5); #144 (Phase 7 README auf ✅, 1c8c652); #338 NetworkPolicies als bereits umgesetzt geschlossen).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
+> **Stand: 2026-06-23 (#146 erledigt — Terraform-Sim-Grundlage der Expeditions-Flotte (Phase 9): `src/sim/terraform.ts` um Module (wiederverwendbare Bausteine → `module.<name>.<res>`), Remote State (`backend` + State-Locking + `force-unlock`), mehrere Provider und deklarierte Outputs erweitert; Config als Szenario-Daten, snapshot→reset-fest, 11 neue Unit-Tests inkl. aller Fehlerfälle (277d5cd). Aus dem Kopf entfernt; oberstes freies Kopf-Ticket ist jetzt #147 (Terraform-Konfig-Inhalte). Kopf jetzt 15 Einträge. Davor 2026-06-23: #337 erledigt — DNS-Quest „Adressbuch des Hafens" bei Ada (CoreDNS/Service-Discovery + ExternalName, `nslookup`-Sim-Befehl, 98ff7b9), womit **Phase 3 komplett** war; #145 — **Lagerhallen-Arc #140–#145 komplett** (1f304f5).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -49,25 +49,24 @@ Leitlinie der Sortierung: **Prio zuerst** (höchste offene Prio oben), **innerha
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
 | | **— Phase 3 (Ingress / DNS / TLS / NetworkPolicies) — KOMPLETT abgeschlossen 2026-06-23, aus dem Kopf entfernt —** | | | Ingress + TLS („Hafentor" bei Ada) ✓, NetworkPolicies („Hafenmauer" bei Juno) ✓ → **#338 als bereits umgesetzt geschlossen**, und jetzt **DNS #337 ✓** („Adressbuch des Hafens" bei Ada: CoreDNS/Service-Discovery + ExternalName, `nslookup`-Sim-Befehl, 98ff7b9). Phase 3 ist damit komplett. |
-| | **— Expeditions-Flotte (Phase 9: Terraform-Module / Remote State / Provider) — dritte progressive Reaktivierung 2026-06-22, neuer Region-Arc —** | | | Sim-Teilgrundlage vorhanden (`src/sim/terraform.ts` deckt `init`/`apply`/`destroy`/`state` bereits ab), Region-Maschinerie datengetrieben (#427). Abhängigkeitsordnung wie bei Wachturm/Lagerhallen: Sim-Grundlage → Region/NPC → Quests → Drills → Quiz → Progression → Tests. |
-| 1 | **#146** | ohne | Sim-Grundlage: Module/Remote-State/Provider-Befehle im Simulator | **Nächstes Ticket.** Fundament des Arcs — ohne Sim keine Quests. |
-| 2 | **#147** | ohne | Terraform-Konfig-Inhalte (Modul-Struktur, backend.tf, provider.tf, outputs) | Spielinhalt auf der Sim-Grundlage (#146). |
-| 3 | **#148** | ohne | Insel/Bereich + Anleger/Warp zur Flotte | Region begehbar machen (RegionScene/#427); ⚠️ Grafik-Anteil — Stardew-Referenz beachten. |
-| 4 | **#149** | ohne | Neuer NPC (Sprite + Smalltalk) | Geber der Region; nach Insel. ⚠️ Grafik-Anteil. |
-| 5 | **#150** | ohne | Quest „Terraform-Module — wiederverwendbare Bausteine" | Erste Quest; nach Sim + Region + NPC. |
-| 6 | **#151** | ohne | Quest „Remote State — gemeinsamer State im Backend" | Baut auf #150. |
-| 7 | **#152** | ohne | Quest „Provider & Cloud — Ressourcen bei verschiedenen Anbietern" | Baut auf #151. |
-| 8 | **#153** | ohne | Quest „Variablen & Outputs — Konfiguration sauber durchreichen" | Letzte Quest des Arcs. |
-| 9 | **#154** | ohne | Drills (Module/Remote-State/Provider-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte. |
-| 10 | **#155** | ohne | Quiz-Karten (Terraform-Module, Remote State, Provider) | Wissens-Sicherung zur Region. |
-| 11 | **#156** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad. |
-| 12 | **#157** | ohne | Tests für Terraform-Aufbau-Quests & Modul/Remote-State/Provider-Sim | Zuletzt im Arc — sichert ab (Red-Green). |
+| | **— Expeditions-Flotte (Phase 9: Terraform-Module / Remote State / Provider) — dritte progressive Reaktivierung 2026-06-22, neuer Region-Arc —** | | | **Sim-Grundlage #146 ✓** (2026-06-23): `src/sim/terraform.ts` deckt jetzt Module/Remote-State+Locking/Provider/Outputs ab. Region-Maschinerie datengetrieben (#427). Abhängigkeitsordnung wie bei Wachturm/Lagerhallen: Sim-Grundlage → Konfig-Inhalte → Region/NPC → Quests → Drills → Quiz → Progression → Tests. |
+| 1 | **#147** | ohne | Terraform-Konfig-Inhalte (Modul-Struktur, backend.tf, provider.tf, outputs) | **Nächstes Ticket.** Spielinhalt auf der Sim-Grundlage (#146 ✓). |
+| 2 | **#148** | ohne | Insel/Bereich + Anleger/Warp zur Flotte | Region begehbar machen (RegionScene/#427); ⚠️ Grafik-Anteil — Stardew-Referenz beachten. |
+| 3 | **#149** | ohne | Neuer NPC (Sprite + Smalltalk) | Geber der Region; nach Insel. ⚠️ Grafik-Anteil. |
+| 4 | **#150** | ohne | Quest „Terraform-Module — wiederverwendbare Bausteine" | Erste Quest; nach Sim + Region + NPC. |
+| 5 | **#151** | ohne | Quest „Remote State — gemeinsamer State im Backend" | Baut auf #150. |
+| 6 | **#152** | ohne | Quest „Provider & Cloud — Ressourcen bei verschiedenen Anbietern" | Baut auf #151. |
+| 7 | **#153** | ohne | Quest „Variablen & Outputs — Konfiguration sauber durchreichen" | Letzte Quest des Arcs. |
+| 8 | **#154** | ohne | Drills (Module/Remote-State/Provider-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte. |
+| 9 | **#155** | ohne | Quiz-Karten (Terraform-Module, Remote State, Provider) | Wissens-Sicherung zur Region. |
+| 10 | **#156** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad. |
+| 11 | **#157** | ohne | Tests für Terraform-Aufbau-Quests & Modul/Remote-State/Provider-Sim | Zuletzt im Arc — sichert ab (Red-Green). |
 | | **— QoL / System-Features (auf Fundament, kein Lernpfad-Fortschritt) —** | | | |
-| 13 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
-| 14 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 12 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
+| 13 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 15 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 16 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 14 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 15 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
