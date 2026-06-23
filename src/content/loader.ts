@@ -72,6 +72,10 @@ const questRegionModules = import.meta.glob<{ default: unknown }>("./data/quests
 const cmdCardModules = import.meta.glob<{ default: unknown }>("./data/cmdcards/*.json", { eager: true });
 // Quiz-Karteikarten (#368) liegen pro THEMA in data/crabquiz/<thema>.json (nicht pro Geber).
 const crabQuizModules = import.meta.glob<{ default: unknown }>("./data/crabquiz/*.json", { eager: true });
+// Terraform-Konfig-Inhalte (#147) liegen pro Region in data/terraform/<region>.json: benannte
+// Beispiel-Szenarien (die simulierten .tf-Dateien + ihr Sim-Zustand), auf die Quests per
+// `scenarioRef` verweisen, statt sie zu duplizieren (DRY über den ganzen Arc – Stardew-Scope).
+const tfConfigModules = import.meta.glob<{ default: unknown }>("./data/terraform/*.json", { eager: true });
 import { QUEST_CHECKS } from "./checks";
 import { compileCheck } from "./check-dsl";
 // Geteilte Parse-Primitiven liegen seit #411 im Leaf-Modul `parse.ts` (bricht den
@@ -232,10 +236,20 @@ function reviveOptions(v: unknown, path: string): ChoiceOption[] {
   });
 }
 
-/** Die an jedem Schritt erlaubten Zusatzfelder (`scenario`, `unlockAbbrev`). */
+/** Die an jedem Schritt erlaubten Zusatzfelder (`scenario`/`scenarioRef`, `unlockAbbrev`). */
 function reviveStepBase(o: Record<string, unknown>, path: string): StepBase {
   const base: StepBase = {};
-  if (o.scenario !== undefined) {
+  // Ein Schritt bereitet die Welt entweder mit einem INLINE-Szenario (`scenario`) vor
+  // oder verweist per `scenarioRef` auf ein benanntes Beispiel-Szenario aus der
+  // Terraform-Konfig-Bibliothek (#147) – beides zugleich wäre mehrdeutig.
+  if (o.scenario !== undefined && o.scenarioRef !== undefined) {
+    fail(`${path}`, "scenario und scenarioRef gleichzeitig gesetzt – nur eines erlaubt");
+  }
+  if (o.scenarioRef !== undefined) {
+    // Referenz wird HIER (beim Laden) zur konkreten `scenario` expandiert – die Laufzeit
+    // sieht nur noch das fertige Szenario, genau wie bei einem inline geschriebenen.
+    base.scenario = resolveScenarioRef(asNonEmptyString(o.scenarioRef, `${path}.scenarioRef`), `${path}.scenarioRef`);
+  } else if (o.scenario !== undefined) {
     // Scenario ist die serialisierbare Sim-Zustandsform (= GameState.clusterSnapshot);
     // hier nur strukturell als Objekt absichern, die Sim-Semantik prüft der Sim selbst.
     if (typeof o.scenario !== "object" || o.scenario === null || Array.isArray(o.scenario)) {
@@ -602,3 +616,88 @@ export const getQuizCards = memo<QuizCard[]>(() =>
       .map(([path, mod]) => parseQuizCards(mod.default, path)),
   ),
 );
+
+/* ===================== Terraform-Konfig-Inhalte (Content-as-Data, #147) =====================
+ * Die Expeditions-Flotte (Phase 9) braucht plausible Beispiel-Konfigurationen als
+ * Spielinhalt für die in der Sim-Grundlage (#146) angelegten Befehle: ein wieder-
+ * verwendbares Modul (Variablen/Ressourcen/Outputs), Remote State (`backend`-Block),
+ * mehrere `provider`-Blöcke (Multi-Cloud) und sauber durchgereichte Variablen/Outputs.
+ *
+ * Eine Terraform-Konfig ist ein **benanntes Beispiel-Szenario**: die simulierten
+ * `.tf`-Dateien (was der Spieler per `cat` liest) PLUS der passende Sim-Zustand
+ * (`tfModules`/`tfProviders`/`tfBackend`/`tfOutputs`/`tfResources`), beides zusammen
+ * als ein `Scenario`. Die Quests des Arcs (#150–#153) verweisen per `scenarioRef`
+ * auf diese Konfigs, statt die langen `.tf`-Texte zu duplizieren – DRY über den
+ * ganzen Arc (Stardew-Scope: vier Quests teilen sich eine Quelle der Wahrheit).
+ *
+ * Wie die Quests **pro Region aufgeteilt** (`./data/terraform/<region>.json`), kein
+ * Monolith. Hier nur STRUKTURELLE Prüfung (id/label/Szenario-Objekt + nicht-leeres
+ * `files`); die Sim-Semantik (läuft init→plan→apply? passt der Text zum Modell?) ist
+ * keine Loader-Aufgabe, sondern wird in `test/tf-configs.test.ts` abgesichert. */
+
+/** Eine benannte Terraform-Konfig: ein Beispiel-Szenario, auf das Quests per
+ *  `scenarioRef` verweisen. `scenario` trägt die simulierten `.tf`-Dateien (`files`)
+ *  und den dazugehörigen Sim-Zustand. */
+export interface TfConfig {
+  id: string;
+  /** Kurzes, sprechendes Anzeige-Label (Doku/Tooling). */
+  label: string;
+  scenario: Scenario;
+}
+
+/** Validiert EINE rohe Terraform-Konfig und gibt sie typisiert zurück. Sichert
+ *  strukturell ab, dass ein nicht-leeres `files` mit rein textuellen Inhalten da ist
+ *  (diese Konfigs existieren, damit der Spieler sie per `cat` lesen kann). */
+function parseOneTfConfig(v: unknown, where: string): TfConfig {
+  const o = asRecord(v, where);
+  const id = asNonEmptyString(o.id, `${where}.id`);
+  const path = `tf-config ${id}`;
+  const label = asNonEmptyString(o.label, `${path}.label`);
+  const sc = asRecord(o.scenario, `${path}.scenario`);
+  const files = asRecord(sc.files, `${path}.scenario.files`);
+  const fileNames = Object.keys(files);
+  if (fileNames.length === 0) fail(`${path}.scenario.files`, "mindestens eine .tf-Datei erwartet");
+  for (const fn of fileNames) asNonEmptyString(files[fn], `${path}.scenario.files["${fn}"]`);
+  return { id, label, scenario: sc as unknown as Scenario };
+}
+
+/** Validiert eine rohe Konfig-Liste (eine Regionen-Datei). Wirft beim ersten Verstoß. */
+export function parseTfConfigs(raw: unknown, where = "tf-configs"): TfConfig[] {
+  const arr = asArray(raw, where);
+  if (arr.length === 0) fail(where, "mindestens eine Terraform-Konfig erwartet");
+  return arr.map((c, i) => parseOneTfConfig(c, `${where}[${i}]`));
+}
+
+/** Führt die Regionen-Listen zusammen und prüft auf doppelte IDs über die Dateien
+ *  hinweg – eine Dublette ließe zwei `scenarioRef`-Ziele kollidieren. */
+export function assembleTfConfigs(regions: TfConfig[][]): TfConfig[] {
+  const seen = new Set<string>();
+  const out: TfConfig[] = [];
+  for (const region of regions) {
+    for (const c of region) {
+      if (seen.has(c.id)) fail("tf-configs", `doppelte Konfig-ID „${c.id}" (über Regionen-Dateien hinweg)`);
+      seen.add(c.id);
+      out.push(c);
+    }
+  }
+  return out;
+}
+
+/** Validierte Terraform-Konfigs in Laufzeit-Form – Quelle: `./data/terraform/<region>.json`.
+ *  Lazy (#435) wie die übrigen Sammlungen: erst beim ersten Zugriff geparst, dann gecacht. */
+export const getTfConfigs = memo<TfConfig[]>(() =>
+  assembleTfConfigs(
+    Object.entries(tfConfigModules)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([path, mod]) => parseTfConfigs(mod.default, path)),
+  ),
+);
+
+/** Löst einen `scenarioRef` (Konfig-ID) zum hinterlegten Beispiel-Szenario auf.
+ *  Wirft `ContentValidationError`, wenn die ID auf keine Konfig zeigt (Tippfehler
+ *  fällt beim Laden hart auf, nicht erst still im Spiel). */
+function resolveScenarioRef(ref: string, path: string): Scenario {
+  const cfg = getTfConfigs().find(c => c.id === ref);
+  if (!cfg) fail(path, `unbekannte Konfig-Referenz „${ref}" (nicht in data/terraform/*.json)`);
+  return cfg.scenario;
+}

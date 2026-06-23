@@ -1,0 +1,72 @@
+[
+  {
+    "id": "flotte-modul",
+    "label": "Wiederverwendbarer Baustein: das Anleger-Modul",
+    "scenario": {
+      "files": {
+        "main.tf": "# Wurzel-Konfiguration der Expeditions-Flotte.\n# Statt jeden Anleger einzeln zu beschreiben, rufen wir EINEN Baustein\n# (das Modul \"anleger\") mehrfach mit unterschiedlichen Werten auf.\n\nmodule \"nordanleger\" {\n  source = \"./modules/anleger\"\n\n  name   = \"nord\"\n  laenge = 12\n}\n\nmodule \"suedanleger\" {\n  source = \"./modules/anleger\"\n\n  name   = \"sued\"\n  laenge = 8\n}\n\n# Das Modul reicht seine Outputs nach oben durch – hier wird die fertige\n# Adresse des Nordanlegers zur Ausgabe der Wurzel-Konfiguration.\noutput \"nordanleger_adresse\" {\n  value = module.nordanleger.adresse\n}\n",
+        "modules/anleger/variables.tf": "# Eingabe-Variablen des Bausteins: das, was der Aufrufer von außen setzt.\n\nvariable \"name\" {\n  description = \"Name des Anlegers (z. B. nord, sued).\"\n  type        = string\n}\n\nvariable \"laenge\" {\n  description = \"Länge des Kais in Metern.\"\n  type        = number\n  default     = 10\n}\n",
+        "modules/anleger/main.tf": "# Die Ressourcen, die der Baustein als Einheit erzeugt.\n\nresource \"hafen_kai\" \"kai\" {\n  name   = var.name\n  laenge = var.laenge\n}\n\nresource \"hafen_poller\" \"poller\" {\n  kai    = hafen_kai.kai.name\n  anzahl = 4\n}\n",
+        "modules/anleger/outputs.tf": "# Was der Baustein nach außen sichtbar macht.\n\noutput \"adresse\" {\n  description = \"Die fertige Anleger-Adresse im Hafennetz.\"\n  value       = \"${var.name}-kai.flotte.local\"\n}\n"
+      },
+      "tfModules": [
+        { "name": "nordanleger", "source": "./modules/anleger", "resources": ["hafen_kai.kai", "hafen_poller.poller"] },
+        { "name": "suedanleger", "source": "./modules/anleger", "resources": ["hafen_kai.kai", "hafen_poller.poller"] }
+      ],
+      "tfOutputs": [
+        { "name": "nordanleger_adresse", "value": "nord-kai.flotte.local" }
+      ]
+    }
+  },
+  {
+    "id": "flotte-remote-state",
+    "label": "Gemeinsames Gedächtnis: Remote State im Flotten-Lager",
+    "scenario": {
+      "files": {
+        "backend.tf": "# Der State – Terraforms Gedächtnis – soll nicht lokal auf einem Laptop liegen,\n# sondern zentral im \"Flotten-Lager\", damit die ganze Crew denselben Stand sieht.\nterraform {\n  backend \"s3\" {\n    bucket         = \"flotten-lager\"\n    key            = \"flotte/terraform.tfstate\"\n    region         = \"kubernia-nord\"\n    dynamodb_table = \"flotten-schloss\" # State-Locking: nur EINE Crew darf zugleich ändern\n  }\n}\n",
+        "main.tf": "# Eine Flotten-Ressource, deren Stand künftig im Flotten-Lager liegt.\nresource \"hafen_leuchtfeuer\" \"einfahrt\" {\n  name       = \"einfahrt-nord\"\n  reichweite = 30\n}\n"
+      },
+      "tfBackend": { "type": "s3", "name": "flotten-lager", "locking": true },
+      "tfResources": [
+        { "addr": "hafen_leuchtfeuer.einfahrt", "desc": "name = \"einfahrt-nord\"" }
+      ]
+    }
+  },
+  {
+    "id": "flotte-provider",
+    "label": "Zwei Inseln, zwei Anbieter: Multi-Cloud-Provider",
+    "scenario": {
+      "files": {
+        "provider.tf": "# Die Flotte expandiert auf ZWEI Inseln verschiedener Anbieter (Multi-Cloud).\n# Jeder Anbieter braucht seinen eigenen provider-Block – terraform init lädt beide.\nterraform {\n  required_providers {\n    nordwind = {\n      source  = \"kubequest/nordwind\"\n      version = \"1.4.0\"\n    }\n    passat = {\n      source  = \"kubequest/passat\"\n      version = \"0.9.2\"\n    }\n  }\n}\n\nprovider \"nordwind\" {\n  region = \"nord-see\"\n}\n\nprovider \"passat\" {\n  region = \"sued-see\"\n}\n",
+        "main.tf": "# Je eine Insel bei jedem Anbieter. Über provider = … wählen wir den Anbieter aus.\nresource \"nordwind_insel\" \"ost\" {\n  provider = nordwind\n  name     = \"ost-vorposten\"\n}\n\nresource \"passat_insel\" \"west\" {\n  provider = passat\n  name     = \"west-vorposten\"\n}\n"
+      },
+      "tfProviders": [
+        { "name": "nordwind", "source": "kubequest/nordwind", "version": "1.4.0" },
+        { "name": "passat", "source": "kubequest/passat", "version": "0.9.2" }
+      ],
+      "tfResources": [
+        { "addr": "nordwind_insel.ost", "desc": "name = \"ost-vorposten\"", "provider": "nordwind" },
+        { "addr": "passat_insel.west", "desc": "name = \"west-vorposten\"", "provider": "passat" }
+      ]
+    }
+  },
+  {
+    "id": "flotte-variablen-outputs",
+    "label": "Sauber durchgereicht: Variablen & Outputs",
+    "scenario": {
+      "files": {
+        "variables.tf": "# Eingabe-Variablen: zentrale Stellschrauben statt fest verdrahteter Werte.\n\nvariable \"flotten_name\" {\n  description = \"Name der Flotte.\"\n  type        = string\n  default     = \"kubernia-expedition\"\n}\n\nvariable \"schiffe\" {\n  description = \"Anzahl der Schiffe in der Flotte.\"\n  type        = number\n  default     = 5\n}\n\nvariable \"lager_schluessel\" {\n  description = \"Zugangsschlüssel zum Flotten-Lager (geheim!).\"\n  type        = string\n  sensitive   = true\n}\n",
+        "main.tf": "# Die Ressource nutzt die Variablen – nichts ist hier fest verdrahtet.\nresource \"hafen_flotte\" \"expedition\" {\n  name    = var.flotten_name\n  schiffe = var.schiffe\n}\n",
+        "outputs.tf": "# Outputs: berechnete Werte sauber nach außen geben.\n\noutput \"flotten_groesse\" {\n  description = \"Wie viele Schiffe die Flotte zählt.\"\n  value       = var.schiffe\n}\n\noutput \"anleger_adresse\" {\n  description = \"Adresse des Flotten-Anlegers im Hafennetz.\"\n  value       = \"${var.flotten_name}.flotte.local\"\n}\n\noutput \"lager_schluessel\" {\n  description = \"Der geheime Lager-Schlüssel – wird verborgen ausgegeben.\"\n  value       = var.lager_schluessel\n  sensitive   = true\n}\n"
+      },
+      "tfResources": [
+        { "addr": "hafen_flotte.expedition", "desc": "name = \"kubernia-expedition\", schiffe = 5" }
+      ],
+      "tfOutputs": [
+        { "name": "flotten_groesse", "value": "5" },
+        { "name": "anleger_adresse", "value": "kubernia-expedition.flotte.local" },
+        { "name": "lager_schluessel", "value": "werft-geheim-2347", "sensitive": true }
+      ]
+    }
+  }
+]
