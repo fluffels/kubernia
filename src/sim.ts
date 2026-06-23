@@ -225,8 +225,10 @@ import { randSuffix, makePodName } from "./sim/util";
     }
 
     /** Bindet ein PVC an Speicher: erst dynamisch über seine StorageClass (legt on-demand
-     *  ein passendes PV an), sonst statisch an ein vorhandenes freies PV. Findet sich
-     *  beides nicht, bleibt das PVC `Pending` – genau das Lehrbild „kein Speicher da". */
+     *  ein passendes PV an), sonst statisch an ein vorhandenes freies PV – das aber zur
+     *  Anforderung passen muss (gleiche StorageClass UND gleicher AccessMode; ein RWO-PV
+     *  erfüllt keine RWX-Anforderung). Findet sich beides nicht, bleibt das PVC `Pending`
+     *  – genau das Lehrbild „kein passender Speicher da". */
     _bindPvc(pvc: PvcRes) {
       if (pvc.status === "Bound" && pvc.volume) return;
       const sc = pvc.storageClass ? this.storageClasses.find(s => s.name === pvc.storageClass) : null;
@@ -237,7 +239,7 @@ import { randSuffix, makePodName } from "./sim/util";
         pvc.volume = pvName;
         return;
       }
-      const pv = this.pvs.find(p => p.status === "Available" && (!pvc.storageClass || p.storageClass === pvc.storageClass));
+      const pv = this.pvs.find(p => p.status === "Available" && (!pvc.storageClass || p.storageClass === pvc.storageClass) && p.accessModes === pvc.accessModes);
       if (pv) {
         pv.status = "Bound";
         pv.claim = "default/" + pvc.name;

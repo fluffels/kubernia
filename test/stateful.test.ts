@@ -101,6 +101,35 @@ test("PVC mit storageClass='' bindet statisch an ein vorhandenes freies PV", () 
   assert.equal(pv.claim, "default/claim-manuell");
 });
 
+test("PVC mit falschem AccessMode bleibt Pending: ein RWO-PV erfüllt keine RWX-Anforderung (#145)", () => {
+  // Statische Bindung: das einzige freie PV bietet nur RWO, die Anforderung will RWX.
+  // In echtem K8s muss der angeforderte AccessMode vom PV unterstützt werden – passt er
+  // nicht, bleibt das PVC Pending (genau die Diagnose, die der pvc-pending-Drill lehrt).
+  sim = new KQSim({
+    pvs: [{ name: "pv-einzel", capacity: "5Gi", storageClass: "manuell", accessModes: "RWO", reclaimPolicy: "Retain" }],
+    pvcs: [{ name: "will-rwx", storage: "5Gi", storageClass: "manuell", accessModes: "RWX" }],
+  });
+  const claim = sim.pvcs.find(p => p.name === "will-rwx")!;
+  assert.equal(claim.status, "Pending", "falscher AccessMode -> kein passendes PV -> Pending");
+  assert.equal(claim.volume, "", "kein Volume gebunden");
+  const pv = sim.pvs.find(p => p.name === "pv-einzel")!;
+  assert.equal(pv.status, "Available", "das RWO-PV bleibt frei (nicht falsch an die RWX-Anforderung gebunden)");
+  assert.match(sim.exec("kubectl get pvc").output!, /will-rwx\s+Pending/);
+});
+
+test("Gegenprobe (Red-Green): bei PASSENDEM AccessMode bindet das PVC – der Check lehnt nicht alles ab (#145)", () => {
+  // Sonst wäre der Pending-Test ein False Positive (würde auch grün, wenn statische Bindung
+  // generell kaputt wäre). Hier: RWX-Anforderung trifft auf ein RWX-PV -> Bound.
+  sim = new KQSim({
+    pvs: [{ name: "pv-geteilt", capacity: "5Gi", storageClass: "manuell", accessModes: "RWX", reclaimPolicy: "Retain" }],
+    pvcs: [{ name: "will-rwx", storage: "5Gi", storageClass: "manuell", accessModes: "RWX" }],
+  });
+  const claim = sim.pvcs.find(p => p.name === "will-rwx")!;
+  assert.equal(claim.status, "Bound", "passender AccessMode (RWX↔RWX) -> Bound");
+  assert.equal(claim.volume, "pv-geteilt");
+  assert.equal(sim.pvs.find(p => p.name === "pv-geteilt")!.claim, "default/will-rwx");
+});
+
 /* ===================== Datendauerhaftigkeit ===================== */
 
 test("StatefulSet-Pod löschen: kommt mit GLEICHEM Namen + GLEICHEM Volume zurück (Daten bleiben)", () => {
