@@ -88,7 +88,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/content/check-dsl.ts`](src/content/check-dsl.ts) | pure Domäne | Deklarative Quest-Check-DSL: `compileCheck` Regel→Prädikat (#411). → [content.md](docs/module/content.md) |
 | [`src/content/checks.ts`](src/content/checks.ts) | pure Domäne | `QUEST_CHECKS`: nur noch echte Code-Sonderfälle (der Rest ist DSL-Daten, #411). |
 | [`src/content/entities.ts`](src/content/entities.ts) | pure Domäne | Entity-Registry: datengesteuerte NPC- & Objekt-Platzierung (#349/#357). |
-| [`src/content/data/`](src/content/data/) | Daten | Quests/NPCs/Smalltalk/Reihenfolge/Drills/Quiz als JSON. |
+| [`src/content/data/`](src/content/data/) | Daten | Quests/NPCs/Smalltalk/Reihenfolge/Drills/Quiz + Terraform-Konfigs (#147) als JSON. |
 | [`src/content/abbrev.ts`](src/content/abbrev.ts) | pure Domäne | Langform↔Kürzel-Katalog („verdiente Abkürzung"). |
 | [`src/world.ts`](src/world.ts) | pure Domäne | Welt-Geometrie + Autotile (#340) + Sub-Tile-Kollision (#343/#386). → [world.md](docs/module/world.md) |
 | [`src/archipel.ts`](src/archipel.ts) | pure Domäne | GitOps-Archipel-Insel: Geometrie + Warp. |
