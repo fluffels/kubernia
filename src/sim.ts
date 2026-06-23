@@ -11,7 +11,7 @@ import type {
   ExecResult,
   Broken, PodInstance, Deployment, ServiceRes, IngressRes, NetworkPolicyRes,
   Secret, ConfigMap, ClusterNode, Container, Release,
-  Chart, TfResource, GitCommit, GitConflict, GitPending,
+  Chart, TfResource, TfProvider, TfModule, TfBackend, TfOutput, GitCommit, GitConflict, GitPending,
   Pipeline, CiDeploy, ArgoApp, ApplyEffect,
   ServiceMonitorRes, PrometheusRuleRes, GrafanaDatasourceRes, GrafanaDashboardRes, StatefulSetRes, PvcRes,
   PvRes, StorageClassRes, VolumeSnapshotRes, ServiceAccountRes, RoleRes,
@@ -22,7 +22,7 @@ export type {
   ExecResult,
   Broken, PodInstance, Deployment, ServiceRes, IngressRes, NetworkPolicyRes,
   Secret, ConfigMap, ClusterNode, Container, HistoryEntry, Release,
-  Chart, TfResource, GitCommit, GitConflict, GitPending, PipelineStage,
+  Chart, TfResource, TfProvider, TfModule, TfBackend, TfOutput, GitCommit, GitConflict, GitPending, PipelineStage,
   Pipeline, CiDeploy, ArgoDesired, ArgoChildSpec, ArgoApp, ApplyEffect,
   ServiceMonitorRes, PrometheusRuleRes, GrafanaDatasourceRes, GrafanaDashboardRes, StatefulSetRes, PvcRes,
   PvRes, StorageClassRes, VolumeSnapshotRes, ServiceAccountRes, PolicyRule, RoleRes, RbacSubject,
@@ -77,7 +77,7 @@ import { randSuffix, makePodName } from "./sim/util";
     helmRepos!: string[];
     releases!: Release[];
     charts!: Chart[];
-    tf!: { initialized: boolean; applied: boolean; resources: TfResource[] };
+    tf!: { initialized: boolean; applied: boolean; resources: TfResource[]; providers: TfProvider[]; modules: TfModule[]; backend: TfBackend | null; outputs: TfOutput[]; locked: boolean; lockHolder?: string };
     git!: { initialized: boolean; branch: string; branches: string[]; staged: string[]; committed: string[]; commits: GitCommit[]; pushed: boolean; remoteAhead: number; fetched: boolean; conflict: GitConflict | null; pendingConflict: GitPending | null };
     ci!: { pipelines: Pipeline[]; deploy: CiDeploy | null };
     lastDeletedPod: string | null = null;
@@ -170,7 +170,15 @@ import { randSuffix, makePodName } from "./sim/util";
       this.tf = {
         initialized: !!sc.tfInitialized,
         applied: !!sc.tfApplied,
-        resources: (sc.tfResources || []).slice(), // [{addr, desc}]
+        resources: (sc.tfResources || []).map(r => ({ addr: r.addr, desc: r.desc, provider: r.provider })),
+        // installed/fetched leiten sich aus tfInitialized ab: ein gespeicherter
+        // initialisierter Stand hat die Provider geladen und die Module geholt (#146).
+        providers: (sc.tfProviders || []).map(p => ({ name: p.name, source: p.source, version: p.version, installed: !!sc.tfInitialized })),
+        modules: (sc.tfModules || []).map(m => ({ name: m.name, source: m.source || "./modules/" + m.name, resources: (m.resources || []).slice(), fetched: !!sc.tfInitialized, available: m.available !== false })),
+        backend: sc.tfBackend ? { type: sc.tfBackend.type, name: sc.tfBackend.name, locking: !!sc.tfBackend.locking } : null,
+        outputs: (sc.tfOutputs || []).map(o => ({ name: o.name, value: o.value, sensitive: !!o.sensitive })),
+        locked: !!sc.tfLocked,
+        lockHolder: sc.tfLockHolder,
       };
 
       this.git = {
@@ -398,7 +406,14 @@ import { randSuffix, makePodName } from "./sim/util";
       for (const a of sc.argoApps || []) {
         if (!this.argoApps.some(x => x.name === a.name)) this.argoApps.push(cloneArgoApp(a));
       }
-      if (sc.tfResources) { this.tf.resources = sc.tfResources.slice(); this.tf.initialized = false; this.tf.applied = false; }
+      if (sc.tfResources) { this.tf.resources = sc.tfResources.map(r => ({ addr: r.addr, desc: r.desc, provider: r.provider })); this.tf.initialized = false; this.tf.applied = false; }
+      // Neue Provider/Module/Backend-Config setzt den Init-Stand zurück (wie echtes `terraform`,
+      // das nach Config-Änderung ein erneutes `init` verlangt, #146).
+      if (sc.tfProviders) { this.tf.providers = sc.tfProviders.map(p => ({ name: p.name, source: p.source, version: p.version, installed: false })); this.tf.initialized = false; }
+      if (sc.tfModules) { this.tf.modules = sc.tfModules.map(m => ({ name: m.name, source: m.source || "./modules/" + m.name, resources: (m.resources || []).slice(), fetched: false, available: m.available !== false })); this.tf.initialized = false; }
+      if (sc.tfBackend !== undefined) { this.tf.backend = sc.tfBackend ? { type: sc.tfBackend.type, name: sc.tfBackend.name, locking: !!sc.tfBackend.locking } : null; this.tf.initialized = false; }
+      if (sc.tfOutputs) { this.tf.outputs = sc.tfOutputs.map(o => ({ name: o.name, value: o.value, sensitive: !!o.sensitive })); }
+      if (sc.tfLocked !== undefined) { this.tf.locked = !!sc.tfLocked; this.tf.lockHolder = sc.tfLockHolder; }
       for (const img of sc.dockerImages || []) {
         if (!this.docker.pulled.includes(img)) this.docker.pulled.push(img);
       }
@@ -493,9 +508,15 @@ import { randSuffix, makePodName } from "./sim/util";
           history: r.history.map(h => Object.assign({}, h)),
         })),
         charts: this.charts.map(c => Object.assign({}, c)),
-        tfResources: this.tf.resources.slice(),
+        tfResources: this.tf.resources.map(r => ({ addr: r.addr, desc: r.desc, provider: r.provider })),
         tfInitialized: this.tf.initialized,
         tfApplied: this.tf.applied,
+        tfProviders: this.tf.providers.map(p => ({ name: p.name, source: p.source, version: p.version })),
+        tfModules: this.tf.modules.map(m => ({ name: m.name, source: m.source, resources: m.resources.slice(), available: m.available })),
+        tfBackend: this.tf.backend ? { type: this.tf.backend.type, name: this.tf.backend.name, locking: this.tf.backend.locking } : null,
+        tfOutputs: this.tf.outputs.map(o => ({ name: o.name, value: o.value, sensitive: o.sensitive })),
+        tfLocked: this.tf.locked,
+        tfLockHolder: this.tf.lockHolder,
         gitInitialized: this.git.initialized,
         gitBranch: this.git.branch,
         gitBranches: this.git.branches.slice(),
