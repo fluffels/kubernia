@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-23 (#144 erledigt — Lagerhallen-Viertel/Phase 7 in der README-Phasentabelle auf ✅ gesetzt + Roadmap auf die Expeditions-Flotte umgestellt; die Progression war bereits durch #140–#143 verdrahtet, daher Doku-only (1c8c652). Aus dem Kopf entfernt, Kopf jetzt 18 Einträge. Davor 2026-06-23: Phase 3 abschließen vorgezogen — #338 NetworkPolicies als bereits umgesetzt geschlossen, DNS #337 als letzter offener Phase-3-Baustein an den **Kopf** gezogen. Oberstes Kopf-Ticket ist #337 DNS, danach #145 Lagerhallen-Tests).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
+> **Stand: 2026-06-23 (#145 erledigt — Tests für Phase 7/Lagerhallen-Viertel: neuer fokussierter `storage-drills.test.ts` (Knut-Drill-Pool + kompletter Storage-Quest-Arc-Durchlauf mit End-Zustands-Pinning) und der vom Ticket genannte Negativfall „falscher AccessMode → Pending" inkl. kleiner Sim-Korrektur im statischen PVC-Binding (1f304f5). Damit ist der **Lagerhallen-Arc #140–#145 komplett** — die ganze Arc-Sektion aus dem Kopf entfernt, Kopf jetzt 17 Einträge. Oberstes freies Kopf-Ticket bleibt #337 DNS (aktuell von einem parallelen Agenten in Arbeit), danach #146 Expeditions-Flotte (Sim-Grundlage). Davor 2026-06-23: #144 erledigt (Phase 7 README auf ✅, Doku-only, 1c8c652); Phase 3 abschließen vorgezogen — #338 NetworkPolicies als bereits umgesetzt geschlossen, DNS #337 als letzter offener Phase-3-Baustein an den **Kopf** gezogen).** Diese Liste bestimmt, welches Ticket **als nächstes** drankommt. Sie ersetzt die frühere, auf `area:architektur` beschränkte „Architektur-Reihenfolge" (die ist abgearbeitet) — und **gilt jetzt für den normalen Trigger „nächstes (kubequest-)Ticket"**, nicht mehr nur für Architektur.
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -50,27 +50,26 @@ Leitlinie der Sortierung: **Prio zuerst** (höchste offene Prio oben), **innerha
 |---|--------|------|--------------|---------------------------|
 | | **— Phase 3 abschließen (Ingress / DNS / TLS / NetworkPolicies) — auf Wunsch der Maintainerin ganz nach vorne gezogen 2026-06-23 —** | | | Phase 3 ist sonst komplett: Ingress + TLS („Hafentor" bei Ada) ✓, NetworkPolicies („Hafenmauer" bei Juno, Quest `network-policy` in `quest-order.json`) ✓ → **#338 als bereits umgesetzt geschlossen**. **DNS ist der einzige offene Baustein.** Keine harte Abhängigkeit (Service-/Sim-Konzept steht, `coredns` existiert bereits als kube-system-Pod), einzelne Quest → günstig vorzuziehen, schließt einen sichtbar halbfertigen Bereich ab. |
 | 1 | **#337** | niedrig | Quest „DNS im Cluster — CoreDNS, Service-Discovery (`<svc>.<ns>.svc.cluster.local`) & externe Namen (ExternalName)" | **Nächstes Ticket.** Letzter offener Baustein von Phase 3; auf Wunsch der Maintainerin vorgezogen. ⚠️ ggf. Grafik-/NPC-Anteil → Stardew-Referenz beachten. |
-| | **— Lagerhallen-Viertel (Phase 7: stateful Workloads & Datendauerhaftigkeit) — progressiv reaktiviert 2026-06-22, vervollständigt die schon bestehende Region —** | | | Region schon im Spiel: Hafenkai + **NPC Knut** ✓, **StatefulSet-Quest** ✓ (`storage-statefulset`), **PVC/PV/StorageClass-Quest** ✓ (`storage-pvc`), **Backup & Restore #140 ✓** (`storage-backup-restore`). **Drills/PRACTICE #142 ✓** (StatefulSet/PVC/Snapshot/Restore-Drills bei Knut + Pending-Negativfall, 38ecf06), **Quiz #143 ✓**, **Reflexions-Quest #141 ✓** (`storage-prod-db-decision`, 6f4af5e) und **Progression/README #144 ✓** (Phase 7 auf ✅, 1c8c652 — Progression war bereits durch #140–#143 verdrahtet). Es fehlt nur noch #145 Tests. Abhängigkeitsordnung wie beim Wachturm-Arc (Quests → Drills → Quiz → Progression → Tests). |
-| 2 | **#145** | ohne | Tests für stateful-Quests & StatefulSet/Volume-Sim | Zuletzt im Lagerhallen-Arc — sichert ab (Red-Green). |
+| | **— Lagerhallen-Viertel (Phase 7: stateful Workloads & Datendauerhaftigkeit) — KOMPLETT abgeschlossen 2026-06-23 (#140–#145 alle ✓), aus dem Kopf entfernt —** | | | Region voll im Spiel: NPC Knut, StatefulSet/PVC/Backup-Restore-Quests, Reflexions-Quest (`storage-prod-db-decision`), Drills/Quiz/Progression und jetzt **Tests #145 ✓** (`storage-drills.test.ts` + AccessMode-Pending in `stateful.test.ts`, 1f304f5). |
 | | **— Expeditions-Flotte (Phase 9: Terraform-Module / Remote State / Provider) — dritte progressive Reaktivierung 2026-06-22, neuer Region-Arc —** | | | Sim-Teilgrundlage vorhanden (`src/sim/terraform.ts` deckt `init`/`apply`/`destroy`/`state` bereits ab), Region-Maschinerie datengetrieben (#427). Abhängigkeitsordnung wie bei Wachturm/Lagerhallen: Sim-Grundlage → Region/NPC → Quests → Drills → Quiz → Progression → Tests. |
-| 3 | **#146** | ohne | Sim-Grundlage: Module/Remote-State/Provider-Befehle im Simulator | Fundament des Arcs — ohne Sim keine Quests. |
-| 4 | **#147** | ohne | Terraform-Konfig-Inhalte (Modul-Struktur, backend.tf, provider.tf, outputs) | Spielinhalt auf der Sim-Grundlage (#146). |
-| 5 | **#148** | ohne | Insel/Bereich + Anleger/Warp zur Flotte | Region begehbar machen (RegionScene/#427); ⚠️ Grafik-Anteil — Stardew-Referenz beachten. |
-| 6 | **#149** | ohne | Neuer NPC (Sprite + Smalltalk) | Geber der Region; nach Insel. ⚠️ Grafik-Anteil. |
-| 7 | **#150** | ohne | Quest „Terraform-Module — wiederverwendbare Bausteine" | Erste Quest; nach Sim + Region + NPC. |
-| 8 | **#151** | ohne | Quest „Remote State — gemeinsamer State im Backend" | Baut auf #150. |
-| 9 | **#152** | ohne | Quest „Provider & Cloud — Ressourcen bei verschiedenen Anbietern" | Baut auf #151. |
-| 10 | **#153** | ohne | Quest „Variablen & Outputs — Konfiguration sauber durchreichen" | Letzte Quest des Arcs. |
-| 11 | **#154** | ohne | Drills (Module/Remote-State/Provider-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte. |
-| 12 | **#155** | ohne | Quiz-Karten (Terraform-Module, Remote State, Provider) | Wissens-Sicherung zur Region. |
-| 13 | **#156** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad. |
-| 14 | **#157** | ohne | Tests für Terraform-Aufbau-Quests & Modul/Remote-State/Provider-Sim | Zuletzt im Arc — sichert ab (Red-Green). |
+| 2 | **#146** | ohne | Sim-Grundlage: Module/Remote-State/Provider-Befehle im Simulator | Fundament des Arcs — ohne Sim keine Quests. |
+| 3 | **#147** | ohne | Terraform-Konfig-Inhalte (Modul-Struktur, backend.tf, provider.tf, outputs) | Spielinhalt auf der Sim-Grundlage (#146). |
+| 4 | **#148** | ohne | Insel/Bereich + Anleger/Warp zur Flotte | Region begehbar machen (RegionScene/#427); ⚠️ Grafik-Anteil — Stardew-Referenz beachten. |
+| 5 | **#149** | ohne | Neuer NPC (Sprite + Smalltalk) | Geber der Region; nach Insel. ⚠️ Grafik-Anteil. |
+| 6 | **#150** | ohne | Quest „Terraform-Module — wiederverwendbare Bausteine" | Erste Quest; nach Sim + Region + NPC. |
+| 7 | **#151** | ohne | Quest „Remote State — gemeinsamer State im Backend" | Baut auf #150. |
+| 8 | **#152** | ohne | Quest „Provider & Cloud — Ressourcen bei verschiedenen Anbietern" | Baut auf #151. |
+| 9 | **#153** | ohne | Quest „Variablen & Outputs — Konfiguration sauber durchreichen" | Letzte Quest des Arcs. |
+| 10 | **#154** | ohne | Drills (Module/Remote-State/Provider-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte. |
+| 11 | **#155** | ohne | Quiz-Karten (Terraform-Module, Remote State, Provider) | Wissens-Sicherung zur Region. |
+| 12 | **#156** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad. |
+| 13 | **#157** | ohne | Tests für Terraform-Aufbau-Quests & Modul/Remote-State/Provider-Sim | Zuletzt im Arc — sichert ab (Red-Green). |
 | | **— QoL / System-Features (auf Fundament, kein Lernpfad-Fortschritt) —** | | | |
-| 15 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
-| 16 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 14 | **#332** | niedrig | Abgeschlossene Quests wiederspielen (Sandbox) | Baut auf #325/#326; ID-Save (#353) + `repeatable` (#410 ✓) vorhanden. |
+| 15 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 17 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 18 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 16 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 17 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
