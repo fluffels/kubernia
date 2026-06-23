@@ -117,7 +117,7 @@ export const questlogUI = part({
     const r = Game.rank();
     const rate = Math.round(Game.incomeRate() * 10) / 10;
     html += `<div class="ql-stats">Rang: ${r.icon} ${r.name} · ${s.xp} XP · 🪙 ${s.coins} (+${rate}/min) · 🔥 Streak: ${s.streak.count}<br>
-      Befehle gefunkt: ${s.stats.commands} · Quiz richtig: ${s.stats.quizRight} · Piraten vertrieben: ${s.stats.piratesBeaten} · Kraken vertrieben: ${s.stats.krakenBeaten}<br>
+      Befehle getippt: ${s.stats.commands} · Quiz richtig: ${s.stats.quizRight} · Piraten vertrieben: ${s.stats.piratesBeaten} · Kraken vertrieben: ${s.stats.krakenBeaten}<br>
       <div class="actions" style="margin-top:10px">
         <button data-action="exportSave">💾 Spielstand sichern (Datei)</button>
         <button data-action="importPick">📂 Spielstand laden</button>
@@ -130,7 +130,7 @@ export const questlogUI = part({
   hintForStep() {
     const step = Game.currentStep();
     if (!step) return "";
-    if (Game.isFunkStep(step)) return "📻 Öffne dein Funkgerät (T) und erledige die Aufgaben.";
+    if (Game.isFunkStep(step)) return "💻 Öffne dein Terminal (T) und erledige die Aufgaben.";
     const npc = NPCS[step.npc];
     return "💬 Sprich mit <b>" + npc.name + "</b> (" + npc.title + ").";
   },

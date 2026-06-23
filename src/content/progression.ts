@@ -21,9 +21,9 @@ export const RANKS = [
 /* ---------- Shop ---------- */
 export const SHOP = [
   { id: "fernrohr", icon: "🔭", name: "Hinweis-Fernrohr", price: 25, type: "consumable",
-    desc: "Zeigt dir beim Funken einen Hinweis zur aktuellen Aufgabe. Einmal benutzbar." },
+    desc: "Zeigt dir im Terminal einen Hinweis zur aktuellen Aufgabe. Einmal benutzbar." },
   { id: "kompass", icon: "🧭", name: "Lösungs-Kompass", price: 50, type: "consumable",
-    desc: "Verrät dir beim Funken die komplette Lösung der aktuellen Aufgabe. Einmal benutzbar." },
+    desc: "Verrät dir im Terminal die komplette Lösung der aktuellen Aufgabe. Einmal benutzbar." },
   { id: "pet-ratte", icon: "🐀", sprite: 124, tex: "pet_ratte", name: "Hafenratte Taki", price: 150, type: "pet",
     desc: "Folgt dir überallhin. Hat schon mehr Häfen gesehen als jeder Admiral." },
   { id: "pet-fledermaus", icon: "🦇", sprite: 120, tex: "pet_fledermaus", name: "Fledermaus Echo", price: 250, type: "pet",

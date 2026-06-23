@@ -53,7 +53,7 @@ export const radioUI = part({
     const s = this.funkSession();
 
     if (s.kind === "free") {
-      box.innerHTML = `<div class="tt-head">🧪 Freies Funken</div>
+      box.innerHTML = `<div class="tt-head">🧪 Freies Ausprobieren</div>
         <div class="dim">Gerade kein Auftrag – probier aus, was du gelernt hast!
         Alles, was du hier anrichtest, siehst du draußen in der Welt.
         <br><br>Mit <code>help</code> siehst du alle Befehle.
@@ -131,7 +131,7 @@ export const radioUI = part({
     // der Schwelle. Vorher tun ↑/↓ nichts (kleine Komfort-Funktion als Upgrade, nicht von
     // Anfang an da). Echte Shells können das auch – kurz erwähnt im Toast.
     if (Game.maybeUnlockCmdHistory()) {
-      this.hint("🔓 Befehlshistorie freigeschaltet: Mit ↑/↓ holst du im Funkgerät vorherige Befehle zurück – wie in einer echten Shell.", "rankup");
+      this.hint("🔓 Befehlshistorie freigeschaltet: Mit ↑/↓ holst du im Terminal vorherige Befehle zurück – wie in einer echten Shell.", "rankup");
     }
 
     const task = this.currentTask();
@@ -268,7 +268,7 @@ export const radioUI = part({
     if (fb) {
       if (next && !Game.isFunkStep(next) && next.npc) {
         const npc = NPCS[next.npc];
-        fb.innerHTML = `<div class="tt-feedback">🎉 Geschafft! <b>${npc.name}</b> will dich sprechen. (Esc schließt das Funkgerät)</div>`;
+        fb.innerHTML = `<div class="tt-feedback">🎉 Geschafft! <b>${npc.name}</b> will dich sprechen. (Esc schließt das Terminal)</div>`;
       } else if (next && Game.isFunkStep(next)) {
         fb.innerHTML = `<div class="tt-feedback">🎉 Weiter geht's direkt hier ⤴</div>`;
       }

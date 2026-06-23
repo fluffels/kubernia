@@ -84,7 +84,7 @@
       "Docker lädt das Image vor dem Start neu herunter."
     ],
     "correct": 0,
-    "explain": "Ohne -d (attached) hängt das Terminal am Container und zeigt dessen Ausgabe – die Konsole ist blockiert, bis er endet. Mit -d (detached) koppelt er sich ab und läuft im Hintergrund weiter; das „Funkgerät“ ist sofort frei für den nächsten Befehl."
+    "explain": "Ohne -d (attached) hängt das Terminal am Container und zeigt dessen Ausgabe – die Konsole ist blockiert, bis er endet. Mit -d (detached) koppelt er sich ab und läuft im Hintergrund weiter; das Terminal ist sofort frei für den nächsten Befehl."
   },
   {
     "id": "q-ch1-8",

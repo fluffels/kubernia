@@ -21,7 +21,7 @@
       "Ein Mensch muss den Sync jede Nacht von Hand anstoßen."
     ],
     "correct": 0,
-    "explain": "Push = von außen reingedrückt (Funkgerät/Pipeline), der Cluster ist passiv. Pull = ein Agent IM Cluster zieht sich den Git-Soll selbst heran und gleicht laufend ab – auch wenn niemand am Funkgerät sitzt. Die Richtung entscheidet, wer die Kontrolle hat."
+    "explain": "Push = von außen reingedrückt (Terminal/Pipeline), der Cluster ist passiv. Pull = ein Agent IM Cluster zieht sich den Git-Soll selbst heran und gleicht laufend ab – auch wenn niemand am Terminal sitzt. Die Richtung entscheidet, wer die Kontrolle hat."
   },
   {
     "id": "q-gitops-sync",

@@ -57,7 +57,7 @@ export const hudUI = part({
     const step = Game.currentStep();
     if (!q || !step) { el.textContent = ""; return; }
     if (Game.isFunkStep(step)) {
-      el.innerHTML = "📜 <b>" + q.title + "</b> – 📻 Funkgerät öffnen (<b>T</b>)!";
+      el.innerHTML = "📜 <b>" + q.title + "</b> – 💻 Terminal öffnen (<b>T</b>)!";
     } else if (step.type === "minigame") {
       const npc = NPCS[step.npc];
       el.innerHTML = "📜 <b>" + q.title + "</b> – Sprich <b>" + npc.name + "</b> an und wähle 🎮 Stapel-Spiel";

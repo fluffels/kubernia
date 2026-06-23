@@ -196,7 +196,7 @@ button.danger:hover { background: var(--bad); color: #1a0606; filter: none; }
 .stack-feedback { min-height: 1.4em; margin-top: 12px; padding: 8px 12px; border-radius: 8px; font-size: 0.9em; line-height: 1.4; }
 .stack-feedback.bad { background: rgba(255,123,123,0.18); border: 1px solid var(--bad); }
 
-/* „Neuer Befehl“-Banner im Funkgerät */
+/* „Neuer Befehl“-Banner im Terminal */
 .tt-new {
   background: rgba(255, 200, 87, 0.12);
   border-left: 4px solid var(--accent);
