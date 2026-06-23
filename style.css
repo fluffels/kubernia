@@ -445,6 +445,9 @@ button.danger:hover { background: var(--bad); color: #1a0606; filter: none; }
 .ql-line { margin-bottom: 8px; line-height: 1.45; }
 .ql-line.ql-hint { margin-top: 10px; padding: 8px 10px; background: var(--panel2); border-radius: 8px; }
 .ql-bo { margin-bottom: 12px; padding: 10px 12px; background: var(--panel2); border-left: 3px solid var(--accent); border-radius: 8px; font-size: 0.92em; line-height: 1.45; }
+/* Wiederspiel-Sandbox (#332): Banner im Logbuch + Ausstieg-Button im HUD. */
+.ql-replay { margin-bottom: 12px; padding: 10px 12px; background: var(--panel2); border-left: 3px solid var(--accent); border-radius: 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hud-replay-exit { margin-left: 8px; padding: 2px 8px; font-size: 0.85em; cursor: pointer; }
 
 /* ===== Toasts ===== */
 #toasts {

@@ -10,6 +10,7 @@
  * ALL_ABBREV_UNLOCKED/ABBREV_EARN_THRESHOLD/CMD_HISTORY_UNLOCK_AT bleiben hier importierbar
  * (ui/radio.ts + game.test.ts) – re-exportiert aus src/game/shared.ts. */
 import { Sim as KQSim } from "./sim";
+import type { GameState } from "./types";
 import { makeDefaultState } from "./game/shared";
 import { saveBundle } from "./game/save";
 import { economyBundle } from "./game/economy";
@@ -17,6 +18,7 @@ import { progressionBundle } from "./game/progression";
 import { unlocksBundle } from "./game/unlocks";
 import { spacedRepetitionBundle } from "./game/spaced-repetition";
 import { clockBundle } from "./game/clock";
+import { sandboxBundle } from "./game/sandbox";
 
 export { ALL_ABBREV_UNLOCKED, ABBREV_EARN_THRESHOLD, CMD_HISTORY_UNLOCK_AT } from "./game/shared";
 
@@ -27,10 +29,14 @@ export const Game = {
   sim: new KQSim({}),
   incomeAcc: 0,
   offlineEarnings: 0,
+  // Wiederspiel-Sandbox (#332): Lesezeichen des Live-Stands während eines Replays –
+  // bewusst flüchtig im RAM (NICHT Teil von GameState/Save). null = kein Wiederspiel.
+  replayBookmark: null as GameState | null,
   ...saveBundle,
   ...economyBundle,
   ...progressionBundle,
   ...unlocksBundle,
   ...spacedRepetitionBundle,
   ...clockBundle,
+  ...sandboxBundle,
 };

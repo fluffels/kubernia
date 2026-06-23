@@ -29,6 +29,9 @@ export interface WorldSceneRef {
   playerSprite?: { setTexture(texture: string, frame: number): void } | null;
   nearestNpc(): { id: string } | null;
   burstAtPlayer(kind: string): void;
+  /** Spielfigur sofort an eine Weltposition setzen (Wiederspiel-Sandbox #332:
+   *  ohne Reload an den Quest-Giver bzw. zurück an die gemerkte Live-Position). */
+  teleport?(x: number, y: number): void;
 }
 
 let _scene: WorldSceneRef | null = null;

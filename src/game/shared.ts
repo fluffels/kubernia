@@ -22,6 +22,9 @@ export type GameSelf = {
   sim: Sim;
   incomeAcc: number;
   offlineEarnings: number;
+  /** Wiederspiel-Sandbox (#332): geklonter Live-Stand während eines Replays, sonst
+   *  null. Flüchtig (RAM), NICHT Teil von GameState/Save. */
+  replayBookmark: GameState | null;
   // Bewusster ThisType-Escape-Hatch (#356, analog UISelf): die quer über die Bündel
   // aufgerufenen Methoden lassen sich hier nicht typisieren, ohne den this-Typ zirkulär
   // zu machen (die Bündel definieren die Methoden ja erst). `unknown` würde sie

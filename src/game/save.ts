@@ -335,6 +335,11 @@ export const saveBundle = part({
     // Nach einem Slot-Wechsel bis zum Reload nichts mehr schreiben (siehe saveSuspended) –
     // sonst landet der alte Spielstand im frisch gewählten Slot.
     if (saveSuspended) return;
+    // Während eines Wiederspiels (#332) schreibt nichts in den Store: der echte
+    // Stand liegt als Lesezeichen im RAM und wird erst von endReplay() wieder
+    // persistiert – so gibt es keine doppelte XP/Wirtschaft und der Live-Fortschritt
+    // (completedQuests/questIdx/Cluster) bleibt unangetastet.
+    if (this.replayBookmark) return;
     if (this.sim) this.state.clusterSnapshot = this.sim.snapshot();
     const ws = worldScene();
     if (syncFromScene && ws && ws.player) {
