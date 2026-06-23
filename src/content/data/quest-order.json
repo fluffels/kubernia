@@ -27,6 +27,7 @@
   "helm-umbrella-chart",
   "network-policy",
   "secrets-encrypted",
+  "dns-service-discovery",
   "k8s-service-endpoints",
   "k8s-resource-limits",
   "gitops-argocd-intro",

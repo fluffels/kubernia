@@ -329,6 +329,14 @@ export function kubectlApply(host: KubectlHost, t: string[]) {
     const existing = host.services.find(s => s.name === effSvc.name);
     if (existing) {
       out.push("service/" + effSvc.name + " unchanged");
+    } else if (effSvc.externalName) {
+      // ExternalName-Service (#337): kein ClusterIP, sondern ein CNAME auf einen externen
+      // DNS-Namen. So bekommen Pods einen cluster-internen Namen für einen Dienst außerhalb.
+      host.services.push({
+        name: effSvc.name, type: "ExternalName", clusterIP: "<none>",
+        port: effSvc.port, externalName: effSvc.externalName, created: host.clock,
+      });
+      out.push("service/" + effSvc.name + " created");
     } else {
       host.services.push({
         name: effSvc.name, type: effSvc.type || "ClusterIP",

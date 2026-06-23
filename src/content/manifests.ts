@@ -15,6 +15,16 @@ export const SERVICE_YAML = [
   "  selector:", "    app: lager", "  ports:", "    - port: 6379",
 ].join("\n");
 
+// ExternalName-Service (#337): KEINE ClusterIP und KEIN Selector. Er ist nur ein
+// cluster-interner DNS-Alias, der per CNAME auf einen externen Namen zeigt. So
+// erreichen Pods einen Dienst AUSSERHALB des Clusters (z.B. eine fremde API) über
+// den gewohnten Service-Namen – ändert sich die externe Adresse, nur hier anfassen.
+export const EXTERNALNAME_YAML = [
+  "apiVersion: v1", "kind: Service", "metadata:", "  name: bank-extern", "spec:",
+  "  type: ExternalName",
+  "  externalName: api.bank.example.com   # der externe DNS-Name, auf den der CNAME zeigt",
+].join("\n");
+
 export const INGRESS_YAML = [
   "apiVersion: networking.k8s.io/v1", "kind: Ingress", "metadata:", "  name: hafentor", "spec:",
   "  ingressClassName: nginx", "  rules:", "    - host: hafen.de", "      http:", "        paths:",

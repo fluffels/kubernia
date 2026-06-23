@@ -98,5 +98,25 @@
     ],
     "solution": "git checkout --theirs seekarte.md",
     "explain": "Im Konflikt wählt --theirs die hereinkommende, --ours die eigene Version – danach add + commit."
+  },
+  {
+    "id": "c-dns-1",
+    "chapter": "dns-service-discovery",
+    "q": "Frag CoreDNS nach der Adresse des Service <code>kasse</code> (kurzer Name).",
+    "accept": [
+      "^nslookup\\s+kasse(\\.default(\\.svc\\.cluster\\.local)?)?$"
+    ],
+    "solution": "nslookup kasse",
+    "explain": "nslookup fragt CoreDNS nach der Adresse hinter einem Namen. Im selben Namespace reicht der kurze Service-Name – CoreDNS löst ihn zur stabilen ClusterIP auf."
+  },
+  {
+    "id": "c-dns-2",
+    "chapter": "dns-service-discovery",
+    "q": "Frag CoreDNS nach <code>kasse</code> über den <b>vollen</b> DNS-Namen (FQDN).",
+    "accept": [
+      "^nslookup\\s+kasse\\.default\\.svc\\.cluster\\.local$"
+    ],
+    "solution": "nslookup kasse.default.svc.cluster.local",
+    "explain": "Der volle Name ist <service>.<namespace>.svc.cluster.local. Über Namespace-Grenzen hinweg brauchst du ihn; im selben Namespace genügt der kurze Name kasse."
   }
 ]

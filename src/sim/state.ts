@@ -74,6 +74,10 @@ export interface ServiceRes {
   type: string;
   clusterIP: string;
   port: string | number;
+  /** Ziel-DNS-Name eines ExternalName-Service (#337): statt einer ClusterIP zeigt der
+   *  Service per CNAME auf einen externen Namen (z.B. api.bank.example.com). Nur dann
+   *  gesetzt; `type` ist dann "ExternalName" und `clusterIP` ist "<none>". */
+  externalName?: string;
   created?: number;
 }
 /** Hafentor: leitet eine Außen-Adresse (host/pfad) an einen Service im Cluster. */
@@ -219,7 +223,9 @@ export interface ApplyEffect {
   serviceAccount?: { name: string };
   role?: { name: string; cluster?: boolean; rules: PolicyRule[] };
   roleBinding?: { name: string; cluster?: boolean; roleRef: { kind: "Role" | "ClusterRole"; name: string }; subjects: RbacSubject[] };
-  service?: { name: string; type?: string; port: string | number };
+  // `externalName` macht den Service zu einem ExternalName-Service (#337): kein ClusterIP,
+  // sondern ein CNAME auf den genannten externen DNS-Namen. `port` darf dann "" sein.
+  service?: { name: string; type?: string; port: string | number; externalName?: string };
   ingress?: { name: string; host: string; path?: string; service: string; port: string | number; className?: string; tls?: { secretName: string } };
   networkPolicy?: { name: string; podSelector?: string; allowFrom?: string };
   // Eine Argo-Application-CRD: legt beim `kubectl apply -f` eine Argo-App im Sim-State an.

@@ -416,6 +416,12 @@ import { randSuffix, makePodName } from "./sim/util";
       for (const c of sc.charts || []) {
         if (!this.charts.some(x => x.name === c.name)) this.charts.push({ name: c.name, version: c.version || "0.1.0", packaged: !!c.packaged });
       }
+      // Services additiv einmischen (#337) – analog zu ingresses/networkPolicies. Ein
+      // Quest-Szenario kann so einen vorhandenen Service voraussetzen (z.B. für nslookup),
+      // ohne sich darauf zu verlassen, dass eine frühere Quest ihn schon exposed hat.
+      for (const s of sc.services || []) {
+        if (!this.services.some(x => x.name === s.name)) this.services.push(Object.assign({}, s));
+      }
       for (const ing of sc.ingresses || []) {
         if (!this.ingresses.some(x => x.name === ing.name)) this.ingresses.push(Object.assign({}, ing));
       }
@@ -537,12 +543,13 @@ import { randSuffix, makePodName } from "./sim/util";
           case "git": out = gitCommand(this, tokens, raw); break;
           case "argocd": out = argocdCommand(this, tokens); break;
           case "glab": out = glabCommand(this, tokens); break;
+          case "nslookup": out = this._nslookup(tokens); break;
           case "ls": out = this._ls(); break;
           case "cat": out = this._cat(tokens); break;
           case "clear": return { output: null, error: false, clear: true };
           case "help": out = this._help(); break;
           default: {
-            const guess = this._suggest(cmd, ["docker", "kubectl", "helm", "terraform", "git", "argocd", "glab", "ls", "cat", "clear", "help"]);
+            const guess = this._suggest(cmd, ["docker", "kubectl", "helm", "terraform", "git", "argocd", "glab", "nslookup", "ls", "cat", "clear", "help"]);
             out = this._err("⚠️ Den Befehl '" + cmd + "' gibt es hier nicht.",
               guess ? "Meintest du '" + guess + "'? (Tippe 'help' für alle Befehle.)"
                     : "Tippe 'help' für eine Liste der Befehle, die hier funktionieren.");
@@ -617,8 +624,47 @@ import { randSuffix, makePodName } from "./sim/util";
         "  git        init | status | add <datei> | commit -m \"…\" | log | branch [<name>] | checkout [-b] <name> | merge <name> | push | fetch | pull",
         "  argocd     app list | app get <name> | app sync <name>  (Argo CD / GitOps – den Git-Soll in den Cluster ziehen)",
         "  glab       ci status | ci list  (Pipeline-Status in GitLab)",
+        "  nslookup   <name>  (DNS: fragt CoreDNS nach der Adresse hinter einem Service-Namen)",
         "  ls, cat <datei>, clear, help",
       ].join("\n");
+    }
+
+    /** nslookup <name>: fragt CoreDNS (den Cluster-DNS-Server) nach der Adresse hinter
+     *  einem Namen (#337). Löst die Service-Discovery-Formen `<svc>`, `<svc>.<ns>` und den
+     *  vollen FQDN `<svc>.<ns>.svc.cluster.local` zur ClusterIP des Service auf; ein
+     *  ExternalName-Service liefert stattdessen den CNAME auf seinen externen DNS-Namen.
+     *  Rein lesend. In der Spielwelt ein eigener Befehl (statt `kubectl exec … nslookup`),
+     *  damit Namensauflösung greifbar wird; im echten Cluster läuft nslookup aus einem Pod. */
+    _nslookup(t: string[]) {
+      const COREDNS = "10.96.0.10";          // ClusterIP des CoreDNS-Service (kube-system)
+      const EXTERNAL_RESOLVE_IP = "203.0.113.55"; // Beispiel-Adresse (TEST-NET-3) hinter dem externen Namen
+      const arg = t[1];
+      if (!arg || arg.startsWith("-")) {
+        return this._err("nslookup: Welchen Namen soll ich auflösen?",
+          "z.B. 'nslookup kasse' oder voll 'nslookup kasse.default.svc.cluster.local'.");
+      }
+      const header = ["Server:\t\t" + COREDNS, "Address:\t" + COREDNS + "#53", ""];
+      const query = arg.replace(/\.$/, "");      // optionalen abschließenden Punkt entfernen
+      const svcName = query.split(".")[0];       // erstes Label = Service-Name (NS/Domain folgt)
+      const fqdn = svcName + ".default.svc.cluster.local";
+      // Der eingebaute kubernetes-API-Service ist immer da und hat eine feste ClusterIP.
+      if (svcName === "kubernetes") {
+        return header.concat(["Name:\t" + "kubernetes.default.svc.cluster.local", "Address: 10.96.0.1"]).join("\n");
+      }
+      const svc = this.services.find(s => s.name === svcName);
+      if (!svc) {
+        return this._err(header.join("\n") + "\n** server can't find " + fqdn + ": NXDOMAIN",
+          "Kennt CoreDNS den Namen nicht? Prüfe mit 'kubectl get services', ob der Service existiert (richtig geschrieben?).");
+      }
+      if (svc.type === "ExternalName" && svc.externalName) {
+        // ExternalName hat KEINE ClusterIP: CoreDNS antwortet mit einem CNAME auf den externen Namen.
+        return header.concat([
+          fqdn + "\tcanonical name = " + svc.externalName + ".",
+          "Name:\t" + svc.externalName,
+          "Address: " + EXTERNAL_RESOLVE_IP,
+        ]).join("\n");
+      }
+      return header.concat(["Name:\t" + fqdn, "Address: " + svc.clusterIP]).join("\n");
     }
 
     // Observability (#109/#110) liegt seit #384 in ./sim/observability.ts. Die öffentliche API

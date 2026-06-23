@@ -47,5 +47,29 @@
     ],
     "correct": 0,
     "explain": "DNS ist das Adressbuch des Internets: hafen.de → IP des Ingress-Controllers (im Spiel die feste 203.0.113.10). Beim selben Controller können viele Hosts ankommen – er entscheidet per host-Regel, an welchen Service es geht."
+  },
+  {
+    "id": "q-dns-discovery",
+    "q": "Wie erreicht ein Pod im Cluster zuverlässig den Service <code>kasse</code>?",
+    "options": [
+      "Über den DNS-Namen (z.B. <code>kasse</code> bzw. <code>kasse.default.svc.cluster.local</code>) – CoreDNS löst ihn zur stabilen ClusterIP auf.",
+      "Über die feste IP eines kasse-Pods, die man einmal nachschlägt.",
+      "Über die externe Adresse <code>hafen.de</code>.",
+      "Gar nicht – Pods können sich untereinander nicht erreichen."
+    ],
+    "correct": 0,
+    "explain": "Pod-IPs wechseln ständig (Neustart, Self-Healing, Skalierung), der Service-Name bleibt stabil. CoreDNS – der cluster-interne DNS-Server – löst <code>&lt;service&gt;.&lt;namespace&gt;.svc.cluster.local</code> zur ClusterIP des Service auf, der dann auf die lebenden Pods verteilt. Im selben Namespace reicht der kurze Name."
+  },
+  {
+    "id": "q-dns-externalname",
+    "q": "Was macht ein <b>ExternalName</b>-Service?",
+    "options": [
+      "Er gibt einen cluster-internen Namen, der per CNAME auf einen externen DNS-Namen zeigt – für Dienste außerhalb des Clusters.",
+      "Er macht einen internen Service über das Internet erreichbar.",
+      "Er weist jedem Pod eine eigene öffentliche IP zu.",
+      "Er verschlüsselt den Verkehr zwischen zwei Services."
+    ],
+    "correct": 0,
+    "explain": "Ein ExternalName-Service hat keinen Selector und keine ClusterIP – nur einen CNAME auf einen externen Namen (z.B. api.bank.example.com). So sprechen Pods einen externen Dienst über den gewohnten Service-Namen an; ändert sich die externe Adresse, fasst man nur den einen Service an. Von außen erreichbar macht man Dienste dagegen über Ingress/LoadBalancer."
   }
 ]

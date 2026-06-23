@@ -1060,5 +1060,184 @@
         ]
       }
     ]
+  },
+  {
+    "id": "dns-service-discovery",
+    "title": "Das Adressbuch des Hafens",
+    "giver": "ada",
+    "topic": "security",
+    "rewardXp": 60,
+    "rewardCoins": 45,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "ada",
+        "scenario": {
+          "deployments": [{ "name": "kasse", "image": "nginx", "replicas": 1 }],
+          "services": [{ "name": "kasse", "type": "ClusterIP", "clusterIP": "10.96.0.50", "port": 80 }],
+          "files": {
+            "externalname.yaml": "apiVersion: v1\nkind: Service\nmetadata:\n  name: bank-extern\nspec:\n  type: ExternalName\n  externalName: api.bank.example.com   # der externe DNS-Name, auf den der CNAME zeigt"
+          },
+          "applyEffects": {
+            "externalname.yaml": { "service": { "name": "bank-extern", "externalName": "api.bank.example.com", "port": "" } }
+          }
+        },
+        "lines": [
+          "Beim Hafentor hast du DNS schon von außen kennengelernt: <code>hafen.de</code> → Adresse des Controllers. Jetzt die andere Seite, <b>im</b> Cluster: Wie findet die <code>kasse</code> eigentlich das <code>lager</code>, wenn die Pods <b>ständig neue IPs</b> bekommen (Neustart, Self-Healing, Skalierung)?",
+          "Gar nicht über IPs – über <b>Namen</b>. Jeder <b>Service</b> bekommt einen stabilen DNS-Namen, und ein eigener DNS-Server im Cluster löst ihn auf: <b>CoreDNS</b>, das <b>Adressbuch des Hafens</b>. Es wohnt im Maschinenraum (Namespace <code>kube-system</code>) – schau es dir gleich an.",
+          "Die Namensform ist immer gleich: <code>&lt;service&gt;.&lt;namespace&gt;.svc.cluster.local</code>. Im selben Namespace reicht der kurze Name (<code>kasse</code>), sonst hängst du den Namespace an. Los, wirf einen Blick auf den DNS-Server!"
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "CoreDNS finden",
+        "tasks": [
+          {
+            "id": "t-ada-dns-coredns",
+            "text": "Schau in den Maschinenraum: zeig die Pods im Namespace <code>kube-system</code> – dort läuft <code>coredns</code>, das Adressbuch.",
+            "accept": [
+              "^kubectl\\s+get\\s+(pods|pod|po)\\s+(-n|--namespace)[=\\s]?kube-system$"
+            ],
+            "solution": "kubectl get pods --namespace kube-system",
+            "hint": "kubectl get pods --namespace kube-system – CoreDNS steht in der Liste."
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Das Adressbuch fragen",
+        "cmd": {
+          "id": "t-nslookup",
+          "intro": "🆕 Neuer Befehl: <code>nslookup &lt;name&gt;</code> – fragt <b>CoreDNS</b> nach der Adresse hinter einem Namen. (Im echten Cluster läuft das aus einem Pod heraus, z.B. <code>kubectl exec … -- nslookup</code>; hier am Funkgerät fragst du das Adressbuch direkt.)",
+          "text": "Frag CoreDNS nach der <code>kasse</code>: <code>nslookup kasse</code>. Achte auf den vollen Namen und die Adresse, die zurückkommt.",
+          "accept": [
+            "^nslookup\\s+kasse(\\.default(\\.svc\\.cluster\\.local)?)?$"
+          ],
+          "solution": "nslookup kasse",
+          "hint": "Muster: nslookup &lt;service&gt; (oder voll: &lt;service&gt;.default.svc.cluster.local)"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Gegenprobe",
+        "tasks": [
+          {
+            "id": "t-ada-dns-getsvc",
+            "text": "Gegenprobe: zeig die Services. Die <b>CLUSTER-IP</b> von <code>kasse</code> ist genau die Adresse, die CoreDNS dir eben nannte – der Name zeigt stabil auf sie.",
+            "accept": [
+              "^kubectl\\s+get\\s+(services|service|svc)$"
+            ],
+            "check": { "some": "services", "where": { "name": "kasse" } },
+            "solution": "kubectl get services",
+            "hint": "kubectl get services – vergleich die CLUSTER-IP von kasse mit der nslookup-Antwort."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "ada",
+        "reviewId": "q-dns-discovery",
+        "q": "Eine App im Cluster soll die <code>kasse</code> erreichen. Was trägt sie als Ziel-Adresse ein?",
+        "options": [
+          {
+            "t": "Den DNS-Namen <code>kasse</code> (bzw. <code>kasse.default.svc.cluster.local</code>) – CoreDNS löst ihn stabil zur ClusterIP auf.",
+            "ok": true,
+            "reply": "Genau! Über den Service-Namen, nie über eine Pod-IP. CoreDNS löst den Namen zur stabilen ClusterIP des Service auf, der Service verteilt dann auf die gerade lebenden Pods. ⚓"
+          },
+          {
+            "t": "Die feste IP eines kasse-Pods, die man einmal nachschlägt.",
+            "ok": false,
+            "reply": "Bloß nicht – Pod-IPs wechseln bei jedem Neustart/Self-Healing. Genau deshalb gibt es den Service-Namen: der bleibt stabil, CoreDNS löst ihn auf."
+          },
+          {
+            "t": "Die externe Adresse <code>hafen.de</code>.",
+            "ok": false,
+            "reply": "Das ist die Außensicht übers Hafentor (Ingress). Cluster-<b>intern</b> reden Pods über den Service-Namen, den CoreDNS auflöst – kein Umweg übers offene Meer."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "ada",
+        "lines": [
+          "Jetzt der Sonderfall: Manchmal liegt das Ziel <b>außerhalb</b> des Clusters – eine fremde <b>Bank-API</b> z.B. Du willst sie trotzdem über einen festen cluster-internen Namen ansprechen, damit dein Code nicht die rohe Fremd-Adresse kennt.",
+          "Dafür gibt es den <b>ExternalName-Service</b>: kein Selector, keine ClusterIP – nur ein <b>CNAME</b>, ein Verweis vom internen Namen auf einen externen DNS-Namen. Ich hab dir die Karte <code>externalname.yaml</code> hingelegt. Lies sie, wende sie an, und frag dann CoreDNS."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "ExternalName anlegen & auflösen",
+        "tasks": [
+          {
+            "id": "t-ada-dns-cat",
+            "text": "Lies die Karte: <code>cat externalname.yaml</code>. Achte auf <code>type: ExternalName</code> und <code>externalName</code> (das externe Ziel).",
+            "accept": [
+              "^cat\\s+externalname\\.yaml$"
+            ],
+            "solution": "cat externalname.yaml",
+            "hint": "cat <datei>"
+          },
+          {
+            "id": "t-ada-dns-apply",
+            "text": "Wende sie an – das legt den ExternalName-Service <code>bank-extern</code> an.",
+            "accept": [
+              "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+externalname\\.yaml$"
+            ],
+            "check": { "some": "services", "where": { "name": "bank-extern" } },
+            "solution": "kubectl apply --filename externalname.yaml",
+            "hint": "Der vertraute Befehl: kubectl apply --filename externalname.yaml"
+          },
+          {
+            "id": "t-ada-dns-nslookup-ext",
+            "text": "Frag CoreDNS nach <code>bank-extern</code>: <code>nslookup bank-extern</code>. Statt einer ClusterIP kommt ein <b>CNAME</b> auf den externen Namen zurück.",
+            "accept": [
+              "^nslookup\\s+bank-extern(\\.default(\\.svc\\.cluster\\.local)?)?$"
+            ],
+            "solution": "nslookup bank-extern",
+            "hint": "Muster: nslookup <service> – hier bank-extern."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "ada",
+        "reviewId": "q-dns-externalname",
+        "q": "Wozu ein <b>ExternalName</b>-Service?",
+        "options": [
+          {
+            "t": "Ein cluster-interner Name, der per CNAME auf einen externen DNS-Namen zeigt – Pods erreichen einen Dienst außerhalb des Clusters über den gewohnten Service-Namen.",
+            "ok": true,
+            "reply": "Richtig! Kein Selector, keine ClusterIP – nur ein Alias. Ändert sich die externe Adresse, fasst du nur den einen Service an, nicht jeden Aufrufer. ⚓"
+          },
+          {
+            "t": "Er macht einen internen Service von außen über das Internet erreichbar.",
+            "ok": false,
+            "reply": "Andersrum: ExternalName zeigt von INNEN auf einen Namen DRAUSSEN. Von außen erreichbar macht man Dienste über Ingress (Hafentor) oder einen LoadBalancer/NodePort."
+          },
+          {
+            "t": "Er vergibt jedem Pod eine eigene öffentliche IP.",
+            "ok": false,
+            "reply": "Nein – ein ExternalName hat gar keine IP, nur einen CNAME auf einen externen Namen. Stabile Pod-Namen gäbe ein StatefulSet mit headless Service, das ist ein anderes Thema."
+          }
+        ]
+      },
+      {
+        "type": "drill",
+        "brief": "Adressbuch-Übung",
+        "pool": [
+          "k-nslookup",
+          "k-nslookup-external"
+        ],
+        "count": 3,
+        "intro": "Einmal beide Fälle: einen normalen Service auflösen (Name → ClusterIP) und einen ExternalName auflösen (Name → CNAME nach draußen)."
+      },
+      {
+        "type": "dialog",
+        "npc": "ada",
+        "lines": [
+          "Merk dir die Faustregel: <b>im Cluster spricht man über Namen, nicht über IPs.</b> CoreDNS ist das Adressbuch, jeder Service ein Eintrag (<code>&lt;service&gt;.&lt;namespace&gt;.svc.cluster.local</code>), und ein ExternalName ist der Verweis auf eine Adresse draußen. Damit ist das Hafen-Netz rund – stark gemacht, Lotse! 🧭⚓"
+        ]
+      }
+    ]
   }
 ]

@@ -4,7 +4,7 @@
  */
 import type { Sim, Deployment, NetworkPolicyRes, ArgoApp } from "../sim";
 import { pick, rnd } from "./util";
-import { NETPOL_YAML, DOCKERFILE, ARGO_APPLICATION_MANUAL_YAML, SERVICEMONITOR_YAML, PROMETHEUSRULE_YAML, ROLE_YAML, ROLEBINDING_YAML, CLUSTERROLE_YAML, CLUSTERROLEBINDING_YAML, POD_SECURITY_YAML, STATEFULSET_YAML, STORAGECLASS_YAML, PVC_YAML, VOLUMESNAPSHOT_YAML, PVC_RESTORE_YAML } from "./manifests";
+import { NETPOL_YAML, EXTERNALNAME_YAML, DOCKERFILE, ARGO_APPLICATION_MANUAL_YAML, SERVICEMONITOR_YAML, PROMETHEUSRULE_YAML, ROLE_YAML, ROLEBINDING_YAML, CLUSTERROLE_YAML, CLUSTERROLEBINDING_YAML, POD_SECURITY_YAML, STATEFULSET_YAML, STORAGECLASS_YAML, PVC_YAML, VOLUMESNAPSHOT_YAML, PVC_RESTORE_YAML } from "./manifests";
 
 const IMAGES = ["redis", "httpd", "busybox", "postgres", "rabbitmq"];
 const NAMES = ["leuchtfeuer", "fischtheke", "lotsenfunk", "ankerwinde", "kombuese", "seekiste"];
@@ -46,6 +46,19 @@ function ensureChart(sim: Sim): string {
 /** Namen & geschützte Apps für die Hafenmauer-Übungen (#20). */
 const NETPOL_NAMES = ["hafenmauer", "kaimauer", "wellenbrecher", "bollwerk", "schutzwall", "palisade"];
 const NETPOL_APPS = ["kasse", "lager", "funkdienst", "lotsen", "leuchtfeuer", "kombuese"];
+
+/** Service-Namen für die DNS-/Adressbuch-Übungen (#337) – normale ClusterIP-Services.
+ *  Bewusst EIGENE, kollisionsfreie Namen: ein Drill-Service bleibt im geteilten Sim
+ *  stehen, ein späteres `kubectl expose deployment <name>` einer anderen Quest würde
+ *  sonst an „already exists" scheitern (#337). */
+const DNS_SVC_NAMES = ["buchhaltung", "navigation", "wetterstation", "zollkontor", "proviantamt", "steuerrad"];
+/** ExternalName-Paare (interner Name → externer DNS-Name) für die CNAME-Übung (#337). */
+const DNS_EXTERNAL_PAIRS: [string, string][] = [
+  ["bank-extern", "api.bank.example.com"],
+  ["mail-extern", "mail.partner.example.net"],
+  ["wetter-api", "wetter.dienst.example.org"],
+  ["zoll-api", "api.zoll.example.com"],
+];
 
 /** Sorgt dafür, dass mindestens eine Hafenmauer (NetworkPolicy) existiert, und gibt sie zurück. */
 function ensureNetworkPolicy(sim: Sim): NetworkPolicyRes {
@@ -417,6 +430,26 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     const np = ensureNetworkPolicy(sim);
     return { text: "Reiß die Hafenmauer <code>" + np.name + "</code> wieder ein.", accept: [new RegExp("^kubectl\\s+delete\\s+(networkpolicy|networkpolicies|netpol|netpols)\\s+" + np.name.replace(/[-]/g, "\\-") + "$")], solution: "kubectl delete networkpolicies " + np.name, hint: "kubectl delete networkpolicies &lt;name&gt; (die Kurzformen netpol/networkpolicy verdienst du dir durch Nutzung)", why: "delete entfernt die NetworkPolicy wieder – danach ist das Netzwerk an dieser Stelle wieder offen. Muster: kubectl delete networkpolicies &lt;name&gt;." };
   },
+  // DNS / Service-Discovery (#337): das Adressbuch (CoreDNS) fragen – einen normalen
+  // Service auf seine ClusterIP auflösen und einen ExternalName auf seinen CNAME. NPC: ada.
+  "k-nslookup": sim => {
+    const name = pick(DNS_SVC_NAMES);
+    // Sorge dafür, dass der Service existiert (sonst NXDOMAIN) – ohne Doppler.
+    if (!sim.services.some(s => s.name === name)) {
+      sim.mergeScenario({ services: [{ name, type: "ClusterIP", clusterIP: "10.96." + rnd(0, 250) + "." + rnd(1, 250), port: pick([80, 8080, 5432, 6379]) }] });
+    }
+    return { text: "Frag das Adressbuch (CoreDNS) nach der Adresse des Service <code>" + name + "</code>.", accept: [new RegExp("^nslookup\\s+" + name + "(\\.default(\\.svc\\.cluster\\.local)?)?$")], solution: "nslookup " + name, hint: "Muster: nslookup &lt;service&gt; (oder voll &lt;service&gt;.default.svc.cluster.local)", why: "nslookup fragt CoreDNS nach der Adresse hinter einem Namen. Ein Service ist über den kurzen Namen, &lt;service&gt;.&lt;namespace&gt; oder den vollen FQDN &lt;service&gt;.&lt;namespace&gt;.svc.cluster.local erreichbar – CoreDNS löst alle drei zur stabilen ClusterIP auf. So reden Pods über Namen, nicht über wechselnde Pod-IPs." };
+  },
+  "k-nslookup-external": sim => {
+    const [name, ext] = pick(DNS_EXTERNAL_PAIRS);
+    if (!sim.services.some(s => s.name === name)) {
+      const file = "drill-externalname.yaml";
+      sim.files[file] = EXTERNALNAME_YAML;
+      sim.applyEffects[file] = { service: { name, externalName: ext, port: "" } };
+      sim.exec("kubectl apply -f " + file);
+    }
+    return { text: "Löse den <b>ExternalName</b>-Service <code>" + name + "</code> auf – wohin zeigt sein CNAME?", accept: [new RegExp("^nslookup\\s+" + name + "(\\.default(\\.svc\\.cluster\\.local)?)?$")], solution: "nslookup " + name, hint: "Muster: nslookup &lt;service&gt; – hier " + name + ".", why: "Ein ExternalName-Service hat keine eigene ClusterIP – nslookup zeigt stattdessen einen CNAME auf den externen DNS-Namen, auf den er verweist. So sprechen Pods einen Dienst außerhalb des Clusters über den gewohnten Service-Namen an; ändert sich die externe Adresse, fasst man nur den Service an." };
+  },
   // GitOps-Archipel (#98): Üben mit Argo CD – Application anlegen, Überblick, Akte lesen, Soll ziehen.
   "argo-apply": sim => {
     // Frische Seekarte: bei jedem Aufruf ein neuer, noch unbekannter Auftrag (sonst „unchanged“).
@@ -648,7 +681,7 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
 export const PRACTICE: Record<string, { drill: string; after: string }[]> = {
   bo:   [{ drill: "docker-pull", after: "docker-first-container" }, { drill: "docker-run", after: "docker-first-container" }, { drill: "docker-ps", after: "docker-list-containers" }, { drill: "docker-stop", after: "docker-list-containers" }, { drill: "docker-ps-a", after: "docker-list-containers" }, { drill: "docker-run-named", after: "docker-run-options" }, { drill: "docker-build", after: "docker-build-image" }, { drill: "docker-tag", after: "docker-build-image" }],
   ole:  [{ drill: "k-get-nodes", after: "k8s-first-deployment" }, { drill: "k-get-pods", after: "k8s-first-deployment" }, { drill: "k-describe", after: "k8s-inspect-pods" }, { drill: "k-get-pods-ns", after: "k8s-inspect-pods" }, { drill: "k-create", after: "k8s-service" }, { drill: "k-scale", after: "k8s-service" }, { drill: "k-delete-pod", after: "k8s-self-healing" }, { drill: "k-expose", after: "k8s-self-healing" }, { drill: "k-get-svc", after: "k8s-self-healing" }, { drill: "k-secret", after: "kraken-boss" }, { drill: "k-get-secrets", after: "kraken-boss" }],
-  ada:  [{ drill: "k-apply", after: "k8s-apply-manifests" }, { drill: "git-status", after: "git-version-control" }, { drill: "git-add", after: "git-version-control" }, { drill: "git-commit", after: "git-version-control" }, { drill: "git-branch", after: "git-feature-branch" }, { drill: "git-checkout", after: "git-feature-branch" }, { drill: "git-add-all", after: "git-pipeline" }, { drill: "ci-status", after: "git-pipeline" }, { drill: "git-pull", after: "git-merge-branches" }, { drill: "git-resolve", after: "git-merge-branches" }, { drill: "k-secret-tls", after: "secrets-encrypted" }, { drill: "k-get-ingress", after: "secrets-encrypted" }],
+  ada:  [{ drill: "k-apply", after: "k8s-apply-manifests" }, { drill: "git-status", after: "git-version-control" }, { drill: "git-add", after: "git-version-control" }, { drill: "git-commit", after: "git-version-control" }, { drill: "git-branch", after: "git-feature-branch" }, { drill: "git-checkout", after: "git-feature-branch" }, { drill: "git-add-all", after: "git-pipeline" }, { drill: "ci-status", after: "git-pipeline" }, { drill: "git-pull", after: "git-merge-branches" }, { drill: "git-resolve", after: "git-merge-branches" }, { drill: "k-secret-tls", after: "secrets-encrypted" }, { drill: "k-get-ingress", after: "secrets-encrypted" }, { drill: "k-nslookup", after: "dns-service-discovery" }, { drill: "k-nslookup-external", after: "dns-service-discovery" }],
   runa: [{ drill: "helm-install", after: "helm-release-install" }, { drill: "helm-list", after: "helm-release-install" }, { drill: "helm-upgrade", after: "helm-upgrade-rollback" }, { drill: "helm-rollback", after: "helm-upgrade-rollback" }, { drill: "helm-create", after: "helm-umbrella-chart" }, { drill: "helm-lint", after: "helm-umbrella-chart" }, { drill: "helm-package", after: "helm-umbrella-chart" }, { drill: "helm-install-local", after: "helm-umbrella-chart" }, { drill: "helm-upgrade-values", after: "helm-umbrella-chart" }, { drill: "helm-dep-update", after: "helm-umbrella-chart" }],
   theo: [{ drill: "tf-plan", after: "terraform-intro" }, { drill: "tf-state", after: "terraform-state-destroy" }],
   juno: [{ drill: "k-logs", after: "k8s-debug-crashloop" }, { drill: "k-describe", after: "k8s-debug-imagepull" }, { drill: "k-rollout", after: "k8s-debug-crashloop" }, { drill: "k-apply-netpol", after: "network-policy" }, { drill: "k-get-netpol", after: "network-policy" }, { drill: "k-describe-netpol", after: "network-policy" }, { drill: "k-delete-netpol", after: "network-policy" }, { drill: "k-set-resources", after: "k8s-resource-limits" }],

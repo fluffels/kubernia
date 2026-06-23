@@ -60,7 +60,18 @@ export function kubectlGet(host: KubectlHost, t: string[]) {
 
   if (["services", "service", "svc"].includes(what)) {
     const rows = [["kubernetes", "ClusterIP", "10.96.0.1", "<none>", "443/TCP", "3d"]];
-    for (const s of host.services) rows.push([s.name, s.type, s.clusterIP, "<none>", s.port + "/TCP", host._age(s.created || 0)]);
+    for (const s of host.services) {
+      // ExternalName-Service (#337): keine ClusterIP, dafür der externe DNS-Name in
+      // EXTERNAL-IP – genau so zeigt echtes kubectl einen ExternalName-Service.
+      const isExt = s.type === "ExternalName";
+      rows.push([
+        s.name, s.type,
+        isExt ? "<none>" : s.clusterIP,
+        isExt ? (s.externalName || "<none>") : "<none>",
+        isExt ? "<none>" : (s.port + "/TCP"),
+        host._age(s.created || 0),
+      ]);
+    }
     return table(["NAME", "TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE"], rows);
   }
 

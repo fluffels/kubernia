@@ -232,10 +232,10 @@ test("v2 (alle Quests durch): Endzustand + vollständige completedQuests-Migrati
 test("v3 (voller Stand, vor #410): Einzel-Quest -> activeQuests-Set, verlustfrei migriert + gesichert", () => {
   loadFixture("savegame-v3-current.json");
 
-  expect(Game.state.questIdx).toBe(30);
+  expect(Game.state.questIdx).toBe(31);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.state.questStep).toBe(1);
-  expect(Game.state.completedQuests).toEqual(slugs(30));
+  expect(Game.state.completedQuests).toEqual(slugs(31));
   expect(Game.state.xp).toBe(1500);
   expect(Game.state.coins).toBe(2000);
   expect(Game.state.character).toBe(1);
@@ -266,10 +266,10 @@ test("v3 (voller Stand, vor #410): Einzel-Quest -> activeQuests-Set, verlustfrei
 test("v4 (vor #413): mehrere offene Quests bleiben, gameDays default 0, migriert + gesichert", () => {
   loadFixture("savegame-v4-current.json");
 
-  expect(Game.state.questIdx).toBe(30);
+  expect(Game.state.questIdx).toBe(31);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.state.questStep).toBe(1);
-  expect(Game.state.completedQuests).toEqual(slugs(30));
+  expect(Game.state.completedQuests).toEqual(slugs(31));
 
   // #410 bleibt unangetastet: ZWEI parallel offene Quests überleben verlustfrei.
   expect(Game.state.activeQuests).toEqual({
@@ -296,7 +296,7 @@ test("v4 (vor #413): mehrere offene Quests bleiben, gameDays default 0, migriert
 test("v5 (aktueller Stand): gameDays überlebt exakt, kein Backup, Roundtrip stabil", () => {
   loadFixture("savegame-v5-current.json");
 
-  expect(Game.state.questIdx).toBe(30);
+  expect(Game.state.questIdx).toBe(31);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.state.activeQuests).toEqual({
     "gitops-argocd-intro": { step: 1, task: 0 },

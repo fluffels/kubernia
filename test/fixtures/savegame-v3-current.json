@@ -6,7 +6,7 @@
     "character": 1,
     "player": { "x": 640, "y": 480 },
     "currentQuestId": "gitops-argocd-intro",
-    "questIdx": 30,
+    "questIdx": 31,
     "questStep": 1,
     "taskIdx": 0,
     "completedQuests": [
@@ -16,7 +16,7 @@
       "helm-upgrade-rollback", "terraform-intro", "terraform-state-destroy", "kraken-boss",
       "k8s-configmap-secret", "k8s-debug-imagepull", "k8s-debug-crashloop", "k8s-node-capacity",
       "git-version-control", "git-feature-branch", "git-pipeline", "git-merge-branches",
-      "helm-umbrella-chart", "network-policy", "secrets-encrypted", "k8s-service-endpoints",
+      "helm-umbrella-chart", "network-policy", "secrets-encrypted", "dns-service-discovery", "k8s-service-endpoints",
       "k8s-resource-limits"
     ],
     "inventory": { "fernrohr": 2 },
