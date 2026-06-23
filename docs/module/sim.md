@@ -45,6 +45,8 @@ Die Observability-Grundlage (#109) liefert Pod-/Node-Metriken, Alert-State (firi
 
 In `src/sim/kubectl/` (seit Split #397): ServiceAccounts + Role/ClusterRole + RoleBinding/ClusterRoleBinding via `kubectl create` (`lifecycle.ts`); `kubectl auth can-i <verb> <resource> [--as=…]` (deterministisch yes/no) + Pod-Security-Admission-Stufe via `kubectl label namespace … pod-security.kubernetes.io/enforce=<stufe>` (lehnt unsichere Pods beim Anlegen ab) in `security.ts`. RBAC-Objekte zusätzlich deklarativ via `kubectl apply -f` (`lifecycle.ts`, #128, Manifest-Vorlagen in `src/content/manifests.ts`).
 
+**Pod-Security bleibt nach Phase 6 dauerhaft gehärtet (#444).** Die Wachturm-Quest `k8s-pod-security` schaltet im teach-Schritt `enforce=restricted` an der **geteilten** `Game.sim` scharf; das ist narrativ bewusst dauerhaft („an diesem Tor kommt sie nicht durch") und wird **nicht** zurückgenommen. Folge: ein danach **imperativ** (ohne securityContext) angelegtes Deployment wird abgewiesen – im freien Funken ist das gewolltes, selbsterklärendes Verhalten (die Fehlermeldung nennt den Ausweg). Damit aber **Übungs-Drills**, die genau so ein rohes Deployment anlegen (Oles `k-create`, dazu alles über `ensureDeployment`), nicht unlösbar werden, normalisieren sie ihren Sandbox-Cluster in der Drill-Vorbereitung auf `privileged` (`ensureBarePodAdmission` in `src/content/drills.ts`) – wie der `pod-security-enforce`-Drill schon „jede Übung startet sauber". Die Cluster-Härtung selbst rührt das nicht an. Test: `test/podsecurity-leftover.test.ts`.
+
 ## Tests
 
 - `test/sim.test.ts` — Kern/`exec`-Dispatch.

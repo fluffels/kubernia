@@ -16,10 +16,22 @@ function ensureDockerfile(sim: Sim) {
   if (!sim.files["Dockerfile"]) sim.files["Dockerfile"] = DOCKERFILE;
 }
 
+/** #444: Ein imperativ (ohne securityContext) angelegtes Deployment wird unter baseline/
+ *  restricted von der Pod-Security-Admission abgewiesen. Die Härtung aus Phase 6 (Wachturm)
+ *  bleibt narrativ bewusst dauerhaft an der GETEILTEN Game.sim stehen ("an diesem Tor kommt
+ *  sie nicht durch") – darf aber das freie Üben nicht blockieren. Übungen, die genau so ein
+ *  rohes Deployment anlegen, normalisieren darum ihren Sandbox-Cluster auf die permissive
+ *  Stufe, genau wie der pod-security-enforce-Drill schon "jede Übung startet sauber". Die
+ *  Cluster-Härtung selbst rührt das nicht an (nur die Drill-Vorbereitung). */
+function ensureBarePodAdmission(sim: Sim) {
+  sim.podSecurity = "privileged";
+}
+
 function ensureDeployment(sim: Sim): Deployment {
   let d = sim.deployments.find(d => !["kantine"].includes(d.name)) || sim.deployments[0];
   if (!d) {
     const name = pick(NAMES);
+    ensureBarePodAdmission(sim); // sonst weist restricted (Phase-6-Rest) das Basis-Deployment ab (#444)
     sim.exec("kubectl create deployment " + name + " --image=nginx");
     d = sim.deployments.find(x => x.name === name)!;
   }
@@ -224,6 +236,7 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   // Übt die --namespace-Langform, damit man sich die Kurzform -n durch Nutzung verdient (#380).
   "k-get-pods-ns": () => ({ text: "Schau ins Maschinenherz: zeig die Pods im Namespace <code>kube-system</code>.", accept: [/^kubectl\s+get\s+(pods|pod|po)\s+(-n|--namespace)[=\s]?kube-system$/], solution: "kubectl get pods --namespace kube-system", hint: "kubectl get pods --namespace kube-system (die Kurzform -n verdienst du dir durch Nutzung).", why: "Ohne Namespace siehst du nur den aktuellen (default); --namespace &lt;name&gt; wählt einen anderen, z.B. kube-system, das Maschinenherz von Kubernetes. Die Kurzform -n verdienst du dir, wenn du die Langform oft genug tippst." }),
   "k-create": sim => {
+    ensureBarePodAdmission(sim); // imperatives create ohne securityContext – Phase-6-Härtung würde es sonst abweisen (#444)
     let name = pick(NAMES);
     while (sim.deployments.some(d => d.name === name)) name = pick(NAMES) + rnd(2, 9);
     const img = pick(IMAGES);
