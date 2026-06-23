@@ -144,6 +144,45 @@ export interface Chart {
 export interface TfResource {
   addr: string;
   desc: string;
+  /** Lokaler Name des `provider`-Blocks, der diese Ressource anlegt (#146). Fehlt das
+   *  Feld, nimmt Terraform den Default-Provider. Verweist es auf einen NICHT deklarierten
+   *  Provider, scheitern plan/apply (Fehlerfall „unbekannter Provider"). */
+  provider?: string;
+}
+/** Ein deklarierter `provider`-Block (provider.tf, #146): erlaubt Ressourcen bei einem
+ *  bestimmten Anbieter („Insel-Provider A/B"). `terraform init` lädt das Plugin (`installed`). */
+export interface TfProvider {
+  name: string;        // lokaler Name, z.B. "insel-a"
+  source?: string;     // Registry-Quelle, z.B. "hashicorp/aws"
+  version?: string;    // z.B. "5.40.0"
+  installed: boolean;  // von `terraform init` geladen (Plugin liegt lokal)
+}
+/** Ein referenzierter `module`-Block (#146): ein wiederverwendbarer Baustein, der MEHRERE
+ *  Ressourcen als Einheit erzeugt. `terraform get`/`init` holt ihn (`fetched`); danach
+ *  expandiert er in `module.<name>.<res>`-Adressen in plan/apply/state. */
+export interface TfModule {
+  name: string;            // module "<name>" { … }
+  source: string;          // source = "./modules/hafen-anlage" o.ä.
+  resources: string[];     // Ressourcen, die der Baustein erzeugt (relative Adressen)
+  fetched: boolean;        // von init/get geholt
+  /** false = Quelle nicht auflösbar → init/get scheitern (Fehlerfall „unbekanntes Modul").
+   *  Fehlt das Feld, gilt der Baustein als auffindbar. */
+  available?: boolean;
+}
+/** Ein `backend`-Block (#146): verlagert den State weg vom lokalen Ordner in ein
+ *  geteiltes „Flotten-Lager" (S3-artig). null = lokaler State. `locking` macht das
+ *  State-Locking-Konzept greifbar: nur EINE Crew darf den geteilten State zugleich ändern. */
+export interface TfBackend {
+  type: string;            // z.B. "s3"
+  name?: string;           // z.B. Bucket-/Container-Name ("flotten-lager")
+  locking?: boolean;       // unterstützt der Backend-Typ State-Locking?
+}
+/** Ein deklarierter `output`-Block (#146): ein Wert, den `terraform output` nach dem
+ *  Apply ausgibt (z.B. eine erzeugte Adresse). `sensitive` verbirgt ihn in der Liste. */
+export interface TfOutput {
+  name: string;
+  value: string;
+  sensitive?: boolean;
 }
 export interface GitCommit {
   hash: string;
@@ -458,6 +497,14 @@ export interface Scenario {
   tfInitialized?: boolean;
   tfApplied?: boolean;
   tfResources?: TfResource[];
+  // Module/Remote-State/Provider/Outputs (#146). Eingabe-Schreibweisen locker –
+  // reset() füllt Defaults (installed/fetched leiten sich aus tfInitialized ab).
+  tfProviders?: Array<{ name: string; source?: string; version?: string }>;
+  tfModules?: Array<{ name: string; source?: string; resources?: string[]; available?: boolean }>;
+  tfBackend?: { type: string; name?: string; locking?: boolean } | null;
+  tfOutputs?: TfOutput[];
+  tfLocked?: boolean;          // hält gerade eine andere Crew den geteilten State-Lock? (Locking-Konzept)
+  tfLockHolder?: string;       // wer ihn hält (Anzeige im Lock-Fehler)
   gitInitialized?: boolean;
   gitBranch?: string;
   gitBranches?: string[];
@@ -510,7 +557,7 @@ export interface ClusterState {
   helmRepos: string[];
   releases: Release[];
   charts: Chart[];
-  tf: { initialized: boolean; applied: boolean; resources: TfResource[] };
+  tf: { initialized: boolean; applied: boolean; resources: TfResource[]; providers: TfProvider[]; modules: TfModule[]; backend: TfBackend | null; outputs: TfOutput[]; locked: boolean; lockHolder?: string };
   git: { initialized: boolean; branch: string; branches: string[]; staged: string[]; committed: string[]; commits: GitCommit[]; pushed: boolean; remoteAhead: number; fetched: boolean; conflict: GitConflict | null; pendingConflict: GitPending | null };
   ci: { pipelines: Pipeline[]; deploy: CiDeploy | null };
 }
