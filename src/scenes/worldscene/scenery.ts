@@ -17,6 +17,7 @@ import { UI } from "../../ui";
 import { WORLD_TO_ARCHIPEL } from "../../archipel";
 import { WORLD_TO_LIGHTHOUSE } from "../../lighthouse";
 import { WORLD_TO_WAREHOUSE } from "../../warehouse";
+import { WORLD_TO_FLOTTE } from "../../flotte";
 import { T, FOAM, WOOD } from "../shared";
 import type { WorldSceneLike } from "./types";
 
@@ -284,6 +285,11 @@ export function renderStatics(scene: WorldSceneLike) {
   const wx = WORLD_TO_WAREHOUSE.tx * T + 8, wy = WORLD_TO_WAREHOUSE.ty * T + 8;
   const whAnchor = scene.add.text(wx, wy - 4, "⚓", { fontSize: "11px", resolution: 6 }).setOrigin(0.5).setDepth(wy + 20);
   scene.tweens.add({ targets: whAnchor, y: wy - 8, duration: 900, yoyo: true, repeat: -1, ease: "Sine.inOut" });
+
+  // #148: Anker-Marker am Flotte-Anleger (Südost-Ecke), pulsierend wie der Lager-Anker.
+  const fx = WORLD_TO_FLOTTE.tx * T + 8, fy = WORLD_TO_FLOTTE.ty * T + 8;
+  const flAnchor = scene.add.text(fx, fy - 4, "⚓", { fontSize: "11px", resolution: 6 }).setOrigin(0.5).setDepth(fy + 20);
+  scene.tweens.add({ targets: flAnchor, y: fy - 8, duration: 900, yoyo: true, repeat: -1, ease: "Sine.inOut" });
 
   scene.dynGroup = scene.add.group(); // Fässer, Flaggen, Laternen, Labels (werden neu gebaut)
 }
