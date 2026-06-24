@@ -389,18 +389,6 @@ button.danger:hover { background: var(--bad); color: #1a0606; filter: none; }
   border-left: 4px solid var(--accent2);
   line-height: 1.45;
 }
-/* Glossar-Auffrischung (#226): bekannter Begriff im Lerntext, der per Hover
-   eine 1-Satz-Erinnerung (title-Tooltip) zeigt – unaufdringlich, nur ein
-   gepunkteter Unterstrich, der beim Überfahren kräftiger wird. */
-.gloss {
-  cursor: help;
-  border-bottom: 1px dotted var(--accent2);
-  text-decoration: none;
-}
-.gloss:hover {
-  background: rgba(77,208,225,0.15);
-  border-bottom-style: solid;
-}
 .review-cmd-row {
   display: flex; align-items: center; gap: 8px;
   background: var(--term-bg);

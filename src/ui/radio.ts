@@ -78,8 +78,8 @@ export const radioUI = part({
       const q = Game.currentQuest();
       html += `<div class="tt-head">📜 ${q.title}: ${step.brief}</div>`;
       if (step.type === "teach") {
-        html += `<div class="tt-new">${KQContent.applyGlossary(step.cmd.intro)}</div>`;
-        html += `<div class="tt-item current">▶️ ${KQContent.applyGlossary(step.cmd.text)}</div>`;
+        html += `<div class="tt-new">${step.cmd.intro}</div>`;
+        html += `<div class="tt-item current">▶️ ${step.cmd.text}</div>`;
       } else if (step.type === "drill") {
         html += `<div class="dim" style="margin-bottom:8px">${step.intro}</div>`;
         html += `<div class="dim">Übung ${Math.min((Game.state.taskIdx || 0) + 1, step.count)} von ${step.count}</div>`;
