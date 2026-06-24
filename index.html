@@ -126,22 +126,49 @@
     // (z.B. per Doppelklick oder über einen einfachen statischen Server), kann der
     // Browser das TypeScript-Modul src/main.ts nicht laden – die Seite bliebe leer.
     // Statt einer rätselhaften leeren Seite zeigen wir dann, wie man es richtig startet.
-    setTimeout(function () {
-      if (document.body.dataset.kqBooted) return; // Spiel lief an – alles gut
-      document.body.insertAdjacentHTML("beforeend",
-        '<div style="position:fixed;inset:0;z-index:99999;background:#0e1b2a;color:#e8eef5;' +
-        'display:flex;align-items:center;justify-content:center;text-align:center;' +
-        'font-family:system-ui,sans-serif;padding:24px;line-height:1.6">' +
-        '<div style="max-width:600px">' +
-        '<h1 style="color:#ffc857;margin:0 0 12px">⚓ KubeQuest startet so nicht</h1>' +
-        '<p>Diese <code>index.html</code> ist die <b>Entwickler-Version</b> und braucht den ' +
-        'Vite-Server, der den Spielcode (TypeScript) erst übersetzt.</p>' +
-        '<p style="margin-top:18px;font-size:1.05em">🎮 <b>Zum Spielen (offline):</b><br>' +
-        'einmal <code>npm run build</code>, dann <code>dist/index.html</code> doppelklicken.</p>' +
-        '<p style="margin-top:14px;font-size:1.05em">🛠️ <b>Zum Entwickeln:</b><br>' +
-        '<code>npm run dev</code> starten und die angezeigte Adresse öffnen.</p>' +
-        '</div></div>');
-    }, 1500);
+    //
+    // #455: Früher wurde EINMALIG nach 1,5 s entschieden und das Netz nie wieder
+    // entfernt. Auf langsameren/ausgelasteten Rechnern – und beim großen Offline-
+    // Build mit allen Assets inline – dauert boot() aber länger als 1,5 s; dann
+    // blieb der „startet so nicht“-Hinweis dauerhaft ÜBER dem real laufenden Spiel
+    // liegen (und brach den Boot-Smoke-Test #391). Darum jetzt: den Boot-Flag aktiv
+    // beobachten statt nur einmal prüfen. Ein erfolgreicher Boot lässt das Netz nie
+    // liegen – egal wie langsam er ist – und ohne Boot erscheint es weiterhin.
+    (function () {
+      var NET_ID = "kq-boot-net";
+      function booted() { return document.body.dataset.kqBooted === "1"; }
+      function removeNet() {
+        var el = document.getElementById(NET_ID);
+        if (el) el.remove();
+      }
+      function showNet() {
+        if (booted() || document.getElementById(NET_ID)) return;
+        document.body.insertAdjacentHTML("beforeend",
+          '<div id="' + NET_ID + '" style="position:fixed;inset:0;z-index:99999;background:#0e1b2a;color:#e8eef5;' +
+          'display:flex;align-items:center;justify-content:center;text-align:center;' +
+          'font-family:system-ui,sans-serif;padding:24px;line-height:1.6">' +
+          '<div style="max-width:600px">' +
+          '<h1 style="color:#ffc857;margin:0 0 12px">⚓ KubeQuest startet so nicht</h1>' +
+          '<p>Diese <code>index.html</code> ist die <b>Entwickler-Version</b> und braucht den ' +
+          'Vite-Server, der den Spielcode (TypeScript) erst übersetzt.</p>' +
+          '<p style="margin-top:18px;font-size:1.05em">🎮 <b>Zum Spielen (offline):</b><br>' +
+          'einmal <code>npm run build</code>, dann <code>dist/index.html</code> doppelklicken.</p>' +
+          '<p style="margin-top:14px;font-size:1.05em">🛠️ <b>Zum Entwickeln:</b><br>' +
+          '<code>npm run dev</code> starten und die angezeigte Adresse öffnen.</p>' +
+          '</div></div>');
+      }
+      var GRACE_MS = 3000; // so lange auf den Boot-Flag warten, bevor der Hinweis erscheint – verhindert ein Aufblitzen bei langsamem, aber erfolgreichem Boot
+      var MAX_MS = 60000;  // danach steht fest: echter Fehlstart – Beobachtung beenden, Hinweis bleibt stehen
+      var STEP_MS = 200;
+      var waited = 0;
+      var timer = setInterval(function () {
+        // Boot – evtl. erst spät – gelungen: ein bereits gezeigtes Netz wieder entfernen und aufhören.
+        if (booted()) { removeNet(); clearInterval(timer); return; }
+        waited += STEP_MS;
+        if (waited >= GRACE_MS) showNet(); // Karenz abgelaufen, noch kein Boot → Hinweis zeigen (weiter beobachten, falls der Boot doch noch kommt)
+        if (waited >= MAX_MS) clearInterval(timer);
+      }, STEP_MS);
+    })();
   </script>
 </body>
 </html>
