@@ -90,7 +90,7 @@
         "type": "dialog",
         "npc": "bo",
         "lines": [
-          "Genug für heute. Bo-Regel: <b>Lieber zwei Befehle sicher als zehn halb.</b> Komm wieder, wenn du durchgeatmet hast – oder sprich Bo an und wähle „Üben“."
+          "Genug für heute. Bo-Regel: <b>Lieber zwei Befehle sicher als zehn halb.</b> Komm wieder, wenn du durchgeatmet hast."
         ]
       }
     ]

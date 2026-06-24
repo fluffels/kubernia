@@ -128,3 +128,40 @@ test("endReplay: ohne laufendes Wiederspiel -> false", () => {
   expect(Game.isReplaying()).toBe(false);
   expect(Game.endReplay()).toBe(false);
 });
+
+/* #451: Bos einmaliger Kralle-Wegweiser nur beim ALLERERSTEN Abschluss der
+ * Docker-Einstiegsquest – nicht in der Sandbox-Wiederholung. Die UI hängt den
+ * Hinweistext an, wenn pointsToKralleAfterFirstQuest() true ist. */
+const FIRST_QUEST_IDX = KQContent.QUESTS.findIndex(q => q.id === "docker-first-container");
+
+test("#451: pointsToKralleAfterFirstQuest – true am letzten Schritt der Docker-Einstiegsquest (Erstdurchlauf)", () => {
+  expect(FIRST_QUEST_IDX).toBeGreaterThanOrEqual(0);
+  const quest = KQContent.QUESTS[FIRST_QUEST_IDX];
+  Game.jumpToQuest(FIRST_QUEST_IDX);
+  Game.state.questStep = quest.steps.length - 1;   // Bos Abschiedsworte
+  expect(Game.isReplaying()).toBe(false);
+  expect(Game.pointsToKralleAfterFirstQuest()).toBe(true);
+});
+
+test("#451: pointsToKralleAfterFirstQuest – false vor dem letzten Schritt", () => {
+  Game.jumpToQuest(FIRST_QUEST_IDX);
+  Game.state.questStep = 0;                          // ganz am Anfang
+  expect(Game.pointsToKralleAfterFirstQuest()).toBe(false);
+});
+
+test("#451: pointsToKralleAfterFirstQuest – false in einer anderen Quest", () => {
+  Game.jumpToQuest(FIRST_QUEST_IDX + 1);             // nächste Quest, letzter Schritt
+  const q = Game.currentQuest()!;
+  Game.state.questStep = q.steps.length - 1;
+  expect(q.id).not.toBe("docker-first-container");
+  expect(Game.pointsToKralleAfterFirstQuest()).toBe(false);
+});
+
+test("#451: pointsToKralleAfterFirstQuest – false im Wiederspiel der Einstiegsquest (nicht bei Wiederholung)", () => {
+  Game.jumpToQuest(FIRST_QUEST_IDX + 1);             // Einstiegsquest damit abgeschlossen
+  expect(Game.startReplay(FIRST_QUEST_IDX)).toBe(true);
+  Game.state.questStep = KQContent.QUESTS[FIRST_QUEST_IDX].steps.length - 1;
+  expect(Game.isReplaying()).toBe(true);
+  expect(Game.pointsToKralleAfterFirstQuest()).toBe(false);
+  Game.endReplay();
+});

@@ -51,6 +51,21 @@ export const progressionBundle = part({
   },
   allQuestsDone() { return this.state.questIdx >= KQContent.QUESTS.length; },
 
+  /** #451: Soll Bo in seinen Abschiedsworten der Docker-Einstiegsquest auf die
+   *  Quiz-Krabbe Kralle verweisen? True genau dann, wenn der aktuelle Schritt der
+   *  LETZTE Schritt von `docker-first-container` ist UND gerade KEIN Wiederspiel
+   *  läuft – also nur beim allerersten Abschluss, nicht bei der Sandbox-Wiederholung
+   *  (#332), in der die Crew Kralle längst kennt. Etabliert den Übungs-Loop früh,
+   *  statt nur generisch „Üben" zu erwähnen. Reine Entscheidung (Anwendungsschicht);
+   *  den Hinweistext hängt die UI an (ui/quest.ts). */
+  pointsToKralleAfterFirstQuest(): boolean {
+    const q = this.currentQuest();
+    return !!q
+      && q.id === "docker-first-container"
+      && this.state.questStep === q.steps.length - 1
+      && !this.isReplaying();
+  },
+
   /* ---------- Dev-/Test-Sprung (#329, Grundlage fürs Dev-Panel #325) ----------
    * Reine Anwendungs-API (Phaser-frei, unit-testbar): stellt einen beliebigen
    * Quest-/Story-Stand zum Testen her, statt sich jedes Mal von vorn durch-

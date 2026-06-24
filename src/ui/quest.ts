@@ -2,6 +2,16 @@ import { Game } from "../game";
 import { worldScene } from "../runtime";
 import { part } from "./shared";
 
+/** #451: Einmaliger Wegweiser, den Bo beim ALLERERSTEN Abschluss der Docker-
+ *  Einstiegsquest an seine Abschiedsworte hängt. Nennt Kralle namentlich, weist
+ *  den Weg (an Deck des eigenen Schiffs) und etabliert den Übungs-Loop früh –
+ *  statt nur generisch „Üben" zu erwähnen. In Bos Stein-Golem-Ton. */
+const KRALLE_WEGWEISER =
+  "Eins noch, Landratte: Gekonnt ist erst, was <b>sitzt</b> – und das kommt vom " +
+  "<b>Wiederholen</b>. Dafür gibt's <b>Kralle</b>, die Quiz-Krabbe an Deck deines " +
+  "Schiffs. Sprich sie an (Taste <b>E</b>) – sie frischt dein Wissen auf, bis es " +
+  "hält. Bo schickt dich hin. Bo ist Stein.";
+
 export const questUI = part({
   /* ========== Quest-Maschine ========== */
   runQuestStep() {
@@ -13,7 +23,13 @@ export const questUI = part({
     // erst nach einem Reload (game.ts re-merged erreichte Szenarien) auftauchte (#214).
     if (step.scenario) { Game.sim.mergeScenario(step.scenario); Game.save(); }
     if (step.type === "dialog") {
-      this.showDialogue(step.npc, step.lines, () => this.afterStep());
+      // #451: Beim allerersten Abschluss der Docker-Einstiegsquest hängt Bo einen
+      // Wegweiser zur Quiz-Krabbe Kralle an (nicht im Wiederspiel – siehe
+      // Game.pointsToKralleAfterFirstQuest). Frische Kopie, step.lines bleibt unangetastet.
+      const lines = Game.pointsToKralleAfterFirstQuest()
+        ? [...step.lines, KRALLE_WEGWEISER]
+        : step.lines;
+      this.showDialogue(step.npc, lines, () => this.afterStep());
     } else if (step.type === "choice") {
       this.showChoice(step, () => this.afterStep());
     }
