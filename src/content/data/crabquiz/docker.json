@@ -111,5 +111,18 @@
     ],
     "correct": 0,
     "explain": "ls = „list“: zeigt, was im Ordner liegt (Dateien/Verzeichnisse). cat <datei> zeigt dagegen den INHALT einer einzelnen Datei. Faustregel: erst ls (was ist da?), dann cat <datei> (was steht drin?)."
+  },
+  {
+    "id": "q-ch1-10",
+    "chapter": "docker-first-container",
+    "q": "Was ist das <code>busybox</code>-Image, das Bo erwähnt?",
+    "options": [
+      "Ein winziges Image, das viele kleine Unix-Werkzeuge (ls, cat, wget …) in einer Datei bündelt – die handliche Allzweck-Kiste für schnelle Tests.",
+      "Eine Registry, aus der man andere Images herunterlädt.",
+      "Ein Werkzeug, das automatisch Dockerfiles schreibt.",
+      "Ein leeres Image ganz ohne Inhalt."
+    ],
+    "correct": 0,
+    "explain": "BusyBox bündelt viele Mini-Werkzeuge in einer einzigen, federleichten Box – man startet sie gern für schnelle Tests und zum Reinschauen (docker run busybox). Der run-Befehl bleibt derselbe, nur der Bauplan-Name wechselt."
   }
 ]
