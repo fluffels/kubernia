@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-24 — nächstes Ticket: #447. Kopf: 16 Einträge. Zuletzt abgeschlossen: #446 (Bo-Intro „Box" → „Container"), #445 („Funkgerät" → „Terminal" in allen spielersichtbaren Texten), #444 (Pod-Security-Härtung blockiert imperative create-Übungen nicht mehr), #147 (Terraform-Konfig-Inhalte Phase 9), #332 (QoL Sandbox-Replay).**
+> **Stand: 2026-06-24 — nächstes Ticket: #455. Kopf: 15 Einträge. Zuletzt abgeschlossen: #452 (Hover-Glossar abgeschafft → Begriffe aktiv in Dialog + Kralle-Quiz), #447 („Kisten-Supermarkt" → „Registry"), #446 (Bo-Intro „Box" → „Container"), #445 („Funkgerät" → „Terminal" in allen spielersichtbaren Texten), #444 (Pod-Security-Härtung blockiert imperative create-Übungen nicht mehr).**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -44,26 +44,26 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| | **— Wording/Didaktik (Begriffe schärfen) —** | | | Neue `prio:mittel`-Quick-Wins; unabhängig voneinander, ranken per Prio über dem „ohne"-Flotte-Arc. |
-| 1 | **#447** | mittel | „Kisten-Supermarkt" → „Registry" in Dialogen/Texten | **Nächstes Ticket.** Echter Fachbegriff; unabhängig, klein. |
-| 2 | **#451** | mittel | Bo-Abschluss Quest 1: direkt zu Kralle schicken statt generisch „Üben" | Didaktik; unabhängig (verwandt mit #302). |
-| 3 | **#452** | mittel | Didaktik: Begriffs-Tooltips in Dialog/Kralle-Abfrage statt Mouseover | Didaktik; unabhängig. |
+| | **— Bugfix (CI/Boot) —** | | | `prio:mittel`-Bug; rankt per Prio über dem „ohne"-Flotte-Arc. |
+| 1 | **#455** | mittel | Boot-Sicherheitsnetz bleibt bei langsamem (aber erfolgreichem) Boot im DOM – verdeckt das Spiel + bricht Smoke-Test | **Nächstes Ticket.** Echter Bug, bricht den Boot-Smoke-Test (#391); frei, unabhängig. |
+| | **— Wording/Didaktik (Begriffe schärfen) —** | | | `prio:mittel`-Quick-Wins; unabhängig voneinander, ranken per Prio über dem „ohne"-Flotte-Arc. |
+| 2 | **#451** | mittel | Bo-Abschluss Quest 1: direkt zu Kralle schicken statt generisch „Üben" | Didaktik; unabhängig (verwandt mit #302). _(z.Zt. in Arbeit)_ |
 | | **— Expeditions-Flotte (Phase 9: Terraform-Module / Remote State / Provider) —** | | | Sim-Grundlage #146 ✓, Konfig-Inhalte #147 ✓ (`data/terraform/flotte.json`, per `scenarioRef` referenzierbar). Reihenfolge: Region/NPC → Quests → Drills → Quiz → Progression → Tests. |
-| 4 | **#148** | ohne | Insel/Bereich + Anleger/Warp zur Flotte | Region begehbar machen (RegionScene/#427); ⚠️ Grafik-Anteil — Stardew-Referenz beachten. |
-| 5 | **#149** | ohne | Neuer NPC (Sprite + Smalltalk) | Geber der Region; nach Insel. ⚠️ Grafik-Anteil. |
-| 6 | **#150** | ohne | Quest „Terraform-Module — wiederverwendbare Bausteine" | Erste Quest; nutzt Konfig `flotte-modul` (#147) per `scenarioRef`. Nach Sim + Region + NPC. |
-| 7 | **#151** | ohne | Quest „Remote State — gemeinsamer State im Backend" | Baut auf #150; Konfig `flotte-remote-state` (#147). |
-| 8 | **#152** | ohne | Quest „Provider & Cloud — Ressourcen bei verschiedenen Anbietern" | Baut auf #151; Konfig `flotte-provider` (#147). |
-| 9 | **#153** | ohne | Quest „Variablen & Outputs — Konfiguration sauber durchreichen" | Letzte Quest des Arcs; Konfig `flotte-variablen-outputs` (#147). |
-| 10 | **#154** | ohne | Drills (Module/Remote-State/Provider-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte. |
-| 11 | **#155** | ohne | Quiz-Karten (Terraform-Module, Remote State, Provider) | Wissens-Sicherung zur Region. |
-| 12 | **#156** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad. |
-| 13 | **#157** | ohne | Tests für Terraform-Aufbau-Quests & Modul/Remote-State/Provider-Sim | Zuletzt im Arc — sichert ab (Red-Green). |
+| 3 | **#148** | ohne | Insel/Bereich + Anleger/Warp zur Flotte | Region begehbar machen (RegionScene/#427); ⚠️ Grafik-Anteil — Stardew-Referenz beachten. _(z.Zt. in Arbeit)_ |
+| 4 | **#149** | ohne | Neuer NPC (Sprite + Smalltalk) | Geber der Region; nach Insel. ⚠️ Grafik-Anteil. |
+| 5 | **#150** | ohne | Quest „Terraform-Module — wiederverwendbare Bausteine" | Erste Quest; nutzt Konfig `flotte-modul` (#147) per `scenarioRef`. Nach Sim + Region + NPC. |
+| 6 | **#151** | ohne | Quest „Remote State — gemeinsamer State im Backend" | Baut auf #150; Konfig `flotte-remote-state` (#147). |
+| 7 | **#152** | ohne | Quest „Provider & Cloud — Ressourcen bei verschiedenen Anbietern" | Baut auf #151; Konfig `flotte-provider` (#147). |
+| 8 | **#153** | ohne | Quest „Variablen & Outputs — Konfiguration sauber durchreichen" | Letzte Quest des Arcs; Konfig `flotte-variablen-outputs` (#147). |
+| 9 | **#154** | ohne | Drills (Module/Remote-State/Provider-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte. |
+| 10 | **#155** | ohne | Quiz-Karten (Terraform-Module, Remote State, Provider) | Wissens-Sicherung zur Region. |
+| 11 | **#156** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad. |
+| 12 | **#157** | ohne | Tests für Terraform-Aufbau-Quests & Modul/Remote-State/Provider-Sim | Zuletzt im Arc — sichert ab (Red-Green). |
 | | **— QoL / System-Features —** | | | |
-| 14 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 13 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 15 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 16 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 14 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 15 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
