@@ -20,6 +20,7 @@ import { buildArchipel, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL, ARCHIPEL_NPC, ARCHI
 import { buildLighthouse, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL, LIGHTHOUSE_NPC, LIGHTHOUSE_QUEST_TRIGGER, LIGHTHOUSE_TOWER, type LighthouseMap } from "../lighthouse";
 import { buildWarehouse, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL, type WarehouseMap } from "../warehouse";
 import { buildWatchtower, WATCHTOWER_TO_WORLD, WATCHTOWER_ARRIVAL, WATCHTOWER_TOWER } from "../watchtower";
+import { buildFlotte, FLOTTE_TO_WORLD, FLOTTE_ARRIVAL, type FlotteMap } from "../flotte";
 
 /** #343/#386: Hitbox-Maße der Lager-Güter – Fässer rund (Radius), Kisten als mittig
  *  eingerücktes Rechteck (Kantenlänge). Wie in der früheren WarehouseScene. */
@@ -199,6 +200,35 @@ const watchtower: RegionConfig = {
   },
 };
 
+/** Expeditions-Flotte (#148, Phase 9): rechteckiges Holz-Deck im offenen Meer, ringsum die
+ *  vertäute Flotte. Keine Boden-Deko (ein Schiffsdeck, kein Garten) – Charakter kommt aus den
+ *  vertäuten Flotten-Schiffen (echtes ship-Sprite, COMMON_ASSET) auf den Wasser-Standplätzen
+ *  aus buildFlotte. NPC #149 + Quests #150–153 docken später an. */
+const flotte: RegionConfig = {
+  key: "Flotte",
+  map: "flotte",
+  build: buildFlotte,
+  regionReturn: FLOTTE_TO_WORLD,
+  arrival: FLOTTE_ARRIVAL,
+  title: "⛵ Expeditions-Flotte",
+  hint: "Steg hinab ⬇ – zurück nach Port Kubernia",
+  returnGlyph: "⬇",
+  returnSign: "Port Kubernia",
+  questSignDy: 1,
+  // keine Boden-Deko (decor weggelassen) – das Holz-Deck trägt keine Büsche/Blumen.
+  decorate(scene: RegionScene, build) {
+    const m = build as FlotteMap;
+    // Vertäute Flotten-Schiffe rings um das Deck (auf Wasser, nicht begehbar) – das echte
+    // ship-Sprite, fußlinien-depth-sortiert + sanftes Dümpeln, damit die Flotte lebt.
+    for (const s of m.ships) {
+      const cx = s.x * T + 8, baseY = (s.y + 1) * T;
+      scene.add.ellipse(cx, baseY - 1, 26, 7, 0x000000, 0.18).setDepth(baseY - 2);   // Wasserschatten
+      const ship = scene.add.image(cx, baseY, "ship").setOrigin(0.5, 1).setScale(0.7).setFlipX(s.flip).setDepth(baseY);
+      scene.tweens.add({ targets: ship, y: baseY - 2, duration: 1900, yoyo: true, repeat: -1, ease: "Sine.inOut" });
+    }
+  },
+};
+
 /** Die EINE Liste aller Region-Szenen-Configs. Reihenfolge = Registrierungsreihenfolge in
  *  scenes.ts (Szenen-Keys sind disjunkt, also nicht load-bearing). */
-export const REGION_CONFIGS: RegionConfig[] = [archipel, lighthouse, warehouse, watchtower];
+export const REGION_CONFIGS: RegionConfig[] = [archipel, lighthouse, warehouse, watchtower, flotte];

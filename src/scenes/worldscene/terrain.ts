@@ -16,6 +16,7 @@ import { WORLD_TO_ARCHIPEL } from "../../archipel";
 import { WORLD_TO_LIGHTHOUSE, WORLD_RETURN_LH } from "../../lighthouse";
 import { DOCK as WH_DOCK, WORLD_JETTY_WH, WORLD_TO_WAREHOUSE } from "../../warehouse";
 import { DOCK as WT_DOCK, WORLD_JETTY_WT, WORLD_TO_WATCHTOWER } from "../../watchtower";
+import { DOCK as FL_DOCK, WORLD_JETTY_FL, WORLD_TO_FLOTTE } from "../../flotte";
 import { PIER_XS } from "../../harbormap";
 import { T, DIRT, ANVIL, TABLE, DEVICE, BOOK, WATER, FOAM, WANG } from "../shared";
 import type { WorldSceneLike } from "./types";
@@ -74,6 +75,18 @@ export function placeHarborObjects(scene: WorldSceneLike) {
     }
   }
   scene.labels.push({ x: WORLD_TO_WATCHTOWER.tx + 0.9, y: WORLD_TO_WATCHTOWER.ty - 0.7, text: "Zum Wachturm", color: "#ffe9b0" });
+
+  // #148: Holz-Anleger in der Südost-Ecke (offenes Wasser zwischen Schiff und Vermessung/
+  // Terraform-Plattform) → Expeditions-Flotte. Gleiches Muster wie Lager-/Wachturm-Anleger:
+  // die Wasserkacheln des Stegs zu begehbaren Planken (PIER -10) machen, damit renderGround
+  // sie als „dock" malt und man hinauslaufen kann. So bleibt harbor.tmj unberührt.
+  for (let y = WORLD_JETTY_FL.y0; y <= WORLD_JETTY_FL.y1; y++) {
+    for (let x = WORLD_JETTY_FL.x; x < WORLD_JETTY_FL.x + WORLD_JETTY_FL.w; x++) {
+      scene.ground[y * W + x] = FL_DOCK;
+      scene.solidGrid[y * W + x] = 0;
+    }
+  }
+  scene.labels.push({ x: WORLD_TO_FLOTTE.tx + 0.9, y: WORLD_TO_FLOTTE.ty - 0.7, text: "Zur Flotte", color: "#ffe9b0" });
 
   // Marktplatz
   scene.objDeco(28, 18, "well", 0.55, true);

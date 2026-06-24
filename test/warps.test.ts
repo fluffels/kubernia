@@ -21,14 +21,15 @@ import { WORLD_TO_ARCHIPEL, WORLD_RETURN, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL } 
 import { WORLD_TO_LIGHTHOUSE, WORLD_RETURN_LH, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL } from "../src/lighthouse";
 import { WORLD_TO_WAREHOUSE, WORLD_RETURN_WH, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL } from "../src/warehouse";
 import { WORLD_TO_WATCHTOWER, WORLD_RETURN_WT, WATCHTOWER_TO_WORLD, WATCHTOWER_ARRIVAL } from "../src/watchtower";
+import { WORLD_TO_FLOTTE, WORLD_RETURN_FL, FLOTTE_TO_WORLD, FLOTTE_ARRIVAL } from "../src/flotte";
 
 /** Pixel-Mittelpunkt einer Kachel (wie die Szenen den Spieler setzen + warpAt floort). */
 const center = (t: { tx: number; ty: number }): [number, number] => [t.tx * TILE + 8, t.ty * TILE + 8];
 
 describe("REGION_WARPS – die Daten-Liste der Region-Übergänge (#426)", () => {
-  it("deckt genau die vier Regionen ab, alle von der Hauptkarte „harbor“", () => {
-    expect(REGION_WARPS.map((w) => w.id).sort()).toEqual(["archipel", "lighthouse", "warehouse", "watchtower"]);
-    expect(REGION_WARPS.map((w) => w.targetScene).sort()).toEqual(["Archipel", "Lighthouse", "Warehouse", "Watchtower"]);
+  it("deckt genau die fünf Regionen ab, alle von der Hauptkarte „harbor“", () => {
+    expect(REGION_WARPS.map((w) => w.id).sort()).toEqual(["archipel", "flotte", "lighthouse", "warehouse", "watchtower"]);
+    expect(REGION_WARPS.map((w) => w.targetScene).sort()).toEqual(["Archipel", "Flotte", "Lighthouse", "Warehouse", "Watchtower"]);
     for (const w of REGION_WARPS) expect(w.fromMap).toBe("harbor");
   });
 
@@ -61,6 +62,10 @@ describe("REGION_WARPS – die Daten-Liste der Region-Übergänge (#426)", () =>
     expect(byId.watchtower.worldReturn).toBe(WORLD_RETURN_WT);
     expect(byId.watchtower.regionReturn).toBe(WATCHTOWER_TO_WORLD);
     expect(byId.watchtower.arrival).toBe(WATCHTOWER_ARRIVAL);
+    expect(byId.flotte.trigger).toBe(WORLD_TO_FLOTTE);
+    expect(byId.flotte.worldReturn).toBe(WORLD_RETURN_FL);
+    expect(byId.flotte.regionReturn).toBe(FLOTTE_TO_WORLD);
+    expect(byId.flotte.arrival).toBe(FLOTTE_ARRIVAL);
   });
 
   it("kein Re-Trigger-Loop für JEDEN Warp: Rückkehr-/Ankunftskachel ≠ Warp-Kachel", () => {
@@ -74,8 +79,8 @@ describe("REGION_WARPS – die Daten-Liste der Region-Übergänge (#426)", () =>
 });
 
 describe("regionWarpsFromMap – Übergänge je Hauptkarte", () => {
-  it("liefert für „harbor“ alle vier, für eine andere Karte keine", () => {
-    expect(regionWarpsFromMap("harbor")).toHaveLength(4);
+  it("liefert für „harbor“ alle fünf, für eine andere Karte keine", () => {
+    expect(regionWarpsFromMap("harbor")).toHaveLength(5);
     expect(regionWarpsFromMap("test-map")).toHaveLength(0);
   });
 });
