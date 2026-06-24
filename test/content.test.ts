@@ -1002,3 +1002,47 @@ test("#139 Wachturm-Quests (k8s-serviceaccount–k8s-pod-security): von Vidar, T
     assert.ok(quests[i].rewardCoins > quests[i - 1].rewardCoins, quests[i].id + ": Dublonen müssen über der Vorquest liegen");
   }
 });
+
+/* ===== Wording-Wächter: verbannte spielwelt-interne Metaphern (#447) =====
+ * Lernende sollen den echten Fachbegriff (Registry) sehen, nicht eine Metapher,
+ * die nur einmal im Spiel auftaucht. Der Wächter sammelt ALLE spielersichtbaren
+ * Quest-Texte und stellt sicher, dass „Kisten-Supermarkt" nicht zurückkehrt. */
+
+/** Sammelt alle vom Spieler gelesenen Texte einer Quest-Liste (Titel, Dialoge,
+ *  Choices, Teach-/Terminal-Panels samt Hints, Drill-Intros). */
+function playerVisibleQuestText(quests: typeof KQContent.QUESTS): string[] {
+  const out: string[] = [];
+  for (const quest of quests) {
+    out.push(quest.title);
+    for (const step of quest.steps) {
+      if ("brief" in step && step.brief) out.push(step.brief);
+      if (step.type === "dialog") out.push(...step.lines);
+      else if (step.type === "choice") {
+        out.push(step.q);
+        for (const o of step.options) out.push(o.t, o.reply);
+      } else if (step.type === "teach") out.push(step.cmd.intro, step.cmd.text, step.cmd.hint);
+      else if (step.type === "terminal") for (const t of step.tasks) out.push(t.text, t.hint);
+      else if (step.type === "drill") out.push(step.intro);
+    }
+  }
+  return out;
+}
+
+test("#447 Wording: kein 'Kisten-Supermarkt' (spielwelt-interne Metapher) mehr in spielersichtbaren Quest-Texten", () => {
+  const treffer = playerVisibleQuestText(KQContent.QUESTS).filter(t => /Kisten-Supermarkt/i.test(t));
+  assert.deepEqual(treffer, [], "verbannte Metapher 'Kisten-Supermarkt' gefunden – bitte 'Registry' verwenden:\n" + treffer.join("\n"));
+});
+
+test("#447 Red-Green: der Wording-Wächter findet 'Kisten-Supermarkt' in einem eingeschleusten Dialog", () => {
+  // Ein Wächter, der den verbannten Begriff nicht fände, wäre wertlos – eingeschleuster
+  // Dialog beweist, dass der Text-Sammler genau die spielersichtbaren Zeilen erfasst.
+  const kaputt = [
+    ...KQContent.QUESTS,
+    {
+      id: "q-wording-probe", title: "Probe", giver: "bo", topic: "docker", rewardXp: 1, rewardCoins: 1,
+      steps: [{ type: "dialog", npc: "bo", lines: ["Baupläne liegen im Kisten-Supermarkt."] }],
+    },
+  ] as typeof KQContent.QUESTS;
+  const treffer = playerVisibleQuestText(kaputt).filter(t => /Kisten-Supermarkt/i.test(t));
+  assert.ok(treffer.length >= 1, "der Wächter müsste den eingeschleusten Begriff finden");
+});
