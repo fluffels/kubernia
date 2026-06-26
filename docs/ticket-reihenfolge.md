@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-26 — nächstes Ticket: #334 (Auto-Rest greift; siehe Hinweis). Kopf: 2 Einträge. Zuletzt abgeschlossen: #250 (Lernpfad-Konsistenz: `argocd app list` ist in q29 `gitops-self-sync`, Schritt `t-argo-list`, jetzt ein eigener teach-Beat mit 🆕-Intro „Flotten-Überblick: Sync/Health aller Applications" — konsistent mit den teach-Schritten get/sync; Lernpfad-Audit Befund B erledigt. npm test 1115 / typecheck / lint / check:arch / check:size / smoke grün + im Browser durchgespielt). Phase 9 + 10 komplett, kein laufender Content-Arc im Kopf. ⏳ **Empfohlener nächster Content-Arc (Reaktivierung ausstehend):** der dependency-geordnete Storage-Lernpfad #240→#241→#242→#243→#244→#245→#246 liegt noch mit Label `status:zurückgestellt` im Pool. Beim nächsten Auffüllen reaktivieren (Label entfernen → dependency-geordnet in den Kopf), analog wie Phase 10 nach Phase 9 aus dem Pool geholt wurde.**
+> **Stand: 2026-06-26 — nächstes Ticket: #240 (Start des Storage-Lernpfad-Arcs). Kopf: 10 Einträge. Zuletzt abgeschlossen: #250 (Lernpfad-Konsistenz: `argocd app list` ist in q29 `gitops-self-sync`, Schritt `t-argo-list`, jetzt ein eigener teach-Beat mit 🆕-Intro „Flotten-Überblick: Sync/Health aller Applications" — konsistent mit den teach-Schritten get/sync; Lernpfad-Audit Befund B erledigt. npm test 1115 / typecheck / lint / check:arch / check:size / smoke grün + im Browser durchgespielt). Phase 9 + 10 komplett. ✅ **Storage-Lernpfad-Arc #240→#241→#242→#243→#244→#245→#246 reaktiviert** (Label `status:zurückgestellt` entfernt) und dependency-geordnet in den Kopf gesetzt — der natürliche Nachfolger, analog wie Phase 10 nach Phase 9 aus dem Pool geholt wurde: erst Sim-Grundlagen #240/#241, dann Quests #242–#244, dann Quiz #245, dann Tests #246.**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -40,17 +40,23 @@ Sagt die Maintainerin **„nächstes Ticket"** (für kubequest), dann:
 
 ## Reihenfolge — der Kopf
 
-Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwas anderes ermöglicht, kommt davor), sonst niedrigste Nummer. Content-Arcs (echter Lernpfad-Fortschritt) stehen über QoL-/System-Features. No-dependency-Content-Füller (#212/#218/#219/#228/#229/#236/#237/#239/#250) leben im Auto-Rest — keine Abhängigkeit, kein Grund für den Kopf.
+Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwas anderes ermöglicht, kommt davor), sonst niedrigste Nummer. Content-Arcs (echter Lernpfad-Fortschritt) stehen über QoL-/System-Features. No-dependency-Content-Füller (#212/#218/#219/#228/#229/#236/#237/#239) leben im Auto-Rest — keine Abhängigkeit, kein Grund für den Kopf.
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
+| | **— Content-Arc: Storage-Lernpfad (reaktiviert 2026-06-26, dependency-geordnet) —** | | | Der nächste echte Lernpfad-Arc nach Phase 9+10. Reihenfolge ist load-bearing: erst die Sim-Grundlagen, dann die Quests, die darauf bauen, dann Quiz, dann Tests. |
+| 1 | **#240** | niedrig | Sim-Grundlage: ephemeral storage (emptyDir, ephemeral-storage-Limits) + DiskPressure-Eviction | **Nächstes Ticket.** Sim-Fundament für die Ephemeral-Quest #242 — muss vor dem Content da sein. |
+| 2 | **#241** | niedrig | Sim-Grundlage: S3-kompatibler Object Store (Buckets/Objekte) | Sim-Fundament für die Object-Storage- & Backup-Quests #243/#244. |
+| 3 | **#242** | niedrig | Quest „Ephemeral Storage — emptyDir, Node-Disk & Eviction" | Baut auf Sim #240. |
+| 4 | **#243** | niedrig | Quest „Object Storage & Buckets — wann S3 statt Volume" | Baut auf Sim #241. |
+| 5 | **#244** | niedrig | Quest „Backup ins Object Storage (S3) — off-cluster sichern (3-2-1)" | Baut auf Sim #241 + Quest #243. |
+| 6 | **#245** | niedrig | Quiz-Karten (ephemeral vs persistent, Object/Block/File, S3-Backup-Ziel, etcd-Backup) | Nach den Quests #242–#244 (Konzepte müssen eingeführt sein). |
+| 7 | **#246** | niedrig | Tests für ephemeral-Storage- & Object-Store-Sim + neue Quests | **Schließt den Arc ab** (analog #157/#172) — nach allem anderen. |
 | | **— QoL / System-Features —** | | | |
-| 1 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 8 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 2 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 3 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
-
-> 📌 **Nächster Content-Arc (zum Reaktivieren):** Phase 9 + 10 sind komplett, der Kopf hat keinen laufenden Content-Arc mehr. Der dependency-geordnete **Storage-Lernpfad #240→#241→#242→#243→#244→#245→#246** liegt im Reaktivierungs-Pool (`status:zurückgestellt`) und ist der natürliche Nachfolger — beim nächsten Auffüllen das Label entfernen und dependency-geordnet (Sim-Grundlagen #240/#241 → Quests #242–#244 → Quiz #245 → Tests #246) in den Kopf einsortieren, genau wie Phase 10 nach Phase 9 aus dem Pool geholt wurde.
+| 9 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 10 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
