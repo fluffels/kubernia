@@ -172,6 +172,29 @@ function ensureStatefulSet(sim: Sim): string {
   return name;
 }
 
+/* ---- Expeditions-Flotte (#146/#150–#153, Phase 9): Terraform im Großen – Bausteine (Module)
+ *  holen, Projekt initialisieren (Provider-Plugins + Remote-Backend), Multi-Cloud bauen und
+ *  Outputs lesen. NPC: saga. Die Drills setzen ihren tf-State per mergeScenario frisch auf
+ *  (additiv für den Cluster, aber tfResources/-Providers/-Modules/-Backend ersetzen die
+ *  jeweiligen Felder), damit jede Übung sauber startet – analog zu den ensure*-Helfern oben. */
+/** Outputs der Übungs-Flotte (einer wird beim Aufbau zusätzlich als sensibel markiert). */
+const TF_FLOTTE_OUTPUTS: { name: string; value: string }[] = [
+  { name: "anleger_adresse", value: "nordkai.flotte.local" },
+  { name: "flotten_groesse", value: "7" },
+];
+
+/** Sorgt für einen applizierten Flotten-State mit deklarierten Outputs (für die output-Übungen) –
+ *  inklusive eines als `sensitive` markierten, damit die Übersicht das Verbergen zeigt. */
+function ensureTfOutputs(sim: Sim) {
+  sim.mergeScenario({
+    tfResources: [{ addr: "hafen_flotte.expedition", desc: 'name = "kubernia-expedition"' }],
+    tfModules: [], tfProviders: [], tfBackend: null,
+    tfOutputs: [...TF_FLOTTE_OUTPUTS, { name: "lager_schluessel", value: "werft-geheim", sensitive: true }],
+  });
+  sim.tf.initialized = true;
+  sim.exec("terraform apply");
+}
+
 /** Eine generierte Übungsaufgabe (Drill).
  *  `why` begründet bei falscher Eingabe das Prinzip (nicht nur die Musterlösung) –
  *  „verstehen statt auswendig" (#233). Pflichtfeld: jeder Drill trägt eine Begründung. */
@@ -331,6 +354,50 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   "tf-state": sim => {
     if (!sim.tf.applied) { sim.tf.initialized = true; sim.exec("terraform apply"); }
     return { text: "Wirf einen Blick in Terraforms Gedächtnis.", accept: [/^terraform\s+state\s+list$/], solution: "terraform state list", hint: "terraform state …", why: "Der State ist Terraforms Gedächtnis; state list zeigt, welche Ressourcen es bereits verwaltet." };
+  },
+  // Expeditions-Flotte (#154): die Phase-9-Themen üben – Module holen, Projekt initialisieren
+  // (Provider + Remote-Backend), Multi-Cloud bauen und Outputs lesen. NPC: saga.
+  "tf-get": sim => {
+    sim.mergeScenario({
+      tfModules: [
+        { name: "nordanleger", source: "./modules/anleger", resources: ["hafen_kai.kai", "hafen_poller.poller"] },
+        { name: "suedanleger", source: "./modules/anleger", resources: ["hafen_kai.kai", "hafen_poller.poller"] },
+      ],
+      tfResources: [],
+    });
+    return { text: "Hol die wiederverwendbaren <b>Bausteine</b> (Module) ins Projekt.", accept: [/^terraform\s+get$/], solution: "terraform get", hint: "terraform &lt;unterbefehl&gt; – der Befehl, der die Module herunterlädt.", why: "Ein Modul ist ein wiederverwendbarer Baustein, den du mit verschiedenen Werten mehrfach aufrufst. terraform get lädt die in den module-Blöcken referenzierten Bausteine ins Projekt (terraform init macht das mit). Muster: terraform get." };
+  },
+  "tf-init-flotte": sim => {
+    sim.mergeScenario({
+      tfProviders: [{ name: "nordwind", source: "kubequest/nordwind", version: "1.4.0" }],
+      tfBackend: { type: "s3", name: "flotten-lager", locking: true },
+      tfResources: [{ addr: "hafen_leuchtfeuer.einfahrt", desc: 'name = "einfahrt-nord"' }],
+    });
+    return { text: "Mach das Projekt startklar: <b>Provider-Plugins laden und das Remote-Backend (Flotten-Lager) einrichten</b>.", accept: [/^terraform\s+init$/], solution: "terraform init", hint: "Der allererste Befehl jedes Terraform-Projekts.", why: "terraform init ist der erste Schritt: es lädt die deklarierten Provider-Plugins herunter UND richtet das konfigurierte Remote-Backend ein, in dem der geteilte State liegt. Erst danach gehen plan/apply. Muster: terraform init." };
+  },
+  "tf-apply-flotte": sim => {
+    sim.mergeScenario({
+      tfProviders: [
+        { name: "nordwind", source: "kubequest/nordwind", version: "1.4.0" },
+        { name: "passat", source: "kubequest/passat", version: "0.9.2" },
+      ],
+      tfModules: [], tfBackend: null,
+      tfResources: [
+        { addr: "nordwind_insel.ost", desc: 'name = "ost-vorposten"', provider: "nordwind" },
+        { addr: "passat_insel.west", desc: 'name = "west-vorposten"', provider: "passat" },
+      ],
+    });
+    sim.tf.initialized = true; // Übung setzt ein initialisiertes Projekt voraus (wie tf-plan)
+    return { text: "Bau die Vorposten bei <b>beiden Anbietern</b>: eine Insel bei nordwind, eine bei passat (Multi-Cloud).", accept: [/^terraform\s+apply(\s+-auto-approve)?$/], solution: "terraform apply", hint: "Nach init/plan kommt der Bau-Befehl.", why: "terraform apply setzt den Plan um und baut die Ressourcen wirklich – hier je eine Insel pro Anbieter, aus EINER Konfig und EINEM Lauf. Genau so verwaltet man später AWS/Azure/GCP nebeneinander. Muster: terraform apply." };
+  },
+  "tf-output-read": sim => {
+    ensureTfOutputs(sim);
+    const o = pick(TF_FLOTTE_OUTPUTS);
+    return { text: "Lies den deklarierten Output <code>" + o.name + "</code> gezielt aus.", accept: [new RegExp("^terraform\\s+output\\s+" + o.name + "$")], solution: "terraform output " + o.name, hint: "Muster: terraform output &lt;output-name&gt;", why: "Outputs sind die sauberen Rückgaben einer Konfiguration. terraform output &lt;name&gt; gibt einen einzelnen Wert gezielt (roh) aus – praktisch, um z.B. eine erzeugte Adresse weiterzuverwenden. Muster: terraform output &lt;name&gt;." };
+  },
+  "tf-output-list": sim => {
+    ensureTfOutputs(sim);
+    return { text: "Verschaff dir den Überblick: zeig <b>alle</b> Outputs auf einmal.", accept: [/^terraform\s+output$/], solution: "terraform output", hint: "terraform output ganz ohne Namen listet alle deklarierten Outputs.", why: "terraform output ohne Namen listet alle deklarierten Outputs. Als sensitive markierte Werte erscheinen dabei nur als &lt;sensitive&gt; – Geheimnisse landen so nicht versehentlich im Log; gezielt (mit Namen) bekommt man sie bei Bedarf trotzdem heraus." };
   },
   "k-secret": sim => {
     let name = pick(["schatzkarte", "funkcode", "kombuesen-rezept"]) + rnd(2, 99);
@@ -697,6 +764,7 @@ export const PRACTICE: Record<string, { drill: string; after: string }[]> = {
   ada:  [{ drill: "k-apply", after: "k8s-apply-manifests" }, { drill: "git-status", after: "git-version-control" }, { drill: "git-add", after: "git-version-control" }, { drill: "git-commit", after: "git-version-control" }, { drill: "git-branch", after: "git-feature-branch" }, { drill: "git-checkout", after: "git-feature-branch" }, { drill: "git-add-all", after: "git-pipeline" }, { drill: "ci-status", after: "git-pipeline" }, { drill: "git-pull", after: "git-merge-branches" }, { drill: "git-resolve", after: "git-merge-branches" }, { drill: "k-secret-tls", after: "secrets-encrypted" }, { drill: "k-get-ingress", after: "secrets-encrypted" }, { drill: "k-nslookup", after: "dns-service-discovery" }, { drill: "k-nslookup-external", after: "dns-service-discovery" }],
   runa: [{ drill: "helm-install", after: "helm-release-install" }, { drill: "helm-list", after: "helm-release-install" }, { drill: "helm-upgrade", after: "helm-upgrade-rollback" }, { drill: "helm-rollback", after: "helm-upgrade-rollback" }, { drill: "helm-create", after: "helm-umbrella-chart" }, { drill: "helm-lint", after: "helm-umbrella-chart" }, { drill: "helm-package", after: "helm-umbrella-chart" }, { drill: "helm-install-local", after: "helm-umbrella-chart" }, { drill: "helm-upgrade-values", after: "helm-umbrella-chart" }, { drill: "helm-dep-update", after: "helm-umbrella-chart" }],
   theo: [{ drill: "tf-plan", after: "terraform-intro" }, { drill: "tf-state", after: "terraform-state-destroy" }],
+  saga: [{ drill: "tf-get", after: "terraform-modul" }, { drill: "tf-init-flotte", after: "terraform-remote-state" }, { drill: "tf-apply-flotte", after: "terraform-provider" }, { drill: "tf-output-read", after: "terraform-variablen-outputs" }, { drill: "tf-output-list", after: "terraform-variablen-outputs" }],
   juno: [{ drill: "k-logs", after: "k8s-debug-crashloop" }, { drill: "k-describe", after: "k8s-debug-imagepull" }, { drill: "k-rollout", after: "k8s-debug-crashloop" }, { drill: "k-apply-netpol", after: "network-policy" }, { drill: "k-get-netpol", after: "network-policy" }, { drill: "k-describe-netpol", after: "network-policy" }, { drill: "k-delete-netpol", after: "network-policy" }, { drill: "k-set-resources", after: "k8s-resource-limits" }],
   argo: [{ drill: "argo-apply", after: "gitops-self-sync" }, { drill: "argo-app-list", after: "gitops-self-sync" }, { drill: "argo-app-get", after: "gitops-self-sync" }, { drill: "argo-app-sync", after: "gitops-self-sync" }],
   lumi: [{ drill: "obs-top-pods", after: "observability-metrics" }, { drill: "obs-top-nodes", after: "observability-metrics" }, { drill: "obs-sm-apply", after: "observability-metrics" }, { drill: "obs-sm-get", after: "observability-metrics" }, { drill: "k-logs", after: "observability-logs" }, { drill: "obs-logs-previous", after: "observability-logs" }, { drill: "obs-alerts", after: "observability-alerts" }, { drill: "obs-pr-apply", after: "observability-alerts" }],
