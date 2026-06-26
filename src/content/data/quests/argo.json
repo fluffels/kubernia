@@ -163,19 +163,18 @@
         ]
       },
       {
-        "type": "terminal",
+        "type": "teach",
         "brief": "Was sagt Argo?",
-        "tasks": [
-          {
-            "id": "t-argo-list",
-            "text": "Verschaff dir den Überblick: <code>argocd app list</code>. In der Spalte SYNC STATUS steht <code>OutOfSync</code> – Ist und Soll klaffen noch auseinander.",
-            "accept": [
-              "^argocd\\s+app\\s+(list|ls)$"
-            ],
-            "solution": "argocd app list",
-            "hint": "Schreib es aus: argocd app list (die Kurzform ls verdienst du dir durch Nutzung)."
-          }
-        ]
+        "cmd": {
+          "id": "t-argo-list",
+          "intro": "🆕 Neuer Befehl: <code>argocd app list</code> – der Flotten-Überblick: listet <b>alle</b> Applications mit ihrem <b>Sync Status</b> (Synced/OutOfSync) und ihrer <b>Health</b> auf einen Blick. Dein Einstieg, bevor du mit <code>get</code> in eine einzelne Akte schaust.",
+          "text": "Verschaff dir den Überblick: <code>argocd app list</code>. In der Spalte SYNC STATUS steht <code>OutOfSync</code> – Ist und Soll klaffen noch auseinander.",
+          "accept": [
+            "^argocd\\s+app\\s+(list|ls)$"
+          ],
+          "solution": "argocd app list",
+          "hint": "Schreib es aus: argocd app list (die Kurzform ls verdienst du dir durch Nutzung)."
+        }
       },
       {
         "type": "teach",
