@@ -48,5 +48,6 @@
   "k8s-pod-security",
   "terraform-modul",
   "terraform-remote-state",
-  "terraform-provider"
+  "terraform-provider",
+  "terraform-variablen-outputs"
 ]

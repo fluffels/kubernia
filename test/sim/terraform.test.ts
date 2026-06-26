@@ -281,3 +281,46 @@ test("Provider-Quest: Alt-State aus Modul-/Remote-State-Quest leckt nicht durch 
   const list = sim.exec("terraform state list").output!.split("\n").sort();
   assert.deepEqual(list, ["nordwind_insel.ost", "passat_insel.west"], "nur die zwei Provider-Inseln, keine Alt-Module");
 });
+
+/* ===== Content-Szenario der Variablen-&-Outputs-Quest (#153) ===== */
+
+test("Variablen-Quest: Outputs sind nach apply abrufbar, sensible nur gezielt im Klartext (#153)", () => {
+  const quest = KQContent.QUESTS.find(q => q.id === "terraform-variablen-outputs");
+  assert.ok(quest, "Quest terraform-variablen-outputs existiert");
+  const step = quest.steps.find(s => s.type === "terminal" && s.scenario);
+  assert.ok(step?.scenario, "Variablen-Quest hat ein Terminal-Szenario");
+  sim.mergeScenario(step.scenario);
+  sim.exec("terraform init");
+  const apply = sim.exec("terraform apply").output!;
+  // Im apply-Output erscheinen die Outputs – das Geheimnis aber nur als <sensitive>.
+  assert.match(apply, /flotten_groesse = "5"/, "die offene Output-Zahl steht im apply");
+  assert.match(apply, /lager_schluessel = <sensitive>/, "das Geheimnis ist in der Übersicht verborgen");
+  assert.doesNotMatch(apply, /werft-geheim/, "der Klartext des Geheimnisses steht NICHT in der Übersicht");
+  // Gezielt abgefragt gibt Terraform den Rohwert heraus – auch den sensiblen.
+  assert.equal(sim.exec("terraform output anleger_adresse").output, "kubernia-expedition.flotte.local");
+  assert.equal(sim.exec("terraform output lager_schluessel").output, "werft-geheim-2347", "gezielter Abruf liefert den Rohwert");
+});
+
+test("Variablen-Quest: Alt-State aus den Vorquests (Module/Provider/Backend) leckt nicht durch (#153)", () => {
+  // mergeScenario ist additiv: Modul-/Provider-/Remote-State-Quest davor hinterlassen
+  // Module, Provider und einen Backend im tf-State. Das Variablen-Szenario muss sie leeren,
+  // sonst zeigt `init` Alt-Provider und `state list` Alt-Anleger (dieselbe #150–#152-Lektion).
+  sim.mergeScenario({
+    tfModules: [{ name: "nordanleger", source: "./modules/anleger", resources: ["hafen_kai.kai"] }],
+    tfProviders: [{ name: "nordwind", source: "kubequest/nordwind", version: "1.4.0" }],
+    tfBackend: { type: "s3", name: "flotten-lager", locking: true },
+    tfResources: [],
+  });
+  sim.exec("terraform init");
+  sim.exec("terraform apply");
+  const quest = KQContent.QUESTS.find(q => q.id === "terraform-variablen-outputs");
+  const step = quest!.steps.find(s => s.type === "terminal" && s.scenario);
+  sim.mergeScenario(step!.scenario);
+  const init = sim.exec("terraform init").output!;
+  assert.doesNotMatch(init, /nordwind/, "kein Alt-Provider aus der Provider-Quest im init");
+  assert.equal(sim.tf.backend, null, "kein Alt-Backend aus der Remote-State-Quest");
+  const apply = sim.exec("terraform apply").output!;
+  assert.doesNotMatch(apply, /nordanleger/, "kein Alt-Output aus der Modul-Quest");
+  const list = sim.exec("terraform state list").output!.split("\n").sort();
+  assert.deepEqual(list, ["hafen_flotte.expedition"], "nur die Variablen-Quest-Ressource, kein Alt-State");
+});
