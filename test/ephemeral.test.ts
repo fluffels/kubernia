@@ -128,6 +128,32 @@ test("Negativ: Default-Cluster (Nodes ohne Kapazität) bekommt NIE DiskPressure"
   assert.doesNotMatch(sim.exec("kubectl get pods").output!, /Evicted/, "und kein Evicted ohne Limit");
 });
 
+/* ===================== mergeScenario: Node-Disk eines Quest-Szenarios setzen (#242) ===================== */
+
+test("mergeScenario setzt/merged Node-Disk-Kapazität → Quest-Szenario kann DiskPressure aufsetzen", () => {
+  sim = new KQSim({}); // Default-Cluster: Nodes ohne Kapazität → unbegrenzt, nie Druck.
+  assert.doesNotMatch(sim.exec("kubectl get nodes").output!, /DiskPressure/, "vorher kein Druck (False-Positive-Schutz)");
+
+  // Ein Quest-Szenario schrumpft die Disk eines vorhandenen Workers UND pinnt einen
+  // gefräßigen Pod dorthin – genau das Setup, das eine Quest braucht.
+  sim.mergeScenario({
+    nodes: [{ name: "ahoi-worker-1", status: "Ready", roles: "<none>", version: "v1.30.2", ephemeralCapacityMi: 1024, ephemeralBaseMi: 700 }],
+    deployments: [{ name: "wildwuchs", image: "nginx", replicas: 1, node: "ahoi-worker-1", emptyDir: { data: "logflut", usedMi: 400 } }],
+  });
+
+  // 700 (Baseline) + 400 (emptyDir) = 1100 >= 1024 → Druck am gemergten Node.
+  assert.match(sim.exec("kubectl get nodes").output!, /ahoi-worker-1\s+Ready,DiskPressure/, "der gemergte Node steht unter DiskPressure");
+  assert.match(sim.exec("kubectl get pods").output!, /wildwuchs[\w-]*\s+0\/1\s+Evicted/, "der Verbraucher wird evictet");
+});
+
+test("mergeScenario nimmt einen ganz neuen Node auf (per Name nicht vorhanden)", () => {
+  sim = new KQSim({});
+  const before = sim.nodes.length;
+  sim.mergeScenario({ nodes: [{ name: "kai-lager-1", status: "Ready", roles: "<none>", version: "v1.30.2" }] });
+  assert.equal(sim.nodes.length, before + 1, "neuer Node ist dazugekommen");
+  assert.match(sim.exec("kubectl get nodes").output!, /kai-lager-1/, "und taucht in get nodes auf");
+});
+
 /* ===================== apply -f: Pod-Template mit emptyDir + Limit ===================== */
 
 test("kubectl apply -f mit emptyDir + ephemeral-storage-Limit (apply-Handler mitgetestet)", () => {
