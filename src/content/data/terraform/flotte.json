@@ -9,6 +9,7 @@
         "modules/anleger/main.tf": "# Die Ressourcen, die der Baustein als Einheit erzeugt.\n\nresource \"hafen_kai\" \"kai\" {\n  name   = var.name\n  laenge = var.laenge\n}\n\nresource \"hafen_poller\" \"poller\" {\n  kai    = hafen_kai.kai.name\n  anzahl = 4\n}\n",
         "modules/anleger/outputs.tf": "# Was der Baustein nach außen sichtbar macht.\n\noutput \"adresse\" {\n  description = \"Die fertige Anleger-Adresse im Hafennetz.\"\n  value       = \"${var.name}-kai.flotte.local\"\n}\n"
       },
+      "tfResources": [],
       "tfModules": [
         { "name": "nordanleger", "source": "./modules/anleger", "resources": ["hafen_kai.kai", "hafen_poller.poller"] },
         { "name": "suedanleger", "source": "./modules/anleger", "resources": ["hafen_kai.kai", "hafen_poller.poller"] }

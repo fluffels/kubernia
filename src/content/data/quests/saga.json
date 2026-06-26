@@ -1,0 +1,153 @@
+[
+  {
+    "id": "terraform-modul",
+    "title": "Ein Bauplan, viele Anleger",
+    "giver": "saga",
+    "topic": "terraform",
+    "rewardXp": 55,
+    "rewardCoins": 40,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "saga",
+        "lines": [
+          "Willkommen bei der Expeditions-Flotte! Saga, Flottenkommandantin. Theo hat dir das Land gebaut – ich zeige dir, wie man <b>im Großen</b> baut, ohne sich zu wiederholen.",
+          "Eine Flotte braucht <b>viele</b> Anleger: Nord, Süd, später Ost und West. Jeder Anleger ist derselbe Bauplan – ein Kai plus ein paar Poller. Würde ich den für jeden Anleger neu abtippen, schleicht sich beim zehnten ein Tippfehler ein.",
+          "Die Lösung heißt <b>Modul</b>: EIN wiederverwendbarer Baustein, den du mit unterschiedlichen Werten beliebig oft <b>aufrufst</b>. Klare Schnittstelle – oben rein (<b>Variablen</b>), unten raus (<b>Outputs</b>). Einmal sauber, hundertmal gleich. Schau dir den Bauplan an."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Den Baustein lesen",
+        "scenarioRef": "flotte-modul",
+        "tasks": [
+          {
+            "id": "t-saga-1",
+            "text": "Lies die Wurzel-Konfig: <code>cat main.tf</code>. Wie oft wird derselbe Baustein <code>./modules/anleger</code> aufgerufen – und mit welchen Werten?",
+            "accept": [
+              "^cat\\s+main\\.tf$"
+            ],
+            "solution": "cat main.tf",
+            "hint": "cat <datei> – achte auf die beiden module-Blöcke."
+          },
+          {
+            "id": "t-saga-2",
+            "text": "Jetzt in den Baustein selbst: <code>cat modules/anleger/main.tf</code>. Welche Ressourcen erzeugt EIN Aufruf als Einheit?",
+            "accept": [
+              "^cat\\s+modules\\/anleger\\/main\\.tf$"
+            ],
+            "solution": "cat modules/anleger/main.tf",
+            "hint": "Ein Kai plus ein paar Poller – das ist der wiederverwendbare Block."
+          },
+          {
+            "id": "t-saga-3",
+            "text": "Und die Schnittstelle nach oben: <code>cat modules/anleger/variables.tf</code> – das sind die <b>Eingaben</b>, die der Aufrufer von außen setzt.",
+            "accept": [
+              "^cat\\s+modules\\/anleger\\/variables\\.tf$"
+            ],
+            "solution": "cat modules/anleger/variables.tf",
+            "hint": "variable-Blöcke = was der Baustein von außen erwartet (name, laenge)."
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Bausteine holen & Generalprobe",
+        "tasks": [
+          {
+            "id": "t-saga-4",
+            "text": "Wie immer Schritt 1: <code>terraform init</code>. Lies die erste Zeile – Terraform holt jetzt nicht nur Provider, sondern auch die <b>Module</b>!",
+            "accept": [
+              "^terraform\\s+init$"
+            ],
+            "solution": "terraform init",
+            "hint": "Der allererste Befehl jedes Terraform-Projekts – „Initializing modules…“."
+          },
+          {
+            "id": "t-saga-5",
+            "text": "Generalprobe: <code>terraform plan</code>. Zähl mit – aus ZWEI Modul-Aufrufen werden <b>vier</b> Ressourcen (je Kai + Poller). Das ist die Wiederverwendung in Aktion.",
+            "accept": [
+              "^terraform\\s+plan$"
+            ],
+            "solution": "terraform plan",
+            "hint": "Erst lesen, dann bauen. Achte auf die „aus Modul“-Zeilen."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "saga",
+        "reviewId": "q-flotte-modul-1",
+        "q": "Warum ein Modul, statt den Anleger-Block für jeden Anleger zu kopieren?",
+        "options": [
+          {
+            "t": "Ein Baustein wird einmal geschrieben und mit verschiedenen Werten beliebig oft aufgerufen – weniger Copy-Paste, Korrekturen wirken überall.",
+            "ok": true,
+            "reply": "Genau das ist DRY für Infrastruktur! Den Kai-Bauplan verbesserst du an EINER Stelle – jeder Anleger erbt die Änderung. Bei zwanzig Anlegern macht das den Unterschied."
+          },
+          {
+            "t": "Module machen den Code schneller – Terraform baut sie parallel auf.",
+            "ok": false,
+            "reply": "Nein, um Tempo geht es nicht. Der Gewinn ist <b>Wiederverwendung</b>: ein Bauplan, beliebig oft ausgestanzt, an einer Stelle gepflegt."
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Die Flotte legt an",
+        "tasks": [
+          {
+            "id": "t-saga-6",
+            "text": "Bau die Anleger: <code>terraform apply</code>. Vier Ressourcen aus zwei Modul-Aufrufen – und ganz unten siehst du schon einen <b>Output</b>.",
+            "accept": [
+              "^terraform\\s+apply(\\s+-auto-approve)?$"
+            ],
+            "check": {"flag":["tf","applied"]},
+            "solution": "terraform apply",
+            "hint": "Nach der Generalprobe die Aufführung."
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Was der Baustein zurückgibt",
+        "cmd": {
+          "id": "t-output",
+          "intro": "🆕 Neuer Befehl: <code>terraform output &lt;name&gt;</code> – zeigt einen deklarierten Output-Wert. Module reichen ihre Outputs nach oben durch: <code>modules/anleger/outputs.tf</code> berechnet die Adresse, die Wurzel-Konfig macht sie als <code>nordanleger_adresse</code> sichtbar.",
+          "text": "Frag die fertige Adresse des Nordanlegers ab: <code>terraform output nordanleger_adresse</code>.",
+          "accept": [
+            "^terraform\\s+output\\s+nordanleger_adresse$"
+          ],
+          "solution": "terraform output nordanleger_adresse",
+          "hint": "Muster: terraform output <output-name>"
+        }
+      },
+      {
+        "type": "choice",
+        "npc": "saga",
+        "reviewId": "q-flotte-modul-2",
+        "q": "Was bilden <code>variables</code> und <code>outputs</code> eines Moduls zusammen?",
+        "options": [
+          {
+            "t": "Die Schnittstelle des Bausteins: Variablen sind die Eingaben des Aufrufers, Outputs die Werte, die der Baustein nach außen sichtbar macht.",
+            "ok": true,
+            "reply": "Perfekt. Ein Modul ist eine Black Box: oben rein (Variablen wie name, laenge), unten raus (Outputs wie die fertige Adresse). Was drinnen steckt, muss der Aufrufer gar nicht kennen."
+          },
+          {
+            "t": "Nichts Besonderes – beides sind nur Kommentare zur Dokumentation.",
+            "ok": false,
+            "reply": "Doch, das ist der Kern: <b>Variablen</b> sind echte Eingaben (der Aufrufer setzt name & laenge), <b>Outputs</b> echte Rückgaben (die berechnete Adresse). Zusammen sind sie der Vertrag des Bausteins."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "saga",
+        "lines": [
+          "Nord- und Südanleger stehen – aus EINEM Bauplan! So wächst eine Flotte, ohne dass die Konfig im Chaos versinkt. Module sind dein wichtigstes Werkzeug für große Infrastruktur.",
+          "Aber jetzt eine Frage, die jede Crew einholt: Wo liegt eigentlich das <b>Gedächtnis</b> der Flotte – der State? Auf deinem Laptop? Was, wenn zwei Kapitäne gleichzeitig planen? Komm morgen wieder, dann reden wir über <b>Remote State</b>. 🧭"
+        ]
+      }
+    ]
+  }
+]
