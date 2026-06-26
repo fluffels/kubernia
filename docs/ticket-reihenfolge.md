@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-26 — nächstes Ticket: #251. Kopf: 4 Einträge. Phase 10 (Heimat-Werft) ist KOMPLETT (#164→#165→#166→#167→#169→#171→#172). Zuletzt abgeschlossen: #172 (Tests für Capstone-Quests & Werft-Sim — neue dedizierte `test/werft-drills.test.ts` analog `storage-drills.test.ts`/#157: Greta-Pool-Verdrahtung, Lösbarkeit über viele Zufallsziehungen, geteilte Sim ohne Vergiftung, der echte ImagePullBackOff-Negativfall (Red-Green-bewiesen), Capstone-Quest-Arc `werft-eigener-dienst` durchgespielt + End-Zustand gepinnt (gebaut→deployt→curl 200), Red-Green-Ablehnung; die reine Werft-Sim T7 war schon durch `test/sim/werft.test.ts`/#164 abgedeckt. npm test 1115 / typecheck / lint / check:arch / check:size grün). Davor #171 (Phase 10 als „im Spiel" markiert) und #169 (Capstone-Drills). Phase 9 (Expeditions-Flotte) #149–#157 und Phase 10 (Heimat-Werft) #164–#172 sind beide komplett — kein laufender Content-Arc mehr im Kopf. Empfohlener nächster Content-Arc: der dependency-geordnete Storage-Lernpfad #240→#241→#242→#243→#244→#245→#246 (steht im Reaktivierungs-Pool, `status:zurückgestellt`), beim nächsten Auffüllen reaktivieren — analog wie Phase 10 nach Phase 9 aus dem Pool geholt wurde.**
+> **Stand: 2026-06-26 — nächstes Ticket: #250. Kopf: 3 Einträge. Zuletzt abgeschlossen: #251 (Lernpfad-Konsistenz: `git branch <name>` (nur anlegen, ohne wechseln) wird in der Quest `git-feature-branch` jetzt als eigener teach-Schritt `t-git-branch` direkt nach `git checkout -b` eingeführt und abgegrenzt — Variante A des Tickets; der bereits existierende `git-branch`-Drill ist damit konsistent gelehrt. Lernpfad-Audit Befund C erledigt. npm test 1115 / typecheck / lint / check:arch / check:size / smoke grün). Phase 9 (Expeditions-Flotte) #149–#157 und Phase 10 (Heimat-Werft) #164–#172 sind beide komplett — kein laufender Content-Arc mehr im Kopf. Empfohlener nächster Content-Arc: der dependency-geordnete Storage-Lernpfad #240→#241→#242→#243→#244→#245→#246 — beim nächsten Auffüllen reaktivieren (Label `status:zurückgestellt` entfernen → dependency-geordnet in den Kopf), analog wie Phase 10 nach Phase 9 aus dem Pool geholt wurde.**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -45,13 +45,12 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
 | | **— Lernpfad-Konsistenz (Reihenfolge-Bugs: gedrillt/genutzt, aber nie eingeführt) —** | | | Echte Abhängigkeits-Fixes: ein Befehl wird geübt/verlangt, bevor er gelehrt wurde. Klein, risikoarm, vor mehr Content abräumen. |
-| 1 | **#251** | niedrig | `git branch` (anlegen ohne wechseln) wird gedrillt, aber nie eingeführt (q19) | **Nächstes Ticket.** Lernpfad-Lücke: Drill ohne Teach-Schritt. |
-| 2 | **#250** | niedrig | `argocd app list` als teach-Schritt einführen (q29) – Konsistenz mit get/sync | Lernpfad-Konsistenz, analog #251. |
+| 1 | **#250** | niedrig | `argocd app list` als teach-Schritt einführen (q29) – Konsistenz mit get/sync | **Nächstes Ticket.** Lernpfad-Konsistenz, analog #251 (erledigt). |
 | | **— QoL / System-Features —** | | | |
-| 3 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 2 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 4 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 5 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 3 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 4 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > 📌 **Nächster Content-Arc (zum Reaktivieren):** Phase 9 + 10 sind komplett, der Kopf hat keinen laufenden Content-Arc mehr. Der dependency-geordnete **Storage-Lernpfad #240→#241→#242→#243→#244→#245→#246** liegt im Reaktivierungs-Pool (`status:zurückgestellt`) und ist der natürliche Nachfolger — beim nächsten Auffüllen das Label entfernen und dependency-geordnet (Sim-Grundlagen #240/#241 → Quests #242–#244 → Quiz #245 → Tests #246) in den Kopf einsortieren, genau wie Phase 10 nach Phase 9 aus dem Pool geholt wurde.
 
