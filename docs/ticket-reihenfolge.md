@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-24 — nächstes Ticket: #149. Kopf: 12 Einträge. Zuletzt abgeschlossen: #455 (Boot-Sicherheitsnetz beobachtet den Boot-Flag aktiv statt Einmal-Timer → langsamer-aber-erfolgreicher Boot lässt es nie liegen; behebt auch die Duplikate #437/#453/#454), #148 (Expeditions-Flotte: begehbare Region + Anleger/Warp), #451 (Bo schickt nach Quest 1 einmalig zu Kralle statt generisch „Üben"), #452 (Hover-Glossar abgeschafft → Begriffe aktiv in Dialog + Kralle-Quiz), #447 („Kisten-Supermarkt" → „Registry").**
+> **Stand: 2026-06-26 — nächstes Ticket: #150. Kopf: 11 Einträge. Zuletzt abgeschlossen: #149 (Expeditions-Flotte: neuer NPC „Saga", Flottenkommandantin — PixelLab-Sprite + Smalltalk, Geberin des Phase-9-Arcs), #455 (Boot-Sicherheitsnetz beobachtet den Boot-Flag aktiv statt Einmal-Timer → langsamer-aber-erfolgreicher Boot lässt es nie liegen; behebt auch die Duplikate #437/#453/#454), #148 (Expeditions-Flotte: begehbare Region + Anleger/Warp), #451 (Bo schickt nach Quest 1 einmalig zu Kralle statt generisch „Üben"), #452 (Hover-Glossar abgeschafft → Begriffe aktiv in Dialog + Kralle-Quiz).**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -45,20 +45,19 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
 | | **— Expeditions-Flotte (Phase 9: Terraform-Module / Remote State / Provider) —** | | | Sim-Grundlage #146 ✓, Konfig-Inhalte #147 ✓ (`data/terraform/flotte.json`), Region/Anleger/Warp #148 ✓ (`src/flotte.ts`, RegionScene-Config „Flotte"). Reihenfolge: NPC → Quests → Drills → Quiz → Progression → Tests. |
-| 1 | **#149** | ohne | Neuer NPC (Sprite + Smalltalk) | **Nächstes Ticket.** Geber der Region; Region #148 ✓. ⚠️ Grafik-Anteil (PixelLab-Sprite). |
-| 2 | **#150** | ohne | Quest „Terraform-Module — wiederverwendbare Bausteine" | Erste Quest; nutzt Konfig `flotte-modul` (#147) per `scenarioRef`. Nach Sim + Region + NPC. |
-| 3 | **#151** | ohne | Quest „Remote State — gemeinsamer State im Backend" | Baut auf #150; Konfig `flotte-remote-state` (#147). |
-| 4 | **#152** | ohne | Quest „Provider & Cloud — Ressourcen bei verschiedenen Anbietern" | Baut auf #151; Konfig `flotte-provider` (#147). |
-| 5 | **#153** | ohne | Quest „Variablen & Outputs — Konfiguration sauber durchreichen" | Letzte Quest des Arcs; Konfig `flotte-variablen-outputs` (#147). |
-| 6 | **#154** | ohne | Drills (Module/Remote-State/Provider-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte. |
-| 7 | **#155** | ohne | Quiz-Karten (Terraform-Module, Remote State, Provider) | Wissens-Sicherung zur Region. |
-| 8 | **#156** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad. |
-| 9 | **#157** | ohne | Tests für Terraform-Aufbau-Quests & Modul/Remote-State/Provider-Sim | Zuletzt im Arc — sichert ab (Red-Green). |
+| 1 | **#150** | ohne | Quest „Terraform-Module — wiederverwendbare Bausteine" | **Nächstes Ticket.** Erste Quest; nutzt Konfig `flotte-modul` (#147) per `scenarioRef`. Nach Sim + Region + NPC (#149 ✓, Geberin Saga). |
+| 2 | **#151** | ohne | Quest „Remote State — gemeinsamer State im Backend" | Baut auf #150; Konfig `flotte-remote-state` (#147). |
+| 3 | **#152** | ohne | Quest „Provider & Cloud — Ressourcen bei verschiedenen Anbietern" | Baut auf #151; Konfig `flotte-provider` (#147). |
+| 4 | **#153** | ohne | Quest „Variablen & Outputs — Konfiguration sauber durchreichen" | Letzte Quest des Arcs; Konfig `flotte-variablen-outputs` (#147). |
+| 5 | **#154** | ohne | Drills (Module/Remote-State/Provider-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte. |
+| 6 | **#155** | ohne | Quiz-Karten (Terraform-Module, Remote State, Provider) | Wissens-Sicherung zur Region. |
+| 7 | **#156** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad. |
+| 8 | **#157** | ohne | Tests für Terraform-Aufbau-Quests & Modul/Remote-State/Provider-Sim | Zuletzt im Arc — sichert ab (Red-Green). |
 | | **— QoL / System-Features —** | | | |
-| 10 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 9 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 11 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 12 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 10 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 11 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
