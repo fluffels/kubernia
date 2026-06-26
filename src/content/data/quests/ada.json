@@ -365,7 +365,29 @@
         "type": "dialog",
         "npc": "ada",
         "lines": [
-          "Du bist jetzt auf <code>experiment-route</code> – <code>main</code> bleibt unberührt. Mach hier deine Arbeit fest: <code>route-neu.md</code> vormerken und committen (wie gestern gelernt)."
+          "Eine wichtige Unterscheidung, bevor du loslegst: <code>git checkout -b</code> hat eben <b>beides</b> getan – angelegt UND hineingewechselt. Oft willst du einen Zweig aber nur <b>anlegen</b> und (noch) <b>nicht</b> hineinwechseln – etwa um ihn schon für später vorzubereiten.",
+          "Dafür gibt es <code>git branch &lt;name&gt;</code>: das legt nur an und lässt dich stehen, wo du bist. Probier's – leg dir schon mal einen Vorrats-Zweig <code>reserve-route</code> an. Du bleibst dabei auf <code>experiment-route</code>."
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Nur anlegen",
+        "cmd": {
+          "id": "t-git-branch",
+          "intro": "🆕 <code>git branch &lt;name&gt;</code> – legt einen neuen Branch an, <b>ohne</b> hineinzuwechseln (anders als <code>git checkout -b</code>, das beides macht).",
+          "text": "Leg den Branch <code>reserve-route</code> an (nur anlegen, nicht wechseln).",
+          "accept": [
+            "^git\\s+branch\\s+reserve-route$"
+          ],
+          "solution": "git branch reserve-route",
+          "hint": "Muster: git branch <name>"
+        }
+      },
+      {
+        "type": "dialog",
+        "npc": "ada",
+        "lines": [
+          "Der Vorrats-Zweig liegt jetzt bereit – und du stehst weiter auf <code>experiment-route</code> (genau der Unterschied zu <code>checkout -b</code>). <code>main</code> bleibt unberührt. Mach hier deine Arbeit fest: <code>route-neu.md</code> vormerken und committen (wie gestern gelernt)."
         ]
       },
       {

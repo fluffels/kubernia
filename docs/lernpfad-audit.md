@@ -69,11 +69,13 @@ Schweregrad: 🔴 Kernbefehl/zustandsändernd ohne Lernmoment · 🟠 Konsistenz
 `kubectl get ingress`/`get deployments`/`get services` zählen **nicht** dazu: `kubectl get` ist
 in q4 eingeführt, hier kommen nur neue Ressourcentypen dazu (eigenes Thema: #208/#226 Glossar).
 
-### C) Drill verlangt eine nie eingeführte Befehlsform — `git branch` 🟡
-Der Drill `git-branch` (reines `git branch <name>`, anlegen *ohne* wechseln) ist im Pool von **q19**.
-q19 lehrt aber nur `git checkout -b` (anlegen **und** wechseln). Die reine `git branch`-Form wird also
-geübt, ohne je gezeigt worden zu sein. → **neues Ticket** (entweder `git branch` kurz einführen oder
-den Drill auf `git checkout -b` umstellen).
+### C) Drill verlangt eine nie eingeführte Befehlsform — `git branch` ✅ erledigt (#251)
+Der Drill `git-branch` (reines `git branch <name>`, anlegen *ohne* wechseln) war im Pool von **q19**
+(`git-feature-branch`), q19 lehrte aber nur `git checkout -b` (anlegen **und** wechseln) – die reine
+`git branch`-Form wurde also geübt, ohne je gezeigt worden zu sein. **Behoben (#251, Variante A):**
+`git-feature-branch` führt `git branch <name>` jetzt als eigenen `teach`-Schritt (`t-git-branch`,
+Branch `reserve-route`) direkt nach `git checkout -b` ein und grenzt beide ausdrücklich ab
+(nur anlegen vs. anlegen + wechseln).
 
 ### D) Übungs-Freischaltung vor Story-Einführung — `k-logs` 🟡
 In `PRACTICE` ist der `k-logs`-Drill bei Juno mit `after: q15` freigeschaltet, `kubectl logs` wird in
@@ -126,7 +128,7 @@ helm install/upgrade/rollback            intro q10/q11  ✓
 helm create/lint/package/install-local   intro q21      ✓
 terraform init/plan/apply/state/destroy  intro q12/q13  ✓ (vor Nutzung q17)
 git init/status/add/commit/log           intro q18      ✓
-git branch                               intro —        ✗ Drill q19         → C
+git branch                               intro q19      ✓ (#251)
 git checkout -b / merge / push / fetch / pull  intro q19/q20/q25  ✓
 glab ci status                           intro q20      ✓ (glab im Dialog vorab)
 argocd app get / sync                    intro q29      ✓
