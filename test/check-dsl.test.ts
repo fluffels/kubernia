@@ -244,6 +244,18 @@ test("serviceAccounts ist adressierbar (#132)", () => {
   assert.equal(evalRule(dep, { deployments: [{ name: "wachposten" }] }), false);
 });
 
+test("buckets sind adressierbar – Object-Store-Quest (#243)", () => {
+  // Bucket existiert (mb-Schritt)
+  const exists = { some: "buckets", where: { name: "hafen-backup" } };
+  assert.equal(evalRule(exists, { objectStore: { buckets: [{ name: "hafen-backup", objects: [] }] } }), true);
+  assert.equal(evalRule(exists, { objectStore: { buckets: [] } }), false);
+  // Bucket enthält ein Objekt mit passendem Key (Upload-Schritt: has über objects)
+  const hasObj = { some: "buckets", where: { name: "hafen-backup", objects: { has: { key: "manifeste/frachtliste.txt" } } } };
+  assert.equal(evalRule(hasObj, { objectStore: { buckets: [{ name: "hafen-backup", objects: [{ key: "manifeste/frachtliste.txt" }] }] } }), true);
+  assert.equal(evalRule(hasObj, { objectStore: { buckets: [{ name: "hafen-backup", objects: [{ key: "andere.txt" }] }] } }), false);
+  assert.ok(CHECK_COLLECTIONS.includes("buckets"), "Allowlist fehlt: buckets");
+});
+
 test("roles + roleBindings sind adressierbar (#133)", () => {
   // Role nach Namespace-Scope (cluster:false = Role, nicht ClusterRole)
   const role = { some: "roles", where: { name: "pod-leser", cluster: false } };
