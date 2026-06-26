@@ -45,5 +45,6 @@
   "k8s-serviceaccount",
   "k8s-rbac-role",
   "k8s-rbac-clusterrole",
-  "k8s-pod-security"
+  "k8s-pod-security",
+  "terraform-modul"
 ]

@@ -48,5 +48,29 @@
     ],
     "correct": 0,
     "explain": "Terraform baut den Hafen, Kubernetes betreibt den Verkehr darin. Oft baut Terraform sogar den K8s-Cluster."
+  },
+  {
+    "id": "q-flotte-modul-1",
+    "q": "Wozu dient ein Terraform-Modul?",
+    "options": [
+      "Ein wiederverwendbarer Baustein, den man mit verschiedenen Werten beliebig oft aufruft.",
+      "Eine Datei, die nur Kommentare enthält.",
+      "Ein Befehl, der Terraform schneller macht.",
+      "Ein Ersatz für terraform plan."
+    ],
+    "correct": 0,
+    "explain": "Ein Bauplan wird einmal geschrieben und mehrfach aufgerufen – weniger Copy-Paste, Korrekturen wirken an einer Stelle für alle."
+  },
+  {
+    "id": "q-flotte-modul-2",
+    "q": "Was sind variables und outputs eines Moduls?",
+    "options": [
+      "Die Schnittstelle: variables sind die Eingaben des Aufrufers, outputs die Werte, die der Baustein zurückgibt.",
+      "Zwei Worte für dasselbe – beides nur Eingaben.",
+      "Nur Dokumentation ohne Wirkung.",
+      "Geheime Werte, die Terraform nie anzeigt."
+    ],
+    "correct": 0,
+    "explain": "Ein Modul ist eine Black Box: oben rein (variables), unten raus (outputs). Der Aufrufer muss das Innenleben nicht kennen."
   }
 ]
