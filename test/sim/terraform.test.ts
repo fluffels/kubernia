@@ -7,6 +7,7 @@
 import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./helpers";
+import { KQContent } from "../../src/content";
 
 let sim: KQSim;
 beforeEach(() => { sim = freshSim(); });
@@ -214,4 +215,30 @@ test("terraform: Module/Provider/Backend/Outputs überstehen snapshot→reset", 
   assert.equal(sim2.tf.outputs[0].value, "kai-7");
   // Und die Outputs sind ohne erneutes apply abrufbar (applied=true im Snapshot).
   assert.equal(sim2.exec("terraform output adresse").output, "kai-7");
+});
+
+/* ===== Content-Szenario der Remote-State-Quest (#151) ===== */
+
+test("Remote-State-Quest: Alt-State aus der Modul-Quest leckt nicht ins Lager (#151)", () => {
+  // mergeScenario ist additiv – die Modul-Quest (flotte-modul) davor hinterlässt
+  // Module + Outputs im tf-State. Das echte Quest-Szenario muss sie leeren,
+  // sonst zeigt `state list`/`apply` Alt-Anleger (dieselbe #150-Lektion).
+  sim.mergeScenario({
+    tfModules: [{ name: "nordanleger", source: "./modules/anleger", resources: ["hafen_kai.kai", "hafen_poller.poller"] }],
+    tfOutputs: [{ name: "nordanleger_adresse", value: "nord-kai.flotte.local" }],
+    tfResources: [],
+  });
+  sim.exec("terraform init");
+  sim.exec("terraform apply");
+  // Die echte Remote-State-Quest lädt ihr Szenario (scenarioRef → flotte-remote-state).
+  const quest = KQContent.QUESTS.find(q => q.id === "terraform-remote-state");
+  assert.ok(quest, "Quest terraform-remote-state existiert");
+  const step = quest.steps.find(s => s.type === "terminal" && s.scenario);
+  assert.ok(step?.scenario, "Remote-State-Quest hat ein Terminal-Szenario");
+  sim.mergeScenario(step.scenario);
+  sim.exec("terraform init");
+  const apply = sim.exec("terraform apply").output!;
+  assert.doesNotMatch(apply, /nordanleger/, "kein Alt-Output aus der Modul-Quest im apply");
+  const list = sim.exec("terraform state list").output!;
+  assert.equal(list, "hafen_leuchtfeuer.einfahrt", "nur die Remote-State-Ressource, keine Alt-Module");
 });
