@@ -78,6 +78,26 @@ export interface Deployment {
    *  (Observability #109). Treibt `kubectl top` über die Schwelle und lässt den
    *  HighPodCPU-Alert feuern – die Spiel-Ursache für „warum brennt mein Cluster?". */
   cpuHeavy?: boolean;
+  /** Knoten, auf dem die Pods laufen (#240, Ephemeral-Storage). Undefiniert = deterministische
+   *  Default-Platzierung über die Worker (round-robin per `_nodeOf`). Relevant für die
+   *  Node-Disk-Bilanz: emptyDir + Writable-Layer der hier laufenden Pods zählen auf die Disk
+   *  dieses Knotens. */
+  node?: string;
+  /** Flüchtiges Scratch-Volume am Pod (`emptyDir`, #240): lebt MIT dem Pod und ist nach einem
+   *  Pod-Neustart leer (`data` ""). Direkter Gegensatz zum PVC (#122/#129), das den Pod überlebt.
+   *  `usedMi` = belegter Platz; zählt auf die ephemeral-storage-Bilanz von Pod UND Node. */
+  emptyDir?: { data: string; usedMi: number };
+  /** `ephemeral-storage`-Limit des Containers in Mi (#240, analog `memLimit` für memory). Reißt die
+   *  tatsächliche ephemeral-Nutzung dieses Limit, evictet der kubelet den Pod (Status `Evicted`). */
+  ephemeralLimit?: number;
+  /** Zusätzliche ephemeral-Nutzung neben `emptyDir` in Mi (#240): Container-Writable-Layer + Logs.
+   *  Wird – wie emptyDir – bei Pod-Neustart freigegeben. */
+  ephemeralUsedMi?: number;
+  /** Gesetzt, wenn der Pod evicted wurde (#240): entweder Disk-Druck am Node (`DiskPressure`) oder
+   *  das eigene ephemeral-storage-Limit gesprengt. Rein abgeleitet (`_evaluateEviction` rechnet es
+   *  bei jedem Befehl neu): fällt der Grund weg (Limit erhöht / Disk freigegeben / Pod neugestartet),
+   *  verschwindet die Markierung wieder. */
+  evicted?: { reason: string } | null;
 }
 export interface ServiceRes {
   name: string;
@@ -131,6 +151,15 @@ export interface ClusterNode {
   status: string;
   roles: string;
   version: string;
+  /** Lokale Disk-Kapazität für ephemeral storage in Mi (#240): emptyDir + Writable-Layer der
+   *  hier laufenden Pods zählen darauf. Undefiniert = unbegrenzt (klassischer Cluster ohne
+   *  Disk-Druck) – so bleiben alle Alt-Szenarien unberührt und bekommen nie DiskPressure. */
+  ephemeralCapacityMi?: number;
+  /** Von System/Images/Logs belegte Disk-Baseline in Mi (#240), unabhängig von Workloads. */
+  ephemeralBaseMi?: number;
+  /** Abgeleitet (`_evaluateEviction`): Disk über der Kapazitätsschwelle → der kubelet setzt
+   *  die Node-Condition `DiskPressure` und evictet Pods, bis wieder Platz ist (#240). */
+  diskPressure?: boolean;
 }
 export interface Container {
   name: string;
@@ -274,7 +303,9 @@ export interface ApplyEffect {
   deployment?: { name: string; image: string; replicas: number; securityContext?: SecurityContext; serviceAccountName?: string; containerPort?: number;
     // #164 (Werft-Capstone): das eigene Image muss vorher lokal gebaut/gezogen sein,
     // sonst landet der Pod im ImagePullBackOff (statt – wie sonst im Sim – einfach zu laufen).
-    requireBuiltImage?: boolean };
+    requireBuiltImage?: boolean;
+    // Ephemeral-Storage aus dem Pod-Template (#240): emptyDir-Volume + ephemeral-storage-Limit/-Nutzung.
+    node?: string; emptyDir?: { data?: string; usedMi?: number }; ephemeralLimit?: number; ephemeralUsedMi?: number };
   // RBAC-CRDs (#128): vom `kubectl apply -f` der Wachturm-Manifeste angelegt. `cluster`
   // unterscheidet Role/ClusterRole bzw. RoleBinding/ClusterRoleBinding (wie in roles/roleBindings).
   serviceAccount?: { name: string };
@@ -483,7 +514,9 @@ export interface Scenario {
   dockerImages?: string[];
   dockerContainers?: Container[];
   nodes?: ClusterNode[];
-  deployments?: Array<{ name: string; image: string; replicas: number; broken?: Broken | null; envFrom?: { configMaps: string[]; secrets: string[] }; cpuHeavy?: boolean; containerPort?: number }>;
+  deployments?: Array<{ name: string; image: string; replicas: number; broken?: Broken | null; envFrom?: { configMaps: string[]; secrets: string[] }; cpuHeavy?: boolean; containerPort?: number;
+    // Ephemeral-Storage (#240). Eingabe-Schreibweisen locker – reset()/merge füllen Defaults.
+    node?: string; emptyDir?: { data?: string; usedMi?: number }; ephemeralLimit?: number; ephemeralUsedMi?: number }>;
   services?: ServiceRes[];
   ingresses?: IngressRes[];
   networkPolicies?: NetworkPolicyRes[];
