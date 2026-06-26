@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-26 — nächstes Ticket: #241 (Sim-Grundlage Object Store). Kopf: 9 Einträge. Zuletzt abgeschlossen: #240 (Sim-Grundlage Ephemeral Storage: emptyDir als flüchtiges Pod-Volume — weg bei Pod-Neustart, Gegenpart zum PVC; `ephemeral-storage`-Limit am Container; deterministische DiskPressure-Eviction mit zwei Auslösern — eigenes Limit gesprengt ODER Node-Disk voll. Sichtbar in `get pods`/`get nodes`/`describe node`/`describe pod`. Mechanik im neuen Modul `src/sim/eviction.ts`. npm test 1127 / typecheck / lint / check:arch / check:size / smoke grün). Phase 9 + 10 komplett, Storage-Lernpfad-Arc läuft (#240 erledigt → #241 als Nächstes, dann Quests #242–#244, Quiz #245, Tests #246).**
+> **Stand: 2026-06-26 — nächstes Ticket: #242 (Quest „Ephemeral Storage — emptyDir, Node-Disk & Eviction"). Kopf: 8 Einträge. Zuletzt abgeschlossen: #241 (Sim-Grundlage S3-kompatibler Object Store: off-cluster Buckets + Objekte als eigene Befehlsfamilie `aws s3` — mb/rb/ls/cp/rm; Objekte überleben Pod/Node/PVC, getrennt vom Cluster-Volume → Backup-Ziel-tauglich; `cp` verbindet Store ↔ lokales Arbeitsverzeichnis als Upload/Download/Copy; Fehlerfälle NoSuchBucket/NoSuchKey/BucketAlreadyOwnedByYou/BucketNotEmpty. Mechanik im neuen Modul `src/sim/s3.ts`. npm test 1153 / typecheck / lint / check:arch / check:size / smoke grün). Phase 9 + 10 komplett, Storage-Lernpfad-Arc läuft (#240+#241 erledigt → Sim-Grundlagen stehen, jetzt die Quests #242–#244, Quiz #245, Tests #246).**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -44,18 +44,17 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| | **— Content-Arc: Storage-Lernpfad (reaktiviert 2026-06-26, dependency-geordnet) —** | | | Der nächste echte Lernpfad-Arc nach Phase 9+10. Reihenfolge ist load-bearing: erst die Sim-Grundlagen, dann die Quests, die darauf bauen, dann Quiz, dann Tests. |
-| 1 | **#241** | niedrig | Sim-Grundlage: S3-kompatibler Object Store (Buckets/Objekte) | **Nächstes Ticket.** Sim-Fundament für die Object-Storage- & Backup-Quests #243/#244. |
-| 2 | **#242** | niedrig | Quest „Ephemeral Storage — emptyDir, Node-Disk & Eviction" | Baut auf Sim #240 (erledigt). |
-| 3 | **#243** | niedrig | Quest „Object Storage & Buckets — wann S3 statt Volume" | Baut auf Sim #241. |
-| 4 | **#244** | niedrig | Quest „Backup ins Object Storage (S3) — off-cluster sichern (3-2-1)" | Baut auf Sim #241 + Quest #243. |
-| 5 | **#245** | niedrig | Quiz-Karten (ephemeral vs persistent, Object/Block/File, S3-Backup-Ziel, etcd-Backup) | Nach den Quests #242–#244 (Konzepte müssen eingeführt sein). |
-| 6 | **#246** | niedrig | Tests für ephemeral-Storage- & Object-Store-Sim + neue Quests | **Schließt den Arc ab** (analog #157/#172) — nach allem anderen. |
+| | **— Content-Arc: Storage-Lernpfad (reaktiviert 2026-06-26, dependency-geordnet) —** | | | Der nächste echte Lernpfad-Arc nach Phase 9+10. Reihenfolge ist load-bearing: erst die Sim-Grundlagen (#240+#241 erledigt), dann die Quests, die darauf bauen, dann Quiz, dann Tests. |
+| 1 | **#242** | niedrig | Quest „Ephemeral Storage — emptyDir, Node-Disk & Eviction" | **Nächstes Ticket.** Baut auf Sim #240 (erledigt). |
+| 2 | **#243** | niedrig | Quest „Object Storage & Buckets — wann S3 statt Volume" | Baut auf Sim #241 (erledigt). |
+| 3 | **#244** | niedrig | Quest „Backup ins Object Storage (S3) — off-cluster sichern (3-2-1)" | Baut auf Sim #241 (erledigt) + Quest #243. |
+| 4 | **#245** | niedrig | Quiz-Karten (ephemeral vs persistent, Object/Block/File, S3-Backup-Ziel, etcd-Backup) | Nach den Quests #242–#244 (Konzepte müssen eingeführt sein). |
+| 5 | **#246** | niedrig | Tests für ephemeral-Storage- & Object-Store-Sim + neue Quests | **Schließt den Arc ab** (analog #157/#172) — nach allem anderen. |
 | | **— QoL / System-Features —** | | | |
-| 7 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 6 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 8 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 9 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 7 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 8 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
