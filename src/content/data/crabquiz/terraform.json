@@ -72,5 +72,29 @@
     ],
     "correct": 0,
     "explain": "Ein Modul ist eine Black Box: oben rein (variables), unten raus (outputs). Der Aufrufer muss das Innenleben nicht kennen."
+  },
+  {
+    "id": "q-flotte-remote-state-1",
+    "q": "Warum legt man den Terraform-State in ein Remote-Backend statt als Datei auf den Laptop?",
+    "options": [
+      "Damit die ganze Crew denselben Stand teilt – niemand überschreibt mit einer veralteten lokalen Kopie die Arbeit der anderen.",
+      "Weil Terraform mit Remote-State schneller plant und appliziert.",
+      "Weil der State lokal nicht gespeichert werden kann.",
+      "Damit man terraform init nicht mehr braucht."
+    ],
+    "correct": 0,
+    "explain": "Der State ist EINE geteilte Wahrheit im Backend. Alle lesen und schreiben denselben Stand – die Grundlage für Teamarbeit mit Terraform."
+  },
+  {
+    "id": "q-flotte-remote-state-2",
+    "q": "Wozu dient State-Locking bei Remote State?",
+    "options": [
+      "Es lässt immer nur eine Crew zugleich am State arbeiten, damit zwei gleichzeitige Änderungen ihn nicht zerstören.",
+      "Es verschlüsselt den State, damit ihn keiner lesen kann.",
+      "Es sperrt den State dauerhaft, sodass er nie wieder geändert wird.",
+      "Es macht ein Backup des States vor jedem apply."
+    ],
+    "correct": 0,
+    "explain": "Wer ändert, nimmt den Schlüssel; alle anderen warten. Ohne Lock würden parallele Applies den State ineinanderschreiben – mit Lock läuft alles sauber nacheinander."
   }
 ]

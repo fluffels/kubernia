@@ -149,5 +149,133 @@
         ]
       }
     ]
+  },
+  {
+    "id": "terraform-remote-state",
+    "title": "Das Gedächtnis der Flotte",
+    "giver": "saga",
+    "topic": "terraform",
+    "rewardXp": 55,
+    "rewardCoins": 40,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "saga",
+        "lines": [
+          "Da bist du ja wieder. Gestern hast du aus EINEM Bauplan eine Anlegerreihe gebaut. Heute die Frage von gestern Abend: Wo merkt sich Terraform eigentlich, was schon steht? Im <b>State</b> – Terraforms Gedächtnis.",
+          "Bisher liegt dieser State als Datei auf <b>deinem</b> Laptop. Solange du allein baust, geht das gut. Aber eine Flotte hat viele Kapitäne. Plant ein Zweiter, während dein Stand nur lokal liegt, sehen beide eine andere Wahrheit – und einer überschreibt dem anderen die Arbeit. State-Salat.",
+          "Die Lösung: Wir legen den State zentral ins <b>Flotten-Lager</b> – ein <b>Remote Backend</b>, das die ganze Crew teilt. Und ein <b>Schloss</b> (State-Locking) sorgt dafür, dass immer nur EINE Crew zugleich ändert. Schau dir den <code>backend</code>-Block an."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Das Lager-Schloss lesen",
+        "scenarioRef": "flotte-remote-state",
+        "tasks": [
+          {
+            "id": "t-saga-rs-1",
+            "text": "Lies den Backend-Block: <code>cat backend.tf</code>. Wohin wandert der State – und welche Zeile sorgt fürs <b>Locking</b>?",
+            "accept": [
+              "^cat\\s+backend\\.tf$"
+            ],
+            "solution": "cat backend.tf",
+            "hint": "cat <datei> – achte auf bucket (das Lager) und dynamodb_table (das Schloss)."
+          },
+          {
+            "id": "t-saga-rs-2",
+            "text": "Und was wird hier verwaltet: <code>cat main.tf</code>. Eine Ressource, deren Stand künftig nicht mehr auf deinem Laptop liegt, sondern im Lager.",
+            "accept": [
+              "^cat\\s+main\\.tf$"
+            ],
+            "solution": "cat main.tf",
+            "hint": "cat <datei> – ein Leuchtfeuer für die Einfahrt."
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "State ins Lager verlagern",
+        "tasks": [
+          {
+            "id": "t-saga-rs-3",
+            "text": "Wie immer zuerst: <code>terraform init</code>. Lies die Zeile <b>Initializing the backend</b> – ab jetzt liegt das Gedächtnis im Flotten-Lager, nicht mehr lokal.",
+            "accept": [
+              "^terraform\\s+init$"
+            ],
+            "solution": "terraform init",
+            "hint": "Der erste Befehl jedes Terraform-Projekts – er richtet auch das Backend ein."
+          },
+          {
+            "id": "t-saga-rs-4",
+            "text": "Jetzt bauen: <code>terraform apply</code>. Das Leuchtfeuer entsteht – und sein Zustand wird ins gemeinsame Lager geschrieben, nicht auf deinen Laptop.",
+            "accept": [
+              "^terraform\\s+apply(\\s+-auto-approve)?$"
+            ],
+            "check": {"flag":["tf","applied"]},
+            "solution": "terraform apply",
+            "hint": "Nach init kommt apply."
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Ins gemeinsame Gedächtnis schauen",
+        "tasks": [
+          {
+            "id": "t-saga-rs-5",
+            "text": "Frag den State ab: <code>terraform state list</code>. Diese Liste liest aus dem Flotten-Lager – <b>jedes</b> Crew-Mitglied sieht jetzt genau dieselben Ressourcen.",
+            "accept": [
+              "^terraform\\s+state\\s+list$"
+            ],
+            "solution": "terraform state list",
+            "hint": "terraform state <unterbefehl> – du willst die Liste."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "saga",
+        "reviewId": "q-flotte-remote-state-1",
+        "q": "Warum den State ins Remote-Backend (Flotten-Lager) legen statt als Datei auf den Laptop?",
+        "options": [
+          {
+            "t": "Weil ihn dann die ganze Crew teilt – alle sehen denselben Stand, niemand überschreibt mit einer veralteten lokalen Kopie die Arbeit der anderen.",
+            "ok": true,
+            "reply": "Genau. Der State ist EINE geteilte Wahrheit im Lager. Egal wer plant – alle lesen und schreiben denselben Stand. Das ist die Grundlage für Teamarbeit mit Terraform."
+          },
+          {
+            "t": "Weil Terraform mit Remote-State schneller plant und appliziert.",
+            "ok": false,
+            "reply": "Nein, ums Tempo geht es nicht. Der Gewinn ist der <b>geteilte</b> Zustand: ein gemeinsames Gedächtnis statt vieler widersprüchlicher Laptop-Kopien."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "saga",
+        "reviewId": "q-flotte-remote-state-2",
+        "q": "Wozu dient das State-Locking (im Beispiel die <code>dynamodb_table</code>, das „Flotten-Schloss“)?",
+        "options": [
+          {
+            "t": "Es lässt immer nur EINE Crew zugleich am State arbeiten – so können zwei gleichzeitige Änderungen den geteilten State nicht zerstören.",
+            "ok": true,
+            "reply": "Richtig. Wer ändert, nimmt den Schlüssel; alle anderen müssen warten. Ohne dieses Schloss würden zwei parallele Applies den State ineinander schreiben – Datensalat. Mit Schloss: sauber nacheinander."
+          },
+          {
+            "t": "Es verschlüsselt den State, damit ihn niemand außerhalb der Crew lesen kann.",
+            "ok": false,
+            "reply": "Das wäre Verschlüsselung – ein anderes Thema. <b>Locking</b> regelt den <i>gleichzeitigen Zugriff</i>: nur eine Crew darf zur selben Zeit ändern, damit nichts ineinanderläuft."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "saga",
+        "lines": [
+          "Das Gedächtnis der Flotte liegt jetzt sicher im Lager – jede Crew sieht denselben Stand, und das Schloss verhindert, dass sich zwei in die Quere kommen. So arbeitet ein echtes Team mit Infrastruktur.",
+          "Als Nächstes wird's weit: Die Flotte expandiert auf Inseln <b>verschiedener Anbieter</b> – Multi-Cloud. Dafür brauchst du mehrere <b>Provider</b>. Bis dann, Kapitän! ⚓"
+        ]
+      }
+    ]
   }
 ]

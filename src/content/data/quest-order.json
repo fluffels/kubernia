@@ -46,5 +46,6 @@
   "k8s-rbac-role",
   "k8s-rbac-clusterrole",
   "k8s-pod-security",
-  "terraform-modul"
+  "terraform-modul",
+  "terraform-remote-state"
 ]

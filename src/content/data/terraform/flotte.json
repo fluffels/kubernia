@@ -30,7 +30,10 @@
       "tfBackend": { "type": "s3", "name": "flotten-lager", "locking": true },
       "tfResources": [
         { "addr": "hafen_leuchtfeuer.einfahrt", "desc": "name = \"einfahrt-nord\"" }
-      ]
+      ],
+      "tfModules": [],
+      "tfProviders": [],
+      "tfOutputs": []
     }
   },
   {
