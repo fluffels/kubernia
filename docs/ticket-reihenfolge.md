@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-26 — nächstes Ticket: #151. Kopf: 10 Einträge. Zuletzt abgeschlossen: #150 (Expeditions-Flotte: erste Quest „Terraform-Module" bei Saga — Module als wiederverwendbare Bausteine, scenarioRef auf flotte-modul, neuer Befehl `terraform output`; Nebenfix `tfResources:[]` in flotte-modul gegen Alt-State im Story-Durchspiel), #149 (Expeditions-Flotte: neuer NPC „Saga", Flottenkommandantin — PixelLab-Sprite + Smalltalk, Geberin des Phase-9-Arcs), #455 (Boot-Sicherheitsnetz beobachtet den Boot-Flag aktiv statt Einmal-Timer → langsamer-aber-erfolgreicher Boot lässt es nie liegen; behebt auch die Duplikate #437/#453/#454), #148 (Expeditions-Flotte: begehbare Region + Anleger/Warp), #451 (Bo schickt nach Quest 1 einmalig zu Kralle statt generisch „Üben").**
+> **Stand: 2026-06-26 — nächstes Ticket: #152. Kopf: 9 Einträge. Zuletzt abgeschlossen: #151 (Expeditions-Flotte: zweite Quest „Remote State" bei Saga — State ins geteilte „Flotten-Lager" (s3-`backend` + Locking) verlagern, `terraform state list`, State-Locking als Konzept via Review-Choices + Quiz; Nebenfix: `flotte-remote-state`-Konfig leert `tfModules/tfProviders/tfOutputs` gegen Alt-State aus der Modul-Quest, Guard-Test Red-Green), #150 (Expeditions-Flotte: erste Quest „Terraform-Module" bei Saga — Module als wiederverwendbare Bausteine, scenarioRef auf flotte-modul, neuer Befehl `terraform output`; Nebenfix `tfResources:[]` in flotte-modul gegen Alt-State im Story-Durchspiel), #149 (Expeditions-Flotte: neuer NPC „Saga", Flottenkommandantin — PixelLab-Sprite + Smalltalk, Geberin des Phase-9-Arcs), #455 (Boot-Sicherheitsnetz beobachtet den Boot-Flag aktiv statt Einmal-Timer → langsamer-aber-erfolgreicher Boot lässt es nie liegen; behebt auch die Duplikate #437/#453/#454), #148 (Expeditions-Flotte: begehbare Region + Anleger/Warp).**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -44,19 +44,18 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| | **— Expeditions-Flotte (Phase 9: Terraform-Module / Remote State / Provider) —** | | | Sim-Grundlage #146 ✓, Konfig-Inhalte #147 ✓ (`data/terraform/flotte.json`), Region/Anleger/Warp #148 ✓ (`src/flotte.ts`, RegionScene-Config „Flotte"), NPC Saga #149 ✓, erste Quest #150 ✓ (`terraform-modul`). Reihenfolge: Quests → Drills → Quiz → Progression → Tests. |
-| 1 | **#151** | ohne | Quest „Remote State — gemeinsamer State im Backend" | **Nächstes Ticket.** Baut auf #150 ✓; Konfig `flotte-remote-state` (#147), Geberin Saga. |
-| 2 | **#152** | ohne | Quest „Provider & Cloud — Ressourcen bei verschiedenen Anbietern" | Baut auf #151; Konfig `flotte-provider` (#147). |
-| 3 | **#153** | ohne | Quest „Variablen & Outputs — Konfiguration sauber durchreichen" | Letzte Quest des Arcs; Konfig `flotte-variablen-outputs` (#147). |
-| 4 | **#154** | ohne | Drills (Module/Remote-State/Provider-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte. |
-| 5 | **#155** | ohne | Quiz-Karten (Terraform-Module, Remote State, Provider) | Wissens-Sicherung zur Region (vertieft die In-Quest-Review-Karten). |
-| 6 | **#156** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad. |
-| 7 | **#157** | ohne | Tests für Terraform-Aufbau-Quests & Modul/Remote-State/Provider-Sim | Zuletzt im Arc — sichert ab (Red-Green). |
+| | **— Expeditions-Flotte (Phase 9: Terraform-Module / Remote State / Provider) —** | | | Sim-Grundlage #146 ✓, Konfig-Inhalte #147 ✓ (`data/terraform/flotte.json`), Region/Anleger/Warp #148 ✓ (`src/flotte.ts`, RegionScene-Config „Flotte"), NPC Saga #149 ✓, Quest 1 #150 ✓ (`terraform-modul`), Quest 2 #151 ✓ (`terraform-remote-state`). Reihenfolge: Quests → Drills → Quiz → Progression → Tests. |
+| 1 | **#152** | ohne | Quest „Provider & Cloud — Ressourcen bei verschiedenen Anbietern" | **Nächstes Ticket.** Baut auf #151 ✓; Konfig `flotte-provider` (#147), Geberin Saga. |
+| 2 | **#153** | ohne | Quest „Variablen & Outputs — Konfiguration sauber durchreichen" | Letzte Quest des Arcs; Konfig `flotte-variablen-outputs` (#147). |
+| 3 | **#154** | ohne | Drills (Module/Remote-State/Provider-Übungen) + PRACTICE-Mapping | Nach den Quests — übt das Gelernte. |
+| 4 | **#155** | ohne | Quiz-Karten (Terraform-Module, Remote State, Provider) | Wissens-Sicherung zur Region (vertieft die In-Quest-Review-Karten). |
+| 5 | **#156** | ohne | Progression einhängen + README-Phasentabelle aktualisieren | Verdrahtet die Region in den Lernpfad. |
+| 6 | **#157** | ohne | Tests für Terraform-Aufbau-Quests & Modul/Remote-State/Provider-Sim | Zuletzt im Arc — sichert ab (Red-Green). |
 | | **— QoL / System-Features —** | | | |
-| 8 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 7 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 9 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 10 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 8 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 9 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
