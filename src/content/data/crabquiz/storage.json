@@ -180,5 +180,109 @@
     ],
     "correct": 0,
     "explain": "Kubernetes <b>kann</b> stateful (das hast du am Kai geübt), aber „kann“ heißt nicht „muss“. Eine Prod-DB im Cluster bedeutet volle Betriebsverantwortung: Backup/Restore, HA, Patches, Failover. Ein Managed-Service kostet Geld, nimmt aber genau diese Arbeit ab. Die ehrliche Antwort ist eine Abwägung von Team-Größe, Know-how und Risiko – kein Dogma."
+  },
+  {
+    "id": "q-eph-vs-pvc",
+    "chapter": "storage-ephemeral",
+    "q": "Ein Pod schreibt in ein <code>emptyDir</code>, ein zweiter in ein <b>PVC</b>. Du löschst beide Pods. Was ist hinterher noch da?",
+    "options": [
+      "Nur die PVC-Daten – <code>emptyDir</code> ist <b>flüchtig</b> und stirbt mit dem Pod, das PVC ist ein eigenes, dauerhaftes Objekt und überlebt.",
+      "Beides ist weg, sobald der Pod stirbt.",
+      "Beides bleibt – Kubernetes sichert jedes Pod-Volume automatisch.",
+      "Nur das <code>emptyDir</code> bleibt, weil es direkt auf dem Node liegt."
+    ],
+    "correct": 0,
+    "explain": "<code>emptyDir</code> (und der beschreibbare Container-Layer) ist <b>ephemeral</b>: er lebt und stirbt mit dem Pod – gut für Scratch/Cache, fatal für echte Daten. Ein PVC ist davon entkoppelt (eigener Lebenszyklus) und bleibt <code>Bound</code>, auch wenn der Pod längst weg ist. Merksatz: flüchtiger Storage = Notizzettel, persistenter Storage = Akte im Regalfach."
+  },
+  {
+    "id": "q-eph-storage-limit",
+    "chapter": "storage-ephemeral",
+    "q": "Wozu dient ein <code>ephemeral-storage</code>-Limit an einem Container?",
+    "options": [
+      "Es deckelt, wie viel flüchtigen Node-Speicher (Logs, <code>emptyDir</code>, Container-Layer) der Pod belegen darf – wird es überschritten, wird der Pod <b>evicted</b>.",
+      "Es legt die Größe des PVC fest, das der Pod mounten darf.",
+      "Es begrenzt die CPU-Zeit, die der Pod fürs Schreiben verbrauchen darf.",
+      "Es verschlüsselt den flüchtigen Speicher des Pods."
+    ],
+    "correct": 0,
+    "explain": "<code>ephemeral-storage</code> ist eine eigene Ressource wie CPU/Memory – mit <code>requests</code>/<code>limits</code>. Das Limit schützt den <b>Node</b>: ein Pod, der vollläuft (endlos wachsendes Log, <code>emptyDir</code>-Wildwuchs), darf nicht die Platte des ganzen Nodes fressen. Reißt er sein Limit, wirft der kubelet ihn raus (Eviction). Mit PVC-Größe hat das nichts zu tun – persistenter Speicher zählt nicht als ephemeral."
+  },
+  {
+    "id": "q-eph-diskpressure",
+    "chapter": "storage-ephemeral",
+    "q": "Ein Node meldet die Condition <code>DiskPressure</code>. Was passiert – und warum?",
+    "options": [
+      "Dem Node geht der flüchtige Speicher aus; der kubelet beginnt, Pods zu <b>evicten</b> (zuerst die mit dem größten ephemeral-Verbrauch über ihren requests), um die Platte zu retten.",
+      "Der Node fährt herunter und alle PVC-Daten gehen verloren.",
+      "Kubernetes vergrößert automatisch die Festplatte des Nodes.",
+      "Nichts – <code>DiskPressure</code> ist nur eine Warnung ohne Folgen."
+    ],
+    "correct": 0,
+    "explain": "<code>DiskPressure</code> ist eine Node-Condition: die lokale (ephemeral) Platte wird knapp. Der kubelet reagiert mit <b>Eviction</b>, um den Node lauffähig zu halten – bevorzugt Pods, die am meisten über ihren ephemeral-storage-requests liegen. PVC-Daten sind davon nicht betroffen (sie liegen im separaten Volume), aber ein evicteter Pod verliert seinen <code>emptyDir</code>. Genau dagegen helfen requests/limits auf <code>ephemeral-storage</code>."
+  },
+  {
+    "id": "q-storage-three-types",
+    "chapter": "storage-object-store",
+    "q": "Object-, Block- und File-Storage unterscheiden sich vor allem im <b>Zugriffsmodell</b>. Welche Zuordnung stimmt?",
+    "options": [
+      "Object = Schlüssel + HTTP-API (Bucket, kein Mount); Block = rohes Gerät, das ein Dateisystem trägt (ein Schreiber, z.B. PVC für eine DB); File = fertiges Dateisystem zum gemeinsamen Mounten (mehrere Pods, NFS-artig).",
+      "Alle drei sind dasselbe, nur unterschiedliche Hersteller-Namen.",
+      "Object = Mount, Block = HTTP-API, File = Schlüssel-Zugriff.",
+      "Block ist immer schneller als File und File immer schneller als Object – sonst kein Unterschied."
+    ],
+    "correct": 0,
+    "explain": "Drei Zugriffsmuster: <b>Block</b> liefert ein rohes Volume, auf das ein einzelner Knoten ein Dateisystem legt (klassisches PVC, RWO – ideal für eine DB). <b>File</b> ist ein bereits formatiertes, mountbares Dateisystem, das mehrere Pods teilen können (RWX, NFS/CephFS). <b>Object</b> kennt kein Mount und keine Ordnerhierarchie: du legst Objekte unter einem <b>Schlüssel</b> in einen Bucket und holst sie per HTTP – beliebig groß, günstig, perfekt für Blobs/Backups. Geschwindigkeit ist nicht das Unterscheidungsmerkmal, das Zugriffsmodell ist es."
+  },
+  {
+    "id": "q-object-usecase",
+    "chapter": "storage-object-store",
+    "q": "Wofür ist ein <b>Object Store</b> (S3/MinIO) die richtige Wahl – und wofür nicht?",
+    "options": [
+      "Gut für große, unveränderliche Blobs: Backups, Bilder/Videos, Logs, statische Assets. Schlecht als Live-Volume einer Datenbank – dafür gibt es kein Mount und keine schnellen In-Place-Schreibzugriffe.",
+      "Ideal als Volume für jede Datenbank, weil es beliebig groß ist.",
+      "Nur für winzige Dateien unter 1 KB geeignet.",
+      "Universell – man sollte PVCs immer durch einen Object Store ersetzen."
+    ],
+    "correct": 0,
+    "explain": "Objekte werden als Ganzes geschrieben/gelesen (PUT/GET über den Schlüssel), nicht an Ort und Stelle byteweise verändert. Das passt zu <b>write-once, read-many</b>-Daten: Backups, Medien, Artefakte, statische Webinhalte. Eine Datenbank braucht dagegen ein gemountetes Dateisystem mit schnellen, wahlfreien Schreibzugriffen – das ist ein Block-Volume (PVC), kein Bucket. „Beliebig groß“ macht S3 nicht zum DB-Speicher."
+  },
+  {
+    "id": "q-s3-vs-snapshot",
+    "chapter": "storage-object-backup",
+    "q": "Du hast einen <b>VolumeSnapshot</b> im Cluster <i>und</i> eine Kopie per <code>aws s3 cp</code> im Object Store. Warum ist die S3-Kopie das eigentliche Backup?",
+    "options": [
+      "Der Snapshot liegt im selben Speichersystem wie das Original – fällt Cluster/Rechenzentrum aus, ist er mit weg. Die S3-Kopie liegt <b>off-cluster</b> und überlebt den Totalausfall (3-2-1).",
+      "Der Snapshot ist langsamer wiederherzustellen als die S3-Kopie.",
+      "S3-Objekte sind kleiner als Snapshots.",
+      "Es gibt keinen Unterschied – beide sind gleichwertige Backups."
+    ],
+    "correct": 0,
+    "explain": "Ein Snapshot ist <b>schnelle Wiederherstellung</b>, teilt aber das Schicksal seines Speichersystems – ist also eher ein „Rückgängig“ als ein Katastrophen-Backup. Erst die Kopie an einem <b>anderen Ort</b> (Object Store, off-cluster) schützt gegen Cluster-/Region-Verlust, Ransomware oder ein gelöschtes PVC. Das ist der Kern der 3-2-1-Regel: drei Kopien, zwei Medien, eine off-site. Genau diese off-site-Kopie hast du am Kai per <code>aws s3 cp</code> angelegt."
+  },
+  {
+    "id": "q-s3-versioning",
+    "chapter": "storage-object-backup",
+    "q": "Warum ist <b>Object Versioning</b> (versionierte Buckets) für ein Backup-Ziel besonders wertvoll?",
+    "options": [
+      "Überschreiben oder Löschen erzeugt eine neue Version statt das Alte zu vernichten – ein verschlüsselndes Ransomware oder ein Fehlgriff kann die alten, heilen Stände nicht einfach wegputzen.",
+      "Versionierung macht die Uploads doppelt so schnell.",
+      "Versionierung halbiert automatisch den Speicherverbrauch.",
+      "Sie verschlüsselt jedes Objekt mit einem eigenen Schlüssel."
+    ],
+    "correct": 0,
+    "explain": "Ein unversioniertes Backup-Ziel hat eine Achillesferse: Wer es erreicht (Angreifer, fehlerhaftes Skript), kann die letzte gute Kopie <b>überschreiben</b> – und das Backup ist wertlos. Mit Versionierung bleibt jede frühere Version erhalten (oft kombiniert mit Object-Lock/WORM gegen Löschen). So bleibt nach einem Ransomware-Angriff oder einem versehentlichen „cp über die gute Datei“ ein sauberer Stand zum Zurückholen. Tempo/Größe ändert Versionierung nicht."
+  },
+  {
+    "id": "q-etcd-backup",
+    "chapter": "storage-object-backup",
+    "q": "Du sicherst brav deine App-Daten (PVCs) nach S3. Warum braucht <b>etcd</b> trotzdem ein <b>eigenes</b> Backup?",
+    "options": [
+      "etcd ist die Zustands-Datenbank des Clusters selbst – alle Objekte (Deployments, Secrets, RBAC …) liegen darin. App-Daten-Backups enthalten diesen Cluster-Zustand nicht; ist etcd weg, weiß der Cluster nicht mehr, was er ausführen soll.",
+      "etcd-Daten liegen ohnehin in jedem PVC mit drin – das Backup ist also doppelt.",
+      "etcd braucht kein Backup, der Scheduler baut den Zustand jederzeit neu auf.",
+      "etcd ist nur ein Cache und darf bedenkenlos verloren gehen."
+    ],
+    "correct": 0,
+    "explain": "Zwei verschiedene Datenarten: <b>App-Daten</b> (in PVCs/Volumes) sicherst du z.B. nach S3. <b>etcd</b> ist die <i>Cluster-State-DB</i> der Control Plane – das gesamte „Soll“ des Clusters (welche Deployments, Services, Secrets, RBAC-Regeln existieren). Ein App-Daten-Backup enthält das nicht. Verlierst du etcd ohne Backup, sind zwar evtl. die Volumes noch da, aber der Cluster hat sein Gedächtnis verloren. Darum macht man als Senior zusätzlich <code>etcdctl snapshot save</code> und legt auch diesen Snapshot off-cluster ab."
   }
 ]
