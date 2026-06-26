@@ -1,0 +1,38 @@
+[
+  {
+    "id": "q-werft-dienst-image",
+    "q": "Was macht docker build aus einem Dockerfile?",
+    "options": [
+      "Es backt App und Abhängigkeiten in ein Image – ein versiegeltes Paket, das ein Cluster starten kann.",
+      "Es startet den Container sofort und macht ihn im Cluster erreichbar.",
+      "Es legt nur einen Service an.",
+      "Es lädt ein fertiges Image aus einer öffentlichen Registry herunter."
+    ],
+    "correct": 0,
+    "explain": "Das Dockerfile ist der Bauplan, das Image das fertige Paket: App plus alles zum Laufen. Starten tut es erst der Cluster, erreichbar macht es erst ein Service."
+  },
+  {
+    "id": "q-werft-dienst-imagepull",
+    "q": "Ein frisch deployter Pod hängt im ImagePullBackOff. Die wahrscheinlichste Ursache bei einem selbst gebauten Image?",
+    "options": [
+      "Das Image existiert nirgends – es wurde im Manifest deklariert, aber nie gebaut.",
+      "Es fehlt der Service vor dem Deployment.",
+      "Der Cluster hat zu wenig Speicher.",
+      "Das Deployment hat zu viele Replicas."
+    ],
+    "correct": 0,
+    "explain": "Der Cluster sucht ein Image, das nie vom Stapel lief. Heilung: erst 'docker build', dann den Pull neu anstoßen (z. B. kubectl rollout restart)."
+  },
+  {
+    "id": "q-werft-dienst-loop",
+    "q": "Wie kommt aus Code ein erreichbarer Dienst im Cluster?",
+    "options": [
+      "Dockerfile → docker build (Image) → kubectl apply (Deployment) → Service → curl bestätigt die 200.",
+      "Nur das Deployment-Manifest schreiben – Image, Service und Erreichbarkeit ergeben sich automatisch.",
+      "Nur docker build – der Cluster zieht den Rest von selbst.",
+      "Nur einen Service anlegen, der Pod entsteht daraus."
+    ],
+    "correct": 0,
+    "explain": "Jeder Schritt ist eigene Arbeit: Image bauen (sonst ImagePullBackOff), als Deployment starten, mit einem Service erreichbar machen, mit curl prüfen."
+  }
+]

@@ -49,5 +49,6 @@
   "terraform-modul",
   "terraform-remote-state",
   "terraform-provider",
-  "terraform-variablen-outputs"
+  "terraform-variablen-outputs",
+  "werft-eigener-dienst"
 ]

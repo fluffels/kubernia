@@ -11,5 +11,6 @@
   { "id": "ci-cd", "label": "CI/CD" },
   { "id": "gitops", "label": "GitOps" },
   { "id": "observability", "label": "Observability" },
-  { "id": "storage", "label": "Storage" }
+  { "id": "storage", "label": "Storage" },
+  { "id": "capstone", "label": "Meister-Abschluss: Eigener Dienst" }
 ]

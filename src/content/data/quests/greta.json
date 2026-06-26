@@ -1,0 +1,242 @@
+[
+  {
+    "id": "werft-eigener-dienst",
+    "title": "Vom Stapel gelassen: dein eigener Dienst",
+    "giver": "greta",
+    "topic": "capstone",
+    "rewardXp": 75,
+    "rewardCoins": 60,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "greta",
+        "lines": [
+          "Da bist du, Kapitän. Lange genug auf fremden Schiffen mitgefahren – Oles Hafen, Adas Karten, Sagas Flotte. Hier in <b>meiner Werft</b> baust du jetzt dein <b>eigenes</b>: vom Bauplan bis zum laufenden Dienst, ganz allein.",
+          "Das ist die ganze Kette an einem Stück: aus dem <b>Dockerfile</b> baust du ein <b>Image</b>, das Image bringst du als <b>Deployment</b> in den Cluster, und dann machst du es über einen <b>Service</b> erreichbar. Am Ende klopfe ich mit <code>curl</code> an – kommt eine <b>200</b> zurück, schwimmt dein Ding.",
+          "Kein Gejammer, wenn's beim ersten Mal hakt – das hakt bei jedem. Du kennst die Werkzeuge. Ich hab dir den Bauplan auf die Helling gelegt. Schau ihn dir an."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Den Bauplan lesen",
+        "scenario": {
+          "podSecurity": "privileged",
+          "files": {
+            "Dockerfile": "FROM node:20-alpine\nWORKDIR /app\nCOPY server.js .\nEXPOSE 8080\nCMD [\"node\", \"server.js\"]",
+            "server.js": "const http = require(\"http\");\nhttp.createServer((req, res) => {\n  res.writeHead(200, { \"Content-Type\": \"text/plain\" });\n  res.end(\"Ahoi vom Werft-Dienst!\\n\");\n}).listen(8080, () => console.log(\"Werft-Dienst lauscht auf :8080\"));",
+            "deployment.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: werft-dienst\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: werft-dienst\n  template:\n    metadata:\n      labels:\n        app: werft-dienst\n    spec:\n      containers:\n        - name: werft-dienst\n          image: werft-dienst:1.0\n          ports:\n            - containerPort: 8080",
+            "service.yaml": "apiVersion: v1\nkind: Service\nmetadata:\n  name: werft-dienst\nspec:\n  selector:\n    app: werft-dienst\n  ports:\n    - port: 80\n      targetPort: 8080"
+          },
+          "applyEffects": {
+            "deployment.yaml": {
+              "deployment": {
+                "name": "werft-dienst",
+                "image": "werft-dienst:1.0",
+                "replicas": 1,
+                "containerPort": 8080,
+                "requireBuiltImage": true
+              }
+            },
+            "service.yaml": {
+              "service": {
+                "name": "werft-dienst",
+                "port": 80,
+                "targetPort": 8080
+              }
+            }
+          }
+        },
+        "tasks": [
+          {
+            "id": "t-greta-ls",
+            "text": "Schau mit <code>ls</code>, was auf der Helling liegt – Bauplan, App, und zwei Manifeste.",
+            "accept": [
+              "^ls$"
+            ],
+            "solution": "ls",
+            "hint": "Zwei Buchstaben."
+          },
+          {
+            "id": "t-greta-cat-dockerfile",
+            "text": "Lies den Bauplan: <code>cat Dockerfile</code>. Er sagt, aus welchem Basis-Image (<code>FROM</code>) dein Dienst entsteht und auf welchem Port (<code>EXPOSE</code>) er lauscht.",
+            "accept": [
+              "^cat\\s+Dockerfile$"
+            ],
+            "solution": "cat Dockerfile",
+            "hint": "cat <datei> – die Datei heißt genau 'Dockerfile' (großes D, ohne Endung)."
+          },
+          {
+            "id": "t-greta-cat-app",
+            "text": "Und die App selbst: <code>cat server.js</code>. Ein winziger Webserver, der auf Port <b>8080</b> lauscht und mit 200 antwortet.",
+            "accept": [
+              "^cat\\s+server\\.js$"
+            ],
+            "solution": "cat server.js",
+            "hint": "cat <datei> – achte auf die Portnummer in listen(...)."
+          },
+          {
+            "id": "t-greta-cat-deploy",
+            "text": "Jetzt das Deployment-Manifest: <code>cat deployment.yaml</code>. Merk dir den <code>image</code>-Namen und den <code>containerPort</code> – beides brauchst du gleich.",
+            "accept": [
+              "^cat\\s+deployment\\.yaml$"
+            ],
+            "solution": "cat deployment.yaml",
+            "hint": "cat <datei> – das Image heißt 'werft-dienst:1.0', der containerPort ist 8080."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "greta",
+        "reviewId": "q-werft-dienst-image",
+        "q": "Was macht <code>docker build</code> aus dem Dockerfile?",
+        "options": [
+          {
+            "t": "Es backt App und Abhängigkeiten in ein <b>Image</b> – ein versiegeltes Paket, das überall gleich läuft und das ein Cluster starten kann.",
+            "ok": true,
+            "reply": "Genau. Das Dockerfile ist der Bauplan, das Image das fertige Schiff: App + alles, was sie zum Laufen braucht, in einem Paket. Genau dieses Image deklarierst du gleich im Deployment."
+          },
+          {
+            "t": "Es startet den Container sofort und macht ihn im Cluster erreichbar.",
+            "ok": false,
+            "reply": "Nein, so weit ist es noch nicht. <code>docker build</code> <i>baut</i> nur das Image. Starten tut es erst der Cluster (Deployment), und erreichbar macht es erst ein Service. Eins nach dem anderen."
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Erst deployen – und stutzen",
+        "tasks": [
+          {
+            "id": "t-greta-apply-deploy",
+            "text": "Bring das Deployment in den Cluster: <code>kubectl apply --filename deployment.yaml</code>. Der Cluster legt es an – aber schau gleich nach, ob die Pods auch laufen.",
+            "accept": [
+              "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+deployment\\.yaml$"
+            ],
+            "check": {"some":"deployments","where":{"name":"werft-dienst"}},
+            "solution": "kubectl apply --filename deployment.yaml",
+            "hint": "kubectl apply --filename <datei> (die Kurzform -f verdienst du dir durch Nutzung)"
+          },
+          {
+            "id": "t-greta-getpods-imagepull",
+            "text": "Sieh nach: <code>kubectl get pods</code>. Dein Pod steht auf <b>ImagePullBackOff</b> und READY 0/1 – der Cluster sucht ein Image, das es noch gar nicht gibt.",
+            "accept": [
+              "^kubectl\\s+get\\s+(pods|po)$"
+            ],
+            "solution": "kubectl get pods",
+            "hint": "kubectl get pods – Spalte STATUS zeigt ImagePullBackOff."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "greta",
+        "reviewId": "q-werft-dienst-imagepull",
+        "q": "Warum hängt der Pod im <b>ImagePullBackOff</b>?",
+        "options": [
+          {
+            "t": "Weil das Image <code>werft-dienst:1.0</code> nirgends existiert – du hast es im Manifest deklariert, aber noch nie gebaut.",
+            "ok": true,
+            "reply": "Richtig. Der Cluster will dein Schiff fahren, aber es lief nie vom Stapel. Kein fremdes Image fehlt hier – DEINS fehlt. Die Heilung kennst du: erst bauen, dann den Cluster neu ziehen lassen."
+          },
+          {
+            "t": "Weil der Service noch fehlt – ohne Service findet der Cluster kein Image.",
+            "ok": false,
+            "reply": "Nein, das verwechselt zwei Dinge. Der Service macht einen <i>laufenden</i> Dienst erreichbar; mit dem Image-Pull hat er nichts zu tun. Der Pod findet sein Image nicht, weil du es noch nicht gebaut hast."
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Das Image bauen und nachziehen",
+        "tasks": [
+          {
+            "id": "t-greta-build",
+            "text": "Bau dein Image aus dem Dockerfile: <code>docker build --tag werft-dienst:1.0 .</code> – der Punkt am Ende ist der Build-Kontext (hier liegt der Bauplan).",
+            "accept": [
+              "^docker\\s+build\\s+(?:-t|--tag)\\s+werft-dienst:1\\.0\\s+\\.$"
+            ],
+            "solution": "docker build --tag werft-dienst:1.0 .",
+            "hint": "docker build --tag <name>:<tag> . – vergiss den Punkt am Ende nicht (die Kurzform -t verdienst du dir durch Nutzung)."
+          },
+          {
+            "id": "t-greta-rollout",
+            "text": "Jetzt den Cluster das Image neu ziehen lassen: <code>kubectl rollout restart deployment werft-dienst</code>. Der frische Pod findet das Image und läuft.",
+            "accept": [
+              "^kubectl\\s+rollout\\s+restart\\s+deployment(?:\\/|\\s+)werft-dienst$"
+            ],
+            "check": {"some":"deployments","where":{"name":"werft-dienst","broken":{"truthy":false}}},
+            "solution": "kubectl rollout restart deployment werft-dienst",
+            "hint": "kubectl rollout restart deployment <name>"
+          },
+          {
+            "id": "t-greta-getpods-running",
+            "text": "Kontrolle: <code>kubectl get pods</code>. Jetzt steht dein Pod auf <b>Running</b>, READY 1/1.",
+            "accept": [
+              "^kubectl\\s+get\\s+(pods|po)$"
+            ],
+            "solution": "kubectl get pods",
+            "hint": "kubectl get pods – STATUS jetzt Running."
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Erreichbar machen",
+        "tasks": [
+          {
+            "id": "t-greta-apply-svc",
+            "text": "Ein laufender Pod allein ist noch nicht erreichbar. Leg den <b>Service</b> davor: <code>kubectl apply --filename service.yaml</code>. Er nimmt Anfragen auf Port 80 an und leitet sie auf <code>targetPort</code> 8080 – genau dahin, wo dein Container lauscht.",
+            "accept": [
+              "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+service\\.yaml$"
+            ],
+            "check": {"some":"services","where":{"name":"werft-dienst"}},
+            "solution": "kubectl apply --filename service.yaml",
+            "hint": "kubectl apply --filename <datei>"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Greta klopft an",
+        "cmd": {
+          "id": "t-greta-curl",
+          "intro": "🆕 Neuer Befehl: <code>curl &lt;adresse&gt;</code> – der Klopftest. Er fragt einen Service im Cluster ab und zeigt, ob wirklich etwas antwortet. Kommt eine <b>200 OK</b> zurück, schwimmt dein Dienst.",
+          "text": "Klopf an deinen eigenen Dienst: <code>curl http://werft-dienst</code>. Über Port 80 leitet der Service auf deinen Container (8080) – und der antwortet mit 200.",
+          "accept": [
+            "^curl\\s+(?:http:\\/\\/)?werft-dienst(?::80)?\\/?$"
+          ],
+          "check": {"all":[{"some":"services","where":{"name":"werft-dienst"}},{"some":"deployments","where":{"name":"werft-dienst","broken":{"truthy":false}}}]},
+          "solution": "curl http://werft-dienst",
+          "hint": "curl http://<service-name> – der Name ist 'werft-dienst'."
+        }
+      },
+      {
+        "type": "choice",
+        "npc": "greta",
+        "reviewId": "q-werft-dienst-loop",
+        "q": "Fass die ganze Kette zusammen: Wie kommt aus Code ein erreichbarer Dienst?",
+        "options": [
+          {
+            "t": "Dockerfile → <code>docker build</code> erzeugt das Image → <code>kubectl apply</code> startet es als Deployment → ein <code>Service</code> macht es erreichbar → <code>curl</code> bestätigt die 200.",
+            "ok": true,
+            "reply": "Das ist sie, die ganze Kette – und du hast sie eben allein gefahren. Bauplan, Image, Deployment, Service, Klopftest. Genau so bringt man im echten Cluster einen Dienst vom Code zum Laufen."
+          },
+          {
+            "t": "Man schreibt nur das Deployment-Manifest – Image, Service und Erreichbarkeit ergeben sich daraus automatisch.",
+            "ok": false,
+            "reply": "Schön wär's. Das Image musst du selbst bauen (sonst ImagePullBackOff), und erreichbar wird ein Pod erst durch einen eigenen Service. Jeder Schritt ist deine Arbeit – das hast du gerade gemerkt."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "greta",
+        "lines": [
+          "200. Dein Dienst schwimmt – gebaut, deployt und erreichbar, alles aus deiner Hand. Das ist der Unterschied zwischen „kennt die Befehle\" und „kann ein Schiff vom Stapel lassen\".",
+          "Du hast in dieser Werft nichts mehr zu lernen, Kapitän. Du baust jetzt selbst. Stolz auf dich – die See gehört dir. ⚓"
+        ]
+      }
+    ]
+  }
+]
