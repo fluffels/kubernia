@@ -43,6 +43,7 @@
   "storage-ephemeral",
   "storage-backup-restore",
   "storage-object-store",
+  "storage-object-backup",
   "storage-prod-db-decision",
   "k8s-serviceaccount",
   "k8s-rbac-role",

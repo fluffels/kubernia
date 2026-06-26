@@ -1062,6 +1062,255 @@
     ]
   },
   {
+    "id": "storage-object-backup",
+    "title": "Backup ins Object Storage (S3): off-cluster sichern (3-2-1)",
+    "giver": "knut",
+    "topic": "storage",
+    "rewardXp": 65,
+    "rewardCoins": 50,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "knut",
+        "lines": [
+          "Kapitän, heute machen wir aus zwei Lehren eine. Beim <b>Snapshot</b> hast du gelernt, ein Volume schnell zu sichern und zurückzuholen. Beim <b>Object Store</b> hast du den Eimer im Hafen kennengelernt, der dem Cluster gar nicht gehört. Jetzt verbinden wir beides: das Backup wandert <b>off-cluster</b> in den Eimer.",
+          "Warum der Aufwand? Ein VolumeSnapshot ist schnell, aber er liegt im <b>selben Speichersystem</b> wie das Original. Geht der Cluster verloren – ein Verschlüsselungs-Trojaner, ein Region-Ausfall, ein versehentliches <code>delete</code> über die ganze StorageClass – ist der Snapshot mit weg. Dann hilft nur eine Kopie, die <b>woanders</b> liegt.",
+          "Die Faustregel der Profis heißt <b>3-2-1</b>: <b>3</b> Kopien deiner Daten, auf <b>2</b> verschiedenen Medien, davon <b>1</b> off-site. Der S3-Eimer ist genau dieses „off-site“. Ich hab dir den Datenbank-Export und die Karte hingelegt – wir schieben ihn jetzt in einen frischen Eimer."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Karten lesen",
+        "scenario": {
+          "files": {
+            "db.yaml": "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: kai-stammdaten\n  labels:\n    app: hafen-datenbank          # auf diesem Volume liegen die Stammkundendaten\nspec:\n  accessModes:\n    - ReadWriteOnce\n  storageClassName: standard\n  resources:\n    requests:\n      storage: 5Gi",
+            "kai-stammdaten.dump": "-- Export hafen-datenbank (stammkundenverzeichnis)\n-- erzeugt aus dem Volume kai-stammdaten\nINSERT INTO kunden VALUES ('Knut', 'Westkai 1');\nINSERT INTO kunden VALUES ('Bo', 'Stapelplatz 3');",
+            "restore.yaml": "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: kai-stammdaten             # gleicher Name: das verlorene Volume neu anlegen\nspec:\n  accessModes:\n    - ReadWriteOnce\n  storageClassName: standard\n  resources:\n    requests:\n      storage: 5Gi\n  # in dieses frische Volume laden wir gleich den aus S3 zurueckgeholten Dump"
+          },
+          "applyEffects": {
+            "db.yaml": {
+              "pvc": {
+                "name": "kai-stammdaten",
+                "storage": "5Gi",
+                "storageClass": "standard",
+                "accessModes": "RWO",
+                "data": "stammkundenverzeichnis"
+              }
+            },
+            "restore.yaml": {
+              "pvc": {
+                "name": "kai-stammdaten",
+                "storage": "5Gi",
+                "storageClass": "standard",
+                "accessModes": "RWO",
+                "data": "stammkundenverzeichnis"
+              }
+            }
+          }
+        },
+        "tasks": [
+          {
+            "id": "t-obak-ls",
+            "text": "Schau mit <code>ls</code>, was am Kai bereitliegt.",
+            "accept": [
+              "^ls$"
+            ],
+            "solution": "ls",
+            "hint": "Zwei Buchstaben."
+          },
+          {
+            "id": "t-obak-cat",
+            "text": "Lies <code>cat kai-stammdaten.dump</code> – das ist der Export der Hafendatenbank, den wir gleich off-cluster sichern.",
+            "accept": [
+              "^cat\\s+kai-stammdaten\\.dump$"
+            ],
+            "solution": "cat kai-stammdaten.dump",
+            "hint": "cat <datei>"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Datenbank-Volume bereitstellen",
+        "cmd": {
+          "id": "t-obak-db",
+          "intro": "Zuerst das Volume, um das es geht: die Hafendatenbank schreibt ihre <b>Stammkundendaten</b> auf das PVC <code>kai-stammdaten</code>. Stell es bereit – stell dir vor, die Datenbank läuft schon eine Weile und das Volume ist voller echter Daten.",
+          "text": "Leg das Datenbank-Volume an: <code>kubectl apply --filename db.yaml</code>.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+db\\.yaml$"
+          ],
+          "check": {"some":"pvcs","where":{"name":"kai-stammdaten","status":"Bound"}},
+          "solution": "kubectl apply --filename db.yaml",
+          "hint": "kubectl apply --filename <datei>"
+        }
+      },
+      {
+        "type": "teach",
+        "brief": "Off-site-Eimer anlegen",
+        "cmd": {
+          "id": "t-obak-mb",
+          "intro": "Jetzt das Ziel für die off-site-Kopie: ein eigener Backup-Eimer im Hafen. Er liegt <b>außerhalb</b> des Clusters – das ist der ganze Sinn. Du kennst den Befehl schon: <code>aws s3 mb</code>.",
+          "text": "Leg den Off-site-Eimer an: <code>aws s3 mb s3://hafen-offsite</code>.",
+          "accept": [
+            "^aws\\s+s3\\s+mb\\s+s3://hafen-offsite$"
+          ],
+          "check": {"some":"buckets","where":{"name":"hafen-offsite"}},
+          "solution": "aws s3 mb s3://hafen-offsite",
+          "hint": "aws s3 mb s3://<bucket>"
+        }
+      },
+      {
+        "type": "teach",
+        "brief": "Backup hochladen (put)",
+        "cmd": {
+          "id": "t-obak-put",
+          "intro": "Jetzt der Kern: das Backup <b>off-cluster</b> ablegen. Mit <code>aws s3 cp &lt;datei&gt; s3://&lt;bucket&gt;/&lt;key&gt;</code> schiebst du den Datenbank-Export in den Eimer. Ein Datum im Key (<code>backups/…-2024-01-01.dump</code>) ist gute Praxis – so liegen mehrere Stände nebeneinander, statt sich zu überschreiben.",
+          "text": "Sichere den Export off-site: <code>aws s3 cp kai-stammdaten.dump s3://hafen-offsite/backups/kai-stammdaten-2024-01-01.dump</code>.",
+          "accept": [
+            "^aws\\s+s3\\s+cp\\s+kai-stammdaten\\.dump\\s+s3://hafen-offsite/backups/kai-stammdaten-2024-01-01\\.dump$"
+          ],
+          "check": {"some":"buckets","where":{"name":"hafen-offsite","objects":{"has":{"key":"backups/kai-stammdaten-2024-01-01.dump"}}}},
+          "solution": "aws s3 cp kai-stammdaten.dump s3://hafen-offsite/backups/kai-stammdaten-2024-01-01.dump",
+          "hint": "aws s3 cp <datei> s3://<bucket>/<key>"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Off-site prüfen (ls)",
+        "tasks": [
+          {
+            "id": "t-obak-ls-bucket",
+            "text": "Sieh ins Off-site-Lager: <code>aws s3 ls s3://hafen-offsite</code>. Dein Backup liegt drin – mit Datum, Größe und vollem Key. Es liegt jetzt an einem zweiten Ort, unabhängig vom Cluster.",
+            "accept": [
+              "^aws\\s+s3\\s+ls\\s+s3://hafen-offsite$"
+            ],
+            "check": {"some":"buckets","where":{"name":"hafen-offsite","objects":{"has":{"key":"backups/kai-stammdaten-2024-01-01.dump"}}}},
+            "solution": "aws s3 ls s3://hafen-offsite",
+            "hint": "aws s3 ls s3://<bucket>"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Der Ernstfall: Cluster-Datenverlust",
+        "cmd": {
+          "id": "t-obak-loss",
+          "intro": "🆕 Jetzt der Ernstfall – und diesmal ein großer. Stell dir nicht nur einen gelöschten Pod vor, sondern den Verlust des ganzen <b>Cluster-Speichers</b>: ein Trojaner, ein Region-Ausfall. Ein VolumeSnapshot würde das <b>nicht</b> überleben – er lag im selben Speichersystem. Wir simulieren den Verlust, indem wir das Volume wegreißen.",
+          "text": "Simuliere den Totalverlust: <code>kubectl delete pvc kai-stammdaten</code>. Das Volume samt aller Stammkundendaten ist damit <b>weg</b> – im Cluster ist nichts mehr zu retten.",
+          "accept": [
+            "^kubectl\\s+delete\\s+pvc\\s+kai-stammdaten$"
+          ],
+          "check": {"none":"pvcs","where":{"name":"kai-stammdaten"}},
+          "solution": "kubectl delete pvc kai-stammdaten",
+          "hint": "kubectl delete pvc <name> – nimm kai-stammdaten."
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Das Off-site-Backup lebt noch",
+        "tasks": [
+          {
+            "id": "t-obak-gone",
+            "text": "Erst der Schock: <code>kubectl get pvc</code> – <code>kai-stammdaten</code> ist <b>weg</b>. Im Cluster ist nichts mehr da.",
+            "accept": [
+              "^kubectl\\s+get\\s+(pvc|persistentvolumeclaim|persistentvolumeclaims)$"
+            ],
+            "check": {"none":"pvcs","where":{"name":"kai-stammdaten"}},
+            "solution": "kubectl get pvc",
+            "hint": "kubectl get pvc"
+          },
+          {
+            "id": "t-obak-survives",
+            "text": "Jetzt die Erleichterung: <code>aws s3 ls s3://hafen-offsite</code> – das Backup ist <b>immer noch da</b>. Der Eimer steht off-cluster im Hafen und hat den Verlust des Clusters überlebt. <b>Das</b> ist der Sinn von 3-2-1.",
+            "accept": [
+              "^aws\\s+s3\\s+ls\\s+s3://hafen-offsite$"
+            ],
+            "check": {"all":[{"none":"pvcs","where":{"name":"kai-stammdaten"}},{"some":"buckets","where":{"name":"hafen-offsite","objects":{"has":{"key":"backups/kai-stammdaten-2024-01-01.dump"}}}}]},
+            "solution": "aws s3 ls s3://hafen-offsite",
+            "hint": "aws s3 ls s3://<bucket>"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Backup zurückholen (get)",
+        "cmd": {
+          "id": "t-obak-get",
+          "intro": "🆕 Der Weg zurück beginnt off-cluster: zuerst holst du den Export mit <code>aws s3 cp</code> aus dem Eimer wieder herunter (S3-Adresse als Quelle, lokaler Dateiname als Ziel). Genau dieser Download ist der erste Schritt jeder Wiederherstellung aus dem Backup.",
+          "text": "Hol das Backup zurück: <code>aws s3 cp s3://hafen-offsite/backups/kai-stammdaten-2024-01-01.dump wiederhergestellt.dump</code>. Mit <code>cat wiederhergestellt.dump</code> siehst du: der Export ist wieder lokal da.",
+          "accept": [
+            "^aws\\s+s3\\s+cp\\s+s3://hafen-offsite/backups/kai-stammdaten-2024-01-01\\.dump\\s+wiederhergestellt\\.dump$"
+          ],
+          "check": {"flag":["files","wiederhergestellt.dump"]},
+          "solution": "aws s3 cp s3://hafen-offsite/backups/kai-stammdaten-2024-01-01.dump wiederhergestellt.dump",
+          "hint": "aws s3 cp s3://<bucket>/<key> <ziel-datei>"
+        }
+      },
+      {
+        "type": "teach",
+        "brief": "Volume neu befüllen",
+        "cmd": {
+          "id": "t-obak-restore",
+          "intro": "Der zweite Schritt: ein frisches Volume anlegen und den heruntergeladenen Dump hineinladen. <code>restore.yaml</code> legt das PVC <code>kai-stammdaten</code> neu an – in dieses Volume kommt der Inhalt des Backups. Die Stammkundendaten sind zurück.",
+          "text": "Stell die Daten wieder her: <code>kubectl apply --filename restore.yaml</code>. Das Volume <code>kai-stammdaten</code> entsteht neu – mit den Daten aus dem off-site-Backup.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+restore\\.yaml$"
+          ],
+          "check": {"some":"pvcs","where":{"name":"kai-stammdaten","data":"stammkundenverzeichnis"}},
+          "solution": "kubectl apply --filename restore.yaml",
+          "hint": "kubectl apply --filename <datei>"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Wieder am Kai",
+        "tasks": [
+          {
+            "id": "t-obak-back",
+            "text": "Prüf das Ergebnis: <code>kubectl get pvc</code> – <code>kai-stammdaten</code> ist wieder <b>Bound</b>. Aus einer Kopie, die der Cluster-Katastrophe entging, hast du den Betrieb zurückgeholt.",
+            "accept": [
+              "^kubectl\\s+get\\s+(pvc|persistentvolumeclaim|persistentvolumeclaims)$"
+            ],
+            "check": {"some":"pvcs","where":{"name":"kai-stammdaten","status":"Bound"}},
+            "solution": "kubectl get pvc",
+            "hint": "kubectl get pvc"
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "knut",
+        "q": "Du hast off-site gesichert und zurückgeholt. Warum gehört ein Backup <b>außerhalb</b> des Clusters – und was sagen <b>RPO</b> und <b>RTO</b>?",
+        "options": [
+          {
+            "t": "Nach 3-2-1: 3 Kopien, 2 Medien, 1 off-site. Ein Snapshot teilt das Schicksal seines Speichersystems – geht der Cluster verloren, ist er mit weg. Hätte das Backup im selben Volume gelegen, wäre es beim delete mitgelöscht worden. Erst die off-cluster-Kopie überlebt den Ernstfall. RPO = wie viel Datenverlust du verträgst (→ wie oft du sicherst), RTO = wie schnell du wieder online bist.",
+            "ok": true,
+            "reply": "Genau. Ein Backup am selben Ort wie die Daten ist kein Backup gegen Brand, Ransomware oder Region-Ausfall – es stirbt mit. Off-site ist der Punkt. RPO und RTO sagen dir, wie oft du sichern und wie schnell du restoren musst. In echt nimmt dir ein Tool wie <b>Velero</b> die Arbeit ab: es kopiert Cluster-Objekte und Volume-Snapshots automatisch nach S3 – genau dieses Muster, nur automatisiert. 🗄️"
+          },
+          {
+            "t": "Off-site ist Overkill – ein readyToUse-Snapshot im selben Cluster genügt als vollwertiges Backup. RPO ist die Snapshot-Größe, RTO die Anzahl der Replicas.",
+            "ok": false,
+            "reply": "Nein. Verlierst du den Cluster oder das Speichersystem, ist der Snapshot mit verloren – ein Backup am selben Ort schützt nicht gegen den Ernstfall. Und RPO/RTO sind Zeit-/Datenverlust-Ziele, keine Größen oder Replica-Zahlen: RPO = tolerierbarer Datenverlust, RTO = tolerierbare Ausfallzeit."
+          },
+          {
+            "t": "Hauptsache, es gibt überhaupt eine Kopie – wo sie liegt, ist egal, auch im selben Volume ist okay.",
+            "ok": false,
+            "reply": "Gerade nicht. Liegt die Kopie im selben Volume, löscht ein <code>delete</code> oder ein kaputtes Dateisystem beide auf einen Schlag – du hast genau dann nichts, wenn du es brauchst. Der Ort ist der ganze Witz: mindestens eine Kopie muss off-cluster/off-site liegen."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "knut",
+        "lines": [
+          "Sauber, Kapitän. Sichern, verlieren, zurückholen – diesmal über den Eimer, der dem Cluster nicht gehört. Das ist der Unterschied zwischen einem Snapshot und einem echten Backup.",
+          "Merk dir 3-2-1 und den Satz dahinter: <b>ein Backup, das nur dort liegt, wo auch die Daten liegen, ist kein Backup</b>. In der Praxis automatisiert das ein Werkzeug wie <b>Velero</b> – es schiebt deine Cluster-Sicherungen regelmäßig nach S3, damit du im Ernstfall nicht von Hand kopierst.",
+          "Damit hast du die ganze Storage-Lehre beisammen: flüchtig und dauerhaft, Block und Object, Snapshot und off-site-Backup. Gute Wacht am Kai! 🪵"
+        ]
+      }
+    ]
+  },
+  {
     "id": "storage-prod-db-decision",
     "title": "Prod-DB im Cluster: ja oder nein?",
     "giver": "knut",
