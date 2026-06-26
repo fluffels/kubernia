@@ -30,6 +30,7 @@ export interface KubectlHost extends ClusterState {
   _podReady(d: Deployment): boolean;
   _reschedulePending(): void;
   _recheckReadiness(): void;
+  _imageAvailable(image: string): boolean; // #164: ist das Image lokal gebaut/gezogen?
   _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment;
   _makePvc(name: string, storage: string, storageClass?: string, accessModes?: string): PvcRes;
   _makeStatefulSet(spec: { name: string; image: string; replicas: number; serviceName?: string; volumeClaimName?: string; storage?: string; storageClass?: string }): StatefulSetRes;

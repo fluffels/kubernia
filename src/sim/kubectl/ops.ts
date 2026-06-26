@@ -34,11 +34,15 @@ export function kubectlExpose(host: KubectlHost, t: string[], raw: string) {
   if (!portMatch) return host._err("error: couldn't find port via --port flag or introspection", "Häng '--port=80' an.");
   if (host.services.some(s => s.name === name)) return host._err('Error from server (AlreadyExists): services "' + name + '" already exists');
   const typeMatch = raw.match(/--type[=\s]+(\S+)/);
+  // --target-port: an welchen Container-Port der Service weiterleitet (#164). Fehlt es,
+  // gilt --port auch als Ziel (wie in echtem kubectl).
+  const targetMatch = raw.match(/--target-port[=\s]+(\S+)/);
   host.services.push({
     name,
     type: typeMatch ? typeMatch[1] : "ClusterIP",
     clusterIP: "10.96." + Math.floor(Math.random() * 250) + "." + Math.floor(Math.random() * 250),
     port: portMatch[1],
+    ...(targetMatch ? { targetPort: targetMatch[1] } : {}),
     created: host.clock,
   });
   return "service/" + name + " exposed";
@@ -161,6 +165,14 @@ export function kubectlRollout(host: KubectlHost, t: string[]) {
   if (broken && broken.type === "crashloop" && host.secrets.some(s => s.name === broken.needsSecret)) {
     dep.broken = null;
   }
+  // Eigenes Image nachgebaut (#164): ein needsBuild-ImagePullBackOff heilt beim Neustart,
+  // sobald das Image lokal verfügbar ist – der klassische „force re-pull"-Griff.
+  let imageHealed = false;
+  if (broken && broken.type === "imagepull" && broken.needsBuild && host._imageAvailable(dep.image)) {
+    dep.broken = null;
+    imageHealed = true;
+  }
   dep.pods = dep.pods.map(() => ({ name: makePodName(dep.name), created: host.clock, restarts: 0 }));
-  return "deployment.apps/" + depName + " restarted";
+  return "deployment.apps/" + depName + " restarted" +
+    (imageHealed ? "\n💡 Image gefunden – die Pods starten neu und laufen jetzt. Prüfe mit 'kubectl get pods'." : "");
 }
