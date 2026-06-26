@@ -324,3 +324,70 @@ test("Variablen-Quest: Alt-State aus den Vorquests (Module/Provider/Backend) lec
   const list = sim.exec("terraform state list").output!.split("\n").sort();
   assert.deepEqual(list, ["hafen_flotte.expedition"], "nur die Variablen-Quest-Ressource, kein Alt-State");
 });
+
+/* ===== Content-Szenario der Modul-Quest (#150, erste Quest des Arcs) =====
+ * Die übrigen drei Quests (#151/#152/#153) haben oben je einen Szenario-Test;
+ * #150 fehlte noch. Kern der Quest: ZWEI Modul-Aufrufe (nord/sued) aus EINEM
+ * Bauplan → VIER Ressourcen (je Kai + Poller), plus der durchgereichte Output. */
+test("Modul-Quest: zwei Modul-Aufrufe ergeben vier Ressourcen + durchgereichter Output (#150)", () => {
+  const quest = KQContent.QUESTS.find(q => q.id === "terraform-modul");
+  assert.ok(quest, "Quest terraform-modul existiert");
+  const step = quest.steps.find(s => s.type === "terminal" && s.scenario);
+  assert.ok(step?.scenario, "Modul-Quest hat ein Terminal-Szenario (scenarioRef → flotte-modul)");
+  sim.mergeScenario(step.scenario);
+  // Zwei Modul-Blöcke (nord + sued), beide vor init noch nicht geholt.
+  assert.equal(sim.tf.modules.length, 2, "zwei Modul-Aufrufe im Szenario");
+  assert.ok(sim.tf.modules.every(m => m.fetched === false), "vor init ist kein Modul geholt");
+  // init holt BEIDE Module.
+  const init = sim.exec("terraform init").output!;
+  assert.match(init, /Initializing modules/);
+  assert.match(init, /nordanleger in \.\/modules\/anleger/);
+  assert.match(init, /suedanleger in \.\/modules\/anleger/);
+  assert.ok(sim.tf.modules.every(m => m.fetched === true), "init holt beide Module");
+  // plan: aus 2 Aufrufen × je 2 Ressourcen werden 4 – das ist die Wiederverwendung.
+  const plan = sim.exec("terraform plan").output!;
+  assert.match(plan, /4 to add/, "zwei Modul-Aufrufe ergeben vier Ressourcen");
+  // apply + state list führen genau die vier modul-expandierten Adressen.
+  sim.exec("terraform apply");
+  const list = sim.exec("terraform state list").output!.split("\n").sort();
+  assert.deepEqual(list, [
+    "module.nordanleger.hafen_kai.kai",
+    "module.nordanleger.hafen_poller.poller",
+    "module.suedanleger.hafen_kai.kai",
+    "module.suedanleger.hafen_poller.poller",
+  ], "beide Anleger als Einheit im State – kein Copy-Paste");
+  // Das Modul reicht seinen Output nach oben durch (Wurzel-Konfig macht ihn sichtbar).
+  assert.equal(sim.exec("terraform output nordanleger_adresse").output, "nord-kai.flotte.local");
+});
+
+/* ===== Weitere Fehler-/Grenzfälle (Red-Green, #157) =====
+ * Der Ticket-Auftrag nennt „State leer" ausdrücklich; dazu die leeren Pendants
+ * von get/output, die im Spiel auftreten können (Spieler tippt zu früh). */
+test("terraform state list: vor apply ist der State leer und wird abgelehnt (#157)", () => {
+  sim.mergeScenario({ tfResources: [{ addr: "local_file.notiz", desc: "x" }] });
+  sim.exec("terraform init");
+  // Noch kein apply → der State ist leer, state list meldet das als Fehler.
+  const before = sim.exec("terraform state list");
+  assert.equal(before.error, true, "state list vor apply ist ein Fehler (State leer)");
+  assert.match(before.output!, /Noch nichts im State/);
+  // Nach apply liefert dieselbe Abfrage die Ressource.
+  sim.exec("terraform apply");
+  const after = sim.exec("terraform state list");
+  assert.equal(after.error, false);
+  assert.equal(after.output, "local_file.notiz");
+});
+
+test("terraform get: ohne referenziertes Modul gibt es nichts zu holen (#157)", () => {
+  const out = sim.exec("terraform get");
+  assert.equal(out.error, false, "kein Fehler – nur nichts zu tun");
+  assert.match(out.output!, /Kein Modul referenziert/);
+});
+
+test("terraform output: nach apply ohne deklarierte Outputs ist die Ausgabe leer (#157)", () => {
+  sim.mergeScenario({ tfResources: [{ addr: "local_file.notiz", desc: "x" }], tfOutputs: [] });
+  sim.exec("terraform init");
+  sim.exec("terraform apply");
+  const out = sim.exec("terraform output");
+  assert.equal(out.error, false, "ohne output-Blöcke ist es kein Fehler");
+  assert.equal(out.output, "", "echtes Terraform gibt ohne Outputs nichts aus");
+});

@@ -731,6 +731,79 @@ test("#142 PRACTICE.knut deckt die drei Storage-Quests mit existierenden Drills"
   }
 });
 
+/* ===== Expeditions-Flotte (Phase 9): Übungs-Pool & Drills (#154/#157) =====
+ * Analog zum Knut-Pool oben: der Saga-Pool muss die vier Flotte-Quests mit
+ * existierenden, gestaffelten Drills abdecken; die fachlichen Drill-Tests darunter
+ * sichern (Red-Green), dass die Drill-Szenarien wirklich das Lehrbild aufbauen. */
+
+test("#154 PRACTICE.saga deckt die vier Flotte-Quests mit existierenden Drills (gestaffelt)", () => {
+  const pool = KQContent.PRACTICE.saga;
+  assert.ok(pool && pool.length > 0, "Saga hat keinen Übungs-Pool");
+  const questIds = new Set(KQContent.QUESTS.map(q => q.id));
+  for (const p of pool) {
+    assert.ok(KQContent.DRILLS[p.drill], "unbekannter Drill im Saga-Pool: " + p.drill);
+    assert.ok(questIds.has(p.after), "unbekannte after-Quest im Saga-Pool: " + p.after);
+  }
+  // Jeder Phase-9-Quest schaltet mindestens einen Übungs-Drill frei.
+  const after = new Set(pool.map(p => p.after));
+  for (const q of ["terraform-modul", "terraform-remote-state", "terraform-provider", "terraform-variablen-outputs"]) {
+    assert.ok(after.has(q), "Saga-Pool deckt die Quest nicht ab: " + q);
+  }
+  // Die fünf Phase-9-Drills sind alle eingehängt.
+  const drills = new Set(pool.map(p => p.drill));
+  for (const d of ["tf-get", "tf-init-flotte", "tf-apply-flotte", "tf-output-read", "tf-output-list"]) {
+    assert.ok(drills.has(d), "Saga-Pool enthält den Drill nicht: " + d);
+  }
+});
+
+test("#154 tf-get-Drill stellt zwei noch ungeholte Module bereit (Modul-Lehrbild)", () => {
+  const sim = new KQSim({});
+  const task = KQContent.DRILLS["tf-get"](sim);
+  assert.equal(sim.tf.modules.length, 2, "der Drill stellt zwei Modul-Aufrufe bereit");
+  assert.ok(sim.tf.modules.every(m => m.fetched === false), "vor dem Holen ist kein Modul geholt");
+  // Die Musterlösung holt die Module wirklich.
+  sim.exec(task.solution);
+  assert.ok(sim.tf.modules.every(m => m.fetched === true), "terraform get holt die Module");
+});
+
+test("#154 tf-apply-flotte-Drill richtet ein initialisiertes Multi-Cloud-Projekt ein (zwei Provider)", () => {
+  const sim = new KQSim({});
+  const task = KQContent.DRILLS["tf-apply-flotte"](sim);
+  assert.equal(sim.tf.providers.length, 2, "Multi-Cloud: zwei Provider deklariert");
+  assert.equal(sim.tf.initialized, true, "der Drill setzt ein bereits initialisiertes Projekt voraus");
+  assert.equal(sim.tf.applied, false, "vor dem Apply ist noch nichts gebaut");
+  // apply baut beide Inseln – je eine pro Anbieter.
+  sim.exec(task.solution);
+  assert.equal(sim.tf.applied, true, "terraform apply baut die Vorposten");
+  const list = sim.exec("terraform state list").output!.split("\n").sort();
+  assert.deepEqual(list, ["nordwind_insel.ost", "passat_insel.west"], "beide Anbieter-Inseln im State");
+});
+
+test("#154 tf-output-list-Drill verbirgt den sensiblen Wert in der Übersicht, gezielt bleibt er roh", () => {
+  const sim = new KQSim({});
+  const task = KQContent.DRILLS["tf-output-list"](sim);
+  const list = sim.exec(task.solution).output!;
+  assert.match(list, /anleger_adresse = "nordkai\.flotte\.local"/, "offene Outputs stehen im Klartext");
+  assert.match(list, /lager_schluessel = <sensitive>/, "das Geheimnis ist in der Übersicht verborgen");
+  assert.doesNotMatch(list, /werft-geheim/, "der Klartext des Geheimnisses taucht in der Übersicht NICHT auf");
+  // Gezielt abgefragt gibt Terraform den Rohwert heraus – auch den sensiblen.
+  assert.equal(sim.exec("terraform output lager_schluessel").output, "werft-geheim");
+});
+
+test("#155 die acht vertiefenden Flotte-Quiz-Karten existieren und hängen an ihrer Quest (chapter)", () => {
+  const questIds = new Set(KQContent.QUESTS.map(q => q.id));
+  const deepening = KQContent.CRAB_QUIZ.filter(c => /^q-flotte-.*-(3|4)$/.test(c.id));
+  assert.equal(deepening.length, 8, "es gibt acht vertiefende Karten (zwei je Phase-9-Quest)");
+  for (const card of deepening) {
+    assert.ok(card.chapter, card.id + ": vertiefende Karte braucht ein chapter (SR-Pool nach Quest-Abschluss)");
+    assert.ok(questIds.has(card.chapter!), card.id + ": chapter zeigt auf eine unbekannte Quest: " + card.chapter);
+  }
+  // Genau zwei je Flotte-Quest.
+  for (const q of ["terraform-modul", "terraform-remote-state", "terraform-provider", "terraform-variablen-outputs"]) {
+    assert.equal(deepening.filter(c => c.chapter === q).length, 2, "zwei vertiefende Karten für " + q);
+  }
+});
+
 test("#142 pvc-pending erzeugt einen wirklich auf Pending hängenden PVC (Negativfall)", () => {
   const sim = new KQSim({});
   KQContent.DRILLS["pvc-pending"](sim);
