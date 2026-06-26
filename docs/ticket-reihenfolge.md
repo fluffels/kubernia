@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-26 — nächstes Ticket: #244 (Quest „Backup ins Object Storage (S3) — off-cluster sichern (3-2-1)"). Kopf: 6 Einträge. Zuletzt abgeschlossen: #243 (Quest `storage-object-store` „Object Storage & Buckets — wann S3 statt Volume" bei Knut, nach storage-backup-restore: `aws s3 mb` Bucket → `cp` put/`ls`/`cp` get Round-Trip mit Key-Präfix (flacher Namensraum); Dialog Object vs. Block (PVC) vs. File-Storage, off-cluster überlebt den Cluster; `choice` wann S3 vs. PVC. Enabler: `buckets` als adressierbare Check-DSL-Sammlung ergänzt, Red-Green-Test. npm test 1156 / typecheck / lint / check:arch / check:size grün). Phase 9 + 10 komplett, Storage-Lernpfad-Arc läuft (#240+#241+#242+#243 erledigt → jetzt Quest #244, Quiz #245, Tests #246).**
+> **Stand: 2026-06-26 — nächstes Ticket: #245 (Quiz-Karten: ephemeral vs persistent, Object/Block/File, S3-Backup-Ziel, etcd-Backup). Kopf: 5 Einträge. Zuletzt abgeschlossen: #244 (Quest `storage-object-backup` „Backup ins Object Storage (S3) — off-cluster sichern (3-2-1)" bei Knut, zwischen storage-object-store und storage-prod-db-decision: DB-Export per `aws s3 cp` off-cluster in frischen Bucket sichern (put) + `aws s3 ls`, Cluster-Datenverlust per `kubectl delete pvc` simulieren, aus S3 zurückholen (get) + Volume neu befüllen; `choice` zu 3-2-1, RPO/RTO und „Backup im selben Volume = kein Backup", Velero→S3 als Ausblick. Reines Content-Ticket, keine neue Sim-Logik; frische Namen kai-stammdaten/hafen-offsite gegen Test-Kollision; README 54→55. npm test 1156 / typecheck / lint / check:arch / check:size grün). Phase 9 + 10 komplett, Storage-Lernpfad-Arc läuft (#240+#241+#242+#243+#244 erledigt → jetzt Quiz #245, Tests #246).**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -44,15 +44,14 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| | **— Content-Arc: Storage-Lernpfad (reaktiviert 2026-06-26, dependency-geordnet) —** | | | Der nächste echte Lernpfad-Arc nach Phase 9+10. Reihenfolge ist load-bearing: erst die Sim-Grundlagen (#240+#241 erledigt), dann die Quests, die darauf bauen (#242+#243 erledigt), dann Quiz, dann Tests. |
-| 1 | **#244** | niedrig | Quest „Backup ins Object Storage (S3) — off-cluster sichern (3-2-1)" | **Nächstes Ticket.** Baut auf Sim #241 + Quest #243 (beide erledigt). |
-| 2 | **#245** | niedrig | Quiz-Karten (ephemeral vs persistent, Object/Block/File, S3-Backup-Ziel, etcd-Backup) | Nach den Quests #242–#244 (Konzepte müssen eingeführt sein). |
-| 3 | **#246** | niedrig | Tests für ephemeral-Storage- & Object-Store-Sim + neue Quests | **Schließt den Arc ab** (analog #157/#172) — nach allem anderen. |
+| | **— Content-Arc: Storage-Lernpfad (reaktiviert 2026-06-26, dependency-geordnet) —** | | | Der nächste echte Lernpfad-Arc nach Phase 9+10. Reihenfolge ist load-bearing: erst die Sim-Grundlagen (#240+#241 erledigt), dann die Quests, die darauf bauen (#242+#243+#244 erledigt), dann Quiz, dann Tests. |
+| 1 | **#245** | niedrig | Quiz-Karten (ephemeral vs persistent, Object/Block/File, S3-Backup-Ziel, etcd-Backup) | **Nächstes Ticket.** Nach den Quests #242–#244 (Konzepte sind jetzt eingeführt). |
+| 2 | **#246** | niedrig | Tests für ephemeral-Storage- & Object-Store-Sim + neue Quests | **Schließt den Arc ab** (analog #157/#172) — nach allem anderen. |
 | | **— QoL / System-Features —** | | | |
-| 4 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 3 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 5 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 6 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 4 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 5 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
