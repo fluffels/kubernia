@@ -242,3 +242,42 @@ test("Remote-State-Quest: Alt-State aus der Modul-Quest leckt nicht ins Lager (#
   const list = sim.exec("terraform state list").output!;
   assert.equal(list, "hafen_leuchtfeuer.einfahrt", "nur die Remote-State-Ressource, keine Alt-Module");
 });
+
+/* ===== Content-Szenario der Provider-Quest (#152) ===== */
+
+test("Provider-Quest: lädt genau die zwei Anbieter, baut beide Inseln (#152)", () => {
+  const quest = KQContent.QUESTS.find(q => q.id === "terraform-provider");
+  assert.ok(quest, "Quest terraform-provider existiert");
+  const step = quest.steps.find(s => s.type === "terminal" && s.scenario);
+  assert.ok(step?.scenario, "Provider-Quest hat ein Terminal-Szenario");
+  sim.mergeScenario(step.scenario);
+  const init = sim.exec("terraform init").output!;
+  assert.match(init, /nordwind/, "init holt den nordwind-Provider");
+  assert.match(init, /passat/, "init holt den passat-Provider");
+  sim.exec("terraform apply");
+  const list = sim.exec("terraform state list").output!.split("\n").sort();
+  assert.deepEqual(list, ["nordwind_insel.ost", "passat_insel.west"], "beide Inseln im State");
+});
+
+test("Provider-Quest: Alt-State aus Modul-/Remote-State-Quest leckt nicht durch (#152)", () => {
+  // mergeScenario ist additiv: die Quests davor hinterlassen Module, Outputs und
+  // einen s3-Backend im tf-State. Das Provider-Szenario muss sie leeren, sonst zeigt
+  // `state list` Alt-Anleger und `apply` einen Alt-Backend (dieselbe #150/#151-Lektion).
+  sim.mergeScenario({
+    tfModules: [{ name: "nordanleger", source: "./modules/anleger", resources: ["hafen_kai.kai"] }],
+    tfOutputs: [{ name: "nordanleger_adresse", value: "nord-kai.flotte.local" }],
+    tfBackend: { type: "s3", name: "flotten-lager", locking: true },
+    tfResources: [],
+  });
+  sim.exec("terraform init");
+  sim.exec("terraform apply");
+  const quest = KQContent.QUESTS.find(q => q.id === "terraform-provider");
+  const step = quest!.steps.find(s => s.type === "terminal" && s.scenario);
+  sim.mergeScenario(step!.scenario);
+  sim.exec("terraform init");
+  const apply = sim.exec("terraform apply").output!;
+  assert.doesNotMatch(apply, /nordanleger/, "kein Alt-Output aus der Modul-Quest");
+  assert.equal(sim.tf.backend, null, "kein Alt-Backend aus der Remote-State-Quest");
+  const list = sim.exec("terraform state list").output!.split("\n").sort();
+  assert.deepEqual(list, ["nordwind_insel.ost", "passat_insel.west"], "nur die zwei Provider-Inseln, keine Alt-Module");
+});

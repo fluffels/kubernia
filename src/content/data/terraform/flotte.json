@@ -51,7 +51,10 @@
       "tfResources": [
         { "addr": "nordwind_insel.ost", "desc": "name = \"ost-vorposten\"", "provider": "nordwind" },
         { "addr": "passat_insel.west", "desc": "name = \"west-vorposten\"", "provider": "passat" }
-      ]
+      ],
+      "tfModules": [],
+      "tfOutputs": [],
+      "tfBackend": null
     }
   },
   {
