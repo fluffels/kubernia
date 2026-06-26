@@ -14,7 +14,7 @@ import type {
   Chart, TfResource, TfProvider, TfModule, TfBackend, TfOutput, GitCommit, GitConflict, GitPending,
   Pipeline, CiDeploy, ArgoApp, ApplyEffect,
   ServiceMonitorRes, PrometheusRuleRes, GrafanaDatasourceRes, GrafanaDashboardRes, StatefulSetRes, PvcRes,
-  PvRes, StorageClassRes, VolumeSnapshotRes, ServiceAccountRes, RoleRes,
+  PvRes, StorageClassRes, VolumeSnapshotRes, S3Bucket, ServiceAccountRes, RoleRes,
   RoleBindingRes, PodSecurityLevel, PodStatus, NodeMetrics,
   ScrapeTarget, Alert, Scenario, ClusterState,
 } from "./sim/state";
@@ -25,7 +25,7 @@ export type {
   Chart, TfResource, TfProvider, TfModule, TfBackend, TfOutput, GitCommit, GitConflict, GitPending, PipelineStage,
   Pipeline, CiDeploy, ArgoDesired, ArgoChildSpec, ArgoApp, ApplyEffect,
   ServiceMonitorRes, PrometheusRuleRes, GrafanaDatasourceRes, GrafanaDashboardRes, StatefulSetRes, PvcRes,
-  PvRes, StorageClassRes, VolumeSnapshotRes, ServiceAccountRes, PolicyRule, RoleRes, RbacSubject,
+  PvRes, StorageClassRes, VolumeSnapshotRes, S3Bucket, S3Object, ServiceAccountRes, PolicyRule, RoleRes, RbacSubject,
   RoleBindingRes, SecurityContext, PodSecurityLevel, PodStatus, PodMetrics, NodeMetrics,
   ScrapeTarget, Alert, Scenario, ClusterState,
 } from "./sim/state";
@@ -42,6 +42,7 @@ import { argocdCommand, reconcileAutoSync, cloneArgoApp } from "./sim/argocd";
 import { podMetrics as obsPodMetrics, nodeMetrics as obsNodeMetrics, scrapeTargets as obsScrapeTargets, alerts as obsAlerts, evaluateAlerts as obsEvaluateAlerts } from "./sim/observability";
 import { glabCommand } from "./sim/glab";
 import { nslookupCommand, curlCommand } from "./sim/net";
+import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
 import { randSuffix, makePodName } from "./sim/util";
 
@@ -70,6 +71,7 @@ import { randSuffix, makePodName } from "./sim/util";
     pvs!: PvRes[];
     storageClasses!: StorageClassRes[];
     volumeSnapshots!: VolumeSnapshotRes[];   // Backup/Restore (#140)
+    objectStore!: { buckets: S3Bucket[] };   // S3-/MinIO-Object-Store (#241), off-cluster
     // RBAC / ServiceAccounts / Pod-Security (#126)
     serviceAccounts!: ServiceAccountRes[];
     roles!: RoleRes[];                 // Roles UND ClusterRoles (per .cluster unterschieden)
@@ -153,6 +155,10 @@ import { randSuffix, makePodName } from "./sim/util";
         name: v.name, sourcePvc: v.sourcePvc, data: v.data || "",
         restoreSize: v.restoreSize || "1Gi", readyToUse: v.readyToUse !== false, created: 0,
       }));
+
+      // S3-/MinIO-Object-Store (#241): off-cluster Buckets + Objekte. `size` aus dem Inhalt
+      // ableiten, wenn nicht explizit vorgegeben (lockere Eingabe-Schreibweise).
+      this.objectStore = { buckets: (sc.s3Buckets || []).map(b => this._makeBucket(b)) };
 
       // RBAC / ServiceAccounts / Pod-Security (#126). Jeder Namespace hat von Haus
       // aus die "default"-SA; weitere kommen aus dem Szenario oder per `kubectl create`.
@@ -325,6 +331,16 @@ import { randSuffix, makePodName } from "./sim/util";
       return sts;
     }
 
+    /** Baut einen Object-Store-Bucket aus einer (lockeren) Szenario-Spec (#241): Objekt-Größe
+     *  aus dem Inhalt ableiten, wenn nicht explizit gesetzt. Geteilt von reset()/mergeScenario(). */
+    _makeBucket(b: { name: string; objects?: Array<{ key: string; content?: string; size?: number }> }): S3Bucket {
+      return {
+        name: b.name,
+        objects: (b.objects || []).map(o => ({ key: o.key, content: o.content || "", size: o.size !== undefined ? o.size : objectByteLength(o.content || ""), created: 0 })),
+        created: 0,
+      };
+    }
+
     /** Pod-Status eines Deployments (für get/describe/logs). */
     _podStatus(d: Deployment): PodStatus {
       // Evicted überschreibt alles (#240): der kubelet hat den Pod wegen Disk-Druck oder
@@ -445,6 +461,9 @@ import { randSuffix, makePodName } from "./sim/util";
       for (const v of sc.volumeSnapshots || []) { // Backup/Restore (#140)
         if (!this.volumeSnapshots.some(x => x.name === v.name)) this.volumeSnapshots.push({ name: v.name, sourcePvc: v.sourcePvc, data: v.data || "", restoreSize: v.restoreSize || "1Gi", readyToUse: v.readyToUse !== false, created: this.clock });
       }
+      for (const b of sc.s3Buckets || []) { // Object Store (#241) – additiv, ohne Doppler.
+        if (!this.objectStore.buckets.some(x => x.name === b.name)) this.objectStore.buckets.push(this._makeBucket(b));
+      }
       // RBAC / ServiceAccounts / Pod-Security (#126) – additiv, ohne Doppler.
       for (const name of sc.serviceAccounts || []) {
         if (!this.serviceAccounts.some(x => x.name === name)) this.serviceAccounts.push({ name, created: this.clock });
@@ -555,6 +574,9 @@ import { randSuffix, makePodName } from "./sim/util";
         statefulSets: this.statefulSets.map(s => ({ name: s.name, image: s.image, replicas: s.replicas, serviceName: s.serviceName, volumeClaimName: s.volumeClaimName, storage: s.storage, storageClass: s.storageClass })),
         // Backup/Restore (#140): VolumeSnapshots überleben Reloads als eigenständige Objekte.
         volumeSnapshots: this.volumeSnapshots.map(v => Object.assign({}, v)),
+        // Object Store (#241): Buckets + Objekte (mit Inhalt) überleben den Reload – sie sind
+        // off-cluster und damit das natürliche Backup-Ziel. `size` wird beim Laden neu abgeleitet.
+        s3Buckets: this.objectStore.buckets.map(b => ({ name: b.name, objects: b.objects.map(o => ({ key: o.key, content: o.content, size: o.size })) })),
         // RBAC / ServiceAccounts / Pod-Security (#126). Die "default"-SA legt reset()
         // ohnehin wieder an – nur die selbst erstellten serialisieren.
         serviceAccounts: this.serviceAccounts.filter(s => s.name !== "default").map(s => s.name),
@@ -632,12 +654,13 @@ import { randSuffix, makePodName } from "./sim/util";
           case "glab": out = glabCommand(this, tokens); break;
           case "nslookup": out = nslookupCommand(this, tokens); break;
           case "curl": out = curlCommand(this, tokens); break;
+          case "aws": out = awsCommand(this, tokens, raw); break;
           case "ls": out = this._ls(); break;
           case "cat": out = this._cat(tokens); break;
           case "clear": return { output: null, error: false, clear: true };
           case "help": out = this._help(); break;
           default: {
-            const guess = this._suggest(cmd, ["docker", "kubectl", "helm", "terraform", "git", "argocd", "glab", "nslookup", "curl", "ls", "cat", "clear", "help"]);
+            const guess = this._suggest(cmd, ["docker", "kubectl", "helm", "terraform", "git", "argocd", "glab", "nslookup", "curl", "aws", "ls", "cat", "clear", "help"]);
             out = this._err("⚠️ Den Befehl '" + cmd + "' gibt es hier nicht.",
               guess ? "Meintest du '" + guess + "'? (Tippe 'help' für alle Befehle.)"
                     : "Tippe 'help' für eine Liste der Befehle, die hier funktionieren.");
@@ -714,6 +737,7 @@ import { randSuffix, makePodName } from "./sim/util";
         "  glab       ci status | ci list  (Pipeline-Status in GitLab)",
         "  nslookup   <name>  (DNS: fragt CoreDNS nach der Adresse hinter einem Service-Namen)",
         "  curl       [http://]<service>[:port][/pfad]  (ruft einen Service ab – läuft mein Dienst und ist er erreichbar?)",
+        "  aws s3     mb s3://<bucket> | rb s3://<bucket> [--force] | ls [s3://<bucket>] | cp <quelle> <ziel> | rm s3://<bucket>/<key>  (Object Store – off-cluster)",
         "  ls, cat <datei>, clear, help",
       ].join("\n");
     }

@@ -418,6 +418,23 @@ export interface StorageClassRes {
   isDefault: boolean;          // greift, wenn ein PVC keine StorageClass nennt
   created: number;
 }
+/** Ein Objekt in einem S3-/MinIO-Bucket (#241): Key → Inhalt. Anders als ein File im
+ *  Pod-Dateisystem liegt es im **off-cluster** Object Store und überlebt Pod/Node/PVC.
+ *  `size` (Bytes) leitet sich aus dem Inhalt ab. */
+export interface S3Object {
+  key: string;
+  content: string;
+  size: number;
+  created: number;
+}
+/** Ein Bucket im S3-kompatiblen Object Store (#241): ein eigenständiger, vom Cluster
+ *  unabhängiger Speicher „im Hafen". Genau diese Unabhängigkeit macht ihn als Backup-Ziel
+ *  tauglich – ein Pod-/Node-/PVC-Verlust rührt die Buckets nicht an. */
+export interface S3Bucket {
+  name: string;
+  objects: S3Object[];
+  created: number;
+}
 /** VolumeSnapshot (CSI, #140): ein Point-in-Time-Abzug des Volumes hinter einem PVC.
  *  Ein EIGENSTÄNDIGES Objekt – es überlebt das Löschen seiner Quelle, genau das ist
  *  der Sinn eines Backups. Aus einem readyToUse-Snapshot stellt man wieder her, indem
@@ -535,6 +552,9 @@ export interface Scenario {
   pvs?: Array<{ name: string; capacity?: string; storageClass?: string; accessModes?: string; reclaimPolicy?: string; status?: "Available" | "Bound" | "Released"; claim?: string }>;
   storageClasses?: Array<{ name: string; provisioner?: string; reclaimPolicy?: string; isDefault?: boolean }>;
   volumeSnapshots?: Array<{ name: string; sourcePvc: string; data?: string; restoreSize?: string; readyToUse?: boolean }>;
+  // S3-/MinIO-Object-Store (#241). Eingabe-Schreibweise locker – reset()/merge füllen Defaults
+  // (size aus dem Inhalt). Off-cluster: unabhängig von Pod/Node/PVC.
+  s3Buckets?: Array<{ name: string; objects?: Array<{ key: string; content?: string; size?: number }> }>;
   // RBAC / ServiceAccounts / Pod-Security (#126). Strukturiert vorgegeben –
   // die imperativen `kubectl create …`-Handler bauen zur Laufzeit dieselben Formen.
   serviceAccounts?: string[];
@@ -600,6 +620,7 @@ export interface ClusterState {
   pvs: PvRes[];
   storageClasses: StorageClassRes[];
   volumeSnapshots: VolumeSnapshotRes[];
+  objectStore: { buckets: S3Bucket[] };
   serviceAccounts: ServiceAccountRes[];
   roles: RoleRes[];
   roleBindings: RoleBindingRes[];
