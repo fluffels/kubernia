@@ -320,8 +320,17 @@ export function kubectlApply(host: KubectlHost, t: string[]) {
       // ServiceAccount-Identität aus dem Pod-Template übernehmen (#132); fehlt sie, bleibt
       // es die default-SA (Feld undefined).
       if (effDep.serviceAccountName) dep.serviceAccountName = effDep.serviceAccountName;
+      // Container-Port aus dem Pod-Template (#164): nötig für den targetPort-Abgleich beim curl.
+      if (effDep.containerPort !== undefined) dep.containerPort = effDep.containerPort;
+      // Eigenes Image (#164, Werft-Capstone): ist es noch nicht lokal gebaut/gezogen, landet
+      // der Pod im ImagePullBackOff – genau wie im echten Cluster. needsBuild markiert: heilt
+      // von selbst, sobald 'docker build'/'docker pull' das Image bereitstellt.
+      if (effDep.requireBuiltImage && !host._imageAvailable(effDep.image)) {
+        dep.broken = { type: "imagepull", badImage: effDep.image, needsBuild: true };
+      }
       host.deployments.push(dep);
       out.push("deployment.apps/" + effDep.name + " created");
+      if (dep.broken) out.push("💡 Pod im ImagePullBackOff: das Image '" + effDep.image + "' gibt es noch nicht. Erst 'docker build -t " + effDep.image + " .', dann 'kubectl rollout restart deployment " + effDep.name + "'.");
     }
   }
   const effSvc = eff.service;
@@ -341,7 +350,9 @@ export function kubectlApply(host: KubectlHost, t: string[]) {
       host.services.push({
         name: effSvc.name, type: effSvc.type || "ClusterIP",
         clusterIP: "10.96." + Math.floor(Math.random() * 250) + "." + Math.floor(Math.random() * 250),
-        port: effSvc.port, created: host.clock,
+        port: effSvc.port,
+        ...(effSvc.targetPort !== undefined ? { targetPort: effSvc.targetPort } : {}), // #164
+        created: host.clock,
       });
       out.push("service/" + effSvc.name + " created");
     }

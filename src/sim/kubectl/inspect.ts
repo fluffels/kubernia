@@ -87,8 +87,11 @@ export function kubectlGet(host: KubectlHost, t: string[]) {
     if (svcs.length === 0) return "No resources found in default namespace.";
     return table(["NAME", "ENDPOINTS", "AGE"], svcs.map(s => {
       const dep = host.deployments.find(d => d.name === s.name);
+      // Endpoints zeigen den Ziel-Port (targetPort), an den weitergeleitet wird – fehlt er,
+      // gilt der Service-Port (#164). So bleibt der Port-Abgleich auch hier sichtbar.
+      const epPort = s.targetPort !== undefined ? s.targetPort : s.port;
       const ips = dep && host._podReady(dep)
-        ? dep.pods.map((_, i) => "10.244.1." + (20 + i) + ":" + s.port)
+        ? dep.pods.map((_, i) => "10.244.1." + (20 + i) + ":" + epPort)
         : [];
       return [s.name, ips.length ? ips.join(",") : "<none>", host._age(s.created || 0)];
     }));

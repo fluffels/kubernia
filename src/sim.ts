@@ -41,6 +41,7 @@ import { gitCommand } from "./sim/git";
 import { argocdCommand, reconcileAutoSync, cloneArgoApp } from "./sim/argocd";
 import { podMetrics as obsPodMetrics, nodeMetrics as obsNodeMetrics, scrapeTargets as obsScrapeTargets, alerts as obsAlerts, evaluateAlerts as obsEvaluateAlerts } from "./sim/observability";
 import { glabCommand } from "./sim/glab";
+import { nslookupCommand, curlCommand } from "./sim/net";
 import { randSuffix, makePodName } from "./sim/util";
 
   class Sim implements ClusterState {
@@ -108,7 +109,11 @@ import { randSuffix, makePodName } from "./sim/util";
         { name: "ahoi-worker-2", status: "Ready", roles: "<none>", version: "v1.30.2" },
       ]).map(n => Object.assign({}, n));
 
-      this.deployments = (sc.deployments || []).map(d => this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy));
+      this.deployments = (sc.deployments || []).map(d => {
+        const dep = this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy);
+        if (d.containerPort !== undefined) dep.containerPort = d.containerPort; // #164
+        return dep;
+      });
       this.services = (sc.services || []).map(s => Object.assign({}, s));
       this.ingresses = (sc.ingresses || []).map(i => Object.assign({}, i));
       this.networkPolicies = (sc.networkPolicies || []).map(n => Object.assign({}, n));
@@ -335,6 +340,28 @@ import { randSuffix, makePodName } from "./sim/util";
       }
     }
 
+    /** Ist das Image lokal verfügbar (gebaut oder gezogen)? Vergleicht mit UND ohne
+     *  `:latest`-Tag, damit `werft-dienst` und `werft-dienst:latest` als dasselbe gelten
+     *  – genau wie docker es behandelt (#164). */
+    _imageAvailable(image: string): boolean {
+      if (!image) return false;
+      const full = image.includes(":") ? image : image + ":latest";
+      return this.docker.pulled.includes(image) || this.docker.pulled.includes(full);
+    }
+
+    /** Der kubelet zieht ein fehlendes Image immer wieder neu: sobald das eigene Image
+     *  lokal gebaut/gezogen ist, heilt der ImagePullBackOff von selbst (#164). Greift NUR
+     *  bei Pods, die mangels gebautem Image kaputt sind (`broken.needsBuild`) – ein echter
+     *  Tippfehler-ImagePull (nur `badImage`) bleibt unberührt. */
+    _recheckImagePull() {
+      for (const d of this.deployments) {
+        if (d.broken && d.broken.type === "imagepull" && d.broken.needsBuild && this._imageAvailable(d.image)) {
+          d.broken = null;
+          d.pods = d.pods.map(() => ({ name: makePodName(d.name), created: this.clock, restarts: 0 }));
+        }
+      }
+    }
+
     _age(created: number) {
       const secs = (this.clock - created) * 20 + 15;
       if (secs < 60) return secs + "s";
@@ -419,7 +446,9 @@ import { randSuffix, makePodName } from "./sim/util";
       }
       for (const d of sc.deployments || []) {
         if (!this.deployments.some(x => x.name === d.name)) {
-          this.deployments.push(this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy));
+          const dep = this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy);
+          if (d.containerPort !== undefined) dep.containerPort = d.containerPort; // #164
+          this.deployments.push(dep);
         }
       }
       for (const cm of sc.configMaps || []) {
@@ -474,7 +503,7 @@ import { randSuffix, makePodName } from "./sim/util";
         dockerImages: this.docker.pulled.slice(),
         dockerContainers: this.docker.containers.map(c => Object.assign({}, c)),
         nodes: this.nodes.map(n => Object.assign({}, n)),
-        deployments: this.deployments.map(d => ({ name: d.name, image: d.image, replicas: d.replicas, broken: d.broken ? Object.assign({}, d.broken) : null, envFrom: { configMaps: d.envFrom.configMaps.slice(), secrets: d.envFrom.secrets.slice() }, cpuHeavy: !!d.cpuHeavy })),
+        deployments: this.deployments.map(d => ({ name: d.name, image: d.image, replicas: d.replicas, broken: d.broken ? Object.assign({}, d.broken) : null, envFrom: { configMaps: d.envFrom.configMaps.slice(), secrets: d.envFrom.secrets.slice() }, cpuHeavy: !!d.cpuHeavy, containerPort: d.containerPort })),
         services: this.services.map(s => Object.assign({}, s)),
         ingresses: this.ingresses.map(i => Object.assign({}, i)),
         networkPolicies: this.networkPolicies.map(n => Object.assign({}, n)),
@@ -547,6 +576,9 @@ import { randSuffix, makePodName } from "./sim/util";
       // Alert-Regeln gegen den (ggf. gerade reconcilten) Zustand auswerten, damit der
       // firing→resolved-Verlauf mitläuft, während gespielt wird (Observability #109).
       obsEvaluateAlerts(this);
+      // Fehlende eigene Images zieht der kubelet nach: ein needsBuild-ImagePullBackOff
+      // heilt, sobald das Image lokal gebaut/gezogen wurde (#164, Werft-Capstone).
+      this._recheckImagePull();
       this.lastError = false;
       const raw = line.trim();
       if (!raw) return { output: "", error: false };
@@ -564,13 +596,14 @@ import { randSuffix, makePodName } from "./sim/util";
           case "git": out = gitCommand(this, tokens, raw); break;
           case "argocd": out = argocdCommand(this, tokens); break;
           case "glab": out = glabCommand(this, tokens); break;
-          case "nslookup": out = this._nslookup(tokens); break;
+          case "nslookup": out = nslookupCommand(this, tokens); break;
+          case "curl": out = curlCommand(this, tokens); break;
           case "ls": out = this._ls(); break;
           case "cat": out = this._cat(tokens); break;
           case "clear": return { output: null, error: false, clear: true };
           case "help": out = this._help(); break;
           default: {
-            const guess = this._suggest(cmd, ["docker", "kubectl", "helm", "terraform", "git", "argocd", "glab", "nslookup", "ls", "cat", "clear", "help"]);
+            const guess = this._suggest(cmd, ["docker", "kubectl", "helm", "terraform", "git", "argocd", "glab", "nslookup", "curl", "ls", "cat", "clear", "help"]);
             out = this._err("⚠️ Den Befehl '" + cmd + "' gibt es hier nicht.",
               guess ? "Meintest du '" + guess + "'? (Tippe 'help' für alle Befehle.)"
                     : "Tippe 'help' für eine Liste der Befehle, die hier funktionieren.");
@@ -646,47 +679,14 @@ import { randSuffix, makePodName } from "./sim/util";
         "  argocd     app list | app get <name> | app sync <name>  (Argo CD / GitOps – den Git-Soll in den Cluster ziehen)",
         "  glab       ci status | ci list  (Pipeline-Status in GitLab)",
         "  nslookup   <name>  (DNS: fragt CoreDNS nach der Adresse hinter einem Service-Namen)",
+        "  curl       [http://]<service>[:port][/pfad]  (ruft einen Service ab – läuft mein Dienst und ist er erreichbar?)",
         "  ls, cat <datei>, clear, help",
       ].join("\n");
     }
 
-    /** nslookup <name>: fragt CoreDNS (den Cluster-DNS-Server) nach der Adresse hinter
-     *  einem Namen (#337). Löst die Service-Discovery-Formen `<svc>`, `<svc>.<ns>` und den
-     *  vollen FQDN `<svc>.<ns>.svc.cluster.local` zur ClusterIP des Service auf; ein
-     *  ExternalName-Service liefert stattdessen den CNAME auf seinen externen DNS-Namen.
-     *  Rein lesend. In der Spielwelt ein eigener Befehl (statt `kubectl exec … nslookup`),
-     *  damit Namensauflösung greifbar wird; im echten Cluster läuft nslookup aus einem Pod. */
-    _nslookup(t: string[]) {
-      const COREDNS = "10.96.0.10";          // ClusterIP des CoreDNS-Service (kube-system)
-      const EXTERNAL_RESOLVE_IP = "203.0.113.55"; // Beispiel-Adresse (TEST-NET-3) hinter dem externen Namen
-      const arg = t[1];
-      if (!arg || arg.startsWith("-")) {
-        return this._err("nslookup: Welchen Namen soll ich auflösen?",
-          "z.B. 'nslookup kasse' oder voll 'nslookup kasse.default.svc.cluster.local'.");
-      }
-      const header = ["Server:\t\t" + COREDNS, "Address:\t" + COREDNS + "#53", ""];
-      const query = arg.replace(/\.$/, "");      // optionalen abschließenden Punkt entfernen
-      const svcName = query.split(".")[0];       // erstes Label = Service-Name (NS/Domain folgt)
-      const fqdn = svcName + ".default.svc.cluster.local";
-      // Der eingebaute kubernetes-API-Service ist immer da und hat eine feste ClusterIP.
-      if (svcName === "kubernetes") {
-        return header.concat(["Name:\t" + "kubernetes.default.svc.cluster.local", "Address: 10.96.0.1"]).join("\n");
-      }
-      const svc = this.services.find(s => s.name === svcName);
-      if (!svc) {
-        return this._err(header.join("\n") + "\n** server can't find " + fqdn + ": NXDOMAIN",
-          "Kennt CoreDNS den Namen nicht? Prüfe mit 'kubectl get services', ob der Service existiert (richtig geschrieben?).");
-      }
-      if (svc.type === "ExternalName" && svc.externalName) {
-        // ExternalName hat KEINE ClusterIP: CoreDNS antwortet mit einem CNAME auf den externen Namen.
-        return header.concat([
-          fqdn + "\tcanonical name = " + svc.externalName + ".",
-          "Name:\t" + svc.externalName,
-          "Address: " + EXTERNAL_RESOLVE_IP,
-        ]).join("\n");
-      }
-      return header.concat(["Name:\t" + fqdn, "Address: " + svc.clusterIP]).join("\n");
-    }
+    // nslookup (#337) + curl (#164) liegen seit #164 in ./sim/net.ts (Erreichbarkeits-
+    // Befehle, KEINE kubectl-Unterbefehle). `exec` ruft nslookupCommand/curlCommand(this, …);
+    // die Sim-Klasse erfüllt das schmale NetHost-Interface über ihre Felder + Helfer.
 
     // Observability (#109/#110) liegt seit #384 in ./sim/observability.ts. Die öffentliche API
     // bleibt hier als dünne Delegation, damit Aufrufer (kubectl get/top über KubectlHost,

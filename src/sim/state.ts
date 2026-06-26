@@ -29,6 +29,11 @@ export interface ExecResult {
 export interface Broken {
   type: string; // "imagepull" | "crashloop" | "pending" | "notready" | "oomkilled"
   badImage?: string;
+  // Bei "imagepull": der Pod scheitert NICHT an einem Tippfehler, sondern weil das
+  // (richtig benannte) eigene Image noch nicht lokal gebaut/gezogen ist (#164, Werft-
+  // Capstone). Anders als ein echter Tippfehler heilt das von selbst, sobald
+  // `docker build`/`docker pull` das Image bereitstellt (der kubelet zieht es nach).
+  needsBuild?: boolean;
   // Fehlendes Secret, das die App braucht. Bei "crashloop" stirbt sie ohne es,
   // bei "notready" läuft sie zwar (liveness ok), meldet sich aber erst als
   // bereit, sobald das Secret da ist (readiness). Sobald es existiert, heilt
@@ -64,6 +69,11 @@ export interface Deployment {
   /** Eingebundene Config/Geheimnisse (via `kubectl set env --from=…`).
    *  configMaps = harmlose Einstellungen, secrets = Vertrauliches. */
   envFrom: { configMaps: string[]; secrets: string[] };
+  /** Port, auf dem der Container im Pod lauscht (`spec.containers[].ports[].containerPort`,
+   *  #164). Aus dem Manifest beim `kubectl apply`. Stimmt er nicht mit dem `targetPort`
+   *  des Service überein, hat der Service zwar Endpoints, aber `curl` läuft ins Leere –
+   *  die klassische Verdrahtungsfalle. Fehlt das Feld, wird der Port nicht geprüft. */
+  containerPort?: number;
   /** Dauerlast-Markierung: die Pods dieses Deployments ziehen ungewöhnlich viel CPU
    *  (Observability #109). Treibt `kubectl top` über die Schwelle und lässt den
    *  HighPodCPU-Alert feuern – die Spiel-Ursache für „warum brennt mein Cluster?". */
@@ -74,6 +84,11 @@ export interface ServiceRes {
   type: string;
   clusterIP: string;
   port: string | number;
+  /** Ziel-Port hinter dem Service (`spec.ports[].targetPort`, #164): an welchen
+   *  Container-Port der Service weiterleitet. Fehlt er, gilt `port` auch als Ziel
+   *  (wie in echtem Kubernetes). Passt er nicht zum `containerPort` des Deployments,
+   *  läuft `curl` ins Leere – sichtbar nur beim Abfragen, nicht an den Endpoints. */
+  targetPort?: string | number;
   /** Ziel-DNS-Name eines ExternalName-Service (#337): statt einer ClusterIP zeigt der
    *  Service per CNAME auf einen externen Namen (z.B. api.bank.example.com). Nur dann
    *  gesetzt; `type` ist dann "ExternalName" und `clusterIP` ist "<none>". */
@@ -256,7 +271,10 @@ export interface ArgoApp {
 }
 /** Wirkung eines `kubectl apply -f <datei>` (was die Datei im Cluster erzeugt). */
 export interface ApplyEffect {
-  deployment?: { name: string; image: string; replicas: number; securityContext?: SecurityContext; serviceAccountName?: string };
+  deployment?: { name: string; image: string; replicas: number; securityContext?: SecurityContext; serviceAccountName?: string; containerPort?: number;
+    // #164 (Werft-Capstone): das eigene Image muss vorher lokal gebaut/gezogen sein,
+    // sonst landet der Pod im ImagePullBackOff (statt – wie sonst im Sim – einfach zu laufen).
+    requireBuiltImage?: boolean };
   // RBAC-CRDs (#128): vom `kubectl apply -f` der Wachturm-Manifeste angelegt. `cluster`
   // unterscheidet Role/ClusterRole bzw. RoleBinding/ClusterRoleBinding (wie in roles/roleBindings).
   serviceAccount?: { name: string };
@@ -264,7 +282,7 @@ export interface ApplyEffect {
   roleBinding?: { name: string; cluster?: boolean; roleRef: { kind: "Role" | "ClusterRole"; name: string }; subjects: RbacSubject[] };
   // `externalName` macht den Service zu einem ExternalName-Service (#337): kein ClusterIP,
   // sondern ein CNAME auf den genannten externen DNS-Namen. `port` darf dann "" sein.
-  service?: { name: string; type?: string; port: string | number; externalName?: string };
+  service?: { name: string; type?: string; port: string | number; externalName?: string; targetPort?: string | number };
   ingress?: { name: string; host: string; path?: string; service: string; port: string | number; className?: string; tls?: { secretName: string } };
   networkPolicy?: { name: string; podSelector?: string; allowFrom?: string };
   // Eine Argo-Application-CRD: legt beim `kubectl apply -f` eine Argo-App im Sim-State an.
@@ -465,7 +483,7 @@ export interface Scenario {
   dockerImages?: string[];
   dockerContainers?: Container[];
   nodes?: ClusterNode[];
-  deployments?: Array<{ name: string; image: string; replicas: number; broken?: Broken | null; envFrom?: { configMaps: string[]; secrets: string[] }; cpuHeavy?: boolean }>;
+  deployments?: Array<{ name: string; image: string; replicas: number; broken?: Broken | null; envFrom?: { configMaps: string[]; secrets: string[] }; cpuHeavy?: boolean; containerPort?: number }>;
   services?: ServiceRes[];
   ingresses?: IngressRes[];
   networkPolicies?: NetworkPolicyRes[];
