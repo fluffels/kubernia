@@ -9,12 +9,12 @@
  * ringsum Werft-Gerüste und -Krane. Vom Hafen (Port Kubernia) ist die Werft über einen Holz-
  * Anleger an der freien Kai-Lücke (x22) erreichbar.
  *
- * Scope (Stand #165): Bereich + Anleger/Warp + reservierter NPC-/Quest-Trigger-Standplatz.
- * Der NPC folgt mit #166 (Sprite + Smalltalk), die Capstone-Quest mit #167, Drills #169,
- * Progression #171, Tests #172. Wie die Flotte in #148 hat die Karte „werft" darum noch KEINEN
- * Eintrag in der Entity-Registry (entities.json); npcSpawnsForMap/objectsForMap liefern für sie
- * leer, was die RegionScene verträgt – der zentrale Hof-Platz wird hier nur schon begehbar
- * freigehalten, damit der spätere NPC + Quest-Trigger garantiert vom Anleger aus erreichbar sind.
+ * Scope (Stand #166): Bereich + Anleger/Warp + Standplätze für NPC + Quest-Trigger.
+ * Die Werftmeisterin Greta steht seit #166 (Sprite + Smalltalk) auf dem reservierten Hof-Platz
+ * (Registry-Eintrag in entities.json); die Capstone-Quest folgt mit #167, Drills #169,
+ * Progression #171, Tests #172. Der Quest-Trigger-Platz (objectsForMap) ist noch frei – bis #167
+ * liefert objectsForMap für „werft" leer, was die RegionScene verträgt; der Hof-Platz wird
+ * begehbar freigehalten, damit NPC + Quest-Trigger garantiert vom Anleger aus erreichbar sind.
  *
  * Die Optik baut die datengetriebene RegionScene (#427) aus denselben Wang-Tiles wie die
  * Hauptkarte (Stein-Kai + Gras-Hof + Holz-Helling); Bewegung/Kollision teilt sich der Bereich
@@ -53,9 +53,9 @@ const CX = 12, CY = 7;   // Mitte des Hofs (Werft-Platz mit NPC/Quest-Trigger)
  *  – breiter als ein normaler Steg, denn auf ihr wird das Schiff gebaut. */
 export const SLIP_X0 = CX - 2, SLIP_X1 = CX + 1;
 
-/** Reservierter Standplatz des späteren Werft-NPC (#166): am Hof-Platz, gut vom Anleger aus
- *  erreichbar. Noch KEIN Registry-Eintrag (entities.json) – das macht #166; hier nur als
- *  begehbar reservierte Kachel vorgesehen, damit keine Deko darauf landet. */
+/** Standplatz der Werftmeisterin Greta (#166): am Hof-Platz, gut vom Anleger aus erreichbar.
+ *  Greta ist als `greta` auf Karte „werft" in entities.json verdrahtet – diese Kachel MUSS dem
+ *  Spawn entsprechen (test/content.test.ts prüft das) und bleibt begehbar/deko-frei. */
 export const WERFT_NPC = { x: CX - 3, y: CY } as const;
 
 /** Reservierter Standplatz des späteren Quest-Triggers (#167, „eigenen Service bauen &

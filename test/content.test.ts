@@ -9,6 +9,8 @@ import { KQAssets } from "../src/assets-data";
 import { ARCHIPEL_NPC } from "../src/archipel";
 import { LIGHTHOUSE_NPC } from "../src/lighthouse";
 import { WAREHOUSE_NPC } from "../src/warehouse";
+import { WERFT_NPC } from "../src/werft";
+import { npcSpawnsForMap } from "../src/content/entities";
 import { Sim as KQSim } from "../src/sim";
 import type { TeachStep } from "../src/types";
 
@@ -390,6 +392,22 @@ test("der Lagerhallen-Viertel-NPC Knut (#125) ist in der Registry verdrahtet, mi
   assert.ok(npc.tex && KQAssets[npc.tex], "Lager-NPC ohne Sprite-Asset");
   const lines = (KQContent.SMALLTALK as Record<string, string[]>)[WAREHOUSE_NPC.id];
   assert.ok(Array.isArray(lines) && lines.length > 0, "Lager-NPC ohne Smalltalk");
+});
+
+test("der Heimat-Werft-NPC Greta (#166) ist in der Registry verdrahtet, mit Sprite + Smalltalk", () => {
+  // werft.ts (#165) hat den Hof-Platz WERFT_NPC begehbar reserviert; #166 setzt Greta dorthin.
+  // Der Spawn MUSS exakt auf der reservierten Kachel sitzen, sonst war die Reservierung umsonst.
+  const greta = (KQContent.NPCS as Record<string, { name?: string; tex?: string }>).greta;
+  assert.ok(greta, "Werft-NPC-Id 'greta' fehlt in NPCS");
+  assert.equal(greta.name, "Greta", "der Werft-NPC heißt Greta");
+  assert.ok(greta.tex && KQAssets[greta.tex], "Werft-NPC ohne Sprite-Asset");
+  const lines = (KQContent.SMALLTALK as Record<string, string[]>).greta;
+  assert.ok(Array.isArray(lines) && lines.length > 0, "Werft-NPC ohne Smalltalk");
+  // Greta steht in der Werft-Karte – und genau auf dem in #165 reservierten Standplatz.
+  const spawn = npcSpawnsForMap("werft").find(s => s.id === "greta");
+  assert.ok(spawn, "Greta hat keinen Standplatz auf der Werft-Karte");
+  assert.equal(spawn!.x, WERFT_NPC.x, "Greta steht nicht auf der reservierten WERFT_NPC-Spalte");
+  assert.equal(spawn!.y, WERFT_NPC.y, "Greta steht nicht auf der reservierten WERFT_NPC-Reihe");
 });
 
 test("Red-Green: ein NPC mit fehlendem Sprite-Asset wird gemeldet", () => {

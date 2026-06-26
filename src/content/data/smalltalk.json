@@ -56,5 +56,11 @@
     "Mein Logbuch liegt nicht in meiner Kajüte, sondern im <b>Remote State</b>: an EINER Stelle, die die ganze Flotte liest. Zwei Kapitäne mit zwei Logbüchern landen in zwei Häfen.",
     "AWS-See, Azure-Fjord, GCP-Bucht – andere Gewässer, gleicher Kurs. Welcher <b>Provider</b> uns trägt, steht oben in der Konfig, nicht in jeder Planke.",
     "Erst die Seekarte, dann das Tau: <code>terraform plan</code> zeigt mir, was sich ändert – <i>bevor</i> es sich ändert. Blind <code>apply</code>en ist Segeln im Nebel."
+  ],
+  "greta": [
+    "Genug auf fremden Schiffen mitgefahren. Hier baust du dein eigenes: aus deinem <b>Dockerfile</b> wird per <code>docker build</code> dein <code>image</code> – und das fährt nur, wenn DU es gebaut hast.",
+    "<b>ImagePullBackOff</b>? Dann sucht der Cluster im Hafen ein Schiff, das nie vom Stapel lief. Kein Gejammer – erst <code>docker build</code>, dann auslaufen.",
+    "Pläne sind schön. Ein <i>laufender</i> Service ist besser. Mein Klopftest ist <code>curl</code>: kommt eine <b>200</b> zurück, schwimmt das Ding. Sonst liegt's im Trockendock.",
+    "Port stimmt, aber nichts kommt durch? Dann zeigt dein <b>Service</b> auf die falsche Luke. <code>targetPort</code> muss treffen, wo der Container wirklich lauscht – nicht, wo du es gern hättest."
   ]
 }
