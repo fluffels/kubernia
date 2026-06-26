@@ -138,7 +138,7 @@ Zusätzlich gibt es einen **verteilbaren Spezial-Build** (`npm run build:devpane
 
 ## Lernpfad: Von 0 zu Senior DevOps (ehrliche Einordnung)
 
-Das Spiel deckt aktuell **Phase 1 – das Fundament** ab. Senior wird man durch Wissen **plus Betriebserfahrung**; das Spiel baut Wissen und Muskelgedächtnis auf, echte Projekte bauen die Erfahrung.
+Das Spiel deckt aktuell die **Phasen 1–9** ab – vom Fundament bis zu Terraform im Großen. Senior wird man durch Wissen **plus Betriebserfahrung**; das Spiel baut Wissen und Muskelgedächtnis auf, echte Projekte bauen die Erfahrung.
 
 | Phase | Thema | Status |
 |---|---|---|
@@ -150,9 +150,9 @@ Das Spiel deckt aktuell **Phase 1 – das Fundament** ab. Senior wird man durch 
 | 6 | RBAC, ServiceAccounts, Pod-Security | ✅ im Spiel: „Wachturm-Quartier“ (befestigter Hof mit Wachturm, Holz-Anleger/Warp an der Südost-Ecke des Hafenkais) mit Wachveteran **Vidar** – 4 Quests: ServiceAccounts (Identität für Pods) → RBAC: Role & RoleBinding (Least Privilege) → RBAC: ClusterRole & auth can-i (cluster-weite Rechte) → Pod-Security: SecurityContext & Pod Security Standards (gehärtete Pods); dazu RBAC/Security-Drills & Quiz-Karten |
 | 7 | StatefulSets, Volumes, Backups, Datenbanken im Cluster | ✅ im Spiel: Hafenkai „Lagerhallen-Viertel“ (Holz-Anleger am Westkai, Verladekräne, Frachtcontainer-Stapel) mit Speicher-Verwalter **Knut** – 4 Quests: StatefulSet & stabile Identität → PVC/PV & StorageClass (Speicher anfordern) → Backup & Restore (VolumeSnapshot, Datenverlust & Wiederherstellung) → Prod-DB im Cluster: ja oder nein? (Urteil & Trade-offs); dazu Storage-Drills & Quiz-Karten |
 | 8 | Troubleshooting-Methodik (CrashLoop, ImagePull, Pending, Service-Endpoints, OOMKilled …) | ✅ im Spiel („Sturm-Saison“ + Service-Debugging + Resource-Management: 5 Quests + Zufalls-Stürme) |
-| 9 | Terraform-Module, Remote State, Cloud-Provider | 🔜 geplant: „Expeditions-Flotte” |
+| 9 | Terraform-Module, Remote State, Cloud-Provider | ✅ im Spiel: „Expeditions-Flotte“ (Flaggschiff-Deck mit Anleger/Warp per Steg im Süden des Hafens, ringsum vertäute Flotten-Schiffe) mit Flottenkommandantin **Saga** – 4 Quests: Terraform-Module (wiederverwendbare Bausteine) → Remote State (gemeinsames State-Backend & Locking) → Provider & Cloud (Multi-Cloud mit mehreren Providern) → Variablen & Outputs (Konfiguration sauber durchreichen); dazu Terraform-Drills & Quiz-Karten |
 
 ## Roadmap (nächste Ausbaustufen)
 
-- Weitere Lernpfad-Inseln (siehe Tabelle oben) – als nächstes die **Expeditions-Flotte** (Terraform-Module, Remote State & Cloud-Provider, Phase 9) u.a., je Insel eigene NPCs, Quests und Drills
+- Weitere Lernpfad-Inseln (siehe Tabelle oben) – die nächsten Ausbaustufen jenseits der bisherigen Phasen 1–9, je Insel eigene NPCs, Quests und Drills
 - Mehr Grafik: weitere CC0-Packs, z.B. Innenräume für betretbare Gebäude
