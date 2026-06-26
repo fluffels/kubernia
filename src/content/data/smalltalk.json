@@ -50,5 +50,11 @@
     "Jeder, der durch mein Tor will, braucht einen Ausweis. Bei Pods heißt der <code>ServiceAccount</code> – ohne den weiß keiner, <b>wer</b> da gerade anklopft. Kein Ausweis, kein Durchlass.",
     "Vierzig Jahre an diesem Tor. <i>*schnaubt*</i> Am gefährlichsten ist immer der, der als <code>root</code> reinmarschiert, weil's bequem ist. Nicht in meiner Festung.",
     "Hm. <i>*knappes Nicken*</i> Du siehst aus, als wüsstest du, was du tust. Na schön – geh durch. Aber ich behalt dich im Auge."
+  ],
+  "saga": [
+    "Eine Flotte baut man nicht Schiff für Schiff. Man schreibt EINEN Bauplan – ein <b>Modul</b> – und stanzt ihn beliebig oft aus. Einmal sauber, hundertmal gleich.",
+    "Mein Logbuch liegt nicht in meiner Kajüte, sondern im <b>Remote State</b>: an EINER Stelle, die die ganze Flotte liest. Zwei Kapitäne mit zwei Logbüchern landen in zwei Häfen.",
+    "AWS-See, Azure-Fjord, GCP-Bucht – andere Gewässer, gleicher Kurs. Welcher <b>Provider</b> uns trägt, steht oben in der Konfig, nicht in jeder Planke.",
+    "Erst die Seekarte, dann das Tau: <code>terraform plan</code> zeigt mir, was sich ändert – <i>bevor</i> es sich ändert. Blind <code>apply</code>en ist Segeln im Nebel."
   ]
 }
