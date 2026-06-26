@@ -428,6 +428,15 @@ import { randSuffix, makePodName } from "./sim/util";
       if (!sc) return;
       Object.assign(this.files, sc.files || {});
       Object.assign(this.applyEffects, sc.applyEffects || {});
+      // Nodes additiv einmischen (#242): existiert der Node schon (per Name), seine Felder
+      // mergen – so kann ein Quest-Szenario die Disk-Kapazität eines vorhandenen Workers
+      // schrumpfen, um DiskPressure/Eviction (#240) lehrbar zu machen; ein unbekannter Name
+      // kommt als neuer Node dazu. Idempotent über Reloads (gleiche Werte erneut zuweisen).
+      for (const n of sc.nodes || []) {
+        const existing = this.nodes.find(x => x.name === n.name);
+        if (existing) Object.assign(existing, n);
+        else this.nodes.push(Object.assign({}, n));
+      }
       for (const s of sc.serviceMonitors || []) {
         if (!this.serviceMonitors.some(x => x.name === s.name)) this.serviceMonitors.push(Object.assign({}, s));
       }

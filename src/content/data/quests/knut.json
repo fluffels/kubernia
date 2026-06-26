@@ -356,6 +356,356 @@
     ]
   },
   {
+    "id": "storage-ephemeral",
+    "title": "Flüchtiger Speicher: emptyDir, Node-Disk & Eviction",
+    "giver": "knut",
+    "topic": "storage",
+    "rewardXp": 60,
+    "rewardCoins": 45,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "knut",
+        "lines": [
+          "Zurück am Kai, Kapitän. Beim PVC ging es um Speicher, der <b>bleibt</b> – über Pod-Neustarts hinweg. Heute zeige ich dir das genaue Gegenteil: Speicher, der <b>bewusst flüchtig</b> ist.",
+          "Stell dir einen <b>Schmierzettel</b> vor: ein Pod kritzelt etwas drauf – einen Cache, eine Zwischendatei, hochgeladene Dateien, die er gerade verarbeitet. Das ist ein <code>emptyDir</code>: ein leeres Verzeichnis, das <b>mit dem Pod entsteht und mit ihm verschwindet</b>.",
+          "Kein Drama – für Cache und Scratch ist genau das richtig. Aber man muss wissen, dass es weg ist, sobald der Pod neu startet. Und man muss wissen, dass dieser Schmierzettel die <b>Disk des Knotens</b> belegt. Schau dir die Karte an, die ich hingelegt habe."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Karte lesen",
+        "scenario": {
+          "files": {
+            "zwischenlager.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: zwischenlager\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: zwischenlager\n  template:\n    metadata:\n      labels:\n        app: zwischenlager\n    spec:\n      containers:\n        - name: app\n          image: nginx\n          volumeMounts:\n            - name: scratch\n              mountPath: /cache       # hier kritzelt der Pod seinen Cache hin\n      volumes:\n        - name: scratch\n          emptyDir: {}                # FLUECHTIG: leeres Verzeichnis, lebt nur mit dem Pod"
+          },
+          "applyEffects": {
+            "zwischenlager.yaml": {
+              "deployment": {
+                "name": "zwischenlager",
+                "image": "nginx",
+                "replicas": 1,
+                "emptyDir": { "data": "warenkorb-cache", "usedMi": 40 }
+              }
+            }
+          }
+        },
+        "tasks": [
+          {
+            "id": "t-eph-ls",
+            "text": "Schau mit <code>ls</code>, was am Kai bereitliegt.",
+            "accept": [
+              "^ls$"
+            ],
+            "solution": "ls",
+            "hint": "Zwei Buchstaben."
+          },
+          {
+            "id": "t-eph-cat",
+            "text": "Lies <code>cat zwischenlager.yaml</code>. Unter <code>volumes</code> steht ein <code>emptyDir: {}</code> – ein leeres, flüchtiges Scratch-Verzeichnis. Keine Größe, keine StorageClass: nur Platz, der mit dem Pod kommt und geht.",
+            "accept": [
+              "^cat\\s+zwischenlager\\.yaml$"
+            ],
+            "solution": "cat zwischenlager.yaml",
+            "hint": "cat <datei>"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Schmierzettel-Pod ausrollen",
+        "cmd": {
+          "id": "t-eph-apply",
+          "intro": "🆕 Ein <code>emptyDir</code>-Volume hängst du wie jedes Manifest mit <code>kubectl apply</code> in den Cluster. Es braucht keine Anforderung und kein PVC – der kubelet legt einfach ein leeres Verzeichnis auf der Node-Disk an.",
+          "text": "Rolle den Pod aus: <code>kubectl apply --filename zwischenlager.yaml</code>. Stell dir vor, er hat schon eine Weile gearbeitet und 40Mi Cache angesammelt.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+zwischenlager\\.yaml$"
+          ],
+          "check": {"some":"deployments","where":{"name":"zwischenlager","emptyDir":{"truthy":true}}},
+          "solution": "kubectl apply --filename zwischenlager.yaml",
+          "hint": "kubectl apply --filename <datei>"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Den Schmierzettel ansehen",
+        "tasks": [
+          {
+            "id": "t-eph-getpods",
+            "text": "Sieh den Pod: <code>kubectl get pods</code> – <code>zwischenlager-…</code> läuft (<code>Running</code>, READY <code>1/1</code>).",
+            "accept": [
+              "^kubectl\\s+get\\s+(pods|pod|po)$"
+            ],
+            "solution": "kubectl get pods",
+            "hint": "kubectl get pods"
+          },
+          {
+            "id": "t-eph-describe1",
+            "text": "Schau hinein: <code>kubectl describe pod &lt;zwischenlager-pod&gt;</code> (Name aus der Liste). Im Abschnitt <code>Volumes:</code> steht <code>EmptyDir</code>, <code>Used: 40Mi</code> und <code>Content: warenkorb-cache</code> – der Schmierzettel ist beschrieben.",
+            "accept": [
+              "^kubectl\\s+describe\\s+pod\\s+zwischenlager\\S*$"
+            ],
+            "check": {"some":"deployments","where":{"name":"zwischenlager","emptyDir":{"match":{"data":"warenkorb-cache"}}}},
+            "solution": "kubectl describe pod <zwischenlager-pod>",
+            "hint": "Erst kubectl get pods, dann kubectl describe pod <name> mit dem zwischenlager-Pod."
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Pod neu starten → Schmierzettel weg",
+        "cmd": {
+          "id": "t-eph-restart",
+          "intro": "🆕 Jetzt der Kernunterschied zum PVC. Starte den Pod neu mit <code>kubectl rollout restart</code> – der alte Pod stirbt, ein frischer kommt. Beim PVC blieben die Daten. Beim <code>emptyDir</code> ist das Scratch-Verzeichnis im neuen Pod <b>leer</b>: der Schmierzettel verschwand mit dem alten Pod.",
+          "text": "Starte ihn neu: <code>kubectl rollout restart deployment zwischenlager</code>. Der Cache (<code>warenkorb-cache</code>) ist damit <b>weg</b> – flüchtig eben.",
+          "accept": [
+            "^kubectl\\s+rollout\\s+restart\\s+deployment\\s+zwischenlager$"
+          ],
+          "check": {"some":"deployments","where":{"name":"zwischenlager","emptyDir":{"match":{"data":""}}}},
+          "solution": "kubectl rollout restart deployment zwischenlager",
+          "hint": "kubectl rollout restart deployment <name>"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Leerer Schmierzettel",
+        "tasks": [
+          {
+            "id": "t-eph-describe2",
+            "text": "Sieh nach: <code>kubectl describe pod &lt;zwischenlager-pod&gt;</code> (der NEUE Name aus <code>get pods</code>). Im <code>Volumes:</code>-Abschnitt steht jetzt <code>Used: 0Mi</code> und <code>Content: (leer)</code>. Genau das ist <code>emptyDir</code>: weg, sobald der Pod weg ist.",
+            "accept": [
+              "^kubectl\\s+describe\\s+pod\\s+zwischenlager\\S*$"
+            ],
+            "check": {"some":"deployments","where":{"name":"zwischenlager","emptyDir":{"match":{"usedMi":0}}}},
+            "solution": "kubectl describe pod <zwischenlager-pod>",
+            "hint": "kubectl describe pod <name> – Name aus get pods."
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "ephemeral-storage-Limit setzen",
+        "cmd": {
+          "id": "t-eph-setlimit",
+          "intro": "🆕 Flüchtig heißt nicht grenzenlos. Wie bei CPU und Speicher kannst du auch für den <b>flüchtigen Speicher</b> ein Limit setzen: <code>--limits=ephemeral-storage=…</code>. Sprengt der Pod es (zu viel Cache/Logs), evictet der kubelet ihn – das schützt die Node-Disk vor einem einzelnen Vielschreiber.",
+          "text": "Gib dem Schmierzettel eine Obergrenze: <code>kubectl set resources deployment/zwischenlager --limits=ephemeral-storage=512Mi</code>.",
+          "accept": [
+            "^kubectl\\s+set\\s+resources\\s+deployment/zwischenlager\\s+--limits[=\\s]ephemeral-storage=512Mi$"
+          ],
+          "check": {"some":"deployments","where":{"name":"zwischenlager","ephemeralLimit":512}},
+          "solution": "kubectl set resources deployment/zwischenlager --limits=ephemeral-storage=512Mi",
+          "hint": "kubectl set resources deployment/<name> --limits=ephemeral-storage=512Mi"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Das Limit auslesen",
+        "tasks": [
+          {
+            "id": "t-eph-readlimit",
+            "text": "Lies das Limit ab: <code>kubectl describe pod &lt;zwischenlager-pod&gt;</code>. Unter <code>Limits:</code> steht jetzt <code>ephemeral-storage: 512Mi</code>, dazu die aktuell verbrauchte Menge – so siehst du den Puffer.",
+            "accept": [
+              "^kubectl\\s+describe\\s+pod\\s+zwischenlager\\S*$"
+            ],
+            "check": {"some":"deployments","where":{"name":"zwischenlager","ephemeralLimit":512}},
+            "solution": "kubectl describe pod <zwischenlager-pod>",
+            "hint": "kubectl describe pod <name> – Name aus get pods."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "knut",
+        "lines": [
+          "Gut. Ein Pod-Limit schützt den Knoten vor <b>einem</b> Vielschreiber. Aber was, wenn die Node-Disk insgesamt volläuft – durch viele Pods zusammen?",
+          "Dann setzt der kubelet die Condition <b>DiskPressure</b> und fängt an, Pods zu <b>evicten</b>, bis wieder Platz ist. Die Frage ist: <b>wen zuerst?</b> Faustregel: wer <b>kein Limit</b> gesetzt hat (BestEffort), fliegt zuerst – und unter denen der größte Verbraucher.",
+          "Lass uns das am Westkai-Knoten <code>ahoi-worker-1</code> durchspielen: dessen Disk ist fast voll. Ich lege dir zwei Frachtbücher hin – eines diszipliniert mit Limit, eines wild ohne. Schau sie dir an."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Zwei Frachtbücher lesen",
+        "scenario": {
+          "nodes": [
+            { "name": "ahoi-worker-1", "status": "Ready", "roles": "<none>", "version": "v1.30.2", "ephemeralCapacityMi": 1024, "ephemeralBaseMi": 700 }
+          ],
+          "files": {
+            "protokoll.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: protokoll\nspec:\n  replicas: 1\n  template:\n    spec:\n      nodeName: ahoi-worker-1        # laeuft auf dem fast vollen Westkai-Knoten\n      containers:\n        - name: app\n          image: busybox\n          resources:\n            limits:\n              ephemeral-storage: 256Mi   # DISZIPLINIERT: gedeckelter fluechtiger Speicher\n          volumeMounts:\n            - name: scratch\n              mountPath: /var/log\n      volumes:\n        - name: scratch\n          emptyDir: {}",
+            "wildwuchs.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: wildwuchs\nspec:\n  replicas: 1\n  template:\n    spec:\n      nodeName: ahoi-worker-1        # gleicher Knoten\n      containers:\n        - name: app\n          image: busybox\n          # KEIN ephemeral-storage-Limit -> BestEffort: faellt bei Disk-Druck zuerst\n          volumeMounts:\n            - name: scratch\n              mountPath: /var/log\n      volumes:\n        - name: scratch\n          emptyDir: {}                # schreibt ungebremst Logs"
+          },
+          "applyEffects": {
+            "protokoll.yaml": {
+              "deployment": {
+                "name": "protokoll",
+                "image": "busybox",
+                "replicas": 1,
+                "node": "ahoi-worker-1",
+                "ephemeralLimit": 256,
+                "emptyDir": { "data": "rotierte-logs", "usedMi": 150 }
+              }
+            },
+            "wildwuchs.yaml": {
+              "deployment": {
+                "name": "wildwuchs",
+                "image": "busybox",
+                "replicas": 1,
+                "node": "ahoi-worker-1",
+                "emptyDir": { "data": "ungebremste-logflut", "usedMi": 400 }
+              }
+            }
+          }
+        },
+        "tasks": [
+          {
+            "id": "t-eph-cat-protokoll",
+            "text": "Lies <code>cat protokoll.yaml</code> – das disziplinierte Buch hat ein <code>ephemeral-storage: 256Mi</code>-Limit.",
+            "accept": [
+              "^cat\\s+protokoll\\.yaml$"
+            ],
+            "solution": "cat protokoll.yaml",
+            "hint": "cat <datei>"
+          },
+          {
+            "id": "t-eph-cat-wildwuchs",
+            "text": "Lies <code>cat wildwuchs.yaml</code> – das wilde Buch hat <b>kein</b> Limit (BestEffort) und schreibt ungebremst.",
+            "accept": [
+              "^cat\\s+wildwuchs\\.yaml$"
+            ],
+            "solution": "cat wildwuchs.yaml",
+            "hint": "cat <datei>"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Diszipliniertes Buch ausrollen",
+        "cmd": {
+          "id": "t-eph-apply-protokoll",
+          "intro": "Erst das disziplinierte Frachtbuch mit Limit. Der Knoten hat noch knapp Platz (Baseline 700Mi von 1024Mi), die 150Mi dieses Buches passen gerade so – noch kein Druck.",
+          "text": "Rolle es aus: <code>kubectl apply --filename protokoll.yaml</code>.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+protokoll\\.yaml$"
+          ],
+          "check": {"some":"deployments","where":{"name":"protokoll"}},
+          "solution": "kubectl apply --filename protokoll.yaml",
+          "hint": "kubectl apply --filename <datei>"
+        }
+      },
+      {
+        "type": "teach",
+        "brief": "Das wilde Buch sprengt die Disk",
+        "cmd": {
+          "id": "t-eph-apply-wildwuchs",
+          "intro": "🆕 Jetzt das wilde Buch ohne Limit. Seine 400Mi bringen den Knoten über die Kante (700 + 150 + 400 = 1250Mi > 1024Mi Kapazität): der kubelet setzt <b>DiskPressure</b> und evictet, bis wieder Platz ist.",
+          "text": "Rolle es aus: <code>kubectl apply --filename wildwuchs.yaml</code> – und beobachte gleich, was am Westkai passiert.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+wildwuchs\\.yaml$"
+          ],
+          "check": {"some":"deployments","where":{"name":"wildwuchs","emptyDir":{"truthy":true}}},
+          "solution": "kubectl apply --filename wildwuchs.yaml",
+          "hint": "kubectl apply --filename <datei>"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Wer fliegt zuerst?",
+        "tasks": [
+          {
+            "id": "t-eph-getnodes",
+            "text": "Sieh den Knoten: <code>kubectl get nodes</code> – <code>ahoi-worker-1</code> zeigt <code>Ready,DiskPressure</code>. Der kubelet meldet: die Disk ist zu voll.",
+            "accept": [
+              "^kubectl\\s+get\\s+nodes?$"
+            ],
+            "check": {"some":"nodes","where":{"name":"ahoi-worker-1","diskPressure":true}},
+            "solution": "kubectl get nodes",
+            "hint": "kubectl get nodes"
+          },
+          {
+            "id": "t-eph-getpods-evict",
+            "text": "Und die Pods: <code>kubectl get pods</code>. <code>wildwuchs</code> ist <b>Evicted</b> (0/1), <code>protokoll</code> läuft weiter. Der ohne Limit (BestEffort) fiel zuerst – genau die Faustregel.",
+            "accept": [
+              "^kubectl\\s+get\\s+(pods|pod|po)$"
+            ],
+            "check": {"all":[{"some":"deployments","where":{"name":"wildwuchs","evicted":{"truthy":true}}},{"some":"deployments","where":{"name":"protokoll","evicted":{"truthy":false}}}]},
+            "solution": "kubectl get pods",
+            "hint": "kubectl get pods"
+          },
+          {
+            "id": "t-eph-describe-evict",
+            "text": "Warum genau? <code>kubectl describe pod &lt;wildwuchs-pod&gt;</code> – unter <code>Reason: Evicted</code> steht „<code>The node was low on resource: ephemeral-storage</code>“. Der Beweis schwarz auf weiß.",
+            "accept": [
+              "^kubectl\\s+describe\\s+pod\\s+wildwuchs\\S*$"
+            ],
+            "check": {"some":"deployments","where":{"name":"wildwuchs","evicted":{"truthy":true}}},
+            "solution": "kubectl describe pod <wildwuchs-pod>",
+            "hint": "kubectl describe pod <name> – Name aus get pods."
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Druck wegnehmen",
+        "cmd": {
+          "id": "t-eph-recover",
+          "intro": "Wie nimmt man den Druck weg? Der evictete Pod gibt seinen Schmierzettel sowieso frei. Starte ihn neu: sein <code>emptyDir</code> ist dann leer, die 400Mi sind zurück (700 + 150 = 850Mi < 1024Mi) – der Druck verschwindet.",
+          "text": "Gib die Disk frei: <code>kubectl rollout restart deployment wildwuchs</code>. Sein Scratch-Volume ist danach leer (0Mi) – die 400Mi sind zurück.",
+          "accept": [
+            "^kubectl\\s+rollout\\s+restart\\s+deployment\\s+wildwuchs$"
+          ],
+          "check": {"some":"deployments","where":{"name":"wildwuchs","emptyDir":{"match":{"usedMi":0}}}},
+          "solution": "kubectl rollout restart deployment wildwuchs",
+          "hint": "kubectl rollout restart deployment <name>"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Entspannung am Kai",
+        "tasks": [
+          {
+            "id": "t-eph-getnodes-ok",
+            "text": "Prüf den Knoten: <code>kubectl get nodes</code> – <code>ahoi-worker-1</code> steht wieder einfach auf <code>Ready</code>, <b>ohne</b> DiskPressure. Der Druck ist weg, sobald wieder Platz da ist.",
+            "accept": [
+              "^kubectl\\s+get\\s+nodes?$"
+            ],
+            "check": {"none":"nodes","where":{"diskPressure":true}},
+            "solution": "kubectl get nodes",
+            "hint": "kubectl get nodes"
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "knut",
+        "q": "Du hast beides gesehen – PVC, das bleibt, und <code>emptyDir</code>, das flüchtig ist. Wann nimmt man was, und wie schützt man die Node-Disk?",
+        "options": [
+          {
+            "t": "emptyDir für Wegwerfbares (Cache, Scratch, hochgeladene Dateien in Arbeit) – flüchtig ist da völlig ok. PVC für alles, was Neustarts überleben muss. Und: ephemeral-storage-Limits setzen, denn ein Pod ohne Limit (BestEffort) fliegt bei DiskPressure zuerst.",
+            "ok": true,
+            "reply": "Genau so. <code>emptyDir</code> ist der Schmierzettel, das PVC der Aktenschrank. Cache darf flüchtig sein; Daten brauchen das PVC. Und ein gesetztes Limit ist Selbstschutz: es deckelt deinen Verbrauch und hält dich aus der ersten Eviction-Reihe heraus. 🗄️"
+          },
+          {
+            "t": "Man nimmt immer emptyDir – es ist einfacher und braucht keine StorageClass; Limits sind unnötig, der kubelet räumt schon irgendwie auf.",
+            "ok": false,
+            "reply": "Nein. <code>emptyDir</code> verliert seinen Inhalt bei jedem Pod-Neustart – für eine Datenbank wäre das ein Desaster. Und „der kubelet räumt schon auf“ heißt: er evictet Pods. Ohne Limit ist genau deiner der erste."
+          },
+          {
+            "t": "emptyDir und PVC sind im Grunde dasselbe; DiskPressure entsteht durch zu wenig RAM, und dagegen hilft mehr CPU.",
+            "ok": false,
+            "reply": "Fast nichts davon stimmt: emptyDir ist flüchtig, das PVC dauerhaft – ein großer Unterschied. DiskPressure ist ein <b>Disk</b>-Problem (zu wenig ephemeral storage), nicht RAM, und CPU hilft dagegen gar nicht – nur weniger Verbrauch oder ein Limit."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "knut",
+        "lines": [
+          "Sauber durchgespielt, Kapitän. Du kennst jetzt beide Seiten: der Schmierzettel, der mit dem Pod kommt und geht – und der Aktenschrank, der bleibt.",
+          "Merk dir die zwei Eviction-Auslöser: <b>eigenes Limit gesprengt</b> (nur dein Pod) oder <b>Node-Disk voll</b> (DiskPressure, trifft die ohne Limit zuerst). Wer Cache flüchtig hält und Limits setzt, hat am Kai gut gewirtschaftet. 🪵"
+        ]
+      }
+    ]
+  },
+  {
     "id": "storage-backup-restore",
     "title": "Backup & Restore: Daten sichern und zurückholen",
     "giver": "knut",
