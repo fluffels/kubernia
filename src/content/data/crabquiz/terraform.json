@@ -144,5 +144,109 @@
     ],
     "correct": 0,
     "explain": "sensitive ist keine Verschlüsselung – es verbirgt den Wert nur in der Ausgabe (z. B. terraform output). Gezielt abgefragt bleibt er bei Bedarf abrufbar."
+  },
+  {
+    "id": "q-flotte-modul-3",
+    "chapter": "terraform-modul",
+    "q": "Du rufst dasselbe Modul zweimal mit verschiedenen Werten auf. Was entsteht?",
+    "options": [
+      "Pro Aufruf ein eigener Satz der enthaltenen Ressourcen – zwei Aufrufe ergeben zweimal Kai + Poller, jeder mit seinen übergebenen Werten.",
+      "Nur ein Satz Ressourcen – der zweite Aufruf überschreibt einfach den ersten.",
+      "Ein Fehler – ein Modul darf in einer Konfig nur einmal aufgerufen werden.",
+      "Die Ressourcen werden geteilt; beide Aufrufe zeigen auf dieselben Objekte."
+    ],
+    "correct": 0,
+    "explain": "Jeder Modul-Aufruf stanzt den Bauplan frisch aus. Zwei Aufrufe (Nord, Süd) → vier Ressourcen, weil das Modul je Aufruf einen Kai und einen Poller anlegt – mit den jeweils übergebenen Werten."
+  },
+  {
+    "id": "q-flotte-modul-4",
+    "chapter": "terraform-modul",
+    "q": "Was holt <code>terraform init</code> bei einer Konfig MIT Modulen zusätzlich zu den Providern?",
+    "options": [
+      "Auch die Module selbst – die Zeile „Initializing modules…“ lädt die referenzierten Bausteine, bevor geplant wird.",
+      "Nichts zusätzlich – init lädt immer nur Provider-Plugins.",
+      "Es baut die Modul-Ressourcen schon beim init auf.",
+      "Es schreibt die Module in den Remote State."
+    ],
+    "correct": 0,
+    "explain": "init ist der Vorbereitungs-Schritt: Es holt die Provider-Plugins UND die Module („Initializing modules…“). Erst danach kennt Terraform alle Bausteine und kann plan/apply ausführen."
+  },
+  {
+    "id": "q-flotte-remote-state-3",
+    "chapter": "terraform-remote-state",
+    "q": "Welcher Befehl richtet das Remote-Backend ein, sodass der State künftig im Lager statt lokal liegt?",
+    "options": [
+      "<code>terraform init</code> – die Zeile „Initializing the backend“ verlagert das Gedächtnis ins gemeinsame Lager.",
+      "<code>terraform apply</code> – erst beim Bauen wandert der State ins Backend.",
+      "<code>terraform state list</code> – das Auflisten verschiebt den State.",
+      "<code>terraform plan</code> – die Generalprobe richtet das Backend ein."
+    ],
+    "correct": 0,
+    "explain": "init macht den Ordner einsatzbereit – inklusive Backend. Ab „Initializing the backend“ liest und schreibt Terraform den State im geteilten Lager, nicht mehr als Datei auf dem Laptop."
+  },
+  {
+    "id": "q-flotte-remote-state-4",
+    "chapter": "terraform-remote-state",
+    "q": "Was zeigt <code>terraform state list</code> bei aktivem Remote-Backend?",
+    "options": [
+      "Die verwalteten Ressourcen aus dem geteilten Lager-State – jedes Crew-Mitglied sieht genau dieselbe Liste.",
+      "Nur die Ressourcen, die du selbst lokal gebaut hast.",
+      "Den kompletten .tf-Quelltext aller Dateien.",
+      "Eine Liste der Crew-Mitglieder, die gerade am State arbeiten."
+    ],
+    "correct": 0,
+    "explain": "state list liest aus dem State – und der liegt jetzt im Lager. Darum sieht die ganze Crew denselben Stand: ein gemeinsames Gedächtnis statt vieler widersprüchlicher Laptop-Kopien."
+  },
+  {
+    "id": "q-flotte-provider-3",
+    "chapter": "terraform-provider",
+    "q": "Warum läuft <code>terraform init</code> bei einem neuen Projekt immer als allererster Befehl?",
+    "options": [
+      "Weil es die benötigten Provider-Plugins (und Module) herunterlädt – ohne sie kann Terraform mit dem Anbieter gar nicht sprechen.",
+      "Weil init die Ressourcen bereits anlegt und plan/apply dann überflüssig sind.",
+      "Weil init den State verschlüsselt, bevor irgendetwas gebaut wird.",
+      "Aus Gewohnheit – die Reihenfolge ist eigentlich egal."
+    ],
+    "correct": 0,
+    "explain": "Ein Provider ist das Plugin für einen Anbieter. init holt die passenden Plugins (und Module) – erst damit „versteht“ Terraform den Anbieter und kann seine Ressourcen planen und bauen. Darum immer zuerst."
+  },
+  {
+    "id": "q-flotte-provider-4",
+    "chapter": "terraform-provider",
+    "q": "Wofür stehen die Spiel-Provider „nordwind“ und „passat“ in der echten Welt?",
+    "options": [
+      "Für reale Cloud-Anbieter wie AWS, Azure und GCP – jeder hat seinen eigenen Provider, den Terraform per init lädt.",
+      "Für zwei Versionen desselben Terraform-Befehls.",
+      "Für Verschlüsselungsverfahren des States.",
+      "Für zwei Module, die denselben Bauplan teilen."
+    ],
+    "correct": 0,
+    "explain": "nordwind und passat sind die Spiel-Namen für verschiedene Anbieter. Real heißen sie AWS, Azure, GCP & Co. – jeder bringt seinen eigenen Provider mit, und Multi-Cloud heißt: mehrere davon aus einer Konfig fahren."
+  },
+  {
+    "id": "q-flotte-variablen-outputs-3",
+    "chapter": "terraform-variablen-outputs",
+    "q": "Wie greift eine Ressource auf den Wert einer Variablen zu?",
+    "options": [
+      "Über <code>var.&lt;name&gt;</code> (z. B. <code>var.schiffe</code>) – statt eines fest eingetippten Werts.",
+      "Sie kopiert den Wert direkt aus der State-Datei.",
+      "Über <code>output.&lt;name&gt;</code> – Outputs liefern die Eingaben.",
+      "Gar nicht – Variablen sind reine Dokumentation ohne Wirkung auf Ressourcen."
+    ],
+    "correct": 0,
+    "explain": "Die Ressource liest <code>var.&lt;name&gt;</code> statt einer fest verdrahteten Zahl. So gibt es den Wert nur an EINER Stelle (der variable-Block) – die Stellschraube, an der man dreht, ohne den Ressourcen-Code anzufassen."
+  },
+  {
+    "id": "q-flotte-variablen-outputs-4",
+    "chapter": "terraform-variablen-outputs",
+    "q": "Ein Output ist als <code>sensitive</code> markiert. Wie bekommst du seinen echten Wert trotzdem?",
+    "options": [
+      "Gezielt mit <code>terraform output &lt;name&gt;</code> – das gibt den Rohwert aus; nur in der Gesamtübersicht bleibt er als <code>&lt;sensitive&gt;</code> verborgen.",
+      "Gar nicht – sensitive verschlüsselt den Wert dauerhaft.",
+      "Indem man <code>sensitive</code> aus den .tf-Dateien löscht und neu appliziert.",
+      "Nur über einen Blick direkt in die State-Datei, sonst nirgends."
+    ],
+    "correct": 0,
+    "explain": "sensitive verbirgt den Wert nur in der Übersicht (damit er nicht versehentlich in Logs landet). Gezielt abgefragt – <code>terraform output &lt;name&gt;</code> – liefert Terraform ihn bei Bedarf trotzdem im Klartext."
   }
 ]
