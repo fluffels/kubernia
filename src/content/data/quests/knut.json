@@ -914,6 +914,154 @@
     ]
   },
   {
+    "id": "storage-object-store",
+    "title": "Object Storage & Buckets: wann S3 statt Volume",
+    "giver": "knut",
+    "topic": "storage",
+    "rewardXp": 60,
+    "rewardCoins": 45,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "knut",
+        "lines": [
+          "Zurück am Kai, Kapitän. Letztes Mal sagte ich, das richtige Backup liegt <b>woanders</b> – off-cluster. Heute zeige ich dir, <b>wo</b> dieses Woanders ist: ein <b>Object Store</b>, ein S3-Eimer im Hafen, der dem Cluster gar nicht gehört.",
+          "PVC und Volume sind wie meine <b>Regalfächer</b> am Kai: an den Cluster gebunden, ein Dateisystem zum Hineinmounten. Ein <b>Bucket</b> ist anders – ein riesiger Eimer, in den du Objekte mit einem <b>Schlüssel</b> hineinlegst und über eine HTTP-Adresse wieder herausholst. Kein Mount, kein Dateisystem, dafür <b>beliebig groß und günstig</b>.",
+          "Das Werkzeug heißt <code>aws s3</code> – funktioniert mit AWS S3 genauso wie mit einem MinIO bei dir im Haus. Ich hab dir eine Frachtliste hingelegt; die sichern wir gleich in den Eimer. Schau sie dir an."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Frachtliste lesen",
+        "scenario": {
+          "files": {
+            "frachtliste.txt": "Frachtliste Westkai\n- 12 Fass Teer\n- 4 Ballen Segeltuch\n- 1 Kiste Navigationsgeraet"
+          }
+        },
+        "tasks": [
+          {
+            "id": "t-obj-ls",
+            "text": "Schau mit <code>ls</code>, was am Kai bereitliegt.",
+            "accept": [
+              "^ls$"
+            ],
+            "solution": "ls",
+            "hint": "Zwei Buchstaben."
+          },
+          {
+            "id": "t-obj-cat",
+            "text": "Lies <code>cat frachtliste.txt</code> – das ist die Datei, die wir gleich in den Object Store hochladen.",
+            "accept": [
+              "^cat\\s+frachtliste\\.txt$"
+            ],
+            "solution": "cat frachtliste.txt",
+            "hint": "cat <datei>"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Bucket anlegen",
+        "cmd": {
+          "id": "t-obj-mb",
+          "intro": "🆕 Zuerst der Eimer selbst. Ein <b>Bucket</b> ist der oberste Behälter im Object Store – global eindeutig benannt. Du legst ihn mit <code>aws s3 mb</code> an (mb = <i>make bucket</i>). Die Adresse schreibt man als <code>s3://&lt;name&gt;</code>.",
+          "text": "Leg den Hafen-Eimer an: <code>aws s3 mb s3://hafen-backup</code>.",
+          "accept": [
+            "^aws\\s+s3\\s+mb\\s+s3://hafen-backup$"
+          ],
+          "check": {"some":"buckets","where":{"name":"hafen-backup"}},
+          "solution": "aws s3 mb s3://hafen-backup",
+          "hint": "aws s3 mb s3://<bucket>"
+        }
+      },
+      {
+        "type": "teach",
+        "brief": "Objekt hochladen (put)",
+        "cmd": {
+          "id": "t-obj-put",
+          "intro": "🆕 Jetzt das Hochladen. <code>aws s3 cp &lt;datei&gt; s3://&lt;bucket&gt;/&lt;key&gt;</code> kopiert eine lokale Datei als <b>Objekt</b> in den Bucket. Der <b>Key</b> ist der Name, unter dem es liegt. Du darfst Schrägstriche im Key nutzen (<code>manifeste/…</code>) – das <b>sieht</b> aus wie ein Ordner, ist aber nur Teil des Schlüssels: der Namensraum ist <b>flach</b>, es gibt keine echten Verzeichnisse.",
+          "text": "Lade die Frachtliste hoch: <code>aws s3 cp frachtliste.txt s3://hafen-backup/manifeste/frachtliste.txt</code>.",
+          "accept": [
+            "^aws\\s+s3\\s+cp\\s+frachtliste\\.txt\\s+s3://hafen-backup/manifeste/frachtliste\\.txt$"
+          ],
+          "check": {"some":"buckets","where":{"name":"hafen-backup","objects":{"has":{"key":"manifeste/frachtliste.txt"}}}},
+          "solution": "aws s3 cp frachtliste.txt s3://hafen-backup/manifeste/frachtliste.txt",
+          "hint": "aws s3 cp <datei> s3://<bucket>/<key>"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Auflisten (ls)",
+        "tasks": [
+          {
+            "id": "t-obj-lsbucket",
+            "text": "Sieh in den Eimer: <code>aws s3 ls s3://hafen-backup</code>. Du siehst dein Objekt mit Datum, Größe und vollem Key <code>manifeste/frachtliste.txt</code> – der Schrägstrich ist nur ein Zeichen im Schlüssel, kein Ordner.",
+            "accept": [
+              "^aws\\s+s3\\s+ls\\s+s3://hafen-backup$"
+            ],
+            "check": {"some":"buckets","where":{"name":"hafen-backup","objects":{"has":{"key":"manifeste/frachtliste.txt"}}}},
+            "solution": "aws s3 ls s3://hafen-backup",
+            "hint": "aws s3 ls s3://<bucket>"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Herunterladen (get)",
+        "cmd": {
+          "id": "t-obj-get",
+          "intro": "🆕 Und der Rückweg: dasselbe <code>aws s3 cp</code>, nur in die andere Richtung – S3-Adresse als Quelle, lokaler Dateiname als Ziel. So holst du ein Objekt über seinen Key wieder herunter. Genau diesen Round-Trip nutzt man fürs Wiederherstellen aus dem Backup.",
+          "text": "Hol die Frachtliste zurück: <code>aws s3 cp s3://hafen-backup/manifeste/frachtliste.txt wiederhergestellt.txt</code>. Mit <code>cat wiederhergestellt.txt</code> siehst du: derselbe Inhalt, aus dem Eimer geholt.",
+          "accept": [
+            "^aws\\s+s3\\s+cp\\s+s3://hafen-backup/manifeste/frachtliste\\.txt\\s+wiederhergestellt\\.txt$"
+          ],
+          "check": {"flag":["files","wiederhergestellt.txt"]},
+          "solution": "aws s3 cp s3://hafen-backup/manifeste/frachtliste.txt wiederhergestellt.txt",
+          "hint": "aws s3 cp s3://<bucket>/<key> <ziel-datei>"
+        }
+      },
+      {
+        "type": "dialog",
+        "npc": "knut",
+        "lines": [
+          "Sauber – hochgeladen, aufgelistet, zurückgeholt. Jetzt der Begriff dahinter, denn am Kai gibt es <b>drei</b> Sorten Speicher, und man verwechselt sie leicht.",
+          "<b>File-Storage</b> ist ein gemeinsames Dateisystem mit Ordnern, das mehrere Pods mounten (NFS, ReadWriteMany). <b>Block-Storage</b> ist eine rohe Platte, die genau <b>ein</b> Pod mountet und formatiert – das ist dein <b>PVC/PV</b> (#129), perfekt für DB-Datenfiles und random writes. Und <b>Object-Storage</b> ist der Eimer von eben: kein Mount, kein Verzeichnisbaum, sondern Key→Inhalt über eine HTTP-API.",
+          "Der Witz am Object Store: er ist <b>nicht</b> an den Cluster gebunden. Pods, Nodes, sogar der ganze Cluster können sterben – der Eimer steht im Hafen und bleibt. Genau deshalb ist er das Ziel für Backups, Artefakte, Logs und statische Dateien."
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "knut",
+        "q": "Letzte Frage, Kapitän: Wann nimmst du <b>Object Storage (S3)</b> und wann ein <b>PVC/Volume</b>?",
+        "options": [
+          {
+            "t": "S3 für Backups, Artefakte, Logs, statische Dateien und alles, was viele Pods/Cluster gemeinsam oder über die HTTP-API erreichen sollen. PVC fürs Dateisystem mit POSIX-Semantik und random-write – Datenbank-Datenfiles vor allem.",
+            "ok": true,
+            "reply": "Genau. Der Eimer ist günstig, riesig und überlebt den Cluster – ideal zum Ablegen und Teilen über die API. Aber eine Datenbank will ein echtes Dateisystem unter sich: random writes, fsync, POSIX. Dafür ist und bleibt das PVC da. 🗄️"
+          },
+          {
+            "t": "Immer S3 – Object Storage ist günstiger und unbegrenzt, also kann man PVCs komplett ersetzen.",
+            "ok": false,
+            "reply": "Verlockend, aber nein. Über S3 kannst du keine Datenbank-Datei in place überschreiben oder fsync-en – es kennt nur ganze Objekte über eine API. Eine Postgres-Datendatei auf S3 zu legen ginge schief. Für POSIX-Workloads brauchst du das Block-Volume."
+          },
+          {
+            "t": "Object und Block sind dasselbe, nur ein anderer Name; man mountet beide ins Dateisystem und gut.",
+            "ok": false,
+            "reply": "Nein – das ist der Kern-Unterschied. Block/PVC <b>mountet</b> man als Dateisystem; Object Storage spricht man über eine <b>HTTP-API</b> mit Key an, ohne Mount. Verschiedene Zugriffe, verschiedene Einsatzzwecke."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "knut",
+        "lines": [
+          "Damit hast du den dritten Speicher-Typ in der Hand: Regalfach, rohe Platte – und der Eimer im Hafen.",
+          "Beim nächsten Mal nutzen wir den Eimer für das, wofür er gemacht ist: ein echtes Backup <b>off-cluster</b> ablegen, nach der 3-2-1-Regel. Heute reicht's – gute Wacht am Kai, Kapitän! 🪵"
+        ]
+      }
+    ]
+  },
+  {
     "id": "storage-prod-db-decision",
     "title": "Prod-DB im Cluster: ja oder nein?",
     "giver": "knut",

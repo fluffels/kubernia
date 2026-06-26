@@ -42,6 +42,7 @@
   "storage-pvc",
   "storage-ephemeral",
   "storage-backup-restore",
+  "storage-object-store",
   "storage-prod-db-decision",
   "k8s-serviceaccount",
   "k8s-rbac-role",
