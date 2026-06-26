@@ -120,5 +120,29 @@
     ],
     "correct": 0,
     "explain": "Zwei Anbieter, zwei provider-Blöcke mit je eigener Region. provider = nordwind bzw. provider = passat entscheidet pro Ressource, auf welcher Insel sie entsteht."
+  },
+  {
+    "id": "q-flotte-variablen-outputs-1",
+    "q": "Wozu dienen variables in einer Terraform-Konfiguration?",
+    "options": [
+      "Sie bündeln die Eingaben als zentrale Stellschrauben – man ändert Werte an einer Stelle, ohne den Ressourcen-Code anzufassen, und kann dieselbe Konfig wiederverwenden.",
+      "Sie lassen Terraform die Ressourcen schneller bauen.",
+      "Sie sind nur Kommentare zur Dokumentation, ohne Wirkung.",
+      "Sie verschlüsseln die gesamte Konfiguration automatisch."
+    ],
+    "correct": 0,
+    "explain": "Statt feste Werte mitten in die Ressourcen zu tippen, liest die Ressource var.<name>. Eine Stellschraube an einer Stelle – sauber und wiederverwendbar."
+  },
+  {
+    "id": "q-flotte-variablen-outputs-2",
+    "q": "Was bewirkt sensitive = true bei einem Terraform-Output?",
+    "options": [
+      "Terraform verbirgt den Wert in der Ausgabe (Übersicht zeigt <sensitive> statt Klartext), damit Geheimnisse nicht versehentlich in Logs landen.",
+      "Der Output wird verschlüsselt und kann danach nie wieder gelesen werden.",
+      "Der Output wird automatisch zu einer Eingabe-Variable.",
+      "Terraform überspringt den Output beim apply."
+    ],
+    "correct": 0,
+    "explain": "sensitive ist keine Verschlüsselung – es verbirgt den Wert nur in der Ausgabe (z. B. terraform output). Gezielt abgefragt bleibt er bei Bedarf abrufbar."
   }
 ]

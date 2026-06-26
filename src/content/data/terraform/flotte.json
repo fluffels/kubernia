@@ -69,6 +69,9 @@
       "tfResources": [
         { "addr": "hafen_flotte.expedition", "desc": "name = \"kubernia-expedition\", schiffe = 5" }
       ],
+      "tfModules": [],
+      "tfProviders": [],
+      "tfBackend": null,
       "tfOutputs": [
         { "name": "flotten_groesse", "value": "5" },
         { "name": "anleger_adresse", "value": "kubernia-expedition.flotte.local" },

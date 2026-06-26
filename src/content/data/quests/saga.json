@@ -420,5 +420,175 @@
         ]
       }
     ]
+  },
+  {
+    "id": "terraform-variablen-outputs",
+    "title": "Die Stellschrauben der Flotte",
+    "giver": "saga",
+    "topic": "terraform",
+    "rewardXp": 60,
+    "rewardCoins": 45,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "saga",
+        "lines": [
+          "Da bist du, Kapitän – die letzte Lektion. Schau dir unsere bisherigen Konfigs an: Überall stecken Namen, Zahlen und Regionen fest im Code. Will ich die Flotte umtaufen oder ein Schiff mehr fahren, muss ich mitten in den Ressourcen herumschrauben. Fehleranfällig und unübersichtlich.",
+          "Sauberer geht's mit <b>Variablen</b>: die <b>Eingaben</b> der Konfig, gebündelt an EINER Stelle als Stellschrauben. Die Ressourcen lesen nur noch <code>var.&lt;name&gt;</code> – kein fest verdrahteter Wert mehr.",
+          "Und am anderen Ende die <b>Outputs</b>: berechnete Ergebnisse, die die Konfig sauber nach außen gibt – die fertige Adresse, die Flottengröße. Geheimnisse markiert man dabei als <b>sensitive</b>, dann verbirgt Terraform sie in der Ausgabe. Schau dir die drei Dateien an."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Die Stellschrauben lesen",
+        "scenarioRef": "flotte-variablen-outputs",
+        "tasks": [
+          {
+            "id": "t-saga-vo-1",
+            "text": "Lies die Eingaben: <code>cat variables.tf</code>. Drei Stellschrauben – Name, Schiffszahl und ein <b>sensibler</b> Lager-Schlüssel. Achte auf <code>type</code>, <code>default</code> und <code>sensitive</code>.",
+            "accept": [
+              "^cat\\s+variables\\.tf$"
+            ],
+            "solution": "cat variables.tf",
+            "hint": "cat <datei> – die variable-Blöcke sind die Eingaben des Aufrufers."
+          },
+          {
+            "id": "t-saga-vo-2",
+            "text": "Jetzt die Ressource: <code>cat main.tf</code>. Sieh, wie sie nur noch <code>var.flotten_name</code> und <code>var.schiffe</code> liest – nichts ist hier fest eingetippt.",
+            "accept": [
+              "^cat\\s+main\\.tf$"
+            ],
+            "solution": "cat main.tf",
+            "hint": "cat <datei> – such die var.-Verweise statt fester Werte."
+          },
+          {
+            "id": "t-saga-vo-3",
+            "text": "Und die Rückgaben: <code>cat outputs.tf</code>. Drei Outputs – eine berechnete Adresse, die Flottengröße und der als <b>sensitive</b> markierte Schlüssel.",
+            "accept": [
+              "^cat\\s+outputs\\.tf$"
+            ],
+            "solution": "cat outputs.tf",
+            "hint": "cat <datei> – output-Blöcke geben berechnete Werte nach außen."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "saga",
+        "reviewId": "q-flotte-variablen-outputs-1",
+        "q": "Warum die Eingaben über <code>variables</code> setzen, statt feste Werte mitten in die Ressourcen zu tippen?",
+        "options": [
+          {
+            "t": "Variablen bündeln die Eingaben als zentrale Stellschrauben – man ändert das Verhalten an einer Stelle, ohne den Ressourcen-Code anzufassen, und kann dieselbe Konfig mit anderen Werten wiederverwenden.",
+            "ok": true,
+            "reply": "Genau. Ein Wert, eine Stelle. Du drehst an der Stellschraube <code>schiffe</code> – die Ressource zieht nach, ohne dass du sie selbst anfasst. Und mit anderen Werten wird aus derselben Konfig eine zweite Flotte."
+          },
+          {
+            "t": "Variablen lassen Terraform die Ressourcen schneller bauen.",
+            "ok": false,
+            "reply": "Nein, ums Tempo geht es nicht. Der Gewinn ist <b>Sauberkeit & Wiederverwendung</b>: Eingaben gebündelt an einer Stelle, der Ressourcen-Code bleibt unberührt."
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Initialisieren & Generalprobe",
+        "tasks": [
+          {
+            "id": "t-saga-vo-4",
+            "text": "Wie immer zuerst: <code>terraform init</code>. Der Ordner wird einsatzbereit gemacht.",
+            "accept": [
+              "^terraform\\s+init$"
+            ],
+            "solution": "terraform init",
+            "hint": "Der allererste Befehl jedes Terraform-Projekts."
+          },
+          {
+            "id": "t-saga-vo-5",
+            "text": "Generalprobe: <code>terraform plan</code>. Eine Ressource soll entstehen – mit den Werten, die aus den Variablen kommen (flotten_name, schiffe).",
+            "accept": [
+              "^terraform\\s+plan$"
+            ],
+            "solution": "terraform plan",
+            "hint": "Erst lesen, dann bauen."
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Die Flotte aufstellen",
+        "tasks": [
+          {
+            "id": "t-saga-vo-6",
+            "text": "Bau es: <code>terraform apply</code>. Ganz unten erscheint der <b>Outputs</b>-Block – und der Lager-Schlüssel steht dort nur als <code>&lt;sensitive&gt;</code>, nicht im Klartext.",
+            "accept": [
+              "^terraform\\s+apply(\\s+-auto-approve)?$"
+            ],
+            "check": {"flag":["tf","applied"]},
+            "solution": "terraform apply",
+            "hint": "Nach der Generalprobe die Aufführung."
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Die Outputs sauber abfragen",
+        "tasks": [
+          {
+            "id": "t-saga-vo-7",
+            "text": "Frag die berechnete Adresse ab: <code>terraform output anleger_adresse</code>. Aus <code>var.flotten_name</code> zusammengesetzt – kein Wert doppelt gepflegt.",
+            "accept": [
+              "^terraform\\s+output\\s+anleger_adresse$"
+            ],
+            "solution": "terraform output anleger_adresse",
+            "hint": "Muster: terraform output <output-name>"
+          },
+          {
+            "id": "t-saga-vo-8",
+            "text": "Jetzt der Überblick: <code>terraform output</code> (ohne Namen). Alle Outputs auf einmal – der sensible Schlüssel bleibt als <code>&lt;sensitive&gt;</code> verborgen.",
+            "accept": [
+              "^terraform\\s+output$"
+            ],
+            "solution": "terraform output",
+            "hint": "terraform output ganz ohne Namen listet alle deklarierten Outputs."
+          },
+          {
+            "id": "t-saga-vo-9",
+            "text": "Brauchst du den Schlüssel wirklich, frag ihn gezielt ab: <code>terraform output lager_schluessel</code>. Gezielt (roh) gibt Terraform auch den sensiblen Wert heraus – verborgen ist er nur in der Übersicht.",
+            "accept": [
+              "^terraform\\s+output\\s+lager_schluessel$"
+            ],
+            "solution": "terraform output lager_schluessel",
+            "hint": "Derselbe Befehl mit dem Output-Namen – gezielt liefert er den Rohwert."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "saga",
+        "reviewId": "q-flotte-variablen-outputs-2",
+        "q": "Was bewirkt <code>sensitive = true</code> bei einem Output?",
+        "options": [
+          {
+            "t": "Terraform verbirgt den Wert in der Ausgabe (in der Übersicht steht <code>&lt;sensitive&gt;</code> statt des Klartexts), damit Geheimnisse nicht versehentlich in Logs landen.",
+            "ok": true,
+            "reply": "Richtig. Das schützt vor dem Klassiker: ein Passwort, das im CI-Log oder Terminal-Mitschnitt steht. In der Übersicht bleibt es <code>&lt;sensitive&gt;</code> – gezielt abgefragt bekommst du es bei Bedarf trotzdem."
+          },
+          {
+            "t": "Der Output wird verschlüsselt und kann danach nie wieder gelesen werden.",
+            "ok": false,
+            "reply": "Nein – <b>sensitive</b> ist keine Verschlüsselung und keine Einbahnstraße. Es <i>verbirgt</i> den Wert nur in der Ausgabe, damit er nicht versehentlich in Logs auftaucht; gezielt abrufbar bleibt er."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "saga",
+        "lines": [
+          "Sauber! Eine Konfig ohne fest verdrahtete Werte: oben die Variablen als Stellschrauben, unten die Outputs als saubere Rückgaben, Geheimnisse verborgen. Genau so übergibt man später echte Infrastruktur an ein Team.",
+          "Damit ist die Expeditions-Flotte vollständig: Module, Remote State, Provider, Variablen & Outputs – du beherrschst die Werkzeuge, mit denen man Terraform im Großen fährt. Stolz auf dich, Kapitän. Die See gehört dir. ⚓🧭"
+        ]
+      }
+    ]
   }
 ]
