@@ -96,5 +96,29 @@
     ],
     "correct": 0,
     "explain": "Wer ändert, nimmt den Schlüssel; alle anderen warten. Ohne Lock würden parallele Applies den State ineinanderschreiben – mit Lock läuft alles sauber nacheinander."
+  },
+  {
+    "id": "q-flotte-provider-1",
+    "q": "Was ist ein Terraform-Provider?",
+    "options": [
+      "Ein Plugin, das Terraform mit einem bestimmten Anbieter (Cloud/Dienst) sprechen lässt – terraform init lädt es herunter.",
+      "Ein Befehl, der den geteilten State gegen gleichzeitige Zugriffe sperrt.",
+      "Eine besondere Art von Output, die Terraform verborgen ausgibt.",
+      "Ein Modul ohne Variablen."
+    ],
+    "correct": 0,
+    "explain": "Jeder Anbieter hat seinen eigenen Provider (nordwind, passat – real AWS, Azure, GCP). terraform init lädt die passenden Plugins, damit Terraform deren Ressourcen anlegen kann."
+  },
+  {
+    "id": "q-flotte-provider-2",
+    "q": "Wozu im Multi-Cloud-Setup pro Anbieter ein eigener provider-Block?",
+    "options": [
+      "Jeder Anbieter braucht eigene Einstellungen (z. B. Region) – und über provider = … wählt jede Ressource ihren Anbieter aus.",
+      "Mehr provider-Blöcke lassen Terraform die Ressourcen schneller bauen.",
+      "Es ist nur Dokumentation, ohne Wirkung auf den Build.",
+      "Damit man terraform plan überspringen kann."
+    ],
+    "correct": 0,
+    "explain": "Zwei Anbieter, zwei provider-Blöcke mit je eigener Region. provider = nordwind bzw. provider = passat entscheidet pro Ressource, auf welcher Insel sie entsteht."
   }
 ]

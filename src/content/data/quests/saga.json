@@ -277,5 +277,148 @@
         ]
       }
     ]
+  },
+  {
+    "id": "terraform-provider",
+    "title": "Zwei Inseln, zwei Anbieter",
+    "giver": "saga",
+    "topic": "terraform",
+    "rewardXp": 55,
+    "rewardCoins": 40,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "saga",
+        "lines": [
+          "Da bist du ja, Kapitän! Die Expedition wird größer: Wir setzen einen Vorposten auf einer Insel im <b>Norden</b> – und einen zweiten ganz woanders, bei einem <b>anderen Anbieter</b> im Süden. Das nennt man <b>Multi-Cloud</b>.",
+          "Jeder Anbieter spricht seine eigene Sprache. Damit Terraform mit ihm reden kann, braucht es das passende Plugin: einen <b>Provider</b>. <code>terraform init</code> lädt genau diese Plugins herunter – das ist der eigentliche Grund, warum init immer als Erstes läuft.",
+          "Bei uns sind es zwei: <b>nordwind</b> für die Nordsee, <b>passat</b> für die Südsee. Jeder bekommt seinen eigenen <code>provider</code>-Block mit eigener Region. Schau dir die Konfig an, bevor wir loslegen."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Die Anbieter lesen",
+        "scenarioRef": "flotte-provider",
+        "tasks": [
+          {
+            "id": "t-saga-prov-1",
+            "text": "Lies die Provider-Konfig: <code>cat provider.tf</code>. Wie viele Anbieter werden deklariert – und welche Region bekommt jeder?",
+            "accept": [
+              "^cat\\s+provider\\.tf$"
+            ],
+            "solution": "cat provider.tf",
+            "hint": "cat <datei> – achte auf die beiden Blöcke unter required_providers und die zwei provider-Blöcke."
+          },
+          {
+            "id": "t-saga-prov-2",
+            "text": "Jetzt die Ressourcen: <code>cat main.tf</code>. Über die Zeile <code>provider = …</code> sagt jede Insel, bei welchem Anbieter sie entsteht – schau, welche zu nordwind und welche zu passat gehört.",
+            "accept": [
+              "^cat\\s+main\\.tf$"
+            ],
+            "solution": "cat main.tf",
+            "hint": "cat <datei> – zwei Ressourcen, jede mit ihrem eigenen provider = …"
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Beide Anbieter holen",
+        "tasks": [
+          {
+            "id": "t-saga-prov-3",
+            "text": "Wie immer Schritt 1: <code>terraform init</code>. Lies mit – unter „Initializing provider plugins…“ holt Terraform jetzt <b>beide</b> Provider, nordwind <i>und</i> passat.",
+            "accept": [
+              "^terraform\\s+init$"
+            ],
+            "solution": "terraform init",
+            "hint": "Der allererste Befehl jedes Terraform-Projekts – er lädt die Provider-Plugins."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "saga",
+        "reviewId": "q-flotte-provider-1",
+        "q": "Was ist ein Terraform-Provider?",
+        "options": [
+          {
+            "t": "Ein Plugin, das Terraform mit einem bestimmten Anbieter (Cloud/Dienst) sprechen lässt – <code>terraform init</code> lädt es herunter.",
+            "ok": true,
+            "reply": "Genau. Jeder Anbieter hat seinen eigenen Provider. <code>init</code> holt die passenden Plugins, damit Terraform deren Ressourcen überhaupt anlegen kann – darum läuft init immer zuerst."
+          },
+          {
+            "t": "Ein Befehl, der den geteilten State gegen gleichzeitige Zugriffe sperrt.",
+            "ok": false,
+            "reply": "Nein, das wäre State-Locking. Ein <b>Provider</b> ist das Plugin für einen Anbieter – nordwind, passat, in der echten Welt AWS, Azure, GCP &amp; Co. <code>init</code> lädt sie."
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Vorposten auf beiden Inseln",
+        "tasks": [
+          {
+            "id": "t-saga-prov-4",
+            "text": "Generalprobe: <code>terraform plan</code>. Zwei Ressourcen sollen entstehen – eine bei jedem Anbieter. Erst lesen, dann bauen.",
+            "accept": [
+              "^terraform\\s+plan$"
+            ],
+            "solution": "terraform plan",
+            "hint": "Erst die Generalprobe, dann die Aufführung."
+          },
+          {
+            "id": "t-saga-prov-5",
+            "text": "Jetzt bauen: <code>terraform apply</code>. Beide Vorposten entstehen – einer in der Nordsee (nordwind), einer in der Südsee (passat).",
+            "accept": [
+              "^terraform\\s+apply(\\s+-auto-approve)?$"
+            ],
+            "check": {"flag":["tf","applied"]},
+            "solution": "terraform apply",
+            "hint": "Nach der Generalprobe die Aufführung."
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Beide Inseln im State",
+        "tasks": [
+          {
+            "id": "t-saga-prov-6",
+            "text": "Frag den State ab: <code>terraform state list</code>. Beide Inseln stehen darin – verschiedene Anbieter, EIN gemeinsamer Terraform-Lauf.",
+            "accept": [
+              "^terraform\\s+state\\s+list$"
+            ],
+            "solution": "terraform state list",
+            "hint": "terraform state <unterbefehl> – du willst die Liste."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "saga",
+        "reviewId": "q-flotte-provider-2",
+        "q": "Wozu im Multi-Cloud-Setup pro Anbieter ein eigener <code>provider</code>-Block?",
+        "options": [
+          {
+            "t": "Jeder Anbieter braucht eigene Einstellungen (z. B. seine Region) – und über <code>provider = …</code> wählt jede Ressource ihren Anbieter aus.",
+            "ok": true,
+            "reply": "Richtig. Zwei Anbieter, zwei provider-Blöcke mit je eigener Region. <code>provider = nordwind</code> bzw. <code>provider = passat</code> entscheidet pro Ressource, auf welcher Insel sie entsteht."
+          },
+          {
+            "t": "Mehr provider-Blöcke lassen Terraform die Ressourcen schneller bauen.",
+            "ok": false,
+            "reply": "Nein, um Tempo geht es nicht. Jeder Anbieter ist anders konfiguriert (eigene Region, eigene Zugänge) – darum ein eigener Block je Anbieter, und <code>provider = …</code> ordnet jede Ressource dem richtigen zu."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "saga",
+        "lines": [
+          "Zwei Inseln, zwei Anbieter, ein einziger Terraform-Lauf – so sieht Multi-Cloud aus. Genau so verwaltet man später AWS, Azure und GCP nebeneinander aus einer Konfig.",
+          "Eines stört mich noch: In all unseren Konfigs stehen Namen, Längen und Regionen fest eingetippt mitten im Code. Das geht schöner – mit <b>Variablen</b> als Stellschrauben und <b>Outputs</b> als sauberen Rückgaben. Das ist unsere letzte Lektion. Bis gleich, Kapitän! 🧭"
+        ]
+      }
+    ]
   }
 ]

@@ -5,7 +5,7 @@
     "coins": 5000,
     "character": 3,
     "player": { "x": 400, "y": 248 },
-    "questIdx": 48,
+    "questIdx": 49,
     "questStep": 0,
     "taskIdx": 0,
     "currentQuestId": "",
@@ -16,7 +16,7 @@
       "q28", "q29", "q30", "q31", "q32", "q33", "q34", "q35", "q36", "q37",
       "dns-service-discovery", "storage-backup-restore", "storage-prod-db-decision",
       "k8s-serviceaccount", "k8s-rbac-role", "k8s-rbac-clusterrole", "k8s-pod-security",
-      "terraform-modul", "terraform-remote-state"
+      "terraform-modul", "terraform-remote-state", "terraform-provider"
     ],
     "inventory": { "fernrohr": 9 },
     "owned": ["pet-ratte", "pet-moewe", "pet-katze", "flag-blau", "flag-rot"],
