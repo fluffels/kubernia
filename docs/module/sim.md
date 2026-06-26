@@ -4,7 +4,7 @@
 
 ## Worum es geht
 
-Der Simulator ist das **pure-Domäne-Herz** des Spiels: die Spielwelt _ist_ der Cluster. Er ist **Phaser-frei und voll im Node-Test prüfbar**. Er versteht die Befehlsfamilien `docker`, `kubectl` (inkl. `top`/`logs -f`/`--previous`), `helm`, `terraform`, `git`, `argocd`/GitOps und `glab` (GitLab-CI) plus die Observability-Schicht.
+Der Simulator ist das **pure-Domäne-Herz** des Spiels: die Spielwelt _ist_ der Cluster. Er ist **Phaser-frei und voll im Node-Test prüfbar**. Er versteht die Befehlsfamilien `docker`, `kubectl` (inkl. `top`/`logs -f`/`--previous`), `helm`, `terraform`, `git`, `argocd`/GitOps, `glab` (GitLab-CI) und `aws s3` (Object Store, #241) plus die Observability-Schicht.
 
 ## Aufbau nach dem sim.ts-Split (#346, Schritte #372–#385)
 
@@ -36,6 +36,7 @@ Ursprünglich war alles ein großes `sim.ts`. Mit #346 wurde es in einen **Kern*
 | `src/sim/glab.ts` | #385 (letzter Split) | glab/CI-Familie: `glabCommand(host, …)` (GitLab-CLI `glab ci status\|list`) UND die **CI-Pipeline-Maschinerie** `runPipeline(host)` — eine `.gitlab-ci.yml` startet beim `git push` ihre Pipeline build → test → deploy, die deploy-Stage rollt auf `main` automatisch aus. Über `GlabHost` (`+ _err`/`_makeDeployment`). |
 | `src/sim/net.ts` | #164 | **Erreichbarkeits-/DNS-Befehle**, die KEINE kubectl-Unterbefehle sind: `nslookupCommand` (CoreDNS-Auflösung #337) + `curlCommand` (Service erreichbar? #164). Beide rein lesend, über das schmale `NetHost`-Interface (services/deployments + `_err`/`_podReady`/`_reschedulePending`/`_recheckReadiness`). Ausgelagert aus `sim.ts`, als die Datei das 800-LOC-Budget sprengte. |
 | `src/sim/eviction.ts` | #240 | **Ephemeral Storage & Eviction**: `evaluateEviction(host)` (mutiert den Zustand) + die Bilanz-Helfer `depEphemeralUsed`/`nodeOf`/`nodeEphemeralUsed`/`resetEphemeral`. Wird – wie `reconcileAutoSync` – aus `exec()` + `reset()` des Kerns gerufen und über dünne `Sim._…`-Delegationen dem `KubectlHost` zugänglich gemacht. Ausgelagert, als `sim.ts` durch die Mechanik über 800 LOC ging. |
+| `src/sim/s3.ts` | #241 | **S3-/MinIO-Object-Store** als eigene Befehlsfamilie `aws s3 …`: `awsCommand(host, …)` (mb/rb/ls/cp/rm). Der Store (`objectStore.buckets`) ist **off-cluster** – Buckets + Objekte (Key→Inhalt, `size` in UTF-8-Bytes) liegen getrennt vom Cluster-Volume und überleben Pod/Node/PVC (taugt damit als Backup-Ziel, #140-Folge). `cp` verbindet den Store mit dem lokalen Arbeitsverzeichnis (`files`): Datei→s3 (Upload), s3→Datei (Download), s3→s3 (Copy). Über das schmale `S3Host`-Interface (`objectStore`/`files`/`clock` + `_err`/`_suggest`). `objectByteLength` wird auch von `reset`/`merge` im Kern genutzt (eine Größen-Quelle). |
 
 Damit bleibt in `sim.ts` nur noch der **Sim-Kern** — keine Befehls- oder CI-Familie mehr.
 
