@@ -17,6 +17,7 @@ import { WORLD_TO_LIGHTHOUSE, WORLD_RETURN_LH } from "../../lighthouse";
 import { DOCK as WH_DOCK, WORLD_JETTY_WH, WORLD_TO_WAREHOUSE } from "../../warehouse";
 import { DOCK as WT_DOCK, WORLD_JETTY_WT, WORLD_TO_WATCHTOWER } from "../../watchtower";
 import { DOCK as FL_DOCK, WORLD_JETTY_FL, WORLD_TO_FLOTTE } from "../../flotte";
+import { DOCK as WF_DOCK, WORLD_JETTY_WF, WORLD_TO_WERFT } from "../../werft";
 import { PIER_XS } from "../../harbormap";
 import { T, DIRT, ANVIL, TABLE, DEVICE, BOOK, WATER, FOAM, WANG } from "../shared";
 import type { WorldSceneLike } from "./types";
@@ -87,6 +88,20 @@ export function placeHarborObjects(scene: WorldSceneLike) {
     }
   }
   scene.labels.push({ x: WORLD_TO_FLOTTE.tx + 0.9, y: WORLD_TO_FLOTTE.ty - 0.7, text: "Zur Flotte", color: "#ffe9b0" });
+
+  // #165: Holz-Anleger an der freien Kai-Lücke (x22–23, zwischen Archipel- und Wachturm-Anleger)
+  // → Heimat-Werft (Phase-10-Capstone). Gleiches Muster wie Lager-/Wachturm-/Flotte-Anleger: die
+  // Wasserkacheln des Stegs zu begehbaren Planken (PIER -10) machen, damit renderGround sie als
+  // „dock" malt und man hinauslaufen kann. So bleibt harbor.tmj unberührt. Das Schild sitzt am
+  // KAI-Kopf des Stegs (y26.3) statt am Steg-Ende, damit es nicht mit den eng benachbarten
+  // Archipel-/Wachturm-Schildern (beide am Steg-Ende y30.3) kollidiert.
+  for (let y = WORLD_JETTY_WF.y0; y <= WORLD_JETTY_WF.y1; y++) {
+    for (let x = WORLD_JETTY_WF.x; x < WORLD_JETTY_WF.x + WORLD_JETTY_WF.w; x++) {
+      scene.ground[y * W + x] = WF_DOCK;
+      scene.solidGrid[y * W + x] = 0;
+    }
+  }
+  scene.labels.push({ x: WORLD_TO_WERFT.tx + 0.9, y: 26.3, text: "Zur Werft", color: "#ffe9b0" });
 
   // Marktplatz
   scene.objDeco(28, 18, "well", 0.55, true);

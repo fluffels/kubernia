@@ -22,6 +22,7 @@ import { WORLD_TO_LIGHTHOUSE, WORLD_RETURN_LH, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_A
 import { WORLD_TO_WAREHOUSE, WORLD_RETURN_WH, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL } from "./warehouse";
 import { WORLD_TO_WATCHTOWER, WORLD_RETURN_WT, WATCHTOWER_TO_WORLD, WATCHTOWER_ARRIVAL } from "./watchtower";
 import { WORLD_TO_FLOTTE, WORLD_RETURN_FL, FLOTTE_TO_WORLD, FLOTTE_ARRIVAL } from "./flotte";
+import { WORLD_TO_WERFT, WORLD_RETURN_WF, WERFT_TO_WORLD, WERFT_ARRIVAL } from "./werft";
 import type { MapId } from "./mapregistry";
 
 export { warpAt, type Warp };
@@ -58,6 +59,7 @@ export const REGION_WARPS: readonly RegionWarp[] = [
   { id: "warehouse",  fromMap: "harbor", targetScene: "Warehouse",  trigger: WORLD_TO_WAREHOUSE,  worldReturn: WORLD_RETURN_WH, regionReturn: WAREHOUSE_TO_WORLD,  arrival: WAREHOUSE_ARRIVAL },
   { id: "watchtower", fromMap: "harbor", targetScene: "Watchtower", trigger: WORLD_TO_WATCHTOWER, worldReturn: WORLD_RETURN_WT, regionReturn: WATCHTOWER_TO_WORLD, arrival: WATCHTOWER_ARRIVAL },
   { id: "flotte",     fromMap: "harbor", targetScene: "Flotte",     trigger: WORLD_TO_FLOTTE,     worldReturn: WORLD_RETURN_FL, regionReturn: FLOTTE_TO_WORLD,     arrival: FLOTTE_ARRIVAL },
+  { id: "werft",      fromMap: "harbor", targetScene: "Werft",      trigger: WORLD_TO_WERFT,      worldReturn: WORLD_RETURN_WF, regionReturn: WERFT_TO_WORLD,      arrival: WERFT_ARRIVAL },
 ];
 
 /** Alle Region-Warps, die von der gegebenen Hauptkarte ausgehen (Stardew-Scope: künftig
