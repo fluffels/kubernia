@@ -11,5 +11,6 @@
   "lumi":   { "name": "Lumi",          "title": "Leuchtturmwärterin", "sprite": 97,  "tex": "char_lumi" },
   "knut":   { "name": "Knut",          "title": "Speicher-Verwalter", "sprite": 100, "tex": "char_knut" },
   "vidar":  { "name": "Vidar",         "title": "Wachveteran",        "sprite": 97,  "tex": "char_vidar" },
-  "saga":   { "name": "Saga",          "title": "Flottenkommandantin", "sprite": 87, "tex": "char_saga" }
+  "saga":   { "name": "Saga",          "title": "Flottenkommandantin", "sprite": 87, "tex": "char_saga" },
+  "greta":  { "name": "Greta",         "title": "Werftmeisterin",     "sprite": 87,  "tex": "char_greta" }
 }

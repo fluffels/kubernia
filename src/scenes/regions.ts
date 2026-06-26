@@ -233,8 +233,9 @@ const flotte: RegionConfig = {
 /** Heimat-Werft (#165, Phase 10): gepflasterter Werft-Hof mit Stein-Kai-Wand + hölzerner
  *  Helling (Slipway) im Süden. Auf der Helling das im Bau befindliche Schiff (der „eigene
  *  Service", den der Capstone bauen lässt), flankiert von zwei Bau-Gerüsten. Sparsame Begrünung
- *  – ein Arbeitshof, kein Garten. Der NPC (#166) + die Capstone-Quest (#167) docken später am
- *  reservierten Hof-Platz an. Das im Bau befindliche Schiff + die Gerüste sind bewusst
+ *  – ein Arbeitshof, kein Garten. Die Werftmeisterin Greta (#166) steht über die Entity-Registry
+ *  auf dem Hof-Platz (von RegionScene aus npcSpawnsForMap gespawnt); die Capstone-Quest (#167)
+ *  dockt später am reservierten Trigger-Platz an. Das im Bau befindliche Schiff + die Gerüste sind bewusst
  *  prozedural/aus dem gemeinsamen ship-Sprite (kein neues Asset) – ein echtes Werft-Gantry-
  *  Sprite ist ein separates Optik-Ticket (Stardew-Nordstern). */
 const werft: RegionConfig = {

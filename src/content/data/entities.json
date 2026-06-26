@@ -11,7 +11,8 @@
     { "id": "lumi",  "map": "lighthouse", "x": 11,   "y": 9 },
     { "id": "knut",  "map": "warehouse",  "x": 12,   "y": 8 },
     { "id": "vidar", "map": "watchtower",  "x": 15,   "y": 9 },
-    { "id": "saga",  "map": "flotte",     "x": 11,   "y": 5 }
+    { "id": "saga",  "map": "flotte",     "x": 11,   "y": 5 },
+    { "id": "greta", "map": "werft",      "x": 9,    "y": 7 }
   ],
   "objects": [
     { "id": "gitops-altar",       "map": "archipel",   "x": 16, "y": 8,  "type": "quest_trigger", "label": "GitOps" },
