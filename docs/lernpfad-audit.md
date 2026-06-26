@@ -64,7 +64,7 @@ Schweregrad: 🔴 Kernbefehl/zustandsändernd ohne Lernmoment · 🟠 Konsistenz
 | `helm search repo` | q9 `t-runa-2` | inline gezeigt | **neues Ticket** (🟠, gebündelt) |
 | `helm list` | q10 `t-runa-3` | inline, danach gedrillt | **neues Ticket** (🟠, gebündelt) |
 | `helm repo update` | q9 `t-runa-1` | inline (Geschwister von `helm repo add`, das eingeführt wird) | **neues Ticket** (🟠, gebündelt) |
-| `argocd app list` | q29 `t-argo-list` | inline, während `argocd app get`/`sync` echte `teach`-Schritte sind | **neues Ticket** (🟡) |
+| `argocd app list` | q29 `t-argo-list` | inline, während `argocd app get`/`sync` echte `teach`-Schritte sind | ✅ **erledigt (#250)** – `t-argo-list` ist jetzt ein eigener `teach`-Beat mit 🆕-Intro |
 
 `kubectl get ingress`/`get deployments`/`get services` zählen **nicht** dazu: `kubectl get` ist
 in q4 eingeführt, hier kommen nur neue Ressourcentypen dazu (eigenes Thema: #208/#226 Glossar).
@@ -132,6 +132,6 @@ git branch                               intro q19      ✓ (#251)
 git checkout -b / merge / push / fetch / pull  intro q19/q20/q25  ✓
 glab ci status                           intro q20      ✓ (glab im Dialog vorab)
 argocd app get / sync                    intro q29      ✓
-argocd app list                          intro —        ✗ inline q29        → B
+argocd app list                          intro q29      ✓ (#250)
 ls / cat                                 intro —        ✗ nie erklärt       → A (#213/#215)
 ```
