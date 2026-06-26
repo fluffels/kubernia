@@ -187,6 +187,9 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
       const idx = dep.pods.findIndex(p => p.name === name);
       dep.pods.splice(idx, 1);
       host.lastDeletedPod = name;
+      // Pod-Neustart gibt das flüchtige emptyDir frei (#240): der Ersatz-Pod startet mit leerem
+      // Scratch-Volume – „weg, sobald der Pod weg ist". (PVCs überleben dagegen, siehe StatefulSet.)
+      host._resetEphemeral(dep);
       // Self-Healing: das Deployment ersetzt den Pod sofort – mit NEUEM Zufallsnamen.
       dep.pods.push({ name: makePodName(dep.name), created: host.clock, restarts: 0 });
       return 'pod "' + name + '" deleted';
@@ -322,6 +325,11 @@ export function kubectlApply(host: KubectlHost, t: string[]) {
       if (effDep.serviceAccountName) dep.serviceAccountName = effDep.serviceAccountName;
       // Container-Port aus dem Pod-Template (#164): nötig für den targetPort-Abgleich beim curl.
       if (effDep.containerPort !== undefined) dep.containerPort = effDep.containerPort;
+      // Ephemeral-Storage aus dem Pod-Template (#240): emptyDir-Volume, Limit, Zusatznutzung, Node-Pin.
+      if (effDep.node !== undefined) dep.node = effDep.node;
+      if (effDep.emptyDir) dep.emptyDir = { data: effDep.emptyDir.data || "", usedMi: effDep.emptyDir.usedMi || 0 };
+      if (effDep.ephemeralLimit !== undefined) dep.ephemeralLimit = effDep.ephemeralLimit;
+      if (effDep.ephemeralUsedMi !== undefined) dep.ephemeralUsedMi = effDep.ephemeralUsedMi;
       // Eigenes Image (#164, Werft-Capstone): ist es noch nicht lokal gebaut/gezogen, landet
       // der Pod im ImagePullBackOff – genau wie im echten Cluster. needsBuild markiert: heilt
       // von selbst, sobald 'docker build'/'docker pull' das Image bereitstellt.

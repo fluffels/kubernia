@@ -127,13 +127,25 @@ function kubectlSetResources(host: KubectlHost, t: string[], raw: string) {
   const requestSpec = (raw.match(/--requests[=\s][^\s]*memory=([0-9]+(?:Mi|Gi|M|G)?)/) || [])[1];
   const cpuMatch = raw.match(/--limits[=\s][^\s]*cpu=([0-9]+)(m)?/);
   const cpuLimitMilli = cpuMatch ? (cpuMatch[2] ? parseInt(cpuMatch[1], 10) : parseInt(cpuMatch[1], 10) * 1000) : null;
+  // ephemeral-storage-Limit (#240): analog memory, gegen die flüchtige Disk-Nutzung des Pods.
+  const ephSpec = (raw.match(/--limits[=\s][^\s]*ephemeral-storage=([0-9]+(?:Mi|Gi|M|G)?)/) || [])[1];
   if (!depName) return host._err("kubectl set resources: Welches Deployment?", "Muster: kubectl set resources deployment/<name> --limits=memory=256Mi --requests=memory=128Mi");
-  if (!limitSpec && !requestSpec && cpuLimitMilli === null) return host._err("kubectl set resources: Kein Limit/Request angegeben.", "Häng z.B. '--limits=memory=256Mi --requests=memory=128Mi' oder '--limits=cpu=200m' an.");
+  if (!limitSpec && !requestSpec && cpuLimitMilli === null && !ephSpec) return host._err("kubectl set resources: Kein Limit/Request angegeben.", "Häng z.B. '--limits=memory=256Mi --requests=memory=128Mi', '--limits=cpu=200m' oder '--limits=ephemeral-storage=1Gi' an.");
   const dep = host.deployments.find(d => d.name === depName);
   if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + depName + '" not found', "Welche Deployments es gibt: 'kubectl get deployments'");
   const newLimit = limitSpec ? parseMem(limitSpec) : null;
   if (limitSpec && newLimit === null) return host._err('error: invalid resource quantity "' + limitSpec + '"', "Schreib das Limit z.B. als '256Mi' oder '1Gi'.");
   if (newLimit !== null) dep.memLimit = newLimit;
+  // ephemeral-storage-Limit setzen (#240): die Eviction-Auswertung greift den neuen Wert beim
+  // nächsten Befehl auf – reicht der Platz jetzt, wird der Pod nicht mehr evictet.
+  const newEph = ephSpec ? parseMem(ephSpec) : null;
+  if (ephSpec && newEph === null) return host._err('error: invalid resource quantity "' + ephSpec + '"', "Schreib das Limit z.B. als '512Mi' oder '1Gi'.");
+  let ephFits = false;
+  if (newEph !== null) {
+    const wasEvicted = !!dep.evicted;
+    dep.ephemeralLimit = newEph;
+    ephFits = wasEvicted && host._depEphemeralUsed(dep) <= newEph;
+  }
   let healed = false;
   if (dep.broken && dep.broken.type === "oomkilled" && newLimit !== null && newLimit >= (dep.broken.memNeeded || 0)) {
     dep.broken = null;
@@ -148,7 +160,8 @@ function kubectlSetResources(host: KubectlHost, t: string[], raw: string) {
   }
   return "deployment.apps/" + depName + " resource requirements updated" +
     (healed ? "\n💡 Genug Speicher! Die Pods starten neu und bleiben diesmal stehen – kein OOMKilled mehr." : "") +
-    (cpuThrottled ? "\n💡 CPU-Limit gesetzt! Die Pods werden gedrosselt – der HighPodCPU-Alert fällt auf resolved." : "");
+    (cpuThrottled ? "\n💡 CPU-Limit gesetzt! Die Pods werden gedrosselt – der HighPodCPU-Alert fällt auf resolved." : "") +
+    (ephFits ? "\n💡 Genug ephemeral-storage! Der Pod wird nicht mehr evictet – prüfe mit 'kubectl get pods'." : "");
 }
 
 /** kubectl rollout restart deployment <name> */
@@ -172,6 +185,9 @@ export function kubectlRollout(host: KubectlHost, t: string[]) {
     dep.broken = null;
     imageHealed = true;
   }
+  // Pod-Neustart gibt das flüchtige Scratch-Volume frei (#240): emptyDir-Inhalt ist weg, die
+  // ephemeral-Disk-Bilanz von Pod und Node fällt – ein evicteter Pod kann so wieder anlaufen.
+  host._resetEphemeral(dep);
   dep.pods = dep.pods.map(() => ({ name: makePodName(dep.name), created: host.clock, restarts: 0 }));
   return "deployment.apps/" + depName + " restarted" +
     (imageHealed ? "\n💡 Image gefunden – die Pods starten neu und laufen jetzt. Prüfe mit 'kubectl get pods'." : "");

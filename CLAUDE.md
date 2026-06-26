@@ -83,6 +83,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/sim/observability.ts`](src/sim/observability.ts) | pure Domäne | Metriken/Scrape-Targets/Alerts (deterministisch, #109/#110). |
 | [`src/sim/glab.ts`](src/sim/glab.ts) | pure Domäne | glab/CI-Familie + Pipeline-Maschinerie (`runPipeline`). |
 | [`src/sim/net.ts`](src/sim/net.ts) | pure Domäne | Erreichbarkeits-Befehle `nslookup` (DNS #337) + `curl` (Service erreichbar? #164). |
+| [`src/sim/eviction.ts`](src/sim/eviction.ts) | pure Domäne | Ephemeral Storage & Eviction: emptyDir/ephemeral-storage-Bilanz + DiskPressure-Auswertung (#240). |
 | [`src/content.ts`](src/content.ts) | pure Domäne | Fassade über `src/content/*` → `KQContent`. → [content.md](docs/module/content.md) |
 | [`src/content/loader.ts`](src/content/loader.ts) | pure Domäne | Content-as-Data-Loader + Laufzeit-Validierung. |
 | [`src/content/parse.ts`](src/content/parse.ts) | pure Domäne | Geteilte Parse-Primitiven + `ContentValidationError` (Leaf, bricht den Zyklus loader↔check-dsl, #411). |

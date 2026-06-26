@@ -42,6 +42,7 @@ import { argocdCommand, reconcileAutoSync, cloneArgoApp } from "./sim/argocd";
 import { podMetrics as obsPodMetrics, nodeMetrics as obsNodeMetrics, scrapeTargets as obsScrapeTargets, alerts as obsAlerts, evaluateAlerts as obsEvaluateAlerts } from "./sim/observability";
 import { glabCommand } from "./sim/glab";
 import { nslookupCommand, curlCommand } from "./sim/net";
+import { depEphemeralUsed, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
 import { randSuffix, makePodName } from "./sim/util";
 
   class Sim implements ClusterState {
@@ -112,6 +113,7 @@ import { randSuffix, makePodName } from "./sim/util";
       this.deployments = (sc.deployments || []).map(d => {
         const dep = this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy);
         if (d.containerPort !== undefined) dep.containerPort = d.containerPort; // #164
+        this._seedEphemeral(dep, d); // node/emptyDir/ephemeral-storage (#240)
         return dep;
       });
       this.services = (sc.services || []).map(s => Object.assign({}, s));
@@ -214,6 +216,19 @@ import { randSuffix, makePodName } from "./sim/util";
       this.lastError = false;
       this._firingAlerts = new Set();
       this._resolvedAlerts = new Set();
+      // Disk-Druck/Eviction einmal ableiten, damit ein frisch geladener Stand schon vor dem
+      // ersten Befehl stimmig ist (DiskPressure/Evicted, #240). exec() rechnet danach laufend nach.
+      this._evaluateEviction();
+    }
+
+    /** Ephemeral-Storage-Felder eines Deployments aus einer (lockeren) Eingabe-Spec setzen (#240):
+     *  Node-Pin, emptyDir-Volume, ephemeral-storage-Limit und -Zusatznutzung. Geteilt von reset()
+     *  und mergeScenario(). */
+    _seedEphemeral(dep: Deployment, s: { node?: string; emptyDir?: { data?: string; usedMi?: number }; ephemeralLimit?: number; ephemeralUsedMi?: number }) {
+      if (s.node !== undefined) dep.node = s.node;
+      if (s.emptyDir) dep.emptyDir = { data: s.emptyDir.data || "", usedMi: s.emptyDir.usedMi || 0 };
+      if (s.ephemeralLimit !== undefined) dep.ephemeralLimit = s.ephemeralLimit;
+      if (s.ephemeralUsedMi !== undefined) dep.ephemeralUsedMi = s.ephemeralUsedMi;
     }
 
     _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment {
@@ -229,6 +244,15 @@ import { randSuffix, makePodName } from "./sim/util";
       }
       return d;
     }
+
+    /* ---------- Ephemeral Storage & Eviction (#240) ---------- */
+    // Die Mechanik liegt in ./sim/eviction.ts (pure Domäne, mutiert nur den Cluster-Zustand);
+    // hier nur dünne Delegationen, damit kubectl sie über das KubectlHost-Interface erreicht.
+    _depEphemeralUsed(d: Deployment): number { return depEphemeralUsed(d); }
+    _nodeOf(d: Deployment): string { return nodeOf(this, d); }
+    _nodeEphemeralUsed(nodeName: string): number { return nodeEphemeralUsed(this, nodeName); }
+    _resetEphemeral(d: Deployment): void { resetEphemeral(d); }
+    _evaluateEviction(): void { evaluateEviction(this); }
 
     /** Name der Default-StorageClass (oder "", wenn keine als Default markiert ist).
      *  Ein PVC ohne eigene StorageClass bekommt im echten Cluster genau diese. */
@@ -303,6 +327,9 @@ import { randSuffix, makePodName } from "./sim/util";
 
     /** Pod-Status eines Deployments (für get/describe/logs). */
     _podStatus(d: Deployment): PodStatus {
+      // Evicted überschreibt alles (#240): der kubelet hat den Pod wegen Disk-Druck oder
+      // gesprengtem ephemeral-storage-Limit beendet – er läuft nicht und ist nicht bereit.
+      if (d.evicted) return { status: "Evicted", ready: "0/1", restarts: 0 };
       if (!d.broken) return { status: "Running", ready: "1/1", restarts: 0 };
       if (d.broken.type === "imagepull") return { status: "ImagePullBackOff", ready: "0/1", restarts: 0 };
       if (d.broken.type === "crashloop") return { status: "CrashLoopBackOff", ready: "0/1", restarts: 5 };
@@ -448,6 +475,7 @@ import { randSuffix, makePodName } from "./sim/util";
         if (!this.deployments.some(x => x.name === d.name)) {
           const dep = this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy);
           if (d.containerPort !== undefined) dep.containerPort = d.containerPort; // #164
+          this._seedEphemeral(dep, d); // node/emptyDir/ephemeral-storage (#240)
           this.deployments.push(dep);
         }
       }
@@ -503,7 +531,10 @@ import { randSuffix, makePodName } from "./sim/util";
         dockerImages: this.docker.pulled.slice(),
         dockerContainers: this.docker.containers.map(c => Object.assign({}, c)),
         nodes: this.nodes.map(n => Object.assign({}, n)),
-        deployments: this.deployments.map(d => ({ name: d.name, image: d.image, replicas: d.replicas, broken: d.broken ? Object.assign({}, d.broken) : null, envFrom: { configMaps: d.envFrom.configMaps.slice(), secrets: d.envFrom.secrets.slice() }, cpuHeavy: !!d.cpuHeavy, containerPort: d.containerPort })),
+        deployments: this.deployments.map(d => ({ name: d.name, image: d.image, replicas: d.replicas, broken: d.broken ? Object.assign({}, d.broken) : null, envFrom: { configMaps: d.envFrom.configMaps.slice(), secrets: d.envFrom.secrets.slice() }, cpuHeavy: !!d.cpuHeavy, containerPort: d.containerPort,
+          // Ephemeral-Storage (#240): emptyDir/Limit/Nutzung/Node-Pin überleben den Reload; `evicted`
+          // wird beim Laden ohnehin neu abgeleitet, daher nicht serialisiert.
+          node: d.node, emptyDir: d.emptyDir ? Object.assign({}, d.emptyDir) : undefined, ephemeralLimit: d.ephemeralLimit, ephemeralUsedMi: d.ephemeralUsedMi })),
         services: this.services.map(s => Object.assign({}, s)),
         ingresses: this.ingresses.map(i => Object.assign({}, i)),
         networkPolicies: this.networkPolicies.map(n => Object.assign({}, n)),
@@ -579,6 +610,9 @@ import { randSuffix, makePodName } from "./sim/util";
       // Fehlende eigene Images zieht der kubelet nach: ein needsBuild-ImagePullBackOff
       // heilt, sobald das Image lokal gebaut/gezogen wurde (#164, Werft-Capstone).
       this._recheckImagePull();
+      // Disk-Druck/Eviction gegen den aktuellen Zustand ableiten (#240): DiskPressure je Node,
+      // Evicted je Pod (Limit gesprengt oder Node-Disk voll). Rein deterministisch, kein Zufall.
+      this._evaluateEviction();
       this.lastError = false;
       const raw = line.trim();
       if (!raw) return { output: "", error: false };
@@ -669,10 +703,10 @@ import { randSuffix, makePodName } from "./sim/util";
       return [
         "Verfügbare Befehle im Simulator:",
         "  docker     pull | build -t <name> . | tag <quelle> <ziel> | run | ps [-a] | images | stop | rm",
-        "  kubectl    get pods|deployments|services|endpoints|ingress|networkpolicies|servicemonitors|prometheusrules|grafanadatasources|grafanadashboards|alerts|nodes|secrets|configmaps|serviceaccounts|roles|rolebindings | describe pod|ingress|networkpolicy|role|serviceaccount <name>",
+        "  kubectl    get pods|deployments|services|endpoints|ingress|networkpolicies|servicemonitors|prometheusrules|grafanadatasources|grafanadashboards|alerts|nodes|secrets|configmaps|serviceaccounts|roles|rolebindings | describe pod|node|ingress|networkpolicy|role|serviceaccount <name>",
         "             create deployment | create secret generic|tls | create configmap | create serviceaccount|role|clusterrole|rolebinding|clusterrolebinding | scale | expose | delete | apply -f <datei>",
         "             auth can-i <verb> <resource> [--as=…] | label namespace <ns> pod-security.kubernetes.io/enforce=<stufe>",
-        "             logs [-f] [--previous] <pod> | top pods|nodes | set image deployment/<n> <c>=<img> | set env deployment/<n> --from=configmap|secret/<n> | set resources deployment/<n> --limits=memory=256Mi | rollout restart deployment <n>",
+        "             logs [-f] [--previous] <pod> | top pods|nodes | set image deployment/<n> <c>=<img> | set env deployment/<n> --from=configmap|secret/<n> | set resources deployment/<n> --limits=memory=256Mi|ephemeral-storage=1Gi | rollout restart deployment <n>",
         "  helm       repo add|update | search repo | create | lint | package | install | list | upgrade | rollback | uninstall | status",
         "  terraform  init | plan | apply | destroy | state list",
         "  git        init | status | add <datei> | commit -m \"…\" | log | branch [<name>] | checkout [-b] <name> | merge <name> | push | fetch | pull",

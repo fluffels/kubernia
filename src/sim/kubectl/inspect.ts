@@ -98,8 +98,11 @@ export function kubectlGet(host: KubectlHost, t: string[]) {
   }
 
   if (["nodes", "node", "no"].includes(what)) {
+    // Echtes `kubectl get nodes` zeigt unter Disk-Druck weiter STATUS "Ready" (DiskPressure ist eine
+    // eigene Condition, sichtbar erst per describe). Im Lernspiel hängen wir sie sichtbar an die
+    // STATUS-Spalte, damit der Druck im Überblick auffällt – Detail dann in `describe node` (#240).
     return table(["NAME", "STATUS", "ROLES", "AGE", "VERSION"],
-      host.nodes.map(n => [n.name, n.status, n.roles, "3d", n.version]));
+      host.nodes.map(n => [n.name, n.diskPressure ? n.status + ",DiskPressure" : n.status, n.roles, "3d", n.version]));
   }
 
   if (["secrets", "secret"].includes(what)) {
@@ -224,6 +227,41 @@ export function kubectlGet(host: KubectlHost, t: string[]) {
 export function kubectlDescribe(host: KubectlHost, t: string[]) {
   const what = (t[2] || "").toLowerCase();
   const name = t[3];
+  if (["node", "nodes", "no"].includes(what)) {
+    if (!name) return host._err("kubectl describe node: Welcher Knoten?", "Die Namen siehst du mit 'kubectl get nodes'.");
+    const node = host.nodes.find(n => n.name === name);
+    if (!node) return host._err('Error from server (NotFound): nodes "' + name + '" not found', "Tipp: Namen aus 'kubectl get nodes' kopieren.");
+    const lines = [
+      "Name:               " + node.name,
+      "Roles:              " + node.roles,
+      "Conditions:",
+      "  Type             Status",
+      "  ----             ------",
+      "  MemoryPressure   False",
+      // DiskPressure ist die Lern-Pointe (#240): True = der kubelet evictet Pods, um Disk zu schaffen.
+      "  DiskPressure     " + (node.diskPressure ? "True" : "False"),
+      "  Ready            True",
+    ];
+    // Ephemeral-Storage-Bilanz nur zeigen, wenn der Knoten eine Kapazität hat (sonst „unbegrenzt").
+    if (node.ephemeralCapacityMi !== undefined) {
+      const used = host._nodeEphemeralUsed(node.name);
+      lines.push(
+        "Capacity:",
+        "  ephemeral-storage:  " + node.ephemeralCapacityMi + "Mi",
+        "Allocated resources:",
+        "  Resource           Used",
+        "  --------           ----",
+        "  ephemeral-storage  " + used + "Mi" + (node.diskPressure ? "  (über der Schwelle – DiskPressure!)" : ""),
+      );
+    }
+    // Evictete Pods dieses Knotens auflisten – so wird sichtbar, wen der Druck getroffen hat.
+    const evicted = host.deployments.filter(d => d.evicted && host._nodeOf(d) === node.name);
+    if (evicted.length) {
+      lines.push("Evicted pods:");
+      for (const d of evicted) for (const p of d.pods) lines.push("  " + p.name + "  (" + d.evicted!.reason + ")");
+    }
+    return lines.join("\n");
+  }
   if (["ingress", "ingresses", "ing"].includes(what)) {
     if (!name) return host._err("kubectl describe ingress: Welches Hafentor?", "Die Namen siehst du mit 'kubectl get ingress'.");
     const ing = host.ingresses.find(i => i.name === name);
@@ -283,7 +321,7 @@ export function kubectlDescribe(host: KubectlHost, t: string[]) {
     if (!acc) return host._err('Error from server (NotFound): serviceaccounts "' + name + '" not found', "Tipp: Namen aus 'kubectl get sa' kopieren.");
     return ["Name:         " + acc.name, "Namespace:    default", "Mountable secrets:  <none>"].join("\n");
   }
-  if (!["pod", "pods"].includes(what)) return host._err("Der Simulator kann nur 'kubectl describe pod|ingress|networkpolicy|role|clusterrole|serviceaccount <name>'.");
+  if (!["pod", "pods"].includes(what)) return host._err("Der Simulator kann nur 'kubectl describe pod|node|ingress|networkpolicy|role|clusterrole|serviceaccount <name>'.");
   if (!name) return host._err("kubectl describe pod: Welcher Pod?", "Die Namen siehst du mit 'kubectl get pods'.");
   const pod = host._allPods().find(p => p.name === name);
   if (!pod) return host._err('Error from server (NotFound): pods "' + name + '" not found', "Tipp: Pod-Namen kannst du aus 'kubectl get pods' kopieren.");
@@ -291,7 +329,13 @@ export function kubectlDescribe(host: KubectlHost, t: string[]) {
   const dep = host._findDeploymentOfPod(name)!;
   const st = host._podStatus(dep);
   const events = ["  Type    Reason     Age   Message", "  ----    ------     ----  -------"];
-  if (!dep.broken) {
+  if (dep.evicted) {
+    // Evicted (#240): der kubelet hat den Pod beendet, um Disk freizugeben bzw. weil er sein
+    // ephemeral-storage-Limit gesprengt hat. Der Grund steht – wie in echtem K8s – im Event.
+    events.push("  Normal   Scheduled  " + host._age(pod.created) + "   Successfully assigned default/" + pod.name);
+    events.push("  Warning  Evicted    " + host._age(pod.created) + "   " + dep.evicted.reason);
+    events.push("  Normal   Killing    " + host._age(pod.created) + "   Stopping container " + dep.name);
+  } else if (!dep.broken) {
     events.push("  Normal  Scheduled  " + host._age(pod.created) + "   Successfully assigned default/" + pod.name);
     events.push("  Normal  Pulled     " + host._age(pod.created) + "   Container image \"" + dep.image + "\" already present");
     events.push("  Normal  Started    " + host._age(pod.created) + "   Started container " + dep.name);
@@ -328,13 +372,31 @@ export function kubectlDescribe(host: KubectlHost, t: string[]) {
       "    Limits:",
       "      memory:     " + (dep.memLimit || 64) + "Mi",
     ] : []),
+    // ephemeral-storage-Limit (#240): macht sichtbar, woran ein Evicted-Pod sein Limit gesprengt hat.
+    ...(dep.ephemeralLimit !== undefined ? [
+      "    Limits:",
+      "      ephemeral-storage:  " + dep.ephemeralLimit + "Mi",
+      "    ephemeral-storage verbraucht: " + host._depEphemeralUsed(dep) + "Mi",
+    ] : []),
     "    Restart Count: " + (st.restarts || pod.restarts),
   ];
+  // Volumes-Abschnitt (#240): zeigt das flüchtige emptyDir-Scratch-Volume samt belegtem Platz.
+  // Der Inhalt ist nach einem Pod-Neustart weg – genau das ist die emptyDir-Lern-Pointe.
+  const volumeBlock = dep.emptyDir ? [
+    "Volumes:",
+    "  scratch:",
+    "    Type:     EmptyDir (a temporary directory that shares a pod's lifetime)",
+    "    Used:     " + dep.emptyDir.usedMi + "Mi",
+    "    Content:  " + (dep.emptyDir.data || "(leer)"),
+  ] : [];
+  // Evictete Pods melden Status Failed / Reason: Evicted – genau so zeigt es echtes Kubernetes (#240).
+  const statusLine = dep.evicted ? "Failed" : (st.status === "Running" ? "Running" : st.status === "Pending" ? "Pending" : "Waiting (" + st.status + ")");
   return [
     "Name:         " + pod.name,
     "Namespace:    default",
-    "Node:         " + (dep.broken && dep.broken.type === "pending" ? "<none>" : host.nodes[1].name),
-    "Status:       " + (st.status === "Running" ? "Running" : st.status === "Pending" ? "Pending" : "Waiting (" + st.status + ")"),
+    "Node:         " + (dep.broken && dep.broken.type === "pending" ? "<none>" : host._nodeOf(dep)),
+    "Status:       " + statusLine,
+    ...(dep.evicted ? ["Reason:       Evicted", "Message:      " + dep.evicted.reason] : []),
     "Ready:        " + st.ready,
     "IP:           " + (dep.broken && dep.broken.type === "pending" ? "<none>" : "10.244.1." + (10 + Math.floor(Math.random() * 200))),
     "Controlled By: ReplicaSet/" + dep.name,
@@ -343,6 +405,7 @@ export function kubectlDescribe(host: KubectlHost, t: string[]) {
     "Service Account: " + (dep.serviceAccountName || "default"),
     "Containers:",
     ...containerBlock,
+    ...volumeBlock,
     "Events:",
   ].concat(events).join("\n");
 }

@@ -35,6 +35,7 @@ Ursprünglich war alles ein großes `sim.ts`. Mit #346 wurde es in einen **Kern*
 | `src/sim/observability.ts` | #384 | Observability-Familie (#109/#110): deterministische Pod-/Node-Metriken (`podMetrics`/`nodeMetrics`, **kein `Math.random`** → `kubectl top` stabil), Prometheus-Scrape-Targets (`scrapeTargets`), Alert-Regeln (`alertRules`) + firing→resolved-Verlauf (`evaluateAlerts`/`alerts`) des simulierten Alertmanagers. Aus `sim.ts` ausgelagert, aber die **öffentliche API bleibt als dünne Delegation auf der Sim-Klasse** (`Sim.podMetrics()` & Co.), damit kubectl get/top, content/checks + content/drills und Tests unverändert `sim.X()` rufen. `exec` ruft vor jeder Eingabe `evaluateAlerts(this)`. Über `ObservabilityHost` (`+ _podReady` + transienter Alert-Sitzungszustand `_firingAlerts`/`_resolvedAlerts`). |
 | `src/sim/glab.ts` | #385 (letzter Split) | glab/CI-Familie: `glabCommand(host, …)` (GitLab-CLI `glab ci status\|list`) UND die **CI-Pipeline-Maschinerie** `runPipeline(host)` — eine `.gitlab-ci.yml` startet beim `git push` ihre Pipeline build → test → deploy, die deploy-Stage rollt auf `main` automatisch aus. Über `GlabHost` (`+ _err`/`_makeDeployment`). |
 | `src/sim/net.ts` | #164 | **Erreichbarkeits-/DNS-Befehle**, die KEINE kubectl-Unterbefehle sind: `nslookupCommand` (CoreDNS-Auflösung #337) + `curlCommand` (Service erreichbar? #164). Beide rein lesend, über das schmale `NetHost`-Interface (services/deployments + `_err`/`_podReady`/`_reschedulePending`/`_recheckReadiness`). Ausgelagert aus `sim.ts`, als die Datei das 800-LOC-Budget sprengte. |
+| `src/sim/eviction.ts` | #240 | **Ephemeral Storage & Eviction**: `evaluateEviction(host)` (mutiert den Zustand) + die Bilanz-Helfer `depEphemeralUsed`/`nodeOf`/`nodeEphemeralUsed`/`resetEphemeral`. Wird – wie `reconcileAutoSync` – aus `exec()` + `reset()` des Kerns gerufen und über dünne `Sim._…`-Delegationen dem `KubectlHost` zugänglich gemacht. Ausgelagert, als `sim.ts` durch die Mechanik über 800 LOC ging. |
 
 Damit bleibt in `sim.ts` nur noch der **Sim-Kern** — keine Befehls- oder CI-Familie mehr.
 
@@ -47,6 +48,16 @@ Die Sim-Grundlage des Capstone-Bogens. Der ganze Ablauf wird spielbar: `docker b
 - **targetPort ≠ containerPort (Manifest).** `ServiceRes.targetPort` (aus `apply`/`expose --target-port`) und `Deployment.containerPort` (aus dem Pod-Template). Stimmen beide nicht überein, hat der Service zwar **Endpoints** (Pod ist bereit, `get endpoints` zeigt sie mit dem targetPort) — `curl` läuft aber ins Leere. Beide Felder sind optional; fehlt eines, wird der Abgleich übersprungen (rückwärtskompatibel). Round-trip über `snapshot`/`reset`.
 
 Tests: `test/sim/werft.test.ts` (Happy-Path + alle Fehlerbilder + Negativ-/Gegenproben, Red-Green).
+
+## Ephemeral Storage & Eviction (#240)
+
+Der **flüchtige** Gegenpart zur dauerhaften Storage-Sim (#122, PVC/StatefulSet). Mechanik in `src/sim/eviction.ts`, datengetrieben über Felder am `Deployment` (`emptyDir`, `ephemeralLimit`, `ephemeralUsedMi`, `node`, abgeleitet `evicted`) und am `ClusterNode` (`ephemeralCapacityMi`, `ephemeralBaseMi`, abgeleitet `diskPressure`):
+
+- **emptyDir** lebt MIT dem Pod: `kubectl delete pod` / `rollout restart` ruft `resetEphemeral` → Inhalt weg, Platz frei. Genau der Gegensatz zum PVC, das den Pod überlebt. Sichtbar in `kubectl describe pod` (Volumes-Abschnitt).
+- **ephemeral-storage-Limit** am Container (analog `memLimit`): per `kubectl set resources deployment/<n> --limits=ephemeral-storage=1Gi` oder aus dem `apply`-Pod-Template.
+- **Eviction** ist **rein abgeleitet** (`evaluateEviction`, läuft in `exec()` vor jedem Befehl + am Ende von `reset()`) — kein verstecktes terminales Feld, darum reload-sicher. Zwei Auslöser: (1) Pod sprengt sein eigenes Limit → `Evicted`; (2) Node-Disk (Baseline + emptyDir/Writable-Layer der hier laufenden Pods) ≥ Kapazität → Node-Condition `DiskPressure` + Eviction der Verbraucher (BestEffort/kein Limit zuerst, dann größter Verbraucher). Fällt der Grund weg (Limit erhöht, Disk freigegeben, Pod neugestartet), verschwindet `Evicted` beim nächsten Befehl. Sichtbar in `kubectl get pods` (STATUS `Evicted`), `kubectl get nodes` (STATUS `…,DiskPressure`) und `kubectl describe node` (Condition + Bilanz). **Backward-Compat:** Nodes ohne `ephemeralCapacityMi` sind „unbegrenzt" → nie DiskPressure, alle Alt-Szenarien unberührt.
+
+Pod-Platzierung (`nodeOf`): ein `node`-Pin am Deployment gewinnt, sonst deterministisch round-robin über die Worker (kein Zufall). Tests: `test/ephemeral.test.ts` (beide Auslöser + Heilung + Negativ-/False-Positive-Fälle, Red-Green).
 
 ## Observability & Monitoring-CRDs (#109/#110)
 
