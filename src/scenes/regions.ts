@@ -21,6 +21,7 @@ import { buildLighthouse, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL, LIGHTHOUSE_NP
 import { buildWarehouse, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL, type WarehouseMap } from "../warehouse";
 import { buildWatchtower, WATCHTOWER_TO_WORLD, WATCHTOWER_ARRIVAL, WATCHTOWER_TOWER } from "../watchtower";
 import { buildFlotte, FLOTTE_TO_WORLD, FLOTTE_ARRIVAL, type FlotteMap } from "../flotte";
+import { buildWerft, WERFT_TO_WORLD, WERFT_ARRIVAL, WERFT_NPC, WERFT_BUILD_TRIGGER, type WerftMap } from "../werft";
 
 /** #343/#386: Hitbox-Maße der Lager-Güter – Fässer rund (Radius), Kisten als mittig
  *  eingerücktes Rechteck (Kantenlänge). Wie in der früheren WarehouseScene. */
@@ -229,6 +230,60 @@ const flotte: RegionConfig = {
   },
 };
 
+/** Heimat-Werft (#165, Phase 10): gepflasterter Werft-Hof mit Stein-Kai-Wand + hölzerner
+ *  Helling (Slipway) im Süden. Auf der Helling das im Bau befindliche Schiff (der „eigene
+ *  Service", den der Capstone bauen lässt), flankiert von zwei Bau-Gerüsten. Sparsame Begrünung
+ *  – ein Arbeitshof, kein Garten. Der NPC (#166) + die Capstone-Quest (#167) docken später am
+ *  reservierten Hof-Platz an. Das im Bau befindliche Schiff + die Gerüste sind bewusst
+ *  prozedural/aus dem gemeinsamen ship-Sprite (kein neues Asset) – ein echtes Werft-Gantry-
+ *  Sprite ist ein separates Optik-Ticket (Stardew-Nordstern). */
+const werft: RegionConfig = {
+  key: "Werft",
+  map: "werft",
+  build: buildWerft,
+  regionReturn: WERFT_TO_WORLD,
+  arrival: WERFT_ARRIVAL,
+  title: "⚒ Heimat-Werft",
+  hint: "Helling hinab ⬇ – zurück nach Port Kubernia",
+  returnGlyph: "⬇",
+  returnSign: "Port Kubernia",
+  questSignDy: 1,
+  decor: {
+    reserved: [
+      { x: WERFT_ARRIVAL.tx, y: WERFT_ARRIVAL.ty },
+      { x: WERFT_TO_WORLD.tx, y: WERFT_TO_WORLD.ty },
+      { x: WERFT_NPC.x, y: WERFT_NPC.y },
+      { x: WERFT_BUILD_TRIGGER.x, y: WERFT_BUILD_TRIGGER.y },
+    ],
+    // Ein Arbeitshof, kein Garten: ein paar Büsche + Blumen am Rand.
+    bands: [{ max: 4, kind: "bush" }, { max: 11, kind: "flowers" }],
+  },
+  decorate(scene: RegionScene, build) {
+    const m = build as WerftMap;
+    // Bau-Gerüste links/rechts der Helling: schlanke Holz-Gerüst-Rahmen aus Primitiven (wie
+    // der Wachturm-Platzhalter), bis ein echtes Werft-Gantry-Sprite existiert.
+    for (const s of m.scaffolds) {
+      const cx = s.x * T + 8, baseY = (s.y + 1) * T;
+      scene.add.ellipse(cx, baseY - 1, 16, 5, 0x000000, 0.2).setDepth(baseY - 2);
+      // Zwei senkrechte Holzstützen + drei Querstreben = ein Bau-Gerüst.
+      scene.add.rectangle(cx - 5, baseY, 2, 26, 0x6b4a2a).setOrigin(0.5, 1).setDepth(baseY);
+      scene.add.rectangle(cx + 5, baseY, 2, 26, 0x6b4a2a).setOrigin(0.5, 1).setDepth(baseY);
+      for (const dy of [4, 13, 22]) {
+        scene.add.rectangle(cx, baseY - dy, 12, 2, 0x7c5a36).setOrigin(0.5, 1).setDepth(baseY + 0.1);
+      }
+    }
+    // Das im Bau befindliche Schiff (der „eigene Service") mittig auf der Helling – das
+    // gemeinsame ship-Sprite, fußlinien-depth-sortiert, mit sanftem Werft-Wippen. Eine
+    // Funken-Andeutung (gelbe Pixel) darüber liest sich als „hier wird gerade gebaut".
+    const cx = m.hull.x * T + 8, baseY = (m.hull.y + 1) * T;
+    scene.add.ellipse(cx, baseY - 1, 28, 8, 0x000000, 0.2).setDepth(baseY - 2);   // Schatten/Kielblock
+    const ship = scene.add.image(cx, baseY, "ship").setOrigin(0.5, 1).setScale(0.75).setDepth(baseY);
+    scene.tweens.add({ targets: ship, y: baseY - 1.5, duration: 2100, yoyo: true, repeat: -1, ease: "Sine.inOut" });
+    const spark = scene.add.image(cx + 6, baseY - 18, "px").setScale(2).setTint(0xffe28a).setDepth(baseY + 1);
+    scene.tweens.add({ targets: spark, alpha: { from: 0.2, to: 0.9 }, duration: 700, yoyo: true, repeat: -1, ease: "Sine.inOut" });
+  },
+};
+
 /** Die EINE Liste aller Region-Szenen-Configs. Reihenfolge = Registrierungsreihenfolge in
  *  scenes.ts (Szenen-Keys sind disjunkt, also nicht load-bearing). */
-export const REGION_CONFIGS: RegionConfig[] = [archipel, lighthouse, warehouse, watchtower, flotte];
+export const REGION_CONFIGS: RegionConfig[] = [archipel, lighthouse, warehouse, watchtower, flotte, werft];

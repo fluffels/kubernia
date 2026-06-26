@@ -27,9 +27,9 @@ import { WORLD_TO_FLOTTE, WORLD_RETURN_FL, FLOTTE_TO_WORLD, FLOTTE_ARRIVAL } fro
 const center = (t: { tx: number; ty: number }): [number, number] => [t.tx * TILE + 8, t.ty * TILE + 8];
 
 describe("REGION_WARPS – die Daten-Liste der Region-Übergänge (#426)", () => {
-  it("deckt genau die fünf Regionen ab, alle von der Hauptkarte „harbor“", () => {
-    expect(REGION_WARPS.map((w) => w.id).sort()).toEqual(["archipel", "flotte", "lighthouse", "warehouse", "watchtower"]);
-    expect(REGION_WARPS.map((w) => w.targetScene).sort()).toEqual(["Archipel", "Flotte", "Lighthouse", "Warehouse", "Watchtower"]);
+  it("deckt genau die sechs Regionen ab, alle von der Hauptkarte „harbor“", () => {
+    expect(REGION_WARPS.map((w) => w.id).sort()).toEqual(["archipel", "flotte", "lighthouse", "warehouse", "watchtower", "werft"]);
+    expect(REGION_WARPS.map((w) => w.targetScene).sort()).toEqual(["Archipel", "Flotte", "Lighthouse", "Warehouse", "Watchtower", "Werft"]);
     for (const w of REGION_WARPS) expect(w.fromMap).toBe("harbor");
   });
 
@@ -79,8 +79,8 @@ describe("REGION_WARPS – die Daten-Liste der Region-Übergänge (#426)", () =>
 });
 
 describe("regionWarpsFromMap – Übergänge je Hauptkarte", () => {
-  it("liefert für „harbor“ alle fünf, für eine andere Karte keine", () => {
-    expect(regionWarpsFromMap("harbor")).toHaveLength(5);
+  it("liefert für „harbor“ alle sechs, für eine andere Karte keine", () => {
+    expect(regionWarpsFromMap("harbor")).toHaveLength(6);
     expect(regionWarpsFromMap("test-map")).toHaveLength(0);
   });
 });
