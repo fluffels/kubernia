@@ -33,6 +33,7 @@ export const LOC_BUDGET = 800
  *  Fällt die Datei unter Budget (Split erledigt), meldet der Wächter den Eintrag als
  *  stale und schlägt fehl – das erinnert daran, die Ausnahme wieder zu entfernen. */
 export const ALLOWLIST = [
+  { file: 'src/content/drills.ts', reason: 'Capstone-Werft-Drills (#169) übers Budget; Split verfolgt in #457' },
 ]
 
 /** Zählt physische Zeilen (wie `wc -l`; ein abschließender Zeilenumbruch zählt nicht doppelt). */
