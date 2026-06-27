@@ -198,5 +198,70 @@
     ],
     "correct": 0,
     "explain": "Der HPA skaliert HORIZONTAL: er erhöht/senkt die Replica-Zahl anhand gemessener Auslastung (braucht dafür requests als Bezugsgröße). Das ist die Automatik hinter dem manuellen 'kubectl scale'. Vertikal (das Limit eines Pods anpassen) macht stattdessen der VPA – nicht zu verwechseln."
+  },
+  {
+    "id": "q-job-vs-deployment",
+    "chapter": "storage-backup-restore",
+    "q": "Was ist der Unterschied zwischen einem <b>Job</b> und einem <b>Deployment</b>?",
+    "options": [
+      "Ein Job läuft eine Aufgabe einmal bis zum Erfolg und endet dann; ein Deployment ist ein Dauerdienst, der nie enden soll und tote Pods immer ersetzt.",
+      "Job und Deployment sind dasselbe – nur in verschiedenen Kubernetes-Versionen.",
+      "Ein Job läuft dauerhaft, ein Deployment nur ein einziges Mal.",
+      "Ein Job ist nur für Datenbanken da, ein Deployment nur für Webserver."
+    ],
+    "correct": 0,
+    "explain": "Faustregel: hat die Sache ein <b>Ende</b>? Eine Migration, ein einmaliger Import, ein Datenexport – das ist ein <b>Job</b>: er läuft bis fertig und hört dann auf. Ein Webshop oder eine API soll dagegen <b>nie</b> enden – das ist ein <b>Deployment</b> (Dauerauftrag „halte immer N Kopien am Laufen“). Ein Deployment würde einen „fertigen“ Pod als Absturz werten und ewig neu starten – falsches Werkzeug für eine Aufgabe mit Ende."
+  },
+  {
+    "id": "q-cronjob-schedule",
+    "chapter": "storage-backup-restore",
+    "q": "Was ist ein <b>CronJob</b>?",
+    "options": [
+      "Ein Job, der nach einem Zeitplan (cron-Syntax) automatisch startet – z.B. jede Nacht ein Backup.",
+      "Ein Job, der besonders schnell läuft.",
+      "Ein Deployment, das sich nachts selbst abschaltet.",
+      "Ein Backup-Format von Kubernetes."
+    ],
+    "correct": 0,
+    "explain": "Ein CronJob ist die geplante Wiederholung eines Jobs: Kubernetes legt nach dem Zeitplan immer wieder einen frischen Job an. Der klassische Fall ist das nächtliche Backup – genau der wiederkehrende Wartungslauf, den niemand von Hand anstoßen will. Name wie beim Unix-<code>cron</code>: Zeitplan rein, Aufgabe läuft von selbst."
+  },
+  {
+    "id": "q-job-cronjob-deployment",
+    "chapter": "storage-backup-restore",
+    "q": "Du hast drei Aufgaben: (a) eine Datenbank-Migration <b>einmal</b> ausführen, (b) <b>jede Nacht</b> ein Backup ziehen, (c) einen Webshop <b>dauerhaft</b> erreichbar halten. Welche Workload-Typen passen?",
+    "options": [
+      "(a) Job, (b) CronJob, (c) Deployment – Aufgabe mit Ende, geplante Aufgabe, Dauerdienst.",
+      "Für alle drei ein Deployment – das kann ohnehin alles.",
+      "(a) CronJob, (b) Job, (c) Deployment.",
+      "(a) Deployment, (b) Deployment, (c) Job."
+    ],
+    "correct": 0,
+    "explain": "Drei Bedürfnisse, drei Typen: <b>einmal bis fertig</b> → Job, <b>nach Zeitplan wiederkehrend</b> → CronJob, <b>nie enden</b> → Deployment. Das richtige Werkzeug zu wählen ist der ganze Trick – ein Deployment für eine einmalige Migration würde sie endlos neu starten."
+  },
+  {
+    "id": "q-cronjob-trigger",
+    "chapter": "storage-backup-restore",
+    "q": "Vor einem riskanten Deploy willst du das nächtliche Backup <b>sofort</b> laufen lassen, ohne auf den Zeitplan zu warten. Wie?",
+    "options": [
+      "Den CronJob manuell als Job auslösen: <code>kubectl create job --from=cronjob/&lt;name&gt; &lt;jobname&gt;</code>.",
+      "Den CronJob löschen und neu anlegen – dann läuft er einmal.",
+      "Die Systemuhr des Clusters auf die Backup-Zeit stellen.",
+      "Gar nicht – ein CronJob läuft ausschließlich nach Zeitplan."
+    ],
+    "correct": 0,
+    "explain": "<code>kubectl create job --from=cronjob/&lt;name&gt; &lt;jobname&gt;</code> erzeugt aus der Vorlage des CronJobs sofort einen einmaligen Job – dieselbe Aufgabe, nur jetzt statt zur geplanten Zeit. Genau richtig, um vor einem Deploy noch schnell ein frisches Backup zu ziehen, ohne den Zeitplan anzufassen."
+  },
+  {
+    "id": "q-cron-syntax",
+    "chapter": "storage-backup-restore",
+    "q": "Im CronJob steht <code>schedule: \"0 3 * * *\"</code>. Wann läuft er?",
+    "options": [
+      "Jede Nacht um 3:00 Uhr.",
+      "Alle 3 Minuten.",
+      "Am 3. Tag jedes Monats um Mitternacht.",
+      "Nur ein einziges Mal, am 3. Januar."
+    ],
+    "correct": 0,
+    "explain": "Die fünf Felder sind <b>Minute Stunde Tag Monat Wochentag</b>; <code>*</code> heißt „jeder Wert“. <code>0 3 * * *</code> = Minute 0, Stunde 3, an jedem Tag/Monat/Wochentag → täglich um 3:00 Uhr. Backups legt man bewusst in die ruhigen Nachtstunden, wenn wenig los ist."
   }
 ]
