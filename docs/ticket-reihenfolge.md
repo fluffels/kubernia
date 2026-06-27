@@ -49,11 +49,10 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 | 2 | **#449** | niedrig | Quest: Docker Registry / Docker Hub — woher Images kommen | Baut auf #448 (man kennt die Images, jetzt deren Herkunft). |
 | 3 | **#450** | niedrig | Quest/Inhalt: RabbitMQ als Message Broker (`docker pull rabbitmq`) | Konkreter Image-/Broker-Anwendungsfall nach #448/#449. |
 | | **— Content: K8s-/Plattform-Konzepte vertiefen (lose Reihenfolge) —** | | | Eigenständige Vertiefungs-Quests; keine harte Abhängigkeit untereinander, hier nur als kuratierter Lernpfad gebündelt. |
-| 4 | **#275** | niedrig | Secrets erzeugen (generic/TLS/Pull-Secrets, Hashing) | Sicherheits-Grundlage — **derzeit in Arbeit** (Worktree). |
-| 5 | **#272** | niedrig | kubectl Context & Multi-Cluster (dev ↔ prod) | **Frei** — QoL fürs CLI-Verständnis. |
+| 4 | **#272** | niedrig | kubectl Context & Multi-Cluster (dev ↔ prod) | **Frei** — QoL fürs CLI-Verständnis (#266/#268/#273/#274/#275 erledigt). |
 | | **— Sonderfälle ans Ende —** | | | |
-| 6 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 7 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 5 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 6 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
