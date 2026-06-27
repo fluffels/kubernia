@@ -25,6 +25,8 @@ const devcontainer = JSON.parse(read(".devcontainer/devcontainer.json")) as {
   postCreateCommand: string;
 };
 const compose = read("docker-compose.yml");
+const devpanelDockerfile = read("Dockerfile.devpanel");
+const devpanelEntrypoint = read("docker/devpanel-entrypoint.sh");
 
 // Die erwartete Major-Version ist die in .nvmrc (SSOT, so liest auch scripts/setup.mjs).
 const nodeMajor = parseInt(nvmrc, 10);
@@ -88,6 +90,62 @@ describe("Dev-Umgebung: Node-Version & Port halten zusammen (#388)", () => {
       devcontainer.postCreateCommand,
       /npm (install|ci)/,
       "devcontainer.json postCreateCommand sollte die Abhängigkeiten installieren.",
+    );
+  });
+
+  // #334: Dockerfile.devpanel ist eine VIERTE Stelle, die die Node-Version nennt –
+  // dieselbe Drift-Falle wie oben. Hier mit an .nvmrc koppeln.
+  test("Dockerfile.devpanel pinnt dieselbe Node-Major wie .nvmrc (#334)", () => {
+    assert.ok(
+      devpanelDockerfile.includes(`node:${nodeMajor}`),
+      `Dockerfile.devpanel referenziert kein 'node:${nodeMajor}'-Image. ` +
+        `Bei einem Node-Upgrade auch hier (zusätzlich zu .nvmrc, devcontainer, compose) nachziehen.`,
+    );
+  });
+});
+
+describe("Dev-Panel-Docker: Laufzeit-Passwort statt Build-Zeit (#334)", () => {
+  test("baut den Dev-Panel-Build und serviert ihn schlank per nginx", () => {
+    assert.match(devpanelDockerfile, /npm run build:devpanel/, "Dockerfile.devpanel muss das Dev-Panel-Bundle bauen.");
+    assert.match(devpanelDockerfile, /FROM nginx:.*alpine/, "Dockerfile.devpanel sollte schlank über nginx-alpine ausliefern.");
+  });
+
+  test("verdrahtet den Entrypoint über den nginx-Startup-Hook", () => {
+    assert.match(
+      devpanelDockerfile,
+      /docker\/devpanel-entrypoint\.sh \/docker-entrypoint\.d\//,
+      "Der Entrypoint muss nach /docker-entrypoint.d/ kopiert werden (nginx führt ihn beim Start aus).",
+    );
+  });
+
+  test("bäckt KEIN Passwort ins Image (Secret bleibt Laufzeit-only)", () => {
+    // Im Dockerfile darf VITE_KQ_DEVPANEL_PW weder per ENV noch per ARG gesetzt
+    // werden – sonst läge das Secret im Image-Layer.
+    assert.doesNotMatch(
+      devpanelDockerfile,
+      /^\s*(ENV|ARG)\s+VITE_KQ_DEVPANEL_PW/m,
+      "Dockerfile.devpanel darf VITE_KQ_DEVPANEL_PW nicht ins Image backen – das Passwort kommt zur Laufzeit.",
+    );
+  });
+
+  test("Entrypoint injiziert das Passwort base64-kodiert als window.__KQ_CONFIG__ vor dem Bundle", () => {
+    assert.match(devpanelEntrypoint, /VITE_KQ_DEVPANEL_PW/, "Entrypoint muss die Laufzeit-Env-Var lesen.");
+    assert.match(devpanelEntrypoint, /base64/, "Entrypoint muss das Passwort base64-kodieren (escaping-sicher).");
+    assert.match(devpanelEntrypoint, /__KQ_CONFIG__/, "Entrypoint muss window.__KQ_CONFIG__ setzen.");
+    // Direkt hinter <head> einfügen → läuft vor dem im Body gebündelten Spielcode.
+    assert.match(devpanelEntrypoint, /<head>/, "Entrypoint muss die Config hinter <head> einfügen (vor dem Bundle).");
+  });
+
+  test("Entrypoint bleibt gesperrt, wenn kein Passwort gesetzt ist, und ist idempotent", () => {
+    assert.match(
+      devpanelEntrypoint,
+      /-z "\$PW"|-z "\$\{?VITE_KQ_DEVPANEL_PW/,
+      "Entrypoint muss den leeren-Passwort-Fall behandeln (Panel bleibt gesperrt).",
+    );
+    assert.match(
+      devpanelEntrypoint,
+      /grep -q "__KQ_CONFIG__"/,
+      "Entrypoint muss idempotent sein (bei vorhandener Config nicht erneut injizieren).",
     );
   });
 });
