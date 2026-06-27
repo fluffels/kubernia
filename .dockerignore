@@ -1,0 +1,14 @@
+# Schlanker Build-Context für Dockerfile.devpanel (#334).
+# node_modules wird im Image per `npm ci` frisch installiert; Build-Artefakte und
+# VCS/Worktrees gehören nicht in den Context.
+node_modules
+dist
+dist-offline
+dist-devpanel
+.git
+.claude
+test-results
+playwright-report
+*.log
+# Niemals ein lokales Secret in den Build-Context ziehen.
+.env

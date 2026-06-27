@@ -37,6 +37,17 @@ Wer **kein Node lokal installieren** will (oder eine garantiert reproduzierbare 
 
 > Beides ist reine Entwicklungs-Tooling. Node-Version (Node 22, aus [`.nvmrc`](.nvmrc)) und Dev-Port bleiben über einen Test ([`test/devcontainer.test.ts`](test/devcontainer.test.ts)) mit Container-Konfig und CI konsistent.
 
+### Dev-Panel als Docker-Image (Passwort zur Laufzeit, #334)
+
+Das passwortgegatete Dev-/Test-Panel (#325) gibt es zusätzlich als schlankes Serve-Image, in das das Passwort erst **beim Containerstart** injiziert wird – ein Image, viele Passwörter, kein Rebuild:
+
+```bash
+docker build -f Dockerfile.devpanel -t kubequest-devpanel .
+docker run --rm -p 8080:80 -e VITE_KQ_DEVPANEL_PW=meinGeheimes kubequest-devpanel
+```
+
+Vollständige Erklärung (Runtime-Config-Hook, Sicherheitshinweise): [`docs/devpanel-docker.md`](docs/devpanel-docker.md). Das Passwort steckt **nie** im Image – nur in der Laufzeit-Env-Var. Reiner Distributionsweg fürs Dev-Panel, kein Spiel-Betrieb (ADR 0002).
+
 ## Die wichtigsten Befehle
 
 | Zweck | Befehl |
