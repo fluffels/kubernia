@@ -1,0 +1,54 @@
+[
+  {
+    "id": "q-ctx-current",
+    "chapter": "k8s-node-capacity",
+    "q": "Du arbeitest mit mehreren Clustern (z.B. <code>dev</code> und <code>prod</code>). Wie findest du heraus, auf WELCHEN dein kubectl gerade zeigt?",
+    "options": [
+      "<code>kubectl config current-context</code> zeigt den aktiven Context; <code>kubectl config get-contexts</code> listet alle verfügbaren auf (der aktive ist mit <code>*</code> markiert).",
+      "<code>kubectl get clusters</code> – das listet alle Cluster im Netzwerk auf.",
+      "Gar nicht – kubectl spricht immer mit demselben, einzigen Cluster.",
+      "<code>kubectl describe node</code> verrät den Cluster-Namen."
+    ],
+    "correct": 0,
+    "explain": "Ein <b>Context</b> bündelt drei Dinge unter einem Namen in der <code>kubeconfig</code>: <b>Cluster + User + Namespace</b>. <code>current-context</code> beantwortet „auf welchen Hafen ist mein Funkgerät gerade eingestellt?“, <code>get-contexts</code> zeigt alle Häfen, zwischen denen du wechseln kannst. Beide ändern nichts – sie zeigen nur an."
+  },
+  {
+    "id": "q-ctx-use",
+    "chapter": "k8s-node-capacity",
+    "q": "Du willst von <code>dev-cluster</code> auf <code>prod-cluster</code> umschalten. Welcher Befehl?",
+    "options": [
+      "<code>kubectl config use-context prod-cluster</code> – ab jetzt geht JEDER kubectl-Befehl an prod, bis du zurückschaltest.",
+      "<code>kubectl switch prod-cluster</code>",
+      "<code>kubectl connect prod-cluster</code>",
+      "Du musst kubectl mit anderen Optionen neu installieren."
+    ],
+    "correct": 0,
+    "explain": "<code>use-context</code> stellt das Funkgerät auf einen anderen Hafen um. Die Umstellung <b>bleibt bestehen</b>: jeder folgende Befehl trifft prod, auch in der nächsten Terminal-Zeile – genau deshalb ist sie so leicht zu vergessen."
+  },
+  {
+    "id": "q-ctx-danger",
+    "chapter": "k8s-node-capacity",
+    "q": "Warum ist der aktive Context so wichtig – worin liegt die Gefahr?",
+    "options": [
+      "Derselbe Befehl (z.B. <code>kubectl delete deployment kasse</code>) trifft je nach Context einen anderen Cluster – auf prod statt dev ist das ein echter Ausfall.",
+      "Der Context ändert nur die Farbe des Terminals.",
+      "Ein falscher Context macht kubectl langsamer.",
+      "Der Context bestimmt nur, in welcher Sprache die Ausgabe erscheint."
+    ],
+    "correct": 0,
+    "explain": "kubectl sagt nicht von selbst, welcher Cluster gemeint ist – dieselbe Zeile löscht oder skaliert auf dem Cluster, auf den der Context gerade zeigt. dev kaputt machen ist ärgerlich, prod kaputt machen ist ein Vorfall. Darum: vor heiklen Befehlen den <code>current-context</code> prüfen."
+  },
+  {
+    "id": "q-ctx-devprod",
+    "chapter": "k8s-node-capacity",
+    "q": "Du wolltest in <code>dev</code> ein Deployment löschen und neu aufsetzen – stellst aber fest: <code>kubectl config current-context</code> zeigt <code>prod-cluster</code>. Was ist die gute Gewohnheit?",
+    "options": [
+      "Erst zurück auf dev schalten (<code>kubectl config use-context dev-cluster</code>) und vor jedem schreibenden/löschenden Befehl IMMER den current-context prüfen.",
+      "Egal – auf prod löschen geht genauso schnell.",
+      "Den prod-Cluster löschen, damit der falsche Context weg ist.",
+      "kubectl deinstallieren und von vorn anfangen."
+    ],
+    "correct": 0,
+    "explain": "Der Klassiker „bin ich grad auf prod?!“. Die Profi-Gewohnheit: vor jedem schreibenden Befehl kurz <code>current-context</code> lesen – viele blenden ihn dauerhaft im Prompt ein (z.B. via <code>kube-ps1</code>). Lieber zwei Sekunden prüfen als einen Prod-Ausfall erklären."
+  }
+]
