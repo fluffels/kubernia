@@ -1,0 +1,54 @@
+[
+  {
+    "id": "q-platform-crd",
+    "chapter": "gitops-drift-detection",
+    "q": "Was ist eine <b>CustomResourceDefinition</b> (CRD)?",
+    "options": [
+      "Sie erweitert Kubernetes um einen <b>eigenen Ressourcen-Typ</b> – danach funktioniert <code>kubectl get &lt;eigene-ressource&gt;</code> genau wie <code>kubectl get pods</code>.",
+      "Eine besonders große Pod-Definition mit vielen Containern.",
+      "Eine automatische Sicherungskopie aller Ressourcen im Cluster.",
+      "Ein Pflicht-Feld, das jedes Deployment haben muss."
+    ],
+    "correct": 0,
+    "explain": "Eine CRD meldet Kubernetes einen neuen, selbst erdachten Ressourcen-Typ an (z.B. <code>Certificate</code> oder <code>DNSRecord</code>). Ab dann ist er ein Bürger erster Klasse: <code>kubectl get</code>, <code>describe</code>, RBAC – alles greift wie bei eingebauten Typen. Im echten Cluster stecken davon Dutzende (cert-manager, external-dns …). Im Hafen: ein neues, eigenes Frachtpapier-Formular, das der ganze Hafen ab sofort kennt und bearbeitet."
+  },
+  {
+    "id": "q-platform-operator",
+    "chapter": "gitops-drift-detection",
+    "q": "Eine CRD definiert nur den neuen Typ. <b>Wer</b> sorgt dafür, dass solche Wunsch-Objekte auch real umgesetzt werden?",
+    "options": [
+      "Ein <b>Operator</b>: ein Programm im Cluster, das die Objekte beobachtet und den deklarierten Soll-Zustand laufend herstellt.",
+      "Niemand – eine CRD wirkt von ganz allein, sobald sie angelegt ist.",
+      "Du musst jedes Objekt von Hand per <code>kubectl apply</code> aktuell halten.",
+      "Der Ingress-Controller übernimmt das automatisch für jede CRD."
+    ],
+    "correct": 0,
+    "explain": "Eine CRD ist nur das Formular – sie tut nichts von selbst. Der <b>Operator</b> ist das laufende Programm, das die Objekte dieses Typs beobachtet und den Soll-Zustand herstellt (Zertifikat ausstellen, DNS-Eintrag setzen, Logging-Stack aufbauen). Im Hafen: ein <b>spezialisierter Hafenarbeiter</b>, der ein Aufgabengebiet selbstständig in Ordnung hält – du sagst nur, WAS sein soll, er kümmert sich ums WIE."
+  },
+  {
+    "id": "q-platform-reconcile",
+    "chapter": "gitops-drift-detection",
+    "q": "Wie hält ein Operator den Wunsch-Zustand aufrecht – und woran erinnert dich das?",
+    "options": [
+      "Per <b>Reconcile-Loop</b>: er vergleicht Ist und Soll immer wieder und gleicht Abweichungen aus – genau das <b>Self-Heal-Prinzip</b> von Argo CD, nur für eine Spezialaufgabe.",
+      "Er prüft genau einmal beim Anlegen und danach nie wieder.",
+      "Er wartet, bis ein Mensch die Abweichung von Hand nachsteuert.",
+      "Er schreibt den Ist-Zustand zurück ins Wunsch-Objekt, bis beide gleich aussehen."
+    ],
+    "correct": 0,
+    "explain": "Der Reconcile-Loop ist dieselbe Idee wie Argo CDs Self-Heal aus dem GitOps-Archipel: Ist mit Soll vergleichen, Drift erkennen, Soll wiederherstellen – endlos im Kreis. Argo macht das für ganze Anwendungen aus Git; ein Operator macht es für seine eine CRD-Aufgabe. Reconcile schreibt nie den Wunsch um (sonst gewänne der Drift), sondern zieht den Ist zum Soll."
+  },
+  {
+    "id": "q-platform-package",
+    "chapter": "gitops-drift-detection",
+    "q": "Du installierst <code>cert-manager</code> im Cluster. Was kommt typischerweise zusammen hinein?",
+    "options": [
+      "<b>CRDs</b> (neue Typen wie <code>Certificate</code>) <b>und</b> ein <b>Operator</b>, der diese Objekte bedient – Formular plus Sachbearbeiter.",
+      "Nur eine CRD – der Operator wird getrennt von Hand gestartet.",
+      "Nur ein gewöhnlicher Pod, ganz ohne neue Ressourcen-Typen.",
+      "Ein komplett eigener Cluster, nur für Zertifikate."
+    ],
+    "correct": 0,
+    "explain": "Solche Plattform-Bausteine liefern fast immer beides als Paket: die <b>CRDs</b> melden die neuen Typen an (das Formular), der <b>Operator</b> läuft als Pod und bedient sie (der Sachbearbeiter). Erst zusammen ergeben sie das Erlebnis ‚<code>kubectl apply</code> eines <code>Certificate</code> → Zertifikat ist da'. Genau so funktionieren cert-manager, external-dns oder der eck-operator im echten Cluster."
+  }
+]
