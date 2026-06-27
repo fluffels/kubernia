@@ -131,13 +131,13 @@
       "Sie verschlüsseln die gesamte Konfiguration automatisch."
     ],
     "correct": 0,
-    "explain": "Statt feste Werte mitten in die Ressourcen zu tippen, liest die Ressource var.<name>. Eine Stellschraube an einer Stelle – sauber und wiederverwendbar."
+    "explain": "Statt feste Werte mitten in die Ressourcen zu tippen, liest die Ressource var.&lt;name&gt;. Eine Stellschraube an einer Stelle – sauber und wiederverwendbar."
   },
   {
     "id": "q-flotte-variablen-outputs-2",
     "q": "Was bewirkt sensitive = true bei einem Terraform-Output?",
     "options": [
-      "Terraform verbirgt den Wert in der Ausgabe (Übersicht zeigt <sensitive> statt Klartext), damit Geheimnisse nicht versehentlich in Logs landen.",
+      "Terraform verbirgt den Wert in der Ausgabe (Übersicht zeigt &lt;sensitive&gt; statt Klartext), damit Geheimnisse nicht versehentlich in Logs landen.",
       "Der Output wird verschlüsselt und kann danach nie wieder gelesen werden.",
       "Der Output wird automatisch zu einer Eingabe-Variable.",
       "Terraform überspringt den Output beim apply."

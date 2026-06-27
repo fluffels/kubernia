@@ -34,7 +34,7 @@
       "DB-Host ins Secret, das Passwort in die ConfigMap."
     ],
     "correct": 0,
-    "explain": "Faustregel: nicht-geheime Einstellungen (Hostnamen, Ports, Log-Level, Feature-Flags) → ConfigMap; alles Vertrauliche (Passwörter, Tokens, Schlüssel) → Secret. Beide bindet man gleich ein – z.B. per 'kubectl set env deployment/<name> --from=configmap/<n>' bzw. '--from=secret/<n>'. Eine Truhe nützt nichts, wenn die App nicht reinschaut."
+    "explain": "Faustregel: nicht-geheime Einstellungen (Hostnamen, Ports, Log-Level, Feature-Flags) → ConfigMap; alles Vertrauliche (Passwörter, Tokens, Schlüssel) → Secret. Beide bindet man gleich ein – z.B. per 'kubectl set env deployment/&lt;name&gt; --from=configmap/&lt;n&gt;' bzw. '--from=secret/&lt;n&gt;'. Eine Truhe nützt nichts, wenn die App nicht reinschaut."
   },
   {
     "id": "q-sec-types",

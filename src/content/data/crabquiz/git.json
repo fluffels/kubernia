@@ -57,7 +57,7 @@
       "Ein abgelehnter git push."
     ],
     "correct": 0,
-    "explain": "Kein Drama: Git legt beide Versionen mit Markern (<<<<<<< ======= >>>>>>>) nebeneinander und wartet auf deine Wahl – z.B. git checkout --ours/--theirs, dann add + commit."
+    "explain": "Kein Drama: Git legt beide Versionen mit Markern (&lt;&lt;&lt;&lt;&lt;&lt;&lt; ======= &gt;&gt;&gt;&gt;&gt;&gt;&gt;) nebeneinander und wartet auf deine Wahl – z.B. git checkout --ours/--theirs, dann add + commit."
   },
   {
     "id": "q-ci-1",
