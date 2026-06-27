@@ -430,5 +430,145 @@
         }
       }
     ]
+  },
+  {
+    "id": "helm-templates",
+    "title": "Hinter die Vorlagen schauen",
+    "giver": "runa",
+    "topic": "helm",
+    "requires": ["helm-umbrella-chart"],
+    "rewardXp": 55,
+    "rewardCoins": 40,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "runa",
+        "lines": [
+          "Du hast Charts <b>gebaut</b> – aber was steht eigentlich IN <code>templates/</code>? Genau da passiert die Magie. Ein Template ist eine YAML-Vorlage mit <b>Platzhaltern</b> in doppelten geschweiften Klammern: <code>{{ … }}</code>. Merksatz: <b>Vorlage + Werte → fertiges Manifest</b> (das nennt man <i>rendern</i>).",
+          "Der wichtigste Platzhalter ist <code>{{ .Values.replicaCount }}</code> – beim Rendern wird er aus <code>values.yaml</code> (oder einem <code>-f</code>-Override) gefüllt. Dazu kommen Kontext-Variablen wie <code>{{ .Release.Name }}</code> (Name DEINER Installation) und <code>{{ .Chart.Name }}</code> (Name des Charts). EINE Vorlage, viele Werte – das ist der ganze Trick.",
+          "Damit du dich nicht wiederholst, gibt es <code>_helpers.tpl</code>: dort <b>definierst</b> du wiederverwendbare Schnipsel (z.B. einheitliche Namen/Labels) und ziehst sie überall per <code>{{ include \"…\" . }}</code> ein – wie eine Funktion statt Copy-Paste. Und mit <code>if</code> rendert ein Block nur unter Bedingung, mit <code>range</code> schleifst du über eine Liste, mit <code>toYaml</code> bettest du einen ganzen Wertblock ein (berüchtigte Einrückungs-Falle!).",
+          "Genug Theorie – wir bauen ein frisches Chart und schauen rein. Den fertigen Stand zeigt dir <code>helm template</code>, OHNE etwas zu installieren."
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Frisches Chart zum Lesen",
+        "cmd": {
+          "id": "t-tmpl-create",
+          "intro": "Bau dir ein eigenes Chart <code>vorlage</code> – darin schauen wir uns die Templates an.",
+          "text": "Lege das Chart <code>vorlage</code> an: <code>helm create vorlage</code>.",
+          "accept": [
+            "^helm\\s+create\\s+vorlage$"
+          ],
+          "solution": "helm create vorlage",
+          "hint": "Muster: helm create <chart-name>"
+        }
+      },
+      {
+        "type": "teach",
+        "brief": "Die Vorlage lesen",
+        "cmd": {
+          "id": "t-tmpl-cat-deploy",
+          "intro": "Jetzt der Blick hinter die Kulissen: die Deployment-Vorlage mit allen Platzhaltern.",
+          "text": "Zeig die Vorlage an: <code>cat vorlage/templates/deployment.yaml</code>. Achte auf <code>{{ .Values… }}</code>, <code>include</code>, <code>if</code>/<code>range</code> und <code>toYaml</code>.",
+          "accept": [
+            "^cat\\s+vorlage\\/templates\\/deployment\\.yaml$"
+          ],
+          "solution": "cat vorlage/templates/deployment.yaml",
+          "hint": "Muster: cat <pfad/zur/datei>"
+        }
+      },
+      {
+        "type": "teach",
+        "brief": "Die Bausteine lesen",
+        "cmd": {
+          "id": "t-tmpl-cat-helpers",
+          "intro": "Die Schnipsel, die <code>include</code> einzieht, stehen in <code>_helpers.tpl</code> – einmal <code>define</code>, überall genutzt.",
+          "text": "Schau in die Bausteine: <code>cat vorlage/templates/_helpers.tpl</code>.",
+          "accept": [
+            "^cat\\s+vorlage\\/templates\\/_helpers\\.tpl$"
+          ],
+          "solution": "cat vorlage/templates/_helpers.tpl",
+          "hint": "Muster: cat <pfad/zur/datei>"
+        }
+      },
+      {
+        "type": "teach",
+        "brief": "Vorlage rendern",
+        "cmd": {
+          "id": "t-tmpl-render",
+          "intro": "🆕 Neuer Befehl: <code>helm template &lt;chart&gt;</code> – rendert die Vorlagen mit den Werten zu fertigen Manifesten und zeigt sie nur AN (nichts wird installiert). Perfekt zum Prüfen, was <code>install</code> ausrollen würde.",
+          "text": "Rendere dein Chart: <code>helm template vorlage</code>. Vergleiche mit der Vorlage – die <code>{{ … }}</code> sind jetzt eingesetzt, und der <code>if</code>-Block (env) ist weg, weil kein env gesetzt ist!",
+          "accept": [
+            "^helm\\s+template\\s+(\\.\\/)?vorlage$"
+          ],
+          "solution": "helm template vorlage",
+          "hint": "Muster: helm template <chart>"
+        }
+      },
+      {
+        "type": "drill",
+        "brief": "Runas Render-Übung",
+        "pool": [
+          "helm-template"
+        ],
+        "count": 1,
+        "intro": "Einmal selbst rendern – sehen, was rauskommt:"
+      },
+      {
+        "type": "choice",
+        "npc": "runa",
+        "reviewId": "q-helm-values",
+        "q": "Was macht <code>{{ .Values.replicaCount }}</code> in einer Vorlage?",
+        "options": [
+          {
+            "t": "Platzhalter – wird beim Rendern aus values.yaml (oder -f-Override) mit dem echten Wert gefüllt.",
+            "ok": true,
+            "reply": "Genau! Eine Vorlage, viele Werte – Test, Staging, Prod aus EINEM Chart."
+          },
+          {
+            "t": "Eine feste Zahl, die man nur direkt in der Vorlage ändern kann.",
+            "ok": false,
+            "reply": "Nein – gerade NICHT fest: der Wert kommt aus values.yaml, die Vorlage bleibt unangetastet."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "runa",
+        "reviewId": "q-helm-helpers",
+        "q": "Wozu dienen <code>_helpers.tpl</code> und <code>include</code>?",
+        "options": [
+          {
+            "t": "Wiederverwendbare Schnipsel: einmal mit define angelegt, überall per include eingezogen – statt Copy-Paste.",
+            "ok": true,
+            "reply": "Sitzt! Einheitliche Namen/Labels an einer Stelle pflegen – wie eine Funktion."
+          },
+          {
+            "t": "Sie installieren das Chart schneller.",
+            "ok": false,
+            "reply": "Nein – mit Tempo hat das nichts zu tun. Es geht um Wiederverwendung statt Copy-Paste."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "runa",
+        "reviewId": "q-helm-template-vs-install",
+        "q": "Unterschied zwischen <code>helm template</code> und <code>helm install</code>?",
+        "options": [
+          {
+            "t": "template rendert nur lokal und zeigt die Manifeste an; install rendert UND rollt sie in den Cluster aus.",
+            "ok": true,
+            "reply": "Perfekt! template = Vorschau ohne Cluster, install = wirklich ausrollen. Ab zu Kralle – sie drillt dich auf die Vorlagen-Logik! ⎈"
+          },
+          {
+            "t": "Kein Unterschied – beide installieren das Chart.",
+            "ok": false,
+            "reply": "Doch: template fasst den Cluster NICHT an, es zeigt nur, was install ausrollen würde."
+          }
+        ]
+      }
+    ]
   }
 ]

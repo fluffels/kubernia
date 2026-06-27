@@ -201,5 +201,80 @@
     ],
     "correct": 0,
     "explain": "Mehrere -f werden von links nach rechts übereinandergelegt, das letzte gewinnt. So hält man eine base.yaml mit gemeinsamen Werten und überlagert sie pro Umgebung/Region (values/non-prod, values/prod) – gleiches Chart, andere Werte je Kunde."
+  },
+  {
+    "id": "q-helm-values",
+    "q": "Was macht der Platzhalter <code>{{ .Values.replicaCount }}</code> in einer Helm-Vorlage?",
+    "options": [
+      "Er wird beim Rendern aus values.yaml (oder einem -f-Override) mit dem echten Wert gefüllt.",
+      "Er ist eine feste Zahl, die man nur direkt in der Vorlage ändern kann.",
+      "Er zählt, wie oft das Chart installiert wurde.",
+      "Er verweist auf die Helm-Version."
+    ],
+    "correct": 0,
+    "explain": "<code>.Values.xyz</code> greift auf die Werte aus <code>values.yaml</code> zu – beim Rendern (<code>helm template</code>/<code>install</code>) wird der Platzhalter ersetzt. Die Vorlage bleibt unverändert; nur die Werte unterscheiden sich je Umgebung. Daneben gibt's Kontext-Variablen wie <code>.Release.Name</code> und <code>.Chart.Name</code>."
+  },
+  {
+    "id": "q-helm-helpers",
+    "q": "Wozu dienen <code>_helpers.tpl</code> und <code>{{ include \"…\" . }}</code>?",
+    "options": [
+      "Wiederverwendbare Schnipsel: einmal mit define angelegt, überall per include eingezogen – statt Copy-Paste.",
+      "Sie installieren das Chart schneller.",
+      "Sie verschlüsseln die values.yaml.",
+      "Sie laden Subcharts aus einer Registry."
+    ],
+    "correct": 0,
+    "explain": "In <code>_helpers.tpl</code> <code>define</code>-iert man benannte Schnipsel (z.B. einheitliche Namen/Labels) und zieht sie per <code>include</code> in jede Vorlage ein – wie eine Funktion. Eine Änderung an einer Stelle wirkt überall, kein Copy-Paste."
+  },
+  {
+    "id": "q-helm-template-vs-install",
+    "q": "Was ist der Unterschied zwischen <code>helm template</code> und <code>helm install</code>?",
+    "options": [
+      "template rendert nur lokal und zeigt die Manifeste an; install rendert UND rollt sie in den Cluster aus.",
+      "Kein Unterschied – beide installieren das Chart.",
+      "template ist die alte, install die neue Schreibweise.",
+      "template installiert ohne Werte, install mit Werten."
+    ],
+    "correct": 0,
+    "explain": "<code>helm template</code> fasst den Cluster NICHT an: es rendert Vorlagen + Werte zu Manifesten und gibt sie nur aus – ideal zum Prüfen, was <code>install</code> ausrollen würde. <code>helm install</code> macht dasselbe Rendern und schickt das Ergebnis dann wirklich an den Cluster."
+  },
+  {
+    "id": "q-helm-render-model",
+    "chapter": "helm-templates",
+    "q": "Welches mentale Modell beschreibt Helm-Rendering richtig?",
+    "options": [
+      "Vorlage (templates/) + Werte (values.yaml) → fertiges Manifest.",
+      "Manifest + Cluster → Vorlage.",
+      "values.yaml + Cluster → neues Chart.",
+      "Chart + Release → Docker-Image."
+    ],
+    "correct": 0,
+    "explain": "Rendern heißt: Helm setzt in die Vorlagen aus <code>templates/</code> die Werte aus <code>values.yaml</code> ein und erzeugt daraus die fertigen Kubernetes-Manifeste. <code>helm template</code> zeigt genau dieses Ergebnis, ohne zu installieren."
+  },
+  {
+    "id": "q-helm-if-range",
+    "chapter": "helm-templates",
+    "q": "Wofür stehen <code>if</code> und <code>range</code> in einer Helm-Vorlage?",
+    "options": [
+      "if rendert einen Block nur unter einer Bedingung; range schleift über eine Liste.",
+      "if prüft die Helm-Version; range begrenzt die Replicas.",
+      "Beide sind Kommentare und werden ignoriert.",
+      "if löscht Ressourcen; range legt sie an."
+    ],
+    "correct": 0,
+    "explain": "Mit <code>{{ if .Values.env }}…{{ end }}</code> erscheint ein Block nur, wenn der Wert gesetzt ist (sonst fehlt er im Manifest – genau das siehst du bei <code>helm template</code>). Mit <code>{{ range .Values.env }}…{{ end }}</code> wiederholst du einen Block für jeden Listeneintrag."
+  },
+  {
+    "id": "q-helm-toyaml",
+    "chapter": "helm-templates",
+    "q": "Wofür benutzt man <code>{{ toYaml .Values.resources | nindent 12 }}</code>?",
+    "options": [
+      "Um einen ganzen Wertblock als YAML einzubetten – nindent sorgt für die korrekte Einrückung.",
+      "Um YAML in JSON umzuwandeln.",
+      "Um die values.yaml zu validieren.",
+      "Um ein Subchart nachzuladen."
+    ],
+    "correct": 0,
+    "explain": "<code>toYaml</code> serialisiert einen kompletten Wert (z.B. den ganzen <code>resources</code>-Block) zu YAML, statt jedes Feld einzeln zu schreiben. Da die Einrückung im Manifest stimmen muss, kommt fast immer <code>nindent &lt;n&gt;</code> dazu – die berüchtigte Helm-Einrückungs-Falle."
   }
 ]
