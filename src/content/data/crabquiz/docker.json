@@ -124,5 +124,43 @@
     ],
     "correct": 0,
     "explain": "BusyBox bündelt viele Mini-Werkzeuge in einer einzigen, federleichten Box – man startet sie gern für schnelle Tests und zum Reinschauen (docker run busybox). Der run-Befehl bleibt derselbe, nur der Bauplan-Name wechselt."
+  },
+  {
+    "id": "q-reg-1",
+    "q": "Du tippst <code>docker pull nginx</code> – woher kommt das Image, und welche Version?",
+    "options": [
+      "Von Docker Hub (der öffentlichen Standard-Registry) – und der Tag :latest, weil keiner angegeben ist.",
+      "Von deiner Festplatte – Docker baut das Image lokal neu zusammen.",
+      "Von einer zufälligen Registry, die Docker jedes Mal neu auswählt.",
+      "Gar nicht – ohne Versionsnummer lehnt Docker den Pull ab."
+    ],
+    "correct": 0,
+    "explain": "Ohne Registry-Präfix fragt docker pull still Docker Hub, die öffentliche Standard-Registry; ohne Tag nimmt es :latest. docker pull nginx ist die Kurzform für docker.io/library/nginx:latest."
+  },
+  {
+    "id": "q-reg-2",
+    "chapter": "docker-registry",
+    "q": "Was bedeutet der Tag <code>:latest</code> in einem Image-Namen?",
+    "options": [
+      "Nur ein Konventions-Name (Default-Tag) – NICHT automatisch die neueste Version.",
+      "Garantiert immer die allerneueste verfügbare Version.",
+      "Dass das Image nur lokal und nicht in einer Registry liegt.",
+      "Dass das Image öffentlich und für jeden frei nutzbar ist."
+    ],
+    "correct": 0,
+    "explain": ":latest ist nur der Default-Tag, ein Zeiger auf das, was zuletzt so getaggt wurde – nicht zwingend die neueste Version. Für reproduzierbare Deployments nagelt man besser eine feste Version fest, z.B. nginx:1.27."
+  },
+  {
+    "id": "q-reg-3",
+    "chapter": "docker-registry",
+    "q": "Warum betreiben Firmen oft eine eigene, private Registry (z.B. ghcr.io oder Harbor)?",
+    "options": [
+      "Für eigene, nicht-öffentliche Images, mehr Kontrolle und kurze Wege.",
+      "Weil Docker Hub keine Images speichern kann.",
+      "Weil private Registries Container schneller laufen lassen.",
+      "Weil man ohne eigene Registry kein docker build ausführen darf."
+    ],
+    "correct": 0,
+    "explain": "Eine Registry ist ein zentrales Image-Lager. Docker Hub ist öffentlich; eine private Registry hält die eigenen, nicht-öffentlichen Images unter eigener Kontrolle und nah am Cluster. Die Adresse schreibt man dann vorne mit dran: ghcr.io/team/app:tag."
   }
 ]

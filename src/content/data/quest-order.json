@@ -5,6 +5,7 @@
   "docker-stack-minigame",
   "docker-run-options",
   "docker-build-image",
+  "docker-registry",
   "k8s-first-deployment",
   "k8s-inspect-pods",
   "k8s-service",

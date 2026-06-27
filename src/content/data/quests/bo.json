@@ -439,7 +439,99 @@
         "type": "dialog",
         "npc": "bo",
         "lines": [
-          "Jetzt bist du <b>echter</b> Kisten-Profi: holen, bauen, etikettieren. <i>*Golem-Applaus*</i> Später baut eine <b>Pipeline</b> deine Images ganz von allein – aber das zeigt dir Ada. Erst will Ole dich sprechen: der GROSSE Umbau wartet! Und wenn du üben willst: <b>Kralle</b> gibt dir Wiederholungen – damit setzt sich das Gelernte fest."
+          "Jetzt bist du <b>echter</b> Kisten-Profi: holen, bauen, etikettieren. <i>*Golem-Applaus*</i> Eine letzte Docker-Sache liegt Bo noch auf der Steinzunge: Du holst Baupläne aus der <b>Registry</b> – aber was IST dieses Lager eigentlich, und wie sagst du ihm, welche <b>Version</b> du willst? Bleib noch einen Moment bei Bo!"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "docker-registry",
+    "title": "Woher die Baupläne kommen",
+    "giver": "bo",
+    "topic": "docker",
+    "rewardXp": 35,
+    "rewardCoins": 25,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "bo",
+        "lines": [
+          "Du holst dir seit der ersten Lektion Baupläne mit <code>docker pull</code> – aber WOHER eigentlich? Bo lüftet das Geheimnis: aus einer <b>Registry</b>.",
+          "Eine <b>Registry</b> ist ein zentrales <b>Lager für Images</b> – wie ein <b>App-Store für Container-Baupläne</b>. Du sagst „gib mir nginx“, die Registry reicht dir den fertigen Bauplan. <code>docker pull nginx</code> fragt still die größte öffentliche Registry: <b>Docker Hub</b>. Du hast die ganze Zeit dort eingekauft, ohne es zu wissen.",
+          "Bisher hast du immer einfach <code>nginx</code> geschrieben – und damit irgendeine Fassung bekommen. Profis sind genauer: sie holen eine <b>bestimmte Version</b>. Die steht als <b>Tag</b> hinter dem Doppelpunkt: <code>nginx:1.27</code>. Probier's!"
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Bestimmte Version holen",
+        "cmd": {
+          "id": "t-pull-version",
+          "intro": "🆕 <code>docker pull &lt;image&gt;:&lt;tag&gt;</code> – holt eine <b>bestimmte Version</b> statt irgendeiner. Der Teil hinter dem <code>:</code> ist der <b>Versions-Tag</b>.",
+          "text": "Hol das Image <code>nginx</code> in der Version <code>1.27</code> – die Version kommt hinter den Doppelpunkt.",
+          "accept": [
+            "^docker\\s+pull\\s+nginx:1\\.27$"
+          ],
+          "solution": "docker pull nginx:1.27",
+          "hint": "Muster: docker pull <image>:<tag> – also nginx:1.27"
+        }
+      },
+      {
+        "type": "dialog",
+        "npc": "bo",
+        "lines": [
+          "Achtung, Falle: <code>nginx</code> OHNE Tag heißt in Wahrheit <code>nginx:latest</code> – und <b>latest ist NICHT automatisch „die neueste Version“</b>! Es ist nur ein <b>Konventions-Name</b>, ein Zeiger auf das, was zuletzt so getaggt wurde. In echt nagelst du oft eine <b>feste Version</b> fest, damit morgen genau dasselbe läuft wie heute. Bo nagelt immer fest. Bo ist Stein.",
+          "Und der <b>volle Name</b> eines Images hat drei Teile: <code>&lt;registry&gt;/&lt;repository&gt;:&lt;tag&gt;</code>. Dein <code>docker pull nginx</code> ist nur die <b>Kurzform</b> für <code>docker.io/library/nginx:latest</code> – Registry (Docker Hub) und Tag füllt Docker still auf.",
+          "Docker Hub ist <b>öffentlich</b> – jeder darf ziehen. Firmen betreiben oft eine <b>eigene, private</b> Registry (z.B. die <b>GitHub Container Registry</b> <code>ghcr.io</code> oder <b>Harbor</b>): für <b>eigene, nicht-öffentliche</b> Images, mehr Kontrolle und kurze Wege. Dann schreibst du die Registry-Adresse vorne mit dran. So zieht der Hafen sein eigenes <code>leuchtfeuer</code> in Version <code>2.1</code>:"
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Aus einer bestimmten Registry holen",
+        "cmd": {
+          "id": "t-pull-registry",
+          "intro": "🆕 <code>docker pull &lt;registry&gt;/&lt;repo&gt;:&lt;tag&gt;</code> – holt ein Image aus einer <b>bestimmten</b> Registry, statt still von Docker Hub. Ganz vorne steht die Registry-Adresse.",
+          "text": "Hol <code>leuchtfeuer:2.1</code> aus der Registry <code>ghcr.io</code>, Namespace <code>hafen</code> – zusammen also <code>ghcr.io/hafen/leuchtfeuer:2.1</code>.",
+          "accept": [
+            "^docker\\s+pull\\s+ghcr\\.io/hafen/leuchtfeuer:2\\.1$"
+          ],
+          "solution": "docker pull ghcr.io/hafen/leuchtfeuer:2.1",
+          "hint": "Muster: docker pull <registry>/<namespace>/<image>:<tag> – ghcr.io/hafen/leuchtfeuer:2.1"
+        }
+      },
+      {
+        "type": "drill",
+        "brief": "Bos Registry-Übung",
+        "pool": [
+          "docker-pull",
+          "docker-pull-version",
+          "docker-pull-registry"
+        ],
+        "count": 3,
+        "intro": "Holen, holen, holen – mal blank, mal mit fester Version, mal aus einer anderen Registry:"
+      },
+      {
+        "type": "choice",
+        "npc": "bo",
+        "reviewId": "q-reg-1",
+        "q": "Du tippst <code>docker pull nginx</code> – woher kommt das Image, und welche Version?",
+        "options": [
+          {
+            "t": "Von Docker Hub (der öffentlichen Standard-Registry) – und zwar der Tag :latest, weil keiner angegeben ist.",
+            "ok": true,
+            "reply": "GENAU. Keine Registry davor → Docker Hub. Kein Tag dahinter → :latest. Bo nickt steinern."
+          },
+          {
+            "t": "Von deiner Festplatte – Docker baut das Image lokal neu zusammen.",
+            "ok": false,
+            "reply": "NEIN. <code>pull</code> HOLT aus einer Registry, es baut nichts (das wäre <code>build</code>). Ohne Adresse fragt es Docker Hub."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "bo",
+        "lines": [
+          "Jetzt weißt du, WOHER die Kisten-Baupläne kommen: aus der Registry, per Tag in der gewünschten Version. <i>*zufriedenes Knirschen*</i> Später baut eine <b>Pipeline</b> deine Images ganz von allein und schiebt sie in so eine Registry – aber das zeigt dir Ada. Erst will Ole dich sprechen: der GROSSE Umbau wartet! Und wenn du üben willst: <b>Kralle</b> gibt dir Wiederholungen – damit setzt sich das Gelernte fest."
         ]
       }
     ]

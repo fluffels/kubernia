@@ -58,5 +58,25 @@
     ],
     "solution": "docker tag hafenwache:1.0 hafenwache:latest",
     "explain": "tag vergibt einen zweiten Namen fürs <b>gleiche</b> Image – kein neues Image, kein anderer Stand; <code>:latest</code> ist nur ein Konventions-Name, nicht automatisch die neueste Version. Reihenfolge ist Quelle → Ziel – wie beim Umetikettieren: erst die vorhandene Kiste (hafenwache:1.0), dann das neue Schild (hafenwache:latest)."
+  },
+  {
+    "id": "c-reg-1",
+    "chapter": "docker-registry",
+    "q": "Hol das Image <code>nginx</code> in einer bestimmten Version: Tag <code>1.27</code>.",
+    "accept": [
+      "^docker\\s+pull\\s+nginx:1\\.27$"
+    ],
+    "solution": "docker pull nginx:1.27",
+    "explain": "Der Teil hinter dem Doppelpunkt ist der <b>Versions-Tag</b>. Ohne Tag bekommst du <code>:latest</code> – nur ein Konventions-Name, NICHT automatisch die neueste Version. Eine feste Version festzunageln macht den Pull reproduzierbar: morgen läuft genau dasselbe wie heute."
+  },
+  {
+    "id": "c-reg-2",
+    "chapter": "docker-registry",
+    "q": "Hol <code>leuchtfeuer:2.1</code> aus der Registry <code>ghcr.io</code>, Namespace <code>hafen</code>.",
+    "accept": [
+      "^docker\\s+pull\\s+ghcr\\.io/hafen/leuchtfeuer:2\\.1$"
+    ],
+    "solution": "docker pull ghcr.io/hafen/leuchtfeuer:2.1",
+    "explain": "Der volle Image-Name ist <code>&lt;registry&gt;/&lt;repository&gt;:&lt;tag&gt;</code>. <code>docker pull nginx</code> ist die Kurzform für <code>docker.io/library/nginx:latest</code> – ohne Registry-Präfix fragt Docker still <b>Docker Hub</b>. Eigene/private Registries (ghcr.io, Harbor) schreibst du vorne mit dran."
   }
 ]

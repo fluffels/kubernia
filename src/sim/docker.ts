@@ -58,15 +58,26 @@ export function dockerCommand(sim: DockerHost, t: string[], _raw?: string): stri
     if (!img) return sim._err("docker pull: Welches Image denn?", "z.B. 'docker pull nginx'");
     const typo = checkImageTypo(sim, img);
     if (typo) return typo;
-    const full = img.includes(":") ? img : img + ":latest";
+    // Image-Name zerlegen: <registry>/<repository>:<tag>. Ohne Tag → :latest (mit dem
+    // bekannten "Using default tag: latest"-Hinweis). Ein Pfad mit "/" trägt eine
+    // explizite Registry/Namespace; Docker Hub stellt offiziellen Images intern nur
+    // "library/" voran. So spiegelt die Ausgabe die wirklich gezogene Version & Quelle
+    // wider (#449 – Registry/Tag-Quest), statt immer "latest" zu behaupten.
+    const hasTag = img.includes(":");
+    const repo = img.split(":")[0];
+    const tag = hasTag ? img.split(":")[1] : "latest";
+    const full = repo + ":" + tag;
+    const hasRegistry = repo.includes("/");
+    const fromRef = hasRegistry ? repo : "library/" + repo;
+    const canonical = hasRegistry ? full : "docker.io/library/" + full;
     if (!sim.docker.pulled.includes(full)) sim.docker.pulled.push(full);
     return [
-      "Using default tag: latest",
-      "latest: Pulling from library/" + img.split(":")[0],
+      ...(hasTag ? [] : ["Using default tag: latest"]),
+      tag + ": Pulling from " + fromRef,
       "a2abf6c4d29d: Pull complete",
       "f3409a9a9e73: Pull complete",
       "Status: Downloaded newer image for " + full,
-      "docker.io/library/" + full,
+      canonical,
     ].join("\n");
   }
 

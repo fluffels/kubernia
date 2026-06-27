@@ -27,6 +27,32 @@ test("docker: pull, run, ps, stop, ps -a", () => {
   assert.match(sim.exec("docker ps -a").output!, /Exited/);
 });
 
+test("docker pull: ohne Tag → :latest, mit dem 'default tag'-Hinweis (#449)", () => {
+  const out = sim.exec("docker pull nginx").output!;
+  assert.match(out, /Using default tag: latest/, "ohne Tag weist Docker auf den Default :latest hin");
+  assert.match(out, /latest: Pulling from library\/nginx/);
+  assert.match(out, /docker\.io\/library\/nginx:latest/, "kanonischer Name mit Hub-Präfix");
+  assert.ok(sim.docker.pulled.includes("nginx:latest"), "nginx:latest liegt lokal bereit");
+});
+
+test("docker pull: expliziter Versions-Tag wird wirklich gezogen – KEIN falsches 'latest' (#449)", () => {
+  const out = sim.exec("docker pull nginx:1.27").output!;
+  assert.doesNotMatch(out, /Using default tag/, "bei explizitem Tag KEIN default-tag-Hinweis");
+  assert.doesNotMatch(out, /\blatest\b/, "die Ausgabe behauptet nicht fälschlich 'latest'");
+  assert.match(out, /1\.27: Pulling from library\/nginx/);
+  assert.match(out, /docker\.io\/library\/nginx:1\.27/);
+  assert.ok(sim.docker.pulled.includes("nginx:1.27"), "nginx:1.27 liegt lokal bereit");
+  assert.ok(!sim.docker.pulled.includes("nginx:latest"), "ohne expliziten latest-Pull entsteht kein latest-Eintrag");
+});
+
+test("docker pull: aus einer expliziten Registry/Namespace – ohne falsches library/-Präfix (#449)", () => {
+  const out = sim.exec("docker pull ghcr.io/hafen/leuchtfeuer:2.1").output!;
+  assert.match(out, /2\.1: Pulling from ghcr\.io\/hafen\/leuchtfeuer/, "Quelle ist die genannte Registry, nicht 'library/'");
+  assert.doesNotMatch(out, /library\//, "ein expliziter Registry-Pfad bekommt KEIN Docker-Hub-library-Präfix");
+  assert.match(out, /Downloaded newer image for ghcr\.io\/hafen\/leuchtfeuer:2\.1/);
+  assert.ok(sim.docker.pulled.includes("ghcr.io/hafen/leuchtfeuer:2.1"), "das Registry-Image liegt lokal bereit");
+});
+
 test("docker build: baut aus dem Dockerfile ein eigenes, getaggtes Image (#66)", () => {
   sim.files["Dockerfile"] = "FROM nginx:1.27\nCOPY site/ /usr/share/nginx/html\nEXPOSE 80";
   const r = sim.exec("docker build -t hafenwache:1.0 .");

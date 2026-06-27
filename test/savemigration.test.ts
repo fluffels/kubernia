@@ -72,6 +72,15 @@ function slugs(n: number): string[] {
   return KQContent.QUESTS.slice(0, n).map(q => q.id);
 }
 
+/** #449: docker-registry wurde mitten in den Docker-Arc (neuer Index 6) eingeschoben.
+ *  Alt-Stände, die diese Stelle schon passiert hatten, tragen die Quest folgerichtig
+ *  NICHT in completedQuests – sie bleibt für sie ungespielt (das Einfügen schickt
+ *  niemanden zurück, siehe AGENTS.md). Diese Helfer drücken „die ersten n Quests, aber
+ *  ohne die nachträglich eingeschobene docker-registry" aus. */
+function slugsSansRegistry(n: number): string[] {
+  return slugs(n).filter(id => id !== "docker-registry");
+}
+
 /** #410: Ein linearer (Single-Active) Stand muss nach dem Laden genau die fokussierte
  *  Quest als offene Menge tragen (oder die leere Menge im Endzustand). So beweist jeder
  *  Alt-Stand-Lauf, dass die Migration „Einzel-Quest → activeQuests-Set mit einem Eintrag"
@@ -118,7 +127,7 @@ test("v1 (Docker-Bogen): currentQuestId aus questIdx abgeleitet, alte IDs gemapp
 
   // #353: currentQuestId fehlt im v1-Stand → wird aus questIdx abgeleitet.
   expect(Game.state.questIdx).toBe(6);
-  expect(Game.state.currentQuestId).toBe(KQContent.QUESTS[6].id); // "k8s-first-deployment"
+  expect(Game.state.currentQuestId).toBe(KQContent.QUESTS[6].id); // "docker-registry" (seit #449 an Index 6)
   // #354: alte numerische IDs (q0..q3b) → sprechende Slugs, vollständig & in Reihenfolge.
   expect(Game.state.completedQuests).toEqual(slugs(6));
 
@@ -138,7 +147,7 @@ test("v1 (Docker-Bogen): currentQuestId aus questIdx abgeleitet, alte IDs gemapp
 
   // #410: lineare Single-Active-Migration – genau die fokussierte Quest ist offen.
   expectFocusedActiveQuests();
-  expect(Game.state.activeQuests).toEqual({ "k8s-first-deployment": { step: Game.state.questStep, task: 0 } });
+  expect(Game.state.activeQuests).toEqual({ "docker-registry": { step: Game.state.questStep, task: 0 } });
 
   // Migrierter Stand wurde VOR dem Überschreiben in den Backup-Slot gesichert.
   expect(SaveStore.readBackup()).toBe(fixtureRaw("savegame-v1-docker-arc.json"));
@@ -150,8 +159,11 @@ test("v1 (voller Stand): reiches Deck/Abkürzungen/Stats/Cluster-Snapshot laden 
   loadFixture("savegame-v1-rich.json");
 
   expect(Game.state.questIdx).toBe(16);
-  expect(Game.state.currentQuestId).toBe(KQContent.QUESTS[16].id); // "kraken-boss"
-  expect(Game.state.completedQuests).toEqual(slugs(16));
+  expect(Game.state.currentQuestId).toBe(KQContent.QUESTS[16].id); // "terraform-state-destroy" (seit #449 +1)
+  // Der gespeicherte Zahl-Index 16 bleibt; durch das Einschieben von docker-registry zeigt
+  // er jetzt auf terraform-state-destroy. Die abgeschlossenen Quests sind unverändert die
+  // 16 echten Alt-IDs – also alles bis Index 16, nur ohne die nie gespielte docker-registry.
+  expect(Game.state.completedQuests).toEqual(slugsSansRegistry(17));
 
   // Explizite unlockedAbbrev-Liste vorhanden → wird übernommen, NICHT pauschal grandfathered.
   expect(Game.state.unlockedAbbrev).toEqual(["-a", "-n", "-d", "--name"]);
@@ -177,7 +189,7 @@ test("v1 (voller Stand): reiches Deck/Abkürzungen/Stats/Cluster-Snapshot laden 
   expect(Game.state.audio).toEqual({ music: false, sfx: true, musicVol: 0.3, sfxVol: 0.9, track: "leuchtturm" });
 
   expect(Game.state.coins).toBe(860); // Snapshot wirft Einkommen ab, aber Uhr gepinnt → 0 Offline-Einnahmen
-  expectFocusedActiveQuests(); // #410: kraken-boss ist die einzige offene Quest
+  expectFocusedActiveQuests(); // #410: die fokussierte Quest (terraform-state-destroy) ist die einzige offene
   expectRoundTripFixedPoint();
 });
 
@@ -189,10 +201,11 @@ test("v2 (veralteter Zahl-Index): currentQuestId gewinnt über stale questIdx, I
   loadFixture("savegame-v2-stale-index.json");
 
   // Kernschutz #353: gespeicherter questIdx (0) ist veraltet; currentQuestId "q5" → "k8s-inspect-pods"
-  // (Index 7) gewinnt. So bricht ein vorheriges Quest-Einschieben den Stand nicht.
-  expect(Game.state.questIdx).toBe(7);
+  // (seit #449 Index 8) gewinnt. So bricht ein vorheriges Quest-Einschieben den Stand nicht – genau
+  // das beweist dieser Test: der Index folgt der ID, nicht umgekehrt.
+  expect(Game.state.questIdx).toBe(8);
   expect(Game.state.currentQuestId).toBe("k8s-inspect-pods");
-  expect(Game.state.completedQuests).toEqual(slugs(7));
+  expect(Game.state.completedQuests).toEqual(slugsSansRegistry(8));
 
   // Explizit leeres unlockedAbbrev wird respektiert (kein Grandfather trotz Fortschritt).
   expect(Game.state.unlockedAbbrev).toEqual([]);
@@ -210,10 +223,14 @@ test("v2 (alle Quests durch): Endzustand + vollständige completedQuests-Migrati
   expect(Game.state.currentQuestId).toBe("");                // Endzustand
   expect(Game.allQuestsDone()).toBe(true);
 
-  // Alle alten numerischen IDs (+ später als Slug ergänzte Quests) → die kompletten
-  // neuen Slugs (Menge identisch zum Content).
-  expect(Game.state.completedQuests.length).toBe(KQContent.QUESTS.length);
-  expect(new Set(Game.state.completedQuests)).toEqual(new Set(KQContent.QUESTS.map(q => q.id)));
+  // Alle alten numerischen IDs (+ später als Slug ergänzte Quests) → die neuen Slugs.
+  // #449: docker-registry wurde NACH diesem „alles durch"-Stand eingeschoben; ein solcher
+  // Alt-Stand kennt sie folgerichtig nicht (sie bleibt ungespielt, niemand wird zurückgeschickt).
+  // Der Endzustand (questIdx == length, currentQuestId "") bleibt trotzdem erhalten.
+  expect(Game.state.completedQuests.length).toBe(KQContent.QUESTS.length - 1);
+  expect(new Set(Game.state.completedQuests)).toEqual(
+    new Set(KQContent.QUESTS.filter(q => q.id !== "docker-registry").map(q => q.id)),
+  );
 
   expect(Game.state.settings).toEqual({ events: "off" });
   expect(Game.state.coins).toBe(5000);
@@ -232,10 +249,10 @@ test("v2 (alle Quests durch): Endzustand + vollständige completedQuests-Migrati
 test("v3 (voller Stand, vor #410): Einzel-Quest -> activeQuests-Set, verlustfrei migriert + gesichert", () => {
   loadFixture("savegame-v3-current.json");
 
-  expect(Game.state.questIdx).toBe(31);
+  expect(Game.state.questIdx).toBe(32); // #449: gitops-argocd-intro um 1 nach hinten gerückt
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.state.questStep).toBe(1);
-  expect(Game.state.completedQuests).toEqual(slugs(31));
+  expect(Game.state.completedQuests).toEqual(slugsSansRegistry(32));
   expect(Game.state.xp).toBe(1500);
   expect(Game.state.coins).toBe(2000);
   expect(Game.state.character).toBe(1);
@@ -266,10 +283,10 @@ test("v3 (voller Stand, vor #410): Einzel-Quest -> activeQuests-Set, verlustfrei
 test("v4 (vor #413): mehrere offene Quests bleiben, gameDays default 0, migriert + gesichert", () => {
   loadFixture("savegame-v4-current.json");
 
-  expect(Game.state.questIdx).toBe(31);
+  expect(Game.state.questIdx).toBe(32); // #449: gitops-argocd-intro um 1 nach hinten gerückt
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.state.questStep).toBe(1);
-  expect(Game.state.completedQuests).toEqual(slugs(31));
+  expect(Game.state.completedQuests).toEqual(slugsSansRegistry(32));
 
   // #410 bleibt unangetastet: ZWEI parallel offene Quests überleben verlustfrei.
   expect(Game.state.activeQuests).toEqual({
@@ -296,7 +313,7 @@ test("v4 (vor #413): mehrere offene Quests bleiben, gameDays default 0, migriert
 test("v5 (aktueller Stand): gameDays überlebt exakt, kein Backup, Roundtrip stabil", () => {
   loadFixture("savegame-v5-current.json");
 
-  expect(Game.state.questIdx).toBe(31);
+  expect(Game.state.questIdx).toBe(32); // #449: gitops-argocd-intro um 1 nach hinten gerückt
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.state.activeQuests).toEqual({
     "gitops-argocd-intro": { step: 1, task: 0 },
