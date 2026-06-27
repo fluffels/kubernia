@@ -828,9 +828,10 @@ test("#354 Migration: Alt-Stand (post-#353) mit alten IDs -> neue Slugs, Fortsch
   Game.importData(JSON.stringify({ v: 2, data: { xp: 100, questIdx: 7, completedQuests: ["q0", "q1", "q2", "q2b", "q3", "q3b", "q4"], currentQuestId: "q5" } }));
   Game.load();
   // currentQuestId auf neuen Slug gemappt, Index folgt der ID (q5 = k8s-inspect-pods,
-  // durch die Einschübe #448 docker-common-images und #449 docker-registry jetzt Index 9):
+  // durch die Einschübe #448 docker-common-images, #449 docker-registry und #450 docker-rabbitmq
+  // jetzt Index 10):
   expect(Game.state.currentQuestId).toBe("k8s-inspect-pods");
-  expect(Game.state.questIdx).toBe(9);
+  expect(Game.state.questIdx).toBe(10);
   // completedQuests vollständig auf neue Slugs gehoben – nichts verloren:
   expect(Game.state.completedQuests).toEqual([
     "onboarding-sign-on", "docker-first-container", "docker-list-containers",
@@ -857,10 +858,10 @@ test("#354 Migration: ein eingeschobener alter Slug (q2b/q26) wird korrekt über
 
 test("#354 Migration: neue Slugs bleiben unverändert (idempotent, kein Doppel-Mapping)", () => {
   // Ein bereits migrierter Stand (neue Slugs) darf nicht erneut angefasst werden.
-  Game.importData(JSON.stringify({ v: 3, data: { questIdx: 9, completedQuests: ["onboarding-sign-on", "docker-first-container"], currentQuestId: "k8s-inspect-pods" } }));
+  Game.importData(JSON.stringify({ v: 3, data: { questIdx: 10, completedQuests: ["onboarding-sign-on", "docker-first-container"], currentQuestId: "k8s-inspect-pods" } }));
   Game.load();
   expect(Game.state.currentQuestId).toBe("k8s-inspect-pods");
-  expect(Game.state.questIdx).toBe(9);
+  expect(Game.state.questIdx).toBe(10);
   expect(Game.state.completedQuests).toEqual(["onboarding-sign-on", "docker-first-container"]);
 });
 

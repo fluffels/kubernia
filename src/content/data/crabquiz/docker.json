@@ -200,5 +200,43 @@
     ],
     "correct": 0,
     "explain": "Drei Werkzeuge, drei Aufgaben: BusyBox = winzige Werkzeug-Kiste (schnell reinschauen/testen), Redis = schnelles, flüchtiges Gedächtnis (Cache/Sessions), Postgres = dauerhafte relationale Datenbank (Tabellen). Wähl das passende fürs jeweilige Ziel."
+  },
+  {
+    "id": "q-rabbit-1",
+    "q": "Was ist <code>rabbitmq</code> – und was macht ein Message Broker?",
+    "options": [
+      "Ein Message Broker: Dienste legen Nachrichten in eine Warteschlange (Queue), andere holen sie später ab – entkoppelte, asynchrone Kommunikation.",
+      "Eine relationale Datenbank, die Nachrichten dauerhaft in Tabellen speichert.",
+      "Ein schneller In-Memory-Cache für Schlüssel→Wert-Paare.",
+      "Eine Registry, aus der man Container-Images herunterlädt."
+    ],
+    "correct": 0,
+    "explain": "RabbitMQ ist ein Message Broker (Nachrichten-Vermittler) – wie eine Posthalle: ein Dienst wirft eine Nachricht in eine Warteschlange (Queue), ein anderer holt sie später ab. Es rechnet und speichert nicht wie Redis/Postgres, sondern reicht Nachrichten weiter. So hängen Sender und Empfänger nicht direkt aneinander (entkoppelt, asynchron)."
+  },
+  {
+    "id": "q-rabbit-2",
+    "chapter": "docker-rabbitmq",
+    "q": "Warum nimmt man einen Message Broker wie RabbitMQ, statt dass ein Dienst den anderen direkt aufruft?",
+    "options": [
+      "Weil Sender und Empfänger so entkoppelt sind – der Sender muss nicht warten, und der Empfänger arbeitet die Nachrichten ab, wenn er bereit ist (asynchron, gut für Hintergrundaufgaben/Events).",
+      "Weil ein direkter Aufruf zwischen zwei Diensten technisch unmöglich ist.",
+      "Weil der Broker Nachrichten schneller verschlüsselt als ein direkter Aufruf.",
+      "Weil man mit einem Broker keine Container mehr braucht."
+    ],
+    "correct": 0,
+    "explain": "Der Broker entkoppelt: Der Sender legt die Nachricht in die Queue und macht weiter, ohne auf den Empfänger zu warten. Fällt der Empfänger kurz aus, warten die Nachrichten geduldig im Postfach und werden später abgearbeitet. Das ist ideal für Hintergrundaufgaben und Events zwischen (Micro-)Services."
+  },
+  {
+    "id": "q-rabbit-3",
+    "chapter": "docker-rabbitmq",
+    "q": "Wofür setzt man einen Message Broker typischerweise ein?",
+    "options": [
+      "Für Hintergrundaufgaben und Events zwischen Diensten – z.B. eine Bestellung in die Queue legen, ein anderer Dienst verschickt später die Bestätigungs-Mail.",
+      "Um statische Webseiten direkt an Browser auszuliefern.",
+      "Um aus einem Dockerfile Container-Images zu bauen.",
+      "Um den Cluster zu überwachen und Metriken zu sammeln."
+    ],
+    "correct": 0,
+    "explain": "Ein Message Broker verbindet Dienste lose über Warteschlangen: Aufgaben/Events landen in einer Queue und werden später abgearbeitet (z.B. Mailversand, Bildverarbeitung, Benachrichtigungen). Das entkoppelt die Dienste zeitlich – ideal für Hintergrundjobs und Microservice-Kommunikation."
   }
 ]

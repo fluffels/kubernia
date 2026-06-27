@@ -650,7 +650,98 @@
         "type": "dialog",
         "npc": "bo",
         "lines": [
-          "Jetzt weißt du, WOHER die Kisten-Baupläne kommen: aus der Registry, per Tag in der gewünschten Version. <i>*zufriedenes Knirschen*</i> Später baut eine <b>Pipeline</b> deine Images ganz von allein und schiebt sie in so eine Registry – aber das zeigt dir Ada. Erst will Ole dich sprechen: der GROSSE Umbau wartet! Und wenn du üben willst: <b>Kralle</b> gibt dir Wiederholungen – damit setzt sich das Gelernte fest."
+          "Jetzt weißt du, WOHER die Kisten-Baupläne kommen: aus der Registry, per Tag in der gewünschten Version. <i>*zufriedenes Knirschen*</i> Eine Kisten-Sorte hat Bo dir aber noch verschwiegen – eine, die weder rechnet noch Daten hütet, sondern nur <b>Nachrichten weiterreicht</b>. Komm gleich nochmal zu Bo: die <b>Posthalle</b> fehlt dir noch."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "docker-rabbitmq",
+    "title": "Die Posthalle am Kai",
+    "giver": "bo",
+    "topic": "docker",
+    "rewardXp": 35,
+    "rewardCoins": 25,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "bo",
+        "lines": [
+          "Letzte Kiste der Warenkunde, Landratte: <b>RabbitMQ</b>. Die ist anders als Redis (schnelles Gedächtnis) oder Postgres (Datenbank) – RabbitMQ <b>rechnet und speichert nicht</b>, sie <b>reicht Nachrichten weiter</b>. Man nennt so eine Kiste einen <b>Message Broker</b> (Nachrichten-Vermittler).",
+          "Stell dir eine <b>Posthalle</b> am Kai vor: Ein Dienst wirft eine Nachricht in ein Postfach – die <b>Warteschlange</b> (engl. <b>Queue</b>). Ein anderer Dienst holt sie später raus und arbeitet sie ab. Der Absender muss <b>nicht warten</b>, bis der Empfänger fertig ist. Das nennt man <b>entkoppelte</b> Kommunikation – die zwei Dienste hängen nicht direkt aneinander.",
+          "Wozu das gut ist? Für <b>Hintergrundaufgaben</b> und <b>Events zwischen Diensten</b>: Eine Bestellung landet in der Queue, ein anderer Dienst verschickt <b>später in Ruhe</b> die Bestätigungs-Mail. Fällt der Empfänger kurz aus, warten die Nachrichten geduldig im Postfach. Bo mag Geduld. Bo ist Stein.",
+          "Genug Theorie. Hol dir zuerst den Bauplan der Posthalle: <code>docker pull rabbitmq</code>."
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Posthallen-Bauplan holen",
+        "cmd": {
+          "id": "t-pull-rabbitmq",
+          "intro": "🆕 Kein neuer Befehl – <code>docker pull</code> kennst du. Neu ist nur das <b>Image</b>: <code>rabbitmq</code>, der Message Broker (die Posthalle).",
+          "text": "Hol den Bauplan des Message Brokers: das Image <code>rabbitmq</code>.",
+          "accept": [
+            "^docker\\s+pull\\s+rabbitmq(:\\S+)?$"
+          ],
+          "solution": "docker pull rabbitmq",
+          "hint": "Muster: docker pull <image> – das Image heißt rabbitmq."
+        }
+      },
+      {
+        "type": "dialog",
+        "npc": "bo",
+        "lines": [
+          "Bauplan ist da. Jetzt mach die Posthalle auf – starten geht wie immer mit <code>docker run</code>, nur der Bauplan-Name wechselt: <code>docker run rabbitmq</code>. Schon nimmt die Halle Nachrichten an.",
+          "Merke dir den Unterschied zu den anderen Kisten: <b>Redis</b> = schnelles Gedächtnis (Cache), <b>Postgres</b> = dauerhafte Datenbank, <b>RabbitMQ</b> = Nachrichten-Posthalle (Queue) zwischen Diensten. Verschiedene Werkzeuge – wähl das richtige für den Job."
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Posthalle starten",
+        "cmd": {
+          "id": "t-run-rabbitmq",
+          "intro": "🆕 Wieder nur ein neues Image: <code>rabbitmq</code>, der Message Broker. Starten wie gehabt mit <code>docker run</code>.",
+          "text": "Starte einen Container aus dem Image <code>rabbitmq</code>. (Einfachste Form, keine Extras!)",
+          "accept": [
+            "^docker\\s+run\\s+rabbitmq(:\\S+)?$"
+          ],
+          "solution": "docker run rabbitmq",
+          "hint": "Muster: docker run <image> – das Image heißt rabbitmq."
+        }
+      },
+      {
+        "type": "drill",
+        "brief": "Bos Posthallen-Runde",
+        "pool": [
+          "docker-run-rabbitmq",
+          "docker-pull"
+        ],
+        "count": 3,
+        "intro": "Posthalle holen und öffnen – ein paar Wiederholungen:"
+      },
+      {
+        "type": "choice",
+        "npc": "bo",
+        "reviewId": "q-rabbit-1",
+        "q": "Bo prüft: Was ist <code>rabbitmq</code> – und was macht so ein Message Broker?",
+        "options": [
+          {
+            "t": "Ein Message Broker: Dienste legen Nachrichten in eine Warteschlange (Queue), andere holen sie später ab – entkoppelte, asynchrone Kommunikation.",
+            "ok": true,
+            "reply": "GENAU. Posthalle: einer wirft ein, einer holt ab, keiner muss warten. Bo nickt steinern."
+          },
+          {
+            "t": "Eine relationale Datenbank, die Nachrichten dauerhaft in Tabellen speichert.",
+            "ok": false,
+            "reply": "NEIN – das wäre Postgres. RabbitMQ SPEICHERT nicht in Tabellen, es REICHT Nachrichten WEITER (Queue). Nochmal merken!"
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "bo",
+        "lines": [
+          "Damit ist die Warenkunde komplett: Werkzeug-Kiste, Cache, Datenbank, Webserver, Posthalle – und du weißt, woher die Baupläne kommen. <i>*seltener Golem-Applaus*</i> Bo lobt dich – das passiert alle hundert Jahre! Jetzt wird's groß: <b>Ole</b> wartet schon, der GROSSE Umbau steht an. Später baut dir <b>Ada</b> sogar eine Pipeline, die Images von allein in die Registry schiebt. Und wenn du üben willst: <b>Kralle</b> gibt dir Wiederholungen – damit setzt sich das Gelernte fest."
         ]
       }
     ]
