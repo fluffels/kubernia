@@ -198,5 +198,31 @@
     ],
     "correct": 0,
     "explain": "Der HPA skaliert HORIZONTAL: er erhöht/senkt die Replica-Zahl anhand gemessener Auslastung (braucht dafür requests als Bezugsgröße). Das ist die Automatik hinter dem manuellen 'kubectl scale'. Vertikal (das Limit eines Pods anpassen) macht stattdessen der VPA – nicht zu verwechseln."
+  },
+  {
+    "id": "q-workload-types",
+    "chapter": "storage-statefulset",
+    "q": "Deployment vs. DaemonSet vs. StatefulSet – wann nimmt man was?",
+    "options": [
+      "Zustandslos & beliebig viele austauschbare Kopien → <b>Deployment</b>; genau einer pro Node → <b>DaemonSet</b>; mit fester Identität & eigenen Daten → <b>StatefulSet</b>.",
+      "Immer ein Deployment – die anderen beiden sind nur ältere Namen dafür.",
+      "DaemonSet für Datenbanken, StatefulSet für Log-Agenten, Deployment für alles andere.",
+      "Die Wahl ist egal; Kubernetes wandelt den Typ bei Last automatisch um."
+    ],
+    "correct": 0,
+    "explain": "Drei Workload-Typen für drei Bedürfnisse – im Hafenbild (Node = Steg, Pod = Liegeplatz darauf): Das <b>Deployment</b> ist der Dauerauftrag „halte N gleiche, austauschbare Kisten“ – egal an welchem Steg, frei skalierbar (zustandslose Web-/API-Dienste). Das <b>DaemonSet</b> stellt an JEDEN Steg genau einen Posten – kommt ein Steg dazu, bekommt er automatisch auch einen (Log-/Monitoring-Agent, Netzwerk-Plugin – Dinge, die überall laufen müssen). Das <b>StatefulSet</b> vergibt feste, durchnummerierte Liegeplätze (…-0, …-1) mit je eigenem Lagerschuppen, der bleibt – für zustandsbehaftete Apps wie Datenbanken (stabile Identität, eigener Speicher, geordnetes Hoch-/Runterfahren)."
+  },
+  {
+    "id": "q-daemonset",
+    "chapter": "storage-statefulset",
+    "q": "Was ist das Besondere an einem <b>DaemonSet</b>?",
+    "options": [
+      "Es hält genau <b>einen Pod pro Node</b> – kommt ein Node dazu, bekommt er automatisch auch einen; ideal für Agenten, die überall laufen müssen.",
+      "Es startet möglichst viele Pods auf demselben, stärksten Node.",
+      "Es gibt jedem Pod einen festen Namen (…-0, …-1) und ein eigenes Volume.",
+      "Es ist ein Deployment, das sich nachts selbst herunterfährt."
+    ],
+    "correct": 0,
+    "explain": "Ein DaemonSet bindet nicht an eine Replica-Zahl, sondern an die <b>Nodes</b>: genau ein Pod je Node, automatisch mitwachsend, wenn der Cluster wächst. Im Hafenbild: an JEDEM Steg genau ein Wachposten. Genau richtig für Dinge, die flächendeckend laufen müssen – Log-Sammler, Monitoring-Agent, Netzwerk-Plugin. Feste Identität & eigenes Volume (…-0, …-1) wäre dagegen ein <b>StatefulSet</b>; beliebig viele austauschbare Kopien ein <b>Deployment</b>."
   }
 ]
