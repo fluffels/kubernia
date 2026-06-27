@@ -77,6 +77,15 @@ function slugs(n: number): string[] {
   return KQContent.QUESTS.map(q => q.id).filter(id => id !== "docker-common-images").slice(0, n);
 }
 
+/** Die im Fixture gespeicherte completedQuests-Liste (bereits aktuelle Slugs). Wird beim
+ *  Laden verlustfrei übernommen – mit ihr prüfen wir Stände, die VOR einer mitten in der
+ *  Reihenfolge eingefügten Quest (z.B. #273 helm-templates) gespeichert wurden: ihr
+ *  Completed-Set bleibt exakt, auch wenn sich der abgeleitete questIdx verschiebt (#353). */
+function fixtureCompleted(name: string): string[] {
+  const env = JSON.parse(fixtureRaw(name)) as { data?: { completedQuests?: string[] } };
+  return env.data?.completedQuests ?? [];
+}
+
 /** #410: Ein linearer (Single-Active) Stand muss nach dem Laden genau die fokussierte
  *  Quest als offene Menge tragen (oder die leere Menge im Endzustand). So beweist jeder
  *  Alt-Stand-Lauf, dass die Migration „Einzel-Quest → activeQuests-Set mit einem Eintrag"
@@ -237,10 +246,13 @@ test("v2 (alle Quests durch): Endzustand + vollständige completedQuests-Migrati
 test("v3 (voller Stand, vor #410): Einzel-Quest -> activeQuests-Set, verlustfrei migriert + gesichert", () => {
   loadFixture("savegame-v3-current.json");
 
-  expect(Game.state.questIdx).toBe(32); // Index 31 → 32 nach Einschub #448 (docker-common-images)
+  // Zwei mitten in die Reihenfolge eingefügte Quests (#273 helm-templates + #448
+  // docker-common-images) vor gitops-argocd-intro → Index 31 + 2 = 33; das
+  // Completed-Set des Alt-Stands bleibt verlustfrei unverändert.
+  expect(Game.state.questIdx).toBe(33);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.state.questStep).toBe(1);
-  expect(Game.state.completedQuests).toEqual(slugs(31));
+  expect(Game.state.completedQuests).toEqual(fixtureCompleted("savegame-v3-current.json"));
   expect(Game.state.xp).toBe(1500);
   expect(Game.state.coins).toBe(2000);
   expect(Game.state.character).toBe(1);
@@ -271,10 +283,11 @@ test("v3 (voller Stand, vor #410): Einzel-Quest -> activeQuests-Set, verlustfrei
 test("v4 (vor #413): mehrere offene Quests bleiben, gameDays default 0, migriert + gesichert", () => {
   loadFixture("savegame-v4-current.json");
 
-  expect(Game.state.questIdx).toBe(32); // Index 31 → 32 nach Einschub #448 (docker-common-images)
+  // #273 helm-templates + #448 docker-common-images: zwei Einschübe vor gitops-argocd-intro → +2.
+  expect(Game.state.questIdx).toBe(33);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.state.questStep).toBe(1);
-  expect(Game.state.completedQuests).toEqual(slugs(31));
+  expect(Game.state.completedQuests).toEqual(fixtureCompleted("savegame-v4-current.json"));
 
   // #410 bleibt unangetastet: ZWEI parallel offene Quests überleben verlustfrei.
   expect(Game.state.activeQuests).toEqual({
@@ -301,7 +314,8 @@ test("v4 (vor #413): mehrere offene Quests bleiben, gameDays default 0, migriert
 test("v5 (aktueller Stand): gameDays überlebt exakt, kein Backup, Roundtrip stabil", () => {
   loadFixture("savegame-v5-current.json");
 
-  expect(Game.state.questIdx).toBe(32); // Index 31 → 32 nach Einschub #448 (docker-common-images)
+  // #273 helm-templates + #448 docker-common-images: zwei Einschübe vor gitops-argocd-intro → +2.
+  expect(Game.state.questIdx).toBe(33);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.state.activeQuests).toEqual({
     "gitops-argocd-intro": { step: 1, task: 0 },

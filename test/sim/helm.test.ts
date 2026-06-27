@@ -87,6 +87,50 @@ test("helm install: bekannter Bruchfall bleibt – Repo-Chart ohne Repo meckert 
   assert.ok(r.error && /repo bitnami not found/.test(r.output!), "ohne 'helm repo add' kein Repo-Install");
 });
 
+/* ---------- Vorlagen lesen & rendern (Issue #273) ---------- */
+
+test("helm create: legt lesbare Template-Dateien mit echter Go-Syntax an", () => {
+  sim.exec("helm create vorlage");
+  const deploy = sim.exec("cat vorlage/templates/deployment.yaml").output!;
+  // Die Kernkonzepte des Tickets müssen in der Vorlage wirklich auftauchen.
+  assert.match(deploy, /\{\{ \.Values\.replicaCount \}\}/, "{{ .Values… }} vorhanden");
+  assert.match(deploy, /include "vorlage\.fullname"/, "include eines _helpers-Schnipsels");
+  assert.match(deploy, /\{\{- if \.Values\.env \}\}/, "if-Block");
+  assert.match(deploy, /\{\{- range \.Values\.env \}\}/, "range-Schleife");
+  assert.match(deploy, /toYaml \.Values\.resources/, "toYaml-Einbettung");
+  const helpers = sim.exec("cat vorlage/templates/_helpers.tpl").output!;
+  assert.match(helpers, /define "vorlage\.fullname"/, "_helpers.tpl definiert Schnipsel");
+  assert.match(helpers, /\.Release\.Name/, "Kontext-Variable .Release.Name");
+});
+
+test("helm template: rendert Vorlage + Werte zu einem fertigen Manifest", () => {
+  sim.exec("helm create vorlage");
+  const out = sim.exec("helm template vorlage").output!;
+  assert.match(out, /kind: Deployment/);
+  // Platzhalter sind ersetzt: .Release.Name (Default) + .Chart.Name + .Values.replicaCount.
+  assert.match(out, /name: release-name-vorlage/, ".Release.Name + .Chart.Name eingesetzt");
+  assert.match(out, /replicas: 1/, ".Values.replicaCount gerendert");
+  assert.match(out, /image: "nginx:latest"/, ".Values.image gerendert");
+  // Der if-Block (env) fehlt, weil kein env gesetzt ist – genau das soll man sehen.
+  assert.doesNotMatch(out, /env:/, "if-Block ohne Wert verschwindet beim Rendern");
+  // Kein roher Platzhalter darf im gerenderten Manifest übrig bleiben.
+  assert.doesNotMatch(out, /\{\{/, "keine ungerenderten {{ }} im Ergebnis");
+});
+
+test("helm template: optionaler Release-Name vor dem Chart wird benutzt", () => {
+  sim.exec("helm create vorlage");
+  const out = sim.exec("helm template mein-release vorlage").output!;
+  assert.match(out, /name: mein-release-vorlage/);
+});
+
+test("helm template: unbekanntes Chart meckert (Negativfall)", () => {
+  const miss = sim.exec("helm template gibtsnicht");
+  assert.ok(miss.error, "template auf unbekanntes Chart muss meckern");
+  assert.match(miss.output!, /not found/);
+  const none = sim.exec("helm template");
+  assert.ok(none.error && /Welches Chart/.test(none.output!), "template ohne Argument meckert");
+});
+
 test("snapshot/restore erhält selbst gebaute Charts", () => {
   sim.exec("helm create funkdienst");
   sim.exec("helm package funkdienst");

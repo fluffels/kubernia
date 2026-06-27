@@ -35,5 +35,57 @@
     ],
     "correct": 0,
     "explain": "Faustregel: nicht-geheime Einstellungen (Hostnamen, Ports, Log-Level, Feature-Flags) → ConfigMap; alles Vertrauliche (Passwörter, Tokens, Schlüssel) → Secret. Beide bindet man gleich ein – z.B. per 'kubectl set env deployment/<name> --from=configmap/<n>' bzw. '--from=secret/<n>'. Eine Truhe nützt nichts, wenn die App nicht reinschaut."
+  },
+  {
+    "id": "q-sec-types",
+    "chapter": "secrets-encrypted",
+    "q": "Ein Secret ist nicht gleich ein Secret – wofür gibt es verschiedene <b>Typen</b>?",
+    "options": [
+      "Je nach Inhalt: 'generic' für freie Key/Value-Paare (z.B. ein DB-Passwort), 'tls' für Zertifikat + Schlüssel, 'docker-registry' für Registry-Zugangsdaten.",
+      "Der Typ legt nur die Farbe der Truhe in der Weboberfläche fest.",
+      "Es gibt nur einen Typ – „Typ“ ist ein Schreibfehler in der Doku.",
+      "Der Typ bestimmt, wie stark das Secret verschlüsselt wird."
+    ],
+    "correct": 0,
+    "explain": "Der Typ sagt Kubernetes, welche Felder erwartet werden. <code>kubectl create secret generic</code> nimmt beliebige Key/Value-Daten; <code>kubectl create secret tls</code> erwartet <code>tls.crt</code> + <code>tls.key</code> (fürs Hafentor); <code>kubectl create secret docker-registry</code> legt Login-Daten für eine private Registry ab. Verschlüsselt wird durch den Typ nichts – nur die Struktur ist festgelegt."
+  },
+  {
+    "id": "q-sec-base64",
+    "chapter": "secrets-encrypted",
+    "q": "Im YAML eines Secrets steht <code>cGFzc3dvcnQ=</code> statt Klartext. Ist das Passwort damit <b>verschlüsselt</b>?",
+    "options": [
+      "Nein! Das ist nur Base64 – eine Kodierung, die jeder mit 'base64 -d' in einer Sekunde zurückrechnet. Base64 ≠ verschlüsselt.",
+      "Ja, Base64 ist eine sichere Verschlüsselung mit Schlüssel.",
+      "Ja, solange niemand das Passwort kennt, kann man Base64 nicht knacken.",
+      "Nein, aber nur Cluster-Admins können Base64 überhaupt lesen."
+    ],
+    "correct": 0,
+    "explain": "Base64 verschleiert nur die Zeichen, es schützt nichts – es gibt keinen Schlüssel, jeder dekodiert es trivial. Ein Secret hält Vertrauliches bloß aus ConfigMaps/Image/Klartext-YAML heraus und regelt den Zugriff (RBAC); für echte Verschlüsselung im Cluster braucht es zusätzlich „encryption at rest“, Sealed Secrets oder einen Vault. Ironie am Rande: das <i>verschlüsselte</i> Hafentor (TLS) schützt den Transport – das TLS-Secret selbst liegt trotzdem nur base64-kodiert."
+  },
+  {
+    "id": "q-sec-pull",
+    "chapter": "secrets-encrypted",
+    "q": "Dein Image liegt in einer <b>privaten</b> Registry. Wozu brauchst du ein <code>docker-registry</code>-Secret (Pull-Secret)?",
+    "options": [
+      "Damit der Cluster sich beim Image-Ziehen an der privaten Registry anmelden darf – referenziert im Pod über 'imagePullSecrets'.",
+      "Damit Spieler das Image schneller herunterladen.",
+      "Um das Image nach dem Ziehen zu verschlüsseln.",
+      "Pull-Secrets gibt es nur für öffentliche Images auf Docker Hub."
+    ],
+    "correct": 0,
+    "explain": "Ohne Zugangsdaten scheitert das Ziehen aus einer privaten Registry – der Pod hängt in <code>ImagePullBackOff</code>. Das Pull-Secret (<code>kubectl create secret docker-registry …</code> mit <code>--docker-server/--docker-username/--docker-password</code>) hinterlegt den Login; per <code>imagePullSecrets</code> im Pod-/ServiceAccount-Spec weiß der Cluster, womit er sich anmelden soll."
+  },
+  {
+    "id": "q-sec-hash",
+    "chapter": "secrets-encrypted",
+    "q": "Manche Tools (z.B. Basic-Auth fürs Monitoring) wollen in der Config keinen Klartext, sondern einen <b>Passwort-Hash</b> (bcrypt/htpasswd). Warum?",
+    "options": [
+      "Ein Hash ist eine Einbahnstraße: aus dem Klartext rechenbar, aber nicht zurück. Gespeichert wird der Hash – wer ihn liest, hat das Passwort trotzdem nicht.",
+      "Ein Hash ist eine kürzere, hübschere Schreibweise des Passworts.",
+      "Der Hash verschlüsselt das Passwort und lässt es mit dem richtigen Schlüssel wieder entschlüsseln.",
+      "Hashes machen das Einloggen schneller."
+    ],
+    "correct": 0,
+    "explain": "Beim Login hasht das Tool die Eingabe erneut und vergleicht nur die Hashes – das Klartext-Passwort muss nirgends gespeichert sein. Tools wie <code>htpasswd</code> erzeugen einen <b>bcrypt</b>-Hash (mit Salt + Arbeitsfaktor, damit Brute-Force teuer bleibt). Wichtig: Hashen ≠ Verschlüsseln – ein Hash ist absichtlich NICHT umkehrbar."
   }
 ]

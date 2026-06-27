@@ -1,0 +1,4 @@
+# Shell-Skripte MÜSSEN LF behalten – ein CRLF-Skript (#!/bin/sh\r) bricht im
+# Linux-Container (z.B. der Dev-Panel-Entrypoint, #334). Erzwingt LF unabhängig
+# von core.autocrlf / Checkout-Plattform.
+*.sh text eol=lf

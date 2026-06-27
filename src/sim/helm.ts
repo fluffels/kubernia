@@ -2,8 +2,8 @@
  * Schritt 4/7 des sim.ts-Datei-Splits (#375, aus Epic #346, ADR 0004).
  *
  * Hier liegt die komplette `helm`-Befehlsfamilie (repo add|update|list, search,
- * create, lint, package, install, list, upgrade, rollback, uninstall, status,
- * dependency) plus der helm-eigene `--set <key>=<n>`-Parser (`setValue`, früher
+ * create, template, lint, package, install, list, upgrade, rollback, uninstall,
+ * status, dependency) plus der helm-eigene `--set <key>=<n>`-Parser (`setValue`, früher
  * `_setValue` – wird nur von helm install/upgrade gebraucht). Aus `sim.ts`
  * ausgelagert als freie Funktionen, die die Sim-Instanz als `HelmHost` bekommen –
  * so bleibt der Cluster-Zustand in EINER Hand (die `Sim`-Klasse), die helm-Logik
@@ -86,9 +86,122 @@ export function helmCommand(host: HelmHost, t: string[], raw: string): string {
       "replicaCount: 1", "image:", "  repository: nginx", "  tag: \"latest\"",
       "service:", "  type: ClusterIP", "  port: 80",
     ].join("\n");
-    host.files[name + "/templates/deployment.yaml"] = "# Vorlage: rendert mit den Werten aus values.yaml zu einem Deployment.";
-    host.files[name + "/templates/service.yaml"] = "# Vorlage: rendert zum Service.";
+    // Echte Go-Template-Syntax zum Lesen (#273): {{ .Values… }}, include/_helpers,
+    // if/range, toYaml. 'helm template <chart>' rendert das mit den Werten oben.
+    host.files[name + "/templates/deployment.yaml"] = [
+      "apiVersion: apps/v1",
+      "kind: Deployment",
+      "metadata:",
+      "  # include zieht einen Schnipsel aus _helpers.tpl ein (kein Copy-Paste).",
+      "  name: {{ include \"" + name + ".fullname\" . }}",
+      "  labels:",
+      "    {{- include \"" + name + ".labels\" . | nindent 4 }}",
+      "spec:",
+      "  # .Values.* wird beim Rendern aus values.yaml (bzw. -f-Override) gefüllt.",
+      "  replicas: {{ .Values.replicaCount }}",
+      "  selector:",
+      "    matchLabels:",
+      "      {{- include \"" + name + ".selectorLabels\" . | nindent 6 }}",
+      "  template:",
+      "    metadata:",
+      "      labels:",
+      "        {{- include \"" + name + ".selectorLabels\" . | nindent 8 }}",
+      "    spec:",
+      "      containers:",
+      "        - name: {{ .Chart.Name }}",
+      "          image: \"{{ .Values.image.repository }}:{{ .Values.image.tag }}\"",
+      "          ports:",
+      "            - containerPort: {{ .Values.service.port }}",
+      "          # if rendert den Block nur, wenn der Wert gesetzt ist; range schleift über eine Liste.",
+      "          {{- if .Values.env }}",
+      "          env:",
+      "            {{- range .Values.env }}",
+      "            - name: {{ .name }}",
+      "              value: {{ .value | quote }}",
+      "            {{- end }}",
+      "          {{- end }}",
+      "          # toYaml bettet einen ganzen Wertblock ein (häufige Einrückungs-Falle).",
+      "          resources:",
+      "            {{- toYaml .Values.resources | nindent 12 }}",
+    ].join("\n");
+    host.files[name + "/templates/service.yaml"] = [
+      "apiVersion: v1",
+      "kind: Service",
+      "metadata:",
+      "  name: {{ include \"" + name + ".fullname\" . }}",
+      "spec:",
+      "  type: {{ .Values.service.type }}",
+      "  ports:",
+      "    - port: {{ .Values.service.port }}",
+    ].join("\n");
+    // _helpers.tpl: einmal definierte, per include wiederverwendbare Schnipsel.
+    host.files[name + "/templates/_helpers.tpl"] = [
+      "{{/* Wiederverwendbare Bausteine – einmal definiert, überall per include eingebunden. */}}",
+      "{{- define \"" + name + ".fullname\" -}}",
+      "{{ .Release.Name }}-{{ .Chart.Name }}",
+      "{{- end -}}",
+      "",
+      "{{- define \"" + name + ".labels\" -}}",
+      "app.kubernetes.io/name: {{ .Chart.Name }}",
+      "app.kubernetes.io/instance: {{ .Release.Name }}",
+      "{{- end -}}",
+      "",
+      "{{- define \"" + name + ".selectorLabels\" -}}",
+      "app.kubernetes.io/name: {{ .Chart.Name }}",
+      "{{- end -}}",
+    ].join("\n");
     return "Creating " + name;
+  }
+
+  if (sub === "template") {
+    // 'helm template [RELEASE] <chart>' rendert die Vorlagen mit den Werten zu
+    // fertigen Manifesten und zeigt sie nur an – OHNE zu installieren (#273).
+    const args = t.slice(2).filter(a => !a.startsWith("-"));
+    if (args.length === 0) return host._err("helm template: Welches Chart?", "Muster: 'helm template <chart>' – z.B. das von 'helm create'.");
+    const ref = args[args.length - 1];
+    const release = args.length >= 2 ? args[0] : "release-name";
+    const name = ref.replace(/^\.?\.?\//, "").replace(/\/+$/, "");
+    if (!host.charts.some(c => c.name === name)) return host._err('Error: path "' + ref + '" not found', "Erst 'helm create " + name + "' – oder den Pfad prüfen.");
+    // Gerendert mit den Default-Werten aus values.yaml (replicaCount 1, nginx:latest, Port 80).
+    // .Release.Name/.Chart.Name/.Values.* sind eingesetzt, der if-Block (env) ist weg,
+    // weil kein env gesetzt ist – genau das macht 'Template + Values → Manifest' sichtbar.
+    return [
+      "---",
+      "# Source: " + name + "/templates/service.yaml",
+      "apiVersion: v1",
+      "kind: Service",
+      "metadata:",
+      "  name: " + release + "-" + name,
+      "spec:",
+      "  type: ClusterIP",
+      "  ports:",
+      "    - port: 80",
+      "---",
+      "# Source: " + name + "/templates/deployment.yaml",
+      "apiVersion: apps/v1",
+      "kind: Deployment",
+      "metadata:",
+      "  name: " + release + "-" + name,
+      "  labels:",
+      "    app.kubernetes.io/name: " + name,
+      "    app.kubernetes.io/instance: " + release,
+      "spec:",
+      "  replicas: 1",
+      "  selector:",
+      "    matchLabels:",
+      "      app.kubernetes.io/name: " + name,
+      "  template:",
+      "    metadata:",
+      "      labels:",
+      "        app.kubernetes.io/name: " + name,
+      "    spec:",
+      "      containers:",
+      "        - name: " + name,
+      "          image: \"nginx:latest\"",
+      "          ports:",
+      "            - containerPort: 80",
+      "          resources: {}",
+    ].join("\n");
   }
 
   if (sub === "lint") {

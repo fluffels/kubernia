@@ -26,6 +26,7 @@
   "git-pipeline",
   "git-merge-branches",
   "helm-umbrella-chart",
+  "helm-templates",
   "network-policy",
   "secrets-encrypted",
   "dns-service-discovery",
