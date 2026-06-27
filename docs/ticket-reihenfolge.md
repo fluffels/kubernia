@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-26 — nächstes Ticket: #246 (Tests für ephemeral-Storage- & Object-Store-Sim + neue Quests, schließt den Storage-Arc ab). Kopf: 4 Einträge. Zuletzt abgeschlossen: #245 (9 Krabben-Quiz-Karten in `data/crabquiz/storage.json` für den Storage-Arc, ohne #143 zu doppeln: storage-ephemeral = emptyDir vs PVC / `ephemeral-storage`-Limit / DiskPressure-Eviction; storage-object-store = Object/Block/File-Zugriffsmodell + Use-Cases; storage-object-backup = S3 vs VolumeSnapshot off-cluster / Object Versioning gegen Ransomware / etcd-Backup als Senior-Konzept. 3-2-1/RPO-RTO nur als Auffrischung in den Erklärungen. Reines Content-Ticket, keine Sim-/Quest-Zahl-Änderung. npm test 1156 / typecheck / lint / check:arch / smoke grün). Phase 9 + 10 komplett, Storage-Lernpfad-Arc fast durch (#240+#241+#242+#243+#244+#245 erledigt → nur noch Tests #246).**
+> **Stand: 2026-06-27 — nächstes Ticket: #448 (Quest „Gängige Images kennenlernen — BusyBox, Redis, Postgres", Start des Docker-Images-Arcs). Kopf: neuer Content-Arc Docker-Grundlagen + QoL + Sonderfälle. Zuletzt abgeschlossen: #246 (End-Zustands-Tests für den Storage-Arc, neue Datei `test/storage-arc-quests.test.ts` mit 10 Tests — Gegenstück zu `storage-drills.test.ts`/#145 für die ersten drei Storage-Quests; pinnt die drei neuen Knut-Quests #242/#243/#244: DiskPressure→Erholung, Bucket-Round-Trip put/ls/get, off-site-Backup überlebt PVC-Verlust + Restore; plus die vom Ticket benannten Negativ-Integrationen emptyDir-nie-Bound und Restore-ohne-Backup-scheitert-sauber; Red-Green belegt. Reines Test-Ticket. npm test 1166 / typecheck / lint / check:arch / check:size grün). **Storage-Lernpfad-Arc damit komplett abgeschlossen (#240–#246 alle erledigt).** Phase 9 + 10 komplett.**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -44,13 +44,23 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| | **— Content-Arc: Storage-Lernpfad (reaktiviert 2026-06-26, dependency-geordnet) —** | | | Der nächste echte Lernpfad-Arc nach Phase 9+10. Reihenfolge ist load-bearing: erst die Sim-Grundlagen (#240+#241 erledigt), dann die Quests, die darauf bauen (#242+#243+#244 erledigt), dann Quiz (#245 erledigt), dann Tests. |
-| 1 | **#246** | niedrig | Tests für ephemeral-Storage- & Object-Store-Sim + neue Quests | **Nächstes Ticket. Schließt den Arc ab** (analog #157/#172) — nach allem anderen. |
+| | **— Content-Arc: Docker-Images & Registry (dependency-geordnet) —** | | | Der nächste echte Lernpfad-Arc nach dem abgeschlossenen Storage-Arc. Reihenfolge ist load-bearing: erst die gängigen Images kennen, dann woher sie kommen, dann ein konkreter Broker als Anwendungsfall. |
+| 1 | **#448** | niedrig | Quest: Gängige Images — BusyBox, Redis, Postgres | **Nächstes Ticket.** Einstieg des Arcs: wofür steht welches Image. |
+| 2 | **#449** | niedrig | Quest: Docker Registry / Docker Hub — woher Images kommen | Baut auf #448 (man kennt die Images, jetzt deren Herkunft). |
+| 3 | **#450** | niedrig | Quest/Inhalt: RabbitMQ als Message Broker (`docker pull rabbitmq`) | Konkreter Image-/Broker-Anwendungsfall nach #448/#449. |
+| | **— Content: K8s-/Plattform-Konzepte vertiefen (lose Reihenfolge) —** | | | Eigenständige Vertiefungs-Quests; keine harte Abhängigkeit untereinander, hier nur als kuratierter Lernpfad gebündelt. |
+| 4 | **#265** | niedrig | CRDs & Operatoren (Plattform-Grundkonzept) | Foundation für Operator-Themen. |
+| 5 | **#266** | niedrig | Workload-Typen: DaemonSet & StatefulSet | Ergänzt das Deployment-Wissen. |
+| 6 | **#274** | niedrig | CronJob & Job (geplante/einmalige Aufgaben) | Knüpft an Backups (#244) an. |
+| 7 | **#275** | niedrig | Secrets erzeugen (generic/TLS/Pull-Secrets, Hashing) | Sicherheits-Grundlage. |
+| 8 | **#272** | niedrig | kubectl Context & Multi-Cluster (dev ↔ prod) | QoL fürs CLI-Verständnis. |
+| 9 | **#273** | niedrig | Helm-Templates lesen/schreiben (.Values, _helpers) | Vertieft Helm. |
+| 10 | **#268** | niedrig | Gateway API (Ingress-Nachfolger) | Netzwerk-Vertiefung. |
 | | **— QoL / System-Features —** | | | |
-| 2 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 11 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 3 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 4 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 12 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 13 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
