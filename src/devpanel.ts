@@ -73,6 +73,68 @@ export function isDevPanelConfigured(expected: string | undefined): boolean {
   return !!expected;
 }
 
+/* ---------- Laufzeit-Konfiguration (#334) ---------- */
+
+/**
+ * Laufzeit-Konfiguration, die ein Serve-Container VOR dem Spiel-Bundle in die
+ * Seite injiziert (`window.__KQ_CONFIG__`). Damit kann EIN Dev-Panel-Image mit
+ * verschiedenen Passwörtern laufen (`docker run -e VITE_KQ_DEVPANEL_PW=…`), ohne
+ * neu zu bauen (#334) – bei einer statischen SPA wird `import.meta.env.*` sonst
+ * fest zur BUILD-Zeit eingebacken (#331) und ließe sich zur Laufzeit nicht mehr
+ * ändern.
+ */
+export interface KqRuntimeConfig {
+  /**
+   * Base64-kodiertes Dev-Panel-Passwort (UTF-8). Bewusst Base64, damit der
+   * Container-Entrypoint ein beliebiges Passwort ohne HTML-/JS-Escaping-Fallen in
+   * die Seite schreiben kann: kein `</script>`-Ausbruch, kein Anführungszeichen-
+   * Bruch, sed-sicher (Base64 = `A–Z a–z 0–9 + / =`).
+   */
+  devPanelPwB64?: string;
+}
+
+/**
+ * Dekodiert einen Base64-String (UTF-8) wieder zu Klartext. Leerer/fehlender
+ * Input ⇒ `undefined`. Kaputtes Base64 ⇒ `undefined` (bewusst nie werfen – ein
+ * fehlerhaft injiziertes Config-Snippet soll das Panel nur gesperrt lassen, nicht
+ * den Boot stören). UTF-8-fest über `TextDecoder`, damit auch Umlaute im Passwort
+ * korrekt ankommen (atob allein liefert Latin-1).
+ */
+export function decodeBase64Utf8(b64: string | undefined): string | undefined {
+  if (!b64) return undefined;
+  try {
+    const bin = atob(b64);
+    const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Bestimmt das wirksame Dev-Panel-Passwort. Die zur LAUFZEIT injizierte Config
+ * (#334, Docker) hat Vorrang vor dem zur BUILD-Zeit eingebackenen Wert (#331);
+ * ein leerer/fehlender Laufzeitwert fällt auf den Build-Wert zurück. So
+ * funktionieren beide Distributionswege nebeneinander (Abgrenzung im Ticket).
+ */
+export function resolveDevPanelPassword(
+  runtimePw: string | undefined,
+  buildTimePw: string | undefined,
+): string | undefined {
+  return runtimePw || buildTimePw;
+}
+
+/**
+ * Liest das zur Laufzeit injizierte Passwort aus `window.__KQ_CONFIG__` (#334)
+ * und dekodiert es. Kapselt den `window`-Zugriff, damit die Vorrang-Logik
+ * (`resolveDevPanelPassword`) und die Dekodierung (`decodeBase64Utf8`) je für
+ * sich pur und unit-testbar bleiben.
+ */
+function readRuntimeDevPanelPassword(): string | undefined {
+  const cfg = (window as unknown as { __KQ_CONFIG__?: KqRuntimeConfig }).__KQ_CONFIG__;
+  return decodeBase64Utf8(cfg?.devPanelPwB64);
+}
+
 /**
  * Wandelt die Quest-Roadmap in Anzeige-Zeilen: ein vorgefertigtes Label plus die
  * Marker `completed` (aus dem Spielstand) und `current` (= laufende Quest).
@@ -104,7 +166,13 @@ function esc(s: unknown): string {
  * importiert – im Prod-/Offline-Build existiert dieser Aufruf nicht.
  */
 export function mountDevPanel(): void {
-  const expected = import.meta.env.VITE_KQ_DEVPANEL_PW;
+  // Laufzeit-Injektion (#334, Docker) vor Build-Zeit-Wert (#331); siehe
+  // resolveDevPanelPassword. So gilt EIN Image, viele Passwörter, ohne Rebuild –
+  // mit dem eingebackenen Wert als Fallback.
+  const expected = resolveDevPanelPassword(
+    readRuntimeDevPanelPassword(),
+    import.meta.env.VITE_KQ_DEVPANEL_PW,
+  );
 
   // Eigene, minimale Styles (bleiben im Dev-Chunk – kein Dev-CSS im Prod-Stylesheet).
   const style = document.createElement("style");
