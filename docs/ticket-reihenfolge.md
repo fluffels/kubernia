@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-27 — nächstes Ticket: #448 (Quest „Gängige Images kennenlernen — BusyBox, Redis, Postgres", Start des Docker-Images-Arcs). Kopf: neuer Content-Arc Docker-Grundlagen + QoL + Sonderfälle. Zuletzt abgeschlossen: #246 (End-Zustands-Tests für den Storage-Arc, neue Datei `test/storage-arc-quests.test.ts` mit 10 Tests — Gegenstück zu `storage-drills.test.ts`/#145 für die ersten drei Storage-Quests; pinnt die drei neuen Knut-Quests #242/#243/#244: DiskPressure→Erholung, Bucket-Round-Trip put/ls/get, off-site-Backup überlebt PVC-Verlust + Restore; plus die vom Ticket benannten Negativ-Integrationen emptyDir-nie-Bound und Restore-ohne-Backup-scheitert-sauber; Red-Green belegt. Reines Test-Ticket. npm test 1166 / typecheck / lint / check:arch / check:size grün). **Storage-Lernpfad-Arc damit komplett abgeschlossen (#240–#246 alle erledigt).** Phase 9 + 10 komplett.**
+> **Stand: 2026-06-27 — nächstes Ticket: #448 (Quest „Gängige Images kennenlernen — BusyBox, Redis, Postgres", Start des Docker-Images-Arcs). Kopf: neuer Content-Arc Docker-Grundlagen + QoL + Sonderfälle. Zuletzt abgeschlossen: #265 (vier Krabben-Quiz-Lernkarten in `src/content/data/crabquiz/platform.json`, freigeschaltet nach `gitops-drift-detection`: Was ist eine CRD? / Was macht ein Operator? / Reconcile-Loop als Verallgemeinerung von Argo Self-Heal / CRD+Operator als Paket à la cert-manager; Hafen-Metapher Operator = spezialisierter Hafenarbeiter, CRD = neues Frachtpapier-Formular; plus Konsistenz-Test #265. Reines Content-Ticket, auf Wunsch außer der Reihe vorgezogen. npm test 1167 / typecheck / lint / Boot-Smoke grün). Phase 9 + 10 komplett.**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -49,18 +49,17 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 | 2 | **#449** | niedrig | Quest: Docker Registry / Docker Hub — woher Images kommen | Baut auf #448 (man kennt die Images, jetzt deren Herkunft). |
 | 3 | **#450** | niedrig | Quest/Inhalt: RabbitMQ als Message Broker (`docker pull rabbitmq`) | Konkreter Image-/Broker-Anwendungsfall nach #448/#449. |
 | | **— Content: K8s-/Plattform-Konzepte vertiefen (lose Reihenfolge) —** | | | Eigenständige Vertiefungs-Quests; keine harte Abhängigkeit untereinander, hier nur als kuratierter Lernpfad gebündelt. |
-| 4 | **#265** | niedrig | CRDs & Operatoren (Plattform-Grundkonzept) | Foundation für Operator-Themen. |
-| 5 | **#266** | niedrig | Workload-Typen: DaemonSet & StatefulSet | Ergänzt das Deployment-Wissen. |
-| 6 | **#274** | niedrig | CronJob & Job (geplante/einmalige Aufgaben) | Knüpft an Backups (#244) an. |
-| 7 | **#275** | niedrig | Secrets erzeugen (generic/TLS/Pull-Secrets, Hashing) | Sicherheits-Grundlage. |
-| 8 | **#272** | niedrig | kubectl Context & Multi-Cluster (dev ↔ prod) | QoL fürs CLI-Verständnis. |
-| 9 | **#273** | niedrig | Helm-Templates lesen/schreiben (.Values, _helpers) | Vertieft Helm. |
-| 10 | **#268** | niedrig | Gateway API (Ingress-Nachfolger) | Netzwerk-Vertiefung. |
+| 4 | **#266** | niedrig | Workload-Typen: DaemonSet & StatefulSet | Ergänzt das Deployment-Wissen. |
+| 5 | **#274** | niedrig | CronJob & Job (geplante/einmalige Aufgaben) | Knüpft an Backups (#244) an. |
+| 6 | **#275** | niedrig | Secrets erzeugen (generic/TLS/Pull-Secrets, Hashing) | Sicherheits-Grundlage. |
+| 7 | **#272** | niedrig | kubectl Context & Multi-Cluster (dev ↔ prod) | QoL fürs CLI-Verständnis. |
+| 8 | **#273** | niedrig | Helm-Templates lesen/schreiben (.Values, _helpers) | Vertieft Helm. |
+| 9 | **#268** | niedrig | Gateway API (Ingress-Nachfolger) | Netzwerk-Vertiefung. |
 | | **— QoL / System-Features —** | | | |
-| 11 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 10 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 12 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 13 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 11 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 12 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
