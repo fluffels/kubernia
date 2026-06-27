@@ -71,5 +71,57 @@
     ],
     "correct": 0,
     "explain": "Ein ExternalName-Service hat keinen Selector und keine ClusterIP – nur einen CNAME auf einen externen Namen (z.B. api.bank.example.com). So sprechen Pods einen externen Dienst über den gewohnten Service-Namen an; ändert sich die externe Adresse, fasst man nur den einen Service an. Von außen erreichbar macht man Dienste dagegen über Ingress/LoadBalancer."
+  },
+  {
+    "id": "q-gateway-why",
+    "chapter": "dns-service-discovery",
+    "q": "Es gibt doch schon <b>Ingress</b> – warum gibt es zusätzlich die <b>Gateway API</b>?",
+    "options": [
+      "Ingress war zu begrenzt und je Controller mit eigenen Annotationen herstellerspezifisch; die Gateway API ist der neue, standardisierte Nachfolger mit klarer Rollentrennung – gleiches Ziel (rein in den Cluster), nur sauberer aufgeteilt.",
+      "Die Gateway API ersetzt den Service – Pods melden sich direkt bei ihr an.",
+      "Ingress wurde abgeschafft und funktioniert nicht mehr.",
+      "Gateway API ist nur ein neuer Name für genau dasselbe Ingress-Objekt."
+    ],
+    "correct": 0,
+    "explain": "Ingress deckte nur HTTP grob ab; alles Feinere (Header, Gewichtung, viele TLS-Details) musste über controller-spezifische Annotationen geregelt werden – jeder Hersteller anders. Die Gateway API ist der portable Nachfolger: dasselbe Ziel wie das Hafentor (Verkehr von außen herein), aber als saubere, herstellerübergreifende Ressourcen aufgeteilt. Ingress bleibt gültig; Neues baut man heute mit der Gateway API."
+  },
+  {
+    "id": "q-gateway-class",
+    "chapter": "dns-service-discovery",
+    "q": "Was beschreibt eine <code>GatewayClass</code> in der Gateway API?",
+    "options": [
+      "Die Implementierung bzw. den Controller-Typ, der die Gateways umsetzt (z.B. Envoy) – analog zur IngressClass.",
+      "Die einzelne Routing-Regel, die einen Pfad auf einen Service abbildet.",
+      "Den einzelnen Pod, der den Verkehr von außen annimmt.",
+      "Das TLS-Zertifikat, mit dem HTTPS am Tor entschlüsselt wird."
+    ],
+    "correct": 0,
+    "explain": "Die GatewayClass sagt, WER die Gateways betreibt – welche Implementierung bzw. welcher Controller (z.B. Envoy Gateway). Sie ist das Gegenstück zur IngressClass. Auf ihr setzt dann das konkrete Gateway auf."
+  },
+  {
+    "id": "q-gateway-vs-httproute",
+    "chapter": "dns-service-discovery",
+    "q": "Du willst <code>hafen.de/lager</code> über die Gateway API erreichbar machen. Welche Ressource öffnet den <b>Einlass (Port/Listener)</b> und welche legt die <b>Routing-Regel (Pfad → Service)</b> fest?",
+    "options": [
+      "Das <code>Gateway</code> öffnet den Einlass (z.B. Listener auf Port 443), die <code>HTTPRoute</code> bildet Host/Pfad auf den Service ab.",
+      "Die <code>HTTPRoute</code> öffnet den Port, das <code>Gateway</code> übernimmt das Routing.",
+      "Beides erledigt die <code>GatewayClass</code> in einer einzigen Datei.",
+      "Das macht weiterhin nur der Service – die Gateway API ändert daran nichts."
+    ],
+    "correct": 0,
+    "explain": "Klare Aufteilung: das <b>Gateway</b> ist der konkrete Einlass – welche Ports/Listener offen sind (z.B. 443/HTTPS). Die <b>HTTPRoute</b> hängt sich an ein Gateway und sagt, welcher Host/Pfad (z.B. <code>hafen.de/lager</code>) an welchen Service geht. Das frühere Ingress-Objekt vermischte beides; die Gateway API trennt Einlass und Routing sauber."
+  },
+  {
+    "id": "q-gateway-roles",
+    "chapter": "dns-service-discovery",
+    "q": "Die Gateway API trennt bewusst nach Rollen (<b>Rollentrennung</b>). Wer betreibt typischerweise das <code>Gateway</code> und wer schreibt die <code>HTTPRoute</code>s?",
+    "options": [
+      "Das Plattform-Team betreibt das Gateway (Einlass, Ports, TLS); die App-Teams steuern für ihre Dienste nur HTTPRoutes bei.",
+      "Jeder Pod betreibt sein eigenes Gateway samt HTTPRoute.",
+      "Beides macht ausschließlich das App-Team; das Plattform-Team ist nicht beteiligt.",
+      "Gateways und HTTPRoutes entstehen automatisch – niemand schreibt sie."
+    ],
+    "correct": 0,
+    "explain": "Diese Rollentrennung ist ein Hauptgrund für die Gateway API: das Plattform-Team verantwortet das Gateway (welche Ports/Listener offen sind, Zertifikate) – wie der Hafenmeister das Tor –, während App-Teams nur ihre HTTPRoutes beisteuern (welcher Pfad zu ihrem Service führt), ohne das zentrale Tor anfassen zu müssen."
   }
 ]
