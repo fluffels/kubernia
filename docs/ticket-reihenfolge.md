@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-27 — Image-Erklär-Arc komplett. Der Kopf enthält jetzt nur noch die beiden ⚠️-Sonderfälle (#314 gated, #293 ZULETZT) → das nächste freie Ticket fällt auf den Auto-Rest (Prio→Nummer). Achtung: die obersten Auto-Rest-Zeilen (#183/#186/#187/#190/#204) sind ⚠️-Optik-Tickets, die erst Design-Abstimmung brauchen; das erste sauber-bearbeitbare freie Ticket ist damit das nächste Inhalt/Logik-Ticket (z.B. #218 Stapel-Spiel-Inhalt). Zuletzt abgeschlossen: #212 (nginx als Webserver in der Warenkunde erklärt — Bo-Quest `docker-common-images` eröffnet jetzt mit nginx als der schon benutzten Kiste: Webserver = liefert Webseiten/Inhalte aus, oft Reverse Proxy / Load Balancer; Befehl `docker run nginx` längst bekannt → reine Dialog-Erklärung, kein neuer teach/drill; Quest-Titel + Abschluss-Rekap erweitert; Krabben-Quiz-Karte q-nginx-1 mit chapter docker-common-images; keine Quest-Reihenfolge/-Anzahl geändert → keine Save-Migration). Davor: #450 (Bo-Quest `docker-rabbitmq` „Die Posthalle am Kai" — RabbitMQ = Message Broker, Queue/entkoppelte asynchrone Kommunikation; Drill `docker-run-rabbitmq` + Quiz q-rabbit-1..3), #449 (Bo-Quest `docker-registry` „Woher die Baupläne kommen"), #448 (Bo-Quest `docker-common-images` „Warenkunde: BusyBox, Redis, Postgres"), #272 (kubectl-Context-Quiz), #275 (Secret-Typen-Quiz; dabei Pre-existing-Bug #458 entdeckt — HTML-Tags in Quiz-Optionen via `esc()` als Literaltext), #274 (Job/CronJob-Quiz), #273 (Helm-Templates), #334 (Dev-Panel-Docker). npm test 1206 / typecheck / lint / arch / size grün. Phase 9 + 10 komplett.**
+> **Stand: 2026-06-27 — Kopf neu aufgefüllt (~16 Tickets + 2 ⚠️-Sonderfälle), nachdem er auf die beiden Sonderfälle (#314 gated, #293 ZULETZT) geschrumpft war. Der Backlog ist inzwischen komplett `prio:niedrig`/ohne (keine `hoch`/`mittel` mehr offen), darum kuratiert der Kopf nach Wert statt nach Prio: erst echte Bugs als Quick Wins (#458/#365/#364/#361/#360), dann Docker-Content als Anschluss an den eben fertigen Image-Arc (#315/#369/#309/#218), dann Flavor/Fun (#302/#228/#229), dann tiefer Lernpfad (#281/#282/#430), dann Tech-Debt (#457), zuletzt die ⚠️-Sonderfälle. Alle ⚠️-Grafik-Tickets (#183/#186/#187/#190/#204 u.a.) bleiben bewusst im Auto-Rest, bis Design abgestimmt ist. Nächstes freies Ticket = oberstes des Kopfes (#458). Zuletzt abgeschlossen: #212 (nginx als Webserver in der Warenkunde erklärt — Bo-Quest `docker-common-images` eröffnet jetzt mit nginx als der schon benutzten Kiste: Webserver = liefert Webseiten/Inhalte aus, oft Reverse Proxy / Load Balancer; Befehl `docker run nginx` längst bekannt → reine Dialog-Erklärung, kein neuer teach/drill; Quest-Titel + Abschluss-Rekap erweitert; Krabben-Quiz-Karte q-nginx-1 mit chapter docker-common-images; keine Quest-Reihenfolge/-Anzahl geändert → keine Save-Migration). Davor: #450 (Bo-Quest `docker-rabbitmq` „Die Posthalle am Kai" — RabbitMQ = Message Broker, Queue/entkoppelte asynchrone Kommunikation; Drill `docker-run-rabbitmq` + Quiz q-rabbit-1..3), #449 (Bo-Quest `docker-registry` „Woher die Baupläne kommen"), #448 (Bo-Quest `docker-common-images` „Warenkunde: BusyBox, Redis, Postgres"), #272 (kubectl-Context-Quiz), #275 (Secret-Typen-Quiz; dabei Pre-existing-Bug #458 entdeckt — HTML-Tags in Quiz-Optionen via `esc()` als Literaltext), #274 (Job/CronJob-Quiz), #273 (Helm-Templates), #334 (Dev-Panel-Docker). npm test 1206 / typecheck / lint / arch / size grün. Phase 9 + 10 komplett.**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -44,10 +44,30 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| | **— Content-Arc „Images im Lernpfad erklären" ist abgeschlossen** (#448 Warenkunde / #449 Registry / #450 RabbitMQ / #212 nginx). Keine offene Abhängigkeitskette mehr → der Kopf hält nur noch die ⚠️-Sonderfälle, sonst regiert der Auto-Rest. — | | | |
+| | **— Bugs zuerst (echte Defekte, design-frei umsetzbar = Quick Wins) —** | | | |
+| 1 | **#458** | niedrig | Krabben-Quiz: HTML-Tags in Antwort-Optionen erscheinen als Literaltext (`esc()`) | Bug, bei #275 frisch entdeckt; trifft sichtbar das Quiz. |
+| 2 | **#365** | ohne | docker ps: Tabellenausgabe nicht ausgerichtet (Spalten verschoben) | Bug, sichtbare Ausgabe; reine Sim-/Format-Logik. |
+| 3 | **#364** | ohne | Dialogtexte: Befehls-Badges nie mitten im Wort umbrechen | Bug, Dialog-Lesbarkeit; reine Präsentationslogik. |
+| 4 | **#361** | ohne | Freies-Funken-Text: klären, dass Befehle nur in der Spielwelt wirken | Bug/Wording; eng mit #362/#363 (Auto-Rest). |
+| 5 | **#360** | ohne | Funkgerät: GitHub-Diskussions-Link nicht lesbar | Bug, kleiner Fix. |
+| | **— Docker-Content (knüpft direkt an den eben fertigen Image-Arc an) —** | | | |
+| 6 | **#315** | niedrig | Die lange Zeichenkette nach `docker run` erklären (Container-ID) | Content, passt nahtlos an die Docker-Warenkunde (#448–#212). |
+| 7 | **#369** | niedrig | Erklären, wofür das „ps" in `docker ps` steht (process status) | Content, gleicher Docker-Bogen; klein. |
+| 8 | **#309** | niedrig | Wording „Kiste" vs. „Container" — wann Metapher, wann echter Begriff | Content/Didaktik, betrifft die Docker-Dialoge. |
+| 9 | **#218** | niedrig | Stapel-Spiel: mehr Beispiele/Übungsrunden + Cache/Build erklären | Content, baut auf vorhandenem Minispiel auf (kein neues System). |
+| | **— Flavor-/Fun-Content (Lernspaß, ohne Abhängigkeit) —** | | | |
+| 10 | **#302** | niedrig | Bo Quest-1-Abschluss-Dialog: Üben-Hinweis auf Kralle umlenken | Content, kleiner Dialog-Fix (Kralle-Üben ist fertig). |
+| 11 | **#228** | niedrig | Fun Fact: woher die 8 in K8s kommt (8 Buchstaben) | Content, schnell, hohe Lernspaß-Dichte. |
+| 12 | **#229** | niedrig | Mehr (gute!) Fun Facts & Witze passend zu NPCs/Hafenwelt | Content, Lernspaß; lose Sammlung. |
+| | **— Tiefer Lernpfad —** | | | |
+| 13 | **#281** | niedrig | Keycloak vertiefen: Realm, Client, User/Rollen/Gruppen, Mapper | Lernpfad-Vertiefung, eigenständiger Content-Block. |
+| 14 | **#282** | niedrig | GitLab CI vertiefen: extends/Templates, rules/Trigger, Environments | Lernpfad-Vertiefung, eigenständiger Content-Block. |
+| 15 | **#430** | niedrig | Gating-Konsistenz: Singular/Plural im Abkürzungs-Katalog (vs. #308) | Lernpfad-Logik, kleiner Konsistenz-Fix. |
+| | **— Tech-Debt (sauber umsetzbar) —** | | | |
+| 16 | **#457** | niedrig | `src/content/drills.ts` aufteilen (God-File-Budget 800 LOC, #169) | Tech-Debt, design-frei; hält die Architektur Stardew-fest. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 1 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 2 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 17 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 18 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
