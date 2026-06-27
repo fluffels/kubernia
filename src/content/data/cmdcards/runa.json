@@ -88,5 +88,15 @@
     ],
     "solution": "helm install hafen-prod ./funkdienst --values base.yaml --values prod.yaml",
     "explain": "Mehrere <code>--values</code> (Kurzform <code>-f</code>, durch Nutzung verdient) werden von links nach rechts überlagert – das spätere prod.yaml sticht base.yaml. So baut man gleiche Charts mit anderen Werten je Umgebung/Region."
+  },
+  {
+    "id": "c-helm-template",
+    "chapter": "helm-templates",
+    "q": "Rendere dein Chart <code>vorlage</code> lokal zu Manifesten, ohne es zu installieren.",
+    "accept": [
+      "^helm\\s+template\\s+(\\.\\/)?vorlage$"
+    ],
+    "solution": "helm template vorlage",
+    "explain": "template rendert die Vorlagen (templates/) mit den Werten (values.yaml) zu fertigen Manifesten und gibt sie nur aus – kein Cluster-Zugriff. So prüfst du, was install ausrollen würde."
   }
 ]
