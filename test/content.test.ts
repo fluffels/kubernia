@@ -822,6 +822,39 @@ test("#155 die acht vertiefenden Flotte-Quiz-Karten existieren und hängen an ih
   }
 });
 
+test("#265 CRD/Operator-Lernkarten existieren, sind sauber und hängen an einer Quest", () => {
+  const questIds = new Set(KQContent.QUESTS.map(q => q.id));
+  const platform = KQContent.CRAB_QUIZ.filter(c => /^q-platform-/.test(c.id));
+  assert.ok(platform.length >= 4, "es gibt mindestens vier Plattform-Lernkarten (CRD/Operator/Reconcile)");
+  // Das Grundkonzept muss benannt sein: CRD und Operator je mindestens einmal.
+  const texte = platform.map(c => c.q + " " + c.options.join(" ") + " " + c.explain).join("\n");
+  assert.match(texte, /CustomResourceDefinition|\bCRD\b/, "eine Karte muss die CRD erklären");
+  assert.match(texte, /Operator/, "eine Karte muss den Operator erklären");
+  assert.match(texte, /Reconcile|Self-Heal/i, "die Reconcile-/Self-Heal-Idee muss vorkommen");
+  for (const card of platform) {
+    assert.ok(card.chapter, card.id + ": Lernkarte braucht ein chapter (SR-Pool nach Quest-Abschluss)");
+    assert.ok(questIds.has(card.chapter!), card.id + ": chapter zeigt auf eine unbekannte Quest: " + card.chapter);
+  }
+});
+
+test("#268 Gateway-API-Quiz-Karten hängen an der Netzwerk-Vertiefung und decken GatewayClass/Gateway/HTTPRoute + Abgrenzung zu Ingress ab", () => {
+  const questIds = new Set(KQContent.QUESTS.map(q => q.id));
+  const cards = KQContent.CRAB_QUIZ.filter(c => /^q-gateway-/.test(c.id));
+  assert.ok(cards.length >= 4, "mindestens vier Gateway-API-Karten erwartet, gefunden: " + cards.length);
+  for (const card of cards) {
+    // SR-Pool erst, wenn der Spieler Ingress/DNS schon kennt (#371-Erreichbarkeit über chapter).
+    assert.equal(card.chapter, "dns-service-discovery", card.id + ": chapter soll die Netzwerk-Vertiefungsquest sein");
+    assert.ok(questIds.has(card.chapter!), card.id + ": chapter zeigt auf eine unbekannte Quest: " + card.chapter);
+    assert.ok(card.correct >= 0 && card.correct < card.options.length, card.id + ": correct außerhalb der Optionen");
+    assert.ok(card.explain.trim().length > 0, card.id + ": Erklärung ist Pflicht");
+  }
+  // Die vom Ticket geforderten Konzepte tauchen irgendwo im Quiz auf.
+  const blob = cards.map(c => c.q + " " + c.options.join(" ") + " " + c.explain).join(" ").toLowerCase();
+  for (const begriff of ["gatewayclass", "httproute", "gateway", "ingress", "rollentrennung"]) {
+    assert.ok(blob.includes(begriff), "Gateway-API-Quiz erwähnt „" + begriff + "“ nicht");
+  }
+});
+
 test("#142 pvc-pending erzeugt einen wirklich auf Pending hängenden PVC (Negativfall)", () => {
   const sim = new KQSim({});
   KQContent.DRILLS["pvc-pending"](sim);

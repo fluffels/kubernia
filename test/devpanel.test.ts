@@ -15,6 +15,8 @@ import {
   checkDevPanelPassword,
   isDevPanelConfigured,
   roadmapToRows,
+  decodeBase64Utf8,
+  resolveDevPanelPassword,
   type QuestRoadmapEntry,
 } from "../src/devpanel";
 
@@ -51,6 +53,48 @@ describe("isDevPanelConfigured – ist ein Passwort gesetzt? (#325)", () => {
   it("false ohne Passwort (undefined / leer)", () => {
     expect(isDevPanelConfigured(undefined)).toBe(false);
     expect(isDevPanelConfigured("")).toBe(false);
+  });
+});
+
+describe("decodeBase64Utf8 – Laufzeit-Passwort dekodieren (#334)", () => {
+  // Gegenstück zum Container-Entrypoint, der das Passwort base64-kodiert in die
+  // Seite injiziert (escaping-sicher). Hier wird zurückdekodiert.
+  it("dekodiert ein ASCII-Passwort wieder zum Klartext", () => {
+    // btoa("geheim123") = "Z2VoZWltMTIz"
+    expect(decodeBase64Utf8("Z2VoZWltMTIz")).toBe("geheim123");
+  });
+
+  it("ist UTF-8-fest (Umlaute überleben die Kodierung)", () => {
+    const pw = "Schlüssel-ä-ö-ü-ß-🦀";
+    const b64 = Buffer.from(pw, "utf-8").toString("base64");
+    expect(decodeBase64Utf8(b64)).toBe(pw);
+  });
+
+  it("liefert undefined für leeren/fehlenden Input", () => {
+    expect(decodeBase64Utf8(undefined)).toBeUndefined();
+    expect(decodeBase64Utf8("")).toBeUndefined();
+  });
+
+  it("liefert undefined statt zu werfen, wenn das Base64 kaputt ist", () => {
+    // '!' ist kein gültiges Base64-Zeichen → atob würde werfen; wir fangen das ab,
+    // damit ein fehlerhaft injiziertes Snippet nur sperrt, nicht den Boot bricht.
+    expect(decodeBase64Utf8("!!!nicht base64!!!")).toBeUndefined();
+  });
+});
+
+describe("resolveDevPanelPassword – Laufzeit vor Build-Zeit (#334)", () => {
+  it("nimmt den Laufzeitwert, wenn gesetzt (Docker schlägt Build-Zeit)", () => {
+    expect(resolveDevPanelPassword("runtime-pw", "build-pw")).toBe("runtime-pw");
+  });
+
+  it("fällt auf den Build-Zeit-Wert zurück, wenn kein Laufzeitwert da ist (#331-Fallback)", () => {
+    expect(resolveDevPanelPassword(undefined, "build-pw")).toBe("build-pw");
+    expect(resolveDevPanelPassword("", "build-pw")).toBe("build-pw");
+  });
+
+  it("ist undefined, wenn beide fehlen (Panel bleibt gesperrt)", () => {
+    expect(resolveDevPanelPassword(undefined, undefined)).toBeUndefined();
+    expect(resolveDevPanelPassword("", "")).toBe("");
   });
 });
 

@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-27 — nächstes Ticket: #448 (Quest „Gängige Images kennenlernen — BusyBox, Redis, Postgres", Start des Docker-Images-Arcs). Kopf: neuer Content-Arc Docker-Grundlagen + QoL + Sonderfälle. Zuletzt abgeschlossen: #246 (End-Zustands-Tests für den Storage-Arc, neue Datei `test/storage-arc-quests.test.ts` mit 10 Tests — Gegenstück zu `storage-drills.test.ts`/#145 für die ersten drei Storage-Quests; pinnt die drei neuen Knut-Quests #242/#243/#244: DiskPressure→Erholung, Bucket-Round-Trip put/ls/get, off-site-Backup überlebt PVC-Verlust + Restore; plus die vom Ticket benannten Negativ-Integrationen emptyDir-nie-Bound und Restore-ohne-Backup-scheitert-sauber; Red-Green belegt. Reines Test-Ticket. npm test 1166 / typecheck / lint / check:arch / check:size grün). **Storage-Lernpfad-Arc damit komplett abgeschlossen (#240–#246 alle erledigt).** Phase 9 + 10 komplett.**
+> **Stand: 2026-06-27 — nächstes freies Ticket: #449 (Docker Registry / Docker Hub; #450 danach). Kopf: Rest Docker-Images-Arc + Sonderfälle. Zuletzt abgeschlossen: #448 (neue Bo-Quest `docker-common-images` „Warenkunde: BusyBox, Redis, Postgres" an Index 2 — BusyBox=Werkzeug-Kiste, Redis=In-Memory-Cache, Postgres=relationale DB; je ein `docker run`-Schritt + Drills + Quiz-Karten; Save-Migrations-Erwartungen wegen Mitten-Einschub nachgezogen; Einstieg des Docker-Images-Arcs). Davor (Parallel-Batch): #272 (vier Krabben-Quiz-Lernkarten in `src/content/data/crabquiz/contexts.json` zu kubectl Context & Multi-Cluster, freigeschaltet nach `k8s-node-capacity`: `current-context`/`get-contexts` / `use-context` dev↔prod / „derselbe Befehl trifft je nach Context einen anderen Cluster" / Mini-Szenario „du wolltest dev, warst aber auf prod"; bewusst Quiz statt Befehlskarte, da Befehlskarten gegen den Sim laufen und `kubectl config` dort fehlt — neuer Test `test/contexts-quiz.test.ts`), #275 (vier Krabben-Quiz-Lernkarten in `src/content/data/crabquiz/security.json` zu Secret-Typen, freigeschaltet nach `secrets-encrypted`: generic/tls/docker-registry / „Base64 ≠ verschlüsselt" / Pull-Secret-`imagePullSecrets` / Passwort-Hash bcrypt; dabei Pre-existing-Bug #458 entdeckt — HTML-Tags in Quiz-Optionen werden via `esc()` als Literaltext gerendert), #274 (fünf Krabben-Quiz-Lernkarten in `src/content/data/crabquiz/kubernetes.json` zu Job & CronJob, freigeschaltet nach `storage-backup-restore`: Job vs. Deployment / CronJob = Job nach Zeitplan / 3-Wege-Abgrenzung / `kubectl create job --from=cronjob/<name>` / cron-Zeile `0 3 * * *`; quiz-getrieben wie der Storage-Arc, neuer Test `test/cronjob-job-quiz.test.ts`), dazu #273 (Helm-Templates), #334 (Dev-Panel-Docker), #268 (Gateway-API-Quiz), #266 (DaemonSet/StatefulSet-Quiz), #265 (CRD/Operator-Quiz). npm test / typecheck / lint / arch / size grün. Phase 9 + 10 komplett.**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -45,22 +45,11 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
 | | **— Content-Arc: Docker-Images & Registry (dependency-geordnet) —** | | | Der nächste echte Lernpfad-Arc nach dem abgeschlossenen Storage-Arc. Reihenfolge ist load-bearing: erst die gängigen Images kennen, dann woher sie kommen, dann ein konkreter Broker als Anwendungsfall. |
-| 1 | **#448** | niedrig | Quest: Gängige Images — BusyBox, Redis, Postgres | **Nächstes Ticket.** Einstieg des Arcs: wofür steht welches Image. |
-| 2 | **#449** | niedrig | Quest: Docker Registry / Docker Hub — woher Images kommen | Baut auf #448 (man kennt die Images, jetzt deren Herkunft). |
-| 3 | **#450** | niedrig | Quest/Inhalt: RabbitMQ als Message Broker (`docker pull rabbitmq`) | Konkreter Image-/Broker-Anwendungsfall nach #448/#449. |
-| | **— Content: K8s-/Plattform-Konzepte vertiefen (lose Reihenfolge) —** | | | Eigenständige Vertiefungs-Quests; keine harte Abhängigkeit untereinander, hier nur als kuratierter Lernpfad gebündelt. |
-| 4 | **#265** | niedrig | CRDs & Operatoren (Plattform-Grundkonzept) | Foundation für Operator-Themen. |
-| 5 | **#266** | niedrig | Workload-Typen: DaemonSet & StatefulSet | Ergänzt das Deployment-Wissen. |
-| 6 | **#274** | niedrig | CronJob & Job (geplante/einmalige Aufgaben) | Knüpft an Backups (#244) an. |
-| 7 | **#275** | niedrig | Secrets erzeugen (generic/TLS/Pull-Secrets, Hashing) | Sicherheits-Grundlage. |
-| 8 | **#272** | niedrig | kubectl Context & Multi-Cluster (dev ↔ prod) | QoL fürs CLI-Verständnis. |
-| 9 | **#273** | niedrig | Helm-Templates lesen/schreiben (.Values, _helpers) | Vertieft Helm. |
-| 10 | **#268** | niedrig | Gateway API (Ingress-Nachfolger) | Netzwerk-Vertiefung. |
-| | **— QoL / System-Features —** | | | |
-| 11 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
+| 1 | **#449** | niedrig | Quest: Docker Registry / Docker Hub — woher Images kommen | Baut auf #448 (man kennt die Images, jetzt deren Herkunft). |
+| 2 | **#450** | niedrig | Quest/Inhalt: RabbitMQ als Message Broker (`docker pull rabbitmq`) | Konkreter Image-/Broker-Anwendungsfall nach #448/#449. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 12 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 13 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 3 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 5 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 

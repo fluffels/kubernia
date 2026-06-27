@@ -96,6 +96,125 @@
     ]
   },
   {
+    "id": "docker-common-images",
+    "title": "Warenkunde: BusyBox, Redis, Postgres",
+    "giver": "bo",
+    "topic": "docker",
+    "rewardXp": 30,
+    "rewardCoins": 22,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "bo",
+        "lines": [
+          "Zurück, Landratte! Bevor Bo dir neue Befehle gibt: Bo hat dir letztes Mal drei Namen hingeworfen – <b>BusyBox</b>, <b>Redis</b>, <b>Postgres</b> – aber nie erklärt, <b>WOFÜR</b> die stehen. Heute: Warenkunde. Bo zeigt dir, was in jeder Kiste steckt.",
+          "Erste Kiste: <b>BusyBox</b>. Eine <b>winzige Allzweck-Kiste</b> – viele Mini-Werkzeuge (<code>ls</code>, <code>cat</code>, <code>wget</code> und Co.) in einer einzigen, federleichten Box. Du startest sie, wenn du <b>schnell etwas testen</b> oder in einen Cluster <b>reinschauen</b> willst. Der Befehl ist der alte: <code>docker run</code> – nur der Bauplan-Name wechselt."
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Allzweck-Kiste starten",
+        "cmd": {
+          "id": "t-run-busybox",
+          "intro": "🆕 Kein neuer Befehl – <code>docker run</code> kennst du. Neu ist nur das <b>Image</b>: <code>busybox</code>, die federleichte Werkzeug-Kiste.",
+          "text": "Starte einen Container aus dem Image <code>busybox</code>. (Einfachste Form, keine Extras!)",
+          "accept": [
+            "^docker\\s+run\\s+busybox(:\\S+)?$"
+          ],
+          "solution": "docker run busybox",
+          "hint": "Muster: docker run <image> – das Image heißt busybox."
+        }
+      },
+      {
+        "type": "dialog",
+        "npc": "bo",
+        "lines": [
+          "Zweite Kiste: <b>Redis</b>. Ein <b>In-Memory Key-Value-Store</b> – ein blitzschnelles Gedächtnis, das Daten als <b>Schlüssel→Wert</b>-Paare direkt im Arbeitsspeicher hält. Weil nichts auf die langsame Platte muss, ist es <b>rasend schnell</b> – darum nimmt man Redis als <b>Cache</b> (Zwischenspeicher) oder für <b>Sitzungen</b> (Sessions). Merke: schnell, aber flüchtig. Bo mag schnell.",
+          "Auch hier: gleicher Befehl, anderer Bauplan. <code>docker run redis</code>."
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Cache starten",
+        "cmd": {
+          "id": "t-run-redis",
+          "intro": "🆕 Wieder nur ein neues Image: <code>redis</code>, der schnelle In-Memory-Cache.",
+          "text": "Starte einen Container aus dem Image <code>redis</code>.",
+          "accept": [
+            "^docker\\s+run\\s+redis(:\\S+)?$"
+          ],
+          "solution": "docker run redis",
+          "hint": "Muster: docker run <image> – das Image heißt redis."
+        }
+      },
+      {
+        "type": "dialog",
+        "npc": "bo",
+        "lines": [
+          "Dritte Kiste: <b>Postgres</b> (voll: PostgreSQL). Eine <b>relationale Datenbank</b> – Daten liegen in <b>Tabellen</b> mit Zeilen und Spalten, dauerhaft gespeichert. Das ist der <b>häufigste Datenbank-Container</b> in echten Clustern, wenn Daten <b>verlässlich bleiben</b> müssen. Gegenstück zu Redis: Postgres ist auf <b>Dauerhaftigkeit</b> aus, nicht auf reines Tempo.",
+          "Du ahnst es: <code>docker run postgres</code>."
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Datenbank starten",
+        "cmd": {
+          "id": "t-run-postgres",
+          "intro": "🆕 Letztes neues Image: <code>postgres</code>, die relationale Datenbank.",
+          "text": "Starte einen Container aus dem Image <code>postgres</code>.",
+          "accept": [
+            "^docker\\s+run\\s+postgres(:\\S+)?$"
+          ],
+          "solution": "docker run postgres",
+          "hint": "Muster: docker run <image> – das Image heißt postgres."
+        }
+      },
+      {
+        "type": "dialog",
+        "npc": "bo",
+        "lines": [
+          "Bo fasst zusammen, Landratte – drei Kisten, drei Aufgaben: <b>BusyBox</b> = winzige Werkzeug-Kiste zum schnellen Reinschauen/Testen · <b>Redis</b> = schnelles, flüchtiges Gedächtnis (Cache/Sessions) · <b>Postgres</b> = dauerhafte Datenbank mit Tabellen. Drei verschiedene Werkzeuge – wähl das richtige für den Job. Bo ist Stein."
+        ]
+      },
+      {
+        "type": "drill",
+        "brief": "Bos Warenkunde-Runde",
+        "pool": [
+          "docker-run-busybox",
+          "docker-run-redis",
+          "docker-run-postgres"
+        ],
+        "count": 3,
+        "intro": "Drei Kisten, drei schnelle Starts – einmal jede:"
+      },
+      {
+        "type": "choice",
+        "npc": "bo",
+        "reviewId": "q-ch1-13",
+        "q": "Bo prüft die Warenkunde: Welche Kiste nimmst du wofür?",
+        "options": [
+          {
+            "t": "BusyBox zum schnellen Reinschauen/Testen, Redis als schneller Cache (Zwischenspeicher), Postgres für dauerhaft gespeicherte Daten in Tabellen.",
+            "ok": true,
+            "reply": "PERFEKT. Werkzeug-Kiste, schnelles Gedächtnis, echte Datenbank. Bo nickt steinern."
+          },
+          {
+            "t": "Redis ist die dauerhafte Datenbank, Postgres nur ein flüchtiger Cache.",
+            "ok": false,
+            "reply": "ANDERSRUM! Redis = schnell & flüchtig (Cache). Postgres = dauerhaft (Datenbank). Nochmal merken!"
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "bo",
+        "lines": [
+          "Genug Warenkunde. Jetzt weißt du, WAS in den Kisten steckt – als Nächstes zeigt Bo dir, wie du den <b>Überblick</b> über deine laufenden Kisten behältst. Komm wieder, wenn du so weit bist."
+        ]
+      }
+    ]
+  },
+  {
     "id": "docker-list-containers",
     "title": "Den Überblick behalten",
     "giver": "bo",

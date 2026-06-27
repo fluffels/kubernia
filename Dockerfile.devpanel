@@ -1,0 +1,37 @@
+# syntax=docker/dockerfile:1
+# KubeQuest – Dev-Panel als Docker-Image (#334).
+#
+# Liefert den passwortgegateten Dev-Panel-Build (#325/#331) als schlankes
+# Serve-Image aus, in das das Passwort erst zur LAUFZEIT injiziert wird
+# (`docker run -e VITE_KQ_DEVPANEL_PW=…`) – ein Image, viele Passwörter, kein
+# Rebuild pro Passwortwechsel. Siehe docs/devpanel-docker.md.
+#
+# ⚠️ Das ist BEWUSST ein separater Distributionsweg neben #331 (Build-Zeit-Secret)
+# und neben dem normalen Spiel – KEINE Betriebs-Infrastruktur des Spiels selbst
+# (ADR 0002: das ausgelieferte Spiel bleibt die offline-fähige Single-File-Web-App).
+#
+# ⚠️ Das Passwort wird NICHT ins Image gebaut: der Build setzt VITE_KQ_DEVPANEL_PW
+# bewusst nicht (Build-Zeit-Wert bleibt leer), der Entrypoint injiziert es erst beim
+# Containerstart. So enthält das Image kein Secret.
+
+# --- Stage 1: Build (Dev-Panel-Bundle, ohne eingebackenes Passwort) ---
+FROM node:22-bookworm-slim AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+# --mode devpanel schaltet das Panel frei (__KQ_DEVPANEL__=true). Kein
+# VITE_KQ_DEVPANEL_PW gesetzt → der Build-Zeit-Wert ist leer (Fallback), das echte
+# Passwort kommt zur Laufzeit aus der __KQ_CONFIG__-Injektion.
+RUN npm run build:devpanel
+
+# --- Stage 2: Serve (schlankes nginx, Laufzeit-Injektion per Entrypoint) ---
+FROM nginx:1.27-alpine AS serve
+# Die self-contained index.html (alle Assets inline) ins nginx-Wurzelverzeichnis.
+COPY --from=build /app/dist-devpanel/ /usr/share/nginx/html/
+# Das offizielle nginx-Image führt /docker-entrypoint.d/*.sh vor dem Start aus –
+# unser Skript injiziert dort das Laufzeit-Passwort in die index.html.
+COPY docker/devpanel-entrypoint.sh /docker-entrypoint.d/40-kq-devpanel-config.sh
+RUN chmod +x /docker-entrypoint.d/40-kq-devpanel-config.sh
+EXPOSE 80
+# CMD/ENTRYPOINT vom nginx-Basisimage übernehmen (nginx im Vordergrund).

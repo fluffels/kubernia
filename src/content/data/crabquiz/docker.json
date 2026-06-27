@@ -162,5 +162,43 @@
     ],
     "correct": 0,
     "explain": "Eine Registry ist ein zentrales Image-Lager. Docker Hub ist öffentlich; eine private Registry hält die eigenen, nicht-öffentlichen Images unter eigener Kontrolle und nah am Cluster. Die Adresse schreibt man dann vorne mit dran: ghcr.io/team/app:tag."
+  },
+  {
+    "id": "q-ch1-11",
+    "chapter": "docker-common-images",
+    "q": "Wofür steht das <code>redis</code>-Image?",
+    "options": [
+      "Ein In-Memory Key-Value-Store – ein blitzschnelles, aber flüchtiges Gedächtnis, typisch als Cache oder für Sessions.",
+      "Eine relationale Datenbank für dauerhaft gespeicherte Tabellen.",
+      "Eine winzige Werkzeug-Kiste mit ls, cat und Co.",
+      "Eine Registry, aus der man andere Images lädt."
+    ],
+    "correct": 0,
+    "explain": "Redis hält Schlüssel→Wert-Paare direkt im Arbeitsspeicher – darum rasend schnell, aber flüchtig. Man nimmt es als Cache (Zwischenspeicher) oder für Sitzungen. Dauerhafte Tabellen-Daten gehören dagegen in eine Datenbank wie Postgres."
+  },
+  {
+    "id": "q-ch1-12",
+    "chapter": "docker-common-images",
+    "q": "Wofür steht das <code>postgres</code>-Image?",
+    "options": [
+      "Eine relationale Datenbank – Daten in Tabellen (Zeilen/Spalten), dauerhaft gespeichert; der häufigste DB-Container in echten Clustern.",
+      "Ein flüchtiger Cache, der alles nur im Arbeitsspeicher hält.",
+      "Eine winzige Allzweck-Kiste für schnelle Tests.",
+      "Ein Webserver, der statische Seiten ausliefert."
+    ],
+    "correct": 0,
+    "explain": "Postgres (PostgreSQL) ist eine relationale Datenbank: Daten liegen in Tabellen und bleiben dauerhaft erhalten. Gegenstück zu Redis – Postgres ist auf Verlässlichkeit/Dauerhaftigkeit aus, nicht auf reines Tempo."
+  },
+  {
+    "id": "q-ch1-13",
+    "q": "Welche Kiste nimmst du wofür: BusyBox, Redis, Postgres?",
+    "options": [
+      "BusyBox zum schnellen Reinschauen/Testen, Redis als schneller Cache, Postgres für dauerhaft gespeicherte Daten in Tabellen.",
+      "BusyBox als Datenbank, Redis zum Testen, Postgres als Cache.",
+      "Redis ist die dauerhafte Datenbank, Postgres nur ein flüchtiger Cache.",
+      "Alle drei sind dasselbe – nur andere Namen."
+    ],
+    "correct": 0,
+    "explain": "Drei Werkzeuge, drei Aufgaben: BusyBox = winzige Werkzeug-Kiste (schnell reinschauen/testen), Redis = schnelles, flüchtiges Gedächtnis (Cache/Sessions), Postgres = dauerhafte relationale Datenbank (Tabellen). Wähl das passende fürs jeweilige Ziel."
   }
 ]

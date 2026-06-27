@@ -1,6 +1,7 @@
 [
   "onboarding-sign-on",
   "docker-first-container",
+  "docker-common-images",
   "docker-list-containers",
   "docker-stack-minigame",
   "docker-run-options",
@@ -26,6 +27,7 @@
   "git-pipeline",
   "git-merge-branches",
   "helm-umbrella-chart",
+  "helm-templates",
   "network-policy",
   "secrets-encrypted",
   "dns-service-discovery",
