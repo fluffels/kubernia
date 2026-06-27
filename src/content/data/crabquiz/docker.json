@@ -190,6 +190,19 @@
     "explain": "Postgres (PostgreSQL) ist eine relationale Datenbank: Daten liegen in Tabellen und bleiben dauerhaft erhalten. Gegenstück zu Redis – Postgres ist auf Verlässlichkeit/Dauerhaftigkeit aus, nicht auf reines Tempo."
   },
   {
+    "id": "q-nginx-1",
+    "chapter": "docker-common-images",
+    "q": "Wofür steht das <code>nginx</code>-Image?",
+    "options": [
+      "Ein Webserver – liefert Webseiten/Inhalte aus und steht oft als Reverse Proxy / Load Balancer vor anderen Diensten.",
+      "Ein flüchtiger In-Memory-Cache für Schlüssel→Wert-Paare.",
+      "Eine relationale Datenbank für dauerhaft gespeicherte Tabellen.",
+      "Eine winzige Allzweck-Kiste mit ls, cat und Co."
+    ],
+    "correct": 0,
+    "explain": "nginx ist ein Webserver: Er liefert Webseiten und Inhalte an Browser aus – ein realistisches, weit verbreitetes Beispiel-Image, an dem man einen laufenden Dienst sieht. Oft steht ein Webserver wie nginx auch als Reverse Proxy oder Load Balancer vorne und verteilt Anfragen an dahinterliegende Dienste."
+  },
+  {
     "id": "q-ch1-13",
     "q": "Welche Kiste nimmst du wofür: BusyBox, Redis, Postgres?",
     "options": [

@@ -97,7 +97,7 @@
   },
   {
     "id": "docker-common-images",
-    "title": "Warenkunde: BusyBox, Redis, Postgres",
+    "title": "Warenkunde: nginx, BusyBox, Redis, Postgres",
     "giver": "bo",
     "topic": "docker",
     "rewardXp": 30,
@@ -107,8 +107,10 @@
         "type": "dialog",
         "npc": "bo",
         "lines": [
-          "Zurück, Landratte! Bevor Bo dir neue Befehle gibt: Bo hat dir letztes Mal drei Namen hingeworfen – <b>BusyBox</b>, <b>Redis</b>, <b>Postgres</b> – aber nie erklärt, <b>WOFÜR</b> die stehen. Heute: Warenkunde. Bo zeigt dir, was in jeder Kiste steckt.",
-          "Erste Kiste: <b>BusyBox</b>. Eine <b>winzige Allzweck-Kiste</b> – viele Mini-Werkzeuge (<code>ls</code>, <code>cat</code>, <code>wget</code> und Co.) in einer einzigen, federleichten Box. Du startest sie, wenn du <b>schnell etwas testen</b> oder in einen Cluster <b>reinschauen</b> willst. Der Befehl ist der alte: <code>docker run</code> – nur der Bauplan-Name wechselt."
+          "Zurück, Landratte! Bevor Bo dir neue Befehle gibt: Zeit für <b>Warenkunde</b>. Bo zeigt dir, was eigentlich in den Kisten steckt – auch in der, die du längst benutzt hast.",
+          "Fang Bo mit deinem alten Bekannten an: <b>nginx</b>. Den hast du in der allerersten Lektion gezogen und gestartet – aber was IST das? Ein <b>Webserver</b>: ein Programm, das <b>Webseiten und Inhalte ausliefert</b>. Tippt ein Browser eine Adresse, antwortet der Webserver mit der Seite. nginx ist einer der meistgenutzten überhaupt – darum taucht er ständig als Beispiel-Image auf, und an ihm <b>siehst</b> du einen echten laufenden Dienst. Oft steht so ein Webserver auch <b>vorne als Pförtner</b> (Reverse Proxy / Load Balancer) und verteilt Anfragen an dahinterliegende Dienste. Der Befehl ist der alte: <code>docker run nginx</code> – Bo gibt dir gleich drei <b>neue</b> Namen dazu.",
+          "Bo hat dir letztes Mal nämlich drei weitere Namen hingeworfen – <b>BusyBox</b>, <b>Redis</b>, <b>Postgres</b> – aber nie erklärt, <b>WOFÜR</b> die stehen. Holen wir das nach. Jeweils gleicher Befehl, anderer Bauplan-Name.",
+          "Erste neue Kiste: <b>BusyBox</b>. Eine <b>winzige Allzweck-Kiste</b> – viele Mini-Werkzeuge (<code>ls</code>, <code>cat</code>, <code>wget</code> und Co.) in einer einzigen, federleichten Box. Du startest sie, wenn du <b>schnell etwas testen</b> oder in einen Cluster <b>reinschauen</b> willst. Der Befehl ist der alte: <code>docker run</code> – nur der Bauplan-Name wechselt."
         ]
       },
       {
@@ -173,7 +175,7 @@
         "type": "dialog",
         "npc": "bo",
         "lines": [
-          "Bo fasst zusammen, Landratte – drei Kisten, drei Aufgaben: <b>BusyBox</b> = winzige Werkzeug-Kiste zum schnellen Reinschauen/Testen · <b>Redis</b> = schnelles, flüchtiges Gedächtnis (Cache/Sessions) · <b>Postgres</b> = dauerhafte Datenbank mit Tabellen. Drei verschiedene Werkzeuge – wähl das richtige für den Job. Bo ist Stein."
+          "Bo fasst zusammen, Landratte – vier Kisten, vier Aufgaben: <b>nginx</b> = Webserver, liefert Webseiten/Inhalte aus · <b>BusyBox</b> = winzige Werkzeug-Kiste zum schnellen Reinschauen/Testen · <b>Redis</b> = schnelles, flüchtiges Gedächtnis (Cache/Sessions) · <b>Postgres</b> = dauerhafte Datenbank mit Tabellen. Verschiedene Werkzeuge – wähl das richtige für den Job. Bo ist Stein."
         ]
       },
       {
