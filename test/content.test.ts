@@ -612,6 +612,45 @@ test("Red-Green: ein Drill mit roh-HTML-Platzhalter in why wird gemeldet", () =>
   assert.ok(problems.some(p => p.includes("drill-roh")), "roher Platzhalter nicht erkannt: " + problems.join(", "));
 });
 
+/** Findet Quiz-Karten, deren `q`/`options`/`explain` einen rohen HTML-Platzhalter
+ *  (z.B. `<name>`, `<sensitive>`) enthalten. Alle drei Felder werden im Krabben-Quiz
+ *  per innerHTML gerendert (Optionen seit #458 ebenfalls als HTML, vorher escaped) –
+ *  ein roher Platzhalter verschwindet dadurch im Browser oder erscheint kaputt. Wer
+ *  spitze Klammern wörtlich zeigen will, schreibt sie als `&lt;…&gt;`.
+ *  Erlaubt: echte HTML-Elemente wie <code>, <b>, <i> (analog #320). */
+function quizCardsWithRawHtmlPlaceholders(cards: typeof KQContent.CRAB_QUIZ): string[] {
+  const SAFE_TAGS = new Set(["code", "b", "i", "em", "strong", "br", "span", "div"]);
+  const bareTag = /<([a-zA-Z][a-zA-Z0-9äöüÄÖÜ\-/]*)>/g;
+  const out: string[] = [];
+  const scan = (text: string, label: string) => {
+    bareTag.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = bareTag.exec(text)) !== null) {
+      if (!SAFE_TAGS.has(m[1].toLowerCase())) { out.push(`${label}: ${m[0]}`); break; }
+    }
+  };
+  for (const c of cards) {
+    scan(c.q, `${c.id}.q`);
+    scan(c.explain, `${c.id}.explain`);
+    c.options.forEach((o, i) => scan(o, `${c.id}.options[${i}]`));
+  }
+  return out;
+}
+
+test("Quiz: q/options/explain enthalten keine rohen HTML-Platzhalter, die innerHTML verschluckt (#458/#320)", () => {
+  const problems = quizCardsWithRawHtmlPlaceholders(KQContent.CRAB_QUIZ);
+  assert.deepEqual(problems, [], "Quiz-Felder mit unescapten <placeholder>-Tags (werden im Browser unsichtbar/kaputt):\n" + problems.join("\n"));
+});
+
+test("Red-Green: eine Quiz-Option mit roh-HTML-Platzhalter wird gemeldet (#458)", () => {
+  const kaputt = [
+    ...KQContent.CRAB_QUIZ,
+    { id: "q-roh-test", q: "?", options: ["zeigt <sensitive> statt Klartext", "b"], correct: 0, explain: "e" },
+  ];
+  const problems = quizCardsWithRawHtmlPlaceholders(kaputt as typeof KQContent.CRAB_QUIZ);
+  assert.ok(problems.some(p => p.includes("q-roh-test.options[0]")), "roher Platzhalter in Option nicht erkannt: " + problems.join(", "));
+});
+
 test("docker-run-named: diag benennt falschen Namen gezielt, nicht Reihenfolge (#321)", () => {
   const make = KQContent.DRILLS["docker-run-named"];
   let tested = false;

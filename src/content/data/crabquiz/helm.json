@@ -88,7 +88,7 @@
   {
     "id": "q-helm-package",
     "chapter": "helm-umbrella-chart",
-    "q": "Was macht helm package <chart>?",
+    "q": "Was macht helm package &lt;chart&gt;?",
     "options": [
       "Es schnürt das Chart in ein versioniertes .tgz-Archiv – zum Teilen oder in ein Repo legen.",
       "Es startet das Chart als Container.",
@@ -96,7 +96,7 @@
       "Es lädt ein fremdes Chart herunter."
     ],
     "correct": 0,
-    "explain": "package erzeugt <name>-<version>.tgz. Genau diese Archive liegen in Chart-Repos – das ist die Brücke vom eigenen Chart zum Verteilen."
+    "explain": "package erzeugt &lt;name&gt;-&lt;version&gt;.tgz. Genau diese Archive liegen in Chart-Repos – das ist die Brücke vom eigenen Chart zum Verteilen."
   },
   {
     "id": "q-helm-version-app",

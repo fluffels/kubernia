@@ -97,7 +97,7 @@
       "webserver ist ein Tippfehler – nur nginx zählt."
     ],
     "correct": 0,
-    "explain": "Hinter --name steht DEIN Wunschname (frei wählbar – auch „meine-kiste“). Ganz hinten steht immer das Image: die Vorlage/der Bausatz, aus dem der Container gestartet wird – und das muss als Bauplan existieren. Muster: docker run [optionen] --name <wunschname> <image>."
+    "explain": "Hinter --name steht DEIN Wunschname (frei wählbar – auch „meine-kiste“). Ganz hinten steht immer das Image: die Vorlage/der Bausatz, aus dem der Container gestartet wird – und das muss als Bauplan existieren. Muster: docker run [optionen] --name &lt;wunschname&gt; &lt;image&gt;."
   },
   {
     "id": "q-ch1-9",
@@ -110,7 +110,7 @@
       "<code>docker ps</code> – das zeigt Container, keine Dateien."
     ],
     "correct": 0,
-    "explain": "ls = „list“: zeigt, was im Ordner liegt (Dateien/Verzeichnisse). cat <datei> zeigt dagegen den INHALT einer einzelnen Datei. Faustregel: erst ls (was ist da?), dann cat <datei> (was steht drin?)."
+    "explain": "ls = „list“: zeigt, was im Ordner liegt (Dateien/Verzeichnisse). cat &lt;datei&gt; zeigt dagegen den INHALT einer einzelnen Datei. Faustregel: erst ls (was ist da?), dann cat &lt;datei&gt; (was steht drin?)."
   },
   {
     "id": "q-ch1-10",

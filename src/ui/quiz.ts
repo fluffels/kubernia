@@ -121,9 +121,14 @@ export const quizUI = part({
       const q = content.q!;
       r.current.order = shuffled(q.options.map((_: unknown, i: number) => i));
       this.reviewSel = -1;   // Tastatur-Auswahl (#258) je Karte zurücksetzen
+      // Optionen werden – wie Frage (q.q) und Erklärung (q.explain) – als HTML
+      // gerendert, damit Befehls-Formatierung (<code>/<b>/<i>) konsistent erscheint
+      // statt als Literaltext (#458). Inhalt ist statisches, autorenkontrolliertes
+      // JSON (kein Nutzer-Input). Spitze Klammern, die wörtlich gemeint sind, gehören
+      // als &lt;…&gt; in die Daten – ein Wächter-Test (content.test.ts) erzwingt das.
       body = `<div class="quiz-q">${q.q}</div>
         <div class="quiz-options" id="quiz-options">
-          ${r.current.order.map((oi: number, i: number) => `<button data-action="answerReviewQuiz" data-oi="${oi}"><span class="qnum">${i + 1}</span>${esc(q.options[oi])}</button>`).join("")}
+          ${r.current.order.map((oi: number, i: number) => `<button data-action="answerReviewQuiz" data-oi="${oi}"><span class="qnum">${i + 1}</span>${q.options[oi]}</button>`).join("")}
         </div><div id="review-explain"></div>`;
     } else {
       const card = content.card!;

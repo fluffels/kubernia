@@ -72,7 +72,7 @@
       "Es ist die IP-Adresse des Pods in Kurzform."
     ],
     "correct": 0,
-    "explain": "Pods aus einem Deployment werden automatisch benannt: <Deployment>-<ReplicaSet-Hash>-<Pod-Hash>. So kollidiert kein Name, auch wenn ständig neue Pods nachstarten. Die noch kryptischere CONTAINER ID in <code>docker ps</code> vergibt analog die Container-Runtime – beides sind eindeutige, maschinengemachte Stempel, keine Handarbeit."
+    "explain": "Pods aus einem Deployment werden automatisch benannt: &lt;Deployment&gt;-&lt;ReplicaSet-Hash&gt;-&lt;Pod-Hash&gt;. So kollidiert kein Name, auch wenn ständig neue Pods nachstarten. Die noch kryptischere CONTAINER ID in <code>docker ps</code> vergibt analog die Container-Runtime – beides sind eindeutige, maschinengemachte Stempel, keine Handarbeit."
   },
   {
     "id": "q-ch3-1",
