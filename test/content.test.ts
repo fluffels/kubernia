@@ -822,6 +822,21 @@ test("#155 die acht vertiefenden Flotte-Quiz-Karten existieren und hängen an ih
   }
 });
 
+test("#265 CRD/Operator-Lernkarten existieren, sind sauber und hängen an einer Quest", () => {
+  const questIds = new Set(KQContent.QUESTS.map(q => q.id));
+  const platform = KQContent.CRAB_QUIZ.filter(c => /^q-platform-/.test(c.id));
+  assert.ok(platform.length >= 4, "es gibt mindestens vier Plattform-Lernkarten (CRD/Operator/Reconcile)");
+  // Das Grundkonzept muss benannt sein: CRD und Operator je mindestens einmal.
+  const texte = platform.map(c => c.q + " " + c.options.join(" ") + " " + c.explain).join("\n");
+  assert.match(texte, /CustomResourceDefinition|\bCRD\b/, "eine Karte muss die CRD erklären");
+  assert.match(texte, /Operator/, "eine Karte muss den Operator erklären");
+  assert.match(texte, /Reconcile|Self-Heal/i, "die Reconcile-/Self-Heal-Idee muss vorkommen");
+  for (const card of platform) {
+    assert.ok(card.chapter, card.id + ": Lernkarte braucht ein chapter (SR-Pool nach Quest-Abschluss)");
+    assert.ok(questIds.has(card.chapter!), card.id + ": chapter zeigt auf eine unbekannte Quest: " + card.chapter);
+  }
+});
+
 test("#142 pvc-pending erzeugt einen wirklich auf Pending hängenden PVC (Negativfall)", () => {
   const sim = new KQSim({});
   KQContent.DRILLS["pvc-pending"](sim);
