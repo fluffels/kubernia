@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-27 — nächstes Ticket: #448 (Quest „Gängige Images kennenlernen — BusyBox, Redis, Postgres", Start des Docker-Images-Arcs). Kopf: neuer Content-Arc Docker-Grundlagen + Sonderfälle (QoL-Sektion geleert: #334 erledigt). Zuletzt abgeschlossen: #334 (Dev-Panel als Docker-Image mit Laufzeit-Passwort-Injektion: `Dockerfile.devpanel` + nginx-Entrypoint schreibt das Passwort base64-kodiert als `window.__KQ_CONFIG__` vor den Bundle-Code, `decodeBase64Utf8`/`resolveDevPanelPassword` in `devpanel.ts` mit Build-Wert-Fallback #331; kein Secret im Image, `.gitattributes` erzwingt LF für `*.sh`; npm test 1181 / typecheck / lint / arch / size / smoke grün) sowie #265 (vier Krabben-Quiz-Lernkarten in `src/content/data/crabquiz/platform.json`, freigeschaltet nach `gitops-drift-detection`: Was ist eine CRD? / Was macht ein Operator? / Reconcile-Loop als Verallgemeinerung von Argo Self-Heal / CRD+Operator als Paket à la cert-manager; Hafen-Metapher Operator = spezialisierter Hafenarbeiter, CRD = neues Frachtpapier-Formular; plus Konsistenz-Test #265. Reines Content-Ticket, auf Wunsch außer der Reihe vorgezogen. npm test 1167 / typecheck / lint / Boot-Smoke grün). Phase 9 + 10 komplett.**
+> **Stand: 2026-06-27 — nächstes freies Ticket: #450 (RabbitMQ als Message Broker, Abschluss des Docker-Images-Arcs; #448/#449 sind bereits in Arbeit) oder #272 (kubectl Context & Multi-Cluster). Kopf: Rest Docker-Images-Arc + K8s-Konzepte vertiefen + Sonderfälle. Zuletzt abgeschlossen (Parallel-Batch): #274 (fünf Krabben-Quiz-Lernkarten in `src/content/data/crabquiz/kubernetes.json` zu Job & CronJob, freigeschaltet nach `storage-backup-restore`: Job vs. Deployment / CronJob = Job nach Zeitplan / 3-Wege-Abgrenzung / `kubectl create job --from=cronjob/<name>` / cron-Zeile `0 3 * * *`; quiz-getrieben wie der Storage-Arc, neuer Test `test/cronjob-job-quiz.test.ts`), dazu #273 (Helm-Templates), #334 (Dev-Panel-Docker), #268 (Gateway-API-Quiz), #266 (DaemonSet/StatefulSet-Quiz), #265 (CRD/Operator-Quiz). npm test / typecheck / lint / arch / size grün. Phase 9 + 10 komplett.**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -49,15 +49,11 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 | 2 | **#449** | niedrig | Quest: Docker Registry / Docker Hub — woher Images kommen | Baut auf #448 (man kennt die Images, jetzt deren Herkunft). |
 | 3 | **#450** | niedrig | Quest/Inhalt: RabbitMQ als Message Broker (`docker pull rabbitmq`) | Konkreter Image-/Broker-Anwendungsfall nach #448/#449. |
 | | **— Content: K8s-/Plattform-Konzepte vertiefen (lose Reihenfolge) —** | | | Eigenständige Vertiefungs-Quests; keine harte Abhängigkeit untereinander, hier nur als kuratierter Lernpfad gebündelt. |
-| 4 | **#266** | niedrig | Workload-Typen: DaemonSet & StatefulSet | Ergänzt das Deployment-Wissen. |
-| 5 | **#274** | niedrig | CronJob & Job (geplante/einmalige Aufgaben) | Knüpft an Backups (#244) an. |
-| 6 | **#275** | niedrig | Secrets erzeugen (generic/TLS/Pull-Secrets, Hashing) | Sicherheits-Grundlage. |
-| 7 | **#272** | niedrig | kubectl Context & Multi-Cluster (dev ↔ prod) | QoL fürs CLI-Verständnis. |
-| 8 | **#273** | niedrig | Helm-Templates lesen/schreiben (.Values, _helpers) | Vertieft Helm. |
-| 9 | **#268** | niedrig | Gateway API (Ingress-Nachfolger) | Netzwerk-Vertiefung. |
+| 4 | **#275** | niedrig | Secrets erzeugen (generic/TLS/Pull-Secrets, Hashing) | Sicherheits-Grundlage — **derzeit in Arbeit** (Worktree). |
+| 5 | **#272** | niedrig | kubectl Context & Multi-Cluster (dev ↔ prod) | **Frei** — QoL fürs CLI-Verständnis. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 10 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 11 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 6 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 7 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
