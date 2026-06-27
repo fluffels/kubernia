@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-27 — nächstes Ticket: #448 (Quest „Gängige Images kennenlernen — BusyBox, Redis, Postgres", Start des Docker-Images-Arcs). Kopf: neuer Content-Arc Docker-Grundlagen + QoL + Sonderfälle. Zuletzt abgeschlossen: #265 (vier Krabben-Quiz-Lernkarten in `src/content/data/crabquiz/platform.json`, freigeschaltet nach `gitops-drift-detection`: Was ist eine CRD? / Was macht ein Operator? / Reconcile-Loop als Verallgemeinerung von Argo Self-Heal / CRD+Operator als Paket à la cert-manager; Hafen-Metapher Operator = spezialisierter Hafenarbeiter, CRD = neues Frachtpapier-Formular; plus Konsistenz-Test #265. Reines Content-Ticket, auf Wunsch außer der Reihe vorgezogen. npm test 1167 / typecheck / lint / Boot-Smoke grün). Phase 9 + 10 komplett.**
+> **Stand: 2026-06-27 — nächstes Ticket: #448 (Quest „Gängige Images kennenlernen — BusyBox, Redis, Postgres", Start des Docker-Images-Arcs). Kopf: neuer Content-Arc Docker-Grundlagen + Sonderfälle (QoL-Sektion geleert: #334 erledigt). Zuletzt abgeschlossen: #334 (Dev-Panel als Docker-Image mit Laufzeit-Passwort-Injektion: `Dockerfile.devpanel` + nginx-Entrypoint schreibt das Passwort base64-kodiert als `window.__KQ_CONFIG__` vor den Bundle-Code, `decodeBase64Utf8`/`resolveDevPanelPassword` in `devpanel.ts` mit Build-Wert-Fallback #331; kein Secret im Image, `.gitattributes` erzwingt LF für `*.sh`; npm test 1181 / typecheck / lint / arch / size / smoke grün) sowie #265 (vier Krabben-Quiz-Lernkarten in `src/content/data/crabquiz/platform.json`, freigeschaltet nach `gitops-drift-detection`: Was ist eine CRD? / Was macht ein Operator? / Reconcile-Loop als Verallgemeinerung von Argo Self-Heal / CRD+Operator als Paket à la cert-manager; Hafen-Metapher Operator = spezialisierter Hafenarbeiter, CRD = neues Frachtpapier-Formular; plus Konsistenz-Test #265. Reines Content-Ticket, auf Wunsch außer der Reihe vorgezogen. npm test 1167 / typecheck / lint / Boot-Smoke grün). Phase 9 + 10 komplett.**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -55,11 +55,9 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 | 7 | **#272** | niedrig | kubectl Context & Multi-Cluster (dev ↔ prod) | QoL fürs CLI-Verständnis. |
 | 8 | **#273** | niedrig | Helm-Templates lesen/schreiben (.Values, _helpers) | Vertieft Helm. |
 | 9 | **#268** | niedrig | Gateway API (Ingress-Nachfolger) | Netzwerk-Vertiefung. |
-| | **— QoL / System-Features —** | | | |
-| 10 | **#334** | niedrig | Dev-Panel per Docker, Passwort zur Laufzeit | Niedrige Dringlichkeit; baut auf #325/#331. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 11 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 12 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 10 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 11 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
