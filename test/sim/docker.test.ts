@@ -27,6 +27,40 @@ test("docker: pull, run, ps, stop, ps -a", () => {
   assert.match(sim.exec("docker ps -a").output!, /Exited/);
 });
 
+test("docker ps: Spalten beginnen an festen Offsets (bündig, #365)", () => {
+  // Images/Namen unterschiedlicher Länge: die Spaltenbreite richtet sich nach dem
+  // längsten Wert. table() (sim/util.ts) paddet jede Zelle einer Spalte auf dieselbe
+  // Breite – darum muss jede Spalte in JEDER Zeile am exakt gleichen Zeichen-Offset
+  // beginnen. Stimmt das nicht, wirkt die Ausgabe „verschoben" (genau der Bug-Report).
+  sim.exec("docker run -d --name web nginx");
+  sim.exec("docker run -d --name datenbank postgres");
+  sim.exec("docker run -d --name kv redis");
+  const lines = sim.exec("docker ps").output!.split("\n");
+  const header = lines[0];
+  const colImage = header.indexOf("IMAGE");
+  const colStatus = header.indexOf("STATUS");
+  const colNames = header.indexOf("NAMES");
+  assert.ok(colImage > 0 && colStatus > colImage && colNames > colStatus, "Kopf-Spalten in Reihenfolge");
+
+  // Container werden in Aufruf-Reihenfolge gelistet → Zeilen sind deterministisch.
+  const expected = [
+    { image: "nginx:latest", name: "web" },
+    { image: "postgres:latest", name: "datenbank" },
+    { image: "redis:latest", name: "kv" },
+  ];
+  expected.forEach((c, i) => {
+    const line = lines[i + 1];
+    // Jede Zelle MUSS genau an ihrem Kopf-Offset anfangen (feste Spaltenbreite).
+    assert.ok(line.slice(colImage).startsWith(c.image), `Zeile ${i + 1}: IMAGE bündig`);
+    assert.ok(line.slice(colStatus).startsWith("Up "), `Zeile ${i + 1}: STATUS bündig`);
+    assert.equal(line.slice(colNames), c.name, `Zeile ${i + 1}: NAMES bündig`);
+    // Vor jeder Spalte stehen Leerzeichen – kein Wert läuft in die nächste Spalte.
+    assert.equal(line[colImage - 1], " ", `Zeile ${i + 1}: Abstand vor IMAGE`);
+    assert.equal(line[colStatus - 1], " ", `Zeile ${i + 1}: Abstand vor STATUS`);
+    assert.equal(line[colNames - 1], " ", `Zeile ${i + 1}: Abstand vor NAMES`);
+  });
+});
+
 test("docker pull: ohne Tag → :latest, mit dem 'default tag'-Hinweis (#449)", () => {
   const out = sim.exec("docker pull nginx").output!;
   assert.match(out, /Using default tag: latest/, "ohne Tag weist Docker auf den Default :latest hin");
