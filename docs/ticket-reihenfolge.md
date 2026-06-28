@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-28 — #302 als erledigt geschlossen (kein Code): Bos Quest-1-Üben-Hinweis auf Kralle umzulenken war bereits durch #451 umgesetzt (dynamischer `KRALLE_WEGWEISER` beim Erstabschluss, gegen Wiederspiel gegated, 4 Tests) – eine statische Basiszeilen-Änderung hätte eine doppelte Kralle-Erwähnung erzeugt, darum bewusst nur geschlossen. Der Backlog ist komplett `prio:niedrig`/ohne (keine `hoch`/`mittel` mehr offen), darum kuratiert der Kopf nach Wert statt nach Prio: jetzt Flavor/Fun (#228/#229/#236/#237), dann tiefer Lernpfad (#281/#282/#430) + Lernbogen-Content (#239/#279), dann Tech-Debt (#457/#382), zuletzt die anlegenden/⚠️-Sonderfälle. Alle ⚠️-Grafik-Tickets (#183/#186/#187/#190/#204 u.a.) bleiben bewusst im Auto-Rest, bis Design abgestimmt ist. Nächstes freies Ticket = oberstes des Kopfes (#228). Davor: #219 (Spaced Repetition auf Stapel-Spiel & Drills, Lernstand-Map `state.mastery`), #218 (Stapel-Spiel von 3 auf 5 Runden + Cache/Build-Lektion), #309 (Kiste-vs-Container-Wording), #369 (Bo erklärt `ps` = process status), #315 (Container-ID nach `docker run --detach`), #360 (Funk-Link lesbar), #361 (Freies-Funken-Text), #364 (Befehls-Badges-Umbruch), #365 (docker-ps-Tabelle bündig), #458 (Quiz-Optionen als HTML), #212 (nginx-Warenkunde). npm test 1222 / typecheck / lint / arch / size grün. Phase 9 + 10 komplett.**
+> **Stand: 2026-06-28 — #228 erledigt: Ole erklärt jetzt beiläufig, dass die 8 in K8s ein Numeronym ist (8 Buchstaben zwischen K und s, wie i18n/a11y) und nichts mit dem „Steuermann" zu tun hat; dazu eine passende Quiz-Karte im Kapitel `k8s-first-deployment`. Der Backlog ist komplett `prio:niedrig`/ohne (keine `hoch`/`mittel` mehr offen), darum kuratiert der Kopf nach Wert statt nach Prio: jetzt Flavor/Fun (#229/#236/#237), dann tiefer Lernpfad (#281/#282/#430) + Lernbogen-Content (#239/#279), dann Tech-Debt (#457/#382), zuletzt die anlegenden/⚠️-Sonderfälle. Alle ⚠️-Grafik-Tickets (#183/#186/#187/#190/#204 u.a.) bleiben bewusst im Auto-Rest, bis Design abgestimmt ist. Nächstes freies Ticket = oberstes des Kopfes (#229). Davor: #302 (bereits durch #451), #219 (Spaced Repetition auf Stapel-Spiel & Drills), #218 (Stapel-Spiel 5 Runden + Cache/Build-Lektion), #309 (Kiste-vs-Container-Wording), #369 (Bo erklärt `ps`), #315 (Container-ID nach `docker run --detach`), #360/#361/#364/#365/#458/#212. npm test 1223 / typecheck / lint / arch / size grün. Phase 9 + 10 komplett.**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -45,23 +45,22 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
 | | **— Flavor-/Fun-Content (Lernspaß, ohne Abhängigkeit) —** | | | |
-| 1 | **#228** | niedrig | Fun Fact: woher die 8 in K8s kommt (8 Buchstaben) | Content, schnell, hohe Lernspaß-Dichte. |
-| 2 | **#229** | niedrig | Mehr (gute!) Fun Facts & Witze passend zu NPCs/Hafenwelt | Content, Lernspaß; lose Sammlung. |
-| 3 | **#236** | niedrig | Kralle-Meilenstein-Sprüche: erwähnt zum wievielten Mal man übt (Zähler + Sprüche) | Content, Lernspaß; baut auf vorhandenem Kralle-Üben auf. |
-| 4 | **#237** | niedrig | Kralle = Krabbe ohne Krallen — Running Gag draus machen (oder umbenennen) | Content/Flavor, kleiner Dialog-Bogen um Kralle. |
+| 1 | **#229** | niedrig | Mehr (gute!) Fun Facts & Witze passend zu NPCs/Hafenwelt | Content, Lernspaß; lose Sammlung. |
+| 2 | **#236** | niedrig | Kralle-Meilenstein-Sprüche: erwähnt zum wievielten Mal man übt (Zähler + Sprüche) | Content, Lernspaß; baut auf vorhandenem Kralle-Üben auf. |
+| 3 | **#237** | niedrig | Kralle = Krabbe ohne Krallen — Running Gag draus machen (oder umbenennen) | Content/Flavor, kleiner Dialog-Bogen um Kralle. |
 | | **— Tiefer Lernpfad —** | | | |
-| 5 | **#281** | niedrig | Keycloak vertiefen: Realm, Client, User/Rollen/Gruppen, Mapper | Lernpfad-Vertiefung, eigenständiger Content-Block. |
-| 6 | **#282** | niedrig | GitLab CI vertiefen: extends/Templates, rules/Trigger, Environments | Lernpfad-Vertiefung, eigenständiger Content-Block. |
-| 7 | **#430** | niedrig | Gating-Konsistenz: Singular/Plural im Abkürzungs-Katalog (vs. #308) | Lernpfad-Logik, kleiner Konsistenz-Fix. |
-| 8 | **#239** | niedrig | Lernbogen: Cluster nach Sturm selbst neu aufbauen (Spät-Spiel) | Content/Lernbogen, design-frei (nutzt vorhandene Sturm-Mechanik). |
-| 9 | **#279** | niedrig | Nachträglich eingeführte Inhalte auch Fortgeschrittene erreichen lassen (Backfill) | Lernpfad-Logik, design-frei; ergänzt #353/#354-Fundament. |
+| 4 | **#281** | niedrig | Keycloak vertiefen: Realm, Client, User/Rollen/Gruppen, Mapper | Lernpfad-Vertiefung, eigenständiger Content-Block. |
+| 5 | **#282** | niedrig | GitLab CI vertiefen: extends/Templates, rules/Trigger, Environments | Lernpfad-Vertiefung, eigenständiger Content-Block. |
+| 6 | **#430** | niedrig | Gating-Konsistenz: Singular/Plural im Abkürzungs-Katalog (vs. #308) | Lernpfad-Logik, kleiner Konsistenz-Fix. |
+| 7 | **#239** | niedrig | Lernbogen: Cluster nach Sturm selbst neu aufbauen (Spät-Spiel) | Content/Lernbogen, design-frei (nutzt vorhandene Sturm-Mechanik). |
+| 8 | **#279** | niedrig | Nachträglich eingeführte Inhalte auch Fortgeschrittene erreichen lassen (Backfill) | Lernpfad-Logik, design-frei; ergänzt #353/#354-Fundament. |
 | | **— Tech-Debt (sauber umsetzbar) —** | | | |
-| 10 | **#457** | niedrig | `src/content/drills.ts` aufteilen (God-File-Budget 800 LOC, #169) | Tech-Debt, design-frei; hält die Architektur Stardew-fest. |
-| 11 | **#382** | niedrig | Doku-Inkonsistenz: Worktree-Pfad-Konvention (AGENTS.md vs CLAUDE.md vs launch.json) | Tech-Debt/Doku, design-frei; klärt eine widersprüchliche Konvention. |
+| 9 | **#457** | niedrig | `src/content/drills.ts` aufteilen (God-File-Budget 800 LOC, #169) | Tech-Debt, design-frei; hält die Architektur Stardew-fest. |
+| 10 | **#382** | niedrig | Doku-Inkonsistenz: Worktree-Pfad-Konvention (AGENTS.md vs CLAUDE.md vs launch.json) | Tech-Debt/Doku, design-frei; klärt eine widersprüchliche Konvention. |
 | | **— Anlegende / Sonderfälle ans Ende —** | | | |
-| 12 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
-| 13 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 14 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 11 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
+| 12 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 13 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
