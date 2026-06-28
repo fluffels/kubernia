@@ -228,7 +228,8 @@
         "type": "dialog",
         "npc": "bo",
         "lines": [
-          "ZWEITE LEKTION. Kisten starten kannst du. Aber: Welche laufen gerade? Dafür gibt es <code>docker ps</code> – die Liste aller <b>laufenden</b> Container."
+          "ZWEITE LEKTION. Kisten starten kannst du. Aber: Welche laufen gerade? Dafür gibt es <code>docker ps</code> – die Liste aller <b>laufenden</b> Container.",
+          "Das <code>ps</code> hat Docker sich bei Unix geborgt: dort listet <code>ps</code> = <b>p</b>rocess <b>s</b>tatus die laufenden Prozesse auf. Eine Kiste auflisten ist im Grunde dasselbe wie einen Prozess auflisten – darum derselbe Name. Eselsbrücke: <code>ps</code> wie <b>process status</b> – zeigt, was gerade <i>läuft</i>. Bo merkt sich Befehle nur, wenn sie einen Sinn ergeben. Bo ist Stein."
         ]
       },
       {
@@ -242,7 +243,7 @@
             "^docker\\s+ps$"
           ],
           "solution": "docker ps",
-          "hint": "Nur zwei Buchstaben nach docker."
+          "hint": "ps wie process status – zwei Buchstaben nach docker."
         }
       },
       {

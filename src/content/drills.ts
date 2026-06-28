@@ -267,7 +267,7 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
       return null; // Name und Image stimmen, anderer Grund → why passt
     } };
   },
-  "docker-ps": () => ({ text: "Zeig alle <b>laufenden</b> Container.", accept: [/^docker\s+ps$/], solution: "docker ps", hint: "Zwei Buchstaben nach docker.", why: "ps zeigt nur die laufenden Container; mit -a kämen auch die gestoppten dazu." }),
+  "docker-ps": () => ({ text: "Zeig alle <b>laufenden</b> Container.", accept: [/^docker\s+ps$/], solution: "docker ps", hint: "ps wie process status – zwei Buchstaben nach docker.", why: "ps = process status (aus Unix): zeigt, was gerade läuft. Ohne -a nur die laufenden Container; mit -a kämen auch die gestoppten dazu." }),
   "docker-ps-a": () => ({ text: "Zeig <b>alle</b> Container – auch gestoppte.", accept: [/^docker\s+ps\s+(-a|--all)$/], solution: "docker ps --all", hint: "docker ps + die ausgeschriebene Flag für „alle“ (--all).", why: "Ohne --all siehst du nur laufende Container; --all zeigt auch die gestoppten." }),
   "docker-stop": sim => {
     let c = sim.docker.containers.find(c => c.running);
