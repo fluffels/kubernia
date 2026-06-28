@@ -54,6 +54,7 @@
         "lines": [
           "Bo lobt dich – das passiert alle hundert Jahre! Jetzt die Königsfrage: Eine Kiste kann jeder. Aber <b>hunderte Kisten auf vielen Stegen</b>? Wer startet nachts Ersatz, wenn eine über Bord geht?",
           "Dafür gibt es <b>Kubernetes</b> – griechisch für „Steuermann“, kurz <b>K8s</b>. Schau zum Wasser: Unsere <b>drei Stege</b> sind die <b>Nodes</b> (Arbeits-Server). Alles zusammen: der <b>Cluster</b>.",
+          "💡 <b>Fun Fact:</b> Die <b>8</b> in K8s ist kein Zufall – zwischen dem <b>K</b> und dem <b>s</b> von „K‑ubernete‑s“ stehen genau <b>8 Buchstaben</b>. Gleiches Muster wie <b>i18n</b> (internationalization) oder <b>a11y</b> (accessibility). Mit dem „Steuermann“ hat die 8 nichts zu tun – der erklärt nur den Namen <i>Kubernetes</i> selbst.",
           "Dein Terminal spricht mit dem Cluster über <code>kubectl</code>. Erster Befehl, ganz harmlos: <code>kubectl get nodes</code> – zeig mir die Stege!"
         ]
       },

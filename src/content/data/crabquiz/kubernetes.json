@@ -13,6 +13,19 @@
     "explain": "Docker startet Container, Kubernetes orchestriert sie in großem Stil – die Hafenmeisterei für hunderte Kisten."
   },
   {
+    "id": "q-ch2-k8s-8",
+    "chapter": "k8s-first-deployment",
+    "q": "Warum schreibt man Kubernetes kurz <b>K8s</b> – woher kommt die 8?",
+    "options": [
+      "Zwischen dem K und dem s stehen genau 8 Buchstaben (K-ubernete-s).",
+      "Kubernetes wurde in der 8. Docker-Version eingeführt.",
+      "Die 8 steht für die 8 Kern-Komponenten des Clusters.",
+      "Sie kommt vom griechischen Wort für „Steuermann“."
+    ],
+    "correct": 0,
+    "explain": "K8s ist ein <b>Numeronym</b>: Anfangsbuchstabe, dann die Zahl der ausgelassenen Buchstaben, dann der Endbuchstabe – K-ubernete-s sind 8 dazwischen. Gleiches Muster: i18n (internationalization), a11y (accessibility), l10n (localization). Der „Steuermann“ erklärt nur den Namen <i>Kubernetes</i> selbst, nicht die 8."
+  },
+  {
     "id": "q-ch2-2",
     "q": "Was ist ein Pod?",
     "options": [
