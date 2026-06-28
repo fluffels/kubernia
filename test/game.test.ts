@@ -450,6 +450,85 @@ test("Red-Green: eine Wiederholungskarte ohne Inhalt wird erkannt", () => {
   expect(unbekannt).toContain("q-gibt-es-nicht");
 });
 
+/* ---------- Praktischer Übungs-Lernstand (#219): SR auf Drills/Stapel-Spiel ---------- */
+
+test("recordPractice: richtig schiebt die Box hoch (max 5), falsch/gestolpert setzt auf 1", () => {
+  expect(Game.masteryBox("docker-run")).toBe(0); // nie geübt = 0
+  Game.recordPractice("docker-run", true);
+  expect(Game.masteryBox("docker-run")).toBe(1); // erstes Mal richtig -> Box 1
+  Game.recordPractice("docker-run", true);
+  expect(Game.masteryBox("docker-run")).toBe(2); // wieder richtig -> hoch
+  Game.recordPractice("docker-run", false);
+  expect(Game.masteryBox("docker-run")).toBe(1); // gestolpert -> komplett zurück
+  for (let i = 0; i < 10; i++) Game.recordPractice("docker-run", true);
+  expect(Game.masteryBox("docker-run")).toBe(5); // Deckel bei 5
+});
+
+test("recordPractice: getrennt von review – Drills sickern NICHT in die Quiz-Auswahl", () => {
+  Game.recordPractice("stack:Python-App", true);
+  expect(Game.state.mastery["stack:Python-App"]).toBeTruthy();
+  expect(Game.state.review["stack:Python-App"]).toBeUndefined(); // Negativfall: nicht in review
+  // … und damit auch nicht im freien Quiz-Pool/Review-Gate (die lesen nur state.review).
+  expect(Game.freeReviewItems(50)).not.toContain("stack:Python-App");
+  expect(Game.dueReviewItems(50)).not.toContain("stack:Python-App");
+});
+
+test("masteryWeight: schwach (nie geübt) zählt am meisten, gemeistert am wenigsten", () => {
+  expect(Game.masteryWeight("neu")).toBe(6);     // Box 0 -> 6
+  Game.recordPractice("gemeistert", true);
+  for (let i = 0; i < 9; i++) Game.recordPractice("gemeistert", true);
+  expect(Game.masteryBox("gemeistert")).toBe(5);
+  expect(Game.masteryWeight("gemeistert")).toBe(1); // Box 5 -> 1 (ab und zu, nie 0)
+});
+
+test("pickWeightedPractice: bevorzugt das schwache Konzept deterministisch", () => {
+  // schwach = nie geübt (Gewicht 6), stark = Box 5 (Gewicht 1). Pool [stark, schwach].
+  for (let i = 0; i < 10; i++) Game.recordPractice("stark", true);
+  const pool = ["stark", "schwach"];
+  // rand=0 trifft das ERSTE Element des gewichteten Bandes (stark, Gewicht 1) …
+  expect(Game.pickWeightedPractice(pool, () => 0)).toBe("stark");
+  // … rand knapp über dem stark-Band (1/7) landet im schwach-Band.
+  expect(Game.pickWeightedPractice(pool, () => 0.5)).toBe("schwach");
+  // Leerer Pool -> "".
+  expect(Game.pickWeightedPractice([], () => 0)).toBe("");
+});
+
+test("pickWeightedDrills: zieht count Übungen, vermeidet Wiederholung wenn genug da", () => {
+  const pool = ["a", "b", "c", "d"];
+  const drei = Game.pickWeightedDrills(pool, 3, () => 0.4);
+  expect(drei.length).toBe(3);
+  expect(new Set(drei).size).toBe(3);              // keine Dublette, da Pool groß genug
+  for (const id of drei) expect(pool).toContain(id);
+});
+
+test("pickWeightedDrills: Pool kleiner als count -> Wiederholungen erlaubt (Runde wird voll)", () => {
+  const drei = Game.pickWeightedDrills(["nur-einer"], 3, () => 0);
+  expect(drei).toEqual(["nur-einer", "nur-einer", "nur-einer"]);
+});
+
+test("load: alter Spielstand OHNE mastery-Feld bekommt eine leere Map (kein Bruch)", () => {
+  Game.importData(JSON.stringify({ v: 1, data: { xp: 5, coins: 99 } }));
+  Game.load();
+  expect(Game.state.coins).toBe(99);
+  expect(Game.state.mastery).toEqual({});
+});
+
+test("load: kaputte mastery-Werte werden geklemmt/verworfen", () => {
+  Game.importData(JSON.stringify({ v: 1, data: {
+    mastery: {
+      ok: { box: 3, due: 10 },
+      zuHoch: { box: 99, due: 5 },     // box auf 5 geklemmt
+      negativ: { box: -2, due: 5 },    // box auf 1 geklemmt
+      kaputt: "nope",                  // kein Objekt -> verworfen
+    },
+  } }));
+  Game.load();
+  expect(Game.state.mastery.ok).toEqual({ box: 3, due: 10 });
+  expect(Game.state.mastery.zuHoch.box).toBe(5);
+  expect(Game.state.mastery.negativ.box).toBe(1);
+  expect(Game.state.mastery.kaputt).toBeUndefined();
+});
+
 /* ---------- Defensive Validierung beim Laden (#61) ----------
  * Ein manipulierter Import oder ein über viele Versionen gewanderter Stand kann
  * kaputte/fremde Feldwerte tragen. load() muss daraus IMMER einen konsistenten

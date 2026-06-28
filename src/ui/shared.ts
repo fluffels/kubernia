@@ -51,6 +51,16 @@ function esc(s: unknown) {
 // kann man per "Lösung zeigen" früher aussteigen – man hängt also nie fest.
 const CMD_MAX_ATTEMPTS = 3;
 
+/** Kleines Lernstand-Abzeichen (#219) für ein Übungs-Konzept anhand seiner Leitner-Box
+ *  (0 = nie geübt … 5 = sitzt). Macht „das kannst du schon / das üben wir nochmal" sichtbar.
+ *  Reine Anzeige – die Box liefert `Game.masteryBox`. */
+function masteryBadge(box: number): string {
+  if (box <= 0) return '<span class="mastery-badge new">🆕 neu</span>';
+  if (box <= 2) return '<span class="mastery-badge weak">🔁 üben wir nochmal</span>';
+  if (box <= 4) return '<span class="mastery-badge mid">📈 fast sicher</span>';
+  return '<span class="mastery-badge done">✅ sitzt</span>';
+}
+
 function shuffled<T>(arr: T[]): T[] {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -86,4 +96,4 @@ for (const item of KQContent.SHOP as UIShopItem[]) {
 }
 
 
-export { $, esc, NPCS, SMALLTALK, CMD_MAX_ATTEMPTS, shuffled, sheetImgs, assets };
+export { $, esc, NPCS, SMALLTALK, CMD_MAX_ATTEMPTS, shuffled, masteryBadge, sheetImgs, assets };

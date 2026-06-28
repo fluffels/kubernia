@@ -148,6 +148,17 @@ export function sanitizeState(raw: unknown): GameState {
     }
   }
 
+  // Übungs-Lernstand (#219): gleiche { box (1..5), due }-Form wie review, eigene Map.
+  // Fehlt das Feld (Alt-Stand) → leer; das ist die verlustfreie Migration (kein Bruch).
+  const mastery: GameState["mastery"] = {};
+  if (isPlainObject(raw.mastery)) {
+    for (const [id, info] of Object.entries(raw.mastery)) {
+      if (!isPlainObject(info)) continue;
+      const box = Math.min(5, Math.max(1, safeCount(info.box, 1)));
+      mastery[id] = { box, due: safeCount(info.due, 0) };
+    }
+  }
+
   // Stats: auf den Default-Stats aufsetzen und nur endliche Zahlen überschreiben;
   // dynamische Zusatz-Stats (z.B. stormsFixed) bleiben erhalten, solange Zahl.
   const stats = def.stats;
@@ -251,6 +262,7 @@ export function sanitizeState(raw: unknown): GameState {
     activePet: safeStrOrNull(raw.activePet),
     activeFlag: safeStrOrNull(raw.activeFlag),
     review,
+    mastery,
     streak: { count: safeCount(streak.count, 0), lastDay: safeCount(streak.lastDay, 0) },
     streakHintShown: typeof raw.streakHintShown === "boolean" ? raw.streakHintShown : def.streakHintShown,
     introSeen: typeof raw.introSeen === "boolean" ? raw.introSeen : def.introSeen,

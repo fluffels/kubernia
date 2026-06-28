@@ -99,4 +99,63 @@ export const spacedRepetitionBundle = part({
     if (q) return { kind: "quiz", q };
     return null;
   },
+
+  /* ---------- Praktischer Übungs-Lernstand (#219) ----------
+   * Spaced Repetition AUSGEWEITET auf das Stapel-Spiel und die Drills: pro praktischem
+   * Konzept (Drill-ID, Stapel-Runde `stack:<name>`) ein Leitner-Stand in `state.mastery`.
+   * Eigene Map getrennt von `review` (Quiz/Karten), damit Drills/Runden nicht in die
+   * Kralle-Quiz-Auswahl bzw. das Review-Gate sickern. Rein anwendungsseitig & Phaser-frei. */
+
+  /** Leitner-Box eines Übungs-Konzepts; 0 = noch nie geübt (= „neu", schwächster Stand). */
+  masteryBox(itemId: string): number {
+    return this.state.mastery[itemId]?.box ?? 0;
+  },
+
+  /** Lernstand eines geübten Konzepts fortschreiben (#219): richtig → Box hoch (max 5),
+   *  falsch/gestolpert → zurück auf 1. Spiegelt `reviewResult`, aber auf `state.mastery`. */
+  recordPractice(itemId: string, correct: boolean) {
+    const box = this.state.mastery[itemId]?.box ?? 0;
+    const next = correct ? Math.min(5, box + 1) : 1;
+    this.state.mastery[itemId] = { box: next, due: today() + (BOX_INTERVALS[next] ?? 1) };
+    this.save();
+  },
+
+  /** Gewicht eines Konzepts für die Übungs-Auswahl: schwach (niedrige Box / nie geübt)
+   *  = hoch, sicher (Box 5) = niedrig. `6 - box` → nie geübt (0) zählt 6×, gemeistert (5)
+   *  noch 1× (sicher Gekonntes kommt also „ab und zu" dran, nicht nie). */
+  masteryWeight(itemId: string): number {
+    return 6 - Math.min(5, this.masteryBox(itemId));
+  },
+
+  /** Gewichtete Zufallsauswahl EINER Übung aus `pool`: schwache Konzepte häufiger,
+   *  sichere seltener (Gewicht = masteryWeight). `rand` ist injizierbar (deterministische
+   *  Tests). Leerer Pool → "". */
+  pickWeightedPractice(pool: string[], rand: () => number = Math.random): string {
+    if (pool.length === 0) return "";
+    const weights = pool.map(id => this.masteryWeight(id));
+    const total = weights.reduce((s, w) => s + w, 0);
+    let r = rand() * total;
+    for (let i = 0; i < pool.length; i++) {
+      r -= weights[i];
+      if (r < 0) return pool[i];
+    }
+    return pool[pool.length - 1];
+  },
+
+  /** Zieht `count` Übungen gewichtet (schwache häufiger). Sind genug verschiedene da,
+   *  werden Wiederholungen vermieden (jede gezogene fällt aus dem Topf); ist der Pool
+   *  kleiner als `count`, sind Wiederholungen erlaubt (sonst ginge die Runde nicht voll).
+   *  `rand` injizierbar für Tests. */
+  pickWeightedDrills(pool: string[], count: number, rand: () => number = Math.random): string[] {
+    if (pool.length === 0) return [];
+    const out: string[] = [];
+    let remaining = pool.slice();
+    for (let i = 0; i < count; i++) {
+      if (remaining.length === 0) remaining = pool.slice(); // Pool kleiner als count → wieder auffüllen
+      const pick = this.pickWeightedPractice(remaining, rand);
+      out.push(pick);
+      remaining = remaining.filter(id => id !== pick);
+    }
+    return out;
+  },
 });

@@ -127,6 +127,7 @@ export function makeDefaultState(): GameState {
     activePet: null,
     activeFlag: null,
     review: {},
+    mastery: {},
     streak: { count: 0, lastDay: 0 },
     streakHintShown: false,
     introSeen: false,

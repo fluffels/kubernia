@@ -4,7 +4,7 @@ import { SFX } from "../sfx";
 import { ABBREVS, lockedAbbrevInInput, abbrevLockHint, flagNearMissHint, longFormsInInput } from "../content/abbrev";
 import { pushHistory, navigateHistory } from "../cmdhistory";
 import type { QuestTask } from "../types";
-import { part, $, esc, NPCS } from "./shared";
+import { part, $, esc, NPCS, masteryBadge } from "./shared";
 
 export const radioUI = part({
   /* ========== Funkgerät ========== */
@@ -31,14 +31,21 @@ export const radioUI = part({
     const s = this.funkSession();
     if (s.kind === "practice") {
       const p = this.practice;
-      if (!p.task) p.task = KQContent.DRILLS[p.drills[p.idx]](Game.sim);
+      // Neue Übung erzeugt → Lernstand-Tracking dieser Übung frisch starten (#219).
+      if (!p.task) { p.task = KQContent.DRILLS[p.drills[p.idx]](Game.sim); this._practiceDirty = false; }
       return p.task;
     }
     if (s.kind === "quest") {
       const step = s.step!;
       if (step.type === "drill") {
         if ((Game.state.taskIdx || 0) >= step.count) return null;
-        if (!this._drillTask) this._drillTask = KQContent.DRILLS[step.pool[Math.floor(Math.random() * step.pool.length)]](Game.sim);
+        // #219: Drill aus dem Pool nach Lernstand GEWICHTET ziehen (schwache häufiger),
+        // statt rein zufällig – und die gezogene ID merken, um das Ergebnis zu buchen.
+        if (!this._drillTask) {
+          this._drillId = Game.pickWeightedPractice(step.pool);
+          this._drillTask = KQContent.DRILLS[this._drillId](Game.sim);
+          this._practiceDirty = false;
+        }
         return this._drillTask;
       }
       const tasks = Game.stepTasks(step);
@@ -70,7 +77,9 @@ export const radioUI = part({
     if (s.kind === "practice") {
       const p = this.practice;
       const npc = NPCS[p.npcId];
-      html += `<div class="tt-head">🏋️ Üben bei ${npc.name} (${Math.min(p.idx + 1, p.drills.length)}/${p.drills.length})</div>`;
+      // #219: Lernstand der aktuellen Übung sichtbar machen („das kannst du schon / üben wir nochmal").
+      const badge = task ? " " + masteryBadge(Game.masteryBox(p.drills[p.idx])) : "";
+      html += `<div class="tt-head">🏋️ Üben bei ${npc.name} (${Math.min(p.idx + 1, p.drills.length)}/${p.drills.length})${badge}</div>`;
       if (task) html += `<div class="tt-item current">▶️ ${task.text}</div>`;
       html += `<div id="tt-feedback"></div>`;
     } else {
@@ -170,6 +179,7 @@ export const radioUI = part({
       this.taskSolved();
     } else {
       this.failCount++;
+      this._practiceDirty = true; // #219: gestolpert -> diese Übung gilt als „noch nicht gekonnt"
       const fb = $("tt-feedback");
       // #367: Beinahe-Schreibweise eines Flags (z.B. „-all“ statt „-a“/„--all“) → gezielter
       // Hinweis statt der generischen Meldung. Die Kurzform schlägt der Hinweis nur vor, wenn
@@ -202,6 +212,9 @@ export const radioUI = part({
 
     if (s.kind === "practice") {
       const p = this.practice;
+      // #219: Lernstand dieser Übung buchen – sauber gelöst (ohne Patzer/Hinweis) = Box hoch,
+      // sonst zurück, damit sie beim nächsten Mal gewichtet früher wiederkommt.
+      Game.recordPractice(p.drills[p.idx], !this._practiceDirty);
       this.reward(8, 6);
       p.idx++; p.task = null;
       if (p.idx >= p.drills.length) {
@@ -219,6 +232,8 @@ export const radioUI = part({
     const step = s.step!;
     this.reward(12, 7);
     if (step.type === "drill") {
+      // #219: auch Quest-Drills schreiben den Lernstand fort (gewichtete Pool-Auswahl oben).
+      if (this._drillId) Game.recordPractice(this._drillId, !this._practiceDirty);
       this._drillTask = null;
       Game.state.taskIdx = (Game.state.taskIdx || 0) + 1;
       Game.save();
@@ -282,6 +297,7 @@ export const radioUI = part({
       this.toast("Nicht genug Dublonen für einen Hinweis! 🪙");
       return;
     }
+    this._practiceDirty = true; // #219: mit Hinweis gelöst zählt als „noch nicht sicher"
     this.refreshHud();
     this.renderTermTasks();
     const fb = $("tt-feedback");
@@ -295,6 +311,7 @@ export const radioUI = part({
       this.toast("Nicht genug Dublonen für die Lösung! 🪙");
       return;
     }
+    this._practiceDirty = true; // #219: Lösung gezeigt -> diese Übung noch nicht gekonnt
     this.refreshHud();
     this.renderTermTasks();
     const fb = $("tt-feedback");
@@ -321,8 +338,9 @@ export const radioUI = part({
   /* ========== Üben ========== */
   startPractice(npcId: string) {
     const available = Game.practiceDrillsFor(npcId);
-    const drills: string[] = [];
-    for (let i = 0; i < 3; i++) drills.push(available[Math.floor(Math.random() * available.length)]);
+    // #219: die 3 Übungen nach Lernstand GEWICHTET ziehen – schwache Konzepte häufiger,
+    // sichere nur ab und zu (statt rein zufällig). Genug verschiedene da → ohne Dublette.
+    const drills = Game.pickWeightedDrills(available, 3);
     this.practice = { npcId, drills, idx: 0, task: null };
     this.toggleTerminal();
   },
