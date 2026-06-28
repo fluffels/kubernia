@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-28 — #361 erledigt (Freies-Funken-Text klärt jetzt, dass Befehle nur in der Spielwelt wirken). Der Backlog ist komplett `prio:niedrig`/ohne (keine `hoch`/`mittel` mehr offen), darum kuratiert der Kopf nach Wert statt nach Prio: erst der letzte echte Bug als Quick Win (#360), dann Docker-Content als Anschluss an den eben fertigen Image-Arc (#315/#369/#309/#218), dann Flavor/Fun (#302/#228/#229), dann tiefer Lernpfad (#281/#282/#430), dann Tech-Debt (#457), zuletzt die ⚠️-Sonderfälle. Alle ⚠️-Grafik-Tickets (#183/#186/#187/#190/#204 u.a.) bleiben bewusst im Auto-Rest, bis Design abgestimmt ist. Nächstes freies Ticket = oberstes des Kopfes (#360). Zuletzt abgeschlossen: #361 (alter Text „Alles, was du hier anrichtest, siehst du draußen in der Welt." klang nach Ausführung auf dem echten Rechner → Einsteiger:innen-Angst vor `kubectl delete`/`terraform destroy`; neuer Text in `src/ui/radio.ts` beruhigt explizit: „Keine Sorge: … wirkt nur im Hafen-Cluster dieser Spielwelt – nichts auf deinem echten Rechner."; im Browser im Freimodus-Panel per Screenshot verifiziert). Davor: #364 (Befehls-Badges nie mitten im Befehl umbrechen), #365 (docker-ps-Tabelle bündig), #458 (Quiz-Optionen als HTML statt esc()), #212 (nginx als Webserver in der Warenkunde erklärt), #450 (Bo-Quest `docker-rabbitmq`), #449 (Bo-Quest `docker-registry`), #448 (Bo-Quest `docker-common-images`), #272 (kubectl-Context-Quiz), #275 (Secret-Typen-Quiz). npm test 1211 / typecheck / lint / arch / size grün. Phase 9 + 10 komplett.**
+> **Stand: 2026-06-28 — #360 erledigt (GitHub-Diskussions-Link im Funkgerät-Freimodus wieder lesbar). Der Backlog ist komplett `prio:niedrig`/ohne (keine `hoch`/`mittel` mehr offen), darum kuratiert der Kopf nach Wert statt nach Prio: jetzt Docker-Content als Anschluss an den eben fertigen Image-Arc (#315/#369/#309/#218), dann Flavor/Fun (#302/#228/#229), dann tiefer Lernpfad (#281/#282/#430), dann Tech-Debt (#457), zuletzt die ⚠️-Sonderfälle. Alle ⚠️-Grafik-Tickets (#183/#186/#187/#190/#204 u.a.) bleiben bewusst im Auto-Rest, bis Design abgestimmt ist. Nächstes freies Ticket = oberstes des Kopfes (#315). Zuletzt abgeschlossen: #360 (typografische Quotes `”` in den `<a>`-/`id`-Attributen in `src/ui/radio.ts` machten den href kaputt + verfremdeten die `tt-feedback`-ID; gerade Quotes + lesbare Link-Farbe `.term-tasks a` in `--accent2`/Cyan unterstrichen ergänzt; im Browser im Freimodus-Panel per Screenshot verifiziert). Davor: #361 (Freies-Funken-Text klärt Spielwelt-Wirkung), #364 (Befehls-Badges nie mitten im Befehl umbrechen), #365 (docker-ps-Tabelle bündig), #458 (Quiz-Optionen als HTML statt esc()), #212 (nginx als Webserver in der Warenkunde erklärt), #450 (Bo-Quest `docker-rabbitmq`), #449 (Bo-Quest `docker-registry`), #448 (Bo-Quest `docker-common-images`), #272 (kubectl-Context-Quiz). npm test 1211 / typecheck / lint / arch / size grün. Phase 9 + 10 komplett.**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -44,27 +44,25 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| | **— Bugs zuerst (echte Defekte, design-frei umsetzbar = Quick Wins) —** | | | |
-| 1 | **#360** | ohne | Funkgerät: GitHub-Diskussions-Link nicht lesbar | Bug, kleiner Fix (typografische Quotes `”` in den `<a>`-Attributen, `src/ui/radio.ts`). |
 | | **— Docker-Content (knüpft direkt an den eben fertigen Image-Arc an) —** | | | |
-| 2 | **#315** | niedrig | Die lange Zeichenkette nach `docker run` erklären (Container-ID) | Content, passt nahtlos an die Docker-Warenkunde (#448–#212). |
-| 3 | **#369** | niedrig | Erklären, wofür das „ps" in `docker ps` steht (process status) | Content, gleicher Docker-Bogen; klein. |
-| 4 | **#309** | niedrig | Wording „Kiste" vs. „Container" — wann Metapher, wann echter Begriff | Content/Didaktik, betrifft die Docker-Dialoge. |
-| 5 | **#218** | niedrig | Stapel-Spiel: mehr Beispiele/Übungsrunden + Cache/Build erklären | Content, baut auf vorhandenem Minispiel auf (kein neues System). |
-| 6 | **#219** | niedrig | Spaced Repetition auf Stapel-Spiel/Drills ausweiten (gekonnt/nicht merken) | Lernpfad, baut direkt auf #218 auf (gleiches Minispiel). |
+| 1 | **#315** | niedrig | Die lange Zeichenkette nach `docker run` erklären (Container-ID) | Content, passt nahtlos an die Docker-Warenkunde (#448–#212). |
+| 2 | **#369** | niedrig | Erklären, wofür das „ps" in `docker ps` steht (process status) | Content, gleicher Docker-Bogen; klein. |
+| 3 | **#309** | niedrig | Wording „Kiste" vs. „Container" — wann Metapher, wann echter Begriff | Content/Didaktik, betrifft die Docker-Dialoge. |
+| 4 | **#218** | niedrig | Stapel-Spiel: mehr Beispiele/Übungsrunden + Cache/Build erklären | Content, baut auf vorhandenem Minispiel auf (kein neues System). |
+| 5 | **#219** | niedrig | Spaced Repetition auf Stapel-Spiel/Drills ausweiten (gekonnt/nicht merken) | Lernpfad, baut direkt auf #218 auf (gleiches Minispiel). |
 | | **— Flavor-/Fun-Content (Lernspaß, ohne Abhängigkeit) —** | | | |
-| 7 | **#302** | niedrig | Bo Quest-1-Abschluss-Dialog: Üben-Hinweis auf Kralle umlenken | Content, kleiner Dialog-Fix (Kralle-Üben ist fertig). |
-| 8 | **#228** | niedrig | Fun Fact: woher die 8 in K8s kommt (8 Buchstaben) | Content, schnell, hohe Lernspaß-Dichte. |
-| 9 | **#229** | niedrig | Mehr (gute!) Fun Facts & Witze passend zu NPCs/Hafenwelt | Content, Lernspaß; lose Sammlung. |
+| 6 | **#302** | niedrig | Bo Quest-1-Abschluss-Dialog: Üben-Hinweis auf Kralle umlenken | Content, kleiner Dialog-Fix (Kralle-Üben ist fertig). |
+| 7 | **#228** | niedrig | Fun Fact: woher die 8 in K8s kommt (8 Buchstaben) | Content, schnell, hohe Lernspaß-Dichte. |
+| 8 | **#229** | niedrig | Mehr (gute!) Fun Facts & Witze passend zu NPCs/Hafenwelt | Content, Lernspaß; lose Sammlung. |
 | | **— Tiefer Lernpfad —** | | | |
-| 10 | **#281** | niedrig | Keycloak vertiefen: Realm, Client, User/Rollen/Gruppen, Mapper | Lernpfad-Vertiefung, eigenständiger Content-Block. |
-| 11 | **#282** | niedrig | GitLab CI vertiefen: extends/Templates, rules/Trigger, Environments | Lernpfad-Vertiefung, eigenständiger Content-Block. |
-| 12 | **#430** | niedrig | Gating-Konsistenz: Singular/Plural im Abkürzungs-Katalog (vs. #308) | Lernpfad-Logik, kleiner Konsistenz-Fix. |
+| 9 | **#281** | niedrig | Keycloak vertiefen: Realm, Client, User/Rollen/Gruppen, Mapper | Lernpfad-Vertiefung, eigenständiger Content-Block. |
+| 10 | **#282** | niedrig | GitLab CI vertiefen: extends/Templates, rules/Trigger, Environments | Lernpfad-Vertiefung, eigenständiger Content-Block. |
+| 11 | **#430** | niedrig | Gating-Konsistenz: Singular/Plural im Abkürzungs-Katalog (vs. #308) | Lernpfad-Logik, kleiner Konsistenz-Fix. |
 | | **— Tech-Debt (sauber umsetzbar) —** | | | |
-| 13 | **#457** | niedrig | `src/content/drills.ts` aufteilen (God-File-Budget 800 LOC, #169) | Tech-Debt, design-frei; hält die Architektur Stardew-fest. |
+| 12 | **#457** | niedrig | `src/content/drills.ts` aufteilen (God-File-Budget 800 LOC, #169) | Tech-Debt, design-frei; hält die Architektur Stardew-fest. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 14 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 15 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 13 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 14 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
