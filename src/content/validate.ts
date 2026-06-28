@@ -70,7 +70,7 @@ export interface ContentBundle {
   CMD_CARDS: CmdCard[];
   DRILLS: Record<string, unknown>;
   PRACTICE: Record<string, { drill: string; after: string }[]>;
-  STACK_ROUNDS: { name: string; layers: string[] }[];
+  STACK_ROUNDS: { name: string; layers: string[]; cacheTip: string }[];
 }
 
 /** Whitespace normalisieren wie die Eingabe-Auswertung der UI (für den
@@ -245,10 +245,14 @@ export function validateContent(c: ContentBundle): string[] {
     }
   }
 
-  // ---------- Stapel-Spiel: mindestens 2 Runden mit je 3+ Schichten ----------
+  // ---------- Stapel-Spiel: genug Runden, je 3+ Schichten, aufsteigend, mit Cache-Tipp (#218) ----------
   if (c.STACK_ROUNDS.length < 2) err(`STACK_ROUNDS: braucht mindestens 2 Runden`);
+  let prevLayers = 0;
   for (const r of c.STACK_ROUNDS) {
     if (r.layers.length < 3) err(`STACK_ROUNDS „${r.name}": braucht mindestens 3 Schichten`);
+    if (!isNonEmptyString(r.cacheTip)) err(`STACK_ROUNDS „${r.name}": braucht einen cacheTip (Cache/Build-Lektion)`);
+    if (r.layers.length < prevLayers) err(`STACK_ROUNDS „${r.name}": leichter als die Runde davor – Reihenfolge muss aufsteigend sein`);
+    prevLayers = r.layers.length;
   }
 
   return errors;

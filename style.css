@@ -195,6 +195,11 @@ button.danger:hover { background: var(--bad); color: #1a0606; filter: none; }
    Zug kommt – mit konkreter Begründung, warum eine Schicht (noch) nicht passt. */
 .stack-feedback { min-height: 1.4em; margin-top: 12px; padding: 8px 12px; border-radius: 8px; font-size: 0.9em; line-height: 1.4; }
 .stack-feedback.bad { background: rgba(255,123,123,0.18); border: 1px solid var(--bad); }
+/* Geschaffte Runde + Cache/Build-Lektion (#218): grün hervorgehoben, der Tipp
+   lesbar abgesetzt, danach der „weiter"-Knopf. */
+.stack-feedback.good { background: rgba(123,255,150,0.12); border: 1px solid var(--good); }
+.stack-cachetip { margin: 8px 0; padding: 8px 10px; background: var(--panel2); border-radius: 8px; line-height: 1.5; }
+.stack-feedback.good button { margin-top: 8px; }
 
 /* „Neuer Befehl“-Banner im Terminal */
 .tt-new {
