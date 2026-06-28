@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-28 — #365 erledigt (docker-ps-Tabelle bündig). Der Backlog ist komplett `prio:niedrig`/ohne (keine `hoch`/`mittel` mehr offen), darum kuratiert der Kopf nach Wert statt nach Prio: erst die restlichen echten Bugs als Quick Wins (#364/#361/#360), dann Docker-Content als Anschluss an den eben fertigen Image-Arc (#315/#369/#309/#218), dann Flavor/Fun (#302/#228/#229), dann tiefer Lernpfad (#281/#282/#430), dann Tech-Debt (#457), zuletzt die ⚠️-Sonderfälle. Alle ⚠️-Grafik-Tickets (#183/#186/#187/#190/#204 u.a.) bleiben bewusst im Auto-Rest, bis Design abgestimmt ist. Nächstes freies Ticket = oberstes des Kopfes (#364). Zuletzt abgeschlossen: #365 (docker ps: Spalten verschoben — nicht die Breiten-Berechnung (`table()` in `sim/util.ts` paddet korrekt), sondern die Schrift: `.term-out` erbte über eine spätere CSS-Regel die proportionale Segoe-UI statt der Monospace von `.terminal` → leerzeichen-gepaddete Spalten verrutschen optisch; `.term-out` aus der Proportional-Regel entfernt, erbt nun Monospace; Regressions-Test „docker ps Spalten an festen Offsets" Red-Green geprüft; betrifft alle CLI-Tabellen). Davor: #458 (Quiz-Optionen als HTML statt esc()), #212 (nginx als Webserver in der Warenkunde erklärt), #450 (Bo-Quest `docker-rabbitmq`), #449 (Bo-Quest `docker-registry`), #448 (Bo-Quest `docker-common-images`), #272 (kubectl-Context-Quiz), #275 (Secret-Typen-Quiz), #274 (Job/CronJob-Quiz), #273 (Helm-Templates), #334 (Dev-Panel-Docker). npm test 1209 / typecheck / lint / arch / size grün. Phase 9 + 10 komplett.**
+> **Stand: 2026-06-28 — #364 erledigt (Befehls-Badges nie mitten im Befehl umbrechen). Der Backlog ist komplett `prio:niedrig`/ohne (keine `hoch`/`mittel` mehr offen), darum kuratiert der Kopf nach Wert statt nach Prio: erst die restlichen echten Bugs als Quick Wins (#361/#360), dann Docker-Content als Anschluss an den eben fertigen Image-Arc (#315/#369/#309/#218), dann Flavor/Fun (#302/#228/#229), dann tiefer Lernpfad (#281/#282/#430), dann Tech-Debt (#457), zuletzt die ⚠️-Sonderfälle. Alle ⚠️-Grafik-Tickets (#183/#186/#187/#190/#204 u.a.) bleiben bewusst im Auto-Rest, bis Design abgestimmt ist. Nächstes freies Ticket = oberstes des Kopfes (#361). Zuletzt abgeschlossen: #364 (Befehls-Badges `<code>` erbten `white-space: normal` → brachen am Leerzeichen mitten im Befehl um, z.B. `docker` Zeile 1 / `run` Zeile 2; `white-space: nowrap` auf die geteilte Badge-Regel `.dlg-text code, .term-tasks code, .panel-body code, .quiz-explain code` macht das Badge zur unteilbaren Einheit, rutscht bei Platzmangel komplett auf die nächste Zeile; Regressions-Test `test/dialog-badge-css.test.ts` Red-Green geprüft, im Browser per DOM-Messung + Screenshot verifiziert). Davor: #365 (docker-ps-Tabelle bündig — `.term-out` erbte proportionale Schrift statt Monospace), #458 (Quiz-Optionen als HTML statt esc()), #212 (nginx als Webserver in der Warenkunde erklärt), #450 (Bo-Quest `docker-rabbitmq`), #449 (Bo-Quest `docker-registry`), #448 (Bo-Quest `docker-common-images`), #272 (kubectl-Context-Quiz), #275 (Secret-Typen-Quiz), #274 (Job/CronJob-Quiz). npm test 1211 / typecheck / lint / arch / size grün. Phase 9 + 10 komplett.**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -45,27 +45,26 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
 | | **— Bugs zuerst (echte Defekte, design-frei umsetzbar = Quick Wins) —** | | | |
-| 1 | **#364** | ohne | Dialogtexte: Befehls-Badges nie mitten im Wort umbrechen | Bug, Dialog-Lesbarkeit; reine Präsentationslogik. |
-| 2 | **#361** | ohne | Freies-Funken-Text: klären, dass Befehle nur in der Spielwelt wirken | Bug/Wording; eng mit #362/#363 (Auto-Rest). |
-| 3 | **#360** | ohne | Funkgerät: GitHub-Diskussions-Link nicht lesbar | Bug, kleiner Fix. |
+| 1 | **#361** | ohne | Freies-Funken-Text: klären, dass Befehle nur in der Spielwelt wirken | Bug/Wording; eng mit #362/#363 (Auto-Rest). |
+| 2 | **#360** | ohne | Funkgerät: GitHub-Diskussions-Link nicht lesbar | Bug, kleiner Fix. |
 | | **— Docker-Content (knüpft direkt an den eben fertigen Image-Arc an) —** | | | |
-| 4 | **#315** | niedrig | Die lange Zeichenkette nach `docker run` erklären (Container-ID) | Content, passt nahtlos an die Docker-Warenkunde (#448–#212). |
-| 5 | **#369** | niedrig | Erklären, wofür das „ps" in `docker ps` steht (process status) | Content, gleicher Docker-Bogen; klein. |
-| 6 | **#309** | niedrig | Wording „Kiste" vs. „Container" — wann Metapher, wann echter Begriff | Content/Didaktik, betrifft die Docker-Dialoge. |
-| 7 | **#218** | niedrig | Stapel-Spiel: mehr Beispiele/Übungsrunden + Cache/Build erklären | Content, baut auf vorhandenem Minispiel auf (kein neues System). |
+| 3 | **#315** | niedrig | Die lange Zeichenkette nach `docker run` erklären (Container-ID) | Content, passt nahtlos an die Docker-Warenkunde (#448–#212). |
+| 4 | **#369** | niedrig | Erklären, wofür das „ps" in `docker ps` steht (process status) | Content, gleicher Docker-Bogen; klein. |
+| 5 | **#309** | niedrig | Wording „Kiste" vs. „Container" — wann Metapher, wann echter Begriff | Content/Didaktik, betrifft die Docker-Dialoge. |
+| 6 | **#218** | niedrig | Stapel-Spiel: mehr Beispiele/Übungsrunden + Cache/Build erklären | Content, baut auf vorhandenem Minispiel auf (kein neues System). |
 | | **— Flavor-/Fun-Content (Lernspaß, ohne Abhängigkeit) —** | | | |
-| 8 | **#302** | niedrig | Bo Quest-1-Abschluss-Dialog: Üben-Hinweis auf Kralle umlenken | Content, kleiner Dialog-Fix (Kralle-Üben ist fertig). |
-| 9 | **#228** | niedrig | Fun Fact: woher die 8 in K8s kommt (8 Buchstaben) | Content, schnell, hohe Lernspaß-Dichte. |
-| 10 | **#229** | niedrig | Mehr (gute!) Fun Facts & Witze passend zu NPCs/Hafenwelt | Content, Lernspaß; lose Sammlung. |
+| 7 | **#302** | niedrig | Bo Quest-1-Abschluss-Dialog: Üben-Hinweis auf Kralle umlenken | Content, kleiner Dialog-Fix (Kralle-Üben ist fertig). |
+| 8 | **#228** | niedrig | Fun Fact: woher die 8 in K8s kommt (8 Buchstaben) | Content, schnell, hohe Lernspaß-Dichte. |
+| 9 | **#229** | niedrig | Mehr (gute!) Fun Facts & Witze passend zu NPCs/Hafenwelt | Content, Lernspaß; lose Sammlung. |
 | | **— Tiefer Lernpfad —** | | | |
-| 11 | **#281** | niedrig | Keycloak vertiefen: Realm, Client, User/Rollen/Gruppen, Mapper | Lernpfad-Vertiefung, eigenständiger Content-Block. |
-| 12 | **#282** | niedrig | GitLab CI vertiefen: extends/Templates, rules/Trigger, Environments | Lernpfad-Vertiefung, eigenständiger Content-Block. |
-| 13 | **#430** | niedrig | Gating-Konsistenz: Singular/Plural im Abkürzungs-Katalog (vs. #308) | Lernpfad-Logik, kleiner Konsistenz-Fix. |
+| 10 | **#281** | niedrig | Keycloak vertiefen: Realm, Client, User/Rollen/Gruppen, Mapper | Lernpfad-Vertiefung, eigenständiger Content-Block. |
+| 11 | **#282** | niedrig | GitLab CI vertiefen: extends/Templates, rules/Trigger, Environments | Lernpfad-Vertiefung, eigenständiger Content-Block. |
+| 12 | **#430** | niedrig | Gating-Konsistenz: Singular/Plural im Abkürzungs-Katalog (vs. #308) | Lernpfad-Logik, kleiner Konsistenz-Fix. |
 | | **— Tech-Debt (sauber umsetzbar) —** | | | |
-| 14 | **#457** | niedrig | `src/content/drills.ts` aufteilen (God-File-Budget 800 LOC, #169) | Tech-Debt, design-frei; hält die Architektur Stardew-fest. |
+| 13 | **#457** | niedrig | `src/content/drills.ts` aufteilen (God-File-Budget 800 LOC, #169) | Tech-Debt, design-frei; hält die Architektur Stardew-fest. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 15 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 16 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 14 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 15 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
