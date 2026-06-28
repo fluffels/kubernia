@@ -386,6 +386,14 @@
         }
       },
       {
+        "type": "dialog",
+        "npc": "bo",
+        "lines": [
+          "Siehst du die <b>lange Zeichenkette</b>, die gerade erschien? Kein Fehler – das ist die <b>Container-ID</b>: ein eindeutiger Fingerabdruck deiner frisch gestarteten Kiste. Im Hintergrund-Modus (<code>--detach</code>) spuckt Docker sie aus, damit du die abgekoppelte Kiste später wieder ansprechen kannst – etwa mit <code>docker stop</code> oder <code>docker logs</code>.",
+          "Den ganzen Hash auswendig lernen? NIEMALS. Genau dafür hast du <code>--name webserver</code> vergeben: Statt der kryptischen ID nimmst du einfach deinen <b>Wunschnamen</b>. Bo merkt sich Namen, keine Hashes. Bo ist Stein."
+        ]
+      },
+      {
         "type": "drill",
         "brief": "Bos Übungsrunde",
         "pool": [
