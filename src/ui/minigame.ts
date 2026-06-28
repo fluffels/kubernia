@@ -1,7 +1,7 @@
 import { Game } from "../game";
 import { KQContent } from "../content";
 import { SFX } from "../sfx";
-import { part, $, shuffled } from "./shared";
+import { part, $, shuffled, masteryBadge } from "./shared";
 
 export const minigameUI = part({
   /* ========== Stapel-Minispiel ========== */
@@ -57,7 +57,11 @@ export const minigameUI = part({
     const round = rounds[st.round];
     st.target = round.layers;
     st.placed = 0;
-    const html = `<p><b>Runde ${st.round + 1}/${rounds.length}: ${round.name}</b> –
+    // #219: Lernstand dieser Runde merken – startet „sauber", jede falsche Schicht macht sie
+    // unsauber (= nicht gekonnt). Vorheriger Stand wird als Abzeichen sichtbar gemacht.
+    st.roundClean = true;
+    const badge = masteryBadge(Game.masteryBox("stack:" + round.name));
+    const html = `<p><b>Runde ${st.round + 1}/${rounds.length}: ${round.name}</b> ${badge} –
       Bo ruft die Schichten durcheinander. Stapel sie in der <b>richtigen Reihenfolge</b>: unten anfangen (Basis zuerst)!
       <button id="stack-info" title="Erklärung nochmal ansehen" style="float:right;font-size:.85em">ℹ️ Erklärung</button></p>
       <div class="stack-area"><div class="stack-pile" id="stack-pile"></div>
@@ -94,6 +98,9 @@ export const minigameUI = part({
         // weiter – sonst wäre der Tipp nicht lesbar.
         const round = KQContent.STACK_ROUNDS[st.round];
         const last = st.round + 1 >= KQContent.STACK_ROUNDS.length;
+        // #219: Runde fehlerfrei gestapelt? Dann sitzt das Konzept (Box hoch); mit Patzern
+        // bleibt es schwach (Box zurück) und kommt beim nächsten Mal früher dran.
+        Game.recordPractice("stack:" + round.name, st.roundClean !== false);
         fb.className = "stack-feedback good";
         fb.innerHTML = `✅ <b>Runde geschafft!</b>
           <div class="stack-cachetip">🗄️ ${round.cacheTip}</div>
@@ -102,6 +109,7 @@ export const minigameUI = part({
       }
     } else {
       st.score = Math.max(0, st.score - 1);
+      st.roundClean = false; // #219: Patzer -> Runde gilt als „noch nicht gekonnt"
       btn.classList.add("wrong");
       setTimeout(() => btn.classList.remove("wrong"), 400);
       SFX.wrong();

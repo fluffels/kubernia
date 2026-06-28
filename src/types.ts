@@ -54,6 +54,14 @@ export interface GameState {
   activePet: string | null;
   activeFlag: string | null;
   review: Record<string, { box: number; due: number }>;
+  /** Lernstand pro praktischem Übungs-Konzept (#219): Drill-ID bzw. Stapel-Runde
+   *  (`stack:<name>`) → Leitner-Box (1..5) + Fälligkeit, exakt wie `review`. BEWUSST eine
+   *  eigene Map getrennt von `review` (Quiz/Karten): so sickern Drills/Runden nicht in die
+   *  Kralle-Quiz-Auswahl bzw. das Review-Gate (deren `findReviewContent` kennt nur echte
+   *  Karten). Schwache Konzepte (niedrige Box / nie geübt) werden bei der Übungs-Auswahl
+   *  häufiger gezogen, sichere nur ab und zu (`pickWeightedDrills`). Fehlt das Feld
+   *  (Alt-Stand) → `{}`, kein Bruch, kein Versions-Bump. */
+  mastery: Record<string, { box: number; due: number }>;
   streak: { count: number; lastDay: number };
   /** Wurde der einmalige Erklär-Toast zum 🔥 Streak bereits gezeigt? */
   streakHintShown: boolean;

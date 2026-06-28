@@ -43,8 +43,9 @@ interface ActivePractice {
   idx: number;
   task: DrillTask | null;
 }
-/** Stapel-Minispiel-Zustand (ui/minigame.ts). */
-interface ActiveStack { round: number; score: number; }
+/** Stapel-Minispiel-Zustand (ui/minigame.ts). target/placed werden je Runde gesetzt;
+ *  roundClean (#219) merkt, ob die aktuelle Runde bisher fehlerfrei gestapelt wurde. */
+interface ActiveStack { round: number; score: number; target?: string[]; placed?: number; roundClean?: boolean; }
 
 export const UI = {
   dialogue: null as ActiveDialogue | null,
@@ -54,6 +55,8 @@ export const UI = {
   review: null as ActiveReview | null,
   practice: null as ActivePractice | null,   // { npcId, drills, idx, task }
   _drillTask: null as DrillTask | null, // aktuelle generierte Drill-Aufgabe des Quest-Schritts
+  _drillId: "",            // #219: ID des aktuell gezogenen Quest-Drills (für recordPractice)
+  _practiceDirty: false,   // #219: aktuelle Übung gestolpert/Hilfe genutzt? -> nicht „gekonnt"
   stack: null as ActiveStack | null,      // Stapel-Minispiel
   failCount: 0,
   _gateClearedIdx: -1,     // questIdx, für den das Wiederholungs-Gate schon erledigt ist (#222)
