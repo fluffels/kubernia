@@ -613,5 +613,9 @@ button.danger:hover { filter: brightness(1.2); background: linear-gradient(#b345
 /* Pixelschrift auch auf kurzen Beschriftungen in den Panels … */
 .dlg-name, .tt-head, .menu-audio-title, .ql-title, .si-name { font-family: "KQPixel", "Segoe UI", system-ui, sans-serif; }
 .dlg-name { font-size: 0.8em; }
-/* … aber Fließtext/Code/Terminal bleiben in der lesbaren Schrift. */
-.dlg-text, .panel-body p, .term-out, .quiz-explain { font-family: "Segoe UI", system-ui, sans-serif; }
+/* … aber Fließtext/Code bleiben in der lesbaren Schrift.
+   Die Terminal-Ausgabe (.term-out) NICHT: sie zeigt echte CLI-Tabellen (docker ps,
+   kubectl get), deren Spalten mit Leerzeichen auf feste Breiten gepaddet sind (sim/util.ts › table()).
+   Das richtet sich nur in einer Monospace-Schrift bündig aus – darum erbt .term-out
+   bewusst das `font-family: …monospace` von .terminal und steht hier NICHT mehr drin (#365). */
+.dlg-text, .panel-body p, .quiz-explain { font-family: "Segoe UI", system-ui, sans-serif; }
