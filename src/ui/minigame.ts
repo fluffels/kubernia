@@ -89,8 +89,16 @@ export const minigameUI = part({
       fb.className = "stack-feedback";
       fb.innerHTML = "";
       if (st.placed >= st.target.length) {
-        st.round++;
-        setTimeout(() => this.renderStackRound(), 700);
+        // Runde geschafft (#218): nicht automatisch wegspringen, sondern die
+        // konkrete Cache-/Build-Lektion zu diesem Image zeigen und per Knopf
+        // weiter – sonst wäre der Tipp nicht lesbar.
+        const round = KQContent.STACK_ROUNDS[st.round];
+        const last = st.round + 1 >= KQContent.STACK_ROUNDS.length;
+        fb.className = "stack-feedback good";
+        fb.innerHTML = `✅ <b>Runde geschafft!</b>
+          <div class="stack-cachetip">🗄️ ${round.cacheTip}</div>
+          <button class="primary" id="stack-next">${last ? "Spiel abschließen ▶" : "Nächste Runde ▶"}</button>`;
+        $("stack-next").onclick = () => { st.round++; this.renderStackRound(); };
       }
     } else {
       st.score = Math.max(0, st.score - 1);

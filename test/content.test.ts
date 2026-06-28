@@ -388,9 +388,31 @@ test("Teach-Schritte mit Pflicht-Flag zeigen es im Panel (intro+text), nicht nur
   }
 });
 
-test("Stapel-Spiel hat mindestens 2 Runden mit je 3+ Schichten", () => {
-  assert.ok(KQContent.STACK_ROUNDS.length >= 2);
+test("Stapel-Spiel hat genug Übungsrunden (#218) mit je 3+ Schichten", () => {
+  // #218: spürbar mehr als das alte Minimum von 2 Runden, damit das Muster
+  // durch Wiederholung sitzt.
+  assert.ok(KQContent.STACK_ROUNDS.length >= 5, `nur ${KQContent.STACK_ROUNDS.length} Runden`);
   for (const r of KQContent.STACK_ROUNDS) assert.ok(r.layers.length >= 3, r.name);
+});
+
+test("Stapel-Spiel steigert die Schwierigkeit (#218): Schichtzahl nie absteigend", () => {
+  // Anfänger sollen mit wenigen Schichten starten und sich steigern – die Runden
+  // sind nach Schichtzahl aufsteigend (oder gleich) sortiert.
+  const counts = KQContent.STACK_ROUNDS.map((r) => r.layers.length);
+  for (let i = 1; i < counts.length; i++) {
+    assert.ok(counts[i] >= counts[i - 1], `Runde ${i + 1} (${counts[i]}) leichter als die davor (${counts[i - 1]})`);
+  }
+  // erste Runde ist die einfachste (genau das geforderte Minimum von 3 Schichten)
+  assert.equal(counts[0], 3, "erste Runde sollte mit 3 Schichten am leichtesten sein");
+});
+
+test("Stapel-Spiel: jede Runde erklärt Cache/Build konkret (#218)", () => {
+  // „Cache und Build nicht nur im Merksatz nennen": jede Runde trägt einen eigenen,
+  // nichtleeren Cache/Build-Tipp, der nach geschaffter Runde gezeigt wird.
+  for (const r of KQContent.STACK_ROUNDS) {
+    assert.ok(r.cacheTip && r.cacheTip.trim().length > 0, `Runde „${r.name}" ohne cacheTip`);
+    assert.ok(/cache|build/i.test(r.cacheTip), `cacheTip von „${r.name}" nennt weder Cache noch Build`);
+  }
 });
 
 test("jeder NPC hat ein Sprite-Asset (tex im Manifest)", () => {
