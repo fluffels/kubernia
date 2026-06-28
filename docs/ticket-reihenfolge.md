@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-28 — #309 erledigt (Wording „Kiste" vs. „Container" geklärt). Der Backlog ist komplett `prio:niedrig`/ohne (keine `hoch`/`mittel` mehr offen), darum kuratiert der Kopf nach Wert statt nach Prio: jetzt restlicher Docker-Content als Anschluss an den Image-Arc (#218), dann Flavor/Fun (#302/#228/#229/#236/#237), dann tiefer Lernpfad (#281/#282/#430), dann Tech-Debt (#457), zuletzt die ⚠️-Sonderfälle. Alle ⚠️-Grafik-Tickets (#183/#186/#187/#190/#204 u.a.) bleiben bewusst im Auto-Rest, bis Design abgestimmt ist. Nächstes freies Ticket = oberstes des Kopfes (#218). Zuletzt abgeschlossen: #309 (Wording-Leitlinie dokumentiert – im Lern-/Befehls-Kontext fällt der Fachbegriff „Container" klar und wird mit der Hafen-Metapher „Kiste" verknüpft, in Welt-/Story-Stimmung bleibt „Kiste"; `docker-run-options` verknüpft beides jetzt am Lehr-Einstieg, `docker-build-image` ergänzt den Bezug Image→Container und entschärft die irreführende „Kiste"-Wiederverwendung für den Build-Kontext; Guard-Test sichert „Container" in jeder Docker-Befehls-Quest). Davor: #369 (Bo erklärt `ps` = process status), #315 (Container-ID nach `docker run --detach` erklärt), #360 (Funk-Link wieder lesbar), #361 (Freies-Funken-Text klärt Spielwelt-Wirkung), #364 (Befehls-Badges nie mitten im Befehl umbrechen), #365 (docker-ps-Tabelle bündig), #458 (Quiz-Optionen als HTML statt esc()), #212 (nginx als Webserver in der Warenkunde erklärt), #450 (Bo-Quest `docker-rabbitmq`). npm test 1212 / typecheck / lint / arch / size grün. Phase 9 + 10 komplett.**
+> **Stand: 2026-06-28 — #218 erledigt (Stapel-Spiel: mehr Runden, Schwierigkeitssteigerung, Cache/Build-Lektion). Der Backlog ist komplett `prio:niedrig`/ohne (keine `hoch`/`mittel` mehr offen), darum kuratiert der Kopf nach Wert statt nach Prio: jetzt Lernpfad-Anschluss ans Stapel-Spiel (#219), dann Flavor/Fun (#302/#228/#229/#236/#237), dann tiefer Lernpfad (#281/#282/#430) + Lernbogen-Content (#239/#279), dann Tech-Debt (#457/#382), zuletzt die ⚠️-Sonderfälle. Alle ⚠️-Grafik-Tickets (#183/#186/#187/#190/#204 u.a.) bleiben bewusst im Auto-Rest, bis Design abgestimmt ist. Nächstes freies Ticket = oberstes des Kopfes (#219). Zuletzt abgeschlossen: #218 (Stapel-Spiel von 3 auf 5 Runden erweitert – statische Webseite → Webserver → Java → Python → Node.js, nach Schichtzahl aufsteigend sortiert 3→4→4→5→6; jede Runde zeigt nach dem Lösen eine konkrete Cache-/Build-Lektion an genau diesem Image, „weiter"-Knopf statt 700ms-Autosprung; Loader + Tests sichern ≥5 Runden, aufsteigende Schwierigkeit, cacheTip pro Runde). Davor: #309 (Kiste-vs-Container-Wording), #369 (Bo erklärt `ps` = process status), #315 (Container-ID nach `docker run --detach`), #360 (Funk-Link lesbar), #361 (Freies-Funken-Text), #364 (Befehls-Badges-Umbruch), #365 (docker-ps-Tabelle bündig), #458 (Quiz-Optionen als HTML), #212 (nginx-Warenkunde), #450 (Bo-Quest `docker-rabbitmq`). npm test 1214 / typecheck / lint / arch / size grün. Phase 9 + 10 komplett.**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -44,24 +44,26 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| | **— Docker-Content (knüpft direkt an den eben fertigen Image-Arc an) —** | | | |
-| 1 | **#218** | niedrig | Stapel-Spiel: mehr Beispiele/Übungsrunden + Cache/Build erklären | Content, baut auf vorhandenem Minispiel auf (kein neues System). |
-| 2 | **#219** | niedrig | Spaced Repetition auf Stapel-Spiel/Drills ausweiten (gekonnt/nicht merken) | Lernpfad, baut direkt auf #218 auf (gleiches Minispiel). |
+| | **— Lernpfad-Anschluss ans Stapel-Spiel —** | | | |
+| 1 | **#219** | niedrig | Spaced Repetition auf Stapel-Spiel/Drills ausweiten (gekonnt/nicht merken) | Lernpfad, baut direkt auf dem eben erweiterten Stapel-Spiel (#218) auf. |
 | | **— Flavor-/Fun-Content (Lernspaß, ohne Abhängigkeit) —** | | | |
-| 3 | **#302** | niedrig | Bo Quest-1-Abschluss-Dialog: Üben-Hinweis auf Kralle umlenken | Content, kleiner Dialog-Fix (Kralle-Üben ist fertig). |
-| 4 | **#228** | niedrig | Fun Fact: woher die 8 in K8s kommt (8 Buchstaben) | Content, schnell, hohe Lernspaß-Dichte. |
-| 5 | **#229** | niedrig | Mehr (gute!) Fun Facts & Witze passend zu NPCs/Hafenwelt | Content, Lernspaß; lose Sammlung. |
-| 6 | **#236** | niedrig | Kralle-Meilenstein-Sprüche: erwähnt zum wievielten Mal man übt (Zähler + Sprüche) | Content, Lernspaß; baut auf vorhandenem Kralle-Üben auf. |
-| 7 | **#237** | niedrig | Kralle = Krabbe ohne Krallen — Running Gag draus machen (oder umbenennen) | Content/Flavor, kleiner Dialog-Bogen um Kralle. |
+| 2 | **#302** | niedrig | Bo Quest-1-Abschluss-Dialog: Üben-Hinweis auf Kralle umlenken | Content, kleiner Dialog-Fix (Kralle-Üben ist fertig). |
+| 3 | **#228** | niedrig | Fun Fact: woher die 8 in K8s kommt (8 Buchstaben) | Content, schnell, hohe Lernspaß-Dichte. |
+| 4 | **#229** | niedrig | Mehr (gute!) Fun Facts & Witze passend zu NPCs/Hafenwelt | Content, Lernspaß; lose Sammlung. |
+| 5 | **#236** | niedrig | Kralle-Meilenstein-Sprüche: erwähnt zum wievielten Mal man übt (Zähler + Sprüche) | Content, Lernspaß; baut auf vorhandenem Kralle-Üben auf. |
+| 6 | **#237** | niedrig | Kralle = Krabbe ohne Krallen — Running Gag draus machen (oder umbenennen) | Content/Flavor, kleiner Dialog-Bogen um Kralle. |
 | | **— Tiefer Lernpfad —** | | | |
-| 8 | **#281** | niedrig | Keycloak vertiefen: Realm, Client, User/Rollen/Gruppen, Mapper | Lernpfad-Vertiefung, eigenständiger Content-Block. |
-| 9 | **#282** | niedrig | GitLab CI vertiefen: extends/Templates, rules/Trigger, Environments | Lernpfad-Vertiefung, eigenständiger Content-Block. |
-| 10 | **#430** | niedrig | Gating-Konsistenz: Singular/Plural im Abkürzungs-Katalog (vs. #308) | Lernpfad-Logik, kleiner Konsistenz-Fix. |
+| 7 | **#281** | niedrig | Keycloak vertiefen: Realm, Client, User/Rollen/Gruppen, Mapper | Lernpfad-Vertiefung, eigenständiger Content-Block. |
+| 8 | **#282** | niedrig | GitLab CI vertiefen: extends/Templates, rules/Trigger, Environments | Lernpfad-Vertiefung, eigenständiger Content-Block. |
+| 9 | **#430** | niedrig | Gating-Konsistenz: Singular/Plural im Abkürzungs-Katalog (vs. #308) | Lernpfad-Logik, kleiner Konsistenz-Fix. |
+| 10 | **#239** | niedrig | Lernbogen: Cluster nach Sturm selbst neu aufbauen (Spät-Spiel) | Content/Lernbogen, design-frei (nutzt vorhandene Sturm-Mechanik). |
+| 11 | **#279** | niedrig | Nachträglich eingeführte Inhalte auch Fortgeschrittene erreichen lassen (Backfill) | Lernpfad-Logik, design-frei; ergänzt #353/#354-Fundament. |
 | | **— Tech-Debt (sauber umsetzbar) —** | | | |
-| 11 | **#457** | niedrig | `src/content/drills.ts` aufteilen (God-File-Budget 800 LOC, #169) | Tech-Debt, design-frei; hält die Architektur Stardew-fest. |
+| 12 | **#457** | niedrig | `src/content/drills.ts` aufteilen (God-File-Budget 800 LOC, #169) | Tech-Debt, design-frei; hält die Architektur Stardew-fest. |
+| 13 | **#382** | niedrig | Doku-Inkonsistenz: Worktree-Pfad-Konvention (AGENTS.md vs CLAUDE.md vs launch.json) | Tech-Debt/Doku, design-frei; klärt eine widersprüchliche Konvention. |
 | | **— Sonderfälle ans Ende —** | | | |
-| 12 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 13 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 14 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 15 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
