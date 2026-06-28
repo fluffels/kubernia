@@ -46,7 +46,7 @@
       "Alle Images auf Docker Hub."
     ],
     "correct": 0,
-    "explain": "docker ps = laufende Container. Mit -a („all“) siehst du auch die gestoppten."
+    "explain": "docker ps = laufende Container. Das ps kommt aus Unix: ps = process status, listet laufende Prozesse. Mit -a („all“) siehst du auch die gestoppten."
   },
   {
     "id": "q-ch1-5",
