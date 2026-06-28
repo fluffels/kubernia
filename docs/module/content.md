@@ -35,6 +35,15 @@ Vom Loader geladen + validiert, von Vite gebündelt; **kein Runtime-`fetch`**, d
 
 > Quest hinzufügen/umbenennen/entfernen inkl. Save-Migrations-Regeln: siehe [AGENTS.md › Content-as-Data](../../AGENTS.md). Quest-Fortschritt persistiert seit #353/#354 per **Quest-ID** (`currentQuestId`), nicht per Zahl-Index — Einfügen/Umsortieren braucht keine Migration.
 
+### Wording-Leitlinie: Metapher vs. Fachbegriff (#309)
+
+Die Hafenwelt hat für viele Konzepte eine **bewusste Metapher** (z.B. „Kiste" für *Container*, „Bauplan" für *Image*, „Funkgerät" fürs Terminal). Die Metapher ist Flavour und soll bleiben — aber wer DevOps lernt, muss am Ende den **echten Fachbegriff** kennen. Darum die einfache Regel:
+
+- **Lern-/Befehls-Kontext → echter Fachbegriff fällt klar.** Wo ein realer Befehl oder ein reales Konzept **eingeführt/erklärt** wird (Quest-Intro vor einem `teach`, `teach.intro`/`text`, Quiz-`explain`), muss der echte Begriff mindestens einmal deutlich genannt **und mit der Metapher verknüpft** werden („die Kiste = ein Container"). So findet der Spielbegriff mit dem Fachwort zusammen.
+- **Welt-/Story-Stimmung → Metapher.** In reinem Flavour, NPC-Charakter (Bo „stapelt Kisten") und Wiederholungen, wo der Begriff schon eingeführt ist, darf die Metapher frei stehen — sie nicht überall mechanisch durch das Fachwort ersetzen.
+
+Konkret für Container: Die Verknüpfung „Kiste = Container" wird in `docker-first-container` (Einführung) gesetzt und in `docker-run-detached` (Profi-Lektion mit `--name`/`--detach`) am Lehr-Einstieg erneut erinnert. Ein Wächter (`test/content.test.ts`) sichert ab, dass jede **Docker-Befehls-Quest** das Fachwort „Container" im Dialog/Lehrtext führt — Flavour-only-Quests würden den Begriff sonst bei Stardew-Scope verlieren.
+
 ## Check-DSL — Quest-Erfolgsbedingungen als Daten (#411)
 
 Eine `teach`/`terminal`-Aufgabe kann ein `check`-Prädikat tragen, das nach der Eingabe den **Sim-Zustand** prüft („ist der Service jetzt da? das Deployment heil?"). Bis #411 war jedes ein hartcodiertes Prädikat in `checks.ts` (56 Stück) — jede neue Quest mit Prüfbedingung brauchte einen Code-Eintrag. Seit #411 ist der **Regelfall Daten**: eine deklarative Regel in der Quest-JSON, die `check-dsl.ts` beim Laden zu `(sim) => boolean` kompiliert. `quests.test.ts` spielt die ganze Story durch und prüft jeden `check` gegen den echten Sim — die Migration ist damit byte-genau abgesichert.

@@ -107,6 +107,42 @@ test("docker run: Flag-Reihenfolge ist frei – Drill & Karte akzeptieren -d/--n
   }
 });
 
+test("#309 Wording-Leitlinie: jede Docker-Befehls-Quest nennt den Fachbegriff „Container“ im Lerntext (Metapher „Kiste“ allein reicht nicht)", () => {
+  // Sammelt allen sichtbaren Lerntext einer Quest (Dialog-Zeilen + Teach-Intro/Text).
+  const lernText = (q: (typeof KQContent.QUESTS)[number]): string =>
+    q.steps
+      .map(s => {
+        if (s.type === "dialog") return s.lines.join(" ");
+        if (s.type === "teach") return (s as TeachStep).cmd.intro + " " + (s as TeachStep).cmd.text;
+        return "";
+      })
+      .join(" ");
+
+  // Docker-Befehls-Quests = topic "docker" mit mindestens einem Teach-Schritt
+  // (dort wird ein echter Befehl beigebracht – genau da muss der Fachbegriff fallen).
+  const dockerLehrQuests = KQContent.QUESTS.filter(
+    q => q.topic === "docker" && q.steps.some(s => s.type === "teach"),
+  );
+  assert.ok(dockerLehrQuests.length > 0, "keine Docker-Befehls-Quest gefunden – Filter kaputt?");
+  for (const q of dockerLehrQuests) {
+    assert.ok(
+      /Container/.test(lernText(q)),
+      `Quest ${q.id}: führt einen Docker-Befehl ein, nennt aber nirgends den Fachbegriff „Container“ (nur die Metapher) – #309-Leitlinie verletzt`,
+    );
+  }
+
+  // Gezielt: die Profi-Lektion (--name/--detach) verknüpft Metapher und Fachwort
+  // direkt im Lehr-Einstiegs-Dialog (#309 – das war die konkrete Lücke).
+  const profi = KQContent.QUESTS.find(q => q.id === "docker-run-options");
+  assert.ok(profi, "docker-run-options nicht gefunden");
+  const introDialog = profi!.steps.find(s => s.type === "dialog");
+  assert.ok(introDialog && introDialog.type === "dialog", "docker-run-options: Intro-Dialog fehlt");
+  assert.ok(
+    /Container/.test(introDialog.lines.join(" ")),
+    "docker-run-options: der Lehr-Einstiegs-Dialog verknüpft „Kiste“ nicht mit dem Fachwort „Container“ (#309)",
+  );
+});
+
 test("docker build: -t UND --tag gelten gleichwertig in Teach-Schritt, Karte & Drill; 'tag'-Bedeutungen entwirrt (#285)", () => {
   const norm = (s: string) => s.trim().replace(/\s+/g, " ");
 

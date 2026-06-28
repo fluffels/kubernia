@@ -365,7 +365,7 @@
         "type": "dialog",
         "npc": "bo",
         "lines": [
-          "LETZTE DOCKER-LEKTION. Profis geben Kisten <b>eigene Namen</b> (<code>--name</code>) und schicken sie mit <code>--detach</code> in den <b>Hintergrund</b>.",
+          "LETZTE DOCKER-LEKTION. Kurz zur Erinnerung, Landratte: Bos <b>Kiste</b> heißt im Fachjargon <b>Container</b> – dasselbe Ding, ein Wort fürs Dock, eins fürs Handbuch. Profis geben ihren <b>Containern</b> <b>eigene Namen</b> (<code>--name</code>) und schicken sie mit <code>--detach</code> in den <b>Hintergrund</b>.",
           "<code>--detach</code> heißt <b>„abgekoppelt“</b>. OHNE <code>--detach</code> klemmt sich dein <b>Terminal an die Kiste</b>: Du siehst ihre Ausgabe, aber die Leitung ist <b>blockiert</b>, bis die Kiste schließt – kein anderer Befehl geht durch. MIT <code>--detach</code> läuft die Kiste <b>abgekoppelt im Hintergrund weiter</b>, und das Terminal ist sofort wieder frei für den nächsten Befehl. Bo lässt das Terminal NIE blockieren. Bo ist Stein. (Profis tippen dafür die Kurzform <code>-d</code> – die <b>verdienst</b> du dir, wenn du <code>--detach</code> oft genug ausgeschrieben hast.)",
           "Zusammen: <code>docker run --detach --name webserver nginx</code>. Sieht lang aus – Bo zerlegt es Stück für Stück: <code>run</code> startet eine Kiste · <code>--detach</code> ab in den Hintergrund · <code>--name webserver</code> = so soll <b>DEINE</b> Kiste heißen (<b>Wunschname, frei wählbar</b>) · <code>nginx</code> = das <b>Image</b>, der Bausatz, aus dem die Kiste entsteht (kommt von außen, NICHT frei erfunden).",
           "Verwechsle die letzten zwei NIE: hinter <code>--name</code> steht dein eigener Name, ganz hinten steht das Image. <code>docker run --detach --name <b>meine-kiste</b> nginx</code> ginge genauso – nur <code>nginx</code> muss als Bauplan existieren.",
@@ -482,7 +482,8 @@
         "type": "dialog",
         "npc": "bo",
         "lines": [
-          "Jetzt machst du aus dem Bauplan ein echtes Image: <code>docker build</code>. Das <code>--tag</code> gibt deinem Image den ganzen <b>Namen</b> <code>name:tag</code> – sonst findest du es später nicht wieder. Der Teil hinter dem <code>:</code> ist der <b>Versions-Tag</b>. (Verwechsle das nicht mit dem eigenen Befehl <code>docker tag</code> – der kommt gleich und gibt einem fertigen Image nur einen Zweitnamen.) Der <b>Punkt</b> am Ende sagt: „Der Bauplan liegt HIER im aktuellen Ordner.“ (Die Kurzform <code>-t</code> verdienst du dir, wenn du <code>--tag</code> oft genug ausgeschrieben hast.)"
+          "Jetzt machst du aus dem Bauplan ein echtes Image: <code>docker build</code>. Das <code>--tag</code> gibt deinem Image den ganzen <b>Namen</b> <code>name:tag</code> – sonst findest du es später nicht wieder. Der Teil hinter dem <code>:</code> ist der <b>Versions-Tag</b>. (Verwechsle das nicht mit dem eigenen Befehl <code>docker tag</code> – der kommt gleich und gibt einem fertigen Image nur einen Zweitnamen.) Der <b>Punkt</b> am Ende sagt: „Der Bauplan liegt HIER im aktuellen Ordner.“ (Die Kurzform <code>-t</code> verdienst du dir, wenn du <code>--tag</code> oft genug ausgeschrieben hast.)",
+          "Und wozu das Ganze? Aus deinem frisch gebauten Image machst du später mit <code>docker run</code> laufende <b>Container</b> (Bos Kisten) – wie damals bei <code>nginx</code>, nur ist der Bauplan jetzt <b>deiner</b>. Bauen → starten, derselbe Kreislauf. Bo ist Stein."
         ]
       },
       {
@@ -490,13 +491,13 @@
         "brief": "Eigenes Image bauen",
         "cmd": {
           "id": "t-build",
-          "intro": "🆕 Neuer Befehl: <code>docker build --tag &lt;name&gt;:&lt;tag&gt; .</code> – baut aus dem Dockerfile ein eigenes Image. Gebaut wird in der <b>Docker-Engine</b> (eigenes Programm, das deine Ordner nicht sieht); der <b>Punkt</b> ist der Build-Kontext – der Ordner, den du ihr als Kiste mit Baumaterial rüberreichst (<code>.</code> = der aktuelle). Daraus liest Docker das Dockerfile und alles, was <code>COPY</code> holt. <code>--tag</code> vergibt den ganzen Namen <code>name:tag</code>; die Kurzform <code>-t</code> verdienst du dir durch Nutzung (beides gilt).",
+          "intro": "🆕 Neuer Befehl: <code>docker build --tag &lt;name&gt;:&lt;tag&gt; .</code> – baut aus dem Dockerfile ein eigenes Image. Gebaut wird in der <b>Docker-Engine</b> (eigenes Programm, das deine Ordner nicht sieht); der <b>Punkt</b> ist der Build-Kontext – der Ordner voll Baumaterial, den du ihr rüberreichst (<code>.</code> = der aktuelle). Daraus liest Docker das Dockerfile und alles, was <code>COPY</code> holt. <code>--tag</code> vergibt den ganzen Namen <code>name:tag</code>; die Kurzform <code>-t</code> verdienst du dir durch Nutzung (beides gilt).",
           "text": "Bau aus dem Dockerfile ein Image mit dem Namen <code>hafenwache:1.0</code>. (Punkt am Ende nicht vergessen!)",
           "accept": [
             "^docker\\s+build\\s+(?:-t|--tag)\\s+hafenwache:1\\.0\\s+\\.$"
           ],
           "solution": "docker build --tag hafenwache:1.0 .",
-          "hint": "Muster: docker build --tag <name>:<tag> . (statt --tag geht auch die Kurzform -t) – der Punkt ist der Build-Kontext: die Kiste (= aktueller Ordner), die du der Engine zum Bauen rüberreichst."
+          "hint": "Muster: docker build --tag <name>:<tag> . (statt --tag geht auch die Kurzform -t) – der Punkt ist der Build-Kontext: der Ordner voll Baumaterial (= aktueller Ordner), den du der Engine zum Bauen rüberreichst."
         }
       },
       {
