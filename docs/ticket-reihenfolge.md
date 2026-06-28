@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-28 — #218 erledigt (Stapel-Spiel: mehr Runden, Schwierigkeitssteigerung, Cache/Build-Lektion). Der Backlog ist komplett `prio:niedrig`/ohne (keine `hoch`/`mittel` mehr offen), darum kuratiert der Kopf nach Wert statt nach Prio: jetzt Lernpfad-Anschluss ans Stapel-Spiel (#219), dann Flavor/Fun (#302/#228/#229/#236/#237), dann tiefer Lernpfad (#281/#282/#430) + Lernbogen-Content (#239/#279), dann Tech-Debt (#457/#382), zuletzt die ⚠️-Sonderfälle. Alle ⚠️-Grafik-Tickets (#183/#186/#187/#190/#204 u.a.) bleiben bewusst im Auto-Rest, bis Design abgestimmt ist. Nächstes freies Ticket = oberstes des Kopfes (#219). Zuletzt abgeschlossen: #218 (Stapel-Spiel von 3 auf 5 Runden erweitert – statische Webseite → Webserver → Java → Python → Node.js, nach Schichtzahl aufsteigend sortiert 3→4→4→5→6; jede Runde zeigt nach dem Lösen eine konkrete Cache-/Build-Lektion an genau diesem Image, „weiter"-Knopf statt 700ms-Autosprung; Loader + Tests sichern ≥5 Runden, aufsteigende Schwierigkeit, cacheTip pro Runde). Davor: #309 (Kiste-vs-Container-Wording), #369 (Bo erklärt `ps` = process status), #315 (Container-ID nach `docker run --detach`), #360 (Funk-Link lesbar), #361 (Freies-Funken-Text), #364 (Befehls-Badges-Umbruch), #365 (docker-ps-Tabelle bündig), #458 (Quiz-Optionen als HTML), #212 (nginx-Warenkunde), #450 (Bo-Quest `docker-rabbitmq`). npm test 1214 / typecheck / lint / arch / size grün. Phase 9 + 10 komplett.**
+> **Stand: 2026-06-28 — #219 erledigt (Spaced Repetition auf Stapel-Spiel & Drills ausgeweitet). Der Backlog ist komplett `prio:niedrig`/ohne (keine `hoch`/`mittel` mehr offen), darum kuratiert der Kopf nach Wert statt nach Prio: jetzt Flavor/Fun (#302/#228/#229/#236/#237), dann tiefer Lernpfad (#281/#282/#430) + Lernbogen-Content (#239/#279), dann Tech-Debt (#457/#382), zuletzt die anlegenden/⚠️-Sonderfälle. Alle ⚠️-Grafik-Tickets (#183/#186/#187/#190/#204 u.a.) bleiben bewusst im Auto-Rest, bis Design abgestimmt ist. Nächstes freies Ticket = oberstes des Kopfes (#302). Zuletzt abgeschlossen: #219 (Lernstand pro Übungs-Konzept – Drill-ID + Stapel-Runde – in eigener Leitner-Map `state.mastery`, getrennt von der Quiz-Map `review`; freies Üben + Quest-Drills ziehen gewichtet statt zufällig, Stapel-Runden buchen den Lernstand; Abzeichen 🆕/🔁/📈/✅ sichtbar; Alt-Stände defensiv migriert). Davor: #218 (Stapel-Spiel von 3 auf 5 Runden + Cache/Build-Lektion pro Runde), #309 (Kiste-vs-Container-Wording), #369 (Bo erklärt `ps` = process status), #315 (Container-ID nach `docker run --detach`), #360 (Funk-Link lesbar), #361 (Freies-Funken-Text), #364 (Befehls-Badges-Umbruch), #365 (docker-ps-Tabelle bündig), #458 (Quiz-Optionen als HTML), #212 (nginx-Warenkunde). npm test 1222 / typecheck / lint / arch / size grün. Phase 9 + 10 komplett.**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -44,24 +44,23 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| | **— Lernpfad-Anschluss ans Stapel-Spiel —** | | | |
-| 1 | **#219** | niedrig | Spaced Repetition auf Stapel-Spiel/Drills ausweiten (gekonnt/nicht merken) | Lernpfad, baut direkt auf dem eben erweiterten Stapel-Spiel (#218) auf. |
 | | **— Flavor-/Fun-Content (Lernspaß, ohne Abhängigkeit) —** | | | |
-| 2 | **#302** | niedrig | Bo Quest-1-Abschluss-Dialog: Üben-Hinweis auf Kralle umlenken | Content, kleiner Dialog-Fix (Kralle-Üben ist fertig). |
-| 3 | **#228** | niedrig | Fun Fact: woher die 8 in K8s kommt (8 Buchstaben) | Content, schnell, hohe Lernspaß-Dichte. |
-| 4 | **#229** | niedrig | Mehr (gute!) Fun Facts & Witze passend zu NPCs/Hafenwelt | Content, Lernspaß; lose Sammlung. |
-| 5 | **#236** | niedrig | Kralle-Meilenstein-Sprüche: erwähnt zum wievielten Mal man übt (Zähler + Sprüche) | Content, Lernspaß; baut auf vorhandenem Kralle-Üben auf. |
-| 6 | **#237** | niedrig | Kralle = Krabbe ohne Krallen — Running Gag draus machen (oder umbenennen) | Content/Flavor, kleiner Dialog-Bogen um Kralle. |
+| 1 | **#302** | niedrig | Bo Quest-1-Abschluss-Dialog: Üben-Hinweis auf Kralle umlenken | Content, kleiner Dialog-Fix (Kralle-Üben ist fertig). |
+| 2 | **#228** | niedrig | Fun Fact: woher die 8 in K8s kommt (8 Buchstaben) | Content, schnell, hohe Lernspaß-Dichte. |
+| 3 | **#229** | niedrig | Mehr (gute!) Fun Facts & Witze passend zu NPCs/Hafenwelt | Content, Lernspaß; lose Sammlung. |
+| 4 | **#236** | niedrig | Kralle-Meilenstein-Sprüche: erwähnt zum wievielten Mal man übt (Zähler + Sprüche) | Content, Lernspaß; baut auf vorhandenem Kralle-Üben auf. |
+| 5 | **#237** | niedrig | Kralle = Krabbe ohne Krallen — Running Gag draus machen (oder umbenennen) | Content/Flavor, kleiner Dialog-Bogen um Kralle. |
 | | **— Tiefer Lernpfad —** | | | |
-| 7 | **#281** | niedrig | Keycloak vertiefen: Realm, Client, User/Rollen/Gruppen, Mapper | Lernpfad-Vertiefung, eigenständiger Content-Block. |
-| 8 | **#282** | niedrig | GitLab CI vertiefen: extends/Templates, rules/Trigger, Environments | Lernpfad-Vertiefung, eigenständiger Content-Block. |
-| 9 | **#430** | niedrig | Gating-Konsistenz: Singular/Plural im Abkürzungs-Katalog (vs. #308) | Lernpfad-Logik, kleiner Konsistenz-Fix. |
-| 10 | **#239** | niedrig | Lernbogen: Cluster nach Sturm selbst neu aufbauen (Spät-Spiel) | Content/Lernbogen, design-frei (nutzt vorhandene Sturm-Mechanik). |
-| 11 | **#279** | niedrig | Nachträglich eingeführte Inhalte auch Fortgeschrittene erreichen lassen (Backfill) | Lernpfad-Logik, design-frei; ergänzt #353/#354-Fundament. |
+| 6 | **#281** | niedrig | Keycloak vertiefen: Realm, Client, User/Rollen/Gruppen, Mapper | Lernpfad-Vertiefung, eigenständiger Content-Block. |
+| 7 | **#282** | niedrig | GitLab CI vertiefen: extends/Templates, rules/Trigger, Environments | Lernpfad-Vertiefung, eigenständiger Content-Block. |
+| 8 | **#430** | niedrig | Gating-Konsistenz: Singular/Plural im Abkürzungs-Katalog (vs. #308) | Lernpfad-Logik, kleiner Konsistenz-Fix. |
+| 9 | **#239** | niedrig | Lernbogen: Cluster nach Sturm selbst neu aufbauen (Spät-Spiel) | Content/Lernbogen, design-frei (nutzt vorhandene Sturm-Mechanik). |
+| 10 | **#279** | niedrig | Nachträglich eingeführte Inhalte auch Fortgeschrittene erreichen lassen (Backfill) | Lernpfad-Logik, design-frei; ergänzt #353/#354-Fundament. |
 | | **— Tech-Debt (sauber umsetzbar) —** | | | |
-| 12 | **#457** | niedrig | `src/content/drills.ts` aufteilen (God-File-Budget 800 LOC, #169) | Tech-Debt, design-frei; hält die Architektur Stardew-fest. |
-| 13 | **#382** | niedrig | Doku-Inkonsistenz: Worktree-Pfad-Konvention (AGENTS.md vs CLAUDE.md vs launch.json) | Tech-Debt/Doku, design-frei; klärt eine widersprüchliche Konvention. |
-| | **— Sonderfälle ans Ende —** | | | |
+| 11 | **#457** | niedrig | `src/content/drills.ts` aufteilen (God-File-Budget 800 LOC, #169) | Tech-Debt, design-frei; hält die Architektur Stardew-fest. |
+| 12 | **#382** | niedrig | Doku-Inkonsistenz: Worktree-Pfad-Konvention (AGENTS.md vs CLAUDE.md vs launch.json) | Tech-Debt/Doku, design-frei; klärt eine widersprüchliche Konvention. |
+| | **— Anlegende / Sonderfälle ans Ende —** | | | |
+| 13 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
 | 14 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
 | 15 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
