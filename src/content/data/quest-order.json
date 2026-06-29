@@ -59,5 +59,6 @@
   "terraform-variablen-outputs",
   "werft-eigener-dienst",
   "aufbau-sturm",
-  "aufbau-control-plane"
+  "aufbau-control-plane",
+  "aufbau-worker-join"
 ]

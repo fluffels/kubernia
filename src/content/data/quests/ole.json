@@ -898,5 +898,152 @@
         ]
       }
     ]
+  },
+  {
+    "id": "aufbau-worker-join",
+    "title": "Stege ans Wasser: Worker-Knoten anschließen",
+    "giver": "ole",
+    "topic": "cluster-aufbau",
+    "rewardXp": 55,
+    "rewardCoins": 40,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "ole",
+        "scenario": {
+          "bareMetal": true,
+          "controlPlane": {
+            "up": true,
+            "token": "abcdef.0123456789abcdef",
+            "node": "ahoi-control"
+          },
+          "nodes": [
+            {
+              "name": "ahoi-control",
+              "status": "Ready",
+              "roles": "control-plane",
+              "version": "v1.30.2",
+              "diskPressure": false
+            }
+          ]
+        },
+        "lines": [
+          "Die Kommandobrücke steht – aber sie ist <b>einsam</b>. <code>kubectl get nodes</code> zeigt genau einen Knoten, die Control-Plane. Die <b>entscheidet</b> nur; tragen muss die Fracht jemand anderes: die <b>Worker</b>.",
+          "Warum nicht alles auf einen großen Knoten? Zwei Gründe, die du im Schlaf können musst: <b>Kapazität</b> (mehr Knoten = mehr Pods passen rein) und <b>Ausfallsicherheit</b> – fällt ein Steg weg, schiebt der Cluster seine Pods auf die anderen. <b>Ein</b> Knoten ist ein <i>single point of failure</i>.",
+          "Auf jedem Worker läuft ein <b>kubelet</b> – der Hafenarbeiter des Knotens: er meldet den Knoten bei der Control-Plane an, nimmt Pod-Aufträge entgegen und hält die Container am Laufen. Anmelden darf er sich nur mit dem <b>Join-Token</b>, das <code>kubeadm init</code> ausgegeben hat: <code>abcdef.0123456789abcdef</code>. Häng den ersten Steg an!"
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Ersten Worker anschließen",
+        "cmd": {
+          "id": "t-join-1",
+          "intro": "🆕 Neuer Befehl: <code>kubeadm join &lt;token&gt;</code> – meldet einen Worker-Knoten mit dem Join-Token bei der Control-Plane an. Das kubelet des Knotens weist sich damit als befugt aus.",
+          "text": "Schließ den ersten Worker an: <code>kubeadm join abcdef.0123456789abcdef</code>. Der Token ist genau der aus <code>kubeadm init</code> – ein Geheimnis auf Zeit, mit dem sich jeder Knoten anmeldet.",
+          "accept": [
+            "^kubeadm\\s+join\\s+(--token\\s+)?abcdef\\.0123456789abcdef$"
+          ],
+          "solution": "kubeadm join abcdef.0123456789abcdef",
+          "hint": "kubeadm join abcdef.0123456789abcdef – den Token aus init unverändert übernehmen.",
+          "check": {
+            "some": "nodes",
+            "where": {
+              "roles": "<none>"
+            }
+          }
+        }
+      },
+      {
+        "type": "dialog",
+        "npc": "ole",
+        "lines": [
+          "Erster Steg liegt! <i>«This node has joined the cluster»</i> – das kubelet des Knotens hat sich beim apiserver gemeldet, der Token stimmte, und schon ist der Worker Teil des Clusters. Wäre der Token falsch oder abgelaufen gewesen, hätte die Control-Plane ihn abgewiesen.",
+          "Ein echter Cluster hat selten nur einen Worker. Häng einen <b>zweiten</b> an – <b>derselbe Befehl, derselbe Token</b>. Genau so läuft es in echt: einen Join-Befehl, auf jedem neuen Server ausgeführt."
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Zweiten Worker anschließen",
+        "cmd": {
+          "id": "t-join-2",
+          "intro": "🔁 Node für Node: derselbe <code>kubeadm join</code> auf dem nächsten Server – der Token bleibt gleich, bis er abläuft.",
+          "text": "Schließ den zweiten Worker an: <code>kubeadm join abcdef.0123456789abcdef</code>. So wächst der Cluster, ein Knoten nach dem anderen.",
+          "accept": [
+            "^kubeadm\\s+join\\s+(--token\\s+)?abcdef\\.0123456789abcdef$"
+          ],
+          "solution": "kubeadm join abcdef.0123456789abcdef",
+          "hint": "Exakt derselbe Befehl wie eben.",
+          "check": {
+            "count": "nodes",
+            "where": {
+              "roles": "<none>"
+            },
+            "cmp": ">=",
+            "value": 2
+          }
+        }
+      },
+      {
+        "type": "teach",
+        "brief": "Der Cluster füllt sich",
+        "cmd": {
+          "id": "t-join-nodes",
+          "intro": "🆕 Schau, wie sich die Knotenliste gefüllt hat.",
+          "text": "Frag den Cluster ab: <code>kubectl get nodes</code>. Jetzt stehen <b>drei</b> Knoten da – die Control-Plane plus deine zwei frischen Worker (Rolle <code>&lt;none&gt;</code>, also reine Arbeitsknoten).",
+          "accept": [
+            "^kubectl\\s+get\\s+(nodes|node|no)$"
+          ],
+          "solution": "kubectl get nodes",
+          "hint": "Derselbe get-nodes-Befehl wie beim Control-Plane-Schritt.",
+          "check": {
+            "count": "nodes",
+            "cmp": ">=",
+            "value": 3
+          }
+        }
+      },
+      {
+        "type": "choice",
+        "npc": "ole",
+        "q": "Kurzer Check: Was ist das <b>kubelet</b>?",
+        "options": [
+          {
+            "t": "Der Agent auf <b>jedem</b> Knoten – er meldet den Knoten an und sorgt dafür, dass die zugewiesenen Pods dort laufen.",
+            "ok": true,
+            "reply": "Genau. Das kubelet ist der Mann vor Ort auf jedem Steg: es spricht mit der Control-Plane, startet die zugeteilten Pods und meldet ihren Zustand zurück. Kein kubelet, kein arbeitender Knoten."
+          },
+          {
+            "t": "Ein kleiner kubectl-Ersatz, mit dem man vom Worker aus Befehle abschickt.",
+            "ok": false,
+            "reply": "Nein – das ist <code>kubectl</code> (das Bedien-Werkzeug). Das <b>kubelet</b> ist der Knoten-Agent, der die Pods tatsächlich laufen lässt. Verwandte Namen, ganz andere Rolle."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "ole",
+        "q": "Warum schließt man mehrere Worker an, statt einen großen Knoten zu nehmen?",
+        "options": [
+          {
+            "t": "Wegen <b>Kapazität</b> und <b>Ausfallsicherheit</b>: mehr Knoten tragen mehr Pods, und fällt einer aus, übernehmen die anderen.",
+            "ok": true,
+            "reply": "So ist es. Ein einzelner Knoten ist ein <i>single point of failure</i> – stirbt er, steht alles. Mit mehreren verteilt der Cluster die Last und kann Pods eines toten Knotens woanders neu starten."
+          },
+          {
+            "t": "Damit jeder Worker seine eigene Control-Plane bekommt und unabhängig ist.",
+            "ok": false,
+            "reply": "Nein – die Worker teilen sich <b>eine</b> Control-Plane (die entscheidet zentral). Mehr Worker bringen <b>Kapazität + Ausfallsicherheit</b> der Arbeit, nicht je eine eigene Brücke."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "ole",
+        "lines": [
+          "Kommandobrücke steht, drei Stege liegen am Wasser – dein Cluster <b>lebt</b> wieder. Nur eines fehlt noch: Es liegt <b>keine Fracht</b> drauf. Kein Dienst läuft.",
+          "Zum Schluss bringen wir deine alten Dienste zurück – <b>Pod für Pod</b>, aus den Bauplänen, die der Sturm verschont hat. Dann ist Port Kubernia wieder das, was er war. ⚓"
+        ]
+      }
+    ]
   }
 ]

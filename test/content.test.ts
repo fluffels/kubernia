@@ -1341,3 +1341,53 @@ test("#462 kubeadm-init-check wird durch das Hochziehen der Control-Plane erfül
   sim.exec("kubeadm init");
   assert.equal(check!(sim), true, "nach dem init ist die Control-Plane oben → check erfüllt");
 });
+
+test("#463 Worker-Join-Quest: korrekt eingehängt + lehrt kubelet/Token/mehrere Knoten", () => {
+  const quest = KQContent.QUESTS.find(q => q.id === "aufbau-worker-join");
+  assert.ok(quest, "Quest aufbau-worker-join fehlt");
+  assert.equal(quest!.topic, "cluster-aufbau", "gehört in den Aufbau-Bogen");
+  assert.equal(quest!.giver, "ole", "Hafenmeister Ole führt den Aufbau-Bogen");
+
+  // Folgt direkt der Control-Plane-Quest (dort wurde die Brücke hochgezogen).
+  const ids = KQContent.QUESTS.map(q => q.id);
+  assert.equal(ids[ids.indexOf("aufbau-control-plane") + 1], "aufbau-worker-join", "kommt direkt nach der Control-Plane");
+
+  // Zwei kubeadm-join-Schritte (Node für Node) + ein get-nodes-Beweis.
+  const teachCmds = quest!.steps.filter((s): s is TeachStep => s.type === "teach").map(s => s.cmd);
+  const joins = teachCmds.filter(c => c.accept.some(re => re.test("kubeadm join abcdef.0123456789abcdef")));
+  assert.equal(joins.length, 2, "es gibt zwei kubeadm-join-Schritte (Node für Node)");
+  assert.ok(teachCmds.some(c => c.accept.some(re => re.test("kubectl get nodes"))), "Beweis-Schritt 'kubectl get nodes' fehlt");
+
+  // Lernbegriffe im Quest-Text.
+  const text = playerVisibleQuestText([quest!]).join(" ").toLowerCase();
+  for (const teil of ["kubelet", "token", "kapazität", "ausfallsicherheit", "worker"]) {
+    assert.ok(text.includes(teil), "Lehrtext nennt '" + teil + "' nicht");
+  }
+});
+
+test("#463 join-Checks füllen den Cluster Knoten für Knoten (Red-Green)", () => {
+  const quest = KQContent.QUESTS.find(q => q.id === "aufbau-worker-join")!;
+  const scenario = quest.steps.find(s => s.scenario)?.scenario;
+  assert.ok(scenario, "die Quest braucht ein Bootstrap-Szenario mit fixem Join-Token");
+
+  const sim = new KQSim({});
+  sim.mergeScenario(scenario!); // Control-Plane up, fixer Token, 1 Control-Plane-Knoten
+  const join1 = quest.steps.find((s): s is TeachStep => s.type === "teach" && s.cmd.id === "t-join-1")!;
+  const join2 = quest.steps.find((s): s is TeachStep => s.type === "teach" && s.cmd.id === "t-join-2")!;
+  const getNodes = quest.steps.find((s): s is TeachStep => s.type === "teach" && s.cmd.id === "t-join-nodes")!;
+
+  // Vor dem ersten Join: kein Worker, alle drei Checks falsch.
+  assert.equal(join1.cmd.check!(sim), false, "vor Join 1: noch kein Worker");
+  assert.equal(getNodes.cmd.check!(sim), false, "vor Join 1: erst 1 Knoten (< 3)");
+
+  assert.ok(!sim.exec(join1.cmd.solution).error, "Join 1 läuft fehlerfrei (Token passt)");
+  assert.equal(join1.cmd.check!(sim), true, "nach Join 1: ein Worker ist da");
+  assert.equal(join2.cmd.check!(sim), false, "nach Join 1: erst 1 Worker (< 2)");
+
+  assert.ok(!sim.exec(join2.cmd.solution).error, "Join 2 läuft fehlerfrei");
+  assert.equal(join2.cmd.check!(sim), true, "nach Join 2: zwei Worker");
+  assert.equal(getNodes.cmd.check!(sim), true, "nach beiden Joins: drei Knoten (Control-Plane + 2 Worker)");
+
+  // Negativprobe: ein falscher Token wird abgewiesen (Erreichbarkeits-/Auth-Schutz).
+  assert.ok(sim.exec("kubeadm join falsch.tokenxxxxxxxxxx").error, "falscher Token scheitert");
+});
