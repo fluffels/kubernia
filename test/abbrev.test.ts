@@ -188,6 +188,37 @@ describe("lockedAbbrevInInput – Regressionsfixes #308", () => {
   });
 });
 
+/* #430: Gating-Konsistenz – das #308-Prinzip (ausgeschriebene Voll-Formen sind
+ * keine Profi-Abkürzung) gilt jetzt einheitlich für ALLE Ressourcen, Singular wie
+ * Plural. Konkret entschieden:
+ *  - networkpolicy (Singular-Vollform) und ingresses (Plural-Vollform) sind NICHT
+ *    mehr gegated – nur die echten Kontraktionen netpol/netpols bzw. ing bleiben es.
+ *  - Bewusste Ausnahme: secret bleibt gegated, weil `secrets` keinen offiziellen
+ *    kubectl-Kurznamen hat und die Singularform als verdienbarer Stellvertreter
+ *    dient (siehe Kommentar in abbrev.ts; mögliches Folgeticket). */
+describe("lockedAbbrevInInput – #430: kanonische Voll-Formen (Singular/Plural) sind nicht gegated", () => {
+  const NICHTS_FREI = (_id: string) => false;
+
+  test("kubectl describe/delete networkpolicy <name> ist NICHT gegated — Singular-Vollform, kein Profi-Kürzel", () => {
+    expect(lockedAbbrevInInput("kubectl describe networkpolicy hafenmauer", NICHTS_FREI)).toBeUndefined();
+    expect(lockedAbbrevInInput("kubectl delete networkpolicy hafenmauer", NICHTS_FREI)).toBeUndefined();
+  });
+
+  test("kubectl get ingresses ist NICHT gegated — Plural-Vollform, kein Profi-Kürzel", () => {
+    expect(lockedAbbrevInInput("kubectl get ingresses", NICHTS_FREI)).toBeUndefined();
+  });
+
+  test("die echten Kontraktionen bleiben gegated (Red-Green-Gegenprobe)", () => {
+    expect(lockedAbbrevInInput("kubectl get netpol", NICHTS_FREI)?.pair.id).toBe("kubectl-netpol");
+    expect(lockedAbbrevInInput("kubectl get netpols", NICHTS_FREI)?.pair.id).toBe("kubectl-netpol");
+    expect(lockedAbbrevInInput("kubectl get ing", NICHTS_FREI)?.pair.id).toBe("kubectl-ingress");
+  });
+
+  test("Ausnahme bleibt bewusst bestehen: secret (Singular) ist weiterhin gegated", () => {
+    expect(lockedAbbrevInInput("kubectl get secret", NICHTS_FREI)?.pair.id).toBe("kubectl-secrets");
+  });
+});
+
 /* #300: Lernpfad-Vollständigkeit – jede Abkürzung im Katalog muss über einen
  * Quest-Schritt freigeschaltet werden (unlockAbbrev). Damit fliegt sofort auf,
  * wenn eine neue AbbrevPair-ID hinzukommt, aber kein passender Teach-/Terminal-

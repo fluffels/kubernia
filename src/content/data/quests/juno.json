@@ -510,12 +510,12 @@
           },
           {
             "id": "t-juno-np-4",
-            "text": "Schau genau hin: <code>kubectl describe networkpolicies hafenmauer</code> – die Zeile <b>Allowing ingress traffic</b> verrät, wer durchdarf.",
+            "text": "Schau genau hin: <code>kubectl describe networkpolicy hafenmauer</code> – die Zeile <b>Allowing ingress traffic</b> verrät, wer durchdarf.",
             "accept": [
               "^kubectl\\s+describe\\s+(networkpolicy|networkpolicies|netpol|netpols)\\s+hafenmauer$"
             ],
-            "solution": "kubectl describe networkpolicies hafenmauer",
-            "hint": "kubectl describe networkpolicies <name> (die Kurzformen netpol/networkpolicy verdienst du dir durch Nutzung)"
+            "solution": "kubectl describe networkpolicy hafenmauer",
+            "hint": "kubectl describe networkpolicy <name> (die Kurzform netpol verdienst du dir durch Nutzung)"
           }
         ]
       },

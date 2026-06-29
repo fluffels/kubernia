@@ -36,7 +36,7 @@
     "accept": [
       "^kubectl\\s+describe\\s+(networkpolicy|networkpolicies|netpol|netpols)\\s+hafenmauer$"
     ],
-    "solution": "kubectl describe networkpolicies hafenmauer",
+    "solution": "kubectl describe networkpolicy hafenmauer",
     "explain": "describe zeigt, wen die Policy schützt (podSelector) und wer durchdarf (from)."
   },
   {
