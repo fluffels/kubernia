@@ -1,0 +1,80 @@
+[
+  {
+    "id": "q-sandbox-what",
+    "chapter": "gitops-app-of-apps",
+    "q": "Was ist eine <b>Sandbox</b> bzw. eine <b>ephemere („Wegwerf-“)Umgebung</b>?",
+    "options": [
+      "Ein abgetrennter Spielplatz zum gefahrlosen Ausprobieren – man testet darin und wirft ihn danach einfach weg.",
+      "Die echte Produktiv-Umgebung, nur mit einem anderen Namen.",
+      "Ein dauerhafter Server, auf dem alle Kundendaten liegen.",
+      "Ein Backup-Speicher für alte Spielstände."
+    ],
+    "correct": 0,
+    "explain": "Eine Sandbox ist ein abgeschotteter Bereich zum Experimentieren. „Ephemer“ heißt kurzlebig: Man baut die Umgebung schnell auf, probiert aus, und verwirft sie wieder – nichts Echtes geht dabei kaputt. So testet man Neues, ohne den laufenden Betrieb zu gefährden."
+  },
+  {
+    "id": "q-sandbox-why-prod",
+    "chapter": "gitops-app-of-apps",
+    "q": "Warum testet man Änderungen erst in einer Sandbox, bevor sie nach <b>Prod</b> (in den Echtbetrieb) gehen?",
+    "options": [
+      "Weil ein Fehler in der Sandbox niemandem schadet – Prod bleibt stabil, und man findet Probleme, bevor echte Nutzer sie merken.",
+      "Weil Prod sonst schneller läuft.",
+      "Weil man in Prod keine Befehle eintippen darf.",
+      "Weil die Sandbox automatisch alle Fehler korrigiert."
+    ],
+    "correct": 0,
+    "explain": "„Erst in der Sandbox, dann echt“: In einer Wegwerf-Umgebung darf etwas schiefgehen, ohne dass echte Nutzer oder Daten betroffen sind. Genau diese Grundhaltung schützt Prod – nichts wird blind auf den Echtbetrieb losgelassen (dieselbe Vorsicht wie an der Hafenmauer gegen die Krake)."
+  },
+  {
+    "id": "q-sandbox-namespace",
+    "chapter": "gitops-app-of-apps",
+    "q": "Wie nutzt man einen <b>Namespace</b> als leichte Sandbox im selben Cluster?",
+    "options": [
+      "Man legt einen eigenen Namespace an und arbeitet mit <code>kubectl -n &lt;name&gt;</code> darin – getrennt von den anderen, ohne einen zweiten Cluster zu brauchen.",
+      "Man löscht zuerst alle anderen Namespaces.",
+      "Ein Namespace ist ein eigener physischer Server.",
+      "Namespaces verschlüsseln den Cluster gegen Angriffe."
+    ],
+    "correct": 0,
+    "explain": "Ein Namespace teilt EINEN Cluster in getrennte Abschnitte. Mit <code>kubectl -n &lt;name&gt;</code> arbeitet man gezielt in einem davon – z.B. einem <code>test</code>-Namespace neben <code>prod</code>. Das ist die leichteste Sandbox: isoliert, aber ohne den Aufwand eines eigenen Clusters."
+  },
+  {
+    "id": "q-sandbox-kind-minikube",
+    "chapter": "gitops-app-of-apps",
+    "q": "Wofür stehen <code>kind</code> und <code>minikube</code>?",
+    "options": [
+      "Für lokale Wegwerf-Cluster auf dem eigenen Rechner – ideal zum Lernen und Ausprobieren, danach einfach gelöscht.",
+      "Für die größten Produktiv-Cluster großer Firmen.",
+      "Für zwei Programmiersprachen.",
+      "Für Backup-Werkzeuge, die Cluster sichern."
+    ],
+    "correct": 0,
+    "explain": "<code>kind</code> (Kubernetes IN Docker) und <code>minikube</code> starten einen vollwertigen Mini-Cluster lokal auf deinem Rechner. Perfekt als Sandbox: schnell hochgezogen, gefahrlos zum Testen, und mit einem Befehl wieder weggeworfen – ohne echte Cloud-Kosten oder Risiko für Prod."
+  },
+  {
+    "id": "q-sandbox-preview",
+    "chapter": "gitops-app-of-apps",
+    "q": "Was ist eine <b>Preview-Umgebung</b> in einem GitOps-Workflow?",
+    "options": [
+      "Eine kurzlebige Umgebung, die pro Branch/Pull-Request automatisch entsteht, dort getestet wird und nach dem Merge wieder verschwindet.",
+      "Die Vorschau-Grafik des Cluster-Logos.",
+      "Eine dauerhafte Kopie von Prod, die nie gelöscht wird.",
+      "Ein Modus, der alle Änderungen sofort nach Prod schiebt."
+    ],
+    "correct": 0,
+    "explain": "Preview-/Ephemeral-Umgebungen sind GitOps in Reinform: Für einen Branch oder Pull-Request wird automatisch eine eigene, kurzlebige Umgebung erzeugt (per Git deklariert). Dort prüft man die Änderung isoliert; nach dem Merge räumt der GitOps-Controller sie wieder ab. Jede Änderung wird so erst getestet, bevor sie Prod erreicht."
+  },
+  {
+    "id": "q-sandbox-ephemeral-meaning",
+    "chapter": "gitops-app-of-apps",
+    "q": "Was bedeutet es, eine Umgebung bewusst <b>ephemer</b> (wegwerfbar) statt von Hand gehegt zu halten?",
+    "options": [
+      "Sie ist jederzeit aus Code reproduzierbar – man wirft sie weg und baut sie identisch neu, statt sie über Jahre mühsam von Hand zu pflegen.",
+      "Sie darf nie wieder gelöscht werden, sobald sie einmal läuft.",
+      "Sie speichert ihre Daten für immer auf der Festplatte.",
+      "Sie läuft ohne jeden Code und ohne Konfiguration."
+    ],
+    "correct": 0,
+    "explain": "Ephemer heißt: Die Umgebung ist kein wertvolles Einzelstück, das man hütet, sondern aus Code (IaC/GitOps) jederzeit neu erzeugbar. Geht etwas schief, wirft man sie weg und baut sie identisch neu – das Gegenteil eines über Jahre handgepflegten „Schneeflocken“-Servers, den keiner mehr anzufassen wagt."
+  }
+]
