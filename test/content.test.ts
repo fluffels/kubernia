@@ -952,6 +952,24 @@ test("#268 Gateway-API-Quiz-Karten hängen an der Netzwerk-Vertiefung und decken
   }
 });
 
+test("#281 Keycloak-Vertiefungskarten decken Realm/Client, Rolle/Gruppe, Mapper und IDP-als-Code ab und hängen an der Keycloak-Quest", () => {
+  const questIds = new Set(KQContent.QUESTS.map(q => q.id));
+  const cards = KQContent.CRAB_QUIZ.filter(c => /^q-keycloak-/.test(c.id));
+  assert.ok(cards.length >= 4, "mindestens vier Keycloak-Karten erwartet, gefunden: " + cards.length);
+  for (const card of cards) {
+    // SR-Pool erst, wenn der Spieler Keycloak (kraken-boss) kennt – und Terraform-als-Code ist da längst eingeführt.
+    assert.equal(card.chapter, "kraken-boss", card.id + ": chapter soll die Keycloak-Quest sein");
+    assert.ok(questIds.has(card.chapter!), card.id + ": chapter zeigt auf eine unbekannte Quest: " + card.chapter);
+    assert.ok(card.correct >= 0 && card.correct < card.options.length, card.id + ": correct außerhalb der Optionen");
+    assert.ok(card.explain.trim().length > 0, card.id + ": Erklärung ist Pflicht");
+  }
+  // Die vom Ticket geforderten Konzepte tauchen irgendwo im Quiz auf.
+  const blob = cards.map(c => c.q + " " + c.options.join(" ") + " " + c.explain).join(" ").toLowerCase();
+  for (const begriff of ["realm", "client", "rolle", "gruppe", "mapper", "token", "keycloak_*", "terraform"]) {
+    assert.ok(blob.includes(begriff), "Keycloak-Quiz erwähnt „" + begriff + "“ nicht");
+  }
+});
+
 test("#142 pvc-pending erzeugt einen wirklich auf Pending hängenden PVC (Negativfall)", () => {
   const sim = new KQSim({});
   KQContent.DRILLS["pvc-pending"](sim);
