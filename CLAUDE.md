@@ -85,6 +85,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/sim/net.ts`](src/sim/net.ts) | pure Domäne | Erreichbarkeits-Befehle `nslookup` (DNS #337) + `curl` (Service erreichbar? #164). |
 | [`src/sim/eviction.ts`](src/sim/eviction.ts) | pure Domäne | Ephemeral Storage & Eviction: emptyDir/ephemeral-storage-Bilanz + DiskPressure-Auswertung (#240). |
 | [`src/sim/s3.ts`](src/sim/s3.ts) | pure Domäne | S3-/MinIO-Object-Store: `aws s3`-Familie (mb/rb/ls/cp/rm) + off-cluster Buckets/Objekte (#241). |
+| [`src/sim/kubeadm.ts`](src/sim/kubeadm.ts) | pure Domäne | kubeadm-Familie (Aufbau-Bogen #460): leerer/zerstörter Cluster + `kubeadm init/join/reset`; vor init scheitert kubectl mit „connection refused". |
 | [`src/content.ts`](src/content.ts) | pure Domäne | Fassade über `src/content/*` → `KQContent`. → [content.md](docs/module/content.md) |
 | [`src/content/loader.ts`](src/content/loader.ts) | pure Domäne | Content-as-Data-Loader + Laufzeit-Validierung. |
 | [`src/content/parse.ts`](src/content/parse.ts) | pure Domäne | Geteilte Parse-Primitiven + `ContentValidationError` (Leaf, bricht den Zyklus loader↔check-dsl, #411). |

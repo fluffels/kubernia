@@ -41,6 +41,7 @@ import { gitCommand } from "./sim/git";
 import { argocdCommand, reconcileAutoSync, cloneArgoApp } from "./sim/argocd";
 import { podMetrics as obsPodMetrics, nodeMetrics as obsNodeMetrics, scrapeTargets as obsScrapeTargets, alerts as obsAlerts, evaluateAlerts as obsEvaluateAlerts } from "./sim/observability";
 import { glabCommand } from "./sim/glab";
+import { kubeadmCommand, deriveControlPlane } from "./sim/kubeadm";
 import { nslookupCommand, curlCommand } from "./sim/net";
 import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
@@ -84,6 +85,8 @@ import { randSuffix, makePodName } from "./sim/util";
     tf!: { initialized: boolean; applied: boolean; resources: TfResource[]; providers: TfProvider[]; modules: TfModule[]; backend: TfBackend | null; outputs: TfOutput[]; locked: boolean; lockHolder?: string };
     git!: { initialized: boolean; branch: string; branches: string[]; staged: string[]; committed: string[]; commits: GitCommit[]; pushed: boolean; remoteAhead: number; fetched: boolean; conflict: GitConflict | null; pendingConflict: GitPending | null };
     ci!: { pipelines: Pipeline[]; deploy: CiDeploy | null };
+    // Control-Plane-Bootstrap (#460, Aufbau-Bogen): ist der Cluster ansprechbar?
+    controlPlane!: { up: boolean; token: string | null; node: string | null };
     lastDeletedPod: string | null = null;
     lastError!: boolean;
     // Alert-Verlauf der Sitzung (Observability #109). Wie memLimit ein reines
@@ -106,11 +109,15 @@ import { randSuffix, makePodName } from "./sim/util";
         containers: (sc.dockerContainers || []).map(c => Object.assign({}, c)),
       };
 
-      this.nodes = (sc.nodes || [
+      // „bare metal" (#460): ein leerer/zerstörter Cluster startet OHNE Nodes – sonst der
+      // klassische 3-Knoten-Default. Explizit vorgegebene `nodes` gewinnen in beiden Fällen.
+      this.nodes = (sc.nodes || (sc.bareMetal ? [] : [
         { name: "ahoi-control", status: "Ready", roles: "control-plane", version: "v1.30.2" },
         { name: "ahoi-worker-1", status: "Ready", roles: "<none>", version: "v1.30.2" },
         { name: "ahoi-worker-2", status: "Ready", roles: "<none>", version: "v1.30.2" },
-      ]).map(n => Object.assign({}, n));
+      ])).map(n => Object.assign({}, n));
+      // Control-Plane-Bootstrap (#460): Lage aus Szenario/Snapshot ableiten (Helfer in sim/kubeadm).
+      this.controlPlane = deriveControlPlane(sc, this.nodes);
 
       this.deployments = (sc.deployments || []).map(d => {
         const dep = this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy);
@@ -626,6 +633,10 @@ import { randSuffix, makePodName } from "./sim/util";
           stages: p.stages.map(s => Object.assign({}, s)),
         })),
         ciDeploy: this.ci.deploy ? Object.assign({}, this.ci.deploy) : null,
+        // Control-Plane-Bootstrap (#460): friert die Aufbau-Lage ein (up/Token/Node), damit ein
+        // halb aufgebauter Cluster den Reload überlebt. Die schon angeschlossenen Knoten trägt
+        // `nodes` (oben) – `bareMetal` braucht der Snapshot daher nicht.
+        controlPlane: { up: this.controlPlane.up, token: this.controlPlane.token, node: this.controlPlane.node },
       };
     }
 
@@ -656,6 +667,7 @@ import { randSuffix, makePodName } from "./sim/util";
         switch (cmd) {
           case "docker": out = dockerCommand(this, tokens, raw); break;
           case "kubectl": out = kubectlCommand(this, tokens, raw); break;
+          case "kubeadm": out = kubeadmCommand(this, tokens); break;
           case "helm": out = helmCommand(this, tokens, raw); break;
           case "terraform": out = terraformCommand(this, tokens, raw); break;
           case "git": out = gitCommand(this, tokens, raw); break;
@@ -669,7 +681,7 @@ import { randSuffix, makePodName } from "./sim/util";
           case "clear": return { output: null, error: false, clear: true };
           case "help": out = this._help(); break;
           default: {
-            const guess = this._suggest(cmd, ["docker", "kubectl", "helm", "terraform", "git", "argocd", "glab", "nslookup", "curl", "aws", "ls", "cat", "clear", "help"]);
+            const guess = this._suggest(cmd, ["docker", "kubectl", "kubeadm", "helm", "terraform", "git", "argocd", "glab", "nslookup", "curl", "aws", "ls", "cat", "clear", "help"]);
             out = this._err("⚠️ Den Befehl '" + cmd + "' gibt es hier nicht.",
               guess ? "Meintest du '" + guess + "'? (Tippe 'help' für alle Befehle.)"
                     : "Tippe 'help' für eine Liste der Befehle, die hier funktionieren.");
@@ -739,6 +751,7 @@ import { randSuffix, makePodName } from "./sim/util";
         "             create deployment | create secret generic|tls | create configmap | create serviceaccount|role|clusterrole|rolebinding|clusterrolebinding | scale | expose | delete | apply -f <datei>",
         "             auth can-i <verb> <resource> [--as=…] | label namespace <ns> pod-security.kubernetes.io/enforce=<stufe>",
         "             logs [-f] [--previous] <pod> | top pods|nodes | set image deployment/<n> <c>=<img> | set env deployment/<n> --from=configmap|secret/<n> | set resources deployment/<n> --limits=memory=256Mi|ephemeral-storage=1Gi | rollout restart deployment <n>",
+        "  kubeadm    init | join <token> | reset  (Cluster selbst aufbauen: Control-Plane hochziehen, Worker anschließen, abräumen)",
         "  helm       repo add|update | search repo | create | lint | package | install | list | upgrade | rollback | uninstall | status",
         "  terraform  init | plan | apply | destroy | state list",
         "  git        init | status | add <datei> | commit -m \"…\" | log | branch [<name>] | checkout [-b] <name> | merge <name> | push | fetch | pull",

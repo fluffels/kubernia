@@ -22,6 +22,15 @@ import type { KubectlHost } from "./kubectl/host";
 export type { KubectlHost } from "./kubectl/host";
 
 export function kubectlCommand(host: KubectlHost, t: string[], raw: string): string {
+  // Aufbau-Bogen (#460): Ohne laufende Control-Plane gibt es keinen apiserver, an den kubectl
+  // sich wenden könnte – genau wie in echtem Kubernetes vor `kubeadm init`. Das Gate sitzt hier,
+  // damit es ALLE kubectl-Unterbefehle gleichermaßen trifft. Im laufenden Cluster (Default
+  // up:true) bleibt alles unverändert.
+  if (!host.controlPlane.up) {
+    return host._err(
+      "The connection to the server localhost:8080 was refused - did you specify the right host or port?",
+      "Es läuft noch keine Control-Plane. Zieh sie zuerst mit 'kubeadm init' hoch.");
+  }
   const sub = t[1];
   if (!sub) return host._err("kubectl: Unterbefehl fehlt.", "Probier z.B. 'kubectl get pods'.");
 

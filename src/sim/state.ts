@@ -531,6 +531,13 @@ export interface Scenario {
   dockerImages?: string[];
   dockerContainers?: Container[];
   nodes?: ClusterNode[];
+  // Aufbau-Bogen (#460): „bare metal" – ein leerer/zerstörter Cluster zum Selbst-Aufbauen.
+  // `bareMetal: true` heißt: KEINE Nodes (sofern `nodes` nicht eigens vorgegeben ist) und
+  // die Control-Plane ist down – dann scheitern alle kubectl-Befehle mit „connection refused",
+  // bis `kubeadm init` sie hochbringt. `controlPlane` ist die serialisierte Bootstrap-Lage
+  // (Round-trip über snapshot/reset); ohne sie leitet reset() den Zustand aus `bareMetal` ab.
+  bareMetal?: boolean;
+  controlPlane?: { up?: boolean; token?: string | null; node?: string | null };
   deployments?: Array<{ name: string; image: string; replicas: number; broken?: Broken | null; envFrom?: { configMaps: string[]; secrets: string[] }; cpuHeavy?: boolean; containerPort?: number;
     // Ephemeral-Storage (#240). Eingabe-Schreibweisen locker – reset()/merge füllen Defaults.
     node?: string; emptyDir?: { data?: string; usedMi?: number }; ephemeralLimit?: number; ephemeralUsedMi?: number }>;
@@ -632,4 +639,12 @@ export interface ClusterState {
   tf: { initialized: boolean; applied: boolean; resources: TfResource[]; providers: TfProvider[]; modules: TfModule[]; backend: TfBackend | null; outputs: TfOutput[]; locked: boolean; lockHolder?: string };
   git: { initialized: boolean; branch: string; branches: string[]; staged: string[]; committed: string[]; commits: GitCommit[]; pushed: boolean; remoteAhead: number; fetched: boolean; conflict: GitConflict | null; pendingConflict: GitPending | null };
   ci: { pipelines: Pipeline[]; deploy: CiDeploy | null };
+  /** Bootstrap-Zustand der Control-Plane (#460, Aufbau-Bogen). `up` = ist der Cluster
+   *  überhaupt ansprechbar (apiserver erreichbar)? Vor `kubeadm init` (bzw. nach dem
+   *  großen Sturm) steht hier `up:false` – dann scheitern alle kubectl-Befehle mit
+   *  „The connection to the server … was refused". `token` ist der von `kubeadm init`
+   *  erzeugte Join-Token, den `kubeadm join` braucht; `node` der Name des Knotens, auf
+   *  dem `init` lief (die Control-Plane). Im klassischen, schon laufenden Cluster ist
+   *  `up:true` (Default) – alle Alt-Szenarien bleiben dadurch unberührt. */
+  controlPlane: { up: boolean; token: string | null; node: string | null };
 }
