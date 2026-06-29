@@ -247,7 +247,7 @@ test("v2 (alle Quests durch): Endzustand + vollständige completedQuests-Migrati
   // „alles durch"-Stand eingeschoben/angehängt; ein solcher Alt-Stand kennt sie folgerichtig
   // nicht (sie bleiben ungespielt, niemand wird zurückgeschickt). Der Endzustand
   // (questIdx == length, currentQuestId "") bleibt trotzdem erhalten.
-  const addedAfterFixture = ["docker-registry", "docker-rabbitmq", "aufbau-sturm"];
+  const addedAfterFixture = ["docker-registry", "docker-rabbitmq", "aufbau-sturm", "aufbau-control-plane"];
   expect(Game.state.completedQuests.length).toBe(KQContent.QUESTS.length - addedAfterFixture.length);
   expect(new Set(Game.state.completedQuests)).toEqual(
     new Set(KQContent.QUESTS.filter(q => !addedAfterFixture.includes(q.id)).map(q => q.id)),

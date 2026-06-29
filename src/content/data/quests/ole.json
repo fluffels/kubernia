@@ -785,5 +785,118 @@
         ]
       }
     ]
+  },
+  {
+    "id": "aufbau-control-plane",
+    "title": "Die Kommandobrücke: Control-Plane hochziehen",
+    "giver": "ole",
+    "topic": "cluster-aufbau",
+    "rewardXp": 55,
+    "rewardCoins": 40,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "ole",
+        "scenario": {
+          "bareMetal": true
+        },
+        "lines": [
+          "Bevor du den ersten Befehl tippst, kapierst du am besten, <b>was</b> du da gleich hochziehst. Ein Cluster hat zwei Sorten Knoten: die <b>Control-Plane</b> (die <i>Kommandobrücke</i> – sie <b>entscheidet</b>) und die <b>Worker</b> (die <i>Stege</i> – sie <b>arbeiten</b>, tragen die Pods). Heute baust du die Brücke.",
+          "Auf der Brücke arbeiten vier zusammen: der <b>kube-apiserver</b> – das <b>einzige Tor</b> zum Cluster, mit ihm redet jedes <code>kubectl</code>. <b>etcd</b> – das <b>Gedächtnis</b>, eine Datenbank, in der der ganze Soll-Zustand des Clusters liegt. Der <b>scheduler</b> – er <b>verteilt</b> neue Pods auf passende Knoten. Und der <b>controller-manager</b> – er <b>wacht</b>, dass Ist=Soll bleibt (fällt ein Pod weg, startet er Ersatz).",
+          "<code>kubeadm init</code> bringt genau diese vier auf diesem Knoten hoch. Danach hat der Cluster wieder ein Tor – <code>kubectl</code> bekommt eine Gegenstelle. Los: zieh die Control-Plane hoch."
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Control-Plane hochziehen",
+        "cmd": {
+          "id": "t-kubeadm-init",
+          "intro": "🆕 Neuer Befehl: <code>kubeadm init</code> – zieht die Control-Plane (apiserver, etcd, scheduler, controller-manager) auf diesem Knoten hoch und macht den Cluster ansprechbar.",
+          "text": "Bring die Kommandobrücke zurück: <code>kubeadm init</code>. Achte in der Ausgabe auf den <b>Join-Token</b> – den brauchst du gleich für die Worker.",
+          "accept": [
+            "^kubeadm\\s+init$"
+          ],
+          "solution": "kubeadm init",
+          "hint": "Wirklich nur 'kubeadm init' – ohne weitere Flags.",
+          "check": {
+            "flag": [
+              "controlPlane",
+              "up"
+            ]
+          }
+        }
+      },
+      {
+        "type": "dialog",
+        "npc": "ole",
+        "lines": [
+          "Geschafft – <i>«Your Kubernetes control-plane has initialized successfully!»</i>. Lies die Ausgabe wie ein Logbuch: <b>certs</b> (Zertifikate, damit nur Befugte mit der Brücke reden), die <b>static Pod manifests</b> für apiserver/scheduler/controller-manager und das <b>etcd</b>-Manifest – die vier laufen jetzt.",
+          "Ganz unten steht ein <code>kubeadm join … --token …</code>-Befehl mit deinem <b>Bootstrap-Token</b>. Damit weisen sich gleich die Worker als befugt aus, wenn sie andocken. Merk dir: ein Token ist ein <b>Geheimnis auf Zeit</b> – kein Worker kommt ohne den passenden rein.",
+          "Und jetzt der Beweis, dass die Brücke wirklich steht: Eben gab <code>kubectl</code> noch «connection refused». Probier es nochmal – jetzt antwortet der apiserver."
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Der Cluster antwortet wieder",
+        "cmd": {
+          "id": "t-cp-nodes",
+          "intro": "🆕 Beweis: Jetzt, wo die Control-Plane läuft, hat <code>kubectl</code> wieder eine Gegenstelle (den apiserver).",
+          "text": "Frag den Cluster ab: <code>kubectl get nodes</code>. Du siehst genau <b>einen</b> Knoten – die frische Control-Plane (Rolle <code>control-plane</code>). Worker fehlen noch.",
+          "accept": [
+            "^kubectl\\s+get\\s+(nodes|node|no)$"
+          ],
+          "solution": "kubectl get nodes",
+          "hint": "Genau der Befehl, der vor dem init noch «connection refused» gab.",
+          "check": {
+            "some": "nodes",
+            "where": {
+              "roles": "control-plane"
+            }
+          }
+        }
+      },
+      {
+        "type": "choice",
+        "npc": "ole",
+        "q": "Kurzer Check: Womit redet <code>kubectl</code> eigentlich, wenn du einen Befehl abschickst?",
+        "options": [
+          {
+            "t": "Mit dem <b>kube-apiserver</b> – dem einzigen Tor zum Cluster. Über ihn läuft jede Anfrage.",
+            "ok": true,
+            "reply": "Genau. Der apiserver ist die einzige offizielle Tür. Darum gab es «connection refused», solange er weg war – nicht <code>kubectl</code> war kaputt, es fehlte die Gegenstelle."
+          },
+          {
+            "t": "Direkt mit <b>etcd</b>, der Datenbank – dort liegen ja alle Daten.",
+            "ok": false,
+            "reply": "Nein – an etcd kommt <b>nur der apiserver</b>. Das ist Absicht: eine einzige, abgesicherte Tür zur Datenbank, statt dass jedes Werkzeug direkt ins Gedächtnis greift. <code>kubectl</code> spricht immer mit dem apiserver."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "ole",
+        "q": "Ein Pod stirbt nachts ab, obwohl du 3 Repliken wolltest – welche Brücken-Komponente startet von selbst Ersatz?",
+        "options": [
+          {
+            "t": "Der <b>controller-manager</b> – er hält Ist=Soll und merkt, dass eine Replika fehlt.",
+            "ok": true,
+            "reply": "Richtig. Der controller-manager ist der wachsame Steuermann: weicht Ist vom Soll ab, gleicht er nach. Den <b>Ort</b> des Ersatz-Pods sucht dann der <b>scheduler</b> aus."
+          },
+          {
+            "t": "Der <b>scheduler</b> – er ist für alles rund um Pods zuständig.",
+            "ok": false,
+            "reply": "Fast. Der scheduler entscheidet nur, <b>auf welchen Knoten</b> ein neuer Pod kommt – er bemerkt das Fehlen nicht. Das <b>Soll=Ist-Wachen</b> ist Sache des <b>controller-managers</b>."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "ole",
+        "lines": [
+          "Die Kommandobrücke steht, der Cluster ist ansprechbar – das war das Herz. Aber eine Brücke allein trägt keine Fracht: noch gibt es <b>keinen Worker</b>, auf dem Pods laufen könnten.",
+          "Als Nächstes hängen wir <b>Knoten an</b> – mit dem <code>kubeadm join</code> und dem Token von eben, Steg für Steg. Dann hat dein Cluster wieder Stege für die Kisten. ⚓"
+        ]
+      }
+    ]
   }
 ]

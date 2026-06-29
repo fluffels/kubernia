@@ -1304,3 +1304,40 @@ test("#447 Red-Green: der Wording-Wächter findet 'Kisten-Supermarkt' in einem e
   const treffer = playerVisibleQuestText(kaputt).filter(t => /Kisten-Supermarkt/i.test(t));
   assert.ok(treffer.length >= 1, "der Wächter müsste den eingeschleusten Begriff finden");
 });
+
+test("#462 Control-Plane-Quest: korrekt eingehängt + lehrt apiserver/etcd/scheduler/controller-manager", () => {
+  const quest = KQContent.QUESTS.find(q => q.id === "aufbau-control-plane");
+  assert.ok(quest, "Quest aufbau-control-plane fehlt");
+  assert.equal(quest!.topic, "cluster-aufbau", "gehört in den Aufbau-Bogen");
+  assert.equal(quest!.giver, "ole", "Hafenmeister Ole führt den Aufbau-Bogen");
+
+  // Folgt direkt der Sturm-Quest in der Reihenfolge (Cluster ist dort bare metal geworden).
+  const ids = KQContent.QUESTS.map(q => q.id);
+  assert.equal(ids[ids.indexOf("aufbau-sturm") + 1], "aufbau-control-plane", "kommt direkt nach dem Sturm");
+
+  // Die teach-Schritte: kubeadm init (Control-Plane hoch) und der get-nodes-Beweis.
+  const teachCmds = quest!.steps.filter((s): s is TeachStep => s.type === "teach").map(s => s.cmd);
+  const init = teachCmds.find(c => c.id === "t-kubeadm-init");
+  assert.ok(init, "kubeadm-init-Schritt fehlt");
+  assert.ok(init!.accept.some(re => re.test("kubeadm init")), "kubeadm init wird akzeptiert");
+  assert.ok(teachCmds.some(c => c.accept.some(re => re.test("kubectl get nodes"))), "Beweis-Schritt 'kubectl get nodes' fehlt");
+
+  // Alle vier Control-Plane-Komponenten kommen im Lehrtext vor.
+  const text = playerVisibleQuestText([quest!]).join(" ").toLowerCase();
+  for (const teil of ["apiserver", "etcd", "scheduler", "controller-manager", "control-plane", "worker"]) {
+    assert.ok(text.includes(teil), "Lehrtext nennt '" + teil + "' nicht");
+  }
+});
+
+test("#462 kubeadm-init-check wird durch das Hochziehen der Control-Plane erfüllt (Red-Green)", () => {
+  const quest = KQContent.QUESTS.find(q => q.id === "aufbau-control-plane")!;
+  const initStep = quest.steps.find((s): s is TeachStep => s.type === "teach" && s.cmd.id === "t-kubeadm-init")!;
+  const check = initStep.cmd.check;
+  assert.ok(check, "kubeadm-init braucht einen check auf controlPlane.up");
+
+  const sim = new KQSim({});
+  sim.mergeScenario({ bareMetal: true }); // wie nach dem Sturm
+  assert.equal(check!(sim), false, "vor dem init ist die Control-Plane down → check falsch");
+  sim.exec("kubeadm init");
+  assert.equal(check!(sim), true, "nach dem init ist die Control-Plane oben → check erfüllt");
+});

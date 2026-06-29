@@ -58,5 +58,6 @@
   "terraform-provider",
   "terraform-variablen-outputs",
   "werft-eigener-dienst",
-  "aufbau-sturm"
+  "aufbau-sturm",
+  "aufbau-control-plane"
 ]
