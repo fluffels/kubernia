@@ -50,8 +50,9 @@ Der Simulator ging bisher von einem **bereits laufenden** Cluster aus. Für den 
 - **`kubeadm join <token>`:** hängt einen Worker (`ahoi-worker-N`, fortlaufend) an — Token muss zum init-Token passen. Akzeptiert `--token <tok>` UND positional. Ruft `_reschedulePending()`, damit ein neuer Knoten wartende Pods einplant (wie der Terraform-Pfad). Negativfälle: join vor init (Control-Plane down → „connection refused"/„couldn't validate"), fehlender/falscher Token.
 - **`kubeadm reset`:** räumt den Cluster auf „bare metal" zurück (keine Nodes, Control-Plane down) — die Sturm-Lage als Befehl, der Gegenpart zu init.
 - **kubectl-Gate:** Vor `kubeadm init` (bzw. `up:false`) scheitert **jeder** kubectl-Unterbefehl mit „The connection to the server … was refused" — das Gate sitzt zentral oben in `kubectlCommand` (`sim/kubectl.ts`), trifft also alle gleichermaßen.
+- **Laufzeit-Sturm (#461):** Eine Quest zerstört den Cluster zur Laufzeit über ihr Szenario (`{ bareMetal: true }`). Der pure Helfer `applyBootstrapScenario(state, sc)` (in `sim/kubeadm.ts`, von `Sim.mergeScenario` gerufen) räumt den laufenden Cluster auf bare metal ab (Nodes/Deployments/Services/Ingresses/NetworkPolicies/StatefulSets weg, Control-Plane down) — die lokalen Baupläne (`files`) bleiben. Bewusst ein gewollter Reset-Punkt (kein additives Merge); reload-sicher, weil seit #436 der Voll-Snapshot den neuen Stand hält und erreichte Szenarien nicht erneut eingemischt werden.
 
-Tests: `test/sim/kubeadm.test.ts` (Happy-Path init→join→join + alle Negativfälle + snapshot/reset-Round-trip, Red-Green). Folge-Tickets bauen darauf die Quests (#461 Sturm-Einstieg, #462 Control-Plane, #463 Worker, #464 Dienste, #465 Terraform-Capstone, #466 Quiz).
+Tests: `test/sim/kubeadm.test.ts` (Happy-Path init→join→join + alle Negativfälle + snapshot/reset-Round-trip + `mergeScenario`-Sturm, Red-Green). Die Intro-Quest `aufbau-sturm` (#461, Geber Ole, narrativer Bogen-Einstieg) nutzt diesen Pfad; weitere Folge-Tickets bauen die Quests #462 Control-Plane, #463 Worker, #464 Dienste, #465 Terraform-Capstone, #466 Quiz.
 
 ## Heimat-Werft: eigenen Service bauen → deployen → erreichbar (#164, Phase 10)
 

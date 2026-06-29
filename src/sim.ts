@@ -41,7 +41,7 @@ import { gitCommand } from "./sim/git";
 import { argocdCommand, reconcileAutoSync, cloneArgoApp } from "./sim/argocd";
 import { podMetrics as obsPodMetrics, nodeMetrics as obsNodeMetrics, scrapeTargets as obsScrapeTargets, alerts as obsAlerts, evaluateAlerts as obsEvaluateAlerts } from "./sim/observability";
 import { glabCommand } from "./sim/glab";
-import { kubeadmCommand, deriveControlPlane } from "./sim/kubeadm";
+import { kubeadmCommand, deriveControlPlane, applyBootstrapScenario } from "./sim/kubeadm";
 import { nslookupCommand, curlCommand } from "./sim/net";
 import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
@@ -435,6 +435,7 @@ import { randSuffix, makePodName } from "./sim/util";
       if (!sc) return;
       Object.assign(this.files, sc.files || {});
       Object.assign(this.applyEffects, sc.applyEffects || {});
+      applyBootstrapScenario(this, sc); // Aufbau-Bogen (#461): Sturm/bare-metal + Control-Plane-Lage
       // Nodes additiv einmischen (#242): existiert der Node schon (per Name), seine Felder
       // mergen – so kann ein Quest-Szenario die Disk-Kapazität eines vorhandenen Workers
       // schrumpfen, um DiskPressure/Eviction (#240) lehrbar zu machen; ein unbekannter Name

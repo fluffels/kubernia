@@ -161,6 +161,43 @@ test("Round-trip: bare metal bleibt nach snapshot → neue Sim bare metal", () =
   assert.match(reloaded.exec("kubectl get nodes").output!, /was refused/i);
 });
 
+/* ===== Sturm via mergeScenario: zerstört den laufenden Cluster zur Laufzeit (#461) ===== */
+
+test("mergeScenario bareMetal: der Sturm räumt den laufenden Cluster auf bare metal ab", () => {
+  // Laufender Cluster mit Workloads (wie spät im Spiel).
+  sim.exec("kubectl create deployment kasse --image=nginx");
+  sim.exec("kubectl expose deployment kasse --port=80");
+  assert.ok(sim.nodes.length >= 1 && sim.deployments.length === 1 && sim.services.length === 1);
+  // Der große Sturm (Quest-Szenario).
+  sim.mergeScenario({ bareMetal: true });
+  assert.equal(sim.nodes.length, 0, "keine Nodes mehr");
+  assert.equal(sim.deployments.length, 0, "keine Workloads mehr");
+  assert.equal(sim.services.length, 0, "keine Services mehr");
+  assert.equal(sim.controlPlane.up, false, "Control-Plane down");
+  assert.match(sim.exec("kubectl get nodes").output!, /was refused/i, "kubectl ist danach blockiert");
+  // Negativ-Gegenprobe (Red-Green): ein frischer Sim OHNE Sturm bleibt erreichbar.
+  assert.doesNotMatch(freshSim().exec("kubectl get nodes").output!, /was refused/i);
+});
+
+test("mergeScenario bareMetal: lokale Baupläne (files) überleben den Sturm", () => {
+  sim.mergeScenario({ bareMetal: true, files: { "deployment.yaml": "kind: Deployment" } });
+  // ls/cat funktionieren weiter – der Sturm nimmt den Cluster, nicht die Manifeste.
+  assert.match(sim.exec("ls").output!, /deployment\.yaml/);
+  assert.match(sim.exec("cat deployment.yaml").output!, /Deployment/);
+});
+
+test("Aufbau-Bogen spielbar: Sturm zerstört, danach init/join baut wieder auf", () => {
+  // Spiegelt den Quest-Fluss #461 → #462/#463: Sturm (mergeScenario) dann Wiederaufbau.
+  sim.exec("kubectl create deployment alt --image=nginx");
+  sim.mergeScenario({ bareMetal: true });
+  assert.equal(sim.controlPlane.up, false);
+  sim.exec("kubeadm init");
+  sim.exec("kubeadm join " + sim.controlPlane.token);
+  assert.equal(sim.controlPlane.up, true);
+  assert.equal(sim.nodes.length, 2, "Control-Plane + 1 Worker neu aufgebaut");
+  assert.doesNotMatch(sim.exec("kubectl get nodes").output!, /was refused/i);
+});
+
 /** Hilfs-Schreibweise: realistischer `kubeadm join`-Aufruf mit --token (wie init ihn ausgibt). */
 function APISERVERTOKEN(token: string, withFlag: boolean): string {
   return withFlag ? "10.0.0.10:6443 --token " + token + " --discovery-token-ca-cert-hash sha256:deadbeef" : token;

@@ -694,5 +694,96 @@
         ]
       }
     ]
+  },
+  {
+    "id": "aufbau-sturm",
+    "title": "Der große Sturm: Port Kubernia in Trümmern",
+    "giver": "ole",
+    "topic": "cluster-aufbau",
+    "rewardXp": 45,
+    "rewardCoins": 30,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "ole",
+        "scenario": {
+          "bareMetal": true,
+          "files": {
+            "lagebericht.txt": "HAFENMEISTER-LAGEBERICHT – nach dem Orkan\n=========================================\nControl-Plane (Kommandobrücke):  ZERSTÖRT – apiserver/etcd/scheduler/controller-manager weg.\nWorker-Knoten:                   alle abgesoffen, kein Knoten mehr im Cluster.\nLaufende Dienste:                fort.\nDeine Baupläne (Manifeste/Dockerfiles): UNVERSEHRT an Land gesichert.\n\nFazit: Der Cluster ist auf bare metal zurück. Wir bauen ihn von Grund auf neu auf –\nzuerst die Kommandobrücke (kubeadm init), dann Knoten (kubeadm join), dann die Dienste."
+          }
+        },
+        "lines": [
+          "Kapitän … du kommst gerade rechtzeitig. Der <b>Orkan</b> hat heute Nacht alles weggerissen. Port Kubernia – unser ganzer Cluster – liegt in Trümmern. ⛈️",
+          "Die <b>Kommandobrücke</b> ist fort: kein <b>apiserver</b>, kein <b>etcd</b>, kein Scheduler, kein Controller-Manager. Die <b>Knoten</b> sind abgesoffen, kein einziger Worker mehr da. Alle Dienste – weg.",
+          "Aber jammern bringt kein Schiff zurück. Du hast jahrelang auf diesem Cluster gearbeitet – jetzt baust du ihn <b>von Grund auf selbst</b> wieder auf. Ich hab dir einen <b>Lagebericht</b> an Land gelegt. Schau ihn dir an."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Den Schaden begutachten",
+        "tasks": [
+          {
+            "id": "t-sturm-ls",
+            "text": "Sieh nach, was den Sturm überstanden hat: <code>ls</code>. Der Cluster ist fort – aber deine <b>Baupläne</b> liegen noch hier an Land.",
+            "accept": [
+              "^ls$"
+            ],
+            "solution": "ls",
+            "hint": "Zwei Buchstaben."
+          },
+          {
+            "id": "t-sturm-cat-bericht",
+            "text": "Lies den Lagebericht: <code>cat lagebericht.txt</code>. Er sagt, was zerstört ist – und in welcher Reihenfolge wir wieder aufbauen.",
+            "accept": [
+              "^cat\\s+lagebericht\\.txt$"
+            ],
+            "solution": "cat lagebericht.txt",
+            "hint": "cat <datei> – die Datei heißt 'lagebericht.txt'."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "ole",
+        "q": "Du tippst aus Gewohnheit <code>kubectl get nodes</code> – und bekommst nur «<code>The connection to the server … was refused</code>». Warum?",
+        "options": [
+          {
+            "t": "Weil keine <b>Control-Plane</b> mehr läuft: <code>kubectl</code> redet ausschließlich mit dem <b>apiserver</b> – und den hat der Sturm zerstört. Es ist ein <b>Erreichbarkeits-</b>, kein Befehlsproblem.",
+            "ok": true,
+            "reply": "Genau. <code>kubectl</code> ist nur das Funkgerät – ohne Gegenstelle (apiserver) kommt kein Funkspruch durch. Erst wenn die Kommandobrücke wieder steht, antwortet der Cluster. Nichts an <code>kubectl</code> ist kaputt."
+          },
+          {
+            "t": "Weil <code>kubectl</code> selbst beschädigt ist und neu installiert werden muss.",
+            "ok": false,
+            "reply": "Nein – <code>kubectl</code> ist heil. Die Meldung sagt es wörtlich: <i>connection refused</i>. Es findet nur niemanden zum Reden, weil der <b>apiserver</b> (die Control-Plane) fehlt. Das Werkzeug ist in Ordnung, die Gegenstelle nicht."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "ole",
+        "q": "Womit fängt der Wiederaufbau an?",
+        "options": [
+          {
+            "t": "Zuerst die <b>Control-Plane</b> hochziehen (<code>kubeadm init</code>) – ohne sie ist der Cluster nicht ansprechbar. Danach <b>Worker-Knoten</b> anschließen (<code>kubeadm join</code>) und zuletzt die <b>Dienste</b> wieder ausbringen.",
+            "ok": true,
+            "reply": "So ist die Reihenfolge: erst die Kommandobrücke, dann die Knoten, dann die Fracht. Ohne Control-Plane gibt es keinen Cluster, an den ein Worker andocken oder ein Dienst ausrollen könnte."
+          },
+          {
+            "t": "Zuerst die Dienste deployen – sobald die laufen, baut sich der Rest des Clusters von selbst.",
+            "ok": false,
+            "reply": "Andersherum. Ein Dienst braucht einen <b>Knoten</b>, auf dem er läuft, und der Knoten braucht eine <b>Control-Plane</b>, die ihn verwaltet. Ohne Fundament kein Aufbau – erst <code>kubeadm init</code>."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "ole",
+        "lines": [
+          "Du weißt, was zu tun ist: <b>Kommandobrücke, Knoten, Dienste</b> – in genau dieser Reihenfolge. Das ist kein Befehl-Nachtippen mehr, das ist <b>einen Cluster bauen</b>.",
+          "Fangen wir mit der <b>Control-Plane</b> an – dem Herz, mit dem alles wieder ansprechbar wird. <code>kubeadm init</code>. Das zeige ich dir gleich Schritt für Schritt. Ärmel hoch, Kapitän. ⚓"
+        ]
+      }
+    ]
   }
 ]

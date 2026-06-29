@@ -57,5 +57,6 @@
   "terraform-remote-state",
   "terraform-provider",
   "terraform-variablen-outputs",
-  "werft-eigener-dienst"
+  "werft-eigener-dienst",
+  "aufbau-sturm"
 ]

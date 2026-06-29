@@ -50,6 +50,26 @@ export function deriveControlPlane(sc: Scenario, nodes: ClusterNode[]): { up: bo
   return { up: !sc.bareMetal, token: null, node: sc.bareMetal ? null : (cp ? cp.name : null) };
 }
 
+/** Bootstrap-/Sturm-Anteil eines Quest-Szenarios auf den LAUFENDEN Cluster anwenden (#461),
+ *  von `Sim.mergeScenario()` genutzt. `bareMetal` = der große Sturm: räumt den Cluster auf
+ *  bare metal ab (keine Nodes/Workloads, Control-Plane down) – die lokalen Baupläne (`files`)
+ *  bleiben absichtlich, der Sturm nimmt den Cluster, nicht deine Manifeste. Eine explizite
+ *  `controlPlane`-Lage übernimmt den Bootstrap-Stand (z.B. ein gespeicherter Zwischenstand).
+ *  Bewusst ein gewollter Reset-Punkt (kein additives Merge); reload-sicher, weil seit #436 der
+ *  Voll-Snapshot den neuen Stand hält und erreichte Szenarien nicht erneut eingemischt werden. */
+export function applyBootstrapScenario(state: ClusterState, sc: Scenario): void {
+  if (sc.bareMetal) {
+    state.nodes.length = 0;
+    state.deployments.length = 0;
+    state.services.length = 0;
+    state.ingresses.length = 0;
+    state.networkPolicies.length = 0;
+    state.statefulSets.length = 0;
+    state.controlPlane = { up: false, token: null, node: null };
+  }
+  if (sc.controlPlane) state.controlPlane = deriveControlPlane(sc, state.nodes);
+}
+
 export function kubeadmCommand(host: KubeadmHost, t: string[]): string {
   const sub = (t[1] || "").toLowerCase();
   if (!sub) return host._err("kubeadm: Unterbefehl fehlt.", "Probier 'kubeadm init', dann 'kubeadm join <token>'.");

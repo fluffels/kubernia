@@ -243,13 +243,14 @@ test("v2 (alle Quests durch): Endzustand + vollständige completedQuests-Migrati
   expect(Game.allQuestsDone()).toBe(true);
 
   // Alle alten numerischen IDs (+ später als Slug ergänzte Quests) → die neuen Slugs.
-  // #449/#450: docker-registry UND docker-rabbitmq wurden NACH diesem „alles durch"-Stand
-  // eingeschoben; ein solcher Alt-Stand kennt sie folgerichtig nicht (sie bleiben ungespielt,
-  // niemand wird zurückgeschickt). Der Endzustand (questIdx == length, currentQuestId "") bleibt
-  // trotzdem erhalten.
-  expect(Game.state.completedQuests.length).toBe(KQContent.QUESTS.length - 2);
+  // #449/#450/#461: docker-registry, docker-rabbitmq UND aufbau-sturm wurden NACH diesem
+  // „alles durch"-Stand eingeschoben/angehängt; ein solcher Alt-Stand kennt sie folgerichtig
+  // nicht (sie bleiben ungespielt, niemand wird zurückgeschickt). Der Endzustand
+  // (questIdx == length, currentQuestId "") bleibt trotzdem erhalten.
+  const addedAfterFixture = ["docker-registry", "docker-rabbitmq", "aufbau-sturm"];
+  expect(Game.state.completedQuests.length).toBe(KQContent.QUESTS.length - addedAfterFixture.length);
   expect(new Set(Game.state.completedQuests)).toEqual(
-    new Set(KQContent.QUESTS.filter(q => q.id !== "docker-registry" && q.id !== "docker-rabbitmq").map(q => q.id)),
+    new Set(KQContent.QUESTS.filter(q => !addedAfterFixture.includes(q.id)).map(q => q.id)),
   );
 
   expect(Game.state.settings).toEqual({ events: "off" });
