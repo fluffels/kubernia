@@ -22,6 +22,10 @@ export type GameSelf = {
   sim: Sim;
   incomeAcc: number;
   offlineEarnings: number;
+  /** #279: Zahl der beim letzten Laden NACHGESCHOBENEN Lernkarten (Backfill). Flüchtig
+   *  (RAM), NICHT Teil von GameState/Save – nur damit die Präsentation einmalig einen
+   *  sanften „Es gibt Neues zu lernen"-Hinweis zeigen kann. */
+  newLearnCards: number;
   /** Wiederspiel-Sandbox (#332): geklonter Live-Stand während eines Replays, sonst
    *  null. Flüchtig (RAM), NICHT Teil von GameState/Save. */
   replayBookmark: GameState | null;

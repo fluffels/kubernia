@@ -29,6 +29,8 @@ export const Game = {
   sim: new KQSim({}),
   incomeAcc: 0,
   offlineEarnings: 0,
+  // #279: beim Laden gesetzt (Backfill nachgeschobener Lernkarten) – flüchtig, kein Save.
+  newLearnCards: 0,
   // Wiederspiel-Sandbox (#332): Lesezeichen des Live-Stands während eines Replays –
   // bewusst flüchtig im RAM (NICHT Teil von GameState/Save). null = kein Wiederspiel.
   replayBookmark: null as GameState | null,

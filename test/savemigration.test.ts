@@ -196,8 +196,15 @@ test("v1 (voller Stand): reiches Deck/Abkürzungen/Stats/Cluster-Snapshot laden 
   expect(Game.state.owned).toEqual(["pet-ratte", "pet-moewe", "flag-blau", "fernrohr-upgrade"]);
   expect(Game.state.activePet).toBe("pet-moewe");
   expect(Game.state.activeFlag).toBe("flag-blau");
-  expect(Object.keys(Game.state.review).length).toBe(6);
+  // Die 6 gespeicherten Review-Einträge werden verlustfrei übernommen (jeder bleibt erhalten,
+  // mit seinem Leitner-Stand) …
+  for (const id of ["q-ch1-1", "q-flag-ps-a", "q-tools-stack", "q-tools-monitoring", "q-flag-run-d", "q-flag-kubectl-n"]) {
+    expect(Game.state.review[id], `gespeicherte Review-Karte ${id} muss verlustfrei geladen werden`).toBeTruthy();
+  }
   expect(Game.state.review["q-ch1-1"]).toEqual({ box: 5, due: 19999 });
+  // … zusätzlich schiebt der #279-Backfill beim Laden die Karten der 16 abgeschlossenen Quests
+  // rein additiv nach (Nachzügler erreichen Fortgeschrittene), daher ist der Pool danach größer.
+  expect(Object.keys(Game.state.review).length).toBeGreaterThan(6);
 
   // Dynamische Zusatz-Stat (stormsFixed) bleibt erhalten.
   expect(Game.state.stats.stormsFixed).toBe(4);

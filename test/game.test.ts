@@ -443,6 +443,65 @@ test("jede über alle Quests freigeschaltete Wiederholungskarte löst zu echtem 
   expect(unbekannt, "Wiederholungs-IDs ohne Inhalt: " + unbekannt.join(", ")).toEqual([]);
 });
 
+/* ---------- #279 Backfill: nachträglich eingeführte Karten erreichen Fortgeschrittene ---------- */
+
+test("#279 backfillReviewItems: schiebt eine fehlende Karte einer ABGESCHLOSSENEN Quest nach und zählt sie", () => {
+  // Fortgeschrittener Spieler: helm-intro längst durch, aber die Karte q-tools-stack
+  // (chapter=helm-intro) fehlt im Pool – z.B. weil sie erst nach seinem Abschluss eingebaut wurde.
+  Game.state.completedQuests = ["helm-intro"];
+  delete Game.state.review["q-tools-stack"];
+  delete Game.state.review["q-tools-monitoring"];
+  const added = Game.backfillReviewItems();
+  expect(added, "Backfill soll die fehlenden helm-intro-Karten zählen").toBeGreaterThanOrEqual(2);
+  expect(Game.state.review["q-tools-stack"]).toBeTruthy();
+  expect(Game.state.review["q-tools-monitoring"]).toBeTruthy();
+});
+
+test("#279 backfillReviewItems: ist idempotent – beim zweiten Lauf kommt nichts mehr dazu", () => {
+  Game.state.completedQuests = ["helm-intro"];
+  Game.backfillReviewItems();
+  const before = JSON.stringify(Game.state.review);
+  const addedAgain = Game.backfillReviewItems();
+  expect(addedAgain, "zweiter Backfill darf nichts mehr nachschieben").toBe(0);
+  expect(JSON.stringify(Game.state.review), "Review-Pool darf unverändert bleiben").toBe(before);
+});
+
+test("#279 backfillReviewItems: rührt Karten NICHT-abgeschlossener Quests nicht an (Negativfall)", () => {
+  // Frischer Stand: nichts abgeschlossen -> nichts wird vorzeitig freigeschaltet.
+  Game.state.completedQuests = [];
+  const added = Game.backfillReviewItems();
+  expect(added).toBe(0);
+  expect(Game.state.review["q-tools-stack"], "Karte einer noch nicht gespielten Quest darf nicht im Pool sein").toBeFalsy();
+});
+
+test("#279 backfillReviewItems: verändert einen bestehenden Leitner-Stand nicht (rein additiv)", () => {
+  // Eine Karte ist schon in Box 4 fällig in 8 Tagen – Backfill darf sie nicht zurücksetzen.
+  Game.state.completedQuests = ["helm-intro"];
+  Game.state.review["q-tools-stack"] = { box: 4, due: 9999 };
+  Game.backfillReviewItems();
+  expect(Game.state.review["q-tools-stack"]).toEqual({ box: 4, due: 9999 });
+});
+
+test("#279 load(): ein fortgeschrittener Altstand bekommt nachträglich eingeführte Karten beim Laden nachgeschoben", () => {
+  // Save eines Spielers, der helm-intro durch hat, dessen review-Pool die Karte aber nicht kennt.
+  Game.importData(JSON.stringify({ v: 3, data: { completedQuests: ["helm-intro"], review: {} } }));
+  Game.load();
+  expect(Game.newLearnCards, "load() soll die nachgeschobenen Karten zählen").toBeGreaterThanOrEqual(2);
+  expect(Game.state.review["q-tools-stack"], "die nachträglich eingeführte Karte ist nach dem Laden im Pool").toBeTruthy();
+});
+
+test("#279 Red-Green: ohne Backfill bliebe die Karte des fortgeschrittenen Spielers verschwunden", () => {
+  // Beweist, dass der Test wirklich am Backfill hängt: nur ensureReviewItem (kein Backfill-Lauf)
+  // über eine NICHT abgeschlossene Quest schiebt nichts nach.
+  Game.state.completedQuests = ["helm-intro"];
+  delete Game.state.review["q-tools-stack"];
+  // Ohne backfillReviewItems()-Aufruf bleibt die Karte fehlend:
+  expect(Game.state.review["q-tools-stack"]).toBeFalsy();
+  // Mit Backfill ist sie da – die Differenz ist genau die getestete Logik:
+  Game.backfillReviewItems();
+  expect(Game.state.review["q-tools-stack"]).toBeTruthy();
+});
+
 test("Red-Green: eine Wiederholungskarte ohne Inhalt wird erkannt", () => {
   // Ein Check, der auch bei einer Geister-ID grün bliebe, wäre wertlos.
   Game.ensureReviewItem("q-gibt-es-nicht");

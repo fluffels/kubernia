@@ -10,28 +10,57 @@ const BOX_INTERVALS: Record<number, number> = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16 };
 /** Spaced-Repetition-Methoden der Game-Fassade (Leitner-Plan, Review-Gate, freies Üben). */
 export const spacedRepetitionBundle = part({
   /* ---------- Spaced Repetition (Leitner) ---------- */
-  ensureReviewItem(itemId: string) {
+  /** Legt für `itemId` ein Wiederhol-Item an, falls noch keins existiert. Gibt `true`
+   *  zurück, wenn dabei wirklich ein NEUES Item entstanden ist (sonst `false`) – das
+   *  nutzt der #279-Backfill, um nachgeschobene Karten zu zählen. Idempotent. */
+  ensureReviewItem(itemId: string): boolean {
     if (!this.state.review[itemId]) {
       this.state.review[itemId] = { box: 1, due: today() + 1 };
+      return true;
     }
+    return false;
   },
 
-  // Schaltet beim Abschluss einer Quest ihre Wiederhol-Karten frei. Zwei Quellen –
-  // beide als DATEN in den Karten/Quests (Single Source seit #412, die frühere
-  // EXTRA_CARDS-Hand-Map ist entfallen): das `chapter` der Karte (CMD/Quiz) und die
-  // Choice-`reviewId` im Quest-Ablauf. Beide sind per Konstruktion in-context –
-  // der Lernreihenfolge-Wächter (content/learnorder.ts + test/learnorder.test.ts)
-  // prüft das gegen die Daten.
-  registerQuestCards(questId: string) {
-    for (const c of KQContent.CMD_CARDS.filter(c => c.chapter === questId)) this.ensureReviewItem(c.id);
-    for (const c of KQContent.CRAB_QUIZ.filter(c => c.chapter === questId)) this.ensureReviewItem(c.id);
+  // Seedet die Wiederhol-Karten EINER Quest aus ihren zwei Daten-Quellen (Single Source
+  // seit #412, die frühere EXTRA_CARDS-Hand-Map ist entfallen): das `chapter` der Karte
+  // (CMD/Quiz) und die Choice-`reviewId` im Quest-Ablauf. Beide sind per Konstruktion
+  // in-context – der Lernreihenfolge-Wächter (content/learnorder.ts + test/learnorder.test.ts)
+  // prüft das gegen die Daten. SPEICHERT NICHT (das übernimmt der Aufrufer); gibt die Zahl
+  // neu hinzugefügter Items zurück.
+  seedQuestCards(questId: string): number {
+    let added = 0;
+    for (const c of KQContent.CMD_CARDS.filter(c => c.chapter === questId)) if (this.ensureReviewItem(c.id)) added++;
+    for (const c of KQContent.CRAB_QUIZ.filter(c => c.chapter === questId)) if (this.ensureReviewItem(c.id)) added++;
     const quest = KQContent.QUESTS.find(q => q.id === questId);
     if (quest) {
       for (const step of quest.steps) {
-        if (step.type === "choice" && step.reviewId) this.ensureReviewItem(step.reviewId);
+        if (step.type === "choice" && step.reviewId && this.ensureReviewItem(step.reviewId)) added++;
       }
     }
+    return added;
+  },
+
+  /** Schaltet beim Abschluss einer Quest ihre Wiederhol-Karten frei (seedQuestCards + save). */
+  registerQuestCards(questId: string) {
+    this.seedQuestCards(questId);
     this.save();
+  },
+
+  /** #279 Backfill – nachträglich eingeführte Lernkarten an fortgeschrittene Spieler nachschieben.
+   *  Problem: Karten kommen beim ABSCHLUSS ihrer chapter-Quest in den Pool (registerQuestCards).
+   *  Wird später eine Karte zu einer schon abgeschlossenen Quest hinzugefügt (neue Quiz-/Befehls-
+   *  Karte, neue Choice), bekäme ein Spieler, der das Kapitel längst durchhat, sie NIE zu sehen.
+   *  Darum beim Laden für JEDE bereits abgeschlossene Quest sicherstellen, dass ihre Karten im
+   *  Spaced-Repetition-Pool sind. Idempotent (ensureReviewItem fügt nur Fehlendes hinzu) und rein
+   *  additiv – verändert keinen bestehenden Leitner-Stand. Über die SR-Fälligkeit (due = morgen)
+   *  landet das Nachgeschobene dosiert im täglichen Kralle-Stapel und wird so TATSÄCHLICH gelernt,
+   *  nicht nur als Liste angezeigt. Gibt die Zahl neu nachgeschobener Karten zurück (für den sanften
+   *  Lade-Hinweis); speichert nur, wenn wirklich etwas dazukam. */
+  backfillReviewItems(): number {
+    let added = 0;
+    for (const id of this.state.completedQuests) added += this.seedQuestCards(id);
+    if (added > 0) this.save();
+    return added;
   },
 
   reviewResult(itemId: string, correct: boolean) {

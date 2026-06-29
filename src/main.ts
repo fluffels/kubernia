@@ -180,6 +180,17 @@ import { keys, clearKeys } from "./runtime";
     if (Game.offlineEarnings > 0) {
       setTimeout(() => UI.toast("🌙 Während du weg warst, hat dein Hafen <b>+" + Game.offlineEarnings + " 🪙</b> verdient!"), 1200);
     }
+    // #279: Sanfter Hinweis, wenn beim Laden nachträglich eingeführte Lernkarten in den
+    // Spaced-Repetition-Pool nachgeschoben wurden (für Spieler, die das Kapitel schon durch
+    // haben). Nicht aufdringlich: ein einzelner Hinweis-Toast, der Rest läuft über den
+    // täglichen Kralle-Stapel – die Karten werden also tatsächlich gelernt, nicht nur gelistet.
+    if (Game.newLearnCards > 0) {
+      const n = Game.newLearnCards;
+      const txt = n === 1
+        ? "🦀 Kralle: „Es gibt <b>Neues zu lernen</b> – eine frische Lernkarte ist in deinem Übungsstapel gelandet.“"
+        : "🦀 Kralle: „Es gibt <b>Neues zu lernen</b> – <b>" + n + "</b> frische Lernkarten sind in deinem Übungsstapel gelandet.“";
+      setTimeout(() => UI.hint(txt), 3400);
+    }
     // Einmaliger Erklär-Toast: was die 🔥-Flamme im HUD bedeutet (auch ohne Maus sichtbar).
     if (!Game.state.streakHintShown) {
       setTimeout(() => UI.hint("🔥 <b>Tages-Streak:</b> Spiele täglich für bis zu <b>+50 % Dublonen</b> auf deine Belohnungen!"), 2600);

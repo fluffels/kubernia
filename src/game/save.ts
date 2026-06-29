@@ -327,6 +327,12 @@ export const saveBundle = part({
       }
     }
     this.touchStreak();
+    // #279 Backfill: nachträglich eingeführte Lernkarten an fortgeschrittene Spieler nachschieben.
+    // Für jede schon abgeschlossene Quest sicherstellen, dass ihre (evtl. neuen) Karten im
+    // Spaced-Repetition-Pool sind – idempotent, rein additiv. Die Zahl merkt sich die Präsentation
+    // (flüchtig) für einen einmaligen sanften Hinweis. Nicht während eines Wiederspiels nötig
+    // (dann ist der echte Stand ohnehin als Lesezeichen geparkt), aber load() läuft nie im Replay.
+    this.newLearnCards = this.backfillReviewItems();
     // Offline-Einnahmen: dein Hafen hat weitergearbeitet (max. 4 Stunden, halber Satz)
     this.offlineEarnings = 0;
     if (this.state.lastSeen) {
