@@ -26,3 +26,29 @@ export function krallePracticeMilestone(count: number): string | null {
   }
   return null;
 }
+
+/* „Running Gag" (#237): Kralle ist eine Krabbe OHNE Krallen – sie hat nur Scheren, und
+ * das wurmt sie. Ab und zu lässt sie am Rundenende wehmütig-frech durchblicken, dass sie
+ * zu gern echte Krallen hätte. Das gibt der Figur Charakter, ohne den etablierten Namen
+ * (NPC-Id `kralle`) anzufassen. Bewusst dosiert (nur ca. jede 7. Runde) und nie auf einem
+ * Meilenstein (dort hat der Meilenstein-Spruch Vorrang), damit es nicht jede Runde nervt. */
+const KRALLE_CLAW_ASIDES: string[] = [
+  "Schnipp, schnapp – nur Scheren. Mit echten Krallen wär ich längst Admiral … aber nein. Egal, üben wir weiter!",
+  "Weißt du, was mir fehlt? Krallen. Eine Krabbe namens Kralle ganz ohne Krallen – das Meer hat Humor. Schnapp.",
+  "Mit richtigen Krallen könnte ich die Karten halten UND blättern. So muss ich tricksen – schnipp-schnapp!",
+  "„Kralle“ heiß ich, dabei hab ich bloß Scheren. Eines Tages wachsen mir welche, schwör ich. Bis dahin: weiter so!",
+  "Andere haben Krallen, ich hab Stil. Scheren auf, Scheren zu – läuft doch auch, oder, Lotse? Schnipp!",
+];
+
+/** Gibt für die `count`-te Übungsrunde gelegentlich einen „hätte-gern-Krallen“-Spruch
+ *  zurück – oder `null`. Bewusst dosiert (nur jede 7. Runde) und nie auf einem
+ *  Meilenstein (`krallePracticeMilestone` hat dort Vorrang, damit nichts doppelt feuert).
+ *  Rotiert deterministisch durch den Pool, also unit-testbar. Defensiv: nicht-positive
+ *  oder nicht-ganzzahlige Werte ergeben `null` (#237). */
+export function kralleClawAside(count: number): string | null {
+  if (!Number.isInteger(count) || count <= 0) return null;
+  if (krallePracticeMilestone(count) !== null) return null; // Meilenstein hat Vorrang
+  if (count % 7 !== 0) return null;
+  const idx = (count / 7 - 1) % KRALLE_CLAW_ASIDES.length;
+  return KRALLE_CLAW_ASIDES[idx];
+}

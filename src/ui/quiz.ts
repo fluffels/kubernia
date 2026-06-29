@@ -86,10 +86,14 @@ export const quizUI = part({
       }
       // #236: Jede abgeschlossene Übungsrunde mit Kralle zählt (täglich, Gate, frei). An
       // Meilensteinen streut Kralle einen zählbewussten Spruch ein – dosiert, nicht jede Runde.
-      const milestone = Game.recordKrallePractice();
+      // #236: Meilenstein-Spruch (festlich). #237: sonst gelegentlich der „hätte-gern-
+      // Krallen"-Running-Gag (wehmütig-frech). Beide schließen sich aus (recordKrallePractice).
+      const { milestone, aside } = Game.recordKrallePractice();
       const milestoneHtml = milestone
         ? `<p class="kralle-milestone">🦀🎉 „${esc(milestone)}“</p>`
-        : "";
+        : aside
+          ? `<p class="kralle-aside">🦀✂️ „${esc(aside)}“</p>`
+          : "";
       // Wiederholungs-Gate (#222): erledigt -> nicht erneut blockieren, weiter zur Quest.
       if (r.gate) {
         this._gateClearedIdx = r.gate.questIdx;
