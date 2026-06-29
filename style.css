@@ -420,6 +420,19 @@ button.danger:hover { background: var(--bad); color: #1a0606; filter: none; }
   font-style: italic;
   line-height: 1.4;
 }
+/* #237: Kralles „hätte-gern-Krallen"-Running-Gag – ruhiger/wehmütiger als der festliche
+   Meilenstein, in der kühlen Akzentfarbe statt Gold, damit beide unterscheidbar bleiben. */
+.kralle-aside {
+  margin: 10px auto 0;
+  max-width: 36em;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(77,208,225,0.1);
+  border: 1px solid rgba(77,208,225,0.35);
+  color: var(--accent2);
+  font-style: italic;
+  line-height: 1.4;
+}
 .review-cmd-row {
   display: flex; align-items: center; gap: 8px;
   background: var(--term-bg);
