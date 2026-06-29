@@ -391,3 +391,34 @@ test("terraform output: nach apply ohne deklarierte Outputs ist die Ausgabe leer
   assert.equal(out.error, false, "ohne output-Blöcke ist es kein Fehler");
   assert.equal(out.output, "", "echtes Terraform gibt ohne Outputs nichts aus");
 });
+
+/* ===== Aufbau-Capstone: ganzen Cluster als Code provisionieren (#465) ===== */
+
+test("terraform Capstone (#465): apply zieht Control-Plane + Worker aus Code hoch", () => {
+  // Bare metal wie nach dem Sturm: kein Knoten, Control-Plane down.
+  sim.mergeScenario({
+    bareMetal: true,
+    tfResources: [
+      { addr: "hafen_cluster.kommandobruecke", desc: "control-plane" },
+      { addr: "hafen_worker.steg1", desc: "worker" },
+      { addr: "hafen_worker.steg2", desc: "worker" },
+      { addr: "hafen_worker.steg3", desc: "worker" },
+    ],
+  });
+  assert.equal(sim.controlPlane.up, false, "vor apply: Control-Plane down (bare metal)");
+  assert.equal(sim.nodes.length, 0, "vor apply: kein Knoten");
+  assert.ok(sim.exec("kubectl get nodes").error, "vor apply: kubectl connection refused");
+
+  sim.exec("terraform init");
+  sim.exec("terraform apply");
+  assert.equal(sim.controlPlane.up, true, "apply zieht die Control-Plane hoch");
+  assert.equal(sim.nodes.length, 4, "Control-Plane + 3 Worker aus Code");
+  assert.equal(sim.nodes.filter(n => /control-plane/.test(n.roles)).length, 1, "genau eine Control-Plane");
+  assert.equal(sim.nodes.filter(n => n.roles === "<none>").length, 3, "drei Worker");
+  assert.ok(!sim.exec("kubectl get nodes").error, "nach apply antwortet der Cluster wieder");
+
+  // destroy ist das Gegenstück: zurück auf bare metal.
+  sim.exec("terraform destroy");
+  assert.equal(sim.nodes.length, 0, "destroy räumt alle Knoten weg");
+  assert.equal(sim.controlPlane.up, false, "destroy fährt die Control-Plane runter");
+});

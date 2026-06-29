@@ -67,6 +67,12 @@ function allAddrs(host: TerraformHost): string[] {
   return [...host.tf.resources.map(r => r.addr), ...moduleAddrs(host)];
 }
 
+/** Provisioniert die Config einen ganzen Cluster (Aufbau-Capstone #465)? Wahr, sobald eine
+ *  `hafen_cluster`-Ressource (Control-Plane) deklariert ist. */
+function provisionsCluster(tf: TerraformHost["tf"]): boolean {
+  return tf.resources.some(r => r.addr.startsWith("hafen_cluster."));
+}
+
 /** Lock-Fehler, wenn der geteilte State gerade von einer anderen Crew gesperrt ist
  *  (Remote-State + Locking, #146). Sonst null. */
 function lockError(host: TerraformHost): string | null {
@@ -169,6 +175,29 @@ export function terraformCommand(host: TerraformHost, t: string[], _raw?: string
       }
       host._reschedulePending();
     }
+    // Aufbau-Capstone (#465): einen ganzen Cluster als Code provisionieren – die Pointe des
+    // Bogens (#239), das deklarative Gegenstück zum manuellen kubeadm init/join. Eine
+    // `hafen_cluster`-Ressource zieht die Control-Plane hoch (wie `kubeadm init`), jede
+    // `hafen_worker`-Ressource hängt einen Worker an (wie ein `kubeadm join`) – reproduzierbar
+    // aus der .tf-Datei statt Schritt für Schritt von Hand. Determiniert (fester Token), damit
+    // der Aufbau-Zustand zum Snapshot-Round-trip passt.
+    if (provisionsCluster(tf)) {
+      if (!host.controlPlane.up) {
+        const cpName = host.nodes.find(n => /control-plane/.test(n.roles))?.name || "ahoi-control";
+        if (!host.nodes.some(n => n.name === cpName)) {
+          host.nodes.push({ name: cpName, status: "Ready", roles: "control-plane", version: "v1.30.2" });
+        }
+        host.controlPlane = { up: true, token: "abcdef.0123456789abcdef", node: cpName };
+      }
+      const workers = tf.resources.filter(r => r.addr.startsWith("hafen_worker."));
+      workers.forEach((_, i) => {
+        const name = "ahoi-worker-" + (i + 1);
+        if (!host.nodes.some(n => n.name === name)) {
+          host.nodes.push({ name, status: "Ready", roles: "<none>", version: "v1.30.2" });
+        }
+      });
+      host._reschedulePending();
+    }
     let out = addrs.map(a => a + ": Creating...\n" + a + ": Creation complete after 2s").join("\n") +
       "\n\nApply complete! Resources: " + addrs.length + " added, 0 changed, 0 destroyed.";
     if (tf.outputs.length) {
@@ -184,6 +213,12 @@ export function terraformCommand(host: TerraformHost, t: string[], _raw?: string
     const addrs = allAddrs(host);
     tf.applied = false;
     host.nodes = host.nodes.filter(n => !["ahoi-worker-3", "ahoi-worker-4"].includes(n.name));
+    // Aufbau-Capstone (#465): ein als Code gebauter Cluster wird per destroy wieder abgeräumt –
+    // alle Knoten weg, Control-Plane down (zurück auf bare metal), das Gegenstück zum apply oben.
+    if (provisionsCluster(tf)) {
+      host.nodes = [];
+      host.controlPlane = { up: false, token: null, node: null };
+    }
     return addrs.map(a => a + ": Destroying...\n" + a + ": Destruction complete after 1s").join("\n") +
       "\n\nDestroy complete! Resources: " + addrs.length + " destroyed.";
   }

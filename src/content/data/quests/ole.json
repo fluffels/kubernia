@@ -1259,5 +1259,163 @@
         ]
       }
     ]
+  },
+  {
+    "id": "aufbau-cluster-als-code",
+    "title": "Nie wieder von Hand: Cluster als Code",
+    "giver": "ole",
+    "topic": "cluster-aufbau",
+    "rewardXp": 75,
+    "rewardCoins": 60,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "ole",
+        "scenario": {
+          "bareMetal": true,
+          "files": {
+            "cluster.tf": "# Der ganze Cluster als CODE – das deklarative Gegenstück zu kubeadm.\n# Statt 'kubeadm init', dann jedes 'kubeadm join' von Hand: EINMAL beschreiben,\n# beliebig oft reproduzierbar bauen. Diese Datei kann in Git liegen, reviewt werden,\n# und beim nächsten Sturm baut EIN 'terraform apply' den ganzen Cluster zurück.\n\n# Die Kommandobrücke (Control-Plane) – was sonst 'kubeadm init' macht.\nresource \"hafen_cluster\" \"kommandobruecke\" {\n  name    = \"ahoi-control\"\n  version = \"1.30.2\"\n}\n\n# Drei Stege (Worker) – je einer ist ein 'kubeadm join', hier nur deklariert.\nresource \"hafen_worker\" \"steg1\" {\n  cluster = hafen_cluster.kommandobruecke.name\n}\n\nresource \"hafen_worker\" \"steg2\" {\n  cluster = hafen_cluster.kommandobruecke.name\n}\n\nresource \"hafen_worker\" \"steg3\" {\n  cluster = hafen_cluster.kommandobruecke.name\n}\n\n# Die Adresse, unter der kubectl den Cluster erreicht.\noutput \"apiserver\" {\n  value = \"https://ahoi-control:6443\"\n}\n"
+          },
+          "tfResources": [
+            { "addr": "hafen_cluster.kommandobruecke", "desc": "name = \"ahoi-control\", version = \"1.30.2\"" },
+            { "addr": "hafen_worker.steg1", "desc": "cluster = ahoi-control" },
+            { "addr": "hafen_worker.steg2", "desc": "cluster = ahoi-control" },
+            { "addr": "hafen_worker.steg3", "desc": "cluster = ahoi-control" }
+          ],
+          "tfOutputs": [
+            { "name": "apiserver", "value": "https://ahoi-control:6443" }
+          ]
+        },
+        "lines": [
+          "Letzte Lektion, Kapitän – und die wichtigste. Du hast den Cluster nach dem Sturm <b>von Hand</b> wieder aufgebaut: <code>kubeadm init</code>, dann jedes <code>kubeadm join</code> einzeln, dann die Dienste. Das musstest du einmal verstehen. Aber ein <b>Profi macht das nie wieder von Hand</b>.",
+          "Warum? Stell dir den <b>nächsten</b> Orkan vor. Tippst du wieder alles einzeln? Vergisst einen Knoten? Vertippst dich im Token? <b>Infrastructure as Code</b> heißt: du <b>beschreibst</b> den Cluster einmal in einer Datei – und ein Befehl baut ihn <b>reproduzierbar</b> auf. Dieselbe Datei, dasselbe Ergebnis, jedes Mal.",
+          "Genau dafür ist <b>Terraform</b> da, das du auf der Flotte gelernt hast. Ich hab dir den ganzen Cluster als <code>cluster.tf</code> hingelegt: die Kommandobrücke und drei Stege – als Code. Schau ihn dir an, dann bauen wir ihn aus dem Nichts."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Den Cluster-Code lesen",
+        "tasks": [
+          {
+            "id": "t-code-cat",
+            "text": "Lies die Cluster-Definition: <code>cat cluster.tf</code>. Eine <code>hafen_cluster</code>-Ressource (die Control-Plane – was sonst <code>kubeadm init</code> tut) und drei <code>hafen_worker</code> (je ein <code>kubeadm join</code>) – alles als Code, nichts von Hand.",
+            "accept": [
+              "^cat\\s+cluster\\.tf$"
+            ],
+            "solution": "cat cluster.tf",
+            "hint": "cat <datei> – die Datei heißt 'cluster.tf'."
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Terraform initialisieren",
+        "cmd": {
+          "id": "t-code-init",
+          "intro": "🔁 Wie auf der Flotte: <code>terraform init</code> bereitet den Ordner vor (lädt Provider/Module). Schritt 1 von jedem Terraform-Lauf.",
+          "text": "Initialisiere: <code>terraform init</code>.",
+          "accept": [
+            "^terraform\\s+init$"
+          ],
+          "solution": "terraform init",
+          "hint": "terraform init – der erste Schritt, immer."
+        }
+      },
+      {
+        "type": "teach",
+        "brief": "Den Bauplan prüfen",
+        "cmd": {
+          "id": "t-code-plan",
+          "intro": "🔁 <code>terraform plan</code> ist die Generalprobe: es zeigt, <b>was</b> entstehen würde, ohne schon zu bauen.",
+          "text": "Schau dir den Plan an: <code>terraform plan</code>. Zähl mit – <b>vier</b> Ressourcen entstehen: die Kommandobrücke plus drei Stege.",
+          "accept": [
+            "^terraform\\s+plan$"
+          ],
+          "solution": "terraform plan",
+          "hint": "terraform plan – zeigt den Bauplan, baut noch nichts."
+        }
+      },
+      {
+        "type": "teach",
+        "brief": "Den ganzen Cluster bauen",
+        "cmd": {
+          "id": "t-code-apply",
+          "intro": "🆕 Der große Moment: <code>terraform apply</code> baut <b>den ganzen Cluster auf einmal</b> – Control-Plane und alle Worker. Was du beim Wiederaufbau in vielen Schritten von Hand getippt hast (<code>kubeadm init</code> + drei <code>join</code>), macht <b>ein</b> deklarativer Befehl.",
+          "text": "Bau den Cluster aus Code: <code>terraform apply</code>. Danach steht die Kommandobrücke und drei Stege liegen am Wasser – reproduzierbar, ohne einen einzigen kubeadm-Befehl.",
+          "accept": [
+            "^terraform\\s+apply(\\s+-auto-approve)?$"
+          ],
+          "solution": "terraform apply",
+          "hint": "terraform apply – baut alles, was im Plan stand.",
+          "check": {
+            "all": [
+              { "flag": ["tf", "applied"] },
+              { "flag": ["controlPlane", "up"] }
+            ]
+          }
+        }
+      },
+      {
+        "type": "teach",
+        "brief": "Beweis: der Cluster steht",
+        "cmd": {
+          "id": "t-code-nodes",
+          "intro": "🆕 Der Beweis aus Code: Eben gab <code>kubectl</code> noch «connection refused» (keine Control-Plane). Jetzt, nach dem apply, antwortet der Cluster.",
+          "text": "Frag den Cluster ab: <code>kubectl get nodes</code>. Vier Knoten – die Control-Plane plus drei Worker – und du hast <b>keinen</b> kubeadm-Befehl getippt. Das ist Infrastructure as Code.",
+          "accept": [
+            "^kubectl\\s+get\\s+(nodes|node|no)$"
+          ],
+          "solution": "kubectl get nodes",
+          "hint": "Derselbe get-nodes-Befehl wie im manuellen Bogen – nur diesmal aus Code gebaut.",
+          "check": {
+            "count": "nodes",
+            "cmp": ">=",
+            "value": 4
+          }
+        }
+      },
+      {
+        "type": "choice",
+        "npc": "ole",
+        "q": "Du hast denselben Cluster zweimal gebaut – einmal von Hand, einmal als Code. Warum ist <b>als Code</b> der Senior-Weg?",
+        "options": [
+          {
+            "t": "<b>Reproduzierbar, versioniert, überprüfbar</b>: dieselbe Datei baut jedes Mal exakt denselben Cluster, liegt in Git und lässt sich reviewen – kein vergessener Knoten, kein Vertipper.",
+            "ok": true,
+            "reply": "Genau das ist der Sprung. Von Hand ist jeder Aufbau ein Unikat mit Fehlerrisiko; als Code ist er ein <b>wiederholbares Artefakt</b>. Beim nächsten Sturm: ein <code>terraform apply</code> statt einer langen, fehleranfälligen Tipp-Session."
+          },
+          {
+            "t": "Weil Terraform die Befehle <b>schneller tippt</b> als ein Mensch – es ist im Grunde dasselbe, nur automatisiert eingegeben.",
+            "ok": false,
+            "reply": "Nein – das ist der Denkfehler. Es geht nicht um Tipptempo. Code ist <b>deklarativ</b>: du beschreibst den <i>Soll-Zustand</i>, nicht die Tastenfolge. Terraform vergleicht Soll mit Ist und macht den Unterschied – reproduzierbar und versioniert, nicht bloß „schneller getippt“."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "ole",
+        "q": "Was hat dein eines <code>terraform apply</code> gerade ersetzt?",
+        "options": [
+          {
+            "t": "Das <code>kubeadm init</code> <b>und</b> alle <code>kubeadm join</code> – der ganze manuelle Aufbau-Bogen in einem deklarativen Schritt.",
+            "ok": true,
+            "reply": "So ist es. Die <code>hafen_cluster</code>-Ressource ist dein <code>kubeadm init</code>, jede <code>hafen_worker</code>-Ressource ein <code>kubeadm join</code>. Statt sie nacheinander zu tippen, hast du sie <b>beschrieben</b> – und Terraform hat sie gebaut."
+          },
+          {
+            "t": "Nur das <code>kubectl apply</code> der Dienste – die Knoten muss man weiterhin von Hand mit kubeadm anschließen.",
+            "ok": false,
+            "reply": "Andersherum gedacht. Hier ging es um die <b>Knoten</b> (Control-Plane + Worker), nicht um die Dienste. Genau die hat Terraform provisioniert – das manuelle <code>kubeadm init</code>/<code>join</code> ist weggefallen."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "ole",
+        "lines": [
+          "Das war's, Kapitän. Du hast Port Kubernia nicht nur benutzt – du hast ihn <b>verstanden</b>: von Hand aus den Trümmern hochgezogen <i>und</i> als Code reproduzierbar gemacht. Den Weg von „Helm? Das setzt man auf den Kopf“ bis hierher bist du selbst gegangen. ⚓",
+          "Merk dir den letzten Satz für deine Laufbahn: <b>Alles, was du zweimal von Hand machst, gehört als Code.</b> Cluster, Dienste, Netzwerke – beschreiben statt tippen. Das ist der Unterschied zwischen einem, der Befehle kann, und einem <b>Senior</b>, der Systeme baut. 🎓"
+        ]
+      }
+    ]
   }
 ]

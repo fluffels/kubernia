@@ -1435,3 +1435,48 @@ test("#464 apply-Checks bringen Deployment + Service Pod für Pod zurück (Red-G
   assert.ok(!sim.exec(applySvc.cmd.solution).error, "apply Service läuft fehlerfrei");
   assert.equal(applySvc.cmd.check!(sim), true, "nach apply: Deployment heil UND Service da");
 });
+
+test("#465 Capstone-Quest: korrekt eingehängt + lehrt Cluster als Code (Terraform)", () => {
+  const quest = KQContent.QUESTS.find(q => q.id === "aufbau-cluster-als-code");
+  assert.ok(quest, "Quest aufbau-cluster-als-code fehlt");
+  assert.equal(quest!.topic, "cluster-aufbau", "gehört in den Aufbau-Bogen");
+  assert.equal(quest!.giver, "ole", "Hafenmeister Ole führt den Aufbau-Bogen");
+
+  // Folgt direkt der Dienste-Quest und ist der Abschluss des Bogens (letzte Quest).
+  const ids = KQContent.QUESTS.map(q => q.id);
+  assert.equal(ids[ids.indexOf("aufbau-dienste") + 1], "aufbau-cluster-als-code", "kommt direkt nach der Dienste-Quest");
+
+  // Der ganze Terraform-Zyklus init→plan→apply + der get-nodes-Beweis.
+  const teachCmds = quest!.steps.filter((s): s is TeachStep => s.type === "teach").map(s => s.cmd);
+  assert.ok(teachCmds.some(c => c.accept.some(re => re.test("terraform init"))), "terraform-init-Schritt fehlt");
+  assert.ok(teachCmds.some(c => c.accept.some(re => re.test("terraform apply"))), "terraform-apply-Schritt fehlt");
+  assert.ok(teachCmds.some(c => c.accept.some(re => re.test("kubectl get nodes"))), "Beweis-Schritt 'kubectl get nodes' fehlt");
+
+  // Lernbegriffe im Quest-Text (Kontrast manuell ↔ als Code).
+  const text = playerVisibleQuestText([quest!]).join(" ").toLowerCase();
+  for (const teil of ["terraform", "code", "kubeadm", "reproduzierbar", "control-plane"]) {
+    assert.ok(text.includes(teil), "Lehrtext nennt '" + teil + "' nicht");
+  }
+});
+
+test("#465 terraform apply provisioniert den ganzen Cluster aus Code (Red-Green)", () => {
+  const quest = KQContent.QUESTS.find(q => q.id === "aufbau-cluster-als-code")!;
+  const scenario = quest.steps.find(s => s.scenario)?.scenario;
+  assert.ok(scenario, "die Quest braucht ein bare-metal-Szenario mit der Cluster-.tf-Config");
+
+  const sim = new KQSim({});
+  sim.mergeScenario(scenario!); // bare metal + tfResources (hafen_cluster + 3 hafen_worker)
+  const apply = quest.steps.find((s): s is TeachStep => s.type === "teach" && s.cmd.id === "t-code-apply")!;
+  const nodes = quest.steps.find((s): s is TeachStep => s.type === "teach" && s.cmd.id === "t-code-nodes")!;
+
+  // Vor dem apply: bare metal, beide Checks falsch, kubectl scheitert (connection refused).
+  assert.equal(apply.cmd.check!(sim), false, "vor apply: nichts gebaut, Control-Plane down");
+  assert.equal(nodes.cmd.check!(sim), false, "vor apply: weniger als 4 Knoten");
+  assert.ok(sim.exec("kubectl get nodes").error, "vor apply: kubectl connection refused");
+
+  sim.exec("terraform init");
+  assert.ok(!sim.exec(apply.cmd.solution).error, "terraform apply läuft fehlerfrei");
+  assert.equal(apply.cmd.check!(sim), true, "nach apply: tf applied UND Control-Plane up");
+  assert.equal(nodes.cmd.check!(sim), true, "nach apply: 4 Knoten (Control-Plane + 3 Worker)");
+  assert.ok(!sim.exec("kubectl get nodes").error, "nach apply antwortet der Cluster wieder");
+});
