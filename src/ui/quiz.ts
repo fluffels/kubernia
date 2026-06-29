@@ -84,6 +84,12 @@ export const quizUI = part({
         Game.save();
         if (r.right === r.ids.length) this.reward(10, 10, "🌟 Perfekte Quizrunde!");
       }
+      // #236: Jede abgeschlossene Übungsrunde mit Kralle zählt (täglich, Gate, frei). An
+      // Meilensteinen streut Kralle einen zählbewussten Spruch ein – dosiert, nicht jede Runde.
+      const milestone = Game.recordKrallePractice();
+      const milestoneHtml = milestone
+        ? `<p class="kralle-milestone">🦀🎉 „${esc(milestone)}“</p>`
+        : "";
       // Wiederholungs-Gate (#222): erledigt -> nicht erneut blockieren, weiter zur Quest.
       if (r.gate) {
         this._gateClearedIdx = r.gate.questIdx;
@@ -92,6 +98,7 @@ export const quizUI = part({
           <div style="font-size:3em">🦀</div>
           <h2>Aufgefrischt! ${r.right} von ${r.ids.length} richtig.</h2>
           <p class="dim">Schnipp – jetzt sitzt's wieder. Weiter geht dein Abenteuer!</p>
+          ${milestoneHtml}
           <button class="primary" id="gate-continue">Weiter geht's! ⚓</button></div>`;
         $("gate-continue").onclick = () => { this.closeOverlays(); this.talkTo(npcId); };
         this.review = null;
@@ -101,6 +108,7 @@ export const quizUI = part({
         <div style="font-size:3em">🦀</div>
         <h2>${r.right} von ${r.ids.length} richtig!</h2>
         ${r.assisted ? `<p class="dim">🪄 ${r.assisted} mit Hilfe gelöst – die üben wir zur Sicherheit bald nochmal.</p>` : ""}
+        ${milestoneHtml}
         <p class="dim">${free
           ? "Freies Üben – so oft du willst! (zählt nicht in den täglichen Wiederholungs-Plan)"
           : "Richtige Karten kommen seltener wieder, falsche öfter – bis alles sitzt. Schnipp!"}</p>

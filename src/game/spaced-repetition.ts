@@ -2,6 +2,7 @@
  * Verwaltet die Wiederholungs-Karten (Box 1..5 + Fälligkeit), das sanfte Review-Gate
  * (#222/#323) und das freie, planungsneutrale Üben. Anwendungsschicht, Phaser-frei. */
 import { KQContent } from "../content";
+import { krallePracticeMilestone } from "../kralle";
 import { part, today } from "./shared";
 
 const BOX_INTERVALS: Record<number, number> = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16 };
@@ -90,6 +91,15 @@ export const spacedRepetitionBundle = part({
       [ids[i], ids[j]] = [ids[j], ids[i]];
     }
     return ids.slice(0, limit || 10);
+  },
+
+  /** #236: Zählt eine abgeschlossene Übungsrunde mit Kralle (täglich, Gate oder frei) und
+   *  gibt – nur an Meilensteinen – den passenden zählbewussten Spruch zurück, sonst `null`.
+   *  Den Gesamtzähler persistiert es; die Anzeige übernimmt die Präsentation (ui/quiz.ts). */
+  recordKrallePractice(): string | null {
+    const count = ++this.state.stats.krallePractice;
+    this.save();
+    return krallePracticeMilestone(count);
   },
 
   findReviewContent(itemId: string) {

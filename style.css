@@ -408,6 +408,18 @@ button.danger:hover { background: var(--bad); color: #1a0606; filter: none; }
   border-left: 4px solid var(--accent2);
   line-height: 1.45;
 }
+/* #236: Kralle-Meilenstein-Spruch im Runden-Endscreen – hebt sich festlich vom dim-Text ab. */
+.kralle-milestone {
+  margin: 10px auto 0;
+  max-width: 36em;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255,200,87,0.14);
+  border: 1px solid rgba(255,200,87,0.45);
+  color: var(--accent);
+  font-style: italic;
+  line-height: 1.4;
+}
 .review-cmd-row {
   display: flex; align-items: center; gap: 8px;
   background: var(--term-bg);
