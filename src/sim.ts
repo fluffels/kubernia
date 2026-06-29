@@ -46,6 +46,7 @@ import { nslookupCommand, curlCommand } from "./sim/net";
 import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
 import { randSuffix, makePodName } from "./sim/util";
+import { renderHelp } from "./helptext";
 
   class Sim implements ClusterState {
     // `!` = definite assignment: alle Felder werden in reset() gesetzt, das der
@@ -641,8 +642,11 @@ import { randSuffix, makePodName } from "./sim/util";
       };
     }
 
-    /** Führt eine Befehlszeile aus. Rückgabe: { output, error } */
-    exec(line: string): ExecResult {
+    /** Führt eine Befehlszeile aus. Rückgabe: { output, error }
+     *  `available`: optionale Menge freigeschalteter Befehlsfamilien – betrifft NUR
+     *  die Ausgabe von `help` (gefilterte Liste #358). Fehlt sie (Tests/bare Sim),
+     *  listet `help` wie bisher alle Befehle. */
+    exec(line: string, available?: Set<string>): ExecResult {
       this.clock++;
       // Argo CD reconciliert vor jeder Eingabe: Self-Heal-Apps drehen zwischenzeitlichen
       // Drift (z.B. ein `kubectl scale` aus dem letzten Befehl) von selbst auf den Git-Soll zurück.
@@ -680,7 +684,7 @@ import { randSuffix, makePodName } from "./sim/util";
           case "ls": out = this._ls(); break;
           case "cat": out = this._cat(tokens); break;
           case "clear": return { output: null, error: false, clear: true };
-          case "help": out = this._help(); break;
+          case "help": out = this._help(available); break;
           default: {
             const guess = this._suggest(cmd, ["docker", "kubectl", "kubeadm", "helm", "terraform", "git", "argocd", "glab", "nslookup", "curl", "aws", "ls", "cat", "clear", "help"]);
             out = this._err("⚠️ Den Befehl '" + cmd + "' gibt es hier nicht.",
@@ -744,25 +748,10 @@ import { randSuffix, makePodName } from "./sim/util";
       return out;
     }
 
-    _help() {
-      return [
-        "Verfügbare Befehle im Simulator:",
-        "  docker     pull | build -t <name> . | tag <quelle> <ziel> | run | ps [-a] | images | stop | rm",
-        "  kubectl    get pods|deployments|services|endpoints|ingress|networkpolicies|servicemonitors|prometheusrules|grafanadatasources|grafanadashboards|alerts|nodes|secrets|configmaps|serviceaccounts|roles|rolebindings | describe pod|node|ingress|networkpolicy|role|serviceaccount <name>",
-        "             create deployment | create secret generic|tls | create configmap | create serviceaccount|role|clusterrole|rolebinding|clusterrolebinding | scale | expose | delete | apply -f <datei>",
-        "             auth can-i <verb> <resource> [--as=…] | label namespace <ns> pod-security.kubernetes.io/enforce=<stufe>",
-        "             logs [-f] [--previous] <pod> | top pods|nodes | set image deployment/<n> <c>=<img> | set env deployment/<n> --from=configmap|secret/<n> | set resources deployment/<n> --limits=memory=256Mi|ephemeral-storage=1Gi | rollout restart deployment <n>",
-        "  kubeadm    init | join <token> | reset  (Cluster selbst aufbauen: Control-Plane hochziehen, Worker anschließen, abräumen)",
-        "  helm       repo add|update | search repo | create | lint | package | install | list | upgrade | rollback | uninstall | status",
-        "  terraform  init | plan | apply | destroy | state list",
-        "  git        init | status | add <datei> | commit -m \"…\" | log | branch [<name>] | checkout [-b] <name> | merge <name> | push | fetch | pull",
-        "  argocd     app list | app get <name> | app sync <name>  (Argo CD / GitOps – den Git-Soll in den Cluster ziehen)",
-        "  glab       ci status | ci list  (Pipeline-Status in GitLab)",
-        "  nslookup   <name>  (DNS: fragt CoreDNS nach der Adresse hinter einem Service-Namen)",
-        "  curl       [http://]<service>[:port][/pfad]  (ruft einen Service ab – läuft mein Dienst und ist er erreichbar?)",
-        "  aws s3     mb s3://<bucket> | rb s3://<bucket> [--force] | ls [s3://<bucket>] | cp <quelle> <ziel> | rm s3://<bucket>/<key>  (Object Store – off-cluster)",
-        "  ls, cat <datei>, clear, help",
-      ].join("\n");
+    /** Hilfetext – Katalog + Filtern liegen in cmdunlock.ts (#358), hält den Kern
+     *  unter dem God-File-Budget. `available` filtert auf Freigeschaltetes. */
+    _help(available?: Set<string>) {
+      return renderHelp(available);
     }
 
     // nslookup (#337) + curl (#164) liegen seit #164 in ./sim/net.ts (Erreichbarkeits-

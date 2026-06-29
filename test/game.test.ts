@@ -1169,3 +1169,19 @@ test("#413 Sanitize: gültiger Float überlebt, kaputter/negativer Wert fällt a
   Game.load();
   expect(Game.state.gameDays).toBe(0);
 });
+
+test("#358 unlockedCommandFamilies: verdrahtet den Quest-Fortschritt (Anfang vs. Ende)", () => {
+  setWorldScene(null);
+  // Spielanfang: nur die Meta-Befehle, noch kein docker/kubectl.
+  Game.jumpToQuest(0);
+  Game.state.questStep = 0;
+  const start = Game.unlockedCommandFamilies();
+  expect(start.has("help")).toBe(true);
+  expect(start.has("clear")).toBe(true);
+  expect(start.has("docker")).toBe(false);
+  // Spielende: alle Hauptfamilien freigeschaltet.
+  Game.jumpToQuest(KQContent.QUESTS.length - 1);
+  Game.state.questStep = KQContent.QUESTS[KQContent.QUESTS.length - 1].steps.length;
+  const end = Game.unlockedCommandFamilies();
+  for (const c of ["docker", "kubectl", "git", "helm"]) expect(end.has(c)).toBe(true);
+});

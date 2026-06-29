@@ -110,6 +110,8 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/toastlife.ts`](src/toastlife.ts) | pure Domäne | Toast-Anzeigedauer-Politik: kurze Belohnung vs. lesbarer Hinweis (>= 15 s) + Fade-Timing (#370). |
 | [`src/kralle.ts`](src/kralle.ts) | pure Domäne | Kralle-Meilenstein-Sprüche: `krallePracticeMilestone(count)` (zählbewusster Spruch an 1/10/25/50/100…, sonst null, #236). |
 | [`src/cmdhistory.ts`](src/cmdhistory.ts) | pure Domäne | Befehlshistorie fürs Funkgerät-Terminal (#316). |
+| [`src/cmdunlock.ts`](src/cmdunlock.ts) | pure Domäne | Freigeschaltete Befehlsfamilien fürs gefilterte `help` (#358): aus dem Quest-Fortschritt abgeleitet (kein neues Save-Feld), `help`/`clear` immer dabei. |
+| [`src/helptext.ts`](src/helptext.ts) | pure Domäne | `help`-Katalog + gefiltertes Rendering (#358); der Simulator delegiert sein `help` hierher (eigenes, typfreies Modul → kein Zyklus). |
 | [`src/questlog.ts`](src/questlog.ts) | pure Domäne | Logbuch-Übersicht: Quest-Zustände, Nachlese (#326). |
 | [`src/album.ts`](src/album.ts) | pure Domäne | Sammelalbum/Glossar (#278): Befehle (Teach-Intros) + Wissen (Quiz) aus dem Content, nach Thema gruppiert, Freischalt-Ableitung aus `completedQuests`/`review` (kein neues Save-Feld). |
 | [`src/labellayout.ts`](src/labellayout.ts) | pure Domäne | Entzerrt überlappende In-Welt-Beschriftungen (#207). |
