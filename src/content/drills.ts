@@ -547,11 +547,11 @@ export const DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   },
   "k-describe-netpol": sim => {
     const np = ensureNetworkPolicy(sim);
-    return { text: "Beschreibe die Hafenmauer <code>" + np.name + "</code> – wer darf rein?", accept: [new RegExp("^kubectl\\s+describe\\s+(networkpolicy|networkpolicies|netpol|netpols)\\s+" + np.name.replace(/[-]/g, "\\-") + "$")], solution: "kubectl describe networkpolicies " + np.name, hint: "kubectl describe networkpolicies &lt;name&gt; (die Kurzformen netpol/networkpolicy verdienst du dir durch Nutzung)", why: "describe zeigt die Details der Policy: wen sie schützt (podSelector) und wer durchdarf (from) – Muster: kubectl describe networkpolicies &lt;name&gt;." };
+    return { text: "Beschreibe die Hafenmauer <code>" + np.name + "</code> – wer darf rein?", accept: [new RegExp("^kubectl\\s+describe\\s+(networkpolicy|networkpolicies|netpol|netpols)\\s+" + np.name.replace(/[-]/g, "\\-") + "$")], solution: "kubectl describe networkpolicy " + np.name, hint: "kubectl describe networkpolicy &lt;name&gt; (die Kurzform netpol verdienst du dir durch Nutzung)", why: "describe zeigt die Details der Policy: wen sie schützt (podSelector) und wer durchdarf (from) – Muster: kubectl describe networkpolicy &lt;name&gt;." };
   },
   "k-delete-netpol": sim => {
     const np = ensureNetworkPolicy(sim);
-    return { text: "Reiß die Hafenmauer <code>" + np.name + "</code> wieder ein.", accept: [new RegExp("^kubectl\\s+delete\\s+(networkpolicy|networkpolicies|netpol|netpols)\\s+" + np.name.replace(/[-]/g, "\\-") + "$")], solution: "kubectl delete networkpolicies " + np.name, hint: "kubectl delete networkpolicies &lt;name&gt; (die Kurzformen netpol/networkpolicy verdienst du dir durch Nutzung)", why: "delete entfernt die NetworkPolicy wieder – danach ist das Netzwerk an dieser Stelle wieder offen. Muster: kubectl delete networkpolicies &lt;name&gt;." };
+    return { text: "Reiß die Hafenmauer <code>" + np.name + "</code> wieder ein.", accept: [new RegExp("^kubectl\\s+delete\\s+(networkpolicy|networkpolicies|netpol|netpols)\\s+" + np.name.replace(/[-]/g, "\\-") + "$")], solution: "kubectl delete networkpolicy " + np.name, hint: "kubectl delete networkpolicy &lt;name&gt; (die Kurzform netpol verdienst du dir durch Nutzung)", why: "delete entfernt die NetworkPolicy wieder – danach ist das Netzwerk an dieser Stelle wieder offen. Muster: kubectl delete networkpolicy &lt;name&gt;." };
   },
   // DNS / Service-Discovery (#337): das Adressbuch (CoreDNS) fragen – einen normalen
   // Service auf seine ClusterIP auflösen und einen ExternalName auf seinen CNAME. NPC: ada.

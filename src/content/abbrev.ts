@@ -51,16 +51,31 @@ export const ABBREVS: readonly AbbrevPair[] = [
   { id: "git-commit-message", context: "git commit",                    kind: "flag", long: "--message",   short: ["-m"] },
 
   // ---- Ressourcen-/Unterbefehl-Kürzel (kubectl/helm/argocd) ----
-  // Nur ECHTE Profi-Kürzel stehen in `short` — Singular-Formen (pod/node/service)
-  // sind genauso kanonisch wie Plural und gehören nicht ins Gating (#308).
+  // GATING-PRINZIP (#308 + #430): Gegated wird NUR eine ECHTE Kontraktion — ein
+  // offizieller kubectl-Kurzname bzw. eine verkürzte Schreibweise (po/no/svc/
+  // netpol/netpols/ing). AUSGESCHRIEBENE Voll-Formen einer Ressource sind KEINE
+  // Profi-Abkürzung und werden NIE gegated — egal ob Singular ODER Plural
+  // (pod/pods, node/nodes, service/services, networkpolicy/networkpolicies,
+  // ingress/ingresses). Sie stehen darum nicht in `short`. Beispiel: wer vor dem
+  // Verdienen `kubectl describe pod x` ODER `kubectl describe networkpolicy x`
+  // tippt, läuft NICHT ins Gating; nur `po`/`netpol` sind freischaltpflichtig.
   { id: "kubectl-pods",       context: "kubectl get pods",              kind: "alias", long: "pods",            short: ["po"] },
   { id: "kubectl-nodes",      context: "kubectl get nodes",             kind: "alias", long: "nodes",           short: ["no"] },
   { id: "kubectl-services",   context: "kubectl get services",          kind: "alias", long: "services",        short: ["svc"] },
-  // `secret` ist in `get/describe/delete` ein Alias für `secrets`, aber nach
-  // `create` ein literaler Unterbefehl → Gating dort aussetzen (#308).
+  // AUSNAHME (#308, bewusst): `secrets` hat KEINEN offiziellen kubectl-Kurznamen
+  // (kein po/svc/netpol/ing-Pendant). Damit die Ressource überhaupt eine
+  // verdienbare „Profi-Form" hat, dient hier die Singularform `secret` als
+  // gegateter Stellvertreter — die einzige bewusste Abweichung vom obigen Prinzip.
+  // Sie ist als Tech-/Pädagogik-Schuld dokumentiert (#430 → Folgeticket: ggf.
+  // kubectl-secrets entfernen, da `secret` streng genommen keine Kontraktion ist).
+  // Nach `create` ist `secret` ohnehin ein literaler Unterbefehl → dort kein Gating.
   { id: "kubectl-secrets",    context: "kubectl get secrets",           kind: "alias", long: "secrets",         short: ["secret"], excludeVerbs: ["create"] },
-  { id: "kubectl-ingress",    context: "kubectl get ingress",           kind: "alias", long: "ingress",         short: ["ingresses", "ing"] },
-  { id: "kubectl-netpol",     context: "kubectl get/describe/delete networkpolicies", kind: "alias", long: "networkpolicies", short: ["networkpolicy", "netpol", "netpols"] },
+  // #430: `ingresses` (Plural-Vollform) ist KEINE Kontraktion → raus aus dem
+  // Gating; nur die echte Kurzform `ing` bleibt freischaltpflichtig.
+  { id: "kubectl-ingress",    context: "kubectl get ingress",           kind: "alias", long: "ingress",         short: ["ing"] },
+  // #430: `networkpolicy` (Singular-Vollform) ist KEINE Kontraktion → raus aus
+  // dem Gating; nur die echten Kurzformen `netpol`/`netpols` bleiben gegated.
+  { id: "kubectl-netpol",     context: "kubectl get/describe/delete networkpolicies", kind: "alias", long: "networkpolicies", short: ["netpol", "netpols"] },
   { id: "helm-list",          context: "helm list",                     kind: "alias", long: "list",            short: ["ls"] },
   { id: "helm-dependency",    context: "helm dependency",               kind: "alias", long: "dependency",      short: ["dep"] },
   { id: "argocd-app-list",    context: "argocd app list",               kind: "alias", long: "list",            short: ["ls"] },
