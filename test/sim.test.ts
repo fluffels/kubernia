@@ -49,9 +49,10 @@ test("help ohne Freischalt-Set listet wie bisher alle Befehle (#358)", () => {
 });
 
 test("help mit Freischalt-Set zeigt NUR freigeschaltete Befehle + Hinweis (#358)", () => {
-  // Spielbeginn: nur die Meta-Befehle.
+  // Spielbeginn: nur die Meta-Befehle (clear/help, je eigene Zeile #359).
   const start = sim.exec("help", new Set(["help", "clear"])).output!;
-  assert.match(start, /clear, help/, "Meta-Befehle stehen immer offen");
+  assert.match(start, /^\s*clear\b/m, "clear steht immer offen");
+  assert.match(start, /^\s*help\b/m, "help steht immer offen");
   assert.doesNotMatch(start, /\bdocker\b/, "docker noch nicht freigeschaltet → nicht gelistet");
   assert.doesNotMatch(start, /\bkubectl\b/, "kubectl noch nicht freigeschaltet → nicht gelistet");
   assert.match(start, /frei/, "Hinweis auf weitere freischaltbare Befehle");
@@ -60,9 +61,26 @@ test("help mit Freischalt-Set zeigt NUR freigeschaltete Befehle + Hinweis (#358)
 test("help mit Freischalt-Set zeigt freigeschaltete, blendet andere aus (#358)", () => {
   const out = sim.exec("help", new Set(["help", "clear", "docker", "ls", "cat"])).output!;
   assert.match(out, /\bdocker\b/, "docker ist freigeschaltet → gelistet");
-  assert.match(out, /ls, cat <datei>, clear, help/, "ls/cat freigeschaltet → in der Meta-Zeile");
+  assert.match(out, /^\s*ls\b/m, "ls freigeschaltet → eigene Zeile");
+  assert.match(out, /^\s*cat\s+<datei>/m, "cat freigeschaltet → eigene Zeile");
   assert.doesNotMatch(out, /\bkubectl\b/, "kubectl NICHT freigeschaltet → ausgeblendet");
   assert.doesNotMatch(out, /\bhelm\b/, "helm NICHT freigeschaltet → ausgeblendet");
+});
+
+test("help-Format ist CLI-typisch: ein Befehl pro Zeile, ausgerichtete Beschreibung (#359)", () => {
+  const out = sim.exec("help").output!;
+  const lines = out.split("\n");
+  // Kein dichtes Pipe-Listing mehr (früheres Format: "pods|deployments|services|...").
+  assert.doesNotMatch(out, /pods\|deployments/, "alte dichte Pipe-Liste darf nicht mehr auftauchen");
+  // get/describe stehen auf je EIGENER Zeile (ein Befehl pro Zeile).
+  const getLine = lines.find(l => /\bget <resource>/.test(l));
+  const descLine = lines.find(l => /\bdescribe <resource>/.test(l));
+  assert.ok(getLine && descLine && getLine !== descLine, "get und describe je eigene Zeile");
+  // Familienname nur in der ersten Zeile der Familie: die describe-Zeile beginnt eingerückt
+  // OHNE 'kubectl'.
+  assert.doesNotMatch(descLine!, /kubectl/, "Folgezeile trägt den Familiennamen NICHT erneut");
+  // Beschreibung ist von der Verwendung getrennt (mehrere Leerzeichen als Spaltenabstand).
+  assert.match(getLine!, /get <resource> {2,}\S/, "Beschreibung in ausgerichteter Spalte");
 });
 
 test("snapshot/restore erhält den kompletten Zustand", () => {
