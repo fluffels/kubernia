@@ -34,7 +34,9 @@
         "type": "dialog",
         "npc": "ole",
         "lines": [
-          "Du tippst ja schon wie ein alter Seebär! Geh als Nächstes runter zum <b>Dock im Südwesten</b> zu <b>Bo</b>, unserem Dock-Golem.",
+          "Du tippst ja schon wie ein alter Seebär! Ist dir die kurze Liste aufgefallen? Das ist <b>Absicht</b>: <code>help</code> zeigt immer nur, was du schon <b>gelernt</b> hast – noch ist da fast nichts.",
+          "Mit jedem neuen Befehl, den dir die Crew beibringt, wächst die Liste von allein. So behältst du den Überblick, statt von hundert Befehlen erschlagen zu werden. Schau ruhig öfter mal mit <code>help</code> rein!",
+          "Geh als Nächstes runter zum <b>Dock im Südwesten</b> zu <b>Bo</b>, unserem Dock-Golem.",
           "Und merk dir: Bei jedem von uns kannst du später jederzeit <b>üben</b> – einfach ansprechen und „Üben“ wählen. Übung füllt den Geldbeutel!"
         ]
       }

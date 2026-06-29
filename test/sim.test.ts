@@ -41,6 +41,30 @@ test("häufige Anfängerfehler werden auch bei kubectl/helm/git abgefangen – F
   assert.ok(sim.exec("git add").error, "git add ohne Datei muss meckern");
 });
 
+test("help ohne Freischalt-Set listet wie bisher alle Befehle (#358)", () => {
+  const out = sim.exec("help").output!;
+  for (const cmd of ["docker", "kubectl", "helm", "terraform", "git", "argocd", "glab", "curl", "aws"]) {
+    assert.match(out, new RegExp(cmd), `help sollte ${cmd} listen`);
+  }
+});
+
+test("help mit Freischalt-Set zeigt NUR freigeschaltete Befehle + Hinweis (#358)", () => {
+  // Spielbeginn: nur die Meta-Befehle.
+  const start = sim.exec("help", new Set(["help", "clear"])).output!;
+  assert.match(start, /clear, help/, "Meta-Befehle stehen immer offen");
+  assert.doesNotMatch(start, /\bdocker\b/, "docker noch nicht freigeschaltet → nicht gelistet");
+  assert.doesNotMatch(start, /\bkubectl\b/, "kubectl noch nicht freigeschaltet → nicht gelistet");
+  assert.match(start, /frei/, "Hinweis auf weitere freischaltbare Befehle");
+});
+
+test("help mit Freischalt-Set zeigt freigeschaltete, blendet andere aus (#358)", () => {
+  const out = sim.exec("help", new Set(["help", "clear", "docker", "ls", "cat"])).output!;
+  assert.match(out, /\bdocker\b/, "docker ist freigeschaltet → gelistet");
+  assert.match(out, /ls, cat <datei>, clear, help/, "ls/cat freigeschaltet → in der Meta-Zeile");
+  assert.doesNotMatch(out, /\bkubectl\b/, "kubectl NICHT freigeschaltet → ausgeblendet");
+  assert.doesNotMatch(out, /\bhelm\b/, "helm NICHT freigeschaltet → ausgeblendet");
+});
+
 test("snapshot/restore erhält den kompletten Zustand", () => {
   sim.exec("kubectl create deployment kasse --image=nginx");
   sim.exec("kubectl create secret generic db --from-literal=pw=x");

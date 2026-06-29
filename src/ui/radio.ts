@@ -63,7 +63,7 @@ export const radioUI = part({
       box.innerHTML = `<div class="tt-head">🧪 Freies Ausprobieren</div>
         <div class="dim">Gerade kein Auftrag – probier aus, was du gelernt hast!
         Keine Sorge: Alles, was du hier eingibst, wirkt nur im Hafen-Cluster dieser Spielwelt – nichts auf deinem echten Rechner.
-        <br><br>Mit <code>help</code> siehst du alle Befehle.
+        <br><br>Mit <code>help</code> siehst du die Befehle, die du schon freigeschaltet hast – die Liste wächst, je weiter du kommst.
         <br><br>💡 Übungs-Aufgaben mit Belohnung bekommst du bei der Crew: ansprechen → „Üben”.
         <br><br>💬 Bug gefunden oder Idee? <a href="https://github.com/fluffels/kubequest/discussions" target="_blank" rel="noopener noreferrer">GitHub Discussions</a></div>
         <div id="tt-feedback"></div>`;
@@ -125,7 +125,9 @@ export const radioUI = part({
     // der Cursor wieder am Entwurf – so holt ↑ als Erstes den gerade getippten Befehl.
     this.termHistory = pushHistory(this.termHistory, line);
     this.termHistIdx = this.termHistory.length;
-    const result = Game.sim.exec(line);
+    // #358: dem help-Befehl die freigeschalteten Befehlsfamilien mitgeben, damit es
+    // nur Gelerntes listet (progressive Aufdeckung statt Komplettliste vorweg).
+    const result = Game.sim.exec(line, Game.unlockedCommandFamilies());
     if (result.clear) { this.termLog = []; this.termRedraw(); return; }
     this.termLog.push('<span class="t-cmd">crew@hafen:~$ ' + esc(line) + "</span>");
     if (result.output) {

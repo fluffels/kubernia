@@ -5,6 +5,7 @@
 import { KQContent } from "../content";
 import { Sim as KQSim } from "../sim";
 import { NPC_SPAWNS, TILE } from "../world";
+import { unlockedCommandFamilies } from "../cmdunlock";
 import type { QuestStep, FunkStep } from "../types";
 import { part, makeDefaultState, questIdForIndex } from "./shared";
 
@@ -25,6 +26,16 @@ export const progressionBundle = part({
     if (step.type === "terminal") return step.tasks;
     if (step.type === "teach") return [step.cmd];
     return null;
+  },
+
+  /** Welche Befehlsfamilien hat der Spieler bisher kennengelernt? Speist die
+   *  gefilterte `help`-Ausgabe im Terminal (#358) – aus dem Quest-Fortschritt
+   *  abgeleitet, kein neues Save-Feld. */
+  unlockedCommandFamilies(): Set<string> {
+    return unlockedCommandFamilies(KQContent.QUESTS, {
+      questIdx: this.state.questIdx,
+      questStep: this.state.questStep,
+    });
   },
 
   advanceStep() {
