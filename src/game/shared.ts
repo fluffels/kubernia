@@ -135,7 +135,7 @@ export function makeDefaultState(): GameState {
     unlockedAbbrev: [],
     abbrevUsage: {},
     cmdHistoryUnlocked: false,
-    stats: { commands: 0, reviews: 0, quizRight: 0, quizWrong: 0, piratesBeaten: 0, krakenBeaten: 0, stackBest: 0 },
+    stats: { commands: 0, reviews: 0, quizRight: 0, quizWrong: 0, piratesBeaten: 0, krakenBeaten: 0, stackBest: 0, krallePractice: 0 },
     lastSeen: 0,
     clusterSnapshot: null,
     audio: { music: true, sfx: true, musicVol: 0.5, sfxVol: 0.8, track: "hafen" },

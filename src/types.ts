@@ -93,6 +93,9 @@ export interface GameState {
     piratesBeaten: number;
     krakenBeaten: number;
     stackBest: number;
+    /** #236: Gesamtzahl abgeschlossener Übungsrunden mit Kralle (täglich, Gate und frei).
+     *  Treibt die zählbewussten Meilenstein-Sprüche (`src/kralle.ts`); persistiert. */
+    krallePractice: number;
     [k: string]: number; // dynamische Zusatz-Stats (z.B. stormsFixed)
   };
   lastSeen: number;
