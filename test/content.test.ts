@@ -1007,6 +1007,24 @@ test("#466 Cluster-Bootstrapping-Vertiefungskarten decken Control-Plane/Worker, 
   }
 });
 
+test("#328 Sandbox-Vertiefungskarten decken Sandbox/ephemer, Namespace, kind/minikube, Preview und test-vor-Prod ab und hängen am GitOps-Finale", () => {
+  const questIds = new Set(KQContent.QUESTS.map(q => q.id));
+  const cards = KQContent.CRAB_QUIZ.filter(c => /^q-sandbox-/.test(c.id));
+  assert.ok(cards.length >= 5, "mindestens fünf Sandbox-Karten erwartet, gefunden: " + cards.length);
+  for (const card of cards) {
+    // SR-Pool erst nach dem GitOps-Bogen – dort sind Namespaces, Preview/Prod und GitOps bekannt (Preview-Umgebungen sind GitOps-nativ).
+    assert.equal(card.chapter, "gitops-app-of-apps", card.id + ": chapter soll die GitOps-Finale-Quest sein");
+    assert.ok(questIds.has(card.chapter!), card.id + ": chapter zeigt auf eine unbekannte Quest: " + card.chapter);
+    assert.ok(card.correct >= 0 && card.correct < card.options.length, card.id + ": correct außerhalb der Optionen");
+    assert.ok(card.explain.trim().length > 0, card.id + ": Erklärung ist Pflicht");
+  }
+  // Die vom Ticket geforderten Konzepte tauchen irgendwo im Quiz auf.
+  const blob = cards.map(c => c.q + " " + c.options.join(" ") + " " + c.explain).join(" ").toLowerCase();
+  for (const begriff of ["sandbox", "ephemer", "wegwerf", "namespace", "kubectl -n", "kind", "minikube", "preview", "prod", "reproduzierbar"]) {
+    assert.ok(blob.includes(begriff), "Sandbox-Quiz erwähnt „" + begriff + "“ nicht");
+  }
+});
+
 test("#142 pvc-pending erzeugt einen wirklich auf Pending hängenden PVC (Negativfall)", () => {
   const sim = new KQSim({});
   KQContent.DRILLS["pvc-pending"](sim);

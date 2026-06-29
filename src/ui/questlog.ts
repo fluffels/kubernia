@@ -83,7 +83,8 @@ export const questlogUI = part({
     if (unlocked && !s.questLogIntroShown) {
       html += `<div class="ql-bo">🗿 <b>${esc(npcName("bo"))}:</b> LOGBUCH. FREIGESCHALTET. <i>*knirsch*</i>
         Hier liegen alle Quests: erledigte zum <b>Nachlesen</b>, deine aktuelle, und gesperrte (kommen noch).
-        Klick eine an – „← Übersicht“ bringt dich zurück, „Zur aktuellen Quest“ zu deiner laufenden Aufgabe.</div>`;
+        Klick eine an – „← Übersicht“ bringt dich zurück, „Zur aktuellen Quest“ zu deiner laufenden Aufgabe.
+        Und: eine erledigte Quest kannst du <b>erneut spielen</b> – das ist deine <b>Spielwiese (Sandbox)</b>: was du dort tust, zählt nicht für echt. Genau so testet man in der echten Welt Neues erst <b>gefahrlos</b>, bevor man es „auf Prod“ loslässt. <i>*klack*</i></div>`;
       s.questLogIntroShown = true;
       Game.save();
     }
