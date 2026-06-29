@@ -1,23 +1,30 @@
 {
   "ole": [
     "Der Hafen läuft wie geschmiert – dank dir!",
-    "K8s spricht man übrigens „Kates“. Klingt wie ein Vorname, ich weiß."
+    "K8s spricht man übrigens „Kates“. Klingt wie ein Vorname, ich weiß.",
+    "💡 Fun Fact: Das <b>Kubernetes</b>-Steuerrad im Logo hat genau <b>sieben Speichen</b>. Der Projekt-Codename bei Google war nämlich <i>„Project Seven of Nine“</i> – ein Gruß an Star Trek. Und der hauseigene Vorläufer hieß tatsächlich <b>Borg</b>."
   ],
   "bo": [
     "BO. STAPELT. <i>*zufriedenes Knirschen*</i>",
-    "Bo-Weisheit: Image ist Bauplan. Container läuft. Bo verwechselt nie. Bo ist Stein."
+    "Bo-Weisheit: Image ist Bauplan. Container läuft. Bo verwechselt nie. Bo ist Stein.",
+    "Bo mag den Wal. Wal hat Namen: <b>Moby Dock</b>. Wie das Buch. Nur mit Kisten auf dem Rücken.",
+    "Docker hat einen <b>Daemon</b>. Kein Dämon. Ein Hintergrund-Geist, der wacht und arbeitet, während du schläfst. Bo mag Geister, die arbeiten."
   ],
   "ada": [
     "Pssst. Ich katalogisiere gerade … alles.",
-    "Leerzeichen, keine Tabs. LEERZEICHEN. KEINE TABS."
+    "Leerzeichen, keine Tabs. LEERZEICHEN. KEINE TABS.",
+    "💡 <b>YAML</b> bedeutet „YAML Ain't Markup Language“ – ein Akronym, das sich selbst enthält. Früher hieß es brav „Yet Another Markup Language“. Dann wurde es … selbstbewusst. <i>*kritzelt*</i>",
+    "Schreib <code>NO</code> ohne Anführungszeichen in dein YAML und es wird zu <b>false</b>. Das Länderkürzel von Norwegen, einfach weg. Man nennt es das <i>Norway-Problem</i>. ANFÜHRUNGSZEICHEN. Immer."
   ],
   "runa": [
     "Das Helm-Logo hängt über meinem Bett. Was? Es ist hübsch!",
-    "helm rollback hat mir mal ein Wochenende gerettet."
+    "helm rollback hat mir mal ein Wochenende gerettet.",
+    "💡 <b>Helm 3</b> hat <i>Tiller</i> über Bord geworfen – die Ruderpinne, die früher als Serverdienst im Cluster saß. Heute redet Helm direkt mit K8s. Ein Teil weniger, der lecken kann."
   ],
   "theo": [
     "Ich vermesse gerade die Möglichkeiten. Sie sind … beachtlich.",
-    "terraform plan lesen. IMMER. Frag nicht, woher ich das weiß."
+    "terraform plan lesen. IMMER. Frag nicht, woher ich das weiß.",
+    "💡 <b>Terraform</b> heißt wörtlich „die Erde formen“. In der Science-Fiction macht man so tote Planeten bewohnbar. Wir machen es mit Cloud-Konten – aus dem Nichts wird Infrastruktur. <i>*vermisst weiter*</i>"
   ],
   "pelle": [
     "Frische Ware, faire Preise! Na ja – Preise.",
@@ -26,30 +33,35 @@
   "juno": [
     "Ruhige See heute. ZU ruhig.",
     "get pods → describe → logs. Träum es. Lebe es.",
-    "Der Leuchtturm hat 99,99% Uptime. Die fehlenden 0,01% verfolgen mich bis heute."
+    "Der Leuchtturm hat 99,99% Uptime. Die fehlenden 0,01% verfolgen mich bis heute.",
+    "💡 <code>grep</code> klingt wie ein Knurren, ist aber pure Technik: <b>g/re/p</b> – „global / regular expression / print“, ein uralter Befehl aus dem <code>ed</code>-Editor. Wer das im Hinterkopf hat, durchsucht Logs schneller."
   ],
   "argo": [
     "Die <b>Seekarte</b> im Git sagt, wie der Hafen aussehen soll – ich halte ihn nur auf Kurs.",
     "Nicht <i>pushen</i>, Lotse. Der Cluster <b>zieht</b> sich den Soll-Zustand selbst. Pull-Prinzip!",
-    "Verstellt jemand heimlich was am Hafen? Beim nächsten Abgleich dreh ich's zurück. Git gewinnt immer."
+    "Verstellt jemand heimlich was am Hafen? Beim nächsten Abgleich dreh ich's zurück. Git gewinnt immer.",
+    "💡 Mein Name ist kein Zufall: <b>Argo</b> hieß das Schiff, mit dem Jason und die <i>Argonauten</i> in der Sage auf große Fahrt gingen. Ein Lotsen-Schiff für GitOps – passender geht's kaum."
   ],
   "lumi": [
     "Erst messen, dann meckern – was du nicht <b>siehst</b>, kannst du nicht reparieren.",
     "Halb drei Uhr nachts, vierter Kaffee, irgendwo feuert ein Alert. Nachtdienst auf dem Turm eben. <i>*nippt*</i>",
     "Prometheus kratzt alle 15 Sekunden meine Metriken ab. Und mein Grafana glüht hübscher als jeder Sonnenuntergang.",
-    "Juno schwört auf die 99,99% Uptime. Ich sehe die fehlenden 0,01% – sie blinken rot auf meinem Dashboard."
+    "Juno schwört auf die 99,99% Uptime. Ich sehe die fehlenden 0,01% – sie blinken rot auf meinem Dashboard.",
+    "💡 <b>Prometheus</b> ist nach dem Titan benannt, der den Menschen das Feuer brachte – berühmt für seine <i>Voraussicht</i>. Genau das will mein Monitoring: den Sturm sehen, bevor er den Hafen erreicht."
   ],
   "knut": [
     "Jede Kiste hat ein <b>Etikett</b>, jedes Volume seinen <b>Anspruch</b>. Ordnung ist keine Schikane – sie ist Buchhaltung.",
     "Ein <b>Pod</b> kommt, ein Pod geht. Sein <code>PersistentVolumeClaim</code> bleibt. Daten überleben die Pods, die sie tragen – schreib dir das hinters Ohr.",
     "Hier heißt keiner „web-7f9c-x2z9“. Im <b>StatefulSet</b> trägt jeder seine Nummer: <code>-0</code>, <code>-1</code>, <code>-2</code>. Stabile Namen, stabile Plätze. So muss das.",
-    "Container drei, Reihe zwei, ganz oben links. <i>*blättert im Logbuch*</i> … steht alles hier. Ich verlege nichts. Ich bin kein <code>emptyDir</code>."
+    "Container drei, Reihe zwei, ganz oben links. <i>*blättert im Logbuch*</i> … steht alles hier. Ich verlege nichts. Ich bin kein <code>emptyDir</code>.",
+    "💡 Der Cluster führt selbst Buch – in <code>etcd</code>. Das <code>etc</code> darin stammt vom alten Unix-Ordner <code>/etc</code>, kurz für „<b>et cetera</b>“: der Kram, der nirgends sonst hinpasste. Bei mir passt jeder Kram an seinen Platz."
   ],
   "vidar": [
     "Name? <i>*mustert dich übern Klemmbrettrand*</i> Steht hier nicht. Bei mir kriegt jeder nur die Rechte, die er <b>wirklich</b> braucht – keinen Deut mehr. Nennt sich <b>Least Privilege</b>. Merk dir das.",
     "Jeder, der durch mein Tor will, braucht einen Ausweis. Bei Pods heißt der <code>ServiceAccount</code> – ohne den weiß keiner, <b>wer</b> da gerade anklopft. Kein Ausweis, kein Durchlass.",
     "Vierzig Jahre an diesem Tor. <i>*schnaubt*</i> Am gefährlichsten ist immer der, der als <code>root</code> reinmarschiert, weil's bequem ist. Nicht in meiner Festung.",
-    "Hm. <i>*knappes Nicken*</i> Du siehst aus, als wüsstest du, was du tust. Na schön – geh durch. Aber ich behalt dich im Auge."
+    "Hm. <i>*knappes Nicken*</i> Du siehst aus, als wüsstest du, was du tust. Na schön – geh durch. Aber ich behalt dich im Auge.",
+    "<code>sudo</code>? <i>*schnaubt*</i> Heißt „<b>superuser do</b>“ – einmal Gott spielen auf Zuruf. Bequem, ja. Und genau deshalb gefährlich. Bei mir gibt's das nicht ohne triftigen Grund."
   ],
   "saga": [
     "Eine Flotte baut man nicht Schiff für Schiff. Man schreibt EINEN Bauplan – ein <b>Modul</b> – und stanzt ihn beliebig oft aus. Einmal sauber, hundertmal gleich.",
