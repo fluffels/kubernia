@@ -1,0 +1,67 @@
+[
+  {
+    "id": "q-bootstrap-cp-worker",
+    "chapter": "aufbau-cluster-als-code",
+    "q": "Cluster-Aufbau: Was ist der Unterschied zwischen <b>Control-Plane</b> und <b>Worker</b>?",
+    "options": [
+      "Control-Plane = die Kommandobrücke, sie <i>entscheidet</i> (verwaltet den Cluster). Worker = die Stege, sie <i>arbeiten</i> und tragen die Pods.",
+      "Control-Plane trägt die Pods, Worker verwalten den Cluster.",
+      "Beides ist dasselbe – nur zwei Wörter für einen Knoten.",
+      "Control-Plane ist die Datenbank, Worker ist das Netzwerk."
+    ],
+    "correct": 0,
+    "explain": "Zwei Sorten Knoten: die Control-Plane <b>entscheidet</b> (apiserver, etcd, scheduler, controller-manager), die Worker <b>arbeiten</b> und tragen die laufenden Pods. Eine Brücke allein trägt keine Fracht – ohne Worker läuft kein Workload."
+  },
+  {
+    "id": "q-bootstrap-components",
+    "chapter": "aufbau-cluster-als-code",
+    "q": "Welche Komponente der Control-Plane ist das <b>einzige Tor</b> zum Cluster, mit dem jedes <code>kubectl</code> redet?",
+    "options": [
+      "Der <b>kube-apiserver</b> – jede Anfrage läuft über ihn.",
+      "Der <b>scheduler</b> – er nimmt die Befehle entgegen.",
+      "<b>etcd</b> – die Datenbank, mit der kubectl direkt spricht.",
+      "Der <b>controller-manager</b> – er beantwortet die Anfragen."
+    ],
+    "correct": 0,
+    "explain": "Der apiserver ist die einzige offizielle Tür. Darum gab es vor <code>kubeadm init</code> «connection refused» – nicht kubectl war kaputt, es fehlte die Gegenstelle. An <b>etcd</b> (das Gedächtnis) kommt nur der apiserver, der <b>scheduler</b> verteilt Pods auf Knoten, der <b>controller-manager</b> hält Ist=Soll."
+  },
+  {
+    "id": "q-bootstrap-controller-manager",
+    "chapter": "aufbau-cluster-als-code",
+    "q": "Ein Pod stirbt nachts ab, obwohl 3 Repliken laufen sollen – welche Control-Plane-Komponente startet von selbst Ersatz?",
+    "options": [
+      "Der <b>controller-manager</b> – er wacht, dass Ist=Soll bleibt, und gleicht das Fehlen aus.",
+      "Der <b>scheduler</b> – er ist für alles rund um Pods zuständig.",
+      "Der <b>kube-apiserver</b> – er erzeugt neue Pods auf Zuruf.",
+      "<b>etcd</b> – die Datenbank startet den Ersatz."
+    ],
+    "correct": 0,
+    "explain": "Der controller-manager ist der wachsame Steuermann: weicht Ist vom Soll ab, gleicht er nach. Den <b>Ort</b> des Ersatz-Pods sucht dann der <b>scheduler</b> aus – er bemerkt das Fehlen aber nicht selbst."
+  },
+  {
+    "id": "q-bootstrap-init-join",
+    "chapter": "aufbau-cluster-als-code",
+    "q": "Beim manuellen Aufbau: Was machen <code>kubeadm init</code> und <code>kubeadm join</code>?",
+    "options": [
+      "<code>init</code> zieht die Control-Plane hoch (einmal), <code>join</code> hängt mit dem Token jeweils einen Worker an.",
+      "<code>init</code> hängt Worker an, <code>join</code> zieht die Control-Plane hoch.",
+      "Beide ziehen je eine Control-Plane hoch – man braucht mehrere.",
+      "<code>init</code> startet die Pods, <code>join</code> löscht alte Knoten."
+    ],
+    "correct": 0,
+    "explain": "<code>kubeadm init</code> bringt die vier Brücken-Komponenten auf dem ersten Knoten hoch und gibt einen <b>Join-Token</b> aus. Mit <code>kubeadm join … --token …</code> weist sich danach jeder Worker als befugt aus und dockt an – Steg für Steg. Ein Token ist ein Geheimnis auf Zeit: kein Worker kommt ohne den passenden rein."
+  },
+  {
+    "id": "q-bootstrap-manual-vs-code",
+    "chapter": "aufbau-cluster-als-code",
+    "q": "Du baust denselben Cluster zweimal – einmal von Hand (kubeadm), einmal als Code (Terraform). Warum ist <b>als Code</b> der Senior-Weg?",
+    "options": [
+      "<b>Reproduzierbar, versioniert, überprüfbar</b>: dieselbe Datei baut jedes Mal denselben Cluster, liegt in Git und lässt sich reviewen.",
+      "Weil Terraform die kubeadm-Befehle nur <b>schneller tippt</b> als ein Mensch.",
+      "Weil man bei Code keine Control-Plane mehr braucht.",
+      "Weil Code generell weniger Knoten benötigt als der manuelle Weg."
+    ],
+    "correct": 0,
+    "explain": "Es geht nicht um Tipptempo. Code ist <b>deklarativ</b>: du beschreibst den Soll-Zustand, nicht die Tastenfolge. Ein <code>terraform apply</code> ersetzt das <code>kubeadm init</code> <i>und</i> alle <code>kubeadm join</code> – reproduzierbar statt fehleranfälliges Unikat. Merksatz: alles, was du zweimal von Hand machst, gehört als Code."
+  }
+]

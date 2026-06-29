@@ -989,6 +989,24 @@ test("#282 GitLab-CI-Vertiefungskarten decken extends/Templates, rules, manuelle
   }
 });
 
+test("#466 Cluster-Bootstrapping-Vertiefungskarten decken Control-Plane/Worker, die vier Komponenten, kubeadm init/join und manuell-vs-Code ab und hängen am Aufbau-Capstone", () => {
+  const questIds = new Set(KQContent.QUESTS.map(q => q.id));
+  const cards = KQContent.CRAB_QUIZ.filter(c => /^q-bootstrap-/.test(c.id));
+  assert.ok(cards.length >= 5, "mindestens fünf Bootstrapping-Karten erwartet, gefunden: " + cards.length);
+  for (const card of cards) {
+    // SR-Pool erst, wenn der Spieler den Aufbau-Bogen bis zum Code-Capstone gespielt hat (dort ist auch Terraform-als-Cluster eingeführt).
+    assert.equal(card.chapter, "aufbau-cluster-als-code", card.id + ": chapter soll die Aufbau-Capstone-Quest sein");
+    assert.ok(questIds.has(card.chapter!), card.id + ": chapter zeigt auf eine unbekannte Quest: " + card.chapter);
+    assert.ok(card.correct >= 0 && card.correct < card.options.length, card.id + ": correct außerhalb der Optionen");
+    assert.ok(card.explain.trim().length > 0, card.id + ": Erklärung ist Pflicht");
+  }
+  // Die vom Ticket geforderten Konzepte tauchen irgendwo im Quiz auf.
+  const blob = cards.map(c => c.q + " " + c.options.join(" ") + " " + c.explain).join(" ").toLowerCase();
+  for (const begriff of ["control-plane", "worker", "kube-apiserver", "etcd", "scheduler", "controller-manager", "kubeadm init", "kubeadm join", "token", "terraform", "deklarativ", "reproduzierbar"]) {
+    assert.ok(blob.includes(begriff), "Bootstrapping-Quiz erwähnt „" + begriff + "“ nicht");
+  }
+});
+
 test("#142 pvc-pending erzeugt einen wirklich auf Pending hängenden PVC (Negativfall)", () => {
   const sim = new KQSim({});
   KQContent.DRILLS["pvc-pending"](sim);
