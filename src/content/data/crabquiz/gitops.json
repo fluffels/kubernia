@@ -58,5 +58,18 @@
     ],
     "correct": 0,
     "explain": "Beim App-of-Apps-Muster rollt die Wurzel-Application selbst <i>nichts</i> aus – sie zeigt nur auf einen Ordner voller Kind-Applications, die ihre Dienste selbst ausrollen. Ein neuer Dienst = eine Datei mehr im Ordner, die Wurzel zieht sie beim nächsten Abgleich automatisch mit. Eine Hand am Steuer, die ganze Flotte fährt mit."
+  },
+  {
+    "id": "q-fun-argo",
+    "chapter": "gitops-argocd-intro",
+    "q": "Fun Fact: Woher stammt der Name <b>Argo</b> (wie in Argo CD)?",
+    "options": [
+      "Von der „Argo“ – dem Schiff, mit dem Jason und die Argonauten in der griechischen Sage auf große Fahrt gingen.",
+      "Es ist die Abkürzung für „Automatic Git Rollout“.",
+      "Vom Sternbild Argo, das Schiffe nach Hause leitet.",
+      "Es ist der Nachname des Erfinders."
+    ],
+    "correct": 0,
+    "explain": "Das Argo-Projekt ist nach der <b>Argo</b> benannt, dem sagenhaften Schiff der <i>Argonauten</i>. Das passt zur Schiff-/Lotsen-Bildsprache von GitOps: ein Agent steuert die „Flotte“ deiner Dienste sicher auf den im Git deklarierten Kurs. (Argo CD ist heute ein CNCF-Projekt.)"
   }
 ]

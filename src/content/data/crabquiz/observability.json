@@ -171,5 +171,18 @@
     ],
     "correct": 0,
     "explain": "Arbeitsteilung: <b>Prometheus</b> wertet die Regeln aus und <i>feuert</i> – ob eine Bedingung zutrifft. Der <b>Alertmanager</b> kümmert sich um alles danach: gleichartige Alerts bündeln (grouping), Dubletten unterdrücken (dedup), Wartungsfenster stummschalten (silences) und an die richtigen Empfänger zustellen (routing). Scrapen macht Prometheus, Zeichnen macht Grafana."
+  },
+  {
+    "id": "q-fun-prometheus",
+    "chapter": "observability-metrics",
+    "q": "Fun Fact: Wonach ist das Monitoring-Werkzeug <b>Prometheus</b> benannt?",
+    "options": [
+      "Nach dem Titan der griechischen Sage, der den Menschen das Feuer brachte und für seine Voraussicht bekannt war.",
+      "Nach dem Erfinder, der Prometheus mit Nachnamen hieß.",
+      "Es ist die Abkürzung für „Process Metrics House“.",
+      "Nach einem Sternbild, das man nur im Winter sieht."
+    ],
+    "correct": 0,
+    "explain": "<b>Prometheus</b> trägt den Namen des Titanen, der den Menschen das Feuer brachte – sein Name bedeutet sinngemäß „der Vorausdenkende“. Genau darum geht es beim Monitoring: aus Messwerten <i>vorausschauend</i> erkennen, wann etwas kippt, bevor der Dienst ausfällt. (Prometheus war nach Kubernetes das zweite Projekt der CNCF.)"
   }
 ]

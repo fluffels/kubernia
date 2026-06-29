@@ -251,5 +251,31 @@
     ],
     "correct": 0,
     "explain": "Ein Message Broker verbindet Dienste lose über Warteschlangen: Aufgaben/Events landen in einer Queue und werden später abgearbeitet (z.B. Mailversand, Bildverarbeitung, Benachrichtigungen). Das entkoppelt die Dienste zeitlich – ideal für Hintergrundjobs und Microservice-Kommunikation."
+  },
+  {
+    "id": "q-fun-mobydock",
+    "chapter": "docker-first-container",
+    "q": "Fun Fact: Wie heißt der <b>Wal</b> im Docker-Logo eigentlich?",
+    "options": [
+      "Moby Dock.",
+      "Flipper.",
+      "Willy.",
+      "Der Wal hat keinen Namen."
+    ],
+    "correct": 0,
+    "explain": "Docker hat seinem Wal-Maskottchen den Namen <b>Moby Dock</b> gegeben – ein Wortspiel auf den Roman „Moby Dick“. Der Wal trägt Container-Kisten auf dem Rücken: das Bild dafür, dass ein Schiff (der Host) viele genormte Kisten (Container) transportiert."
+  },
+  {
+    "id": "q-fun-daemon",
+    "chapter": "docker-first-container",
+    "q": "Docker läuft als <b>Daemon</b> (<code>dockerd</code>). Was bedeutet „Daemon“ in der Unix-Welt?",
+    "options": [
+      "Ein Hintergrundprozess, der ständig läuft und auf Aufträge wartet – das Wort meint einen „Hilfsgeist“, keinen Dämon.",
+      "Ein Schadprogramm, das im System versteckt ist.",
+      "Ein Befehl, der das System neu startet.",
+      "Die grafische Oberfläche eines Programms."
+    ],
+    "correct": 0,
+    "explain": "Ein <b>Daemon</b> ist ein Dienst, der unsichtbar im Hintergrund läuft und auf Anfragen reagiert (bei Docker: <code>dockerd</code> startet und verwaltet die Container). Der Name geht auf das griechische <i>daimon</i> zurück – einen wohlwollenden Hilfsgeist, nicht den „Dämon“. Klassisches Beispiel sind die vielen <code>…d</code>-Prozesse unter Unix (<code>sshd</code>, <code>systemd</code>)."
   }
 ]

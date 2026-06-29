@@ -26,6 +26,19 @@
     "explain": "K8s ist ein <b>Numeronym</b>: Anfangsbuchstabe, dann die Zahl der ausgelassenen Buchstaben, dann der Endbuchstabe – K-ubernete-s sind 8 dazwischen. Gleiches Muster: i18n (internationalization), a11y (accessibility), l10n (localization). Der „Steuermann“ erklärt nur den Namen <i>Kubernetes</i> selbst, nicht die 8."
   },
   {
+    "id": "q-ch2-k8s-borg",
+    "chapter": "k8s-first-deployment",
+    "q": "Fun Fact: Das Kubernetes-Logo hat ein Steuerrad mit genau <b>sieben Speichen</b>. Warum gerade sieben?",
+    "options": [
+      "Der Projekt-Codename bei Google war „Project Seven of Nine“ – eine Anspielung auf Star Trek; Googles interner Vorläufer hieß „Borg“.",
+      "Sieben ist die Zahl der Komponenten, die jeder Cluster mindestens braucht.",
+      "Reiner Zufall – ein Designer fand sieben Speichen am hübschesten.",
+      "Eine Speiche pro Wochentag, weil der Cluster rund um die Uhr läuft."
+    ],
+    "correct": 0,
+    "explain": "Kubernetes ist aus Googles internem Cluster-Manager <b>Borg</b> hervorgegangen. Das Projekt trug zunächst den Codenamen <i>„Seven of Nine“</i> (eine Borg-Figur aus Star Trek). Aus markenrechtlichen Gründen wurde daraus „Kubernetes“ – die sieben Speichen im Logo blieben als Augenzwinkern erhalten."
+  },
+  {
     "id": "q-ch2-2",
     "q": "Was ist ein Pod?",
     "options": [
