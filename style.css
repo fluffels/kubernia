@@ -481,6 +481,25 @@ button.danger:hover { background: var(--bad); color: #1a0606; filter: none; }
 .ql-replay { margin-bottom: 12px; padding: 10px 12px; background: var(--panel2); border-left: 3px solid var(--accent); border-radius: 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .hud-replay-exit { margin-left: 8px; padding: 2px 8px; font-size: 0.85em; cursor: pointer; }
 
+/* ===== Sammelalbum / Glossar (#278) ===== */
+/* Gesamt-Fortschritt oben + Sammel-Balken. */
+.album-total { margin-bottom: 14px; font-size: 0.95em; }
+.album-bar { margin-top: 6px; height: 8px; border-radius: 6px; background: var(--panel2); overflow: hidden; }
+.album-bar-fill { height: 100%; background: var(--good); transition: width 0.3s; }
+/* Übersicht: eine Zeile je Album-Seite (Thema) mit Fortschritt rechts. Nutzt .ql-row. */
+.album-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.album-row-prog { font-size: 0.85em; color: var(--text-dim); white-space: nowrap; }
+.album-pageprog { margin-bottom: 10px; font-size: 0.85em; }
+/* Seitenansicht: die Sticker-Einträge. */
+.album-entries { display: flex; flex-direction: column; gap: 8px; }
+.album-entry { padding: 9px 12px; background: var(--panel2); border-radius: 10px; border: 1px solid var(--border); }
+.album-entry.locked { opacity: 0.5; border-style: dashed; }
+.album-entry-head { font-size: 1em; margin-bottom: 4px; }
+.album-detail { font-size: 0.9em; line-height: 1.45; }
+.album-example { margin-top: 4px; font-size: 0.85em; color: var(--text-dim); }
+.album-where { margin-top: 5px; font-size: 0.8em; }
+.album-empty { text-align: center; padding: 20px; line-height: 1.5; }
+
 /* ===== Toasts ===== */
 #toasts {
   position: fixed;

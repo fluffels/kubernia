@@ -111,6 +111,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/kralle.ts`](src/kralle.ts) | pure Domäne | Kralle-Meilenstein-Sprüche: `krallePracticeMilestone(count)` (zählbewusster Spruch an 1/10/25/50/100…, sonst null, #236). |
 | [`src/cmdhistory.ts`](src/cmdhistory.ts) | pure Domäne | Befehlshistorie fürs Funkgerät-Terminal (#316). |
 | [`src/questlog.ts`](src/questlog.ts) | pure Domäne | Logbuch-Übersicht: Quest-Zustände, Nachlese (#326). |
+| [`src/album.ts`](src/album.ts) | pure Domäne | Sammelalbum/Glossar (#278): Befehle (Teach-Intros) + Wissen (Quiz) aus dem Content, nach Thema gruppiert, Freischalt-Ableitung aus `completedQuests`/`review` (kein neues Save-Feld). |
 | [`src/labellayout.ts`](src/labellayout.ts) | pure Domäne | Entzerrt überlappende In-Welt-Beschriftungen (#207). |
 | [`src/tilemap.ts`](src/tilemap.ts) | pure Domäne | Tiled-`.tmj`-Grundgerüst (Typen/Validierung/Kollision, #191). |
 | [`src/harbormap.ts`](src/harbormap.ts) | pure Domäne | Hafenkarte als Daten + Tiled-Serialisierung (#192). |
@@ -152,6 +153,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/ui/radio.ts`](src/ui/radio.ts) | Präsentation | Funkgerät-Terminal (teach/drill/terminal) + freies Üben. |
 | [`src/ui/minigame.ts`](src/ui/minigame.ts) | Präsentation | Stapel-Minispiel. |
 | [`src/ui/questlog.ts`](src/ui/questlog.ts) | Präsentation | Logbuch-Übersicht & -Detail (DOM, #326). |
+| [`src/ui/album.ts`](src/ui/album.ts) | Präsentation | Sammelalbum/Glossar (DOM, #278): Album-Seiten je Thema + Sticker-Detail, Taste B. |
 | [`src/ui/shop.ts`](src/ui/shop.ts) | Präsentation | Shop. |
 | [`src/ui/quiz.ts`](src/ui/quiz.ts) | Präsentation | Krabben-Quiz (Spaced-Repetition). |
 | [`src/ui/save.ts`](src/ui/save.ts) | Präsentation | Spielstand-Export/Import + `resetGame`. |
