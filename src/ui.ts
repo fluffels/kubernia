@@ -10,6 +10,7 @@ import { dialogUI } from "./ui/dialog";
 import { radioUI } from "./ui/radio";
 import { minigameUI } from "./ui/minigame";
 import { questlogUI } from "./ui/questlog";
+import { albumUI } from "./ui/album";
 import { shopUI } from "./ui/shop";
 import { quizUI } from "./ui/quiz";
 import { saveUI } from "./ui/save";
@@ -64,6 +65,7 @@ export const UI = {
   choiceBtns: null as HTMLButtonElement[] | null, // Dialog-Antwort-Buttons (für Tastatur-Navigation)
   choiceSel: 0,
   questLogViewIdx: null as number | null, // welche Quest im Logbuch gerade „nachgelesen" wird (null = Übersicht, #326)
+  albumViewTopic: null as string | null, // welche Album-Seite (Thema) gerade offen ist (null = Übersicht, #278)
   reviewSel: -1,           // markierte Quiz-Option in der Wissensrunde (Pfeiltasten, #258)
   ...overlayUI,
   ...hudUI,
@@ -72,6 +74,7 @@ export const UI = {
   ...radioUI,
   ...minigameUI,
   ...questlogUI,
+  ...albumUI,
   ...shopUI,
   ...quizUI,
   ...saveUI,

@@ -60,6 +60,12 @@ import { keys, clearKeys } from "./runtime";
         e.preventDefault();
         return;
       }
+      if (k === "b") {
+        if ($("overlay-album").classList.contains("hidden")) UI.openAlbum();
+        else UI.closeOverlays();
+        e.preventDefault();
+        return;
+      }
       // Generische Tastatur-Bedienung blockierender Modals ohne eigene Navigation (#283):
       // Stapel-Spiel, Shop, Logbuch, Menü per ↑/↓ + Enter/Leer steuern (Primär-Button als Default).
       if (UI.overlayKey(k, e)) return;

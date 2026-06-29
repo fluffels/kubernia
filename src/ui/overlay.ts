@@ -40,6 +40,9 @@ export const overlayUI = part({
         case "termSolution": this.termSolution(); break;
         case "viewQuest": if (arg) this.viewQuest(arg); break;
         case "questLogBack": this.questLogBack(); break;
+        case "openAlbum": this.openAlbum(); break;
+        case "viewAlbumPage": if (arg) this.viewAlbumPage(arg); break;
+        case "albumBack": this.albumBack(); break;
         case "replayQuest": if (arg) this.replayQuest(arg); break;
         case "exitReplay": this.exitReplay(); break;
         case "buyItem": if (arg) this.buyItem(arg); break;
@@ -113,12 +116,12 @@ export const overlayUI = part({
   /* ========== Blockierung ========== */
   blocking() {
     return !!this.dialogue ||
-      ["overlay-terminal", "overlay-quest", "overlay-shop", "overlay-review", "overlay-stack", "overlay-menu"]
+      ["overlay-terminal", "overlay-quest", "overlay-album", "overlay-shop", "overlay-review", "overlay-stack", "overlay-menu"]
         .some(id => !$(id).classList.contains("hidden"));
   },
 
   closeOverlays() {
-    ["overlay-terminal", "overlay-quest", "overlay-shop", "overlay-review", "overlay-stack", "overlay-menu"].forEach(id => $(id).classList.add("hidden"));
+    ["overlay-terminal", "overlay-quest", "overlay-album", "overlay-shop", "overlay-review", "overlay-stack", "overlay-menu"].forEach(id => $(id).classList.add("hidden"));
     if (this.practice && this.practice.idx >= this.practice.drills.length) this.practice = null;
   },
 
@@ -130,7 +133,7 @@ export const overlayUI = part({
    * sind hier bewusst NICHT gelistet. Die Entscheidung selbst liegt im puren,
    * unit-getesteten `overlaykbd.ts`; hier nur die DOM-Anbindung. */
   overlayKey(k: string, ev: KeyboardEvent): boolean {
-    const ids = ["overlay-stack", "overlay-shop", "overlay-quest", "overlay-menu"];
+    const ids = ["overlay-stack", "overlay-shop", "overlay-quest", "overlay-album", "overlay-menu"];
     const ov = ids.map($).find(el => !el.classList.contains("hidden"));
     if (!ov) return false;
     const btns = Array.from(ov.querySelectorAll("button")) as HTMLButtonElement[];

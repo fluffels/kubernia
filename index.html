@@ -25,7 +25,7 @@
       <span class="hud-clock" id="hud-clock" title="Spielzeit – läuft im Tag-Nacht-Takt"><b id="hud-date">🌱 Mo, Tag 1</b> · <b id="hud-time">🕐 12:00</b></span>
     </div>
     <div class="hud-quest" id="hud-quest"></div>
-    <div class="hud-keys">🚶 WASD/Pfeile · 💬 E reden · 💻 T Terminal · 📜 J Logbuch · ☰ Esc Menü</div>
+    <div class="hud-keys">🚶 WASD/Pfeile · 💬 E reden · 💻 T Terminal · 📜 J Logbuch · 📖 B Album · ☰ Esc Menü</div>
     <button id="hud-menu-btn" class="hud-menu-btn" data-action="openMenu" title="Menü öffnen (Esc)">☰ Menü</button>
   </div>
 
@@ -73,6 +73,14 @@
       <button class="close-btn" data-action="closeOverlays">✕ (Esc)</button>
     </div>
     <div id="quest-body" class="panel-body"></div>
+  </div>
+
+  <!-- Sammelalbum / Glossar -->
+  <div id="overlay-album" class="panel hidden">
+    <div class="panel-head">📖 Sammelalbum <span class="dim">– alle Befehle &amp; dein Wissen</span>
+      <button class="close-btn" data-action="closeOverlays">✕ (Esc)</button>
+    </div>
+    <div id="album-body" class="panel-body"></div>
   </div>
 
   <!-- Shop -->
