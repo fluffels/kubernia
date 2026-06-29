@@ -970,6 +970,25 @@ test("#281 Keycloak-Vertiefungskarten decken Realm/Client, Rolle/Gruppe, Mapper 
   }
 });
 
+test("#282 GitLab-CI-Vertiefungskarten decken extends/Templates, rules, manuelle Freigabe, environment und CI-Variablen ab und hängen an der Pipeline-Quest", () => {
+  const questIds = new Set(KQContent.QUESTS.map(q => q.id));
+  // Die neuen Vertiefungskarten (q-ci-4 aufwärts) – q-ci-1..3 sind das Grundwissen aus der Quest selbst.
+  const cards = KQContent.CRAB_QUIZ.filter(c => /^q-ci-(4|5|6|7|8)$/.test(c.id));
+  assert.ok(cards.length >= 5, "mindestens fünf CI-Vertiefungskarten erwartet, gefunden: " + cards.length);
+  for (const card of cards) {
+    // SR-Pool erst, wenn der Spieler die Pipeline-Passage (git-pipeline) gespielt hat – dort wird .gitlab-ci.yml eingeführt.
+    assert.equal(card.chapter, "git-pipeline", card.id + ": chapter soll die Pipeline-Quest sein");
+    assert.ok(questIds.has(card.chapter!), card.id + ": chapter zeigt auf eine unbekannte Quest: " + card.chapter);
+    assert.ok(card.correct >= 0 && card.correct < card.options.length, card.id + ": correct außerhalb der Optionen");
+    assert.ok(card.explain.trim().length > 0, card.id + ": Erklärung ist Pflicht");
+  }
+  // Die vom Ticket geforderten Konzepte tauchen irgendwo im Quiz auf.
+  const blob = cards.map(c => c.q + " " + c.options.join(" ") + " " + c.explain).join(" ").toLowerCase();
+  for (const begriff of ["extends", "vorlage", "rules", "manuell", "freigabe", "environment", "dev/qs/prod", "ci-variablen", "secret"]) {
+    assert.ok(blob.includes(begriff), "CI-Quiz erwähnt „" + begriff + "“ nicht");
+  }
+});
+
 test("#142 pvc-pending erzeugt einen wirklich auf Pending hängenden PVC (Negativfall)", () => {
   const sim = new KQSim({});
   KQContent.DRILLS["pvc-pending"](sim);

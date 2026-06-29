@@ -95,5 +95,70 @@
     ],
     "correct": 0,
     "explain": "CI = Änderungen laufend automatisch bauen & testen. CD = sie automatisch ausliefern/ausrollen. Zusammen: vom Commit bis in den Cluster ohne Handarbeit."
+  },
+  {
+    "id": "q-ci-4",
+    "chapter": "git-pipeline",
+    "q": "Wozu dient <code>extends</code> in einer GitLab-Pipeline?",
+    "options": [
+      "Wiederkehrende Job-Definitionen einmal als Vorlage schreiben und mehrfach erben – statt Copy-Paste.",
+      "Die Pipeline auf mehrere Server verteilen.",
+      "Einen Job länger laufen lassen.",
+      "Das Repo um eine zweite <code>.gitlab-ci.yml</code> erweitern."
+    ],
+    "correct": 0,
+    "explain": "Mit <code>extends</code> erbt ein Job eine versteckte Vorlage (z.B. <code>.deploy-chart</code> – der führende Punkt heißt „läuft nicht selbst, nur zum Erben\"). Gemeinsames steht einmal, jeder Job überschreibt nur, was er braucht: DRY statt fünfmal denselben Block kopieren."
+  },
+  {
+    "id": "q-ci-5",
+    "chapter": "git-pipeline",
+    "q": "Wozu dienen <code>rules</code> bzw. <code>when</code> bei einem CI-Job?",
+    "options": [
+      "Sie legen fest, <i>unter welchen Bedingungen</i> ein Job läuft – z.B. nur auf einem bestimmten Branch oder wenn eine Variable gesetzt ist.",
+      "Sie bestimmen die Reihenfolge der Stages.",
+      "Sie geben dem Job mehr Arbeitsspeicher.",
+      "Sie verschlüsseln die Pipeline."
+    ],
+    "correct": 0,
+    "explain": "Mit <code>rules</code> läuft ein Job nicht mehr stur immer, sondern nur unter Bedingungen: bestimmter Branch, gesetzte Variable, geänderte Dateien. Das <code>only: main</code> aus der Pipeline-Passage war die einfache Vorform davon."
+  },
+  {
+    "id": "q-ci-6",
+    "chapter": "git-pipeline",
+    "q": "Warum lässt man einen Prod-Deploy-Job oft erst nach <b>manueller Freigabe</b> laufen (<code>when: manual</code>)?",
+    "options": [
+      "Damit niemand versehentlich auf prod deployt – erst ein bewusster Klick startet den Job.",
+      "Weil GitLab automatische Deploys auf prod grundsätzlich verbietet.",
+      "Weil manuelle Jobs schneller durchlaufen.",
+      "Damit der Runner zwischendurch Pause machen kann."
+    ],
+    "correct": 0,
+    "explain": "Bauen und Testen laufen automatisch, aber der Schritt nach prod wartet auf einen bewussten Klick (<code>when: manual</code>). So geht nichts ungeplant live – ein Schutz vor dem versehentlichen Prod-Deploy."
+  },
+  {
+    "id": "q-ci-7",
+    "chapter": "git-pipeline",
+    "q": "Was bringt das <code>environment</code>-Feld eines Deploy-Jobs in GitLab?",
+    "options": [
+      "GitLab führt Buch über die Umgebungen (dev/qs/prod): wer wann wohin deployt hat – und was dort gerade läuft.",
+      "Es setzt die Umgebungsvariablen im Container.",
+      "Es startet automatisch eine zweite Pipeline.",
+      "Es wählt das Betriebssystem des Runners."
+    ],
+    "correct": 0,
+    "explain": "<code>environment: prod</code> ordnet einen Deploy einer benannten Umgebung zu. GitLab zeigt dann pro Umgebung den aktuellen Stand und die Deploy-Historie – nachvollziehbar, was wann wohin ausgerollt wurde."
+  },
+  {
+    "id": "q-ci-8",
+    "chapter": "git-pipeline",
+    "q": "Woher sollten Passwörter und Tokens für die Pipeline kommen?",
+    "options": [
+      "Aus <b>CI-Variablen/Secrets</b>, die in GitLab hinterlegt sind – nicht aus dem Repo.",
+      "Direkt als Klartext in die <code>.gitlab-ci.yml</code> geschrieben.",
+      "Aus den Commit-Nachrichten.",
+      "Fest verdrahtet als <code>ENV</code> im Dockerfile."
+    ],
+    "correct": 0,
+    "explain": "Geheimnisse (DB-Passwörter, Tokens) liegen als CI-Variablen/Secrets in GitLab und werden dem Job zur Laufzeit als Umgebungsvariable gereicht – nie im Repo, das sonst jeder mit Lesezugriff einsehen könnte."
   }
 ]
