@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-29 — #237 erledigt: Kralle-Running-Gag (krallenlose Krabbe wünscht sich Krallen). Kralle ist eine Krabbe ohne Krallen – das wird zum Gag: am Wissensrunden-Endscreen streut sie ab und zu (jede 7. Übungsrunde, nie auf einem Meilenstein) wehmütig-frech ein, dass sie zu gern echte Krallen hätte. Pure Logik `kralleClawAside(count)` in `src/kralle.ts` (dosiert, deterministisch rotierend, Meilenstein #236 hat Vorrang); `recordKrallePractice` liefert nun `{milestone, aside}`; neue `.kralle-aside`-Box (kühl/wehmütig, abgesetzt vom goldenen Meilenstein). Unit-getestet, im Browser verifiziert. Der Backlog ist komplett `prio:niedrig`/ohne (keine `hoch`/`mittel` mehr offen), darum kuratiert der Kopf nach Wert statt nach Prio: jetzt tiefer Lernpfad (#281/#282/#430) + Lernbogen-Content (#239/#279/#278), dann QoL/Didaktik (#358/#359/#362/#363), dann Tech-Debt (#457/#382), zuletzt die anlegenden/⚠️-Sonderfälle. Alle ⚠️-Grafik-Tickets (#183/#186/#187/#190/#204 u.a.) bleiben bewusst im Auto-Rest, bis Design abgestimmt ist. Nächstes freies Ticket = oberstes des Kopfes (#281). Davor: #236 (Kralle-Meilenstein-Sprüche), #229 (Fun Facts & Wortherkünfte), #228, #302, #219, #218, #309, #369, #315, #360/#361/#364/#365/#458/#212. npm test 1233 / typecheck / lint / arch / size grün. Phase 9 + 10 komplett.**
+> **Stand: 2026-06-29 — #281 erledigt: Keycloak-Vertiefung. Vier Quiz-Karteikarten (`q-keycloak-*`) in `src/content/data/crabquiz/keycloak.json`, freigeschaltet nach der Keycloak-Quest `kraken-boss` (Terraform-als-Code ist dort längst eingeführt). Auf Konzept-Ebene: Realm vs. Client, Rolle vs. Gruppe, Protocol Mapper (was landet im Token), IDP-Config deklarativ als `keycloak_*`-Terraform-Ressourcen. Test #281 sichert Existenz/chapter/correct-Index/Pflicht-Erklärung + Begriffsabdeckung. npm test 1234 / typecheck / lint / smoke grün. Nächstes freies Ticket = oberstes des Kopfes (#282). — Davor #237 erledigt: Kralle-Running-Gag (krallenlose Krabbe wünscht sich Krallen). Kralle ist eine Krabbe ohne Krallen – das wird zum Gag: am Wissensrunden-Endscreen streut sie ab und zu (jede 7. Übungsrunde, nie auf einem Meilenstein) wehmütig-frech ein, dass sie zu gern echte Krallen hätte. Pure Logik `kralleClawAside(count)` in `src/kralle.ts` (dosiert, deterministisch rotierend, Meilenstein #236 hat Vorrang); `recordKrallePractice` liefert nun `{milestone, aside}`; neue `.kralle-aside`-Box (kühl/wehmütig, abgesetzt vom goldenen Meilenstein). Unit-getestet, im Browser verifiziert. Der Backlog ist komplett `prio:niedrig`/ohne (keine `hoch`/`mittel` mehr offen), darum kuratiert der Kopf nach Wert statt nach Prio: jetzt tiefer Lernpfad (#281/#282/#430) + Lernbogen-Content (#239/#279/#278), dann QoL/Didaktik (#358/#359/#362/#363), dann Tech-Debt (#457/#382), zuletzt die anlegenden/⚠️-Sonderfälle. Alle ⚠️-Grafik-Tickets (#183/#186/#187/#190/#204 u.a.) bleiben bewusst im Auto-Rest, bis Design abgestimmt ist. Nächstes freies Ticket = oberstes des Kopfes (#281). Davor: #236 (Kralle-Meilenstein-Sprüche), #229 (Fun Facts & Wortherkünfte), #228, #302, #219, #218, #309, #369, #315, #360/#361/#364/#365/#458/#212. npm test 1233 / typecheck / lint / arch / size grün. Phase 9 + 10 komplett.**
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -45,24 +45,23 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
 | | **— Tiefer Lernpfad —** | | | |
-| 1 | **#281** | niedrig | Keycloak vertiefen: Realm, Client, User/Rollen/Gruppen, Mapper | Lernpfad-Vertiefung, eigenständiger Content-Block. |
-| 2 | **#282** | niedrig | GitLab CI vertiefen: extends/Templates, rules/Trigger, Environments | Lernpfad-Vertiefung, eigenständiger Content-Block. |
-| 3 | **#430** | niedrig | Gating-Konsistenz: Singular/Plural im Abkürzungs-Katalog (vs. #308) | Lernpfad-Logik, kleiner Konsistenz-Fix. |
-| 4 | **#239** | niedrig | Lernbogen: Cluster nach Sturm selbst neu aufbauen (Spät-Spiel) | Content/Lernbogen, design-frei (nutzt vorhandene Sturm-Mechanik). |
-| 5 | **#279** | niedrig | Nachträglich eingeführte Inhalte auch Fortgeschrittene erreichen lassen (Backfill) | Lernpfad-Logik, design-frei; ergänzt #353/#354-Fundament. |
-| 6 | **#278** | niedrig | Sammelalbum/Glossar: alle Befehle & Wissen entdecken und sammeln | Content/Lernpfad, design-frei; sammelt vorhandenes Wissen, kein neues Asset. |
+| 1 | **#282** | niedrig | GitLab CI vertiefen: extends/Templates, rules/Trigger, Environments | Lernpfad-Vertiefung, eigenständiger Content-Block. |
+| 2 | **#430** | niedrig | Gating-Konsistenz: Singular/Plural im Abkürzungs-Katalog (vs. #308) | Lernpfad-Logik, kleiner Konsistenz-Fix. |
+| 3 | **#239** | niedrig | Lernbogen: Cluster nach Sturm selbst neu aufbauen (Spät-Spiel) | Content/Lernbogen, design-frei (nutzt vorhandene Sturm-Mechanik). |
+| 4 | **#279** | niedrig | Nachträglich eingeführte Inhalte auch Fortgeschrittene erreichen lassen (Backfill) | Lernpfad-Logik, design-frei; ergänzt #353/#354-Fundament. |
+| 5 | **#278** | niedrig | Sammelalbum/Glossar: alle Befehle & Wissen entdecken und sammeln | Content/Lernpfad, design-frei; sammelt vorhandenes Wissen, kein neues Asset. |
 | | **— QoL / Didaktik (design-frei) —** | | | |
-| 7 | **#358** | ohne | help zeigt nur freigeschaltete Befehle (zu Spielbeginn: keine/nur help) | UX/Didaktik, design-frei; eng mit #359 (beide am help-Befehl). |
-| 8 | **#359** | ohne | help-Ausgabe: console-typisches Format (ein Befehl pro Zeile) | UX, design-frei; gehört zu #358. |
-| 9 | **#362** | ohne | Freies Funken: nach Befehlsausführung Erklärung einblenden | Didaktik, design-frei; vertieft das freie Funken-Terminal. |
-| 10 | **#363** | ohne | Freies Funken: echte Tool-Namen/Images durch spielweltinterne Begriffe ersetzen | Content/Konsistenz, design-frei; gehört zu #362. |
+| 6 | **#358** | ohne | help zeigt nur freigeschaltete Befehle (zu Spielbeginn: keine/nur help) | UX/Didaktik, design-frei; eng mit #359 (beide am help-Befehl). |
+| 7 | **#359** | ohne | help-Ausgabe: console-typisches Format (ein Befehl pro Zeile) | UX, design-frei; gehört zu #358. |
+| 8 | **#362** | ohne | Freies Funken: nach Befehlsausführung Erklärung einblenden | Didaktik, design-frei; vertieft das freie Funken-Terminal. |
+| 9 | **#363** | ohne | Freies Funken: echte Tool-Namen/Images durch spielweltinterne Begriffe ersetzen | Content/Konsistenz, design-frei; gehört zu #362. |
 | | **— Tech-Debt (sauber umsetzbar) —** | | | |
-| 11 | **#457** | niedrig | `src/content/drills.ts` aufteilen (God-File-Budget 800 LOC, #169) | Tech-Debt, design-frei; hält die Architektur Stardew-fest. |
-| 12 | **#382** | niedrig | Doku-Inkonsistenz: Worktree-Pfad-Konvention (AGENTS.md vs CLAUDE.md vs launch.json) | Tech-Debt/Doku, design-frei; klärt eine widersprüchliche Konvention. |
+| 10 | **#457** | niedrig | `src/content/drills.ts` aufteilen (God-File-Budget 800 LOC, #169) | Tech-Debt, design-frei; hält die Architektur Stardew-fest. |
+| 11 | **#382** | niedrig | Doku-Inkonsistenz: Worktree-Pfad-Konvention (AGENTS.md vs CLAUDE.md vs launch.json) | Tech-Debt/Doku, design-frei; klärt eine widersprüchliche Konvention. |
 | | **— Anlegende / Sonderfälle ans Ende —** | | | |
-| 13 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
-| 14 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
-| 15 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 12 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
+| 13 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | **Optik-Ticket: erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen** (übergreift #223). |
+| 14 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > ⚠️ **Optik-/Grafik-Tickets** (auch im Auto-Rest, z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#336/#341/#342): vor dem Umsetzen die **Vorstellung + Referenzbilder** mit der Maintainerin abstimmen und die Stardew-Referenz lesen ([AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md)) — nicht selbst das Design festlegen.
 
