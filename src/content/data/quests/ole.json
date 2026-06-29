@@ -1045,5 +1045,219 @@
         ]
       }
     ]
+  },
+  {
+    "id": "aufbau-dienste",
+    "title": "Fracht zurück an Bord: Dienste wieder ausbringen",
+    "giver": "ole",
+    "topic": "cluster-aufbau",
+    "rewardXp": 60,
+    "rewardCoins": 45,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "ole",
+        "scenario": {
+          "controlPlane": {
+            "up": true,
+            "token": "abcdef.0123456789abcdef",
+            "node": "ahoi-control"
+          },
+          "nodes": [
+            {
+              "name": "ahoi-control",
+              "status": "Ready",
+              "roles": "control-plane",
+              "version": "v1.30.2",
+              "diskPressure": false
+            },
+            {
+              "name": "ahoi-worker-1",
+              "status": "Ready",
+              "roles": "<none>",
+              "version": "v1.30.2",
+              "diskPressure": false
+            },
+            {
+              "name": "ahoi-worker-2",
+              "status": "Ready",
+              "roles": "<none>",
+              "version": "v1.30.2",
+              "diskPressure": false
+            }
+          ],
+          "files": {
+            "deployment.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: funkdienst\nspec:\n  replicas: 2\n  selector:\n    matchLabels:\n      app: funkdienst\n  template:\n    metadata:\n      labels:\n        app: funkdienst\n    spec:\n      containers:\n        - name: funkdienst\n          image: funkdienst:2.0\n          ports:\n            - containerPort: 8080",
+            "service.yaml": "apiVersion: v1\nkind: Service\nmetadata:\n  name: funkdienst\nspec:\n  selector:\n    app: funkdienst\n  ports:\n    - port: 80\n      targetPort: 8080"
+          },
+          "applyEffects": {
+            "deployment.yaml": {
+              "deployment": {
+                "name": "funkdienst",
+                "image": "funkdienst:2.0",
+                "replicas": 2,
+                "containerPort": 8080
+              }
+            },
+            "service.yaml": {
+              "service": {
+                "name": "funkdienst",
+                "port": "80"
+              }
+            }
+          }
+        },
+        "lines": [
+          "Drei Knoten, Control-Plane oben – dein Cluster <b>lebt</b>. Aber er ist <b>leer</b>: <code>kubectl get pods</code> zeigt nichts. Eine Werft ohne Schiffe ist nur ein Steg. Jetzt holen wir die <b>Fracht</b> zurück: die Dienste, die der Sturm fortgerissen hat.",
+          "Und weißt du, was das Schöne ist? Du musst nichts neu erfinden. Deine <b>Baupläne</b> – die Manifeste – lagen sicher an Land. Genau die Karten, die du ganz am Anfang bei Ada angewendet hast. Wir spielen sie einfach wieder ein: <b>Pod für Pod</b>, mit dem Befehl, den du im Schlaf kannst – <code>kubectl apply</code>.",
+          "Fang mit dem <b>Funkdienst</b> an – das Herz des Hafens. Schau erst, wie leer der Cluster ist, dann bring den Bauplan zurück."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Leeren Cluster begutachten",
+        "tasks": [
+          {
+            "id": "t-dienste-getpods-leer",
+            "text": "Vergewissere dich, dass nichts läuft: <code>kubectl get pods</code>. Der Cluster ist da, aber leer – keine Fracht an Bord.",
+            "accept": [
+              "^kubectl\\s+get\\s+(pods|po)$"
+            ],
+            "solution": "kubectl get pods",
+            "hint": "kubectl get pods – noch zeigt er „No resources found“."
+          },
+          {
+            "id": "t-dienste-cat-deployment",
+            "text": "Schau dir den geretteten Bauplan an: <code>cat deployment.yaml</code>. Da steht dein <b>Funkdienst</b> drin – <code>kind: Deployment</code>, <code>replicas: 2</code>, dasselbe Manifest wie eh und je.",
+            "accept": [
+              "^cat\\s+deployment\\.yaml$"
+            ],
+            "solution": "cat deployment.yaml",
+            "hint": "cat <datei> – die Datei heißt 'deployment.yaml'."
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Den Funkdienst zurückbringen",
+        "cmd": {
+          "id": "t-dienste-apply-deploy",
+          "intro": "🔁 Kein neuer Befehl – der altbekannte <code>kubectl apply --filename</code>. „Stelle her, was in der Karte steht.“ Genau das, was du bei Adas Seekarten gelernt hast, jetzt im Wiederaufbau.",
+          "text": "Bring das Deployment zurück: <code>kubectl apply --filename deployment.yaml</code>. Der Cluster legt es an – und weil jetzt <b>Worker</b> da sind, kann der scheduler die Pods sofort auf einen Steg setzen.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+deployment\\.yaml$"
+          ],
+          "solution": "kubectl apply --filename deployment.yaml",
+          "hint": "kubectl apply --filename deployment.yaml (die Kurzform -f verdienst du dir durch Nutzung).",
+          "check": {
+            "some": "deployments",
+            "where": {
+              "name": "funkdienst",
+              "broken": {
+                "truthy": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "teach",
+        "brief": "Sehen, dass die Pods laufen",
+        "cmd": {
+          "id": "t-dienste-getpods-running",
+          "intro": "🆕 Der Beweis, dass die Fracht an Bord ist: schau dir die Pods an.",
+          "text": "Frag nach: <code>kubectl get pods</code>. Jetzt stehen <b>zwei</b> Funkdienst-Pods auf <b>Running</b> – verteilt auf deine frischen Worker. Aus dem Bauplan ist wieder ein laufender Dienst geworden.",
+          "accept": [
+            "^kubectl\\s+get\\s+(pods|po)$"
+          ],
+          "solution": "kubectl get pods",
+          "hint": "Derselbe get-pods-Befehl wie eben – nur ist der Cluster jetzt nicht mehr leer.",
+          "check": {
+            "some": "deployments",
+            "where": {
+              "name": "funkdienst",
+              "broken": {
+                "truthy": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "teach",
+        "brief": "Den Dienst erreichbar machen",
+        "cmd": {
+          "id": "t-dienste-apply-svc",
+          "intro": "🔁 Ein laufender Pod allein ist noch nicht erreichbar – davor gehört ein <b>Service</b>. Auch das ein vertrauter <code>kubectl apply</code>.",
+          "text": "Leg den Service davor: <code>kubectl apply --filename service.yaml</code>. Er nimmt Anfragen auf Port 80 an und leitet sie an deinen Funkdienst (targetPort 8080) – so finden andere Dienste ihn wieder unter dem Namen <code>funkdienst</code>.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+service\\.yaml$"
+          ],
+          "solution": "kubectl apply --filename service.yaml",
+          "hint": "kubectl apply --filename service.yaml – dieselbe Mechanik, andere Karte.",
+          "check": {
+            "all": [
+              {
+                "some": "services",
+                "where": {
+                  "name": "funkdienst"
+                }
+              },
+              {
+                "some": "deployments",
+                "where": {
+                  "name": "funkdienst",
+                  "broken": {
+                    "truthy": false
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "choice",
+        "npc": "ole",
+        "q": "Du hast Pods <b>und</b> einen Service ausgebracht. Wozu der Service – die Pods laufen doch schon?",
+        "options": [
+          {
+            "t": "Pods sind <b>vergänglich</b> und bekommen neue IPs, wenn sie neu starten. Der Service ist eine <b>feste Adresse</b> davor, unter der andere den Dienst stabil erreichen.",
+            "ok": true,
+            "reply": "Genau. Ein Pod kann jederzeit sterben und woanders neu hochkommen – mit neuer IP. Der Service ist der <b>gleichbleibende Name</b>, der immer auf die gerade laufenden Pods zeigt. Ohne ihn müsste jeder Aufrufer die flüchtigen Pod-IPs kennen."
+          },
+          {
+            "t": "Ohne Service würden die Pods gar nicht erst starten – er ist Voraussetzung dafür, dass das Deployment läuft.",
+            "ok": false,
+            "reply": "Nein – die Pods liefen eben schon (Running), ganz ohne Service. Der Service startet keine Pods; er macht <b>laufende</b> Pods unter einer stabilen Adresse <b>erreichbar</b>. Zwei getrennte Aufgaben."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "ole",
+        "q": "Du hast den ganzen Cluster von Grund auf neu gebaut. In welcher <b>Reihenfolge</b> ging das – und warum?",
+        "options": [
+          {
+            "t": "Erst <b>Control-Plane</b> (kubeadm init), dann <b>Worker</b> (kubeadm join), zuletzt die <b>Dienste</b> (kubectl apply) – jede Schicht braucht die darunter.",
+            "ok": true,
+            "reply": "So ist es. Ohne Control-Plane ist der Cluster nicht ansprechbar; ohne Worker gibt es keinen Steg, auf dem ein Pod laufen könnte; und erst auf diesem Fundament ergibt ein Dienst Sinn. Du hast nicht Befehle nachgetippt – du hast einen <b>Cluster gebaut</b>. 🎓"
+          },
+          {
+            "t": "Die Reihenfolge ist egal – Kubernetes sortiert das von selbst, Hauptsache alle Befehle laufen irgendwann.",
+            "ok": false,
+            "reply": "Nein – die Abhängigkeit ist echt. Ein <code>kubeadm join</code> vor dem <code>init</code> findet keine Control-Plane („connection refused“), und ein <code>kubectl apply</code> ohne Knoten hätte keinen Ort für die Pods. <b>Fundament zuerst</b>, dann aufwärts."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "ole",
+        "lines": [
+          "<b>Port Kubernia funkt wieder.</b> Drei Knoten, eine Control-Plane, und die Dienste fahren – aus genau den Bauplänen, die der Sturm verschont hat. Der Kreis schließt sich: dieselben Manifeste, mit denen du als Grünschnabel bei Ada angefangen hast, haben deinen Hafen aus den Trümmern zurückgeholt. ⚓",
+          "Aber mal ehrlich, Kapitän: Du hast jeden Schritt <b>von Hand</b> getippt. Beim nächsten Orkan willst du das nicht alles noch mal einzeln eingeben. Stell dir vor, der ganze Cluster stünde als <b>Code</b> in einer Datei – und ein Befehl baut ihn zurück. Genau dahin gehen wir als Letztes: <b>Cluster als Code</b>. 🛠️"
+        ]
+      }
+    ]
   }
 ]

@@ -60,5 +60,6 @@
   "werft-eigener-dienst",
   "aufbau-sturm",
   "aufbau-control-plane",
-  "aufbau-worker-join"
+  "aufbau-worker-join",
+  "aufbau-dienste"
 ]

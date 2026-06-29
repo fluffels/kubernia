@@ -1391,3 +1391,47 @@ test("#463 join-Checks füllen den Cluster Knoten für Knoten (Red-Green)", () =
   // Negativprobe: ein falscher Token wird abgewiesen (Erreichbarkeits-/Auth-Schutz).
   assert.ok(sim.exec("kubeadm join falsch.tokenxxxxxxxxxx").error, "falscher Token scheitert");
 });
+
+test("#464 Dienste-Quest: korrekt eingehängt + bringt Workloads per apply zurück", () => {
+  const quest = KQContent.QUESTS.find(q => q.id === "aufbau-dienste");
+  assert.ok(quest, "Quest aufbau-dienste fehlt");
+  assert.equal(quest!.topic, "cluster-aufbau", "gehört in den Aufbau-Bogen");
+  assert.equal(quest!.giver, "ole", "Hafenmeister Ole führt den Aufbau-Bogen");
+
+  // Folgt direkt der Worker-Join-Quest (dort wurden die Knoten angeschlossen) und schließt den Bogen.
+  const ids = KQContent.QUESTS.map(q => q.id);
+  assert.equal(ids[ids.indexOf("aufbau-worker-join") + 1], "aufbau-dienste", "kommt direkt nach den Workern");
+
+  // Zwei apply-Schritte (Deployment + Service) – die vertraute Mechanik, kein neues Sim.
+  const teachCmds = quest!.steps.filter((s): s is TeachStep => s.type === "teach").map(s => s.cmd);
+  assert.ok(teachCmds.some(c => c.accept.some(re => re.test("kubectl apply --filename deployment.yaml"))), "apply-Deployment-Schritt fehlt");
+  assert.ok(teachCmds.some(c => c.accept.some(re => re.test("kubectl apply --filename service.yaml"))), "apply-Service-Schritt fehlt");
+
+  // Lernbegriffe im Quest-Text (Bogen-Schluss: Reihenfolge + Service als feste Adresse).
+  const text = playerVisibleQuestText([quest!]).join(" ").toLowerCase();
+  for (const teil of ["service", "deployment", "control-plane", "worker", "dienst"]) {
+    assert.ok(text.includes(teil), "Lehrtext nennt '" + teil + "' nicht");
+  }
+});
+
+test("#464 apply-Checks bringen Deployment + Service Pod für Pod zurück (Red-Green)", () => {
+  const quest = KQContent.QUESTS.find(q => q.id === "aufbau-dienste")!;
+  const scenario = quest.steps.find(s => s.scenario)?.scenario;
+  assert.ok(scenario, "die Quest braucht ein Szenario mit fertig gebautem Cluster + geretteten Manifesten");
+
+  const sim = new KQSim({});
+  sim.mergeScenario(scenario!); // Control-Plane up, 3 Knoten, Manifeste an Land, keine Workloads
+  const applyDeploy = quest.steps.find((s): s is TeachStep => s.type === "teach" && s.cmd.id === "t-dienste-apply-deploy")!;
+  const applySvc = quest.steps.find((s): s is TeachStep => s.type === "teach" && s.cmd.id === "t-dienste-apply-svc")!;
+
+  // Vor dem apply: leerer Cluster, beide Checks falsch.
+  assert.equal(applyDeploy.cmd.check!(sim), false, "vor apply: noch kein Funkdienst-Deployment");
+  assert.equal(applySvc.cmd.check!(sim), false, "vor apply: noch kein Service");
+
+  assert.ok(!sim.exec(applyDeploy.cmd.solution).error, "apply Deployment läuft fehlerfrei");
+  assert.equal(applyDeploy.cmd.check!(sim), true, "nach apply: Deployment ist da und heil (Pods laufen auf den Workern)");
+  assert.equal(applySvc.cmd.check!(sim), false, "nach Deployment-apply: Service fehlt noch");
+
+  assert.ok(!sim.exec(applySvc.cmd.solution).error, "apply Service läuft fehlerfrei");
+  assert.equal(applySvc.cmd.check!(sim), true, "nach apply: Deployment heil UND Service da");
+});
