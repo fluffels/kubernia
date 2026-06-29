@@ -1,0 +1,54 @@
+[
+  {
+    "id": "q-keycloak-realm-client",
+    "chapter": "kraken-boss",
+    "q": "Keycloak: Was ist der Unterschied zwischen einem <b>Realm</b> und einem <b>Client</b>?",
+    "options": [
+      "Realm = abgeschotteter Mandanten-Raum (eigene User, Rollen, Clients). Client = eine einzelne App darin, die sich anmeldet und Tokens bekommt.",
+      "Realm ist eine App, Client ist ein Benutzer.",
+      "Beides sind nur andere Wörter für einen Benutzer.",
+      "Client ist der Server, Realm der Login-Knopf."
+    ],
+    "correct": 0,
+    "explain": "Realm = eigener Mandanten-Raum, oft einer pro Produkt/Kunde, mit eigenen Usern, Rollen und Clients – nichts daraus sieht den anderen Realm. Client = eine Anwendung in diesem Realm, die sich bei Keycloak registriert und Tokens anfordert."
+  },
+  {
+    "id": "q-keycloak-role-group",
+    "chapter": "kraken-boss",
+    "q": "<b>Rolle</b> und <b>Gruppe</b> in Keycloak – was ist was?",
+    "options": [
+      "Rolle = eine Berechtigung (darf was). Gruppe = Sammlung von Usern, der man Rollen gebündelt zuweist.",
+      "Gruppe ist eine Berechtigung, Rolle eine Liste von Usern.",
+      "Rolle und Gruppe sind dasselbe.",
+      "Rolle ist ein Passwort, Gruppe ein Realm."
+    ],
+    "correct": 0,
+    "explain": "Rolle = was jemand darf (z.B. <code>kasse-admin</code>). Gruppe = Sammlung von Usern; hängt man die Rolle an die Gruppe, erben alle Mitglieder sie automatisch. Das spart das mühsame Einzel-Zuweisen pro Person."
+  },
+  {
+    "id": "q-keycloak-mapper",
+    "chapter": "kraken-boss",
+    "q": "Wozu dient ein <b>Protocol Mapper</b> in Keycloak?",
+    "options": [
+      "Er legt fest, welche Infos (Attribute, Rollen) in den Token wandern, damit die App sie sieht.",
+      "Er übersetzt die Keycloak-Oberfläche in andere Sprachen.",
+      "Er leitet Netzwerkanfragen an den richtigen Pod weiter.",
+      "Er sichert den Token mit einem zweiten Passwort."
+    ],
+    "correct": 0,
+    "explain": "Die App liest nur, was im Token steht. Ein Mapper bestimmt, welche User-Attribute und Rollen Keycloak in den Token packt – etwa die E-Mail oder die Rolle <code>admin</code> –, damit die App entscheiden kann, wer was darf."
+  },
+  {
+    "id": "q-keycloak-as-code",
+    "chapter": "kraken-boss",
+    "q": "Wie verwaltet man Realms, Clients und Rollen reproduzierbar, statt im Admin-UI zu klicken?",
+    "options": [
+      "Deklarativ als Code: in Terraform als <code>keycloak_*</code>-Ressourcen, versioniert in Git.",
+      "Einmal im Admin-UI klicken und einen Screenshot machen.",
+      "In eine Textdatei mit allen Passwörtern schreiben.",
+      "Gar nicht – Keycloak merkt sich alles von selbst."
+    ],
+    "correct": 0,
+    "explain": "IDP-Config als Code: Realm, Client, User, Rolle und Mapper liegen als <code>keycloak_*</code>-Terraform-Ressourcen im Repo – nachvollziehbar, wiederholbar, reviewbar. Genau wie Terraform den Rest der Infrastruktur baut, baut es auch die IDP-Konfiguration."
+  }
+]
