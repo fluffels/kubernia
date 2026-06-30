@@ -32,8 +32,9 @@ Sagt die Maintainerin **„nächstes Ticket"** (für kubequest), dann:
 
 1. **Direkt aus dem Kopf unten wählen — KEIN Vorab-Abgleich der ganzen Liste.** Das **oberste noch offene** Ticket des Kopfes nehmen, das
    - **kein** Assignee hat (Kollisionsschutz — siehe [AGENTS.md › Board-Workflow](../AGENTS.md)), und
-   - keinen offenen Branch/Worktree hat, und
-   - **kein** ⚠️-Sonderfall ist, der erst etwas braucht (siehe Flags in der Tabelle). **🎨-Optik-Tickets sind KEIN solcher Sonderfall** — sie werden ganz normal gewählt; das Aussehen wird WÄHREND der Umsetzung per Rückfrage abgestimmt (Vorschlag/Referenz/Asset vorlegen). ⚠️ bleibt nur für echte Sonderfälle: **Epic → aufteilen** (#317), **riskant → erst evaluieren** (#443), **Review → zuletzt** (#293), **Grundsatz-Review → offen halten** (#355).
+   - keinen offenen Branch/Worktree hat.
+
+   **Kein Flag verhindert das Loslegen** — die Flags sagen nur, WIE man loslegt (nicht OB): **🎨 Optik** → dranmachen, den Look während der Umsetzung per Rückfrage abstimmen; **📦 Epic** → mit der **Aufteilung** loslegen (session-große Kinder anlegen, Epic auf done schließen); **⚠️ riskant** → mit dem **Evaluieren** loslegen. Reihenfolge-Hinweise wie „Review zuletzt" (#293) oder „Grundsatz offen halten" (#355) sind reine Positionierung, kein Gate.
 
    Dabei **nur dieses eine Kandidaten-Ticket** kurz gegen den Live-Stand prüfen (`gh issue view <nr>`: offen? kein Assignee? Branch/Worktree-Gegencheck `git worktree list` + `git branch -a`). Ist es schon geschlossen / vergeben, das **nächste** des Kopfes nehmen. Die **ganze Liste wird NICHT vorab gegen GitHub abgeglichen** — Drift wird erst am Ende eingearbeitet (siehe „Pflege"). Das spart bei jeder Auswahl die teure Komplett-Sichtung.
 2. **Ist der Kopf leer** (alle erledigt/vergeben), auf den **Auto-Rest** zurückfallen: das oberste freie Ticket nach **Prio→Nummer** (Befehl im nächsten Abschnitt) — und beim Pflege-Schritt den Kopf wieder auffüllen.
@@ -53,10 +54,10 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 | 3 | **#441** | niedrig | char_knut.png ist 68×68 statt 48² – Knut rendert ~40 % zu groß | Bug, design-frei; Asset auf die etablierte Figurengröße bringen (kein Design-Entscheid). |
 | 4 | **#382** | niedrig | Doku-Inkonsistenz: Worktree-Pfad-Konvention (AGENTS.md vs CLAUDE.md vs launch.json) | Tech-Debt/Doku, design-frei; klärt eine widersprüchliche Konvention. |
 | 5 | **#296** | niedrig | Reset-Fix (#295) manuell im Browser verifizieren | Verifikation, design-frei; reiner Browser-Check eines schon gefixten Verhaltens. |
-| 6 | **#443** ⚠️ | niedrig | Phaser 4 evaluieren/migrieren (Dependabot-Major #433, CI rot) | Tech-Debt, design-frei, aber **groß/riskant** (Major-Migration) — erst evaluieren (Breaking Changes, Aufwand), dann entscheiden; nicht blind mergen. |
+| 6 | **#443** ⚠️ | niedrig | Phaser 4 evaluieren/migrieren (Dependabot-Major #433, CI rot) | Tech-Debt, design-frei, aber **groß/riskant** (Major-Migration) — mit dem **Evaluieren loslegen** (Breaking Changes/Aufwand), bei einer echten Weiche per Rückfrage abstimmen; nicht blind mergen. |
 | | **— Anlegende / Epic —** | | | |
 | 7 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
-| 8 | **#317** ⚠️ | niedrig | EPIC: Komfort-Funktionen im Shop kaufen + Shop-Überarbeitung | **Epic → aufteilen statt umsetzen** (session-große Kinder anlegen, Epic auf done schließen). |
+| 8 | **#317** 📦 | niedrig | EPIC: Komfort-Funktionen im Shop kaufen + Shop-Überarbeitung | **Epic → mit der Aufteilung loslegen** (session-große Kinder anlegen, Epic auf done schließen). |
 | | **— 🎨 Optik / Grafik (werden GANZ NORMAL automatisch gewählt; das Aussehen stimmt der Agent WÄHREND der Umsetzung per Rückfrage mit der Maintainerin ab — Referenz/Vorschlag/generiertes Asset vorlegen, entscheiden lassen, iterieren; NICHT vorab gaten, NICHT selbst das Design festlegen) —** | | | |
 | 9 | **#183** 🎨 | niedrig | Hafen-Kanone als Pixelart-Asset statt Emoji 💣 | Optik — Asset-Look während der Umsetzung abstimmen. |
 | 10 | **#186** 🎨 | niedrig | Außen-Türen der Gebäude als Pixelart statt prozeduraler Rechtecke | Optik — Look während der Umsetzung abstimmen. |
@@ -65,7 +66,7 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 | 13 | **#238** 🎨 | niedrig | Container laufen visuell in Pods (Fässer im Schiffsrumpf) | Optik/Visualisierung — Look während der Umsetzung abstimmen. |
 | 14 | **#314** 🎨 | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | Optik — Look während der Umsetzung abstimmen (übergreift #223). |
 | | **— Zuletzt —** | | | |
-| 15 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 15 | **#293** | niedrig | Spiellogik-Review (anlegend) | Steht bewusst **zuletzt** (reine Positionierung, kein Gate) — erst wenn der Backlog weitgehend leer ist, sonst veraltet das Review sofort. Erzeugt Folge-Tickets. |
 
 > **Aufbau-Bogen-Optik #467** 🎨 (zerstörter Hafen → Wiederaufbau) wird wie jedes Optik-Ticket normal gewählt; der Look wird während der Umsetzung mit der Maintainerin abgestimmt — kein Vorab-Gate, kein Blocker für den Lerninhalt (#460–#466).
 
