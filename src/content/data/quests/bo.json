@@ -13,7 +13,7 @@
         "lines": [
           "BO. GRÜSST. NEUE CREW. <i>*knirsch*</i> Bo stapelt Fracht. Früher: Chaos – Säcke, Fässer, hundert Formen. Dann kam: <b>DER CONTAINER</b>. Genormte Box. Jeder Kran kann sie heben.",
           "Software genauso: App + alles Drumherum in einen <b>Container</b> → läuft <b>überall gleich</b>. Werkzeug: <b>Docker</b>.",
-          "Erster Handgriff: Bauplan holen. Baupläne heißen <b>Images</b> und liegen in der <b>Registry</b> – dem Online-Lager für fertige Images (z.B. Docker Hub). Bo zeigt: <code>docker pull nginx</code>. Jetzt DU! (T drücken)"
+          "Erster Handgriff: Bauplan holen. Baupläne heißen <b>Images</b> und liegen in der <b>Registry</b> – dem Online-Lager für fertige Images (z.B. Docker Hub). Bo zeigt: <code>docker pull lotsen-dienst</code> – der kleine Dienst, der Schiffe in den Hafen einweist. Jetzt DU! (T drücken)"
         ]
       },
       {
@@ -22,11 +22,11 @@
         "cmd": {
           "id": "t-pull",
           "intro": "🆕 Neuer Befehl: <code>docker pull</code> – lädt ein Image aus der Registry.",
-          "text": "Lade das Image <code>nginx</code> (ein kleiner Webserver) herunter.",
+          "text": "Lade das Image <code>lotsen-dienst</code> (einen kleinen Hafendienst) herunter.",
           "accept": [
-            "^docker\\s+pull\\s+nginx(:\\S+)?$"
+            "^docker\\s+pull\\s+lotsen-dienst(:\\S+)?$"
           ],
-          "solution": "docker pull nginx",
+          "solution": "docker pull lotsen-dienst",
           "hint": "Muster: docker pull <image>"
         }
       },
@@ -43,11 +43,11 @@
         "cmd": {
           "id": "t-run",
           "intro": "🆕 Neuer Befehl: <code>docker run</code> – startet einen Container aus einem Image.",
-          "text": "Starte einen Container aus dem Image <code>nginx</code>. (Einfachste Form, keine Extras!)",
+          "text": "Starte einen Container aus dem Image <code>lotsen-dienst</code>. (Einfachste Form, keine Extras!)",
           "accept": [
-            "^docker\\s+run\\s+nginx(:\\S+)?$"
+            "^docker\\s+run\\s+lotsen-dienst(:\\S+)?$"
           ],
-          "solution": "docker run nginx",
+          "solution": "docker run lotsen-dienst",
           "hint": "Muster: docker run <image>"
         }
       },
@@ -55,7 +55,7 @@
         "type": "dialog",
         "npc": "bo",
         "lines": [
-          "Eins noch, Landratte: <code>nginx</code> ist nicht der einzige Bauplan in der <b>Registry</b>. Gleich in der Übung tauchen andere auf – <code>redis</code> oder <code>postgres</code> sind fertige Dienste, und <b>BusyBox</b> ist die <b>winzige Allzweck-Kiste</b>: viele Mini-Werkzeuge (<code>ls</code>, <code>cat</code> und Co.) in einer einzigen, federleichten Box – die startet man für schnelle Tests und zum Reinschauen. Der Befehl bleibt derselbe, nur der Bauplan-Name wechselt. Bo ist Stein."
+          "Eins noch, Landratte: <code>lotsen-dienst</code> ist nicht der einzige Bauplan in der <b>Registry</b>. Gleich in der Übung tauchen <b>echte</b> auf – <code>redis</code> oder <code>postgres</code> sind fertige Dienste, und <b>BusyBox</b> ist die <b>winzige Allzweck-Kiste</b>: viele Mini-Werkzeuge (<code>ls</code>, <code>cat</code> und Co.) in einer einzigen, federleichten Box – die startet man für schnelle Tests und zum Reinschauen. Der Befehl bleibt derselbe, nur der Bauplan-Name wechselt. Bo ist Stein."
         ]
       },
       {

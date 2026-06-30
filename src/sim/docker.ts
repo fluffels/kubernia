@@ -17,6 +17,10 @@ import { randSuffix, table } from "./util";
 // Bekannte Container-Images – Grundlage für die „Meintest du …?"-Tippfehlerhilfe.
 // Enthält alle im Spiel benutzten plus echte Tools, die man als DevOps kennt.
 export const KNOWN_IMAGES = [
+  // Hafen-eigenes Platzhalter-Image (#363): der generische Beispiel-Dienst, mit dem die
+  // erste Docker-Quest einsteigt – spielweltbezogen statt „nginx", bevor echte Tool-Namen
+  // (redis/postgres/…) eingeführt sind. Als bekanntes Image gelistet → keine Tippfehlerhilfe.
+  "lotsen-dienst",
   "nginx", "redis", "httpd", "busybox", "postgres", "rabbitmq",
   "mysql", "mariadb", "mongo", "memcached", "node", "python", "golang",
   "alpine", "ubuntu", "debian", "traefik", "envoy", "haproxy", "vault",
@@ -55,7 +59,7 @@ export function dockerCommand(sim: DockerHost, t: string[], _raw?: string): stri
 
   if (sub === "pull") {
     const img = t[2];
-    if (!img) return sim._err("docker pull: Welches Image denn?", "z.B. 'docker pull nginx'");
+    if (!img) return sim._err("docker pull: Welches Image denn?", "z.B. 'docker pull lotsen-dienst'");
     const typo = checkImageTypo(sim, img);
     if (typo) return typo;
     // Image-Name zerlegen: <registry>/<repository>:<tag>. Ohne Tag → :latest (mit dem
@@ -167,7 +171,7 @@ export function dockerCommand(sim: DockerHost, t: string[], _raw?: string): stri
       else if (t[i] === "-p" || t[i] === "--publish") { i++; }
       else if (!t[i].startsWith("-")) image = t[i];
     }
-    if (!image) return sim._err("docker run: Es fehlt das Image.", "z.B. 'docker run -d --name webserver nginx'");
+    if (!image) return sim._err("docker run: Es fehlt das Image.", "z.B. 'docker run -d --name lotse lotsen-dienst'");
     if (flagAfterImage) return sim._err("docker run: Optionen wie -d/--name müssen VOR das Image.", "Alles nach dem Image ist der Container-Befehl. Muster: docker run [-d] [--name <name>] <image>");
     const typo = checkImageTypo(sim, image);
     if (typo) return typo;
