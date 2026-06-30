@@ -29,9 +29,9 @@ export interface AbbrevPair {
   readonly short: readonly string[];
   /** Unterbefehl-Tokens, bei deren Vorkommen VOR dem Alias-Token das Gating
    *  ausgesetzt wird — weil das Token dort literaler Unterbefehl ist, kein
-   *  Ressourcen-Alias. Nur für `kind: "alias"` sinnvoll. Beispiel: `["create"]`
-   *  für kubectl-secrets verhindert, dass `kubectl create secret generic …`
-   *  blockiert wird, obwohl `secret` hier kein Kürzel für `secrets` ist (#308). */
+   *  Ressourcen-Alias. Nur für `kind: "alias"` sinnvoll. Beispiel: `["logs"]`
+   *  für kubectl-filename verhindert, dass `kubectl logs -f` als gesperrte
+   *  --filename-Kurzform behandelt wird (#380). */
   readonly excludeVerbs?: readonly string[];
 }
 
@@ -62,14 +62,9 @@ export const ABBREVS: readonly AbbrevPair[] = [
   { id: "kubectl-pods",       context: "kubectl get pods",              kind: "alias", long: "pods",            short: ["po"] },
   { id: "kubectl-nodes",      context: "kubectl get nodes",             kind: "alias", long: "nodes",           short: ["no"] },
   { id: "kubectl-services",   context: "kubectl get services",          kind: "alias", long: "services",        short: ["svc"] },
-  // AUSNAHME (#308, bewusst): `secrets` hat KEINEN offiziellen kubectl-Kurznamen
-  // (kein po/svc/netpol/ing-Pendant). Damit die Ressource überhaupt eine
-  // verdienbare „Profi-Form" hat, dient hier die Singularform `secret` als
-  // gegateter Stellvertreter — die einzige bewusste Abweichung vom obigen Prinzip.
-  // Sie ist als Tech-/Pädagogik-Schuld dokumentiert (#430 → Folgeticket: ggf.
-  // kubectl-secrets entfernen, da `secret` streng genommen keine Kontraktion ist).
-  // Nach `create` ist `secret` ohnehin ein literaler Unterbefehl → dort kein Gating.
-  { id: "kubectl-secrets",    context: "kubectl get secrets",           kind: "alias", long: "secrets",         short: ["secret"], excludeVerbs: ["create"] },
+  // `secrets` hat KEINEN offiziellen kubectl-Kurznamen (kein po/svc/netpol/ing-Pendant).
+  // Weder Singular (`secret`) noch Plural (`secrets`) sind echte Kontraktionen →
+  // kein kubectl-secrets-Eintrag; der Eintrag wurde in #459 entfernt (#430-Folge).
   // #430: `ingresses` (Plural-Vollform) ist KEINE Kontraktion → raus aus dem
   // Gating; nur die echte Kurzform `ing` bleibt freischaltpflichtig.
   { id: "kubectl-ingress",    context: "kubectl get ingress",           kind: "alias", long: "ingress",         short: ["ing"] },

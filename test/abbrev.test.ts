@@ -159,10 +159,8 @@ describe("lockedAbbrevInInput – Regressionsfixes #308", () => {
     expect(lockedAbbrevInInput("kubectl create secret tls my-tls --cert=tls.crt --key=tls.key", NICHTS_FREI)).toBeUndefined();
   });
 
-  test("kubectl get secret (Singular) blockiert weiterhin — echter Alias für secrets", () => {
-    const hit = lockedAbbrevInInput("kubectl get secret", NICHTS_FREI);
-    expect(hit?.pair.id).toBe("kubectl-secrets");
-    expect(hit?.used).toBe("secret");
+  test("kubectl get secret (Singular) ist NICHT geblockt — kein offizieller kubectl-Kurzname, kein Gating (#459)", () => {
+    expect(lockedAbbrevInInput("kubectl get secret", NICHTS_FREI)).toBeUndefined();
   });
 
   test("kubectl describe pod <name> darf NICHT geblockt werden — Singular ist kanonisch, kein Profi-Kürzel", () => {
@@ -214,8 +212,8 @@ describe("lockedAbbrevInInput – #430: kanonische Voll-Formen (Singular/Plural)
     expect(lockedAbbrevInInput("kubectl get ing", NICHTS_FREI)?.pair.id).toBe("kubectl-ingress");
   });
 
-  test("Ausnahme bleibt bewusst bestehen: secret (Singular) ist weiterhin gegated", () => {
-    expect(lockedAbbrevInInput("kubectl get secret", NICHTS_FREI)?.pair.id).toBe("kubectl-secrets");
+  test("keine Ausnahme mehr: kubectl get secret ist NICHT gegated — kubectl-secrets entfernt (#459)", () => {
+    expect(lockedAbbrevInInput("kubectl get secret", NICHTS_FREI)).toBeUndefined();
   });
 });
 
@@ -491,7 +489,7 @@ describe("#379: Docker-Flags -a/-d/-t sind nutzungs-verdient (kein unlockAbbrev-
 describe("#380: kubectl-Kürzel sind nutzungs-verdient (kein unlockAbbrev, Langform-zuerst)", () => {
   const VERDIENT_PER_NUTZUNG = [
     "kubectl-namespace", "kubectl-filename", "kubectl-pods", "kubectl-nodes",
-    "kubectl-services", "kubectl-secrets", "kubectl-ingress", "kubectl-netpol",
+    "kubectl-services", "kubectl-ingress", "kubectl-netpol",
   ];
 
   function stepUnlockIds(): Set<string> {
