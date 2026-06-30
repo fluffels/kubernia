@@ -93,6 +93,19 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/content/checks.ts`](src/content/checks.ts) | pure Domäne | `QUEST_CHECKS`: nur noch echte Code-Sonderfälle (der Rest ist DSL-Daten, #411). |
 | [`src/content/entities.ts`](src/content/entities.ts) | pure Domäne | Entity-Registry: datengesteuerte NPC- & Objekt-Platzierung (#349/#357). |
 | [`src/content/data/`](src/content/data/) | Daten | Quests/NPCs/Smalltalk/Reihenfolge/Drills/Quiz + Terraform-Konfigs (#147) + Funk-Erklärungen (#362) als JSON. |
+| [`src/content/drills.ts`](src/content/drills.ts) | pure Domäne | Barrel: mergt `DRILLS` + `PRACTICE` aus `src/content/drills/*` (#457). |
+| [`src/content/drills/shared.ts`](src/content/drills/shared.ts) | pure Domäne | Geteilte Helfer + `DrillTask`-Typ + ensure*-Fabriken + YAML-Konstanten-Re-Exporte (#457). |
+| [`src/content/drills/docker.ts`](src/content/drills/docker.ts) | pure Domäne | Docker-Drills (pull/run/build/tag/push, #457). |
+| [`src/content/drills/kubectl.ts`](src/content/drills/kubectl.ts) | pure Domäne | kubectl/Secret/Ingress-Drills (#457). |
+| [`src/content/drills/git.ts`](src/content/drills/git.ts) | pure Domäne | Git/CI-Drills (#457). |
+| [`src/content/drills/helm.ts`](src/content/drills/helm.ts) | pure Domäne | Helm-Drills (install/upgrade/rollback/create/template, #457). |
+| [`src/content/drills/terraform.ts`](src/content/drills/terraform.ts) | pure Domäne | Terraform-Drills (plan/apply/state/output, #457). |
+| [`src/content/drills/network.ts`](src/content/drills/network.ts) | pure Domäne | Netzwerk-Drills (NetworkPolicy/DNS, #457). |
+| [`src/content/drills/gitops.ts`](src/content/drills/gitops.ts) | pure Domäne | GitOps/ArgoCD-Drills (#457). |
+| [`src/content/drills/observability.ts`](src/content/drills/observability.ts) | pure Domäne | Observability-Drills (Metriken/Logs/Alerts, #457). |
+| [`src/content/drills/rbac.ts`](src/content/drills/rbac.ts) | pure Domäne | RBAC/Pod-Security-Drills (#457). |
+| [`src/content/drills/storage.ts`](src/content/drills/storage.ts) | pure Domäne | Storage-Drills (StatefulSet/PVC/Snapshot, #457). |
+| [`src/content/drills/werft.ts`](src/content/drills/werft.ts) | pure Domäne | Werft-Capstone-Drills (Build→Deploy→Expose→Test, #457). |
 | [`src/content/abbrev.ts`](src/content/abbrev.ts) | pure Domäne | Langform↔Kürzel-Katalog („verdiente Abkürzung"). |
 | [`src/world.ts`](src/world.ts) | pure Domäne | Welt-Geometrie + Autotile (#340) + Sub-Tile-Kollision (#343/#386). → [world.md](docs/module/world.md) |
 | [`src/archipel.ts`](src/archipel.ts) | pure Domäne | GitOps-Archipel-Insel: Geometrie + Warp. |

@@ -32,9 +32,7 @@ export const LOC_BUDGET = 800
  *  „Kein Grün-durch-Aufweichen": jede Ausnahme MUSS ein offenes Split-Ticket nennen.
  *  Fällt die Datei unter Budget (Split erledigt), meldet der Wächter den Eintrag als
  *  stale und schlägt fehl – das erinnert daran, die Ausnahme wieder zu entfernen. */
-export const ALLOWLIST = [
-  { file: 'src/content/drills.ts', reason: 'Capstone-Werft-Drills (#169) übers Budget; Split verfolgt in #457' },
-]
+export const ALLOWLIST = []
 
 /** Zählt physische Zeilen (wie `wc -l`; ein abschließender Zeilenumbruch zählt nicht doppelt). */
 export function countLines(text) {
