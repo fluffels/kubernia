@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-30 — zuletzt #296:** Reset-Fix (#295) im Browser verifiziert — reine Verifikation, kein Code-Change; Spawn nach Reset landet exakt bei (400,248) neben Ole. Nebenbefund als #473 angelegt (Reset reloadt sofort und racet den async IndexedDB-Commit). **Nächstes freies Ticket = oberstes des Kopfes** (#443 Phaser-4 evaluieren ⚠️).
+> **Stand: 2026-06-30 — zuletzt #443:** Phaser 4 (Dependabot-Major #433) evaluiert und **bewusst verschoben**. Die `drawFrame→stamp`-Migration ist trivial + alle Gates grün (Patch am Ticket), ABER Phaser **4.2.0** hat einen **Renderer-Bug bei kleine-Welt-Szenen** (InteriorScene: Framebuffer-Müll außerhalb der Welt-Bounds); 7 App-seitige Workarounds gescheitert, kein Upstream-Issue/Fix, keine neuere 4.x. Bleiben auf **3.90.x**; Re-Eval per Folge-Ticket. Begründung in [ADR 0001 › Phaser 4 evaluiert](adr/0001-engine-phaser.md). **Nächstes freies Ticket = oberstes des Kopfes** (#311).
 >
 > _Frühere Tickets (Kurzfassung — volle Details in git-History + Brain `Projekte/KubeQuest`):_ #296 Reset-Fix im Browser verifiziert (+ #473 angelegt) · #382 Worktree-Pfad-Konvention vereinheitlicht · #441 Knut-Sprite Asset-Hygiene · #362 freies Funken „Was ist gerade passiert?"-Erklärung · #359 `help` im CLI-Format · #358 `help` zeigt nur Freigeschaltetes · #328 Sandbox-Vertiefungs-Quiz · #278 Sammelalbum/Glossar · #279 Lernkarten-Backfill · #460–#466 Aufbau-Bogen (Epic #239, kubeadm + Terraform-Cluster) · #430 Gating-Konsistenz · #281/#282 Keycloak-/CI-Vertiefung · #237 Kralle-Gag.
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
@@ -49,25 +49,26 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 |---|--------|------|--------------|---------------------------|
 | | **— Tiefer Lernpfad (Aufbau-Bogen #239 komplett: #460–#466 erledigt; #279 Backfill + #278 Sammelalbum + #328 Sandbox-Lernthema erledigt) —** | | | |
 | | **— Tech-Debt (sauber umsetzbar) —** | | | |
-| 1 | **#443** ⚠️ | niedrig | Phaser 4 evaluieren/migrieren (Dependabot-Major #433, CI rot) | Tech-Debt, design-frei, aber **groß/riskant** (Major-Migration) — mit dem **Evaluieren loslegen** (Breaking Changes/Aufwand), bei einer echten Weiche per Rückfrage abstimmen; nicht blind mergen. |
-| 2 | **#311** | niedrig | Variable Platzhalter (nginx/webserver) typografisch als „ändere-mich"-Wert kennzeichnen (app-weit) | Auto-Rest hochgezogen (Prio→Nummer); design-arme Didaktik-Verbesserung ohne Abhängigkeit. |
-| 3 | **#318** | niedrig | HUD: Einkommensrate des Hafens/Clusters anzeigen (Dublonen/Stunde) | Auto-Rest hochgezogen (Prio→Nummer); kleines HUD-Feature ohne Abhängigkeit. |
+| 1 | **#311** | niedrig | Variable Platzhalter (nginx/webserver) typografisch als „ändere-mich"-Wert kennzeichnen (app-weit) | Auto-Rest hochgezogen (Prio→Nummer); design-arme Didaktik-Verbesserung ohne Abhängigkeit. |
+| 2 | **#318** | niedrig | HUD: Einkommensrate des Hafens/Clusters anzeigen (Dublonen/Stunde) | Auto-Rest hochgezogen (Prio→Nummer); kleines HUD-Feature ohne Abhängigkeit. |
 | | **— Anlegende / Epic —** | | | |
-| 4 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
-| 5 | **#317** 📦 | niedrig | EPIC: Komfort-Funktionen im Shop kaufen + Shop-Überarbeitung | **Epic → mit der Aufteilung loslegen** (session-große Kinder anlegen, Epic auf done schließen). |
+| 3 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
+| 4 | **#317** 📦 | niedrig | EPIC: Komfort-Funktionen im Shop kaufen + Shop-Überarbeitung | **Epic → mit der Aufteilung loslegen** (session-große Kinder anlegen, Epic auf done schließen). |
 | | **— 🎨 Optik / Grafik (werden GANZ NORMAL automatisch gewählt; das Aussehen stimmt der Agent WÄHREND der Umsetzung per Rückfrage mit der Maintainerin ab — Referenz/Vorschlag/generiertes Asset vorlegen, entscheiden lassen, iterieren; NICHT vorab gaten, NICHT selbst das Design festlegen) —** | | | |
-| 6 | **#183** 🎨 | niedrig | Hafen-Kanone als Pixelart-Asset statt Emoji 💣 | Optik — Asset-Look während der Umsetzung abstimmen. |
-| 7 | **#186** 🎨 | niedrig | Außen-Türen der Gebäude als Pixelart statt prozeduraler Rechtecke | Optik — Look während der Umsetzung abstimmen. |
-| 8 | **#187** 🎨 | niedrig | Interior-Einrichtung (Bullaugen/Türen/Wandschatten) als Pixelart | Optik — Look während der Umsetzung abstimmen. |
-| 9 | **#190** 🎨 | niedrig | Overlay-Panels (Funkgerät/Logbuch/Shop/Quiz/Stapel/Menü) im Stardew-Look | Optik — Look während der Umsetzung abstimmen. |
-| 10 | **#204** 🎨 | niedrig | HUD-/Panel-Emojis durch PixelLab-Pixel-Icons ersetzen | Optik — Look während der Umsetzung abstimmen. |
-| 11 | **#223** 🎨 | niedrig | Rang-Aufstieg mit Feier-Popup (alter → neuer Rang) statt nur Toast | Optik/UX — gehört mit #314 zusammen; Look während der Umsetzung abstimmen. |
-| 12 | **#238** 🎨 | niedrig | Container laufen visuell in Pods (Fässer im Schiffsrumpf) | Optik/Visualisierung — Look während der Umsetzung abstimmen. |
-| 13 | **#289** 🎨 | niedrig | Kenney-Tilesets (town/dungeon) durch PixelLab ersetzen, dann entfernen | Auto-Rest hochgezogen (Prio→Nummer); Optik — Look während der Umsetzung abstimmen. |
-| 14 | **#303** 🎨 | niedrig | Gestoppte Container visuell ins Lager verschieben (statt am Dock) | Auto-Rest hochgezogen (Prio→Nummer); Optik/Visualisierung — Look während der Umsetzung abstimmen. |
-| 15 | **#314** 🎨 | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | Optik — Look während der Umsetzung abstimmen (übergreift #223). |
+| 5 | **#183** 🎨 | niedrig | Hafen-Kanone als Pixelart-Asset statt Emoji 💣 | Optik — Asset-Look während der Umsetzung abstimmen. |
+| 6 | **#186** 🎨 | niedrig | Außen-Türen der Gebäude als Pixelart statt prozeduraler Rechtecke | Optik — Look während der Umsetzung abstimmen. |
+| 7 | **#187** 🎨 | niedrig | Interior-Einrichtung (Bullaugen/Türen/Wandschatten) als Pixelart | Optik — Look während der Umsetzung abstimmen. |
+| 8 | **#190** 🎨 | niedrig | Overlay-Panels (Funkgerät/Logbuch/Shop/Quiz/Stapel/Menü) im Stardew-Look | Optik — Look während der Umsetzung abstimmen. |
+| 9 | **#204** 🎨 | niedrig | HUD-/Panel-Emojis durch PixelLab-Pixel-Icons ersetzen | Optik — Look während der Umsetzung abstimmen. |
+| 10 | **#223** 🎨 | niedrig | Rang-Aufstieg mit Feier-Popup (alter → neuer Rang) statt nur Toast | Optik/UX — gehört mit #314 zusammen; Look während der Umsetzung abstimmen. |
+| 11 | **#238** 🎨 | niedrig | Container laufen visuell in Pods (Fässer im Schiffsrumpf) | Optik/Visualisierung — Look während der Umsetzung abstimmen. |
+| 12 | **#289** 🎨 | niedrig | Kenney-Tilesets (town/dungeon) durch PixelLab ersetzen, dann entfernen | Auto-Rest hochgezogen (Prio→Nummer); Optik — Look während der Umsetzung abstimmen. |
+| 13 | **#303** 🎨 | niedrig | Gestoppte Container visuell ins Lager verschieben (statt am Dock) | Auto-Rest hochgezogen (Prio→Nummer); Optik/Visualisierung — Look während der Umsetzung abstimmen. |
+| 14 | **#314** 🎨 | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | Optik — Look während der Umsetzung abstimmen (übergreift #223). |
 | | **— Zuletzt —** | | | |
-| 16 | **#293** | niedrig | Spiellogik-Review (anlegend) | Steht bewusst **zuletzt** (reine Positionierung, kein Gate) — erst wenn der Backlog weitgehend leer ist, sonst veraltet das Review sofort. Erzeugt Folge-Tickets. |
+| 15 | **#293** | niedrig | Spiellogik-Review (anlegend) | Steht bewusst **zuletzt** (reine Positionierung, kein Gate) — erst wenn der Backlog weitgehend leer ist, sonst veraltet das Review sofort. Erzeugt Folge-Tickets. |
+
+> **#443 (Phaser 4)** ist aus dem Kopf raus: evaluiert und bewusst verschoben (Renderer-Bug in 4.2.0 bei kleine-Welt-Szenen, kein Quick-Fix). Re-Eval läuft über das Folge-Ticket, sobald Phaser 4 reift / der Bug upstream gefixt ist. Details: [ADR 0001](adr/0001-engine-phaser.md).
 
 > **Aufbau-Bogen-Optik #467** 🎨 (zerstörter Hafen → Wiederaufbau) wird wie jedes Optik-Ticket normal gewählt; der Look wird während der Umsetzung mit der Maintainerin abgestimmt — kein Vorab-Gate, kein Blocker für den Lerninhalt (#460–#466).
 
