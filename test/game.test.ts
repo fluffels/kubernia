@@ -1093,12 +1093,12 @@ test("#410 requires (datengesteuert): optionale Quest bleibt gesperrt, bis die V
  * gespeichert (vom Tempo DAY_CYCLE_MS entkoppelt), damit ein Tempo-Tuning keinen Stand
  * auf ein anderes Kalenderdatum umschreibt. */
 
-test("#413 defaultState: frischer Stand startet bei Tag 1, Mittag (gameDays 0)", () => {
+test("#413/#336 defaultState: frischer Stand startet bei Tag 1, früher Morgen 06:00 (gameDays 0)", () => {
   Game.reset();
   expect(Game.state.gameDays).toBe(0);
   const cal = Game.calendar();
   expect(cal.day).toBe(1);
-  expect(cal.hhmm).toBe("12:00");
+  expect(cal.hhmm).toBe("06:00");           // seit #336: Spielstart morgens, nicht mittags
   expect(cal.seasonName).toBe("Frühling");
 });
 
@@ -1112,11 +1112,11 @@ test("#413 advanceClock: typische Per-Frame-Deltas akkumulieren (über den Tempo
 
 test("#413 calendar(): leitet Tag/Uhrzeit/Saison aus der gesetzten Achse ab", () => {
   Game.reset();
-  Game.state.gameDays = 1;                     // exakt ein Tag vergangen
-  // gameDays 1.0 = wieder Mittag (phase 0), aber Mitternacht dazwischen -> Tag 2.
+  Game.state.gameDays = 1;                     // exakt ein Tag seit dem 06:00-Start vergangen
+  // gameDays 1.0 = wieder 06:00 (Start-Tageszeit, #336), aber Mitternacht dazwischen -> Tag 2.
   expect(Game.calendar().day).toBe(2);
-  expect(Game.calendar().hhmm).toBe("12:00");
-  Game.state.gameDays = 28.25;                 // Tag 29, 18:00 -> Saisonwechsel nach 28 Tagen
+  expect(Game.calendar().hhmm).toBe("06:00");
+  Game.state.gameDays = 28.5;                  // Tag 29, 18:00 -> Saisonwechsel nach 28 Tagen
   expect(Game.calendar().day).toBe(29);
   expect(Game.calendar().hhmm).toBe("18:00");
   expect(Game.calendar().seasonName).toBe("Sommer");
