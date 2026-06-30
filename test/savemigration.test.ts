@@ -356,10 +356,13 @@ test("v5 (aktueller Stand): gameDays überlebt exakt, kein Backup, Roundtrip sta
   });
 
   // Kern von #413: die persistente Zeit-Achse lädt EXAKT (fraktional, nicht gerundet)
-  // und ergibt den richtigen Kalendertag. gameDays 47.625: der Tag springt an Mitternacht
-  // (day = floor(gameDays + 0.5) + 1 = floor(48.125) + 1 = 49), Saison Sommer (Tag 49).
+  // und ergibt den richtigen Kalendertag. gameDays persistiert verlustfrei; der daraus
+  // abgeleitete (rein kosmetische) Kalendertag hängt seit #336 am 06:00-Spielstart:
+  // day = floor(gameDays + START_PHASE - 0.5) + 1 = floor(47.625 + 0.25) + 1 = 48,
+  // Saison Sommer (Tag 48). (Der Stand selbst bricht nicht – nur die Anzeige folgt dem
+  // verschobenen Mitternachts-Anker.)
   expect(Game.state.gameDays).toBe(47.625);
-  expect(Game.calendar().day).toBe(49);
+  expect(Game.calendar().day).toBe(48);
   expect(Game.calendar().seasonName).toBe("Sommer");
 
   // Aktuelle Version → kein Herauf-Migrieren → kein Sichern ins Backup.

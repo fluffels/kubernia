@@ -12,7 +12,7 @@
 import Phaser from "phaser";
 import { pickPlacements, strSeed, hash01, grassTuftStyle } from "../../decor";
 import { circleHitbox, rectHitbox, SHIP_DOOR } from "../../world";
-import { gameClock, DAY_CYCLE_MS } from "../../clock";
+import { gameClock, DAY_CYCLE_MS, withStartOffset } from "../../clock";
 import { UI } from "../../ui";
 import { WORLD_TO_ARCHIPEL } from "../../archipel";
 import { WORLD_TO_LIGHTHOUSE } from "../../lighthouse";
@@ -143,7 +143,9 @@ export function scatter(scene: WorldSceneLike, tex: string, count: number, scale
  *  am gespeicherten Zeitpunkt fort (die WorldScene reicht sie so herein). */
 export function updateDayNight(scene: WorldSceneLike, time: number) {
   const CYCLE = DAY_CYCLE_MS;                    // Tempo zentral in clock.ts justieren (SSOT)
-  const phase = (time % CYCLE) / CYCLE;          // 0 = Mittag … 0.5 = Mitternacht … 1 = Mittag
+  // Spielstart-Offset (#336): time=0 → früher Morgen (06:00, phase 0.75) statt Mittag.
+  // Identischer Offset wie in gameClock (withStartOffset) → Schleier & Uhr bleiben synchron.
+  const phase = (withStartOffset(time, CYCLE) % CYCLE) / CYCLE; // 0 = Mittag … 0.5 = Mitternacht … 0.75 = 06:00
   // Keyframes [phase, r, g, b, alpha] – dazwischen wird linear interpoliert
   const keys: number[][] = [
     [0.0,  10,  18, 48, 0.0],

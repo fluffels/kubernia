@@ -110,7 +110,9 @@ export interface GameState {
   questsSinceGate: number;
   /** Persistente Spiel-Zeit-Achse (#413): vergangene In-Game-Tage als **fraktionale Zahl**.
    *  Der Ganzzahl-Anteil + 1 ist der Anzeige-Tag (`gameDays` 0 = Tag 1), der Nachkomma-Anteil
-   *  die Tageszeit (Phase ab Mittag, wie der Tag-Nacht-Schleier). Daraus leiten `clock.ts`
+   *  die Tageszeit. `gameDays` 0 ist der Spielstart und zeigt seit #336 den frühen Morgen
+   *  (06:00) – der Start-Offset START_PHASE in `clock.ts` verschiebt die Achse für Uhr UND
+   *  Schleier gemeinsam, der Achsen-Nullpunkt selbst bleibt 0. Daraus leiten `clock.ts`
    *  (Uhr/Datum) und `updateDayNight` (Schleier) Tag/Saison/Uhrzeit ab – seit #413 überleben
    *  die also einen Reload (vorher lief Tag/Nacht nur aus der flüchtigen Frame-Zeit, Reload =
    *  wieder „Tag 1"). Bewusst in TAGEN statt ms gespeichert: so ist der Kalender vom Tempo
