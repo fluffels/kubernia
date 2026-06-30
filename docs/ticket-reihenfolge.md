@@ -1,8 +1,8 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-30 — zuletzt #382:** Worktree-Konvention in AGENTS.md vereinheitlicht (Doku-only). **Nächstes freies Ticket = oberstes des Kopfes** (#296 Reset-Fix Browser-Verifikation).
+> **Stand: 2026-06-30 — zuletzt #296:** Reset-Fix (#295) im Browser verifiziert — reine Verifikation, kein Code-Change; Spawn nach Reset landet exakt bei (400,248) neben Ole. Nebenbefund als #473 angelegt (Reset reloadt sofort und racet den async IndexedDB-Commit). **Nächstes freies Ticket = oberstes des Kopfes** (#443 Phaser-4 evaluieren ⚠️).
 >
-> _Frühere Tickets (Kurzfassung — volle Details in git-History + Brain `Projekte/KubeQuest`):_ #382 Worktree-Pfad-Konvention vereinheitlicht · #441 Knut-Sprite Asset-Hygiene · #362 freies Funken „Was ist gerade passiert?"-Erklärung · #359 `help` im CLI-Format · #358 `help` zeigt nur Freigeschaltetes · #328 Sandbox-Vertiefungs-Quiz · #278 Sammelalbum/Glossar · #279 Lernkarten-Backfill · #460–#466 Aufbau-Bogen (Epic #239, kubeadm + Terraform-Cluster) · #430 Gating-Konsistenz · #281/#282 Keycloak-/CI-Vertiefung · #237 Kralle-Gag.
+> _Frühere Tickets (Kurzfassung — volle Details in git-History + Brain `Projekte/KubeQuest`):_ #296 Reset-Fix im Browser verifiziert (+ #473 angelegt) · #382 Worktree-Pfad-Konvention vereinheitlicht · #441 Knut-Sprite Asset-Hygiene · #362 freies Funken „Was ist gerade passiert?"-Erklärung · #359 `help` im CLI-Format · #358 `help` zeigt nur Freigeschaltetes · #328 Sandbox-Vertiefungs-Quiz · #278 Sammelalbum/Glossar · #279 Lernkarten-Backfill · #460–#466 Aufbau-Bogen (Epic #239, kubeadm + Terraform-Cluster) · #430 Gating-Konsistenz · #281/#282 Keycloak-/CI-Vertiefung · #237 Kralle-Gag.
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -49,19 +49,22 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 |---|--------|------|--------------|---------------------------|
 | | **— Tiefer Lernpfad (Aufbau-Bogen #239 komplett: #460–#466 erledigt; #279 Backfill + #278 Sammelalbum + #328 Sandbox-Lernthema erledigt) —** | | | |
 | | **— Tech-Debt (sauber umsetzbar) —** | | | |
-| 1 | **#296** | niedrig | Reset-Fix (#295) manuell im Browser verifizieren | Verifikation, design-frei; reiner Browser-Check eines schon gefixten Verhaltens. |
-| 5 | **#443** ⚠️ | niedrig | Phaser 4 evaluieren/migrieren (Dependabot-Major #433, CI rot) | Tech-Debt, design-frei, aber **groß/riskant** (Major-Migration) — mit dem **Evaluieren loslegen** (Breaking Changes/Aufwand), bei einer echten Weiche per Rückfrage abstimmen; nicht blind mergen. |
+| 1 | **#443** ⚠️ | niedrig | Phaser 4 evaluieren/migrieren (Dependabot-Major #433, CI rot) | Tech-Debt, design-frei, aber **groß/riskant** (Major-Migration) — mit dem **Evaluieren loslegen** (Breaking Changes/Aufwand), bei einer echten Weiche per Rückfrage abstimmen; nicht blind mergen. |
+| 2 | **#311** | niedrig | Variable Platzhalter (nginx/webserver) typografisch als „ändere-mich"-Wert kennzeichnen (app-weit) | Auto-Rest hochgezogen (Prio→Nummer); design-arme Didaktik-Verbesserung ohne Abhängigkeit. |
+| 3 | **#318** | niedrig | HUD: Einkommensrate des Hafens/Clusters anzeigen (Dublonen/Stunde) | Auto-Rest hochgezogen (Prio→Nummer); kleines HUD-Feature ohne Abhängigkeit. |
 | | **— Anlegende / Epic —** | | | |
-| 6 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
-| 7 | **#317** 📦 | niedrig | EPIC: Komfort-Funktionen im Shop kaufen + Shop-Überarbeitung | **Epic → mit der Aufteilung loslegen** (session-große Kinder anlegen, Epic auf done schließen). |
+| 4 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
+| 5 | **#317** 📦 | niedrig | EPIC: Komfort-Funktionen im Shop kaufen + Shop-Überarbeitung | **Epic → mit der Aufteilung loslegen** (session-große Kinder anlegen, Epic auf done schließen). |
 | | **— 🎨 Optik / Grafik (werden GANZ NORMAL automatisch gewählt; das Aussehen stimmt der Agent WÄHREND der Umsetzung per Rückfrage mit der Maintainerin ab — Referenz/Vorschlag/generiertes Asset vorlegen, entscheiden lassen, iterieren; NICHT vorab gaten, NICHT selbst das Design festlegen) —** | | | |
-| 8 | **#183** 🎨 | niedrig | Hafen-Kanone als Pixelart-Asset statt Emoji 💣 | Optik — Asset-Look während der Umsetzung abstimmen. |
-| 9 | **#186** 🎨 | niedrig | Außen-Türen der Gebäude als Pixelart statt prozeduraler Rechtecke | Optik — Look während der Umsetzung abstimmen. |
-| 10 | **#187** 🎨 | niedrig | Interior-Einrichtung (Bullaugen/Türen/Wandschatten) als Pixelart | Optik — Look während der Umsetzung abstimmen. |
-| 11 | **#190** 🎨 | niedrig | Overlay-Panels (Funkgerät/Logbuch/Shop/Quiz/Stapel/Menü) im Stardew-Look | Optik — Look während der Umsetzung abstimmen. |
-| 12 | **#204** 🎨 | niedrig | HUD-/Panel-Emojis durch PixelLab-Pixel-Icons ersetzen | Optik — Look während der Umsetzung abstimmen. |
-| 13 | **#223** 🎨 | niedrig | Rang-Aufstieg mit Feier-Popup (alter → neuer Rang) statt nur Toast | Optik/UX — gehört mit #314 zusammen; Look während der Umsetzung abstimmen. |
-| 14 | **#238** 🎨 | niedrig | Container laufen visuell in Pods (Fässer im Schiffsrumpf) | Optik/Visualisierung — Look während der Umsetzung abstimmen. |
+| 6 | **#183** 🎨 | niedrig | Hafen-Kanone als Pixelart-Asset statt Emoji 💣 | Optik — Asset-Look während der Umsetzung abstimmen. |
+| 7 | **#186** 🎨 | niedrig | Außen-Türen der Gebäude als Pixelart statt prozeduraler Rechtecke | Optik — Look während der Umsetzung abstimmen. |
+| 8 | **#187** 🎨 | niedrig | Interior-Einrichtung (Bullaugen/Türen/Wandschatten) als Pixelart | Optik — Look während der Umsetzung abstimmen. |
+| 9 | **#190** 🎨 | niedrig | Overlay-Panels (Funkgerät/Logbuch/Shop/Quiz/Stapel/Menü) im Stardew-Look | Optik — Look während der Umsetzung abstimmen. |
+| 10 | **#204** 🎨 | niedrig | HUD-/Panel-Emojis durch PixelLab-Pixel-Icons ersetzen | Optik — Look während der Umsetzung abstimmen. |
+| 11 | **#223** 🎨 | niedrig | Rang-Aufstieg mit Feier-Popup (alter → neuer Rang) statt nur Toast | Optik/UX — gehört mit #314 zusammen; Look während der Umsetzung abstimmen. |
+| 12 | **#238** 🎨 | niedrig | Container laufen visuell in Pods (Fässer im Schiffsrumpf) | Optik/Visualisierung — Look während der Umsetzung abstimmen. |
+| 13 | **#289** 🎨 | niedrig | Kenney-Tilesets (town/dungeon) durch PixelLab ersetzen, dann entfernen | Auto-Rest hochgezogen (Prio→Nummer); Optik — Look während der Umsetzung abstimmen. |
+| 14 | **#303** 🎨 | niedrig | Gestoppte Container visuell ins Lager verschieben (statt am Dock) | Auto-Rest hochgezogen (Prio→Nummer); Optik/Visualisierung — Look während der Umsetzung abstimmen. |
 | 15 | **#314** 🎨 | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | Optik — Look während der Umsetzung abstimmen (übergreift #223). |
 | | **— Zuletzt —** | | | |
 | 16 | **#293** | niedrig | Spiellogik-Review (anlegend) | Steht bewusst **zuletzt** (reine Positionierung, kein Gate) — erst wenn der Backlog weitgehend leer ist, sonst veraltet das Review sofort. Erzeugt Folge-Tickets. |
