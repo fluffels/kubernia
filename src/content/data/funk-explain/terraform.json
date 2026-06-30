@@ -1,0 +1,22 @@
+[
+  {
+    "id": "fx-terraform-init",
+    "match": ["^terraform\\s+init\\b"],
+    "text": "<code>terraform init</code> bereitet das Arbeitsverzeichnis vor – lädt die nötigen Provider und richtet das Backend ein. Der erste Schritt, bevor Terraform etwas bauen kann."
+  },
+  {
+    "id": "fx-terraform-plan",
+    "match": ["^terraform\\s+plan\\b"],
+    "text": "<code>terraform plan</code> zeigt dir, was sich ändern WÜRDE – ein Vorschau-Diff zwischen Code und Wirklichkeit. Es ändert noch nichts; der Trockenlauf vor <code>apply</code>."
+  },
+  {
+    "id": "fx-terraform-apply",
+    "match": ["^terraform\\s+apply\\b"],
+    "text": "<code>terraform apply</code> setzt den geplanten Stand um – baut Infrastruktur aus Code, reproduzierbar und versioniert, statt von Hand zu klicken."
+  },
+  {
+    "id": "fx-terraform-destroy",
+    "match": ["^terraform\\s+destroy\\b"],
+    "text": "<code>terraform destroy</code> räumt wieder ab, was der Code angelegt hat – sauber und vollständig, weil Terraform Buch über jede Ressource führt."
+  }
+]

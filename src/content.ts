@@ -9,7 +9,7 @@ import { RANKS, SHOP } from "./content/progression";
 // NPCs, Smalltalk, Quests, Befehls-Karten und Quiz-Karten sind Content-as-Data
 // (#348/#352/#368): als JSON in content/data/, geladen & gegen ein Schema validiert vom
 // Loader (accept→RegExp, check→Mechanik-Registry). Siehe content/loader.ts + content/checks.ts.
-import { NPCS, SMALLTALK, getQuests, getCmdCards, getQuizCards, getQuestTopics, groupQuestsByTopic, getTfConfigs } from "./content/loader";
+import { NPCS, SMALLTALK, getQuests, getCmdCards, getQuizCards, getQuestTopics, groupQuestsByTopic, getTfConfigs, getFunkExplains } from "./content/loader";
 import { DRILLS, PRACTICE } from "./content/drills";
 import { STACK_ROUNDS, corruptImage } from "./content/minigame";
 
@@ -26,4 +26,7 @@ export const KQContent = {
   // Terraform-Konfig-Bibliothek (#147): benannte Beispiel-Szenarien der Expeditions-Flotte,
   // auf die Quests per `scenarioRef` verweisen. Lazy wie die übrigen Sammlungen.
   get TF_CONFIGS() { return getTfConfigs(); },
+  // Freies-Funken-Erklärungen (#362): „Was ist gerade passiert?"-Einordnungen, vom puren
+  // funkexplain.ts dosiert ausgewählt. Lazy wie die übrigen Sammlungen.
+  get FUNK_EXPLAINS() { return getFunkExplains(); },
 };

@@ -1,0 +1,57 @@
+[
+  {
+    "id": "fx-kubectl-get-pods",
+    "match": ["^kubectl\\s+(get|top)\\s+(po|pods?)\\b"],
+    "text": "<code>kubectl get pods</code> listet die Pods – die kleinste laufende Einheit im Cluster, meist genau ein Container darin. Die Spalte READY zeigt, ob alle Container im Pod stehen, STATUS ob er rund läuft."
+  },
+  {
+    "id": "fx-kubectl-get-nodes",
+    "match": ["^kubectl\\s+get\\s+(no|nodes?)\\b"],
+    "text": "<code>kubectl get nodes</code> zeigt die Knoten – die Maschinen, auf denen deine Pods laufen. Sie sind die Werften des Clusters: Control-Plane steuert, Worker tragen die Last."
+  },
+  {
+    "id": "fx-kubectl-get-svc",
+    "match": ["^kubectl\\s+get\\s+(svc|services?)\\b"],
+    "text": "<code>kubectl get services</code> zeigt die Services – feste Adressen, hinter denen sich wechselnde Pods verbergen. Egal welcher Pod gerade antwortet, der Service bleibt der gleiche Anleger."
+  },
+  {
+    "id": "fx-kubectl-get-deploy",
+    "match": ["^kubectl\\s+get\\s+(deploy|deployments?)\\b"],
+    "text": "<code>kubectl get deployments</code> zeigt die Deployments – sie sorgen dafür, dass immer die gewünschte Zahl Pods läuft und Ausgefallenes automatisch ersetzt wird."
+  },
+  {
+    "id": "fx-kubectl-get",
+    "match": ["^kubectl\\s+get\\b"],
+    "text": "<code>kubectl get</code> ist dein Fernrohr in den Cluster: es listet Objekte einer Art (Pods, Services, Nodes …) mit ihrem aktuellen Zustand."
+  },
+  {
+    "id": "fx-kubectl-describe",
+    "match": ["^kubectl\\s+describe\\b"],
+    "text": "<code>kubectl describe</code> öffnet die volle Akte eines Objekts: Events, Zustände, warum etwas (nicht) läuft. Das erste, wonach man bei Problemen greift."
+  },
+  {
+    "id": "fx-kubectl-logs",
+    "match": ["^kubectl\\s+logs\\b"],
+    "text": "<code>kubectl logs</code> zeigt, was ein Container ausgegeben hat – sein Logbuch. Hier steht meist die wahre Ursache, wenn ein Pod streikt."
+  },
+  {
+    "id": "fx-kubectl-apply",
+    "match": ["^kubectl\\s+apply\\b"],
+    "text": "<code>kubectl apply</code> gleicht den Cluster an deine YAML-Datei an – deklarativ: du beschreibst den SOLL-Zustand, der Cluster baut ihn nach. Zweimal apply schadet nicht (idempotent)."
+  },
+  {
+    "id": "fx-kubectl-delete",
+    "match": ["^kubectl\\s+delete\\b"],
+    "text": "<code>kubectl delete</code> entfernt ein Objekt. Bei einem Pod aus einem Deployment startet der Controller sofort Ersatz – Selbstheilung: der SOLL-Zustand bleibt."
+  },
+  {
+    "id": "fx-kubectl-scale",
+    "match": ["^kubectl\\s+scale\\b"],
+    "text": "<code>kubectl scale</code> ändert die Zahl der Pod-Repliken – mehr Schiffe für mehr Andrang, weniger, wenn es ruhig ist. Lastverteilung auf Knopfdruck."
+  },
+  {
+    "id": "fx-kubectl-expose",
+    "match": ["^kubectl\\s+expose\\b"],
+    "text": "<code>kubectl expose</code> legt einen Service vor dein Deployment – ab jetzt erreichst du die Pods über eine feste Adresse, statt jeden einzeln zu suchen."
+  }
+]

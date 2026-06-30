@@ -1,0 +1,32 @@
+[
+  {
+    "id": "fx-git-init",
+    "match": ["^git\\s+init\\b"],
+    "text": "<code>git init</code> macht aus dem Ordner ein Git-Repo (legt den versteckten <code>.git</code>-Ordner an) – ab jetzt kann Git jede Änderung als Schnappschuss festhalten."
+  },
+  {
+    "id": "fx-git-add",
+    "match": ["^git\\s+add\\b"],
+    "text": "<code>git add</code> merkt Dateien für den nächsten Commit vor (Staging). Erst auswählen, was zusammengehört, dann mit <code>git commit</code> festhalten."
+  },
+  {
+    "id": "fx-git-commit",
+    "match": ["^git\\s+commit\\b"],
+    "text": "<code>git commit</code> hält die vorgemerkten Änderungen als festen Schnappschuss fest, mit Nachricht. Hochgeladen wird damit noch nichts – das macht erst <code>git push</code>."
+  },
+  {
+    "id": "fx-git-push",
+    "match": ["^git\\s+push\\b"],
+    "text": "<code>git push</code> schiebt deine Commits hoch zum Remote – und stößt im Hafen die CI-Pipeline an. Erst jetzt sehen andere (und die Automatik) deine Änderung."
+  },
+  {
+    "id": "fx-git-status",
+    "match": ["^git\\s+status\\b"],
+    "text": "<code>git status</code> zeigt, was sich geändert hat, was schon vorgemerkt ist und auf welchem Branch du bist – der Lagebericht vor jedem Commit."
+  },
+  {
+    "id": "fx-git-checkout",
+    "match": ["^git\\s+(checkout|switch)\\b"],
+    "text": "<code>git checkout -b &lt;name&gt;</code> legt einen Branch an und wechselt direkt hinein – eine eigene Spur zum Experimentieren, ohne den Hauptstand zu stören."
+  }
+]

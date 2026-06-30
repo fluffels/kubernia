@@ -340,6 +340,9 @@ button.danger:hover { background: var(--bad); color: #1a0606; filter: none; }
 .term-tasks .tt-item.done { opacity: 0.55; border-left-color: var(--good); }
 .term-tasks .tt-item.current { border-left-color: var(--accent); }
 .term-tasks .tt-feedback { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: rgba(77,208,225,0.12); }
+/* #362: „Was ist gerade passiert?"-Einordnung im freien Funken – warm/golden abgesetzt
+   von der kühlen Aufgaben-Rückmeldung, damit es als freundlicher Erklär-Einwurf liest. */
+.term-tasks .tt-feedback.funk-explain { background: rgba(255,217,122,0.13); border-left: 3px solid var(--accent2); }
 /* Links im Aufgaben-Panel (z.B. GitHub-Diskussionen) lesbar gegen den dunklen Hintergrund (#360) */
 .term-tasks a { color: var(--accent2); text-decoration: underline; font-weight: bold; }
 .term-tasks a:hover { color: var(--accent); }

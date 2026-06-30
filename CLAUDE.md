@@ -92,7 +92,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/content/check-dsl.ts`](src/content/check-dsl.ts) | pure Domäne | Deklarative Quest-Check-DSL: `compileCheck` Regel→Prädikat (#411). → [content.md](docs/module/content.md) |
 | [`src/content/checks.ts`](src/content/checks.ts) | pure Domäne | `QUEST_CHECKS`: nur noch echte Code-Sonderfälle (der Rest ist DSL-Daten, #411). |
 | [`src/content/entities.ts`](src/content/entities.ts) | pure Domäne | Entity-Registry: datengesteuerte NPC- & Objekt-Platzierung (#349/#357). |
-| [`src/content/data/`](src/content/data/) | Daten | Quests/NPCs/Smalltalk/Reihenfolge/Drills/Quiz + Terraform-Konfigs (#147) als JSON. |
+| [`src/content/data/`](src/content/data/) | Daten | Quests/NPCs/Smalltalk/Reihenfolge/Drills/Quiz + Terraform-Konfigs (#147) + Funk-Erklärungen (#362) als JSON. |
 | [`src/content/abbrev.ts`](src/content/abbrev.ts) | pure Domäne | Langform↔Kürzel-Katalog („verdiente Abkürzung"). |
 | [`src/world.ts`](src/world.ts) | pure Domäne | Welt-Geometrie + Autotile (#340) + Sub-Tile-Kollision (#343/#386). → [world.md](docs/module/world.md) |
 | [`src/archipel.ts`](src/archipel.ts) | pure Domäne | GitOps-Archipel-Insel: Geometrie + Warp. |
@@ -112,6 +112,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/cmdhistory.ts`](src/cmdhistory.ts) | pure Domäne | Befehlshistorie fürs Funkgerät-Terminal (#316). |
 | [`src/cmdunlock.ts`](src/cmdunlock.ts) | pure Domäne | Freigeschaltete Befehlsfamilien fürs gefilterte `help` (#358): aus dem Quest-Fortschritt abgeleitet (kein neues Save-Feld), `help`/`clear` immer dabei. |
 | [`src/helptext.ts`](src/helptext.ts) | pure Domäne | `help`-Katalog + gefiltertes Rendering (#358) im CLI-Format (ein Befehl/Zeile, ausgerichtete Spalten, #359); der Simulator delegiert sein `help` hierher (eigenes, typfreies Modul → kein Zyklus). |
+| [`src/funkexplain.ts`](src/funkexplain.ts) | pure Domäne | Freies Funken „Was ist gerade passiert?": dosierte Auswahl einer In-World-Erklärung zur Befehlszeile (#362); Katalog ist Content-as-Data (`content/data/funk-explain/<tool>.json`). |
 | [`src/questlog.ts`](src/questlog.ts) | pure Domäne | Logbuch-Übersicht: Quest-Zustände, Nachlese (#326). |
 | [`src/album.ts`](src/album.ts) | pure Domäne | Sammelalbum/Glossar (#278): Befehle (Teach-Intros) + Wissen (Quiz) aus dem Content, nach Thema gruppiert, Freischalt-Ableitung aus `completedQuests`/`review` (kein neues Save-Feld). |
 | [`src/labellayout.ts`](src/labellayout.ts) | pure Domäne | Entzerrt überlappende In-Welt-Beschriftungen (#207). |
