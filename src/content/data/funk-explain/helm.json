@@ -1,0 +1,22 @@
+[
+  {
+    "id": "fx-helm-install",
+    "match": ["^helm\\s+install\\b"],
+    "text": "<code>helm install</code> rollt ein ganzes Paket (Chart) auf einmal aus – Deployment, Service und Konfiguration in einem Rutsch, statt jede YAML einzeln zu applien. Wie ein Bausatz statt loser Teile."
+  },
+  {
+    "id": "fx-helm-list",
+    "match": ["^helm\\s+(list|ls)\\b"],
+    "text": "<code>helm list</code> zeigt die installierten Releases – welche Charts gerade im Cluster laufen und in welcher Version."
+  },
+  {
+    "id": "fx-helm-upgrade",
+    "match": ["^helm\\s+upgrade\\b"],
+    "text": "<code>helm upgrade</code> hebt ein Release auf eine neue Version oder neue Werte – und merkt sich den alten Stand, sodass <code>helm rollback</code> notfalls zurückkann."
+  },
+  {
+    "id": "fx-helm-repo",
+    "match": ["^helm\\s+repo\\b"],
+    "text": "<code>helm repo</code> verwaltet die Quellen, aus denen du Charts beziehst – wie ein Adressbuch der Bausatz-Lieferanten."
+  }
+]

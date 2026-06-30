@@ -60,6 +60,7 @@ export const UI = {
   _practiceDirty: false,   // #219: aktuelle Übung gestolpert/Hilfe genutzt? -> nicht „gekonnt"
   stack: null as ActiveStack | null,      // Stapel-Minispiel
   failCount: 0,
+  _funkExplained: new Set<string>(),      // #362: IDs der „Was ist gerade passiert?"-Erklärungen, die diese Sitzung schon gezeigt wurden (dosiert, kein Save-Feld)
   _gateClearedIdx: -1,     // questIdx, für den das Wiederholungs-Gate schon erledigt ist (#222)
   _lastClock: "",          // zuletzt gesetzte HUD-Uhr-Signatur – die Uhr tickt jede reale Sekunde, aber updateDayNight feuert jeden Frame; nur bei echter Änderung in den DOM schreiben (#121)
   choiceBtns: null as HTMLButtonElement[] | null, // Dialog-Antwort-Buttons (für Tastatur-Navigation)

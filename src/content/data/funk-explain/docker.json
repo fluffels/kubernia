@@ -1,0 +1,32 @@
+[
+  {
+    "id": "fx-docker-pull",
+    "match": ["^docker\\s+pull\\b"],
+    "text": "<code>docker pull</code> lädt ein fertiges Image aus einer Registry herunter – wie ein Bauplan, den du dir besorgst, bevor du etwas baust. Die Zeilen darunter sind die einzelnen Schichten (Layer), die dabei geladen werden."
+  },
+  {
+    "id": "fx-docker-run",
+    "match": ["^docker\\s+run\\b"],
+    "text": "<code>docker run</code> startet aus einem Image einen laufenden Container – aus dem Bauplan wird ein echtes Schiff im Wasser. Mit <code>-d</code> läuft es im Hintergrund weiter."
+  },
+  {
+    "id": "fx-docker-build",
+    "match": ["^docker\\s+build\\b"],
+    "text": "<code>docker build</code> backt aus einem Dockerfile ein eigenes Image – du schreibst den Bauplan selbst, statt einen fertigen zu holen."
+  },
+  {
+    "id": "fx-docker-ps",
+    "match": ["^docker\\s+ps\\b"],
+    "text": "<code>docker ps</code> zeigt die gerade laufenden Container. Mit <code>-a</code> kämen auch die schon gestoppten dazu – wie ein Blick ins Hafenbecken samt vertäuter Schiffe."
+  },
+  {
+    "id": "fx-docker-images",
+    "match": ["^docker\\s+images\\b"],
+    "text": "<code>docker images</code> listet die Images, die schon bei dir liegen – dein Regal voller Baupläne, aus denen du Container starten kannst."
+  },
+  {
+    "id": "fx-docker-stop-rm",
+    "match": ["^docker\\s+(stop|rm)\\b"],
+    "text": "<code>docker stop</code> hält einen Container an, <code>docker rm</code> räumt ihn ganz weg. Das Image (der Bauplan) bleibt – du kannst jederzeit einen neuen Container daraus starten."
+  }
+]

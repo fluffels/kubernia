@@ -3,6 +3,7 @@ import { KQContent } from "../content";
 import { SFX } from "../sfx";
 import { ABBREVS, lockedAbbrevInInput, abbrevLockHint, flagNearMissHint, longFormsInInput } from "../content/abbrev";
 import { pushHistory, navigateHistory } from "../cmdhistory";
+import { pickFunkExplanation } from "../funkexplain";
 import type { QuestTask } from "../types";
 import { part, $, esc, NPCS, masteryBadge } from "./shared";
 
@@ -143,6 +144,19 @@ export const radioUI = part({
     // Anfang an da). Echte Shells können das auch – kurz erwähnt im Toast.
     if (Game.maybeUnlockCmdHistory()) {
       this.hint("🔓 Befehlshistorie freigeschaltet: Mit ↑/↓ holst du im Terminal vorherige Befehle zurück – wie in einer echten Shell.", "rankup");
+    }
+
+    // #362: Im freien Funken nach einem fehlerfreien Befehl eine kurze, in der Spielwelt
+    // verankerte Einordnung „Was ist gerade passiert?" einblenden – dosiert: nur bei einem
+    // echten Lernmoment (Befehl im Erklär-Katalog) und nie zweimal dieselbe pro Sitzung.
+    // Bei einem Sim-Fehler bewusst nicht (die Einordnung würde nicht zur Ausgabe passen).
+    if (this.funkSession().kind === "free" && !result.error) {
+      const exp = pickFunkExplanation(line, KQContent.FUNK_EXPLAINS, this._funkExplained);
+      if (exp) {
+        this._funkExplained.add(exp.id);
+        const fb = $("tt-feedback");
+        if (fb) fb.innerHTML = '<div class="tt-feedback funk-explain">💡 <b>Bo:</b> Was ist da gerade passiert? ' + exp.text + "</div>";
+      }
     }
 
     const task = this.currentTask();
