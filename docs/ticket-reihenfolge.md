@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-30 — zuletzt #459:** `kubectl-secrets`-Eintrag entfernt (keine echte Kontraktion; #430-Folge). 1313 Tests grün, typecheck + lint grün. **Nächstes freies Ticket = oberstes des Kopfes** (#441 Knut-Sprite 68×68→48²).
+> **Stand: 2026-06-30 — zuletzt #441:** Knut-Sprite 68×68→48² runterskaliert (Asset-Hygiene). 1313 Tests grün, typecheck + lint grün. **Nächstes freies Ticket = oberstes des Kopfes** (#382 Doku-Inkonsistenz Worktree-Pfad-Konvention).
 >
 > _Frühere Tickets (Kurzfassung — volle Details in git-History + Brain `Projekte/KubeQuest`):_ #362 freies Funken „Was ist gerade passiert?"-Erklärung · #359 `help` im CLI-Format · #358 `help` zeigt nur Freigeschaltetes · #328 Sandbox-Vertiefungs-Quiz · #278 Sammelalbum/Glossar · #279 Lernkarten-Backfill · #460–#466 Aufbau-Bogen (Epic #239, kubeadm + Terraform-Cluster) · #430 Gating-Konsistenz · #281/#282 Keycloak-/CI-Vertiefung · #237 Kralle-Gag.
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
@@ -49,8 +49,7 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 |---|--------|------|--------------|---------------------------|
 | | **— Tiefer Lernpfad (Aufbau-Bogen #239 komplett: #460–#466 erledigt; #279 Backfill + #278 Sammelalbum + #328 Sandbox-Lernthema erledigt) —** | | | |
 | | **— Tech-Debt (sauber umsetzbar) —** | | | |
-| 1 | **#441** | niedrig | char_knut.png ist 68×68 statt 48² – Knut rendert ~40 % zu groß | Bug, design-frei; Asset auf die etablierte Figurengröße bringen (kein Design-Entscheid). |
-| 3 | **#382** | niedrig | Doku-Inkonsistenz: Worktree-Pfad-Konvention (AGENTS.md vs CLAUDE.md vs launch.json) | Tech-Debt/Doku, design-frei; klärt eine widersprüchliche Konvention. |
+| 1 | **#382** | niedrig | Doku-Inkonsistenz: Worktree-Pfad-Konvention (AGENTS.md vs CLAUDE.md vs launch.json) | Tech-Debt/Doku, design-frei; klärt eine widersprüchliche Konvention. |
 | 4 | **#296** | niedrig | Reset-Fix (#295) manuell im Browser verifizieren | Verifikation, design-frei; reiner Browser-Check eines schon gefixten Verhaltens. |
 | 5 | **#443** ⚠️ | niedrig | Phaser 4 evaluieren/migrieren (Dependabot-Major #433, CI rot) | Tech-Debt, design-frei, aber **groß/riskant** (Major-Migration) — mit dem **Evaluieren loslegen** (Breaking Changes/Aufwand), bei einer echten Weiche per Rückfrage abstimmen; nicht blind mergen. |
 | | **— Anlegende / Epic —** | | | |
