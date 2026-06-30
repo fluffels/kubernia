@@ -1,6 +1,6 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-06-30 — zuletzt #363:** erste Docker-Quest + freies Funken nutzen das Hafen-Image `lotsen-dienst` statt `nginx` (bewusst minimaler Scope, mit der Maintainerin abgestimmt; spätere Quests behalten `nginx` gewollt). 4 neue Tests, npm test 1313 / typecheck / lint / arch / size grün, im Browser verifiziert. **Nächstes freies Ticket = oberstes des Kopfes** (#336 wird parallel bearbeitet → ist es vergeben, das nächste freie nehmen, z.B. #457).
+> **Stand: 2026-06-30 — zuletzt #336:** Spielstart morgens um 06:00 statt 12:00 — gemeinsamer Start-Offset `START_PHASE = 0.75` in `clock.ts` (`withStartOffset`), aus dem HUD-Uhr UND Tag-Nacht-Schleier ziehen (synchron, keine doppelte Zeit-Verbiegung); Tageszähler bleibt am Start Tag 1, springt erst zur ersten Mitternacht auf Tag 2 (Off-by-one per Test abgesichert). npm test 1309 / typecheck / lint grün, Start-Schleier (alpha 0.195) + 06:00 end-to-end verifiziert. **Nächstes freies Ticket = oberstes des Kopfes** (z.B. #457 `drills.ts` aufteilen).
 >
 > _Frühere Tickets (Kurzfassung — volle Details in git-History + Brain `Projekte/KubeQuest`):_ #362 freies Funken „Was ist gerade passiert?"-Erklärung · #359 `help` im CLI-Format · #358 `help` zeigt nur Freigeschaltetes · #328 Sandbox-Vertiefungs-Quiz · #278 Sammelalbum/Glossar · #279 Lernkarten-Backfill · #460–#466 Aufbau-Bogen (Epic #239, kubeadm + Terraform-Cluster) · #430 Gating-Konsistenz · #281/#282 Keycloak-/CI-Vertiefung · #237 Kralle-Gag.
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
@@ -47,27 +47,25 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
 | | **— Tiefer Lernpfad (Aufbau-Bogen #239 komplett: #460–#466 erledigt; #279 Backfill + #278 Sammelalbum + #328 Sandbox-Lernthema erledigt) —** | | | |
-| | **— QoL (design-frei) —** | | | |
-| 1 | **#336** | niedrig | Spiel morgens statt mittags starten (Startzeit 06:00 statt 12:00) | QoL, design-frei; kleine Konstante in der Spiel-Zeit. *(aktuell von einem Parallel-Agenten bearbeitet — ggf. überspringen.)* |
 | | **— Tech-Debt (sauber umsetzbar) —** | | | |
-| 2 | **#457** | niedrig | `src/content/drills.ts` aufteilen (God-File-Budget 800 LOC, #169) | Tech-Debt, design-frei; hält die Architektur Stardew-fest. |
-| 3 | **#459** | niedrig | kubectl-secrets-Pseudo-Abkürzung überdenken (secret keine echte Kontraktion) | Tech-/Pädagogik-Debt, design-frei; direkte #430-Folge, kleiner Konsistenz-Fix. |
-| 4 | **#441** | niedrig | char_knut.png ist 68×68 statt 48² – Knut rendert ~40 % zu groß | Bug, design-frei; Asset auf die etablierte Figurengröße bringen (kein Design-Entscheid). |
-| 5 | **#382** | niedrig | Doku-Inkonsistenz: Worktree-Pfad-Konvention (AGENTS.md vs CLAUDE.md vs launch.json) | Tech-Debt/Doku, design-frei; klärt eine widersprüchliche Konvention. |
-| 6 | **#296** | niedrig | Reset-Fix (#295) manuell im Browser verifizieren | Verifikation, design-frei; reiner Browser-Check eines schon gefixten Verhaltens. |
-| 7 | **#443** ⚠️ | niedrig | Phaser 4 evaluieren/migrieren (Dependabot-Major #433, CI rot) | Tech-Debt, design-frei, aber **groß/riskant** (Major-Migration) — erst evaluieren (Breaking Changes, Aufwand), dann entscheiden; nicht blind mergen. |
+| 1 | **#457** | niedrig | `src/content/drills.ts` aufteilen (God-File-Budget 800 LOC, #169) | Tech-Debt, design-frei; hält die Architektur Stardew-fest. |
+| 2 | **#459** | niedrig | kubectl-secrets-Pseudo-Abkürzung überdenken (secret keine echte Kontraktion) | Tech-/Pädagogik-Debt, design-frei; direkte #430-Folge, kleiner Konsistenz-Fix. |
+| 3 | **#441** | niedrig | char_knut.png ist 68×68 statt 48² – Knut rendert ~40 % zu groß | Bug, design-frei; Asset auf die etablierte Figurengröße bringen (kein Design-Entscheid). |
+| 4 | **#382** | niedrig | Doku-Inkonsistenz: Worktree-Pfad-Konvention (AGENTS.md vs CLAUDE.md vs launch.json) | Tech-Debt/Doku, design-frei; klärt eine widersprüchliche Konvention. |
+| 5 | **#296** | niedrig | Reset-Fix (#295) manuell im Browser verifizieren | Verifikation, design-frei; reiner Browser-Check eines schon gefixten Verhaltens. |
+| 6 | **#443** ⚠️ | niedrig | Phaser 4 evaluieren/migrieren (Dependabot-Major #433, CI rot) | Tech-Debt, design-frei, aber **groß/riskant** (Major-Migration) — erst evaluieren (Breaking Changes, Aufwand), dann entscheiden; nicht blind mergen. |
 | | **— Anlegende / Epic —** | | | |
-| 8 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
-| 9 | **#317** ⚠️ | niedrig | EPIC: Komfort-Funktionen im Shop kaufen + Shop-Überarbeitung | **Epic → aufteilen statt umsetzen** (session-große Kinder anlegen, Epic auf done schließen). |
+| 7 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
+| 8 | **#317** ⚠️ | niedrig | EPIC: Komfort-Funktionen im Shop kaufen + Shop-Überarbeitung | **Epic → aufteilen statt umsetzen** (session-große Kinder anlegen, Epic auf done schließen). |
 | | **— ⚠️ Optik / Grafik (erst Vorstellung + Referenzbilder mit der Maintainerin abstimmen; der Picker überspringt diese, bis das Design steht — nur hier sichtbar gemacht, niedrigste Nummern zuerst) —** | | | |
-| 10 | **#183** ⚠️ | niedrig | Hafen-Kanone als Pixelart-Asset statt Emoji 💣 | Optik — Referenz/Asset erst abstimmen. |
-| 11 | **#186** ⚠️ | niedrig | Außen-Türen der Gebäude als Pixelart statt prozeduraler Rechtecke | Optik — Referenz erst abstimmen. |
-| 12 | **#187** ⚠️ | niedrig | Interior-Einrichtung (Bullaugen/Türen/Wandschatten) als Pixelart | Optik — Referenz erst abstimmen. |
-| 13 | **#223** ⚠️ | niedrig | Rang-Aufstieg mit Feier-Popup (alter → neuer Rang) statt nur Toast | Optik/UX — gehört mit #314 zusammen; erst abstimmen. |
-| 14 | **#238** ⚠️ | niedrig | Container laufen visuell in Pods (Fässer im Schiffsrumpf) | Optik/Visualisierung — Referenz erst abstimmen. |
-| 15 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | Optik — erst Vorstellung + Referenzbilder abstimmen (übergreift #223). |
+| 9 | **#183** ⚠️ | niedrig | Hafen-Kanone als Pixelart-Asset statt Emoji 💣 | Optik — Referenz/Asset erst abstimmen. |
+| 10 | **#186** ⚠️ | niedrig | Außen-Türen der Gebäude als Pixelart statt prozeduraler Rechtecke | Optik — Referenz erst abstimmen. |
+| 11 | **#187** ⚠️ | niedrig | Interior-Einrichtung (Bullaugen/Türen/Wandschatten) als Pixelart | Optik — Referenz erst abstimmen. |
+| 12 | **#223** ⚠️ | niedrig | Rang-Aufstieg mit Feier-Popup (alter → neuer Rang) statt nur Toast | Optik/UX — gehört mit #314 zusammen; erst abstimmen. |
+| 13 | **#238** ⚠️ | niedrig | Container laufen visuell in Pods (Fässer im Schiffsrumpf) | Optik/Visualisierung — Referenz erst abstimmen. |
+| 14 | **#314** ⚠️ | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | Optik — erst Vorstellung + Referenzbilder abstimmen (übergreift #223). |
 | | **— Zuletzt —** | | | |
-| 16 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
+| 15 | **#293** ⚠️ | niedrig | Spiellogik-Review (anlegend) | **ZULETZT** — erst wenn der Backlog weitgehend leer ist (sonst veraltet das Review sofort). Erzeugt Folge-Tickets, kein direkter Fix. |
 
 > **Aufbau-Bogen-Optik #467** ⚠️ (zerstörter Hafen → Wiederaufbau) bleibt bewusst im **Auto-Rest**, bis die Vorstellung + Referenzbilder mit der Maintainerin abgestimmt sind — kein Blocker für den Lerninhalt (#460–#466).
 
