@@ -2,11 +2,11 @@
   {
     "id": "c-ch1-1",
     "chapter": "docker-first-container",
-    "q": "Lade das Image <code>nginx</code> aus der Registry herunter.",
+    "q": "Lade das Image <code>lotsen-dienst</code> aus der Registry herunter.",
     "accept": [
-      "^docker\\s+pull\\s+nginx(:\\S+)?$"
+      "^docker\\s+pull\\s+lotsen-dienst(:\\S+)?$"
     ],
-    "solution": "docker pull nginx",
+    "solution": "docker pull lotsen-dienst",
     "explain": "pull holt ein fertiges Image aus der Registry auf deinen Rechner – build dagegen stellt ein eigenes her."
   },
   {
