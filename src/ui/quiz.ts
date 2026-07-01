@@ -2,6 +2,7 @@ import { Game } from "../game";
 import { SFX } from "../sfx";
 import { lockedAbbrevInInput, abbrevLockHint } from "../content/abbrev";
 import { fmtCmd } from "../markup";
+import { scoreReview } from "../viewdecide";
 import { part, $, esc, CMD_MAX_ATTEMPTS, shuffled } from "./shared";
 
 export const quizUI = part({
@@ -284,18 +285,19 @@ export const quizUI = part({
   finishReviewItem(correct: boolean, explainHtml: string, assisted = false) {
     const r = this.review;
     // "Mit Hilfe gelöst" (erst nach Retry richtig) zählt fürs Spaced Repetition NICHT
-    // als sicher gekonnt – die Karte soll bald wiederkommen (#234, offene Frage).
-    const secure = correct && !assisted;
+    // als sicher gekonnt – die Karte soll bald wiederkommen (#234). Die Wertung
+    // (secure + Zähler-Bucket) liegt DOM-frei in uieval (#500).
+    const { secure, bucket } = scoreReview(correct, assisted);
+    if (bucket === "right") r.right++;
+    else if (bucket === "assisted") r.assisted++;
     if (r.free) {
       // Freies Üben: SR-Plan unangetastet lassen, keine Belohnung (kein Farmen)
-      if (correct) { if (secure) r.right++; else r.assisted++; SFX.success(); }
-      else SFX.wrong();
+      if (correct) SFX.success(); else SFX.wrong();
     } else {
       Game.reviewResult(r.current.itemId, secure);
-      if (correct) {
-        if (secure) { r.right++; this.reward(4, 3); }
-        else { r.assisted++; SFX.success(); }   // mit Hilfe: kein voller Reward
-      } else SFX.wrong();
+      if (!correct) SFX.wrong();
+      else if (secure) this.reward(4, 3);
+      else SFX.success();   // mit Hilfe: kein voller Reward
     }
     const head = correct
       ? (assisted
