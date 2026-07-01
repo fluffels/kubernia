@@ -19,6 +19,7 @@ import { UI } from "../../ui";
 import { KQContent } from "../../content";
 import { SFX } from "../../sfx";
 import { T } from "../shared";
+import { hazardStartable, stormVictims, pirateVictims, resolveHazardTick } from "../../hazards";
 import type { WorldSceneLike } from "./types";
 
 export function scheduleEvents(scene: WorldSceneLike, delaySec?: number) {
@@ -37,8 +38,8 @@ export function anyEventActive(scene: WorldSceneLike) {
 
 /* ---------- Sturm: ein Deployment geht kaputt, du reparierst es ---------- */
 export function tryStartStorm(scene: WorldSceneLike) {
-  if (!Game.eventProfile().enabled || anyEventActive(scene) || !Game.state.completedQuests.includes("k8s-node-capacity")) return;
-  const victims = Game.sim.deployments.filter(d => !d.broken);
+  if (!hazardStartable("storm", { enabled: Game.eventProfile().enabled, anyActive: anyEventActive(scene), completedQuests: Game.state.completedQuests })) return;
+  const victims = stormVictims(Game.sim.deployments);
   if (victims.length === 0 || UI.blocking()) { scene.hazards.nextStorm += 25; return; }
   const dep = Phaser.Utils.Array.GetRandom(victims);
   const kind = Math.random() < 0.5 ? "imagepull" : "crashloop";
@@ -89,8 +90,8 @@ export function resolveStorm(scene: WorldSceneLike, success: boolean) {
 }
 
 export function tryStartPirate(scene: WorldSceneLike) {
-  if (!Game.eventProfile().enabled || anyEventActive(scene) || !Game.state.completedQuests.includes("k8s-self-healing")) return;
-  const victims = Game.sim.deployments.filter(d => d.replicas >= 2);
+  if (!hazardStartable("pirate", { enabled: Game.eventProfile().enabled, anyActive: anyEventActive(scene), completedQuests: Game.state.completedQuests })) return;
+  const victims = pirateVictims(Game.sim.deployments);
   if (victims.length === 0 || UI.blocking()) { scene.hazards.nextPirate += 20; return; }
   const dep = Phaser.Utils.Array.GetRandom(victims);
   const want = dep.replicas;
@@ -136,7 +137,7 @@ export function resolvePirate(scene: WorldSceneLike, success: boolean) {
 }
 
 export function tryStartKraken(scene: WorldSceneLike) {
-  if (!Game.eventProfile().enabled || anyEventActive(scene) || !Game.state.completedQuests.includes("kraken-boss")) return;
+  if (!hazardStartable("kraken", { enabled: Game.eventProfile().enabled, anyActive: anyEventActive(scene), completedQuests: Game.state.completedQuests })) return;
   if (UI.blocking()) { scene.hazards.nextKraken += 20; return; }
   const baseline = Game.sim.secrets.length;
 
@@ -183,26 +184,14 @@ export function tickEvents(scene: WorldSceneLike, time: number) {
   if (now > scene.hazards.nextPirate) tryStartPirate(scene);
   if (now > scene.hazards.nextKraken) tryStartKraken(scene);
   if (now > scene.hazards.nextStorm) tryStartStorm(scene);
-  // #496: den non-null-narrowten Beutel in einer lokalen Konstante festhalten – TS
-  // kann die Verengung aus dem `if` sonst nicht in die `.find()`-Closure tragen (das
-  // versteckte vorher die `[key: string]: any`-Sicht der Szene).
-  const storm = scene.hazards.storm;
-  if (storm) {
-    const dep = Game.sim.deployments.find(d => d.name === storm.dep);
-    if (!dep || !dep.broken) resolveStorm(scene, true);
-    else if (now > storm.until) resolveStorm(scene, false);
-    else UI.updateAlarmTimer(Math.ceil(storm.until - now));
-  }
-  const pirate = scene.hazards.pirate;
-  if (pirate) {
-    const dep = Game.sim.deployments.find(d => d.name === pirate.dep);
-    if (dep && dep.replicas >= pirate.want) resolvePirate(scene, true);
-    else if (now > pirate.until) resolvePirate(scene, false);
-    else UI.updateAlarmTimer(Math.ceil(pirate.until - now));
-  }
-  if (scene.hazards.kraken) {
-    if (Game.sim.secrets.length > scene.hazards.kraken.baseline) resolveKraken(scene, true);
-    else if (now > scene.hazards.kraken.until) resolveKraken(scene, false);
-    else UI.updateAlarmTimer(Math.ceil(scene.hazards.kraken.until - now));
+  // Die spielentscheidenden Auflöse-/Deadline-Entscheidungen liegen jetzt im
+  // reinen Kern (#512); hier bleibt nur die Effekt-Ausführung. Die Szenen-
+  // `hazards` erfüllen `ActiveHazards` strukturell (nur mit Phaser-Extras).
+  const view = { deployments: Game.sim.deployments, secretCount: Game.sim.secrets.length };
+  for (const action of resolveHazardTick(scene.hazards, view, now)) {
+    if (action.type === "tick") { UI.updateAlarmTimer(action.secondsLeft); continue; }
+    if (action.kind === "storm") resolveStorm(scene, action.success);
+    else if (action.kind === "pirate") resolvePirate(scene, action.success);
+    else resolveKraken(scene, action.success);
   }
 }
