@@ -5,31 +5,8 @@
  * Fallback und der localStorage-Pfad sauber getrennt geprüft werden.
  */
 import { test, expect, vi, afterEach } from "vitest";
-
-function makeLocalStorageStub() {
-  const map = new Map<string, string>();
-  return {
-    getItem: (k: string) => (map.has(k) ? map.get(k)! : null),
-    setItem: (k: string, v: string) => { map.set(k, String(v)); },
-    removeItem: (k: string) => { map.delete(k); },
-    _map: map,
-  };
-}
-
-/** localStorage-Stub, bei dem die Init-Probe durchläuft, aber jeder ECHTE Schreibvorgang
- *  (Key != Probe) scheitert – simuliert ein zur Laufzeit volles Kontingent (QuotaExceeded). */
-function makeQuotaStub() {
-  const map = new Map<string, string>();
-  return {
-    getItem: (k: string) => (map.has(k) ? map.get(k)! : null),
-    setItem: (k: string, v: string) => {
-      if (k === "__kq_probe__") { map.set(k, String(v)); return; } // Init-Probe darf durch
-      throw new Error("QuotaExceededError"); // echte Saves scheitern zur Laufzeit
-    },
-    removeItem: (k: string) => { map.delete(k); },
-    _map: map,
-  };
-}
+import { stubWindowLocalStorage } from "./support/browser-env";
+import { makeQuotaStub } from "./support/quota-stub";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -38,8 +15,7 @@ afterEach(() => {
 });
 
 test("SaveStore: write/read/remove-Runde über localStorage", async () => {
-  const ls = makeLocalStorageStub();
-  vi.stubGlobal("window", { localStorage: ls });
+  const ls = stubWindowLocalStorage();
   vi.resetModules();
   const { SaveStore } = await import("../src/store");
 
@@ -52,8 +28,7 @@ test("SaveStore: write/read/remove-Runde über localStorage", async () => {
 });
 
 test("SaveStore: schreibt unter genau einem, stabilen Schlüssel", async () => {
-  const ls = makeLocalStorageStub();
-  vi.stubGlobal("window", { localStorage: ls });
+  const ls = stubWindowLocalStorage();
   vi.resetModules();
   const { SaveStore } = await import("../src/store");
 
@@ -84,8 +59,7 @@ test("SaveStore: fällt auf In-Memory zurück, wenn localStorage blockiert ist",
 const SAVE_KEY = "kubequest-save-v3"; // muss zum Key in store.ts passen
 
 test("writeState: legt den Stand in einer Versions-Hülle { v, data } ab", async () => {
-  const ls = makeLocalStorageStub();
-  vi.stubGlobal("window", { localStorage: ls });
+  const ls = stubWindowLocalStorage();
   vi.resetModules();
   const { SaveStore, CURRENT_SAVE_VERSION } = await import("../src/store");
 
@@ -98,8 +72,7 @@ test("writeState: legt den Stand in einer Versions-Hülle { v, data } ab", async
 });
 
 test("readState: Roundtrip mit writeState gibt den Stand zurück, nicht die Hülle", async () => {
-  const ls = makeLocalStorageStub();
-  vi.stubGlobal("window", { localStorage: ls });
+  stubWindowLocalStorage();
   vi.resetModules();
   const { SaveStore } = await import("../src/store");
 
@@ -110,8 +83,7 @@ test("readState: Roundtrip mit writeState gibt den Stand zurück, nicht die Hül
 });
 
 test("readState: migriert einen Alt-Stand OHNE Hülle (Version 0) verlustfrei", async () => {
-  const ls = makeLocalStorageStub();
-  vi.stubGlobal("window", { localStorage: ls });
+  const ls = stubWindowLocalStorage();
   vi.resetModules();
   const { SaveStore } = await import("../src/store");
 
@@ -124,8 +96,7 @@ test("readState: migriert einen Alt-Stand OHNE Hülle (Version 0) verlustfrei", 
 });
 
 test("readState: kaputte Datei führt zu frischem Start (null), nicht zum Crash", async () => {
-  const ls = makeLocalStorageStub();
-  vi.stubGlobal("window", { localStorage: ls });
+  const ls = stubWindowLocalStorage();
   vi.resetModules();
   const { SaveStore } = await import("../src/store");
 
@@ -134,8 +105,7 @@ test("readState: kaputte Datei führt zu frischem Start (null), nicht zum Crash"
 });
 
 test("readState: unbekannt neue Version crasht nicht, liefert die Nutzlast best effort", async () => {
-  const ls = makeLocalStorageStub();
-  vi.stubGlobal("window", { localStorage: ls });
+  const ls = stubWindowLocalStorage();
   vi.resetModules();
   const { SaveStore } = await import("../src/store");
 
@@ -149,8 +119,7 @@ test("readState: unbekannt neue Version crasht nicht, liefert die Nutzlast best 
 /* ===== Schreibsicherheit: voller/blockierter Speicher darf nicht crashen ===== */
 
 test("write: voller localStorage (QuotaExceeded) crasht NICHT, gibt false zurück", async () => {
-  const ls = makeQuotaStub();
-  vi.stubGlobal("window", { localStorage: ls });
+  stubWindowLocalStorage(makeQuotaStub());
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.resetModules();
   const { SaveStore } = await import("../src/store");
@@ -164,8 +133,7 @@ test("write: voller localStorage (QuotaExceeded) crasht NICHT, gibt false zurüc
 });
 
 test("writeState: voller localStorage crasht NICHT, gibt false zurück und warnt nur einmal", async () => {
-  const ls = makeQuotaStub();
-  vi.stubGlobal("window", { localStorage: ls });
+  stubWindowLocalStorage(makeQuotaStub());
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.resetModules();
   const { SaveStore } = await import("../src/store");
@@ -177,8 +145,7 @@ test("writeState: voller localStorage crasht NICHT, gibt false zurück und warnt
 });
 
 test("write/writeState: bei erfolgreichem Speichern wird true zurückgegeben", async () => {
-  const ls = makeLocalStorageStub();
-  vi.stubGlobal("window", { localStorage: ls });
+  stubWindowLocalStorage();
   vi.resetModules();
   const { SaveStore } = await import("../src/store");
 
@@ -189,8 +156,7 @@ test("write/writeState: bei erfolgreichem Speichern wird true zurückgegeben", a
 /* ===== Backup-Slot: kein Stand geht durch Migration/Verwerfen verloren ===== */
 
 test("readState: sichert einen migrierten Alt-Stand (v0) vor dem Überschreiben ins Backup", async () => {
-  const ls = makeLocalStorageStub();
-  vi.stubGlobal("window", { localStorage: ls });
+  const ls = stubWindowLocalStorage();
   vi.resetModules();
   const { SaveStore } = await import("../src/store");
 
@@ -203,8 +169,7 @@ test("readState: sichert einen migrierten Alt-Stand (v0) vor dem Überschreiben 
 });
 
 test("readState: sichert eine kaputte Datei ins Backup, statt sie verloren zu geben", async () => {
-  const ls = makeLocalStorageStub();
-  vi.stubGlobal("window", { localStorage: ls });
+  const ls = stubWindowLocalStorage();
   vi.resetModules();
   const { SaveStore } = await import("../src/store");
 
@@ -216,8 +181,7 @@ test("readState: sichert eine kaputte Datei ins Backup, statt sie verloren zu ge
 });
 
 test("readState: sichert einen Zukunfts-Stand (v>CURRENT) vor dem Herunterstufen ins Backup", async () => {
-  const ls = makeLocalStorageStub();
-  vi.stubGlobal("window", { localStorage: ls });
+  const ls = stubWindowLocalStorage();
   vi.resetModules();
   const { SaveStore } = await import("../src/store");
 
@@ -229,8 +193,7 @@ test("readState: sichert einen Zukunfts-Stand (v>CURRENT) vor dem Herunterstufen
 });
 
 test("readState: ein v1-Stand wird auf das aktuelle Format migriert und vorher gesichert (#353)", async () => {
-  const ls = makeLocalStorageStub();
-  vi.stubGlobal("window", { localStorage: ls });
+  const ls = stubWindowLocalStorage();
   vi.resetModules();
   const { SaveStore, CURRENT_SAVE_VERSION } = await import("../src/store");
 
@@ -247,8 +210,7 @@ test("readState: ein v1-Stand wird auf das aktuelle Format migriert und vorher g
 });
 
 test("readState: ein Roundtrip in aktueller Version legt KEIN Backup an", async () => {
-  const ls = makeLocalStorageStub();
-  vi.stubGlobal("window", { localStorage: ls });
+  stubWindowLocalStorage();
   vi.resetModules();
   const { SaveStore } = await import("../src/store");
 

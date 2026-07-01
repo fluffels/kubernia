@@ -7,7 +7,7 @@
  * zu wenig Dublonen -> kein Kauf, falsche Antwort -> Box zurück auf 1.
  */
 import { test, expect, beforeAll, beforeEach } from "vitest";
-import { vi } from "vitest";
+import { stubWindowLocalStorage, loadGameStack } from "./support/browser-env";
 import { KQContent } from "../src/content";
 import { NPC_SPAWNS, TILE, TALK_RANGE } from "../src/world";
 import { setWorldScene } from "../src/runtime";
@@ -21,19 +21,11 @@ let THRESHOLD: number;
 let CMD_HISTORY_AT: number;
 
 beforeAll(async () => {
-  const map = new Map<string, string>();
-  vi.stubGlobal("window", {
-    localStorage: {
-      getItem: (k: string) => (map.has(k) ? map.get(k)! : null),
-      setItem: (k: string, v: string) => { map.set(k, String(v)); },
-      removeItem: (k: string) => { map.delete(k); },
-    },
-  });
-  ({ Game } = await import("../src/game"));
-  THRESHOLD = (await import("../src/game")).ABBREV_EARN_THRESHOLD;
-  CMD_HISTORY_AT = (await import("../src/game")).CMD_HISTORY_UNLOCK_AT;
-  ({ Sim } = await import("../src/sim"));
-  ({ SaveStore } = await import("../src/store"));
+  stubWindowLocalStorage();                 // window.localStorage bereitstellen (geteiltes Harness)
+  ({ Game, Sim, SaveStore } = await loadGameStack());
+  const game = await import("../src/game"); // spielspezifische Konstanten aus demselben Modul
+  THRESHOLD = game.ABBREV_EARN_THRESHOLD;
+  CMD_HISTORY_AT = game.CMD_HISTORY_UNLOCK_AT;
 });
 
 beforeEach(() => {

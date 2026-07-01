@@ -1,13 +1,4 @@
-/* Gemeinsame Test-Fixtures für die sim-Modul-Tests (sim.test.ts-Split, #383).
- * Die befehlsfamilien-spezifischen Tests (docker/kubectl/rbac/helm/git/terraform/
- * argocd/glab) liegen je in test/sim/<familie>.test.ts und teilen sich diesen
- * frischen Ausgangs-Simulator – früher das beforeEach in test/sim.test.ts. */
-import { Sim as KQSim } from "../../src/sim";
-
-export { KQSim };
-
-/** Frischer Simulator mit leerem Szenario – der gemeinsame Startzustand jeder
- *  sim-Modul-Test-Datei (`beforeEach(() => { sim = freshSim(); })`). */
-export function freshSim(): KQSim {
-  return new KQSim({});
-}
+/* Re-Export der Sim-Factory (nach test/factories/ gezogen, #475). Die
+ * test/sim/*-Tests importieren weiterhin `{ KQSim, freshSim }` aus "./helpers"
+ * – dieser Barrel hält diese Import-Pfade unverändert (keine Link-Brüche). */
+export { KQSim, freshSim } from "../factories/sim";
