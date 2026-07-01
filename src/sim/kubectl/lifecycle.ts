@@ -15,6 +15,7 @@ import { addDeployment, removeDeployment, replaceDeploymentPod, restartStatefulP
 // einer Application zieht/kloniert den Soll direkt darüber (statt über eine Host-Methode).
 import { argoReconcile, cloneChildSpec } from "../argocd";
 import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
+import { flagValue, multiFlag } from "../util"; // clusterIP entfällt: Service läuft jetzt über host._makeService (#507)
 import { admitPod } from "./security";
 import type { KubectlHost } from "./host";
 
@@ -94,8 +95,8 @@ export function kubectlCreate(host: KubectlHost, t: string[], raw: string) {
     const name = t[3];
     if (!name || name.startsWith("--")) return host._err("kubectl create " + t[2] + ": Der Name fehlt.", "Muster: kubectl create " + t[2] + " <name> --verb=get,list --resource=pods");
     { const bad = invalidNameError(host, cluster ? "ClusterRole" : "Role", name); if (bad) return bad; }
-    const verbs = host._multiFlag(raw, "verb");
-    const resources = host._multiFlag(raw, "resource");
+    const verbs = multiFlag(raw, "verb");
+    const resources = multiFlag(raw, "resource");
     if (verbs.length === 0) return host._err("error: at least one --verb must be specified", "Häng z.B. '--verb=get,list' an.");
     if (resources.length === 0) return host._err("error: at least one --resource must be specified", "Häng z.B. '--resource=pods' an.");
     const kind = cluster ? "clusterrole" : "role";
@@ -108,15 +109,15 @@ export function kubectlCreate(host: KubectlHost, t: string[], raw: string) {
     const name = t[3];
     if (!name || name.startsWith("--")) return host._err("kubectl create " + t[2] + ": Der Name fehlt.", "Muster: kubectl create " + t[2] + " <name> --role=<rolle> --serviceaccount=<ns>:<sa>");
     { const bad = invalidNameError(host, cluster ? "ClusterRoleBinding" : "RoleBinding", name); if (bad) return bad; }
-    const roleName = host._flagValue(t, "--role");
-    const clusterRoleName = host._flagValue(t, "--clusterrole");
+    const roleName = flagValue(t, "--role");
+    const clusterRoleName = flagValue(t, "--clusterrole");
     // ClusterRoleBinding kann sich nur auf eine ClusterRole beziehen.
     if (cluster && roleName) return host._err("error: a ClusterRoleBinding can only reference a ClusterRole", "Nutze '--clusterrole=<name>' statt '--role'.");
     if (!roleName && !clusterRoleName) return host._err("error: exactly one of --role or --clusterrole must be specified", cluster ? "Häng '--clusterrole=<name>' an." : "Häng '--role=<name>' oder '--clusterrole=<name>' an.");
     const roleRef = clusterRoleName ? { kind: "ClusterRole" as const, name: clusterRoleName } : { kind: "Role" as const, name: roleName! };
     const subjects: RbacSubject[] = [];
-    for (const u of host._multiFlag(raw, "user")) subjects.push({ kind: "User", name: u });
-    for (const sa of host._multiFlag(raw, "serviceaccount")) {
+    for (const u of multiFlag(raw, "user")) subjects.push({ kind: "User", name: u });
+    for (const sa of multiFlag(raw, "serviceaccount")) {
       const [ns, n] = sa.includes(":") ? sa.split(":") : ["default", sa];
       subjects.push({ kind: "ServiceAccount", name: n, namespace: ns });
     }

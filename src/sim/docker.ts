@@ -12,7 +12,7 @@
  * die Domänentypen aus ./state – kein Rückimport nach sim.ts (kein Zyklus).
  */
 import type { Container } from "./state";
-import { randSuffix, table } from "./util";
+import { randSuffix, table, flagValue, suggest } from "./util";
 import { hashStr, hashHex } from "../rng";
 
 // Bekannte Container-Images – Grundlage für die „Meintest du …?"-Tippfehlerhilfe.
@@ -36,16 +36,14 @@ export interface DockerHost {
   files: Record<string, string>;
   clock: number;
   _err(msg: string, tip?: string): string;
-  _flagValue(tokens: string[], flag: string): string | null;
   _age(created: number): string;
-  _suggest(word: string, list: string[]): string | null;
 }
 
 /** Prüft ein Docker-Image auf Tippfehler. Gibt eine Fehlermeldung zurück oder null (alles ok). */
 export function checkImageTypo(sim: DockerHost, img: string): string | null {
   const bare = (img.split(":")[0].split("/").pop() || "").toLowerCase();
   if (KNOWN_IMAGES.includes(bare)) return null;
-  const guess = sim._suggest(bare, KNOWN_IMAGES);
+  const guess = suggest(bare, KNOWN_IMAGES);
   if (guess) {
     return sim._err('⚠️ Das Image "' + bare + '" kennt die Registry nicht.',
       "Tippfehler? Meintest du \"" + guess + "\"? (So entsteht im echten Cluster ein ImagePullBackOff!)");
@@ -88,7 +86,7 @@ export function dockerCommand(sim: DockerHost, t: string[], _raw?: string): stri
 
   if (sub === "build") {
     // docker build -t <name[:tag]> <kontext>  – baut aus dem Dockerfile ein eigenes Image.
-    const tagSpec = sim._flagValue(t, "-t") || sim._flagValue(t, "--tag");
+    const tagSpec = flagValue(t, "-t") || flagValue(t, "--tag");
     if (!tagSpec) return sim._err("docker build: Ohne -t bekommt dein Image keinen Namen.", "Muster: docker build -t <name>:<tag> .");
     // Build-Kontext = das positionale Argument (PATH | URL | -) hinter den Optionen.
     // Fehlt es, bricht echtes Docker mit "requires exactly 1 argument" ab – kein falscher Erfolg.

@@ -1,9 +1,10 @@
 import { Game, ABBREV_EARN_THRESHOLD } from "../game";
 import { KQContent } from "../content";
 import { SFX } from "../sfx";
-import { ABBREVS, lockedAbbrevInInput, abbrevLockHint, flagNearMissHint, longFormsInInput } from "../content/abbrev";
+import { ABBREVS } from "../content/abbrev";
 import { pushHistory, navigateHistory } from "../cmdhistory";
 import { pickFunkExplanation } from "../funkexplain";
+import { evaluateSubmission, funkSessionKind } from "../viewdecide";
 import { fmtCmd } from "../markup";
 import type { QuestTask } from "../types";
 import { part, $, esc, NPCS, masteryBadge } from "./shared";
@@ -20,11 +21,15 @@ export const radioUI = part({
     $("term-input").focus();
   },
 
-  /** Aktive Funk-Session: practice > Quest-Schritt > frei */
+  /** Aktive Funk-Session: practice > Quest-Schritt > frei (Priorität in uieval). */
   funkSession() {
-    if (this.practice && this.practice.idx < this.practice.drills.length) return { kind: "practice" };
     const step = Game.currentStep();
-    if (step && Game.isFunkStep(step)) return { kind: "quest", step };
+    const kind = funkSessionKind(
+      !!(this.practice && this.practice.idx < this.practice.drills.length),
+      !!(step && Game.isFunkStep(step)),
+    );
+    if (kind === "practice") return { kind: "practice" };
+    if (kind === "quest") return { kind: "quest", step: step! };
     return { kind: "free" };
   },
 
@@ -162,31 +167,28 @@ export const radioUI = part({
 
     const task = this.currentTask();
     if (!task) return;
-    const norm = line.trim().replace(/\s+/g, " ");
-    const cmdOk = task.accept.some((re: RegExp) => re.test(norm));
-    const checkOk = !task.check || task.check(Game.sim);
+    // #500: die verschränkte Bewertung (accept-Match / Abkürzungs-Gating #299/#366 /
+    // Near-Miss #367 / Begründung #233/#307) liegt jetzt DOM-frei in uieval.
+    // Hier nur noch: Zustand hereinreichen, Verdikt umsetzen (innerHTML/SFX/Fortschritt).
+    const verdict = evaluateSubmission(line, task, {
+      simError: !!result.error,
+      checkOk: !task.check || !!task.check(Game.sim),
+      isAbbrevUnlocked: (id) => Game.isAbbrevUnlocked(id),
+      unlockAbbrev: Game.currentStep()?.unlockAbbrev,
+      failCount: this.failCount,
+    });
 
-    // #299: Der Befehl trifft zwar die Lösung, nutzt aber ein noch nicht
-    // freigeschaltetes Profi-Kürzel → freundlicher Hinweis (Langform schreiben)
-    // statt es als gelöst zu werten. Die Langform gilt immer; nach Freischaltung
-    // (Game.unlockAbbrev, #300) zählen beide Formen.
-    // #366: Die Abkürzung, die GENAU DIESER Schritt freischaltet, ist hier
-    // ausgenommen – sonst blockt das Gating den Lehr-Auftrag, der sie einführt
-    // (z.B. „tippe docker ps -a“, während -a erst nach diesem Schritt freigeschaltet wird).
-    const lockedHit = cmdOk
-      ? lockedAbbrevInInput(norm, (id) => Game.isAbbrevUnlocked(id), Game.currentStep()?.unlockAbbrev)
-      : undefined;
-    if (lockedHit) {
+    if (verdict.outcome === "locked") {
       const fb = $("tt-feedback");
-      if (fb) fb.innerHTML = '<div class="tt-feedback">' + abbrevLockHint(lockedHit) + '</div>';
+      if (fb) fb.innerHTML = '<div class="tt-feedback">' + verdict.feedback + '</div>';
       return;
     }
 
-    if (cmdOk && !result.error && checkOk) {
+    if (verdict.outcome === "solved") {
       this.failCount = 0;
       // #313: jede korrekt getippte Langform eines noch gesperrten Bausteins zählt
       // Richtung Freischaltung; bei Erreichen der Schwelle ist die Kurzform „verdient".
-      for (const id of longFormsInInput(norm)) {
+      for (const id of verdict.longForms) {
         if (Game.recordAbbrevLongFormUse(id)) {
           const pair = ABBREVS.find(a => a.id === id);
           if (pair) this.hint(`🔓 Profi-Abkürzung verdient: <code>${pair.short[pair.short.length - 1]}</code> = <code>${pair.long}</code> – ${ABBREV_EARN_THRESHOLD}× ausgeschrieben!`, "rankup");
@@ -194,34 +196,14 @@ export const radioUI = part({
       }
       SFX.success();
       this.taskSolved();
-    } else {
-      this.failCount++;
-      this._practiceDirty = true; // #219: gestolpert -> diese Übung gilt als „noch nicht gekonnt"
-      const fb = $("tt-feedback");
-      // #367: Beinahe-Schreibweise eines Flags (z.B. „-all“ statt „-a“/„--all“) → gezielter
-      // Hinweis statt der generischen Meldung. Die Kurzform schlägt der Hinweis nur vor, wenn
-      // sie schon verfügbar ist (freigeschaltet ODER dieser Lehr-Schritt schaltet sie frei, #366).
-      const nearMiss = flagNearMissHint(norm, (id) => Game.isAbbrevUnlocked(id), Game.currentStep()?.unlockAbbrev);
-      if (fb && nearMiss) {
-        fb.innerHTML = '<div class="tt-feedback">' + nearMiss + '</div>';
-      } else if (fb && this.failCount >= 3) {
-        // nach mehreren Versuchen: zum Hinweis-Knopf lotsen
-        this.failCount = 0;
-        fb.innerHTML = '<div class="tt-feedback">💪 Tippfehler sind der häufigste Stolperstein. Der 🔭 Hinweis unten hilft – das ist keine Schande!</div>';
-      } else if (fb) {
-        // Aufgabe nicht gelöst → immer Begründung zeigen (#307: auch wenn der Befehl einen
-        // Sim-Fehler warf; „Nie nur falsch, immer begründen" #233).
-        const tip = (task.diag ? task.diag(norm) : null)
-          ?? task.why
-          ?? (/^docker\s+run\b/.test(norm)
-            ? "Bei <code>docker run</code>: hinter <code>--name</code> steht dein Wunschname, das Image kommt ganz zuletzt – Muster <code>docker run -d --name <name> <image></code>."
-            : "Vergleich ihn mit dem Muster oben – Reihenfolge und Namen genau prüfen.");
-        const prefix = result.error
-          ? "❌ "
-          : "❌ Fast – der Befehl lief durch, erfüllt die Aufgabe aber noch nicht. ";
-        fb.innerHTML = '<div class="tt-feedback">' + prefix + fmtCmd(tip) + '</div>';
-      }
+      return;
     }
+
+    // outcome === "failed"
+    this.failCount = verdict.failCount;
+    this._practiceDirty = true; // #219: gestolpert -> diese Übung gilt als „noch nicht gekonnt"
+    const fb = $("tt-feedback");
+    if (fb) fb.innerHTML = '<div class="tt-feedback">' + verdict.feedback + '</div>';
   },
 
   taskSolved() {

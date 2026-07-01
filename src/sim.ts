@@ -45,11 +45,59 @@ import { kubeadmCommand, deriveControlPlane, applyBootstrapScenario } from "./si
 import { nslookupCommand, curlCommand } from "./sim/net";
 import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
-import { randSuffix, clusterIP } from "./sim/util";
+import { randSuffix, clusterIP, suggest } from "./sim/util";
 import { asPodName, resourceName, InvalidResourceNameError, rfc1123ErrorText, RFC1123_TIP } from "./sim/names";
 import { assertClusterInvariants } from "./sim/invariants";
 import { scaleDeployment, replacePods } from "./sim/workload";
 import { renderHelp } from "./helptext";
+
+/* ---------- Ressourcen-Registry (#499) ----------
+ * Eine Reihe von Ressourcentypen ist „einfach additiv": ihr Zustand ist eine flache Liste,
+ * ein Eintrag wird per Shallow-Clone übernommen und per `.name` dedupliziert. Genau diese
+ * Typen standen bisher DREIMAL fast identisch da – in reset() (klonen), mergeScenario()
+ * (per Name anhängen) und snapshot() (klonen). Neue solche Ressource = drei Blöcke konsistent
+ * pflegen (iSAQB: Open-Closed verletzt). Als Registry ist jeder Typ EIN Eintrag hier; reset,
+ * merge und snapshot iterieren nur noch darüber. Der Schlüssel benennt dasselbe Feld auf
+ * BEIDEN Seiten (Live-Zustand UND Szenario-Spec heißen gleich). Ein Quest-Szenario kann so
+ * z.B. einen vorhandenen Service voraussetzen (#337), ohne dass eine frühere Quest ihn
+ * exposed haben muss – additiv, ohne Doppler. */
+const SIMPLE_RESOURCE_KEYS = [
+  "services", "ingresses", "networkPolicies",
+  "serviceMonitors", "prometheusRules", "grafanaDatasources", "grafanaDashboards",
+] as const;
+type SimpleResourceKey = (typeof SIMPLE_RESOURCE_KEYS)[number];
+type NamedRes = { name: string };
+
+/* Registry-Zugriff auf die gleichnamige Liste. TypeScript kann die per-Schlüssel-Korrelation
+ * der Union-Typen (Live-Zustand ↔ Szenario) nicht ausdrücken (kein „correlated unions"),
+ * darum hier drei eng gekapselte, dokumentierte `any`-Brücken – analog zu den bewusst nötigen
+ * ThisType-Escape-Hatches (GameSelf/UISelf) des Projekts. Die Element-Semantik bleibt korrekt
+ * (alle Typen sind `{name}`-Ressourcen; die Klon-/Dedup-Logik hängt nur an `.name`). */
+function simpleList(obj: object, key: SimpleResourceKey): NamedRes[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((obj as any)[key] as NamedRes[] | undefined) || [];
+}
+function setSimpleList(obj: object, key: SimpleResourceKey, list: NamedRes[]): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (obj as any)[key] = list;
+}
+/** Flacher Klon einer Ressourcen-Liste (reset/snapshot). */
+function cloneNamed(list: readonly NamedRes[]): NamedRes[] {
+  return list.map(x => Object.assign({}, x));
+}
+/** Additiv einmischen: hängt jeden Eintrag an, dessen `.name` in der Ziel-Liste noch fehlt. */
+function mergeByName(target: NamedRes[], specs: readonly NamedRes[] | undefined): void {
+  for (const s of specs || []) {
+    if (!target.some(x => x.name === s.name)) target.push(Object.assign({}, s));
+  }
+}
+/** Snapshot der „einfach additiven" Ressourcen als getippter Record (Spread in snapshot()). */
+function snapshotSimple(state: object): Pick<Required<Scenario>, SimpleResourceKey> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const out: any = {};
+  for (const k of SIMPLE_RESOURCE_KEYS) out[k] = cloneNamed(simpleList(state, k));
+  return out;
+}
 
   class Sim implements ClusterState {
     // `!` = definite assignment: alle Felder werden in reset() gesetzt, das der
@@ -133,17 +181,14 @@ import { renderHelp } from "./helptext";
         this._seedEphemeral(dep, d); // node/emptyDir/ephemeral-storage (#240)
         return dep;
       });
-      this.services = (sc.services || []).map(s => Object.assign({}, s));
-      this.ingresses = (sc.ingresses || []).map(i => Object.assign({}, i));
-      this.networkPolicies = (sc.networkPolicies || []).map(n => Object.assign({}, n));
+      // „Einfach additive" Ressourcen (services/ingresses/networkPolicies/serviceMonitors/
+      // prometheusRules/grafanaDatasources/grafanaDashboards) über die Resource-Registry (#499)
+      // klonen – ein Schleifendurchlauf statt sieben fast identischer Einzelzeilen.
+      for (const k of SIMPLE_RESOURCE_KEYS) setSimpleList(this, k, cloneNamed(simpleList(sc, k)));
       this.secrets = (sc.secrets || []).map(s => Object.assign({}, s));
       this.configMaps = (sc.configMaps || []).map(c => Object.assign({}, c));
       this.files = Object.assign({}, sc.files || {});
       this.applyEffects = sc.applyEffects || {}; // dateiname -> Wirkung von kubectl apply -f
-      this.serviceMonitors = (sc.serviceMonitors || []).map(s => Object.assign({}, s));
-      this.prometheusRules = (sc.prometheusRules || []).map(r => Object.assign({}, r));
-      this.grafanaDatasources = (sc.grafanaDatasources || []).map(d => Object.assign({}, d));
-      this.grafanaDashboards = (sc.grafanaDashboards || []).map(d => Object.assign({}, d));
 
       // Speicher (#122) – Reihenfolge zählt: StorageClass + PVs müssen stehen, bevor
       // PVCs/StatefulSets binden. Ohne explizite Vorgabe gibt es – wie in kind/minikube –
@@ -253,9 +298,7 @@ import { renderHelp } from "./helptext";
     }
 
     _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment {
-      // #507: die Namensprüfung lebt zentral in der Fabrik – jeder Anlege-Weg (create,
-      // apply, helm install) läuft hier durch, ein DNS-1123-verletzender Name wirft und
-      // wird von exec() zur richtigen kubectl-Meldung (statt still ein illegaler Zustand).
+      // #507: Namensprüfung zentral an der Fabrik – jeder Anlege-Weg läuft hier durch.
       const d: Deployment = {
         name: resourceName(name), image, replicas, created: this.clock, pods: [], broken: broken ? Object.assign({}, broken) : null,
         envFrom: { configMaps: (envFrom?.configMaps || []).slice(), secrets: (envFrom?.secrets || []).slice() },
@@ -269,15 +312,11 @@ import { renderHelp } from "./helptext";
       return d;
     }
 
-    /** Baut einen Service (#507): die EINE Anlege-Grenze für `kubectl expose`, `kubectl
-     *  apply -f` und `helm install` – validiert den Namen (DNS-1123) zentral statt pro
-     *  Call-Site. Ein ExternalName-Service (#337) bekommt keine ClusterIP, sondern den
-     *  CNAME-Zielnamen; sonst die aus dem Namen abgeleitete stabile ClusterIP (#492). */
+    /** Baut einen Service (#507): die EINE Anlege-Grenze für expose/apply/helm – validiert
+     *  den Namen (DNS-1123) zentral. ExternalName (#337) → CNAME statt ClusterIP. */
     _makeService(spec: { name: string; type?: string; port: string | number; targetPort?: string | number; externalName?: string }): ServiceRes {
       const name = resourceName(spec.name);
-      if (spec.externalName) {
-        return { name, type: "ExternalName", clusterIP: "<none>", port: spec.port, externalName: spec.externalName, created: this.clock };
-      }
+      if (spec.externalName) return { name, type: "ExternalName", clusterIP: "<none>", port: spec.port, externalName: spec.externalName, created: this.clock };
       return {
         name, type: spec.type || "ClusterIP", clusterIP: clusterIP(name), port: spec.port,
         ...(spec.targetPort !== undefined ? { targetPort: spec.targetPort } : {}),
@@ -348,8 +387,7 @@ import { renderHelp } from "./helptext";
     _makeStatefulSet(spec: { name: string; image: string; replicas: number; serviceName?: string; volumeClaimName?: string; storage?: string; storageClass?: string }): StatefulSetRes {
       const vct = spec.volumeClaimName || "data";
       const sts: StatefulSetRes = {
-        name: resourceName(spec.name), // #507: DNS-1123 zentral an der Fabrik-Grenze
-        image: spec.image, replicas: spec.replicas,
+        name: resourceName(spec.name), image: spec.image, replicas: spec.replicas, // #507: DNS-1123 zentral
         serviceName: spec.serviceName || spec.name,
         volumeClaimName: vct,
         storage: spec.storage || "1Gi",
@@ -473,18 +511,10 @@ import { renderHelp } from "./helptext";
         if (existing) Object.assign(existing, n);
         else this.nodes.push(Object.assign({}, n));
       }
-      for (const s of sc.serviceMonitors || []) {
-        if (!this.serviceMonitors.some(x => x.name === s.name)) this.serviceMonitors.push(Object.assign({}, s));
-      }
-      for (const r of sc.prometheusRules || []) {
-        if (!this.prometheusRules.some(x => x.name === r.name)) this.prometheusRules.push(Object.assign({}, r));
-      }
-      for (const d of sc.grafanaDatasources || []) {
-        if (!this.grafanaDatasources.some(x => x.name === d.name)) this.grafanaDatasources.push(Object.assign({}, d));
-      }
-      for (const d of sc.grafanaDashboards || []) {
-        if (!this.grafanaDashboards.some(x => x.name === d.name)) this.grafanaDashboards.push(Object.assign({}, d));
-      }
+      // „Einfach additive" Ressourcen (services/ingresses/networkPolicies/serviceMonitors/
+      // prometheusRules/grafana*) additiv über die Resource-Registry (#499) einmischen – ein
+      // Durchlauf statt sieben separater, per Name deduplizierender Blöcke.
+      for (const k of SIMPLE_RESOURCE_KEYS) mergeByName(simpleList(this, k), simpleList(sc, k));
       // Speicher (#122) – Reihenfolge wie in reset(): StorageClass + PVs vor PVCs/StatefulSets.
       for (const s of sc.storageClasses || []) {
         if (!this.storageClasses.some(x => x.name === s.name)) this.storageClasses.push({ name: s.name, provisioner: s.provisioner || "rancher.io/local-path", reclaimPolicy: s.reclaimPolicy || "Delete", isDefault: !!s.isDefault, created: this.clock });
@@ -552,18 +582,7 @@ import { renderHelp } from "./helptext";
       for (const c of sc.charts || []) {
         if (!this.charts.some(x => x.name === c.name)) this.charts.push({ name: c.name, version: c.version || "0.1.0", packaged: !!c.packaged });
       }
-      // Services additiv einmischen (#337) – analog zu ingresses/networkPolicies. Ein
-      // Quest-Szenario kann so einen vorhandenen Service voraussetzen (z.B. für nslookup),
-      // ohne sich darauf zu verlassen, dass eine frühere Quest ihn schon exposed hat.
-      for (const s of sc.services || []) {
-        if (!this.services.some(x => x.name === s.name)) this.services.push(Object.assign({}, s));
-      }
-      for (const ing of sc.ingresses || []) {
-        if (!this.ingresses.some(x => x.name === ing.name)) this.ingresses.push(Object.assign({}, ing));
-      }
-      for (const np of sc.networkPolicies || []) {
-        if (!this.networkPolicies.some(x => x.name === np.name)) this.networkPolicies.push(Object.assign({}, np));
-      }
+      // (services/ingresses/networkPolicies laufen jetzt oben über die Resource-Registry #499.)
       if (sc.ciDeploy) this.ci.deploy = Object.assign({}, sc.ciDeploy);
       // Kollaborations-Setup (origin voraus + scharf gestellter Konflikt) als EINHEIT
       // einmischen. game.ts re-merged beim Laden alle erreichten Szenarien – ein nacktes
@@ -599,17 +618,13 @@ import { renderHelp } from "./helptext";
           // Ephemeral-Storage (#240): emptyDir/Limit/Nutzung/Node-Pin überleben den Reload; `evicted`
           // wird beim Laden ohnehin neu abgeleitet, daher nicht serialisiert.
           node: d.node, emptyDir: d.emptyDir ? Object.assign({}, d.emptyDir) : undefined, ephemeralLimit: d.ephemeralLimit, ephemeralUsedMi: d.ephemeralUsedMi })),
-        services: this.services.map(s => Object.assign({}, s)),
-        ingresses: this.ingresses.map(i => Object.assign({}, i)),
-        networkPolicies: this.networkPolicies.map(n => Object.assign({}, n)),
+        // services/ingresses/networkPolicies/serviceMonitors/prometheusRules/grafana* über die
+        // Resource-Registry serialisieren (#499) – flacher Klon, gespiegelt zu reset/mergeScenario.
+        ...snapshotSimple(this),
         secrets: this.secrets.map(s => ({ name: s.name, keys: s.keys.slice() })),
         configMaps: this.configMaps.map(c => ({ name: c.name, keys: c.keys.slice() })),
         files: Object.assign({}, this.files),
         applyEffects: JSON.parse(JSON.stringify(this.applyEffects)),
-        serviceMonitors: this.serviceMonitors.map(s => Object.assign({}, s)),
-        prometheusRules: this.prometheusRules.map(r => Object.assign({}, r)),
-        grafanaDatasources: this.grafanaDatasources.map(d => Object.assign({}, d)),
-        grafanaDashboards: this.grafanaDashboards.map(d => Object.assign({}, d)),
         // Speicher (#122): PVCs gebunden serialisieren (volume + status), damit ein Reload
         // sie NICHT neu provisioniert; StatefulSets nur als Spezifikation – ihre Pods (stabile
         // Namen) und bereits vorhandene PVCs baut reset() deterministisch wieder auf.
@@ -713,7 +728,7 @@ import { renderHelp } from "./helptext";
           case "clear": return { output: null, error: false, clear: true };
           case "help": out = this._help(available); break;
           default: {
-            const guess = this._suggest(cmd, ["docker", "kubectl", "kubeadm", "helm", "terraform", "git", "argocd", "glab", "nslookup", "curl", "aws", "ls", "cat", "clear", "help"]);
+            const guess = suggest(cmd, ["docker", "kubectl", "kubeadm", "helm", "terraform", "git", "argocd", "glab", "nslookup", "curl", "aws", "ls", "cat", "clear", "help"]);
             out = this._err("⚠️ Den Befehl '" + cmd + "' gibt es hier nicht.",
               guess ? "Meintest du '" + guess + "'? (Tippe 'help' für alle Befehle.)"
                     : "Tippe 'help' für eine Liste der Befehle, die hier funktionieren.");
@@ -724,9 +739,8 @@ import { renderHelp } from "./helptext";
         // statt still einen illegalen Zustand zu hinterlassen (Dev/Test, siehe invariantChecks).
         if (this.invariantChecks) assertClusterInvariants(this);
       } catch (e) {
-        // #507: ein ungültiger Ressourcenname (aus einer _make*-Fabrik) ist KEIN interner
-        // Fehler, sondern eine abgelehnte Nutzereingabe – als richtige kubectl-Meldung
-        // ausgeben (zentral, egal ob create/apply/expose/helm den Namen brachte).
+        // #507: ein ungültiger Ressourcenname (aus einer _make*-Fabrik) ist eine abgelehnte
+        // Nutzereingabe, kein interner Fehler → als richtige kubectl-Meldung ausgeben.
         if (e instanceof InvalidResourceNameError) {
           out = this._err(rfc1123ErrorText(e.raw), RFC1123_TIP);
         } else {
@@ -742,49 +756,9 @@ import { renderHelp } from "./helptext";
       return msg + (tip ? "\n💡 " + tip : "");
     }
 
-    /** Editierdistanz (Levenshtein) – für „Meintest du …?"-Vorschläge. */
-    _editDistance(a: string, b: string) {
-      const m = a.length, n = b.length;
-      const d = Array.from({ length: m + 1 }, (_, i) => [i].concat(new Array(n).fill(0)));
-      for (let j = 0; j <= n; j++) d[0][j] = j;
-      for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) {
-        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
-      }
-      return d[m][n];
-    }
-
-    /** Nächstliegendes bekanntes Wort, wenn nah genug dran (sonst null). */
-    _suggest(word: string, list: string[]): string | null {
-      let best: string | null = null, bestD = Infinity;
-      for (const cand of list) {
-        const dist = this._editDistance(word.toLowerCase(), cand.toLowerCase());
-        if (dist < bestD) { bestD = dist; best = cand; }
-      }
-      const limit = word.length <= 4 ? 1 : 2; // bei kurzen Wörtern strenger
-      return bestD <= limit && bestD > 0 ? best : null;
-    }
-
-    /** Wert hinter einer Flag finden: unterstützt "-n wert" und "-n=wert". */
-    _flagValue(tokens: string[], flag: string): string | null {
-      for (let i = 0; i < tokens.length; i++) {
-        if (tokens[i] === flag) return tokens[i + 1] || null;
-        if (tokens[i].startsWith(flag + "=")) return tokens[i].slice(flag.length + 1);
-      }
-      return null;
-    }
-
-    /** Alle Werte eines (wiederholbaren UND kommagetrennten) Flags einsammeln, z.B.
-     *  `--verb=get,list --verb=watch` → ["get","list","watch"]. Für RBAC-Befehle (#126). */
-    _multiFlag(raw: string, flag: string): string[] {
-      const re = new RegExp("--" + flag + "[=\\s]([^\\s]+)", "g");
-      const out: string[] = [];
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(raw)) !== null) {
-        for (const part of m[1].split(",")) if (part) out.push(part);
-      }
-      return out;
-    }
+    // Eingabe-Parsing (Vorschläge/Flags) liegt seit #499 als pure Funktionen in ./sim/util.ts
+    // (editDistance/suggest/flagValue/multiFlag) – sie brauchen keinen Cluster-Zustand, hielten
+    // den Kern nur künstlich groß und mussten durch jedes Host-Interface gereicht werden.
 
     /** Hilfetext – Katalog + Filtern liegen in cmdunlock.ts (#358), hält den Kern
      *  unter dem God-File-Budget. `available` filtert auf Freigeschaltetes. */

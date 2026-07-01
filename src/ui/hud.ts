@@ -2,6 +2,7 @@ import { Game } from "../game";
 import { SFX } from "../sfx";
 import { worldScene, interiorOpen } from "../runtime";
 import { part, $, NPCS, SMALLTALK } from "./shared";
+import { resolveTalkTarget } from "../viewdecide";
 import { TOAST_LIFE_MS, HINT_LIFE_MS, toastFadeDelaySeconds } from "../toastlife";
 
 export const hudUI = part({
@@ -158,19 +159,22 @@ export const hudUI = part({
    *  verhindert weiterhin, dass man durch die Wand mit Außen-NPCs der
    *  pausierten Welt redet. */
   talkTo(npcId: string): void {
-    if (npcId === "pelle") return this.openShop();
-    if (npcId === "kralle") return this.openReview();
-
+    // #500: Routing-Priorität (Shop → Review → Quest-Schritt[+Gate #222] → Menü)
+    // liegt DOM-frei in uieval; hier nur Zustand hereinreichen + Verzweigung ausführen.
     const step = Game.currentStep();
-    if (step && (step.type === "dialog" || step.type === "choice") && step.npc === npcId) {
-      // Sanftes Wiederholungs-Gate (#222): bevor eine NEUE Quest startet (Schritt 0)
-      // und nur wenn Karten fällig sind, kurz auffrischen – einmal pro Quest.
-      if (Game.shouldReviewGate() && this._gateClearedIdx !== Game.state.questIdx) {
-        return this.openReviewGate(npcId);
-      }
-      return this.runQuestStep();
+    const questStepNpc =
+      step && (step.type === "dialog" || step.type === "choice") ? step.npc : null;
+    // Sanftes Wiederholungs-Gate (#222): bevor eine NEUE Quest startet und nur wenn
+    // Karten fällig sind, kurz auffrischen – einmal pro Quest.
+    const reviewGatePending =
+      Game.shouldReviewGate() && this._gateClearedIdx !== Game.state.questIdx;
+    switch (resolveTalkTarget(npcId, { shopNpcId: "pelle", reviewNpcId: "kralle", questStepNpc, reviewGatePending })) {
+      case "shop": return this.openShop();
+      case "review": return this.openReview();
+      case "reviewGate": return this.openReviewGate(npcId);
+      case "questStep": return this.runQuestStep();
+      case "menu": return this.showNpcMenu(npcId);
     }
-    this.showNpcMenu(npcId);
   },
 
   /** Menü: Plaudern / Üben / Stapel-Spiel */

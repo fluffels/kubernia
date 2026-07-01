@@ -10,6 +10,7 @@
  * KubectlHost-Interface (./host). Kein Rückimport (kein Zyklus).
  */
 import type { RbacSubject, SecurityContext } from "../state";
+import { flagValue } from "../util";
 import type { KubectlHost } from "./host";
 
 /* ---- RBAC-Auswertung (#126) ---- */
@@ -56,7 +57,7 @@ export function kubectlAuth(host: KubectlHost, t: string[], _raw: string) {
   const verb = positional[0];
   const resource = positional[1];
   if (!verb || !resource) return host._err("kubectl auth can-i: Es fehlt verb oder resource.", "Muster: kubectl auth can-i get pods --as=system:serviceaccount:default:deploy-bot");
-  const subjectKey = asKey(host._flagValue(t, "--as"));
+  const subjectKey = asKey(flagValue(t, "--as"));
   return canI(host, verb, resource, subjectKey) ? "yes" : "no";
 }
 

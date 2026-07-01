@@ -76,7 +76,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/sim.ts`](src/sim.ts) | pure Domäne | Cluster-Simulator-**Kern** (State/reset/Fabriken/`exec`-Dispatch/snapshot); Befehlsfamilien ausgelagert nach `src/sim/*`. → [sim.md](docs/module/sim.md) |
 | [`src/sim/state.ts`](src/sim/state.ts) | pure Domäne | Simulator-Zustand & Domänentypen (Pod/Deployment/…, `ClusterState`). |
 | [`src/sim/util.ts`](src/sim/util.ts) | pure Domäne | Geteilte pure Sim-Helfer (IDs, Pod-Namen, Tabellen). |
-| [`src/sim/names.ts`](src/sim/names.ts) | pure Domäne | Value Objects für Ressourcen-Namen (#479): DNS-1123-Regel + `PodName`-Brand + Fabriken (`podName`/`asPodName`) an EINER Stelle. |
+| [`src/sim/names.ts`](src/sim/names.ts) | pure Domäne | Value Objects für Ressourcen-Namen (#479/#507): DNS-1123-Regel + `ResourceName`/`PodName`-Brand + prüfender Constructor `resourceName()` (von den _make*-Fabriken zentral genutzt) + `asPodName` an EINER Stelle. |
 | [`src/sim/docker.ts`](src/sim/docker.ts) | pure Domäne | docker-Befehlsfamilie. |
 | [`src/sim/kubectl.ts`](src/sim/kubectl.ts) | pure Domäne | kubectl-Familie: dünner Dispatch-Barrel über `src/sim/kubectl/*` (Split #397). → [sim.md](docs/module/sim.md) |
 | [`src/sim/kubectl/host.ts`](src/sim/kubectl/host.ts) | pure Domäne | `KubectlHost`-Interface (was kubectl von der Sim-Klasse braucht). |
@@ -133,6 +133,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/werft.ts`](src/werft.ts) | pure Domäne | Heimat-Werft: Werft-Hof-Geometrie + Helling/Anleger/Warp (Phase-10-Capstone, #165). |
 | [`src/warps.ts`](src/warps.ts) | pure Domäne | Region-Übergänge als Daten-Liste (`REGION_WARPS`) + reiner Anti-Pingpong-Kern `armWarps`/`triggeredWarp` (#426). |
 | [`src/decor.ts`](src/decor.ts) | pure Domäne | Deterministische Deko-Platzierung. |
+| [`src/hazards.ts`](src/hazards.ts) | pure Domäne | Gefahren-Entscheidungskern (#512): `resolveHazardTick` (welche Gefahr startet/löst auf/tickt) + Start-Gate + Opfer-Eignung; `scenes/worldscene/events.ts` führt nur noch die Effekte aus. |
 | [`src/clock.ts`](src/clock.ts) | pure Domäne | Zeit-/Datums-Ableitung für die HUD-Uhr. |
 | [`src/coins.ts`](src/coins.ts) | pure Domäne | Value Object für Dublonen (#490, Forts. #479): Regel „nicht-negativ + ganzzahlig" + zentrale Arithmetik (Rundung/Multiplikator/Affordability) als `Coins`-Brand + Fabriken/Operationen. |
 | [`src/rng.ts`](src/rng.ts) | pure Domäne | Zufall/Determinismus-SSOT (#492): seedbarer PRNG `mulberry32`/`nextRandom`/`seedGlobalRng` + aus Namen abgeleitete stabile Werte `hashStr`/`hashHex`; ersetzt `Math.random` in `src/sim/**` + `src/content/**`. |
@@ -140,6 +141,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/markup.ts`](src/markup.ts) | pure Domäne | `fmtCmd`: zeichnet variable Platzhalter `<token>` in Content-Texten als sichtbares „ändere-mich"-Badge aus (#311); die EINE Quelle der Platzhalter-Konvention, angewandt an der Render-Grenze (radio/dialog/quiz/questlog/album). |
 | [`src/cull.ts`](src/cull.ts) | pure Domäne | Off-screen-Culling & FPS-Messung (#82) + Cluster-Tag-Auswahl `selectVisibleTags` (#416). |
 | [`src/overlaykbd.ts`](src/overlaykbd.ts) | pure Domäne | Tastatur-Logik für Modals (#283) + Dialog-Blättern (#310). |
+| [`src/viewdecide.ts`](src/viewdecide.ts) | pure Domäne | Reine Präsentations-Entscheidungen (#500), DOM-frei/testbar: Funk-Session-Priorität + `evaluateSubmission` (Terminal-Bewertung) + `scoreReview` (Quiz) + `resolveTalkTarget` (NPC-Routing). |
 | [`src/toastlife.ts`](src/toastlife.ts) | pure Domäne | Toast-Anzeigedauer-Politik: kurze Belohnung vs. lesbarer Hinweis (>= 15 s) + Fade-Timing (#370). |
 | [`src/kralle.ts`](src/kralle.ts) | pure Domäne | Kralle-Meilenstein-Sprüche: `krallePracticeMilestone(count)` (zählbewusster Spruch an 1/10/25/50/100…, sonst null, #236). |
 | [`src/cmdhistory.ts`](src/cmdhistory.ts) | pure Domäne | Befehlshistorie fürs Funkgerät-Terminal (#316). |
@@ -162,6 +164,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/game/unlocks.ts`](src/game/unlocks.ts) | Anwendung | Verdiente Abkürzungen (#313) + Befehlshistorie (#316). |
 | [`src/game/spaced-repetition.ts`](src/game/spaced-repetition.ts) | Anwendung | Leitner-Spaced-Repetition + Review-Gate + Übungs-Lernstand (Drills/Stapel-Runden, gewichtete Auswahl, #219). |
 | [`src/game/clock.ts`](src/game/clock.ts) | Anwendung | Persistente Spiel-Zeit/Kalender (#413): `advanceClock` (Achse `gameDays` vorrücken) + `calendar` (abgeleiteter Tag/Saison/Uhrzeit). |
+| [`src/game/tick.ts`](src/game/tick.ts) | Anwendung | Szenen-neutraler Taktgeber (#501): `Game.tick(dtMs)` rückt frame-unabhängige Domäne (Spiel-Zeit + Hafen-Wirtschaft) an EINER Stelle vor; aus Phasers globalem Pre-Step (main.ts) getrieben → läuft in JEDER Szene, Auszahlung entkoppelt über runtime-Sink. |
 | [`src/runtime.ts`](src/runtime.ts) | Anwendung | Laufzeit-Singletons (bricht Import-Zyklen). |
 | [`src/devpanel.ts`](src/devpanel.ts) | Anwendung | Dev-/Test-Panel (#325/#331). |
 | [`src/store.ts`](src/store.ts) | Persistenz | SaveStore: IndexedDB-Backend, sync API via In-Memory-Cache (#350); Eviction-Schutz `requestPersistentStorage()` (#401); mehrere Save-Slots (#306, aktiver Slot + Slot-Index, Default-Slot am Legacy-Key). |

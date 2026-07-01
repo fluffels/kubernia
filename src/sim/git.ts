@@ -18,6 +18,7 @@
  */
 import type { ClusterState, Deployment, Broken } from "./state";
 import { runPipeline } from "./glab";
+import { suggest } from "./util";
 
 /** Was die git-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
  *  Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es dokumentiert
@@ -29,7 +30,6 @@ import { runPipeline } from "./glab";
  *  die Deployment-Fabrik (`runPipeline` rollt die deploy-Stage auf `main` aus). */
 export interface GitHost extends ClusterState {
   _err(msg: string, tip?: string): string;
-  _suggest(word: string, list: string[]): string | null;
   _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment;
 }
 
@@ -56,7 +56,7 @@ export function gitCommand(host: GitHost, t: string[], raw: string): string {
     case "fetch": return gitFetch(host);
     case "pull": return gitPull(host);
     default: {
-      const guess = host._suggest(sub || "", ["init", "status", "add", "commit", "log", "branch", "checkout", "merge", "push", "fetch", "pull"]);
+      const guess = suggest(sub || "", ["init", "status", "add", "commit", "log", "branch", "checkout", "merge", "push", "fetch", "pull"]);
       return host._err("⚠️ 'git " + (sub || "") + "' kenne ich hier nicht.",
         guess ? "Meintest du 'git " + guess + "'?" : "Versuch's mit status, add, commit, log, branch, checkout, merge oder push.");
     }
