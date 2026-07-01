@@ -14,7 +14,7 @@
  */
 
 import { execSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { chmodSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -54,6 +54,26 @@ if (Number.isNaN(haveMajor) || haveMajor < needMajor) {
   )
 }
 console.log(`${green('✓')} Node ${process.versions.node} ${dim(`(≥ ${needMajor} ok)`)}\n`)
+
+// 1b) Git-Hooks verdrahten (#528): den versionierten `.githooks/`-Ordner als
+// `core.hooksPath` setzen, damit der committete pre-push-Hook greift (kein husky
+// nötig). Idempotent, läuft in jedem Klon/Worktree einmal. Kein Git-Repo (z.B.
+// Tarball-Download)? Nur ein Hinweis, kein Abbruch – Setup soll weiterlaufen.
+console.log(bold('▶ Git-Hooks verdrahten') + dim('  (core.hooksPath → .githooks, #528)'))
+try {
+  execSync('git rev-parse --git-dir', { stdio: 'ignore', cwd: ROOT })
+  execSync('git config core.hooksPath .githooks', { stdio: 'inherit', cwd: ROOT })
+  // Ausführbar-Bit setzen (POSIX; auf Windows harmlos/no-op) – ohne läuft der
+  // Hook dort nicht.
+  try {
+    chmodSync(join(ROOT, '.githooks', 'pre-push'), 0o755)
+  } catch {
+    // Datei fehlt/kein POSIX – der core.hooksPath-Eintrag oben genügt.
+  }
+  console.log(`${green('✓')} pre-push-Hook aktiv ${dim('(schnelle Gates vor Push auf main; Umgehung: git push --no-verify)')}\n`)
+} catch {
+  console.log(`${dim('… kein Git-Repo erkannt – Hook-Verdrahtung übersprungen (nur relevant beim Pushen).')}\n`)
+}
 
 // 2)–5) Die Schritte der Reihe nach – bei Fehler sofort abbrechen.
 const steps = [

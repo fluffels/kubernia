@@ -2,3 +2,7 @@
 # Linux-Container (z.B. der Dev-Panel-Entrypoint, #334). Erzwingt LF unabhängig
 # von core.autocrlf / Checkout-Plattform.
 *.sh text eol=lf
+
+# Git-Hooks (#528) sind endungslose sh-Skripte und würden von *.sh nicht erfasst
+# – ohne LF bräche der pre-push-Hook mit "$'\r': command not found".
+.githooks/* text eol=lf

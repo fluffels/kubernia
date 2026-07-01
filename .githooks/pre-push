@@ -1,0 +1,57 @@
+#!/usr/bin/env sh
+#
+# KubeQuest pre-push-Hook (#528)
+# =================================================================
+# Schließt die einzige echte Lücke im sonst lückenlosen Gate-Netz:
+# Der Workflow pusht bewusst DIREKT auf `main` (kein PR/Required-Checks,
+# sonst bräche der Direkt-Push). Die CI-Gates laufen dadurch ERST NACH
+# dem Push (post-hoc) — in der Zeitspanne dazwischen kann kaputter Code
+# `main` rot machen, und ein paralleler Agent baut dann auf rotem `main` auf.
+#
+# Dieser Hook fährt die schnellen Gates (`npm run verify`: typecheck → lint
+# → check:arch → check:size → check:docmap → test) LOKAL, BEVOR ein Push auf
+# `main` das Remote erreicht, und bricht den Push bei Rot ab.
+#
+# Bewusste Grenzen:
+#  - Nur bei Push auf `main` — Feature-Branch-Pushes bleiben schnell.
+#  - OHNE Builds/Boot-Smoke (das ist `verify:full`), damit der Hook zügig bleibt;
+#    die schweren Artefakt-Schritte deckt die CI ab.
+#  - Umgehung im Notfall: `git push --no-verify` (git ruft den Hook dann gar
+#    nicht auf). Default = abgesichert.
+#
+# Verdrahtet über `core.hooksPath = .githooks` (gesetzt von `npm run setup`),
+# also versioniert und ohne husky-Abhängigkeit — jeder frische Klon bekommt
+# denselben Schutz, sobald `npm run setup` einmal lief.
+#
+# git übergibt: $1 = Remote-Name, $2 = Remote-URL; auf stdin je Ref eine Zeile
+# "<local_ref> <local_oid> <remote_ref> <remote_oid>".
+
+protected_ref='refs/heads/main'
+push_to_main=0
+
+while read -r local_ref local_oid remote_ref remote_oid; do
+	if [ "$remote_ref" = "$protected_ref" ]; then
+		# Branch-Löschung (local_oid = lauter Nullen) hat nichts zu prüfen.
+		case "$local_oid" in
+		*[!0]*) push_to_main=1 ;;
+		esac
+	fi
+done
+
+if [ "$push_to_main" -eq 0 ]; then
+	# Kein Push auf main → nichts zu tun (Feature-Branches bleiben schnell).
+	exit 0
+fi
+
+echo "⚓ pre-push (#528): Push auf main erkannt — schnelle Gates (npm run verify) laufen lokal …"
+
+if npm run verify; then
+	echo "✅ pre-push: alle Gates grün — Push auf main wird durchgelassen."
+	exit 0
+else
+	echo ""
+	echo "✖ pre-push: 'npm run verify' ist ROT — Push auf main abgebrochen."
+	echo "  Behebe die Ursache oben und pushe erneut."
+	echo "  Notfall-Umgehung (bewusst): git push --no-verify"
+	exit 1
+fi

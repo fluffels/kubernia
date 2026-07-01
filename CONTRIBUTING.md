@@ -15,7 +15,7 @@ cd kubequest
 npm run setup
 ```
 
-`npm run setup` prüft die Node-Version, installiert die Abhängigkeiten und lässt einmal **Tests, Typecheck und den Architektur-Wächter** laufen. Steht am Ende „Alles grün", bist du startklar. Danach den Dev-Server starten:
+`npm run setup` prüft die Node-Version, verdrahtet die **Git-Hooks** (#528: der versionierte pre-push-Hook fährt `npm run verify` vor jedem Push auf `main`), installiert die Abhängigkeiten und lässt einmal **Tests, Typecheck und den Architektur-Wächter** laufen. Steht am Ende „Alles grün", bist du startklar. Danach den Dev-Server starten:
 
 ```bash
 npm run dev   # lokaler Server (Vite) – angezeigte Adresse im Browser öffnen
@@ -52,7 +52,7 @@ Vollständige Erklärung (Runtime-Config-Hook, Sicherheitshinweise): [`docs/devp
 
 | Zweck | Befehl |
 |---|---|
-| One-Command-Setup (Node-Check + install + alle Checks) | `npm run setup` |
+| One-Command-Setup (Node-Check + Git-Hooks + install + alle Checks) | `npm run setup` |
 | Dev-Server (Code-Änderung → manuell neu laden) | `npm run dev` |
 | Tests (Vitest) | `npm test` |
 | Typen prüfen (strict) | `npm run typecheck` |
@@ -72,7 +72,7 @@ Damit nichts doppelt gepflegt wird, lebt jedes Thema an **genau einer** Stelle:
 
 ## Bevor du committest
 
-- `npm test`, `npm run typecheck` und `npm run check:arch` müssen **grün** sein – genau das, was `npm run setup` einmal durchspielt.
+- `npm test`, `npm run typecheck` und `npm run check:arch` müssen **grün** sein – genau das, was `npm run setup` einmal durchspielt. Vor einem Push auf `main` fährt der pre-push-Hook (#528) ohnehin die volle `npm run verify`-Kette und bricht bei Rot ab (Notfall-Umgehung: `git push --no-verify`).
 - Neue/geänderte Logik bekommt **Tests, auch für Negativfälle** (Red-Green absichern, bei Bugfixes test-first).
 - Sicht- oder spielbare Änderungen **im Browser** verifizieren, nicht nur „sollte gehen".
 - Der komplette Ablauf inkl. Branch-/Worktree-Workflow und Test-Disziplin: [AGENTS.md](AGENTS.md).
