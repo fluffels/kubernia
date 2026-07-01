@@ -9,7 +9,7 @@
  * ../state und das KubectlHost-Interface (./host). Aufgerufen aus dem
  * kubectl-Dispatch (../kubectl.ts).
  */
-import type { ArgoApp, RbacSubject } from "../state";
+import type { ApplyEffect, ArgoApp, RbacSubject } from "../state";
 import { addDeployment, removeDeployment, replaceDeploymentPod, restartStatefulPod } from "../workload";
 // Argo-CD-Reconcile/-Klon liegen seit #378 bei der argocd-Familie in ../argocd – `kubectl apply -f`
 // einer Application zieht/kloniert den Soll direkt darüber (statt über eine Host-Methode).
@@ -312,6 +312,367 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
 }
 
 
+/* ===== apply-Handler-Registry (#538) =====
+ * Der frühere `kubectlApply`-Monolith (~18 sequenzielle `if (eff.<typ>)`-Blöcke) ist in
+ * eine ORDNUNGSBEWAHRENDE Handler-Liste zerlegt (iSAQB Open-Closed, analog zur
+ * Resource-Registry aus #499): ein neuer apply-fähiger Ressourcentyp = ein neuer Eintrag,
+ * `kubectlApply` selbst bleibt unangetastet. Die Reihenfolge der Liste IST die
+ * Anwendungsreihenfolge – sie zählt an einer Stelle: StorageClass + PV müssen vor
+ * PVC/StatefulSet stehen, damit das Binden im selben apply schon greift.
+ *
+ * Jeder Handler bekommt (host, eff, out). Er ist NUR zuständig, wenn sein Feld gesetzt ist
+ * (`if (!eff.<typ>) return;` als erster Schritt) und meldet Ergebniszeilen über `out.push`.
+ * Ein Handler, der `string` zurückgibt, signalisiert einen FEHLER mit früher Rückgabe –
+ * `kubectlApply` bricht dann ab und gibt genau diesen Text zurück (bewahrt das alte
+ * `return host._err(...)`-Verhalten der PVC-dataSource-, VolumeSnapshot-Quellen- und
+ * Pod-Security-Sonderfälle). Gibt er `void`/`undefined` zurück, läuft die Kette weiter.
+ */
+type ApplyHandler = (host: KubectlHost, eff: ApplyEffect, out: string[]) => string | void;
+
+const applyDeployment: ApplyHandler = (host, eff, out) => {
+  const effDep = eff.deployment;
+  if (!effDep) return;
+  const existing = host.deployments.find(d => d.name === effDep.name);
+  if (existing) {
+    // Deklarativ: eine geänderte SA-Zuordnung (spec.serviceAccountName, #132) wird
+    // beim erneuten apply übernommen ("configured") – sonst bleibt es "unchanged".
+    if (effDep.serviceAccountName && existing.serviceAccountName !== effDep.serviceAccountName) {
+      existing.serviceAccountName = effDep.serviceAccountName;
+      out.push("deployment.apps/" + effDep.name + " configured");
+    } else {
+      out.push("deployment.apps/" + effDep.name + " unchanged");
+    }
+    return;
+  }
+  // Pod-Security-Admission (#126): unsichere Pods werden unter baseline/restricted
+  // schon beim Anlegen abgewiesen – der Rest des Manifests wird nicht angewandt.
+  const denied = admitPod(host, effDep.name, effDep.securityContext);
+  if (denied) return host._err(denied, "Ergänze im Manifest einen passenden securityContext (z.B. runAsNonRoot: true) oder senke die enforce-Stufe.");
+  const dep = host._makeDeployment(effDep.name, effDep.image, effDep.replicas);
+  // ServiceAccount-Identität aus dem Pod-Template übernehmen (#132); fehlt sie, bleibt
+  // es die default-SA (Feld undefined).
+  if (effDep.serviceAccountName) dep.serviceAccountName = effDep.serviceAccountName;
+  // Container-Port aus dem Pod-Template (#164): nötig für den targetPort-Abgleich beim curl.
+  if (effDep.containerPort !== undefined) dep.containerPort = effDep.containerPort;
+  // Ephemeral-Storage aus dem Pod-Template (#240): emptyDir-Volume, Limit, Zusatznutzung, Node-Pin.
+  if (effDep.node !== undefined) dep.node = effDep.node;
+  if (effDep.emptyDir) dep.emptyDir = { data: effDep.emptyDir.data || "", usedMi: effDep.emptyDir.usedMi || 0 };
+  if (effDep.ephemeralLimit !== undefined) dep.ephemeralLimit = effDep.ephemeralLimit;
+  if (effDep.ephemeralUsedMi !== undefined) dep.ephemeralUsedMi = effDep.ephemeralUsedMi;
+  // Eigenes Image (#164, Werft-Capstone): ist es noch nicht lokal gebaut/gezogen, landet
+  // der Pod im ImagePullBackOff – genau wie im echten Cluster. needsBuild markiert: heilt
+  // von selbst, sobald 'docker build'/'docker pull' das Image bereitstellt.
+  if (effDep.requireBuiltImage && !host._imageAvailable(effDep.image)) {
+    dep.broken = { type: "imagepull", badImage: effDep.image, needsBuild: true };
+  }
+  addDeployment(host, dep);
+  out.push("deployment.apps/" + effDep.name + " created");
+  if (dep.broken) out.push("💡 Pod im ImagePullBackOff: das Image '" + effDep.image + "' gibt es noch nicht. Erst 'docker build -t " + effDep.image + " .', dann 'kubectl rollout restart deployment " + effDep.name + "'.");
+};
+
+const applyService: ApplyHandler = (host, eff, out) => {
+  const effSvc = eff.service;
+  if (!effSvc) return;
+  const existing = host.services.find(s => s.name === effSvc.name);
+  if (existing) {
+    out.push("service/" + effSvc.name + " unchanged");
+    return;
+  }
+  // #507: Service-Anlegen zentral über die Fabrik (DNS-1123-Prüfung inklusive).
+  // ExternalName (#337) → CNAME statt ClusterIP; sonst abgeleitete ClusterIP + optionaler
+  // targetPort (#164). Die Fallunterscheidung macht jetzt _makeService.
+  host.services.push(host._makeService({
+    name: effSvc.name, type: effSvc.type,
+    port: effSvc.port,
+    ...(effSvc.targetPort !== undefined ? { targetPort: effSvc.targetPort } : {}),
+    ...(effSvc.externalName ? { externalName: effSvc.externalName } : {}),
+  }));
+  out.push("service/" + effSvc.name + " created");
+};
+
+const applyIngress: ApplyHandler = (host, eff, out) => {
+  const effIng = eff.ingress;
+  if (!effIng) return;
+  const existing = host.ingresses.find(i => i.name === effIng.name);
+  if (existing) {
+    // TLS am bestehenden Hafentor nachrüsten: aus HTTP wird HTTPS ("configured").
+    if (effIng.tls && !existing.tls) {
+      existing.tls = { secretName: effIng.tls.secretName };
+      out.push("ingress.networking.k8s.io/" + effIng.name + " configured");
+    } else {
+      out.push("ingress.networking.k8s.io/" + effIng.name + " unchanged");
+    }
+    return;
+  }
+  host.ingresses.push({
+    name: effIng.name, className: effIng.className || "nginx",
+    host: effIng.host, path: effIng.path || "/",
+    service: effIng.service, port: effIng.port,
+    ...(effIng.tls ? { tls: { secretName: effIng.tls.secretName } } : {}),
+    created: host.clock,
+  });
+  out.push("ingress.networking.k8s.io/" + effIng.name + " created");
+};
+
+const applyNetworkPolicy: ApplyHandler = (host, eff, out) => {
+  const effNp = eff.networkPolicy;
+  if (!effNp) return;
+  const existing = host.networkPolicies.find(n => n.name === effNp.name);
+  if (existing) {
+    out.push("networkpolicy.networking.k8s.io/" + effNp.name + " unchanged");
+    return;
+  }
+  host.networkPolicies.push({
+    name: effNp.name, podSelector: effNp.podSelector || "",
+    allowFrom: effNp.allowFrom || "", created: host.clock,
+  });
+  out.push("networkpolicy.networking.k8s.io/" + effNp.name + " created");
+};
+
+const applyApplication: ApplyHandler = (host, eff, out) => {
+  const effApp = eff.application;
+  if (!effApp) return;
+  const existing = host.argoApps.find(a => a.name === effApp.name);
+  if (existing) {
+    // kubectl apply ist idempotent: ändert sich autoSync/selfHeal, ist das ein "configure"-Vorgang
+    // (genau wie bei echtem kubectl, das "configured" statt "unchanged" zurückgibt, wenn sich etwas ändert).
+    const newAutoSync = !!effApp.autoSync;
+    const newSelfHeal = !!effApp.selfHeal;
+    if (existing.autoSync !== newAutoSync || existing.selfHeal !== newSelfHeal) {
+      existing.autoSync = newAutoSync;
+      existing.selfHeal = newSelfHeal;
+      out.push("application.argoproj.io/" + effApp.name + " configured");
+      if (existing.autoSync) {
+        argoReconcile(host, existing);
+        out.push("💡 Sync-Policy 'Automated'" + (existing.selfHeal ? " + Self-Heal" : "") + " aktiv – Argo gleicht den Cluster laufend mit dem Git-Soll ab.");
+      }
+    } else {
+      out.push("application.argoproj.io/" + effApp.name + " unchanged");
+    }
+    return;
+  }
+  const isAppOfApps = !!effApp.childApps && effApp.childApps.length > 0;
+  const app: ArgoApp = {
+    name: effApp.name,
+    repo: effApp.repo || "https://git.hafen.de/apps.git",
+    path: effApp.path || effApp.name + "/",
+    autoSync: !!effApp.autoSync,
+    selfHeal: !!effApp.selfHeal,
+    created: host.clock,
+    ...(isAppOfApps
+      ? { childApps: effApp.childApps!.map(c => cloneChildSpec(c)) }
+      : { desired: {
+          deployment: Object.assign({}, effApp.deployment!),
+          ...(effApp.service ? { service: Object.assign({}, effApp.service) } : {}),
+        } }),
+  };
+  host.argoApps.push(app);
+  out.push("application.argoproj.io/" + effApp.name + " created");
+  // Mit auto-sync zieht Argo den Git-Soll sofort in den Cluster (Pull ohne manuelles 'argocd app sync').
+  if (app.autoSync) {
+    argoReconcile(host, app);
+    out.push(isAppOfApps
+      ? "💡 App-of-Apps: Argo legt aus dem '" + app.path + "'-Ordner gleich die ganze Flotte an. Schau mit 'argocd app list'."
+      : "💡 Sync-Policy 'Automated' – Argo rollt den deklarierten Stand sofort aus. Schau mit 'argocd app get " + app.name + "'.");
+  } else {
+    out.push("💡 Die App ist angelegt, aber noch OutOfSync. Zieh den Git-Soll mit 'argocd app sync " + app.name + "' in den Cluster.");
+  }
+};
+
+// Observability-CRDs (#110): legen Monitoring-Objekte an, idempotent wie die übrigen.
+const applyServiceMonitor: ApplyHandler = (host, eff, out) => {
+  const effSm = eff.serviceMonitor;
+  if (!effSm) return;
+  if (host.serviceMonitors.some(s => s.name === effSm.name)) {
+    out.push("servicemonitor.monitoring.coreos.com/" + effSm.name + " unchanged");
+    return;
+  }
+  host.serviceMonitors.push({ name: effSm.name, selector: effSm.selector, port: effSm.port || "metrics", interval: effSm.interval || "30s", created: host.clock });
+  out.push("servicemonitor.monitoring.coreos.com/" + effSm.name + " created");
+};
+
+const applyPrometheusRule: ApplyHandler = (host, eff, out) => {
+  const effPr = eff.prometheusRule;
+  if (!effPr) return;
+  if (host.prometheusRules.some(r => r.name === effPr.name)) {
+    out.push("prometheusrule.monitoring.coreos.com/" + effPr.name + " unchanged");
+    return;
+  }
+  host.prometheusRules.push({ name: effPr.name, alert: effPr.alert, expr: effPr.expr || "", forDuration: effPr.forDuration || "5m", severity: effPr.severity || "warning", created: host.clock });
+  out.push("prometheusrule.monitoring.coreos.com/" + effPr.name + " created");
+};
+
+const applyGrafanaDatasource: ApplyHandler = (host, eff, out) => {
+  const effDs = eff.grafanaDatasource;
+  if (!effDs) return;
+  if (host.grafanaDatasources.some(d => d.name === effDs.name)) {
+    out.push("grafanadatasource.grafana.integreatly.org/" + effDs.name + " unchanged");
+    return;
+  }
+  host.grafanaDatasources.push({ name: effDs.name, dsType: effDs.dsType || "prometheus", url: effDs.url || "", created: host.clock });
+  out.push("grafanadatasource.grafana.integreatly.org/" + effDs.name + " created");
+};
+
+const applyGrafanaDashboard: ApplyHandler = (host, eff, out) => {
+  const effGd = eff.grafanaDashboard;
+  if (!effGd) return;
+  if (host.grafanaDashboards.some(d => d.name === effGd.name)) {
+    out.push("grafanadashboard.grafana.integreatly.org/" + effGd.name + " unchanged");
+    return;
+  }
+  host.grafanaDashboards.push({ name: effGd.name, title: effGd.title, panels: effGd.panels || 0, created: host.clock });
+  out.push("grafanadashboard.grafana.integreatly.org/" + effGd.name + " created");
+};
+
+// Stateful-Workload-CRDs (#122). Reihenfolge (siehe applyHandlers): StorageClass + PV
+// vor PVC/StatefulSet, damit das Binden im selben apply schon greift.
+const applyStorageClass: ApplyHandler = (host, eff, out) => {
+  const effSc = eff.storageClass;
+  if (!effSc) return;
+  if (host.storageClasses.some(s => s.name === effSc.name)) {
+    out.push("storageclass.storage.k8s.io/" + effSc.name + " unchanged");
+    return;
+  }
+  host.storageClasses.push({ name: effSc.name, provisioner: effSc.provisioner || "rancher.io/local-path", reclaimPolicy: effSc.reclaimPolicy || "Delete", isDefault: !!effSc.isDefault, created: host.clock });
+  out.push("storageclass.storage.k8s.io/" + effSc.name + " created");
+};
+
+const applyPv: ApplyHandler = (host, eff, out) => {
+  const effPv = eff.pv;
+  if (!effPv) return;
+  if (host.pvs.some(p => p.name === effPv.name)) {
+    out.push("persistentvolume/" + effPv.name + " unchanged");
+    return;
+  }
+  host.pvs.push({ name: effPv.name, capacity: effPv.capacity || "1Gi", status: "Available", claim: "", storageClass: effPv.storageClass || "", accessModes: effPv.accessModes || "RWO", reclaimPolicy: effPv.reclaimPolicy || "Retain", created: host.clock });
+  out.push("persistentvolume/" + effPv.name + " created");
+};
+
+const applyPvc: ApplyHandler = (host, eff, out) => {
+  const effPvc = eff.pvc;
+  if (!effPvc) return;
+  if (host.pvcs.some(p => p.name === effPvc.name)) {
+    out.push("persistentvolumeclaim/" + effPvc.name + " unchanged");
+    return;
+  }
+  // Restore aus einem VolumeSnapshot (#140): spec.dataSource zeigt auf einen Snapshot.
+  // Der muss existieren UND readyToUse sein – sonst bekäme das PVC stillschweigend ein
+  // leeres Volume statt der gesicherten Daten (genau der Fehler, den die Quest vermeidet).
+  let restored: string | undefined;
+  if (effPvc.dataSource) {
+    const snap = host.volumeSnapshots.find(v => v.name === effPvc.dataSource);
+    if (!snap) return host._err('error: the dataSource VolumeSnapshot "' + effPvc.dataSource + '" was not found', "Aus einem Snapshot stellst du wieder her – schau mit 'kubectl get volumesnapshot', welche es gibt.");
+    if (!snap.readyToUse) return host._err('error: the VolumeSnapshot "' + effPvc.dataSource + '" is not readyToUse yet', "Ein Snapshot kann erst wiederhergestellt werden, wenn er fertig ist (READYTOUSE true).");
+    restored = snap.data;
+  }
+  const pvc = host._makePvc(effPvc.name, effPvc.storage || "1Gi", effPvc.storageClass, effPvc.accessModes);
+  // Volume-Inhalt setzen: aus dem Snapshot wiederhergestellt, sonst frisch geseedet, sonst leer.
+  if (restored !== undefined) pvc.data = restored;
+  else if (effPvc.data !== undefined) pvc.data = effPvc.data;
+  host.pvcs.push(pvc);
+  out.push("persistentvolumeclaim/" + effPvc.name + " created");
+  if (restored !== undefined) {
+    out.push("💡 PVC '" + pvc.name + "' aus Snapshot '" + effPvc.dataSource + "' wiederhergestellt – die gesicherten Daten sind zurück auf dem Volume.");
+  } else {
+    out.push(pvc.status === "Bound"
+      ? "💡 PVC '" + pvc.name + "' ist Bound – es hat Speicher bekommen (PV " + pvc.volume + ")."
+      : "💡 PVC '" + pvc.name + "' ist Pending – kein passendes PV da und keine StorageClass, die eins anlegt.");
+  }
+};
+
+// Backup/Restore (#140): VolumeSnapshot eines Quell-PVC. Der Snapshot friert den
+// aktuellen Volume-Inhalt ein und ist ab dann ein eigenständiges Objekt – er überlebt
+// das Löschen der Quelle (das ist der Sinn eines Backups).
+const applyVolumeSnapshot: ApplyHandler = (host, eff, out) => {
+  const effVs = eff.volumeSnapshot;
+  if (!effVs) return;
+  if (host.volumeSnapshots.some(v => v.name === effVs.name)) {
+    out.push("volumesnapshot.snapshot.storage.k8s.io/" + effVs.name + " unchanged");
+    return;
+  }
+  const src = host.pvcs.find(p => p.name === effVs.sourcePvc);
+  if (!src) return host._err('error: the source PVC "' + effVs.sourcePvc + '" does not exist', "Eine VolumeSnapshot braucht ein vorhandenes Quell-PVC. Schau mit 'kubectl get pvc'.");
+  host.volumeSnapshots.push({ name: effVs.name, sourcePvc: src.name, data: src.data || "", restoreSize: src.capacity, readyToUse: true, created: host.clock });
+  out.push("volumesnapshot.snapshot.storage.k8s.io/" + effVs.name + " created");
+  out.push("💡 Snapshot '" + effVs.name + "' sichert den Stand von PVC '" + src.name + "' (readyToUse). Er ist ein eigenes Objekt und überlebt das Löschen der Quelle.");
+};
+
+const applyStatefulSet: ApplyHandler = (host, eff, out) => {
+  const effSts = eff.statefulSet;
+  if (!effSts) return;
+  if (host.statefulSets.some(s => s.name === effSts.name)) {
+    out.push("statefulset.apps/" + effSts.name + " unchanged");
+    return;
+  }
+  const sts = host._makeStatefulSet(effSts);
+  host.statefulSets.push(sts);
+  out.push("statefulset.apps/" + effSts.name + " created");
+  out.push("💡 " + sts.replicas + " Pod(s) mit stabiler Identität (" + sts.name + "-0 …), jeder mit eigenem PVC '" + sts.volumeClaimName + "-" + sts.name + "-0' usw.");
+};
+
+// RBAC-CRDs (#128): SA / Role(+Cluster) / RoleBinding(+Cluster) deklarativ anlegen,
+// idempotent wie alles andere. Genau diese Objekte wertet `kubectl auth can-i` aus.
+const applyServiceAccount: ApplyHandler = (host, eff, out) => {
+  const effSa = eff.serviceAccount;
+  if (!effSa) return;
+  if (host.serviceAccounts.some(s => s.name === effSa.name)) {
+    out.push("serviceaccount/" + effSa.name + " unchanged");
+    return;
+  }
+  host.serviceAccounts.push({ name: effSa.name, created: host.clock });
+  out.push("serviceaccount/" + effSa.name + " created");
+};
+
+const applyRole: ApplyHandler = (host, eff, out) => {
+  const effRole = eff.role;
+  if (!effRole) return;
+  const cluster = !!effRole.cluster;
+  const kind = cluster ? "clusterrole" : "role";
+  if (host.roles.some(r => r.name === effRole.name && r.cluster === cluster)) {
+    out.push(kind + ".rbac.authorization.k8s.io/" + effRole.name + " unchanged");
+    return;
+  }
+  host.roles.push({ name: effRole.name, cluster, rules: effRole.rules.map(rule => ({ verbs: rule.verbs.slice(), resources: rule.resources.slice() })), created: host.clock });
+  out.push(kind + ".rbac.authorization.k8s.io/" + effRole.name + " created");
+};
+
+const applyRoleBinding: ApplyHandler = (host, eff, out) => {
+  const effRb = eff.roleBinding;
+  if (!effRb) return;
+  const cluster = !!effRb.cluster;
+  const kind = cluster ? "clusterrolebinding" : "rolebinding";
+  if (host.roleBindings.some(b => b.name === effRb.name && b.cluster === cluster)) {
+    out.push(kind + ".rbac.authorization.k8s.io/" + effRb.name + " unchanged");
+    return;
+  }
+  host.roleBindings.push({ name: effRb.name, cluster, roleRef: { kind: effRb.roleRef.kind, name: effRb.roleRef.name }, subjects: effRb.subjects.map(s => Object.assign({}, s)), created: host.clock });
+  out.push(kind + ".rbac.authorization.k8s.io/" + effRb.name + " created");
+};
+
+/** Die apply-Handler in ANWENDUNGSREIHENFOLGE. Die Reihenfolge ist bewusst identisch
+ *  zur früheren Block-Reihenfolge des Monolithen; kritisch ist nur, dass StorageClass + PV
+ *  vor PVC/StatefulSet stehen (Binden im selben apply). Neuer apply-Typ = ein Eintrag hier
+ *  (+ ein `applyX`-Handler + das Feld in `ApplyEffect`). */
+const applyHandlers: readonly ApplyHandler[] = [
+  applyDeployment,
+  applyService,
+  applyIngress,
+  applyNetworkPolicy,
+  applyApplication,
+  applyServiceMonitor,
+  applyPrometheusRule,
+  applyGrafanaDatasource,
+  applyGrafanaDashboard,
+  applyStorageClass,
+  applyPv,
+  applyPvc,
+  applyVolumeSnapshot,
+  applyStatefulSet,
+  applyServiceAccount,
+  applyRole,
+  applyRoleBinding,
+];
+
 export function kubectlApply(host: KubectlHost, t: string[]) {
   const file = filenameArg(t);
   if (!file) return host._err("error: must specify one of -f or -k", "Muster: 'kubectl apply --filename deployment.yaml'");
@@ -319,291 +680,12 @@ export function kubectlApply(host: KubectlHost, t: string[]) {
   const eff = host.applyEffects[file];
   if (!eff) return host._err("error: unable to decode " + file);
   const out: string[] = [];
-  const effDep = eff.deployment;
-  if (effDep) {
-    const existing = host.deployments.find(d => d.name === effDep.name);
-    if (existing) {
-      // Deklarativ: eine geänderte SA-Zuordnung (spec.serviceAccountName, #132) wird
-      // beim erneuten apply übernommen ("configured") – sonst bleibt es "unchanged".
-      if (effDep.serviceAccountName && existing.serviceAccountName !== effDep.serviceAccountName) {
-        existing.serviceAccountName = effDep.serviceAccountName;
-        out.push("deployment.apps/" + effDep.name + " configured");
-      } else {
-        out.push("deployment.apps/" + effDep.name + " unchanged");
-      }
-    } else {
-      // Pod-Security-Admission (#126): unsichere Pods werden unter baseline/restricted
-      // schon beim Anlegen abgewiesen – der Rest des Manifests wird nicht angewandt.
-      const denied = admitPod(host, effDep.name, effDep.securityContext);
-      if (denied) return host._err(denied, "Ergänze im Manifest einen passenden securityContext (z.B. runAsNonRoot: true) oder senke die enforce-Stufe.");
-      const dep = host._makeDeployment(effDep.name, effDep.image, effDep.replicas);
-      // ServiceAccount-Identität aus dem Pod-Template übernehmen (#132); fehlt sie, bleibt
-      // es die default-SA (Feld undefined).
-      if (effDep.serviceAccountName) dep.serviceAccountName = effDep.serviceAccountName;
-      // Container-Port aus dem Pod-Template (#164): nötig für den targetPort-Abgleich beim curl.
-      if (effDep.containerPort !== undefined) dep.containerPort = effDep.containerPort;
-      // Ephemeral-Storage aus dem Pod-Template (#240): emptyDir-Volume, Limit, Zusatznutzung, Node-Pin.
-      if (effDep.node !== undefined) dep.node = effDep.node;
-      if (effDep.emptyDir) dep.emptyDir = { data: effDep.emptyDir.data || "", usedMi: effDep.emptyDir.usedMi || 0 };
-      if (effDep.ephemeralLimit !== undefined) dep.ephemeralLimit = effDep.ephemeralLimit;
-      if (effDep.ephemeralUsedMi !== undefined) dep.ephemeralUsedMi = effDep.ephemeralUsedMi;
-      // Eigenes Image (#164, Werft-Capstone): ist es noch nicht lokal gebaut/gezogen, landet
-      // der Pod im ImagePullBackOff – genau wie im echten Cluster. needsBuild markiert: heilt
-      // von selbst, sobald 'docker build'/'docker pull' das Image bereitstellt.
-      if (effDep.requireBuiltImage && !host._imageAvailable(effDep.image)) {
-        dep.broken = { type: "imagepull", badImage: effDep.image, needsBuild: true };
-      }
-      addDeployment(host, dep);
-      out.push("deployment.apps/" + effDep.name + " created");
-      if (dep.broken) out.push("💡 Pod im ImagePullBackOff: das Image '" + effDep.image + "' gibt es noch nicht. Erst 'docker build -t " + effDep.image + " .', dann 'kubectl rollout restart deployment " + effDep.name + "'.");
-    }
-  }
-  const effSvc = eff.service;
-  if (effSvc) {
-    const existing = host.services.find(s => s.name === effSvc.name);
-    if (existing) {
-      out.push("service/" + effSvc.name + " unchanged");
-    } else {
-      // #507: Service-Anlegen zentral über die Fabrik (DNS-1123-Prüfung inklusive).
-      // ExternalName (#337) → CNAME statt ClusterIP; sonst abgeleitete ClusterIP + optionaler
-      // targetPort (#164). Die Fallunterscheidung macht jetzt _makeService.
-      host.services.push(host._makeService({
-        name: effSvc.name, type: effSvc.type,
-        port: effSvc.port,
-        ...(effSvc.targetPort !== undefined ? { targetPort: effSvc.targetPort } : {}),
-        ...(effSvc.externalName ? { externalName: effSvc.externalName } : {}),
-      }));
-      out.push("service/" + effSvc.name + " created");
-    }
-  }
-  const effIng = eff.ingress;
-  if (effIng) {
-    const existing = host.ingresses.find(i => i.name === effIng.name);
-    if (existing) {
-      // TLS am bestehenden Hafentor nachrüsten: aus HTTP wird HTTPS ("configured").
-      if (effIng.tls && !existing.tls) {
-        existing.tls = { secretName: effIng.tls.secretName };
-        out.push("ingress.networking.k8s.io/" + effIng.name + " configured");
-      } else {
-        out.push("ingress.networking.k8s.io/" + effIng.name + " unchanged");
-      }
-    } else {
-      host.ingresses.push({
-        name: effIng.name, className: effIng.className || "nginx",
-        host: effIng.host, path: effIng.path || "/",
-        service: effIng.service, port: effIng.port,
-        ...(effIng.tls ? { tls: { secretName: effIng.tls.secretName } } : {}),
-        created: host.clock,
-      });
-      out.push("ingress.networking.k8s.io/" + effIng.name + " created");
-    }
-  }
-  const effNp = eff.networkPolicy;
-  if (effNp) {
-    const existing = host.networkPolicies.find(n => n.name === effNp.name);
-    if (existing) {
-      out.push("networkpolicy.networking.k8s.io/" + effNp.name + " unchanged");
-    } else {
-      host.networkPolicies.push({
-        name: effNp.name, podSelector: effNp.podSelector || "",
-        allowFrom: effNp.allowFrom || "", created: host.clock,
-      });
-      out.push("networkpolicy.networking.k8s.io/" + effNp.name + " created");
-    }
-  }
-  const effApp = eff.application;
-  if (effApp) {
-    const existing = host.argoApps.find(a => a.name === effApp.name);
-    if (existing) {
-      // kubectl apply ist idempotent: ändert sich autoSync/selfHeal, ist das ein "configure"-Vorgang
-      // (genau wie bei echtem kubectl, das "configured" statt "unchanged" zurückgibt, wenn sich etwas ändert).
-      const newAutoSync = !!effApp.autoSync;
-      const newSelfHeal = !!effApp.selfHeal;
-      if (existing.autoSync !== newAutoSync || existing.selfHeal !== newSelfHeal) {
-        existing.autoSync = newAutoSync;
-        existing.selfHeal = newSelfHeal;
-        out.push("application.argoproj.io/" + effApp.name + " configured");
-        if (existing.autoSync) {
-          argoReconcile(host, existing);
-          out.push("💡 Sync-Policy 'Automated'" + (existing.selfHeal ? " + Self-Heal" : "") + " aktiv – Argo gleicht den Cluster laufend mit dem Git-Soll ab.");
-        }
-      } else {
-        out.push("application.argoproj.io/" + effApp.name + " unchanged");
-      }
-    } else {
-      const isAppOfApps = !!effApp.childApps && effApp.childApps.length > 0;
-      const app: ArgoApp = {
-        name: effApp.name,
-        repo: effApp.repo || "https://git.hafen.de/apps.git",
-        path: effApp.path || effApp.name + "/",
-        autoSync: !!effApp.autoSync,
-        selfHeal: !!effApp.selfHeal,
-        created: host.clock,
-        ...(isAppOfApps
-          ? { childApps: effApp.childApps!.map(c => cloneChildSpec(c)) }
-          : { desired: {
-              deployment: Object.assign({}, effApp.deployment!),
-              ...(effApp.service ? { service: Object.assign({}, effApp.service) } : {}),
-            } }),
-      };
-      host.argoApps.push(app);
-      out.push("application.argoproj.io/" + effApp.name + " created");
-      // Mit auto-sync zieht Argo den Git-Soll sofort in den Cluster (Pull ohne manuelles 'argocd app sync').
-      if (app.autoSync) {
-        argoReconcile(host, app);
-        out.push(isAppOfApps
-          ? "💡 App-of-Apps: Argo legt aus dem '" + app.path + "'-Ordner gleich die ganze Flotte an. Schau mit 'argocd app list'."
-          : "💡 Sync-Policy 'Automated' – Argo rollt den deklarierten Stand sofort aus. Schau mit 'argocd app get " + app.name + "'.");
-      } else {
-        out.push("💡 Die App ist angelegt, aber noch OutOfSync. Zieh den Git-Soll mit 'argocd app sync " + app.name + "' in den Cluster.");
-      }
-    }
-  }
-  // Observability-CRDs (#110): legen Monitoring-Objekte an, idempotent wie die übrigen.
-  const effSm = eff.serviceMonitor;
-  if (effSm) {
-    if (host.serviceMonitors.some(s => s.name === effSm.name)) {
-      out.push("servicemonitor.monitoring.coreos.com/" + effSm.name + " unchanged");
-    } else {
-      host.serviceMonitors.push({ name: effSm.name, selector: effSm.selector, port: effSm.port || "metrics", interval: effSm.interval || "30s", created: host.clock });
-      out.push("servicemonitor.monitoring.coreos.com/" + effSm.name + " created");
-    }
-  }
-  const effPr = eff.prometheusRule;
-  if (effPr) {
-    if (host.prometheusRules.some(r => r.name === effPr.name)) {
-      out.push("prometheusrule.monitoring.coreos.com/" + effPr.name + " unchanged");
-    } else {
-      host.prometheusRules.push({ name: effPr.name, alert: effPr.alert, expr: effPr.expr || "", forDuration: effPr.forDuration || "5m", severity: effPr.severity || "warning", created: host.clock });
-      out.push("prometheusrule.monitoring.coreos.com/" + effPr.name + " created");
-    }
-  }
-  const effDs = eff.grafanaDatasource;
-  if (effDs) {
-    if (host.grafanaDatasources.some(d => d.name === effDs.name)) {
-      out.push("grafanadatasource.grafana.integreatly.org/" + effDs.name + " unchanged");
-    } else {
-      host.grafanaDatasources.push({ name: effDs.name, dsType: effDs.dsType || "prometheus", url: effDs.url || "", created: host.clock });
-      out.push("grafanadatasource.grafana.integreatly.org/" + effDs.name + " created");
-    }
-  }
-  const effGd = eff.grafanaDashboard;
-  if (effGd) {
-    if (host.grafanaDashboards.some(d => d.name === effGd.name)) {
-      out.push("grafanadashboard.grafana.integreatly.org/" + effGd.name + " unchanged");
-    } else {
-      host.grafanaDashboards.push({ name: effGd.name, title: effGd.title, panels: effGd.panels || 0, created: host.clock });
-      out.push("grafanadashboard.grafana.integreatly.org/" + effGd.name + " created");
-    }
-  }
-  // Stateful-Workload-CRDs (#122). Reihenfolge: StorageClass + PV vor PVC/StatefulSet,
-  // damit das Binden im selben apply schon greift.
-  const effSc = eff.storageClass;
-  if (effSc) {
-    if (host.storageClasses.some(s => s.name === effSc.name)) {
-      out.push("storageclass.storage.k8s.io/" + effSc.name + " unchanged");
-    } else {
-      host.storageClasses.push({ name: effSc.name, provisioner: effSc.provisioner || "rancher.io/local-path", reclaimPolicy: effSc.reclaimPolicy || "Delete", isDefault: !!effSc.isDefault, created: host.clock });
-      out.push("storageclass.storage.k8s.io/" + effSc.name + " created");
-    }
-  }
-  const effPv = eff.pv;
-  if (effPv) {
-    if (host.pvs.some(p => p.name === effPv.name)) {
-      out.push("persistentvolume/" + effPv.name + " unchanged");
-    } else {
-      host.pvs.push({ name: effPv.name, capacity: effPv.capacity || "1Gi", status: "Available", claim: "", storageClass: effPv.storageClass || "", accessModes: effPv.accessModes || "RWO", reclaimPolicy: effPv.reclaimPolicy || "Retain", created: host.clock });
-      out.push("persistentvolume/" + effPv.name + " created");
-    }
-  }
-  const effPvc = eff.pvc;
-  if (effPvc) {
-    if (host.pvcs.some(p => p.name === effPvc.name)) {
-      out.push("persistentvolumeclaim/" + effPvc.name + " unchanged");
-    } else {
-      // Restore aus einem VolumeSnapshot (#140): spec.dataSource zeigt auf einen Snapshot.
-      // Der muss existieren UND readyToUse sein – sonst bekäme das PVC stillschweigend ein
-      // leeres Volume statt der gesicherten Daten (genau der Fehler, den die Quest vermeidet).
-      let restored: string | undefined;
-      if (effPvc.dataSource) {
-        const snap = host.volumeSnapshots.find(v => v.name === effPvc.dataSource);
-        if (!snap) return host._err('error: the dataSource VolumeSnapshot "' + effPvc.dataSource + '" was not found', "Aus einem Snapshot stellst du wieder her – schau mit 'kubectl get volumesnapshot', welche es gibt.");
-        if (!snap.readyToUse) return host._err('error: the VolumeSnapshot "' + effPvc.dataSource + '" is not readyToUse yet', "Ein Snapshot kann erst wiederhergestellt werden, wenn er fertig ist (READYTOUSE true).");
-        restored = snap.data;
-      }
-      const pvc = host._makePvc(effPvc.name, effPvc.storage || "1Gi", effPvc.storageClass, effPvc.accessModes);
-      // Volume-Inhalt setzen: aus dem Snapshot wiederhergestellt, sonst frisch geseedet, sonst leer.
-      if (restored !== undefined) pvc.data = restored;
-      else if (effPvc.data !== undefined) pvc.data = effPvc.data;
-      host.pvcs.push(pvc);
-      out.push("persistentvolumeclaim/" + effPvc.name + " created");
-      if (restored !== undefined) {
-        out.push("💡 PVC '" + pvc.name + "' aus Snapshot '" + effPvc.dataSource + "' wiederhergestellt – die gesicherten Daten sind zurück auf dem Volume.");
-      } else {
-        out.push(pvc.status === "Bound"
-          ? "💡 PVC '" + pvc.name + "' ist Bound – es hat Speicher bekommen (PV " + pvc.volume + ")."
-          : "💡 PVC '" + pvc.name + "' ist Pending – kein passendes PV da und keine StorageClass, die eins anlegt.");
-      }
-    }
-  }
-  // Backup/Restore (#140): VolumeSnapshot eines Quell-PVC. Der Snapshot friert den
-  // aktuellen Volume-Inhalt ein und ist ab dann ein eigenständiges Objekt – er überlebt
-  // das Löschen der Quelle (das ist der Sinn eines Backups).
-  const effVs = eff.volumeSnapshot;
-  if (effVs) {
-    if (host.volumeSnapshots.some(v => v.name === effVs.name)) {
-      out.push("volumesnapshot.snapshot.storage.k8s.io/" + effVs.name + " unchanged");
-    } else {
-      const src = host.pvcs.find(p => p.name === effVs.sourcePvc);
-      if (!src) return host._err('error: the source PVC "' + effVs.sourcePvc + '" does not exist', "Eine VolumeSnapshot braucht ein vorhandenes Quell-PVC. Schau mit 'kubectl get pvc'.");
-      host.volumeSnapshots.push({ name: effVs.name, sourcePvc: src.name, data: src.data || "", restoreSize: src.capacity, readyToUse: true, created: host.clock });
-      out.push("volumesnapshot.snapshot.storage.k8s.io/" + effVs.name + " created");
-      out.push("💡 Snapshot '" + effVs.name + "' sichert den Stand von PVC '" + src.name + "' (readyToUse). Er ist ein eigenes Objekt und überlebt das Löschen der Quelle.");
-    }
-  }
-  const effSts = eff.statefulSet;
-  if (effSts) {
-    if (host.statefulSets.some(s => s.name === effSts.name)) {
-      out.push("statefulset.apps/" + effSts.name + " unchanged");
-    } else {
-      const sts = host._makeStatefulSet(effSts);
-      host.statefulSets.push(sts);
-      out.push("statefulset.apps/" + effSts.name + " created");
-      out.push("💡 " + sts.replicas + " Pod(s) mit stabiler Identität (" + sts.name + "-0 …), jeder mit eigenem PVC '" + sts.volumeClaimName + "-" + sts.name + "-0' usw.");
-    }
-  }
-  // RBAC-CRDs (#128): SA / Role(+Cluster) / RoleBinding(+Cluster) deklarativ anlegen,
-  // idempotent wie alles andere. Genau diese Objekte wertet `kubectl auth can-i` aus.
-  const effSa = eff.serviceAccount;
-  if (effSa) {
-    if (host.serviceAccounts.some(s => s.name === effSa.name)) {
-      out.push("serviceaccount/" + effSa.name + " unchanged");
-    } else {
-      host.serviceAccounts.push({ name: effSa.name, created: host.clock });
-      out.push("serviceaccount/" + effSa.name + " created");
-    }
-  }
-  const effRole = eff.role;
-  if (effRole) {
-    const cluster = !!effRole.cluster;
-    const kind = cluster ? "clusterrole" : "role";
-    if (host.roles.some(r => r.name === effRole.name && r.cluster === cluster)) {
-      out.push(kind + ".rbac.authorization.k8s.io/" + effRole.name + " unchanged");
-    } else {
-      host.roles.push({ name: effRole.name, cluster, rules: effRole.rules.map(rule => ({ verbs: rule.verbs.slice(), resources: rule.resources.slice() })), created: host.clock });
-      out.push(kind + ".rbac.authorization.k8s.io/" + effRole.name + " created");
-    }
-  }
-  const effRb = eff.roleBinding;
-  if (effRb) {
-    const cluster = !!effRb.cluster;
-    const kind = cluster ? "clusterrolebinding" : "rolebinding";
-    if (host.roleBindings.some(b => b.name === effRb.name && b.cluster === cluster)) {
-      out.push(kind + ".rbac.authorization.k8s.io/" + effRb.name + " unchanged");
-    } else {
-      host.roleBindings.push({ name: effRb.name, cluster, roleRef: { kind: effRb.roleRef.kind, name: effRb.roleRef.name }, subjects: effRb.subjects.map(s => Object.assign({}, s)), created: host.clock });
-      out.push(kind + ".rbac.authorization.k8s.io/" + effRb.name + " created");
-    }
+  for (const handler of applyHandlers) {
+    // Ein Handler, der einen String zurückgibt, meldet einen Fehler mit früher Rückgabe
+    // (Pod-Security-Admission, PVC-dataSource-/VolumeSnapshot-Quellen-Fehler) – exakt das
+    // alte `return host._err(...)`-Verhalten: die Kette bricht ab, der Text ist das Ergebnis.
+    const err = handler(host, eff, out);
+    if (typeof err === "string") return err;
   }
   return out.join("\n");
 }
