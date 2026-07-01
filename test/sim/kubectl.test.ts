@@ -535,3 +535,46 @@ test("deployments-Liste spiegelt Readiness: notready zeigt 0/1, geheilt 1/1", ()
   sim.exec("kubectl create secret generic kombuese-menue --from-literal=menue=fisch");
   assert.match(sim.exec("kubectl get deployments").output!, /kombuese\s+1\/1/);
 });
+
+// ── #489: Ressourcen-Namen an der create-Befehlsgrenze validieren (DNS-1123, Forts. #479) ──
+// Der Spieler tippt bei `kubectl create <kind> <name>` den Namen selbst – das ist die echte
+// Nutzereingabe-Grenze. Ungültige Namen (Großbuchstaben, '_', führender '-' …) werden wie im
+// echten kubectl abgelehnt, statt stillschweigend eine Ressource mit illegalem Namen anzulegen.
+
+test("#489 create deployment: Großbuchstaben-Name wird abgelehnt (wie echtes kubectl), legt nichts an", () => {
+  const r = sim.exec("kubectl create deployment WebApp --image=nginx");
+  assert.ok(r.error, "ungültiger Name muss einen Fehler geben");
+  assert.match(r.output!, /Invalid value: "WebApp"/, "kubectl-typische Fehlermeldung mit dem echten Namen");
+  assert.match(r.output!, /RFC 1123|DNS-1123|Kleinbuchstaben/, "erklärt die Namensregel");
+  assert.equal(sim.deployments.filter(d => d.name === "WebApp").length, 0, "kein Deployment angelegt");
+  assert.equal(sim.deployments.length, 0, "gar nichts angelegt");
+});
+
+test("#489 create deployment: Unterstrich und führender Bindestrich sind ungültig", () => {
+  assert.ok(sim.exec("kubectl create deployment web_app --image=nginx").error, "'_' ist verboten");
+  assert.ok(sim.exec("kubectl create deployment -kasse --image=nginx").error, "führender '-' ist verboten");
+  assert.equal(sim.deployments.length, 0, "kein Deployment aus ungültigen Namen");
+});
+
+test("#489 create deployment: gültiger DNS-1123-Name funktioniert weiter (Gegenprobe)", () => {
+  const r = sim.exec("kubectl create deployment web-app --image=nginx");
+  assert.ok(!r.error, "gültiger Name darf nicht abgelehnt werden");
+  assert.match(r.output!, /deployment\.apps\/web-app created/);
+  assert.equal(sim.deployments.filter(d => d.name === "web-app").length, 1);
+});
+
+test("#489 create: auch secret/configmap/serviceaccount lehnen ungültige Namen ab", () => {
+  const sec = sim.exec("kubectl create secret generic DB_Zugang --from-literal=pw=geheim123");
+  assert.ok(sec.error, "Secret-Name mit Großbuchstaben/'_' abgelehnt");
+  assert.match(sec.output!, /Invalid value/);
+  assert.equal(sim.secrets.length, 0);
+
+  const cm = sim.exec("kubectl create configmap App.Config --from-literal=k=v");
+  // 'App.Config' hat Großbuchstaben → ungültig
+  assert.ok(cm.error, "ConfigMap-Name mit Großbuchstaben abgelehnt");
+  assert.equal(sim.configMaps.length, 0);
+
+  const sa = sim.exec("kubectl create serviceaccount Wachdienst");
+  assert.ok(sa.error, "ServiceAccount-Name mit Großbuchstaben abgelehnt");
+  assert.equal(sim.serviceAccounts.filter(s => s.name === "Wachdienst").length, 0, "kein SA mit ungültigem Namen");
+});

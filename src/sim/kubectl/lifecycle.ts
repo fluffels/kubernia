@@ -14,8 +14,26 @@ import { addDeployment, removeDeployment, replaceDeploymentPod, restartStatefulP
 // Argo-CD-Reconcile/-Klon liegen seit #378 bei der argocd-Familie in ../argocd – `kubectl apply -f`
 // einer Application zieht/kloniert den Soll direkt darüber (statt über eine Host-Methode).
 import { argoReconcile, cloneChildSpec } from "../argocd";
+import { isResourceName } from "../names";
 import { admitPod } from "./security";
 import type { KubectlHost } from "./host";
+
+/** #489: Lehnt einen vom Spieler getippten Ressourcennamen ab, wenn er die DNS-1123-Regel
+ *  verletzt – genau wie echtes kubectl (`… is invalid: metadata.name: Invalid value: …`).
+ *  Die eine Regel lebt in `../names` (isResourceName, #479); hier verdrahten wir sie an der
+ *  Nutzereingabe-Grenze `kubectl create`. Gibt die fertige Fehlermeldung (über `host._err`,
+ *  setzt `error`) zurück oder `null`, wenn der Name gültig ist. `kind` ist der K8s-Objekttyp
+ *  für die Meldung (z.B. "Deployment", "Secret"). */
+function invalidNameError(host: KubectlHost, kind: string, name: string): string | null {
+  if (isResourceName(name)) return null;
+  return host._err(
+    'The ' + kind + ' "' + name + '" is invalid: metadata.name: Invalid value: "' + name +
+      "\": a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', " +
+      "and must start and end with an alphanumeric character",
+    "Kubernetes-Namen folgen der DNS-1123-Regel: nur Kleinbuchstaben, Ziffern und '-', " +
+      "Anfang und Ende alphanumerisch (z.B. 'web-app' statt 'WebApp' oder 'web_app').",
+  );
+}
 
 /** Den Dateinamen hinter `-f`/`--filename` herausziehen (beide Formen gleichwertig,
  *  wie echtes kubectl und wie die accept-Regex; #380). Unterstützt Leerzeichen
@@ -37,6 +55,7 @@ export function kubectlCreate(host: KubectlHost, t: string[], raw: string) {
     if (t[3] === "tls") {
       const name = t[4];
       if (!name || name.startsWith("--")) return host._err("kubectl create secret tls: Der Name fehlt.", "Muster: kubectl create secret tls <name> --cert=tls.crt --key=tls.key");
+      { const bad = invalidNameError(host, "Secret", name); if (bad) return bad; }
       const hasCert = /--cert[=\s]\S+/.test(raw);
       const hasKey = /--key[=\s]\S+/.test(raw);
       if (!hasCert || !hasKey) return host._err("error: a TLS secret needs --cert and --key", "Häng '--cert=tls.crt --key=tls.key' an.");
@@ -48,6 +67,7 @@ export function kubectlCreate(host: KubectlHost, t: string[], raw: string) {
     if (t[3] !== "generic") return host._err("Der Simulator kann nur 'kubectl create secret generic <name> --from-literal=k=v' und 'kubectl create secret tls <name> --cert=… --key=…'.");
     const name = t[4];
     if (!name || name.startsWith("--")) return host._err("kubectl create secret: Der Name fehlt.", "Muster: kubectl create secret generic <name> --from-literal=schluessel=wert");
+    { const bad = invalidNameError(host, "Secret", name); if (bad) return bad; }
     const literals = [...raw.matchAll(/--from-literal[=\s]([\w.-]+)=(\S+)/g)].map(m => m[1]);
     if (literals.length === 0) return host._err("error: at least one --from-literal is required", "Häng '--from-literal=passwort=geheim123' an.");
     if (host.secrets.some(s => s.name === name)) return host._err('error: secrets "' + name + '" already exists');
@@ -58,6 +78,7 @@ export function kubectlCreate(host: KubectlHost, t: string[], raw: string) {
     // kubectl create configmap <name> --from-literal=schluessel=wert
     const name = t[3];
     if (!name || name.startsWith("--")) return host._err("kubectl create configmap: Der Name fehlt.", "Muster: kubectl create configmap <name> --from-literal=schluessel=wert");
+    { const bad = invalidNameError(host, "ConfigMap", name); if (bad) return bad; }
     const literals = [...raw.matchAll(/--from-literal[=\s]([\w.-]+)=(\S+)/g)].map(m => m[1]);
     if (literals.length === 0) return host._err("error: at least one --from-literal is required", "Häng '--from-literal=log_level=info' an.");
     if (host.configMaps.some(c => c.name === name)) return host._err('error: configmaps "' + name + '" already exists');
@@ -67,6 +88,7 @@ export function kubectlCreate(host: KubectlHost, t: string[], raw: string) {
   if (t[2] === "serviceaccount" || t[2] === "sa") {
     const name = t[3];
     if (!name || name.startsWith("--")) return host._err("kubectl create serviceaccount: Der Name fehlt.", "Muster: kubectl create serviceaccount <name>");
+    { const bad = invalidNameError(host, "ServiceAccount", name); if (bad) return bad; }
     if (host.serviceAccounts.some(s => s.name === name)) return host._err('error: serviceaccounts "' + name + '" already exists');
     host.serviceAccounts.push({ name, created: host.clock });
     return "serviceaccount/" + name + " created";
@@ -75,6 +97,7 @@ export function kubectlCreate(host: KubectlHost, t: string[], raw: string) {
     const cluster = t[2] === "clusterrole";
     const name = t[3];
     if (!name || name.startsWith("--")) return host._err("kubectl create " + t[2] + ": Der Name fehlt.", "Muster: kubectl create " + t[2] + " <name> --verb=get,list --resource=pods");
+    { const bad = invalidNameError(host, cluster ? "ClusterRole" : "Role", name); if (bad) return bad; }
     const verbs = host._multiFlag(raw, "verb");
     const resources = host._multiFlag(raw, "resource");
     if (verbs.length === 0) return host._err("error: at least one --verb must be specified", "Häng z.B. '--verb=get,list' an.");
@@ -88,6 +111,7 @@ export function kubectlCreate(host: KubectlHost, t: string[], raw: string) {
     const cluster = t[2] === "clusterrolebinding";
     const name = t[3];
     if (!name || name.startsWith("--")) return host._err("kubectl create " + t[2] + ": Der Name fehlt.", "Muster: kubectl create " + t[2] + " <name> --role=<rolle> --serviceaccount=<ns>:<sa>");
+    { const bad = invalidNameError(host, cluster ? "ClusterRoleBinding" : "RoleBinding", name); if (bad) return bad; }
     const roleName = host._flagValue(t, "--role");
     const clusterRoleName = host._flagValue(t, "--clusterrole");
     // ClusterRoleBinding kann sich nur auf eine ClusterRole beziehen.
@@ -110,6 +134,7 @@ export function kubectlCreate(host: KubectlHost, t: string[], raw: string) {
   const name = t[3];
   const imgMatch = raw.match(/--image[=\s]+(\S+)/);
   if (!name || name.startsWith("--")) return host._err("kubectl create deployment: Der Name fehlt.", "z.B. 'kubectl create deployment kasse --image=nginx'");
+  { const bad = invalidNameError(host, "Deployment", name); if (bad) return bad; }
   if (!imgMatch) return host._err("error: required flag(s) \"image\" not set", "Häng '--image=nginx' an.");
   if (host.deployments.some(d => d.name === name)) return host._err('error: deployment "' + name + '" already exists');
   // Pod-Security-Admission: ein imperativ erzeugtes Deployment hat keinen securityContext.
