@@ -14,7 +14,23 @@ Ein **2D-Lernspiel** (gebaut mit **Phaser 3**) für Docker, Kubernetes, Helm, Te
 - Helm-Releases hissen **Flaggen**, Services leuchten als **Laternen**, Docker-Container stehen als **Fässer** am Dock
 - `terraform apply` baut **sichtbar neues Land** ins Meer
 
-## Spielstart
+---
+
+## ✨ Was dieses Projekt besonders macht
+
+KubeQuest ist mehr als ein Lernspiel – es ist ein **Vorzeigeprojekt in drei Dimensionen**. Wer hier reinschaut, findet:
+
+1. **🎮 Ein echtes Lernspiel** – Docker/K8s/Helm/Terraform hands-on, mit Story, Spaced Repetition und 10 aufeinander aufbauenden Lern-Phasen. → [Das Spiel](#-das-spiel)
+2. **🏛️ Architektur & Code-Qualität als Verkaufsargument** – erzwungene Schichtung, Content-as-Data, versionierte Persistenz (Save bricht nie), `strict` TypeScript ohne `any`, taktisches DDD und Fitness-Functions als CI-Gates. → [Architektur & Qualität](#-architektur--qualität)
+3. **🤖 Vollständig von KI-Coding-Agenten gebaut – und abgesichert** – der komplette Code entsteht durch autonome Agenten. Was das sicher und billig macht, sind die Leitplanken: selbstdokumentierendes Repo, Board-Workflow mit Kollisionsschutz und ein Netz aus automatischen Gates. → [Gebaut von KI-Agenten](#-gebaut-von-ki-agenten)
+
+Die drei Abschnitte darunter erzählen jeden dieser Punkte im Detail.
+
+---
+
+## 🎮 Das Spiel
+
+### Spielstart
 
 **Entwickeln:** einmalig `npm install`, dann `npm run dev` – startet den lokalen Vite-Server. Im Browser unter der angezeigten Adresse öffnen. CSS-Änderungen werden live übernommen; nach Code-Änderungen kurz mit **F5** neu laden (ein Toast erinnert daran, Spielstand bleibt erhalten).
 
@@ -38,7 +54,7 @@ Im 📜 **Logbuch (J)** blätterst du durch alle Quests: abgeschlossene zum **Na
 
 Im 📖 **Sammelalbum (B)** sammelst du wie in einem Sticker-Album alles, was du lernst: **jeden Befehl** (z.B. `docker pull`, `kubectl get`) und **jedes Wissens-Stück** aus den Quiz-Karten. Einträge starten **verdeckt** und werden freigeschaltet, sobald du sie im Spiel kennengelernt hast – mit Fortschrittsanzeige „X von Y gesammelt“, gruppiert nach Themen-Seiten (Docker, Kubernetes, Helm …). Auch das Album wird nach deiner ersten abgeschlossenen Quest frei.
 
-## Lernen in kleinen Schritten
+### Lernen in kleinen Schritten
 
 Jeder Befehl wird **einzeln** eingeführt und sofort geübt:
 
@@ -62,13 +78,59 @@ Die **Git-Quests** (bei Ada im Kartenhaus, „versioniere deine Seekarten") füh
 
 Die **Sturm-Saison** (bei Sturmwache Juno am Leuchtturm) lehrt das Debugging-Handwerk wie im echten Betrieb: `ImagePullBackOff` diagnostizieren und mit `kubectl set image` heilen, `CrashLoopBackOff` über die **Logs** verstehen und mit Secret + `rollout restart` beheben, `Pending`-Pods durch neue Nodes (Terraform!) einplanen. Das Mantra: **get pods → describe → logs.** Danach ziehen zufällige **Stürme mit Regen und Donner** auf, die live Deployments kaputtmachen – kaputte Dienste verdienen nichts, bis du sie reparierst!
 
-## Spielsysteme
+### Spielsysteme
 
 - **🪙 Hafen-Wirtschaft** – laufende Pods und Services verdienen passiv Dublonen (auch offline, gedeckelt). Gesunder Cluster = volle Kasse!
 - **🏴‍☠️ Piraten-Überfälle** – Zufalls-Events: Piraten klauen Pod-Kisten, du stellst den Soll-Zustand unter Zeitdruck wieder her (Incident-Response!). Die Hafen-Kanone aus dem Shop erhöht das Kopfgeld.
 - **🐙 Hacker-Krake** – schnüffelt nach Klartext-Daten; nur ein schnell angelegtes Secret vertreibt sie (Security!)
 - **🎮 Bos Stapel-Spiel** – Docker-Image-Schichten in der richtigen Reihenfolge stapeln (lehrt Layer & Build-Cache)
 - **XP & Ränge** (Landratte → Moses → … → Admiral), Shop mit Haustieren 🐀🦇👻, Schiffsflaggen, Hinweis-Items, 🔥 Tages-Streak
+
+Die volle Einordnung des Lernpfads (Phasen 1–10, „Von 0 zu Senior DevOps") steht weiter unten in **[Lernpfad](#lernpfad-von-0-zu-senior-devops-ehrliche-einordnung)**.
+
+---
+
+## 🏛️ Architektur & Qualität
+
+KubeQuest ist bewusst so gebaut, dass es **so groß wie Stardew Valley** werden könnte (100+ Quests, 50+ NPCs, viele Welten) – ohne dass die Struktur bricht. Das ist die **oberste Regel** über allen Einzelentscheidungen. Was das konkret heißt:
+
+- **🧱 Erzwungene Schichtung.** Der Code ist streng geschichtet – **pure Domäne → Anwendung → Präsentation** – damit die komplette Spiellogik (Cluster-Simulator, Wirtschaft, Content) **ohne Phaser** im Node-Test läuft. Diese Grenze ist nicht nur Konvention, sondern wird von **`dependency-cruiser`** erzwungen: importiert die Domäne versehentlich die Engine, schlägt der Build fehl. Dazu verbietet der Wächter **Import-Zyklen** und **toten Code**.
+- **📦 Content-as-Data + Check-DSL.** Quests, Dialoge, NPCs und Quiz-Karten sind **Daten** (JSON), kein hartcodiertes TypeScript – pro Region/NPC eine Datei statt eines Monolithen. Quest-Bedingungen werden über eine deklarative **Check-DSL** ausgedrückt. So kostet neuer Inhalt keinen Code-Eingriff und der Build bleibt schnell.
+- **💾 Versionierte Persistenz – der Save bricht nie.** Spielstände laufen über eine SaveStore-Schicht auf **IndexedDB** (kein 5-MB-localStorage-Limit mehr). Jede Formatänderung bekommt einen `version`-Bump + Migrationskette; Quest-Fortschritt persistiert per **sprechender ID**, nicht per Index, sodass eingeschobene oder umsortierte Quests keinen bestehenden Stand verschieben. „Was live geht, darf nie einen Spielstand kaputtmachen" ist eine harte Regel.
+- **🔒 `strict` TypeScript, kein `any`.** Die ganze Codebasis (inkl. Tests und Build-Config) steht auf `"strict": true`; `@typescript-eslint/no-explicit-any` ist ein **Fehler**, der den Build blockt. Die wenigen bewusst nötigen Ausnahmen tragen eine begründete Disable-Zeile.
+- **🎯 Taktisches DDD.** Fehlbare Konzepte werden **un-repräsentierbar** gemacht: Value Objects für Ressourcen-Namen (DNS-1123-Regel an einer Stelle) und für Dublonen (nicht-negativ + ganzzahlig by construction), dazu **Cluster-Invarianten** als SSOT für einen legalen Zustand, die der Simulator an der Aggregat-Grenze prüft.
+- **✅ Fitness-Functions als CI-Gates.** Statt auf Review-Disziplin zu vertrauen, hält ein Netz aus automatischen Prüfungen die Architektur ehrlich – jede läuft lokal **und** als CI-Gate:
+
+  | Gate | Was es sichert |
+  |---|---|
+  | `npm test` (Vitest) | Verhalten der Domäne/Sim/Wirtschaft, inkl. Negativ-/Grenzfälle (Red-Green-abgesichert) |
+  | `npm run typecheck` | voll `strict`, ganzes Projekt |
+  | `npm run lint` | ESLint typbewusst, `--max-warnings 0`, `any` blockt |
+  | `npm run check:arch` | Schichtung + keine Zyklen + kein toter Code (dependency-cruiser) |
+  | `npm run check:size` | God-File-Frühwarnung (Zeilen-Budget je Modul) |
+  | `npm run check:docmap` | die Datei-Landkarte in CLAUDE.md kann nicht leise veralten |
+  | `npm run smoke` | Boot- & Interaktions-Smokes headless gegen den echten Offline-Build (Playwright) |
+  | `npm audit --omit=dev` | Security-Gate über die ausgelieferten Produktiv-Deps |
+
+**Mehr Tiefe:** die vollständige Architektur-Gesamtsicht nach **arc42** steht in [docs/arc42-architektur.md](docs/arc42-architektur.md); die frische, doku-unabhängige **iSAQB-Analyse** (fünf Durchläufe je Schicht) in [docs/architektur-analyse-2026-07-iSAQB.md](docs/architektur-analyse-2026-07-iSAQB.md). Die bewusst festgehaltenen Grundsatzentscheidungen liegen als **ADRs** unter [docs/adr/](docs/adr/) (Engine Phaser, kein Backend/DB, kein Multiplayer, Skalierungs-Fundament).
+
+---
+
+## 🤖 Gebaut von KI-Agenten
+
+Der komplette Code von KubeQuest entsteht durch **autonome KI-Coding-Agenten** – kein Mensch tippt die Implementierung. Das ist nur deshalb sicher und billig, weil das Repo als **Harness** um die Agenten herum gebaut ist: klare Leitplanken, an denen ein Agent nicht vorbeikommt, statt Vertrauen in einen einzelnen guten Lauf. Die Bausteine:
+
+- **📖 Selbstdokumentierendes Repo (SSOT im Code).** Ein Agent findet alles, was er braucht, im Repo selbst – auch ohne externes Wissen (frischer Clone, Cloud-Agent). [CLAUDE.md](CLAUDE.md) ist der Schnellstart + die Datei-für-Datei-Landkarte, [AGENTS.md](AGENTS.md) die ausführliche Arbeitsanweisung (harte Regeln, Board-Workflow, Konventionen), dazu **modul-lokale** `AGENTS.md` (z.B. in `src/content/`), die nur gelesen werden, wenn man im jeweiligen Bereich arbeitet (Kontext als Token-Grenze).
+- **🗂️ Board-getriebener Ein-Ticket-Workflow.** Der Backlog lebt als **GitHub Issues** + Project-Board; die [kuratierte Umsetzungs-Reihenfolge](docs/ticket-reihenfolge.md) sagt, was als Nächstes dran ist. Ein Agent nimmt **genau ein** Ticket, arbeitet es end-to-end ab (umsetzen → Gates grün → im Browser verifizieren → nach `main` → Issue schließen) und pflegt danach das Board.
+- **🚦 Kollisionsschutz für parallele Agenten.** Mehrere Agenten können gleichzeitig laufen, ohne sich in die Quere zu kommen: Ein Ticket wird per **Assignee** als „in Arbeit" markiert (der einzige Zustand, den ein paralleler Agent sieht) und in einem **eigenen `git worktree`** auf eigenem Branch bearbeitet – so teilen sich zwei Chats nie dasselbe Arbeitsverzeichnis.
+- **🛡️ Automatische Gates als Sicherheitsnetz.** Genau die [Fitness-Functions oben](#-architektur--qualität) (typecheck/lint/arch/size/docmap/test/smoke/audit) sind das, was autonome Entwicklung absichert: Ein Agent kann keinen Schichtbruch, keinen `any`, kein God-File, keine veraltete Doku-Landkarte und keine gebrochene Save-Migration unbemerkt einschleusen – der Build wird rot. **Determinismus** (seedbare Zufälligkeit statt `Math.random` in der Domäne) und die **Save-nie-brechen-Regel** gehören zum selben Netz.
+- **🧩 Skills für wiederkehrende Abläufe.** Der immer gleiche Ticket-Ablauf ist als **Skill** kodifiziert (`kubequest`), ebenso das Bearbeiten des Forums (`forum`, GitHub Discussions mit Freigabe-Stopp vor dem Posten) – reproduzierbare Abläufe statt freihändiger Improvisation.
+
+**Warum das funktioniert:** Nicht ein einzelner cleverer Prompt macht autonome KI-Entwicklung sicher, sondern die **Leitplanken drumherum** – SSOT-Doku, ein enger Ticket-Fokus, Kollisionsschutz und ein Gate-Netz, das jeden Fehler an der Grenze abfängt. Genau diese Kombination ist selbst ein Architekturziel (siehe [arc42 §8](docs/arc42-architektur.md)).
+
+> 📝 Eine **kanonische Harness-Tiefendoku** (`docs/agent-harness.md`, „wie + warum" an einer Stelle) ist als nächster Schritt geplant (#526) und wird von hier verlinkt, sobald sie steht. Bis dahin sind [AGENTS.md](AGENTS.md) + [CLAUDE.md](CLAUDE.md) + die [Umsetzungs-Reihenfolge](docs/ticket-reihenfolge.md) die maßgeblichen Quellen.
+
+---
 
 ## Projektstruktur
 
@@ -87,8 +149,9 @@ kubequest/
 │   ├── scenes.ts      Phaser-Welt: Karte, Cluster-Sync, Piraten, Krake
 │   └── …              ui, world, decor, clock, runtime, store, sfx, types, assets-data
 ├── test/             Test-Suite (Vitest) – Simulator, Inhalte, kompletter Story-Durchlauf u.a.
+├── e2e/              Boot- & Interaktions-Smokes (Playwright, gegen den Offline-Build)
 ├── assets/           Kenney- & PixelLab-Grafiken (CC0) + Lizenzen
-├── docs/             Konzept- & Architektur-Analysen
+├── docs/             Konzept-, Architektur- & Harness-Doku (arc42, ADRs, Analysen, Reihenfolge)
 ├── dist/             Host-Build von `npm run build` (Multi-File, nicht eingecheckt)
 └── dist-offline/     Offline-Build von `npm run build:offline` (eine self-contained index.html, nicht eingecheckt)
 ```
@@ -129,7 +192,8 @@ Voller Einstieg (Voraussetzungen, Alltags-Befehle, „wo finde ich was"): **[CON
 
 - **Wo liegt was?** Datei-für-Datei-Landkarte: [CLAUDE.md](CLAUDE.md).
 - **Wie wird hier gearbeitet** (Regeln, Board-Workflow, Konventionen): [AGENTS.md](AGENTS.md).
-- **Architektur-Stand & Umsetzungs-Reihenfolge** (Stardew-Scope): [docs/architektur-analyse-2026-06.md](docs/architektur-analyse-2026-06.md) + [docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md).
+- **Wie KI-Agenten hier bauen** (der Harness): siehe [Gebaut von KI-Agenten](#-gebaut-von-ki-agenten) oben.
+- **Architektur-Stand & Umsetzungs-Reihenfolge** (Stardew-Scope): [docs/arc42-architektur.md](docs/arc42-architektur.md) + [docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md).
 
 > Eine **containerisierte Dev-Umgebung** (devcontainer/`docker compose`) ist in Arbeit (#388) und macht den Einstieg künftig noch reproduzierbarer.
 
@@ -160,3 +224,4 @@ Das Spiel deckt aktuell die **Phasen 1–10** ab – vom Fundament über Terrafo
 
 - Weitere Lernpfad-Inseln (siehe Tabelle oben) – die nächsten Ausbaustufen jenseits der bisherigen Phasen 1–10, je Insel eigene NPCs, Quests und Drills
 - Mehr Grafik: weitere CC0-Packs, z.B. Innenräume für betretbare Gebäude
+</content>
