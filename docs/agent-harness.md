@@ -53,7 +53,8 @@ Das eigentliche Sicherheitsnetz: eine Reihe von Prüfungen, die **lokal und in d
 
 ### 2.5 Skills + Setup als reproduzierbare Abläufe
 
-- **Skills** kodifizieren wiederkehrende Abläufe statt freihändiger Improvisation: der `kubequest`-Skill (der Ticket-Ablauf end-to-end), der `forum`-Skill (GitHub Discussions bearbeiten, mit verbindlichem Freigabe-Stopp vor dem Posten). Der Skill ist ein dünner Zeiger auf die Repo-SSOT (AGENTS.md), damit er auch ohne Skill-Datei funktioniert.
+- **Skills** kodifizieren wiederkehrende Abläufe statt freihändiger Improvisation: der `kubequest`-Skill (der Ticket-Ablauf end-to-end), der `forum`-Skill (GitHub Discussions bearbeiten, mit verbindlichem Freigabe-Stopp vor dem Posten), der `review-lenses`-Skill (gestaffelter Mehr-Perspektiven-Review vor dem Merge, #532 — siehe unten). Der Skill ist ein dünner Zeiger auf die Repo-SSOT (AGENTS.md), damit er auch ohne Skill-Datei funktioniert.
+- **Gestaffelter Review vor `main` (`review-lenses`-Skill, #532)** — Vorbild WPS-KI-Fabrik: erst die billigen deterministischen Gates (`npm run verify`), und **nur bei Grün** drei getrennte agentische Lens-Pässe (Architektur / Requirement-Treue / Test-Adäquanz) mit strukturierten Findings. Rote Gates ⇒ **Abbruch ohne Lens-Pass** (Token-Short-Circuit: kein LLM-Aufwand auf einen Diff, der schon deterministisch scheitert). Kein Ersatz für die CI-Gates (hängt sich davor), **kein Auto-Merge** — der Review liefert nur Findings für den normalen Ticket-Abschluss.
 - **One-Command-Setup** (`npm run setup`, #387) + **Devcontainer** ([`.devcontainer/`](../.devcontainer/devcontainer.json), #388): ein Agent (oder Mensch) ist mit einem Befehl bzw. `docker compose up` startklar — Node-Check, `npm install`, einmal alle Checks. Reproduzierbare Umgebung statt „bei mir lief's".
 
 ## 3. Die Fitness-Functions im Detail
@@ -153,15 +154,14 @@ So greifen die Bausteine bei **einem** Ticket ineinander — jeder Schritt ist e
 
 ## 5. Roadmap / bekannte Lücken
 
-Der Harness ist bewusst ein **lebendes System** — seine eigenen Schwachstellen sind als Tickets erfasst (dogfooding: der Harness verbessert sich über denselben Board-Workflow). Offene Harness-Verbesserungen (Stand: Block „Harness & Vorzeige-Doku", [ticket-reihenfolge.md](ticket-reihenfolge.md)):
+Der Harness ist bewusst ein **lebendes System** — seine eigenen Schwachstellen sind als Tickets erfasst (dogfooding: der Harness verbessert sich über denselben Board-Workflow). Noch **offene** Harness-Verbesserungen ([ticket-reihenfolge.md](ticket-reihenfolge.md)):
 
 | Ticket | Was es schließt |
 |---|---|
-| **#527** | Aggregat-Kommando `npm run verify` (check:all) als **eine** SSOT für alle Gates — verhindert vergessene Gates + CI/lokal-Drift. |
-| **#528** | Git **pre-push-Hook** — lässt die schnellen Gates lokal **vor** `git push origin main` laufen; schließt die Post-hoc-CI-Lücke des Direkt-Push (§4). |
-| **#531** | **Forum-Inbox härten** gegen Prompt-Injection (externer Discussion-Text → auto-Issue → Agent). |
 | **#492** | Zentrale **seedbare RNG** + Fitness-Function gegen `Math.random` in Domäne/Content — macht den Determinismus-Anspruch zu einem echten Gate. |
-| **#532 / #533** | Tooling aus der KI-Fabrik-Analyse: Multi-Viewpoint-Review-Skill mit Gate-Short-Circuit; Diff-Größenbudget als Gate (`check:diffsize`, erzwingt kleine Commits). |
+| **#533** | **Diff-Größenbudget als Gate** (`check:diffsize`) — erzwingt kleine Commits (Schwester von `check:size`). |
+
+**Schon gelandet** (Block „Harness & Vorzeige-Doku", 2026-07-01): das Aggregat-Kommando `npm run verify` (#527), der Git-**pre-push-Hook** (#528, schließt die Post-hoc-CI-Lücke des Direkt-Push, §4), der **Harness-Drift-Wächter** `check:docdrift` (#529, §3), die **Forum-Inbox-Härtung** gegen Prompt-Injection (#531, §4) und der **`review-lenses`-Skill** — der gestaffelte Mehr-Perspektiven-Review mit Gate-Short-Circuit (#532, §2.5).
 
 Mit **#530** ([ADR 0008](adr/0008-ki-agenten-harness.md)) ist der ADR jetzt die formale Grundsatzentscheidung und dieses Doc die erklärende Tiefe daneben — dieselbe Arbeitsteilung wie AGENTS.md (operativ) ↔ agent-harness.md (erklärend).
 
