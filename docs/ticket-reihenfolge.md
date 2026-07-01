@@ -1,8 +1,8 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-07-02.** Der Harness-&-Vorzeige-Doku-Block (#525–#533) und der Großteil der iSAQB-Architektur-Analyse (#492–#512, #534, #538 — Determinismus, Coverage-Gate, Save-Versioning-SSOT, Sim-Invarianten/Aggregat-Mutationen, DNS-1123, DOM-freie Bewertung, szenen-neutrale Ticks u.a.) sind **erledigt**. Volle Details je Ticket: git-History + Brain `Projekte/KubeQuest`; Analyse-Herleitung in [architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md).
+> **Stand: 2026-07-02.** Der Harness-&-Vorzeige-Doku-Block (#525–#533) und der Großteil der iSAQB-Architektur-Analyse (#492–#512, #534, #538 — Determinismus, Coverage-Gate, Save-Versioning-SSOT, Sim-Invarianten/Aggregat-Mutationen, DNS-1123, DOM-freie Bewertung, szenen-neutrale Ticks u.a.) sind **erledigt**; zuletzt **#511 (A15)** — `sanitizeState` gehärtet (stats >=0/floor, questStep/taskIdx gegen den Content geklemmt). Volle Details je Ticket: git-History + Brain `Projekte/KubeQuest`; Analyse-Herleitung in [architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md).
 >
-> **Nächstes freies Ticket = #514 (A17, `manifestRef`).** #511 (A15) und #513 (A16) stehen oben im Kopf, sind aber **in Arbeit** (assigned + offener Worktree) → beim Wählen überspringen.
+> **Nächstes freies Ticket = #514 (A17, `manifestRef`).** #513 (A16) steht oben im Kopf, ist aber **in Arbeit** (assigned + offener Worktree) → beim Wählen überspringen.
 >
 > _Frühere Tickets (Kurzfassung — volle Details in git-History + Brain `Projekte/KubeQuest`):_ #492–#512/#534/#538 iSAQB-Analyse-Umsetzung (Governance-Gates + Grenz-Härtung) · #525–#533 Harness & Vorzeige-Doku (`npm run verify`, pre-push-Hook, Drift-Wächter, ADR 0008, Diff-Größenbudget) · #490/#489/#488/#479 DDD (Value Objects, getippte Aggregat-Mutationen) · #484 Lernlücke Scheduler-Blindplatzierung/Eviction-Loop · #481 Barrierefreiheit-Audit · #480 Präsentations-Interaktions-Smokes · #475 Test-Harness konsolidiert · #443 Phaser 4 evaluiert & bewusst verschoben (Re-Eval per #474) · #296 Reset-Fix · #382 Worktree-Pfad-Konvention · #362 freies Funken · #358/#359 `help` gefiltert/CLI-Format · #328 Sandbox-Vertiefung · #278/#279 Sammelalbum + Lernkarten-Backfill · #460–#466 Aufbau-Bogen (Epic #239).
 > Diese Liste ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
@@ -47,12 +47,11 @@ Sagt die Maintainerin **„nächstes Ticket"** (für kubequest), dann:
 
 Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwas anderes ermöglicht, kommt davor), sonst niedrigste Nummer. Content-Arcs (echter Lernpfad-Fortschritt) stehen über QoL-/System-Features. No-dependency-Content-Füller (#218/#219/#228/#229/#236/#237/#239) lebten im Auto-Rest — keine Abhängigkeit, kein Grund für den Kopf; einige davon sind inzwischen erledigt, der verbleibende design-freie Content (#239/#279/#278) ist hier nach Wert kuratiert, weil der Backlog rein `prio:niedrig`/ohne ist.
 
-> **⭐ Kopf-Reihenfolge (Stand 2026-07-02):** Harness-&-Vorzeige-Doku (#525–#533) und der HOCH-Teil der iSAQB-Analyse sind **abgearbeitet**. Oben steht jetzt der **iSAQB-Rest MITTEL→NIEDRIG (#511–#524 + #535/#536)**, _danach_ der bisherige Lernpfad-/QoL-Kopf. Oberstes freies Ticket: **#514** (#511/#513 in Arbeit). Volle Begründung je Ticket: [architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md).
+> **⭐ Kopf-Reihenfolge (Stand 2026-07-02):** Harness-&-Vorzeige-Doku (#525–#533) und der HOCH-Teil der iSAQB-Analyse sind **abgearbeitet**. Oben steht jetzt der **iSAQB-Rest MITTEL→NIEDRIG (#513–#524 + #535/#536)**, _danach_ der bisherige Lernpfad-/QoL-Kopf. Oberstes freies Ticket: **#514** (#513 in Arbeit). Volle Begründung je Ticket: [architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md).
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
 | | **━━━ iSAQB-Architektur-Analyse 2026-07-01 — MITTEL (Struktur-, Testbarkeits- & Governance-Präzisierung) ━━━** | | | |
-| A15 | **#511** | mittel | Save: `sanitizeState` vervollständigen (stats härten, questStep/taskIdx klemmen) | Grenzfälle rutschen durch den Selbstanspruch. |
 | A16 | **#513** | mittel | Anwendung: `GameSelf [key:string]:any` → explizites `GameApi`-Interface | Keine Typprüfung an Bündelgrenzen. |
 | A17 | **#514** | mittel | Content: `manifests.ts` von Quests ungenutzt / YAML dupliziert → `manifestRef` | Zwei Wahrheiten für dieselben Manifeste. |
 | A18 | **#498** | mittel | Content: maschineller Schema-Drift-Wächter JSON ↔ TS-Typen | ~13k Zeilen JSON ohne Struktur-Schutz. |
