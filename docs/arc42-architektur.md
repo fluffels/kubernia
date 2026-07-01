@@ -104,6 +104,14 @@ Die Modul-Splits + die on-demand-Tiefendocs der CLAUDE.md **sind** bereits solch
 | Aggregat & Invarianten | Prüfungen um `ClusterState` verteilt | `ClusterState` als Aggregat, ungültige Zustände un-konstruierbar | #478 |
 | Value Objects | Primitive (`string` Pod-Name, `number` Dublonen) | Value Objects, illegale Zustände un-repräsentierbar | #479 |
 
+### Monolith ≠ schlecht — und hier läuft gar kein Server
+
+„Monolith" meint zwei verschiedene Dinge: einen **Deployment-Monolithen** (ein Server-Prozess macht alles; Gegenteil = Microservices — *das* ist die Kubernetes-/Skalierungsfrage) und einen **modularen Monolithen** (ein Deployable mit sauberen inneren Grenzen; Gegenteil = „Big Ball of Mud"). KubeQuest ist Letzteres — und das ist ein Gütesiegel, kein Makel.
+
+Vor allem aber: **KubeQuest hat keinen Server.** Es ist ein client-seitiges Browser-Spiel ohne Backend/Container/DB ([ADR 0002](adr/0002-kein-backend-keine-db.md)/[0003](adr/0003-multiplayer-coop-out-of-scope.md)), ausgeliefert als statische Dateien bzw. eine Offline-Datei. Die Frage „Monolith vs. Microservices in Kubernetes" greift hier gar nicht — es gibt nichts zu hosten außer statischen Assets (die *könnten* aus einem Container/CDN kommen, aber das ist ein nginx, kein verteiltes System). **Ironie:** das Spiel *lehrt* die K8s-Welt, ist aber bewusst nicht so gebaut — ein Lernspiel hat andere Qualitätsziele als ein verteiltes Produktionssystem.
+
+iSAQB ist **stil-neutral**: Architektur folgt Qualitätszielen, nicht Mode. Microservices sind ein Trade-off (unabhängiges Deployen/Skalieren gegen hohe Betriebskomplexität), keine Tugend; „Monolith first" ist heute Mainstream-Rat. Die ~2–3 Subdomänen oben sind **Navigations-/Token-Grenzen in einem Bundle, keine künftigen Services**. Ein echter Server — und damit die K8s-Frage — würde erst bei Cloud-Saves/Bestenlisten/Multiplayer relevant; heute per ADR 0003 mit Re-Eval-Trigger ausgeschlossen.
+
 ### Weitere Querschnitts-Konzepte (Status)
 
 - **Sicherheit/Supply-Chain:** Dependabot + zweistufiges `npm audit`-CI-Gate (blockt nur ausgelieferte Deps). Dev-Panel aus Prod-Builds gestrippt + passwortgated. **Abgedeckt.**
