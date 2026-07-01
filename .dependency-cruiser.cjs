@@ -14,16 +14,12 @@
 // Wächter bei Stardew-Scope mitwächst: jedes NEUE Domänen-Modul ist automatisch geschützt,
 // ohne dass man es hier nachträgt.
 
-/** Präsentationsschicht – darf Phaser + alles andere anfassen. Deckt sowohl die
- *  Einzeldatei (src/ui.ts, src/sfx.ts) als auch die Modul-Ordner ab (src/scenes/*
- *  seit dem scenes.ts-Split #345; analog künftig src/ui/*). */
-const PRESENTATION = "^src/(scenes|ui|sfx)(\\.ts$|/)";
-/** Anwendungs-/Persistenzschicht – muss phaser- und präsentationsfrei bleiben. Deckt sowohl
- *  die Einzeldatei (src/game.ts, src/store.ts …) als auch den Modul-Ordner src/game/* ab
- *  (game.ts-Split #392, analog zu src/scenes/* #345 und src/ui/* #356). */
-const APPLICATION = "^src/(game|runtime|devpanel|store)(\\.ts$|/)";
-/** Einstieg/Assets – main bootet bewusst Phaser + Szenen; assets-data hält PNG-Imports. */
-const ENTRY = "^src/(main|assets-data)\\.ts$";
+// Schicht-Muster (Präsentation/Anwendung/Einstieg) als EINE Quelle der Wahrheit (#482):
+// dieselbe Definition nutzt der Doku↔Code-Wächter (scripts/check-docmap.mjs), damit die
+// Schicht-Zuordnung nicht zweimal nebeneinander gepflegt wird und auseinanderdriftet.
+// Deckung: Präsentation = src/(scenes|ui|sfx)(.ts|/…); Anwendung/Persistenz =
+// src/(game|runtime|devpanel|store)(.ts|/…); Einstieg/Assets = src/(main|assets-data).ts.
+const { PRESENTATION, APPLICATION, ENTRY } = require("./scripts/layers.cjs");
 /** Phaser, egal über welchen aufgelösten Pfad (Pfad beginnt mit `node_modules/…`, kein führender Slash). */
 const PHASER = "node_modules[/\\\\]phaser[/\\\\]";
 

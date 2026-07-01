@@ -47,6 +47,9 @@ jobs:
       - name: Dateigröße-Wächter (God-File-Budget, #390)
         run: npm run check:size
 
+      - name: Doku↔Code-Drift-Wächter (CLAUDE.md-Landkarte, #482)
+        run: npm run check:docmap
+
       - name: Host-Build
         run: npm run build
 
