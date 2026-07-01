@@ -1,6 +1,6 @@
 # Tiefendoc: Content-as-Data (`src/content.ts` + `src/content/*`)
 
-> On-demand-Detail zur Content-Schicht. Der schlanke Always-Index steht in [CLAUDE.md](../../CLAUDE.md). **Wie man tatsächlich neuen Inhalt hinzufügt** (Quest/NPC anlegen, Save-Migration), steht im Workflow-Abschnitt der [AGENTS.md › Content-as-Data](../../AGENTS.md) — hier liegen nur die **Modul-Interna**, nicht doppelt. Pfade sind repo-relativ als Inline-Code.
+> On-demand-Detail zur Content-Schicht. Der schlanke Always-Index steht in [CLAUDE.md](../../CLAUDE.md). **Wie man tatsächlich neuen Inhalt hinzufügt** (Quest/NPC anlegen, Save-Migration), steht in der modul-lokalen [`src/content/AGENTS.md`](../../src/content/AGENTS.md) (#483) — hier liegen nur die **Modul-Interna**, nicht doppelt. Pfade sind repo-relativ als Inline-Code.
 
 ## Worum es geht
 
@@ -33,7 +33,7 @@ Vom Loader geladen + validiert, von Vite gebündelt; **kein Runtime-`fetch`**, d
 
 **Granularität immer mitdenken:** wird eine Regionen-Datei zu groß, in sinnvolle Unterdateien splitten — eine Umstellung ist nur etwas wert, wenn sie dem Wachstum standhält.
 
-> Quest hinzufügen/umbenennen/entfernen inkl. Save-Migrations-Regeln: siehe [AGENTS.md › Content-as-Data](../../AGENTS.md). Quest-Fortschritt persistiert seit #353/#354 per **Quest-ID** (`currentQuestId`), nicht per Zahl-Index — Einfügen/Umsortieren braucht keine Migration.
+> Quest hinzufügen/umbenennen/entfernen inkl. Save-Migrations-Regeln: siehe [`src/content/AGENTS.md`](../../src/content/AGENTS.md) (#483). Quest-Fortschritt persistiert seit #353/#354 per **Quest-ID** (`currentQuestId`), nicht per Zahl-Index — Einfügen/Umsortieren braucht keine Migration.
 
 ### Wording-Leitlinie: Metapher vs. Fachbegriff (#309)
 
