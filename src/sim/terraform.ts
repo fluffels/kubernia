@@ -22,6 +22,7 @@
  * nach sim.ts (kein Zyklus).
  */
 import type { ClusterState } from "./state";
+import { provisionNode, removeNode, isControlPlane } from "./nodes";
 
 /** Was die terraform-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
  *  Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es dokumentiert
@@ -169,9 +170,7 @@ export function terraformCommand(host: TerraformHost, t: string[], _raw?: string
     // Neue Server werden echte Cluster-Nodes – wartende Pods bekommen Platz!
     if (tf.resources.some(r => r.addr.includes("hafen_server"))) {
       for (const name of ["ahoi-worker-3", "ahoi-worker-4"]) {
-        if (!host.nodes.some(n => n.name === name)) {
-          host.nodes.push({ name, status: "Ready", roles: "<none>", version: "v1.30.2" });
-        }
+        provisionNode(host, { name }); // idempotent per Name (Worker-Default: roles "<none>")
       }
       host._reschedulePending();
     }
@@ -183,18 +182,13 @@ export function terraformCommand(host: TerraformHost, t: string[], _raw?: string
     // der Aufbau-Zustand zum Snapshot-Round-trip passt.
     if (provisionsCluster(tf)) {
       if (!host.controlPlane.up) {
-        const cpName = host.nodes.find(n => /control-plane/.test(n.roles))?.name || "ahoi-control";
-        if (!host.nodes.some(n => n.name === cpName)) {
-          host.nodes.push({ name: cpName, status: "Ready", roles: "control-plane", version: "v1.30.2" });
-        }
+        const cpName = host.nodes.find(isControlPlane)?.name || "ahoi-control";
+        provisionNode(host, { name: cpName, roles: "control-plane" }); // idempotent per Name
         host.controlPlane = { up: true, token: "abcdef.0123456789abcdef", node: cpName };
       }
       const workers = tf.resources.filter(r => r.addr.startsWith("hafen_worker."));
       workers.forEach((_, i) => {
-        const name = "ahoi-worker-" + (i + 1);
-        if (!host.nodes.some(n => n.name === name)) {
-          host.nodes.push({ name, status: "Ready", roles: "<none>", version: "v1.30.2" });
-        }
+        provisionNode(host, { name: "ahoi-worker-" + (i + 1) });
       });
       host._reschedulePending();
     }
@@ -212,11 +206,14 @@ export function terraformCommand(host: TerraformHost, t: string[], _raw?: string
     if (locked) return locked;
     const addrs = allAddrs(host);
     tf.applied = false;
-    host.nodes = host.nodes.filter(n => !["ahoi-worker-3", "ahoi-worker-4"].includes(n.name));
+    removeNode(host, "ahoi-worker-3");
+    removeNode(host, "ahoi-worker-4");
     // Aufbau-Capstone (#465): ein als Code gebauter Cluster wird per destroy wieder abgeräumt –
     // alle Knoten weg, Control-Plane down (zurück auf bare metal), das Gegenstück zum apply oben.
+    // Das komplette Leeren des Node-Aggregats ist bewusst eine distinkte „Aggregat leeren"-
+    // Semantik (kein Per-Member-removeNode), analog zur #508-Entscheidung für StatefulSets.
     if (provisionsCluster(tf)) {
-      host.nodes = [];
+      host.nodes.length = 0;
       host.controlPlane = { up: false, token: null, node: null };
     }
     return addrs.map(a => a + ": Destroying...\n" + a + ": Destruction complete after 1s").join("\n") +

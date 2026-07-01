@@ -24,6 +24,7 @@
  */
 import type { ClusterState, Deployment, PodInstance, PodMetrics, NodeMetrics, ScrapeTarget, Alert } from "./state";
 import { hashStr } from "../rng";
+import { isControlPlane } from "./nodes";
 
 /** Was die Observability vom Simulator braucht (von der `Sim`-Klasse erfüllt).
  *  Bewusst schmal: die Daten-Felder (`deployments`/`nodes`/`services`) kommen über
@@ -72,7 +73,7 @@ export function nodeMetrics(host: ObservabilityHost): NodeMetrics[] {
   const memShare = Math.round(pods.reduce((s, p) => s + p.memMi, 0) / n);
   return host.nodes.map(nd => {
     const h = hashStr(nd.name);
-    const ctrl = nd.roles.includes("control-plane");
+    const ctrl = isControlPlane(nd);
     const baseCpu = (ctrl ? 120 : 60) + (h % (ctrl ? 80 : 60));
     const baseMem = (ctrl ? 900 : 500) + (h % 300);
     const cpuMilli = Math.min(CPU_CAP, baseCpu + cpuShare);

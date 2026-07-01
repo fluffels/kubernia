@@ -20,8 +20,8 @@
  */
 import type { ClusterState, ClusterNode, Scenario } from "./state";
 import { randSuffix, flagValue } from "./util";
+import { provisionNode, isControlPlane, NODE_VERSION } from "./nodes";
 
-const NODE_VERSION = "v1.30.2";
 const APISERVER = "10.0.0.10:6443";
 
 /** Was die kubeadm-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt). Schmales
@@ -45,7 +45,7 @@ export function deriveControlPlane(sc: Scenario, nodes: ClusterNode[]): { up: bo
   if (sc.controlPlane) {
     return { up: !!sc.controlPlane.up, token: sc.controlPlane.token ?? null, node: sc.controlPlane.node ?? null };
   }
-  const cp = nodes.find(n => /control-plane/.test(n.roles));
+  const cp = nodes.find(isControlPlane);
   return { up: !sc.bareMetal, token: null, node: sc.bareMetal ? null : (cp ? cp.name : null) };
 }
 
@@ -90,11 +90,8 @@ function kubeadmInit(host: KubeadmHost): string {
   const token = genToken();
   // Der Knoten, auf dem init läuft, wird die Control-Plane. Gibt es schon einen Control-Plane-
   // Knoten (z.B. aus dem Szenario), nimm ihn; sonst lege "ahoi-control" an. Idempotent über Name.
-  const existingCp = host.nodes.find(n => /control-plane/.test(n.roles));
-  const cpName = existingCp ? existingCp.name : "ahoi-control";
-  if (!existingCp) {
-    host.nodes.push({ name: cpName, status: "Ready", roles: "control-plane", version: NODE_VERSION });
-  }
+  const cpName = host.nodes.find(isControlPlane)?.name ?? "ahoi-control";
+  provisionNode(host, { name: cpName, roles: "control-plane" }); // idempotent per Name
   host.controlPlane = { up: true, token, node: cpName };
   return [
     "[init] Using Kubernetes version: " + NODE_VERSION,
@@ -139,9 +136,9 @@ function kubeadmJoin(host: KubeadmHost, t: string[]): string {
       "Der Token passt nicht zur Control-Plane. Nimm genau den Token, den 'kubeadm init' ausgegeben hat.");
   }
   // Nächster freier Worker-Name: ahoi-worker-<n>, fortlaufend über die schon vorhandenen Worker.
-  const workerCount = host.nodes.filter(n => !/control-plane/.test(n.roles)).length;
+  const workerCount = host.nodes.filter(n => !isControlPlane(n)).length;
   const name = "ahoi-worker-" + (workerCount + 1);
-  host.nodes.push({ name, status: "Ready", roles: "<none>", version: NODE_VERSION });
+  provisionNode(host, { name }); // Worker-Default: roles "<none>", version NODE_VERSION
   // Ein neuer Knoten kann wartende (Pending) Pods einplanen – wie ein echter Worker, der dazukommt.
   host._reschedulePending();
   return [
