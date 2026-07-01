@@ -22,9 +22,13 @@
  *
  * Neue Format-Version später? Ein neues test/fixtures/savegame-v<N>-*.json mit vollem
  * Fortschritt ergänzen und hier einen Lade-Block dafür schreiben (siehe unten).
+ * Das ist seit #510 nicht mehr nur Bitte, sondern MASCHINELL ERZWUNGEN: der
+ * Fitness-Test „#510 …" ganz unten geht rot, sobald es zu einer Format-Version
+ * 1..CURRENT_SAVE_VERSION keine hier geladene Fixture gibt. Damit kann ein
+ * CURRENT_SAVE_VERSION-Bump ohne echten Alt-Stand-Nachweis nicht durchrutschen.
  */
 import { test, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { KQContent } from "../src/content";
@@ -485,6 +489,52 @@ test("#436: load() mit vollständigem Snapshot überschreibt Snapshot-Dateien NI
   Game.load();
   // Snapshot-Version muss nach dem Laden unverändert erhalten bleiben.
   expect(Game.sim.files["Dockerfile"]).toBe("SNAPSHOT-VERSION-NIE-UEBERSCHREIBEN");
+});
+
+/* ============================================================================
+ * #510: Fitness-Function — ein CURRENT_SAVE_VERSION-Bump erzwingt Alt-Stand-Beweis.
+ *
+ * Das Save-Versioning hat zwei Mechanismen mit getrennter Zuständigkeit (SSOT in
+ * store.ts dokumentiert): versionsgetriebene migrations[n] für STRUKTURELLE Sprünge,
+ * feldbasiertes sanitizeState fürs Defaulting/Härten. Die Regel „was auf main geht,
+ * darf keinen Stand brechen" hing bislang nur an einem Kommentar („neue Version? bitte
+ * eine Fixture + Lade-Block ergänzen") – ein Bump OHNE echten Alt-Stand-Nachweis wäre
+ * unbemerkt durchgerutscht. Dieser Test gibt der Regel Zähne:
+ *
+ *   1. Zu JEDER Format-Version 1..CURRENT_SAVE_VERSION muss mindestens eine volle
+ *      Alt-Stand-Fixture test/fixtures/savegame-v<N>-*.json auf der Platte liegen.
+ *   2. Jede solche Fixture muss von dieser Test-Datei auch WIRKLICH GELADEN werden
+ *      (ihr Dateiname taucht im Quelltext auf) – eine tote Fixture, die kein Lade-Block
+ *      anfasst, zählt nicht als Nachweis.
+ *
+ * RED-GREEN: CURRENT_SAVE_VERSION testweise +1 → es fehlt die Fixture der neuen Version
+ * → rot. Bzw. eine geladene savegame-v3-*.json-Zeile entfernen → rot. Beides verifiziert.
+ * ========================================================================== */
+
+test("#510 Fitness: jede Format-Version 1..CURRENT_SAVE_VERSION hat eine GELADENE Alt-Stand-Fixture", () => {
+  const files = readdirSync(FIXTURES).filter(f => /^savegame-v\d+-.*\.json$/.test(f));
+  // Der eigene Quelltext ist die Wahrheit dafür, WELCHE Fixtures ein Lade-/Import-Block
+  // tatsächlich anfasst (loadFixture(...)/fixtureRaw(...)/ALL_FIXTURES). Eine bloß auf der
+  // Platte liegende Datei, die nirgends referenziert wird, ist kein Migrations-Nachweis.
+  const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
+
+  for (let v = 1; v <= CURRENT_SAVE_VERSION; v++) {
+    const forVersion = files.filter(f => new RegExp(`^savegame-v${v}-`).test(f));
+    expect(
+      forVersion.length,
+      `Format-Version ${v} braucht mindestens eine volle Alt-Stand-Fixture ` +
+      `test/fixtures/savegame-v${v}-*.json (Regel #510: CURRENT_SAVE_VERSION-Bump ` +
+      `erzwingt einen echten Alt-Stand-Nachweis).`,
+    ).toBeGreaterThan(0);
+
+    const loaded = forVersion.filter(f => src.includes(f));
+    expect(
+      loaded.length,
+      `Für Format-Version ${v} existiert eine Fixture (${forVersion.join(", ")}), aber KEINE ` +
+      `wird in savemigration.test.ts geladen/importiert. Einen Lade-Block dafür schreiben ` +
+      `(loadFixture / ALL_FIXTURES), sonst ist die Migration nicht abgesichert.`,
+    ).toBeGreaterThan(0);
+  }
 });
 
 /* ============================================================================

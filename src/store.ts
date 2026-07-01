@@ -315,9 +315,38 @@
    * sondern eine einmalige Storage-Migration in init(). Auch die Save-Slots (#306) ändern
    * das FORMAT nicht: der Slot-Index liegt separat, jeder Slot trägt dieselbe { v, data }-Hülle.
    *
+   * ===== Zwei Mechanismen, klare Zuständigkeit (SSOT, #510) =====
+   * Es gibt ZWEI Stellen, die einen Alt-Stand aufs aktuelle Format heben – bewusst mit
+   * getrennter Verantwortung, damit sie keine „zwei Wahrheiten" über das Format sind:
+   *
+   *   • migrations[n] hier (versionsgetrieben): der SSOT für STRUKTURELLE Format-Sprünge,
+   *     die eine feldbasierte Ableitung NICHT tragen kann – ein Feld umbenennen/umdeuten
+   *     (gleicher Name, andere Bedeutung), eine Menge in eine andere Form gießen, einen
+   *     Wert wegwerfen. Nur so ein Sprung braucht echten Code in migrations[n]. Läuft
+   *     GENAU EINMAL beim Anheben von Version n→n+1, mit der Versionsnummer als Auslöser.
+   *
+   *   • sanitizeState in game/save.ts (feldbasiert): NUR Defaulting + Härten. Fehlt ein
+   *     additiv neu hinzugekommenes Feld, wird es mit seinem Default ergänzt; ein
+   *     unplausibler Wert (NaN/negativ/falscher Typ/Array statt Objekt) fällt auf den
+   *     Default zurück. Das läuft bei JEDEM Ladeweg (auch Import #493) und ist idempotent.
+   *
+   * Faustregel für die Wahl: rein ADDITIV (neues Feld, das bei Fehlen sinnvoll defaultet)
+   * → gehört in sanitizeState, die Migration bleibt No-op (dokumentiert warum). ECHTE
+   * Umbenennung/Umstrukturierung (Bedeutung ändert sich, Alt-Wert muss aktiv transformiert
+   * werden) → gehört in migrations[n]. Die heute No-op-Migrationen 0→5 sind allesamt der
+   * additive Fall (siehe Kommentare unten); ihr Versions-Bump hat trotzdem einen Zweck:
+   * er löst die Backup-vor-Überschreiben-Sicherung aus (readState) – kein Spieler verliert
+   * beim Update seinen Fortschritt, selbst wenn die eigentliche Anhebung feldbasiert ist.
+   *
    * Erweitern bei einer Formatänderung:
    *   1. CURRENT_SAVE_VERSION um 1 erhöhen.
-   *   2. Eine Migration migrations[n] ergänzen, die `data` von Version n auf n+1 bringt.
+   *   2. Eine Migration migrations[n] ergänzen, die `data` von Version n auf n+1 bringt
+   *      (additiver Fall: No-op mit Begründung; struktureller Fall: echte Transformation).
+   *   3. Eine VOLLE Alt-Stand-Fixture test/fixtures/savegame-v<n>-*.json anlegen und in
+   *      test/savemigration.test.ts einen Lade-Block dafür schreiben. Das ist Pflicht und
+   *      wird maschinell erzwungen (#510): der Fitness-Test dort geht rot, sobald es zu
+   *      einer Version keine geladene Fixture gibt – der frühere „bitte dran denken"-
+   *      Kommentar allein hatte keine Zähne.
    * Die Kette läuft dann automatisch jede Zwischenstufe der Reihe nach durch.
    */
   export const CURRENT_SAVE_VERSION = 5;
