@@ -14,8 +14,7 @@ import { addDeployment, removeDeployment, replaceDeploymentPod, restartStatefulP
 // Argo-CD-Reconcile/-Klon liegen seit #378 bei der argocd-Familie in ../argocd – `kubectl apply -f`
 // einer Application zieht/kloniert den Soll direkt darüber (statt über eine Host-Methode).
 import { argoReconcile, cloneChildSpec } from "../argocd";
-import { isResourceName } from "../names";
-import { clusterIP } from "../util";
+import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { admitPod } from "./security";
 import type { KubectlHost } from "./host";
 
@@ -27,13 +26,9 @@ import type { KubectlHost } from "./host";
  *  für die Meldung (z.B. "Deployment", "Secret"). */
 function invalidNameError(host: KubectlHost, kind: string, name: string): string | null {
   if (isResourceName(name)) return null;
-  return host._err(
-    'The ' + kind + ' "' + name + '" is invalid: metadata.name: Invalid value: "' + name +
-      "\": a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', " +
-      "and must start and end with an alphanumeric character",
-    "Kubernetes-Namen folgen der DNS-1123-Regel: nur Kleinbuchstaben, Ziffern und '-', " +
-      "Anfang und Ende alphanumerisch (z.B. 'web-app' statt 'WebApp' oder 'web_app').",
-  );
+  // Meldungstext + Tipp liegen zentral in ../names (#507), damit create, apply, expose
+  // und helm bei einem ungültigen Namen exakt dieselbe Meldung geben.
+  return host._err(rfc1123ErrorText(name, kind), RFC1123_TIP);
 }
 
 /** Den Dateinamen hinter `-f`/`--filename` herausziehen (beide Formen gleichwertig,
@@ -367,22 +362,16 @@ export function kubectlApply(host: KubectlHost, t: string[]) {
     const existing = host.services.find(s => s.name === effSvc.name);
     if (existing) {
       out.push("service/" + effSvc.name + " unchanged");
-    } else if (effSvc.externalName) {
-      // ExternalName-Service (#337): kein ClusterIP, sondern ein CNAME auf einen externen
-      // DNS-Namen. So bekommen Pods einen cluster-internen Namen für einen Dienst außerhalb.
-      host.services.push({
-        name: effSvc.name, type: "ExternalName", clusterIP: "<none>",
-        port: effSvc.port, externalName: effSvc.externalName, created: host.clock,
-      });
-      out.push("service/" + effSvc.name + " created");
     } else {
-      host.services.push({
-        name: effSvc.name, type: effSvc.type || "ClusterIP",
-        clusterIP: clusterIP(effSvc.name),
+      // #507: Service-Anlegen zentral über die Fabrik (DNS-1123-Prüfung inklusive).
+      // ExternalName (#337) → CNAME statt ClusterIP; sonst abgeleitete ClusterIP + optionaler
+      // targetPort (#164). Die Fallunterscheidung macht jetzt _makeService.
+      host.services.push(host._makeService({
+        name: effSvc.name, type: effSvc.type,
         port: effSvc.port,
-        ...(effSvc.targetPort !== undefined ? { targetPort: effSvc.targetPort } : {}), // #164
-        created: host.clock,
-      });
+        ...(effSvc.targetPort !== undefined ? { targetPort: effSvc.targetPort } : {}),
+        ...(effSvc.externalName ? { externalName: effSvc.externalName } : {}),
+      }));
       out.push("service/" + effSvc.name + " created");
     }
   }

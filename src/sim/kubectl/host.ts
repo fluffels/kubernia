@@ -9,7 +9,7 @@
  */
 import type {
   ClusterState, Deployment, PodInstance, PodStatus, PvcRes, StatefulSetRes,
-  Broken, NodeMetrics, Alert,
+  ServiceRes, Broken, NodeMetrics, Alert,
 } from "../state";
 
 /** Was die kubectl-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
@@ -37,6 +37,7 @@ export interface KubectlHost extends ClusterState {
   _nodeEphemeralUsed(nodeName: string): number;
   _resetEphemeral(d: Deployment): void;
   _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment;
+  _makeService(spec: { name: string; type?: string; port: string | number; targetPort?: string | number; externalName?: string }): ServiceRes;
   _makePvc(name: string, storage: string, storageClass?: string, accessModes?: string): PvcRes;
   _makeStatefulSet(spec: { name: string; image: string; replicas: number; serviceName?: string; volumeClaimName?: string; storage?: string; storageClass?: string }): StatefulSetRes;
   // Observability-API (öffentlich, bleibt in sim.ts): top/get lesen daraus.

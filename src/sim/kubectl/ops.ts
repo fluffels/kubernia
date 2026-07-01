@@ -8,7 +8,6 @@
  * KubectlHost-Interface (./host). Aufgerufen aus dem kubectl-Dispatch (../kubectl.ts).
  */
 import { scaleDeployment, replacePods } from "../workload";
-import { clusterIP } from "../util";
 import type { KubectlHost } from "./host";
 
 
@@ -36,14 +35,13 @@ export function kubectlExpose(host: KubectlHost, t: string[], raw: string) {
   // --target-port: an welchen Container-Port der Service weiterleitet (#164). Fehlt es,
   // gilt --port auch als Ziel (wie in echtem kubectl).
   const targetMatch = raw.match(/--target-port[=\s]+(\S+)/);
-  host.services.push({
+  // #507: Service-Anlegen zentral über die Fabrik (DNS-1123-Prüfung inklusive).
+  host.services.push(host._makeService({
     name,
-    type: typeMatch ? typeMatch[1] : "ClusterIP",
-    clusterIP: clusterIP(name),
+    type: typeMatch ? typeMatch[1] : undefined,
     port: portMatch[1],
     ...(targetMatch ? { targetPort: targetMatch[1] } : {}),
-    created: host.clock,
-  });
+  }));
   return "service/" + name + " exposed";
 }
 

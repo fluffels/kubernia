@@ -45,8 +45,8 @@ import { kubeadmCommand, deriveControlPlane, applyBootstrapScenario } from "./si
 import { nslookupCommand, curlCommand } from "./sim/net";
 import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
-import { randSuffix } from "./sim/util";
-import { asPodName } from "./sim/names";
+import { randSuffix, clusterIP } from "./sim/util";
+import { asPodName, resourceName, InvalidResourceNameError, rfc1123ErrorText, RFC1123_TIP } from "./sim/names";
 import { assertClusterInvariants } from "./sim/invariants";
 import { scaleDeployment, replacePods } from "./sim/workload";
 import { renderHelp } from "./helptext";
@@ -253,8 +253,11 @@ import { renderHelp } from "./helptext";
     }
 
     _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment {
+      // #507: die Namensprüfung lebt zentral in der Fabrik – jeder Anlege-Weg (create,
+      // apply, helm install) läuft hier durch, ein DNS-1123-verletzender Name wirft und
+      // wird von exec() zur richtigen kubectl-Meldung (statt still ein illegaler Zustand).
       const d: Deployment = {
-        name, image, replicas, created: this.clock, pods: [], broken: broken ? Object.assign({}, broken) : null,
+        name: resourceName(name), image, replicas, created: this.clock, pods: [], broken: broken ? Object.assign({}, broken) : null,
         envFrom: { configMaps: (envFrom?.configMaps || []).slice(), secrets: (envFrom?.secrets || []).slice() },
         cpuHeavy: !!cpuHeavy,
       };
@@ -264,6 +267,22 @@ import { renderHelp } from "./helptext";
       // schon bei der Konstruktion (d.replicas ist bereits `replicas`, hier nur die Pods).
       scaleDeployment(d, replicas, this.clock);
       return d;
+    }
+
+    /** Baut einen Service (#507): die EINE Anlege-Grenze für `kubectl expose`, `kubectl
+     *  apply -f` und `helm install` – validiert den Namen (DNS-1123) zentral statt pro
+     *  Call-Site. Ein ExternalName-Service (#337) bekommt keine ClusterIP, sondern den
+     *  CNAME-Zielnamen; sonst die aus dem Namen abgeleitete stabile ClusterIP (#492). */
+    _makeService(spec: { name: string; type?: string; port: string | number; targetPort?: string | number; externalName?: string }): ServiceRes {
+      const name = resourceName(spec.name);
+      if (spec.externalName) {
+        return { name, type: "ExternalName", clusterIP: "<none>", port: spec.port, externalName: spec.externalName, created: this.clock };
+      }
+      return {
+        name, type: spec.type || "ClusterIP", clusterIP: clusterIP(name), port: spec.port,
+        ...(spec.targetPort !== undefined ? { targetPort: spec.targetPort } : {}),
+        created: this.clock,
+      };
     }
 
     /* ---------- Ephemeral Storage & Eviction (#240) ---------- */
@@ -312,7 +331,7 @@ import { renderHelp } from "./helptext";
      *  greift die Default-StorageClass; ein leeres "" erzwingt statische Bindung. */
     _makePvc(name: string, storage: string, storageClass?: string, accessModes?: string): PvcRes {
       const pvc: PvcRes = {
-        name,
+        name: resourceName(name), // #507: DNS-1123 zentral an der Fabrik-Grenze
         status: "Pending",
         volume: "",
         capacity: storage || "1Gi",
@@ -329,7 +348,8 @@ import { renderHelp } from "./helptext";
     _makeStatefulSet(spec: { name: string; image: string; replicas: number; serviceName?: string; volumeClaimName?: string; storage?: string; storageClass?: string }): StatefulSetRes {
       const vct = spec.volumeClaimName || "data";
       const sts: StatefulSetRes = {
-        name: spec.name, image: spec.image, replicas: spec.replicas,
+        name: resourceName(spec.name), // #507: DNS-1123 zentral an der Fabrik-Grenze
+        image: spec.image, replicas: spec.replicas,
         serviceName: spec.serviceName || spec.name,
         volumeClaimName: vct,
         storage: spec.storage || "1Gi",
@@ -704,8 +724,15 @@ import { renderHelp } from "./helptext";
         // statt still einen illegalen Zustand zu hinterlassen (Dev/Test, siehe invariantChecks).
         if (this.invariantChecks) assertClusterInvariants(this);
       } catch (e) {
-        this.lastError = true;
-        out = "Hoppla, da ist im Simulator etwas schiefgegangen: " + (e instanceof Error ? e.message : String(e));
+        // #507: ein ungültiger Ressourcenname (aus einer _make*-Fabrik) ist KEIN interner
+        // Fehler, sondern eine abgelehnte Nutzereingabe – als richtige kubectl-Meldung
+        // ausgeben (zentral, egal ob create/apply/expose/helm den Namen brachte).
+        if (e instanceof InvalidResourceNameError) {
+          out = this._err(rfc1123ErrorText(e.raw), RFC1123_TIP);
+        } else {
+          this.lastError = true;
+          out = "Hoppla, da ist im Simulator etwas schiefgegangen: " + (e instanceof Error ? e.message : String(e));
+        }
       }
       return { output: out, error: this.lastError };
     }

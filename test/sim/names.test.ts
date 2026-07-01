@@ -1,12 +1,12 @@
-/* Value Objects für Ressourcen-Namen (#479, DDD – erster Schritt).
+/* Value Objects für Ressourcen-Namen (#479, DDD; auf ResourceName verallgemeinert #507).
  * Ein Kubernetes-Objektname ist KEIN beliebiger String, sondern folgt der
  * DNS-1123-Regel. Diese Tests sichern die zentrale Regel (`isResourceName`),
- * den prüfenden Smart-Constructor (`podName`) und die bewusste, ungeprüfte
+ * den prüfenden Smart-Constructor (`resourceName`) und die bewusste, ungeprüfte
  * Brand-Fabrik für intern erzeugte Namen (`asPodName`) ab – inkl. Negativfälle.
  * Dass die Namen-Fabrik `makePodName` (util.ts) tatsächlich nur gültige Namen
  * liefert (die Rechtfertigung für den ungeprüften Brand), wird hier mitgeprüft. */
 import { describe, test, expect } from "vitest";
-import { isResourceName, podName, asPodName, InvalidResourceNameError } from "../../src/sim/names";
+import { isResourceName, resourceName, asPodName, InvalidResourceNameError } from "../../src/sim/names";
 import { makePodName } from "../../src/sim/util";
 
 describe("isResourceName – die DNS-1123-Regel an EINER Stelle", () => {
@@ -41,17 +41,27 @@ describe("isResourceName – die DNS-1123-Regel an EINER Stelle", () => {
   });
 });
 
-describe("podName – prüfender Smart-Constructor", () => {
+describe("resourceName – prüfender Smart-Constructor", () => {
   test("gibt bei gültigem Namen den (gebrandeten) Namen unverändert zurück", () => {
-    const n = podName("web-7d8f9c6b54-x2k9p");
+    const n = resourceName("web-7d8f9c6b54-x2k9p");
     expect(n).toBe("web-7d8f9c6b54-x2k9p");
   });
 
   test("wirft InvalidResourceNameError bei ungültigem Namen", () => {
-    expect(() => podName("WebApp")).toThrow(InvalidResourceNameError);
-    expect(() => podName("")).toThrow(InvalidResourceNameError);
+    expect(() => resourceName("WebApp")).toThrow(InvalidResourceNameError);
+    expect(() => resourceName("")).toThrow(InvalidResourceNameError);
     // Die Fehlermeldung nennt den beanstandeten Wert (Diagnose).
-    expect(() => podName("bad_name")).toThrow(/bad_name/);
+    expect(() => resourceName("bad_name")).toThrow(/bad_name/);
+  });
+
+  test("trägt den beanstandeten Rohwert als `raw` (für die Aggregat-Grenze)", () => {
+    try {
+      resourceName("Bad_Name");
+      throw new Error("hätte werfen müssen");
+    } catch (e) {
+      expect(e).toBeInstanceOf(InvalidResourceNameError);
+      expect((e as InvalidResourceNameError).raw).toBe("Bad_Name");
+    }
   });
 });
 

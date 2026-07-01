@@ -13,8 +13,8 @@
  * Phaser-frei (pure Domäne): die geteilten Ausgabe-/Pod-Namen-Helfer kommen aus
  * ./util, die Domänentypen aus ./state – kein Rückimport nach sim.ts (kein Zyklus).
  */
-import type { ClusterState, Deployment, Broken } from "./state";
-import { table, clusterIP } from "./util";
+import type { ClusterState, Deployment, ServiceRes, Broken } from "./state";
+import { table } from "./util";
 import { addDeployment, scaleDeployment } from "./workload";
 
 /** Was die helm-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
@@ -26,6 +26,7 @@ import { addDeployment, scaleDeployment } from "./workload";
 export interface HelmHost extends ClusterState {
   _err(msg: string, tip?: string): string;
   _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment;
+  _makeService(spec: { name: string; type?: string; port: string | number; targetPort?: string | number; externalName?: string }): ServiceRes;
 }
 
 /** Liest `--set <key>=<zahl>` aus der rohen Eingabe (helm install/upgrade). */
@@ -246,7 +247,8 @@ export function helmCommand(host: HelmHost, t: string[], raw: string): string {
     const chartShort = isLocal ? localName : (chart.split("/").pop() || chart);
     const depName = release + "-" + chartShort.split(":")[0];
     addDeployment(host, host._makeDeployment(depName, chartShort + ":latest", replicas));
-    host.services.push({ name: depName, type: "ClusterIP", clusterIP: clusterIP(depName), port: "80", created: host.clock });
+    host.services.push(host._makeService({ name: depName, port: "80" })); // #507: zentral über die Fabrik
+
     host.releases.push({ name: release, chart, revision: 1, depName, history: [{ revision: 1, replicas }] });
     return [
       "NAME: " + release,
