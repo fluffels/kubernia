@@ -9,10 +9,11 @@
  * Bewusst auch Negativfälle: nicht abgeschlossene/ungültige Quest, doppeltes
  * Reinspringen, Beenden ohne laufendes Wiederspiel.
  *
- * Harness wie game.test.ts: window/localStorage stubben, Game dynamisch importieren.
+ * Harness wie game.test.ts: window/localStorage stubben, Spiel-Stack dynamisch
+ * laden – beides über das geteilte test/support/browser-env (#475).
  */
 import { test, expect, beforeAll, beforeEach } from "vitest";
-import { vi } from "vitest";
+import { stubWindowLocalStorage, loadGameStack } from "./support/browser-env";
 import { KQContent } from "../src/content";
 
 let Game: typeof import("../src/game").Game;
@@ -20,17 +21,8 @@ let Sim: typeof import("../src/sim").Sim;
 let SaveStore: typeof import("../src/store").SaveStore;
 
 beforeAll(async () => {
-  const map = new Map<string, string>();
-  vi.stubGlobal("window", {
-    localStorage: {
-      getItem: (k: string) => (map.has(k) ? map.get(k)! : null),
-      setItem: (k: string, v: string) => { map.set(k, String(v)); },
-      removeItem: (k: string) => { map.delete(k); },
-    },
-  });
-  ({ Game } = await import("../src/game"));
-  ({ Sim } = await import("../src/sim"));
-  ({ SaveStore } = await import("../src/store"));
+  stubWindowLocalStorage();
+  ({ Game, Sim, SaveStore } = await loadGameStack());
 });
 
 beforeEach(() => {
