@@ -6,7 +6,7 @@
 import { KQContent } from "../content";
 import { Sim as KQSim } from "../sim";
 import { SaveStore } from "../store";
-import { worldScene, applyAudioConfig } from "../runtime";
+import { worldScene, applyAudioConfig, notifySaveFailed } from "../runtime";
 import { add, toCoins } from "../coins";
 import type { GameState, QuestProgress } from "../types";
 import { part, makeDefaultState, questIdForIndex, questIndexForId, canonicalActiveQuests, isEventMode, ALL_ABBREV_UNLOCKED } from "./shared";
@@ -296,6 +296,13 @@ export function sanitizeState(raw: unknown): GameState {
  * automatisch wieder false. */
 let saveSuspended = false;
 
+/* Ein fehlgeschlagener save() (voller localStorage im Fallback-Modus, QuotaExceeded) war
+ * bisher für den Spieler unsichtbar (#497) – writeState meldet ihn nur einmalig in die
+ * Konsole. Wir heben ihn an die Präsentation, aber nur EINMAL pro Fehler-Episode: der
+ * 5-s-Auto-Save darf nicht im Sekundentakt warnen. Nach einem wieder geglückten Save
+ * re-armen, damit ein späterer neuer Fehlschlag erneut gemeldet wird. */
+let saveFailedNotified = false;
+
 /** Persistenz-Methoden der Game-Fassade (Laden/Speichern/Reset/Export/Import). */
 export const saveBundle = part({
   load() {
@@ -372,7 +379,17 @@ export const saveBundle = part({
     }
     this.state.activeQuests = canonicalActiveQuests(this.state.activeQuests);
     this.state.lastSeen = Date.now();
-    SaveStore.writeState(this.state); // legt den Stand in der aktuellen Versions-Hülle ab
+    // writeState meldet über den bool-Rückgabewert, ob das Schreiben klappte (#497).
+    // Ein Fehlschlag (voller localStorage-Fallback) darf nicht still verpuffen –
+    // einmalig pro Fehler-Episode an die Präsentation heben; ein wieder geglückter
+    // Save re-armt die Meldung. Legt den Stand in der aktuellen Versions-Hülle ab.
+    const written = SaveStore.writeState(this.state);
+    if (!written && !saveFailedNotified) {
+      saveFailedNotified = true;
+      notifySaveFailed();
+    } else if (written) {
+      saveFailedNotified = false;
+    }
     // Vorschau des aktiven Slots für den Spielstand-Wähler aktualisieren (#306). Im
     // Single-Slot-Fall (kein Index) ist das ein No-op – kein Churn beim 5-s-Auto-Save.
     SaveStore.setActiveSlotSummary(this.slotSummary());

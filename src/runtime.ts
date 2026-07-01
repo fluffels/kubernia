@@ -78,3 +78,24 @@ export function setAudioSink(fn: ((cfg: AudioConfig) => void) | null): void {
 export function applyAudioConfig(cfg: AudioConfig): void {
   _audioSink?.(cfg);
 }
+
+/* ---------- Save-Fehler-Sink (#497) ----------
+ * Analog zum Audio-Sink oben: ein fehlgeschlagener Save (voller localStorage im
+ * Fallback-Modus, QuotaExceeded) war bisher für den Spieler unsichtbar – die
+ * Persistenz meldet ihn nur einmalig in die Konsole (store.ts), die niemand sieht.
+ * game.ts (Anwendung) darf ui.ts (Präsentation) nicht importieren; stattdessen
+ * registriert die Präsentation hier ihren Handler (`setSaveFailedSink`) und die
+ * Anwendung meldet den Fehlschlag entkoppelt über `notifySaveFailed`. Ohne Sink
+ * (z.B. Node-Test) ist das Melden ein No-op. */
+let _saveFailedSink: (() => void) | null = null;
+
+/** Von der Präsentation (ui.ts) beim Modul-Laden gesetzt. */
+export function setSaveFailedSink(fn: (() => void) | null): void {
+  _saveFailedSink = fn;
+}
+
+/** Der Präsentation melden, dass ein Speichern fehlgeschlagen ist (No-op, solange
+ *  kein Sink registriert ist). */
+export function notifySaveFailed(): void {
+  _saveFailedSink?.();
+}
