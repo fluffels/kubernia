@@ -94,7 +94,9 @@ Vier Konzepte durchziehen den Code: **Schichtung** (§5), **Content-as-Data**, *
 | Lern-/Progression | Pädagogik (Quest/XP/Dublonen/Leitner-Box) | `game/*`, Lern-Teile `content/*` |
 | Welt/Präsentation | räumlich/Hafen (Kiste/Steg/Laterne) | `world`, `scenes/*` |
 
-Die Modul-Splits + die on-demand-Tiefendocs der CLAUDE.md **sind** bereits solche Token-Grenzen. Was fehlt: die Subdomänen **explizit benennen** und die Übersetzung Hafen↔K8s (eine echte **Anti-Corruption-Layer**) als Glossar festhalten. *Nuance:* mehr Kontexte ≠ automatisch weniger Tokens — zu viele Nähte erzeugen Übersetzungs-Code; Sweet Spot sind die 2–3, nicht zehn. **Contexts benennen, nicht auseinanderreißen.** → #477.
+Die Modul-Splits + die on-demand-Tiefendocs der CLAUDE.md **sind** bereits solche Token-Grenzen. *Nuance:* mehr Kontexte ≠ automatisch weniger Tokens — zu viele Nähte erzeugen Übersetzungs-Code; Sweet Spot sind die 2–3, nicht zehn. **Contexts benennen, nicht auseinanderreißen.**
+
+> ✅ **#477 erledigt:** die Subdomänen sind explizit benannt und die Übersetzung Hafen↔K8s (die Anti-Corruption-Layer) als Glossar festgehalten — beides als SSOT in **[docs/glossar.md](glossar.md)** (Glossar mit Code-Ort + Kontext-Landkarte mit Tiefendoc-Zuordnung; die Prüfung dort bestätigt, dass die Tiefendocs schon entlang der Grenzen schneiden, mit `content.md` als bewusstem Shared Kernel).
 
 ### Der DDD-Hebel — drei gezielte Schritte
 
@@ -149,7 +151,7 @@ Konkrete Szenarien (Reiz → Reaktion) statt vager Adjektive:
 | Befund | Wirkung bei Stardew-Scope | Schwere | Ticket |
 |---|---|---|---|
 | Assets eager geladen, kein Lazy-Loading / Texture-Atlas | Lade-/Draw-Call-Problem bei vielen Welten/Sprites | mittel | #198/#339 |
-| Ubiquitous Language nur implizit (kein Glossar/ACL-Doku) | Übersetzung Hafen↔K8s driftet mit mehr Beitragenden/Agenten | mittel | #477 |
+| ~~Ubiquitous Language nur implizit (kein Glossar/ACL-Doku)~~ → **erledigt**: [glossar.md](glossar.md) | Übersetzung Hafen↔K8s driftet mit mehr Beitragenden/Agenten | ~~mittel~~ | #477 ✓ |
 | Präsentation ohne Regressionsnetz (nur 1 Boot-Smoke + manuell) | Interaktions-Regressionen kommen durch | mittel | #480 |
 | Auslieferungsform (ADR 0005) offen | Färbt save-/asset-/build-nahe Entscheidungen | mittel | #355 |
 | Barrierefreiheit ungeprüft (Farb-Status, Tastatur, Kontraste) | Lernspiel schließt Nutzer:innen aus | niedrig | #481 |
@@ -160,17 +162,8 @@ Konkrete Szenarien (Reiz → Reaktion) statt vager Adjektive:
 
 **Gesamtverdikt:** Das Infrastruktur-Fundament trägt — Schichtung, Content-as-Data und versionierte Persistenz sind die richtigen, automatisch bewachten Weichen. Die offene Arbeit ist **Politur** (Asset-Skalierung, Präsentations-Tests) und **DDD-Präzisierung** (Sprache/Kontexte, Aggregat, Value Objects), kein Umbau.
 
-## 12. Glossar — die zwei Sprachen von Port Kubernia
+## 12. Glossar & Kontext-Landkarte
 
-Diese Tabelle **ist** die Anti-Corruption-Layer aus §8, explizit gemacht (Kern von #477):
+Die ubiquitäre Sprache (Glossar Hafen ↔ K8s ↔ Code — die explizit gemachte Anti-Corruption-Layer aus §8) **und** die Kontext-Landkarte der Subdomänen leben seit #477 als eigene, aus [CLAUDE.md](../CLAUDE.md) verlinkte SSOT — hier nicht doppeln:
 
-| Hafen-Metapher | DevOps-Domäne | Beispiel |
-|---|---|---|
-| Kiste auf dem Steg | Pod | Pod löschen → Kiste platscht ins Wasser |
-| Steg am Dock | Node | Drei Stege = drei Nodes |
-| Laterne | Service | leuchtet, wenn erreichbar |
-| Flagge | Helm-Release | Release hissen = Flagge setzen |
-| Fass am Dock | Docker-Container | gestoppte Container ins Lager |
-| Neues Land im Meer | `terraform apply` | Provisionierung wird sichtbar gebaut |
-| Sturm / Piraten-Überfall | Incident | Soll-Zustand unter Zeitdruck wiederherstellen |
-| Hacker-Krake | Klartext-Secret-Leak | nur ein schnell angelegtes Secret vertreibt sie |
+> 📖 **[docs/glossar.md](glossar.md)** — Glossar (Cluster-als-Hafen + Lern-als-Seefahrer-Karriere, je mit Code-Ort) + Kontext-Landkarte (DevOps-Simulation / Lern-Progression / Welt-Präsentation, je mit Sprache + Verzeichnissen + Tiefendoc) + die Prüfung „schneiden die Tiefendocs schon entlang dieser Grenzen?".
