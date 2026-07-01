@@ -1,6 +1,7 @@
 import { Game } from "../game";
 import { SFX } from "../sfx";
 import { dialogueNav } from "../overlaykbd";
+import { fmtCmd } from "../markup";
 import type { ChoiceStep, ChoiceOption } from "../types";
 import { part, $, NPCS, shuffled } from "./shared";
 
@@ -18,7 +19,7 @@ export const dialogUI = part({
 
   renderDialogueLine() {
     const d = this.dialogue;
-    $("dlg-text").innerHTML = d.lines[d.idx];
+    $("dlg-text").innerHTML = fmtCmd(d.lines[d.idx]);
     const fwd = d.idx < d.lines.length - 1 ? "▼ weiter (E)" : "✔ fertig (E)";
     // #310: Lese-Rückblick – ab der zweiten Zeile sichtbar machen, dass man eine
     // Zeile zurückblättern kann (analog zum „weiter"-Hinweis, rein per Tastatur).
@@ -59,14 +60,14 @@ export const dialogUI = part({
     this.dialogue = { npcId: step.npc, lines: [], idx: 0, onDone, choice: step };
     $("dlg-name").textContent = npc.name + " · " + npc.title;
     this.drawNpcPortrait($("dlg-portrait-canvas") as HTMLCanvasElement, npc);
-    $("dlg-text").innerHTML = "🤔 " + step.q;
+    $("dlg-text").innerHTML = "🤔 " + fmtCmd(step.q);
     $("dlg-next").textContent = "↑/↓ wählen · Enter bestätigen";
     $("dlg-next").classList.remove("hidden");
     const box = $("dlg-choices");
     box.innerHTML = "";
     for (const opt of shuffled<ChoiceOption>(step.options)) {
       const btn = document.createElement("button");
-      btn.innerHTML = opt.t;
+      btn.innerHTML = fmtCmd(opt.t);
       btn.onclick = () => this.answerChoice(step, opt, btn);
       box.appendChild(btn);
     }
@@ -89,7 +90,7 @@ export const dialogUI = part({
     Game.choiceResult(step.reviewId ?? "", opt.ok);
     if (opt.ok) this.reward(12, 6);
     else SFX.wrong();
-    $("dlg-text").innerHTML = (opt.ok ? "✅ " : "❌ ") + opt.reply;
+    $("dlg-text").innerHTML = (opt.ok ? "✅ " : "❌ ") + fmtCmd(opt.reply);
     $("dlg-next").textContent = "✔ weiter (E)";
     $("dlg-next").classList.remove("hidden");
     d.choice = null;

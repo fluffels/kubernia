@@ -4,6 +4,7 @@ import { SFX } from "../sfx";
 import { ABBREVS, lockedAbbrevInInput, abbrevLockHint, flagNearMissHint, longFormsInInput } from "../content/abbrev";
 import { pushHistory, navigateHistory } from "../cmdhistory";
 import { pickFunkExplanation } from "../funkexplain";
+import { fmtCmd } from "../markup";
 import type { QuestTask } from "../types";
 import { part, $, esc, NPCS, masteryBadge } from "./shared";
 
@@ -81,25 +82,25 @@ export const radioUI = part({
       // #219: Lernstand der aktuellen Übung sichtbar machen („das kannst du schon / üben wir nochmal").
       const badge = task ? " " + masteryBadge(Game.masteryBox(p.drills[p.idx])) : "";
       html += `<div class="tt-head">🏋️ Üben bei ${npc.name} (${Math.min(p.idx + 1, p.drills.length)}/${p.drills.length})${badge}</div>`;
-      if (task) html += `<div class="tt-item current">▶️ ${task.text}</div>`;
+      if (task) html += `<div class="tt-item current">▶️ ${fmtCmd(task.text)}</div>`;
       html += `<div id="tt-feedback"></div>`;
     } else {
       const step = s.step!;
       const q = Game.currentQuest();
       html += `<div class="tt-head">📜 ${q.title}: ${step.brief}</div>`;
       if (step.type === "teach") {
-        html += `<div class="tt-new">${step.cmd.intro}</div>`;
-        html += `<div class="tt-item current">▶️ ${step.cmd.text}</div>`;
+        html += `<div class="tt-new">${fmtCmd(step.cmd.intro)}</div>`;
+        html += `<div class="tt-item current">▶️ ${fmtCmd(step.cmd.text)}</div>`;
       } else if (step.type === "drill") {
-        html += `<div class="dim" style="margin-bottom:8px">${step.intro}</div>`;
+        html += `<div class="dim" style="margin-bottom:8px">${fmtCmd(step.intro)}</div>`;
         html += `<div class="dim">Übung ${Math.min((Game.state.taskIdx || 0) + 1, step.count)} von ${step.count}</div>`;
-        if (task) html += `<div class="tt-item current">▶️ ${task.text}</div>`;
+        if (task) html += `<div class="tt-item current">▶️ ${fmtCmd(task.text)}</div>`;
       } else {
         const taskIdx = Game.state.taskIdx || 0;
         step.tasks.forEach((t: QuestTask, i: number) => {
           const cls = i < taskIdx ? "done" : i === taskIdx ? "current" : "";
           const mark = i < taskIdx ? "✅" : i === taskIdx ? "▶️" : "·";
-          html += `<div class="tt-item ${cls}">${mark} ${i <= taskIdx ? t.text : "???"}</div>`;
+          html += `<div class="tt-item ${cls}">${mark} ${i <= taskIdx ? fmtCmd(t.text) : "???"}</div>`;
         });
       }
       html += `<div id="tt-feedback"></div>`;
@@ -155,7 +156,7 @@ export const radioUI = part({
       if (exp) {
         this._funkExplained.add(exp.id);
         const fb = $("tt-feedback");
-        if (fb) fb.innerHTML = '<div class="tt-feedback funk-explain">💡 <b>Bo:</b> Was ist da gerade passiert? ' + exp.text + "</div>";
+        if (fb) fb.innerHTML = '<div class="tt-feedback funk-explain">💡 <b>Bo:</b> Was ist da gerade passiert? ' + fmtCmd(exp.text) + "</div>";
       }
     }
 
@@ -213,12 +214,12 @@ export const radioUI = part({
         const tip = (task.diag ? task.diag(norm) : null)
           ?? task.why
           ?? (/^docker\s+run\b/.test(norm)
-            ? "Bei <code>docker run</code>: hinter <code>--name</code> steht dein Wunschname, das Image kommt ganz zuletzt – Muster <code>docker run -d --name &lt;name&gt; &lt;image&gt;</code>."
+            ? "Bei <code>docker run</code>: hinter <code>--name</code> steht dein Wunschname, das Image kommt ganz zuletzt – Muster <code>docker run -d --name <name> <image></code>."
             : "Vergleich ihn mit dem Muster oben – Reihenfolge und Namen genau prüfen.");
         const prefix = result.error
           ? "❌ "
           : "❌ Fast – der Befehl lief durch, erfüllt die Aufgabe aber noch nicht. ";
-        fb.innerHTML = '<div class="tt-feedback">' + prefix + tip + '</div>';
+        fb.innerHTML = '<div class="tt-feedback">' + prefix + fmtCmd(tip) + '</div>';
       }
     }
   },
@@ -317,7 +318,7 @@ export const radioUI = part({
     this.refreshHud();
     this.renderTermTasks();
     const fb = $("tt-feedback");
-    if (fb) fb.innerHTML = '<div class="tt-feedback">🔭 <b>Hinweis:</b> ' + task.hint + "</div>";
+    if (fb) fb.innerHTML = '<div class="tt-feedback">🔭 <b>Hinweis:</b> ' + fmtCmd(task.hint) + "</div>";
   },
 
   termSolution() {
@@ -332,7 +333,7 @@ export const radioUI = part({
     this.renderTermTasks();
     const fb = $("tt-feedback");
     // „Warum so?" gleich mitliefern (#233), nicht nur die Musterlösung zeigen.
-    const why = task.why ? ' <span class="dim">' + task.why + "</span>" : "";
+    const why = task.why ? ' <span class="dim">' + fmtCmd(task.why) + "</span>" : "";
     if (fb) fb.innerHTML = '<div class="tt-feedback">🧭 <b>Lösung:</b> <code>' + esc(task.solution) + "</code> – selbst eintippen!" + why + "</div>";
   },
 

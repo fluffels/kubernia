@@ -12,6 +12,7 @@ import { WAREHOUSE_NPC } from "../src/warehouse";
 import { WERFT_NPC } from "../src/werft";
 import { npcSpawnsForMap } from "../src/content/entities";
 import { Sim as KQSim } from "../src/sim";
+import { fmtCmd, CONTENT_HTML_TAGS } from "../src/markup";
 import type { TeachStep } from "../src/types";
 
 /** Findet Befehls-Karten ohne nicht-leere Begründung (`explain`, #233) – sonst
@@ -633,80 +634,58 @@ test("Red-Green: Quiz-Karte mit unbekanntem introducedIn wird gemeldet (#412)", 
     "unbekanntes introducedIn nicht gemeldet:\n" + errors.join("\n"));
 });
 
-/** Findet Drills, deren `why`- oder `hint`-Text bare HTML-Platzhalter enthält
- *  (z.B. `<name>`, `<image>`), die im Browser via innerHTML unsichtbar werden.
- *  Erlaubt: echte HTML-Elemente wie <code>, <b>. (#320) */
-function drillsWithRawHtmlPlaceholders(drills: typeof KQContent.DRILLS): string[] {
-  const SAFE_TAGS = new Set(["code", "b", "i", "em", "strong", "br", "span", "div"]);
-  const bareTag = /<([a-zA-Z][a-zA-Z0-9äöüÄÖÜ\-/]*)>/g;
+/** #311: Findet in einem Anzeige-Text „Platzhalter-artige" `<token>`, die `fmtCmd` NICHT
+ *  sichtbar macht und die darum beim innerHTML-Rendern unsichtbar/kaputt blieben. Seit #311
+ *  ist ein `<token>` die offizielle Platzhalter-Schreibweise – `fmtCmd` zeichnet sie als
+ *  sichtbares Badge aus. Diese Invariante ersetzt die früheren Einzel-Wächter #320/#458
+ *  (die bare Platzhalter nur verboten statt dargestellt hatten). Übrig bleiben dürfen nur
+ *  echte HTML-Tags (`CONTENT_HTML_TAGS`); wörtliche spitze Klammern gehören als `&lt;…&gt;`
+ *  in die Daten (die matchen hier nicht und rendern korrekt als Text). Die Suchform ist
+ *  BEWUSST breiter als fmtCmds Wortklasse (erlaubt z.B. `_`/`.`), um genau die Token zu
+ *  fangen, die fmtCmd (eng definiert) übersieht und die dann unsichtbar würden. */
+function invisiblePlaceholders(text: string): string[] {
+  const rendered = fmtCmd(text);   // erst rendern: erkannte Platzhalter sind danach Badges
   const out: string[] = [];
-  for (const [id, make] of Object.entries(drills)) {
+  const tokenish = /<([A-Za-zÄÖÜäöüß][^<>\s/]*)>/g;
+  let m: RegExpExecArray | null;
+  while ((m = tokenish.exec(rendered)) !== null) {
+    if (!CONTENT_HTML_TAGS.has(m[1].toLowerCase())) out.push(m[0]);
+  }
+  return out;
+}
+
+/** Sammelt alle Anzeige-Textfelder eines Content-Bereichs mit Label für die Wächter. */
+function scanFields(pairs: [string, string][]): string[] {
+  const out: string[] = [];
+  for (const [label, text] of pairs) for (const bad of invisiblePlaceholders(text)) out.push(`${label}: ${bad}`);
+  return out;
+}
+
+test("Drills: why/hint enthalten keine unsichtbaren Platzhalter (fmtCmd macht <token> sichtbar, #311/#320)", () => {
+  const pairs: [string, string][] = [];
+  for (const [id, make] of Object.entries(KQContent.DRILLS)) {
     const task = make(new KQSim({}));
-    for (const field of ["why", "hint"] as const) {
-      bareTag.lastIndex = 0;
-      let m: RegExpExecArray | null;
-      while ((m = bareTag.exec(task[field])) !== null) {
-        if (!SAFE_TAGS.has(m[1].toLowerCase())) {
-          out.push(`${id}.${field}: ${m[0]}`);
-          break;
-        }
-      }
-    }
+    pairs.push([`${id}.hint`, task.hint], [`${id}.why`, task.why ?? ""]);
   }
-  return out;
-}
-
-test("Drills: why/hint enthalten keine rohen HTML-Platzhalter, die innerHTML verschluckt (#320)", () => {
-  const problems = drillsWithRawHtmlPlaceholders(KQContent.DRILLS);
-  assert.deepEqual(problems, [], "Drill-Felder mit unescapten <placeholder>-Tags (werden im Browser unsichtbar):\n" + problems.join("\n"));
+  const problems = scanFields(pairs);
+  assert.deepEqual(problems, [], "Drill-Felder mit Platzhaltern, die fmtCmd nicht sichtbar macht (werden im Browser unsichtbar):\n" + problems.join("\n"));
 });
 
-test("Red-Green: ein Drill mit roh-HTML-Platzhalter in why wird gemeldet", () => {
-  const kaputt = {
-    ...KQContent.DRILLS,
-    "drill-roh": (_sim: KQSim) => ({ text: "x", accept: [/^x$/], solution: "x", hint: "x", why: "Muster: docker run <name> <image>." }),
-  };
-  const problems = drillsWithRawHtmlPlaceholders(kaputt as typeof KQContent.DRILLS);
-  assert.ok(problems.some(p => p.includes("drill-roh")), "roher Platzhalter nicht erkannt: " + problems.join(", "));
-});
-
-/** Findet Quiz-Karten, deren `q`/`options`/`explain` einen rohen HTML-Platzhalter
- *  (z.B. `<name>`, `<sensitive>`) enthalten. Alle drei Felder werden im Krabben-Quiz
- *  per innerHTML gerendert (Optionen seit #458 ebenfalls als HTML, vorher escaped) –
- *  ein roher Platzhalter verschwindet dadurch im Browser oder erscheint kaputt. Wer
- *  spitze Klammern wörtlich zeigen will, schreibt sie als `&lt;…&gt;`.
- *  Erlaubt: echte HTML-Elemente wie <code>, <b>, <i> (analog #320). */
-function quizCardsWithRawHtmlPlaceholders(cards: typeof KQContent.CRAB_QUIZ): string[] {
-  const SAFE_TAGS = new Set(["code", "b", "i", "em", "strong", "br", "span", "div"]);
-  const bareTag = /<([a-zA-Z][a-zA-Z0-9äöüÄÖÜ\-/]*)>/g;
-  const out: string[] = [];
-  const scan = (text: string, label: string) => {
-    bareTag.lastIndex = 0;
-    let m: RegExpExecArray | null;
-    while ((m = bareTag.exec(text)) !== null) {
-      if (!SAFE_TAGS.has(m[1].toLowerCase())) { out.push(`${label}: ${m[0]}`); break; }
-    }
-  };
-  for (const c of cards) {
-    scan(c.q, `${c.id}.q`);
-    scan(c.explain, `${c.id}.explain`);
-    c.options.forEach((o, i) => scan(o, `${c.id}.options[${i}]`));
+test("Quiz: q/options/explain enthalten keine unsichtbaren Platzhalter (#311/#458)", () => {
+  const pairs: [string, string][] = [];
+  for (const c of KQContent.CRAB_QUIZ) {
+    pairs.push([`${c.id}.q`, c.q], [`${c.id}.explain`, c.explain]);
+    c.options.forEach((o, i) => pairs.push([`${c.id}.options[${i}]`, o]));
   }
-  return out;
-}
-
-test("Quiz: q/options/explain enthalten keine rohen HTML-Platzhalter, die innerHTML verschluckt (#458/#320)", () => {
-  const problems = quizCardsWithRawHtmlPlaceholders(KQContent.CRAB_QUIZ);
-  assert.deepEqual(problems, [], "Quiz-Felder mit unescapten <placeholder>-Tags (werden im Browser unsichtbar/kaputt):\n" + problems.join("\n"));
+  const problems = scanFields(pairs);
+  assert.deepEqual(problems, [], "Quiz-Felder mit Platzhaltern, die fmtCmd nicht sichtbar macht:\n" + problems.join("\n"));
 });
 
-test("Red-Green: eine Quiz-Option mit roh-HTML-Platzhalter wird gemeldet (#458)", () => {
-  const kaputt = [
-    ...KQContent.CRAB_QUIZ,
-    { id: "q-roh-test", q: "?", options: ["zeigt <sensitive> statt Klartext", "b"], correct: 0, explain: "e" },
-  ];
-  const problems = quizCardsWithRawHtmlPlaceholders(kaputt as typeof KQContent.CRAB_QUIZ);
-  assert.ok(problems.some(p => p.includes("q-roh-test.options[0]")), "roher Platzhalter in Option nicht erkannt: " + problems.join(", "));
+test("Red-Green: ein Platzhalter, den fmtCmd NICHT erkennt (z.B. mit Unterstrich), wird als unsichtbar gemeldet (#311)", () => {
+  // `<pod_name>` fällt aus fmtCmds Wortklasse (kein `_`) → würde im Browser unsichtbar.
+  assert.ok(invisiblePlaceholders("kubectl logs <pod_name>").length > 0, "unerkannter Platzhalter nicht gemeldet");
+  // Gegenprobe: der offizielle, mit Bindestrich geschriebene Platzhalter ist sichtbar → NICHT gemeldet.
+  assert.deepEqual(invisiblePlaceholders("kubectl logs <pod-name>"), [], "korrekter Platzhalter darf nicht gemeldet werden");
 });
 
 test("docker-run-named: diag benennt falschen Namen gezielt, nicht Reihenfolge (#321)", () => {

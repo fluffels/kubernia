@@ -1,6 +1,7 @@
 import { Game } from "../game";
 import { KQContent } from "../content";
 import { buildAlbum, albumUnlocked, type Album } from "../album";
+import { fmtCmd } from "../markup";
 import { part, $, esc } from "./shared";
 
 /* ========== Sammelalbum / Glossar (#278) ==========
@@ -63,7 +64,7 @@ export const albumUI = part({
           const example = e.kind === "command" && e.example
             ? `<div class="album-example">Beispiel: <code>${esc(e.example)}</code></div>` : "";
           return `<div class="album-entry"><div class="album-entry-head">${icon} ${e.kind === "command" ? `<code>${esc(e.title)}</code>` : `<b>${e.title}</b>`}</div>
-            <div class="album-detail">${e.detail}</div>${example}
+            <div class="album-detail">${fmtCmd(e.detail)}</div>${example}
             <div class="album-where dim">📜 gelernt in: ${esc(e.questTitle)}</div></div>`;
         }).join("");
         $("album-body").innerHTML = `<div class="actions" style="margin-bottom:10px">
