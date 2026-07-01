@@ -49,7 +49,7 @@ export function syncCluster(scene: WorldSceneLike) {
   if (!Game.sim) return;
   const pods = [];
   for (const d of Game.sim.deployments) for (const p of d.pods) pods.push({ name: p.name, dep: d.name });
-  const names = new Set(pods.map(p => p.name));
+  const names = new Set<string>(pods.map(p => p.name));
 
   for (const p of pods) {
     if (!scene.podSlots[p.name]) {

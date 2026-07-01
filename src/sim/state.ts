@@ -15,6 +15,7 @@
  * Echte Interfaces für die simulierten Ressourcen (Pod/Deployment/Service …) statt
  * `any`. Sie sichern Felder + Mutationen im ganzen Simulator ab.
  */
+import type { PodName } from "./names"; // Value Object (#479); reiner Typ-Import → state.ts bleibt Laufzeit-importfrei.
 
 /** Ergebnis einer simulierten Befehlszeile (`Sim.exec`). Lebt hier (Sim-Domänentyp)
  *  und nicht in `types.ts`, damit `sim.ts` nicht zurück auf `types.ts` zeigen muss –
@@ -48,7 +49,7 @@ export interface Broken {
 }
 /** Eine einzelne Pod-Instanz eines Deployments. */
 export interface PodInstance {
-  name: string;
+  name: PodName;   // Value Object (#479): ein Pod-Name ist kein beliebiger String, sondern DNS-1123.
   created: number;
   restarts: number;
 }

@@ -7,6 +7,7 @@
  * (docker, kubectl, …) sie teilen kann, OHNE nach `sim.ts` zurückzuimportieren
  * (das gäbe einen Import-Zyklus). `sim.ts` und die Befehls-Module importieren hier.
  */
+import { asPodName, type PodName } from "./names";
 
 /** Zufällige Kleinbuchstaben-/Ziffern-Folge der Länge `len` – für Container-/Image-IDs. */
 export function randSuffix(len: number): string {
@@ -19,8 +20,9 @@ export function randSuffix(len: number): string {
 /** Pod-Name im echten Kubernetes-Stil: `<deployment>-<replicaset-hash>-<pod-suffix>`
  *  (z.B. `web-7d8f9c6b54-x2k9p`). Von `sim.ts` (reset/Helm/Argo) UND `sim/kubectl.ts`
  *  (scale/rollout/apply/delete-Self-Healing) gebraucht – darum hier als geteilter Helfer. */
-export function makePodName(depName: string): string {
-  return depName + "-" + randSuffix(9) + "-" + randSuffix(5);
+export function makePodName(depName: string): PodName {
+  // Intern erzeugt → vertrauenswürdig: ungeprüft branden (der Name ist per Konstruktion gültig).
+  return asPodName(depName + "-" + randSuffix(9) + "-" + randSuffix(5));
 }
 
 /** Mit Leerzeichen auf Mindestbreite `n` auffüllen (Spalten-Ausrichtung der CLI-Tabellen). */

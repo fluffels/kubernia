@@ -11,6 +11,7 @@
  */
 import type { ArgoApp, RbacSubject } from "../state";
 import { makePodName } from "../util";
+import { asPodName } from "../names";
 // Argo-CD-Reconcile/-Klon liegen seit #378 bei der argocd-Familie in ../argocd – `kubectl apply -f`
 // einer Application zieht/kloniert den Soll direkt darüber (statt über eine Host-Methode).
 import { argoReconcile, cloneChildSpec } from "../argocd";
@@ -201,7 +202,7 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
       const idx = sts.pods.findIndex(p => p.name === name);
       sts.pods.splice(idx, 1);
       host.lastDeletedPod = name;
-      sts.pods.splice(idx, 0, { name, created: host.clock, restarts: 0 }); // stabile Identität: gleicher Name, gleiche Ordinalposition
+      sts.pods.splice(idx, 0, { name: asPodName(name), created: host.clock, restarts: 0 }); // stabile Identität: gleicher (bekannt-gültiger) Name, gleiche Ordinalposition
       return 'pod "' + name + '" deleted';
     }
     return host._err('Error from server (NotFound): pods "' + name + '" not found', "Pod-Namen siehst du mit 'kubectl get pods'.");

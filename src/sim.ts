@@ -46,6 +46,7 @@ import { nslookupCommand, curlCommand } from "./sim/net";
 import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
 import { randSuffix, makePodName } from "./sim/util";
+import { asPodName } from "./sim/names";
 import { assertClusterInvariants } from "./sim/invariants";
 import { renderHelp } from "./helptext";
 
@@ -335,7 +336,7 @@ import { renderHelp } from "./helptext";
         pods: [], created: this.clock,
       };
       for (let i = 0; i < spec.replicas; i++) {
-        sts.pods.push({ name: spec.name + "-" + i, created: this.clock, restarts: 0 });
+        sts.pods.push({ name: asPodName(spec.name + "-" + i), created: this.clock, restarts: 0 });
         const pvcName = vct + "-" + spec.name + "-" + i;
         if (!this.pvcs.some(p => p.name === pvcName)) {
           this.pvcs.push(this._makePvc(pvcName, sts.storage, spec.storageClass, "RWO"));

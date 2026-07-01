@@ -70,6 +70,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/sim.ts`](src/sim.ts) | pure Domäne | Cluster-Simulator-**Kern** (State/reset/Fabriken/`exec`-Dispatch/snapshot); Befehlsfamilien ausgelagert nach `src/sim/*`. → [sim.md](docs/module/sim.md) |
 | [`src/sim/state.ts`](src/sim/state.ts) | pure Domäne | Simulator-Zustand & Domänentypen (Pod/Deployment/…, `ClusterState`). |
 | [`src/sim/util.ts`](src/sim/util.ts) | pure Domäne | Geteilte pure Sim-Helfer (IDs, Pod-Namen, Tabellen). |
+| [`src/sim/names.ts`](src/sim/names.ts) | pure Domäne | Value Objects für Ressourcen-Namen (#479): DNS-1123-Regel + `PodName`-Brand + Fabriken (`podName`/`asPodName`) an EINER Stelle. |
 | [`src/sim/docker.ts`](src/sim/docker.ts) | pure Domäne | docker-Befehlsfamilie. |
 | [`src/sim/kubectl.ts`](src/sim/kubectl.ts) | pure Domäne | kubectl-Familie: dünner Dispatch-Barrel über `src/sim/kubectl/*` (Split #397). → [sim.md](docs/module/sim.md) |
 | [`src/sim/kubectl/host.ts`](src/sim/kubectl/host.ts) | pure Domäne | `KubectlHost`-Interface (was kubectl von der Sim-Klasse braucht). |
