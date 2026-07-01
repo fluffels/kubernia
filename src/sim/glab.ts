@@ -22,6 +22,7 @@
  */
 import type { ClusterState, Pipeline, Broken, Deployment } from "./state";
 import { pad, table } from "./util";
+import { addDeployment } from "./workload";
 
 /** Was die glab/CI-Funktionen vom Simulator brauchen (von der `Sim`-Klasse
  *  erfüllt). Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es
@@ -52,7 +53,7 @@ export function runPipeline(host: GlabHost): Pipeline {
   if (host.ci.deploy && onMain) {
     const d = host.ci.deploy;
     if (!host.deployments.some(x => x.name === d.name)) {
-      host.deployments.push(host._makeDeployment(d.name, d.image, d.replicas));
+      addDeployment(host, host._makeDeployment(d.name, d.image, d.replicas));
     }
   }
   return p;

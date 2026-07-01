@@ -14,7 +14,8 @@
  * ./util, die Domänentypen aus ./state – kein Rückimport nach sim.ts (kein Zyklus).
  */
 import type { ClusterState, Deployment, Broken } from "./state";
-import { table, makePodName } from "./util";
+import { table } from "./util";
+import { addDeployment, scaleDeployment } from "./workload";
 
 /** Was die helm-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
  *  Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es dokumentiert
@@ -244,7 +245,7 @@ export function helmCommand(host: HelmHost, t: string[], raw: string): string {
     const replicas = setValue(raw, "replicaCount") || 1;
     const chartShort = isLocal ? localName : (chart.split("/").pop() || chart);
     const depName = release + "-" + chartShort.split(":")[0];
-    host.deployments.push(host._makeDeployment(depName, chartShort + ":latest", replicas));
+    addDeployment(host, host._makeDeployment(depName, chartShort + ":latest", replicas));
     host.services.push({ name: depName, type: "ClusterIP", clusterIP: "10.96.40." + Math.floor(Math.random() * 250), port: "80", created: host.clock });
     host.releases.push({ name: release, chart, revision: 1, depName, history: [{ revision: 1, replicas }] });
     return [
@@ -275,11 +276,7 @@ export function helmCommand(host: HelmHost, t: string[], raw: string): string {
     const newReplicas = replicas || rel.history[rel.history.length - 1].replicas;
     rel.history.push({ revision: rel.revision, replicas: newReplicas });
     const dep = host.deployments.find(d => d.name === rel.depName);
-    if (dep && replicas) {
-      while (dep.pods.length < replicas) dep.pods.push({ name: makePodName(dep.name), created: host.clock, restarts: 0 });
-      while (dep.pods.length > replicas) dep.pods.pop();
-      dep.replicas = replicas;
-    }
+    if (dep && replicas) scaleDeployment(dep, replicas, host.clock);
     return 'Release "' + release + '" has been upgraded. Happy Helming!\nREVISION: ' + rel.revision;
   }
 
@@ -295,11 +292,7 @@ export function helmCommand(host: HelmHost, t: string[], raw: string): string {
     rel.revision++;
     rel.history.push({ revision: rel.revision, replicas: target.replicas });
     const dep = host.deployments.find(d => d.name === rel.depName);
-    if (dep) {
-      while (dep.pods.length < target.replicas) dep.pods.push({ name: makePodName(dep.name), created: host.clock, restarts: 0 });
-      while (dep.pods.length > target.replicas) dep.pods.pop();
-      dep.replicas = target.replicas;
-    }
+    if (dep) scaleDeployment(dep, target.replicas, host.clock);
     return "Rollback was a success! Happy Helming!";
   }
 

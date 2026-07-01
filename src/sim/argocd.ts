@@ -24,7 +24,8 @@
  * Domänentypen aus ./state – kein Rückimport nach sim.ts (kein Zyklus).
  */
 import type { ClusterState, ArgoApp, ArgoChildSpec, Deployment, Broken } from "./state";
-import { table, makePodName } from "./util";
+import { table } from "./util";
+import { addDeployment, scaleDeployment } from "./workload";
 
 /** Was die argocd-Befehle/Reconcile vom Simulator brauchen (von der `Sim`-Klasse
  *  erfüllt). Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es
@@ -130,12 +131,10 @@ export function argoReconcile(host: ArgocdHost, app: ArgoApp): void {
   const d = app.desired!.deployment;
   const dep = host.deployments.find(x => x.name === d.name);
   if (!dep) {
-    host.deployments.push(host._makeDeployment(d.name, d.image, d.replicas));
+    addDeployment(host, host._makeDeployment(d.name, d.image, d.replicas));
   } else {
     dep.image = d.image;
-    while (dep.pods.length < d.replicas) dep.pods.push({ name: makePodName(dep.name), created: host.clock, restarts: 0 });
-    while (dep.pods.length > d.replicas) dep.pods.pop();
-    dep.replicas = d.replicas;
+    scaleDeployment(dep, d.replicas, host.clock);
     dep.broken = null; // ein gesundes Git-Manifest heilt auch eine kaputte Workload
   }
   const s = app.desired!.service;

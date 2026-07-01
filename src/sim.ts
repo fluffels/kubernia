@@ -45,9 +45,10 @@ import { kubeadmCommand, deriveControlPlane, applyBootstrapScenario } from "./si
 import { nslookupCommand, curlCommand } from "./sim/net";
 import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
-import { randSuffix, makePodName } from "./sim/util";
+import { randSuffix } from "./sim/util";
 import { asPodName } from "./sim/names";
 import { assertClusterInvariants } from "./sim/invariants";
+import { scaleDeployment, replacePods } from "./sim/workload";
 import { renderHelp } from "./helptext";
 
   class Sim implements ClusterState {
@@ -259,9 +260,9 @@ import { renderHelp } from "./helptext";
       };
       // OOMKilled startet mit einem zu knappen Limit – das ist ja die Ursache.
       if (d.broken && d.broken.type === "oomkilled") d.memLimit = 64;
-      for (let i = 0; i < replicas; i++) {
-        d.pods.push({ name: makePodName(name), created: this.clock, restarts: 0 });
-      }
+      // Pods über die Aggregat-Mutation erzeugen (#488): hält `pods.length === replicas`
+      // schon bei der Konstruktion (d.replicas ist bereits `replicas`, hier nur die Pods).
+      scaleDeployment(d, replicas, this.clock);
       return d;
     }
 
@@ -414,7 +415,7 @@ import { renderHelp } from "./helptext";
       for (const d of this.deployments) {
         if (d.broken && d.broken.type === "imagepull" && d.broken.needsBuild && this._imageAvailable(d.image)) {
           d.broken = null;
-          d.pods = d.pods.map(() => ({ name: makePodName(d.name), created: this.clock, restarts: 0 }));
+          replacePods(d, this.clock);
         }
       }
     }
