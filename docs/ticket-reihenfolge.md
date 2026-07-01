@@ -1,8 +1,8 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-07-01 — zuletzt #475:** Test-Harness konsolidiert. Die Querschnitts-Umgebung (window/localStorage-Stub + Spiel-Stack laden) liegt jetzt **einmal** in `test/support/`, valide Domänen-Eingaben als **Factory** in `test/factories/` (`test/sim/helpers.ts` re-exportiert daraus, keine Link-Brüche). Leitprinzip in CLAUDE.md/AGENTS.md verankert: **Tests prüfen Verhalten über die öffentliche API, nicht Interna**; die Architektur-Fitness-Functions (`layering`/`filesize`) bleiben bewusst eine eigene Kategorie. Reines Test-Infra-Refactoring — 1313 Tests unverändert grün. **Nächstes freies Ticket = oberstes des Kopfes** (#311).
+> **Stand: 2026-07-01 — zuletzt #311:** Variable Platzhalter (`<token>`) in Beispielbefehlen app-weit als sichtbares „ändere-mich"-Badge ausgezeichnet. Neue Quelle `src/markup.ts` › `fmtCmd`, angewandt an der Render-Grenze (radio/dialog/quiz/questlog/album); behebt nebenbei bisher unsichtbare bare `<image>`/`<datei>` in Hints; die früheren Einzel-Wächter #320/#458 durch eine mechanik-gestützte Invariante ersetzt. **Content-Rollout** (entity `&lt;token&gt;` → bare, mit Ausnahmen `<none>`/`<sensitive>`/Konfliktmarker) als Folge-Ticket **#476** (Auto-Rest). **Nächstes freies Ticket = oberstes des Kopfes** (#318).
 >
-> _Frühere Tickets (Kurzfassung — volle Details in git-History + Brain `Projekte/KubeQuest`):_ #443 Phaser 4 evaluiert & bewusst verschoben (Renderer-Bug 4.2.0 bei kleine-Welt-Szenen, bleiben auf 3.90.x, Re-Eval per Folge-Ticket) · #296 Reset-Fix im Browser verifiziert (+ #473 angelegt) · #382 Worktree-Pfad-Konvention vereinheitlicht · #441 Knut-Sprite Asset-Hygiene · #362 freies Funken „Was ist gerade passiert?"-Erklärung · #359 `help` im CLI-Format · #358 `help` zeigt nur Freigeschaltetes · #328 Sandbox-Vertiefungs-Quiz · #278 Sammelalbum/Glossar · #279 Lernkarten-Backfill · #460–#466 Aufbau-Bogen (Epic #239, kubeadm + Terraform-Cluster) · #430 Gating-Konsistenz · #281/#282 Keycloak-/CI-Vertiefung · #237 Kralle-Gag.
+> _Frühere Tickets (Kurzfassung — volle Details in git-History + Brain `Projekte/KubeQuest`):_ #475 Test-Harness konsolidiert (`test/support/` + `test/factories/`, „Verhalten über öffentliche API testen") · #443 Phaser 4 evaluiert & bewusst verschoben (Renderer-Bug 4.2.0 bei kleine-Welt-Szenen, bleiben auf 3.90.x, Re-Eval per Folge-Ticket) · #296 Reset-Fix im Browser verifiziert (+ #473 angelegt) · #382 Worktree-Pfad-Konvention vereinheitlicht · #441 Knut-Sprite Asset-Hygiene · #362 freies Funken „Was ist gerade passiert?"-Erklärung · #359 `help` im CLI-Format · #358 `help` zeigt nur Freigeschaltetes · #328 Sandbox-Vertiefungs-Quiz · #278 Sammelalbum/Glossar · #279 Lernkarten-Backfill · #460–#466 Aufbau-Bogen (Epic #239, kubeadm + Terraform-Cluster) · #430 Gating-Konsistenz · #281/#282 Keycloak-/CI-Vertiefung · #237 Kralle-Gag.
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
 
 ## Wie diese Liste funktioniert — drei Schichten
@@ -49,30 +49,29 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 |---|--------|------|--------------|---------------------------|
 | | **— Tiefer Lernpfad (Aufbau-Bogen #239 komplett: #460–#466 erledigt; #279 Backfill + #278 Sammelalbum + #328 Sandbox-Lernthema erledigt) —** | | | |
 | | **— Tech-Debt (sauber umsetzbar) —** | | | |
-| 1 | **#311** | niedrig | Variable Platzhalter (nginx/webserver) typografisch als „ändere-mich"-Wert kennzeichnen (app-weit) | Auto-Rest hochgezogen (Prio→Nummer); design-arme Didaktik-Verbesserung ohne Abhängigkeit. |
-| 2 | **#318** | niedrig | HUD: Einkommensrate des Hafens/Clusters anzeigen (Dublonen/Stunde) | Auto-Rest hochgezogen (Prio→Nummer); kleines HUD-Feature ohne Abhängigkeit. |
+| 1 | **#318** | niedrig | HUD: Einkommensrate des Hafens/Clusters anzeigen (Dublonen/Stunde) | Auto-Rest hochgezogen (Prio→Nummer); kleines HUD-Feature ohne Abhängigkeit. |
 | | **— Anlegende / Epic —** | | | |
-| 3 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
-| 4 | **#317** 📦 | niedrig | EPIC: Komfort-Funktionen im Shop kaufen + Shop-Überarbeitung | **Epic → mit der Aufteilung loslegen** (session-große Kinder anlegen, Epic auf done schließen). |
+| 2 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
+| 3 | **#317** 📦 | niedrig | EPIC: Komfort-Funktionen im Shop kaufen + Shop-Überarbeitung | **Epic → mit der Aufteilung loslegen** (session-große Kinder anlegen, Epic auf done schließen). |
 | | **— 🎨 Optik / Grafik (werden GANZ NORMAL automatisch gewählt; das Aussehen stimmt der Agent WÄHREND der Umsetzung per Rückfrage mit der Maintainerin ab — Referenz/Vorschlag/generiertes Asset vorlegen, entscheiden lassen, iterieren; NICHT vorab gaten, NICHT selbst das Design festlegen) —** | | | |
-| 5 | **#183** 🎨 | niedrig | Hafen-Kanone als Pixelart-Asset statt Emoji 💣 | Optik — Asset-Look während der Umsetzung abstimmen. |
-| 6 | **#186** 🎨 | niedrig | Außen-Türen der Gebäude als Pixelart statt prozeduraler Rechtecke | Optik — Look während der Umsetzung abstimmen. |
-| 7 | **#187** 🎨 | niedrig | Interior-Einrichtung (Bullaugen/Türen/Wandschatten) als Pixelart | Optik — Look während der Umsetzung abstimmen. |
-| 8 | **#190** 🎨 | niedrig | Overlay-Panels (Funkgerät/Logbuch/Shop/Quiz/Stapel/Menü) im Stardew-Look | Optik — Look während der Umsetzung abstimmen. |
-| 9 | **#204** 🎨 | niedrig | HUD-/Panel-Emojis durch PixelLab-Pixel-Icons ersetzen | Optik — Look während der Umsetzung abstimmen. |
-| 10 | **#223** 🎨 | niedrig | Rang-Aufstieg mit Feier-Popup (alter → neuer Rang) statt nur Toast | Optik/UX — gehört mit #314 zusammen; Look während der Umsetzung abstimmen. |
-| 11 | **#238** 🎨 | niedrig | Container laufen visuell in Pods (Fässer im Schiffsrumpf) | Optik/Visualisierung — Look während der Umsetzung abstimmen. |
-| 12 | **#289** 🎨 | niedrig | Kenney-Tilesets (town/dungeon) durch PixelLab ersetzen, dann entfernen | Auto-Rest hochgezogen (Prio→Nummer); Optik — Look während der Umsetzung abstimmen. |
-| 13 | **#303** 🎨 | niedrig | Gestoppte Container visuell ins Lager verschieben (statt am Dock) | Auto-Rest hochgezogen (Prio→Nummer); Optik/Visualisierung — Look während der Umsetzung abstimmen. |
-| 14 | **#314** 🎨 | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | Optik — Look während der Umsetzung abstimmen (übergreift #223). |
+| 4 | **#183** 🎨 | niedrig | Hafen-Kanone als Pixelart-Asset statt Emoji 💣 | Optik — Asset-Look während der Umsetzung abstimmen. |
+| 5 | **#186** 🎨 | niedrig | Außen-Türen der Gebäude als Pixelart statt prozeduraler Rechtecke | Optik — Look während der Umsetzung abstimmen. |
+| 6 | **#187** 🎨 | niedrig | Interior-Einrichtung (Bullaugen/Türen/Wandschatten) als Pixelart | Optik — Look während der Umsetzung abstimmen. |
+| 7 | **#190** 🎨 | niedrig | Overlay-Panels (Funkgerät/Logbuch/Shop/Quiz/Stapel/Menü) im Stardew-Look | Optik — Look während der Umsetzung abstimmen. |
+| 8 | **#204** 🎨 | niedrig | HUD-/Panel-Emojis durch PixelLab-Pixel-Icons ersetzen | Optik — Look während der Umsetzung abstimmen. |
+| 9 | **#223** 🎨 | niedrig | Rang-Aufstieg mit Feier-Popup (alter → neuer Rang) statt nur Toast | Optik/UX — gehört mit #314 zusammen; Look während der Umsetzung abstimmen. |
+| 10 | **#238** 🎨 | niedrig | Container laufen visuell in Pods (Fässer im Schiffsrumpf) | Optik/Visualisierung — Look während der Umsetzung abstimmen. |
+| 11 | **#289** 🎨 | niedrig | Kenney-Tilesets (town/dungeon) durch PixelLab ersetzen, dann entfernen | Auto-Rest hochgezogen (Prio→Nummer); Optik — Look während der Umsetzung abstimmen. |
+| 12 | **#303** 🎨 | niedrig | Gestoppte Container visuell ins Lager verschieben (statt am Dock) | Auto-Rest hochgezogen (Prio→Nummer); Optik/Visualisierung — Look während der Umsetzung abstimmen. |
+| 13 | **#314** 🎨 | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | Optik — Look während der Umsetzung abstimmen (übergreift #223). |
 | | **— Zuletzt —** | | | |
-| 15 | **#293** | niedrig | Spiellogik-Review (anlegend) | Steht bewusst **zuletzt** (reine Positionierung, kein Gate) — erst wenn der Backlog weitgehend leer ist, sonst veraltet das Review sofort. Erzeugt Folge-Tickets. |
+| 14 | **#293** | niedrig | Spiellogik-Review (anlegend) | Steht bewusst **zuletzt** (reine Positionierung, kein Gate) — erst wenn der Backlog weitgehend leer ist, sonst veraltet das Review sofort. Erzeugt Folge-Tickets. |
 
 > **#443 (Phaser 4)** ist aus dem Kopf raus: evaluiert und bewusst verschoben (Renderer-Bug in 4.2.0 bei kleine-Welt-Szenen, kein Quick-Fix). Re-Eval läuft über das Folge-Ticket, sobald Phaser 4 reift / der Bug upstream gefixt ist. Details: [ADR 0001](adr/0001-engine-phaser.md).
 
 > **Aufbau-Bogen-Optik #467** 🎨 (zerstörter Hafen → Wiederaufbau) wird wie jedes Optik-Ticket normal gewählt; der Look wird während der Umsetzung mit der Maintainerin abgestimmt — kein Vorab-Gate, kein Blocker für den Lerninhalt (#460–#466).
 
-> 🎨 **Optik-/Grafik-Tickets** (z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#311/#318/#341/#342/#467): werden **automatisch wie jedes andere Ticket gewählt**. Das konkrete Aussehen legt der Agent **nicht selbst** fest, sondern stimmt es **während der Umsetzung per Rückfrage** mit der Maintainerin ab (Stardew-Referenz lesen — [AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md) —, dann Vorschlag/Referenz/generiertes Asset vorlegen und entscheiden lassen, iterieren). Also: dranmachen ja, Design-Entscheidung interaktiv.
+> 🎨 **Optik-/Grafik-Tickets** (z.B. #183/#186/#187/#190/#204/#223/#238/#289/#303/#318/#341/#342/#467): werden **automatisch wie jedes andere Ticket gewählt**. Das konkrete Aussehen legt der Agent **nicht selbst** fest, sondern stimmt es **während der Umsetzung per Rückfrage** mit der Maintainerin ab (Stardew-Referenz lesen — [AGENTS.md › Grafik-Stil](../AGENTS.md), [docs/stardew-referenz.md](stardew-referenz.md) —, dann Vorschlag/Referenz/generiertes Asset vorlegen und entscheiden lassen, iterieren). Also: dranmachen ja, Design-Entscheidung interaktiv.
 
 ## Auto-Rest — alles unterhalb des Kopfes
 
