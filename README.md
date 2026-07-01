@@ -128,7 +128,7 @@ Der komplette Code von KubeQuest entsteht durch **autonome KI-Coding-Agenten** �
 
 **Warum das funktioniert:** Nicht ein einzelner cleverer Prompt macht autonome KI-Entwicklung sicher, sondern die **Leitplanken drumherum** – SSOT-Doku, ein enger Ticket-Fokus, Kollisionsschutz und ein Gate-Netz, das jeden Fehler an der Grenze abfängt. Genau diese Kombination ist selbst ein Architekturziel (siehe [arc42 §8](docs/arc42-architektur.md)).
 
-> 📝 Eine **kanonische Harness-Tiefendoku** (`docs/agent-harness.md`, „wie + warum" an einer Stelle) ist als nächster Schritt geplant (#526) und wird von hier verlinkt, sobald sie steht. Bis dahin sind [AGENTS.md](AGENTS.md) + [CLAUDE.md](CLAUDE.md) + die [Umsetzungs-Reihenfolge](docs/ticket-reihenfolge.md) die maßgeblichen Quellen.
+> 📝 Die **kanonische Harness-Tiefendoku** — der KI-Agenten-Harness als System, „wie + warum" an einer Stelle — steht in **[docs/agent-harness.md](docs/agent-harness.md)**. Sie ist die erklärende Gesamtsicht; die operative Arbeitsanweisung bleibt [AGENTS.md](AGENTS.md), der Schnellstart + die Datei-Landkarte [CLAUDE.md](CLAUDE.md).
 
 ---
 
