@@ -3,6 +3,7 @@
  * Multiplikator hebt, wie XP in Ränge umschlägt und wofür Dublonen ausgegeben werden.
  * Anwendungsschicht, Phaser-frei. */
 import { KQContent } from "../content";
+import { add, applyMultiplier, canAfford, subtract, toCoins } from "../coins";
 import type { EventMode } from "../types";
 import { part, isEventMode, today } from "./shared";
 
@@ -54,9 +55,10 @@ export const economyBundle = part({
   economyTick(dt: number) {
     this.incomeAcc += this.incomeRate() / 60 * dt;
     if (this.incomeAcc >= 1) {
-      const payout = Math.floor(this.incomeAcc);
+      // Nur ganze Dublonen auszahlen; der Nachkomma-Rest bleibt im Akkumulator.
+      const payout = toCoins(this.incomeAcc);
       this.incomeAcc -= payout;
-      this.state.coins += payout;
+      this.state.coins = add(this.state.coins, payout);
       return payout;
     }
     return 0;
@@ -97,15 +99,16 @@ export const economyBundle = part({
   },
 
   addCoins(amount: number) {
-    const real = Math.round(amount * this.coinMultiplier());
-    this.state.coins += real;
+    const real = applyMultiplier(amount, this.coinMultiplier());
+    this.state.coins = add(this.state.coins, real);
     this.save();
     return real;
   },
 
   spendCoins(amount: number) {
-    if (this.state.coins < amount) return false;
-    this.state.coins -= amount;
+    const price = toCoins(amount);
+    if (!canAfford(this.state.coins, price)) return false;
+    this.state.coins = subtract(this.state.coins, price);
     this.save();
     return true;
   },

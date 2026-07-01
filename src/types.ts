@@ -7,6 +7,7 @@
 // Reiner Typ-Import (zur Laufzeit gelöscht). Seit #390 zeigt sim.ts NICHT mehr auf types.ts
 // zurück (ExecResult liegt jetzt in sim/state.ts) – die Kante types → sim ist einseitig, kein Zyklus.
 import type { Sim, Scenario } from "./sim";
+import type { Coins } from "./coins";
 
 /** Fortschritt EINER offenen Quest: aktueller Schritt + Aufgabe innerhalb des Schritts.
  *  Wert-Typ von `GameState.activeQuests` (#410). Pro offener Quest genau ein solcher Stand;
@@ -20,7 +21,10 @@ export interface QuestProgress {
 /** Vollständiger, serialisierbarer Spielstand (genau die Form aus Game.defaultState). */
 export interface GameState {
   xp: number;
-  coins: number;
+  /** Dublonen-Kontostand als Value Object (#490): eine nicht-negative ganze Zahl.
+   *  Branded `Coins` – serialisiert unverändert als `number`, der Compiler zwingt
+   *  Schreibzugriffe aber durch die Arithmetik in `src/coins.ts`. */
+  coins: Coins;
   character: number | null;
   player: { x: number; y: number };
   /** Offene Quests als **Menge** (Quest-ID → Fortschritt). Die Persistenz-Autorität für

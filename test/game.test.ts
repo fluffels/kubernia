@@ -13,6 +13,7 @@ import { NPC_SPAWNS, TILE, TALK_RANGE } from "../src/world";
 import { setWorldScene } from "../src/runtime";
 import { MAP_REGISTRY } from "../src/mapregistry";
 import { DAY_CYCLE_MS } from "../src/clock";
+import { coins } from "../src/coins";
 
 let Game: typeof import("../src/game").Game;
 let Sim: typeof import("../src/sim").Sim;
@@ -316,7 +317,7 @@ test("addCoins: Streak-Multiplikator wirkt und ist bei 10 gedeckelt", () => {
 /* ---------- Shop ---------- */
 
 test("buy: scheitert bei zu wenig Dublonen, ohne etwas abzubuchen", () => {
-  Game.state.coins = 10; // Fernrohr kostet 25
+  Game.state.coins = coins(10); // Fernrohr kostet 25
   const res = Game.buy("fernrohr");
   expect(res.ok).toBe(false);
   expect(Game.state.coins).toBe(10);                 // nichts abgezogen
@@ -324,7 +325,7 @@ test("buy: scheitert bei zu wenig Dublonen, ohne etwas abzubuchen", () => {
 });
 
 test("buy: Verbrauchsgut wird gekauft, Dublonen abgezogen, Inventar erhöht", () => {
-  Game.state.coins = 100;
+  Game.state.coins = coins(100);
   const res = Game.buy("fernrohr");
   expect(res.ok).toBe(true);
   expect(Game.state.coins).toBe(75);                 // 100 - 25
@@ -332,7 +333,7 @@ test("buy: Verbrauchsgut wird gekauft, Dublonen abgezogen, Inventar erhöht", ()
 });
 
 test("buy: nicht-verbrauchbare Ware lässt sich nicht doppelt kaufen", () => {
-  Game.state.coins = 1000;
+  Game.state.coins = coins(1000);
   expect(Game.buy("pet-ratte").ok).toBe(true);       // Haustier (150)
   const zweiter = Game.buy("pet-ratte");
   expect(zweiter.ok).toBe(false);                    // schon im Besitz

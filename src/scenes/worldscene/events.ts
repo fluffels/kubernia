@@ -169,8 +169,7 @@ export function resolveKraken(scene: WorldSceneLike, success: boolean) {
     SFX.fanfare();
   } else {
     const stolen = Math.min(20, Game.state.coins);
-    Game.state.coins -= stolen;
-    Game.save();
+    Game.spendCoins(stolen); // gedeckt (stolen <= coins) -> zieht ab + speichert, zentral über das Coins-VO (#490)
     UI.hint("🐙 Die Krake hat " + stolen + " 🪙 erbeutet! Leg beim nächsten Mal schnell ein Secret an.");
   }
   scheduleEvents(scene);

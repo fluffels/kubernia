@@ -7,6 +7,7 @@ import { KQContent } from "../content";
 import { Sim as KQSim } from "../sim";
 import { SaveStore } from "../store";
 import { worldScene, applyAudioConfig } from "../runtime";
+import { add, toCoins } from "../coins";
 import type { GameState, QuestProgress } from "../types";
 import { part, makeDefaultState, questIdForIndex, questIndexForId, canonicalActiveQuests, isEventMode, ALL_ABBREV_UNLOCKED } from "./shared";
 
@@ -248,7 +249,7 @@ export function sanitizeState(raw: unknown): GameState {
 
   return {
     xp: safeCount(raw.xp, def.xp),
-    coins: safeCount(raw.coins, def.coins),
+    coins: toCoins(safeCount(raw.coins, def.coins)),
     character: typeof raw.character === "number" && Number.isFinite(raw.character) ? raw.character : null,
     player: { x: safeNum(player.x, def.player.x), y: safeNum(player.y, def.player.y) },
     activeQuests,
@@ -338,7 +339,7 @@ export const saveBundle = part({
     if (this.state.lastSeen) {
       const minutes = Math.min(240, (Date.now() - this.state.lastSeen) / 60000);
       this.offlineEarnings = Math.floor(minutes * this.incomeRate() * 0.5);
-      if (this.offlineEarnings > 0) this.state.coins += this.offlineEarnings;
+      if (this.offlineEarnings > 0) this.state.coins = add(this.state.coins, toCoins(this.offlineEarnings));
     }
     this.save();
   },

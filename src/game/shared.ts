@@ -9,6 +9,7 @@
  *    Barrel public re-exportiert, weil ui/radio.ts + Tests sie importieren).
  * Bewusst KEIN Import aus anderen game/*-Modulen – shared bleibt das zyklenfreie Blatt. */
 import { KQContent } from "../content";
+import { coins } from "../coins";
 import type { Sim } from "../sim";
 import type { GameState, EventMode, QuestProgress } from "../types";
 
@@ -109,7 +110,7 @@ export function canonicalActiveQuests(active: Record<string, QuestProgress>): Re
 export function makeDefaultState(): GameState {
   return {
     xp: 0,
-    coins: 40,
+    coins: coins(40),
     character: null,
     // Erststart direkt neben Ole, dem Hafenmeister (#288): kein orientierungsloses
     // Loslaufen mehr – man steht in Redeweite vor der Hafenmeisterei, der Begrüßungs-

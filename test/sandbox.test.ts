@@ -15,6 +15,7 @@
 import { test, expect, beforeAll, beforeEach } from "vitest";
 import { stubWindowLocalStorage, loadGameStack } from "./support/browser-env";
 import { KQContent } from "../src/content";
+import { coins } from "../src/coins";
 
 let Game: typeof import("../src/game").Game;
 let Sim: typeof import("../src/sim").Sim;
@@ -60,14 +61,14 @@ test("startReplay funktioniert für JEDE abgeschlossene Quest – unabhängig vo
 
 test("Wiederspiel: save() ist ein No-Op – keine doppelte XP/Wirtschaft im echten Stand", () => {
   Game.jumpToQuest(3);
-  Game.state.xp = 100; Game.state.coins = 50;
+  Game.state.xp = 100; Game.state.coins = coins(50);
   Game.save(false);
   const before = clone(SaveStore.readState());
 
   Game.startReplay(2);
   // Im Wiederspiel XP/Münzen „kassieren", Müll in completedQuests, und speichern:
   Game.state.xp += 999;
-  Game.state.coins += 999;
+  Game.state.coins = coins(Game.state.coins + 999);
   Game.state.completedQuests.push("sandbox-junk");
   Game.save();
 
