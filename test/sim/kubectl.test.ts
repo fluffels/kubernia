@@ -35,6 +35,22 @@ test("kubectl apply ist idempotent", () => {
   assert.equal(sim.deployments.filter(d => d.name === "lager").length, 1);
 });
 
+test("#538 apply: ein Fehler in einem Handler bricht die Kette ab – spätere Ressourcen werden NICHT angelegt", () => {
+  // Manifest mit PVC (bösartige dataSource → Fehler) UND einem StatefulSet, das in der
+  // Handler-Reihenfolge NACH dem PVC kommt. Der PVC-Fehler muss die Kette abbrechen, sodass
+  // das StatefulSet gar nicht mehr angelegt wird (das alte `return host._err(...)`-Verhalten).
+  sim.files["multi.yaml"] = "kind: List …";
+  sim.applyEffects["multi.yaml"] = {
+    pvc: { name: "kai-db", storage: "1Gi", dataSource: "gibt-es-nicht" },
+    statefulSet: { name: "lager-sts", image: "redis", replicas: 1 },
+  };
+  const r = sim.exec("kubectl apply -f multi.yaml");
+  assert.ok(r.error, "der PVC-dataSource-Fehler muss den ganzen apply abbrechen");
+  assert.match(r.output!, /dataSource VolumeSnapshot "gibt-es-nicht" was not found/);
+  assert.equal(sim.pvcs.find(p => p.name === "kai-db"), undefined, "kein PVC aus dem fehlgeschlagenen Restore");
+  assert.equal(sim.statefulSets.find(s => s.name === "lager-sts"), undefined, "das spätere StatefulSet darf NICHT angelegt worden sein (Kette abgebrochen)");
+});
+
 test("secrets: create, get (ohne Inhalt!), delete", () => {
   sim.exec("kubectl create secret generic db --from-literal=pw=geheim123");
   const out = sim.exec("kubectl get secrets").output!;
