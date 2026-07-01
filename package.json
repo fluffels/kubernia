@@ -23,6 +23,7 @@
     "typecheck:strict": "tsc -p tsconfig.strict.json",
     "check:arch": "depcruise src --config .dependency-cruiser.cjs",
     "check:size": "node scripts/check-size.mjs",
+    "check:docmap": "node scripts/check-docmap.mjs",
     "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {

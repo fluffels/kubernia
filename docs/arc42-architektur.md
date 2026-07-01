@@ -42,7 +42,7 @@ Der fachliche Kontext ist bewusst schmal:
 | Erweiterbarkeit | **Content-as-Data**: Quests/NPCs/Dialoge/Drills als validiertes JSON; Quest-Checks als deklarative DSL; Entities als datengesteuerte Registry. |
 | Datensicherheit | **Repository-Kapsel** `SaveStore` über IndexedDB, versionierte Hülle `{v,data}`, Migrationskette, Backup-Slot vor jeder Migration. |
 | Portabilität | **Zwei Builds aus einer Quelle**: Multi-File-Host-Build + self-contained Offline-Single-File. |
-| KI-Wartbarkeit | **Fitness Functions** als CI-Gates: Lint, Schicht-/Zyklen-/Größen-Wächter, headless Boot-Smoke. |
+| KI-Wartbarkeit | **Fitness Functions** als CI-Gates: Lint, Schicht-/Zyklen-/Größen-Wächter, **Doku↔Code-Drift-Wächter** (#482, hält die Landkarte als Kontext-Selektor ehrlich), headless Boot-Smoke. |
 
 ## 5. Bausteinsicht (Ebene-1-Zerlegung)
 
@@ -143,7 +143,7 @@ Konkrete Szenarien (Reiz → Reaktion) statt vager Adjektive:
 | Testbarkeit | Sim-Regel ändern → Unit-Test gegen pure Domäne ohne Engine; Suite < 3 s | erfüllt |
 | Datensicherheit | Save-Format ändert sich → Migrationskette + Backup-Slot; Alt-Stand bricht nie | erfüllt |
 | Portabilität | Spiel weitergeben → ein Doppelklick-HTML, offline | erfüllt |
-| Wartbarkeit (KI) | Agent ändert Modul → Lint/Arch/Größe/Smoke fangen Fehler vor dem Merge | erfüllt |
+| Wartbarkeit (KI) | Agent ändert Modul → Lint/Arch/Größe/**Doku-Drift** (#482)/Smoke fangen Fehler vor dem Merge | erfüllt |
 | Performance | Viele Inseln/Sprites → Culling greift, aber Assets werden noch eager geladen | teilweise |
 
 ## 11. Risiken und technische Schulden

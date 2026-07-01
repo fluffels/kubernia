@@ -55,6 +55,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | Linter (ESLint, #389) | `npm run lint` |
 | Architektur-Wächter (Schichtung + Zyklen + Orphans, #347/#390) | `npm run check:arch` |
 | Dateigröße-Wächter (God-File-Budget 800 LOC, #390) | `npm run check:size` |
+| Doku↔Code-Drift-Wächter (CLAUDE.md-Landkarte gegen den Code, #482) | `npm run check:docmap` |
 | Security-Audit (Produktiv-Deps, CI-Gate blockt bei high+, #396) | `npm audit --omit=dev --audit-level=high` |
 
 > ⚠️ **Code-Änderungen laden im Dev-Server NICHT automatisch neu** (#301). Eine JS/TS-Änderung löst bewusst keinen Auto-Reload aus (der riss sonst mitten im Spielen laufende Gespräche weg + blaues Flackern, v.a. wenn parallele Agenten editieren). Stattdessen erscheint ein Toast „🔄 Code geändert – neu laden (F5)". Zum Übernehmen also **F5 / Seite neu laden** (Spielstand bleibt erhalten – seit #350 in IndexedDB). CSS-Edits swappen weiterhin live.
@@ -92,6 +93,12 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/content/check-dsl.ts`](src/content/check-dsl.ts) | pure Domäne | Deklarative Quest-Check-DSL: `compileCheck` Regel→Prädikat (#411). → [content.md](docs/module/content.md) |
 | [`src/content/checks.ts`](src/content/checks.ts) | pure Domäne | `QUEST_CHECKS`: nur noch echte Code-Sonderfälle (der Rest ist DSL-Daten, #411). |
 | [`src/content/entities.ts`](src/content/entities.ts) | pure Domäne | Entity-Registry: datengesteuerte NPC- & Objekt-Platzierung (#349/#357). |
+| [`src/content/validate.ts`](src/content/validate.ts) | pure Domäne | Schema-Validierung des Inhalts-Bündels (`validateContent`): strukturelle Konsistenz aller Quests/Drills/Quiz/Karten/Pools, ohne Fremd-Library (null Laufzeit-Deps). → [content.md](docs/module/content.md) |
+| [`src/content/learnorder.ts`](src/content/learnorder.ts) | pure Domäne | Lernreihenfolge-Wächter (#235/#412): keine Quiz-/Review-Karte vor Einführung ihres Konzepts; Prüflogik wird nur vom Test-Wächter `test/learnorder.test.ts` aufgerufen. |
+| [`src/content/manifests.ts`](src/content/manifests.ts) | pure Domäne | „Virtuelle Dateien": fertige YAML-/Terraform-/CI-Schnipsel, die Quests im simulierten Dateisystem hinlegen (lesen/anwenden/reparieren). |
+| [`src/content/minigame.ts`](src/content/minigame.ts) | pure Domäne | Stapel-Minispiel-Daten (Docker-Image-Schichten aufsteigend, #218) + Sturm-Image-Namen-Verfälscher. |
+| [`src/content/progression.ts`](src/content/progression.ts) | pure Domäne | Reine Inhalts-Daten: Ränge (XP-Schwellen) + Shop-Angebot. |
+| [`src/content/util.ts`](src/content/util.ts) | pure Domäne | Kleine geteilte Inhalts-Helfer (Zufall: `pick`/Range), von Drills u.a. genutzt. |
 | [`src/content/data/`](src/content/data/) | Daten | Quests/NPCs/Smalltalk/Reihenfolge/Drills/Quiz + Terraform-Konfigs (#147) + Funk-Erklärungen (#362) als JSON. |
 | [`src/content/drills.ts`](src/content/drills.ts) | pure Domäne | Barrel: mergt `DRILLS` + `PRACTICE` aus `src/content/drills/*` (#457). |
 | [`src/content/drills/shared.ts`](src/content/drills/shared.ts) | pure Domäne | Geteilte Helfer + `DrillTask`-Typ + ensure*-Fabriken + YAML-Konstanten-Re-Exporte (#457). |
@@ -187,7 +194,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`docs/module/presentation.md`](docs/module/presentation.md) | Präsentation: Szenen-Barrel & -Split #345, UI-Barrel & -Bündel #356, SFX/Assets. |
 | [`docs/module/app.md`](docs/module/app.md) | Anwendung/Persistenz/Typen: `game.ts`/`sanitizeState`, runtime, devpanel, SaveStore/IndexedDB #350. |
 
-> **Konvention (gegen erneutes Aufblähen):** Neues `src/`-Modul = **eine** knappe Zeile hier (Datei · Schicht · ein Satz Zweck). Ausführliche Historie/Interface-Details kommen in das passende [`docs/module/`](docs/module/)-Tiefendoc, **nicht** in diese Tabelle. Tiefe Begründung der Schichtung (Domäne ↔ Anwendung ↔ Präsentation): [AGENTS.md › Architektur](AGENTS.md#architektur).
+> **Konvention (gegen erneutes Aufblähen):** Neues `src/`-Modul = **eine** knappe Zeile hier (Datei · Schicht · ein Satz Zweck). Ausführliche Historie/Interface-Details kommen in das passende [`docs/module/`](docs/module/)-Tiefendoc, **nicht** in diese Tabelle. Tiefe Begründung der Schichtung (Domäne ↔ Anwendung ↔ Präsentation): [AGENTS.md › Architektur](AGENTS.md#architektur). **Diese Konvention ist maschinell bewacht (#482):** `npm run check:docmap` (CI-Gate + `test/docmap.test.ts`) meldet jede `src/`-Datei ohne Landkarten-Zeile, jede Zeile ohne Datei und jede Schicht, die von der `dependency-cruiser`-Zuordnung abweicht — die Landkarte kann also nicht mehr leise veralten.
 
 **Weitere Anlaufstellen:**
 
@@ -201,7 +208,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | 🎨 PixelLab-Assets (Liste + IDs) | [assets/pixellab/README.md](assets/pixellab/README.md) |
 | 🔤 Pixelschrift fürs HUD (`KQPixel`/Silkscreen) | [`fonts.css`](fonts.css) (base64-`@font-face`) + Quelle/Lizenz in [`assets/fonts/`](assets/fonts/) (#189) |
 | 🗺️ Tiled-Maps (`.tmj`) + Workflow | [assets/maps/README.md](assets/maps/README.md) |
-| 🧪 Tests (Vitest) | [`test/`](test/) – Kern/Dispatch in `sim.test.ts`; die Simulator-Befehlsfamilien gespiegelt zu den `sim/`-Modulen unter [`test/sim/`](test/sim/) (docker/kubectl/rbac/helm/git/terraform/argocd/glab, #383); dazu `content.test.ts`, `quests.test.ts` u.a. **Geteiltes Harness (#475):** Querschnitts-Umgebung (window/localStorage-Stub + Spiel-Stack laden) in [`test/support/`](test/support/), valide Domänen-Eingaben/Factories in [`test/factories/`](test/factories/) (`freshSim`; `test/sim/helpers.ts` re-exportiert daraus). Verhaltens-Tests prüfen die öffentliche API/beobachtbares Verhalten, nicht Interna – die Architektur-**Fitness-Functions** (`layering.test.ts`/`filesize.test.ts`) sind bewusst eine eigene Kategorie. |
+| 🧪 Tests (Vitest) | [`test/`](test/) – Kern/Dispatch in `sim.test.ts`; die Simulator-Befehlsfamilien gespiegelt zu den `sim/`-Modulen unter [`test/sim/`](test/sim/) (docker/kubectl/rbac/helm/git/terraform/argocd/glab, #383); dazu `content.test.ts`, `quests.test.ts` u.a. **Geteiltes Harness (#475):** Querschnitts-Umgebung (window/localStorage-Stub + Spiel-Stack laden) in [`test/support/`](test/support/), valide Domänen-Eingaben/Factories in [`test/factories/`](test/factories/) (`freshSim`; `test/sim/helpers.ts` re-exportiert daraus). Verhaltens-Tests prüfen die öffentliche API/beobachtbares Verhalten, nicht Interna – die Architektur-**Fitness-Functions** (`layering.test.ts`/`filesize.test.ts`/`docmap.test.ts`, #482) sind bewusst eine eigene Kategorie. |
 | 🚦 Boot-Smoke-Test (Playwright, E2E) | [`e2e/`](e2e/) – lädt den gebauten Offline-Build headless und prüft den fehlerfreien Boot (#391); Config: [`playwright.config.ts`](playwright.config.ts). Bewusst getrennt von den Vitest-Unit-Tests (`npm run smoke`). |
 | ✅ Backlog / TODOs | GitHub Issues + Project-Board (`gh issue list --state open --limit 500`, `gh project list --owner fluffels`) |
 | 🥇 Nächstes Ticket (Umsetzungs-Reihenfolge) | [docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md) – Kopf (kuratiert) + Auto-Rest (Prio→Nummer) + Reaktivierungs-Pool |
