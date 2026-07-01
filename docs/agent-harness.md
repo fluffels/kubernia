@@ -159,12 +159,11 @@ Der Harness ist bewusst ein **lebendes System** — seine eigenen Schwachstellen
 |---|---|
 | **#527** | Aggregat-Kommando `npm run verify` (check:all) als **eine** SSOT für alle Gates — verhindert vergessene Gates + CI/lokal-Drift. |
 | **#528** | Git **pre-push-Hook** — lässt die schnellen Gates lokal **vor** `git push origin main` laufen; schließt die Post-hoc-CI-Lücke des Direkt-Push (§4). |
-| **#530** | **ADR 0008:** den KI-Agenten-Harness als explizite Architekturentscheidung festhalten (Autonomie + Fitness-Function-Leitplanken) — bisher nur gelebt, nicht als ADR. |
 | **#531** | **Forum-Inbox härten** gegen Prompt-Injection (externer Discussion-Text → auto-Issue → Agent). |
 | **#492** | Zentrale **seedbare RNG** + Fitness-Function gegen `Math.random` in Domäne/Content — macht den Determinismus-Anspruch zu einem echten Gate. |
 | **#532 / #533** | Tooling aus der KI-Fabrik-Analyse: Multi-Viewpoint-Review-Skill mit Gate-Short-Circuit; Diff-Größenbudget als Gate (`check:diffsize`, erzwingt kleine Commits). |
 
-Sobald **#530** steht, ist der ADR die formale Grundsatzentscheidung und dieses Doc die erklärende Tiefe daneben — dieselbe Arbeitsteilung wie AGENTS.md (operativ) ↔ agent-harness.md (erklärend).
+Mit **#530** ([ADR 0008](adr/0008-ki-agenten-harness.md)) ist der ADR jetzt die formale Grundsatzentscheidung und dieses Doc die erklärende Tiefe daneben — dieselbe Arbeitsteilung wie AGENTS.md (operativ) ↔ agent-harness.md (erklärend).
 
 ## 6. Verwandte Dokumente
 

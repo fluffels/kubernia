@@ -145,7 +145,7 @@ Dazu kommt: an einzelnen **Grenzen hört die sonst konsequente Disziplin auf** �
 | 0005 | Auslieferungsform Web vs. Desktop | **offen gehalten** (ergebnisoffener ADR + Re-Eval-Trigger) |
 | 0006 | Persistenz-Präzisierung: Engpass ist Eviction, nicht Kapazität → `storage.persist()` | präzisiert |
 | 0007 | Spielsystem-Fundamente (Quest-Modell, Checks-als-Daten, Zeit-Achse) | umgesetzt |
-| 0008 | **KI-Agenten-Harness** als Entwicklungsmodell (autonomer Ein-Ticket-Worktree-Workflow + Fitness-Functions als Leitplanken + selbstdokumentierendes Repo) | **geplant (#530)** — die prägendste Entscheidung, bisher nur in AGENTS.md/CLAUDE.md gelebt, nicht als ADR festgehalten. Kanonische Erklärung des Harness liegt bereits vor: [agent-harness.md](agent-harness.md) (#526). |
+| 0008 | **KI-Agenten-Harness** als Entwicklungsmodell (autonomer Ein-Ticket-Worktree-Workflow + Fitness-Functions als Leitplanken + selbstdokumentierendes Repo) | **akzeptiert** ([ADR 0008](adr/0008-ki-agenten-harness.md), #530) — die prägendste Entscheidung, jetzt als ADR festgehalten (Kontext/Alternativen/Re-Eval-Trigger). Kanonische Erklärung des Harness: [agent-harness.md](agent-harness.md) (#526). |
 
 iSAQB-konform: jeder ADR trägt einen expliziten **Re-Evaluierungs-Trigger** — Entscheidungen sind an nachprüfbare Bedingungen geknüpft, nicht „für immer".
 
