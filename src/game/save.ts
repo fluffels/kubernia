@@ -8,7 +8,7 @@ import { Sim as KQSim } from "../sim";
 import { SaveStore } from "../store";
 import { worldScene, applyAudioConfig, notifySaveFailed } from "../runtime";
 import { add, toCoins } from "../coins";
-import type { GameState, QuestProgress } from "../types";
+import type { GameState, QuestProgress, QuestStep } from "../types";
 import { part, makeDefaultState, questIdForIndex, questIndexForId, canonicalActiveQuests, isEventMode, ALL_ABBREV_UNLOCKED } from "./shared";
 
 /** Save-Migration #354: alte numerische Quest-IDs (q0, q2b, …) → neue sprechende Slugs.
@@ -127,6 +127,38 @@ function safeAudio(v: unknown): GameState["audio"] {
   };
 }
 
+/** Zahl der über `taskIdx` adressierbaren Aufgaben eines Schritts (#511). Muss zu den
+ *  einzigen Stellen passen, die `taskIdx` hochzählen (ui/radio.ts): terminal läuft über
+ *  `tasks`, drill über `count`, teach hat genau die eine `cmd`. Bei dialog/choice/minigame
+ *  gibt es keine per-Aufgabe-Adressierung – dort ist `taskIdx` bedeutungslos (bleibt 0). */
+function stepTaskCount(step: QuestStep): number {
+  switch (step.type) {
+    case "terminal": return step.tasks.length;
+    case "drill": return step.count;
+    case "teach": return 1;
+    default: return 0; // dialog / choice / minigame: kein per-Aufgabe-Index
+  }
+}
+
+/** Schritt-/Aufgaben-Index einer Quest gegen ihren echten Content klemmen (#511).
+ *  `step`/`task` kommen bereits nicht-negativ + ganzzahlig herein (safeCount), hier wird
+ *  nur die OBERE Grenze gezogen: ein manipulierter/über viele Versionen gewanderter Stand
+ *  kann questStep/taskIdx weit jenseits der real existierenden Schritte/Aufgaben tragen
+ *  (z.B. 999). Ungeklemmt liefert currentStep() dann null → toter Quest-Zustand.
+ *   - Kein zugehöriger Quest (unbekannte/leere ID = Endzustand) oder eine Quest ohne
+ *     Schritte → {0,0}: es gibt keinen Schritt zu fokussieren, der lineare Stand ist
+ *     bedeutungslos.
+ *   - Sonst: Schritt auf den letzten realen Schritt klemmen; taskIdx gegen die Aufgabenzahl
+ *     des so fokussierten Schritts (`stepTaskCount`) – ein Schritt ohne adressierbare
+ *     Aufgaben (dialog/choice/minigame) erzwingt taskIdx 0. */
+function clampProgress(questId: string, step: number, task: number): QuestProgress {
+  const quest = KQContent.QUESTS[questIndexForId(questId)];
+  if (!quest || quest.steps.length === 0) return { step: 0, task: 0 };
+  const s = Math.min(step, quest.steps.length - 1);
+  const taskCount = stepTaskCount(quest.steps[s]);
+  return { step: s, task: taskCount > 0 ? Math.min(task, taskCount - 1) : 0 };
+}
+
 export function sanitizeState(raw: unknown): GameState {
   const def = makeDefaultState();
   if (!isPlainObject(raw)) return def; // primitiver/kaputter Stand -> komplett frisch
@@ -160,12 +192,15 @@ export function sanitizeState(raw: unknown): GameState {
     }
   }
 
-  // Stats: auf den Default-Stats aufsetzen und nur endliche Zahlen überschreiben;
-  // dynamische Zusatz-Stats (z.B. stormsFixed) bleiben erhalten, solange Zahl.
+  // Stats: auf den Default-Stats aufsetzen und nur endliche, NICHT-NEGATIVE Ganzzahlen
+  // überschreiben (#511 – gehärtet wie inventory/abbrevUsage; Stats sind durchweg Zähler
+  // bzw. Bestwerte >= 0). Ein negativer/gebrochener Wert fällt für bekannte Keys auf den
+  // Default zurück und wird für dynamische Zusatz-Stats (z.B. stormsFixed) gar nicht erst
+  // übernommen.
   const stats = def.stats;
   if (isPlainObject(raw.stats)) {
     for (const [k, n] of Object.entries(raw.stats)) {
-      if (typeof n === "number" && Number.isFinite(n)) stats[k] = n;
+      if (typeof n === "number" && Number.isFinite(n) && n >= 0) stats[k] = Math.floor(n);
     }
   }
 
@@ -233,19 +268,24 @@ export function sanitizeState(raw: unknown): GameState {
       if (questIndexForId(id) < 0) continue;   // unbekannte/entfernte Quest -> raus
       if (completedSet.has(id)) continue;      // erledigt gewinnt -> nicht zugleich offen
       if (!isPlainObject(prog)) continue;
-      active[id] = { step: safeCount(prog.step, 0), task: safeCount(prog.task, 0) };
+      // #511: gegen den echten Content klemmen – die Autorität darf keinen Schritt/Aufgabe
+      // jenseits der Quest tragen (sonst persistiert der 999-Zustand und wird beim Fokus tot).
+      active[id] = clampProgress(id, safeCount(prog.step, 0), safeCount(prog.task, 0));
     }
   } else if (currentQuestId !== "") {
-    active[currentQuestId] = { step: questStep, task: taskIdx };
+    active[currentQuestId] = clampProgress(currentQuestId, questStep, taskIdx);
   }
   // Invariante: die fokussierte Quest ist (außer im Endzustand) immer offen – fehlt sie in
   // einem v4-Stand (kaputt/manipuliert), aus den linearen Feldern ergänzen.
-  if (currentQuestId !== "" && !active[currentQuestId]) active[currentQuestId] = { step: questStep, task: taskIdx };
+  if (currentQuestId !== "" && !active[currentQuestId]) active[currentQuestId] = clampProgress(currentQuestId, questStep, taskIdx);
   const activeQuests = canonicalActiveQuests(active);
   // Arbeitskopie aus der Autorität nachziehen: bei v4-Ständen kann der fokussierte Eintrag
-  // aktueller sein als die top-level questStep/taskIdx (Autorität gewinnt).
+  // aktueller sein als die top-level questStep/taskIdx (Autorität gewinnt). Danach die linearen
+  // Felder final gegen den Content klemmen (#511): deckt Endzustand (keine Quest → 0,0) und die
+  // Migrations-/Fallback-Zweige oben einheitlich ab; für den Autoritäts-Fall idempotent.
   const focus = currentQuestId !== "" ? activeQuests[currentQuestId] : undefined;
   if (focus) { questStep = focus.step; taskIdx = focus.task; }
+  ({ step: questStep, task: taskIdx } = clampProgress(currentQuestId, questStep, taskIdx));
 
   return {
     xp: safeCount(raw.xp, def.xp),

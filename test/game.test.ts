@@ -646,8 +646,8 @@ test("load: kaputte Zahlenfelder (String-Münzen, negative XP) fallen auf Defaul
   SaveStore.writeState({
     coins: "viel",   // falscher Typ -> KEINE String/NaN-Münzen
     xp: -50,         // negativ = unplausibel
-    questIdx: -3,    // negativer Index
-    taskIdx: 2.7,    // krumm -> abgerundet
+    questIdx: -3,    // negativer Index -> 0 (Onboarding-Quest)
+    taskIdx: 2.7,    // krumm + jenseits des Contents
     lastSeen: 0,     // keine Offline-Einnahmen
   } as Parameters<typeof SaveStore.writeState>[0]);
   Game.load();
@@ -656,7 +656,9 @@ test("load: kaputte Zahlenfelder (String-Münzen, negative XP) fallen auf Defaul
   expect(Number.isFinite(Game.state.coins)).toBe(true);
   expect(Game.state.xp).toBe(0);
   expect(Game.state.questIdx).toBe(0);
-  expect(Game.state.taskIdx).toBe(2);             // 2.7 -> 2 (ganzzahliger Index)
+  // questIdx 0 fokussiert die Onboarding-Quest; deren Schritt 0 ist ein Dialog ohne
+  // adressierbare Aufgaben -> taskIdx wird gegen den Content auf 0 gehärtet (#511).
+  expect(Game.state.taskIdx).toBe(0);
 });
 
 test("load: kaputte Sammlungen/Typen werden gefiltert oder verworfen", () => {
@@ -715,6 +717,91 @@ test("load: ein VOLLSTÄNDIG valider Stand überlebt unverändert (kein Over-San
   expect(Game.state.stats.stackBest).toBe(30);
   expect(Game.state.stats.stormsFixed).toBe(3);            // dynamische Zusatz-Stat bleibt
   expect(Game.state.introSeen).toBe(false);                // ohne Feld -> Default (Intro kommt noch)
+});
+
+/* ---------- #511: sanitizeState-Härtung (stats + questStep/taskIdx) ---------- */
+
+test("#511 stats: negative/gebrochene Werte werden gehärtet (>=0, floor) wie inventory/abbrevUsage", () => {
+  // Vor #511 übernahm sanitizeState jede ENDLICHE Zahl in stats – auch negative und
+  // gebrochene, im Gegensatz zu inventory/abbrevUsage. Jetzt: nur >=0, auf Ganzzahl gefloort.
+  Game.importData(JSON.stringify({ v: 3, data: { xp: 50, stats: {
+    commands: -5,      // negativ -> ungültig, bekannter Key behält seinen Default (0)
+    reviews: 3.9,      // gebrochen -> auf 3 gefloort
+    stormsFixed: -2,   // negative dynamische Stat -> fällt weg (nicht übernommen)
+    brave: 4.7,        // gebrochene dynamische Stat -> auf 4 gefloort übernommen
+  } } }));
+  Game.load();
+  expect(Game.state.stats.commands).toBe(0);        // negativer bekannter Wert -> Default
+  expect(Game.state.stats.reviews).toBe(3);         // gefloort
+  expect(Game.state.stats.stormsFixed).toBeUndefined(); // negative dynamische Stat verworfen
+  expect(Game.state.stats.brave).toBe(4);           // gefloorte dynamische Stat bleibt
+});
+
+test("#511 questStep/taskIdx: jenseits des Contents werden gegen die Quest geklemmt (kein toter Zustand)", () => {
+  // Ein manipulierter/über viele Versionen gewanderter Stand kann questStep/taskIdx weit
+  // jenseits der real existierenden Schritte tragen. Ungeklemmt liefert currentStep() null.
+  const qi = 4;
+  const q = KQContent.QUESTS[qi];
+  const lastStep = q.steps[q.steps.length - 1];
+  const taskCount = lastStep.type === "terminal" ? lastStep.tasks.length : 0;
+  const expectedStep = q.steps.length - 1;
+  const expectedTask = taskCount > 0 ? taskCount - 1 : 0;
+
+  Game.importData(JSON.stringify({ v: 3, data: { questIdx: qi, questStep: 999, taskIdx: 999 } }));
+  Game.load();
+
+  expect(Game.state.questIdx).toBe(qi);
+  expect(Game.state.questStep).toBe(expectedStep);     // auf letzten realen Schritt geklemmt
+  expect(Game.state.taskIdx).toBe(expectedTask);       // gegen Aufgabenzahl des Schritts geklemmt
+  expect(Game.currentStep()).not.toBeNull();           // KEIN toter Quest-Zustand mehr
+  // Die Persistenz-Autorität (activeQuests) trägt denselben geklemmten Stand.
+  expect(Game.state.activeQuests[Game.state.currentQuestId]).toEqual({ step: expectedStep, task: expectedTask });
+});
+
+test("#511 questStep/taskIdx: aus der activeQuests-Autorität werden ebenfalls geklemmt", () => {
+  // v4+-Stände tragen den Fortschritt in activeQuests (Autorität) – auch der muss geklemmt
+  // werden, sonst persistiert ein 999-Schritt weiter und wird beim Fokussieren zum toten Zustand.
+  const qi = 4;
+  const q = KQContent.QUESTS[qi];
+  const id = q.id;
+  const expectedStep = q.steps.length - 1;
+  const lastStep = q.steps[expectedStep];
+  const expectedTask = lastStep.type === "terminal" && lastStep.tasks.length > 0 ? lastStep.tasks.length - 1 : 0;
+
+  Game.importData(JSON.stringify({ v: 4, data: {
+    questIdx: qi, currentQuestId: id, questStep: 0, taskIdx: 0,
+    activeQuests: { [id]: { step: 999, task: 999 } },
+  } }));
+  Game.load();
+
+  expect(Game.state.activeQuests[id]).toEqual({ step: expectedStep, task: expectedTask });
+  expect(Game.state.questStep).toBe(expectedStep);
+  expect(Game.currentStep()).not.toBeNull();
+});
+
+test("#511 questStep: ein valider Schritt überlebt unverändert (kein Over-Clamping)", () => {
+  Game.importData(JSON.stringify({ v: 3, data: { questIdx: 4, questStep: 1, taskIdx: 0 } }));
+  Game.load();
+  expect(Game.state.questStep).toBe(1);
+  expect(Game.state.taskIdx).toBe(0);
+});
+
+test("#511 taskIdx: ein gültiger Mid-Drill-Index überlebt (kein Over-Clamping von Drills)", () => {
+  // docker-run-options Schritt 3 ist ein Drill (count 3): taskIdx 0..2 sind echte Stände.
+  // Die Klemmung darf sie NICHT anfassen (sonst bräche ein Save mitten in der Übungsreihe).
+  Game.importData(JSON.stringify({ v: 3, data: { questIdx: 5, questStep: 3, taskIdx: 2 } }));
+  Game.load();
+  expect(Game.state.questStep).toBe(3);
+  expect(Game.state.taskIdx).toBe(2);
+});
+
+test("#511 taskIdx: über der Aufgabenzahl des Schritts wird geklemmt", () => {
+  // Derselbe Drill (count 3): ein taskIdx jenseits von count-1 fällt auf den letzten
+  // gültigen Aufgaben-Index zurück statt ins Leere zu zeigen.
+  Game.importData(JSON.stringify({ v: 3, data: { questIdx: 5, questStep: 3, taskIdx: 999 } }));
+  Game.load();
+  expect(Game.state.questStep).toBe(3);
+  expect(Game.state.taskIdx).toBe(2); // count - 1
 });
 
 test("introSeen (#288): Default ist false, valider Wert überlebt, kaputter fällt zurück", () => {
@@ -1061,11 +1148,14 @@ test("#410 defaultState: genau die erste Quest ist offen", () => {
 });
 
 test("#410 Migration: Alt-Stand (v3, kein activeQuests) -> fokussierte Einzel-Quest wird offen", () => {
-  Game.importData(JSON.stringify({ v: 3, data: { questIdx: 5, questStep: 2, taskIdx: 1, currentQuestId: KQContent.QUESTS[5].id } }));
+  // Schritt 3 von docker-run-options ist ein Drill (count 3) – taskIdx 1 ist dort ein
+  // ECHTER Mid-Drill-Stand und muss die Migration verlustfrei überstehen (#511: die
+  // taskIdx-Klemmung darf einen gültigen Aufgaben-Index NICHT anfassen).
+  Game.importData(JSON.stringify({ v: 3, data: { questIdx: 5, questStep: 3, taskIdx: 1, currentQuestId: KQContent.QUESTS[5].id } }));
   Game.load();
   // Genau ein offener Eintrag, mit dem migrierten Schritt-Stand – verlustfrei.
-  expect(Game.state.activeQuests).toEqual({ [KQContent.QUESTS[5].id]: { step: 2, task: 1 } });
-  expect(Game.state.questStep).toBe(2);
+  expect(Game.state.activeQuests).toEqual({ [KQContent.QUESTS[5].id]: { step: 3, task: 1 } });
+  expect(Game.state.questStep).toBe(3);
   expect(Game.state.taskIdx).toBe(1);
 });
 
