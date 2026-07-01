@@ -1,7 +1,7 @@
 # KubeQuest — Architektur-Analyse nach arc42
 
-> **Stand: 2026-07-01** (nach #475). Beschreibung + Bewertung der Architektur entlang der arc42-Gliederung (die Vorlage, die iSAQB lehrt).
-> Diese Datei ist die aktuelle, versionierte Architektur-Sicht. Sie **ergänzt** die ältere, Infrastruktur-fokussierte [architektur-analyse-2026-06.md](architektur-analyse-2026-06.md) (deren Baustellen #350/#389/#390/#391/#392/#393/#411/#413 inzwischen erledigt sind) um eine strukturierte Gesamtsicht.
+> **Stand: 2026-07-01** (nach #475; ergänzt um die iSAQB-Analyse #492–#524). Beschreibung + Bewertung der Architektur entlang der arc42-Gliederung (die Vorlage, die iSAQB lehrt).
+> Diese Datei ist die aktuelle, versionierte Architektur-**Gesamtsicht**. Sie **ergänzt** (a) die ältere, Infrastruktur-fokussierte [architektur-analyse-2026-06.md](architektur-analyse-2026-06.md) (deren Baustellen #350/#389/#390/#391/#392/#393/#411/#413 inzwischen erledigt sind) und (b) die frische, doku-unabhängige **[architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md)** (fünf Durchläufe je Schicht → 33 Tickets #492–#524; die Risiken/Qualitäts-Aktualisierungen daraus sind unten in §8/§10/§11 eingearbeitet).
 > Umsetzungs-Reihenfolge: [ticket-reihenfolge.md](ticket-reihenfolge.md).
 
 ## 1. Einführung und Ziele
@@ -117,7 +117,22 @@ iSAQB ist **stil-neutral**: Architektur folgt Qualitätszielen, nicht Mode. Micr
 ### Weitere Querschnitts-Konzepte (Status)
 
 - **Sicherheit/Supply-Chain:** Dependabot + zweistufiges `npm audit`-CI-Gate (blockt nur ausgelieferte Deps). Dev-Panel aus Prod-Builds gestrippt + passwortgated. **Abgedeckt.**
-- **Determinismus/Zufall:** Tests brauchen Determinismus; Deko ist deterministisch geseedet, Zufallsevents (Piraten/Drills) brauchen eine bewusste Seed-Strategie — **als Konzept nicht dokumentiert** (kleine Schuld).
+- **Determinismus/Zufall:** Tests brauchen Determinismus; `observability.ts` macht es per FNV-Hash vor. Die iSAQB-Analyse fand aber **ungeseedeten `Math.random` in 8 puren Domänen-/Content-Dateien** (`sim/util`, `docker`, `helm`, `argocd`, `kubectl/ops|lifecycle|inspect`, `content/util`) — Widerspruch zum eigenen Anspruch, blockiert Golden-/Snapshot-Tests. → **zentrale seedbare RNG + Fitness-Function (#492).**
+- **Fehlerbehandlung/Diagnostik:** ad hoc — kein globaler `window.onerror`/`unhandledrejection`-Handler, kein Fallback-Overlay, Logging verstreut (`console.*`). Als arc42-§8-Konzept **noch offen (#504).**
+
+### Der rote Faden der iSAQB-Analyse 2026-07: struktur- vs. verhaltensbezogene Governance
+
+Die **strukturellen** Querschnittskonzepte sind exzellent mechanisiert (Schichtung, Zyklen-/Orphan-/Größen-/Doku-Drift-Wächter). Was fehlt, sind **verhaltensbezogene** Gates — obwohl die Infrastruktur je zur Hälfte existiert:
+
+| Verhaltens-Governance | Heute | Gate-Ticket |
+|---|---|---|
+| Determinismus | `Math.random` in der Domäne | #492 |
+| Coverage | 91 Tests, **0 Messung** | #495 |
+| Komplexität | nur LOC-Deckel (800), keine `complexity`-Regel | #502 |
+| Bundle-Größe | nur Warnung, kein Fail | #503 |
+| Fehler-Diagnostik | kein globaler Handler | #504 |
+
+Dazu kommt: an einzelnen **Grenzen hört die sonst konsequente Disziplin auf** — `scenario`/`applyEffects` ungeprüft (#494), `importData` umgeht die Migrationskette (#493), `WorldSceneLike = any` (#496). Kein Umbau, sondern Absicherung des bereits richtig Angelegten.
 
 ## 9. Architekturentscheidungen (ADRs)
 
@@ -130,6 +145,7 @@ iSAQB ist **stil-neutral**: Architektur folgt Qualitätszielen, nicht Mode. Micr
 | 0005 | Auslieferungsform Web vs. Desktop | **offen gehalten** (ergebnisoffener ADR + Re-Eval-Trigger) |
 | 0006 | Persistenz-Präzisierung: Engpass ist Eviction, nicht Kapazität → `storage.persist()` | präzisiert |
 | 0007 | Spielsystem-Fundamente (Quest-Modell, Checks-als-Daten, Zeit-Achse) | umgesetzt |
+| 0008 | **KI-Agenten-Harness** als Entwicklungsmodell (autonomer Ein-Ticket-Worktree-Workflow + Fitness-Functions als Leitplanken + selbstdokumentierendes Repo) | **geplant (#530)** — die prägendste Entscheidung, bisher nur in AGENTS.md/CLAUDE.md gelebt, nicht als ADR festgehalten. Kanonische Erklärung → `docs/agent-harness.md` (#526). |
 
 iSAQB-konform: jeder ADR trägt einen expliziten **Re-Evaluierungs-Trigger** — Entscheidungen sind an nachprüfbare Bedingungen geknüpft, nicht „für immer".
 
@@ -144,7 +160,10 @@ Konkrete Szenarien (Reiz → Reaktion) statt vager Adjektive:
 | Datensicherheit | Save-Format ändert sich → Migrationskette + Backup-Slot; Alt-Stand bricht nie | erfüllt |
 | Portabilität | Spiel weitergeben → ein Doppelklick-HTML, offline | erfüllt |
 | Wartbarkeit (KI) | Agent ändert Modul → Lint/Arch/Größe/**Doku-Drift** (#482)/Smoke fangen Fehler vor dem Merge | erfüllt |
-| Performance | Viele Inseln/Sprites → Culling greift, aber Assets werden noch eager geladen | teilweise |
+| Testbarkeit (Messung) | „Welche Teile sind untertestet?" → Coverage messbar mit Per-Verzeichnis-Schwellen | **offen (#495)** |
+| Determinismus | Domäne reproduzierbar → seedbare RNG, kein `Math.random` in `sim/`/`content/` | **teilweise (#492)** |
+| Zuverlässigkeit | Laufzeitfehler/Save-Fehler → sichtbarer Fallback statt schwarzem Canvas / stillem Verlust | **offen (#504/#497)** |
+| Performance | Viele Inseln/Sprites → Culling greift, aber Assets werden noch eager geladen; kein Bundle-Budget | teilweise (#503) |
 
 ## 11. Risiken und technische Schulden
 
@@ -157,10 +176,18 @@ Konkrete Szenarien (Reiz → Reaktion) statt vager Adjektive:
 | Barrierefreiheit ungeprüft (Farb-Status, Tastatur, Kontraste) | Lernspiel schließt Nutzer:innen aus | niedrig | #481 |
 | Invarianten um `ClusterState` verstreut | Neue Sim-Befehle können Zustandsregeln umgehen | niedrig | #478 |
 | Primitive statt Value Objects | Verwechslungs-/Validierungsfehler skalieren mit Befehlszahl | niedrig | #479 |
-| Deutsch fest verdrahtet (i18n) | Kein „gratis später" — bewusste Randbedingung | niedrig | — |
+| Deutsch fest verdrahtet (i18n) | Kein „gratis später" — bewusste Randbedingung (Content-Strings sind Daten, Code-Strings der teure Rest) | niedrig | — |
 | NPC-Routinen (#420) & Inventar (#421) zurückgestellt | Bekannte Scope-Fragen, bewusst geparkt | bekannt | #420/#421 |
+| **`Math.random` in der puren Domäne** | Widerspricht Determinismus-Anspruch; keine Golden-/Snapshot-Tests, kein „Seed teilen" | hoch | #492 |
+| **`importData` umgeht Migration + schreibt hüllenlos** | Wiederherstellungspfad bricht bei künftigen echten Migrationen („Save nie brechen") | hoch | #493 |
+| **`scenario`/`applyEffects` ungeprüft (as-Cast)** | Mechanik-nahe Struktur ohne Validierung → stille Fehler bei mehr Content | hoch | #494 |
+| **Coverage nirgends gemessen** | „untertestet?" ist Vermutung; Präsentation wächst ungemessen | hoch | #495 |
+| **`WorldSceneLike = any`** | 6 Systemmodule ungetypt → Renames/Tippfehler brechen zur Laufzeit | hoch | #496 |
+| Verhaltens-Governance fehlt (Komplexität/Bundle/Fehler-Diagnostik) | ungemessene Erosion bei Scale | mittel | #502/#503/#504 |
+| Spiel-/Bewertungslogik in DOM-Methoden; `events.ts` ungetestet | Kernlogik nur e2e-testbar; `economyTick` läuft nicht in RegionScene | mittel | #500/#512/#501 |
+| Value Objects/Invarianten/Workload nur teilverdrahtet | Namensgrenzen/Aggregat-Mutationen umgangen | mittel | #507/#508/#509 |
 
-**Gesamtverdikt:** Das Infrastruktur-Fundament trägt — Schichtung, Content-as-Data und versionierte Persistenz sind die richtigen, automatisch bewachten Weichen. Die offene Arbeit ist **Politur** (Asset-Skalierung, Präsentations-Tests) und **DDD-Präzisierung** (Sprache/Kontexte, Aggregat, Value Objects), kein Umbau.
+**Gesamtverdikt (aktualisiert nach der iSAQB-Analyse 2026-07):** Das Infrastruktur-Fundament trägt — Schichtung, Content-as-Data und versionierte Persistenz sind die richtigen, automatisch bewachten Weichen. Die frische Analyse bestätigt das, findet aber zwei konkrete Arbeitsstränge: (1) **verhaltensbezogene Governance** als Gate nachrüsten (Determinismus/Coverage/Komplexität/Bundle/Fehler — #492/#495/#502/#503/#504), und (2) die **wenigen Grenzen schließen, an denen die Disziplin aussetzt** (`scenario`-Validierung #494, `importData` #493, `WorldSceneLike` #496, VO/Invarianten/Workload #507–#509). Dazu zwei verifizierte latente Bugs (#501 economyTick, #493 hüllenloser Import). Alles **Präzisierung + Absicherung**, kein Umbau. Volle Details: [architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md).
 
 ## 12. Glossar & Kontext-Landkarte
 
