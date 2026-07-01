@@ -46,6 +46,7 @@ import { nslookupCommand, curlCommand } from "./sim/net";
 import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
 import { randSuffix, makePodName } from "./sim/util";
+import { assertClusterInvariants } from "./sim/invariants";
 import { renderHelp } from "./helptext";
 
   class Sim implements ClusterState {
@@ -90,6 +91,10 @@ import { renderHelp } from "./helptext";
     controlPlane!: { up: boolean; token: string | null; node: string | null };
     lastDeletedPod: string | null = null;
     lastError!: boolean;
+    // #478: Aggregat-Invarianten-Wächter (sim/invariants.ts). In Dev/Test an, im
+    // Prod-Build aus – Spieler:innen sehen nie einen Invarianten-Fehler, CI + Dev
+    // fangen jede Verletzung sofort (wie die Architektur-Fitness-Functions).
+    invariantChecks: boolean = !import.meta.env.PROD;
     // Alert-Verlauf der Sitzung (Observability #109). Wie memLimit ein reines
     // Laufzeit-Feld: NICHT serialisiert – Alerts leiten sich aus dem Cluster-Zustand
     // ab, nur der firing→resolved-Übergang braucht ein kurzes Gedächtnis.
@@ -692,6 +697,10 @@ import { renderHelp } from "./helptext";
                     : "Tippe 'help' für eine Liste der Befehle, die hier funktionieren.");
           }
         }
+        // #478: Aggregat-Grenze – nach jeder Befehls-Transaktion prüfen, dass der Cluster
+        // legal bleibt; eine Verletzung fällt in den catch unten (wird zur Fehlermeldung),
+        // statt still einen illegalen Zustand zu hinterlassen (Dev/Test, siehe invariantChecks).
+        if (this.invariantChecks) assertClusterInvariants(this);
       } catch (e) {
         this.lastError = true;
         out = "Hoppla, da ist im Simulator etwas schiefgegangen: " + (e instanceof Error ? e.message : String(e));
