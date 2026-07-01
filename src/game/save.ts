@@ -398,8 +398,15 @@ export const saveBundle = part({
   },
 
   importData(json: string) {
-    JSON.parse(json); // wirft bei ungültiger Datei
-    SaveStore.write(json);
+    const parsed = JSON.parse(json); // wirft bei ungültiger Datei
+    // #493: Import ist das letzte Netz (JSON-Backup). Er MUSS durch dieselbe Kette wie ein
+    // normaler Ladevorgang: erst aufs aktuelle FORMAT heben (Hülle erkennen/migrieren,
+    // migrateParsed), dann den INHALT defensiv härten (sanitizeState) und in der AKTUELLEN
+    // Versions-Hülle ablegen (writeState). Früher legte SaveStore.write(json) den String roh
+    // und HÜLLENLOS ab und umging Migration + Sanitize – ein hüllenloser oder aus einer
+    // anderen Version stammender Stand wurde dann beim nächsten readState als Version 0
+    // fehlinterpretiert (Verstoß gegen „Save darf nie brechen").
+    SaveStore.writeState(sanitizeState(SaveStore.migrateParsed(parsed)));
   },
 
   /* ---------- Mehrere Spielstände / Save-Slots (#306) ----------

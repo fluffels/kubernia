@@ -335,8 +335,8 @@
     //         Spielstand mehr bricht. Strukturell ein No-op: die Ableitung der ID aus dem
     //         alten questIdx (und das Auflösen ID -> Index) passiert ZENTRAL in
     //         game.ts › sanitizeState, weil sie ALLE Ladewege gleich treffen muss
-    //         (localStorage UND der rohe JSON-Import via Game.importData umgeht diese
-    //         Migrationskette). Der Versions-Bump sorgt hier dafür, dass jeder bestehende
+    //         (localStorage UND der rohe JSON-Import via Game.importData, der seit #493
+    //         ebenfalls durch migrateParsed + sanitizeState läuft). Der Versions-Bump sorgt hier dafür, dass jeder bestehende
     //         v1-Stand vor dem ersten Überschreiben in den Backup-Slot gesichert wird
     //         (readState) – kein Spieler verliert beim Update seinen Fortschritt.
     1: (data) => data,
@@ -345,22 +345,24 @@
     //         currentQuestId), also remappt die Migration alt -> neu. Wie bei 1->2 strukturell
     //         ein No-op auf store-Ebene: das eigentliche Remapping liegt in game.ts ›
     //         sanitizeState (LEGACY_QUEST_ID_MAP), damit es ALLE Ladewege trifft (auch der
-    //         rohe JSON-Import). Der Bump sichert jeden v2-Stand vor dem Überschreiben.
+    //         rohe JSON-Import, der seit #493 durch migrateParsed + sanitizeState läuft).
+    //         Der Bump sichert jeden v2-Stand vor dem Überschreiben.
     2: (data) => data,
     // 3 -> 4 (#410): Quest-Fortschritt von EINER fokussierten Quest (currentQuestId) auf eine
     //         MENGE offener Quests (activeQuests: Quest-ID -> {step,task}) erweitert, damit das
     //         Save-Format mehrere parallel/optional offene Quests trägt. Wie 1->2/2->3 strukturell
     //         ein No-op auf store-Ebene: das Bauen von activeQuests aus der fokussierten Einzel-
     //         Quest liegt ZENTRAL in game.ts › sanitizeState, weil es ALLE Ladewege treffen muss
-    //         (auch den rohen JSON-Import, der diese Kette umgeht). Der Bump sichert jeden v3-Stand
-    //         vor dem ersten Überschreiben in den Backup-Slot.
+    //         (auch den rohen JSON-Import, der seit #493 durch migrateParsed + sanitizeState läuft).
+    //         Der Bump sichert jeden v3-Stand vor dem ersten Überschreiben in den Backup-Slot.
     3: (data) => data,
     // 4 -> 5 (#413): persistente Spiel-Zeit-Achse `gameDays` (fraktionale Tageszahl) neu im
     //         GameState, damit Tag/Saison/Uhrzeit einen Reload überleben. Wie 1->2/2->3/3->4
     //         strukturell ein No-op auf store-Ebene: das Ergänzen des Default-Werts (0 = Tag 1,
     //         Mittag) liegt ZENTRAL in game.ts › sanitizeState (safeNonNegNum), damit es ALLE
-    //         Ladewege trifft (auch den rohen JSON-Import). Verlustfrei – vorher war die Zeit nie
-    //         gespeichert. Der Bump sichert jeden v4-Stand vor dem ersten Überschreiben ins Backup.
+    //         Ladewege trifft (auch den rohen JSON-Import, der seit #493 durch migrateParsed +
+    //         sanitizeState läuft). Verlustfrei – vorher war die Zeit nie gespeichert. Der Bump
+    //         sichert jeden v4-Stand vor dem ersten Überschreiben ins Backup.
     4: (data) => data,
   };
 
@@ -594,6 +596,22 @@
       // Keine Hülle = Alt-Stand der Format-Version 0 → wird migriert, also vorher sichern.
       backup(raw);
       return migrate(0, parsed);
+    },
+
+    /**
+     * Einen bereits GEPARSTEN Roh-Stand auf das aktuelle FORMAT heben und die reine Nutzlast
+     * (ohne Versions-Hülle) zurückgeben – dieselbe Format-Logik wie {@link readState}, aber auf
+     * einem ÜBERGEBENEN Wert statt aus dem Storage gelesen. Für den JSON-Import (#493): ein
+     * importierter Stand muss durch dieselbe Migrationskette wie ein geladener laufen, sonst
+     * wird ein hüllenloser oder aus einer anderen Version stammender Stand später als
+     * Format-Version 0 fehlinterpretiert.
+     *   - Versions-Hülle { v, data } → `data` von `v` hochmigrieren.
+     *   - blanker Alt-Stand (keine Hülle) → als Format-Version 0 migrieren.
+     * Der INHALT der Felder wird hier NICHT geprüft – das härtet der Aufrufer via sanitizeState.
+     * Kein Backup: das ist eine reine Format-Umrechnung, kein Überschreiben eines Stands.
+     */
+    migrateParsed(parsed: unknown): unknown {
+      return isEnvelope(parsed) ? migrate(parsed.v, parsed.data) : migrate(0, parsed);
     },
 
     /**

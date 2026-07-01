@@ -35,6 +35,7 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 
 let Game: typeof import("../src/game").Game;
 let SaveStore: typeof import("../src/store").SaveStore;
+let CURRENT_SAVE_VERSION: number;
 let lsMap: Map<string, string>;
 
 beforeAll(async () => {
@@ -49,7 +50,9 @@ beforeAll(async () => {
     },
   });
   ({ Game } = await import("../src/game"));
-  ({ SaveStore } = await import("../src/store"));
+  const store = await import("../src/store");
+  SaveStore = store.SaveStore;
+  CURRENT_SAVE_VERSION = store.CURRENT_SAVE_VERSION;
 });
 
 beforeEach(() => {
@@ -482,4 +485,89 @@ test("#436: load() mit vollständigem Snapshot überschreibt Snapshot-Dateien NI
   Game.load();
   // Snapshot-Version muss nach dem Laden unverändert erhalten bleiben.
   expect(Game.sim.files["Dockerfile"]).toBe("SNAPSHOT-VERSION-NIE-UEBERSCHREIBEN");
+});
+
+/* ============================================================================
+ * #493: JSON-Import (Game.importData) muss durch dieselbe Kette wie ein Ladevorgang.
+ * Früher legte importData den Roh-String via SaveStore.write HÜLLENLOS ab und umging
+ * Migration + sanitizeState → ein hüllenloser/fremdversionierter Stand wurde beim
+ * nächsten readState als Version 0 fehlinterpretiert. Jetzt: migrateParsed +
+ * sanitizeState + writeState in der aktuellen Versions-Hülle.
+ *
+ * RED-GREEN: alle Assertions prüfen den Zustand DIREKT NACH importData (ohne load()) –
+ * genau dort, wo der alte Code hüllenlos/ungehärtet schrieb. Mit dem alten importData
+ * gehen sie sofort rot.
+ * ========================================================================== */
+
+const ALL_FIXTURES = [
+  "savegame-v1-docker-arc.json", "savegame-v1-rich.json",
+  "savegame-v2-stale-index.json", "savegame-v2-allquests.json",
+  "savegame-v3-current.json", "savegame-v4-current.json", "savegame-v5-current.json",
+];
+
+test("#493 Import-Pfad: jeder Fixture-Stand (v1..v5) wird in der AKTUELLEN Versions-Hülle abgelegt (nicht hüllenlos/alt)", () => {
+  for (const f of ALL_FIXTURES) {
+    lsMap.clear();
+    Game.importData(fixtureRaw(f));
+    const raw = SaveStore.read();
+    expect(raw, `${f}: nach dem Import muss ein Stand gespeichert sein`).not.toBeNull();
+    const env = JSON.parse(raw!) as { v?: unknown; data?: unknown };
+    // Kern des Bugs: der importierte Stand liegt jetzt IN der aktuellen Hülle, nicht mehr
+    // roh in seiner Alt-Version (v1..v4) oder ganz ohne Hülle.
+    expect(env.v, `${f}: gespeicherte Version muss die aktuelle sein`).toBe(CURRENT_SAVE_VERSION);
+    expect(typeof env.data, `${f}: Nutzlast muss ein Objekt sein`).toBe("object");
+  }
+});
+
+test("#493 Import-Pfad: ein HÜLLENLOSER Alt-Stand (Format-Version 0) wird beim Import migriert + gehüllt", () => {
+  // Ein blanker GameState ohne { v, data }-Hülle – so lagen Stände VOR der Versionierung
+  // (bzw. so sieht eine handgeschriebene/fremde Backup-Datei aus). Der alte importData legte
+  // genau das roh ab → readState hätte es korrekt als v0 lesen müssen, aber es lief nie durch
+  // sanitizeState. Jetzt: als v0 migriert, gehärtet, in aktueller Hülle gespeichert.
+  Game.importData(JSON.stringify({ xp: 7, coins: 50, questIdx: 2 }));
+  const env = JSON.parse(SaveStore.read()!) as { v?: unknown; data?: { xp?: unknown; coins?: unknown } };
+  expect(env.v).toBe(CURRENT_SAVE_VERSION);
+  expect(env.data?.xp).toBe(7);
+  expect(env.data?.coins).toBe(50);
+});
+
+test("#493 Import-Pfad RED-GREEN: kaputter Stand wird schon BEIM IMPORT gehärtet (nicht erst beim Laden)", () => {
+  // savegame-v2-corrupt.json trägt Müllwerte (coins:"viel", xp:-50, clusterSnapshot:[1,2,3] …).
+  // Der alte importData schrieb genau diesen Müll roh weg; sanitizeState lief erst beim späteren
+  // load(). Jetzt härtet der Import selbst – der PERSISTIERTE Stand ist bereits sauber.
+  Game.importData(fixtureRaw("savegame-v2-corrupt.json"));
+  const env = JSON.parse(SaveStore.read()!) as { v?: unknown; data?: Record<string, unknown> };
+  expect(env.v).toBe(CURRENT_SAVE_VERSION);
+  const data = env.data!;
+  expect(data.coins).toBe(40);   // "viel" → Default
+  expect(data.xp).toBe(0);       // -50 → Default
+  expect(data.character).toBeNull(); // "Hans" → null
+  expect(Array.isArray(data.clusterSnapshot)).toBe(false); // [1,2,3] verworfen
+  // completedQuests war ein String → sauberes Array.
+  expect(Array.isArray(data.completedQuests)).toBe(true);
+});
+
+test("#493 Import-Pfad ≙ Ladepfad: importieren+laden ergibt exakt denselben kanonischen Stand wie direktes Laden", () => {
+  // Beide Wege müssen zu byte-identischer Persistenz führen – der Import ist nur ein weiterer
+  // Eingang in dieselbe Normalisierung. Uhr auf den gespeicherten lastSeen pinnen (keine
+  // Offline-Einnahmen), damit der Vergleich deterministisch ist.
+  const raw = fixtureRaw("savegame-v1-rich.json");
+  const env = JSON.parse(raw) as { data?: { lastSeen?: unknown } };
+  const lastSeen = typeof env?.data?.lastSeen === "number" ? env.data.lastSeen : 0;
+
+  // Pfad 1: direkt in die Persistenz einspielen + laden.
+  vi.setSystemTime(lastSeen);
+  lsMap.clear();
+  lsMap.set(SAVE_KEY, raw);
+  Game.load();
+  const viaLoad = SaveStore.read();
+
+  // Pfad 2: über den JSON-Import + laden.
+  vi.setSystemTime(lastSeen);
+  lsMap.clear();
+  Game.importData(raw);
+  Game.load();
+  const viaImport = SaveStore.read();
+
+  expect(viaImport).toBe(viaLoad);
 });
