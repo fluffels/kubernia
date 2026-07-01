@@ -1,7 +1,7 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-07-01 — zuletzt #477:** Ubiquitous Language + Kontext-Landkarte sichtbar gemacht. Neue SSOT **[docs/glossar.md](glossar.md)** (Glossar Hafen↔K8s↔Code + die 3 Subdomänen je mit Sprache/Verzeichnissen/Tiefendoc); arc42 §8/§11/§12 auf die SSOT umgestellt, aus CLAUDE.md verlinkt. Prüfung DoD 3: Tiefendocs schneiden bereits entlang der Grenzen, `content.md` bleibt bewusster Shared Kernel. Reines Doku-Ticket, kein Code-Umbau.
-> **Kuratierung 2026-07-01 (SIG-AI-Harness-Diskussion + arc42-Analyse, [arc42-architektur.md](arc42-architektur.md)):** Auf Maintainerin-Wunsch stehen **alle heutigen Architektur-/Harness-Tickets als ein Block ganz oben** — die DDD-Präzisierung #478/#479 (arc42) plus die zwei Harness-Tickets **#482** (Doku↔Code-Drift-Wächter, macht die Architektur-Doku maschinell wahr) und **#483** (kontext-lokale Regeln pro Sub-Modul), dazu #480 (Präsentations-Tests) und #481 (Barrierefreiheit). #477 (benennt die Kontexte) ist erledigt; **#482/#483 setzen darauf auf.** **Nächstes freies Ticket = oberstes des Kopfes** (#482).
+> **Stand: 2026-07-01 — zuletzt #482:** Doku↔Code-Drift-Wächter gebaut. Neuer Fitness-Function-Wächter `scripts/check-docmap.mjs` (CLI `npm run check:docmap` + `test/docmap.test.ts`, CI-Gate) prüft die CLAUDE.md-Landkarte gegen den Code: keine Geister-Zeilen, keine verwaisten Module, Schicht-Konsistenz. Gemeinsame Schicht-Quelle `scripts/layers.cjs` (auch vom dependency-cruiser genutzt — eine Wahrheit statt zwei). Angleichung: 6 nicht kartierte `content/`-Module in die Landkarte ergänzt. Baut auf #477 auf.
+> **Kuratierung 2026-07-01 (SIG-AI-Harness-Diskussion + arc42-Analyse, [arc42-architektur.md](arc42-architektur.md)):** Auf Maintainerin-Wunsch stehen **alle heutigen Architektur-/Harness-Tickets als ein Block ganz oben** — die DDD-Präzisierung #478/#479 (arc42) plus das Harness-Ticket **#483** (kontext-lokale Regeln pro Sub-Modul), dazu #480 (Präsentations-Tests) und #481 (Barrierefreiheit). #477 (benennt die Kontexte) und #482 (Doku↔Code-Wächter, macht die Landkarte maschinell wahr) sind erledigt; **#483 setzt darauf auf.** **Nächstes freies Ticket = oberstes des Kopfes** (#478).
 >
 > _Frühere Tickets (Kurzfassung — volle Details in git-History + Brain `Projekte/KubeQuest`):_ #475 Test-Harness konsolidiert (`test/support/` + `test/factories/`, „Verhalten über öffentliche API testen") · #443 Phaser 4 evaluiert & bewusst verschoben (Renderer-Bug 4.2.0 bei kleine-Welt-Szenen, bleiben auf 3.90.x, Re-Eval per Folge-Ticket) · #296 Reset-Fix im Browser verifiziert (+ #473 angelegt) · #382 Worktree-Pfad-Konvention vereinheitlicht · #441 Knut-Sprite Asset-Hygiene · #362 freies Funken „Was ist gerade passiert?"-Erklärung · #359 `help` im CLI-Format · #358 `help` zeigt nur Freigeschaltetes · #328 Sandbox-Vertiefungs-Quiz · #278 Sammelalbum/Glossar · #279 Lernkarten-Backfill · #460–#466 Aufbau-Bogen (Epic #239, kubeadm + Terraform-Cluster) · #430 Gating-Konsistenz · #281/#282 Keycloak-/CI-Vertiefung · #237 Kralle-Gag.
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
@@ -49,31 +49,30 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
 | | **— ⭐ Architektur & Harness (SIG-AI-Diskussion + arc42, 2026-07; von der Maintainerin komplett nach oben priorisiert) —** | | | |
-| 1 | **#482** | hoch | Architektur-Fitness-Function: arc42-/Landkarten-Grenzen maschinell gegen den Code erzwingen (Doku↔Code-Drift-Wächter) | Macht die Doku als Kontext-Selektor **verlässlich** (Drift wird rot). Baut auf #477 auf (erzwingt die dort benannten Grenzen). Test-first, CI-Gate. |
-| 2 | **#478** | hoch | ClusterState als Aggregat — Invarianten kapseln (illegale Cluster-Zustände un-konstruierbar) | Taktisches DDD; härtet die Domäne vor dem Befehls-Wachstum. Test-first. |
-| 3 | **#483** | mittel | Kontext-lokale Regeln pro Sub-Modul (Content-as-Data & Co.) statt verstreut in AGENTS.md | Operationalisiert den Kontext-Selektor (Agent lädt nur sein Modul). Baut auf #477 auf (benannte Kontexte); beginnt mit `src/content/`. |
-| 4 | **#479** | mittel | Value Objects für Domänen-Primitive (PodName, Dublonen …) hinter stabiler API | Inkrementell; sinnvoll **nach** #478 (Aggregat gibt die Grenzen vor). |
-| 5 | **#480** | mittel | Präsentations-Regressionsnetz über den Boot-Smoke hinaus (schlanke Interaktions-Smokes) | arc42-Testlücke: Präsentation nur manuell + 1 Boot-Smoke geprüft; schlankes Playwright-Netz für kritische Flows. |
-| 6 | **#481** | niedrig | Barrierefreiheit prüfen: farb-unabhängige Statuscodierung, Tastatur-Vollbedienung, Kontraste | Heutiges arc42-Architektur-Ticket; im Block mitgezogen, unten (niedrig, keine Abhängigkeit). |
+| 1 | **#478** | hoch | ClusterState als Aggregat — Invarianten kapseln (illegale Cluster-Zustände un-konstruierbar) | Taktisches DDD; härtet die Domäne vor dem Befehls-Wachstum. Test-first. |
+| 2 | **#483** | mittel | Kontext-lokale Regeln pro Sub-Modul (Content-as-Data & Co.) statt verstreut in AGENTS.md | Operationalisiert den Kontext-Selektor (Agent lädt nur sein Modul). Baut auf #477/#482 auf (benannte + maschinell bewachte Kontexte); beginnt mit `src/content/`. |
+| 3 | **#479** | mittel | Value Objects für Domänen-Primitive (PodName, Dublonen …) hinter stabiler API | Inkrementell; sinnvoll **nach** #478 (Aggregat gibt die Grenzen vor). |
+| 4 | **#480** | mittel | Präsentations-Regressionsnetz über den Boot-Smoke hinaus (schlanke Interaktions-Smokes) | arc42-Testlücke: Präsentation nur manuell + 1 Boot-Smoke geprüft; schlankes Playwright-Netz für kritische Flows. |
+| 5 | **#481** | niedrig | Barrierefreiheit prüfen: farb-unabhängige Statuscodierung, Tastatur-Vollbedienung, Kontraste | Heutiges arc42-Architektur-Ticket; im Block mitgezogen, unten (niedrig, keine Abhängigkeit). |
 | | **— Tiefer Lernpfad (Aufbau-Bogen #239 komplett: #460–#466 erledigt; #279 Backfill + #278 Sammelalbum + #328 Sandbox-Lernthema erledigt) —** | | | |
 | | **— System / QoL —** | | | |
-| 7 | **#318** | niedrig | HUD: Einkommensrate des Hafens/Clusters anzeigen (Dublonen/Stunde) | Auto-Rest hochgezogen (Prio→Nummer); kleines HUD-Feature ohne Abhängigkeit. |
+| 6 | **#318** | niedrig | HUD: Einkommensrate des Hafens/Clusters anzeigen (Dublonen/Stunde) | Auto-Rest hochgezogen (Prio→Nummer); kleines HUD-Feature ohne Abhängigkeit. |
 | | **— Anlegende / Epic —** | | | |
-| 8 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
-| 9 | **#317** 📦 | niedrig | EPIC: Komfort-Funktionen im Shop kaufen + Shop-Überarbeitung | **Epic → mit der Aufteilung loslegen** (session-große Kinder anlegen, Epic auf done schließen). |
+| 7 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
+| 8 | **#317** 📦 | niedrig | EPIC: Komfort-Funktionen im Shop kaufen + Shop-Überarbeitung | **Epic → mit der Aufteilung loslegen** (session-große Kinder anlegen, Epic auf done schließen). |
 | | **— 🎨 Optik / Grafik (werden GANZ NORMAL automatisch gewählt; das Aussehen stimmt der Agent WÄHREND der Umsetzung per Rückfrage mit der Maintainerin ab — Referenz/Vorschlag/generiertes Asset vorlegen, entscheiden lassen, iterieren; NICHT vorab gaten, NICHT selbst das Design festlegen) —** | | | |
-| 10 | **#183** 🎨 | niedrig | Hafen-Kanone als Pixelart-Asset statt Emoji 💣 | Optik — Asset-Look während der Umsetzung abstimmen. |
-| 11 | **#186** 🎨 | niedrig | Außen-Türen der Gebäude als Pixelart statt prozeduraler Rechtecke | Optik — Look während der Umsetzung abstimmen. |
-| 12 | **#187** 🎨 | niedrig | Interior-Einrichtung (Bullaugen/Türen/Wandschatten) als Pixelart | Optik — Look während der Umsetzung abstimmen. |
-| 13 | **#190** 🎨 | niedrig | Overlay-Panels (Funkgerät/Logbuch/Shop/Quiz/Stapel/Menü) im Stardew-Look | Optik — Look während der Umsetzung abstimmen. |
-| 14 | **#204** 🎨 | niedrig | HUD-/Panel-Emojis durch PixelLab-Pixel-Icons ersetzen | Optik — Look während der Umsetzung abstimmen. |
-| 15 | **#223** 🎨 | niedrig | Rang-Aufstieg mit Feier-Popup (alter → neuer Rang) statt nur Toast | Optik/UX — gehört mit #314 zusammen; Look während der Umsetzung abstimmen. |
-| 16 | **#238** 🎨 | niedrig | Container laufen visuell in Pods (Fässer im Schiffsrumpf) | Optik/Visualisierung — Look während der Umsetzung abstimmen. |
-| 17 | **#289** 🎨 | niedrig | Kenney-Tilesets (town/dungeon) durch PixelLab ersetzen, dann entfernen | Auto-Rest hochgezogen (Prio→Nummer); Optik — Look während der Umsetzung abstimmen. |
-| 18 | **#303** 🎨 | niedrig | Gestoppte Container visuell ins Lager verschieben (statt am Dock) | Auto-Rest hochgezogen (Prio→Nummer); Optik/Visualisierung — Look während der Umsetzung abstimmen. |
-| 19 | **#314** 🎨 | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | Optik — Look während der Umsetzung abstimmen (übergreift #223). |
+| 9 | **#183** 🎨 | niedrig | Hafen-Kanone als Pixelart-Asset statt Emoji 💣 | Optik — Asset-Look während der Umsetzung abstimmen. |
+| 10 | **#186** 🎨 | niedrig | Außen-Türen der Gebäude als Pixelart statt prozeduraler Rechtecke | Optik — Look während der Umsetzung abstimmen. |
+| 11 | **#187** 🎨 | niedrig | Interior-Einrichtung (Bullaugen/Türen/Wandschatten) als Pixelart | Optik — Look während der Umsetzung abstimmen. |
+| 12 | **#190** 🎨 | niedrig | Overlay-Panels (Funkgerät/Logbuch/Shop/Quiz/Stapel/Menü) im Stardew-Look | Optik — Look während der Umsetzung abstimmen. |
+| 13 | **#204** 🎨 | niedrig | HUD-/Panel-Emojis durch PixelLab-Pixel-Icons ersetzen | Optik — Look während der Umsetzung abstimmen. |
+| 14 | **#223** 🎨 | niedrig | Rang-Aufstieg mit Feier-Popup (alter → neuer Rang) statt nur Toast | Optik/UX — gehört mit #314 zusammen; Look während der Umsetzung abstimmen. |
+| 15 | **#238** 🎨 | niedrig | Container laufen visuell in Pods (Fässer im Schiffsrumpf) | Optik/Visualisierung — Look während der Umsetzung abstimmen. |
+| 16 | **#289** 🎨 | niedrig | Kenney-Tilesets (town/dungeon) durch PixelLab ersetzen, dann entfernen | Auto-Rest hochgezogen (Prio→Nummer); Optik — Look während der Umsetzung abstimmen. |
+| 17 | **#303** 🎨 | niedrig | Gestoppte Container visuell ins Lager verschieben (statt am Dock) | Auto-Rest hochgezogen (Prio→Nummer); Optik/Visualisierung — Look während der Umsetzung abstimmen. |
+| 18 | **#314** 🎨 | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | Optik — Look während der Umsetzung abstimmen (übergreift #223). |
 | | **— Zuletzt —** | | | |
-| 20 | **#293** | niedrig | Spiellogik-Review (anlegend) | Steht bewusst **zuletzt** (reine Positionierung, kein Gate) — erst wenn der Backlog weitgehend leer ist, sonst veraltet das Review sofort. Erzeugt Folge-Tickets. |
+| 19 | **#293** | niedrig | Spiellogik-Review (anlegend) | Steht bewusst **zuletzt** (reine Positionierung, kein Gate) — erst wenn der Backlog weitgehend leer ist, sonst veraltet das Review sofort. Erzeugt Folge-Tickets. |
 
 > **#443 (Phaser 4)** ist aus dem Kopf raus: evaluiert und bewusst verschoben (Renderer-Bug in 4.2.0 bei kleine-Welt-Szenen, kein Quick-Fix). Re-Eval läuft über das Folge-Ticket, sobald Phaser 4 reift / der Bug upstream gefixt ist. Details: [ADR 0001](adr/0001-engine-phaser.md).
 
