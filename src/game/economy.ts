@@ -5,21 +5,10 @@
 import { KQContent } from "../content";
 import { add, applyMultiplier, canAfford, subtract, toCoins } from "../coins";
 import type { EventMode } from "../types";
-import { part, isEventMode, today } from "./shared";
+import { part, isEventMode, today, type EventProfile } from "./shared";
 
-/** Konkrete Stellschrauben pro Spiel-Feel-Stufe (#71). Bewusst eine reine
- *  Daten-Tabelle, damit Wirtschaft (hier) und Events (scenes.ts, via Game.eventProfile())
- *  dieselbe Quelle nutzen und sie testbar bleibt. */
-export interface EventProfile {
-  /** Faktor auf die Wartezeit bis zum nächsten Event (größer = seltener; Infinity = nie). */
-  spawnScale: number;
-  /** Faktor auf die Reparatur-Deadline (größer = mehr Zeit = sanfter). */
-  deadlineScale: number;
-  /** Anteil der Einnahmen, den ein kaputter Dienst trotzdem abwirft (0 = voller Malus, 1 = kein Malus). */
-  malusFactor: number;
-  /** Schaltet Zufalls-Events ganz an/aus. */
-  enabled: boolean;
-}
+// EventProfile (Spiel-Feel-Stellschrauben #71) liegt seit #513 in shared.ts, weil GameApi sie
+// als Rückgabetyp von eventProfile() braucht; die konkrete Tabelle bleibt hier.
 const EVENT_PROFILES: Record<EventMode, EventProfile> = {
   normal: { spawnScale: 1, deadlineScale: 1, malusFactor: 0, enabled: true },
   cozy: { spawnScale: 2, deadlineScale: 1.5, malusFactor: 0.5, enabled: true },

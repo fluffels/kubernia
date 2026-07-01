@@ -6,10 +6,11 @@ import { KQContent } from "../content";
 import { KQAssets } from "../assets-data";
 
 /** this-Typ der UI-Methodenbündel: permissiv, da Methoden quer über Bündel auf this.* zugreifen.
- *  Bewusster ThisType-Escape-Hatch (analog `GameSelf` in game/shared.ts): die Index-Signatur
- *  lässt sich hier NICHT durch `unknown` ersetzen, weil sonst die quer aufgerufenen Methoden
- *  (this.foo()) nicht mehr aufrufbar wären (zirkulärer this-Typ). Darum hier – und nur hier –
- *  ein begründetes `any`. */
+ *  Bewusster ThisType-Escape-Hatch: die Index-Signatur lässt sich hier NICHT durch `unknown`
+ *  ersetzen, weil sonst die quer aufgerufenen Methoden (this.foo()) nicht mehr aufrufbar wären
+ *  (zirkulärer this-Typ). Darum hier – und nur hier – ein begründetes `any`. (game/shared.ts hat
+ *  diese Oberfläche mit #513 auf ein explizites `GameApi`-Interface umgestellt; für die UI wäre
+ *  dieselbe Übung ein eigenes, größeres Ticket.) */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type UISelf = Record<string, any>;
 /** Typisiert ein Methodenbündel so, dass this = UISelf ist, ohne die Methoden-Signaturen zu verlieren. */

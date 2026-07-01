@@ -70,8 +70,8 @@ type NamedRes = { name: string };
 
 /* Registry-Zugriff auf die gleichnamige Liste. TypeScript kann die per-Schlüssel-Korrelation
  * der Union-Typen (Live-Zustand ↔ Szenario) nicht ausdrücken (kein „correlated unions"),
- * darum hier drei eng gekapselte, dokumentierte `any`-Brücken – analog zu den bewusst nötigen
- * ThisType-Escape-Hatches (GameSelf/UISelf) des Projekts. Die Element-Semantik bleibt korrekt
+ * darum hier drei eng gekapselte, dokumentierte `any`-Brücken – analog zum bewusst nötigen
+ * ThisType-Escape-Hatch (UISelf) des Projekts. Die Element-Semantik bleibt korrekt
  * (alle Typen sind `{name}`-Ressourcen; die Klon-/Dedup-Logik hängt nur an `.name`). */
 function simpleList(obj: object, key: SimpleResourceKey): NamedRes[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

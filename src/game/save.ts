@@ -9,7 +9,7 @@ import { SaveStore } from "../store";
 import { worldScene, applyAudioConfig, notifySaveFailed } from "../runtime";
 import { add, toCoins } from "../coins";
 import type { GameState, QuestProgress } from "../types";
-import { part, makeDefaultState, questIdForIndex, questIndexForId, canonicalActiveQuests, isEventMode, ALL_ABBREV_UNLOCKED } from "./shared";
+import { part, makeDefaultState, questIdForIndex, questIndexForId, canonicalActiveQuests, isEventMode, ALL_ABBREV_UNLOCKED, type SlotView } from "./shared";
 
 /** Save-Migration #354: alte numerische Quest-IDs (q0, q2b, …) → neue sprechende Slugs.
  *  Quest-IDs sind in Spielständen persistiert (completedQuests + currentQuestId aus #353),
@@ -51,26 +51,6 @@ function migrateQuestId(id: string): string {
  * GameState – kein Crash, kein NaN. */
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
-/** Anzeigefertige Slot-Beschreibung für den Spielstand-Wähler (#306). Die Anwendungsschicht
- *  leitet hier Rang/Quest-Titel aus den Roh-Zahlen ab, damit die UI dumm bleibt. */
-export interface SlotView {
-  id: string;
-  name: string;
-  /** Ist das der gerade gespielte Slot? */
-  active: boolean;
-  /** Frischer, noch nicht bespielter Slot (keine Vorschau/kein Charakter)? */
-  isNew: boolean;
-  xp: number;
-  rankIcon: string;
-  rankName: string;
-  /** Index der fokussierten Quest (0-basiert) bzw. = questTotal im Endzustand. */
-  questIdx: number;
-  questTotal: number;
-  questTitle: string;
-  /** Zeitstempel des letzten Speicherns (ms), 0 = noch nie. */
-  lastSeen: number;
 }
 
 /** Die opake Slot-Vorschau (summary) defensiv lesen: eine endliche Zahl unter `key`, sonst Default. */
