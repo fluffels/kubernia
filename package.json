@@ -24,7 +24,9 @@
     "check:arch": "depcruise src --config .dependency-cruiser.cjs",
     "check:size": "node scripts/check-size.mjs",
     "check:docmap": "node scripts/check-docmap.mjs",
-    "lint": "eslint . --max-warnings 0"
+    "lint": "eslint . --max-warnings 0",
+    "verify": "npm run typecheck && npm run lint && npm run check:arch && npm run check:size && npm run check:docmap && npm test",
+    "verify:full": "npm run verify && npm run build && npm run build:offline && npm run test:smoke"
   },
   "dependencies": {
     "phaser": "^3.87.0"
