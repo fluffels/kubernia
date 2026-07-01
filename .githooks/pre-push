@@ -9,8 +9,10 @@
 # `main` rot machen, und ein paralleler Agent baut dann auf rotem `main` auf.
 #
 # Dieser Hook fährt die schnellen Gates (`npm run verify`: typecheck → lint
-# → check:arch → check:size → check:docmap → test) LOKAL, BEVOR ein Push auf
-# `main` das Remote erreicht, und bricht den Push bei Rot ab.
+# → check:arch → check:size → check:docmap → check:docdrift → check:diffsize
+# → test) LOKAL, BEVOR ein Push auf `main` das Remote erreicht, und bricht den
+# Push bei Rot ab. Genau hier beißt auch check:diffsize (#533): der Slice gegen
+# main ist vor dem Push messbar, ein zu breiter Push auf main wird abgebrochen.
 #
 # Bewusste Grenzen:
 #  - Nur bei Push auf `main` — Feature-Branch-Pushes bleiben schnell.
