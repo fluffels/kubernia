@@ -175,7 +175,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/scenes/worldscene/clustersync.ts`](src/scenes/worldscene/clustersync.ts) | Präsentation | Cluster→Welt-Sync: Pod-Kisten + dynamische Tags als Daten + gedeckelter Render-Pool (#393/#416). |
 | [`src/scenes/worldscene/events.ts`](src/scenes/worldscene/events.ts) | Präsentation | Zufalls-Gefahren: Piraten/Krake/Sturm + Terminierung (#393). |
 | [`src/scenes/worldscene/warps.ts`](src/scenes/worldscene/warps.ts) | Präsentation | Übergänge Haus/Archipel/Leuchtturm/Lager + Warp-Gates (#393). |
-| [`src/scenes/worldscene/types.ts`](src/scenes/worldscene/types.ts) | Präsentation | Struktur-Typ `WorldSceneLike` fürs System-Modul-Muster (#393). |
+| [`src/scenes/worldscene/types.ts`](src/scenes/worldscene/types.ts) | Präsentation | Feld-/Primitive-Interface `WorldSceneFields` (WorldScene `implements` es) + `WorldSceneLike = Phaser.Scene & WorldSceneFields` fürs System-Modul-Muster; volltypisiert statt `any` (#393/#496). |
 | [`src/scenes/InteriorScene.ts`](src/scenes/InteriorScene.ts) | Präsentation | Betretbarer Hausinnenraum (#6). |
 | [`src/scenes/RegionScene.ts`](src/scenes/RegionScene.ts) | Präsentation | EINE datengetriebene Szene für alle Nachbar-Regionen (Archipel/Leuchtturm/Lager/Wachturm), gesteuert über eine `RegionConfig` (#427); ersetzt die früheren Insel-Szenen-Klassen. |
 | [`src/scenes/regions.ts`](src/scenes/regions.ts) | Präsentation | Die `RegionConfig`-Liste (`REGION_CONFIGS`): Archipel #92/Leuchtturm #111/Lager #124/Wachturm #130 als Daten + `decorate`-Hooks für echte Sondermechanik (Bäume/Statue, Lichtkegel, Lager-Güter, Wachturm-Platzhalter), #427. |

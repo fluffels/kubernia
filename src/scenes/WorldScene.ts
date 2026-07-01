@@ -22,6 +22,14 @@ import { spawnGull, spawnFlowers, spawnGrassDetail, scatter, renderStatics, upda
 import { syncCluster, updateDynamicTags } from "./worldscene/clustersync";
 import { scheduleEvents, tickEvents } from "./worldscene/events";
 import { updateWarps } from "./worldscene/warps";
+// #496: die Feld-Typen + das WorldSceneFields-Interface liegen in worldscene/types.ts
+// (dieselbe Datei wie WorldSceneLike). Die Klasse implementiert WorldSceneFields, damit
+// der Compiler garantiert, dass jedes Feld/jede Render-Primitive, die die Systemmodule
+// über WorldSceneLike sehen, hier wirklich existiert – ohne dass ein Modul eine zweite
+// Feldliste von Hand pflegt (frühere DynTagLike-Doppelpflege).
+import type {
+  WorldSceneFields, DecoItem, LabelSpec, DynTagData, PodSlot, Butterfly, PlayerPos, Hazards,
+} from "./worldscene/types";
 
 /* #343/#386: Sub-Tile-Kollisionsradien (Pixel). Steine, Büsche und NPCs prallen nicht
  * mehr als volles 16×16-Quadrat ab, sondern als runde Hitbox um ihren Mittelpunkt – so
@@ -32,37 +40,7 @@ const ROCK_HIT_R = 6;
 const BUSH_HIT_R = 6;
 const LAMP_HIT: readonly [number, number] = [6, 10];   // Pfosten: schmale Rechteck-Hitbox (B×H)
 
-/* ── Laufzeit-Typen der WorldScene-Felder (#423): ersetzen die frühere
- *    `[key: string]: any`-Index-Signatur durch echte Typen. ── */
-/** Gesetztes/gestreutes Deko-Element (Bäume/Möbel/Objekte) – renderStatics liest es. */
-interface DecoItem { x: number; y: number; sheet: string; idx?: number; obj?: boolean; scale?: number; }
-/** Festes Orts-Schild als Daten (gesammelt, bevor renderStatics es als 9-Slice baut). */
-interface LabelSpec { x: number; y: number; text: string; color?: string; depth?: number; }
-/** Dynamisches Cluster-Tag als DATEN (#416): kein Dauer-Container mehr je Tag,
- *  sondern Position/Text/Status. Nur die JETZT sichtbaren bekommen pro Frame einen
- *  Container aus `tagPool` (updateDynamicTags). `tx,ty` = Tag-Position (ty = Basis
- *  fürs Entzerren), `ax,ay` = Bezugs-Objekt (Distanz zur Figur + Tiefe). */
-interface DynTagData { tx: number; ty: number; ax: number; ay: number; text: string; status: number; compact: boolean; }
-/** Pod-Kiste an einem Steg-Slot (Cluster→Welt-Sync). */
-interface PodSlot { slot: number; crate: Phaser.GameObjects.Image; band: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; dep: string; }
-/** Über die Wiese flatternder Schmetterling. */
-interface Butterfly { spr: Phaser.GameObjects.Image; ax: number; ay: number; ph: number; sp: number; }
-/** Spieler-Laufzeitzustand der Hauptkarte (wie `ScenePlayer`, plus `dir` für den Wurf). */
-interface PlayerPos { x: number; y: number; dir: number; moving: boolean; face: string; }
-/** Zufalls-Gefahren-Beutel der Hauptkarte (worldscene/events.ts schreibt/liest ihn).
- *  Hieß früher `events` und überschrieb damit Phasers geerbten EventEmitter mit `any`
- *  (genau das war die Warnung) – jetzt ein eigenes, getipptes Feld `hazards`. */
-interface Hazards {
-  nextPirate: number;
-  nextKraken: number;
-  nextStorm: number;
-  pirate: { dep: string; want: number; boat: Phaser.GameObjects.Container; until: number } | null;
-  kraken: { kraken: Phaser.GameObjects.Container; baseline: number; until: number } | null;
-  storm: { dep: string; until: number } | null;
-  stormFlash: Phaser.Time.TimerEvent | null;
-}
-
-export class WorldScene extends Phaser.Scene {
+export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   // Welt-Raster + Kollision
   W!: number;
   H!: number;

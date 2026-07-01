@@ -183,17 +183,22 @@ export function tickEvents(scene: WorldSceneLike, time: number) {
   if (now > scene.hazards.nextPirate) tryStartPirate(scene);
   if (now > scene.hazards.nextKraken) tryStartKraken(scene);
   if (now > scene.hazards.nextStorm) tryStartStorm(scene);
-  if (scene.hazards.storm) {
-    const dep = Game.sim.deployments.find(d => d.name === scene.hazards.storm.dep);
+  // #496: den non-null-narrowten Beutel in einer lokalen Konstante festhalten – TS
+  // kann die Verengung aus dem `if` sonst nicht in die `.find()`-Closure tragen (das
+  // versteckte vorher die `[key: string]: any`-Sicht der Szene).
+  const storm = scene.hazards.storm;
+  if (storm) {
+    const dep = Game.sim.deployments.find(d => d.name === storm.dep);
     if (!dep || !dep.broken) resolveStorm(scene, true);
-    else if (now > scene.hazards.storm.until) resolveStorm(scene, false);
-    else UI.updateAlarmTimer(Math.ceil(scene.hazards.storm.until - now));
+    else if (now > storm.until) resolveStorm(scene, false);
+    else UI.updateAlarmTimer(Math.ceil(storm.until - now));
   }
-  if (scene.hazards.pirate) {
-    const dep = Game.sim.deployments.find(d => d.name === scene.hazards.pirate.dep);
-    if (dep && dep.replicas >= scene.hazards.pirate.want) resolvePirate(scene, true);
-    else if (now > scene.hazards.pirate.until) resolvePirate(scene, false);
-    else UI.updateAlarmTimer(Math.ceil(scene.hazards.pirate.until - now));
+  const pirate = scene.hazards.pirate;
+  if (pirate) {
+    const dep = Game.sim.deployments.find(d => d.name === pirate.dep);
+    if (dep && dep.replicas >= pirate.want) resolvePirate(scene, true);
+    else if (now > pirate.until) resolvePirate(scene, false);
+    else UI.updateAlarmTimer(Math.ceil(pirate.until - now));
   }
   if (scene.hazards.kraken) {
     if (Game.sim.secrets.length > scene.hazards.kraken.baseline) resolveKraken(scene, true);

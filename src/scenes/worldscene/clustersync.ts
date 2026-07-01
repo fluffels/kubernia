@@ -23,7 +23,7 @@ import { SFX } from "../../sfx";
 import { spreadLabelsVertically, type LayoutBox } from "../../labellayout";
 import { selectVisibleTags, expandRect } from "../../cull";
 import { T, hashHue, hueColor, SIGN_FONT, SIGN_SCALE } from "../shared";
-import type { WorldSceneLike } from "./types";
+import type { WorldSceneLike, DynTagData } from "./types";
 
 // Nähe-Aufdeckung: voll sichtbar bis FULL, ausgeblendet ab FADE (Welt-Pixel).
 const REVEAL_FULL = 42;
@@ -170,7 +170,7 @@ function ensureTagPool(scene: WorldSceneLike, n: number) {
 
 /** Setzt einen Pool-Container auf die Daten eines Tags um (Text/Status/Position/
  *  Größe/Transparenz). Re-Sizing des Hintergrund-Panels analog zu makeTechTag. */
-function applyTag(scene: WorldSceneLike, cont: Phaser.GameObjects.Container, data: DynTagLike, alpha: number) {
+function applyTag(scene: WorldSceneLike, cont: Phaser.GameObjects.Container, data: DynTagData, alpha: number) {
   const bg = cont.list[0] as Phaser.GameObjects.Rectangle;
   const txt = cont.list[1] as Phaser.GameObjects.BitmapText;
   const dot = cont.list[2] as Phaser.GameObjects.Arc;
@@ -184,9 +184,6 @@ function applyTag(scene: WorldSceneLike, cont: Phaser.GameObjects.Container, dat
   cont.setPosition(data.tx, data.ty).setDepth(data.ay).setScale(data.compact ? SIGN_SCALE : 1).setAlpha(alpha).setVisible(true);
 }
 
-/** Minimal-Sicht auf ein Tag-Datum (das WorldScene-Feld ist voll getippt). */
-interface DynTagLike { tx: number; ty: number; ax: number; ay: number; text: string; status: number; compact: boolean; }
-
 /** Pro Frame: die JETZT sichtbaren Cluster-Tags (im Sichtfeld + nah, gedeckelt)
  *  aus dem Pool darstellen, den Rest ausblenden – und NUR die sichtbaren vertikal
  *  entzerren (#207), sodass der O(n²)-Aufwand aufs Sichtfeld begrenzt bleibt (#416).
@@ -196,7 +193,7 @@ export function updateDynamicTags(scene: WorldSceneLike) {
   const wv = scene.cameras.main.worldView;
   if (wv.width <= 0) return; // worldView erst nach dem ersten Render gefüllt
   const view = expandRect({ x: wv.x, y: wv.y, width: wv.width, height: wv.height }, TAG_VIEW_MARGIN);
-  const visible = selectVisibleTags(scene.dynTags as DynTagLike[], scene.playerPos, view, { full: REVEAL_FULL, fade: REVEAL_FADE, cap: TAG_CAP });
+  const visible = selectVisibleTags(scene.dynTags, scene.playerPos, view, { full: REVEAL_FULL, fade: REVEAL_FADE, cap: TAG_CAP });
   ensureTagPool(scene, visible.length);
 
   const pool = scene.tagPool as Phaser.GameObjects.Container[];
@@ -204,7 +201,7 @@ export function updateDynamicTags(scene: WorldSceneLike) {
   const boxes: LayoutBox[] = scene.signBoxes ? scene.signBoxes.slice() : [];
   const offset = boxes.length;
   for (let k = 0; k < visible.length; k++) {
-    const data = scene.dynTags[visible[k].i] as DynTagLike;
+    const data = scene.dynTags[visible[k].i];
     const cont = pool[k];
     applyTag(scene, cont, data, visible[k].alpha);
     const bg = cont.list[0] as Phaser.GameObjects.Rectangle;
@@ -216,7 +213,7 @@ export function updateDynamicTags(scene: WorldSceneLike) {
 
   const dys = spreadLabelsVertically(boxes, 2);
   for (let k = 0; k < visible.length; k++) {
-    const data = scene.dynTags[visible[k].i] as DynTagLike;
+    const data = scene.dynTags[visible[k].i];
     pool[k].y = data.ty + dys[offset + k];
   }
   scene.visibleTags = visible.length;
