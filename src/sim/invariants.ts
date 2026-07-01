@@ -17,7 +17,16 @@
 import type { ClusterState } from "./state";
 
 /** Alle verletzten Invarianten des Cluster-Zustands als lesbare Meldungen
- *  (leeres Array = legaler Zustand). Rein lesend, mutiert nichts. */
+ *  (leeres Array = legaler Zustand). Rein lesend, mutiert nichts.
+ *
+ *  Geprüft werden (#478/#509): (1)/(2) Replica Ist/Soll je Deployment/StatefulSet,
+ *  (3) Pods auf realen Nodes, (4)/(5) PVC-/PV-Bindungsstatus, (6) Namens-Eindeutigkeit
+ *  je Ressourcentyp, (7) referenzielle Integrität der PVC↔PV-Bindung, (8) die stabilen
+ *  StatefulSet-Ordinalnamen <name>-0 … . Bewusst NICHT geprüft: Service→Deployment (ein
+ *  ServiceRes trägt in diesem Simulator keinen Selektor/keine Deployment-Referenz, die
+ *  Zuordnung ist rein namensbasiert an der Abfrage-Grenze – kein persistenter Verweis, der
+ *  ins Leere zeigen könnte) und roleBinding.roleRef→Role (eine Bindung auf eine noch nicht
+ *  existierende Role ist in echtem Kubernetes ein zulässiger Zustand, keine Verletzung). */
 export function clusterInvariantViolations(s: ClusterState): string[] {
   const v: string[] = [];
 
@@ -31,7 +40,7 @@ export function clusterInvariantViolations(s: ClusterState): string[] {
   }
 
   // (2) Replica Ist/Soll konsistent (StatefulSets): stabile Identität – ebenso viele
-  // Pods wie `replicas`, mit festen Ordinal-Namen <name>-0 … (Namensregel siehe unten).
+  // Pods wie `replicas`. Die festen Ordinal-Namen prüft Invariante (8) unten.
   for (const sts of s.statefulSets) {
     if (sts.pods.length !== sts.replicas) {
       v.push(`StatefulSet "${sts.name}": Soll ${sts.replicas} Replica(s), aber ${sts.pods.length} Pod(s)`);
@@ -70,6 +79,86 @@ export function clusterInvariantViolations(s: ClusterState): string[] {
     }
     if (p.status === "Available" && p.claim) {
       v.push(`PV "${p.name}": Status Available, aber Claim "${p.claim}" gesetzt`);
+    }
+  }
+
+  // (6) Namens-Eindeutigkeit pro Ressourcentyp. In echtem Kubernetes ist ein Objektname
+  // je Art (+ Namespace) EINDEUTIG – es kann keine zwei Deployments "kasse" geben. Bisher
+  // prüften das nur ad-hoc `some(x => x.name === …)`-Wachen pro Anlege-Befehl; ein Weg an
+  // ihnen vorbei (mergeScenario, apply, eine neue Familie) konnte still Duplikate erzeugen,
+  // die dann z.B. `get`/`delete` mehrdeutig machen. Hier wird die Regel für alle
+  // benannten Aggregat-Mitglieder an EINER Stelle erzwungen (Stardew-Scope: neue
+  // Ressourcenart = ein Eintrag hier, keine verstreute Disziplin).
+  const uniqueChecks: Array<[string, ReadonlyArray<{ name: string }>]> = [
+    ["Deployment", s.deployments],
+    ["StatefulSet", s.statefulSets],
+    ["Service", s.services],
+    ["Ingress", s.ingresses],
+    ["NetworkPolicy", s.networkPolicies],
+    ["Secret", s.secrets],
+    ["ConfigMap", s.configMaps],
+    ["Node", s.nodes],
+    ["PVC", s.pvcs],
+    ["PV", s.pvs],
+    ["StorageClass", s.storageClasses],
+    ["VolumeSnapshot", s.volumeSnapshots],
+    ["ServiceAccount", s.serviceAccounts],
+    ["Role", s.roles],
+    ["RoleBinding", s.roleBindings],
+  ];
+  for (const [kind, list] of uniqueChecks) {
+    const seen = new Set<string>();
+    const reported = new Set<string>();
+    for (const item of list) {
+      if (seen.has(item.name) && !reported.has(item.name)) {
+        v.push(`${kind} "${item.name}": Name doppelt vergeben (muss je Typ eindeutig sein)`);
+        reported.add(item.name);
+      }
+      seen.add(item.name);
+    }
+  }
+
+  // (7) Referenzielle Integrität der intern verwalteten Speicher-Bindung: ein Verweis
+  // zeigt auf ein wirklich existierendes Ziel. Bewusst NUR die PVC↔PV-Bindung – sie wird
+  // vom Simulator selbst gesetzt und muss darum konsistent bleiben; ein Dangling wäre ein
+  // echter Sim-Bug. (roleBinding.roleRef → Role ist BEWUSST NICHT hier: in echtem Kubernetes
+  // ist eine RoleBinding auf eine noch nicht existierende Role völlig legal – sie gewährt
+  // bloß nichts, bis die Role auftaucht; das ist ein zulässiger Zustand, keine Verletzung.)
+  // (7a) PVC "Bound" → das genannte Volume existiert als PV. Ein Bound-PVC ohne Volume
+  // fängt schon (4); hier: das Volume ist gesetzt, aber es gibt kein PV dieses Namens.
+  const pvNames = new Set(s.pvs.map(p => p.name));
+  for (const p of s.pvcs) {
+    if (p.status === "Bound" && p.volume && !pvNames.has(p.volume)) {
+      v.push(`PVC "${p.name}": an nicht existierendes Volume "${p.volume}" gebunden`);
+    }
+  }
+  // (7b) PV "Bound" → der genannte Claim existiert als PVC. Der Claim wird als "<ns>/<name>"
+  // geführt (Default-Namespace "default/…"); geprüft wird gegen den PVC-Namen hinter dem "/".
+  const pvcNames = new Set(s.pvcs.map(p => p.name));
+  for (const p of s.pvs) {
+    if (p.status === "Bound" && p.claim) {
+      const claimName = p.claim.includes("/") ? p.claim.slice(p.claim.indexOf("/") + 1) : p.claim;
+      if (!pvcNames.has(claimName)) {
+        v.push(`PV "${p.name}": an nicht existierendes PVC "${p.claim}" gebunden`);
+      }
+    }
+  }
+
+  // (8) StatefulSet-Ordinalnamen: die Pods eines StatefulSets tragen die STABILEN Namen
+  // <name>-0 … <name>-(replicas-1) – exakt diese Menge, jeder genau einmal. Anders als beim
+  // Deployment (Zufallsnamen) ist die Identität hier Teil des Vertrags (stabiles Netzwerk,
+  // stabiles PVC je Ordinal). Ein abweichender/duplizierter/fehlender Ordinalname ist ein
+  // illegaler Zustand. (Setzt Invariante (2) NICHT voraus – prüft die Namensmenge direkt.)
+  for (const sts of s.statefulSets) {
+    const expected = new Set<string>();
+    for (let i = 0; i < sts.replicas; i++) expected.add(`${sts.name}-${i}`);
+    const actual = sts.pods.map(p => String(p.name));
+    const actualSet = new Set(actual);
+    const wrong = actual.some(n => !expected.has(n));
+    const missing = [...expected].some(n => !actualSet.has(n));
+    const duplicate = actual.length !== actualSet.size;
+    if (wrong || missing || duplicate) {
+      v.push(`StatefulSet "${sts.name}": Pod-Namen müssen genau ${sts.name}-0 … ${sts.name}-${sts.replicas - 1} sein (stabile Ordinal-Identität)`);
     }
   }
 

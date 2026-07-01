@@ -94,6 +94,80 @@ test("invariants: ClusterInvariantError trägt die Verletzungsliste", () => {
   }
 });
 
+/* ---------- (6) Namens-Eindeutigkeit je Ressourcentyp (#509) ---------- */
+
+test("invariants (ROT): zwei Deployments mit gleichem Namen werden erkannt", () => {
+  sim.exec("kubectl create deployment kasse --image=nginx");
+  // ein zweites, gleichnamiges Deployment hinter dem Rücken des Aggregats
+  sim.deployments.push({ name: "kasse", image: "redis", replicas: 1, created: 0,
+    pods: [], broken: null, envFrom: { configMaps: [], secrets: [] } });
+  // (das zweite hat 0 Pods → auch Invariante 1 schlägt an; die Eindeutigkeit muss dabei sein)
+  assert.match(clusterInvariantViolations(sim).join(), /Deployment "kasse".*doppelt/);
+});
+
+test("invariants (ROT): doppelter Service-Name wird genau EINMAL gemeldet", () => {
+  sim.services.push({ name: "web", type: "ClusterIP", clusterIP: "10.0.0.1", port: 80 });
+  sim.services.push({ name: "web", type: "ClusterIP", clusterIP: "10.0.0.2", port: 80 });
+  const viol = clusterInvariantViolations(sim).filter(m => /Service "web".*doppelt/.test(m));
+  assert.equal(viol.length, 1); // ein Duplikat = eine Meldung, nicht pro Vorkommen
+});
+
+test("invariants: gleiche Namen über VERSCHIEDENE Ressourcentypen sind legal", () => {
+  // ein Deployment "web" und ein Service "web" dürfen koexistieren (je Typ eindeutig)
+  sim.exec("kubectl create deployment web --image=nginx");
+  sim.exec("kubectl expose deployment web --port=80");
+  assert.deepEqual(clusterInvariantViolations(sim), []);
+});
+
+/* ---------- (7) Referenzielle Integrität PVC↔PV (#509) ---------- */
+
+test("invariants (ROT): Bound-PVC an ein nicht existierendes Volume wird erkannt", () => {
+  sim.pvs.push({ name: "pv-echt", capacity: "1Gi", status: "Available", claim: "", storageClass: "", accessModes: "RWO", reclaimPolicy: "Retain", created: 0 });
+  sim.pvcs.push({ name: "daten", status: "Bound", volume: "pv-geist", capacity: "1Gi", storageClass: "", accessModes: "RWO", created: 0 });
+  assert.match(clusterInvariantViolations(sim).join(), /PVC "daten".*nicht existierendes Volume "pv-geist"/);
+});
+
+test("invariants (ROT): Bound-PV mit Claim auf ein nicht existierendes PVC wird erkannt", () => {
+  sim.pvs.push({ name: "pv-x", capacity: "1Gi", status: "Bound", claim: "default/geist", storageClass: "", accessModes: "RWO", reclaimPolicy: "Retain", created: 0 });
+  assert.match(clusterInvariantViolations(sim).join(), /PV "pv-x".*nicht existierendes PVC "default\/geist"/);
+});
+
+test("invariants: eine konsistente PVC↔PV-Bindung ist legal", () => {
+  sim.pvs.push({ name: "pv-1", capacity: "1Gi", status: "Bound", claim: "default/daten", storageClass: "", accessModes: "RWO", reclaimPolicy: "Retain", created: 0 });
+  sim.pvcs.push({ name: "daten", status: "Bound", volume: "pv-1", capacity: "1Gi", storageClass: "", accessModes: "RWO", created: 0 });
+  assert.deepEqual(clusterInvariantViolations(sim), []);
+});
+
+/* ---------- (8) StatefulSet-Ordinalnamen (#509) ---------- */
+
+function makeSts(sim: KQSim, name: string, replicas: number) {
+  sim.files[name + ".yaml"] = "kind: StatefulSet";
+  sim.applyEffects[name + ".yaml"] = { statefulSet: { name, image: "redis", replicas } };
+  sim.exec("kubectl apply -f " + name + ".yaml");
+  return sim.statefulSets.find(s => s.name === name)!;
+}
+
+test("invariants: frisch angelegtes StatefulSet hat legale Ordinalnamen", () => {
+  makeSts(sim, "lager", 3); // Pods lager-0, lager-1, lager-2
+  assert.deepEqual(clusterInvariantViolations(sim), []);
+});
+
+test("invariants (ROT): StatefulSet-Pod mit falschem (nicht-ordinalem) Namen wird erkannt", () => {
+  const sts = makeSts(sim, "lager", 2);
+  // stabile Identität verbogen: ein Pod bekommt einen Zufallsnamen wie ein Deployment-Pod
+  sts.pods[1] = { ...sts.pods[1], name: "lager-abc123" as typeof sts.pods[1]["name"] };
+  assert.match(clusterInvariantViolations(sim).join(), /StatefulSet "lager".*lager-0 … lager-1/);
+});
+
+test("invariants (ROT): StatefulSet mit doppeltem Ordinalnamen wird erkannt", () => {
+  const sts = makeSts(sim, "lager", 2);
+  // beide Pods heißen lager-0 (Ist-Zahl stimmt, Menge nicht) → nur die Ordinal-Regel greift
+  sts.pods[1] = { ...sts.pods[1], name: sts.pods[0].name };
+  const viol = clusterInvariantViolations(sim).join();
+  assert.match(viol, /StatefulSet "lager".*lager-0 … lager-1/);
+  assert.doesNotMatch(viol, /Soll 2/); // Invariante (2) NICHT ausgelöst – Ist-Zahl = Soll
+});
+
 /* ---------- (b) das Aggregat-Verhalten an der exec()-Grenze ---------- */
 
 test("aggregat: eine an exec() vorbei verbogene Verletzung wird an der Grenze laut", () => {
