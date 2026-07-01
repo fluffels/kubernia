@@ -12,9 +12,11 @@ import { KQSim, freshSim } from "./helpers";
 import {
   newDeploymentPod, scaleDeployment, replacePods, replaceDeploymentPod,
   restartStatefulPod, addDeployment, removeDeployment,
+  addStatefulSet, removeStatefulSet,
 } from "../../src/sim/workload";
 import { clusterInvariantViolations } from "../../src/sim/invariants";
-import type { Deployment } from "../../src/sim/state";
+import type { Deployment, StatefulSetRes, PodInstance } from "../../src/sim/state";
+import { asPodName } from "../../src/sim/names";
 
 let sim: KQSim;
 beforeEach(() => { sim = freshSim(); });
@@ -118,6 +120,30 @@ test("addDeployment/removeDeployment: Eintritt und Austritt eines Aggregat-Mitgl
   assert.equal(removeDeployment(state, "kasse"), undefined, "zweites Entfernen findet nichts");
 });
 
+/** Minimales, legales StatefulSet fürs pure Testen (ohne exec-Umweg). */
+function makeSts(name: string, replicas: number): StatefulSetRes {
+  const pods: PodInstance[] = [];
+  for (let i = 0; i < replicas; i++) pods.push({ name: asPodName(name + "-" + i), created: 0, restarts: 0 });
+  return { name, image: "redis", replicas, serviceName: name, volumeClaimName: "data", storage: "1Gi", pods, created: 0 };
+}
+
+test("addStatefulSet/removeStatefulSet: Eintritt und Austritt eines Aggregat-Mitglieds", () => {
+  const state = { statefulSets: [] as StatefulSetRes[] };
+  const sts = makeSts("lager", 3);
+  addStatefulSet(state, sts);
+  assert.equal(state.statefulSets.length, 1);
+  const removed = removeStatefulSet(state, "lager");
+  assert.equal(removed, sts);
+  assert.equal(state.statefulSets.length, 0);
+});
+
+test("removeStatefulSet (Negativfall): unbekannter Name ändert nichts, gibt undefined", () => {
+  const state = { statefulSets: [makeSts("lager", 1)] };
+  const removed = removeStatefulSet(state, "gibt-es-nicht");
+  assert.equal(removed, undefined);
+  assert.equal(state.statefulSets.length, 1, "das vorhandene StatefulSet bleibt unangetastet");
+});
+
 /* ---------- (b) das Aggregat-Verhalten an der exec()-Grenze ---------- */
 
 test("aggregat: helm/argocd/kubectl-Skalierung hält die Invarianten", () => {
@@ -127,5 +153,39 @@ test("aggregat: helm/argocd/kubectl-Skalierung hält die Invarianten", () => {
   assert.equal(sim.exec("kubectl scale deployment kasse --replicas=1").error, false);
   const dep = sim.deployments.find(d => d.name === "kasse")!;
   assert.equal(dep.pods.length, dep.replicas);
+  assert.deepEqual(clusterInvariantViolations(sim), []);
+});
+
+test("aggregat: StatefulSet anlegen + löschen läuft über den Kanal und lässt den Cluster legal", () => {
+  sim.invariantChecks = true;
+  sim.files["sts.yaml"] = "kind: StatefulSet";
+  sim.applyEffects["sts.yaml"] = { statefulSet: { name: "lager", image: "redis", replicas: 3 } };
+  assert.equal(sim.exec("kubectl apply -f sts.yaml").error, false);
+  assert.equal(sim.statefulSets.find(s => s.name === "lager")!.pods.length, 3);
+  assert.deepEqual(clusterInvariantViolations(sim), []);
+  // löschen (per Namen) – der Kanal entfernt das Mitglied, PVCs bleiben (#122)
+  assert.equal(sim.exec("kubectl delete statefulset lager").error, false);
+  assert.equal(sim.statefulSets.some(s => s.name === "lager"), false);
+  assert.deepEqual(clusterInvariantViolations(sim), []);
+});
+
+test("aggregat: kubectl delete statefulset (Negativfall) meldet NotFound und lässt den Bestand", () => {
+  sim.files["sts.yaml"] = "kind: StatefulSet";
+  sim.applyEffects["sts.yaml"] = { statefulSet: { name: "lager", image: "redis", replicas: 1 } };
+  sim.exec("kubectl apply -f sts.yaml");
+  const res = sim.exec("kubectl delete statefulset gibt-es-nicht");
+  assert.equal(res.error, true);
+  assert.match(res.output!, /NotFound/);
+  assert.equal(sim.statefulSets.length, 1, "das vorhandene StatefulSet bleibt");
+});
+
+test("aggregat: helm uninstall entfernt das Deployment über den Kanal und lässt den Cluster legal", () => {
+  sim.invariantChecks = true;
+  assert.equal(sim.exec("helm repo add bitnami https://charts.bitnami.com/bitnami").error, false);
+  assert.equal(sim.exec("helm install shop bitnami/nginx").error, false);
+  const rel = sim.releases.find(r => r.name === "shop")!;
+  assert.equal(sim.deployments.some(d => d.name === rel.depName), true);
+  assert.equal(sim.exec("helm uninstall shop").error, false);
+  assert.equal(sim.deployments.some(d => d.name === rel.depName), false, "das Deployment ist weg");
   assert.deepEqual(clusterInvariantViolations(sim), []);
 });

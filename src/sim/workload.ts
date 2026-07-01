@@ -87,3 +87,23 @@ export function removeDeployment(state: { deployments: Deployment[] }, name: str
   if (idx < 0) return undefined;
   return state.deployments.splice(idx, 1)[0];
 }
+
+/** Nimmt ein StatefulSet in den Cluster auf – der EINE Eintrittspunkt (Pendant zu
+ *  `addDeployment`). Das StatefulSet trägt dieselbe Replica-Invariante wie ein
+ *  Deployment (`pods.length === replicas`, Invariante 1 in ./invariants.ts) und ist
+ *  per Fabrik (`_makeStatefulSet`) bereits legal gebaut. Bündelt den Zugriff, damit
+ *  künftige Eintritts-Invarianten genau hier landen, statt in jeder Familie neu. */
+export function addStatefulSet(state: { statefulSets: StatefulSetRes[] }, sts: StatefulSetRes): void {
+  state.statefulSets.push(sts);
+}
+
+/** Entfernt ein StatefulSet (per Name) aus dem Cluster – der EINE Austrittspunkt
+ *  (Pendant zu `removeDeployment`). Gibt das entfernte StatefulSet zurück, oder
+ *  `undefined`, wenn keins passt (der Aufrufer unterscheidet daran „gelöscht" von
+ *  „nicht gefunden"). Die zugehörigen PVCs bleiben absichtlich bestehen (#122) – das
+ *  ist Sache des Aufrufers, nicht dieses Aggregat-Austritts. */
+export function removeStatefulSet(state: { statefulSets: StatefulSetRes[] }, name: string): StatefulSetRes | undefined {
+  const idx = state.statefulSets.findIndex(s => s.name === name);
+  if (idx < 0) return undefined;
+  return state.statefulSets.splice(idx, 1)[0];
+}

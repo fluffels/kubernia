@@ -10,7 +10,7 @@
  * kubectl-Dispatch (../kubectl.ts).
  */
 import type { ApplyEffect, ArgoApp, RbacSubject } from "../state";
-import { addDeployment, removeDeployment, replaceDeploymentPod, restartStatefulPod } from "../workload";
+import { addDeployment, removeDeployment, addStatefulSet, removeStatefulSet, replaceDeploymentPod, restartStatefulPod } from "../workload";
 // Argo-CD-Reconcile/-Klon liegen seit #378 bei der argocd-Familie in ../argocd – `kubectl apply -f`
 // einer Application zieht/kloniert den Soll direkt darüber (statt über eine Host-Methode).
 import { argoReconcile, cloneChildSpec } from "../argocd";
@@ -174,8 +174,8 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
     }
     const effStsDel = eff.statefulSet;
     if (effStsDel) {
-      const i = host.statefulSets.findIndex(x => x.name === effStsDel.name);
-      if (i >= 0) { host.statefulSets.splice(i, 1); out.push('statefulset.apps "' + effStsDel.name + '" deleted'); } // PVCs bleiben absichtlich (#122)
+      // PVCs bleiben absichtlich (#122)
+      if (removeStatefulSet(host, effStsDel.name)) out.push('statefulset.apps "' + effStsDel.name + '" deleted');
     }
     const effPvcDel = eff.pvc;
     if (effPvcDel) {
@@ -267,10 +267,8 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
   }
 
   if (["statefulset", "statefulsets", "sts"].includes(what)) {
-    const idx = host.statefulSets.findIndex(s => s.name === name);
-    if (idx === -1) return host._err('Error from server (NotFound): statefulsets.apps "' + name + '" not found');
-    host.statefulSets.splice(idx, 1);
     // Die PVCs bleiben absichtlich erhalten – Kern der Datendauerhaftigkeit (#122).
+    if (!removeStatefulSet(host, name)) return host._err('Error from server (NotFound): statefulsets.apps "' + name + '" not found');
     return 'statefulset.apps "' + name + '" deleted\n💡 Die PVCs bleiben bestehen – die Daten überleben das Löschen des StatefulSets. Skalierst du es wieder hoch, hängen die alten Volumes wieder dran.';
   }
 
@@ -605,7 +603,7 @@ const applyStatefulSet: ApplyHandler = (host, eff, out) => {
     return;
   }
   const sts = host._makeStatefulSet(effSts);
-  host.statefulSets.push(sts);
+  addStatefulSet(host, sts);
   out.push("statefulset.apps/" + effSts.name + " created");
   out.push("💡 " + sts.replicas + " Pod(s) mit stabiler Identität (" + sts.name + "-0 …), jeder mit eigenem PVC '" + sts.volumeClaimName + "-" + sts.name + "-0' usw.");
 };

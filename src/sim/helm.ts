@@ -15,7 +15,7 @@
  */
 import type { ClusterState, Deployment, ServiceRes, Broken } from "./state";
 import { table } from "./util";
-import { addDeployment, scaleDeployment } from "./workload";
+import { addDeployment, removeDeployment, scaleDeployment } from "./workload";
 
 /** Was die helm-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
  *  Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es dokumentiert
@@ -303,7 +303,7 @@ export function helmCommand(host: HelmHost, t: string[], raw: string): string {
     const idx = host.releases.findIndex(r => r.name === release);
     if (idx === -1) return host._err("Error: uninstall: Release not loaded: " + (release || "?") + ": release: not found", "Welche Releases es gibt: 'helm list'");
     const rel = host.releases[idx];
-    host.deployments = host.deployments.filter(d => d.name !== rel.depName);
+    removeDeployment(host, rel.depName);
     host.services = host.services.filter(s => s.name !== rel.depName);
     host.releases.splice(idx, 1);
     return 'release "' + release + '" uninstalled';
