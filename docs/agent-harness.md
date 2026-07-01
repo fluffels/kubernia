@@ -68,6 +68,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 | Architektur | `npm run check:arch` (dependency-cruiser) |
 | Dateigröße | `npm run check:size` |
 | Doku↔Code-Drift | `npm run check:docmap` |
+| Harness-Drift (Kommandos + Links) | `npm run check:docdrift` |
 | Boot-/Interaktions-Smoke | `npm run smoke` (Playwright, headless) |
 | Security-Audit | `npm audit --omit=dev --audit-level=high` |
 
@@ -100,6 +101,11 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **WAS:** meldet jede `src/`-Datei ohne Landkarten-Zeile in CLAUDE.md, jede Zeile ohne Datei und jede deklarierte Schicht, die von der dependency-cruiser-Zuordnung abweicht (gemeinsame Schicht-Quelle [`scripts/layers.cjs`](../scripts/layers.cjs)). Auch als `test/docmap.test.ts`.
 - **WARUM:** die CLAUDE.md-Landkarte ist der **Kontext-Selektor** jeder KI-Session (§2.1). Driftet sie leise, führt sie Agenten in die Irre — genau das darf nicht passieren, also ist „die Doku stimmt" selbst maschinell geprüft.
 
+### Harness-Drift-Wächter (`npm run check:docdrift`, #529)
+- **WAS:** hält die Doku jenseits der Datei-Landkarte ehrlich: (1) jedes in einem Markdown erwähnte `npm run <x>` (bzw. `npm test`) existiert als Skript in `package.json`; (2) jedes Kern-Skript (außer bewusst ausgenommener Convenience) ist in AGENTS.md/CLAUDE.md/README dokumentiert; (3) jeder interne, repo-relative Markdown-Link zeigt auf eine existierende Datei; (4) jeder `#anker` trifft eine reale Überschrift (GitHub-Slug-Regel). Auch als `test/docdrift.test.ts`.
+- **WARUM:** AGENTS.md/CLAUDE.md/README werden von **jeder** KI-Session als Kontext geladen und nennen Kommandos + verweisen quer auf andere Harness-Docs. Ein totes Kommando oder ein toter Link/Anker schickt einen Agenten ins Leere — der Datei-Landkarten-Wächter (#482) deckt genau diese Fehlklasse **nicht** ab.
+- **Absicherung:** Code-Fences werden ausgeblendet (ein `#`-Kommentar in einem bash-Block ist keine Überschrift, ein Beispiel-Link keiner); Ausnahmen (undokumentierte Convenience-Skripte) stehen begründet in `DOC_EXEMPT_SCRIPTS`. Red-Green über `test/docdrift.test.ts` (totes Kommando, toter Link, toter Anker werden jeweils erkannt; die Slug-Regel trifft Emoji-/Umlaut-Überschriften).
+
 ### Boot-/Interaktions-Smokes (`npm run smoke`, Playwright, #391/#480)
 - **WAS:** lädt den **gebauten Offline-Build** (`dist-offline/index.html` per `file://`, genau der Doppelklick-Pfad) headless in Chromium. Boot-Smoke: fährt fehlerfrei hoch (Boot-Flag, Canvas da, keine Konsolen-/Laufzeitfehler). Interaktions-Smokes: `help` ins Terminal → Ausgabe, Overlay auf/zu, Onboarding-Quest annehmen + abschließen — über Tastatur/DOM ohne Test-Hintertür.
 - **WARUM:** die Vitest-Unit-Tests fassen die Präsentation (Phaser/DOM) bewusst **nicht** an. Ein Fehler, der erst beim echten Boot auftritt (Phaser-Init, ein werfender Content-Loader, ein kaputtes Asset-Manifest) oder eine Interaktions-Regression (Terminal nimmt keine Eingabe) käme sonst durch.
@@ -127,7 +133,7 @@ So greifen die Bausteine bei **einem** Ticket ineinander — jeder Schritt ist e
    │  Umsetzen (TDD: rot → grün → aufräumen)                        │
    │                          ▼                                     │
    │  Gates lokal grün: test · typecheck · lint · arch · size ·     │  ← Fehler an der Grenze
-   │  docmap · smoke · audit  +  im Browser verifiziert             │
+   │  docmap · docdrift · smoke · audit + im Browser verifiziert    │
    │                          ▼                                     │
    │  nach main mergen → push → CI läuft dieselben Gates nochmal    │  ← zweite Grenze
    │                          ▼                                     │
@@ -138,7 +144,7 @@ So greifen die Bausteine bei **einem** Ticket ineinander — jeder Schritt ist e
 
 **Warum das „billig UND sicher" ergibt (arc42-Qualitätsziel §1.4):**
 - **Billig,** weil der Agent nichts sucht (SSOT-Doku als Kontext-Selektor), nichts abwägt (Reihenfolge entscheidet), und ein kleiner Ein-Ticket-Diff wenig Kontext braucht.
-- **Sicher,** weil jede Fehlklasse ihre eigene Grenze hat: falsche Logik → Tests, Typfehler → tsc, Schichtbruch → check:arch, Doku-Drift → check:docmap, Boot-Fehler → Smoke, verwundbare Dep → audit. Kein Fehler verlässt sich darauf, dass „der Lauf schon gut war".
+- **Sicher,** weil jede Fehlklasse ihre eigene Grenze hat: falsche Logik → Tests, Typfehler → tsc, Schichtbruch → check:arch, Landkarten-Drift → check:docmap, totes Kommando/toter Link → check:docdrift, Boot-Fehler → Smoke, verwundbare Dep → audit. Kein Fehler verlässt sich darauf, dass „der Lauf schon gut war".
 
 **Wo die Grenzen sind (ehrlich):**
 - Die Gates prüfen, was sie prüfen können. **Didaktische Richtigkeit** (ist die simulierte Cluster-Mechanik pädagogisch sinnvoll?) und **Spielspaß/Look** bleiben menschliches Urteil — darum der Browser-Verifizierungs-Schritt und die interaktive Optik-Abstimmung per Rückfrage.
@@ -153,7 +159,6 @@ Der Harness ist bewusst ein **lebendes System** — seine eigenen Schwachstellen
 |---|---|
 | **#527** | Aggregat-Kommando `npm run verify` (check:all) als **eine** SSOT für alle Gates — verhindert vergessene Gates + CI/lokal-Drift. |
 | **#528** | Git **pre-push-Hook** — lässt die schnellen Gates lokal **vor** `git push origin main` laufen; schließt die Post-hoc-CI-Lücke des Direkt-Push (§4). |
-| **#529** | **Harness-Drift-Wächter:** prüft die dokumentierten Kommandos + internen Doku-Links gegen die Realität (hält u.a. dieses Doc + die Befehlstabellen ehrlich). |
 | **#530** | **ADR 0008:** den KI-Agenten-Harness als explizite Architekturentscheidung festhalten (Autonomie + Fitness-Function-Leitplanken) — bisher nur gelebt, nicht als ADR. |
 | **#531** | **Forum-Inbox härten** gegen Prompt-Injection (externer Discussion-Text → auto-Issue → Agent). |
 | **#492** | Zentrale **seedbare RNG** + Fitness-Function gegen `Math.random` in Domäne/Content — macht den Determinismus-Anspruch zu einem echten Gate. |

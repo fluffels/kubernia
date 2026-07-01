@@ -109,6 +109,7 @@ KubeQuest ist bewusst so gebaut, dass es **so groß wie Stardew Valley** werden 
   | `npm run check:arch` | Schichtung + keine Zyklen + kein toter Code (dependency-cruiser) |
   | `npm run check:size` | God-File-Frühwarnung (Zeilen-Budget je Modul) |
   | `npm run check:docmap` | die Datei-Landkarte in CLAUDE.md kann nicht leise veralten |
+  | `npm run check:docdrift` | dokumentierte `npm run`-Kommandos + interne Doku-Links/Anker können nicht leise veralten |
   | `npm run smoke` | Boot- & Interaktions-Smokes headless gegen den echten Offline-Build (Playwright) |
   | `npm audit --omit=dev` | Security-Gate über die ausgelieferten Produktiv-Deps |
 

@@ -11,7 +11,7 @@
 
 ## Methode
 
-Spielreihenfolge = **Array-Reihenfolge** in [`src/content/quests.ts`](../src/content/quests.ts)
+Spielreihenfolge = **Array-Reihenfolge** in [`src/content/data/quest-order.json`](../src/content/data/quest-order.json)
 (nicht die Quest-Nummer! q26 liegt zwischen q14/q15, q25 zwischen q20/q21). Über alle Quests
 in dieser Reihenfolge wurde jeder Schritt klassifiziert:
 

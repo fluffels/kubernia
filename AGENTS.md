@@ -35,7 +35,7 @@
 | Zweck | Befehl |
 |---|---|
 | One-Command-Setup (Node-Check + `npm install` + Tests/Typecheck/Arch-Check, #387) | `npm run setup` |
-| **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (typecheck → lint → check:arch → check:size → check:docmap → test) |
+| **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (typecheck → lint → check:arch → check:size → check:docmap → check:docdrift → test) |
 | Voller Vor-Push-Check inkl. beider Builds + Boot-Smoke (#527) | `npm run verify:full` (= `verify` + `build` + `build:offline` + `test:smoke`) |
 | Git-Hooks verdrahten (pre-push fährt `verify` vor Push auf main, #528) | Teil von `npm run setup` (`core.hooksPath` → `.githooks`); Umgehung: `git push --no-verify` |
 | Dev-Server (Code-Änderung → manuell neu laden, #301) | `npm run dev` → angezeigte Adresse öffnen |
@@ -50,6 +50,7 @@
 | Architektur-Wächter (Schichtung + Zyklen + Orphans, #347/#390) | `npm run check:arch` (dependency-cruiser) |
 | Dateigröße-Wächter (God-File-Budget 800 LOC, #390) | `npm run check:size` |
 | Doku↔Code-Drift-Wächter (CLAUDE.md-Landkarte gegen den Code, #482) | `npm run check:docmap` |
+| Harness-Drift-Wächter (dokumentierte `npm run`-Kommandos + interne Doku-Links/Anker, #529) | `npm run check:docdrift` |
 | Security-Audit der Produktiv-Deps (CI-Gate, blockt bei high+, #396) | `npm audit --omit=dev --audit-level=high` |
 | Security-Audit aller Deps inkl. Dev (nur Bericht, #396) | `npm audit` |
 
