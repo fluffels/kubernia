@@ -1,5 +1,7 @@
 # Architektur-Analyse 2026-06 – Trägt der Stack ein Spiel in Stardew-Größe?
 
+> ➡️ **Neuere Gesamtsicht:** Eine strukturierte **arc42-Analyse** (aktueller Stand) liegt in [arc42-architektur.md](arc42-architektur.md). Die dort erledigt markierten Baustellen dieser 2026-06-Analyse (#350/#389/#390/#391/#392/#393/#411/#413) sind inzwischen umgesetzt; diese Datei bleibt als historischer Infrastruktur-Fokus erhalten.
+
 > **Stand: 2026-06-20.** Kritische Gesamtanalyse vor dem großen Ausbau (viele Quests/Orte/Charaktere, Spielstände, Stardew-Scope).
 > **Nachtrag 2026-06-21:** Eine erneute, **ADR-blinde** Analyse hat drei übersehene **Spielsystem-/Mechanik-Schulden** ergänzt (diese Analyse war Infrastruktur-fokussiert). → Abschnitt „Nachtrag 2026-06-21" unten + [ADR 0007](adr/0007-spielsystem-fundamente.md).
 > Diese Analyse löst die ältere [architektur-analyse-stardew.md](architektur-analyse-stardew.md) (#46) als aktuellen Stand ab – die meisten ihrer Lücken sind inzwischen geschlossen (Tiled-Maps #191–196, Build-Split #58, Content-as-Data #348/#349, ID-basierte Saves #353/#354, sim/ui/scenes-Splits).
