@@ -1,7 +1,7 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-07-01 — zuletzt #311:** Variable Platzhalter (`<token>`) in Beispielbefehlen app-weit als sichtbares „ändere-mich"-Badge ausgezeichnet. Neue Quelle `src/markup.ts` › `fmtCmd`, angewandt an der Render-Grenze (radio/dialog/quiz/questlog/album); behebt nebenbei bisher unsichtbare bare `<image>`/`<datei>` in Hints; die früheren Einzel-Wächter #320/#458 durch eine mechanik-gestützte Invariante ersetzt. **Content-Rollout** (entity `&lt;token&gt;` → bare, mit Ausnahmen `<none>`/`<sensitive>`/Konfliktmarker) als Folge-Ticket **#476** (Auto-Rest).
-> **Kuratierung 2026-07-01 (SIG-AI-Harness-Diskussion + arc42-Analyse, [arc42-architektur.md](arc42-architektur.md)):** Auf Maintainerin-Wunsch stehen **alle heutigen Architektur-/Harness-Tickets als ein Block ganz oben** — die DDD-Präzisierung #477/#478/#479 (arc42) plus die zwei neuen Harness-Tickets **#482** (Doku↔Code-Drift-Wächter, macht die Architektur-Doku maschinell wahr) und **#483** (kontext-lokale Regeln pro Sub-Modul), dazu #480 (Präsentations-Tests) und #481 (Barrierefreiheit). Reihenfolge im Block dependency-bewusst: **#477 benennt die Kontexte, #482/#483 setzen darauf auf.** **Nächstes freies Ticket = oberstes des Kopfes** (#477).
+> **Stand: 2026-07-01 — zuletzt #477:** Ubiquitous Language + Kontext-Landkarte sichtbar gemacht. Neue SSOT **[docs/glossar.md](glossar.md)** (Glossar Hafen↔K8s↔Code + die 3 Subdomänen je mit Sprache/Verzeichnissen/Tiefendoc); arc42 §8/§11/§12 auf die SSOT umgestellt, aus CLAUDE.md verlinkt. Prüfung DoD 3: Tiefendocs schneiden bereits entlang der Grenzen, `content.md` bleibt bewusster Shared Kernel. Reines Doku-Ticket, kein Code-Umbau.
+> **Kuratierung 2026-07-01 (SIG-AI-Harness-Diskussion + arc42-Analyse, [arc42-architektur.md](arc42-architektur.md)):** Auf Maintainerin-Wunsch stehen **alle heutigen Architektur-/Harness-Tickets als ein Block ganz oben** — die DDD-Präzisierung #478/#479 (arc42) plus die zwei Harness-Tickets **#482** (Doku↔Code-Drift-Wächter, macht die Architektur-Doku maschinell wahr) und **#483** (kontext-lokale Regeln pro Sub-Modul), dazu #480 (Präsentations-Tests) und #481 (Barrierefreiheit). #477 (benennt die Kontexte) ist erledigt; **#482/#483 setzen darauf auf.** **Nächstes freies Ticket = oberstes des Kopfes** (#482).
 >
 > _Frühere Tickets (Kurzfassung — volle Details in git-History + Brain `Projekte/KubeQuest`):_ #475 Test-Harness konsolidiert (`test/support/` + `test/factories/`, „Verhalten über öffentliche API testen") · #443 Phaser 4 evaluiert & bewusst verschoben (Renderer-Bug 4.2.0 bei kleine-Welt-Szenen, bleiben auf 3.90.x, Re-Eval per Folge-Ticket) · #296 Reset-Fix im Browser verifiziert (+ #473 angelegt) · #382 Worktree-Pfad-Konvention vereinheitlicht · #441 Knut-Sprite Asset-Hygiene · #362 freies Funken „Was ist gerade passiert?"-Erklärung · #359 `help` im CLI-Format · #358 `help` zeigt nur Freigeschaltetes · #328 Sandbox-Vertiefungs-Quiz · #278 Sammelalbum/Glossar · #279 Lernkarten-Backfill · #460–#466 Aufbau-Bogen (Epic #239, kubeadm + Terraform-Cluster) · #430 Gating-Konsistenz · #281/#282 Keycloak-/CI-Vertiefung · #237 Kralle-Gag.
 > Sie ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
@@ -49,32 +49,31 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
 | | **— ⭐ Architektur & Harness (SIG-AI-Diskussion + arc42, 2026-07; von der Maintainerin komplett nach oben priorisiert) —** | | | |
-| 1 | **#477** | hoch | Ubiquitous Language sichtbar machen (Glossar Hafen↔K8s↔Code) + Subdomänen als Kontext-Landkarte | **Fundament des Blocks:** benennt die Bounded Contexts → Token-Effizienz-Hebel; #482/#483 setzen darauf auf. Doku-lastig, keine Abhängigkeit. |
-| 2 | **#482** | hoch | Architektur-Fitness-Function: arc42-/Landkarten-Grenzen maschinell gegen den Code erzwingen (Doku↔Code-Drift-Wächter) | Macht die Doku als Kontext-Selektor **verlässlich** (Drift wird rot). Sinnvoll **nach** #477 (erzwingt die dort benannten Grenzen). Test-first, CI-Gate. |
-| 3 | **#478** | hoch | ClusterState als Aggregat — Invarianten kapseln (illegale Cluster-Zustände un-konstruierbar) | Taktisches DDD; härtet die Domäne vor dem Befehls-Wachstum. Test-first. |
-| 4 | **#483** | mittel | Kontext-lokale Regeln pro Sub-Modul (Content-as-Data & Co.) statt verstreut in AGENTS.md | Operationalisiert den Kontext-Selektor (Agent lädt nur sein Modul). **Nach** #477 (benannte Kontexte); beginnt mit `src/content/`. |
-| 5 | **#479** | mittel | Value Objects für Domänen-Primitive (PodName, Dublonen …) hinter stabiler API | Inkrementell; sinnvoll **nach** #478 (Aggregat gibt die Grenzen vor). |
-| 6 | **#480** | mittel | Präsentations-Regressionsnetz über den Boot-Smoke hinaus (schlanke Interaktions-Smokes) | arc42-Testlücke: Präsentation nur manuell + 1 Boot-Smoke geprüft; schlankes Playwright-Netz für kritische Flows. |
-| 7 | **#481** | niedrig | Barrierefreiheit prüfen: farb-unabhängige Statuscodierung, Tastatur-Vollbedienung, Kontraste | Heutiges arc42-Architektur-Ticket; im Block mitgezogen, unten (niedrig, keine Abhängigkeit). |
+| 1 | **#482** | hoch | Architektur-Fitness-Function: arc42-/Landkarten-Grenzen maschinell gegen den Code erzwingen (Doku↔Code-Drift-Wächter) | Macht die Doku als Kontext-Selektor **verlässlich** (Drift wird rot). Baut auf #477 auf (erzwingt die dort benannten Grenzen). Test-first, CI-Gate. |
+| 2 | **#478** | hoch | ClusterState als Aggregat — Invarianten kapseln (illegale Cluster-Zustände un-konstruierbar) | Taktisches DDD; härtet die Domäne vor dem Befehls-Wachstum. Test-first. |
+| 3 | **#483** | mittel | Kontext-lokale Regeln pro Sub-Modul (Content-as-Data & Co.) statt verstreut in AGENTS.md | Operationalisiert den Kontext-Selektor (Agent lädt nur sein Modul). Baut auf #477 auf (benannte Kontexte); beginnt mit `src/content/`. |
+| 4 | **#479** | mittel | Value Objects für Domänen-Primitive (PodName, Dublonen …) hinter stabiler API | Inkrementell; sinnvoll **nach** #478 (Aggregat gibt die Grenzen vor). |
+| 5 | **#480** | mittel | Präsentations-Regressionsnetz über den Boot-Smoke hinaus (schlanke Interaktions-Smokes) | arc42-Testlücke: Präsentation nur manuell + 1 Boot-Smoke geprüft; schlankes Playwright-Netz für kritische Flows. |
+| 6 | **#481** | niedrig | Barrierefreiheit prüfen: farb-unabhängige Statuscodierung, Tastatur-Vollbedienung, Kontraste | Heutiges arc42-Architektur-Ticket; im Block mitgezogen, unten (niedrig, keine Abhängigkeit). |
 | | **— Tiefer Lernpfad (Aufbau-Bogen #239 komplett: #460–#466 erledigt; #279 Backfill + #278 Sammelalbum + #328 Sandbox-Lernthema erledigt) —** | | | |
 | | **— System / QoL —** | | | |
-| 8 | **#318** | niedrig | HUD: Einkommensrate des Hafens/Clusters anzeigen (Dublonen/Stunde) | Auto-Rest hochgezogen (Prio→Nummer); kleines HUD-Feature ohne Abhängigkeit. |
+| 7 | **#318** | niedrig | HUD: Einkommensrate des Hafens/Clusters anzeigen (Dublonen/Stunde) | Auto-Rest hochgezogen (Prio→Nummer); kleines HUD-Feature ohne Abhängigkeit. |
 | | **— Anlegende / Epic —** | | | |
-| 9 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
-| 10 | **#317** 📦 | niedrig | EPIC: Komfort-Funktionen im Shop kaufen + Shop-Überarbeitung | **Epic → mit der Aufteilung loslegen** (session-große Kinder anlegen, Epic auf done schließen). |
+| 8 | **#277** | niedrig | Ideen-Ticket: weitere Minispiele überlegen & dafür Tickets anlegen | Anlegend, design-frei; erzeugt Folge-Tickets statt direktem Fix. |
+| 9 | **#317** 📦 | niedrig | EPIC: Komfort-Funktionen im Shop kaufen + Shop-Überarbeitung | **Epic → mit der Aufteilung loslegen** (session-große Kinder anlegen, Epic auf done schließen). |
 | | **— 🎨 Optik / Grafik (werden GANZ NORMAL automatisch gewählt; das Aussehen stimmt der Agent WÄHREND der Umsetzung per Rückfrage mit der Maintainerin ab — Referenz/Vorschlag/generiertes Asset vorlegen, entscheiden lassen, iterieren; NICHT vorab gaten, NICHT selbst das Design festlegen) —** | | | |
-| 11 | **#183** 🎨 | niedrig | Hafen-Kanone als Pixelart-Asset statt Emoji 💣 | Optik — Asset-Look während der Umsetzung abstimmen. |
-| 12 | **#186** 🎨 | niedrig | Außen-Türen der Gebäude als Pixelart statt prozeduraler Rechtecke | Optik — Look während der Umsetzung abstimmen. |
-| 13 | **#187** 🎨 | niedrig | Interior-Einrichtung (Bullaugen/Türen/Wandschatten) als Pixelart | Optik — Look während der Umsetzung abstimmen. |
-| 14 | **#190** 🎨 | niedrig | Overlay-Panels (Funkgerät/Logbuch/Shop/Quiz/Stapel/Menü) im Stardew-Look | Optik — Look während der Umsetzung abstimmen. |
-| 15 | **#204** 🎨 | niedrig | HUD-/Panel-Emojis durch PixelLab-Pixel-Icons ersetzen | Optik — Look während der Umsetzung abstimmen. |
-| 16 | **#223** 🎨 | niedrig | Rang-Aufstieg mit Feier-Popup (alter → neuer Rang) statt nur Toast | Optik/UX — gehört mit #314 zusammen; Look während der Umsetzung abstimmen. |
-| 17 | **#238** 🎨 | niedrig | Container laufen visuell in Pods (Fässer im Schiffsrumpf) | Optik/Visualisierung — Look während der Umsetzung abstimmen. |
-| 18 | **#289** 🎨 | niedrig | Kenney-Tilesets (town/dungeon) durch PixelLab ersetzen, dann entfernen | Auto-Rest hochgezogen (Prio→Nummer); Optik — Look während der Umsetzung abstimmen. |
-| 19 | **#303** 🎨 | niedrig | Gestoppte Container visuell ins Lager verschieben (statt am Dock) | Auto-Rest hochgezogen (Prio→Nummer); Optik/Visualisierung — Look während der Umsetzung abstimmen. |
-| 20 | **#314** 🎨 | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | Optik — Look während der Umsetzung abstimmen (übergreift #223). |
+| 10 | **#183** 🎨 | niedrig | Hafen-Kanone als Pixelart-Asset statt Emoji 💣 | Optik — Asset-Look während der Umsetzung abstimmen. |
+| 11 | **#186** 🎨 | niedrig | Außen-Türen der Gebäude als Pixelart statt prozeduraler Rechtecke | Optik — Look während der Umsetzung abstimmen. |
+| 12 | **#187** 🎨 | niedrig | Interior-Einrichtung (Bullaugen/Türen/Wandschatten) als Pixelart | Optik — Look während der Umsetzung abstimmen. |
+| 13 | **#190** 🎨 | niedrig | Overlay-Panels (Funkgerät/Logbuch/Shop/Quiz/Stapel/Menü) im Stardew-Look | Optik — Look während der Umsetzung abstimmen. |
+| 14 | **#204** 🎨 | niedrig | HUD-/Panel-Emojis durch PixelLab-Pixel-Icons ersetzen | Optik — Look während der Umsetzung abstimmen. |
+| 15 | **#223** 🎨 | niedrig | Rang-Aufstieg mit Feier-Popup (alter → neuer Rang) statt nur Toast | Optik/UX — gehört mit #314 zusammen; Look während der Umsetzung abstimmen. |
+| 16 | **#238** 🎨 | niedrig | Container laufen visuell in Pods (Fässer im Schiffsrumpf) | Optik/Visualisierung — Look während der Umsetzung abstimmen. |
+| 17 | **#289** 🎨 | niedrig | Kenney-Tilesets (town/dungeon) durch PixelLab ersetzen, dann entfernen | Auto-Rest hochgezogen (Prio→Nummer); Optik — Look während der Umsetzung abstimmen. |
+| 18 | **#303** 🎨 | niedrig | Gestoppte Container visuell ins Lager verschieben (statt am Dock) | Auto-Rest hochgezogen (Prio→Nummer); Optik/Visualisierung — Look während der Umsetzung abstimmen. |
+| 19 | **#314** 🎨 | niedrig | Zentrales Feier-Popup-System (Konfetti + Spruch) | Optik — Look während der Umsetzung abstimmen (übergreift #223). |
 | | **— Zuletzt —** | | | |
-| 21 | **#293** | niedrig | Spiellogik-Review (anlegend) | Steht bewusst **zuletzt** (reine Positionierung, kein Gate) — erst wenn der Backlog weitgehend leer ist, sonst veraltet das Review sofort. Erzeugt Folge-Tickets. |
+| 20 | **#293** | niedrig | Spiellogik-Review (anlegend) | Steht bewusst **zuletzt** (reine Positionierung, kein Gate) — erst wenn der Backlog weitgehend leer ist, sonst veraltet das Review sofort. Erzeugt Folge-Tickets. |
 
 > **#443 (Phaser 4)** ist aus dem Kopf raus: evaluiert und bewusst verschoben (Renderer-Bug in 4.2.0 bei kleine-Welt-Szenen, kein Quick-Fix). Re-Eval läuft über das Folge-Ticket, sobald Phaser 4 reift / der Bug upstream gefixt ist. Details: [ADR 0001](adr/0001-engine-phaser.md).
 
