@@ -14,6 +14,7 @@ import { albumUI } from "./ui/album";
 import { shopUI } from "./ui/shop";
 import { quizUI } from "./ui/quiz";
 import { saveUI } from "./ui/save";
+import { setSaveFailedSink } from "./runtime";
 import type { ChoiceStep } from "./types";
 import type { DrillTask } from "./content/drills";
 
@@ -80,3 +81,13 @@ export const UI = {
   ...quizUI,
   ...saveUI,
 };
+
+/* #497: einen fehlgeschlagenen Save (voller Browser-Speicher im localStorage-Fallback)
+ * für den Spieler sichtbar machen. Die Anwendung (game.ts) meldet ihn entkoppelt über
+ * den Laufzeit-Sink (runtime.ts, wie beim Audio-Sink #344); hier zeigt die Präsentation
+ * einen lesbaren Hinweis mit dem konkreten Ausweg (Stand exportieren). `hint()` bleibt
+ * mindestens 15 s stehen (#370). Läuft beim Modul-Laden – main.ts importiert ui.ts vor
+ * Game.load() und dem 5-s-Auto-Save, der Sink steht also rechtzeitig. */
+setSaveFailedSink(() => {
+  UI.hint("⚠️ <b>Speichern fehlgeschlagen</b> – der Browser-Speicher ist voll. Sichere deinen Fortschritt über Menü → Spielstand exportieren.");
+});
