@@ -1,12 +1,5 @@
 # Umsetzungs-Reihenfolge (alle Tickets)
 
-> **Stand: 2026-07-02.** Der Harness-&-Vorzeige-Doku-Block (#525–#533) und der Großteil der iSAQB-Architektur-Analyse (#492–#513, #534, #538 — Determinismus, Coverage-Gate, Save-Versioning-SSOT, Sim-Invarianten/Aggregat-Mutationen, DNS-1123, DOM-freie Bewertung, szenen-neutrale Ticks u.a.) sind **erledigt**; zuletzt **#513 (A16)** — Cross-Bündel-Oberfläche der Game-Fassade als explizites `GameApi`-Interface (statt `[key:string]:any`), Komposition compilergeprüft (`Game: GameApi`), reiner Auswahl-Kern `pickWeighted` isoliert testbar herausgezogen. Volle Details je Ticket: git-History + Brain `Projekte/KubeQuest`; Analyse-Herleitung in [architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md).
->
-> **Nächstes freies Ticket = #514 (A17, `manifestRef`).**
->
-> _Frühere Tickets (Kurzfassung — volle Details in git-History + Brain `Projekte/KubeQuest`):_ #492–#512/#534/#538 iSAQB-Analyse-Umsetzung (Governance-Gates + Grenz-Härtung) · #525–#533 Harness & Vorzeige-Doku (`npm run verify`, pre-push-Hook, Drift-Wächter, ADR 0008, Diff-Größenbudget) · #490/#489/#488/#479 DDD (Value Objects, getippte Aggregat-Mutationen) · #484 Lernlücke Scheduler-Blindplatzierung/Eviction-Loop · #481 Barrierefreiheit-Audit · #480 Präsentations-Interaktions-Smokes · #475 Test-Harness konsolidiert · #443 Phaser 4 evaluiert & bewusst verschoben (Re-Eval per #474) · #296 Reset-Fix · #382 Worktree-Pfad-Konvention · #362 freies Funken · #358/#359 `help` gefiltert/CLI-Format · #328 Sandbox-Vertiefung · #278/#279 Sammelalbum + Lernkarten-Backfill · #460–#466 Aufbau-Bogen (Epic #239).
-> Diese Liste ist die **kuratierte Vorne-Auswahl** über die generische Board-Sortierung (Prio→Nummer aus [AGENTS.md](../AGENTS.md)): das oberste freie Ticket des **Kopfes** ist „dran"; was nicht im Kopf steht, fällt automatisch auf Prio→Nummer zurück.
-
 ## Wie diese Liste funktioniert — drei Schichten
 
 1. **Kopf (kuratiert, ~15–20 Tickets).** Die nächsten Tickets in **bewusster** Reihenfolge — abhängigkeitsbewusst und prio-informiert, nicht nur nach Label. **„Nächstes Ticket" = das oberste freie hier.** Siehe Tabelle unten.
