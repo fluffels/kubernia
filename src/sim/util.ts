@@ -8,13 +8,30 @@
  * (das gäbe einen Import-Zyklus). `sim.ts` und die Befehls-Module importieren hier.
  */
 import { asPodName, type PodName } from "./names";
+import { nextRandom, hashStr } from "../rng";
 
-/** Zufällige Kleinbuchstaben-/Ziffern-Folge der Länge `len` – für Container-/Image-IDs. */
+/** Zufällige Kleinbuchstaben-/Ziffern-Folge der Länge `len` – für Container-/Image-IDs.
+ *  Zieht aus dem globalen Strom (`src/rng.ts`, #492), nicht aus `Math.random` –
+ *  seedbar, damit Pod-Namen & IDs reproduzierbar werden. */
 export function randSuffix(len: number): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   let s = "";
-  for (let i = 0; i < len; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < len; i++) s += chars[Math.floor(nextRandom() * chars.length)];
   return s;
+}
+
+/** Deterministische Cluster-IP (`10.96.x.y`) aus einem Service-Namen – über Aufrufe
+ *  hinweg STABIL (kein Zufall, #492), damit ein Service seine IP behält und Tests/
+ *  Quest-Checks darauf prüfen können. */
+export function clusterIP(name: string): string {
+  const h = hashStr(name);
+  return "10.96." + (h % 250) + "." + ((h >>> 8) % 250);
+}
+
+/** Deterministische Pod-IP (`10.244.1.x`) aus dem Pod-Namen – über Aufrufe hinweg
+ *  stabil (kein Zufall, #492); `kubectl describe pod` zeigt nun konsistent dieselbe IP. */
+export function podIP(name: string): string {
+  return "10.244.1." + (10 + (hashStr(name) % 200));
 }
 
 /** Pod-Name im echten Kubernetes-Stil: `<deployment>-<replicaset-hash>-<pod-suffix>`

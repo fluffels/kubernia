@@ -18,11 +18,12 @@
  * mitläuft.
  *
  * Phaser-frei (pure Domäne): Domänentypen aus ./state – kein Rückimport nach
- * sim.ts (kein Zyklus). Der deterministische Namens-Hash (`hashStr`) lebt mit
- * hier, weil ihn nur die Metriken brauchen (kein Math.random → `kubectl top`
- * bleibt über Aufrufe hinweg stabil und Tests reproduzierbar).
+ * sim.ts (kein Zyklus). Der deterministische Namens-Hash (`hashStr`) kommt seit
+ * #492 aus dem Zufall-/Determinismus-SSOT `src/rng.ts` (vorher hier lokal) – dieselbe
+ * FNV-1a-Idee, jetzt an EINER Stelle für alle aus Namen abgeleiteten stabilen Werte.
  */
 import type { ClusterState, Deployment, PodInstance, PodMetrics, NodeMetrics, ScrapeTarget, Alert } from "./state";
+import { hashStr } from "../rng";
 
 /** Was die Observability vom Simulator braucht (von der `Sim`-Klasse erfüllt).
  *  Bewusst schmal: die Daten-Felder (`deployments`/`nodes`/`services`) kommen über
@@ -34,18 +35,6 @@ export interface ObservabilityHost extends ClusterState {
   _podReady(d: Deployment): boolean;
   _firingAlerts: Set<string>;   // brennt gerade
   _resolvedAlerts: Set<string>; // war mal an, Ursache inzwischen behoben
-}
-
-/** Stabiler kleiner Hash (FNV-1a-artig). Liefert aus einem Namen einen festen
- *  Zahlenwert – Grundlage für deterministische Metrik-Werte (kein Math.random,
- *  damit `kubectl top` über Aufrufe hinweg gleich bleibt und Tests reproduzierbar sind). */
-function hashStr(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
 }
 
 /** Momentane Ressourcen-Last eines Pods – oder null, wenn der Container gar nicht

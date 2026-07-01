@@ -8,7 +8,7 @@
  * Phaser-frei (pure Domäne): Tabellen-Ausgabe aus ../util, Zustand über das
  * KubectlHost-Interface (./host). Aufgerufen aus dem kubectl-Dispatch (../kubectl.ts).
  */
-import { table } from "../util";
+import { table, podIP } from "../util";
 import type { KubectlHost } from "./host";
 
 // Alle Ingresses teilen sich die Adresse des einen Ingress-Controllers (wie im echten
@@ -398,7 +398,7 @@ export function kubectlDescribe(host: KubectlHost, t: string[]) {
     "Status:       " + statusLine,
     ...(dep.evicted ? ["Reason:       Evicted", "Message:      " + dep.evicted.reason] : []),
     "Ready:        " + st.ready,
-    "IP:           " + (dep.broken && dep.broken.type === "pending" ? "<none>" : "10.244.1." + (10 + Math.floor(Math.random() * 200))),
+    "IP:           " + (dep.broken && dep.broken.type === "pending" ? "<none>" : podIP(pod.name)),
     "Controlled By: ReplicaSet/" + dep.name,
     // ServiceAccount-Identität des Pods (#132): die per spec.serviceAccountName gesetzte SA,
     // sonst die default-SA des Namespaces – genau wie in echtem `kubectl describe pod`.
