@@ -443,6 +443,16 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     floatPixelText(this, x, y, str, color);
   }
 
+  /** „+N 🪙"-Floater für eine fällige Hafen-Auszahlung (#501). Der szenen-neutrale Game.tick
+   *  meldet die Auszahlung über den runtime-Sink (ui.ts), die den Floater an der aktiven
+   *  WorldScene anfordert. Nur zeigen, wenn diese Szene tatsächlich läuft – bei offenem
+   *  Innenraum schläft sie (scene.sleep), dann würde der Floater unsichtbar auflaufen; der
+   *  HUD-Dublonenstand wird trotzdem aktualisiert (ui.ts). Hafen-Kachel als Anker. */
+  payoutFloat(amount: number) {
+    if (!this.scene.isActive()) return;
+    this.floatText((11 + Math.random() * 8) * T, 25 * T, "+" + amount + " 🪙", "#ffd97a");
+  }
+
   /* ============ Off-screen-Culling (#82) ============ */
   /** Off-screen-Culling der statischen Deko (#82). Gedrosselt: die (potentiell
    *  tausende) Sprites werden nur neu geprüft, wenn die Kamera nennenswert
@@ -543,16 +553,12 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     // Schleier/die HUD-Uhr daraus speisen – NICHT mehr aus der flüchtigen Phaser-`time`,
     // die bei jedem Reload bei 0 begänne. So überlebt der Kalender den Reload (Auto-Save
     // persistiert gameDays). Die übrigen Frame-Animationen unten nutzen weiter Phaser-`time`.
-    Game.advanceClock(delta);
+    // #501: Spiel-Zeit-Achse UND Hafen-Wirtschaft tickt jetzt der szenen-neutrale Game.tick
+    // (main.ts, Phaser-Pre-Step), damit beide auch in den Regionen laufen – hier nur noch die
+    // bereits vorgerückte Achse in den Tag-Nacht-Schleier lesen. Eine fällige Auszahlung malt
+    // payoutFloat() über den runtime-Sink (ui.ts).
     updateDayNight(this, Game.state.gameDays * DAY_CYCLE_MS);
     this.cullDecor(delta);
-
-    // Wirtschaft
-    const payout = Game.economyTick(dt);
-    if (payout > 0) {
-      this.floatText((11 + Math.random() * 8) * T, 25 * T, "+" + payout + " 🪙", "#ffd97a");
-      UI.refreshHud();
-    }
 
     // Schmetterlinge flattern über die Wiesen
     const t = time / 1000;

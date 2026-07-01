@@ -14,7 +14,7 @@ import { albumUI } from "./ui/album";
 import { shopUI } from "./ui/shop";
 import { quizUI } from "./ui/quiz";
 import { saveUI } from "./ui/save";
-import { setSaveFailedSink } from "./runtime";
+import { setSaveFailedSink, setPayoutSink, worldScene } from "./runtime";
 import type { ChoiceStep } from "./types";
 import type { DrillTask } from "./content/drills";
 
@@ -90,4 +90,15 @@ export const UI = {
  * Game.load() und dem 5-s-Auto-Save, der Sink steht also rechtzeitig. */
 setSaveFailedSink(() => {
   UI.hint("⚠️ <b>Speichern fehlgeschlagen</b> – der Browser-Speicher ist voll. Sichere deinen Fortschritt über Menü → Spielstand exportieren.");
+});
+
+/* #501: der szenen-neutrale Taktgeber (Game.tick) zahlt den passiven Hafen-Verdienst jetzt in
+ * JEDER Szene aus (früher nur in WorldScene.update → stand in den Regionen still). Die
+ * Auszahlung meldet die Anwendung entkoppelt über den runtime-Sink; hier reagiert die
+ * Präsentation: der HUD-Dublonenstand wird überall aktualisiert (DOM, szenen-unabhängig), der
+ * „+N 🪙"-Floater kommt nur von der aktiven Hafen-WorldScene (payoutFloat) – in einer Region
+ * wäre die Hafen-Kachel-Koordinate sinnlos, dort tickt der Beutel nur im HUD hoch. */
+setPayoutSink((amount) => {
+  UI.refreshHud();
+  worldScene()?.payoutFloat?.(amount);
 });

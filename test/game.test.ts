@@ -10,7 +10,7 @@ import { test, expect, beforeAll, beforeEach } from "vitest";
 import { stubWindowLocalStorage, loadGameStack } from "./support/browser-env";
 import { KQContent } from "../src/content";
 import { NPC_SPAWNS, TILE, TALK_RANGE } from "../src/world";
-import { setWorldScene } from "../src/runtime";
+import { setWorldScene, setPayoutSink } from "../src/runtime";
 import { MAP_REGISTRY } from "../src/mapregistry";
 import { DAY_CYCLE_MS } from "../src/clock";
 import { coins } from "../src/coins";
@@ -303,6 +303,56 @@ test("economyTick: zahlt erst ganze Dublonen aus und schreibt sie gut", () => {
   const payout = Game.economyTick(120);
   expect(payout).toBeGreaterThanOrEqual(2);
   expect(Game.state.coins).toBe(coinsVorher + payout);
+});
+
+/* ---------- Szenen-neutraler Taktgeber (#501) ----------
+ * Game.tick(dtMs) rückt die frame-unabhängige Domäne (Spiel-Zeit + Wirtschaft) an EINER
+ * Stelle vor, damit sie in JEDER Szene läuft (früher nur in WorldScene.update → economyTick
+ * stand in den Regionen still). Präsentation läuft über den runtime-Sink (notifyPayout). */
+test("#501 tick: rückt Spiel-Zeit vor UND zahlt Wirtschaft aus, meldet Auszahlung an den Sink", () => {
+  Game.sim = new Sim({ deployments: [{ name: "a", image: "nginx", replicas: 2 }] }); // Rate 1.0/min
+  const tageVorher = Game.state.gameDays;
+  Game.incomeAcc = 1.5;           // eine ganze Dublone ist fällig (Rest 0.5 bleibt liegen)
+  const coinsVorher = Game.state.coins;
+
+  let gemeldet = -1;
+  setPayoutSink((n) => { gemeldet = n; });
+  try {
+    Game.tick(16);                // ein 60fps-Frame
+  } finally {
+    setPayoutSink(null);          // Sink nicht in andere Tests lecken lassen
+  }
+
+  expect(Game.state.gameDays).toBeGreaterThan(tageVorher);   // Kalender lief (advanceClock)
+  expect(gemeldet).toBe(1);                                  // eine ganze Dublone fällig
+  expect(Game.state.coins).toBe(coinsVorher + 1);            // und gutgeschrieben
+});
+
+test("#501 tick: deckelt den Wirtschafts-dt eines Riesen-Frames (kein Catch-up-Windfall)", () => {
+  Game.sim = new Sim({ deployments: [{ name: "a", image: "nginx", replicas: 2 }] }); // Rate 1.0/min
+  Game.incomeAcc = 0;
+  Game.tick(1_000_000_000);       // absurder Frame (Tab lag im Hintergrund)
+  // dt ist auf 0.05 s gedeckelt: 1.0/min /60 * 0.05 s ≈ 0.000833 – NICHT Sekunden an Einkommen.
+  expect(Game.incomeAcc).toBeCloseTo(1 / 60 * 0.05, 6);
+});
+
+test("#501 tick: ignoriert Unsinn (NaN/0/negativ) ohne den Akkumulator zu vergiften", () => {
+  Game.sim = new Sim({ deployments: [{ name: "a", image: "nginx", replicas: 2 }] });
+  Game.incomeAcc = 0.5;
+  const tageVorher = Game.state.gameDays;
+  let gemeldet = 0;
+  setPayoutSink((n) => { gemeldet += n; });
+  try {
+    Game.tick(NaN);
+    Game.tick(0);
+    Game.tick(-5000);
+  } finally {
+    setPayoutSink(null);
+  }
+  expect(Number.isNaN(Game.incomeAcc)).toBe(false);
+  expect(Game.incomeAcc).toBe(0.5);              // unverändert
+  expect(Game.state.gameDays).toBe(tageVorher);  // Zeit nicht rückwärts/NaN
+  expect(gemeldet).toBe(0);                       // keine Auszahlung gemeldet
 });
 
 test("addCoins: Streak-Multiplikator wirkt und ist bei 10 gedeckelt", () => {

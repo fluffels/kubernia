@@ -32,6 +32,10 @@ export interface WorldSceneRef {
   /** Spielfigur sofort an eine Weltposition setzen (Wiederspiel-Sandbox #332:
    *  ohne Reload an den Quest-Giver bzw. zurück an die gemerkte Live-Position). */
   teleport?(x: number, y: number): void;
+  /** Optionaler „+N 🪙"-Floater für eine fällige Hafen-Auszahlung (#501). Nur die echte
+   *  Hafen-WorldScene setzt ihn (Floater an einer Hafen-Kachel); Regionen implementieren ihn
+   *  nicht (die Koordinate wäre dort sinnlos), der HUD-Refresh läuft trotzdem überall. */
+  payoutFloat?(amount: number): void;
 }
 
 let _scene: WorldSceneRef | null = null;
@@ -98,4 +102,24 @@ export function setSaveFailedSink(fn: (() => void) | null): void {
  *  kein Sink registriert ist). */
 export function notifySaveFailed(): void {
   _saveFailedSink?.();
+}
+
+/* ---------- Dublonen-Auszahlungs-Sink (#501) ----------
+ * Der passive Hafen-Verdienst wird seit #501 vom szenen-neutralen Taktgeber (Game.tick,
+ * getrieben aus Phasers globalem Pre-Step in main.ts) getickt, nicht mehr aus
+ * WorldScene.update() – damit er in JEDER Szene läuft (auch in den Regionen). Die
+ * Präsentation (HUD-Refresh + „+N 🪙"-Floater) darf die Anwendung aber nicht importieren;
+ * darum meldet Game.tick eine fällige Auszahlung entkoppelt hierüber (wie Audio-#344/
+ * Save-#497), und die Präsentation (ui.ts) registriert ihren Handler. Ohne Sink (Node-Test)
+ * ist das Melden ein No-op. */
+let _payoutSink: ((amount: number) => void) | null = null;
+
+/** Von der Präsentation (ui.ts) beim Modul-Laden gesetzt. */
+export function setPayoutSink(fn: ((amount: number) => void) | null): void {
+  _payoutSink = fn;
+}
+
+/** Der Präsentation eine fällige Hafen-Auszahlung melden (No-op ohne Sink). */
+export function notifyPayout(amount: number): void {
+  _payoutSink?.(amount);
 }

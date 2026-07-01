@@ -18,6 +18,7 @@ import { progressionBundle } from "./game/progression";
 import { unlocksBundle } from "./game/unlocks";
 import { spacedRepetitionBundle } from "./game/spaced-repetition";
 import { clockBundle } from "./game/clock";
+import { tickBundle } from "./game/tick";
 import { sandboxBundle } from "./game/sandbox";
 
 export { ALL_ABBREV_UNLOCKED, ABBREV_EARN_THRESHOLD, CMD_HISTORY_UNLOCK_AT } from "./game/shared";
@@ -40,5 +41,6 @@ export const Game = {
   ...unlocksBundle,
   ...spacedRepetitionBundle,
   ...clockBundle,
+  ...tickBundle,
   ...sandboxBundle,
 };

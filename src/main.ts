@@ -130,6 +130,14 @@ import { keys, clearKeys } from "./runtime";
       scene: [KQScenes.BootScene, KQScenes.WorldScene, KQScenes.InteriorScene, ...KQScenes.REGION_SCENES, KQScenes.TilemapTestScene],
     });
 
+    // #501: frame-unabhängige Domänen-Ticks (Hafen-Wirtschaft + Spiel-Zeit) szenen-neutral
+    // treiben – aus Phasers globalem Pre-Step, der unabhängig von der aktiven Szene je Frame
+    // mit der realen Frame-Zeit feuert. So laufen Einkommen und Kalender in JEDER Szene;
+    // früher lag der Takt in WorldScene.update() und stand darum in den Regionen still (der
+    // economyTick-Bug aus #501). Die szenen-spezifische Präsentation (Tag-Nacht-Schleier,
+    // Zufalls-Gefahren) bleibt bewusst in der Szene.
+    game.events.on(Phaser.Core.Events.PRE_STEP, (_time: number, delta: number) => Game.tick(delta));
+
     // Dev-Affordance: die laufende Phaser-Instanz fürs manuelle Verifizieren im
     // Browser greifbar machen (Szenen-Wechsel/Teleport testen). Im Prod-Build fällt
     // der ganze Block weg (import.meta.env.DEV === false), kein Gameplay-Einfluss.
