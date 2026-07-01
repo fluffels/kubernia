@@ -221,6 +221,45 @@
     "explain": "<code>DiskPressure</code> ist eine Node-Condition: die lokale (ephemeral) Platte wird knapp. Der kubelet reagiert mit <b>Eviction</b>, um den Node lauffähig zu halten – bevorzugt Pods, die am meisten über ihren ephemeral-storage-requests liegen. PVC-Daten sind davon nicht betroffen (sie liegen im separaten Volume), aber ein evicteter Pod verliert seinen <code>emptyDir</code>. Genau dagegen helfen requests/limits auf <code>ephemeral-storage</code>."
   },
   {
+    "id": "q-eph-sched-blind",
+    "chapter": "storage-ephemeral",
+    "q": "Ein Pod hat <b>keine</b> ephemeral-storage-<code>requests</code> (also <code>request=0</code>) und wird auf einem Node platziert, dessen Disk längst voll ist – wo er sofort evictet wird. Warum tut der Scheduler das?",
+    "options": [
+      "Der Scheduler plant nach <code>requests</code>, nicht nach echtem Verbrauch. Bei <code>request=0</code> rechnet er „dieser Pod braucht nichts“ und setzt ihn <b>blind</b> auf jeden Node – auch einen vollen. Der kubelet evictet ihn, ein neuer Pod entsteht, der Scheduler würfelt erneut: ein <b>Eviction-Loop</b>.",
+      "Der Scheduler misst den freien Platz jedes Nodes live und hat sich schlicht verrechnet.",
+      "Ein Pod ohne requests wird gar nicht geplant, sondern läuft sofort auf allen Nodes gleichzeitig.",
+      "Der kubelet, nicht der Scheduler, sucht den Node aus – der Scheduler ist unbeteiligt."
+    ],
+    "correct": 0,
+    "explain": "Der Scheduler ist kein Hellseher: seine Platzrechnung beruht auf den angemeldeten <code>requests</code>, nicht auf dem tatsächlichen Verbrauch. Wer <code>0</code> anfordert, sagt dem Scheduler „ich brauche nichts“ – also passt der Pod rechnerisch auf jeden Node, selbst einen randvollen. Dort schlägt die Realität zu (DiskPressure → Eviction), ein Ersatz-Pod entsteht, und der Scheduler platziert wieder blind: jedes manuelle Löschen ist nur ein neuer Würfelwurf, bis zufällig ein Node mit Platz erwischt wird. Genau das ist der Eviction-Loop – kein Bug, sondern fehlende requests."
+  },
+  {
+    "id": "q-eph-pending-vs-loop",
+    "chapter": "storage-ephemeral",
+    "q": "Du setzt dem Loop-Pod ehrliche <code>requests</code> – und jetzt bleibt er <code>Pending</code> mit <code>0/3 nodes available: Insufficient ephemeral-storage</code>. Ist das ein Rückschritt?",
+    "options": [
+      "Nein – das ist das <b>ehrliche</b> Signal „kein Node hat gerade Platz“. Der Scheduler filtert jetzt volle Nodes korrekt aus und wartet, statt blind zu platzieren. <code>Pending</code> ist sichtbar und behebbar (Platz schaffen / Node dazu); der Eviction-Loop war stilles Im-Kreis-Drehen.",
+      "Ja – <code>Pending</code> heißt, der Pod ist kaputt und muss neu gebaut werden.",
+      "Ja – ohne requests lief er wenigstens ab und zu, mit requests läuft er nie mehr.",
+      "<code>Pending</code> und Eviction-Loop sind dasselbe, nur mit anderem Namen."
+    ],
+    "correct": 0,
+    "explain": "<code>Pending</code> fühlt sich schlechter an, ist aber der Fortschritt: Mit ehrlichen <code>requests</code> erkennt der Scheduler, dass kein Node den Bedarf decken kann, und lässt den Pod bewusst warten – die Meldung <code>Insufficient ephemeral-storage</code> nennt sogar den Grund. Beim <code>request=0</code>-Loop wurde der Pod stattdessen immer wieder auf volle Nodes geworfen und sofort evictet: viel Bewegung, kein Fortschritt. Ehrliches <code>Pending</code> ist ein diagnostizierbarer Zustand (mehr Platz, ein weiterer Node, kleinere requests), der blinde Loop nicht."
+  },
+  {
+    "id": "q-eph-loop-fix",
+    "chapter": "storage-ephemeral",
+    "q": "Ein Pod dreht im Eviction-Loop (ständig platziert → evictet → neu). Was durchbricht den Kreis <b>dauerhaft</b> – und was hilft <b>nicht</b>?",
+    "options": [
+      "Ehrliche <code>requests</code> setzen, damit der Scheduler volle Nodes ausfiltert (dann läuft der Pod auf einem Node mit Platz oder wartet als <code>Pending</code>). Den Pod immer wieder von Hand zu löschen hilft <b>nicht</b> – das ist nur ein neuer blinder Würfelwurf.",
+      "Ein höheres <code>limit</code> setzen – das Limit steuert die Platzwahl des Schedulers.",
+      "Den Pod oft genug löschen; irgendwann bleibt er von selbst dauerhaft laufen.",
+      "Mehr CPU zuweisen, dann braucht der Pod weniger Disk."
+    ],
+    "correct": 0,
+    "explain": "Die Wurzel ist die Platzrechnung des Schedulers, und die läuft über <code>requests</code> – nicht über <code>limits</code> (die deckeln nur den Betrieb) und schon gar nicht über CPU. Setzt du ephemeral-storage-<code>requests</code> in echter Höhe, filtert der Scheduler zu volle Nodes aus: der Pod landet auf einem Node mit Platz oder bleibt ehrlich <code>Pending</code>. Manuelles Löschen ändert an <code>request=0</code> nichts – jeder neue Pod wird wieder blind platziert, der Loop läuft weiter."
+  },
+  {
     "id": "q-storage-three-types",
     "chapter": "storage-object-store",
     "q": "Object-, Block- und File-Storage unterscheiden sich vor allem im <b>Zugriffsmodell</b>. Welche Zuordnung stimmt?",
