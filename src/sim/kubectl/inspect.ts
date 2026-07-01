@@ -8,7 +8,7 @@
  * Phaser-frei (pure Domäne): Tabellen-Ausgabe aus ../util, Zustand über das
  * KubectlHost-Interface (./host). Aufgerufen aus dem kubectl-Dispatch (../kubectl.ts).
  */
-import { table, podIP } from "../util";
+import { table, podIP, flagValue } from "../util";
 import type { KubectlHost } from "./host";
 
 // Alle Ingresses teilen sich die Adresse des einen Ingress-Controllers (wie im echten
@@ -18,7 +18,7 @@ const INGRESS_ADDRESS = "203.0.113.10";
 
 export function kubectlGet(host: KubectlHost, t: string[]) {
   const what = (t[2] || "").toLowerCase();
-  const ns = host._flagValue(t, "-n") || host._flagValue(t, "--namespace");
+  const ns = flagValue(t, "-n") || flagValue(t, "--namespace");
   const allNs = t.includes("-A") || t.includes("--all-namespaces");
   host._recheckReadiness();
 

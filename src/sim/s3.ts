@@ -20,6 +20,7 @@
  * S3Host-Interface; kein Rückimport nach sim.ts (kein Zyklus).
  */
 import type { S3Bucket, S3Object } from "./state";
+import { suggest } from "./util";
 
 /** Was die aws-s3-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt). */
 export interface S3Host {
@@ -29,7 +30,6 @@ export interface S3Host {
   files: Record<string, string>;
   clock: number;
   _err(msg: string, tip?: string): string;
-  _suggest(word: string, list: string[]): string | null;
 }
 
 const VERBS = ["mb", "rb", "ls", "cp", "rm"];
@@ -59,7 +59,7 @@ function findBucket(host: S3Host, name: string): S3Bucket | undefined {
 export function awsCommand(host: S3Host, t: string[], raw: string): string {
   // tokens: aws s3 <verb> …
   if (t[1] !== "s3") {
-    const guess = host._suggest(t[1] || "", ["s3"]);
+    const guess = suggest(t[1] || "", ["s3"]);
     return host._err("aws: Hier ist nur der Object Store (aws s3) eingebaut.",
       (guess ? "Meintest du 'aws s3'? " : "") + "z.B. 'aws s3 ls' oder 'aws s3 mb s3://hafen-backup'.");
   }
@@ -75,7 +75,7 @@ export function awsCommand(host: S3Host, t: string[], raw: string): string {
     case "cp": return s3Copy(host, t);
     case "rm": return s3Remove(host, t);
     default: {
-      const guess = host._suggest(verb, VERBS);
+      const guess = suggest(verb, VERBS);
       return host._err("aws s3: Den Unterbefehl '" + verb + "' gibt es hier nicht.",
         guess ? "Meintest du 'aws s3 " + guess + "'?" : "Verfügbar: " + VERBS.join(", ") + ".");
     }

@@ -19,10 +19,9 @@ import type {
 export interface KubectlHost extends ClusterState {
   // Transienter Sitzungs-Marker (kein Cluster-Zustand → nicht in ClusterState).
   lastDeletedPod: string | null;
-  // Geteilte Sim-Helfer (bleiben in sim.ts): Fehler/Flags, Alter, Pods/Readiness, Fabriken.
+  // Geteilte Sim-Helfer (bleiben in sim.ts): Fehler, Alter, Pods/Readiness, Fabriken.
+  // Flag-/Vorschlags-Parsing ist seit #499 pure Funktionen in ../util (flagValue/multiFlag/suggest).
   _err(msg: string, tip?: string): string;
-  _flagValue(tokens: string[], flag: string): string | null;
-  _multiFlag(raw: string, flag: string): string[];
   _age(created: number): string;
   _allPods(): PodInstance[];
   _findDeploymentOfPod(podName: string): Deployment | undefined;

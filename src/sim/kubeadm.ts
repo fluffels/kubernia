@@ -19,7 +19,7 @@
  * per `kubeadmCommand(this, …)`.
  */
 import type { ClusterState, ClusterNode, Scenario } from "./state";
-import { randSuffix } from "./util";
+import { randSuffix, flagValue } from "./util";
 
 const NODE_VERSION = "v1.30.2";
 const APISERVER = "10.0.0.10:6443";
@@ -29,7 +29,6 @@ const APISERVER = "10.0.0.10:6443";
  *  Import-Zyklus kubeadm ↔ sim. `nodes`/`controlPlane` kommen über `extends ClusterState`. */
 export interface KubeadmHost extends ClusterState {
   _err(msg: string, tip?: string): string;
-  _flagValue(tokens: string[], flag: string): string | null;
   _reschedulePending(): void; // ein neuer Worker kann wartende Pods einplanen
 }
 
@@ -127,7 +126,7 @@ function kubeadmJoin(host: KubeadmHost, t: string[]): string {
       "Es läuft noch keine Control-Plane, an die sich der Worker hängen könnte. Zieh sie zuerst mit 'kubeadm init' hoch.");
   }
   // Token akzeptieren als `--token <tok>` ODER positional `kubeadm join <tok>` (beide Schreibweisen).
-  const flagToken = host._flagValue(t, "--token");
+  const flagToken = flagValue(t, "--token");
   const positional = t.slice(2).find(a => !a.startsWith("-") && /^\w+\.\w+$/.test(a));
   const token = flagToken || positional || null;
   if (!token) {

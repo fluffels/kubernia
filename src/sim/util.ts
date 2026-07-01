@@ -60,3 +60,54 @@ export function table(headers: string[], rows: (string | number)[][]): string {
   }
   return lines.join("\n");
 }
+
+/* ---------- Eingabe-Parsing: Vorschläge & Flags (#499) ----------
+ * Reine, zustandslose Helfer, die vorher als `_editDistance`/`_suggest`/`_flagValue`/
+ * `_multiFlag`-Methoden in sim.ts hingen. Da sie kein bisschen Cluster-Zustand brauchen,
+ * gehören sie hierher zu den geteilten Sim-Helfern – das hält den sim.ts-Kern unter dem
+ * God-File-Budget und verschmälert die Host-Interfaces (KubectlHost/DockerHost/…), die
+ * sie sonst als Methode durchreichen mussten. */
+
+/** Editierdistanz (Levenshtein) – Basis für „Meintest du …?"-Vorschläge (`suggest`). */
+export function editDistance(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const d = Array.from({ length: m + 1 }, (_, i) => [i].concat(new Array(n).fill(0)));
+  for (let j = 0; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) {
+    const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+  }
+  return d[m][n];
+}
+
+/** Nächstliegendes bekanntes Wort, wenn nah genug dran (sonst null). */
+export function suggest(word: string, list: string[]): string | null {
+  let best: string | null = null, bestD = Infinity;
+  for (const cand of list) {
+    const dist = editDistance(word.toLowerCase(), cand.toLowerCase());
+    if (dist < bestD) { bestD = dist; best = cand; }
+  }
+  const limit = word.length <= 4 ? 1 : 2; // bei kurzen Wörtern strenger
+  return bestD <= limit && bestD > 0 ? best : null;
+}
+
+/** Wert hinter einer Flag finden: unterstützt "-n wert" und "-n=wert". */
+export function flagValue(tokens: string[], flag: string): string | null {
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i] === flag) return tokens[i + 1] || null;
+    if (tokens[i].startsWith(flag + "=")) return tokens[i].slice(flag.length + 1);
+  }
+  return null;
+}
+
+/** Alle Werte eines (wiederholbaren UND kommagetrennten) Flags einsammeln, z.B.
+ *  `--verb=get,list --verb=watch` → ["get","list","watch"]. Für RBAC-Befehle (#126). */
+export function multiFlag(raw: string, flag: string): string[] {
+  const re = new RegExp("--" + flag + "[=\\s]([^\\s]+)", "g");
+  const out: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw)) !== null) {
+    for (const part of m[1].split(",")) if (part) out.push(part);
+  }
+  return out;
+}
