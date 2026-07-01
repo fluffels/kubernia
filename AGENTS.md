@@ -34,6 +34,8 @@
 | Zweck | Befehl |
 |---|---|
 | One-Command-Setup (Node-Check + `npm install` + Tests/Typecheck/Arch-Check, #387) | `npm run setup` |
+| **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (typecheck → lint → check:arch → check:size → check:docmap → test) |
+| Voller Vor-Push-Check inkl. beider Builds + Boot-Smoke (#527) | `npm run verify:full` (= `verify` + `build` + `build:offline` + `test:smoke`) |
 | Dev-Server (Code-Änderung → manuell neu laden, #301) | `npm run dev` → angezeigte Adresse öffnen |
 | Host-/Prod-Build (Multi-File nach `dist/`, zum Ausliefern) | `npm run build` |
 | Offline-Build (eine self-contained `dist-offline/index.html`) | `npm run build:offline` |

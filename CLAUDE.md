@@ -44,6 +44,8 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | Zweck | Befehl |
 |---|---|
 | One-Command-Setup (Node-Check + install + alle Checks, #387) | `npm run setup` |
+| **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (typecheck → lint → check:arch → check:size → check:docmap → test) |
+| Voller Vor-Push-Check inkl. beider Builds + Boot-Smoke (#527) | `npm run verify:full` (= `verify` + Builds + `test:smoke`) |
 | Erstinstallation | `npm install` |
 | Dev-Server | `npm run dev` |
 | Host-/Prod-Build (Multi-File nach `dist/`) | `npm run build` |
