@@ -1,6 +1,53 @@
 /// <reference types="vitest/config" />
 import { defineConfig, type ConfigEnv, type Plugin, type UserConfig } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
+import { createRequire } from "node:module";
+
+// Schicht-Grenzen als Glob-Form aus der EINEN Schicht-SSOT (scripts/layers.cjs, #482/#495).
+// createRequire, weil layers.cjs bewusst CommonJS ist (der dependency-cruiser-Config `require`t
+// es ebenfalls) — dasselbe Muster wie scripts/check-docmap.mjs.
+const require = createRequire(import.meta.url);
+const { LAYERS, COVERAGE_GLOBS } = require("./scripts/layers.cjs") as {
+  LAYERS: { PRESENTATION: string; APPLICATION: string; ENTRY: string; DOMAIN: string };
+  COVERAGE_GLOBS: Record<string, string>;
+};
+
+// #495: Coverage MESSEN + PRO SCHICHT gaten statt Repo-Mittelwert.
+//
+// Motivation (Architektur-Analyse 2026-07, iSAQB): 94 Testdateien lullen ein — der
+// Repo-Schnitt (~62 %) versteckt, dass die pure Domäne exzellent getestet ist (~92-96 %),
+// die Präsentation (Phaser/DOM) aber per Architektur nur vom Boot-/Interaktions-Smoke
+// berührt wird (~5 % im Unit-Lauf). Ein einziger Repo-Mittelwert als Gate würde eine
+// Domänen-Regression hinter der gut getesteten Masse verstecken. Darum: Schwellen PRO
+// Schicht-Bucket (dieselben Grenzen, die dependency-cruiser erzwingt).
+//
+// Mechanik: Vitest prüft je Glob-Schlüssel die gematchten Dateien gegen dessen Schwellen.
+// Diese Vitest-Version rechnet Glob-Treffer NICHT aus einer globalen Schwelle heraus —
+// darum setzen wir bewusst GAR KEINE globale Schwelle, sondern geben jeder Schicht (inkl.
+// Domäne, als Extglob-Ausschluss) eigene, EXPLIZITE Glob-Schwellen. So ist jede Datei genau
+// einem Bucket zugeordnet (Vollständigkeit + Disjunktheit prüft test/coverage-config.test.ts),
+// und es gibt keinen einzelnen Repo-Mittelwert mehr, hinter dem sich etwas versteckt.
+//
+// Die Zahlen sind ehrliche Ist-Floors (leicht unter dem gemessenen Stand, damit
+// Determinismus-Rauschen nicht flaket) im Sinne von „kein Grün durch Aufweichen": sie
+// fangen Regressionen, ohne unerreichbar zu sein. Ratchet: steigt eine Schicht dauerhaft,
+// wird der Floor per Folge-Commit angehoben (autoUpdate ist aus — nie maschinell gesenkt).
+const LAYER_FLOORS: Record<string, { statements: number; branches: number; functions: number; lines: number }> = {
+  // Domäne (pure Domäne, ~92/83/94/96 gemessen): hart, nahe am Ist.
+  [LAYERS.DOMAIN]: { statements: 89, branches: 80, functions: 92, lines: 94 },
+  // Anwendung/Persistenz (game/runtime/devpanel/store, ~82/80/83/83 gemessen): solide.
+  [LAYERS.APPLICATION]: { statements: 79, branches: 76, functions: 80, lines: 80 },
+  // Präsentation (scenes/ui/sfx): per Architektur unit-untestbar (Phaser/DOM), nur vom
+  // e2e-Smoke berührt → bewusst NIEDRIGER, aber EXPLIZIT (darf nicht still auf 0 fallen).
+  [LAYERS.PRESENTATION]: { statements: 3, branches: 3, functions: 4, lines: 3 },
+  // Einstieg (main bootet Phaser, assets-data hält PNG-Imports): wie Präsentation, explizit niedrig.
+  [LAYERS.ENTRY]: { statements: 3, branches: 0, functions: 10, lines: 3 },
+};
+
+// Aus dem Bucket-Glob je Schicht die flache thresholds-Map bauen (Glob → Schicht-Floors).
+// Kein globaler Eintrag: rein pro Schicht.
+const COVERAGE_THRESHOLDS: Record<string, { statements: number; branches: number; functions: number; lines: number }> =
+  Object.fromEntries(Object.entries(COVERAGE_GLOBS).map(([layer, glob]) => [glob, LAYER_FLOORS[layer]]));
 
 // #301: Im Dev-Server löste bisher JEDE Quellcode-Änderung einen vollen
 // Page-Reload aus – das Spiel hat keine HMR-Boundaries (Phaser-Instanz +
@@ -102,6 +149,20 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
       // Die Unit-Tests (sim/content) brauchen kein DOM – laufen schnell auf Node.
       environment: "node",
       include: ["test/**/*.test.ts"],
+      // #495: Coverage misst nur der `--coverage`-Lauf (npm run test:coverage / CI-Gate);
+      // der normale `npm test` bleibt uninstrumentiert und damit schnell.
+      coverage: {
+        provider: "v8",
+        // Nur den ausgelieferten Spielcode messen (nur .ts; kein Markdown/JSON unter src);
+        // `all: true` (v8-Default) zählt auch NICHT importierte Dateien mit → untestete
+        // Präsentation wird sichtbar statt still 0.
+        include: ["src/**/*.ts"],
+        reporter: ["text", "json-summary"],
+        reportsDirectory: "coverage",
+        // Kein autoUpdate: die Floors werden bewusst per Commit angehoben (Ratchet), nie
+        // still von der Maschine abgesenkt.
+        thresholds: COVERAGE_THRESHOLDS,
+      },
     },
   };
 });

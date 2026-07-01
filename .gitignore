@@ -2,6 +2,8 @@ node_modules/
 dist/
 dist-offline/
 dist-devpanel/
+# Coverage-Berichte (#495): v8-Instrumentierung schreibt nach coverage/, nie ins Repo.
+coverage/
 # Playwright-Boot-Smoke-Test (#391): Browser-Artefakte/Reports, nie ins Repo.
 test-results/
 playwright-report/

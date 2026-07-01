@@ -45,6 +45,15 @@ jobs:
       - name: Verify – alle Gates in einer SSOT-Kette (#527)
         run: npm run verify
 
+      # Coverage-Gate (#495): eigener Schritt, weil die v8-Instrumentierung die Test-Suite
+      # spürbar verlangsamt (~+6 s) — die schnelle `verify`/pre-push-Kette bleibt darum
+      # uninstrumentiert. `test:coverage` misst pro Schicht-Bucket (Domäne/Anwendung hart,
+      # Präsentation explizit niedrig, siehe vite.config.ts) und bricht bei Unterschreiten
+      # der Floors ab; verhindert, dass eine Domänen-Regression hinter dem Repo-Mittel
+      # untergeht. Lokal Teil von `npm run verify:full`.
+      - name: Coverage-Gate – pro Schicht (#495)
+        run: npm run test:coverage
+
       - name: Host-Build
         run: npm run build
 

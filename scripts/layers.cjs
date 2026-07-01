@@ -56,4 +56,29 @@ const LABEL_TO_LAYER = {
   // beim .ts-Schicht-Abgleich übersprungen (siehe check-docmap.mjs).
 };
 
-module.exports = { PRESENTATION, APPLICATION, ENTRY, LAYERS, layerOf, LABEL_TO_LAYER };
+/** Die Wurzel-Namen (Datei- bzw. Verzeichnis-Segmente) der NICHT-Domäne-Schichten. EINE
+ *  Quelle für den Domänen-Glob unten: Domäne = „alles unter src, dessen erstes Segment
+ *  NICHT hier steht" (Extglob-Ausschluss). Deckungsgleich mit den PRESENTATION/APPLICATION/
+ *  ENTRY-RegExps oben — `test/coverage-config.test.ts` beweist die Deckungsgleichheit. */
+const NON_DOMAIN = ["scenes", "ui", "sfx", "game", "runtime", "devpanel", "store", "main", "assets-data"];
+const _nd = NON_DOMAIN.join("|");
+
+/** Glob-Form derselben Schicht-Grenzen (#495) — für Vitests Coverage-`thresholds`, deren
+ *  Schlüssel Globs (picomatch), keine RegExps sind. Bewusst hier co-lokalisiert zu den
+ *  RegExp-Mustern oben, damit beide Formen an EINER Stelle stehen; `test/coverage-config.test.ts`
+ *  bindet die zwei Formen aneinander, indem es für JEDE echte `src`-Datei prüft, dass GENAU EIN
+ *  Bucket-Glob greift und dieser mit `layerOf()` (der RegExp-Wahrheit) übereinstimmt — driftet
+ *  eines, wird es rot. GENAU EIN Glob je Bucket, damit Vitest die Schwelle über das ganze
+ *  Schicht-Aggregat prüft (nicht Datei-Untergruppen zersplittert). Verzeichnisbasiert und damit
+ *  Stardew-fest: neue Dateien fallen automatisch in ihren Bucket. Bewusst KEINE globale Schwelle
+ *  daneben — jede Datei ist genau einem Bucket zugeordnet (der ganze Sinn: pro Schicht statt
+ *  Repo-Mittel). Das kombinierte `{.ts,/**}` fasst Wurzel-Datei UND Modul-Ordner je Schicht;
+ *  der Domänen-Glob `src/!(nd)/**` matcht Wurzel-`.ts` (Globstar matcht leer) UND Unterordner. */
+const COVERAGE_GLOBS = {
+  [LAYERS.PRESENTATION]: "src/{scenes,ui,sfx}{.ts,/**}",
+  [LAYERS.APPLICATION]: "src/{game,runtime,devpanel,store}{.ts,/**}",
+  [LAYERS.ENTRY]: "src/{main,assets-data}.ts",
+  [LAYERS.DOMAIN]: `src/!(${_nd})/**`,
+};
+
+module.exports = { PRESENTATION, APPLICATION, ENTRY, LAYERS, layerOf, LABEL_TO_LAYER, NON_DOMAIN, COVERAGE_GLOBS };

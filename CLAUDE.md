@@ -45,7 +45,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 |---|---|
 | One-Command-Setup (Node-Check + install + Git-Hooks + alle Checks, #387/#528) | `npm run setup` |
 | **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (typecheck → lint → check:arch → check:size → check:docmap → check:docdrift → check:diffsize → test) |
-| Voller Vor-Push-Check inkl. beider Builds + Boot-Smoke (#527) | `npm run verify:full` (= `verify` + Builds + `test:smoke`) |
+| Voller Vor-Push-Check inkl. beider Builds + Boot-Smoke (#527) | `npm run verify:full` (= `verify` + `test:coverage` + Builds + `test:smoke`) |
 | pre-push-Hook (fährt `verify` vor Push auf main, #528) | verdrahtet via `npm run setup`; Umgehung: `git push --no-verify` |
 | Erstinstallation | `npm install` |
 | Dev-Server | `npm run dev` |
@@ -53,6 +53,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | Offline-Build (self-contained `dist-offline/index.html`) | `npm run build:offline` |
 | Dev-Panel-Build (#331, Panel MIT, passwortgated, `dist-devpanel/`) | `npm run build:devpanel` |
 | Tests | `npm test` (Vitest) |
+| Coverage-Gate (v8, Schwellen PRO Schicht statt Repo-Mittel, #495) | `npm run test:coverage` |
 | Boot-Smoke-Test (headless, gegen den Offline-Build, #391) | `npm run smoke` (baut Offline + Playwright) bzw. `npm run test:smoke` (nur Lauf, Build muss da sein) |
 | Typen prüfen (voll strict) | `npm run typecheck` |
 | Linter (ESLint, #389) | `npm run lint` |

@@ -17,6 +17,7 @@
     "preview:offline": "vite preview --outDir dist-offline",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:smoke": "playwright test",
     "smoke": "npm run build:offline && playwright test",
     "typecheck": "tsc --noEmit",
@@ -28,7 +29,7 @@
     "check:diffsize": "node scripts/check-diffsize.mjs",
     "lint": "eslint . --max-warnings 0",
     "verify": "npm run typecheck && npm run lint && npm run check:arch && npm run check:size && npm run check:docmap && npm run check:docdrift && npm run check:diffsize && npm test",
-    "verify:full": "npm run verify && npm run build && npm run build:offline && npm run test:smoke"
+    "verify:full": "npm run verify && npm run test:coverage && npm run build && npm run build:offline && npm run test:smoke"
   },
   "dependencies": {
     "phaser": "^3.87.0"
@@ -37,6 +38,7 @@
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.61.1",
     "@types/node": "^26.0.1",
+    "@vitest/coverage-v8": "^4.1.9",
     "dependency-cruiser": "^18.0.0",
     "eslint": "^10.6.0",
     "fake-indexeddb": "^6.2.5",
