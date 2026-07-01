@@ -10,8 +10,7 @@
  * kubectl-Dispatch (../kubectl.ts).
  */
 import type { ArgoApp, RbacSubject } from "../state";
-import { makePodName } from "../util";
-import { asPodName } from "../names";
+import { addDeployment, removeDeployment, replaceDeploymentPod, restartStatefulPod } from "../workload";
 // Argo-CD-Reconcile/-Klon liegen seit #378 bei der argocd-Familie in ../argocd – `kubectl apply -f`
 // einer Application zieht/kloniert den Soll direkt darüber (statt über eine Host-Methode).
 import { argoReconcile, cloneChildSpec } from "../argocd";
@@ -117,7 +116,7 @@ export function kubectlCreate(host: KubectlHost, t: string[], raw: string) {
   // Unter baseline/restricted wird es deshalb abgelehnt (privileged = keine Prüfung).
   const denied = admitPod(host, name, undefined);
   if (denied) return host._err(denied, "Setz die Stufe mit 'kubectl label namespace default pod-security.kubernetes.io/enforce=privileged' herab oder liefere einen passenden securityContext per Manifest.");
-  host.deployments.push(host._makeDeployment(name, imgMatch[1], 1));
+  addDeployment(host, host._makeDeployment(name, imgMatch[1], 1));
   return "deployment.apps/" + name + " created";
 }
 
@@ -134,8 +133,7 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
     const out: string[] = [];
     const effDep = eff.deployment;
     if (effDep) {
-      const i = host.deployments.findIndex(d => d.name === effDep.name);
-      if (i >= 0) { host.deployments.splice(i, 1); out.push('deployment.apps "' + effDep.name + '" deleted'); }
+      if (removeDeployment(host, effDep.name)) out.push('deployment.apps "' + effDep.name + '" deleted');
     }
     const effSvc = eff.service;
     if (effSvc) {
@@ -185,33 +183,29 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
   if (["pod", "pods", "po"].includes(what)) {
     const dep = host._findDeploymentOfPod(name);
     if (dep) {
-      const idx = dep.pods.findIndex(p => p.name === name);
-      dep.pods.splice(idx, 1);
       host.lastDeletedPod = name;
       // Pod-Neustart gibt das flüchtige emptyDir frei (#240): der Ersatz-Pod startet mit leerem
       // Scratch-Volume – „weg, sobald der Pod weg ist". (PVCs überleben dagegen, siehe StatefulSet.)
       host._resetEphemeral(dep);
-      // Self-Healing: das Deployment ersetzt den Pod sofort – mit NEUEM Zufallsnamen.
-      dep.pods.push({ name: makePodName(dep.name), created: host.clock, restarts: 0 });
+      // Self-Healing: das Deployment ersetzt den Pod sofort – mit NEUEM Zufallsnamen (hält die
+      // Pod-Anzahl konstant, #488).
+      replaceDeploymentPod(dep, name, host.clock);
       return 'pod "' + name + '" deleted';
     }
     // StatefulSet-Pod (#122): kommt mit GLEICHEM Namen und GLEICHEM PVC zurück –
-    // die Daten überleben. Das PVC wird bewusst NICHT angefasst.
+    // die Daten überleben. Das PVC wird bewusst NICHT angefasst; stabile Identität
+    // (gleicher Name, gleiche Ordinalposition) hält restartStatefulPod (#488).
     const sts = host.statefulSets.find(s => s.pods.some(p => p.name === name));
     if (sts) {
-      const idx = sts.pods.findIndex(p => p.name === name);
-      sts.pods.splice(idx, 1);
       host.lastDeletedPod = name;
-      sts.pods.splice(idx, 0, { name: asPodName(name), created: host.clock, restarts: 0 }); // stabile Identität: gleicher (bekannt-gültiger) Name, gleiche Ordinalposition
+      restartStatefulPod(sts, name, host.clock);
       return 'pod "' + name + '" deleted';
     }
     return host._err('Error from server (NotFound): pods "' + name + '" not found', "Pod-Namen siehst du mit 'kubectl get pods'.");
   }
 
   if (["deployment", "deployments", "deploy"].includes(what)) {
-    const idx = host.deployments.findIndex(d => d.name === name);
-    if (idx === -1) return host._err('Error from server (NotFound): deployments.apps "' + name + '" not found');
-    host.deployments.splice(idx, 1);
+    if (!removeDeployment(host, name)) return host._err('Error from server (NotFound): deployments.apps "' + name + '" not found');
     return 'deployment.apps "' + name + '" deleted';
   }
 
@@ -337,7 +331,7 @@ export function kubectlApply(host: KubectlHost, t: string[]) {
       if (effDep.requireBuiltImage && !host._imageAvailable(effDep.image)) {
         dep.broken = { type: "imagepull", badImage: effDep.image, needsBuild: true };
       }
-      host.deployments.push(dep);
+      addDeployment(host, dep);
       out.push("deployment.apps/" + effDep.name + " created");
       if (dep.broken) out.push("💡 Pod im ImagePullBackOff: das Image '" + effDep.image + "' gibt es noch nicht. Erst 'docker build -t " + effDep.image + " .', dann 'kubectl rollout restart deployment " + effDep.name + "'.");
     }

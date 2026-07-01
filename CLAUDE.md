@@ -89,6 +89,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/sim/s3.ts`](src/sim/s3.ts) | pure Domäne | S3-/MinIO-Object-Store: `aws s3`-Familie (mb/rb/ls/cp/rm) + off-cluster Buckets/Objekte (#241). |
 | [`src/sim/kubeadm.ts`](src/sim/kubeadm.ts) | pure Domäne | kubeadm-Familie (Aufbau-Bogen #460): leerer/zerstörter Cluster + `kubeadm init/join/reset`; vor init scheitert kubectl mit „connection refused". |
 | [`src/sim/invariants.ts`](src/sim/invariants.ts) | pure Domäne | Cluster-Invarianten (#478): `clusterInvariantViolations`/`assertClusterInvariants` als SSOT für einen legalen `ClusterState` (Replica Ist/Soll, Pods auf realen Nodes, PV/PVC-Bindung); `Sim.exec()` prüft sie an der Aggregat-Grenze. |
+| [`src/sim/workload.ts`](src/sim/workload.ts) | pure Domäne | Getippte Workload-Mutationen (#488, Forts. #478): `scaleDeployment`/`replacePods`/`replaceDeploymentPod`/`restartStatefulPod`/`addDeployment`/`removeDeployment` halten `pods.length === replicas` by-construction; die Befehlsfamilien (lifecycle/ops/helm/argocd/glab) mutieren den Workload-Kern nur noch hierüber. |
 | [`src/content.ts`](src/content.ts) | pure Domäne | Fassade über `src/content/*` → `KQContent`. → [content.md](docs/module/content.md) |
 | [`src/content/loader.ts`](src/content/loader.ts) | pure Domäne | Content-as-Data-Loader + Laufzeit-Validierung. |
 | [`src/content/parse.ts`](src/content/parse.ts) | pure Domäne | Geteilte Parse-Primitiven + `ContentValidationError` (Leaf, bricht den Zyklus loader↔check-dsl, #411). |

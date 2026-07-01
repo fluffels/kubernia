@@ -7,7 +7,7 @@
  * Phaser-frei (pure Domäne): nutzt nur `makePodName` aus ../util und das
  * KubectlHost-Interface (./host). Aufgerufen aus dem kubectl-Dispatch (../kubectl.ts).
  */
-import { makePodName } from "../util";
+import { scaleDeployment, replacePods } from "../workload";
 import type { KubectlHost } from "./host";
 
 
@@ -18,9 +18,7 @@ export function kubectlScale(host: KubectlHost, t: string[], raw: string) {
   const dep = host.deployments.find(d => d.name === name);
   if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + name + '" not found', "Welche Deployments es gibt: 'kubectl get deployments'");
   const target = parseInt(repMatch[1], 10);
-  while (dep.pods.length < target) dep.pods.push({ name: makePodName(dep.name), created: host.clock, restarts: 0 });
-  while (dep.pods.length > target) dep.pods.pop();
-  dep.replicas = target;
+  scaleDeployment(dep, target, host.clock);
   return "deployment.apps/" + name + " scaled";
 }
 
@@ -98,7 +96,7 @@ function kubectlSetImage(host: KubectlHost, t: string[]) {
   dep.image = newImage;
   if (oldBad && newImage !== oldBad) {
     dep.broken = null;
-    dep.pods = dep.pods.map(() => ({ name: makePodName(dep.name), created: host.clock, restarts: 0 }));
+    replacePods(dep, host.clock);
   }
   return "deployment.apps/" + depName + " image updated" + (oldBad && newImage === oldBad ? "\n💡 Hmm – das ist exakt dasselbe (kaputte) Image. Schau nochmal genau auf den Namen!" : "");
 }
@@ -149,13 +147,13 @@ function kubectlSetResources(host: KubectlHost, t: string[], raw: string) {
   let healed = false;
   if (dep.broken && dep.broken.type === "oomkilled" && newLimit !== null && newLimit >= (dep.broken.memNeeded || 0)) {
     dep.broken = null;
-    dep.pods = dep.pods.map(() => ({ name: makePodName(dep.name), created: host.clock, restarts: 0 }));
+    replacePods(dep, host.clock);
     healed = true;
   }
   let cpuThrottled = false;
   if (cpuLimitMilli !== null && cpuLimitMilli < 500 && dep.cpuHeavy) {
     dep.cpuHeavy = false;
-    dep.pods = dep.pods.map(() => ({ name: makePodName(dep.name), created: host.clock, restarts: 0 }));
+    replacePods(dep, host.clock);
     cpuThrottled = true;
   }
   return "deployment.apps/" + depName + " resource requirements updated" +
@@ -188,7 +186,7 @@ export function kubectlRollout(host: KubectlHost, t: string[]) {
   // Pod-Neustart gibt das flüchtige Scratch-Volume frei (#240): emptyDir-Inhalt ist weg, die
   // ephemeral-Disk-Bilanz von Pod und Node fällt – ein evicteter Pod kann so wieder anlaufen.
   host._resetEphemeral(dep);
-  dep.pods = dep.pods.map(() => ({ name: makePodName(dep.name), created: host.clock, restarts: 0 }));
+  replacePods(dep, host.clock);
   return "deployment.apps/" + depName + " restarted" +
     (imageHealed ? "\n💡 Image gefunden – die Pods starten neu und laufen jetzt. Prüfe mit 'kubectl get pods'." : "");
 }
