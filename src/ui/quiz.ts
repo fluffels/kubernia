@@ -1,6 +1,7 @@
 import { Game } from "../game";
 import { SFX } from "../sfx";
 import { lockedAbbrevInInput, abbrevLockHint } from "../content/abbrev";
+import { fmtCmd } from "../markup";
 import { part, $, esc, CMD_MAX_ATTEMPTS, shuffled } from "./shared";
 
 export const quizUI = part({
@@ -138,13 +139,13 @@ export const quizUI = part({
       // statt als Literaltext (#458). Inhalt ist statisches, autorenkontrolliertes
       // JSON (kein Nutzer-Input). Spitze Klammern, die wörtlich gemeint sind, gehören
       // als &lt;…&gt; in die Daten – ein Wächter-Test (content.test.ts) erzwingt das.
-      body = `<div class="quiz-q">${q.q}</div>
+      body = `<div class="quiz-q">${fmtCmd(q.q)}</div>
         <div class="quiz-options" id="quiz-options">
-          ${r.current.order.map((oi: number, i: number) => `<button data-action="answerReviewQuiz" data-oi="${oi}"><span class="qnum">${i + 1}</span>${q.options[oi]}</button>`).join("")}
+          ${r.current.order.map((oi: number, i: number) => `<button data-action="answerReviewQuiz" data-oi="${oi}"><span class="qnum">${i + 1}</span>${fmtCmd(q.options[oi])}</button>`).join("")}
         </div><div id="review-explain"></div>`;
     } else {
       const card = content.card!;
-      body = `<div class="quiz-q">⌨️ ${card.q}</div>
+      body = `<div class="quiz-q">⌨️ ${fmtCmd(card.q)}</div>
         <div class="review-cmd-row"><span class="term-prompt">crew@hafen:~$</span>
           <input type="text" id="review-input" autocomplete="off" spellcheck="false"
             placeholder="Befehl eintippen, Enter drücken …"></div>
@@ -259,7 +260,7 @@ export const quizUI = part({
     if (r.current.attempts >= CMD_MAX_ATTEMPTS) { this.revealReviewCmd(); return; }
     const remaining = CMD_MAX_ATTEMPTS - r.current.attempts;
     $("review-explain").innerHTML = `
-      <div class="quiz-explain">❌ <b>Nicht ganz.</b> ${card.explain || ""}
+      <div class="quiz-explain">❌ <b>Nicht ganz.</b> ${fmtCmd(card.explain || "")}
         <div class="dim" style="margin-top:.4em">🦀 „Nochmal tippen, Matrose!“ – noch ${remaining} Versuch${remaining === 1 ? "" : "e"}.</div></div>
       <div class="actions"><button data-action="revealReviewCmd">Lösung zeigen ➡️</button></div>`;
     // Eingabefeld wieder freigeben und markieren, damit gleich neu getippt werden kann.
@@ -302,7 +303,7 @@ export const quizUI = part({
           : "✅ <b>Richtig!</b> Schnipp-schnapp-applaus! 🦀")
       : "❌ <b>Nicht ganz.</b>";
     $("review-explain").innerHTML = `
-      <div class="quiz-explain">${head} ${explainHtml}</div>
+      <div class="quiz-explain">${head} ${fmtCmd(explainHtml)}</div>
       <div class="actions"><button class="primary" data-action="nextReviewItem">Weiter ➡️</button></div>`;
   },
 

@@ -273,6 +273,18 @@ button.danger:hover { background: var(--bad); color: #1a0606; filter: none; }
      nicht mehr auf die Zeile, rutscht es komplett auf die nächste. */
   white-space: nowrap;
 }
+/* #311: Variabler Platzhalter in Beispielbefehlen – der „ändere-mich"-Wert (z.B. der selbst
+   gewählte Name, das Image). Spitze Klammern bleiben sichtbar (Maintainerin-Entscheid #311)
+   und werden in warmer Akzentfarbe + kursiv abgesetzt, klar unterscheidbar von festen
+   Befehlen/Flags (die als <code> cyan-monospace erscheinen). Monospace + nowrap, damit der
+   Platzhalter auch INNERHALB eines <code>-Befehls sauber sitzt und nicht mittendrin umbricht. */
+.ph {
+  color: var(--accent);
+  font-family: Consolas, monospace;
+  font-style: italic;
+  font-size: 0.92em;
+  white-space: nowrap;
+}
 .dlg-next { text-align: right; color: var(--text-dim); font-size: 0.8em; margin-top: 6px; animation: blink 1.2s infinite; }
 /* #310: Rückblick-Hinweis links neben dem „weiter"-Hinweis (beide rechtsbündig). */
 .dlg-back { margin-right: 14px; }
