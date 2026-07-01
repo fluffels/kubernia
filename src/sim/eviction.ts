@@ -13,6 +13,7 @@
  * und über dünne Delegations-Methoden dem `KubectlHost`-Interface zugänglich gemacht (#240).
  */
 import type { ClusterNode, Deployment } from "./state";
+import { isControlPlane } from "./nodes";
 
 /** Der minimale Zustand, den die Eviction-Auswertung braucht (von der Sim-Klasse erfüllt). */
 export interface EvictionHost {
@@ -32,7 +33,7 @@ export function depEphemeralUsed(d: Deployment): number {
  *  Ohne Worker fällt es auf den ersten Knoten zurück. */
 export function nodeOf(host: EvictionHost, d: Deployment): string {
   if (d.node && host.nodes.some(n => n.name === d.node)) return d.node;
-  const workers = host.nodes.filter(n => !n.roles.includes("control-plane"));
+  const workers = host.nodes.filter(n => !isControlPlane(n));
   if (workers.length === 0) return host.nodes[0]?.name || "";
   const idx = host.deployments.indexOf(d);
   return workers[(idx < 0 ? 0 : idx) % workers.length].name;
