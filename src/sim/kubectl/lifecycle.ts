@@ -15,6 +15,7 @@ import { addDeployment, removeDeployment, replaceDeploymentPod, restartStatefulP
 // einer Application zieht/kloniert den Soll direkt darüber (statt über eine Host-Methode).
 import { argoReconcile, cloneChildSpec } from "../argocd";
 import { isResourceName } from "../names";
+import { clusterIP } from "../util";
 import { admitPod } from "./security";
 import type { KubectlHost } from "./host";
 
@@ -377,7 +378,7 @@ export function kubectlApply(host: KubectlHost, t: string[]) {
     } else {
       host.services.push({
         name: effSvc.name, type: effSvc.type || "ClusterIP",
-        clusterIP: "10.96." + Math.floor(Math.random() * 250) + "." + Math.floor(Math.random() * 250),
+        clusterIP: clusterIP(effSvc.name),
         port: effSvc.port,
         ...(effSvc.targetPort !== undefined ? { targetPort: effSvc.targetPort } : {}), // #164
         created: host.clock,

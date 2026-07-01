@@ -14,7 +14,7 @@
  * ./util, die Domänentypen aus ./state – kein Rückimport nach sim.ts (kein Zyklus).
  */
 import type { ClusterState, Deployment, Broken } from "./state";
-import { table } from "./util";
+import { table, clusterIP } from "./util";
 import { addDeployment, scaleDeployment } from "./workload";
 
 /** Was die helm-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
@@ -246,7 +246,7 @@ export function helmCommand(host: HelmHost, t: string[], raw: string): string {
     const chartShort = isLocal ? localName : (chart.split("/").pop() || chart);
     const depName = release + "-" + chartShort.split(":")[0];
     addDeployment(host, host._makeDeployment(depName, chartShort + ":latest", replicas));
-    host.services.push({ name: depName, type: "ClusterIP", clusterIP: "10.96.40." + Math.floor(Math.random() * 250), port: "80", created: host.clock });
+    host.services.push({ name: depName, type: "ClusterIP", clusterIP: clusterIP(depName), port: "80", created: host.clock });
     host.releases.push({ name: release, chart, revision: 1, depName, history: [{ revision: 1, replicas }] });
     return [
       "NAME: " + release,

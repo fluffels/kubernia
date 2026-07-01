@@ -13,6 +13,7 @@
  */
 import type { Container } from "./state";
 import { randSuffix, table } from "./util";
+import { hashStr, hashHex } from "../rng";
 
 // Bekannte Container-Images – Grundlage für die „Meintest du …?"-Tippfehlerhilfe.
 // Enthält alle im Spiel benutzten plus echte Tools, die man als DevOps kennt.
@@ -150,7 +151,10 @@ export function dockerCommand(sim: DockerHost, t: string[], _raw?: string): stri
       ["REPOSITORY", "TAG", "IMAGE ID", "SIZE"],
       sim.docker.pulled.map(img => {
         const [repo, tag] = img.split(":");
-        return [repo, tag || "latest", randSuffix(12), Math.floor(Math.random() * 150 + 20) + "MB"];
+        // Image-ID/-Größe deterministisch aus dem Image-Namen (#492): `docker images`
+        // ist ein Lesebefehl und zeigt jetzt stabil dieselben Werte, statt bei jedem
+        // Aufruf neu zu würfeln (und den globalen RNG-Strom zu perturbieren).
+        return [repo, tag || "latest", hashHex(img, 12), (20 + (hashStr(img) % 150)) + "MB"];
       })
     );
   }

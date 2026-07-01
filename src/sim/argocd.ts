@@ -24,7 +24,7 @@
  * Domänentypen aus ./state – kein Rückimport nach sim.ts (kein Zyklus).
  */
 import type { ClusterState, ArgoApp, ArgoChildSpec, Deployment, Broken } from "./state";
-import { table } from "./util";
+import { table, clusterIP } from "./util";
 import { addDeployment, scaleDeployment } from "./workload";
 
 /** Was die argocd-Befehle/Reconcile vom Simulator brauchen (von der `Sim`-Klasse
@@ -141,7 +141,7 @@ export function argoReconcile(host: ArgocdHost, app: ArgoApp): void {
   if (s && !host.services.some(x => x.name === s.name)) {
     host.services.push({
       name: s.name, type: s.type || "ClusterIP",
-      clusterIP: "10.96." + Math.floor(Math.random() * 250) + "." + Math.floor(Math.random() * 250),
+      clusterIP: clusterIP(s.name),
       port: s.port, created: host.clock,
     });
   }

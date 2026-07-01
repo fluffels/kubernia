@@ -8,6 +8,7 @@
  * KubectlHost-Interface (./host). Aufgerufen aus dem kubectl-Dispatch (../kubectl.ts).
  */
 import { scaleDeployment, replacePods } from "../workload";
+import { clusterIP } from "../util";
 import type { KubectlHost } from "./host";
 
 
@@ -38,7 +39,7 @@ export function kubectlExpose(host: KubectlHost, t: string[], raw: string) {
   host.services.push({
     name,
     type: typeMatch ? typeMatch[1] : "ClusterIP",
-    clusterIP: "10.96." + Math.floor(Math.random() * 250) + "." + Math.floor(Math.random() * 250),
+    clusterIP: clusterIP(name),
     port: portMatch[1],
     ...(targetMatch ? { targetPort: targetMatch[1] } : {}),
     created: host.clock,
