@@ -10,15 +10,58 @@
  * Bewusst KEIN Import aus anderen game/*-Modulen – shared bleibt das zyklenfreie Blatt. */
 import { KQContent } from "../content";
 import { coins } from "../coins";
+import type { Coins } from "../coins";
 import type { Sim } from "../sim";
-import type { GameState, EventMode, QuestProgress } from "../types";
+import type { GameState, EventMode, QuestProgress, Quest, QuestStep, FunkStep, QuestTask } from "../types";
+import type { GameClock } from "../clock";
+import type { CmdCard, QuizCard } from "../content/loader";
 
-/** this-Typ der Game-Methodenbündel (this = das komponierte Game-Objekt). Anders als
- *  UISelf in ui/shared.ts behalten die VERÄNDERLICHEN DATEN-Felder hier ihren echten Typ
- *  (state/sim/…), damit der save-kritische Zugriff (this.state.*) voll typgeprüft bleibt;
- *  nur die quer über die Bündel aufgerufenen Methoden sind über die Index-Signatur
- *  permissiv (sonst wäre der Typ zirkulär – die Bündel definieren ja erst die Methoden). */
-export type GameSelf = {
+/* ---------- Rückgabe-Typen der Bündel-Oberfläche ---------- */
+
+/** Ein Rang-Eintrag (XP-Schwelle + Anzeige) – der Element-Typ von `KQContent.RANKS`.
+ *  Als benannter Typ, damit `rank()`/`nextRank()` in `GameApi` ihn tragen können. */
+export type Rank = { xp: number; name: string; icon: string };
+
+/** Konkrete Stellschrauben pro Spiel-Feel-Stufe (#71). Bewusst eine reine Daten-Form,
+ *  die Wirtschaft (game/economy.ts) und Events (scenes.ts via Game.eventProfile())
+ *  gemeinsam nutzen. Liegt hier im zyklenfreien Blatt, weil `GameApi` sie als
+ *  Rückgabetyp von `eventProfile()` braucht (shared darf kein game/*-Modul importieren). */
+export interface EventProfile {
+  /** Faktor auf die Wartezeit bis zum nächsten Event (größer = seltener; Infinity = nie). */
+  spawnScale: number;
+  /** Faktor auf die Reparatur-Deadline (größer = mehr Zeit = sanfter). */
+  deadlineScale: number;
+  /** Anteil der Einnahmen, den ein kaputter Dienst trotzdem abwirft (0 = voller Malus, 1 = kein Malus). */
+  malusFactor: number;
+  /** Schaltet Zufalls-Events ganz an/aus. */
+  enabled: boolean;
+}
+
+/** Anzeigefertige Slot-Beschreibung für den Spielstand-Wähler (#306). Die Anwendungsschicht
+ *  leitet Rang/Quest-Titel aus den Roh-Zahlen ab, damit die UI dumm bleibt. Liegt hier (statt
+ *  in save.ts), weil `GameApi.slots()` sie als Rückgabetyp trägt. */
+export interface SlotView {
+  id: string;
+  name: string;
+  /** Ist das der gerade gespielte Slot? */
+  active: boolean;
+  /** Frischer, noch nicht bespielter Slot (keine Vorschau/kein Charakter)? */
+  isNew: boolean;
+  xp: number;
+  rankIcon: string;
+  rankName: string;
+  /** Index der fokussierten Quest (0-basiert) bzw. = questTotal im Endzustand. */
+  questIdx: number;
+  questTotal: number;
+  questTitle: string;
+  /** Zeitstempel des letzten Speicherns (ms), 0 = noch nie. */
+  lastSeen: number;
+}
+
+/** Die veränderlichen Zustandsfelder der Game-Fassade (in game.ts initialisiert, von load()
+ *  ersetzt). Behalten ihren echten Typ, damit der save-kritische Zugriff `this.state.*` voll
+ *  typgeprüft bleibt. */
+export interface GameData {
   state: GameState;
   sim: Sim;
   incomeAcc: number;
@@ -30,16 +73,115 @@ export type GameSelf = {
   /** Wiederspiel-Sandbox (#332): geklonter Live-Stand während eines Replays, sonst
    *  null. Flüchtig (RAM), NICHT Teil von GameState/Save. */
   replayBookmark: GameState | null;
-  // Bewusster ThisType-Escape-Hatch (#356, analog UISelf): die quer über die Bündel
-  // aufgerufenen Methoden lassen sich hier nicht typisieren, ohne den this-Typ zirkulär
-  // zu machen (die Bündel definieren die Methoden ja erst). `unknown` würde sie
-  // unaufrufbar machen und die Game-API-Typisierung brechen – darum ein begründetes any.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any;
-};
-/** Typisiert ein Methodenbündel so, dass this = GameSelf ist, ohne die Methoden-Signaturen
- *  zu verlieren (ThisType-Muster). Die öffentliche Game-API bleibt damit typisiert. */
-export function part<T>(b: T & ThisType<GameSelf>): T { return b; }
+}
+
+/** Die vollständige Oberfläche der komponierten Game-Fassade: Zustandsfelder (GameData) +
+ *  alle Methoden der game/*-Bündel. DIES ist der `this`-Typ der Bündel (ThisType unten) UND
+ *  der Typ, gegen den game.ts die Komposition (`Game`) prüft. Damit ist die Cross-Bündel-
+ *  Oberfläche voll typgeprüft (#513): ein Tippfehler `this.iComeRate()` fällt jetzt auf,
+ *  früher schluckte ihn eine `[key:string]: any`-Index-Signatur. Der Compiler hält die Liste
+ *  ehrlich – eine neue Bündel-Methode MUSS hier stehen, sonst schlägt der Typecheck von
+ *  `Game` bzw. jeder Aufrufer fehl. Die reinen Rechenkerne liegen als freie Funktionen
+ *  (pickWeighted/canonicalActiveQuests) unten und sind isoliert testbar. */
+export interface GameApi extends GameData {
+  // ---- economy.ts: Hafen-Wirtschaft, Streak, XP/Rang, Dublonen, Shop ----
+  eventProfile(): EventProfile;
+  setEventMode(mode: EventMode): void;
+  incomeRate(): number;
+  economyTick(dt: number): number;
+  touchStreak(): void;
+  coinMultiplier(): number;
+  rankIndex(xp?: number): number;
+  rank(): Rank;
+  nextRank(): Rank | null;
+  addXp(amount: number): boolean;
+  addCoins(amount: number): Coins;
+  spendCoins(amount: number): boolean;
+  buy(itemId: string): { ok: boolean; msg: string };
+  useConsumable(itemId: string): boolean;
+  hasUpgrade(id: string): boolean;
+
+  // ---- save.ts: Laden/Speichern/Reset/Export/Import + Save-Slots (#306) ----
+  load(): void;
+  save(syncFromScene?: boolean): void;
+  reset(): void;
+  exportData(): string | null;
+  importData(json: string): void;
+  slotSummary(): { xp: number; coins: Coins; questIdx: number; lastSeen: number; character: number | null };
+  slots(): SlotView[];
+  newSlot(name?: string): string;
+  switchSlot(id: string): boolean;
+  renameSlot(id: string, name: string): boolean;
+  deleteSlot(id: string): { ok: boolean; reload: boolean };
+
+  // ---- progression.ts: Quest-Fortschritt, Dev-Sprung, offene Quests, Üben ----
+  // currentQuest ist (wie in der Sim, noUncheckedIndexedAccess aus) non-null typisiert:
+  // KQContent.QUESTS[idx] gilt dem Compiler als Quest, `|| null` bleibt darum Quest.
+  currentQuest(): Quest;
+  currentStep(): QuestStep | null;
+  isFunkStep(step: QuestStep | null): step is FunkStep;
+  stepTasks(step: QuestStep): QuestTask[] | null;
+  unlockedCommandFamilies(): Set<string>;
+  advanceStep(): { questDone?: Quest };
+  allQuestsDone(): boolean;
+  pointsToKralleAfterFirstQuest(): boolean;
+  getQuestRoadmap(): { idx: number; id: string; title: string; giver: string; giverName: string; steps: number; completed: boolean }[];
+  spawnAtQuestGiver(questIdx: number): void;
+  jumpToQuest(questIdx: number): boolean;
+  activeQuestIds(): string[];
+  isQuestActive(id: string): boolean;
+  isQuestCompleted(id: string): boolean;
+  questProgress(id: string): QuestProgress | null;
+  questPrereqsMet(id: string): boolean;
+  canStartQuest(id: string): boolean;
+  startQuest(id: string): boolean;
+  practiceDrillsFor(npcId: string): string[];
+
+  // ---- unlocks.ts: verdiente Abkürzungen (#313) + Befehlshistorie (#316) ----
+  isAbbrevUnlocked(id: string): boolean;
+  unlockAbbrev(id: string): void;
+  recordAbbrevLongFormUse(id: string): boolean;
+  isCmdHistoryUnlocked(): boolean;
+  maybeUnlockCmdHistory(): boolean;
+
+  // ---- spaced-repetition.ts: Leitner-Plan, Review-Gate, Übungs-Lernstand (#219) ----
+  ensureReviewItem(itemId: string): boolean;
+  seedQuestCards(questId: string): number;
+  registerQuestCards(questId: string): void;
+  backfillReviewItems(): number;
+  reviewResult(itemId: string, correct: boolean): void;
+  choiceResult(itemId: string, correct: boolean): void;
+  dueReviewItems(limit?: number): string[];
+  shouldReviewGate(): boolean;
+  freeReviewItems(limit?: number): string[];
+  recordKrallePractice(): { milestone: string | null; aside: string | null };
+  // Genau eine der beiden Karten ist je Treffer gesetzt (kind "cmd" → card, "quiz" → q); der
+  // Aufrufer diskriminiert über `kind` und greift per `!` zu (ui/quiz.ts) – Form gespiegelt zum
+  // inferierten Rückgabetyp der Methode.
+  findReviewContent(itemId: string): { kind: string; card?: CmdCard; q?: QuizCard } | null;
+  masteryBox(itemId: string): number;
+  recordPractice(itemId: string, correct: boolean): void;
+  masteryWeight(itemId: string): number;
+  pickWeightedPractice(pool: string[], rand?: () => number): string;
+  pickWeightedDrills(pool: string[], count: number, rand?: () => number): string[];
+
+  // ---- clock.ts: persistente Spiel-Zeit / Kalender (#413) ----
+  advanceClock(deltaMs: number): void;
+  calendar(): GameClock;
+
+  // ---- tick.ts: szenen-neutraler Frame-Takt (#501) ----
+  tick(deltaMs: number): void;
+
+  // ---- sandbox.ts: Wiederspiel-Sandbox (#332) ----
+  isReplaying(): boolean;
+  startReplay(questIdx: number): boolean;
+  endReplay(): boolean;
+}
+
+/** Typisiert ein Methodenbündel so, dass this = GameApi ist, ohne die Methoden-Signaturen
+ *  zu verlieren (ThisType-Muster). Damit sind die quer über die Bündel aufgerufenen Methoden
+ *  (this.save(), this.incomeRate() …) voll typgeprüft (#513). */
+export function part<T>(b: T & ThisType<GameApi>): T { return b; }
 
 /** Sentinel in `unlockedAbbrev`: „alle Abkürzungen freigeschaltet". Für Alt-Spielstände
  *  von vor der Freischalt-Mechanik (#287/#297) – so erlebt niemand einen Rückschritt,
@@ -104,6 +246,27 @@ export function canonicalActiveQuests(active: Record<string, QuestProgress>): Re
     if (p) out[q.id] = { step: p.step, task: p.task };
   }
   return out;
+}
+
+/* ---------- Gewichtete Auswahl: reiner Kern (#513) ----------
+ * Herausgezogen aus `pickWeightedPractice` (game/spaced-repetition.ts), das nur über das
+ * voll komponierte Game erreichbar (und damit schwer isoliert testbar) war. Der eigentliche
+ * Auswahl-Algorithmus hängt an KEINEM Spielzustand – nur an einer Gewichts-Funktion – und
+ * gehört darum als freie, pur testbare Funktion hierher (analog canonicalActiveQuests). */
+
+/** Zieht EIN Element aus `pool` gewichtet zufällig: `weightOf` gibt je Element sein Gewicht
+ *  (höher = häufiger), `rand` eine Zahl in [0,1). Leerer Pool → undefined. Landet der gezogene
+ *  Punkt jenseits der Gewichtssumme (Rundung), fällt die Wahl auf das letzte Element. */
+export function pickWeighted<T>(pool: T[], weightOf: (item: T) => number, rand: () => number): T | undefined {
+  if (pool.length === 0) return undefined;
+  const weights = pool.map(weightOf);
+  const total = weights.reduce((s, w) => s + w, 0);
+  let r = rand() * total;
+  for (let i = 0; i < pool.length; i++) {
+    r -= weights[i];
+    if (r < 0) return pool[i];
+  }
+  return pool[pool.length - 1];
 }
 
 /** Frischer Spielstand – genau die Form von GameState. */

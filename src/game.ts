@@ -11,7 +11,7 @@
  * (ui/radio.ts + game.test.ts) – re-exportiert aus src/game/shared.ts. */
 import { Sim as KQSim } from "./sim";
 import type { GameState } from "./types";
-import { makeDefaultState } from "./game/shared";
+import { makeDefaultState, type GameApi } from "./game/shared";
 import { saveBundle } from "./game/save";
 import { economyBundle } from "./game/economy";
 import { progressionBundle } from "./game/progression";
@@ -23,7 +23,11 @@ import { sandboxBundle } from "./game/sandbox";
 
 export { ALL_ABBREV_UNLOCKED, ABBREV_EARN_THRESHOLD, CMD_HISTORY_UNLOCK_AT } from "./game/shared";
 
-export const Game = {
+/* Die Annotation `: GameApi` ist der Drift-Wächter (#513): der Compiler prüft, dass die
+ * komponierte Fassade GENAU die deklarierte Oberfläche erfüllt. Fehlt eine Bündel-Methode in
+ * GameApi (oder weicht ihre Signatur ab), schlägt der Typecheck hier fehl – die Liste in
+ * shared.ts kann also nicht mehr still veralten. */
+export const Game: GameApi = {
   // state & sim sind ab Modul-Init gesetzt (und werden von load() ersetzt) –
   // nie null. Das spart Null-Prüfungen in der gesamten Spiel-/Szenen-Logik.
   state: makeDefaultState(),

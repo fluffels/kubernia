@@ -3,7 +3,7 @@
  * (#222/#323) und das freie, planungsneutrale Üben. Anwendungsschicht, Phaser-frei. */
 import { KQContent } from "../content";
 import { krallePracticeMilestone, kralleClawAside } from "../kralle";
-import { part, today } from "./shared";
+import { part, today, pickWeighted } from "./shared";
 
 const BOX_INTERVALS: Record<number, number> = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16 };
 
@@ -170,17 +170,11 @@ export const spacedRepetitionBundle = part({
 
   /** Gewichtete Zufallsauswahl EINER Übung aus `pool`: schwache Konzepte häufiger,
    *  sichere seltener (Gewicht = masteryWeight). `rand` ist injizierbar (deterministische
-   *  Tests). Leerer Pool → "". */
+   *  Tests). Leerer Pool → "". Der reine Auswahl-Kern liegt seit #513 als freie, isoliert
+   *  testbare Funktion `pickWeighted` in shared.ts – hier wird nur die Gewichtung (Lernstand)
+   *  eingehängt. */
   pickWeightedPractice(pool: string[], rand: () => number = Math.random): string {
-    if (pool.length === 0) return "";
-    const weights = pool.map(id => this.masteryWeight(id));
-    const total = weights.reduce((s, w) => s + w, 0);
-    let r = rand() * total;
-    for (let i = 0; i < pool.length; i++) {
-      r -= weights[i];
-      if (r < 0) return pool[i];
-    }
-    return pool[pool.length - 1];
+    return pickWeighted(pool, id => this.masteryWeight(id), rand) ?? "";
   },
 
   /** Zieht `count` Übungen gewichtet (schwache häufiger). Sind genug verschiedene da,
