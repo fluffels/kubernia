@@ -99,6 +99,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/content/loader.ts`](src/content/loader.ts) | pure Domäne | Content-as-Data-Loader + Laufzeit-Validierung. |
 | [`src/content/parse.ts`](src/content/parse.ts) | pure Domäne | Geteilte Parse-Primitiven + `ContentValidationError` (Leaf, bricht den Zyklus loader↔check-dsl, #411). |
 | [`src/content/check-dsl.ts`](src/content/check-dsl.ts) | pure Domäne | Deklarative Quest-Check-DSL: `compileCheck` Regel→Prädikat (#411). → [content.md](docs/module/content.md) |
+| [`src/content/scenario.ts`](src/content/scenario.ts) | pure Domäne | Scenario-Validierung (#494): `reviveScenario` prüft Inline-`scenario` strukturell gegen eine geschlossene Feld-/applyEffect-Allowlist (fail-fast gegen stille Tippfehler). |
 | [`src/content/checks.ts`](src/content/checks.ts) | pure Domäne | `QUEST_CHECKS`: nur noch echte Code-Sonderfälle (der Rest ist DSL-Daten, #411). |
 | [`src/content/entities.ts`](src/content/entities.ts) | pure Domäne | Entity-Registry: datengesteuerte NPC- & Objekt-Platzierung (#349/#357). |
 | [`src/content/validate.ts`](src/content/validate.ts) | pure Domäne | Schema-Validierung des Inhalts-Bündels (`validateContent`): strukturelle Konsistenz aller Quests/Drills/Quiz/Karten/Pools, ohne Fremd-Library (null Laufzeit-Deps). → [content.md](docs/module/content.md) |

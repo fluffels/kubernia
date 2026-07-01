@@ -81,6 +81,9 @@ const tfConfigModules = import.meta.glob<{ default: unknown }>("./data/terraform
 const funkExplainModules = import.meta.glob<{ default: unknown }>("./data/funk-explain/*.json", { eager: true });
 import { QUEST_CHECKS } from "./checks";
 import { compileCheck } from "./check-dsl";
+// Scenario-Validierung (#494) liegt als eigenes Leaf-Modul neben dem Loader (wie check-dsl):
+// geschlossene Feld-Allowlist + fail-fast gegen stille Tippfehler im Inline-`scenario`.
+import { reviveScenario } from "./scenario";
 // Geteilte Parse-Primitiven liegen seit #411 im Leaf-Modul `parse.ts` (bricht den
 // Zyklus loader → check-dsl → loader, den #390 verbietet). `ContentValidationError`
 // wird hier re-exportiert, damit bestehende `import … from "./loader"` (entities.ts,
@@ -255,11 +258,9 @@ function reviveStepBase(o: Record<string, unknown>, path: string): StepBase {
     base.scenario = resolveScenarioRef(asNonEmptyString(o.scenarioRef, `${path}.scenarioRef`), `${path}.scenarioRef`);
   } else if (o.scenario !== undefined) {
     // Scenario ist die serialisierbare Sim-Zustandsform (= GameState.clusterSnapshot);
-    // hier nur strukturell als Objekt absichern, die Sim-Semantik prüft der Sim selbst.
-    if (typeof o.scenario !== "object" || o.scenario === null || Array.isArray(o.scenario)) {
-      fail(`${path}.scenario`, "Scenario-Objekt erwartet");
-    }
-    base.scenario = o.scenario as Scenario;
+    // strukturell gegen die geschlossene Feld-Allowlist prüfen (#494), die Sim-Semantik
+    // prüft der Sim selbst. Ein Tippfehler im Schlüssel scheitert jetzt hart beim Laden.
+    base.scenario = reviveScenario(o.scenario, `${path}.scenario`);
   }
   if (o.unlockAbbrev !== undefined) base.unlockAbbrev = asNonEmptyString(o.unlockAbbrev, `${path}.unlockAbbrev`);
   return base;
@@ -657,12 +658,15 @@ function parseOneTfConfig(v: unknown, where: string): TfConfig {
   const id = asNonEmptyString(o.id, `${where}.id`);
   const path = `tf-config ${id}`;
   const label = asNonEmptyString(o.label, `${path}.label`);
-  const sc = asRecord(o.scenario, `${path}.scenario`);
-  const files = asRecord(sc.files, `${path}.scenario.files`);
+  // Scenario strukturell gegen die Feld-Allowlist prüfen (#494) statt ungeprüft casten.
+  const scenario = reviveScenario(o.scenario, `${path}.scenario`);
+  // tf-config-spezifisch: der Spieler MUSS etwas per `cat` lesen können → nicht-leeres
+  // `files` mit nicht-leeren Inhalten (strenger als das generische reviveScenario).
+  const files = asRecord(scenario.files, `${path}.scenario.files`);
   const fileNames = Object.keys(files);
   if (fileNames.length === 0) fail(`${path}.scenario.files`, "mindestens eine .tf-Datei erwartet");
   for (const fn of fileNames) asNonEmptyString(files[fn], `${path}.scenario.files["${fn}"]`);
-  return { id, label, scenario: sc as unknown as Scenario };
+  return { id, label, scenario };
 }
 
 /** Validiert eine rohe Konfig-Liste (eine Regionen-Datei). Wirft beim ersten Verstoß. */
