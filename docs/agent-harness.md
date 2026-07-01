@@ -145,7 +145,7 @@ So greifen die Bausteine bei **einem** Ticket ineinander — jeder Schritt ist e
 
 **Warum das „billig UND sicher" ergibt (arc42-Qualitätsziel §1.4):**
 - **Billig,** weil der Agent nichts sucht (SSOT-Doku als Kontext-Selektor), nichts abwägt (Reihenfolge entscheidet), und ein kleiner Ein-Ticket-Diff wenig Kontext braucht.
-- **Sicher,** weil jede Fehlklasse ihre eigene Grenze hat: falsche Logik → Tests, Typfehler → tsc, Schichtbruch → check:arch, Landkarten-Drift → check:docmap, totes Kommando/toter Link → check:docdrift, Boot-Fehler → Smoke, verwundbare Dep → audit. Kein Fehler verlässt sich darauf, dass „der Lauf schon gut war".
+- **Sicher,** weil jede Fehlklasse ihre eigene Grenze hat: falsche Logik → Tests, Typfehler → tsc, Schichtbruch → check:arch, Landkarten-Drift → check:docmap, totes Kommando/toter Link → check:docdrift, zu breiter Slice → check:diffsize, Boot-Fehler → Smoke, verwundbare Dep → audit. Kein Fehler verlässt sich darauf, dass „der Lauf schon gut war".
 
 **Wo die Grenzen sind (ehrlich):**
 - Die Gates prüfen, was sie prüfen können. **Didaktische Richtigkeit** (ist die simulierte Cluster-Mechanik pädagogisch sinnvoll?) und **Spielspaß/Look** bleiben menschliches Urteil — darum der Browser-Verifizierungs-Schritt und die interaktive Optik-Abstimmung per Rückfrage.
@@ -159,9 +159,8 @@ Der Harness ist bewusst ein **lebendes System** — seine eigenen Schwachstellen
 | Ticket | Was es schließt |
 |---|---|
 | **#492** | Zentrale **seedbare RNG** + Fitness-Function gegen `Math.random` in Domäne/Content — macht den Determinismus-Anspruch zu einem echten Gate. |
-| **#533** | **Diff-Größenbudget als Gate** (`check:diffsize`) — erzwingt kleine Commits (Schwester von `check:size`). |
 
-**Schon gelandet** (Block „Harness & Vorzeige-Doku", 2026-07-01): das Aggregat-Kommando `npm run verify` (#527), der Git-**pre-push-Hook** (#528, schließt die Post-hoc-CI-Lücke des Direkt-Push, §4), der **Harness-Drift-Wächter** `check:docdrift` (#529, §3), die **Forum-Inbox-Härtung** gegen Prompt-Injection (#531, §4) und der **`review-lenses`-Skill** — der gestaffelte Mehr-Perspektiven-Review mit Gate-Short-Circuit (#532, §2.5).
+**Schon gelandet** (Block „Harness & Vorzeige-Doku", 2026-07-01): das Aggregat-Kommando `npm run verify` (#527), der Git-**pre-push-Hook** (#528, schließt die Post-hoc-CI-Lücke des Direkt-Push, §4), der **Harness-Drift-Wächter** `check:docdrift` (#529, §3), die **Forum-Inbox-Härtung** gegen Prompt-Injection (#531, §4), der **`review-lenses`-Skill** — der gestaffelte Mehr-Perspektiven-Review mit Gate-Short-Circuit (#532, §2.5) — und das **Diff-Größenbudget-Gate** `check:diffsize` (#533, §3): misst den Slice gegen `main` (max. 20 Dateien / 800 Zeilen, Override mit Pflicht-Begründung) und erzwingt so die Slice-Disziplin der KI-Fabrik auf Commit-Ebene; Durchsetzungspunkt ist der pre-push-Hook (im flachen CI-Checkout degradiert es bewusst zu grün).
 
 Mit **#530** ([ADR 0008](adr/0008-ki-agenten-harness.md)) ist der ADR jetzt die formale Grundsatzentscheidung und dieses Doc die erklärende Tiefe daneben — dieselbe Arbeitsteilung wie AGENTS.md (operativ) ↔ agent-harness.md (erklärend).
 
