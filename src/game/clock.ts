@@ -10,7 +10,7 @@
  *  - `scenes/worldscene/scenery.ts` (Präsentation): malt den Tag-Nacht-Schleier aus
  *    derselben Achse und ruft die HUD-Uhr.
  */
-import { gameClock, DAY_CYCLE_MS, type GameClock } from "../clock";
+import { gameClock, DAY_CYCLE_MS, type GameClock } from "../core/clock";
 import { part } from "./shared";
 
 /** Obergrenze für den Zeit-Zuwachs EINES Frames (ms). Ein in den Hintergrund gelegter Tab

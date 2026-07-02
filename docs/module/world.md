@@ -33,7 +33,7 @@ Jeweils Geometrie/Kollision + Anleger/Warp + reservierte NPC-/Quest-Trigger-Stan
 
 | Modul | Inhalt |
 |---|---|
-| `src/clock.ts` | Zeit-/Datums-Ableitung für die HUD-Uhr (synchron zum Tag-Nacht-Schleier). |
+| `src/core/clock.ts` | Zeit-/Datums-Ableitung für die HUD-Uhr (synchron zum Tag-Nacht-Schleier). |
 | `src/pixelfont.ts` | Glyphen-Daten (5×7) + Helfer der In-Welt-Pixel-Bitmap-Font (#188); `scenes.ts` backt daraus die RetroFont-Textur für alle In-Welt-Texte. |
 | `src/overlaykbd.ts` | Tastatur-Logik für einfache Modals (#283): `resolveOverlayKey` (Navigation ↑/↓/w/s bzw. Auslösen Enter/Leer/E). Dazu `dialogueNav` (#310): Vor-/Zurück-Blättern für mehrzeilige Lese-Dialoge. DOM-Anbindung dünn in `ui/*` + `main.ts`. |
 | `src/cmdhistory.ts` | Befehlshistorie fürs Funkgerät-Terminal (#316): `pushHistory` + `navigateHistory` (↑/↓-Cursor, bash-nah). Freischaltbar via `Game.cmdHistoryUnlocked`; DOM-Anbindung dünn in `ui/radio.ts` + `main.ts`. Tests: `test/cmdhistory.test.ts`. |

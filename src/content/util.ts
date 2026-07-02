@@ -3,7 +3,7 @@
  * Der Zufall kommt aus dem globalen Strom in `src/rng.ts` (SSOT, #492) – KEIN
  * `Math.random` mehr in `src/content/**` (seedbar → reproduzierbare Drill-Auswahl).
  */
-import { nextRandom } from "../rng";
+import { nextRandom } from "../core/rng";
 
 /** Ein zufälliges Element aus einem Array. */
 export const pick = <T>(arr: T[]): T => arr[Math.floor(nextRandom() * arr.length)];

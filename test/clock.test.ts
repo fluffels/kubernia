@@ -9,7 +9,7 @@
  * Mitternacht (inkl. Off-by-one-Schutz beim ERSTEN Übergang), Saison-/Wochentags-Rollover
  * sowie harte Invarianten und ein Red-Green-Schutz gegen eine konstante Ausgabe. */
 import { test, expect } from "vitest";
-import { gameClock, DAY_CYCLE_MS, START_PHASE, withStartOffset } from "../src/clock";
+import { gameClock, DAY_CYCLE_MS, START_PHASE, withStartOffset } from "../src/core/clock";
 
 const CYCLE = 1440000; // wie in scenes.ts: 24 min realer Zeit = ein Spieltag
 

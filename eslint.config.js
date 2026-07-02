@@ -121,7 +121,7 @@ export default tseslint.config(
   // 5) Determinismus-Wächter (#492): In der puren Domäne (src/sim/**) und im
   //    Content (src/content/**) ist `Math.random` verboten – die Schicht ist als
   //    deterministisch/testbar deklariert. Zufall kommt ausschließlich aus dem
-  //    SSOT src/rng.ts (`nextRandom`/`hashStr`), damit snapshot()-Round-trips
+  //    SSOT src/core/rng.ts (`nextRandom`/`hashStr`), damit snapshot()-Round-trips
   //    wertstabil sind, Pod-Namen/IPs auf konkrete Namen prüfbar werden und ein
   //    „Seed teilen" nachrüstbar bleibt. Doppelt gesichert durch die Fitness-
   //    Function test/rng.test.ts (läuft auch im reinen `npm test`).
@@ -134,7 +134,7 @@ export default tseslint.config(
           object: "Math",
           property: "random",
           message:
-            "Kein Math.random in Domäne/Content (#492): nutze src/rng.ts – nextRandom() für einen seedbaren Strom, hashStr()/hashHex() für aus Namen abgeleitete stabile Werte.",
+            "Kein Math.random in Domäne/Content (#492): nutze src/core/rng.ts – nextRandom() für einen seedbaren Strom, hashStr()/hashHex() für aus Namen abgeleitete stabile Werte.",
         },
       ],
     },

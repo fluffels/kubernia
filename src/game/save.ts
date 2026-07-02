@@ -7,7 +7,7 @@ import { KQContent } from "../content";
 import { Sim as KQSim } from "../sim";
 import { SaveStore } from "../store";
 import { worldScene, applyAudioConfig, notifySaveFailed } from "../runtime";
-import { add, toCoins } from "../coins";
+import { add, toCoins } from "../core/coins";
 import type { GameState, QuestProgress, QuestStep } from "../types";
 import { part, makeDefaultState, questIdForIndex, questIndexForId, canonicalActiveQuests, isEventMode, ALL_ABBREV_UNLOCKED, type SlotView } from "./shared";
 

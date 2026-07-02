@@ -14,7 +14,7 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { mulberry32, hashStr, hashHex, nextRandom, seedGlobalRng } from "../src/rng";
+import { mulberry32, hashStr, hashHex, nextRandom, seedGlobalRng } from "../src/core/rng";
 
 describe("mulberry32 – seedbarer PRNG (#492)", () => {
   test("gleicher Seed → exakt gleiche Zahlenfolge (reproduzierbar)", () => {

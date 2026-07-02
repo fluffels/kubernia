@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import {
   isCoins, coins, toCoins, applyMultiplier, add, canAfford, subtract, InvalidCoinsError,
-} from "../src/coins";
+} from "../src/core/coins";
 
 describe("isCoins – die EINE Regel", () => {
   it("akzeptiert nicht-negative ganze Zahlen (inkl. 0)", () => {

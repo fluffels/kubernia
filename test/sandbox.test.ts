@@ -15,7 +15,7 @@
 import { test, expect, beforeAll, beforeEach } from "vitest";
 import { stubWindowLocalStorage, loadGameStack } from "./support/browser-env";
 import { KQContent } from "../src/content";
-import { coins } from "../src/coins";
+import { coins } from "../src/core/coins";
 
 let Game: typeof import("../src/game").Game;
 let Sim: typeof import("../src/sim").Sim;

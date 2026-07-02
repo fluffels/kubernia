@@ -23,7 +23,7 @@
  * FNV-1a-Idee, jetzt an EINER Stelle für alle aus Namen abgeleiteten stabilen Werte.
  */
 import type { ClusterState, Deployment, PodInstance, PodMetrics, NodeMetrics, ScrapeTarget, Alert } from "./state";
-import { hashStr } from "../rng";
+import { hashStr } from "../core/rng";
 import { isControlPlane } from "./nodes";
 
 /** Was die Observability vom Simulator braucht (von der `Sim`-Klasse erfüllt).

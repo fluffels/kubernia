@@ -13,7 +13,7 @@
  */
 import type { Container } from "./state";
 import { randSuffix, table, flagValue, suggest } from "./util";
-import { hashStr, hashHex } from "../rng";
+import { hashStr, hashHex } from "../core/rng";
 
 // Bekannte Container-Images – Grundlage für die „Meintest du …?"-Tippfehlerhilfe.
 // Enthält alle im Spiel benutzten plus echte Tools, die man als DevOps kennt.

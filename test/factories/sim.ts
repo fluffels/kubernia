@@ -3,7 +3,7 @@
  * freshSim() liefert den bekannten leeren Startzustand; spätere Varianten
  * überschreiben nur, was für die jeweilige Assertion relevant ist. */
 import { Sim as KQSim } from "../../src/sim";
-import { seedGlobalRng } from "../../src/rng";
+import { seedGlobalRng } from "../../src/core/rng";
 
 export { KQSim };
 

@@ -3,7 +3,7 @@
  * Multiplikator hebt, wie XP in Ränge umschlägt und wofür Dublonen ausgegeben werden.
  * Anwendungsschicht, Phaser-frei. */
 import { KQContent } from "../content";
-import { add, applyMultiplier, canAfford, subtract, toCoins } from "../coins";
+import { add, applyMultiplier, canAfford, subtract, toCoins } from "../core/coins";
 import type { EventMode } from "../types";
 import { part, isEventMode, today, type EventProfile } from "./shared";
 

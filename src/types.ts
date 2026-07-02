@@ -7,7 +7,7 @@
 // Reiner Typ-Import (zur Laufzeit gelöscht). Seit #390 zeigt sim.ts NICHT mehr auf types.ts
 // zurück (ExecResult liegt jetzt in sim/state.ts) – die Kante types → sim ist einseitig, kein Zyklus.
 import type { Sim, Scenario } from "./sim";
-import type { Coins } from "./coins";
+import type { Coins } from "./core/coins";
 
 /** Fortschritt EINER offenen Quest: aktueller Schritt + Aufgabe innerhalb des Schritts.
  *  Wert-Typ von `GameState.activeQuests` (#410). Pro offener Quest genau ein solcher Stand;

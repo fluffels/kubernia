@@ -8,7 +8,7 @@ import { type LayoutBox } from "../labellayout";
 import { keys, setWorldScene } from "../runtime";
 import { expandRect, cull, FrameSampler, type Cullable } from "../cull";
 import { getMapEntry, type MapId } from "../mapregistry";
-import { DAY_CYCLE_MS } from "../clock";
+import { DAY_CYCLE_MS } from "../core/clock";
 import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, type SceneNpc } from "./shared";
 // Spiel-Systeme als eigene, fokussierte Module (WorldScene.ts-Split #393, analog
 // scenes.ts-Split #345): freie Funktionen mit der Szene als Parameter (`scene`).

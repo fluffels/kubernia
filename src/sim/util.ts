@@ -8,7 +8,7 @@
  * (das gäbe einen Import-Zyklus). `sim.ts` und die Befehls-Module importieren hier.
  */
 import { asPodName, type PodName } from "./names";
-import { nextRandom, hashStr } from "../rng";
+import { nextRandom, hashStr } from "../core/rng";
 
 /** Zufällige Kleinbuchstaben-/Ziffern-Folge der Länge `len` – für Container-/Image-IDs.
  *  Zieht aus dem globalen Strom (`src/rng.ts`, #492), nicht aus `Math.random` –

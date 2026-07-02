@@ -9,11 +9,11 @@
  *    Barrel public re-exportiert, weil ui/radio.ts + Tests sie importieren).
  * Bewusst KEIN Import aus anderen game/*-Modulen – shared bleibt das zyklenfreie Blatt. */
 import { KQContent } from "../content";
-import { coins } from "../coins";
-import type { Coins } from "../coins";
+import { coins } from "../core/coins";
+import type { Coins } from "../core/coins";
 import type { Sim } from "../sim";
 import type { GameState, EventMode, QuestProgress, Quest, QuestStep, FunkStep, QuestTask } from "../types";
-import type { GameClock } from "../clock";
+import type { GameClock } from "../core/clock";
 import type { CmdCard, QuizCard } from "../content/loader";
 
 /* ---------- Rückgabe-Typen der Bündel-Oberfläche ---------- */
