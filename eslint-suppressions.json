@@ -91,21 +91,6 @@
       "count": 1
     }
   },
-  "src/sim/kubectl.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
-  "src/sim/kubectl/lifecycle.ts": {
-    "complexity": {
-      "count": 3
-    }
-  },
-  "src/sim/kubectl/ops.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "src/sim/net.ts": {
     "complexity": {
       "count": 1
