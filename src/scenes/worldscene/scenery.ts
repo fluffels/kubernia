@@ -14,10 +14,10 @@ import { pickPlacements, strSeed, hash01, grassTuftStyle } from "../../decor";
 import { circleHitbox, rectHitbox, SHIP_DOOR } from "../../world";
 import { gameClock, DAY_CYCLE_MS, withStartOffset } from "../../core/clock";
 import { UI } from "../../ui";
-import { WORLD_TO_ARCHIPEL } from "../../archipel";
-import { WORLD_TO_LIGHTHOUSE } from "../../lighthouse";
-import { WORLD_TO_WAREHOUSE } from "../../warehouse";
-import { WORLD_TO_FLOTTE } from "../../flotte";
+import { WORLD_TO_ARCHIPEL } from "../../world/regions/archipel";
+import { WORLD_TO_LIGHTHOUSE } from "../../world/regions/lighthouse";
+import { WORLD_TO_WAREHOUSE } from "../../world/regions/warehouse";
+import { WORLD_TO_FLOTTE } from "../../world/regions/flotte";
 import { T, FOAM, WOOD } from "../shared";
 import type { WorldSceneLike } from "./types";
 

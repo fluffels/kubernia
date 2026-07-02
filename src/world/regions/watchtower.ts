@@ -25,7 +25,7 @@
  * wiederverwendet statt erneut definiert (wie in lighthouse.ts/warehouse.ts).
  */
 import { warpAt, type Warp } from "./archipel";
-import { objectsForMap, objectFootprint } from "./content/entities";
+import { objectsForMap, objectFootprint } from "../../content/entities";
 
 export { warpAt, type Warp };
 

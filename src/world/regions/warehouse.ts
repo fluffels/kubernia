@@ -15,7 +15,7 @@
  * von dort wiederverwendet statt ein drittes Mal definiert (wie in lighthouse.ts).
  */
 import { warpAt, type Warp } from "./archipel";
-import { npcSpawnForMap, objectForId, objectsForMap, objectFootprint, type Spawn } from "./content/entities";
+import { npcSpawnForMap, objectForId, objectsForMap, objectFootprint, type Spawn } from "../../content/entities";
 
 export { warpAt, type Warp };
 

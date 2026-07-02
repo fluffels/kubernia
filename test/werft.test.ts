@@ -17,7 +17,7 @@ import {
   buildWerft, warpAt,
   WORLD_JETTY_WF, WORLD_TO_WERFT, WORLD_RETURN_WF,
   WERFT_TO_WORLD, WERFT_ARRIVAL, WERFT_NPC, WERFT_BUILD_TRIGGER,
-} from "../src/werft";
+} from "../src/world/regions/werft";
 
 const map = buildWerft();
 

@@ -23,7 +23,7 @@
  * die pure shipTile()-Geometrie aus world.ts.
  */
 import { SHIP, SHIP_PIER, shipTile, TILE, ENTRANCES, NPC_SPAWNS, type Door, type Spawn } from "./world";
-import { WORLD_JETTY } from "./archipel";
+import { WORLD_JETTY } from "./world/regions/archipel";
 import { parseTiledMap, tileLayer, type TiledMap } from "./tilemap";
 
 /** Maße der Hafenkarte (identisch zu WorldScene.W/H). */

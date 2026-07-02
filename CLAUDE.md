@@ -128,12 +128,12 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/content/drills/werft.ts`](src/content/drills/werft.ts) | pure Domäne | Werft-Capstone-Drills (Build→Deploy→Expose→Test, #457). |
 | [`src/content/abbrev.ts`](src/content/abbrev.ts) | pure Domäne | Langform↔Kürzel-Katalog („verdiente Abkürzung"). |
 | [`src/world.ts`](src/world.ts) | pure Domäne | Welt-Geometrie + Autotile (#340) + Sub-Tile-Kollision (#343/#386). → [world.md](docs/module/world.md) |
-| [`src/archipel.ts`](src/archipel.ts) | pure Domäne | GitOps-Archipel-Insel: Geometrie + Warp. |
-| [`src/lighthouse.ts`](src/lighthouse.ts) | pure Domäne | Monitoring-Leuchtturm-Klippe: Geometrie + Warp (#111). |
-| [`src/warehouse.ts`](src/warehouse.ts) | pure Domäne | Lagerhallen-Viertel/Hafenkai: Geometrie + Warp (#124). |
-| [`src/watchtower.ts`](src/watchtower.ts) | pure Domäne | Wachturm-Quartier: Festungs-Bailey-Geometrie + Anleger/Warp + Turm-Fußabdruck (#130). |
-| [`src/flotte.ts`](src/flotte.ts) | pure Domäne | Expeditions-Flotte: Flaggschiff-Deck-Geometrie + Anleger/Warp (#148). |
-| [`src/werft.ts`](src/werft.ts) | pure Domäne | Heimat-Werft: Werft-Hof-Geometrie + Helling/Anleger/Warp (Phase-10-Capstone, #165). |
+| [`src/world/regions/archipel.ts`](src/world/regions/archipel.ts) | pure Domäne | GitOps-Archipel-Insel: Geometrie + Warp. |
+| [`src/world/regions/lighthouse.ts`](src/world/regions/lighthouse.ts) | pure Domäne | Monitoring-Leuchtturm-Klippe: Geometrie + Warp (#111). |
+| [`src/world/regions/warehouse.ts`](src/world/regions/warehouse.ts) | pure Domäne | Lagerhallen-Viertel/Hafenkai: Geometrie + Warp (#124). |
+| [`src/world/regions/watchtower.ts`](src/world/regions/watchtower.ts) | pure Domäne | Wachturm-Quartier: Festungs-Bailey-Geometrie + Anleger/Warp + Turm-Fußabdruck (#130). |
+| [`src/world/regions/flotte.ts`](src/world/regions/flotte.ts) | pure Domäne | Expeditions-Flotte: Flaggschiff-Deck-Geometrie + Anleger/Warp (#148). |
+| [`src/world/regions/werft.ts`](src/world/regions/werft.ts) | pure Domäne | Heimat-Werft: Werft-Hof-Geometrie + Helling/Anleger/Warp (Phase-10-Capstone, #165). |
 | [`src/warps.ts`](src/warps.ts) | pure Domäne | Region-Übergänge als Daten-Liste (`REGION_WARPS`) + reiner Anti-Pingpong-Kern `armWarps`/`triggeredWarp` (#426). |
 | [`src/decor.ts`](src/decor.ts) | pure Domäne | Deterministische Deko-Platzierung. |
 | [`src/hazards.ts`](src/hazards.ts) | pure Domäne | Gefahren-Entscheidungskern (#512): `resolveHazardTick` (welche Gefahr startet/löst auf/tickt) + Start-Gate + Opfer-Eignung; `scenes/worldscene/events.ts` führt nur noch die Effekte aus. |

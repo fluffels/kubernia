@@ -15,7 +15,7 @@ import {
   WORLD_JETTY_WH, WORLD_TO_WAREHOUSE, WORLD_RETURN_WH,
   WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL,
   WAREHOUSE_NPC, WAREHOUSE_QUEST_TRIGGER, WAREHOUSE_CRANES, WAREHOUSE_CONTAINERS,
-} from "../src/warehouse";
+} from "../src/world/regions/warehouse";
 
 const map = buildWarehouse();
 const isStone = (c: number) => (STONE_CODES as readonly number[]).includes(c);
