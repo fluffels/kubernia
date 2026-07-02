@@ -43,7 +43,7 @@ test("Offline-Build bootet headless ohne Konsolen-/Laufzeit-Fehler", async ({ pa
 
   // Das index.html-Sicherheitsnetz (der „startet so nicht"-Fallback nach 1,5 s)
   // darf NICHT erschienen sein – es erscheint nur, wenn kqBooted ausbleibt.
-  await expect(page.getByText("KubeQuest startet so nicht")).toHaveCount(0);
+  await expect(page.getByText("Kubernia startet so nicht")).toHaveCount(0);
 
   // Kurz weiterlaufen lassen, damit auch ASYNCHRONE Fehler auflaufen, die nach
   // dem Boot-Flag kommen (BootScene lädt/sliced Assets, Szenen-create, Content).

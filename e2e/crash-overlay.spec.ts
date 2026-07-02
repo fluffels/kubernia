@@ -21,7 +21,7 @@ test("ein unbehandelter Fehler zeigt das Fallback-Overlay statt schwarzem Canvas
   });
 
   await expect(overlay).toBeVisible();
-  await expect(page.getByText("KubeQuest ist auf ein Problem gestoßen")).toBeVisible();
+  await expect(page.getByText("Kubernia ist auf ein Problem gestoßen")).toBeVisible();
   await expect(page.getByText("Synthetischer Testfehler").first()).toBeVisible();
   await expect(page.getByRole("button", { name: /neu laden/i })).toBeVisible();
 });
