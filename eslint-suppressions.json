@@ -150,11 +150,6 @@
       "count": 1
     }
   },
-  "src/store.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "src/ui/overlay.ts": {
     "complexity": {
       "count": 1

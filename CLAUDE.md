@@ -171,7 +171,11 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/game/tick.ts`](src/game/tick.ts) | Anwendung | Szenen-neutraler Taktgeber (#501): `Game.tick(dtMs)` rückt frame-unabhängige Domäne (Spiel-Zeit + Hafen-Wirtschaft) an EINER Stelle vor; aus Phasers globalem Pre-Step (main.ts) getrieben → läuft in JEDER Szene, Auszahlung entkoppelt über runtime-Sink. |
 | [`src/runtime.ts`](src/runtime.ts) | Anwendung | Laufzeit-Singletons (bricht Import-Zyklen). |
 | [`src/devpanel.ts`](src/devpanel.ts) | Anwendung | Dev-/Test-Panel (#325/#331). |
-| [`src/store.ts`](src/store.ts) | Persistenz | SaveStore: IndexedDB-Backend, sync API via In-Memory-Cache (#350); Eviction-Schutz `requestPersistentStorage()` (#401); mehrere Save-Slots (#306, aktiver Slot + Slot-Index, Default-Slot am Legacy-Key); Namensraum `kubernia` (#557). |
+| [`src/store.ts`](src/store.ts) | Persistenz | SaveStore: dünne Fassade (#515), orchestriert den Boot (`init` + einmalige Namensraum-Migrationen `kubernia` #557) und delegiert an `store/*`. |
+| [`src/store/backend.ts`](src/store/backend.ts) | Persistenz | Backend-Auswahl (IndexedDB #350 / localStorage / In-Memory) + synchrones Roh-IO (`rawGet`/`rawSet`/`rawRemove`) via In-Memory-Cache; `hydrate`/`activateIdb` fürs Boot-Hydrieren (#515). |
+| [`src/store/slots.ts`](src/store/slots.ts) | Persistenz | Mehrere Save-Slots (#306): Slot-Index, Slot-Keys (Default-Slot am Legacy-Key), Slot-CRUD + Roh-IO auf dem AKTIVEN Slot (#515). |
+| [`src/store/versioning.ts`](src/store/versioning.ts) | Persistenz | Save-Format-Versionierung (#350/#510): `{ v, data }`-Hülle, Migrationskette (`CURRENT_SAVE_VERSION`), `readState`/`writeState`/`migrateParsed` + Backup-vor-Überschreiben (#515). |
+| [`src/store/persistence.ts`](src/store/persistence.ts) | Persistenz | Eviction-Schutz + Quota-Monitoring (#401): `requestPersistentStorage()`/`StorageHealth`/`QUOTA_WARN_RATIO` (#515). |
 | [`src/store/legacy-idb.ts`](src/store/legacy-idb.ts) | Persistenz | Rename-Migration KubeQuest→Kubernia (#557): hebt einen Alt-Bestand aus der IndexedDB `kubequest` in die neue DB `kubernia` (nur in ein leeres Ziel, Alt-DB bleibt als Netz). |
 | [`src/scenes.ts`](src/scenes.ts) | Präsentation | Barrel der 7 Phaser-Szenen (`KQScenes`, #345). → [presentation.md](docs/module/presentation.md) |
 | [`src/scenes/shared.ts`](src/scenes/shared.ts) | Präsentation | Geteilte Szenen-Bausteine (Font/Schilder/NPC-Render) + Insel-Szenen-Basisklasse `IslandScene` (#423). |
