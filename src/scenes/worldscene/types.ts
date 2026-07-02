@@ -95,7 +95,7 @@ export interface WorldSceneFields {
   shipFlag: Phaser.GameObjects.Image;
   lhBeam: Phaser.GameObjects.Image;
   lhLight: Phaser.GameObjects.Image;
-  cannon: Phaser.GameObjects.Text;
+  cannon: Phaser.GameObjects.Image;
   tfGroup: Phaser.GameObjects.Container;
   tfBuoys: Phaser.GameObjects.Image[];
   butterflies: Butterfly[];

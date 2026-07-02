@@ -270,8 +270,8 @@ export function renderStatics(scene: WorldSceneLike) {
     scene.tfBuoys.push(b);
   }
 
-  // Hafen-Kanone (Shop-Upgrade)
-  scene.cannon = scene.add.text(21 * T, 24 * T + 8, "💣", { fontSize: "10px", resolution: 6 }).setOrigin(0.5).setDepth(24 * T + 16).setVisible(false);
+  // Hafen-Kanone (Shop-Upgrade, #183): Pixelart-Sprite statt Emoji 💣.
+  scene.cannon = scene.add.image(21 * T, 24 * T + 8, "cannon").setOrigin(0.5).setScale(0.3).setDepth(24 * T + 16).setVisible(false);
 
   // Anker-Marker am Archipel-Steg (#92): pulsierend, damit der Warp sichtbar ist.
   const ax = WORLD_TO_ARCHIPEL.tx * T + 8, ay = WORLD_TO_ARCHIPEL.ty * T + 8;
