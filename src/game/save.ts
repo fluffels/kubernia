@@ -221,16 +221,19 @@ export function sanitizeState(raw: unknown): GameState {
   let questIdx: number;
   if (typeof raw.currentQuestId === "string") {
     const resolved = questIndexForId(migrateQuestId(raw.currentQuestId));
-    questIdx = resolved >= 0 ? resolved : safeCount(raw.questIdx, def.questIdx);
+    questIdx = resolved >= 0 ? resolved : safeCount(raw.questIdx, 0);
   } else {
-    questIdx = safeCount(raw.questIdx, def.questIdx);
+    questIdx = safeCount(raw.questIdx, 0);
   }
   if (questIdx > KQContent.QUESTS.length) questIdx = KQContent.QUESTS.length; // nie über den Endzustand
   const currentQuestId = questIdForIndex(questIdx);
 
-  // Schritt-/Aufgaben-Stand der fokussierten Quest defensiv lesen (Arbeitskopie der linearen Felder).
-  let questStep = safeCount(raw.questStep, def.questStep);
-  let taskIdx = safeCount(raw.taskIdx, def.taskIdx);
+  // Schritt-/Aufgaben-Stand der fokussierten Quest aus dem Alt-Stand defensiv lesen (#559: nur
+  // noch Rohmaterial zum Bauen des activeQuests-Eintrags unten, kein persistiertes Feld mehr).
+  // Ein Stand ab v4 trägt den maßgeblichen Fortschritt ohnehin in raw.activeQuests; diese
+  // top-level Felder sind der Migrationspfad für Alt-Stände ≤ v3 (Einzel-Quest → Menge).
+  const questStep = safeCount(raw.questStep, 0);
+  const taskIdx = safeCount(raw.taskIdx, 0);
 
   // Offene Quests als Menge auflösen (#410). Die Persistenz-Autorität ist `activeQuests`;
   // die linearen Felder oben sind nur die Arbeitskopie der FOKUSSIERTEN (linearen) Quest.
@@ -246,7 +249,11 @@ export function sanitizeState(raw: unknown): GameState {
     for (const [rawId, prog] of Object.entries(raw.activeQuests)) {
       const id = migrateQuestId(rawId);
       if (questIndexForId(id) < 0) continue;   // unbekannte/entfernte Quest -> raus
-      if (completedSet.has(id)) continue;      // erledigt gewinnt -> nicht zugleich offen
+      // „erledigt gewinnt" -> nicht zugleich offen; AUSNAHME die fokussierte Quest, die per
+      // Invariante immer offen ist. Ohne diese Ausnahme ginge ihr Schritt-Stand verloren, seit
+      // er nicht mehr redundant top-level persistiert wird (#559): der frühere Invarianten-Fill
+      // unten hätte ihn aus dem entfernten questStep-Feld „gerettet", jetzt gibt es das nicht mehr.
+      if (completedSet.has(id) && id !== currentQuestId) continue;
       if (!isPlainObject(prog)) continue;
       // #511: gegen den echten Content klemmen – die Autorität darf keinen Schritt/Aufgabe
       // jenseits der Quest tragen (sonst persistiert der 999-Zustand und wird beim Fokus tot).
@@ -259,24 +266,21 @@ export function sanitizeState(raw: unknown): GameState {
   // einem v4-Stand (kaputt/manipuliert), aus den linearen Feldern ergänzen.
   if (currentQuestId !== "" && !active[currentQuestId]) active[currentQuestId] = clampProgress(currentQuestId, questStep, taskIdx);
   const activeQuests = canonicalActiveQuests(active);
-  // Arbeitskopie aus der Autorität nachziehen: bei v4-Ständen kann der fokussierte Eintrag
-  // aktueller sein als die top-level questStep/taskIdx (Autorität gewinnt). Danach die linearen
-  // Felder final gegen den Content klemmen (#511): deckt Endzustand (keine Quest → 0,0) und die
-  // Migrations-/Fallback-Zweige oben einheitlich ab; für den Autoritäts-Fall idempotent.
-  const focus = currentQuestId !== "" ? activeQuests[currentQuestId] : undefined;
-  if (focus) { questStep = focus.step; taskIdx = focus.task; }
-  ({ step: questStep, task: taskIdx } = clampProgress(currentQuestId, questStep, taskIdx));
+  // Kein Nachziehen einer Arbeitskopie mehr (#559): activeQuests ist die alleinige Autorität,
+  // Schritt/Aufgabe werden zur Laufzeit daraus abgeleitet. Die Klemmung gegen den Content (#511)
+  // ist bereits in clampProgress oben passiert, das jeden activeQuests-Eintrag baut.
 
   return {
     xp: safeCount(raw.xp, def.xp),
     coins: toCoins(safeCount(raw.coins, def.coins)),
     character: typeof raw.character === "number" && Number.isFinite(raw.character) ? raw.character : null,
     player: { x: safeNum(player.x, def.player.x), y: safeNum(player.y, def.player.y) },
+    // Quest-Fortschritt: nur die Autorität persistieren (#559). Schritt/Aufgabe/Index werden
+    // zur Laufzeit aus activeQuests + currentQuestId abgeleitet (Game.questStep()/taskIdx()/
+    // questIdx()) – die lokalen questStep/taskIdx/questIdx oben dienen nur noch dazu, activeQuests
+    // korrekt zu bauen (Alt-Stand-Migration + Klemmung).
     activeQuests,
     currentQuestId,
-    questIdx,
-    questStep,
-    taskIdx,
     completedQuests: safeStrArray(raw.completedQuests).map(migrateQuestId), // alte Quest-IDs -> neue Slugs (#354)
     inventory,
     owned: safeStrArray(raw.owned),
@@ -345,10 +349,12 @@ export const saveBundle = part({
     // `files`-Schlüssel): alle bereits erreichten Szenarien einmischen; der anschließende
     // save() schreibt dann erstmals einen vollständigen Snapshot.
     if (!this.state.clusterSnapshot || this.state.clusterSnapshot.files === undefined) {
-      for (let qi = 0; qi <= Math.min(this.state.questIdx, KQContent.QUESTS.length - 1); qi++) {
+      const curIdx = this.questIdx();
+      const curStep = this.questStep();
+      for (let qi = 0; qi <= Math.min(curIdx, KQContent.QUESTS.length - 1); qi++) {
         const quest = KQContent.QUESTS[qi];
         quest.steps.forEach((step, si) => {
-          if (step.scenario && (qi < this.state.questIdx || si <= this.state.questStep)) {
+          if (step.scenario && (qi < curIdx || si <= curStep)) {
             this.sim.mergeScenario(Object.assign({}, step.scenario));
           }
         });
@@ -391,12 +397,10 @@ export const saveBundle = part({
     if (syncFromScene && ws && ws.player) {
       this.state.player = { x: ws.player.x, y: ws.player.y };
     }
-    // Fokussierte Quest in die Autorität (activeQuests) einfalten + kanonisieren (#410):
-    // so spiegelt der persistierte Stand die lineare Arbeitskopie (questStep/taskIdx) wider
-    // und die Schlüssel-Reihenfolge bleibt byte-stabil (Roundtrip-Fixpunkt).
-    if (this.state.currentQuestId) {
-      this.state.activeQuests[this.state.currentQuestId] = { step: this.state.questStep, task: this.state.taskIdx };
-    }
+    // Kein Einfalten einer Arbeitskopie mehr (#559): advanceStep/advanceTask/jumpToQuest
+    // mutieren activeQuests direkt, es gibt keine getrennten questStep/taskIdx-Felder, die
+    // gespiegelt werden müssten. Nur noch kanonisieren, damit die Schlüssel-Reihenfolge
+    // byte-stabil bleibt (Roundtrip-Fixpunkt in savemigration.test.ts).
     this.state.activeQuests = canonicalActiveQuests(this.state.activeQuests);
     this.state.lastSeen = Date.now();
     // writeState meldet über den bool-Rückgabewert, ob das Schreiben klappte (#497).
@@ -455,7 +459,7 @@ export const saveBundle = part({
     return {
       xp: this.state.xp,
       coins: this.state.coins,
-      questIdx: this.state.questIdx,
+      questIdx: this.questIdx(),
       lastSeen: this.state.lastSeen,
       character: this.state.character,
     };
@@ -469,7 +473,7 @@ export const saveBundle = part({
     return SaveStore.listSlots().map((s) => {
       const active = s.id === activeId;
       const xp = active ? this.state.xp : summaryNum(s.summary, "xp", 0);
-      const rawQuest = active ? this.state.questIdx : summaryNum(s.summary, "questIdx", 0);
+      const rawQuest = active ? this.questIdx() : summaryNum(s.summary, "questIdx", 0);
       const questIdx = Math.max(0, Math.min(total, Math.floor(rawQuest)));
       const lastSeen = active ? this.state.lastSeen : summaryNum(s.summary, "lastSeen", 0);
       // „Neu" = aktiver Slot ohne gesetzten Charakter (Intro noch nicht durch) bzw. ein

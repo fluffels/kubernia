@@ -45,7 +45,7 @@ export const radioUI = part({
     if (s.kind === "quest") {
       const step = s.step!;
       if (step.type === "drill") {
-        if ((Game.state.taskIdx || 0) >= step.count) return null;
+        if (Game.taskIdx() >= step.count) return null;
         // #219: Drill aus dem Pool nach Lernstand GEWICHTET ziehen (schwache häufiger),
         // statt rein zufällig – und die gezogene ID merken, um das Ergebnis zu buchen.
         if (!this._drillTask) {
@@ -56,7 +56,7 @@ export const radioUI = part({
         return this._drillTask;
       }
       const tasks = Game.stepTasks(step);
-      return (tasks && tasks[Game.state.taskIdx || 0]) || null;
+      return (tasks && tasks[Game.taskIdx()]) || null;
     }
     return null;
   },
@@ -98,10 +98,10 @@ export const radioUI = part({
         html += `<div class="tt-item current">▶️ ${fmtCmd(step.cmd.text)}</div>`;
       } else if (step.type === "drill") {
         html += `<div class="dim" style="margin-bottom:8px">${fmtCmd(step.intro)}</div>`;
-        html += `<div class="dim">Übung ${Math.min((Game.state.taskIdx || 0) + 1, step.count)} von ${step.count}</div>`;
+        html += `<div class="dim">Übung ${Math.min(Game.taskIdx() + 1, step.count)} von ${step.count}</div>`;
         if (task) html += `<div class="tt-item current">▶️ ${fmtCmd(task.text)}</div>`;
       } else {
-        const taskIdx = Game.state.taskIdx || 0;
+        const taskIdx = Game.taskIdx();
         step.tasks.forEach((t: QuestTask, i: number) => {
           const cls = i < taskIdx ? "done" : i === taskIdx ? "current" : "";
           const mark = i < taskIdx ? "✅" : i === taskIdx ? "▶️" : "·";
@@ -234,15 +234,15 @@ export const radioUI = part({
       // #219: auch Quest-Drills schreiben den Lernstand fort (gewichtete Pool-Auswahl oben).
       if (this._drillId) Game.recordPractice(this._drillId, !this._practiceDirty);
       this._drillTask = null;
-      Game.state.taskIdx = (Game.state.taskIdx || 0) + 1;
+      const task = Game.advanceTask();
       Game.save();
-      if (Game.state.taskIdx >= step.count) return this.finishFunkStep();
+      if (task >= step.count) return this.finishFunkStep();
     } else if (step.type === "teach") {
       return this.finishFunkStep();
     } else {
-      Game.state.taskIdx = (Game.state.taskIdx || 0) + 1;
+      const task = Game.advanceTask();
       Game.save();
-      if (Game.state.taskIdx >= step.tasks.length) return this.finishFunkStep();
+      if (task >= step.tasks.length) return this.finishFunkStep();
     }
     this.renderTermTasks();
     const fb = $("tt-feedback");

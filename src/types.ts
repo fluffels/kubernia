@@ -45,31 +45,26 @@ export interface GameState {
   coins: Coins;
   character: number | null;
   player: Position;
-  /** Offene Quests als **Menge** (Quest-ID → Fortschritt). Die Persistenz-Autorität für
-   *  den Quest-Fortschritt seit #410 – erweitert #353 von EINER auf MEHRERE gleichzeitig
-   *  offene Quests, ohne dass das einen Spielstand bricht. Auf dem linearen Lernpfad ist
-   *  hier genau **ein** Eintrag (= die aktuelle Quest); das Modell trägt aber beliebig viele
-   *  parallel/optional offene Quests (Stardew-Scope: Nebenstränge, Voraussetzungen). Eine
-   *  Quest ist „offen" ⇔ sie steht hier; „erledigt" ⇔ sie steht in `completedQuests`
-   *  (beides gleichzeitig schließt sich aus). Leeres Objekt = keine offene Quest (Endzustand).
-   *  Die linearen Felder `currentQuestId`/`questIdx`/`questStep`/`taskIdx` sind die abgeleitete
-   *  **Arbeitskopie der fokussierten Quest** (= des linearen Lernpfads); sie werden beim Laden
-   *  aus `activeQuests` abgeleitet und beim Speichern dort eingefaltet. Alt-Stände ohne dieses
-   *  Feld werden aus der fokussierten Einzel-Quest migriert (game.ts › sanitizeState). */
+  /** Offene Quests als **Menge** (Quest-ID → Fortschritt). Die **alleinige** Persistenz-
+   *  Autorität für den Quest-Fortschritt (#410/#559) – erweitert #353 von EINER auf MEHRERE
+   *  gleichzeitig offene Quests, ohne dass das einen Spielstand bricht. Auf dem linearen
+   *  Lernpfad ist hier genau **ein** Eintrag (= die aktuelle Quest); das Modell trägt aber
+   *  beliebig viele parallel/optional offene Quests (Stardew-Scope: Nebenstränge,
+   *  Voraussetzungen). Eine Quest ist „offen" ⇔ sie steht hier; „erledigt" ⇔ sie steht in
+   *  `completedQuests` (beides gleichzeitig schließt sich aus). Leeres Objekt = keine offene
+   *  Quest (Endzustand). Schritt/Aufgabe der fokussierten Quest werden seit #559 NICHT mehr
+   *  redundant persistiert, sondern zur Laufzeit hieraus abgeleitet
+   *  (`Game.questIdx()`/`questStep()`/`taskIdx()`) – es gibt keine separate Arbeitskopie mehr,
+   *  die synchron gehalten werden müsste. Alt-Stände (≤ v3) ohne dieses Feld werden aus der
+   *  fokussierten Einzel-Quest migriert (game.ts › sanitizeState). */
   activeQuests: Record<string, QuestProgress>;
   /** Fokussierte Quest als **ID** (die lineare Lernpfad-Quest, deren Schritt die UI spielt).
-   *  Abgeleitete Arbeitskopie der entsprechenden `activeQuests`-Auswahl. Leerer String =
-   *  alle Quests durch (Endzustand). `questIdx` ist der daraus abgeleitete Laufzeit-Index;
-   *  bei Konflikt gewinnt diese ID. Seit #353 ID-basiert (Quests einschieben/umsortieren
-   *  verschiebt keinen Stand), seit #410 Spiegel des `activeQuests`-Eintrags. */
+   *  Zusammen mit `activeQuests` die einzige persistierte Quest-Fortschritts-Autorität. Leerer
+   *  String = alle Quests durch (Endzustand). Der Laufzeit-Index (`Game.questIdx()`) und der
+   *  Schritt-/Aufgaben-Stand (`Game.questStep()`/`taskIdx()`) werden hieraus + `activeQuests`
+   *  abgeleitet und nicht mehr gespeichert (#559). Seit #353 ID-basiert (Quests
+   *  einschieben/umsortieren verschiebt keinen Stand), seit #410 Schlüssel in `activeQuests`. */
   currentQuestId: string;
-  /** Abgeleiteter Laufzeit-Index der fokussierten Quest in `QUESTS` (= Index in quest-order.json).
-   *  Wird beim Laden aus `currentQuestId` aufgelöst – NICHT die Persistenz-Autorität (#353). */
-  questIdx: number;
-  /** Schritt-Stand der fokussierten Quest. Arbeitskopie von `activeQuests[currentQuestId].step`. */
-  questStep: number;
-  /** Aufgaben-Stand innerhalb des fokussierten Schritts. Arbeitskopie von `activeQuests[currentQuestId].task`. */
-  taskIdx: number;
   completedQuests: string[];
   inventory: Record<string, number>;
   owned: string[];

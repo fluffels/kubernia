@@ -35,9 +35,17 @@ beforeEach(() => {
 /** Tiefe Kopie eines beliebigen serialisierbaren Werts (für „vorher == nachher"). */
 function clone<T>(v: T): T { return JSON.parse(JSON.stringify(v)) as T; }
 
+/** #559: Schritt der fokussierten Quest setzen. activeQuests[currentQuestId] ist die
+ *  Fortschritts-Autorität (kein persistiertes questStep-Feld mehr); jumpToQuest/startReplay
+ *  legen den fokussierten Eintrag zuvor an. */
+function setFocusedStep(step: number): void {
+  const id = Game.state.currentQuestId;
+  Game.state.activeQuests[id] = { step, task: Game.state.activeQuests[id]?.task ?? 0 };
+}
+
 test("startReplay: springt an den Anfang einer abgeschlossenen Quest und merkt das Lesezeichen (RAM)", () => {
   Game.jumpToQuest(3);                 // q0..q2 erledigt, aktuell q3
-  Game.state.questStep = 2;            // mittendrin in q3
+  setFocusedStep(2);                   // mittendrin in q3
   Game.state.player = { x: 123, y: 456 };
   Game.save(false);
   const persistedBefore = clone(SaveStore.readState());
@@ -45,9 +53,9 @@ test("startReplay: springt an den Anfang einer abgeschlossenen Quest und merkt d
   const ok = Game.startReplay(1);      // q1 wiederspielen
   expect(ok).toBe(true);
   expect(Game.isReplaying()).toBe(true);
-  expect(Game.state.questIdx).toBe(1);
+  expect(Game.questIdx()).toBe(1);
   expect(Game.state.currentQuestId).toBe(KQContent.QUESTS[1].id);
-  expect(Game.state.questStep).toBe(0);
+  expect(Game.questStep()).toBe(0);
 
   // Der echte Save wurde NICHT angefasst (immer noch q3-Stand).
   expect(SaveStore.readState()).toEqual(persistedBefore);
@@ -77,7 +85,7 @@ test("Wiederspiel: save() ist ein No-Op – keine doppelte XP/Wirtschaft im echt
 
 test("endReplay: stellt Position + questIdx + questStep des Live-Stands exakt wieder her und persistiert", () => {
   Game.jumpToQuest(4);
-  Game.state.questStep = 1;
+  setFocusedStep(1);
   Game.state.player = { x: 222, y: 333 };
   Game.state.xp = 777;
   const liveCompleted = clone(Game.state.completedQuests);
@@ -85,14 +93,14 @@ test("endReplay: stellt Position + questIdx + questStep des Live-Stands exakt wi
 
   Game.startReplay(0);
   Game.state.xp += 5000;       // im Wiederspiel verdient -> muss verfallen
-  Game.state.questStep = 9;
+  setFocusedStep(9);
   Game.state.completedQuests.push("sandbox-junk");
 
   const ok = Game.endReplay();
   expect(ok).toBe(true);
   expect(Game.isReplaying()).toBe(false);
-  expect(Game.state.questIdx).toBe(4);
-  expect(Game.state.questStep).toBe(1);
+  expect(Game.questIdx()).toBe(4);
+  expect(Game.questStep()).toBe(1);
   expect(Game.state.player).toEqual({ x: 222, y: 333 });
   expect(Game.state.xp).toBe(777);                       // keine Wiederspiel-XP
   expect(Game.state.completedQuests).toEqual(liveCompleted); // kein Sandbox-Müll
@@ -131,21 +139,21 @@ test("#451: pointsToKralleAfterFirstQuest – true am letzten Schritt der Docker
   expect(FIRST_QUEST_IDX).toBeGreaterThanOrEqual(0);
   const quest = KQContent.QUESTS[FIRST_QUEST_IDX];
   Game.jumpToQuest(FIRST_QUEST_IDX);
-  Game.state.questStep = quest.steps.length - 1;   // Bos Abschiedsworte
+  setFocusedStep(quest.steps.length - 1);   // Bos Abschiedsworte
   expect(Game.isReplaying()).toBe(false);
   expect(Game.pointsToKralleAfterFirstQuest()).toBe(true);
 });
 
 test("#451: pointsToKralleAfterFirstQuest – false vor dem letzten Schritt", () => {
   Game.jumpToQuest(FIRST_QUEST_IDX);
-  Game.state.questStep = 0;                          // ganz am Anfang
+  setFocusedStep(0);                                 // ganz am Anfang
   expect(Game.pointsToKralleAfterFirstQuest()).toBe(false);
 });
 
 test("#451: pointsToKralleAfterFirstQuest – false in einer anderen Quest", () => {
   Game.jumpToQuest(FIRST_QUEST_IDX + 1);             // nächste Quest, letzter Schritt
   const q = Game.currentQuest()!;
-  Game.state.questStep = q.steps.length - 1;
+  setFocusedStep(q.steps.length - 1);
   expect(q.id).not.toBe("docker-first-container");
   expect(Game.pointsToKralleAfterFirstQuest()).toBe(false);
 });
@@ -153,7 +161,7 @@ test("#451: pointsToKralleAfterFirstQuest – false in einer anderen Quest", () 
 test("#451: pointsToKralleAfterFirstQuest – false im Wiederspiel der Einstiegsquest (nicht bei Wiederholung)", () => {
   Game.jumpToQuest(FIRST_QUEST_IDX + 1);             // Einstiegsquest damit abgeschlossen
   expect(Game.startReplay(FIRST_QUEST_IDX)).toBe(true);
-  Game.state.questStep = KQContent.QUESTS[FIRST_QUEST_IDX].steps.length - 1;
+  setFocusedStep(KQContent.QUESTS[FIRST_QUEST_IDX].steps.length - 1);
   expect(Game.isReplaying()).toBe(true);
   expect(Game.pointsToKralleAfterFirstQuest()).toBe(false);
   Game.endReplay();

@@ -34,6 +34,14 @@ beforeEach(() => {
   Game.sim = new Sim({}); // leerer Cluster als bekannte Basis
 });
 
+/** #559: Schritt der fokussierten Quest setzen. Seit #559 gibt es kein persistiertes
+ *  questStep-Feld mehr – activeQuests[currentQuestId] ist die Fortschritts-Autorität, aus
+ *  der Game.questStep() ableitet. (Nach dem beforeEach-Reset ist genau Quest 0 fokussiert.) */
+function setFocusedStep(step: number): void {
+  const id = Game.state.currentQuestId;
+  Game.state.activeQuests[id] = { step, task: Game.state.activeQuests[id]?.task ?? 0 };
+}
+
 /* ---------- Audio-Einstellungen (#47) ---------- */
 
 test("defaultState: Audio ist standardmäßig an, mit gesetzten Lautstärken", () => {
@@ -655,10 +663,10 @@ test("load: kaputte Zahlenfelder (String-Münzen, negative XP) fallen auf Defaul
   expect(Game.state.coins).toBe(40);              // Default, sauber
   expect(Number.isFinite(Game.state.coins)).toBe(true);
   expect(Game.state.xp).toBe(0);
-  expect(Game.state.questIdx).toBe(0);
+  expect(Game.questIdx()).toBe(0);
   // questIdx 0 fokussiert die Onboarding-Quest; deren Schritt 0 ist ein Dialog ohne
   // adressierbare Aufgaben -> taskIdx wird gegen den Content auf 0 gehärtet (#511).
-  expect(Game.state.taskIdx).toBe(0);
+  expect(Game.taskIdx()).toBe(0);
 });
 
 test("load: kaputte Sammlungen/Typen werden gefiltert oder verworfen", () => {
@@ -708,7 +716,7 @@ test("load: ein VOLLSTÄNDIG valider Stand überlebt unverändert (kein Over-San
   expect(Game.state.coins).toBe(99);
   expect(Game.state.character).toBe(2);
   expect(Game.state.player).toEqual({ x: 100, y: 200 });
-  expect(Game.state.questIdx).toBe(4);
+  expect(Game.questIdx()).toBe(4);
   expect(Game.state.completedQuests).toEqual(["docker-first-container", "docker-list-containers"]);
   expect(Game.state.owned).toEqual(["pet-cat"]);
   expect(Game.state.inventory).toEqual({ potion: 2 });
@@ -750,9 +758,9 @@ test("#511 questStep/taskIdx: jenseits des Contents werden gegen die Quest gekle
   Game.importData(JSON.stringify({ v: 3, data: { questIdx: qi, questStep: 999, taskIdx: 999 } }));
   Game.load();
 
-  expect(Game.state.questIdx).toBe(qi);
-  expect(Game.state.questStep).toBe(expectedStep);     // auf letzten realen Schritt geklemmt
-  expect(Game.state.taskIdx).toBe(expectedTask);       // gegen Aufgabenzahl des Schritts geklemmt
+  expect(Game.questIdx()).toBe(qi);
+  expect(Game.questStep()).toBe(expectedStep);     // auf letzten realen Schritt geklemmt
+  expect(Game.taskIdx()).toBe(expectedTask);       // gegen Aufgabenzahl des Schritts geklemmt
   expect(Game.currentStep()).not.toBeNull();           // KEIN toter Quest-Zustand mehr
   // Die Persistenz-Autorität (activeQuests) trägt denselben geklemmten Stand.
   expect(Game.state.activeQuests[Game.state.currentQuestId]).toEqual({ step: expectedStep, task: expectedTask });
@@ -775,15 +783,15 @@ test("#511 questStep/taskIdx: aus der activeQuests-Autorität werden ebenfalls g
   Game.load();
 
   expect(Game.state.activeQuests[id]).toEqual({ step: expectedStep, task: expectedTask });
-  expect(Game.state.questStep).toBe(expectedStep);
+  expect(Game.questStep()).toBe(expectedStep);
   expect(Game.currentStep()).not.toBeNull();
 });
 
 test("#511 questStep: ein valider Schritt überlebt unverändert (kein Over-Clamping)", () => {
   Game.importData(JSON.stringify({ v: 3, data: { questIdx: 4, questStep: 1, taskIdx: 0 } }));
   Game.load();
-  expect(Game.state.questStep).toBe(1);
-  expect(Game.state.taskIdx).toBe(0);
+  expect(Game.questStep()).toBe(1);
+  expect(Game.taskIdx()).toBe(0);
 });
 
 test("#511 taskIdx: ein gültiger Mid-Drill-Index überlebt (kein Over-Clamping von Drills)", () => {
@@ -791,8 +799,8 @@ test("#511 taskIdx: ein gültiger Mid-Drill-Index überlebt (kein Over-Clamping 
   // Die Klemmung darf sie NICHT anfassen (sonst bräche ein Save mitten in der Übungsreihe).
   Game.importData(JSON.stringify({ v: 3, data: { questIdx: 5, questStep: 3, taskIdx: 2 } }));
   Game.load();
-  expect(Game.state.questStep).toBe(3);
-  expect(Game.state.taskIdx).toBe(2);
+  expect(Game.questStep()).toBe(3);
+  expect(Game.taskIdx()).toBe(2);
 });
 
 test("#511 taskIdx: über der Aufgabenzahl des Schritts wird geklemmt", () => {
@@ -800,8 +808,8 @@ test("#511 taskIdx: über der Aufgabenzahl des Schritts wird geklemmt", () => {
   // gültigen Aufgaben-Index zurück statt ins Leere zu zeigen.
   Game.importData(JSON.stringify({ v: 3, data: { questIdx: 5, questStep: 3, taskIdx: 999 } }));
   Game.load();
-  expect(Game.state.questStep).toBe(3);
-  expect(Game.state.taskIdx).toBe(2); // count - 1
+  expect(Game.questStep()).toBe(3);
+  expect(Game.taskIdx()).toBe(2); // count - 1
 });
 
 test("introSeen (#288): Default ist false, valider Wert überlebt, kaputter fällt zurück", () => {
@@ -875,7 +883,7 @@ test("Erststart-Spawn (#288): neuer Spielstand startet in Redeweite neben Ole", 
 });
 
 test("Wiederholungs-Gate (#222): greift nur am Quest-Anfang, wenn Karten fällig sind", () => {
-  Game.state.questStep = 0;
+  setFocusedStep(0);
   // Keine fälligen Karten -> kein Gate (blockiert nicht)
   expect(Game.shouldReviewGate()).toBe(false);
   // Eine fällige Karte (due in der Vergangenheit) am Quest-Anfang -> Gate
@@ -883,27 +891,27 @@ test("Wiederholungs-Gate (#222): greift nur am Quest-Anfang, wenn Karten fällig
   expect(Game.dueReviewItems().length).toBeGreaterThan(0);
   expect(Game.shouldReviewGate()).toBe(true);
   // Mitten in der Quest (Schritt > 0) -> NICHT unterbrechen
-  Game.state.questStep = 3;
+  setFocusedStep(3);
   expect(Game.shouldReviewGate()).toBe(false);
 });
 
 test("Wiederholungs-Gate (#222): nicht fällige Karten blockieren nicht", () => {
-  Game.state.questStep = 0;
+  setFocusedStep(0);
   Game.state.review["q-ch1-1"] = { box: 3, due: 9_999_999 }; // weit in der Zukunft
   expect(Game.dueReviewItems().length).toBe(0);
   expect(Game.shouldReviewGate()).toBe(false);
 });
 
 test("Wiederholungs-Gate (#222): nach der letzten Quest kein Gate", () => {
-  Game.state.questStep = 0;
+  setFocusedStep(0);
   Game.state.review["q-ch1-1"] = { box: 1, due: 0 };
-  Game.state.questIdx = KQContent.QUESTS.length; // alle Quests durch
+  Game.state.currentQuestId = ""; // alle Quests durch (Endzustand); questIdx() leitet daraus ab
   expect(Game.currentQuest()).toBe(null);
   expect(Game.shouldReviewGate()).toBe(false);
 });
 
 test("#323 Quest-Count-Gate: feuert nach ≥ 3 Quests wenn Karten vorhanden (nicht fällig)", () => {
-  Game.state.questStep = 0;
+  setFocusedStep(0);
   Game.state.questsSinceGate = 3;
   // Karte vorhanden, aber noch nicht fällig
   Game.state.review["q-ch1-1"] = { box: 3, due: 9_999_999 };
@@ -912,14 +920,14 @@ test("#323 Quest-Count-Gate: feuert nach ≥ 3 Quests wenn Karten vorhanden (nic
 });
 
 test("#323 Quest-Count-Gate: feuert NICHT nach < 3 Quests ohne fällige Karten", () => {
-  Game.state.questStep = 0;
+  setFocusedStep(0);
   Game.state.questsSinceGate = 2;
   Game.state.review["q-ch1-1"] = { box: 3, due: 9_999_999 };
   expect(Game.shouldReviewGate()).toBe(false);
 });
 
 test("#323 Quest-Count-Gate: feuert NICHT wenn review-Dict leer (gar nichts gelernt)", () => {
-  Game.state.questStep = 0;
+  setFocusedStep(0);
   Game.state.questsSinceGate = 5;
   Game.state.review = {};
   expect(Game.shouldReviewGate()).toBe(false);
@@ -950,9 +958,9 @@ test("getQuestRoadmap: completed spiegelt den Spielstand (vorher nichts, nach Sp
 test("jumpToQuest: gültiger Index setzt Quest-Stand + completedQuests + Spawn beim Giver", () => {
   setWorldScene(null); // sonst überschreibt save() die gesetzte Spielerposition
   expect(Game.jumpToQuest(3)).toBe(true);
-  expect(Game.state.questIdx).toBe(3);
-  expect(Game.state.questStep).toBe(0);
-  expect(Game.state.taskIdx).toBe(0);
+  expect(Game.questIdx()).toBe(3);
+  expect(Game.questStep()).toBe(0);
+  expect(Game.taskIdx()).toBe(0);
   // genau die Quests VOR dem Ziel gelten als erledigt
   expect(Game.state.completedQuests).toEqual(KQContent.QUESTS.slice(0, 3).map(q => q.id));
   // Figur steht beim Giver der Zielquest (sofern fester Standplatz existiert)
@@ -963,14 +971,14 @@ test("jumpToQuest: gültiger Index setzt Quest-Stand + completedQuests + Spawn b
 test("jumpToQuest(0): leerer Stand, keine Quest erledigt", () => {
   Game.jumpToQuest(5);                       // erst woanders hin
   expect(Game.jumpToQuest(0)).toBe(true);
-  expect(Game.state.questIdx).toBe(0);
+  expect(Game.questIdx()).toBe(0);
   expect(Game.state.completedQuests).toEqual([]);
 });
 
 test("jumpToQuest(QUESTS.length): erlaubter Endzustand -> allQuestsDone, alle erledigt", () => {
   const end = KQContent.QUESTS.length;
   expect(Game.jumpToQuest(end)).toBe(true);
-  expect(Game.state.questIdx).toBe(end);
+  expect(Game.questIdx()).toBe(end);
   expect(Game.allQuestsDone()).toBe(true);
   expect(Game.currentQuest()).toBeNull();
   expect(Game.state.completedQuests.length).toBe(end);
@@ -989,7 +997,7 @@ test("jumpToQuest: Sprung persistiert (load() liest denselben Quest-Stand zurüc
   setWorldScene(null);
   Game.jumpToQuest(4);
   Game.load();
-  expect(Game.state.questIdx).toBe(4);
+  expect(Game.questIdx()).toBe(4);
   expect(Game.state.completedQuests).toEqual(KQContent.QUESTS.slice(0, 4).map(q => q.id));
 });
 
@@ -1024,7 +1032,7 @@ test("jumpToQuest: Giver-Position überlebt eine LAUFENDE WorldScene (#335, glei
 
 test("#353 currentQuestId: frischer Stand zeigt auf die erste Quest", () => {
   Game.reset();
-  expect(Game.state.questIdx).toBe(0);
+  expect(Game.questIdx()).toBe(0);
   expect(Game.state.currentQuestId).toBe(KQContent.QUESTS[0].id);
 });
 
@@ -1032,7 +1040,7 @@ test("#353 Migration: Alt-Stand OHNE currentQuestId leitet die ID aus dem questI
   // Stand wie vor #353: nur numerischer Index, kein currentQuestId.
   Game.importData(JSON.stringify({ v: 1, data: { xp: 50, questIdx: 3 } }));
   Game.load();
-  expect(Game.state.questIdx).toBe(3);                       // Index erhalten
+  expect(Game.questIdx()).toBe(3);                       // Index erhalten
   expect(Game.state.currentQuestId).toBe(KQContent.QUESTS[3].id); // ID ergänzt
 });
 
@@ -1044,14 +1052,14 @@ test("#353 Autorität ID: bei veraltetem questIdx gewinnt currentQuestId (Quest-
   const ziel = KQContent.QUESTS[3].id;
   Game.importData(JSON.stringify({ v: 2, data: { xp: 50, questIdx: 0, currentQuestId: ziel } }));
   Game.load();
-  expect(Game.state.questIdx).toBe(3);
+  expect(Game.questIdx()).toBe(3);
   expect(Game.state.currentQuestId).toBe(ziel);
 });
 
 test("#353 unbekannte currentQuestId (Quest entfernt) -> Fallback auf questIdx, kein Verlust", () => {
   Game.importData(JSON.stringify({ v: 2, data: { questIdx: 2, currentQuestId: "gibt-es-nicht-mehr" } }));
   Game.load();
-  expect(Game.state.questIdx).toBe(2);                       // Fallback rettet den Fortschritt
+  expect(Game.questIdx()).toBe(2);                       // Fallback rettet den Fortschritt
   expect(Game.state.currentQuestId).toBe(KQContent.QUESTS[2].id); // kanonisiert auf die echte ID
 });
 
@@ -1061,7 +1069,7 @@ test("#353 Endzustand: alle Quests durch -> currentQuestId leer, round-trippt", 
   Game.jumpToQuest(end);
   expect(Game.state.currentQuestId).toBe("");
   Game.load(); // persistiert + zurückgelesen
-  expect(Game.state.questIdx).toBe(end);
+  expect(Game.questIdx()).toBe(end);
   expect(Game.state.currentQuestId).toBe("");
   expect(Game.allQuestsDone()).toBe(true);
 });
@@ -1071,7 +1079,7 @@ test("#353 jumpToQuest hält currentQuestId synchron zum Index (auch über load)
   Game.jumpToQuest(5);
   expect(Game.state.currentQuestId).toBe(KQContent.QUESTS[5].id);
   Game.load();
-  expect(Game.state.questIdx).toBe(5);
+  expect(Game.questIdx()).toBe(5);
   expect(Game.state.currentQuestId).toBe(KQContent.QUESTS[5].id);
 });
 
@@ -1082,7 +1090,7 @@ test("#353 advanceStep: Quest-Abschluss zieht currentQuestId auf die nächste Qu
   let result: ReturnType<typeof Game.advanceStep> = {};
   for (let i = 0; i < stepCount; i++) result = Game.advanceStep();
   expect(result).toMatchObject({ questDone: KQContent.QUESTS[0] }); // Quest 0 abgeschlossen
-  expect(Game.state.questIdx).toBe(1);
+  expect(Game.questIdx()).toBe(1);
   expect(Game.state.currentQuestId).toBe(KQContent.QUESTS[1].id);
 });
 
@@ -1099,7 +1107,7 @@ test("#354 Migration: Alt-Stand (post-#353) mit alten IDs -> neue Slugs, Fortsch
   // durch die Einschübe #448 docker-common-images, #449 docker-registry und #450 docker-rabbitmq
   // jetzt Index 10):
   expect(Game.state.currentQuestId).toBe("k8s-inspect-pods");
-  expect(Game.state.questIdx).toBe(10);
+  expect(Game.questIdx()).toBe(10);
   // completedQuests vollständig auf neue Slugs gehoben – nichts verloren:
   expect(Game.state.completedQuests).toEqual([
     "onboarding-sign-on", "docker-first-container", "docker-list-containers",
@@ -1111,7 +1119,7 @@ test("#354 Migration: Alt-Stand (pre-#353, nur questIdx) mit alten completedQues
   // Noch älter: kein currentQuestId, Fortschritt nur über questIdx + alte completedQuests.
   Game.importData(JSON.stringify({ v: 1, data: { xp: 50, questIdx: 2, completedQuests: ["q0", "q1"] } }));
   Game.load();
-  expect(Game.state.questIdx).toBe(2);
+  expect(Game.questIdx()).toBe(2);
   expect(Game.state.currentQuestId).toBe("docker-common-images"); // Index 2 -> neuer Slug (Warenkunde-Einschub #448)
   expect(Game.state.completedQuests).toEqual(["onboarding-sign-on", "docker-first-container"]);
 });
@@ -1129,7 +1137,7 @@ test("#354 Migration: neue Slugs bleiben unverändert (idempotent, kein Doppel-M
   Game.importData(JSON.stringify({ v: 3, data: { questIdx: 10, completedQuests: ["onboarding-sign-on", "docker-first-container"], currentQuestId: "k8s-inspect-pods" } }));
   Game.load();
   expect(Game.state.currentQuestId).toBe("k8s-inspect-pods");
-  expect(Game.state.questIdx).toBe(10);
+  expect(Game.questIdx()).toBe(10);
   expect(Game.state.completedQuests).toEqual(["onboarding-sign-on", "docker-first-container"]);
 });
 
@@ -1155,8 +1163,8 @@ test("#410 Migration: Alt-Stand (v3, kein activeQuests) -> fokussierte Einzel-Qu
   Game.load();
   // Genau ein offener Eintrag, mit dem migrierten Schritt-Stand – verlustfrei.
   expect(Game.state.activeQuests).toEqual({ [KQContent.QUESTS[5].id]: { step: 3, task: 1 } });
-  expect(Game.state.questStep).toBe(3);
-  expect(Game.state.taskIdx).toBe(1);
+  expect(Game.questStep()).toBe(3);
+  expect(Game.taskIdx()).toBe(1);
 });
 
 test("#410 Migration: Endzustand (alle durch) -> leere offene Menge", () => {
@@ -1306,15 +1314,14 @@ test("#413 Sanitize: gültiger Float überlebt, kaputter/negativer Wert fällt a
 test("#358 unlockedCommandFamilies: verdrahtet den Quest-Fortschritt (Anfang vs. Ende)", () => {
   setWorldScene(null);
   // Spielanfang: nur die Meta-Befehle, noch kein docker/kubectl.
-  Game.jumpToQuest(0);
-  Game.state.questStep = 0;
+  Game.jumpToQuest(0); // setzt Fokus + Schritt 0
   const start = Game.unlockedCommandFamilies();
   expect(start.has("help")).toBe(true);
   expect(start.has("clear")).toBe(true);
   expect(start.has("docker")).toBe(false);
   // Spielende: alle Hauptfamilien freigeschaltet.
   Game.jumpToQuest(KQContent.QUESTS.length - 1);
-  Game.state.questStep = KQContent.QUESTS[KQContent.QUESTS.length - 1].steps.length;
+  setFocusedStep(KQContent.QUESTS[KQContent.QUESTS.length - 1].steps.length);
   const end = Game.unlockedCommandFamilies();
   for (const c of ["docker", "kubectl", "git", "helm"]) expect(end.has(c)).toBe(true);
 });

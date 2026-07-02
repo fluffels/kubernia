@@ -7,15 +7,40 @@ import { Sim as KQSim } from "../sim";
 import { NPC_SPAWNS, TILE } from "../world/world";
 import { unlockedCommandFamilies } from "../hud/cmdunlock";
 import type { QuestStep, FunkStep } from "../types";
-import { part, makeDefaultState, questIdForIndex } from "./shared";
+import { part, makeDefaultState, questIdForIndex, questIndexForId } from "./shared";
 
 /** Quest-Fortschritt, Dev-Sprung und Üben der Game-Fassade. */
 export const progressionBundle = part({
+  /* ---------- Abgeleiteter Quest-Cursor (#559) ----------
+   * Die alleinige Autorität ist `activeQuests` + `currentQuestId`. Der frühere Save trug
+   * zusätzlich die redundante Arbeitskopie questIdx/questStep/taskIdx und hielt sie an jedem
+   * Schreibpfad manuell synchron – diese Sync-Last entfällt, weil hier alles frisch abgeleitet
+   * wird. `focusedProgress()` ist der eine Zugriff auf den Fortschritt der fokussierten Quest
+   * (null im Endzustand / wenn keine offen ist). */
+  focusedProgress() {
+    const id = this.state.currentQuestId;
+    return id ? (this.state.activeQuests[id] ?? null) : null;
+  },
+  /** Laufzeit-Index der fokussierten Quest in der quest-order (Endzustand → QUESTS.length). */
+  questIdx(): number { return questIndexForId(this.state.currentQuestId); },
+  /** Schritt-Stand der fokussierten Quest (0, wenn keine offen ist). */
+  questStep(): number { return this.focusedProgress()?.step ?? 0; },
+  /** Aufgaben-Stand im fokussierten Schritt (0, wenn keine offen ist). */
+  taskIdx(): number { return this.focusedProgress()?.task ?? 0; },
+  /** Rückt die Aufgabe im fokussierten Schritt um eins vor → neuer Stand. Schreibt in die
+   *  Autorität (activeQuests); persistiert NICHT selbst (der Aufrufer ruft save()). */
+  advanceTask(): number {
+    const p = this.focusedProgress();
+    if (!p) return 0;
+    p.task++;
+    return p.task;
+  },
+
   /* ---------- Quests ---------- */
-  currentQuest() { return KQContent.QUESTS[this.state.questIdx] || null; },
+  currentQuest() { return KQContent.QUESTS[this.questIdx()] || null; },
   currentStep() {
     const q = this.currentQuest();
-    return q ? q.steps[this.state.questStep] || null : null;
+    return q ? q.steps[this.questStep()] || null : null;
   },
   /** Ist der aktuelle Schritt einer fürs Funkgerät? (Typ-Guard fürs Narrowing) */
   isFunkStep(step: QuestStep | null): step is FunkStep {
@@ -33,34 +58,36 @@ export const progressionBundle = part({
    *  abgeleitet, kein neues Save-Feld. */
   unlockedCommandFamilies(): Set<string> {
     return unlockedCommandFamilies(KQContent.QUESTS, {
-      questIdx: this.state.questIdx,
-      questStep: this.state.questStep,
+      questIdx: this.questIdx(),
+      questStep: this.questStep(),
     });
   },
 
   advanceStep() {
     const q = this.currentQuest();
     if (!q) return {};
-    this.state.questStep++;
-    this.state.taskIdx = 0;
-    if (this.state.questStep >= q.steps.length) {
+    // Fortschritt der fokussierten Quest ist die einzige Autorität (#559) – direkt hier
+    // mutieren, keine separate Arbeitskopie mehr synchron halten.
+    const prog = this.focusedProgress();
+    if (!prog) return {};
+    const nextStep = prog.step + 1;
+    if (nextStep >= q.steps.length) {
       this.state.completedQuests.push(q.id);
       delete this.state.activeQuests[q.id]; // abgeschlossene Quest ist nicht mehr offen (#410)
-      this.state.questIdx++;
-      this.state.currentQuestId = questIdForIndex(this.state.questIdx); // ID synchron halten (#353)
-      this.state.questStep = 0;
-      this.state.taskIdx = 0;
-      // Nächste lineare Quest öffnen (außer im Endzustand). save() faltet sie ohnehin ein;
-      // hier explizit, damit die Menge auch zwischen zwei Saves im RAM stimmt (#410).
+      // Fokus auf die nächste lineare Quest verschieben (ID ist die Autorität, #353).
+      this.state.currentQuestId = questIdForIndex(this.questIdx() + 1);
+      // Nächste lineare Quest öffnen (außer im Endzustand).
       if (this.state.currentQuestId) this.state.activeQuests[this.state.currentQuestId] = { step: 0, task: 0 };
       this.state.questsSinceGate++;
       this.save();
       return { questDone: q };
     }
+    prog.step = nextStep;
+    prog.task = 0;
     this.save();
     return {};
   },
-  allQuestsDone() { return this.state.questIdx >= KQContent.QUESTS.length; },
+  allQuestsDone() { return this.questIdx() >= KQContent.QUESTS.length; },
 
   /** #451: Soll Bo in seinen Abschiedsworten der Docker-Einstiegsquest auf die
    *  Quiz-Krabbe Kralle verweisen? True genau dann, wenn der aktuelle Schritt der
@@ -73,7 +100,7 @@ export const progressionBundle = part({
     const q = this.currentQuest();
     return !!q
       && q.id === "docker-first-container"
-      && this.state.questStep === q.steps.length - 1
+      && this.questStep() === q.steps.length - 1
       && !this.isReplaying();
   },
 
@@ -122,23 +149,22 @@ export const progressionBundle = part({
     const quests = KQContent.QUESTS;
     if (!Number.isInteger(questIdx) || questIdx < 0 || questIdx > quests.length) return false;
 
-    this.state.questIdx = questIdx;
-    this.state.currentQuestId = questIdForIndex(questIdx); // ID synchron halten (#353)
-    this.state.questStep = 0;
-    this.state.taskIdx = 0;
+    this.state.currentQuestId = questIdForIndex(questIdx); // ID ist die Autorität (#353/#559)
     this.state.completedQuests = quests.slice(0, questIdx).map(q => q.id);
     // Offene Quests (#410) auf genau die fokussierte (lineare) Zielquest setzen – beim Sprung
     // gibt es keine parallel offenen Stränge; Endzustand (currentQuestId leer) -> keine offen.
+    // Schritt/Aufgabe = 0; questStep()/taskIdx() leiten das ab (kein separates Feld mehr, #559).
     this.state.activeQuests = this.state.currentQuestId ? { [this.state.currentQuestId]: { step: 0, task: 0 } } : {};
 
     // Cluster frisch aus den erreichten Schritt-Szenarien aufbauen – exakt wie
     // load() es nach diesem Stand täte, nur von leerem Cluster (kein Snapshot),
     // damit jump + Reload denselben Welt-Zustand ergibt wie natürliches Ankommen.
+    // questStep() ist nach dem Setzen von activeQuests 0 (Quest-Anfang).
     this.state.clusterSnapshot = null;
     this.sim = new KQSim({});
     for (let qi = 0; qi <= Math.min(questIdx, quests.length - 1); qi++) {
       quests[qi].steps.forEach((step, si) => {
-        if (step.scenario && (qi < questIdx || si <= this.state.questStep)) {
+        if (step.scenario && (qi < questIdx || si <= this.questStep())) {
           this.sim.mergeScenario(Object.assign({}, step.scenario));
         }
       });

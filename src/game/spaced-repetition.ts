@@ -104,7 +104,7 @@ export const spacedRepetitionBundle = part({
    *  Variante (b) ist ein Quest-Count-Nudge (#323): bei verketteten Quests (z.B. docker-run-options→docker-build-image)
    *  kommt auch ohne Fälligkeiten ein Kralle-Beat. */
   shouldReviewGate(): boolean {
-    if (this.state.questStep !== 0) return false;
+    if (this.questStep() !== 0) return false;
     if (!this.currentQuest()) return false;
     if (this.dueReviewItems().length > 0) return true;
     return this.state.questsSinceGate >= 3 && Object.keys(this.state.review).length > 0;
