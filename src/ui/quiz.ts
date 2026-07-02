@@ -78,59 +78,72 @@ export const quizUI = part({
 
   renderReviewItem(): void {
     const r = this.review;
-    if (r.idx >= r.ids.length) {
-      const free = !!r.free;
-      if (!free) {
-        // nur die tägliche fällige Runde zählt für Statistik & Bonus
-        Game.state.stats.reviews++;
-        Game.save();
-        if (r.right === r.ids.length) this.reward(10, 10, "🌟 Perfekte Quizrunde!");
-      }
-      // #236: Jede abgeschlossene Übungsrunde mit Kralle zählt (täglich, Gate, frei). An
-      // Meilensteinen streut Kralle einen zählbewussten Spruch ein – dosiert, nicht jede Runde.
-      // #236: Meilenstein-Spruch (festlich). #237: sonst gelegentlich der „hätte-gern-
-      // Krallen"-Running-Gag (wehmütig-frech). Beide schließen sich aus (recordKrallePractice).
-      const { milestone, aside } = Game.recordKrallePractice();
-      const milestoneHtml = milestone
-        ? `<p class="kralle-milestone">🦀🎉 „${esc(milestone)}“</p>`
-        : aside
-          ? `<p class="kralle-aside">🦀✂️ „${esc(aside)}“</p>`
-          : "";
-      // Wiederholungs-Gate (#222): erledigt -> nicht erneut blockieren, weiter zur Quest.
-      if (r.gate) {
-        this._gateClearedIdx = r.gate.questIdx;
-        const npcId = r.gate.npcId;
-        $("review-body").innerHTML = `<div style="text-align:center">
-          <div style="font-size:3em">🦀</div>
-          <h2>Aufgefrischt! ${r.right} von ${r.ids.length} richtig.</h2>
-          <p class="dim">Schnipp – jetzt sitzt's wieder. Weiter geht dein Abenteuer!</p>
-          ${milestoneHtml}
-          <button class="primary" id="gate-continue">Weiter geht's! ⚓</button></div>`;
-        $("gate-continue").onclick = () => { this.closeOverlays(); this.talkTo(npcId); };
-        this.review = null;
-        return;
-      }
-      $("review-body").innerHTML = `<div style="text-align:center">
-        <div style="font-size:3em">🦀</div>
-        <h2>${r.right} von ${r.ids.length} richtig!</h2>
-        ${r.assisted ? `<p class="dim">🪄 ${r.assisted} mit Hilfe gelöst – die üben wir zur Sicherheit bald nochmal.</p>` : ""}
-        ${milestoneHtml}
-        <p class="dim">${free
-          ? "Freies Üben – so oft du willst! (zählt nicht in den täglichen Wiederholungs-Plan)"
-          : "Richtige Karten kommen seltener wieder, falsche öfter – bis alles sitzt. Schnipp!"}</p>
-        <div class="actions">
-          <button class="primary" data-action="startFreePractice">🦀 Nochmal frei üben</button>
-          <button data-action="closeOverlays">Zurück ins Abenteuer</button>
-        </div></div>`;
-      this.review = null;
-      return;
-    }
+    if (r.idx >= r.ids.length) { this._renderReviewEnd(); return; }
     const itemId = r.ids[r.idx];
     const content = Game.findReviewContent(itemId);
     if (!content) { r.idx++; return this.renderReviewItem(); }
     r.current = { itemId, content, answered: false, attempts: 0 };
+    const body = this._reviewCardBody();
+    $("review-body").innerHTML = `<p class="dim">🦀 Karte ${r.idx + 1} von ${r.ids.length} · richtig: ${r.right}</p>` + body;
+    const inp = $("review-input");
+    if (inp) inp.focus();
+  },
 
-    let body;
+  /** Rundenabschluss: Statistik/Bonus buchen, Kralle-Meilenstein einstreuen, Gate-
+   *  bzw. normalen Endscreen zeigen und die Runde beenden (#565, aus renderReviewItem). */
+  _renderReviewEnd(): void {
+    const r = this.review;
+    const free = !!r.free;
+    if (!free) {
+      // nur die tägliche fällige Runde zählt für Statistik & Bonus
+      Game.state.stats.reviews++;
+      Game.save();
+      if (r.right === r.ids.length) this.reward(10, 10, "🌟 Perfekte Quizrunde!");
+    }
+    // #236: Jede abgeschlossene Übungsrunde mit Kralle zählt (täglich, Gate, frei). An
+    // Meilensteinen streut Kralle einen zählbewussten Spruch ein – dosiert, nicht jede Runde.
+    // #236: Meilenstein-Spruch (festlich). #237: sonst gelegentlich der „hätte-gern-
+    // Krallen"-Running-Gag (wehmütig-frech). Beide schließen sich aus (recordKrallePractice).
+    const { milestone, aside } = Game.recordKrallePractice();
+    const milestoneHtml = milestone
+      ? `<p class="kralle-milestone">🦀🎉 „${esc(milestone)}“</p>`
+      : aside
+        ? `<p class="kralle-aside">🦀✂️ „${esc(aside)}“</p>`
+        : "";
+    // Wiederholungs-Gate (#222): erledigt -> nicht erneut blockieren, weiter zur Quest.
+    if (r.gate) {
+      this._gateClearedIdx = r.gate.questIdx;
+      const npcId = r.gate.npcId;
+      $("review-body").innerHTML = `<div style="text-align:center">
+        <div style="font-size:3em">🦀</div>
+        <h2>Aufgefrischt! ${r.right} von ${r.ids.length} richtig.</h2>
+        <p class="dim">Schnipp – jetzt sitzt's wieder. Weiter geht dein Abenteuer!</p>
+        ${milestoneHtml}
+        <button class="primary" id="gate-continue">Weiter geht's! ⚓</button></div>`;
+      $("gate-continue").onclick = () => { this.closeOverlays(); this.talkTo(npcId); };
+      this.review = null;
+      return;
+    }
+    $("review-body").innerHTML = `<div style="text-align:center">
+      <div style="font-size:3em">🦀</div>
+      <h2>${r.right} von ${r.ids.length} richtig!</h2>
+      ${r.assisted ? `<p class="dim">🪄 ${r.assisted} mit Hilfe gelöst – die üben wir zur Sicherheit bald nochmal.</p>` : ""}
+      ${milestoneHtml}
+      <p class="dim">${free
+        ? "Freies Üben – so oft du willst! (zählt nicht in den täglichen Wiederholungs-Plan)"
+        : "Richtige Karten kommen seltener wieder, falsche öfter – bis alles sitzt. Schnipp!"}</p>
+      <div class="actions">
+        <button class="primary" data-action="startFreePractice">🦀 Nochmal frei üben</button>
+        <button data-action="closeOverlays">Zurück ins Abenteuer</button>
+      </div></div>`;
+    this.review = null;
+  },
+
+  /** Baut den Karten-Körper (Quiz-Optionen bzw. Befehls-Eingabe) für die aktuelle
+   *  Karte und setzt dabei die karten-lokale Auswahl-/Reihenfolge zurück (#565). */
+  _reviewCardBody(): string {
+    const r = this.review;
+    const content = r.current.content;
     if (content.kind === "quiz") {
       const q = content.q!;
       r.current.order = shuffled(q.options.map((_: unknown, i: number) => i));
@@ -140,21 +153,17 @@ export const quizUI = part({
       // statt als Literaltext (#458). Inhalt ist statisches, autorenkontrolliertes
       // JSON (kein Nutzer-Input). Spitze Klammern, die wörtlich gemeint sind, gehören
       // als &lt;…&gt; in die Daten – ein Wächter-Test (content.test.ts) erzwingt das.
-      body = `<div class="quiz-q">${fmtCmd(q.q)}</div>
+      return `<div class="quiz-q">${fmtCmd(q.q)}</div>
         <div class="quiz-options" id="quiz-options">
           ${r.current.order.map((oi: number, i: number) => `<button data-action="answerReviewQuiz" data-oi="${oi}"><span class="qnum">${i + 1}</span>${fmtCmd(q.options[oi])}</button>`).join("")}
         </div><div id="review-explain"></div>`;
-    } else {
-      const card = content.card!;
-      body = `<div class="quiz-q">⌨️ ${fmtCmd(card.q)}</div>
-        <div class="review-cmd-row"><span class="term-prompt">crew@hafen:~$</span>
-          <input type="text" id="review-input" autocomplete="off" spellcheck="false"
-            placeholder="Befehl eintippen, Enter drücken …"></div>
-        <div id="review-explain"></div>`;
     }
-    $("review-body").innerHTML = `<p class="dim">🦀 Karte ${r.idx + 1} von ${r.ids.length} · richtig: ${r.right}</p>` + body;
-    const inp = $("review-input");
-    if (inp) inp.focus();
+    const card = content.card!;
+    return `<div class="quiz-q">⌨️ ${fmtCmd(card.q)}</div>
+      <div class="review-cmd-row"><span class="term-prompt">crew@hafen:~$</span>
+        <input type="text" id="review-input" autocomplete="off" spellcheck="false"
+          placeholder="Befehl eintippen, Enter drücken …"></div>
+      <div id="review-explain"></div>`;
   },
 
   answerReviewQuiz(optionIndex: number) {
@@ -184,30 +193,9 @@ export const quizUI = part({
    *  wird von main.ts gar nicht erst hierher geleitet (Fokus liegt im INPUT). */
   reviewKey(k: string, ev: KeyboardEvent): boolean {
     const r = this.review;
+    // Offene Quiz-Frage: eigene Tastensteuerung (Ziffern/Pfeile/Enter) im Helfer (#565).
     if (r && r.current && !r.current.answered && r.current.content.kind === "quiz") {
-      const order: number[] = r.current.order;
-      if (/^[1-9]$/.test(k)) {
-        const pos = Number(k) - 1;
-        if (pos < order.length) { ev.preventDefault(); this.answerReviewQuiz(order[pos]); }
-        return true;
-      }
-      if (k === "ArrowDown" || k === "ArrowUp") {
-        const n = order.length;
-        const start = k === "ArrowDown" ? -1 : 0;
-        const cur = this.reviewSel < 0 ? start : this.reviewSel;
-        this.reviewSel = ((cur + (k === "ArrowDown" ? 1 : -1)) % n + n) % n;
-        this.highlightReviewOption();
-        ev.preventDefault();
-        return true;
-      }
-      if (k === "Enter" || k === " ") {
-        if (this.reviewSel >= 0 && this.reviewSel < order.length) {
-          ev.preventDefault();
-          this.answerReviewQuiz(order[this.reviewSel]);
-        }
-        return true;   // offene Frage „schluckt" Enter/Leer, damit nichts dahinter feuert
-      }
-      return false;
+      return this._reviewQuizKey(k, ev, r.current.order);
     }
     // beantwortet / Zwischen-/Endscreen / Gate: Primär-Button per Enter/Leertaste
     if (k === "Enter" || k === " ") {
@@ -215,6 +203,34 @@ export const quizUI = part({
         "button.primary, #gate-start, #gate-continue, [data-action='nextReviewItem']",
       ) as HTMLButtonElement | null;
       if (btn) { ev.preventDefault(); btn.click(); return true; }
+    }
+    return false;
+  },
+
+  /** Tastensteuerung einer OFFENEN Quiz-Frage (#258/#565): Ziffern 1–n wählen direkt,
+   *  ↑/↓ markieren zyklisch, Enter/Leer bestätigt die Markierung. Gibt immer `true`
+   *  zurück (die offene Frage „schluckt" die Taste, damit nichts dahinter feuert). */
+  _reviewQuizKey(k: string, ev: KeyboardEvent, order: number[]): boolean {
+    if (/^[1-9]$/.test(k)) {
+      const pos = Number(k) - 1;
+      if (pos < order.length) { ev.preventDefault(); this.answerReviewQuiz(order[pos]); }
+      return true;
+    }
+    if (k === "ArrowDown" || k === "ArrowUp") {
+      const n = order.length;
+      const start = k === "ArrowDown" ? -1 : 0;
+      const cur = this.reviewSel < 0 ? start : this.reviewSel;
+      this.reviewSel = ((cur + (k === "ArrowDown" ? 1 : -1)) % n + n) % n;
+      this.highlightReviewOption();
+      ev.preventDefault();
+      return true;
+    }
+    if (k === "Enter" || k === " ") {
+      if (this.reviewSel >= 0 && this.reviewSel < order.length) {
+        ev.preventDefault();
+        this.answerReviewQuiz(order[this.reviewSel]);
+      }
+      return true;
     }
     return false;
   },

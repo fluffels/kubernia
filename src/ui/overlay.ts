@@ -23,36 +23,40 @@ export const overlayUI = part({
    * erzeugte Buttons in den Overlays sind damit ohne Neu-Verdrahtung
    * abgedeckt. Wird einmalig beim Start aus main.ts aufgerufen. */
   bindEvents() {
+    // data-action → Handler statt langem switch (#565): jeder Handler bekommt das
+    // Trigger-Element (für data-arg/data-on/data-oi). Die Arrows binden `this` über
+    // den Closure – so bleibt der delegierte Listener selbst verzweigungsarm.
+    const actions: Record<string, (el: HTMLElement) => void> = {
+      openMenu: () => this.openMenu(),
+      closeOverlays: () => this.closeOverlays(),
+      exportSave: () => this.exportSave(),
+      resetGame: () => this.resetGame(),
+      importPick: () => ($("save-import") as HTMLInputElement).click(),
+      newSlot: () => this.newSlot(),
+      loadSlot: el => { if (el.dataset.arg) this.loadSlot(el.dataset.arg); },
+      renameSlot: el => { if (el.dataset.arg) this.renameSlot(el.dataset.arg); },
+      deleteSlot: el => { if (el.dataset.arg) this.deleteSlot(el.dataset.arg); },
+      termHint: () => this.termHint(),
+      termSolution: () => this.termSolution(),
+      viewQuest: el => { if (el.dataset.arg) this.viewQuest(el.dataset.arg); },
+      questLogBack: () => this.questLogBack(),
+      openAlbum: () => this.openAlbum(),
+      viewAlbumPage: el => { if (el.dataset.arg) this.viewAlbumPage(el.dataset.arg); },
+      albumBack: () => this.albumBack(),
+      replayQuest: el => { if (el.dataset.arg) this.replayQuest(el.dataset.arg); },
+      exitReplay: () => this.exitReplay(),
+      buyItem: el => { if (el.dataset.arg) this.buyItem(el.dataset.arg); },
+      toggleItem: el => { if (el.dataset.arg) this.toggleItem(el.dataset.arg, el.dataset.on === "1"); },
+      startFreePractice: () => this.startFreePractice(),
+      nextReviewItem: () => this.nextReviewItem(),
+      answerReviewQuiz: el => this.answerReviewQuiz(Number(el.dataset.oi)),
+      revealReviewCmd: () => this.revealReviewCmd(),
+    };
     document.addEventListener("click", ev => {
       const el = (ev.target as HTMLElement).closest("[data-action]") as HTMLElement | null;
       if (!el) return;
-      const arg = el.dataset.arg;
-      switch (el.dataset.action) {
-        case "openMenu": this.openMenu(); break;
-        case "closeOverlays": this.closeOverlays(); break;
-        case "exportSave": this.exportSave(); break;
-        case "resetGame": this.resetGame(); break;
-        case "importPick": ($("save-import") as HTMLInputElement).click(); break;
-        case "newSlot": this.newSlot(); break;
-        case "loadSlot": if (arg) this.loadSlot(arg); break;
-        case "renameSlot": if (arg) this.renameSlot(arg); break;
-        case "deleteSlot": if (arg) this.deleteSlot(arg); break;
-        case "termHint": this.termHint(); break;
-        case "termSolution": this.termSolution(); break;
-        case "viewQuest": if (arg) this.viewQuest(arg); break;
-        case "questLogBack": this.questLogBack(); break;
-        case "openAlbum": this.openAlbum(); break;
-        case "viewAlbumPage": if (arg) this.viewAlbumPage(arg); break;
-        case "albumBack": this.albumBack(); break;
-        case "replayQuest": if (arg) this.replayQuest(arg); break;
-        case "exitReplay": this.exitReplay(); break;
-        case "buyItem": if (arg) this.buyItem(arg); break;
-        case "toggleItem": if (arg) this.toggleItem(arg, el.dataset.on === "1"); break;
-        case "startFreePractice": this.startFreePractice(); break;
-        case "nextReviewItem": this.nextReviewItem(); break;
-        case "answerReviewQuiz": this.answerReviewQuiz(Number(el.dataset.oi)); break;
-        case "revealReviewCmd": this.revealReviewCmd(); break;
-      }
+      const action = el.dataset.action;
+      if (action) actions[action]?.(el);
     });
     // Audio-Regler/-Schalter im Menü: Checkboxen feuern "change", Slider "input".
     // Beide delegiert am document abgefangen (Block wird dynamisch erzeugt).

@@ -40,44 +40,50 @@ export const questlogUI = part({
   },
 
   renderQuestLog() {
-    const s = Game.state;
-    const npcName = (id: string): string => NPCS[id]?.name ?? id;
-
-    // ----- Detailansicht: Dialoge/Hinweise einer Quest nachlesen -----
+    // Detailansicht hat Vorrang; unbekannte Quest fällt auf die Übersicht zurück (#565).
     if (this.questLogViewIdx !== null) {
       const quest = KQContent.QUESTS[this.questLogViewIdx];
-      if (quest) {
-        const isActive = this.questLogViewIdx === Game.questIdx();
-        const lines = buildQuestDetail(quest, npcName);
-        const icon: Record<string, string> = { dialog: "💬", choice: "❓", teach: "📻", drill: "🎯", terminal: "🖥️", minigame: "🎮" };
-        let detail = lines
-          .map(l => `<div class="ql-line">${icon[l.kind] ?? "•"} ${l.speaker ? `<b>${esc(l.speaker)}:</b> ` : ""}${fmtCmd(l.text)}</div>`)
-          .join("");
-        if (!lines.length) detail = `<div class="ql-line dim">Diese Quest hat keine nachlesbaren Dialoge.</div>`;
-        if (isActive) {
-          const hint = this.hintForStep();
-          if (hint) detail += `<div class="ql-line ql-hint">📍 <b>Jetzt dran:</b> ${hint}</div>`;
-        }
-        const replaying = Game.isReplaying();
-        // Eine abgeschlossene Quest lässt sich in der Sandbox erneut spielen (#332) –
-        // außer es läuft schon ein Wiederspiel (dann zeigt das Banner den Ausstieg).
-        const replayBtn = !replaying && s.completedQuests.includes(quest.id)
-          ? `<button data-action="replayQuest" data-arg="${this.questLogViewIdx}">🔁 Quest erneut spielen</button>` : "";
-        const resumeBtn = !replaying && !isActive && !Game.allQuestsDone()
-          ? `<button data-action="viewQuest" data-arg="${Game.questIdx()}">▶️ Zur aktuellen Quest</button>` : "";
-        $("quest-body").innerHTML = `${this.replayBanner()}<div class="ql-detail">
-          <div class="actions" style="margin-bottom:10px">
-            <button class="primary" data-action="questLogBack">← Übersicht</button>${replayBtn}${resumeBtn}
-          </div>
-          <div class="ql-title">${isActive ? "▶️" : "✅"} ${esc(quest.title)}</div>
-          ${detail}
-        </div>`;
-        return;
-      }
+      if (quest) { this._renderQuestDetail(quest); return; }
       this.questLogViewIdx = null; // unbekannte Quest → zurück auf die Übersicht
     }
+    this._renderQuestOverview();
+  },
 
-    // ----- Übersicht -----
+  /** Detailansicht: Dialoge/Hinweise einer ansehbaren Quest nachlesen (#326/#565). */
+  _renderQuestDetail(quest: import("../types").Quest) {
+    const s = Game.state;
+    const npcName = (id: string): string => NPCS[id]?.name ?? id;
+    const isActive = this.questLogViewIdx === Game.questIdx();
+    const lines = buildQuestDetail(quest, npcName);
+    const icon: Record<string, string> = { dialog: "💬", choice: "❓", teach: "📻", drill: "🎯", terminal: "🖥️", minigame: "🎮" };
+    let detail = lines
+      .map(l => `<div class="ql-line">${icon[l.kind] ?? "•"} ${l.speaker ? `<b>${esc(l.speaker)}:</b> ` : ""}${fmtCmd(l.text)}</div>`)
+      .join("");
+    if (!lines.length) detail = `<div class="ql-line dim">Diese Quest hat keine nachlesbaren Dialoge.</div>`;
+    if (isActive) {
+      const hint = this.hintForStep();
+      if (hint) detail += `<div class="ql-line ql-hint">📍 <b>Jetzt dran:</b> ${hint}</div>`;
+    }
+    const replaying = Game.isReplaying();
+    // Eine abgeschlossene Quest lässt sich in der Sandbox erneut spielen (#332) –
+    // außer es läuft schon ein Wiederspiel (dann zeigt das Banner den Ausstieg).
+    const replayBtn = !replaying && s.completedQuests.includes(quest.id)
+      ? `<button data-action="replayQuest" data-arg="${this.questLogViewIdx}">🔁 Quest erneut spielen</button>` : "";
+    const resumeBtn = !replaying && !isActive && !Game.allQuestsDone()
+      ? `<button data-action="viewQuest" data-arg="${Game.questIdx()}">▶️ Zur aktuellen Quest</button>` : "";
+    $("quest-body").innerHTML = `${this.replayBanner()}<div class="ql-detail">
+      <div class="actions" style="margin-bottom:10px">
+        <button class="primary" data-action="questLogBack">← Übersicht</button>${replayBtn}${resumeBtn}
+      </div>
+      <div class="ql-title">${isActive ? "▶️" : "✅"} ${esc(quest.title)}</div>
+      ${detail}
+    </div>`;
+  },
+
+  /** Übersicht: Quest-Liste (freigeschaltet) bzw. nur die aktuelle Quest, plus Statistik-Fuß (#326/#565). */
+  _renderQuestOverview() {
+    const s = Game.state;
+    const npcName = (id: string): string => NPCS[id]?.name ?? id;
     const unlocked = questLogUnlocked(s.completedQuests.length);
     let html = this.replayBanner();
 
