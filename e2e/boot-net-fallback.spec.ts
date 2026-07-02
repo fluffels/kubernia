@@ -18,7 +18,7 @@ test("rohe Dev-index.html ohne Server zeigt das Boot-Sicherheitsnetz", async ({ 
   await page.goto(pathToFileURL(rawDevHtml).href);
 
   // Der Hinweis muss nach Ablauf der Karenz auftauchen ...
-  await expect(page.getByText("KubeQuest startet so nicht")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Kubernia startet so nicht")).toBeVisible({ timeout: 10_000 });
 
   // ... und das Boot-Flag darf nie gesetzt worden sein (ohne Server bootet nichts).
   // Erst hier geprüft – nachdem das Netz schon da ist –, damit ein hypothetischer
@@ -35,11 +35,11 @@ test("verspäteter Boot-Flag entfernt ein bereits gezeigtes Sicherheitsnetz wied
   await page.goto(pathToFileURL(rawDevHtml).href);
 
   // Erst das Netz abwarten (Boot ist hier mangels Server noch nicht passiert) ...
-  await expect(page.getByText("KubeQuest startet so nicht")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Kubernia startet so nicht")).toBeVisible({ timeout: 10_000 });
 
   // ... dann den langsamen, aber erfolgreichen Boot nachstellen: Flag setzen.
   await page.evaluate(() => { document.body.dataset.kqBooted = "1"; });
 
   // Die Beobachtung muss das Netz nun wieder aus dem DOM nehmen.
-  await expect(page.getByText("KubeQuest startet so nicht")).toHaveCount(0);
+  await expect(page.getByText("Kubernia startet so nicht")).toHaveCount(0);
 });

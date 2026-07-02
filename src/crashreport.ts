@@ -20,7 +20,7 @@ export interface CrashReport {
 }
 
 /** Feste, nicht-technische Überschrift des Absturz-Overlays. */
-export const CRASH_TITLE = "⚓ KubeQuest ist auf ein Problem gestoßen";
+export const CRASH_TITLE = "⚓ Kubernia ist auf ein Problem gestoßen";
 
 /** Fallback-Meldung, wenn sich aus dem geworfenen Wert kein Text gewinnen lässt. */
 export const CRASH_FALLBACK_MESSAGE = "Ein unerwarteter Fehler ist aufgetreten.";

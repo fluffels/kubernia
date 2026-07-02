@@ -88,7 +88,7 @@ import { buildCrashReport, type CrashReport } from "./crashreport";
     const onFatal = (reason: unknown): void => {
       const report = buildCrashReport(reason);
       // Zentrale Diagnostik: einmal klar markiert in die Konsole (statt verstreutem console.*).
-      console.error("💥 KubeQuest-Absturz abgefangen (#504):", reason);
+      console.error("💥 Kubernia-Absturz abgefangen (#504):", reason);
       // Overlay nur EINMAL – ein Fehler in Phasers Render-Loop feuert sonst je Frame.
       if (shown) return;
       shown = true;
@@ -198,7 +198,7 @@ import { buildCrashReport, type CrashReport } from "./crashreport";
       // Konsole loggt – sie soll den Boot nicht aufhalten (#389/no-floating-promises).
       void Promise.all([import("./content/validate"), import("./content")]).then(([{ validateContent }, { KQContent }]) => {
         const probleme = validateContent(KQContent);
-        if (probleme.length) console.error("⚠️ KubeQuest-Inhalte inkonsistent (#81):\n" + probleme.join("\n"));
+        if (probleme.length) console.error("⚠️ Kubernia-Inhalte inkonsistent (#81):\n" + probleme.join("\n"));
       });
     }
     // Persistenz auf IndexedDB hochziehen, BEVOR der Stand geladen wird (#350): init()

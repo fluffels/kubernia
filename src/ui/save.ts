@@ -30,7 +30,7 @@ export const saveUI = part({
         this.toast("📂 Spielstand geladen – Spiel startet neu …");
         setTimeout(() => location.reload(), 800);
       } catch {
-        this.toast("⚠️ Das ist keine gültige KubeQuest-Spielstand-Datei.");
+        this.toast("⚠️ Das ist keine gültige Kubernia-Spielstand-Datei.");
       }
     };
     reader.readAsText(file);
