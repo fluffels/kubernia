@@ -10,7 +10,7 @@ import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./helpers";
 import {
-  newDeploymentPod, scaleDeployment, replacePods, replaceDeploymentPod,
+  newDeploymentPod, newStatefulPod, scaleDeployment, replacePods, replaceDeploymentPod,
   restartStatefulPod, addDeployment, removeDeployment,
   addStatefulSet, removeStatefulSet,
 } from "../../src/sim/workload";
@@ -27,6 +27,13 @@ function makeDep(name: string, replicas: number): Deployment {
   scaleDeployment(dep, replicas, 0); // gleich auf `replicas` bringen (hält die Invariante)
   return dep;
 }
+
+test("newStatefulPod (#577): stabile Ordinal-Identität, restarts 0, created gesetzt", () => {
+  const pod = newStatefulPod("lager-0", 42);
+  assert.equal(pod.name, "lager-0", "Name ist der übergebene Ordinal-Name (kein Zufallssuffix)");
+  assert.equal(pod.restarts, 0);
+  assert.equal(pod.created, 42);
+});
 
 /* ---------- (a) die puren Mutations-Funktionen ---------- */
 
