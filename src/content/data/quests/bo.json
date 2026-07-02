@@ -444,8 +444,8 @@
         "type": "dialog",
         "npc": "bo",
         "scenario": {
-          "files": {
-            "Dockerfile": "FROM nginx:1.27\nCOPY site/ /usr/share/nginx/html\nEXPOSE 80"
+          "manifests": {
+            "Dockerfile": "dockerfile-nginx"
           }
         },
         "lines": [

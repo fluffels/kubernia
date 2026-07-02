@@ -105,8 +105,8 @@
         "type": "dialog",
         "npc": "lumi",
         "scenario": {
-          "files": {
-            "servicemonitor.yaml": "apiVersion: monitoring.coreos.com/v1\nkind: ServiceMonitor\nmetadata:\n  name: lager-monitor\n  labels:\n    release: prometheus        # über dieses Label findet Prometheus den ServiceMonitor\nspec:\n  selector:\n    matchLabels:\n      app: lager               # dieser Service wird gescrapt\n  endpoints:\n    - port: metrics            # benannter Port, unter dem /metrics liegt\n      path: /metrics\n      interval: 30s            # wie oft Prometheus scrapt"
+          "manifests": {
+            "servicemonitor.yaml": "servicemonitor-lager"
           },
           "applyEffects": {
             "servicemonitor.yaml": {
@@ -234,8 +234,8 @@
         "type": "dialog",
         "npc": "lumi",
         "scenario": {
-          "files": {
-            "grafanadatasource.yaml": "apiVersion: grafana.integreatly.org/v1beta1\nkind: GrafanaDatasource\nmetadata:\n  name: prometheus-quelle\nspec:\n  datasource:\n    name: Prometheus\n    type: prometheus\n    access: proxy\n    url: http://prometheus-server.monitoring.svc:9090   # die Prometheus-Adresse im Cluster"
+          "manifests": {
+            "grafanadatasource.yaml": "grafana-datasource-prometheus"
           },
           "applyEffects": {
             "grafanadatasource.yaml": {
@@ -343,8 +343,8 @@
         "type": "dialog",
         "npc": "lumi",
         "scenario": {
-          "files": {
-            "grafanadashboard.yaml": "apiVersion: grafana.integreatly.org/v1beta1\nkind: GrafanaDashboard\nmetadata:\n  name: hafen-uebersicht\nspec:\n  resyncPeriod: 30s\n  datasources:\n    - inputName: DS_PROMETHEUS\n      datasourceName: Prometheus\n  json: |\n    {\n      \"title\": \"Hafen-Übersicht\",\n      \"panels\": [\n        { \"title\": \"CPU pro Pod (kubectl top)\", \"type\": \"timeseries\" },\n        { \"title\": \"Aktive Alerts\", \"type\": \"stat\" },\n        { \"title\": \"Scrape-Targets up/down\", \"type\": \"table\" }\n      ]\n    }"
+          "manifests": {
+            "grafanadashboard.yaml": "grafana-dashboard-hafen"
           },
           "applyEffects": {
             "grafanadashboard.yaml": {
@@ -647,8 +647,8 @@
               "cpuHeavy": true
             }
           ],
-          "files": {
-            "prometheusrule.yaml": "apiVersion: monitoring.coreos.com/v1\nkind: PrometheusRule\nmetadata:\n  name: hafen-alarme\n  labels:\n    release: prometheus\nspec:\n  groups:\n    - name: hafen.rules\n      rules:\n        - alert: HighPodCPU                                     # Name des Alarms\n          expr: rate(container_cpu_usage_seconds_total[5m]) > 0.5   # Schwelle (PromQL)\n          for: 5m                                               # erst nach 5 min Dauerlast feuern\n          labels:\n            severity: warning\n          annotations:\n            summary: \"Pod zieht ungewöhnlich viel CPU\""
+          "manifests": {
+            "prometheusrule.yaml": "prometheusrule-hafen"
           },
           "applyEffects": {
             "prometheusrule.yaml": {

@@ -20,9 +20,9 @@
         "type": "terminal",
         "brief": "Karten lesen",
         "scenario": {
-          "files": {
-            "headless-service.yaml": "apiVersion: v1\nkind: Service\nmetadata:\n  name: speicher-datenbank\nspec:\n  clusterIP: None              # headless: keine virtuelle IP -> ein DNS-Name je Pod\n  selector:\n    app: speicher-datenbank\n  ports:\n    - port: 5432\n      name: postgres",
-            "statefulset.yaml": "apiVersion: apps/v1\nkind: StatefulSet\nmetadata:\n  name: speicher-datenbank\nspec:\n  serviceName: speicher-datenbank   # der headless Service für stabile Pod-DNS-Namen\n  replicas: 3\n  selector:\n    matchLabels:\n      app: speicher-datenbank\n  template:\n    metadata:\n      labels:\n        app: speicher-datenbank\n    spec:\n      containers:\n        - name: postgres\n          image: postgres:16\n          ports:\n            - containerPort: 5432\n              name: postgres\n          volumeMounts:\n            - name: daten\n              mountPath: /var/lib/postgresql/data\n  volumeClaimTemplates:               # jeder Pod erhält sein eigenes, dauerhaftes Volume\n    - metadata:\n        name: daten\n      spec:\n        accessModes:\n          - ReadWriteOnce\n        storageClassName: kai-ssd\n        resources:\n          requests:\n            storage: 10Gi"
+          "manifests": {
+            "headless-service.yaml": "service-headless-speicher",
+            "statefulset.yaml": "statefulset-speicher"
           },
           "applyEffects": {
             "headless-service.yaml": {
@@ -187,9 +187,9 @@
         "type": "terminal",
         "brief": "Karten lesen",
         "scenario": {
-          "files": {
-            "storageclass.yaml": "apiVersion: storage.k8s.io/v1\nkind: StorageClass\nmetadata:\n  name: kai-ssd\nprovisioner: kubernetes.io/aws-ebs   # Beispiel-Provisioner (je nach Cloud/Cluster anders)\nparameters:\n  type: gp3                          # schnelle SSD-Klasse\nreclaimPolicy: Retain                # Volume nach dem Löschen der PVC behalten (Daten schützen)\nvolumeBindingMode: WaitForFirstConsumer   # erst binden, wenn ein Pod das Volume wirklich braucht",
-            "pvc.yaml": "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: lager-daten\nspec:\n  accessModes:\n    - ReadWriteOnce            # von genau einem Node les-/schreibbar (typisch für eine DB)\n  storageClassName: kai-ssd    # welches Regal: verweist auf die StorageClass oben\n  resources:\n    requests:\n      storage: 5Gi             # so viel dauerhafter Platz wird angefordert"
+          "manifests": {
+            "storageclass.yaml": "storageclass-kai-ssd",
+            "pvc.yaml": "pvc-lager-daten"
           },
           "applyEffects": {
             "storageclass.yaml": {

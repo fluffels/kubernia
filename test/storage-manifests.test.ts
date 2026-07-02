@@ -6,9 +6,12 @@
  */
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import {
-  STATEFULSET_YAML, HEADLESS_SERVICE_YAML, STORAGECLASS_YAML, PVC_YAML,
-} from "../src/content/manifests";
+import { getManifest } from "../src/content/manifest-lib";
+
+const STATEFULSET_YAML = getManifest("statefulset-speicher");
+const HEADLESS_SERVICE_YAML = getManifest("service-headless-speicher");
+const STORAGECLASS_YAML = getManifest("storageclass-kai-ssd");
+const PVC_YAML = getManifest("pvc-lager-daten");
 
 /** Gibt die Liste fehlender Muster zurück (leer = ok) – so Red-Green-prüfbar. */
 function fehlende(yaml: string, muster: [RegExp, string][]): string[] {

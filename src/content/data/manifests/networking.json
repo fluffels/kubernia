@@ -1,0 +1,21 @@
+[
+  {
+    "id": "ingress-hafentor",
+    "yaml": "apiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: hafentor\nspec:\n  ingressClassName: nginx\n  rules:\n    - host: hafen.de\n      http:\n        paths:\n          - path: /lager\n            pathType: Prefix\n            backend:\n              service:\n                name: lager\n                port:\n                  number: 6379"
+  },
+  {
+    "id": "ingress-hafentor-tls",
+    "note": "Dasselbe Hafentor mit TLS: spec.tls referenziert das Zertifikats-Secret, der Controller terminiert HTTPS für hafen.de.",
+    "yaml": "apiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: hafentor\nspec:\n  ingressClassName: nginx\n  tls:\n    - hosts:\n        - hafen.de\n      secretName: hafen-tls\n  rules:\n    - host: hafen.de\n      http:\n        paths:\n          - path: /lager\n            pathType: Prefix\n            backend:\n              service:\n                name: lager\n                port:\n                  number: 6379"
+  },
+  {
+    "id": "service-externalname-bank",
+    "note": "ExternalName-Service (#337): keine ClusterIP, kein Selector – nur ein cluster-interner DNS-Alias (CNAME) auf einen externen Namen.",
+    "yaml": "apiVersion: v1\nkind: Service\nmetadata:\n  name: bank-extern\nspec:\n  type: ExternalName\n  externalName: api.bank.example.com   # der externe DNS-Name, auf den der CNAME zeigt"
+  },
+  {
+    "id": "networkpolicy-hafenmauer",
+    "note": "Hafenmauer um die Pods von app=lager: standardmäßig dicht, nur das Hafentor darf rein.",
+    "yaml": "apiVersion: networking.k8s.io/v1\nkind: NetworkPolicy\nmetadata:\n  name: hafenmauer\nspec:\n  podSelector:\n    matchLabels:\n      app: lager\n  policyTypes:\n    - Ingress\n  ingress:\n    - from:\n        - podSelector:\n            matchLabels:\n              app: hafentor"
+  }
+]

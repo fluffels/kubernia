@@ -1,11 +1,15 @@
-/* Struktur-Tests für die Beispiel-Manifeste (src/content/manifests.ts).
- * Die YAML-Schnipsel werden von Quests/Drills/Sim als „virtuelle Dateien" konsumiert –
- * ein Tippfehler in der Einrückung oder ein fehlender Pflicht-Block fällt sonst erst
- * spät auf. Hier prüfen wir die Invarianten, auf die die GitOps-Tickets (Phase 4) bauen.
+/* Struktur-Tests für die Beispiel-Manifeste (Manifest-Bibliothek data/manifests via
+ * manifest-lib, #514). Die YAML-Schnipsel werden von Quests/Drills/Sim als „virtuelle
+ * Dateien" konsumiert – ein Tippfehler in der Einrückung oder ein fehlender Pflicht-Block
+ * fällt sonst erst spät auf. Hier prüfen wir die Invarianten, auf die die GitOps-Tickets
+ * (Phase 4) bauen.
  */
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { ARGO_APPLICATION_YAML, APP_OF_APPS_YAML } from "../src/content/manifests";
+import { getManifest } from "../src/content/manifest-lib";
+
+const ARGO_APPLICATION_YAML = getManifest("argo-application-auto");
+const APP_OF_APPS_YAML = getManifest("argo-app-of-apps");
 
 /** Minimal-Check für ein Argo-CD-`Application`-Manifest. Gibt eine Liste gefundener
  *  Probleme zurück (leer = ok), damit wir ihn Red-Green gegen kaputte Eingaben prüfen. */

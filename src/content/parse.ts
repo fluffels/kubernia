@@ -74,3 +74,23 @@ export function assertNoUnknownKeys(o: Record<string, unknown>, path: string, kn
     }
   }
 }
+
+/** Lazy-Memoizer (#435): `make` läuft beim ERSTEN Aufruf, das Ergebnis wird gecacht.
+ *  So wandert das Parsen+Validieren der Inhalte vom Modul-Import (Boot-Pfad) auf die
+ *  erste tatsächliche Nutzung und passiert pro Sammlung genau einmal. Wichtig für
+ *  Stardew-Scope: hunderte Quests/Karten/Manifeste werden nicht mehr alle beim Boot
+ *  geparst, sondern erst, wenn die jeweilige Sammlung gebraucht wird. Der zugehörige
+ *  `import.meta.glob`-Import bleibt eager (der Single-File-Build inlinet die JSON-Module
+ *  weiterhin) – nur das AUSWERTEN ist verzögert. Liegt hier im geteilten Leaf, weil
+ *  sowohl `loader.ts` als auch `manifest-lib.ts` (#514) memoisierte Sammlungen bauen. */
+export function memo<T>(make: () => T): () => T {
+  let value: T;
+  let computed = false;
+  return () => {
+    if (!computed) {
+      value = make();
+      computed = true;
+    }
+    return value;
+  };
+}

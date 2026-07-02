@@ -1,0 +1,32 @@
+[
+  {
+    "id": "serviceaccount-deploy-bot",
+    "note": "ServiceAccount: die Identität, unter der ein Pod im Cluster auftritt – Basis für Least Privilege (eigene SA statt der allmächtigen default-SA).",
+    "yaml": "apiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: deploy-bot          # eigene Identität fuer den Deploy-Automaten\n  namespace: default"
+  },
+  {
+    "id": "role-pod-leser",
+    "note": "Role: ein Bündel Rechte INNERHALB eines Namespace. Hier: pods nur lesen (get/list/watch) – kein delete, kein create.",
+    "yaml": "apiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  name: pod-leser\n  namespace: default\nrules:\n  - apiGroups: [\"\"]            # \"\" = die Kern-API-Gruppe (pods, services, …)\n    resources: [\"pods\"]\n    verbs: [\"get\", \"list\", \"watch\"]   # nur lesen, NICHT veraendern"
+  },
+  {
+    "id": "rolebinding-pod-leser",
+    "note": "RoleBinding: verbindet ein Subjekt (hier die SA deploy-bot) mit einer Role. Erst die Bindung macht aus den Regeln ein echtes Recht.",
+    "yaml": "apiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata:\n  name: pod-leser-binden\n  namespace: default\nsubjects:\n  - kind: ServiceAccount\n    name: deploy-bot\n    namespace: default\nroleRef:\n  kind: Role                 # zeigt auf die Role oben\n  name: pod-leser\n  apiGroup: rbac.authorization.k8s.io"
+  },
+  {
+    "id": "clusterrole-knoten-leser",
+    "note": "ClusterRole: wie eine Role, aber CLUSTER-WEIT (z.B. für nicht-namespaced Ressourcen wie nodes). Hier: Knoten lesen dürfen.",
+    "yaml": "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: knoten-leser         # ClusterRole hat KEINEN namespace\nrules:\n  - apiGroups: [\"\"]\n    resources: [\"nodes\"]\n    verbs: [\"get\", \"list\"]"
+  },
+  {
+    "id": "clusterrolebinding-knoten-leser",
+    "note": "ClusterRoleBinding: bindet ein Subjekt cluster-weit an eine ClusterRole. Hier bekommt der User „wache“ das Recht, Knoten im ganzen Cluster zu lesen.",
+    "yaml": "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRoleBinding\nmetadata:\n  name: knoten-leser-binden\nsubjects:\n  - kind: User\n    name: wache\n    apiGroup: rbac.authorization.k8s.io\nroleRef:\n  kind: ClusterRole\n  name: knoten-leser\n  apiGroup: rbac.authorization.k8s.io"
+  },
+  {
+    "id": "deployment-wachposten-restricted",
+    "note": "Pod-Security: ein Workload, der die strenge „restricted“-Stufe besteht. securityContext im Pod-Template (runAsNonRoot) und am Container (allowPrivilegeEscalation: false, readOnlyRootFilesystem: true).",
+    "yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: wachposten\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: wachposten\n  template:\n    metadata:\n      labels:\n        app: wachposten\n    spec:\n      securityContext:                 # gilt fuer den ganzen Pod\n        runAsNonRoot: true             # NICHT als root laufen\n      containers:\n        - name: wachposten\n          image: nginx\n          securityContext:             # gilt fuer diesen Container\n            allowPrivilegeEscalation: false   # keine Rechte-Eskalation\n            readOnlyRootFilesystem: true      # Dateisystem nur lesbar"
+  }
+]

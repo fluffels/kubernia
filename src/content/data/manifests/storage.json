@@ -1,0 +1,32 @@
+[
+  {
+    "id": "storageclass-kai-ssd",
+    "note": "StorageClass: das „Regal-Typ“-Schild im Lager. Sie sagt, WIE Volumes bereitgestellt werden (Provisioner, Disk-Art). PVCs verweisen über storageClassName darauf.",
+    "yaml": "apiVersion: storage.k8s.io/v1\nkind: StorageClass\nmetadata:\n  name: kai-ssd\nprovisioner: kubernetes.io/aws-ebs   # Beispiel-Provisioner (je nach Cloud/Cluster anders)\nparameters:\n  type: gp3                          # schnelle SSD-Klasse\nreclaimPolicy: Retain                # Volume nach dem Löschen der PVC behalten (Daten schützen)\nvolumeBindingMode: WaitForFirstConsumer   # erst binden, wenn ein Pod das Volume wirklich braucht"
+  },
+  {
+    "id": "pvc-lager-daten",
+    "note": "PersistentVolumeClaim: die „Lager-Anforderung“. Ein Pod fordert damit dauerhaften Platz von einer StorageClass an; Kubernetes provisioniert das Volume.",
+    "yaml": "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: lager-daten\nspec:\n  accessModes:\n    - ReadWriteOnce            # von genau einem Node les-/schreibbar (typisch für eine DB)\n  storageClassName: kai-ssd    # welches Regal: verweist auf die StorageClass oben\n  resources:\n    requests:\n      storage: 5Gi             # so viel dauerhafter Platz wird angefordert"
+  },
+  {
+    "id": "service-headless-speicher",
+    "note": "headless Service (clusterIP: None): keine gemeinsame Cluster-IP, sondern stabile DNS-Namen pro Pod – genau das braucht ein StatefulSet.",
+    "yaml": "apiVersion: v1\nkind: Service\nmetadata:\n  name: speicher-datenbank\nspec:\n  clusterIP: None              # headless: keine virtuelle IP -> ein DNS-Name je Pod\n  selector:\n    app: speicher-datenbank\n  ports:\n    - port: 5432\n      name: postgres"
+  },
+  {
+    "id": "statefulset-speicher",
+    "note": "StatefulSet: wie ein Deployment, aber für Workloads mit IDENTITÄT & eigenen Daten. Jeder Pod bekommt eine feste Nummer und über volumeClaimTemplates sein eigenes Volume; serviceName bindet den headless Service.",
+    "yaml": "apiVersion: apps/v1\nkind: StatefulSet\nmetadata:\n  name: speicher-datenbank\nspec:\n  serviceName: speicher-datenbank   # der headless Service für stabile Pod-DNS-Namen\n  replicas: 3\n  selector:\n    matchLabels:\n      app: speicher-datenbank\n  template:\n    metadata:\n      labels:\n        app: speicher-datenbank\n    spec:\n      containers:\n        - name: postgres\n          image: postgres:16\n          ports:\n            - containerPort: 5432\n              name: postgres\n          volumeMounts:\n            - name: daten\n              mountPath: /var/lib/postgresql/data\n  volumeClaimTemplates:               # jeder Pod erhält sein eigenes, dauerhaftes Volume\n    - metadata:\n        name: daten\n      spec:\n        accessModes:\n          - ReadWriteOnce\n        storageClassName: kai-ssd\n        resources:\n          requests:\n            storage: 10Gi"
+  },
+  {
+    "id": "volumesnapshot-lager",
+    "note": "VolumeSnapshot (Backup #140): ein Point-in-Time-Abzug des Volumes hinter einem PVC. Ein eigenes Objekt – es überlebt das Löschen seiner Quelle.",
+    "yaml": "apiVersion: snapshot.storage.k8s.io/v1\nkind: VolumeSnapshot\nmetadata:\n  name: lager-daten-snap\nspec:\n  volumeSnapshotClassName: kai-snapclass    # der CSI-Treiber, der den Abzug anfertigt\n  source:\n    persistentVolumeClaimName: lager-daten   # WAS gesichert wird: das Volume dieses PVC"
+  },
+  {
+    "id": "pvc-restore-lager",
+    "note": "Restore (#140): ein neues PVC, das per spec.dataSource auf einen VolumeSnapshot zeigt. Statt eines leeren Volumes bekommt es den gesicherten Inhalt zurück.",
+    "yaml": "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: lager-daten             # gleicher Name: das verlorene Volume zurueckholen\nspec:\n  accessModes:\n    - ReadWriteOnce\n  storageClassName: kai-ssd\n  resources:\n    requests:\n      storage: 5Gi\n  dataSource:                    # HIER kommt das Backup ins Spiel:\n    name: lager-daten-snap       # aus diesem Snapshot wird der Inhalt wiederhergestellt\n    kind: VolumeSnapshot\n    apiGroup: snapshot.storage.k8s.io"
+  }
+]

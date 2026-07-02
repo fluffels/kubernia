@@ -108,11 +108,11 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/content/entities.ts`](src/content/entities.ts) | pure Domäne | Entity-Registry: datengesteuerte NPC- & Objekt-Platzierung (#349/#357). |
 | [`src/content/validate.ts`](src/content/validate.ts) | pure Domäne | Schema-Validierung des Inhalts-Bündels (`validateContent`): strukturelle Konsistenz aller Quests/Drills/Quiz/Karten/Pools, ohne Fremd-Library (null Laufzeit-Deps). → [content.md](docs/module/content.md) |
 | [`src/content/learnorder.ts`](src/content/learnorder.ts) | pure Domäne | Lernreihenfolge-Wächter (#235/#412): keine Quiz-/Review-Karte vor Einführung ihres Konzepts; Prüflogik wird nur vom Test-Wächter `test/learnorder.test.ts` aufgerufen. |
-| [`src/content/manifests.ts`](src/content/manifests.ts) | pure Domäne | „Virtuelle Dateien": fertige YAML-/Terraform-/CI-Schnipsel, die Quests im simulierten Dateisystem hinlegen (lesen/anwenden/reparieren). |
+| [`src/content/manifest-lib.ts`](src/content/manifest-lib.ts) | pure Domäne | Manifest-Bibliothek (#514): benannte „virtuelle Dateien" (YAML/Dockerfile/CI/Terraform) als Daten (`data/manifests/*.json`); `getManifest(id)` für Drills, `manifestRef` (`scenario.manifests`) für Quests – EINE Quelle statt TS-Monolith. |
 | [`src/content/minigame.ts`](src/content/minigame.ts) | pure Domäne | Stapel-Minispiel-Daten (Docker-Image-Schichten aufsteigend, #218) + Sturm-Image-Namen-Verfälscher. |
 | [`src/content/progression.ts`](src/content/progression.ts) | pure Domäne | Reine Inhalts-Daten: Ränge (XP-Schwellen) + Shop-Angebot. |
 | [`src/content/util.ts`](src/content/util.ts) | pure Domäne | Kleine geteilte Inhalts-Helfer (Zufall: `pick`/Range), von Drills u.a. genutzt. |
-| [`src/content/data/`](src/content/data/) | Daten | Quests/NPCs/Smalltalk/Reihenfolge/Drills/Quiz + Terraform-Konfigs (#147) + Funk-Erklärungen (#362) als JSON. |
+| [`src/content/data/`](src/content/data/) | Daten | Quests/NPCs/Smalltalk/Reihenfolge/Drills/Quiz + Terraform-Konfigs (#147) + Manifeste (#514) + Funk-Erklärungen (#362) als JSON. |
 | [`src/content/drills.ts`](src/content/drills.ts) | pure Domäne | Barrel: mergt `DRILLS` + `PRACTICE` aus `src/content/drills/*` (#457). |
 | [`src/content/drills/shared.ts`](src/content/drills/shared.ts) | pure Domäne | Geteilte Helfer + `DrillTask`-Typ + ensure*-Fabriken + YAML-Konstanten-Re-Exporte (#457). |
 | [`src/content/drills/docker.ts`](src/content/drills/docker.ts) | pure Domäne | Docker-Drills (pull/run/build/tag/push, #457). |

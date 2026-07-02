@@ -293,8 +293,8 @@
               }
             }
           ],
-          "files": {
-            "main.tf": "terraform {\n  required_providers {\n    hafen = {\n      source = \"kubequest/hafen\"\n    }\n  }\n}\n\n# Ein neues Ost-Plateau für Port Kubernia\nresource \"hafen_plateau\" \"ost\" {\n  name   = \"ost-erweiterung\"\n  breite = 12\n}\n\n# Zwei Server für den wachsenden Cluster\nresource \"hafen_server\" \"worker\" {\n  count   = 2\n  name    = \"worker-${count.index + 3}\"\n  groesse = \"mittel\"\n}"
+          "manifests": {
+            "main.tf": "terraform-ost-plateau"
           },
           "tfResources": [
             {
@@ -466,8 +466,8 @@
         "type": "terminal",
         "brief": "Mauer hochziehen",
         "scenario": {
-          "files": {
-            "netpol.yaml": "apiVersion: networking.k8s.io/v1\nkind: NetworkPolicy\nmetadata:\n  name: hafenmauer\nspec:\n  podSelector:\n    matchLabels:\n      app: lager\n  policyTypes:\n    - Ingress\n  ingress:\n    - from:\n        - podSelector:\n            matchLabels:\n              app: hafentor"
+          "manifests": {
+            "netpol.yaml": "networkpolicy-hafenmauer"
           },
           "applyEffects": {
             "netpol.yaml": {
@@ -797,8 +797,8 @@
         "type": "terminal",
         "brief": "Die saubere Lösung lesen",
         "scenario": {
-          "files": {
-            "resources.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: kartograf\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: kartograf\n  template:\n    metadata:\n      labels:\n        app: kartograf\n    spec:\n      containers:\n        - name: kartograf\n          image: nginx\n          resources:\n            requests:        # so viel reserviert der Scheduler fest\n              memory: 128Mi\n              cpu: 100m\n            limits:          # ab hier killt der Kernel den Container (OOMKilled)\n              memory: 256Mi\n              cpu: 250m"
+          "manifests": {
+            "resources.yaml": "deployment-kartograf-resources"
           }
         },
         "tasks": [

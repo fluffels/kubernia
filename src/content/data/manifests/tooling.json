@@ -1,0 +1,17 @@
+[
+  {
+    "id": "dockerfile-nginx",
+    "note": "Kleines Dockerfile: statische Website auf nginx – Basis für docker build/tag/push-Übungen und die Pipeline.",
+    "yaml": "FROM nginx:1.27\nCOPY site/ /usr/share/nginx/html\nEXPOSE 80"
+  },
+  {
+    "id": "gitlab-ci-pipeline",
+    "note": "GitLab-CI-Definition mit den klassischen Stages build → test → deploy; deploy läuft nur auf main.",
+    "yaml": "stages:\n  - build\n  - test\n  - deploy\n\nbuild-image:        # baut aus dem Dockerfile ein Docker-Image\n  stage: build\n  script:\n    - docker build -t funkdienst:$CI_COMMIT_SHORT_SHA .\n\nunit-test:          # prueft den Code, BEVOR etwas live geht\n  stage: test\n  script:\n    - npm test\n\ndeploy-cluster:     # rollt automatisch in den Cluster aus\n  stage: deploy\n  script:\n    - kubectl apply -f deployment.yaml\n  only:\n    - main          # nur vom main-Branch wird wirklich deployt"
+  },
+  {
+    "id": "terraform-ost-plateau",
+    "note": "Beispiel-Terraform: ein neues Ost-Plateau + zwei Worker-Server für Port Kubernia (Provider hafen).",
+    "yaml": "terraform {\n  required_providers {\n    hafen = {\n      source = \"kubequest/hafen\"\n    }\n  }\n}\n\n# Ein neues Ost-Plateau für Port Kubernia\nresource \"hafen_plateau\" \"ost\" {\n  name   = \"ost-erweiterung\"\n  breite = 12\n}\n\n# Zwei Server für den wachsenden Cluster\nresource \"hafen_server\" \"worker\" {\n  count   = 2\n  name    = \"worker-${count.index + 3}\"\n  groesse = \"mittel\"\n}"
+  }
+]

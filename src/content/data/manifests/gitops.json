@@ -1,0 +1,22 @@
+[
+  {
+    "id": "argo-application-auto",
+    "note": "Argo CD liest den Soll-Zustand aus einem Git-Repo (die „Seekarte“) und segelt den Cluster selbsttätig dorthin – Pull statt Push. Diese Variante synct automatisch (prune + selfHeal).",
+    "yaml": "apiVersion: argoproj.io/v1alpha1\nkind: Application\nmetadata:\n  name: hafen-lager\n  namespace: argocd\nspec:\n  project: default\n  source:                       # die Seekarte: Soll-Zustand im Git-Repo\n    repoURL: https://github.com/port-kubernia/seekarten.git\n    path: lager\n    targetRevision: main\n  destination:                  # wohin Argo den Soll-Zustand segelt\n    server: https://kubernetes.default.svc\n    namespace: hafen\n  syncPolicy:\n    automated:                  # Pull-Prinzip: Argo gleicht selbst ab\n      prune: true               # entfernt, was aus der Seekarte verschwand\n      selfHeal: true            # Drift am Cluster wird zurückgesetzt"
+  },
+  {
+    "id": "argo-application-manual",
+    "note": "Dieselbe Application OHNE syncPolicy.automated: Argo merkt Drift, rollt aber NICHT von selbst aus – du synchronisierst von Hand mit `argocd app sync`.",
+    "yaml": "apiVersion: argoproj.io/v1alpha1\nkind: Application\nmetadata:\n  name: hafen-lager\n  namespace: argocd\nspec:\n  project: default\n  source:                       # die Seekarte: Soll-Zustand im Git-Repo\n    repoURL: https://github.com/port-kubernia/seekarten.git\n    path: lager\n    targetRevision: main\n  destination:                  # wohin Argo den Soll-Zustand segelt\n    server: https://kubernetes.default.svc\n    namespace: hafen\n  # (noch) keine syncPolicy.automated → du synchronisierst von Hand:\n  #   argocd app sync hafen-lager"
+  },
+  {
+    "id": "argo-application-selfheal",
+    "note": "Application MIT syncPolicy.automated + selfHeal: Argo gleicht den Cluster laufend mit dem Git-Soll ab und dreht manuellen Drift automatisch zurück (#96).",
+    "yaml": "apiVersion: argoproj.io/v1alpha1\nkind: Application\nmetadata:\n  name: hafen-lager\n  namespace: argocd\nspec:\n  project: default\n  source:                       # die Seekarte: Soll-Zustand im Git-Repo\n    repoURL: https://github.com/port-kubernia/seekarten.git\n    path: lager\n    targetRevision: main\n  destination:                  # wohin Argo den Soll-Zustand segelt\n    server: https://kubernetes.default.svc\n    namespace: hafen\n  syncPolicy:\n    automated:                  # Pull-Prinzip: Argo gleicht selbst ab\n      prune: true               # entfernt, was aus der Seekarte verschwand\n      selfHeal: true            # Drift zurücksetzen: Git gewinnt immer"
+  },
+  {
+    "id": "argo-app-of-apps",
+    "note": "App-of-Apps: eine Application, die keine Dienste ausrollt, sondern auf einen Ordner voller weiterer Applications zeigt – eine „Flotte“, die mit einem Auftrag den ganzen Archipel verwaltet.",
+    "yaml": "apiVersion: argoproj.io/v1alpha1\nkind: Application\nmetadata:\n  name: hafen-flotte\n  namespace: argocd\nspec:\n  project: default\n  source:                       # zeigt nur auf einen Ordner voller weiterer Applications\n    repoURL: https://github.com/port-kubernia/seekarten.git\n    path: flotte\n    targetRevision: main\n  destination:\n    server: https://kubernetes.default.svc\n    namespace: argocd\n  syncPolicy:\n    automated:\n      prune: true\n      selfHeal: true"
+  }
+]

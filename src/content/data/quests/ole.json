@@ -488,8 +488,8 @@
         "type": "terminal",
         "brief": "Das Leck finden",
         "scenario": {
-          "files": {
-            "boese-config.yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: kasse-config\ndata:\n  datenbank_host: db.hafen.local\n  # AUTSCH – Passwort im Klartext! Krakenfutter!\n  datenbank_passwort: fisch123"
+          "manifests": {
+            "boese-config.yaml": "configmap-kasse-klartext"
           }
         },
         "tasks": [

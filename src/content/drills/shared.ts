@@ -4,12 +4,27 @@
  */
 import type { Sim, Deployment, NetworkPolicyRes, ArgoApp } from "../../sim";
 import { pick, rnd } from "../util";
-import {
-  NETPOL_YAML, EXTERNALNAME_YAML, DOCKERFILE, ARGO_APPLICATION_MANUAL_YAML,
-  SERVICEMONITOR_YAML, PROMETHEUSRULE_YAML, ROLE_YAML, ROLEBINDING_YAML,
-  CLUSTERROLE_YAML, CLUSTERROLEBINDING_YAML, POD_SECURITY_YAML,
-  STATEFULSET_YAML, STORAGECLASS_YAML, PVC_YAML, VOLUMESNAPSHOT_YAML, PVC_RESTORE_YAML,
-} from "../manifests";
+// Manifeste kommen seit #514 aus der EINEN Quelle (data/manifests via manifest-lib), nicht
+// mehr aus einem TS-Konstanten-Monolithen. Die vertrauten Namen bleiben als lokale Konstanten
+// erhalten (aus der Bibliothek aufgelöst) + re-exportiert – die Drill-Module ändern sich nicht.
+import { getManifest } from "../manifest-lib";
+
+const NETPOL_YAML = getManifest("networkpolicy-hafenmauer");
+const EXTERNALNAME_YAML = getManifest("service-externalname-bank");
+const DOCKERFILE = getManifest("dockerfile-nginx");
+const ARGO_APPLICATION_MANUAL_YAML = getManifest("argo-application-manual");
+const SERVICEMONITOR_YAML = getManifest("servicemonitor-lager");
+const PROMETHEUSRULE_YAML = getManifest("prometheusrule-hafen");
+const ROLE_YAML = getManifest("role-pod-leser");
+const ROLEBINDING_YAML = getManifest("rolebinding-pod-leser");
+const CLUSTERROLE_YAML = getManifest("clusterrole-knoten-leser");
+const CLUSTERROLEBINDING_YAML = getManifest("clusterrolebinding-knoten-leser");
+const POD_SECURITY_YAML = getManifest("deployment-wachposten-restricted");
+const STATEFULSET_YAML = getManifest("statefulset-speicher");
+const STORAGECLASS_YAML = getManifest("storageclass-kai-ssd");
+const PVC_YAML = getManifest("pvc-lager-daten");
+const VOLUMESNAPSHOT_YAML = getManifest("volumesnapshot-lager");
+const PVC_RESTORE_YAML = getManifest("pvc-restore-lager");
 
 export const IMAGES = ["redis", "httpd", "busybox", "postgres", "rabbitmq"];
 export const NAMES = ["leuchtfeuer", "fischtheke", "lotsenfunk", "ankerwinde", "kombuese", "seekiste"];

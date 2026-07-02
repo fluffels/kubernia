@@ -91,8 +91,8 @@
         "type": "dialog",
         "npc": "argo",
         "scenario": {
-          "files": {
-            "application.yaml": "apiVersion: argoproj.io/v1alpha1\nkind: Application\nmetadata:\n  name: hafen-lager\n  namespace: argocd\nspec:\n  project: default\n  source:                       # die Seekarte: Soll-Zustand im Git-Repo\n    repoURL: https://github.com/port-kubernia/seekarten.git\n    path: lager\n    targetRevision: main\n  destination:                  # wohin Argo den Soll-Zustand segelt\n    server: https://kubernetes.default.svc\n    namespace: hafen\n  # (noch) keine syncPolicy.automated → du synchronisierst von Hand:\n  #   argocd app sync hafen-lager"
+          "manifests": {
+            "application.yaml": "argo-application-manual"
           },
           "applyEffects": {
             "application.yaml": {
@@ -278,8 +278,8 @@
         "type": "terminal",
         "brief": "Seekarte lesen",
         "scenario": {
-          "files": {
-            "application-selfheal.yaml": "apiVersion: argoproj.io/v1alpha1\nkind: Application\nmetadata:\n  name: hafen-lager\n  namespace: argocd\nspec:\n  project: default\n  source:                       # die Seekarte: Soll-Zustand im Git-Repo\n    repoURL: https://github.com/port-kubernia/seekarten.git\n    path: lager\n    targetRevision: main\n  destination:                  # wohin Argo den Soll-Zustand segelt\n    server: https://kubernetes.default.svc\n    namespace: hafen\n  syncPolicy:\n    automated:                  # Pull-Prinzip: Argo gleicht selbst ab\n      prune: true               # entfernt, was aus der Seekarte verschwand\n      selfHeal: true            # Drift zurücksetzen: Git gewinnt immer"
+          "manifests": {
+            "application-selfheal.yaml": "argo-application-selfheal"
           },
           "applyEffects": {
             "application-selfheal.yaml": {
@@ -431,8 +431,8 @@
         "type": "terminal",
         "brief": "Seekarte der Flotte lesen",
         "scenario": {
-          "files": {
-            "app-of-apps.yaml": "apiVersion: argoproj.io/v1alpha1\nkind: Application\nmetadata:\n  name: hafen-flotte\n  namespace: argocd\nspec:\n  project: default\n  source:                       # zeigt nur auf einen Ordner voller weiterer Applications\n    repoURL: https://github.com/port-kubernia/seekarten.git\n    path: flotte\n    targetRevision: main\n  destination:\n    server: https://kubernetes.default.svc\n    namespace: argocd\n  syncPolicy:\n    automated:\n      prune: true\n      selfHeal: true"
+          "manifests": {
+            "app-of-apps.yaml": "argo-app-of-apps"
           },
           "applyEffects": {
             "app-of-apps.yaml": {

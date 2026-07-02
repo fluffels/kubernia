@@ -20,8 +20,8 @@
         "type": "terminal",
         "brief": "Bauplan lesen",
         "scenario": {
-          "files": {
-            "main.tf": "terraform {\n  required_providers {\n    hafen = {\n      source = \"kubequest/hafen\"\n    }\n  }\n}\n\n# Ein neues Ost-Plateau für Port Kubernia\nresource \"hafen_plateau\" \"ost\" {\n  name   = \"ost-erweiterung\"\n  breite = 12\n}\n\n# Zwei Server für den wachsenden Cluster\nresource \"hafen_server\" \"worker\" {\n  count   = 2\n  name    = \"worker-${count.index + 3}\"\n  groesse = \"mittel\"\n}"
+          "manifests": {
+            "main.tf": "terraform-ost-plateau"
           },
           "tfResources": [
             {

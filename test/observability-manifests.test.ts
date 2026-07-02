@@ -1,14 +1,17 @@
 /* Tests für die Observability-Manifeste (#110): ServiceMonitor, PrometheusRule,
  * Grafana-Datasource/-Dashboard. Zwei Ebenen:
- *  1. Struktur der YAML-Schnipsel in src/content/manifests.ts (valide, korrekt eingerückt).
+ *  1. Struktur der YAML-Schnipsel (Manifest-Bibliothek data/manifests via manifest-lib, #514).
  *  2. Der Simulator verarbeitet sie per `kubectl apply -f` und listet sie via `kubectl get`.
  */
 import { test } from "vitest";
 import assert from "node:assert/strict";
 import { Sim as KQSim } from "../src/sim";
-import {
-  SERVICEMONITOR_YAML, PROMETHEUSRULE_YAML, GRAFANA_DATASOURCE_YAML, GRAFANA_DASHBOARD_YAML,
-} from "../src/content/manifests";
+import { getManifest } from "../src/content/manifest-lib";
+
+const SERVICEMONITOR_YAML = getManifest("servicemonitor-lager");
+const PROMETHEUSRULE_YAML = getManifest("prometheusrule-hafen");
+const GRAFANA_DATASOURCE_YAML = getManifest("grafana-datasource-prometheus");
+const GRAFANA_DASHBOARD_YAML = getManifest("grafana-dashboard-hafen");
 
 /* ===================== 1. Struktur der Manifeste ===================== */
 

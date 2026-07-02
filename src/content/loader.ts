@@ -84,6 +84,10 @@ import { compileCheck } from "./check-dsl";
 // Scenario-Validierung (#494) liegt als eigenes Leaf-Modul neben dem Loader (wie check-dsl):
 // geschlossene Feld-Allowlist + fail-fast gegen stille Tippfehler im Inline-`scenario`.
 import { reviveScenario } from "./scenario";
+// Manifest-Bibliothek (#514): benannte YAML-/Datei-Inhalte als Daten. Der Loader löst die
+// `scenario.manifests`-Kurzform (manifestRef) über `resolveScenarioManifests` auf; das
+// Leaf-Modul importiert nur parse.ts, sodass auch die Drills es zyklusfrei nutzen.
+import { resolveScenarioManifests } from "./manifest-lib";
 // Geteilte Parse-Primitiven liegen seit #411 im Leaf-Modul `parse.ts` (bricht den
 // Zyklus loader → check-dsl → loader, den #390 verbietet). `ContentValidationError`
 // wird hier re-exportiert, damit bestehende `import … from "./loader"` (entities.ts,
@@ -98,6 +102,7 @@ import {
   asBool,
   asArray,
   assertNoUnknownKeys,
+  memo,
 } from "./parse";
 import type { Sim } from "../sim";
 import type { FunkExplanation } from "../funkexplain";
@@ -112,25 +117,6 @@ import type {
 import type { Scenario } from "../sim";
 
 export { ContentValidationError };
-
-/** Lazy-Memoizer (#435): `make` läuft beim ERSTEN Aufruf, das Ergebnis wird gecacht.
- *  So wandert das Parsen+Validieren der Inhalte vom Modul-Import (Boot-Pfad) auf die
- *  erste tatsächliche Nutzung und passiert pro Sammlung genau einmal. Wichtig für
- *  Stardew-Scope: hunderte Quests/Karten werden nicht mehr alle beim Boot geparst,
- *  sondern erst, wenn die jeweilige Sammlung gebraucht wird (Funkgerät/Quiz/Logbuch).
- *  Der `import.meta.glob`-Import bleibt eager (der Single-File-Build inlinet die JSON-
- *  Module weiterhin) – nur das AUSWERTEN ist verzögert. */
-function memo<T>(make: () => T): () => T {
-  let value: T;
-  let computed = false;
-  return () => {
-    if (!computed) {
-      value = make();
-      computed = true;
-    }
-    return value;
-  };
-}
 
 /** NPC-Stammdaten: Anzeigename, Funktions-Titel, Spritesheet-Frame, Textur-Key. */
 export interface NpcMeta {
@@ -282,7 +268,8 @@ function reviveStepBase(o: Record<string, unknown>, path: string): StepBase {
     // Scenario ist die serialisierbare Sim-Zustandsform (= GameState.clusterSnapshot);
     // strukturell gegen die geschlossene Feld-Allowlist prüfen (#494), die Sim-Semantik
     // prüft der Sim selbst. Ein Tippfehler im Schlüssel scheitert jetzt hart beim Laden.
-    base.scenario = reviveScenario(o.scenario, `${path}.scenario`);
+    // Vorher die `manifests`-Kurzform (manifestRef, #514) zu `files` auflösen.
+    base.scenario = reviveScenario(resolveScenarioManifests(o.scenario, `${path}.scenario`), `${path}.scenario`);
   }
   if (o.unlockAbbrev !== undefined) base.unlockAbbrev = asNonEmptyString(o.unlockAbbrev, `${path}.unlockAbbrev`);
   return base;

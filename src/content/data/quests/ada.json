@@ -20,10 +20,10 @@
         "type": "terminal",
         "brief": "Karten lesen",
         "scenario": {
-          "files": {
-            "deployment.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: lager\nspec:\n  replicas: 2\n  selector:\n    matchLabels:\n      app: lager\n  template:\n    metadata:\n      labels:\n        app: lager\n    spec:\n      containers:\n        - name: lager\n          image: redis:7\n          ports:\n            - containerPort: 6379",
-            "service.yaml": "apiVersion: v1\nkind: Service\nmetadata:\n  name: lager\nspec:\n  selector:\n    app: lager\n  ports:\n    - port: 6379",
-            "ingress.yaml": "apiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: hafentor\nspec:\n  ingressClassName: nginx\n  rules:\n    - host: hafen.de\n      http:\n        paths:\n          - path: /lager\n            pathType: Prefix\n            backend:\n              service:\n                name: lager\n                port:\n                  number: 6379"
+          "manifests": {
+            "deployment.yaml": "deployment-lager",
+            "service.yaml": "service-lager",
+            "ingress.yaml": "ingress-hafentor"
           },
           "applyEffects": {
             "deployment.yaml": {
@@ -531,9 +531,9 @@
         "type": "dialog",
         "npc": "ada",
         "scenario": {
-          "files": {
-            ".gitlab-ci.yml": "stages:\n  - build\n  - test\n  - deploy\n\nbuild-image:        # baut aus dem Dockerfile ein Docker-Image\n  stage: build\n  script:\n    - docker build -t funkdienst:$CI_COMMIT_SHORT_SHA .\n\nunit-test:          # prueft den Code, BEVOR etwas live geht\n  stage: test\n  script:\n    - npm test\n\ndeploy-cluster:     # rollt automatisch in den Cluster aus\n  stage: deploy\n  script:\n    - kubectl apply -f deployment.yaml\n  only:\n    - main          # nur vom main-Branch wird wirklich deployt",
-            "Dockerfile": "FROM nginx:1.27\nCOPY site/ /usr/share/nginx/html\nEXPOSE 80"
+          "manifests": {
+            ".gitlab-ci.yml": "gitlab-ci-pipeline",
+            "Dockerfile": "dockerfile-nginx"
           },
           "ciDeploy": {
             "name": "funkdienst",
@@ -968,8 +968,8 @@
         "type": "terminal",
         "brief": "HTTPS aufschalten",
         "scenario": {
-          "files": {
-            "ingress-tls.yaml": "apiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: hafentor\nspec:\n  ingressClassName: nginx\n  tls:\n    - hosts:\n        - hafen.de\n      secretName: hafen-tls\n  rules:\n    - host: hafen.de\n      http:\n        paths:\n          - path: /lager\n            pathType: Prefix\n            backend:\n              service:\n                name: lager\n                port:\n                  number: 6379"
+          "manifests": {
+            "ingress-tls.yaml": "ingress-hafentor-tls"
           },
           "applyEffects": {
             "ingress-tls.yaml": {
@@ -1097,8 +1097,8 @@
         "scenario": {
           "deployments": [{ "name": "kasse", "image": "nginx", "replicas": 1 }],
           "services": [{ "name": "kasse", "type": "ClusterIP", "clusterIP": "10.96.0.50", "port": 80 }],
-          "files": {
-            "externalname.yaml": "apiVersion: v1\nkind: Service\nmetadata:\n  name: bank-extern\nspec:\n  type: ExternalName\n  externalName: api.bank.example.com   # der externe DNS-Name, auf den der CNAME zeigt"
+          "manifests": {
+            "externalname.yaml": "service-externalname-bank"
           },
           "applyEffects": {
             "externalname.yaml": { "service": { "name": "bank-extern", "externalName": "api.bank.example.com", "port": "" } }

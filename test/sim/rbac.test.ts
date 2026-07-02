@@ -6,10 +6,14 @@ import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./helpers";
 import { KQContent } from "../../src/content";
-import {
-  SERVICEACCOUNT_YAML, ROLE_YAML, ROLEBINDING_YAML,
-  CLUSTERROLE_YAML, CLUSTERROLEBINDING_YAML, POD_SECURITY_YAML,
-} from "../../src/content/manifests";
+import { getManifest } from "../../src/content/manifest-lib";
+
+const SERVICEACCOUNT_YAML = getManifest("serviceaccount-deploy-bot");
+const ROLE_YAML = getManifest("role-pod-leser");
+const ROLEBINDING_YAML = getManifest("rolebinding-pod-leser");
+const CLUSTERROLE_YAML = getManifest("clusterrole-knoten-leser");
+const CLUSTERROLEBINDING_YAML = getManifest("clusterrolebinding-knoten-leser");
+const POD_SECURITY_YAML = getManifest("deployment-wachposten-restricted");
 
 let sim: KQSim;
 beforeEach(() => { sim = freshSim(); });

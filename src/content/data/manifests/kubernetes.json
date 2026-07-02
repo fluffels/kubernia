@@ -1,0 +1,20 @@
+[
+  {
+    "id": "deployment-lager",
+    "yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: lager\nspec:\n  replicas: 2\n  selector:\n    matchLabels:\n      app: lager\n  template:\n    metadata:\n      labels:\n        app: lager\n    spec:\n      containers:\n        - name: lager\n          image: redis:7\n          ports:\n            - containerPort: 6379"
+  },
+  {
+    "id": "service-lager",
+    "yaml": "apiVersion: v1\nkind: Service\nmetadata:\n  name: lager\nspec:\n  selector:\n    app: lager\n  ports:\n    - port: 6379"
+  },
+  {
+    "id": "deployment-kartograf-resources",
+    "note": "Ein Deployment MIT Ressourcen-Angaben: requests = was der Scheduler fest reserviert, limits = Obergrenze, ab der der Kernel den Container killt (OOMKilled). Zu knapp = OOMKilled, zu üppig = verschwendete Dublonen.",
+    "yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: kartograf\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: kartograf\n  template:\n    metadata:\n      labels:\n        app: kartograf\n    spec:\n      containers:\n        - name: kartograf\n          image: nginx\n          resources:\n            requests:        # so viel reserviert der Scheduler fest\n              memory: 128Mi\n              cpu: 100m\n            limits:          # ab hier killt der Kernel den Container (OOMKilled)\n              memory: 256Mi\n              cpu: 250m"
+  },
+  {
+    "id": "configmap-kasse-klartext",
+    "note": "Negativ-Beispiel: Passwort im Klartext in einer ConfigMap – gehört in ein Secret.",
+    "yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: kasse-config\ndata:\n  datenbank_host: db.hafen.local\n  # AUTSCH – Passwort im Klartext! Krakenfutter!\n  datenbank_passwort: fisch123"
+  }
+]
