@@ -9,7 +9,7 @@
  * ../state und das KubectlHost-Interface (./host). Aufgerufen aus dem
  * kubectl-Dispatch (../kubectl.ts).
  */
-import type { ApplyEffect, ArgoApp, RbacSubject } from "../state";
+import type { ApplyEffect, ArgoApp, Deployment, RbacSubject } from "../state";
 import { addDeployment, removeDeployment, addStatefulSet, removeStatefulSet, replaceDeploymentPod, restartStatefulPod } from "../workload";
 // Argo-CD-Reconcile/-Klon liegen seit #378 bei der argocd-Familie in ../argocd – `kubectl apply -f`
 // einer Application zieht/kloniert den Soll direkt darüber (statt über eine Host-Methode).
@@ -78,88 +78,118 @@ const SIMPLE_DELETABLE: readonly {
 ];
 
 
-export function kubectlCreate(host: KubectlHost, t: string[], raw: string) {
-  if (t[2] === "secret") {
-    // kubectl create secret tls <name> --cert=<datei> --key=<datei>
-    if (t[3] === "tls") {
-      const name = t[4];
-      if (!name || name.startsWith("--")) return host._err("kubectl create secret tls: Der Name fehlt.", "Muster: kubectl create secret tls <name> --cert=tls.crt --key=tls.key");
-      { const bad = invalidNameError(host, "Secret", name); if (bad) return bad; }
-      const hasCert = /--cert[=\s]\S+/.test(raw);
-      const hasKey = /--key[=\s]\S+/.test(raw);
-      if (!hasCert || !hasKey) return host._err("error: a TLS secret needs --cert and --key", "Häng '--cert=tls.crt --key=tls.key' an.");
-      if (host.secrets.some(s => s.name === name)) return host._err('error: secrets "' + name + '" already exists');
-      host.secrets.push({ name, keys: ["tls.crt", "tls.key"], type: "kubernetes.io/tls", created: host.clock });
-      return "secret/" + name + " created";
-    }
-    // kubectl create secret generic <name> --from-literal=schluessel=wert
-    if (t[3] !== "generic") return host._err("Der Simulator kann nur 'kubectl create secret generic <name> --from-literal=k=v' und 'kubectl create secret tls <name> --cert=… --key=…'.");
-    const name = t[4];
-    if (!name || name.startsWith("--")) return host._err("kubectl create secret: Der Name fehlt.", "Muster: kubectl create secret generic <name> --from-literal=schluessel=wert");
-    { const bad = invalidNameError(host, "Secret", name); if (bad) return bad; }
-    const literals = [...raw.matchAll(/--from-literal[=\s]([\w.-]+)=(\S+)/g)].map(m => m[1]);
-    if (literals.length === 0) return host._err("error: at least one --from-literal is required", "Häng '--from-literal=passwort=geheim123' an.");
-    if (host.secrets.some(s => s.name === name)) return host._err('error: secrets "' + name + '" already exists');
-    host.secrets.push({ name, keys: literals, created: host.clock });
-    return "secret/" + name + " created";
+/* ===== `kubectl create <typ> …` – ein Handler je Ressourcentyp (#543) =====
+ * Der frühere Monolith (complexity 63, ein `if (t[2] === …)`-Block je Typ) ist in fokussierte
+ * Handler zerlegt, verdrahtet über die `CREATE_HANDLERS`-Tabelle (dieselbe Registry-Idee wie
+ * `applyHandlers` / `SIMPLE_DELETABLE`). Ein neuer create-fähiger Typ = ein Handler + ein
+ * Tabellen-Eintrag; `kubectlCreate` selbst bleibt ein dünner Dispatcher (Stardew-Scope: wächst
+ * nicht in der Komplexität, egal wie viele Ressourcentypen dazukommen). Alle Handler teilen die
+ * Signatur (host, t, raw); wer `raw` nicht braucht, ignoriert es. */
+type CreateHandler = (host: KubectlHost, t: string[], raw: string) => string;
+
+// kubectl create secret tls <name> --cert=<datei> --key=<datei>
+function createSecretTls(host: KubectlHost, t: string[], raw: string): string {
+  const name = t[4];
+  if (!name || name.startsWith("--")) return host._err("kubectl create secret tls: Der Name fehlt.", "Muster: kubectl create secret tls <name> --cert=tls.crt --key=tls.key");
+  { const bad = invalidNameError(host, "Secret", name); if (bad) return bad; }
+  const hasCert = /--cert[=\s]\S+/.test(raw);
+  const hasKey = /--key[=\s]\S+/.test(raw);
+  if (!hasCert || !hasKey) return host._err("error: a TLS secret needs --cert and --key", "Häng '--cert=tls.crt --key=tls.key' an.");
+  if (host.secrets.some(s => s.name === name)) return host._err('error: secrets "' + name + '" already exists');
+  host.secrets.push({ name, keys: ["tls.crt", "tls.key"], type: "kubernetes.io/tls", created: host.clock });
+  return "secret/" + name + " created";
+}
+
+// kubectl create secret generic <name> --from-literal=schluessel=wert
+function createSecretGeneric(host: KubectlHost, t: string[], raw: string): string {
+  const name = t[4];
+  if (!name || name.startsWith("--")) return host._err("kubectl create secret: Der Name fehlt.", "Muster: kubectl create secret generic <name> --from-literal=schluessel=wert");
+  { const bad = invalidNameError(host, "Secret", name); if (bad) return bad; }
+  const literals = [...raw.matchAll(/--from-literal[=\s]([\w.-]+)=(\S+)/g)].map(m => m[1]);
+  if (literals.length === 0) return host._err("error: at least one --from-literal is required", "Häng '--from-literal=passwort=geheim123' an.");
+  if (host.secrets.some(s => s.name === name)) return host._err('error: secrets "' + name + '" already exists');
+  host.secrets.push({ name, keys: literals, created: host.clock });
+  return "secret/" + name + " created";
+}
+
+const createSecret: CreateHandler = (host, t, raw) => {
+  if (t[3] === "tls") return createSecretTls(host, t, raw);
+  if (t[3] === "generic") return createSecretGeneric(host, t, raw);
+  return host._err("Der Simulator kann nur 'kubectl create secret generic <name> --from-literal=k=v' und 'kubectl create secret tls <name> --cert=… --key=…'.");
+};
+
+// kubectl create configmap <name> --from-literal=schluessel=wert
+const createConfigMap: CreateHandler = (host, t, raw) => {
+  const name = t[3];
+  if (!name || name.startsWith("--")) return host._err("kubectl create configmap: Der Name fehlt.", "Muster: kubectl create configmap <name> --from-literal=schluessel=wert");
+  { const bad = invalidNameError(host, "ConfigMap", name); if (bad) return bad; }
+  const literals = [...raw.matchAll(/--from-literal[=\s]([\w.-]+)=(\S+)/g)].map(m => m[1]);
+  if (literals.length === 0) return host._err("error: at least one --from-literal is required", "Häng '--from-literal=log_level=info' an.");
+  if (host.configMaps.some(c => c.name === name)) return host._err('error: configmaps "' + name + '" already exists');
+  host.configMaps.push({ name, keys: literals, created: host.clock });
+  return "configmap/" + name + " created";
+};
+
+const createServiceAccount: CreateHandler = (host, t) => {
+  const name = t[3];
+  if (!name || name.startsWith("--")) return host._err("kubectl create serviceaccount: Der Name fehlt.", "Muster: kubectl create serviceaccount <name>");
+  { const bad = invalidNameError(host, "ServiceAccount", name); if (bad) return bad; }
+  if (host.serviceAccounts.some(s => s.name === name)) return host._err('error: serviceaccounts "' + name + '" already exists');
+  host.serviceAccounts.push({ name, created: host.clock });
+  return "serviceaccount/" + name + " created";
+};
+
+// kubectl create role|clusterrole <name> --verb=… --resource=… (cluster ergibt sich aus t[2])
+const createRole: CreateHandler = (host, t, raw) => {
+  const cluster = t[2] === "clusterrole";
+  const name = t[3];
+  if (!name || name.startsWith("--")) return host._err("kubectl create " + t[2] + ": Der Name fehlt.", "Muster: kubectl create " + t[2] + " <name> --verb=get,list --resource=pods");
+  { const bad = invalidNameError(host, cluster ? "ClusterRole" : "Role", name); if (bad) return bad; }
+  const verbs = multiFlag(raw, "verb");
+  const resources = multiFlag(raw, "resource");
+  if (verbs.length === 0) return host._err("error: at least one --verb must be specified", "Häng z.B. '--verb=get,list' an.");
+  if (resources.length === 0) return host._err("error: at least one --resource must be specified", "Häng z.B. '--resource=pods' an.");
+  const kind = cluster ? "clusterrole" : "role";
+  if (host.roles.some(r => r.cluster === cluster && r.name === name)) return host._err('error: ' + kind + 's.rbac.authorization.k8s.io "' + name + '" already exists');
+  host.roles.push({ name, cluster, rules: [{ verbs, resources }], created: host.clock });
+  return kind + ".rbac.authorization.k8s.io/" + name + " created";
+};
+
+/** Die `--user`/`--serviceaccount`-Subjekte eines RoleBindings einsammeln (`<ns>:<sa>` oder
+ *  `<sa>` → Namespace `default`). Ausgelagert aus `createRoleBinding`, damit der Dispatcher
+ *  unter der Komplexitätsschwelle bleibt. */
+function collectRbacSubjects(raw: string): RbacSubject[] {
+  const subjects: RbacSubject[] = [];
+  for (const u of multiFlag(raw, "user")) subjects.push({ kind: "User", name: u });
+  for (const sa of multiFlag(raw, "serviceaccount")) {
+    const [ns, n] = sa.includes(":") ? sa.split(":") : ["default", sa];
+    subjects.push({ kind: "ServiceAccount", name: n, namespace: ns });
   }
-  if (t[2] === "configmap" || t[2] === "cm") {
-    // kubectl create configmap <name> --from-literal=schluessel=wert
-    const name = t[3];
-    if (!name || name.startsWith("--")) return host._err("kubectl create configmap: Der Name fehlt.", "Muster: kubectl create configmap <name> --from-literal=schluessel=wert");
-    { const bad = invalidNameError(host, "ConfigMap", name); if (bad) return bad; }
-    const literals = [...raw.matchAll(/--from-literal[=\s]([\w.-]+)=(\S+)/g)].map(m => m[1]);
-    if (literals.length === 0) return host._err("error: at least one --from-literal is required", "Häng '--from-literal=log_level=info' an.");
-    if (host.configMaps.some(c => c.name === name)) return host._err('error: configmaps "' + name + '" already exists');
-    host.configMaps.push({ name, keys: literals, created: host.clock });
-    return "configmap/" + name + " created";
-  }
-  if (t[2] === "serviceaccount" || t[2] === "sa") {
-    const name = t[3];
-    if (!name || name.startsWith("--")) return host._err("kubectl create serviceaccount: Der Name fehlt.", "Muster: kubectl create serviceaccount <name>");
-    { const bad = invalidNameError(host, "ServiceAccount", name); if (bad) return bad; }
-    if (host.serviceAccounts.some(s => s.name === name)) return host._err('error: serviceaccounts "' + name + '" already exists');
-    host.serviceAccounts.push({ name, created: host.clock });
-    return "serviceaccount/" + name + " created";
-  }
-  if (t[2] === "role" || t[2] === "clusterrole") {
-    const cluster = t[2] === "clusterrole";
-    const name = t[3];
-    if (!name || name.startsWith("--")) return host._err("kubectl create " + t[2] + ": Der Name fehlt.", "Muster: kubectl create " + t[2] + " <name> --verb=get,list --resource=pods");
-    { const bad = invalidNameError(host, cluster ? "ClusterRole" : "Role", name); if (bad) return bad; }
-    const verbs = multiFlag(raw, "verb");
-    const resources = multiFlag(raw, "resource");
-    if (verbs.length === 0) return host._err("error: at least one --verb must be specified", "Häng z.B. '--verb=get,list' an.");
-    if (resources.length === 0) return host._err("error: at least one --resource must be specified", "Häng z.B. '--resource=pods' an.");
-    const kind = cluster ? "clusterrole" : "role";
-    if (host.roles.some(r => r.cluster === cluster && r.name === name)) return host._err('error: ' + kind + 's.rbac.authorization.k8s.io "' + name + '" already exists');
-    host.roles.push({ name, cluster, rules: [{ verbs, resources }], created: host.clock });
-    return kind + ".rbac.authorization.k8s.io/" + name + " created";
-  }
-  if (t[2] === "rolebinding" || t[2] === "clusterrolebinding") {
-    const cluster = t[2] === "clusterrolebinding";
-    const name = t[3];
-    if (!name || name.startsWith("--")) return host._err("kubectl create " + t[2] + ": Der Name fehlt.", "Muster: kubectl create " + t[2] + " <name> --role=<rolle> --serviceaccount=<ns>:<sa>");
-    { const bad = invalidNameError(host, cluster ? "ClusterRoleBinding" : "RoleBinding", name); if (bad) return bad; }
-    const roleName = flagValue(t, "--role");
-    const clusterRoleName = flagValue(t, "--clusterrole");
-    // ClusterRoleBinding kann sich nur auf eine ClusterRole beziehen.
-    if (cluster && roleName) return host._err("error: a ClusterRoleBinding can only reference a ClusterRole", "Nutze '--clusterrole=<name>' statt '--role'.");
-    if (!roleName && !clusterRoleName) return host._err("error: exactly one of --role or --clusterrole must be specified", cluster ? "Häng '--clusterrole=<name>' an." : "Häng '--role=<name>' oder '--clusterrole=<name>' an.");
-    const roleRef = clusterRoleName ? { kind: "ClusterRole" as const, name: clusterRoleName } : { kind: "Role" as const, name: roleName! };
-    const subjects: RbacSubject[] = [];
-    for (const u of multiFlag(raw, "user")) subjects.push({ kind: "User", name: u });
-    for (const sa of multiFlag(raw, "serviceaccount")) {
-      const [ns, n] = sa.includes(":") ? sa.split(":") : ["default", sa];
-      subjects.push({ kind: "ServiceAccount", name: n, namespace: ns });
-    }
-    if (subjects.length === 0) return host._err("error: at least one of --user or --serviceaccount must be specified", "Muster: '--serviceaccount=default:deploy-bot' oder '--user=alice'.");
-    const kind = cluster ? "clusterrolebinding" : "rolebinding";
-    if (host.roleBindings.some(b => b.cluster === cluster && b.name === name)) return host._err('error: ' + kind + 's.rbac.authorization.k8s.io "' + name + '" already exists');
-    host.roleBindings.push({ name, cluster, roleRef, subjects, created: host.clock });
-    return kind + ".rbac.authorization.k8s.io/" + name + " created";
-  }
-  if (t[2] !== "deployment") return host._err("Der Simulator kann nur 'kubectl create deployment|serviceaccount|role|clusterrole|rolebinding|clusterrolebinding …', 'kubectl create secret generic|tls …' und 'kubectl create configmap …'.");
+  return subjects;
+}
+
+// kubectl create rolebinding|clusterrolebinding <name> --role=… --serviceaccount=…
+const createRoleBinding: CreateHandler = (host, t, raw) => {
+  const cluster = t[2] === "clusterrolebinding";
+  const name = t[3];
+  if (!name || name.startsWith("--")) return host._err("kubectl create " + t[2] + ": Der Name fehlt.", "Muster: kubectl create " + t[2] + " <name> --role=<rolle> --serviceaccount=<ns>:<sa>");
+  { const bad = invalidNameError(host, cluster ? "ClusterRoleBinding" : "RoleBinding", name); if (bad) return bad; }
+  const roleName = flagValue(t, "--role");
+  const clusterRoleName = flagValue(t, "--clusterrole");
+  // ClusterRoleBinding kann sich nur auf eine ClusterRole beziehen.
+  if (cluster && roleName) return host._err("error: a ClusterRoleBinding can only reference a ClusterRole", "Nutze '--clusterrole=<name>' statt '--role'.");
+  if (!roleName && !clusterRoleName) return host._err("error: exactly one of --role or --clusterrole must be specified", cluster ? "Häng '--clusterrole=<name>' an." : "Häng '--role=<name>' oder '--clusterrole=<name>' an.");
+  const roleRef = clusterRoleName ? { kind: "ClusterRole" as const, name: clusterRoleName } : { kind: "Role" as const, name: roleName! };
+  const subjects = collectRbacSubjects(raw);
+  if (subjects.length === 0) return host._err("error: at least one of --user or --serviceaccount must be specified", "Muster: '--serviceaccount=default:deploy-bot' oder '--user=alice'.");
+  const kind = cluster ? "clusterrolebinding" : "rolebinding";
+  if (host.roleBindings.some(b => b.cluster === cluster && b.name === name)) return host._err('error: ' + kind + 's.rbac.authorization.k8s.io "' + name + '" already exists');
+  host.roleBindings.push({ name, cluster, roleRef, subjects, created: host.clock });
+  return kind + ".rbac.authorization.k8s.io/" + name + " created";
+};
+
+// kubectl create deployment <name> --image=<image>
+const createDeployment: CreateHandler = (host, t, raw) => {
   const name = t[3];
   const imgMatch = raw.match(/--image[=\s]+(\S+)/);
   if (!name || name.startsWith("--")) return host._err("kubectl create deployment: Der Name fehlt.", "z.B. 'kubectl create deployment kasse --image=nginx'");
@@ -172,60 +202,107 @@ export function kubectlCreate(host: KubectlHost, t: string[], raw: string) {
   if (denied) return host._err(denied, "Setz die Stufe mit 'kubectl label namespace default pod-security.kubernetes.io/enforce=privileged' herab oder liefere einen passenden securityContext per Manifest.");
   addDeployment(host, host._makeDeployment(name, imgMatch[1], 1));
   return "deployment.apps/" + name + " created";
+};
+
+/** Ressourcentyp (t[2], inkl. Kurz-Aliase) → create-Handler. Reihenfolge egal (Lookup). */
+const CREATE_HANDLERS: Readonly<Record<string, CreateHandler>> = {
+  secret: createSecret,
+  configmap: createConfigMap, cm: createConfigMap,
+  serviceaccount: createServiceAccount, sa: createServiceAccount,
+  role: createRole, clusterrole: createRole,
+  rolebinding: createRoleBinding, clusterrolebinding: createRoleBinding,
+  deployment: createDeployment,
+};
+
+export function kubectlCreate(host: KubectlHost, t: string[], raw: string): string {
+  const handler = CREATE_HANDLERS[t[2]];
+  if (!handler) return host._err("Der Simulator kann nur 'kubectl create deployment|serviceaccount|role|clusterrole|rolebinding|clusterrolebinding …', 'kubectl create secret generic|tls …' und 'kubectl create configmap …'.");
+  return handler(host, t, raw);
 }
 
+
+/* ===== `kubectl delete -f <datei>` – Tabelle der aus einem Manifest löschbaren Ressourcen (#543) =====
+ * Ein Eintrag je Ressourcentyp, den ein `apply -f` anlegen kann, in derselben Reihenfolge wie die
+ * Ausgabe zuvor. `pick` holt das Effekt-Feld (oder undefined), `remove` entfernt es (Deployment/
+ * StatefulSet über ihre Aggregat-Entferner mit Folgewirkung: Pods, beim StatefulSet bewusst OHNE
+ * PVCs #122; der Rest ist schlicht „splice per Name", #518) und `msg` liefert die „… deleted"-Zeile.
+ * Ein neuer apply-fähiger Typ = ein Eintrag hier (Stardew-Scope: der Löscher wächst nicht in der
+ * Komplexität). */
+const FILE_DELETABLE: readonly {
+  pick: (eff: ApplyEffect) => { name: string } | undefined;
+  remove: (host: KubectlHost, name: string) => boolean;
+  msg: (name: string) => string;
+}[] = [
+  { pick: e => e.deployment, remove: (h, n) => !!removeDeployment(h, n), msg: n => 'deployment.apps "' + n + '" deleted' },
+  { pick: e => e.service, remove: (h, n) => spliceByName(h.services, n), msg: n => 'service "' + n + '" deleted' },
+  { pick: e => e.ingress, remove: (h, n) => spliceByName(h.ingresses, n), msg: n => 'ingress.networking.k8s.io "' + n + '" deleted' },
+  { pick: e => e.networkPolicy, remove: (h, n) => spliceByName(h.networkPolicies, n), msg: n => 'networkpolicy.networking.k8s.io "' + n + '" deleted' },
+  { pick: e => e.statefulSet, remove: (h, n) => !!removeStatefulSet(h, n), msg: n => 'statefulset.apps "' + n + '" deleted' },
+  { pick: e => e.pvc, remove: (h, n) => spliceByName(h.pvcs, n), msg: n => 'persistentvolumeclaim "' + n + '" deleted' },
+  { pick: e => e.pv, remove: (h, n) => spliceByName(h.pvs, n), msg: n => 'persistentvolume "' + n + '" deleted' },
+  { pick: e => e.storageClass, remove: (h, n) => spliceByName(h.storageClasses, n), msg: n => 'storageclass.storage.k8s.io "' + n + '" deleted' },
+  { pick: e => e.volumeSnapshot, remove: (h, n) => spliceByName(h.volumeSnapshots, n), msg: n => 'volumesnapshot.snapshot.storage.k8s.io "' + n + '" deleted' },
+];
+
+/** `kubectl delete -f <datei>` – löscht alle Ressourcen, die das Manifest angelegt hat
+ *  (über die `FILE_DELETABLE`-Tabelle). */
+function deleteFromFile(host: KubectlHost, t: string[]): string {
+  const file = filenameArg(t);
+  if (!file) return host._err("error: must specify one of -f or -k", "Muster: 'kubectl delete --filename deployment.yaml'");
+  const eff = host.applyEffects[file];
+  if (!eff || !host.files[file]) return host._err("error: the path \"" + file + "\" does not exist", "Mit 'ls' siehst du, welche Dateien hier liegen.");
+  const out: string[] = [];
+  for (const d of FILE_DELETABLE) {
+    const res = d.pick(eff);
+    if (res && d.remove(host, res.name)) out.push(d.msg(res.name));
+  }
+  return out.join("\n") || "nothing deleted";
+}
+
+/** `kubectl delete pod <name>` – Deployment-Pod (Self-Healing mit neuem Namen, #488; gibt das
+ *  flüchtige emptyDir frei, #240) ODER StatefulSet-Pod (kommt mit GLEICHEM Namen + PVC zurück,
+ *  Daten überleben, #122). NotFound, wenn der Name zu keinem Workload gehört. */
+function deletePod(host: KubectlHost, name: string): string {
+  const dep = host._findDeploymentOfPod(name);
+  if (dep) {
+    host.lastDeletedPod = name;
+    host._resetEphemeral(dep);
+    replaceDeploymentPod(dep, name, host.clock);
+    return 'pod "' + name + '" deleted';
+  }
+  const sts = host.statefulSets.find(s => s.pods.some(p => p.name === name));
+  if (sts) {
+    host.lastDeletedPod = name;
+    restartStatefulPod(sts, name, host.clock);
+    return 'pod "' + name + '" deleted';
+  }
+  return host._err('Error from server (NotFound): pods "' + name + '" not found', "Pod-Namen siehst du mit 'kubectl get pods'.");
+}
+
+/** `kubectl delete pvc <name>` – gibt das gebundene PV frei: Delete-Policy entfernt es,
+ *  Retain hinterlässt es als "Released". */
+function deletePvc(host: KubectlHost, name: string): string {
+  const idx = host.pvcs.findIndex(p => p.name === name);
+  if (idx === -1) return host._err('Error from server (NotFound): persistentvolumeclaims "' + name + '" not found');
+  const [removed] = host.pvcs.splice(idx, 1);
+  const pv = host.pvs.find(p => p.name === removed.volume);
+  if (pv) {
+    if (pv.reclaimPolicy === "Retain") { pv.status = "Released"; pv.claim = ""; }
+    else { const j = host.pvs.findIndex(x => x.name === pv.name); if (j >= 0) host.pvs.splice(j, 1); }
+  }
+  return 'persistentvolumeclaim "' + name + '" deleted';
+}
 
 export function kubectlDelete(host: KubectlHost, t: string[]) {
   const what = (t[2] || "").toLowerCase();
   const name = t[3];
 
-  if (what === "-f" || what === "--filename" || /^(?:-f|--filename)=/.test(what)) {
-    const file = filenameArg(t);
-    if (!file) return host._err("error: must specify one of -f or -k", "Muster: 'kubectl delete --filename deployment.yaml'");
-    const eff = host.applyEffects[file];
-    if (!eff || !host.files[file]) return host._err("error: the path \"" + file + "\" does not exist", "Mit 'ls' siehst du, welche Dateien hier liegen.");
-    const out: string[] = [];
-    // #518: Deployment/StatefulSet gehen über ihre Aggregat-Entferner (Folgewirkung: Pods,
-    // beim StatefulSet bewusst OHNE PVCs, #122); der Rest ist schlicht „splice per Name".
-    const effDep = eff.deployment;
-    if (effDep && removeDeployment(host, effDep.name)) out.push('deployment.apps "' + effDep.name + '" deleted');
-    if (eff.service && spliceByName(host.services, eff.service.name)) out.push('service "' + eff.service.name + '" deleted');
-    if (eff.ingress && spliceByName(host.ingresses, eff.ingress.name)) out.push('ingress.networking.k8s.io "' + eff.ingress.name + '" deleted');
-    if (eff.networkPolicy && spliceByName(host.networkPolicies, eff.networkPolicy.name)) out.push('networkpolicy.networking.k8s.io "' + eff.networkPolicy.name + '" deleted');
-    const effStsDel = eff.statefulSet;
-    if (effStsDel && removeStatefulSet(host, effStsDel.name)) out.push('statefulset.apps "' + effStsDel.name + '" deleted'); // PVCs bleiben absichtlich (#122)
-    if (eff.pvc && spliceByName(host.pvcs, eff.pvc.name)) out.push('persistentvolumeclaim "' + eff.pvc.name + '" deleted');
-    if (eff.pv && spliceByName(host.pvs, eff.pv.name)) out.push('persistentvolume "' + eff.pv.name + '" deleted');
-    if (eff.storageClass && spliceByName(host.storageClasses, eff.storageClass.name)) out.push('storageclass.storage.k8s.io "' + eff.storageClass.name + '" deleted');
-    if (eff.volumeSnapshot && spliceByName(host.volumeSnapshots, eff.volumeSnapshot.name)) out.push('volumesnapshot.snapshot.storage.k8s.io "' + eff.volumeSnapshot.name + '" deleted');
-    return out.join("\n") || "nothing deleted";
-  }
+  if (what === "-f" || what === "--filename" || /^(?:-f|--filename)=/.test(what)) return deleteFromFile(host, t);
 
   if (!name) return host._err("kubectl delete: Was und wie heißt es?", "z.B. 'kubectl delete pod <pod-name>'");
 
-  if (["pod", "pods", "po"].includes(what)) {
-    const dep = host._findDeploymentOfPod(name);
-    if (dep) {
-      host.lastDeletedPod = name;
-      // Pod-Neustart gibt das flüchtige emptyDir frei (#240): der Ersatz-Pod startet mit leerem
-      // Scratch-Volume – „weg, sobald der Pod weg ist". (PVCs überleben dagegen, siehe StatefulSet.)
-      host._resetEphemeral(dep);
-      // Self-Healing: das Deployment ersetzt den Pod sofort – mit NEUEM Zufallsnamen (hält die
-      // Pod-Anzahl konstant, #488).
-      replaceDeploymentPod(dep, name, host.clock);
-      return 'pod "' + name + '" deleted';
-    }
-    // StatefulSet-Pod (#122): kommt mit GLEICHEM Namen und GLEICHEM PVC zurück –
-    // die Daten überleben. Das PVC wird bewusst NICHT angefasst; stabile Identität
-    // (gleicher Name, gleiche Ordinalposition) hält restartStatefulPod (#488).
-    const sts = host.statefulSets.find(s => s.pods.some(p => p.name === name));
-    if (sts) {
-      host.lastDeletedPod = name;
-      restartStatefulPod(sts, name, host.clock);
-      return 'pod "' + name + '" deleted';
-    }
-    return host._err('Error from server (NotFound): pods "' + name + '" not found', "Pod-Namen siehst du mit 'kubectl get pods'.");
-  }
+  if (["pod", "pods", "po"].includes(what)) return deletePod(host, name);
+  if (["pvc", "persistentvolumeclaim", "persistentvolumeclaims"].includes(what)) return deletePvc(host, name);
 
   if (["deployment", "deployments", "deploy"].includes(what)) {
     if (!removeDeployment(host, name)) return host._err('Error from server (NotFound): deployments.apps "' + name + '" not found');
@@ -234,7 +311,7 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
 
   // #518: Alle schlicht löschbaren Typen (finde per Name → splice → melde) über die
   // SIMPLE_DELETABLE-Tabelle statt je eines eigenen if-Zweigs. Die Sonderfälle mit
-  // Folgewirkung (statefulset behält PVCs, pvc gibt sein PV frei) bleiben eigene Zweige unten.
+  // Folgewirkung (statefulset behält PVCs, pvc gibt sein PV frei) bleiben eigene Zweige.
   const simple = SIMPLE_DELETABLE.find(s => s.aliases.includes(what));
   if (simple) {
     if (!spliceByName(simple.pick(host), name)) return host._err('Error from server (NotFound): ' + simple.notFoundKind + ' "' + name + '" not found');
@@ -245,19 +322,6 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
     // Die PVCs bleiben absichtlich erhalten – Kern der Datendauerhaftigkeit (#122).
     if (!removeStatefulSet(host, name)) return host._err('Error from server (NotFound): statefulsets.apps "' + name + '" not found');
     return 'statefulset.apps "' + name + '" deleted\n💡 Die PVCs bleiben bestehen – die Daten überleben das Löschen des StatefulSets. Skalierst du es wieder hoch, hängen die alten Volumes wieder dran.';
-  }
-
-  if (["pvc", "persistentvolumeclaim", "persistentvolumeclaims"].includes(what)) {
-    const idx = host.pvcs.findIndex(p => p.name === name);
-    if (idx === -1) return host._err('Error from server (NotFound): persistentvolumeclaims "' + name + '" not found');
-    const [removed] = host.pvcs.splice(idx, 1);
-    // Gebundenes PV freigeben: Delete-Policy entfernt es, Retain hinterlässt es als "Released".
-    const pv = host.pvs.find(p => p.name === removed.volume);
-    if (pv) {
-      if (pv.reclaimPolicy === "Retain") { pv.status = "Released"; pv.claim = ""; }
-      else { const j = host.pvs.findIndex(x => x.name === pv.name); if (j >= 0) host.pvs.splice(j, 1); }
-    }
-    return 'persistentvolumeclaim "' + name + '" deleted';
   }
 
   return host._err("kubectl delete: Ressourcentyp '" + what + "' kennt der Simulator nicht.");
@@ -281,21 +345,22 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
  */
 type ApplyHandler = (host: KubectlHost, eff: ApplyEffect, out: string[]) => string | void;
 
-const applyDeployment: ApplyHandler = (host, eff, out) => {
-  const effDep = eff.deployment;
-  if (!effDep) return;
-  const existing = host.deployments.find(d => d.name === effDep.name);
-  if (existing) {
-    // Deklarativ: eine geänderte SA-Zuordnung (spec.serviceAccountName, #132) wird
-    // beim erneuten apply übernommen ("configured") – sonst bleibt es "unchanged".
-    if (effDep.serviceAccountName && existing.serviceAccountName !== effDep.serviceAccountName) {
-      existing.serviceAccountName = effDep.serviceAccountName;
-      out.push("deployment.apps/" + effDep.name + " configured");
-    } else {
-      out.push("deployment.apps/" + effDep.name + " unchanged");
-    }
-    return;
+/** Ein bereits bestehendes Deployment deklarativ nach-konfigurieren (idempotentes apply).
+ *  Nur eine geänderte SA-Zuordnung (spec.serviceAccountName, #132) ist heute „configured",
+ *  sonst „unchanged". */
+function reconfigureDeployment(existing: Deployment, effDep: NonNullable<ApplyEffect["deployment"]>, out: string[]): void {
+  if (effDep.serviceAccountName && existing.serviceAccountName !== effDep.serviceAccountName) {
+    existing.serviceAccountName = effDep.serviceAccountName;
+    out.push("deployment.apps/" + effDep.name + " configured");
+  } else {
+    out.push("deployment.apps/" + effDep.name + " unchanged");
   }
+}
+
+/** Ein neues Deployment aus dem Manifest bauen und die optionalen Pod-Template-Felder
+ *  (SA / Container-Port / Ephemeral-Storage / eigenes Image) übernehmen. Gibt bei
+ *  Pod-Security-Abweisung (#126) den Fehlertext zurück (early return in `kubectlApply`). */
+function createDeploymentFromManifest(host: KubectlHost, effDep: NonNullable<ApplyEffect["deployment"]>, out: string[]): string | void {
   // Pod-Security-Admission (#126): unsichere Pods werden unter baseline/restricted
   // schon beim Anlegen abgewiesen – der Rest des Manifests wird nicht angewandt.
   const denied = admitPod(host, effDep.name, effDep.securityContext);
@@ -320,6 +385,15 @@ const applyDeployment: ApplyHandler = (host, eff, out) => {
   addDeployment(host, dep);
   out.push("deployment.apps/" + effDep.name + " created");
   if (dep.broken) out.push("💡 Pod im ImagePullBackOff: das Image '" + effDep.image + "' gibt es noch nicht. Erst 'docker build -t " + effDep.image + " .', dann 'kubectl rollout restart deployment " + effDep.name + "'.");
+}
+
+const applyDeployment: ApplyHandler = (host, eff, out) => {
+  const effDep = eff.deployment;
+  if (!effDep) return;
+  const existing = host.deployments.find(d => d.name === effDep.name);
+  // Deklarativ: bestehendes Deployment nach-konfigurieren, sonst neu aus dem Manifest bauen.
+  if (existing) return reconfigureDeployment(existing, effDep, out);
+  return createDeploymentFromManifest(host, effDep, out);
 };
 
 const applyService: ApplyHandler = (host, eff, out) => {

@@ -8,6 +8,7 @@
  * KubectlHost-Interface (./host). Aufgerufen aus dem kubectl-Dispatch (../kubectl.ts).
  */
 import { scaleDeployment, replacePods } from "../workload";
+import type { Deployment } from "../state";
 import type { KubectlHost } from "./host";
 
 /** Den Deployment-Namen aus einer Referenz `deployment/<name>` (Slash) ODER
@@ -123,52 +124,78 @@ function parseMem(spec: string): number | null {
   return n; // Mi / M ~ als Mi behandeln (didaktisch genau genug)
 }
 
-/** kubectl set resources deployment/<name> --limits=memory=256Mi [--requests=memory=128Mi]
- *  Setzt das memory-Limit. Ist der Dienst wegen OOMKilled kaputt und das neue Limit
- *  reicht (>= memNeeded), heilt er. Setzt auch --limits=cpu=<N>m: bei ≤ 499 m wird
- *  cpuHeavy gelöscht und der HighPodCPU-Alert fällt auf resolved. */
+/** Ein Fehler einer Ressourcen-Dimension: [Meldung, Tipp] für `host._err`. `null` = ok. */
+type ResourceError = readonly [msg: string, tip: string];
 
+/** Das Memory-Limit setzen (#240). Ist der Dienst wegen OOMKilled kaputt und das neue Limit
+ *  reicht (>= memNeeded), heilt er. Notiz landet in `notes`. */
+function applyMemLimit(host: KubectlHost, dep: Deployment, spec: string | undefined, notes: string[]): ResourceError | null {
+  if (!spec) return null;
+  const newLimit = parseMem(spec);
+  if (newLimit === null) return ['error: invalid resource quantity "' + spec + '"', "Schreib das Limit z.B. als '256Mi' oder '1Gi'."];
+  dep.memLimit = newLimit;
+  if (dep.broken && dep.broken.type === "oomkilled" && newLimit >= (dep.broken.memNeeded || 0)) {
+    dep.broken = null;
+    replacePods(dep, host.clock);
+    notes.push("\n💡 Genug Speicher! Die Pods starten neu und bleiben diesmal stehen – kein OOMKilled mehr.");
+  }
+  return null;
+}
+
+/** Das CPU-Limit setzen: bei < 500 m wird cpuHeavy gelöscht und der HighPodCPU-Alert fällt
+ *  auf resolved. `milli` ist das Limit in Milli-Cores (oder null, wenn keins angegeben). */
+function applyCpuLimit(host: KubectlHost, dep: Deployment, milli: number | null, notes: string[]): void {
+  if (milli !== null && milli < 500 && dep.cpuHeavy) {
+    dep.cpuHeavy = false;
+    replacePods(dep, host.clock);
+    notes.push("\n💡 CPU-Limit gesetzt! Die Pods werden gedrosselt – der HighPodCPU-Alert fällt auf resolved.");
+  }
+}
+
+/** Das ephemeral-storage-Limit setzen (#240): analog memory, gegen die flüchtige Disk-Nutzung
+ *  des Pods. Die Eviction-Auswertung greift den neuen Wert beim nächsten Befehl auf – reicht der
+ *  Platz jetzt, wird der Pod nicht mehr evictet. */
+function applyEphemeralLimit(host: KubectlHost, dep: Deployment, spec: string | undefined, notes: string[]): ResourceError | null {
+  if (!spec) return null;
+  const newEph = parseMem(spec);
+  if (newEph === null) return ['error: invalid resource quantity "' + spec + '"', "Schreib das Limit z.B. als '512Mi' oder '1Gi'."];
+  const wasEvicted = !!dep.evicted;
+  dep.ephemeralLimit = newEph;
+  if (wasEvicted && host._depEphemeralUsed(dep) <= newEph) {
+    notes.push("\n💡 Genug ephemeral-storage! Der Pod wird nicht mehr evictet – prüfe mit 'kubectl get pods'.");
+  }
+  return null;
+}
+
+/** Das `--limits=cpu=<N>[m]` in Milli-Cores ziehen (ohne `m` = ganze Cores → ×1000). */
+function parseCpuLimitMilli(raw: string): number | null {
+  const m = raw.match(/--limits[=\s][^\s]*cpu=([0-9]+)(m)?/);
+  if (!m) return null;
+  return m[2] ? parseInt(m[1], 10) : parseInt(m[1], 10) * 1000;
+}
+
+/** kubectl set resources deployment/<name> --limits=memory=256Mi [--requests=memory=128Mi]
+ *  Dünner Dispatcher: parst die vier Dimensionen und delegiert je an ihren Applier
+ *  (memory-Limit + OOM-Heilung / CPU-Limit / ephemeral-storage-Limit). Die Notiz-Reihenfolge
+ *  (Speicher → CPU → ephemeral) bleibt wie zuvor. `--requests=memory` wird akzeptiert, ändert
+ *  aber didaktisch nichts – es zählt nur mit, ob überhaupt etwas angegeben wurde. */
 function kubectlSetResources(host: KubectlHost, t: string[], raw: string) {
   const depName = resolveDeploymentRef(t);
   const limitSpec = (raw.match(/--limits[=\s][^\s]*memory=([0-9]+(?:Mi|Gi|M|G)?)/) || [])[1];
   const requestSpec = (raw.match(/--requests[=\s][^\s]*memory=([0-9]+(?:Mi|Gi|M|G)?)/) || [])[1];
-  const cpuMatch = raw.match(/--limits[=\s][^\s]*cpu=([0-9]+)(m)?/);
-  const cpuLimitMilli = cpuMatch ? (cpuMatch[2] ? parseInt(cpuMatch[1], 10) : parseInt(cpuMatch[1], 10) * 1000) : null;
-  // ephemeral-storage-Limit (#240): analog memory, gegen die flüchtige Disk-Nutzung des Pods.
+  const cpuLimitMilli = parseCpuLimitMilli(raw);
   const ephSpec = (raw.match(/--limits[=\s][^\s]*ephemeral-storage=([0-9]+(?:Mi|Gi|M|G)?)/) || [])[1];
   if (!depName) return host._err("kubectl set resources: Welches Deployment?", "Muster: kubectl set resources deployment/<name> --limits=memory=256Mi --requests=memory=128Mi");
   if (!limitSpec && !requestSpec && cpuLimitMilli === null && !ephSpec) return host._err("kubectl set resources: Kein Limit/Request angegeben.", "Häng z.B. '--limits=memory=256Mi --requests=memory=128Mi', '--limits=cpu=200m' oder '--limits=ephemeral-storage=1Gi' an.");
   const dep = host.deployments.find(d => d.name === depName);
   if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + depName + '" not found', "Welche Deployments es gibt: 'kubectl get deployments'");
-  const newLimit = limitSpec ? parseMem(limitSpec) : null;
-  if (limitSpec && newLimit === null) return host._err('error: invalid resource quantity "' + limitSpec + '"', "Schreib das Limit z.B. als '256Mi' oder '1Gi'.");
-  if (newLimit !== null) dep.memLimit = newLimit;
-  // ephemeral-storage-Limit setzen (#240): die Eviction-Auswertung greift den neuen Wert beim
-  // nächsten Befehl auf – reicht der Platz jetzt, wird der Pod nicht mehr evictet.
-  const newEph = ephSpec ? parseMem(ephSpec) : null;
-  if (ephSpec && newEph === null) return host._err('error: invalid resource quantity "' + ephSpec + '"', "Schreib das Limit z.B. als '512Mi' oder '1Gi'.");
-  let ephFits = false;
-  if (newEph !== null) {
-    const wasEvicted = !!dep.evicted;
-    dep.ephemeralLimit = newEph;
-    ephFits = wasEvicted && host._depEphemeralUsed(dep) <= newEph;
-  }
-  let healed = false;
-  if (dep.broken && dep.broken.type === "oomkilled" && newLimit !== null && newLimit >= (dep.broken.memNeeded || 0)) {
-    dep.broken = null;
-    replacePods(dep, host.clock);
-    healed = true;
-  }
-  let cpuThrottled = false;
-  if (cpuLimitMilli !== null && cpuLimitMilli < 500 && dep.cpuHeavy) {
-    dep.cpuHeavy = false;
-    replacePods(dep, host.clock);
-    cpuThrottled = true;
-  }
-  return "deployment.apps/" + depName + " resource requirements updated" +
-    (healed ? "\n💡 Genug Speicher! Die Pods starten neu und bleiben diesmal stehen – kein OOMKilled mehr." : "") +
-    (cpuThrottled ? "\n💡 CPU-Limit gesetzt! Die Pods werden gedrosselt – der HighPodCPU-Alert fällt auf resolved." : "") +
-    (ephFits ? "\n💡 Genug ephemeral-storage! Der Pod wird nicht mehr evictet – prüfe mit 'kubectl get pods'." : "");
+  const notes: string[] = [];
+  const memErr = applyMemLimit(host, dep, limitSpec, notes);
+  if (memErr) return host._err(memErr[0], memErr[1]);
+  applyCpuLimit(host, dep, cpuLimitMilli, notes);
+  const ephErr = applyEphemeralLimit(host, dep, ephSpec, notes);
+  if (ephErr) return host._err(ephErr[0], ephErr[1]);
+  return "deployment.apps/" + depName + " resource requirements updated" + notes.join("");
 }
 
 /** kubectl rollout restart deployment <name> */
