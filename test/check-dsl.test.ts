@@ -41,6 +41,12 @@ test("none: kein Element passt (Abwesenheit)", () => {
   assert.equal(evalRule(rule, { deployments: [{ name: "datenbank" }] }), false);
 });
 
+test("none ohne where: Sammlung ist leer (Gegenstück zu some ohne where)", () => {
+  const rule = { none: "deployments" };
+  assert.equal(evalRule(rule, { deployments: [] }), true);
+  assert.equal(evalRule(rule, { deployments: [{ name: "x" }] }), false);
+});
+
 test("count: Anzahl der Elemente verglichen", () => {
   assert.equal(evalRule({ count: "nodes", cmp: ">", value: 3 }, { nodes: [1, 2, 3, 4] }), true);
   assert.equal(evalRule({ count: "nodes", cmp: ">", value: 3 }, { nodes: [1, 2, 3] }), false);
@@ -153,6 +159,12 @@ test("not: Negation", () => {
   assert.equal(evalRule(rule, { git: { conflict: { file: "x" } } }), false);
 });
 
+test("not verschachtelt um count (not-in-count): Negation einer Zählregel", () => {
+  const rule = { not: { count: "nodes", cmp: ">", value: 3 } };
+  assert.equal(evalRule(rule, { nodes: [1, 2, 3] }), true); // 3 > 3 falsch → not → true
+  assert.equal(evalRule(rule, { nodes: [1, 2, 3, 4] }), false); // 4 > 3 wahr → not → false
+});
+
 test("verschachtelt: all aus some + none (app-of-apps-Muster)", () => {
   const rule = {
     all: [
@@ -222,6 +234,38 @@ test("Red-Green: unbekannte/mehrdeutige Matcher-Form wirft", () => {
 
 test("Red-Green: leere all-Liste wirft", () => {
   assert.throws(() => compileCheck({ all: [] }, "p"), ContentValidationError);
+});
+
+test("Red-Green: leere any-Liste wirft", () => {
+  assert.throws(
+    () => compileCheck({ any: [] }, "p"),
+    (e: unknown) => e instanceof ContentValidationError && /Regelliste/.test((e as Error).message),
+  );
+});
+
+test("Red-Green: truthy-Matcher mit nicht-Boolean wirft", () => {
+  assert.throws(
+    () => compileCheck({ some: "services", where: { tls: { truthy: "ja" } } }, "p"),
+    (e: unknown) => e instanceof ContentValidationError && /truthy/.test((e as Error).message),
+  );
+});
+
+test("Red-Green: len-Matcher mit ungültiger Länge wirft (negativ / nicht-ganzzahlig)", () => {
+  assert.throws(
+    () => compileCheck({ some: "argoApps", where: { childApps: { len: -1 } } }, "p"),
+    (e: unknown) => e instanceof ContentValidationError && /len/.test((e as Error).message),
+  );
+  assert.throws(
+    () => compileCheck({ some: "argoApps", where: { childApps: { len: 1.5 } } }, "p"),
+    (e: unknown) => e instanceof ContentValidationError && /len/.test((e as Error).message),
+  );
+});
+
+test("Red-Green: includes-Regel mit nicht-skalarem value wirft", () => {
+  assert.throws(
+    () => compileCheck({ includes: ["git", "staged"], value: {} }, "p"),
+    (e: unknown) => e instanceof ContentValidationError && /value/.test((e as Error).message),
+  );
 });
 
 test("Red-Green: flag mit leerem Pfad wirft", () => {
