@@ -97,6 +97,7 @@ import {
   asNonEmptyStringArray,
   asBool,
   asArray,
+  assertNoUnknownKeys,
 } from "./parse";
 import type { Sim } from "../sim";
 import type { FunkExplanation } from "../funkexplain";
@@ -139,6 +140,8 @@ export interface NpcMeta {
   tex: string;
 }
 
+const NPC_KEYS = ["name", "title", "sprite", "tex"] as const;
+
 /** Validiert rohe NPC-Daten gegen das Schema und gibt sie typisiert zurück.
  *  Wirft `ContentValidationError` beim ersten Verstoß (nie still durchwinken). */
 export function parseNpcs(raw: unknown): Record<string, NpcMeta> {
@@ -148,6 +151,7 @@ export function parseNpcs(raw: unknown): Record<string, NpcMeta> {
   const out: Record<string, NpcMeta> = {};
   for (const id of ids) {
     const m = asRecord(obj[id], `npcs.${id}`);
+    assertNoUnknownKeys(m, `npcs.${id}`, NPC_KEYS);
     out[id] = {
       name: asNonEmptyString(m.name, `npcs.${id}.name`),
       title: asNonEmptyString(m.title, `npcs.${id}.title`),
@@ -211,8 +215,25 @@ function reviveCheck(v: unknown, path: string): ((sim: Sim) => unknown) | undefi
   return compileCheck(v, path);
 }
 
-/** Gemeinsame Felder von Teach-Befehl und Terminal-Aufgabe (ohne `intro`). */
-function reviveTaskCommon(o: Record<string, unknown>, path: string): QuestTask {
+/* Schema-Drift-Wächter (#498): vom Reviver konsumierte JSON-Schlüssel je Objektform (unbekannte scheitern beim Laden; Begründung in parse.ts). */
+const TASK_KEYS = ["id", "text", "accept", "solution", "hint", "check"] as const;
+const OPTION_KEYS = ["t", "ok", "reply"] as const;
+const STEP_BASE_KEYS = ["type", "scenario", "scenarioRef", "unlockAbbrev"] as const;
+/** Typ-spezifische Schritt-Felder; `Record<QuestStep["type"],…>` zwingt bei neuem Schritt-Typ eine Zeile (Type→Loader-Kopplung). */
+const STEP_TYPE_KEYS: Record<QuestStep["type"], readonly string[]> = {
+  dialog: ["npc", "lines"],
+  choice: ["npc", "q", "options", "reviewId"],
+  teach: ["brief", "cmd"],
+  drill: ["brief", "pool", "count", "intro"],
+  terminal: ["brief", "tasks"],
+  minigame: ["npc", "game", "brief"],
+};
+
+/** Gemeinsame Felder von Teach-Befehl und Terminal-Aufgabe (ohne `intro`). `keys` schließt
+ *  die erlaubten Schlüssel (Schema-Drift-Wächter #498): Terminal-Aufgabe = TASK_KEYS,
+ *  Teach-Befehl = TASK_KEYS + `intro`. */
+function reviveTaskCommon(o: Record<string, unknown>, path: string, keys: readonly string[] = TASK_KEYS): QuestTask {
+  assertNoUnknownKeys(o, path, keys);
   const task: QuestTask = {
     id: asNonEmptyString(o.id, `${path}.id`),
     text: asNonEmptyString(o.text, `${path}.text`),
@@ -227,7 +248,7 @@ function reviveTaskCommon(o: Record<string, unknown>, path: string): QuestTask {
 
 function reviveTeachCmd(v: unknown, path: string): TeachCommand {
   const o = asRecord(v, path);
-  return { ...reviveTaskCommon(o, path), intro: asNonEmptyString(o.intro, `${path}.intro`) };
+  return { ...reviveTaskCommon(o, path, [...TASK_KEYS, "intro"]), intro: asNonEmptyString(o.intro, `${path}.intro`) };
 }
 
 function reviveOptions(v: unknown, path: string): ChoiceOption[] {
@@ -235,6 +256,7 @@ function reviveOptions(v: unknown, path: string): ChoiceOption[] {
   if (arr.length === 0) fail(path, "nicht-leere Optionsliste erwartet");
   return arr.map((opt, i) => {
     const r = asRecord(opt, `${path}[${i}]`);
+    assertNoUnknownKeys(r, `${path}[${i}]`, OPTION_KEYS);
     return {
       t: asNonEmptyString(r.t, `${path}[${i}].t`),
       ok: asBool(r.ok, `${path}[${i}].ok`),
@@ -269,6 +291,8 @@ function reviveStepBase(o: Record<string, unknown>, path: string): StepBase {
 function reviveStep(v: unknown, path: string): QuestStep {
   const o = asRecord(v, path);
   const type = asNonEmptyString(o.type, `${path}.type`);
+  const typeKeys = STEP_TYPE_KEYS[type as QuestStep["type"]]; // unbekannter Typ → switch-default
+  if (typeKeys) assertNoUnknownKeys(o, path, [...STEP_BASE_KEYS, ...typeKeys]);
   const base = reviveStepBase(o, path);
   switch (type) {
     case "dialog":
@@ -313,8 +337,11 @@ function reviveStep(v: unknown, path: string): QuestStep {
 
 /** Validiert EINE rohe Quest und gibt sie in Laufzeit-Form zurück
  *  (`accept` als RegExp, `check` als Funktion). */
+const QUEST_KEYS = ["id", "title", "giver", "topic", "rewardXp", "rewardCoins", "steps", "requires", "repeatable"] as const;
+
 function parseOneQuest(q: unknown, where: string): Quest {
   const o = asRecord(q, where);
+  assertNoUnknownKeys(o, where, QUEST_KEYS);
   const id = asNonEmptyString(o.id, `${where}.id`);
   const path = `quest ${id}`;
   const quest: Quest = {
@@ -426,6 +453,7 @@ export function parseQuestTopics(raw: unknown, where = "quest-topics"): QuestTop
   const seen = new Set<string>();
   return arr.map((t, i) => {
     const o = asRecord(t, `${where}[${i}]`);
+    assertNoUnknownKeys(o, `${where}[${i}]`, ["id", "label"]);
     const id = asNonEmptyString(o.id, `${where}[${i}].id`);
     if (seen.has(id)) fail(`${where}[${i}].id`, `doppelte Themen-ID „${id}"`);
     seen.add(id);
@@ -484,8 +512,11 @@ export interface CmdCard {
 
 /** Validiert EINE rohe Befehls-Karte und gibt sie in Laufzeit-Form zurück
  *  (`accept` als RegExp). Wirft `ContentValidationError` beim ersten Verstoß. */
+const CMDCARD_KEYS = ["id", "chapter", "introducedIn", "q", "accept", "solution", "explain"] as const;
+
 function parseOneCmdCard(v: unknown, where: string): CmdCard {
   const o = asRecord(v, where);
+  assertNoUnknownKeys(o, where, CMDCARD_KEYS);
   const id = asNonEmptyString(o.id, `${where}.id`);
   const path = `cmdcard ${id}`;
   const introducedIn = o.introducedIn !== undefined ? asNonEmptyString(o.introducedIn, `${path}.introducedIn`) : undefined;
@@ -564,8 +595,11 @@ export interface QuizCard {
 
 /** Validiert EINE rohe Quiz-Karte und gibt sie typisiert zurück.
  *  Wirft `ContentValidationError` beim ersten Verstoß. */
+const QUIZCARD_KEYS = ["id", "chapter", "introducedIn", "q", "options", "correct", "explain"] as const;
+
 function parseOneQuizCard(v: unknown, where: string): QuizCard {
   const o = asRecord(v, where);
+  assertNoUnknownKeys(o, where, QUIZCARD_KEYS);
   const id = asNonEmptyString(o.id, `${where}.id`);
   const path = `quizcard ${id}`;
   const options = asNonEmptyStringArray(o.options, `${path}.options`);
@@ -655,6 +689,7 @@ export interface TfConfig {
  *  (diese Konfigs existieren, damit der Spieler sie per `cat` lesen kann). */
 function parseOneTfConfig(v: unknown, where: string): TfConfig {
   const o = asRecord(v, where);
+  assertNoUnknownKeys(o, where, ["id", "label", "scenario"]);
   const id = asNonEmptyString(o.id, `${where}.id`);
   const path = `tf-config ${id}`;
   const label = asNonEmptyString(o.label, `${path}.label`);
@@ -711,6 +746,7 @@ export const getTfConfigs = memo<TfConfig[]>(() =>
 /** Validiert EINE rohe Erklärung und gibt sie in Laufzeit-Form zurück (`match` als RegExp). */
 function parseOneFunkExplain(v: unknown, where: string): FunkExplanation {
   const o = asRecord(v, where);
+  assertNoUnknownKeys(o, where, ["id", "match", "text"]);
   const id = asNonEmptyString(o.id, `${where}.id`);
   const path = `funk-explain ${id}`;
   return {

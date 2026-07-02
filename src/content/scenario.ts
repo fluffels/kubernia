@@ -20,17 +20,20 @@
  * Pure Domäne, Phaser-frei, unit-getestet (`test/scenario-validate.test.ts`).
  */
 import { fail, asRecord, asNonEmptyString, asBool, asInt } from "./parse";
-import type { Scenario } from "../sim";
+import type { Scenario, ApplyEffect } from "../sim";
 
 /** Erlaubte Schlüssel eines `applyEffect` (was ein `kubectl apply -f <datei>` erzeugt).
- *  Spiegelt die `ApplyEffect`-Felder aus sim/state.ts – ein Tippfehler hier fiele sonst
- *  still im Sim-Verhalten auf (die JSON sieht der Compiler nie). */
-const APPLY_EFFECT_KEYS = new Set<string>([
-  "deployment", "serviceAccount", "role", "roleBinding", "service", "ingress",
-  "networkPolicy", "application", "serviceMonitor", "prometheusRule",
-  "grafanaDatasource", "grafanaDashboard", "statefulSet", "pvc", "pv",
-  "storageClass", "volumeSnapshot",
-]);
+ *  **An `keyof ApplyEffect` gebunden** (#498): der Typ `Record<keyof ApplyEffect, true>`
+ *  zwingt den Compiler, dass diese Allowlist EXAKT die `ApplyEffect`-Felder (sim/state.ts)
+ *  spiegelt – ein neues/entferntes/umbenanntes Feld bricht hier den Build, bis die Liste
+ *  nachzieht (statt still im Sim-Verhalten aufzufallen, weil die JSON der Compiler nie sieht). */
+const APPLY_EFFECT_FIELDS: Record<keyof ApplyEffect, true> = {
+  deployment: true, serviceAccount: true, role: true, roleBinding: true, service: true,
+  ingress: true, networkPolicy: true, application: true, serviceMonitor: true,
+  prometheusRule: true, grafanaDatasource: true, grafanaDashboard: true, statefulSet: true,
+  pvc: true, pv: true, storageClass: true, volumeSnapshot: true,
+};
+const APPLY_EFFECT_KEYS = new Set<string>(Object.keys(APPLY_EFFECT_FIELDS));
 
 type ScenarioFieldCheck = (v: unknown, path: string) => void;
 
@@ -66,9 +69,11 @@ const scApplyEffects: ScenarioFieldCheck = (v, p) => {
 };
 
 /** Geschlossene Allowlist der `Scenario`-Top-Level-Felder → strukturelle Prüfung je Feld.
- *  Spiegelt `interface Scenario` (sim/state.ts). Ein hier fehlender Schlüssel scheitert
- *  beim Laden (fail-fast gegen Tippfehler); ein neues Scenario-Feld braucht eine Zeile hier. */
-const SCENARIO_FIELDS: Record<string, ScenarioFieldCheck> = {
+ *  **An `keyof Scenario` gebunden** (#498): der Typ `Record<keyof Scenario, ScenarioFieldCheck>`
+ *  zwingt den Compiler, dass diese Allowlist EXAKT `interface Scenario` (sim/state.ts) spiegelt –
+ *  ein neues Scenario-Feld bricht hier den Build, bis eine Zeile dazukommt (fail-fast gegen
+ *  Tippfehler beim Laden UND gegen stille Drift zwischen JSON-Allowlist und TS-Typ). */
+const SCENARIO_FIELDS: Record<keyof Scenario, ScenarioFieldCheck> = {
   // Ressourcen-Arrays (nur strukturell – Element-Semantik füllt/prüft reset()/die Sim)
   dockerImages: scArray, dockerContainers: scArray, nodes: scArray, deployments: scArray,
   services: scArray, ingresses: scArray, networkPolicies: scArray, secrets: scArray,
@@ -101,8 +106,12 @@ const SCENARIO_FIELDS: Record<string, ScenarioFieldCheck> = {
  *  (unbekannter Schlüssel = Tippfehler, oder falsche JSON-Art eines bekannten Felds). */
 export function reviveScenario(v: unknown, path: string): Scenario {
   const o = asRecord(v, path);
+  // Laufzeit-Lookup gegen beliebige JSON-Strings: die Allowlist ist an `keyof Scenario`
+  // gebunden (Compile-Zeit-Wächter), hier aber tolerant per String indiziert, damit ein
+  // unbekannter Schlüssel als `undefined` erkannt und hart abgewiesen wird.
+  const fields = SCENARIO_FIELDS as Record<string, ScenarioFieldCheck | undefined>;
   for (const key of Object.keys(o)) {
-    const check = SCENARIO_FIELDS[key];
+    const check = fields[key];
     if (!check) fail(`${path}.${key}`, `unbekanntes Scenario-Feld „${key}" (Tippfehler? nicht in der Scenario-Allowlist)`);
     check(o[key], `${path}.${key}`);
   }

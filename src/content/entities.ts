@@ -60,6 +60,16 @@ function asFiniteNumber(v: unknown, path: string): number {
   return v;
 }
 
+/** Schema-Drift-Wächter (#498): jeder JSON-Schlüssel MUSS bekannt sein, sonst wird er
+ *  still verworfen und die Registry-Daten weichen unbemerkt von `EntityNpc`/`EntityObject`
+ *  ab. Fängt Tippfehler (`labl`) und veraltete/neue Felder ohne Reviver-Anschluss. */
+function assertNoUnknownKeys(o: Record<string, unknown>, path: string, known: readonly string[]): void {
+  const allowed = new Set<string>(known);
+  for (const k of Object.keys(o)) {
+    if (!allowed.has(k)) fail(`${path}.${k}`, `unbekannter Schlüssel „${k}" (Tippfehler? veraltetes/neues Feld ohne Reviver-Anschluss?)`);
+  }
+}
+
 /** Validiert die rohe Registry gegen das Schema und gibt sie typisiert + in
  *  Datei-Reihenfolge zurück. Wirft `ContentValidationError` beim ersten Verstoß
  *  (nie still durchwinken). Die Reihenfolge ist load-bearing: der Hafen baut aus
@@ -71,6 +81,7 @@ export function parseEntities(raw: unknown): EntityNpc[] {
   const seen = new Set<string>();
   return list.map((entry, i) => {
     const o = asRecord(entry, `entities.npcs[${i}]`);
+    assertNoUnknownKeys(o, `entities.npcs[${i}]`, ["id", "map", "x", "y"]);
     const id = asNonEmptyString(o.id, `entities.npcs[${i}].id`);
     const map = asNonEmptyString(o.map, `entities.npcs[${i}].map`);
     const x = asFiniteNumber(o.x, `entities.npcs[${i}].x`);
@@ -154,6 +165,7 @@ export function parseObjects(raw: unknown): EntityObject[] {
   const seen = new Set<string>();
   return list.map((entry, i) => {
     const o = asRecord(entry, `entities.objects[${i}]`);
+    assertNoUnknownKeys(o, `entities.objects[${i}]`, ["id", "map", "x", "y", "type", "sprite", "label", "w", "h"]);
     const id = asNonEmptyString(o.id, `entities.objects[${i}].id`);
     const map = asNonEmptyString(o.map, `entities.objects[${i}].map`);
     const x = asFiniteNumber(o.x, `entities.objects[${i}].x`);

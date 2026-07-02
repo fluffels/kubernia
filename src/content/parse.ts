@@ -55,3 +55,22 @@ export function asArray(v: unknown, path: string): unknown[] {
   if (!Array.isArray(v)) fail(path, "Array erwartet");
   return v;
 }
+
+/** Schema-Drift-Wächter für Content-JSON (#498, Vorbild `reviveScenario` #494).
+ *  Prüft ein Roh-Objekt gegen ein GESCHLOSSENES Schema: jeder Schlüssel MUSS in `known`
+ *  stehen (= wird von seinem `revive*` konsumiert). Ohne diese Prüfung wird ein JSON-
+ *  Schlüssel, den KEIN Reviver liest, beim Laden still verworfen – und die ~13k Zeilen
+ *  JSON driften unbemerkt von den TS-Typen ab. Genau diese eine Kopplung Form↔Typ war
+ *  vorher nur handgepflegt (loader.ts lädt die JSON als `unknown`). Jetzt scheitert die
+ *  Drift hart mit Pfadangabe: ein Tippfehler in einem Optionalfeld (`introducdIn`), ein
+ *  umbenanntes/entferntes Typ-Feld oder ein hand-hinzugefügtes Feld ohne Loader-Anschluss
+ *  fällt beim Laden auf – im Browser wie im Node-Test. `known` steht bewusst direkt neben
+ *  den Feld-Lesezugriffen des Revivers (eine Quelle der Wahrheit je Objektform). */
+export function assertNoUnknownKeys(o: Record<string, unknown>, path: string, known: readonly string[]): void {
+  const allowed = new Set<string>(known);
+  for (const k of Object.keys(o)) {
+    if (!allowed.has(k)) {
+      fail(`${path}.${k}`, `unbekannter Schlüssel „${k}" – kein Reviver liest ihn (Tippfehler? veraltetes oder neues Typ-Feld ohne Loader-Anschluss?)`);
+    }
+  }
+}
