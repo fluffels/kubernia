@@ -260,6 +260,45 @@
     "explain": "Die Wurzel ist die Platzrechnung des Schedulers, und die läuft über <code>requests</code> – nicht über <code>limits</code> (die deckeln nur den Betrieb) und schon gar nicht über CPU. Setzt du ephemeral-storage-<code>requests</code> in echter Höhe, filtert der Scheduler zu volle Nodes aus: der Pod landet auf einem Node mit Platz oder bleibt ehrlich <code>Pending</code>. Manuelles Löschen ändert an <code>request=0</code> nichts – jeder neue Pod wird wieder blind platziert, der Loop läuft weiter."
   },
   {
+    "id": "q-imggc-what",
+    "chapter": "storage-ephemeral",
+    "q": "Was macht die <b>Image Garbage Collection</b> des kubelet – und wann?",
+    "options": [
+      "Steigt die Belegung der Image-Disk über eine <b>Schwelle</b> (High-Threshold, Default ~85%), löscht der kubelet <b>ungenutzte</b> Images (am längsten nicht gebraucht zuerst), bis wieder unter die Low-Schwelle – laufende, referenzierte Images rührt er nie an.",
+      "Er löscht in festen Zeitabständen <b>alle</b> Images und lädt sie beim nächsten Pod-Start neu herunter.",
+      "Er verschiebt ungenutzte Images in ein PVC, damit sie dauerhaft erhalten bleiben.",
+      "Er komprimiert die laufenden Images an Ort und Stelle, um Platz zu sparen, ohne etwas zu löschen."
+    ],
+    "correct": 0,
+    "explain": "Image-GC ist <b>schwellwertgesteuert</b>: Erst wenn die Image-Disk über den High-Threshold (Default ~85%) läuft, räumt der kubelet auf – und zwar nur <b>nicht referenzierte</b> Images nach dem Least-recently-used-Prinzip, bis wieder unter den Low-Threshold (~80%). In-use-Images bleiben unangetastet. Image-GC ist damit ein Schutz gegen <b>Alt-Images</b>, kein Mittel gegen einen Node, dessen laufende Images die Platte füllen."
+  },
+  {
+    "id": "q-imggc-in-use",
+    "chapter": "storage-ephemeral",
+    "q": "Ein Node steht auf <code>DiskPressure</code>, aber die Image-GC schreibt ins Log: <code>Failed to garbage collect required amount of images … 0 bytes eligible to free</code>. Wie kann das sein?",
+    "options": [
+      "Die Image-GC gibt nur <b>ungenutzte</b> Images frei. Sind alle vorhandenen Images von laufenden Pods <b>in-use</b>, ist nichts löschbar – der Platzdruck kommt dann von den In-use-Images selbst (plus emptyDirs/Logs), und dagegen hilft die Image-GC gar nicht.",
+      "Die Meldung ist harmlos – Image-GC gibt grundsätzlich 0 Byte frei und läuft nur zur Anzeige.",
+      "Der kubelet ist abgestürzt; erst ein Neustart des Nodes gibt den belegten Speicher wieder frei.",
+      "Container-Images zählen gar nicht zur Node-Disk; die Meldung ist ein Anzeigefehler im kubelet."
+    ],
+    "correct": 0,
+    "explain": "Die Image-GC löscht bei Disk-Druck <b>nur nicht referenzierte</b> Images (LRU), um Platz zu schaffen. Läuft zu jedem vorhandenen Image mindestens ein Pod, ist <b>kein</b> Image löschbar → <code>0 bytes eligible to free</code>. Der Node bleibt trotz laufender GC unter <code>DiskPressure</code>, weil die In-use-Images (zusammen mit emptyDirs/Logs) die Platte füllen. Abhilfe ist dann nicht ‚mehr GC‘, sondern kleinere/wenigere Images, mehr Disk oder die Last auf mehr Nodes verteilen."
+  },
+  {
+    "id": "q-imggc-two-sources",
+    "chapter": "storage-ephemeral",
+    "q": "Woraus besteht die belegte <b>Node-Disk</b> in Bezug auf die Pods – und was davon kann die Image-GC freimachen?",
+    "options": [
+      "Aus <b>zwei</b> Quellen: den <b>Container-Images</b> und dem <b>flüchtigen Speicher</b> der Pods (emptyDir + Writable-Layer/Logs). Die Image-GC kann nur <b>ungenutzte Images</b> freigeben – In-use-Images und der ephemeral-Verbrauch bleiben liegen.",
+      "Nur aus den PVC-Volumes der Pods – und die gibt die Image-GC bei Bedarf frei.",
+      "Nur aus den Container-Images; ein <code>emptyDir</code> liegt im RAM und zählt nicht zur Disk.",
+      "Aus der Summe der CPU- und Memory-<code>limits</code> aller Pods, die auf dem Node laufen."
+    ],
+    "correct": 0,
+    "explain": "Zwei unabhängige Disk-Füller teilen sich die Node-Platte: die <b>Images</b> (was der Node an Container-Images vorhält) und der <b>ephemeral storage</b> der Pods (emptyDir, beschreibbarer Layer, Logs). <b>PVC-Volumes zählen nicht</b> dazu – die liegen im eigenen, dauerhaften Volume. Die Image-GC greift nur an der ersten Quelle und nur bei <b>ungenutzten</b> Images; gegen In-use-Images oder emptyDir-Wildwuchs hilft nur weniger Verbrauch, ein ephemeral-storage-Limit oder mehr Platz."
+  },
+  {
     "id": "q-init-what",
     "chapter": "storage-init",
     "q": "Was ist ein <b>initContainer</b>?",
