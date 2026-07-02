@@ -37,24 +37,54 @@ const TAG_CAP = 64;
 // (Tags ragen über ihren Bezugspunkt + werden beim Entzerren nach oben geschoben).
 const TAG_VIEW_MARGIN = 2 * T;
 
+// Belegung je Steg: 2 Spalten × 6 Reihen = 12 Slots. Bei mehr Pods als Stege×12
+// wird NICHT mehr auf Slot 0 zurückgefallen (Überlagerung, #523), sondern eine
+// weitere „Seite" darunter gestapelt – die Slot-Vergabe ist dynamisch, nicht fix 36.
+const SLOTS_PER_PIER = 12;
+const PIER_ROWS = SLOTS_PER_PIER / 2;
+
 function podSlotPos(scene: WorldSceneLike, slot: number) {
-  const pier = scene.piers[Math.floor(slot / 12)];
-  const i = slot % 12;
+  const P = Math.max(1, scene.piers.length);
+  const page = Math.floor(slot / (P * SLOTS_PER_PIER)); // vollständige Füllung aller Stege
+  const within = slot % (P * SLOTS_PER_PIER);
+  const pier = scene.piers[Math.floor(within / SLOTS_PER_PIER)];
+  const i = within % SLOTS_PER_PIER;
   const col = i % 2 === 0 ? 0 : 2;
-  const row = Math.floor(i / 2);
+  const row = Math.floor(i / 2) + page * PIER_ROWS;      // Folge-Seiten stapeln nach unten
   return { x: (pier.x + col) * T + 8, y: (28 + row) * T + 8 };
 }
 
 export function syncCluster(scene: WorldSceneLike) {
   if (!Game.sim) return;
+  // #523: Der teure Pod-/Signatur-Sync läuft nur, wenn sich der Cluster seit dem
+  // letzten Frame geändert hat (Sim.rev). Vorher lief er JEDEN Frame O(n) über alle
+  // Pods + baute vier join("|")-Signaturen – Frame-Killer bei Stardew-Scope.
+  if (Game.sim.rev !== scene.lastClusterRev) {
+    scene.lastClusterRev = Game.sim.rev;
+    syncPods(scene);
+  }
+  // Billige, jeden Frame nötige Sichtbarkeit (hängt an Game-State/tf, NICHT an rev –
+  // die Kanone wird per Shop-Kauf freigeschaltet, ohne den Cluster zu ändern):
+  const applied = Game.sim.tf.applied;
+  scene.tfGroup.setVisible(applied);
+  scene.tfBuoys.forEach((b: Phaser.GameObjects.Image) => b.setVisible(Game.sim.tf.initialized && !applied));
+  scene.cannon.setVisible(Game.hasUpgrade("kanone"));
+}
+
+/** Pod-Kisten + Signatur-abhängige Deko an den aktuellen Cluster-Zustand angleichen.
+ *  Läuft nur bei geänderter Cluster-Revision (#523), nicht mehr pro Frame. */
+function syncPods(scene: WorldSceneLike) {
   const pods = [];
   for (const d of Game.sim.deployments) for (const p of d.pods) pods.push({ name: p.name, dep: d.name });
   const names = new Set<string>(pods.map(p => p.name));
 
   for (const p of pods) {
     if (!scene.podSlots[p.name]) {
+      // #523: freien Slot suchen; sind alle belegt, die Belegungsliste dynamisch um
+      // einen Slot wachsen lassen (podSlotPos stapelt darüber sauber) statt auf Slot 0
+      // zurückzufallen und die Kiste zu überlagern.
       let slot = scene.slotUsed.findIndex((u: boolean) => !u);
-      if (slot === -1) slot = 0;
+      if (slot === -1) slot = scene.slotUsed.length;
       scene.slotUsed[slot] = true;
       const pos = podSlotPos(scene, slot);
       const hue = hashHue(p.dep);
@@ -94,12 +124,6 @@ export function syncCluster(scene: WorldSceneLike) {
     scene.dynamic = { depSig: dSig, barrelsSig: bSig, flagsSig: fSig, svcSig: sSig };
     rebuildDynamic(scene);
   }
-
-  // Terraform-Plateau & Bojen
-  const applied = Game.sim.tf.applied;
-  scene.tfGroup.setVisible(applied);
-  scene.tfBuoys.forEach((b: Phaser.GameObjects.Image) => b.setVisible(Game.sim.tf.initialized && !applied));
-  scene.cannon.setVisible(Game.hasUpgrade("kanone"));
 }
 
 export function rebuildDynamic(scene: WorldSceneLike) {
