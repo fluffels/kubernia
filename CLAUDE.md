@@ -11,14 +11,14 @@
 ```
 1. npm run setup                            # einmalig: prüft Node, npm install, Tests+Typecheck+Arch-Check (oder nur npm install)
 2. npm run dev                              # Dev-Server, angezeigte Adresse im Browser öffnen
-3. docs/ticket-reihenfolge.md               # nächstes Ticket = oberstes freies Issue nach Prio→Nummer (gh issue list --state open --limit 500, ohne --limit nur die 30 neuesten)
+3. docs/ticket-reihenfolge.md               # nächstes Ticket = oberstes freies im KURATIERTEN KOPF (leer → Auto-Rest Prio→Nummer; gh issue list --state open --limit 500, ohne --limit nur die 30 neuesten)
 4. gh issue edit <nr> --add-assignee @me    # SOFORT claimen = "in Arbeit"-Marker, dann mit gh issue view <nr> prüfen
 5. git worktree add .claude/worktrees/kq-<nr> -b feature/kq-<nr>-<slug>   # eigener Worktree, bevor du Dateien anfasst
 6. coden                                    # im Worktree umsetzen, deutsche Umlaute in Texten/Kommentaren
 7. npm test                                 # muss grün sein (auch Negativfälle abdecken, Red-Green)
 8. npm run typecheck                        # muss grün sein (strict)
 9. npm run lint                             # muss grün sein (ESLint, #389) – im Browser sichtbare Änderungen zusätzlich anschauen
-10. nach main mergen → Worktree/Branch aufräumen → Issue schließen   # Details siehe AGENTS.md
+10. nach main mergen → Worktree/Branch aufräumen → Issue schließen → KOPF pflegen (puh-fertig)   # Details siehe AGENTS.md
 ```
 
 ⚠️ **Die rohe `index.html` im Root ist die Dev-Version** und braucht den Vite-Server. Per Doppelklick öffnen → leere Seite. Zum Offline-Spielen `npm run build:offline`, dann `dist-offline/index.html` doppelklicken.
@@ -231,14 +231,14 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | 🧪 Tests (Vitest) | [`test/`](test/) – Kern/Dispatch in `sim.test.ts`; die Simulator-Befehlsfamilien gespiegelt zu den `sim/`-Modulen unter [`test/sim/`](test/sim/) (docker/kubectl/rbac/helm/git/terraform/argocd/glab, #383); dazu `content.test.ts`, `quests.test.ts` u.a. **Geteiltes Harness (#475):** Querschnitts-Umgebung (window/localStorage-Stub + Spiel-Stack laden) in [`test/support/`](test/support/), valide Domänen-Eingaben/Factories in [`test/factories/`](test/factories/) (`freshSim`; `test/sim/helpers.ts` re-exportiert daraus). Verhaltens-Tests prüfen die öffentliche API/beobachtbares Verhalten, nicht Interna – die Architektur-**Fitness-Functions** (`layering.test.ts`/`filesize.test.ts`/`docmap.test.ts`, #482) sind bewusst eine eigene Kategorie. |
 | 🚦 Boot- & Interaktions-Smokes (Playwright, E2E) | [`e2e/`](e2e/) – lädt den gebauten Offline-Build headless: Boot fehlerfrei (#391) **plus** schlanke Interaktions-Smokes (#480: Terminal-Eingabe, Overlay auf/zu, ein Quest-Durchlauf) über Tastatur/DOM ohne Test-Hintertür; geteilte Helfer in [`e2e/support.ts`](e2e/support.ts). Config: [`playwright.config.ts`](playwright.config.ts). Bewusst getrennt von den Vitest-Unit-Tests (`npm run smoke`). |
 | ✅ Backlog / TODOs | GitHub Issues + Project-Board (`gh issue list --state open --limit 500`, `gh project list --owner fluffels`) |
-| 🥇 Nächstes Ticket (Auswahl-Regel) | [docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md) – deterministisch Prio→Nummer über die freien Issues + Reaktivierungs-Pool (keine handgepflegte Liste) |
+| 🥇 Nächstes Ticket (Auswahl-Regel) | [docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md) – kuratierter Kopf (oberstes freies) über dem deterministischen Auto-Rest (Prio→Nummer) + Reaktivierungs-Pool; Kopf am Ticket-Ende pflegen |
 
 ## ❓ Die vier Einstiegsfragen
 
 - **Was ist das Spiel?** KubeQuest – ein 2D-Lernspiel (Phaser 3) für Docker/K8s/Helm/Terraform; die Spielwelt **ist** der Cluster. → [README.md](README.md)
 - **Wie starte ich?** `npm install` → `npm run dev` → angezeigte Adresse im Browser. → Schnellstart oben.
-- **Welches Ticket nehme ich?** Das **oberste freie Issue** nach **Priorität** (`prio:hoch` → `prio:mittel` → `prio:niedrig` → ohne Label) + **niedrigster Nummer** (`gh issue list --state open --limit 500` – ohne `--limit` nur die 30 neuesten!; frei = kein Assignee, kein offener PR/Branch/Worktree, nicht `status:zurückgestellt`) – rein deterministisch, nicht nach Inhalt aussuchen, keine handgepflegte Reihenfolge. Fertig sortierter Auswahl-Befehl + Sonderfälle: [Ticket-Auswahl](docs/ticket-reihenfolge.md). Sofort self-assignen. → [AGENTS.md › Wo die TODOs leben](AGENTS.md#wo-die-todos-leben).
-- **Wie schließe ich ab?** Tests grün + im Browser verifiziert → nach `main` mergen → Worktree/Branch aufräumen → Issue schließen. → [AGENTS.md › Git-Workflow](AGENTS.md#das-wichtigste-zuerst-harte-regeln).
+- **Welches Ticket nehme ich?** Das **oberste freie Ticket im kuratierten Kopf** von [Ticket-Auswahl](docs/ticket-reihenfolge.md); **ist der Kopf leer**, der **Auto-Rest** nach **Priorität** (`prio:hoch` → `prio:mittel` → `prio:niedrig` → ohne Label) + **niedrigster Nummer** (`gh issue list --state open --limit 500` – ohne `--limit` nur die 30 neuesten!; frei = kein Assignee, kein offener PR/Branch/Worktree, nicht `status:zurückgestellt`). Nur **dieses eine** Kandidaten-Ticket prüfen, nicht die ganze Liste. Sofort self-assignen. **Am Ticket-Ende den Kopf pflegen** (puh-fertig, Pflicht). → [AGENTS.md › Wo die TODOs leben](AGENTS.md#wo-die-todos-leben).
+- **Wie schließe ich ab?** Tests grün + im Browser verifiziert → nach `main` mergen → Worktree/Branch aufräumen → Issue schließen → **den kuratierten Kopf in [Ticket-Auswahl](docs/ticket-reihenfolge.md) pflegen** (puh-fertig: geschlossenes raus, Kopf nachfüllen, Stand-Datum aktualisieren, committen). → [AGENTS.md › Git-Workflow](AGENTS.md#das-wichtigste-zuerst-harte-regeln).
 
 ---
 
