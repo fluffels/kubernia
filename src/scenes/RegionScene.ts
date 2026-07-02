@@ -22,8 +22,8 @@ import { UI } from "../ui";
 import { resolveMove, circleHitbox, npcHitboxes, type Hitbox } from "../world/world";
 import { npcSpawnsForMap, objectsForMap } from "../content/entities";
 import { WATER, SAND, PATH, DOCK } from "../world/regions/archipel";
-import { keys, setWorldScene, setInteriorOpen } from "../runtime";
-import { T, FOAM, WANG, STONE, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText, queueAssetLoad, sliceSheets, IslandScene, type SceneNpc } from "./shared";
+import { setWorldScene, setInteriorOpen } from "../runtime";
+import { T, FOAM, WANG, STONE, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText, queueAssetLoad, sliceSheets, readMoveInput, faceFrom, IslandScene, type SceneNpc } from "./shared";
 import type { Warp } from "../world/warps";
 import { assetsForScene } from "../assets-data";
 
@@ -333,20 +333,11 @@ export class RegionScene extends IslandScene {
     const pl = this.pl;
     const blocked = UI.blocking();
 
-    let dx = 0, dy = 0;
-    if (!blocked) {
-      if (keys["w"] || keys["ArrowUp"]) dy -= 1;
-      if (keys["s"] || keys["ArrowDown"]) dy += 1;
-      if (keys["a"] || keys["ArrowLeft"]) dx -= 1;
-      if (keys["d"] || keys["ArrowRight"]) dx += 1;
-    }
+    const { dx, dy } = readMoveInput(blocked);
     pl.moving = dx !== 0 || dy !== 0;
     if (pl.moving) {
       const len = Math.hypot(dx, dy);
-      if (dx < 0) pl.face = "west";
-      else if (dx > 0) pl.face = "east";
-      else if (dy < 0) pl.face = "north";
-      else if (dy > 0) pl.face = "south";
+      pl.face = faceFrom(dx, dy, pl.face);
       const next = resolveMove((px, py) => this.isSolidAt(px, py), pl.x, pl.y, dx / len * 75 * dt, dy / len * 75 * dt, this.softObstacles);
       pl.x = next.x; pl.y = next.y;
       this.bobT += dt * 12;

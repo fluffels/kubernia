@@ -13,6 +13,42 @@ import { type AssetEntry } from "../assets-data";
 
 const T = 16;
 
+/** WASD + Pfeiltasten, die das Spiel als Lauf-/Navigations-Eingabe wertet. EINE Liste,
+ *  damit „welche Taste bewegt" nicht über mehrere Szenen driftet. */
+const MOVE_KEYS = ["w", "s", "a", "d", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"] as const;
+
+/** Ob gerade irgendeine Lauftaste gedrückt ist – fürs Anti-Pingpong-Gate des Rück-Warps
+ *  (updateReturn). Ausgelagert, weil die 8-fach-Oder-Prüfung sonst die Methode allein über
+ *  die Komplexitäts-Schwelle trägt (#564). */
+function anyMoveKeyDown(): boolean {
+  return MOVE_KEYS.some((k) => keys[k]);
+}
+
+/** WASD/Pfeiltasten → Bewegungsvektor (je Achse -1/0/1). Bei `blocked` (ein den Spieler
+ *  fesselndes Overlay ist offen) bleibt er stehen. Gemeinsam für alle laufbaren Szenen
+ *  (Welt/Region/Innenraum), damit die Tastenbelegung an EINER Stelle lebt statt in drei
+ *  byte-gleichen update()-Blöcken (#564; Stardew-Scope: neue Szene erbt die Steuerung). */
+function readMoveInput(blocked: boolean): { dx: number; dy: number } {
+  let dx = 0, dy = 0;
+  if (!blocked) {
+    if (keys["w"] || keys["ArrowUp"]) dy -= 1;
+    if (keys["s"] || keys["ArrowDown"]) dy += 1;
+    if (keys["a"] || keys["ArrowLeft"]) dx -= 1;
+    if (keys["d"] || keys["ArrowRight"]) dx += 1;
+  }
+  return { dx, dy };
+}
+
+/** Blickrichtung aus dem Bewegungsvektor – horizontal hat bei Diagonale Vorrang. Ohne
+ *  Bewegung (dx=dy=0) bleibt `current` erhalten (gemeinsam für alle laufbaren Szenen, #564). */
+function faceFrom(dx: number, dy: number, current: string): string {
+  if (dx < 0) return "west";
+  if (dx > 0) return "east";
+  if (dy < 0) return "north";
+  if (dy > 0) return "south";
+  return current;
+}
+
 /** Laufzeit-Referenz eines gerenderten NPC (#423): Schatten/Tween bleiben anonym,
  *  gemerkt werden nur Identität + Standplatz + die schaltbaren Sprites. Gemeinsame
  *  Form für Welt- und Insel-Szenen (Rückgabe von `spawnIslandNpc`). */
@@ -79,8 +115,7 @@ export abstract class IslandScene extends Phaser.Scene {
   updateReturn(warp: Warp, blocked: boolean, emergencyExtra = false): boolean {
     const pl = this.pl;
     const onRet = warpAt(pl.x, pl.y, warp);
-    const moveKeyDown = !!(keys["w"] || keys["s"] || keys["a"] || keys["d"] ||
-      keys["ArrowUp"] || keys["ArrowDown"] || keys["ArrowLeft"] || keys["ArrowRight"]);
+    const moveKeyDown = anyMoveKeyDown();
     if (!moveKeyDown && !onRet) this.returnArmed = true;
     if (!blocked && this.returnArmed && onRet) { this.exitToWorld(); return true; }
     const e = !blocked && (!!keys["e"] || !!keys["Enter"]);
@@ -314,5 +349,5 @@ function floatPixelText(scene: Phaser.Scene, x: number, y: number, str: string, 
 }
 
 export {
-  T, DIRT, STONE, WOOD, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, WELL, SIGN, CART, WATER, FOAM, WANG, hashHue, hueColor, hueColorLight, FONT_KEY, FONT_TEX, COIN_TEX, buildPixelFont, buildCoinIcon, queueAssetLoad, sliceSheets, fontColor, pixelText, spawnIslandNpc, spawnIslandObject, SIGN_BORDER, SIGN_PAD, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText,
+  T, DIRT, STONE, WOOD, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, WELL, SIGN, CART, WATER, FOAM, WANG, hashHue, hueColor, hueColorLight, FONT_KEY, FONT_TEX, COIN_TEX, buildPixelFont, buildCoinIcon, queueAssetLoad, sliceSheets, fontColor, pixelText, spawnIslandNpc, spawnIslandObject, SIGN_BORDER, SIGN_PAD, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, readMoveInput, faceFrom,
 };

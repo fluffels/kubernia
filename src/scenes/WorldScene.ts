@@ -5,11 +5,11 @@ import { KQContent } from "../content";
 import { npcSolidIndices, npcHitboxes, resolveMove, SHIP_KRALLE, type Hitbox, type Door } from "../world/world";
 import { type Spawn } from "../content/entities";
 import { type LayoutBox } from "../hud/labellayout";
-import { keys, setWorldScene } from "../runtime";
+import { setWorldScene } from "../runtime";
 import { expandRect, cull, FrameSampler, type Cullable } from "../hud/cull";
 import { getMapEntry, type MapId } from "../world/maps/mapregistry";
 import { DAY_CYCLE_MS } from "../core/clock";
-import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, type SceneNpc } from "./shared";
+import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, readMoveInput, faceFrom, type SceneNpc } from "./shared";
 // Spiel-Systeme als eigene, fokussierte Module (WorldScene.ts-Split #393, analog
 // scenes.ts-Split #345): freie Funktionen mit der Szene als Parameter (`scene`).
 // WorldScene ist seither nur noch der schlanke Orchestrator (Aufbau in create(),
@@ -498,22 +498,13 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     const pl = this.playerPos;
     const blocked = UI.blocking();
 
-    let dx = 0, dy = 0;
-    if (!blocked) {
-      if (keys["w"] || keys["ArrowUp"]) dy -= 1;
-      if (keys["s"] || keys["ArrowDown"]) dy += 1;
-      if (keys["a"] || keys["ArrowLeft"]) dx -= 1;
-      if (keys["d"] || keys["ArrowRight"]) dx += 1;
-    }
+    const { dx, dy } = readMoveInput(blocked);
     pl.moving = dx !== 0 || dy !== 0;
     if (pl.moving) {
       const len = Math.hypot(dx, dy);
       if (dx) pl.dir = Math.sign(dx);
       // Blickrichtung für die 4 PixelLab-Richtungen (horizontal hat Vorrang bei Diagonale)
-      if (dx < 0) pl.face = "west";
-      else if (dx > 0) pl.face = "east";
-      else if (dy < 0) pl.face = "north";
-      else if (dy > 0) pl.face = "south";
+      pl.face = faceFrom(dx, dy, pl.face);
       this.tryMove(dx / len * 75 * dt, dy / len * 75 * dt);
       this.petTrail.push({ x: pl.x, y: pl.y });
       if (this.petTrail.length > 26) this.petTrail.shift();
@@ -533,29 +524,13 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     this.playerSprite.setTexture(faceTex).setPosition(pl.x, pl.y + 6 - bob).setFlipX(false).setDepth(pl.y + 8);
     this.playerShadow.setPosition(pl.x, pl.y + 6);
 
-    // Haustier
-    const item = Game.state.activePet ? KQContent.SHOP.find(s => s.id === Game.state.activePet) : undefined;
-    if (item) {
-      const pos = this.petTrail[Math.max(0, this.petTrail.length - 16)] || pl;
-      this.petSprite.setVisible(true).setTexture(item.tex!).setScale(0.4)
-        .setPosition(pos.x, pos.y - 2 + Math.sin(time / 180) * 1.5)
-        .setFlipX(pl.x < pos.x).setDepth(pos.y + 7);
-      this.petShadow.setVisible(true).setPosition(pos.x, pos.y + 6);
-    } else {
-      this.petSprite.setVisible(false);
-      this.petShadow.setVisible(false);
-    }
+    this.updatePet(time);
 
     // Schiffsflagge einfärben
     const flagItem = KQContent.SHOP.find(f => f.id === Game.state.activeFlag);
     this.shipFlag.setTint(flagItem ? flagItem.color : 0x4dd0e1);
 
-    // Quest-Marker
-    for (const n of this.npcs) {
-      let show = UI.questMarkerFor(n.id);
-      if (n.id === "kralle" && Game.shouldReviewGate()) show = true;
-      n.marker.setVisible(!blocked && show);
-    }
+    this.updateQuestMarkers(blocked);
 
     syncCluster(this);
     updateDynamicTags(this);
@@ -583,5 +558,32 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     tickEvents(this, time);
 
     UI.updatePrompt();
+  }
+
+  /** Aktives Haustier (Shop-Kauf) hinter dem Spieler herführen: es folgt der abgelegten
+   *  Lauf-Spur mit Versatz und wippt leicht; ohne Haustier bleiben Sprite + Schatten aus. */
+  private updatePet(time: number): void {
+    const item = Game.state.activePet ? KQContent.SHOP.find(s => s.id === Game.state.activePet) : undefined;
+    if (!item) {
+      this.petSprite.setVisible(false);
+      this.petShadow.setVisible(false);
+      return;
+    }
+    const pl = this.playerPos;
+    const pos = this.petTrail[Math.max(0, this.petTrail.length - 16)] || pl;
+    this.petSprite.setVisible(true).setTexture(item.tex!).setScale(0.4)
+      .setPosition(pos.x, pos.y - 2 + Math.sin(time / 180) * 1.5)
+      .setFlipX(pl.x < pos.x).setDepth(pos.y + 7);
+    this.petShadow.setVisible(true).setPosition(pos.x, pos.y + 6);
+  }
+
+  /** „!"-Marker über den NPCs zeigen, sobald ein Quest-Dialogschritt ansteht (Kralle
+   *  zusätzlich, wenn eine Wissensrunde fällig ist); bei offenem Overlay alle aus. */
+  private updateQuestMarkers(blocked: boolean): void {
+    for (const n of this.npcs) {
+      let show = UI.questMarkerFor(n.id);
+      if (n.id === "kralle" && Game.shouldReviewGate()) show = true;
+      n.marker.setVisible(!blocked && show);
+    }
   }
 }
