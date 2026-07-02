@@ -53,6 +53,10 @@ import crane from "../assets/pixellab/crane.png";                   // Hafen-Ver
 import house_office from "../assets/pixellab/house_office.png";
 import house_forge from "../assets/pixellab/house_forge.png";
 import house_chart from "../assets/pixellab/house_chart.png";
+// Gebäudespezifische Außen-Türen (#186): ersetzen die prozeduralen Rechteck-Türen
+import door_office from "../assets/pixellab/door_office.png";
+import door_forge from "../assets/pixellab/door_forge.png";
+import door_chart from "../assets/pixellab/door_chart.png";
 import ship from "../assets/pixellab/ship.png";
 import kraken from "../assets/pixellab/kraken.png";   // Hacker-Krake (Gegner, #184)
 import pirate_ship from "../assets/pixellab/pirate_ship.png";   // Piraten-Schiff (Gegner, #185)
@@ -139,6 +143,10 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
   { key: "house_office", src: house_office, kind: "plain" },
   { key: "house_forge", src: house_forge, kind: "plain" },
   { key: "house_chart", src: house_chart, kind: "plain" },
+  // Gebäudespezifische Außen-Türen (#186), an der Fußlinie über die Gebäude-Front gesetzt
+  { key: "door_office", src: door_office, kind: "plain" },
+  { key: "door_forge", src: door_forge, kind: "plain" },
+  { key: "door_chart", src: door_chart, kind: "plain" },
   { key: "ship", src: ship, kind: "plain" },
   { key: "kraken", src: kraken, kind: "plain" },   // Hacker-Krake (Gegner, #184)
   { key: "pirate_ship", src: pirate_ship, kind: "plain" },   // Piraten-Schiff (Gegner, #185)

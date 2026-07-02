@@ -161,14 +161,36 @@ export function carveDoors(scene: WorldSceneLike) {
   for (const d of scene.doors as Door[]) {
     if (d.theme === "ship") continue;
     scene.solidGrid[d.ty * scene.W + d.tx] = 0;
-    makeDoor(scene, d.tx, d.ty);
+    makeDoor(scene, d.tx, d.ty, d.theme);
   }
 }
 
-/** Eine sichtbare Holztür auf der vorderen Gebäudekante (Fußlinie der Kachel),
- *  Tiefe knapp vor der Hauswand, damit sie auf der Front sitzt. */
-export function makeDoor(scene: WorldSceneLike, tx: number, ty: number) {
+/** Gebäudespezifisches Tür-Asset (#186): welche PixelLab-Tür zu welchem Gebäude-Thema
+ *  gehört. Ersetzt die früher prozedural gemalte Rechteck-Tür. */
+const DOOR_TEX: Record<string, string> = {
+  office: "door_office",
+  forge: "door_forge",
+  chart: "door_chart",
+};
+/** Ziel-Höhe der Tür in Welt-Pixeln (~1,4 Kacheln) – die Assets haben leicht
+ *  unterschiedliche Quellhöhen, darum wird pro Tür auf diese Höhe skaliert. */
+const DOOR_WORLD_HEIGHT = 22;
+
+/** Eine sichtbare Tür auf der vorderen Gebäudekante (Fußlinie der Kachel), Tiefe knapp
+ *  vor der Hauswand, damit sie auf der Front sitzt. Seit #186 ein PixelLab-Asset je
+ *  Gebäude-Thema; fehlt das Asset/Thema, fällt sie auf eine schlichte prozedurale Tür
+ *  zurück (defensiv – die Hafentüren office/forge/chart haben alle ein Asset). */
+export function makeDoor(scene: WorldSceneLike, tx: number, ty: number, theme?: string) {
   const cx = tx * T + 8, baseY = (ty + 1) * T;
+  const tex = theme ? DOOR_TEX[theme] : undefined;
+  if (tex && scene.textures.exists(tex)) {
+    const img = scene.add.image(cx, baseY, tex).setOrigin(0.5, 1);
+    const src = scene.textures.get(tex).getSourceImage() as { height: number };
+    img.setScale(DOOR_WORLD_HEIGHT / src.height);   // Fußlinie bündig, Höhe vereinheitlicht
+    img.setDepth(baseY + 0.5);
+    return;
+  }
+  // Fallback: schlichte prozedurale Tür (unbekanntes Thema / Asset fehlt)
   const frame = scene.add.rectangle(0, 0, 12, 15, 0x33210f).setOrigin(0.5, 1);   // dunkler Rahmen
   const leaf = scene.add.rectangle(0, -1, 9, 12, 0x6b4a2a).setOrigin(0.5, 1);     // Türblatt
   const seam = scene.add.rectangle(0, -1, 1, 12, 0x4a3219).setOrigin(0.5, 1);     // Mittelfuge
