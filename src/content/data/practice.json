@@ -1,0 +1,71 @@
+{
+  "bo": {
+    "docker-first-container": ["docker-pull", "docker-run"],
+    "docker-common-images": ["docker-run-busybox", "docker-run-redis", "docker-run-postgres"],
+    "docker-list-containers": ["docker-ps", "docker-stop", "docker-ps-a"],
+    "docker-run-options": ["docker-run-named"],
+    "docker-build-image": ["docker-build", "docker-tag"],
+    "docker-registry": ["docker-pull-version", "docker-pull-registry"],
+    "docker-rabbitmq": ["docker-run-rabbitmq"]
+  },
+  "ole": {
+    "k8s-first-deployment": ["k-get-nodes", "k-get-pods"],
+    "k8s-inspect-pods": ["k-describe", "k-get-pods-ns"],
+    "k8s-service": ["k-create", "k-scale"],
+    "k8s-self-healing": ["k-delete-pod", "k-expose", "k-get-svc"],
+    "kraken-boss": ["k-secret", "k-get-secrets"]
+  },
+  "ada": {
+    "k8s-apply-manifests": ["k-apply"],
+    "git-version-control": ["git-status", "git-add", "git-commit"],
+    "git-feature-branch": ["git-branch", "git-checkout"],
+    "git-pipeline": ["git-add-all", "ci-status"],
+    "git-merge-branches": ["git-pull", "git-resolve"],
+    "secrets-encrypted": ["k-secret-tls", "k-get-ingress"],
+    "dns-service-discovery": ["k-nslookup", "k-nslookup-external"]
+  },
+  "runa": {
+    "helm-release-install": ["helm-install", "helm-list"],
+    "helm-upgrade-rollback": ["helm-upgrade", "helm-rollback"],
+    "helm-umbrella-chart": ["helm-create", "helm-lint", "helm-package", "helm-install-local", "helm-upgrade-values", "helm-dep-update"],
+    "helm-templates": ["helm-template"]
+  },
+  "theo": {
+    "terraform-intro": ["tf-plan"],
+    "terraform-state-destroy": ["tf-state"]
+  },
+  "saga": {
+    "terraform-modul": ["tf-get"],
+    "terraform-remote-state": ["tf-init-flotte"],
+    "terraform-provider": ["tf-apply-flotte"],
+    "terraform-variablen-outputs": ["tf-output-read", "tf-output-list"]
+  },
+  "juno": {
+    "k8s-debug-crashloop": ["k-logs", "k-rollout"],
+    "k8s-debug-imagepull": ["k-describe"],
+    "network-policy": ["k-apply-netpol", "k-get-netpol", "k-describe-netpol", "k-delete-netpol"],
+    "k8s-resource-limits": ["k-set-resources"]
+  },
+  "argo": {
+    "gitops-self-sync": ["argo-apply", "argo-app-list", "argo-app-get", "argo-app-sync"]
+  },
+  "lumi": {
+    "observability-metrics": ["obs-top-pods", "obs-top-nodes", "obs-sm-apply", "obs-sm-get"],
+    "observability-logs": ["k-logs", "obs-logs-previous"],
+    "observability-alerts": ["obs-alerts", "obs-pr-apply"]
+  },
+  "vidar": {
+    "k8s-serviceaccount": ["rbac-sa-create", "rbac-sa-get"],
+    "k8s-rbac-role": ["rbac-can-i", "rbac-apply-role", "rbac-apply-rolebinding", "rbac-describe-role"],
+    "k8s-rbac-clusterrole": ["rbac-apply-clusterrole", "rbac-apply-clusterrolebinding"],
+    "k8s-pod-security": ["pod-security-enforce", "pod-security-harden"]
+  },
+  "knut": {
+    "storage-statefulset": ["sts-apply", "sts-get", "sts-delete-pod"],
+    "storage-pvc": ["sc-apply", "pvc-apply", "pvc-get", "pv-get", "pvc-pending"],
+    "storage-backup-restore": ["snap-apply", "snap-get", "snap-restore"]
+  },
+  "greta": {
+    "werft-eigener-dienst": ["werft-build", "werft-deploy-imagepull", "werft-rollout-heal", "werft-expose", "werft-curl"]
+  }
+}

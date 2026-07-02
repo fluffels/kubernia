@@ -109,6 +109,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/content/loader/quizcards.ts`](src/content/loader/quizcards.ts) | pure Domäne | Quiz-Karteikarten (Krabbe Kralle), pro Thema (`getQuizCards`, #368/#517). |
 | [`src/content/loader/tfconfigs.ts`](src/content/loader/tfconfigs.ts) | pure Domäne | Terraform-Konfig-Szenarien + `resolveScenarioRef` (`getTfConfigs`, #147/#517). |
 | [`src/content/loader/funkexplain.ts`](src/content/loader/funkexplain.ts) | pure Domäne | Freies-Funken-Erklärungen, pro Tool (`getFunkExplains`, #362/#517). |
+| [`src/content/loader/practice.ts`](src/content/loader/practice.ts) | pure Domäne | Übungs-Pools je NPC (`PRACTICE`): welcher Drill nach welcher Quest freigeschaltet wird; lädt die gruppierte `data/practice.json` und expandiert sie in `{ drill, after }[]` (#521). |
 | [`src/content/parse.ts`](src/content/parse.ts) | pure Domäne | Geteilte Parse-Primitiven + `ContentValidationError` (Leaf, bricht den Zyklus loader↔check-dsl, #411). |
 | [`src/content/check-dsl.ts`](src/content/check-dsl.ts) | pure Domäne | Deklarative Quest-Check-DSL: `compileCheck` Regel→Prädikat (#411). → [content.md](docs/module/content.md) |
 | [`src/content/scenario.ts`](src/content/scenario.ts) | pure Domäne | Scenario-Validierung (#494): `reviveScenario` prüft Inline-`scenario` strukturell gegen eine geschlossene Feld-/applyEffect-Allowlist (fail-fast gegen stille Tippfehler). |
@@ -120,8 +121,8 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/content/minigame.ts`](src/content/minigame.ts) | pure Domäne | Stapel-Minispiel-Daten (Docker-Image-Schichten aufsteigend, #218) + Sturm-Image-Namen-Verfälscher. |
 | [`src/content/progression.ts`](src/content/progression.ts) | pure Domäne | Reine Inhalts-Daten: Ränge (XP-Schwellen) + Shop-Angebot. |
 | [`src/content/util.ts`](src/content/util.ts) | pure Domäne | Kleine geteilte Inhalts-Helfer (Zufall: `pick`/Range), von Drills u.a. genutzt. |
-| [`src/content/data/`](src/content/data/) | Daten | Quests/NPCs/Smalltalk/Reihenfolge/Drills/Quiz + Terraform-Konfigs (#147) + Manifeste (#514) + Funk-Erklärungen (#362) als JSON. |
-| [`src/content/drills.ts`](src/content/drills.ts) | pure Domäne | Barrel: mergt `DRILLS` + `PRACTICE` aus `src/content/drills/*` (#457). |
+| [`src/content/data/`](src/content/data/) | Daten | Quests/NPCs/Smalltalk/Reihenfolge/Drills/Quiz + Terraform-Konfigs (#147) + Manifeste (#514) + Funk-Erklärungen (#362) + Übungs-Pools (`practice.json`, #521) als JSON. |
+| [`src/content/drills.ts`](src/content/drills.ts) | pure Domäne | Barrel: mergt `DRILLS` aus `src/content/drills/*` (#457); `PRACTICE` ist seit #521 Content-as-Data (`loader/practice.ts`). |
 | [`src/content/drills/shared.ts`](src/content/drills/shared.ts) | pure Domäne | Geteilte Helfer + `DrillTask`-Typ + ensure*-Fabriken + YAML-Konstanten-Re-Exporte (#457). |
 | [`src/content/drills/docker.ts`](src/content/drills/docker.ts) | pure Domäne | Docker-Drills (pull/run/build/tag/push, #457). |
 | [`src/content/drills/kubectl.ts`](src/content/drills/kubectl.ts) | pure Domäne | kubectl/Secret/Ingress-Drills (#457). |

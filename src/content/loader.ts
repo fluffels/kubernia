@@ -49,3 +49,6 @@ export { type TfConfig, parseTfConfigs, assembleTfConfigs, getTfConfigs } from "
 
 // Freies-Funken-Erklärungen „Was ist gerade passiert?", pro Tool (#362).
 export { parseFunkExplains, assembleFunkExplains, getFunkExplains } from "./loader/funkexplain";
+
+// Übungs-Pools je NPC (welcher Drill nach welcher Quest freigeschaltet wird, #521).
+export { type PracticeEntry, parsePractice, PRACTICE } from "./loader/practice";

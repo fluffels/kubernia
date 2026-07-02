@@ -9,8 +9,8 @@ import { RANKS, SHOP } from "./content/progression";
 // NPCs, Smalltalk, Quests, Befehls-Karten und Quiz-Karten sind Content-as-Data
 // (#348/#352/#368): als JSON in content/data/, geladen & gegen ein Schema validiert vom
 // Loader (accept→RegExp, check→Mechanik-Registry). Siehe content/loader.ts + content/checks.ts.
-import { NPCS, SMALLTALK, getQuests, getCmdCards, getQuizCards, getQuestTopics, groupQuestsByTopic, getTfConfigs, getFunkExplains } from "./content/loader";
-import { DRILLS, PRACTICE } from "./content/drills";
+import { NPCS, SMALLTALK, PRACTICE, getQuests, getCmdCards, getQuizCards, getQuestTopics, groupQuestsByTopic, getTfConfigs, getFunkExplains } from "./content/loader";
+import { DRILLS } from "./content/drills";
 import { STACK_ROUNDS, corruptImage } from "./content/minigame";
 
 // Quests, Themen, Quiz- und Befehls-Karten sind seit #435 LAZY: die Fassade exponiert sie

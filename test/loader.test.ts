@@ -23,6 +23,8 @@ import {
   assembleQuizCards,
   parseQuestTopics,
   groupQuestsByTopic,
+  parsePractice,
+  PRACTICE,
   ContentValidationError,
   type CmdCard,
   type QuizCard,
@@ -596,6 +598,90 @@ test("assembleQuizCards: wirft bei doppelter Quiz-ID über Thema-Dateien hinweg"
   assert.throws(
     () => assembleQuizCards([[mkQuiz("q-dup")], [mkQuiz("q-dup")]]),
     (e: unknown) => e instanceof ContentValidationError && /doppelte Quiz-ID/.test((e as Error).message),
+  );
+});
+
+/* ===================== Übungs-Pools je NPC (Content-as-Data, #521) =====================
+ * PRACTICE ist seit #521 Daten (content/data/practice.json), gruppiert als
+ * `npc → questId → [drillIds]` und vom Loader in die Laufzeitform `{ drill, after }[]`
+ * expandiert. Geprüft wird: die ECHTEN Daten sind vollständig geladen, und der Parser
+ * MUSS bei kaputten Eingaben explizit werfen (Red-Green, nie still durchwinken). */
+
+/* ---------- Echte Daten: vollständig & konsistent geladen ---------- */
+
+test("loader: PRACTICE lädt für jeden erwarteten NPC einen nicht-leeren Übungs-Pool", () => {
+  // Die Geber mit freiem Üben – dieselben Schlüssel, an denen game/progression.ts hängt.
+  for (const id of ["bo", "ole", "ada", "runa", "theo", "saga", "juno", "argo", "lumi", "vidar", "knut", "greta"]) {
+    const pool = PRACTICE[id];
+    assert.ok(Array.isArray(pool) && pool.length > 0, `PRACTICE-Pool für „${id}" fehlt/leer`);
+    for (const p of pool) {
+      assert.ok(typeof p.drill === "string" && p.drill.length > 0, `${id}: leerer drill`);
+      assert.ok(typeof p.after === "string" && p.after.length > 0, `${id}: leere after-Quest`);
+    }
+  }
+  // Stichprobe gegen versehentliche Daten-Verschiebung beim JSON-Umzug + gegen die Expansion.
+  assert.ok(PRACTICE.bo.some((p) => p.drill === "docker-run-busybox" && p.after === "docker-common-images"));
+  assert.ok(PRACTICE.greta.some((p) => p.drill === "werft-curl" && p.after === "werft-eigener-dienst"));
+});
+
+test("loader: PRACTICE hat je NPC keine doppelten Drills (Expansion kollidiert nicht)", () => {
+  for (const [id, pool] of Object.entries(PRACTICE)) {
+    const drills = pool.map((p) => p.drill);
+    assert.equal(new Set(drills).size, drills.length, `doppelter Drill im echten Pool „${id}"`);
+  }
+});
+
+/* ---------- parsePractice: gültige Daten (Gruppen → { drill, after }[]) ---------- */
+
+test("parsePractice: expandiert die gruppierte Form korrekt", () => {
+  const out = parsePractice({ bo: { "quest-a": ["d1", "d2"], "quest-b": ["d3"] } });
+  assert.deepEqual(out.bo, [
+    { drill: "d1", after: "quest-a" },
+    { drill: "d2", after: "quest-a" },
+    { drill: "d3", after: "quest-b" },
+  ]);
+});
+
+/* ---------- parsePractice: kaputte Daten MÜSSEN explizit werfen (Negativfälle) ---------- */
+
+test("parsePractice: wirft bei Nicht-Objekt", () => {
+  assert.throws(() => parsePractice([]), ContentValidationError);
+  assert.throws(() => parsePractice(null), ContentValidationError);
+  assert.throws(() => parsePractice("nope"), ContentValidationError);
+});
+
+test("parsePractice: wirft bei NPC ohne jede Folge-Quest (mit Pfad)", () => {
+  assert.throws(
+    () => parsePractice({ bo: {} }),
+    (e: unknown) => e instanceof ContentValidationError && /practice\.bo/.test((e as Error).message),
+  );
+});
+
+test("parsePractice: wirft bei leerer Drill-Liste einer Quest (mit Pfad)", () => {
+  assert.throws(
+    () => parsePractice({ bo: { "quest-a": [] } }),
+    (e: unknown) => e instanceof ContentValidationError && /practice\.bo\.quest-a/.test((e as Error).message),
+  );
+});
+
+test("parsePractice: wirft bei nicht-textuellem Drill (mit Pfad)", () => {
+  assert.throws(
+    () => parsePractice({ bo: { "quest-a": ["ok", 123] } }),
+    (e: unknown) => e instanceof ContentValidationError && /practice\.bo\.quest-a\[1\]/.test((e as Error).message),
+  );
+});
+
+test("parsePractice: wirft bei Gruppe, die kein Objekt ist (mit Pfad)", () => {
+  assert.throws(
+    () => parsePractice({ bo: ["quest-a"] }),
+    (e: unknown) => e instanceof ContentValidationError && /practice\.bo/.test((e as Error).message),
+  );
+});
+
+test("parsePractice: wirft bei doppeltem Drill über Quests hinweg (mit Pfad)", () => {
+  assert.throws(
+    () => parsePractice({ bo: { "quest-a": ["dup"], "quest-b": ["dup"] } }),
+    (e: unknown) => e instanceof ContentValidationError && /doppelter Drill „dup"/.test((e as Error).message),
   );
 });
 
