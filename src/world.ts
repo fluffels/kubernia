@@ -5,7 +5,7 @@
  * und in test/world.test.ts direkt abgetestet.
  */
 
-import { type TiledObjectGroup, tiledProps } from "./tilemap";
+import { type TiledObjectGroup, tiledProps } from "./world/maps/tilemap";
 import { npcSpawnsForMap, type Spawn } from "./content/entities";
 
 /** Kachelgröße in Pixeln (muss zu T in scenes.ts passen). */

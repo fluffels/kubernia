@@ -7,7 +7,7 @@ import { type Spawn } from "../content/entities";
 import { type LayoutBox } from "../hud/labellayout";
 import { keys, setWorldScene } from "../runtime";
 import { expandRect, cull, FrameSampler, type Cullable } from "../hud/cull";
-import { getMapEntry, type MapId } from "../mapregistry";
+import { getMapEntry, type MapId } from "../world/maps/mapregistry";
 import { DAY_CYCLE_MS } from "../core/clock";
 import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, type SceneNpc } from "./shared";
 // Spiel-Systeme als eigene, fokussierte Module (WorldScene.ts-Split #393, analog

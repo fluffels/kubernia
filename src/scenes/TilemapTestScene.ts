@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { ASSET_MANIFEST } from "../assets-data";
-import { parseTiledMap, collisionGrid, resolveTilesets } from "../tilemap";
-import { getMapEntry } from "../mapregistry";
+import { parseTiledMap, collisionGrid, resolveTilesets } from "../world/maps/tilemap";
+import { getMapEntry } from "../world/maps/mapregistry";
 import { pixelText } from "./shared";
 
 /** #191 (Epic #57): Demonstriert die Tiled-Map-Infrastruktur anhand einer

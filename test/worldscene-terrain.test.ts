@@ -13,7 +13,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { loadMapTerrain } from "../src/scenes/worldscene/mapterrain";
-import { getMapEntry } from "../src/mapregistry";
+import { getMapEntry } from "../src/world/maps/mapregistry";
 import type { WorldSceneLike } from "../src/scenes/worldscene/types";
 
 /** Minimaler Fake einer WorldScene: loadMapTerrain liest nur scene.mapId/W/H und

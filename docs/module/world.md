@@ -25,9 +25,9 @@ Jeweils Geometrie/Kollision + Anleger/Warp + reservierte NPC-/Quest-Trigger-Stan
 
 | Modul | Inhalt |
 |---|---|
-| `src/tilemap.ts` | Tiled-`.tmj`-Grundgerüst (#191): Typen + Validierung + Kollisions-Raster + Tileset→Asset-Mapping; seit #194 auch Objekt-Layer (`objectgroup` + Custom-Properties) als Datengrundlage fürs Warp-/Tür-System (`objectGroup`/`tiledProps`). Maps + Workflow: `assets/maps/README.md`. |
-| `src/harbormap.ts` | Hafenkarte als Daten (#192): pure Boden-/Kollisions-Geometrie + Tiled-Serialisierung; Quelle für `assets/maps/harbor.tmj`, das seit #196 der einzige Ladepfad für `WorldScene` ist (`buildMap()` entfernt). |
-| `src/mapregistry.ts` | Map-Registry (#193): die EINE zentrale Liste aller Karten (Map-ID → rohes `.tmj` + Metadaten: Maße, Spawn, Tileset, Layer, Parser). `getMapEntry(id)` löst sie auf; die Loader in `scenes.ts` nutzen sie statt fester Pfade. |
+| `src/world/maps/tilemap.ts` | Tiled-`.tmj`-Grundgerüst (#191): Typen + Validierung + Kollisions-Raster + Tileset→Asset-Mapping; seit #194 auch Objekt-Layer (`objectgroup` + Custom-Properties) als Datengrundlage fürs Warp-/Tür-System (`objectGroup`/`tiledProps`). Maps + Workflow: `assets/maps/README.md`. |
+| `src/world/maps/harbormap.ts` | Hafenkarte als Daten (#192): pure Boden-/Kollisions-Geometrie + Tiled-Serialisierung; Quelle für `assets/maps/harbor.tmj`, das seit #196 der einzige Ladepfad für `WorldScene` ist (`buildMap()` entfernt). |
+| `src/world/maps/mapregistry.ts` | Map-Registry (#193): die EINE zentrale Liste aller Karten (Map-ID → rohes `.tmj` + Metadaten: Maße, Spawn, Tileset, Layer, Parser). `getMapEntry(id)` löst sie auf; die Loader in `scenes.ts` nutzen sie statt fester Pfade. |
 
 ## HUD-/Eingabe-Logik (Phaser-/DOM-frei, dünn angebunden)
 

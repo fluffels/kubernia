@@ -13,9 +13,9 @@
  * Ausführen mit:  npm test
  */
 import { describe, it, expect, expectTypeOf } from "vitest";
-import { MAP_REGISTRY, getMapEntry, type MapId } from "../src/mapregistry";
-import { harborGeometry } from "../src/harbormap";
-import { collisionGrid } from "../src/tilemap";
+import { MAP_REGISTRY, getMapEntry, type MapId } from "../src/world/maps/mapregistry";
+import { harborGeometry } from "../src/world/maps/harbormap";
+import { collisionGrid } from "../src/world/maps/tilemap";
 
 const ids = Object.keys(MAP_REGISTRY) as MapId[];
 

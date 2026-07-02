@@ -13,8 +13,8 @@
  */
 import { parseTiledMap, type TiledMap } from "./tilemap";
 import { parseHarborMap, decodeHarborGround, HARBOR_W, HARBOR_H, WARP_LAYER, NPC_LAYER } from "./harbormap";
-import harborMapRaw from "../assets/maps/harbor.tmj?raw";
-import testMapRaw from "../assets/maps/test-map.tmj?raw";
+import harborMapRaw from "../../../assets/maps/harbor.tmj?raw";
+import testMapRaw from "../../../assets/maps/test-map.tmj?raw";
 
 /** Ein Registry-Eintrag bündelt Datei + Metadaten einer Karte. */
 export interface MapEntry {

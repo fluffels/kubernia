@@ -24,7 +24,7 @@ import type { Hitbox, Door } from "../../world";
 import type { Spawn } from "../../content/entities";
 import type { LayoutBox } from "../../hud/labellayout";
 import type { Cullable, FrameSampler } from "../../hud/cull";
-import type { MapId } from "../../mapregistry";
+import type { MapId } from "../../world/maps/mapregistry";
 import type { SceneNpc } from "../shared";
 
 /* ── Laufzeit-Typen der WorldScene-Felder (#423, hierher gezogen mit #496). ── */

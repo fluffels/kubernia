@@ -30,11 +30,6 @@
       "count": 1
     }
   },
-  "src/harbormap.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "src/hud/labellayout.ts": {
     "max-depth": {
       "count": 1
@@ -181,6 +176,11 @@
     }
   },
   "src/world/regions/warehouse.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/world/maps/harbormap.ts": {
     "complexity": {
       "count": 1
     }

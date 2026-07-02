@@ -19,7 +19,7 @@ import {
   objectGroup,
   tiledProps,
   type TiledMap,
-} from "../src/tilemap";
+} from "../src/world/maps/tilemap";
 import { ASSET_MANIFEST } from "../src/assets-data";
 
 const rawTestMap = readFileSync(

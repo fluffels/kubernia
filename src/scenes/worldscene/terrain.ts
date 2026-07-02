@@ -18,7 +18,7 @@ import { DOCK as WH_DOCK, WORLD_JETTY_WH, WORLD_TO_WAREHOUSE } from "../../world
 import { DOCK as WT_DOCK, WORLD_JETTY_WT, WORLD_TO_WATCHTOWER } from "../../world/regions/watchtower";
 import { DOCK as FL_DOCK, WORLD_JETTY_FL, WORLD_TO_FLOTTE } from "../../world/regions/flotte";
 import { DOCK as WF_DOCK, WORLD_JETTY_WF, WORLD_TO_WERFT } from "../../world/regions/werft";
-import { PIER_XS } from "../../harbormap";
+import { PIER_XS } from "../../world/maps/harbormap";
 import { T, DIRT, ANVIL, TABLE, DEVICE, BOOK, WATER, FOAM, WANG } from "../shared";
 import type { WorldSceneLike } from "./types";
 

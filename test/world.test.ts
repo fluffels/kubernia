@@ -7,7 +7,7 @@
  */
 import { test, expect } from "vitest";
 import { NPC_SPAWNS, TILE, TALK_RANGE, npcTile, npcSolidIndices, footprintSolid, resolveMove, DOORS, doorAt, findDoorAt, doorsFromObjectGroup, npcsFromObjectGroup, ENTRANCES, SHIP, SHIP_DOOR, SHIP_PIER, SHIP_DECK, SHIP_KRALLE, onShipDeck, shipTile, interiorEAction, interiorEFlank, type Door, type Spawn } from "../src/world";
-import type { TiledObjectGroup } from "../src/tilemap";
+import type { TiledObjectGroup } from "../src/world/maps/tilemap";
 
 const W = 52, H = 40; // wie WorldScene.create()
 

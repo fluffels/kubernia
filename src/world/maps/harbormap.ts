@@ -22,8 +22,8 @@
  * SHIP_PIER ist Holz (-10). Die Wasser/Steg-Aufteilung im Schiffsbereich liefert
  * die pure shipTile()-Geometrie aus world.ts.
  */
-import { SHIP, SHIP_PIER, shipTile, TILE, ENTRANCES, NPC_SPAWNS, type Door, type Spawn } from "./world";
-import { WORLD_JETTY } from "./world/regions/archipel";
+import { SHIP, SHIP_PIER, shipTile, TILE, ENTRANCES, NPC_SPAWNS, type Door, type Spawn } from "../../world";
+import { WORLD_JETTY } from "../regions/archipel";
 import { parseTiledMap, tileLayer, type TiledMap } from "./tilemap";
 
 /** Maße der Hafenkarte (identisch zu WorldScene.W/H). */

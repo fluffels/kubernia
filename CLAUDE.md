@@ -155,9 +155,9 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/hud/questlog.ts`](src/hud/questlog.ts) | pure Domäne | Logbuch-Übersicht: Quest-Zustände, Nachlese (#326). |
 | [`src/hud/album.ts`](src/hud/album.ts) | pure Domäne | Sammelalbum/Glossar (#278): Befehle (Teach-Intros) + Wissen (Quiz) aus dem Content, nach Thema gruppiert, Freischalt-Ableitung aus `completedQuests`/`review` (kein neues Save-Feld). |
 | [`src/hud/labellayout.ts`](src/hud/labellayout.ts) | pure Domäne | Entzerrt überlappende In-Welt-Beschriftungen (#207). |
-| [`src/tilemap.ts`](src/tilemap.ts) | pure Domäne | Tiled-`.tmj`-Grundgerüst (Typen/Validierung/Kollision, #191). |
-| [`src/harbormap.ts`](src/harbormap.ts) | pure Domäne | Hafenkarte als Daten + Tiled-Serialisierung (#192). |
-| [`src/mapregistry.ts`](src/mapregistry.ts) | pure Domäne | Zentrale Map-Registry (ID → `.tmj` + Metadaten, #193). |
+| [`src/world/maps/tilemap.ts`](src/world/maps/tilemap.ts) | pure Domäne | Tiled-`.tmj`-Grundgerüst (Typen/Validierung/Kollision, #191). |
+| [`src/world/maps/harbormap.ts`](src/world/maps/harbormap.ts) | pure Domäne | Hafenkarte als Daten + Tiled-Serialisierung (#192). |
+| [`src/world/maps/mapregistry.ts`](src/world/maps/mapregistry.ts) | pure Domäne | Zentrale Map-Registry (ID → `.tmj` + Metadaten, #193). |
 | [`src/types.ts`](src/types.ts) | Typen | Zentrale Typen (GameState, Quest, …). → [app.md](docs/module/app.md) |
 | [`src/game.ts`](src/game.ts) | Anwendung | `Game`-Fassade/Barrel (#356-Muster): State-Felder + Spread der `src/game/*`-Bündel. → [app.md](docs/module/app.md) |
 | [`src/game/shared.ts`](src/game/shared.ts) | Anwendung | Geteilte Bausteine: `part`/`GameSelf`, `today`, Quest-ID↔Index-Brücke, `makeDefaultState`, Freischalt-Konstanten. |

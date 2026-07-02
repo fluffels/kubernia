@@ -37,11 +37,11 @@ Default (Umschalt-Pfad); abgelöst wird sie erst in
 ## Wer lädt das?
 
 - Reine, Phaser-freie Logik (Typen, Validierung, Kollisions-Raster,
-  Tileset→Asset-Mapping): [`src/tilemap.ts`](../../src/tilemap.ts), getestet in
+  Tileset→Asset-Mapping): [`src/world/maps/tilemap.ts`](../../src/world/maps/tilemap.ts), getestet in
   [`test/tilemap.test.ts`](../../test/tilemap.test.ts) (parst u. a. das echte
   `test-map.tmj` und prüft die Fehlerfälle).
 - Hafenkarte-Geometrie + Tiled-Serialisierung (Phaser-frei):
-  [`src/harbormap.ts`](../../src/harbormap.ts), getestet in
+  [`src/world/maps/harbormap.ts`](../../src/world/maps/harbormap.ts), getestet in
   [`test/harbormap.test.ts`](../../test/harbormap.test.ts). Dieselbe Quelle
   erzeugt `harbor.tmj` (Generator, s. u.) und decodiert es im Datenpfad zurück.
 - Phaser-Rendering der Loader-Demo (`make.tilemap` / `addTilesetImage` /
@@ -67,7 +67,7 @@ Default (Umschalt-Pfad); abgelöst wird sie erst in
 ## Generieren / aktualisieren
 
 `harbor.tmj` ist ein **generiertes Artefakt** aus `harborTiledMap()` in
-`src/harbormap.ts`. Neu erzeugen nach einer Geometrie-Änderung:
+`src/world/maps/harbormap.ts`. Neu erzeugen nach einer Geometrie-Änderung:
 
 ```
 GEN_HARBOR=1 npx vitest run test/harbormap.test.ts

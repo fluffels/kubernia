@@ -23,7 +23,7 @@ import { WORLD_TO_WAREHOUSE, WORLD_RETURN_WH, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRI
 import { WORLD_TO_WATCHTOWER, WORLD_RETURN_WT, WATCHTOWER_TO_WORLD, WATCHTOWER_ARRIVAL } from "./world/regions/watchtower";
 import { WORLD_TO_FLOTTE, WORLD_RETURN_FL, FLOTTE_TO_WORLD, FLOTTE_ARRIVAL } from "./world/regions/flotte";
 import { WORLD_TO_WERFT, WORLD_RETURN_WF, WERFT_TO_WORLD, WERFT_ARRIVAL } from "./world/regions/werft";
-import type { MapId } from "./mapregistry";
+import type { MapId } from "./world/maps/mapregistry";
 
 export { warpAt, type Warp };
 

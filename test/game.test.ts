@@ -11,7 +11,7 @@ import { stubWindowLocalStorage, loadGameStack } from "./support/browser-env";
 import { KQContent } from "../src/content";
 import { NPC_SPAWNS, TILE, TALK_RANGE } from "../src/world";
 import { setWorldScene, setPayoutSink } from "../src/runtime";
-import { MAP_REGISTRY } from "../src/mapregistry";
+import { MAP_REGISTRY } from "../src/world/maps/mapregistry";
 import { DAY_CYCLE_MS } from "../src/core/clock";
 import { coins } from "../src/core/coins";
 
