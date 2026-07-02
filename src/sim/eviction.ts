@@ -28,6 +28,21 @@ export function depEphemeralUsed(d: Deployment): number {
   return (d.emptyDir?.usedMi || 0) + (d.ephemeralUsedMi || 0);
 }
 
+/** Der HÖCHSTE flüchtige Speicher, den die Pods eines Deployments je belegen (Mi, #485). Im
+ *  Dauerbetrieb ist das `depEphemeralUsed`; läuft ein `initContainer`, kann der Peak WÄHREND der
+ *  Vorbereitung höher liegen: er schreibt `fillsMi` ins emptyDir, und bei Doppelablage
+ *  (`doubleStage`: erst Writable-Layer, dann Kopie ins emptyDir) liegt beides kurz gleichzeitig
+ *  auf der Disk (~2× `fillsMi`). Genau dieser Peak – nicht die Dauer-Belegung – entscheidet über
+ *  die Pod-Limit-Eviction: ein Pod, der sein ephemeral-storage-Limit nur im Init-Peak reißt, wird
+ *  evictet, obwohl der Dauerbetrieb darunter läge. Ohne initContainer ist der Peak == Dauerwert
+ *  (Alt-Szenarien unberührt). */
+export function depEphemeralPeak(d: Deployment): number {
+  const steady = depEphemeralUsed(d);
+  if (!d.initContainer) return steady;
+  const initPeak = d.initContainer.fillsMi * (d.initContainer.doubleStage ? 2 : 1);
+  return Math.max(steady, initPeak);
+}
+
 /** Auf welchem Knoten die Pods eines Deployments laufen: ein gesetzter `node`-Pin gewinnt,
  *  sonst deterministisch round-robin über die Worker (kein Zufall – per Deployment-Index).
  *  Ohne Worker fällt es auf den ersten Knoten zurück. */
@@ -56,12 +71,15 @@ export function evaluateEviction(host: EvictionHost) {
   for (const n of host.nodes) n.diskPressure = false;
   for (const d of host.deployments) d.evicted = null;
 
-  // (1) Eigenes ephemeral-storage-Limit gesprengt → Pod evicted.
+  // (1) Eigenes ephemeral-storage-Limit gesprengt → Pod evicted. Maßgeblich ist der PEAK (#485):
+  // ein initContainer kann während der Vorbereitung mehr belegen als der Dauerbetrieb – reißt der
+  // Peak das Limit, evictet der kubelet, obwohl der Dauerwert darunter läge. Ohne initContainer ist
+  // der Peak == Dauerwert (Alt-Verhalten unverändert).
   for (const d of host.deployments) {
     if (d.ephemeralLimit === undefined) continue;
-    const used = depEphemeralUsed(d);
-    if (used > d.ephemeralLimit) {
-      d.evicted = { reason: "Pod ephemeral local storage usage exceeds the total limit of containers " + d.ephemeralLimit + "Mi (verbraucht " + used + "Mi)." };
+    const peak = depEphemeralPeak(d);
+    if (peak > d.ephemeralLimit) {
+      d.evicted = { reason: "Pod ephemeral local storage usage exceeds the total limit of containers " + d.ephemeralLimit + "Mi (verbraucht " + peak + "Mi)." };
     }
   }
 

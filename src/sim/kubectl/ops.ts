@@ -161,7 +161,9 @@ function applyEphemeralLimit(host: KubectlHost, dep: Deployment, spec: string | 
   if (newEph === null) return ['error: invalid resource quantity "' + spec + '"', "Schreib das Limit z.B. als '512Mi' oder '1Gi'."];
   const wasEvicted = !!dep.evicted;
   dep.ephemeralLimit = newEph;
-  if (wasEvicted && host._depEphemeralUsed(dep) <= newEph) {
+  // Maßgeblich ist der PEAK (#485): reicht das Limit auch für den (evtl. doppelten) initContainer-Peak,
+  // läuft der Pod wieder – sonst würde er beim nächsten Init erneut evictet.
+  if (wasEvicted && host._depEphemeralPeak(dep) <= newEph) {
     notes.push("\n💡 Genug ephemeral-storage! Der Pod wird nicht mehr evictet – prüfe mit 'kubectl get pods'.");
   }
   return null;

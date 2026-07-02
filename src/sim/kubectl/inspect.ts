@@ -437,8 +437,28 @@ function podContainerBlock(host: KubectlHost, pod: PodInstance, dep: Deployment,
       "    Limits:",
       "      ephemeral-storage:  " + dep.ephemeralLimit + "Mi",
       "    ephemeral-storage verbraucht: " + host._depEphemeralUsed(dep) + "Mi",
+      // Init-Peak (#485): reißt ein Pod sein Limit nur WÄHREND des initContainers, ist genau der Peak
+      // (nicht die Dauer-Belegung) der Eviction-Grund – darum hier gesondert sichtbar.
+      ...(dep.initContainer ? ["    ephemeral-storage Spitze (initContainer): " + host._depEphemeralPeak(dep) + "Mi"] : []),
     ] : []),
     "    Restart Count: " + (st.restarts || pod.restarts),
+  ];
+}
+
+// Init-Containers-Abschnitt (#485): zeigt den Vorbereitungs-Container, was er ins emptyDir füllt und
+// – bei Doppelablage – dass sein Peak kurzzeitig doppelt so hoch ist wie die Dauer-Belegung.
+function podInitContainerBlock(host: KubectlHost, dep: Deployment): string[] {
+  const ic = dep.initContainer;
+  if (!ic) return [];
+  const peak = ic.fillsMi * (ic.doubleStage ? 2 : 1);
+  return [
+    "Init Containers:",
+    "  vorbereiter:",
+    "    State:    Terminated (Reason: Completed – lief vor den Hauptcontainern)",
+    "    Prepares: " + ic.fillsMi + "Mi in das emptyDir",
+    "    Staging:  " + (ic.doubleStage
+      ? "erst in den Writable-Layer entpackt, dann ins emptyDir kopiert → Peak " + peak + "Mi (doppelt)"
+      : "direkt ins emptyDir entpackt → Peak " + peak + "Mi"),
   ];
 }
 
@@ -476,6 +496,7 @@ function describePod(host: KubectlHost, t: string[]): string {
     // ServiceAccount-Identität des Pods (#132): die per spec.serviceAccountName gesetzte SA,
     // sonst die default-SA des Namespaces – genau wie in echtem `kubectl describe pod`.
     "Service Account: " + (dep.serviceAccountName || "default"),
+    ...podInitContainerBlock(host, dep),
     "Containers:",
     ...podContainerBlock(host, pod, dep, st),
     ...podVolumeBlock(dep),

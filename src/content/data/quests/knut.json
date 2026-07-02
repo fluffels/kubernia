@@ -706,6 +706,268 @@
     ]
   },
   {
+    "id": "storage-init",
+    "title": "Der Vorbereiter: initContainer & der Peak beim Befüllen",
+    "giver": "knut",
+    "topic": "storage",
+    "rewardXp": 60,
+    "rewardCoins": 45,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "knut",
+        "lines": [
+          "Zurück am Kai, Kapitän. Du kennst das <code>emptyDir</code> – den flüchtigen Schmierzettel. Heute zeige ich dir, <b>wer</b> ihn oft füllt, bevor die eigentliche Arbeit beginnt: der <b>initContainer</b>.",
+          "Ein <b>initContainer</b> läuft <b>vor</b> den Hauptcontainern und ist erst fertig, dann starten sie. Typische Aufgabe: er lädt oder entpackt Daten in ein gemeinsames <code>emptyDir</code>, damit die App beim Start alles vorfindet – Geodaten, ein Modell, eine Config.",
+          "Klingt harmlos. Aber flüchtiger Speicher hat eine Tücke, die man erst beim Befüllen sieht: der <b>Spitzenverbrauch (Peak)</b> liegt oft <b>während der Vorbereitung</b>, nicht im Dauerbetrieb. Schau dir die Karte an, die ich hingelegt habe."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Karte lesen",
+        "scenario": {
+          "files": {
+            "vorbereiter.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: vorbereiter\nspec:\n  replicas: 1\n  template:\n    spec:\n      initContainers:\n        - name: lade-geodaten          # laeuft ZUERST, fuellt das emptyDir vor\n          image: busybox\n          command: [\"sh\",\"-c\",\"tar xf /pakete/kacheln.tar -C /cache\"]  # direkt ins emptyDir\n          volumeMounts:\n            - name: scratch\n              mountPath: /cache\n      containers:\n        - name: app\n          image: nginx\n          volumeMounts:\n            - name: scratch\n              mountPath: /cache       # die App findet die vorbereiteten Daten hier\n      volumes:\n        - name: scratch\n          emptyDir: {}                # gemeinsames, fluechtiges Verzeichnis"
+          },
+          "applyEffects": {
+            "vorbereiter.yaml": {
+              "deployment": {
+                "name": "vorbereiter",
+                "image": "nginx",
+                "replicas": 1,
+                "emptyDir": { "data": "importierte-kacheln", "usedMi": 200 },
+                "initContainer": { "fillsMi": 200 }
+              }
+            }
+          }
+        },
+        "tasks": [
+          {
+            "id": "t-init-ls",
+            "text": "Schau mit <code>ls</code>, was am Kai bereitliegt.",
+            "accept": [
+              "^ls$"
+            ],
+            "solution": "ls",
+            "hint": "Zwei Buchstaben."
+          },
+          {
+            "id": "t-init-cat",
+            "text": "Lies <code>cat vorbereiter.yaml</code>. Oben unter <code>initContainers</code> steht der Vorbereiter – er entpackt <code>/pakete/kacheln.tar</code> <b>direkt</b> ins gemeinsame <code>emptyDir</code> (<code>/cache</code>). Erst danach startet die App.",
+            "accept": [
+              "^cat\\s+vorbereiter\\.yaml$"
+            ],
+            "solution": "cat vorbereiter.yaml",
+            "hint": "cat <datei>"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Vorbereiter ausrollen",
+        "cmd": {
+          "id": "t-init-apply",
+          "intro": "🆕 Einen Pod mit initContainer rollst du aus wie jeden anderen – <code>kubectl apply</code>. Kubernetes fährt erst den initContainer hoch, lässt ihn das <code>emptyDir</code> füllen und startet dann die Hauptcontainer.",
+          "text": "Rolle ihn aus: <code>kubectl apply --filename vorbereiter.yaml</code>. Stell dir vor, der initContainer hat gerade 200Mi Kacheln ins <code>/cache</code> entpackt.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+vorbereiter\\.yaml$"
+          ],
+          "check": {"some":"deployments","where":{"name":"vorbereiter","initContainer":{"truthy":true}}},
+          "solution": "kubectl apply --filename vorbereiter.yaml",
+          "hint": "kubectl apply --filename <datei>"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Den Vorbereiter ansehen",
+        "tasks": [
+          {
+            "id": "t-init-getpods",
+            "text": "Sieh den Pod: <code>kubectl get pods</code> – <code>vorbereiter-…</code> läuft (<code>Running</code>, READY <code>1/1</code>). Der initContainer ist längst fertig.",
+            "accept": [
+              "^kubectl\\s+get\\s+(pods|pod|po)$"
+            ],
+            "solution": "kubectl get pods",
+            "hint": "kubectl get pods"
+          },
+          {
+            "id": "t-init-describe",
+            "text": "Schau hinein: <code>kubectl describe pod &lt;vorbereiter-pod&gt;</code> (Name aus der Liste). Der Abschnitt <code>Init Containers:</code> zeigt <code>vorbereiter</code> als <b>Terminated (Completed)</b> und <code>Prepares: 200Mi in das emptyDir</code> – er hat vorgearbeitet und sich beendet.",
+            "accept": [
+              "^kubectl\\s+describe\\s+pod\\s+vorbereiter\\S*$"
+            ],
+            "check": {"some":"deployments","where":{"name":"vorbereiter","initContainer":{"truthy":true}}},
+            "solution": "kubectl describe pod <vorbereiter-pod>",
+            "hint": "Erst kubectl get pods, dann kubectl describe pod <name> mit dem vorbereiter-Pod."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "knut",
+        "lines": [
+          "Jetzt die Tücke. Beim Vorbereiter oben war alles gut – er entpackt <b>direkt</b> ins <code>emptyDir</code>. Aber viele init-Skripte machen es anders: sie entpacken erst in den <b>eigenen Writable-Layer</b> (z.B. <code>/tmp</code>) und <b>kopieren</b> das Ergebnis dann ins <code>emptyDir</code>.",
+          "Dann liegen die Daten kurz <b>doppelt</b> auf der Disk: einmal in <code>/tmp</code>, einmal in <code>/cache</code>. Der Peak ist also fast <b>2×</b> so hoch wie das, was am Ende übrig bleibt – und dieser Peak zählt gegen dein <code>ephemeral-storage</code>-Limit.",
+          "Ich lege dir zwei Frachtbücher hin: beide füllen am Ende 300Mi, beide haben dasselbe Limit von 512Mi. Nur der Weg dorthin ist anders. Schau sie dir an."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Zwei Frachtbücher lesen",
+        "scenario": {
+          "files": {
+            "doppelt.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: doppelt\nspec:\n  replicas: 1\n  template:\n    spec:\n      initContainers:\n        - name: entpacker\n          image: busybox\n          # DOPPELABLAGE: erst nach /tmp entpacken, DANN nach /cache kopieren -> Peak ~2x\n          command: [\"sh\",\"-c\",\"tar xf paket.tar -C /tmp && cp -r /tmp/* /cache\"]\n          volumeMounts:\n            - name: scratch\n              mountPath: /cache\n      containers:\n        - name: app\n          image: busybox\n          resources:\n            limits:\n              ephemeral-storage: 512Mi   # reicht fuer 300Mi Dauer, NICHT fuer den 600Mi-Peak\n          volumeMounts:\n            - name: scratch\n              mountPath: /cache\n      volumes:\n        - name: scratch\n          emptyDir: {}",
+            "direkt.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: direkt\nspec:\n  replicas: 1\n  template:\n    spec:\n      initContainers:\n        - name: entpacker\n          image: busybox\n          # DIREKT: gleich ins emptyDir entpacken -> kein zweiter Platzbedarf, Peak = 300Mi\n          command: [\"sh\",\"-c\",\"tar xf paket.tar -C /cache\"]\n          volumeMounts:\n            - name: scratch\n              mountPath: /cache\n      containers:\n        - name: app\n          image: busybox\n          resources:\n            limits:\n              ephemeral-storage: 512Mi   # gleiches Limit wie doppelt.yaml\n          volumeMounts:\n            - name: scratch\n              mountPath: /cache\n      volumes:\n        - name: scratch\n          emptyDir: {}"
+          },
+          "applyEffects": {
+            "doppelt.yaml": {
+              "deployment": {
+                "name": "doppelt",
+                "image": "busybox",
+                "replicas": 1,
+                "ephemeralLimit": 512,
+                "emptyDir": { "data": "geodaten", "usedMi": 300 },
+                "initContainer": { "fillsMi": 300, "doubleStage": true }
+              }
+            },
+            "direkt.yaml": {
+              "deployment": {
+                "name": "direkt",
+                "image": "busybox",
+                "replicas": 1,
+                "ephemeralLimit": 512,
+                "emptyDir": { "data": "geodaten", "usedMi": 300 },
+                "initContainer": { "fillsMi": 300, "doubleStage": false }
+              }
+            }
+          }
+        },
+        "tasks": [
+          {
+            "id": "t-init-cat-doppelt",
+            "text": "Lies <code>cat doppelt.yaml</code> – der Entpacker geht über <code>/tmp</code> und <b>kopiert</b> dann ins <code>/cache</code>: die Daten liegen kurz doppelt (Peak ~600Mi).",
+            "accept": [
+              "^cat\\s+doppelt\\.yaml$"
+            ],
+            "solution": "cat doppelt.yaml",
+            "hint": "cat <datei>"
+          },
+          {
+            "id": "t-init-cat-direkt",
+            "text": "Lies <code>cat direkt.yaml</code> – hier entpackt der Entpacker <b>direkt</b> ins <code>/cache</code>: kein zweiter Platz, Peak nur 300Mi. Gleiches Limit (512Mi), gleiches Endergebnis.",
+            "accept": [
+              "^cat\\s+direkt\\.yaml$"
+            ],
+            "solution": "cat direkt.yaml",
+            "hint": "cat <datei>"
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Die Doppelablage sprengt das Limit",
+        "cmd": {
+          "id": "t-init-apply-doppelt",
+          "intro": "🆕 Erst das doppelt ablegende Buch. Sein Endstand (300Mi) läge locker unter dem 512Mi-Limit – aber der <b>Init-Peak</b> ist ~600Mi (kurz doppelt auf der Disk). Genau diesen Peak prüft der kubelet: er evictet den Pod <b>während</b> der Vorbereitung.",
+          "text": "Rolle es aus: <code>kubectl apply --filename doppelt.yaml</code> – und schau gleich, was mit dem Pod passiert.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+doppelt\\.yaml$"
+          ],
+          "check": {"some":"deployments","where":{"name":"doppelt","initContainer":{"match":{"doubleStage":true}}}},
+          "solution": "kubectl apply --filename doppelt.yaml",
+          "hint": "kubectl apply --filename <datei>"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Evicted trotz kleinem Endstand",
+        "tasks": [
+          {
+            "id": "t-init-getpods-evict",
+            "text": "Sieh die Pods: <code>kubectl get pods</code>. <code>doppelt</code> ist <b>Evicted</b> (0/1) – obwohl am Ende nur 300Mi übrig blieben. Der Peak beim Befüllen war zu hoch.",
+            "accept": [
+              "^kubectl\\s+get\\s+(pods|pod|po)$"
+            ],
+            "check": {"some":"deployments","where":{"name":"doppelt","evicted":{"truthy":true}}},
+            "solution": "kubectl get pods",
+            "hint": "kubectl get pods"
+          },
+          {
+            "id": "t-init-describe-evict",
+            "text": "Warum genau? <code>kubectl describe pod &lt;doppelt-pod&gt;</code>. Unter <code>Init Containers</code> steht die <b>Spitze (initContainer): 600Mi</b>, und der Evicted-Grund nennt <code>verbraucht 600Mi</code> gegen das 512Mi-Limit. Der Peak, nicht der Endstand, war schuld.",
+            "accept": [
+              "^kubectl\\s+describe\\s+pod\\s+doppelt\\S*$"
+            ],
+            "check": {"some":"deployments","where":{"name":"doppelt","evicted":{"truthy":true}}},
+            "solution": "kubectl describe pod <doppelt-pod>",
+            "hint": "kubectl describe pod <name> – Name aus get pods."
+          }
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Direkt ins emptyDir halbiert den Peak",
+        "cmd": {
+          "id": "t-init-apply-direkt",
+          "intro": "🆕 Jetzt das direkt ablegende Buch – gleiches Limit, gleiches Endergebnis, aber es entpackt <b>direkt</b> ins <code>emptyDir</code>. Kein zweiter Platzbedarf: der Peak ist nur 300Mi und passt bequem unter 512Mi.",
+          "text": "Rolle es aus: <code>kubectl apply --filename direkt.yaml</code> – und vergleich gleich mit dem doppelt ablegenden.",
+          "accept": [
+            "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+direkt\\.yaml$"
+          ],
+          "check": {"some":"deployments","where":{"name":"direkt","initContainer":{"match":{"doubleStage":false}}}},
+          "solution": "kubectl apply --filename direkt.yaml",
+          "hint": "kubectl apply --filename <datei>"
+        }
+      },
+      {
+        "type": "terminal",
+        "brief": "Der Vergleich",
+        "tasks": [
+          {
+            "id": "t-init-getpods-both",
+            "text": "Und der Vergleich: <code>kubectl get pods</code>. <code>direkt</code> läuft (<code>Running</code>), <code>doppelt</code> ist <b>Evicted</b>. Gleiches Limit, gleiches Endergebnis – nur der Weg beim Befüllen entschied.",
+            "accept": [
+              "^kubectl\\s+get\\s+(pods|pod|po)$"
+            ],
+            "check": {"all":[{"some":"deployments","where":{"name":"direkt","evicted":{"truthy":false}}},{"some":"deployments","where":{"name":"doppelt","evicted":{"truthy":true}}}]},
+            "solution": "kubectl get pods",
+            "hint": "kubectl get pods"
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "knut",
+        "q": "Zwei Pods, gleiches Endergebnis (300Mi) und gleiches Limit (512Mi) – einer läuft, einer wurde evicted. Warum?",
+        "options": [
+          {
+            "t": "Der evictete Pod entpackt in seinem initContainer erst woanders und kopiert dann ins emptyDir – dabei liegen die Daten kurz doppelt (~600Mi Peak), und dieser Peak sprengt das Limit. Direkt ins emptyDir entpacken halbiert den Peak.",
+            "ok": true,
+            "reply": "Genau. Nicht der Endstand zählt fürs Limit, sondern der <b>Peak</b> beim Befüllen – und der liegt bei einem initContainer meist während der Vorbereitung. Doppelablage verdoppelt ihn; direkt ins Ziel entpacken vermeidet das. 🗄️"
+          },
+          {
+            "t": "Der evictete Pod hatte einfach zu wenig CPU – mit mehr CPU hätte der initContainer schneller kopiert und wäre nicht evicted worden.",
+            "ok": false,
+            "reply": "Nein. Es ging um <b>Disk</b> (ephemeral storage), nicht um CPU. Tempo ändert am Platzbedarf nichts – der Peak beim Doppelt-Ablegen bleibt derselbe."
+          },
+          {
+            "t": "initContainer zählen gar nicht in die ephemeral-storage-Bilanz; der Pod wurde aus einem anderen Grund evicted.",
+            "ok": false,
+            "reply": "Doch, sie zählen – und zwar mit ihrem Spitzenverbrauch. Genau während der Vorbereitung lag der Pod über seinem Limit, darum flog er raus."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "knut",
+        "lines": [
+          "Sauber verglichen, Kapitän. Merk dir zwei Dinge über den initContainer: er läuft <b>vor</b> der App und füllt oft das <code>emptyDir</code> – und sein <b>Peak</b> beim Befüllen zählt gegen dein <code>ephemeral-storage</code>-Limit, nicht der Endstand.",
+          "Und die Faustregel gegen die Doppelablage: <b>direkt ins Ziel entpacken</b> statt erst woanders und dann kopieren. Halber Peak, gleiches Ergebnis. Gute Wacht am Kai! 🪵"
+        ]
+      }
+    ]
+  },
+  {
     "id": "storage-backup-restore",
     "title": "Backup & Restore: Daten sichern und zurückholen",
     "giver": "knut",
