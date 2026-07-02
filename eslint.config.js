@@ -18,8 +18,15 @@ import globals from "globals";
 export default tseslint.config(
   // 1) Was der Linter NIE anfasst: Build-Artefakte. node_modules ignoriert ESLint 9
   //    selbst – die Dist-Ordner aber nicht, also hier explizit raus.
+  //    Ebenso `.claude/worktrees/**` (#541): dort liegen vollständige Parallel-Checkouts
+  //    anderer Tickets. Ohne diesen Ausschluss scannt ein `eslint .` im Haupt-Checkout
+  //    JEDEN Worktree mit – und die #502-Komplexitäts-Suppressions (eslint-suppressions.json,
+  //    repo-relative Pfade) greifen dort NICHT, sodass vorbestehende God-Functions als
+  //    frische Fehler anschlagen und JEDEN main-Push blockieren, solange irgendein
+  //    halbfertiger Worktree existiert. Jeder Worktree wird ohnehin über seinen eigenen
+  //    `eslint`-Lauf (aus seiner Wurzel) geprüft.
   {
-    ignores: ["dist/", "dist-offline/", "dist-devpanel/"],
+    ignores: ["dist/", "dist-offline/", "dist-devpanel/", ".claude/worktrees/"],
   },
 
   // 2) Reine JS-Dateien (diese Config, scripts/*.mjs): nur die JS-Basisregeln,
