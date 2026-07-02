@@ -128,6 +128,7 @@ export const GLYPHS: Record<string, string[]> = {
   "·": [".....", ".....", ".....", ".##..", ".##..", ".....", "....."], // · middot
   "↓": ["..#..", "..#..", "..#..", "..#..", "#.#.#", ".###.", "..#.."], // ↓ Pfeil
   "⚠": ["..#..", "..#..", ".#.#.", ".#.#.", "#.#.#", "#...#", "#####"], // ⚠ Warndreieck
+  "⏸": [".#.#.", ".#.#.", ".#.#.", ".#.#.", ".#.#.", ".#.#.", ".#.#."], // ⏸ Pause (zwei Balken, farbunabh. „gestoppt", #491)
 };
 
 /** Reihenfolge der Glyphen im Atlas (eine Zeile). Muss zur Zeichnung in scenes.ts passen. */

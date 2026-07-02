@@ -21,7 +21,7 @@ describe("pixelfont – Glyphen-Daten", () => {
       "abcdefghijklmnopqrstuvwxyz" +
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
       "0123456789" +
-      " -/().,:!#&+'·–↓⚠" +
+      " -/().,:!#&+'·–↓⚠⏸" +
       "ÄÖÜäöüß";
     for (const ch of needed) {
       expect(hasGlyph(ch), `Glyph fehlt für '${ch}'`).toBe(true);
@@ -82,6 +82,12 @@ describe("pixelfont – sanitize", () => {
   it("behält ⚠ und ↓ (echte Glyphen, kein Emoji-Drop)", () => {
     expect(sanitize("api ⚠ CrashLoopBackOff")).toBe("api ⚠ CrashLoopBackOff");
     expect(sanitize("E – an Deck · ↓ durch die Luke")).toBe("E – an Deck · ↓ durch die Luke");
+  });
+
+  it("behält das ⏸ des gestoppten Docker-Fasses (echte Glyphe, kein ?-Fallback, #491)", () => {
+    // Ohne eigene Glyphe würde ⏸ zum sichtbaren Fallback → „? web" statt „⏸ web".
+    expect(sanitize("⏸ web")).toBe("⏸ web");
+    expect(sanitize("⏸ web")).not.toContain(FALLBACK_CHAR);
   });
 
   it("ersetzt sonstige unbekannte Zeichen durch den sichtbaren Fallback", () => {

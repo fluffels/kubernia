@@ -427,6 +427,13 @@ button:focus-visible, select:focus-visible {
 }
 .quiz-options button.correct .qnum { color: var(--good); }
 .quiz-options button.wrong .qnum { color: var(--bad); }
+/* #491: farbunabhängiger Marker (Häkchen/Kreuz) zusätzlich zur Grün/Rot-Färbung,
+   damit Rot-Grün-Sehschwäche das Quiz-/Dialog-Feedback nicht über die Farbe allein
+   erkennen muss. Der Symbol-Shape (✓ vs ✗) trägt die Info, die Farbe verstärkt nur. */
+.quiz-options button.correct::after,
+.dlg-choices button.correct::after { content: " ✓"; font-weight: bold; color: var(--good); }
+.quiz-options button.wrong::after,
+.dlg-choices button.wrong::after { content: " ✗"; font-weight: bold; color: var(--bad); }
 .quiz-explain {
   margin-top: 12px;
   padding: 10px 12px;

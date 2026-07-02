@@ -154,7 +154,9 @@ export function rebuildDynamic(scene: WorldSceneLike) {
     const bx = (4 + (i % 5) * 2) * T + 8, by = (26 + Math.floor(i / 5) * 0.0) * T + 8;
     const barrel = scene.add.image(bx, by, "barrel").setScale(0.5).setDepth(by + 8).setAlpha(c.running ? 1 : 0.45);
     scene.dynGroup.add(barrel);
-    mkTag(bx, by - 9 - (i % 2) * 7, c.name, c.running ? 0x6fe09a : 0x8a98a8, bx, by, true);
+    // #491: „gestoppt" farbunabhängig markieren – zusätzlich zur Tag-Farbe (grün→grau)
+    // ein Pause-Symbol vor dem Namen, damit Rot-Grün-Sehschwäche den Zustand nicht verliert.
+    mkTag(bx, by - 9 - (i % 2) * 7, (c.running ? "" : "⏸ ") + c.name, c.running ? 0x6fe09a : 0x8a98a8, bx, by, true);
   });
   // Helm-Flaggen an der Werft
   Game.sim.releases.forEach((r, i) => {
