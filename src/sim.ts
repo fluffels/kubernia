@@ -105,6 +105,11 @@ function snapshotSimple(state: object): Pick<Required<Scenario>, SimpleResourceK
     // Die Cluster-Zustands-Felder erfüllen den `ClusterState`-Vertrag (sim/state.ts, #372).
     scenario: Scenario;
     clock!: number;
+    // Cluster-Revision (#523): monoton wachsender Laufzeit-Dirty-Marker – bumpt bei
+    // jeder exec-Transaktion und jeder Nicht-exec-Mutation via touch() (Sturm/Piraten).
+    // clustersync.ts synchronisiert nur bei geändertem `rev` statt jeden Frame. Flüchtig,
+    // NICHT serialisiert (leitet sich aus dem Zustand ab).
+    rev = 0;
     docker!: { pulled: string[]; containers: Container[] };
     nodes!: ClusterNode[];
     deployments!: Deployment[];
@@ -159,6 +164,7 @@ function snapshotSimple(state: object): Pick<Required<Scenario>, SimpleResourceK
     reset() {
       const sc = this.scenario;
       this.clock = 0; // jede Eingabe = ~20s Spielzeit, für AGE-Spalten
+      this.rev++;     // #523: neuer/geladener Stand → Präsentation muss voll neu synchronisieren
 
       this.docker = {
         pulled: (sc.dockerImages || []).slice(),
@@ -690,6 +696,8 @@ function snapshotSimple(state: object): Pick<Required<Scenario>, SimpleResourceK
      *  listet `help` wie bisher alle Befehle. */
     exec(line: string, available?: Set<string>): ExecResult {
       this.clock++;
+      this.rev++;   // #523: jede Befehls-Transaktion = potenzieller Zustandswechsel (auch
+                    // Lesebefehle – harmlos, löst nur EINEN günstigen Resync aus statt pro Frame).
       // Argo CD reconciliert vor jeder Eingabe: Self-Heal-Apps drehen zwischenzeitlichen
       // Drift (z.B. ein `kubectl scale` aus dem letzten Befehl) von selbst auf den Git-Soll zurück.
       reconcileAutoSync(this);
@@ -755,6 +763,11 @@ function snapshotSimple(state: object): Pick<Required<Scenario>, SimpleResourceK
       this.lastError = true;
       return msg + (tip ? "\n💡 " + tip : "");
     }
+
+    /** #523: Cluster-Revision extern erhöhen – für Mutationen abseits von exec()
+     *  (Zufalls-Gefahren in worldscene/events.ts: Sturm setzt `broken`, Piraten klauen
+     *  Pods), damit der Cluster→Welt-Sync sie sieht und die Kisten färbt/entfernt. */
+    touch() { this.rev++; }
 
     // Eingabe-Parsing (Vorschläge/Flags) liegt seit #499 als pure Funktionen in ./sim/util.ts
     // (editDistance/suggest/flagValue/multiFlag) – sie brauchen keinen Cluster-Zustand, hielten

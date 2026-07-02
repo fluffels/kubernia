@@ -54,6 +54,7 @@ export function tryStartStorm(scene: WorldSceneLike) {
     dep.broken = { type: "crashloop", needsSecret: "sturm-schluessel-" + Phaser.Math.Between(10, 99) };
     hintCmd = "Diagnose: <code>kubectl get pods</code> → <code>kubectl logs &lt;pod&gt;</code>. Dann Ursache beheben + <code>rollout restart</code>!";
   }
+  Game.sim.touch();   // #523: direkte Cluster-Mutation (broken/image) → Cluster-Sync anstoßen (Kisten rot färben)
   Game.save();
 
   scene.rain.start();
@@ -98,6 +99,7 @@ export function tryStartPirate(scene: WorldSceneLike) {
   const steal = Math.max(1, Math.floor(dep.replicas / 2));
   dep.replicas -= steal;
   dep.pods.splice(0, steal);
+  Game.sim.touch();   // #523: direkte Cluster-Mutation (geklaute Pods) → Cluster-Sync anstoßen (Kisten entfernen)
   Game.save();
 
   // Piratenboot segelt heran

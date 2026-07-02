@@ -55,11 +55,6 @@
       "count": 1
     }
   },
-  "src/scenes/worldscene/clustersync.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "src/sim.ts": {
     "complexity": {
       "count": 3
