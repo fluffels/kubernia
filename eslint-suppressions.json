@@ -1,0 +1,188 @@
+{
+  "src/archipel.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/content/check-dsl.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/content/validate.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-depth": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/devpanel.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/game/save.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/harbormap.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/labellayout.ts": {
+    "max-depth": {
+      "count": 1
+    }
+  },
+  "src/lighthouse.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/main.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/scenes/InteriorScene.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/scenes/RegionScene.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/scenes/WorldScene.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/scenes/shared.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/scenes/worldscene/clustersync.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/sim.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/sim/argocd.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/sim/docker.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/sim/git.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/sim/helm.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/sim/invariants.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/sim/kubectl.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/sim/kubectl/inspect.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "src/sim/kubectl/lifecycle.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/sim/kubectl/ops.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/sim/net.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/sim/s3.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/sim/terraform.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/store.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/ui/overlay.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/ui/questlog.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/ui/quiz.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/ui/radio.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/warehouse.ts": {
+    "complexity": {
+      "count": 1
+    }
+  }
+}

@@ -77,7 +77,41 @@ export default tseslint.config(
     },
   },
 
-  // 4) Determinismus-Wächter (#492): In der puren Domäne (src/sim/**) und im
+  // 4) Komplexitäts-/God-Function-Wächter (#502) – NUR Produktionscode (src/**).
+  //    Der Dateigröße-Deckel (scripts/check-size.mjs, 800 LOC/Datei) misst nur
+  //    physische Zeilen JE DATEI; er sieht die eigentliche God-Function nicht: eine
+  //    400-Zeilen-Datei mit einer 300-Zeilen-verschachtelten Funktion, und er
+  //    provoziert Zeilen-Zusammenziehen statt kohäsivem Schnitt. Diese drei Regeln
+  //    ergänzen genau die Dimensionen, die der Zeilen-Deckel nicht misst:
+  //      • complexity            – zyklomatische Komplexität je Funktion (Verzweigungslast)
+  //      • max-lines-per-function – Funktionslänge (der per-Funktion-Deckel neben dem per-Datei-Deckel)
+  //      • max-depth             – Verschachtelungstiefe (der „300-Zeilen-nested"-Kern)
+  //    Bewusst NICHT auf test/** angewandt: Test-Callbacks (describe/it) sind
+  //    legitim lang und keine God-Functions – die Regeln zielen auf die Spiel-/
+  //    Sim-/Wirtschaftslogik in src/, exakt der Ort der im Ticket genannten God-Functions.
+  //
+  //    Einführung in eine gewachsene Codebasis OHNE Big-Bang-Refactor: der Bestand
+  //    an Verletzungen ist als committete ESLint-Bulk-Suppressions-Baseline
+  //    (eslint-suppressions.json) festgehalten – GENAU wie der ALLOWLIST-Ratchet in
+  //    check-size.mjs bzw. der Coverage-Ratchet (#495). Jede NEUE oder
+  //    VERSCHLECHTERTE Verletzung bricht sofort (die Baseline zählt pro Datei/Regel);
+  //    wird eine God-Function aufgeteilt, meldet ESLint den stale Suppressions-Eintrag
+  //    (`npm run lint` rot) bis er per `npm run lint:prune` entfernt ist – dieselbe
+  //    „stale-Eintrag wird gemeldet"-Disziplin wie beim Dateigröße-Wächter. Der
+  //    Abbau der Baseline läuft über session-große Burn-down-Tickets (Diff-Size-Gate #533).
+  {
+    files: ["src/**/*.ts"],
+    rules: {
+      complexity: ["error", 15],
+      "max-depth": ["error", 4],
+      "max-lines-per-function": [
+        "error",
+        { max: 120, skipBlankLines: true, skipComments: true },
+      ],
+    },
+  },
+
+  // 5) Determinismus-Wächter (#492): In der puren Domäne (src/sim/**) und im
   //    Content (src/content/**) ist `Math.random` verboten – die Schicht ist als
   //    deterministisch/testbar deklariert. Zufall kommt ausschließlich aus dem
   //    SSOT src/rng.ts (`nextRandom`/`hashStr`), damit snapshot()-Round-trips
