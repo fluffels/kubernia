@@ -161,6 +161,9 @@ function compileMatcher(where: unknown, path: string): ElPred {
  * Regeln: die booleschen Ausdrücke der DSL. Genau ein Regel-Schlüssel je Objekt.
  * -------------------------------------------------------------------------- */
 const RULE_KEYS = ["all", "any", "not", "some", "none", "count", "flag", "includes"] as const;
+type RuleKind = (typeof RULE_KEYS)[number];
+/** Ein Record der DSL – genau ein Regel-Schlüssel ist gesetzt (von compileRule geprüft). */
+type RuleObj = Record<string, unknown>;
 
 function collectionReader(name: unknown, path: string): (sim: Sim) => readonly unknown[] {
   const key = asNonEmptyString(name, path);
@@ -169,67 +172,74 @@ function collectionReader(name: unknown, path: string): (sim: Sim) => readonly u
   return reader;
 }
 
+/** Kompiliert die Unter-Regelliste von `all`/`any` (nicht-leer erzwungen). */
+function compileSubRules(o: RuleObj, path: string, key: "all" | "any"): CompiledCheck[] {
+  const subs = asArray(o[key], `${path}.${key}`).map((r, i) => compileRule(r, `${path}.${key}[${i}]`));
+  if (subs.length === 0) fail(`${path}.${key}`, "nicht-leere Regelliste erwartet");
+  return subs;
+}
+
+/** Sammlungs-Leser + optionalen Element-Matcher für `some`/`none`/`count` auflösen. */
+function readerAndPred(o: RuleObj, path: string, key: RuleKind): { reader: (sim: Sim) => readonly unknown[]; pred: ElPred | null } {
+  return {
+    reader: collectionReader(o[key], `${path}.${key}`),
+    pred: o.where === undefined ? null : compileMatcher(o.where, `${path}.where`),
+  };
+}
+
+/* ----------------------------------------------------------------------------
+ * Regel-Compiler-Registry: je Regel-Art ein kleiner, kohäsiver Compiler. Der
+ * Dispatcher `compileRule` wählt nur noch den passenden aus – so wächst ein 10×
+ * größerer Regelsatz über die Tabelle statt über eine immer längere switch-Kaskade
+ * (#502 / Stardew-Scope). Alle Compiler bekommen das bereits als Record geprüfte
+ * Regel-Objekt `o` und den Pfad.
+ * -------------------------------------------------------------------------- */
+const RULE_COMPILERS: Record<RuleKind, (o: RuleObj, path: string) => CompiledCheck> = {
+  all: (o, path) => { const subs = compileSubRules(o, path, "all"); return (sim) => subs.every((s) => s(sim)); },
+  any: (o, path) => { const subs = compileSubRules(o, path, "any"); return (sim) => subs.some((s) => s(sim)); },
+  not: (o, path) => { const sub = compileRule(o.not, `${path}.not`); return (sim) => !sub(sim); },
+  some: (o, path) => {
+    const { reader, pred } = readerAndPred(o, path, "some");
+    return pred ? (sim) => reader(sim).some(pred) : (sim) => reader(sim).length > 0;
+  },
+  none: (o, path) => {
+    const { reader, pred } = readerAndPred(o, path, "none");
+    return pred ? (sim) => !reader(sim).some(pred) : (sim) => reader(sim).length === 0;
+  },
+  count: (o, path) => {
+    const { reader, pred } = readerAndPred(o, path, "count");
+    const op = asNonEmptyString(o.cmp, `${path}.cmp`);
+    if (!(CMP_OPS as readonly string[]).includes(op)) fail(`${path}.cmp`, `unbekannter Operator „${op}" (erlaubt: ${CMP_OPS.join(" ")})`);
+    if (typeof o.value !== "number") fail(`${path}.value`, "Zahl erwartet");
+    const want = o.value;
+    return (sim) => {
+      const list = reader(sim);
+      const n = pred ? list.filter(pred).length : list.length;
+      return compareNum(n, op as Cmp, want);
+    };
+  },
+  flag: (o, path) => {
+    const segs = asNonEmptyStringArray(o.flag, `${path}.flag`);
+    if (o.eq !== undefined) {
+      const want = asScalar(o.eq, `${path}.eq`);
+      return (sim) => readPath(sim, segs) === want;
+    }
+    return (sim) => Boolean(readPath(sim, segs));
+  },
+  includes: (o, path) => {
+    const segs = asNonEmptyStringArray(o.includes, `${path}.includes`);
+    const want = asScalar(o.value, `${path}.value`);
+    return (sim) => { const v = readPath(sim, segs); return Array.isArray(v) && v.includes(want); };
+  },
+};
+
 function compileRule(rule: unknown, path: string): CompiledCheck {
   const o = asRecord(rule, path);
   const present = RULE_KEYS.filter((k) => k in o);
   if (present.length !== 1) {
     fail(path, `genau ein Regel-Schlüssel erwartet (${RULE_KEYS.join("/")}), gefunden: ${present.join(",") || "keiner"}`);
   }
-  const kind = present[0];
-  switch (kind) {
-    case "all": {
-      const subs = asArray(o.all, `${path}.all`).map((r, i) => compileRule(r, `${path}.all[${i}]`));
-      if (subs.length === 0) fail(`${path}.all`, "nicht-leere Regelliste erwartet");
-      return (sim) => subs.every((s) => s(sim));
-    }
-    case "any": {
-      const subs = asArray(o.any, `${path}.any`).map((r, i) => compileRule(r, `${path}.any[${i}]`));
-      if (subs.length === 0) fail(`${path}.any`, "nicht-leere Regelliste erwartet");
-      return (sim) => subs.some((s) => s(sim));
-    }
-    case "not": {
-      const sub = compileRule(o.not, `${path}.not`);
-      return (sim) => !sub(sim);
-    }
-    case "some": {
-      const reader = collectionReader(o.some, `${path}.some`);
-      const pred = o.where === undefined ? null : compileMatcher(o.where, `${path}.where`);
-      return pred ? (sim) => reader(sim).some(pred) : (sim) => reader(sim).length > 0;
-    }
-    case "none": {
-      const reader = collectionReader(o.none, `${path}.none`);
-      const pred = o.where === undefined ? null : compileMatcher(o.where, `${path}.where`);
-      return pred ? (sim) => !reader(sim).some(pred) : (sim) => reader(sim).length === 0;
-    }
-    case "count": {
-      const reader = collectionReader(o.count, `${path}.count`);
-      const pred = o.where === undefined ? null : compileMatcher(o.where, `${path}.where`);
-      const op = asNonEmptyString(o.cmp, `${path}.cmp`);
-      if (!(CMP_OPS as readonly string[]).includes(op)) fail(`${path}.cmp`, `unbekannter Operator „${op}" (erlaubt: ${CMP_OPS.join(" ")})`);
-      if (typeof o.value !== "number") fail(`${path}.value`, "Zahl erwartet");
-      const want = o.value;
-      return (sim) => {
-        const list = reader(sim);
-        const n = pred ? list.filter(pred).length : list.length;
-        return compareNum(n, op as Cmp, want);
-      };
-    }
-    case "flag": {
-      const segs = asNonEmptyStringArray(o.flag, `${path}.flag`);
-      if (o.eq !== undefined) {
-        const want = asScalar(o.eq, `${path}.eq`);
-        return (sim) => readPath(sim, segs) === want;
-      }
-      return (sim) => Boolean(readPath(sim, segs));
-    }
-    case "includes": {
-      const segs = asNonEmptyStringArray(o.includes, `${path}.includes`);
-      const want = asScalar(o.value, `${path}.value`);
-      return (sim) => { const v = readPath(sim, segs); return Array.isArray(v) && v.includes(want); };
-    }
-    default:
-      return fail(path, `unbekannte Regel: ${kind}`);
-  }
+  return RULE_COMPILERS[present[0]](o, path);
 }
 
 /**

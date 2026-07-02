@@ -51,46 +51,41 @@ export function coastY(x: number): number {
   return Math.max(25, Math.min(28, c));
 }
 
-/** Boden- und (struktur-)Kollisionsraster der Hafenkarte. Reproduziert exakt die
- *  Terrain-Schreibvorgänge der buildMap(): Küste/Wasser/Sand/Gras, Hafenkai, Stege,
- *  schwimmendes Schiff (Wasser unterm Rumpf + Steg, #108), Archipel-Anleger,
- *  Marktplatz, Wege. NICHT enthalten (kommt zur Laufzeit in placeHarborObjects()
- *  bzw. spawnNpcs()): Gebäude-/Baum-/Deko-/Leuchtturm-Solids, freigeräumte Türen,
- *  NPC-Solids. */
-export function harborGeometry(W = HARBOR_W, H = HARBOR_H): { ground: number[]; solid: number[] } {
-  const ground = new Array<number>(W * H).fill(0);
-  const solid = new Array<number>(W * H).fill(0);
-  const set = (x: number, y: number, v: number) => { ground[y * W + x] = v; };
-  // Begehbare Kachel (Steg/Anleger/Schiffsrumpf-Wasser): Boden setzen + (vorher
-  // solides) Wasser darunter wieder freiräumen.
-  const walkable = (x: number, y: number, v: number) => { ground[y * W + x] = v; solid[y * W + x] = 0; };
-  // Weg ziehen wie buildMap.path(): erst in x, dann in y, jede berührte Kachel = Erde.
-  const path = (x0: number, y0: number, x1: number, y1: number) => {
-    let x = x0, y = y0;
-    const sx = Math.sign(x1 - x0), sy = Math.sign(y1 - y0);
-    while (x !== x1) { set(x, y, DIRT); x += sx; }
-    while (y !== y1) { set(x, y, DIRT); y += sy; }
-    set(x1, y1, DIRT);
-  };
+/* ---- Terrain-Bausteine für harborGeometry() ----
+ * Die Karte entsteht in drei kohäsiven Schreib-Phasen (Grundterrain → begehbare
+ * Docks → Wege/Vorplätze), damit keine einzelne God-Function alle Verzweigungen
+ * trägt (#502). Jede Phase schreibt direkt in dieselben ground/solid-Raster.
+ * `set` (nur Boden) und `walkable` (Boden + Wasser darunter freiräumen) sind die
+ * geteilten Schreib-Primitiven auf dem row-major-Raster (y*W+x). */
+const setTile = (ground: number[], W: number, x: number, y: number, v: number) => { ground[y * W + x] = v; };
+const walkableTile = (ground: number[], solid: number[], W: number, x: number, y: number, v: number) => {
+  ground[y * W + x] = v; solid[y * W + x] = 0;
+};
 
-  // Grundterrain: Küste (Wasser solide), Sandstrand, gemischtes Gras.
+/** Grundterrain: Küste (Wasser solide), Sandstrand, gemischtes Gras. */
+function fillBaseTerrain(ground: number[], solid: number[], W: number, H: number): void {
   for (let x = 0; x < W; x++) {
     const cY = coastY(x);
     const beach = !(x >= 3 && x <= 24) && !(x >= 30 && x <= 38);
     for (let y = 0; y < H; y++) {
       if (y >= cY + (beach ? 2 : 0)) {
-        set(x, y, WATER); solid[y * W + x] = 1;
+        ground[y * W + x] = WATER; solid[y * W + x] = 1;
       } else if (beach && y >= cY) {
-        set(x, y, SAND);
+        ground[y * W + x] = SAND;
       } else {
         const r = (((x * 73856093) ^ (y * 19349663)) >>> 0) % 100;
-        set(x, y, r < 80 ? 0 : r < 93 ? 1 : 2);
+        ground[y * W + x] = r < 80 ? 0 : r < 93 ? 1 : 2;
       }
     }
   }
+}
+
+/** Begehbare Strukturen: Hafenkai, Stege, schwimmendes Schiff (#108), Archipel-Anleger. */
+function fillDocks(ground: number[], solid: number[], W: number): void {
+  const walkable = (x: number, y: number, v: number) => walkableTile(ground, solid, W, x, y, v);
 
   // Hafenkai (begehbare Stein-Plattform – Gras-Solid 0 bleibt).
-  for (let y = 24; y <= 26; y++) for (let x = 3; x <= 24; x++) set(x, y, STONE[(x * 3 + y) % 3]);
+  for (let y = 24; y <= 26; y++) for (let x = 3; x <= 24; x++) setTile(ground, W, x, y, STONE[(x * 3 + y) % 3]);
 
   // Stege (Cluster-Knoten): je 3 Kacheln breit, begehbar.
   for (const px of PIER_XS) {
@@ -105,13 +100,25 @@ export function harborGeometry(W = HARBOR_W, H = HARBOR_H): { ground: number[]; 
   for (let y = shipY0; y <= shipY1; y++)
     for (let x = 0; x < W; x++) {
       const t = shipTile(x, y);
-      if (!t) continue;
-      walkable(x, y, t === "pier" ? PIER : WATER);
+      if (t) walkable(x, y, t === "pier" ? PIER : WATER);
     }
 
   // Anleger zum GitOps-Archipel.
   for (let y = WORLD_JETTY.y0; y <= WORLD_JETTY.y1; y++)
     for (let x = WORLD_JETTY.x; x < WORLD_JETTY.x + WORLD_JETTY.w; x++) walkable(x, y, PIER);
+}
+
+/** Marktplatz, Wege und Erd-Vorplätze (alles Erde/DIRT). */
+function fillPathsAndPlazas(ground: number[], W: number): void {
+  const set = (x: number, y: number, v: number) => setTile(ground, W, x, y, v);
+  // Weg ziehen wie buildMap.path(): erst in x, dann in y, jede berührte Kachel = Erde.
+  const path = (x0: number, y0: number, x1: number, y1: number) => {
+    let x = x0, y = y0;
+    const sx = Math.sign(x1 - x0), sy = Math.sign(y1 - y0);
+    while (x !== x1) { set(x, y, DIRT); x += sx; }
+    while (y !== y1) { set(x, y, DIRT); y += sy; }
+    set(x1, y1, DIRT);
+  };
 
   // Marktplatz (Erde).
   for (let y = 16; y <= 22; y++) for (let x = 24; x <= 32; x++) set(x, y, DIRT);
@@ -128,7 +135,20 @@ export function harborGeometry(W = HARBOR_W, H = HARBOR_H): { ground: number[]; 
   // Erd-Vorplätze vor Werft und Vermessung.
   for (let y = 10; y <= 15; y++) for (let x = 8; x <= 17; x++) set(x, y, DIRT);
   for (let y = 18; y <= 22; y++) for (let x = 41; x <= 46; x++) set(x, y, DIRT);
+}
 
+/** Boden- und (struktur-)Kollisionsraster der Hafenkarte. Reproduziert exakt die
+ *  Terrain-Schreibvorgänge der buildMap(): Küste/Wasser/Sand/Gras, Hafenkai, Stege,
+ *  schwimmendes Schiff (Wasser unterm Rumpf + Steg, #108), Archipel-Anleger,
+ *  Marktplatz, Wege. NICHT enthalten (kommt zur Laufzeit in placeHarborObjects()
+ *  bzw. spawnNpcs()): Gebäude-/Baum-/Deko-/Leuchtturm-Solids, freigeräumte Türen,
+ *  NPC-Solids. */
+export function harborGeometry(W = HARBOR_W, H = HARBOR_H): { ground: number[]; solid: number[] } {
+  const ground = new Array<number>(W * H).fill(0);
+  const solid = new Array<number>(W * H).fill(0);
+  fillBaseTerrain(ground, solid, W, H);
+  fillDocks(ground, solid, W);
+  fillPathsAndPlazas(ground, W);
   return { ground, solid };
 }
 

@@ -31,7 +31,7 @@
  *  ohne die niedrige Einstiegshürde („neue Quest als Objekt-Literal anhängen")
  *  aufzugeben.
  */
-import type { Quest } from "../types";
+import type { Quest, QuestStep } from "../types";
 // QuizCard/CmdCard sind NICHT hier neu definiert, sondern die EINE Wahrheit aus dem
 // Loader (#519): der Loader parst/validiert die JSON in genau diese Typen, also gibt es
 // keinen Grund für eine zweite Kopie hier – die war schon divergiert (die frühere lokale
@@ -61,38 +61,41 @@ const norm = (s: string) => s.trim().replace(/\s+/g, " ");
 
 const isNonEmptyString = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
 
-/**
- * Prüft die strukturelle & referenzielle Konsistenz des Inhalts-Bündels.
- * @returns Liste der gefundenen Probleme (leeres Array = valide).
- */
-export function validateContent(c: ContentBundle): string[] {
-  const errors: string[] = [];
-  const err = (msg: string) => errors.push(msg);
+/** Sammel-Callback für gefundene Probleme (hängt an die errors-Liste an). */
+type Err = (msg: string) => void;
 
-  // Nachschlage-Mengen für die Querverweis-Prüfungen.
-  const npcIds = new Set(Object.keys(c.NPCS));
-  const questIds = new Set(c.QUESTS.map(q => q.id));
-  const drillIds = new Set(Object.keys(c.DRILLS));
-  const quizIds = new Set(c.CRAB_QUIZ.map(q => q.id));
-  const topicIds = new Set(c.QUEST_TOPICS.map(t => t.id));
-  // Welche Themen tatsächlich von einer Quest benutzt werden (für den Tot-Themen-Check #327).
-  const usedTopics = new Set<string>();
+/** Vorberechnete Nachschlage-Mengen für die referenziellen Querverweis-Prüfungen. */
+interface Lookups {
+  npcIds: Set<string>;
+  questIds: Set<string>;
+  drillIds: Set<string>;
+  quizIds: Set<string>;
+  topicIds: Set<string>;
+}
 
-  // ---------- Ränge: aufsteigende XP-Schwellen ----------
+/** Der konkrete QuestStep-Variantentyp zu einem `type`-Diskriminator. */
+type StepOf<T extends QuestStep["type"]> = Extract<QuestStep, { type: T }>;
+
+// ---------- Ränge: aufsteigende XP-Schwellen ----------
+function validateRanks(c: ContentBundle, err: Err): void {
   for (let i = 1; i < c.RANKS.length; i++) {
     if (c.RANKS[i].xp <= c.RANKS[i - 1].xp) {
       err(`RANKS: XP-Schwelle nicht aufsteigend bei „${c.RANKS[i].name}" (${c.RANKS[i].xp} <= ${c.RANKS[i - 1].xp})`);
     }
   }
+}
 
-  // ---------- Shop: IDs eindeutig ----------
+// ---------- Shop: IDs eindeutig ----------
+function validateShop(c: ContentBundle, err: Err): void {
   const shopSeen = new Set<string>();
   for (const item of c.SHOP) {
     if (shopSeen.has(item.id)) err(`SHOP: doppelte ID „${item.id}"`);
     shopSeen.add(item.id);
   }
+}
 
-  // ---------- Quiz-Karten: IDs eindeutig, correct gültig, Erklärung da ----------
+// ---------- Quiz-Karten: IDs eindeutig, correct gültig, Erklärung da ----------
+function validateQuizCards(c: ContentBundle, questIds: Set<string>, err: Err): void {
   const quizSeen = new Set<string>();
   for (const q of c.CRAB_QUIZ) {
     if (quizSeen.has(q.id)) err(`CRAB_QUIZ: doppelte ID „${q.id}"`);
@@ -103,8 +106,10 @@ export function validateContent(c: ContentBundle): string[] {
     if (q.chapter !== undefined && !questIds.has(q.chapter)) err(`CRAB_QUIZ ${q.id}: unbekannte Quest „${q.chapter}" in chapter`);
     if (q.introducedIn !== undefined && !questIds.has(q.introducedIn)) err(`CRAB_QUIZ ${q.id}: unbekannte Quest „${q.introducedIn}" in introducedIn`);
   }
+}
 
-  // ---------- Befehls-Karten: ID eindeutig, Lösung matcht accept, chapter existiert ----------
+// ---------- Befehls-Karten: ID eindeutig, Lösung matcht accept, chapter existiert ----------
+function validateCmdCards(c: ContentBundle, questIds: Set<string>, err: Err): void {
   const cardSeen = new Set<string>();
   for (const card of c.CMD_CARDS) {
     if (cardSeen.has(card.id)) err(`CMD_CARDS: doppelte ID „${card.id}"`);
@@ -114,101 +119,118 @@ export function validateContent(c: ContentBundle): string[] {
     if (!questIds.has(card.chapter)) err(`CMD_CARDS ${card.id}: unbekannte Quest „${card.chapter}"`);
     if (card.introducedIn !== undefined && !questIds.has(card.introducedIn)) err(`CMD_CARDS ${card.id}: unbekannte Quest „${card.introducedIn}" in introducedIn`);
   }
+}
 
-  // ---------- Quests: Geber/NPCs/Drills/reviewIds existieren, Choices wohlgeformt ----------
+/* ---------- Quest-Schritte je Typ (ausgelagert, damit die Verschachtelung flach bleibt) ----------
+ * Hinweis: teach-/terminal-Lösungen werden bewusst NICHT gegen ihre accept-Regex geprüft –
+ * viele tragen dynamische Platzhalter (z.B. „docker stop <name aus docker ps>"), weil der
+ * echte Name aus dem Sim-Zustand kommt. Der Selbsttest „Lösung matcht accept" greift nur für
+ * die statischen CMD_CARDS (siehe oben), wie schon vor #81 etabliert. */
+function validateDialogStep(q: Quest, step: StepOf<"dialog">, lk: Lookups, err: Err): void {
+  if (!lk.npcIds.has(step.npc)) err(`Quest ${q.id}: unbekannter NPC „${step.npc}" (dialog)`);
+  if (step.lines.length === 0) err(`Quest ${q.id}: dialog-Schritt ohne Zeilen`);
+}
+function validateChoiceStep(q: Quest, step: StepOf<"choice">, lk: Lookups, err: Err): void {
+  if (!lk.npcIds.has(step.npc)) err(`Quest ${q.id}: unbekannter NPC „${step.npc}" (choice)`);
+  const richtige = step.options.filter(o => o.ok).length;
+  if (richtige !== 1) err(`Quest ${q.id}: Choice „${norm(step.q)}" braucht genau eine richtige Antwort (hat ${richtige})`);
+  if (step.reviewId !== undefined && !lk.quizIds.has(step.reviewId)) err(`Quest ${q.id}: unbekannte reviewId „${step.reviewId}"`);
+}
+function validateTeachStep(q: Quest, step: StepOf<"teach">, err: Err): void {
+  if (!isNonEmptyString(step.cmd.intro) || !isNonEmptyString(step.cmd.hint) || !isNonEmptyString(step.cmd.solution)) {
+    err(`Quest ${q.id}: teach-Schritt „${step.cmd.id}" unvollständig (intro/hint/solution)`);
+  }
+  if (step.cmd.accept.length === 0) err(`Quest ${q.id}: teach „${step.cmd.id}" ohne accept-Regel`);
+}
+function validateDrillStep(q: Quest, step: StepOf<"drill">, lk: Lookups, err: Err): void {
+  if (step.count <= 0) err(`Quest ${q.id}: drill-Schritt mit count ${step.count}`);
+  if (step.pool.length === 0) err(`Quest ${q.id}: drill-Schritt mit leerem Pool`);
+  for (const d of step.pool) if (!lk.drillIds.has(d)) err(`Quest ${q.id}: unbekannter Drill „${d}"`);
+}
+function validateTerminalStep(q: Quest, step: StepOf<"terminal">, err: Err): void {
+  if (step.tasks.length === 0) err(`Quest ${q.id}: terminal-Schritt ohne Aufgaben`);
+  for (const t of step.tasks) {
+    if (t.accept.length === 0) err(`Quest ${q.id}: Aufgabe „${t.id}" ohne accept-Regel`);
+  }
+}
+function validateMinigameStep(q: Quest, step: StepOf<"minigame">, lk: Lookups, err: Err): void {
+  if (!lk.npcIds.has(step.npc)) err(`Quest ${q.id}: unbekannter NPC „${step.npc}" (minigame)`);
+  if (step.game !== "stack") err(`Quest ${q.id}: unbekanntes Minispiel „${step.game}"`);
+}
+function validateQuestStep(q: Quest, step: QuestStep, lk: Lookups, err: Err): void {
+  switch (step.type) {
+    case "dialog": validateDialogStep(q, step, lk, err); break;
+    case "choice": validateChoiceStep(q, step, lk, err); break;
+    case "teach": validateTeachStep(q, step, err); break;
+    case "drill": validateDrillStep(q, step, lk, err); break;
+    case "terminal": validateTerminalStep(q, step, err); break;
+    case "minigame": validateMinigameStep(q, step, lk, err); break;
+  }
+}
+
+/** Geber/Thema/Voraussetzungen einer Quest + alle ihre Schritte prüfen. */
+function validateQuest(quest: Quest, lk: Lookups, usedTopics: Set<string>, err: Err): void {
+  if (!lk.npcIds.has(quest.giver)) err(`Quest ${quest.id}: unbekannter Questgeber „${quest.giver}"`);
+  // Thema referenziell prüfen (#327): muss in der Taxonomie stehen, sonst rutscht
+  // die Quest ungruppiert durchs Logbuch-Accordion. Wie beim Geber bewusst hier
+  // (Querverweis) statt im Loader (der prüft topic nur strukturell als Pflicht-String).
+  if (!lk.topicIds.has(quest.topic)) err(`Quest ${quest.id}: unbekanntes Thema „${quest.topic}" (nicht in quest-topics.json)`);
+  else usedTopics.add(quest.topic);
+
+  // Voraussetzungen (#410) referenziell prüfen: jede ID muss eine echte Quest sein und darf
+  // nicht auf sich selbst zeigen (eine Quest kann sich nie selbst freischalten). Zyklen über
+  // mehrere Quests fängt der eigene Pass unten ab.
+  if (quest.requires) {
+    const seenReq = new Set<string>();
+    for (const r of quest.requires) {
+      if (r === quest.id) err(`Quest ${quest.id}: Voraussetzung verweist auf sich selbst`);
+      else if (!lk.questIds.has(r)) err(`Quest ${quest.id}: unbekannte Voraussetzung „${r}"`);
+      if (seenReq.has(r)) err(`Quest ${quest.id}: doppelte Voraussetzung „${r}"`);
+      seenReq.add(r);
+    }
+  }
+
+  for (const step of quest.steps) validateQuestStep(quest, step, lk, err);
+}
+
+// ---------- Quests: Geber/NPCs/Drills/reviewIds existieren, Choices wohlgeformt ----------
+function validateQuests(c: ContentBundle, lk: Lookups, usedTopics: Set<string>, err: Err): void {
   const questSeen = new Set<string>();
   for (const quest of c.QUESTS) {
     if (questSeen.has(quest.id)) err(`QUESTS: doppelte ID „${quest.id}"`);
     questSeen.add(quest.id);
-    if (!npcIds.has(quest.giver)) err(`Quest ${quest.id}: unbekannter Questgeber „${quest.giver}"`);
-    // Thema referenziell prüfen (#327): muss in der Taxonomie stehen, sonst rutscht
-    // die Quest ungruppiert durchs Logbuch-Accordion. Wie beim Geber bewusst hier
-    // (Querverweis) statt im Loader (der prüft topic nur strukturell als Pflicht-String).
-    if (!topicIds.has(quest.topic)) err(`Quest ${quest.id}: unbekanntes Thema „${quest.topic}" (nicht in quest-topics.json)`);
-    else usedTopics.add(quest.topic);
-
-    // Voraussetzungen (#410) referenziell prüfen: jede ID muss eine echte Quest sein und darf
-    // nicht auf sich selbst zeigen (eine Quest kann sich nie selbst freischalten). Zyklen über
-    // mehrere Quests fängt der eigene Pass unten ab.
-    if (quest.requires) {
-      const seenReq = new Set<string>();
-      for (const r of quest.requires) {
-        if (r === quest.id) err(`Quest ${quest.id}: Voraussetzung verweist auf sich selbst`);
-        else if (!questIds.has(r)) err(`Quest ${quest.id}: unbekannte Voraussetzung „${r}"`);
-        if (seenReq.has(r)) err(`Quest ${quest.id}: doppelte Voraussetzung „${r}"`);
-        seenReq.add(r);
-      }
-    }
-
-    for (const step of quest.steps) {
-      switch (step.type) {
-        case "dialog":
-          if (!npcIds.has(step.npc)) err(`Quest ${quest.id}: unbekannter NPC „${step.npc}" (dialog)`);
-          if (step.lines.length === 0) err(`Quest ${quest.id}: dialog-Schritt ohne Zeilen`);
-          break;
-        case "choice": {
-          if (!npcIds.has(step.npc)) err(`Quest ${quest.id}: unbekannter NPC „${step.npc}" (choice)`);
-          const richtige = step.options.filter(o => o.ok).length;
-          if (richtige !== 1) err(`Quest ${quest.id}: Choice „${norm(step.q)}" braucht genau eine richtige Antwort (hat ${richtige})`);
-          if (step.reviewId !== undefined && !quizIds.has(step.reviewId)) err(`Quest ${quest.id}: unbekannte reviewId „${step.reviewId}"`);
-          break;
-        }
-        case "teach":
-          // Hinweis: teach-/terminal-Lösungen werden bewusst NICHT gegen ihre accept-Regex
-          // geprüft – viele tragen dynamische Platzhalter (z.B. „docker stop <name aus docker ps>"),
-          // weil der echte Name aus dem Sim-Zustand kommt. Der Selbsttest „Lösung matcht accept"
-          // greift nur für die statischen CMD_CARDS (siehe oben), wie schon vor #81 etabliert.
-          if (!isNonEmptyString(step.cmd.intro) || !isNonEmptyString(step.cmd.hint) || !isNonEmptyString(step.cmd.solution)) {
-            err(`Quest ${quest.id}: teach-Schritt „${step.cmd.id}" unvollständig (intro/hint/solution)`);
-          }
-          if (step.cmd.accept.length === 0) err(`Quest ${quest.id}: teach „${step.cmd.id}" ohne accept-Regel`);
-          break;
-        case "drill":
-          if (step.count <= 0) err(`Quest ${quest.id}: drill-Schritt mit count ${step.count}`);
-          if (step.pool.length === 0) err(`Quest ${quest.id}: drill-Schritt mit leerem Pool`);
-          for (const d of step.pool) if (!drillIds.has(d)) err(`Quest ${quest.id}: unbekannter Drill „${d}"`);
-          break;
-        case "terminal":
-          if (step.tasks.length === 0) err(`Quest ${quest.id}: terminal-Schritt ohne Aufgaben`);
-          for (const t of step.tasks) {
-            if (t.accept.length === 0) err(`Quest ${quest.id}: Aufgabe „${t.id}" ohne accept-Regel`);
-          }
-          break;
-        case "minigame":
-          if (!npcIds.has(step.npc)) err(`Quest ${quest.id}: unbekannter NPC „${step.npc}" (minigame)`);
-          if (step.game !== "stack") err(`Quest ${quest.id}: unbekanntes Minispiel „${step.game}"`);
-          break;
-      }
-    }
+    validateQuest(quest, lk, usedTopics, err);
   }
+}
 
-  // ---------- Voraussetzungen: keine Zyklen im requires-Graph (#410) ----------
-  // Ein Zyklus (A braucht B, B braucht A) würde beide Quests unerreichbar machen –
-  // bei Stardew-Scope (viele optionale Stränge) ein leicht einzuschleichender Fehler.
-  // Tiefensuche mit Farben: grau = im aktuellen Pfad (Rückkante = Zyklus), schwarz = fertig.
-  {
-    const questById = new Map(c.QUESTS.map(q => [q.id, q]));
-    const color = new Map<string, 0 | 1 | 2>(); // 0 weiß (ungesehen), 1 grau, 2 schwarz
-    const cyclesReported = new Set<string>();
-    const visit = (id: string): boolean => {
-      color.set(id, 1);
-      for (const dep of questById.get(id)?.requires ?? []) {
-        if (!questById.has(dep)) continue; // unbekannte Referenz hat der Pass oben schon gemeldet
-        const cdep = color.get(dep) ?? 0;
-        if (cdep === 1) { // Rückkante in den aktuellen Pfad = Zyklus
-          const key = [id, dep].sort().join("|");
-          if (!cyclesReported.has(key)) { cyclesReported.add(key); err(`QUESTS: Voraussetzungs-Zyklus über „${dep}" (z.B. ${id} → ${dep})`); }
-          return true;
-        }
-        if (cdep === 0 && visit(dep)) return true;
+// ---------- Voraussetzungen: keine Zyklen im requires-Graph (#410) ----------
+// Ein Zyklus (A braucht B, B braucht A) würde beide Quests unerreichbar machen –
+// bei Stardew-Scope (viele optionale Stränge) ein leicht einzuschleichender Fehler.
+// Tiefensuche mit Farben: grau = im aktuellen Pfad (Rückkante = Zyklus), schwarz = fertig.
+function validateRequiresCycles(c: ContentBundle, err: Err): void {
+  const questById = new Map(c.QUESTS.map(q => [q.id, q]));
+  const color = new Map<string, 0 | 1 | 2>(); // 0 weiß (ungesehen), 1 grau, 2 schwarz
+  const cyclesReported = new Set<string>();
+  const visit = (id: string): boolean => {
+    color.set(id, 1);
+    for (const dep of questById.get(id)?.requires ?? []) {
+      if (!questById.has(dep)) continue; // unbekannte Referenz hat der Pass oben schon gemeldet
+      const cdep = color.get(dep) ?? 0;
+      if (cdep === 1) { // Rückkante in den aktuellen Pfad = Zyklus
+        const key = [id, dep].sort().join("|");
+        if (!cyclesReported.has(key)) { cyclesReported.add(key); err(`QUESTS: Voraussetzungs-Zyklus über „${dep}" (z.B. ${id} → ${dep})`); }
+        return true;
       }
-      color.set(id, 2);
-      return false;
-    };
-    for (const q of c.QUESTS) if ((color.get(q.id) ?? 0) === 0) visit(q.id);
-  }
+      if (cdep === 0 && visit(dep)) return true;
+    }
+    color.set(id, 2);
+    return false;
+  };
+  for (const q of c.QUESTS) if ((color.get(q.id) ?? 0) === 0) visit(q.id);
+}
 
-  // ---------- Themen-Taxonomie: IDs eindeutig, kein totes Thema (#327) ----------
+// ---------- Themen-Taxonomie: IDs eindeutig, kein totes Thema (#327) ----------
+function validateTopics(c: ContentBundle, usedTopics: Set<string>, err: Err): void {
   const topicSeen = new Set<string>();
   for (const t of c.QUEST_TOPICS) {
     if (topicSeen.has(t.id)) err(`QUEST_TOPICS: doppelte Themen-ID „${t.id}"`);
@@ -217,17 +239,21 @@ export function validateContent(c: ContentBundle): string[] {
     // im topic einer Quest oder ein verwaistes Thema. Beides soll auffallen.
     if (!usedTopics.has(t.id)) err(`QUEST_TOPICS: Thema „${t.id}" (${t.label}) hat keine einzige Quest`);
   }
+}
 
-  // ---------- Übungs-Pools: NPC, Drill und Folge-Quest existieren ----------
+// ---------- Übungs-Pools: NPC, Drill und Folge-Quest existieren ----------
+function validatePractice(c: ContentBundle, lk: Lookups, err: Err): void {
   for (const [npcId, pool] of Object.entries(c.PRACTICE)) {
-    if (!npcIds.has(npcId)) err(`PRACTICE: unbekannter NPC „${npcId}"`);
+    if (!lk.npcIds.has(npcId)) err(`PRACTICE: unbekannter NPC „${npcId}"`);
     for (const p of pool) {
-      if (!drillIds.has(p.drill)) err(`PRACTICE ${npcId}: unbekannter Drill „${p.drill}"`);
-      if (!questIds.has(p.after)) err(`PRACTICE ${npcId}: unbekannte Quest „${p.after}"`);
+      if (!lk.drillIds.has(p.drill)) err(`PRACTICE ${npcId}: unbekannter Drill „${p.drill}"`);
+      if (!lk.questIds.has(p.after)) err(`PRACTICE ${npcId}: unbekannte Quest „${p.after}"`);
     }
   }
+}
 
-  // ---------- Stapel-Spiel: genug Runden, je 3+ Schichten, aufsteigend, mit Cache-Tipp (#218) ----------
+// ---------- Stapel-Spiel: genug Runden, je 3+ Schichten, aufsteigend, mit Cache-Tipp (#218) ----------
+function validateStackRounds(c: ContentBundle, err: Err): void {
   if (c.STACK_ROUNDS.length < 2) err(`STACK_ROUNDS: braucht mindestens 2 Runden`);
   let prevLayers = 0;
   for (const r of c.STACK_ROUNDS) {
@@ -236,6 +262,36 @@ export function validateContent(c: ContentBundle): string[] {
     if (r.layers.length < prevLayers) err(`STACK_ROUNDS „${r.name}": leichter als die Runde davor – Reihenfolge muss aufsteigend sein`);
     prevLayers = r.layers.length;
   }
+}
+
+/**
+ * Prüft die strukturelle & referenzielle Konsistenz des Inhalts-Bündels.
+ * @returns Liste der gefundenen Probleme (leeres Array = valide).
+ */
+export function validateContent(c: ContentBundle): string[] {
+  const errors: string[] = [];
+  const err: Err = (msg) => errors.push(msg);
+
+  // Nachschlage-Mengen für die Querverweis-Prüfungen.
+  const lk: Lookups = {
+    npcIds: new Set(Object.keys(c.NPCS)),
+    questIds: new Set(c.QUESTS.map(q => q.id)),
+    drillIds: new Set(Object.keys(c.DRILLS)),
+    quizIds: new Set(c.CRAB_QUIZ.map(q => q.id)),
+    topicIds: new Set(c.QUEST_TOPICS.map(t => t.id)),
+  };
+  // Welche Themen tatsächlich von einer Quest benutzt werden (für den Tot-Themen-Check #327).
+  const usedTopics = new Set<string>();
+
+  validateRanks(c, err);
+  validateShop(c, err);
+  validateQuizCards(c, lk.questIds, err);
+  validateCmdCards(c, lk.questIds, err);
+  validateQuests(c, lk, usedTopics, err);
+  validateRequiresCycles(c, err);
+  validateTopics(c, usedTopics, err);
+  validatePractice(c, lk, err);
+  validateStackRounds(c, err);
 
   return errors;
 }

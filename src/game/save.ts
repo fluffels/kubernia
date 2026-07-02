@@ -107,6 +107,110 @@ function safeAudio(v: unknown): GameState["audio"] {
   };
 }
 
+/** Boolean oder Default – additive Bool-Flags fehlen in Alt-Ständen (kein Bruch). */
+function safeBool(v: unknown, def: boolean): boolean {
+  return typeof v === "boolean" ? v : def;
+}
+/** Endliche Zahl oder null (z.B. die Charakter-Auswahl). */
+function safeNumOrNull(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+/** Map endlicher, nicht-negativer Ganzzahlen (Inventar #313, Nutzungszähler abbrevUsage):
+ *  nur plausible Einträge behalten, fremde/kaputte Werte verwerfen. Fehlt das Feld → leer. */
+function sanitizeCountMap(v: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (isPlainObject(v)) {
+    for (const [id, n] of Object.entries(v)) {
+      if (typeof n === "number" && Number.isFinite(n) && n >= 0) out[id] = Math.floor(n);
+    }
+  }
+  return out;
+}
+/** Leitner-Einträge { box (1..5), due } defensiv übernehmen. EINE Quelle für die
+ *  gleich geformten Maps `review` (Quiz) und `mastery` (Übungen #219) – fehlt das Feld
+ *  (Alt-Stand) → leer, die verlustfreie Migration. */
+function sanitizeLeitnerMap(v: unknown): Record<string, LeitnerEntry> {
+  const out: Record<string, LeitnerEntry> = {};
+  if (isPlainObject(v)) {
+    for (const [id, info] of Object.entries(v)) {
+      if (!isPlainObject(info)) continue;
+      const box = Math.min(5, Math.max(1, safeCount(info.box, 1)));
+      out[id] = { box, due: safeCount(info.due, 0) };
+    }
+  }
+  return out;
+}
+/** Auf die Default-Stats aufsetzen und nur endliche, NICHT-NEGATIVE Ganzzahlen aus dem
+ *  Alt-Stand überschreiben (#511). Negative/gebrochene Werte fallen für bekannte Keys auf
+ *  den Default; dynamische Zusatz-Stats (z.B. stormsFixed) werden nur bei validem Wert
+ *  übernommen. Mutiert und liefert `base` (das Default-Stats-Objekt). */
+function sanitizeStats(base: GameState["stats"], raw: unknown): GameState["stats"] {
+  if (isPlainObject(raw)) {
+    for (const [k, n] of Object.entries(raw)) {
+      if (typeof n === "number" && Number.isFinite(n) && n >= 0) base[k] = Math.floor(n);
+    }
+  }
+  return base;
+}
+
+/** „Verdiente Abkürzungen" (#297) auflösen: vorhandenes Feld übernehmen. Fehlt es ganz,
+ *  stammt der Stand von VOR der Mechanik – wer schon Fortschritt hat, wird per Sentinel "*"
+ *  grandfathered (alles frei), damit das spätere Gating (#299) kein gelerntes Kürzel
+ *  rückwirkend sperrt. Frischer Stand ohne Fortschritt startet leer. */
+function resolveUnlockedAbbrev(raw: Record<string, unknown>): string[] {
+  if (raw.unlockedAbbrev !== undefined) return safeStrArray(raw.unlockedAbbrev);
+  const hatFortschritt = safeCount(raw.xp, 0) > 0 || safeCount(raw.questIdx, 0) > 0 ||
+    (Array.isArray(raw.completedQuests) && raw.completedQuests.length > 0);
+  return hatFortschritt ? [ALL_ABBREV_UNLOCKED] : [];
+}
+
+/** Quest-Fortschritts-Index auflösen (#353): die Quest-ID ist die Autorität, der numerische
+ *  questIdx nur abgeleitet. So bricht das Einfügen/Umsortieren von Quests keinen Stand.
+ *   - currentQuestId vorhanden (Stand ab #353): ID gewinnt → Index daraus. Unbekannte ID
+ *     (Quest entfernt) → Fallback auf den geklemmten Zahl-Index (kein stiller Rückfall auf 0).
+ *   - currentQuestId fehlt (Alt-Stand VOR #353): aus dem numerischen questIdx ableiten.
+ *  Die alte Quest-ID (q5, …) wird zuerst per #354-Map auf den neuen Slug gehoben. */
+function resolveQuestIdx(raw: Record<string, unknown>): number {
+  let questIdx: number;
+  if (typeof raw.currentQuestId === "string") {
+    const resolved = questIndexForId(migrateQuestId(raw.currentQuestId));
+    questIdx = resolved >= 0 ? resolved : safeCount(raw.questIdx, 0);
+  } else {
+    questIdx = safeCount(raw.questIdx, 0);
+  }
+  return Math.min(questIdx, KQContent.QUESTS.length); // nie über den Endzustand
+}
+
+/** Offene Quests als Menge auflösen (#410). Autorität ist `raw.activeQuests`; `questStep`/
+ *  `taskIdx` sind nur der Migrationspfad für Alt-Stände ≤ v3 (Einzel-Quest → Menge).
+ *   - Stand ab v4: `raw.activeQuests` sanitisieren – nur echte Quest-IDs (alte via #354-Map),
+ *     erledigte fallen raus (AUSNAHME: die fokussierte Quest ist per Invariante immer offen,
+ *     sonst ginge ihr Schritt-Stand seit #559 verloren), jeder Eintrag gegen den Content
+ *     geklemmt (#511 – kein 999-Zustand persistieren).
+ *   - Alt-Stand (≤ v3, kein `activeQuests`): aus der fokussierten Einzel-Quest bauen.
+ *  Die Invariante „fokussierte Quest immer offen" wird abschließend erzwungen. */
+function resolveActiveQuests(
+  raw: Record<string, unknown>, currentQuestId: string, questStep: number, taskIdx: number,
+): Record<string, QuestProgress> {
+  const completedSet = new Set(safeStrArray(raw.completedQuests).map(migrateQuestId));
+  const active: Record<string, QuestProgress> = {};
+  if (isPlainObject(raw.activeQuests)) {
+    for (const [rawId, prog] of Object.entries(raw.activeQuests)) {
+      const id = migrateQuestId(rawId);
+      if (questIndexForId(id) < 0) continue;                       // unbekannte/entfernte Quest
+      if (completedSet.has(id) && id !== currentQuestId) continue; // „erledigt gewinnt"
+      if (!isPlainObject(prog)) continue;
+      active[id] = clampProgress(id, safeCount(prog.step, 0), safeCount(prog.task, 0));
+    }
+  } else if (currentQuestId !== "") {
+    active[currentQuestId] = clampProgress(currentQuestId, questStep, taskIdx);
+  }
+  if (currentQuestId !== "" && !active[currentQuestId]) {
+    active[currentQuestId] = clampProgress(currentQuestId, questStep, taskIdx);
+  }
+  return canonicalActiveQuests(active);
+}
+
 /** Zahl der über `taskIdx` adressierbaren Aufgaben eines Schritts (#511). Muss zu den
  *  einzigen Stellen passen, die `taskIdx` hochzählen (ui/radio.ts): terminal läuft über
  *  `tasks`, drill über `count`, teach hat genau die eine `cmd`. Bei dialog/choice/minigame
@@ -143,162 +247,42 @@ export function sanitizeState(raw: unknown): GameState {
   const def = makeDefaultState();
   if (!isPlainObject(raw)) return def; // primitiver/kaputter Stand -> komplett frisch
 
-  // Inventar: nur Einträge mit endlicher, nicht-negativer Stückzahl behalten.
-  const inventory: Record<string, number> = {};
-  if (isPlainObject(raw.inventory)) {
-    for (const [id, n] of Object.entries(raw.inventory)) {
-      if (typeof n === "number" && Number.isFinite(n) && n >= 0) inventory[id] = Math.floor(n);
-    }
-  }
-
-  // Spaced-Repetition: nur valide { box (1..5), due } übernehmen.
-  const review: Record<string, LeitnerEntry> = {};
-  if (isPlainObject(raw.review)) {
-    for (const [id, info] of Object.entries(raw.review)) {
-      if (!isPlainObject(info)) continue;
-      const box = Math.min(5, Math.max(1, safeCount(info.box, 1)));
-      review[id] = { box, due: safeCount(info.due, 0) };
-    }
-  }
-
-  // Übungs-Lernstand (#219): gleiche { box (1..5), due }-Form wie review, eigene Map.
-  // Fehlt das Feld (Alt-Stand) → leer; das ist die verlustfreie Migration (kein Bruch).
-  const mastery: Record<string, LeitnerEntry> = {};
-  if (isPlainObject(raw.mastery)) {
-    for (const [id, info] of Object.entries(raw.mastery)) {
-      if (!isPlainObject(info)) continue;
-      const box = Math.min(5, Math.max(1, safeCount(info.box, 1)));
-      mastery[id] = { box, due: safeCount(info.due, 0) };
-    }
-  }
-
-  // Stats: auf den Default-Stats aufsetzen und nur endliche, NICHT-NEGATIVE Ganzzahlen
-  // überschreiben (#511 – gehärtet wie inventory/abbrevUsage; Stats sind durchweg Zähler
-  // bzw. Bestwerte >= 0). Ein negativer/gebrochener Wert fällt für bekannte Keys auf den
-  // Default zurück und wird für dynamische Zusatz-Stats (z.B. stormsFixed) gar nicht erst
-  // übernommen.
-  const stats = def.stats;
-  if (isPlainObject(raw.stats)) {
-    for (const [k, n] of Object.entries(raw.stats)) {
-      if (typeof n === "number" && Number.isFinite(n) && n >= 0) stats[k] = Math.floor(n);
-    }
-  }
-
   const player = isPlainObject(raw.player) ? raw.player : {};
   const streak = isPlainObject(raw.streak) ? raw.streak : {};
 
-  // „Verdiente Abkürzungen" (#297): vorhandenes Feld einfach übernehmen. Fehlt es ganz,
-  // stammt der Stand von VOR dieser Mechanik – wer schon Fortschritt hat, wird per
-  // Sentinel "*" grandfathered (alles frei), damit das spätere Gating (#299) kein bereits
-  // gelerntes Kürzel rückwirkend sperrt. Ein frischer Stand ohne Fortschritt startet leer
-  // und verdient die Kürzel regulär.
-  let unlockedAbbrev: string[];
-  if (raw.unlockedAbbrev !== undefined) {
-    unlockedAbbrev = safeStrArray(raw.unlockedAbbrev);
-  } else {
-    const hatFortschritt = safeCount(raw.xp, 0) > 0 || safeCount(raw.questIdx, 0) > 0 ||
-      (Array.isArray(raw.completedQuests) && raw.completedQuests.length > 0);
-    unlockedAbbrev = hatFortschritt ? [ALL_ABBREV_UNLOCKED] : [];
-  }
-
-  // Nutzungszähler je Baustein (#313): nur endliche, nicht-negative Zahlen übernehmen.
-  // Fehlt das Feld (Alt-Stand), bleibt es leer – kein Bruch, kein Rückschritt.
-  const abbrevUsage: Record<string, number> = {};
-  if (isPlainObject(raw.abbrevUsage)) {
-    for (const [id, n] of Object.entries(raw.abbrevUsage)) {
-      if (typeof n === "number" && Number.isFinite(n) && n >= 0) abbrevUsage[id] = Math.floor(n);
-    }
-  }
-
-  // Quest-Fortschritt auflösen (#353): die Quest-ID ist die Autorität, der numerische
-  // questIdx nur abgeleitet. So bricht das Einfügen/Umsortieren von Quests keinen Stand.
-  //   - currentQuestId vorhanden (Stand ab #353): ID gewinnt -> Index daraus auflösen.
-  //       Unbekannte ID (Quest entfernt) -> Fallback auf den (geklemmten) Zahl-Index,
-  //       damit Fortschritt nicht still auf Quest 0 zurückfällt.
-  //   - currentQuestId fehlt (Alt-Stand VOR #353): aus dem numerischen questIdx ableiten.
-  // Danach wird die ID kanonisch aus dem aufgelösten Index neu gesetzt (Endzustand -> "").
-  // Save-Migration #354: eine evtl. alte Quest-ID (q5, …) zuerst auf den neuen Slug heben.
-  let questIdx: number;
-  if (typeof raw.currentQuestId === "string") {
-    const resolved = questIndexForId(migrateQuestId(raw.currentQuestId));
-    questIdx = resolved >= 0 ? resolved : safeCount(raw.questIdx, 0);
-  } else {
-    questIdx = safeCount(raw.questIdx, 0);
-  }
-  if (questIdx > KQContent.QUESTS.length) questIdx = KQContent.QUESTS.length; // nie über den Endzustand
+  // Quest-Fortschritt auflösen (#353/#410): questIdx aus der ID-Autorität, danach die
+  // kanonische ID; activeQuests ist die alleinige Persistenz-Autorität (#559), die linearen
+  // questStep/taskIdx sind nur der Migrationspfad für Alt-Stände ≤ v3.
+  const questIdx = resolveQuestIdx(raw);
   const currentQuestId = questIdForIndex(questIdx);
-
-  // Schritt-/Aufgaben-Stand der fokussierten Quest aus dem Alt-Stand defensiv lesen (#559: nur
-  // noch Rohmaterial zum Bauen des activeQuests-Eintrags unten, kein persistiertes Feld mehr).
-  // Ein Stand ab v4 trägt den maßgeblichen Fortschritt ohnehin in raw.activeQuests; diese
-  // top-level Felder sind der Migrationspfad für Alt-Stände ≤ v3 (Einzel-Quest → Menge).
-  const questStep = safeCount(raw.questStep, 0);
-  const taskIdx = safeCount(raw.taskIdx, 0);
-
-  // Offene Quests als Menge auflösen (#410). Die Persistenz-Autorität ist `activeQuests`;
-  // die linearen Felder oben sind nur die Arbeitskopie der FOKUSSIERTEN (linearen) Quest.
-  //   - Stand ab v4: `raw.activeQuests` sanitisiert übernehmen – nur echte Quest-IDs (alte
-  //     numerische via #354-Map gehoben); bereits erledigte Quests fallen raus, weil „offen"
-  //     und „erledigt" sich ausschließen.
-  //   - Alt-Stand (≤ v3, kein `activeQuests`): aus der fokussierten Einzel-Quest bauen – genau
-  //     ein offener Eintrag (oder keiner im Endzustand). Das ist die verlustfreie Migration
-  //     „bestehender Einzel-Stand → Set mit einem Eintrag".
-  const completedSet = new Set(safeStrArray(raw.completedQuests).map(migrateQuestId));
-  const active: Record<string, QuestProgress> = {};
-  if (isPlainObject(raw.activeQuests)) {
-    for (const [rawId, prog] of Object.entries(raw.activeQuests)) {
-      const id = migrateQuestId(rawId);
-      if (questIndexForId(id) < 0) continue;   // unbekannte/entfernte Quest -> raus
-      // „erledigt gewinnt" -> nicht zugleich offen; AUSNAHME die fokussierte Quest, die per
-      // Invariante immer offen ist. Ohne diese Ausnahme ginge ihr Schritt-Stand verloren, seit
-      // er nicht mehr redundant top-level persistiert wird (#559): der frühere Invarianten-Fill
-      // unten hätte ihn aus dem entfernten questStep-Feld „gerettet", jetzt gibt es das nicht mehr.
-      if (completedSet.has(id) && id !== currentQuestId) continue;
-      if (!isPlainObject(prog)) continue;
-      // #511: gegen den echten Content klemmen – die Autorität darf keinen Schritt/Aufgabe
-      // jenseits der Quest tragen (sonst persistiert der 999-Zustand und wird beim Fokus tot).
-      active[id] = clampProgress(id, safeCount(prog.step, 0), safeCount(prog.task, 0));
-    }
-  } else if (currentQuestId !== "") {
-    active[currentQuestId] = clampProgress(currentQuestId, questStep, taskIdx);
-  }
-  // Invariante: die fokussierte Quest ist (außer im Endzustand) immer offen – fehlt sie in
-  // einem v4-Stand (kaputt/manipuliert), aus den linearen Feldern ergänzen.
-  if (currentQuestId !== "" && !active[currentQuestId]) active[currentQuestId] = clampProgress(currentQuestId, questStep, taskIdx);
-  const activeQuests = canonicalActiveQuests(active);
-  // Kein Nachziehen einer Arbeitskopie mehr (#559): activeQuests ist die alleinige Autorität,
-  // Schritt/Aufgabe werden zur Laufzeit daraus abgeleitet. Die Klemmung gegen den Content (#511)
-  // ist bereits in clampProgress oben passiert, das jeden activeQuests-Eintrag baut.
+  const activeQuests = resolveActiveQuests(raw, currentQuestId, safeCount(raw.questStep, 0), safeCount(raw.taskIdx, 0));
 
   return {
     xp: safeCount(raw.xp, def.xp),
     coins: toCoins(safeCount(raw.coins, def.coins)),
-    character: typeof raw.character === "number" && Number.isFinite(raw.character) ? raw.character : null,
+    character: safeNumOrNull(raw.character),
     player: { x: safeNum(player.x, def.player.x), y: safeNum(player.y, def.player.y) },
     // Quest-Fortschritt: nur die Autorität persistieren (#559). Schritt/Aufgabe/Index werden
-    // zur Laufzeit aus activeQuests + currentQuestId abgeleitet (Game.questStep()/taskIdx()/
-    // questIdx()) – die lokalen questStep/taskIdx/questIdx oben dienen nur noch dazu, activeQuests
-    // korrekt zu bauen (Alt-Stand-Migration + Klemmung).
+    // zur Laufzeit aus activeQuests + currentQuestId abgeleitet (Game.questStep()/taskIdx()/questIdx()).
     activeQuests,
     currentQuestId,
     completedQuests: safeStrArray(raw.completedQuests).map(migrateQuestId), // alte Quest-IDs -> neue Slugs (#354)
-    inventory,
+    inventory: sanitizeCountMap(raw.inventory),
     owned: safeStrArray(raw.owned),
     activePet: safeStrOrNull(raw.activePet),
     activeFlag: safeStrOrNull(raw.activeFlag),
-    review,
-    mastery,
+    review: sanitizeLeitnerMap(raw.review),
+    mastery: sanitizeLeitnerMap(raw.mastery), // gleiche Form wie review (#219)
     streak: { count: safeCount(streak.count, 0), lastDay: safeCount(streak.lastDay, 0) },
-    streakHintShown: typeof raw.streakHintShown === "boolean" ? raw.streakHintShown : def.streakHintShown,
-    introSeen: typeof raw.introSeen === "boolean" ? raw.introSeen : def.introSeen,
-    questLogIntroShown: typeof raw.questLogIntroShown === "boolean" ? raw.questLogIntroShown : def.questLogIntroShown,
-    unlockedAbbrev,
-    abbrevUsage,
+    streakHintShown: safeBool(raw.streakHintShown, def.streakHintShown),
+    introSeen: safeBool(raw.introSeen, def.introSeen),
+    questLogIntroShown: safeBool(raw.questLogIntroShown, def.questLogIntroShown),
+    unlockedAbbrev: resolveUnlockedAbbrev(raw),
+    abbrevUsage: sanitizeCountMap(raw.abbrevUsage), // Nutzungszähler je Baustein (#313)
     // #316: additives Bool-Flag wie die Abkürzungs-Freischaltung – fehlt es (Alt-Stand),
-    // gilt der Default (gesperrt); ein bestehender Vielspieler schaltet es beim nächsten
-    // getippten Befehl regulär frei (kein Bruch, kein Versions-Bump nötig).
-    cmdHistoryUnlocked: typeof raw.cmdHistoryUnlocked === "boolean" ? raw.cmdHistoryUnlocked : def.cmdHistoryUnlocked,
-    stats,
+    // gilt der Default (gesperrt); ein Vielspieler schaltet es beim nächsten Befehl regulär frei.
+    cmdHistoryUnlocked: safeBool(raw.cmdHistoryUnlocked, def.cmdHistoryUnlocked),
+    stats: sanitizeStats(def.stats, raw.stats),
     lastSeen: safeCount(raw.lastSeen, def.lastSeen),
     // Snapshot ist ein freies Sim-Objekt; nur ein echtes Objekt akzeptieren, sonst null.
     clusterSnapshot: isPlainObject(raw.clusterSnapshot) ? raw.clusterSnapshot : null,
@@ -307,8 +291,6 @@ export function sanitizeState(raw: unknown): GameState {
     questsSinceGate: safeCount(raw.questsSinceGate, 0),
     // Spiel-Zeit-Achse (#413): fraktionale, nicht-negative Tageszahl. Fehlt das Feld
     // (jeder Stand ≤ v4) → Default 0 (= Tag 1, Mittag); kaputt/negativ → ebenfalls 0.
-    // Das ist die verlustfreie Migration: vorher war die Zeit nie persistiert, ein
-    // Alt-Stand startet also völlig korrekt am Tag-1-Anfang, ohne Fortschrittsverlust.
     gameDays: safeNonNegNum(raw.gameDays, def.gameDays),
   };
 }

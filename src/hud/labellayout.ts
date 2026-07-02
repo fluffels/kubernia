@@ -28,6 +28,22 @@ function overlapsX(a: { x: number; w: number }, b: { x: number; w: number }): bo
   return Math.abs(a.x - b.x) < (a.w + b.w) / 2;
 }
 
+/** Eine bereits endgültig platzierte Box (festes Hindernis oder schon entzerrter Tag). */
+interface Placed { x: number; w: number; top: number; bottom: number }
+
+/** Höchste (kleinstes `top`) bereits platzierte Box, die die Box `b` an vertikaler
+ *  Position `y` horizontal überlappt UND vertikal (inkl. `gap`) berührt. `Infinity`,
+ *  wenn `y` frei ist – dann muss `b` nicht weiter angehoben werden. Ausgelagert aus
+ *  der Relaxations-Schleife, damit deren Verschachtelung flach bleibt (max-depth). */
+function highestCollidingTop(b: LayoutBox, y: number, placed: Placed[], gap: number): number {
+  let liftedTop = Infinity;
+  for (const p of placed) {
+    const touches = overlapsX(b, p) && y - b.h / 2 < p.bottom + gap && y + b.h / 2 > p.top - gap;
+    if (touches && p.top < liftedTop) liftedTop = p.top;
+  }
+  return liftedTop;
+}
+
 /**
  * Schiebt sich horizontal überlappende Boxen vertikal nach oben auseinander.
  *
@@ -49,7 +65,6 @@ export function spreadLabelsVertically(boxes: LayoutBox[], gap = 2): number[] {
 
   // Endgültig platzierte Boxen (feste + schon entzerrte) – als Hindernisse für die
   // jeweils nächste bewegliche Box.
-  interface Placed { x: number; w: number; top: number; bottom: number }
   const placed: Placed[] = [];
 
   // Feste Hindernisse zuerst einhängen: sie bleiben stehen, also müssen bewegliche
@@ -76,12 +91,7 @@ export function spreadLabelsVertically(boxes: LayoutBox[], gap = 2): number[] {
     // Sicherheitsnetz. Nötig, weil ein Hub die Box in eine WEITER oben liegende
     // Nachbar-Box schieben kann, die beim ersten Blick noch nicht im Weg war.
     for (let guard = 0; guard <= placed.length; guard++) {
-      let liftedTop = Infinity;
-      for (const p of placed) {
-        if (overlapsX(b, p) && y - b.h / 2 < p.bottom + gap && y + b.h / 2 > p.top - gap) {
-          if (p.top < liftedTop) liftedTop = p.top;
-        }
-      }
+      const liftedTop = highestCollidingTop(b, y, placed, gap);
       if (liftedTop === Infinity) break; // freie Lücke gefunden
       y = liftedTop - gap - b.h / 2;     // knapp über die höchste kollidierende Box
     }

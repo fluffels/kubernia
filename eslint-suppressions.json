@@ -1,32 +1,6 @@
 {
-  "src/content/check-dsl.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
-  "src/content/validate.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-depth": {
-      "count": 2
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/devpanel.ts": {
     "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/game/save.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
-  "src/hud/labellayout.ts": {
-    "max-depth": {
       "count": 1
     }
   },
@@ -119,11 +93,6 @@
   "src/ui/radio.ts": {
     "complexity": {
       "count": 2
-    }
-  },
-  "src/world/maps/harbormap.ts": {
-    "complexity": {
-      "count": 1
     }
   },
   "src/world/regions/archipel.ts": {
