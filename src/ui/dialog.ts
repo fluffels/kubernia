@@ -1,7 +1,7 @@
 import { Game } from "../game";
 import { SFX } from "../sfx";
-import { dialogueNav } from "../overlaykbd";
-import { fmtCmd } from "../markup";
+import { dialogueNav } from "../hud/overlaykbd";
+import { fmtCmd } from "../hud/markup";
 import type { ChoiceStep, ChoiceOption } from "../types";
 import { part, $, NPCS, shuffled } from "./shared";
 

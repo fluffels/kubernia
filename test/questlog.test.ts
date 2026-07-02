@@ -14,7 +14,7 @@ import {
   questLogUnlocked,
   buildQuestDetail,
   type QuestLogRoadmapEntry,
-} from "../src/questlog";
+} from "../src/hud/questlog";
 import type { Quest } from "../src/types";
 
 /** Roadmap-Helfer: n Quests, davon die ersten `done` als abgeschlossen markiert. */

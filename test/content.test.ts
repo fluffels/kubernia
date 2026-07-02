@@ -12,7 +12,7 @@ import { WAREHOUSE_NPC } from "../src/warehouse";
 import { WERFT_NPC } from "../src/werft";
 import { npcSpawnsForMap } from "../src/content/entities";
 import { Sim as KQSim } from "../src/sim";
-import { fmtCmd, CONTENT_HTML_TAGS } from "../src/markup";
+import { fmtCmd, CONTENT_HTML_TAGS } from "../src/hud/markup";
 import type { TeachStep } from "../src/types";
 
 /** Findet Befehls-Karten ohne nicht-leere Begründung (`explain`, #233) – sonst

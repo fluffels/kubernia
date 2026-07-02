@@ -4,7 +4,7 @@
  */
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { pickFunkExplanation, type FunkExplanation } from "../src/funkexplain";
+import { pickFunkExplanation, type FunkExplanation } from "../src/hud/funkexplain";
 import { KQContent } from "../src/content";
 
 /* ---------- pure Auswahl-Mechanik ---------- */

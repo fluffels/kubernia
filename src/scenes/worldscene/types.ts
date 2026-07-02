@@ -22,8 +22,8 @@
 import type Phaser from "phaser";
 import type { Hitbox, Door } from "../../world";
 import type { Spawn } from "../../content/entities";
-import type { LayoutBox } from "../../labellayout";
-import type { Cullable, FrameSampler } from "../../cull";
+import type { LayoutBox } from "../../hud/labellayout";
+import type { Cullable, FrameSampler } from "../../hud/cull";
 import type { MapId } from "../../mapregistry";
 import type { SceneNpc } from "../shared";
 

@@ -81,7 +81,7 @@ Rot-Grün-Sehschwäche-Anteil (~8 % der Männer) relevant, weil es ein **Lernspi
 - **Globale Shortcuts** ([`src/main.ts`](../src/main.ts)): Bewegung (Pfeile/WASD),
   E = Interaktion, T = Terminal, J = Logbuch, B = Album, Esc = schließen/Menü,
   1–4 / ↑↓+Enter = Antwortwahl, ←/Backspace = Dialog zurückblättern (#310).
-- **Modale Tastatur** als pure Logik ([`src/overlaykbd.ts`](../src/overlaykbd.ts)) +
+- **Modale Tastatur** als pure Logik ([`src/hud/overlaykbd.ts`](../src/hud/overlaykbd.ts)) +
   DOM-Anbindung ([`src/ui/overlay.ts:135–150`](../src/ui/overlay.ts)): ↑/↓/w/s
   navigiert Buttons, Enter/Space/E aktiviert, **Fokus wird sichtbar gesetzt**
   (`.sel`-Klasse + `▶`-Marker). Buttons laufen über `data-action`-Delegation, nicht

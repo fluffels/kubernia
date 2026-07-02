@@ -5,7 +5,7 @@
  * Negativfällen (Kante, leere Liste, pausierter Tab) und Red-Green-Schutz
  * (ein Objekt weit draußen MUSS ausgeblendet werden, sonst cullt nichts). */
 import { test, expect } from "vitest";
-import { expandRect, inView, cull, selectVisibleTags, FrameSampler, type Cullable, type Rect, type TagAnchor } from "../src/cull";
+import { expandRect, inView, cull, selectVisibleTags, FrameSampler, type Cullable, type Rect, type TagAnchor } from "../src/hud/cull";
 
 const view: Rect = { x: 100, y: 100, width: 200, height: 120 };
 

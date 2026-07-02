@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   GLYPHS, GLYPH_W, GLYPH_H, CELL_W, CELL_H, ATLAS_CHARS,
   hasGlyph, glyphMatrix, sanitize, FALLBACK_CHAR,
-} from "../src/pixelfont";
+} from "../src/hud/pixelfont";
 
 describe("pixelfont – Glyphen-Daten", () => {
   it("jede Glyphe ist exakt 7 Zeilen × 5 Spalten (kein vertippter Eintrag)", () => {

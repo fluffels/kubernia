@@ -43,7 +43,7 @@
 | `src/ui/dialog.ts` | `dialogUI` | NPC-/Bo-Dialoge. |
 | `src/ui/radio.ts` | `radioUI` | Funkgerät-Terminal (teach/drill/terminal) + freies Üben. |
 | `src/ui/minigame.ts` | `minigameUI` | Stapel-Minispiel. |
-| `src/ui/questlog.ts` | `questlogUI` | Logbuch-Übersicht & -Detail (#326); pure Logik in `src/questlog.ts`. |
+| `src/ui/questlog.ts` | `questlogUI` | Logbuch-Übersicht & -Detail (#326); pure Logik in `src/hud/questlog.ts`. |
 | `src/ui/shop.ts` | `shopUI` | Shop. |
 | `src/ui/quiz.ts` | `quizUI` | Krabben-Quiz (Spaced-Repetition). |
 | `src/ui/save.ts` | `saveUI` | Spielstand-Export/Import + `resetGame`. |

@@ -141,20 +141,20 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/core/coins.ts`](src/core/coins.ts) | pure Domäne | Value Object für Dublonen (#490, Forts. #479): Regel „nicht-negativ + ganzzahlig" + zentrale Arithmetik (Rundung/Multiplikator/Affordability) als `Coins`-Brand + Fabriken/Operationen. |
 | [`src/crashreport.ts`](src/crashreport.ts) | pure Domäne | Absturz-Diagnostik (#504): `buildCrashReport` normalisiert einen beliebigen geworfenen Wert (Error/String/DOMException/Promise-reason) DOM-frei in einen anzeigbaren `{title,message,detail}`-Bericht; die DOM-Umsetzung (globaler Handler + Fallback-Overlay) sitzt in `main.ts`. |
 | [`src/core/rng.ts`](src/core/rng.ts) | pure Domäne | Zufall/Determinismus-SSOT (#492): seedbarer PRNG `mulberry32`/`nextRandom`/`seedGlobalRng` + aus Namen abgeleitete stabile Werte `hashStr`/`hashHex`; ersetzt `Math.random` in `src/sim/**` + `src/content/**`. |
-| [`src/pixelfont.ts`](src/pixelfont.ts) | pure Domäne | Glyphen-Daten der In-Welt-Bitmap-Font (#188). |
-| [`src/markup.ts`](src/markup.ts) | pure Domäne | `fmtCmd`: zeichnet variable Platzhalter `<token>` in Content-Texten als sichtbares „ändere-mich"-Badge aus (#311); die EINE Quelle der Platzhalter-Konvention, angewandt an der Render-Grenze (radio/dialog/quiz/questlog/album). |
-| [`src/cull.ts`](src/cull.ts) | pure Domäne | Off-screen-Culling & FPS-Messung (#82) + Cluster-Tag-Auswahl `selectVisibleTags` (#416). |
-| [`src/overlaykbd.ts`](src/overlaykbd.ts) | pure Domäne | Tastatur-Logik für Modals (#283) + Dialog-Blättern (#310) + Fokusfallen-Index (#506). |
-| [`src/viewdecide.ts`](src/viewdecide.ts) | pure Domäne | Reine Präsentations-Entscheidungen (#500), DOM-frei/testbar: Funk-Session-Priorität + `evaluateSubmission` (Terminal-Bewertung) + `scoreReview` (Quiz) + `resolveTalkTarget` (NPC-Routing). |
-| [`src/toastlife.ts`](src/toastlife.ts) | pure Domäne | Toast-Anzeigedauer-Politik: kurze Belohnung vs. lesbarer Hinweis (>= 15 s) + Fade-Timing (#370). |
-| [`src/kralle.ts`](src/kralle.ts) | pure Domäne | Kralle-Meilenstein-Sprüche: `krallePracticeMilestone(count)` (zählbewusster Spruch an 1/10/25/50/100…, sonst null, #236). |
-| [`src/cmdhistory.ts`](src/cmdhistory.ts) | pure Domäne | Befehlshistorie fürs Funkgerät-Terminal (#316). |
-| [`src/cmdunlock.ts`](src/cmdunlock.ts) | pure Domäne | Freigeschaltete Befehlsfamilien fürs gefilterte `help` (#358): aus dem Quest-Fortschritt abgeleitet (kein neues Save-Feld), `help`/`clear` immer dabei. |
-| [`src/helptext.ts`](src/helptext.ts) | pure Domäne | `help`-Katalog + gefiltertes Rendering (#358) im CLI-Format (ein Befehl/Zeile, ausgerichtete Spalten, #359); der Simulator delegiert sein `help` hierher (eigenes, typfreies Modul → kein Zyklus). |
-| [`src/funkexplain.ts`](src/funkexplain.ts) | pure Domäne | Freies Funken „Was ist gerade passiert?": dosierte Auswahl einer In-World-Erklärung zur Befehlszeile (#362); Katalog ist Content-as-Data (`content/data/funk-explain/<tool>.json`). |
-| [`src/questlog.ts`](src/questlog.ts) | pure Domäne | Logbuch-Übersicht: Quest-Zustände, Nachlese (#326). |
-| [`src/album.ts`](src/album.ts) | pure Domäne | Sammelalbum/Glossar (#278): Befehle (Teach-Intros) + Wissen (Quiz) aus dem Content, nach Thema gruppiert, Freischalt-Ableitung aus `completedQuests`/`review` (kein neues Save-Feld). |
-| [`src/labellayout.ts`](src/labellayout.ts) | pure Domäne | Entzerrt überlappende In-Welt-Beschriftungen (#207). |
+| [`src/hud/pixelfont.ts`](src/hud/pixelfont.ts) | pure Domäne | Glyphen-Daten der In-Welt-Bitmap-Font (#188). |
+| [`src/hud/markup.ts`](src/hud/markup.ts) | pure Domäne | `fmtCmd`: zeichnet variable Platzhalter `<token>` in Content-Texten als sichtbares „ändere-mich"-Badge aus (#311); die EINE Quelle der Platzhalter-Konvention, angewandt an der Render-Grenze (radio/dialog/quiz/questlog/album). |
+| [`src/hud/cull.ts`](src/hud/cull.ts) | pure Domäne | Off-screen-Culling & FPS-Messung (#82) + Cluster-Tag-Auswahl `selectVisibleTags` (#416). |
+| [`src/hud/overlaykbd.ts`](src/hud/overlaykbd.ts) | pure Domäne | Tastatur-Logik für Modals (#283) + Dialog-Blättern (#310) + Fokusfallen-Index (#506). |
+| [`src/hud/viewdecide.ts`](src/hud/viewdecide.ts) | pure Domäne | Reine Präsentations-Entscheidungen (#500), DOM-frei/testbar: Funk-Session-Priorität + `evaluateSubmission` (Terminal-Bewertung) + `scoreReview` (Quiz) + `resolveTalkTarget` (NPC-Routing). |
+| [`src/hud/toastlife.ts`](src/hud/toastlife.ts) | pure Domäne | Toast-Anzeigedauer-Politik: kurze Belohnung vs. lesbarer Hinweis (>= 15 s) + Fade-Timing (#370). |
+| [`src/hud/kralle.ts`](src/hud/kralle.ts) | pure Domäne | Kralle-Meilenstein-Sprüche: `krallePracticeMilestone(count)` (zählbewusster Spruch an 1/10/25/50/100…, sonst null, #236). |
+| [`src/hud/cmdhistory.ts`](src/hud/cmdhistory.ts) | pure Domäne | Befehlshistorie fürs Funkgerät-Terminal (#316). |
+| [`src/hud/cmdunlock.ts`](src/hud/cmdunlock.ts) | pure Domäne | Freigeschaltete Befehlsfamilien fürs gefilterte `help` (#358): aus dem Quest-Fortschritt abgeleitet (kein neues Save-Feld), `help`/`clear` immer dabei. |
+| [`src/hud/helptext.ts`](src/hud/helptext.ts) | pure Domäne | `help`-Katalog + gefiltertes Rendering (#358) im CLI-Format (ein Befehl/Zeile, ausgerichtete Spalten, #359); der Simulator delegiert sein `help` hierher (eigenes, typfreies Modul → kein Zyklus). |
+| [`src/hud/funkexplain.ts`](src/hud/funkexplain.ts) | pure Domäne | Freies Funken „Was ist gerade passiert?": dosierte Auswahl einer In-World-Erklärung zur Befehlszeile (#362); Katalog ist Content-as-Data (`content/data/funk-explain/<tool>.json`). |
+| [`src/hud/questlog.ts`](src/hud/questlog.ts) | pure Domäne | Logbuch-Übersicht: Quest-Zustände, Nachlese (#326). |
+| [`src/hud/album.ts`](src/hud/album.ts) | pure Domäne | Sammelalbum/Glossar (#278): Befehle (Teach-Intros) + Wissen (Quiz) aus dem Content, nach Thema gruppiert, Freischalt-Ableitung aus `completedQuests`/`review` (kein neues Save-Feld). |
+| [`src/hud/labellayout.ts`](src/hud/labellayout.ts) | pure Domäne | Entzerrt überlappende In-Welt-Beschriftungen (#207). |
 | [`src/tilemap.ts`](src/tilemap.ts) | pure Domäne | Tiled-`.tmj`-Grundgerüst (Typen/Validierung/Kollision, #191). |
 | [`src/harbormap.ts`](src/harbormap.ts) | pure Domäne | Hafenkarte als Daten + Tiled-Serialisierung (#192). |
 | [`src/mapregistry.ts`](src/mapregistry.ts) | pure Domäne | Zentrale Map-Registry (ID → `.tmj` + Metadaten, #193). |

@@ -6,7 +6,7 @@
  * (kein Überlapp → keine Bewegung, feste Hindernisse bleiben fix, Determinismus) und
  * ein Red-Green-Schutz gegen einen Test, der die Entzerrung gar nicht fordert. */
 import { test, expect } from "vitest";
-import { spreadLabelsVertically, type LayoutBox } from "../src/labellayout";
+import { spreadLabelsVertically, type LayoutBox } from "../src/hud/labellayout";
 
 /** Wendet die berechneten Versätze an und liefert die finalen Boxen (Mittelpunkt verschoben). */
 function applied(boxes: LayoutBox[], gap?: number) {

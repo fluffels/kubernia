@@ -13,7 +13,7 @@
  * des laufenden. So taucht ein Befehl genau dann in help auf, wenn er gerade gelehrt
  * wird (sein Teach-Intro steht ohnehin auf dem Schirm), nie früher.
  */
-import type { Quest, QuestStep } from "./types";
+import type { Quest, QuestStep } from "../types";
 
 /** Die Meta-Befehle, die von Anfang an offenstehen (kein Lernpfad nötig). */
 export const ALWAYS_AVAILABLE_COMMANDS: readonly string[] = ["help", "clear"];

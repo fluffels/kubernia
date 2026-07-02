@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { krallePracticeMilestone, kralleClawAside } from "../src/kralle";
+import { krallePracticeMilestone, kralleClawAside } from "../src/hud/kralle";
 
 // Pure Meilenstein-Politik der Kralle-Übungssprüche (#236). Kralle streut nur an
 // bestimmten Gesamt-Übungszahlen einen zählbewussten Spruch ein – die DOM-Anzeige

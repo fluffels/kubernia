@@ -2,8 +2,8 @@ import { Game } from "../game";
 import { SFX } from "../sfx";
 import { worldScene, interiorOpen } from "../runtime";
 import { part, $, NPCS, SMALLTALK } from "./shared";
-import { resolveTalkTarget } from "../viewdecide";
-import { TOAST_LIFE_MS, HINT_LIFE_MS, toastFadeDelaySeconds } from "../toastlife";
+import { resolveTalkTarget } from "../hud/viewdecide";
+import { TOAST_LIFE_MS, HINT_LIFE_MS, toastFadeDelaySeconds } from "../hud/toastlife";
 
 export const hudUI = part({
   /* ========== HUD, Toasts, Alarm ========== */

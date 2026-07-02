@@ -11,7 +11,7 @@
  *    (keine verwaiste, unsammelbare Karte) und jeder Befehl hat eine Heimat.
  */
 import { describe, it, expect } from "vitest";
-import { buildAlbum, extractTaughtCommand, albumUnlocked, type AlbumUnlockState } from "../src/album";
+import { buildAlbum, extractTaughtCommand, albumUnlocked, type AlbumUnlockState } from "../src/hud/album";
 import { KQContent } from "../src/content";
 import type { Quest, TeachStep, ChoiceStep } from "../src/types";
 import type { QuizCard, QuestTopic } from "../src/content/loader";

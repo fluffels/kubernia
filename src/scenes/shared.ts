@@ -5,7 +5,7 @@ import Phaser from "phaser";
 import { KQContent } from "../content";
 import { type Spawn, type EntityObject } from "../content/entities";
 import { type Hitbox } from "../world";
-import { ATLAS_CHARS, CELL_W, CELL_H, GLYPH_W, GLYPH_H, glyphMatrix, sanitize } from "../pixelfont";
+import { ATLAS_CHARS, CELL_W, CELL_H, GLYPH_W, GLYPH_H, glyphMatrix, sanitize } from "../hud/pixelfont";
 import { SFX } from "../sfx";
 import { keys, setWorldScene, setInteriorOpen, type WorldSceneRef } from "../runtime";
 import { warpAt, type Warp } from "../warps";

@@ -6,7 +6,7 @@
  * leeres Overlay, irrelevante Tasten, Wrap), damit kein Maus-only-Knopf bleibt.
  */
 import { test, expect, describe } from "vitest";
-import { resolveOverlayKey, dialogueNav, nextFocusIndex, type OverlayButton } from "../src/overlaykbd";
+import { resolveOverlayKey, dialogueNav, nextFocusIndex, type OverlayButton } from "../src/hud/overlaykbd";
 
 // Kürzel zum Bauen von Button-Listen.
 const b = (o: Partial<OverlayButton> = {}): OverlayButton => ({ disabled: false, primary: false, ...o });

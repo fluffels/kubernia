@@ -5,7 +5,7 @@
 import { KQContent } from "../content";
 import { Sim as KQSim } from "../sim";
 import { NPC_SPAWNS, TILE } from "../world";
-import { unlockedCommandFamilies } from "../cmdunlock";
+import { unlockedCommandFamilies } from "../hud/cmdunlock";
 import type { QuestStep, FunkStep } from "../types";
 import { part, makeDefaultState, questIdForIndex } from "./shared";
 

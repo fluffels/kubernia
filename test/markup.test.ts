@@ -4,7 +4,7 @@
  */
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { fmtCmd, CONTENT_HTML_TAGS } from "../src/markup";
+import { fmtCmd, CONTENT_HTML_TAGS } from "../src/hud/markup";
 
 test("Platzhalter <token> wird zum sichtbaren .ph-Badge mit erhaltenen spitzen Klammern (#311)", () => {
   assert.equal(fmtCmd("docker pull <image>"), 'docker pull <span class="ph">&lt;image&gt;</span>');

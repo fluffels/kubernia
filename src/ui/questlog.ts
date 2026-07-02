@@ -1,8 +1,8 @@
 import { Game } from "../game";
 import { KQContent } from "../content";
 import { worldScene } from "../runtime";
-import { buildQuestLogRows, questLogUnlocked, buildQuestDetail } from "../questlog";
-import { fmtCmd } from "../markup";
+import { buildQuestLogRows, questLogUnlocked, buildQuestDetail } from "../hud/questlog";
+import { fmtCmd } from "../hud/markup";
 import { part, $, esc, NPCS } from "./shared";
 
 export const questlogUI = part({

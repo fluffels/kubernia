@@ -1,8 +1,8 @@
 import { Game } from "../game";
 import { SFX } from "../sfx";
 import { lockedAbbrevInInput, abbrevLockHint } from "../content/abbrev";
-import { fmtCmd } from "../markup";
-import { scoreReview } from "../viewdecide";
+import { fmtCmd } from "../hud/markup";
+import { scoreReview } from "../hud/viewdecide";
 import { part, $, esc, CMD_MAX_ATTEMPTS, shuffled } from "./shared";
 
 export const quizUI = part({
