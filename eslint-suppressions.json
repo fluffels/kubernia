@@ -96,14 +96,6 @@
       "count": 1
     }
   },
-  "src/sim/kubectl/inspect.ts": {
-    "complexity": {
-      "count": 3
-    },
-    "max-lines-per-function": {
-      "count": 2
-    }
-  },
   "src/sim/kubectl/lifecycle.ts": {
     "complexity": {
       "count": 3
