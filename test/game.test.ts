@@ -9,7 +9,7 @@
 import { test, expect, beforeAll, beforeEach } from "vitest";
 import { stubWindowLocalStorage, loadGameStack } from "./support/browser-env";
 import { KQContent } from "../src/content";
-import { NPC_SPAWNS, TILE, TALK_RANGE } from "../src/world";
+import { NPC_SPAWNS, TILE, TALK_RANGE } from "../src/world/world";
 import { setWorldScene, setPayoutSink } from "../src/runtime";
 import { MAP_REGISTRY } from "../src/world/maps/mapregistry";
 import { DAY_CYCLE_MS } from "../src/core/clock";

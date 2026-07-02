@@ -12,7 +12,7 @@
  * und wird hier auf seinen konkreten Map-Typ gecastet (derselbe Builder hat es erzeugt).
  */
 import Phaser from "phaser";
-import { circleHitbox, rectHitbox } from "../world";
+import { circleHitbox, rectHitbox } from "../world/world";
 import { npcSpawnsForMap } from "../content/entities";
 import { T, DEVICE } from "./shared";
 import type { RegionConfig, RegionScene } from "./RegionScene";

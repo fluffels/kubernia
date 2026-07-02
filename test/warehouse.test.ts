@@ -8,7 +8,7 @@
  * wirklich begehbar erreichbar sein, sonst wäre das Viertel eine hübsche, aber tote Karte.
  */
 import { test, expect } from "vitest";
-import { TILE } from "../src/world";
+import { TILE } from "../src/world/world";
 import {
   WW, WH, WATER, DOCK, PATH, STONE_CODES,
   buildWarehouse, warpAt,

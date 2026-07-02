@@ -19,7 +19,7 @@ import {
   objectFootprint,
 } from "../src/content/entities";
 import { NPCS, ContentValidationError } from "../src/content/loader";
-import { NPC_SPAWNS } from "../src/world";
+import { NPC_SPAWNS } from "../src/world/world";
 import { ARCHIPEL_NPC, ARCHIPEL_QUEST_TRIGGER } from "../src/world/regions/archipel";
 import { LIGHTHOUSE_NPC, LIGHTHOUSE_QUEST_TRIGGER, LIGHTHOUSE_TOWER, LIGHTHOUSE_GRAFANA, LIGHTHOUSE_BELL } from "../src/world/regions/lighthouse";
 import { WAREHOUSE_NPC, WAREHOUSE_QUEST_TRIGGER, WAREHOUSE_CRANES, WAREHOUSE_CONTAINERS } from "../src/world/regions/warehouse";

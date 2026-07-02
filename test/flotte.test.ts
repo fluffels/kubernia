@@ -8,7 +8,7 @@
  * sonst wäre die Flotte eine hübsche, aber tote Karte.
  */
 import { test, expect } from "vitest";
-import { TILE } from "../src/world";
+import { TILE } from "../src/world/world";
 import {
   FW, FH, WATER, DOCK, DX0, DX1, DY0, DY1,
   buildFlotte, warpAt,

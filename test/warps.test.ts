@@ -13,10 +13,10 @@
  * Ausführen mit:  npm test
  */
 import { describe, it, expect } from "vitest";
-import { TILE } from "../src/world";
+import { TILE } from "../src/world/world";
 import {
   REGION_WARPS, regionWarpsFromMap, armWarps, triggeredWarp, warpAt, type RegionWarp,
-} from "../src/warps";
+} from "../src/world/warps";
 import { WORLD_TO_ARCHIPEL, WORLD_RETURN, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL } from "../src/world/regions/archipel";
 import { WORLD_TO_LIGHTHOUSE, WORLD_RETURN_LH, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL } from "../src/world/regions/lighthouse";
 import { WORLD_TO_WAREHOUSE, WORLD_RETURN_WH, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL } from "../src/world/regions/warehouse";

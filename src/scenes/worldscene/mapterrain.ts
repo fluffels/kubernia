@@ -9,7 +9,7 @@
  * Gebäude/Leuchtturm/Türen-Optik) bleibt in terrain.ts; die datengetriebene Region-
  * Szenerie folgt mit #427 (RegionScene). Hier liegt nur der gemeinsame Terrain-Schritt.
  */
-import { NPC_SPAWNS, ENTRANCES, doorsFromObjectGroup, npcsFromObjectGroup } from "../../world";
+import { NPC_SPAWNS, ENTRANCES, doorsFromObjectGroup, npcsFromObjectGroup } from "../../world/world";
 import { collisionGrid, objectGroup } from "../../world/maps/tilemap";
 import { getMapEntry } from "../../world/maps/mapregistry";
 import type { WorldSceneLike } from "./types";

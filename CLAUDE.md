@@ -127,16 +127,16 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/content/drills/storage.ts`](src/content/drills/storage.ts) | pure Domäne | Storage-Drills (StatefulSet/PVC/Snapshot, #457). |
 | [`src/content/drills/werft.ts`](src/content/drills/werft.ts) | pure Domäne | Werft-Capstone-Drills (Build→Deploy→Expose→Test, #457). |
 | [`src/content/abbrev.ts`](src/content/abbrev.ts) | pure Domäne | Langform↔Kürzel-Katalog („verdiente Abkürzung"). |
-| [`src/world.ts`](src/world.ts) | pure Domäne | Welt-Geometrie + Autotile (#340) + Sub-Tile-Kollision (#343/#386). → [world.md](docs/module/world.md) |
+| [`src/world/world.ts`](src/world/world.ts) | pure Domäne | Welt-Geometrie + Autotile (#340) + Sub-Tile-Kollision (#343/#386). → [world.md](docs/module/world.md) |
 | [`src/world/regions/archipel.ts`](src/world/regions/archipel.ts) | pure Domäne | GitOps-Archipel-Insel: Geometrie + Warp. |
 | [`src/world/regions/lighthouse.ts`](src/world/regions/lighthouse.ts) | pure Domäne | Monitoring-Leuchtturm-Klippe: Geometrie + Warp (#111). |
 | [`src/world/regions/warehouse.ts`](src/world/regions/warehouse.ts) | pure Domäne | Lagerhallen-Viertel/Hafenkai: Geometrie + Warp (#124). |
 | [`src/world/regions/watchtower.ts`](src/world/regions/watchtower.ts) | pure Domäne | Wachturm-Quartier: Festungs-Bailey-Geometrie + Anleger/Warp + Turm-Fußabdruck (#130). |
 | [`src/world/regions/flotte.ts`](src/world/regions/flotte.ts) | pure Domäne | Expeditions-Flotte: Flaggschiff-Deck-Geometrie + Anleger/Warp (#148). |
 | [`src/world/regions/werft.ts`](src/world/regions/werft.ts) | pure Domäne | Heimat-Werft: Werft-Hof-Geometrie + Helling/Anleger/Warp (Phase-10-Capstone, #165). |
-| [`src/warps.ts`](src/warps.ts) | pure Domäne | Region-Übergänge als Daten-Liste (`REGION_WARPS`) + reiner Anti-Pingpong-Kern `armWarps`/`triggeredWarp` (#426). |
-| [`src/decor.ts`](src/decor.ts) | pure Domäne | Deterministische Deko-Platzierung. |
-| [`src/hazards.ts`](src/hazards.ts) | pure Domäne | Gefahren-Entscheidungskern (#512): `resolveHazardTick` (welche Gefahr startet/löst auf/tickt) + Start-Gate + Opfer-Eignung; `scenes/worldscene/events.ts` führt nur noch die Effekte aus. |
+| [`src/world/warps.ts`](src/world/warps.ts) | pure Domäne | Region-Übergänge als Daten-Liste (`REGION_WARPS`) + reiner Anti-Pingpong-Kern `armWarps`/`triggeredWarp` (#426). |
+| [`src/world/decor.ts`](src/world/decor.ts) | pure Domäne | Deterministische Deko-Platzierung. |
+| [`src/world/hazards.ts`](src/world/hazards.ts) | pure Domäne | Gefahren-Entscheidungskern (#512): `resolveHazardTick` (welche Gefahr startet/löst auf/tickt) + Start-Gate + Opfer-Eignung; `scenes/worldscene/events.ts` führt nur noch die Effekte aus. |
 | [`src/core/clock.ts`](src/core/clock.ts) | pure Domäne | Zeit-/Datums-Ableitung für die HUD-Uhr. |
 | [`src/core/coins.ts`](src/core/coins.ts) | pure Domäne | Value Object für Dublonen (#490, Forts. #479): Regel „nicht-negativ + ganzzahlig" + zentrale Arithmetik (Rundung/Multiplikator/Affordability) als `Coins`-Brand + Fabriken/Operationen. |
 | [`src/crashreport.ts`](src/crashreport.ts) | pure Domäne | Absturz-Diagnostik (#504): `buildCrashReport` normalisiert einen beliebigen geworfenen Wert (Error/String/DOMException/Promise-reason) DOM-frei in einen anzeigbaren `{title,message,detail}`-Bericht; die DOM-Umsetzung (globaler Handler + Fallback-Overlay) sitzt in `main.ts`. |

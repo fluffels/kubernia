@@ -11,7 +11,7 @@
  * (scene.tree/objDeco/deco/building/get) bleiben auf der Szene.
  */
 import Phaser from "phaser";
-import { SHIP, type Door } from "../../world";
+import { SHIP, type Door } from "../../world/world";
 import { WORLD_TO_ARCHIPEL } from "../../world/regions/archipel";
 import { WORLD_TO_LIGHTHOUSE, WORLD_RETURN_LH } from "../../world/regions/lighthouse";
 import { DOCK as WH_DOCK, WORLD_JETTY_WH, WORLD_TO_WAREHOUSE } from "../../world/regions/warehouse";

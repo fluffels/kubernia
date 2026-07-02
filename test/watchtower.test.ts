@@ -8,7 +8,7 @@
  * wäre das Quartier eine hübsche, aber tote Karte.
  */
 import { test, expect } from "vitest";
-import { TILE } from "../src/world";
+import { TILE } from "../src/world/world";
 import {
   WTW, WTH, WATER, DOCK, PATH, STONE_CODES,
   buildWatchtower, warpAt, watchtowerFootprint, WATCHTOWER_TOWER,

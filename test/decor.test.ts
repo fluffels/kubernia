@@ -5,7 +5,7 @@
  * werden daher vor allem die harten Garantien – inklusive Negativ-/Grenzfälle
  * und ein Red-Green-Schutz gegen einen Test, der den Seed ignorieren würde. */
 import { test, expect } from "vitest";
-import { hash01, strSeed, pickPlacements, grassTuftStyle, type ScatterSpec } from "../src/decor";
+import { hash01, strSeed, pickPlacements, grassTuftStyle, type ScatterSpec } from "../src/world/decor";
 
 const W = 52, H = 40;
 /** Standard-Akzeptanz: ganze Karte gültig (Grenzen 1..W-2 / 1..H-2 macht pickPlacements selbst). */

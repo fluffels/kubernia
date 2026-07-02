@@ -15,10 +15,10 @@
  * eigenen, fokussierten Modul.
  */
 import { keys, setInteriorOpen } from "../../runtime";
-import { findDoorAt, type Door } from "../../world";
+import { findDoorAt, type Door } from "../../world/world";
 import { SFX } from "../../sfx";
 import { T } from "../shared";
-import { regionWarpsFromMap, armWarps, triggeredWarp, type RegionWarp } from "../../warps";
+import { regionWarpsFromMap, armWarps, triggeredWarp, type RegionWarp } from "../../world/warps";
 import type { WorldSceneLike } from "./types";
 
 /** #6: Haus betreten – WorldScene schlafen legen (friert + blendet sie aus)

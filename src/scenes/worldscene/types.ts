@@ -20,7 +20,7 @@
  * Hand (das war die frühere DynTagLike-Doppelpflege in clustersync.ts).
  */
 import type Phaser from "phaser";
-import type { Hitbox, Door } from "../../world";
+import type { Hitbox, Door } from "../../world/world";
 import type { Spawn } from "../../content/entities";
 import type { LayoutBox } from "../../hud/labellayout";
 import type { Cullable, FrameSampler } from "../../hud/cull";

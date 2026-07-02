@@ -4,7 +4,7 @@
  * Phaser-frei und unit-testbar (Anwendungsschicht). */
 import { KQContent } from "../content";
 import { Sim as KQSim } from "../sim";
-import { NPC_SPAWNS, TILE } from "../world";
+import { NPC_SPAWNS, TILE } from "../world/world";
 import { unlockedCommandFamilies } from "../hud/cmdunlock";
 import type { QuestStep, FunkStep } from "../types";
 import { part, makeDefaultState, questIdForIndex } from "./shared";

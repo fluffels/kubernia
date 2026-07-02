@@ -9,7 +9,7 @@
  * wäre die Insel eine hübsche, aber tote Karte.
  */
 import { test, expect } from "vitest";
-import { TILE } from "../src/world";
+import { TILE } from "../src/world/world";
 import {
   AW, AH, WATER, SAND, PATH, DOCK,
   buildArchipel, warpAt,

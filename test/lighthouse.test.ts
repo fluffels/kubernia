@@ -9,7 +9,7 @@
  * sein, sonst wäre die Klippe eine hübsche, aber tote Karte.
  */
 import { test, expect } from "vitest";
-import { TILE } from "../src/world";
+import { TILE } from "../src/world/world";
 import {
   LW, LH, WATER, PATH, STONE_CODES,
   buildLighthouse, warpAt,

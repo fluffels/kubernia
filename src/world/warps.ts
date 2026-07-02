@@ -16,14 +16,14 @@
  * nur zur Liste GEBÜNDELT, nicht dupliziert. Darum ein TS-Datenmodul und keine JSON-Datei:
  * eine statische JSON würde diese berechneten Konstanten von ihrer Geometrie entkoppeln.
  */
-import { warpAt, type Warp } from "./world/regions/archipel";
-import { WORLD_TO_ARCHIPEL, WORLD_RETURN, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL } from "./world/regions/archipel";
-import { WORLD_TO_LIGHTHOUSE, WORLD_RETURN_LH, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL } from "./world/regions/lighthouse";
-import { WORLD_TO_WAREHOUSE, WORLD_RETURN_WH, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL } from "./world/regions/warehouse";
-import { WORLD_TO_WATCHTOWER, WORLD_RETURN_WT, WATCHTOWER_TO_WORLD, WATCHTOWER_ARRIVAL } from "./world/regions/watchtower";
-import { WORLD_TO_FLOTTE, WORLD_RETURN_FL, FLOTTE_TO_WORLD, FLOTTE_ARRIVAL } from "./world/regions/flotte";
-import { WORLD_TO_WERFT, WORLD_RETURN_WF, WERFT_TO_WORLD, WERFT_ARRIVAL } from "./world/regions/werft";
-import type { MapId } from "./world/maps/mapregistry";
+import { warpAt, type Warp } from "./regions/archipel";
+import { WORLD_TO_ARCHIPEL, WORLD_RETURN, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL } from "./regions/archipel";
+import { WORLD_TO_LIGHTHOUSE, WORLD_RETURN_LH, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL } from "./regions/lighthouse";
+import { WORLD_TO_WAREHOUSE, WORLD_RETURN_WH, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL } from "./regions/warehouse";
+import { WORLD_TO_WATCHTOWER, WORLD_RETURN_WT, WATCHTOWER_TO_WORLD, WATCHTOWER_ARRIVAL } from "./regions/watchtower";
+import { WORLD_TO_FLOTTE, WORLD_RETURN_FL, FLOTTE_TO_WORLD, FLOTTE_ARRIVAL } from "./regions/flotte";
+import { WORLD_TO_WERFT, WORLD_RETURN_WF, WERFT_TO_WORLD, WERFT_ARRIVAL } from "./regions/werft";
+import type { MapId } from "./maps/mapregistry";
 
 export { warpAt, type Warp };
 

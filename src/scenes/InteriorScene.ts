@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { UI } from "../ui";
 import { KQContent } from "../content";
 import { SFX } from "../sfx";
-import { TALK_RANGE, interiorEAction, interiorEFlank, type Door } from "../world";
+import { TALK_RANGE, interiorEAction, interiorEFlank, type Door } from "../world/world";
 import { keys, setInteriorOpen } from "../runtime";
 import { sanitize } from "../hud/pixelfont";
 import { T, STONE, WOOD, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, pixelText, type ScenePlayer } from "./shared";

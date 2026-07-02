@@ -20,7 +20,7 @@ Default (Umschalt-Pfad); abgelöst wird sie erst in
   parsbar (kein XML-Parser nötig) und gut im Diff lesbar.
 - **Orthogonal, 16×16 px Tiles.** Teil 1 unterstützt bewusst nur orthogonale
   Maps mit 16er-Raster (passt zum `pixelArt`-Renderer und zu `TILE = 16` in
-  [`src/world.ts`](../../src/world.ts)).
+  [`src/world/world.ts`](../../src/world/world.ts)).
 - **Eingebettete Tilesets** (kein „Embed in map"-Häkchen weglassen). Externe
   `.tsx`-Tilesets sind in Teil 1 noch nicht unterstützt – der Validator lehnt
   Tilesets ohne `image`-Feld ab.

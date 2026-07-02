@@ -59,7 +59,7 @@ Culling, mehrere Szenen, Kamera-Follow/Bounds, Partikel, Tweens. Genutzt wird
 davon aber **kein** Tilemap-System: `WorldScene.buildMap()` in `src/scenes.ts`
 setzt **jede Kachel, jeden Weg, jedes Gebäude über fest verdrahtete
 Koordinaten** auf einer einzigen 52×40-Karte. NPC-Plätze und Türen stehen als
-Hardcode-Listen in `src/world.ts` (`NPC_SPAWNS`, `DOORS`), Deko wird per
+Hardcode-Listen in `src/world/world.ts` (`NPC_SPAWNS`, `DOORS`), Deko wird per
 `scatter()`/`objDeco()` im Code gestreut.
 
 Das ist für die eine Hafenszene bewährt und gut testbar (`world.ts` ist

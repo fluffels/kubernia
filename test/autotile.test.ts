@@ -12,7 +12,7 @@ import { test, expect } from "vitest";
 import {
   NB, reduceBlobMask, maskFromNeighbors, autotileIndex, autotileIndexFromMask,
   neighbors8, BLOB_MASKS, AUTOTILE_BLOB_COUNT, type Neighbors8,
-} from "../src/world";
+} from "../src/world/world";
 
 const NONE: Neighbors8 = { n: false, ne: false, e: false, se: false, s: false, sw: false, w: false, nw: false };
 /** Bequemer Maskenbau im Test: nur die genannten Nachbarn sind „gleicher Typ". */

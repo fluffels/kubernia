@@ -14,7 +14,7 @@ import { test, expect } from "vitest";
 import {
   TILE, circleHitbox, rectHitbox, playerFootprint, hitboxBlocks, blockedByHitboxes,
   npcHitboxes, footprintSolid, resolveMove, type Hitbox, type Spawn, type SolidAt,
-} from "../src/world";
+} from "../src/world/world";
 
 const NONE: SolidAt = () => false;
 

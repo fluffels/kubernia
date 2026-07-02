@@ -19,7 +19,7 @@ import { UI } from "../../ui";
 import { KQContent } from "../../content";
 import { SFX } from "../../sfx";
 import { T } from "../shared";
-import { hazardStartable, stormVictims, pirateVictims, resolveHazardTick } from "../../hazards";
+import { hazardStartable, stormVictims, pirateVictims, resolveHazardTick } from "../../world/hazards";
 import type { WorldSceneLike } from "./types";
 
 export function scheduleEvents(scene: WorldSceneLike, delaySec?: number) {

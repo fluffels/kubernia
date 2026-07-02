@@ -7,7 +7,7 @@ import {
   resolveHazardTick,
   type ActiveHazards,
   type HazardClusterView,
-} from "../src/hazards";
+} from "../src/world/hazards";
 
 // Reiner Entscheidungskern der Zufalls-Gefahren (#512). Vorher steckten die
 // spielentscheidenden Bedingungen (Belohnung/Strafe, Deadline, „besiegt wann")

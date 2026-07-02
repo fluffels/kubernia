@@ -10,8 +10,8 @@
  * deterministische Platzierungs-Mathematik ist Phaser-frei in src/decor.ts.
  */
 import Phaser from "phaser";
-import { pickPlacements, strSeed, hash01, grassTuftStyle } from "../../decor";
-import { circleHitbox, rectHitbox, SHIP_DOOR } from "../../world";
+import { pickPlacements, strSeed, hash01, grassTuftStyle } from "../../world/decor";
+import { circleHitbox, rectHitbox, SHIP_DOOR } from "../../world/world";
 import { gameClock, DAY_CYCLE_MS, withStartOffset } from "../../core/clock";
 import { UI } from "../../ui";
 import { WORLD_TO_ARCHIPEL } from "../../world/regions/archipel";

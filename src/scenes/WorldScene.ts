@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { Game } from "../game";
 import { UI } from "../ui";
 import { KQContent } from "../content";
-import { npcSolidIndices, npcHitboxes, resolveMove, SHIP_KRALLE, type Hitbox, type Door } from "../world";
+import { npcSolidIndices, npcHitboxes, resolveMove, SHIP_KRALLE, type Hitbox, type Door } from "../world/world";
 import { type Spawn } from "../content/entities";
 import { type LayoutBox } from "../hud/labellayout";
 import { keys, setWorldScene } from "../runtime";

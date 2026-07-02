@@ -19,12 +19,12 @@
  */
 import Phaser from "phaser";
 import { UI } from "../ui";
-import { resolveMove, circleHitbox, npcHitboxes, type Hitbox } from "../world";
+import { resolveMove, circleHitbox, npcHitboxes, type Hitbox } from "../world/world";
 import { npcSpawnsForMap, objectsForMap } from "../content/entities";
 import { WATER, SAND, PATH, DOCK } from "../world/regions/archipel";
 import { keys, setWorldScene, setInteriorOpen } from "../runtime";
 import { T, FOAM, WANG, STONE, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText, queueAssetLoad, sliceSheets, IslandScene, type SceneNpc } from "./shared";
-import type { Warp } from "../warps";
+import type { Warp } from "../world/warps";
 import { assetsForScene } from "../assets-data";
 
 /** #343/#386: Radius der runden Sub-Tile-Hitboxen (Steine/Büsche/NPCs) – in allen

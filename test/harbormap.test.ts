@@ -38,7 +38,7 @@ import {
   NPC_LAYER,
 } from "../src/world/maps/harbormap";
 import { collisionGrid, objectGroup } from "../src/world/maps/tilemap";
-import { ENTRANCES, doorsFromObjectGroup, npcsFromObjectGroup, NPC_SPAWNS } from "../src/world";
+import { ENTRANCES, doorsFromObjectGroup, npcsFromObjectGroup, NPC_SPAWNS } from "../src/world/world";
 
 const harborPath = fileURLToPath(new URL("../assets/maps/harbor.tmj", import.meta.url));
 

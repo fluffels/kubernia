@@ -11,7 +11,7 @@
  * test/sim/werft.test.ts abgedeckt, #164.)
  */
 import { test, expect } from "vitest";
-import { TILE } from "../src/world";
+import { TILE } from "../src/world/world";
 import {
   WERFT_W, WERFT_H, WATER, DOCK, QX0, QX1, QY0, QY1,
   buildWerft, warpAt,
