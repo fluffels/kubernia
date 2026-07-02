@@ -112,7 +112,7 @@ function slugsSansRegistry(n: number): string[] {
 function expectFocusedActiveQuests(): void {
   const cur = Game.state.currentQuestId;
   if (cur === "") { expect(Game.state.activeQuests).toEqual({}); return; }
-  expect(Game.state.activeQuests).toEqual({ [cur]: { step: Game.state.questStep, task: Game.state.taskIdx } });
+  expect(Game.state.activeQuests).toEqual({ [cur]: { step: Game.questStep(), task: Game.taskIdx() } });
 }
 
 /**
@@ -150,7 +150,7 @@ test("v1 (Docker-Bogen): currentQuestId aus questIdx abgeleitet, alte IDs gemapp
   loadFixture("savegame-v1-docker-arc.json");
 
   // #353: currentQuestId fehlt im v1-Stand → wird aus questIdx abgeleitet.
-  expect(Game.state.questIdx).toBe(6);
+  expect(Game.questIdx()).toBe(6);
   // QUESTS[6] = "docker-build-image": die Einschübe docker-common-images (#448, Index 2) und
   // docker-registry (#449, Index 7) verschieben, was der gespeicherte Zahl-Index 6 auflöst.
   expect(Game.state.currentQuestId).toBe(KQContent.QUESTS[6].id);
@@ -173,7 +173,7 @@ test("v1 (Docker-Bogen): currentQuestId aus questIdx abgeleitet, alte IDs gemapp
 
   // #410: lineare Single-Active-Migration – genau die fokussierte Quest ist offen.
   expectFocusedActiveQuests();
-  expect(Game.state.activeQuests).toEqual({ "docker-build-image": { step: Game.state.questStep, task: 0 } });
+  expect(Game.state.activeQuests).toEqual({ "docker-build-image": { step: Game.questStep(), task: 0 } });
 
   // Migrierter Stand wurde VOR dem Überschreiben in den Backup-Slot gesichert.
   expect(SaveStore.readBackup()).toBe(fixtureRaw("savegame-v1-docker-arc.json"));
@@ -184,7 +184,7 @@ test("v1 (Docker-Bogen): currentQuestId aus questIdx abgeleitet, alte IDs gemapp
 test("v1 (voller Stand): reiches Deck/Abkürzungen/Stats/Cluster-Snapshot laden verlustfrei", () => {
   loadFixture("savegame-v1-rich.json");
 
-  expect(Game.state.questIdx).toBe(16);
+  expect(Game.questIdx()).toBe(16);
   // QUESTS[16] = "terraform-intro": der gespeicherte Zahl-Index 16 bleibt, löst aber durch die
   // beiden Docker-Einschübe (#448/#449) eine andere Quest auf. Die 16 abgeschlossenen Alt-IDs
   // sind unverändert – „alles bis dahin", nur ohne die nie gespielten Einschübe.
@@ -236,7 +236,7 @@ test("v2 (veralteter Zahl-Index): currentQuestId gewinnt über stale questIdx, I
   // Kernschutz #353: gespeicherter questIdx (0) ist veraltet; currentQuestId "q5" → "k8s-inspect-pods"
   // (durch die Einschübe #448/#449/#450 jetzt Index 10) gewinnt. So bricht ein vorheriges Quest-Einschieben
   // den Stand nicht – der Index folgt der ID, nicht umgekehrt.
-  expect(Game.state.questIdx).toBe(10);
+  expect(Game.questIdx()).toBe(10);
   expect(Game.state.currentQuestId).toBe("k8s-inspect-pods");
   expect(Game.state.completedQuests).toEqual(slugsSansRegistry(7));
 
@@ -252,7 +252,7 @@ test("v2 (veralteter Zahl-Index): currentQuestId gewinnt über stale questIdx, I
 test("v2 (alle Quests durch): Endzustand + vollständige completedQuests-Migration", () => {
   loadFixture("savegame-v2-allquests.json");
 
-  expect(Game.state.questIdx).toBe(KQContent.QUESTS.length); // alle durch
+  expect(Game.questIdx()).toBe(KQContent.QUESTS.length); // alle durch
   expect(Game.state.currentQuestId).toBe("");                // Endzustand
   expect(Game.allQuestsDone()).toBe(true);
 
@@ -287,9 +287,9 @@ test("v3 (voller Stand, vor #410): Einzel-Quest -> activeQuests-Set, verlustfrei
   // Vier mitten eingeschobene Quests vor gitops-argocd-intro: #448 docker-common-images,
   // #449 docker-registry, #450 docker-rabbitmq, #273 helm-templates → Index 31 + 4 = 35; das
   // Completed-Set des Alt-Stands bleibt verlustfrei unverändert.
-  expect(Game.state.questIdx).toBe(35);
+  expect(Game.questIdx()).toBe(35);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
-  expect(Game.state.questStep).toBe(1);
+  expect(Game.questStep()).toBe(1);
   expect(Game.state.completedQuests).toEqual(fixtureCompleted("savegame-v3-current.json"));
   expect(Game.state.xp).toBe(1500);
   expect(Game.state.coins).toBe(2000);
@@ -323,9 +323,9 @@ test("v4 (vor #413): mehrere offene Quests bleiben, gameDays default 0, migriert
 
   // #448 docker-common-images + #449 docker-registry + #450 docker-rabbitmq + #273 helm-templates:
   // vier Einschübe vor gitops-argocd-intro → 31 + 4 = 35.
-  expect(Game.state.questIdx).toBe(35);
+  expect(Game.questIdx()).toBe(35);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
-  expect(Game.state.questStep).toBe(1);
+  expect(Game.questStep()).toBe(1);
   expect(Game.state.completedQuests).toEqual(fixtureCompleted("savegame-v4-current.json"));
 
   // #410 bleibt unangetastet: ZWEI parallel offene Quests überleben verlustfrei.
@@ -346,16 +346,18 @@ test("v4 (vor #413): mehrere offene Quests bleiben, gameDays default 0, migriert
 });
 
 /* ============================================================================
- * v5 (aktuelles Format, #413): muss UNVERÄNDERT laden – kein Backup. Trägt die
- * persistente Zeit-Achse gameDays; sie muss EXAKT (fraktional) round-trippen.
+ * v5 (vor #559): trägt noch die redundante Quest-Arbeitskopie (questIdx/questStep/taskIdx)
+ * im Save. Lädt jetzt als Alt-Stand -> wird auf v6 migriert (die drei Felder fallen weg,
+ * Schritt/Aufgabe werden zur Laufzeit aus activeQuests abgeleitet) und vorher gesichert.
+ * Die persistente Zeit-Achse gameDays muss dabei EXAKT (fraktional) round-trippen.
  * ========================================================================== */
 
-test("v5 (aktueller Stand): gameDays überlebt exakt, kein Backup, Roundtrip stabil", () => {
+test("v5 (vor #559): gameDays exakt, Arbeitskopie-Felder fallen weg, migriert + gesichert", () => {
   loadFixture("savegame-v5-current.json");
 
   // #448 docker-common-images + #449 docker-registry + #450 docker-rabbitmq + #273 helm-templates
   // → 31 + 4 = 35.
-  expect(Game.state.questIdx).toBe(35);
+  expect(Game.questIdx()).toBe(35);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.state.activeQuests).toEqual({
     "gitops-argocd-intro": { step: 1, task: 0 },
@@ -371,6 +373,41 @@ test("v5 (aktueller Stand): gameDays überlebt exakt, kein Backup, Roundtrip sta
   expect(Game.state.gameDays).toBe(47.625);
   expect(Game.calendar().day).toBe(48);
   expect(Game.calendar().seasonName).toBe("Sommer");
+
+  // v5 < aktuelle Version (6) → Herauf-Migrieren → Original VORHER gesichert.
+  expect(SaveStore.readBackup()).toBe(fixtureRaw("savegame-v5-current.json"));
+
+  expectRoundTripFixedPoint();
+});
+
+/* ============================================================================
+ * v6 (aktuelles Format, #559): die Quest-Arbeitskopie (questIdx/questStep/taskIdx) wird NICHT
+ * mehr persistiert – der Save trägt nur noch activeQuests + currentQuestId, der Rest wird zur
+ * Laufzeit abgeleitet. Muss UNVERÄNDERT laden (kein Backup) und byte-stabil round-trippen.
+ * ========================================================================== */
+
+test("v6 (aktueller Stand): abgeleiteter Cursor, kein persistiertes questStep, kein Backup", () => {
+  loadFixture("savegame-v6-current.json");
+
+  // currentQuestId ist die Autorität; questIdx()/questStep()/taskIdx() leiten daraus ab.
+  expect(Game.questIdx()).toBe(35);
+  expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
+  expect(Game.questStep()).toBe(1);
+  expect(Game.taskIdx()).toBe(0);
+  expect(Game.state.activeQuests).toEqual({
+    "gitops-argocd-intro": { step: 1, task: 0 },
+    "gitops-self-sync": { step: 0, task: 0 },
+  });
+
+  // Die persistente Zeit-Achse lädt weiterhin exakt.
+  expect(Game.state.gameDays).toBe(47.625);
+
+  // Der persistierte Stand trägt die Arbeitskopie-Felder NICHT mehr (#559).
+  const env = JSON.parse(SaveStore.read()!) as { data?: Record<string, unknown> };
+  expect(env.data).toBeTruthy();
+  expect("questIdx" in env.data!).toBe(false);
+  expect("questStep" in env.data!).toBe(false);
+  expect("taskIdx" in env.data!).toBe(false);
 
   // Aktuelle Version → kein Herauf-Migrieren → kein Sichern ins Backup.
   expect(SaveStore.readBackup()).toBeNull();
@@ -416,7 +453,7 @@ test("Red-Green: kaputtes v2-Fixture lädt sanitisiert (kein Crash, Defaults sta
   expect(Game.state.player).toEqual({ x: 400, y: 200 }); // "nope" → Default-x, gültiges y bleibt
 
   // Quest-Fortschritt: currentQuestId 999 (kein String) + questIdx -3 → sauber auf Quest 0.
-  expect(Game.state.questIdx).toBe(0);
+  expect(Game.questIdx()).toBe(0);
   expect(Game.state.currentQuestId).toBe(KQContent.QUESTS[0].id);
   expect(Game.state.completedQuests).toEqual([]); // String statt Array → leer
 
@@ -553,9 +590,10 @@ const ALL_FIXTURES = [
   "savegame-v1-docker-arc.json", "savegame-v1-rich.json",
   "savegame-v2-stale-index.json", "savegame-v2-allquests.json",
   "savegame-v3-current.json", "savegame-v4-current.json", "savegame-v5-current.json",
+  "savegame-v6-current.json",
 ];
 
-test("#493 Import-Pfad: jeder Fixture-Stand (v1..v5) wird in der AKTUELLEN Versions-Hülle abgelegt (nicht hüllenlos/alt)", () => {
+test("#493 Import-Pfad: jeder Fixture-Stand (v1..v6) wird in der AKTUELLEN Versions-Hülle abgelegt (nicht hüllenlos/alt)", () => {
   for (const f of ALL_FIXTURES) {
     lsMap.clear();
     Game.importData(fixtureRaw(f));

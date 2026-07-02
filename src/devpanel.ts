@@ -199,7 +199,7 @@ export function mountDevPanel(): void {
   let unlocked = false; // einmal korrektes Passwort = für diese Sitzung frei (kein Nerven)
 
   function render(): void {
-    const rows = roadmapToRows(Game.getQuestRoadmap(), Game.state.questIdx);
+    const rows = roadmapToRows(Game.getQuestRoadmap(), Game.questIdx());
     let html =
       '<p class="dim">Springe an den <b>Anfang einer Quest</b> (Stand + Cluster + Spawn werden gesetzt). ' +
       "↑/↓ wählen, Enter springt – oder klicken.</p>" +

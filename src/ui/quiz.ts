@@ -44,7 +44,7 @@ export const quizUI = part({
     const dueIds = Game.dueReviewItems(10);
     if (dueIds.length === 0) {
       // Quest-Count-Gate (#323): nichts fällig, aber ≥ 3 Quests am Stück – sanfter Nudge.
-      this._gateClearedIdx = Game.state.questIdx;
+      this._gateClearedIdx = Game.questIdx();
       $("overlay-review").classList.remove("hidden");
       $("review-body").innerHTML = `<div style="text-align:center">
         <div style="font-size:3em">🦀</div>
@@ -56,7 +56,7 @@ export const quizUI = part({
       return;
     }
     $("overlay-review").classList.remove("hidden");
-    this.review = { ids: dueIds, idx: 0, right: 0, free: false, gate: { npcId, questIdx: Game.state.questIdx } };
+    this.review = { ids: dueIds, idx: 0, right: 0, free: false, gate: { npcId, questIdx: Game.questIdx() } };
     const n = dueIds.length;
     const kartenWort = n === 1 ? "1 Karte" : n + " Karten";
     $("review-body").innerHTML = `<div style="text-align:center">

@@ -27,7 +27,7 @@ export const questlogUI = part({
    *  wechseln. Gesperrte/unbekannte Quests werden abgewiesen (kein Vorausspringen). */
   viewQuest(idxStr: string) {
     const idx = Number(idxStr);
-    const row = buildQuestLogRows(Game.getQuestRoadmap(), Game.state.questIdx).find(r => r.idx === idx);
+    const row = buildQuestLogRows(Game.getQuestRoadmap(), Game.questIdx()).find(r => r.idx === idx);
     if (!row || !row.viewable) return;
     this.questLogViewIdx = idx;
     this.renderQuestLog();
@@ -47,7 +47,7 @@ export const questlogUI = part({
     if (this.questLogViewIdx !== null) {
       const quest = KQContent.QUESTS[this.questLogViewIdx];
       if (quest) {
-        const isActive = this.questLogViewIdx === s.questIdx;
+        const isActive = this.questLogViewIdx === Game.questIdx();
         const lines = buildQuestDetail(quest, npcName);
         const icon: Record<string, string> = { dialog: "💬", choice: "❓", teach: "📻", drill: "🎯", terminal: "🖥️", minigame: "🎮" };
         let detail = lines
@@ -64,7 +64,7 @@ export const questlogUI = part({
         const replayBtn = !replaying && s.completedQuests.includes(quest.id)
           ? `<button data-action="replayQuest" data-arg="${this.questLogViewIdx}">🔁 Quest erneut spielen</button>` : "";
         const resumeBtn = !replaying && !isActive && !Game.allQuestsDone()
-          ? `<button data-action="viewQuest" data-arg="${s.questIdx}">▶️ Zur aktuellen Quest</button>` : "";
+          ? `<button data-action="viewQuest" data-arg="${Game.questIdx()}">▶️ Zur aktuellen Quest</button>` : "";
         $("quest-body").innerHTML = `${this.replayBanner()}<div class="ql-detail">
           <div class="actions" style="margin-bottom:10px">
             <button class="primary" data-action="questLogBack">← Übersicht</button>${replayBtn}${resumeBtn}
@@ -92,7 +92,7 @@ export const questlogUI = part({
     }
 
     if (unlocked) {
-      const rows = buildQuestLogRows(Game.getQuestRoadmap(), s.questIdx);
+      const rows = buildQuestLogRows(Game.getQuestRoadmap(), Game.questIdx());
       html += `<div class="ql-list">`;
       for (const row of rows) {
         if (row.state === "locked") {

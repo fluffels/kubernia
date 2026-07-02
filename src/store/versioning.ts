@@ -45,7 +45,7 @@
  */
 import { readActiveRaw, writeActiveRaw, backupActive } from "./slots";
 
-export const CURRENT_SAVE_VERSION = 5;
+export const CURRENT_SAVE_VERSION = 6;
 
 /** Migration von Format-Version n auf n+1 (reine Funktion auf dem `data`-Objekt). */
 type Migration = (data: unknown) => unknown;
@@ -89,6 +89,15 @@ const migrations: Record<number, Migration> = {
   //         sanitizeState läuft). Verlustfrei – vorher war die Zeit nie gespeichert. Der Bump
   //         sichert jeden v4-Stand vor dem ersten Überschreiben ins Backup.
   4: (data) => data,
+  // 5 -> 6 (#559): die redundante Quest-Arbeitskopie (questIdx/questStep/taskIdx) wird nicht
+  //         mehr persistiert – Schritt/Aufgabe/Index werden zur Laufzeit aus der Autorität
+  //         activeQuests + currentQuestId abgeleitet. Strukturell ein No-op auf store-Ebene:
+  //         sanitizeState (game/save.ts) baut activeQuests unverändert aus dem Alt-Stand (bei
+  //         v4/v5 direkt aus raw.activeQuests, bei ≤ v3 aus der fokussierten Einzel-Quest) und
+  //         gibt die drei Felder schlicht nicht mehr zurück. Ein alter Stand lädt also verlustfrei;
+  //         die weggefallenen Felder waren ohnehin nur Spiegel von activeQuests[currentQuestId].
+  //         Der Bump sichert jeden v5-Stand vor dem ersten Überschreiben ins Backup.
+  5: (data) => data,
 };
 
 /** Hebt `data` von `version` schrittweise auf CURRENT_SAVE_VERSION. */

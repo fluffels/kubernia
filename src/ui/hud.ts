@@ -167,7 +167,7 @@ export const hudUI = part({
     // Sanftes Wiederholungs-Gate (#222): bevor eine NEUE Quest startet und nur wenn
     // Karten fällig sind, kurz auffrischen – einmal pro Quest.
     const reviewGatePending =
-      Game.shouldReviewGate() && this._gateClearedIdx !== Game.state.questIdx;
+      Game.shouldReviewGate() && this._gateClearedIdx !== Game.questIdx();
     switch (resolveTalkTarget(npcId, { shopNpcId: "pelle", reviewNpcId: "kralle", questStepNpc, reviewGatePending })) {
       case "shop": return this.openShop();
       case "review": return this.openReview();

@@ -115,6 +115,19 @@ export interface GameApi extends GameData {
   deleteSlot(id: string): { ok: boolean; reload: boolean };
 
   // ---- progression.ts: Quest-Fortschritt, Dev-Sprung, offene Quests, Üben ----
+  // Abgeleiteter Quest-Cursor (#559): NICHT mehr persistiert, sondern jederzeit aus
+  // currentQuestId + activeQuests berechnet – die einzige Autorität ist activeQuests.
+  /** Fortschritt der fokussierten Quest (null im Endzustand / wenn keine offen ist). */
+  focusedProgress(): QuestProgress | null;
+  /** Laufzeit-Index der fokussierten Quest in QUESTS (Endzustand = QUESTS.length). */
+  questIdx(): number;
+  /** Schritt-Stand der fokussierten Quest (0, wenn keine offen ist). */
+  questStep(): number;
+  /** Aufgaben-Stand im fokussierten Schritt (0, wenn keine offen ist). */
+  taskIdx(): number;
+  /** Rückt die Aufgabe im fokussierten Schritt um eins vor und gibt den neuen Stand zurück
+   *  (schreibt in activeQuests, persistiert NICHT selbst – der Aufrufer ruft save()). */
+  advanceTask(): number;
   // currentQuest ist (wie in der Sim, noUncheckedIndexedAccess aus) non-null typisiert:
   // KQContent.QUESTS[idx] gilt dem Compiler als Quest, `|| null` bleibt darum Quest.
   currentQuest(): Quest;
@@ -282,13 +295,10 @@ export function makeDefaultState(): GameState {
     // links davon (Pixel), begehbar und innerhalb der Redeweite (1,7 Kacheln).
     // Returning-Spieler überschreiben das mit ihrer gespeicherten Position.
     player: { x: 400, y: 248 },
-    // Offene Quests (#410): die erste Quest ist der einzige offene Eintrag. Persistenz-
-    // Autorität; die linearen Felder darunter sind ihre abgeleitete Arbeitskopie.
+    // Offene Quests (#410/#559): die erste Quest ist der einzige offene Eintrag. Alleinige
+    // Persistenz-Autorität; Schritt/Aufgabe/Index werden zur Laufzeit hieraus abgeleitet.
     activeQuests: { [questIdForIndex(0)]: { step: 0, task: 0 } },
-    currentQuestId: questIdForIndex(0), // fokussierte (lineare) Quest; Spiegel von activeQuests (#353/#410)
-    questIdx: 0,
-    questStep: 0,
-    taskIdx: 0,
+    currentQuestId: questIdForIndex(0), // fokussierte (lineare) Quest; Schlüssel in activeQuests (#353/#410)
     completedQuests: [],
     inventory: {},
     owned: [],
