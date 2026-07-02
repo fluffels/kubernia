@@ -226,6 +226,44 @@
     "explain": "Der HPA skaliert HORIZONTAL: er erhöht/senkt die Replica-Zahl anhand gemessener Auslastung (braucht dafür requests als Bezugsgröße). Das ist die Automatik hinter dem manuellen 'kubectl scale'. Vertikal (das Limit eines Pods anpassen) macht stattdessen der VPA – nicht zu verwechseln."
   },
   {
+    "id": "q-qos-classes",
+    "q": "Ein Pod hat <code>requests=memory=128Mi</code> und <code>limits=memory=256Mi</code> (requests < limits). Welche <b>QoS-Klasse</b> ist das?",
+    "options": [
+      "Burstable – requests gesetzt, aber kleiner als die limits.",
+      "Guaranteed – er hat beide Werte gesetzt.",
+      "BestEffort – solange requests ≠ limits, zählt es als nichts.",
+      "Preemptible – requests < limits macht den Pod verdrängbar."
+    ],
+    "correct": 0,
+    "explain": "Drei QoS-Klassen, bestimmt allein aus requests/limits: <b>Guaranteed</b> = requests == limits (gleiche Zahl, CPU UND Speicher, alle Container); <b>Burstable</b> = requests gesetzt, aber < limits (oder nur teils gesetzt); <b>BestEffort</b> = gar nichts gesetzt. Hier ist 128Mi < 256Mi → Burstable: darf über die requests hinaus bis zum Limit „bursten“, ist bei Knappheit aber ein früheres Opfer als Guaranteed. „Preemptible“ ist kein QoS-Begriff."
+  },
+  {
+    "id": "q-qos-evict-order",
+    "chapter": "k8s-resource-limits",
+    "q": "Dem Node geht der Speicher aus – der kubelet muss Pods <b>evicten</b>. In welcher Reihenfolge trifft es die QoS-Klassen?",
+    "options": [
+      "BestEffort zuerst, dann Burstable, Guaranteed zuletzt.",
+      "Guaranteed zuerst, weil die am meisten reserviert haben.",
+      "Zufällig – Kubernetes würfelt das Opfer aus.",
+      "Der jüngste Pod zuerst, unabhängig von der QoS-Klasse."
+    ],
+    "correct": 0,
+    "explain": "Der kubelet opfert in QoS-Reihenfolge: <b>BestEffort</b> zuerst (nichts zugesichert), dann <b>Burstable</b> (sobald sie über ihre requests hinaus wachsen), <b>Guaranteed</b> zuletzt (requests == limits, volle Zusicherung). Das ist genau Knuts Faustregel „wer kein Limit hat, fliegt zuerst“ – verallgemeinert auf alle drei Klassen und auf Speicher wie CPU. Wer soll überleben, muss requests==limits setzen."
+  },
+  {
+    "id": "q-qos-guaranteed",
+    "chapter": "k8s-resource-limits",
+    "q": "Wie erreicht man für einen Pod die stabilste QoS-Klasse <b>Guaranteed</b>?",
+    "options": [
+      "requests und limits für CPU und Speicher setzen – und zwar auf denselben Wert.",
+      "Nur ein hohes limit setzen, requests weglassen.",
+      "Nur requests setzen, limits offen lassen.",
+      "Das Label <code>qos: guaranteed</code> an den Pod schreiben."
+    ],
+    "correct": 0,
+    "explain": "Guaranteed gibt es nur, wenn für <b>jeden</b> Container requests == limits sind – für CPU UND Speicher. Dann ist dem Pod genau das zugesichert, was er nutzen darf, und er wird bei Knappheit zuletzt evictet. Nur ein Limit (ohne passende requests) ergibt Burstable, gar nichts ergibt BestEffort. Ein Label steuert die QoS-Klasse NICHT – sie wird aus den Ressourcen abgeleitet."
+  },
+  {
     "id": "q-workload-types",
     "chapter": "storage-statefulset",
     "q": "Deployment vs. DaemonSet vs. StatefulSet – wann nimmt man was?",
