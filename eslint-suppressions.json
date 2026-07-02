@@ -4,31 +4,6 @@
       "count": 1
     }
   },
-  "src/main.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
-  "src/scenes/InteriorScene.ts": {
-    "complexity": {
-      "count": 2
-    }
-  },
-  "src/scenes/RegionScene.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
-  "src/scenes/WorldScene.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
-  "src/scenes/shared.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "src/world/regions/archipel.ts": {
     "complexity": {
       "count": 1

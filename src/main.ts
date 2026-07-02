@@ -111,60 +111,86 @@ import { buildCrashReport, type CrashReport } from "./crashreport";
    * und als Andockpunkt für späteres Customizing à la Stardew erhalten. */
   const FIXED_CHARACTER = 0;
 
+  /** Antwort-Auswahl im Dialog per Tastatur (#288): ↑/↓ oder W/S navigieren, Enter/E/Leer
+   *  bestätigt, 1–4 wählt direkt. In diesem Modus verbraucht der Dialog jede Taste. */
+  function handleDialogueChoiceKey(e: KeyboardEvent, k: string): void {
+    if (k === "ArrowUp" || k === "w") { UI.dlgMoveSel(-1); e.preventDefault(); return; }
+    if (k === "ArrowDown" || k === "s") { UI.dlgMoveSel(1); e.preventDefault(); return; }
+    if (k === "e" || k === "Enter" || k === " ") { UI.dlgActivateSel(); e.preventDefault(); return; }
+    if (["1", "2", "3", "4"].includes(k)) { UI.dlgPickNumber(parseInt(k, 10)); e.preventDefault(); }
+  }
+
+  /** Fortlaufender Dialog ohne Antwortauswahl: ← / Backspace blättert eine Zeile zurück
+   *  (#310, reines Nachlesen ohne Zustandsänderung), E/Enter/Leer wieder vorwärts. */
+  function handleDialogueReadKey(e: KeyboardEvent, k: string): void {
+    if (k === "ArrowLeft" || k === "Backspace") { UI.dialogueBack(); e.preventDefault(); return; }
+    if (k === "e" || k === "Enter" || k === " ") { UI.advanceDialogue(); e.preventDefault(); }
+  }
+
+  /** Overlay-Umschalt-Tasten: T Funkgerät, J Logbuch, B Sammelalbum (offen → schließen).
+   *  Gibt true zurück, wenn die Taste ein Overlay bediente. */
+  function handleOverlayToggleKey(e: KeyboardEvent, k: string): boolean {
+    if (k === "t") { UI.toggleTerminal(); e.preventDefault(); return true; }
+    if (k === "j") {
+      if ($(OVERLAY_ID.quest).classList.contains("hidden")) UI.openQuestLog();
+      else UI.closeOverlays();
+      e.preventDefault();
+      return true;
+    }
+    if (k === "b") {
+      if ($(OVERLAY_ID.album).classList.contains("hidden")) UI.openAlbum();
+      else UI.closeOverlays();
+      e.preventDefault();
+      return true;
+    }
+    return false;
+  }
+
+  /** Vorverarbeitung eines keydown: Fokusfalle (#506) und die Text-Eingabefelder (Terminal/
+   *  Quiz) abfangen, sonst die Taste normalisieren, im `keys`-Zustand vermerken und den
+   *  Browser-Default der Navigationstasten unterdrücken. Gibt die normalisierte Taste zurück
+   *  – oder null, wenn das Event hier schon vollständig behandelt wurde. */
+  function preprocessKey(e: KeyboardEvent): string | null {
+    // Fokusfalle (#506): Tab/Shift+Tab bleibt in einem offenen Modal – VOR dem INPUT-
+    // Sonderfall, damit sie auch greift, während das Terminal-/Quiz-Eingabefeld den Fokus
+    // hat (sonst wanderte Tab von dort in den Hintergrund).
+    if (e.key === "Tab" && UI.trapFocus(e)) return null;
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") {
+      if (e.key === "Escape") { UI.closeOverlays(); (e.target as HTMLElement).blur(); }
+      return null;
+    }
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    keys[k] = true;
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
+    return k;
+  }
+
+  /** Spiel-Aktion zu einer (bereits vorverarbeiteten) Taste: Menü/Schließen, Wissensrunde,
+   *  Dialog, Overlay-Umschalter, generische Modal-Bedienung, sonst Interagieren. */
+  function dispatchGameKey(e: KeyboardEvent, k: string): void {
+    if (k === "Escape") { if (UI.blocking()) UI.closeOverlays(); else UI.openMenu(); return; }
+    // Wissensrunde per Tastatur (#258): Quiz-Auswahl (1–n, ↑/↓+Enter) & „Weiter". Die
+    // Befehls-Eingabe (INPUT) ist in preprocessKey schon abgefangen, landet hier nicht.
+    if (!$(OVERLAY_ID.review).classList.contains("hidden") && UI.reviewKey(k, e)) return;
+    if (UI.dialogue) {
+      if (UI.hasChoices()) handleDialogueChoiceKey(e, k);
+      else handleDialogueReadKey(e, k);
+      return;
+    }
+    if (handleOverlayToggleKey(e, k)) return;
+    // Generische Tastatur-Bedienung blockierender Modals ohne eigene Navigation (#283):
+    // Stapel-Spiel, Shop, Logbuch, Menü per ↑/↓ + Enter/Leer steuern (Primär-Button als Default).
+    if (UI.overlayKey(k, e)) return;
+    if (!UI.blocking() && (k === "e" || k === "Enter" || k === " ")) { UI.interact(); e.preventDefault(); }
+  }
+
   function wireKeyboard() {
     window.addEventListener("keydown", e => {
       SFX.ensure();
-      // Fokusfalle (#506): Tab/Shift+Tab bleibt in einem offenen Modal – VOR dem
-      // INPUT-Sonderfall, damit die Falle auch greift, während das Terminal-/Quiz-
-      // Eingabefeld den Fokus hat (sonst wanderte Tab von dort in den Hintergrund).
-      if (e.key === "Tab" && UI.trapFocus(e)) return;
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") {
-        if (e.key === "Escape") { UI.closeOverlays(); (e.target as HTMLElement).blur(); }
-        return;
-      }
-      const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-      keys[k] = true;
-      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
-
-      if (k === "Escape") { if (UI.blocking()) UI.closeOverlays(); else UI.openMenu(); return; }
-      // Wissensrunde per Tastatur (#258): Quiz-Auswahl (1–n, ↑/↓+Enter) & „Weiter".
-      // Die Befehls-Eingabe (INPUT) ist oben schon abgefangen, landet hier nicht.
-      if (!$(OVERLAY_ID.review).classList.contains("hidden")) {
-        if (UI.reviewKey(k, e)) return;
-      }
-      if (UI.dialogue) {
-        if (UI.hasChoices()) {
-          // Antwort-Auswahl per Tastatur: ↑/↓ (oder W/S) navigieren, Enter/E/Leer bestätigen, 1–4 direkt
-          if (k === "ArrowUp" || k === "w") { UI.dlgMoveSel(-1); e.preventDefault(); return; }
-          if (k === "ArrowDown" || k === "s") { UI.dlgMoveSel(1); e.preventDefault(); return; }
-          if (k === "e" || k === "Enter" || k === " ") { UI.dlgActivateSel(); e.preventDefault(); return; }
-          if (["1", "2", "3", "4"].includes(k)) { UI.dlgPickNumber(parseInt(k, 10)); e.preventDefault(); return; }
-          return;
-        }
-        // #310: Lese-Rückblick – ← / Backspace blättert eine Zeile zurück (reines
-        // Nachlesen, ohne Spielzustand zu ändern), E/Enter/Leer wieder vorwärts.
-        if (k === "ArrowLeft" || k === "Backspace") { UI.dialogueBack(); e.preventDefault(); return; }
-        if (k === "e" || k === "Enter" || k === " ") { UI.advanceDialogue(); e.preventDefault(); }
-        return;
-      }
-      if (k === "t") { UI.toggleTerminal(); e.preventDefault(); return; }
-      if (k === "j") {
-        if ($(OVERLAY_ID.quest).classList.contains("hidden")) UI.openQuestLog();
-        else UI.closeOverlays();
-        e.preventDefault();
-        return;
-      }
-      if (k === "b") {
-        if ($(OVERLAY_ID.album).classList.contains("hidden")) UI.openAlbum();
-        else UI.closeOverlays();
-        e.preventDefault();
-        return;
-      }
-      // Generische Tastatur-Bedienung blockierender Modals ohne eigene Navigation (#283):
-      // Stapel-Spiel, Shop, Logbuch, Menü per ↑/↓ + Enter/Leer steuern (Primär-Button als Default).
-      if (UI.overlayKey(k, e)) return;
-      if (!UI.blocking() && (k === "e" || k === "Enter" || k === " ")) { UI.interact(); e.preventDefault(); }
+      const k = preprocessKey(e);
+      if (k === null) return;
+      dispatchGameKey(e, k);
     });
     window.addEventListener("keyup", e => {
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
