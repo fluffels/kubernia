@@ -118,7 +118,7 @@ iSAQB ist **stil-neutral**: Architektur folgt Qualitätszielen, nicht Mode. Micr
 
 - **Sicherheit/Supply-Chain:** Dependabot + zweistufiges `npm audit`-CI-Gate (blockt nur ausgelieferte Deps). Dev-Panel aus Prod-Builds gestrippt + passwortgated. **Abgedeckt.**
 - **Determinismus/Zufall:** Tests brauchen Determinismus; `observability.ts` macht es per FNV-Hash vor. Die iSAQB-Analyse fand aber **ungeseedeten `Math.random` in 8 puren Domänen-/Content-Dateien** (`sim/util`, `docker`, `helm`, `argocd`, `kubectl/ops|lifecycle|inspect`, `content/util`) — Widerspruch zum eigenen Anspruch, blockiert Golden-/Snapshot-Tests. → **zentrale seedbare RNG + Fitness-Function (#492).**
-- **Fehlerbehandlung/Diagnostik:** ad hoc — kein globaler `window.onerror`/`unhandledrejection`-Handler, kein Fallback-Overlay, Logging verstreut (`console.*`). Als arc42-§8-Konzept **noch offen (#504).**
+- **Fehlerbehandlung/Diagnostik:** EIN globaler `window.onerror`/`unhandledrejection`-Handler in `main.ts` fängt jeden unbehandelten Laufzeitfehler zentral ab, loggt ihn an einer Stelle und zeigt statt eines stillen schwarzen Canvas ein lesbares Fallback-Overlay mit „Neu laden"-Knopf; die reine Aufbereitung des geworfenen Werts liegt DOM-frei/testbar in `src/crashreport.ts` (`buildCrashReport`). In JEDEM Build aktiv (auch der ausgelieferten Offline-Datei). Fitness-Function: `e2e/crash-overlay.spec.ts` feuert einen synthetischen Fehler gegen den Offline-Build und prüft das Overlay; der Boot-Smoke (#391) bleibt das Gegenstück (sauberer Boot ⇒ kein Fehler, kein Overlay). **Abgedeckt (#504).**
 
 ### Der rote Faden der iSAQB-Analyse 2026-07: struktur- vs. verhaltensbezogene Governance
 
@@ -130,7 +130,7 @@ Die **strukturellen** Querschnittskonzepte sind exzellent mechanisiert (Schichtu
 | Coverage | 91 Tests, **0 Messung** | #495 |
 | Komplexität | nur LOC-Deckel (800), keine `complexity`-Regel | #502 |
 | Bundle-Größe | nur Warnung, kein Fail | #503 |
-| Fehler-Diagnostik | kein globaler Handler | #504 |
+| Fehler-Diagnostik | ✅ globaler Handler + Fallback-Overlay + e2e-Smoke | #504 (erledigt) |
 
 Dazu kommt: an einzelnen **Grenzen hört die sonst konsequente Disziplin auf** — `scenario`/`applyEffects` ungeprüft (#494), `importData` umgeht die Migrationskette (#493), `WorldSceneLike = any` (#496). Kein Umbau, sondern Absicherung des bereits richtig Angelegten.
 
@@ -162,7 +162,7 @@ Konkrete Szenarien (Reiz → Reaktion) statt vager Adjektive:
 | Wartbarkeit (KI) | Agent ändert Modul → Lint/Arch/Größe/**Doku-Drift** (#482)/Smoke fangen Fehler vor dem Merge | erfüllt |
 | Testbarkeit (Messung) | „Welche Teile sind untertestet?" → Coverage messbar mit Per-Verzeichnis-Schwellen | **offen (#495)** |
 | Determinismus | Domäne reproduzierbar → seedbare RNG, kein `Math.random` in `sim/`/`content/` | **teilweise (#492)** |
-| Zuverlässigkeit | Laufzeitfehler/Save-Fehler → sichtbarer Fallback statt schwarzem Canvas / stillem Verlust | **offen (#504/#497)** |
+| Zuverlässigkeit | Laufzeitfehler/Save-Fehler → sichtbarer Fallback statt schwarzem Canvas / stillem Verlust | Laufzeitfehler abgedeckt (#504); Save-Fehler-Hinweis offen (#497) |
 | Performance | Viele Inseln/Sprites → Culling greift, aber Assets werden noch eager geladen; kein Bundle-Budget | teilweise (#503) |
 
 ## 11. Risiken und technische Schulden
@@ -183,7 +183,7 @@ Konkrete Szenarien (Reiz → Reaktion) statt vager Adjektive:
 | **`scenario`/`applyEffects` ungeprüft (as-Cast)** | Mechanik-nahe Struktur ohne Validierung → stille Fehler bei mehr Content | hoch | #494 |
 | **Coverage nirgends gemessen** | „untertestet?" ist Vermutung; Präsentation wächst ungemessen | hoch | #495 |
 | **`WorldSceneLike = any`** | 6 Systemmodule ungetypt → Renames/Tippfehler brechen zur Laufzeit | hoch | #496 |
-| Verhaltens-Governance fehlt (Komplexität/Bundle/Fehler-Diagnostik) | ungemessene Erosion bei Scale | mittel | #502/#503/#504 |
+| Verhaltens-Governance fehlt (Komplexität/Bundle) | ungemessene Erosion bei Scale | mittel | #502/#503 (Fehler-Diagnostik #504 erledigt) |
 | Spiel-/Bewertungslogik in DOM-Methoden; `events.ts` ungetestet | Kernlogik nur e2e-testbar; `economyTick` läuft nicht in RegionScene | mittel | #500/#512/#501 |
 | Value Objects/Invarianten/Workload nur teilverdrahtet | Namensgrenzen/Aggregat-Mutationen umgangen | mittel | #507/#508/#509 |
 

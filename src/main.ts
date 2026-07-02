@@ -9,9 +9,99 @@ import { SFX } from "./sfx";
 import { SaveStore } from "./store";
 import { OVERLAY_ID } from "./ui/overlays";
 import { keys, clearKeys } from "./runtime";
+import { buildCrashReport, type CrashReport } from "./crashreport";
 
   // Wie in ui.ts: die DOM-Knoten liegen fest in index.html, darum nicht-nullbar.
   const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
+
+  /* ===== Zentrale Fehlerbehandlung/Diagnostik (#504) =====
+   * Politik (arc42 §8, siehe docs/arc42-architektur.md): Ein unbehandelter
+   * Laufzeitfehler darf das Spiel nicht mehr STILL wegreißen (schwarzes Canvas).
+   * EIN globaler window.onerror/unhandledrejection-Handler fängt alles ab, loggt
+   * es an EINER Stelle in die Konsole (Diagnostik + der Boot-Smoke #391 prüft, dass
+   * ein sauberer Boot KEINE Konsolen-/Laufzeit-Fehler wirft) und zeigt ein lesbares
+   * Fallback-Overlay mit „Neu laden"-Knopf statt eines schwarzen Bildschirms.
+   * Bewusst in JEDEM Build aktiv (nicht dev-only) – gerade die ausgelieferte,
+   * verschenkbare Offline-Datei soll bei einem Fehler nicht rätselhaft schwarz sein.
+   * Das Overlay baut sich nur aus `document` (kein UI/Phaser/Game), damit es auch
+   * dann noch erscheint, wenn genau diese Schichten der Grund des Absturzes sind. */
+  function showCrashOverlay(report: CrashReport): void {
+    const ID = "kq-crash-overlay";
+    if (document.getElementById(ID)) return; // schon sichtbar – nicht stapeln
+
+    const overlay = document.createElement("div");
+    overlay.id = ID;
+    overlay.setAttribute("role", "alertdialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-label", report.title);
+    overlay.style.cssText =
+      "position:fixed;inset:0;z-index:2147483647;background:#0e1b2a;color:#e8eef5;" +
+      "display:flex;align-items:center;justify-content:center;text-align:center;" +
+      "font-family:system-ui,sans-serif;padding:24px;line-height:1.6";
+
+    const box = document.createElement("div");
+    box.style.cssText = "max-width:620px";
+
+    const h = document.createElement("h1");
+    h.style.cssText = "color:#ffc857;margin:0 0 12px";
+    h.textContent = report.title;
+
+    // textContent (nicht innerHTML): die Fehlermeldung ist beliebiger Text und darf
+    // nicht als HTML interpretiert werden.
+    const msg = document.createElement("p");
+    msg.textContent = report.message;
+
+    const hint = document.createElement("p");
+    hint.style.cssText = "margin-top:14px;color:#9db4cc";
+    hint.textContent = "Dein Fortschritt wird automatisch gesichert – lade das Spiel neu, um weiterzuspielen.";
+
+    const reload = document.createElement("button");
+    reload.textContent = "🔄 Spiel neu laden";
+    reload.style.cssText =
+      "margin-top:16px;font-size:1.05em;padding:10px 22px;cursor:pointer;border:0;border-radius:8px;" +
+      "background:#ffc857;color:#0e1b2a;font-weight:600";
+    reload.addEventListener("click", () => location.reload());
+
+    box.append(h, msg, hint, reload);
+
+    if (report.detail) {
+      const details = document.createElement("details");
+      details.style.cssText = "margin-top:20px;text-align:left";
+      const summary = document.createElement("summary");
+      summary.style.cssText = "cursor:pointer;color:#9db4cc";
+      summary.textContent = "Technische Details";
+      const pre = document.createElement("pre");
+      pre.style.cssText =
+        "white-space:pre-wrap;overflow:auto;max-height:200px;background:#0a1420;" +
+        "padding:12px;border-radius:6px;font-size:.8em";
+      pre.textContent = report.detail;
+      details.append(summary, pre);
+      box.append(details);
+    }
+
+    overlay.append(box);
+    document.body.append(overlay);
+  }
+
+  function installCrashHandler(): void {
+    let shown = false;
+    const onFatal = (reason: unknown): void => {
+      const report = buildCrashReport(reason);
+      // Zentrale Diagnostik: einmal klar markiert in die Konsole (statt verstreutem console.*).
+      console.error("💥 KubeQuest-Absturz abgefangen (#504):", reason);
+      // Overlay nur EINMAL – ein Fehler in Phasers Render-Loop feuert sonst je Frame.
+      if (shown) return;
+      shown = true;
+      showCrashOverlay(report);
+    };
+    window.addEventListener("error", (e: ErrorEvent) => {
+      // Reine Ressourcen-Ladefehler (z.B. ein <img>) tauchen auch als "error" auf,
+      // tragen aber keinen echten Fehlerwert – die sind kein Spiel-Absturz.
+      if (!e.error && !e.message) return;
+      onFatal(e.error ?? e.message);
+    });
+    window.addEventListener("unhandledrejection", (e: PromiseRejectionEvent) => onFatal(e.reason));
+  }
 
   /* Fester Spielcharakter: Die Spielfigur ist immer der PixelLab-Sprite
    * `char_player` (4 Richtungen, siehe scenes.ts). Die frühere Charakterwahl
@@ -95,6 +185,10 @@ import { keys, clearKeys } from "./runtime";
   }
 
   async function boot() {
+    // Ganz früh: zentraler Fehler-Handler (#504), damit auch ein Fehler beim
+    // restlichen Boot (Persistenz/Content/Phaser-Init) in einem lesbaren Overlay
+    // landet statt in einem stillen schwarzen Canvas.
+    installCrashHandler();
     // Dev-Sicherheitsnetz: Inhalts-Schema beim Start prüfen und Querverweis-Fehler
     // (unbekannte NPCs/Drills/Quests/reviewIds …) sofort in der Konsole melden.
     // Nur im Dev-Server aktiv – `import.meta.env.DEV` ist im Prod-Build `false`,
