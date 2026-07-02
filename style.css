@@ -307,6 +307,18 @@ button.danger:hover { background: var(--bad); color: #1a0606; filter: none; }
   box-shadow: 0 0 0 2px var(--accent) inset;
 }
 
+/* Sichtbarer Tastatur-Fokus (#506): deutlicher Akzent-Ring, aber nur bei
+   Tastatur-Navigation (:focus-visible) – ein Maus-Klick zeigt keinen Ring. Ohne das
+   war für Tastatur-/Screenreader-Nutzer nicht erkennbar, welches Element den Fokus
+   hat (Fokusfalle/Fokus-ins-Modal wären unsichtbar). */
+button:focus-visible, select:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+/* #game-container ist nur programmatischer Fokus-Anker (closeOverlays gibt den Fokus
+   hierher zurück), kein per Tab erreichbares Bedienelement – darum kein sichtbarer Ring. */
+#game-container:focus, #game-container:focus-visible { outline: none; }
+
 /* ===== Panels (Terminal, Logbuch, Shop, Krabbe) ===== */
 .panel {
   position: fixed;

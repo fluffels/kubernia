@@ -26,6 +26,7 @@ export const albumUI = part({
     $("overlay-album").classList.remove("hidden");
     this.albumViewTopic = null; // immer auf der Übersicht starten
     this.renderAlbum();
+    this.focusFirstIn($("overlay-album")); // #506: Fokus ins Modal
   },
 
   /** Auf eine Album-Seite (Thema) wechseln. */

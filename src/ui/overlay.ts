@@ -1,6 +1,6 @@
 import { Game } from "../game";
 import { SFX, MUSIC_THEMES } from "../sfx";
-import { resolveOverlayKey } from "../overlaykbd";
+import { resolveOverlayKey, nextFocusIndex } from "../overlaykbd";
 import { BLOCKING_OVERLAY_IDS, KEYNAV_OVERLAY_IDS } from "./overlays";
 import { part, $, esc, sheetImgs, type UINpc } from "./shared";
 
@@ -122,6 +122,61 @@ export const overlayUI = part({
   closeOverlays() {
     BLOCKING_OVERLAY_IDS.forEach(id => $(id).classList.add("hidden"));
     if (this.practice && this.practice.idx >= this.practice.drills.length) this.practice = null;
+    this.blurToGame();
+  },
+
+  /* ---------- Fokus-Management & Fokusfalle für Modals (#506) ----------
+   * Barrierefreiheit: ohne diese Schicht wanderte der Tab-Fokus aus einem offenen
+   * Modal in die Hintergrund-Elemente (das Spiel dahinter), und Screenreader-Nutzer
+   * verloren die Orientierung. Zentral fürs ganze Overlay-Register (#505) statt je
+   * Modal: beim Öffnen den Fokus ins Modal ziehen, Tab zyklisch darin halten
+   * (Fokusfalle), beim Schließen den Fokus zurück ins Spiel geben. Die reine
+   * Index-Mathematik der Falle liegt in `overlaykbd.ts` (nextFocusIndex). */
+
+  /** Fokussierbare, sichtbare, aktive Knoten eines Modals in DOM-Reihenfolge. */
+  _focusables(root: HTMLElement): HTMLElement[] {
+    const sel = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    return (Array.from(root.querySelectorAll(sel)) as HTMLElement[])
+      // offsetParent === null blendet display:none-Knoten aus (auch in versteckten
+      // Panels); disabled-Buttons sollen den Fokus nicht bekommen.
+      .filter(el => !(el as HTMLButtonElement).disabled && el.offsetParent !== null);
+  },
+
+  /** Das gerade offene, fokusfähige Modal (Dialog hat Vorrang vor den Panels) – oder null. */
+  _openModalEl(): HTMLElement | null {
+    if (this.dialogue) return $("dialogue");
+    const id = BLOCKING_OVERLAY_IDS.find(x => !$(x).classList.contains("hidden"));
+    return id ? $(id) : null;
+  },
+
+  /** Beim Öffnen den Fokus ins Modal ziehen: bevorzugt den Primär-Button
+   *  (z.B. „Weiterspielen"), sonst den ersten fokussierbaren Knoten. So ist ein
+   *  Modal sofort per Tastatur bedienbar und Screenreader lesen den Dialog vor. */
+  focusFirstIn(root: HTMLElement) {
+    const f = this._focusables(root);
+    if (!f.length) return;
+    (f.find((el: HTMLElement) => el.classList.contains("primary")) ?? f[0]).focus();
+  },
+
+  /** Tab/Shift+Tab in einer Fokusfalle halten. Liefert true, wenn ein Modal offen
+   *  war (dann ist die Taste verarbeitet); sonst false (Aufrufer macht weiter).
+   *  Wird aus main.ts VOR dem INPUT-Sonderfall aufgerufen, damit die Falle auch
+   *  greift, während das Terminal-/Quiz-Eingabefeld den Fokus hat. */
+  trapFocus(ev: KeyboardEvent): boolean {
+    const modal = this._openModalEl();
+    if (!modal) return false;
+    ev.preventDefault(); // in einem Modal verlässt Tab es nie
+    const f = this._focusables(modal);
+    const target = nextFocusIndex(f.length, f.indexOf(document.activeElement as HTMLElement), ev.shiftKey);
+    if (target !== null) f[target].focus();
+    return true;
+  },
+
+  /** Beim Schließen den Fokus zurück ins Spiel geben (aufs fokussierbare
+   *  #game-container-Canvas, tabindex=-1 in index.html) – sonst bliebe er auf dem
+   *  gerade versteckten Modal-Button hängen. */
+  blurToGame() {
+    $("game-container").focus();
   },
 
   /* ---------- Generische Tastatur-Bedienung einfacher Modals (#283) ----------
@@ -156,6 +211,7 @@ export const overlayUI = part({
     this.renderAudioSettings();
     this.renderEventSettings();
     $("overlay-menu").classList.remove("hidden");
+    this.focusFirstIn($("overlay-menu"));
   },
 
   /** Spielstände-Block im Menü (#306): Liste aller Slots + Wechseln/Umbenennen/Löschen/Neu.

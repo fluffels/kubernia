@@ -6,7 +6,7 @@
  * leeres Overlay, irrelevante Tasten, Wrap), damit kein Maus-only-Knopf bleibt.
  */
 import { test, expect, describe } from "vitest";
-import { resolveOverlayKey, dialogueNav, type OverlayButton } from "../src/overlaykbd";
+import { resolveOverlayKey, dialogueNav, nextFocusIndex, type OverlayButton } from "../src/overlaykbd";
 
 // Kürzel zum Bauen von Button-Listen.
 const b = (o: Partial<OverlayButton> = {}): OverlayButton => ({ disabled: false, primary: false, ...o });
@@ -132,5 +132,46 @@ describe("dialogueNav – mehrzeilige Lese-Dialoge vor/zurück (#310)", () => {
     if (fwd.kind === "show") {
       expect(dialogueNav(fwd.idx, 3, -1)).toEqual({ kind: "show", idx: 0 });
     }
+  });
+});
+
+describe("nextFocusIndex – Fokusfalle für Modals (#506)", () => {
+  test("Tab vorwärts läuft Schritt für Schritt weiter", () => {
+    expect(nextFocusIndex(3, 0, false)).toBe(1);
+    expect(nextFocusIndex(3, 1, false)).toBe(2);
+  });
+
+  test("Tab am letzten Knoten wickelt zyklisch auf den ersten um (Falle greift)", () => {
+    expect(nextFocusIndex(3, 2, false)).toBe(0);
+  });
+
+  test("Shift+Tab läuft rückwärts", () => {
+    expect(nextFocusIndex(3, 2, true)).toBe(1);
+    expect(nextFocusIndex(3, 1, true)).toBe(0);
+  });
+
+  test("Shift+Tab am ersten Knoten wickelt auf den letzten um", () => {
+    expect(nextFocusIndex(3, 0, true)).toBe(2);
+  });
+
+  test("Fokus außerhalb des Modals (-1): Tab → erster, Shift+Tab → letzter", () => {
+    expect(nextFocusIndex(3, -1, false)).toBe(0);
+    expect(nextFocusIndex(3, -1, true)).toBe(2);
+  });
+
+  test("außerhalb liegender/ungültiger current-Index verhält sich wie 'nicht im Modal'", () => {
+    // indexOf liefert -1, kann aber theoretisch auch >= count sein → gleicher Einstieg.
+    expect(nextFocusIndex(3, 99, false)).toBe(0);
+    expect(nextFocusIndex(3, 99, true)).toBe(2);
+  });
+
+  test("einzelner Knoten: Tab und Shift+Tab bleiben auf ihm (Fokus kann nicht raus)", () => {
+    expect(nextFocusIndex(1, 0, false)).toBe(0);
+    expect(nextFocusIndex(1, 0, true)).toBe(0);
+  });
+
+  test("kein fokussierbarer Knoten → null (nichts zu fokussieren)", () => {
+    expect(nextFocusIndex(0, -1, false)).toBeNull();
+    expect(nextFocusIndex(0, 0, true)).toBeNull();
   });
 });

@@ -24,6 +24,10 @@ import { keys, clearKeys } from "./runtime";
   function wireKeyboard() {
     window.addEventListener("keydown", e => {
       SFX.ensure();
+      // Fokusfalle (#506): Tab/Shift+Tab bleibt in einem offenen Modal – VOR dem
+      // INPUT-Sonderfall, damit die Falle auch greift, während das Terminal-/Quiz-
+      // Eingabefeld den Fokus hat (sonst wanderte Tab von dort in den Hintergrund).
+      if (e.key === "Tab" && UI.trapFocus(e)) return;
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") {
         if (e.key === "Escape") { UI.closeOverlays(); (e.target as HTMLElement).blur(); }

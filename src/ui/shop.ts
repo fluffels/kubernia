@@ -53,6 +53,7 @@ export const shopUI = part({
       const c = cv as HTMLCanvasElement;
       this.drawTexIcon(c, c.dataset.tex!);
     });
+    this.focusFirstIn($("overlay-shop")); // #506: Fokus ins Modal
   },
 
   buyItem(itemId: string) {

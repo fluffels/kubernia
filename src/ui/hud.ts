@@ -252,6 +252,7 @@ export const hudUI = part({
     this.dialogue = null;
     this.choiceBtns = null;
     $("dialogue").classList.add("hidden");
+    this.blurToGame(); // #506: Fokus zurück ins Spiel
   },
 
 });

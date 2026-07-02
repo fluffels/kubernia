@@ -76,3 +76,40 @@ describe("Overlay-Register (#505)", () => {
     assert.notDeepEqual(withExtra, OVERLAYS.map(o => o.id).sort(), "ein zusätzliches HTML-Overlay muss die Abweichung zeigen");
   });
 });
+
+describe("Modal-ARIA-Semantik (#506)", () => {
+  /** Öffnendes `<div>`-Tag eines Elements mit gegebener id aus dem HTML holen. */
+  function openTagFor(html: string, id: string): string {
+    const m = html.match(new RegExp(`<div[^>]*\\bid="${id}"[^>]*>`));
+    return m ? m[0] : "";
+  }
+
+  test("jedes registrierte Overlay-Panel ist ein role=dialog aria-modal=true (Fokusfalle-Kontext)", () => {
+    for (const o of OVERLAYS) {
+      const tag = openTagFor(indexHtml, o.id);
+      assert.ok(tag, `#${o.id} fehlt in index.html`);
+      assert.match(tag, /role="dialog"/, `#${o.id} braucht role="dialog" (#506)`);
+      assert.match(tag, /aria-modal="true"/, `#${o.id} braucht aria-modal="true" (#506)`);
+      // Ein zugänglicher Name: entweder aria-label ODER aria-labelledby.
+      assert.match(tag, /aria-label(ledby)?="/, `#${o.id} braucht einen zugänglichen Namen (aria-label/-labelledby, #506)`);
+    }
+  });
+
+  test("Toast- und Alarm-Container sind Live-Regionen (Screenreader-Ansage, #506)", () => {
+    const toasts = openTagFor(indexHtml, "toasts");
+    assert.match(toasts, /aria-live="polite"/, "#toasts braucht aria-live=polite (Belohnungen/Hinweise)");
+    const alarm = openTagFor(indexHtml, "alarm");
+    assert.match(alarm, /aria-live="assertive"/, "#alarm braucht aria-live=assertive (Gefahren sofort ansagen)");
+  });
+
+  test("Der Dialog (#dialogue) trägt ebenfalls Dialog-Semantik", () => {
+    const tag = openTagFor(indexHtml, "dialogue");
+    assert.match(tag, /role="dialog"/);
+    assert.match(tag, /aria-modal="true"/);
+  });
+
+  test("Detektion greift (Red-Green): ein role-loses Panel würde auffliegen", () => {
+    const broken = '<div id="overlay-terminal" class="panel hidden">';
+    assert.doesNotMatch(broken, /role="dialog"/, "das kaputte Beispiel hat bewusst kein role → der echte Test würde hier rot");
+  });
+});

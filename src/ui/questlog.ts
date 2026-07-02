@@ -20,6 +20,7 @@ export const questlogUI = part({
     $("overlay-quest").classList.remove("hidden");
     this.questLogViewIdx = null; // immer auf der Übersicht starten
     this.renderQuestLog();
+    this.focusFirstIn($("overlay-quest")); // #506: Fokus ins Modal
   },
 
   /** In die Detailansicht einer ansehbaren (abgeschlossenen/aktuellen) Quest

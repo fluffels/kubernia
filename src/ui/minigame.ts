@@ -14,6 +14,7 @@ export const minigameUI = part({
     // wieder aufrufbar (#216).
     if (Game.state.stats.stackIntroSeen) this.renderStackRound();
     else this.renderStackIntro();
+    this.focusFirstIn($("overlay-stack")); // #506: Fokus ins Modal
   },
 
   /** Kurze Einführung – kein Vorwissen annehmen (#216): erklärt

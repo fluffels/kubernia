@@ -9,7 +9,9 @@
 </head>
 <body>
 
-  <div id="game-container"></div>
+  <!-- tabindex=-1: nicht per Tab erreichbar, aber programmatisch fokussierbar –
+       so gibt closeOverlays()/closeDialogue() den Fokus hierher zurück (#506). -->
+  <div id="game-container" tabindex="-1"></div>
   <div id="vignette"></div>
   <input type="file" id="save-import" accept=".json" class="hidden">
 
@@ -29,8 +31,8 @@
     <button id="hud-menu-btn" class="hud-menu-btn" data-action="openMenu" title="Menü öffnen (Esc)">☰ Menü</button>
   </div>
 
-  <!-- Alarm (Piraten / Krake) -->
-  <div id="alarm" class="hidden">
+  <!-- Alarm (Piraten / Krake) – role=alert: Screenreader lesen die Warnung sofort vor (#506) -->
+  <div id="alarm" class="hidden" role="alert" aria-live="assertive">
     <span id="alarm-text"></span>
     <span id="alarm-timer" class="alarm-timer"></span>
   </div>
@@ -39,7 +41,7 @@
   <div id="prompt" class="hidden"></div>
 
   <!-- Dialog -->
-  <div id="dialogue" class="hidden">
+  <div id="dialogue" class="hidden" role="dialog" aria-modal="true" aria-labelledby="dlg-name">
     <div class="dlg-portrait"><canvas id="dlg-portrait-canvas" width="48" height="48"></canvas></div>
     <div class="dlg-body">
       <div class="dlg-name" id="dlg-name"></div>
@@ -50,7 +52,7 @@
   </div>
 
   <!-- Terminal -->
-  <div id="overlay-terminal" class="panel hidden">
+  <div id="overlay-terminal" class="panel hidden" role="dialog" aria-modal="true" aria-label="Terminal – Verbindung zum Hafen-Cluster">
     <div class="panel-head">💻 Terminal <span class="dim">– Verbindung zum Hafen-Cluster</span>
       <button class="close-btn" data-action="closeOverlays">✕ (Esc)</button>
     </div>
@@ -68,7 +70,7 @@
   </div>
 
   <!-- Logbuch -->
-  <div id="overlay-quest" class="panel hidden">
+  <div id="overlay-quest" class="panel hidden" role="dialog" aria-modal="true" aria-label="Logbuch">
     <div class="panel-head">📜 Logbuch
       <button class="close-btn" data-action="closeOverlays">✕ (Esc)</button>
     </div>
@@ -76,7 +78,7 @@
   </div>
 
   <!-- Sammelalbum / Glossar -->
-  <div id="overlay-album" class="panel hidden">
+  <div id="overlay-album" class="panel hidden" role="dialog" aria-modal="true" aria-label="Sammelalbum">
     <div class="panel-head">📖 Sammelalbum <span class="dim">– alle Befehle &amp; dein Wissen</span>
       <button class="close-btn" data-action="closeOverlays">✕ (Esc)</button>
     </div>
@@ -84,7 +86,7 @@
   </div>
 
   <!-- Shop -->
-  <div id="overlay-shop" class="panel hidden">
+  <div id="overlay-shop" class="panel hidden" role="dialog" aria-modal="true" aria-label="Pelles Handelsposten">
     <div class="panel-head">🛒 Pelles Handelsposten
       <button class="close-btn" data-action="closeOverlays">✕ (Esc)</button>
     </div>
@@ -92,7 +94,7 @@
   </div>
 
   <!-- Quiz-Krabbe -->
-  <div id="overlay-review" class="panel hidden">
+  <div id="overlay-review" class="panel hidden" role="dialog" aria-modal="true" aria-label="Wissensrunde mit Krabbe Kralle">
     <div class="panel-head">🦀 Krabbe Kralle <span class="dim">– die tägliche Wissensrunde</span>
       <button class="close-btn" data-action="closeOverlays">✕ (Esc)</button>
     </div>
@@ -100,7 +102,7 @@
   </div>
 
   <!-- Stapel-Minispiel -->
-  <div id="overlay-stack" class="panel hidden">
+  <div id="overlay-stack" class="panel hidden" role="dialog" aria-modal="true" aria-label="Bos Stapel-Spiel">
     <div class="panel-head">🎮 Bos Stapel-Spiel <span class="dim">– Docker-Images sind Schichtstapel!</span>
       <button class="close-btn" data-action="closeOverlays">✕ (Esc)</button>
     </div>
@@ -108,7 +110,7 @@
   </div>
 
   <!-- Menü / Pause -->
-  <div id="overlay-menu" class="panel hidden">
+  <div id="overlay-menu" class="panel hidden" role="dialog" aria-modal="true" aria-label="Menü">
     <div class="panel-head">⚓ Menü
       <button class="close-btn" data-action="closeOverlays">✕ (Esc)</button>
     </div>
@@ -126,7 +128,9 @@
     </div>
   </div>
 
-  <div id="toasts"></div>
+  <!-- Live-Region (#506): neu eingehängte Toasts (Belohnungen/Hinweise) werden von
+       Screenreadern vorgelesen, ohne den Fokus zu stehlen (höflich = polite). -->
+  <div id="toasts" role="status" aria-live="polite"></div>
 
   <script type="module" src="/src/main.ts"></script>
   <script>

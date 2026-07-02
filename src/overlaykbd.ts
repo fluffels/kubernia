@@ -119,3 +119,31 @@ export function dialogueNav(idx: number, lineCount: number, dir: 1 | -1): Dialog
   }
   return idx > 0 ? { kind: "show", idx: idx - 1 } : { kind: "stay" };
 }
+
+/* ===== Fokusfalle für Modals (#506) =====
+ * Pure Rechen-Hilfe für die Tab-Fokusfalle: hält den Tastatur-Fokus zyklisch
+ * innerhalb eines offenen Modals, statt ihn in Hintergrund-Elemente wandern zu
+ * lassen (Screenreader-/Tastatur-Barrierefreiheit). Wie überall hier ist nur die
+ * Index-Mathematik testbar-pur; die DOM-Anbindung (fokussierbare Knoten sammeln,
+ * `.focus()` setzen) liegt dünn in `ui/overlay.ts` (`trapFocus`).
+ */
+
+/**
+ * Nächster Fokus-Index bei Tab / Shift+Tab innerhalb einer Fokusfalle.
+ *
+ * @param count     Anzahl der fokussierbaren Knoten im Modal.
+ * @param current   Index des aktuell fokussierten Knotens, oder -1 (bzw. außerhalb
+ *                   des Bereichs), wenn der Fokus (noch) nicht im Modal sitzt.
+ * @param backward  true = Shift+Tab (rückwärts), false = Tab (vorwärts).
+ *
+ * - Vorwärts über den letzten Knoten hinaus springt zyklisch auf den ersten,
+ *   rückwärts vor den ersten auf den letzten – so verlässt der Fokus das Modal nie.
+ * - Sitzt der Fokus (noch) außerhalb, landet Tab auf dem ersten, Shift+Tab auf dem
+ *   letzten Knoten.
+ * - Ohne fokussierbaren Knoten (`count <= 0`) gibt es nichts zu fokussieren: `null`.
+ */
+export function nextFocusIndex(count: number, current: number, backward: boolean): number | null {
+  if (count <= 0) return null;
+  if (current < 0 || current >= count) return backward ? count - 1 : 0;
+  return ((current + (backward ? -1 : 1)) % count + count) % count;
+}
