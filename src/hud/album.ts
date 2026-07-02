@@ -20,8 +20,8 @@
  * Bewusst wie questlog.ts geschnitten: die Entscheidung lebt hier (unit-getestet),
  * die DOM-Anbindung (Rendern/Klicks) liegt dünn in ui/album.ts.
  */
-import type { Quest } from "./types";
-import type { QuizCard, QuestTopic } from "./content/loader";
+import type { Quest } from "../types";
+import type { QuizCard, QuestTopic } from "../content/loader";
 
 /** Ein Sammel-Eintrag im Album – ein Befehl oder ein Wissens-Stück. */
 export interface AlbumEntry {

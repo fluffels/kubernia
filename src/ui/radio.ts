@@ -2,10 +2,10 @@ import { Game, ABBREV_EARN_THRESHOLD } from "../game";
 import { KQContent } from "../content";
 import { SFX } from "../sfx";
 import { ABBREVS } from "../content/abbrev";
-import { pushHistory, navigateHistory } from "../cmdhistory";
-import { pickFunkExplanation } from "../funkexplain";
-import { evaluateSubmission, funkSessionKind } from "../viewdecide";
-import { fmtCmd } from "../markup";
+import { pushHistory, navigateHistory } from "../hud/cmdhistory";
+import { pickFunkExplanation } from "../hud/funkexplain";
+import { evaluateSubmission, funkSessionKind } from "../hud/viewdecide";
+import { fmtCmd } from "../hud/markup";
 import type { QuestTask } from "../types";
 import { part, $, esc, NPCS, masteryBadge } from "./shared";
 

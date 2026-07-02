@@ -23,7 +23,7 @@ nennenswertem Kamera-Scroll) blendet `WorldScene.cullDecor()` alles außerhalb d
 Sichtfelds aus und innerhalb wieder ein.
 
 - Die reine Sichtfeld-Logik liegt Phaser-frei und getestet in
-  [`src/cull.ts`](../src/cull.ts) (`expandRect`, `inView`, `cull`, `FrameSampler`).
+  [`src/hud/cull.ts`](../src/hud/cull.ts) (`expandRect`, `inView`, `cull`, `FrameSampler`).
 - **Nur Optik:** Kollision (`solidGrid`) hängt **nicht** an der Sichtbarkeit – ein
   ausgeblendeter Baum bleibt solide.
 - **Kein Pop-in:** Das Sichtfeld wird um `MARGIN = 4 × Kachel` erweitert, damit hohe
@@ -43,7 +43,7 @@ ein Frame-Killer, sobald das Spiel „groß" wird. Jetzt:
   aus einem **wiederverwendeten Pool** (`scene.tagPool`, gedeckelt auf 64). Die Zahl der
   Tag-Render-Objekte wächst damit **nicht** mehr mit der Cluster-Größe.
 - **Sichtfeld + Nähe entscheiden.** Welche Tags sichtbar sind, wählt die pure, getestete
-  [`selectVisibleTags`](../src/cull.ts): im (erweiterten) Sichtfeld UND im Aufdeck-Radius,
+  [`selectVisibleTags`](../src/hud/cull.ts): im (erweiterten) Sichtfeld UND im Aufdeck-Radius,
   nach Distanz gedeckelt. Off-screen-Tags werden **gar nicht** gerendert.
 - **Entzerrung nur über die sichtbaren Tags** → die O(n²)-Label-Entzerrung (#207) ist aufs
   Sichtfeld begrenzt statt auf den ganzen Cluster.

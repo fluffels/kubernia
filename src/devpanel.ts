@@ -22,7 +22,7 @@
  */
 import { Game } from "./game";
 import { SaveStore } from "./store";
-import { resolveOverlayKey } from "./overlaykbd";
+import { resolveOverlayKey } from "./hud/overlaykbd";
 
 /* ---------- Pure Logik (Phaser-/DOM-frei, unit-getestet) ---------- */
 

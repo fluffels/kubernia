@@ -49,7 +49,7 @@ import { randSuffix, clusterIP, suggest } from "./sim/util";
 import { asPodName, resourceName, InvalidResourceNameError, rfc1123ErrorText, RFC1123_TIP } from "./sim/names";
 import { assertClusterInvariants } from "./sim/invariants";
 import { scaleDeployment, replacePods } from "./sim/workload";
-import { renderHelp } from "./helptext";
+import { renderHelp } from "./hud/helptext";
 
 /* ---------- Ressourcen-Registry (#499) ----------
  * Eine Reihe von Ressourcentypen ist „einfach additiv": ihr Zustand ist eine flache Liste,

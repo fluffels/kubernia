@@ -4,7 +4,7 @@ import { KQContent } from "../content";
 import { SFX } from "../sfx";
 import { TALK_RANGE, interiorEAction, interiorEFlank, type Door } from "../world";
 import { keys, setInteriorOpen } from "../runtime";
-import { sanitize } from "../pixelfont";
+import { sanitize } from "../hud/pixelfont";
 import { T, STONE, WOOD, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, pixelText, type ScenePlayer } from "./shared";
 
 /* ===== InteriorScene (#6) – betretbarer Hausinnenraum =====

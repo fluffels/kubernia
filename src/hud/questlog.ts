@@ -13,7 +13,7 @@
  * Anders als das Dev-Panel (#325, springt überallhin) erlaubt diese Schicht
  * KEIN Vorausspringen: gesperrte Quests sind sichtbar, aber nicht ansehbar.
  */
-import type { Quest } from "./types";
+import type { Quest } from "../types";
 
 /** Zustand einer Quest in der Logbuch-Übersicht. */
 export type QuestLogState = "done" | "active" | "locked";

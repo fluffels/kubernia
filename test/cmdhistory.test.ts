@@ -5,7 +5,7 @@
  * leere Historie, Klemmen an beiden Enden, ignoredups, Längen-Cap, Whitespace.
  */
 import { test, expect } from "vitest";
-import { pushHistory, navigateHistory, CMD_HISTORY_MAX } from "../src/cmdhistory";
+import { pushHistory, navigateHistory, CMD_HISTORY_MAX } from "../src/hud/cmdhistory";
 
 /* ---------- pushHistory ---------- */
 

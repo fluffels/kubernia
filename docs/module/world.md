@@ -8,8 +8,8 @@
 |---|---|
 | `src/world.ts` | Welt-Geometrie (Kachelraster, NPC-Standplätze, Solid-Kacheln) + **Blob-Autotile-Auswahl** (#340: `neighbors8`/`reduceBlobMask`/`autotileIndex`, 47er-Set — wählt aus der 8er-Nachbarschaft die Übergangskachel für weichere Wege/Wasserkanten; erster Schritt aus #256, noch ohne Tileset-Assets) + **Sub-Tile-Kollision** (#343: `Hitbox` = Kreis/Rechteck als Daten, `circleHitbox`/`rectHitbox`/`hitboxBlocks`/`blockedByHitboxes`/`npcHitboxes`; `footprintSolid`/`resolveMove` nehmen die Hitboxen als optionales rückwärtskompatibles Zusatzargument). Seit #386 in **allen** Szenen verdrahtet: WorldScene (Steine/Büsche rund, Laternen schmales Rechteck), Archipel/Lighthouse/Warehouse (Steine/Felsbrocken/Büsche/Fässer rund, Kisten Rechteck, NPCs rund); große Strukturen (Kräne/Container/Turm) bleiben bewusst volles Kachel-Solid. |
 | `src/decor.ts` | Deterministische Deko-Platzierung (Büsche, Steine, Laternen, Blumen). |
-| `src/labellayout.ts` | Entzerrt sich überlappende In-Welt-Beschriftungen (#207): schiebt horizontal kollidierende Cluster-Tags/Schilder vertikal auseinander (`spreadLabelsVertically`). `revealNearbyLabels` in `scenes.ts` wendet die Versätze auf die sichtbaren Tags an. |
-| `src/cull.ts` | Off-screen-Culling & FPS-Messung (Sichtfeld-Prüfung, `FrameSampler`); Performance-Budget #82, siehe [performance-budget.md](../performance-budget.md). |
+| `src/hud/labellayout.ts` | Entzerrt sich überlappende In-Welt-Beschriftungen (#207): schiebt horizontal kollidierende Cluster-Tags/Schilder vertikal auseinander (`spreadLabelsVertically`). `revealNearbyLabels` in `scenes.ts` wendet die Versätze auf die sichtbaren Tags an. |
+| `src/hud/cull.ts` | Off-screen-Culling & FPS-Messung (Sichtfeld-Prüfung, `FrameSampler`); Performance-Budget #82, siehe [performance-budget.md](../performance-budget.md). |
 
 ## Inseln & Bereiche (Geometrie + Warp, Phaser-frei)
 
@@ -34,7 +34,7 @@ Jeweils Geometrie/Kollision + Anleger/Warp + reservierte NPC-/Quest-Trigger-Stan
 | Modul | Inhalt |
 |---|---|
 | `src/clock.ts` | Zeit-/Datums-Ableitung für die HUD-Uhr (synchron zum Tag-Nacht-Schleier). |
-| `src/pixelfont.ts` | Glyphen-Daten (5×7) + Helfer der In-Welt-Pixel-Bitmap-Font (#188); `scenes.ts` backt daraus die RetroFont-Textur für alle In-Welt-Texte. |
-| `src/overlaykbd.ts` | Tastatur-Logik für einfache Modals (#283): `resolveOverlayKey` (Navigation ↑/↓/w/s bzw. Auslösen Enter/Leer/E). Dazu `dialogueNav` (#310): Vor-/Zurück-Blättern für mehrzeilige Lese-Dialoge. DOM-Anbindung dünn in `ui/*` + `main.ts`. |
-| `src/cmdhistory.ts` | Befehlshistorie fürs Funkgerät-Terminal (#316): `pushHistory` + `navigateHistory` (↑/↓-Cursor, bash-nah). Freischaltbar via `Game.cmdHistoryUnlocked`; DOM-Anbindung dünn in `ui/radio.ts` + `main.ts`. Tests: `test/cmdhistory.test.ts`. |
-| `src/questlog.ts` | Logbuch-Übersicht (#326): Zustand jeder Quest (done/active/locked), Freischalt-Bedingung (nach Quest 1), lesbare Dialog-Zeilen fürs Nachlesen abgeschlossener Quests. DOM-Anbindung dünn in `ui/questlog.ts`. |
+| `src/hud/pixelfont.ts` | Glyphen-Daten (5×7) + Helfer der In-Welt-Pixel-Bitmap-Font (#188); `scenes.ts` backt daraus die RetroFont-Textur für alle In-Welt-Texte. |
+| `src/hud/overlaykbd.ts` | Tastatur-Logik für einfache Modals (#283): `resolveOverlayKey` (Navigation ↑/↓/w/s bzw. Auslösen Enter/Leer/E). Dazu `dialogueNav` (#310): Vor-/Zurück-Blättern für mehrzeilige Lese-Dialoge. DOM-Anbindung dünn in `ui/*` + `main.ts`. |
+| `src/hud/cmdhistory.ts` | Befehlshistorie fürs Funkgerät-Terminal (#316): `pushHistory` + `navigateHistory` (↑/↓-Cursor, bash-nah). Freischaltbar via `Game.cmdHistoryUnlocked`; DOM-Anbindung dünn in `ui/radio.ts` + `main.ts`. Tests: `test/cmdhistory.test.ts`. |
+| `src/hud/questlog.ts` | Logbuch-Übersicht (#326): Zustand jeder Quest (done/active/locked), Freischalt-Bedingung (nach Quest 1), lesbare Dialog-Zeilen fürs Nachlesen abgeschlossener Quests. DOM-Anbindung dünn in `ui/questlog.ts`. |

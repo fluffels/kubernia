@@ -2,7 +2,7 @@
  * Verwaltet die Wiederholungs-Karten (Box 1..5 + Fälligkeit), das sanfte Review-Gate
  * (#222/#323) und das freie, planungsneutrale Üben. Anwendungsschicht, Phaser-frei. */
 import { KQContent } from "../content";
-import { krallePracticeMilestone, kralleClawAside } from "../kralle";
+import { krallePracticeMilestone, kralleClawAside } from "../hud/kralle";
 import { part, today, pickWeighted } from "./shared";
 
 const BOX_INTERVALS: Record<number, number> = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16 };

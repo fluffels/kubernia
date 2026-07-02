@@ -19,7 +19,7 @@ import {
   abbrevLockHint,
   flagNearMissHint,
   longFormsInInput,
-} from "./content/abbrev";
+} from "../content/abbrev";
 
 /* ---------- 1. Funk-Session-Priorität (radio.ts:funkSession) ---------- */
 

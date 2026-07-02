@@ -1,6 +1,6 @@
 import { Game } from "../game";
 import { SFX, MUSIC_THEMES } from "../sfx";
-import { resolveOverlayKey, nextFocusIndex } from "../overlaykbd";
+import { resolveOverlayKey, nextFocusIndex } from "../hud/overlaykbd";
 import { BLOCKING_OVERLAY_IDS, KEYNAV_OVERLAY_IDS } from "./overlays";
 import { part, $, esc, sheetImgs, type UINpc } from "./shared";
 

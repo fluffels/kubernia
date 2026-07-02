@@ -1,7 +1,7 @@
 import { Game } from "../game";
 import { KQContent } from "../content";
-import { buildAlbum, albumUnlocked, type Album } from "../album";
-import { fmtCmd } from "../markup";
+import { buildAlbum, albumUnlocked, type Album } from "../hud/album";
+import { fmtCmd } from "../hud/markup";
 import { part, $, esc } from "./shared";
 
 /* ========== Sammelalbum / Glossar (#278) ==========

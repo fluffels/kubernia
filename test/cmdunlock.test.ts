@@ -9,7 +9,7 @@
  *  - Gegen den echten Content: zu Spielbeginn nur Meta-Befehle; ganz am Ende alle.
  */
 import { describe, it, expect } from "vitest";
-import { unlockedCommandFamilies, ALWAYS_AVAILABLE_COMMANDS } from "../src/cmdunlock";
+import { unlockedCommandFamilies, ALWAYS_AVAILABLE_COMMANDS } from "../src/hud/cmdunlock";
 import { KQContent } from "../src/content";
 import type { Quest, QuestStep } from "../src/types";
 

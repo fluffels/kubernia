@@ -20,8 +20,8 @@
 import Phaser from "phaser";
 import { Game } from "../../game";
 import { SFX } from "../../sfx";
-import { spreadLabelsVertically, type LayoutBox } from "../../labellayout";
-import { selectVisibleTags, expandRect } from "../../cull";
+import { spreadLabelsVertically, type LayoutBox } from "../../hud/labellayout";
+import { selectVisibleTags, expandRect } from "../../hud/cull";
 import { T, hashHue, hueColor, SIGN_FONT, SIGN_SCALE } from "../shared";
 import type { WorldSceneLike, DynTagData } from "./types";
 

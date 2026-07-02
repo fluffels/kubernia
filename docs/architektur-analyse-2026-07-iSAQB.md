@@ -96,7 +96,7 @@ Keiner der Befunde verlangt einen Umbau. Es ist **Präzisierung und Absicherung*
 
 **Vorbildlich:** CI fährt wirklich alle Gates (test/typecheck/lint/arch/size/docmap/beide Builds/Boot-Smoke, reproduzierbar via `npm ci` + `.nvmrc`), zweistufiges `npm audit`-Gate + Dependabot mit Grouping, alle drei Build-Modi getestet, Fitness-Functions selbst red-green-abgesichert.
 
-> **i18n (Deutsch fest verdrahtet):** bewusste, konsistent umgesetzte Randbedingung — **kein Ticket**, aber als Trade-off in arc42 §11 explizit benannt. Content-Strings sind bereits als Daten separiert; der teure Rest wären die im Code verstreuten Domänen-Strings (`clock.ts`, `markup.ts`).
+> **i18n (Deutsch fest verdrahtet):** bewusste, konsistent umgesetzte Randbedingung — **kein Ticket**, aber als Trade-off in arc42 §11 explizit benannt. Content-Strings sind bereits als Daten separiert; der teure Rest wären die im Code verstreuten Domänen-Strings (`clock.ts`, `hud/markup.ts`).
 
 ## Priorisierung (Kurzfassung)
 

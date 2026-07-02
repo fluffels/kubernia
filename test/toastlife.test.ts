@@ -4,7 +4,7 @@ import {
   HINT_LIFE_MS,
   TOAST_FADE_MS,
   toastFadeDelaySeconds,
-} from "../src/toastlife";
+} from "../src/hud/toastlife";
 
 // Pure Dauer-Politik der Toasts (#370). Belohnungen/Bestätigungen blitzen kurz auf,
 // echte Hinweise müssen wirklich lesbar bleiben. Die DOM-Umsetzung in src/ui/hud.ts

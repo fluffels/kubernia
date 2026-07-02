@@ -14,7 +14,7 @@ import {
   resolveTalkTarget,
   type SubmissionTask,
   type SubmissionContext,
-} from "../src/viewdecide";
+} from "../src/hud/viewdecide";
 
 /* ---------- funkSessionKind ---------- */
 

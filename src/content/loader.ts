@@ -105,7 +105,7 @@ import {
   memo,
 } from "./parse";
 import type { Sim } from "../sim";
-import type { FunkExplanation } from "../funkexplain";
+import type { FunkExplanation } from "../hud/funkexplain";
 import type {
   Quest,
   QuestStep,
