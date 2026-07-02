@@ -18,6 +18,13 @@
  * Daten aus dem Szenario (die simulierten .tf-Dateien); dieser Handler ist nur die
  * Mechanik darüber – keine UI/Quests (die liefern die Folge-Tickets #147ff).
  *
+ * **Aufbau (Schnitt #545, aus #502):** `terraformCommand` war ein 133-Zeilen-Dispatcher
+ * (complexity 47) mit substanzieller Inline-Logik je Unterbefehl. Jetzt ist jeder
+ * Unterbefehl eine eigene kohäsive Funktion (`tfGet`/`tfInit`/…), und `terraformCommand`
+ * ist ein dünner Dispatcher über die Daten-Tabelle `TERRAFORM_SUBCOMMANDS` (Alias→Handler)
+ * – gespiegelt zum helm-/docker-Schnitt (#544/#545). Die querschnittlichen Guards
+ * (init-nötig, unbekannter Provider) bleiben als Preamble im Dispatcher.
+ *
  * Phaser-frei (pure Domäne): die Domänentypen kommen aus ./state – kein Rückimport
  * nach sim.ts (kein Zyklus).
  */
@@ -96,49 +103,198 @@ function lockError(host: TerraformHost): string | null {
   return null;
 }
 
+/** Ein terraform-Unterbefehl-Handler: bekommt Host + Tokens, gibt die Ausgabe.
+ *  Handler, die `t` nicht brauchen, lassen den Parameter weg – dank struktureller
+ *  Kompatibilität bleiben sie zur Tabelle zuweisbar. */
+type TerraformHandler = (host: TerraformHost, t: string[]) => string;
+
+/** `terraform get` – referenzierte Module holen. */
+function tfGet(host: TerraformHost): string {
+  const err = fetchModules(host);
+  if (err) return err;
+  if (host.tf.modules.length === 0) return "Kein Modul referenziert – nichts zu holen.";
+  return host.tf.modules.map(m => "- " + m.name + " in " + m.source).join("\n");
+}
+
+/** `terraform init` – Module ziehen, Provider installieren, Backend initialisieren. */
+function tfInit(host: TerraformHost): string {
+  const tf = host.tf;
+  // Erst die Module ziehen – schlägt fehl, wenn eine Quelle nicht auflösbar ist.
+  const modErr = fetchModules(host);
+  if (modErr) return modErr;
+  tf.providers.forEach(p => { p.installed = true; });
+  tf.initialized = true;
+  const lines: string[] = [];
+  if (tf.modules.length) {
+    lines.push("Initializing modules...");
+    tf.modules.forEach(m => lines.push("- " + m.name + " in " + m.source));
+  }
+  lines.push(tf.backend
+    ? "Initializing the backend (" + tf.backend.type + (tf.backend.name ? ': "' + tf.backend.name + '"' : "") + ")..."
+    : "Initializing the backend...");
+  lines.push("Initializing provider plugins...");
+  if (tf.providers.length) {
+    tf.providers.forEach(p => lines.push("- Installing " + (p.source || p.name) + (p.version ? " v" + p.version : "") + "..."));
+  } else {
+    lines.push("- Installing hashicorp/local v2.5.1...");
+  }
+  lines.push("", "Terraform has been successfully initialized!", "",
+    "You may now begin working with Terraform. Try running \"terraform plan\".");
+  return lines.join("\n");
+}
+
+/** `terraform plan` – geplante Ressourcen (Top-Level + aus Modulen expandiert). */
+function tfPlan(host: TerraformHost): string {
+  const tf = host.tf;
+  if (tf.applied) {
+    return "No changes. Your infrastructure matches the configuration.\n\n" +
+      "Terraform hat verglichen: Was in main.tf steht, existiert schon genau so. Nichts zu tun. 🧘";
+  }
+  const top = tf.resources.map(r =>
+    "  # " + r.addr + " will be created\n  + resource " + r.addr.replace(".", " \"") + "\" {\n      + " + r.desc + "\n    }"
+  );
+  const mods = moduleAddrs(host).map(a => "  # " + a + " will be created\n  + resource (aus Modul) " + a);
+  const all = [...top, ...mods];
+  return all.join("\n\n") +
+    (all.length ? "\n\n" : "") +
+    "Plan: " + allAddrs(host).length + " to add, 0 to change, 0 to destroy.";
+}
+
+/** Provisioniert einen als Code deklarierten Cluster (Aufbau-Capstone #465): Control-Plane
+ *  hochziehen (wie `kubeadm init`) + je `hafen_worker`-Ressource einen Worker anhängen. */
+function provisionClusterFromCode(host: TerraformHost): void {
+  if (!host.controlPlane.up) {
+    const cpName = host.nodes.find(isControlPlane)?.name || "ahoi-control";
+    provisionNode(host, { name: cpName, roles: "control-plane" }); // idempotent per Name
+    host.controlPlane = { up: true, token: "abcdef.0123456789abcdef", node: cpName };
+  }
+  const workers = host.tf.resources.filter(r => r.addr.startsWith("hafen_worker."));
+  workers.forEach((_, i) => {
+    provisionNode(host, { name: "ahoi-worker-" + (i + 1) });
+  });
+  host._reschedulePending();
+}
+
+/** `terraform apply` – Ressourcen erzeugen, ggf. Nodes/Cluster provisionieren. */
+function tfApply(host: TerraformHost): string {
+  const tf = host.tf;
+  if (tf.applied) return "No changes. Your infrastructure matches the configuration.\n\nApply complete! Resources: 0 added, 0 changed, 0 destroyed.";
+  const locked = lockError(host);
+  if (locked) return locked;
+  const addrs = allAddrs(host);
+  tf.applied = true;
+  // Neue Server werden echte Cluster-Nodes – wartende Pods bekommen Platz!
+  if (tf.resources.some(r => r.addr.includes("hafen_server"))) {
+    for (const name of ["ahoi-worker-3", "ahoi-worker-4"]) {
+      provisionNode(host, { name }); // idempotent per Name (Worker-Default: roles "<none>")
+    }
+    host._reschedulePending();
+  }
+  // Aufbau-Capstone (#465): einen ganzen Cluster als Code provisionieren – die Pointe des
+  // Bogens (#239), das deklarative Gegenstück zum manuellen kubeadm init/join. Eine
+  // `hafen_cluster`-Ressource zieht die Control-Plane hoch (wie `kubeadm init`), jede
+  // `hafen_worker`-Ressource hängt einen Worker an (wie ein `kubeadm join`) – reproduzierbar
+  // aus der .tf-Datei statt Schritt für Schritt von Hand. Determiniert (fester Token), damit
+  // der Aufbau-Zustand zum Snapshot-Round-trip passt.
+  if (provisionsCluster(tf)) provisionClusterFromCode(host);
+  let out = addrs.map(a => a + ": Creating...\n" + a + ": Creation complete after 2s").join("\n") +
+    "\n\nApply complete! Resources: " + addrs.length + " added, 0 changed, 0 destroyed.";
+  if (tf.outputs.length) {
+    out += "\n\nOutputs:\n\n" + tf.outputs.map(o => o.name + " = " + (o.sensitive ? "<sensitive>" : '"' + o.value + '"')).join("\n");
+  }
+  return out;
+}
+
+/** `terraform destroy` – Ressourcen abräumen, ggf. Cluster zurück auf bare metal. */
+function tfDestroy(host: TerraformHost): string {
+  const tf = host.tf;
+  if (!tf.applied) return "No changes. No objects need to be destroyed.";
+  const locked = lockError(host);
+  if (locked) return locked;
+  const addrs = allAddrs(host);
+  tf.applied = false;
+  removeNode(host, "ahoi-worker-3");
+  removeNode(host, "ahoi-worker-4");
+  // Aufbau-Capstone (#465): ein als Code gebauter Cluster wird per destroy wieder abgeräumt –
+  // alle Knoten weg, Control-Plane down (zurück auf bare metal), das Gegenstück zum apply oben.
+  // Das komplette Leeren des Node-Aggregats ist bewusst eine distinkte „Aggregat leeren"-
+  // Semantik (kein Per-Member-removeNode), analog zur #508-Entscheidung für StatefulSets.
+  if (provisionsCluster(tf)) {
+    host.nodes.length = 0;
+    host.controlPlane = { up: false, token: null, node: null };
+  }
+  return addrs.map(a => a + ": Destroying...\n" + a + ": Destruction complete after 1s").join("\n") +
+    "\n\nDestroy complete! Resources: " + addrs.length + " destroyed.";
+}
+
+/** `terraform state list` – Adressen im (ggf. remote liegenden) State. */
+function tfState(host: TerraformHost, t: string[]): string {
+  if (t[2] !== "list") return host._err("Der Simulator kann nur 'terraform state list'.");
+  if (!host.tf.applied) return host._err("Noch nichts im State.", "Der State füllt sich erst nach 'terraform apply'.");
+  // Liest aus dem (ggf. remote liegenden) State – die Adressen sind dieselben,
+  // egal ob lokal oder im „Flotten-Lager". Die Quelle entscheidet der backend-Block.
+  return allAddrs(host).join("\n");
+}
+
+/** `terraform output [name]` – deklarierte Outputs (nach apply bekannt). */
+function tfOutput(host: TerraformHost, t: string[]): string {
+  const tf = host.tf;
+  // Outputs sind erst nach einem Apply bekannt (vorher steht nichts im State).
+  if (!tf.applied) return host._err("Noch keine Outputs.", "Outputs sind erst nach 'terraform apply' bekannt.");
+  const name = t[2];
+  if (name) {
+    const o = tf.outputs.find(x => x.name === name);
+    if (!o) return host._err('Error: Output "' + name + '" not found', "Prüfe die deklarierten output-Blöcke.");
+    return o.value; // gezielter Abruf gibt den Rohwert (wie `terraform output -raw`) – auch sensible
+  }
+  if (tf.outputs.length === 0) return ""; // keine output-Blöcke deklariert → echtes TF gibt nichts aus
+  return tf.outputs.map(o => o.name + " = " + (o.sensitive ? "<sensitive>" : '"' + o.value + '"')).join("\n");
+}
+
+/** `terraform force-unlock <id>` – einen hängenden State-Lock lösen (#146). */
+function tfForceUnlock(host: TerraformHost, t: string[]): string {
+  const tf = host.tf;
+  if (!tf.backend || !tf.backend.locking) {
+    return host._err("Kein sperrbarer Remote-State konfiguriert.", "force-unlock gibt es nur mit einem Backend, das State-Locking unterstützt.");
+  }
+  if (!tf.locked) return host._err("Der State ist nicht gesperrt.", "Es gibt gerade keinen Lock zu lösen.");
+  tf.locked = false;
+  const id = t[2];
+  return "Terraform state has been successfully unlocked!" + (id ? "\n\nUnlocked ID: " + id : "");
+}
+
+/** Verlangt `sub` ein initialisiertes Verzeichnis (plan/apply/destroy)? */
+function needsInit(sub: string): boolean {
+  return ["plan", "apply", "destroy"].includes(sub);
+}
+
+/** Alias → Handler. Ein neuer Unterbefehl ist ein Eintrag hier + eine Funktion oben –
+ *  der Dispatcher (`terraformCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz. */
+const TERRAFORM_SUBCOMMANDS: Record<string, TerraformHandler> = {
+  get: tfGet,
+  init: tfInit,
+  plan: tfPlan,
+  apply: tfApply,
+  destroy: tfDestroy,
+  state: tfState,
+  output: tfOutput,
+  "force-unlock": tfForceUnlock,
+  fmt: () => "main.tf",
+  validate: () => "Success! The configuration is valid.",
+};
+
+/** Dünner `terraform`-Dispatcher: erst die querschnittlichen Guards (init-nötig,
+ *  unbekannter Provider), dann Handler aus `TERRAFORM_SUBCOMMANDS`. */
 export function terraformCommand(host: TerraformHost, t: string[], _raw?: string): string {
   const sub = t[1];
   if (!sub) return host._err("terraform: Unterbefehl fehlt.", "Probier 'terraform init'.");
-  const tf = host.tf;
 
-  if (sub === "get") {
-    const err = fetchModules(host);
-    if (err) return err;
-    if (tf.modules.length === 0) return "Kein Modul referenziert – nichts zu holen.";
-    return tf.modules.map(m => "- " + m.name + " in " + m.source).join("\n");
-  }
-
-  if (sub === "init") {
-    // Erst die Module ziehen – schlägt fehl, wenn eine Quelle nicht auflösbar ist.
-    const modErr = fetchModules(host);
-    if (modErr) return modErr;
-    tf.providers.forEach(p => { p.installed = true; });
-    tf.initialized = true;
-    const lines: string[] = [];
-    if (tf.modules.length) {
-      lines.push("Initializing modules...");
-      tf.modules.forEach(m => lines.push("- " + m.name + " in " + m.source));
-    }
-    lines.push(tf.backend
-      ? "Initializing the backend (" + tf.backend.type + (tf.backend.name ? ': "' + tf.backend.name + '"' : "") + ")..."
-      : "Initializing the backend...");
-    lines.push("Initializing provider plugins...");
-    if (tf.providers.length) {
-      tf.providers.forEach(p => lines.push("- Installing " + (p.source || p.name) + (p.version ? " v" + p.version : "") + "..."));
-    } else {
-      lines.push("- Installing hashicorp/local v2.5.1...");
-    }
-    lines.push("", "Terraform has been successfully initialized!", "",
-      "You may now begin working with Terraform. Try running \"terraform plan\".");
-    return lines.join("\n");
-  }
-
-  if (!tf.initialized && ["plan", "apply", "destroy"].includes(sub)) {
+  // init/get laufen ohne Vor-Guards; plan/apply/destroy brauchen ein initialisiertes Verzeichnis.
+  if (!host.tf.initialized && needsInit(sub)) {
     return host._err("Error: Backend initialization required, please run \"terraform init\"", "Der Ordner muss erst initialisiert werden: 'terraform init'");
   }
-
   // Unbekannter Provider blockt plan/apply (nicht destroy – das räumt nur weg, was schon da ist).
-  if (["plan", "apply"].includes(sub)) {
+  if (sub === "plan" || sub === "apply") {
     const prov = unknownProvider(host);
     if (prov) {
       return host._err(
@@ -147,113 +303,7 @@ export function terraformCommand(host: TerraformHost, t: string[], _raw?: string
     }
   }
 
-  if (sub === "plan") {
-    if (tf.applied) {
-      return "No changes. Your infrastructure matches the configuration.\n\n" +
-        "Terraform hat verglichen: Was in main.tf steht, existiert schon genau so. Nichts zu tun. 🧘";
-    }
-    const top = tf.resources.map(r =>
-      "  # " + r.addr + " will be created\n  + resource " + r.addr.replace(".", " \"") + "\" {\n      + " + r.desc + "\n    }"
-    );
-    const mods = moduleAddrs(host).map(a => "  # " + a + " will be created\n  + resource (aus Modul) " + a);
-    const all = [...top, ...mods];
-    return all.join("\n\n") +
-      (all.length ? "\n\n" : "") +
-      "Plan: " + allAddrs(host).length + " to add, 0 to change, 0 to destroy.";
-  }
-
-  if (sub === "apply") {
-    if (tf.applied) return "No changes. Your infrastructure matches the configuration.\n\nApply complete! Resources: 0 added, 0 changed, 0 destroyed.";
-    const locked = lockError(host);
-    if (locked) return locked;
-    const addrs = allAddrs(host);
-    tf.applied = true;
-    // Neue Server werden echte Cluster-Nodes – wartende Pods bekommen Platz!
-    if (tf.resources.some(r => r.addr.includes("hafen_server"))) {
-      for (const name of ["ahoi-worker-3", "ahoi-worker-4"]) {
-        provisionNode(host, { name }); // idempotent per Name (Worker-Default: roles "<none>")
-      }
-      host._reschedulePending();
-    }
-    // Aufbau-Capstone (#465): einen ganzen Cluster als Code provisionieren – die Pointe des
-    // Bogens (#239), das deklarative Gegenstück zum manuellen kubeadm init/join. Eine
-    // `hafen_cluster`-Ressource zieht die Control-Plane hoch (wie `kubeadm init`), jede
-    // `hafen_worker`-Ressource hängt einen Worker an (wie ein `kubeadm join`) – reproduzierbar
-    // aus der .tf-Datei statt Schritt für Schritt von Hand. Determiniert (fester Token), damit
-    // der Aufbau-Zustand zum Snapshot-Round-trip passt.
-    if (provisionsCluster(tf)) {
-      if (!host.controlPlane.up) {
-        const cpName = host.nodes.find(isControlPlane)?.name || "ahoi-control";
-        provisionNode(host, { name: cpName, roles: "control-plane" }); // idempotent per Name
-        host.controlPlane = { up: true, token: "abcdef.0123456789abcdef", node: cpName };
-      }
-      const workers = tf.resources.filter(r => r.addr.startsWith("hafen_worker."));
-      workers.forEach((_, i) => {
-        provisionNode(host, { name: "ahoi-worker-" + (i + 1) });
-      });
-      host._reschedulePending();
-    }
-    let out = addrs.map(a => a + ": Creating...\n" + a + ": Creation complete after 2s").join("\n") +
-      "\n\nApply complete! Resources: " + addrs.length + " added, 0 changed, 0 destroyed.";
-    if (tf.outputs.length) {
-      out += "\n\nOutputs:\n\n" + tf.outputs.map(o => o.name + " = " + (o.sensitive ? "<sensitive>" : '"' + o.value + '"')).join("\n");
-    }
-    return out;
-  }
-
-  if (sub === "destroy") {
-    if (!tf.applied) return "No changes. No objects need to be destroyed.";
-    const locked = lockError(host);
-    if (locked) return locked;
-    const addrs = allAddrs(host);
-    tf.applied = false;
-    removeNode(host, "ahoi-worker-3");
-    removeNode(host, "ahoi-worker-4");
-    // Aufbau-Capstone (#465): ein als Code gebauter Cluster wird per destroy wieder abgeräumt –
-    // alle Knoten weg, Control-Plane down (zurück auf bare metal), das Gegenstück zum apply oben.
-    // Das komplette Leeren des Node-Aggregats ist bewusst eine distinkte „Aggregat leeren"-
-    // Semantik (kein Per-Member-removeNode), analog zur #508-Entscheidung für StatefulSets.
-    if (provisionsCluster(tf)) {
-      host.nodes.length = 0;
-      host.controlPlane = { up: false, token: null, node: null };
-    }
-    return addrs.map(a => a + ": Destroying...\n" + a + ": Destruction complete after 1s").join("\n") +
-      "\n\nDestroy complete! Resources: " + addrs.length + " destroyed.";
-  }
-
-  if (sub === "state") {
-    if (t[2] !== "list") return host._err("Der Simulator kann nur 'terraform state list'.");
-    if (!tf.applied) return host._err("Noch nichts im State.", "Der State füllt sich erst nach 'terraform apply'.");
-    // Liest aus dem (ggf. remote liegenden) State – die Adressen sind dieselben,
-    // egal ob lokal oder im „Flotten-Lager". Die Quelle entscheidet der backend-Block.
-    return allAddrs(host).join("\n");
-  }
-
-  if (sub === "output") {
-    // Outputs sind erst nach einem Apply bekannt (vorher steht nichts im State).
-    if (!tf.applied) return host._err("Noch keine Outputs.", "Outputs sind erst nach 'terraform apply' bekannt.");
-    const name = t[2];
-    if (name) {
-      const o = tf.outputs.find(x => x.name === name);
-      if (!o) return host._err('Error: Output "' + name + '" not found', "Prüfe die deklarierten output-Blöcke.");
-      return o.value; // gezielter Abruf gibt den Rohwert (wie `terraform output -raw`) – auch sensible
-    }
-    if (tf.outputs.length === 0) return ""; // keine output-Blöcke deklariert → echtes TF gibt nichts aus
-    return tf.outputs.map(o => o.name + " = " + (o.sensitive ? "<sensitive>" : '"' + o.value + '"')).join("\n");
-  }
-
-  if (sub === "force-unlock") {
-    if (!tf.backend || !tf.backend.locking) {
-      return host._err("Kein sperrbarer Remote-State konfiguriert.", "force-unlock gibt es nur mit einem Backend, das State-Locking unterstützt.");
-    }
-    if (!tf.locked) return host._err("Der State ist nicht gesperrt.", "Es gibt gerade keinen Lock zu lösen.");
-    tf.locked = false;
-    const id = t[2];
-    return "Terraform state has been successfully unlocked!" + (id ? "\n\nUnlocked ID: " + id : "");
-  }
-
-  if (sub === "fmt") return "main.tf";
-  if (sub === "validate") return "Success! The configuration is valid.";
-
-  return host._err("terraform: unbekannter Unterbefehl '" + sub + "'", "Tippe 'help' für alle Befehle.");
+  const handler = TERRAFORM_SUBCOMMANDS[sub];
+  if (!handler) return host._err("terraform: unbekannter Unterbefehl '" + sub + "'", "Tippe 'help' für alle Befehle.");
+  return handler(host, t);
 }
