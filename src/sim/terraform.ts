@@ -27,10 +27,11 @@ import { provisionNode, removeNode, isControlPlane } from "./nodes";
 /** Was die terraform-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
  *  Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es dokumentiert
  *  die Kopplung von terraform an den Cluster-Zustand und vermeidet einen
- *  Import-Zyklus terraform ↔ sim. Die Daten-Felder (`tf`/`nodes`) kommen über
- *  `extends ClusterState` (sim/state.ts, #372); hinzu kommen die in `sim.ts`
- *  verbleibenden Helfer, die terraform ruft. */
-export interface TerraformHost extends ClusterState {
+ *  Import-Zyklus terraform ↔ sim. Statt des ganzen `ClusterState` (Leaky Abstraction
+ *  #516) nur die berührten Daten-Felder per `Pick` (ISP): `tf`/`controlPlane`/`nodes`;
+ *  die Feld-Typen bleiben so an die SSOT (sim/state.ts, #372) gebunden. Hinzu kommen
+ *  die in `sim.ts` verbleibenden Helfer, die terraform ruft. */
+export interface TerraformHost extends Pick<ClusterState, "tf" | "controlPlane" | "nodes"> {
   _err(msg: string, tip?: string): string;
   _reschedulePending(): void;
 }
