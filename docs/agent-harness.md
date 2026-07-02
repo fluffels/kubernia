@@ -30,7 +30,7 @@ Alles, was ein Agent braucht, liegt **im Repo selbst** — versioniert und gepus
 
 Der Backlog lebt als **GitHub Issues** + Project-Board — **nicht** im Code, nicht in einem externen System. Prioritäten als Labels (`prio:hoch`/`mittel`/`niedrig`), Bereiche als `area:`-Labels.
 
-- **Was als Nächstes dran ist,** sagt die kuratierte [Umsetzungs-Reihenfolge](ticket-reihenfolge.md): das **oberste freie Ticket ihres Kopfes**; steht nichts im Kopf, der generische **Auto-Rest** (Prio → niedrigste Nummer). Der Agent **wägt nicht ab** und sucht nicht nach Inhalt — die Reihenfolge entscheidet. Das hält die Auswahl billig und reproduzierbar.
+- **Was als Nächstes dran ist,** entscheidet eine rein deterministische Regel (keine handgepflegte Reihenfolge): das **oberste freie Ticket nach Prio → niedrigste Nummer** ([Ticket-Auswahl](ticket-reihenfolge.md)). Der Agent **wägt nicht ab** und sucht nicht nach Inhalt — Prio-Label + Nummer entscheiden. Das hält die Auswahl billig, reproduzierbar und Stardew-fest (nichts, was mit dem Backlog mitwächst und driftet).
 - **Ein Agent nimmt genau EIN Ticket** und arbeitet es end-to-end ab: umsetzen → alle Gates grün → im Browser verifizieren → nach `main` → Issue schließen → Board + Reihenfolge pflegen. Der enge Fokus ist Absicht: ein kleiner, abgeschlossener Diff ist review- und verifizierbar; ein „ich mach schnell noch fünf Sachen mit"-Lauf ist es nicht.
 - **Der Agent managt das Board selbst** (nur in kubequest an ihn delegiert): Issues schließen/kommentieren/labeln und **neue Tickets anlegen, wenn etwas auffällt** (Bug, Lücke, Tech-Debt, Idee) — lieber ein Ticket zu viel als verlorenes Wissen. GitHub ist die SSOT für den Stand.
 - **Zu großes Ticket (Epic/Phase) → aufteilen statt umsetzen:** in session-große Kinder zerlegen (ohne Assignee), Übersichts-Kommentar posten, Epic auf `done` schließen. Kein Code.
@@ -127,7 +127,7 @@ So greifen die Bausteine bei **einem** Ticket ineinander — jeder Schritt ist e
    ┌─ Doku (SSOT) ────────────────────────────────────────────────┐
    │  Agent liest CLAUDE.md + AGENTS.md + modul-lokale Regeln       │
    │                          ▼                                     │
-   │  Board: oberstes freies Ticket aus der Umsetzungs-Reihenfolge  │  ← kein Abwägen
+   │  Board: oberstes freies Ticket nach Prio→Nummer                │  ← kein Abwägen
    │                          ▼                                     │
    │  Kollisionsschutz: self-assign (verifiziert) + eigener Worktree│  ← parallel-sicher
    │                          ▼                                     │
@@ -169,6 +169,6 @@ Mit **#530** ([ADR 0008](adr/0008-ki-agenten-harness.md)) ist der ADR jetzt die 
 - **[AGENTS.md](../AGENTS.md)** — operative Arbeitsanweisung (harte Regeln, Board-Workflow, Konventionen). *Bei Konflikt maßgeblich.*
 - **[CLAUDE.md](../CLAUDE.md)** — Schnellstart + Datei-Landkarte.
 - **[docs/arc42-architektur.md](arc42-architektur.md)** — Architektur-Gesamtsicht; §1.4 (KI-Entwickel-Effizienz als Qualitätsziel), §8 (Querschnittskonzepte), §9 (ADR-Übersicht inkl. geplantem 0008).
-- **[docs/ticket-reihenfolge.md](ticket-reihenfolge.md)** — was als Nächstes dran ist (Kopf + Auto-Rest + Reaktivierungs-Pool).
+- **[docs/ticket-reihenfolge.md](ticket-reihenfolge.md)** — was als Nächstes dran ist (deterministisch Prio→Nummer + Reaktivierungs-Pool).
 - **[docs/adr/](adr/)** — die festgehaltenen Grundsatzentscheidungen (Engine, kein Backend/DB, kein Multiplayer, Skalierungs-Fundament, …).
 - **[CONTRIBUTING.md](../CONTRIBUTING.md)** — Einstieg für Menschen (`npm run setup`, Devcontainer, PR-/Dependabot-Policy).

@@ -2,7 +2,7 @@
 
 > **Stand: 2026-07-01** (nach #475; ergänzt um die iSAQB-Analyse #492–#524). Beschreibung + Bewertung der Architektur entlang der arc42-Gliederung (die Vorlage, die iSAQB lehrt).
 > Diese Datei ist die aktuelle, versionierte Architektur-**Gesamtsicht**. Sie **ergänzt** (a) die ältere, Infrastruktur-fokussierte [architektur-analyse-2026-06.md](architektur-analyse-2026-06.md) (deren Baustellen #350/#389/#390/#391/#392/#393/#411/#413 inzwischen erledigt sind) und (b) die frische, doku-unabhängige **[architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md)** (fünf Durchläufe je Schicht → 33 Tickets #492–#524; die Risiken/Qualitäts-Aktualisierungen daraus sind unten in §8/§10/§11 eingearbeitet).
-> Umsetzungs-Reihenfolge: [ticket-reihenfolge.md](ticket-reihenfolge.md).
+> Ticket-Auswahl (Prio→Nummer): [ticket-reihenfolge.md](ticket-reihenfolge.md).
 
 ## 1. Einführung und Ziele
 

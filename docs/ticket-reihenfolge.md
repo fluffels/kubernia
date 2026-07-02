@@ -40,14 +40,14 @@ Sagt die Maintainerin **„nächstes Ticket"** (für kubequest), dann:
 
 Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwas anderes ermöglicht, kommt davor), sonst niedrigste Nummer. Content-Arcs (echter Lernpfad-Fortschritt) stehen über QoL-/System-Features. No-dependency-Content-Füller (#218/#219/#228/#229/#236/#237/#239) lebten im Auto-Rest — keine Abhängigkeit, kein Grund für den Kopf; einige davon sind inzwischen erledigt, der verbleibende design-freie Content (#239/#279/#278) ist hier nach Wert kuratiert, weil der Backlog rein `prio:niedrig`/ohne ist.
 
-> **⭐ Kopf-Reihenfolge (Stand 2026-07-02):** Harness-&-Vorzeige-Doku (#525–#533) und der HOCH-Teil der iSAQB-Analyse sind **abgearbeitet**. Oben steht jetzt der **iSAQB-Rest MITTEL→NIEDRIG (#514–#524 + #535/#536)**, _danach_ der bisherige Lernpfad-/QoL-Kopf. Oberstes freies Ticket: **#514**. Volle Begründung je Ticket: [architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md).
+> **⭐ Kopf-Reihenfolge (Stand 2026-07-02):** Harness-&-Vorzeige-Doku (#525–#533) und der HOCH-Teil der iSAQB-Analyse sind **abgearbeitet**. Oben steht jetzt der **iSAQB-Rest MITTEL→NIEDRIG (#514–#524 + #535/#536)**, _danach_ der bisherige Lernpfad-/QoL-Kopf. Dazu der **Burn-down #502** (#542–#547) als eigener NIEDRIG-Strang am Ende des Analyse-Blocks. Oberstes freies Ticket: **#514**. Volle Begründung je Ticket: [architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md).
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
 | | **━━━ iSAQB-Architektur-Analyse 2026-07-01 — MITTEL (Struktur-, Testbarkeits- & Governance-Präzisierung) ━━━** | | | |
 | A17 | **#514** | mittel | Content: `manifests.ts` von Quests ungenutzt / YAML dupliziert → `manifestRef` | Zwei Wahrheiten für dieselben Manifeste. |
 | A18 | **#498** | mittel | Content: maschineller Schema-Drift-Wächter JSON ↔ TS-Typen | ~13k Zeilen JSON ohne Struktur-Schutz. |
-| A19 | **#502** | mittel | Governance: Komplexitäts-Metriken (ESLint) statt reinem LOC-Deckel | LOC-Deckel sieht God-Functions nicht. |
+| A19 | **#502** | mittel | Governance: Komplexitäts-Metriken (ESLint) statt reinem LOC-Deckel | LOC-Deckel sieht God-Functions nicht. **Burn-down → #542–#547 unten.** |
 | A20 | **#503** | mittel | Governance: Bundle-Size-Budget als CI-Gate | Offline-Build inlined alle Assets, wächst unbemerkt. |
 | A21 | **#504** | mittel | Querschnitt: zentrale Fehlerbehandlung (`window.onerror` + Fallback-Overlay) | Laufzeitfehler reißt still das Spiel. |
 | A22 | **#505** | mittel | Präsentation: Overlay-Register statt 4× hartkodierter ID-Liste | Basis für Fokus-Management (#506). |
@@ -66,6 +66,13 @@ Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwa
 | A31 | **#522** | niedrig | Content: Check-DSL Testlücke (Top-Level `includes`-Regel) | Nur Abdeckung; DSL ist vorbildlich. |
 | A32 | **#523** | niedrig | Präsentation: `syncCluster` drosseln + dynamische Pod-Slots statt fixe 36 | Letzte Frame-Budget-Lücke bei Cluster-Scale. |
 | A33 | **#524** | niedrig | Testarchitektur: FPS-/A11y-Smoke assertieren (FpsMeter vorhanden) | Billig wegen vorhandener Infrastruktur. |
+| | **━━━ Burn-down #502 (Komplexitäts-Gate) — God-Functions/Dispatcher schneiden, prio:niedrig ━━━** | | | |
+| A34 | **#542** | niedrig | Burn-down #502: kubectl-Lese-Dispatcher (`inspect.ts`) aufteilen | Konkreter Vollzug des #502-Komplexitäts-Gates. Wie die God-File-Splits #515/#517 idealerweise **nach** der Ziel-Struktur #536, damit die geschnittenen Teile gleich am richtigen Ort landen. |
+| A35 | **#543** | niedrig | Burn-down #502: kubectl-Lifecycle/Ops-Dispatcher aufteilen | Fortsetzung #502; kubectl-Familie (nach/mit #542). |
+| A36 | **#544** | niedrig | Burn-down #502: `helmCommand` (277 Zeilen) in Unterbefehle schneiden | Fortsetzung #502; konkrete God-Function. |
+| A37 | **#545** | niedrig | Burn-down #502: übrige sim-Befehlsfamilien + `sim.ts`-Kern entzerren | Fortsetzung #502; Sim-Rest. |
+| A38 | **#546** | niedrig | Burn-down #502: Content + Persistenz vereinfachen (inkl. `max-depth`) | Fortsetzung #502; Content-/Persistenz-Schicht. |
+| A39 | **#547** | niedrig | Burn-down #502: Präsentation + Region-Geometrie entzerren | Fortsetzung #502; Präsentations-Schicht. |
 | | **━━━ Bisheriger Kopf (Lernpfad / QoL / Optik) — erst NACH dem Analyse-Block ━━━** | | | |
 | | **— Tiefer Lernpfad (Aufbau-Bogen #239 komplett: #460–#466 erledigt; #279 Backfill + #278 Sammelalbum + #328 Sandbox-Lernthema erledigt; #484 Scheduler-Blindplatzierung erledigt) —** | | | |
 | 1 | **#485** | niedrig | Lernlücke: initContainer (füllt das emptyDir vor dem Hauptcontainer) | Lernpfad-Content; docktan die storage-ephemeral/emptyDir-Lektion an (Content vor QoL), thematisch direkte Fortsetzung von #484. |
