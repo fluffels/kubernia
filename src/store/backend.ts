@@ -88,6 +88,12 @@ const cache = new Map<string, string>();
 let idb: IDBDatabase | null = null;
 let warnedIdbWriteFailed = false;
 
+// Ausstehende (fire-and-forget) IndexedDB-Schreibvorgänge. flushIdb() wartet darauf,
+// damit ein Reload (Reset/Slot-Wechsel/Import) den async Commit NICHT überholt und
+// hinterher einen Alt-Stand zurückliest (#473). Jede readwrite-Transaktion registriert
+// hier eine Zusage, die entfernt wird, sobald sie committet/scheitert.
+const pendingWrites = new Set<Promise<void>>();
+
 /** true, sobald der IndexedDB-Modus aktiv ist (für die Idempotenz von init()). */
 export function idbActive(): boolean {
   return idb != null;
@@ -147,6 +153,19 @@ function idbGet(db: IDBDatabase, key: string): Promise<string | null> {
   });
 }
 
+/** Registriert eine readwrite-Transaktion als „ausstehend", bis sie committet oder
+ *  scheitert. Die Zusage resolved IMMER (auch bei Fehler/Abbruch, dann zusätzlich
+ *  gemeldet) – ein fehlschlagender Persist darf flushIdb() nicht hängen lassen. */
+function trackWrite(tx: IDBTransaction): void {
+  const done = new Promise<void>((resolve) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => { warnIdbWrite(tx.error); resolve(); };
+    tx.onabort = () => { warnIdbWrite(tx.error); resolve(); };
+  });
+  pendingWrites.add(done);
+  void done.then(() => pendingWrites.delete(done));
+}
+
 /** Wert async nach IndexedDB schreiben (fire-and-forget). Fehler werden EINMALIG
  *  gemeldet und nie geworfen – ein fehlschlagender Persist darf den synchronen
  *  Aufrufer (Auto-Save) nicht reißen; der Cache hält den Wert für die Sitzung. */
@@ -154,8 +173,7 @@ function idbPut(db: IDBDatabase, key: string, value: string): void {
   try {
     const tx = db.transaction(OBJECT_STORE, "readwrite");
     tx.objectStore(OBJECT_STORE).put(value, key);
-    tx.onerror = () => warnIdbWrite(tx.error);
-    tx.onabort = () => warnIdbWrite(tx.error);
+    trackWrite(tx);
   } catch (e) {
     warnIdbWrite(e);
   }
@@ -166,11 +184,21 @@ function idbDelete(db: IDBDatabase, key: string): void {
   try {
     const tx = db.transaction(OBJECT_STORE, "readwrite");
     tx.objectStore(OBJECT_STORE).delete(key);
-    tx.onerror = () => warnIdbWrite(tx.error);
-    tx.onabort = () => warnIdbWrite(tx.error);
+    trackWrite(tx);
   } catch (e) {
     warnIdbWrite(e);
   }
+}
+
+/** Wartet, bis alle AKTUELL ausstehenden IndexedDB-Schreibvorgänge committet (bzw.
+ *  fehlgeschlagen) sind. Damit kann ein Aufrufer VOR einem `location.reload()`
+ *  (Reset/Slot-Wechsel/Import) sicherstellen, dass der fire-and-forget-Commit durch ist,
+ *  statt ein Timing zu raten (#473). Im Legacy-/In-Memory-Modus (kein IndexedDB) sind
+ *  Schreibvorgänge synchron → die Menge ist leer → resolved sofort. Wirft NIE.
+ *  Snapshot-Semantik: der Aufrufer setzt seine Writes synchron VOR flushIdb() ab, sie
+ *  sind also bereits erfasst; danach dazukommende Writes gehören nicht zu diesem Flush. */
+export async function flushIdb(): Promise<void> {
+  await Promise.all([...pendingWrites]);
 }
 
 function warnIdbWrite(e: unknown): void {

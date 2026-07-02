@@ -21,7 +21,7 @@
  */
 import {
   lsGet, lsSet, // Roh-localStorage für die einmalige Namensraum-Rename-Migration (#557)
-  DB_VERSION, OBJECT_STORE, getIndexedDB, openIdb, hydrate, idbActive, activateIdb,
+  DB_VERSION, OBJECT_STORE, getIndexedDB, openIdb, hydrate, idbActive, activateIdb, flushIdb,
 } from "./store/backend";
 import {
   SLOTS_KEY, parseSlotIndex, defaultIndex, saveKeyFor, backupKeyFor,
@@ -126,6 +126,16 @@ export const SaveStore = {
   /** Eviction-Schutz anfordern (#401) – siehe store/persistence.ts. */
   requestPersistentStorage(): Promise<StorageHealth> {
     return requestPersistentStorage();
+  },
+
+  /**
+   * Wartet, bis ausstehende (fire-and-forget) IndexedDB-Schreibvorgänge sicher committet
+   * sind. VOR einem `location.reload()` nach Reset/Slot-Wechsel/Import awaiten, damit der
+   * Reload den async Commit nicht überholt und beim Boot einen Alt-Stand zurückliest (#473).
+   * Im Legacy-/In-Memory-Modus sofort resolved. Wirft NIE.
+   */
+  flush(): Promise<void> {
+    return flushIdb();
   },
 
   /** Roh-JSON des Spielstands (aktiver Slot) lesen – oder null, wenn noch nichts gespeichert ist. */

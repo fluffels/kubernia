@@ -217,3 +217,71 @@ test("remove(): löscht den Stand aus IndexedDB (Reset lässt nichts zurück)", 
   expect(SaveStore.read()).toBe(null);                 // synchron sofort weg
   expect(await directReadIdb(SAVE_KEY)).toBe(null);    // auch aus IndexedDB entfernt
 });
+
+/* ===== flush(): der Reset/Reload-Race-Fix (#473) =====
+ * Vor #473 reloadte resetGame() SOFORT nach dem fire-and-forget-Schreiben; committete der
+ * async IndexedDB-Put nicht rechtzeitig, las der Boot einen Alt-Stand zurück. flush() gibt
+ * dem Aufrufer eine awaitbare Persist-Zusage, sodass der Reload den Commit nicht überholt. */
+
+test("flush(): wartet auf den ausstehenden Commit, bevor es resolved (#473)", async () => {
+  stubWindowWithoutLocalStorage();
+  vi.resetModules();
+  const { SaveStore } = await import("../src/store");
+  await SaveStore.init();
+
+  // Ohne ausstehende Writes resolved flush() sofort (leere Warteliste) – Kontrolle.
+  await expect(SaveStore.flush()).resolves.toBeUndefined();
+
+  // Mit einem ausstehenden Put muss flush() den echten IndexedDB-Commit ABWARTEN. Das
+  // beweisen wir robust über den Effekt statt über Task-Timing: ist flush() resolved,
+  // liegt der Wert wirklich in IndexedDB – gelesen über eine EIGENE Verbindung (kein
+  // Cache). Ein No-op-flush könnte diese Zusage nicht geben.
+  SaveStore.writeState({ xp: 1, coins: 2 });
+  await SaveStore.flush();
+  const raw = await directReadIdb(SAVE_KEY);
+  expect(raw).not.toBeNull();
+  expect(JSON.parse(raw!).data).toEqual({ xp: 1, coins: 2 }); // wirklich in IndexedDB committet
+});
+
+test("flush(): ein fehlschlagender (abgebrochener) Commit lässt flush() nicht hängen (#473)", async () => {
+  stubWindowWithoutLocalStorage();
+  vi.resetModules();
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const { SaveStore } = await import("../src/store");
+  await SaveStore.init();
+
+  SaveStore.writeState({ xp: 5 });
+  // Selbst wenn der Persist scheiterte, darf flush() nur resolven (nie werfen/hängen) –
+  // sonst bliebe ein Reset für immer im Ladezustand stecken.
+  await expect(SaveStore.flush()).resolves.toBeUndefined();
+  warn.mockRestore();
+});
+
+test("flush(): nach dem Await überlebt der Stand einen Reload OHNE settle-Read (#473)", async () => {
+  stubWindowWithoutLocalStorage(); // einziger dauerhafter Speicher = IndexedDB
+  vi.resetModules();
+  {
+    const { SaveStore } = await import("../src/store");
+    await SaveStore.init();
+    SaveStore.writeState({ xp: 77, coins: 3 });
+    await SaveStore.flush(); // statt directReadIdb-settle: genau der Reset/Reload-Fix
+  }
+  // „Reload" OHNE directReadIdb-settle – nur flush() darf den Commit garantiert haben.
+  vi.resetModules();
+  const { SaveStore } = await import("../src/store");
+  await SaveStore.init();
+  expect(SaveStore.readState()).toEqual({ xp: 77, coins: 3 });
+});
+
+test("flush(): im Legacy-/localStorage-Modus resolved sofort (kein Hänger, kein Wurf)", async () => {
+  vi.stubGlobal("indexedDB", undefined); // kein IndexedDB → synchroner Modus
+  const ls = makeLocalStorageStub();
+  vi.stubGlobal("window", { localStorage: ls });
+  vi.resetModules();
+
+  const { SaveStore } = await import("../src/store");
+  await SaveStore.init(); // No-op (kein IndexedDB)
+  SaveStore.writeState({ xp: 9 }); // synchron in localStorage
+  await expect(SaveStore.flush()).resolves.toBeUndefined(); // nichts Ausstehendes → sofort
+  expect(ls._map.has(SAVE_KEY)).toBe(true);
+});
