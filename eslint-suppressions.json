@@ -78,14 +78,6 @@
       "count": 1
     }
   },
-  "src/sim/helm.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/sim/invariants.ts": {
     "complexity": {
       "count": 1
