@@ -14,6 +14,12 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
+  // EIN Worker (#524): der FPS-Budget-Smoke misst echte Bilder/Sekunde in Echtzeit.
+  // Läuft ein zweiter headless-Chromium (v.a. der CPU-schwere axe-Scan) parallel auf
+  // demselben Runner, bricht die gemessene FPS künstlich ein (60 → ~15) und der Gate
+  // wird flakig. Die Smoke-Suite ist klein, darum serialisieren wir sie bewusst –
+  // deterministisches Timing ist hier mehr wert als die paar Sekunden Parallelität.
+  workers: 1,
   // Kein versehentliches `test.only` in der CI durchwinken.
   forbidOnly: !!process.env.CI,
   // Ein Boot-Smoke-Test soll deterministisch sein; ein einzelner Retry fängt nur

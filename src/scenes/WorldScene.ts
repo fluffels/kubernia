@@ -471,14 +471,22 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
       const bounds = expandRect({ x: wv.x, y: wv.y, width: wv.width, height: wv.height }, MARGIN);
       this.visibleCullables = cull(this.cullables, bounds);
     }
-    if (this.debugPerf && this.perfHud) {
-      const total = this.cullables.length, vis = this.visibleCullables;
-      this.perfHud.setText(
-        "FPS " + this.fpsSampler.fps + "\n" +
-        "Sprites sichtbar " + vis + "/" + total + "\n" +
-        "gecullt " + (total - vis) + "  ·  stress ×" + this.stress + "\n" +
-        "Cluster-Tags " + this.visibleTags + "/" + this.dynTags.length + " (Pool " + this.tagPool.length + ")",
-      );
+    if (this.debugPerf) {
+      const fps = this.fpsSampler.fps;
+      // FPS zusätzlich als DOM-Attribut spiegeln, damit der headless-Smoke (#524) das
+      // Frame-Budget ohne Test-Hintertür assertieren kann: window.kqGame ist im
+      // Offline-Build gestrippt, das ?perf-gate-Attribut ist es nicht. Nur wenn der
+      // Sampler schon Frames gesammelt hat (fps > 0), sonst bliebe die Zahl bei 0 hängen.
+      if (typeof document !== "undefined" && fps > 0) document.body.dataset.kqFps = String(fps);
+      if (this.perfHud) {
+        const total = this.cullables.length, vis = this.visibleCullables;
+        this.perfHud.setText(
+          "FPS " + fps + "\n" +
+          "Sprites sichtbar " + vis + "/" + total + "\n" +
+          "gecullt " + (total - vis) + "  ·  stress ×" + this.stress + "\n" +
+          "Cluster-Tags " + this.visibleTags + "/" + this.dynTags.length + " (Pool " + this.tagPool.length + ")",
+        );
+      }
     }
   }
 

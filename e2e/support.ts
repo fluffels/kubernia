@@ -24,9 +24,12 @@ export function requireOfflineBuild(): void {
 
 /** Lädt den Offline-Build und wartet, bis das Spiel gebootet hat (Boot-Flag +
  *  Phaser-Canvas). Jeder Test bekommt einen frischen Browser-Kontext, also einen
- *  leeren Spielstand – darum startet das Spiel deterministisch mit dem Intro. */
-export async function bootGame(page: Page): Promise<void> {
-  await page.goto(pathToFileURL(offlineHtml).href);
+ *  leeren Spielstand – darum startet das Spiel deterministisch mit dem Intro.
+ *  `query` hängt optional einen URL-Suchstring an (z.B. "perf" für das #82-Perf-HUD,
+ *  das der FPS-Smoke #524 braucht) – der Offline-Build wertet location.search aus. */
+export async function bootGame(page: Page, query = ""): Promise<void> {
+  const url = pathToFileURL(offlineHtml).href + (query ? "?" + query : "");
+  await page.goto(url);
   await expect(page.locator("body")).toHaveAttribute("data-kq-booted", "1", { timeout: 15_000 });
   await expect(page.locator("#game-container canvas")).toBeVisible();
 }

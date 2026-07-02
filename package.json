@@ -35,9 +35,11 @@
     "verify:full": "npm run verify && npm run test:coverage && npm run build && npm run build:offline && npm run check:bundle && npm run test:smoke"
   },
   "dependencies": {
+    "kubequest": "file:../../..",
     "phaser": "^3.87.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.61.1",
     "@types/node": "^26.0.1",
