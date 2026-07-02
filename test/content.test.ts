@@ -613,7 +613,7 @@ test("Red-Green: CMD-Karte mit unbekanntem chapter und nicht matchender Lösung 
     ...KQContent,
     CMD_CARDS: [
       ...KQContent.CMD_CARDS,
-      { id: "c-bad", chapter: "q-existiert-nicht", q: "?", accept: [/^kubectl get pods$/], solution: "ganz was anderes" },
+      { id: "c-bad", chapter: "q-existiert-nicht", q: "?", accept: [/^kubectl get pods$/], solution: "ganz was anderes", explain: "Erklärung" },
     ],
   };
   const errors = validateContent(kaputt);

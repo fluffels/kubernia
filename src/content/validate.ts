@@ -32,30 +32,12 @@
  *  aufzugeben.
  */
 import type { Quest } from "../types";
-
-/** Karteikarte der Quiz-Krabbe (Multiple Choice). */
-export interface QuizCard {
-  id: string;
-  /** Quest-ID, nach deren Abschluss diese Karte in den SR-Pool kommt (analog zu CmdCard.chapter). */
-  chapter?: string;
-  /** Quest-ID, in der das Konzept eingeführt wird (#412); fehlt es, gilt `chapter`. */
-  introducedIn?: string;
-  q: string;
-  options: string[];
-  correct: number;
-  explain: string;
-}
-
-/** Befehls-Karte (Spaced Repetition): Aufgabe + akzeptierte Eingaben. */
-export interface CmdCard {
-  id: string;
-  chapter: string;
-  /** Quest-ID, in der das Konzept eingeführt wird (#412); fehlt es, gilt `chapter`. */
-  introducedIn?: string;
-  q: string;
-  accept: RegExp[];
-  solution: string;
-}
+// QuizCard/CmdCard sind NICHT hier neu definiert, sondern die EINE Wahrheit aus dem
+// Loader (#519): der Loader parst/validiert die JSON in genau diese Typen, also gibt es
+// keinen Grund für eine zweite Kopie hier – die war schon divergiert (die frühere lokale
+// CmdCard hatte kein `explain`-Feld). Reiner Typ-Import: zur Laufzeit erzeugt er keine
+// Abhängigkeit auf den Loader (und keinen Zyklus – der Loader kennt validate.ts nicht).
+import type { QuizCard, CmdCard } from "./loader";
 
 /** Genau die Felder des `KQContent`-Bündels, die der Validator inspiziert.
  *  Strukturelle Teilmenge – `KQContent` (mit SMALLTALK, corruptImage …) ist

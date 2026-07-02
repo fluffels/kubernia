@@ -21,7 +21,13 @@
  * Validierung läuft beim Modul-Laden (im Browser wie im Node-Test) und wirft bei
  * kaputten Daten explizit `ContentValidationError` (dieselbe Klasse wie loader.ts).
  */
-import { ContentValidationError, NPCS } from "./loader";
+import { NPCS } from "./loader";
+// Die Parse-/Validier-Primitiven kommen aus dem geteilten Leaf `./parse` (#519), statt hier
+// erneut nachgebaut zu werden – dieselben Bausteine nutzt auch der Loader. `fail` wirft die
+// gemeinsame `ContentValidationError` mit dem Präfix „Content …" (die Pfadangabe unten sagt
+// ohnehin `entities.…`, die Herkunft bleibt also erkennbar). `asFiniteNumber`/`asPositiveInt`
+// sind registry-spezifisch (Bruch-Koordinaten bzw. Fußabdruck ≥1) und bleiben lokal.
+import { fail, asRecord, asArray, asNonEmptyString, assertNoUnknownKeys } from "./parse";
 import entitiesData from "./data/entities.json";
 
 /** Ein NPC-Standplatz auf einer Karte (Kachel-Koordinaten). Bewusst hier definiert
@@ -33,41 +39,11 @@ export interface Spawn { id: string; x: number; y: number }
  *  (z.B. "harbor", "archipel", "lighthouse", "warehouse"). */
 export interface EntityNpc extends Spawn { map: string }
 
-function fail(path: string, msg: string): never {
-  throw new ContentValidationError(`Entity-Registry „${path}": ${msg}`);
-}
-
-function asRecord(v: unknown, path: string): Record<string, unknown> {
-  if (typeof v !== "object" || v === null || Array.isArray(v)) fail(path, "Objekt erwartet");
-  return v as Record<string, unknown>;
-}
-
-function asArray(v: unknown, path: string): unknown[] {
-  if (!Array.isArray(v)) fail(path, "Array erwartet");
-  return v;
-}
-
-function asNonEmptyString(v: unknown, path: string): string {
-  if (typeof v !== "string") fail(path, "String erwartet");
-  if (v.trim() === "") fail(path, "nicht-leerer String erwartet");
-  return v;
-}
-
 /** Endliche Zahl (Kachel-Koordinaten dürfen Brüche sein, z.B. 14.6 – darum NICHT
- *  asInt). NaN/Infinity werden abgewiesen. */
+ *  asInt). NaN/Infinity werden abgewiesen. Registry-spezifisch → bleibt lokal. */
 function asFiniteNumber(v: unknown, path: string): number {
   if (typeof v !== "number" || !Number.isFinite(v)) fail(path, "endliche Zahl erwartet");
   return v;
-}
-
-/** Schema-Drift-Wächter (#498): jeder JSON-Schlüssel MUSS bekannt sein, sonst wird er
- *  still verworfen und die Registry-Daten weichen unbemerkt von `EntityNpc`/`EntityObject`
- *  ab. Fängt Tippfehler (`labl`) und veraltete/neue Felder ohne Reviver-Anschluss. */
-function assertNoUnknownKeys(o: Record<string, unknown>, path: string, known: readonly string[]): void {
-  const allowed = new Set<string>(known);
-  for (const k of Object.keys(o)) {
-    if (!allowed.has(k)) fail(`${path}.${k}`, `unbekannter Schlüssel „${k}" (Tippfehler? veraltetes/neues Feld ohne Reviver-Anschluss?)`);
-  }
 }
 
 /** Validiert die rohe Registry gegen das Schema und gibt sie typisiert + in
