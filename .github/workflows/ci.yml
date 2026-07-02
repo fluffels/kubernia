@@ -60,6 +60,13 @@ jobs:
       - name: Offline-Build
         run: npm run build:offline
 
+      # Bundle-Budget-Gate (#503): jetzt liegen beide Builds vor — hartes Byte-Budget
+      # für die ausgelieferten Artefakte (Offline-HTML + Spielcode-Chunks ohne Phaser).
+      # Bewusst HIER, nach den Builds (nicht in der build-freien `verify`-Kette), analog
+      # zu verify:full. Macht die reine chunkSizeWarningLimit-Warnung zu einem echten Fail.
+      - name: Bundle-Budget-Gate (nach den Builds, #503)
+        run: npm run check:bundle
+
       - name: Offline-Build als Artefakt hochladen
         uses: actions/upload-artifact@v7
         with:

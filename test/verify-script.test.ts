@@ -27,11 +27,18 @@ const pkg = JSON.parse(readRepo("package.json")) as {
 };
 const scripts = pkg.scripts;
 
-// Die Einzel-Gates, die die CI fährt: jedes `check:*` plus die drei
-// Namens-Gates. Aus den Scripts abgeleitet, damit ein neu hinzugefügtes
-// `check:*`-Gate den Test automatisch mitzieht (statt hier zu verrotten).
+// Build-ABHÄNGIGE Gates messen die GEBAUTEN Artefakte und können darum nicht in
+// der build-freien `verify`-Kette laufen – sie gehören (wie test:coverage) hinter
+// die Builds in `verify:full`. #503: check:bundle misst dist-offline/index.html +
+// die dist/-Chunks, existiert also erst NACH `build`/`build:offline`.
+const BUILD_DEPENDENT_GATES = new Set(["check:bundle"]);
+
+// Die build-freien Einzel-Gates, die `verify` fährt: jedes `check:*` (außer den
+// build-abhängigen) plus die drei Namens-Gates. Aus den Scripts abgeleitet, damit
+// ein neu hinzugefügtes `check:*`-Gate den Test automatisch mitzieht (statt hier zu
+// verrotten).
 const GATE_SCRIPTS = [
-  ...Object.keys(scripts).filter((n) => n.startsWith("check:")),
+  ...Object.keys(scripts).filter((n) => n.startsWith("check:") && !BUILD_DEPENDENT_GATES.has(n)),
   "typecheck",
   "lint",
   "test",
@@ -58,6 +65,24 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
     expect(full).toMatch(/\bnpm run build\b/);
     expect(full).toMatch(/\bnpm run build:offline\b/);
     expect(full).toMatch(/\bnpm run (test:smoke|smoke)\b/);
+  });
+
+  it("build-abhängige Gates (#503 check:bundle) laufen in verify:full, NACH den Builds", () => {
+    const full = scripts["verify:full"];
+    for (const gate of BUILD_DEPENDENT_GATES) {
+      const needle = new RegExp(`\\bnpm run ${gate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+      expect(full, `verify:full muss das build-abhängige Gate "${gate}" enthalten`).toMatch(needle);
+      // ... und zwar hinter build:offline (sonst fehlt das gemessene Artefakt).
+      expect(
+        full.indexOf(`npm run ${gate}`) > full.indexOf("npm run build:offline"),
+        `"${gate}" muss NACH "build:offline" stehen`,
+      ).toBe(true);
+      // NICHT in der build-freien verify-Kette (dort gäbe es kein Artefakt zu messen).
+      expect(
+        new RegExp(`\\bnpm run ${gate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(scripts.verify),
+        `"${gate}" darf NICHT in der build-freien verify-Kette stehen`,
+      ).toBe(false);
+    }
   });
 
   it("die CI ruft die `verify`-Kette auf, statt die Gates einzeln zu duplizieren", () => {

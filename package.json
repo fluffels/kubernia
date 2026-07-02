@@ -27,9 +27,10 @@
     "check:docmap": "node scripts/check-docmap.mjs",
     "check:docdrift": "node scripts/check-docdrift.mjs",
     "check:diffsize": "node scripts/check-diffsize.mjs",
+    "check:bundle": "node scripts/check-bundle.mjs",
     "lint": "eslint . --max-warnings 0",
     "verify": "npm run typecheck && npm run lint && npm run check:arch && npm run check:size && npm run check:docmap && npm run check:docdrift && npm run check:diffsize && npm test",
-    "verify:full": "npm run verify && npm run test:coverage && npm run build && npm run build:offline && npm run test:smoke"
+    "verify:full": "npm run verify && npm run test:coverage && npm run build && npm run build:offline && npm run check:bundle && npm run test:smoke"
   },
   "dependencies": {
     "phaser": "^3.87.0"
