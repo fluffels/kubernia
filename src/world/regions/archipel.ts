@@ -7,7 +7,8 @@
  * Hauptkarte (resolveMove/footprintSolid aus world.ts) – nichts dupliziert.
  */
 import { TILE } from "../world";
-import { npcSpawnForMap, objectForId, objectsForMap, objectFootprint, type Spawn } from "../../content/entities";
+import { npcSpawnForMap, objectForId, type Spawn } from "../../content/entities";
+import { fillTerrain, markRegistrySolids } from "./geometry";
 
 /** Inselraster (Kacheln). Kleiner als die Hauptkarte – eine kompakte, voll
  *  umrundbare Insel, die in einer Session sauber gefüllt werden kann. */
@@ -81,12 +82,6 @@ function landLevel(x: number, y: number): 0 | 1 | 2 {
   return 0;
 }
 
-/** Deterministischer Gras-Frame-Index (0/1/2) wie auf der Hauptkarte. */
-function grassFrame(x: number, y: number): number {
-  const h = (((x * 73856093) ^ (y * 19349663)) >>> 0) % 100;
-  return h < 80 ? 0 : h < 93 ? 1 : 2;
-}
-
 export interface ArchipelMap {
   W: number;
   H: number;
@@ -95,59 +90,32 @@ export interface ArchipelMap {
   trees: { x: number; y: number }[];
 }
 
-/** Baut das komplette Inselraster: Boden, Kollision, Bäume. Pur und
- *  deterministisch – in test/archipel.test.ts direkt geprüft (u.a. dass die
- *  Lichtung vom Anleger aus erreichbar ist). */
-export function buildArchipel(): ArchipelMap {
-  const W = AW, H = AH;
-  const ground = new Array(W * H).fill(WATER);
-  const solid = new Uint8Array(W * H);
-
-  // Grundterrain aus der Inselform
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const lvl = landLevel(x, y);
-      const i = y * W + x;
-      if (lvl === 0) { ground[i] = WATER; solid[i] = 1; }       // Wasser blockt
-      else if (lvl === 1) ground[i] = SAND;                      // Strand begehbar
-      else ground[i] = grassFrame(x, y);                         // Gras begehbar
-    }
-  }
-
-  // Anleger-Steg im Süden: von der Sand-Unterkante (Spalte CX) bis zur
-  // untersten Reihe als begehbare Planken über dem Wasser.
+/** Anleger-Steg im Süden (begehbare Planken über dem Wasser, Spalten CX-1/CX)
+ *  plus den Aufweg von der Steg-Anbindung hoch zur Lichtung (Mitte). Der Steg
+ *  endet eine Reihe vor dem Kartenrand → die Insel bleibt von Wasser umschlossen. */
+function carveDockAndPath(W: number, H: number, ground: number[], solid: Uint8Array): void {
   let dockTop = CY;
   for (let y = CY; y < H; y++) { if (landLevel(CX, y) === 0) { dockTop = y; break; } }
-  for (let y = dockTop; y <= H - 2; y++) {   // endet eine Reihe vor dem Rand → Insel bleibt von Wasser umschlossen
+  for (let y = dockTop; y <= H - 2; y++) {
     for (const x of [CX - 1, CX]) { const i = y * W + x; ground[i] = DOCK; solid[i] = 0; }
   }
-
-  // Weg von der Steg-Anbindung hoch zur Lichtung (Mitte)
   for (let y = CY; y <= dockTop; y++) { const i = y * W + CX; ground[i] = PATH; solid[i] = 0; }
+}
 
-  // Lichtung um die Mitte garantiert begehbar halten (kein Baum/Solid auf
-  // NPC-Standplatz, Quest-Trigger und Ankunftsweg).
-  const clear = new Set([
-    ARCHIPEL_NPC.y * W + ARCHIPEL_NPC.x,
-    ARCHIPEL_QUEST_TRIGGER.y * W + ARCHIPEL_QUEST_TRIGGER.x,
-    CY * W + CX,
-  ]);
-
-  // Solide Objekte (props/tower) aus der Registry (#357) als Kachel-Solid markieren.
-  // Der Archipel hat derzeit nur den begehbaren Quest-Trigger (übersprungen), aber so ist
-  // ein künftiges Insel-Objekt nur ein JSON-Eintrag (entities.json), kein Geometrie-Edit.
-  for (const o of objectsForMap("archipel")) {
-    if (o.type === "quest_trigger") continue;
-    for (const t of objectFootprint(o)) solid[t.y * W + t.x] = 1;
-  }
-
-  // Bäume als grüner Saum nahe der Küste – deterministisch, nie auf Weg/Lichtung/Steg.
+/** Bäume als grüner Saum nahe der Küste – deterministisch, nie auf Weg/Lichtung/
+ *  Steg (`clear`). Setzt die getroffenen Kacheln solide und liefert die Positionen. */
+function scatterTrees(
+  W: number,
+  H: number,
+  ground: number[],
+  solid: Uint8Array,
+  clear: Set<number>,
+): { x: number; y: number }[] {
   const trees: { x: number; y: number }[] = [];
   for (let y = 1; y < H - 1; y++) {
     for (let x = 1; x < W - 1; x++) {
       const i = y * W + x;
-      if (ground[i] !== 0 && ground[i] !== 1 && ground[i] !== 2) continue;  // nur Gras
-      if (ground[i] === PATH || ground[i] === DOCK) continue;
+      if (ground[i] !== 0 && ground[i] !== 1 && ground[i] !== 2) continue;  // nur Gras (Weg/Steg sind ≠0/1/2)
       if (clear.has(i)) continue;
       const dx = (x - CX) / 1.08, dy = (y - CY) / 0.92;
       const r = Math.hypot(dx, dy);
@@ -158,6 +126,32 @@ export function buildArchipel(): ArchipelMap {
       }
     }
   }
+  return trees;
+}
 
+/** Baut das komplette Inselraster: Boden, Kollision, Bäume. Pur und
+ *  deterministisch – in test/archipel.test.ts direkt geprüft (u.a. dass die
+ *  Lichtung vom Anleger aus erreichbar ist). */
+export function buildArchipel(): ArchipelMap {
+  const W = AW, H = AH;
+  const ground = new Array<number>(W * H).fill(WATER);
+  const solid = new Uint8Array(W * H);
+
+  fillTerrain(W, H, ground, solid, landLevel, () => SAND);
+  carveDockAndPath(W, H, ground, solid);
+
+  // Lichtung um die Mitte garantiert begehbar halten (kein Baum/Solid auf
+  // NPC-Standplatz, Quest-Trigger und Ankunftsweg).
+  const clear = new Set([
+    ARCHIPEL_NPC.y * W + ARCHIPEL_NPC.x,
+    ARCHIPEL_QUEST_TRIGGER.y * W + ARCHIPEL_QUEST_TRIGGER.x,
+    CY * W + CX,
+  ]);
+
+  // Der Archipel hat derzeit nur den begehbaren Quest-Trigger (übersprungen), aber so ist
+  // ein künftiges Insel-Objekt nur ein JSON-Eintrag (entities.json), kein Geometrie-Edit.
+  markRegistrySolids("archipel", W, solid);
+
+  const trees = scatterTrees(W, H, ground, solid, clear);
   return { W, H, ground, solid, trees };
 }

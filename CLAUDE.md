@@ -137,6 +137,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/content/drills/werft.ts`](src/content/drills/werft.ts) | pure Domäne | Werft-Capstone-Drills (Build→Deploy→Expose→Test, #457). |
 | [`src/content/abbrev.ts`](src/content/abbrev.ts) | pure Domäne | Langform↔Kürzel-Katalog („verdiente Abkürzung"). |
 | [`src/world/world.ts`](src/world/world.ts) | pure Domäne | Welt-Geometrie + Autotile (#340) + Sub-Tile-Kollision (#343/#386). → [world.md](docs/module/world.md) |
+| [`src/world/regions/geometry.ts`](src/world/regions/geometry.ts) | pure Domäne | Geteilte Region-Bausteine (#566): `grassFrame` + `fillTerrain` (Grundterrain aus `landLevel`) + `markRegistrySolids`; einmal statt byte-gleich je Region. |
 | [`src/world/regions/archipel.ts`](src/world/regions/archipel.ts) | pure Domäne | GitOps-Archipel-Insel: Geometrie + Warp. |
 | [`src/world/regions/lighthouse.ts`](src/world/regions/lighthouse.ts) | pure Domäne | Monitoring-Leuchtturm-Klippe: Geometrie + Warp (#111). |
 | [`src/world/regions/warehouse.ts`](src/world/regions/warehouse.ts) | pure Domäne | Lagerhallen-Viertel/Hafenkai: Geometrie + Warp (#124). |
