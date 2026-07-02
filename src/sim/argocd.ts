@@ -158,67 +158,89 @@ export function reconcileAutoSync(host: ArgocdHost): void {
   }
 }
 
+/** Ein `argocd app <action>`-Handler: bekommt Host + Tokens, gibt die Ausgabe. */
+type ArgocdAppHandler = (host: ArgocdHost, t: string[]) => string;
+
+/** Löst die von `get`/`sync` benötigte Application auf (gemeinsame „welche App?"-Wache),
+ *  oder liefert die passende Fehlermeldung. Bündelt die drei sonst duplizierten Fälle
+ *  (fehlender Name / Flag statt Name / unbekannter Name). */
+function resolveArgoApp(host: ArgocdHost, action: string, name: string | undefined): ArgoApp | string {
+  if (!name || name.startsWith("-")) return host._err("argocd app " + action + ": Welche Application?", "Die Namen siehst du mit 'argocd app list'.");
+  const app = host.argoApps.find(a => a.name === name);
+  if (!app) return host._err('Error: rpc error: code = NotFound desc = applications.argoproj.io "' + name + '" not found', "Die Namen siehst du mit 'argocd app list'.");
+  return app;
+}
+
+/** `argocd app list|ls` – alle Applications mit Sync-/Health-Status. */
+function argoAppList(host: ArgocdHost): string {
+  if (host.argoApps.length === 0) return "Keine Argo-Applications. (Lege eine an: 'kubectl apply -f <application>.yaml'.)";
+  return table(["NAME", "SYNC STATUS", "HEALTH STATUS", "REPO", "PATH"],
+    host.argoApps.map(a => [a.name, argoSyncStatus(host, a), argoHealth(host, a), a.repo, a.path]));
+}
+
+/** `argocd app get <name>` – Detailansicht einer Application (inkl. App-of-Apps-Kinder). */
+function argoAppGet(host: ArgocdHost, t: string[]): string {
+  const app = resolveArgoApp(host, "get", t[3]);
+  if (typeof app === "string") return app;
+  const sync = argoSyncStatus(host, app);
+  const lines = [
+    "Name:               " + app.name,
+    "Project:            default",
+    "Source Repo:        " + app.repo,
+    "Source Path:        " + app.path,
+    "Sync Policy:        " + (app.autoSync ? "Automated" + (app.selfHeal ? " (self-heal)" : "") : "<none> (manuell)"),
+    "Sync Status:        " + sync + (sync === "Synced" ? " ✅" : " ⚠️  (der Cluster weicht vom Git-Soll ab)"),
+    "Health Status:      " + argoHealth(host, app),
+  ];
+  if (app.childApps) {
+    lines.push("Managed Apps:       " + app.childApps.length + " (App-of-Apps – eine Wurzel verwaltet die ganze Flotte)");
+    for (const c of app.childApps) {
+      const child = host.argoApps.find(a => a.name === c.name);
+      lines.push("  • " + c.name + "  " + (child ? argoSyncStatus(host, child) + "/" + argoHealth(host, child) : "OutOfSync/Missing"));
+    }
+  }
+  if (sync === "OutOfSync") {
+    lines.push(app.autoSync && app.selfHeal
+      ? "▸ Self-Heal ist an – Argo dreht den Drift beim nächsten Abgleich von selbst auf den Git-Stand zurück."
+      : "▸ Bring den Cluster auf den Git-Soll: 'argocd app sync " + app.name + "'. (Git ist die Quelle der Wahrheit, nicht der Cluster.)");
+  }
+  return lines.join("\n");
+}
+
+/** `argocd app sync <name>` – zieht den Git-Soll in den Cluster (Pull-Prinzip). */
+function argoAppSync(host: ArgocdHost, t: string[]): string {
+  const app = resolveArgoApp(host, "sync", t[3]);
+  if (typeof app === "string") return app;
+  const before = argoSyncStatus(host, app);
+  argoReconcile(host, app);
+  if (before === "Synced") {
+    return "Application '" + app.name + "' ist bereits Synced ✅ – Cluster und Git-Soll stimmen überein, nichts zu tun. 🧘";
+  }
+  return [
+    "Synchronisiere Application '" + app.name + "' …",
+    app.childApps
+      ? "App-of-Apps: Argo legt aus dem '" + app.path + "'-Ordner jede Kind-Application an (eine Wurzel → die ganze Flotte)."
+      : "Argo zieht den im Git deklarierten Soll-Zustand in den Cluster (Pull-Prinzip).",
+    "Sync Status: Synced ✅   Health: " + argoHealth(host, app),
+    app.childApps
+      ? "▸ Schau mit 'argocd app list' – die ganze Flotte ist jetzt da."
+      : "▸ Schau mit 'kubectl get deployments' – der Cluster entspricht jetzt wieder dem Git-Stand.",
+  ].join("\n");
+}
+
+/** Alias → Handler. Ein neuer `argocd app`-Verb ist ein Eintrag hier + eine Funktion oben –
+ *  der Dispatcher (`argocdCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz. */
+const ARGOCD_APP_ACTIONS: Record<string, ArgocdAppHandler> = {
+  list: argoAppList,
+  ls: argoAppList,
+  get: argoAppGet,
+  sync: argoAppSync,
+};
+
 export function argocdCommand(host: ArgocdHost, t: string[]): string {
   if (t[1] !== "app") return host._err("Der Simulator kann nur 'argocd app ...'.", "z.B. 'argocd app list', 'argocd app get <name>' oder 'argocd app sync <name>'.");
   const action = t[2];
-
-  if (action === "list" || action === "ls") {
-    if (host.argoApps.length === 0) return "Keine Argo-Applications. (Lege eine an: 'kubectl apply -f <application>.yaml'.)";
-    return table(["NAME", "SYNC STATUS", "HEALTH STATUS", "REPO", "PATH"],
-      host.argoApps.map(a => [a.name, argoSyncStatus(host, a), argoHealth(host, a), a.repo, a.path]));
-  }
-
-  if (action === "get") {
-    const name = t[3];
-    if (!name || name.startsWith("-")) return host._err("argocd app get: Welche Application?", "Die Namen siehst du mit 'argocd app list'.");
-    const app = host.argoApps.find(a => a.name === name);
-    if (!app) return host._err('Error: rpc error: code = NotFound desc = applications.argoproj.io "' + name + '" not found', "Die Namen siehst du mit 'argocd app list'.");
-    const sync = argoSyncStatus(host, app);
-    const lines = [
-      "Name:               " + app.name,
-      "Project:            default",
-      "Source Repo:        " + app.repo,
-      "Source Path:        " + app.path,
-      "Sync Policy:        " + (app.autoSync ? "Automated" + (app.selfHeal ? " (self-heal)" : "") : "<none> (manuell)"),
-      "Sync Status:        " + sync + (sync === "Synced" ? " ✅" : " ⚠️  (der Cluster weicht vom Git-Soll ab)"),
-      "Health Status:      " + argoHealth(host, app),
-    ];
-    if (app.childApps) {
-      lines.push("Managed Apps:       " + app.childApps.length + " (App-of-Apps – eine Wurzel verwaltet die ganze Flotte)");
-      for (const c of app.childApps) {
-        const child = host.argoApps.find(a => a.name === c.name);
-        lines.push("  • " + c.name + "  " + (child ? argoSyncStatus(host, child) + "/" + argoHealth(host, child) : "OutOfSync/Missing"));
-      }
-    }
-    if (sync === "OutOfSync") {
-      lines.push(app.autoSync && app.selfHeal
-        ? "▸ Self-Heal ist an – Argo dreht den Drift beim nächsten Abgleich von selbst auf den Git-Stand zurück."
-        : "▸ Bring den Cluster auf den Git-Soll: 'argocd app sync " + app.name + "'. (Git ist die Quelle der Wahrheit, nicht der Cluster.)");
-    }
-    return lines.join("\n");
-  }
-
-  if (action === "sync") {
-    const name = t[3];
-    if (!name || name.startsWith("-")) return host._err("argocd app sync: Welche Application?", "Die Namen siehst du mit 'argocd app list'.");
-    const app = host.argoApps.find(a => a.name === name);
-    if (!app) return host._err('Error: rpc error: code = NotFound desc = applications.argoproj.io "' + name + '" not found', "Die Namen siehst du mit 'argocd app list'.");
-    const before = argoSyncStatus(host, app);
-    argoReconcile(host, app);
-    if (before === "Synced") {
-      return "Application '" + app.name + "' ist bereits Synced ✅ – Cluster und Git-Soll stimmen überein, nichts zu tun. 🧘";
-    }
-    return [
-      "Synchronisiere Application '" + app.name + "' …",
-      app.childApps
-        ? "App-of-Apps: Argo legt aus dem '" + app.path + "'-Ordner jede Kind-Application an (eine Wurzel → die ganze Flotte)."
-        : "Argo zieht den im Git deklarierten Soll-Zustand in den Cluster (Pull-Prinzip).",
-      "Sync Status: Synced ✅   Health: " + argoHealth(host, app),
-      app.childApps
-        ? "▸ Schau mit 'argocd app list' – die ganze Flotte ist jetzt da."
-        : "▸ Schau mit 'kubectl get deployments' – der Cluster entspricht jetzt wieder dem Git-Stand.",
-    ].join("\n");
-  }
-
-  return host._err("argocd app: unbekannte Aktion '" + (action || "") + "'", "z.B. 'argocd app list', 'argocd app get <name>' oder 'argocd app sync <name>'.");
+  const handler = action ? ARGOCD_APP_ACTIONS[action] : undefined;
+  if (!handler) return host._err("argocd app: unbekannte Aktion '" + (action || "") + "'", "z.B. 'argocd app list', 'argocd app get <name>' oder 'argocd app sync <name>'.");
+  return handler(host, t);
 }

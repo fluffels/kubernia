@@ -67,15 +67,9 @@ export function nslookupCommand(host: NetHost, t: string[]): string {
  *   - keine bereiten Pods (ImagePull/CrashLoop/  → (7) refused (Verweis auf get pods/
  *     NotReady/Pending oder gar kein Deployment)    describe/endpoints)
  *   - targetPort ≠ containerPort (Manifest)      → (7) refused (Ports angleichen) */
-export function curlCommand(host: NetHost, t: string[]): string {
-  // Vor der Abfrage den Cluster nachführen (wie get/top): notready-Pods, die durch ein
-  // inzwischen vorhandenes Secret bereit wurden, und nachgeschobene Nodes berücksichtigen.
-  host._reschedulePending();
-  host._recheckReadiness();
-
-  const arg = t.find((tok, i) => i > 0 && !tok.startsWith("-")) || null;
-  if (!arg) return host._err("curl: Welche Adresse soll ich abfragen?", "z.B. 'curl http://kasse' oder 'curl kasse:8080'.");
-  // URL zerlegen: optionales Schema, Host, optionaler :Port, optionaler /Pfad.
+/** Zerlegt die curl-Adresse `[http(s)://]<host>[:port][/pfad]` in ihre Teile. Als eigener
+ *  Parser gehalten, damit `curlCommand` unter dem Komplexitäts-Budget bleibt (#502). */
+function parseCurlUrl(arg: string): { hostName: string; reqPort: string | null; path: string; svcName: string } {
   let rest = arg.replace(/^https?:\/\//, "");
   const slash = rest.indexOf("/");
   const path = slash >= 0 ? rest.slice(slash) : "/";
@@ -84,6 +78,18 @@ export function curlCommand(host: NetHost, t: string[]): string {
   const reqPort = colon >= 0 ? rest.slice(colon + 1) : null;
   const hostName = colon >= 0 ? rest.slice(0, colon) : rest;
   const svcName = hostName.split(".")[0]; // erstes Label (svc / svc.ns / FQDN)
+  return { hostName, reqPort, path, svcName };
+}
+
+export function curlCommand(host: NetHost, t: string[]): string {
+  // Vor der Abfrage den Cluster nachführen (wie get/top): notready-Pods, die durch ein
+  // inzwischen vorhandenes Secret bereit wurden, und nachgeschobene Nodes berücksichtigen.
+  host._reschedulePending();
+  host._recheckReadiness();
+
+  const arg = t.find((tok, i) => i > 0 && !tok.startsWith("-")) || null;
+  if (!arg) return host._err("curl: Welche Adresse soll ich abfragen?", "z.B. 'curl http://kasse' oder 'curl kasse:8080'.");
+  const { hostName, reqPort, path, svcName } = parseCurlUrl(arg);
 
   const svc = host.services.find(s => s.name === svcName);
   if (!svc) {

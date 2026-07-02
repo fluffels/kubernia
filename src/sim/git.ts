@@ -35,9 +35,31 @@ export interface GitHost extends Pick<ClusterState, "git" | "files" | "ci" | "de
   _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment;
 }
 
+/** Ein git-Unterbefehl-Handler: bekommt Host + Tokens + Rohzeile, gibt die Ausgabe.
+ *  Handler, die `t`/`raw` nicht brauchen, lassen den Parameter weg – dank struktureller
+ *  Kompatibilität bleiben sie zur Tabelle zuweisbar (wie bei docker `DockerHandler`). */
+type GitHandler = (host: GitHost, t: string[], raw: string) => string;
+
+/** Alias → Handler (alle NACH der `git init`-Wache, also im initialisierten Repo). Ein
+ *  neuer git-Unterbefehl ist ein Eintrag hier + eine Funktion oben – der Dispatcher
+ *  (`gitCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz (Stardew-Scope). */
+const GIT_SUBCOMMANDS: Record<string, GitHandler> = {
+  status: gitStatus,
+  add: gitAdd,
+  commit: (host, _t, raw) => gitCommit(host, raw),
+  log: gitLog,
+  branch: gitBranch,
+  checkout: gitCheckout,
+  merge: gitMerge,
+  push: gitPush,
+  fetch: gitFetch,
+  pull: gitPull,
+};
+
 export function gitCommand(host: GitHost, t: string[], raw: string): string {
   const sub = t[1];
   const g = host.git;
+  // `git init` läuft VOR der „ist ein Repo?"-Wache – es legt das Repo überhaupt erst an.
   if (sub === "init") {
     if (g.initialized) return "Hinweis: Hier liegt schon ein Git-Repository (.git existiert bereits).";
     g.initialized = true;
@@ -46,23 +68,13 @@ export function gitCommand(host: GitHost, t: string[], raw: string): string {
   if (!g.initialized) {
     return host._err("⚠️ Das hier ist (noch) kein Git-Repository.", "Starte eins mit 'git init'.");
   }
-  switch (sub) {
-    case "status": return gitStatus(host);
-    case "add": return gitAdd(host, t);
-    case "commit": return gitCommit(host, raw);
-    case "log": return gitLog(host);
-    case "branch": return gitBranch(host, t);
-    case "checkout": return gitCheckout(host, t);
-    case "merge": return gitMerge(host, t);
-    case "push": return gitPush(host);
-    case "fetch": return gitFetch(host);
-    case "pull": return gitPull(host);
-    default: {
-      const guess = suggest(sub || "", ["init", "status", "add", "commit", "log", "branch", "checkout", "merge", "push", "fetch", "pull"]);
-      return host._err("⚠️ 'git " + (sub || "") + "' kenne ich hier nicht.",
-        guess ? "Meintest du 'git " + guess + "'?" : "Versuch's mit status, add, commit, log, branch, checkout, merge oder push.");
-    }
+  const handler = sub ? GIT_SUBCOMMANDS[sub] : undefined;
+  if (!handler) {
+    const guess = suggest(sub || "", ["init", "status", "add", "commit", "log", "branch", "checkout", "merge", "push", "fetch", "pull"]);
+    return host._err("⚠️ 'git " + (sub || "") + "' kenne ich hier nicht.",
+      guess ? "Meintest du 'git " + guess + "'?" : "Versuch's mit status, add, commit, log, branch, checkout, merge oder push.");
   }
+  return handler(host, t, raw);
 }
 
 function gitUntracked(host: GitHost): string[] {

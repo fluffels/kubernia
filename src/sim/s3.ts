@@ -141,7 +141,50 @@ function s3List(host: S3Host, t: string[]): string {
   return matches.map(o => fmtDate(o.created) + " " + String(o.size).padStart(10, " ") + " " + o.key).join("\n");
 }
 
-/** aws s3 cp <quelle> <ziel> – Upload (Datei→s3), Download (s3→Datei) oder Copy (s3→s3). */
+/** Ziel-Key auffüllen: ein expliziter Key bleibt, ein leerer bzw. auf „/" endender Key
+ *  (Verzeichnis-Form) bekommt den Dateinamen der Quelle angehängt – wie echtes `aws s3 cp`. */
+function resolveKey(key: string, srcName: string): string {
+  return key && !key.endsWith("/") ? key : key + baseName(srcName);
+}
+
+/** Upload: lokale Datei → Bucket-Objekt (`aws s3 cp <datei> s3://…`). */
+function s3Upload(host: S3Host, src: string, dstRef: { bucket: string; key: string }): string {
+  if (host.files[src] === undefined) {
+    return host._err("aws s3 cp: Die lokale Datei '" + src + "' gibt es nicht.", "Mit 'ls' siehst du, was hier liegt.");
+  }
+  const bucket = findBucket(host, dstRef.bucket);
+  if (!bucket) return noSuchBucket(host, dstRef.bucket);
+  const key = resolveKey(dstRef.key, src);
+  putObject(host, bucket, key, host.files[src]);
+  return "upload: " + src + " to s3://" + bucket.name + "/" + key;
+}
+
+/** Download: Bucket-Objekt → lokale Datei (`aws s3 cp s3://… <datei>`). */
+function s3Download(host: S3Host, srcRef: { bucket: string; key: string }, dst: string): string {
+  const bucket = findBucket(host, srcRef.bucket);
+  if (!bucket) return noSuchBucket(host, srcRef.bucket);
+  const obj = bucket.objects.find(o => o.key === srcRef.key);
+  if (!obj) return noSuchKey(host, srcRef.bucket, srcRef.key);
+  const dest = dst === "." || dst.endsWith("/") ? (dst === "." ? "" : dst) + baseName(srcRef.key) : dst;
+  host.files[dest] = obj.content;
+  return "download: s3://" + bucket.name + "/" + obj.key + " to " + dest;
+}
+
+/** Copy: Objekt von Bucket zu Bucket (`aws s3 cp s3://… s3://…`). */
+function s3CopyObject(host: S3Host, srcRef: { bucket: string; key: string }, dstRef: { bucket: string; key: string }): string {
+  const sBucket = findBucket(host, srcRef.bucket);
+  if (!sBucket) return noSuchBucket(host, srcRef.bucket);
+  const obj = sBucket.objects.find(o => o.key === srcRef.key);
+  if (!obj) return noSuchKey(host, srcRef.bucket, srcRef.key);
+  const dBucket = findBucket(host, dstRef.bucket);
+  if (!dBucket) return noSuchBucket(host, dstRef.bucket);
+  const key = resolveKey(dstRef.key, obj.key);
+  putObject(host, dBucket, key, obj.content);
+  return "copy: s3://" + sBucket.name + "/" + obj.key + " to s3://" + dBucket.name + "/" + key;
+}
+
+/** aws s3 cp <quelle> <ziel> – Upload (Datei→s3), Download (s3→Datei) oder Copy (s3→s3).
+ *  Dünner Dispatcher: welche Seite eine s3-Adresse ist, wählt den Modus. */
 function s3Copy(host: S3Host, t: string[]): string {
   const args = t.filter((tok, i) => i >= 3 && !tok.startsWith("-"));
   const src = args[0], dst = args[1];
@@ -150,40 +193,9 @@ function s3Copy(host: S3Host, t: string[]): string {
       "Hochladen: 'aws s3 cp daten.txt s3://hafen-backup/daten.txt' · Herunterladen: 'aws s3 cp s3://hafen-backup/daten.txt daten.txt'.");
   }
   const srcRef = parseS3Uri(src), dstRef = parseS3Uri(dst);
-
-  // Upload: lokale Datei → Bucket-Objekt.
-  if (!srcRef && dstRef) {
-    if (host.files[src] === undefined) {
-      return host._err("aws s3 cp: Die lokale Datei '" + src + "' gibt es nicht.", "Mit 'ls' siehst du, was hier liegt.");
-    }
-    const bucket = findBucket(host, dstRef.bucket);
-    if (!bucket) return noSuchBucket(host, dstRef.bucket);
-    const key = dstRef.key && !dstRef.key.endsWith("/") ? dstRef.key : (dstRef.key + baseName(src));
-    putObject(host, bucket, key, host.files[src]);
-    return "upload: " + src + " to s3://" + bucket.name + "/" + key;
-  }
-  // Download: Bucket-Objekt → lokale Datei.
-  if (srcRef && !dstRef) {
-    const bucket = findBucket(host, srcRef.bucket);
-    if (!bucket) return noSuchBucket(host, srcRef.bucket);
-    const obj = bucket.objects.find(o => o.key === srcRef.key);
-    if (!obj) return noSuchKey(host, srcRef.bucket, srcRef.key);
-    const dest = dst === "." || dst.endsWith("/") ? (dst === "." ? "" : dst) + baseName(srcRef.key) : dst;
-    host.files[dest] = obj.content;
-    return "download: s3://" + bucket.name + "/" + obj.key + " to " + dest;
-  }
-  // Copy: Objekt von Bucket zu Bucket.
-  if (srcRef && dstRef) {
-    const sBucket = findBucket(host, srcRef.bucket);
-    if (!sBucket) return noSuchBucket(host, srcRef.bucket);
-    const obj = sBucket.objects.find(o => o.key === srcRef.key);
-    if (!obj) return noSuchKey(host, srcRef.bucket, srcRef.key);
-    const dBucket = findBucket(host, dstRef.bucket);
-    if (!dBucket) return noSuchBucket(host, dstRef.bucket);
-    const key = dstRef.key && !dstRef.key.endsWith("/") ? dstRef.key : (dstRef.key + baseName(obj.key));
-    putObject(host, dBucket, key, obj.content);
-    return "copy: s3://" + sBucket.name + "/" + obj.key + " to s3://" + dBucket.name + "/" + key;
-  }
+  if (!srcRef && dstRef) return s3Upload(host, src, dstRef);
+  if (srcRef && !dstRef) return s3Download(host, srcRef, dst);
+  if (srcRef && dstRef) return s3CopyObject(host, srcRef, dstRef);
   // Beides lokal – das ist `cp`, nicht `aws s3 cp`.
   return host._err("aws s3 cp: Mindestens Quelle oder Ziel muss eine s3-Adresse (s3://…) sein.",
     "Für lokale Kopien ist 'aws s3 cp' nicht da – hier geht es um den Object Store.");
