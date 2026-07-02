@@ -20,7 +20,7 @@ function makeToggleStub(): { stub: LocalStorageStub; ctl: { fail: boolean } } {
   const stub: LocalStorageStub = {
     getItem: (k) => (map.has(k) ? map.get(k)! : null),
     setItem: (k, v) => {
-      if (k === "__kq_probe__") { map.set(k, String(v)); return; }
+      if (k === "__kubernia_probe__") { map.set(k, String(v)); return; }
       if (ctl.fail) throw new Error("QuotaExceededError");
       map.set(k, String(v));
     },

@@ -8,7 +8,7 @@ export function makeQuotaStub(): LocalStorageStub {
   return {
     getItem: (k: string) => (map.has(k) ? map.get(k)! : null),
     setItem: (k: string, v: string) => {
-      if (k === "__kq_probe__") { map.set(k, String(v)); return; } // Init-Probe darf durch
+      if (k === "__kubernia_probe__") { map.set(k, String(v)); return; } // Init-Probe darf durch
       throw new Error("QuotaExceededError"); // echte Saves scheitern zur Laufzeit
     },
     removeItem: (k: string) => { map.delete(k); },

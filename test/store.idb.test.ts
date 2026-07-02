@@ -14,8 +14,8 @@
 import { test, expect, vi, beforeEach, afterEach } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
 
-const SAVE_KEY = "kubequest-save-v3";       // muss zu store.ts passen
-const DB_NAME = "kubequest";
+const SAVE_KEY = "kubernia-save-v3";       // muss zu store.ts passen
+const DB_NAME = "kubernia";
 const DB_VERSION = 1;
 const STORE = "saves";
 
@@ -37,7 +37,7 @@ function makeQuotaStub() {
   return {
     getItem: (k: string) => (map.has(k) ? map.get(k)! : null),
     setItem: (k: string, v: string) => {
-      if (k === "__kq_probe__") { map.set(k, String(v)); return; }
+      if (k === "__kubernia_probe__") { map.set(k, String(v)); return; }
       throw new Error("QuotaExceededError");
     },
     removeItem: (k: string) => { map.delete(k); },
@@ -190,7 +190,7 @@ test("Backup-Slot greift auch im IndexedDB-Modus (Alt-Stand wird vor Migration g
   expect(SaveStore.readBackup()).toBe(null);          // vorher nichts gesichert
   expect(SaveStore.readState()).toEqual({ xp: 999, coins: 5 }); // migriert (v0 → aktuell)
   expect(SaveStore.readBackup()).toBe(legacyRaw);     // Original vor dem Überschreiben gesichert
-  expect(await directReadIdb("kubequest-save-backup-v1")).toBe(legacyRaw); // Backup liegt in IndexedDB
+  expect(await directReadIdb("kubernia-save-backup-v1")).toBe(legacyRaw); // Backup liegt in IndexedDB
 });
 
 test("init() ist idempotent – ein zweiter Aufruf ändert nichts und wirft nicht", async () => {

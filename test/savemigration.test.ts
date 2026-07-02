@@ -34,7 +34,7 @@ import { dirname, join } from "node:path";
 import { KQContent } from "../src/content";
 import { setWorldScene } from "../src/runtime";
 
-const SAVE_KEY = "kubequest-save-v3";        // muss zum Key in store.ts passen
+const SAVE_KEY = "kubernia-save-v3";        // muss zum Key in store.ts passen
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 
 let Game: typeof import("../src/game").Game;

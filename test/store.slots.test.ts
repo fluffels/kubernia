@@ -1,9 +1,9 @@
 /* Tests für mehrere lokale Spielstände / Save-Slots (#306).
  *
  * Die Slot-Logik lebt bewusst in der Persistenz-Schicht (SaveStore): read/write/readState/
- * writeState routen auf den AKTIVEN Slot, ein kleiner Slot-Index (kubequest-slots-v1) hält
+ * writeState routen auf den AKTIVEN Slot, ein kleiner Slot-Index (kubernia-slots-v1) hält
  * Liste + aktiven Zeiger. Backward-Kompatibilität ist der Kern: der Default-Slot ("slot-1")
- * speichert seine Daten unter dem bisherigen Einzel-Key (kubequest-save-v3) – ein bestehender
+ * speichert seine Daten unter dem bisherigen Einzel-Key (kubernia-save-v3) – ein bestehender
  * Stand ist damit ohne Kopieren/Bump automatisch "Slot 1", und solange es NUR den Default-Slot
  * gibt, wird gar kein Index geschrieben (Single-Slot bleibt byte-identisch zu vorher).
  *
@@ -14,8 +14,8 @@
 import { test, expect, vi, afterEach, beforeEach } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
 
-const SAVE_KEY = "kubequest-save-v3";        // = Daten-Key des Default-Slots (Legacy)
-const SLOTS_KEY = "kubequest-slots-v1";
+const SAVE_KEY = "kubernia-save-v3";        // = Daten-Key des Default-Slots (Legacy)
+const SLOTS_KEY = "kubernia-slots-v1";
 const DEFAULT_SLOT_ID = "slot-1";
 
 function makeLocalStorageStub() {
@@ -34,7 +34,7 @@ function makeQuotaStub() {
   return {
     getItem: (k: string) => (map.has(k) ? map.get(k)! : null),
     setItem: (k: string, v: string) => {
-      if (k === "__kq_probe__") { map.set(k, String(v)); return; }
+      if (k === "__kubernia_probe__") { map.set(k, String(v)); return; }
       throw new Error("QuotaExceededError");
     },
     removeItem: (k: string) => { map.delete(k); },

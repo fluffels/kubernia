@@ -56,7 +56,7 @@ test("SaveStore: fällt auf In-Memory zurück, wenn localStorage blockiert ist",
 
 /* ===== Versionierte Spielstände (readState/writeState + Migration) ===== */
 
-const SAVE_KEY = "kubequest-save-v3"; // muss zum Key in store.ts passen
+const SAVE_KEY = "kubernia-save-v3"; // muss zum Key in store.ts passen
 
 test("writeState: legt den Stand in einer Versions-Hülle { v, data } ab", async () => {
   const ls = stubWindowLocalStorage();

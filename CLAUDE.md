@@ -171,7 +171,8 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/game/tick.ts`](src/game/tick.ts) | Anwendung | Szenen-neutraler Taktgeber (#501): `Game.tick(dtMs)` rückt frame-unabhängige Domäne (Spiel-Zeit + Hafen-Wirtschaft) an EINER Stelle vor; aus Phasers globalem Pre-Step (main.ts) getrieben → läuft in JEDER Szene, Auszahlung entkoppelt über runtime-Sink. |
 | [`src/runtime.ts`](src/runtime.ts) | Anwendung | Laufzeit-Singletons (bricht Import-Zyklen). |
 | [`src/devpanel.ts`](src/devpanel.ts) | Anwendung | Dev-/Test-Panel (#325/#331). |
-| [`src/store.ts`](src/store.ts) | Persistenz | SaveStore: IndexedDB-Backend, sync API via In-Memory-Cache (#350); Eviction-Schutz `requestPersistentStorage()` (#401); mehrere Save-Slots (#306, aktiver Slot + Slot-Index, Default-Slot am Legacy-Key). |
+| [`src/store.ts`](src/store.ts) | Persistenz | SaveStore: IndexedDB-Backend, sync API via In-Memory-Cache (#350); Eviction-Schutz `requestPersistentStorage()` (#401); mehrere Save-Slots (#306, aktiver Slot + Slot-Index, Default-Slot am Legacy-Key); Namensraum `kubernia` (#557). |
+| [`src/store/legacy-idb.ts`](src/store/legacy-idb.ts) | Persistenz | Rename-Migration KubeQuest→Kubernia (#557): hebt einen Alt-Bestand aus der IndexedDB `kubequest` in die neue DB `kubernia` (nur in ein leeres Ziel, Alt-DB bleibt als Netz). |
 | [`src/scenes.ts`](src/scenes.ts) | Präsentation | Barrel der 7 Phaser-Szenen (`KQScenes`, #345). → [presentation.md](docs/module/presentation.md) |
 | [`src/scenes/shared.ts`](src/scenes/shared.ts) | Präsentation | Geteilte Szenen-Bausteine (Font/Schilder/NPC-Render) + Insel-Szenen-Basisklasse `IslandScene` (#423). |
 | [`src/scenes/BootScene.ts`](src/scenes/BootScene.ts) | Präsentation | Lädt Assets + Frame-Slicing, startet World. |

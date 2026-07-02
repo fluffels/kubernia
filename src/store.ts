@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Persistenz-Schicht (SaveStore) =====
+/* ===== Kubernia – Persistenz-Schicht (SaveStore) =====
  * Eine dünne Schicht zwischen Spiellogik und Speicher.
  *
  * Die Spiellogik (game.ts) kennt NUR dieses Interface – read() / write() / remove()
@@ -15,21 +15,40 @@
  * Einzel-Key (LEGACY_SAVE_KEY) – damit ist ein bestehender Stand ohne Kopieren/Versions-Bump
  * automatisch "Slot 1", und solange NUR der Default-Slot existiert, wird gar kein Index
  * geschrieben (Single-Slot bleibt byte-identisch zu vor diesem Feature). Siehe Slot-Block unten.
+ *
+ * Namensraum-Rename KubeQuest → Kubernia (#557): die persistente Storage-Identität (Save-Keys +
+ * IndexedDB-DB-Name) trägt jetzt das `kubernia`-Präfix; Alt-Stände (`kubequest`-Präfix / DB
+ * "kubequest") werden beim Boot EINMALIG gehoben (migrateLegacyLocalStorage + ./store/legacy-idb),
+ * ohne den Alt-Bestand zu vernichten. "LEGACY" in den Key-Namen unten meint dagegen den
+ * historischen Einzel-Save-Key des Default-Slots (#306), nicht den alten Produktnamen.
  */
+  import { migrateLegacyIdb } from "./store/legacy-idb";
+
   // Daten-Key des Default-Slots = der historische Einzel-Save-Key (Backward-Kompatibilität #306).
-  const LEGACY_SAVE_KEY = "kubequest-save-v3";
+  const LEGACY_SAVE_KEY = "kubernia-save-v3";
   // Sicherungskopie der Roh-Spielstanddatei (pro Slot). Wird befüllt, BEVOR ein Stand
   // migriert/heruntergestuft/verworfen würde (siehe readState). Damit ist garantiert,
   // dass selbst eine fehlerhafte Migration oder eine kaputte Datei nicht den einzigen
   // vorhandenen Stand vernichtet – er bleibt hier wiederherstellbar (readBackup).
-  const LEGACY_BACKUP_KEY = "kubequest-save-backup-v1";
+  const LEGACY_BACKUP_KEY = "kubernia-save-backup-v1";
+
+  /* ----- Alt-Namensraum (KubeQuest) – NUR Quelle der einmaligen Rename-Migration (#557).
+   * Es wird nur DARAUS gelesen, nie hinein; der Alt-Bestand bleibt als Sicherheitsnetz. Alt- und
+   * Neu-Keys unterscheiden sich nur im Präfix, darum genügt EIN Mapper je Richtung. ----- */
+  const KUBEQUEST_DB_NAME = "kubequest";
+  function toKubequestKey(kuberniaKey: string): string {
+    return "kubequest" + kuberniaKey.slice(8); // "kubernia".length === 8
+  }
+  function toKuberniaKey(kubequestKey: string): string {
+    return kubequestKey.startsWith("kubequest") ? "kubernia" + kubequestKey.slice(9) : kubequestKey;
+  }
 
   // localStorage ist nicht überall verfügbar (privater Modus, blockierte Cookies,
   // Node-Tests). Dann fallen wir auf einen flüchtigen In-Memory-Speicher zurück,
   // damit das Spiel weiterläuft – nur eben ohne Speichern über die Sitzung hinaus.
   const backend = (function () {
     try {
-      const probe = "__kq_probe__";
+      const probe = "__kubernia_probe__";
       window.localStorage.setItem(probe, probe);
       window.localStorage.removeItem(probe);
       return window.localStorage;
@@ -86,7 +105,7 @@
    * bisherigen, voll synchronen localStorage-Modus – init() ist dann ein No-op. So
    * bricht nichts und der bestehende Code-/Testpfad ist unverändert.
    */
-  const DB_NAME = "kubequest";
+  const DB_NAME = "kubernia";
   const DB_VERSION = 1;
   const OBJECT_STORE = "saves"; // ein simpler Key→Wert-Store; Keys = Save-/Backup-/Slot-Index-Keys
 
@@ -228,7 +247,7 @@
    * hydriert init() den jetzt aktiven Slot. So muss der synchrone Pfad nie einen fremden Slot
    * asynchron nachladen.
    */
-  const SLOTS_KEY = "kubequest-slots-v1";
+  const SLOTS_KEY = "kubernia-slots-v1";
   const DEFAULT_SLOT_ID = "slot-1";
   const DEFAULT_SLOT_NAME = "Spielstand 1";
 
@@ -439,6 +458,32 @@
     if (fromLs != null) { cache.set(key, fromLs); idbPut(db, key, fromLs); }
   }
 
+  /* Rename-Migration KubeQuest → Kubernia in localStorage (#557): hebt einen Alt-Stand einmalig
+   * von `kubequest-*` nach `kubernia-*` (Alt-Key bleibt als Netz, Neu-Key wird nie überschrieben).
+   * Deterministisch über die bekannten Slot-Key-Former statt Enumeration (die der In-Memory-
+   * Fallback + Test-Stubs nicht bieten). Best effort – wirft nie. */
+  function migrateLegacyLocalStorage(): void {
+    try {
+      copyLegacyLs(SLOTS_KEY); // zuerst der Index – er nennt alle Slots
+      // Der (ggf. gerade gehobene) Index nennt alle Slots; Single-Slot → synthetischer Default.
+      const idx = parseSlotIndex(backend.getItem(SLOTS_KEY)) ?? defaultIndex();
+      for (const s of idx.slots) {
+        copyLegacyLs(saveKeyFor(s.id));
+        copyLegacyLs(backupKeyFor(s.id));
+      }
+    } catch {
+      /* best effort – ein Alt-Stand darf den Boot nie reißen */
+    }
+  }
+
+  /** Kopiert den Alt-Key-Wert (kubequest-*) unter den neuen Key (kubernia-*), falls dieser
+   *  noch leer ist. Kein Löschen des Alt-Keys (bewusstes Sicherheitsnetz). */
+  function copyLegacyLs(newKey: string): void {
+    if (backend.getItem(newKey) != null) return; // Neu-Key existiert → nichts überschreiben
+    const legacy = backend.getItem(toKubequestKey(newKey));
+    if (legacy != null) backend.setItem(newKey, legacy);
+  }
+
   /* ===== Eviction-Schutz: dauerhafter Speicher + Quota-Monitoring (#401) =====
    * Browser-Speicher ist "geliehen, nicht besessen": unter Speicherdruck löscht der
    * Browser best-effort-Origins per LRU KOMPLETT (IndexedDB + Cache API + OPFS einer
@@ -498,6 +543,9 @@
      */
     async init(): Promise<void> {
       if (idb) return; // schon im IndexedDB-Modus
+      // (#557) Alt-Namensraum in localStorage heben – läuft in JEDEM Modus (auch ohne IndexedDB),
+      // damit der localStorage-Fallback unten (und der reine localStorage-Modus) den Neu-Key sieht.
+      migrateLegacyLocalStorage();
       // Kein `= null`-Initializer: db wird in BEIDEN Zweigen (try/catch) gesetzt, bevor
       // es unten gelesen wird – ein Startwert wäre toter Code (no-useless-assignment, ESLint 10).
       let db: IDBDatabase | null;
@@ -508,6 +556,14 @@
       }
       if (!db) return; // kein IndexedDB → synchroner localStorage-Modus bleibt
       try {
+        // (#557) Liegt der Stand noch in der Alt-DB "kubequest", einmalig in die neue DB
+        // "kubernia" heben – VOR der Hydration, damit sie den gehobenen Bestand vorfindet.
+        // Nur in eine leere Ziel-DB, Alt-DB bleibt unangetastet (siehe ./store/legacy-idb).
+        const factory = getIndexedDB();
+        if (factory) await migrateLegacyIdb({
+          factory, target: db, oldDbName: KUBEQUEST_DB_NAME,
+          store: OBJECT_STORE, version: DB_VERSION, renameKey: toKuberniaKey,
+        });
         // Zuerst den Slot-Index, dann gezielt den aktiven Slot (Daten + Backup) hydrieren.
         // So liegt nur EIN Stand im Cache – nicht alle Slots (Stardew-Scope). hydrate()
         // deckt zugleich die einmalige localStorage→IndexedDB-Migration je Key ab.
