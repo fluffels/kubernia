@@ -46,9 +46,10 @@ import { nslookupCommand, curlCommand } from "./sim/net";
 import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, depEphemeralPeak, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
 import { randSuffix, clusterIP, suggest } from "./sim/util";
-import { asPodName, resourceName, InvalidResourceNameError, rfc1123ErrorText, RFC1123_TIP } from "./sim/names";
+import { resourceName, InvalidResourceNameError, rfc1123ErrorText, RFC1123_TIP } from "./sim/names";
 import { assertClusterInvariants } from "./sim/invariants";
-import { scaleDeployment, replacePods } from "./sim/workload";
+import { scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod } from "./sim/workload";
+import { provisionNode } from "./sim/nodes";
 import { renderHelp } from "./hud/helptext";
 
 /* ---------- Ressourcen-Registry (#499) ----------
@@ -493,7 +494,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
         pods: [], created: this.clock,
       };
       for (let i = 0; i < spec.replicas; i++) {
-        sts.pods.push({ name: asPodName(spec.name + "-" + i), created: this.clock, restarts: 0 });
+        sts.pods.push(newStatefulPod(spec.name + "-" + i, this.clock));
         const pvcName = vct + "-" + spec.name + "-" + i;
         if (!this.pvcs.some(p => p.name === pvcName)) {
           this.pvcs.push(this._makePvc(pvcName, sts.storage, spec.storageClass, "RWO"));
@@ -624,7 +625,10 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       for (const n of sc.nodes || []) {
         const existing = this.nodes.find(x => x.name === n.name);
         if (existing) Object.assign(existing, n);
-        else this.nodes.push(Object.assign({}, n));
+        // #577: neuer Knoten über die Node-Aggregat-SSOT – füllt fehlende Felder
+        // (status/roles/version) mit den Cluster-Defaults, statt einen Teil-Spec roh
+        // als (strukturell illegalen) ClusterNode einzupushen.
+        else provisionNode(this, n);
       }
     }
 
@@ -643,7 +647,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
 
     _mergeStatefulAndBackups(sc: Scenario) {
       for (const s of sc.statefulSets || []) {
-        if (!this.statefulSets.some(x => x.name === s.name)) this.statefulSets.push(this._makeStatefulSet(s));
+        if (!this.statefulSets.some(x => x.name === s.name)) addStatefulSet(this, this._makeStatefulSet(s));
       }
       for (const v of sc.volumeSnapshots || []) { // Backup/Restore (#140)
         if (!this.volumeSnapshots.some(x => x.name === v.name)) this.volumeSnapshots.push(buildVolumeSnapshot(v, this.clock));
@@ -694,7 +698,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
           const dep = this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy);
           if (d.containerPort !== undefined) dep.containerPort = d.containerPort; // #164
           this._seedEphemeral(dep, d); // node/emptyDir/ephemeral-storage (#240)
-          this.deployments.push(dep);
+          addDeployment(this, dep); // #577: über die Workload-Aggregat-SSOT statt roher Push
         }
       }
       for (const cm of sc.configMaps || []) {

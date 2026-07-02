@@ -95,6 +95,30 @@ test("kubeadm init/join/reset provisionieren & räumen Knoten über den Kanal (m
   assert.equal(sim.controlPlane.up, false);
 });
 
+test("mergeScenario (#577): ein Teil-Node-Spec {name} bekommt die Cluster-Defaults statt eines illegalen Knotens", () => {
+  sim.mergeScenario({ bareMetal: true });
+  assert.equal(sim.nodes.length, 0, "bare metal: leerer Ausgangszustand");
+  // Ein Szenario, das nur den Namen liefert (die Sim-Fabrik soll die Pflichtfelder füllen).
+  // Vor #577 landete das per rohem `nodes.push(Object.assign({},n))` als strukturell
+  // illegaler ClusterNode (status/roles/version === undefined); jetzt über provisionNode.
+  sim.mergeScenario({ nodes: [{ name: "ahoi-lonely" } as ClusterNode] });
+  const node = sim.nodes.find(n => n.name === "ahoi-lonely");
+  assert.ok(node, "der Teil-Node wurde aufgenommen");
+  assert.equal(node!.status, "Ready", "status-Default gefüllt");
+  assert.equal(node!.roles, "<none>", "roles-Default gefüllt");
+  assert.equal(node!.version, NODE_VERSION, "version-Default gefüllt");
+  // Der Knoten ist damit ein legaler ClusterNode: isControlPlane greift ohne TypeError.
+  assert.equal(isControlPlane(node!), false, "gefüllte roles sind auswertbar (kein undefined)");
+});
+
+test("mergeScenario (#577): ein voll spezifizierter Node bleibt unverändert (Defaults überschrieben)", () => {
+  sim.mergeScenario({ bareMetal: true });
+  sim.mergeScenario({ nodes: [{ name: "ahoi-cp", status: "Ready", roles: "control-plane", version: NODE_VERSION }] });
+  const node = sim.nodes.find(n => n.name === "ahoi-cp")!;
+  assert.equal(node.roles, "control-plane", "explizite Rolle bleibt erhalten");
+  assert.equal(isControlPlane(node), true);
+});
+
 test("terraform destroy entfernt die per apply provisionierten Worker über removeNode", () => {
   sim.mergeScenario({ tfResources: [{ addr: "hafen_server.worker[0]", desc: "neue Server" }] });
   sim.exec("terraform init");

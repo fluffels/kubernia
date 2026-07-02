@@ -32,6 +32,14 @@ export function newDeploymentPod(dep: Deployment, clock: number): PodInstance {
   return { name: makePodName(dep.name), created: clock, restarts: 0 };
 }
 
+/** Eine StatefulSet-Pod-Instanz mit STABILER Identität (`<sts>-<ordinal>`), anders als
+ *  der Zufallsname eines Deployment-Pods. Die EINE Stelle, an der ein Stateful-Pod
+ *  entsteht – Bau (`_makeStatefulSet`) und Neustart (`restartStatefulPod`) gehen darüber,
+ *  damit die Ordinal-Namensregel (Invariante 8) an einer Stelle lebt statt roh dupliziert. */
+export function newStatefulPod(ordinalName: string, clock: number): PodInstance {
+  return { name: asPodName(ordinalName), created: clock, restarts: 0 };
+}
+
 /** Skaliert ein Deployment auf `target` Replicas und hält dabei die Invariante
  *  `pods.length === replicas`: fehlende Pods kommen frisch dazu, überzählige fallen
  *  weg, und `replicas` wird gemeinsam gesetzt – nie das eine ohne das andere. */
@@ -67,7 +75,7 @@ export function replaceDeploymentPod(dep: Deployment, oldName: string, clock: nu
 export function restartStatefulPod(sts: StatefulSetRes, name: string, clock: number): boolean {
   const idx = sts.pods.findIndex(p => p.name === name);
   if (idx < 0) return false;
-  sts.pods.splice(idx, 1, { name: asPodName(name), created: clock, restarts: 0 });
+  sts.pods.splice(idx, 1, newStatefulPod(name, clock));
   return true;
 }
 
