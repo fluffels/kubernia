@@ -69,6 +69,7 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   // Cluster→Welt-Sync
   podSlots!: Record<string, PodSlot>;
   slotUsed!: boolean[];
+  lastClusterRev!: number;
   dynamic!: { barrelsSig: string; flagsSig: string; svcSig: string; depSig: string };
   dynGroup!: Phaser.GameObjects.Group;
   // statische Props/Effekte aus scenery.ts
@@ -143,7 +144,8 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     this.tagPool = [];     // wiederverwendete Tag-Container (nur für die sichtbaren)
     this.visibleTags = 0;
     this.podSlots = {};
-    this.slotUsed = new Array(36).fill(false);
+    this.slotUsed = [];            // #523: wächst dynamisch mit der Pod-Zahl (kein fixes 36)
+    this.lastClusterRev = -1;      // #523: erzwingt einen vollen Sync im ersten Frame
     this.dynamic = { barrelsSig: "", flagsSig: "", svcSig: "", depSig: "" };
     this.hazards = { nextPirate: 0, pirate: null, nextKraken: 0, kraken: null, nextStorm: 0, storm: null, stormFlash: null };
     // #426: Anti-Pingpong-Gate aller Region-Warps – leer = alle disarmt; updateWarps

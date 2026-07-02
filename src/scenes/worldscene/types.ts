@@ -88,6 +88,7 @@ export interface WorldSceneFields {
   // Cluster→Welt-Sync
   podSlots: Record<string, PodSlot>;
   slotUsed: boolean[];
+  lastClusterRev: number;   // #523: zuletzt synchronisierte Sim.rev (Frame-Sparbremse)
   dynamic: { barrelsSig: string; flagsSig: string; svcSig: string; depSig: string };
   dynGroup: Phaser.GameObjects.Group;
   // statische Props/Effekte aus scenery.ts
