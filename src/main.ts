@@ -7,6 +7,7 @@ import { UI } from "./ui";
 import { KQScenes } from "./scenes";
 import { SFX } from "./sfx";
 import { SaveStore } from "./store";
+import { OVERLAY_ID } from "./ui/overlays";
 import { keys, clearKeys } from "./runtime";
 
   // Wie in ui.ts: die DOM-Knoten liegen fest in index.html, darum nicht-nullbar.
@@ -35,7 +36,7 @@ import { keys, clearKeys } from "./runtime";
       if (k === "Escape") { if (UI.blocking()) UI.closeOverlays(); else UI.openMenu(); return; }
       // Wissensrunde per Tastatur (#258): Quiz-Auswahl (1–n, ↑/↓+Enter) & „Weiter".
       // Die Befehls-Eingabe (INPUT) ist oben schon abgefangen, landet hier nicht.
-      if (!$("overlay-review").classList.contains("hidden")) {
+      if (!$(OVERLAY_ID.review).classList.contains("hidden")) {
         if (UI.reviewKey(k, e)) return;
       }
       if (UI.dialogue) {
@@ -55,13 +56,13 @@ import { keys, clearKeys } from "./runtime";
       }
       if (k === "t") { UI.toggleTerminal(); e.preventDefault(); return; }
       if (k === "j") {
-        if ($("overlay-quest").classList.contains("hidden")) UI.openQuestLog();
+        if ($(OVERLAY_ID.quest).classList.contains("hidden")) UI.openQuestLog();
         else UI.closeOverlays();
         e.preventDefault();
         return;
       }
       if (k === "b") {
-        if ($("overlay-album").classList.contains("hidden")) UI.openAlbum();
+        if ($(OVERLAY_ID.album).classList.contains("hidden")) UI.openAlbum();
         else UI.closeOverlays();
         e.preventDefault();
         return;

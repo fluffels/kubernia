@@ -1,6 +1,7 @@
 import { Game } from "../game";
 import { SFX, MUSIC_THEMES } from "../sfx";
 import { resolveOverlayKey } from "../overlaykbd";
+import { BLOCKING_OVERLAY_IDS, KEYNAV_OVERLAY_IDS } from "./overlays";
 import { part, $, esc, sheetImgs, type UINpc } from "./shared";
 
 /** „Zuletzt gespielt" grob als Text fürs Slot-Listing (#306). */
@@ -115,13 +116,11 @@ export const overlayUI = part({
 
   /* ========== Blockierung ========== */
   blocking() {
-    return !!this.dialogue ||
-      ["overlay-terminal", "overlay-quest", "overlay-album", "overlay-shop", "overlay-review", "overlay-stack", "overlay-menu"]
-        .some(id => !$(id).classList.contains("hidden"));
+    return !!this.dialogue || BLOCKING_OVERLAY_IDS.some(id => !$(id).classList.contains("hidden"));
   },
 
   closeOverlays() {
-    ["overlay-terminal", "overlay-quest", "overlay-album", "overlay-shop", "overlay-review", "overlay-stack", "overlay-menu"].forEach(id => $(id).classList.add("hidden"));
+    BLOCKING_OVERLAY_IDS.forEach(id => $(id).classList.add("hidden"));
     if (this.practice && this.practice.idx >= this.practice.drills.length) this.practice = null;
   },
 
@@ -133,8 +132,7 @@ export const overlayUI = part({
    * sind hier bewusst NICHT gelistet. Die Entscheidung selbst liegt im puren,
    * unit-getesteten `overlaykbd.ts`; hier nur die DOM-Anbindung. */
   overlayKey(k: string, ev: KeyboardEvent): boolean {
-    const ids = ["overlay-stack", "overlay-shop", "overlay-quest", "overlay-album", "overlay-menu"];
-    const ov = ids.map($).find(el => !el.classList.contains("hidden"));
+    const ov = KEYNAV_OVERLAY_IDS.map($).find(el => !el.classList.contains("hidden"));
     if (!ov) return false;
     const btns = Array.from(ov.querySelectorAll("button")) as HTMLButtonElement[];
     if (!btns.length) return false;

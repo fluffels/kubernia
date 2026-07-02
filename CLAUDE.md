@@ -188,6 +188,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/scenes/TilemapTestScene.ts`](src/scenes/TilemapTestScene.ts) | Präsentation | Tiled-Loader-Testszene (`?maptest`, #191). |
 | [`src/ui.ts`](src/ui.ts) | Präsentation | UI-Orchestrator/Barrel (komponiert `UI` aus `src/ui/*`, #356). → [presentation.md](docs/module/presentation.md) |
 | [`src/ui/shared.ts`](src/ui/shared.ts) | Präsentation | Geteilte UI-Helfer + `part()`-Typ-Helper. |
+| [`src/ui/overlays.ts`](src/ui/overlays.ts) | Präsentation | Overlay-Register (#505): EINE Datenliste `OVERLAYS` (id/blocking/keyNav) als SSOT; `blocking`/`closeOverlays`/`overlayKey` + Einzel-Checks leiten daraus ab (`BLOCKING_OVERLAY_IDS`/`KEYNAV_OVERLAY_IDS`/`OVERLAY_ID`), an index.html gebunden. |
 | [`src/ui/overlay.ts`](src/ui/overlay.ts) | Präsentation | Event-Delegation, Modal-Tastatur, Menü/Pause. |
 | [`src/ui/hud.ts`](src/ui/hud.ts) | Präsentation | HUD/Toasts/Alarm, Interaktion, Antwort-Buttons. |
 | [`src/ui/quest.ts`](src/ui/quest.ts) | Präsentation | Quest-Maschine + Begrüßung/Intro (#288). |
