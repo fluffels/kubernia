@@ -45,6 +45,7 @@ export interface KubectlHost extends Pick<ClusterState,
   // Ephemeral-Storage & Eviction (#240): Platzierung, Disk-Bilanz, Scratch-Freigabe.
   _nodeOf(d: Deployment): string;
   _depEphemeralUsed(d: Deployment): number;
+  _depEphemeralPeak(d: Deployment): number; // #485: höchste flüchtige Belegung (Init-Peak vs. Dauer)
   _nodeEphemeralUsed(nodeName: string): number;
   _resetEphemeral(d: Deployment): void;
   _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment;

@@ -260,6 +260,32 @@
     "explain": "Die Wurzel ist die Platzrechnung des Schedulers, und die läuft über <code>requests</code> – nicht über <code>limits</code> (die deckeln nur den Betrieb) und schon gar nicht über CPU. Setzt du ephemeral-storage-<code>requests</code> in echter Höhe, filtert der Scheduler zu volle Nodes aus: der Pod landet auf einem Node mit Platz oder bleibt ehrlich <code>Pending</code>. Manuelles Löschen ändert an <code>request=0</code> nichts – jeder neue Pod wird wieder blind platziert, der Loop läuft weiter."
   },
   {
+    "id": "q-init-what",
+    "chapter": "storage-init",
+    "q": "Was ist ein <b>initContainer</b>?",
+    "options": [
+      "Ein Container, der <b>vor</b> den Hauptcontainern läuft und fertig sein muss, bevor sie starten – typisch, um ein gemeinsames <code>emptyDir</code> mit Daten/Config vorzubereiten.",
+      "Ein zweiter Hauptcontainer, der parallel zur App läuft und Last abfängt.",
+      "Der allererste Pod, den ein Deployment beim Skalieren erzeugt.",
+      "Ein Container, der nur startet, wenn die App abstürzt (Neustart-Helfer)."
+    ],
+    "correct": 0,
+    "explain": "Ein <code>initContainer</code> läuft sequenziell <b>vor</b> den Hauptcontainern; erst wenn alle initContainer erfolgreich durch sind, starten die App-Container. Klassischer Einsatz: Daten/Config in ein geteiltes <code>emptyDir</code> laden oder entpacken, warten auf eine Abhängigkeit, Migrationen ausführen. Er läuft nicht parallel (das wäre ein Sidecar) und ist kein Neustart-Helfer."
+  },
+  {
+    "id": "q-init-peak",
+    "chapter": "storage-init",
+    "q": "Ein initContainer entpackt ein Archiv erst nach <code>/tmp</code> und <b>kopiert</b> es dann in ein <code>emptyDir</code>. Am Ende liegen 300Mi im emptyDir, das <code>ephemeral-storage</code>-Limit ist 512Mi. Warum wird der Pod trotzdem evicted?",
+    "options": [
+      "Weil die Daten während der Vorbereitung kurz <b>doppelt</b> auf der Disk liegen (in <code>/tmp</code> und im emptyDir) – der <b>Peak</b> ist ~600Mi und sprengt das 512Mi-Limit. Fürs Limit zählt der Peak, nicht der Endstand.",
+      "Weil ein initContainer generell doppelt so viel Speicher braucht wie ein Hauptcontainer.",
+      "Weil <code>emptyDir</code> nie mehr als 256Mi fassen darf.",
+      "Weil das Kopieren zu langsam ist und der kubelet nach einem Timeout evictet."
+    ],
+    "correct": 0,
+    "explain": "<code>ephemeral-storage</code> wird am <b>Spitzenverbrauch</b> gemessen, nicht am Endstand. Die Doppelablage (erst <code>/tmp</code>, dann kopieren) hält die Daten kurz zweimal auf der Node-Disk → Peak ~2×. Dieser Peak reißt das Limit, also evictet der kubelet den Pod während der Vorbereitung – obwohl am Ende nur 300Mi übrig blieben. Die Abhilfe ist nicht mehr CPU oder ein größeres emptyDir, sondern <b>direkt ins Ziel entpacken</b> (halbiert den Peak) oder das Limit über den Peak heben."
+  },
+  {
     "id": "q-storage-three-types",
     "chapter": "storage-object-store",
     "q": "Object-, Block- und File-Storage unterscheiden sich vor allem im <b>Zugriffsmodell</b>. Welche Zuordnung stimmt?",

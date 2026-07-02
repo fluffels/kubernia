@@ -94,6 +94,15 @@ export interface Deployment {
   /** Zusätzliche ephemeral-Nutzung neben `emptyDir` in Mi (#240): Container-Writable-Layer + Logs.
    *  Wird – wie emptyDir – bei Pod-Neustart freigegeben. */
   ephemeralUsedMi?: number;
+  /** initContainer (#485): ein Container, der VOR den Hauptcontainern läuft und typischerweise
+   *  ein `emptyDir` vorbereitet (Daten entpacken/laden). `fillsMi` = wie viel er ins emptyDir
+   *  schreibt (= dessen Dauer-Belegung nach dem Init). Lehr-Pointe: der PEAK an ephemeral-storage
+   *  liegt oft WÄHREND der Vorbereitung, nicht im Dauerbetrieb. `doubleStage` modelliert die
+   *  Doppelablage-Falle: entpackt der Init erst in den eigenen Writable-Layer und KOPIERT dann ins
+   *  emptyDir, liegen die Daten kurz doppelt auf der Disk (~2× `fillsMi`) – direkt ins emptyDir
+   *  entpacken halbiert den Bedarf. Der Peak (nicht die Dauer-Belegung) entscheidet über die
+   *  Pod-Limit-Eviction. */
+  initContainer?: { fillsMi: number; doubleStage?: boolean };
   /** Gesetzt, wenn der Pod evicted wurde (#240): entweder Disk-Druck am Node (`DiskPressure`) oder
    *  das eigene ephemeral-storage-Limit gesprengt. Rein abgeleitet (`_evaluateEviction` rechnet es
    *  bei jedem Befehl neu): fällt der Grund weg (Limit erhöht / Disk freigegeben / Pod neugestartet),
@@ -306,7 +315,9 @@ export interface ApplyEffect {
     // sonst landet der Pod im ImagePullBackOff (statt – wie sonst im Sim – einfach zu laufen).
     requireBuiltImage?: boolean;
     // Ephemeral-Storage aus dem Pod-Template (#240): emptyDir-Volume + ephemeral-storage-Limit/-Nutzung.
-    node?: string; emptyDir?: { data?: string; usedMi?: number }; ephemeralLimit?: number; ephemeralUsedMi?: number };
+    node?: string; emptyDir?: { data?: string; usedMi?: number }; ephemeralLimit?: number; ephemeralUsedMi?: number;
+    // initContainer (#485): füllt beim Ausrollen das emptyDir vor; `doubleStage` verdoppelt den Peak.
+    initContainer?: { fillsMi: number; doubleStage?: boolean } };
   // RBAC-CRDs (#128): vom `kubectl apply -f` der Wachturm-Manifeste angelegt. `cluster`
   // unterscheidet Role/ClusterRole bzw. RoleBinding/ClusterRoleBinding (wie in roles/roleBindings).
   serviceAccount?: { name: string };
@@ -541,7 +552,9 @@ export interface Scenario {
   controlPlane?: { up?: boolean; token?: string | null; node?: string | null };
   deployments?: Array<{ name: string; image: string; replicas: number; broken?: Broken | null; envFrom?: { configMaps: string[]; secrets: string[] }; cpuHeavy?: boolean; containerPort?: number;
     // Ephemeral-Storage (#240). Eingabe-Schreibweisen locker – reset()/merge füllen Defaults.
-    node?: string; emptyDir?: { data?: string; usedMi?: number }; ephemeralLimit?: number; ephemeralUsedMi?: number }>;
+    node?: string; emptyDir?: { data?: string; usedMi?: number }; ephemeralLimit?: number; ephemeralUsedMi?: number;
+    // initContainer (#485): Eingabe-Schreibweise locker – reset()/_seedEphemeral übernehmen es.
+    initContainer?: { fillsMi: number; doubleStage?: boolean } }>;
   services?: ServiceRes[];
   ingresses?: IngressRes[];
   networkPolicies?: NetworkPolicyRes[];

@@ -376,6 +376,9 @@ function createDeploymentFromManifest(host: KubectlHost, effDep: NonNullable<App
   if (effDep.emptyDir) dep.emptyDir = { data: effDep.emptyDir.data || "", usedMi: effDep.emptyDir.usedMi || 0 };
   if (effDep.ephemeralLimit !== undefined) dep.ephemeralLimit = effDep.ephemeralLimit;
   if (effDep.ephemeralUsedMi !== undefined) dep.ephemeralUsedMi = effDep.ephemeralUsedMi;
+  // initContainer aus dem Pod-Template (#485): füllt beim Ausrollen das emptyDir vor; der (bei
+  // Doppelablage doppelte) Vorbereitungs-Peak entscheidet über die ephemeral-storage-Eviction.
+  if (effDep.initContainer) dep.initContainer = { fillsMi: effDep.initContainer.fillsMi, doubleStage: !!effDep.initContainer.doubleStage };
   // Eigenes Image (#164, Werft-Capstone): ist es noch nicht lokal gebaut/gezogen, landet
   // der Pod im ImagePullBackOff – genau wie im echten Cluster. needsBuild markiert: heilt
   // von selbst, sobald 'docker build'/'docker pull' das Image bereitstellt.

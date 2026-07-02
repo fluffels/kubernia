@@ -44,7 +44,7 @@ import { glabCommand } from "./sim/glab";
 import { kubeadmCommand, deriveControlPlane, applyBootstrapScenario } from "./sim/kubeadm";
 import { nslookupCommand, curlCommand } from "./sim/net";
 import { awsCommand, objectByteLength } from "./sim/s3";
-import { depEphemeralUsed, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
+import { depEphemeralUsed, depEphemeralPeak, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
 import { randSuffix, clusterIP, suggest } from "./sim/util";
 import { asPodName, resourceName, InvalidResourceNameError, rfc1123ErrorText, RFC1123_TIP } from "./sim/names";
 import { assertClusterInvariants } from "./sim/invariants";
@@ -385,11 +385,13 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     /** Ephemeral-Storage-Felder eines Deployments aus einer (lockeren) Eingabe-Spec setzen (#240):
      *  Node-Pin, emptyDir-Volume, ephemeral-storage-Limit und -Zusatznutzung. Geteilt von reset()
      *  und mergeScenario(). */
-    _seedEphemeral(dep: Deployment, s: { node?: string; emptyDir?: { data?: string; usedMi?: number }; ephemeralLimit?: number; ephemeralUsedMi?: number }) {
+    _seedEphemeral(dep: Deployment, s: { node?: string; emptyDir?: { data?: string; usedMi?: number }; ephemeralLimit?: number; ephemeralUsedMi?: number; initContainer?: { fillsMi: number; doubleStage?: boolean } }) {
       if (s.node !== undefined) dep.node = s.node;
       if (s.emptyDir) dep.emptyDir = { data: s.emptyDir.data || "", usedMi: s.emptyDir.usedMi || 0 };
       if (s.ephemeralLimit !== undefined) dep.ephemeralLimit = s.ephemeralLimit;
       if (s.ephemeralUsedMi !== undefined) dep.ephemeralUsedMi = s.ephemeralUsedMi;
+      // initContainer (#485): der Vorbereitungs-Container samt Doppelablage-Marke.
+      if (s.initContainer) dep.initContainer = { fillsMi: s.initContainer.fillsMi, doubleStage: !!s.initContainer.doubleStage };
     }
 
     _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment {
@@ -423,6 +425,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     // Die Mechanik liegt in ./sim/eviction.ts (pure Domäne, mutiert nur den Cluster-Zustand);
     // hier nur dünne Delegationen, damit kubectl sie über das KubectlHost-Interface erreicht.
     _depEphemeralUsed(d: Deployment): number { return depEphemeralUsed(d); }
+    _depEphemeralPeak(d: Deployment): number { return depEphemeralPeak(d); }
     _nodeOf(d: Deployment): string { return nodeOf(this, d); }
     _nodeEphemeralUsed(nodeName: string): number { return nodeEphemeralUsed(this, nodeName); }
     _resetEphemeral(d: Deployment): void { resetEphemeral(d); }
@@ -744,7 +747,8 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
         deployments: this.deployments.map(d => ({ name: d.name, image: d.image, replicas: d.replicas, broken: d.broken ? Object.assign({}, d.broken) : null, envFrom: { configMaps: d.envFrom.configMaps.slice(), secrets: d.envFrom.secrets.slice() }, cpuHeavy: !!d.cpuHeavy, containerPort: d.containerPort,
           // Ephemeral-Storage (#240): emptyDir/Limit/Nutzung/Node-Pin überleben den Reload; `evicted`
           // wird beim Laden ohnehin neu abgeleitet, daher nicht serialisiert.
-          node: d.node, emptyDir: d.emptyDir ? Object.assign({}, d.emptyDir) : undefined, ephemeralLimit: d.ephemeralLimit, ephemeralUsedMi: d.ephemeralUsedMi })),
+          node: d.node, emptyDir: d.emptyDir ? Object.assign({}, d.emptyDir) : undefined, ephemeralLimit: d.ephemeralLimit, ephemeralUsedMi: d.ephemeralUsedMi,
+          initContainer: d.initContainer ? Object.assign({}, d.initContainer) : undefined })),
         // services/ingresses/networkPolicies/serviceMonitors/prometheusRules/grafana* über die
         // Resource-Registry serialisieren (#499) – flacher Klon, gespiegelt zu reset/mergeScenario.
         ...snapshotSimple(this),

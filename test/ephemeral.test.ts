@@ -178,6 +178,65 @@ test("snapshot/reload: emptyDir, Limit und Node-Pin überleben – Eviction wird
   assert.match(sim2.exec("kubectl get pods").output!, /Evicted/, "Eviction reproduziert sich nach Reload");
 });
 
+/* ===================== initContainer: Vorbereitungs-Peak & Doppelablage (#485) ===================== */
+
+test("initContainer bereitet das emptyDir vor: describe pod zeigt Init Containers + Prepares", () => {
+  sim = new KQSim({ deployments: [{ name: "geodaten", image: "nginx", replicas: 1, emptyDir: { data: "importierte-kacheln", usedMi: 200 }, initContainer: { fillsMi: 200 } }] });
+  const podName = sim.deployments[0].pods[0].name;
+  const desc = sim.exec("kubectl describe pod " + podName).output!;
+  assert.match(desc, /Init Containers:/, "describe pod zeigt den Init-Containers-Abschnitt");
+  assert.match(desc, /Prepares:\s+200Mi/, "was der initContainer ins emptyDir füllt");
+  assert.match(desc, /direkt ins emptyDir/, "single-stage → direkt entpackt");
+  assert.doesNotMatch(sim.exec("kubectl get pods").output!, /Evicted/, "single-stage-Peak == Dauerwert → kein Evicted");
+});
+
+test("Doppelablage: Init-Peak (2×) sprengt das Limit → Evicted, obwohl der Dauerwert darunter liegt", () => {
+  // fillsMi 300, doubleStage → Peak 600 > 512Mi Limit; die DAUER-Belegung ist aber nur 300 < 512.
+  sim = new KQSim({ deployments: [{ name: "doppelt", image: "busybox", replicas: 1, ephemeralLimit: 512, emptyDir: { data: "geodaten", usedMi: 300 }, initContainer: { fillsMi: 300, doubleStage: true } }] });
+  const pods = sim.exec("kubectl get pods").output!;
+  assert.match(pods, /doppelt[\w-]+\s+0\/1\s+Evicted/, "get pods zeigt Evicted trotz Dauerwert 300 < 512");
+  const desc = sim.exec("kubectl describe pod " + sim.deployments[0].pods[0].name).output!;
+  assert.match(desc, /Reason:\s+Evicted/, "describe pod nennt Reason: Evicted");
+  assert.match(desc, /exceeds the total limit/, "Grund: gesprengtes Limit");
+  assert.match(desc, /verbraucht 600Mi/, "der Peak (600Mi), nicht der Dauerwert, steht im Grund");
+  assert.match(desc, /Spitze \(initContainer\): 600Mi/, "die Init-Spitze ist gesondert sichtbar");
+});
+
+test("Direkt ins emptyDir entpacken halbiert den Peak: gleiche Daten + gleiches Limit, aber KEIN Evicted", () => {
+  // Kontrast zum Doppelablage-Fall: fillsMi 300, doubleStage:false → Peak 300 <= 512 → läuft.
+  sim = new KQSim({ deployments: [{ name: "direkt", image: "busybox", replicas: 1, ephemeralLimit: 512, emptyDir: { data: "geodaten", usedMi: 300 }, initContainer: { fillsMi: 300, doubleStage: false } }] });
+  const pods = sim.exec("kubectl get pods").output!;
+  assert.doesNotMatch(pods, /Evicted/, "Peak 300 <= 512 → kein Evicted (False-Positive-Schutz gegen den Doppelablage-Fall)");
+  assert.match(pods, /Running/, "der Pod läuft");
+});
+
+test("Limit anheben heilt den Doppelablage-Pod (set resources rechnet mit dem Peak)", () => {
+  sim = new KQSim({ deployments: [{ name: "doppelt", image: "busybox", replicas: 1, ephemeralLimit: 512, emptyDir: { data: "x", usedMi: 300 }, initContainer: { fillsMi: 300, doubleStage: true } }] });
+  assert.match(sim.exec("kubectl get pods").output!, /Evicted/, "erst evicted (Peak 600 > 512)");
+  // 768Mi >= Peak 600 → geheilt; ein Wert, der nur den Dauerwert (300) deckt, würde NICHT reichen.
+  const r = sim.exec("kubectl set resources deployment/doppelt --limits=ephemeral-storage=768Mi");
+  assert.match(r.output!, /Genug ephemeral-storage/, "Heilungs-Hinweis erscheint (Peak passt jetzt)");
+  assert.doesNotMatch(sim.exec("kubectl get pods").output!, /Evicted/, "nach genug Limit nicht mehr evicted");
+});
+
+test("apply -f mit initContainer + Doppelablage evictet den Pod (apply-Handler mitgetestet)", () => {
+  sim.mergeScenario({
+    files: { "vorbereiter.yaml": "kind: Deployment\n" },
+    applyEffects: { "vorbereiter.yaml": { deployment: { name: "vorbereiter", image: "busybox", replicas: 1, ephemeralLimit: 512, emptyDir: { data: "geodaten", usedMi: 300 }, initContainer: { fillsMi: 300, doubleStage: true } } } },
+  });
+  const r = sim.exec("kubectl apply -f vorbereiter.yaml");
+  assert.match(r.output!, /deployment\.apps\/vorbereiter created/);
+  assert.match(sim.exec("kubectl get pods").output!, /Evicted/, "der Doppelablage-Peak sprengt das Limit");
+});
+
+test("snapshot/reload: initContainer + Doppelablage überleben – Eviction wird neu abgeleitet", () => {
+  sim = new KQSim({ deployments: [{ name: "d", image: "busybox", replicas: 1, ephemeralLimit: 512, emptyDir: { data: "g", usedMi: 300 }, initContainer: { fillsMi: 300, doubleStage: true } }] });
+  const sim2 = new KQSim(sim.snapshot());
+  assert.equal(sim2.deployments[0].initContainer!.fillsMi, 300, "fillsMi übernommen");
+  assert.equal(sim2.deployments[0].initContainer!.doubleStage, true, "doubleStage übernommen");
+  assert.match(sim2.exec("kubectl get pods").output!, /Evicted/, "Eviction reproduziert sich nach Reload");
+});
+
 /* ===================== describe node: Negativfälle ===================== */
 
 test("describe node: unbekannter Node meldet NotFound, gesunder Node zeigt DiskPressure False", () => {

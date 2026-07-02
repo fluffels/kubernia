@@ -23,6 +23,9 @@ function resolvePlaceholder(cmd: string, sim: KQSim) {
   if (/wachposten/.test(cmd)) return cmd.replace(/<[^>]+>/, findPod("wachposten"));
   if (/zwischenlager/.test(cmd)) return cmd.replace(/<[^>]+>/, findPod("zwischenlager"));
   if (/wildwuchs/.test(cmd)) return cmd.replace(/<[^>]+>/, findPod("wildwuchs"));
+  if (/vorbereiter/.test(cmd)) return cmd.replace(/<[^>]+>/, findPod("vorbereiter")); // #485 initContainer
+  if (/doppelt/.test(cmd)) return cmd.replace(/<[^>]+>/, findPod("doppelt"));         // #485 Doppelablage
+  if (/direkt/.test(cmd)) return cmd.replace(/<[^>]+>/, findPod("direkt"));           // #485 direkt ins emptyDir
   if (/describe/.test(cmd)) return cmd.replace(/<[^>]+>/, findPod("kantine"));
   if (/delete pod/.test(cmd)) return cmd.replace(/<[^>]+>/, findPod("kasse"));
   if (/docker stop/.test(cmd)) {

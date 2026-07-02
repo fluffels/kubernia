@@ -45,6 +45,7 @@
   "storage-statefulset",
   "storage-pvc",
   "storage-ephemeral",
+  "storage-init",
   "storage-backup-restore",
   "storage-object-store",
   "storage-object-backup",
