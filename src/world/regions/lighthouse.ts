@@ -13,7 +13,7 @@
  * von dort wiederverwendet statt ein zweites Mal definiert.
  */
 import { warpAt, type Warp } from "./archipel";
-import { npcSpawnForMap, objectForId, objectsForMap, objectFootprint, type Spawn } from "./content/entities";
+import { npcSpawnForMap, objectForId, objectsForMap, objectFootprint, type Spawn } from "../../content/entities";
 
 export { warpAt, type Warp };
 

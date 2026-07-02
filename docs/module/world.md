@@ -13,13 +13,13 @@
 
 ## Inseln & Bereiche (Geometrie + Warp, Phaser-frei)
 
-Jeweils Geometrie/Kollision + Anleger/Warp + reservierte NPC-/Quest-Trigger-Standplätze; die zugehörige Phaser-Szene nutzt sie. Die Warp-Primitive (`warpAt`/`Warp`) stammen aus `archipel.ts` und werden wiederverwendet.
+Jeweils Geometrie/Kollision + Anleger/Warp + reservierte NPC-/Quest-Trigger-Standplätze; die zugehörige Phaser-Szene nutzt sie. Die Warp-Primitive (`warpAt`/`Warp`) stammen aus `world/regions/archipel.ts` und werden wiederverwendet. Alle Regions-Module liegen gebündelt unter `src/world/regions/` (#551).
 
 | Modul | Inhalt |
 |---|---|
-| `src/archipel.ts` | GitOps-Archipel: Insel-Geometrie + Anleger/Warp (Hauptkarte ⇄ Insel). |
-| `src/lighthouse.ts` | Monitoring-Leuchtturm (#111): Klippen-Geometrie (Gras-Hochebene + begehbarer Stein-Klippenrand) + Aufgang/Warp am Turmfuß + Monitoring-Deko-Plätze. |
-| `src/warehouse.ts` | Lagerhallen-Viertel/Hafenkai (#124): Quay-Geometrie + Stein-Kai-Wand + Holz-Steg/Warp + Standplätze für Verladekräne/Frachtcontainer + deterministisch gestreute Lager-Güter (Kisten/Fässer). |
+| `src/world/regions/archipel.ts` | GitOps-Archipel: Insel-Geometrie + Anleger/Warp (Hauptkarte ⇄ Insel). |
+| `src/world/regions/lighthouse.ts` | Monitoring-Leuchtturm (#111): Klippen-Geometrie (Gras-Hochebene + begehbarer Stein-Klippenrand) + Aufgang/Warp am Turmfuß + Monitoring-Deko-Plätze. |
+| `src/world/regions/warehouse.ts` | Lagerhallen-Viertel/Hafenkai (#124): Quay-Geometrie + Stein-Kai-Wand + Holz-Steg/Warp + Standplätze für Verladekräne/Frachtcontainer + deterministisch gestreute Lager-Güter (Kisten/Fässer). |
 
 ## Tiled-Karten-Pipeline
 

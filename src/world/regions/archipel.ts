@@ -6,8 +6,8 @@
  * die Hauptkarte. Das Bewegungs- & Kollisionsmodell teilt sich die Insel mit der
  * Hauptkarte (resolveMove/footprintSolid aus world.ts) – nichts dupliziert.
  */
-import { TILE } from "./world";
-import { npcSpawnForMap, objectForId, objectsForMap, objectFootprint, type Spawn } from "./content/entities";
+import { TILE } from "../../world";
+import { npcSpawnForMap, objectForId, objectsForMap, objectFootprint, type Spawn } from "../../content/entities";
 
 /** Inselraster (Kacheln). Kleiner als die Hauptkarte – eine kompakte, voll
  *  umrundbare Insel, die in einer Session sauber gefüllt werden kann. */

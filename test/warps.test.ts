@@ -17,11 +17,11 @@ import { TILE } from "../src/world";
 import {
   REGION_WARPS, regionWarpsFromMap, armWarps, triggeredWarp, warpAt, type RegionWarp,
 } from "../src/warps";
-import { WORLD_TO_ARCHIPEL, WORLD_RETURN, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL } from "../src/archipel";
-import { WORLD_TO_LIGHTHOUSE, WORLD_RETURN_LH, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL } from "../src/lighthouse";
-import { WORLD_TO_WAREHOUSE, WORLD_RETURN_WH, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL } from "../src/warehouse";
-import { WORLD_TO_WATCHTOWER, WORLD_RETURN_WT, WATCHTOWER_TO_WORLD, WATCHTOWER_ARRIVAL } from "../src/watchtower";
-import { WORLD_TO_FLOTTE, WORLD_RETURN_FL, FLOTTE_TO_WORLD, FLOTTE_ARRIVAL } from "../src/flotte";
+import { WORLD_TO_ARCHIPEL, WORLD_RETURN, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL } from "../src/world/regions/archipel";
+import { WORLD_TO_LIGHTHOUSE, WORLD_RETURN_LH, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL } from "../src/world/regions/lighthouse";
+import { WORLD_TO_WAREHOUSE, WORLD_RETURN_WH, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL } from "../src/world/regions/warehouse";
+import { WORLD_TO_WATCHTOWER, WORLD_RETURN_WT, WATCHTOWER_TO_WORLD, WATCHTOWER_ARRIVAL } from "../src/world/regions/watchtower";
+import { WORLD_TO_FLOTTE, WORLD_RETURN_FL, FLOTTE_TO_WORLD, FLOTTE_ARRIVAL } from "../src/world/regions/flotte";
 
 /** Pixel-Mittelpunkt einer Kachel (wie die Szenen den Spieler setzen + warpAt floort). */
 const center = (t: { tx: number; ty: number }): [number, number] => [t.tx * TILE + 8, t.ty * TILE + 8];

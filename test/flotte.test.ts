@@ -14,7 +14,7 @@ import {
   buildFlotte, warpAt,
   WORLD_JETTY_FL, WORLD_TO_FLOTTE, WORLD_RETURN_FL,
   FLOTTE_TO_WORLD, FLOTTE_ARRIVAL,
-} from "../src/flotte";
+} from "../src/world/regions/flotte";
 
 const map = buildFlotte();
 const CENTER_TX = FLOTTE_TO_WORLD.tx;   // Mittelachse (Steg) = CX

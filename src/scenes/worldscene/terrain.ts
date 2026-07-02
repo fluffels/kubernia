@@ -12,12 +12,12 @@
  */
 import Phaser from "phaser";
 import { SHIP, type Door } from "../../world";
-import { WORLD_TO_ARCHIPEL } from "../../archipel";
-import { WORLD_TO_LIGHTHOUSE, WORLD_RETURN_LH } from "../../lighthouse";
-import { DOCK as WH_DOCK, WORLD_JETTY_WH, WORLD_TO_WAREHOUSE } from "../../warehouse";
-import { DOCK as WT_DOCK, WORLD_JETTY_WT, WORLD_TO_WATCHTOWER } from "../../watchtower";
-import { DOCK as FL_DOCK, WORLD_JETTY_FL, WORLD_TO_FLOTTE } from "../../flotte";
-import { DOCK as WF_DOCK, WORLD_JETTY_WF, WORLD_TO_WERFT } from "../../werft";
+import { WORLD_TO_ARCHIPEL } from "../../world/regions/archipel";
+import { WORLD_TO_LIGHTHOUSE, WORLD_RETURN_LH } from "../../world/regions/lighthouse";
+import { DOCK as WH_DOCK, WORLD_JETTY_WH, WORLD_TO_WAREHOUSE } from "../../world/regions/warehouse";
+import { DOCK as WT_DOCK, WORLD_JETTY_WT, WORLD_TO_WATCHTOWER } from "../../world/regions/watchtower";
+import { DOCK as FL_DOCK, WORLD_JETTY_FL, WORLD_TO_FLOTTE } from "../../world/regions/flotte";
+import { DOCK as WF_DOCK, WORLD_JETTY_WF, WORLD_TO_WERFT } from "../../world/regions/werft";
 import { PIER_XS } from "../../harbormap";
 import { T, DIRT, ANVIL, TABLE, DEVICE, BOOK, WATER, FOAM, WANG } from "../shared";
 import type { WorldSceneLike } from "./types";

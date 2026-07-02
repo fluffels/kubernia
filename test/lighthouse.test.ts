@@ -17,7 +17,7 @@ import {
   LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL,
   LIGHTHOUSE_NPC, LIGHTHOUSE_QUEST_TRIGGER, LIGHTHOUSE_TOWER,
   LIGHTHOUSE_GRAFANA, LIGHTHOUSE_BELL,
-} from "../src/lighthouse";
+} from "../src/world/regions/lighthouse";
 
 const map = buildLighthouse();
 const isStone = (c: number) => (STONE_CODES as readonly number[]).includes(c);

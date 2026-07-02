@@ -1,5 +1,5 @@
 {
-  "src/archipel.ts": {
+  "src/world/regions/archipel.ts": {
     "complexity": {
       "count": 1
     }
@@ -40,7 +40,7 @@
       "count": 1
     }
   },
-  "src/lighthouse.ts": {
+  "src/world/regions/lighthouse.ts": {
     "complexity": {
       "count": 1
     }
@@ -180,7 +180,7 @@
       "count": 2
     }
   },
-  "src/warehouse.ts": {
+  "src/world/regions/warehouse.ts": {
     "complexity": {
       "count": 1
     }

@@ -15,7 +15,7 @@ import {
   buildArchipel, warpAt,
   WORLD_TO_ARCHIPEL, ARCHIPEL_TO_WORLD, WORLD_RETURN, ARCHIPEL_ARRIVAL,
   ARCHIPEL_NPC, ARCHIPEL_QUEST_TRIGGER, WORLD_JETTY,
-} from "../src/archipel";
+} from "../src/world/regions/archipel";
 
 const map = buildArchipel();
 

@@ -16,12 +16,12 @@ import { circleHitbox, rectHitbox } from "../world";
 import { npcSpawnsForMap } from "../content/entities";
 import { T, DEVICE } from "./shared";
 import type { RegionConfig, RegionScene } from "./RegionScene";
-import { buildArchipel, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL, ARCHIPEL_NPC, ARCHIPEL_QUEST_TRIGGER, type ArchipelMap } from "../archipel";
-import { buildLighthouse, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL, LIGHTHOUSE_NPC, LIGHTHOUSE_QUEST_TRIGGER, LIGHTHOUSE_TOWER, type LighthouseMap } from "../lighthouse";
-import { buildWarehouse, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL, type WarehouseMap } from "../warehouse";
-import { buildWatchtower, WATCHTOWER_TO_WORLD, WATCHTOWER_ARRIVAL, WATCHTOWER_TOWER } from "../watchtower";
-import { buildFlotte, FLOTTE_TO_WORLD, FLOTTE_ARRIVAL, type FlotteMap } from "../flotte";
-import { buildWerft, WERFT_TO_WORLD, WERFT_ARRIVAL, WERFT_NPC, WERFT_BUILD_TRIGGER, type WerftMap } from "../werft";
+import { buildArchipel, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL, ARCHIPEL_NPC, ARCHIPEL_QUEST_TRIGGER, type ArchipelMap } from "../world/regions/archipel";
+import { buildLighthouse, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL, LIGHTHOUSE_NPC, LIGHTHOUSE_QUEST_TRIGGER, LIGHTHOUSE_TOWER, type LighthouseMap } from "../world/regions/lighthouse";
+import { buildWarehouse, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL, type WarehouseMap } from "../world/regions/warehouse";
+import { buildWatchtower, WATCHTOWER_TO_WORLD, WATCHTOWER_ARRIVAL, WATCHTOWER_TOWER } from "../world/regions/watchtower";
+import { buildFlotte, FLOTTE_TO_WORLD, FLOTTE_ARRIVAL, type FlotteMap } from "../world/regions/flotte";
+import { buildWerft, WERFT_TO_WORLD, WERFT_ARRIVAL, WERFT_NPC, WERFT_BUILD_TRIGGER, type WerftMap } from "../world/regions/werft";
 
 /** #343/#386: Hitbox-Maße der Lager-Güter – Fässer rund (Radius), Kisten als mittig
  *  eingerücktes Rechteck (Kantenlänge). Wie in der früheren WarehouseScene. */

@@ -14,7 +14,7 @@ import {
   buildWatchtower, warpAt, watchtowerFootprint, WATCHTOWER_TOWER,
   WORLD_JETTY_WT, WORLD_TO_WATCHTOWER, WORLD_RETURN_WT,
   WATCHTOWER_TO_WORLD, WATCHTOWER_ARRIVAL,
-} from "../src/watchtower";
+} from "../src/world/regions/watchtower";
 
 const map = buildWatchtower();
 const isStone = (c: number) => (STONE_CODES as readonly number[]).includes(c);
