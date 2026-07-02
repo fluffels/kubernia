@@ -1,7 +1,7 @@
 # Glossar & Kontext-Landkarte — die Sprachen von Port Kubernia
 
-> **SSOT für die _ubiquitäre Sprache_ und die _Subdomänen_ von KubeQuest** (#477, aus der [arc42-Analyse › §8 DDD](arc42-architektur.md#8-querschnittliche-konzepte--ddd-bewertung)).
-> Warum diese Datei existiert: KubeQuest hat faktisch **mehrere ubiquitäre Sprachen** (echtes K8s, die Hafen-Metapher, die Lern-/Progressions-Begriffe), deren Übersetzung bisher nur „im Kopf" lebte. Explizit gemacht ist sie eine echte **Anti-Corruption-Layer** und — weil der Weiterbau KI-getrieben ist — ein **Token-Effizienz-Hebel**: Wer weiß, welche Sprache in welchem Verzeichnis gilt, lädt kontext-lokal und weniger.
+> **SSOT für die _ubiquitäre Sprache_ und die _Subdomänen_ von Kubernia** (#477, aus der [arc42-Analyse › §8 DDD](arc42-architektur.md#8-querschnittliche-konzepte--ddd-bewertung)).
+> Warum diese Datei existiert: Kubernia hat faktisch **mehrere ubiquitäre Sprachen** (echtes K8s, die Hafen-Metapher, die Lern-/Progressions-Begriffe), deren Übersetzung bisher nur „im Kopf" lebte. Explizit gemacht ist sie eine echte **Anti-Corruption-Layer** und — weil der Weiterbau KI-getrieben ist — ein **Token-Effizienz-Hebel**: Wer weiß, welche Sprache in welchem Verzeichnis gilt, lädt kontext-lokal und weniger.
 > Verwandt: die Datei-für-Datei-Landkarte steht **einmal** in [CLAUDE.md](../CLAUDE.md), die Schichtungs-Begründung in [AGENTS.md › Architektur](../AGENTS.md#architektur).
 
 ## 1. Ubiquitous Language — Glossar Hafen ↔ K8s/DevOps ↔ Code
@@ -40,7 +40,7 @@ Die Hafen-Metapher ist die **Anti-Corruption-Layer** zwischen der Spieler:innen-
 
 ## 2. Kontext-Landkarte — die Subdomänen
 
-KubeQuest ist ein **modularer Monolith** mit **2–3 Kern-Subdomänen** plus unterstützenden generischen Bausteinen. Die Grenzen sind hier vor allem **Grenzen für kognitive Last = Token-Last** bei KI-Entwicklung (explizites Qualitätsziel §1 der arc42-Analyse) — **Navigationsgrenzen in _einem_ Bundle, keine künftigen Services.** Bewusst nur wenige Nähte: zu viele erzeugen Übersetzungs-Code und kosten mehr Tokens, nicht weniger.
+Kubernia ist ein **modularer Monolith** mit **2–3 Kern-Subdomänen** plus unterstützenden generischen Bausteinen. Die Grenzen sind hier vor allem **Grenzen für kognitive Last = Token-Last** bei KI-Entwicklung (explizites Qualitätsziel §1 der arc42-Analyse) — **Navigationsgrenzen in _einem_ Bundle, keine künftigen Services.** Bewusst nur wenige Nähte: zu viele erzeugen Übersetzungs-Code und kosten mehr Tokens, nicht weniger.
 
 | Subdomäne | Rolle | Was gehört rein | Eigene Sprache | Code-Verzeichnisse | Tiefendoc |
 |---|---|---|---|---|---|

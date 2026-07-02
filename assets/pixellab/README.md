@@ -1,4 +1,4 @@
-# PixelLab-Assets & Autotiling (KubeQuest)
+# PixelLab-Assets & Autotiling (Kubernia)
 
 Diese Grafiken wurden mit **PixelLab AI** (https://api.pixellab.ai/mcp) im Stardew-angelehnten
 Stil erzeugt und ersetzen nach und nach die ursprünglichen Kenney-Tiny-Platzhalter.
