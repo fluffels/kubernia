@@ -18,6 +18,24 @@ export interface QuestProgress {
   task: number;
 }
 
+/** Serialisierbare 2D-Position in Welt-Koordinaten (Pixeln). Value-Form von
+ *  `GameState.player`. Bewusst ein eigener Typ in der Typ-Schicht (nicht Phasers
+ *  `Vector2`): sie ist Teil des Save-Formats und muss Phaser-frei/serialisierbar
+ *  bleiben. Die laufende Szene liest/schreibt sie beim Auto-Save (save.ts). */
+export interface Position {
+  x: number;
+  y: number;
+}
+
+/** Ein Leitner-Spaced-Repetition-Eintrag: Box (1..5) + Fälligkeits-Tag (`due`,
+ *  als `today()`-Zähler). Gemeinsame Form der zwei bewusst getrennten Lernstand-
+ *  Maps `GameState.review` (Quiz/Karteikarten) und `GameState.mastery`
+ *  (praktischer Übungs-Lernstand, #219) – identische Struktur, EIN Typ. */
+export interface LeitnerEntry {
+  box: number;
+  due: number;
+}
+
 /** Vollständiger, serialisierbarer Spielstand (genau die Form aus Game.defaultState). */
 export interface GameState {
   xp: number;
@@ -26,7 +44,7 @@ export interface GameState {
    *  Schreibzugriffe aber durch die Arithmetik in `src/coins.ts`. */
   coins: Coins;
   character: number | null;
-  player: { x: number; y: number };
+  player: Position;
   /** Offene Quests als **Menge** (Quest-ID → Fortschritt). Die Persistenz-Autorität für
    *  den Quest-Fortschritt seit #410 – erweitert #353 von EINER auf MEHRERE gleichzeitig
    *  offene Quests, ohne dass das einen Spielstand bricht. Auf dem linearen Lernpfad ist
@@ -57,7 +75,7 @@ export interface GameState {
   owned: string[];
   activePet: string | null;
   activeFlag: string | null;
-  review: Record<string, { box: number; due: number }>;
+  review: Record<string, LeitnerEntry>;
   /** Lernstand pro praktischem Übungs-Konzept (#219): Drill-ID bzw. Stapel-Runde
    *  (`stack:<name>`) → Leitner-Box (1..5) + Fälligkeit, exakt wie `review`. BEWUSST eine
    *  eigene Map getrennt von `review` (Quiz/Karten): so sickern Drills/Runden nicht in die
@@ -65,7 +83,7 @@ export interface GameState {
    *  Karten). Schwache Konzepte (niedrige Box / nie geübt) werden bei der Übungs-Auswahl
    *  häufiger gezogen, sichere nur ab und zu (`pickWeightedDrills`). Fehlt das Feld
    *  (Alt-Stand) → `{}`, kein Bruch, kein Versions-Bump. */
-  mastery: Record<string, { box: number; due: number }>;
+  mastery: Record<string, LeitnerEntry>;
   streak: { count: number; lastDay: number };
   /** Wurde der einmalige Erklär-Toast zum 🔥 Streak bereits gezeigt? */
   streakHintShown: boolean;

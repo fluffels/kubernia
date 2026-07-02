@@ -8,7 +8,7 @@ import { Sim as KQSim } from "../sim";
 import { SaveStore } from "../store";
 import { worldScene, applyAudioConfig, notifySaveFailed } from "../runtime";
 import { add, toCoins } from "../core/coins";
-import type { GameState, QuestProgress, QuestStep } from "../types";
+import type { GameState, QuestProgress, QuestStep, LeitnerEntry } from "../types";
 import { part, makeDefaultState, questIdForIndex, questIndexForId, canonicalActiveQuests, isEventMode, ALL_ABBREV_UNLOCKED, type SlotView } from "./shared";
 
 /** Save-Migration #354: alte numerische Quest-IDs (q0, q2b, …) → neue sprechende Slugs.
@@ -152,7 +152,7 @@ export function sanitizeState(raw: unknown): GameState {
   }
 
   // Spaced-Repetition: nur valide { box (1..5), due } übernehmen.
-  const review: GameState["review"] = {};
+  const review: Record<string, LeitnerEntry> = {};
   if (isPlainObject(raw.review)) {
     for (const [id, info] of Object.entries(raw.review)) {
       if (!isPlainObject(info)) continue;
@@ -163,7 +163,7 @@ export function sanitizeState(raw: unknown): GameState {
 
   // Übungs-Lernstand (#219): gleiche { box (1..5), due }-Form wie review, eigene Map.
   // Fehlt das Feld (Alt-Stand) → leer; das ist die verlustfreie Migration (kein Bruch).
-  const mastery: GameState["mastery"] = {};
+  const mastery: Record<string, LeitnerEntry> = {};
   if (isPlainObject(raw.mastery)) {
     for (const [id, info] of Object.entries(raw.mastery)) {
       if (!isPlainObject(info)) continue;
