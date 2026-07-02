@@ -10,9 +10,23 @@
 import { scaleDeployment, replacePods } from "../workload";
 import type { KubectlHost } from "./host";
 
+/** Den Deployment-Namen aus einer Referenz `deployment/<name>` (Slash) ODER
+ *  `deployment <name>` (getrennt) ziehen – egal an welcher Token-Position sie steht.
+ *  Deckt beide Schreibweisen ab, die scale/expose/set/rollout gemeinsam annehmen, und
+ *  ersetzt so die früher 6× kopierte Ad-hoc-Zerlegung. `null`, wenn keine
+ *  Deployment-Referenz dasteht. */
+function resolveDeploymentRef(t: string[]): string | null {
+  for (let i = 0; i < t.length; i++) {
+    const tok = t[i];
+    if (tok.startsWith("deployment/")) return tok.slice("deployment/".length) || null;
+    if (tok === "deployment") return t[i + 1] && !t[i + 1].startsWith("-") ? t[i + 1] : null;
+  }
+  return null;
+}
+
 
 export function kubectlScale(host: KubectlHost, t: string[], raw: string) {
-  const name = t[3] === "deployment" ? t[4] : (t[2] === "deployment" ? t[3] : null);
+  const name = resolveDeploymentRef(t);
   const repMatch = raw.match(/--replicas[=\s]+(\d+)/);
   if (!name || !repMatch) return host._err("kubectl scale: So nicht ganz.", "Muster: 'kubectl scale deployment <name> --replicas=3'");
   const dep = host.deployments.find(d => d.name === name);
@@ -24,7 +38,7 @@ export function kubectlScale(host: KubectlHost, t: string[], raw: string) {
 
 
 export function kubectlExpose(host: KubectlHost, t: string[], raw: string) {
-  const name = t[3] === "deployment" ? t[4] : (t[2] === "deployment" ? t[3] : null);
+  const name = resolveDeploymentRef(t);
   const portMatch = raw.match(/--port[=\s]+(\d+)/);
   if (!name) return host._err("kubectl expose: Welches Deployment?", "Muster: 'kubectl expose deployment <name> --port=80'");
   const dep = host.deployments.find(d => d.name === name);
@@ -59,9 +73,7 @@ export function kubectlSet(host: KubectlHost, t: string[], raw: string) {
  *  Umgebungsvariablen in ein Deployment ein. */
 
 function kubectlSetEnv(host: KubectlHost, t: string[], raw: string) {
-  let depName: string | null = null;
-  if (t[3] && t[3].startsWith("deployment/")) depName = t[3].split("/")[1];
-  else if (t[3] === "deployment") depName = t[4];
+  const depName = resolveDeploymentRef(t);
   if (!depName) return host._err("kubectl set env: Welches Deployment?", "Muster: kubectl set env deployment/<name> --from=configmap/<name>");
   const dep = host.deployments.find(d => d.name === depName);
   if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + depName + '" not found', "Welche Deployments es gibt: 'kubectl get deployments'");
@@ -83,9 +95,9 @@ function kubectlSetEnv(host: KubectlHost, t: string[], raw: string) {
 
 function kubectlSetImage(host: KubectlHost, t: string[]) {
   if (t[2] !== "image") return host._err("Der Simulator kann nur 'kubectl set image deployment/<name> <container>=<image>'.");
-  let depName: string | null = null;
-  if (t[3] && t[3].startsWith("deployment/")) depName = t[3].split("/")[1];
-  else if (t[3] === "deployment") { depName = t[4]; t = t.slice(0, 4).concat(t.slice(5)); }
+  const depName = resolveDeploymentRef(t);
+  // Der Deployment-Name enthält nie ein "=", darum findet die kv-Suche ausschließlich das
+  // <container>=<image>-Paar (kein Herausschneiden des Namens-Tokens mehr nötig).
   const kv = t.find(x => x.includes("=") && !x.startsWith("--"));
   if (!depName || !kv) return host._err("kubectl set image: So nicht ganz.", "Muster: kubectl set image deployment/<name> <container>=<image>");
   const dep = host.deployments.find(d => d.name === depName);
@@ -117,9 +129,7 @@ function parseMem(spec: string): number | null {
  *  cpuHeavy gelöscht und der HighPodCPU-Alert fällt auf resolved. */
 
 function kubectlSetResources(host: KubectlHost, t: string[], raw: string) {
-  let depName: string | null = null;
-  if (t[3] && t[3].startsWith("deployment/")) depName = t[3].split("/")[1];
-  else if (t[3] === "deployment") depName = t[4];
+  const depName = resolveDeploymentRef(t);
   const limitSpec = (raw.match(/--limits[=\s][^\s]*memory=([0-9]+(?:Mi|Gi|M|G)?)/) || [])[1];
   const requestSpec = (raw.match(/--requests[=\s][^\s]*memory=([0-9]+(?:Mi|Gi|M|G)?)/) || [])[1];
   const cpuMatch = raw.match(/--limits[=\s][^\s]*cpu=([0-9]+)(m)?/);
@@ -165,9 +175,7 @@ function kubectlSetResources(host: KubectlHost, t: string[], raw: string) {
 
 export function kubectlRollout(host: KubectlHost, t: string[]) {
   if (t[2] !== "restart") return host._err("Der Simulator kann nur 'kubectl rollout restart deployment <name>'.");
-  let depName: string | null = null;
-  if (t[3] && t[3].startsWith("deployment/")) depName = t[3].split("/")[1];
-  else if (t[3] === "deployment") depName = t[4];
+  const depName = resolveDeploymentRef(t);
   if (!depName) return host._err("kubectl rollout restart: Welches Deployment?", "Muster: kubectl rollout restart deployment <name>");
   const dep = host.deployments.find(d => d.name === depName);
   if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + depName + '" not found');

@@ -1,9 +1,4 @@
 {
-  "src/world/regions/archipel.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "src/content/check-dsl.ts": {
     "complexity": {
       "count": 1
@@ -32,11 +27,6 @@
   },
   "src/hud/labellayout.ts": {
     "max-depth": {
-      "count": 1
-    }
-  },
-  "src/world/regions/lighthouse.ts": {
-    "complexity": {
       "count": 1
     }
   },
@@ -122,9 +112,6 @@
   "src/sim/kubectl/lifecycle.ts": {
     "complexity": {
       "count": 3
-    },
-    "max-lines-per-function": {
-      "count": 1
     }
   },
   "src/sim/kubectl/ops.ts": {
@@ -170,12 +157,22 @@
       "count": 2
     }
   },
-  "src/world/regions/warehouse.ts": {
+  "src/world/maps/harbormap.ts": {
     "complexity": {
       "count": 1
     }
   },
-  "src/world/maps/harbormap.ts": {
+  "src/world/regions/archipel.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/world/regions/lighthouse.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/world/regions/warehouse.ts": {
     "complexity": {
       "count": 1
     }

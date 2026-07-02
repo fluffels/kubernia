@@ -23,8 +23,8 @@
  * Phaser-frei (pure Domäne): Tabellen-Ausgabe + Pod-Namen kommen aus ./util, die
  * Domänentypen aus ./state – kein Rückimport nach sim.ts (kein Zyklus).
  */
-import type { ClusterState, ArgoApp, ArgoChildSpec, Deployment, Broken } from "./state";
-import { table, clusterIP } from "./util";
+import type { ClusterState, ArgoApp, ArgoChildSpec, Deployment, ServiceRes, Broken } from "./state";
+import { table } from "./util";
 import { addDeployment, scaleDeployment } from "./workload";
 
 /** Was die argocd-Befehle/Reconcile vom Simulator brauchen (von der `Sim`-Klasse
@@ -39,6 +39,7 @@ export interface ArgocdHost extends Pick<ClusterState, "argoApps" | "deployments
   _err(msg: string, tip?: string): string;
   _podReady(d: Deployment): boolean;
   _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment;
+  _makeService(spec: { name: string; type?: string; port: string | number; targetPort?: string | number; externalName?: string }): ServiceRes;
 }
 
 /** Tiefe Kopie einer Kind-App-Spezifikation (App-of-Apps). */
@@ -140,11 +141,9 @@ export function argoReconcile(host: ArgocdHost, app: ArgoApp): void {
   }
   const s = app.desired!.service;
   if (s && !host.services.some(x => x.name === s.name)) {
-    host.services.push({
-      name: s.name, type: s.type || "ClusterIP",
-      clusterIP: clusterIP(s.name),
-      port: s.port, created: host.clock,
-    });
+    // #518: Service zentral über die Fabrik anlegen (ClusterIP-Ableitung inklusive),
+    // statt die clusterIP-Konstruktion hier ein viertes Mal zu kopieren.
+    host.services.push(host._makeService({ name: s.name, type: s.type, port: s.port }));
   }
 }
 

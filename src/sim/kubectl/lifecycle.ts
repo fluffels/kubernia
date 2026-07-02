@@ -45,6 +45,38 @@ function filenameArg(t: string[]): string | null {
   return null;
 }
 
+/** Ein benanntes Element aus einer Ressourcen-Liste entfernen; `true`, wenn es da war.
+ *  Bündelt das früher ~13× kopierte `findIndex → splice` (#518). */
+function spliceByName(arr: { name: string }[], name: string): boolean {
+  const i = arr.findIndex(r => r.name === name);
+  if (i < 0) return false;
+  arr.splice(i, 1);
+  return true;
+}
+
+/* ===== `kubectl delete <typ> <name>` – Tabelle der schlicht löschbaren Ressourcen (#518) =====
+ * Alle Ressourcentypen, deren Löschen genau „finde per Name → splice → melde" ist (keine
+ * Folgewirkung wie das PV-Freigeben beim PVC oder das PVC-Behalten beim StatefulSet). Ein
+ * Eintrag je Typ statt eines eigenen if-Zweigs. `notFoundKind` ist der voll qualifizierte
+ * Plural für die NotFound-Meldung (echtes kubectl), `deletedKind` das qualifizierte Objekt
+ * für die „… deleted"-Zeile. Die Sonderfälle (pod/deployment/statefulset/pvc) bleiben
+ * bewusst eigene Zweige. */
+const SIMPLE_DELETABLE: readonly {
+  aliases: string[];
+  pick: (host: KubectlHost) => { name: string }[];
+  notFoundKind: string;
+  deletedKind: string;
+}[] = [
+  { aliases: ["service", "services", "svc"], pick: h => h.services, notFoundKind: "services", deletedKind: "service" },
+  { aliases: ["configmap", "configmaps", "cm"], pick: h => h.configMaps, notFoundKind: "configmaps", deletedKind: "configmap" },
+  { aliases: ["secret", "secrets"], pick: h => h.secrets, notFoundKind: "secrets", deletedKind: "secret" },
+  { aliases: ["ingress", "ingresses", "ing"], pick: h => h.ingresses, notFoundKind: "ingresses.networking.k8s.io", deletedKind: "ingress.networking.k8s.io" },
+  { aliases: ["networkpolicy", "networkpolicies", "netpol", "netpols"], pick: h => h.networkPolicies, notFoundKind: "networkpolicies.networking.k8s.io", deletedKind: "networkpolicy.networking.k8s.io" },
+  { aliases: ["pv", "persistentvolume", "persistentvolumes"], pick: h => h.pvs, notFoundKind: "persistentvolumes", deletedKind: "persistentvolume" },
+  { aliases: ["storageclass", "storageclasses", "sc"], pick: h => h.storageClasses, notFoundKind: "storageclasses.storage.k8s.io", deletedKind: "storageclass.storage.k8s.io" },
+  { aliases: ["volumesnapshot", "volumesnapshots", "vs"], pick: h => h.volumeSnapshots, notFoundKind: "volumesnapshots.snapshot.storage.k8s.io", deletedKind: "volumesnapshot.snapshot.storage.k8s.io" },
+];
+
 
 export function kubectlCreate(host: KubectlHost, t: string[], raw: string) {
   if (t[2] === "secret") {
@@ -153,50 +185,19 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
     const eff = host.applyEffects[file];
     if (!eff || !host.files[file]) return host._err("error: the path \"" + file + "\" does not exist", "Mit 'ls' siehst du, welche Dateien hier liegen.");
     const out: string[] = [];
+    // #518: Deployment/StatefulSet gehen über ihre Aggregat-Entferner (Folgewirkung: Pods,
+    // beim StatefulSet bewusst OHNE PVCs, #122); der Rest ist schlicht „splice per Name".
     const effDep = eff.deployment;
-    if (effDep) {
-      if (removeDeployment(host, effDep.name)) out.push('deployment.apps "' + effDep.name + '" deleted');
-    }
-    const effSvc = eff.service;
-    if (effSvc) {
-      const i = host.services.findIndex(s => s.name === effSvc.name);
-      if (i >= 0) { host.services.splice(i, 1); out.push('service "' + effSvc.name + '" deleted'); }
-    }
-    const effIng = eff.ingress;
-    if (effIng) {
-      const i = host.ingresses.findIndex(x => x.name === effIng.name);
-      if (i >= 0) { host.ingresses.splice(i, 1); out.push('ingress.networking.k8s.io "' + effIng.name + '" deleted'); }
-    }
-    const effNp = eff.networkPolicy;
-    if (effNp) {
-      const i = host.networkPolicies.findIndex(x => x.name === effNp.name);
-      if (i >= 0) { host.networkPolicies.splice(i, 1); out.push('networkpolicy.networking.k8s.io "' + effNp.name + '" deleted'); }
-    }
+    if (effDep && removeDeployment(host, effDep.name)) out.push('deployment.apps "' + effDep.name + '" deleted');
+    if (eff.service && spliceByName(host.services, eff.service.name)) out.push('service "' + eff.service.name + '" deleted');
+    if (eff.ingress && spliceByName(host.ingresses, eff.ingress.name)) out.push('ingress.networking.k8s.io "' + eff.ingress.name + '" deleted');
+    if (eff.networkPolicy && spliceByName(host.networkPolicies, eff.networkPolicy.name)) out.push('networkpolicy.networking.k8s.io "' + eff.networkPolicy.name + '" deleted');
     const effStsDel = eff.statefulSet;
-    if (effStsDel) {
-      // PVCs bleiben absichtlich (#122)
-      if (removeStatefulSet(host, effStsDel.name)) out.push('statefulset.apps "' + effStsDel.name + '" deleted');
-    }
-    const effPvcDel = eff.pvc;
-    if (effPvcDel) {
-      const i = host.pvcs.findIndex(x => x.name === effPvcDel.name);
-      if (i >= 0) { host.pvcs.splice(i, 1); out.push('persistentvolumeclaim "' + effPvcDel.name + '" deleted'); }
-    }
-    const effPvDel = eff.pv;
-    if (effPvDel) {
-      const i = host.pvs.findIndex(x => x.name === effPvDel.name);
-      if (i >= 0) { host.pvs.splice(i, 1); out.push('persistentvolume "' + effPvDel.name + '" deleted'); }
-    }
-    const effScDel = eff.storageClass;
-    if (effScDel) {
-      const i = host.storageClasses.findIndex(x => x.name === effScDel.name);
-      if (i >= 0) { host.storageClasses.splice(i, 1); out.push('storageclass.storage.k8s.io "' + effScDel.name + '" deleted'); }
-    }
-    const effVsDel = eff.volumeSnapshot;
-    if (effVsDel) {
-      const i = host.volumeSnapshots.findIndex(x => x.name === effVsDel.name);
-      if (i >= 0) { host.volumeSnapshots.splice(i, 1); out.push('volumesnapshot.snapshot.storage.k8s.io "' + effVsDel.name + '" deleted'); }
-    }
+    if (effStsDel && removeStatefulSet(host, effStsDel.name)) out.push('statefulset.apps "' + effStsDel.name + '" deleted'); // PVCs bleiben absichtlich (#122)
+    if (eff.pvc && spliceByName(host.pvcs, eff.pvc.name)) out.push('persistentvolumeclaim "' + eff.pvc.name + '" deleted');
+    if (eff.pv && spliceByName(host.pvs, eff.pv.name)) out.push('persistentvolume "' + eff.pv.name + '" deleted');
+    if (eff.storageClass && spliceByName(host.storageClasses, eff.storageClass.name)) out.push('storageclass.storage.k8s.io "' + eff.storageClass.name + '" deleted');
+    if (eff.volumeSnapshot && spliceByName(host.volumeSnapshots, eff.volumeSnapshot.name)) out.push('volumesnapshot.snapshot.storage.k8s.io "' + eff.volumeSnapshot.name + '" deleted');
     return out.join("\n") || "nothing deleted";
   }
 
@@ -231,39 +232,13 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
     return 'deployment.apps "' + name + '" deleted';
   }
 
-  if (["service", "services", "svc"].includes(what)) {
-    const idx = host.services.findIndex(s => s.name === name);
-    if (idx === -1) return host._err('Error from server (NotFound): services "' + name + '" not found');
-    host.services.splice(idx, 1);
-    return 'service "' + name + '" deleted';
-  }
-
-  if (["configmap", "configmaps", "cm"].includes(what)) {
-    const idx = host.configMaps.findIndex(c => c.name === name);
-    if (idx === -1) return host._err('Error from server (NotFound): configmaps "' + name + '" not found');
-    host.configMaps.splice(idx, 1);
-    return 'configmap "' + name + '" deleted';
-  }
-
-  if (["secret", "secrets"].includes(what)) {
-    const idx = host.secrets.findIndex(s => s.name === name);
-    if (idx === -1) return host._err('Error from server (NotFound): secrets "' + name + '" not found');
-    host.secrets.splice(idx, 1);
-    return 'secret "' + name + '" deleted';
-  }
-
-  if (["ingress", "ingresses", "ing"].includes(what)) {
-    const idx = host.ingresses.findIndex(i => i.name === name);
-    if (idx === -1) return host._err('Error from server (NotFound): ingresses.networking.k8s.io "' + name + '" not found');
-    host.ingresses.splice(idx, 1);
-    return 'ingress.networking.k8s.io "' + name + '" deleted';
-  }
-
-  if (["networkpolicy", "networkpolicies", "netpol", "netpols"].includes(what)) {
-    const idx = host.networkPolicies.findIndex(n => n.name === name);
-    if (idx === -1) return host._err('Error from server (NotFound): networkpolicies.networking.k8s.io "' + name + '" not found');
-    host.networkPolicies.splice(idx, 1);
-    return 'networkpolicy.networking.k8s.io "' + name + '" deleted';
+  // #518: Alle schlicht löschbaren Typen (finde per Name → splice → melde) über die
+  // SIMPLE_DELETABLE-Tabelle statt je eines eigenen if-Zweigs. Die Sonderfälle mit
+  // Folgewirkung (statefulset behält PVCs, pvc gibt sein PV frei) bleiben eigene Zweige unten.
+  const simple = SIMPLE_DELETABLE.find(s => s.aliases.includes(what));
+  if (simple) {
+    if (!spliceByName(simple.pick(host), name)) return host._err('Error from server (NotFound): ' + simple.notFoundKind + ' "' + name + '" not found');
+    return simple.deletedKind + ' "' + name + '" deleted';
   }
 
   if (["statefulset", "statefulsets", "sts"].includes(what)) {
@@ -283,27 +258,6 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
       else { const j = host.pvs.findIndex(x => x.name === pv.name); if (j >= 0) host.pvs.splice(j, 1); }
     }
     return 'persistentvolumeclaim "' + name + '" deleted';
-  }
-
-  if (["pv", "persistentvolume", "persistentvolumes"].includes(what)) {
-    const idx = host.pvs.findIndex(p => p.name === name);
-    if (idx === -1) return host._err('Error from server (NotFound): persistentvolumes "' + name + '" not found');
-    host.pvs.splice(idx, 1);
-    return 'persistentvolume "' + name + '" deleted';
-  }
-
-  if (["storageclass", "storageclasses", "sc"].includes(what)) {
-    const idx = host.storageClasses.findIndex(s => s.name === name);
-    if (idx === -1) return host._err('Error from server (NotFound): storageclasses.storage.k8s.io "' + name + '" not found');
-    host.storageClasses.splice(idx, 1);
-    return 'storageclass.storage.k8s.io "' + name + '" deleted';
-  }
-
-  if (["volumesnapshot", "volumesnapshots", "vs"].includes(what)) {
-    const idx = host.volumeSnapshots.findIndex(v => v.name === name);
-    if (idx === -1) return host._err('Error from server (NotFound): volumesnapshots.snapshot.storage.k8s.io "' + name + '" not found');
-    host.volumeSnapshots.splice(idx, 1);
-    return 'volumesnapshot.snapshot.storage.k8s.io "' + name + '" deleted';
   }
 
   return host._err("kubectl delete: Ressourcentyp '" + what + "' kennt der Simulator nicht.");
