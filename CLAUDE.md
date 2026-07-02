@@ -100,7 +100,15 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/sim/workload.ts`](src/sim/workload.ts) | pure Domäne | Getippte Workload-Mutationen (#488/#508, Forts. #478): `scaleDeployment`/`replacePods`/`replaceDeploymentPod`/`restartStatefulPod`/`addDeployment`/`removeDeployment`/`addStatefulSet`/`removeStatefulSet` halten `pods.length === replicas` by-construction; die Befehlsfamilien (lifecycle/ops/helm/argocd/glab) mutieren den Workload-Kern (Deployments UND StatefulSets) nur noch hierüber. |
 | [`src/sim/nodes.ts`](src/sim/nodes.ts) | pure Domäne | Node-Aggregat-Mutationen (#534): `provisionNode` (idempotent per Name) / `removeNode` (spiegelt `removeDeployment`) + geteilte `NODE_VERSION` + das EINE Control-Plane-Prädikat `isControlPlane`; terraform/kubeadm/observability/eviction provisionieren/prüfen Knoten nur noch hierüber (vorher über 4 Dateien dupliziert). |
 | [`src/content.ts`](src/content.ts) | pure Domäne | Fassade über `src/content/*` → `KQContent`. → [content.md](docs/module/content.md) |
-| [`src/content/loader.ts`](src/content/loader.ts) | pure Domäne | Content-as-Data-Loader + Laufzeit-Validierung. |
+| [`src/content/loader.ts`](src/content/loader.ts) | pure Domäne | Content-as-Data-Loader: dünnes Barrel (#517), re-exportiert die öffentliche API der `loader/*`-Leaves. → [content.md](docs/module/content.md) |
+| [`src/content/loader/shared.ts`](src/content/loader/shared.ts) | pure Domäne | Generische Loader-Bausteine (#517): `loadGroups`/`assembleUnique`/`makeGlobLoader` (das geteilte glob→parse→dedup-Skelett) + `reviveAccept`. |
+| [`src/content/loader/npcs.ts`](src/content/loader/npcs.ts) | pure Domäne | NPC-Stammdaten + Smalltalk (`NPCS`/`SMALLTALK`, #348/#517). |
+| [`src/content/loader/quests.ts`](src/content/loader/quests.ts) | pure Domäne | Quests: Schritt-Reviver + `parseQuests`/`assembleQuests`/`getQuests` (order-basiert, #348/#517). |
+| [`src/content/loader/topics.ts`](src/content/loader/topics.ts) | pure Domäne | Quest-Themen-Taxonomie fürs Logbuch-Accordion (`getQuestTopics`/`groupQuestsByTopic`, #327/#517). |
+| [`src/content/loader/cmdcards.ts`](src/content/loader/cmdcards.ts) | pure Domäne | Befehls-Karten (Spaced-Repetition-Drills), pro Geber (`getCmdCards`, #352/#517). |
+| [`src/content/loader/quizcards.ts`](src/content/loader/quizcards.ts) | pure Domäne | Quiz-Karteikarten (Krabbe Kralle), pro Thema (`getQuizCards`, #368/#517). |
+| [`src/content/loader/tfconfigs.ts`](src/content/loader/tfconfigs.ts) | pure Domäne | Terraform-Konfig-Szenarien + `resolveScenarioRef` (`getTfConfigs`, #147/#517). |
+| [`src/content/loader/funkexplain.ts`](src/content/loader/funkexplain.ts) | pure Domäne | Freies-Funken-Erklärungen, pro Tool (`getFunkExplains`, #362/#517). |
 | [`src/content/parse.ts`](src/content/parse.ts) | pure Domäne | Geteilte Parse-Primitiven + `ContentValidationError` (Leaf, bricht den Zyklus loader↔check-dsl, #411). |
 | [`src/content/check-dsl.ts`](src/content/check-dsl.ts) | pure Domäne | Deklarative Quest-Check-DSL: `compileCheck` Regel→Prädikat (#411). → [content.md](docs/module/content.md) |
 | [`src/content/scenario.ts`](src/content/scenario.ts) | pure Domäne | Scenario-Validierung (#494): `reviveScenario` prüft Inline-`scenario` strukturell gegen eine geschlossene Feld-/applyEffect-Allowlist (fail-fast gegen stille Tippfehler). |
