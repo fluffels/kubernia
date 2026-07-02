@@ -39,14 +39,6 @@
       "count": 1
     }
   },
-  "src/sim/docker.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/sim/git.ts": {
     "complexity": {
       "count": 1
@@ -64,14 +56,6 @@
   },
   "src/sim/s3.ts": {
     "complexity": {
-      "count": 1
-    }
-  },
-  "src/sim/terraform.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
       "count": 1
     }
   },
