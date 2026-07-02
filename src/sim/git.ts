@@ -23,12 +23,14 @@ import { suggest } from "./util";
 /** Was die git-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
  *  Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es dokumentiert
  *  die Kopplung von git an den Cluster-Zustand und vermeidet einen Import-Zyklus
- *  git ↔ sim. Die Daten-Felder (`git`/`files`/`ci`/`deployments`) kommen über
- *  `extends ClusterState` (sim/state.ts, #372); hinzu kommen die in `sim.ts`
- *  verbleibenden Helfer, die git ruft: Fehlerausgabe, „Meintest du …?"-Vorschlag
- *  und – für die beim `git push` ausgelöste CI-Pipeline (`runPipeline`, sim/glab.ts) –
- *  die Deployment-Fabrik (`runPipeline` rollt die deploy-Stage auf `main` aus). */
-export interface GitHost extends ClusterState {
+ *  git ↔ sim. Statt des ganzen `ClusterState` (30+ Felder, Leaky Abstraction #516)
+ *  nur die tatsächlich berührten Daten-Felder per `Pick` (ISP): `git`/`files` liest
+ *  git selbst; `ci`/`deployments`/`clock` braucht die beim `git push` ausgelöste
+ *  CI-Pipeline (`runPipeline`, sim/glab.ts), an die git seinen Host durchreicht.
+ *  Die Feld-**Typen** bleiben über `Pick<ClusterState, …>` an die eine SSOT
+ *  (sim/state.ts, #372) gebunden. Hinzu kommen die in `sim.ts` verbleibenden Helfer,
+ *  die git ruft: Fehlerausgabe und – für die deploy-Stage – die Deployment-Fabrik. */
+export interface GitHost extends Pick<ClusterState, "git" | "files" | "ci" | "deployments" | "clock"> {
   _err(msg: string, tip?: string): string;
   _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment;
 }

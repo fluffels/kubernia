@@ -13,10 +13,22 @@ import type {
 } from "../state";
 
 /** Was die kubectl-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
- *  Die Daten-Felder kommen über `extends ClusterState` (sim/state.ts, #372); hinzu
- *  kommen der transiente Sitzungs-Marker `lastDeletedPod` und die in `sim.ts`
- *  verbleibenden Helfer/öffentlichen Methoden, die kubectl ruft. */
-export interface KubectlHost extends ClusterState {
+ *  kubectl ist der breiteste Seam – berührt aber trotzdem nicht ALLE Cluster-Felder:
+ *  statt des ganzen `ClusterState` (Leaky Abstraction #516) nur die tatsächlich
+ *  genutzten Daten-Felder per `Pick` (ISP). Bewusst NICHT dabei und damit für kubectl
+ *  strukturell tabu: `docker`, `git`, `ci`, `tf`, `releases`/`charts`/`helmRepos`,
+ *  `objectStore`, `scenario`. (`controlPlane` liest nur das Verbindungs-Gate im Barrel
+ *  kubectl.ts, #460 – daher dabei.) Die Feld-Typen bleiben über
+ *  `Pick<ClusterState, …>` an die eine SSOT (sim/state.ts, #372) gebunden. Hinzu kommen
+ *  der transiente Sitzungs-Marker `lastDeletedPod` und die in `sim.ts` verbleibenden
+ *  Helfer/öffentlichen Methoden, die kubectl ruft. */
+export interface KubectlHost extends Pick<ClusterState,
+  | "clock" | "nodes" | "deployments" | "services" | "ingresses" | "networkPolicies"
+  | "secrets" | "configMaps" | "files" | "applyEffects" | "serviceMonitors"
+  | "prometheusRules" | "grafanaDatasources" | "grafanaDashboards" | "statefulSets"
+  | "pvcs" | "pvs" | "storageClasses" | "volumeSnapshots" | "serviceAccounts"
+  | "roles" | "roleBindings" | "podSecurity" | "argoApps" | "controlPlane"
+> {
   // Transienter Sitzungs-Marker (kein Cluster-Zustand → nicht in ClusterState).
   lastDeletedPod: string | null;
   // Geteilte Sim-Helfer (bleiben in sim.ts): Fehler, Alter, Pods/Readiness, Fabriken.

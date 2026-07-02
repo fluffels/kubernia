@@ -20,10 +20,12 @@ import { addDeployment, removeDeployment, scaleDeployment } from "./workload";
 /** Was die helm-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
  *  Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es dokumentiert
  *  die Kopplung von helm an den Cluster-Zustand und vermeidet einen Import-Zyklus
- *  helm ↔ sim. Die Daten-Felder (helmRepos/charts/releases/deployments/services/
- *  files/clock) kommen über `extends ClusterState` (sim/state.ts, #372); hinzu
+ *  helm ↔ sim. Statt des ganzen `ClusterState` (Leaky Abstraction #516) nur die
+ *  berührten Daten-Felder per `Pick` (ISP): helmRepos/charts/releases/deployments/
+ *  services/files/clock; die Feld-Typen bleiben so an die SSOT (sim/state.ts, #372)
+ *  gebunden. Hinzu
  *  kommen die in `sim.ts` verbleibenden Helfer, die helm ruft. */
-export interface HelmHost extends ClusterState {
+export interface HelmHost extends Pick<ClusterState, "helmRepos" | "charts" | "releases" | "deployments" | "services" | "files" | "clock"> {
   _err(msg: string, tip?: string): string;
   _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment;
   _makeService(spec: { name: string; type?: string; port: string | number; targetPort?: string | number; externalName?: string }): ServiceRes;

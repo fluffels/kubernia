@@ -26,8 +26,10 @@ const APISERVER = "10.0.0.10:6443";
 
 /** Was die kubeadm-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt). Schmales
  *  Interface statt der ganzen Klasse – dokumentiert die Kopplung und vermeidet den
- *  Import-Zyklus kubeadm ↔ sim. `nodes`/`controlPlane` kommen über `extends ClusterState`. */
-export interface KubeadmHost extends ClusterState {
+ *  Import-Zyklus kubeadm ↔ sim. Statt des ganzen `ClusterState` (Leaky Abstraction
+ *  #516) nur die berührten `nodes`/`controlPlane` per `Pick` (ISP), typgebunden an die
+ *  SSOT (sim/state.ts, #372). */
+export interface KubeadmHost extends Pick<ClusterState, "nodes" | "controlPlane"> {
   _err(msg: string, tip?: string): string;
   _reschedulePending(): void; // ein neuer Worker kann wartende Pods einplanen
 }

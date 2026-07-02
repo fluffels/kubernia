@@ -27,12 +27,13 @@ import { hashStr } from "../core/rng";
 import { isControlPlane } from "./nodes";
 
 /** Was die Observability vom Simulator braucht (von der `Sim`-Klasse erfüllt).
- *  Bewusst schmal: die Daten-Felder (`deployments`/`nodes`/`services`) kommen über
- *  `extends ClusterState` (sim/state.ts, #372); hinzu kommen der Sim-Helfer
+ *  Bewusst schmal: statt des ganzen `ClusterState` (Leaky Abstraction #516) nur die
+ *  berührten Daten-Felder per `Pick` (ISP): `deployments`/`nodes`/`services`;
+ *  typgebunden an die SSOT (sim/state.ts, #372). Hinzu kommen der Sim-Helfer
  *  `_podReady` und der transiente Alert-Sitzungszustand (`_firingAlerts`/
  *  `_resolvedAlerts` – kein Cluster-Zustand, darum NICHT in ClusterState, sondern
  *  Host-Felder wie kubectls `lastDeletedPod`). */
-export interface ObservabilityHost extends ClusterState {
+export interface ObservabilityHost extends Pick<ClusterState, "deployments" | "nodes" | "services"> {
   _podReady(d: Deployment): boolean;
   _firingAlerts: Set<string>;   // brennt gerade
   _resolvedAlerts: Set<string>; // war mal an, Ursache inzwischen behoben

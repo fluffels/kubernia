@@ -27,11 +27,12 @@ import { addDeployment } from "./workload";
 /** Was die glab/CI-Funktionen vom Simulator brauchen (von der `Sim`-Klasse
  *  erfüllt). Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es
  *  dokumentiert die Kopplung von CI an den Cluster-Zustand und vermeidet einen
- *  Import-Zyklus glab ↔ sim. Die Daten-Felder (`ci`/`git`/`deployments`/`clock`)
- *  kommen über `extends ClusterState` (sim/state.ts, #372); hinzu kommen die in
- *  `sim.ts` verbleibenden Helfer: Fehlerausgabe (`glab`) und die Deployment-
- *  Fabrik (`runPipeline` rollt die deploy-Stage auf `main` darüber aus). */
-export interface GlabHost extends ClusterState {
+ *  Import-Zyklus glab ↔ sim. Statt des ganzen `ClusterState` (Leaky Abstraction
+ *  #516) nur die berührten Daten-Felder per `Pick` (ISP): `ci`/`git`/`deployments`/
+ *  `clock`; die Feld-Typen bleiben so an die SSOT (sim/state.ts, #372) gebunden.
+ *  Hinzu kommen die in `sim.ts` verbleibenden Helfer: Fehlerausgabe (`glab`) und die
+ *  Deployment-Fabrik (`runPipeline` rollt die deploy-Stage auf `main` darüber aus). */
+export interface GlabHost extends Pick<ClusterState, "ci" | "git" | "deployments" | "clock"> {
   _err(msg: string, tip?: string): string;
   _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment;
 }

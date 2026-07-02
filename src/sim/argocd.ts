@@ -30,11 +30,12 @@ import { addDeployment, scaleDeployment } from "./workload";
 /** Was die argocd-Befehle/Reconcile vom Simulator brauchen (von der `Sim`-Klasse
  *  erfüllt). Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es
  *  dokumentiert die Kopplung von Argo CD an den Cluster-Zustand und vermeidet einen
- *  Import-Zyklus argocd ↔ sim. Die Daten-Felder (`argoApps`/`deployments`/`services`/
- *  `clock`) kommen über `extends ClusterState` (sim/state.ts, #372); hinzu kommen
- *  die in `sim.ts` verbleibenden Helfer, die Argo ruft: Fehlerausgabe,
- *  Pod-Readiness und die Deployment-Fabrik. */
-export interface ArgocdHost extends ClusterState {
+ *  Import-Zyklus argocd ↔ sim. Statt des ganzen `ClusterState` (Leaky Abstraction
+ *  #516) nur die berührten Daten-Felder per `Pick` (ISP): `argoApps`/`deployments`/
+ *  `services`/`clock`; die Feld-Typen bleiben so an die SSOT (sim/state.ts, #372)
+ *  gebunden. Hinzu kommen die in `sim.ts` verbleibenden Helfer, die Argo ruft:
+ *  Fehlerausgabe, Pod-Readiness und die Deployment-Fabrik. */
+export interface ArgocdHost extends Pick<ClusterState, "argoApps" | "deployments" | "services" | "clock"> {
   _err(msg: string, tip?: string): string;
   _podReady(d: Deployment): boolean;
   _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment;

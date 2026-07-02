@@ -12,7 +12,7 @@ Ursprünglich war alles ein großes `sim.ts`. Mit #346 wurde es in einen **Kern*
 
 - **`src/sim.ts` (Kern):** State/reset/Fabriken (`_makeDeployment` u.a.)/geteilte Pod-Helfer/`exec`-Dispatch/`snapshot`. `class Sim implements ClusterState`. Re-exportiert `src/sim/state.ts` als **Barrel**, damit bestehende Importe (`from "./sim"`) unverändert bleiben.
 - **Je Befehlsfamilie eine freie Funktion** `xCommand(host, …)` in `src/sim/<x>.ts`. Der `exec`-Dispatch im Kern ruft sie (`dockerCommand(this, …)` usw.).
-- **Schmales Host-Interface je Familie** (`DockerHost`, `KubectlHost`, …): `extends ClusterState` + genau die Sim-Helfer, die die Familie nutzt. So bekommt die Familie die Sim-Instanz, **ohne Import-Zyklus**.
+- **Schmales Host-Interface je Familie** (`DockerHost`, `KubectlHost`, …): `extends Pick<ClusterState, …>` mit **genau den Cluster-Feldern, die die Familie berührt** (Interface Segregation, #516) + genau die Sim-Helfer, die sie nutzt. So bekommt die Familie die Sim-Instanz **ohne Import-Zyklus** und **ohne Vollzugriff auf alle 30+ State-Felder** – ein `extends ClusterState` war eine Leaky Abstraction (git konnte helm-State mutieren o.ä.). Die Feld-**Typen** bleiben über `Pick<ClusterState, …>` an die eine SSOT (`sim/state.ts`) gebunden, driften also nicht. `class Sim implements ClusterState` erfüllt jedes Pick-Subset automatisch.
 - **Öffentliche API bleibt stabil** auf der `Sim`-Klasse / dem Barrel → Aufrufer (content/checks, content/drills) und Tests rufen unverändert `sim.X()`.
 
 ### Die Module im Einzelnen
