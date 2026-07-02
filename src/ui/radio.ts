@@ -4,7 +4,7 @@ import { SFX } from "../sfx";
 import { ABBREVS } from "../content/abbrev";
 import { pushHistory, navigateHistory } from "../hud/cmdhistory";
 import { pickFunkExplanation } from "../hud/funkexplain";
-import { evaluateSubmission, funkSessionKind } from "../hud/viewdecide";
+import { evaluateSubmission, funkSessionKind, type SubmissionTask } from "../hud/viewdecide";
 import { fmtCmd } from "../hud/markup";
 import type { QuestTask } from "../types";
 import { part, $, esc, NPCS, masteryBadge } from "./shared";
@@ -136,13 +136,7 @@ export const radioUI = part({
     // nur Gelerntes listet (progressive Aufdeckung statt Komplettliste vorweg).
     const result = Game.sim.exec(line, Game.unlockedCommandFamilies());
     if (result.clear) { this.termLog = []; this.termRedraw(); return; }
-    this.termLog.push('<span class="t-cmd">crew@hafen:~$ ' + esc(line) + "</span>");
-    if (result.output) {
-      const text = esc(result.output).replace(/💡[^\n]*/g, s => '</span><span class="t-tip">' + s + '</span><span>');
-      this.termLog.push(result.error ? '<span class="t-err">' + text + "</span>" : "<span>" + text + "</span>");
-    }
-    if (this.termLog.length > 160) this.termLog = this.termLog.slice(-120);
-    this.termRedraw();
+    this._echoCommand(line, result);
     Game.state.stats.commands++;
     Game.save();
     // #316: Befehlshistorie „durch Nutzung" freischalten – einmalige Feier beim Erreichen
@@ -151,25 +145,42 @@ export const radioUI = part({
     if (Game.maybeUnlockCmdHistory()) {
       this.hint("🔓 Befehlshistorie freigeschaltet: Mit ↑/↓ holst du im Terminal vorherige Befehle zurück – wie in einer echten Shell.", "rankup");
     }
-
-    // #362: Im freien Funken nach einem fehlerfreien Befehl eine kurze, in der Spielwelt
-    // verankerte Einordnung „Was ist gerade passiert?" einblenden – dosiert: nur bei einem
-    // echten Lernmoment (Befehl im Erklär-Katalog) und nie zweimal dieselbe pro Sitzung.
-    // Bei einem Sim-Fehler bewusst nicht (die Einordnung würde nicht zur Ausgabe passen).
-    if (this.funkSession().kind === "free" && !result.error) {
-      const exp = pickFunkExplanation(line, KQContent.FUNK_EXPLAINS, this._funkExplained);
-      if (exp) {
-        this._funkExplained.add(exp.id);
-        const fb = $("tt-feedback");
-        if (fb) fb.innerHTML = '<div class="tt-feedback funk-explain">💡 <b>Bo:</b> Was ist da gerade passiert? ' + fmtCmd(exp.text) + "</div>";
-      }
-    }
+    this._maybeFunkExplain(line, result);
 
     const task = this.currentTask();
     if (!task) return;
-    // #500: die verschränkte Bewertung (accept-Match / Abkürzungs-Gating #299/#366 /
-    // Near-Miss #367 / Begründung #233/#307) liegt jetzt DOM-frei in uieval.
-    // Hier nur noch: Zustand hereinreichen, Verdikt umsetzen (innerHTML/SFX/Fortschritt).
+    this._applyVerdict(line, task, result);
+  },
+
+  /** Befehl + Sim-Ausgabe ins Terminal-Log schreiben, kappen und neu zeichnen (#565). */
+  _echoCommand(line: string, result: { output?: string; error?: boolean }) {
+    this.termLog.push('<span class="t-cmd">crew@hafen:~$ ' + esc(line) + "</span>");
+    if (result.output) {
+      const text = esc(result.output).replace(/💡[^\n]*/g, s => '</span><span class="t-tip">' + s + '</span><span>');
+      this.termLog.push(result.error ? '<span class="t-err">' + text + "</span>" : "<span>" + text + "</span>");
+    }
+    if (this.termLog.length > 160) this.termLog = this.termLog.slice(-120);
+    this.termRedraw();
+  },
+
+  /** #362: Im freien Funken nach einem fehlerfreien Befehl eine kurze, in der Spielwelt
+   *  verankerte Einordnung „Was ist gerade passiert?" einblenden – dosiert: nur bei einem
+   *  echten Lernmoment (Befehl im Erklär-Katalog) und nie zweimal dieselbe pro Sitzung.
+   *  Bei einem Sim-Fehler bewusst nicht (die Einordnung würde nicht zur Ausgabe passen). */
+  _maybeFunkExplain(line: string, result: { error?: boolean }) {
+    if (this.funkSession().kind !== "free" || result.error) return;
+    const exp = pickFunkExplanation(line, KQContent.FUNK_EXPLAINS, this._funkExplained);
+    if (!exp) return;
+    this._funkExplained.add(exp.id);
+    const fb = $("tt-feedback");
+    if (fb) fb.innerHTML = '<div class="tt-feedback funk-explain">💡 <b>Bo:</b> Was ist da gerade passiert? ' + fmtCmd(exp.text) + "</div>";
+  },
+
+  /** Eine getippte Zeile gegen die aktuelle Aufgabe bewerten und das Verdikt umsetzen (#565).
+   *  #500: die verschränkte Bewertung (accept-Match / Abkürzungs-Gating #299/#366 /
+   *  Near-Miss #367 / Begründung #233/#307) liegt DOM-frei in uieval. Hier nur noch:
+   *  Zustand hereinreichen, Verdikt umsetzen (innerHTML/SFX/Fortschritt). */
+  _applyVerdict(line: string, task: SubmissionTask & { check?: (sim: typeof Game.sim) => boolean }, result: { error?: boolean }) {
     const verdict = evaluateSubmission(line, task, {
       simError: !!result.error,
       checkOk: !task.check || !!task.check(Game.sim),
@@ -250,19 +261,7 @@ export const radioUI = part({
   },
 
   finishFunkStep() {
-    // Abkürzungs-Freischaltung vor dem Voranschreiten (#300): unlockAbbrev am fertigen
-    // Schritt → Game.unlockAbbrev + Toast, damit der Toast sichtbar bleibt während die
-    // Belohnungs-Anzeige erscheint.
-    const completedStep = Game.currentStep();
-    if (completedStep?.unlockAbbrev && !Game.isAbbrevUnlocked(completedStep.unlockAbbrev)) {
-      const id = completedStep.unlockAbbrev;
-      Game.unlockAbbrev(id);
-      const pair = ABBREVS.find(a => a.id === id);
-      if (pair) {
-        const shortForm = pair.short[pair.short.length - 1];
-        this.hint(`🔓 Profi-Abkürzung freigeschaltet: <code>${shortForm}</code> = <code>${pair.long}</code>`, "rankup");
-      }
-    }
+    this._unlockStepAbbrev();
     const result = Game.advanceStep() || {};
     this._drillTask = null;
     if (result.questDone) {
@@ -273,19 +272,39 @@ export const radioUI = part({
       this.reward(10, 6, "📻 Auftrag erledigt!");
     }
     const next = Game.currentStep();
-    if (next && Game.isFunkStep(next)) {
-      if (next.scenario) { Game.sim.mergeScenario(next.scenario); Game.save(); }
+    if (next && Game.isFunkStep(next) && next.scenario) {
+      Game.sim.mergeScenario(next.scenario); Game.save();
     }
     this.renderTermTasks();
     this.refreshHud();
+    this._announceNextStep(next);
+  },
+
+  /** Abkürzungs-Freischaltung vor dem Voranschreiten (#300): unlockAbbrev am fertigen
+   *  Schritt → Game.unlockAbbrev + Toast, damit der Toast sichtbar bleibt während die
+   *  Belohnungs-Anzeige erscheint (#565, aus finishFunkStep). */
+  _unlockStepAbbrev() {
+    const completedStep = Game.currentStep();
+    if (!completedStep?.unlockAbbrev || Game.isAbbrevUnlocked(completedStep.unlockAbbrev)) return;
+    const id = completedStep.unlockAbbrev;
+    Game.unlockAbbrev(id);
+    const pair = ABBREVS.find(a => a.id === id);
+    if (pair) {
+      const shortForm = pair.short[pair.short.length - 1];
+      this.hint(`🔓 Profi-Abkürzung freigeschaltet: <code>${shortForm}</code> = <code>${pair.long}</code>`, "rankup");
+    }
+  },
+
+  /** Feedback-Zeile nach einem erledigten Schritt: kündigt den nächsten NPC bzw. den
+   *  direkt anschließenden Funk-Schritt an (#565, aus finishFunkStep). */
+  _announceNextStep(next: ReturnType<typeof Game.currentStep>) {
     const fb = $("tt-feedback");
-    if (fb) {
-      if (next && !Game.isFunkStep(next) && next.npc) {
-        const npc = NPCS[next.npc];
-        fb.innerHTML = `<div class="tt-feedback">🎉 Geschafft! <b>${npc.name}</b> will dich sprechen. (Esc schließt das Terminal)</div>`;
-      } else if (next && Game.isFunkStep(next)) {
-        fb.innerHTML = `<div class="tt-feedback">🎉 Weiter geht's direkt hier ⤴</div>`;
-      }
+    if (!fb) return;
+    if (next && !Game.isFunkStep(next) && next.npc) {
+      const npc = NPCS[next.npc];
+      fb.innerHTML = `<div class="tt-feedback">🎉 Geschafft! <b>${npc.name}</b> will dich sprechen. (Esc schließt das Terminal)</div>`;
+    } else if (next && Game.isFunkStep(next)) {
+      fb.innerHTML = `<div class="tt-feedback">🎉 Weiter geht's direkt hier ⤴</div>`;
     }
   },
 
