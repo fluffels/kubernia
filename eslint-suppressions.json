@@ -29,11 +29,6 @@
       "count": 1
     }
   },
-  "src/sim.ts": {
-    "complexity": {
-      "count": 3
-    }
-  },
   "src/ui/overlay.ts": {
     "complexity": {
       "count": 1

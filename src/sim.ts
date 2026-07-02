@@ -99,6 +99,79 @@ function snapshotSimple(state: object): Pick<Required<Scenario>, SimpleResourceK
   return out;
 }
 
+/* ---------- Spec→Objekt-Bauteile (#563) ----------
+ * reset() (ersetzt den Zustand) und mergeScenario() (mischt additiv ein) bauen aus einer
+ * lockeren Szenario-Spec dieselbe Domänen-Form – nur die Einfüge-Strategie unterscheidet
+ * sich (klonen vs. per `.name` deduplizieren). Diese reinen Bauteile sind die EINE Quelle
+ * der Feld-Defaults; vorher standen sie in beiden Methoden dupliziert (iSAQB: Open-Closed –
+ * ein neuer Feld-Default war an zwei Stellen konsistent zu pflegen). `created` reicht der
+ * Aufrufer durch (in reset() ist `this.clock` zu diesem Zeitpunkt 0, wie zuvor `created: 0`). */
+type StorageClassSpec = NonNullable<Scenario["storageClasses"]>[number];
+type PvSpec = NonNullable<Scenario["pvs"]>[number];
+type PvcSpec = NonNullable<Scenario["pvcs"]>[number];
+type VolumeSnapshotSpec = NonNullable<Scenario["volumeSnapshots"]>[number];
+type RoleSpec = NonNullable<Scenario["roles"]>[number];
+type RoleBindingSpec = NonNullable<Scenario["roleBindings"]>[number];
+type ReleaseSpec = NonNullable<Scenario["releases"]>[number];
+type ChartSpec = NonNullable<Scenario["charts"]>[number];
+
+function buildStorageClass(s: StorageClassSpec, created: number): StorageClassRes {
+  return { name: s.name, provisioner: s.provisioner || "rancher.io/local-path", reclaimPolicy: s.reclaimPolicy || "Delete", isDefault: !!s.isDefault, created };
+}
+function buildPv(p: PvSpec, created: number): PvRes {
+  return { name: p.name, capacity: p.capacity || "1Gi", status: p.status || "Available", claim: p.claim || "", storageClass: p.storageClass || "", accessModes: p.accessModes || "RWO", reclaimPolicy: p.reclaimPolicy || "Retain", created };
+}
+function buildVolumeSnapshot(v: VolumeSnapshotSpec, created: number): VolumeSnapshotRes {
+  return { name: v.name, sourcePvc: v.sourcePvc, data: v.data || "", restoreSize: v.restoreSize || "1Gi", readyToUse: v.readyToUse !== false, created };
+}
+function buildRole(r: RoleSpec, created: number): RoleRes {
+  return { name: r.name, cluster: !!r.cluster, rules: r.rules.map(rule => ({ verbs: rule.verbs.slice(), resources: rule.resources.slice() })), created };
+}
+function buildRoleBinding(b: RoleBindingSpec, created: number): RoleBindingRes {
+  return { name: b.name, cluster: !!b.cluster, roleRef: { kind: b.roleRef.kind, name: b.roleRef.name }, subjects: b.subjects.map(s => Object.assign({}, s)), created };
+}
+function buildRelease(r: ReleaseSpec): Release {
+  return { name: r.name, chart: r.chart, revision: r.revision, depName: r.depName, history: (r.history || []).map(h => Object.assign({}, h)) };
+}
+function buildChart(c: ChartSpec): Chart {
+  return { name: c.name, version: c.version || "0.1.0", packaged: !!c.packaged };
+}
+
+/** Default-Cluster (kein `bareMetal`, keine expliziten `nodes`): der klassische 3-Knoten-Cluster
+ *  wie kind/minikube. Elemente werden beim reset() geklont – die Konstante bleibt unangetastet. */
+const DEFAULT_NODES: ClusterNode[] = [
+  { name: "ahoi-control", status: "Ready", roles: "control-plane", version: "v1.30.2" },
+  { name: "ahoi-worker-1", status: "Ready", roles: "<none>", version: "v1.30.2" },
+  { name: "ahoi-worker-2", status: "Ready", roles: "<none>", version: "v1.30.2" },
+];
+/** Ohne Vorgabe genau eine Default-StorageClass "standard", die PVCs dynamisch ein PV beschafft. */
+const DEFAULT_STORAGE_CLASS: StorageClassSpec = { name: "standard", provisioner: "rancher.io/local-path", reclaimPolicy: "Delete", isDefault: true };
+
+/* ---------- Befehls-Dispatch (#563) ----------
+ * Statt eines wachsenden switch in exec() (jeder Fall = +1 zyklomatische Komplexität) dispatcht
+ * exec() über diese Handler-Tabelle (Alias → Handler), wie helm/docker (HELM_/DOCKER_SUBCOMMANDS).
+ * `clear` (früher Rücksprung mit Sonder-Rückgabe) und `help` (braucht die freigeschalteten
+ * Familien) bleiben Sonderfälle in exec()/_runCommand. Bei Stardew-Scope wächst der Befehlssatz –
+ * ein neuer Befehl ist EIN Tabelleneintrag, kein weiterer switch-Zweig. */
+const COMMAND_HANDLERS: Record<string, (sim: Sim, tokens: string[], raw: string) => string> = {
+  docker: (s, t, raw) => dockerCommand(s, t, raw),
+  kubectl: (s, t, raw) => kubectlCommand(s, t, raw),
+  kubeadm: (s, t) => kubeadmCommand(s, t),
+  helm: (s, t, raw) => helmCommand(s, t, raw),
+  terraform: (s, t, raw) => terraformCommand(s, t, raw),
+  git: (s, t, raw) => gitCommand(s, t, raw),
+  argocd: (s, t) => argocdCommand(s, t),
+  glab: (s, t) => glabCommand(s, t),
+  nslookup: (s, t) => nslookupCommand(s, t),
+  curl: (s, t) => curlCommand(s, t),
+  aws: (s, t, raw) => awsCommand(s, t, raw),
+  ls: (s) => s._ls(),
+  cat: (s, t) => s._cat(t),
+};
+/** Alle hier funktionierenden Befehle – für die „Meintest du …?"-Vorschläge bei Tippfehlern.
+ *  Die Handler-Tabelle plus die Sonderfälle `clear`/`help`. */
+const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
+
   class Sim implements ClusterState {
     // `!` = definite assignment: alle Felder werden in reset() gesetzt, das der
     // Konstruktor aufruft. TS sieht das nicht durch den Methodenaufruf hindurch.
@@ -161,91 +234,111 @@ function snapshotSimple(state: object): Pick<Required<Scenario>, SimpleResourceK
       this.reset();
     }
 
+    /** Baut den Cluster-Zustand vollständig aus dem Szenario neu auf (Konstruktor + Laden).
+     *  In Gruppen-Helfer geschnitten (#563), die reset() und mergeScenario() spiegeln –
+     *  reset ersetzt, merge mischt additiv ein. */
     reset() {
       const sc = this.scenario;
       this.clock = 0; // jede Eingabe = ~20s Spielzeit, für AGE-Spalten
       this.rev++;     // #523: neuer/geladener Stand → Präsentation muss voll neu synchronisieren
+      this._resetDocker(sc);
+      this._resetNodes(sc);
+      this._resetDeployments(sc);
+      // „Einfach additive" Ressourcen (services/ingresses/networkPolicies/serviceMonitors/
+      // prometheusRules/grafana*) über die Resource-Registry (#499) klonen – ein Durchlauf.
+      for (const k of SIMPLE_RESOURCE_KEYS) setSimpleList(this, k, cloneNamed(simpleList(sc, k)));
+      this._resetConfig(sc);
+      this._resetStorage(sc);
+      this._resetRbac(sc);
+      this.argoApps = (sc.argoApps || []).map(a => cloneArgoApp(a));
+      this._resetHelm(sc);
+      this._resetTf(sc);
+      this._resetGit(sc);
+      this._resetCi(sc);
+      this.lastDeletedPod = null;
+      this.lastError = false;
+      this._firingAlerts = new Set();
+      this._resolvedAlerts = new Set();
+      // Disk-Druck/Eviction einmal ableiten, damit ein frisch geladener Stand schon vor dem
+      // ersten Befehl stimmig ist (DiskPressure/Evicted, #240). exec() rechnet danach laufend nach.
+      this._evaluateEviction();
+    }
 
+    _resetDocker(sc: Scenario) {
       this.docker = {
         pulled: (sc.dockerImages || []).slice(),
         containers: (sc.dockerContainers || []).map(c => Object.assign({}, c)),
       };
+    }
 
+    _resetNodes(sc: Scenario) {
       // „bare metal" (#460): ein leerer/zerstörter Cluster startet OHNE Nodes – sonst der
       // klassische 3-Knoten-Default. Explizit vorgegebene `nodes` gewinnen in beiden Fällen.
-      this.nodes = (sc.nodes || (sc.bareMetal ? [] : [
-        { name: "ahoi-control", status: "Ready", roles: "control-plane", version: "v1.30.2" },
-        { name: "ahoi-worker-1", status: "Ready", roles: "<none>", version: "v1.30.2" },
-        { name: "ahoi-worker-2", status: "Ready", roles: "<none>", version: "v1.30.2" },
-      ])).map(n => Object.assign({}, n));
+      this.nodes = (sc.nodes || (sc.bareMetal ? [] : DEFAULT_NODES)).map(n => Object.assign({}, n));
       // Control-Plane-Bootstrap (#460): Lage aus Szenario/Snapshot ableiten (Helfer in sim/kubeadm).
       this.controlPlane = deriveControlPlane(sc, this.nodes);
+    }
 
+    _resetDeployments(sc: Scenario) {
       this.deployments = (sc.deployments || []).map(d => {
         const dep = this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy);
         if (d.containerPort !== undefined) dep.containerPort = d.containerPort; // #164
         this._seedEphemeral(dep, d); // node/emptyDir/ephemeral-storage (#240)
         return dep;
       });
-      // „Einfach additive" Ressourcen (services/ingresses/networkPolicies/serviceMonitors/
-      // prometheusRules/grafanaDatasources/grafanaDashboards) über die Resource-Registry (#499)
-      // klonen – ein Schleifendurchlauf statt sieben fast identischer Einzelzeilen.
-      for (const k of SIMPLE_RESOURCE_KEYS) setSimpleList(this, k, cloneNamed(simpleList(sc, k)));
+    }
+
+    _resetConfig(sc: Scenario) {
       this.secrets = (sc.secrets || []).map(s => Object.assign({}, s));
       this.configMaps = (sc.configMaps || []).map(c => Object.assign({}, c));
       this.files = Object.assign({}, sc.files || {});
       this.applyEffects = sc.applyEffects || {}; // dateiname -> Wirkung von kubectl apply -f
+    }
 
+    _resetStorage(sc: Scenario) {
       // Speicher (#122) – Reihenfolge zählt: StorageClass + PVs müssen stehen, bevor
-      // PVCs/StatefulSets binden. Ohne explizite Vorgabe gibt es – wie in kind/minikube –
-      // genau eine Default-StorageClass "standard", die PVCs dynamisch ein PV beschafft.
-      this.storageClasses = (sc.storageClasses || [
-        { name: "standard", provisioner: "rancher.io/local-path", reclaimPolicy: "Delete", isDefault: true },
-      ]).map(s => ({ name: s.name, provisioner: s.provisioner || "rancher.io/local-path", reclaimPolicy: s.reclaimPolicy || "Delete", isDefault: !!s.isDefault, created: 0 }));
-      this.pvs = (sc.pvs || []).map(p => ({ name: p.name, capacity: p.capacity || "1Gi", status: p.status || "Available", claim: p.claim || "", storageClass: p.storageClass || "", accessModes: p.accessModes || "RWO", reclaimPolicy: p.reclaimPolicy || "Retain", created: 0 }));
+      // PVCs/StatefulSets binden. Ohne Vorgabe genau eine Default-StorageClass "standard".
+      this.storageClasses = (sc.storageClasses || [DEFAULT_STORAGE_CLASS]).map(s => buildStorageClass(s, this.clock));
+      this.pvs = (sc.pvs || []).map(p => buildPv(p, this.clock));
       this.pvcs = [];
-      for (const p of sc.pvcs || []) {
-        let pvc: PvcRes;
-        if (p.status === "Bound" && p.volume) {
-          // schon gebunden (z.B. aus einem gespeicherten Stand) – nicht neu provisionieren
-          pvc = { name: p.name, status: "Bound", volume: p.volume, capacity: p.storage || p.capacity || "1Gi", storageClass: p.storageClass || "", accessModes: p.accessModes || "RWO", created: 0 };
-        } else {
-          pvc = this._makePvc(p.name, p.storage || p.capacity || "1Gi", p.storageClass, p.accessModes);
-        }
-        if (p.data !== undefined) pvc.data = p.data; // Volume-Inhalt mitgeben (Backup/Restore #140)
-        this.pvcs.push(pvc);
-      }
+      for (const p of sc.pvcs || []) this.pvcs.push(this._pvcFromSpec(p));
       this.statefulSets = (sc.statefulSets || []).map(s => this._makeStatefulSet(s));
       // Backup/Restore (#140): VolumeSnapshots sind eigenständige, persistierte Objekte.
-      this.volumeSnapshots = (sc.volumeSnapshots || []).map(v => ({
-        name: v.name, sourcePvc: v.sourcePvc, data: v.data || "",
-        restoreSize: v.restoreSize || "1Gi", readyToUse: v.readyToUse !== false, created: 0,
-      }));
-
-      // S3-/MinIO-Object-Store (#241): off-cluster Buckets + Objekte. `size` aus dem Inhalt
-      // ableiten, wenn nicht explizit vorgegeben (lockere Eingabe-Schreibweise).
+      this.volumeSnapshots = (sc.volumeSnapshots || []).map(v => buildVolumeSnapshot(v, this.clock));
+      // S3-/MinIO-Object-Store (#241): off-cluster Buckets + Objekte.
       this.objectStore = { buckets: (sc.s3Buckets || []).map(b => this._makeBucket(b)) };
+    }
 
+    /** Baut ein PVC aus einer (lockeren) Spec – geteilt von reset()/mergeScenario(): ein schon
+     *  gebundenes PVC (aus einem Stand) wird NICHT neu provisioniert, sonst über _makePvc. */
+    _pvcFromSpec(p: PvcSpec): PvcRes {
+      const pvc: PvcRes = (p.status === "Bound" && p.volume)
+        ? { name: p.name, status: "Bound", volume: p.volume, capacity: p.storage || p.capacity || "1Gi", storageClass: p.storageClass || "", accessModes: p.accessModes || "RWO", created: this.clock }
+        : this._makePvc(p.name, p.storage || p.capacity || "1Gi", p.storageClass, p.accessModes);
+      if (p.data !== undefined) pvc.data = p.data; // Volume-Inhalt mitgeben (Backup/Restore #140)
+      return pvc;
+    }
+
+    _resetRbac(sc: Scenario) {
       // RBAC / ServiceAccounts / Pod-Security (#126). Jeder Namespace hat von Haus
       // aus die "default"-SA; weitere kommen aus dem Szenario oder per `kubectl create`.
-      this.serviceAccounts = [{ name: "default", created: 0 }];
+      this.serviceAccounts = [{ name: "default", created: this.clock }];
       for (const name of sc.serviceAccounts || []) {
-        if (!this.serviceAccounts.some(s => s.name === name)) this.serviceAccounts.push({ name, created: 0 });
+        if (!this.serviceAccounts.some(s => s.name === name)) this.serviceAccounts.push({ name, created: this.clock });
       }
-      this.roles = (sc.roles || []).map(r => ({ name: r.name, cluster: !!r.cluster, rules: r.rules.map(rule => ({ verbs: rule.verbs.slice(), resources: rule.resources.slice() })), created: 0 }));
-      this.roleBindings = (sc.roleBindings || []).map(b => ({ name: b.name, cluster: !!b.cluster, roleRef: { kind: b.roleRef.kind, name: b.roleRef.name }, subjects: b.subjects.map(s => Object.assign({}, s)), created: 0 }));
+      this.roles = (sc.roles || []).map(r => buildRole(r, this.clock));
+      this.roleBindings = (sc.roleBindings || []).map(b => buildRoleBinding(b, this.clock));
       // Ohne Vorgabe ist die Admission "privileged" (keine Einschränkung) – wie ein frischer Cluster.
       this.podSecurity = sc.podSecurity || "privileged";
+    }
 
-      this.argoApps = (sc.argoApps || []).map(a => cloneArgoApp(a));
-
+    _resetHelm(sc: Scenario) {
       this.helmRepos = (sc.helmRepos || []).slice();
-      this.releases = (sc.releases || []).map(r => ({
-        name: r.name, chart: r.chart, revision: r.revision, depName: r.depName,
-        history: (r.history || []).map(h => Object.assign({}, h)),
-      }));
-      this.charts = (sc.charts || []).map(c => ({ name: c.name, version: c.version || "0.1.0", packaged: !!c.packaged }));
+      this.releases = (sc.releases || []).map(r => buildRelease(r));
+      this.charts = (sc.charts || []).map(c => buildChart(c));
+    }
 
+    _resetTf(sc: Scenario) {
       this.tf = {
         initialized: !!sc.tfInitialized,
         applied: !!sc.tfApplied,
@@ -259,7 +352,9 @@ function snapshotSimple(state: object): Pick<Required<Scenario>, SimpleResourceK
         locked: !!sc.tfLocked,
         lockHolder: sc.tfLockHolder,
       };
+    }
 
+    _resetGit(sc: Scenario) {
       this.git = {
         initialized: !!sc.gitInitialized,
         branch: sc.gitBranch || "main",
@@ -275,7 +370,9 @@ function snapshotSimple(state: object): Pick<Required<Scenario>, SimpleResourceK
         conflict: sc.gitActiveConflict ? Object.assign({}, sc.gitActiveConflict) : null,
         pendingConflict: sc.gitConflict ? Object.assign({}, sc.gitConflict) : null,
       };
+    }
 
+    _resetCi(sc: Scenario) {
       this.ci = {
         pipelines: (sc.ciPipelines || []).map(p => ({
           id: p.id, ref: p.ref, status: p.status, created: p.created,
@@ -283,14 +380,6 @@ function snapshotSimple(state: object): Pick<Required<Scenario>, SimpleResourceK
         })),
         deploy: sc.ciDeploy ? Object.assign({}, sc.ciDeploy) : null, // {name, image, replicas}, den die deploy-Stage ausrollt
       };
-
-      this.lastDeletedPod = null;
-      this.lastError = false;
-      this._firingAlerts = new Set();
-      this._resolvedAlerts = new Set();
-      // Disk-Druck/Eviction einmal ableiten, damit ein frisch geladener Stand schon vor dem
-      // ersten Befehl stimmig ist (DiskPressure/Evicted, #240). exec() rechnet danach laufend nach.
-      this._evaluateEviction();
     }
 
     /** Ephemeral-Storage-Felder eines Deployments aus einer (lockeren) Eingabe-Spec setzen (#240):
@@ -502,12 +591,29 @@ function snapshotSimple(state: object): Pick<Required<Scenario>, SimpleResourceK
       return this.deployments.find(d => d.pods.some(p => p.name === podName));
     }
 
-    /** Quest-Szenario in die laufende Welt mischen (Dateien, Aufträge, Beispiel-Pods …). */
+    /** Quest-Szenario in die laufende Welt mischen (Dateien, Aufträge, Beispiel-Pods …).
+     *  Additiv, per `.name` dedupliziert – in Gruppen-Helfer geschnitten (#563), die die
+     *  reset()-Gruppen spiegeln. */
     mergeScenario(sc: Scenario | null | undefined) {
       if (!sc) return;
       Object.assign(this.files, sc.files || {});
       Object.assign(this.applyEffects, sc.applyEffects || {});
       applyBootstrapScenario(this, sc); // Aufbau-Bogen (#461): Sturm/bare-metal + Control-Plane-Lage
+      this._mergeNodes(sc);
+      // „Einfach additive" Ressourcen (services/ingresses/networkPolicies/serviceMonitors/
+      // prometheusRules/grafana*) additiv über die Resource-Registry (#499) einmischen.
+      for (const k of SIMPLE_RESOURCE_KEYS) mergeByName(simpleList(this, k), simpleList(sc, k));
+      this._mergeVolumes(sc);
+      this._mergeStatefulAndBackups(sc);
+      this._mergeRbac(sc);
+      this._mergeArgo(sc);
+      this._mergeTf(sc);
+      this._mergeDeployments(sc);
+      this._mergeHelm(sc);
+      this._mergeGit(sc);
+    }
+
+    _mergeNodes(sc: Scenario) {
       // Nodes additiv einmischen (#242): existiert der Node schon (per Name), seine Felder
       // mergen – so kann ein Quest-Szenario die Disk-Kapazität eines vorhandenen Workers
       // schrumpfen, um DiskPressure/Eviction (#240) lehrbar zu machen; ein unbekannter Name
@@ -517,49 +623,55 @@ function snapshotSimple(state: object): Pick<Required<Scenario>, SimpleResourceK
         if (existing) Object.assign(existing, n);
         else this.nodes.push(Object.assign({}, n));
       }
-      // „Einfach additive" Ressourcen (services/ingresses/networkPolicies/serviceMonitors/
-      // prometheusRules/grafana*) additiv über die Resource-Registry (#499) einmischen – ein
-      // Durchlauf statt sieben separater, per Name deduplizierender Blöcke.
-      for (const k of SIMPLE_RESOURCE_KEYS) mergeByName(simpleList(this, k), simpleList(sc, k));
-      // Speicher (#122) – Reihenfolge wie in reset(): StorageClass + PVs vor PVCs/StatefulSets.
+    }
+
+    _mergeVolumes(sc: Scenario) {
+      // Speicher (#122) – Reihenfolge wie in reset(): StorageClass + PVs vor PVCs.
       for (const s of sc.storageClasses || []) {
-        if (!this.storageClasses.some(x => x.name === s.name)) this.storageClasses.push({ name: s.name, provisioner: s.provisioner || "rancher.io/local-path", reclaimPolicy: s.reclaimPolicy || "Delete", isDefault: !!s.isDefault, created: this.clock });
+        if (!this.storageClasses.some(x => x.name === s.name)) this.storageClasses.push(buildStorageClass(s, this.clock));
       }
       for (const p of sc.pvs || []) {
-        if (!this.pvs.some(x => x.name === p.name)) this.pvs.push({ name: p.name, capacity: p.capacity || "1Gi", status: p.status || "Available", claim: p.claim || "", storageClass: p.storageClass || "", accessModes: p.accessModes || "RWO", reclaimPolicy: p.reclaimPolicy || "Retain", created: this.clock });
+        if (!this.pvs.some(x => x.name === p.name)) this.pvs.push(buildPv(p, this.clock));
       }
       for (const p of sc.pvcs || []) {
-        if (this.pvcs.some(x => x.name === p.name)) continue;
-        const pvc = (p.status === "Bound" && p.volume)
-          ? { name: p.name, status: "Bound" as const, volume: p.volume, capacity: p.storage || p.capacity || "1Gi", storageClass: p.storageClass || "", accessModes: p.accessModes || "RWO", created: this.clock }
-          : this._makePvc(p.name, p.storage || p.capacity || "1Gi", p.storageClass, p.accessModes);
-        if (p.data !== undefined) pvc.data = p.data; // Volume-Inhalt mitgeben (Backup/Restore #140)
-        this.pvcs.push(pvc);
+        if (!this.pvcs.some(x => x.name === p.name)) this.pvcs.push(this._pvcFromSpec(p));
       }
+    }
+
+    _mergeStatefulAndBackups(sc: Scenario) {
       for (const s of sc.statefulSets || []) {
         if (!this.statefulSets.some(x => x.name === s.name)) this.statefulSets.push(this._makeStatefulSet(s));
       }
       for (const v of sc.volumeSnapshots || []) { // Backup/Restore (#140)
-        if (!this.volumeSnapshots.some(x => x.name === v.name)) this.volumeSnapshots.push({ name: v.name, sourcePvc: v.sourcePvc, data: v.data || "", restoreSize: v.restoreSize || "1Gi", readyToUse: v.readyToUse !== false, created: this.clock });
+        if (!this.volumeSnapshots.some(x => x.name === v.name)) this.volumeSnapshots.push(buildVolumeSnapshot(v, this.clock));
       }
       for (const b of sc.s3Buckets || []) { // Object Store (#241) – additiv, ohne Doppler.
         if (!this.objectStore.buckets.some(x => x.name === b.name)) this.objectStore.buckets.push(this._makeBucket(b));
       }
+    }
+
+    _mergeRbac(sc: Scenario) {
       // RBAC / ServiceAccounts / Pod-Security (#126) – additiv, ohne Doppler.
       for (const name of sc.serviceAccounts || []) {
         if (!this.serviceAccounts.some(x => x.name === name)) this.serviceAccounts.push({ name, created: this.clock });
       }
       for (const r of sc.roles || []) {
-        if (!this.roles.some(x => x.name === r.name && x.cluster === !!r.cluster)) this.roles.push({ name: r.name, cluster: !!r.cluster, rules: r.rules.map(rule => ({ verbs: rule.verbs.slice(), resources: rule.resources.slice() })), created: this.clock });
+        if (!this.roles.some(x => x.name === r.name && x.cluster === !!r.cluster)) this.roles.push(buildRole(r, this.clock));
       }
       for (const b of sc.roleBindings || []) {
-        if (!this.roleBindings.some(x => x.name === b.name && x.cluster === !!b.cluster)) this.roleBindings.push({ name: b.name, cluster: !!b.cluster, roleRef: { kind: b.roleRef.kind, name: b.roleRef.name }, subjects: b.subjects.map(s => Object.assign({}, s)), created: this.clock });
+        if (!this.roleBindings.some(x => x.name === b.name && x.cluster === !!b.cluster)) this.roleBindings.push(buildRoleBinding(b, this.clock));
       }
       // Höhere enforce-Stufe gewinnt nicht automatisch – eine explizit gesetzte Stufe übernehmen.
       if (sc.podSecurity) this.podSecurity = sc.podSecurity;
+    }
+
+    _mergeArgo(sc: Scenario) {
       for (const a of sc.argoApps || []) {
         if (!this.argoApps.some(x => x.name === a.name)) this.argoApps.push(cloneArgoApp(a));
       }
+    }
+
+    _mergeTf(sc: Scenario) {
       if (sc.tfResources) { this.tf.resources = sc.tfResources.map(r => ({ addr: r.addr, desc: r.desc, provider: r.provider })); this.tf.initialized = false; this.tf.applied = false; }
       // Neue Provider/Module/Backend-Config setzt den Init-Stand zurück (wie echtes `terraform`,
       // das nach Config-Änderung ein erneutes `init` verlangt, #146).
@@ -568,6 +680,9 @@ function snapshotSimple(state: object): Pick<Required<Scenario>, SimpleResourceK
       if (sc.tfBackend !== undefined) { this.tf.backend = sc.tfBackend ? { type: sc.tfBackend.type, name: sc.tfBackend.name, locking: !!sc.tfBackend.locking } : null; this.tf.initialized = false; }
       if (sc.tfOutputs) { this.tf.outputs = sc.tfOutputs.map(o => ({ name: o.name, value: o.value, sensitive: !!o.sensitive })); }
       if (sc.tfLocked !== undefined) { this.tf.locked = !!sc.tfLocked; this.tf.lockHolder = sc.tfLockHolder; }
+    }
+
+    _mergeDeployments(sc: Scenario) {
       for (const img of sc.dockerImages || []) {
         if (!this.docker.pulled.includes(img)) this.docker.pulled.push(img);
       }
@@ -582,14 +697,20 @@ function snapshotSimple(state: object): Pick<Required<Scenario>, SimpleResourceK
       for (const cm of sc.configMaps || []) {
         if (!this.configMaps.some(x => x.name === cm.name)) this.configMaps.push(Object.assign({}, cm));
       }
+    }
+
+    _mergeHelm(sc: Scenario) {
       for (const repo of sc.helmRepos || []) {
         if (!this.helmRepos.includes(repo)) this.helmRepos.push(repo);
       }
       for (const c of sc.charts || []) {
-        if (!this.charts.some(x => x.name === c.name)) this.charts.push({ name: c.name, version: c.version || "0.1.0", packaged: !!c.packaged });
+        if (!this.charts.some(x => x.name === c.name)) this.charts.push(buildChart(c));
       }
-      // (services/ingresses/networkPolicies laufen jetzt oben über die Resource-Registry #499.)
+      // (services/ingresses/networkPolicies laufen über die Resource-Registry #499.)
       if (sc.ciDeploy) this.ci.deploy = Object.assign({}, sc.ciDeploy);
+    }
+
+    _mergeGit(sc: Scenario) {
       // Kollaborations-Setup (origin voraus + scharf gestellter Konflikt) als EINHEIT
       // einmischen. game.ts re-merged beim Laden alle erreichten Szenarien – ein nacktes
       // `remoteAhead = N` würde dabei nach jedem Pull wieder auf N hochschnellen. Deshalb
@@ -698,6 +819,30 @@ function snapshotSimple(state: object): Pick<Required<Scenario>, SimpleResourceK
       this.clock++;
       this.rev++;   // #523: jede Befehls-Transaktion = potenzieller Zustandswechsel (auch
                     // Lesebefehle – harmlos, löst nur EINEN günstigen Resync aus statt pro Frame).
+      this._preStep();
+      this.lastError = false;
+      const raw = line.trim();
+      if (!raw) return { output: "", error: false };
+
+      const tokens = raw.split(/\s+/);
+      const cmd = tokens[0];
+      if (cmd === "clear") return { output: null, error: false, clear: true };
+
+      let out: string;
+      try {
+        out = this._runCommand(cmd, tokens, raw, available);
+        // #478: Aggregat-Grenze – nach jeder Befehls-Transaktion prüfen, dass der Cluster
+        // legal bleibt; eine Verletzung fällt in den catch unten (wird zur Fehlermeldung),
+        // statt still einen illegalen Zustand zu hinterlassen (Dev/Test, siehe invariantChecks).
+        if (this.invariantChecks) assertClusterInvariants(this);
+      } catch (e) {
+        out = this._handleExecError(e);
+      }
+      return { output: out, error: this.lastError };
+    }
+
+    /** Vorlauf vor jeder Eingabe: fortlaufende Selbstheilung/Auswertung gegen den Zustand. */
+    _preStep() {
       // Argo CD reconciliert vor jeder Eingabe: Self-Heal-Apps drehen zwischenzeitlichen
       // Drift (z.B. ein `kubectl scale` aus dem letzten Befehl) von selbst auf den Git-Soll zurück.
       reconcileAutoSync(this);
@@ -710,53 +855,30 @@ function snapshotSimple(state: object): Pick<Required<Scenario>, SimpleResourceK
       // Disk-Druck/Eviction gegen den aktuellen Zustand ableiten (#240): DiskPressure je Node,
       // Evicted je Pod (Limit gesprengt oder Node-Disk voll). Rein deterministisch, kein Zufall.
       this._evaluateEviction();
-      this.lastError = false;
-      const raw = line.trim();
-      if (!raw) return { output: "", error: false };
+    }
 
-      const tokens = raw.split(/\s+/);
-      const cmd = tokens[0];
+    /** Dispatch einer erkannten Befehlszeile über die Handler-Tabelle (#563); `help` braucht
+     *  die freigeschalteten Familien, Unbekanntes bekommt eine Meintest-du-Meldung. */
+    _runCommand(cmd: string, tokens: string[], raw: string, available?: Set<string>): string {
+      const handler = COMMAND_HANDLERS[cmd];
+      if (handler) return handler(this, tokens, raw);
+      if (cmd === "help") return this._help(available);
+      return this._unknownCommand(cmd);
+    }
 
-      let out: string;
-      try {
-        switch (cmd) {
-          case "docker": out = dockerCommand(this, tokens, raw); break;
-          case "kubectl": out = kubectlCommand(this, tokens, raw); break;
-          case "kubeadm": out = kubeadmCommand(this, tokens); break;
-          case "helm": out = helmCommand(this, tokens, raw); break;
-          case "terraform": out = terraformCommand(this, tokens, raw); break;
-          case "git": out = gitCommand(this, tokens, raw); break;
-          case "argocd": out = argocdCommand(this, tokens); break;
-          case "glab": out = glabCommand(this, tokens); break;
-          case "nslookup": out = nslookupCommand(this, tokens); break;
-          case "curl": out = curlCommand(this, tokens); break;
-          case "aws": out = awsCommand(this, tokens, raw); break;
-          case "ls": out = this._ls(); break;
-          case "cat": out = this._cat(tokens); break;
-          case "clear": return { output: null, error: false, clear: true };
-          case "help": out = this._help(available); break;
-          default: {
-            const guess = suggest(cmd, ["docker", "kubectl", "kubeadm", "helm", "terraform", "git", "argocd", "glab", "nslookup", "curl", "aws", "ls", "cat", "clear", "help"]);
-            out = this._err("⚠️ Den Befehl '" + cmd + "' gibt es hier nicht.",
-              guess ? "Meintest du '" + guess + "'? (Tippe 'help' für alle Befehle.)"
-                    : "Tippe 'help' für eine Liste der Befehle, die hier funktionieren.");
-          }
-        }
-        // #478: Aggregat-Grenze – nach jeder Befehls-Transaktion prüfen, dass der Cluster
-        // legal bleibt; eine Verletzung fällt in den catch unten (wird zur Fehlermeldung),
-        // statt still einen illegalen Zustand zu hinterlassen (Dev/Test, siehe invariantChecks).
-        if (this.invariantChecks) assertClusterInvariants(this);
-      } catch (e) {
-        // #507: ein ungültiger Ressourcenname (aus einer _make*-Fabrik) ist eine abgelehnte
-        // Nutzereingabe, kein interner Fehler → als richtige kubectl-Meldung ausgeben.
-        if (e instanceof InvalidResourceNameError) {
-          out = this._err(rfc1123ErrorText(e.raw), RFC1123_TIP);
-        } else {
-          this.lastError = true;
-          out = "Hoppla, da ist im Simulator etwas schiefgegangen: " + (e instanceof Error ? e.message : String(e));
-        }
-      }
-      return { output: out, error: this.lastError };
+    _unknownCommand(cmd: string): string {
+      const guess = suggest(cmd, KNOWN_COMMANDS);
+      return this._err("⚠️ Den Befehl '" + cmd + "' gibt es hier nicht.",
+        guess ? "Meintest du '" + guess + "'? (Tippe 'help' für alle Befehle.)"
+              : "Tippe 'help' für eine Liste der Befehle, die hier funktionieren.");
+    }
+
+    _handleExecError(e: unknown): string {
+      // #507: ein ungültiger Ressourcenname (aus einer _make*-Fabrik) ist eine abgelehnte
+      // Nutzereingabe, kein interner Fehler → als richtige kubectl-Meldung ausgeben.
+      if (e instanceof InvalidResourceNameError) return this._err(rfc1123ErrorText(e.raw), RFC1123_TIP);
+      this.lastError = true;
+      return "Hoppla, da ist im Simulator etwas schiefgegangen: " + (e instanceof Error ? e.message : String(e));
     }
 
     _err(msg: string, tip?: string) {
