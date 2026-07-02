@@ -1,22 +1,2 @@
 {
-  "src/devpanel.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/world/regions/archipel.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
-  "src/world/regions/lighthouse.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
-  "src/world/regions/warehouse.ts": {
-    "complexity": {
-      "count": 1
-    }
-  }
 }

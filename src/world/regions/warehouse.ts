@@ -15,7 +15,8 @@
  * von dort wiederverwendet statt ein drittes Mal definiert (wie in lighthouse.ts).
  */
 import { warpAt, type Warp } from "./archipel";
-import { npcSpawnForMap, objectForId, objectsForMap, objectFootprint, type Spawn } from "../../content/entities";
+import { npcSpawnForMap, objectForId, objectsForMap, objectFootprint, type EntityObject, type Spawn } from "../../content/entities";
+import { fillTerrain, markRegistrySolids } from "./geometry";
 
 export { warpAt, type Warp };
 
@@ -88,12 +89,6 @@ function landLevel(x: number, y: number): 0 | 1 | 2 {
   return 0;                                                               // Meer
 }
 
-/** Deterministischer Gras-Frame-Index (0/1/2) wie auf der Hauptkarte. */
-function grassFrame(x: number, y: number): number {
-  const h = (((x * 73856093) ^ (y * 19349663)) >>> 0) % 100;
-  return h < 80 ? 0 : h < 93 ? 1 : 2;
-}
-
 export interface WarehouseMap {
   W: number;
   H: number;
@@ -103,52 +98,38 @@ export interface WarehouseMap {
   goods: { x: number; y: number; kind: "crate" | "barrel" }[];
 }
 
-/** Baut das komplette Kai-Raster: Boden (Meer/Stein-Kai/Gras), Steg, Pfad, Kollision
- *  und die gestreuten Lager-Güter. Pur und deterministisch – in test/warehouse.test.ts
- *  direkt geprüft (u.a. dass NPC-Standplatz & Quest-Trigger vom Anleger aus erreichbar sind). */
-export function buildWarehouse(): WarehouseMap {
-  const W = WW, H = WH;
-  const ground = new Array<number>(W * H).fill(WATER);
-  const solid = new Uint8Array(W * H);
-
-  // Grundterrain aus der Kai-Form
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const lvl = landLevel(x, y);
-      const i = y * W + x;
-      if (lvl === 0) { ground[i] = WATER; solid[i] = 1; }            // Meer blockt
-      else if (lvl === 1) ground[i] = STONE_CODES[(x * 3 + y) % 3];  // Stein-Kai-Wand begehbar
-      else ground[i] = grassFrame(x, y);                             // Quay-Fläche begehbar
-    }
-  }
-
-  // Holz-Steg im Süden (Spalten CX-1, CX): von der Kaikante (Reihe QY1+1 = Stein)
-  // als begehbare Planken über dem Wasser hinunter bis eine Reihe vor den Kartenrand.
+/** Holz-Steg im Süden (Spalten CX-1/CX): von der Kaikante (Reihe QY1+1 = Stein) als
+ *  begehbare Planken über dem Wasser hinunter bis eine Reihe vor den Kartenrand, plus
+ *  den Pfad vom Steg/der Kaikante hoch zur Kontor-Mitte (Spalte CX). */
+function carveJettyAndPath(W: number, H: number, ground: number[], solid: Uint8Array): void {
   for (let y = QY1 + 2; y <= H - 2; y++) {
     for (const x of [CX - 1, CX]) { const i = y * W + x; ground[i] = DOCK; solid[i] = 0; }
   }
-
-  // Pfad: vom Steg/der Kaikante hoch zur Kontor-Mitte (Spalte CX).
   for (let y = CY; y <= QY1 + 1; y++) { const i = y * W + CX; ground[i] = PATH; solid[i] = 0; }
+}
 
-  // Reserviert begehbar halten: Ankunft, Rück-Warp + die durchgehende Kontor-Plaza-Reihe
-  // (y = CY von NPC-Standplatz bis Quest-Trigger). So ist der NPC garantiert vom Pfad/
-  // Anleger aus erreichbar – kein Gut/Container darf den Weg zumauern.
+/** Reserviert begehbar halten: Ankunft, Rück-Warp + die durchgehende Kontor-Plaza-Reihe
+ *  (y = CY von NPC-Standplatz bis Quest-Trigger). So ist der NPC garantiert vom Pfad/
+ *  Anleger aus erreichbar – kein Gut/Container darf den Weg zumauern. */
+function reservedWalkable(W: number): Set<number> {
   const reserved = new Set<number>([
     WAREHOUSE_ARRIVAL.ty * W + WAREHOUSE_ARRIVAL.tx,
     WAREHOUSE_TO_WORLD.ty * W + WAREHOUSE_TO_WORLD.tx,
   ]);
   for (let x = WAREHOUSE_NPC.x; x <= WAREHOUSE_QUEST_TRIGGER.x; x++) reserved.add(CY * W + x);
-  for (const idx of reserved) solid[idx] = 0;
+  return reserved;
+}
 
-  // Solide Objekte (Kräne + Container) aus der Registry (#357) als Kachel-Solid markieren –
-  // deckungsgleich zu den Sprite-Standplätzen. Ein zusätzlicher Kran/Container ist nur ein
-  // JSON-Eintrag (entities.json), kein Geometrie-Edit.
-  const solidObjects = objectsForMap("warehouse").filter((o) => o.type !== "quest_trigger");
-  for (const o of solidObjects) for (const t of objectFootprint(o)) solid[t.y * W + t.x] = 1;
-
-  // Lager-Güter (Kisten/Fässer) deterministisch auf der Quay-Fläche streuen – nie auf
-  // Pfad/Steg/Reserviert und nie auf eine solide Objekt-Kachel (Kran/Container).
+/** Lager-Güter (Kisten/Fässer) deterministisch auf der Quay-Fläche streuen – nie auf
+ *  Pfad/Steg/Reserviert und nie auf eine solide Objekt-Kachel (Kran/Container). Setzt
+ *  die getroffenen Kacheln solide und liefert die Positionen. */
+function scatterGoods(
+  W: number,
+  ground: number[],
+  solid: Uint8Array,
+  reserved: Set<number>,
+  solidObjects: EntityObject[],
+): { x: number; y: number; kind: "crate" | "barrel" }[] {
   const blocked = new Set<number>(reserved);
   for (const o of solidObjects) for (const t of objectFootprint(o)) blocked.add(t.y * W + t.x);
   const goods: { x: number; y: number; kind: "crate" | "barrel" }[] = [];
@@ -163,6 +144,28 @@ export function buildWarehouse(): WarehouseMap {
       else if (h === 1) { goods.push({ x, y, kind: "barrel" }); solid[i] = 1; }
     }
   }
+  return goods;
+}
 
+/** Baut das komplette Kai-Raster: Boden (Meer/Stein-Kai/Gras), Steg, Pfad, Kollision
+ *  und die gestreuten Lager-Güter. Pur und deterministisch – in test/warehouse.test.ts
+ *  direkt geprüft (u.a. dass NPC-Standplatz & Quest-Trigger vom Anleger aus erreichbar sind). */
+export function buildWarehouse(): WarehouseMap {
+  const W = WW, H = WH;
+  const ground = new Array<number>(W * H).fill(WATER);
+  const solid = new Uint8Array(W * H);
+
+  fillTerrain(W, H, ground, solid, landLevel, (x, y) => STONE_CODES[(x * 3 + y) % 3]);
+  carveJettyAndPath(W, H, ground, solid);
+
+  const reserved = reservedWalkable(W);
+  for (const idx of reserved) solid[idx] = 0;
+
+  // Solide Objekte (Kräne + Container) aus der Registry (#357) als Kachel-Solid markieren –
+  // deckungsgleich zu den Sprite-Standplätzen. Ein zusätzlicher Kran/Container ist nur ein
+  // JSON-Eintrag (entities.json), kein Geometrie-Edit.
+  const solidObjects = markRegistrySolids("warehouse", W, solid);
+
+  const goods = scatterGoods(W, ground, solid, reserved, solidObjects);
   return { W, H, ground, solid, goods };
 }

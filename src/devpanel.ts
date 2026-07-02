@@ -156,25 +156,9 @@ function esc(s: unknown): string {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/**
- * Hängt das Dev-Panel in die laufende Seite ein: baut das Overlay dynamisch
- * (kein Markup in index.html → auch dort keine Spur im Prod-Build), verdrahtet
- * Öffnen-Keybind (F9, mit Passwortabfrage), Maus-Klicks und Tastatur-Navigation
- * und stellt `window.kqDev.panel()` zum Öffnen aus der Konsole bereit.
- *
- * Wird ausschließlich aus dem `import.meta.env.DEV`-Block in main.ts dynamisch
- * importiert – im Prod-/Offline-Build existiert dieser Aufruf nicht.
- */
-export function mountDevPanel(): void {
-  // Laufzeit-Injektion (#334, Docker) vor Build-Zeit-Wert (#331); siehe
-  // resolveDevPanelPassword. So gilt EIN Image, viele Passwörter, ohne Rebuild –
-  // mit dem eingebackenen Wert als Fallback.
-  const expected = resolveDevPanelPassword(
-    readRuntimeDevPanelPassword(),
-    import.meta.env.VITE_KQ_DEVPANEL_PW,
-  );
-
-  // Eigene, minimale Styles (bleiben im Dev-Chunk – kein Dev-CSS im Prod-Stylesheet).
+/** Injiziert die minimalen Dev-Panel-Styles (bleiben im Dev-Chunk – kein Dev-CSS
+ *  im Prod-Stylesheet). */
+function injectDevPanelStyles(): void {
   const style = document.createElement("style");
   style.textContent = `
     #overlay-devpanel .devpanel-list { display:flex; flex-direction:column; gap:4px; margin:8px 0; }
@@ -183,8 +167,11 @@ export function mountDevPanel(): void {
     #overlay-devpanel .devpanel-row.sel { background:rgba(240,192,32,.25); }
     #overlay-devpanel .devpanel-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }`;
   document.head.appendChild(style);
+}
 
-  // Overlay-Grundgerüst (nutzt die generischen Panel-Klassen aus style.css).
+/** Baut das Overlay-Grundgerüst (generische Panel-Klassen aus style.css), hängt es
+ *  an <body> und liefert Overlay + den Body-Container zum Füllen. */
+function buildDevPanelOverlay(): { overlay: HTMLElement; body: HTMLElement } {
   const overlay = document.createElement("div");
   overlay.id = "overlay-devpanel";
   overlay.className = "panel hidden";
@@ -194,64 +181,60 @@ export function mountDevPanel(): void {
     '<div class="panel-body"><div id="devpanel-body"></div></div>';
   document.body.appendChild(overlay);
   const body = overlay.querySelector("#devpanel-body") as HTMLElement;
+  return { overlay, body };
+}
 
-  let open = false;
-  let unlocked = false; // einmal korrektes Passwort = für diese Sitzung frei (kein Nerven)
-
-  function render(): void {
-    const rows = roadmapToRows(Game.getQuestRoadmap(), Game.questIdx());
-    let html =
-      '<p class="dim">Springe an den <b>Anfang einer Quest</b> (Stand + Cluster + Spawn werden gesetzt). ' +
-      "↑/↓ wählen, Enter springt – oder klicken.</p>" +
-      '<div class="devpanel-list">';
-    for (const r of rows) {
-      const mark = r.completed ? "✅" : r.current ? "▶️" : "▫️";
-      html +=
-        `<button class="devpanel-row${r.current ? " current" : ""}" data-dev="jump" data-idx="${r.idx}">` +
-        `${mark} ${esc(r.label)}</button>`;
-    }
-    // Endzustand (alles durch): jumpToQuest akzeptiert idx === Anzahl Quests.
+/** Rendert die Quest-Roadmap (Sprungziele + Neustart/Zurücksetzen-Aktionen) als
+ *  Markup in den Panel-Body. */
+function renderRoadmapInto(body: HTMLElement): void {
+  const rows = roadmapToRows(Game.getQuestRoadmap(), Game.questIdx());
+  let html =
+    '<p class="dim">Springe an den <b>Anfang einer Quest</b> (Stand + Cluster + Spawn werden gesetzt). ' +
+    "↑/↓ wählen, Enter springt – oder klicken.</p>" +
+    '<div class="devpanel-list">';
+  for (const r of rows) {
+    const mark = r.completed ? "✅" : r.current ? "▶️" : "▫️";
     html +=
-      `<button class="devpanel-row" data-dev="jump" data-idx="${rows.length}">🏁 ${rows.length} · Endzustand (alles durch)</button>` +
-      "</div>" +
-      '<div class="devpanel-actions">' +
-      '<button data-dev="fresh">🌱 Neustart (echter Erststart)</button>' +
-      '<button class="danger" data-dev="reset">♻️ Zurücksetzen</button>' +
-      "</div>" +
-      '<div class="dim" style="margin-top:8px">„Neustart“ löscht den Save und lädt wie ein frischer Erststart (mit Intro). ' +
-      "„Zurücksetzen“ geht über den bestehenden Reset-Pfad – genau der Unterschied aus #295/#296.</div>";
-    body.innerHTML = html;
+      `<button class="devpanel-row${r.current ? " current" : ""}" data-dev="jump" data-idx="${r.idx}">` +
+      `${mark} ${esc(r.label)}</button>`;
   }
+  // Endzustand (alles durch): jumpToQuest akzeptiert idx === Anzahl Quests.
+  html +=
+    `<button class="devpanel-row" data-dev="jump" data-idx="${rows.length}">🏁 ${rows.length} · Endzustand (alles durch)</button>` +
+    "</div>" +
+    '<div class="devpanel-actions">' +
+    '<button data-dev="fresh">🌱 Neustart (echter Erststart)</button>' +
+    '<button class="danger" data-dev="reset">♻️ Zurücksetzen</button>' +
+    "</div>" +
+    '<div class="dim" style="margin-top:8px">„Neustart“ löscht den Save und lädt wie ein frischer Erststart (mit Intro). ' +
+    "„Zurücksetzen“ geht über den bestehenden Reset-Pfad – genau der Unterschied aus #295/#296.</div>";
+  body.innerHTML = html;
+}
 
-  function show(): void {
-    if (open) return;
-    if (!unlocked) {
-      if (!isDevPanelConfigured(expected)) {
-        window.alert(
-          "🛠️ Dev-Panel gesperrt: kein Passwort gesetzt.\n\nLege eine gitignored .env mit VITE_KQ_DEVPANEL_PW=<deinWert> an (siehe .env.example) und starte den Dev-Server neu.",
-        );
-        return;
-      }
-      const input = window.prompt("🛠️ Dev-Panel – Passwort:");
-      if (input === null) return; // abgebrochen
-      if (!checkDevPanelPassword(input, expected)) {
-        window.alert("Falsches Passwort.");
-        return;
-      }
-      unlocked = true;
-    }
-    render();
-    overlay.classList.remove("hidden");
-    open = true;
+/**
+ * Weiche Passwort-Sperre gegen versehentliches Reinrutschen (KEIN Krypto, #325):
+ * ist kein Passwort konfiguriert, bleibt das Panel gesperrt (mit klarem Hinweis);
+ * sonst wird einmal abgefragt. Liefert `true`, wenn der Einstieg jetzt frei ist.
+ */
+function tryUnlockDevPanel(expected: string | undefined): boolean {
+  if (!isDevPanelConfigured(expected)) {
+    window.alert(
+      "🛠️ Dev-Panel gesperrt: kein Passwort gesetzt.\n\nLege eine gitignored .env mit VITE_KQ_DEVPANEL_PW=<deinWert> an (siehe .env.example) und starte den Dev-Server neu.",
+    );
+    return false;
   }
-
-  function hide(): void {
-    overlay.classList.add("hidden");
-    open = false;
+  const input = window.prompt("🛠️ Dev-Panel – Passwort:");
+  if (input === null) return false; // abgebrochen
+  if (!checkDevPanelPassword(input, expected)) {
+    window.alert("Falsches Passwort.");
+    return false;
   }
+  return true;
+}
 
-  // Maus: ein delegierter Listener am Overlay (eigenes data-dev, getrennt von der
-  // data-action-Delegation in ui.ts – kein Eingriff dort nötig).
+/** Maus: ein delegierter Klick-Listener am Overlay (eigenes data-dev, getrennt von
+ *  der data-action-Delegation in ui.ts – kein Eingriff dort nötig). */
+function bindDevPanelMouse(overlay: HTMLElement, hide: () => void): void {
   overlay.addEventListener("click", ev => {
     const el = (ev.target as HTMLElement).closest("[data-dev]") as HTMLElement | null;
     if (!el) return;
@@ -273,20 +256,31 @@ export function mountDevPanel(): void {
       location.reload();
     }
   });
+}
 
-  // Tastatur in der Capture-Phase: solange das Panel offen ist, gehören die Tasten
-  // uns (sonst liefe die Spielfigur hinter dem Modal weiter, weil der globale
-  // Handler in main.ts das Panel nicht kennt). F9 öffnet/schließt; ↑/↓ + Enter
-  // navigieren über `resolveOverlayKey` (overlaykbd.ts); alles andere wird
-  // geschluckt, damit nichts ins Spiel durchsickert.
+/** Panel-Steuerung, die der Tastatur-Handler von aussen braucht. */
+interface DevPanelControls {
+  isOpen: () => boolean;
+  show: () => void;
+  hide: () => void;
+}
+
+/**
+ * Tastatur in der Capture-Phase: solange das Panel offen ist, gehören die Tasten
+ * uns (sonst liefe die Spielfigur hinter dem Modal weiter, weil der globale Handler
+ * in main.ts das Panel nicht kennt). F9 öffnet/schließt; ↑/↓ + Enter navigieren über
+ * `resolveOverlayKey` (overlaykbd.ts); alles andere wird geschluckt, damit nichts ins
+ * Spiel durchsickert.
+ */
+function bindDevPanelKeyboard(overlay: HTMLElement, ctrl: DevPanelControls): void {
   window.addEventListener(
     "keydown",
     ev => {
       const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
-      if (!open) {
+      if (!ctrl.isOpen()) {
         if (k === "F9") {
           ev.preventDefault();
-          show();
+          ctrl.show();
         }
         return; // Panel zu: alle anderen Tasten gehören dem Spiel
       }
@@ -294,7 +288,7 @@ export function mountDevPanel(): void {
       ev.preventDefault();
       ev.stopImmediatePropagation();
       if (k === "Escape" || k === "F9") {
-        hide();
+        ctrl.hide();
         return;
       }
       const btns = Array.from(overlay.querySelectorAll("button")) as HTMLButtonElement[];
@@ -315,16 +309,63 @@ export function mountDevPanel(): void {
     },
     true, // capture
   );
+}
 
-  // Konsolen-Affordance: aus der DevTools heraus ohne Passwort öffnen (wer die
-  // Konsole hat, hat ohnehin vollen Zugriff – das Passwort gated nur den Tasten-
-  // Einstieg gegen versehentliches Reinrutschen).
+/** Konsolen-Affordance: aus der DevTools heraus ohne Passwort öffnen (wer die
+ *  Konsole hat, hat ohnehin vollen Zugriff – das Passwort gated nur den Tasten-
+ *  Einstieg gegen versehentliches Reinrutschen). */
+function bindDevPanelConsole(openUnlocked: () => void): void {
   const dev = window as unknown as { kqDev?: Record<string, unknown> };
   if (dev.kqDev) {
-    dev.kqDev.panel = () => {
-      unlocked = true;
-      show();
-    };
+    dev.kqDev.panel = openUnlocked;
   }
   console.info("🛠️ Dev-Panel bereit: Taste F9 (Passwort) · kqDev.panel() (Konsole, ohne Passwort)");
+}
+
+/**
+ * Hängt das Dev-Panel in die laufende Seite ein: baut das Overlay dynamisch
+ * (kein Markup in index.html → auch dort keine Spur im Prod-Build), verdrahtet
+ * Öffnen-Keybind (F9, mit Passwortabfrage), Maus-Klicks und Tastatur-Navigation
+ * und stellt `window.kqDev.panel()` zum Öffnen aus der Konsole bereit.
+ *
+ * Wird ausschließlich aus dem `import.meta.env.DEV`-Block in main.ts dynamisch
+ * importiert – im Prod-/Offline-Build existiert dieser Aufruf nicht.
+ */
+export function mountDevPanel(): void {
+  // Laufzeit-Injektion (#334, Docker) vor Build-Zeit-Wert (#331); siehe
+  // resolveDevPanelPassword. So gilt EIN Image, viele Passwörter, ohne Rebuild –
+  // mit dem eingebackenen Wert als Fallback.
+  const expected = resolveDevPanelPassword(
+    readRuntimeDevPanelPassword(),
+    import.meta.env.VITE_KQ_DEVPANEL_PW,
+  );
+
+  injectDevPanelStyles();
+  const { overlay, body } = buildDevPanelOverlay();
+
+  let open = false;
+  let unlocked = false; // einmal korrektes Passwort = für diese Sitzung frei (kein Nerven)
+
+  function show(): void {
+    if (open) return;
+    if (!unlocked) {
+      if (!tryUnlockDevPanel(expected)) return;
+      unlocked = true;
+    }
+    renderRoadmapInto(body);
+    overlay.classList.remove("hidden");
+    open = true;
+  }
+
+  function hide(): void {
+    overlay.classList.add("hidden");
+    open = false;
+  }
+
+  bindDevPanelMouse(overlay, hide);
+  bindDevPanelKeyboard(overlay, { isOpen: () => open, show, hide });
+  bindDevPanelConsole(() => {
+    unlocked = true;
+    show();
+  });
 }

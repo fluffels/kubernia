@@ -13,7 +13,8 @@
  * von dort wiederverwendet statt ein zweites Mal definiert.
  */
 import { warpAt, type Warp } from "./archipel";
-import { npcSpawnForMap, objectForId, objectsForMap, objectFootprint, type Spawn } from "../../content/entities";
+import { npcSpawnForMap, objectForId, type Spawn } from "../../content/entities";
+import { fillTerrain, markRegistrySolids } from "./geometry";
 
 export { warpAt, type Warp };
 
@@ -94,12 +95,6 @@ function southEdgeRow(): number {
   return LH - 2;
 }
 
-/** Deterministischer Gras-Frame-Index (0/1/2) wie auf der Hauptkarte. */
-function grassFrame(x: number, y: number): number {
-  const h = (((x * 73856093) ^ (y * 19349663)) >>> 0) % 100;
-  return h < 80 ? 0 : h < 93 ? 1 : 2;
-}
-
 export interface LighthouseMap {
   W: number;
   H: number;
@@ -108,47 +103,32 @@ export interface LighthouseMap {
   rocks: { x: number; y: number }[];
 }
 
-/** Baut das komplette Klippenraster: Boden (Meer/Stein-Rand/Gras), Kollision,
- *  Felsbrocken am Rand. Pur und deterministisch – in test/lighthouse.test.ts direkt
- *  geprüft (u.a. dass die Station/der NPC-Standplatz vom Aufgang aus erreichbar ist). */
-export function buildLighthouse(): LighthouseMap {
-  const W = LW, H = LH;
-  const ground = new Array<number>(W * H).fill(WATER);
-  const solid = new Uint8Array(W * H);
-
-  // Grundterrain aus der Klippenform
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const lvl = landLevel(x, y);
-      const i = y * W + x;
-      if (lvl === 0) { ground[i] = WATER; solid[i] = 1; }            // Meer blockt
-      else if (lvl === 1) ground[i] = STONE_CODES[(x * 3 + y) % 3];  // Stein-Klippenrand begehbar
-      else ground[i] = grassFrame(x, y);                             // Gras-Hochebene begehbar
-    }
-  }
-
-  // Aufgangs-Pfad: von der Hochebene (Mitte) hinunter zum südlichen Klippenrand.
+/** Aufgangs-Pfad: von der Hochebene (Mitte) hinunter zum südlichen Klippenrand. */
+function carveAscentPath(W: number, ground: number[], solid: Uint8Array): void {
   const edge = southEdgeRow();
   for (let y = CY; y <= edge; y++) { const i = y * W + CX; ground[i] = PATH; solid[i] = 0; }
+}
 
-  // Solide Objekte (Leuchtturm-Fuß 2×2 + Monitoring-Deko) aus der Registry (#357) als
-  // Kachel-Solid markieren – der Turm über seinen w/h-Fußabdruck, props 1×1. Sprite und
-  // Solid kommen so aus denselben Daten; ein neues Objekt ist nur ein JSON-Eintrag.
-  for (const o of objectsForMap("lighthouse")) {
-    if (o.type === "quest_trigger") continue;
-    for (const t of objectFootprint(o)) solid[t.y * W + t.x] = 1;
-  }
-
-  // Reserviert begehbar halten (NPC-Standplatz, Quest-Trigger, Ankunft, Warp, Pfad).
-  const reserved = new Set([
+/** Kacheln, die garantiert begehbar bleiben müssen: NPC-Standplatz, Quest-Trigger,
+ *  Ankunft und Rück-Warp (der Pfad ist über `carveAscentPath` schon frei). */
+function reservedWalkable(W: number): Set<number> {
+  return new Set([
     LIGHTHOUSE_NPC.y * W + LIGHTHOUSE_NPC.x,
     LIGHTHOUSE_QUEST_TRIGGER.y * W + LIGHTHOUSE_QUEST_TRIGGER.x,
     LIGHTHOUSE_ARRIVAL.ty * W + LIGHTHOUSE_ARRIVAL.tx,
     LIGHTHOUSE_TO_WORLD.ty * W + LIGHTHOUSE_TO_WORLD.tx,
   ]);
-  for (const idx of reserved) solid[idx] = 0;
+}
 
-  // Felsbrocken als Saum auf dem Stein-Rand – deterministisch, nie auf Pfad/Reserviert.
+/** Felsbrocken als Saum auf dem Stein-Rand – deterministisch, nie auf Pfad/
+ *  Reserviert. Setzt die getroffenen Kacheln solide und liefert die Positionen. */
+function scatterRocks(
+  W: number,
+  H: number,
+  ground: number[],
+  solid: Uint8Array,
+  reserved: Set<number>,
+): { x: number; y: number }[] {
   const rocks: { x: number; y: number }[] = [];
   for (let y = 1; y < H - 1; y++) {
     for (let x = 1; x < W - 1; x++) {
@@ -161,6 +141,28 @@ export function buildLighthouse(): LighthouseMap {
       if (h === 0) { rocks.push({ x, y }); solid[i] = 1; }
     }
   }
+  return rocks;
+}
 
+/** Baut das komplette Klippenraster: Boden (Meer/Stein-Rand/Gras), Kollision,
+ *  Felsbrocken am Rand. Pur und deterministisch – in test/lighthouse.test.ts direkt
+ *  geprüft (u.a. dass die Station/der NPC-Standplatz vom Aufgang aus erreichbar ist). */
+export function buildLighthouse(): LighthouseMap {
+  const W = LW, H = LH;
+  const ground = new Array<number>(W * H).fill(WATER);
+  const solid = new Uint8Array(W * H);
+
+  fillTerrain(W, H, ground, solid, landLevel, (x, y) => STONE_CODES[(x * 3 + y) % 3]);
+  carveAscentPath(W, ground, solid);
+
+  // Solide Objekte (Leuchtturm-Fuß 2×2 + Monitoring-Deko) aus der Registry (#357) als
+  // Kachel-Solid markieren – der Turm über seinen w/h-Fußabdruck, props 1×1. Sprite und
+  // Solid kommen so aus denselben Daten; ein neues Objekt ist nur ein JSON-Eintrag.
+  markRegistrySolids("lighthouse", W, solid);
+
+  const reserved = reservedWalkable(W);
+  for (const idx of reserved) solid[idx] = 0;
+
+  const rocks = scatterRocks(W, H, ground, solid, reserved);
   return { W, H, ground, solid, rocks };
 }
