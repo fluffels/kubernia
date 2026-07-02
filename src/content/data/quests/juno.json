@@ -873,7 +873,32 @@
         "type": "dialog",
         "npc": "juno",
         "lines": [
-          "Letzter Profi-Tipp, bevor du weiterziehst: Last schwankt – tagsüber Hochbetrieb, nachts Ebbe. Statt von Hand zu skalieren, setzt man einen <b>HorizontalPodAutoscaler (HPA)</b> davor. Der zählt die Auslastung (gemessen an den requests!) und dreht die Replica-Zahl automatisch hoch und runter."
+          "Noch was Wichtiges, das direkt aus diesen zwei Zahlen folgt: Wie du <b>requests</b> und <b>limits</b> setzt, entscheidet die <b>QoS-Klasse</b> (Quality of Service) deines Pods. Davon hängt ab, <b>wer zuerst über Bord geht</b>, wenn dem Knoten der Speicher ausgeht.",
+          "Drei Klassen gibt es: <b>Guaranteed</b> – requests und limits sind gesetzt und <b>gleich</b> (für CPU <i>und</i> Speicher, alle Container). <b>Burstable</b> – requests gesetzt, aber kleiner als die limits (oder nur teilweise gesetzt). <b>BestEffort</b> – gar nichts gesetzt, weder requests noch limits.",
+          "Und bei Knappheit räumt der kubelet in genau dieser Reihenfolge aus: <b>BestEffort zuerst</b> (die haben nichts zugesichert bekommen), dann <b>Burstable</b> (sobald sie über ihre requests hinaus wachsen), <b>Guaranteed zuletzt</b>. Erinnerst du dich an Knuts wildes Buch ohne Limit? Das war BestEffort – flog zuerst. Dasselbe Prinzip, jetzt für Speicher UND CPU."
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "juno",
+        "reviewId": "q-qos-classes",
+        "q": "Unser <code>kartograf</code> hat jetzt <code>requests=memory=128Mi</code> und <code>limits=memory=256Mi</code> – requests also kleiner als limits. Welche QoS-Klasse ist das?",
+        "options": [
+          {
+            "t": "Burstable – requests sind gesetzt, aber kleiner als die limits.",
+            "ok": true,
+            "reply": "Genau! Requests gesetzt, aber < limits → Burstable. Er darf über seine 128Mi hinaus „bursten\" bis 256Mi, ist aber bei Knappheit ein früheres Opfer als ein Guaranteed-Pod. Für Guaranteed müsstest du requests == limits setzen (128Mi = 128Mi)."
+          },
+          {
+            "t": "Guaranteed – er hat ja beide Werte, requests und limits.",
+            "ok": false,
+            "reply": "Fast – beide Werte allein reichen nicht. Guaranteed heißt requests == limits (gleiche Zahl, CPU und Speicher). Hier ist 128Mi < 256Mi, also Burstable."
+          },
+          {
+            "t": "BestEffort – solange kein Autoscaler dranhängt, zählt nichts.",
+            "ok": false,
+            "reply": "Nein. BestEffort ist nur, wenn GAR nichts gesetzt ist. Unser kartograf hat requests und limits – er ist Burstable."
+          }
         ]
       },
       {
