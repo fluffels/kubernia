@@ -28,6 +28,8 @@
     "check:docdrift": "node scripts/check-docdrift.mjs",
     "check:diffsize": "node scripts/check-diffsize.mjs",
     "lint": "eslint . --max-warnings 0",
+    "lint:prune": "eslint . --prune-suppressions",
+    "lint:suppress": "eslint . --suppress-rule complexity --suppress-rule max-depth --suppress-rule max-lines-per-function",
     "verify": "npm run typecheck && npm run lint && npm run check:arch && npm run check:size && npm run check:docmap && npm run check:docdrift && npm run check:diffsize && npm test",
     "verify:full": "npm run verify && npm run test:coverage && npm run build && npm run build:offline && npm run test:smoke"
   },
