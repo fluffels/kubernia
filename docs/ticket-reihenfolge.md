@@ -40,21 +40,16 @@ Sagt die Maintainerin **„nächstes Ticket"** (für kubequest), dann:
 
 Leitlinie: **Prio zuerst**, innerhalb gleicher Prio nach Abhängigkeit (was etwas anderes ermöglicht, kommt davor), sonst niedrigste Nummer. Content-Arcs (echter Lernpfad-Fortschritt) stehen über QoL-/System-Features. No-dependency-Content-Füller (#218/#219/#228/#229/#236/#237/#239) lebten im Auto-Rest — keine Abhängigkeit, kein Grund für den Kopf; einige davon sind inzwischen erledigt, der verbleibende design-freie Content (#239/#279/#278) ist hier nach Wert kuratiert, weil der Backlog rein `prio:niedrig`/ohne ist.
 
-> **⭐ Kopf-Reihenfolge (Stand 2026-07-02):** Harness-&-Vorzeige-Doku (#525–#533) und der HOCH-Teil der iSAQB-Analyse sind **abgearbeitet**. Oben steht jetzt der **iSAQB-Rest MITTEL→NIEDRIG (#514–#524 + #535/#536)**, _danach_ der bisherige Lernpfad-/QoL-Kopf. Dazu der **Burn-down #502** (#542–#547) als eigener NIEDRIG-Strang am Ende des Analyse-Blocks. Oberstes freies Ticket: **#514**. Volle Begründung je Ticket: [architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md).
+> **⭐ Kopf-Reihenfolge (Stand 2026-07-02):** Harness-&-Vorzeige-Doku (#525–#533) **und der komplette iSAQB-MITTEL-Block (#514/#498/#502–#506) sind abgearbeitet**, ebenso die Epics **#535/#536** (in Kinder zerlegt). Oben stehen jetzt die **offenen #536-Ordner-Slices (#551/#552; #548/#549 ✓, #550 in Arbeit)** und die **#535-Rename-Slices (#553/#554/#557 mittel; #555/#556 im Auto-Rest niedrig)** — _vor_ den NIEDRIG-God-File-Splits #515–#524 und dem **Burn-down #502 (#542–#547)**, damit die Splits am fertigen Ort landen. Danach der bisherige Lernpfad-/QoL-Kopf. Oberstes freies Ticket: **#551** (#550 gerade in Arbeit). Volle Begründung je Ticket: [architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md).
 
 | # | Ticket | Prio | Worum's geht | Warum hier / Abhängigkeit |
 |---|--------|------|--------------|---------------------------|
-| | **━━━ iSAQB-Architektur-Analyse 2026-07-01 — MITTEL (Struktur-, Testbarkeits- & Governance-Präzisierung) ━━━** | | | |
-| A17 | **#514** | mittel | Content: `manifests.ts` von Quests ungenutzt / YAML dupliziert → `manifestRef` | Zwei Wahrheiten für dieselben Manifeste. |
-| A18 | **#498** | mittel | Content: maschineller Schema-Drift-Wächter JSON ↔ TS-Typen | ~13k Zeilen JSON ohne Struktur-Schutz. |
-| A19 | **#502** | mittel | Governance: Komplexitäts-Metriken (ESLint) statt reinem LOC-Deckel | LOC-Deckel sieht God-Functions nicht. **Burn-down → #542–#547 unten.** |
-| A20 | **#503** | mittel | Governance: Bundle-Size-Budget als CI-Gate | Offline-Build inlined alle Assets, wächst unbemerkt. |
-| A21 | **#504** | mittel | Querschnitt: zentrale Fehlerbehandlung (`window.onerror` + Fallback-Overlay) | Laufzeitfehler reißt still das Spiel. |
-| A22 | **#505** | mittel | Präsentation: Overlay-Register statt 4× hartkodierter ID-Liste | Basis für Fokus-Management (#506). |
-| A23 | **#506** | mittel | Barrierefreiheit: Fokus-Management + ARIA für Modals (distinkt zu #491) | Tastatur-/Screenreader-Bedienung löchrig. Nach #505. |
-| | **━━━ Frisch einsortiert (2026-07-01, prio:mittel) — auf Maintainerin-Wunsch ━━━** | | | |
-| N1 | **#536** | mittel | Architektur: flache `src/`-Ebene (41 Dateien) nach Subdomänen bündeln — Ziel-Struktur + schrittweise Migration | **Vor** den NIEDRIG-Datei-Splits #515/#517: erst die Ziel-Ordner (z.B. `src/world/`, `src/hud/`) festlegen, damit die Splits gleich am richtigen Ort landen statt später nochmal umzuziehen. Kein Big-Bang (1 Subdomäne = 1 Slice, `layers.cjs`/cruiser/docmap mitziehen). |
-| N2 | **#535** | mittel | Neuen, eindeutigen Spielnamen finden (`KubeQuest` ist schon vergeben) | Branding, unabhängig — **je früher, desto weniger verstreute Referenzen** beim Rename. Verfügbarkeit belegen (Web/GitHub/npm/Domain), finaler Name mit Maintainerin abstimmen; Save-Keys nicht brechen. |
+| | **━━━ Architektur-/Rename-Slices — Kinder von #536/#535 (MITTEL, zuerst) ━━━** | | | |
+| N1 | **#551** | mittel | Architektur #536: `src/world/regions/` bündeln (archipel/lighthouse/warehouse/watchtower/flotte/werft) | Kind von #536; die Ordner-Struktur kommt **vor** den NIEDRIG-God-File-Splits #515/#517 + Burn-down #542–#547, damit die Splits gleich am richtigen Ort landen. #548 (core) + #549 (hud) ✓, #550 (world/maps) in Arbeit. |
+| N2 | **#552** | mittel | Architektur #536: `src/world/` Welt-Kern bündeln (world/decor/hazards/warps) | Kind von #536; letzter Ordner-Slice. |
+| N3 | **#553** | mittel | Rename #535 (1/5): In-Game-Titel + spieler-sichtbare Strings → „Kubernia" | Kind von #535; Rename-Kette **in fester Reihenfolge 1→5** (unabhängig vom Prio-Label), save-kritische Storage-Keys **#557 zuletzt**. |
+| N4 | **#554** | mittel | Rename #535 (2/5): README + spielerseitige Doku → „Kubernia" | Kind von #535; nach #553. Danach #555/#556 (interne Doku/Build, niedrig, im Auto-Rest). |
+| N5 | **#557** | mittel | Rename #535 (5/5): Storage-Keys/DB-Namen + Repo-Name (save-kritisch) | Kind von #535; **ganz zuletzt** der Kette — Save-Format nicht brechen (migrieren). |
 | | **━━━ NIEDRIG (Duplizierung, God-Files schneiden, Typmodell, Rest-Lücken) ━━━** | | | |
 | A24 | **#515** | niedrig | Anwendung: `store.ts` (695) in backend/slots/versioning/persistence schneiden | Vier Verantwortlichkeiten. |
 | A25 | **#516** | niedrig | Sim: Host-Seam verschmälern (`extends ClusterState` → schmale Interfaces, ISP) | Leaky Abstraction ermöglicht Umgehungen. |
