@@ -82,16 +82,47 @@ function checkPvBinding(s: ClusterState): string[] {
   return v;
 }
 
+/** Sammelt doppelte Schlüssel in einer Liste benannter Objekte – genau EINE Meldung je
+ *  Kollision (nicht pro Vorkommen). `keyOf` bestimmt die Eindeutigkeits-Identität,
+ *  `message` die Meldung für das kollidierende Objekt. */
+function reportDuplicates<T>(
+  list: ReadonlyArray<T>,
+  keyOf: (item: T) => string,
+  message: (item: T) => string,
+): string[] {
+  const v: string[] = [];
+  const seen = new Set<string>();
+  const reported = new Set<string>();
+  for (const item of list) {
+    const k = keyOf(item);
+    if (seen.has(k) && !reported.has(k)) {
+      v.push(message(item));
+      reported.add(k);
+    }
+    seen.add(k);
+  }
+  return v;
+}
+
 /** (6) Namens-Eindeutigkeit pro Ressourcentyp. In echtem Kubernetes ist ein Objektname
  *  je Art (+ Namespace) EINDEUTIG – es kann keine zwei Deployments "kasse" geben. Bisher
  *  prüften das nur ad-hoc `some(x => x.name === …)`-Wachen pro Anlege-Befehl; ein Weg an
  *  ihnen vorbei (mergeScenario, apply, eine neue Familie) konnte still Duplikate erzeugen,
  *  die dann z.B. `get`/`delete` mehrdeutig machen. Hier wird die Regel für alle
  *  benannten Aggregat-Mitglieder an EINER Stelle erzwungen (Stardew-Scope: neue
- *  Ressourcenart = ein Eintrag hier, keine verstreute Disziplin). */
+ *  Ressourcenart = ein Eintrag hier, keine verstreute Disziplin).
+ *
+ *  RBAC-Sonderfall (#578): Role (namespaced) und ClusterRole (cluster-weit) sind
+ *  VERSCHIEDENE Arten – denselben Namen als Role UND als ClusterRole zu vergeben ist in
+ *  echtem Kubernetes legal. Der Simulator führt beide in EINER Liste (per `.cluster`
+ *  unterschieden, ebenso RoleBinding/ClusterRoleBinding), also schließt der Eindeutigkeits-
+ *  Schlüssel den Scope mit ein – exakt dieselbe Schlüsseldefinition wie der Merge-Dedup
+ *  (`sim.ts` `_mergeRbac`: `name && cluster`). Vorher prüfte diese Invariante nur den
+ *  Namen und divergierte damit vom Merge: ein legales Role+ClusterRole-Paar gleichen
+ *  Namens hätte `exec()` fälschlich mit `ClusterInvariantError` abgebrochen. */
 function checkNameUniqueness(s: ClusterState): string[] {
   const v: string[] = [];
-  const uniqueChecks: Array<[string, ReadonlyArray<{ name: string }>]> = [
+  const byName: Array<[string, ReadonlyArray<{ name: string }>]> = [
     ["Deployment", s.deployments],
     ["StatefulSet", s.statefulSets],
     ["Service", s.services],
@@ -105,20 +136,16 @@ function checkNameUniqueness(s: ClusterState): string[] {
     ["StorageClass", s.storageClasses],
     ["VolumeSnapshot", s.volumeSnapshots],
     ["ServiceAccount", s.serviceAccounts],
-    ["Role", s.roles],
-    ["RoleBinding", s.roleBindings],
   ];
-  for (const [kind, list] of uniqueChecks) {
-    const seen = new Set<string>();
-    const reported = new Set<string>();
-    for (const item of list) {
-      if (seen.has(item.name) && !reported.has(item.name)) {
-        v.push(`${kind} "${item.name}": Name doppelt vergeben (muss je Typ eindeutig sein)`);
-        reported.add(item.name);
-      }
-      seen.add(item.name);
-    }
+  for (const [kind, list] of byName) {
+    v.push(...reportDuplicates(list, i => i.name,
+      i => `${kind} "${i.name}": Name doppelt vergeben (muss je Typ eindeutig sein)`));
   }
+  const roleKind = (cluster: boolean) => (cluster ? "ClusterRole" : "Role");
+  v.push(...reportDuplicates(s.roles, r => `${roleKind(r.cluster)} ${r.name}`,
+    r => `${roleKind(r.cluster)} "${r.name}": Name doppelt vergeben (muss je Typ eindeutig sein)`));
+  v.push(...reportDuplicates(s.roleBindings, b => `${roleKind(b.cluster)}Binding ${b.name}`,
+    b => `${roleKind(b.cluster)}Binding "${b.name}": Name doppelt vergeben (muss je Typ eindeutig sein)`));
   return v;
 }
 
