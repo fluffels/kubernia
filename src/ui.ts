@@ -17,6 +17,7 @@ import { saveUI } from "./ui/save";
 import { setSaveFailedSink, setPayoutSink, setClockSink, worldScene } from "./runtime";
 import type { ChoiceStep } from "./types";
 import type { DrillTask } from "./content/drills";
+import type { CmdCard, QuizCard } from "./content/loader";
 
 /* ── Typen des veränderlichen UI-Zustands (#423): ersetzen die früheren `as any`.
  *    Geschrieben/gelesen werden die Felder quer aus den ui/*-Bündeln über die
@@ -28,8 +29,24 @@ interface ActiveDialogue {
   idx: number;
   onDone: (() => void) | null;
   choice: ChoiceStep | { menu: true } | null;
+  /** Nur Choice-Dialoge: schon eine Antwort gewählt? (ui/dialog.ts answerChoice → verhindert
+   *  Doppelklick). Fehlt bei normalen Lese-Dialogen, darum optional. */
+  answered?: boolean;
 }
-/** Laufende Wissensrunde/Quiz (ui/quiz.ts). */
+/** Inhalt EINER Review-Karte, wie ihn `Game.findReviewContent` liefert: entweder eine
+ *  Quiz-Frage (`q`) oder eine Befehls-Karte (`card`), unterschieden über `kind`. */
+type ReviewContent = { kind: string; card?: CmdCard; q?: QuizCard };
+/** Die aktuell gezeigte Karte einer Wissensrunde (ui/quiz.ts setzt sie je Karte in
+ *  renderReviewItem). `order` mischt nur bei Quiz-Karten die Options-Reihenfolge (#258). */
+interface ReviewCard {
+  itemId: string;
+  content: ReviewContent;
+  answered: boolean;
+  attempts: number;
+  order?: number[];
+}
+/** Laufende Wissensrunde/Quiz (ui/quiz.ts). `current` ist erst nach renderReviewItem gesetzt
+ *  (zwischen den Karten bzw. vor dem Start nicht vorhanden). */
 interface ActiveReview {
   ids: string[];
   idx: number;
@@ -37,6 +54,7 @@ interface ActiveReview {
   free: boolean;
   assisted?: number;
   gate?: { npcId: string; questIdx: number };
+  current?: ReviewCard;
 }
 /** Freies Üben am Funkgerät (ui/radio.ts). */
 interface ActivePractice {
