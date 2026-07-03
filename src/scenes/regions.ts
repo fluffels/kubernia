@@ -15,6 +15,7 @@ import Phaser from "phaser";
 import { circleHitbox, rectHitbox } from "../world/world";
 import { npcSpawnsForMap } from "../content/entities";
 import { T, DEVICE } from "./shared";
+import { HIT_R, CRATE_HIT } from "./geometry";
 import type { RegionConfig, RegionScene } from "./RegionScene";
 import { buildArchipel, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL, ARCHIPEL_NPC, ARCHIPEL_QUEST_TRIGGER, type ArchipelMap } from "../world/regions/archipel";
 import { buildLighthouse, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL, LIGHTHOUSE_NPC, LIGHTHOUSE_QUEST_TRIGGER, LIGHTHOUSE_TOWER, type LighthouseMap } from "../world/regions/lighthouse";
@@ -22,11 +23,8 @@ import { buildWarehouse, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL, type WarehouseMa
 import { buildWatchtower, WATCHTOWER_TO_WORLD, WATCHTOWER_ARRIVAL, WATCHTOWER_TOWER } from "../world/regions/watchtower";
 import { buildFlotte, FLOTTE_TO_WORLD, FLOTTE_ARRIVAL, type FlotteMap } from "../world/regions/flotte";
 import { buildWerft, WERFT_TO_WORLD, WERFT_ARRIVAL, WERFT_NPC, WERFT_BUILD_TRIGGER, type WerftMap } from "../world/regions/werft";
-
-/** #343/#386: Hitbox-Maße der Lager-Güter – Fässer rund (Radius), Kisten als mittig
- *  eingerücktes Rechteck (Kantenlänge). Wie in der früheren WarehouseScene. */
-const HIT_R = 6;
-const CRATE_HIT = 12;
+// #343/#386: Hitbox-Maße der Lager-Güter (Fässer rund `HIT_R`, Kisten eckig `CRATE_HIT`)
+// liegen jetzt zentral in scenes/geometry.ts (#590).
 
 /** GitOps-Archipel (#92): organische Insel mit Sandstrand + Holz-Steg; Bäume als grüner
  *  Saum, der Quest-Trigger als Stein-Statue. E-Notausgang auf dem ganzen Steg. */
