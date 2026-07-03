@@ -158,8 +158,7 @@ Der Harness ist bewusst ein **lebendes System** — seine eigenen Schwachstellen
 
 | Ticket | Was es schließt |
 |---|---|
-| **#592** | **Serverseitige Gate-Durchsetzung** (`prio:hoch`) — heute laufen die Gates nur lokal (pre-push, per `--no-verify` umgehbar) + post-hoc in CI; `check:diffsize` degradiert im flachen CI-Checkout bewusst zu grün. Größte Vibe-Coding-Lücke: ein Agent kann roten Code auf `main` schieben, auf dem ein paralleler Agent aufbaut. |
-| **#605** | CI fährt `verify` post-hoc auf `main` nach + alarmiert bei Rot (ergänzt #592, ohne den Direkt-Push-Workflow zu brechen). |
+| **#605** | CI fährt `verify` post-hoc auf `main` nach + alarmiert bei Rot (ergänzt das PR-Gating #592 als zweite Grenze). |
 | **#591** | Determinismus-Gate auf `game/**` ausweiten (heute nur `sim/**`+`content/**`; `spaced-repetition.ts` nutzt `Math.random`). |
 | **#604** | Suppression-Budget-Guard für `eslint-disable no-explicit-any` (Ratchet analog Komplexitäts-Gate) — sonst ist der `any`-Error pro Zeile aushebelbar. |
 | **#610** | Doku-Aktualitäts-Guard: als „offen" dokumentierte Harness-Tickets gegen den echten `gh issue`-Status prüfen (`check:docdrift` prüft nur Kommandos/Links/Anker, nicht Aktualität). |
@@ -168,7 +167,7 @@ Der Harness ist bewusst ein **lebendes System** — seine eigenen Schwachstellen
 
 > **#492 ist erledigt** (Determinismus-Gate steht, siehe §3) — die Roadmap ist seit der [iSAQB-Runde 3 (2026-07-03)](architektur-analyse-2026-07-03-iSAQB.md) auf die verbleibenden Durchsetzungs-/Scope-Lücken aktualisiert.
 
-**Schon gelandet** (Block „Harness & Vorzeige-Doku", 2026-07-01): das Aggregat-Kommando `npm run verify` (#527), der Git-**pre-push-Hook** (#528, schließt die Post-hoc-CI-Lücke des Direkt-Push, §4), der **Harness-Drift-Wächter** `check:docdrift` (#529, §3), die **Forum-Inbox-Härtung** gegen Prompt-Injection (#531, §4), der **`review-lenses`-Skill** — der gestaffelte Mehr-Perspektiven-Review mit Gate-Short-Circuit (#532, §2.5) — und das **Diff-Größenbudget-Gate** `check:diffsize` (#533, §3): misst den Slice gegen `main` (max. 20 Dateien / 800 Zeilen, Override mit Pflicht-Begründung) und erzwingt so die Slice-Disziplin der KI-Fabrik auf Commit-Ebene; seit **#592** ist der Durchsetzungspunkt der **PR-Required-Check** (CI-Checkout `fetch-depth: 0` + `KQ_DIFF_BASE`), nicht mehr nur der lokale pre-push-Hook.
+**Schon gelandet** (Block „Harness & Vorzeige-Doku", 2026-07-01): das Aggregat-Kommando `npm run verify` (#527), der Git-**pre-push-Hook** (#528, schließt die Post-hoc-CI-Lücke des Direkt-Push, §4), der **Harness-Drift-Wächter** `check:docdrift` (#529, §3), die **Forum-Inbox-Härtung** gegen Prompt-Injection (#531, §4), der **`review-lenses`-Skill** — der gestaffelte Mehr-Perspektiven-Review mit Gate-Short-Circuit (#532, §2.5) — und das **Diff-Größenbudget-Gate** `check:diffsize` (#533, §3): misst den Slice gegen `main` (max. 20 Dateien / 800 Zeilen, Override mit Pflicht-Begründung) und erzwingt so die Slice-Disziplin der KI-Fabrik auf Commit-Ebene; seit **#592** ist der Durchsetzungspunkt der **PR-Required-Check** (CI-Checkout `fetch-depth: 0` + `KQ_DIFF_BASE`), nicht mehr nur der lokale pre-push-Hook. Und das **PR-Gating selbst** (#592, [ADR 0009](adr/0009-pr-gating-required-checks.md)): `main` ist server-seitig geschützt (Merge nur über PR mit grünen Required-Checks, `enforce_admins` an) — die größte Vibe-Coding-Lücke (ein Agent schiebt roten Code auf `main`, ein paralleler baut darauf auf) ist damit geschlossen.
 
 Mit **#530** ([ADR 0008](adr/0008-ki-agenten-harness.md)) ist der ADR jetzt die formale Grundsatzentscheidung und dieses Doc die erklärende Tiefe daneben — dieselbe Arbeitsteilung wie AGENTS.md (operativ) ↔ agent-harness.md (erklärend).
 
