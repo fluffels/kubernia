@@ -119,6 +119,30 @@ test("mergeScenario (#577): ein voll spezifizierter Node bleibt unverändert (De
   assert.equal(isControlPlane(node), true);
 });
 
+test("reset (#596): ein Teil-Node-Spec {name} im Szenario bekommt die Cluster-Defaults statt eines illegalen Knotens", () => {
+  // Zwilling zu #577, aber auf dem RESET-Pfad (Konstruktor/Laden): ein Szenario mit einem
+  // Node, der nur den Namen trägt, landete per rohem `Object.assign({}, n)` (sim.ts:278) als
+  // strukturell illegaler ClusterNode (status/roles/version === undefined) – deriveControlPlane
+  // wertet dann direkt danach `roles.includes(...)` auf undefined aus (TypeError). Jetzt über
+  // provisionNode, das die Pflichtfelder mit den Cluster-Defaults füllt.
+  const s = new KQSim({ nodes: [{ name: "ahoi-lonely" } as ClusterNode] });
+  const node = s.nodes.find(n => n.name === "ahoi-lonely");
+  assert.ok(node, "der Teil-Node wurde aufgenommen");
+  assert.equal(node!.status, "Ready", "status-Default gefüllt");
+  assert.equal(node!.roles, "<none>", "roles-Default gefüllt");
+  assert.equal(node!.version, NODE_VERSION, "version-Default gefüllt");
+  // Der Knoten ist damit ein legaler ClusterNode: isControlPlane greift ohne TypeError.
+  assert.equal(isControlPlane(node!), false, "gefüllte roles sind auswertbar (kein undefined)");
+});
+
+test("reset (#596): ein voll spezifizierter Szenario-Node bleibt unverändert, Control-Plane wird abgeleitet", () => {
+  const s = new KQSim({ nodes: [{ name: "ahoi-cp", status: "Ready", roles: "control-plane", version: NODE_VERSION }] });
+  const node = s.nodes.find(n => n.name === "ahoi-cp")!;
+  assert.equal(node.roles, "control-plane", "explizite Rolle bleibt erhalten");
+  assert.equal(isControlPlane(node), true);
+  assert.equal(s.controlPlane.node, "ahoi-cp", "deriveControlPlane findet den gefüllten Control-Plane-Knoten");
+});
+
 test("terraform destroy entfernt die per apply provisionierten Worker über removeNode", () => {
   sim.mergeScenario({ tfResources: [{ addr: "hafen_server.worker[0]", desc: "neue Server" }] });
   sim.exec("terraform init");
