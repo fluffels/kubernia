@@ -18,13 +18,13 @@ Verkettet über `lower_base_tile_id`, damit gemeinsame Terrains pixelgleich ansc
 |---|---|---|---|
 | `water-sand` (coast) | Wasser→Sand | c7e28595-ae17-4840-9c25-31a4a7dd8eb0 | water 356778f0… → sand 096ddbfb… |
 | `sand-grass` (meadow) | Sand→Gras | 6de18767-1ba1-4829-b9b8-81a659508612 | sand 096ddbfb… → grass 197809d8… |
-| `grass-dirt` (path) | Gras→Weg | c2bd68ef-1b8d-4936-9787-6c3b68d4500f | grass 197809d8… → dirt e8efe511… |
+| `grass-dirt` (path) | Gras→Weg | d4085ba1-664b-45cb-ae94-0022400b5b1d | grass 197809d8… → dirt 79c94c91… |
 | `water-stone` (kai) | Wasser→Stein | 18b0efb4-f9f4-4e16-97a3-e5e298eb8bb5 | water 356778f0… → stone bcb30e72… |
 | `water-wood` (dock) | Wasser→Holz | 8540cac2-06ff-438f-8432-7b5865046011 | water 356778f0… → wood 2cab6bae… |
 
 Gemeinsame Basis-Tile-IDs (zum Weiter-Verketten neuer Sets):
 `water 356778f0-9b33-4025-86fe-c7bb75b06d27` · `sand 096ddbfb-6300-4a3e-bed8-d052a947fa64` ·
-`grass 197809d8-8637-4344-88d1-f704a7e410f5` · `dirt e8efe511-b484-4a4f-90d9-7efbebebfbe3` ·
+`grass 197809d8-8637-4344-88d1-f704a7e410f5` · `dirt 79c94c91-00e6-499d-8130-58807f11addc` ·
 `stone bcb30e72-ea60-44e7-87b4-2f6ca52a98c9` · `wood 2cab6bae-8dce-4298-a8df-d1e4ef4644a8`
 
 ## Objekte (`create_map_object`, transparent)
