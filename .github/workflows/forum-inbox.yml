@@ -1,7 +1,7 @@
 name: Forum-Eingang
 
-# Flaggt jede neue Forum-Nachricht (GitHub Discussions) automatisch als prio:hoch-Issue,
-# damit im Board nichts durchrutscht. Diese Action ANTWORTET NICHT und legt KEIN echtes
+# Flaggt jede neue Forum-Nachricht (GitHub Discussions) automatisch als forum-Issue,
+# damit im Board nichts durchrutscht (der /forum-Skill findet sie über das forum-Label). Diese Action ANTWORTET NICHT und legt KEIN echtes
 # Bug-/Feature-Ticket an – das ist bewusst der interaktive Teil (siehe /forum-Skill +
 # AGENTS.md > Forum-Eingang): die Maintainerin gibt Antwort + Triage frei.
 #
@@ -82,7 +82,6 @@ jobs:
               "➡️ Mit dem \`/forum\`-Skill bearbeiten: Nachricht lesen → Antwort entwerfen (Formulierung von der Maintainerin freigeben lassen) → als \`fluffels\` posten → passendes Ticket anlegen/zuordnen → dieses Issue schließen. Details in AGENTS.md › Forum-Eingang.")
             gh issue create --repo "$REPO" \
               --title "${marker} ${safe_title}" \
-              --label "prio:hoch" \
               --label "forum" \
               --body "$body"
           fi
