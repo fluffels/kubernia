@@ -43,7 +43,7 @@ Mehrere Chats/Agenten können **gleichzeitig** laufen. Damit sich zwei nie dasse
 
 - **Self-assign als „in Arbeit"-Marker:** beim Start sofort `gh issue edit <nr> --add-assignee @me` + mit `gh issue view` **verifizieren** (blockierend — ohne bestätigte Zuweisung kein Implementieren). Der Assignee ist der **einzige** Zustand, den ein paralleler Agent sehen kann; ein nur „im Kopf" gewähltes Ticket ist unsichtbar.
 - **Eigener `git worktree` pro Ticket** (`.claude/worktrees/kq-<nr>` auf eigenem Branch `feature/kq-<nr>-<slug>`) — **nicht nur** ein eigener Branch. Zwei Agenten im selben Arbeitsverzeichnis würden sich gegenseitig die Dateien unter den Füßen wegziehen; getrennte Worktrees isolieren das vollständig.
-- Am Ende: nach `main` mergen → `git push origin main` → Worktree + Branch entfernen → Issue schließen, **jeder Schritt verifiziert**.
+- Am Ende: Feature-Branch pushen → **PR öffnen** (`gh pr create`, Body `Closes #<nr>`) → grüne Required-Checks abwarten → **PR mergen** (`gh pr merge --squash --delete-branch`) → Worktree entfernen → Issue schließt via `Closes`, **jeder Schritt verifiziert**. PR-gegated seit #592, kein Direkt-Push auf `main`.
 
 Fallstricke (Windows-Cleanup: laufende Dev-Server killen, nicht in den Worktree `cd`en; `node_modules` nicht per Junction verlinken): [AGENTS.md › Kollisionsschutz](../AGENTS.md#wo-die-todos-leben).
 
@@ -136,7 +136,7 @@ So greifen die Bausteine bei **einem** Ticket ineinander — jeder Schritt ist e
    │  Gates lokal grün: test · typecheck · lint · arch · size ·     │  ← Fehler an der Grenze
    │  docmap · docdrift · smoke · audit + im Browser verifiziert    │
    │                          ▼                                     │
-   │  nach main mergen → push → CI läuft dieselben Gates nochmal    │  ← zweite Grenze
+   │  PR öffnen → CI-Required-Checks grün → PR mergen (--squash)    │  ← blockierende Grenze
    │                          ▼                                     │
    │  Issue schließen (verifiziert) → Worktree/Branch weg → Board   │
    │  + Reihenfolge pflegen ("puh, fertig")                         │
@@ -149,7 +149,7 @@ So greifen die Bausteine bei **einem** Ticket ineinander — jeder Schritt ist e
 
 **Wo die Grenzen sind (ehrlich):**
 - Die Gates prüfen, was sie prüfen können. **Didaktische Richtigkeit** (ist die simulierte Cluster-Mechanik pädagogisch sinnvoll?) und **Spielspaß/Look** bleiben menschliches Urteil — darum der Browser-Verifizierungs-Schritt und die interaktive Optik-Abstimmung per Rückfrage.
-- Der **Direkt-Push auf `main`** bedeutet: die CI-Gates laufen *nach* dem Push (post-hoc). Die lokalen Gates sind die eigentliche Vorab-Prüfung — der pre-push-Hook (#528) fängt das lokal ab, ist aber per `git push --no-verify` umgehbar und serverseitig nicht erzwungen — die verbleibende reale Netzlücke (#592, siehe §5).
+- **Seit #592 ist `main` PR-gegated** (Branch-Protection: Merge nur über PR mit grünen Required-Checks, `enforce_admins` an). Die CI-Gates laufen damit **vor** dem Merge und sind server-seitig **nicht umgehbar** — kein `--no-verify`-Schlupf, kein Aufbauen auf noch-rotem `main` mehr. `check:diffsize` misst auf dem PR den echten Slice (CI-Checkout `fetch-depth: 0` + `KQ_DIFF_BASE`). Der frühere Direkt-Push mit post-hoc-CI (und der pre-push-Hook #528 als lokaler Riegel) ist damit abgelöst; der Hook bleibt nur als sekundäres Netz.
 - Der **Forum-Eingang** ist der einzige Pfad, auf dem unvertrauter externer Text (GitHub Discussions) in auto-erzeugte Issues und damit in die Agenten-Queue gelangt — ein Prompt-Injection-Vektor (Härtung geplant: #531).
 
 ## 5. Roadmap / bekannte Lücken
@@ -168,7 +168,7 @@ Der Harness ist bewusst ein **lebendes System** — seine eigenen Schwachstellen
 
 > **#492 ist erledigt** (Determinismus-Gate steht, siehe §3) — die Roadmap ist seit der [iSAQB-Runde 3 (2026-07-03)](architektur-analyse-2026-07-03-iSAQB.md) auf die verbleibenden Durchsetzungs-/Scope-Lücken aktualisiert.
 
-**Schon gelandet** (Block „Harness & Vorzeige-Doku", 2026-07-01): das Aggregat-Kommando `npm run verify` (#527), der Git-**pre-push-Hook** (#528, schließt die Post-hoc-CI-Lücke des Direkt-Push, §4), der **Harness-Drift-Wächter** `check:docdrift` (#529, §3), die **Forum-Inbox-Härtung** gegen Prompt-Injection (#531, §4), der **`review-lenses`-Skill** — der gestaffelte Mehr-Perspektiven-Review mit Gate-Short-Circuit (#532, §2.5) — und das **Diff-Größenbudget-Gate** `check:diffsize` (#533, §3): misst den Slice gegen `main` (max. 20 Dateien / 800 Zeilen, Override mit Pflicht-Begründung) und erzwingt so die Slice-Disziplin der KI-Fabrik auf Commit-Ebene; Durchsetzungspunkt ist der pre-push-Hook (im flachen CI-Checkout degradiert es bewusst zu grün).
+**Schon gelandet** (Block „Harness & Vorzeige-Doku", 2026-07-01): das Aggregat-Kommando `npm run verify` (#527), der Git-**pre-push-Hook** (#528, schließt die Post-hoc-CI-Lücke des Direkt-Push, §4), der **Harness-Drift-Wächter** `check:docdrift` (#529, §3), die **Forum-Inbox-Härtung** gegen Prompt-Injection (#531, §4), der **`review-lenses`-Skill** — der gestaffelte Mehr-Perspektiven-Review mit Gate-Short-Circuit (#532, §2.5) — und das **Diff-Größenbudget-Gate** `check:diffsize` (#533, §3): misst den Slice gegen `main` (max. 20 Dateien / 800 Zeilen, Override mit Pflicht-Begründung) und erzwingt so die Slice-Disziplin der KI-Fabrik auf Commit-Ebene; seit **#592** ist der Durchsetzungspunkt der **PR-Required-Check** (CI-Checkout `fetch-depth: 0` + `KQ_DIFF_BASE`), nicht mehr nur der lokale pre-push-Hook.
 
 Mit **#530** ([ADR 0008](adr/0008-ki-agenten-harness.md)) ist der ADR jetzt die formale Grundsatzentscheidung und dieses Doc die erklärende Tiefe daneben — dieselbe Arbeitsteilung wie AGENTS.md (operativ) ↔ agent-harness.md (erklärend).
 
