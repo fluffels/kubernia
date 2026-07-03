@@ -275,6 +275,23 @@ test("ingress: describe zeigt Backend – und warnt, wenn der Ziel-Service fehlt
   assert.match(miss.output!, /NotFound/);
 });
 
+test("ingress: describe spricht echtes K8s statt Hafen-Metapher (#608)", () => {
+  // Fehlender Name: fragt nach dem „Ingress", nicht nach dem „Hafentor".
+  // Die Sim-Domäne bleibt metaphern-frei – die Hafen-Übersetzung lebt nur in
+  // Präsentation/Content (Glossar §2), nicht in den Fehlertexten des Simulators.
+  const ohneName = sim.exec("kubectl describe ingress");
+  assert.ok(ohneName.error, "fehlender Name ist ein Fehler");
+  assert.match(ohneName.output!, /Welcher Ingress\?/, "fragt mit dem echten K8s-Begriff nach");
+  assert.doesNotMatch(ohneName.output!, /Hafentor/i, "keine Hafen-Metapher in der Sim-Domäne");
+
+  // Fehlender Ziel-Service: die Lern-Warnung benennt den „Ingress", nicht „das Tor".
+  legeIngressManifest(sim);
+  sim.exec("kubectl apply -f ingress.yaml");
+  const warn = sim.exec("kubectl describe ingress hafentor");
+  assert.match(warn.output!, /lotst ins Leere/, "fehlender Service wird angewarnt");
+  assert.doesNotMatch(warn.output!, /das Tor/, "kein Metapher-Wort im Warntext");
+});
+
 test("ingress: Szenario-Seeding + snapshot/restore erhalten das Tor", () => {
   // Über das Szenario vorbelegt (wie eine Quest-Welt).
   const seeded = new KQSim({ ingresses: [{ name: "tor-1", className: "nginx", host: "alt.de", path: "/", service: "alt", port: "80" }] });
@@ -429,6 +446,15 @@ test("networkpolicy: describe nennt Selektor + erlaubte Quelle; Unbekanntes meld
   const miss = sim.exec("kubectl describe netpol geistermauer");
   assert.ok(miss.error);
   assert.match(miss.output!, /NotFound/);
+});
+
+test("networkpolicy: describe spricht echtes K8s statt Hafen-Metapher (#608)", () => {
+  // Fehlender Name: fragt nach der „NetworkPolicy", nicht nach der „Hafenmauer".
+  // Sim-Domäne bleibt metaphern-frei (Glossar §2) – die Hafen-Übersetzung lebt in Content.
+  const ohneName = sim.exec("kubectl describe networkpolicy");
+  assert.ok(ohneName.error, "fehlender Name ist ein Fehler");
+  assert.match(ohneName.output!, /Welche NetworkPolicy\?/, "fragt mit dem echten K8s-Begriff nach");
+  assert.doesNotMatch(ohneName.output!, /Hafenmauer/i, "keine Hafen-Metapher in der Sim-Domäne");
 });
 
 test("networkpolicy: default-deny – eine Policy ganz ohne erlaubte Quelle macht dicht", () => {
