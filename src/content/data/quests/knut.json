@@ -441,7 +441,7 @@
           },
           {
             "id": "t-eph-describe1",
-            "text": "Schau hinein: <code>kubectl describe pod &lt;zwischenlager-pod&gt;</code> (Name aus der Liste). Im Abschnitt <code>Volumes:</code> steht <code>EmptyDir</code>, <code>Used: 40Mi</code> und <code>Content: warenkorb-cache</code> – der Schmierzettel ist beschrieben.",
+            "text": "Schau hinein: <code>kubectl describe pod <zwischenlager-pod></code> (Name aus der Liste). Im Abschnitt <code>Volumes:</code> steht <code>EmptyDir</code>, <code>Used: 40Mi</code> und <code>Content: warenkorb-cache</code> – der Schmierzettel ist beschrieben.",
             "accept": [
               "^kubectl\\s+describe\\s+pod\\s+zwischenlager\\S*$"
             ],
@@ -472,7 +472,7 @@
         "tasks": [
           {
             "id": "t-eph-describe2",
-            "text": "Sieh nach: <code>kubectl describe pod &lt;zwischenlager-pod&gt;</code> (der NEUE Name aus <code>get pods</code>). Im <code>Volumes:</code>-Abschnitt steht jetzt <code>Used: 0Mi</code> und <code>Content: (leer)</code>. Genau das ist <code>emptyDir</code>: weg, sobald der Pod weg ist.",
+            "text": "Sieh nach: <code>kubectl describe pod <zwischenlager-pod></code> (der NEUE Name aus <code>get pods</code>). Im <code>Volumes:</code>-Abschnitt steht jetzt <code>Used: 0Mi</code> und <code>Content: (leer)</code>. Genau das ist <code>emptyDir</code>: weg, sobald der Pod weg ist.",
             "accept": [
               "^kubectl\\s+describe\\s+pod\\s+zwischenlager\\S*$"
             ],
@@ -503,7 +503,7 @@
         "tasks": [
           {
             "id": "t-eph-readlimit",
-            "text": "Lies das Limit ab: <code>kubectl describe pod &lt;zwischenlager-pod&gt;</code>. Unter <code>Limits:</code> steht jetzt <code>ephemeral-storage: 512Mi</code>, dazu die aktuell verbrauchte Menge – so siehst du den Puffer.",
+            "text": "Lies das Limit ab: <code>kubectl describe pod <zwischenlager-pod></code>. Unter <code>Limits:</code> steht jetzt <code>ephemeral-storage: 512Mi</code>, dazu die aktuell verbrauchte Menge – so siehst du den Puffer.",
             "accept": [
               "^kubectl\\s+describe\\s+pod\\s+zwischenlager\\S*$"
             ],
@@ -632,7 +632,7 @@
           },
           {
             "id": "t-eph-describe-evict",
-            "text": "Warum genau? <code>kubectl describe pod &lt;wildwuchs-pod&gt;</code> – unter <code>Reason: Evicted</code> steht „<code>The node was low on resource: ephemeral-storage</code>“. Der Beweis schwarz auf weiß.",
+            "text": "Warum genau? <code>kubectl describe pod <wildwuchs-pod></code> – unter <code>Reason: Evicted</code> steht „<code>The node was low on resource: ephemeral-storage</code>“. Der Beweis schwarz auf weiß.",
             "accept": [
               "^kubectl\\s+describe\\s+pod\\s+wildwuchs\\S*$"
             ],
@@ -792,7 +792,7 @@
           },
           {
             "id": "t-init-describe",
-            "text": "Schau hinein: <code>kubectl describe pod &lt;vorbereiter-pod&gt;</code> (Name aus der Liste). Der Abschnitt <code>Init Containers:</code> zeigt <code>vorbereiter</code> als <b>Terminated (Completed)</b> und <code>Prepares: 200Mi in das emptyDir</code> – er hat vorgearbeitet und sich beendet.",
+            "text": "Schau hinein: <code>kubectl describe pod <vorbereiter-pod></code> (Name aus der Liste). Der Abschnitt <code>Init Containers:</code> zeigt <code>vorbereiter</code> als <b>Terminated (Completed)</b> und <code>Prepares: 200Mi in das emptyDir</code> – er hat vorgearbeitet und sich beendet.",
             "accept": [
               "^kubectl\\s+describe\\s+pod\\s+vorbereiter\\S*$"
             ],
@@ -894,7 +894,7 @@
           },
           {
             "id": "t-init-describe-evict",
-            "text": "Warum genau? <code>kubectl describe pod &lt;doppelt-pod&gt;</code>. Unter <code>Init Containers</code> steht die <b>Spitze (initContainer): 600Mi</b>, und der Evicted-Grund nennt <code>verbraucht 600Mi</code> gegen das 512Mi-Limit. Der Peak, nicht der Endstand, war schuld.",
+            "text": "Warum genau? <code>kubectl describe pod <doppelt-pod></code>. Unter <code>Init Containers</code> steht die <b>Spitze (initContainer): 600Mi</b>, und der Evicted-Grund nennt <code>verbraucht 600Mi</code> gegen das 512Mi-Limit. Der Peak, nicht der Endstand, war schuld.",
             "accept": [
               "^kubectl\\s+describe\\s+pod\\s+doppelt\\S*$"
             ],
@@ -1226,7 +1226,7 @@
         "brief": "Bucket anlegen",
         "cmd": {
           "id": "t-obj-mb",
-          "intro": "🆕 Zuerst der Eimer selbst. Ein <b>Bucket</b> ist der oberste Behälter im Object Store – global eindeutig benannt. Du legst ihn mit <code>aws s3 mb</code> an (mb = <i>make bucket</i>). Die Adresse schreibt man als <code>s3://&lt;name&gt;</code>.",
+          "intro": "🆕 Zuerst der Eimer selbst. Ein <b>Bucket</b> ist der oberste Behälter im Object Store – global eindeutig benannt. Du legst ihn mit <code>aws s3 mb</code> an (mb = <i>make bucket</i>). Die Adresse schreibt man als <code>s3://<name></code>.",
           "text": "Leg den Hafen-Eimer an: <code>aws s3 mb s3://hafen-backup</code>.",
           "accept": [
             "^aws\\s+s3\\s+mb\\s+s3://hafen-backup$"
@@ -1241,7 +1241,7 @@
         "brief": "Objekt hochladen (put)",
         "cmd": {
           "id": "t-obj-put",
-          "intro": "🆕 Jetzt das Hochladen. <code>aws s3 cp &lt;datei&gt; s3://&lt;bucket&gt;/&lt;key&gt;</code> kopiert eine lokale Datei als <b>Objekt</b> in den Bucket. Der <b>Key</b> ist der Name, unter dem es liegt. Du darfst Schrägstriche im Key nutzen (<code>manifeste/…</code>) – das <b>sieht</b> aus wie ein Ordner, ist aber nur Teil des Schlüssels: der Namensraum ist <b>flach</b>, es gibt keine echten Verzeichnisse.",
+          "intro": "🆕 Jetzt das Hochladen. <code>aws s3 cp <datei> s3://<bucket>/<key></code> kopiert eine lokale Datei als <b>Objekt</b> in den Bucket. Der <b>Key</b> ist der Name, unter dem es liegt. Du darfst Schrägstriche im Key nutzen (<code>manifeste/…</code>) – das <b>sieht</b> aus wie ein Ordner, ist aber nur Teil des Schlüssels: der Namensraum ist <b>flach</b>, es gibt keine echten Verzeichnisse.",
           "text": "Lade die Frachtliste hoch: <code>aws s3 cp frachtliste.txt s3://hafen-backup/manifeste/frachtliste.txt</code>.",
           "accept": [
             "^aws\\s+s3\\s+cp\\s+frachtliste\\.txt\\s+s3://hafen-backup/manifeste/frachtliste\\.txt$"
@@ -1426,7 +1426,7 @@
         "brief": "Backup hochladen (put)",
         "cmd": {
           "id": "t-obak-put",
-          "intro": "Jetzt der Kern: das Backup <b>off-cluster</b> ablegen. Mit <code>aws s3 cp &lt;datei&gt; s3://&lt;bucket&gt;/&lt;key&gt;</code> schiebst du den Datenbank-Export in den Eimer. Ein Datum im Key (<code>backups/…-2024-01-01.dump</code>) ist gute Praxis – so liegen mehrere Stände nebeneinander, statt sich zu überschreiben.",
+          "intro": "Jetzt der Kern: das Backup <b>off-cluster</b> ablegen. Mit <code>aws s3 cp <datei> s3://<bucket>/<key></code> schiebst du den Datenbank-Export in den Eimer. Ein Datum im Key (<code>backups/…-2024-01-01.dump</code>) ist gute Praxis – so liegen mehrere Stände nebeneinander, statt sich zu überschreiben.",
           "text": "Sichere den Export off-site: <code>aws s3 cp kai-stammdaten.dump s3://hafen-offsite/backups/kai-stammdaten-2024-01-01.dump</code>.",
           "accept": [
             "^aws\\s+s3\\s+cp\\s+kai-stammdaten\\.dump\\s+s3://hafen-offsite/backups/kai-stammdaten-2024-01-01\\.dump$"

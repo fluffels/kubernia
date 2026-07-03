@@ -133,7 +133,7 @@
           },
           {
             "id": "t-sa-describe",
-            "text": "Der Beweis: <code>kubectl describe pod &lt;pod-name&gt;</code> (Name aus der Liste oben). In der Zeile <code>Service Account:</code> steht <code>wachdienst</code> – nicht mehr <code>default</code>. Der Ausweis sitzt.",
+            "text": "Der Beweis: <code>kubectl describe pod <pod-name></code> (Name aus der Liste oben). In der Zeile <code>Service Account:</code> steht <code>wachdienst</code> – nicht mehr <code>default</code>. Der Ausweis sitzt.",
             "accept": [
               "^kubectl\\s+describe\\s+pod\\s+wachposten-\\S+$"
             ],
@@ -637,7 +637,7 @@
         "brief": "Die strengste Stufe scharf schalten",
         "cmd": {
           "id": "t-ps-enforce",
-          "intro": "🆕 Die Pod-Security-Stufe setzt du als <b>Namespace-Label</b>: <code>pod-security.kubernetes.io/enforce=&lt;stufe&gt;</code>. Ab <code>restricted</code> prüft das Tor jeden <b>neu</b> ausgerollten Pod – ein ungehärteter bekäme dann: <code>Error from server (Forbidden): admission webhook \"pod-security\" denied the request: … runAsNonRoot muss true sein</code>. (Schon laufende Pods bleiben, bis sie neu starten.)",
+          "intro": "🆕 Die Pod-Security-Stufe setzt du als <b>Namespace-Label</b>: <code>pod-security.kubernetes.io/enforce=<stufe></code>. Ab <code>restricted</code> prüft das Tor jeden <b>neu</b> ausgerollten Pod – ein ungehärteter bekäme dann: <code>Error from server (Forbidden): admission webhook \"pod-security\" denied the request: … runAsNonRoot muss true sein</code>. (Schon laufende Pods bleiben, bis sie neu starten.)",
           "text": "Schalt die strengste Stufe scharf: <code>kubectl label namespace default pod-security.kubernetes.io/enforce=restricted</code>.",
           "accept": [
             "^kubectl\\s+label\\s+(?:namespace|ns)\\s+default\\s+pod-security\\.kubernetes\\.io/enforce=restricted$"

@@ -478,8 +478,8 @@
         "brief": "Pod-Logs lesen",
         "cmd": {
           "id": "t-logs-basic",
-          "intro": "🆕 Neuer Befehl: <code>kubectl logs &lt;pod&gt;</code> – zeigt die Textausgaben (stdout/stderr) des Containers. Den Pod-Namen bekommst du mit <code>kubectl get pods</code>.",
-          "text": "Lies die Logs des signalgeber-Pods: <code>kubectl logs &lt;pod-name&gt;</code>.",
+          "intro": "🆕 Neuer Befehl: <code>kubectl logs <pod></code> – zeigt die Textausgaben (stdout/stderr) des Containers. Den Pod-Namen bekommst du mit <code>kubectl get pods</code>.",
+          "text": "Lies die Logs des signalgeber-Pods: <code>kubectl logs <pod-name></code>.",
           "accept": [
             "^kubectl\\s+logs\\s+(signalgeber|signalgeber-\\S+)$"
           ],
@@ -493,7 +493,7 @@
         "cmd": {
           "id": "t-logs-follow",
           "intro": "🆕 Flag <code>-f</code> (<code>--follow</code>): Hält den Log-Stream offen – neue Zeilen erscheinen live. Ideal, um zu sehen, was gerade passiert. Mit <code>^C</code> beenden.",
-          "text": "Folge den Logs live: <code>kubectl logs -f &lt;pod-name&gt;</code>.",
+          "text": "Folge den Logs live: <code>kubectl logs -f <pod-name></code>.",
           "accept": [
             "^kubectl\\s+logs\\s+(-f|--follow)\\s+(signalgeber|signalgeber-\\S+)$",
             "^kubectl\\s+logs\\s+(signalgeber|signalgeber-\\S+)\\s+(-f|--follow)$"
@@ -506,7 +506,7 @@
         "type": "choice",
         "npc": "lumi",
         "reviewId": "q-obs-logs-basic",
-        "q": "Was zeigt dir <code>kubectl logs &lt;pod&gt;</code>?",
+        "q": "Was zeigt dir <code>kubectl logs <pod></code>?",
         "options": [
           {
             "t": "Die Textausgaben der App – stdout/stderr des laufenden Containers.",
@@ -561,7 +561,7 @@
           },
           {
             "id": "t-logs-crash",
-            "text": "Lies die Logs der bakenbote: <code>kubectl logs &lt;pod-name&gt;</code>. Schau dir die letzte Zeile an – was steht da?",
+            "text": "Lies die Logs der bakenbote: <code>kubectl logs <pod-name></code>. Schau dir die letzte Zeile an – was steht da?",
             "accept": [
               "^kubectl\\s+logs\\s+(bakenbote|bakenbote-\\S+)$"
             ],
@@ -576,7 +576,7 @@
         "cmd": {
           "id": "t-logs-previous",
           "intro": "🆕 Flag <code>--previous</code> (auch: <code>-p</code>): Zeigt die Logs des <b>letzten abgestürzten</b> Containers – genau das, was er kurz vor dem Exit ausgegeben hat. Nur sinnvoll, wenn der Pod schon neugestartet ist (also bei CrashLoop).",
-          "text": "Lies den Absturz-Log: <code>kubectl logs --previous &lt;bakenbote-pod&gt;</code>.",
+          "text": "Lies den Absturz-Log: <code>kubectl logs --previous <bakenbote-pod></code>.",
           "accept": [
             "^kubectl\\s+logs\\s+(--previous|-p)\\s+(bakenbote|bakenbote-\\S+)$",
             "^kubectl\\s+logs\\s+(bakenbote|bakenbote-\\S+)\\s+(--previous|-p)$"

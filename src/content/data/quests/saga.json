@@ -113,7 +113,7 @@
         "brief": "Was der Baustein zurückgibt",
         "cmd": {
           "id": "t-output",
-          "intro": "🆕 Neuer Befehl: <code>terraform output &lt;name&gt;</code> – zeigt einen deklarierten Output-Wert. Module reichen ihre Outputs nach oben durch: <code>modules/anleger/outputs.tf</code> berechnet die Adresse, die Wurzel-Konfig macht sie als <code>nordanleger_adresse</code> sichtbar.",
+          "intro": "🆕 Neuer Befehl: <code>terraform output <name></code> – zeigt einen deklarierten Output-Wert. Module reichen ihre Outputs nach oben durch: <code>modules/anleger/outputs.tf</code> berechnet die Adresse, die Wurzel-Konfig macht sie als <code>nordanleger_adresse</code> sichtbar.",
           "text": "Frag die fertige Adresse des Nordanlegers ab: <code>terraform output nordanleger_adresse</code>.",
           "accept": [
             "^terraform\\s+output\\s+nordanleger_adresse$"
@@ -434,7 +434,7 @@
         "npc": "saga",
         "lines": [
           "Da bist du, Kapitän – die letzte Lektion. Schau dir unsere bisherigen Konfigs an: Überall stecken Namen, Zahlen und Regionen fest im Code. Will ich die Flotte umtaufen oder ein Schiff mehr fahren, muss ich mitten in den Ressourcen herumschrauben. Fehleranfällig und unübersichtlich.",
-          "Sauberer geht's mit <b>Variablen</b>: die <b>Eingaben</b> der Konfig, gebündelt an EINER Stelle als Stellschrauben. Die Ressourcen lesen nur noch <code>var.&lt;name&gt;</code> – kein fest verdrahteter Wert mehr.",
+          "Sauberer geht's mit <b>Variablen</b>: die <b>Eingaben</b> der Konfig, gebündelt an EINER Stelle als Stellschrauben. Die Ressourcen lesen nur noch <code>var.<name></code> – kein fest verdrahteter Wert mehr.",
           "Und am anderen Ende die <b>Outputs</b>: berechnete Ergebnisse, die die Konfig sauber nach außen gibt – die fertige Adresse, die Flottengröße. Geheimnisse markiert man dabei als <b>sensitive</b>, dann verbirgt Terraform sie in der Ausgabe. Schau dir die drei Dateien an."
         ]
       },
