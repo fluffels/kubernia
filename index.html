@@ -9,14 +9,20 @@
 </head>
 <body>
 
-  <!-- tabindex=-1: nicht per Tab erreichbar, aber programmatisch fokussierbar –
+  <!-- role=main: der Phaser-Canvas-Host ist der Hauptinhalt der Seite – so liegt der
+       Spielbereich in einer Landmark-Region (axe 'region', #560). aria-label, weil der
+       Canvas selbst keinen vorlesbaren Text hat.
+       tabindex=-1: nicht per Tab erreichbar, aber programmatisch fokussierbar –
        so gibt closeOverlays()/closeDialogue() den Fokus hierher zurück (#506). -->
-  <div id="game-container" tabindex="-1"></div>
-  <div id="vignette"></div>
+  <div id="game-container" tabindex="-1" role="main" aria-label="Spielwelt – Hafen Kubernia"></div>
+  <!-- rein dekorativer Rand-Schleier: aria-hidden, damit er nicht als landmark-loser
+       Inhalt zählt (axe 'region', #560) und Screenreader ihn ignorieren. -->
+  <div id="vignette" aria-hidden="true"></div>
   <input type="file" id="save-import" accept=".json" class="hidden">
 
-  <!-- HUD -->
-  <div id="hud">
+  <!-- HUD – role=region+aria-label: die dauerhaft sichtbare Statusleiste (Rang/XP/
+       Dublonen/Uhr) und die Steuer-Hinweise liegen so in einer Landmark (axe 'region', #560). -->
+  <div id="hud" role="region" aria-label="Spielstand und Steuerung">
     <div class="hud-left">
       <div class="hud-rank"><span id="hud-rankname">Landratte</span>
         <div class="xpbar"><div id="hud-xpfill"></div></div>
@@ -37,8 +43,10 @@
     <span id="alarm-timer" class="alarm-timer"></span>
   </div>
 
-  <!-- Interaktions-Hinweis -->
-  <div id="prompt" class="hidden"></div>
+  <!-- Interaktions-Hinweis – role=status+aria-live: der kontextuelle Hinweis ("E: mit … reden")
+       wird beim Auftauchen höflich vorgelesen und liegt als Live-Region in einer Landmark
+       (axe 'region', #560). -->
+  <div id="prompt" class="hidden" role="status" aria-live="polite"></div>
 
   <!-- Dialog -->
   <div id="dialogue" class="hidden" role="dialog" aria-modal="true" aria-labelledby="dlg-name">
