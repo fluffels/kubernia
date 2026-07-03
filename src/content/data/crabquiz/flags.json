@@ -62,7 +62,7 @@
       "Es zeigt nur die Nodes an."
     ],
     "correct": 0,
-    "explain": "<code>-n &lt;namespace&gt;</code> (Langform <code>--namespace</code>) gehört zu fast allen <code>kubectl</code>-Befehlen. Namespaces unterteilen den Cluster in getrennte Bereiche: Ohne <code>-n</code> arbeitet kubectl im Namespace <code>default</code>; mit <code>-n kube-system</code> schaust du z.B. ins Maschinenherz von Kubernetes."
+    "explain": "<code>-n <namespace></code> (Langform <code>--namespace</code>) gehört zu fast allen <code>kubectl</code>-Befehlen. Namespaces unterteilen den Cluster in getrennte Bereiche: Ohne <code>-n</code> arbeitet kubectl im Namespace <code>default</code>; mit <code>-n kube-system</code> schaust du z.B. ins Maschinenherz von Kubernetes."
   },
   {
     "id": "q-flag-apply-f",
@@ -75,7 +75,7 @@
       "Es löscht die Datei nach dem Anwenden."
     ],
     "correct": 0,
-    "explain": "<code>-f &lt;datei&gt;</code> (from file) gehört zu <code>kubectl apply</code> (auch <code>create</code>/<code>delete</code>): Es sagt kubectl, den gewünschten Zustand aus dieser YAML-Datei herzustellen. Das ist der deklarative Weg – die Datei ist die Quelle der Wahrheit."
+    "explain": "<code>-f <datei></code> (from file) gehört zu <code>kubectl apply</code> (auch <code>create</code>/<code>delete</code>): Es sagt kubectl, den gewünschten Zustand aus dieser YAML-Datei herzustellen. Das ist der deklarative Weg – die Datei ist die Quelle der Wahrheit."
   },
   {
     "id": "q-flag-helm-set",
@@ -88,7 +88,7 @@
       "Es löscht den angegebenen Wert aus dem Chart."
     ],
     "correct": 0,
-    "explain": "<code>--set &lt;schlüssel&gt;=&lt;wert&gt;</code> gehört zu <code>helm install/upgrade</code>: Statt die values.yaml zu ändern, überschreibst du einen einzelnen Drehknopf direkt beim Aufruf – praktisch für schnelle Anpassungen. Für viele/dauerhafte Werte nimmt man eine eigene values-Datei."
+    "explain": "<code>--set <schlüssel>=<wert></code> gehört zu <code>helm install/upgrade</code>: Statt die values.yaml zu ändern, überschreibst du einen einzelnen Drehknopf direkt beim Aufruf – praktisch für schnelle Anpassungen. Für viele/dauerhafte Werte nimmt man eine eigene values-Datei."
   },
   {
     "id": "q-flag-git-commit-m",
@@ -114,7 +114,7 @@
       "Es zeigt die Liste aller Branches."
     ],
     "correct": 0,
-    "explain": "<code>-b</code> (branch) gehört zu <code>git checkout</code>: Mit <code>-b</code> wird ein NEUER Branch erstellt und du landest sofort darauf. Ohne <code>-b</code> (<code>git checkout &lt;name&gt;</code>) wechselst du nur auf einen schon vorhandenen Branch."
+    "explain": "<code>-b</code> (branch) gehört zu <code>git checkout</code>: Mit <code>-b</code> wird ein NEUER Branch erstellt und du landest sofort darauf. Ohne <code>-b</code> (<code>git checkout <name></code>) wechselst du nur auf einen schon vorhandenen Branch."
   },
   {
     "id": "q-flag-git-add-dot",

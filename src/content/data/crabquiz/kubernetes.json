@@ -98,7 +98,7 @@
       "Es ist die IP-Adresse des Pods in Kurzform."
     ],
     "correct": 0,
-    "explain": "Pods aus einem Deployment werden automatisch benannt: &lt;Deployment&gt;-&lt;ReplicaSet-Hash&gt;-&lt;Pod-Hash&gt;. So kollidiert kein Name, auch wenn ständig neue Pods nachstarten. Die noch kryptischere CONTAINER ID in <code>docker ps</code> vergibt analog die Container-Runtime – beides sind eindeutige, maschinengemachte Stempel, keine Handarbeit."
+    "explain": "Pods aus einem Deployment werden automatisch benannt: <Deployment>-<ReplicaSet-Hash>-<Pod-Hash>. So kollidiert kein Name, auch wenn ständig neue Pods nachstarten. Die noch kryptischere CONTAINER ID in <code>docker ps</code> vergibt analog die Container-Runtime – beides sind eindeutige, maschinengemachte Stempel, keine Handarbeit."
   },
   {
     "id": "q-ch3-1",
@@ -333,13 +333,13 @@
     "chapter": "storage-backup-restore",
     "q": "Vor einem riskanten Deploy willst du das nächtliche Backup <b>sofort</b> laufen lassen, ohne auf den Zeitplan zu warten. Wie?",
     "options": [
-      "Den CronJob manuell als Job auslösen: <code>kubectl create job --from=cronjob/&lt;name&gt; &lt;jobname&gt;</code>.",
+      "Den CronJob manuell als Job auslösen: <code>kubectl create job --from=cronjob/<name> <jobname></code>.",
       "Den CronJob löschen und neu anlegen – dann läuft er einmal.",
       "Die Systemuhr des Clusters auf die Backup-Zeit stellen.",
       "Gar nicht – ein CronJob läuft ausschließlich nach Zeitplan."
     ],
     "correct": 0,
-    "explain": "<code>kubectl create job --from=cronjob/&lt;name&gt; &lt;jobname&gt;</code> erzeugt aus der Vorlage des CronJobs sofort einen einmaligen Job – dieselbe Aufgabe, nur jetzt statt zur geplanten Zeit. Genau richtig, um vor einem Deploy noch schnell ein frisches Backup zu ziehen, ohne den Zeitplan anzufassen."
+    "explain": "<code>kubectl create job --from=cronjob/<name> <jobname></code> erzeugt aus der Vorlage des CronJobs sofort einen einmaligen Job – dieselbe Aufgabe, nur jetzt statt zur geplanten Zeit. Genau richtig, um vor einem Deploy noch schnell ein frisches Backup zu ziehen, ohne den Zeitplan anzufassen."
   },
   {
     "id": "q-cron-syntax",

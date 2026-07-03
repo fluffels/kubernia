@@ -30,13 +30,13 @@
     "chapter": "gitops-app-of-apps",
     "q": "Wie nutzt man einen <b>Namespace</b> als leichte Sandbox im selben Cluster?",
     "options": [
-      "Man legt einen eigenen Namespace an und arbeitet mit <code>kubectl -n &lt;name&gt;</code> darin – getrennt von den anderen, ohne einen zweiten Cluster zu brauchen.",
+      "Man legt einen eigenen Namespace an und arbeitet mit <code>kubectl -n <name></code> darin – getrennt von den anderen, ohne einen zweiten Cluster zu brauchen.",
       "Man löscht zuerst alle anderen Namespaces.",
       "Ein Namespace ist ein eigener physischer Server.",
       "Namespaces verschlüsseln den Cluster gegen Angriffe."
     ],
     "correct": 0,
-    "explain": "Ein Namespace teilt EINEN Cluster in getrennte Abschnitte. Mit <code>kubectl -n &lt;name&gt;</code> arbeitet man gezielt in einem davon – z.B. einem <code>test</code>-Namespace neben <code>prod</code>. Das ist die leichteste Sandbox: isoliert, aber ohne den Aufwand eines eigenen Clusters."
+    "explain": "Ein Namespace teilt EINEN Cluster in getrennte Abschnitte. Mit <code>kubectl -n <name></code> arbeitet man gezielt in einem davon – z.B. einem <code>test</code>-Namespace neben <code>prod</code>. Das ist die leichteste Sandbox: isoliert, aber ohne den Aufwand eines eigenen Clusters."
   },
   {
     "id": "q-sandbox-kind-minikube",

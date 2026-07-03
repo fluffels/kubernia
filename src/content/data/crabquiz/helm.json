@@ -88,7 +88,7 @@
   {
     "id": "q-helm-package",
     "chapter": "helm-umbrella-chart",
-    "q": "Was macht helm package &lt;chart&gt;?",
+    "q": "Was macht helm package <chart>?",
     "options": [
       "Es schnürt das Chart in ein versioniertes .tgz-Archiv – zum Teilen oder in ein Repo legen.",
       "Es startet das Chart als Container.",
@@ -96,7 +96,7 @@
       "Es lädt ein fremdes Chart herunter."
     ],
     "correct": 0,
-    "explain": "package erzeugt &lt;name&gt;-&lt;version&gt;.tgz. Genau diese Archive liegen in Chart-Repos – das ist die Brücke vom eigenen Chart zum Verteilen."
+    "explain": "package erzeugt <name>-<version>.tgz. Genau diese Archive liegen in Chart-Repos – das ist die Brücke vom eigenen Chart zum Verteilen."
   },
   {
     "id": "q-helm-version-app",
@@ -275,6 +275,6 @@
       "Um ein Subchart nachzuladen."
     ],
     "correct": 0,
-    "explain": "<code>toYaml</code> serialisiert einen kompletten Wert (z.B. den ganzen <code>resources</code>-Block) zu YAML, statt jedes Feld einzeln zu schreiben. Da die Einrückung im Manifest stimmen muss, kommt fast immer <code>nindent &lt;n&gt;</code> dazu – die berüchtigte Helm-Einrückungs-Falle."
+    "explain": "<code>toYaml</code> serialisiert einen kompletten Wert (z.B. den ganzen <code>resources</code>-Block) zu YAML, statt jedes Feld einzeln zu schreiben. Da die Einrückung im Manifest stimmen muss, kommt fast immer <code>nindent <n></code> dazu – die berüchtigte Helm-Einrückungs-Falle."
   }
 ]

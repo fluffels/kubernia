@@ -16,6 +16,7 @@ import { KQContent } from "../src/content";
 import {
   correctAnswers,
   indexConventionViolations,
+  normalizeAnswer,
   snapshotViolations,
 } from "../src/content/quizcheck";
 
@@ -88,6 +89,23 @@ test("Red-Green: neue und entfernte Karten werden gemeldet", () => {
   expect(snapshotViolations({ neu: "text" }, {})[0]).toContain("neue Karte");
   expect(snapshotViolations({}, { weg: "alt" })).toHaveLength(1);
   expect(snapshotViolations({}, { weg: "alt" })[0]).toContain("entfernt");
+});
+
+test("Platzhalter-kodierungs-agnostisch: bare <token> und entity &lt;token&gt; normalisieren gleich (#476)", () => {
+  // Der Kern der #476-Umstellung: ein Platzhalter von `&lt;ns&gt;` auf bare `<ns>`
+  // umzustellen darf die korrekte Antwort NICHT driften lassen (sonst bräuchte jede
+  // Häppchen-Konvertierung eine Golden-Regeneration und das Golden würde den Platzhalter
+  // beim Tag-Strippen verlieren).
+  const bare = "kubectl auth can-i delete pods --as=system:serviceaccount:<ns>:lager";
+  const entity = "kubectl auth can-i delete pods --as=system:serviceaccount:&lt;ns&gt;:lager";
+  expect(normalizeAnswer(bare)).toBe(normalizeAnswer(entity));
+  // ... und der Platzhalter bleibt im Golden lesbar erhalten (nicht ersatzlos gestrippt).
+  expect(normalizeAnswer(bare)).toContain("<ns>");
+  // Gegenprobe (Red-Green): der wörtliche Terraform-Marker bleibt im Content entity-kodiert
+  // (`&lt;sensitive&gt;`, kein Platzhalter) und normalisiert weiter zu <sensitive>; ein echtes
+  // HTML-Tag wird nach wie vor gestrippt.
+  expect(normalizeAnswer("Rohwert; sonst &lt;sensitive&gt;")).toBe("Rohwert; sonst <sensitive>");
+  expect(normalizeAnswer("<code>terraform output</code> reicht")).toBe("terraform output reicht");
 });
 
 test("Red-Green: unveränderte Karte ist KEIN Verstoß", () => {

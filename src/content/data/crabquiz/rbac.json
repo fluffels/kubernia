@@ -66,13 +66,13 @@
     "chapter": "k8s-rbac-role",
     "q": "Du bist unsicher, ob der ServiceAccount <code>lager</code> Pods löschen darf. Wie prüfst du es, statt zu raten?",
     "options": [
-      "<code>kubectl auth can-i delete pods --as=system:serviceaccount:&lt;ns&gt;:lager</code> – es antwortet schlicht yes/no.",
+      "<code>kubectl auth can-i delete pods --as=system:serviceaccount:<ns>:lager</code> – es antwortet schlicht yes/no.",
       "Einen Pod löschen und schauen, ob es klappt.",
       "In der Doku des Container-Images nachlesen.",
       "Den Cluster neu starten und beobachten, was passiert."
     ],
     "correct": 0,
-    "explain": "kubectl auth can-i &lt;verb&gt; &lt;resource&gt; fragt den API-Server direkt: „darf ich das?“ Mit --as= prüfst du es stellvertretend für ein anderes Subjekt (z.B. einen ServiceAccount). So verifizierst du Berechtigungen vorher – statt sie im Ernstfall am kaputten Cluster zu erraten."
+    "explain": "kubectl auth can-i <verb> <resource> fragt den API-Server direkt: „darf ich das?“ Mit --as= prüfst du es stellvertretend für ein anderes Subjekt (z.B. einen ServiceAccount). So verifizierst du Berechtigungen vorher – statt sie im Ernstfall am kaputten Cluster zu erraten."
   },
   {
     "id": "q-podsec-1",

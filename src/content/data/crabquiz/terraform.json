@@ -131,7 +131,7 @@
       "Sie verschlüsseln die gesamte Konfiguration automatisch."
     ],
     "correct": 0,
-    "explain": "Statt feste Werte mitten in die Ressourcen zu tippen, liest die Ressource var.&lt;name&gt;. Eine Stellschraube an einer Stelle – sauber und wiederverwendbar."
+    "explain": "Statt feste Werte mitten in die Ressourcen zu tippen, liest die Ressource var.<name>. Eine Stellschraube an einer Stelle – sauber und wiederverwendbar."
   },
   {
     "id": "q-flotte-variablen-outputs-2",
@@ -228,25 +228,25 @@
     "chapter": "terraform-variablen-outputs",
     "q": "Wie greift eine Ressource auf den Wert einer Variablen zu?",
     "options": [
-      "Über <code>var.&lt;name&gt;</code> (z. B. <code>var.schiffe</code>) – statt eines fest eingetippten Werts.",
+      "Über <code>var.<name></code> (z. B. <code>var.schiffe</code>) – statt eines fest eingetippten Werts.",
       "Sie kopiert den Wert direkt aus der State-Datei.",
-      "Über <code>output.&lt;name&gt;</code> – Outputs liefern die Eingaben.",
+      "Über <code>output.<name></code> – Outputs liefern die Eingaben.",
       "Gar nicht – Variablen sind reine Dokumentation ohne Wirkung auf Ressourcen."
     ],
     "correct": 0,
-    "explain": "Die Ressource liest <code>var.&lt;name&gt;</code> statt einer fest verdrahteten Zahl. So gibt es den Wert nur an EINER Stelle (der variable-Block) – die Stellschraube, an der man dreht, ohne den Ressourcen-Code anzufassen."
+    "explain": "Die Ressource liest <code>var.<name></code> statt einer fest verdrahteten Zahl. So gibt es den Wert nur an EINER Stelle (der variable-Block) – die Stellschraube, an der man dreht, ohne den Ressourcen-Code anzufassen."
   },
   {
     "id": "q-flotte-variablen-outputs-4",
     "chapter": "terraform-variablen-outputs",
     "q": "Ein Output ist als <code>sensitive</code> markiert. Wie bekommst du seinen echten Wert trotzdem?",
     "options": [
-      "Gezielt mit <code>terraform output &lt;name&gt;</code> – das gibt den Rohwert aus; nur in der Gesamtübersicht bleibt er als <code>&lt;sensitive&gt;</code> verborgen.",
+      "Gezielt mit <code>terraform output <name></code> – das gibt den Rohwert aus; nur in der Gesamtübersicht bleibt er als <code>&lt;sensitive&gt;</code> verborgen.",
       "Gar nicht – sensitive verschlüsselt den Wert dauerhaft.",
       "Indem man <code>sensitive</code> aus den .tf-Dateien löscht und neu appliziert.",
       "Nur über einen Blick direkt in die State-Datei, sonst nirgends."
     ],
     "correct": 0,
-    "explain": "sensitive verbirgt den Wert nur in der Übersicht (damit er nicht versehentlich in Logs landet). Gezielt abgefragt – <code>terraform output &lt;name&gt;</code> – liefert Terraform ihn bei Bedarf trotzdem im Klartext."
+    "explain": "sensitive verbirgt den Wert nur in der Übersicht (damit er nicht versehentlich in Logs landet). Gezielt abgefragt – <code>terraform output <name></code> – liefert Terraform ihn bei Bedarf trotzdem im Klartext."
   }
 ]

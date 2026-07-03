@@ -4,7 +4,7 @@
     "chapter": "gitops-drift-detection",
     "q": "Was ist eine <b>CustomResourceDefinition</b> (CRD)?",
     "options": [
-      "Sie erweitert Kubernetes um einen <b>eigenen Ressourcen-Typ</b> – danach funktioniert <code>kubectl get &lt;eigene-ressource&gt;</code> genau wie <code>kubectl get pods</code>.",
+      "Sie erweitert Kubernetes um einen <b>eigenen Ressourcen-Typ</b> – danach funktioniert <code>kubectl get <eigene-ressource></code> genau wie <code>kubectl get pods</code>.",
       "Eine besonders große Pod-Definition mit vielen Containern.",
       "Eine automatische Sicherungskopie aller Ressourcen im Cluster.",
       "Ein Pflicht-Feld, das jedes Deployment haben muss."
