@@ -119,6 +119,47 @@ test("invariants: gleiche Namen über VERSCHIEDENE Ressourcentypen sind legal", 
   assert.deepEqual(clusterInvariantViolations(sim), []);
 });
 
+/* ---------- (6) RBAC: Role vs. ClusterRole sind verschiedene Arten (#578) ---------- */
+
+test("invariants: gleichnamige Role und ClusterRole dürfen koexistieren (#578)", () => {
+  // Role (namespaced) und ClusterRole (cluster-weit) sind verschiedene Arten – wie beim
+  // Merge-Dedup (name && cluster) darf es "leser" als beides geben. Vorher meldete die
+  // Invariante hier fälschlich ein Duplikat, weil sie nur den Namen prüfte.
+  sim.roles.push({ name: "leser", cluster: false, rules: [], created: 0 });
+  sim.roles.push({ name: "leser", cluster: true, rules: [], created: 0 });
+  assert.deepEqual(clusterInvariantViolations(sim), []);
+});
+
+test("invariants: gleichnamige RoleBinding und ClusterRoleBinding dürfen koexistieren (#578)", () => {
+  const ref = { kind: "Role" as const, name: "leser" };
+  sim.roleBindings.push({ name: "leser-bind", cluster: false, roleRef: ref, subjects: [], created: 0 });
+  sim.roleBindings.push({ name: "leser-bind", cluster: true, roleRef: ref, subjects: [], created: 0 });
+  assert.deepEqual(clusterInvariantViolations(sim), []);
+});
+
+test("invariants (ROT): zwei Roles GLEICHEN Scopes mit gleichem Namen werden erkannt (#578)", () => {
+  // gleicher Scope (beide namespaced) + gleicher Name = echtes Duplikat, muss weiterhin fangen
+  sim.roles.push({ name: "leser", cluster: false, rules: [], created: 0 });
+  sim.roles.push({ name: "leser", cluster: false, rules: [], created: 0 });
+  const viol = clusterInvariantViolations(sim).filter(m => /Role "leser".*doppelt/.test(m));
+  assert.equal(viol.length, 1); // ein Duplikat = eine Meldung
+});
+
+test("invariants (ROT): zwei ClusterRoleBindings mit gleichem Namen werden erkannt (#578)", () => {
+  const ref = { kind: "ClusterRole" as const, name: "admin" };
+  sim.roleBindings.push({ name: "admins", cluster: true, roleRef: ref, subjects: [], created: 0 });
+  sim.roleBindings.push({ name: "admins", cluster: true, roleRef: ref, subjects: [], created: 0 });
+  assert.match(clusterInvariantViolations(sim).join(), /ClusterRoleBinding "admins".*doppelt/);
+});
+
+test("invariants: legales Role+ClusterRole-Paar bricht exec() NICHT ab (#578)", () => {
+  // Der eigentliche latente Bug: eine Szenario-Merge legt beide an, exec() prüft die
+  // Invarianten an der Aggregat-Grenze – das darf nicht fälschlich werfen.
+  sim.roles.push({ name: "leser", cluster: false, rules: [], created: 0 });
+  sim.roles.push({ name: "leser", cluster: true, rules: [], created: 0 });
+  assert.doesNotThrow(() => assertClusterInvariants(sim));
+});
+
 /* ---------- (7) Referenzielle Integrität PVC↔PV (#509) ---------- */
 
 test("invariants (ROT): Bound-PVC an ein nicht existierendes Volume wird erkannt", () => {
