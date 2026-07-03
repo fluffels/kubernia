@@ -198,6 +198,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/store/legacy-idb.ts`](src/store/legacy-idb.ts) | Persistenz | Rename-Migration KubeQuest→Kubernia (#557): hebt einen Alt-Bestand aus der IndexedDB `kubequest` in die neue DB `kubernia` (nur in ein leeres Ziel, Alt-DB bleibt als Netz). |
 | [`src/scenes.ts`](src/scenes.ts) | Präsentation | Barrel der 7 Phaser-Szenen (`KQScenes`, #345). → [presentation.md](docs/module/presentation.md) |
 | [`src/scenes/shared.ts`](src/scenes/shared.ts) | Präsentation | Geteilte Szenen-Bausteine (Font/Schilder/NPC-Render) + Insel-Szenen-Basisklasse `IslandScene` (#423). |
+| [`src/scenes/geometry.ts`](src/scenes/geometry.ts) | Präsentation | Szenen-Geometrie-/Hitbox-Konstanten-SSOT (#590): Sub-Tile-Hitbox-Radius `HIT_R` + `LAMP_HIT`/`CRATE_HIT` + Pod-Steg-/Tag-Layout (`SLOTS_PER_PIER`/`TAG_CAP`/`REVEAL_*`); vorher über WorldScene/RegionScene/regions/clustersync verstreut. |
 | [`src/scenes/BootScene.ts`](src/scenes/BootScene.ts) | Präsentation | Lädt Assets + Frame-Slicing, startet World. |
 | [`src/scenes/WorldScene.ts`](src/scenes/WorldScene.ts) | Präsentation | Port Kubernia: schlanker Orchestrator (create/update) + Render-Primitive; Spiel-Systeme in `worldscene/*` (#393). |
 | [`src/scenes/worldscene/mapterrain.ts`](src/scenes/worldscene/mapterrain.ts) | Präsentation | Generischer, Phaser-freier Terrain-Lader: Boden/Kollision/Türen/NPCs aus `getMapEntry(scene.mapId)` statt fest „harbor" (#425). |

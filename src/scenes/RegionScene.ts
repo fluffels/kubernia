@@ -24,12 +24,9 @@ import { npcSpawnsForMap, objectsForMap } from "../content/entities";
 import { WATER, SAND, PATH, DOCK } from "../world/regions/archipel";
 import { setWorldScene, setInteriorOpen } from "../runtime";
 import { T, FOAM, WANG, STONE, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText, queueAssetLoad, sliceSheets, renderPlayer, stepSimplePlayer, IslandScene, type SceneNpc } from "./shared";
+import { HIT_R } from "./geometry";
 import type { Warp } from "../world/warps";
 import { assetsForScene } from "../assets-data";
-
-/** #343/#386: Radius der runden Sub-Tile-Hitboxen (Steine/Büsche/NPCs) – in allen
- *  Regionen gleich (wie in WorldScene). */
-const HIT_R = 6;
 
 /** Stein-Kai/-Klippe (Boden-Codes 96–98) – als volle Kachel gerendert + edge-„kai". */
 const isStone = (c: number) => c === STONE[0] || c === STONE[1] || c === STONE[2];
