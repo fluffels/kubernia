@@ -23,9 +23,12 @@
  *  eigener Typ, den nur die Fabriken/Operationen hier erzeugen. */
 export type Coins = number & { readonly __brand: "Coins" };
 
-/** Die EINE Regel: eine gültige Dublonen-Menge ist ganzzahlig und nicht negativ. */
+/** Die EINE Regel: eine gültige Dublonen-Menge ist eine nicht-negative, SICHERE ganze
+ *  Zahl. `Number.isSafeInteger` schließt in einem Rutsch aus: Nachkomma, NaN/Infinity
+ *  UND jenseits von 2^53 – wo die Ganzzahl-Präzision verloren geht (Overflow, #579). So
+ *  ist ein durch eine Addition „übergelaufener" Kontostand kein gültiger `Coins` mehr. */
 export function isCoins(n: number): boolean {
-  return Number.isInteger(n) && n >= 0;
+  return Number.isSafeInteger(n) && n >= 0;
 }
 
 /** Fehler eines prüfenden Smart-Constructors bzw. eines nicht gedeckten Abzugs. */
@@ -50,7 +53,9 @@ export function coins(n: number): Coins {
  *  wäre ein Wurf schlechter als ein sauber abgerundeter Wert. */
 export function toCoins(n: number): Coins {
   if (!Number.isFinite(n)) return 0 as Coins;
-  return Math.max(0, Math.floor(n)) as Coins;
+  // abrunden, mindestens 0 UND höchstens die sichere Ganzzahl-Grenze – damit die Fabrik
+  // ihr Versprechen „liefert immer eine gültige Menge" auch jenseits von 2^53 hält (#579).
+  return Math.min(Math.max(0, Math.floor(n)), Number.MAX_SAFE_INTEGER) as Coins;
 }
 
 /** Verdienst mit einem Multiplikator (Streak-Bonus) verrechnen und kaufmännisch runden –
@@ -59,9 +64,13 @@ export function applyMultiplier(amount: number, multiplier: number): Coins {
   return toCoins(Math.round(amount * multiplier));
 }
 
-/** Zwei Mengen addieren (Kontostand + Gutschrift) – bleibt per Konstruktion gültig. */
+/** Zwei Mengen addieren (Kontostand + Gutschrift). Reasserted die Regel über den
+ *  prüfenden Smart-Constructor statt roh zu branden (#579): zwei gültige Summanden
+ *  ergeben normal wieder eine gültige Menge – reißt die Summe aber die sichere
+ *  Ganzzahl-Grenze (Overflow), ist das ein echter Programmierfehler und wirft, statt
+ *  einen präzisionsverlierenden Kontostand stillschweigend zu branden. */
 export function add(balance: Coins, amount: Coins): Coins {
-  return (balance + amount) as Coins;
+  return coins(balance + amount);
 }
 
 /** Reicht der Kontostand für den Preis? (Affordability an EINER Stelle.) */
