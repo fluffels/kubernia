@@ -33,12 +33,21 @@ const scripts = pkg.scripts;
 // die dist/-Chunks, existiert also erst NACH `build`/`build:offline`.
 const BUILD_DEPENDENT_GATES = new Set(["check:bundle"]);
 
+// Netz-/nicht-deterministische Gates, die bewusst NICHT in der hermetischen,
+// offline-fähigen `verify`-Kette laufen dürfen: #610 check:doctickets gleicht die
+// offen-markierten Roadmap-Tickets gegen den echten `gh issue`-Status ab — das
+// braucht Netz + Token und ist nicht deterministisch. Es läuft als eigener,
+// non-blocking CI-Job (alarmierend) + lokal auf Zuruf, nicht als verify-Gate.
+const NETWORK_DEPENDENT_GATES = new Set(["check:doctickets"]);
+
 // Die build-freien Einzel-Gates, die `verify` fährt: jedes `check:*` (außer den
-// build-abhängigen) plus die drei Namens-Gates. Aus den Scripts abgeleitet, damit
-// ein neu hinzugefügtes `check:*`-Gate den Test automatisch mitzieht (statt hier zu
-// verrotten).
+// build- und netzabhängigen) plus die drei Namens-Gates. Aus den Scripts abgeleitet,
+// damit ein neu hinzugefügtes `check:*`-Gate den Test automatisch mitzieht (statt
+// hier zu verrotten).
 const GATE_SCRIPTS = [
-  ...Object.keys(scripts).filter((n) => n.startsWith("check:") && !BUILD_DEPENDENT_GATES.has(n)),
+  ...Object.keys(scripts).filter(
+    (n) => n.startsWith("check:") && !BUILD_DEPENDENT_GATES.has(n) && !NETWORK_DEPENDENT_GATES.has(n),
+  ),
   "typecheck",
   "lint",
   "test",
@@ -82,6 +91,22 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
         new RegExp(`\\bnpm run ${gate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(scripts.verify),
         `"${gate}" darf NICHT in der build-freien verify-Kette stehen`,
       ).toBe(false);
+    }
+  });
+
+  it("netzabhängige Gates (#610 check:doctickets) laufen NICHT in verify, sondern als eigener CI-Job", () => {
+    for (const gate of NETWORK_DEPENDENT_GATES) {
+      const needle = new RegExp(`\\bnpm run ${gate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+      // Nicht in der hermetischen verify-Kette (dort gäbe es kein Netz/Token).
+      expect(
+        needle.test(scripts.verify),
+        `"${gate}" darf NICHT in der offline-fähigen verify-Kette stehen`,
+      ).toBe(false);
+      // Aber es MUSS ein package.json-Skript sein (existiert & wird gepflegt).
+      expect(scripts[gate], `"${gate}" muss als package.json-Skript existieren`).toBeTruthy();
+      // ... und als eigener Schritt in der CI laufen (sonst alarmiert es nie automatisch).
+      const ci = readRepo(".github/workflows/ci.yml");
+      expect(ci.includes(`scripts/check-doc-tickets.mjs`) || needle.test(ci)).toBe(true);
     }
   });
 
