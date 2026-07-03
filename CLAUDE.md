@@ -238,6 +238,23 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 
 > **Konvention (gegen erneutes Aufblähen):** Neues `src/`-Modul = **eine** knappe Zeile hier (Datei · Schicht · ein Satz Zweck). Ausführliche Historie/Interface-Details kommen in das passende [`docs/module/`](docs/module/)-Tiefendoc, **nicht** in diese Tabelle. Tiefe Begründung der Schichtung (Domäne ↔ Anwendung ↔ Präsentation): [AGENTS.md › Architektur](AGENTS.md#architektur). **Diese Konvention ist maschinell bewacht (#482):** `npm run check:docmap` (CI-Gate + `test/docmap.test.ts`) meldet jede `src/`-Datei ohne Landkarten-Zeile, jede Zeile ohne Datei und jede Schicht, die von der `dependency-cruiser`-Zuordnung abweicht — die Landkarte kann also nicht mehr leise veralten.
 
+## 🧭 Schichtregeln beim Arbeiten im Verzeichnis (welche Imports gelten wo, #472)
+
+Die Landkarte oben sagt, **wo** ein Modul liegt; diese Tabelle sagt, **was du importieren darfst**, sobald du in einem Bereich arbeitest. Die **harten** Regeln (❌) sind keine Bitte, sondern werden von **`npm run check:arch`** (dependency-cruiser, #347) als CI-Gate erzwungen — eine Verletzung ist **rot**, nicht nur unschön. EINE Quelle der Schicht-Grenzen: [`scripts/layers.cjs`](scripts/layers.cjs); das *Warum* der Schichtung: [AGENTS.md › Architektur](AGENTS.md#architektur).
+
+| Wenn du hier arbeitest | Schicht | Darf importieren | ❌ Verboten (hart, `check:arch`) |
+|---|---|---|---|
+| `src/sim/*`, `src/content/*`, `src/world/*`, `src/core/*`, `src/hud/*`, `src/types.ts` … (= alles unter `src/`, das **nicht** in den drei Zeilen darunter steht) | **pure Domäne** | nur andere pure Domäne | `phaser`, `scenes`/`ui`/`sfx` |
+| `src/game/*`, `src/runtime.ts`, `src/devpanel.ts`, `src/store/*` | **Anwendung/Persistenz** | pure Domäne (nur „nach unten") | `phaser`, `scenes`/`ui`/`sfx` |
+| `src/scenes/*`, `src/ui/*`, `src/sfx.ts` | **Präsentation** | alles (nach unten offen) | *(keine Import-Regel — aber ACL beachten, s.u.)* |
+| `src/main.ts`, `src/assets-data.ts` | **Einstieg/Assets** | alles (bootet Phaser + Szenen) | *(bewusst ausgenommen)* |
+
+**Zusätzlich überall hart (`check:arch`, #390):** keine **Import-Zyklen** (geteilten Zustand nach [`src/runtime.ts`](src/runtime.ts) ziehen bzw. ein Host-Interface einführen — nicht die Regel aufweichen) und keine **verwaisten Module** (toter Code: einbinden oder löschen).
+
+**Weiche Konvention für die Präsentation (kein `check:arch`, aber gewollt):** Die Präsentation *darf* technisch nach unten alles importieren — die Übersetzung Hafen ↔ Sim läuft aber bewusst nur über die **Anti-Corruption-Layer** an genau zwei Stellen ([`src/scenes/worldscene/clustersync.ts`](src/scenes/worldscene/clustersync.ts) für den Cluster→Welt-Sync, [`src/hud/markup.ts`](src/hud/markup.ts) für Content-Texte), **nicht** als verstreute Sim-Zugriffe quer durch die UI. Warum: [docs/glossar.md](docs/glossar.md).
+
+**Braucht ein Bereich eigene, tiefe Regeln → modul-lokale `AGENTS.md`, statt diese Datei aufzublähen.** Dafür gibt es den **Kontext-Selektor** (#483): sehr detaillierte Bereichs-Konventionen liegen in einer `src/<bereich>/AGENTS.md`, die du **nur liest, wenn du dort arbeitest** — Vorbild [`src/content/AGENTS.md`](src/content/AGENTS.md) (Content-as-Data). Das ist die **Vorstufe zu Sub-CLAUDE.mds**: Wächst ein Modul so, dass ein Agent ohne Tiefenkontext regelmäßig falsch liegt, bekommt es eine eigene lokale Regel-Datei — statt die Root-CLAUDE.md (die JEDE Session lädt) zu überfrachten.
+
 **Weitere Anlaufstellen:**
 
 | Was | Wo |
