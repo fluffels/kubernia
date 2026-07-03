@@ -22,10 +22,13 @@
  *    eigentliche Durchsetzungspunkt.
  *  - Auf einem Feature-Branch / im lokalen pre-push-Hook (#528) greift er ebenso
  *    (volle Historie da) — als schnelle Vorab-Rückmeldung vor dem PR.
- *  - Auf dem push-auf-main-Event (nach dem Merge) bzw. in einem flachen Checkout
- *    ohne Basis (origin/main == HEAD) ist keine sinnvolle Basis da → der Check
- *    degradiert bewusst zu GRÜN (No-op), statt `main` rot zu machen. Kein falsches
- *    Rot; der Slice wurde ja schon auf dem PR gemessen.
+ *  - Auf dem push-auf-main-Event (nach dem Merge) setzt ci.yml die Basis auf den
+ *    Vorgänger-Commit (KQ_DIFF_BASE=github.event.before) → der Check misst den
+ *    gerade gemergten Slice AUCH auf main nach (#605, zweite Grenze hinter dem
+ *    PR-Gate #592; ein roter main-Lauf blockiert nichts, löst aber den Alarm-Job aus).
+ *  - Nur wo keine sinnvolle Basis auflösbar ist (flacher Checkout, workflow_dispatch,
+ *    origin/main == HEAD) degradiert der Check bewusst zu GRÜN (No-op), statt `main`
+ *    rot zu machen — kein falsches Rot.
  *
  * Override mit Pflicht-Begründung (gleiches Muster wie die check-size-ALLOWLIST,
  * inkl. stale-Meldung): ein bewusst breiter Slice (z.B. ein großer God-File-Split)

@@ -98,3 +98,33 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
     }
   });
 });
+
+/* #605: das CI-Post-hoc-Netz auf `main` — die zweite Grenze hinter dem PR-Gate #592.
+ * Struktureller Wächter (wie oben): stellt sicher, dass die zwei Bausteine des Netzes
+ * in ci.yml erhalten bleiben und nicht still zurückdriften:
+ *  1. check:diffsize misst auf push:main gegen den Vorgänger-Commit (KQ_DIFF_BASE
+ *     = github.event.before) — statt dort wie früher zu Grün zu degradieren.
+ *  2. ein Alarm-Job öffnet bei rotem main ein prio:hoch-Issue, NUR auf push (nicht
+ *     bei PRs) und ohne den Workflow zu blockieren.
+ */
+describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
+  const ci = readRepo(".github/workflows/ci.yml");
+
+  it("check:diffsize misst auf push:main gegen den Vorgänger-Commit (github.event.before)", () => {
+    // Die verify-Basis muss auf push den Vorgänger heranziehen, damit der gemergte
+    // Slice AUCH auf main gemessen wird (sonst No-op-grün wie vor #605).
+    expect(ci).toMatch(/KQ_DIFF_BASE:\s*\$\{\{\s*github\.event\.pull_request\.base\.sha\s*\|\|\s*github\.event\.before\s*\}\}/);
+  });
+
+  it("ein Alarm-Job schlägt bei rotem main an — nur auf push, nicht blockierend", () => {
+    expect(ci, "der Alarm-Job muss existieren").toMatch(/alarm-red-main:/);
+    // Läuft NUR bei Fehlschlag UND nur auf push (ein roter PR ist Sache der Autorin).
+    expect(ci).toMatch(/if:\s*failure\(\)\s*&&\s*github\.event_name\s*==\s*'push'/);
+    // Hängt an den Korrektheits-/Security-Gates (nicht am passwortgated Devpanel-Build).
+    expect(ci).toMatch(/needs:\s*\[build-test,\s*security-audit\]/);
+    // Braucht Schreibrecht auf Issues, um den Alarm anzulegen.
+    expect(ci).toMatch(/issues:\s*write/);
+    // Legt ein prio:hoch-Issue an (Board-SSOT statt leicht übersehbarem rotem ✗).
+    expect(ci).toMatch(/gh issue create[\s\S]*?--label "prio:hoch"/);
+  });
+});

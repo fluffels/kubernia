@@ -23,7 +23,7 @@ import { resolveMove, circleHitbox, npcHitboxes, type Hitbox } from "../world/wo
 import { npcSpawnsForMap, objectsForMap } from "../content/entities";
 import { WATER, SAND, PATH, DOCK } from "../world/regions/archipel";
 import { setWorldScene, setInteriorOpen } from "../runtime";
-import { T, FOAM, WANG, STONE, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText, queueAssetLoad, sliceSheets, readMoveInput, faceFrom, IslandScene, type SceneNpc } from "./shared";
+import { T, FOAM, WANG, STONE, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText, queueAssetLoad, sliceSheets, renderPlayer, stepSimplePlayer, IslandScene, type SceneNpc } from "./shared";
 import type { Warp } from "../world/warps";
 import { assetsForScene } from "../assets-data";
 
@@ -333,19 +333,13 @@ export class RegionScene extends IslandScene {
     const pl = this.pl;
     const blocked = UI.blocking();
 
-    const { dx, dy } = readMoveInput(blocked);
-    pl.moving = dx !== 0 || dy !== 0;
-    if (pl.moving) {
-      const len = Math.hypot(dx, dy);
-      pl.face = faceFrom(dx, dy, pl.face);
-      const next = resolveMove((px, py) => this.isSolidAt(px, py), pl.x, pl.y, dx / len * 75 * dt, dy / len * 75 * dt, this.softObstacles);
+    // Bewegung + Bob + Render gemeinsam über die Szenen-Helfer (#601, Forts. #564): die
+    // Region bewegt sich mit 75 px/s über resolveMove (runde Sub-Tile-Hitboxen #343/#386).
+    this.bobT = stepSimplePlayer(pl, dt, blocked, 75, this.bobT, (mx, my) => {
+      const next = resolveMove((px, py) => this.isSolidAt(px, py), pl.x, pl.y, mx, my, this.softObstacles);
       pl.x = next.x; pl.y = next.y;
-      this.bobT += dt * 12;
-    }
-    const bob = pl.moving ? Math.abs(Math.sin(this.bobT)) * 1.6 : 0;
-    const faceTex = pl.face === "south" ? "char_player" : "char_player_" + pl.face;
-    this.pSprite.setTexture(faceTex).setPosition(pl.x, pl.y + 6 - bob).setDepth(pl.y + 8);
-    this.pShadow.setPosition(pl.x, pl.y + 6);
+    });
+    renderPlayer(this.pSprite, this.pShadow, pl, this.bobT);
 
     // Quest-Marker über den NPCs (zeigt „!", sobald ein Quest-Dialogschritt ansteht).
     for (const n of this.npcs) n.marker.setVisible(!blocked && UI.questMarkerFor(n.id));
