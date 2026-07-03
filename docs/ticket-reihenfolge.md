@@ -33,8 +33,8 @@ Sagt die Maintainerin **„nächstes Ticket"** (für kubequest), dann:
 
    Dabei **nur dieses eine Kandidaten-Ticket** kurz gegen den Live-Stand prüfen (`gh issue view <nr>`: offen? kein Assignee? Branch/Worktree-Gegencheck `git worktree list` + `git branch -a`). Ist es schon geschlossen / vergeben, das **nächste** des Kopfes nehmen. Die **ganze Liste wird NICHT vorab gegen GitHub abgeglichen** — Drift wird erst am Ende eingearbeitet (siehe „Pflege"). Das spart bei jeder Auswahl die teure Komplett-Sichtung.
 2. **Ist der Kopf leer** (alle erledigt/vergeben), auf den **Auto-Rest** zurückfallen: das oberste freie Ticket nach **Prio→Nummer** (Befehl im nächsten Abschnitt) — und beim Pflege-Schritt den Kopf wieder auffüllen.
-3. Das gewählte Ticket mit dem normalen kubequest-Workflow abarbeiten (self-assignen → eigener Worktree → umsetzen → Tests/Typecheck/Lint grün + im Browser verifizieren → PR öffnen → grüne Required-Checks → PR mergen → Issue schließt via `Closes`). PR-gegated seit #592. Details: [AGENTS.md](../AGENTS.md).
-4. **Erst NACH getaner Arbeit diese Liste pflegen** — der „puh, fertig"-Schritt (siehe ganz unten).
+3. Das gewählte Ticket mit dem normalen kubequest-Workflow abarbeiten (self-assignen → eigener Worktree → umsetzen → Tests/Typecheck/Lint grün + im Browser verifizieren → **diese Liste im selben Branch pflegen (Schritt 4)** → PR öffnen → **CI abwarten und den PR bis zum Merge bringen**: grün → mergt, rot → fixen bis grün → Issue schließt via `Closes`). PR-gegated seit #592; **ein PR pro Ticket, fertig erst wenn gemergt (#618)**. Details: [AGENTS.md](../AGENTS.md).
+4. **Diese Liste als Teil des Tickets pflegen** — der „puh, fertig"-Schritt (siehe ganz unten), **auf DEMSELBEN Branch/PR** (kein zweiter Nach-PR).
 
 ## Reihenfolge — der Kopf
 
@@ -146,7 +146,7 @@ gh issue list --state open --limit 500 --label "status:zurückgestellt" \
 
 ## Pflege dieser Liste — der „puh, fertig"-Schritt
 
-Diese Liste ist **lebendig** — sie wird **am Ende jedes Tickets** fortgeschrieben, **nicht** als Vorab-Check vor der Auswahl. Nach getaner Arbeit einmal den echten GitHub-Stand holen und Drift einarbeiten:
+Diese Liste ist **lebendig** — sie wird **am Ende jedes Tickets** fortgeschrieben, **nicht** als Vorab-Check vor der Auswahl. Diese Pflege gehört **auf denselben Feature-Branch wie das Ticket und damit in denselben PR** (ein PR pro Ticket, #618) — **kein** separater Nach-PR. Nach getaner Arbeit einmal den echten GitHub-Stand holen und Drift einarbeiten:
 
 ```bash
 # Aktive (nicht zurückgestellte) offene Tickets, sortiert Prio→Nummer — Abgleich gegen den Kopf
@@ -163,5 +163,5 @@ Dann:
 - **Kopf zu kurz geworden** (< ~15) → von oben aus dem **Auto-Rest** (Prio→Nummer) **und/oder dem Reaktivierungs-Pool** nachfüllen, bis wieder ~15–20 erreicht sind. Aus dem Pool nur reaktivieren, was wirklich dran ist (Scope-Klärung beachten).
 - **Neues offenes Ticket mit echter Abhängigkeit** → an die dependency-passende Stelle in den Kopf einsortieren, nicht unten anhängen. Ein Ticket **ohne** besondere Abhängigkeit muss **nicht** in den Kopf — es lebt im Auto-Rest.
 - **Altentscheidung wackelt** → als Grundsatz-Review oben aufnehmen (wie #355), nicht stillschweigend fortschreiben.
-- **Driftet die Liste → Doku fixen, Stand-Datum oben aktualisieren, committen** (Doku-only → kein Test-Lauf).
+- **Driftet die Liste → Doku fixen, Stand-Datum oben aktualisieren**, als Commit im Ticket-Branch (fließt mit dem einen PR nach `main`).
 - Bei Unklarheit über die Position: „Ist das okay, wenn KubeQuest Stardew-groß wird?" (oberste Regel, [AGENTS.md](../AGENTS.md)) entscheidet vor dem Prio-Label.
