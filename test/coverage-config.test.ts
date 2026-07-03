@@ -155,4 +155,35 @@ describe("#495 Bindung: Glob-Form ↔ RegExp-Wahrheit (layerOf) deckungsgleich",
     }
     expect(Object.keys(COVERAGE_GLOBS).sort()).toEqual([...Object.values(LAYERS)].sort());
   });
+
+  // #539: Regression gegen die Präfix-Kollision. Der Domänen-Glob war `src/!(…)/**`; picomatch
+  // rendert die Negation als PRÄFIX-Lookahead `(?!(?:…|ui|…))[^/]*?` — NICHT an die Segmentgrenze
+  // verankert. Eine Top-Level-Domänen-Datei, deren Name mit einem NON_DOMAIN-Segment BEGINNT
+  // (uieval.ts, gamefoo.ts …), fiel damit still aus dem Domänen-Bucket (bei #500 real passiert →
+  // die Datei musste von `uieval.ts` auf `viewdecide.ts` umbenannt werden — Umgehung statt Fix).
+  // Die reale-Datei-Bindung oben fängt das nur, wenn eine solche Datei zufällig existiert; dieser
+  // Fall prüft SYNTHETISCHE Namen, damit die Präfix-Sicherheit dauerhaft bewacht ist. Bewusst OHNE
+  // `dot`-Option, weil Vitest die Schwellen-Globs mit `pm(glob)` ohne Optionen matcht (Beleg:
+  // node_modules/vitest → `const matcher = pm(glob)`).
+  it("Top-Level-Domänen-Datei mit reserviertem Präfix landet im Domänen-Bucket (#539)", () => {
+    const domainMatch = picomatch(COVERAGE_GLOBS[LAYERS.DOMAIN]);
+    // Für jedes NON_DOMAIN-Segment ein erfundener Domänen-Dateiname, der damit BEGINNT (aber nicht
+    // die reservierte Datei selbst ist), plus eine neutrale Kontrolle ohne reserviertes Präfix.
+    const shouldBeDomain = [
+      "src/uieval.ts", // der historische #500-Fall
+      "src/gamefoo.ts",
+      "src/storeX.ts",
+      "src/mainish.ts",
+      "src/scenesXY.ts",
+      "src/runtimey.ts",
+      "src/sfxplus.ts",
+      "src/markup.ts", // Kontrolle: kein reserviertes Präfix
+    ];
+    const missed = shouldBeDomain.filter((f) => !domainMatch(f));
+    expect(missed, `Domänen-Glob verfehlt Top-Level-Dateien:\n${missed.join("\n")}`).toEqual([]);
+    // Die reservierten Dateien selbst (exakte NON_DOMAIN-Namen) bleiben NICHT Domäne.
+    const shouldNotBeDomain = ["src/ui.ts", "src/game.ts", "src/store.ts", "src/main.ts", "src/scenes.ts"];
+    const leaked = shouldNotBeDomain.filter((f) => domainMatch(f));
+    expect(leaked, `Nicht-Domänen-Datei fälschlich im Domänen-Glob:\n${leaked.join("\n")}`).toEqual([]);
+  });
 });

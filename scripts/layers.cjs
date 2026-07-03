@@ -62,6 +62,9 @@ const LABEL_TO_LAYER = {
  *  ENTRY-RegExps oben — `test/coverage-config.test.ts` beweist die Deckungsgleichheit. */
 const NON_DOMAIN = ["scenes", "ui", "sfx", "game", "runtime", "devpanel", "store", "main", "assets-data"];
 const _nd = NON_DOMAIN.join("|");
+// Dieselben Namen als vollständige Datei-Token (`ui.ts` statt `ui`) — gebraucht für den
+// prä­fix-sicheren Domänen-Glob unten (#539).
+const _ndTs = NON_DOMAIN.map((n) => `${n}.ts`).join("|");
 
 /** Glob-Form derselben Schicht-Grenzen (#495) — für Vitests Coverage-`thresholds`, deren
  *  Schlüssel Globs (picomatch), keine RegExps sind. Bewusst hier co-lokalisiert zu den
@@ -72,13 +75,26 @@ const _nd = NON_DOMAIN.join("|");
  *  Schicht-Aggregat prüft (nicht Datei-Untergruppen zersplittert). Verzeichnisbasiert und damit
  *  Stardew-fest: neue Dateien fallen automatisch in ihren Bucket. Bewusst KEINE globale Schwelle
  *  daneben — jede Datei ist genau einem Bucket zugeordnet (der ganze Sinn: pro Schicht statt
- *  Repo-Mittel). Das kombinierte `{.ts,/**}` fasst Wurzel-Datei UND Modul-Ordner je Schicht;
- *  der Domänen-Glob `src/!(nd)/**` matcht Wurzel-`.ts` (Globstar matcht leer) UND Unterordner. */
+ *  Repo-Mittel). Das kombinierte `{.ts,/**}` fasst Wurzel-Datei UND Modul-Ordner je Schicht.
+ *
+ *  Der Domänen-Glob ist bewusst ZWEIGETEILT (`{!(nd)/**,!(ndTs)}`), NICHT `src/!(nd)/**` (#539):
+ *  picomatch rendert `!(…)` als PRÄFIX-Lookahead `(?!(?:…|ui|…))[^/]*?`, der NICHT an die
+ *  Segmentgrenze verankert ist. `src/!(nd)/**` matchte Top-Level-`.ts` nur über den „Globstar matcht
+ *  leer"-Zweig, und dort verwarf der Präfix-Lookahead jede Datei, deren Name mit einem NON_DOMAIN-
+ *  Segment BEGINNT (`uieval.ts` wegen `ui`) — die fiel still aus dem Domänen-Bucket (real bei #500:
+ *  `uieval.ts` musste zu `viewdecide.ts` umbenannt werden). Der Datei-Zweig `!(${_ndTs})` negiert
+ *  stattdessen die vollständigen Datei-Token (`ui.ts`), sodass das `.ts` als Grenze wirkt und
+ *  `uieval.ts` NICHT mehr mit `ui.ts` beginnt → korrekt Domäne. Der Verzeichnis-Zweig `!(${_nd})/**`
+ *  deckt Unterordner ab. Rest-Grenze: eine künftige Domänen-DIR mit reserviertem Präfix (`gameplay/`)
+ *  träfe denselben picomatch-Präfix-Effekt (in einem einzelnen Glob nicht behebbar, auch nicht mit
+ *  `@()`/`bash:true`) — sie fällt aber NICHT still durch, sondern lässt die reale-Datei-Bindung in
+ *  `test/coverage-config.test.ts` rot laufen (0 Buckets getroffen), genau wie #500 auffiel.
+ *  Prüfung: `test/coverage-config.test.ts` (reale Dateien + synthetische reservierte-Präfix-Namen). */
 const COVERAGE_GLOBS = {
   [LAYERS.PRESENTATION]: "src/{scenes,ui,sfx}{.ts,/**}",
   [LAYERS.APPLICATION]: "src/{game,runtime,devpanel,store}{.ts,/**}",
   [LAYERS.ENTRY]: "src/{main,assets-data}.ts",
-  [LAYERS.DOMAIN]: `src/!(${_nd})/**`,
+  [LAYERS.DOMAIN]: `src/{!(${_nd})/**,!(${_ndTs})}`,
 };
 
 module.exports = { PRESENTATION, APPLICATION, ENTRY, LAYERS, layerOf, LABEL_TO_LAYER, NON_DOMAIN, COVERAGE_GLOBS };
