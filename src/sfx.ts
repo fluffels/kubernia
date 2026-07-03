@@ -139,6 +139,10 @@ export const SFX = {
   splash() { this.tone(180, 0.2, "sine", 0.05); this.tone(90, 0.25, "sine", 0.04, 0.05); },
   alarm() { this.tone(440, 0.18, "sawtooth", 0.04); this.tone(330, 0.18, "sawtooth", 0.04, 0.2); this.tone(440, 0.18, "sawtooth", 0.04, 0.4); },
   fanfare() { [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.16, "square", 0.04, i * 0.12)); },
+  // Schiffsglocke ("Glasen") für den Rang-Aufstieg (#223): zwei helle Schläge im
+  // Doppelschlag-Rhythmus, jeder Grundton + Oktav-Oberton als metallischer Klang,
+  // sine mit langem Ausklang – hebt den Aufstieg akustisch von der Quest-Fanfare ab.
+  shipBell() { [0, 0.26].forEach(d => { this.tone(1568, 0.6, "sine", 0.05, d); this.tone(3136, 0.5, "sine", 0.022, d); }); },
   wrong() { this.tone(196, 0.18, "sawtooth", 0.03); },
   thunder() { this.tone(58, 0.7, "sawtooth", 0.06); this.tone(46, 0.9, "sawtooth", 0.05, 0.12); },
   door() { this.tone(160, 0.12, "sine", 0.05); this.tone(110, 0.16, "sine", 0.04, 0.05); },

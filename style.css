@@ -349,6 +349,58 @@ button:focus-visible, select:focus-visible {
 .close-btn { margin-left: auto; font-size: 0.85em; padding: 4px 10px; }
 .panel-body { padding: 14px 18px; overflow-y: auto; line-height: 1.5; }
 
+/* ===== Rang-Aufstieg-Feier (#223) =====
+ * Mittiges Feier-Overlay: neuer Rang groß im Fokus, alter als „zuvor"-Zeile.
+ * Maritim gefeiert – Signalflaggen-Konfetti regnet + eine Wimpelkette (dress ship)
+ * schmückt die Karte. Liegt über den Panels (z 20), unter dem Absturz-Netz (99999). */
+.rankup-overlay {
+  position: fixed; inset: 0; z-index: 40;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(6, 12, 20, 0.55);
+}
+.rankup-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+.flag-confetti {
+  position: absolute; top: -26px; width: 13px; height: 17px; background: var(--c);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  animation-name: flag-fall; animation-timing-function: linear; animation-iteration-count: infinite;
+}
+@keyframes flag-fall {
+  0%   { transform: translateY(-10vh) rotate(var(--rot)); opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translateY(90vh) rotate(calc(var(--rot) + 400deg)); opacity: 0.15; }
+}
+.rankup-card {
+  position: relative; z-index: 2; text-align: center;
+  min-width: min(320px, 90vw); max-width: 92vw;
+  padding: 30px 34px 24px; margin: 0 12px;
+  background: var(--panel); border: 2px solid var(--accent); border-radius: 16px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 200, 87, 0.25) inset;
+  animation: rankup-pop 0.32s cubic-bezier(0.2, 1.3, 0.5, 1) both;
+}
+@keyframes rankup-pop { from { transform: scale(0.82); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+/* Wimpelkette am oberen Kartenrand (dress ship): eine Reihe dreieckiger Signal-Wimpel. */
+.rankup-bunting {
+  display: flex; justify-content: center; gap: 3px;
+  position: absolute; left: 0; right: 0; top: -12px;
+}
+.pennant {
+  width: 16px; height: 20px; background: var(--c);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  transform-origin: top center; animation: bunting-sway 2.4s ease-in-out infinite;
+}
+.rankup-bunting .pennant:nth-child(even) { animation-delay: 0.4s; }
+@keyframes bunting-sway { 50% { transform: rotate(6deg); } }
+.rankup-title { color: var(--accent); font-weight: bold; font-size: 1.25em; margin: 6px 0 12px; }
+.rankup-icon { font-size: 68px; line-height: 1; animation: rankup-icon-pop 0.55s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+@keyframes rankup-icon-pop { 0% { transform: scale(0); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+.rankup-name { font-size: 1.7em; font-weight: bold; margin: 6px 0 4px; }
+.rankup-from { color: var(--muted, #9fb3c8); font-size: 0.95em; margin-bottom: 18px; }
+.rankup-ok { font-size: 1.02em; padding: 8px 18px; }
+@media (prefers-reduced-motion: reduce) {
+  .rankup-card, .rankup-icon { animation: none; }
+  .flag-confetti, .pennant { animation: none; }
+}
+
 /* Terminal-Layout */
 .term-layout { display: flex; gap: 0; min-height: 0; flex: 1; }
 .term-tasks {

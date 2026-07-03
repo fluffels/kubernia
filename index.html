@@ -128,6 +128,24 @@
     </div>
   </div>
 
+  <!-- Rang-Aufstieg-Feier (#223): mittiges Feier-Overlay, neuer Rang groß im Fokus,
+       alter Rang als "zuvor"-Zeile. Maritim gefeiert: Signalflaggen-Konfetti regnet
+       (statt bunter Schnipsel) + eine Wimpelkette schmückt die Karte (dress ship).
+       Wimpelkette/Konfetti füllt hud.ts (Farben/Positionen dynamisch). Ein einzelner
+       Rang-"von → nach"-Slot; das allgemeine Erfolgs-Feier-System (Queue + Bündelung
+       verschiedener Erfolgs-Arten) ist bewusst #314. -->
+  <div id="overlay-rankup" class="rankup-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="rankup-title">
+    <div class="rankup-confetti" id="rankup-confetti" aria-hidden="true"></div>
+    <div class="rankup-card">
+      <div class="rankup-bunting" id="rankup-bunting" aria-hidden="true"></div>
+      <div class="rankup-title" id="rankup-title">🎉 Aufgestiegen! 🎉</div>
+      <div class="rankup-icon" id="rankup-icon" aria-hidden="true">⚓</div>
+      <div class="rankup-name" id="rankup-name">Matrose</div>
+      <div class="rankup-from" id="rankup-from"></div>
+      <button class="primary rankup-ok" data-action="closeOverlays">⚓ Weiter (Enter)</button>
+    </div>
+  </div>
+
   <!-- Live-Region (#506): neu eingehängte Toasts (Belohnungen/Hinweise) werden von
        Screenreadern vorgelesen, ohne den Fokus zu stehlen (höflich = polite). -->
   <div id="toasts" role="status" aria-live="polite"></div>
