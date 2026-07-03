@@ -140,8 +140,13 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
  * in ci.yml erhalten bleiben und nicht still zurückdriften:
  *  1. check:diffsize misst auf push:main gegen den Vorgänger-Commit (KQ_DIFF_BASE
  *     = github.event.before) — statt dort wie früher zu Grün zu degradieren.
- *  2. ein Alarm-Job öffnet bei rotem main ein prio:hoch-Issue, NUR auf push (nicht
+ *  2. ein Alarm-Job öffnet bei rotem main ein Alarm-Issue, NUR auf push (nicht
  *     bei PRs) und ohne den Workflow zu blockieren.
+ *
+ * #658: Seit #627 sind die `prio:*`-Labels entfernt — der Alarm-Job darf sich nicht
+ * mehr auf das nicht mehr existierende `prio:hoch`-Label verlassen (sonst bräche
+ * `gh issue create` mit „label not found" genau dann, wenn der Alarm greifen soll).
+ * Stattdessen: existierendes Label + Board-`Prio` per GraphQL (Muster wie #644).
  */
 describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
   const ci = readRepo(".github/workflows/ci.yml");
@@ -160,7 +165,40 @@ describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
     expect(ci).toMatch(/needs:\s*\[build-test,\s*security-audit\]/);
     // Braucht Schreibrecht auf Issues, um den Alarm anzulegen.
     expect(ci).toMatch(/issues:\s*write/);
-    // Legt ein prio:hoch-Issue an (Board-SSOT statt leicht übersehbarem rotem ✗).
-    expect(ci).toMatch(/gh issue create[\s\S]*?--label "prio:hoch"/);
+  });
+
+  it("legt das Alarm-Issue mit einem EXISTIERENDEN Label an (nicht dem entfernten prio:hoch, #658)", () => {
+    // Das prio:hoch-Label ist seit #627 weg; ein create damit bräche mit „label not
+    // found" – genau im Moment, in dem der Alarm greifen soll. Also existierendes Label.
+    expect(
+      ci,
+      "der Alarm darf sich nicht mehr auf das entfernte prio:hoch-Label verlassen",
+    ).not.toMatch(/--label "prio:hoch"/);
+    expect(ci).toMatch(/ALARM_LABEL:\s*area:architektur/);
+    expect(ci).toMatch(/gh issue create[\s\S]*?--label "\$ALARM_LABEL"/);
+  });
+
+  it("priorisiert stattdessen über die Board-Prio per GraphQL (Muster #644, #658)", () => {
+    // Board-, Prio-Feld- und Kritisch-Options-ID müssen verdrahtet sein.
+    expect(ci).toContain("PVT_kwHOD8746c4Barq_");
+    expect(ci).toContain("PVTSSF_lAHOD8746c4Barq_zhXBLXs");
+    expect(ci, "Options-ID für 'Kritisch' fehlt").toContain("0663cd9e");
+    // Beide Mutationen: idempotent aufs Board hängen UND das Feld setzen.
+    expect(ci).toContain("addProjectV2ItemById");
+    expect(ci).toContain("updateProjectV2ItemFieldValue");
+    // Am NEU angelegten Issue aufgerufen.
+    expect(ci).toMatch(/new_url=\$\(gh issue create/);
+    expect(ci).toContain('set_board_prio "$new_url"');
+  });
+
+  it("degradiert ohne PROJECT_TOKEN graceful (nur Warnung, Issue entsteht trotzdem, #658)", () => {
+    expect(ci).toMatch(/PROJECT_TOKEN:\s*\$\{\{\s*secrets\.PROJECT_TOKEN\s*\}\}/);
+    expect(ci).toContain('if [ -z "${PROJECT_TOKEN:-}" ]');
+    expect(ci).toMatch(/::warning::[^\n]*PROJECT_TOKEN/);
+  });
+
+  it("dedupliziert über den Titel-Präfix (nicht über ein Label, #658)", () => {
+    // Das offene Alarm-Issue wird über den 🚨-Titel-Präfix gefunden, nicht über prio:hoch.
+    expect(ci).toMatch(/startswith\(\\"\$marker\\"\)/);
   });
 });
