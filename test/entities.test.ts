@@ -17,9 +17,12 @@ import {
   objectsForMap,
   objectForId,
   objectFootprint,
+  entityMapProblems,
 } from "../src/content/entities";
 import { NPCS, ContentValidationError } from "../src/content/loader";
 import { NPC_SPAWNS } from "../src/world/world";
+import { MAP_REGISTRY } from "../src/world/maps/mapregistry";
+import { REGION_WARPS } from "../src/world/warps";
 import { ARCHIPEL_NPC, ARCHIPEL_QUEST_TRIGGER } from "../src/world/regions/archipel";
 import { LIGHTHOUSE_NPC, LIGHTHOUSE_QUEST_TRIGGER, LIGHTHOUSE_TOWER, LIGHTHOUSE_GRAFANA, LIGHTHOUSE_BELL } from "../src/world/regions/lighthouse";
 import { WAREHOUSE_NPC, WAREHOUSE_QUEST_TRIGGER, WAREHOUSE_CRANES, WAREHOUSE_CONTAINERS } from "../src/world/regions/warehouse";
@@ -89,6 +92,45 @@ test("entities: npcSpawnsForMap liefert [] für eine Karte ohne NPCs (kein Wurf)
 
 test("entities: npcSpawnForMap wirft laut bei unbekannter Karte (Tippfehler fällt auf)", () => {
   assert.throws(() => npcSpawnForMap("habor"), ContentValidationError);
+});
+
+/* ---------- Karten-Referenz-Drift (#600): Standplatz auf echter Karte? ---------- */
+
+/** Die realen Karten-IDs, auf denen Entities platziert sein dürfen: die Registry-Karten
+ *  (harbor/test-map) PLUS die Region-Karten. Deren IDs sind exakt die REGION_WARPS-IDs
+ *  (jede Region ist über einen Warp erreichbar, warp.id == Region-Karten-ID). Datengetrieben
+ *  statt hartcodiert, damit die Menge mit einer neuen Region/Karte automatisch mitwächst. */
+function realKnownMaps(): Set<string> {
+  return new Set<string>([...Object.keys(MAP_REGISTRY), ...REGION_WARPS.map((w) => w.id)]);
+}
+
+test("entities: jeder Standplatz + jedes Objekt steht auf einer echten Karte (#600)", () => {
+  // Die Lücke, die parseEntities/parseObjects NICHT abdecken: eine `map`-Referenz auf eine
+  // nicht existierende Karte wirft nicht, der Eintrag rendert im Spiel STILL nicht.
+  assert.deepEqual(
+    entityMapProblems(ENTITY_NPCS, ENTITY_OBJECTS, realKnownMaps()),
+    [],
+    "Ein Entity zeigt auf eine unbekannte Karte (Tippfehler / umbenannte/entfernte Region?)",
+  );
+});
+
+test("entityMapProblems: meldet unbekannte Karten, akzeptiert bekannte (Red-Green)", () => {
+  const known = new Set(["harbor", "archipel"]);
+  // Gegenprobe gegen False Positives: valide Karten → keine Meldung (nicht trivial immer rot).
+  assert.deepEqual(entityMapProblems(
+    [{ id: "ole", map: "harbor" }],
+    [{ id: "kran", map: "archipel" }],
+    known,
+  ), []);
+  // Unbekannte Karte bei NPC UND Objekt → je genau eine Meldung mit id + Karte.
+  const problems = entityMapProblems(
+    [{ id: "ole", map: "harbor" }, { id: "geist", map: "habor" }],
+    [{ id: "kran", map: "nirgendwo" }],
+    known,
+  );
+  assert.equal(problems.length, 2);
+  assert.ok(problems.some((p) => p.includes("geist") && p.includes("habor")), "NPC-Standplatz-Drift nicht gemeldet");
+  assert.ok(problems.some((p) => p.includes("kran") && p.includes("nirgendwo")), "Objekt-Drift nicht gemeldet");
 });
 
 /* ---------- Schema-Verhalten: KAPUTTE Eingaben müssen werfen (Red-Green) ---------- */
