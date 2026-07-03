@@ -254,11 +254,20 @@ jobs:
   # paralleler Agent leicht; die Board-SSOT ist ein OFFENES Issue. Dieser Job fährt
   # NICHTS neu nach (build-test fährt die volle verify-Kette auf push:main schon,
   # inkl. diffsize gegen den Vorgänger, s.o.) — er schlägt nur Alarm, wenn dieser
-  # Lauf auf main rot war: er öffnet ein prio:hoch-Issue (dedupliziert — ein offenes
+  # Lauf auf main rot war: er öffnet ein Alarm-Issue (dedupliziert — ein offenes
   # Alarm-Issue zur Zeit) und blockiert bewusst NICHTS (main ist ohnehin schon
   # gepusht; kein Bruch des Workflows, genau wie das Ticket es fordert).
   # Nur auf push (= main): ein roter PR ist erwartbar und Sache der PR-Autorin,
   # kein Board-Alarm.
+  #
+  # Priorisierung über die Board-`Prio` (#658): Seit #627 sind die `prio:*`-Labels
+  # entfernt — das früher genutzte `prio:hoch` existiert NICHT mehr. Also wie in
+  # forum-inbox.yml (#644): Issue mit einem existierenden Label (`area:architektur`)
+  # anlegen und die Board-`Prio` per GraphQL auf "Kritisch" setzen (ein roter `main`
+  # blockiert jeden parallelen Agenten → höchste Dringlichkeit). Dedup läuft über den
+  # Titel-Präfix, nicht mehr über ein Label. Board-Schreibzugriff braucht — wie #644 —
+  # das Secret PROJECT_TOKEN (das Standard-GITHUB_TOKEN kann kein User-Project V2
+  # schreiben); fehlt es, entsteht das Issue trotzdem und wird nur nicht priorisiert.
   alarm-red-main:
     name: Alarm bei rotem main (#605)
     needs: [build-test, security-audit]
@@ -268,22 +277,57 @@ jobs:
       contents: read
       issues: write
     steps:
-      - name: prio:hoch-Alarm-Issue öffnen oder ergänzen
+      - name: Alarm-Issue öffnen oder ergänzen
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+          # Board-Prio setzen (#658, analog #644). Das Standard-GITHUB_TOKEN kann NICHT
+          # in ein User-Project V2 schreiben – dafür ein PAT mit project-Scope als Secret
+          # PROJECT_TOKEN. Fehlt es, wird nur gewarnt (siehe set_board_prio unten).
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          # IDs des KubeQuest-Backlog-Boards + Prio-Feld/Option (stabile Node-IDs,
+          # siehe docs/ticket-reihenfolge.md › Priorität pflegen).
+          PROJECT_ID: PVT_kwHOD8746c4Barq_
+          PRIO_FIELD_ID: PVTSSF_lAHOD8746c4Barq_zhXBLXs
+          PRIO_KRITISCH_OPTION: 0663cd9e
+          # Existierendes Label (die prio:*-Labels sind seit #627 entfernt, #658).
+          ALARM_LABEL: area:architektur
         run: |
           set -euo pipefail
           marker="🚨 CI rot auf main"
           short="${SHA:0:7}"
 
+          # Setzt das Board-Feld `Prio` des frisch angelegten Alarm-Issues auf "Kritisch"
+          # (#658), statt sich auf das entfernte `prio:hoch`-Label zu verlassen.
+          # addProjectV2ItemById ist idempotent: ist das Issue schon per Board-„Auto-add"
+          # drauf, kommt einfach die bestehende Item-ID zurück – der async-Race ist damit egal.
+          set_board_prio() {
+            local issue_url="$1"
+            if [ -z "${PROJECT_TOKEN:-}" ]; then
+              echo "::warning::PROJECT_TOKEN-Secret fehlt – Board-Prio für ${issue_url} nicht gesetzt (Alarm-Issue sortiert ohne Prio ganz unten). PAT mit project-Scope als Secret PROJECT_TOKEN hinterlegen."
+              return 0
+            fi
+            local content_id
+            content_id=$(gh issue view "$issue_url" --repo "$REPO" --json id --jq .id)
+            local item_id
+            item_id=$(GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
+              -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }' \
+              -f p="$PROJECT_ID" -f c="$content_id" \
+              --jq '.data.addProjectV2ItemById.item.id')
+            GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
+              -f query='mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' \
+              -f p="$PROJECT_ID" -f i="$item_id" -f f="$PRIO_FIELD_ID" -f o="$PRIO_KRITISCH_OPTION" >/dev/null
+            echo "Board-Prio 'Kritisch' gesetzt für ${issue_url} (item ${item_id})."
+          }
+
           # Gibt es schon ein OFFENES Alarm-Issue? (Titel-Präfix-Match über die offenen
-          # prio:hoch-Issues — dasselbe robuste Muster wie forum-inbox.yml.) Solange main
-          # rot bleibt, hängen weitere rote Läufe nur einen Kommentar an, statt zu spammen.
-          existing=$(gh issue list --repo "$REPO" --state open --label "prio:hoch" \
+          # area:architektur-Issues — dasselbe robuste Muster wie forum-inbox.yml; kein
+          # prio:hoch-Label mehr, das gibt es seit #627 nicht.) Solange main rot bleibt,
+          # hängen weitere rote Läufe nur einen Kommentar an, statt zu spammen.
+          existing=$(gh issue list --repo "$REPO" --state open --label "$ALARM_LABEL" \
             --json number,title \
             --jq "[.[] | select(.title | startswith(\"$marker\"))][0].number // empty")
 
@@ -300,8 +344,12 @@ jobs:
               "- Fehlgeschlagener Lauf: ${RUN_URL}" \
               "" \
               "**Zuerst behandeln** (main muss grün sein, bevor ein paralleler Agent darauf aufbaut): Ursache im Lauf ansehen → auf einem Fix-Branch reparieren → per PR mergen → dieses Issue schließen. Solange main rot bleibt, hängt jeder weitere rote Lauf nur einen Kommentar hier an (kein Issue-Spam).")
-            gh issue create --repo "$REPO" \
+            new_url=$(gh issue create --repo "$REPO" \
               --title "${marker} (${short})" \
-              --label "prio:hoch" \
-              --body "$body"
+              --label "$ALARM_LABEL" \
+              --body "$body")
+            echo "Angelegt: ${new_url}"
+            # Board-Prio direkt auf "Kritisch" (#658) – nur beim NEUEN Issue, nicht beim
+            # Ergänzen eines bestehenden (das steht schon mit seiner Prio im Board).
+            set_board_prio "$new_url"
           fi
