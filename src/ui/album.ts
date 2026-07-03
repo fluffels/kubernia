@@ -21,6 +21,17 @@ export const albumUI = part({
     });
   },
 
+  /** IDs aller aktuell freigeschalteten Album-Einträge. Ein Vorher/Nachher-Vergleich
+   *  um einen Quest-Abschluss herum zeigt, wie viele Einträge dieser Abschluss NEU
+   *  freischaltet – Grundlage der Album-Erfolgs-Feier (#314). */
+  albumUnlockedIds(): Set<string> {
+    const ids = new Set<string>();
+    for (const page of this.buildAlbum().pages) {
+      for (const e of page.entries) if (e.unlocked) ids.add(e.id);
+    }
+    return ids;
+  },
+
   openAlbum() {
     this.closeOverlays();
     $("overlay-album").classList.remove("hidden");

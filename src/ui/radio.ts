@@ -143,7 +143,12 @@ export const radioUI = part({
     // der Schwelle. Vorher tun ↑/↓ nichts (kleine Komfort-Funktion als Upgrade, nicht von
     // Anfang an da). Echte Shells können das auch – kurz erwähnt im Toast.
     if (Game.maybeUnlockCmdHistory()) {
-      this.hint("🔓 Befehlshistorie freigeschaltet: Mit ↑/↓ holst du im Terminal vorherige Befehle zurück – wie in einer echten Shell.", "rankup");
+      // #314: als Erfolg feiern (gebündelt, sobald der Spieler das Terminal verlässt) statt
+      // nur als Toast – die Feier poppt nie während des Tippens auf.
+      this.celebrate({
+        kind: "cmdhistory", icon: "⌨️", title: "Befehlshistorie freigeschaltet",
+        detail: "Mit ↑/↓ holst du im Terminal vorherige Befehle zurück – wie in einer echten Shell.",
+      });
     }
     this._maybeFunkExplain(line, result);
 
@@ -202,7 +207,11 @@ export const radioUI = part({
       for (const id of verdict.longForms) {
         if (Game.recordAbbrevLongFormUse(id)) {
           const pair = ABBREVS.find(a => a.id === id);
-          if (pair) this.hint(`🔓 Profi-Abkürzung verdient: <code>${pair.short[pair.short.length - 1]}</code> = <code>${pair.long}</code> – ${ABBREV_EARN_THRESHOLD}× ausgeschrieben!`, "rankup");
+          if (pair) this.celebrate({
+            kind: "abbrev", icon: "🔓",
+            title: `${pair.short[pair.short.length - 1]} = ${pair.long}`,
+            detail: `Profi-Abkürzung verdient – ${ABBREV_EARN_THRESHOLD}× ausgeschrieben!`,
+          });
         }
       }
       SFX.success();
@@ -291,7 +300,11 @@ export const radioUI = part({
     const pair = ABBREVS.find(a => a.id === id);
     if (pair) {
       const shortForm = pair.short[pair.short.length - 1];
-      this.hint(`🔓 Profi-Abkürzung freigeschaltet: <code>${shortForm}</code> = <code>${pair.long}</code>`, "rankup");
+      this.celebrate({
+        kind: "abbrev", icon: "🔓",
+        title: `${shortForm} = ${pair.long}`,
+        detail: "Profi-Abkürzung freigeschaltet.",
+      });
     }
   },
 

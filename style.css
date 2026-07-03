@@ -366,16 +366,19 @@ button:focus-visible, select:focus-visible {
 .close-btn { margin-left: auto; font-size: 0.85em; padding: 4px 10px; }
 .panel-body { padding: 14px 18px; overflow-y: auto; line-height: 1.5; }
 
-/* ===== Rang-Aufstieg-Feier (#223) =====
- * Mittiges Feier-Overlay: neuer Rang groß im Fokus, alter als „zuvor"-Zeile.
+/* ===== Erfolgs-Feier-Overlay (#314, verallgemeinert das Rang-Feier #223) =====
+ * Mittiges Feier-Popup für ALLE Erfolge: je Erfolg ein „Sticker" (Icon + Titel +
+ * optionale „zuvor"-Zeile) plus ein DevOps-Spruch; mehrere ~gleichzeitige Erfolge
+ * werden zu EINEM Popup gebündelt. Bei genau EINEM Erfolg (Modifier `.single`) wird
+ * das Icon groß in den Fokus gerückt (der klassische Rang-Aufstiegs-Look).
  * Maritim gefeiert – Signalflaggen-Konfetti regnet + eine Wimpelkette (dress ship)
  * schmückt die Karte. Liegt über den Panels (z 20), unter dem Absturz-Netz (99999). */
-.rankup-overlay {
+.celebrate-overlay {
   position: fixed; inset: 0; z-index: 40;
   display: flex; align-items: center; justify-content: center;
   background: rgba(6, 12, 20, 0.55);
 }
-.rankup-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+.celebrate-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
 .flag-confetti {
   position: absolute; top: -26px; width: 13px; height: 17px; background: var(--c);
   clip-path: polygon(0 0, 100% 0, 50% 100%);
@@ -386,17 +389,17 @@ button:focus-visible, select:focus-visible {
   85%  { opacity: 1; }
   100% { transform: translateY(90vh) rotate(calc(var(--rot) + 400deg)); opacity: 0.15; }
 }
-.rankup-card {
+.celebrate-card {
   position: relative; z-index: 2; text-align: center;
   min-width: min(320px, 90vw); max-width: 92vw;
   padding: 30px 34px 24px; margin: 0 12px;
   background: var(--panel); border: 2px solid var(--accent); border-radius: 16px;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 200, 87, 0.25) inset;
-  animation: rankup-pop 0.32s cubic-bezier(0.2, 1.3, 0.5, 1) both;
+  animation: celebrate-pop 0.32s cubic-bezier(0.2, 1.3, 0.5, 1) both;
 }
-@keyframes rankup-pop { from { transform: scale(0.82); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes celebrate-pop { from { transform: scale(0.82); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 /* Wimpelkette am oberen Kartenrand (dress ship): eine Reihe dreieckiger Signal-Wimpel. */
-.rankup-bunting {
+.celebrate-bunting {
   display: flex; justify-content: center; gap: 3px;
   position: absolute; left: 0; right: 0; top: -12px;
 }
@@ -405,16 +408,36 @@ button:focus-visible, select:focus-visible {
   clip-path: polygon(0 0, 100% 0, 50% 100%);
   transform-origin: top center; animation: bunting-sway 2.4s ease-in-out infinite;
 }
-.rankup-bunting .pennant:nth-child(even) { animation-delay: 0.4s; }
+.celebrate-bunting .pennant:nth-child(even) { animation-delay: 0.4s; }
 @keyframes bunting-sway { 50% { transform: rotate(6deg); } }
-.rankup-title { color: var(--accent); font-weight: bold; font-size: 1.25em; margin: 6px 0 12px; }
-.rankup-icon { font-size: 68px; line-height: 1; animation: rankup-icon-pop 0.55s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
-@keyframes rankup-icon-pop { 0% { transform: scale(0); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
-.rankup-name { font-size: 1.7em; font-weight: bold; margin: 6px 0 4px; }
-.rankup-from { color: var(--muted, #9fb3c8); font-size: 0.95em; margin-bottom: 18px; }
-.rankup-ok { font-size: 1.02em; padding: 8px 18px; }
+.celebrate-title { color: var(--accent); font-weight: bold; font-size: 1.25em; margin: 6px 0 12px; }
+/* Sticker-Liste der gefeierten Erfolge. Mehrere Erfolge: kompakte Zeilen (Icon links,
+ * Text rechts, linksbündig). */
+.celebrate-items { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 14px; }
+.celebrate-item {
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  padding: 8px 12px; background: rgba(255, 255, 255, 0.04); border-radius: 10px;
+}
+.celebrate-item-icon { font-size: 30px; line-height: 1; flex: 0 0 auto; }
+.celebrate-item-text { display: flex; flex-direction: column; min-width: 0; }
+.celebrate-item-title { font-size: 1.15em; font-weight: bold; }
+.celebrate-item-detail { color: var(--muted, #9fb3c8); font-size: 0.9em; }
+/* Genau EIN Erfolg → der klassische, große Rang-Aufstiegs-Look (Icon groß, zentriert). */
+.celebrate-items.single { align-items: center; }
+.celebrate-items.single .celebrate-item {
+  flex-direction: column; gap: 4px; text-align: center;
+  background: none; padding: 0;
+}
+.celebrate-items.single .celebrate-item-icon {
+  font-size: 68px; animation: celebrate-icon-pop 0.55s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+@keyframes celebrate-icon-pop { 0% { transform: scale(0); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+.celebrate-items.single .celebrate-item-text { align-items: center; }
+.celebrate-items.single .celebrate-item-title { font-size: 1.7em; }
+.celebrate-quip { color: var(--muted, #9fb3c8); font-size: 0.98em; line-height: 1.45; margin-bottom: 18px; }
+.celebrate-ok { font-size: 1.02em; padding: 8px 18px; }
 @media (prefers-reduced-motion: reduce) {
-  .rankup-card, .rankup-icon { animation: none; }
+  .celebrate-card, .celebrate-items.single .celebrate-item-icon { animation: none; }
   .flag-confetti, .pennant { animation: none; }
 }
 
@@ -624,7 +647,6 @@ button:focus-visible, select:focus-visible {
      frühere Standzeit, falls die Variable mal nicht gesetzt ist. */
   animation: toast-in 0.25s ease-out, toast-out 0.4s ease-in var(--toast-fade-delay, 3.4s) forwards;
 }
-.toast.rankup { border-color: var(--accent2); font-size: 1.05em; }
 @keyframes toast-in { from { transform: translateX(120%); } to { transform: translateX(0); } }
 @keyframes toast-out { to { opacity: 0; transform: translateY(10px); } }
 
