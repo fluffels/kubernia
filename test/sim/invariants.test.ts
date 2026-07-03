@@ -168,6 +168,17 @@ test("invariants (ROT): StatefulSet mit doppeltem Ordinalnamen wird erkannt", ()
   assert.doesNotMatch(viol, /Soll 2/); // Invariante (2) NICHT ausgelöst – Ist-Zahl = Soll
 });
 
+test("invariants (ROT): StatefulSet-Pods in vertauschter Ordinal-Reihenfolge werden erkannt (#599)", () => {
+  const sts = makeSts(sim, "lager", 3); // Pods lager-0, lager-1, lager-2 an Position 0,1,2
+  // Namensmenge stimmt exakt, aber Ordinal ≠ Array-Position: Index 0 und 2 vertauscht.
+  // In echtem Kubernetes ist die Ordinal-Identität an die Position gebunden (lager-0 IST
+  // Ordinal 0) – die alte Mengen-Prüfung ließ diese Verdrehung durch.
+  [sts.pods[0], sts.pods[2]] = [sts.pods[2], sts.pods[0]]; // → [lager-2, lager-1, lager-0]
+  const viol = clusterInvariantViolations(sim).join();
+  assert.match(viol, /StatefulSet "lager".*lager-0 … lager-2/);
+  assert.doesNotMatch(viol, /Soll 3/); // Invariante (2) NICHT ausgelöst – Ist-Zahl = Soll
+});
+
 /* ---------- (b) das Aggregat-Verhalten an der exec()-Grenze ---------- */
 
 test("aggregat: eine an exec() vorbei verbogene Verletzung wird an der Grenze laut", () => {

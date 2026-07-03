@@ -153,22 +153,21 @@ function checkReferentialIntegrity(s: ClusterState): string[] {
 }
 
 /** (8) StatefulSet-Ordinalnamen: die Pods eines StatefulSets tragen die STABILEN Namen
- *  <name>-0 … <name>-(replicas-1) – exakt diese Menge, jeder genau einmal. Anders als beim
- *  Deployment (Zufallsnamen) ist die Identität hier Teil des Vertrags (stabiles Netzwerk,
- *  stabiles PVC je Ordinal). Ein abweichender/duplizierter/fehlender Ordinalname ist ein
- *  illegaler Zustand. (Setzt Invariante (2) NICHT voraus – prüft die Namensmenge direkt.) */
+ *  <name>-0 … <name>-(replicas-1). Anders als beim Deployment (Zufallsnamen) ist die
+ *  Identität hier Teil des Vertrags (stabiles Netzwerk, stabiles PVC je Ordinal) – und
+ *  das Ordinal ist an die ARRAY-POSITION gebunden: der Pod an Index i MUSS `<name>-i`
+ *  heißen. Eine bloße Mengen-Prüfung (#599) ließ ein Vertauschen der Reihenfolge
+ *  (`[x-2, x-0, x-1]`) durch, obwohl das Ordinal 0 dann nicht mehr an Position 0 sitzt.
+ *  Positionsgenau geprüft deckt das zugleich abweichende/duplizierte/fehlende Ordinalnamen
+ *  ab. Die Längenprüfung ist mit drin, damit die Regel ohne Invariante (2) trägt. */
 function checkStatefulSetOrdinals(s: ClusterState): string[] {
   const v: string[] = [];
   for (const sts of s.statefulSets) {
-    const expected = new Set<string>();
-    for (let i = 0; i < sts.replicas; i++) expected.add(`${sts.name}-${i}`);
-    const actual = sts.pods.map(p => String(p.name));
-    const actualSet = new Set(actual);
-    const wrong = actual.some(n => !expected.has(n));
-    const missing = [...expected].some(n => !actualSet.has(n));
-    const duplicate = actual.length !== actualSet.size;
-    if (wrong || missing || duplicate) {
-      v.push(`StatefulSet "${sts.name}": Pod-Namen müssen genau ${sts.name}-0 … ${sts.name}-${sts.replicas - 1} sein (stabile Ordinal-Identität)`);
+    const ordinalsOk =
+      sts.pods.length === sts.replicas &&
+      sts.pods.every((p, i) => String(p.name) === `${sts.name}-${i}`);
+    if (!ordinalsOk) {
+      v.push(`StatefulSet "${sts.name}": Pod-Namen müssen genau ${sts.name}-0 … ${sts.name}-${sts.replicas - 1} sein (stabile Ordinal-Identität, Ordinal = Array-Position)`);
     }
   }
   return v;
