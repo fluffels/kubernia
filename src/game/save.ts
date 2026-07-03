@@ -309,6 +309,22 @@ let saveSuspended = false;
  * re-armen, damit ein späterer neuer Fehlschlag erneut gemeldet wird. */
 let saveFailedNotified = false;
 
+/** Die EINE Stelle, die einen Stand schreibt UND einen Fehlschlag an den Spieler hebt (#585).
+ *  Bündelt `SaveStore.writeState` mit der Einmal-pro-Episode-Meldung (`notifySaveFailed`),
+ *  damit KEIN Schreibpfad (save/reset/importData) den Fehlschlag mehr still verschluckt –
+ *  vorher werteten reset()/importData() den bool-Rückgabewert gar nicht aus. Nach einem wieder
+ *  geglückten Save wird die Meldung re-armt. Gibt zurück, ob geschrieben wurde. */
+function persistState(state: GameState): boolean {
+  const written = SaveStore.writeState(state);
+  if (!written && !saveFailedNotified) {
+    saveFailedNotified = true;
+    notifySaveFailed();
+  } else if (written) {
+    saveFailedNotified = false;
+  }
+  return written;
+}
+
 /** Persistenz-Methoden der Game-Fassade (Laden/Speichern/Reset/Export/Import). */
 export const saveBundle = part({
   load() {
@@ -365,15 +381,16 @@ export const saveBundle = part({
    *  aber GERADE BEWUSST gesetzt hat (Sprung/Reset), ruft `save(false)`: sonst
    *  überschreibt die noch lebende Szene die frische Position sofort wieder und
    *  der reload landet am alten Ort (#335 / Reset-Position-Falle #295/#296). */
-  save(syncFromScene = true) {
+  save(syncFromScene = true): boolean {
     // Nach einem Slot-Wechsel bis zum Reload nichts mehr schreiben (siehe saveSuspended) –
-    // sonst landet der alte Spielstand im frisch gewählten Slot.
-    if (saveSuspended) return;
+    // sonst landet der alte Spielstand im frisch gewählten Slot. Bewusst übersprungen ist
+    // KEIN Fehlschlag → true (der Aufrufer, z.B. jumpToQuest, soll nicht false sehen).
+    if (saveSuspended) return true;
     // Während eines Wiederspiels (#332) schreibt nichts in den Store: der echte
     // Stand liegt als Lesezeichen im RAM und wird erst von endReplay() wieder
     // persistiert – so gibt es keine doppelte XP/Wirtschaft und der Live-Fortschritt
-    // (completedQuests/questIdx/Cluster) bleibt unangetastet.
-    if (this.replayBookmark) return;
+    // (completedQuests/questIdx/Cluster) bleibt unangetastet. Ebenfalls kein Fehlschlag → true.
+    if (this.replayBookmark) return true;
     if (this.sim) this.state.clusterSnapshot = this.sim.snapshot();
     const ws = worldScene();
     if (syncFromScene && ws && ws.player) {
@@ -385,20 +402,13 @@ export const saveBundle = part({
     // byte-stabil bleibt (Roundtrip-Fixpunkt in savemigration.test.ts).
     this.state.activeQuests = canonicalActiveQuests(this.state.activeQuests);
     this.state.lastSeen = Date.now();
-    // writeState meldet über den bool-Rückgabewert, ob das Schreiben klappte (#497).
-    // Ein Fehlschlag (voller localStorage-Fallback) darf nicht still verpuffen –
-    // einmalig pro Fehler-Episode an die Präsentation heben; ein wieder geglückter
-    // Save re-armt die Meldung. Legt den Stand in der aktuellen Versions-Hülle ab.
-    const written = SaveStore.writeState(this.state);
-    if (!written && !saveFailedNotified) {
-      saveFailedNotified = true;
-      notifySaveFailed();
-    } else if (written) {
-      saveFailedNotified = false;
-    }
+    // Schreiben + Fehlschlag-Meldung laufen über persistState (SSOT, #585/#497): ein
+    // fehlgeschlagener Save (voller localStorage-Fallback) verpufft so nicht still.
+    const written = persistState(this.state);
     // Vorschau des aktiven Slots für den Spielstand-Wähler aktualisieren (#306). Im
     // Single-Slot-Fall (kein Index) ist das ein No-op – kein Churn beim 5-s-Auto-Save.
     SaveStore.setActiveSlotSummary(this.slotSummary());
+    return written;
   },
 
   reset() {
@@ -411,7 +421,9 @@ export const saveBundle = part({
     // Position explizit auf den Default zwingen und neu sichern; der anschließende
     // location.reload() (ui.resetGame) lädt dann sauber die Startposition.
     this.state.player = { ...makeDefaultState().player };
-    SaveStore.writeState(this.state);
+    // Über persistState statt roh (#585): scheitert dieser Schreibvorgang, wird der
+    // Spieler gemeldet statt still verschluckt (vorher wurde der bool ignoriert).
+    persistState(this.state);
   },
 
   /* ---------- Spielstand als Datei sichern / laden ---------- */
@@ -420,7 +432,7 @@ export const saveBundle = part({
     return SaveStore.read();
   },
 
-  importData(json: string) {
+  importData(json: string): boolean {
     const parsed = JSON.parse(json); // wirft bei ungültiger Datei
     // #493: Import ist das letzte Netz (JSON-Backup). Er MUSS durch dieselbe Kette wie ein
     // normaler Ladevorgang: erst aufs aktuelle FORMAT heben (Hülle erkennen/migrieren,
@@ -429,7 +441,9 @@ export const saveBundle = part({
     // und HÜLLENLOS ab und umging Migration + Sanitize – ein hüllenloser oder aus einer
     // anderen Version stammender Stand wurde dann beim nächsten readState als Version 0
     // fehlinterpretiert (Verstoß gegen „Save darf nie brechen").
-    SaveStore.writeState(sanitizeState(SaveStore.migrateParsed(parsed)));
+    // Über persistState (#585): gibt zurück, ob der Import geschrieben wurde (vorher `void`),
+    // und meldet einen Fehlschlag (voller Speicher) an den Spieler statt ihn zu verschlucken.
+    return persistState(sanitizeState(SaveStore.migrateParsed(parsed)));
   },
 
   /* ---------- Mehrere Spielstände / Save-Slots (#306) ----------

@@ -174,8 +174,11 @@ export const progressionBundle = part({
     // save(false): die gerade gesetzte Giver-Position NICHT von der noch
     // lebenden WorldScene überschreiben lassen (#335) – sonst spawnt man nach
     // dem reload wieder am alten Ort statt beim Quest-Giver.
-    this.save(false);
-    return true;
+    // Rückgabe von save() durchreichen (#585): scheitert der Save (voller Speicher), meldet
+    // save() das an den Spieler UND wir liefern false zurück, damit der Aufrufer (Dev-Panel/
+    // main.ts: `if (jumpToQuest(idx)) location.reload()`) nicht in einen nicht-persistierten
+    // Sprung hinein neu lädt. Bewusst übersprungene Saves (Slot-Wechsel/Replay) liefern true.
+    return this.save(false);
   },
 
   /* ---------- Offene Quests als Menge: Voraussetzungen & Multi-Active (#410) ----------
