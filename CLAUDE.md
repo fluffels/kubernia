@@ -18,7 +18,7 @@
 7. npm test                                 # muss grün sein (auch Negativfälle abdecken, Red-Green)
 8. npm run typecheck                        # muss grün sein (strict)
 9. npm run lint                             # muss grün sein (ESLint, #389) – im Browser sichtbare Änderungen zusätzlich anschauen
-10. Branch pushen → PR öffnen (gh pr create, Body "Closes #<nr>") → grüne Required-Checks → PR mergen (gh pr merge --squash --delete-branch) → Worktree aufräumen → Issue schließt via Closes → KOPF pflegen (puh-fertig)   # PR-gegated seit #592, Details in AGENTS.md
+10. KOPF/Doku im SELBEN Branch pflegen (puh-fertig) → Branch pushen → EIN PR (gh pr create, Body "Closes #<nr>") → CI abwarten + bis Merge bringen (gh pr merge --squash --delete-branch --auto; rot → fixen bis grün) → Worktree aufräumen → Issue schließt via Closes   # ein PR pro Ticket (#618), fertig erst wenn gemergt; PR-gegated seit #592
 ```
 
 ⚠️ **Die rohe `index.html` im Root ist die Dev-Version** und braucht den Vite-Server. Per Doppelklick öffnen → leere Seite. Zum Offline-Spielen `npm run build:offline`, dann `dist-offline/index.html` doppelklicken.
@@ -257,7 +257,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 - **Was ist das Spiel?** KubeQuest – ein 2D-Lernspiel (Phaser 3) für Docker/K8s/Helm/Terraform; die Spielwelt **ist** der Cluster. → [README.md](README.md)
 - **Wie starte ich?** `npm install` → `npm run dev` → angezeigte Adresse im Browser. → Schnellstart oben.
 - **Welches Ticket nehme ich?** Das **oberste freie Ticket im kuratierten Kopf** von [Ticket-Auswahl](docs/ticket-reihenfolge.md); **ist der Kopf leer**, der **Auto-Rest** nach **Priorität** (`prio:hoch` → `prio:mittel` → `prio:niedrig` → ohne Label) + **niedrigster Nummer** (`gh issue list --state open --limit 500` – ohne `--limit` nur die 30 neuesten!; frei = kein Assignee, kein offener PR/Branch/Worktree, nicht `status:zurückgestellt`). Nur **dieses eine** Kandidaten-Ticket prüfen, nicht die ganze Liste. Sofort self-assignen. **Am Ticket-Ende den Kopf pflegen** (puh-fertig, Pflicht). → [AGENTS.md › Wo die TODOs leben](AGENTS.md#wo-die-todos-leben).
-- **Wie schließe ich ab?** Tests grün + im Browser verifiziert → Feature-Branch pushen → **PR öffnen** (Body `Closes #<nr>`) → grüne Required-Checks abwarten → **PR mergen** (`gh pr merge --squash --delete-branch`) → Worktree aufräumen → Issue schließt via `Closes` → **den kuratierten Kopf in [Ticket-Auswahl](docs/ticket-reihenfolge.md) pflegen** (puh-fertig: geschlossenes raus, Kopf nachfüllen, Stand-Datum aktualisieren, committen). PR-gegated seit #592, kein Direkt-Push auf `main`. → [AGENTS.md › Git-Workflow](AGENTS.md#das-wichtigste-zuerst-harte-regeln).
+- **Wie schließe ich ab?** Tests grün + im Browser verifiziert → **den kuratierten Kopf in [Ticket-Auswahl](docs/ticket-reihenfolge.md) pflegen** (puh-fertig: geschlossenes raus, Kopf nachfüllen, Stand-Datum) **auf demselben Branch** → **ein PR** (Body `Closes #<nr>`) → **CI abwarten und bis zum Merge bringen** (Auto-Merge + `gh pr checks --watch`; grün → mergt, rot → fixen bis grün) → Worktree aufräumen → Issue schließt via `Closes`. **Ein PR pro Ticket (#618); fertig erst, wenn der PR gemergt ist.** PR-gegated seit #592, kein Direkt-Push auf `main`. → [AGENTS.md › Git-Workflow](AGENTS.md#das-wichtigste-zuerst-harte-regeln).
 
 ---
 
