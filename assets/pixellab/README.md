@@ -16,7 +16,7 @@ Verkettet über `lower_base_tile_id`, damit gemeinsame Terrains pixelgleich ansc
 
 | Datei | Übergang | tileset_id | base tiles (lower→upper) |
 |---|---|---|---|
-| `water-sand` (coast) | Wasser→Sand | c7e28595-ae17-4840-9c25-31a4a7dd8eb0 | water 356778f0… → sand 096ddbfb… |
+| `water-sand` (coast) | Wasser→Sand | 0df35065-b4c6-4a58-93ce-b8c11caeeb5a | water 356778f0… → sand 096ddbfb… (neu generiert #342: `pro`-Modus, raggedness 0.4 = sanft geschwungene, lebendigere Uferlinie; an dieselben Basetiles gekettet) |
 | `sand-grass` (meadow) | Sand→Gras | 6de18767-1ba1-4829-b9b8-81a659508612 | sand 096ddbfb… → grass 197809d8… |
 | `grass-dirt` (path) | Gras→Weg | c2bd68ef-1b8d-4936-9787-6c3b68d4500f | grass 197809d8… → dirt e8efe511… |
 | `water-stone` (kai) | Wasser→Stein | 18b0efb4-f9f4-4e16-97a3-e5e298eb8bb5 | water 356778f0… → stone bcb30e72… |
