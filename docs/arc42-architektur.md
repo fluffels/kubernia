@@ -145,7 +145,8 @@ Dazu kommt: an einzelnen **Grenzen hört die sonst konsequente Disziplin auf** �
 | 0005 | Auslieferungsform Web vs. Desktop | **offen gehalten** (ergebnisoffener ADR + Re-Eval-Trigger) |
 | 0006 | Persistenz-Präzisierung: Engpass ist Eviction, nicht Kapazität → `storage.persist()` | präzisiert |
 | 0007 | Spielsystem-Fundamente (Quest-Modell, Checks-als-Daten, Zeit-Achse) | umgesetzt |
-| 0008 | **KI-Agenten-Harness** als Entwicklungsmodell (autonomer Ein-Ticket-Worktree-Workflow + Fitness-Functions als Leitplanken + selbstdokumentierendes Repo) | **akzeptiert** ([ADR 0008](adr/0008-ki-agenten-harness.md), #530) — die prägendste Entscheidung, jetzt als ADR festgehalten (Kontext/Alternativen/Re-Eval-Trigger). Kanonische Erklärung des Harness: [agent-harness.md](agent-harness.md) (#526). |
+| 0008 | **KI-Agenten-Harness** als Entwicklungsmodell (autonomer Ein-Ticket-Worktree-Workflow + Fitness-Functions als Leitplanken + selbstdokumentierendes Repo) | **akzeptiert** ([ADR 0008](adr/0008-ki-agenten-harness.md), #530) — die prägendste Entscheidung, jetzt als ADR festgehalten (Kontext/Alternativen/Re-Eval-Trigger). Kanonische Erklärung des Harness: [agent-harness.md](agent-harness.md) (#526). Integrationsweg seit #592 durch 0009 präzisiert. |
+| 0009 | **PR-Gating mit Required-Checks** auf `main` (`enforce_admins` an) statt Direkt-Push | **akzeptiert** ([ADR 0009](adr/0009-pr-gating-required-checks.md), #592) — der dritte Re-Eval-Trigger von 0008 ist eingetreten; Gate-Durchsetzung jetzt server-seitig und nicht mehr per `--no-verify` umgehbar. |
 
 iSAQB-konform: jeder ADR trägt einen expliziten **Re-Evaluierungs-Trigger** — Entscheidungen sind an nachprüfbare Bedingungen geknüpft, nicht „für immer".
 

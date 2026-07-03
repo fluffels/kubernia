@@ -15,14 +15,17 @@
  * Dieser Wächter misst den Diff des aktuellen Standes gegen `main` und wird ROT,
  * wenn er ein Budget an geänderten Dateien ODER Zeilen überschreitet.
  *
- * WO er beißt (bewusst asymmetrisch, passend zum Direct-Push-auf-main-Workflow):
- *  - Auf einem Feature-Branch bzw. im pre-push-Hook (#528) VOR dem Push auf `main`
- *    liegt die volle Historie vor → die Vergleichs-Basis (Merge-Base gegen
- *    origin/main) ist auflösbar → der Slice wird gemessen und ein zu breiter Push
- *    lokal abgebrochen. Das ist der eigentliche Durchsetzungspunkt.
- *  - In flachen CI-Checkouts (fetch-depth 1) bzw. wenn origin/main == HEAD (auf
- *    `main` nach dem Push) ist keine sinnvolle Basis da → der Check degradiert
- *    bewusst zu GRÜN (No-op), statt `main` rot zu machen. Kein falsches Rot.
+ * WO er beißt (seit #592 primär server-seitig, PR-gegated):
+ *  - Auf einem PR (CI-Checkout mit fetch-depth:0 + KQ_DIFF_BASE=PR-Basis, siehe
+ *    ci.yml) ist die Vergleichs-Basis auflösbar → der Slice wird als **Required
+ *    Check** gemessen und ein zu breiter PR am Merge gehindert. Das ist der
+ *    eigentliche Durchsetzungspunkt.
+ *  - Auf einem Feature-Branch / im lokalen pre-push-Hook (#528) greift er ebenso
+ *    (volle Historie da) — als schnelle Vorab-Rückmeldung vor dem PR.
+ *  - Auf dem push-auf-main-Event (nach dem Merge) bzw. in einem flachen Checkout
+ *    ohne Basis (origin/main == HEAD) ist keine sinnvolle Basis da → der Check
+ *    degradiert bewusst zu GRÜN (No-op), statt `main` rot zu machen. Kein falsches
+ *    Rot; der Slice wurde ja schon auf dem PR gemessen.
  *
  * Override mit Pflicht-Begründung (gleiches Muster wie die check-size-ALLOWLIST,
  * inkl. stale-Meldung): ein bewusst breiter Slice (z.B. ein großer God-File-Split)

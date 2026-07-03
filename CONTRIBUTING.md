@@ -72,14 +72,14 @@ Damit nichts doppelt gepflegt wird, lebt jedes Thema an **genau einer** Stelle:
 
 ## Bevor du committest
 
-- `npm test`, `npm run typecheck` und `npm run check:arch` müssen **grün** sein – genau das, was `npm run setup` einmal durchspielt. Vor einem Push auf `main` fährt der pre-push-Hook (#528) ohnehin die volle `npm run verify`-Kette und bricht bei Rot ab (Notfall-Umgehung: `git push --no-verify`).
+- `npm test`, `npm run typecheck` und `npm run check:arch` müssen **grün** sein – genau das, was `npm run setup` einmal durchspielt. **Änderungen gehen über einen Pull Request** (seit #592 ist `main` PR-gegated, kein Direkt-Push); fahr vor dem PR einmal `npm run verify` lokal für schnelle Rückmeldung – die **Required-Checks auf dem PR** sind der maßgebliche, server-seitig nicht umgehbare Gate.
 - Neue/geänderte Logik bekommt **Tests, auch für Negativfälle** (Red-Green absichern, bei Bugfixes test-first).
 - Sicht- oder spielbare Änderungen **im Browser** verifizieren, nicht nur „sollte gehen".
 - Der komplette Ablauf inkl. Branch-/Worktree-Workflow und Test-Disziplin: [AGENTS.md](AGENTS.md).
 
 ## Pull Requests & Abhängigkeits-Updates (Policy)
 
-Dieses Repo ist **öffentlich – aber zur Sichtbarkeit für Kollegen**, nicht als offene Einladung für beliebige Fremdbeiträge. Aktiver Code kommt von der Maintainerin (+ KI-Agent); `main` ist seit #419 geschützt (Force-Push/Löschen blockiert). Für eingehende PRs gilt:
+Dieses Repo ist **öffentlich – aber zur Sichtbarkeit für Kollegen**, nicht als offene Einladung für beliebige Fremdbeiträge. Aktiver Code kommt von der Maintainerin (+ KI-Agent); `main` ist seit #419 geschützt (Force-Push/Löschen blockiert) und seit **#592 PR-gegated**: Merge nur über einen Pull Request mit **grünen Required-Checks**, `enforce_admins` **an** (gilt auch für die Maintainerin und die Agenten – kein Direkt-Push, kein `--no-verify`-Schlupf). Für eingehende PRs gilt:
 
 ### Dependabot-PRs (Bot, vertrauenswürdig – kein Fremd-Menschen-Code)
 
@@ -87,7 +87,7 @@ Dieses Repo ist **öffentlich – aber zur Sichtbarkeit für Kollegen**, nicht a
 2. **Rot (CI failt) → NICHT blind mergen.** Ein rotes Update bricht gerade etwas – erst Code anpassen (eigenes Ticket) oder zurückstellen. Gilt vor allem für **Major-Bumps**.
 3. **Gekoppelte Pakete zusammen behandeln.** Eslint + `@eslint/js`, vite + vitest, ein Tool + sein Plugin – einzeln gemergt entstehen inkonsistente Versionen (genau das passierte mit #405 eslint 9→10 grün / #409 `@eslint/js` 9→10 rot). Darum bündelt [`.github/dependabot.yml`](.github/dependabot.yml) die Dev-Toolchain in **Gruppen** (`eslint`, `vite-vitest`, `github-actions`) – inklusive ihrer Majors, sodass ein gekoppeltes Major-Upgrade als **ein** koordinierter PR kommt. Sonstige Majors (z.B. phaser) bleiben bewusst Einzel-PRs zum Einzel-Review. Grouping ist **kein** Auto-Merge: ein roter Gruppen-PR wird weiter manuell geprüft.
 
-> **Auto-Merge – erwogen, vorerst zurückgestellt (#422).** GitHub-natives Auto-Merge für grüne Patch/Minor-PRs setzt **Required Status Checks** auf `main` voraus (sonst mergt „Auto-Merge" sofort, ohne auf grün zu warten). Genau die würden aber den kubequest-Arbeitsablauf brechen, bei dem direkt auf `main` committet und `git push origin main` gemacht wird (kein PR) – Required Checks würden diesen Direkt-Push blockieren, weil die CI auf dem frischen Commit noch nicht gelaufen ist. Solange dieser Direkt-Push-Workflow gilt, bleibt das Mergen grüner Updates ein **bewusster, kurzer Handgriff**; das Grouping oben senkt das PR-Aufkommen bereits deutlich. **Wenn doch gewünscht:** `allow_auto_merge` am Repo aktivieren, in der Branch-Protection die CI-Jobs als Required Checks setzen **und** auf einen PR-basierten Merge-Workflow umstellen, dann via `dependabot/fetch-metadata` + `gh pr merge --auto` nur Patch/Minor automatisieren (Majors bleiben manuell).
+> **Auto-Merge – jetzt möglich (seit #592).** GitHub-natives Auto-Merge für grüne Patch/Minor-PRs setzt **Required Status Checks** auf `main` voraus. Die sind seit **#592** gesetzt (der frühere Direkt-Push-Workflow, der das blockierte, ist auf PR-Gating umgestellt) — die Voraussetzung ist also erfüllt. Der Merge grüner Updates bleibt bis auf Weiteres ein **bewusster Handgriff** (`gh pr merge --squash`, sobald die Required-Checks grün sind); das Grouping oben senkt das PR-Aufkommen bereits deutlich. **Wenn voll automatisiert gewünscht:** `allow_auto_merge` am Repo aktivieren und via `dependabot/fetch-metadata` + `gh pr merge --auto` nur Patch/Minor automatisieren (Majors bleiben manuell im Review).
 
 ### PRs von fremden GitHub-Nutzern (Menschen)
 

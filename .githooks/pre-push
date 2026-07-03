@@ -1,25 +1,26 @@
 #!/usr/bin/env sh
 #
-# KubeQuest pre-push-Hook (#528)
+# KubeQuest pre-push-Hook (#528, seit #592 nur noch SEKUNDÄR)
 # =================================================================
-# Schließt die einzige echte Lücke im sonst lückenlosen Gate-Netz:
-# Der Workflow pusht bewusst DIREKT auf `main` (kein PR/Required-Checks,
-# sonst bräche der Direkt-Push). Die CI-Gates laufen dadurch ERST NACH
-# dem Push (post-hoc) — in der Zeitspanne dazwischen kann kaputter Code
-# `main` rot machen, und ein paralleler Agent baut dann auf rotem `main` auf.
+# Seit #592 ist `main` server-seitig PR-gegated (Branch-Protection: Merge nur
+# über PR mit grünen Required-Checks, enforce_admins an) — die maßgebliche,
+# NICHT umgehbare Durchsetzung sind jetzt die CI-Required-Checks auf dem PR,
+# nicht mehr dieser lokale Hook (siehe ADR 0009). Ein Direkt-Push auf `main`
+# wird server-seitig ohnehin abgelehnt; dieser Hook ist damit nur noch ein
+# harmloses Zusatznetz für den Fall, dass die Protection je gelockert wird.
 #
 # Dieser Hook fährt die schnellen Gates (`npm run verify`: typecheck → lint
 # → check:arch → check:size → check:docmap → check:docdrift → check:diffsize
-# → test) LOKAL, BEVOR ein Push auf `main` das Remote erreicht, und bricht den
-# Push bei Rot ab. Genau hier beißt auch check:diffsize (#533): der Slice gegen
-# main ist vor dem Push messbar, ein zu breiter Push auf main wird abgebrochen.
+# → test) LOKAL, falls doch mal auf `main` gepusht wird, und bricht bei Rot ab.
+# Für die schnelle Vorab-Rückmeldung VOR dem PR `npm run verify` einfach manuell
+# fahren (Feature-Branch-Pushes triggern diesen main-only-Hook nicht).
 #
 # Bewusste Grenzen:
 #  - Nur bei Push auf `main` — Feature-Branch-Pushes bleiben schnell.
 #  - OHNE Builds/Boot-Smoke (das ist `verify:full`), damit der Hook zügig bleibt;
 #    die schweren Artefakt-Schritte deckt die CI ab.
-#  - Umgehung im Notfall: `git push --no-verify` (git ruft den Hook dann gar
-#    nicht auf). Default = abgesichert.
+#  - Umgehung: `git push --no-verify` — greift aber NICHT an der Server-Protection
+#    vorbei; die Required-Checks auf dem PR bleiben verbindlich.
 #
 # Verdrahtet über `core.hooksPath = .githooks` (gesetzt von `npm run setup`),
 # also versioniert und ohne husky-Abhängigkeit — jeder frische Klon bekommt
