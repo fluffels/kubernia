@@ -171,6 +171,46 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/check-doc-tickets.mjs
 
+  # Duplikations-Report (#612): jscpd als WEICHES, NICHT-BLOCKIERENDES CI-Artefakt.
+  # Hintergrund (iSAQB-Runde 3, docs/architektur-analyse-2026-07-03-iSAQB.md): die
+  # SSOT-Umgehungen (#534/#577/#578, _resetNodes/#596) sind die einzige Regressionsklasse
+  # OHNE direkten Guard — sie hängen nur am Invariant (der erst bei illegalem State wirft)
+  # plus Review; einen Copy-Paste-Detektor gab es nicht. jscpd macht eine Copy-Paste-
+  # Wiedereinführung früh sichtbar. BEWUSST WEICH (kein Gate, analog zum nur-berichtenden
+  # dev-`npm audit` oben): harte Duplikat-Schwellen erzeugen viele False Positives und
+  # würden — wie das dev-Audit aus #395 — sonst nur abgeschaltet/ignoriert. Darum kein
+  # `threshold` in .jscpd.json (jscpd exit 0 unabhängig von der Duplikatquote) UND
+  # continue-on-error als zweiter Riegel; der HTML/JSON-Report wird nur als Artefakt
+  # hochgeladen. Bewusst NICHT Teil von `npm run verify(:full)` (den blockierenden
+  # Gate-Ketten) und ein eigener Job, damit er build-test nie rot färbt.
+  duplication-report:
+    name: Duplikations-Report (jscpd, nicht-blockierend, #612)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Node einrichten
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: jscpd-Duplikations-Report (nur Bericht, blockt nicht)
+        continue-on-error: true
+        run: npm run check:duplication
+
+      - name: Duplikations-Report als Artefakt hochladen
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: kubequest-duplication-report
+          path: jscpd-report/
+          if-no-files-found: warn
+
   # Dev-Panel-Build (#331): liefert das sonst dev-server-only Panel als eine
   # self-contained Datei aus, passwortgated über das Repo-Secret VITE_KQ_DEVPANEL_PW.
   # WICHTIG (Geheimhaltung): nur bei Push auf main bzw. manuellem Start – NICHT bei
