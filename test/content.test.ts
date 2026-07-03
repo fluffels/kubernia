@@ -45,6 +45,18 @@ function npcSpriteProblems(npcs: Record<string, { tex?: string }>, assets: Recor
   return out;
 }
 
+/** Findet Shop-Items, deren `tex` ins Leere zeigt (#582): trägt ein Item ein `tex`, muss es
+ *  ein echtes Asset im Manifest sein – sonst gibt der Shop still den Phaser-Platzhalter aus
+ *  (analog zu npcSpriteProblems). Items ohne `tex` (consumable/flag/upgrade, oder Pets, die
+ *  über `sprite` rendern) sind hier bewusst nicht betroffen. Red-Green-absicherbarer Helfer. */
+function shopSpriteProblems(shop: { id: string; tex?: string }[], assets: Record<string, string>): string[] {
+  const out: string[] = [];
+  for (const item of shop) {
+    if (item.tex !== undefined && !assets[item.tex]) out.push(`${item.id}: Sprite-Asset fehlt (tex=${item.tex})`);
+  }
+  return out;
+}
+
 test("Quiz-Karten: IDs eindeutig, correct-Index gültig, Erklärung vorhanden", () => {
   const seen = new Set();
   for (const q of KQContent.CRAB_QUIZ) {
@@ -421,6 +433,23 @@ test("jeder NPC hat ein Sprite-Asset (tex im Manifest)", () => {
   assert.deepEqual(problems, [], "NPCs ohne Sprite-Asset:\n" + problems.join("\n"));
 });
 
+test("jedes Shop-Item mit tex hat ein Sprite-Asset im Manifest (#582)", () => {
+  const problems = shopSpriteProblems(KQContent.SHOP, KQAssets);
+  assert.deepEqual(problems, [], "Shop-Items mit totem tex (stiller Platzhalter):\n" + problems.join("\n"));
+});
+
+test("Red-Green: ein Shop-Item mit vertipptem tex wird gemeldet (#582)", () => {
+  // Das ist der eigentliche Bug: ein Tippfehler im tex gibt still den Phaser-Platzhalter.
+  const problems = shopSpriteProblems(
+    [...KQContent.SHOP, { id: "pet-tippfehler", tex: "gibt_es_nicht_im_manifest" }],
+    KQAssets,
+  );
+  assert.ok(
+    problems.some(p => p.includes("pet-tippfehler") && p.includes("gibt_es_nicht_im_manifest")),
+    "vertippter Shop-tex wurde NICHT gemeldet – Check ohne Zähne:\n" + problems.join("\n"),
+  );
+});
+
 test("der GitOps-Insel-NPC (#93) ist in der Registry verdrahtet, mit Sprite + Smalltalk", () => {
   // archipel.ts reserviert den Standplatz mit fester id – die MUSS einem NPC der
   // Registry entsprechen, sonst rendert die Insel eine Figur ohne Daten.
@@ -632,6 +661,46 @@ test("Red-Green: Quiz-Karte mit unbekanntem introducedIn wird gemeldet (#412)", 
   const errors = validateContent(kaputt);
   assert.ok(errors.some(e => e.includes("q-bad-intro") && e.includes("q-existiert-nicht") && e.includes("introducedIn")),
     "unbekanntes introducedIn nicht gemeldet:\n" + errors.join("\n"));
+});
+
+test("Red-Green: Shop-Item mit unbekanntem type macht den Check rot (#582)", () => {
+  // Die Kauf-Logik in game/economy.ts verzweigt über `type` – ein Tippfehler
+  // (z.B. „konsumierbar" statt „consumable") fiele sonst still durch.
+  const kaputt: ContentBundle = {
+    ...KQContent,
+    SHOP: [...KQContent.SHOP, { id: "s-bad-type", type: "gibt-es-nicht", price: 10 }],
+  };
+  const errors = validateContent(kaputt);
+  assert.ok(
+    errors.some(e => e.includes("s-bad-type") && e.includes("type")),
+    "unbekannter Shop-type wurde NICHT gemeldet:\n" + errors.join("\n"),
+  );
+});
+
+test("Red-Green: Shop-Item mit ungültigem price (0/negativ/nicht-ganzzahlig) macht den Check rot (#582)", () => {
+  for (const bad of [0, -5, 12.5]) {
+    const kaputt: ContentBundle = {
+      ...KQContent,
+      SHOP: [...KQContent.SHOP, { id: "s-bad-price", type: "consumable", price: bad }],
+    };
+    const errors = validateContent(kaputt);
+    assert.ok(
+      errors.some(e => e.includes("s-bad-price") && e.includes("price")),
+      `ungültiger price ${bad} wurde NICHT gemeldet:\n` + errors.join("\n"),
+    );
+  }
+});
+
+test("Red-Green: Shop-Item mit leerem tex macht den Check rot (#582)", () => {
+  const kaputt: ContentBundle = {
+    ...KQContent,
+    SHOP: [...KQContent.SHOP, { id: "s-bad-tex", type: "pet", price: 10, tex: "  " }],
+  };
+  const errors = validateContent(kaputt);
+  assert.ok(
+    errors.some(e => e.includes("s-bad-tex") && e.includes("tex")),
+    "leerer Shop-tex wurde NICHT gemeldet:\n" + errors.join("\n"),
+  );
 });
 
 /** #311: Findet in einem Anzeige-Text „Platzhalter-artige" `<token>`, die `fmtCmd` NICHT
