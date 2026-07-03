@@ -40,13 +40,24 @@ const BUILD_DEPENDENT_GATES = new Set(["check:bundle"]);
 // non-blocking CI-Job (alarmierend) + lokal auf Zuruf, nicht als verify-Gate.
 const NETWORK_DEPENDENT_GATES = new Set(["check:doctickets"]);
 
+// Bewusst WEICHE, NICHT-blockierende `check:*` — keine Gates, sondern nur berichtende
+// CI-Artefakte, die daher AUSDRÜCKLICH NICHT in die `verify`-Kette gehören. #612:
+// check:duplication (jscpd) ist ein reiner Copy-Paste-Report ohne `threshold`; ein
+// Platz in `verify` würde ihn zum harten Gate machen — genau das soll er nicht sein
+// (die weiche Auslegung sichert test/duplication-config.test.ts).
+const SOFT_NONBLOCKING_GATES = new Set(["check:duplication"]);
+
 // Die build-freien Einzel-Gates, die `verify` fährt: jedes `check:*` (außer den
-// build- und netzabhängigen) plus die drei Namens-Gates. Aus den Scripts abgeleitet,
-// damit ein neu hinzugefügtes `check:*`-Gate den Test automatisch mitzieht (statt
-// hier zu verrotten).
+// build-, netzabhängigen und bewusst weichen) plus die drei Namens-Gates. Aus den
+// Scripts abgeleitet, damit ein neu hinzugefügtes `check:*`-Gate den Test automatisch
+// mitzieht (statt hier zu verrotten).
 const GATE_SCRIPTS = [
   ...Object.keys(scripts).filter(
-    (n) => n.startsWith("check:") && !BUILD_DEPENDENT_GATES.has(n) && !NETWORK_DEPENDENT_GATES.has(n),
+    (n) =>
+      n.startsWith("check:") &&
+      !BUILD_DEPENDENT_GATES.has(n) &&
+      !NETWORK_DEPENDENT_GATES.has(n) &&
+      !SOFT_NONBLOCKING_GATES.has(n),
   ),
   "typecheck",
   "lint",

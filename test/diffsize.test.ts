@@ -36,6 +36,7 @@ const overrideReason: (env?: Record<string, string | undefined>) => string | nul
 const resolveBase: (runGit: RunGit, env?: Record<string, string | undefined>) => string | null = checkDiff.resolveBase;
 const checkDiffSize: (opts: { runGit: RunGit; env?: Record<string, string | undefined> }) => Record<string, unknown> =
   checkDiff.checkDiffSize;
+const isGeneratedArtifact: (path: string) => boolean = checkDiff.isGeneratedArtifact;
 
 describe("Diff-Größenbudget (#533)", () => {
   test("parseNumstat: summiert added+deleted, zählt Dateien, behandelt Binärdateien", () => {
@@ -170,5 +171,36 @@ describe("Diff-Größenbudget (#533)", () => {
     // merge-base liefert genau HEADSHA → nichts gegenüber main → No-op.
     const r = checkDiffSize({ runGit: gitWith("HEADSHA", OVER), env: tightEnv });
     assert.equal(r.skipped, true);
+  });
+
+  // ── #612: generierte Lockfiles zählen nicht zum reviewbaren Slice ──
+  test("isGeneratedArtifact: Lockfiles (auch in Unterordnern), NICHT Quellcode", () => {
+    assert.equal(isGeneratedArtifact("package-lock.json"), true);
+    assert.equal(isGeneratedArtifact("npm-shrinkwrap.json"), true);
+    assert.equal(isGeneratedArtifact("yarn.lock"), true);
+    assert.equal(isGeneratedArtifact("pnpm-lock.yaml"), true);
+    assert.equal(isGeneratedArtifact("sub/dir/package-lock.json"), true, "Basename greift auch in Unterordnern");
+    assert.equal(isGeneratedArtifact("src/foo.ts"), false, "Quellcode zählt weiter mit");
+    assert.equal(isGeneratedArtifact("package.json"), false, "package.json ist von Hand geschrieben");
+  });
+
+  test("checkDiffSize: ein riesiges Lockfile allein sprengt das Budget NICHT (#612)", () => {
+    // Ein winziger Code-Slice + ein aufgeblähtes Lockfile (Dep-Ergänzung wie jscpd/#612).
+    // Ohne die Exklusion wären das 1100 Zeilen > Default-Budget 800 → fälschlich rot.
+    const numstat = ["10\t2\tsrc/foo.ts", "1100\t0\tpackage-lock.json"].join("\n");
+    const r = checkDiffSize({ runGit: gitWith("BASE", numstat), env: {} });
+    assert.equal(r.excludedCount, 1, "das Lockfile wird als ausgeschlossen gezählt");
+    assert.equal(r.changedLines, 12, "nur der Code-Slice (10+2) zählt, nicht die 1100 Lockfile-Zeilen");
+    assert.equal(r.fileCount, 1, "nur src/foo.ts zählt als Slice-Datei");
+    assert.equal(r.over, false, "der reviewbare Slice liegt unter Budget");
+  });
+
+  test("Red-Green: dasselbe Lockfile-Volumen als Quellcode WÜRDE das Budget reißen", () => {
+    // Beweist, dass die Exklusion wirkt (nicht das Budget an sich): identische Zeilen,
+    // aber in einer .ts statt im Lockfile → over === true.
+    const numstat = ["10\t2\tsrc/foo.ts", "1100\t0\tsrc/generated.ts"].join("\n");
+    const r = checkDiffSize({ runGit: gitWith("BASE", numstat), env: {} });
+    assert.equal(r.excludedCount, 0);
+    assert.equal(r.over, true, "1112 echte Code-Zeilen sprengen das 800er-Budget");
   });
 });
