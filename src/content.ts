@@ -12,6 +12,7 @@ import { RANKS, SHOP } from "./content/progression";
 import { NPCS, SMALLTALK, PRACTICE, getQuests, getCmdCards, getQuizCards, getQuestTopics, groupQuestsByTopic, getTfConfigs, getFunkExplains } from "./content/loader";
 import { DRILLS } from "./content/drills";
 import { STACK_ROUNDS, corruptImage } from "./content/minigame";
+import type { ContentBundle } from "./content/validate";
 
 // Quests, Themen, Quiz- und Befehls-Karten sind seit #435 LAZY: die Fassade exponiert sie
 // als Getter, die das (bei Stardew-Scope teure) Parsen+Validieren erst beim ersten Zugriff
@@ -30,3 +31,12 @@ export const KQContent = {
   // funkexplain.ts dosiert ausgewählt. Lazy wie die übrigen Sammlungen.
   get FUNK_EXPLAINS() { return getFunkExplains(); },
 };
+
+// #581: KQContent an den Validator-Eingang `ContentBundle` (content/validate.ts) koppeln.
+// Vorher war ContentBundle ein hand-gepflegter Struktur-Spiegel, der still driften konnte —
+// ein neu zu prüfendes Feld fiel nirgends auf (anders als die `keyof Scenario`-Kopplung nebenan).
+// Die Fassade ist bewusst ein SUPERSET (SMALLTALK/corruptImage/TF_CONFIGS/FUNK_EXPLAINS inspiziert
+// der Validator nicht), darum greift `satisfies` NICHT direkt am Literal (Excess-Property-Prüfung);
+// die Kopplung steht als `satisfies` auf der Variablen (kein frisches Literal → keine Excess-Prüfung).
+// Fehlt KQContent künftig ein von ContentBundle NEU gefordertes Feld, bricht diese Zeile den Typecheck.
+const _contentBundleContract = KQContent satisfies ContentBundle;
