@@ -210,9 +210,13 @@ export const ABBREV_EARN_THRESHOLD = 20;
  *  spürbares kleines Upgrade sein, sobald man das Terminal ein paar Mal benutzt hat. */
 export const CMD_HISTORY_UNLOCK_AT = 10;
 
+/** Tages-Index (Tage seit der Unix-Epoche) als SSOT für die persistierte Leitner-Fälligkeit
+ *  (`due`) und den Streak (`lastDay`). Bewusst ein **UTC**-Tageszähler (kein
+ *  `getTimezoneOffset()` mehr, #587): ein lokal-zeitzonengebundener Zähler verschob bei
+ *  Reise/Zeitzonenwechsel jede Fälligkeit um ±1 Tag. Kosmetisch, kein Save-Bruch – der
+ *  Wertebereich (Tageszähler) bleibt gleich, nur der Bezugsrahmen ist jetzt zonenstabil. */
 export function today() {
-  const now = new Date();
-  return Math.floor((now.getTime() - now.getTimezoneOffset() * 60000) / 86400000);
+  return Math.floor(Date.now() / 86400000);
 }
 
 /** Spiel-Feel-Stufe erkennen (Typ-Guard fürs Narrowing). */
