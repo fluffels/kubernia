@@ -222,9 +222,21 @@ import { buildCrashReport, type CrashReport } from "./crashreport";
     if (import.meta.env.DEV) {
       // Bewusst nicht awaiten (`void`): eine Dev-only-Diagnose, die nur in die
       // Konsole loggt – sie soll den Boot nicht aufhalten (#389/no-floating-promises).
-      void Promise.all([import("./content/validate"), import("./content")]).then(([{ validateContent }, { KQContent }]) => {
+      void Promise.all([
+        import("./content/validate"),
+        import("./content"),
+        import("./content/entities"),
+        import("./world/maps/mapregistry"),
+        import("./world/warps"),
+      ]).then(([{ validateContent }, { KQContent }, { ENTITY_NPCS, ENTITY_OBJECTS, entityMapProblems }, { MAP_REGISTRY }, { REGION_WARPS }]) => {
         const probleme = validateContent(KQContent);
         if (probleme.length) console.error("⚠️ Kubernia-Inhalte inkonsistent (#81):\n" + probleme.join("\n"));
+        // #600: Entity-Standplätze gegen die realen Karten prüfen – ein Standplatz auf einer
+        // unbekannten Karte wirft nicht, die Szene rendert ihn STILL nicht. Karten-Menge =
+        // Registry-Karten (harbor/test-map) + Region-Karten (REGION_WARPS-IDs).
+        const knownMaps = new Set<string>([...Object.keys(MAP_REGISTRY), ...REGION_WARPS.map((w) => w.id)]);
+        const kartenProbleme = entityMapProblems(ENTITY_NPCS, ENTITY_OBJECTS, knownMaps);
+        if (kartenProbleme.length) console.error("⚠️ Entity-Registry: Standplatz auf unbekannter Karte (#600):\n" + kartenProbleme.join("\n"));
       });
     }
     // Persistenz auf IndexedDB hochziehen, BEVOR der Stand geladen wird (#350): init()
