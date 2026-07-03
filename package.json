@@ -30,6 +30,7 @@
     "check:anysuppress": "node scripts/check-any-suppressions.mjs",
     "check:lockfile": "node scripts/check-lockfile.mjs",
     "check:bundle": "node scripts/check-bundle.mjs",
+    "check:doctickets": "node scripts/check-doc-tickets.mjs",
     "lint": "eslint . --max-warnings 0",
     "lint:prune": "eslint . --prune-suppressions",
     "lint:suppress": "eslint . --suppress-rule complexity --suppress-rule max-depth --suppress-rule max-lines-per-function",

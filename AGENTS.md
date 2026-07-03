@@ -60,6 +60,7 @@
 | Dateigröße-Wächter (God-File-Budget 800 LOC, #390) | `npm run check:size` |
 | Doku↔Code-Drift-Wächter (CLAUDE.md-Landkarte gegen den Code, #482) | `npm run check:docmap` |
 | Harness-Drift-Wächter (dokumentierte `npm run`-Kommandos + interne Doku-Links/Anker, #529) | `npm run check:docdrift` |
+| Doku-Aktualitäts-Wächter (offen-markierte Harness-Roadmap-Tickets gegen den echten gh-Status; non-blocking, braucht `gh`; NICHT in `verify`, #610) | `npm run check:doctickets` |
 | Diff-Größenbudget-Wächter (max. 20 Dateien / 800 geänderte Zeilen gegen main, #533) | `npm run check:diffsize` |
 | `no-explicit-any`-Suppression-Ratchet (per-Datei-Baseline `any-suppressions.json`, #604) | `npm run check:anysuppress` (Baseline neu ziehen: `node scripts/check-any-suppressions.mjs --write`) |
 | Lockfile-Integritäts-Wächter (package-lock.json ↔ package.json, gegen Lockfile-Drift, #593) | `npm run check:lockfile` |
