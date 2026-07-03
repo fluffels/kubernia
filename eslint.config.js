@@ -118,15 +118,34 @@ export default tseslint.config(
     },
   },
 
-  // 5) Determinismus-Wächter (#492): In der puren Domäne (src/sim/**) und im
-  //    Content (src/content/**) ist `Math.random` verboten – die Schicht ist als
+  // 5) Determinismus-Wächter (#492, Scope ausgeweitet #591): In der puren Domäne
+  //    UND der Anwendung ist `Math.random` verboten – diese Schichten sind als
   //    deterministisch/testbar deklariert. Zufall kommt ausschließlich aus dem
   //    SSOT src/core/rng.ts (`nextRandom`/`hashStr`), damit snapshot()-Round-trips
   //    wertstabil sind, Pod-Namen/IPs auf konkrete Namen prüfbar werden und ein
   //    „Seed teilen" nachrüstbar bleibt. Doppelt gesichert durch die Fitness-
   //    Function test/rng.test.ts (läuft auch im reinen `npm test`).
+  //
+  //    Der Scope umfasst alle zustandstragenden Schichten: die pure Domäne
+  //    (src/sim/**, src/content/**, src/world/**, src/hud/**, src/core/**) und die
+  //    Anwendung (src/game/**). BEWUSST ausgenommen ist die PRÄSENTATION
+  //    (src/scenes/**, src/ui/**, src/sfx.ts): dort ist Zufall rein optisch/Timing
+  //    (Möwen-Spawns, Tween-Jitter, floatText-Position, Smalltalk-Zeilenwahl, die
+  //    Phaser-getriebene Gefahren-Terminierung in scenes/worldscene/events.ts) und
+  //    berührt keinen snapshot-stabilen Zustand – Determinismus ist eine Eigenschaft
+  //    des Spielzustands, nicht der Optik. Ein Gate über events.ts wäre zudem
+  //    irreführend, weil dieselbe Datei über Phaser.Math.Between/GetRandom ohnehin
+  //    nicht-deterministisch würfelt (das ließe sich mit einer Math.random-Regel
+  //    gar nicht fassen).
   {
-    files: ["src/sim/**/*.ts", "src/content/**/*.ts"],
+    files: [
+      "src/sim/**/*.ts",
+      "src/content/**/*.ts",
+      "src/world/**/*.ts",
+      "src/hud/**/*.ts",
+      "src/core/**/*.ts",
+      "src/game/**/*.ts",
+    ],
     rules: {
       "no-restricted-properties": [
         "error",

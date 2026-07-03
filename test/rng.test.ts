@@ -4,9 +4,14 @@
  * Zwei Rollen in einer Datei (bewusst, gehört inhaltlich zusammen):
  *  1. Verhaltens-Tests des PRNG/Hash (mulberry32 seedbar & reproduzierbar,
  *     hashStr/hashHex stabil).
- *  2. Architektur-Wächter (Fitness-Function): src/sim/** + src/content/** dürfen
- *     `Math.random` nicht aufrufen – der Determinismus-Anspruch der puren Domäne
- *     wird so maschinell gehalten (neben der ESLint-Regel no-restricted-properties).
+ *  2. Architektur-Wächter (Fitness-Function): die Domäne + Anwendung
+ *     (src/sim/** + src/content/** + src/world/** + src/hud/** + src/core/** +
+ *     src/game/**, #591) dürfen `Math.random` nicht aufrufen – der Determinismus-
+ *     Anspruch dieser Schichten wird so maschinell gehalten (neben der ESLint-Regel
+ *     no-restricted-properties). Die Präsentation (src/scenes/**, src/ui/**, sfx.ts)
+ *     ist BEWUSST ausgenommen: dort ist Zufall rein optisch/Timing (Möwen-Spawns,
+ *     Tween-Jitter, floatText-Position, Smalltalk-Zeilenwahl, Phaser-getriebene
+ *     Gefahren-Terminierung) und berührt keinen snapshot-stabilen Zustand.
  *
  * Ausführen mit:  npm test
  */
@@ -85,10 +90,20 @@ function tsFiles(dir: string): string[] {
 /** Findet echte `Math.random(`-AUFRUFE (nicht die Erwähnung in Prosa/Kommentaren). */
 const MATH_RANDOM_CALL = /Math\s*\.\s*random\s*\(/;
 
-const GUARDED_DIRS = [join(process.cwd(), "src", "sim"), join(process.cwd(), "src", "content")];
+// Determinismus-Scope (#492, ausgeweitet #591): die Domäne + Anwendung. Die
+// Präsentation (src/scenes/**, src/ui/**, sfx.ts) ist bewusst NICHT hier – dort
+// ist Zufall optisch/Timing, nicht zustandswirksam (siehe Kopfkommentar).
+const GUARDED_DIRS = [
+  join(process.cwd(), "src", "sim"),
+  join(process.cwd(), "src", "content"),
+  join(process.cwd(), "src", "world"),
+  join(process.cwd(), "src", "hud"),
+  join(process.cwd(), "src", "core"),
+  join(process.cwd(), "src", "game"),
+];
 
-describe("Fitness-Function: Determinismus der Domäne (#492)", () => {
-  test("kein Math.random()-Aufruf in src/sim/** und src/content/**", () => {
+describe("Fitness-Function: Determinismus der Domäne (#492/#591)", () => {
+  test("kein Math.random()-Aufruf in Domäne + Anwendung (sim/content/world/hud/core/game)", () => {
     const offenders: string[] = [];
     for (const dir of GUARDED_DIRS) {
       for (const file of tsFiles(dir)) {
@@ -111,6 +126,6 @@ describe("Fitness-Function: Determinismus der Domäne (#492)", () => {
     assert.ok(MATH_RANDOM_CALL.test("const r = Math.random();"), "Aufruf muss erkannt werden.");
     assert.ok(MATH_RANDOM_CALL.test("x = Math . random ()"), "Auch mit Whitespace erkannt.");
     assert.ok(!MATH_RANDOM_CALL.test("// kein Math.random mehr hier"), "Prosa ohne Aufruf ist erlaubt.");
-    assert.ok(GUARDED_DIRS.length === 2 && tsFiles(GUARDED_DIRS[0]).length > 0, "Es müssen wirklich Dateien gescannt werden.");
+    assert.ok(GUARDED_DIRS.length === 6 && tsFiles(GUARDED_DIRS[0]).length > 0, "Es müssen wirklich alle sechs Schicht-Ordner gescannt werden.");
   });
 });
