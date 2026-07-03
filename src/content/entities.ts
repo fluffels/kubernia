@@ -200,3 +200,32 @@ export function objectFootprint(o: EntityObject): { x: number; y: number }[] {
   for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) tiles.push({ x: o.x - dx, y: o.y - dy });
   return tiles;
 }
+
+/* ===== Referenzielle Karten-Prüfung (#600) =====
+ * parseEntities/parseObjects prüfen Struktur + NPC-Identität + Doppel-Standplätze schon beim
+ * Laden (werfen laut). Was BISHER durch keine Prüfung fiel: die `map`-Referenz. Ein Standplatz
+ * auf einer nicht existierenden Karte (Tippfehler „habor", umbenannte/entfernte Region) wirft
+ * nicht — die Szene loopt einfach nie über ihn, der NPC/das Objekt fehlt STILL. Diese Prüfung
+ * schließt die Lücke, analog zur Validierungs-Asymmetrie bei SHOP (#582).
+ *
+ * WELCHE Karten es gibt, ist Wissen der world-/Präsentations-Schicht (MAP_REGISTRY + die
+ * Region-Karten aus REGION_WARPS/REGION_CONFIGS), das die pure content-Schicht NICHT importieren
+ * darf — es entstünde ein Import-Zyklus, weil world.ts bereits content/entities importiert. Darum
+ * nimmt die Prüfung — genau wie shopSpriteProblems (#582) die Asset-Registry — die Karten-Menge
+ * als PARAMETER; der Aufrufer (main.ts-Dev-Netz, test/entities.test.ts) reicht die reale Menge
+ * herein. Auch die Entity-Listen sind Parameter, damit der Check Red-Green gegen erfundene
+ * Eingaben absicherbar ist (nicht nur gegen die echten, immer-validen Daten). */
+export function entityMapProblems(
+  npcs: readonly { id: string; map: string }[],
+  objects: readonly { id: string; map: string }[],
+  knownMaps: ReadonlySet<string>,
+): string[] {
+  const out: string[] = [];
+  for (const e of npcs) {
+    if (!knownMaps.has(e.map)) out.push(`NPC-Standplatz „${e.id}" auf unbekannter Karte „${e.map}"`);
+  }
+  for (const o of objects) {
+    if (!knownMaps.has(o.map)) out.push(`Objekt „${o.id}" auf unbekannter Karte „${o.map}"`);
+  }
+  return out;
+}
