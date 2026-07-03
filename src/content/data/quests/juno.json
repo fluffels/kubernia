@@ -183,7 +183,7 @@
         "brief": "Logs lesen",
         "cmd": {
           "id": "t-logs",
-          "intro": "🆕 Neuer Befehl: <code>kubectl logs &lt;pod&gt;</code> – zeigt, was die <b>App selbst</b> ausgegeben hat (stdout/stderr): ihre Meldungen, Fehler, Stacktraces. Das ist die <b>dritte Stufe</b> des Mantras <code>get pods → describe → logs</code>. Merke den Unterschied: <code>describe</code> zeigt die <b>Kubernetes-Sicht</b> (Zustand + Events, das <i>Warum</i>), <code>logs</code> die <b>App-Ausgabe</b> selbst.",
+          "intro": "🆕 Neuer Befehl: <code>kubectl logs <pod></code> – zeigt, was die <b>App selbst</b> ausgegeben hat (stdout/stderr): ihre Meldungen, Fehler, Stacktraces. Das ist die <b>dritte Stufe</b> des Mantras <code>get pods → describe → logs</code>. Merke den Unterschied: <code>describe</code> zeigt die <b>Kubernetes-Sicht</b> (Zustand + Events, das <i>Warum</i>), <code>logs</code> die <b>App-Ausgabe</b> selbst.",
           "text": "Jetzt die Wahrheit: Lies die <b>Logs</b> des <code>funkboje</code>-Pods!",
           "accept": [
             "^kubectl\\s+logs\\s+funkboje-\\S+$"
@@ -826,7 +826,7 @@
         "brief": "Mehr Speicher geben",
         "cmd": {
           "id": "t-setresources",
-          "intro": "🆕 Neuer Befehl: <code>kubectl set resources deployment/&lt;name&gt; --limits=memory=&lt;X&gt; --requests=memory=&lt;Y&gt;</code> – setzt die Ressourcen-Grenzen.",
+          "intro": "🆕 Neuer Befehl: <code>kubectl set resources deployment/<name> --limits=memory=<X> --requests=memory=<Y></code> – setzt die Ressourcen-Grenzen.",
           "text": "Gib dem <code>kartograf</code> ein <code>--limits=memory=256Mi</code> und ein <code>--requests=memory=128Mi</code>. Schau danach zum Dock!",
           "accept": [
             "^kubectl\\s+set\\s+resources\\s+deployment\\/kartograf\\s+(?:--limits[=\\s][^\\s]*memory=256Mi\\s+--requests[=\\s][^\\s]*memory=128Mi|--requests[=\\s][^\\s]*memory=128Mi\\s+--limits[=\\s][^\\s]*memory=256Mi)$"

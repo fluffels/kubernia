@@ -250,7 +250,7 @@
         "type": "dialog",
         "npc": "bo",
         "lines": [
-          "Siehst du die Namen in der NAMES-Spalte? Docker erfindet welche, wenn du keinen vergibst. Mit dem Namen kannst du eine Kiste gezielt <b>stoppen</b>: <code>docker stop &lt;name&gt;</code>.",
+          "Siehst du die Namen in der NAMES-Spalte? Docker erfindet welche, wenn du keinen vergibst. Mit dem Namen kannst du eine Kiste gezielt <b>stoppen</b>: <code>docker stop <name></code>.",
           "Das kryptische Kürzel in der <b>CONTAINER ID</b>-Spalte ganz links? Das vergibt Docker selbst – ein <b>eindeutiger Stempel</b> pro Kiste, damit keine zwei verwechselt werden. Bo merkt sich sowas nie. Bo nimmt den Namen. Bo ist Stein."
         ]
       },
@@ -450,7 +450,7 @@
         },
         "lines": [
           "Erinnerst du dich ans <b>Stapel-Spiel</b>? Ein Image ist ein Stapel aus <b>Schichten</b>. Diesen Stapel beschreibst du in einer Datei: dem <b>Dockerfile</b>. Das ist DEIN Bauplan.",
-          "Kurz die <b>Terminal-Basics</b>, bevor wir loslegen – zwei winzige Linux-Befehle: <code>ls</code> zeigt, <b>was im aktuellen Ordner liegt</b> (ein Blick ins Frachtregal), und <code>cat &lt;datei&gt;</code> <b>schreibt den Inhalt einer Datei ins Terminal</b>. (In einer echten Shell wechselst du mit <code>cd</code> den Ordner und <code>pwd</code> zeigt, wo du gerade stehst – an deinem Terminal bleibst du immer im selben Ordner, die zwei brauchst du hier also nicht.)",
+          "Kurz die <b>Terminal-Basics</b>, bevor wir loslegen – zwei winzige Linux-Befehle: <code>ls</code> zeigt, <b>was im aktuellen Ordner liegt</b> (ein Blick ins Frachtregal), und <code>cat <datei></code> <b>schreibt den Inhalt einer Datei ins Terminal</b>. (In einer echten Shell wechselst du mit <code>cd</code> den Ordner und <code>pwd</code> zeigt, wo du gerade stehst – an deinem Terminal bleibst du immer im selben Ordner, die zwei brauchst du hier also nicht.)",
           "Bo hat dir einen Bauplan hingelegt. Erst <code>ls</code> – dann lies ihn mit <code>cat Dockerfile</code>. Jede Zeile = eine Schicht. <code>FROM</code> ist die Grundschicht (ein fertiges Image), darauf legst du deine eigene App."
         ]
       },
@@ -491,7 +491,7 @@
         "brief": "Eigenes Image bauen",
         "cmd": {
           "id": "t-build",
-          "intro": "🆕 Neuer Befehl: <code>docker build --tag &lt;name&gt;:&lt;tag&gt; .</code> – baut aus dem Dockerfile ein eigenes Image. Gebaut wird in der <b>Docker-Engine</b> (eigenes Programm, das deine Ordner nicht sieht); der <b>Punkt</b> ist der Build-Kontext – der Ordner voll Baumaterial, den du ihr rüberreichst (<code>.</code> = der aktuelle). Daraus liest Docker das Dockerfile und alles, was <code>COPY</code> holt. <code>--tag</code> vergibt den ganzen Namen <code>name:tag</code>; die Kurzform <code>-t</code> verdienst du dir durch Nutzung (beides gilt).",
+          "intro": "🆕 Neuer Befehl: <code>docker build --tag <name>:<tag> .</code> – baut aus dem Dockerfile ein eigenes Image. Gebaut wird in der <b>Docker-Engine</b> (eigenes Programm, das deine Ordner nicht sieht); der <b>Punkt</b> ist der Build-Kontext – der Ordner voll Baumaterial, den du ihr rüberreichst (<code>.</code> = der aktuelle). Daraus liest Docker das Dockerfile und alles, was <code>COPY</code> holt. <code>--tag</code> vergibt den ganzen Namen <code>name:tag</code>; die Kurzform <code>-t</code> verdienst du dir durch Nutzung (beides gilt).",
           "text": "Bau aus dem Dockerfile ein Image mit dem Namen <code>hafenwache:1.0</code>. (Punkt am Ende nicht vergessen!)",
           "accept": [
             "^docker\\s+build\\s+(?:-t|--tag)\\s+hafenwache:1\\.0\\s+\\.$"
@@ -529,7 +529,7 @@
         "brief": "Zweites Etikett",
         "cmd": {
           "id": "t-tag",
-          "intro": "🆕 Neuer Befehl: <code>docker tag &lt;quelle&gt; &lt;ziel&gt;</code> – hängt einem vorhandenen Image einen weiteren Namen an (kein neues Image, nur ein zweites Etikett an derselben Kiste). Lesart: <b>Programm</b> <code>docker</code> · <b>Unterbefehl</b> <code>tag</code> · dann <b>Quelle</b> → <b>Ziel</b>.",
+          "intro": "🆕 Neuer Befehl: <code>docker tag <quelle> <ziel></code> – hängt einem vorhandenen Image einen weiteren Namen an (kein neues Image, nur ein zweites Etikett an derselben Kiste). Lesart: <b>Programm</b> <code>docker</code> · <b>Unterbefehl</b> <code>tag</code> · dann <b>Quelle</b> → <b>Ziel</b>.",
           "text": "Gib deinem <code>hafenwache:1.0</code> zusätzlich das Etikett <code>hafenwache:latest</code>.",
           "accept": [
             "^docker\\s+tag\\s+hafenwache:1\\.0\\s+hafenwache:latest$"
@@ -597,7 +597,7 @@
         "brief": "Bestimmte Version holen",
         "cmd": {
           "id": "t-pull-version",
-          "intro": "🆕 <code>docker pull &lt;image&gt;:&lt;tag&gt;</code> – holt eine <b>bestimmte Version</b> statt irgendeiner. Der Teil hinter dem <code>:</code> ist der <b>Versions-Tag</b>.",
+          "intro": "🆕 <code>docker pull <image>:<tag></code> – holt eine <b>bestimmte Version</b> statt irgendeiner. Der Teil hinter dem <code>:</code> ist der <b>Versions-Tag</b>.",
           "text": "Hol das Image <code>nginx</code> in der Version <code>1.27</code> – die Version kommt hinter den Doppelpunkt.",
           "accept": [
             "^docker\\s+pull\\s+nginx:1\\.27$"
@@ -611,7 +611,7 @@
         "npc": "bo",
         "lines": [
           "Achtung, Falle: <code>nginx</code> OHNE Tag heißt in Wahrheit <code>nginx:latest</code> – und <b>latest ist NICHT automatisch „die neueste Version“</b>! Es ist nur ein <b>Konventions-Name</b>, ein Zeiger auf das, was zuletzt so getaggt wurde. In echt nagelst du oft eine <b>feste Version</b> fest, damit morgen genau dasselbe läuft wie heute. Bo nagelt immer fest. Bo ist Stein.",
-          "Und der <b>volle Name</b> eines Images hat drei Teile: <code>&lt;registry&gt;/&lt;repository&gt;:&lt;tag&gt;</code>. Dein <code>docker pull nginx</code> ist nur die <b>Kurzform</b> für <code>docker.io/library/nginx:latest</code> – Registry (Docker Hub) und Tag füllt Docker still auf.",
+          "Und der <b>volle Name</b> eines Images hat drei Teile: <code><registry>/<repository>:<tag></code>. Dein <code>docker pull nginx</code> ist nur die <b>Kurzform</b> für <code>docker.io/library/nginx:latest</code> – Registry (Docker Hub) und Tag füllt Docker still auf.",
           "Docker Hub ist <b>öffentlich</b> – jeder darf ziehen. Firmen betreiben oft eine <b>eigene, private</b> Registry (z.B. die <b>GitHub Container Registry</b> <code>ghcr.io</code> oder <b>Harbor</b>): für <b>eigene, nicht-öffentliche</b> Images, mehr Kontrolle und kurze Wege. Dann schreibst du die Registry-Adresse vorne mit dran. So zieht der Hafen sein eigenes <code>leuchtfeuer</code> in Version <code>2.1</code>:"
         ]
       },
@@ -620,7 +620,7 @@
         "brief": "Aus einer bestimmten Registry holen",
         "cmd": {
           "id": "t-pull-registry",
-          "intro": "🆕 <code>docker pull &lt;registry&gt;/&lt;repo&gt;:&lt;tag&gt;</code> – holt ein Image aus einer <b>bestimmten</b> Registry, statt still von Docker Hub. Ganz vorne steht die Registry-Adresse.",
+          "intro": "🆕 <code>docker pull <registry>/<repo>:<tag></code> – holt ein Image aus einer <b>bestimmten</b> Registry, statt still von Docker Hub. Ganz vorne steht die Registry-Adresse.",
           "text": "Hol <code>leuchtfeuer:2.1</code> aus der Registry <code>ghcr.io</code>, Namespace <code>hafen</code> – zusammen also <code>ghcr.io/hafen/leuchtfeuer:2.1</code>.",
           "accept": [
             "^docker\\s+pull\\s+ghcr\\.io/hafen/leuchtfeuer:2\\.1$"

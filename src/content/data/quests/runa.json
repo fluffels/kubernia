@@ -51,7 +51,7 @@
         "brief": "Charts suchen",
         "cmd": {
           "id": "t-reposearch",
-          "intro": "🆕 Neuer Befehl: <code>helm search repo &lt;begriff&gt;</code> – durchsucht die hinzugefügten Repos nach passenden Charts (statt blind den Namen zu raten).",
+          "intro": "🆕 Neuer Befehl: <code>helm search repo <begriff></code> – durchsucht die hinzugefügten Repos nach passenden Charts (statt blind den Namen zu raten).",
           "text": "Suche mit <code>helm search repo nginx</code> nach einem Webserver-Chart.",
           "accept": [
             "^helm\\s+search\\s+repo\\s+nginx$"
@@ -497,7 +497,7 @@
         "brief": "Vorlage rendern",
         "cmd": {
           "id": "t-tmpl-render",
-          "intro": "🆕 Neuer Befehl: <code>helm template &lt;chart&gt;</code> – rendert die Vorlagen mit den Werten zu fertigen Manifesten und zeigt sie nur AN (nichts wird installiert). Perfekt zum Prüfen, was <code>install</code> ausrollen würde.",
+          "intro": "🆕 Neuer Befehl: <code>helm template <chart></code> – rendert die Vorlagen mit den Werten zu fertigen Manifesten und zeigt sie nur AN (nichts wird installiert). Perfekt zum Prüfen, was <code>install</code> ausrollen würde.",
           "text": "Rendere dein Chart: <code>helm template vorlage</code>. Vergleiche mit der Vorlage – die <code>{{ … }}</code> sind jetzt eingesetzt, und der <code>if</code>-Block (env) ist weg, weil kein env gesetzt ist!",
           "accept": [
             "^helm\\s+template\\s+(\\.\\/)?vorlage$"

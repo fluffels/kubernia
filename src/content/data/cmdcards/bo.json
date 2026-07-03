@@ -77,6 +77,6 @@
       "^docker\\s+pull\\s+ghcr\\.io/hafen/leuchtfeuer:2\\.1$"
     ],
     "solution": "docker pull ghcr.io/hafen/leuchtfeuer:2.1",
-    "explain": "Der volle Image-Name ist <code>&lt;registry&gt;/&lt;repository&gt;:&lt;tag&gt;</code>. <code>docker pull nginx</code> ist die Kurzform für <code>docker.io/library/nginx:latest</code> – ohne Registry-Präfix fragt Docker still <b>Docker Hub</b>. Eigene/private Registries (ghcr.io, Harbor) schreibst du vorne mit dran."
+    "explain": "Der volle Image-Name ist <code><registry>/<repository>:<tag></code>. <code>docker pull nginx</code> ist die Kurzform für <code>docker.io/library/nginx:latest</code> – ohne Registry-Präfix fragt Docker still <b>Docker Hub</b>. Eigene/private Registries (ghcr.io, Harbor) schreibst du vorne mit dran."
   }
 ]

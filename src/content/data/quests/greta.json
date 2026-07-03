@@ -201,7 +201,7 @@
         "brief": "Greta klopft an",
         "cmd": {
           "id": "t-greta-curl",
-          "intro": "🆕 Neuer Befehl: <code>curl &lt;adresse&gt;</code> – der Klopftest. Er fragt einen Service im Cluster ab und zeigt, ob wirklich etwas antwortet. Kommt eine <b>200 OK</b> zurück, schwimmt dein Dienst.",
+          "intro": "🆕 Neuer Befehl: <code>curl <adresse></code> – der Klopftest. Er fragt einen Service im Cluster ab und zeigt, ob wirklich etwas antwortet. Kommt eine <b>200 OK</b> zurück, schwimmt dein Dienst.",
           "text": "Klopf an deinen eigenen Dienst: <code>curl http://werft-dienst</code>. Über Port 80 leitet der Service auf deinen Container (8080) – und der antwortet mit 200.",
           "accept": [
             "^curl\\s+(?:http:\\/\\/)?werft-dienst(?::80)?\\/?$"

@@ -160,7 +160,7 @@
         "type": "dialog",
         "npc": "ole",
         "lines": [
-          "Listen sind gut – Details sind besser. Wenn ein Pod zickt, willst du ALLES über ihn wissen: <code>kubectl describe pod &lt;name&gt;</code>. Das ist DER Debugging-Befehl, den du später täglich brauchst."
+          "Listen sind gut – Details sind besser. Wenn ein Pod zickt, willst du ALLES über ihn wissen: <code>kubectl describe pod <name></code>. Das ist DER Debugging-Befehl, den du später täglich brauchst."
         ]
       },
       {
@@ -168,7 +168,7 @@
         "brief": "Pod-Akte öffnen",
         "cmd": {
           "id": "t-describe",
-          "intro": "🆕 Neuer Befehl: <code>kubectl describe pod &lt;name&gt;</code> – alle Details + Ereignisse.",
+          "intro": "🆕 Neuer Befehl: <code>kubectl describe pod <name></code> – alle Details + Ereignisse.",
           "text": "Beschreibe einen <code>kantine</code>-Pod. (Name per <code>kubectl get pods</code> holen und abtippen – das Abtippen trainiert!)",
           "accept": [
             "^kubectl\\s+describe\\s+pods?\\s+kantine-\\S+$"
@@ -190,7 +190,7 @@
         "brief": "Hinter die Kulissen",
         "cmd": {
           "id": "t-ns",
-          "intro": "🆕 Neue Flag: <code>--namespace &lt;namespace&gt;</code> – in einen anderen Namespace schauen. Schreib die Langform aus; die Kurzform <code>-n</code> verdienst du dir, wenn du <code>--namespace</code> oft genug benutzt hast.",
+          "intro": "🆕 Neue Flag: <code>--namespace <namespace></code> – in einen anderen Namespace schauen. Schreib die Langform aus; die Kurzform <code>-n</code> verdienst du dir, wenn du <code>--namespace</code> oft genug benutzt hast.",
           "text": "Zeig die Pods im Namespace <code>kube-system</code> – das Maschinenherz von Kubernetes.",
           "accept": [
             "^kubectl\\s+get\\s+(pods|pod|po)\\s+(-n|--namespace)[=\\s]?kube-system$"
@@ -278,7 +278,7 @@
         "brief": "Dauerauftrag erteilen",
         "cmd": {
           "id": "t-create",
-          "intro": "🆕 Neuer Befehl: <code>kubectl create deployment &lt;name&gt; --image=&lt;image&gt;</code> – <b>Name</b> = frei wählbares Etikett, <b>--image</b> = was läuft (Pflicht).",
+          "intro": "🆕 Neuer Befehl: <code>kubectl create deployment <name> --image=<image></code> – <b>Name</b> = frei wählbares Etikett, <b>--image</b> = was läuft (Pflicht).",
           "text": "Erstelle ein Deployment <code>kasse</code> mit dem Image <code>nginx</code>. (Name <code>kasse</code> ist Story-Deko fürs Wiederfinden; <code>nginx</code> ist der Platzhalter-Webserver, der real läuft.)",
           "accept": [
             "^kubectl\\s+create\\s+deployment\\s+kasse\\s+--image[=\\s]nginx(:\\S+)?$"
@@ -299,7 +299,7 @@
         "brief": "Hochskalieren",
         "cmd": {
           "id": "t-scale",
-          "intro": "🆕 Neuer Befehl: <code>kubectl scale deployment &lt;name&gt; --replicas=&lt;zahl&gt;</code> – Anzahl der Kopien ändern.",
+          "intro": "🆕 Neuer Befehl: <code>kubectl scale deployment <name> --replicas=<zahl></code> – Anzahl der Kopien ändern.",
           "text": "Skaliere <code>kasse</code> auf <b>3</b> Kopien – und beobachte das Dock!",
           "accept": [
             "^kubectl\\s+scale\\s+deployment\\s+kasse\\s+--replicas[=\\s]3$"
@@ -374,7 +374,7 @@
         "brief": "Eine Kiste versenken",
         "cmd": {
           "id": "t-delete",
-          "intro": "🆕 Neuer Befehl: <code>kubectl delete pod &lt;name&gt;</code> – löscht einen Pod sofort. Achtung, das ist <b>zustandsändernd</b>: Bisher hast du nur <i>geguckt</i> (<code>get</code>, <code>describe</code>) – <code>delete</code> greift wirklich ein und „versenkt“ den Pod. Genau das brauchen wir für den Self-Healing-Test.",
+          "intro": "🆕 Neuer Befehl: <code>kubectl delete pod <name></code> – löscht einen Pod sofort. Achtung, das ist <b>zustandsändernd</b>: Bisher hast du nur <i>geguckt</i> (<code>get</code>, <code>describe</code>) – <code>delete</code> greift wirklich ein und „versenkt“ den Pod. Genau das brauchen wir für den Self-Healing-Test.",
           "text": "💥 Versenke jetzt einen <code>kasse</code>-Pod – und behalte dabei das Dock im Blick!",
           "accept": [
             "^kubectl\\s+delete\\s+pods?\\s+kasse-\\S+$"
@@ -940,7 +940,7 @@
         "brief": "Ersten Worker anschließen",
         "cmd": {
           "id": "t-join-1",
-          "intro": "🆕 Neuer Befehl: <code>kubeadm join &lt;token&gt;</code> – meldet einen Worker-Knoten mit dem Join-Token bei der Control-Plane an. Das kubelet des Knotens weist sich damit als befugt aus.",
+          "intro": "🆕 Neuer Befehl: <code>kubeadm join <token></code> – meldet einen Worker-Knoten mit dem Join-Token bei der Control-Plane an. Das kubelet des Knotens weist sich damit als befugt aus.",
           "text": "Schließ den ersten Worker an: <code>kubeadm join abcdef.0123456789abcdef</code>. Der Token ist genau der aus <code>kubeadm init</code> – ein Geheimnis auf Zeit, mit dem sich jeder Knoten anmeldet.",
           "accept": [
             "^kubeadm\\s+join\\s+(--token\\s+)?abcdef\\.0123456789abcdef$"
