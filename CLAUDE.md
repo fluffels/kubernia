@@ -166,6 +166,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/hud/viewdecide.ts`](src/hud/viewdecide.ts) | pure Domäne | Reine Präsentations-Entscheidungen (#500), DOM-frei/testbar: Funk-Session-Priorität + `evaluateSubmission` (Terminal-Bewertung) + `scoreReview` (Quiz) + `resolveTalkTarget` (NPC-Routing). |
 | [`src/hud/toastlife.ts`](src/hud/toastlife.ts) | pure Domäne | Toast-Anzeigedauer-Politik: kurze Belohnung vs. lesbarer Hinweis (>= 15 s) + Fade-Timing (#370). |
 | [`src/hud/kralle.ts`](src/hud/kralle.ts) | pure Domäne | Kralle-Meilenstein-Sprüche: `krallePracticeMilestone(count)` (zählbewusster Spruch an 1/10/25/50/100…, sonst null, #236). |
+| [`src/hud/rankup.ts`](src/hud/rankup.ts) | pure Domäne | Rang-Aufstieg-Feier-Kern (#223): `mergeRankUp` faltet mehrere aufgelaufene Aufstiege zu EINEM „von → nach"; die Präsentation (Feier-Overlay + Signalflaggen-Konfetti) sitzt in `ui/hud.ts`. |
 | [`src/hud/cmdhistory.ts`](src/hud/cmdhistory.ts) | pure Domäne | Befehlshistorie fürs Funkgerät-Terminal (#316). |
 | [`src/hud/cmdunlock.ts`](src/hud/cmdunlock.ts) | pure Domäne | Freigeschaltete Befehlsfamilien fürs gefilterte `help` (#358): aus dem Quest-Fortschritt abgeleitet (kein neues Save-Feld), `help`/`clear` immer dabei. |
 | [`src/hud/helptext.ts`](src/hud/helptext.ts) | pure Domäne | `help`-Katalog + gefiltertes Rendering (#358) im CLI-Format (ein Befehl/Zeile, ausgerichtete Spalten, #359); der Simulator delegiert sein `help` hierher (eigenes, typfreies Modul → kein Zyklus). |
