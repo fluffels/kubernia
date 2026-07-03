@@ -6,7 +6,7 @@
  * Forum-Text-Entschärfung (#531) — die einzige Stelle, an der UNVERTRAUTER,
  * externer Text (Titel/Body einer öffentlichen GitHub-Discussion) automatisiert
  * in die Agenten-Arbeitswarteschlange gelangt: die Action forum-inbox.yml legt
- * daraus ein `prio:hoch`+`forum`-Issue an, das anschließend ein Coding-Agent
+ * daraus ein `forum`-Issue an, das anschließend ein Coding-Agent
  * (per /forum-Skill) abarbeitet.
  *
  * Das ist eine Prompt-Injection-/Supply-Chain-Fläche des Harness:
