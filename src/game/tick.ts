@@ -6,10 +6,11 @@
  * EINER Stelle; main.ts treibt sie aus Phasers globalem Pre-Step, der unabhängig von der
  * aktiven Szene je Frame feuert – so ticken sie in JEDER Szene.
  *
- * Bewusst NUR die frame-unabhängige reine Domäne (Wirtschaft/Zeit): die szenen-spezifische
- * Präsentation bleibt in der jeweiligen Szene (Tag-Nacht-Schleier liest die schon
- * vorgerückte Achse in WorldScene; die Zufalls-Gefahren spawnen Welt-Sprites und bleiben
- * darum weltgebunden, siehe worldscene/events.ts).
+ * Bewusst NUR die frame-unabhängige Domäne (Wirtschaft/Zeit/Gefahren): die szenen-spezifische
+ * Präsentation bleibt in der jeweiligen Szene (Tag-Nacht-Schleier liest die schon vorgerückte
+ * Achse in WorldScene). Seit #540 gehört auch der Gefahren-Takt (Piraten/Krake/Sturm) hierher
+ * – die Zeitachse + Cluster-Mutation laufen szenen-neutral (Game.hazardTick), nur die
+ * Welt-Sprites bleiben weltgebunden (worldscene/events.ts rendert den gemeldeten Zustand).
  *
  * Die fällige Auszahlung wird entkoppelt über den runtime-Sink (notifyPayout) gemeldet –
  * die Anwendung darf die Präsentation nicht importieren (Schichtung wie Audio-#344/Save-#497).
@@ -46,5 +47,9 @@ export const tickBundle = part({
     if (!Number.isFinite(deltaMs) || deltaMs <= 0) return;
     const payout = this.economyTick(Math.min(MAX_ECONOMY_DT, deltaMs / 1000));
     if (payout > 0) notifyPayout(payout);
+    // Szenen-neutrale Zufalls-Gefahren (#540): Zeitachse + Cluster-Mutation laufen jetzt hier
+    // (nicht mehr in WorldScene.update über scene.time.now), damit Gefahren in JEDER Szene
+    // starten/fortschreiten. Die Effekte (Sprites/Alarm/roter Rahmen) meldet der runtime-Sink.
+    this.hazardTick(deltaMs);
   },
 });

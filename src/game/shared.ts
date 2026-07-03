@@ -15,6 +15,7 @@ import type { Sim } from "../sim";
 import type { GameState, EventMode, QuestProgress, Quest, QuestStep, FunkStep, QuestTask } from "../types";
 import type { GameClock } from "../core/clock";
 import type { CmdCard, QuizCard } from "../content/loader";
+import type { ActiveHazards } from "../world/hazards";
 
 /* ---------- Rückgabe-Typen der Bündel-Oberfläche ---------- */
 
@@ -184,6 +185,13 @@ export interface GameApi extends GameData {
 
   // ---- tick.ts: szenen-neutraler Frame-Takt (#501) ----
   tick(deltaMs: number): void;
+
+  // ---- hazards.ts: szenen-neutrale Zufalls-Gefahren (#540) ----
+  hazardTick(deltaMs: number): void;
+  scheduleHazards(delaySec?: number): void;
+  hazardState(): ActiveHazards;
+  hazardActive(): boolean;
+  resetHazards(): void;
 
   // ---- sandbox.ts: Wiederspiel-Sandbox (#332) ----
   isReplaying(): boolean;

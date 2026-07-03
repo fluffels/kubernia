@@ -37,6 +37,11 @@
     <button id="hud-menu-btn" class="hud-menu-btn" data-action="openMenu" title="Menü öffnen (Esc)">☰ Menü</button>
   </div>
 
+  <!-- Globaler Gefahren-Warnrahmen (#540): sichtbar in JEDER Szene, solange eine Gefahr läuft.
+       aria-hidden – der Alarm-Banner unten trägt die vorgelesene Warnung, der Rahmen ist rein
+       visuell und würde sonst doppelt vorgelesen. -->
+  <div id="hazard-frame" class="hidden" aria-hidden="true"></div>
+
   <!-- Alarm (Piraten / Krake) – role=alert: Screenreader lesen die Warnung sofort vor (#506) -->
   <div id="alarm" class="hidden" role="alert" aria-live="assertive">
     <span id="alarm-text"></span>
