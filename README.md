@@ -113,7 +113,7 @@ Kubernia ist bewusst so gebaut, dass es **so groß wie Stardew Valley** werden k
   | `npm run smoke` | Boot- & Interaktions-Smokes headless gegen den echten Offline-Build (Playwright) |
   | `npm audit --omit=dev` | Security-Gate über die ausgelieferten Produktiv-Deps |
 
-**Mehr Tiefe:** die vollständige Architektur-Gesamtsicht nach **arc42** steht in [docs/arc42-architektur.md](docs/arc42-architektur.md); die frische, doku-unabhängige **iSAQB-Analyse** (fünf Durchläufe je Schicht) in [docs/architektur-analyse-2026-07-iSAQB.md](docs/architektur-analyse-2026-07-iSAQB.md). Die bewusst festgehaltenen Grundsatzentscheidungen liegen als **ADRs** unter [docs/adr/](docs/adr/) (Engine Phaser, kein Backend/DB, kein Multiplayer, Skalierungs-Fundament).
+**Mehr Tiefe:** die vollständige Architektur-Gesamtsicht nach **arc42** steht in [docs/arc42-architektur.md](docs/arc42-architektur.md); dazu laufen wiederkehrende, doku-unabhängige **iSAQB-Analysen** — [Runde 1](docs/architektur-analyse-2026-07-iSAQB.md) und [Runde 2](docs/architektur-analyse-2026-07-02-iSAQB.md) (je Schicht) sowie die breitere [Runde 3](docs/architektur-analyse-2026-07-03-iSAQB.md) (ADRs kritisch hinterfragt, DDD, Teststrategie, Harness-Regressions-Matrix). Die bewusst festgehaltenen Grundsatzentscheidungen liegen als **ADRs** unter [docs/adr/](docs/adr/) (Engine Phaser, kein Backend/DB, kein Multiplayer, Skalierungs-Fundament).
 
 ---
 

@@ -117,7 +117,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **WARUM:** das echte Nutzerrisiko steckt im `dist`-Artefakt (nur `phaser` & Co., kein vite/vitest). Ein hartes high+-Gate über den **ganzen** Baum wäre durch dev-only-Advisories dauerhaft rot — und würde dann abgeschaltet (die ⚠️-Falle aus #395). Die selbstwartende Regel „blocke, was ausgeliefert wird; berichte den Rest" verrottet nicht bei Stardew-Scope, anders als ein hartcodierter Advisory-Allowlist.
 - **Ergänzend:** Dependabot ([`.github/dependabot.yml`](../.github/dependabot.yml)) öffnet wöchentlich gebündelte Update-PRs und zieht Security-Advisories automatisch hoch; Umgang damit als Policy in [CONTRIBUTING.md](../CONTRIBUTING.md#pull-requests--abhängigkeits-updates-policy).
 
-> **Nicht auf der Liste, aber Teil des Netzes:** die **Save-nie-brechen-Regel** (jede Format-Änderung migriert, alter Stand vorher in den Backup-Slot, `sanitizeState` härtet kaputte Felder ab) und der **Determinismus-Anspruch** (seedbare Zufälligkeit statt `Math.random` in der Domäne) gehören zum selben Netz. Der Determinismus ist heute noch nicht als Gate erzwungen — das ist eine bekannte Lücke (#492, siehe §5).
+> **Nicht auf der Liste, aber Teil des Netzes:** die **Save-nie-brechen-Regel** (jede Format-Änderung migriert, alter Stand vorher in den Backup-Slot, `sanitizeState` härtet kaputte Felder ab) und der **Determinismus-Anspruch** (seedbare Zufälligkeit statt `Math.random` in der Domäne) gehören zum selben Netz. Der Determinismus ist seit **#492** als ESLint-Gate (`no-restricted-properties` gegen `Math.random`) + `test/rng.test.ts` für `src/sim/**`+`src/content/**` **erzwungen**; die Ausweitung auf die übrige als „pur/deterministisch" deklarierte Logik (`game/**`, z.B. `spaced-repetition.ts`) ist als #591 erfasst (siehe §5).
 
 ## 4. Die sichere Autonomie-Schleife
 
@@ -149,7 +149,7 @@ So greifen die Bausteine bei **einem** Ticket ineinander — jeder Schritt ist e
 
 **Wo die Grenzen sind (ehrlich):**
 - Die Gates prüfen, was sie prüfen können. **Didaktische Richtigkeit** (ist die simulierte Cluster-Mechanik pädagogisch sinnvoll?) und **Spielspaß/Look** bleiben menschliches Urteil — darum der Browser-Verifizierungs-Schritt und die interaktive Optik-Abstimmung per Rückfrage.
-- Der **Direkt-Push auf `main`** bedeutet: die CI-Gates laufen *nach* dem Push (post-hoc). Die lokalen Gates sind die eigentliche Vorab-Prüfung — ein vergessener lokaler Lauf ist die reale Netzlücke (Gegenmittel geplant: pre-push-Hook #528, siehe §5).
+- Der **Direkt-Push auf `main`** bedeutet: die CI-Gates laufen *nach* dem Push (post-hoc). Die lokalen Gates sind die eigentliche Vorab-Prüfung — der pre-push-Hook (#528) fängt das lokal ab, ist aber per `git push --no-verify` umgehbar und serverseitig nicht erzwungen — die verbleibende reale Netzlücke (#592, siehe §5).
 - Der **Forum-Eingang** ist der einzige Pfad, auf dem unvertrauter externer Text (GitHub Discussions) in auto-erzeugte Issues und damit in die Agenten-Queue gelangt — ein Prompt-Injection-Vektor (Härtung geplant: #531).
 
 ## 5. Roadmap / bekannte Lücken
@@ -158,7 +158,15 @@ Der Harness ist bewusst ein **lebendes System** — seine eigenen Schwachstellen
 
 | Ticket | Was es schließt |
 |---|---|
-| **#492** | Zentrale **seedbare RNG** + Fitness-Function gegen `Math.random` in Domäne/Content — macht den Determinismus-Anspruch zu einem echten Gate. |
+| **#592** | **Serverseitige Gate-Durchsetzung** (`prio:hoch`) — heute laufen die Gates nur lokal (pre-push, per `--no-verify` umgehbar) + post-hoc in CI; `check:diffsize` degradiert im flachen CI-Checkout bewusst zu grün. Größte Vibe-Coding-Lücke: ein Agent kann roten Code auf `main` schieben, auf dem ein paralleler Agent aufbaut. |
+| **#605** | CI fährt `verify` post-hoc auf `main` nach + alarmiert bei Rot (ergänzt #592, ohne den Direkt-Push-Workflow zu brechen). |
+| **#591** | Determinismus-Gate auf `game/**` ausweiten (heute nur `sim/**`+`content/**`; `spaced-repetition.ts` nutzt `Math.random`). |
+| **#604** | Suppression-Budget-Guard für `eslint-disable no-explicit-any` (Ratchet analog Komplexitäts-Gate) — sonst ist der `any`-Error pro Zeile aushebelbar. |
+| **#610** | Doku-Aktualitäts-Guard: als „offen" dokumentierte Harness-Tickets gegen den echten `gh issue`-Status prüfen (`check:docdrift` prüft nur Kommandos/Links/Anker, nicht Aktualität). |
+| **#612** | Optionaler jscpd-Duplikations-Detektor als weiches CI-Artefakt gegen SSOT-/Copy-Paste-Umgehung (einzige Regressionsklasse ohne direkten Guard). |
+| **#593 / #594 / #595** | Lockfile-Sync-Check in `verify`, tsconfig-`target`-Prüfung, Phaser-vendor-Byte-Gate. |
+
+> **#492 ist erledigt** (Determinismus-Gate steht, siehe §3) — die Roadmap ist seit der [iSAQB-Runde 3 (2026-07-03)](architektur-analyse-2026-07-03-iSAQB.md) auf die verbleibenden Durchsetzungs-/Scope-Lücken aktualisiert.
 
 **Schon gelandet** (Block „Harness & Vorzeige-Doku", 2026-07-01): das Aggregat-Kommando `npm run verify` (#527), der Git-**pre-push-Hook** (#528, schließt die Post-hoc-CI-Lücke des Direkt-Push, §4), der **Harness-Drift-Wächter** `check:docdrift` (#529, §3), die **Forum-Inbox-Härtung** gegen Prompt-Injection (#531, §4), der **`review-lenses`-Skill** — der gestaffelte Mehr-Perspektiven-Review mit Gate-Short-Circuit (#532, §2.5) — und das **Diff-Größenbudget-Gate** `check:diffsize` (#533, §3): misst den Slice gegen `main` (max. 20 Dateien / 800 Zeilen, Override mit Pflicht-Begründung) und erzwingt so die Slice-Disziplin der KI-Fabrik auf Commit-Ebene; Durchsetzungspunkt ist der pre-push-Hook (im flachen CI-Checkout degradiert es bewusst zu grün).
 
