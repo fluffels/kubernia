@@ -35,6 +35,8 @@
  * ohnehin `correct` + `explain` gemeinsam neu.
  */
 
+import { CONTENT_HTML_TAGS } from "../hud/markup";
+
 /** Struktureller Mindest-Vertrag einer Quiz-Karte (entkoppelt von der vollen QuizCard,
  *  damit die Prüflogik mit Literalen testbar bleibt – wie in learnorder.ts). */
 export interface QuizLike {
@@ -44,15 +46,31 @@ export interface QuizLike {
 }
 
 /** Normalisiert einen Antwort-/Options-Text zu einer stabilen Vergleichsform:
- *  HTML-Tags entfernt, `&lt;`/`&gt;`/`&amp;` entschärft, Whitespace kollabiert, getrimmt.
+ *  echte HTML-Tags entfernt, Entities entschärft, Whitespace kollabiert, getrimmt.
  *  Die Groß-/Kleinschreibung bleibt erhalten (das Golden-File soll für den Review lesbar
- *  sein). Rein, deterministisch. */
+ *  sein). Rein, deterministisch.
+ *
+ *  Platzhalter-kodierungs-agnostisch (#476): Entities werden ZUERST dekodiert, sodass ein
+ *  bare `<token>` und ein entity-kodiertes `&lt;token&gt;` danach identisch sind. Erst
+ *  dann werden NUR echte HTML-Tags (`CONTENT_HTML_TAGS`, dieselbe Allowlist wie `fmtCmd`)
+ *  gestrippt; ein Platzhalter `<token>` (Einzelwort, nicht in der Allowlist) bleibt
+ *  wortlaut-erhalten stehen. So meldet der Golden-Snapshot die #311/#476-Umstellung eines
+ *  Platzhalters von `&lt;token&gt;` auf bare `<token>` NICHT als Antwort-Drift (jede
+ *  Häppchen-Konvertierung wäre sonst golden-regenerierungspflichtig), und der Platzhalter
+ *  bleibt im Golden lesbar (`serviceaccount:<ns>:lager`, nicht `serviceaccount: :lager`).
+ *  Reihenfolge ist bewusst umgekehrt zur früheren Fassung (erst dekodieren, dann strippen). */
 export function normalizeAnswer(html: string): string {
   return html
-    .replace(/<[^>]+>/g, " ")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&amp;/g, "&")
+    // Nur echte HTML-Tags strippen (mit Leerzeichen, damit Worte nicht verkleben); ein
+    // reiner `<token>`/`</token>` ohne Attribute, dessen Wort NICHT in der Allowlist steht,
+    // ist ein Platzhalter und bleibt erhalten.
+    .replace(/<([^>]+)>/g, (whole, inner: string) => {
+      const m = /^\/?([A-Za-zÄÖÜäöüß][A-Za-z0-9ÄÖÜäöüß-]*)$/.exec(inner);
+      return m && !CONTENT_HTML_TAGS.has(m[1].toLowerCase()) ? whole : " ";
+    })
     .replace(/\s+/g, " ")
     .trim();
 }
