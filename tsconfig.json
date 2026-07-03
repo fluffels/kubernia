@@ -1,9 +1,20 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    // Sprachstand ES2022 (#594) — bewusst statt des früheren ES2020. Grund:
+    // Die Toolchain ist auf Node 22 gepinnt (engines.node >=22 + .nvmrc 22), und
+    // ES2022 ist im Browser universell verfügbar (Chrome/Edge 94, Firefox 93,
+    // Safari 15.4 — alle 2021/2022; für ein 2026 ausgeliefertes Spiel unbedenklich).
+    // Wichtig: tsc EMITTIERT hier nichts (noEmit: true) — transpiliert wird von
+    // esbuild/Vite. Diese `target`/`lib` steuern also NUR den Typecheck (welche
+    // Standard-Lib-Typen sichtbar sind, z.B. Array.at/Object.hasOwn/Error.cause).
+    // Damit das Typecheck-Sprachniveau und der ausgelieferte Browser-Syntax-Floor
+    // nicht auseinanderlaufen, ist Vites Build-Target ebenfalls explizit auf es2022
+    // gepinnt (vite.config.ts → build.target) statt Vites implizitem, undokumentiertem
+    // `modules`-Default (~chrome87, dem z.B. Object.hasOwn fehlt).
+    "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
 
     // Strict-Ratchet abgeschlossen: das ganze Projekt (src inkl. scenes/ui/main,
     // test und vite.config) läuft auf voller Typ-Strenge. Früher wurde die Strenge
