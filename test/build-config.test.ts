@@ -86,6 +86,18 @@ describe("Geheimhaltung #331/#325: Panel-Flag bleibt in öffentlichen Builds aus
   });
 });
 
+/* #594: Der ausgelieferte Browser-Syntax-Floor ist bewusst EXPLIZIT auf es2022
+ * gepinnt (nicht Vites impliziter `modules`-Default), damit er sich mit der
+ * tsconfig-`target: ES2022` (Typecheck) deckt. Dieser Wächter verhindert ein
+ * stilles Zurückdriften auf den impliziten Default. */
+describe("Build-Sprachstand #594: Browser-Target explizit es2022", () => {
+  it("pinnt build.target in allen Auslieferungs-Modi auf es2022", () => {
+    for (const mode of ["production", "offline", "devpanel"]) {
+      expect((resolve(mode).build as { target?: string }).target).toBe("es2022");
+    }
+  });
+});
+
 /* #301: Im Dev-Server darf eine Quellcode-Änderung KEINEN automatischen
  * Full-Reload mehr auslösen (riss sonst laufende NPC-Gespräche weg + blaues
  * Flackern). Das Plugin fängt JS/TS-Updates ab (leeres Modul-Array → Vite lädt

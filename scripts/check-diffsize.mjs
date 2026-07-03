@@ -22,10 +22,13 @@
  *    eigentliche Durchsetzungspunkt.
  *  - Auf einem Feature-Branch / im lokalen pre-push-Hook (#528) greift er ebenso
  *    (volle Historie da) — als schnelle Vorab-Rückmeldung vor dem PR.
- *  - Auf dem push-auf-main-Event (nach dem Merge) bzw. in einem flachen Checkout
- *    ohne Basis (origin/main == HEAD) ist keine sinnvolle Basis da → der Check
- *    degradiert bewusst zu GRÜN (No-op), statt `main` rot zu machen. Kein falsches
- *    Rot; der Slice wurde ja schon auf dem PR gemessen.
+ *  - Auf dem push-auf-main-Event (nach dem Merge) setzt ci.yml die Basis auf den
+ *    Vorgänger-Commit (KQ_DIFF_BASE=github.event.before) → der Check misst den
+ *    gerade gemergten Slice AUCH auf main nach (#605, zweite Grenze hinter dem
+ *    PR-Gate #592; ein roter main-Lauf blockiert nichts, löst aber den Alarm-Job aus).
+ *  - Nur wo keine sinnvolle Basis auflösbar ist (flacher Checkout, workflow_dispatch,
+ *    origin/main == HEAD) degradiert der Check bewusst zu GRÜN (No-op), statt `main`
+ *    rot zu machen — kein falsches Rot.
  *
  * Override mit Pflicht-Begründung (gleiches Muster wie die check-size-ALLOWLIST,
  * inkl. stale-Meldung): ein bewusst breiter Slice (z.B. ein großer God-File-Split)
@@ -52,6 +55,29 @@ import { pathToFileURL } from "node:url";
  *  groß sein darf. Über Env überschreibbar (KQ_DIFFSIZE_MAX_FILES/-MAX_LINES). */
 export const MAX_FILES = 20;
 export const MAX_LINES = 800;
+
+/** Generierte, NICHT von Hand geschriebene Artefakte, die aus der Slice-Messung
+ *  fallen (#612): Ein Paketmanager-Lockfile ist kein reviewbarer Slice — es wird
+ *  MASCHINELL aus package.json erzeugt und Zeile-für-Zeile gar nicht gelesen. Es
+ *  mitzuzählen bedeutet, dass JEDE Dependency-Ergänzung (z.B. jscpd/#612 zog ~1100
+ *  Lockfile-Zeilen für 90 transitive Pakete) das Budget sprengt und einen Override
+ *  erzwingt — genau die Override-Inflation, vor der der Wächter selbst warnt
+ *  (#395-Antipattern). Der Budget-Zweck („ein unreviewbarer Epic-Riesen-Commit fällt
+ *  auf") zielt auf von Hand geschriebenen Code; das Lockfile-Volumen ist dafür Rauschen.
+ *  Der eigentliche Code-Slice einer Dep-Ergänzung bleibt klein und wird weiter gemessen. */
+export const GENERATED_ARTIFACTS = new Set([
+  "package-lock.json",
+  "npm-shrinkwrap.json",
+  "yarn.lock",
+  "pnpm-lock.yaml",
+]);
+
+/** True, wenn `path` ein generiertes Lockfile ist (Basename-Vergleich, damit es
+ *  auch in Unterordnern greift). Aus der Slice-Messung ausgenommen (#612). */
+export function isGeneratedArtifact(path) {
+  const base = String(path).split(/[\\/]/).pop() ?? "";
+  return GENERATED_ARTIFACTS.has(base);
+}
 
 /** Liest die Schwellen aus der Umgebung (Fallback: die Defaults oben). Eine
  *  nicht-positive/nicht-numerische Angabe wird ignoriert (Default gilt). */
@@ -159,7 +185,12 @@ export function checkDiffSize({ runGit, env = process.env } = {}) {
     return { skipped: true, base, ...thresholds, fileCount: 0, changedLines: 0 };
   }
 
-  const { files, fileCount, changedLines } = parseNumstat(numstat);
+  const parsed = parseNumstat(numstat);
+  // Generierte Lockfiles zählen nicht zum reviewbaren Slice (#612).
+  const files = parsed.files.filter((f) => !isGeneratedArtifact(f.path));
+  const excludedCount = parsed.fileCount - files.length;
+  const fileCount = files.length;
+  const changedLines = files.reduce((s, f) => s + f.added + f.deleted, 0);
   const { overFiles, overLines, over } = evaluate({ fileCount, changedLines }, thresholds);
   const reason = overrideReason(env);
 
@@ -170,6 +201,7 @@ export function checkDiffSize({ runGit, env = process.env } = {}) {
     files,
     fileCount,
     changedLines,
+    excludedCount,
     overFiles,
     overLines,
     over,
@@ -201,6 +233,10 @@ function main() {
 
   const budget = `Budget ${r.maxFiles} Dateien / ${r.maxLines} Zeilen`;
   const measured = `${r.fileCount} Dateien, ${r.changedLines} geänderte Zeilen`;
+
+  if (r.excludedCount > 0) {
+    console.log(dim(`• ${r.excludedCount} generierte(s) Lockfile(s) nicht mitgezählt (#612).`));
+  }
 
   if (r.stale) {
     console.error(

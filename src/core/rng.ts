@@ -72,13 +72,21 @@ export function hashHex(s: string, len: number): string {
 // Snapshots sind stabil). Variabilität innerhalb einer Sitzung entsteht durch das
 // Fortschreiten des Stroms; für reproduzierbare Läufe bzw. „Seed teilen" (künftig)
 // lässt er sich per `seedGlobalRng()` neu setzen (Tests: known-start pro Fall).
-const DEFAULT_SEED = 0x9e3779b9;
+export const DEFAULT_SEED = 0x9e3779b9;
 let _gen: () => number = mulberry32(DEFAULT_SEED);
 
 /** Setzt den globalen Zufallsstrom neu (Tests: reproduzierbarer Start; künftig:
  *  „Seed teilen"). */
 export function seedGlobalRng(seed: number): void {
   _gen = mulberry32(seed >>> 0);
+}
+
+/** Ein EIGENER, unabhängiger Zufallsstrom (#580) – im Gegensatz zum globalen `nextRandom`
+ *  teilt er sich seinen Zustand mit niemandem. Jede `Sim`-Instanz baut sich damit in
+ *  `reset()` ihren eigenen Strom, sodass Pod-Namen/IDs nur an der Instanz (+ ihrem Seed)
+ *  hängen, nicht an der globalen Ausführungsreihenfolge. Gleicher Seed → gleiche Folge. */
+export function makeRng(seed: number = DEFAULT_SEED): () => number {
+  return mulberry32(seed >>> 0);
 }
 
 /** Die nächste Zufallszahl in [0,1) aus dem globalen Strom – der SSOT-Ersatz für

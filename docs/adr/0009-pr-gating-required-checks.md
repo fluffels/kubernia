@@ -38,6 +38,7 @@ Eine Absicherung, die man mit einem Flag umgehen kann, ist bei einem **unzuverl�
 **Positiv**
 - **Nicht umgehbare Durchsetzung:** ein roter oder zu breiter Slice kann `main` nicht mehr erreichen — auch nicht per `--no-verify` oder als Admin.
 - **Kein Aufbauen auf rotem `main`:** parallele Agenten sehen `main` immer grün, weil kaputter Code den PR-Gate nicht passiert.
+- **Zweite Grenze als Netz (#605):** falls doch je ein roter `main` trotz grüner PR-Checks entsteht (semantischer Merge zweier grüner PRs, fehlkonfigurierter Required Check, Admin-/Force-Push), fährt die CI auf `push:main` die volle `verify`-Kette weiter (jetzt inkl. `check:diffsize` gegen den Vorgänger-Commit) und öffnet bei Rot automatisch ein dedupliziertes `prio:hoch`-Alarm-Issue (`alarm-red-main`), ohne den Workflow zu blockieren.
 - **Auto-Merge für Dependabot wird möglich** (die Required-Checks waren dessen fehlende Voraussetzung — siehe [CONTRIBUTING.md › PR-Policy](../../CONTRIBUTING.md#pull-requests--abhängigkeits-updates-policy)).
 
 **Negativ / Trade-offs**

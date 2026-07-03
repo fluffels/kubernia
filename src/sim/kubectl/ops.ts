@@ -33,7 +33,7 @@ export function kubectlScale(host: KubectlHost, t: string[], raw: string) {
   const dep = host.deployments.find(d => d.name === name);
   if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + name + '" not found', "Welche Deployments es gibt: 'kubectl get deployments'");
   const target = parseInt(repMatch[1], 10);
-  scaleDeployment(dep, target, host.clock);
+  scaleDeployment(dep, target, host.clock, host.rng);
   return "deployment.apps/" + name + " scaled";
 }
 
@@ -108,7 +108,7 @@ function kubectlSetImage(host: KubectlHost, t: string[]) {
   dep.image = newImage;
   if (oldBad && newImage !== oldBad) {
     dep.broken = null;
-    replacePods(dep, host.clock);
+    replacePods(dep, host.clock, host.rng);
   }
   return "deployment.apps/" + depName + " image updated" + (oldBad && newImage === oldBad ? "\n💡 Hmm – das ist exakt dasselbe (kaputte) Image. Schau nochmal genau auf den Namen!" : "");
 }
@@ -136,7 +136,7 @@ function applyMemLimit(host: KubectlHost, dep: Deployment, spec: string | undefi
   dep.memLimit = newLimit;
   if (dep.broken && dep.broken.type === "oomkilled" && newLimit >= (dep.broken.memNeeded || 0)) {
     dep.broken = null;
-    replacePods(dep, host.clock);
+    replacePods(dep, host.clock, host.rng);
     notes.push("\n💡 Genug Speicher! Die Pods starten neu und bleiben diesmal stehen – kein OOMKilled mehr.");
   }
   return null;
@@ -147,7 +147,7 @@ function applyMemLimit(host: KubectlHost, dep: Deployment, spec: string | undefi
 function applyCpuLimit(host: KubectlHost, dep: Deployment, milli: number | null, notes: string[]): void {
   if (milli !== null && milli < 500 && dep.cpuHeavy) {
     dep.cpuHeavy = false;
-    replacePods(dep, host.clock);
+    replacePods(dep, host.clock, host.rng);
     notes.push("\n💡 CPU-Limit gesetzt! Die Pods werden gedrosselt – der HighPodCPU-Alert fällt auf resolved.");
   }
 }
@@ -222,7 +222,7 @@ export function kubectlRollout(host: KubectlHost, t: string[]) {
   // Pod-Neustart gibt das flüchtige Scratch-Volume frei (#240): emptyDir-Inhalt ist weg, die
   // ephemeral-Disk-Bilanz von Pod und Node fällt – ein evicteter Pod kann so wieder anlaufen.
   host._resetEphemeral(dep);
-  replacePods(dep, host.clock);
+  replacePods(dep, host.clock, host.rng);
   return "deployment.apps/" + depName + " restarted" +
     (imageHealed ? "\n💡 Image gefunden – die Pods starten neu und laufen jetzt. Prüfe mit 'kubectl get pods'." : "");
 }

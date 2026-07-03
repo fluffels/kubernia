@@ -9,6 +9,8 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+# jscpd-Duplikations-Report (#612): weiches, nicht-blockierendes CI-Artefakt, nie ins Repo.
+jscpd-report/
 # Lokale Umgebungsvariablen (#325): der Dev-Panel-Passwort-WERT darf nie ins Repo.
 # Die Vorlage `.env.example` (nur Variablen-Namen) bleibt versioniert.
 .env

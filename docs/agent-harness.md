@@ -28,14 +28,14 @@ Alles, was ein Agent braucht, liegt **im Repo selbst** — versioniert und gepus
 
 ### 2.2 Board-getriebener Ein-Ticket-Workflow
 
-Der Backlog lebt als **GitHub Issues** + Project-Board — **nicht** im Code, nicht in einem externen System. Prioritäten als Labels (`prio:hoch`/`mittel`/`niedrig`), Bereiche als `area:`-Labels.
+Der Backlog lebt als **GitHub Issues** + Project-Board — **nicht** im Code, nicht in einem externen System. Priorität im Board-Feld `Prio` (Kritisch → Hoch → Mittel → Niedrig → Später, seit #627), Bereiche als `area:`-Labels.
 
-- **Was als Nächstes dran ist,** entscheidet eine rein deterministische Regel (keine handgepflegte Reihenfolge): das **oberste freie Ticket nach Prio → niedrigste Nummer** ([Ticket-Auswahl](ticket-reihenfolge.md)). Der Agent **wägt nicht ab** und sucht nicht nach Inhalt — Prio-Label + Nummer entscheiden. Das hält die Auswahl billig, reproduzierbar und Stardew-fest (nichts, was mit dem Backlog mitwächst und driftet).
-- **Ein Agent nimmt genau EIN Ticket** und arbeitet es end-to-end ab: umsetzen → alle Gates grün → im Browser verifizieren → nach `main` → Issue schließen → Board + Reihenfolge pflegen. Der enge Fokus ist Absicht: ein kleiner, abgeschlossener Diff ist review- und verifizierbar; ein „ich mach schnell noch fünf Sachen mit"-Lauf ist es nicht.
+- **Was als Nächstes dran ist,** entscheidet eine rein deterministische Regel (keine handgepflegte Reihenfolge): das **oberste freie Ticket nach Board-`Prio` → niedrigste Nummer** ([Ticket-Auswahl](ticket-reihenfolge.md)). Der Agent **wägt nicht ab** und sucht nicht nach Inhalt — `Prio`-Feld + Nummer entscheiden. Das hält die Auswahl billig, reproduzierbar und Stardew-fest (nichts, was mit dem Backlog mitwächst und driftet).
+- **Ein Agent nimmt genau EIN Ticket** und arbeitet es end-to-end ab: umsetzen → alle Gates grün → im Browser verifizieren → über PR nach `main` → Issue schließen → Board pflegen (keine Reihenfolge-Datei mehr, #627). Der enge Fokus ist Absicht: ein kleiner, abgeschlossener Diff ist review- und verifizierbar; ein „ich mach schnell noch fünf Sachen mit"-Lauf ist es nicht.
 - **Der Agent managt das Board selbst** (nur in kubequest an ihn delegiert): Issues schließen/kommentieren/labeln und **neue Tickets anlegen, wenn etwas auffällt** (Bug, Lücke, Tech-Debt, Idee) — lieber ein Ticket zu viel als verlorenes Wissen. GitHub ist die SSOT für den Stand.
 - **Zu großes Ticket (Epic/Phase) → aufteilen statt umsetzen:** in session-große Kinder zerlegen (ohne Assignee), Übersichts-Kommentar posten, Epic auf `done` schließen. Kein Code.
 
-Operative Details (Auswahl-Befehl, Pflege-Schritt): [AGENTS.md › Wo die TODOs leben](../AGENTS.md#wo-die-todos-leben) + [ticket-reihenfolge.md](ticket-reihenfolge.md).
+Operative Details (Auswahl-Befehl, Board-Prio-Pflege): [AGENTS.md › Wo die TODOs leben](../AGENTS.md#wo-die-todos-leben) + [ticket-reihenfolge.md](ticket-reihenfolge.md).
 
 ### 2.3 Kollisionsschutz für parallele Agenten
 
@@ -107,6 +107,11 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **WARUM:** AGENTS.md/CLAUDE.md/README werden von **jeder** KI-Session als Kontext geladen und nennen Kommandos + verweisen quer auf andere Harness-Docs. Ein totes Kommando oder ein toter Link/Anker schickt einen Agenten ins Leere — der Datei-Landkarten-Wächter (#482) deckt genau diese Fehlklasse **nicht** ab.
 - **Absicherung:** Code-Fences werden ausgeblendet (ein `#`-Kommentar in einem bash-Block ist keine Überschrift, ein Beispiel-Link keiner); Ausnahmen (undokumentierte Convenience-Skripte) stehen begründet in `DOC_EXEMPT_SCRIPTS`. Red-Green über `test/docdrift.test.ts` (totes Kommando, toter Link, toter Anker werden jeweils erkannt; die Slug-Regel trifft Emoji-/Umlaut-Überschriften).
 
+### Doku-Aktualitäts-Wächter (`npm run check:doctickets`, #610)
+- **WAS:** liest die zwischen den Markern `open-harness-tickets:start/end` in §5 als **„offen"** gelistete Roadmap-Tabelle und gleicht jede Nummer gegen den echten `gh issue`-Status ab — ist eine als offen dokumentierte Nummer auf GitHub bereits **CLOSED**, ist die Roadmap stale. Die reine Parse-Logik (`parseOpenHarnessTickets`) testet `test/doctickets.test.ts` offline (Red-Green).
+- **WARUM:** `check:docdrift` prüft nur *Kommandos/Links/Anker*, nicht die **inhaltliche Aktualität**. Genau das ließ die „#492 (RNG-Determinismus) ist offen"-Zeile stehen, obwohl das Gate längst existierte (Befund iSAQB-Runde 3). Dieser Wächter fängt diese Fehlklasse.
+- **Absicherung / bewusste Sonderstellung:** der gh-Abgleich braucht Netz + Auth und ist nicht deterministisch — er ist darum **NICHT** in der hermetischen `verify`-Kette / der Vitest-Suite, sondern läuft als **eigener, bewusst non-blocking (alarmierender) CI-Job** und lokal beim Pflege-Schritt. Fehlt `gh`/Token (offline, frischer Clone), wird **übersprungen** (exit 0, klare Meldung), nicht fälschlich grün gemeldet; **rot** nur bei einer sicher als CLOSED erkannten Nummer. Non-blocking ist Absicht: ein von einem *parallelen* Agenten geschlossenes Roadmap-Ticket soll keinen fremden PR rot blockieren (das ⚠️-Anti-Pattern aus #395), sondern nur alarmieren.
+
 ### Boot-/Interaktions-Smokes (`npm run smoke`, Playwright, #391/#480)
 - **WAS:** lädt den **gebauten Offline-Build** (`dist-offline/index.html` per `file://`, genau der Doppelklick-Pfad) headless in Chromium. Boot-Smoke: fährt fehlerfrei hoch (Boot-Flag, Canvas da, keine Konsolen-/Laufzeitfehler). Interaktions-Smokes: `help` ins Terminal → Ausgabe, Overlay auf/zu, Onboarding-Quest annehmen + abschließen — über Tastatur/DOM ohne Test-Hintertür.
 - **WARUM:** die Vitest-Unit-Tests fassen die Präsentation (Phaser/DOM) bewusst **nicht** an. Ein Fehler, der erst beim echten Boot auftritt (Phaser-Init, ein werfender Content-Loader, ein kaputtes Asset-Manifest) oder eine Interaktions-Regression (Terminal nimmt keine Eingabe) käme sonst durch.
@@ -117,7 +122,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **WARUM:** das echte Nutzerrisiko steckt im `dist`-Artefakt (nur `phaser` & Co., kein vite/vitest). Ein hartes high+-Gate über den **ganzen** Baum wäre durch dev-only-Advisories dauerhaft rot — und würde dann abgeschaltet (die ⚠️-Falle aus #395). Die selbstwartende Regel „blocke, was ausgeliefert wird; berichte den Rest" verrottet nicht bei Stardew-Scope, anders als ein hartcodierter Advisory-Allowlist.
 - **Ergänzend:** Dependabot ([`.github/dependabot.yml`](../.github/dependabot.yml)) öffnet wöchentlich gebündelte Update-PRs und zieht Security-Advisories automatisch hoch; Umgang damit als Policy in [CONTRIBUTING.md](../CONTRIBUTING.md#pull-requests--abhängigkeits-updates-policy).
 
-> **Nicht auf der Liste, aber Teil des Netzes:** die **Save-nie-brechen-Regel** (jede Format-Änderung migriert, alter Stand vorher in den Backup-Slot, `sanitizeState` härtet kaputte Felder ab) und der **Determinismus-Anspruch** (seedbare Zufälligkeit statt `Math.random` in der Domäne) gehören zum selben Netz. Der Determinismus ist seit **#492** als ESLint-Gate (`no-restricted-properties` gegen `Math.random`) + `test/rng.test.ts` für `src/sim/**`+`src/content/**` **erzwungen**; die Ausweitung auf die übrige als „pur/deterministisch" deklarierte Logik (`game/**`, z.B. `spaced-repetition.ts`) ist als #591 erfasst (siehe §5).
+> **Nicht auf der Liste, aber Teil des Netzes:** die **Save-nie-brechen-Regel** (jede Format-Änderung migriert, alter Stand vorher in den Backup-Slot, `sanitizeState` härtet kaputte Felder ab) und der **Determinismus-Anspruch** (seedbare Zufälligkeit statt `Math.random` in der Domäne) gehören zum selben Netz. Der Determinismus ist seit **#492** als ESLint-Gate (`no-restricted-properties` gegen `Math.random`) + `test/rng.test.ts` für `src/sim/**`+`src/content/**` **erzwungen**; die Ausweitung auf die übrige als „pur/deterministisch" deklarierte Logik (`game/**`, z.B. `spaced-repetition.ts`) ist mit #591 nachgezogen.
 
 ## 4. Die sichere Autonomie-Schleife
 
@@ -156,16 +161,19 @@ So greifen die Bausteine bei **einem** Ticket ineinander — jeder Schritt ist e
 
 Der Harness ist bewusst ein **lebendes System** — seine eigenen Schwachstellen sind als Tickets erfasst (dogfooding: der Harness verbessert sich über denselben Board-Workflow). Noch **offene** Harness-Verbesserungen ([ticket-reihenfolge.md](ticket-reihenfolge.md)):
 
+<!-- Diese Tabelle ist maschinell bewacht (#610, `npm run check:doctickets`): jede hier
+     als „offen" gelistete #-Nummer wird gegen den echten gh-issue-Status abgeglichen; ist
+     eine davon bereits geschlossen, meldet der Wächter Drift (rot). Beim Schließen eines
+     Roadmap-Tickets also seine Zeile hier entfernen (erledigte Punkte gehören in „Schon
+     gelandet"). NUR Nummern ZWISCHEN den beiden Markern zählen als „offen dokumentiert" —
+     die #-Nummern in Prosa/„erledigt"-Notizen (z.B. das erledigte #492) bleiben außen vor. -->
+<!-- open-harness-tickets:start -->
 | Ticket | Was es schließt |
 |---|---|
-| **#605** | CI fährt `verify` post-hoc auf `main` nach + alarmiert bei Rot (ergänzt das PR-Gating #592 als zweite Grenze). |
-| **#591** | Determinismus-Gate auf `game/**` ausweiten (heute nur `sim/**`+`content/**`; `spaced-repetition.ts` nutzt `Math.random`). |
-| **#604** | Suppression-Budget-Guard für `eslint-disable no-explicit-any` (Ratchet analog Komplexitäts-Gate) — sonst ist der `any`-Error pro Zeile aushebelbar. |
-| **#610** | Doku-Aktualitäts-Guard: als „offen" dokumentierte Harness-Tickets gegen den echten `gh issue`-Status prüfen (`check:docdrift` prüft nur Kommandos/Links/Anker, nicht Aktualität). |
 | **#612** | Optionaler jscpd-Duplikations-Detektor als weiches CI-Artefakt gegen SSOT-/Copy-Paste-Umgehung (einzige Regressionsklasse ohne direkten Guard). |
-| **#593 / #594 / #595** | Lockfile-Sync-Check in `verify`, tsconfig-`target`-Prüfung, Phaser-vendor-Byte-Gate. |
+<!-- open-harness-tickets:end -->
 
-> **#492 ist erledigt** (Determinismus-Gate steht, siehe §3) — die Roadmap ist seit der [iSAQB-Runde 3 (2026-07-03)](architektur-analyse-2026-07-03-iSAQB.md) auf die verbleibenden Durchsetzungs-/Scope-Lücken aktualisiert.
+> **Erledigt & darum aus der Tabelle raus:** **#492** (Determinismus-Gate, siehe §3), **#591** (Determinismus-Scope auf `game/**`), **#604** (`no-explicit-any`-Suppression-Ratchet), **#593** (Lockfile-Sync-Check), **#594** (tsconfig-`target`-Prüfung), **#595** (Phaser-vendor-Byte-Gate), das PR-Gating **#592** und die zweite CI-Grenze **#605** (`verify` post-hoc auf `main`) — sowie **#610** selbst: dieser **Doku-Aktualitäts-Wächter** (`npm run check:doctickets`) macht genau diese Tabelle jetzt maschinell ehrlich (der alte stale „#492 ist offen"-Eintrag war der Auslöser). Die Roadmap wird laufend auf die verbleibenden Lücken eingedampft.
 
 **Schon gelandet** (Block „Harness & Vorzeige-Doku", 2026-07-01): das Aggregat-Kommando `npm run verify` (#527), der Git-**pre-push-Hook** (#528, schließt die Post-hoc-CI-Lücke des Direkt-Push, §4), der **Harness-Drift-Wächter** `check:docdrift` (#529, §3), die **Forum-Inbox-Härtung** gegen Prompt-Injection (#531, §4), der **`review-lenses`-Skill** — der gestaffelte Mehr-Perspektiven-Review mit Gate-Short-Circuit (#532, §2.5) — und das **Diff-Größenbudget-Gate** `check:diffsize` (#533, §3): misst den Slice gegen `main` (max. 20 Dateien / 800 Zeilen, Override mit Pflicht-Begründung) und erzwingt so die Slice-Disziplin der KI-Fabrik auf Commit-Ebene; seit **#592** ist der Durchsetzungspunkt der **PR-Required-Check** (CI-Checkout `fetch-depth: 0` + `KQ_DIFF_BASE`), nicht mehr nur der lokale pre-push-Hook. Und das **PR-Gating selbst** (#592, [ADR 0009](adr/0009-pr-gating-required-checks.md)): `main` ist server-seitig geschützt (Merge nur über PR mit grünen Required-Checks, `enforce_admins` an) — die größte Vibe-Coding-Lücke (ein Agent schiebt roten Code auf `main`, ein paralleler baut darauf auf) ist damit geschlossen.
 
@@ -176,6 +184,6 @@ Mit **#530** ([ADR 0008](adr/0008-ki-agenten-harness.md)) ist der ADR jetzt die 
 - **[AGENTS.md](../AGENTS.md)** — operative Arbeitsanweisung (harte Regeln, Board-Workflow, Konventionen). *Bei Konflikt maßgeblich.*
 - **[CLAUDE.md](../CLAUDE.md)** — Schnellstart + Datei-Landkarte.
 - **[docs/arc42-architektur.md](arc42-architektur.md)** — Architektur-Gesamtsicht; §1.4 (KI-Entwickel-Effizienz als Qualitätsziel), §8 (Querschnittskonzepte), §9 (ADR-Übersicht inkl. geplantem 0008).
-- **[docs/ticket-reihenfolge.md](ticket-reihenfolge.md)** — was als Nächstes dran ist (deterministisch Prio→Nummer + Reaktivierungs-Pool).
+- **[docs/ticket-reihenfolge.md](ticket-reihenfolge.md)** — was als Nächstes dran ist (deterministisch Board-`Prio` → Nummer).
 - **[docs/adr/](adr/)** — die festgehaltenen Grundsatzentscheidungen (Engine, kein Backend/DB, kein Multiplayer, Skalierungs-Fundament, …).
 - **[CONTRIBUTING.md](../CONTRIBUTING.md)** — Einstieg für Menschen (`npm run setup`, Devcontainer, PR-/Dependabot-Policy).

@@ -27,9 +27,11 @@ import { asPodName } from "./names";
 
 /** Eine frische Pod-Instanz für ein Deployment: neuer Zufallsname im K8s-Stil,
  *  `restarts: 0`, `created` = aktueller Sim-Takt. Die EINE Stelle, an der ein
- *  Deployment-Pod entsteht – scale/rollout/heal gehen alle darüber. */
-export function newDeploymentPod(dep: Deployment, clock: number): PodInstance {
-  return { name: makePodName(dep.name), created: clock, restarts: 0 };
+ *  Deployment-Pod entsteht – scale/rollout/heal gehen alle darüber. Der Zufallsstrom
+ *  `rng` kommt von der Sim-Instanz durch (wie der `clock`), damit die Pod-Namen
+ *  instanz-lokal reproduzierbar sind (#580). */
+export function newDeploymentPod(dep: Deployment, clock: number, rng: () => number): PodInstance {
+  return { name: makePodName(dep.name, rng), created: clock, restarts: 0 };
 }
 
 /** Eine StatefulSet-Pod-Instanz mit STABILER Identität (`<sts>-<ordinal>`), anders als
@@ -43,8 +45,8 @@ export function newStatefulPod(ordinalName: string, clock: number): PodInstance 
 /** Skaliert ein Deployment auf `target` Replicas und hält dabei die Invariante
  *  `pods.length === replicas`: fehlende Pods kommen frisch dazu, überzählige fallen
  *  weg, und `replicas` wird gemeinsam gesetzt – nie das eine ohne das andere. */
-export function scaleDeployment(dep: Deployment, target: number, clock: number): void {
-  while (dep.pods.length < target) dep.pods.push(newDeploymentPod(dep, clock));
+export function scaleDeployment(dep: Deployment, target: number, clock: number, rng: () => number): void {
+  while (dep.pods.length < target) dep.pods.push(newDeploymentPod(dep, clock, rng));
   while (dep.pods.length > target) dep.pods.pop();
   dep.replicas = target;
 }
@@ -52,19 +54,19 @@ export function scaleDeployment(dep: Deployment, target: number, clock: number):
 /** Ersetzt ALLE Pods eines Deployments durch frische (Rollout / Heilung nach Fix).
  *  Die Anzahl bleibt erhalten, `replicas` unberührt – `pods.length === replicas`
  *  gilt vor und nach dem Neustart. */
-export function replacePods(dep: Deployment, clock: number): void {
-  dep.pods = dep.pods.map(() => newDeploymentPod(dep, clock));
+export function replacePods(dep: Deployment, clock: number, rng: () => number): void {
+  dep.pods = dep.pods.map(() => newDeploymentPod(dep, clock, rng));
 }
 
 /** Ersetzt genau EINEN Pod (per Name) durch einen frischen – die Selbstheilung eines
  *  Deployments beim Pod-Verlust (`kubectl delete pod`). Der Ersatz-Pod bekommt einen
  *  NEUEN Zufallsnamen (anders als beim StatefulSet, siehe `restartStatefulPod`); die
  *  Pod-Anzahl bleibt gleich. Gibt `false` zurück, wenn kein Pod dieses Namens da ist. */
-export function replaceDeploymentPod(dep: Deployment, oldName: string, clock: number): boolean {
+export function replaceDeploymentPod(dep: Deployment, oldName: string, clock: number, rng: () => number): boolean {
   const idx = dep.pods.findIndex(p => p.name === oldName);
   if (idx < 0) return false;
   dep.pods.splice(idx, 1);
-  dep.pods.push(newDeploymentPod(dep, clock));
+  dep.pods.push(newDeploymentPod(dep, clock, rng));
   return true;
 }
 
