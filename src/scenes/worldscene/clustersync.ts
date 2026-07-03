@@ -23,25 +23,15 @@ import { SFX } from "../../sfx";
 import { spreadLabelsVertically, type LayoutBox } from "../../hud/labellayout";
 import { selectVisibleTags, expandRect } from "../../hud/cull";
 import { T, hashHue, hueColor, SIGN_FONT, SIGN_SCALE } from "../shared";
+// Pod-Steg-Belegung + Tag-Rendering-Konstanten liegen zentral in scenes/geometry.ts (#590).
+import { SLOTS_PER_PIER, TAG_CAP, REVEAL_FULL, REVEAL_FADE } from "../geometry";
 import type { WorldSceneLike, DynTagData } from "./types";
 
-// Nähe-Aufdeckung: voll sichtbar bis FULL, ausgeblendet ab FADE (Welt-Pixel).
-const REVEAL_FULL = 42;
-const REVEAL_FADE = 84;
-// Höchstzahl gleichzeitig gerenderter Tags. Der Aufdeck-Radius (FADE) begrenzt die
-// realistisch sichtbaren Tags ohnehin auf wenige; der Deckel ist die harte Garantie,
-// dass Pool-Größe + Entzerrung auch im pathologischen Fall (sehr dichter Cluster)
-// konstant bleiben. Mehr als CAP Tags im Radius → die NÄCHSTEN gewinnen.
-const TAG_CAP = 64;
 // Sichtfeld fürs Tag-Culling großzügig erweitern, damit am Bildrand nichts aufpoppt
 // (Tags ragen über ihren Bezugspunkt + werden beim Entzerren nach oben geschoben).
 const TAG_VIEW_MARGIN = 2 * T;
 
-// Belegung je Steg: 2 Spalten × 6 Reihen = 12 Slots. Bei mehr Pods als Stege×12
-// wird NICHT mehr auf Slot 0 zurückgefallen (Überlagerung, #523), sondern eine
-// weitere „Seite" darunter gestapelt – die Slot-Vergabe ist dynamisch, nicht fix 36.
-const SLOTS_PER_PIER = 12;
-const PIER_ROWS = SLOTS_PER_PIER / 2;
+const PIER_ROWS = SLOTS_PER_PIER / 2;   // 2 Spalten × PIER_ROWS Reihen je Steg (#590/#523)
 
 function podSlotPos(scene: WorldSceneLike, slot: number) {
   const P = Math.max(1, scene.piers.length);

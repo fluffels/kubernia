@@ -10,6 +10,7 @@ import { expandRect, cull, FrameSampler, type Cullable } from "../hud/cull";
 import { getMapEntry, type MapId } from "../world/maps/mapregistry";
 import { DAY_CYCLE_MS } from "../core/clock";
 import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, readMoveInput, faceFrom, renderPlayer, type SceneNpc } from "./shared";
+import { HIT_R, LAMP_HIT } from "./geometry";
 // Spiel-Systeme als eigene, fokussierte Module (WorldScene.ts-Split #393, analog
 // scenes.ts-Split #345): freie Funktionen mit der Szene als Parameter (`scene`).
 // WorldScene ist seither nur noch der schlanke Orchestrator (Aufbau in create(),
@@ -31,15 +32,7 @@ import type {
   WorldSceneFields, DecoItem, LabelSpec, DynTagData, PodSlot, Butterfly, PlayerPos, Hazards,
 } from "./worldscene/types";
 
-/* #343/#386: Sub-Tile-Kollisionsradien (Pixel). Steine, Büsche und NPCs prallen nicht
- * mehr als volles 16×16-Quadrat ab, sondern als runde Hitbox um ihren Mittelpunkt – so
- * gleitet man an der runden Silhouette weich vorbei statt eckig abzuprallen. Laternen
- * sind schmale Pfosten und bekommen darum ein kleineres, dünnes Rechteck (#386). */
-const NPC_HIT_R = 6;
-const ROCK_HIT_R = 6;
-const BUSH_HIT_R = 6;
-const LAMP_HIT: readonly [number, number] = [6, 10];   // Pfosten: schmale Rechteck-Hitbox (B×H)
-
+// #343/#386: Sub-Tile-Kollisionsradien liegen jetzt zentral in scenes/geometry.ts (#590).
 export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   // Welt-Raster + Kollision
   W!: number;
@@ -185,8 +178,8 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     spawnGrassDetail(this);   // #40: dichtes, variiertes Gras (Stardew-Look)
     this.spawnNpcs();
     this.spawnPlayer();
-    scatter(this, "bush", 16, 0.5, [0, 1, 2], false, BUSH_HIT_R); // Büsche: runde Hitbox (#386) statt voller Kachel, nicht an Wegen
-    scatter(this, "rock", 14, 0.45, [0, 1, 2, -3], false, ROCK_HIT_R); // Steine: runde Hitbox (#343), auch am Strand
+    scatter(this, "bush", 16, 0.5, [0, 1, 2], false, HIT_R); // Büsche: runde Hitbox (#386) statt voller Kachel, nicht an Wegen
+    scatter(this, "rock", 14, 0.45, [0, 1, 2, -3], false, HIT_R); // Steine: runde Hitbox (#343), auch am Strand
     scatter(this, "lamppost", 4, 0.55, [0, 1, 2], false, 0, LAMP_HIT); // Hafenlaternen: schmales Pfosten-Rechteck (#386)
     scatter(this, "mushroom", 10, 0.28, [0, 1, 2]);       // Pilze: kleine Wald-/Wiesendeko, begehbar (#7)
     scatter(this, "seashell", 8, 0.22, [-3]);             // Muscheln: nur am Sandstrand (#7)
@@ -353,7 +346,7 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     // weich an ihnen vorbeigleitet. Reden (E) bleibt möglich (nearestNpc greift von
     // der Nachbarkachel). Die Kachel bleibt für die Deko-Platzierung belegt (softGrid).
     for (const idx of npcSolidIndices(defs, this.W, this.H)) this.softGrid[idx] = 1;
-    this.softObstacles.push(...npcHitboxes(defs, NPC_HIT_R));
+    this.softObstacles.push(...npcHitboxes(defs, HIT_R));
     this.npcs = defs.map(d => {
       const meta = KQContent.NPCS[d.id as keyof typeof KQContent.NPCS];
       this.addShadow(d.x * T + 8, d.y * T + 15);
