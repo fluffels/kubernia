@@ -48,6 +48,7 @@ import { depEphemeralUsed, depEphemeralPeak, nodeOf, nodeEphemeralUsed, resetEph
 import { randSuffix, clusterIP, suggest } from "./sim/util";
 import { makeRng, DEFAULT_SEED } from "./core/rng";
 import { resourceName, InvalidResourceNameError, rfc1123ErrorText, RFC1123_TIP } from "./sim/names";
+import { sameRbac } from "./sim/rbac";
 import { assertClusterInvariants } from "./sim/invariants";
 import { scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod } from "./sim/workload";
 import { provisionNode } from "./sim/nodes";
@@ -678,10 +679,10 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
         if (!this.serviceAccounts.some(x => x.name === name)) this.serviceAccounts.push({ name, created: this.clock });
       }
       for (const r of sc.roles || []) {
-        if (!this.roles.some(x => x.name === r.name && x.cluster === !!r.cluster)) this.roles.push(buildRole(r, this.clock));
+        if (!this.roles.some(x => sameRbac(x, r))) this.roles.push(buildRole(r, this.clock));
       }
       for (const b of sc.roleBindings || []) {
-        if (!this.roleBindings.some(x => x.name === b.name && x.cluster === !!b.cluster)) this.roleBindings.push(buildRoleBinding(b, this.clock));
+        if (!this.roleBindings.some(x => sameRbac(x, b))) this.roleBindings.push(buildRoleBinding(b, this.clock));
       }
       // Höhere enforce-Stufe gewinnt nicht automatisch – eine explizit gesetzte Stufe übernehmen.
       if (sc.podSecurity) this.podSecurity = sc.podSecurity;

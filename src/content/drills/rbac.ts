@@ -1,6 +1,7 @@
 import type { Sim } from "../../sim";
 import { pick, rnd, SA_NAMES, ROLE_NAMES, CLUSTERROLE_NAMES, CANI_PAIRS, ensureRole, ROLE_YAML, ROLEBINDING_YAML, CLUSTERROLE_YAML, CLUSTERROLEBINDING_YAML, POD_SECURITY_YAML } from "./shared";
 import type { DrillTask } from "./shared";
+import { sameRbac } from "../../sim/rbac";
 
 export const RBAC_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   "rbac-sa-create": sim => {
@@ -15,7 +16,7 @@ export const RBAC_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   },
   "rbac-apply-role": sim => {
     let name = pick(ROLE_NAMES);
-    while (sim.roles.some(r => !r.cluster && r.name === name)) name = pick(ROLE_NAMES) + rnd(2, 99);
+    while (sim.roles.some(r => sameRbac(r, { name, cluster: false }))) name = pick(ROLE_NAMES) + rnd(2, 99);
     const file = "role.yaml";
     sim.files[file] = ROLE_YAML;
     sim.applyEffects[file] = { role: { name, rules: [{ verbs: ["get", "list", "watch"], resources: ["pods"] }] } };
@@ -23,7 +24,7 @@ export const RBAC_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   },
   "rbac-apply-rolebinding": sim => {
     let name = pick(ROLE_NAMES) + "-binden";
-    while (sim.roleBindings.some(b => !b.cluster && b.name === name)) name = "binden-" + rnd(2, 999);
+    while (sim.roleBindings.some(b => sameRbac(b, { name, cluster: false }))) name = "binden-" + rnd(2, 999);
     const file = "rolebinding.yaml";
     sim.files[file] = ROLEBINDING_YAML;
     sim.applyEffects[file] = { roleBinding: { name, roleRef: { kind: "Role", name: "pod-leser" }, subjects: [{ kind: "ServiceAccount", name: "wachdienst", namespace: "default" }] } };
@@ -36,7 +37,7 @@ export const RBAC_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   },
   "rbac-apply-clusterrole": sim => {
     let name = pick(CLUSTERROLE_NAMES);
-    while (sim.roles.some(r => r.cluster && r.name === name)) name = pick(CLUSTERROLE_NAMES) + rnd(2, 99);
+    while (sim.roles.some(r => sameRbac(r, { name, cluster: true }))) name = pick(CLUSTERROLE_NAMES) + rnd(2, 99);
     const file = "clusterrole.yaml";
     sim.files[file] = CLUSTERROLE_YAML;
     sim.applyEffects[file] = { role: { name, cluster: true, rules: [{ verbs: ["get", "list", "watch"], resources: ["nodes"] }] } };
@@ -44,7 +45,7 @@ export const RBAC_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   },
   "rbac-apply-clusterrolebinding": sim => {
     let name = pick(CLUSTERROLE_NAMES) + "-binden";
-    while (sim.roleBindings.some(b => b.cluster && b.name === name)) name = "rundblick-" + rnd(2, 999);
+    while (sim.roleBindings.some(b => sameRbac(b, { name, cluster: true }))) name = "rundblick-" + rnd(2, 999);
     const file = "clusterrolebinding.yaml";
     sim.files[file] = CLUSTERROLEBINDING_YAML;
     sim.applyEffects[file] = { roleBinding: { name, cluster: true, roleRef: { kind: "ClusterRole", name: "knoten-spaeher" }, subjects: [{ kind: "ServiceAccount", name: "wachdienst", namespace: "default" }] } };

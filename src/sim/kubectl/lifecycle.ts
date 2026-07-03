@@ -15,6 +15,7 @@ import { addDeployment, removeDeployment, addStatefulSet, removeStatefulSet, rep
 // einer Application zieht/kloniert den Soll direkt darüber (statt über eine Host-Methode).
 import { argoReconcile, cloneChildSpec } from "../argocd";
 import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
+import { sameRbac } from "../rbac";
 import { flagValue, multiFlag } from "../util"; // clusterIP entfällt: Service läuft jetzt über host._makeService (#507)
 import { admitPod } from "./security";
 import type { KubectlHost } from "./host";
@@ -150,7 +151,7 @@ const createRole: CreateHandler = (host, t, raw) => {
   if (verbs.length === 0) return host._err("error: at least one --verb must be specified", "Häng z.B. '--verb=get,list' an.");
   if (resources.length === 0) return host._err("error: at least one --resource must be specified", "Häng z.B. '--resource=pods' an.");
   const kind = cluster ? "clusterrole" : "role";
-  if (host.roles.some(r => r.cluster === cluster && r.name === name)) return host._err('error: ' + kind + 's.rbac.authorization.k8s.io "' + name + '" already exists');
+  if (host.roles.some(r => sameRbac(r, { name, cluster }))) return host._err('error: ' + kind + 's.rbac.authorization.k8s.io "' + name + '" already exists');
   host.roles.push({ name, cluster, rules: [{ verbs, resources }], created: host.clock });
   return kind + ".rbac.authorization.k8s.io/" + name + " created";
 };
@@ -183,7 +184,7 @@ const createRoleBinding: CreateHandler = (host, t, raw) => {
   const subjects = collectRbacSubjects(raw);
   if (subjects.length === 0) return host._err("error: at least one of --user or --serviceaccount must be specified", "Muster: '--serviceaccount=default:deploy-bot' oder '--user=alice'.");
   const kind = cluster ? "clusterrolebinding" : "rolebinding";
-  if (host.roleBindings.some(b => b.cluster === cluster && b.name === name)) return host._err('error: ' + kind + 's.rbac.authorization.k8s.io "' + name + '" already exists');
+  if (host.roleBindings.some(b => sameRbac(b, { name, cluster }))) return host._err('error: ' + kind + 's.rbac.authorization.k8s.io "' + name + '" already exists');
   host.roleBindings.push({ name, cluster, roleRef, subjects, created: host.clock });
   return kind + ".rbac.authorization.k8s.io/" + name + " created";
 };
@@ -657,7 +658,7 @@ const applyRole: ApplyHandler = (host, eff, out) => {
   if (!effRole) return;
   const cluster = !!effRole.cluster;
   const kind = cluster ? "clusterrole" : "role";
-  if (host.roles.some(r => r.name === effRole.name && r.cluster === cluster)) {
+  if (host.roles.some(r => sameRbac(r, { name: effRole.name, cluster }))) {
     out.push(kind + ".rbac.authorization.k8s.io/" + effRole.name + " unchanged");
     return;
   }
@@ -670,7 +671,7 @@ const applyRoleBinding: ApplyHandler = (host, eff, out) => {
   if (!effRb) return;
   const cluster = !!effRb.cluster;
   const kind = cluster ? "clusterrolebinding" : "rolebinding";
-  if (host.roleBindings.some(b => b.name === effRb.name && b.cluster === cluster)) {
+  if (host.roleBindings.some(b => sameRbac(b, { name: effRb.name, cluster }))) {
     out.push(kind + ".rbac.authorization.k8s.io/" + effRb.name + " unchanged");
     return;
   }
