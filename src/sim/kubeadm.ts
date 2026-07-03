@@ -30,13 +30,14 @@ const APISERVER = "10.0.0.10:6443";
  *  #516) nur die berührten `nodes`/`controlPlane` per `Pick` (ISP), typgebunden an die
  *  SSOT (sim/state.ts, #372). */
 export interface KubeadmHost extends Pick<ClusterState, "nodes" | "controlPlane"> {
+  rng: () => number; // Instanz-eigener Zufallsstrom (#580): Bootstrap-Token/CA-Hash statt globaler Strom
   _err(msg: string, tip?: string): string;
   _reschedulePending(): void; // ein neuer Worker kann wartende Pods einplanen
 }
 
 /** Join-Token im echten kubeadm-Format `abcdef.0123456789abcdef` (6 . 16 Zeichen). */
-function genToken(): string {
-  return randSuffix(6) + "." + randSuffix(16);
+function genToken(rng: () => number): string {
+  return randSuffix(6, rng) + "." + randSuffix(16, rng);
 }
 
 /** Bootstrap-Lage der Control-Plane aus dem Szenario ableiten (#460), von `Sim.reset()` genutzt.
@@ -89,7 +90,7 @@ function kubeadmInit(host: KubeadmHost): string {
       "[ERROR FileAvailable--etc-kubernetes-manifests]: /etc/kubernetes/manifests is not empty",
       "Die Control-Plane läuft bereits. Worker hängst du mit 'kubeadm join <token>' an, abräumen geht mit 'kubeadm reset'.");
   }
-  const token = genToken();
+  const token = genToken(host.rng);
   // Der Knoten, auf dem init läuft, wird die Control-Plane. Gibt es schon einen Control-Plane-
   // Knoten (z.B. aus dem Szenario), nimm ihn; sonst lege "ahoi-control" an. Idempotent über Name.
   const cpName = host.nodes.find(isControlPlane)?.name ?? "ahoi-control";
@@ -108,7 +109,7 @@ function kubeadmInit(host: KubeadmHost): string {
     "Then you can join any number of worker nodes by running the following on each as root:",
     "",
     "  kubeadm join " + APISERVER + " --token " + token + " \\",
-    "          --discovery-token-ca-cert-hash sha256:" + randSuffix(64),
+    "          --discovery-token-ca-cert-hash sha256:" + randSuffix(64, host.rng),
     "",
     "💡 Die Control-Plane (" + cpName + ") läuft jetzt – kubectl ist wieder ansprechbar. Häng Worker mit dem obigen 'kubeadm join'-Befehl an.",
   ].join("\n");

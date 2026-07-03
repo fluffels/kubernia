@@ -8,6 +8,7 @@
 import { describe, test, expect } from "vitest";
 import { isResourceName, resourceName, asPodName, InvalidResourceNameError } from "../../src/sim/names";
 import { makePodName } from "../../src/sim/util";
+import { makeRng } from "../../src/core/rng";
 
 describe("isResourceName – die DNS-1123-Regel an EINER Stelle", () => {
   test("akzeptiert gültige Namen", () => {
@@ -75,7 +76,7 @@ describe("asPodName – ungeprüfte Brand-Fabrik für vertrauenswürdige, intern
 describe("makePodName rechtfertigt den ungeprüften Brand", () => {
   test("erzeugt für einen gültigen Deployment-Namen einen gültigen Ressourcen-Namen", () => {
     for (const dep of ["web", "kasse", "my-app-1"]) {
-      const name = makePodName(dep);
+      const name = makePodName(dep, makeRng(1));
       expect(isResourceName(name), name).toBe(true);
       expect(name.startsWith(dep + "-")).toBe(true);
     }

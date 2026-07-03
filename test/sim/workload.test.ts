@@ -17,14 +17,20 @@ import {
 import { clusterInvariantViolations } from "../../src/sim/invariants";
 import type { Deployment, StatefulSetRes, PodInstance } from "../../src/sim/state";
 import { asPodName } from "../../src/sim/names";
+import { makeRng } from "../../src/core/rng";
 
 let sim: KQSim;
 beforeEach(() => { sim = freshSim(); });
 
+// Ein fortlaufender Instanz-Strom (#580) für die puren Mutations-Funktionen: er wird über
+// die Aufrufe hinweg WEITERGEDREHT (nicht neu geseedet), damit ein Neustart frische Pod-
+// Namen zieht (wie in der echten Sim, wo `sim.rng` durchgereicht wird).
+const rng = makeRng(0xF00D);
+
 /** Minimales, legales Deployment fürs pure Testen (ohne exec-Umweg). */
 function makeDep(name: string, replicas: number): Deployment {
   const dep: Deployment = { name, image: "nginx", replicas: 0, created: 0, pods: [], broken: null, envFrom: { configMaps: [], secrets: [] } };
-  scaleDeployment(dep, replicas, 0); // gleich auf `replicas` bringen (hält die Invariante)
+  scaleDeployment(dep, replicas, 0, rng); // gleich auf `replicas` bringen (hält die Invariante)
   return dep;
 }
 
@@ -39,7 +45,7 @@ test("newStatefulPod (#577): stabile Ordinal-Identität, restarts 0, created ges
 
 test("newDeploymentPod: Name trägt den Deployment-Präfix, restarts 0, created = Takt", () => {
   const dep = makeDep("kasse", 0);
-  const p = newDeploymentPod(dep, 7);
+  const p = newDeploymentPod(dep, 7, rng);
   assert.ok(p.name.startsWith("kasse-"), "Pod-Name sollte mit dem Deployment-Namen beginnen");
   assert.equal(p.restarts, 0);
   assert.equal(p.created, 7);
@@ -47,21 +53,21 @@ test("newDeploymentPod: Name trägt den Deployment-Präfix, restarts 0, created 
 
 test("scaleDeployment: hoch skalieren hält pods.length === replicas", () => {
   const dep = makeDep("kasse", 1);
-  scaleDeployment(dep, 4, 1);
+  scaleDeployment(dep, 4, 1, rng);
   assert.equal(dep.replicas, 4);
   assert.equal(dep.pods.length, 4);
 });
 
 test("scaleDeployment: runter skalieren hält pods.length === replicas", () => {
   const dep = makeDep("kasse", 5);
-  scaleDeployment(dep, 2, 1);
+  scaleDeployment(dep, 2, 1, rng);
   assert.equal(dep.replicas, 2);
   assert.equal(dep.pods.length, 2);
 });
 
 test("scaleDeployment: auf 0 skalieren lässt keine Pods übrig", () => {
   const dep = makeDep("kasse", 3);
-  scaleDeployment(dep, 0, 1);
+  scaleDeployment(dep, 0, 1, rng);
   assert.equal(dep.replicas, 0);
   assert.equal(dep.pods.length, 0);
 });
@@ -69,7 +75,7 @@ test("scaleDeployment: auf 0 skalieren lässt keine Pods übrig", () => {
 test("replacePods: ersetzt alle Pods, Anzahl bleibt, Namen sind neu", () => {
   const dep = makeDep("kasse", 3);
   const alt = dep.pods.map(p => p.name);
-  replacePods(dep, 2);
+  replacePods(dep, 2, rng);
   assert.equal(dep.pods.length, 3, "Anzahl bleibt gleich");
   assert.equal(dep.replicas, 3, "replicas unberührt");
   for (const p of dep.pods) {
@@ -81,7 +87,7 @@ test("replacePods: ersetzt alle Pods, Anzahl bleibt, Namen sind neu", () => {
 test("replaceDeploymentPod: heilt genau einen Pod mit NEUEM Namen, Anzahl bleibt", () => {
   const dep = makeDep("kasse", 3);
   const victim = dep.pods[1].name;
-  const ok = replaceDeploymentPod(dep, victim, 5);
+  const ok = replaceDeploymentPod(dep, victim, 5, rng);
   assert.equal(ok, true);
   assert.equal(dep.pods.length, 3);
   assert.ok(!dep.pods.some(p => p.name === victim), "der alte Pod ist weg");
@@ -90,7 +96,7 @@ test("replaceDeploymentPod: heilt genau einen Pod mit NEUEM Namen, Anzahl bleibt
 test("replaceDeploymentPod (Negativfall): unbekannter Pod-Name ändert nichts, gibt false", () => {
   const dep = makeDep("kasse", 2);
   const vorher = dep.pods.map(p => p.name);
-  const ok = replaceDeploymentPod(dep, "gibt-es-nicht", 5);
+  const ok = replaceDeploymentPod(dep, "gibt-es-nicht", 5, rng);
   assert.equal(ok, false);
   assert.deepEqual(dep.pods.map(p => p.name), vorher);
 });

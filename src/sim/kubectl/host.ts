@@ -31,6 +31,9 @@ export interface KubectlHost extends Pick<ClusterState,
 > {
   // Transienter Sitzungs-Marker (kein Cluster-Zustand → nicht in ClusterState).
   lastDeletedPod: string | null;
+  // Instanz-eigener Zufallsstrom (#580): scale/rollout/heal ziehen neue Pod-Namen darüber,
+  // nicht mehr aus dem globalen Strom (transient, wie lastDeletedPod – kein ClusterState).
+  rng: () => number;
   // Geteilte Sim-Helfer (bleiben in sim.ts): Fehler, Alter, Pods/Readiness, Fabriken.
   // Flag-/Vorschlags-Parsing ist seit #499 pure Funktionen in ../util (flagValue/multiFlag/suggest).
   _err(msg: string, tip?: string): string;
