@@ -1,12 +1,12 @@
 import { Game } from "../game";
 import { SFX } from "../sfx";
 import { worldScene, interiorOpen } from "../runtime";
-import { part, $, NPCS, SMALLTALK } from "./shared";
+import { part, $, esc, NPCS, SMALLTALK } from "./shared";
 import { resolveTalkTarget } from "../hud/viewdecide";
 import { TOAST_LIFE_MS, HINT_LIFE_MS, toastFadeDelaySeconds } from "../hud/toastlife";
-import { mergeRankUp } from "../hud/rankup";
+import { enqueueAchievement, bundleCelebration, type Achievement } from "../hud/celebrate";
 
-/** Signalflaggen-Farben fürs Rang-Aufstieg-Feier (#223): kräftige, maritime
+/** Signalflaggen-Farben fürs Erfolgs-Feier-Overlay (#223/#314): kräftige, maritime
  *  Palette für die Wimpelkette (dress ship) und den Flaggen-Konfetti-Regen. */
 const SIGNAL_COLORS = ["#e03131", "#ffd43b", "#1971c2", "#f1f3f5", "#4dd0e1", "#2f9e44"];
 
@@ -105,44 +105,67 @@ export const hudUI = part({
     if (label) msg = label + " " + msg;
     this.toast(msg);
     SFX.coin();
-    if (rankUp) this.celebrateRankUp(beforeRank, Game.rank());
+    if (rankUp) {
+      const to = Game.rank();
+      this.celebrate({
+        kind: "rank", icon: to.icon, title: to.name,
+        detail: "zuvor: " + beforeRank.icon + " " + beforeRank.name,
+      });
+    }
     this.refreshHud();
   },
 
-  /** Rang-Aufstieg feiern (#223): statt nur eines dezenten Toasts ein prominentes,
-   *  mittiges Feier-Overlay – der neue Rang groß, der alte als „zuvor"-Zeile –,
-   *  maritim geschmückt mit Signalflaggen-Konfetti + Wimpelkette + Schiffsglocke.
-   *  Poppt nur auf, wenn der Spieler frei ist; läuft gerade ein Dialog/Terminal/
-   *  Quiz/Minispiel, wird der Aufstieg gemerkt (und mit evtl. weiteren zu EINEM
-   *  „von → nach" gefaltet) und erst gezeigt, wenn der Spieler wieder frei ist
-   *  (Flush in updatePrompt). Die Warteschlange über verschiedene Erfolgs-Arten
-   *  (Album/Abkürzung …) mit Bündelung ist bewusst ein eigenes Ticket (#314). */
-  celebrateRankUp(from: { icon: string; name: string }, to: { icon: string; name: string }) {
-    this.pendingRankUp = mergeRankUp(this.pendingRankUp ?? null, {
-      fromIcon: from.icon, fromName: from.name, toIcon: to.icon, toName: to.name,
-    });
-    if (!this.blocking() && !this.dialogue) this.showPendingRankUp();
+  /** Einen Erfolg feiern (#314): in die Warteschlange legen und – wenn der Spieler
+   *  gerade frei ist – sofort als gebündeltes Feier-Popup zeigen. Verallgemeinert das
+   *  Rang-Aufstieg-Feier (#223) auf ALLE Erfolgs-Arten (Level-Up/Album/Abkürzung/
+   *  Historie): prominentes, mittiges Overlay, maritim mit Signalflaggen-Konfetti +
+   *  Wimpelkette + Schiffsglocke, mit Enter/Leer/E schließbar. Läuft gerade ein
+   *  Dialog/Terminal/Quiz/Minispiel, wird der Erfolg gemerkt und erst gezeigt, wenn
+   *  der Spieler wieder frei ist (Flush in updatePrompt). */
+  celebrate(a: Achievement) {
+    this.enqueueCelebration(a);
+    this.flushCelebrations();
   },
 
-  /** Das gemerkte Feier-Overlay tatsächlich anzeigen (falls eins aussteht). */
-  showPendingRankUp() {
-    const v = this.pendingRankUp;
-    if (!v) return;
-    this.pendingRankUp = null;
-    // Rang-Namen stammen aus unserem eigenen Content (kein HTML) → textContent genügt.
-    $("rankup-icon").textContent = v.toIcon;
-    $("rankup-name").textContent = v.toName;
-    $("rankup-from").textContent = "zuvor: " + v.fromIcon + " " + v.fromName;
+  /** Erfolg nur in die Warteschlange legen, OHNE sofort zu zeigen – damit mehrere im
+   *  selben Tick erreichte Erfolge (z.B. Album-Einträge + Rang-Aufstieg beim Quest-
+   *  Abschluss) zu EINEM Popup gebündelt und dann gemeinsam geflusht werden (#314). */
+  enqueueCelebration(a: Achievement) {
+    this.pendingCelebrations = enqueueAchievement(this.pendingCelebrations, a);
+  },
+
+  /** Die aufgelaufenen Erfolge als EIN gebündeltes Popup zeigen, sobald der Spieler
+   *  frei ist (sonst No-op – updatePrompt holt es beim Freiwerden nach). Leert danach
+   *  die Warteschlange. (#314) */
+  flushCelebrations() {
+    if (this.blocking() || this.dialogue) return;
+    const view = bundleCelebration(this.pendingCelebrations);
+    if (!view) return;
+    this.pendingCelebrations = [];
+    // Alle Texte stammen aus unserem eigenen Content – zur Sicherheit trotzdem escapen.
+    $("celebrate-title").textContent = view.title;
+    $("celebrate-quip").textContent = view.quip;
+    const itemsEl = $("celebrate-items");
+    itemsEl.className = "celebrate-items" + (view.items.length === 1 ? " single" : "");
+    itemsEl.innerHTML = view.items.map(it =>
+      '<div class="celebrate-item">' +
+        '<span class="celebrate-item-icon" aria-hidden="true">' + esc(it.icon) + '</span>' +
+        '<span class="celebrate-item-text">' +
+          '<span class="celebrate-item-title">' + esc(it.title) + '</span>' +
+          (it.detail ? '<span class="celebrate-item-detail">' + esc(it.detail) + '</span>' : '') +
+        '</span>' +
+      '</div>'
+    ).join("");
     this._buildBunting();
     this._spawnFlagConfetti();
-    $("overlay-rankup").classList.remove("hidden");
-    this.focusFirstIn($("overlay-rankup"));
+    $("overlay-celebrate").classList.remove("hidden");
+    this.focusFirstIn($("overlay-celebrate"));
     SFX.shipBell();
   },
 
   /** Wimpelkette (dress ship) einmalig aufbauen: eine Reihe dreieckiger Signal-Wimpel. */
   _buildBunting() {
-    const el = $("rankup-bunting");
+    const el = $("celebrate-bunting");
     if (el.childElementCount) return; // statischer Schmuck – nur einmal bauen
     let html = "";
     for (let i = 0; i < 13; i++) html += '<span class="pennant" style="--c:' + SIGNAL_COLORS[i % SIGNAL_COLORS.length] + '"></span>';
@@ -162,7 +185,7 @@ export const hudUI = part({
         SIGNAL_COLORS[i % SIGNAL_COLORS.length] + ';--rot:' + rot + 'deg;animation-delay:' +
         delay + 's;animation-duration:' + dur + 's"></span>';
     }
-    $("rankup-confetti").innerHTML = html;
+    $("celebrate-confetti").innerHTML = html;
   },
 
   showAlarm(html: string, seconds: number) {
@@ -195,10 +218,11 @@ export const hudUI = part({
     const ws = worldScene();
     // Im Hausinnenraum (#6) zeigt die InteriorScene ihren eigenen Hinweis.
     if (this.blocking() || !ws || interiorOpen()) { p.classList.add("hidden"); return; }
-    // Frei zurück in der Welt: ein aufgelaufenes Rang-Aufstieg-Feier (#223) nachholen,
-    // das während eines offenen Dialogs/Overlays zurückgehalten wurde. Sobald es
-    // aufpoppt, ist blocking() true → dieser Zweig greift nächste Frame nicht erneut.
-    if (this.pendingRankUp) { this.showPendingRankUp(); return; }
+    // Frei zurück in der Welt: aufgelaufene Erfolgs-Feiern (#314, u.a. Rang #223)
+    // nachholen, die während eines offenen Dialogs/Overlays zurückgehalten wurden.
+    // Sobald das Popup aufpoppt, ist blocking() true → der Zweig greift nächste Frame
+    // nicht erneut.
+    if (this.pendingCelebrations.length) { this.flushCelebrations(); return; }
     const near = ws.nearestNpc();
     if (!near) { p.classList.add("hidden"); return; }
     const meta = NPCS[near.id];

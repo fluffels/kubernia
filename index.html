@@ -141,21 +141,21 @@
     </div>
   </div>
 
-  <!-- Rang-Aufstieg-Feier (#223): mittiges Feier-Overlay, neuer Rang groß im Fokus,
-       alter Rang als "zuvor"-Zeile. Maritim gefeiert: Signalflaggen-Konfetti regnet
-       (statt bunter Schnipsel) + eine Wimpelkette schmückt die Karte (dress ship).
-       Wimpelkette/Konfetti füllt hud.ts (Farben/Positionen dynamisch). Ein einzelner
-       Rang-"von → nach"-Slot; das allgemeine Erfolgs-Feier-System (Queue + Bündelung
-       verschiedener Erfolgs-Arten) ist bewusst #314. -->
-  <div id="overlay-rankup" class="rankup-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="rankup-title">
-    <div class="rankup-confetti" id="rankup-confetti" aria-hidden="true"></div>
-    <div class="rankup-card">
-      <div class="rankup-bunting" id="rankup-bunting" aria-hidden="true"></div>
-      <div class="rankup-title" id="rankup-title">🎉 Aufgestiegen! 🎉</div>
-      <div class="rankup-icon" id="rankup-icon" aria-hidden="true">⚓</div>
-      <div class="rankup-name" id="rankup-name">Matrose</div>
-      <div class="rankup-from" id="rankup-from"></div>
-      <button class="primary rankup-ok" data-action="closeOverlays">⚓ Weiter (Enter)</button>
+  <!-- Erfolgs-Feier-Overlay (#314, verallgemeinert das Rang-Feier #223): mittiges
+       Feier-Popup für ALLE Erfolge (Level-Up/Album/Abkürzung/Historie). Oben ein
+       DevOps-Spruch, darunter je gefeiertem Erfolg ein "Sticker" (Icon + Titel +
+       optionale "zuvor"-Zeile) – mehrere ~gleichzeitige Erfolge werden zu EINEM Popup
+       gebündelt (Titel/Spruch/Sticker füllt hud.ts aus der celebrate.ts-Sicht).
+       Maritim gefeiert: Signalflaggen-Konfetti regnet + eine Wimpelkette schmückt die
+       Karte (dress ship); Farben/Positionen dynamisch aus hud.ts. -->
+  <div id="overlay-celebrate" class="celebrate-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="celebrate-title">
+    <div class="celebrate-confetti" id="celebrate-confetti" aria-hidden="true"></div>
+    <div class="celebrate-card">
+      <div class="celebrate-bunting" id="celebrate-bunting" aria-hidden="true"></div>
+      <div class="celebrate-title" id="celebrate-title">🎉 Geschafft! 🎉</div>
+      <div class="celebrate-items single" id="celebrate-items"></div>
+      <div class="celebrate-quip" id="celebrate-quip"></div>
+      <button class="primary celebrate-ok" data-action="closeOverlays">⚓ Weiter (Enter)</button>
     </div>
   </div>
 

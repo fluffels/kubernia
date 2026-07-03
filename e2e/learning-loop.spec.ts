@@ -142,7 +142,26 @@ async function playQuestToEnd(page: Page, questId: string): Promise<PlayResult> 
     await page.keyboard.press(/Terminal öffnen/.test(hint) ? "t" : "e");
     await page.waitForTimeout(150);
   }
+  // #314: Ein Quest-Abschluss kann ein blockierendes Erfolgs-Feier-Popup öffnen (Album-
+  // Einträge / Rang-Aufstieg) – im echten Spiel klickt man es mit Enter weg, bevor es
+  // weitergeht. Sonst bliebe es offen und sperrte die nächste Interaktion.
+  await dismissCelebration(page);
   return res;
+}
+
+/** Schließt ein evtl. (auch verzögert) aufpoppendes Erfolgs-Feier-Popup (#314). Es wird
+ *  erst gezeigt, wenn der Spieler frei ist (Flush in updatePrompt), kann also kurz nach
+ *  dem Quest-Abschluss erscheinen – darum gepollt und per Enter (closeOverlays) weg. */
+async function dismissCelebration(page: Page): Promise<void> {
+  const cel = page.locator("#overlay-celebrate");
+  for (let i = 0; i < 10; i++) {
+    await page.waitForTimeout(150);
+    if (await cel.isVisible()) {
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(150);
+      if (!(await cel.isVisible())) return;
+    }
+  }
 }
 
 test("Lern-Loop über die UI: Drill lösen und Quiz bei Krabbe Kralle", async ({ page }) => {
