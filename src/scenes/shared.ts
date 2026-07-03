@@ -49,6 +49,65 @@ function faceFrom(dx: number, dy: number, current: string): string {
   return current;
 }
 
+/** Textur-Key der 4-Richtungs-Spielfigur aus der Blickrichtung: `south` ist die Basis-
+ *  Textur, die anderen tragen das Richtungs-Suffix. In allen laufbaren Szenen identisch (#601). */
+function playerFaceTexture(face: string): string {
+  return face === "south" ? "char_player" : "char_player_" + face;
+}
+
+/** Vertikaler „Bob"-Versatz der Figur (sinusförmiges Wippen beim Laufen, in Ruhe 0). Byte-
+ *  gleich in Welt/Region/Innenraum – die Bob-Phase `bobT` liegt auf der Szene (#601). */
+function playerBob(moving: boolean, bobT: number): number {
+  return moving ? Math.abs(Math.sin(bobT)) * 1.6 : 0;
+}
+
+/** Rendert Spieler-Sprite + Schatten aus dem Laufzeitzustand (#601): Blicktextur, Bob-
+ *  Versatz, Fuß-Position und y-Tiefe. Byte-gleicher Block in allen drei laufbaren Szenen –
+ *  die Szene reicht nur ihre (unterschiedlich benannten) Sprite-/Schatten-Objekte + den
+ *  Zustand herein. `setFlipX(false)` ist überall neutral (die Figur wird nie gespiegelt),
+ *  hält aber den Render-Pfad für alle drei Szenen exakt identisch. Der Schatten ist mal
+ *  Image (Welt), mal Ellipse (Region/Innenraum) – beide teilen die Transform-Komponente. */
+function renderPlayer(
+  sprite: Phaser.GameObjects.Image,
+  shadow: Phaser.GameObjects.Components.Transform,
+  pl: ScenePlayer,
+  bobT: number,
+): void {
+  const bob = playerBob(pl.moving, bobT);
+  sprite.setTexture(playerFaceTexture(pl.face)).setPosition(pl.x, pl.y + 6 - bob).setFlipX(false).setDepth(pl.y + 8);
+  shadow.setPosition(pl.x, pl.y + 6);
+}
+
+/** Gemeinsamer Bewegungs-Schritt der EINFACHEN laufbaren Szenen (Innenraum #6 + Region #427,
+ *  #601): Eingabe lesen → `moving`/Blickrichtung setzen → (szenen-eigene) Fortbewegung mit
+ *  `speed` px/s → Bob-Phase weiterdrehen. Gibt die neue Bob-Phase zurück (`bobT` liegt auf der
+ *  Szene, nicht am Spielerzustand). Die eigentliche Kollision unterscheidet sich je Szene und
+ *  kommt als `move`-Callback herein (bereits mit `speed*dt` skalierter Richtungsvektor):
+ *  Innenraum eigenes `tryMove`, Region `resolveMove` mit runden Sub-Tile-Hitboxen.
+ *
+ *  Die WorldScene nutzt diesen Helfer BEWUSST nicht: sie hängt im selben Block Haustier-Spur,
+ *  Laufrichtung und Staubwölkchen an und schiebt den Rück-Warp-Check zwischen Bewegung und
+ *  Render – ihr Block ist der dokumentierte Sonderfall. Den byte-gleichen Render teilt sie
+ *  aber über `renderPlayer` mit. */
+function stepSimplePlayer(
+  pl: ScenePlayer,
+  dt: number,
+  blocked: boolean,
+  speed: number,
+  bobT: number,
+  move: (mx: number, my: number) => void,
+): number {
+  const { dx, dy } = readMoveInput(blocked);
+  pl.moving = dx !== 0 || dy !== 0;
+  if (pl.moving) {
+    const len = Math.hypot(dx, dy);
+    pl.face = faceFrom(dx, dy, pl.face);
+    move(dx / len * speed * dt, dy / len * speed * dt);
+    bobT += dt * 12;
+  }
+  return bobT;
+}
+
 /** Laufzeit-Referenz eines gerenderten NPC (#423): Schatten/Tween bleiben anonym,
  *  gemerkt werden nur Identität + Standplatz + die schaltbaren Sprites. Gemeinsame
  *  Form für Welt- und Insel-Szenen (Rückgabe von `spawnIslandNpc`). */
@@ -349,5 +408,5 @@ function floatPixelText(scene: Phaser.Scene, x: number, y: number, str: string, 
 }
 
 export {
-  T, DIRT, STONE, WOOD, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, WELL, SIGN, CART, WATER, FOAM, WANG, hashHue, hueColor, hueColorLight, FONT_KEY, FONT_TEX, COIN_TEX, buildPixelFont, buildCoinIcon, queueAssetLoad, sliceSheets, fontColor, pixelText, spawnIslandNpc, spawnIslandObject, SIGN_BORDER, SIGN_PAD, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, readMoveInput, faceFrom,
+  T, DIRT, STONE, WOOD, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, WELL, SIGN, CART, WATER, FOAM, WANG, hashHue, hueColor, hueColorLight, FONT_KEY, FONT_TEX, COIN_TEX, buildPixelFont, buildCoinIcon, queueAssetLoad, sliceSheets, fontColor, pixelText, spawnIslandNpc, spawnIslandObject, SIGN_BORDER, SIGN_PAD, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, readMoveInput, faceFrom, playerFaceTexture, playerBob, renderPlayer, stepSimplePlayer,
 };

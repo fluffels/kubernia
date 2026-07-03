@@ -125,7 +125,7 @@ export interface ServiceRes {
   externalName?: string;
   created?: number;
 }
-/** Hafentor: leitet eine Außen-Adresse (host/pfad) an einen Service im Cluster. */
+/** Ingress: leitet eine Außen-Adresse (host/pfad) an einen Service im Cluster. */
 export interface IngressRes {
   name: string;
   className: string;      // z.B. "nginx" – welcher Ingress-Controller zuständig ist
@@ -133,10 +133,10 @@ export interface IngressRes {
   path: string;          // z.B. "/kasse"
   service: string;       // Ziel-Service im Cluster
   port: string | number; // Ziel-Port des Services
-  tls?: { secretName: string }; // verschlüsseltes Hafentor: TLS-Terminierung mit diesem Secret
+  tls?: { secretName: string }; // TLS-Terminierung mit diesem Secret (HTTPS am Ingress)
   created?: number;
 }
-/** Hafenmauer: regelt, welche Pods überhaupt zu einem Ziel-Pod durchdürfen (Firewall im Cluster). */
+/** NetworkPolicy: regelt, welche Pods überhaupt zu einem Ziel-Pod durchdürfen (Firewall im Cluster). */
 export interface NetworkPolicyRes {
   name: string;
   podSelector: string;   // app-Label der geschützten Pods ("" = alle Pods im Namespace)

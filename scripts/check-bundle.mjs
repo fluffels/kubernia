@@ -17,13 +17,19 @@
  * Dieser Wächter misst die GEBAUTEN Artefakte und wird ROT, wenn eines sein
  * Byte-Budget überschreitet. Macht die `chunkSizeWarningLimit`-Behauptung wahr.
  *
- * WAS gemessen wird (bewusst zwei Ziele):
+ * WAS gemessen wird (bewusst drei Ziele):
  *  1. dist-offline/index.html — die self-contained Offline-Datei (Code + ALLE Assets
  *     inline). Das eigentliche Wachstums-Risiko aus dem Ticket.
  *  2. Der Spielcode in dist/ (alle JS-Chunks OHNE den Phaser-`vendor`-Chunk). Phaser
  *     (~1,2 MB) ist bewusst ein eigener, langlebiger Vendor-Chunk (#199) und ändert
- *     sich selten — es NICHT mitzumessen hält das Budget auf UNSEREM Code, der bei
- *     Stardew-Scope wächst. Ein Phaser-Bump fällt separat beim Offline-Budget auf.
+ *     sich selten — es NICHT mitzumessen hält DIESES Budget auf UNSEREM Code, der bei
+ *     Stardew-Scope wächst.
+ *  3. Der Phaser-`vendor`-Chunk in dist/ selbst — sein EIGENES hartes Byte-Gate (#595).
+ *     Vorher fiel ein Phaser-Bump, der den Vendor-Chunk aufbläht, nur indirekt übers
+ *     Offline-HTML-Budget auf (dort mit dem Code zusammengerechnet), und vite hatte für
+ *     ihn nur `chunkSizeWarningLimit` (eine Log-WARNUNG, kein Fail). Ein eigenes,
+ *     ratchetbares Budget macht den Vendor-Chunk-Bump zu einem echten, gezielten Gate,
+ *     ohne das Spielcode-Budget (Ziel 2) zu verwässern.
  *
  * WANN er läuft: NUR wenn die Builds da sind — als CI-Schritt NACH den Builds und
  * als Teil von `npm run verify:full` (nach `build`+`build:offline`). Bewusst NICHT
@@ -59,9 +65,10 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
  * Byte-Budgets je Artefakt. `maxBytes` ist die harte Obergrenze (STRIKT: „über" heißt
  * `> maxBytes`, == Budget ist ok — analog zu check-size `loc > budget`).
  *
- * Ist-Werte bei Kalibrierung (2026-07-02, `npm run build` + `build:offline`):
+ * Ist-Werte bei Kalibrierung (2026-07-02/03, `npm run build` + `build:offline`):
  *   • dist-offline/index.html        ~2.39 MiB (2_509_465 B)  → Budget 2_750_000 (~+10 %)
  *   • Spielcode (dist/, ohne vendor) ~1.07 MiB (1_119_019 B)  → Budget 1_250_000 (~+12 %)
+ *   • Phaser-vendor-Chunk (dist/)    ~1.14 MiB (1_198_788 B)  → Budget 1_350_000 (~+12 %, #595)
  */
 export const BUNDLE_BUDGETS = [
   {
@@ -75,6 +82,12 @@ export const BUNDLE_BUDGETS = [
     kind: "game-chunks",
     dir: "dist/assets",
     maxBytes: 1_250_000,
+  },
+  {
+    label: "Phaser-vendor-Chunk in dist/ (#595)",
+    kind: "vendor-chunk",
+    dir: "dist/assets",
+    maxBytes: 1_350_000,
   },
 ];
 
@@ -90,6 +103,14 @@ export function isVendorChunk(name) {
 export function isGameChunk(name) {
   return name.endsWith(".js") && !name.endsWith(".js.map") && !isVendorChunk(name);
 }
+
+/** Welche dist/-Dateien ein Chunk-Budget aufsummiert, je `kind`. Die beiden Filter sind
+ *  komplementär: `game-chunks` = alles außer Vendor (Ziel 2), `vendor-chunk` = nur der
+ *  Phaser-Vendor (Ziel 3, #595). EINE Quelle, damit `measureBudget` kind-generisch bleibt. */
+export const CHUNK_FILTERS = {
+  "game-chunks": isGameChunk,
+  "vendor-chunk": isVendorChunk,
+};
 
 /** Bewertet gemessene Bytes gegen das Budget. STRIKT größer = über (== ist ok). */
 export function evaluateBudget(bytes, maxBytes) {
@@ -120,9 +141,10 @@ export function measureBudget(budget, io) {
     const bytes = io.size(budget.path);
     return { label: budget.label, maxBytes: budget.maxBytes, bytes, files: [budget.path], missing: false, over: evaluateBudget(bytes, budget.maxBytes) };
   }
-  // kind === "game-chunks": alle Nicht-Vendor-JS im Verzeichnis aufsummieren.
+  // Chunk-Kinds ("game-chunks"/"vendor-chunk"): die passenden JS-Chunks aufsummieren.
+  const pick = CHUNK_FILTERS[budget.kind];
   const names = io.list(budget.dir);
-  const chunks = (names ?? []).filter(isGameChunk).sort();
+  const chunks = (names ?? []).filter(pick).sort();
   if (names === null || chunks.length === 0) {
     return { label: budget.label, maxBytes: budget.maxBytes, bytes: 0, files: [], missing: true, over: false };
   }

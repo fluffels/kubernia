@@ -313,7 +313,7 @@ function describeNode(host: KubectlHost, t: string[]): string {
 
 function describeIngress(host: KubectlHost, t: string[]): string {
   const name = t[3];
-  if (!name) return host._err("kubectl describe ingress: Welches Hafentor?", "Die Namen siehst du mit 'kubectl get ingress'.");
+  if (!name) return host._err("kubectl describe ingress: Welcher Ingress?", "Die Namen siehst du mit 'kubectl get ingress'.");
   const ing = host.ingresses.find(i => i.name === name);
   if (!ing) return host._err('Error from server (NotFound): ingresses.networking.k8s.io "' + name + '" not found', "Tipp: Namen aus 'kubectl get ingress' kopieren.");
   const svcExists = host.services.some(s => s.name === ing.service);
@@ -332,13 +332,13 @@ function describeIngress(host: KubectlHost, t: string[]): string {
     "  Host        Path  Backends",
     "  ----        ----  --------",
     "  " + ing.host + "  " + ing.path + "   " + ing.service + ":" + ing.port +
-      (svcExists ? "" : "  (⚠ Service '" + ing.service + "' gibt es nicht – das Tor lotst ins Leere!)"),
+      (svcExists ? "" : "  (⚠ Service '" + ing.service + "' gibt es nicht – der Ingress lotst ins Leere!)"),
   ].join("\n");
 }
 
 function describeNetworkPolicy(host: KubectlHost, t: string[]): string {
   const name = t[3];
-  if (!name) return host._err("kubectl describe networkpolicy: Welche Hafenmauer?", "Die Namen siehst du mit 'kubectl get networkpolicies'.");
+  if (!name) return host._err("kubectl describe networkpolicy: Welche NetworkPolicy?", "Die Namen siehst du mit 'kubectl get networkpolicies'.");
   const np = host.networkPolicies.find(n => n.name === name);
   if (!np) return host._err('Error from server (NotFound): networkpolicies.networking.k8s.io "' + name + '" not found', "Tipp: Namen aus 'kubectl get networkpolicies' kopieren.");
   return [

@@ -83,8 +83,10 @@ Diese Entscheidung wird neu aufgemacht, wenn **einer** dieser Fälle eintritt:
   Phaser-Grenzen stoßen – nicht vorher. Vorher ist es kein Phaser-Problem,
   sondern ein fehlendes Fundament.
 
-Tritt ein Trigger ein: neues ADR (`0005-…`) mit aktualisierter Abwägung
-schreiben, dieses hier auf „abgelöst durch 0005" setzen.
+Tritt ein Trigger ein: neues ADR (nächste freie Nummer) mit aktualisierter
+Abwägung schreiben, dieses hier auf „abgelöst durch <neues ADR>" setzen. (Die
+Nummer `0005` ist inzwischen für die [Auslieferungsform](0005-auslieferungsform.md)
+vergeben — ein Engine-Nachfolge-ADR bekäme die nächste freie Nummer.)
 
 ## Bestätigte Re-Evaluierung – 2026-06-19 (#291)
 
