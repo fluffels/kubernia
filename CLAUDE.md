@@ -18,7 +18,7 @@
 7. npm test                                 # muss grün sein (auch Negativfälle abdecken, Red-Green)
 8. npm run typecheck                        # muss grün sein (strict)
 9. npm run lint                             # muss grün sein (ESLint, #389) – im Browser sichtbare Änderungen zusätzlich anschauen
-10. nach main mergen → Worktree/Branch aufräumen → Issue schließen → KOPF pflegen (puh-fertig)   # Details siehe AGENTS.md
+10. Branch pushen → PR öffnen (gh pr create, Body "Closes #<nr>") → grüne Required-Checks → PR mergen (gh pr merge --squash --delete-branch) → Worktree aufräumen → Issue schließt via Closes → KOPF pflegen (puh-fertig)   # PR-gegated seit #592, Details in AGENTS.md
 ```
 
 ⚠️ **Die rohe `index.html` im Root ist die Dev-Version** und braucht den Vite-Server. Per Doppelklick öffnen → leere Seite. Zum Offline-Spielen `npm run build:offline`, dann `dist-offline/index.html` doppelklicken.
@@ -46,7 +46,8 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | One-Command-Setup (Node-Check + install + Git-Hooks + alle Checks, #387/#528) | `npm run setup` |
 | **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (typecheck → lint → check:arch → check:size → check:docmap → check:docdrift → check:diffsize → test) |
 | Voller Vor-Push-Check inkl. beider Builds + Boot-Smoke (#527) | `npm run verify:full` (= `verify` + `test:coverage` + Builds + `check:bundle` + `test:smoke`) |
-| pre-push-Hook (fährt `verify` vor Push auf main, #528) | verdrahtet via `npm run setup`; Umgehung: `git push --no-verify` |
+| Required-Checks auf dem PR = maßgeblicher Gate (server-seitig, seit #592) | Merge nur über `gh pr merge` bei grüner CI; kein Direkt-Push auf `main` |
+| pre-push-Hook (fährt `verify`; seit #592 nur noch sekundäres Netz) | verdrahtet via `npm run setup`; greift nur bei Push auf `main` (server-seitig ohnehin blockiert) |
 | Erstinstallation | `npm install` |
 | Dev-Server | `npm run dev` |
 | Host-/Prod-Build (Multi-File nach `dist/`) | `npm run build` |
@@ -256,7 +257,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 - **Was ist das Spiel?** KubeQuest – ein 2D-Lernspiel (Phaser 3) für Docker/K8s/Helm/Terraform; die Spielwelt **ist** der Cluster. → [README.md](README.md)
 - **Wie starte ich?** `npm install` → `npm run dev` → angezeigte Adresse im Browser. → Schnellstart oben.
 - **Welches Ticket nehme ich?** Das **oberste freie Ticket im kuratierten Kopf** von [Ticket-Auswahl](docs/ticket-reihenfolge.md); **ist der Kopf leer**, der **Auto-Rest** nach **Priorität** (`prio:hoch` → `prio:mittel` → `prio:niedrig` → ohne Label) + **niedrigster Nummer** (`gh issue list --state open --limit 500` – ohne `--limit` nur die 30 neuesten!; frei = kein Assignee, kein offener PR/Branch/Worktree, nicht `status:zurückgestellt`). Nur **dieses eine** Kandidaten-Ticket prüfen, nicht die ganze Liste. Sofort self-assignen. **Am Ticket-Ende den Kopf pflegen** (puh-fertig, Pflicht). → [AGENTS.md › Wo die TODOs leben](AGENTS.md#wo-die-todos-leben).
-- **Wie schließe ich ab?** Tests grün + im Browser verifiziert → nach `main` mergen → Worktree/Branch aufräumen → Issue schließen → **den kuratierten Kopf in [Ticket-Auswahl](docs/ticket-reihenfolge.md) pflegen** (puh-fertig: geschlossenes raus, Kopf nachfüllen, Stand-Datum aktualisieren, committen). → [AGENTS.md › Git-Workflow](AGENTS.md#das-wichtigste-zuerst-harte-regeln).
+- **Wie schließe ich ab?** Tests grün + im Browser verifiziert → Feature-Branch pushen → **PR öffnen** (Body `Closes #<nr>`) → grüne Required-Checks abwarten → **PR mergen** (`gh pr merge --squash --delete-branch`) → Worktree aufräumen → Issue schließt via `Closes` → **den kuratierten Kopf in [Ticket-Auswahl](docs/ticket-reihenfolge.md) pflegen** (puh-fertig: geschlossenes raus, Kopf nachfüllen, Stand-Datum aktualisieren, committen). PR-gegated seit #592, kein Direkt-Push auf `main`. → [AGENTS.md › Git-Workflow](AGENTS.md#das-wichtigste-zuerst-harte-regeln).
 
 ---
 

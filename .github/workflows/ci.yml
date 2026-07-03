@@ -22,6 +22,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # #592: volle Historie, damit check:diffsize (#533) den PR-Slice WIRKLICH
+          # gegen die PR-Basis messen kann. Ohne Historie (Default fetch-depth 1)
+          # fehlt die Vergleichs-Basis und der Wächter degradiert zu Grün — genau
+          # die Lücke, die #592 serverseitig (als Required Check auf PRs) schließt.
+          fetch-depth: 0
 
       - name: Node einrichten
         uses: actions/setup-node@v6
@@ -39,10 +45,16 @@ jobs:
       # check:docdrift → check:diffsize → test (billige Gates fail-fast zuerst,
       # die volle Test-Suite zuletzt). Builds + Boot-Smoke bleiben eigene Steps,
       # weil sie Artefakte hochladen (= CI-Sache); zusammen = `npm run verify:full`.
-      # Hinweis: check:diffsize (#533) misst den Slice gegen main und degradiert im
-      # flachen CI-Checkout bewusst zu grün — sein Durchsetzungspunkt ist der
-      # pre-push-Hook (#528), wo die Historie/Basis lokal vorliegt.
+      # Hinweis: check:diffsize (#533) misst den Slice gegen die Basis. Auf einem PR
+      # (fetch-depth:0 oben) ist die Basis die PR-Basis — via KQ_DIFF_BASE gesetzt —,
+      # der Wächter greift hier also WIRKLICH als Required Check (#592). Auf dem
+      # push-auf-main-Event ist KQ_DIFF_BASE leer und HEAD == origin/main → der
+      # Wächter degradiert dort bewusst zu Grün (der Slice wurde schon im PR gemessen).
       - name: Verify – alle Gates in einer SSOT-Kette (#527)
+        env:
+          # Leer bei push-Events (dann greift die interne origin/main-Auflösung),
+          # gesetzt bei pull_request → check:diffsize misst genau den PR-Slice (#592).
+          KQ_DIFF_BASE: ${{ github.event.pull_request.base.sha }}
         run: npm run verify
 
       # Coverage-Gate (#495): eigener Schritt, weil die v8-Instrumentierung die Test-Suite

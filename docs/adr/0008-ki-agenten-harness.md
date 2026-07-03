@@ -2,10 +2,11 @@
 
 > Architecture Decision Record. Format: Kontext → Problem → Optionen → Entscheidung → Konsequenzen → Re-Evaluierung.
 > Status: **akzeptiert** · Datum: 2026-07-01 · Ticket: #530
+> ⚠️ **Integrationsweg teilweise abgelöst durch [ADR 0009](0009-pr-gating-required-checks.md) (2026-07-03, #592):** Der hier bewusst beibehaltene **Direkt-Push auf `main`** ist auf **PR-Gating mit Required-Checks** (`enforce_admins` an) umgestellt — der dritte Re-Eval-Trigger unten ist eingetreten. Das **Entwicklungsmodell** dieses ADR (Harness, Ein-Ticket-Worktree, Fitness-Functions, Kollisionsschutz) bleibt unverändert gültig; nur wie der Slice auf `main` landet, regelt jetzt 0009.
 
 ## Status
 
-**Akzeptiert.** KubeQuest wird durch **autonome KI-Coding-Agenten** weitergebaut — kein Mensch tippt die Implementierung. Dieser ADR hält das **Entwicklungsmodell** als bewusste Architekturentscheidung fest. Er ist die formale Grundsatzentscheidung; die erklärende Gesamtsicht („wie + warum" im Detail, alle fünf Bausteine, jede Fitness-Function) liegt bereits vor in [`docs/agent-harness.md`](../agent-harness.md) (#526). Dieser ADR **verweist** dorthin, statt zu doppeln — dieselbe Arbeitsteilung wie [AGENTS.md](../../AGENTS.md) (operativ) ↔ agent-harness.md (erklärend).
+**Akzeptiert** (Integrationsweg teilweise abgelöst durch [0009](0009-pr-gating-required-checks.md), siehe Kasten oben). KubeQuest wird durch **autonome KI-Coding-Agenten** weitergebaut — kein Mensch tippt die Implementierung. Dieser ADR hält das **Entwicklungsmodell** als bewusste Architekturentscheidung fest. Er ist die formale Grundsatzentscheidung; die erklärende Gesamtsicht („wie + warum" im Detail, alle fünf Bausteine, jede Fitness-Function) liegt bereits vor in [`docs/agent-harness.md`](../agent-harness.md) (#526). Dieser ADR **verweist** dorthin, statt zu doppeln — dieselbe Arbeitsteilung wie [AGENTS.md](../../AGENTS.md) (operativ) ↔ agent-harness.md (erklärend).
 
 ## Kontext
 
@@ -41,7 +42,7 @@ Die Verlässlichkeit muss also **nicht am Modell**, sondern an der **Umgebung** 
 
 ### Was bewusst *nicht* entschieden wird
 
-- **Kein Wechsel auf PR-mit-Required-Checks — noch nicht.** Der Direkt-Push auf `main` bleibt, solange die Maintainerin solo mit vertrauenswürdigen, gegateten Agenten arbeitet. Der Umstieg ist als Re-Eval-Trigger dokumentiert, nicht verbaut.
+- ~~**Kein Wechsel auf PR-mit-Required-Checks — noch nicht.** Der Direkt-Push auf `main` bleibt, solange die Maintainerin solo mit vertrauenswürdigen, gegateten Agenten arbeitet.~~ **Überholt (2026-07-03, #592 → [ADR 0009](0009-pr-gating-required-checks.md)):** der Umstieg auf PR-Gating ist erfolgt, weil die Durchsetzung sonst am lokal umgehbaren Hook hing. Wie angekündigt war er als Re-Eval-Trigger dokumentiert, nicht verbaut.
 - **Menschliches Urteil bleibt für das, was Gates nicht prüfen können:** didaktische Richtigkeit (ist die simulierte Cluster-Mechanik pädagogisch sinnvoll?) und Spielspaß/Look — darum der Browser-Verifizierungs-Schritt und die interaktive Optik-Abstimmung per Rückfrage.
 
 ## Konsequenzen
@@ -64,7 +65,7 @@ Diese Entscheidung wird neu aufgemacht, wenn **einer** dieser Fälle eintritt:
 
 - **Mehrere (oder fremde) Beitragende** kommen dazu — dann wird der Umstieg auf **PR mit Required Checks auf `main`** wahrscheinlich nötig (Review/Absicherung fremder Änderungen), und der Direkt-Push-Workflow wird abgelöst.
 - **Required Checks werden aus anderem Grund nötig** (z.B. GitHub-natives Auto-Merge für Dependabot, das heute wegen des Direkt-Push-Workflows zurückgestellt ist — siehe [CONTRIBUTING.md › PR-Policy](../../CONTRIBUTING.md#pull-requests--abhängigkeits-updates-policy)).
-- **Der Direkt-Push auf `main` verursacht wiederholt roten `main`** trotz pre-push-Hook — dann trägt das Post-hoc-CI-Modell nicht mehr und ein blockierender PR-Gate ist fällig.
+- ✅ **[eingetreten 2026-07-03, #592]** **Der Direkt-Push auf `main` verursacht wiederholt roten `main`** trotz pre-push-Hook — dann trägt das Post-hoc-CI-Modell nicht mehr und ein blockierender PR-Gate ist fällig. → umgesetzt in [ADR 0009](0009-pr-gating-required-checks.md).
 - **Ein Mensch übernimmt die Implementierung** in nennenswertem Umfang — dann verschiebt sich das Gleichgewicht der Leitplanken (Review wird verfügbar, Fitness-Functions weniger alleiniges Netz).
 
 Tritt ein Trigger ein: neuen/abgelösten ADR schreiben (`0009-…`), diesen hier auf „abgelöst durch 0009" setzen.
