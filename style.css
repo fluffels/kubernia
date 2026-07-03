@@ -163,6 +163,23 @@ button.danger:hover { background: var(--bad); color: #1a0606; filter: none; }
 }
 @keyframes alarm-pulse { 50% { border-color: #ffae6b; } }
 
+/* Globaler Gefahren-Warnrahmen (#540): pulsierender roter Rand am Bildschirmrand, sichtbar in
+   JEDER Szene, solange eine Gefahr läuft (der Alarm-Banner trägt die Details). Bewusst
+   pointer-events:none (fängt keine Klicks) + inset-Shadow (verschiebt kein Layout) und unter dem
+   Alarm-Banner (z-index 15) / den Overlays. */
+#hazard-frame {
+  position: fixed;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 4px var(--bad), inset 0 0 48px rgba(200, 24, 24, 0.5);
+  animation: hazard-frame-pulse 1.6s ease-in-out infinite;
+}
+@keyframes hazard-frame-pulse {
+  50% { box-shadow: inset 0 0 0 4px #ff7043, inset 0 0 72px rgba(220, 60, 40, 0.7); }
+}
+@media (prefers-reduced-motion: reduce) { #hazard-frame { animation: none; } }
+
 /* ===== Stapel-Minispiel ===== */
 .stack-area { display: flex; gap: 18px; flex-wrap: wrap; }
 .stack-pile {

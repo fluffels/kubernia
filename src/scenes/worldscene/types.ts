@@ -43,18 +43,6 @@ export interface PodSlot { slot: number; crate: Phaser.GameObjects.Image; band: 
 export interface Butterfly { spr: Phaser.GameObjects.Image; ax: number; ay: number; ph: number; sp: number; }
 /** Spieler-Laufzeitzustand der Hauptkarte (wie `ScenePlayer`, plus `dir` für den Wurf). */
 export interface PlayerPos { x: number; y: number; dir: number; moving: boolean; face: string; }
-/** Zufalls-Gefahren-Beutel der Hauptkarte (worldscene/events.ts schreibt/liest ihn).
- *  Hieß früher `events` und überschrieb damit Phasers geerbten EventEmitter mit `any`
- *  (genau das war die Warnung) – jetzt ein eigenes, getipptes Feld `hazards`. */
-export interface Hazards {
-  nextPirate: number;
-  nextKraken: number;
-  nextStorm: number;
-  pirate: { dep: string; want: number; boat: Phaser.GameObjects.Container; until: number } | null;
-  kraken: { kraken: Phaser.GameObjects.Container; baseline: number; until: number } | null;
-  storm: { dep: string; until: number } | null;
-  stormFlash: Phaser.Time.TimerEvent | null;
-}
 
 /** Die konkreten WorldScene-Felder + die Render-Primitive, die die Systemmodule auf
  *  der Szene aufrufen – als reines Typ-Interface (#496). WorldScene implementiert es,
@@ -125,9 +113,10 @@ export interface WorldSceneFields {
   debugPerf: boolean;
   stress: number;
   perfHud?: Phaser.GameObjects.Text;
-  // Warp-Gates (Anti-Pingpong) + Zufalls-Gefahren + geladene Karte (#425/#426)
+  // Warp-Gates (Anti-Pingpong) + geladene Karte (#425/#426). Der Gefahren-*Zustand* liegt
+  // seit #540 szenen-neutral in game/hazards.ts – nur die Welt-Sprites (rain/stormOverlay +
+  // die vom Renderer gehaltenen boat/kraken) sind hier präsent (worldscene/events.ts).
   warpArmed: Set<string>;
-  hazards: Hazards;
   mapId: MapId;
 
   // ── Render-Primitive, die die Systemmodule auf der Szene aufrufen ──

@@ -4,6 +4,8 @@ import {
   hazardStartable,
   stormVictims,
   pirateVictims,
+  pirateSteal,
+  stormFixKind,
   resolveHazardTick,
   type ActiveHazards,
   type HazardClusterView,
@@ -73,6 +75,22 @@ describe("Opfer-Eignung (#512)", () => {
   it("keine geeigneten Opfer → leere Liste (kein Start möglich)", () => {
     expect(stormVictims([{ name: "x", broken: { type: "crashloop" } }])).toEqual([]);
     expect(pirateVictims([{ name: "x", replicas: 1 }])).toEqual([]);
+  });
+});
+
+describe("Start-Effekt-Kerne (#540)", () => {
+  it("pirateSteal klaut die Hälfte (abgerundet), mindestens 1", () => {
+    expect(pirateSteal(3)).toBe(1);   // floor(1.5)
+    expect(pirateSteal(4)).toBe(2);
+    expect(pirateSteal(2)).toBe(1);   // Untergrenze greift NICHT (floor(1)=1)
+    expect(pirateSteal(1)).toBe(1);   // Untergrenze: floor(0.5)=0 → auf 1 angehoben
+  });
+
+  it("stormFixKind verzweigt bei 0.5 (imagepull unter, crashloop ab)", () => {
+    expect(stormFixKind(0)).toBe("imagepull");
+    expect(stormFixKind(0.49)).toBe("imagepull");
+    expect(stormFixKind(0.5)).toBe("crashloop");   // Grenzfall: nicht < 0.5
+    expect(stormFixKind(0.99)).toBe("crashloop");
   });
 });
 
