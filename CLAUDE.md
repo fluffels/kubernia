@@ -58,6 +58,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | Typen prüfen (voll strict) | `npm run typecheck` |
 | Linter (ESLint, #389; Komplexitäts-Gates complexity/max-lines-per-function/max-depth #502) | `npm run lint` |
 | Stale Komplexitäts-Suppressions prunen / Baseline neu aufbauen (#502) | `npm run lint:prune` / `npm run lint:suppress` |
+| Quiz-Korrektheits-Golden nach bewusstem Review aktualisieren (#597) | `npm run quiz:golden` |
 | Architektur-Wächter (Schichtung + Zyklen + Orphans, #347/#390) | `npm run check:arch` |
 | Dateigröße-Wächter (God-File-Budget 800 LOC, #390) | `npm run check:size` |
 | Doku↔Code-Drift-Wächter (CLAUDE.md-Landkarte gegen den Code, #482) | `npm run check:docmap` |
@@ -117,6 +118,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/content/entities.ts`](src/content/entities.ts) | pure Domäne | Entity-Registry: datengesteuerte NPC- & Objekt-Platzierung (#349/#357). |
 | [`src/content/validate.ts`](src/content/validate.ts) | pure Domäne | Schema-Validierung des Inhalts-Bündels (`validateContent`): strukturelle Konsistenz aller Quests/Drills/Quiz/Karten/Pools, ohne Fremd-Library (null Laufzeit-Deps). → [content.md](docs/module/content.md) |
 | [`src/content/learnorder.ts`](src/content/learnorder.ts) | pure Domäne | Lernreihenfolge-Wächter (#235/#412): keine Quiz-/Review-Karte vor Einführung ihres Konzepts; Prüflogik wird nur vom Test-Wächter `test/learnorder.test.ts` aufgerufen. |
+| [`src/content/quizcheck.ts`](src/content/quizcheck.ts) | pure Domäne | Quiz-Korrektheits-Wächter (#597): `correctAnswers`/`snapshotViolations` (Golden-Ratchet der als correct markierten Antwort) + `indexConventionViolations` (correct===0); fängt eine still vertauschte/verschobene richtige Antwort. Nur vom Test-Wächter `test/quizcheck.test.ts` aufgerufen. |
 | [`src/content/manifest-lib.ts`](src/content/manifest-lib.ts) | pure Domäne | Manifest-Bibliothek (#514): benannte „virtuelle Dateien" (YAML/Dockerfile/CI/Terraform) als Daten (`data/manifests/*.json`); `getManifest(id)` für Drills, `manifestRef` (`scenario.manifests`) für Quests – EINE Quelle statt TS-Monolith. |
 | [`src/content/minigame.ts`](src/content/minigame.ts) | pure Domäne | Stapel-Minispiel-Daten (Docker-Image-Schichten aufsteigend, #218) + Sturm-Image-Namen-Verfälscher. |
 | [`src/content/progression.ts`](src/content/progression.ts) | pure Domäne | Reine Inhalts-Daten: Ränge (XP-Schwellen) + Shop-Angebot. |
