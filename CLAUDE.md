@@ -163,6 +163,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/hud/pixelfont.ts`](src/hud/pixelfont.ts) | pure Domäne | Glyphen-Daten der In-Welt-Bitmap-Font (#188). |
 | [`src/hud/markup.ts`](src/hud/markup.ts) | pure Domäne | `fmtCmd`: zeichnet variable Platzhalter `<token>` in Content-Texten als sichtbares „ändere-mich"-Badge aus (#311); die EINE Quelle der Platzhalter-Konvention, angewandt an der Render-Grenze (radio/dialog/quiz/questlog/album). |
 | [`src/hud/cull.ts`](src/hud/cull.ts) | pure Domäne | Off-screen-Culling & FPS-Messung (#82) + Cluster-Tag-Auswahl `selectVisibleTags` (#416). |
+| [`src/hud/containeryard.ts`](src/hud/containeryard.ts) | pure Domäne | Container-Hof-Layout (#303): `CONTAINER_DOCK`/`CONTAINER_LAGER` + `containerBarrelTile` (laufende→Dock, gestoppte→Lagerschuppen); reine Geometrie für clustersync (Fässer) + scenery (Schuppen). |
 | [`src/hud/overlaykbd.ts`](src/hud/overlaykbd.ts) | pure Domäne | Tastatur-Logik für Modals (#283) + Dialog-Blättern (#310) + Fokusfallen-Index (#506). |
 | [`src/hud/viewdecide.ts`](src/hud/viewdecide.ts) | pure Domäne | Reine Präsentations-Entscheidungen (#500), DOM-frei/testbar: Funk-Session-Priorität + `evaluateSubmission` (Terminal-Bewertung) + `scoreReview` (Quiz) + `resolveTalkTarget` (NPC-Routing). |
 | [`src/hud/toastlife.ts`](src/hud/toastlife.ts) | pure Domäne | Toast-Anzeigedauer-Politik: kurze Belohnung vs. lesbarer Hinweis (>= 15 s) + Fade-Timing (#370). |
