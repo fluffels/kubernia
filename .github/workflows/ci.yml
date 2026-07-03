@@ -48,13 +48,18 @@ jobs:
       # Hinweis: check:diffsize (#533) misst den Slice gegen die Basis. Auf einem PR
       # (fetch-depth:0 oben) ist die Basis die PR-Basis — via KQ_DIFF_BASE gesetzt —,
       # der Wächter greift hier also WIRKLICH als Required Check (#592). Auf dem
-      # push-auf-main-Event ist KQ_DIFF_BASE leer und HEAD == origin/main → der
-      # Wächter degradiert dort bewusst zu Grün (der Slice wurde schon im PR gemessen).
+      # push-auf-main-Event (nach dem Merge) ist die Basis der Vorgänger-Commit
+      # (github.event.before) → der Wächter misst den gerade gemergten Slice AUCH
+      # auf main nach, statt dort zu Grün zu degradieren (#605, zweite Grenze hinter
+      # dem PR-Gate). Ein roter main-Lauf blockiert nichts (main ist schon gepusht),
+      # löst aber den Alarm-Job unten aus.
       - name: Verify – alle Gates in einer SSOT-Kette (#527)
         env:
-          # Leer bei push-Events (dann greift die interne origin/main-Auflösung),
-          # gesetzt bei pull_request → check:diffsize misst genau den PR-Slice (#592).
-          KQ_DIFF_BASE: ${{ github.event.pull_request.base.sha }}
+          # PR → die PR-Basis: check:diffsize misst genau den PR-Slice (#592).
+          # push:main → der Vorgänger-Commit: diffsize misst den gemergten Slice
+          # nach (#605). Bei workflow_dispatch sind beide leer → interne
+          # origin/main-Auflösung (auf main == HEAD → No-op-grün).
+          KQ_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: npm run verify
 
       # Coverage-Gate (#495): eigener Schritt, weil die v8-Instrumentierung die Test-Suite
@@ -174,3 +179,62 @@ jobs:
           name: kubequest-devpanel
           path: dist-devpanel/index.html
           if-no-files-found: error
+
+  # Post-hoc-Alarm (#605): die ZWEITE Grenze hinter dem PR-Gate (#592). `main` ist
+  # seit #592 PR-gegated, aber ein roter `main` TROTZ grüner PR-Checks bleibt möglich
+  # — ein semantischer Merge-Konflikt zweier je grüner PRs, ein fehlkonfigurierter
+  # Required Check, ein Admin-/Force-Push. Ein rotes ✗ an einem Commit übersieht ein
+  # paralleler Agent leicht; die Board-SSOT ist ein OFFENES Issue. Dieser Job fährt
+  # NICHTS neu nach (build-test fährt die volle verify-Kette auf push:main schon,
+  # inkl. diffsize gegen den Vorgänger, s.o.) — er schlägt nur Alarm, wenn dieser
+  # Lauf auf main rot war: er öffnet ein prio:hoch-Issue (dedupliziert — ein offenes
+  # Alarm-Issue zur Zeit) und blockiert bewusst NICHTS (main ist ohnehin schon
+  # gepusht; kein Bruch des Workflows, genau wie das Ticket es fordert).
+  # Nur auf push (= main): ein roter PR ist erwartbar und Sache der PR-Autorin,
+  # kein Board-Alarm.
+  alarm-red-main:
+    name: Alarm bei rotem main (#605)
+    needs: [build-test, security-audit]
+    if: failure() && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: prio:hoch-Alarm-Issue öffnen oder ergänzen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+        run: |
+          set -euo pipefail
+          marker="🚨 CI rot auf main"
+          short="${SHA:0:7}"
+
+          # Gibt es schon ein OFFENES Alarm-Issue? (Titel-Präfix-Match über die offenen
+          # prio:hoch-Issues — dasselbe robuste Muster wie forum-inbox.yml.) Solange main
+          # rot bleibt, hängen weitere rote Läufe nur einen Kommentar an, statt zu spammen.
+          existing=$(gh issue list --repo "$REPO" --state open --label "prio:hoch" \
+            --json number,title \
+            --jq "[.[] | select(.title | startswith(\"$marker\"))][0].number // empty")
+
+          if [ -n "$existing" ]; then
+            echo "Bestehendes Alarm-Issue #$existing – ergänze Kommentar."
+            gh issue comment "$existing" --repo "$REPO" \
+              --body "🔴 Erneut rot auf \`main\` bei Commit [\`${short}\`](${COMMIT_URL}) → [CI-Lauf](${RUN_URL})."
+          else
+            echo "Lege neues Alarm-Issue an."
+            body=$(printf '%s\n' \
+              "Der CI-Lauf auf \`main\` ist **rot** — obwohl \`main\` seit #592 PR-gegated ist. Das ist die zweite Grenze aus #605: ein roter \`main\` trotz grüner PR-Checks (semantischer Merge zweier je grüner PRs, ein fehlkonfigurierter Required Check, ein Admin-/Force-Push)." \
+              "" \
+              "- Commit: [\`${short}\`](${COMMIT_URL})" \
+              "- Fehlgeschlagener Lauf: ${RUN_URL}" \
+              "" \
+              "**Zuerst behandeln** (main muss grün sein, bevor ein paralleler Agent darauf aufbaut): Ursache im Lauf ansehen → auf einem Fix-Branch reparieren → per PR mergen → dieses Issue schließen. Solange main rot bleibt, hängt jeder weitere rote Lauf nur einen Kommentar hier an (kein Issue-Spam).")
+            gh issue create --repo "$REPO" \
+              --title "${marker} (${short})" \
+              --label "prio:hoch" \
+              --body "$body"
+          fi
