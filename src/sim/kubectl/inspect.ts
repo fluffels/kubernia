@@ -16,6 +16,7 @@
 import { table, podIP, flagValue } from "../util";
 import type { KubectlHost } from "./host";
 import type { Deployment, PodInstance, PodStatus } from "../state";
+import { sameRbac } from "../rbac";
 
 // Alle Ingresses teilen sich die Adresse des einen Ingress-Controllers (wie im echten
 // Cluster). Nur die kubectl-Ausgaben (get/describe ingress) brauchen sie, darum hier.
@@ -358,7 +359,7 @@ function describeRole(host: KubectlHost, t: string[]): string {
   const name = t[3];
   const cluster = what === "clusterrole";
   if (!name) return host._err("kubectl describe " + what + ": Welche Rolle?", "Die Namen siehst du mit 'kubectl get " + what + "s'.");
-  const role = host.roles.find(r => r.name === name && r.cluster === cluster);
+  const role = host.roles.find(r => sameRbac(r, { name, cluster }));
   if (!role) return host._err('Error from server (NotFound): ' + what + 's.rbac.authorization.k8s.io "' + name + '" not found', "Tipp: Namen aus 'kubectl get " + what + "s' kopieren.");
   const lines = [
     "Name:         " + role.name,
