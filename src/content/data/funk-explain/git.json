@@ -27,6 +27,6 @@
   {
     "id": "fx-git-checkout",
     "match": ["^git\\s+(checkout|switch)\\b"],
-    "text": "<code>git checkout -b &lt;name&gt;</code> legt einen Branch an und wechselt direkt hinein – eine eigene Spur zum Experimentieren, ohne den Hauptstand zu stören."
+    "text": "<code>git checkout -b <name></code> legt einen Branch an und wechselt direkt hinein – eine eigene Spur zum Experimentieren, ohne den Hauptstand zu stören."
   }
 ]

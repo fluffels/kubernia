@@ -225,7 +225,7 @@
         "brief": "Vormerken",
         "cmd": {
           "id": "t-git-add",
-          "intro": "🆕 <code>git add &lt;datei&gt;</code> – merkt eine Datei für den nächsten Commit vor (Staging).",
+          "intro": "🆕 <code>git add <datei></code> – merkt eine Datei für den nächsten Commit vor (Staging).",
           "text": "Merke <code>seekarte.md</code> zum Commit vor.",
           "accept": [
             "^git\\s+add\\s+seekarte\\.md$"
@@ -352,7 +352,7 @@
         "brief": "Zweig + wechseln",
         "cmd": {
           "id": "t-git-checkout-b",
-          "intro": "🆕 <code>git checkout -b &lt;name&gt;</code> – legt einen neuen Branch an UND wechselt direkt hinein.",
+          "intro": "🆕 <code>git checkout -b <name></code> – legt einen neuen Branch an UND wechselt direkt hinein.",
           "text": "Leg den Branch <code>experiment-route</code> an und wechsle hinein.",
           "accept": [
             "^git\\s+checkout\\s+-b\\s+experiment-route$"
@@ -366,7 +366,7 @@
         "npc": "ada",
         "lines": [
           "Eine wichtige Unterscheidung, bevor du loslegst: <code>git checkout -b</code> hat eben <b>beides</b> getan – angelegt UND hineingewechselt. Oft willst du einen Zweig aber nur <b>anlegen</b> und (noch) <b>nicht</b> hineinwechseln – etwa um ihn schon für später vorzubereiten.",
-          "Dafür gibt es <code>git branch &lt;name&gt;</code>: das legt nur an und lässt dich stehen, wo du bist. Probier's – leg dir schon mal einen Vorrats-Zweig <code>reserve-route</code> an. Du bleibst dabei auf <code>experiment-route</code>."
+          "Dafür gibt es <code>git branch <name></code>: das legt nur an und lässt dich stehen, wo du bist. Probier's – leg dir schon mal einen Vorrats-Zweig <code>reserve-route</code> an. Du bleibst dabei auf <code>experiment-route</code>."
         ]
       },
       {
@@ -374,7 +374,7 @@
         "brief": "Nur anlegen",
         "cmd": {
           "id": "t-git-branch",
-          "intro": "🆕 <code>git branch &lt;name&gt;</code> – legt einen neuen Branch an, <b>ohne</b> hineinzuwechseln (anders als <code>git checkout -b</code>, das beides macht).",
+          "intro": "🆕 <code>git branch <name></code> – legt einen neuen Branch an, <b>ohne</b> hineinzuwechseln (anders als <code>git checkout -b</code>, das beides macht).",
           "text": "Leg den Branch <code>reserve-route</code> an (nur anlegen, nicht wechseln).",
           "accept": [
             "^git\\s+branch\\s+reserve-route$"
@@ -430,7 +430,7 @@
         "brief": "Zurück zu main",
         "cmd": {
           "id": "t-git-checkout-main",
-          "intro": "🆕 <code>git checkout &lt;name&gt;</code> (ohne -b) – wechselt auf einen bestehenden Branch.",
+          "intro": "🆕 <code>git checkout <name></code> (ohne -b) – wechselt auf einen bestehenden Branch.",
           "text": "Wechsle zurück auf <code>main</code>.",
           "accept": [
             "^git\\s+checkout\\s+main$"
@@ -451,7 +451,7 @@
         "brief": "Zusammenführen",
         "cmd": {
           "id": "t-git-merge",
-          "intro": "🆕 <code>git merge &lt;branch&gt;</code> – holt die Arbeit aus einem anderen Branch in deinen aktuellen.",
+          "intro": "🆕 <code>git merge <branch></code> – holt die Arbeit aus einem anderen Branch in deinen aktuellen.",
           "text": "Führe <code>experiment-route</code> in <code>main</code> zusammen.",
           "accept": [
             "^git\\s+merge\\s+experiment-route$"
@@ -785,7 +785,7 @@
         "brief": "Zusammenführen – Knall",
         "cmd": {
           "id": "t-git-merge-conflict",
-          "intro": "↩︎ <code>git merge &lt;branch&gt;</code> kennst du. Diesmal haben BEIDE Seiten dieselbe Stelle geändert – Git kann nicht entscheiden und meldet einen <b>Merge-Konflikt</b>. Das ist <b>normal</b>, kein Fehler von dir!",
+          "intro": "↩︎ <code>git merge <branch></code> kennst du. Diesmal haben BEIDE Seiten dieselbe Stelle geändert – Git kann nicht entscheiden und meldet einen <b>Merge-Konflikt</b>. Das ist <b>normal</b>, kein Fehler von dir!",
           "text": "Führe <code>lennart-route</code> in <code>main</code> zusammen.",
           "accept": [
             "^git\\s+merge\\s+lennart-route$"
@@ -955,7 +955,7 @@
         "brief": "Zertifikat hinterlegen",
         "cmd": {
           "id": "t-secret-tls",
-          "intro": "🆕 Neuer Befehl: <code>kubectl create secret tls &lt;name&gt; --cert=&lt;datei&gt; --key=&lt;datei&gt;</code> – legt ein TLS-Zertifikat als Secret ab.",
+          "intro": "🆕 Neuer Befehl: <code>kubectl create secret tls <name> --cert=<datei> --key=<datei></code> – legt ein TLS-Zertifikat als Secret ab.",
           "text": "Lege das Zertifikat <code>hafen-tls</code> aus <code>tls.crt</code> und <code>tls.key</code> an.",
           "accept": [
             "^kubectl\\s+create\\s+secret\\s+tls\\s+hafen-tls\\s+--cert[=\\s]\\S+\\s+--key[=\\s]\\S+$"
@@ -1107,7 +1107,7 @@
         "lines": [
           "Beim Hafentor hast du DNS schon von außen kennengelernt: <code>hafen.de</code> → Adresse des Controllers. Jetzt die andere Seite, <b>im</b> Cluster: Wie findet die <code>kasse</code> eigentlich das <code>lager</code>, wenn die Pods <b>ständig neue IPs</b> bekommen (Neustart, Self-Healing, Skalierung)?",
           "Gar nicht über IPs – über <b>Namen</b>. Jeder <b>Service</b> bekommt einen stabilen DNS-Namen, und ein eigener DNS-Server im Cluster löst ihn auf: <b>CoreDNS</b>, das <b>Adressbuch des Hafens</b>. Es wohnt im Maschinenraum (Namespace <code>kube-system</code>) – schau es dir gleich an.",
-          "Die Namensform ist immer gleich: <code>&lt;service&gt;.&lt;namespace&gt;.svc.cluster.local</code>. Im selben Namespace reicht der kurze Name (<code>kasse</code>), sonst hängst du den Namespace an. Los, wirf einen Blick auf den DNS-Server!"
+          "Die Namensform ist immer gleich: <code><service>.<namespace>.svc.cluster.local</code>. Im selben Namespace reicht der kurze Name (<code>kasse</code>), sonst hängst du den Namespace an. Los, wirf einen Blick auf den DNS-Server!"
         ]
       },
       {
@@ -1130,13 +1130,13 @@
         "brief": "Das Adressbuch fragen",
         "cmd": {
           "id": "t-nslookup",
-          "intro": "🆕 Neuer Befehl: <code>nslookup &lt;name&gt;</code> – fragt <b>CoreDNS</b> nach der Adresse hinter einem Namen. (Im echten Cluster läuft das aus einem Pod heraus, z.B. <code>kubectl exec … -- nslookup</code>; hier am Terminal fragst du das Adressbuch direkt.)",
+          "intro": "🆕 Neuer Befehl: <code>nslookup <name></code> – fragt <b>CoreDNS</b> nach der Adresse hinter einem Namen. (Im echten Cluster läuft das aus einem Pod heraus, z.B. <code>kubectl exec … -- nslookup</code>; hier am Terminal fragst du das Adressbuch direkt.)",
           "text": "Frag CoreDNS nach der <code>kasse</code>: <code>nslookup kasse</code>. Achte auf den vollen Namen und die Adresse, die zurückkommt.",
           "accept": [
             "^nslookup\\s+kasse(\\.default(\\.svc\\.cluster\\.local)?)?$"
           ],
           "solution": "nslookup kasse",
-          "hint": "Muster: nslookup &lt;service&gt; (oder voll: &lt;service&gt;.default.svc.cluster.local)"
+          "hint": "Muster: nslookup <service> (oder voll: <service>.default.svc.cluster.local)"
         }
       },
       {
@@ -1257,7 +1257,7 @@
         "type": "dialog",
         "npc": "ada",
         "lines": [
-          "Merk dir die Faustregel: <b>im Cluster spricht man über Namen, nicht über IPs.</b> CoreDNS ist das Adressbuch, jeder Service ein Eintrag (<code>&lt;service&gt;.&lt;namespace&gt;.svc.cluster.local</code>), und ein ExternalName ist der Verweis auf eine Adresse draußen. Damit ist das Hafen-Netz rund – stark gemacht, Lotse! 🧭⚓"
+          "Merk dir die Faustregel: <b>im Cluster spricht man über Namen, nicht über IPs.</b> CoreDNS ist das Adressbuch, jeder Service ein Eintrag (<code><service>.<namespace>.svc.cluster.local</code>), und ein ExternalName ist der Verweis auf eine Adresse draußen. Damit ist das Hafen-Netz rund – stark gemacht, Lotse! 🧭⚓"
         ]
       }
     ]

@@ -181,7 +181,7 @@
         "brief": "In die Akte schauen",
         "cmd": {
           "id": "t-argo-get",
-          "intro": "🆕 Neuer Befehl: <code>argocd app get &lt;name&gt;</code> – die volle Akte einer Application: <b>Sync Status</b> (Synced/OutOfSync) und <b>Health</b> (läuft die Workload gesund?).",
+          "intro": "🆕 Neuer Befehl: <code>argocd app get <name></code> – die volle Akte einer Application: <b>Sync Status</b> (Synced/OutOfSync) und <b>Health</b> (läuft die Workload gesund?).",
           "text": "Öffne die Akte von <code>hafen-lager</code>. Lies Sync Status (noch <b>OutOfSync</b>) und Health.",
           "accept": [
             "^argocd\\s+app\\s+get\\s+hafen-lager$"
@@ -204,7 +204,7 @@
         "brief": "Soll in den Cluster ziehen",
         "cmd": {
           "id": "t-argo-sync",
-          "intro": "🆕 Neuer Befehl: <code>argocd app sync &lt;name&gt;</code> – Argo zieht den im Git deklarierten Soll-Zustand in den Cluster (Pull) und legt die fehlenden Ressourcen an.",
+          "intro": "🆕 Neuer Befehl: <code>argocd app sync <name></code> – Argo zieht den im Git deklarierten Soll-Zustand in den Cluster (Pull) und legt die fehlenden Ressourcen an.",
           "text": "Synchronisiere <code>hafen-lager</code> – und schau danach, wie das Deployment entsteht!",
           "accept": [
             "^argocd\\s+app\\s+sync\\s+hafen-lager$"
