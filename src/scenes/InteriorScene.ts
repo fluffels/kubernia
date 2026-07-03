@@ -5,7 +5,7 @@ import { SFX } from "../sfx";
 import { TALK_RANGE, interiorEAction, interiorEFlank, type Door } from "../world/world";
 import { keys, setInteriorOpen } from "../runtime";
 import { sanitize } from "../hud/pixelfont";
-import { T, STONE, WOOD, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, pixelText, readMoveInput, faceFrom, type ScenePlayer } from "./shared";
+import { T, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, pixelText, readMoveInput, faceFrom, type ScenePlayer } from "./shared";
 
 /* ===== InteriorScene (#6) – betretbarer Hausinnenraum =====
  * Wird von WorldScene.enterInterior() als eigene Szene gestartet, während die
@@ -55,7 +55,7 @@ export class InteriorScene extends Phaser.Scene {
     this.exitTy = this.RH - 1;               // 7 (Tür-Schwelle unten Mitte)
 
     this.renderRoom(isShip);
-    if (isShip) this.renderShipHull();       // Rumpf abdunkeln + Bullaugen
+    if (isShip) this.renderPortholes();      // #187: Messing-Bullaugen (Rumpf-Dunkelheit steckt jetzt im Wand-Tile)
     this.renderThreshold(isShip);
     this.placeFurniture(door.theme);
     const meta = this.spawnResident(door);
@@ -79,35 +79,36 @@ export class InteriorScene extends Phaser.Scene {
     return y === 0 || x === 0 || x === this.RW - 1 || (y === this.RH - 1 && x !== this.exitTx);
   }
 
-  /** Boden (Holz) + Wände (Haus: Stein / Schiff: Holzrumpf) in eine RenderTexture backen und
-   *  die Wände als solide markieren; Schwelle unten Mitte bleibt frei. */
+  /** Boden (Holzdielen) + Wände (Haus: verputzter Stein / Schiff: dunkler Holzrumpf) in eine
+   *  RenderTexture backen und die Wände als solide markieren; Schwelle unten Mitte bleibt frei.
+   *  #187: echte Pixelart-Kacheln (`interior_floor`/`interior_wall_house`/`interior_wall_ship`)
+   *  statt der Kenney-`dungeon`-Kacheln – der Schiffsrumpf ist dunkel im Tile selbst, das frühere
+   *  halbtransparente Rechteck-Overlay entfällt. */
   private renderRoom(isShip: boolean): void {
     const { RW, RH } = this;
-    const wallTiles = isShip ? WOOD : STONE;
+    const wallKey = isShip ? "interior_wall_ship" : "interior_wall_house";
     const rt = this.add.renderTexture(0, 0, RW * T, RH * T).setOrigin(0).setDepth(0);
     for (let y = 0; y < RH; y++) for (let x = 0; x < RW; x++) {
-      if (this.isWallTile(x, y)) { rt.drawFrame("dungeon", wallTiles[(x + y) % wallTiles.length], x * T, y * T); this.solid[y * RW + x] = 1; }
-      else rt.drawFrame("dungeon", WOOD[(x * 3 + y) % WOOD.length], x * T, y * T);
+      if (this.isWallTile(x, y)) { rt.draw(wallKey, x * T, y * T); this.solid[y * RW + x] = 1; }
+      else rt.draw("interior_floor", x * T, y * T);
     }
   }
 
-  /** Schiff (#42): Wände abdunkeln (Rumpf) + zwei Bullaugen mit Blick aufs Meer. */
-  private renderShipHull(): void {
-    const { RW, RH } = this;
-    for (let y = 0; y < RH; y++) for (let x = 0; x < RW; x++) {
-      if (this.isWallTile(x, y)) this.add.rectangle(x * T, y * T, T, T, 0x0a1219, 0.42).setOrigin(0).setDepth(0.4);
-    }
+  /** Schiff (#42/#187): zwei Messing-Bullaugen (echtes Asset) mit Blick aufs Meer an der oberen
+   *  Rumpfwand. Ersetzt die früheren prozeduralen Ellipsen; die Rumpf-Abdunklung steckt jetzt im
+   *  Wand-Tile selbst (renderRoom), darum kein Rechteck-Overlay mehr. */
+  private renderPortholes(): void {
     for (const px of [3, 7]) {
-      this.add.ellipse(px * T + 8, 8, 11, 11, 0x2f6f8f).setDepth(0.5);          // Meer durchs Bullauge
-      this.add.ellipse(px * T + 8, 8, 11, 11).setStrokeStyle(2.5, 0x8a6b3f).setDepth(0.51); // Messingring
-      this.add.rectangle(px * T + 8, 8, 11, 2, 0xbfe0ec, 0.7).setDepth(0.52);   // Wellenglanz
+      this.add.image(px * T + 8, T - 6, "porthole").setScale(0.42).setDepth(0.5);
     }
   }
 
-  /** Schwelle (Haus: Tür-Matte / Schiff: Decksluke) optisch markieren. */
+  /** Schwelle (Haus: Holztür in der unteren Wand / Schiff: Decksluke flach am Boden) als echtes
+   *  Pixelart-Asset markieren (#187) statt der früheren zwei Rechtecke. */
   private renderThreshold(isShip: boolean): void {
-    this.add.rectangle(this.exitTx * T + 8, this.exitTy * T + T, 12, 14, isShip ? 0x2a1c0d : 0x6b4a2a).setOrigin(0.5, 1).setDepth(1);
-    this.add.rectangle(this.exitTx * T + 8, this.exitTy * T + T, 9, 3, isShip ? 0x6b4f35 : 0x2a1c0d).setOrigin(0.5, 1).setDepth(1.1);
+    const cx = this.exitTx * T + 8;
+    if (isShip) this.add.image(cx, this.exitTy * T + 8, "ship_hatch").setScale(0.42).setDepth(1);
+    else this.add.image(cx, this.exitTy * T + T + 2, "interior_door").setOrigin(0.5, 1).setScale(0.42).setDepth(1);
   }
 
   /** Themengerechte Möbel (solide, damit man sie nicht durchläuft). */

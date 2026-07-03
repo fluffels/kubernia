@@ -18,6 +18,11 @@
 import town from "../assets/town.png";
 import dungeon from "../assets/dungeon.png";
 
+// Interior-Boden/Wand-Tiles (#187): 16px-Einzelkacheln (Holzboden, Haus-Stein-Wand, Schiffsrumpf-Wand)
+import interior_floor from "../assets/pixellab/interior_floor.png";
+import interior_wall_house from "../assets/pixellab/interior_wall_house.png";
+import interior_wall_ship from "../assets/pixellab/interior_wall_ship.png";
+
 // PixelLab Wang-Tilesets (water-sand = coast, sand-grass = meadow, grass-dirt = path, …)
 import coast from "../assets/pixellab/water-sand.png";
 import meadow from "../assets/pixellab/sand-grass.png";
@@ -58,6 +63,10 @@ import door_office from "../assets/pixellab/door_office.png";
 import door_forge from "../assets/pixellab/door_forge.png";
 import door_chart from "../assets/pixellab/door_chart.png";
 import ship from "../assets/pixellab/ship.png";
+// Interior-Einrichtung (#187): echte Pixelart statt prozeduraler Ellipsen/Rechtecke
+import porthole from "../assets/pixellab/porthole.png";         // Messing-Bullauge (Schiff)
+import interior_door from "../assets/pixellab/interior_door.png"; // Innen-Tür (Haus, Austritt)
+import ship_hatch from "../assets/pixellab/ship_hatch.png";     // Decksluke (Schiff, Austritt)
 import kraken from "../assets/pixellab/kraken.png";   // Hacker-Krake (Gegner, #184)
 import pirate_ship from "../assets/pixellab/pirate_ship.png";   // Piraten-Schiff (Gegner, #185)
 import seagull from "../assets/pixellab/seagull.png";           // Möwe (#182)
@@ -148,6 +157,13 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
   { key: "door_forge", src: door_forge, kind: "plain" },
   { key: "door_chart", src: door_chart, kind: "plain" },
   { key: "ship", src: ship, kind: "plain" },
+  // Interior-Einrichtung (#187): Bullauge/Tür/Luke + Boden/Wand-Kacheln ersetzen prozedurale Formen im Innenraum
+  { key: "porthole", src: porthole, kind: "plain" },
+  { key: "interior_door", src: interior_door, kind: "plain" },
+  { key: "ship_hatch", src: ship_hatch, kind: "plain" },
+  { key: "interior_floor", src: interior_floor, kind: "plain" },
+  { key: "interior_wall_house", src: interior_wall_house, kind: "plain" },
+  { key: "interior_wall_ship", src: interior_wall_ship, kind: "plain" },
   { key: "kraken", src: kraken, kind: "plain" },   // Hacker-Krake (Gegner, #184)
   { key: "pirate_ship", src: pirate_ship, kind: "plain" },   // Piraten-Schiff (Gegner, #185)
   { key: "seagull", src: seagull, kind: "plain" },           // Möwe (#182)
