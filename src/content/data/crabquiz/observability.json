@@ -57,11 +57,11 @@
       "Prometheus scrapt gerade – das Target ist kurz offline und kommt von selbst zurück."
     ],
     "correct": 0,
-    "explain": "Ein <code>down</code>-Target bedeutet: Prometheus hat beim Scrapen keine Antwort bekommen. Der Pod könnte abgestürzt sein, am falschen Port horchen oder ein Startproblem haben. Wäre die Datasource weg, wären <i>alle</i> Panels betroffen, nicht nur ein einzelnes Target. Erster Handgriff: <code>kubectl get pods</code>, dann <code>kubectl describe pod &lt;name&gt;</code> für Details."
+    "explain": "Ein <code>down</code>-Target bedeutet: Prometheus hat beim Scrapen keine Antwort bekommen. Der Pod könnte abgestürzt sein, am falschen Port horchen oder ein Startproblem haben. Wäre die Datasource weg, wären <i>alle</i> Panels betroffen, nicht nur ein einzelnes Target. Erster Handgriff: <code>kubectl get pods</code>, dann <code>kubectl describe pod <name></code> für Details."
   },
   {
     "id": "q-obs-logs-basic",
-    "q": "Was zeigt dir <code>kubectl logs &lt;pod&gt;</code>?",
+    "q": "Was zeigt dir <code>kubectl logs <pod></code>?",
     "options": [
       "Die Textausgaben der App – stdout/stderr des laufenden Containers.",
       "Die Kubernetes-Events des Pods (Scheduling, ImagePull, Neustart).",
@@ -75,9 +75,9 @@
     "id": "q-obs-logs-previous",
     "q": "Ein Pod läuft in CrashLoopBackOff. Mit welchem Befehl liest du die Logs des <b>letzten abgestürzten</b> Containers (nicht des gerade neu gestarteten)?",
     "options": [
-      "<code>kubectl logs --previous &lt;pod&gt;</code> (Kurzform: <code>-p</code>) – zeigt den Log des Vorgänger-Containers.",
-      "<code>kubectl logs -f &lt;pod&gt;</code> – folgt dem Log live.",
-      "<code>kubectl describe pod &lt;pod&gt;</code> – zeigt den Absturz-Grund in den Events.",
+      "<code>kubectl logs --previous <pod></code> (Kurzform: <code>-p</code>) – zeigt den Log des Vorgänger-Containers.",
+      "<code>kubectl logs -f <pod></code> – folgt dem Log live.",
+      "<code>kubectl describe pod <pod></code> – zeigt den Absturz-Grund in den Events.",
       "<code>kubectl get pods --previous</code> – listet beendete Pods."
     ],
     "correct": 0,
