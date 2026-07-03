@@ -4,14 +4,16 @@
 import Phaser from "phaser";
 import { KQContent } from "../content";
 import { type Spawn, type EntityObject } from "../content/entities";
-import { type Hitbox } from "../world/world";
+import { TILE, type Hitbox } from "../world/world";
 import { ATLAS_CHARS, CELL_W, CELL_H, GLYPH_W, GLYPH_H, glyphMatrix, sanitize } from "../hud/pixelfont";
 import { SFX } from "../sfx";
 import { keys, setWorldScene, setInteriorOpen, type WorldSceneRef } from "../runtime";
 import { warpAt, type Warp } from "../world/warps";
 import { type AssetEntry } from "../assets-data";
 
-const T = 16;
+// Kachelgröße in Pixeln – die EINE Quelle ist `TILE` in world.ts (#607). `T` ist nur der
+// kurze, in der Szenen-Mathematik (`x * T`) breit genutzte Alias darauf, kein zweites Literal.
+const T = TILE;
 
 /** WASD + Pfeiltasten, die das Spiel als Lauf-/Navigations-Eingabe wertet. EINE Liste,
  *  damit „welche Taste bewegt" nicht über mehrere Szenen driftet. */

@@ -8,7 +8,8 @@
 import { type TiledObjectGroup, tiledProps } from "./maps/tilemap";
 import { npcSpawnsForMap, type Spawn } from "../content/entities";
 
-/** Kachelgröße in Pixeln (muss zu T in scenes.ts passen). */
+/** Kachelgröße in Pixeln – die EINE Quelle dieses Werts (#607). Die Szenen leiten ihren
+ *  kurzen Alias `T` (scenes/shared.ts) davon ab, statt das Literal zu duplizieren. */
 export const TILE = 16;
 
 /** Re-Export, damit Altaufrufer `import { type Spawn } from "./world"` weiter
