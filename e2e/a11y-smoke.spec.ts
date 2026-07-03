@@ -13,21 +13,18 @@ import { requireOfflineBuild, bootGame, dismissIntro } from "./support";
 // Logbuch, Album, Menü …) – genau die zugänglichen Steuerflächen. Getrieben wie ein
 // Mensch über Tastatur/DOM (keine Test-Hintertür), wie der Rest von e2e/.
 //
-// Gate-Politik (kein Grün-durch-Aufweichen): assertiert NULL Verletzungen, mit EINER
-// bewusst dokumentierten Ausnahme – die `region`-Regel (moderate: „alle Inhalte in
-// Landmark-Regionen"). Die scheitert nur an fehlenden <main>/role-Landmarks um HUD +
-// Canvas; das ist ein eigenes, strukturelles Optik-/Layout-Thema (Folge-Ticket),
-// keine Interaktions-Barriere. Alles andere – inkl. moderate – bricht den Smoke.
+// Gate-Politik (kein Grün-durch-Aufweichen): assertiert NULL Verletzungen – KEINE
+// ausgeklammerte Regel mehr. Die frühere `region`-Ausnahme (moderate: „alle Inhalte in
+// Landmark-Regionen") ist mit #560 behoben: `index.html` legt den Canvas-Host in
+// role=main, das HUD in role=region und den Interaktions-Hinweis in eine role=status-
+// Live-Region. Alles andere – inkl. moderate – bricht den Smoke ohnehin.
 
 test.beforeAll(requireOfflineBuild);
 
-/** Bekannte, bewusst ausgeklammerte axe-Regeln (mit Grund). NUR diese eine –
- *  jede andere Verletzung soll den Smoke rot machen. */
-const KNOWN_EXCLUDED_RULES = ["region"];
-
-/** Scannt den aktuellen DOM-Zustand und gibt die (gefilterten) Verletzungen zurück. */
+/** Scannt den aktuellen DOM-Zustand und gibt die Verletzungen zurück – ohne jede
+ *  ausgeklammerte Regel, jede Verletzung soll den Smoke rot machen. */
 async function a11yViolations(page: import("@playwright/test").Page) {
-  const res = await new AxeBuilder({ page }).disableRules(KNOWN_EXCLUDED_RULES).analyze();
+  const res = await new AxeBuilder({ page }).analyze();
   return res.violations;
 }
 
