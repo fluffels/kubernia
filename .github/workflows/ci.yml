@@ -144,6 +144,33 @@ jobs:
         continue-on-error: true
         run: npm audit
 
+  # Doku-Aktualitäts-Wächter (#610): gleicht die in docs/agent-harness.md als
+  # „offen" markierten Roadmap-Tickets gegen den echten gh-issue-Status ab und
+  # ALARMIERT, wenn ein längst geschlossenes Ticket noch als offen dokumentiert ist
+  # (der reale #492-Befund). BEWUSST NICHT in der hermetischen `verify`-Kette: der
+  # gh-Abgleich braucht Netz + Token und ist nicht deterministisch. Eigener Job,
+  # gh ist auf ubuntu-Runnern vorinstalliert, Token = GITHUB_TOKEN (Issue-Lesezugriff).
+  # continue-on-error: NON-BLOCKING — ein von einem parallelen Agenten geschlossenes
+  # Roadmap-Ticket soll keinen fremden PR rot-blocken (⚠️-Anti-Pattern #395); der rote
+  # Schritt bleibt aber als Alarm sichtbar. Kein npm ci nötig (nur Node-Builtins + gh).
+  doc-freshness:
+    name: Doku-Aktualität (Roadmap-Tickets, #610)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Node einrichten
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Offen-markierte Roadmap-Tickets gegen gh-Status prüfen (#610)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/check-doc-tickets.mjs
+
   # Dev-Panel-Build (#331): liefert das sonst dev-server-only Panel als eine
   # self-contained Datei aus, passwortgated über das Repo-Secret VITE_KQ_DEVPANEL_PW.
   # WICHTIG (Geheimhaltung): nur bei Push auf main bzw. manuellem Start – NICHT bei
