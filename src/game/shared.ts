@@ -103,10 +103,10 @@ export interface GameApi extends GameData {
 
   // ---- save.ts: Laden/Speichern/Reset/Export/Import + Save-Slots (#306) ----
   load(): void;
-  save(syncFromScene?: boolean): void;
+  save(syncFromScene?: boolean): boolean; // true = geschrieben/bewusst übersprungen, false = Fehlschlag (#585)
   reset(): void;
   exportData(): string | null;
-  importData(json: string): void;
+  importData(json: string): boolean; // ob der Import geschrieben wurde (#585)
   slotSummary(): { xp: number; coins: Coins; questIdx: number; lastSeen: number; character: number | null };
   slots(): SlotView[];
   newSlot(name?: string): string;
