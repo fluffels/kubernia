@@ -837,6 +837,31 @@ test("#511 taskIdx: ein gültiger Mid-Drill-Index überlebt (kein Over-Clamping 
   expect(Game.taskIdx()).toBe(2);
 });
 
+/* ---------- #586: clusterSnapshot am Save-Rand gegen die Sim-Form härten ---------- */
+
+test("#586 clusterSnapshot: ein Plain-Object mit kaputter Liste crasht load() NICHT, fällt auf Default-Cluster", () => {
+  // Vor #586 prüfte sanitizeState den Snapshot nur per isPlainObject – ein plausibles Objekt mit
+  // einem Nicht-Array-Listenfeld (deployments: "x") floss roh in new KQSim(...), wo reset() beim
+  // .map() riss. `new KQSim` in load() liegt AUSSERHALB des try/catch → der ganze Ladevorgang
+  // crashte (Verstoß gegen „Saves nie brechen"). RED ohne die Härtung, GREEN mit ihr.
+  Game.importData(JSON.stringify({ v: 3, data: { xp: 10, clusterSnapshot: { deployments: "kein-array", nodes: 5 } } }));
+  expect(() => Game.load()).not.toThrow();
+  // Kaputter Snapshot verworfen → load() baut einen frischen, gültigen Default-Cluster auf.
+  expect(Game.state.clusterSnapshot).not.toBeNull();
+  expect(Game.state.clusterSnapshot).not.toEqual({ deployments: "kein-array", nodes: 5 });
+  expect(Array.isArray(Game.state.clusterSnapshot?.deployments)).toBe(true);
+  expect(Game.state.xp).toBe(10); // der Rest des Stands lädt normal weiter
+});
+
+test("#586 clusterSnapshot: ein GÜLTIGER Plain-Object-Snapshot überlebt unverändert (kein Over-Sanitizing)", () => {
+  // Der Simulator baut diesen Snapshot wurffrei auf → er ist gültig und muss erhalten bleiben;
+  // insbesondere darf die Härtung ihn nicht re-snapshotten (sonst bräche die files-basierte
+  // Teil-Snapshot-Erkennung in load() #436). Der files-Schlüssel muss den Ladeweg überleben.
+  Game.importData(JSON.stringify({ v: 3, data: { xp: 5, clusterSnapshot: { files: { "Dockerfile": "FROM nginx:1.27" } } } }));
+  expect(() => Game.load()).not.toThrow();
+  expect(Game.state.clusterSnapshot?.files?.["Dockerfile"]).toBe("FROM nginx:1.27");
+});
+
 test("#511 taskIdx: über der Aufgabenzahl des Schritts wird geklemmt", () => {
   // Derselbe Drill (count 3): ein taskIdx jenseits von count-1 fällt auf den letzten
   // gültigen Aufgaben-Index zurück statt ins Leere zu zeigen.

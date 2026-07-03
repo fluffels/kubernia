@@ -4,7 +4,7 @@
  * ⚠️ Save-kritisch: bestehende Stände müssen exakt gleich laden – Logik unverändert
  * aus game.ts übernommen (#392 ist reines Refactoring, keine Format-Migration). */
 import { KQContent } from "../content";
-import { Sim as KQSim } from "../sim";
+import { Sim as KQSim, type Scenario } from "../sim";
 import { SaveStore } from "../store";
 import { worldScene, applyAudioConfig, notifySaveFailed } from "../runtime";
 import { add, toCoins } from "../core/coins";
@@ -243,6 +243,29 @@ function clampProgress(questId: string, step: number, task: number): QuestProgre
   return { step: s, task: taskCount > 0 ? Math.min(task, taskCount - 1) : 0 };
 }
 
+/** Den Cluster-Snapshot am Save-Rand härten (#586). `clusterSnapshot` ist die serialisierte
+ *  Sim-Form (`Scenario`) und war der letzte UNGETYPTE Rand an der Save-Bündelgrenze: `isPlainObject`
+ *  allein ließ ein plausibles Objekt mit kaputten Feldern (z.B. `deployments: "x"` statt Array)
+ *  roh in `new KQSim(...)` fließen, wo es load() beim Aufbau reißen konnte – ein manipulierter
+ *  Import/über viele Versionen gewanderter Stand hätte so den Ladevorgang gecrasht (Verstoß gegen
+ *  „Saves nie brechen"). Der Simulator ist die SSOT für eine gültige `Scenario`-Form; statt seine
+ *  ~50 Felder hier zu duplizieren (bräche bei Stardew-Scope sofort auseinander), lassen wir IHN
+ *  den Snapshot einmal interpretieren: baut `new KQSim` ihn wurffrei auf, ist er gültig und wird
+ *  UNVERÄNDERT übernommen (damit die Teil-Snapshot-Erkennung über `files` in load() #436 erhalten
+ *  bleibt – kein Re-Snapshot, der `files` nachträglich setzt); wirft der Aufbau, ist der Snapshot
+ *  kaputt und fällt weg (load() baut dann einen frischen Default-Cluster + Szenario-Replay).
+ *  Der Sim-Konstruktor ist seit #580 seitenwirkungsfrei (Instanz-eigener RNG), die Wegwerf-Instanz
+ *  verändert also keinen globalen Zustand. */
+function sanitizeSnapshot(raw: unknown): Scenario | null {
+  if (!isPlainObject(raw)) return null; // primitiver/Array-Snapshot → kein gültiger Sim-Zustand
+  try {
+    new KQSim(raw as Scenario); // nur Validierung: interpretiert der SSOT-Simulator ihn ohne Wurf?
+    return raw as Scenario;
+  } catch {
+    return null;
+  }
+}
+
 export function sanitizeState(raw: unknown): GameState {
   const def = makeDefaultState();
   if (!isPlainObject(raw)) return def; // primitiver/kaputter Stand -> komplett frisch
@@ -284,8 +307,9 @@ export function sanitizeState(raw: unknown): GameState {
     cmdHistoryUnlocked: safeBool(raw.cmdHistoryUnlocked, def.cmdHistoryUnlocked),
     stats: sanitizeStats(def.stats, raw.stats),
     lastSeen: safeCount(raw.lastSeen, def.lastSeen),
-    // Snapshot ist ein freies Sim-Objekt; nur ein echtes Objekt akzeptieren, sonst null.
-    clusterSnapshot: isPlainObject(raw.clusterSnapshot) ? raw.clusterSnapshot : null,
+    // Snapshot ist die serialisierte Sim-Form: gegen die SSOT (den Simulator) härten (#586),
+    // nicht nur „ist ein Objekt". Kaputt/fremd → null, gültig → unverändert (siehe sanitizeSnapshot).
+    clusterSnapshot: sanitizeSnapshot(raw.clusterSnapshot),
     audio: safeAudio(raw.audio),
     settings: safeSettings(raw.settings),
     questsSinceGate: safeCount(raw.questsSinceGate, 0),
