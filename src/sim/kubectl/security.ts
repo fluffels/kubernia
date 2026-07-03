@@ -10,6 +10,7 @@
  * KubectlHost-Interface (./host). Kein Rückimport (kein Zyklus).
  */
 import type { RbacSubject, SecurityContext } from "../state";
+import { roleMatchesRef } from "../rbac";
 import { flagValue } from "../util";
 import type { KubectlHost } from "./host";
 
@@ -38,7 +39,7 @@ function canI(host: KubectlHost, verb: string, resource: string, subjectKey: str
   if (subjectKey === null) return true; // ohne --as fragt man die eigenen (Admin-)Rechte ab
   for (const b of host.roleBindings) {
     if (!b.subjects.some(s => subjectKeyOf(host, s) === subjectKey)) continue;
-    const role = host.roles.find(r => r.name === b.roleRef.name && r.cluster === (b.roleRef.kind === "ClusterRole"));
+    const role = host.roles.find(r => roleMatchesRef(r, b.roleRef));
     if (!role) continue; // baumelnde Referenz: gewährt nichts
     for (const rule of role.rules) {
       const verbOk = rule.verbs.includes("*") || rule.verbs.includes(verb);

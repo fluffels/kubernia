@@ -11,10 +11,12 @@
  * ohne dass es sofort auffällt. Das ist der skalierende (Stardew-Scope) Weg: neue
  * Befehlsfamilien sind automatisch bewacht, ohne Disziplin pro Modul.
  *
- * Reine Domäne: importiert NUR Typen aus ./state, kein Laufzeit-Code, Phaser-frei,
- * vom Architektur-Wächter (#347) als Domäne geschützt und im Node-Test prüfbar.
+ * Reine Domäne: importiert Typen aus ./state + die RBAC-Identitäts-Helfer aus ./rbac
+ * (#609), kein Phaser, vom Architektur-Wächter (#347) als Domäne geschützt und im
+ * Node-Test prüfbar.
  */
 import type { ClusterState } from "./state";
+import { rbacKey, roleKind } from "./rbac";
 
 /** (1)/(2) Replica Ist/Soll konsistent: ein Deployment/StatefulSet hält genau so viele
  *  Pods, wie sein `replicas`-Soll sagt. Das gilt auch bei kaputten Workloads (die Pods
@@ -141,10 +143,12 @@ function checkNameUniqueness(s: ClusterState): string[] {
     v.push(...reportDuplicates(list, i => i.name,
       i => `${kind} "${i.name}": Name doppelt vergeben (muss je Typ eindeutig sein)`));
   }
-  const roleKind = (cluster: boolean) => (cluster ? "ClusterRole" : "Role");
-  v.push(...reportDuplicates(s.roles, r => `${roleKind(r.cluster)} ${r.name}`,
+  // RBAC-Identität = (name, cluster), SSOT in ./rbac (#609). roles/roleBindings werden
+  // getrennt geprüft (eigenes seen-Set je reportDuplicates-Aufruf), darum reicht rbacKey
+  // ohne „Binding"-Suffix zur Kollisionstrennung.
+  v.push(...reportDuplicates(s.roles, rbacKey,
     r => `${roleKind(r.cluster)} "${r.name}": Name doppelt vergeben (muss je Typ eindeutig sein)`));
-  v.push(...reportDuplicates(s.roleBindings, b => `${roleKind(b.cluster)}Binding ${b.name}`,
+  v.push(...reportDuplicates(s.roleBindings, rbacKey,
     b => `${roleKind(b.cluster)}Binding "${b.name}": Name doppelt vergeben (muss je Typ eindeutig sein)`));
   return v;
 }
