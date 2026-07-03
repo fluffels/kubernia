@@ -38,6 +38,10 @@ export const OVERLAYS = [
   { key: "review", id: "overlay-review", blocking: true, keyNav: false },
   { key: "stack", id: "overlay-stack", blocking: true, keyNav: true },
   { key: "menu", id: "overlay-menu", blocking: true, keyNav: true },
+  // Rang-Aufstieg-Feier (#223): blockierend (fängt die Weiter-Bestätigung ein, sperrt
+  // solange die Weltinteraktion) + keyNav, damit Enter/Leer/E den „Weiter"-Button über
+  // die generische Modal-Tastatur (#283) auslöst und das Overlay schließt.
+  { key: "rankup", id: "overlay-rankup", blocking: true, keyNav: true },
 ] as const satisfies readonly OverlayDef[];
 
 export type OverlayKey = (typeof OVERLAYS)[number]["key"];
