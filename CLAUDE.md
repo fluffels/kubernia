@@ -44,7 +44,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | Zweck | Befehl |
 |---|---|
 | One-Command-Setup (Node-Check + install + Git-Hooks + alle Checks, #387/#528) | `npm run setup` |
-| **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (typecheck → lint → check:arch → check:size → check:docmap → check:docdrift → check:diffsize → test) |
+| **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (typecheck → lint → check:arch → check:size → check:anysuppress → check:docmap → check:docdrift → check:diffsize → test) |
 | Voller Vor-Push-Check inkl. beider Builds + Boot-Smoke (#527) | `npm run verify:full` (= `verify` + `test:coverage` + Builds + `check:bundle` + `test:smoke`) |
 | Required-Checks auf dem PR = maßgeblicher Gate (server-seitig, seit #592) | Merge nur über `gh pr merge` bei grüner CI; kein Direkt-Push auf `main` |
 | pre-push-Hook (fährt `verify`; seit #592 nur noch sekundäres Netz) | verdrahtet via `npm run setup`; greift nur bei Push auf `main` (server-seitig ohnehin blockiert) |
@@ -65,6 +65,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | Doku↔Code-Drift-Wächter (CLAUDE.md-Landkarte gegen den Code, #482) | `npm run check:docmap` |
 | Harness-Drift-Wächter (dokumentierte `npm run`-Kommandos + interne Doku-Links/Anker, #529) | `npm run check:docdrift` |
 | Diff-Größenbudget-Wächter (max. 20 Dateien / 800 geänderte Zeilen gegen main, #533) | `npm run check:diffsize` |
+| `no-explicit-any`-Suppression-Ratchet (per-Datei-Baseline, #604) | `npm run check:anysuppress` (neu ziehen: `node scripts/check-any-suppressions.mjs --write`) |
 | Bundle-Byte-Budget-Wächter (Offline-HTML + Spielcode-Chunks, NACH den Builds, #503) | `npm run check:bundle` |
 | Security-Audit (Produktiv-Deps, CI-Gate blockt bei high+, #396) | `npm audit --omit=dev --audit-level=high` |
 
