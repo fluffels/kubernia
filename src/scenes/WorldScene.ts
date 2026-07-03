@@ -20,7 +20,7 @@ import { loadMapTerrain } from "./worldscene/mapterrain";
 import { placeHarborObjects, renderGround } from "./worldscene/terrain";
 import { spawnGull, spawnFlowers, spawnGrassDetail, scatter, renderStatics, updateDayNight } from "./worldscene/scenery";
 import { syncCluster, updateDynamicTags } from "./worldscene/clustersync";
-import { scheduleEvents, tickEvents } from "./worldscene/events";
+import { registerHazardRenderer } from "./worldscene/events";
 import { updateWarps } from "./worldscene/warps";
 // #496: die Feld-Typen + das WorldSceneFields-Interface liegen in worldscene/types.ts
 // (dieselbe Datei wie WorldSceneLike). Die Klasse implementiert WorldSceneFields, damit
@@ -28,7 +28,7 @@ import { updateWarps } from "./worldscene/warps";
 // über WorldSceneLike sehen, hier wirklich existiert – ohne dass ein Modul eine zweite
 // Feldliste von Hand pflegt (frühere DynTagLike-Doppelpflege).
 import type {
-  WorldSceneFields, DecoItem, LabelSpec, DynTagData, PodSlot, Butterfly, PlayerPos, Hazards,
+  WorldSceneFields, DecoItem, LabelSpec, DynTagData, PodSlot, Butterfly, PlayerPos,
 } from "./worldscene/types";
 
 /* #343/#386: Sub-Tile-Kollisionsradien (Pixel). Steine, Büsche und NPCs prallen nicht
@@ -110,7 +110,6 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   // #426: ein Set armierter Warp-IDs statt je ein benanntes Boolean pro Region –
   // datengetrieben über REGION_WARPS, sodass eine neue Region kein neues Flag braucht.
   warpArmed!: Set<string>;
-  hazards!: Hazards;
   // #425: welche Registry-Karte diese Szene lädt. Default „harbor", damit Boot/
   // Erststart unverändert bleibt; eine zweite Tiled-Region kommt über die Init-Daten
   // (`scene.start("World", { mapId })`) dazu, nicht über eine neue Szenen-Klasse.
@@ -147,7 +146,6 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     this.slotUsed = [];            // #523: wächst dynamisch mit der Pod-Zahl (kein fixes 36)
     this.lastClusterRev = -1;      // #523: erzwingt einen vollen Sync im ersten Frame
     this.dynamic = { barrelsSig: "", flagsSig: "", svcSig: "", depSig: "" };
-    this.hazards = { nextPirate: 0, pirate: null, nextKraken: 0, kraken: null, nextStorm: 0, storm: null, stormFlash: null };
     // #426: Anti-Pingpong-Gate aller Region-Warps – leer = alle disarmt; updateWarps
     // armiert jeden Warp, sobald man ihn verlassen und die Lauftaste losgelassen hat.
     this.warpArmed = new Set();
@@ -234,7 +232,9 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
       }).setScrollFactor(0).setDepth(30000);
     }
 
-    scheduleEvents(this, 60); // erste Events frühestens nach 1 Minute
+    // #540: Der Gefahren-*Takt* läuft szenen-neutral in Game.tick; diese Szene meldet sich nur
+    // als RENDERER an (Welt-Sprites) und rekonstruiert einen ggf. schon laufenden Zustand.
+    registerHazardRenderer(this);
 
     // Möwen für die Hafen-Atmosphäre
     this.time.addEvent({ delay: 6500, loop: true, callback: () => { if (Math.random() < 0.65) spawnGull(this); } });
@@ -553,8 +553,8 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
       ).setScale(1.3, 0.6 + Math.abs(Math.sin(t * 14 + b.ph)) * 0.7);
     }
 
-    // Events: fällige Gefahren starten + laufende auf Erfolg/Deadline prüfen (#393: worldscene/events.ts)
-    tickEvents(this, time);
+    // #540: Der Gefahren-Takt läuft szenen-neutral in Game.tick (main.ts Pre-Step), nicht mehr
+    // hier – die WorldScene ist nur noch Renderer (worldscene/events.ts, reconcile beim Wachen).
 
     UI.updatePrompt();
   }

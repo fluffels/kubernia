@@ -154,7 +154,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/world/regions/werft.ts`](src/world/regions/werft.ts) | pure Domäne | Heimat-Werft: Werft-Hof-Geometrie + Helling/Anleger/Warp (Phase-10-Capstone, #165). |
 | [`src/world/warps.ts`](src/world/warps.ts) | pure Domäne | Region-Übergänge als Daten-Liste (`REGION_WARPS`) + reiner Anti-Pingpong-Kern `armWarps`/`triggeredWarp` (#426). |
 | [`src/world/decor.ts`](src/world/decor.ts) | pure Domäne | Deterministische Deko-Platzierung. |
-| [`src/world/hazards.ts`](src/world/hazards.ts) | pure Domäne | Gefahren-Entscheidungskern (#512): `resolveHazardTick` (welche Gefahr startet/löst auf/tickt) + Start-Gate + Opfer-Eignung; `scenes/worldscene/events.ts` führt nur noch die Effekte aus. |
+| [`src/world/hazards.ts`](src/world/hazards.ts) | pure Domäne | Gefahren-Entscheidungskern (#512): `resolveHazardTick` (welche Gefahr startet/löst auf/tickt) + Start-Gate + Opfer-Eignung + `pirateSteal`/`stormFixKind`; dazu die szenen-neutralen `HazardEvent`/`HazardStartInfo`-Typen (#540). |
 | [`src/core/clock.ts`](src/core/clock.ts) | pure Domäne | Zeit-/Datums-Ableitung für die HUD-Uhr. |
 | [`src/core/coins.ts`](src/core/coins.ts) | pure Domäne | Value Object für Dublonen (#490, Forts. #479): Regel „nicht-negativ + ganzzahlig" + zentrale Arithmetik (Rundung/Multiplikator/Affordability) als `Coins`-Brand + Fabriken/Operationen. |
 | [`src/crashreport.ts`](src/crashreport.ts) | pure Domäne | Absturz-Diagnostik (#504): `buildCrashReport` normalisiert einen beliebigen geworfenen Wert (Error/String/DOMException/Promise-reason) DOM-frei in einen anzeigbaren `{title,message,detail}`-Bericht; die DOM-Umsetzung (globaler Handler + Fallback-Overlay) sitzt in `main.ts`. |
@@ -187,7 +187,8 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/game/unlocks.ts`](src/game/unlocks.ts) | Anwendung | Verdiente Abkürzungen (#313) + Befehlshistorie (#316). |
 | [`src/game/spaced-repetition.ts`](src/game/spaced-repetition.ts) | Anwendung | Leitner-Spaced-Repetition + Review-Gate + Übungs-Lernstand (Drills/Stapel-Runden, gewichtete Auswahl, #219). |
 | [`src/game/clock.ts`](src/game/clock.ts) | Anwendung | Persistente Spiel-Zeit/Kalender (#413): `advanceClock` (Achse `gameDays` vorrücken) + `calendar` (abgeleiteter Tag/Saison/Uhrzeit). |
-| [`src/game/tick.ts`](src/game/tick.ts) | Anwendung | Szenen-neutraler Taktgeber (#501): `Game.tick(dtMs)` rückt frame-unabhängige Domäne (Spiel-Zeit + Hafen-Wirtschaft) an EINER Stelle vor; aus Phasers globalem Pre-Step (main.ts) getrieben → läuft in JEDER Szene, Auszahlung entkoppelt über runtime-Sink. |
+| [`src/game/tick.ts`](src/game/tick.ts) | Anwendung | Szenen-neutraler Taktgeber (#501): `Game.tick(dtMs)` rückt frame-unabhängige Domäne (Spiel-Zeit + Hafen-Wirtschaft + Gefahren #540) an EINER Stelle vor; aus Phasers globalem Pre-Step (main.ts) getrieben → läuft in JEDER Szene, Auszahlung entkoppelt über runtime-Sink. |
+| [`src/game/hazards.ts`](src/game/hazards.ts) | Anwendung | Szenen-neutrale Zufalls-Gefahren (#540): Hazard-Zeitachse + Zustand (Piraten/Krake/Sturm) + Cluster-Mutation, getaktet aus `Game.hazardTick` → Gefahren starten/schreiten in JEDER Szene fort (flüchtig, kein Save); Entscheidungen aus dem reinen Kern `world/hazards.ts`, Effekte entkoppelt über `notifyHazard`-Sink. |
 | [`src/runtime.ts`](src/runtime.ts) | Anwendung | Laufzeit-Singletons (bricht Import-Zyklen). |
 | [`src/devpanel.ts`](src/devpanel.ts) | Anwendung | Dev-/Test-Panel (#325/#331). |
 | [`src/store.ts`](src/store.ts) | Persistenz | SaveStore: dünne Fassade (#515), orchestriert den Boot (`init` + einmalige Namensraum-Migrationen `kubernia` #557) und delegiert an `store/*`. |
@@ -204,7 +205,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/scenes/worldscene/terrain.ts`](src/scenes/worldscene/terrain.ts) | Präsentation | Hafen-Szenerie (Objekte/Gebäude/Türen-Optik) + Wang-Autotile-Boden (#393). |
 | [`src/scenes/worldscene/scenery.ts`](src/scenes/worldscene/scenery.ts) | Präsentation | Deko, statische Props/Effekte, Möwen, Tag-Nacht-Schleier (#393). |
 | [`src/scenes/worldscene/clustersync.ts`](src/scenes/worldscene/clustersync.ts) | Präsentation | Cluster→Welt-Sync: Pod-Kisten + dynamische Tags als Daten + gedeckelter Render-Pool (#393/#416). |
-| [`src/scenes/worldscene/events.ts`](src/scenes/worldscene/events.ts) | Präsentation | Zufalls-Gefahren: Piraten/Krake/Sturm + Terminierung (#393). |
+| [`src/scenes/worldscene/events.ts`](src/scenes/worldscene/events.ts) | Präsentation | Gefahren-RENDERER (#540): setzt den `notifyHazard`-Sink um – globaler Alarm/roter Rahmen + weltgebundene Sprites (Boot/Krake/Sturm), Sprite-Rekonstruktion beim Aufwachen; Zustand/Takt liegen in `game/hazards.ts`. |
 | [`src/scenes/worldscene/warps.ts`](src/scenes/worldscene/warps.ts) | Präsentation | Übergänge Haus/Archipel/Leuchtturm/Lager + Warp-Gates (#393). |
 | [`src/scenes/worldscene/types.ts`](src/scenes/worldscene/types.ts) | Präsentation | Feld-/Primitive-Interface `WorldSceneFields` (WorldScene `implements` es) + `WorldSceneLike = Phaser.Scene & WorldSceneFields` fürs System-Modul-Muster; volltypisiert statt `any` (#393/#496). |
 | [`src/scenes/InteriorScene.ts`](src/scenes/InteriorScene.ts) | Präsentation | Betretbarer Hausinnenraum (#6). |

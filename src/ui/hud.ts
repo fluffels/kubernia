@@ -177,6 +177,13 @@ export const hudUI = part({
     $("alarm").classList.add("hidden");
   },
 
+  /** Globaler roter Warnrahmen (#540): pulsiert am Bildschirmrand, solange eine Gefahr aktiv
+   *  ist – bewusst DOM/HUD (nicht Phaser), damit man die Gefahr in JEDER Szene sieht (auch in
+   *  Region/Innenraum, wo der Szenen-Alarm-Sprite fehlt). Der Alarm-Banner zeigt die Details. */
+  setHazardFrame(active: boolean) {
+    $("hazard-frame").classList.toggle("hidden", !active);
+  },
+
   /* ========== Interaktion ========== */
   questMarkerFor(npcId: string) {
     const step = Game.currentStep();

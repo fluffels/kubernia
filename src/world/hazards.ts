@@ -71,6 +71,40 @@ export function pirateVictims<T extends { replicas: number }>(deployments: reado
   return deployments.filter(d => d.replicas >= 2);
 }
 
+/** Wie viele Repliken die Piraten von einem Opfer klauen: die Hälfte (abgerundet),
+ *  mindestens 1. Pur/testbar (vorher inline im Szenen-Start). */
+export function pirateSteal(replicas: number): number {
+  return Math.max(1, Math.floor(replicas / 2));
+}
+
+/** Welche Sturm-Schadensart auftritt (Buchstabendreher im Image vs. CrashLoop mit
+ *  fehlendem Secret). `rand` in [0,1). Pur, damit die 50/50-Verzweigung testbar ist. */
+export function stormFixKind(rand: number): "imagepull" | "crashloop" {
+  return rand < 0.5 ? "imagepull" : "crashloop";
+}
+
+/* ---------- Szenen-neutrale Weitergabe an die Präsentation (#540) ----------
+ * Seit #540 schreitet die Hazard-Zeitachse szenen-neutral in Game.tick fort (analog
+ * Wirtschaft/Uhr #501). Start/Auflösung/Countdown entstehen damit in der Anwendungsschicht
+ * (game/hazards.ts) – die darf die Präsentation (Welt-Sprites, Alarm-DOM, Belohnung) nicht
+ * importieren. Darum meldet die Anwendung ein `HazardEvent` entkoppelt über den runtime-Sink
+ * (`notifyHazard`, wie Payout-#501/Audio-#344), und die Präsentation (worldscene/events.ts)
+ * führt daraufhin die Effekte aus. Die Nutzdaten sind bewusst STRUKTUR (kein HTML) – die
+ * Präsentation formatiert die Alarm-Meldung selbst, damit hier keine Markup-Kopplung entsteht. */
+
+/** Was beim Start einer Gefahr an die Präsentation geht – genug, um die Alarm-Meldung zu
+ *  formatieren und das richtige Welt-Sprite zu spawnen. */
+export type HazardStartInfo =
+  | { kind: "storm"; dep: string; fix: "imagepull" | "crashloop" }
+  | { kind: "pirate"; dep: string; want: number; left: number }
+  | { kind: "kraken" };
+
+/** Ereignis aus dem szenen-neutralen Hazard-Takt an die Präsentation. */
+export type HazardEvent =
+  | { type: "start"; info: HazardStartInfo; deadlineSec: number }
+  | { type: "tick"; kind: HazardKind; secondsLeft: number }
+  | { type: "resolve"; kind: HazardKind; success: boolean; dep?: string };
+
 /** Der Kern: entscheidet pro laufender Gefahr, ob sie sich auflöst (Erfolg oder
  *  abgelaufene Deadline) oder nur weitertickt. Reihenfolge Sturm→Piraten→Krake
  *  wie im früheren inline-Block; da nur eine Gefahr gleichzeitig aktiv ist,
