@@ -46,6 +46,7 @@ import { nslookupCommand, curlCommand } from "./sim/net";
 import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, depEphemeralPeak, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
 import { randSuffix, clusterIP, suggest } from "./sim/util";
+import { makeRng, DEFAULT_SEED } from "./core/rng";
 import { resourceName, InvalidResourceNameError, rfc1123ErrorText, RFC1123_TIP } from "./sim/names";
 import { assertClusterInvariants } from "./sim/invariants";
 import { scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod } from "./sim/workload";
@@ -184,6 +185,13 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     // clustersync.ts synchronisiert nur bei geändertem `rev` statt jeden Frame. Flüchtig,
     // NICHT serialisiert (leitet sich aus dem Zustand ab).
     rev = 0;
+    // Instanz-eigener Zufallsstrom (#580): jede Sim hat ihren EIGENEN, in reset() aus
+    // `_seed` frisch geseedeten Strom für Pod-Namen/IDs (randSuffix/makePodName). Damit
+    // hängen die Namen nur an der Instanz + ihrem Seed, nicht an der globalen Ausführungs-
+    // reihenfolge (früher: geteilter globaler Strom → zwei Sims verschoben sich gegenseitig).
+    // Flüchtig, NICHT serialisiert – ein geladener Stand baut die Pods ohnehin neu auf.
+    rng!: () => number;
+    private readonly _seed: number;
     docker!: { pulled: string[]; containers: Container[] };
     nodes!: ClusterNode[];
     deployments!: Deployment[];
@@ -230,8 +238,9 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     _firingAlerts!: Set<string>;   // brennt gerade
     _resolvedAlerts!: Set<string>; // war mal an, Ursache inzwischen behoben
 
-    constructor(scenario: Scenario = {}) {
+    constructor(scenario: Scenario = {}, seed: number = DEFAULT_SEED) {
       this.scenario = scenario || {};
+      this._seed = seed >>> 0; // pro-Instanz-Seed (#580); Default → deterministisch reproduzierbar
       this.reset();
     }
 
@@ -242,6 +251,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       const sc = this.scenario;
       this.clock = 0; // jede Eingabe = ~20s Spielzeit, für AGE-Spalten
       this.rev++;     // #523: neuer/geladener Stand → Präsentation muss voll neu synchronisieren
+      this.rng = makeRng(this._seed); // #580: Instanz-Strom frisch seeden → Pod-Namen reproduzierbar ab reset
       this._resetDocker(sc);
       this._resetNodes(sc);
       this._resetDeployments(sc);
@@ -411,7 +421,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       if (d.broken && d.broken.type === "oomkilled") d.memLimit = 64;
       // Pods über die Aggregat-Mutation erzeugen (#488): hält `pods.length === replicas`
       // schon bei der Konstruktion (d.replicas ist bereits `replicas`, hier nur die Pods).
-      scaleDeployment(d, replicas, this.clock);
+      scaleDeployment(d, replicas, this.clock, this.rng);
       return d;
     }
 
@@ -453,7 +463,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       if (pvc.status === "Bound" && pvc.volume) return;
       const sc = pvc.storageClass ? this.storageClasses.find(s => s.name === pvc.storageClass) : null;
       if (sc && sc.provisioner) {
-        const pvName = "pvc-" + randSuffix(8);
+        const pvName = "pvc-" + randSuffix(8, this.rng);
         this.pvs.push({ name: pvName, capacity: pvc.capacity, status: "Bound", claim: "default/" + pvc.name, storageClass: sc.name, accessModes: pvc.accessModes, reclaimPolicy: sc.reclaimPolicy, created: this.clock });
         pvc.status = "Bound";
         pvc.volume = pvName;
@@ -577,7 +587,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       for (const d of this.deployments) {
         if (d.broken && d.broken.type === "imagepull" && d.broken.needsBuild && this._imageAvailable(d.image)) {
           d.broken = null;
-          replacePods(d, this.clock);
+          replacePods(d, this.clock, this.rng);
         }
       }
     }

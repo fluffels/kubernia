@@ -33,6 +33,7 @@ import { addDeployment, removeDeployment, scaleDeployment } from "./workload";
  *  gebunden. Hinzu
  *  kommen die in `sim.ts` verbleibenden Helfer, die helm ruft. */
 export interface HelmHost extends Pick<ClusterState, "helmRepos" | "charts" | "releases" | "deployments" | "services" | "files" | "clock"> {
+  rng: () => number; // Instanz-eigener Zufallsstrom (#580): scaleDeployment zieht Pod-Namen darüber
   _err(msg: string, tip?: string): string;
   _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment;
   _makeService(spec: { name: string; type?: string; port: string | number; targetPort?: string | number; externalName?: string }): ServiceRes;
@@ -300,7 +301,7 @@ function helmUpgrade(host: HelmHost, t: string[], raw: string): string {
   const newReplicas = replicas || rel.history[rel.history.length - 1].replicas;
   rel.history.push({ revision: rel.revision, replicas: newReplicas });
   const dep = host.deployments.find(d => d.name === rel.depName);
-  if (dep && replicas) scaleDeployment(dep, replicas, host.clock);
+  if (dep && replicas) scaleDeployment(dep, replicas, host.clock, host.rng);
   return 'Release "' + release + '" has been upgraded. Happy Helming!\nREVISION: ' + rel.revision;
 }
 
@@ -317,7 +318,7 @@ function helmRollback(host: HelmHost, t: string[]): string {
   rel.revision++;
   rel.history.push({ revision: rel.revision, replicas: target.replicas });
   const dep = host.deployments.find(d => d.name === rel.depName);
-  if (dep) scaleDeployment(dep, target.replicas, host.clock);
+  if (dep) scaleDeployment(dep, target.replicas, host.clock, host.rng);
   return "Rollback was a success! Happy Helming!";
 }
 

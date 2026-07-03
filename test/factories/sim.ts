@@ -9,9 +9,10 @@ export { KQSim };
 
 /** Frischer Simulator mit leerem Szenario – der gemeinsame Startzustand jeder
  *  sim-Modul-Test-Datei (`beforeEach(() => { sim = freshSim(); })`).
- *  Setzt zusätzlich den globalen Zufallsstrom (#492) auf einen festen Seed, damit
- *  Pod-Namen/IDs pro Testfall reproduzierbar und von der Ausführungsreihenfolge
- *  unabhängig sind. */
+ *  Pod-Namen/IDs sind seit #580 ohnehin instanz-lokal reproduzierbar (jede Sim seedet
+ *  in `reset()` ihren EIGENEN Strom), unabhängig von der Ausführungsreihenfolge. Der
+ *  globale Seed (#492) hier fixt nur noch die verbleibende Content-/Anwendungs-Zufälligkeit
+ *  (`pick`/Spaced-Repetition), die den globalen Strom nutzt. */
 export function freshSim(): KQSim {
   seedGlobalRng(0xC0FFEE);
   return new KQSim({});

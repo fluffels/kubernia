@@ -43,6 +43,7 @@ export interface DockerHost {
   docker: { pulled: string[]; containers: Container[] };
   files: Record<string, string>;
   clock: number;
+  rng: () => number; // Instanz-eigener Zufallsstrom (#580): Build-/Container-IDs statt globaler Strom
   _err(msg: string, tip?: string): string;
   _age(created: number): string;
 }
@@ -131,7 +132,7 @@ function dockerBuild(sim: DockerHost, t: string[]): string {
     copyLines ? " => [2/" + (copyLines + 1) + "] COPY/RUN-Schritte aus dem Dockerfile" : " => (keine weiteren Schichten)",
     " => exporting to image",
     " => => naming to docker.io/library/" + full,
-    "Successfully built " + randSuffix(12),
+    "Successfully built " + randSuffix(12, sim.rng),
     "Successfully tagged " + full,
   ].join("\n");
 }
@@ -194,14 +195,14 @@ function dockerRun(sim: DockerHost, t: string[]): string {
   if (flagAfterImage) return sim._err("docker run: Optionen wie -d/--name müssen VOR das Image.", "Alles nach dem Image ist der Container-Befehl. Muster: docker run [-d] [--name <name>] <image>");
   const typo = checkImageTypo(sim, image);
   if (typo) return typo;
-  if (!name) name = image.split(":")[0] + "-" + randSuffix(4);
+  if (!name) name = image.split(":")[0] + "-" + randSuffix(4, sim.rng);
   if (sim.docker.containers.some(c => c.name === name && c.running)) {
     return sim._err('docker: Container-Name "' + name + '" wird schon benutzt.', "Nimm einen anderen Namen oder stoppe den alten Container.");
   }
   const full = image.includes(":") ? image : image + ":latest";
   if (!sim.docker.pulled.includes(full)) sim.docker.pulled.push(full);
-  sim.docker.containers.push({ name, image: full, running: true, created: sim.clock, id: randSuffix(12) });
-  return randSuffix(64);
+  sim.docker.containers.push({ name, image: full, running: true, created: sim.clock, id: randSuffix(12, sim.rng) });
+  return randSuffix(64, sim.rng);
 }
 
 /** `docker ps [-a]` – laufende (mit -a: auch gestoppte) Container listen. */

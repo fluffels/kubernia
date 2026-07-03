@@ -8,15 +8,17 @@
  * (das gäbe einen Import-Zyklus). `sim.ts` und die Befehls-Module importieren hier.
  */
 import { asPodName, type PodName } from "./names";
-import { nextRandom, hashStr } from "../core/rng";
+import { hashStr } from "../core/rng";
 
 /** Zufällige Kleinbuchstaben-/Ziffern-Folge der Länge `len` – für Container-/Image-IDs.
- *  Zieht aus dem globalen Strom (`src/rng.ts`, #492), nicht aus `Math.random` –
- *  seedbar, damit Pod-Namen & IDs reproduzierbar werden. */
-export function randSuffix(len: number): string {
+ *  Zieht aus dem übergebenen Strom `rng` (#580) statt aus dem globalen `nextRandom`:
+ *  jede `Sim`-Instanz reicht ihren EIGENEN, in `reset()` geseedeten Strom durch (wie den
+ *  `clock`), damit Pod-Namen/IDs nur an der Instanz hängen, nicht an der globalen Ausführungs-
+ *  reihenfolge. Kein `Math.random` (Determinismus-SSOT, #492). */
+export function randSuffix(len: number, rng: () => number): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   let s = "";
-  for (let i = 0; i < len; i++) s += chars[Math.floor(nextRandom() * chars.length)];
+  for (let i = 0; i < len; i++) s += chars[Math.floor(rng() * chars.length)];
   return s;
 }
 
@@ -37,9 +39,9 @@ export function podIP(name: string): string {
 /** Pod-Name im echten Kubernetes-Stil: `<deployment>-<replicaset-hash>-<pod-suffix>`
  *  (z.B. `web-7d8f9c6b54-x2k9p`). Von `sim.ts` (reset/Helm/Argo) UND `sim/kubectl.ts`
  *  (scale/rollout/apply/delete-Self-Healing) gebraucht – darum hier als geteilter Helfer. */
-export function makePodName(depName: string): PodName {
+export function makePodName(depName: string, rng: () => number): PodName {
   // Intern erzeugt → vertrauenswürdig: ungeprüft branden (der Name ist per Konstruktion gültig).
-  return asPodName(depName + "-" + randSuffix(9) + "-" + randSuffix(5));
+  return asPodName(depName + "-" + randSuffix(9, rng) + "-" + randSuffix(5, rng));
 }
 
 /** Mit Leerzeichen auf Mindestbreite `n` auffüllen (Spalten-Ausrichtung der CLI-Tabellen). */
