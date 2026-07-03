@@ -13,6 +13,14 @@ name: Forum-Eingang
 # Den vollen Thread liest erst der /forum-Skill – dort gilt Discussion-Inhalt ausdrücklich
 # als Daten, nie als Instruktion.
 #
+# Board-Prio (#644): Seit #627 ist das Board-Feld `Prio` die SSOT der Reihenfolge –
+# ein Issue OHNE gesetztes `Prio` sortiert ganz nach unten. Damit ein frisch geflaggtes
+# Forum-Ticket nicht untergeht, setzt diese Action beim Anlegen das Board-`Prio`-Feld
+# direkt auf "Hoch" (GraphQL: addProjectV2ItemById idempotent + updateProjectV2ItemFieldValue).
+# ⚠️ Das braucht einen PAT mit `project`-Scope als Secret PROJECT_TOKEN – das
+# Standard-GITHUB_TOKEN kann NICHT in ein User-Project V2 schreiben. Fehlt das Secret,
+# wird nur gewarnt (das Inbox-Issue selbst entsteht trotzdem, sortiert dann ohne Prio).
+#
 # Damit discussion-Trigger feuern, muss diese Datei auf dem Default-Branch (main) liegen.
 
 on:
@@ -46,10 +54,42 @@ jobs:
           EVENT: ${{ github.event_name }}
           SENDER: ${{ github.event.sender.login }}
           COMMENT_URL: ${{ github.event.comment.html_url }}
+          # Board-Prio setzen (#644). Das Standard-GITHUB_TOKEN kann NICHT in ein
+          # User-Project V2 schreiben – dafür ein PAT mit project-Scope als Secret
+          # PROJECT_TOKEN. Fehlt es, wird nur gewarnt (siehe set_board_prio unten).
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          # IDs des KubeQuest-Backlog-Boards + Prio-Feld/Option (stabile Node-IDs,
+          # siehe docs/ticket-reihenfolge.md › Priorität pflegen).
+          PROJECT_ID: PVT_kwHOD8746c4Barq_
+          PRIO_FIELD_ID: PVTSSF_lAHOD8746c4Barq_zhXBLXs
+          PRIO_HOCH_OPTION: 2c80551d
         run: |
           set -euo pipefail
           marker="Forum #${DISC_NUMBER}:"
           link="${COMMENT_URL:-$DISC_URL}"
+
+          # Setzt das Board-Feld `Prio` eines frisch angelegten Issues auf "Hoch" (#644),
+          # damit ein Forum-Ticket in der Board-SSOT nicht ganz unten (ohne Prio) landet.
+          # addProjectV2ItemById ist idempotent: ist das Issue schon per Board-„Auto-add"
+          # drauf, kommt einfach die bestehende Item-ID zurück – der async-Race ist damit egal.
+          set_board_prio() {
+            local issue_url="$1"
+            if [ -z "${PROJECT_TOKEN:-}" ]; then
+              echo "::warning::PROJECT_TOKEN-Secret fehlt – Board-Prio für ${issue_url} nicht gesetzt (Issue sortiert ohne Prio ganz unten). PAT mit project-Scope als Secret PROJECT_TOKEN hinterlegen."
+              return 0
+            fi
+            local content_id
+            content_id=$(gh issue view "$issue_url" --repo "$REPO" --json id --jq .id)
+            local item_id
+            item_id=$(GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
+              -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }' \
+              -f p="$PROJECT_ID" -f c="$content_id" \
+              --jq '.data.addProjectV2ItemById.item.id')
+            GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
+              -f query='mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' \
+              -f p="$PROJECT_ID" -f i="$item_id" -f f="$PRIO_FIELD_ID" -f o="$PRIO_HOCH_OPTION" >/dev/null
+            echo "Board-Prio 'Hoch' gesetzt für ${issue_url} (item ${item_id})."
+          }
 
           # Unvertrauten externen Titel entschärfen (#531): Länge kappen, Backtick/HTML/
           # Pipe neutralisieren, einzeilig machen. Über stdin, um Argv-Escaping zu vermeiden.
@@ -80,8 +120,12 @@ jobs:
               "- Letzte Aktivität: **${SENDER}** (\`${EVENT}\`) → ${link}" \
               "" \
               "➡️ Mit dem \`/forum\`-Skill bearbeiten: Nachricht lesen → Antwort entwerfen (Formulierung von der Maintainerin freigeben lassen) → als \`fluffels\` posten → passendes Ticket anlegen/zuordnen → dieses Issue schließen. Details in AGENTS.md › Forum-Eingang.")
-            gh issue create --repo "$REPO" \
+            new_url=$(gh issue create --repo "$REPO" \
               --title "${marker} ${safe_title}" \
               --label "forum" \
-              --body "$body"
+              --body "$body")
+            echo "Angelegt: ${new_url}"
+            # Board-Prio direkt auf "Hoch" (#644) – nur beim NEUEN Issue, nicht beim
+            # Ergänzen eines bestehenden (das steht schon mit seiner Prio im Board).
+            set_board_prio "$new_url"
           fi
