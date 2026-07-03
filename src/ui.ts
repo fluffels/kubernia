@@ -18,6 +18,7 @@ import { setSaveFailedSink, setPayoutSink, setClockSink, worldScene } from "./ru
 import type { ChoiceStep } from "./types";
 import type { DrillTask } from "./content/drills";
 import type { CmdCard, QuizCard } from "./content/loader";
+import type { Achievement } from "./hud/celebrate";
 
 /* ── Typen des veränderlichen UI-Zustands (#423): ersetzen die früheren `as any`.
  *    Geschrieben/gelesen werden die Felder quer aus den ui/*-Bündeln über die
@@ -87,6 +88,7 @@ export const UI = {
   questLogViewIdx: null as number | null, // welche Quest im Logbuch gerade „nachgelesen" wird (null = Übersicht, #326)
   albumViewTopic: null as string | null, // welche Album-Seite (Thema) gerade offen ist (null = Übersicht, #278)
   reviewSel: -1,           // markierte Quiz-Option in der Wissensrunde (Pfeiltasten, #258)
+  pendingCelebrations: [] as Achievement[], // #314: aufgelaufene Erfolge, gebündelt gezeigt sobald der Spieler frei ist
   ...overlayUI,
   ...hudUI,
   ...questUI,

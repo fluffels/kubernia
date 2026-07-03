@@ -36,12 +36,26 @@ export const questUI = part({
   },
 
   afterStep() {
+    // #314: Album-Stand VOR dem Abschluss merken, um die durch diesen Abschluss neu
+    // freigeschalteten Einträge zu zählen (Befehle via completedQuests, Wissen via
+    // registerQuestCards → beides passiert gleich unten).
+    const albumBefore = this.albumUnlockedIds();
     const result = Game.advanceStep() || {};
     this._drillTask = null;
     if (result.questDone) {
       const q = result.questDone;
       Game.registerQuestCards(q.id);
+      // #314: neue Album-Einträge dieses Abschlusses als EINEN Erfolg vormerken, damit sie
+      // mit einem evtl. Rang-Aufstieg (aus reward()) zu EINEM Popup gebündelt werden.
+      const gained = [...this.albumUnlockedIds()].filter(id => !albumBefore.has(id)).length;
+      if (gained > 0) {
+        this.enqueueCelebration({
+          kind: "album", icon: "📖",
+          title: gained === 1 ? "1 neuer Album-Eintrag" : gained + " neue Album-Einträge",
+        });
+      }
       this.reward(q.rewardXp, q.rewardCoins, "🏁 Quest „" + q.title + "“ abgeschlossen!");
+      this.flushCelebrations(); // falls kein Rang-Aufstieg: Album-Erfolg trotzdem zeigen (sonst No-op)
       worldScene()?.burstAtPlayer("sparkle");
       return;
     }

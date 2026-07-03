@@ -37,7 +37,7 @@ describe("Overlay-Register (#505)", () => {
 
   test("BLOCKING_OVERLAY_IDS = alle acht blockierenden Overlays", () => {
     assert.deepEqual([...BLOCKING_OVERLAY_IDS].sort(), OVERLAYS.filter(o => o.blocking).map(o => o.id).sort());
-    assert.equal(BLOCKING_OVERLAY_IDS.length, 8, "aktuell sind alle acht Overlays blockierend (inkl. Rang-Aufstieg-Feier #223)");
+    assert.equal(BLOCKING_OVERLAY_IDS.length, 8, "aktuell sind alle acht Overlays blockierend (inkl. Erfolgs-Feier #314)");
   });
 
   test("KEYNAV_OVERLAY_IDS schließt Terminal + Wissensrunde bewusst aus (eigene Tastatur-Handler)", () => {
@@ -47,8 +47,8 @@ describe("Overlay-Register (#505)", () => {
     assert.ok(!KEYNAV_OVERLAY_IDS.includes("overlay-review"), "Wissensrunde hat einen eigenen reviewKey-Handler");
     assert.deepEqual(
       [...KEYNAV_OVERLAY_IDS].sort(),
-      ["overlay-album", "overlay-menu", "overlay-quest", "overlay-rankup", "overlay-shop", "overlay-stack"],
-      "keyNav = Stapel/Shop/Logbuch/Album/Menü/Rang-Aufstieg",
+      ["overlay-album", "overlay-celebrate", "overlay-menu", "overlay-quest", "overlay-shop", "overlay-stack"],
+      "keyNav = Stapel/Shop/Logbuch/Album/Menü/Erfolgs-Feier",
     );
   });
 
