@@ -43,7 +43,7 @@ Mehrere Chats/Agenten können **gleichzeitig** laufen. Damit sich zwei nie dasse
 
 - **Self-assign als „in Arbeit"-Marker:** beim Start sofort `gh issue edit <nr> --add-assignee @me` + mit `gh issue view` **verifizieren** (blockierend — ohne bestätigte Zuweisung kein Implementieren). Der Assignee ist der **einzige** Zustand, den ein paralleler Agent sehen kann; ein nur „im Kopf" gewähltes Ticket ist unsichtbar.
 - **Eigener `git worktree` pro Ticket** (`.claude/worktrees/kq-<nr>` auf eigenem Branch `feature/kq-<nr>-<slug>`) — **nicht nur** ein eigener Branch. Zwei Agenten im selben Arbeitsverzeichnis würden sich gegenseitig die Dateien unter den Füßen wegziehen; getrennte Worktrees isolieren das vollständig.
-- Am Ende: Feature-Branch pushen → **PR öffnen** (`gh pr create`, Body `Closes #<nr>`) → grüne Required-Checks abwarten → **PR mergen** (`gh pr merge --squash --delete-branch`) → Worktree entfernen → Issue schließt via `Closes`, **jeder Schritt verifiziert**. PR-gegated seit #592, kein Direkt-Push auf `main`.
+- Am Ende (**ein PR pro Ticket**, #618): Kopf-/Doku-Pflege in denselben Branch → pushen → **PR öffnen** (`gh pr create`, Body `Closes #<nr>`) → **CI abwarten und den PR bis zum Merge bringen** (Auto-Merge + `gh pr checks --watch`; grün → mergt, rot → auf dem Branch fixen bis grün) → Worktree entfernen → Issue schließt via `Closes`, **jeder Schritt verifiziert**. PR-gegated seit #592, kein Direkt-Push auf `main`; **ein Ticket ist erst fertig, wenn sein PR gemergt ist** — kein offener/roter PR bleibt liegen.
 
 Fallstricke (Windows-Cleanup: laufende Dev-Server killen, nicht in den Worktree `cd`en; `node_modules` nicht per Junction verlinken): [AGENTS.md › Kollisionsschutz](../AGENTS.md#wo-die-todos-leben).
 
@@ -136,10 +136,10 @@ So greifen die Bausteine bei **einem** Ticket ineinander — jeder Schritt ist e
    │  Gates lokal grün: test · typecheck · lint · arch · size ·     │  ← Fehler an der Grenze
    │  docmap · docdrift · smoke · audit + im Browser verifiziert    │
    │                          ▼                                     │
-   │  PR öffnen → CI-Required-Checks grün → PR mergen (--squash)    │  ← blockierende Grenze
+   │  PR öffnen → CI abwarten → mergt (rot? fixen bis grün)         │  ← blockierende Grenze; fertig erst bei Merge (#618)
    │                          ▼                                     │
    │  Issue schließen (verifiziert) → Worktree/Branch weg → Board   │
-   │  + Reihenfolge pflegen ("puh, fertig")                         │
+   │  (Kopf-/Doku-Pflege im SELBEN PR #618)                         │
    └───────────────────────────────────────────────────────────────┘
 ```
 
