@@ -133,7 +133,7 @@ gesetztes Ziel**; bewusst akzeptiert, kein Folge-Ticket.
 
 - **Dimension 1** → **ein** fokussiertes Folge-Ticket: farb-unabhängige Statuscodierung
   nachrüsten (Quiz ✓/✗-Präfix, Docker-Fässer laufend/gestoppt-Marker, optional
-  Pod-Kisten). `prio:niedrig`, `area:grafik` — das konkrete Symbol/Aussehen wird bei der
+  Pod-Kisten). Prio Niedrig, `area:grafik` — das konkrete Symbol/Aussehen wird bei der
   Umsetzung mit der Maintainerin abgestimmt (Optik-Regel, [AGENTS.md](../AGENTS.md)).
 - **Dimension 2** → kein Ticket (bereits vollständig bedienbar).
 - **Dimension 3** → kein Ticket (WCAG AA erfüllt; AAA bewusst nicht Ziel).
