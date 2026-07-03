@@ -36,6 +36,7 @@ import { addDeployment, scaleDeployment } from "./workload";
  *  gebunden. Hinzu kommen die in `sim.ts` verbleibenden Helfer, die Argo ruft:
  *  Fehlerausgabe, Pod-Readiness und die Deployment-Fabrik. */
 export interface ArgocdHost extends Pick<ClusterState, "argoApps" | "deployments" | "services" | "clock"> {
+  rng: () => number; // Instanz-eigener Zufallsstrom (#580): scaleDeployment im Reconcile zieht Pod-Namen darüber
   _err(msg: string, tip?: string): string;
   _podReady(d: Deployment): boolean;
   _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment;
@@ -136,7 +137,7 @@ export function argoReconcile(host: ArgocdHost, app: ArgoApp): void {
     addDeployment(host, host._makeDeployment(d.name, d.image, d.replicas));
   } else {
     dep.image = d.image;
-    scaleDeployment(dep, d.replicas, host.clock);
+    scaleDeployment(dep, d.replicas, host.clock, host.rng);
     dep.broken = null; // ein gesundes Git-Manifest heilt auch eine kaputte Workload
   }
   const s = app.desired!.service;

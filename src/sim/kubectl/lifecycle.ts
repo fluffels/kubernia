@@ -267,7 +267,7 @@ function deletePod(host: KubectlHost, name: string): string {
   if (dep) {
     host.lastDeletedPod = name;
     host._resetEphemeral(dep);
-    replaceDeploymentPod(dep, name, host.clock);
+    replaceDeploymentPod(dep, name, host.clock, host.rng);
     return 'pod "' + name + '" deleted';
   }
   const sts = host.statefulSets.find(s => s.pods.some(p => p.name === name));
