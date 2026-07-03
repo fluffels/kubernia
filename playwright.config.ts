@@ -30,5 +30,19 @@ export default defineConfig({
     // Bei Fehlschlag eine Trace zur Diagnose sichern (test-results/).
     trace: "retain-on-failure",
   },
+  // Dev-Server für den Lern-Loop-Smoke (#602). Die Boot-/Interaktions-/Perf-/A11y-
+  // Smokes laden den gebauten OFFLINE-Build per file:// (kein Server nötig); der
+  // Lern-Loop-Smoke braucht aber die Dev-Affordanzen `window.kqGame`/`kqDev` (in
+  // main.ts hinter `import.meta.env.DEV`, im Offline-/Prod-Build rausgestrippt),
+  // um die Figur ohne fragile Blind-Navigation an den Quiz-/Drill-NPC zu setzen –
+  // Begründung im Kopf von e2e/learning-loop.spec.ts. Playwright startet dafür
+  // `npm run dev` und wartet, bis der Vite-Server steht; lokal wird ein bereits
+  // laufender wiederverwendet.
+  webServer: {
+    command: "npm run dev",
+    url: "http://localhost:5173",
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 });
