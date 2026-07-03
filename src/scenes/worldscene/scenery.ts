@@ -12,8 +12,7 @@
 import Phaser from "phaser";
 import { pickPlacements, strSeed, hash01, grassTuftStyle } from "../../world/decor";
 import { circleHitbox, rectHitbox, SHIP_DOOR } from "../../world/world";
-import { gameClock, DAY_CYCLE_MS, withStartOffset } from "../../core/clock";
-import { UI } from "../../ui";
+import { DAY_CYCLE_MS, withStartOffset } from "../../core/clock";
 import { WORLD_TO_ARCHIPEL } from "../../world/regions/archipel";
 import { WORLD_TO_LIGHTHOUSE } from "../../world/regions/lighthouse";
 import { WORLD_TO_WAREHOUSE } from "../../world/regions/warehouse";
@@ -139,8 +138,10 @@ export function scatter(scene: WorldSceneLike, tex: string, count: number, scale
 /** Tag-Nacht-Zyklus: sanft animierter Lichtschleier über der Welt + Laternen-Glühen,
  *  das bei Dämmerung/Nacht aufleuchtet. Ein voller Tag dauert DAY_CYCLE_MS. (#4)
  *  `time` ist seit #413 die PERSISTENTE Spiel-Zeit (aus `GameState.gameDays`, in ms),
- *  nicht mehr die flüchtige Frame-Zeit – Schleier + Uhr setzen also nach einem Reload
- *  am gespeicherten Zeitpunkt fort (die WorldScene reicht sie so herein). */
+ *  nicht mehr die flüchtige Frame-Zeit – der Schleier setzt also nach einem Reload
+ *  am gespeicherten Zeitpunkt fort (die WorldScene reicht sie so herein). Die HUD-Uhr-
+ *  Anzeige läuft seit #588 szenen-neutral über Game.tick (runtime-Clock-Sink), nicht mehr
+ *  hier – bleibt aber synchron, weil sie aus derselben Achse mit demselben Offset ableitet. */
 export function updateDayNight(scene: WorldSceneLike, time: number) {
   const CYCLE = DAY_CYCLE_MS;                    // Tempo zentral in clock.ts justieren (SSOT)
   // Spielstart-Offset (#336): time=0 → früher Morgen (06:00, phase 0.75) statt Mittag.
@@ -170,9 +171,10 @@ export function updateDayNight(scene: WorldSceneLike, time: number) {
   // Laternen an die Schleier-Dichte koppeln: glühen, sobald es dämmert
   const lampLvl = Phaser.Math.Clamp(alpha / 0.42, 0, 1) * 0.7;
   for (const lg of scene.lampGlows) lg.setAlpha(lampLvl);
-  // Uhrzeit + Datum aus derselben time/CYCLE-Quelle → garantiert synchron zum Schleier (#39)
-  const clock = gameClock(time, CYCLE);
-  UI.setClock(clock.dateLabel, clock.timeLabel, clock.title);
+  // Die HUD-Uhr-Anzeige (Datum/Uhrzeit) setzt seit #588 der szenen-neutrale Game.tick über den
+  // runtime-Clock-Sink – nicht mehr hier, sonst fror sie in Region-/Interior-Szenen ein. Uhr
+  // und Schleier bleiben trotzdem synchron: beide leiten aus derselben Achse (GameState.gameDays
+  // → time/CYCLE) mit demselben Start-Offset (withStartOffset) ab (#39/#336).
 }
 
 export function renderStatics(scene: WorldSceneLike) {

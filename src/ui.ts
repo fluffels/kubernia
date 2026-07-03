@@ -14,7 +14,7 @@ import { albumUI } from "./ui/album";
 import { shopUI } from "./ui/shop";
 import { quizUI } from "./ui/quiz";
 import { saveUI } from "./ui/save";
-import { setSaveFailedSink, setPayoutSink, worldScene } from "./runtime";
+import { setSaveFailedSink, setPayoutSink, setClockSink, worldScene } from "./runtime";
 import type { ChoiceStep } from "./types";
 import type { DrillTask } from "./content/drills";
 
@@ -101,4 +101,12 @@ setSaveFailedSink(() => {
 setPayoutSink((amount) => {
   UI.refreshHud();
   worldScene()?.payoutFloat?.(amount);
+});
+
+/* #588: die HUD-Uhr-Anzeige (Datum/Uhrzeit) setzte früher nur die WorldScene (updateDayNight)
+ * → in Region-/Interior-Szenen fror sie ein. Jetzt meldet der szenen-neutrale Game.tick die
+ * Uhr-Labels entkoppelt über den runtime-Sink (wie Payout-#501); hier schreibt die Präsentation
+ * sie ins HUD. setClock dedupliziert per Signatur, schreibt also nur bei echter Änderung. */
+setClockSink((dateLabel, timeLabel, title) => {
+  UI.setClock(dateLabel, timeLabel, title);
 });
