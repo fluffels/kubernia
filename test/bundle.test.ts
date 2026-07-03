@@ -25,13 +25,15 @@ import * as checkBundle from "../scripts/check-bundle.mjs";
 
 type Budget =
   | { label: string; kind: "file"; path: string; maxBytes: number }
-  | { label: string; kind: "game-chunks"; dir: string; maxBytes: number };
+  | { label: string; kind: "game-chunks"; dir: string; maxBytes: number }
+  | { label: string; kind: "vendor-chunk"; dir: string; maxBytes: number };
 type Io = { exists: (p: string) => boolean; size: (p: string) => number; list: (p: string) => string[] | null };
 type Measured = { label: string; maxBytes: number; bytes: number; files: string[]; missing: boolean; over: boolean };
 
 const BUNDLE_BUDGETS: Budget[] = checkBundle.BUNDLE_BUDGETS;
 const isVendorChunk: (n: string) => boolean = checkBundle.isVendorChunk;
 const isGameChunk: (n: string) => boolean = checkBundle.isGameChunk;
+const CHUNK_FILTERS: Record<string, (n: string) => boolean> = checkBundle.CHUNK_FILTERS;
 const evaluateBudget: (bytes: number, max: number) => boolean = checkBundle.evaluateBudget;
 const fmtBytes: (n: number) => string = checkBundle.fmtBytes;
 const measureBudget: (b: Budget, io: Io) => Measured = checkBundle.measureBudget;
@@ -112,6 +114,63 @@ describe("Bundle-Größenbudget (#503)", () => {
     assert.deepEqual(r.files, ["dist/assets/index-a.js", "dist/assets/rolldown-runtime-b.js"]);
   });
 
+  test("measureBudget (vendor-chunk): summiert NUR den Phaser-vendor, ignoriert Spielcode/css/png (#595)", () => {
+    const io = fakeIo(
+      {
+        "dist/assets/index-a.js": 1_000_000, // Spielcode – darf NICHT mitgezählt werden
+        "dist/assets/rolldown-runtime-b.js": 19_019, // Glue – darf NICHT mitgezählt werden
+        "dist/assets/vendor-c.js": 1_198_788, // NUR das zählt
+        "dist/assets/index-a.css": 29_485,
+        "dist/assets/container.png": 9_459,
+      },
+      {
+        "dist/assets": ["index-a.js", "rolldown-runtime-b.js", "vendor-c.js", "index-a.css", "container.png"],
+      },
+    );
+    const b: Budget = { label: "vendor", kind: "vendor-chunk", dir: "dist/assets", maxBytes: 1_350_000 };
+    const r = measureBudget(b, io);
+    assert.equal(r.bytes, 1_198_788, "nur der vendor-Chunk zählt");
+    assert.equal(r.over, false, "1.14 MiB liegt unter 1.35 MB Budget");
+    assert.deepEqual(r.files, ["dist/assets/vendor-c.js"]);
+  });
+
+  test("measureBudget (vendor-chunk): aufgeblähter Phaser-Bump kippt das eigene Gate (#595)", () => {
+    const io = fakeIo(
+      { "dist/assets/vendor-c.js": 1_500_000, "dist/assets/index-a.js": 1_000_000 },
+      { "dist/assets": ["vendor-c.js", "index-a.js"] },
+    );
+    const b: Budget = { label: "vendor", kind: "vendor-chunk", dir: "dist/assets", maxBytes: 1_350_000 };
+    const r = measureBudget(b, io);
+    assert.equal(r.bytes, 1_500_000, "nur der vendor-Chunk, nicht der Spielcode");
+    assert.equal(r.over, true, "1.5 MB > 1.35 MB Budget → über");
+  });
+
+  test("measureBudget (vendor-chunk): fehlendes dist/ ODER kein Vendor-Chunk → missing", () => {
+    const b: Budget = { label: "vendor", kind: "vendor-chunk", dir: "dist/assets", maxBytes: 1_350_000 };
+    assert.equal(measureBudget(b, fakeIo({})).missing, true, "kein dist/assets → missing");
+    // Verzeichnis da, aber nur Spielcode/Assets, kein Vendor-Chunk (z.B. Vendor-Split entfernt).
+    const io = fakeIo(
+      { "dist/assets/index-a.js": 1_000_000, "dist/assets/x.png": 100 },
+      { "dist/assets": ["index-a.js", "x.png"] },
+    );
+    assert.equal(measureBudget(b, io).missing, true, "kein messbarer Vendor-Chunk → missing, nicht still grün");
+  });
+
+  test("CHUNK_FILTERS: game-chunks und vendor-chunk sind komplementär (#595)", () => {
+    // Jeder JS-Chunk (kein .map) fällt in genau eines der beiden Budgets – kein Chunk
+    // wird doppelt gezählt, keiner fällt zwischen die Budgets.
+    for (const name of ["vendor-clUN07v7.js", "index-Cvecvphz.js", "rolldown-runtime-QTnfLwEv.js"]) {
+      const inGame = CHUNK_FILTERS["game-chunks"](name);
+      const inVendor = CHUNK_FILTERS["vendor-chunk"](name);
+      assert.equal(inGame !== inVendor, true, `${name}: genau eines von game/vendor, nie beides/keines`);
+    }
+    // Nicht-JS bzw. Sourcemaps fallen in KEIN Chunk-Budget.
+    for (const name of ["index-Cvecvphz.css", "index-Cvecvphz.js.map", "container-DTEZjtah.png"]) {
+      assert.equal(CHUNK_FILTERS["game-chunks"](name), false, `${name}: nicht im Spielcode-Budget`);
+      assert.equal(CHUNK_FILTERS["vendor-chunk"](name), false, `${name}: nicht im Vendor-Budget`);
+    }
+  });
+
   test("measureBudget (game-chunks): fehlendes dist/ ODER kein JS-Chunk → missing", () => {
     const b: Budget = { label: "code", kind: "game-chunks", dir: "dist/assets", maxBytes: 1_250_000 };
     // Verzeichnis fehlt ganz.
@@ -126,8 +185,8 @@ describe("Bundle-Größenbudget (#503)", () => {
 
   test("checkBundle: unter Budget → nicht missing, nicht über", () => {
     const io = fakeIo(
-      { "dist-offline/index.html": 2_500_000, "dist/assets/index-a.js": 1_100_000 },
-      { "dist/assets": ["index-a.js"] },
+      { "dist-offline/index.html": 2_500_000, "dist/assets/index-a.js": 1_100_000, "dist/assets/vendor-c.js": 1_150_000 },
+      { "dist/assets": ["index-a.js", "vendor-c.js"] },
     );
     const r = check({ io });
     assert.equal(r.missing, false);
@@ -137,12 +196,25 @@ describe("Bundle-Größenbudget (#503)", () => {
 
   test("checkBundle: ein Artefakt über Budget → over=true", () => {
     const io = fakeIo(
-      { "dist-offline/index.html": 9_000_000, "dist/assets/index-a.js": 1_100_000 },
-      { "dist/assets": ["index-a.js"] },
+      { "dist-offline/index.html": 9_000_000, "dist/assets/index-a.js": 1_100_000, "dist/assets/vendor-c.js": 1_150_000 },
+      { "dist/assets": ["index-a.js", "vendor-c.js"] },
     );
     const r = check({ io });
     assert.equal(r.over, true, "die aufgeblähte Offline-HTML kippt das Gate");
     assert.equal(r.missing, false);
+  });
+
+  test("checkBundle: aufgeblähter Vendor-Chunk allein kippt das Gate (#595)", () => {
+    // Offline + Spielcode im Budget, nur der Phaser-Vendor läuft weg → over=true.
+    const io = fakeIo(
+      { "dist-offline/index.html": 2_500_000, "dist/assets/index-a.js": 1_100_000, "dist/assets/vendor-c.js": 1_500_000 },
+      { "dist/assets": ["index-a.js", "vendor-c.js"] },
+    );
+    const r = check({ io });
+    assert.equal(r.missing, false);
+    assert.equal(r.over, true, "der Vendor-Chunk über seinem eigenen Budget kippt das Gate");
+    const vendorResult = r.results.find((x) => x.label.includes("(#595)"));
+    assert.equal(vendorResult?.over, true, "genau das Vendor-Budget ist über");
   });
 
   test("checkBundle: fehlende Artefakte → missing=true (Gate wird rot, nicht still grün)", () => {
@@ -166,14 +238,18 @@ describe("Bundle-Größenbudget (#503)", () => {
     assert.equal(check({ io: fakeIo(files, dirs), budgets: huge }).over, false, "riesiges Budget darf nie treffen");
   });
 
-  test("BUNDLE_BUDGETS: zwei plausible, positive Budgets (offline-Datei + Spielcode-Chunks)", () => {
-    assert.equal(BUNDLE_BUDGETS.length, 2);
+  test("BUNDLE_BUDGETS: drei plausible, positive Budgets (offline-Datei + Spielcode- + Vendor-Chunk)", () => {
+    assert.equal(BUNDLE_BUDGETS.length, 3);
     const kinds = BUNDLE_BUDGETS.map((b) => b.kind).sort();
-    assert.deepEqual(kinds, ["file", "game-chunks"]);
+    assert.deepEqual(kinds, ["file", "game-chunks", "vendor-chunk"]);
     for (const b of BUNDLE_BUDGETS) {
       assert.ok(Number.isFinite(b.maxBytes) && b.maxBytes > 0, `${b.label}: maxBytes muss positiv sein`);
       // Grobe Sanity: Budgets liegen im Megabyte-Bereich (nicht versehentlich 0/KB oder GB).
       assert.ok(b.maxBytes > 500_000 && b.maxBytes < 20_000_000, `${b.label}: maxBytes plausibel im MB-Bereich`);
+    }
+    // Jedes Chunk-Budget hat einen Filter in CHUNK_FILTERS (kind-generische Messung).
+    for (const b of BUNDLE_BUDGETS.filter((x) => x.kind !== "file")) {
+      assert.equal(typeof CHUNK_FILTERS[b.kind], "function", `${b.kind}: Filter in CHUNK_FILTERS vorhanden`);
     }
   });
 

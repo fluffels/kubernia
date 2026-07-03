@@ -136,7 +136,11 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
       // invalidieren nur den kleinen Spielchunk. Der Vendor-Chunk selbst ist
       // bewusst >500 kB (Phaser ist eine Game-Engine), daher chunkSizeWarningLimit
       // hochgesetzt – ein unerwartetes Wachstum des Spielcode-Chunks würde trotzdem
-      // auffallen, weil er deutlich unter dem Limit bleibt.
+      // auffallen, weil er deutlich unter dem Limit bleibt. Für den Vendor-Chunk ist
+      // `chunkSizeWarningLimit` NICHT das einzige Netz mehr: er hat seit #595 sein
+      // eigenes hartes, ratchetbares Byte-Gate in scripts/check-bundle.mjs
+      // (BUNDLE_BUDGETS, kind "vendor-chunk") – ein Phaser-Bump, der ihn aufbläht,
+      // bricht dort die CI statt nur eine Log-Warnung zu drucken.
       ...(singleFile
         ? {}
         : {
