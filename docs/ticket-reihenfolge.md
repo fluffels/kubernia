@@ -48,6 +48,7 @@ Das Board (`Prio`-Feld) ist die **einzige** Prio-Quelle; die früheren `prio:*`-
 - **Abhängigkeit** („A vor B"): als Notiz `blockiert durch #X` in den **Body** des abhängigen Issues. Die Auswahl fängt das am Kandidaten-Check ab (offener Blocker → überspringen), nicht im Sortier-Befehl.
 - **Zurückstellen:** Label `status:zurückgestellt` (wird übersprungen, **nicht** verworfen). Reaktivieren = Label entfernen.
 - **Neues Issue:** wandert per „Auto-add to project"-Board-Workflow automatisch aufs Board — danach **`Prio` setzen nicht vergessen** (ohne Prio landet es ganz unten).
+- **Forum-Issues** setzen ihre `Prio` selbst: die Action [`.github/workflows/forum-inbox.yml`](../.github/workflows/forum-inbox.yml) setzt beim Anlegen direkt **Hoch** (#644, GraphQL mit den Feld-/Options-IDs oben). ⚠️ Das braucht ein Repo-Secret **`PROJECT_TOKEN`** (PAT mit `project`-Scope) — das Standard-`GITHUB_TOKEN` kann kein User-Project V2 beschreiben; fehlt es, warnt die Action nur (Issue ohne Prio). Feld-IDs: Projekt `PVT_kwHOD8746c4Barq_`, Prio-Feld `PVTSSF_lAHOD8746c4Barq_zhXBLXs`.
 
 ## Kein „puh, fertig"-Schritt mehr
 
