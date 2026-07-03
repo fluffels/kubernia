@@ -275,7 +275,12 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     _resetNodes(sc: Scenario) {
       // „bare metal" (#460): ein leerer/zerstörter Cluster startet OHNE Nodes – sonst der
       // klassische 3-Knoten-Default. Explizit vorgegebene `nodes` gewinnen in beiden Fällen.
-      this.nodes = (sc.nodes || (sc.bareMetal ? [] : DEFAULT_NODES)).map(n => Object.assign({}, n));
+      // #596 (Zwilling zu #577): über die Node-Aggregat-SSOT `provisionNode` statt rohem
+      // `Object.assign({}, n)` – füllt fehlende Pflichtfelder (status/roles/version) mit den
+      // Cluster-Defaults, statt einen Teil-Spec als strukturell illegalen ClusterNode zu
+      // übernehmen (sonst bricht deriveControlPlane gleich unten an `roles === undefined`).
+      this.nodes = [];
+      for (const n of sc.nodes || (sc.bareMetal ? [] : DEFAULT_NODES)) provisionNode(this, n);
       // Control-Plane-Bootstrap (#460): Lage aus Szenario/Snapshot ableiten (Helfer in sim/kubeadm).
       this.controlPlane = deriveControlPlane(sc, this.nodes);
     }
