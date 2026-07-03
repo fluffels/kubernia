@@ -18,9 +18,14 @@
  *     macht die rand-Injektion bereits vor.
  *
  * Bewusst Phaser-frei und importfrei (Leaf-Modul → kein Zyklus). Es ist die EINE
- * Stelle im Baum, an der Zufall entsteht; `src/sim/**` und `src/content/**` dürfen
- * `Math.random` nicht mehr nutzen (ESLint `no-restricted-properties` + Fitness-
- * Function `test/rng.test.ts`).
+ * Stelle im Baum, an der Zufall entsteht. Der Determinismus-Scope (#492, ausgeweitet
+ * #591) umfasst alle zustandstragenden Schichten – die pure Domäne (`src/sim/**`,
+ * `src/content/**`, `src/world/**`, `src/hud/**`, `src/core/**`) und die Anwendung
+ * (`src/game/**`) – dort ist `Math.random` verboten (ESLint `no-restricted-properties`
+ * + Fitness-Function `test/rng.test.ts`). BEWUSST ausgenommen ist die Präsentation
+ * (`src/scenes/**`, `src/ui/**`, `src/sfx.ts`): dort ist Zufall rein optisch/Timing
+ * (Möwen-Spawns, Tween-Jitter, floatText-Position, Phaser-Gefahren-Terminierung) und
+ * berührt keinen snapshot-stabilen Zustand.
  */
 
 /** mulberry32 – winziger, schneller, seedbarer 32-Bit-PRNG. Gleicher Seed →

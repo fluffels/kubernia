@@ -3,6 +3,7 @@
  * (#222/#323) und das freie, planungsneutrale Üben. Anwendungsschicht, Phaser-frei. */
 import { KQContent } from "../content";
 import { krallePracticeMilestone, kralleClawAside } from "../hud/kralle";
+import { nextRandom } from "../core/rng";
 import { part, today, pickWeighted } from "./shared";
 
 const BOX_INTERVALS: Record<number, number> = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16 };
@@ -115,8 +116,8 @@ export const spacedRepetitionBundle = part({
    *  NICHT (anders als reviewResult). So kann man so oft üben, wie man will. */
   freeReviewItems(limit?: number) {
     const ids = Object.keys(this.state.review);
-    for (let i = ids.length - 1; i > 0; i--) {       // Fisher-Yates-Shuffle
-      const j = Math.floor(Math.random() * (i + 1));
+    for (let i = ids.length - 1; i > 0; i--) {       // Fisher-Yates-Shuffle (aus dem rng-SSOT, #591)
+      const j = Math.floor(nextRandom() * (i + 1));
       [ids[i], ids[j]] = [ids[j], ids[i]];
     }
     return ids.slice(0, limit || 10);
@@ -173,7 +174,7 @@ export const spacedRepetitionBundle = part({
    *  Tests). Leerer Pool → "". Der reine Auswahl-Kern liegt seit #513 als freie, isoliert
    *  testbare Funktion `pickWeighted` in shared.ts – hier wird nur die Gewichtung (Lernstand)
    *  eingehängt. */
-  pickWeightedPractice(pool: string[], rand: () => number = Math.random): string {
+  pickWeightedPractice(pool: string[], rand: () => number = nextRandom): string {
     return pickWeighted(pool, id => this.masteryWeight(id), rand) ?? "";
   },
 
@@ -181,7 +182,7 @@ export const spacedRepetitionBundle = part({
    *  werden Wiederholungen vermieden (jede gezogene fällt aus dem Topf); ist der Pool
    *  kleiner als `count`, sind Wiederholungen erlaubt (sonst ginge die Runde nicht voll).
    *  `rand` injizierbar für Tests. */
-  pickWeightedDrills(pool: string[], count: number, rand: () => number = Math.random): string[] {
+  pickWeightedDrills(pool: string[], count: number, rand: () => number = nextRandom): string[] {
     if (pool.length === 0) return [];
     const out: string[] = [];
     let remaining = pool.slice();
