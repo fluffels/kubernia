@@ -5,7 +5,7 @@ import { SFX } from "../sfx";
 import { TALK_RANGE, interiorEAction, interiorEFlank, type Door } from "../world/world";
 import { keys, setInteriorOpen } from "../runtime";
 import { sanitize } from "../hud/pixelfont";
-import { T, STONE, WOOD, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, pixelText, readMoveInput, faceFrom, type ScenePlayer } from "./shared";
+import { T, STONE, WOOD, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, pixelText, renderPlayer, stepSimplePlayer, type ScenePlayer } from "./shared";
 
 /* ===== InteriorScene (#6) – betretbarer Hausinnenraum =====
  * Wird von WorldScene.enterInterior() als eigene Szene gestartet, während die
@@ -190,18 +190,10 @@ export class InteriorScene extends Phaser.Scene {
     const pl = this.pl;
     const blocked = UI.blocking();
 
-    const { dx, dy } = readMoveInput(blocked);
-    pl.moving = dx !== 0 || dy !== 0;
-    if (pl.moving) {
-      const len = Math.hypot(dx, dy);
-      pl.face = faceFrom(dx, dy, pl.face);
-      this.tryMove(dx / len * 70 * dt, dy / len * 70 * dt);
-      this.bobT += dt * 12;
-    }
-    const bob = pl.moving ? Math.abs(Math.sin(this.bobT)) * 1.6 : 0;
-    const faceTex = pl.face === "south" ? "char_player" : "char_player_" + pl.face;
-    this.pSprite.setTexture(faceTex).setPosition(pl.x, pl.y + 6 - bob).setDepth(pl.y + 8);
-    this.pShadow.setPosition(pl.x, pl.y + 6);
+    // Bewegung + Bob + Render gemeinsam über die Szenen-Helfer (#601, Forts. #564): der
+    // Innenraum bewegt sich mit 70 px/s über sein eigenes achsenweises tryMove.
+    this.bobT = stepSimplePlayer(pl, dt, blocked, 70, this.bobT, (mx, my) => this.tryMove(mx, my));
+    renderPlayer(this.pSprite, this.pShadow, pl, this.bobT);
 
     // #201: E ist kontextabhängig. Steht der Spieler beim Bewohner (in
     // Talk-Reichweite) → mit ihm reden; sonst (E-Flanke oder auf der
