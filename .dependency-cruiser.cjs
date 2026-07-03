@@ -84,6 +84,10 @@ module.exports = {
           // bewusst NUR der Test-Wächter test/learnorder.test.ts aufruft – kein src-Laufzeit-Import. Da
           // check:arch nur `src` cruist, gilt das Modul sonst fälschlich als verwaist (#390).
           "^src/content/learnorder\\.ts$",
+          // Quiz-Korrektheits-Wächter (#597): reine Prüflogik (correctAnswers/snapshotViolations/
+          // indexConventionViolations), die bewusst NUR der Test-Wächter test/quizcheck.test.ts
+          // aufruft – kein src-Laufzeit-Import, genau wie learnorder.ts darüber.
+          "^src/content/quizcheck\\.ts$",
         ],
       },
       to: {},
