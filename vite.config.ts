@@ -119,6 +119,13 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
     // `apply: "serve"`-Plugin inaktiv und bleibt wirkungslos.
     plugins: singleFile ? [viteSingleFile()] : [devNoFullReload()],
     build: {
+      // #594: Browser-Syntax-Floor EXPLIZIT auf es2022 gepinnt statt Vites
+      // implizitem, undokumentiertem `modules`-Default (~chrome87/safari14). So
+      // deckt sich der ausgelieferte Sprachstand mit der tsconfig-`target: ES2022`
+      // (Typecheck) — ein Auseinanderlaufen (Typen erlauben ES2022, das Bundle
+      // würde tiefer gesenkt) ist damit ausgeschlossen. es2022 ist im Browser
+      // universell verfügbar (Chrome/Edge 94, Firefox 93, Safari 15.4; 2021/2022).
+      target: "es2022",
       outDir: devpanel ? "dist-devpanel" : offline ? "dist-offline" : "dist",
       emptyOutDir: true,
       // #199: Phaser (~1,9 MB) in einen eigenen langlebigen Vendor-Chunk auslagern.
