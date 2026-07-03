@@ -11,14 +11,14 @@
 ```
 1. npm run setup                            # einmalig: prüft Node, npm install, Tests+Typecheck+Arch-Check (oder nur npm install)
 2. npm run dev                              # Dev-Server, angezeigte Adresse im Browser öffnen
-3. docs/ticket-reihenfolge.md               # nächstes Ticket = oberstes freies im KURATIERTEN KOPF (leer → Auto-Rest Prio→Nummer; gh issue list --state open --limit 500, ohne --limit nur die 30 neuesten)
+3. docs/ticket-reihenfolge.md               # nächstes Ticket = oberstes freies nach Board-Prio→Nummer (gh project item-list 1 --owner fluffels --format json --limit 800; braucht read:project-Scope)
 4. gh issue edit <nr> --add-assignee @me    # SOFORT claimen = "in Arbeit"-Marker, dann mit gh issue view <nr> prüfen
 5. git worktree add .claude/worktrees/kq-<nr> -b feature/kq-<nr>-<slug>   # eigener Worktree, bevor du Dateien anfasst
 6. coden                                    # im Worktree umsetzen, deutsche Umlaute in Texten/Kommentaren
 7. npm test                                 # muss grün sein (auch Negativfälle abdecken, Red-Green)
 8. npm run typecheck                        # muss grün sein (strict)
 9. npm run lint                             # muss grün sein (ESLint, #389) – im Browser sichtbare Änderungen zusätzlich anschauen
-10. KOPF/Doku im SELBEN Branch pflegen (puh-fertig) → Branch pushen → EIN PR (gh pr create, Body "Closes #<nr>") → CI abwarten + bis Merge bringen (gh pr merge --squash --delete-branch --auto; rot → fixen bis grün) → Worktree aufräumen → Issue schließt via Closes   # ein PR pro Ticket (#618), fertig erst wenn gemergt; PR-gegated seit #592
+10. ggf. Doku im SELBEN Branch anpassen → Branch pushen → EIN PR (gh pr create, Body "Closes #<nr>") → CI abwarten + bis Merge bringen (gh pr merge --squash --delete-branch --auto; rot → fixen bis grün) → Worktree aufräumen → Issue schließt via Closes   # ein PR pro Ticket (#618), fertig erst wenn gemergt; PR-gegated seit #592; keine Reihenfolge-Datei mehr pflegen (#627)
 ```
 
 ⚠️ **Die rohe `index.html` im Root ist die Dev-Version** und braucht den Vite-Server. Per Doppelklick öffnen → leere Seite. Zum Offline-Spielen `npm run build:offline`, dann `dist-offline/index.html` doppelklicken.
@@ -44,7 +44,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | Zweck | Befehl |
 |---|---|
 | One-Command-Setup (Node-Check + install + Git-Hooks + alle Checks, #387/#528) | `npm run setup` |
-| **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (typecheck → lint → check:arch → check:size → check:docmap → check:docdrift → check:diffsize → test) |
+| **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (typecheck → lint → check:arch → check:size → check:anysuppress → check:docmap → check:docdrift → check:lockfile → check:diffsize → test) |
 | Voller Vor-Push-Check inkl. beider Builds + Boot-Smoke (#527) | `npm run verify:full` (= `verify` + `test:coverage` + Builds + `check:bundle` + `test:smoke`) |
 | Required-Checks auf dem PR = maßgeblicher Gate (server-seitig, seit #592) | Merge nur über `gh pr merge` bei grüner CI; kein Direkt-Push auf `main` |
 | pre-push-Hook (fährt `verify`; seit #592 nur noch sekundäres Netz) | verdrahtet via `npm run setup`; greift nur bei Push auf `main` (server-seitig ohnehin blockiert) |
@@ -66,7 +66,9 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | Harness-Drift-Wächter (dokumentierte `npm run`-Kommandos + interne Doku-Links/Anker, #529) | `npm run check:docdrift` |
 | Doku-Aktualitäts-Wächter (offen-markierte Roadmap-Tickets gegen den gh-Status, non-blocking, braucht `gh`, #610) | `npm run check:doctickets` |
 | Diff-Größenbudget-Wächter (max. 20 Dateien / 800 geänderte Zeilen gegen main, #533) | `npm run check:diffsize` |
-| Bundle-Byte-Budget-Wächter (Offline-HTML + Spielcode-Chunks, NACH den Builds, #503) | `npm run check:bundle` |
+| `no-explicit-any`-Suppression-Ratchet (per-Datei-Baseline, #604) | `npm run check:anysuppress` (neu ziehen: `node scripts/check-any-suppressions.mjs --write`) |
+| Lockfile-Integritäts-Wächter (package-lock.json ↔ package.json, gegen Lockfile-Drift, #593) | `npm run check:lockfile` |
+| Bundle-Byte-Budget-Wächter (Offline-HTML + Spielcode- + Phaser-vendor-Chunk, NACH den Builds, #503/#595) | `npm run check:bundle` |
 | Security-Audit (Produktiv-Deps, CI-Gate blockt bei high+, #396) | `npm audit --omit=dev --audit-level=high` |
 
 > ⚠️ **Code-Änderungen laden im Dev-Server NICHT automatisch neu** (#301). Eine JS/TS-Änderung löst bewusst keinen Auto-Reload aus (der riss sonst mitten im Spielen laufende Gespräche weg + blaues Flackern, v.a. wenn parallele Agenten editieren). Stattdessen erscheint ein Toast „🔄 Code geändert – neu laden (F5)". Zum Übernehmen also **F5 / Seite neu laden** (Spielstand bleibt erhalten – seit #350 in IndexedDB). CSS-Edits swappen weiterhin live.
@@ -251,14 +253,14 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | 🧪 Tests (Vitest) | [`test/`](test/) – Kern/Dispatch in `sim.test.ts`; die Simulator-Befehlsfamilien gespiegelt zu den `sim/`-Modulen unter [`test/sim/`](test/sim/) (docker/kubectl/rbac/helm/git/terraform/argocd/glab, #383); dazu `content.test.ts`, `quests.test.ts` u.a. **Geteiltes Harness (#475):** Querschnitts-Umgebung (window/localStorage-Stub + Spiel-Stack laden) in [`test/support/`](test/support/), valide Domänen-Eingaben/Factories in [`test/factories/`](test/factories/) (`freshSim`; `test/sim/helpers.ts` re-exportiert daraus). Verhaltens-Tests prüfen die öffentliche API/beobachtbares Verhalten, nicht Interna – die Architektur-**Fitness-Functions** (`layering.test.ts`/`filesize.test.ts`/`docmap.test.ts`, #482) sind bewusst eine eigene Kategorie. |
 | 🚦 Boot- & Interaktions-Smokes (Playwright, E2E) | [`e2e/`](e2e/) – lädt den gebauten Offline-Build headless: Boot fehlerfrei (#391) **plus** schlanke Interaktions-Smokes (#480: Terminal-Eingabe, Overlay auf/zu, ein Quest-Durchlauf) **plus** ein FPS-Budget- und ein a11y-Smoke (#524: `perf-smoke.spec.ts` liest die auf `body[data-kq-fps]` gespiegelten FrameSampler-FPS bei `?perf`; `a11y-smoke.spec.ts` scannt HUD + Overlays mit axe-core) über Tastatur/DOM ohne Test-Hintertür; geteilte Helfer in [`e2e/support.ts`](e2e/support.ts). Config: [`playwright.config.ts`](playwright.config.ts) (`workers: 1`, damit die FPS-Messung nicht durch parallele Runs einbricht). Bewusst getrennt von den Vitest-Unit-Tests (`npm run smoke`). |
 | ✅ Backlog / TODOs | GitHub Issues + Project-Board (`gh issue list --state open --limit 500`, `gh project list --owner fluffels`) |
-| 🥇 Nächstes Ticket (Auswahl-Regel) | [docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md) – kuratierter Kopf (oberstes freies) über dem deterministischen Auto-Rest (Prio→Nummer) + Reaktivierungs-Pool; Kopf am Ticket-Ende pflegen |
+| 🥇 Nächstes Ticket (Auswahl-Regel) | [docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md) – oberstes freies nach Board-`Prio` → Nummer (kein kuratierter Kopf mehr, keine Datei-Pflege seit #627) |
 
 ## ❓ Die vier Einstiegsfragen
 
 - **Was ist das Spiel?** KubeQuest – ein 2D-Lernspiel (Phaser 3) für Docker/K8s/Helm/Terraform; die Spielwelt **ist** der Cluster. → [README.md](README.md)
 - **Wie starte ich?** `npm install` → `npm run dev` → angezeigte Adresse im Browser. → Schnellstart oben.
-- **Welches Ticket nehme ich?** Das **oberste freie Ticket im kuratierten Kopf** von [Ticket-Auswahl](docs/ticket-reihenfolge.md); **ist der Kopf leer**, der **Auto-Rest** nach **Priorität** (`prio:hoch` → `prio:mittel` → `prio:niedrig` → ohne Label) + **niedrigster Nummer** (`gh issue list --state open --limit 500` – ohne `--limit` nur die 30 neuesten!; frei = kein Assignee, kein offener PR/Branch/Worktree, nicht `status:zurückgestellt`). Nur **dieses eine** Kandidaten-Ticket prüfen, nicht die ganze Liste. Sofort self-assignen. **Am Ticket-Ende den Kopf pflegen** (puh-fertig, Pflicht). → [AGENTS.md › Wo die TODOs leben](AGENTS.md#wo-die-todos-leben).
-- **Wie schließe ich ab?** Tests grün + im Browser verifiziert → **den kuratierten Kopf in [Ticket-Auswahl](docs/ticket-reihenfolge.md) pflegen** (puh-fertig: geschlossenes raus, Kopf nachfüllen, Stand-Datum) **auf demselben Branch** → **ein PR** (Body `Closes #<nr>`) → **CI abwarten und bis zum Merge bringen** (Auto-Merge + `gh pr checks --watch`; grün → mergt, rot → fixen bis grün) → Worktree aufräumen → Issue schließt via `Closes`. **Ein PR pro Ticket (#618); fertig erst, wenn der PR gemergt ist.** PR-gegated seit #592, kein Direkt-Push auf `main`. → [AGENTS.md › Git-Workflow](AGENTS.md#das-wichtigste-zuerst-harte-regeln).
+- **Welches Ticket nehme ich?** Das **oberste freie Ticket nach Board-`Prio` → Nummer** (`Prio`: Kritisch → Hoch → Mittel → Niedrig → Später), gelesen aus dem Project-Board (`gh project item-list 1 --owner fluffels --format json --limit 800`, braucht `read:project`-Scope; frei = kein Assignee, kein offener PR/Branch/Worktree, nicht `status:zurückgestellt`, kein offener Blocker). Nur **dieses eine** Kandidaten-Ticket prüfen, nicht die ganze Liste. Sofort self-assignen. Fertig sortierter Befehl: [Ticket-Auswahl](docs/ticket-reihenfolge.md). → [AGENTS.md › Wo die TODOs leben](AGENTS.md#wo-die-todos-leben).
+- **Wie schließe ich ab?** Tests grün + im Browser verifiziert → **ein PR** (Body `Closes #<nr>`) auf dem Feature-Branch → **CI abwarten und bis zum Merge bringen** (Auto-Merge + `gh pr checks --watch`; grün → mergt, rot → fixen bis grün) → Worktree aufräumen → Issue schließt via `Closes`. **Keine Reihenfolge-Datei mehr pflegen** (entfällt seit #627). **Ein PR pro Ticket (#618); fertig erst, wenn der PR gemergt ist.** PR-gegated seit #592, kein Direkt-Push auf `main`. → [AGENTS.md › Git-Workflow](AGENTS.md#das-wichtigste-zuerst-harte-regeln).
 
 ---
 

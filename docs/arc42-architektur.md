@@ -142,7 +142,7 @@ Dazu kommt: an einzelnen **Grenzen hört die sonst konsequente Disziplin auf** �
 | 0002 | Kein Backend, keine DB — client-only | bestätigt |
 | 0003 | Kein Multiplayer / Co-op | bestätigt |
 | 0004 | Skalierungs-Fundament (Content-as-Data, Entity-Registry, IndexedDB) | umgesetzt |
-| 0005 | Auslieferungsform Web vs. Desktop | **offen gehalten** (ergebnisoffener ADR + Re-Eval-Trigger) |
+| 0005 | Auslieferungsform Web vs. Desktop | **offen gehalten** ([ADR 0005](adr/0005-auslieferungsform.md), #355/#606) — ergebnisoffener Grundsatz-ADR + Re-Eval-Trigger; bündelt die Single-File-Präzisierung aus 0006. |
 | 0006 | Persistenz-Präzisierung: Engpass ist Eviction, nicht Kapazität → `storage.persist()` | präzisiert |
 | 0007 | Spielsystem-Fundamente (Quest-Modell, Checks-als-Daten, Zeit-Achse) | umgesetzt |
 | 0008 | **KI-Agenten-Harness** als Entwicklungsmodell (autonomer Ein-Ticket-Worktree-Workflow + Fitness-Functions als Leitplanken + selbstdokumentierendes Repo) | **akzeptiert** ([ADR 0008](adr/0008-ki-agenten-harness.md), #530) — die prägendste Entscheidung, jetzt als ADR festgehalten (Kontext/Alternativen/Re-Eval-Trigger). Kanonische Erklärung des Harness: [agent-harness.md](agent-harness.md) (#526). Integrationsweg seit #592 durch 0009 präzisiert. |

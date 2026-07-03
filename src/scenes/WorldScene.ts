@@ -9,7 +9,7 @@ import { setWorldScene } from "../runtime";
 import { expandRect, cull, FrameSampler, type Cullable } from "../hud/cull";
 import { getMapEntry, type MapId } from "../world/maps/mapregistry";
 import { DAY_CYCLE_MS } from "../core/clock";
-import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, readMoveInput, faceFrom, type SceneNpc } from "./shared";
+import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, readMoveInput, faceFrom, renderPlayer, type SceneNpc } from "./shared";
 // Spiel-Systeme als eigene, fokussierte Module (WorldScene.ts-Split #393, analog
 // scenes.ts-Split #345): freie Funktionen mit der Szene als Parameter (`scene`).
 // WorldScene ist seither nur noch der schlanke Orchestrator (Aufbau in create(),
@@ -518,11 +518,10 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     // Übergang aus, ist der Rest des Frames vorbei (Szene wechselt) → return.
     if (updateWarps(this, blocked)) return;
 
-    const bob = pl.moving ? Math.abs(Math.sin(this.bobT)) * 1.6 : 0;
-    // Echte 4-Richtungs-Sprites aus PixelLab (south = Basis-Textur char_player)
-    const faceTex = pl.face === "south" ? "char_player" : "char_player_" + pl.face;
-    this.playerSprite.setTexture(faceTex).setPosition(pl.x, pl.y + 6 - bob).setFlipX(false).setDepth(pl.y + 8);
-    this.playerShadow.setPosition(pl.x, pl.y + 6);
+    // Spieler-Sprite + Schatten aus dem Zustand rendern (#601): byte-gleicher Block wie in
+    // Region/Innenraum → gemeinsamer renderPlayer-Helfer. Die Welt-spezifischen Extras oben
+    // (Haustier-Spur/Staub/Laufrichtung) und der Rück-Warp-Check bleiben hier explizit.
+    renderPlayer(this.playerSprite, this.playerShadow, pl, this.bobT);
 
     this.updatePet(time);
 
