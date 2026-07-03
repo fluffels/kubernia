@@ -10,7 +10,7 @@ import { test, expect, beforeAll, beforeEach } from "vitest";
 import { stubWindowLocalStorage, loadGameStack } from "./support/browser-env";
 import { KQContent } from "../src/content";
 import { NPC_SPAWNS, TILE, TALK_RANGE } from "../src/world/world";
-import { setWorldScene, setPayoutSink } from "../src/runtime";
+import { setWorldScene, setPayoutSink, setClockSink } from "../src/runtime";
 import { MAP_REGISTRY } from "../src/world/maps/mapregistry";
 import { DAY_CYCLE_MS } from "../src/core/clock";
 import { coins } from "../src/core/coins";
@@ -361,6 +361,40 @@ test("#501 tick: ignoriert Unsinn (NaN/0/negativ) ohne den Akkumulator zu vergif
   expect(Game.incomeAcc).toBe(0.5);              // unverändert
   expect(Game.state.gameDays).toBe(tageVorher);  // Zeit nicht rückwärts/NaN
   expect(gemeldet).toBe(0);                       // keine Auszahlung gemeldet
+});
+
+/* ---------- HUD-Uhr szenen-neutral (#588) ----------
+ * Die Uhr-*Anzeige* wurde früher nur in WorldScene.update (updateDayNight → UI.setClock) gesetzt
+ * → in Region-/Interior-Szenen mit eigenem update() fror sie ein (gleiche Bug-Klasse wie das
+ * economyTick-#501). Jetzt meldet der szenen-neutrale Game.tick die Uhr-Labels über den
+ * runtime-Sink, läuft also in JEDER Szene. */
+test("#588 tick: meldet die aktuelle HUD-Uhr szenen-neutral an den Clock-Sink", () => {
+  Game.state.gameDays = 1;             // Tag 2, 06:00 (siehe #413-Kalender-Test)
+  let got: { d: string; t: string; ti: string } | null = null;
+  setClockSink((d, t, ti) => { got = { d, t, ti }; });
+  try {
+    Game.tick(16);                     // ein 60fps-Frame
+  } finally {
+    setClockSink(null);                // Sink nicht in andere Tests lecken lassen
+  }
+  const cal = Game.calendar();         // erwarteter Stand NACH dem tick (advanceClock lief)
+  expect(got).not.toBeNull();
+  expect(got!.d).toBe(cal.dateLabel);
+  expect(got!.t).toBe(cal.timeLabel);
+  expect(got!.ti).toBe(cal.title);
+});
+
+test("#588 tick: meldet die Uhr auch bei einem Unsinns-Delta (Anzeige friert nie ein)", () => {
+  // Selbst wenn der Kalender nicht vorrückt (NaN-Frame), soll die Uhr-Anzeige gemeldet werden –
+  // der DOM-Schreib wird erst in UI.setClock per Signatur dedupliziert, nicht hier unterdrückt.
+  let calls = 0;
+  setClockSink(() => { calls++; });
+  try {
+    Game.tick(NaN);
+  } finally {
+    setClockSink(null);
+  }
+  expect(calls).toBe(1);
 });
 
 test("addCoins: Streak-Multiplikator wirkt und ist bei 10 gedeckelt", () => {

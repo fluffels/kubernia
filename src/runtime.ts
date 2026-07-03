@@ -123,3 +123,24 @@ export function setPayoutSink(fn: ((amount: number) => void) | null): void {
 export function notifyPayout(amount: number): void {
   _payoutSink?.(amount);
 }
+
+/* ---------- HUD-Uhr-Sink (#588) ----------
+ * Die HUD-Uhr-*Anzeige* (Datum/Uhrzeit) wurde früher nur in WorldScene.update
+ * (updateDayNight → UI.setClock) gesetzt – in Region-/Interior-Szenen mit eigenem update()
+ * fror sie darum ein (gleiche Bug-Klasse wie der economyTick-#501, nur fürs Uhr-Rendering).
+ * Jetzt meldet der szenen-neutrale Taktgeber (Game.tick, aus Phasers globalem Pre-Step in
+ * main.ts) die abgeleiteten Uhr-Labels entkoppelt hierüber (wie Payout-#501/Audio-#344), und
+ * die Präsentation (ui.ts) registriert ihren Handler → die Uhr läuft in JEDER Szene. Der
+ * Tag-Nacht-Schleier bleibt weltgebunden (nur die WorldScene malt ihn). Ohne Sink (Node-Test)
+ * ist das Melden ein No-op. */
+let _clockSink: ((dateLabel: string, timeLabel: string, title: string) => void) | null = null;
+
+/** Von der Präsentation (ui.ts) beim Modul-Laden gesetzt. */
+export function setClockSink(fn: ((dateLabel: string, timeLabel: string, title: string) => void) | null): void {
+  _clockSink = fn;
+}
+
+/** Der Präsentation die aktuelle HUD-Uhr melden (No-op ohne Sink). */
+export function notifyClock(dateLabel: string, timeLabel: string, title: string): void {
+  _clockSink?.(dateLabel, timeLabel, title);
+}
