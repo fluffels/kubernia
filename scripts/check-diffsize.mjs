@@ -56,6 +56,29 @@ import { pathToFileURL } from "node:url";
 export const MAX_FILES = 20;
 export const MAX_LINES = 800;
 
+/** Generierte, NICHT von Hand geschriebene Artefakte, die aus der Slice-Messung
+ *  fallen (#612): Ein Paketmanager-Lockfile ist kein reviewbarer Slice — es wird
+ *  MASCHINELL aus package.json erzeugt und Zeile-für-Zeile gar nicht gelesen. Es
+ *  mitzuzählen bedeutet, dass JEDE Dependency-Ergänzung (z.B. jscpd/#612 zog ~1100
+ *  Lockfile-Zeilen für 90 transitive Pakete) das Budget sprengt und einen Override
+ *  erzwingt — genau die Override-Inflation, vor der der Wächter selbst warnt
+ *  (#395-Antipattern). Der Budget-Zweck („ein unreviewbarer Epic-Riesen-Commit fällt
+ *  auf") zielt auf von Hand geschriebenen Code; das Lockfile-Volumen ist dafür Rauschen.
+ *  Der eigentliche Code-Slice einer Dep-Ergänzung bleibt klein und wird weiter gemessen. */
+export const GENERATED_ARTIFACTS = new Set([
+  "package-lock.json",
+  "npm-shrinkwrap.json",
+  "yarn.lock",
+  "pnpm-lock.yaml",
+]);
+
+/** True, wenn `path` ein generiertes Lockfile ist (Basename-Vergleich, damit es
+ *  auch in Unterordnern greift). Aus der Slice-Messung ausgenommen (#612). */
+export function isGeneratedArtifact(path) {
+  const base = String(path).split(/[\\/]/).pop() ?? "";
+  return GENERATED_ARTIFACTS.has(base);
+}
+
 /** Liest die Schwellen aus der Umgebung (Fallback: die Defaults oben). Eine
  *  nicht-positive/nicht-numerische Angabe wird ignoriert (Default gilt). */
 export function readThresholds(env = process.env) {
@@ -162,7 +185,12 @@ export function checkDiffSize({ runGit, env = process.env } = {}) {
     return { skipped: true, base, ...thresholds, fileCount: 0, changedLines: 0 };
   }
 
-  const { files, fileCount, changedLines } = parseNumstat(numstat);
+  const parsed = parseNumstat(numstat);
+  // Generierte Lockfiles zählen nicht zum reviewbaren Slice (#612).
+  const files = parsed.files.filter((f) => !isGeneratedArtifact(f.path));
+  const excludedCount = parsed.fileCount - files.length;
+  const fileCount = files.length;
+  const changedLines = files.reduce((s, f) => s + f.added + f.deleted, 0);
   const { overFiles, overLines, over } = evaluate({ fileCount, changedLines }, thresholds);
   const reason = overrideReason(env);
 
@@ -173,6 +201,7 @@ export function checkDiffSize({ runGit, env = process.env } = {}) {
     files,
     fileCount,
     changedLines,
+    excludedCount,
     overFiles,
     overLines,
     over,
@@ -204,6 +233,10 @@ function main() {
 
   const budget = `Budget ${r.maxFiles} Dateien / ${r.maxLines} Zeilen`;
   const measured = `${r.fileCount} Dateien, ${r.changedLines} geänderte Zeilen`;
+
+  if (r.excludedCount > 0) {
+    console.log(dim(`• ${r.excludedCount} generierte(s) Lockfile(s) nicht mitgezählt (#612).`));
+  }
 
   if (r.stale) {
     console.error(
