@@ -5,7 +5,7 @@
  * werden daher vor allem die harten Garantien – inklusive Negativ-/Grenzfälle
  * und ein Red-Green-Schutz gegen einen Test, der den Seed ignorieren würde. */
 import { test, expect } from "vitest";
-import { hash01, strSeed, pickPlacements, grassTuftStyle, type ScatterSpec } from "../src/world/decor";
+import { hash01, strSeed, pickPlacements, grassTuftStyle, isOccupiedTile, isOpenGrassTile, canScatterAt, type ScatterSpec } from "../src/world/decor";
 
 const W = 52, H = 40;
 /** Standard-Akzeptanz: ganze Karte gültig (Grenzen 1..W-2 / 1..H-2 macht pickPlacements selbst). */
@@ -194,4 +194,102 @@ test("grassTuftStyle: benachbarte Felder sehen unterschiedlich aus (Koordinaten 
   // nicht alles identisch bleiben – sonst entstünde wieder ein Gleichtakt.
   const styles = [0, 1, 2, 3, 4].map((dx) => JSON.stringify(grassTuftStyle(GS_SEED, 10 + dx, 10, 3)));
   expect(new Set(styles).size).toBeGreaterThan(1);
+});
+
+/* ---------- isOccupiedTile / isOpenGrassTile / canScatterAt (#537) ----------
+ * Aus src/scenes/worldscene/scenery.ts (spawnFlowers/spawnGrassDetail/scatter)
+ * gezogene Platzierungs-Prädikate – jetzt pur und hier im Node-Lauf prüfbar,
+ * statt nur implizit über einen Phaser-Boot-Smoke. */
+
+function grid(n: number): Uint8Array {
+  return new Uint8Array(n);
+}
+
+test("isOccupiedTile: frei, wenn weder solidGrid noch softGrid gesetzt ist", () => {
+  expect(isOccupiedTile(grid(9), grid(9), 3, 1, 1)).toBe(false);
+});
+
+test("isOccupiedTile: belegt durch ein eckiges Solid (solidGrid)", () => {
+  const solid = grid(9); solid[4] = 1; // (1,1) bei W=3
+  expect(isOccupiedTile(solid, grid(9), 3, 1, 1)).toBe(true);
+});
+
+test("isOccupiedTile: belegt durch ein rundes Sub-Tile-Objekt (softGrid)", () => {
+  const soft = grid(9); soft[4] = 1;
+  expect(isOccupiedTile(grid(9), soft, 3, 1, 1)).toBe(true);
+});
+
+test("isOpenGrassTile: Gras-Frames 0/1/2 sind offen, wenn unbelegt", () => {
+  const W = 5;
+  for (const v of [0, 1, 2]) {
+    const ground = [v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v];
+    expect(isOpenGrassTile(ground, grid(25), grid(25), W, 2, 2)).toBe(true);
+  }
+});
+
+test("isOpenGrassTile: kein Gras (z.B. Wasser -2 oder Erde 25) ist nie offen", () => {
+  const W = 5;
+  for (const v of [-2, -3, 25, 96]) {
+    const ground = new Array(25).fill(v);
+    expect(isOpenGrassTile(ground, grid(25), grid(25), W, 2, 2)).toBe(false);
+  }
+});
+
+test("isOpenGrassTile: Gras, aber belegt (solid ODER soft) ist nicht offen", () => {
+  const W = 5;
+  const ground = new Array(25).fill(0);
+  const solid = grid(25); solid[2 * W + 2] = 1;
+  expect(isOpenGrassTile(ground, solid, grid(25), W, 2, 2)).toBe(false);
+  const soft = grid(25); soft[2 * W + 2] = 1;
+  expect(isOpenGrassTile(ground, grid(25), soft, W, 2, 2)).toBe(false);
+});
+
+test("canScatterAt: passender Untergrund, unbelegt, weg vom Spieler → erlaubt", () => {
+  const W = 9;
+  const ground = new Array(W * 9).fill(0);
+  expect(canScatterAt(ground, grid(W * 9), grid(W * 9), W, 4, 4, [0, 1, 2], { x: 0, y: 0 })).toBe(true);
+});
+
+test("canScatterAt: Untergrund nicht in kinds → verboten", () => {
+  const W = 9;
+  const ground = new Array(W * 9).fill(-3); // Sand, aber kinds erlaubt nur Gras
+  expect(canScatterAt(ground, grid(W * 9), grid(W * 9), W, 4, 4, [0, 1, 2], { x: 0, y: 0 })).toBe(false);
+});
+
+test("canScatterAt: belegte Kachel (solid) → verboten", () => {
+  const W = 9;
+  const ground = new Array(W * 9).fill(0);
+  const solid = grid(W * 9); solid[4 * W + 4] = 1;
+  expect(canScatterAt(ground, solid, grid(W * 9), W, 4, 4, [0, 1, 2], { x: 0, y: 0 })).toBe(false);
+});
+
+test("canScatterAt: grenzt an einen Weg (Erde 25) → verboten (alle 4 Richtungen)", () => {
+  const W = 9;
+  for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+    const ground = new Array(W * 9).fill(0);
+    ground[(4 + dy) * W + (4 + dx)] = 25;
+    expect(canScatterAt(ground, grid(W * 9), grid(W * 9), W, 4, 4, [0, 1, 2], { x: 0, y: 0 })).toBe(false);
+  }
+});
+
+test("canScatterAt: diagonal an einen Weg angrenzend ist ERLAUBT (nur die 4 Nachbarn zählen)", () => {
+  const W = 9;
+  const ground = new Array(W * 9).fill(0);
+  ground[3 * W + 3] = 25; // diagonal, keiner der 4 direkten Nachbarn
+  expect(canScatterAt(ground, grid(W * 9), grid(W * 9), W, 4, 4, [0, 1, 2], { x: 0, y: 0 })).toBe(true);
+});
+
+test("canScatterAt: zu nah am Spieler-Start (Abstand <= 1, auch diagonal) → verboten", () => {
+  const W = 9;
+  const ground = new Array(W * 9).fill(0);
+  for (const [dx, dy] of [[0, 0], [1, 0], [-1, -1], [1, 1]]) {
+    expect(canScatterAt(ground, grid(W * 9), grid(W * 9), W, 4, 4, [0, 1, 2], { x: 4 + dx, y: 4 + dy })).toBe(false);
+  }
+});
+
+test("canScatterAt: 2 Kacheln vom Spieler entfernt ist wieder erlaubt (Grenzfall)", () => {
+  const W = 9;
+  const ground = new Array(W * 9).fill(0);
+  expect(canScatterAt(ground, grid(W * 9), grid(W * 9), W, 4, 4, [0, 1, 2], { x: 6, y: 4 })).toBe(true);
+  expect(canScatterAt(ground, grid(W * 9), grid(W * 9), W, 4, 4, [0, 1, 2], { x: 2, y: 4 })).toBe(true);
 });
