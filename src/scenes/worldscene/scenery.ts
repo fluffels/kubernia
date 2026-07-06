@@ -17,6 +17,7 @@ import { WORLD_TO_ARCHIPEL } from "../../world/regions/archipel";
 import { WORLD_TO_LIGHTHOUSE } from "../../world/regions/lighthouse";
 import { WORLD_TO_WAREHOUSE } from "../../world/regions/warehouse";
 import { WORLD_TO_FLOTTE } from "../../world/regions/flotte";
+import { CONTAINER_LAGER } from "../../hud/containeryard";
 import { T, FOAM, WOOD } from "../shared";
 import type { WorldSceneLike } from "./types";
 
@@ -177,7 +178,37 @@ export function updateDayNight(scene: WorldSceneLike, time: number) {
   // → time/CYCLE) mit demselben Start-Offset (withStartOffset) ab (#39/#336).
 }
 
+/** Lagerschuppen für gestoppte Container (#303). Offen-fronter Holz-Schuppen auf dem
+ *  Kai ein Stück östlich von Bos Dock; die gestoppten Docker-Fässer werden in
+ *  clustersync hierher (CONTAINER_LAGER) statt an die Wasserkante gesetzt, damit
+ *  „gestoppt ≠ gelöscht" (docker ps -a) sichtbar wird. Bewusst noch als Code-Primitiv
+ *  gezeichnet (schlichte erste Fassung) – ein PixelLab-Schuppen-Asset folgt als eigenes
+ *  Ticket (Grafik-Konvention: Primitiv ist nur Übergang). Footprint = CONTAINER_LAGER.shed. */
+export function renderContainerLager(scene: WorldSceneLike) {
+  const s = CONTAINER_LAGER.shed;
+  const left = s.x * T, top = s.y * T, w = s.w * T, h = s.h * T;
+  const footY = top + h;                         // Depth an der Fußlinie → Fässer davor
+  const g = scene.add.graphics().setDepth(footY);
+  // Bodenschatten
+  g.fillStyle(0x000000, 0.18); g.fillEllipse(left + w / 2, footY, w + 8, 10);
+  // Rückwand (Holzbretter) + dunkle offene Front, damit die Fässer „drinstehen"
+  g.fillStyle(0x6b4f34, 1); g.fillRect(left, top, w, h);
+  g.fillStyle(0x3a2c1c, 1); g.fillRect(left + 4, top + 5, w - 8, h - 5);
+  g.lineStyle(1, 0x543d28, 0.9);
+  for (let x = left + 10; x < left + w - 4; x += 10) g.lineBetween(x, top + 5, x, top + h);
+  // Eck-/Stützbalken
+  g.fillStyle(0x513922, 1);
+  g.fillRect(left, top, 4, h); g.fillRect(left + w - 4, top, 4, h);
+  // Überstehendes Satteldach (dunkler), leicht auskragend
+  g.fillStyle(0x854f2e, 1);
+  g.fillTriangle(left - 6, top + 2, left + w + 6, top + 2, left + w / 2, top - h * 0.7);
+  g.fillStyle(0x6d3f24, 1);
+  g.fillRect(left - 6, top, w + 12, 4);
+  scene.registerCullable(g, left + w / 2, footY);
+}
+
 export function renderStatics(scene: WorldSceneLike) {
+  renderContainerLager(scene);
   // Deko (Bäume, Häuser, Möbel) – Tiefe nach y. Jedes Bild fürs Culling
   // registrieren (#82): außerhalb des Sichtfelds wird es ausgeblendet.
   for (const d of scene.decoList) {

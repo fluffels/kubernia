@@ -15,6 +15,7 @@ import Phaser from "phaser";
 import { circleHitbox, rectHitbox } from "../world/world";
 import { npcSpawnsForMap } from "../content/entities";
 import { T, DEVICE } from "./shared";
+import { HIT_R, CRATE_HIT } from "./geometry";
 import type { RegionConfig, RegionScene } from "./RegionScene";
 import { buildArchipel, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL, ARCHIPEL_NPC, ARCHIPEL_QUEST_TRIGGER, type ArchipelMap } from "../world/regions/archipel";
 import { buildLighthouse, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL, LIGHTHOUSE_NPC, LIGHTHOUSE_QUEST_TRIGGER, LIGHTHOUSE_TOWER, type LighthouseMap } from "../world/regions/lighthouse";
@@ -22,11 +23,8 @@ import { buildWarehouse, WAREHOUSE_TO_WORLD, WAREHOUSE_ARRIVAL, type WarehouseMa
 import { buildWatchtower, WATCHTOWER_TO_WORLD, WATCHTOWER_ARRIVAL, WATCHTOWER_TOWER } from "../world/regions/watchtower";
 import { buildFlotte, FLOTTE_TO_WORLD, FLOTTE_ARRIVAL, type FlotteMap } from "../world/regions/flotte";
 import { buildWerft, WERFT_TO_WORLD, WERFT_ARRIVAL, WERFT_NPC, WERFT_BUILD_TRIGGER, type WerftMap } from "../world/regions/werft";
-
-/** #343/#386: Hitbox-Maße der Lager-Güter – Fässer rund (Radius), Kisten als mittig
- *  eingerücktes Rechteck (Kantenlänge). Wie in der früheren WarehouseScene. */
-const HIT_R = 6;
-const CRATE_HIT = 12;
+// #343/#386: Hitbox-Maße der Lager-Güter (Fässer rund `HIT_R`, Kisten eckig `CRATE_HIT`)
+// liegen jetzt zentral in scenes/geometry.ts (#590).
 
 /** GitOps-Archipel (#92): organische Insel mit Sandstrand + Holz-Steg; Bäume als grüner
  *  Saum, der Quest-Trigger als Stein-Statue. E-Notausgang auf dem ganzen Steg. */
@@ -145,10 +143,9 @@ const warehouse: RegionConfig = {
 };
 
 /** Wachturm-Quartier (#130): befestigter Gras-Bailey mit Stein-Wehrmauer + Tor + Holz-Steg;
- *  im Hof der namensgebende Wachturm. Thema: Zugriffskontrolle (RBAC/Security, Phase 6). Der
- *  NPC Vidar (#131, Wachveteran am Tor) steht jetzt als Registry-Eintrag (entities.json) im
- *  Hof; die Quests (#132–135) docken später an. Der Wachturm selbst ist bis zu seinem
- *  PixelLab-Asset (#440) ein bewusster prozeduraler Platzhalter (siehe decorate). */
+ *  im Hof der namensgebende Wachturm (PixelLab-Sprite, #440). Thema: Zugriffskontrolle
+ *  (RBAC/Security, Phase 6). Der NPC Vidar (#131, Wachveteran am Tor) steht als Registry-
+ *  Eintrag (entities.json) im Hof; die Quests (#132–135) docken später an. */
 const watchtower: RegionConfig = {
   key: "Watchtower",
   map: "watchtower",
@@ -173,30 +170,22 @@ const watchtower: RegionConfig = {
     bands: [{ max: 4, kind: "bush" }, { max: 11, kind: "flowers" }],
   },
   decorate(scene: RegionScene) {
-    // Wachturm als prozeduraler Platzhalter (#130): bis das PixelLab-Asset existiert, ein
-    // klar erkennbarer Stein-Turm mit Zinnenkranz + Banner aus Primitiven (wie der Leucht-
-    // turm Sockel/Lampe teils prozedural sind). Mittig über dem 2×2-Fußabdruck, fußlinien-
-    // depth-sortiert. Asset-Ticket: echtes Wachturm-Sprite + Umzug in die Entity-Registry.
+    // Wachturm (PixelLab-Sprite, #440): Stein-Turm mit Zinnenkranz + Tor + Schießscharte,
+    // mittig über dem 2×2-Fußabdruck, fußlinien-depth-sortiert (Muster wie der Leuchtturm,
+    // #357). Das flatternde Banner bleibt bewusst Code – ein dynamischer Effekt (Tween) ist
+    // kein Platzhalter, genau wie der rotierende Leuchtturm-Lichtkegel.
     const cx = WATCHTOWER_TOWER.x * T;                  // Boundary zwischen den 2 Fuß-Spalten = Mitte
     const baseY = (WATCHTOWER_TOWER.y + 1) * T;         // Fußlinie (untere Kante des Fußabdrucks)
+    // Skalierung bewusst klein genug, dass Turm + Banner nicht über den Kartenrand (y=0) hinaus-
+    // ragen – die Kamera ist per `setBounds` auf die Kartengröße geklemmt (RegionScene) und
+    // würde alles darüber wegschneiden. Der Turm steht nah am Nordrand des Hofs (nur 4 Kacheln).
+    const wtSc = 0.3;
     scene.add.ellipse(cx, baseY - 1, 30, 9, 0x000000, 0.22).setDepth(baseY - 2);   // Schatten
-    // Turmschaft (Stein), leicht nach oben verjüngt.
-    const shaftH = 54, shaftW = 24;
-    scene.add.rectangle(cx, baseY, shaftW, shaftH, 0x7b8493).setOrigin(0.5, 1).setDepth(baseY);
-    scene.add.rectangle(cx - shaftW / 2 + 2, baseY, 3, shaftH, 0x9aa3b2).setOrigin(0.5, 1).setDepth(baseY + 0.1); // Lichtkante
-    scene.add.rectangle(cx + shaftW / 2 - 2, baseY, 3, shaftH, 0x5d6675).setOrigin(0.5, 1).setDepth(baseY + 0.1); // Schattenkante
-    // Tür + Arrow-Slit-Fenster (dunkle Öffnungen).
-    scene.add.rectangle(cx, baseY, 8, 12, 0x2a2f38).setOrigin(0.5, 1).setDepth(baseY + 0.2);           // Tor
-    scene.add.rectangle(cx, baseY - 30, 4, 9, 0x2a2f38).setOrigin(0.5, 1).setDepth(baseY + 0.2);        // Schießscharte
-    // Zinnenkranz: breitere Plattform + drei Zinnen-Zacken.
-    const topY = baseY - shaftH;
-    scene.add.rectangle(cx, topY + 4, shaftW + 8, 8, 0x6b7280).setOrigin(0.5, 1).setDepth(baseY + 0.3);
-    for (const dx of [-12, 0, 12]) {
-      scene.add.rectangle(cx + dx, topY - 4, 6, 6, 0x6b7280).setOrigin(0.5, 1).setDepth(baseY + 0.3);
-    }
-    // Banner (stahlblau – Wache/Security) am kurzen Fahnenmast.
-    scene.add.rectangle(cx + 14, topY - 6, 1.5, 16, 0x3a2f22).setOrigin(0.5, 1).setDepth(baseY + 0.4);  // Mast
-    const flag = scene.add.triangle(cx + 14, topY - 16, 0, 0, 12, 4, 0, 8, 0x3b6ea5).setOrigin(0, 0.5).setDepth(baseY + 0.4);
+    const tower = scene.add.image(cx, baseY, "watchtower").setOrigin(0.5, 1).setScale(wtSc).setDepth(baseY + 4);
+    const topY = baseY - tower.displayHeight;
+    // Banner (stahlblau – Wache/Security) am kurzen Fahnenmast, rechts neben dem Zinnenkranz.
+    scene.add.rectangle(cx + 11, topY + 2, 1.5, 10, 0x3a2f22).setOrigin(0.5, 1).setDepth(baseY + 5);  // Mast
+    const flag = scene.add.triangle(cx + 11, topY - 6, 0, 0, 10, 3, 0, 6, 0x3b6ea5).setOrigin(0, 0.5).setDepth(baseY + 5);
     scene.tweens.add({ targets: flag, scaleX: { from: 1, to: 0.82 }, duration: 1300, yoyo: true, repeat: -1, ease: "Sine.inOut" });
   },
 };

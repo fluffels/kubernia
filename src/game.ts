@@ -19,6 +19,7 @@ import { unlocksBundle } from "./game/unlocks";
 import { spacedRepetitionBundle } from "./game/spaced-repetition";
 import { clockBundle } from "./game/clock";
 import { tickBundle } from "./game/tick";
+import { hazardsBundle } from "./game/hazards";
 import { sandboxBundle } from "./game/sandbox";
 
 export { ALL_ABBREV_UNLOCKED, ABBREV_EARN_THRESHOLD, CMD_HISTORY_UNLOCK_AT } from "./game/shared";
@@ -46,5 +47,6 @@ export const Game: GameApi = {
   ...spacedRepetitionBundle,
   ...clockBundle,
   ...tickBundle,
+  ...hazardsBundle,
   ...sandboxBundle,
 };

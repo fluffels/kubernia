@@ -9,14 +9,20 @@
 </head>
 <body>
 
-  <!-- tabindex=-1: nicht per Tab erreichbar, aber programmatisch fokussierbar –
+  <!-- role=main: der Phaser-Canvas-Host ist der Hauptinhalt der Seite – so liegt der
+       Spielbereich in einer Landmark-Region (axe 'region', #560). aria-label, weil der
+       Canvas selbst keinen vorlesbaren Text hat.
+       tabindex=-1: nicht per Tab erreichbar, aber programmatisch fokussierbar –
        so gibt closeOverlays()/closeDialogue() den Fokus hierher zurück (#506). -->
-  <div id="game-container" tabindex="-1"></div>
-  <div id="vignette"></div>
+  <div id="game-container" tabindex="-1" role="main" aria-label="Spielwelt – Hafen Kubernia"></div>
+  <!-- rein dekorativer Rand-Schleier: aria-hidden, damit er nicht als landmark-loser
+       Inhalt zählt (axe 'region', #560) und Screenreader ihn ignorieren. -->
+  <div id="vignette" aria-hidden="true"></div>
   <input type="file" id="save-import" accept=".json" class="hidden">
 
-  <!-- HUD -->
-  <div id="hud">
+  <!-- HUD – role=region+aria-label: die dauerhaft sichtbare Statusleiste (Rang/XP/
+       Dublonen/Uhr) und die Steuer-Hinweise liegen so in einer Landmark (axe 'region', #560). -->
+  <div id="hud" role="region" aria-label="Spielstand und Steuerung">
     <div class="hud-left">
       <div class="hud-rank"><span id="hud-rankname">Landratte</span>
         <div class="xpbar"><div id="hud-xpfill"></div></div>
@@ -31,14 +37,21 @@
     <button id="hud-menu-btn" class="hud-menu-btn" data-action="openMenu" title="Menü öffnen (Esc)">☰ Menü</button>
   </div>
 
+  <!-- Globaler Gefahren-Warnrahmen (#540): sichtbar in JEDER Szene, solange eine Gefahr läuft.
+       aria-hidden – der Alarm-Banner unten trägt die vorgelesene Warnung, der Rahmen ist rein
+       visuell und würde sonst doppelt vorgelesen. -->
+  <div id="hazard-frame" class="hidden" aria-hidden="true"></div>
+
   <!-- Alarm (Piraten / Krake) – role=alert: Screenreader lesen die Warnung sofort vor (#506) -->
   <div id="alarm" class="hidden" role="alert" aria-live="assertive">
     <span id="alarm-text"></span>
     <span id="alarm-timer" class="alarm-timer"></span>
   </div>
 
-  <!-- Interaktions-Hinweis -->
-  <div id="prompt" class="hidden"></div>
+  <!-- Interaktions-Hinweis – role=status+aria-live: der kontextuelle Hinweis ("E: mit … reden")
+       wird beim Auftauchen höflich vorgelesen und liegt als Live-Region in einer Landmark
+       (axe 'region', #560). -->
+  <div id="prompt" class="hidden" role="status" aria-live="polite"></div>
 
   <!-- Dialog -->
   <div id="dialogue" class="hidden" role="dialog" aria-modal="true" aria-labelledby="dlg-name">
@@ -128,21 +141,21 @@
     </div>
   </div>
 
-  <!-- Rang-Aufstieg-Feier (#223): mittiges Feier-Overlay, neuer Rang groß im Fokus,
-       alter Rang als "zuvor"-Zeile. Maritim gefeiert: Signalflaggen-Konfetti regnet
-       (statt bunter Schnipsel) + eine Wimpelkette schmückt die Karte (dress ship).
-       Wimpelkette/Konfetti füllt hud.ts (Farben/Positionen dynamisch). Ein einzelner
-       Rang-"von → nach"-Slot; das allgemeine Erfolgs-Feier-System (Queue + Bündelung
-       verschiedener Erfolgs-Arten) ist bewusst #314. -->
-  <div id="overlay-rankup" class="rankup-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="rankup-title">
-    <div class="rankup-confetti" id="rankup-confetti" aria-hidden="true"></div>
-    <div class="rankup-card">
-      <div class="rankup-bunting" id="rankup-bunting" aria-hidden="true"></div>
-      <div class="rankup-title" id="rankup-title">🎉 Aufgestiegen! 🎉</div>
-      <div class="rankup-icon" id="rankup-icon" aria-hidden="true">⚓</div>
-      <div class="rankup-name" id="rankup-name">Matrose</div>
-      <div class="rankup-from" id="rankup-from"></div>
-      <button class="primary rankup-ok" data-action="closeOverlays">⚓ Weiter (Enter)</button>
+  <!-- Erfolgs-Feier-Overlay (#314, verallgemeinert das Rang-Feier #223): mittiges
+       Feier-Popup für ALLE Erfolge (Level-Up/Album/Abkürzung/Historie). Oben ein
+       DevOps-Spruch, darunter je gefeiertem Erfolg ein "Sticker" (Icon + Titel +
+       optionale "zuvor"-Zeile) – mehrere ~gleichzeitige Erfolge werden zu EINEM Popup
+       gebündelt (Titel/Spruch/Sticker füllt hud.ts aus der celebrate.ts-Sicht).
+       Maritim gefeiert: Signalflaggen-Konfetti regnet + eine Wimpelkette schmückt die
+       Karte (dress ship); Farben/Positionen dynamisch aus hud.ts. -->
+  <div id="overlay-celebrate" class="celebrate-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="celebrate-title">
+    <div class="celebrate-confetti" id="celebrate-confetti" aria-hidden="true"></div>
+    <div class="celebrate-card">
+      <div class="celebrate-bunting" id="celebrate-bunting" aria-hidden="true"></div>
+      <div class="celebrate-title" id="celebrate-title">🎉 Geschafft! 🎉</div>
+      <div class="celebrate-items single" id="celebrate-items"></div>
+      <div class="celebrate-quip" id="celebrate-quip"></div>
+      <button class="primary celebrate-ok" data-action="closeOverlays">⚓ Weiter (Enter)</button>
     </div>
   </div>
 

@@ -10,6 +10,7 @@ import { expandRect, cull, FrameSampler, type Cullable } from "../hud/cull";
 import { getMapEntry, type MapId } from "../world/maps/mapregistry";
 import { DAY_CYCLE_MS } from "../core/clock";
 import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, readMoveInput, faceFrom, renderPlayer, type SceneNpc } from "./shared";
+import { HIT_R, LAMP_HIT } from "./geometry";
 // Spiel-Systeme als eigene, fokussierte Module (WorldScene.ts-Split #393, analog
 // scenes.ts-Split #345): freie Funktionen mit der Szene als Parameter (`scene`).
 // WorldScene ist seither nur noch der schlanke Orchestrator (Aufbau in create(),
@@ -19,8 +20,8 @@ import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, r
 import { loadMapTerrain } from "./worldscene/mapterrain";
 import { placeHarborObjects, renderGround } from "./worldscene/terrain";
 import { spawnGull, spawnFlowers, spawnGrassDetail, scatter, renderStatics, updateDayNight } from "./worldscene/scenery";
-import { syncCluster, updateDynamicTags } from "./worldscene/clustersync";
-import { scheduleEvents, tickEvents } from "./worldscene/events";
+import { syncCluster, updateDynamicTags, updateDynDecor } from "./worldscene/clustersync";
+import { registerHazardRenderer } from "./worldscene/events";
 import { updateWarps } from "./worldscene/warps";
 // #496: die Feld-Typen + das WorldSceneFields-Interface liegen in worldscene/types.ts
 // (dieselbe Datei wie WorldSceneLike). Die Klasse implementiert WorldSceneFields, damit
@@ -28,18 +29,10 @@ import { updateWarps } from "./worldscene/warps";
 // über WorldSceneLike sehen, hier wirklich existiert – ohne dass ein Modul eine zweite
 // Feldliste von Hand pflegt (frühere DynTagLike-Doppelpflege).
 import type {
-  WorldSceneFields, DecoItem, LabelSpec, DynTagData, PodSlot, Butterfly, PlayerPos, Hazards,
+  WorldSceneFields, DecoItem, LabelSpec, DynTagData, DynDecorItem, PodSlot, Butterfly, PlayerPos,
 } from "./worldscene/types";
 
-/* #343/#386: Sub-Tile-Kollisionsradien (Pixel). Steine, Büsche und NPCs prallen nicht
- * mehr als volles 16×16-Quadrat ab, sondern als runde Hitbox um ihren Mittelpunkt – so
- * gleitet man an der runden Silhouette weich vorbei statt eckig abzuprallen. Laternen
- * sind schmale Pfosten und bekommen darum ein kleineres, dünnes Rechteck (#386). */
-const NPC_HIT_R = 6;
-const ROCK_HIT_R = 6;
-const BUSH_HIT_R = 6;
-const LAMP_HIT: readonly [number, number] = [6, 10];   // Pfosten: schmale Rechteck-Hitbox (B×H)
-
+// #343/#386: Sub-Tile-Kollisionsradien liegen jetzt zentral in scenes/geometry.ts (#590).
 export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   // Welt-Raster + Kollision
   W!: number;
@@ -58,6 +51,10 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   tagFontDefault?: number;   // native (nicht-compacte) Tag-Schriftgröße, einmal gemerkt
   visibleTags!: number;      // gerade dargestellte Tag-Zahl (Perf-HUD-Beleg)
   lampGlows!: Phaser.GameObjects.Image[];
+  // Dekorative dynGroup-Sprites (Helm-Flaggen/Service-Laternen): cullbar + ohne
+  // Dauer-Tween (#431)
+  dynDecor!: DynDecorItem[];
+  visibleDynDecor!: number;
   // Hafen-Objekt-Felder aus terrain.ts (Stege/Schiff/Flaggenmasten/Leuchtturm/Plateau)
   piers!: { x: number; name: string }[];
   ship!: { x: number; y: number; w: number; h: number };
@@ -110,7 +107,6 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   // #426: ein Set armierter Warp-IDs statt je ein benanntes Boolean pro Region –
   // datengetrieben über REGION_WARPS, sodass eine neue Region kein neues Flag braucht.
   warpArmed!: Set<string>;
-  hazards!: Hazards;
   // #425: welche Registry-Karte diese Szene lädt. Default „harbor", damit Boot/
   // Erststart unverändert bleibt; eine zweite Tiled-Region kommt über die Init-Daten
   // (`scene.start("World", { mapId })`) dazu, nicht über eine neue Szenen-Klasse.
@@ -143,11 +139,12 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     this.dynTags = [];     // dynamische Cluster-Tags als Daten (#416)
     this.tagPool = [];     // wiederverwendete Tag-Container (nur für die sichtbaren)
     this.visibleTags = 0;
+    this.dynDecor = [];        // dekorative Flaggen/Laternen als Daten (#431)
+    this.visibleDynDecor = 0;
     this.podSlots = {};
     this.slotUsed = [];            // #523: wächst dynamisch mit der Pod-Zahl (kein fixes 36)
     this.lastClusterRev = -1;      // #523: erzwingt einen vollen Sync im ersten Frame
     this.dynamic = { barrelsSig: "", flagsSig: "", svcSig: "", depSig: "" };
-    this.hazards = { nextPirate: 0, pirate: null, nextKraken: 0, kraken: null, nextStorm: 0, storm: null, stormFlash: null };
     // #426: Anti-Pingpong-Gate aller Region-Warps – leer = alle disarmt; updateWarps
     // armiert jeden Warp, sobald man ihn verlassen und die Lauftaste losgelassen hat.
     this.warpArmed = new Set();
@@ -185,8 +182,8 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     spawnGrassDetail(this);   // #40: dichtes, variiertes Gras (Stardew-Look)
     this.spawnNpcs();
     this.spawnPlayer();
-    scatter(this, "bush", 16, 0.5, [0, 1, 2], false, BUSH_HIT_R); // Büsche: runde Hitbox (#386) statt voller Kachel, nicht an Wegen
-    scatter(this, "rock", 14, 0.45, [0, 1, 2, -3], false, ROCK_HIT_R); // Steine: runde Hitbox (#343), auch am Strand
+    scatter(this, "bush", 16, 0.5, [0, 1, 2], false, HIT_R); // Büsche: runde Hitbox (#386) statt voller Kachel, nicht an Wegen
+    scatter(this, "rock", 14, 0.45, [0, 1, 2, -3], false, HIT_R); // Steine: runde Hitbox (#343), auch am Strand
     scatter(this, "lamppost", 4, 0.55, [0, 1, 2], false, 0, LAMP_HIT); // Hafenlaternen: schmales Pfosten-Rechteck (#386)
     scatter(this, "mushroom", 10, 0.28, [0, 1, 2]);       // Pilze: kleine Wald-/Wiesendeko, begehbar (#7)
     scatter(this, "seashell", 8, 0.22, [-3]);             // Muscheln: nur am Sandstrand (#7)
@@ -234,7 +231,9 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
       }).setScrollFactor(0).setDepth(30000);
     }
 
-    scheduleEvents(this, 60); // erste Events frühestens nach 1 Minute
+    // #540: Der Gefahren-*Takt* läuft szenen-neutral in Game.tick; diese Szene meldet sich nur
+    // als RENDERER an (Welt-Sprites) und rekonstruiert einen ggf. schon laufenden Zustand.
+    registerHazardRenderer(this);
 
     // Möwen für die Hafen-Atmosphäre
     this.time.addEvent({ delay: 6500, loop: true, callback: () => { if (Math.random() < 0.65) spawnGull(this); } });
@@ -353,7 +352,7 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     // weich an ihnen vorbeigleitet. Reden (E) bleibt möglich (nearestNpc greift von
     // der Nachbarkachel). Die Kachel bleibt für die Deko-Platzierung belegt (softGrid).
     for (const idx of npcSolidIndices(defs, this.W, this.H)) this.softGrid[idx] = 1;
-    this.softObstacles.push(...npcHitboxes(defs, NPC_HIT_R));
+    this.softObstacles.push(...npcHitboxes(defs, HIT_R));
     this.npcs = defs.map(d => {
       const meta = KQContent.NPCS[d.id as keyof typeof KQContent.NPCS];
       this.addShadow(d.x * T + 8, d.y * T + 15);
@@ -472,6 +471,10 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
       const MARGIN = 4 * T;
       const bounds = expandRect({ x: wv.x, y: wv.y, width: wv.width, height: wv.height }, MARGIN);
       this.visibleCullables = cull(this.cullables, bounds);
+      // #431: dieselbe (gedrosselte) Sichtfeld-Prüfung auch für die dekorativen
+      // dynGroup-Sprites (Flaggen/Laternen) – off-screen bleiben sie ausgeblendet,
+      // statt wie zuvor immer sichtbar + dauerhaft animiert zu sein.
+      this.visibleDynDecor = cull(this.dynDecor, bounds);
     }
     if (this.debugPerf) {
       const fps = this.fpsSampler.fps;
@@ -486,7 +489,8 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
           "FPS " + fps + "\n" +
           "Sprites sichtbar " + vis + "/" + total + "\n" +
           "gecullt " + (total - vis) + "  ·  stress ×" + this.stress + "\n" +
-          "Cluster-Tags " + this.visibleTags + "/" + this.dynTags.length + " (Pool " + this.tagPool.length + ")",
+          "Cluster-Tags " + this.visibleTags + "/" + this.dynTags.length + " (Pool " + this.tagPool.length + ")\n" +
+          "Deko-Props sichtbar " + this.visibleDynDecor + "/" + this.dynDecor.length,
         );
       }
     }
@@ -533,6 +537,7 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
 
     syncCluster(this);
     updateDynamicTags(this);
+    updateDynDecor(this, time);
     // Persistente Spiel-Zeit (#413) um die reale Frame-Zeit vorrücken und den Tag-Nacht-
     // Schleier/die HUD-Uhr daraus speisen – NICHT mehr aus der flüchtigen Phaser-`time`,
     // die bei jedem Reload bei 0 begänne. So überlebt der Kalender den Reload (Auto-Save
@@ -553,8 +558,8 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
       ).setScale(1.3, 0.6 + Math.abs(Math.sin(t * 14 + b.ph)) * 0.7);
     }
 
-    // Events: fällige Gefahren starten + laufende auf Erfolg/Deadline prüfen (#393: worldscene/events.ts)
-    tickEvents(this, time);
+    // #540: Der Gefahren-Takt läuft szenen-neutral in Game.tick (main.ts Pre-Step), nicht mehr
+    // hier – die WorldScene ist nur noch Renderer (worldscene/events.ts, reconcile beim Wachen).
 
     UI.updatePrompt();
   }

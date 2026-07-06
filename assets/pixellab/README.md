@@ -16,21 +16,21 @@ Verkettet über `lower_base_tile_id`, damit gemeinsame Terrains pixelgleich ansc
 
 | Datei | Übergang | tileset_id | base tiles (lower→upper) |
 |---|---|---|---|
-| `water-sand` (coast) | Wasser→Sand | c7e28595-ae17-4840-9c25-31a4a7dd8eb0 | water 356778f0… → sand 096ddbfb… |
+| `water-sand` (coast) | Wasser→Sand | 0df35065-b4c6-4a58-93ce-b8c11caeeb5a | water 356778f0… → sand 096ddbfb… (neu generiert #342: `pro`-Modus, raggedness 0.4 = sanft geschwungene, lebendigere Uferlinie; an dieselben Basetiles gekettet) |
 | `sand-grass` (meadow) | Sand→Gras | 6de18767-1ba1-4829-b9b8-81a659508612 | sand 096ddbfb… → grass 197809d8… |
-| `grass-dirt` (path) | Gras→Weg | c2bd68ef-1b8d-4936-9787-6c3b68d4500f | grass 197809d8… → dirt e8efe511… |
+| `grass-dirt` (path) | Gras→Weg | d4085ba1-664b-45cb-ae94-0022400b5b1d | grass 197809d8… → dirt 79c94c91… |
 | `water-stone` (kai) | Wasser→Stein | 18b0efb4-f9f4-4e16-97a3-e5e298eb8bb5 | water 356778f0… → stone bcb30e72… |
 | `water-wood` (dock) | Wasser→Holz | 8540cac2-06ff-438f-8432-7b5865046011 | water 356778f0… → wood 2cab6bae… |
 
 Gemeinsame Basis-Tile-IDs (zum Weiter-Verketten neuer Sets):
 `water 356778f0-9b33-4025-86fe-c7bb75b06d27` · `sand 096ddbfb-6300-4a3e-bed8-d052a947fa64` ·
-`grass 197809d8-8637-4344-88d1-f704a7e410f5` · `dirt e8efe511-b484-4a4f-90d9-7efbebebfbe3` ·
+`grass 197809d8-8637-4344-88d1-f704a7e410f5` · `dirt 79c94c91-00e6-499d-8130-58807f11addc` ·
 `stone bcb30e72-ea60-44e7-87b4-2f6ca52a98c9` · `wood 2cab6bae-8dce-4298-a8df-d1e4ef4644a8`
 
 ## Objekte (`create_map_object`, transparent)
 `flowers` 0b39f8ca · `tree` 5875d1ff · `pine` 646df3e0 · `bush` 60c32cf5 · `rock` fc3a7be6 ·
 `crate` 80a6f6c4 · `barrel` 694b9ecc · `well` edd57bbc · `stall` 1f189047 · `lamppost` ce7a86df · `signpost` b05d7ca2 · `sign` f6d5f12f
-`lighthouse` d132cfe0 · `house_office` 66ac5306 · `house_forge` 83dc3d8d · `house_chart` d83f271c
+`lighthouse` d132cfe0 · `watchtower` 43e86eb8 · `house_office` 66ac5306 · `house_forge` 83dc3d8d · `house_chart` d83f271c
 `door_office` 1691c8a5 · `door_forge` 70fce9d9 · `door_chart` b4688343 (Gebäude-Außentüren, #186; `view: side`, `selective outline`, `detailed shading`, je auf den Sprite-Stil abgestimmt: office = braune Bogentür, forge = dunkle Timber-Tür mit Eisennieten, chart = warme Bogentür mit Bullauge. Nach dem Generieren auf den Inhalt beschnitten (transparentes Padding weg), damit sie in `makeDoor` (`scenes/worldscene/terrain.ts`) mit Origin unten bündig auf der Gebäude-Fußlinie sitzen; ersetzen die früheren prozeduralen Rechteck-Türen)
 `grasstuft0` 240c6cab · `grasstuft1` aacd3464 · `grasstuft2` 38bff122 (Gras-Büschel, #107; 64×64, „kleine Grasbüschel ohne Erde"; ersetzen die prozeduralen `fillTriangle`-Halme aus #40. Über `spawnGrassDetail()` in `scenes.ts` deterministisch über die Wiese gestreut — Variante/Helligkeit/Neigung/Größe/Spiegelung kommen aus `grassTuftStyle()` in `decor.ts`; die Farbe trägt das Sprite selbst, nur eine dezente Grau-Tint-Helligkeitsvariation bleibt)
 `mushroom` b5ef64e2 · `seashell` fcecf607 · `driftwood` c7db4671 (Natur-Deko, #7; 64×64, `high top-down`, `selective outline`, `detailed shading`; über `scatter()` in `scenes.ts` gestreut — Pilze auf Land, Muscheln & Treibholz nur auf Sandstrand)
@@ -47,6 +47,7 @@ Gemeinsame Basis-Tile-IDs (zum Weiter-Verketten neuer Sets):
 > **Interior-Einrichtung** (#187): ersetzt die prozeduralen Ellipsen/Rechtecke des Hausinnenraums/der Kajüte (`scenes/InteriorScene.ts`) durch echte Pixelart. **Objekte** (`create_map_object`): `porthole` (Messing-Bullauge mit Meerblick, `view: side`, 48², an der oberen Schiffs-Rumpfwand – ersetzt die früheren `add.ellipse`-Bullaugen), `interior_door` (geschlossene Holztür, `view: side`, 40×56, als Haus-Austritt an der unteren Wand), `ship_hatch` (Decksluke von oben, `view: high top-down`, 40², als Schiffs-Austritt flach am Boden). **Boden/Wand-Kacheln** (`create_tiles_pro`, `square_topdown`, 16px, view_angle 90 = flach): `interior_floor` (Holzdielen, `segmentation`-Mode → nahtlos ohne Pro-Kachel-Raster), `interior_wall_house` (verputzte Steinwand), `interior_wall_ship` (dunkler Holzrumpf – die Rumpf-Dunkelheit steckt jetzt im Tile, das frühere halbtransparente Rechteck-Overlay entfällt). Gezeichnet in `renderRoom` (RenderTexture, `rt.draw` je Zelle) / `renderPortholes` / `renderThreshold`.
 
 > **Leuchtturm** (`lighthouse`, side-view, 72×128 → 45×100): löst den alten code-gezeichneten Turm ab; im `decorate`-Hook der Leuchtturm-Region (`scenes/regions.ts`, #427) als Bild + Felsen-Ellipse, dazu ein **rotierender Lichtkegel** (Code: weiches ADD-Blend-Dreieck `lhbeam`, 360°-Tween) und das pulsierende Lämpchen.
+> **Wachturm** (`watchtower`, side-view, 128×256 → auf Inhalt zugeschnitten 114×227, #440): löst den alten code-gezeichneten Turm (Stein-Schaft + Zinnenkranz) ab; Standplatz + 2×2-Fußabdruck stehen wie beim Leuchtturm (#357) in der Entity-Registry (`content/data/entities.json`, Karte `watchtower`, Typ `tower`). Im `decorate`-Hook der Wachturm-Region (`scenes/regions.ts`) als Bild (Skalierung 0.4) + Schatten-Ellipse gerendert; das **flatternde Banner** bleibt bewusst Code (Mast-Rechteck + Dreieck-Flagge, Scale-Tween) – derselbe „dynamischer Effekt ist kein Platzhalter"-Grundsatz wie beim Leuchtturm-Lichtkegel.
 > **Gebäude** (`house_office` Stein/Hafenmeisterei, `house_forge` Werft, `house_chart` Kartenhaus; `view: high top-down`, 2.5D): lösen die Kenney-„town"-Tile-Häuser ab. Gerendert über `building(x,y,w,tex,scale)` — Grundfläche (w×3 Tiles) bleibt solide, das hohe Dach ragt nach oben, Tiefe nach Fußlinie (korrektes Vorne/Hinten zur Figur).
 
 > **`sign`** (Holz-Schildbrett, `view: side`, 96×40 → auf Inhalt zugeschnitten **75×30**, Aufhänge-Knäufe oben abgeschnitten) ist die Grundlage der **festen Orts-Schilder**. Es wird in `scenes.ts` per **Phaser `NineSlice`** (Insets 8/8/8/6) auf jede Textlänge gedehnt – Rahmen bleibt fix, Holzmitte streckt. So genügt **eine** Grafik für alle Schilder (`makeSign`). Die *dynamischen* Cluster-Labels nutzen bewusst KEIN Holz, sondern „digitale" Tech-Tags (`makeTechTag`, Monospace + Status-Punkt, Nähe-Aufdeckung).

@@ -20,6 +20,11 @@ describe("isCoins – die EINE Regel", () => {
     expect(isCoins(NaN)).toBe(false);
     expect(isCoins(Infinity)).toBe(false);
   });
+  it("lehnt unsichere Ganzzahlen jenseits von MAX_SAFE_INTEGER ab (Overflow-Grenze)", () => {
+    expect(isCoins(Number.MAX_SAFE_INTEGER)).toBe(true);
+    expect(isCoins(Number.MAX_SAFE_INTEGER + 1)).toBe(false); // Präzision verloren → nicht mehr sicher
+    expect(isCoins(2 ** 60)).toBe(false);
+  });
 });
 
 describe("coins – prüfender Smart-Constructor", () => {
@@ -43,8 +48,12 @@ describe("toCoins – härtende Fabrik für unsichere Quellen", () => {
     expect(toCoins(NaN)).toBe(0);
     expect(toCoins(Infinity)).toBe(0);
   });
+  it("deckelt unsicher große Werte bei MAX_SAFE_INTEGER (bleibt eine gültige Menge)", () => {
+    expect(toCoins(2 ** 60)).toBe(Number.MAX_SAFE_INTEGER);
+    expect(isCoins(toCoins(2 ** 60))).toBe(true);
+  });
   it("liefert immer eine gültige Menge", () => {
-    for (const raw of [7.7, -3, 0, 100.4, NaN]) expect(isCoins(toCoins(raw))).toBe(true);
+    for (const raw of [7.7, -3, 0, 100.4, NaN, 2 ** 60]) expect(isCoins(toCoins(raw))).toBe(true);
   });
 });
 
@@ -63,6 +72,11 @@ describe("applyMultiplier – Verdienst × Faktor, kaufmännisch gerundet", () =
 describe("add / canAfford / subtract – Kontostand-Arithmetik", () => {
   it("addiert zwei Mengen", () => {
     expect(add(coins(40), coins(10))).toBe(50);
+  });
+  it("liefert eine gültige Menge und wirft bei Overflow über MAX_SAFE_INTEGER", () => {
+    expect(isCoins(add(coins(1), coins(2)))).toBe(true);
+    // Regel-Reassertion: eine Summe, die die sichere Ganzzahl-Grenze reißt, ist un-repräsentierbar
+    expect(() => add(coins(Number.MAX_SAFE_INTEGER), coins(Number.MAX_SAFE_INTEGER))).toThrow(InvalidCoinsError);
   });
   it("canAfford: reicht genau / reicht nicht", () => {
     expect(canAfford(coins(25), coins(25))).toBe(true);

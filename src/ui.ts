@@ -14,10 +14,11 @@ import { albumUI } from "./ui/album";
 import { shopUI } from "./ui/shop";
 import { quizUI } from "./ui/quiz";
 import { saveUI } from "./ui/save";
-import { setSaveFailedSink, setPayoutSink, setClockSink, worldScene } from "./runtime";
+import { setSaveFailedSink, setPayoutSink, setClockSink, setUiBusyProbe, worldScene } from "./runtime";
 import type { ChoiceStep } from "./types";
 import type { DrillTask } from "./content/drills";
 import type { CmdCard, QuizCard } from "./content/loader";
+import type { Achievement } from "./hud/celebrate";
 
 /* ── Typen des veränderlichen UI-Zustands (#423): ersetzen die früheren `as any`.
  *    Geschrieben/gelesen werden die Felder quer aus den ui/*-Bündeln über die
@@ -87,6 +88,7 @@ export const UI = {
   questLogViewIdx: null as number | null, // welche Quest im Logbuch gerade „nachgelesen" wird (null = Übersicht, #326)
   albumViewTopic: null as string | null, // welche Album-Seite (Thema) gerade offen ist (null = Übersicht, #278)
   reviewSel: -1,           // markierte Quiz-Option in der Wissensrunde (Pfeiltasten, #258)
+  pendingCelebrations: [] as Achievement[], // #314: aufgelaufene Erfolge, gebündelt gezeigt sobald der Spieler frei ist
   ...overlayUI,
   ...hudUI,
   ...questUI,
@@ -128,3 +130,9 @@ setPayoutSink((amount) => {
 setClockSink((dateLabel, timeLabel, title) => {
   UI.setClock(dateLabel, timeLabel, title);
 });
+
+/* #540: der szenen-neutrale Gefahren-Takt (game/hazards.ts) darf ui.ts nicht importieren, will
+ * aber – wie früher der Szenen-Start – eine Gefahr aufschieben, solange ein Overlay/Dialog/Quiz
+ * offen ist (kein Alarm mitten ins Modal). Dafür registriert die Präsentation hier eine Sonde,
+ * die die Anwendung vor dem Start abfragt. */
+setUiBusyProbe(() => UI.blocking());

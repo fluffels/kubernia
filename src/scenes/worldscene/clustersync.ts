@@ -21,27 +21,29 @@ import Phaser from "phaser";
 import { Game } from "../../game";
 import { SFX } from "../../sfx";
 import { spreadLabelsVertically, type LayoutBox } from "../../hud/labellayout";
-import { selectVisibleTags, expandRect } from "../../hud/cull";
+import { selectVisibleTags, expandRect, flagBobOffset, lampFlickerAlpha } from "../../hud/cull";
+import { containerBarrelTile } from "../../hud/containeryard";
 import { T, hashHue, hueColor, SIGN_FONT, SIGN_SCALE } from "../shared";
+// Pod-Steg-Belegung + Tag-Rendering-Konstanten liegen zentral in scenes/geometry.ts (#590).
+import { SLOTS_PER_PIER, TAG_CAP, REVEAL_FULL, REVEAL_FADE } from "../geometry";
 import type { WorldSceneLike, DynTagData } from "./types";
 
-// Nähe-Aufdeckung: voll sichtbar bis FULL, ausgeblendet ab FADE (Welt-Pixel).
-const REVEAL_FULL = 42;
-const REVEAL_FADE = 84;
-// Höchstzahl gleichzeitig gerenderter Tags. Der Aufdeck-Radius (FADE) begrenzt die
-// realistisch sichtbaren Tags ohnehin auf wenige; der Deckel ist die harte Garantie,
-// dass Pool-Größe + Entzerrung auch im pathologischen Fall (sehr dichter Cluster)
-// konstant bleiben. Mehr als CAP Tags im Radius → die NÄCHSTEN gewinnen.
-const TAG_CAP = 64;
 // Sichtfeld fürs Tag-Culling großzügig erweitern, damit am Bildrand nichts aufpoppt
 // (Tags ragen über ihren Bezugspunkt + werden beim Entzerren nach oben geschoben).
 const TAG_VIEW_MARGIN = 2 * T;
 
-// Belegung je Steg: 2 Spalten × 6 Reihen = 12 Slots. Bei mehr Pods als Stege×12
-// wird NICHT mehr auf Slot 0 zurückgefallen (Überlagerung, #523), sondern eine
-// weitere „Seite" darunter gestapelt – die Slot-Vergabe ist dynamisch, nicht fix 36.
-const SLOTS_PER_PIER = 12;
-const PIER_ROWS = SLOTS_PER_PIER / 2;
+// Dekorative dynGroup-Sprites (#431): Bewegungs-Konstanten für die Sinus-Ersatzbewegung
+// der früheren Dauer-Tweens (Flagge: y-Wippe, Lampe: Alpha-Flicker). period = volle
+// Hoch-Runter-Periode in Sekunden (die alten Tweens liefen mit yoyo → 2× duration).
+const FLAG_BOB_PX = 2;
+const FLAG_BOB_PERIOD_S = 1.2;
+const LAMP_MIN_ALPHA = 0.55;
+const LAMP_FLICKER_PERIOD_S = 1.6;
+// Leichter Phasen-Versatz je Index, damit nicht ALLE Flaggen/Lampen exakt synchron
+// wippen/flackern (rein kosmetisch, kein Zufall nötig – deterministisch aus dem Index).
+const DECOR_PHASE_STEP = 0.8;
+
+const PIER_ROWS = SLOTS_PER_PIER / 2;   // 2 Spalten × PIER_ROWS Reihen je Steg (#590/#523)
 
 function podSlotPos(scene: WorldSceneLike, slot: number) {
   const P = Math.max(1, scene.piers.length);
@@ -132,6 +134,10 @@ export function rebuildDynamic(scene: WorldSceneLike) {
   // (lx,ly) = Tag-Position, (ax,ay) = Bezugspunkt des Objekts (Distanz zur Figur +
   // Tiefen-Sortierung). `ty` ist die Basis-Position fürs Entzerren.
   scene.dynTags = [];
+  // #431: dekorative Sprites (Flaggen/Laternen) parallel als Daten sammeln – analog zu
+  // dynTags NEU aufgebaut bei jedem rebuildDynamic, damit kein Eintrag auf ein von
+  // dynGroup.clear() bereits zerstörtes Sprite zeigt.
+  scene.dynDecor = [];
   const mkTag = (lx: number, ly: number, str: string, status: number, ax: number, ay: number, compact = false) => {
     scene.dynTags.push({ tx: lx, ty: ly, ax, ay, text: str, status, compact });
   };
@@ -149,34 +155,65 @@ export function rebuildDynamic(scene: WorldSceneLike) {
       mkTag(pos.x, pos.y - 12, text, d.broken ? 0xff7b7b : 0x6fe09a, pos.x, pos.y);
     }
   }
-  // Docker-Fässer bei Bo (max. 10 sichtbar, Tags versetzt gegen Überlappung)
-  Game.sim.docker.containers.slice(-10).forEach((c, i) => {
-    const bx = (4 + (i % 5) * 2) * T + 8, by = (26 + Math.floor(i / 5) * 0.0) * T + 8;
+  // Docker-Fässer (max. 10 sichtbar): laufende am Dock bei Bo, gestoppte im
+  // Lagerschuppen (#303). Der Ortswechsel macht „gestoppt ≠ gelöscht" (docker ps -a)
+  // sichtbar – Layout-SSOT + Placement-Mathe pur in hud/containeryard.ts, damit
+  // Fass-Positionen und der Schuppen (scenery) nicht driften. Jede Gruppe packt ab 0.
+  let nRun = 0, nStop = 0;
+  Game.sim.docker.containers.slice(-10).forEach((c) => {
+    const k = c.running ? nRun++ : nStop++;
+    const tile = containerBarrelTile(c.running, k);
+    const bx = tile.x * T + 8, by = tile.y * T + 8;
     const barrel = scene.add.image(bx, by, "barrel").setScale(0.5).setDepth(by + 8).setAlpha(c.running ? 1 : 0.45);
     scene.dynGroup.add(barrel);
     // #491: „gestoppt" farbunabhängig markieren – zusätzlich zur Tag-Farbe (grün→grau)
     // ein Pause-Symbol vor dem Namen, damit Rot-Grün-Sehschwäche den Zustand nicht verliert.
-    mkTag(bx, by - 9 - (i % 2) * 7, (c.running ? "" : "⏸ ") + c.name, c.running ? 0x6fe09a : 0x8a98a8, bx, by, true);
+    mkTag(bx, by - 9 - (k % 2) * 7, (c.running ? "" : "⏸ ") + c.name, c.running ? 0x6fe09a : 0x8a98a8, bx, by, true);
   });
-  // Helm-Flaggen an der Werft
+  // Helm-Flaggen an der Werft. #431: kein Dauer-Tween mehr (skalierte bei
+  // Stardew-Scope 1:1 mit der Release-Zahl, auch off-screen) – Mast+Flagge sind
+  // cullbar (dynDecor), die Wipp-Bewegung berechnet updateDynDecor() pro Frame nur
+  // für aktuell sichtbare Flaggen (flagBobOffset in cull.ts).
   Game.sim.releases.forEach((r, i) => {
     const pole = scene.flagPoles[i % scene.flagPoles.length];
     const fx = pole.x * T + 8, fy = pole.y * T;
     const mast = scene.add.image(fx, fy, "px").setScale(1, 15).setTint(0x6b5436).setDepth(fy + 30);
-    const flag = scene.add.image(fx + 6, fy - 12, "px").setScale(6, 3.5).setTint(hueColor(hashHue(r.name))).setDepth(fy + 31);
-    scene.tweens.add({ targets: flag, y: fy - 14, duration: 600, yoyo: true, repeat: -1, ease: "Sine.inOut" });
+    const flagBaseY = fy - 12;
+    const flag = scene.add.image(fx + 6, flagBaseY, "px").setScale(6, 3.5).setTint(hueColor(hashHue(r.name))).setDepth(fy + 31);
     scene.dynGroup.add(mast); scene.dynGroup.add(flag);
+    scene.dynDecor.push({ x: fx, y: fy, obj: mast });
+    scene.dynDecor.push({ x: fx, y: fy, obj: flag, anim: { kind: "flag", baseY: flagBaseY, phase: i * DECOR_PHASE_STEP } });
     mkTag(fx + 4, fy - 18, r.name + " rev" + r.revision, 0x6fd0e6, fx, fy - 8);
   });
-  // Service-Laternen am Dockrand
+  // Service-Laternen am Dockrand. #431: analog – Alpha-Flicker nur fürs sichtbare
+  // Lamp-Sprite (lampFlickerAlpha in cull.ts), Pfosten + Lampe cullbar.
   Game.sim.services.forEach((s, i) => {
     const lx = (6 + i * 4) * T + 8, ly = 23 * T + 8;
     const post = scene.add.image(lx, ly + 2, "px").setScale(1, 6).setTint(0x5a4632).setDepth(ly + 8);
     const lamp = scene.add.image(lx, ly - 5, "px").setScale(3, 2.5).setTint(0xffdc78).setDepth(ly + 9);
-    scene.tweens.add({ targets: lamp, alpha: { from: 0.55, to: 1 }, duration: 800, yoyo: true, repeat: -1 });
     scene.dynGroup.add(post); scene.dynGroup.add(lamp);
+    scene.dynDecor.push({ x: lx, y: ly, obj: post });
+    scene.dynDecor.push({ x: lx, y: ly, obj: lamp, anim: { kind: "lamp", baseY: ly, phase: i * DECOR_PHASE_STEP } });
     mkTag(lx, ly - 10, s.name, 0x6fd0e6, lx, ly);
   });
+}
+
+/** Pro Frame: die Wipp-/Flicker-Bewegung der dekorativen dynGroup-Sprites NUR für
+ *  die aktuell sichtbaren berechnen (#431) – der Rest bleibt unangetastet, bis er
+ *  wieder ins Sichtfeld scrollt (dann setzt `cull()` seine Position/Alpha beim
+ *  nächsten Sichtbar-Werden ohnehin neu, kein Sprung sichtbar). Ersetzt die
+ *  früheren `scene.tweens.add({repeat:-1})`-Dauer-Tweens, die unabhängig von der
+ *  Sichtbarkeit pro Frame tickten. */
+export function updateDynDecor(scene: WorldSceneLike, time: number) {
+  const t = time / 1000;
+  for (const d of scene.dynDecor) {
+    if (!d.anim || !d.obj.visible) continue;
+    if (d.anim.kind === "flag") {
+      d.obj.y = d.anim.baseY + flagBobOffset(t, d.anim.phase, FLAG_BOB_PX, FLAG_BOB_PERIOD_S);
+    } else {
+      d.obj.setAlpha(lampFlickerAlpha(t, d.anim.phase, LAMP_MIN_ALPHA, LAMP_FLICKER_PERIOD_S));
+    }
+  }
 }
 
 /** Vergrößert den Tag-Pool bei Bedarf auf `n` (≤ TAG_CAP) wiederverwendbare

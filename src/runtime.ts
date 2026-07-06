@@ -7,6 +7,7 @@
  * scenes.ts, ui.ts, main.ts und game.ts kein zyklischer Import entsteht.
  */
 import type { AudioConfig } from "./types";
+import type { HazardEvent } from "./world/hazards";
 
 /* ---------- Tastenzustand ----------
  * main.ts schreibt (keydown/keyup/blur), scenes.ts liest in der Update-Schleife.
@@ -143,4 +144,42 @@ export function setClockSink(fn: ((dateLabel: string, timeLabel: string, title: 
 /** Der Präsentation die aktuelle HUD-Uhr melden (No-op ohne Sink). */
 export function notifyClock(dateLabel: string, timeLabel: string, title: string): void {
   _clockSink?.(dateLabel, timeLabel, title);
+}
+
+/* ---------- Gefahren-Sink (#540) ----------
+ * Die Zufalls-Gefahren (Piraten/Krake/Sturm) schreiten seit #540 szenen-neutral in Game.tick
+ * fort (Zeitachse + Cluster-Mutation in der Anwendungsschicht, analog Wirtschaft/Uhr #501).
+ * Die Effekt-Ausführung (Welt-Sprites nur in der WorldScene, globaler Alarm-DOM + roter
+ * Warnrahmen in JEDER Szene, Belohnung/Strafe) bleibt Präsentation – die die Anwendung nicht
+ * importieren darf. Darum meldet game/hazards.ts jedes `HazardEvent` entkoppelt hierüber (wie
+ * Payout-#501/Uhr-#588), und die Präsentation (worldscene/events.ts) registriert ihren Handler.
+ * Ohne Sink (Node-Test) ist das Melden ein No-op. */
+let _hazardSink: ((ev: HazardEvent) => void) | null = null;
+
+/** Von der Präsentation (worldscene/events.ts) beim Modul-Laden gesetzt. */
+export function setHazardSink(fn: ((ev: HazardEvent) => void) | null): void {
+  _hazardSink = fn;
+}
+
+/** Der Präsentation ein Gefahren-Ereignis melden (No-op ohne Sink). */
+export function notifyHazard(ev: HazardEvent): void {
+  _hazardSink?.(ev);
+}
+
+/* ---------- UI-Beschäftigt-Sonde (#540) ----------
+ * Der frühere Szenen-Start-Code verschob eine fällige Gefahr, solange ein Overlay/Dialog/Quiz
+ * offen war (`UI.blocking()`), damit der Alarm nicht mitten in ein Modal platzt. Die
+ * szenen-neutrale Anwendungsschicht darf `ui.ts` nicht importieren – statt eines Sinks
+ * registriert die Präsentation hier eine SONDE, die die Anwendung (game/hazards.ts) vor dem
+ * Start abfragt. Ohne Sonde (Node-Test) gilt „nicht beschäftigt" (false). */
+let _uiBusyProbe: (() => boolean) | null = null;
+
+/** Von der Präsentation (ui.ts) beim Modul-Laden gesetzt. */
+export function setUiBusyProbe(fn: (() => boolean) | null): void {
+  _uiBusyProbe = fn;
+}
+
+/** Ist die UI gerade durch ein blockierendes Overlay/Dialog/Quiz beschäftigt? (false ohne Sonde). */
+export function uiBusy(): boolean {
+  return _uiBusyProbe?.() ?? false;
 }

@@ -37,24 +37,24 @@ export interface LabelSpec { x: number; y: number; text: string; color?: string;
  *  Container aus `tagPool` (updateDynamicTags). `tx,ty` = Tag-Position (ty = Basis
  *  fürs Entzerren), `ax,ay` = Bezugs-Objekt (Distanz zur Figur + Tiefe). */
 export interface DynTagData { tx: number; ty: number; ax: number; ay: number; text: string; status: number; compact: boolean; }
+/** Dekoratives dynGroup-Sprite (Helm-Flaggen-Mast/-Flagge, Laternen-Pfosten/-Lampe,
+ *  #431): `x,y` = Culling-Anker (wie `Cullable`, damit `cull()` es direkt toggelt).
+ *  `anim` ist nur bei animierten Sprites (Flagge/Lampe) gesetzt – Mast/Pfosten sind
+ *  nur cullbar, nicht animiert. `updateDynDecor` berechnet die Bewegung pro Frame NUR
+ *  für aktuell sichtbare Sprites (kein Dauer-Tween mehr, siehe `flagBobOffset`/
+ *  `lampFlickerAlpha` in cull.ts). */
+export interface DynDecorItem {
+  x: number;
+  y: number;
+  obj: Phaser.GameObjects.Image;
+  anim?: { kind: "flag" | "lamp"; baseY: number; phase: number };
+}
 /** Pod-Kiste an einem Steg-Slot (Cluster→Welt-Sync). */
 export interface PodSlot { slot: number; crate: Phaser.GameObjects.Image; band: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; dep: string; }
 /** Über die Wiese flatternder Schmetterling. */
 export interface Butterfly { spr: Phaser.GameObjects.Image; ax: number; ay: number; ph: number; sp: number; }
 /** Spieler-Laufzeitzustand der Hauptkarte (wie `ScenePlayer`, plus `dir` für den Wurf). */
 export interface PlayerPos { x: number; y: number; dir: number; moving: boolean; face: string; }
-/** Zufalls-Gefahren-Beutel der Hauptkarte (worldscene/events.ts schreibt/liest ihn).
- *  Hieß früher `events` und überschrieb damit Phasers geerbten EventEmitter mit `any`
- *  (genau das war die Warnung) – jetzt ein eigenes, getipptes Feld `hazards`. */
-export interface Hazards {
-  nextPirate: number;
-  nextKraken: number;
-  nextStorm: number;
-  pirate: { dep: string; want: number; boat: Phaser.GameObjects.Container; until: number } | null;
-  kraken: { kraken: Phaser.GameObjects.Container; baseline: number; until: number } | null;
-  storm: { dep: string; until: number } | null;
-  stormFlash: Phaser.Time.TimerEvent | null;
-}
 
 /** Die konkreten WorldScene-Felder + die Render-Primitive, die die Systemmodule auf
  *  der Szene aufrufen – als reines Typ-Interface (#496). WorldScene implementiert es,
@@ -77,6 +77,10 @@ export interface WorldSceneFields {
   tagFontDefault?: number;
   visibleTags: number;
   lampGlows: Phaser.GameObjects.Image[];
+  // Dekorative dynGroup-Sprites (Helm-Flaggen/Service-Laternen): cullbar + ohne
+  // Dauer-Tween (#431)
+  dynDecor: DynDecorItem[];
+  visibleDynDecor: number;
   // Hafen-Objekt-Felder aus terrain.ts
   piers: { x: number; name: string }[];
   ship: { x: number; y: number; w: number; h: number };
@@ -125,9 +129,10 @@ export interface WorldSceneFields {
   debugPerf: boolean;
   stress: number;
   perfHud?: Phaser.GameObjects.Text;
-  // Warp-Gates (Anti-Pingpong) + Zufalls-Gefahren + geladene Karte (#425/#426)
+  // Warp-Gates (Anti-Pingpong) + geladene Karte (#425/#426). Der Gefahren-*Zustand* liegt
+  // seit #540 szenen-neutral in game/hazards.ts – nur die Welt-Sprites (rain/stormOverlay +
+  // die vom Renderer gehaltenen boat/kraken) sind hier präsent (worldscene/events.ts).
   warpArmed: Set<string>;
-  hazards: Hazards;
   mapId: MapId;
 
   // ── Render-Primitive, die die Systemmodule auf der Szene aufrufen ──

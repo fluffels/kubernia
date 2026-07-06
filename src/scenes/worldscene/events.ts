@@ -1,199 +1,195 @@
-/* ===== KubeQuest – WorldScene-Gefahren (worldscene/events.ts) =====
- * Schritt des WorldScene.ts-Splits (#393). Hier liegt das Zufalls-Gefahren-System
- * der Hauptkarte: Piraten-Überfall, Hacker-Krake und Sturmschaden – jeweils
- * mit tryStart…/resolve… – plus die gemeinsame Terminierung (scheduleEvents,
- * anyEventActive) und der pro-Frame-Tick (tickEvents), den update() aufruft.
+/* ===== KubeQuest – WorldScene-Gefahren-RENDERER (worldscene/events.ts) =====
+ * Seit #540 lebt der Gefahren-*Zustand* + die *Zeitachse* szenen-neutral in der Anwendung
+ * (src/game/hazards.ts, getaktet aus Game.tick), damit Piraten/Krake/Sturm in JEDER Szene
+ * starten und fortschreiten. Dieses Modul ist nur noch die PRÄSENTATION: es registriert einen
+ * runtime-Sink (setHazardSink) und führt die gemeldeten `HazardEvent`s aus –
+ *   - global (jede Szene): der Alarm-DOM + der rote Warnrahmen + der Alert-Sound,
+ *   - weltgebunden (nur wenn die WorldScene wach ist): die Welt-Sprites (Piratenboot/Krake/
+ *     Sturm-Regen) + Kamera-Shake, plus Belohnung/Strafe beim Auflösen.
  *
- * Bewusst EIN kohäsives Modul: die drei Gefahren teilen sich die Terminierung,
- * die „nur eine Gefahr gleichzeitig"-Regel (anyEventActive) und das Alarm-/
- * Deadline-Muster. Wächst das System bei Stardew-Scope um weitere Gefahrentypen
- * über das Datei-Budget (#390), ist der Schnitt offensichtlich: je Gefahr ein
- * eigenes pirates.ts/kraken.ts/storm.ts mit diesem Kern als gemeinsamer Basis.
- *
- * Freie Funktionen mit der Szene als Parameter; Phaser/SFX/UI/Game bleiben hier
- * gebündelt, der Cluster-Zustand aber in Game.sim (eine Hand).
- */
+ * Die Sprites werden beim Einschlafen der WorldScene abgebaut und beim Aufwachen aus dem
+ * gemeldeten Zustand REKONSTRUIERT (reconcile) – so „spawnt beim Betreten nach, was während
+ * der Abwesenheit entstand" (#540). Der Start-Kern (Opfer-Wahl, Cluster-Mutation) liegt in
+ * game/hazards.ts; hier steht bewusst KEINE Domänen-Entscheidung mehr. */
 import Phaser from "phaser";
 import { Game } from "../../game";
 import { UI } from "../../ui";
-import { KQContent } from "../../content";
 import { SFX } from "../../sfx";
 import { T } from "../shared";
-import { hazardStartable, stormVictims, pirateVictims, resolveHazardTick } from "../../world/hazards";
+import { setHazardSink } from "../../runtime";
+import type { HazardEvent, HazardStartInfo, HazardKind } from "../../world/hazards";
 import type { WorldSceneLike } from "./types";
 
-export function scheduleEvents(scene: WorldSceneLike, delaySec?: number) {
-  const now = scene.time.now / 1000;
-  // Spiel-Feel (#71): Cozy streckt die Wartezeit, "Aus" schiebt sie auf
-  // Infinity (next* wird nie erreicht → keine Zufalls-Events).
-  const scale = Game.eventProfile().spawnScale;
-  scene.hazards.nextPirate = now + (delaySec || Phaser.Math.Between(200, 360)) * scale;
-  scene.hazards.nextKraken = now + (delaySec ? delaySec + 90 : Phaser.Math.Between(300, 500)) * scale;
-  scene.hazards.nextStorm = now + (delaySec ? delaySec + 150 : Phaser.Math.Between(260, 430)) * scale;
-}
+/* ---------- Präsentations-Zustand (Modul-Singleton: es gibt eine WorldScene) ---------- */
+let activeWorld: WorldSceneLike | null = null;
+let awake = false;
+let boat: Phaser.GameObjects.Container | null = null;
+let krakenSpr: Phaser.GameObjects.Container | null = null;
+let stormFlash: Phaser.Time.TimerEvent | null = null;
 
-export function anyEventActive(scene: WorldSceneLike) {
-  return !!(scene.hazards.pirate || scene.hazards.kraken || scene.hazards.storm);
-}
-
-/* ---------- Sturm: ein Deployment geht kaputt, du reparierst es ---------- */
-export function tryStartStorm(scene: WorldSceneLike) {
-  if (!hazardStartable("storm", { enabled: Game.eventProfile().enabled, anyActive: anyEventActive(scene), completedQuests: Game.state.completedQuests })) return;
-  const victims = stormVictims(Game.sim.deployments);
-  if (victims.length === 0 || UI.blocking()) { scene.hazards.nextStorm += 25; return; }
-  const dep = Phaser.Utils.Array.GetRandom(victims);
-  const kind = Math.random() < 0.5 ? "imagepull" : "crashloop";
-  let hintCmd;
-  if (kind === "imagepull") {
-    // Der Sturm "verdreht" den Image-Namen (Buchstabendreher)
-    const bad = KQContent.corruptImage(dep.image.split(":")[0]);
-    dep.broken = { type: "imagepull", badImage: bad };
-    dep.image = bad;
-    hintCmd = "Diagnose: <code>kubectl get pods</code> → <code>describe</code>. Fix: <code>kubectl set image deployment/" + dep.name + " …</code>";
-  } else {
-    dep.broken = { type: "crashloop", needsSecret: "sturm-schluessel-" + Phaser.Math.Between(10, 99) };
-    hintCmd = "Diagnose: <code>kubectl get pods</code> → <code>kubectl logs &lt;pod&gt;</code>. Dann Ursache beheben + <code>rollout restart</code>!";
+/** Alarm-Meldung aus den strukturierten Start-Daten formatieren (HTML bleibt Präsentation –
+ *  die Anwendung liefert nur Struktur). Gespiegelt aus den früheren tryStart*-Strings. */
+function alarmHtml(info: HazardStartInfo): string {
+  if (info.kind === "storm") {
+    const hint = info.fix === "imagepull"
+      ? "Diagnose: <code>kubectl get pods</code> → <code>describe</code>. Fix: <code>kubectl set image deployment/" + info.dep + " …</code>"
+      : "Diagnose: <code>kubectl get pods</code> → <code>kubectl logs &lt;pod&gt;</code>. Dann Ursache beheben + <code>rollout restart</code>!";
+    return "⛈️ <b>STURMSCHADEN!</b> Das Deployment <b>" + info.dep + "</b> ist ausgefallen – und verdient nichts mehr! " + hint;
   }
-  Game.sim.touch();   // #523: direkte Cluster-Mutation (broken/image) → Cluster-Sync anstoßen (Kisten rot färben)
-  Game.save();
-
-  scene.rain.start();
-  scene.stormOverlay.setVisible(true);
-  SFX.thunder();
-  scene.cameras.main.flash(180, 200, 210, 255);
-  scene.cameras.main.shake(280, 0.004);
-  scene.hazards.stormFlash = scene.time.addEvent({ delay: 5200, loop: true, callback: () => {
-    scene.cameras.main.flash(140, 200, 210, 255);
-    SFX.thunder();
-  }});
-
-  const deadline = Math.round(240 * Game.eventProfile().deadlineScale);
-  scene.hazards.storm = { dep: dep.name, until: scene.time.now / 1000 + deadline };
-  UI.showAlarm("⛈️ <b>STURMSCHADEN!</b> Das Deployment <b>" + dep.name + "</b> ist ausgefallen – und verdient nichts mehr! " + hintCmd, deadline);
-}
-
-export function resolveStorm(scene: WorldSceneLike, success: boolean) {
-  const ev = scene.hazards.storm;
-  if (!ev) return;
-  scene.hazards.storm = null;
-  if (scene.hazards.stormFlash) { scene.hazards.stormFlash.remove(); scene.hazards.stormFlash = null; }
-  scene.rain.stop();
-  scene.stormOverlay.setVisible(false);
-  UI.hideAlarm();
-  if (success) {
-    Game.state.stats.stormsFixed = (Game.state.stats.stormsFixed || 0) + 1;
-    UI.reward(35, 50, "⛈️ Sturmschaden behoben!");
-    SFX.fanfare();
-  } else {
-    UI.hint("⛈️ Der Sturm zieht ab – aber <b>" + ev.dep + "</b> bleibt kaputt (und verdient nichts), bis du es reparierst!");
+  if (info.kind === "pirate") {
+    return "🏴‍☠️ <b>PIRATEN-ÜBERFALL!</b> Sie haben Kisten von <b>" + info.dep + "</b> geklaut (nur noch " + info.left + "/" + info.want + ")! " +
+      "Skaliere zurück auf <b>" + info.want + "</b>: <code>kubectl scale deployment " + info.dep + " --replicas=" + info.want + "</code>";
   }
-  scheduleEvents(scene);
+  return "🐙 <b>DIE HACKER-KRAKE!</b> Sie schnüffelt nach Klartext-Daten! Vertreibe sie, indem du irgendein neues <b>Secret</b> anlegst: " +
+    "<code>kubectl create secret generic &lt;name&gt; --from-literal=passwort=&lt;wert&gt;</code>";
 }
 
-export function tryStartPirate(scene: WorldSceneLike) {
-  if (!hazardStartable("pirate", { enabled: Game.eventProfile().enabled, anyActive: anyEventActive(scene), completedQuests: Game.state.completedQuests })) return;
-  const victims = pirateVictims(Game.sim.deployments);
-  if (victims.length === 0 || UI.blocking()) { scene.hazards.nextPirate += 20; return; }
-  const dep = Phaser.Utils.Array.GetRandom(victims);
-  const want = dep.replicas;
-  const steal = Math.max(1, Math.floor(dep.replicas / 2));
-  dep.replicas -= steal;
-  dep.pods.splice(0, steal);
-  Game.sim.touch();   // #523: direkte Cluster-Mutation (geklaute Pods) → Cluster-Sync anstoßen (Kisten entfernen)
-  Game.save();
+/* ---------- Welt-Sprites (nur wenn die WorldScene wach ist) ---------- */
 
-  // Piratenboot segelt heran
-  const boat = scene.add.container(scene.W * T + 30, 31 * T).setDepth(8000);
-  // Pixelart-Piratenschiff (#185) statt der früheren code-gezeichneten fillRect-Rümpfe.
-  // 128×96-Asset (dunkler Rumpf + schwarzes Totenkopf-Segel), Bug nach links = in
-  // Fahrtrichtung; auf Gegner-Größe herunterskaliert. Überfall-/Tween-Logik unverändert.
+function spawnBoat(scene: WorldSceneLike): void {
+  // Pixelart-Piratenschiff (#185): 128×96-Asset (dunkler Rumpf + Totenkopf-Segel), Bug nach
+  // links = in Fahrtrichtung; auf Gegner-Größe herunterskaliert.
+  boat = scene.add.container(scene.W * T + 30, 31 * T).setDepth(8000);
   const hull = scene.add.image(0, -4, "pirate_ship").setOrigin(0.5, 0.5).setScale(0.34);
   boat.add(hull);
   scene.tweens.add({ targets: boat, x: 24 * T, duration: 2600, ease: "Sine.out" });
   scene.tweens.add({ targets: boat, y: 31 * T - 2, duration: 700, yoyo: true, repeat: -1, ease: "Sine.inOut" });
-
-  SFX.alarm();
   scene.cameras.main.shake(250, 0.004);
-  const deadline = Math.round(180 * Game.eventProfile().deadlineScale);
-  scene.hazards.pirate = { dep: dep.name, want, boat, until: scene.time.now / 1000 + deadline };
-  UI.showAlarm("🏴‍☠️ <b>PIRATEN-ÜBERFALL!</b> Sie haben Kisten von <b>" + dep.name + "</b> geklaut (nur noch " + dep.replicas + "/" + want + ")! " +
-    "Skaliere zurück auf <b>" + want + "</b>: <code>kubectl scale deployment " + dep.name + " --replicas=" + want + "</code>", deadline);
 }
 
-export function resolvePirate(scene: WorldSceneLike, success: boolean) {
-  const ev = scene.hazards.pirate;
-  if (!ev) return;
-  scene.tweens.add({ targets: ev.boat, x: scene.W * T + 40, duration: 1800, ease: "Sine.in", onComplete: () => ev.boat.destroy() });
-  scene.hazards.pirate = null;
-  UI.hideAlarm();
-  if (success) {
-    const bounty = Math.round(40 * (Game.hasUpgrade("kanone") ? 1.5 : 1));
-    Game.state.stats.piratesBeaten++;
-    if (Game.hasUpgrade("kanone")) { scene.cameras.main.shake(150, 0.003); SFX.tone(80, 0.3, "sawtooth", 0.06); }
-    UI.reward(25, bounty, "🏴‍☠️ Piraten vertrieben!");
-    SFX.fanfare();
-  } else {
-    UI.hint("🏴‍☠️ Die Piraten sind entkommen … Stell die Kopien trotzdem wieder her – deine Einnahmen leiden!");
-  }
-  scheduleEvents(scene);
-}
-
-export function tryStartKraken(scene: WorldSceneLike) {
-  if (!hazardStartable("kraken", { enabled: Game.eventProfile().enabled, anyActive: anyEventActive(scene), completedQuests: Game.state.completedQuests })) return;
-  if (UI.blocking()) { scene.hazards.nextKraken += 20; return; }
-  const baseline = Game.sim.secrets.length;
-
+function spawnKraken(scene: WorldSceneLike): void {
+  // Pixelart-Krake (#184): 64×64-Asset, auf Gegner-Größe herunterskaliert.
   const kx = 26 * T, ky = 30 * T;
-  const kraken = scene.add.container(kx, ky + 30).setDepth(8000);
-  // Pixelart-Sprite (#184) statt der früheren code-gezeichneten fillCircle/fillRect-Krake.
-  // 64×64-Asset, auf Gegner-Größe herunterskaliert; Wackel-/Auftauch-Tweens unten unverändert.
+  krakenSpr = scene.add.container(kx, ky + 30).setDepth(8000);
   const body = scene.add.image(0, 0, "kraken").setOrigin(0.5, 0.5).setScale(0.46);
-  kraken.add(body);
-  scene.tweens.add({ targets: kraken, y: ky, duration: 900, ease: "Back.out" });
-  scene.tweens.add({ targets: kraken, angle: { from: -4, to: 4 }, duration: 900, yoyo: true, repeat: -1, ease: "Sine.inOut" });
-
-  SFX.alarm();
+  krakenSpr.add(body);
+  scene.tweens.add({ targets: krakenSpr, y: ky, duration: 900, ease: "Back.out" });
+  scene.tweens.add({ targets: krakenSpr, angle: { from: -4, to: 4 }, duration: 900, yoyo: true, repeat: -1, ease: "Sine.inOut" });
   scene.cameras.main.shake(250, 0.004);
-  const deadline = Math.round(120 * Game.eventProfile().deadlineScale);
-  scene.hazards.kraken = { kraken, baseline, until: scene.time.now / 1000 + deadline };
-  UI.showAlarm("🐙 <b>DIE HACKER-KRAKE!</b> Sie schnüffelt nach Klartext-Daten! Vertreibe sie, indem du irgendein neues <b>Secret</b> anlegst: " +
-    "<code>kubectl create secret generic &lt;name&gt; --from-literal=passwort=&lt;wert&gt;</code>", deadline);
 }
 
-export function resolveKraken(scene: WorldSceneLike, success: boolean) {
-  const ev = scene.hazards.kraken;
-  if (!ev) return;
-  scene.tweens.add({ targets: ev.kraken, y: "+=40", alpha: 0, duration: 700, ease: "Sine.in", onComplete: () => ev.kraken.destroy() });
-  scene.hazards.kraken = null;
-  UI.hideAlarm();
-  if (success) {
-    Game.state.stats.krakenBeaten++;
-    UI.reward(30, 50, "🐙 Krake vertrieben!");
-    SFX.fanfare();
+function startStormVisuals(scene: WorldSceneLike): void {
+  scene.rain.start();
+  scene.stormOverlay.setVisible(true);
+  scene.cameras.main.flash(180, 200, 210, 255);
+  scene.cameras.main.shake(280, 0.004);
+  stormFlash = scene.time.addEvent({ delay: 5200, loop: true, callback: () => {
+    scene.cameras.main.flash(140, 200, 210, 255);
+    SFX.thunder();
+  }});
+}
+
+/** Sprite für eine Gefahren-Art aufbauen (nur wenn nicht schon da – idempotent fürs reconcile). */
+function spawnFor(scene: WorldSceneLike, kind: HazardKind): void {
+  if (kind === "storm") { if (!stormFlash) startStormVisuals(scene); }
+  else if (kind === "pirate") { if (!boat) spawnBoat(scene); }
+  else if (!krakenSpr) spawnKraken(scene);
+}
+
+function despawnBoat(scene: WorldSceneLike, animate: boolean): void {
+  if (!boat) return;
+  const b = boat; boat = null;
+  if (animate) scene.tweens.add({ targets: b, x: scene.W * T + 40, duration: 1800, ease: "Sine.in", onComplete: () => b.destroy() });
+  else b.destroy();
+}
+
+function despawnKraken(scene: WorldSceneLike, animate: boolean): void {
+  if (!krakenSpr) return;
+  const k = krakenSpr; krakenSpr = null;
+  if (animate) scene.tweens.add({ targets: k, y: "+=40", alpha: 0, duration: 700, ease: "Sine.in", onComplete: () => k.destroy() });
+  else k.destroy();
+}
+
+function stopStormVisuals(scene: WorldSceneLike): void {
+  if (stormFlash) { stormFlash.remove(); stormFlash = null; }
+  scene.rain.stop();
+  scene.stormOverlay.setVisible(false);
+}
+
+/** Welt-Sprites einer Gefahren-Art abbauen. `animate` nur beim echten Auflösen; beim
+ *  Einschlafen sofort weg (die Szene ist ohnehin unsichtbar). */
+function despawnFor(scene: WorldSceneLike, kind: HazardKind, animate: boolean): void {
+  if (kind === "storm") stopStormVisuals(scene);
+  else if (kind === "pirate") despawnBoat(scene, animate);
+  else despawnKraken(scene, animate);
+}
+
+function despawnAll(scene: WorldSceneLike): void {
+  stopStormVisuals(scene);
+  despawnBoat(scene, false);
+  despawnKraken(scene, false);
+}
+
+/* ---------- Belohnung/Strafe beim Auflösen (gespiegelt aus den früheren resolve*) ---------- */
+function applyOutcome(kind: HazardKind, success: boolean, dep?: string): void {
+  if (kind === "storm") {
+    if (success) { Game.state.stats.stormsFixed = (Game.state.stats.stormsFixed || 0) + 1; UI.reward(35, 50, "⛈️ Sturmschaden behoben!"); SFX.fanfare(); }
+    else UI.hint("⛈️ Der Sturm zieht ab – aber <b>" + (dep ?? "das Deployment") + "</b> bleibt kaputt (und verdient nichts), bis du es reparierst!");
+  } else if (kind === "pirate") {
+    if (success) {
+      const bounty = Math.round(40 * (Game.hasUpgrade("kanone") ? 1.5 : 1));
+      Game.state.stats.piratesBeaten++;
+      if (Game.hasUpgrade("kanone") && awake && activeWorld) { activeWorld.cameras.main.shake(150, 0.003); SFX.tone(80, 0.3, "sawtooth", 0.06); }
+      UI.reward(25, bounty, "🏴‍☠️ Piraten vertrieben!"); SFX.fanfare();
+    } else UI.hint("🏴‍☠️ Die Piraten sind entkommen … Stell die Kopien trotzdem wieder her – deine Einnahmen leiden!");
   } else {
-    const stolen = Math.min(20, Game.state.coins);
-    Game.spendCoins(stolen); // gedeckt (stolen <= coins) -> zieht ab + speichert, zentral über das Coins-VO (#490)
-    UI.hint("🐙 Die Krake hat " + stolen + " 🪙 erbeutet! Leg beim nächsten Mal schnell ein Secret an.");
+    if (success) { Game.state.stats.krakenBeaten++; UI.reward(30, 50, "🐙 Krake vertrieben!"); SFX.fanfare(); }
+    else {
+      const stolen = Math.min(20, Game.state.coins);
+      Game.spendCoins(stolen); // gedeckt (stolen <= coins) → zieht ab + speichert, zentral über das Coins-VO (#490)
+      UI.hint("🐙 Die Krake hat " + stolen + " 🪙 erbeutet! Leg beim nächsten Mal schnell ein Secret an.");
+    }
   }
-  scheduleEvents(scene);
 }
 
-/** Pro Frame aus update(): fällige Gefahren starten und laufende auf Erfolg/
- *  Deadline prüfen + den Alarm-Countdown aktualisieren. Kapselt den früheren
- *  inline-Event-Block der update()-Schleife. */
-export function tickEvents(scene: WorldSceneLike, time: number) {
-  const now = time / 1000;
-  if (now > scene.hazards.nextPirate) tryStartPirate(scene);
-  if (now > scene.hazards.nextKraken) tryStartKraken(scene);
-  if (now > scene.hazards.nextStorm) tryStartStorm(scene);
-  // Die spielentscheidenden Auflöse-/Deadline-Entscheidungen liegen jetzt im
-  // reinen Kern (#512); hier bleibt nur die Effekt-Ausführung. Die Szenen-
-  // `hazards` erfüllen `ActiveHazards` strukturell (nur mit Phaser-Extras).
-  const view = { deployments: Game.sim.deployments, secretCount: Game.sim.secrets.length };
-  for (const action of resolveHazardTick(scene.hazards, view, now)) {
-    if (action.type === "tick") { UI.updateAlarmTimer(action.secondsLeft); continue; }
-    if (action.kind === "storm") resolveStorm(scene, action.success);
-    else if (action.kind === "pirate") resolvePirate(scene, action.success);
-    else resolveKraken(scene, action.success);
+/* ---------- Der Sink: ein Gefahren-Ereignis in Effekte übersetzen ---------- */
+function onHazard(ev: HazardEvent): void {
+  if (ev.type === "tick") { UI.updateAlarmTimer(ev.secondsLeft); return; }
+  if (ev.type === "start") {
+    UI.showAlarm(alarmHtml(ev.info), ev.deadlineSec);
+    UI.setHazardFrame(true);
+    if (ev.info.kind === "storm") SFX.thunder(); else SFX.alarm();
+    if (awake && activeWorld) spawnFor(activeWorld, ev.info.kind);
+    return;
   }
+  // resolve
+  if (awake && activeWorld) despawnFor(activeWorld, ev.kind, true);
+  UI.hideAlarm();
+  UI.setHazardFrame(Game.hazardActive());
+  applyOutcome(ev.kind, ev.success, ev.dep);
+}
+
+// EINMAL beim Modul-Laden registrieren (die WorldScene lädt dieses Modul beim Boot). Der Sink
+// bleibt über den ganzen Lauf aktiv – Game.tick meldet auch dann, wenn keine WorldScene wach
+// ist (dann nur Alarm/Rahmen, keine Sprites).
+setHazardSink(onHazard);
+
+/** Nach dem Aufwachen / beim ersten create: die Welt-Sprites aus dem gemeldeten Zustand
+ *  nachziehen (#540 „spawnt beim Betreten nach"). Idempotent über spawnFor. */
+function reconcile(scene: WorldSceneLike): void {
+  const st = Game.hazardState();
+  if (st.storm) spawnFor(scene, "storm");
+  if (st.pirate) spawnFor(scene, "pirate");
+  if (st.kraken) spawnFor(scene, "kraken");
+  UI.setHazardFrame(Game.hazardActive());
+}
+
+/** Von WorldScene.create() gerufen: diese Szene ist der aktive Gefahren-Renderer. Verdrahtet
+ *  Aufwachen/Einschlafen/Herunterfahren und rekonstruiert einen ggf. schon laufenden Zustand. */
+export function registerHazardRenderer(scene: WorldSceneLike): void {
+  activeWorld = scene;
+  awake = true;
+  scene.events.on(Phaser.Scenes.Events.WAKE, () => { if (scene === activeWorld) { awake = true; reconcile(scene); } });
+  scene.events.on(Phaser.Scenes.Events.SLEEP, () => { if (scene === activeWorld) { awake = false; despawnAll(scene); } });
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => unregisterHazardRenderer(scene));
+  reconcile(scene);
+}
+
+/** Beim Herunterfahren der WorldScene (scene.start("World", …) für einen Map-Wechsel): den
+ *  Renderer lösen, damit keine Sprite-Refs auf eine tote Szene zeigen. */
+export function unregisterHazardRenderer(scene: WorldSceneLike): void {
+  if (scene !== activeWorld) return;
+  despawnAll(scene);
+  activeWorld = null;
+  awake = false;
 }

@@ -4,6 +4,7 @@
  */
 import type { Sim, Deployment, NetworkPolicyRes, ArgoApp } from "../../sim";
 import { pick, rnd } from "../util";
+import { sameRbac } from "../../sim/rbac";
 // Manifeste kommen seit #514 aus der EINEN Quelle (data/manifests via manifest-lib), nicht
 // mehr aus einem TS-Konstanten-Monolithen. Die vertrauten Namen bleiben als lokale Konstanten
 // erhalten (aus der Bibliothek aufgelöst) + re-exportiert – die Drill-Module ändern sich nicht.
@@ -139,7 +140,7 @@ export function ensureArgoApp(sim: Sim, fresh = false): ArgoApp {
 
 /** Sorgt dafür, dass eine (Cluster-)Role mit diesem Namen existiert. */
 export function ensureRole(sim: Sim, name: string, cluster: boolean) {
-  if (sim.roles.some(r => r.name === name && r.cluster === cluster)) return;
+  if (sim.roles.some(r => sameRbac(r, { name, cluster }))) return;
   const file = "ensure-" + (cluster ? "clusterrole" : "role") + ".yaml";
   sim.files[file] = cluster ? CLUSTERROLE_YAML : ROLE_YAML;
   sim.applyEffects[file] = { role: { name, cluster, rules: [{ verbs: ["get", "list", "watch"], resources: [cluster ? "nodes" : "pods"] }] } };

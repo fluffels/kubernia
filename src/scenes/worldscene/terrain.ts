@@ -41,6 +41,8 @@ export function placeHarborObjects(scene: WorldSceneLike) {
   scene.piers = PIER_XS.map((x, i) => ({ x, name: ["ahoi-control", "ahoi-worker-1", "ahoi-worker-2"][i] }));
   for (const p of scene.piers) scene.labels.push({ x: p.x + 1.5, y: 27.4, text: p.name, color: "#ffd97a" });
   scene.labels.push({ x: 6.5, y: 23.4, text: "Bos Dock", color: "#ffffff" });
+  // #303: Lagerschuppen für gestoppte Container (docker ps -a) östlich des Docks.
+  scene.labels.push({ x: 17.5, y: 21.4, text: "Lager", color: "#ffffff" });
 
   // Dein Schiff (Grundfläche aus world.ts SHIP – Single Source of Truth, #42).
   // Die Schiffs-Terrain-Geometrie (#108: Schiff SCHWIMMT – Wasser unterm Rumpf +

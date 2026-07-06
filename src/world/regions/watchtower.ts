@@ -12,20 +12,17 @@
  * Hauptkarte (Stein-Mauer + Holz-Steg); Bewegung/Kollision teilt sich der Bereich über
  * resolveMove/footprintSolid mit der Hauptkarte – nichts dupliziert.
  *
- * Scope (Stand #131): Bereich + Anleger/Warp (#130) sowie der NPC Vidar (#131, Wachveteran
+ * Scope (Stand #440): Bereich + Anleger/Warp (#130) sowie der NPC Vidar (#131, Wachveteran
  * am Tor) stehen; die Quests folgen mit #132–135, die Drills mit #136. Die Karte „watchtower"
- * trägt seit #131 ihren NPC als Eintrag in der Entity-Registry (entities.json); objectsForMap
- * ist noch leer (kein Quest-Trigger/prop), die RegionScene verträgt das. Der Wachturm selbst
- * ist bis zu seinem PixelLab-Asset (#440) ein bewusster prozeduraler Platzhalter (decorate-
- * Hook in scenes/regions.ts); seine SSOT-Geometrie (Standplatz + Fußabdruck) liegt darum noch
- * als Konstante HIER, nicht in der Registry (die ein Sprite verlangt). Wenn das Turm-Sprite
- * kommt, wandert er wie der Leuchtturm (#357) in entities.json.
+ * trägt ihren NPC + seit #440 (wie der Leuchtturm, #357) den Wachturm selbst als Einträge in
+ * der Entity-Registry (entities.json).
  *
  * Der Warp-Primitive (Warp + warpAt) wohnt in archipel.ts und ist generisch – von dort
  * wiederverwendet statt erneut definiert (wie in lighthouse.ts/warehouse.ts).
  */
 import { warpAt, type Warp } from "./archipel";
-import { objectsForMap, objectFootprint } from "../../content/entities";
+import { objectForId } from "../../content/entities";
+import { markRegistrySolids } from "./geometry";
 
 export { warpAt, type Warp };
 
@@ -47,22 +44,9 @@ export const QX0 = 3, QX1 = 22, QY0 = 3, QY1 = 12;
 
 const CX = 13, CY = 7;   // Mittelachse (Tor/Steg) bzw. Höfe-Mitte
 
-/** Standplatz + Fußabdruck des Wachturms (2×2, nord-zentral im Hof). Anker (x,y) ist die
- *  rechte untere Ecke wie bei objectFootprint (Registry-Konvention #357), damit der spätere
- *  Umzug in entities.json deckungsgleich ist. Bis dahin SSOT hier (siehe Modul-Kopf). */
-export const WATCHTOWER_TOWER = { x: 15, y: 4, w: 2, h: 2 } as const;
-
-/** Die vom Wachturm belegten Kacheln (Fußabdruck) – wie objectFootprint(EntityObject),
- *  aber für die lokale Konstante (der Turm ist noch kein Registry-Objekt). */
-export function watchtowerFootprint(): { x: number; y: number }[] {
-  const tiles: { x: number; y: number }[] = [];
-  for (let dy = 0; dy < WATCHTOWER_TOWER.h; dy++) {
-    for (let dx = 0; dx < WATCHTOWER_TOWER.w; dx++) {
-      tiles.push({ x: WATCHTOWER_TOWER.x - dx, y: WATCHTOWER_TOWER.y - dy });
-    }
-  }
-  return tiles;
-}
+/** Standplatz + Fußabdruck des Wachturms (2×2, nord-zentral im Hof). Seit #440 (wie der
+ *  Leuchtturm, #357) aus der Entity-Registry (Karte "watchtower", Typ "tower") gelesen. */
+export const WATCHTOWER_TOWER = objectForId("watchtower", "wachturm");
 
 /* ===== Hauptkarte ⇄ Wachturm-Quartier ===== */
 
@@ -142,16 +126,10 @@ export function buildWatchtower(): WatchtowerMap {
   // Hof-Mitte (Spalte CX). Das „Tor" passt thematisch zum Zugriffskontroll-Quartier.
   for (let y = CY; y <= QY1 + 1; y++) { const i = y * W + CX; ground[i] = PATH; solid[i] = 0; }
 
-  // Wachturm-Fußabdruck (2×2) solide markieren – steht im Hof, blockt das Durchlaufen.
-  for (const t of watchtowerFootprint()) solid[t.y * W + t.x] = 1;
-
-  // Solide Registry-Objekte (props/tower) als Kachel-Solid markieren. Die Karte hat in
-  // #130 noch keine (NPC/Quest-Trigger folgen mit #131/#132ff.); der Loop ist Vorsorge,
-  // damit ein künftiges Hof-Objekt nur ein JSON-Eintrag ist, kein Geometrie-Edit.
-  for (const o of objectsForMap("watchtower")) {
-    if (o.type === "quest_trigger") continue;
-    for (const t of objectFootprint(o)) solid[t.y * W + t.x] = 1;
-  }
+  // Solide Registry-Objekte (Wachturm-Fußabdruck 2×2) als Kachel-Solid markieren – der Turm
+  // über seinen w/h-Fußabdruck, künftige props 1×1. Sprite und Solid kommen so aus denselben
+  // Daten; ein neues Hof-Objekt ist nur ein JSON-Eintrag, kein Geometrie-Edit.
+  markRegistrySolids("watchtower", W, solid);
 
   // Reserviert begehbar halten: Ankunft, Rück-Warp + die Hof-Mitte (damit der Aufgang vom
   // Anleger bis in den Hof garantiert frei ist).
