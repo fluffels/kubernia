@@ -224,9 +224,9 @@ const flotte: RegionConfig = {
  *  Service", den der Capstone bauen lässt), flankiert von zwei Bau-Gerüsten. Sparsame Begrünung
  *  – ein Arbeitshof, kein Garten. Die Werftmeisterin Greta (#166) steht über die Entity-Registry
  *  auf dem Hof-Platz (von RegionScene aus npcSpawnsForMap gespawnt); die Capstone-Quest (#167)
- *  dockt später am reservierten Trigger-Platz an. Das im Bau befindliche Schiff + die Gerüste sind bewusst
- *  prozedural/aus dem gemeinsamen ship-Sprite (kein neues Asset) – ein echtes Werft-Gantry-
- *  Sprite ist ein separates Optik-Ticket (Stardew-Nordstern). */
+ *  dockt später am reservierten Trigger-Platz an. Das im Bau befindliche Schiff + die Gerüste
+ *  sind seit #456 echte PixelLab-Sprites (`ship_frame`/`scaffold`) statt der früheren
+ *  prozeduralen Primitive/des wiederverwendeten fertigen `ship`-Sprites. */
 const werft: RegionConfig = {
   key: "Werft",
   map: "werft",
@@ -250,24 +250,21 @@ const werft: RegionConfig = {
   },
   decorate(scene: RegionScene, build) {
     const m = build as WerftMap;
-    // Bau-Gerüste links/rechts der Helling: schlanke Holz-Gerüst-Rahmen aus Primitiven (wie
-    // der Wachturm-Platzhalter), bis ein echtes Werft-Gantry-Sprite existiert.
+    // Bau-Gerüste links/rechts der Helling: echtes PixelLab-Gerüst-Sprite (#456) statt der
+    // früheren prozeduralen Holzstützen-Primitive (wie zuvor beim Wachturm-Platzhalter #440).
     for (const s of m.scaffolds) {
       const cx = s.x * T + 8, baseY = (s.y + 1) * T;
       scene.add.ellipse(cx, baseY - 1, 16, 5, 0x000000, 0.2).setDepth(baseY - 2);
-      // Zwei senkrechte Holzstützen + drei Querstreben = ein Bau-Gerüst.
-      scene.add.rectangle(cx - 5, baseY, 2, 26, 0x6b4a2a).setOrigin(0.5, 1).setDepth(baseY);
-      scene.add.rectangle(cx + 5, baseY, 2, 26, 0x6b4a2a).setOrigin(0.5, 1).setDepth(baseY);
-      for (const dy of [4, 13, 22]) {
-        scene.add.rectangle(cx, baseY - dy, 12, 2, 0x7c5a36).setOrigin(0.5, 1).setDepth(baseY + 0.1);
-      }
+      scene.add.image(cx, baseY, "scaffold").setOrigin(0.5, 1).setScale(0.22).setDepth(baseY);
     }
-    // Das im Bau befindliche Schiff (der „eigene Service") mittig auf der Helling – das
-    // gemeinsame ship-Sprite, fußlinien-depth-sortiert, mit sanftem Werft-Wippen. Eine
-    // Funken-Andeutung (gelbe Pixel) darüber liest sich als „hier wird gerade gebaut".
+    // Das im Bau befindliche Schiff (der „eigene Service") mittig auf der Helling – ein echtes
+    // PixelLab-Sprite (#456: Rumpf mit sichtbaren Spanten + Baugerüst-Pfosten auf der Kufe,
+    // ersetzt das frühere fertige ship-Sprite), fußlinien-depth-sortiert, mit sanftem
+    // Werft-Wippen. Eine Funken-Andeutung (gelbe Pixel) darüber liest sich als „hier wird
+    // gerade gebaut".
     const cx = m.hull.x * T + 8, baseY = (m.hull.y + 1) * T;
     scene.add.ellipse(cx, baseY - 1, 28, 8, 0x000000, 0.2).setDepth(baseY - 2);   // Schatten/Kielblock
-    const ship = scene.add.image(cx, baseY, "ship").setOrigin(0.5, 1).setScale(0.75).setDepth(baseY);
+    const ship = scene.add.image(cx, baseY, "ship_frame").setOrigin(0.5, 1).setScale(0.4).setDepth(baseY);
     scene.tweens.add({ targets: ship, y: baseY - 1.5, duration: 2100, yoyo: true, repeat: -1, ease: "Sine.inOut" });
     const spark = scene.add.image(cx + 6, baseY - 18, "px").setScale(2).setTint(0xffe28a).setDepth(baseY + 1);
     scene.tweens.add({ targets: spark, alpha: { from: 0.2, to: 0.9 }, duration: 700, yoyo: true, repeat: -1, ease: "Sine.inOut" });

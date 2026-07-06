@@ -72,6 +72,8 @@ import kraken from "../assets/pixellab/kraken.png";   // Hacker-Krake (Gegner, #
 import pirate_ship from "../assets/pixellab/pirate_ship.png";   // Piraten-Schiff (Gegner, #185)
 import seagull from "../assets/pixellab/seagull.png";           // Möwe (#182)
 import cannon from "../assets/pixellab/cannon.png";             // Hafen-Kanone (Shop-Upgrade, #183)
+import ship_frame from "../assets/pixellab/ship_frame.png";     // Schiffsrumpf im Bau, Heimat-Werft (#456)
+import scaffold from "../assets/pixellab/scaffold.png";         // Werft-Baugerüst, Heimat-Werft (#456)
 
 // PixelLab-Figuren (nur south-Frame genutzt)
 import char_player from "../assets/pixellab/char_player.png";
@@ -151,6 +153,8 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
   { key: "container", src: container, kind: "plain", scene: "Warehouse" },           // Frachtcontainer-Stapel (#124)
   { key: "crane", src: crane, kind: "plain", scene: "Warehouse" },                   // Hafen-Verladekran (#124)
   { key: "watchtower", src: watchtower, kind: "plain", scene: "Watchtower" },        // Wachturm (#440)
+  { key: "ship_frame", src: ship_frame, kind: "plain", scene: "Werft" },             // Schiffsrumpf im Bau (#456)
+  { key: "scaffold", src: scaffold, kind: "plain", scene: "Werft" },                 // Werft-Baugerüst (#456)
   { key: "house_office", src: house_office, kind: "plain" },
   { key: "house_forge", src: house_forge, kind: "plain" },
   { key: "house_chart", src: house_chart, kind: "plain" },
