@@ -37,6 +37,18 @@ export interface LabelSpec { x: number; y: number; text: string; color?: string;
  *  Container aus `tagPool` (updateDynamicTags). `tx,ty` = Tag-Position (ty = Basis
  *  fürs Entzerren), `ax,ay` = Bezugs-Objekt (Distanz zur Figur + Tiefe). */
 export interface DynTagData { tx: number; ty: number; ax: number; ay: number; text: string; status: number; compact: boolean; }
+/** Dekoratives dynGroup-Sprite (Helm-Flaggen-Mast/-Flagge, Laternen-Pfosten/-Lampe,
+ *  #431): `x,y` = Culling-Anker (wie `Cullable`, damit `cull()` es direkt toggelt).
+ *  `anim` ist nur bei animierten Sprites (Flagge/Lampe) gesetzt – Mast/Pfosten sind
+ *  nur cullbar, nicht animiert. `updateDynDecor` berechnet die Bewegung pro Frame NUR
+ *  für aktuell sichtbare Sprites (kein Dauer-Tween mehr, siehe `flagBobOffset`/
+ *  `lampFlickerAlpha` in cull.ts). */
+export interface DynDecorItem {
+  x: number;
+  y: number;
+  obj: Phaser.GameObjects.Image;
+  anim?: { kind: "flag" | "lamp"; baseY: number; phase: number };
+}
 /** Pod-Kiste an einem Steg-Slot (Cluster→Welt-Sync). */
 export interface PodSlot { slot: number; crate: Phaser.GameObjects.Image; band: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; dep: string; }
 /** Über die Wiese flatternder Schmetterling. */
@@ -65,6 +77,10 @@ export interface WorldSceneFields {
   tagFontDefault?: number;
   visibleTags: number;
   lampGlows: Phaser.GameObjects.Image[];
+  // Dekorative dynGroup-Sprites (Helm-Flaggen/Service-Laternen): cullbar + ohne
+  // Dauer-Tween (#431)
+  dynDecor: DynDecorItem[];
+  visibleDynDecor: number;
   // Hafen-Objekt-Felder aus terrain.ts
   piers: { x: number; name: string }[];
   ship: { x: number; y: number; w: number; h: number };

@@ -5,7 +5,11 @@
  * Negativfällen (Kante, leere Liste, pausierter Tab) und Red-Green-Schutz
  * (ein Objekt weit draußen MUSS ausgeblendet werden, sonst cullt nichts). */
 import { test, expect } from "vitest";
-import { expandRect, inView, cull, selectVisibleTags, FrameSampler, type Cullable, type Rect, type TagAnchor } from "../src/hud/cull";
+import {
+  expandRect, inView, cull, selectVisibleTags, FrameSampler,
+  flagBobOffset, lampFlickerAlpha,
+  type Cullable, type Rect, type TagAnchor,
+} from "../src/hud/cull";
 
 const view: Rect = { x: 100, y: 100, width: 200, height: 120 };
 
@@ -165,4 +169,77 @@ test("FrameSampler ignoriert nicht-positive Deltas (pausierter Tab, erster Frame
   expect(s.fps).toBe(0);
   s.push(1000 / 60);
   expect(s.fps).toBe(60);
+});
+
+/* ---------- flagBobOffset / lampFlickerAlpha (#431) =====
+ * Ersetzen die früheren Dauer-Tweens der Helm-Flaggen/Service-Laternen: dieselbe
+ * Sinus-Bewegung, aber als reine Funktion – der Aufrufer (clustersync.ts) berechnet
+ * sie nur für aktuell SICHTBARE Sprites, statt hunderte Tweens permanent ticken zu
+ * lassen. period = 2π macht die Prüfpunkte exakt (sin an bekannten Winkeln). */
+
+test("flagBobOffset: Amplitude 0 hält die Flagge immer auf der Basislinie", () => {
+  expect(flagBobOffset(0, 0, 0, 2 * Math.PI)).toBeCloseTo(0, 10);
+  expect(flagBobOffset(123.4, 1.7, 0, 2 * Math.PI)).toBeCloseTo(0, 10);
+});
+
+test("flagBobOffset: bleibt für jedes t innerhalb [-amplitude, 0] (Red-Green: ein Vorzeichenfehler würde das verlassen)", () => {
+  const amplitude = 4, period = 2 * Math.PI;
+  for (let t = 0; t <= period; t += period / 20) {
+    const off = flagBobOffset(t, 0, amplitude, period);
+    expect(off).toBeLessThanOrEqual(0);
+    expect(off).toBeGreaterThanOrEqual(-amplitude);
+  }
+});
+
+test("flagBobOffset: erreicht bei t=period/4 genau das Minimum (-amplitude)", () => {
+  const amplitude = 4, period = 2 * Math.PI;
+  expect(flagBobOffset(period / 4, 0, amplitude, period)).toBeCloseTo(-amplitude, 5);
+});
+
+test("flagBobOffset: erreicht bei t=3·period/4 genau die Basislinie (0)", () => {
+  const period = 2 * Math.PI;
+  expect(flagBobOffset((3 * period) / 4, 0, 4, period)).toBeCloseTo(0, 5);
+});
+
+test("flagBobOffset: ist periodisch (t und t+period liefern denselben Wert)", () => {
+  const period = 2 * Math.PI;
+  const a = flagBobOffset(1.3, 0.4, 3, period);
+  const b = flagBobOffset(1.3 + period, 0.4, 3, period);
+  expect(b).toBeCloseTo(a, 8);
+});
+
+test("flagBobOffset: phase verschiebt die Kurve (unterschiedliche Werte bei sonst gleichen Parametern)", () => {
+  const period = 2 * Math.PI;
+  expect(flagBobOffset(0, 0, 4, period)).not.toBeCloseTo(flagBobOffset(0, Math.PI / 2, 4, period), 3);
+});
+
+test("lampFlickerAlpha: minAlpha 1 hält die Laterne konstant voll hell", () => {
+  expect(lampFlickerAlpha(0, 0, 1, 2 * Math.PI)).toBe(1);
+  expect(lampFlickerAlpha(77, 2.2, 1, 2 * Math.PI)).toBe(1);
+});
+
+test("lampFlickerAlpha: bleibt für jedes t innerhalb [minAlpha, 1] (Red-Green)", () => {
+  const minAlpha = 0.55, period = 2 * Math.PI;
+  for (let t = 0; t <= period; t += period / 20) {
+    const a = lampFlickerAlpha(t, 0, minAlpha, period);
+    expect(a).toBeGreaterThanOrEqual(minAlpha);
+    expect(a).toBeLessThanOrEqual(1);
+  }
+});
+
+test("lampFlickerAlpha: erreicht bei t=period/4 genau das Maximum (1)", () => {
+  const period = 2 * Math.PI;
+  expect(lampFlickerAlpha(period / 4, 0, 0.55, period)).toBeCloseTo(1, 5);
+});
+
+test("lampFlickerAlpha: erreicht bei t=3·period/4 genau das Minimum (minAlpha)", () => {
+  const period = 2 * Math.PI;
+  expect(lampFlickerAlpha((3 * period) / 4, 0, 0.55, period)).toBeCloseTo(0.55, 5);
+});
+
+test("lampFlickerAlpha: ist periodisch (t und t+period liefern denselben Wert)", () => {
+  const period = 2 * Math.PI;
+  const a = lampFlickerAlpha(0.9, 0.6, 0.4, period);
+  const b = lampFlickerAlpha(0.9 + period, 0.6, 0.4, period);
+  expect(b).toBeCloseTo(a, 8);
 });
