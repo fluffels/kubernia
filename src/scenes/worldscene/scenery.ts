@@ -7,10 +7,11 @@
  *
  * Freie Funktionen mit der Szene als Parameter; die Render-Primitive
  * (scene.registerCullable/makeSign/addShadow) bleiben auf der Szene. Die
- * deterministische Platzierungs-Mathematik ist Phaser-frei in src/decor.ts.
+ * deterministische Platzierungs-Mathematik (inkl. der Streu-Prädikate, #537)
+ * ist Phaser-frei in src/world/decor.ts.
  */
 import Phaser from "phaser";
-import { pickPlacements, strSeed, hash01, grassTuftStyle } from "../../world/decor";
+import { pickPlacements, strSeed, hash01, grassTuftStyle, isOpenGrassTile, canScatterAt } from "../../world/decor";
 import { circleHitbox, rectHitbox, SHIP_DOOR } from "../../world/world";
 import { DAY_CYCLE_MS, withStartOffset } from "../../core/clock";
 import { WORLD_TO_ARCHIPEL } from "../../world/regions/archipel";
@@ -38,10 +39,7 @@ export function spawnFlowers(scene: WorldSceneLike) {
   // Wildblumen (PixelLab) fest auf freie Gras-Zellen gestreut – bricht das
   // wiederholte Gras-Tile gleichmäßig auf. Jetzt deterministisch statt bei
   // jedem Neuladen neu gewürfelt (#3): gleiche Welt → gleiche Blumen.
-  const accept = (x: number, y: number) => {
-    const v = scene.ground[y * scene.W + x];
-    return (v === 0 || v === 1 || v === 2) && !scene.occupied(x, y);
-  };
+  const accept = (x: number, y: number) => isOpenGrassTile(scene.ground, scene.solidGrid, scene.softGrid, scene.W, x, y);
   for (const p of pickPlacements({
     W: scene.W, H: scene.H, count: 30 * scene.stress, seed: strSeed("flowers"), accept,
     jitter: { x: [2, 14], y: [8, 15] },
@@ -65,10 +63,7 @@ export function spawnGrassDetail(scene: WorldSceneLike) {
   const VARIANTS = 3;
   // Die Sprites sind 64×64; auf ~Kachelhöhe herunterskaliert (zusätzlich × s.scale).
   const BASE = 0.26;
-  const accept = (x: number, y: number) => {
-    const v = scene.ground[y * scene.W + x];
-    return (v === 0 || v === 1 || v === 2) && !scene.occupied(x, y);
-  };
+  const accept = (x: number, y: number) => isOpenGrassTile(scene.ground, scene.solidGrid, scene.softGrid, scene.W, x, y);
   // Deutlich mehr Büschel als Blumen → die Wiese wirkt flächig bewachsen statt kahl.
   for (const p of pickPlacements({
     W: scene.W, H: scene.H, count: 140 * scene.stress, seed: strSeed("grass-detail"), accept,
@@ -93,15 +88,8 @@ export function spawnGrassDetail(scene: WorldSceneLike) {
 export function scatter(scene: WorldSceneLike, tex: string, count: number, scale: number, kinds: number[], solid = false, hitR = 0, hitRect?: readonly [number, number]) {
   // PixelLab-Objekte streuen: nur passende Felder, nie auf/neben Wege, nicht auf Solids, Spieler-Start frei.
   // Platzierung ist deterministisch (#3) – Büsche/Steine/Laternen sitzen bei jedem Laden an festen Stellen.
-  const isDirt = (x: number, y: number) => scene.ground[y * scene.W + x] === 25;
   const pcx = Math.round(scene.playerPos.x / T), pcy = Math.round(scene.playerPos.y / T);
-  const accept = (x: number, y: number) => {
-    const v = scene.ground[y * scene.W + x];
-    if (kinds.indexOf(v) < 0 || scene.occupied(x, y)) return false;
-    if (isDirt(x, y - 1) || isDirt(x, y + 1) || isDirt(x - 1, y) || isDirt(x + 1, y)) return false; // nicht an Wege grenzen
-    if (Math.abs(x - pcx) <= 1 && Math.abs(y - pcy) <= 1) return false;                             // Spieler-Start freihalten
-    return true;
-  };
+  const accept = (x: number, y: number) => canScatterAt(scene.ground, scene.solidGrid, scene.softGrid, scene.W, x, y, kinds, { x: pcx, y: pcy });
   // Seed je Sorte (aus dem Textur-Namen) → jede Deko-Art bekommt ihr eigenes festes Muster.
   for (const p of pickPlacements({
     W: scene.W, H: scene.H, count, seed: strSeed(tex), accept,

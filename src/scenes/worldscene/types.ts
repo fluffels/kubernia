@@ -142,7 +142,6 @@ export interface WorldSceneFields {
   tree(x: number, y: number): void;
   objDeco(x: number, y: number, tex: string, scale: number, solid?: boolean): void;
   building(x: number, y: number, w: number, tex: string, scale: number): void;
-  occupied(x: number, y: number): boolean;
   burstAt(x: number, y: number, kind: string): void;
   registerCullable<T extends Phaser.GameObjects.Components.Visible>(obj: T, px: number, py: number): T;
   makeSign(x: number, y: number, text: string, depth?: number): Phaser.GameObjects.Container;

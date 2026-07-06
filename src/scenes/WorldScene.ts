@@ -395,15 +395,6 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   }
 
   /* ============ Kollision & Bewegung ============ */
-  /** Kachel (x,y) belegt? – fürs Deko-Streuen (#3): eckige Solids (solidGrid:
-   *  Wände/Wasser/Gebäude/Büsche) ODER runde Objekte (softGrid: Steine/NPCs, #343).
-   *  Bewusst getrennt von der Kollision (isSolidAt), die runde Objekte als Hitbox
-   *  prüft, nicht als volle Kachel. */
-  occupied(x: number, y: number) {
-    const i = y * this.W + x;
-    return !!this.solidGrid[i] || !!this.softGrid[i];
-  }
-
   isSolidAt(px: number, py: number) {
     const tx = Math.floor(px / T), ty = Math.floor(py / T);
     if (tx < 0 || ty < 0 || tx >= this.W || ty >= this.H) return true;
