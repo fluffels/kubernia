@@ -9,9 +9,10 @@
  */
 import { test, expect } from "vitest";
 import { TILE } from "../src/world/world";
+import { objectFootprint } from "../src/content/entities";
 import {
   WTW, WTH, WATER, DOCK, PATH, STONE_CODES,
-  buildWatchtower, warpAt, watchtowerFootprint, WATCHTOWER_TOWER,
+  buildWatchtower, warpAt, WATCHTOWER_TOWER,
   WORLD_JETTY_WT, WORLD_TO_WATCHTOWER, WORLD_RETURN_WT,
   WATCHTOWER_TO_WORLD, WATCHTOWER_ARRIVAL,
 } from "../src/world/regions/watchtower";
@@ -88,8 +89,8 @@ test("die Hof-Mitte ist vom Anleger aus erreichbar – das Quartier ist nicht to
 });
 
 test("der Wachturm-Fußabdruck (2×2) ist vollständig solide (man läuft nicht hindurch)", () => {
-  const foot = watchtowerFootprint();
-  expect(foot).toHaveLength(WATCHTOWER_TOWER.w * WATCHTOWER_TOWER.h);
+  const foot = objectFootprint(WATCHTOWER_TOWER);
+  expect(foot).toHaveLength((WATCHTOWER_TOWER.w ?? 1) * (WATCHTOWER_TOWER.h ?? 1));
   for (const t of foot) {
     expect(t.x >= 0 && t.x < WTW && t.y >= 0 && t.y < WTH, `(${t.x},${t.y}) im Raster`).toBe(true);
     expect(map.solid[t.y * WTW + t.x], `(${t.x},${t.y}) muss solide sein`).toBe(1);
@@ -101,7 +102,7 @@ test("der Wachturm steht auf Gras-Bailey, nicht auf Pfad/Steg/Ankunft (Aufgang b
     WATCHTOWER_ARRIVAL.ty * WTW + WATCHTOWER_ARRIVAL.tx,
     WATCHTOWER_TO_WORLD.ty * WTW + WATCHTOWER_TO_WORLD.tx,
   ]);
-  for (const t of watchtowerFootprint()) {
+  for (const t of objectFootprint(WATCHTOWER_TOWER)) {
     const i = t.y * WTW + t.x;
     expect(map.ground[i]).not.toBe(PATH);
     expect(map.ground[i]).not.toBe(DOCK);

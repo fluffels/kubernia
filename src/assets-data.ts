@@ -51,6 +51,7 @@ import driftwood from "../assets/pixellab/driftwood.png";
 import signpost from "../assets/pixellab/signpost.png";
 import sign from "../assets/pixellab/sign.png";
 import lighthouse from "../assets/pixellab/lighthouse.png";
+import watchtower from "../assets/pixellab/watchtower.png";         // Wachturm-Quartier-Turm (#440)
 import grafana_board from "../assets/pixellab/grafana_board.png";   // Monitoring-Dashboard (#111)
 import alert_bell from "../assets/pixellab/alert_bell.png";         // Alarm-Glocke (#111)
 import container from "../assets/pixellab/container.png";           // Frachtcontainer-Stapel (#124)
@@ -149,6 +150,7 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
   { key: "alert_bell", src: alert_bell, kind: "plain", scene: "Lighthouse" },         // Alarm-Glocke (#111)
   { key: "container", src: container, kind: "plain", scene: "Warehouse" },           // Frachtcontainer-Stapel (#124)
   { key: "crane", src: crane, kind: "plain", scene: "Warehouse" },                   // Hafen-Verladekran (#124)
+  { key: "watchtower", src: watchtower, kind: "plain", scene: "Watchtower" },        // Wachturm (#440)
   { key: "house_office", src: house_office, kind: "plain" },
   { key: "house_forge", src: house_forge, kind: "plain" },
   { key: "house_chart", src: house_chart, kind: "plain" },
