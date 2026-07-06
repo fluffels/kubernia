@@ -4,7 +4,7 @@
 > Die **ausführliche Arbeitsanweisung** (harte Regeln, Board-Workflow, Konventionen) steht in **[AGENTS.md](AGENTS.md)** – diese Datei ist der schnelle Einstieg, der dorthin führt.
 > Was das Spiel **ist** (Story, Steuerung, Lernpfad), steht in der **[README.md](README.md)** – die ist spielerseitig, nicht für dich als Agent.
 
-> ⭐ **Oberste Regel vor JEDER Änderung:** „Ist das okay, wenn KubeQuest ein Spiel in **Stardew-Valley-Größe** wird?" Nur machen, wenn ja — diese Frage steht über allen ADRs/Konventionen. Was auffällt, aber gerade nicht dran ist → **Ticket anlegen**. Details: [AGENTS.md › Oberste Regel](AGENTS.md#-oberste-regel--über-allem-auch-über-den-adrs).
+> ⭐ **Oberste Regel vor JEDER Änderung:** „Ist das okay, wenn Kubernia ein Spiel in **Stardew-Valley-Größe** wird?" Nur machen, wenn ja — diese Frage steht über allen ADRs/Konventionen. Was auffällt, aber gerade nicht dran ist → **Ticket anlegen**. Details: [AGENTS.md › Oberste Regel](AGENTS.md#-oberste-regel--über-allem-auch-über-den-adrs).
 
 ## ⚡ Schnellstart (in <1 Minute zum ersten Schritt)
 
@@ -280,7 +280,7 @@ Die Landkarte oben sagt, **wo** ein Modul liegt; diese Tabelle sagt, **was du im
 
 ## ❓ Die vier Einstiegsfragen
 
-- **Was ist das Spiel?** KubeQuest – ein 2D-Lernspiel (Phaser 3) für Docker/K8s/Helm/Terraform; die Spielwelt **ist** der Cluster. → [README.md](README.md)
+- **Was ist das Spiel?** Kubernia – ein 2D-Lernspiel (Phaser 3) für Docker/K8s/Helm/Terraform; die Spielwelt **ist** der Cluster. → [README.md](README.md)
 - **Wie starte ich?** `npm install` → `npm run dev` → angezeigte Adresse im Browser. → Schnellstart oben.
 - **Welches Ticket nehme ich?** Das **oberste freie Ticket nach Board-`Prio` → Nummer** (`Prio`: Kritisch → Hoch → Mittel → Niedrig → Später), gelesen aus dem Project-Board (`gh project item-list 1 --owner fluffels --format json --limit 800`, braucht `read:project`-Scope; frei = kein Assignee, kein offener PR/Branch/Worktree, nicht `status:zurückgestellt`, kein offener Blocker). Nur **dieses eine** Kandidaten-Ticket prüfen, nicht die ganze Liste. Sofort self-assignen. Fertig sortierter Befehl: [Ticket-Auswahl](docs/ticket-reihenfolge.md). → [AGENTS.md › Wo die TODOs leben](AGENTS.md#wo-die-todos-leben).
 - **Wie schließe ich ab?** Tests grün + im Browser verifiziert → **ein PR** (Body `Closes #<nr>`) auf dem Feature-Branch → **CI abwarten und bis zum Merge bringen** (Auto-Merge + `gh pr checks --watch`; grün → mergt, rot → fixen bis grün) → Worktree aufräumen → Issue schließt via `Closes`. **Keine Reihenfolge-Datei mehr pflegen** (entfällt seit #627). **Ein PR pro Ticket (#618); fertig erst, wenn der PR gemergt ist.** PR-gegated seit #592, kein Direkt-Push auf `main`. → [AGENTS.md › Git-Workflow](AGENTS.md#das-wichtigste-zuerst-harte-regeln).

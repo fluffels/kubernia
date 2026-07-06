@@ -5,7 +5,7 @@
 
 ## Status
 
-**Akzeptiert.** KubeQuest soll langfristig zu einem großen Spiel wachsen – Stardew-Qualität *und* Stardew-Scope. Das erfordert jetzt bewusste Weichenstellungen, solange der Umbau noch überschaubar ist.
+**Akzeptiert.** Kubernia soll langfristig zu einem großen Spiel wachsen – Stardew-Qualität *und* Stardew-Scope. Das erfordert jetzt bewusste Weichenstellungen, solange der Umbau noch überschaubar ist.
 
 ## Kontext
 

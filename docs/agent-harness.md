@@ -1,6 +1,6 @@
-# Der KI-Agenten-Harness von KubeQuest — wie + warum
+# Der KI-Agenten-Harness von Kubernia — wie + warum
 
-> **Was ist dieses Dokument?** Die **eine** erklärende Gesamtsicht auf den „Harness": die Maschinerie, mit der autonome KI-Coding-Agenten dieses Repo **billig und sicher** weiterbauen. Der komplette Code von KubeQuest entsteht durch solche Agenten — kein Mensch tippt die Implementierung.
+> **Was ist dieses Dokument?** Die **eine** erklärende Gesamtsicht auf den „Harness": die Maschinerie, mit der autonome KI-Coding-Agenten dieses Repo **billig und sicher** weiterbauen. Der komplette Code von Kubernia entsteht durch solche Agenten — kein Mensch tippt die Implementierung.
 >
 > **Abgrenzung — was hier NICHT steht.** Dies ist die *erklärende* Sicht (das System als Ganzes, das „warum"), nicht die operative Arbeitsanweisung. Die **harten Regeln + den Schritt-für-Schritt-Ablauf** hat weiterhin die [AGENTS.md](../AGENTS.md) (SSOT für „wie arbeite ich"), den Schnellstart + die Datei-Landkarte die [CLAUDE.md](../CLAUDE.md). Dieses Doc **verlinkt** dorthin, statt zu doppeln — driftet etwas, gilt AGENTS.md/CLAUDE.md. Es ist die Tiefenquelle, auf die die [README › Gebaut von KI-Agenten](../README.md#-gebaut-von-ki-agenten) (Marketing-Ebene 3) und [arc42 §8](arc42-architektur.md#8-querschnittliche-konzepte--ddd-bewertung) verweisen.
 
@@ -8,7 +8,7 @@
 
 **Nicht ein einzelner cleverer Prompt macht autonome KI-Entwicklung sicher, sondern die Leitplanken drumherum.** Ein LLM-Agent ist ein unzuverlässiger Ausführender: mal brillant, mal halluziniert er eine API, vergisst eine Migration oder reißt eine Schichtgrenze ein. Der Harness dreht die Verlässlichkeit nicht am Modell, sondern an der **Umgebung**: Er sorgt dafür, dass ein Agent alles Nötige **findet** (SSOT-Doku), sich auf **genau eine** Aufgabe konzentriert (Ein-Ticket-Workflow), anderen Agenten **nicht in die Quere** kommt (Kollisionsschutz) und jeden Fehler **an einer automatischen Grenze** vorgeführt bekommt (Fitness-Functions als Gates), bevor er auf `main` landet.
 
-Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI ändert das billig **und** sicher"), gleichrangig neben Testbarkeit, Erweiterbarkeit und Datensicherheit — und es steht unter derselben obersten Regel wie alles andere: **„Trägt das noch, wenn KubeQuest so groß wie Stardew Valley wird?"** Ein Harness, der bei 10× Content/NPCs/parallelen Agenten zusammenbricht, ist keiner.
+Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI ändert das billig **und** sicher"), gleichrangig neben Testbarkeit, Erweiterbarkeit und Datensicherheit — und es steht unter derselben obersten Regel wie alles andere: **„Trägt das noch, wenn Kubernia so groß wie Stardew Valley wird?"** Ein Harness, der bei 10× Content/NPCs/parallelen Agenten zusammenbricht, ist keiner.
 
 ## 2. Die fünf Bausteine
 

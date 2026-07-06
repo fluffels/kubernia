@@ -9,7 +9,7 @@
 
 ## Leitfrage (oberste Regel)
 
-Für **jede** Entscheidung: „Trägt das, wenn KubeQuest so groß wie Stardew Valley wird (100+ Quests, 50+ NPCs, viele Welten, jahrelange Entwicklung)?" Alte Entscheidungen wurden bewusst angezweifelt – nicht als gesetzt angenommen.
+Für **jede** Entscheidung: „Trägt das, wenn Kubernia so groß wie Stardew Valley wird (100+ Quests, 50+ NPCs, viele Welten, jahrelange Entwicklung)?" Alte Entscheidungen wurden bewusst angezweifelt – nicht als gesetzt angenommen.
 
 ## TL;DR – Verdikt
 

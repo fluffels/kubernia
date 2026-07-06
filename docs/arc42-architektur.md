@@ -1,4 +1,4 @@
-# KubeQuest — Architektur-Analyse nach arc42
+# Kubernia — Architektur-Analyse nach arc42
 
 > **Stand: 2026-07-01** (nach #475; ergänzt um die iSAQB-Analyse #492–#524). Beschreibung + Bewertung der Architektur entlang der arc42-Gliederung (die Vorlage, die iSAQB lehrt).
 > Diese Datei ist die aktuelle, versionierte Architektur-**Gesamtsicht**. Sie **ergänzt** (a) die ältere, Infrastruktur-fokussierte [architektur-analyse-2026-06.md](architektur-analyse-2026-06.md) (deren Baustellen #350/#389/#390/#391/#392/#393/#411/#413 inzwischen erledigt sind) und (b) die frische, doku-unabhängige **[architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md)** (fünf Durchläufe je Schicht → 33 Tickets #492–#524; die Risiken/Qualitäts-Aktualisierungen daraus sind unten in §8/§10/§11 eingearbeitet).
@@ -6,9 +6,9 @@
 
 ## 1. Einführung und Ziele
 
-KubeQuest bringt DevOps-Grundlagen (Docker, Kubernetes, Helm, Terraform, Security) bei, indem Lernende **echte Befehle an einen simulierten Cluster** schicken — sichtbar als Hafenstadt Port Kubernia (Pods = Kisten auf Stegen/Nodes, Services = Laternen, `terraform apply` baut sichtbar neues Land).
+Kubernia bringt DevOps-Grundlagen (Docker, Kubernetes, Helm, Terraform, Security) bei, indem Lernende **echte Befehle an einen simulierten Cluster** schicken — sichtbar als Hafenstadt Port Kubernia (Pods = Kisten auf Stegen/Nodes, Services = Laternen, `terraform apply` baut sichtbar neues Land).
 
-**Oberste Qualitätsanforderung (über allen ADRs):** „Trägt jede Entscheidung, wenn KubeQuest so groß wie Stardew Valley wird?" (100+ Quests, 50+ NPCs, viele Welten, jahrelange Entwicklung).
+**Oberste Qualitätsanforderung (über allen ADRs):** „Trägt jede Entscheidung, wenn Kubernia so groß wie Stardew Valley wird?" (100+ Quests, 50+ NPCs, viele Welten, jahrelange Entwicklung).
 
 **Top-Qualitätsziele:**
 1. **Erweiterbarkeit auf Content-Tiefe** — neuer Inhalt darf den Build nicht verlangsamen und keinen Code-Eingriff erzwingen.
@@ -86,7 +86,7 @@ Vier Konzepte durchziehen den Code: **Schichtung** (§5), **Content-as-Data**, *
 
 **Taktisches DDD lebt das Projekt bereits an der teuersten Stelle:** eine framework-freie, *erzwungene* Domänenschicht + eine Repository-Kapsel (`SaveStore`).
 
-**Kein strategisches DDD mit getrennten Deployables/Packages** — das wäre Over-Engineering. **Aber:** KubeQuest ist ein **modularer Monolith mit ~2–3 Subdomänen**, deren eigene Sprache real ist. Bounded Contexts sind hier vor allem **Grenzen für kognitive Last = Token-Last** bei KI-Entwicklung (explizites Qualitätsziel):
+**Kein strategisches DDD mit getrennten Deployables/Packages** — das wäre Over-Engineering. **Aber:** Kubernia ist ein **modularer Monolith mit ~2–3 Subdomänen**, deren eigene Sprache real ist. Bounded Contexts sind hier vor allem **Grenzen für kognitive Last = Token-Last** bei KI-Entwicklung (explizites Qualitätsziel):
 
 | Subdomäne | Eigene Sprache | Code |
 |---|---|---|
@@ -108,9 +108,9 @@ Die Modul-Splits + die on-demand-Tiefendocs der CLAUDE.md **sind** bereits solch
 
 ### Monolith ≠ schlecht — und hier läuft gar kein Server
 
-„Monolith" meint zwei verschiedene Dinge: einen **Deployment-Monolithen** (ein Server-Prozess macht alles; Gegenteil = Microservices — *das* ist die Kubernetes-/Skalierungsfrage) und einen **modularen Monolithen** (ein Deployable mit sauberen inneren Grenzen; Gegenteil = „Big Ball of Mud"). KubeQuest ist Letzteres — und das ist ein Gütesiegel, kein Makel.
+„Monolith" meint zwei verschiedene Dinge: einen **Deployment-Monolithen** (ein Server-Prozess macht alles; Gegenteil = Microservices — *das* ist die Kubernetes-/Skalierungsfrage) und einen **modularen Monolithen** (ein Deployable mit sauberen inneren Grenzen; Gegenteil = „Big Ball of Mud"). Kubernia ist Letzteres — und das ist ein Gütesiegel, kein Makel.
 
-Vor allem aber: **KubeQuest hat keinen Server.** Es ist ein client-seitiges Browser-Spiel ohne Backend/Container/DB ([ADR 0002](adr/0002-kein-backend-keine-db.md)/[0003](adr/0003-multiplayer-coop-out-of-scope.md)), ausgeliefert als statische Dateien bzw. eine Offline-Datei. Die Frage „Monolith vs. Microservices in Kubernetes" greift hier gar nicht — es gibt nichts zu hosten außer statischen Assets (die *könnten* aus einem Container/CDN kommen, aber das ist ein nginx, kein verteiltes System). **Ironie:** das Spiel *lehrt* die K8s-Welt, ist aber bewusst nicht so gebaut — ein Lernspiel hat andere Qualitätsziele als ein verteiltes Produktionssystem.
+Vor allem aber: **Kubernia hat keinen Server.** Es ist ein client-seitiges Browser-Spiel ohne Backend/Container/DB ([ADR 0002](adr/0002-kein-backend-keine-db.md)/[0003](adr/0003-multiplayer-coop-out-of-scope.md)), ausgeliefert als statische Dateien bzw. eine Offline-Datei. Die Frage „Monolith vs. Microservices in Kubernetes" greift hier gar nicht — es gibt nichts zu hosten außer statischen Assets (die *könnten* aus einem Container/CDN kommen, aber das ist ein nginx, kein verteiltes System). **Ironie:** das Spiel *lehrt* die K8s-Welt, ist aber bewusst nicht so gebaut — ein Lernspiel hat andere Qualitätsziele als ein verteiltes Produktionssystem.
 
 iSAQB ist **stil-neutral**: Architektur folgt Qualitätszielen, nicht Mode. Microservices sind ein Trade-off (unabhängiges Deployen/Skalieren gegen hohe Betriebskomplexität), keine Tugend; „Monolith first" ist heute Mainstream-Rat. Die ~2–3 Subdomänen oben sind **Navigations-/Token-Grenzen in einem Bundle, keine künftigen Services**. Ein echter Server — und damit die K8s-Frage — würde erst bei Cloud-Saves/Bestenlisten/Multiplayer relevant; heute per ADR 0003 mit Re-Eval-Trigger ausgeschlossen.
 

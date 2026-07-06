@@ -1,4 +1,4 @@
-# Mitentwickeln an KubeQuest
+# Mitentwickeln an Kubernia
 
 Willkommen! Diese Seite bringt dich – Mensch **oder** KI-Agent – in **einem Schritt** auf einen lauffähigen Stand. Was das Spiel selbst _ist_ (Story, Steuerung, Lernpfad), steht in der [README.md](README.md).
 
@@ -95,4 +95,4 @@ Dieses Repo ist **öffentlich – aber zur Sichtbarkeit für Kollegen**, nicht a
 
 ## Lizenz & Rechte an Beiträgen
 
-KubeQuest ist **proprietär**: © 2026 [fluffels](https://github.com/fluffels), **alle Rechte vorbehalten** (verbindlich ist die [`LICENSE`](LICENSE) im Repo-Root). Beiträge sind ausdrücklich willkommen – aber: mit dem Einreichen eines Pull Requests räumst du dem Rechteinhaber das nicht-exklusive, unbefristete Recht ein, deinen Beitrag unter dieser Lizenz zu nutzen und zu verbreiten; die Rechte am Gesamtwerk bleiben bei der Maintainerin. Forken/Klonen zur eigenständigen Weiterführung außerhalb von Beiträgen an dieses Repository ist nicht gestattet.
+Kubernia ist **proprietär**: © 2026 [fluffels](https://github.com/fluffels), **alle Rechte vorbehalten** (verbindlich ist die [`LICENSE`](LICENSE) im Repo-Root). Beiträge sind ausdrücklich willkommen – aber: mit dem Einreichen eines Pull Requests räumst du dem Rechteinhaber das nicht-exklusive, unbefristete Recht ein, deinen Beitrag unter dieser Lizenz zu nutzen und zu verbreiten; die Rechte am Gesamtwerk bleiben bei der Maintainerin. Forken/Klonen zur eigenständigen Weiterführung außerhalb von Beiträgen an dieses Repository ist nicht gestattet.

@@ -1,4 +1,4 @@
-# ADR 0006: Braucht KubeQuest bei Stardew-Scope ein Backend? — Skalierungs-Review
+# ADR 0006: Braucht Kubernia bei Stardew-Scope ein Backend? — Skalierungs-Review
 
 - **Status:** akzeptiert (2026-06-21) · ergebnisoffenes Grundsatz-Review
 - **Kontext-Ticket:** [#400](https://github.com/fluffels/kubequest/issues/400)
@@ -34,14 +34,14 @@ Damit ist **#400 nicht ohne #355 entscheidbar**: „kein Backend" ist für die D
 
 [ADR 0004](0004-skalierungs-fundament.md) und der Kommentar in [`src/store.ts`](../../src/store.ts) begründen den Umstieg auf IndexedDB mit der **Kapazität** („localStorage-Limit 5–10 MB sprengt Stardew-Scale-Stände"). Der Stardew-Vergleich entlarvt das als nicht den eigentlichen Punkt:
 
-- **Ein Stardew-Save ist selbst nur ~5–10 MB** (XML, ein komplettes Bauernhof-Leben). KubeQuest speichert deutlich weniger pro Stand. **Die Kapazität ist also gar nicht der Stardew-Scope-Engpass** — selbst localStorage läge grenzwertig im Rahmen, IndexedDB hat massiv Headroom (Firefox best-effort ~10 GiB bzw. 10 % der Platte, Chrome ~60 % der Platte).
+- **Ein Stardew-Save ist selbst nur ~5–10 MB** (XML, ein komplettes Bauernhof-Leben). Kubernia speichert deutlich weniger pro Stand. **Die Kapazität ist also gar nicht der Stardew-Scope-Engpass** — selbst localStorage läge grenzwertig im Rahmen, IndexedDB hat massiv Headroom (Firefox best-effort ~10 GiB bzw. 10 % der Platte, Chrome ~60 % der Platte).
 - Der **echte, bisher ungenannte Engpass ist Eviction.** Browser-Speicher ist „geliehen, nicht besessen": Unter Speicherdruck löscht der Browser **best-effort**-Origins per LRU komplett — IndexedDB, Cache API und OPFS einer Origin werden zusammen entfernt. Ein Spiel, in das man 100 h steckt und das man nur sporadisch im Browser-Tab öffnet, ist **genau ein LRU-Kandidat**. IndexedDB allein schützt davor **nicht**.
-- **Schutz dagegen:** `navigator.storage.persist()` macht die Origin persistent (immun gegen LRU-Eviction; nur noch manuelles Löschen durch den Nutzer entfernt Daten). Chrome/Safari gewähren das automatisch nach Interaktions-Historie/Engagement (PWA-Installation, Lesezeichen, Wiederbesuche helfen), Firefox per Prompt. Dazu `navigator.storage.estimate()` zum Überwachen. **Heute ruft KubeQuest `persist()` nirgends auf** (im Code verifiziert) — der Stand ist also ungeschützt. → Folge-Ticket, siehe unten.
+- **Schutz dagegen:** `navigator.storage.persist()` macht die Origin persistent (immun gegen LRU-Eviction; nur noch manuelles Löschen durch den Nutzer entfernt Daten). Chrome/Safari gewähren das automatisch nach Interaktions-Historie/Engagement (PWA-Installation, Lesezeichen, Wiederbesuche helfen), Firefox per Prompt. Dazu `navigator.storage.estimate()` zum Überwachen. **Heute ruft Kubernia `persist()` nirgends auf** (im Code verifiziert) — der Stand ist also ungeschützt. → Folge-Ticket, siehe unten.
 - **Brauchen wir SQLite-WASM / OPFS statt IndexedDB?** (Ticket-Frage 2) **Nein.** Beide unterliegen **derselben** Storage-Policy und werden bei Eviction genauso gelöscht — sie lösen das eigentliche Problem (Persistenz) **nicht**. Ihr Mehrwert wäre nur strukturierte Queries / Datei-artige Saves; bei 5–10 MB Save ist das **Over-Engineering** (verstößt gegen ADR 0002s Geist). Der wirksame Hebel ist `persist()` + verlässlicher **JSON-Export/Import** (existiert), nicht ein anderes Backend.
 
 ### 4. Asset-Delivery: das echte Stardew-Scope-Problem — und es ist kein Backend-Problem
 
-Die große Zahl bei Stardew ist **nicht** der Save (10 MB), sondern die **Asset-Menge** (~490 MB–1 GB: hunderte Sprites, Tilemaps, Sounds, Musik). Das ist die Dimension, die bei KubeQuest zuerst gegen eine Wand läuft — und sie wird **client-seitig** gelöst, ohne Backend:
+Die große Zahl bei Stardew ist **nicht** der Save (10 MB), sondern die **Asset-Menge** (~490 MB–1 GB: hunderte Sprites, Tilemaps, Sounds, Musik). Das ist die Dimension, die bei Kubernia zuerst gegen eine Wand läuft — und sie wird **client-seitig** gelöst, ohne Backend:
 
 - **Texture-Atlas** statt Einzel-Dateien (TexturePacker-JSON, von Phaser nativ unterstützt) → weniger Draw-Calls, weniger HTTP-Requests. → **bereits als [#339](https://github.com/fluffels/kubequest/issues/339) erfasst.**
 - **Lazy-Loading pro Insel/Szene** statt alles im `preload` → keine Minuten-Ladezeit beim Start. → **bereits als [#198](https://github.com/fluffels/kubequest/issues/198) erfasst.**
@@ -91,7 +91,7 @@ Neu zu bewerten, sobald **einer** eintritt (ergänzt die Trigger aus ADR 0002):
 
 ## Folge-Tickets
 
-- **Neu angelegt: [#401](https://github.com/fluffels/kubequest/issues/401)** — „`navigator.storage.persist()` + Quota-Monitoring beim Boot anfordern". Schließt die in Befund 3 gefundene Eviction-Lücke (heute ruft KubeQuest `persist()` nirgends auf). Client-seitig, session-groß, ohne Backend.
+- **Neu angelegt: [#401](https://github.com/fluffels/kubequest/issues/401)** — „`navigator.storage.persist()` + Quota-Monitoring beim Boot anfordern". Schließt die in Befund 3 gefundene Eviction-Lücke (heute ruft Kubernia `persist()` nirgends auf). Client-seitig, session-groß, ohne Backend.
 - **Bereits im Backlog (Asset-Skalierung):** [#198](https://github.com/fluffels/kubequest/issues/198) Lazy-Asset-Loading, [#339](https://github.com/fluffels/kubequest/issues/339) Texture-Atlas.
 - **Offen, koppelt hier an:** [#355](https://github.com/fluffels/kubequest/issues/355) Auslieferungsform — entscheidet, ob die Plattform die Backend-Features liefert.
 

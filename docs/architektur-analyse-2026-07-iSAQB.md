@@ -1,6 +1,6 @@
-# KubeQuest — Architektur-Analyse 2026-07-01 (iSAQB, frische Code-Sicht)
+# Kubernia — Architektur-Analyse 2026-07-01 (iSAQB, frische Code-Sicht)
 
-> **Stand: 2026-07-01.** Diese Analyse wurde **bewusst ohne Rücksicht auf die bestehende Doku/ADRs** erstellt — fünf unabhängige Durchläufe (je eine Schicht) haben ausschließlich den echten Code mit der iSAQB-Brille bewertet (Modularität, Kopplung/Kohäsion, konzeptuelle Integrität, Testbarkeit, Fehlerbehandlung, Querschnittskonzepte, Governance). Ziel: KubeQuest zu einem **beispiellosen Vorzeigeprojekt für Code-Qualität** machen.
+> **Stand: 2026-07-01.** Diese Analyse wurde **bewusst ohne Rücksicht auf die bestehende Doku/ADRs** erstellt — fünf unabhängige Durchläufe (je eine Schicht) haben ausschließlich den echten Code mit der iSAQB-Brille bewertet (Modularität, Kopplung/Kohäsion, konzeptuelle Integrität, Testbarkeit, Fehlerbehandlung, Querschnittskonzepte, Governance). Ziel: Kubernia zu einem **beispiellosen Vorzeigeprojekt für Code-Qualität** machen.
 >
 > Sie **ergänzt** die strukturierte Gesamtsicht [arc42-architektur.md](arc42-architektur.md) (die aus dieser Analyse aktualisiert wurde) und die ältere [architektur-analyse-2026-06.md](architektur-analyse-2026-06.md). Alle Befunde sind als Tickets **#492–#524** ticketiert und stehen im Kopf der [ticket-reihenfolge.md](ticket-reihenfolge.md).
 
@@ -8,7 +8,7 @@
 
 **Das Fundament ist überdurchschnittlich stark und wird nicht in Frage gestellt.** Die strikte, per `dependency-cruiser` **erzwungene** Schichtung (Phaser-/DOM-freie Domäne, keine Zyklen, keine Orphans), Content-as-Data mit deklarativer Check-DSL, versionierte Persistenz mit Backup-vor-Migration und Roundtrip-Fixpunkt-Test, `strict` TypeScript, ESLint mit `no-explicit-any`/`no-floating-promises` als Error, und die Fitness-Functions (Layering/Filesize/Docmap) als CI-Gates — das ist taktisches DDD und Architektur-Governance auf einem Niveau, das die meisten Produktivprojekte nicht erreichen.
 
-**Der rote Faden aller Befunde:** KubeQuest hat **strukturelle** Qualität exzellent mechanisiert, aber
+**Der rote Faden aller Befunde:** Kubernia hat **strukturelle** Qualität exzellent mechanisiert, aber
 
 1. **verhaltensbezogene Governance fehlt** (Determinismus, Coverage, Komplexität, Bundle-Größe, Fehlerdiagnostik sind nicht als Gate abgesichert — obwohl die Infrastruktur dafür je zur Hälfte schon existiert), und
 2. **es gibt einzelne, klar benennbare Grenzen, an denen die sonst konsequente Disziplin aufhört** — und genau dort sitzen die riskantesten Befunde: das `scenario`-Feld (ungeprüft), der `importData`-Pfad (umgeht Migration), der `WorldSceneLike`-Seam (`any`), der `Math.random` in der Domäne (widerspricht dem eigenen Determinismus-Anspruch).

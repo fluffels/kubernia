@@ -5,7 +5,7 @@
 
 ## Status
 
-**Akzeptiert.** Phaser 3 bleibt die Engine von KubeQuest.
+**Akzeptiert.** Phaser 3 bleibt die Engine von Kubernia.
 
 ## Kontext
 
@@ -16,7 +16,7 @@ nehmen?" Diese Diskussion taucht in fast jedem zweiten Chat neu auf und kostet
 jedes Mal Zeit. Dieses ADR hält die Entscheidung **einmal sauber fest**, damit
 sie nicht ständig neu verhandelt wird.
 
-Der Kern-Wert von KubeQuest ist:
+Der Kern-Wert von Kubernia ist:
 
 - **Läuft offline im Browser**, als **eine einzige Datei** (`dist-offline/index.html`)
   per Doppelklick startbar, einfach verschenkbar.
@@ -62,7 +62,7 @@ Der Kern-Wert von KubeQuest ist:
 **Negativ / Grenzen**
 
 - An echte 3D-Anforderungen oder sehr hohe native Performance kommt Phaser nicht
-  heran – das ist bewusst außerhalb des Scopes von KubeQuest.
+  heran – das ist bewusst außerhalb des Scopes von Kubernia.
 - Wir binden uns an das Phaser-/Web-Ökosystem (Browser-Rendering-Grenzen).
 
 ## Re-Evaluierungs-Trigger

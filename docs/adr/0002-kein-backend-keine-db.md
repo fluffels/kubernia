@@ -6,11 +6,11 @@
 
 ## Kontext
 
-KubeQuest ist ein DevOps-Lernspiel: Die Spielwelt **ist** der Cluster (Docker, Kubernetes, Helm, Terraform). Genau deshalb liegt es reflexhaft nahe, das Spiel selbst „lehrbuchmäßig" als verteiltes System zu bauen – mit Datenbank, eigenem Backend, Frontend-Backend-Split und `docker-compose`. Diese Versuchung taucht in fast jedem zweiten Architektur-Gespräch auf.
+Kubernia ist ein DevOps-Lernspiel: Die Spielwelt **ist** der Cluster (Docker, Kubernetes, Helm, Terraform). Genau deshalb liegt es reflexhaft nahe, das Spiel selbst „lehrbuchmäßig" als verteiltes System zu bauen – mit Datenbank, eigenem Backend, Frontend-Backend-Split und `docker-compose`. Diese Versuchung taucht in fast jedem zweiten Architektur-Gespräch auf.
 
 Für ein **Single-Player-2D-Lernspiel ist dieser Stack Over-Engineering.** Die Vergleichsgröße (Stardew Valley, unsere Stardew-Messlatte aus #44) hat nichts davon: kein Server, keine DB, keine Container – nur eine lokale Anwendung mit lokalen Speicherständen.
 
-Der Kern-Wert von KubeQuest ist „läuft offline im Browser, eine Datei, einfach verschenkbar, Lern-Tool". Ein Server-Stack würde diesem Wert direkt widersprechen: Er bräuchte Betrieb, Hosting, Online-Zwang und Wartung – für null Spielwert.
+Der Kern-Wert von Kubernia ist „läuft offline im Browser, eine Datei, einfach verschenkbar, Lern-Tool". Ein Server-Stack würde diesem Wert direkt widersprechen: Er bräuchte Betrieb, Hosting, Online-Zwang und Wartung – für null Spielwert.
 
 ## Optionen
 

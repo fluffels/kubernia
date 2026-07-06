@@ -4,7 +4,7 @@
 >
 > **Verwandt:** die **Modul-Interna** (Loader/Schema/Check-DSL/Entity-Registry im Detail) stehen im Tiefendoc [docs/module/content.md](../../docs/module/content.md); der **Bounded Context** dieses Verzeichnisses (Shared Kernel „Content-Loader") ist in [docs/glossar.md](../../docs/glossar.md) benannt (#477). Die harten **Projekt-Regeln** (Git-Workflow, Tests, Board) bleiben in der Wurzel-[AGENTS.md](../../AGENTS.md) — bei Konflikt gilt die Wurzel.
 
-⭐ **Oberste Regel gilt auch hier:** „Ist das okay, wenn KubeQuest ein Spiel in Stardew-Valley-Größe wird?" Content skaliert nur, wenn er **kein Monolith** ist — pro Region/Geber/NPC eine Datei, wie Stardew. Granularität immer mitdenken, nicht nur das Format.
+⭐ **Oberste Regel gilt auch hier:** „Ist das okay, wenn Kubernia ein Spiel in Stardew-Valley-Größe wird?" Content skaliert nur, wenn er **kein Monolith** ist — pro Region/Geber/NPC eine Datei, wie Stardew. Granularität immer mitdenken, nicht nur das Format.
 
 ## Wie man Inhalt hinzufügt (Stand #348/#349/#353/#354, auf `main`)
 
