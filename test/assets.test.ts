@@ -83,7 +83,7 @@ describe("ASSET_MANIFEST – Szenen-Zuordnung (#198 Lazy-Loading)", () => {
     Warehouse: ["container", "crane", "char_knut"],
     Watchtower: ["char_vidar", "watchtower"],
     Flotte: ["char_saga"],
-    Werft: ["char_greta"],
+    Werft: ["char_greta", "ship_frame", "scaffold"],
   };
   const REGIONS = Object.keys(EXPECTED_LAZY);
 
