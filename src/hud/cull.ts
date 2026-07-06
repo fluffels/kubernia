@@ -132,6 +132,27 @@ export function selectVisibleTags(
   return opts.cap >= 0 && out.length > opts.cap ? out.slice(0, opts.cap) : out;
 }
 
+/* ===== Dekorative dynGroup-Sprites ohne Dauer-Tween (#431) =====
+ * Helm-Flaggen (je Release) und Service-Laternen (je Service) hatten bisher je ein
+ * `scene.tweens.add({..., repeat: -1})` – bei Stardew-Scope (100+ Services) hunderte
+ * permanent tickende Tweens, AUCH off-screen (ein Tween hängt nicht am `visible`-Flag
+ * seines Ziels). Diese reinen Sinus-Funktionen ersetzen sie: `clustersync.ts` ruft sie
+ * pro Frame nur für Sprites auf, die gerade sichtbar sind (siehe `cull()` oben) – für
+ * den Rest entsteht gar keine Rechenlast. Phaser-frei, damit sie wie der Rest von
+ * cull.ts pur im Node-Test prüfbar sind. */
+
+/** Flaggen-Wipp-Versatz (Pixel, `[-amplitude, 0]`): dieselbe Bewegung wie das frühere
+ *  `y: baseY - amplitude, yoyo: true`-Tween, aber als reiner Sinus statt Dauer-Tween. */
+export function flagBobOffset(t: number, phase: number, amplitude: number, period: number): number {
+  return -amplitude * (0.5 + 0.5 * Math.sin((2 * Math.PI / period) * t + phase));
+}
+
+/** Laternen-Flicker-Alpha (`[minAlpha, 1]`): dieselbe Bewegung wie das frühere
+ *  `alpha: {from: minAlpha, to: 1}, yoyo: true`-Tween, aber als reiner Sinus. */
+export function lampFlickerAlpha(t: number, phase: number, minAlpha: number, period: number): number {
+  return minAlpha + (1 - minAlpha) * (0.5 + 0.5 * Math.sin((2 * Math.PI / period) * t + phase));
+}
+
 /** Rollender FPS-Mittelwert über die letzten `size` Frame-Deltas – fürs
  *  Performance-HUD/Budget. Pur (nimmt nur das Delta in ms entgegen), daher im
  *  Node-Test prüfbar. Nicht-positive Deltas werden ignoriert (erster Frame,
