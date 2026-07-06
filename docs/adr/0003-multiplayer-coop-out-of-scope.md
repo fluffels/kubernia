@@ -5,14 +5,14 @@
 
 ## Status
 
-**Akzeptiert.** KubeQuest bleibt ein Single-Player-Spiel. Multiplayer/Co-op ist
+**Akzeptiert.** Kubernia bleibt ein Single-Player-Spiel. Multiplayer/Co-op ist
 bewusst außerhalb des aktuellen Scopes.
 
 ## Kontext
 
 Stardew Valley hat Co-op: ein Host-Spielstand, andere joinen – **ein gemeinsamer
 Stand**, nicht getrennte. Weil Stardew unsere Politur-Messlatte ist (#44), kommt
-regelmäßig die Frage auf, ob KubeQuest das auch können sollte.
+regelmäßig die Frage auf, ob Kubernia das auch können sollte.
 
 Co-op wäre für uns ein **großer Architektur-Treiber**: dauerhaft laufender
 Server + Netcode (Zustands-Synchronisation, Konfliktauflösung) + vermutlich
@@ -20,7 +20,7 @@ DB/Accounts. Das ist **genau der Backend-Stack, den wir bewusst nicht bauen** �
 festgehalten im „kein Backend"-ADR (#85). Multiplayer hängt damit direkt an
 dieser Entscheidung: Ohne Backend kein geteilter Live-Spielstand.
 
-Der Kern-Wert von KubeQuest spricht ebenfalls gegen Multiplayer:
+Der Kern-Wert von Kubernia spricht ebenfalls gegen Multiplayer:
 
 - **Läuft offline im Browser**, als **eine einzige Datei**
   (`dist-offline/index.html`) per Doppelklick startbar, einfach verschenkbar.

@@ -1,7 +1,7 @@
 # Barrierefreiheit-Audit (#481)
 
 > **Was ist das hier?** Eine einmalige, ganzheitliche Prüfung der Zugänglichkeit von
-> KubeQuest über drei Dimensionen: **(1)** wird Status irgendwo **nur über Farbe**
+> Kubernia über drei Dimensionen: **(1)** wird Status irgendwo **nur über Farbe**
 > kodiert (ohne Form/Icon/Text), **(2)** ist das Spiel **vollständig per Tastatur**
 > bedienbar, **(3)** halten die HUD-/Overlay-**Kontraste** grob WCAG AA (4.5:1 für
 > normalen, 3:1 für großen Text)? Ergebnis ist dieser Bericht + daraus abgeleitete

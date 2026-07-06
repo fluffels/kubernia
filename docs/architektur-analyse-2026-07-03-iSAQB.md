@@ -1,4 +1,4 @@
-# KubeQuest — Architektur-Analyse 2026-07-03 (iSAQB, Runde 3: ADRs, DDD, Tests, Harness)
+# Kubernia — Architektur-Analyse 2026-07-03 (iSAQB, Runde 3: ADRs, DDD, Tests, Harness)
 
 > **Stand: 2026-07-03.** Dritte vollständige Runde, einen Tag nach [Runde 2](architektur-analyse-2026-07-02-iSAQB.md) (#577–#595) und zwei nach [Runde 1](architektur-analyse-2026-07-iSAQB.md) (#492–#524). Diese Runde ist **breiter** angelegt als die beiden Code-Runden: vier unabhängige Durchläufe haben je eine andere Brille aufgesetzt —
 > **(1) die ADRs bewusst kritisch hinterfragt** (nicht als Gesetz), **(2) der Code gegen DDD/iSAQB**, **(3) die Teststrategie als _Funktionstest_-Frage** („funktioniert das Spiel, stimmt der Lerninhalt?"), **(4) der Entwicklungs-Harness** gegen die Frage „fest genug fürs Vibe-Coding, und verhindern die Guards die Wiederkehr des Aufgeräumten?".

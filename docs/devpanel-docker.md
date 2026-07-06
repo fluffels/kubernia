@@ -30,7 +30,7 @@ das Panel gesperrt (wie ein normaler Build ohne `.env`).
 
 ## Wie die Laufzeit-Injektion funktioniert (der „Haken")
 
-KubeQuest ist eine **statische SPA**: `import.meta.env.VITE_*` wird zur **Build-Zeit**
+Kubernia ist eine **statische SPA**: `import.meta.env.VITE_*` wird zur **Build-Zeit**
 ersetzt und ist danach fest im Bundle – eine Env-Var allein erreicht den fertigen
 JS-Code nicht mehr. Deshalb gibt es einen kleinen Runtime-Config-Hook:
 
