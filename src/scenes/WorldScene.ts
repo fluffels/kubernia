@@ -20,7 +20,7 @@ import { HIT_R, LAMP_HIT } from "./geometry";
 import { loadMapTerrain } from "./worldscene/mapterrain";
 import { placeHarborObjects, renderGround } from "./worldscene/terrain";
 import { spawnGull, spawnFlowers, spawnGrassDetail, scatter, renderStatics, updateDayNight } from "./worldscene/scenery";
-import { syncCluster, updateDynamicTags } from "./worldscene/clustersync";
+import { syncCluster, updateDynamicTags, updateDynDecor } from "./worldscene/clustersync";
 import { registerHazardRenderer } from "./worldscene/events";
 import { updateWarps } from "./worldscene/warps";
 // #496: die Feld-Typen + das WorldSceneFields-Interface liegen in worldscene/types.ts
@@ -29,7 +29,7 @@ import { updateWarps } from "./worldscene/warps";
 // über WorldSceneLike sehen, hier wirklich existiert – ohne dass ein Modul eine zweite
 // Feldliste von Hand pflegt (frühere DynTagLike-Doppelpflege).
 import type {
-  WorldSceneFields, DecoItem, LabelSpec, DynTagData, PodSlot, Butterfly, PlayerPos,
+  WorldSceneFields, DecoItem, LabelSpec, DynTagData, DynDecorItem, PodSlot, Butterfly, PlayerPos,
 } from "./worldscene/types";
 
 // #343/#386: Sub-Tile-Kollisionsradien liegen jetzt zentral in scenes/geometry.ts (#590).
@@ -51,6 +51,10 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   tagFontDefault?: number;   // native (nicht-compacte) Tag-Schriftgröße, einmal gemerkt
   visibleTags!: number;      // gerade dargestellte Tag-Zahl (Perf-HUD-Beleg)
   lampGlows!: Phaser.GameObjects.Image[];
+  // Dekorative dynGroup-Sprites (Helm-Flaggen/Service-Laternen): cullbar + ohne
+  // Dauer-Tween (#431)
+  dynDecor!: DynDecorItem[];
+  visibleDynDecor!: number;
   // Hafen-Objekt-Felder aus terrain.ts (Stege/Schiff/Flaggenmasten/Leuchtturm/Plateau)
   piers!: { x: number; name: string }[];
   ship!: { x: number; y: number; w: number; h: number };
@@ -135,6 +139,8 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     this.dynTags = [];     // dynamische Cluster-Tags als Daten (#416)
     this.tagPool = [];     // wiederverwendete Tag-Container (nur für die sichtbaren)
     this.visibleTags = 0;
+    this.dynDecor = [];        // dekorative Flaggen/Laternen als Daten (#431)
+    this.visibleDynDecor = 0;
     this.podSlots = {};
     this.slotUsed = [];            // #523: wächst dynamisch mit der Pod-Zahl (kein fixes 36)
     this.lastClusterRev = -1;      // #523: erzwingt einen vollen Sync im ersten Frame
@@ -465,6 +471,10 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
       const MARGIN = 4 * T;
       const bounds = expandRect({ x: wv.x, y: wv.y, width: wv.width, height: wv.height }, MARGIN);
       this.visibleCullables = cull(this.cullables, bounds);
+      // #431: dieselbe (gedrosselte) Sichtfeld-Prüfung auch für die dekorativen
+      // dynGroup-Sprites (Flaggen/Laternen) – off-screen bleiben sie ausgeblendet,
+      // statt wie zuvor immer sichtbar + dauerhaft animiert zu sein.
+      this.visibleDynDecor = cull(this.dynDecor, bounds);
     }
     if (this.debugPerf) {
       const fps = this.fpsSampler.fps;
@@ -479,7 +489,8 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
           "FPS " + fps + "\n" +
           "Sprites sichtbar " + vis + "/" + total + "\n" +
           "gecullt " + (total - vis) + "  ·  stress ×" + this.stress + "\n" +
-          "Cluster-Tags " + this.visibleTags + "/" + this.dynTags.length + " (Pool " + this.tagPool.length + ")",
+          "Cluster-Tags " + this.visibleTags + "/" + this.dynTags.length + " (Pool " + this.tagPool.length + ")\n" +
+          "Deko-Props sichtbar " + this.visibleDynDecor + "/" + this.dynDecor.length,
         );
       }
     }
@@ -526,6 +537,7 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
 
     syncCluster(this);
     updateDynamicTags(this);
+    updateDynDecor(this, time);
     // Persistente Spiel-Zeit (#413) um die reale Frame-Zeit vorrücken und den Tag-Nacht-
     // Schleier/die HUD-Uhr daraus speisen – NICHT mehr aus der flüchtigen Phaser-`time`,
     // die bei jedem Reload bei 0 begänne. So überlebt der Kalender den Reload (Auto-Save
