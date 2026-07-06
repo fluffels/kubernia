@@ -6,11 +6,11 @@
 
 ## Status
 
-**Akzeptiert** (Integrationsweg teilweise abgelöst durch [0009](0009-pr-gating-required-checks.md), siehe Kasten oben). KubeQuest wird durch **autonome KI-Coding-Agenten** weitergebaut — kein Mensch tippt die Implementierung. Dieser ADR hält das **Entwicklungsmodell** als bewusste Architekturentscheidung fest. Er ist die formale Grundsatzentscheidung; die erklärende Gesamtsicht („wie + warum" im Detail, alle fünf Bausteine, jede Fitness-Function) liegt bereits vor in [`docs/agent-harness.md`](../agent-harness.md) (#526). Dieser ADR **verweist** dorthin, statt zu doppeln — dieselbe Arbeitsteilung wie [AGENTS.md](../../AGENTS.md) (operativ) ↔ agent-harness.md (erklärend).
+**Akzeptiert** (Integrationsweg teilweise abgelöst durch [0009](0009-pr-gating-required-checks.md), siehe Kasten oben). Kubernia wird durch **autonome KI-Coding-Agenten** weitergebaut — kein Mensch tippt die Implementierung. Dieser ADR hält das **Entwicklungsmodell** als bewusste Architekturentscheidung fest. Er ist die formale Grundsatzentscheidung; die erklärende Gesamtsicht („wie + warum" im Detail, alle fünf Bausteine, jede Fitness-Function) liegt bereits vor in [`docs/agent-harness.md`](../agent-harness.md) (#526). Dieser ADR **verweist** dorthin, statt zu doppeln — dieselbe Arbeitsteilung wie [AGENTS.md](../../AGENTS.md) (operativ) ↔ agent-harness.md (erklärend).
 
 ## Kontext
 
-KubeQuest wird von **einer** Maintainerin verantwortet, die den Weiterbau bewusst an KI-Agenten delegiert: DevOps-Lernspiel als eigenes Weiterbildungsprojekt, Solo, ohne Team-Review-Kapazität. Der komplette Code entsteht so.
+Kubernia wird von **einer** Maintainerin verantwortet, die den Weiterbau bewusst an KI-Agenten delegiert: DevOps-Lernspiel als eigenes Weiterbildungsprojekt, Solo, ohne Team-Review-Kapazität. Der komplette Code entsteht so.
 
 Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI ändert das billig **und** sicher"), gleichrangig neben Testbarkeit, Erweiterbarkeit und Datensicherheit. Anders als die prägenden Nachbar-Entscheidungen — Engine ([ADR 0001](0001-engine-phaser.md)), kein Backend ([0002](0002-kein-backend-keine-db.md)), kein Multiplayer ([0003](0003-multiplayer-coop-out-of-scope.md)), Skalierung ([0004](0004-skalierungs-fundament.md)) — war dieses Entwicklungsmodell bisher **nirgends als ADR** festgehalten, sondern nur in AGENTS.md/CLAUDE.md gelebt. Dieser ADR schließt die Lücke iSAQB-konform (mit explizitem Re-Eval-Trigger wie die anderen).
 

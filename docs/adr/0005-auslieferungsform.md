@@ -6,7 +6,7 @@
 
 ## Status
 
-**Akzeptiert — die Frage bleibt bewusst offen.** KubeQuest legt sich **nicht** vorab auf eine einzige Auslieferungsform fest. Dieser ADR hält den Entscheidungsraum, die bereits getroffenen Präzisierungen und die Re-Evaluierungs-Trigger fest, statt eine Option zu wählen. Er ist das Artefakt zu dem in [arc42 §9](../arc42-architektur.md#9-architekturentscheidungen-adrs) und in der [Ticket-Reihenfolge](../ticket-reihenfolge.md) als „offen gehalten" geführten ADR 0005 — bisher fehlte genau diese Datei (der Doku-vs-Realität-Drift, den das Projekt sonst maschinell bekämpft; iSAQB-Runde 3, [#606](https://github.com/fluffels/kubequest/issues/606)).
+**Akzeptiert — die Frage bleibt bewusst offen.** Kubernia legt sich **nicht** vorab auf eine einzige Auslieferungsform fest. Dieser ADR hält den Entscheidungsraum, die bereits getroffenen Präzisierungen und die Re-Evaluierungs-Trigger fest, statt eine Option zu wählen. Er ist das Artefakt zu dem in [arc42 §9](../arc42-architektur.md#9-architekturentscheidungen-adrs) und in der [Ticket-Reihenfolge](../ticket-reihenfolge.md) als „offen gehalten" geführten ADR 0005 — bisher fehlte genau diese Datei (der Doku-vs-Realität-Drift, den das Projekt sonst maschinell bekämpft; iSAQB-Runde 3, [#606](https://github.com/fluffels/kubequest/issues/606)).
 
 ## Warum dieser ADR — und warum ergebnisoffen
 
