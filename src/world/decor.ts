@@ -107,6 +107,39 @@ export interface GrassTuft {
   flip: boolean;
 }
 
+/** Kachel (x,y) durch ein eckiges Solid ODER ein rundes Sub-Tile-Objekt belegt?
+ *  Dieselbe Belegungsregel wie die Szenen-Methode `occupied()` (früher WorldScene,
+ *  weiterhin RegionScene, #343/#386) – hier pur (nur Grids, kein Phaser) für die
+ *  Platzierungs-Prädikate unten, aus scenes/worldscene/scenery.ts gezogen (#537). */
+export function isOccupiedTile(solidGrid: Uint8Array, softGrid: Uint8Array, W: number, x: number, y: number): boolean {
+  const i = y * W + x;
+  return !!solidGrid[i] || !!softGrid[i];
+}
+
+/** Frei begehbare Gras-Kachel (Frame 0/1/2) und nicht belegt – Platzierungsregel für
+ *  Wildblumen (spawnFlowers) und Gras-Büschel (spawnGrassDetail), aus
+ *  scenes/worldscene/scenery.ts gezogen (#537). */
+export function isOpenGrassTile(ground: readonly number[], solidGrid: Uint8Array, softGrid: Uint8Array, W: number, x: number, y: number): boolean {
+  const v = ground[y * W + x];
+  return (v === 0 || v === 1 || v === 2) && !isOccupiedTile(solidGrid, softGrid, W, x, y);
+}
+
+/** Darf ein gestreutes Deko-Objekt (Busch/Stein/Laterne …) auf Kachel (x,y) stehen?
+ *  Nur passender Untergrund (`kinds`), nicht belegt, nicht an einen Weg (Erde-Code 25)
+ *  grenzend, und mindestens 2 Kacheln vom Spieler-Start entfernt (Start freihalten) –
+ *  aus `scatter()` in scenes/worldscene/scenery.ts gezogen (#537). */
+export function canScatterAt(
+  ground: readonly number[], solidGrid: Uint8Array, softGrid: Uint8Array, W: number,
+  x: number, y: number, kinds: readonly number[], playerTile: { x: number; y: number },
+): boolean {
+  const v = ground[y * W + x];
+  if (kinds.indexOf(v) < 0 || isOccupiedTile(solidGrid, softGrid, W, x, y)) return false;
+  const isDirt = (dx: number, dy: number) => ground[dy * W + dx] === 25;
+  if (isDirt(x, y - 1) || isDirt(x, y + 1) || isDirt(x - 1, y) || isDirt(x + 1, y)) return false; // nicht an Wege grenzen
+  if (Math.abs(x - playerTile.x) <= 1 && Math.abs(y - playerTile.y) <= 1) return false;           // Spieler-Start freihalten
+  return true;
+}
+
 /** Leitet rein deterministisch (Seed + Koordinaten, kein globaler Zufall) das
  *  Aussehen eines Gras-Büschels auf Feld (x,y) ab. Gleiche Welt → exakt gleiche
  *  Wiese (#3-Prinzip). Jede Eigenschaft zieht aus einem eigenen Hash-Strom, damit
