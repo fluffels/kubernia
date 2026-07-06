@@ -42,7 +42,7 @@ jobs:
     steps:
       # Nur für scripts/forum-sanitize.mjs nötig (Text-Entschärfung, #531).
       - name: Repo auschecken
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Inbox-Issue anlegen oder ergänzen
         env:
