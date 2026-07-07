@@ -1,6 +1,8 @@
 # ⚓ Kubernia – Das Hafen-Abenteuer
 
 [![CI](https://github.com/fluffels/kubequest/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fluffels/kubequest/actions/workflows/ci.yml)
+[![Gemergte PRs](https://img.shields.io/github/issues-search/fluffels/kubequest?query=is%3Apr%20is%3Amerged&label=gemergte%20PRs&color=blue)](https://github.com/fluffels/kubequest/pulls?q=is%3Apr+is%3Amerged)
+[![Geschlossene Issues](https://img.shields.io/github/issues-search/fluffels/kubequest?query=is%3Aissue%20is%3Aclosed&label=geschlossene%20Issues&color=blue)](https://github.com/fluffels/kubequest/issues?q=is%3Aissue+is%3Aclosed)
 
 > **🚧 Work in Progress** – Kubernia ist in aktiver Entwicklung. Bugs und unfertige Ecken sind möglich.
 > Hast du etwas gefunden oder eine Idee? Meld dich gern in den **[GitHub Discussions](https://github.com/fluffels/kubequest/discussions)** – einfach lostippen (GitHub-Login nötig).
@@ -120,7 +122,7 @@ Kubernia ist bewusst so gebaut, dass es **so groß wie Stardew Valley** werden k
 
 ## 🤖 Gebaut von KI-Agenten
 
-Der komplette Code von Kubernia entsteht durch **autonome KI-Coding-Agenten** – kein Mensch tippt die Implementierung. Das ist nur deshalb sicher und billig, weil das Repo als **Harness** um die Agenten herum gebaut ist: klare Leitplanken, an denen ein Agent nicht vorbeikommt, statt Vertrauen in einen einzelnen guten Lauf. Die Bausteine:
+Der komplette Code von Kubernia entsteht durch **autonome KI-Coding-Agenten** – kein Mensch tippt die Implementierung. Das ist nur deshalb sicher und billig, weil das Repo als **Harness** um die Agenten herum gebaut ist: klare Leitplanken, an denen ein Agent nicht vorbeikommt, statt Vertrauen in einen einzelnen guten Lauf. Die Badges oben (gemergte PRs, geschlossene Issues) zeigen live, in welchem Umfang das tatsächlich passiert – keine feste Zahl hier im Text, die veralten könnte. Die Bausteine:
 
 - **📖 Selbstdokumentierendes Repo (SSOT im Code).** Ein Agent findet alles, was er braucht, im Repo selbst – auch ohne externes Wissen (frischer Clone, Cloud-Agent). [CLAUDE.md](CLAUDE.md) ist der Schnellstart + die Datei-für-Datei-Landkarte, [AGENTS.md](AGENTS.md) die ausführliche Arbeitsanweisung (harte Regeln, Board-Workflow, Konventionen), dazu **modul-lokale** `AGENTS.md` (z.B. in `src/content/`), die nur gelesen werden, wenn man im jeweiligen Bereich arbeitet (Kontext als Token-Grenze).
 - **🗂️ Board-getriebener Ein-Ticket-Workflow.** Der Backlog lebt als **GitHub Issues** + Project-Board; eine [deterministische Auswahl-Regel](docs/ticket-reihenfolge.md) (Prio → niedrigste Nummer) sagt, was als Nächstes dran ist. Ein Agent nimmt **genau ein** Ticket, arbeitet es end-to-end ab (umsetzen → Gates grün → im Browser verifizieren → nach `main` → Issue schließen) und pflegt danach das Board.
