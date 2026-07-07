@@ -1,5 +1,5 @@
 {
-  "name": "KubeQuest Dev",
+  "name": "Kubernia Dev",
   "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {}

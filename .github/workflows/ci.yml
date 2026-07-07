@@ -87,7 +87,7 @@ jobs:
       - name: Offline-Build als Artefakt hochladen
         uses: actions/upload-artifact@v7
         with:
-          name: kubequest-offline
+          name: kubernia-offline
           path: dist-offline/index.html
           if-no-files-found: error
 
@@ -107,7 +107,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: kubequest-smoke-trace
+          name: kubernia-smoke-trace
           path: test-results/
           if-no-files-found: ignore
 
@@ -207,7 +207,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: kubequest-duplication-report
+          name: kubernia-duplication-report
           path: jscpd-report/
           if-no-files-found: warn
 
@@ -243,7 +243,7 @@ jobs:
       - name: Dev-Panel-Build als Artefakt hochladen
         uses: actions/upload-artifact@v7
         with:
-          name: kubequest-devpanel
+          name: kubernia-devpanel
           path: dist-devpanel/index.html
           if-no-files-found: error
 
@@ -288,7 +288,7 @@ jobs:
           # in ein User-Project V2 schreiben – dafür ein PAT mit project-Scope als Secret
           # PROJECT_TOKEN. Fehlt es, wird nur gewarnt (siehe set_board_prio unten).
           PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-          # IDs des KubeQuest-Backlog-Boards + Prio-Feld/Option (stabile Node-IDs,
+          # IDs des Kubernia-Backlog-Boards + Prio-Feld/Option (stabile Node-IDs,
           # siehe docs/ticket-reihenfolge.md › Priorität pflegen).
           PROJECT_ID: PVT_kwHOD8746c4Barq_
           PRIO_FIELD_ID: PVTSSF_lAHOD8746c4Barq_zhXBLXs
