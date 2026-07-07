@@ -218,6 +218,28 @@ button.danger:hover { background: var(--bad); color: #1a0606; filter: none; }
 .stack-cachetip { margin: 8px 0; padding: 8px 10px; background: var(--panel2); border-radius: 8px; line-height: 1.5; }
 .stack-feedback.good button { margin-top: 8px; }
 
+/* ===== Pod-Packspiel (#567) ===== */
+.packing-area { display: flex; gap: 18px; flex-wrap: wrap; }
+.packing-nodes { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 10px; }
+.packing-node {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 0.85em;
+}
+.packing-bar-label { margin-top: 4px; }
+.packing-bar { height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; margin: 2px 0; }
+.packing-bar-fill { height: 100%; background: var(--good); }
+.packing-node-pods { margin-top: 6px; font-size: 0.9em; }
+.packing-pods { flex: 1; min-width: 260px; display: flex; flex-direction: column; gap: 8px; }
+.packing-pod { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.packing-pod button { font-size: 0.85em; }
+.packing-feedback { min-height: 1.4em; margin-top: 12px; padding: 8px 12px; border-radius: 8px; font-size: 0.9em; line-height: 1.4; }
+.packing-feedback.bad { background: rgba(255,123,123,0.18); border: 1px solid var(--bad); }
+.packing-feedback.good { background: rgba(123,255,150,0.12); border: 1px solid var(--good); }
+.packing-feedback.good button { margin-top: 8px; }
+
 /* #219: Lernstand-Abzeichen für Übungen (Stapel-Runden + Drills) – „kannst du schon / üben wir nochmal". */
 .mastery-badge { display: inline-block; font-size: 0.72em; font-weight: bold; padding: 1px 7px; border-radius: 10px; vertical-align: middle; white-space: nowrap; }
 .mastery-badge.new { background: var(--panel2); color: var(--text-dim); }

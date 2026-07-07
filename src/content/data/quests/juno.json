@@ -920,5 +920,29 @@
         ]
       }
     ]
+  },
+  {
+    "id": "k8s-pod-packing",
+    "title": "Der Scheduler in Aktion",
+    "giver": "juno",
+    "topic": "troubleshooting",
+    "rewardXp": 20,
+    "rewardCoins": 15,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "juno",
+        "lines": [
+          "Jetzt weißt du, was <b>requests</b> und Node-<b>Kapazität</b> sind – Zeit, selbst Scheduler zu spielen. Ich hab da ein kleines <b>Minispiel</b>: Pods auf Nodes verteilen, so wie es der echte Scheduler tut.",
+          "So rufst du es auf: <b>Sprich mich an</b> (Taste <b>E</b>), dann wähle im Menü <b>🎮 Pod-Packspiel</b> und spiel es einmal ganz durch. Manchmal passt ein Pod auf KEINEN Node – dann ist „Pending“ die richtige Antwort, kein Fehler. Los geht's!"
+        ]
+      },
+      {
+        "type": "minigame",
+        "npc": "juno",
+        "game": "packing",
+        "brief": "Pod-Packspiel spielen"
+      }
+    ]
   }
 ]

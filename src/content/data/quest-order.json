@@ -34,6 +34,7 @@
   "dns-service-discovery",
   "k8s-service-endpoints",
   "k8s-resource-limits",
+  "k8s-pod-packing",
   "gitops-argocd-intro",
   "gitops-self-sync",
   "gitops-drift-detection",
