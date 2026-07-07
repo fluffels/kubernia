@@ -24,6 +24,7 @@
     "typecheck:strict": "tsc -p tsconfig.strict.json",
     "check:arch": "depcruise src --config .dependency-cruiser.cjs",
     "check:size": "node scripts/check-size.mjs",
+    "check:contextsize": "node scripts/check-context-size.mjs",
     "check:docmap": "node scripts/check-docmap.mjs",
     "check:docdrift": "node scripts/check-docdrift.mjs",
     "check:diffsize": "node scripts/check-diffsize.mjs",
@@ -36,7 +37,7 @@
     "lint:prune": "eslint . --prune-suppressions",
     "lint:suppress": "eslint . --suppress-rule complexity --suppress-rule max-depth --suppress-rule max-lines-per-function",
     "quiz:golden": "node scripts/quiz-golden.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run check:arch && npm run check:size && npm run check:anysuppress && npm run check:docmap && npm run check:docdrift && npm run check:lockfile && npm run check:diffsize && npm test",
+    "verify": "npm run typecheck && npm run lint && npm run check:arch && npm run check:size && npm run check:contextsize && npm run check:anysuppress && npm run check:docmap && npm run check:docdrift && npm run check:lockfile && npm run check:diffsize && npm test",
     "verify:full": "npm run verify && npm run test:coverage && npm run build && npm run build:offline && npm run check:bundle && npm run test:smoke"
   },
   "dependencies": {
