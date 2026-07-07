@@ -22,11 +22,51 @@ Ein **2D-Lernspiel** (gebaut mit **Phaser 3**) für Docker, Kubernetes, Helm, Te
 
 Kubernia ist mehr als ein Lernspiel – es ist ein **Vorzeigeprojekt in drei Dimensionen**. Wer hier reinschaut, findet:
 
-1. **🎮 Ein echtes Lernspiel** – Docker/K8s/Helm/Terraform hands-on, mit Story, Spaced Repetition und 10 aufeinander aufbauenden Lern-Phasen. → [Das Spiel](#-das-spiel)
+1. **🤖 Vollständig von KI-Coding-Agenten gebaut – und abgesichert** – der komplette Code entsteht durch autonome Agenten. Was das sicher und billig macht, sind die Leitplanken: selbstdokumentierendes Repo, Board-Workflow mit Kollisionsschutz und ein Netz aus automatischen Gates. → [Gebaut von KI-Agenten](#-gebaut-von-ki-agenten)
 2. **🏛️ Architektur & Code-Qualität als Verkaufsargument** – erzwungene Schichtung, Content-as-Data, versionierte Persistenz (Save bricht nie), `strict` TypeScript ohne `any`, taktisches DDD und Fitness-Functions als CI-Gates. → [Architektur & Qualität](#-architektur--qualität)
-3. **🤖 Vollständig von KI-Coding-Agenten gebaut – und abgesichert** – der komplette Code entsteht durch autonome Agenten. Was das sicher und billig macht, sind die Leitplanken: selbstdokumentierendes Repo, Board-Workflow mit Kollisionsschutz und ein Netz aus automatischen Gates. → [Gebaut von KI-Agenten](#-gebaut-von-ki-agenten)
+3. **🎮 Ein echtes Lernspiel** – Docker/K8s/Helm/Terraform hands-on, mit Story, Spaced Repetition und 10 aufeinander aufbauenden Lern-Phasen. → [Das Spiel](#-das-spiel)
 
 Die drei Abschnitte darunter erzählen jeden dieser Punkte im Detail.
+
+---
+
+## 🤖 Gebaut von KI-Agenten
+
+Der komplette Code von Kubernia entsteht durch **autonome KI-Coding-Agenten** – kein Mensch tippt die Implementierung. Das ist nur deshalb sicher und billig, weil das Repo als **Harness** um die Agenten herum gebaut ist: klare Leitplanken, an denen ein Agent nicht vorbeikommt, statt Vertrauen in einen einzelnen guten Lauf. Die Badges oben (gemergte PRs, geschlossene Issues) zeigen live, in welchem Umfang das tatsächlich passiert – keine feste Zahl hier im Text, die veralten könnte.
+
+### Der Ticket-Lebenszyklus
+
+![Lebenszyklus eines kubequest-Tickets: Board lesen → claimen → eigener Worktree → Umsetzen (TDD) → lokale Gates → Pull Request → CI-Pipeline → CI-Feedback → Merge → Aufräumen. Beide Rückkopplungsschleifen bei roten Gates führen zurück zu „Umsetzen", nicht zu einem neuen Ticket; ein Post-hoc-Alarm öffnet ein Issue, falls main trotz grüner Checks rot wird.](docs/img/agenten-lebenszyklus.png)
+
+Ein Agent nimmt **genau ein** Ticket vom Board, arbeitet es end-to-end ab und räumt danach auf. Beide Rückkopplungsschleifen – lokale Gates und CI – führen zurück zum **Umsetzen**-Schritt, nie zu einem neuen Ticket.
+
+### Die Bausteine
+
+- **📖 Selbstdokumentierendes Repo (SSOT im Code).** Ein Agent findet alles, was er braucht, im Repo selbst – auch ohne externes Wissen (frischer Clone, Cloud-Agent). [CLAUDE.md](CLAUDE.md) ist der Schnellstart + die Datei-für-Datei-Landkarte, [AGENTS.md](AGENTS.md) die ausführliche Arbeitsanweisung (harte Regeln, Board-Workflow, Konventionen), dazu **modul-lokale** `AGENTS.md` (z.B. in `src/content/`), die nur gelesen werden, wenn man im jeweiligen Bereich arbeitet (Kontext als Token-Grenze).
+- **🗂️ Board-getriebener Ein-Ticket-Workflow.** Der Backlog lebt als **GitHub Issues** + Project-Board; eine [deterministische Auswahl-Regel](docs/ticket-reihenfolge.md) (Prio → niedrigste Nummer) sagt, was als Nächstes dran ist. Ein Agent nimmt **genau ein** Ticket, arbeitet es end-to-end ab (umsetzen → Gates grün → im Browser verifizieren → nach `main` → Issue schließen) und pflegt danach das Board.
+- **🚦 Kollisionsschutz für parallele Agenten.** Mehrere Agenten können gleichzeitig laufen, ohne sich in die Quere zu kommen: Ein Ticket wird per **Assignee** als „in Arbeit" markiert (der einzige Zustand, den ein paralleler Agent sieht) und in einem **eigenen `git worktree`** auf eigenem Branch bearbeitet – so teilen sich zwei Chats nie dasselbe Arbeitsverzeichnis.
+- **🛡️ Automatische Gates als Sicherheitsnetz.** Genau die [Fitness-Functions unten](#-architektur--qualität) (typecheck/lint/arch/size/docmap/docdrift/test/smoke/audit) sind das, was autonome Entwicklung absichert: Ein Agent kann keinen Schichtbruch, keinen `any`, kein God-File, keine veraltete Doku-Landkarte und keine gebrochene Save-Migration unbemerkt einschleusen – der Build wird rot. **Determinismus** (seedbare Zufälligkeit statt `Math.random` in der Domäne) und die **Save-nie-brechen-Regel** gehören zum selben Netz.
+- **🪝 Hooks.** Kein Claude-Code-natives Hook-System im Einsatz, sondern ein klassischer Git-Hook (`.githooks/pre-push`, über `core.hooksPath`): fährt `npm run verify` lokal vor jedem Push auf `main`. Seit **serverseitiges PR-Gating** greift (Required Checks, `enforce_admins`), ist der Hook nur noch ein *sekundäres* Netz – die eigentliche Durchsetzung liegt auf dem PR, nicht mehr lokal.
+- **🧩 Skills für wiederkehrende Abläufe.** Der immer gleiche Ticket-Ablauf ist als **Skill** kodifiziert (`kubequest`), ebenso das Bearbeiten des Forums (`forum`, GitHub Discussions mit Freigabe-Stopp vor dem Posten) – reproduzierbare Abläufe statt freihändiger Improvisation.
+- **🔌 MCP, gezielt statt global.** Nur ein projekt-scoped Server (`pixellab` für Pixel-Art-Generierung) in `.mcp.json`, Token über Umgebungsvariable – kein globales Tooling, das jede Session automatisch mitschleppt.
+- **📐 ADRs statt nachträglicher Rechtfertigung.** Grundsatzentscheidungen (Engine, kein Backend, der Harness selbst, PR-Gating …) werden **vor** der Umsetzung als [Architecture Decision Record](docs/adr/) festgehalten – nachvollziehbar, warum eine Alternative verworfen wurde, nicht nur was am Ende dabei rauskam.
+
+### Wie das gewachsen ist
+
+Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehrenden Muster: Jede neue Leitplanke fängt als **Bitte** an – eine dokumentierte Konvention in `AGENTS.md`, ein lokaler Hook, der sich mit `--no-verify` umgehen lässt – und wird erst zur **Mauer**, sobald sie sich im Alltag bewährt hat: ein serverseitig erzwungenes CI-Gate, an dem kein Agent mehr vorbeikommt. Ganz am Anfang liefen Agenten entsprechend freier (Direkt-Push auf `main` war erlaubt, ein Pflicht-Worktree war noch keine Regel). Der Weg von diesem lockeren Start (**Vibe Coding**) hin zu einem Ablauf, in dem Mauern statt Bitten die Arbeit tragen (**Agentic Engineering**), lässt sich an den eigenen Commits und ADRs nachvollziehen, nicht nur behaupten:
+
+| Datum | Was passierte |
+|---|---|
+| 12.06.2026 | Projektstart |
+| 15.06.2026 | `AGENTS.md` + Kollisionsschutz für parallele Agenten dokumentiert – schon am dritten Tag, aber noch **Bitte** |
+| 16.06.2026 | erste ADRs (Engine, kein Backend, kein Multiplayer) |
+| 30.06.2026 | Worktree-Konvention vereinheitlicht, weil paralleles Arbeiten längst Alltag war |
+| 01.07.2026 | der Harness selbst wird explizite Architekturentscheidung ([ADR 0008](docs/adr/0008-ki-agenten-harness.md)) – erst nachdem er sich wochenlang informell bewährt hatte |
+| 03.07.2026 | Direkt-Push auf `main` abgeschafft, PR-Gating mit Required Checks serverseitig erzwungen ([ADR 0009](docs/adr/0009-pr-gating-required-checks.md)) – aus der Bitte wird **Mauer** |
+
+**Warum das funktioniert:** Nicht ein einzelner cleverer Prompt macht autonome KI-Entwicklung sicher, sondern die **Leitplanken drumherum** – SSOT-Doku, ein enger Ticket-Fokus, Kollisionsschutz und ein Gate-Netz, das jeden Fehler an der Grenze abfängt. Genau diese Kombination ist selbst ein Architekturziel (siehe [arc42 §8](docs/arc42-architektur.md)).
+
+> 📝 Die **kanonische Harness-Tiefendoku** — der KI-Agenten-Harness als System, „wie + warum" an einer Stelle — steht in **[docs/agent-harness.md](docs/agent-harness.md)**, konkrete Einzelfragen dazu in der **[Harness-FAQ](docs/agent-harness-faq.md)**. Beide sind die erklärende Gesamtsicht; die operative Arbeitsanweisung bleibt [AGENTS.md](AGENTS.md), der Schnellstart + die Datei-Landkarte [CLAUDE.md](CLAUDE.md).
 
 ---
 
@@ -117,22 +157,6 @@ Kubernia ist bewusst so gebaut, dass es **so groß wie Stardew Valley** werden k
   | `npm audit --omit=dev` | Security-Gate über die ausgelieferten Produktiv-Deps |
 
 **Mehr Tiefe:** die vollständige Architektur-Gesamtsicht nach **arc42** steht in [docs/arc42-architektur.md](docs/arc42-architektur.md); dazu laufen wiederkehrende, doku-unabhängige **iSAQB-Analysen** — [Runde 1](docs/architektur-analyse-2026-07-iSAQB.md) und [Runde 2](docs/architektur-analyse-2026-07-02-iSAQB.md) (je Schicht) sowie die breitere [Runde 3](docs/architektur-analyse-2026-07-03-iSAQB.md) (ADRs kritisch hinterfragt, DDD, Teststrategie, Harness-Regressions-Matrix). Die bewusst festgehaltenen Grundsatzentscheidungen liegen als **ADRs** unter [docs/adr/](docs/adr/) (Engine Phaser, kein Backend/DB, kein Multiplayer, Skalierungs-Fundament).
-
----
-
-## 🤖 Gebaut von KI-Agenten
-
-Der komplette Code von Kubernia entsteht durch **autonome KI-Coding-Agenten** – kein Mensch tippt die Implementierung. Das ist nur deshalb sicher und billig, weil das Repo als **Harness** um die Agenten herum gebaut ist: klare Leitplanken, an denen ein Agent nicht vorbeikommt, statt Vertrauen in einen einzelnen guten Lauf. Die Badges oben (gemergte PRs, geschlossene Issues) zeigen live, in welchem Umfang das tatsächlich passiert – keine feste Zahl hier im Text, die veralten könnte. Die Bausteine:
-
-- **📖 Selbstdokumentierendes Repo (SSOT im Code).** Ein Agent findet alles, was er braucht, im Repo selbst – auch ohne externes Wissen (frischer Clone, Cloud-Agent). [CLAUDE.md](CLAUDE.md) ist der Schnellstart + die Datei-für-Datei-Landkarte, [AGENTS.md](AGENTS.md) die ausführliche Arbeitsanweisung (harte Regeln, Board-Workflow, Konventionen), dazu **modul-lokale** `AGENTS.md` (z.B. in `src/content/`), die nur gelesen werden, wenn man im jeweiligen Bereich arbeitet (Kontext als Token-Grenze).
-- **🗂️ Board-getriebener Ein-Ticket-Workflow.** Der Backlog lebt als **GitHub Issues** + Project-Board; eine [deterministische Auswahl-Regel](docs/ticket-reihenfolge.md) (Prio → niedrigste Nummer) sagt, was als Nächstes dran ist. Ein Agent nimmt **genau ein** Ticket, arbeitet es end-to-end ab (umsetzen → Gates grün → im Browser verifizieren → nach `main` → Issue schließen) und pflegt danach das Board.
-- **🚦 Kollisionsschutz für parallele Agenten.** Mehrere Agenten können gleichzeitig laufen, ohne sich in die Quere zu kommen: Ein Ticket wird per **Assignee** als „in Arbeit" markiert (der einzige Zustand, den ein paralleler Agent sieht) und in einem **eigenen `git worktree`** auf eigenem Branch bearbeitet – so teilen sich zwei Chats nie dasselbe Arbeitsverzeichnis.
-- **🛡️ Automatische Gates als Sicherheitsnetz.** Genau die [Fitness-Functions oben](#-architektur--qualität) (typecheck/lint/arch/size/docmap/test/smoke/audit) sind das, was autonome Entwicklung absichert: Ein Agent kann keinen Schichtbruch, keinen `any`, kein God-File, keine veraltete Doku-Landkarte und keine gebrochene Save-Migration unbemerkt einschleusen – der Build wird rot. **Determinismus** (seedbare Zufälligkeit statt `Math.random` in der Domäne) und die **Save-nie-brechen-Regel** gehören zum selben Netz.
-- **🧩 Skills für wiederkehrende Abläufe.** Der immer gleiche Ticket-Ablauf ist als **Skill** kodifiziert (`kubequest`), ebenso das Bearbeiten des Forums (`forum`, GitHub Discussions mit Freigabe-Stopp vor dem Posten) – reproduzierbare Abläufe statt freihändiger Improvisation.
-
-**Warum das funktioniert:** Nicht ein einzelner cleverer Prompt macht autonome KI-Entwicklung sicher, sondern die **Leitplanken drumherum** – SSOT-Doku, ein enger Ticket-Fokus, Kollisionsschutz und ein Gate-Netz, das jeden Fehler an der Grenze abfängt. Genau diese Kombination ist selbst ein Architekturziel (siehe [arc42 §8](docs/arc42-architektur.md)).
-
-> 📝 Die **kanonische Harness-Tiefendoku** — der KI-Agenten-Harness als System, „wie + warum" an einer Stelle — steht in **[docs/agent-harness.md](docs/agent-harness.md)**. Sie ist die erklärende Gesamtsicht; die operative Arbeitsanweisung bleibt [AGENTS.md](AGENTS.md), der Schnellstart + die Datei-Landkarte [CLAUDE.md](CLAUDE.md).
 
 ---
 
