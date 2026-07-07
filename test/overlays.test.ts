@@ -35,9 +35,9 @@ describe("Overlay-Register (#505)", () => {
     );
   });
 
-  test("BLOCKING_OVERLAY_IDS = alle elf blockierenden Overlays", () => {
+  test("BLOCKING_OVERLAY_IDS = alle zwölf blockierenden Overlays", () => {
     assert.deepEqual([...BLOCKING_OVERLAY_IDS].sort(), OVERLAYS.filter(o => o.blocking).map(o => o.id).sort());
-    assert.equal(BLOCKING_OVERLAY_IDS.length, 11, "aktuell sind alle elf Overlays blockierend (inkl. Erfolgs-Feier #314, Pod-Packspiel #567, YAML-Bausteine #568, Wunschzustand-Minispiel #570)");
+    assert.equal(BLOCKING_OVERLAY_IDS.length, 12, "aktuell sind alle zwölf Overlays blockierend (inkl. Erfolgs-Feier #314, Pod-Packspiel #567, YAML-Bausteine #568, Routing-Lotse #569, Wunschzustand-Minispiel #570)");
   });
 
   test("KEYNAV_OVERLAY_IDS schließt Terminal + Wissensrunde bewusst aus (eigene Tastatur-Handler)", () => {
@@ -47,8 +47,8 @@ describe("Overlay-Register (#505)", () => {
     assert.ok(!KEYNAV_OVERLAY_IDS.includes("overlay-review"), "Wissensrunde hat einen eigenen reviewKey-Handler");
     assert.deepEqual(
       [...KEYNAV_OVERLAY_IDS].sort(),
-      ["overlay-album", "overlay-celebrate", "overlay-driftheal", "overlay-menu", "overlay-packing", "overlay-quest", "overlay-shop", "overlay-stack", "overlay-yamlstruct"],
-      "keyNav = Stapel/Pod-Packspiel/YAML-Bausteine/Wunschzustand-Minispiel/Shop/Logbuch/Album/Menü/Erfolgs-Feier",
+      ["overlay-album", "overlay-celebrate", "overlay-driftheal", "overlay-menu", "overlay-packing", "overlay-quest", "overlay-routing", "overlay-shop", "overlay-stack", "overlay-yamlstruct"],
+      "keyNav = Stapel/Pod-Packspiel/YAML-Bausteine/Routing-Lotse/Wunschzustand-Minispiel/Shop/Logbuch/Album/Menü/Erfolgs-Feier",
     );
   });
 
