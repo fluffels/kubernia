@@ -29,6 +29,8 @@ Drei Gründe, warum die Naht bewusst am PR liegt und nicht am einzelnen Tool-Cal
 
 Lokal gibt es trotzdem etwas Ähnliches: `npm run verify` fährt der Agent selbst vor dem PR, plus der pre-push-Hook (siehe [AGENTS.md](../AGENTS.md)) als Netz — ausgelöst durch „fertig", nicht durch jeden einzelnen Edit.
 
+**Nachfrage: Wäre ein Stop-Hook (feuert, wenn der Agent seinen Turn beendet, nicht bei jedem Edit) nicht näher dran?** Das Kosten-Argument oben gilt nur für einen Hook nach jedem einzelnen Edit — bei „einmal pro Stop" fällt es weg, das ist genauso günstig wie einmal pro PR. Trotzdem bleibt ein Stop-Hook strukturell eine sehr elaborierte Bitte, keine Mauer: er läuft nur, wenn die Hook-Konfiguration im jeweiligen Worktree vorhanden ist und der Prozess nicht abstürzt, und er ist unklar darin, ob „Stop" beim autonomen Agenten zuverlässig genau dann feuert, wenn der Code wirklich PR-reif ist. Der Required Check auf dem PR bleibt die eigentliche Mauer, weil GitHub den Merge ohne ihn strukturell verweigert, unabhängig davon, ob und wie lokal geprüft wurde. Ein Stop-Hook wäre trotzdem ein sinnvoller zusätzlicher Frühindikator (Upgrade von „`npm run verify` läuft, weil es in der Anweisung steht" zu „läuft garantiert, sobald der Agent fertig ist") — er ersetzt die CI nicht, er ergänzt sie nur um schnelleres lokales Feedback. Noch nicht umgesetzt, siehe [#708](https://github.com/fluffels/kubequest/issues/708).
+
 ## Verwandte Dokumente
 
 - [agent-harness.md](agent-harness.md) — die erklärende Gesamtsicht auf den Harness
