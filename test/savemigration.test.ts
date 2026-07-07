@@ -93,15 +93,14 @@ function fixtureCompleted(name: string): string[] {
   return env.data?.completedQuests ?? [];
 }
 
-/** Wie `slugs`, aber zusätzlich OHNE die später eingeschobenen `docker-registry` (#449, Index 7)
- *  und `docker-rabbitmq` (#450, Index 8).
- *  Die ganz alten v1/v2-Fixtures stammen aus der Zeit vor ALLEN drei Docker-Einschüben
- *  (docker-common-images #448, docker-registry #449 und docker-rabbitmq #450); ihr migrierter
- *  Fortschritt überspringt alle (passierte Einschübe schicken niemanden zurück, #353). „Die ersten
+/** Wie `slugs`, aber zusätzlich OHNE die später eingeschobenen `docker-registry` (#449, Index 7),
+ *  `docker-rabbitmq` (#450, Index 8) und `k8s-yaml-struct-minigame` (#568, vor `helm-intro`).
+ *  Die ganz alten v1/v2-Fixtures stammen aus der Zeit vor all diesen Einschüben; ihr migrierter
+ *  Fortschritt überspringt sie (passierte Einschübe schicken niemanden zurück, #353). „Die ersten
  *  n erledigten Quests" ist daher die Reihenfolge ohne diese Einschübe. */
 function slugsSansRegistry(n: number): string[] {
   return KQContent.QUESTS.map(q => q.id)
-    .filter(id => id !== "docker-common-images" && id !== "docker-registry" && id !== "docker-rabbitmq")
+    .filter(id => id !== "docker-common-images" && id !== "docker-registry" && id !== "docker-rabbitmq" && id !== "k8s-yaml-struct-minigame")
     .slice(0, n);
 }
 
@@ -257,11 +256,11 @@ test("v2 (alle Quests durch): Endzustand + vollständige completedQuests-Migrati
   expect(Game.allQuestsDone()).toBe(true);
 
   // Alle alten numerischen IDs (+ später als Slug ergänzte Quests) → die neuen Slugs.
-  // #449/#450/#461: docker-registry, docker-rabbitmq UND aufbau-sturm wurden NACH diesem
-  // „alles durch"-Stand eingeschoben/angehängt; ein solcher Alt-Stand kennt sie folgerichtig
-  // nicht (sie bleiben ungespielt, niemand wird zurückgeschickt). Der Endzustand
+  // #449/#450/#461/#568: docker-registry, docker-rabbitmq, aufbau-sturm UND k8s-yaml-struct-minigame
+  // wurden NACH diesem „alles durch"-Stand eingeschoben/angehängt; ein solcher Alt-Stand kennt sie
+  // folgerichtig nicht (sie bleiben ungespielt, niemand wird zurückgeschickt). Der Endzustand
   // (questIdx == length, currentQuestId "") bleibt trotzdem erhalten.
-  const addedAfterFixture = ["docker-registry", "docker-rabbitmq", "storage-init", "k8s-pod-packing", "aufbau-sturm", "aufbau-control-plane", "aufbau-worker-join", "aufbau-dienste", "aufbau-cluster-als-code"];
+  const addedAfterFixture = ["docker-registry", "docker-rabbitmq", "storage-init", "k8s-pod-packing", "k8s-yaml-struct-minigame", "aufbau-sturm", "aufbau-control-plane", "aufbau-worker-join", "aufbau-dienste", "aufbau-cluster-als-code"];
   expect(Game.state.completedQuests.length).toBe(KQContent.QUESTS.length - addedAfterFixture.length);
   expect(new Set(Game.state.completedQuests)).toEqual(
     new Set(KQContent.QUESTS.filter(q => !addedAfterFixture.includes(q.id)).map(q => q.id)),
@@ -284,10 +283,11 @@ test("v2 (alle Quests durch): Endzustand + vollständige completedQuests-Migrati
 test("v3 (voller Stand, vor #410): Einzel-Quest -> activeQuests-Set, verlustfrei migriert + gesichert", () => {
   loadFixture("savegame-v3-current.json");
 
-  // Fünf mitten eingeschobene Quests vor gitops-argocd-intro: #448 docker-common-images,
-  // #449 docker-registry, #450 docker-rabbitmq, #273 helm-templates, #567 k8s-pod-packing →
-  // Index 31 + 5 = 36; das Completed-Set des Alt-Stands bleibt verlustfrei unverändert.
-  expect(Game.questIdx()).toBe(36);
+  // Sechs mitten eingeschobene Quests vor gitops-argocd-intro: #448 docker-common-images,
+  // #449 docker-registry, #450 docker-rabbitmq, #273 helm-templates, #567 k8s-pod-packing,
+  // #568 k8s-yaml-struct-minigame → Index 31 + 6 = 37; das Completed-Set des Alt-Stands
+  // bleibt verlustfrei unverändert.
+  expect(Game.questIdx()).toBe(37);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.questStep()).toBe(1);
   expect(Game.state.completedQuests).toEqual(fixtureCompleted("savegame-v3-current.json"));
@@ -322,8 +322,9 @@ test("v4 (vor #413): mehrere offene Quests bleiben, gameDays default 0, migriert
   loadFixture("savegame-v4-current.json");
 
   // #448 docker-common-images + #449 docker-registry + #450 docker-rabbitmq + #273 helm-templates
-  // + #567 k8s-pod-packing: fünf Einschübe vor gitops-argocd-intro → 31 + 5 = 36.
-  expect(Game.questIdx()).toBe(36);
+  // + #567 k8s-pod-packing + #568 k8s-yaml-struct-minigame: sechs Einschübe vor gitops-argocd-intro
+  // → 31 + 6 = 37.
+  expect(Game.questIdx()).toBe(37);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.questStep()).toBe(1);
   expect(Game.state.completedQuests).toEqual(fixtureCompleted("savegame-v4-current.json"));
@@ -356,8 +357,8 @@ test("v5 (vor #559): gameDays exakt, Arbeitskopie-Felder fallen weg, migriert + 
   loadFixture("savegame-v5-current.json");
 
   // #448 docker-common-images + #449 docker-registry + #450 docker-rabbitmq + #273 helm-templates
-  // + #567 k8s-pod-packing → 31 + 5 = 36.
-  expect(Game.questIdx()).toBe(36);
+  // + #567 k8s-pod-packing + #568 k8s-yaml-struct-minigame → 31 + 6 = 37.
+  expect(Game.questIdx()).toBe(37);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.state.activeQuests).toEqual({
     "gitops-argocd-intro": { step: 1, task: 0 },
@@ -390,7 +391,7 @@ test("v6 (aktueller Stand): abgeleiteter Cursor, kein persistiertes questStep, k
   loadFixture("savegame-v6-current.json");
 
   // currentQuestId ist die Autorität; questIdx()/questStep()/taskIdx() leiten daraus ab.
-  expect(Game.questIdx()).toBe(36);
+  expect(Game.questIdx()).toBe(37);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.questStep()).toBe(1);
   expect(Game.taskIdx()).toBe(0);

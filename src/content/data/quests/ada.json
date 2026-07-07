@@ -157,6 +157,31 @@
     ]
   },
   {
+    "id": "k8s-yaml-struct-minigame",
+    "title": "Adas Bausteine",
+    "giver": "ada",
+    "topic": "yaml",
+    "rewardXp": 20,
+    "rewardCoins": 15,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "ada",
+        "lines": [
+          "Noch was, bevor du weiterziehst: Bei YAML entscheidet allein die <b>Einrückung</b>, was zu was gehört. Zwei Leerzeichen pro Ebene, NIEMALS ein Tab – sonst weist der Cluster deine Karte ab.",
+          "Ich hab ein <b>Minispiel</b> dafür: Die Zeilen eines Manifests liegen durcheinander, du setzt sie <b>in Reihenfolge und auf der richtigen Ebene</b> wieder zusammen.",
+          "So rufst du es auf: <b>Sprich mich an</b> (Taste <b>E</b>), dann wähle im Menü <b>🎮 YAML-Bausteine</b> und spiel es einmal ganz durch. Los, Landratte!"
+        ]
+      },
+      {
+        "type": "minigame",
+        "npc": "ada",
+        "game": "yamlstruct",
+        "brief": "YAML-Bausteine spielen"
+      }
+    ]
+  },
+  {
     "id": "git-version-control",
     "title": "Seekarten versionieren",
     "giver": "ada",
