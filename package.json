@@ -46,7 +46,7 @@
     "@axe-core/playwright": "^4.12.1",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.61.1",
-    "@types/node": "^26.0.1",
+    "@types/node": "^26.1.0",
     "@vitest/coverage-v8": "^4.1.10",
     "dependency-cruiser": "^18.0.0",
     "eslint": "^10.6.0",
