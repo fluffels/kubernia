@@ -1286,5 +1286,30 @@
         ]
       }
     ]
+  },
+  {
+    "id": "k8s-routing-lotse-minigame",
+    "title": "Der Routing-Lotse",
+    "giver": "ada",
+    "topic": "security",
+    "rewardXp": 25,
+    "rewardCoins": 20,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "ada",
+        "lines": [
+          "Eine letzte Übung, bevor du weiterziehst: Ingress, Service und Pod-Labels kennst du jetzt einzeln – aber lotst eine Anfrage wirklich sicher durch alle drei?",
+          "Ich hab ein <b>Minispiel</b> dafür: Du bekommst Anfragen, Ingress-Regeln, Services mit Selectors und ein paar Pods. Lotse jede Anfrage über die richtige Route zum richtigen Pod – oder erkenne, wenn ein Service <b>keine passenden Endpoints</b> hat.",
+          "So rufst du es auf: <b>Sprich mich an</b> (Taste <b>E</b>), dann wähle im Menü <b>🎮 Routing-Lotse</b> und spiel es einmal ganz durch. Auf geht's, Lotse!"
+        ]
+      },
+      {
+        "type": "minigame",
+        "npc": "ada",
+        "game": "routing",
+        "brief": "Routing-Lotse spielen"
+      }
+    ]
   }
 ]
