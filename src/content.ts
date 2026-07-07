@@ -16,6 +16,7 @@ import { POD_PACKING_ROUNDS } from "./content/podpacking";
 import { YAML_STRUCT_ROUNDS } from "./content/yamlstruct";
 import { ROUTING_ROUNDS } from "./content/routing";
 import { DRIFT_HEAL_ROUNDS } from "./content/driftheal";
+import { RBAC_KEYRING_ROUNDS } from "./content/rbacKeyring";
 import type { ContentBundle } from "./content/validate";
 
 // Quests, Themen, Quiz- und Befehls-Karten sind seit #435 LAZY: die Fassade exponiert sie
@@ -23,7 +24,7 @@ import type { ContentBundle } from "./content/validate";
 // auslösen (memoisiert im Loader). Die öffentliche API `KQContent.QUESTS` etc. bleibt
 // unverändert synchron. NPCS/SMALLTALK bleiben eager (winzig, schon beim Boot gebraucht).
 export const KQContent = {
-  RANKS, SHOP, NPCS, SMALLTALK, DRILLS, PRACTICE, STACK_ROUNDS, POD_PACKING_ROUNDS, YAML_STRUCT_ROUNDS, ROUTING_ROUNDS, DRIFT_HEAL_ROUNDS, corruptImage, groupQuestsByTopic,
+  RANKS, SHOP, NPCS, SMALLTALK, DRILLS, PRACTICE, STACK_ROUNDS, POD_PACKING_ROUNDS, YAML_STRUCT_ROUNDS, ROUTING_ROUNDS, DRIFT_HEAL_ROUNDS, RBAC_KEYRING_ROUNDS, corruptImage, groupQuestsByTopic,
   get QUESTS() { return getQuests(); },
   get QUEST_TOPICS() { return getQuestTopics(); },
   get CRAB_QUIZ() { return getQuizCards(); },
