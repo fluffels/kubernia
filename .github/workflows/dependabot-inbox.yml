@@ -1,0 +1,115 @@
+name: Dependabot-Inbox
+
+# Sammelt offene Dependabot-PRs automatisch in EINEM Board-Ticket mit Prio Kritisch
+# (#712), damit sie beim "nächstes Ticket"-Griff (docs/ticket-reihenfolge.md) ganz
+# oben stehen, statt nur aufzufallen, wenn jemand explizit danach fragt.
+#
+# Dedupliziert über den Titel-Präfix "🤖 Dependabot-PRs auflösen" (dasselbe Muster
+# wie forum-inbox.yml/#644 und der alarm-red-main-Job in ci.yml/#658): existiert das
+# Sammel-Issue schon, wird nur der PR-Stand per Kommentar aktualisiert statt ein
+# zweites Issue anzulegen. Sind KEINE Dependabot-PRs mehr offen, wird ein noch
+# offenes Sammel-Issue automatisch geschlossen (kein vergessenes Kritisch-Ticket
+# ohne Grund).
+#
+# ⚠️ Braucht dasselbe Secret PROJECT_TOKEN (PAT mit project-Scope) wie forum-inbox.yml
+# – das Standard-GITHUB_TOKEN kann kein User-Project V2 beschreiben. Fehlt es, wird
+# nur gewarnt (das Sammel-Issue entsteht trotzdem, sortiert dann ohne Prio).
+
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  inbox:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sammel-Issue anlegen, aktualisieren oder schließen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          # Board-Prio setzen (#712, analog #644/#658). Das Standard-GITHUB_TOKEN kann
+          # NICHT in ein User-Project V2 schreiben – dafür ein PAT mit project-Scope
+          # als Secret PROJECT_TOKEN. Fehlt es, wird nur gewarnt (siehe set_board_prio).
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          # IDs des Kubernia-Backlog-Boards + Prio-Feld/Option (stabile Node-IDs,
+          # siehe docs/ticket-reihenfolge.md › Priorität pflegen).
+          PROJECT_ID: PVT_kwHOD8746c4Barq_
+          PRIO_FIELD_ID: PVTSSF_lAHOD8746c4Barq_zhXBLXs
+          PRIO_KRITISCH_OPTION: 0663cd9e
+          INBOX_LABEL: area:architektur
+        run: |
+          set -euo pipefail
+          marker="🤖 Dependabot-PRs auflösen"
+
+          # Setzt das Board-Feld `Prio` des frisch angelegten Sammel-Issues auf
+          # "Kritisch". addProjectV2ItemById ist idempotent: ist das Issue schon per
+          # Board-„Auto-add" drauf, kommt einfach die bestehende Item-ID zurück – der
+          # async-Race ist damit egal.
+          set_board_prio() {
+            local issue_url="$1"
+            if [ -z "${PROJECT_TOKEN:-}" ]; then
+              echo "::warning::PROJECT_TOKEN-Secret fehlt – Board-Prio für ${issue_url} nicht gesetzt (Sammel-Issue sortiert ohne Prio ganz unten). PAT mit project-Scope als Secret PROJECT_TOKEN hinterlegen."
+              return 0
+            fi
+            local content_id
+            content_id=$(gh issue view "$issue_url" --repo "$REPO" --json id --jq .id)
+            local item_id
+            item_id=$(GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
+              -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }' \
+              -f p="$PROJECT_ID" -f c="$content_id" \
+              --jq '.data.addProjectV2ItemById.item.id')
+            GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
+              -f query='mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' \
+              -f p="$PROJECT_ID" -f i="$item_id" -f f="$PRIO_FIELD_ID" -f o="$PRIO_KRITISCH_OPTION" >/dev/null
+            echo "Board-Prio 'Kritisch' gesetzt für ${issue_url} (item ${item_id})."
+          }
+
+          count=$(gh pr list --repo "$REPO" --state open --author "app/dependabot" --json number --jq 'length')
+
+          # Gibt es schon ein OFFENES Sammel-Issue? (Titel-Exakt-Match über die offenen
+          # area:architektur-Issues — dasselbe robuste Muster wie forum-inbox.yml.)
+          existing=$(gh issue list --repo "$REPO" --state open --label "$INBOX_LABEL" \
+            --json number,title \
+            --jq "[.[] | select(.title == \"$marker\")][0].number // empty")
+
+          if [ "$count" -eq 0 ]; then
+            if [ -n "$existing" ]; then
+              echo "Keine offenen Dependabot-PRs mehr – schließe Sammel-Issue #$existing."
+              gh issue close "$existing" --repo "$REPO" --reason completed \
+                --comment "Keine offenen Dependabot-PRs mehr – automatisch geschlossen."
+            else
+              echo "Keine offenen Dependabot-PRs, kein Sammel-Issue nötig."
+            fi
+            exit 0
+          fi
+
+          list=$(gh pr list --repo "$REPO" --state open --author "app/dependabot" --json number,title,url \
+            --jq '.[] | "- #\(.number) \(.title) (\(.url))"')
+
+          if [ -n "$existing" ]; then
+            echo "Bestehendes Sammel-Issue #$existing – aktualisiere PR-Liste per Kommentar."
+            gh issue comment "$existing" --repo "$REPO" \
+              --body "$(printf 'Aktueller Stand: %s offene Dependabot-PR(s).\n\n%s' "$count" "$list")"
+          else
+            echo "Lege neues Sammel-Issue an."
+            body=$(printf '%s\n' \
+              "Automatisch angelegt: **${count} offene Dependabot-PR(s)** warten auf Merge." \
+              "" \
+              "$list" \
+              "" \
+              "**Abarbeiten ohne Worktree/Code** (wie der Epic-Sonderfall, siehe AGENTS.md › Der Agent managt das Board): pro PR CI grün prüfen (\`gh pr checks <nr>\`) und mergen (\`gh pr merge <nr> --squash --delete-branch\`), danach dieses Issue schließen (\`gh issue close <nr> --reason completed\`).")
+            new_url=$(gh issue create --repo "$REPO" \
+              --title "$marker" \
+              --label "$INBOX_LABEL" \
+              --body "$body")
+            echo "Angelegt: ${new_url}"
+            # Board-Prio direkt auf "Kritisch" – nur beim NEUEN Issue, nicht beim
+            # Ergänzen eines bestehenden (das steht schon mit seiner Prio im Board).
+            set_board_prio "$new_url"
+          fi
