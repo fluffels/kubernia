@@ -159,3 +159,5 @@ export default tseslint.config(
     },
   },
 );
+
+// codeowners-verify (#723): temporaerer no-op Kommentar, dieser Test-PR wird nicht gemergt
