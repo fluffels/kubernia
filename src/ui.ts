@@ -12,6 +12,7 @@ import { minigameUI } from "./ui/minigame";
 import { podpackingUI } from "./ui/podpacking";
 import { yamlstructUI } from "./ui/yamlstruct";
 import { routingUI } from "./ui/routing";
+import { drifthealUI } from "./ui/driftheal";
 import { questlogUI } from "./ui/questlog";
 import { albumUI } from "./ui/album";
 import { shopUI } from "./ui/shop";
@@ -23,6 +24,7 @@ import type { DrillTask } from "./content/drills";
 import type { CmdCard, QuizCard } from "./content/loader";
 import type { PackingPlacement } from "./content/podpacking";
 import type { YamlLine } from "./content/yamlstruct";
+import type { DriftHealState } from "./content/driftheal";
 import type { Achievement } from "./hud/celebrate";
 
 /* ── Typen des veränderlichen UI-Zustands (#423): ersetzen die früheren `as any`.
@@ -94,6 +96,11 @@ interface ActiveRouting {
   targetService: string | null;
   roundClean?: boolean;
 }
+/** Wunschzustand-Minispiel-Zustand (#570, ui/driftheal.ts). `eventIdx` ist der Index
+ *  des laufenden Drift-Ereignisses in der Runde; `state` trägt Ist/Soll + ob der
+ *  Reconcile-Loop schon läuft. roundClean (#219) merkt, ob die Runde bisher ohne
+ *  imperativen Fehlgriff lief. */
+interface ActiveDriftHeal { round: number; score: number; state: DriftHealState; eventIdx: number; roundClean?: boolean; }
 
 export const UI = {
   dialogue: null as ActiveDialogue | null,
@@ -109,6 +116,7 @@ export const UI = {
   packing: null as ActivePacking | null,  // Pod-Packspiel (#567)
   yamlstruct: null as ActiveYamlStruct | null, // YAML-Bausteine-Minispiel (#568)
   routing: null as ActiveRouting | null,  // Routing-Lotse-Minispiel (#569)
+  driftheal: null as ActiveDriftHeal | null, // Wunschzustand-Minispiel (#570)
   failCount: 0,
   _funkExplained: new Set<string>(),      // #362: IDs der „Was ist gerade passiert?"-Erklärungen, die diese Sitzung schon gezeigt wurden (dosiert, kein Save-Feld)
   _gateClearedIdx: -1,     // questIdx, für den das Wiederholungs-Gate schon erledigt ist (#222)
@@ -128,6 +136,7 @@ export const UI = {
   ...podpackingUI,
   ...yamlstructUI,
   ...routingUI,
+  ...drifthealUI,
   ...questlogUI,
   ...albumUI,
   ...shopUI,
