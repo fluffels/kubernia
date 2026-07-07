@@ -16,5 +16,10 @@
     "id": "configmap-kasse-klartext",
     "note": "Negativ-Beispiel: Passwort im Klartext in einer ConfigMap – gehört in ein Secret.",
     "yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: kasse-config\ndata:\n  datenbank_host: db.hafen.local\n  # AUTSCH – Passwort im Klartext! Krakenfutter!\n  datenbank_passwort: fisch123"
+  },
+  {
+    "id": "pod-leuchtfeuer",
+    "note": "Ein einzelner Pod – flach, kaum Verschachtelung. Guter Einstieg in die YAML-Struktur (#568).",
+    "yaml": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: leuchtfeuer\nspec:\n  containers:\n    - name: leuchtfeuer\n      image: nginx:1.27"
   }
 ]

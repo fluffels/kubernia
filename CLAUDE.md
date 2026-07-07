@@ -129,6 +129,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/content/manifest-lib.ts`](src/content/manifest-lib.ts) | pure Domäne | Manifest-Bibliothek (#514): benannte „virtuelle Dateien" (YAML/Dockerfile/CI/Terraform) als Daten (`data/manifests/*.json`); `getManifest(id)` für Drills, `manifestRef` (`scenario.manifests`) für Quests – EINE Quelle statt TS-Monolith. |
 | [`src/content/minigame.ts`](src/content/minigame.ts) | pure Domäne | Stapel-Minispiel-Daten (Docker-Image-Schichten aufsteigend, #218) + Sturm-Image-Namen-Verfälscher. |
 | [`src/content/podpacking.ts`](src/content/podpacking.ts) | pure Domäne | Pod-Packspiel-Daten (#567): `POD_PACKING_ROUNDS` (Nodes/Pods/requests aufsteigend) + Platzier-/Kapazitäts-Kern (`canPlacePod`/`podFitsAnyNode`). |
+| [`src/content/yamlstruct.ts`](src/content/yamlstruct.ts) | pure Domäne | YAML-Bausteine-Minispiel-Daten (#568): `YAML_STRUCT_ROUNDS` (Manifest-Bibliothek-IDs, aufsteigend verschachtelt) + Struktur-Prüf-Kern (`yamlStructLines`/`checkYamlOrder`/`checkYamlDepth`). |
 | [`src/content/progression.ts`](src/content/progression.ts) | pure Domäne | Reine Inhalts-Daten: Ränge (XP-Schwellen) + Shop-Angebot. |
 | [`src/content/util.ts`](src/content/util.ts) | pure Domäne | Kleine geteilte Inhalts-Helfer (Zufall: `pick`/Range), von Drills u.a. genutzt. |
 | [`src/content/data/`](src/content/data/) | Daten | Quests/NPCs/Smalltalk/Reihenfolge/Drills/Quiz + Terraform-Konfigs (#147) + Manifeste (#514) + Funk-Erklärungen (#362) + Übungs-Pools (`practice.json`, #521) als JSON. |
@@ -226,6 +227,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/ui/radio.ts`](src/ui/radio.ts) | Präsentation | Funkgerät-Terminal (teach/drill/terminal) + freies Üben. |
 | [`src/ui/minigame.ts`](src/ui/minigame.ts) | Präsentation | Stapel-Minispiel. |
 | [`src/ui/podpacking.ts`](src/ui/podpacking.ts) | Präsentation | Pod-Packspiel (#567): Pods per Klick auf Nodes verteilen, Kapazitätsbalken, Pending-Erkennung. |
+| [`src/ui/yamlstruct.ts`](src/ui/yamlstruct.ts) | Präsentation | YAML-Bausteine-Minispiel (#568): Zeile wählen (Reihenfolge) → Ebene wählen (Einrückung), Sofort-Feedback + Tab-Distraktor. |
 | [`src/ui/questlog.ts`](src/ui/questlog.ts) | Präsentation | Logbuch-Übersicht & -Detail (DOM, #326). |
 | [`src/ui/album.ts`](src/ui/album.ts) | Präsentation | Sammelalbum/Glossar (DOM, #278): Album-Seiten je Thema + Sticker-Detail, Taste B. |
 | [`src/ui/shop.ts`](src/ui/shop.ts) | Präsentation | Shop. |
