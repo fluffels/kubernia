@@ -131,6 +131,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/content/minigame.ts`](src/content/minigame.ts) | pure Domäne | Stapel-Minispiel-Daten (Docker-Image-Schichten aufsteigend, #218) + Sturm-Image-Namen-Verfälscher. |
 | [`src/content/podpacking.ts`](src/content/podpacking.ts) | pure Domäne | Pod-Packspiel-Daten (#567): `POD_PACKING_ROUNDS` (Nodes/Pods/requests aufsteigend) + Platzier-/Kapazitäts-Kern (`canPlacePod`/`podFitsAnyNode`). |
 | [`src/content/yamlstruct.ts`](src/content/yamlstruct.ts) | pure Domäne | YAML-Bausteine-Minispiel-Daten (#568): `YAML_STRUCT_ROUNDS` (Manifest-Bibliothek-IDs, aufsteigend verschachtelt) + Struktur-Prüf-Kern (`yamlStructLines`/`checkYamlOrder`/`checkYamlDepth`). |
+| [`src/content/routing.ts`](src/content/routing.ts) | pure Domäne | Routing-Lotse-Minispiel-Daten (#569): `ROUTING_ROUNDS` (Ingress-Regeln/Services+Selector/Pods+Labels, aufsteigend) + Match-/Routing-Kern (`podMatchesSelector`/`matchingPods`/`checkIngressChoice`/`checkPodChoice`/`checkNoEndpoints`). |
 | [`src/content/progression.ts`](src/content/progression.ts) | pure Domäne | Reine Inhalts-Daten: Ränge (XP-Schwellen) + Shop-Angebot. |
 | [`src/content/util.ts`](src/content/util.ts) | pure Domäne | Kleine geteilte Inhalts-Helfer (Zufall: `pick`/Range), von Drills u.a. genutzt. |
 | [`src/content/data/`](src/content/data/) | Daten | Quests/NPCs/Smalltalk/Reihenfolge/Drills/Quiz + Terraform-Konfigs (#147) + Manifeste (#514) + Funk-Erklärungen (#362) + Übungs-Pools (`practice.json`, #521) als JSON. |
@@ -229,6 +230,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/ui/minigame.ts`](src/ui/minigame.ts) | Präsentation | Stapel-Minispiel. |
 | [`src/ui/podpacking.ts`](src/ui/podpacking.ts) | Präsentation | Pod-Packspiel (#567): Pods per Klick auf Nodes verteilen, Kapazitätsbalken, Pending-Erkennung. |
 | [`src/ui/yamlstruct.ts`](src/ui/yamlstruct.ts) | Präsentation | YAML-Bausteine-Minispiel (#568): Zeile wählen (Reihenfolge) → Ebene wählen (Einrückung), Sofort-Feedback + Tab-Distraktor. |
+| [`src/ui/routing.ts`](src/ui/routing.ts) | Präsentation | Routing-Lotse-Minispiel (#569): Anfrage wählen → optional Ingress-Regel → Pod (oder „keine Endpoints“) treffen, Sofort-Feedback. |
 | [`src/ui/questlog.ts`](src/ui/questlog.ts) | Präsentation | Logbuch-Übersicht & -Detail (DOM, #326). |
 | [`src/ui/album.ts`](src/ui/album.ts) | Präsentation | Sammelalbum/Glossar (DOM, #278): Album-Seiten je Thema + Sticker-Detail, Taste B. |
 | [`src/ui/shop.ts`](src/ui/shop.ts) | Präsentation | Shop. |

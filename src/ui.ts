@@ -11,6 +11,7 @@ import { radioUI } from "./ui/radio";
 import { minigameUI } from "./ui/minigame";
 import { podpackingUI } from "./ui/podpacking";
 import { yamlstructUI } from "./ui/yamlstruct";
+import { routingUI } from "./ui/routing";
 import { questlogUI } from "./ui/questlog";
 import { albumUI } from "./ui/album";
 import { shopUI } from "./ui/shop";
@@ -80,6 +81,19 @@ interface ActivePacking { round: number; score: number; placements: PackingPlace
  *  während ihre Tiefe gewählt wird (zwischen den beiden Schritten null). roundClean
  *  (#219) merkt, ob die Runde bisher fehlerfrei lief. */
 interface ActiveYamlStruct { round: number; score: number; target?: YamlLine[]; placed?: number; pendingText?: string | null; roundClean?: boolean; }
+/** Routing-Lotse-Minispiel-Zustand (#569, ui/routing.ts). `order` sind die noch offenen
+ *  Anfrage-Labels dieser Runde; `activeLabel`/`stage` verfolgen die gerade bearbeitete
+ *  Anfrage (erst optional „ingress", dann „pod"); `targetService` ist der dabei aufgelöste
+ *  Ziel-Service. roundClean (#219) merkt, ob die Runde bisher fehlerfrei lief. */
+interface ActiveRouting {
+  round: number;
+  score: number;
+  order: string[];
+  activeLabel: string | null;
+  stage: "ingress" | "pod" | null;
+  targetService: string | null;
+  roundClean?: boolean;
+}
 
 export const UI = {
   dialogue: null as ActiveDialogue | null,
@@ -94,6 +108,7 @@ export const UI = {
   stack: null as ActiveStack | null,      // Stapel-Minispiel
   packing: null as ActivePacking | null,  // Pod-Packspiel (#567)
   yamlstruct: null as ActiveYamlStruct | null, // YAML-Bausteine-Minispiel (#568)
+  routing: null as ActiveRouting | null,  // Routing-Lotse-Minispiel (#569)
   failCount: 0,
   _funkExplained: new Set<string>(),      // #362: IDs der „Was ist gerade passiert?"-Erklärungen, die diese Sitzung schon gezeigt wurden (dosiert, kein Save-Feld)
   _gateClearedIdx: -1,     // questIdx, für den das Wiederholungs-Gate schon erledigt ist (#222)
@@ -112,6 +127,7 @@ export const UI = {
   ...minigameUI,
   ...podpackingUI,
   ...yamlstructUI,
+  ...routingUI,
   ...questlogUI,
   ...albumUI,
   ...shopUI,
