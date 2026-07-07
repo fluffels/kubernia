@@ -6,7 +6,7 @@
  * Bewusst auch Negativ-/Grenzfälle: kaputte Deployments verdienen nichts,
  * zu wenig Dublonen -> kein Kauf, falsche Antwort -> Box zurück auf 1.
  */
-import { test, expect, beforeAll, beforeEach } from "vitest";
+import { test, expect, describe, beforeAll, afterAll, beforeEach } from "vitest";
 import { stubWindowLocalStorage, loadGameStack } from "./support/browser-env";
 import { KQContent } from "../src/content";
 import { NPC_SPAWNS, TILE, TALK_RANGE } from "../src/world/world";
@@ -437,6 +437,94 @@ test("useConsumable: ohne Bestand false, mit Bestand true + Dekrement", () => {
   Game.state.inventory["fernrohr"] = 2;
   expect(Game.useConsumable("fernrohr")).toBe(true);
   expect(Game.state.inventory["fernrohr"]).toBe(1);
+});
+
+/* ---------- Komfort-Funktionen: Kauf-/Freischalt-Mechanik (#572) ----------
+ * Noch keine echte Komfort-Funktion im SHOP (die kommt erst mit den Kindern #573/#574) –
+ * die Mechanik selbst wird hier über ein temporäres Test-Fixture-Item geprüft (an-/
+ * abgemeldet in beforeAll/afterAll, damit kein anderer Test in dieser Datei ein
+ * zusätzliches SHOP-Item sieht). */
+describe("Komfort-Funktionen: Zwei-Stufen-Gate verdienen -> kaufbar -> kaufen (#572)", () => {
+  const FIXTURE_ID = "test-comfort-fixture";
+  const UNLOCK_AT = 3;
+
+  beforeAll(() => {
+    KQContent.SHOP.push({ id: FIXTURE_ID, icon: "🧪", name: "Test-Komfort", price: 20, type: "comfort", desc: "Testfixture", unlockAt: UNLOCK_AT });
+  });
+  afterAll(() => {
+    const idx = KQContent.SHOP.findIndex(s => s.id === FIXTURE_ID);
+    if (idx >= 0) KQContent.SHOP.splice(idx, 1);
+  });
+
+  test("isComfortUnlocked: frischer Stand hat nichts verdient", () => {
+    expect(Game.isComfortUnlocked(FIXTURE_ID)).toBe(false);
+    expect(Game.state.unlockedComfort).toEqual([]);
+  });
+
+  test("recordComfortUse: zählt unter der Schwelle und schaltet GENAU bei unlockAt den Kauf frei", () => {
+    for (let i = 1; i < UNLOCK_AT; i++) {
+      expect(Game.recordComfortUse(FIXTURE_ID)).toBe(false);   // unter der Schwelle: nur zählen
+      expect(Game.state.comfortUsage[FIXTURE_ID]).toBe(i);
+      expect(Game.isComfortUnlocked(FIXTURE_ID)).toBe(false);
+    }
+    expect(Game.recordComfortUse(FIXTURE_ID)).toBe(true);       // dieser Aufruf schaltet den Kauf frei
+    expect(Game.isComfortUnlocked(FIXTURE_ID)).toBe(true);
+  });
+
+  test("recordComfortUse: bereits verdient → No-op, kein Weiterzählen", () => {
+    for (let i = 0; i < UNLOCK_AT; i++) Game.recordComfortUse(FIXTURE_ID);
+    expect(Game.isComfortUnlocked(FIXTURE_ID)).toBe(true);
+    expect(Game.recordComfortUse(FIXTURE_ID)).toBe(false);
+    expect(Game.state.comfortUsage[FIXTURE_ID]).toBe(UNLOCK_AT); // nicht weitergezählt
+  });
+
+  test("recordComfortUse: unbekanntes Item bzw. Item ohne type 'comfort' → No-op", () => {
+    expect(Game.recordComfortUse("gibtsnicht")).toBe(false);
+    expect(Game.recordComfortUse("fernrohr")).toBe(false);       // echtes Item, aber type "consumable"
+    expect(Game.state.comfortUsage["fernrohr"]).toBeUndefined();
+  });
+
+  test("buy: Kaufversuch VOR Freischaltung wird abgelehnt, ohne Dublonen abzubuchen", () => {
+    Game.state.coins = coins(1000);
+    const res = Game.buy(FIXTURE_ID);
+    expect(res.ok).toBe(false);
+    expect(res.msg).toMatch(/verdien/i);
+    expect(Game.state.coins).toBe(1000);
+    expect(Game.state.owned).not.toContain(FIXTURE_ID);
+  });
+
+  test("buy: nach Freischaltung ist der Kauf möglich, danach dauerhaft im Besitz (kein Doppelkauf)", () => {
+    Game.state.coins = coins(1000);
+    for (let i = 0; i < UNLOCK_AT; i++) Game.recordComfortUse(FIXTURE_ID);
+    const res = Game.buy(FIXTURE_ID);
+    expect(res.ok).toBe(true);
+    expect(Game.state.owned).toContain(FIXTURE_ID);
+    expect(Game.hasUpgrade(FIXTURE_ID)).toBe(true);
+    expect(Game.buy(FIXTURE_ID).ok).toBe(false);                 // schon im Besitz
+  });
+
+  test("Zähler + Freischaltung persistieren über load()", () => {
+    for (let i = 0; i < UNLOCK_AT; i++) Game.recordComfortUse(FIXTURE_ID);
+    Game.load();
+    expect(Game.state.comfortUsage[FIXTURE_ID]).toBe(UNLOCK_AT);
+    expect(Game.isComfortUnlocked(FIXTURE_ID)).toBe(true);
+  });
+
+  test("Migration: Alt-Stand ohne comfortUsage/unlockedComfort startet leer (additiv, kein Bruch)", () => {
+    Game.importData(JSON.stringify({ v: 6, data: { xp: 50 } }));
+    Game.load();
+    expect(Game.state.comfortUsage).toEqual({});
+    expect(Game.state.unlockedComfort).toEqual([]);
+    expect(Game.isComfortUnlocked(FIXTURE_ID)).toBe(false);
+  });
+
+  test("Migration: kaputte Werte fallen auf leer zurück bzw. werden gefiltert", () => {
+    Game.importData(JSON.stringify({ v: 6, data: { unlockedComfort: "alles", comfortUsage: { [FIXTURE_ID]: -1, ok: 2 } } }));
+    Game.load();
+    expect(Game.state.unlockedComfort).toEqual([]);              // kein Array -> leer
+    expect(Game.state.comfortUsage[FIXTURE_ID]).toBeUndefined(); // negativ raus
+    expect(Game.state.comfortUsage.ok).toBe(2);
+  });
 });
 
 /* ---------- Spaced Repetition (Leitner) ---------- */

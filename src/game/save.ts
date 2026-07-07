@@ -305,6 +305,11 @@ export function sanitizeState(raw: unknown): GameState {
     // #316: additives Bool-Flag wie die Abkürzungs-Freischaltung – fehlt es (Alt-Stand),
     // gilt der Default (gesperrt); ein Vielspieler schaltet es beim nächsten Befehl regulär frei.
     cmdHistoryUnlocked: safeBool(raw.cmdHistoryUnlocked, def.cmdHistoryUnlocked),
+    // #572: additive Komfort-Funktionen-Felder wie abbrevUsage/unlockedAbbrev – fehlen sie
+    // (Alt-Stand von vor der Mechanik), gilt der leere Default (kein Grandfathering nötig,
+    // es gibt noch keine echte Komfort-Funktion, die rückwirkend verdient sein könnte).
+    comfortUsage: sanitizeCountMap(raw.comfortUsage),
+    unlockedComfort: safeStrArray(raw.unlockedComfort),
     stats: sanitizeStats(def.stats, raw.stats),
     lastSeen: safeCount(raw.lastSeen, def.lastSeen),
     // Snapshot ist die serialisierte Sim-Form: gegen die SSOT (den Simulator) härten (#586),

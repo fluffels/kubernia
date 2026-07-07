@@ -2,6 +2,7 @@
  * Abkürzungen (#287/#297/#313) und die ↑/↓-Befehlshistorie des Funkgerät-Terminals (#316).
  * Beide folgen demselben Muster: additives Flag/Array, das ein Alt-Stand regulär
  * nachverdient (kein Bruch, kein Versions-Bump). Anwendungsschicht, Phaser-frei. */
+import { KQContent } from "../content";
 import { part, ALL_ABBREV_UNLOCKED, ABBREV_EARN_THRESHOLD, CMD_HISTORY_UNLOCK_AT } from "./shared";
 
 /** Freischalt-Methoden der Game-Fassade (Abkürzungen + Befehlshistorie). */
@@ -55,5 +56,40 @@ export const unlocksBundle = part({
     this.state.cmdHistoryUnlocked = true;
     this.save();
     return true;
+  },
+
+  /* ---------- Komfort-Funktionen: Kauf-/Freischalt-Mechanik (#572) ----------
+   * Zwei-Stufen-Gate, verallgemeinert aus dem Abkürzungs-/Befehlshistorie-Muster oben:
+   * 1) Nutzung zählen -> ab der im SHOP-Item hinterlegten Schwelle (`unlockAt`) wird der
+   *    KAUF freigeschaltet (unlockedComfort) – die Funktion ist NOCH NICHT aktiv.
+   * 2) Der Kauf selbst läuft über Game.buy()/state.owned, genau wie bei upgrade/pet/flag;
+   *    erst danach ist die Funktion dauerhaft aktiv.
+   * Neue Komfort-Funktionen brauchen dafür KEINEN neuen Code-Pfad hier – nur einen
+   * SHOP-Eintrag (type "comfort" + unlockAt) und ihren eigenen Zähl-Aufruf (Stardew-Scope:
+   * datengetrieben statt je Funktion hart verdrahtet). */
+
+  /** Ist der KAUF dieses Komfort-Items freigeschaltet (verdient)? Sagt nichts über Besitz –
+   *  das prüft `hasUpgrade`/`state.owned` wie bei jedem anderen Shop-Item. */
+  isComfortUnlocked(itemId: string): boolean {
+    return this.state.unlockedComfort.includes(itemId);
+  },
+
+  /** Zählt eine Nutzung Richtung „Komfort-Funktion verdient" (analog
+   *  `recordAbbrevLongFormUse`). Ist das Item bereits verdient, unbekannt oder kein
+   *  `type: "comfort"`, ist der Aufruf ein No-op (`false`). Gibt `true` zurück, wenn GENAU
+   *  dieser Aufruf die Schwelle (`unlockAt`) erreicht hat (für die Freischalt-Feier). */
+  recordComfortUse(itemId: string): boolean {
+    if (this.isComfortUnlocked(itemId)) return false;
+    const item = KQContent.SHOP.find(s => s.id === itemId);
+    if (!item || item.type !== "comfort" || !item.unlockAt) return false;
+    const n = (this.state.comfortUsage[itemId] || 0) + 1;
+    this.state.comfortUsage[itemId] = n;
+    if (n >= item.unlockAt) {
+      this.state.unlockedComfort.push(itemId);
+      this.save();
+      return true;
+    }
+    this.save();
+    return false;
   },
 });

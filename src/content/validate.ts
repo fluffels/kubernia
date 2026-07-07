@@ -44,7 +44,7 @@ import type { QuizCard, CmdCard } from "./loader";
  *  zuweisbar, aber auch ein bewusst kaputtes Test-Objekt lässt sich übergeben. */
 export interface ContentBundle {
   RANKS: { xp: number; name: string; icon: string }[];
-  SHOP: { id: string; type: string; price: number; tex?: string }[];
+  SHOP: { id: string; type: string; price: number; tex?: string; unlockAt?: number }[];
   NPCS: Record<string, { name: string }>;
   QUESTS: Quest[];
   QUEST_TOPICS: { id: string; label: string }[];
@@ -93,7 +93,8 @@ function validateRanks(c: ContentBundle, err: Err): void {
 // Die tex→Manifest-Existenz (der eigentliche „stiller Platzhalter"-Bug) braucht das
 // Asset-Manifest und lebt darum – wie beim NPC-Sprite-Check – im Test (shopSpriteProblems),
 // nicht in diesem bewusst laufzeit-dep-freien Validator; hier nur die strukturelle Form.
-const SHOP_TYPES = new Set(["consumable", "pet", "flag", "upgrade"]);
+// "comfort" (#572): Komfort-Funktionen-Zwei-Stufen-Gate (verdienen -> kaufbar -> kaufen).
+const SHOP_TYPES = new Set(["consumable", "pet", "flag", "upgrade", "comfort"]);
 function validateShop(c: ContentBundle, err: Err): void {
   const shopSeen = new Set<string>();
   for (const item of c.SHOP) {
@@ -102,6 +103,11 @@ function validateShop(c: ContentBundle, err: Err): void {
     if (!SHOP_TYPES.has(item.type)) err(`SHOP ${item.id}: unbekannter type „${item.type}" (erlaubt: ${[...SHOP_TYPES].join("/")})`);
     if (!Number.isInteger(item.price) || item.price <= 0) err(`SHOP ${item.id}: price muss eine positive ganze Zahl sein (ist ${item.price})`);
     if (item.tex !== undefined && !isNonEmptyString(item.tex)) err(`SHOP ${item.id}: tex ist gesetzt, aber kein nicht-leerer String`);
+    // "comfort" braucht die Nutzungs-Schwelle (unlockAt), ab der der Kauf freigeschaltet wird
+    // (#572) – ohne sie wäre die Funktion nie verdienbar, ohne dass es hier auffällt.
+    if (item.type === "comfort" && (!Number.isInteger(item.unlockAt) || (item.unlockAt as number) <= 0)) {
+      err(`SHOP ${item.id}: type "comfort" braucht ein positives ganzzahliges unlockAt (ist ${item.unlockAt})`);
+    }
   }
 }
 
