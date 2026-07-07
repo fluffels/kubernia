@@ -1,0 +1,45 @@
+name: _tmp-verify-project-token
+
+# WEGWERF-Workflow, nur zur einmaligen manuellen Verifikation, dass das frisch
+# hinterlegte PROJECT_TOKEN-Secret funktioniert (dieselben zwei GraphQL-Mutationen
+# wie in dependabot-inbox.yml/forum-inbox.yml). Wird direkt nach der Verifikation
+# per Folge-PR wieder entfernt - kein Bestandteil des Produkts.
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_url:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: set_board_prio gegen ein echtes Issue testen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          PROJECT_ID: PVT_kwHOD8746c4Barq_
+          PRIO_FIELD_ID: PVTSSF_lAHOD8746c4Barq_zhXBLXs
+          PRIO_KRITISCH_OPTION: 0663cd9e
+          ISSUE_URL: ${{ inputs.issue_url }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PROJECT_TOKEN:-}" ]; then
+            echo "::error::PROJECT_TOKEN fehlt weiterhin."
+            exit 1
+          fi
+          content_id=$(gh issue view "$ISSUE_URL" --json id --jq .id)
+          item_id=$(GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
+            -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }' \
+            -f p="$PROJECT_ID" -f c="$content_id" \
+            --jq '.data.addProjectV2ItemById.item.id')
+          GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
+            -f query='mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' \
+            -f p="$PROJECT_ID" -f i="$item_id" -f f="$PRIO_FIELD_ID" -f o="$PRIO_KRITISCH_OPTION" >/dev/null
+          echo "ERFOLG: Board-Prio 'Kritisch' gesetzt fuer ${ISSUE_URL} (item ${item_id})."
