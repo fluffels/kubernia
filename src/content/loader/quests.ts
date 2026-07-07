@@ -179,7 +179,7 @@ function reviveStep(v: unknown, path: string): QuestStep {
       };
     case "minigame": {
       const game = asNonEmptyString(o.game, `${path}.game`);
-      if (game !== "stack" && game !== "packing" && game !== "yamlstruct" && game !== "routing" && game !== "driftheal") fail(`${path}.game`, `unbekanntes Minispiel: ${game}`);
+      if (game !== "stack" && game !== "packing" && game !== "yamlstruct" && game !== "routing" && game !== "driftheal" && game !== "rbaskeyring") fail(`${path}.game`, `unbekanntes Minispiel: ${game}`);
       return { ...base, type: "minigame", npc: asNonEmptyString(o.npc, `${path}.npc`), game, brief: asNonEmptyString(o.brief, `${path}.brief`) };
     }
     default:

@@ -41,6 +41,7 @@ export const OVERLAYS = [
   { key: "yamlstruct", id: "overlay-yamlstruct", blocking: true, keyNav: true },
   { key: "routing", id: "overlay-routing", blocking: true, keyNav: true },
   { key: "driftheal", id: "overlay-driftheal", blocking: true, keyNav: true },
+  { key: "rbaskeyring", id: "overlay-rbaskeyring", blocking: true, keyNav: true },
   { key: "menu", id: "overlay-menu", blocking: true, keyNav: true },
   // Erfolgs-Feier-Overlay (#314, verallgemeinert das Rang-Feier #223): blockierend
   // (fängt die Weiter-Bestätigung ein, sperrt solange die Weltinteraktion) + keyNav,

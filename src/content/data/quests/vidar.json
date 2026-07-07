@@ -563,6 +563,30 @@
     ]
   },
   {
+    "id": "k8s-rbac-keyring-minigame",
+    "title": "Der Schlüsselbund: Least Privilege üben",
+    "giver": "vidar",
+    "topic": "security",
+    "rewardXp": 20,
+    "rewardCoins": 15,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "vidar",
+        "lines": [
+          "Jetzt kennst du Role, ClusterRole und can-i. Zeit, es selbst zu üben, statt nur zuzuhören. Ich hab da einen <b>Schlüsselbund</b> – ein kleines <b>Minispiel</b>: für jedes Subjekt den KLEINSTEN Schlüssel finden, der noch passt.",
+          "So rufst du es auf: <b>Sprich mich an</b> (Taste <b>E</b>), dann wähle im Menü <b>🎮 RBAC-Schlüsselbund</b> und spiel es einmal ganz durch. Manchmal würde ein größerer Schlüssel auch passen – trotzdem ist er die FALSCHE Wahl. Least Privilege, Kapitän. Los geht's!"
+        ]
+      },
+      {
+        "type": "minigame",
+        "npc": "vidar",
+        "game": "rbaskeyring",
+        "brief": "RBAC-Schlüsselbund spielen"
+      }
+    ]
+  },
+  {
     "id": "k8s-pod-security",
     "title": "Wer darf rein: Pod-Security & SecurityContext",
     "giver": "vidar",

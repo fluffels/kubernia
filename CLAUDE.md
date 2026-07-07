@@ -133,6 +133,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/content/yamlstruct.ts`](src/content/yamlstruct.ts) | pure Domäne | YAML-Bausteine-Minispiel-Daten (#568): `YAML_STRUCT_ROUNDS` (Manifest-Bibliothek-IDs, aufsteigend verschachtelt) + Struktur-Prüf-Kern (`yamlStructLines`/`checkYamlOrder`/`checkYamlDepth`). |
 | [`src/content/routing.ts`](src/content/routing.ts) | pure Domäne | Routing-Lotse-Minispiel-Daten (#569): `ROUTING_ROUNDS` (Ingress-Regeln/Services+Selector/Pods+Labels, aufsteigend) + Match-/Routing-Kern (`podMatchesSelector`/`matchingPods`/`checkIngressChoice`/`checkPodChoice`/`checkNoEndpoints`). |
 | [`src/content/driftheal.ts`](src/content/driftheal.ts) | pure Domäne | Wunschzustand-Minispiel-Daten (#570): `DRIFT_HEAL_ROUNDS` (Drift-Ereignisse aufsteigend) + Reconcile-Kern (`applyDriftEvent`/`resolveChoice`): deklarativ hält gegen erneuten Drift, imperativ nicht. |
+| [`src/content/rbacKeyring.ts`](src/content/rbacKeyring.ts) | pure Domäne | RBAC-Schlüsselbund-Minispiel-Daten (#571): `RBAC_KEYRING_ROUNDS` (Schlüsselbund + Subjekt-Aufgaben, aufsteigend) + Grant-/Breite-Kern (`ruleGrants`/`optionGrants`/`optionBreadth`/`checkKeyringChoice`) für die kleinste passende Role/ClusterRole (Least Privilege). |
 | [`src/content/progression.ts`](src/content/progression.ts) | pure Domäne | Reine Inhalts-Daten: Ränge (XP-Schwellen) + Shop-Angebot. |
 | [`src/content/util.ts`](src/content/util.ts) | pure Domäne | Kleine geteilte Inhalts-Helfer (Zufall: `pick`/Range), von Drills u.a. genutzt. |
 | [`src/content/data/`](src/content/data/) | Daten | Quests/NPCs/Smalltalk/Reihenfolge/Drills/Quiz + Terraform-Konfigs (#147) + Manifeste (#514) + Funk-Erklärungen (#362) + Übungs-Pools (`practice.json`, #521) als JSON. |
@@ -233,6 +234,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/ui/yamlstruct.ts`](src/ui/yamlstruct.ts) | Präsentation | YAML-Bausteine-Minispiel (#568): Zeile wählen (Reihenfolge) → Ebene wählen (Einrückung), Sofort-Feedback + Tab-Distraktor. |
 | [`src/ui/routing.ts`](src/ui/routing.ts) | Präsentation | Routing-Lotse-Minispiel (#569): Anfrage wählen → optional Ingress-Regel → Pod (oder „keine Endpoints“) treffen, Sofort-Feedback. |
 | [`src/ui/driftheal.ts`](src/ui/driftheal.ts) | Präsentation | Wunschzustand-Minispiel (#570): Ist/Soll-Board, Drift-Ereignis auflösen (imperativ vs. deklarativ), Reconcile-Loop-Anzeige. |
+| [`src/ui/rbaskeyring.ts`](src/ui/rbaskeyring.ts) | Präsentation | RBAC-Schlüsselbund-Minispiel (#571): Subjekt wählen → kleinsten passenden Schlüssel (Role/ClusterRole) aus dem Bund binden, Sofort-Feedback. |
 | [`src/ui/questlog.ts`](src/ui/questlog.ts) | Präsentation | Logbuch-Übersicht & -Detail (DOM, #326). |
 | [`src/ui/album.ts`](src/ui/album.ts) | Präsentation | Sammelalbum/Glossar (DOM, #278): Album-Seiten je Thema + Sticker-Detail, Taste B. |
 | [`src/ui/shop.ts`](src/ui/shop.ts) | Präsentation | Shop. |
