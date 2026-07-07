@@ -110,6 +110,8 @@ export interface GameState {
     piratesBeaten: number;
     krakenBeaten: number;
     stackBest: number;
+    /** #567: höchster Score im Pod-Packspiel (analog stackBest). */
+    packingBest: number;
     /** #236: Gesamtzahl abgeschlossener Übungsrunden mit Kralle (täglich, Gate und frei).
      *  Treibt die zählbewussten Meilenstein-Sprüche (`src/kralle.ts`); persistiert. */
     krallePractice: number;
@@ -254,7 +256,7 @@ export interface MinigameStep extends StepBase {
   /** Bei welchem NPC das Minispiel im Menü liegt (steuert Marker/Wegweiser). */
   npc: string;
   /** Welches Minispiel verpflichtend gespielt werden muss. */
-  game: "stack";
+  game: "stack" | "packing";
   /** Kurzlabel des Schritts (Anzeige/Doku). */
   brief: string;
 }
