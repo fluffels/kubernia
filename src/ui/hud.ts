@@ -66,7 +66,7 @@ export const hudUI = part({
       el.innerHTML = "📜 <b>" + q.title + "</b> – 💻 Terminal öffnen (<b>T</b>)!";
     } else if (step.type === "minigame") {
       const npc = NPCS[step.npc];
-      const gameLabel = step.game === "packing" ? "🎮 Pod-Packspiel" : step.game === "yamlstruct" ? "🎮 YAML-Bausteine" : "🎮 Stapel-Spiel";
+      const gameLabel = step.game === "packing" ? "🎮 Pod-Packspiel" : step.game === "yamlstruct" ? "🎮 YAML-Bausteine" : step.game === "routing" ? "🎮 Routing-Lotse" : "🎮 Stapel-Spiel";
       el.innerHTML = "📜 <b>" + q.title + "</b> – Sprich <b>" + npc.name + "</b> an und wähle " + gameLabel;
     } else {
       const npc = NPCS[step.npc];
@@ -270,13 +270,23 @@ export const hudUI = part({
     }
   },
 
-  /** Menü: Plaudern / Üben / Stapel-Spiel */
+  /** Menü: Plaudern / Üben / Minispiel. Welches Minispiel bei welchem NPC freischaltet
+   *  (Vorbild #505 OVERLAYS): EINE Liste statt je einer eigenen `xyzOk`-Variable + eigenem
+   *  `if` – neues Minispiel = ein Eintrag hier, statt die Methoden-Komplexität weiter zu
+   *  treiben (#502-Gate). */
+  npcMinigames(npcId: string) {
+    return [
+      { npc: "bo", quest: "docker-list-containers", label: "🎮 Stapel-Spiel (Image-Schichten)", open: () => this.openStackGame() },
+      { npc: "juno", quest: "k8s-resource-limits", label: "🎮 Pod-Packspiel (auf Nodes verteilen)", open: () => this.openPackingGame() },
+      { npc: "ada", quest: "k8s-apply-manifests", label: "🎮 YAML-Bausteine (Einrückung üben)", open: () => this.openYamlStructGame() },
+      { npc: "ada", quest: "dns-service-discovery", label: "🎮 Routing-Lotse (Anfragen lotsen)", open: () => this.openRoutingGame() },
+    ].filter((m) => m.npc === npcId && Game.state.completedQuests.includes(m.quest));
+  },
+
   showNpcMenu(npcId: string) {
     const drills = Game.practiceDrillsFor(npcId);
-    const stackOk = npcId === "bo" && Game.state.completedQuests.includes("docker-list-containers");
-    const packingOk = npcId === "juno" && Game.state.completedQuests.includes("k8s-resource-limits");
-    const yamlstructOk = npcId === "ada" && Game.state.completedQuests.includes("k8s-apply-manifests");
-    if (drills.length === 0 && !stackOk && !packingOk && !yamlstructOk) {
+    const minigames = this.npcMinigames(npcId);
+    if (drills.length === 0 && minigames.length === 0) {
       const lines = SMALLTALK[npcId] || ["…"];
       return this.showDialogue(npcId, [lines[Math.floor(Math.random() * lines.length)]]);
     }
@@ -303,18 +313,7 @@ export const hudUI = part({
       this.closeDialogue();
       this.startPractice(npcId);
     });
-    if (stackOk) addBtn("🎮 Stapel-Spiel (Image-Schichten)", () => {
-      this.closeDialogue();
-      this.openStackGame();
-    });
-    if (packingOk) addBtn("🎮 Pod-Packspiel (auf Nodes verteilen)", () => {
-      this.closeDialogue();
-      this.openPackingGame();
-    });
-    if (yamlstructOk) addBtn("🎮 YAML-Bausteine (Einrückung üben)", () => {
-      this.closeDialogue();
-      this.openYamlStructGame();
-    });
+    for (const m of minigames) addBtn(m.label, () => { this.closeDialogue(); m.open(); });
     addBtn("Nichts, schönen Tag! ⚓", () => this.closeDialogue());
     $("dialogue").classList.remove("hidden");
     this._initChoiceNav();
