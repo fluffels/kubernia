@@ -37,6 +37,7 @@ export const OVERLAYS = [
   { key: "shop", id: "overlay-shop", blocking: true, keyNav: true },
   { key: "review", id: "overlay-review", blocking: true, keyNav: false },
   { key: "stack", id: "overlay-stack", blocking: true, keyNav: true },
+  { key: "packing", id: "overlay-packing", blocking: true, keyNav: true },
   { key: "menu", id: "overlay-menu", blocking: true, keyNav: true },
   // Erfolgs-Feier-Overlay (#314, verallgemeinert das Rang-Feier #223): blockierend
   // (fängt die Weiter-Bestätigung ein, sperrt solange die Weltinteraktion) + keyNav,
