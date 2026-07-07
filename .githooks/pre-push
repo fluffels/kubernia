@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 #
-# KubeQuest pre-push-Hook (#528, seit #592 nur noch SEKUNDÄR)
+# Kubernia pre-push-Hook (#528, seit #592 nur noch SEKUNDÄR)
 # =================================================================
 # Seit #592 ist `main` server-seitig PR-gegated (Branch-Protection: Merge nur
 # über PR mit grünen Required-Checks, enforce_admins an) — die maßgebliche,

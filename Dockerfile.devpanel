@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# KubeQuest – Dev-Panel als Docker-Image (#334).
+# Kubernia – Dev-Panel als Docker-Image (#334).
 #
 # Liefert den passwortgegateten Dev-Panel-Build (#325/#331) als schlankes
 # Serve-Image aus, in das das Passwort erst zur LAUFZEIT injiziert wird

@@ -1,7 +1,7 @@
 #!/bin/sh
-# KubeQuest Dev-Panel-Image (#334) – Laufzeit-Passwort-Injektion.
+# Kubernia Dev-Panel-Image (#334) – Laufzeit-Passwort-Injektion.
 #
-# Hintergrund: KubeQuest ist eine STATISCHE SPA (Vite → fertiges HTML/JS).
+# Hintergrund: Kubernia ist eine STATISCHE SPA (Vite → fertiges HTML/JS).
 # `import.meta.env.VITE_*` wird zur BUILD-Zeit ersetzt (#331), lässt sich also zur
 # Laufzeit nicht mehr ändern. Damit EIN Image mit VIELEN Passwörtern laufen kann
 # (`docker run -e VITE_KQ_DEVPANEL_PW=…`, ohne Rebuild), schreibt dieser
