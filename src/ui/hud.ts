@@ -66,7 +66,8 @@ export const hudUI = part({
       el.innerHTML = "📜 <b>" + q.title + "</b> – 💻 Terminal öffnen (<b>T</b>)!";
     } else if (step.type === "minigame") {
       const npc = NPCS[step.npc];
-      const gameLabel = step.game === "packing" ? "🎮 Pod-Packspiel" : step.game === "yamlstruct" ? "🎮 YAML-Bausteine" : step.game === "routing" ? "🎮 Routing-Lotse" : "🎮 Stapel-Spiel";
+      const GAME_LABELS: Record<typeof step.game, string> = { stack: "🎮 Stapel-Spiel", packing: "🎮 Pod-Packspiel", yamlstruct: "🎮 YAML-Bausteine", routing: "🎮 Routing-Lotse", driftheal: "🎮 Wunschzustand einstellen", rbaskeyring: "🎮 RBAC-Schlüsselbund" };
+      const gameLabel = GAME_LABELS[step.game];
       el.innerHTML = "📜 <b>" + q.title + "</b> – Sprich <b>" + npc.name + "</b> an und wähle " + gameLabel;
     } else {
       const npc = NPCS[step.npc];
@@ -280,6 +281,7 @@ export const hudUI = part({
       { npc: "juno", quest: "k8s-resource-limits", label: "🎮 Pod-Packspiel (auf Nodes verteilen)", open: () => this.openPackingGame() },
       { npc: "ada", quest: "k8s-apply-manifests", label: "🎮 YAML-Bausteine (Einrückung üben)", open: () => this.openYamlStructGame() },
       { npc: "ada", quest: "dns-service-discovery", label: "🎮 Routing-Lotse (Anfragen lotsen)", open: () => this.openRoutingGame() },
+      { npc: "argo", quest: "gitops-drift-detection", label: "🎮 Wunschzustand einstellen (Self-Heal/Drift)", open: () => this.openDriftHealGame() },
       { npc: "vidar", quest: "k8s-rbac-clusterrole", label: "🎮 RBAC-Schlüsselbund (Least Privilege)", open: () => this.openRbacKeyringGame() },
     ].filter((m) => m.npc === npcId && Game.state.completedQuests.includes(m.quest));
   },

@@ -116,6 +116,8 @@ export interface GameState {
     yamlstructBest: number;
     /** #569: höchster Score im Routing-Lotse-Minispiel (analog stackBest). */
     routingBest: number;
+    /** #570: höchster Score im Wunschzustand-Minispiel (Self-Heal/Drift, analog stackBest). */
+    drifthealBest: number;
     /** #571: höchster Score im RBAC-Schlüsselbund-Minispiel (analog stackBest). */
     rbackeyringBest: number;
     /** #236: Gesamtzahl abgeschlossener Übungsrunden mit Kralle (täglich, Gate und frei).
@@ -262,7 +264,7 @@ export interface MinigameStep extends StepBase {
   /** Bei welchem NPC das Minispiel im Menü liegt (steuert Marker/Wegweiser). */
   npc: string;
   /** Welches Minispiel verpflichtend gespielt werden muss. */
-  game: "stack" | "packing" | "yamlstruct" | "routing" | "rbaskeyring";
+  game: "stack" | "packing" | "yamlstruct" | "routing" | "driftheal" | "rbaskeyring";
   /** Kurzlabel des Schritts (Anzeige/Doku). */
   brief: string;
 }
