@@ -157,6 +157,9 @@ export interface GameApi extends GameData {
   recordAbbrevLongFormUse(id: string): boolean;
   isCmdHistoryUnlocked(): boolean;
   maybeUnlockCmdHistory(): boolean;
+  // ---- unlocks.ts: Komfort-Funktionen Kauf-/Freischalt-Mechanik (#572) ----
+  isComfortUnlocked(itemId: string): boolean;
+  recordComfortUse(itemId: string): boolean;
 
   // ---- spaced-repetition.ts: Leitner-Plan, Review-Gate, Übungs-Lernstand (#219) ----
   ensureReviewItem(itemId: string): boolean;
@@ -325,6 +328,8 @@ export function makeDefaultState(): GameState {
     unlockedAbbrev: [],
     abbrevUsage: {},
     cmdHistoryUnlocked: false,
+    comfortUsage: {},
+    unlockedComfort: [],
     stats: { commands: 0, reviews: 0, quizRight: 0, quizWrong: 0, piratesBeaten: 0, krakenBeaten: 0, stackBest: 0, packingBest: 0, yamlstructBest: 0, routingBest: 0, drifthealBest: 0, rbackeyringBest: 0, krallePractice: 0 },
     lastSeen: 0,
     clusterSnapshot: null,

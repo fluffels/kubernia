@@ -102,6 +102,15 @@ export interface GameState {
    *  (`CMD_HISTORY_UNLOCK_AT`) – eine kleine Komfort-Funktion als Upgrade, nicht von Anfang
    *  an da. Persistiert, damit die Freischaltung über Reloads erhalten bleibt. */
   cmdHistoryUnlocked: boolean;
+  /** Komfort-Funktionen (#572): Zwei-Stufen-Gate „verdienen -> kaufbar -> kaufen",
+   *  verallgemeinert aus `abbrevUsage`/`cmdHistoryUnlocked`. Nutzungszähler je Shop-Item-ID
+   *  (SHOP-Items vom `type: "comfort"`) – wie oft die Grundlage schon benutzt wurde. Fehlt/leer
+   *  = noch nichts gezählt; ein bereits verdientes Item wird nicht weitergezählt. */
+  comfortUsage: Record<string, number>;
+  /** Komfort-Funktionen (#572): welche Komfort-Items bereits VERDIENT (kaufbar
+   *  freigeschaltet) sind. Der eigentliche Kauf/Besitz läuft weiterhin über `owned` (wie bei
+   *  upgrade/pet/flag) – erst danach ist die Funktion aktiv. Leer = noch keins verdient. */
+  unlockedComfort: string[];
   stats: {
     commands: number;
     reviews: number;

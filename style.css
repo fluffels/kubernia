@@ -691,6 +691,7 @@ button:focus-visible, select:focus-visible {
 .shop-item .si-name { font-weight: bold; font-size: 0.95em; }
 .shop-item .si-desc { font-size: 0.8em; color: var(--text-dim); flex: 1; }
 .shop-item .si-owned { color: var(--good); font-size: 0.85em; }
+.shop-item .si-locked { color: var(--text-dim); font-size: 0.85em; }
 
 /* Logbuch */
 .ql-quest { margin-bottom: 14px; padding: 10px 12px; background: var(--panel2); border-radius: 10px; border: 1px solid var(--border); }

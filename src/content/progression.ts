@@ -19,7 +19,26 @@ export const RANKS = [
 ];
 
 /* ---------- Shop ---------- */
-export const SHOP = [
+/** Ein Eintrag im Shop-Angebot. Heterogen (Verbrauchsgut/Haustier/Flagge/Upgrade/Komfort-
+ *  Funktion) – die je nach `type` optionalen Felder bleiben darum optional statt je Variante
+ *  einen eigenen Union-Zweig zu brauchen; Kauf-Logik (`game/economy.ts`) und Content-Validator
+ *  (`content/validate.ts`) verzweigen über `type`. */
+export interface ShopItem {
+  id: string;
+  icon: string;
+  name: string;
+  price: number;
+  type: string;
+  desc: string;
+  sprite?: number;
+  tex?: string;
+  color?: number;
+  /** Komfort-Funktionen (#572, Zwei-Stufen-Gate verdienen→kaufen): wie oft die Grundlage
+   *  benutzt werden muss, bevor der Kauf freigeschaltet wird. Nur bei `type: "comfort"`. */
+  unlockAt?: number;
+}
+
+export const SHOP: ShopItem[] = [
   { id: "fernrohr", icon: "🔭", name: "Hinweis-Fernrohr", price: 25, type: "consumable",
     desc: "Zeigt dir im Terminal einen Hinweis zur aktuellen Aufgabe. Einmal benutzbar." },
   { id: "kompass", icon: "🧭", name: "Lösungs-Kompass", price: 50, type: "consumable",

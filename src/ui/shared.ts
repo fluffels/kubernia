@@ -41,6 +41,8 @@ export interface UIShopItem {
   sprite?: number;
   tex?: string;
   color?: number;
+  /** Komfort-Funktionen (#572): Nutzungs-Schwelle, ab der der Kauf freigeschaltet wird. */
+  unlockAt?: number;
 }
 
 function esc(s: unknown) {
