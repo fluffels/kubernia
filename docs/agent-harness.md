@@ -18,6 +18,8 @@ Der Harness ist kein einzelnes Tool, sondern das Zusammenspiel von fünf Schicht
 
 Alles, was ein Agent braucht, liegt **im Repo selbst** — versioniert und gepusht, damit auch ein frischer Clone oder ein Cloud-Agent ohne externen Kontext arbeiten kann. Bewusst **kein** externes Notiz-/Wissenssystem als Voraussetzung.
 
+> **Abgrenzung — was „kein externes Notiz-/Wissenssystem" NICHT heißt.** Das gilt für den Harness: kein Schritt im Ticket-Workflow und keine Agenten-Entscheidung hängt an etwas außerhalb von Repo + GitHub, sonst könnten weder ein frischer Clone noch ein Cloud-Agent ohne die Maintainerin loslegen. Die Maintainerin führt daneben **privat** ein Obsidian-Second-Brain (Lernfortschritt, Konzept-Notizen für einen möglichen Weiterbildungstag) — rein additiv für sie als Mensch, kein Teil des Harness und für keinen Agenten-Schritt Voraussetzung. Fiele der Vault weg, liefe der Harness unverändert weiter.
+
 - **[CLAUDE.md](../CLAUDE.md)** — Schnellstart (10-Schritte-Checkliste) + die **eine** Datei-für-Datei-Repo-Landkarte (Datei · Schicht · ein Satz Zweck).
 - **[AGENTS.md](../AGENTS.md)** — die ausführliche Arbeitsanweisung: harte Regeln, Board-Workflow, Konventionen, Begründungen.
 - **Modul-lokale `AGENTS.md`** (z.B. [`src/content/AGENTS.md`](../src/content/AGENTS.md), #483) — Regeln, die nur gelten, wenn man in *diesem* Verzeichnis arbeitet. **Kontext als Token-Grenze:** ein Agent, der an `src/content/` arbeitet, lädt die Content-Regeln; wer woanders arbeitet, schleppt sie nicht mit.
