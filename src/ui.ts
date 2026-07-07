@@ -12,6 +12,7 @@ import { minigameUI } from "./ui/minigame";
 import { podpackingUI } from "./ui/podpacking";
 import { yamlstructUI } from "./ui/yamlstruct";
 import { routingUI } from "./ui/routing";
+import { rbaskeyringUI } from "./ui/rbaskeyring";
 import { questlogUI } from "./ui/questlog";
 import { albumUI } from "./ui/album";
 import { shopUI } from "./ui/shop";
@@ -94,6 +95,10 @@ interface ActiveRouting {
   targetService: string | null;
   roundClean?: boolean;
 }
+/** RBAC-Schlüsselbund-Minispiel-Zustand (#571, ui/rbaskeyring.ts). `order` sind die noch
+ *  offenen Task-Indizes dieser Runde; `activeTaskIdx` verfolgt die gerade gewählte Aufgabe
+ *  (null = Warteschlange). roundClean (#219) merkt, ob die Runde bisher fehlerfrei lief. */
+interface ActiveRbacKeyring { round: number; score: number; order: number[]; activeTaskIdx: number | null; roundClean?: boolean; }
 
 export const UI = {
   dialogue: null as ActiveDialogue | null,
@@ -109,6 +114,7 @@ export const UI = {
   packing: null as ActivePacking | null,  // Pod-Packspiel (#567)
   yamlstruct: null as ActiveYamlStruct | null, // YAML-Bausteine-Minispiel (#568)
   routing: null as ActiveRouting | null,  // Routing-Lotse-Minispiel (#569)
+  rbaskeyring: null as ActiveRbacKeyring | null, // RBAC-Schlüsselbund-Minispiel (#571)
   failCount: 0,
   _funkExplained: new Set<string>(),      // #362: IDs der „Was ist gerade passiert?"-Erklärungen, die diese Sitzung schon gezeigt wurden (dosiert, kein Save-Feld)
   _gateClearedIdx: -1,     // questIdx, für den das Wiederholungs-Gate schon erledigt ist (#222)
@@ -128,6 +134,7 @@ export const UI = {
   ...podpackingUI,
   ...yamlstructUI,
   ...routingUI,
+  ...rbaskeyringUI,
   ...questlogUI,
   ...albumUI,
   ...shopUI,

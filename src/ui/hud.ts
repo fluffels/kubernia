@@ -280,6 +280,7 @@ export const hudUI = part({
       { npc: "juno", quest: "k8s-resource-limits", label: "🎮 Pod-Packspiel (auf Nodes verteilen)", open: () => this.openPackingGame() },
       { npc: "ada", quest: "k8s-apply-manifests", label: "🎮 YAML-Bausteine (Einrückung üben)", open: () => this.openYamlStructGame() },
       { npc: "ada", quest: "dns-service-discovery", label: "🎮 Routing-Lotse (Anfragen lotsen)", open: () => this.openRoutingGame() },
+      { npc: "vidar", quest: "k8s-rbac-clusterrole", label: "🎮 RBAC-Schlüsselbund (Least Privilege)", open: () => this.openRbacKeyringGame() },
     ].filter((m) => m.npc === npcId && Game.state.completedQuests.includes(m.quest));
   },
 

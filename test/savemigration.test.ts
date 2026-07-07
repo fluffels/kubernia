@@ -256,11 +256,12 @@ test("v2 (alle Quests durch): Endzustand + vollständige completedQuests-Migrati
   expect(Game.allQuestsDone()).toBe(true);
 
   // Alle alten numerischen IDs (+ später als Slug ergänzte Quests) → die neuen Slugs.
-  // #449/#450/#461/#568/#569: docker-registry, docker-rabbitmq, aufbau-sturm, k8s-yaml-struct-minigame
-  // UND k8s-routing-lotse-minigame wurden NACH diesem „alles durch"-Stand eingeschoben/angehängt;
-  // ein solcher Alt-Stand kennt sie folgerichtig nicht (sie bleiben ungespielt, niemand wird
-  // zurückgeschickt). Der Endzustand (questIdx == length, currentQuestId "") bleibt trotzdem erhalten.
-  const addedAfterFixture = ["docker-registry", "docker-rabbitmq", "storage-init", "k8s-pod-packing", "k8s-yaml-struct-minigame", "k8s-routing-lotse-minigame", "aufbau-sturm", "aufbau-control-plane", "aufbau-worker-join", "aufbau-dienste", "aufbau-cluster-als-code"];
+  // #449/#450/#461/#568/#569/#571: docker-registry, docker-rabbitmq, aufbau-sturm,
+  // k8s-yaml-struct-minigame, k8s-routing-lotse-minigame UND k8s-rbac-keyring-minigame wurden
+  // NACH diesem „alles durch"-Stand eingeschoben/angehängt; ein solcher Alt-Stand kennt sie
+  // folgerichtig nicht (sie bleiben ungespielt, niemand wird zurückgeschickt). Der Endzustand
+  // (questIdx == length, currentQuestId "") bleibt trotzdem erhalten.
+  const addedAfterFixture = ["docker-registry", "docker-rabbitmq", "storage-init", "k8s-pod-packing", "k8s-yaml-struct-minigame", "k8s-routing-lotse-minigame", "k8s-rbac-keyring-minigame", "aufbau-sturm", "aufbau-control-plane", "aufbau-worker-join", "aufbau-dienste", "aufbau-cluster-als-code"];
   expect(Game.state.completedQuests.length).toBe(KQContent.QUESTS.length - addedAfterFixture.length);
   expect(new Set(Game.state.completedQuests)).toEqual(
     new Set(KQContent.QUESTS.filter(q => !addedAfterFixture.includes(q.id)).map(q => q.id)),
