@@ -10,6 +10,7 @@ import { dialogUI } from "./ui/dialog";
 import { radioUI } from "./ui/radio";
 import { minigameUI } from "./ui/minigame";
 import { podpackingUI } from "./ui/podpacking";
+import { yamlstructUI } from "./ui/yamlstruct";
 import { questlogUI } from "./ui/questlog";
 import { albumUI } from "./ui/album";
 import { shopUI } from "./ui/shop";
@@ -20,6 +21,7 @@ import type { ChoiceStep } from "./types";
 import type { DrillTask } from "./content/drills";
 import type { CmdCard, QuizCard } from "./content/loader";
 import type { PackingPlacement } from "./content/podpacking";
+import type { YamlLine } from "./content/yamlstruct";
 import type { Achievement } from "./hud/celebrate";
 
 /* ── Typen des veränderlichen UI-Zustands (#423): ersetzen die früheren `as any`.
@@ -73,6 +75,11 @@ interface ActiveStack { round: number; score: number; target?: string[]; placed?
  *  Reihenfolge im Pool dieser Runde; `pending` sind korrekt als „passt nirgends"
  *  markierte Pods. roundClean (#219) merkt, ob die Runde bisher fehlerfrei lief. */
 interface ActivePacking { round: number; score: number; placements: PackingPlacement[]; pending: string[]; order: string[]; roundClean?: boolean; }
+/** YAML-Bausteine-Minispiel-Zustand (#568, ui/yamlstruct.ts). `target`/`placed` werden
+ *  je Runde gesetzt; `pendingText` ist die per Reihenfolge schon bestätigte Zeile,
+ *  während ihre Tiefe gewählt wird (zwischen den beiden Schritten null). roundClean
+ *  (#219) merkt, ob die Runde bisher fehlerfrei lief. */
+interface ActiveYamlStruct { round: number; score: number; target?: YamlLine[]; placed?: number; pendingText?: string | null; roundClean?: boolean; }
 
 export const UI = {
   dialogue: null as ActiveDialogue | null,
@@ -86,6 +93,7 @@ export const UI = {
   _practiceDirty: false,   // #219: aktuelle Übung gestolpert/Hilfe genutzt? -> nicht „gekonnt"
   stack: null as ActiveStack | null,      // Stapel-Minispiel
   packing: null as ActivePacking | null,  // Pod-Packspiel (#567)
+  yamlstruct: null as ActiveYamlStruct | null, // YAML-Bausteine-Minispiel (#568)
   failCount: 0,
   _funkExplained: new Set<string>(),      // #362: IDs der „Was ist gerade passiert?"-Erklärungen, die diese Sitzung schon gezeigt wurden (dosiert, kein Save-Feld)
   _gateClearedIdx: -1,     // questIdx, für den das Wiederholungs-Gate schon erledigt ist (#222)
@@ -103,6 +111,7 @@ export const UI = {
   ...radioUI,
   ...minigameUI,
   ...podpackingUI,
+  ...yamlstructUI,
   ...questlogUI,
   ...albumUI,
   ...shopUI,

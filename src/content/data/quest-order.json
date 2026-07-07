@@ -13,6 +13,7 @@
   "k8s-service",
   "k8s-self-healing",
   "k8s-apply-manifests",
+  "k8s-yaml-struct-minigame",
   "helm-intro",
   "helm-release-install",
   "helm-upgrade-rollback",

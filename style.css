@@ -240,6 +240,32 @@ button.danger:hover { background: var(--bad); color: #1a0606; filter: none; }
 .packing-feedback.good { background: rgba(123,255,150,0.12); border: 1px solid var(--good); }
 .packing-feedback.good button { margin-top: 8px; }
 
+/* ===== YAML-Bausteine-Minispiel (#568) ===== */
+.yamlstruct-area { display: flex; gap: 18px; flex-wrap: wrap; }
+.yamlstruct-built {
+  flex: 1;
+  min-width: 260px;
+  min-height: 180px;
+  margin: 0;
+  background: var(--panel2);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 0.85em;
+  white-space: pre;
+  overflow-x: auto;
+}
+.yamlstruct-choices { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 8px; }
+.yamlstruct-choices button { text-align: left; }
+.yamlstruct-choices button.wrong { background: rgba(255,123,123,0.3); border-color: var(--bad); animation: shake 0.3s; }
+.yamlstruct-depths { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.yamlstruct-depths button { font-size: 0.85em; text-align: center; }
+.yamlstruct-tab { border-color: var(--bad) !important; }
+.yamlstruct-feedback { min-height: 1.4em; margin-top: 12px; padding: 8px 12px; border-radius: 8px; font-size: 0.9em; line-height: 1.4; }
+.yamlstruct-feedback.bad { background: rgba(255,123,123,0.18); border: 1px solid var(--bad); }
+.yamlstruct-feedback.good { background: rgba(123,255,150,0.12); border: 1px solid var(--good); }
+.yamlstruct-feedback.good button { margin-top: 8px; }
+
 /* #219: Lernstand-Abzeichen für Übungen (Stapel-Runden + Drills) – „kannst du schon / üben wir nochmal". */
 .mastery-badge { display: inline-block; font-size: 0.72em; font-weight: bold; padding: 1px 7px; border-radius: 10px; vertical-align: middle; white-space: nowrap; }
 .mastery-badge.new { background: var(--panel2); color: var(--text-dim); }

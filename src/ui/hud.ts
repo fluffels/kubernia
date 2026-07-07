@@ -66,7 +66,7 @@ export const hudUI = part({
       el.innerHTML = "📜 <b>" + q.title + "</b> – 💻 Terminal öffnen (<b>T</b>)!";
     } else if (step.type === "minigame") {
       const npc = NPCS[step.npc];
-      const gameLabel = step.game === "packing" ? "🎮 Pod-Packspiel" : "🎮 Stapel-Spiel";
+      const gameLabel = step.game === "packing" ? "🎮 Pod-Packspiel" : step.game === "yamlstruct" ? "🎮 YAML-Bausteine" : "🎮 Stapel-Spiel";
       el.innerHTML = "📜 <b>" + q.title + "</b> – Sprich <b>" + npc.name + "</b> an und wähle " + gameLabel;
     } else {
       const npc = NPCS[step.npc];
@@ -275,7 +275,8 @@ export const hudUI = part({
     const drills = Game.practiceDrillsFor(npcId);
     const stackOk = npcId === "bo" && Game.state.completedQuests.includes("docker-list-containers");
     const packingOk = npcId === "juno" && Game.state.completedQuests.includes("k8s-resource-limits");
-    if (drills.length === 0 && !stackOk && !packingOk) {
+    const yamlstructOk = npcId === "ada" && Game.state.completedQuests.includes("k8s-apply-manifests");
+    if (drills.length === 0 && !stackOk && !packingOk && !yamlstructOk) {
       const lines = SMALLTALK[npcId] || ["…"];
       return this.showDialogue(npcId, [lines[Math.floor(Math.random() * lines.length)]]);
     }
@@ -309,6 +310,10 @@ export const hudUI = part({
     if (packingOk) addBtn("🎮 Pod-Packspiel (auf Nodes verteilen)", () => {
       this.closeDialogue();
       this.openPackingGame();
+    });
+    if (yamlstructOk) addBtn("🎮 YAML-Bausteine (Einrückung üben)", () => {
+      this.closeDialogue();
+      this.openYamlStructGame();
     });
     addBtn("Nichts, schönen Tag! ⚓", () => this.closeDialogue());
     $("dialogue").classList.remove("hidden");
