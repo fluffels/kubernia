@@ -1,0 +1,36 @@
+# Häufig gestellte Fragen zum Agenten-Harness (FAQ)
+
+> Fragen, die im Umfeld dieses Projekts wiederkehrend zum Agenten-Harness aufkommen — hier einmal zentral beantwortet statt einzeln immer wieder neu. Ergänzt [agent-harness.md](agent-harness.md) (die erklärende Gesamtsicht) um konkrete Einzelfragen, ohne sie zu duplizieren. Bei Konflikt gelten [AGENTS.md](../AGENTS.md)/[CLAUDE.md](../CLAUDE.md).
+
+## Wie kommt das CI-Ergebnis zum Agenten zurück? Läuft dafür ein GitHub-MCP-Server?
+
+Kein MCP-Server nötig. Der Agent öffnet den PR und ruft danach blockierend `gh pr checks <nr> --watch` auf (normale `gh`-CLI über die Shell) — der Befehl wartet, bis alle Checks durchgelaufen sind, und liefert den Status zurück. Es gibt keinen Push-Mechanismus (die CI meldet sich nicht aktiv beim Agenten); das Warten läuft als blockierendes Polling im selben Aufruf. Ist die CI grün, mergt `gh pr merge --auto` von selbst; ist sie rot, liest der Agent die Fehlerausgabe aus demselben `gh`-Aufruf, fixt auf dem Branch und stößt den nächsten Push + `--watch`-Lauf an. Dieselbe normale Shell + `gh`-CLI reicht für den gesamten Workflow (Issue claimen, Worktree, Board pflegen, PR mergen) — kein projektspezifischer MCP-Server nötig.
+
+## Ist Kubernia irgendwo deploybar, oder läuft es nur lokal?
+
+Beides. Der Standard-Build (`npm run build`) ist schon ein statisches Bundle ohne eigenes Backend/DB ([ADR 0002](adr/0002-kein-backend-keine-db.md)) — es lässt sich auf jedem Webserver hosten, der statische Dateien ausliefert. Zusätzlich gibt es `npm run build:offline`: eine einzige self-contained `dist-offline/index.html` (alle Assets inline), die sich per Doppelklick lokal öffnen lässt. Beide Wege entstehen aus derselben Quelle; welcher Vertriebsweg (Web-Hosting vs. Desktop-Distribution) am Ende der bevorzugte ist, ist bewusst offen gehalten ([ADR 0005](adr/0005-auslieferungsform.md)).
+
+## Lässt sich der komplette Agenten-Harness 1:1 auf ein anderes Projekt übertragen?
+
+Nein, nicht 1:1 — die projektspezifische Qualitäts-Harness (§2 in [agent-harness.md](agent-harness.md)) hat zwei Unter-Schichten mit unterschiedlicher Portabilität:
+
+- **Workflow-/Orchestrierungs-Schicht (voll portabel, stack-unabhängig):** Board-getriebene Ticket-Auswahl, `git worktree` pro Agent als Kollisionsschutz, Skills als kodifizierte Abläufe. Läuft über Git/CLI/`gh`, kennt die Programmiersprache des Zielprojekts gar nicht.
+- **Verifikations-/Gate-Schicht (Konzept portabel, Tooling stack-gebunden):** dependency-cruiser, die ESLint-Komplexitätsregeln, die handgeschriebenen Node-Skripte (`check:docmap`, `check:size` …) sind auf Kubernias TypeScript/Vite-Stack zugeschnitten. Für ein anderes Zielprojekt trägt das *Prinzip* (Schichtung erzwingen, Doku-Drift verhindern), das *Werkzeug* muss für den Zielstack ausgetauscht werden (z. B. ArchUnit statt dependency-cruiser bei Java/Kotlin).
+
+Kurzformel: das Prinzip kopieren, nicht den Code.
+
+## Warum prüft die Mauer erst im PR-Gate (CI) und nicht direkt als Hook nach jedem Edit?
+
+Drei Gründe, warum die Naht bewusst am PR liegt und nicht am einzelnen Tool-Call:
+
+- **Granularität.** Viele Gates urteilen über einen kohärenten fertigen Zustand, nicht über einen einzelnen Edit: `check:arch` prüft den ganzen Dependency-Graph, `check:docmap` die Doku-Landkarte gegen den ganzen Code, `check:diffsize` den PR gegen die Basis. Ein Hook nach jedem Edit würde ständig auf völlig legitimen Zwischenständen rot werden, etwa wenn eine neue Datei noch nicht in der Doku steht oder man mitten im Refactoring kurz eine Schicht verletzt.
+- **Zentralisierung über parallele Worktrees.** Mehrere Agenten arbeiten in eigenen `git worktree`s (§2.3 in [agent-harness.md](agent-harness.md)); ein lokaler Dev-Hook müsste in jedem Worktree gleich konfiguriert sein, sonst driftet er. Der Required Check auf dem PR gilt dagegen zentral serverseitig, einmal definiert, egal welcher Agent den Branch gebaut hat.
+- **Kosten.** Ein paar Gates sind schlicht teuer (Coverage-Instrumentierung kostet gemessen +6 Sekunden); das nach jedem Edit statt einmal pro PR zu fahren, würde sich aufsummieren.
+
+Lokal gibt es trotzdem etwas Ähnliches: `npm run verify` fährt der Agent selbst vor dem PR, plus der pre-push-Hook (siehe [AGENTS.md](../AGENTS.md)) als Netz — ausgelöst durch „fertig", nicht durch jeden einzelnen Edit.
+
+## Verwandte Dokumente
+
+- [agent-harness.md](agent-harness.md) — die erklärende Gesamtsicht auf den Harness
+- [AGENTS.md](../AGENTS.md) — operative Arbeitsanweisung
+- [CLAUDE.md](../CLAUDE.md) — Schnellstart + Repo-Landkarte

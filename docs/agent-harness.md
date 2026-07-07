@@ -181,6 +181,7 @@ Mit **#530** ([ADR 0008](adr/0008-ki-agenten-harness.md)) ist der ADR jetzt die 
 
 ## 6. Verwandte Dokumente
 
+- **[docs/agent-harness-faq.md](agent-harness-faq.md)** — häufig gestellte Einzelfragen zum Harness (CI-Feedback-Mechanismus, Deploybarkeit, Portabilität, Hook vs. PR-Gate), gesammelt statt einzeln neu beantwortet.
 - **[AGENTS.md](../AGENTS.md)** — operative Arbeitsanweisung (harte Regeln, Board-Workflow, Konventionen). *Bei Konflikt maßgeblich.*
 - **[CLAUDE.md](../CLAUDE.md)** — Schnellstart + Datei-Landkarte.
 - **[docs/arc42-architektur.md](arc42-architektur.md)** — Architektur-Gesamtsicht; §1.4 (KI-Entwickel-Effizienz als Qualitätsziel), §8 (Querschnittskonzepte), §9 (ADR-Übersicht inkl. geplantem 0008).
