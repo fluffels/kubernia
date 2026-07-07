@@ -703,6 +703,48 @@ test("Red-Green: Shop-Item mit leerem tex macht den Check rot (#582)", () => {
   );
 });
 
+/* #572: Komfort-Funktionen-Mechanik – neuer Shop-Item-Typ "comfort" braucht ein
+ * positives ganzzahliges unlockAt (die Nutzungs-Schwelle, ab der der Kauf freigeschaltet
+ * wird); ohne diese Prüfung könnte ein vergessenes/kaputtes unlockAt eine Komfort-Funktion
+ * nie verdienbar machen, ohne dass es auffällt. */
+test("Red-Green: Shop-type 'comfort' ist jetzt erlaubt (#572)", () => {
+  const bundle: ContentBundle = {
+    ...KQContent,
+    SHOP: [...KQContent.SHOP, { id: "s-comfort-ok", type: "comfort", price: 10, unlockAt: 5 }],
+  };
+  const errors = validateContent(bundle);
+  assert.ok(
+    !errors.some(e => e.includes("s-comfort-ok")),
+    "type 'comfort' mit gültigem unlockAt wurde fälschlich gemeldet:\n" + errors.join("\n"),
+  );
+});
+
+test("Red-Green: Shop-Item vom type 'comfort' OHNE unlockAt macht den Check rot (#572)", () => {
+  const kaputt: ContentBundle = {
+    ...KQContent,
+    SHOP: [...KQContent.SHOP, { id: "s-comfort-no-unlockat", type: "comfort", price: 10 }],
+  };
+  const errors = validateContent(kaputt);
+  assert.ok(
+    errors.some(e => e.includes("s-comfort-no-unlockat") && e.includes("unlockAt")),
+    "fehlendes unlockAt bei type 'comfort' wurde NICHT gemeldet:\n" + errors.join("\n"),
+  );
+});
+
+test("Red-Green: Shop-Item vom type 'comfort' mit ungültigem unlockAt (0/negativ/nicht-ganzzahlig) macht den Check rot (#572)", () => {
+  for (const bad of [0, -3, 2.5]) {
+    const kaputt: ContentBundle = {
+      ...KQContent,
+      SHOP: [...KQContent.SHOP, { id: "s-comfort-bad-unlockat", type: "comfort", price: 10, unlockAt: bad }],
+    };
+    const errors = validateContent(kaputt);
+    assert.ok(
+      errors.some(e => e.includes("s-comfort-bad-unlockat") && e.includes("unlockAt")),
+      `ungültiges unlockAt ${bad} bei type 'comfort' wurde NICHT gemeldet:\n` + errors.join("\n"),
+    );
+  }
+});
+
 /** #311: Findet in einem Anzeige-Text „Platzhalter-artige" `<token>`, die `fmtCmd` NICHT
  *  sichtbar macht und die darum beim innerHTML-Rendern unsichtbar/kaputt blieben. Seit #311
  *  ist ein `<token>` die offizielle Platzhalter-Schreibweise – `fmtCmd` zeichnet sie als

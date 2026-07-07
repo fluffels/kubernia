@@ -106,6 +106,11 @@ export const economyBundle = part({
   buy(itemId: string) {
     const item = KQContent.SHOP.find(s => s.id === itemId);
     if (!item) return { ok: false, msg: "Unbekannte Ware." };
+    // Komfort-Funktionen (#572): erst verdienen (Nutzung), dann kaufbar – ein Kaufversuch
+    // davor wird abgelehnt, egal wie viele Dublonen im Beutel sind.
+    if (item.type === "comfort" && !this.isComfortUnlocked(itemId)) {
+      return { ok: false, msg: "Musst du dir erst verdienen!" };
+    }
     if (item.type !== "consumable" && this.state.owned.includes(itemId)) {
       return { ok: false, msg: "Hast du schon!" };
     }

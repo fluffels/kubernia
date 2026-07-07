@@ -1,7 +1,36 @@
 import { Game } from "../game";
 import { KQContent } from "../content";
+import type { GameState } from "../types";
 import { SFX } from "../sfx";
 import { part, $, type UIShopItem } from "./shared";
+
+/** Baut den Aktions-Bereich (Kaufen-Button/Fortschritt/Installiert/Aktivieren) EINES
+ *  Shop-Items – aus `openShop` herausgezogen (#572, Komfort-Zustand kam als dritter Zweig
+ *  dazu, sonst wäre die Schleife zu komplex geworden, #502). */
+function shopItemAction(item: UIShopItem, s: GameState): string {
+  const ownedPerm = s.owned.includes(item.id);
+  if (item.type === "consumable") {
+    const ownedCount = s.inventory[item.id] || 0;
+    return `<button class="primary" data-action="buyItem" data-arg="${item.id}">Kaufen – ${item.price} 🪙</button>
+      ${ownedCount > 0 ? `<div class="si-owned">Im Beutel: ${ownedCount}</div>` : ""}`;
+  }
+  if (item.type === "comfort" && !ownedPerm && !Game.isComfortUnlocked(item.id)) {
+    // Komfort-Funktion noch nicht verdient (#572): Fortschritt statt Kaufen-Button.
+    const have = s.comfortUsage[item.id] || 0;
+    const need = item.unlockAt ?? 0;
+    return `<div class="si-locked">🔒 Noch ${Math.max(0, need - have)}× ausschreiben (${have}/${need})</div>`;
+  }
+  if (!ownedPerm) {
+    return `<button class="primary" data-action="buyItem" data-arg="${item.id}">Kaufen – ${item.price} 🪙</button>`;
+  }
+  if (item.type === "upgrade" || item.type === "comfort") {
+    return `<div class="si-owned">✅ Installiert</div>`;
+  }
+  const active = s.activePet === item.id || s.activeFlag === item.id;
+  return active
+    ? `<button data-action="toggleItem" data-arg="${item.id}" data-on="0">✅ Aktiv – abschalten</button>`
+    : `<button data-action="toggleItem" data-arg="${item.id}" data-on="1">Aktivieren</button>`;
+}
 
 export const shopUI = part({
   /* ========== Shop ========== */
@@ -13,24 +42,7 @@ export const shopUI = part({
       Dein 🔥 Streak (${s.streak.count}) gibt bis zu +50% auf Belohnungen, dein Hafen verdient +${Math.round(Game.incomeRate() * 10) / 10}/min.</p>
       <div class="shop-grid">`;
     for (const item of KQContent.SHOP as UIShopItem[]) {
-      const ownedCount = s.inventory[item.id] || 0;
-      const ownedPerm = s.owned.includes(item.id);
-      let action;
-      if (item.type === "consumable") {
-        action = `<button class="primary" data-action="buyItem" data-arg="${item.id}">Kaufen – ${item.price} 🪙</button>
-          ${ownedCount > 0 ? `<div class="si-owned">Im Beutel: ${ownedCount}</div>` : ""}`;
-      } else if (ownedPerm) {
-        if (item.type === "upgrade") {
-          action = `<div class="si-owned">✅ Installiert</div>`;
-        } else {
-          const active = s.activePet === item.id || s.activeFlag === item.id;
-          action = active
-            ? `<button data-action="toggleItem" data-arg="${item.id}" data-on="0">✅ Aktiv – abschalten</button>`
-            : `<button data-action="toggleItem" data-arg="${item.id}" data-on="1">Aktivieren</button>`;
-        }
-      } else {
-        action = `<button class="primary" data-action="buyItem" data-arg="${item.id}">Kaufen – ${item.price} 🪙</button>`;
-      }
+      const action = shopItemAction(item, s);
       const icon = item.tex !== undefined
         ? `<canvas width="16" height="16" data-tex="${item.tex}"></canvas>`
         : item.sprite !== undefined
