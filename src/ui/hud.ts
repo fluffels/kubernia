@@ -10,6 +10,17 @@ import { enqueueAchievement, bundleCelebration, type Achievement } from "../hud/
  *  Palette für die Wimpelkette (dress ship) und den Flaggen-Konfetti-Regen. */
 const SIGNAL_COLORS = ["#e03131", "#ffd43b", "#1971c2", "#f1f3f5", "#4dd0e1", "#2f9e44"];
 
+/** Freischalt-Regel je Minispiel im NPC-Menü (#570): Daten statt einer wachsenden Kette
+ *  aus Bool-Konstanten + Ifs in `showNpcMenu` – jedes neue Minispiel ist NUR ein Eintrag
+ *  hier + eine Zeile in `openMinigame` (Stardew-Scope: die Menü-Funktion selbst wächst
+ *  dabei nicht mehr, ihre Komplexität bleibt konstant). */
+const MINIGAME_MENU: { game: "stack" | "packing" | "yamlstruct" | "driftheal"; npc: string; quest: string; label: string }[] = [
+  { game: "stack", npc: "bo", quest: "docker-list-containers", label: "🎮 Stapel-Spiel (Image-Schichten)" },
+  { game: "packing", npc: "juno", quest: "k8s-resource-limits", label: "🎮 Pod-Packspiel (auf Nodes verteilen)" },
+  { game: "yamlstruct", npc: "ada", quest: "k8s-apply-manifests", label: "🎮 YAML-Bausteine (Einrückung üben)" },
+  { game: "driftheal", npc: "argo", quest: "gitops-drift-detection", label: "🎮 Wunschzustand einstellen (Self-Heal/Drift)" },
+];
+
 export const hudUI = part({
   /* ========== HUD, Toasts, Alarm ========== */
   refreshHud() {
@@ -66,7 +77,7 @@ export const hudUI = part({
       el.innerHTML = "📜 <b>" + q.title + "</b> – 💻 Terminal öffnen (<b>T</b>)!";
     } else if (step.type === "minigame") {
       const npc = NPCS[step.npc];
-      const gameLabel = step.game === "packing" ? "🎮 Pod-Packspiel" : step.game === "yamlstruct" ? "🎮 YAML-Bausteine" : "🎮 Stapel-Spiel";
+      const gameLabel = step.game === "packing" ? "🎮 Pod-Packspiel" : step.game === "yamlstruct" ? "🎮 YAML-Bausteine" : step.game === "driftheal" ? "🎮 Wunschzustand einstellen" : "🎮 Stapel-Spiel";
       el.innerHTML = "📜 <b>" + q.title + "</b> – Sprich <b>" + npc.name + "</b> an und wähle " + gameLabel;
     } else {
       const npc = NPCS[step.npc];
@@ -270,13 +281,11 @@ export const hudUI = part({
     }
   },
 
-  /** Menü: Plaudern / Üben / Stapel-Spiel */
+  /** Menü: Plaudern / Üben / Minispiele (freigeschaltet über `MINIGAME_MENU`). */
   showNpcMenu(npcId: string) {
     const drills = Game.practiceDrillsFor(npcId);
-    const stackOk = npcId === "bo" && Game.state.completedQuests.includes("docker-list-containers");
-    const packingOk = npcId === "juno" && Game.state.completedQuests.includes("k8s-resource-limits");
-    const yamlstructOk = npcId === "ada" && Game.state.completedQuests.includes("k8s-apply-manifests");
-    if (drills.length === 0 && !stackOk && !packingOk && !yamlstructOk) {
+    const unlockedGames = MINIGAME_MENU.filter((g) => g.npc === npcId && Game.state.completedQuests.includes(g.quest));
+    if (drills.length === 0 && unlockedGames.length === 0) {
       const lines = SMALLTALK[npcId] || ["…"];
       return this.showDialogue(npcId, [lines[Math.floor(Math.random() * lines.length)]]);
     }
@@ -303,21 +312,23 @@ export const hudUI = part({
       this.closeDialogue();
       this.startPractice(npcId);
     });
-    if (stackOk) addBtn("🎮 Stapel-Spiel (Image-Schichten)", () => {
+    for (const g of unlockedGames) addBtn(g.label, () => {
       this.closeDialogue();
-      this.openStackGame();
-    });
-    if (packingOk) addBtn("🎮 Pod-Packspiel (auf Nodes verteilen)", () => {
-      this.closeDialogue();
-      this.openPackingGame();
-    });
-    if (yamlstructOk) addBtn("🎮 YAML-Bausteine (Einrückung üben)", () => {
-      this.closeDialogue();
-      this.openYamlStructGame();
+      this.openMinigame(g.game);
     });
     addBtn("Nichts, schönen Tag! ⚓", () => this.closeDialogue());
     $("dialogue").classList.remove("hidden");
     this._initChoiceNav();
+  },
+
+  /** Öffnet das per `MINIGAME_MENU` gewählte Minispiel-Overlay. Eigene, kleine Methode
+   *  statt inline in `showNpcMenu` (#570) – hält deren Komplexität konstant, egal wie
+   *  viele Minispiele dazukommen. */
+  openMinigame(game: "stack" | "packing" | "yamlstruct" | "driftheal") {
+    if (game === "stack") this.openStackGame();
+    else if (game === "packing") this.openPackingGame();
+    else if (game === "yamlstruct") this.openYamlStructGame();
+    else this.openDriftHealGame();
   },
 
   /* ---------- Tastatur-Navigation für Antwort-Buttons (↑/↓ + Enter, Ziffern) ---------- */

@@ -39,6 +39,7 @@
   "gitops-argocd-intro",
   "gitops-self-sync",
   "gitops-drift-detection",
+  "gitops-driftheal-minigame",
   "gitops-app-of-apps",
   "observability-metrics",
   "observability-grafana",

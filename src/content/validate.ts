@@ -166,7 +166,7 @@ function validateTerminalStep(q: Quest, step: StepOf<"terminal">, err: Err): voi
 }
 function validateMinigameStep(q: Quest, step: StepOf<"minigame">, lk: Lookups, err: Err): void {
   if (!lk.npcIds.has(step.npc)) err(`Quest ${q.id}: unbekannter NPC „${step.npc}" (minigame)`);
-  if (step.game !== "stack" && step.game !== "packing" && step.game !== "yamlstruct") err(`Quest ${q.id}: unbekanntes Minispiel „${step.game}"`);
+  if (step.game !== "stack" && step.game !== "packing" && step.game !== "yamlstruct" && step.game !== "driftheal") err(`Quest ${q.id}: unbekanntes Minispiel „${step.game}"`);
 }
 function validateQuestStep(q: Quest, step: QuestStep, lk: Lookups, err: Err): void {
   switch (step.type) {
