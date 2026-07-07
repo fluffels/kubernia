@@ -1,0 +1,22 @@
+# Codeowners fuer Gate-/Fitness-Function-Konfiguration (#723)
+#
+# Diese Dateien VERDRAHTEN die automatischen Qualitaets-/Architektur-Gates
+# selbst (dependency-cruiser, ESLint-Komplexitaet, Groessen-/Diff-/Bundle-
+# Budgets, Coverage-Schwellen, CI-Pipeline). Wer sie aendert, kann ein Gate
+# unbemerkt abschwaechen, statt die eigentliche Ursache zu beheben - das
+# Ergebnis waere von aussen (gruene Checks) nicht von einem echten Fix zu
+# unterscheiden. Darum brauchen NUR PRs, die diese Pfade anfassen, eine
+# explizite Freigabe von @fluffels (Branch Protection: require_code_owner_
+# reviews=true auf main). Alle anderen Pfade bleiben unangetastet und
+# mergen weiterhin autonom bei gruener CI (kein pauschaler Review-Zwang).
+
+/.dependency-cruiser.cjs   @fluffels
+/scripts/layers.cjs        @fluffels
+/scripts/check-*.mjs       @fluffels
+/eslint.config.js          @fluffels
+/eslint-suppressions.json  @fluffels
+/any-suppressions.json     @fluffels
+/vite.config.ts            @fluffels
+/.jscpd.json               @fluffels
+/.github/workflows/*.yml   @fluffels
+/.github/CODEOWNERS        @fluffels
