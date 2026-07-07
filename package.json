@@ -1,7 +1,7 @@
 {
-  "name": "kubequest",
+  "name": "kubernia",
   "version": "3.0.0",
-  "description": "KubeQuest – das Hafen-Abenteuer: ein 2D-Lernspiel für Docker, Kubernetes, Helm & Terraform.",
+  "description": "Kubernia – das Hafen-Abenteuer: ein 2D-Lernspiel für Docker, Kubernetes, Helm & Terraform.",
   "private": true,
   "type": "module",
   "engines": {

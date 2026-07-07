@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * One-Command-Setup für KubeQuest (#387).
+ * One-Command-Setup für Kubernia (#387).
  *
  * Bringt neue Entwickler:innen UND KI-Agenten in EINEM Schritt auf einen
  * lauffähigen, grünen Stand: Node-Version prüfen → Abhängigkeiten installieren
@@ -34,7 +34,7 @@ function fail(msg) {
   process.exit(1)
 }
 
-console.log(bold('\n⚓ KubeQuest – Setup\n'))
+console.log(bold('\n⚓ Kubernia – Setup\n'))
 
 // 1) Node-Version gegen .nvmrc prüfen (SSOT der erwarteten Major-Version).
 function requiredMajor() {

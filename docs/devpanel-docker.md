@@ -18,10 +18,10 @@ Image, sondern kommt zur Laufzeit aus der Umgebungsvariable.
 
 ```bash
 # 1) Image bauen (enthält KEIN Passwort)
-docker build -f Dockerfile.devpanel -t kubequest-devpanel .
+docker build -f Dockerfile.devpanel -t kubernia-devpanel .
 
 # 2) Mit Laufzeit-Passwort starten (Port 80 im Container → 8080 lokal)
-docker run --rm -p 8080:80 -e VITE_KQ_DEVPANEL_PW=meinGeheimes kubequest-devpanel
+docker run --rm -p 8080:80 -e VITE_KQ_DEVPANEL_PW=meinGeheimes kubernia-devpanel
 ```
 
 Dann **http://localhost:8080** öffnen, im Spiel **F9** drücken und das via

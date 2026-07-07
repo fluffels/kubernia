@@ -1,4 +1,4 @@
-# Reproduzierbare Dev-Umgebung für KubeQuest (#388) — NUR fürs Entwickeln.
+# Reproduzierbare Dev-Umgebung für Kubernia (#388) — NUR fürs Entwickeln.
 #
 # `docker compose up` startet den Vite-Dev-Server im Container, ohne dass lokal
 # Node installiert sein muss. Danach im Browser die angezeigte Adresse öffnen
