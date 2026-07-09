@@ -9,6 +9,7 @@
 import { test, expect, describe, beforeAll, afterAll, beforeEach } from "vitest";
 import { stubWindowLocalStorage, loadGameStack } from "./support/browser-env";
 import { KQContent } from "../src/content";
+import { ABBREVS } from "../src/content/abbrev";
 import { NPC_SPAWNS, TILE, TALK_RANGE } from "../src/world/world";
 import { setWorldScene, setPayoutSink, setClockSink } from "../src/runtime";
 import { MAP_REGISTRY } from "../src/world/maps/mapregistry";
@@ -62,102 +63,109 @@ test("load: kaputte/fremde audio-Werte fallen auf Defaults zurück bzw. werden g
   expect(Game.state.audio).toEqual({ music: false, sfx: true, musicVol: 1, sfxVol: 0, track: "hafen" });
 });
 
-/* ---------- „Verdiente Abkürzungen": Freischalt-Mechanik (#287/#297) ---------- */
-test("unlockedAbbrev: frischer Stand hat nichts freigeschaltet", () => {
-  expect(Game.state.unlockedAbbrev).toEqual([]);
+/* ---------- „Verdiente Abkürzungen": Komfort-Kauf-Mechanik (#287/#297/#313, seit #574) ---------- */
+test("isAbbrevUnlocked: frischer Stand hat nichts freigeschaltet", () => {
+  expect(Game.state.owned).not.toContain("-a");
   expect(Game.isAbbrevUnlocked("-a")).toBe(false);
 });
 
-test("unlockAbbrev: schaltet gezielt frei, ist idempotent und persistiert über load()", () => {
+test("unlockAbbrev: schaltet SOFORT & KOSTENLOS frei (verdient+gekauft), ist idempotent und persistiert über load()", () => {
   Game.unlockAbbrev("-a");
   expect(Game.isAbbrevUnlocked("-a")).toBe(true);
   expect(Game.isAbbrevUnlocked("-n")).toBe(false);     // nur das eine, nicht alles
-  expect(Game.state.unlockedAbbrev).toEqual(["-a"]);
+  expect(Game.state.owned).toEqual(["-a"]);
+  expect(Game.state.unlockedComfort).toEqual(["-a"]);
   Game.unlockAbbrev("-a");                              // nochmal -> kein Duplikat
-  expect(Game.state.unlockedAbbrev).toEqual(["-a"]);
+  expect(Game.state.owned).toEqual(["-a"]);
   // persistiert: neu laden liest den gesicherten Stand zurück
   Game.load();
   expect(Game.isAbbrevUnlocked("-a")).toBe(true);
 });
 
-test("Migration: Alt-Stand MIT Fortschritt ohne unlockedAbbrev wird grandfathered (alles frei)", () => {
+test("Migration (v6->v7, #574): Alt-Stand MIT Fortschritt ohne unlockedAbbrev wird grandfathered (alle aktuellen ABBREVS-IDs)", () => {
   // Stand wie vor der Mechanik: Fortschritt vorhanden, Feld fehlt ganz.
   Game.importData(JSON.stringify({ v: 1, data: { xp: 120, questIdx: 5, completedQuests: ["docker-first-container", "docker-list-containers"] } }));
   Game.load();
-  expect(Game.isAbbrevUnlocked("-a")).toBe(true);      // beliebige ID -> frei
-  expect(Game.isAbbrevUnlocked("--irgendwas")).toBe(true);
-  expect(Game.state.unlockedAbbrev).toEqual(["*"]);
+  for (const a of ABBREVS) expect(Game.isAbbrevUnlocked(a.id)).toBe(true);
+  expect(Game.isAbbrevUnlocked("--irgendwas-frei-erfunden")).toBe(false); // kein offener Wildcard mehr (#574)
 });
 
-test("Migration: Alt-Stand OHNE Fortschritt ohne unlockedAbbrev startet leer (kein Grandfather)", () => {
+test("Migration (v6->v7, #574): Alt-Stand OHNE Fortschritt ohne unlockedAbbrev startet leer (kein Grandfather)", () => {
   Game.importData(JSON.stringify({ v: 1, data: { coins: 40 } }));   // coins=Default, kein echter Fortschritt
   Game.load();
-  expect(Game.state.unlockedAbbrev).toEqual([]);
-  expect(Game.isAbbrevUnlocked("-a")).toBe(false);
+  for (const a of ABBREVS) expect(Game.isAbbrevUnlocked(a.id)).toBe(false);
 });
 
-test("Migration: vorhandenes unlockedAbbrev-Feld wird übernommen (kein Pauschal-Unlock)", () => {
+test("Migration (v6->v7, #574): vorhandenes unlockedAbbrev-Feld wird 1:1 in owned/unlockedComfort gehoben (kein Pauschal-Unlock)", () => {
   Game.importData(JSON.stringify({ v: 1, data: { xp: 50, unlockedAbbrev: ["-a"] } }));
   Game.load();
   expect(Game.isAbbrevUnlocked("-a")).toBe(true);
   expect(Game.isAbbrevUnlocked("-n")).toBe(false);     // trotz Fortschritt NICHT grandfathered
-  expect(Game.state.unlockedAbbrev).toEqual(["-a"]);
+  expect(Game.state.owned).toEqual(["-a"]);
 });
 
-test("Migration: kaputtes unlockedAbbrev (kein Array) fällt auf leer zurück", () => {
+test("Migration (v6->v7, #574): kaputtes unlockedAbbrev (kein Array) zählt als leer, TROTZ Fortschritt kein Grandfather", () => {
+  // Ein vorhandenes, aber falsch typisiertes Feld ist NICHT dasselbe wie ein fehlendes Feld
+  // (wie beim alten safeStrArray) – der Grandfather-Fallback greift nur bei echtem Fehlen.
   Game.importData(JSON.stringify({ v: 1, data: { xp: 50, unlockedAbbrev: "alles" } }));
   Game.load();
-  expect(Game.state.unlockedAbbrev).toEqual([]);
+  expect(Game.state.owned).toEqual([]);
 });
 
-/* ---------- „Verdiente Abkürzung" durch Nutzung: Zähler (#313) ---------- */
-test("recordAbbrevLongFormUse: zählt unter der Schwelle und schaltet GENAU bei der Schwelle frei", () => {
+/* ---------- „Verdiente Abkürzung" durch Nutzung: Komfort-Kauf-Zähler (#313/#572, seit #574) ---------- */
+test("recordComfortUse: zählt unter der Schwelle und schaltet GENAU bei der Schwelle den KAUF frei (noch nicht aktiv)", () => {
   const id = "docker-ps-all";
   expect(Game.isAbbrevUnlocked(id)).toBe(false);
   for (let i = 1; i < THRESHOLD; i++) {
-    expect(Game.recordAbbrevLongFormUse(id)).toBe(false);   // unter der Schwelle: nur zählen
-    expect(Game.state.abbrevUsage[id]).toBe(i);
+    expect(Game.recordComfortUse(id)).toBe(false);   // unter der Schwelle: nur zählen
+    expect(Game.state.comfortUsage[id]).toBe(i);
     expect(Game.isAbbrevUnlocked(id)).toBe(false);
   }
-  expect(Game.recordAbbrevLongFormUse(id)).toBe(true);       // dieser Aufruf verdient sie
+  expect(Game.recordComfortUse(id)).toBe(true);       // dieser Aufruf verdient sie (kaufbar)
+  expect(Game.isComfortUnlocked(id)).toBe(true);
+  expect(Game.isAbbrevUnlocked(id)).toBe(false);      // #574: verdient ≠ aktiv, erst der Kauf zählt
+  Game.state.coins = coins(1000);
+  expect(Game.buy(id).ok).toBe(true);
   expect(Game.isAbbrevUnlocked(id)).toBe(true);
 });
 
-test("recordAbbrevLongFormUse: bereits freigeschaltet → No-op, kein Weiterzählen", () => {
+test("recordComfortUse: bereits per unlockAbbrev freigeschaltet → No-op, kein Weiterzählen", () => {
   const id = "docker-ps-all";
   Game.unlockAbbrev(id);
-  expect(Game.recordAbbrevLongFormUse(id)).toBe(false);
-  expect(Game.state.abbrevUsage[id]).toBeUndefined();        // gar nicht erst gezählt
+  expect(Game.recordComfortUse(id)).toBe(false);
+  expect(Game.state.comfortUsage[id]).toBeUndefined();        // gar nicht erst gezählt
 });
 
-test("recordAbbrevLongFormUse: grandfatherter Stand (*) zählt nicht", () => {
-  Game.importData(JSON.stringify({ v: 1, data: { xp: 99 } }));   // → grandfathered "*"
+test("recordComfortUse: grandfatherter Stand (Alt-Fortschritt ohne unlockedAbbrev) zählt nicht mehr", () => {
+  Game.importData(JSON.stringify({ v: 1, data: { xp: 99 } }));   // → grandfathered, alle ABBREVS-IDs verdient+gekauft
   Game.load();
-  expect(Game.recordAbbrevLongFormUse("docker-ps-all")).toBe(false);
-  expect(Game.state.abbrevUsage["docker-ps-all"]).toBeUndefined();
+  expect(Game.recordComfortUse("docker-ps-all")).toBe(false);
+  expect(Game.state.comfortUsage["docker-ps-all"]).toBeUndefined();
 });
 
 test("Zähler persistiert über load()", () => {
-  Game.recordAbbrevLongFormUse("docker-ps-all");
-  Game.recordAbbrevLongFormUse("docker-ps-all");
-  expect(Game.state.abbrevUsage["docker-ps-all"]).toBe(2);
+  Game.recordComfortUse("docker-ps-all");
+  Game.recordComfortUse("docker-ps-all");
+  expect(Game.state.comfortUsage["docker-ps-all"]).toBe(2);
   Game.load();
-  expect(Game.state.abbrevUsage["docker-ps-all"]).toBe(2);
+  expect(Game.state.comfortUsage["docker-ps-all"]).toBe(2);
 });
 
-test("Migration: Alt-Stand ohne abbrevUsage → leerer Zähler; kaputte Werte werden gefiltert/geklemmt", () => {
-  Game.importData(JSON.stringify({ v: 1, data: { xp: 5, unlockedAbbrev: [], abbrevUsage: { "docker-ps-all": 3, neg: -1, str: "nope", frac: 2.9 } } }));
+test("Migration: Alt-Stand ohne comfortUsage → leerer Zähler; kaputte Werte werden gefiltert/geklemmt", () => {
+  // unlockedAbbrev explizit leer: neutralisiert die v6->v7-Grandfather-Migration (#574),
+  // damit dieser Test isoliert nur die comfortUsage-Härtung prüft.
+  Game.importData(JSON.stringify({ v: 1, data: { xp: 5, unlockedAbbrev: [], comfortUsage: { "docker-ps-all": 3, neg: -1, str: "nope", frac: 2.9 } } }));
   Game.load();
-  expect(Game.state.abbrevUsage["docker-ps-all"]).toBe(3);
-  expect(Game.state.abbrevUsage.neg).toBeUndefined();   // negativ raus
-  expect(Game.state.abbrevUsage.str).toBeUndefined();   // falscher Typ raus
-  expect(Game.state.abbrevUsage.frac).toBe(2);          // abgerundet
+  expect(Game.state.comfortUsage["docker-ps-all"]).toBe(3);
+  expect(Game.state.comfortUsage.neg).toBeUndefined();   // negativ raus
+  expect(Game.state.comfortUsage.str).toBeUndefined();   // falscher Typ raus
+  expect(Game.state.comfortUsage.frac).toBe(2);          // abgerundet
 });
 
 test("Migration: frischer Stand hat leeren Zähler", () => {
   Game.importData(JSON.stringify({ v: 1, data: { coins: 40 } }));
   Game.load();
-  expect(Game.state.abbrevUsage).toEqual({});
+  expect(Game.state.comfortUsage).toEqual({});
 });
 
 /* ---------- Reset: Spielerposition (#295) ---------- */
@@ -509,7 +517,9 @@ describe("Komfort-Funktionen: Zwei-Stufen-Gate verdienen -> kaufbar -> kaufen (#
   });
 
   test("Migration: Alt-Stand ohne comfortUsage/unlockedComfort startet leer (additiv, kein Bruch)", () => {
-    Game.importData(JSON.stringify({ v: 6, data: { xp: 50 } }));
+    // unlockedAbbrev explizit leer: neutralisiert die v6->v7-Grandfather-Migration (#574),
+    // damit dieser Test isoliert nur das generische Komfort-Kauf-Defaulting (#572) prüft.
+    Game.importData(JSON.stringify({ v: 6, data: { xp: 50, unlockedAbbrev: [] } }));
     Game.load();
     expect(Game.state.comfortUsage).toEqual({});
     expect(Game.state.unlockedComfort).toEqual([]);
@@ -849,9 +859,9 @@ test("load: ein VOLLSTÄNDIG valider Stand überlebt unverändert (kein Over-San
 
 /* ---------- #511: sanitizeState-Härtung (stats + questStep/taskIdx) ---------- */
 
-test("#511 stats: negative/gebrochene Werte werden gehärtet (>=0, floor) wie inventory/abbrevUsage", () => {
+test("#511 stats: negative/gebrochene Werte werden gehärtet (>=0, floor) wie inventory/comfortUsage", () => {
   // Vor #511 übernahm sanitizeState jede ENDLICHE Zahl in stats – auch negative und
-  // gebrochene, im Gegensatz zu inventory/abbrevUsage. Jetzt: nur >=0, auf Ganzzahl gefloort.
+  // gebrochene, im Gegensatz zu inventory/comfortUsage. Jetzt: nur >=0, auf Ganzzahl gefloort.
   Game.importData(JSON.stringify({ v: 3, data: { xp: 50, stats: {
     commands: -5,      // negativ -> ungültig, bekannter Key behält seinen Default (0)
     reviews: 3.9,      // gebrochen -> auf 3 gefloort

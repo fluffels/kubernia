@@ -152,10 +152,9 @@ export interface GameApi extends GameData {
   startQuest(id: string): boolean;
   practiceDrillsFor(npcId: string): string[];
 
-  // ---- unlocks.ts: verdiente Abkürzungen (#313) + Befehlshistorie (#316) ----
+  // ---- unlocks.ts: Abkürzungen (#313/#574, über die Komfort-Kauf-Mechanik) + Befehlshistorie (#316) ----
   isAbbrevUnlocked(id: string): boolean;
   unlockAbbrev(id: string): void;
-  recordAbbrevLongFormUse(id: string): boolean;
   isCmdHistoryUnlocked(): boolean;
   // ---- unlocks.ts: Komfort-Funktionen Kauf-/Freischalt-Mechanik (#572) ----
   isComfortUnlocked(itemId: string): boolean;
@@ -207,13 +206,17 @@ export interface GameApi extends GameData {
  *  (this.save(), this.incomeRate() …) voll typgeprüft (#513). */
 export function part<T>(b: T & ThisType<GameApi>): T { return b; }
 
-/** Sentinel in `unlockedAbbrev`: „alle Abkürzungen freigeschaltet". Für Alt-Spielstände
- *  von vor der Freischalt-Mechanik (#287/#297) – so erlebt niemand einen Rückschritt,
- *  wenn das Gating (#299) aktiv wird. Neue Spiele starten mit leerem Array. */
+/** Sentinel des alten additiven `unlockedAbbrev`-Arrays: „alle Abkürzungen freigeschaltet".
+ *  Seit #574 nur noch als Alt-Wert relevant – die EINMALIGE Save-Migration (v6→v7,
+ *  `store/versioning.ts`) hebt ihn beim Laden eines Alt-Stands auf `owned`/`unlockedComfort`
+ *  (alle zum Migrations-Zeitpunkt bekannten ABBREVS-IDs). Der Laufzeit-Check `isAbbrevUnlocked`
+ *  kennt ihn NICHT mehr (das wäre nach der Migration mehrdeutig, siehe Kommentar dort). */
 export const ALL_ABBREV_UNLOCKED = "*";
 
 /** Schwelle (#313): so oft muss die Langform korrekt getippt werden, bis sich die
- *  zugehörige Kurzform „verdient" und freischaltet. Zentral & bewusst tunebar. */
+ *  zugehörige Kurzform „verdient" (= im Shop kaufbar, #572/#574) hat. Zentral & bewusst
+ *  tunebar; jedes ABBREVS-Shop-Item in `content/progression.ts` dupliziert diesen Wert als
+ *  `unlockAt`-Literal (Content ist pure Domäne, kann diese Konstante nicht importieren). */
 export const ABBREV_EARN_THRESHOLD = 20;
 
 /** Shop-Item-ID der Befehlshistorie-Komfort-Funktion (#316, Kauf-Mechanik seit #573): EINE
@@ -327,8 +330,6 @@ export function makeDefaultState(): GameState {
     streakHintShown: false,
     introSeen: false,
     questLogIntroShown: false,
-    unlockedAbbrev: [],
-    abbrevUsage: {},
     comfortUsage: {},
     unlockedComfort: [],
     stats: { commands: 0, reviews: 0, quizRight: 0, quizWrong: 0, piratesBeaten: 0, krakenBeaten: 0, stackBest: 0, packingBest: 0, yamlstructBest: 0, routingBest: 0, drifthealBest: 0, rbackeyringBest: 0, krallePractice: 0 },

@@ -6,9 +6,11 @@
  * Persistenz läuft über die SaveStore-Schicht (IndexedDB seit #350; localStorage/In-Memory
  * als Fallback). Anwendungsschicht – bewusst Phaser-frei und im Node-Test prüfbar.
  *
- * Die öffentliche API ist unverändert: kein Aufrufer wurde angefasst. Auch die Konstanten
- * ALL_ABBREV_UNLOCKED/ABBREV_EARN_THRESHOLD bleiben hier importierbar
- * (ui/radio.ts + game.test.ts) – re-exportiert aus src/game/shared.ts. */
+ * Die öffentliche API ist unverändert: kein Aufrufer wurde angefasst. Die Konstante
+ * ABBREV_EARN_THRESHOLD bleibt hier importierbar (ui/radio.ts + game.test.ts) – re-exportiert
+ * aus src/game/shared.ts. ALL_ABBREV_UNLOCKED wird seit #574 nur noch von der Save-Migration
+ * (store/versioning.ts) gebraucht – die importiert ihn direkt aus game/shared.ts statt über
+ * diese Fassade. */
 import { Sim as KQSim } from "./sim";
 import type { GameState } from "./types";
 import { makeDefaultState, type GameApi } from "./game/shared";
@@ -22,7 +24,7 @@ import { tickBundle } from "./game/tick";
 import { hazardsBundle } from "./game/hazards";
 import { sandboxBundle } from "./game/sandbox";
 
-export { ALL_ABBREV_UNLOCKED, ABBREV_EARN_THRESHOLD } from "./game/shared";
+export { ABBREV_EARN_THRESHOLD } from "./game/shared";
 
 /* Die Annotation `: GameApi` ist der Drift-Wächter (#513): der Compiler prüft, dass die
  * komponierte Fassade GENAU die deklarierte Oberfläche erfüllt. Fehlt eine Bündel-Methode in
