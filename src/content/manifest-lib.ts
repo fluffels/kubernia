@@ -18,6 +18,7 @@
  * einen Import-Zyklus loader ↔ drills.
  */
 import { fail, asRecord, asNonEmptyString, asArray, assertNoUnknownKeys, memo } from "./parse";
+import { SCENARIO_FIELD_NAMES } from "./scenario";
 
 // Vite eager-Mode: Build-Zeit-Glob (der Single-File-Build inlinet die JSON-Module).
 const manifestModules = import.meta.glob<{ default: unknown }>("./data/manifests/*.json", { eager: true });
@@ -89,15 +90,27 @@ export function getManifest(id: string, path = `manifestRef „${id}"`): string 
   return yaml;
 }
 
+/** Die an DIESER Stelle bekannten Szenario-Eingabe-Schlüssel: alle echten `Scenario`-Felder
+ *  (SSOT `SCENARIO_FIELD_NAMES` aus `scenario.ts`, an `keyof Scenario` gebunden) PLUS die
+ *  Loader-Kurzform `manifests`, die hier zu `files` aufgelöst und danach entfernt wird –
+ *  sie ist bewusst KEIN `Scenario`-Feld (deshalb nicht in `SCENARIO_FIELD_NAMES`). */
+const SCENARIO_INPUT_KEYS: readonly string[] = [...SCENARIO_FIELD_NAMES, "manifests"];
+
 /** Löst die `manifests`-Kurzform eines Inline-Szenarios auf (manifestRef, #514):
  *  `manifests: Record<dateiname, manifestId>` → die benannten Datei-Inhalte werden in
  *  `scenario.files` eingesetzt. DRY: EINE Quelle statt in jede Quest kopiertes YAML. Gibt
  *  ein NEUES Roh-Objekt OHNE `manifests`-Schlüssel zurück – der nachgelagerte
  *  `reviveScenario` (Loader) sieht danach nur fertige `files`, genau wie bei inline
  *  geschriebenen Dateien. Ein Dateiname, der zugleich explizit in `files` steht, scheitert
- *  hart (mehrdeutig); ein Tippfehler in der ID fällt über `getManifest` beim Laden auf. */
+ *  hart (mehrdeutig); ein Tippfehler in der ID fällt über `getManifest` beim Laden auf.
+ *
+ *  Schließt die Eingabe-Schlüssel LOKAL (`assertNoUnknownKeys`, wie `parseOneManifest`):
+ *  ein vertippter Schlüssel (z.B. `manifets` statt `manifests`) fällt damit HIER an der
+ *  Manifest-Auflösung auf – mit Pfad auf diese Stelle –, statt erst nachgelagert generisch
+ *  in `reviveScenario` (#584). Die tiefe Struktur-Prüfung je Feld bleibt `reviveScenario`. */
 export function resolveScenarioManifests(rawScenario: unknown, path: string): unknown {
   const o = asRecord(rawScenario, path);
+  assertNoUnknownKeys(o, path, SCENARIO_INPUT_KEYS);
   if (o.manifests === undefined) return o;
   const refs = asRecord(o.manifests, `${path}.manifests`);
   const explicitFiles = o.files === undefined ? {} : asRecord(o.files, `${path}.files`);
