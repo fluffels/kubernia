@@ -168,7 +168,8 @@ test("v1 (Docker-Bogen): currentQuestId aus questIdx abgeleitet, alte IDs gemapp
   expect(Game.state.owned).toEqual(["pet-ratte"]);
   expect(Game.state.audio).toEqual({ music: true, sfx: true, musicVol: 0.5, sfxVol: 0.8, track: "hafen" });
   expect(Game.state.settings).toEqual({ events: "normal" });
-  expect(Game.state.cmdHistoryUnlocked).toBe(false);
+  // #573: kein Alt-Modell-Flag im Fixture -> kein Grandfathering, Historie bleibt ungekauft.
+  expect(Game.isCmdHistoryUnlocked()).toBe(false);
 
   // #410: lineare Single-Active-Migration – genau die fokussierte Quest ist offen.
   expectFocusedActiveQuests();
@@ -195,11 +196,12 @@ test("v1 (voller Stand): reiches Deck/Abkürzungen/Stats/Cluster-Snapshot laden 
   expect(Game.isAbbrevUnlocked("-a")).toBe(true);
   expect(Game.isAbbrevUnlocked("--noch-nie")).toBe(false);
   expect(Game.state.abbrevUsage).toEqual({ "docker-ps-all": 19, "kubectl-get-pods": 7 });
-  expect(Game.state.cmdHistoryUnlocked).toBe(true);
+  // #573: Alt-Modell-Flag true -> als verdient+gekauft grandfathered (kein Rückschritt).
+  expect(Game.isCmdHistoryUnlocked()).toBe(true);
 
-  // Volle Sammlungen exakt erhalten.
+  // Volle Sammlungen exakt erhalten (+ die grandfatherte Befehlshistorie, #573).
   expect(Game.state.inventory).toEqual({ fernrohr: 3, kompass: 1 });
-  expect(Game.state.owned).toEqual(["pet-ratte", "pet-moewe", "flag-blau", "fernrohr-upgrade"]);
+  expect(Game.state.owned).toEqual(["pet-ratte", "pet-moewe", "flag-blau", "fernrohr-upgrade", "befehlshistorie"]);
   expect(Game.state.activePet).toBe("pet-moewe");
   expect(Game.state.activeFlag).toBe("flag-blau");
   // Die 6 gespeicherten Review-Einträge werden verlustfrei übernommen (jeder bleibt erhalten,
@@ -299,7 +301,9 @@ test("v3 (voller Stand, vor #410): Einzel-Quest -> activeQuests-Set, verlustfrei
   expect(Game.state.player).toEqual({ x: 640, y: 480 });
   expect(Game.state.unlockedAbbrev).toEqual(["-a", "-n"]);
   expect(Game.state.abbrevUsage).toEqual({ "docker-ps-all": 5 });
-  expect(Game.state.cmdHistoryUnlocked).toBe(true);
+  // #573: Alt-Modell-Flag true -> als verdient+gekauft grandfathered.
+  expect(Game.isCmdHistoryUnlocked()).toBe(true);
+  expect(Game.state.owned).toContain("befehlshistorie");
   expect(Game.state.audio).toEqual({ music: true, sfx: false, musicVol: 0.6, sfxVol: 0.4, track: "archipel" });
   expect(Game.state.settings).toEqual({ events: "cozy" });
   expect(Game.state.stats.stormsFixed).toBe(9);
@@ -472,7 +476,9 @@ test("Red-Green: kaputtes v2-Fixture lädt sanitisiert (kein Crash, Defaults sta
   expect(Game.state.abbrevUsage).toEqual({ z: 4 }); // neg/falscher Typ raus
 
   // Booleans & Enums.
-  expect(Game.state.cmdHistoryUnlocked).toBe(false);
+  // #573: "ja" ist kein exaktes `=== true` -> kein Grandfathering (bereits durch die
+  // obige exakte owned-Prüfung ["pet-1", "flag"] mitbewiesen).
+  expect(Game.isCmdHistoryUnlocked()).toBe(false);
   expect(Game.state.introSeen).toBe(false);
   expect(Game.state.settings).toEqual({ events: "normal" }); // "ultrahart" verworfen
   expect(Game.state.audio).toEqual({ music: false, sfx: true, musicVol: 1, sfxVol: 0, track: "hafen" });
@@ -517,7 +523,7 @@ test("#436: load() mit vollständigem Snapshot überschreibt Snapshot-Dateien NI
       completedQuests: KQContent.QUESTS.slice(0, nextIdx).map((q: { id: string }) => q.id),
       activeQuests: { [KQContent.QUESTS[nextIdx].id]: { step: 0, task: 0 } },
       inventory: {}, owned: [], activePet: null, activeFlag: null,
-      review: {}, unlockedAbbrev: [], abbrevUsage: {}, cmdHistoryUnlocked: false,
+      review: {}, unlockedAbbrev: [], abbrevUsage: {},
       streak: { count: 0, lastDay: 0 }, streakHintShown: false, introSeen: false,
       questLogIntroShown: false, stats: {}, lastSeen: 0, gameDays: 0, questsSinceGate: 0,
       audio: { music: true, sfx: true, musicVol: 0.5, sfxVol: 0.8, track: "hafen" },

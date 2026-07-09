@@ -19,14 +19,12 @@ let Game: typeof import("../src/game").Game;
 let Sim: typeof import("../src/sim").Sim;
 let SaveStore: typeof import("../src/store").SaveStore;
 let THRESHOLD: number;
-let CMD_HISTORY_AT: number;
 
 beforeAll(async () => {
   stubWindowLocalStorage();                 // window.localStorage bereitstellen (geteiltes Harness)
   ({ Game, Sim, SaveStore } = await loadGameStack());
   const game = await import("../src/game"); // spielspezifische Konstanten aus demselben Modul
   THRESHOLD = game.ABBREV_EARN_THRESHOLD;
-  CMD_HISTORY_AT = game.CMD_HISTORY_UNLOCK_AT;
 });
 
 beforeEach(() => {
@@ -440,10 +438,10 @@ test("useConsumable: ohne Bestand false, mit Bestand true + Dekrement", () => {
 });
 
 /* ---------- Komfort-Funktionen: Kauf-/Freischalt-Mechanik (#572) ----------
- * Noch keine echte Komfort-Funktion im SHOP (die kommt erst mit den Kindern #573/#574) –
- * die Mechanik selbst wird hier über ein temporäres Test-Fixture-Item geprüft (an-/
- * abgemeldet in beforeAll/afterAll, damit kein anderer Test in dieser Datei ein
- * zusätzliches SHOP-Item sieht). */
+ * Die generische Mechanik wird hier weiterhin über ein temporäres Test-Fixture-Item geprüft
+ * (an-/abgemeldet in beforeAll/afterAll, damit kein anderer Test in dieser Datei ein
+ * zusätzliches SHOP-Item sieht) – unabhängig von der ersten echten Komfort-Funktion
+ * (Befehlshistorie, #573, s.u.). #574 bringt die zweite. */
 describe("Komfort-Funktionen: Zwei-Stufen-Gate verdienen -> kaufbar -> kaufen (#572)", () => {
   const FIXTURE_ID = "test-comfort-fixture";
   const UNLOCK_AT = 3;
@@ -975,48 +973,53 @@ test("introSeen (#288): Default ist false, valider Wert überlebt, kaputter fäl
   expect(Game.state.introSeen).toBe(false);
 });
 
-/* ---------- Befehlshistorie freischalten (#316) ---------- */
+/* ---------- Befehlshistorie: Komfort-Kauf-Mechanik (#316, seit #573 über #572) ---------- */
 
-test("cmdHistoryUnlocked (#316): Default false, Alt-Stand ohne Feld bleibt gesperrt, kaputt -> false", () => {
-  // Frischer Stand: Historie noch gesperrt.
+test("isCmdHistoryUnlocked (#573): Default false; verdient reicht NICHT, erst der Kauf schaltet frei", () => {
+  const unlockAt = KQContent.SHOP.find(s => s.id === "befehlshistorie")!.unlockAt!;
+
   Game.reset();
-  expect(Game.state.cmdHistoryUnlocked).toBe(false);
   expect(Game.isCmdHistoryUnlocked()).toBe(false);
 
-  // Alt-Stand OHNE das Feld (von vor #316) darf nicht brechen -> Default gesperrt.
-  Game.importData(JSON.stringify({ v: 3, data: { xp: 50, questIdx: 3 } }));
-  Game.load();
-  expect(Game.state.cmdHistoryUnlocked).toBe(false);
-
-  // Freigeschalteter Stand überlebt Laden/Speichern.
-  Game.importData(JSON.stringify({ v: 3, data: { cmdHistoryUnlocked: true } }));
-  Game.load();
-  expect(Game.state.cmdHistoryUnlocked).toBe(true);
-
-  // Kaputter (nicht-boolescher) Wert fällt auf den Default false zurück.
-  Game.importData(JSON.stringify({ v: 3, data: { cmdHistoryUnlocked: "ja" } }));
-  Game.load();
-  expect(Game.state.cmdHistoryUnlocked).toBe(false);
-});
-
-test("maybeUnlockCmdHistory (#316): schaltet erst an der Schwelle frei, dann idempotent", () => {
-  Game.reset();
-  // Unter der Schwelle: kein Freischalten.
-  Game.state.stats.commands = CMD_HISTORY_AT - 1;
-  expect(Game.maybeUnlockCmdHistory()).toBe(false);
+  // Schwelle erreicht → im Shop kaufbar, aber ↑/↓ tut noch nichts (nur verdient, nicht gekauft).
+  for (let i = 0; i < unlockAt; i++) Game.recordComfortUse("befehlshistorie");
+  expect(Game.isComfortUnlocked("befehlshistorie")).toBe(true);
   expect(Game.isCmdHistoryUnlocked()).toBe(false);
 
-  // Schwelle erreicht: GENAU dieser Aufruf schaltet frei (true für die einmalige Feier).
-  Game.state.stats.commands = CMD_HISTORY_AT;
-  expect(Game.maybeUnlockCmdHistory()).toBe(true);
+  // Erst der Kauf aktiviert sie dauerhaft.
+  Game.state.coins = coins(1000);
+  expect(Game.buy("befehlshistorie").ok).toBe(true);
   expect(Game.isCmdHistoryUnlocked()).toBe(true);
 
-  // Danach idempotent: kein zweites Mal feiern.
-  expect(Game.maybeUnlockCmdHistory()).toBe(false);
-
-  // Bleibt über einen Reload erhalten (persistiert).
+  // Bleibt über einen Reload erhalten (persistiert über state.owned).
   Game.load();
-  expect(Game.state.cmdHistoryUnlocked).toBe(true);
+  expect(Game.isCmdHistoryUnlocked()).toBe(true);
+});
+
+test("Migration (#573): Alt-Modell-Flag cmdHistoryUnlocked=true wird als verdient+gekauft grandfathered", () => {
+  Game.importData(JSON.stringify({ v: 6, data: { cmdHistoryUnlocked: true } }));
+  Game.load();
+  expect(Game.state.owned).toContain("befehlshistorie");
+  expect(Game.state.unlockedComfort).toContain("befehlshistorie");
+  expect(Game.isCmdHistoryUnlocked()).toBe(true);
+
+  // Erneutes Laden desselben (jetzt schon migrierten) Stands trägt das Item nicht doppelt ein.
+  Game.load();
+  expect(Game.state.owned.filter(id => id === "befehlshistorie")).toHaveLength(1);
+});
+
+test("Migration (#573): fehlendes/falsches Alt-Flag grandfathert NICHT", () => {
+  // Alt-Stand ohne das Feld (von vor #316) darf nicht brechen -> bleibt ungekauft.
+  Game.importData(JSON.stringify({ v: 6, data: { xp: 50 } }));
+  Game.load();
+  expect(Game.state.owned).not.toContain("befehlshistorie");
+  expect(Game.isCmdHistoryUnlocked()).toBe(false);
+
+  // Kaputter (nicht-boolescher) Wert grandfathert nicht (nur === true zählt).
+  Game.importData(JSON.stringify({ v: 6, data: { cmdHistoryUnlocked: "ja" } }));
+  Game.load();
+  expect(Game.state.owned).not.toContain("befehlshistorie");
+  expect(Game.isCmdHistoryUnlocked()).toBe(false);
 });
 
 test("Erststart-Spawn (#288): neuer Spielstand startet in Redeweite neben Ole", () => {
