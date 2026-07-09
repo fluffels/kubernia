@@ -260,14 +260,15 @@ jobs:
   # Nur auf push (= main): ein roter PR ist erwartbar und Sache der PR-Autorin,
   # kein Board-Alarm.
   #
-  # Priorisierung über die Board-`Prio` (#658): Seit #627 sind die `prio:*`-Labels
-  # entfernt — das früher genutzte `prio:hoch` existiert NICHT mehr. Also wie in
-  # forum-inbox.yml (#644): Issue mit einem existierenden Label (`area:architektur`)
-  # anlegen und die Board-`Prio` per GraphQL auf "Kritisch" setzen (ein roter `main`
-  # blockiert jeden parallelen Agenten → höchste Dringlichkeit). Dedup läuft über den
-  # Titel-Präfix, nicht mehr über ein Label. Board-Schreibzugriff braucht — wie #644 —
-  # das Secret PROJECT_TOKEN (das Standard-GITHUB_TOKEN kann kein User-Project V2
-  # schreiben); fehlt es, entsteht das Issue trotzdem und wird nur nicht priorisiert.
+  # Priorisierung über die Board-Position (#658/#747): Seit #627 sind die `prio:*`-Labels
+  # entfernt, seit #747 ist auch das Board-`Prio`-Feld weg — die Reihenfolge ist die
+  # manuelle Board-Position (oberstes freies Item = dran). Also wie in forum-inbox.yml:
+  # Issue mit einem existierenden Label (`area:architektur`) anlegen und per GraphQL an
+  # die OBERSTE Board-Position schieben (ein roter `main` blockiert jeden parallelen
+  # Agenten → höchste Dringlichkeit). Dedup läuft über den Titel-Präfix, nicht über ein
+  # Label. Board-Schreibzugriff braucht das Secret PROJECT_TOKEN (das Standard-
+  # GITHUB_TOKEN kann kein User-Project V2 schreiben); fehlt es, entsteht das Issue
+  # trotzdem und steht nur nicht garantiert oben.
   alarm-red-main:
     name: Alarm bei rotem main (#605)
     needs: [build-test, security-audit]
@@ -284,15 +285,13 @@ jobs:
           SHA: ${{ github.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
-          # Board-Prio setzen (#658, analog #644). Das Standard-GITHUB_TOKEN kann NICHT
-          # in ein User-Project V2 schreiben – dafür ein PAT mit project-Scope als Secret
-          # PROJECT_TOKEN. Fehlt es, wird nur gewarnt (siehe set_board_prio unten).
+          # Board-Position setzen (#658/#747, analog forum-inbox.yml). Das Standard-
+          # GITHUB_TOKEN kann NICHT in ein User-Project V2 schreiben – dafür ein PAT mit
+          # project-Scope als Secret PROJECT_TOKEN. Fehlt es, wird nur gewarnt (siehe set_board_top unten).
           PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-          # IDs des Kubernia-Backlog-Boards + Prio-Feld/Option (stabile Node-IDs,
-          # siehe docs/ticket-reihenfolge.md › Priorität pflegen).
+          # Node-ID des Kubernia-Backlog-Boards (stabil,
+          # siehe docs/ticket-reihenfolge.md › Reihenfolge pflegen).
           PROJECT_ID: PVT_kwHOD8746c4Barq_
-          PRIO_FIELD_ID: PVTSSF_lAHOD8746c4Barq_zhXBLXs
-          PRIO_KRITISCH_OPTION: 0663cd9e
           # Existierendes Label (die prio:*-Labels sind seit #627 entfernt, #658).
           ALARM_LABEL: area:architektur
         run: |
@@ -300,14 +299,15 @@ jobs:
           marker="🚨 CI rot auf main"
           short="${SHA:0:7}"
 
-          # Setzt das Board-Feld `Prio` des frisch angelegten Alarm-Issues auf "Kritisch"
-          # (#658), statt sich auf das entfernte `prio:hoch`-Label zu verlassen.
+          # Schiebt das frisch angelegte Alarm-Issue an die OBERSTE Board-Position (#747),
+          # statt sich auf ein entferntes Prio-Feld/Label zu verlassen.
           # addProjectV2ItemById ist idempotent: ist das Issue schon per Board-„Auto-add"
-          # drauf, kommt einfach die bestehende Item-ID zurück – der async-Race ist damit egal.
-          set_board_prio() {
+          # drauf, kommt einfach die bestehende Item-ID zurück – der async-Race ist damit
+          # egal. updateProjectV2ItemPosition ohne afterId = ganz oben.
+          set_board_top() {
             local issue_url="$1"
             if [ -z "${PROJECT_TOKEN:-}" ]; then
-              echo "::warning::PROJECT_TOKEN-Secret fehlt – Board-Prio für ${issue_url} nicht gesetzt (Alarm-Issue sortiert ohne Prio ganz unten). PAT mit project-Scope als Secret PROJECT_TOKEN hinterlegen."
+              echo "::warning::PROJECT_TOKEN-Secret fehlt – Board-Position für ${issue_url} nicht gesetzt (Alarm-Issue steht dann irgendwo statt oben). PAT mit project-Scope als Secret PROJECT_TOKEN hinterlegen."
               return 0
             fi
             local content_id
@@ -318,9 +318,9 @@ jobs:
               -f p="$PROJECT_ID" -f c="$content_id" \
               --jq '.data.addProjectV2ItemById.item.id')
             GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
-              -f query='mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' \
-              -f p="$PROJECT_ID" -f i="$item_id" -f f="$PRIO_FIELD_ID" -f o="$PRIO_KRITISCH_OPTION" >/dev/null
-            echo "Board-Prio 'Kritisch' gesetzt für ${issue_url} (item ${item_id})."
+              -f query='mutation($p:ID!,$i:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i}){ items(first:1){ nodes{ id } } } }' \
+              -f p="$PROJECT_ID" -f i="$item_id" >/dev/null
+            echo "Board-Position 'oben' gesetzt für ${issue_url} (item ${item_id})."
           }
 
           # Gibt es schon ein OFFENES Alarm-Issue? (Titel-Präfix-Match über die offenen
@@ -349,7 +349,7 @@ jobs:
               --label "$ALARM_LABEL" \
               --body "$body")
             echo "Angelegt: ${new_url}"
-            # Board-Prio direkt auf "Kritisch" (#658) – nur beim NEUEN Issue, nicht beim
-            # Ergänzen eines bestehenden (das steht schon mit seiner Prio im Board).
-            set_board_prio "$new_url"
+            # An die oberste Board-Position schieben (#747) – nur beim NEUEN Issue, nicht
+            # beim Ergänzen eines bestehenden (das steht schon an seiner Board-Position).
+            set_board_top "$new_url"
           fi
