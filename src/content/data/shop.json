@@ -45,5 +45,80 @@
     "id": "befehlshistorie", "icon": "⌨️", "name": "Befehlshistorie", "price": 40, "type": "comfort",
     "desc": "Schaltet ↑/↓ im Funkgerät-Terminal frei: vorherige Befehle zurückholen, wie in einer echten Shell.",
     "unlockAt": 10
+  },
+  {
+    "id": "docker-ps-all", "icon": "🐳", "name": "Kurzform -a (docker ps)", "price": 20, "type": "comfort",
+    "desc": "Schaltet -a als Kurzform für --all bei docker ps frei.",
+    "unlockAt": 20
+  },
+  {
+    "id": "docker-run-detach", "icon": "🐳", "name": "Kurzform -d (docker run)", "price": 20, "type": "comfort",
+    "desc": "Schaltet -d als Kurzform für --detach bei docker run frei.",
+    "unlockAt": 20
+  },
+  {
+    "id": "docker-build-tag", "icon": "🐳", "name": "Kurzform -t (docker build)", "price": 20, "type": "comfort",
+    "desc": "Schaltet -t als Kurzform für --tag bei docker build frei.",
+    "unlockAt": 20
+  },
+  {
+    "id": "kubectl-namespace", "icon": "☸️", "name": "Kurzform -n (kubectl Namespace)", "price": 20, "type": "comfort",
+    "desc": "Schaltet -n als Kurzform für --namespace bei kubectl frei.",
+    "unlockAt": 20
+  },
+  {
+    "id": "kubectl-filename", "icon": "☸️", "name": "Kurzform -f (kubectl Manifest)", "price": 20, "type": "comfort",
+    "desc": "Schaltet -f als Kurzform für --filename bei kubectl apply/create/delete frei.",
+    "unlockAt": 20
+  },
+  {
+    "id": "kubectl-pods", "icon": "☸️", "name": "Kurzform po (kubectl Pods)", "price": 20, "type": "comfort",
+    "desc": "Schaltet po als Kurzform für pods bei kubectl get frei.",
+    "unlockAt": 20
+  },
+  {
+    "id": "kubectl-nodes", "icon": "☸️", "name": "Kurzform no (kubectl Nodes)", "price": 20, "type": "comfort",
+    "desc": "Schaltet no als Kurzform für nodes bei kubectl get frei.",
+    "unlockAt": 20
+  },
+  {
+    "id": "kubectl-services", "icon": "☸️", "name": "Kurzform svc (kubectl Services)", "price": 20, "type": "comfort",
+    "desc": "Schaltet svc als Kurzform für services bei kubectl get frei.",
+    "unlockAt": 20
+  },
+  {
+    "id": "kubectl-ingress", "icon": "☸️", "name": "Kurzform ing (kubectl Ingress)", "price": 20, "type": "comfort",
+    "desc": "Schaltet ing als Kurzform für ingress bei kubectl get frei.",
+    "unlockAt": 20
+  },
+  {
+    "id": "kubectl-netpol", "icon": "☸️", "name": "Kurzform netpol (kubectl NetworkPolicies)", "price": 20, "type": "comfort",
+    "desc": "Schaltet netpol/netpols als Kurzform für networkpolicies bei kubectl frei.",
+    "unlockAt": 20
+  },
+  {
+    "id": "helm-values", "icon": "⚓", "name": "Kurzform -f (helm Values)", "price": 20, "type": "comfort",
+    "desc": "Schaltet -f als Kurzform für --values bei helm install/upgrade frei.",
+    "unlockAt": 20
+  },
+  {
+    "id": "helm-list", "icon": "⚓", "name": "Kurzform ls (helm list)", "price": 20, "type": "comfort",
+    "desc": "Schaltet ls als Kurzform für list bei helm frei.",
+    "unlockAt": 20
+  },
+  {
+    "id": "helm-dependency", "icon": "⚓", "name": "Kurzform dep (helm dependency)", "price": 20, "type": "comfort",
+    "desc": "Schaltet dep als Kurzform für dependency bei helm frei.",
+    "unlockAt": 20
+  },
+  {
+    "id": "git-commit-message", "icon": "🔀", "name": "Kurzform -m (git commit)", "price": 20, "type": "comfort",
+    "desc": "Schaltet -m als Kurzform für --message bei git commit frei.",
+    "unlockAt": 20
+  },
+  {
+    "id": "argocd-app-list", "icon": "🔄", "name": "Kurzform ls (argocd app list)", "price": 20, "type": "comfort",
+    "desc": "Schaltet ls als Kurzform für list bei argocd app frei.",
+    "unlockAt": 20
   }
 ]

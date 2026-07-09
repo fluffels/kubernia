@@ -13,6 +13,7 @@
  */
 import { test, expect, vi, beforeEach, afterEach } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
+import { ABBREVS } from "../src/content/abbrev";
 
 const SAVE_KEY = "kubernia-save-v3";       // muss zu store.ts passen
 const DB_NAME = "kubernia";
@@ -134,7 +135,14 @@ test("init(): migriert einen bestehenden localStorage-Stand einmalig nach Indexe
   await SaveStore.init(); // IndexedDB leer + localStorage hat Stand → Migration
 
   expect(await directReadIdb(SAVE_KEY)).toBe(raw); // liegt jetzt 1:1 in IndexedDB
-  expect(SaveStore.readState()).toEqual({ xp: 5, questIdx: 2 }); // und ist normal lesbar
+  // v3 < aktuelle Version -> läuft durch die Migrationskette; seit #574 grandfathert xp>0 ohne
+  // unlockedAbbrev-Feld alle aktuellen Abkürzungen (uralter Vor-#297-Fall), sonst unverändert.
+  expect(SaveStore.readState()).toEqual({
+    xp: 5, questIdx: 2,
+    owned: ABBREVS.map(a => a.id),
+    unlockedComfort: ABBREVS.map(a => a.id),
+    comfortUsage: {},
+  }); // und ist normal lesbar
 });
 
 test("Fallback: ohne IndexedDB bleibt der synchrone localStorage-Modus aktiv", async () => {
@@ -188,7 +196,14 @@ test("Backup-Slot greift auch im IndexedDB-Modus (Alt-Stand wird vor Migration g
   await SaveStore.init(); // hydriert den Cache aus IndexedDB (legacyRaw)
 
   expect(SaveStore.readBackup()).toBe(null);          // vorher nichts gesichert
-  expect(SaveStore.readState()).toEqual({ xp: 999, coins: 5 }); // migriert (v0 → aktuell)
+  // migriert (v0 → aktuell); seit #574 grandfathert xp>0 ohne unlockedAbbrev-Feld alle
+  // aktuellen Abkürzungen (uralter Vor-#297-Fall, siehe store/versioning.ts).
+  expect(SaveStore.readState()).toEqual({
+    xp: 999, coins: 5,
+    owned: ABBREVS.map(a => a.id),
+    unlockedComfort: ABBREVS.map(a => a.id),
+    comfortUsage: {},
+  });
   expect(SaveStore.readBackup()).toBe(legacyRaw);     // Original vor dem Überschreiben gesichert
   expect(await directReadIdb("kubernia-save-backup-v1")).toBe(legacyRaw); // Backup liegt in IndexedDB
 });

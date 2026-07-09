@@ -7,6 +7,7 @@
 import { test, expect, vi, afterEach } from "vitest";
 import { stubWindowLocalStorage } from "./support/browser-env";
 import { makeQuotaStub } from "./support/quota-stub";
+import { ABBREVS } from "../src/content/abbrev";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -91,8 +92,16 @@ test("readState: migriert einen Alt-Stand OHNE Hülle (Version 0) verlustfrei", 
   const legacy = { xp: 999, coins: 5, questIdx: 3 };
   ls._map.set(SAVE_KEY, JSON.stringify(legacy));
 
-  // Wird als Version 0 erkannt und unverändert auf das aktuelle Format gehoben.
-  expect(SaveStore.readState()).toEqual(legacy);
+  // Wird als Version 0 erkannt und unverändert auf das aktuelle Format gehoben – EINE
+  // beabsichtigte Ausnahme (#574): echter Fortschritt (xp>0) OHNE unlockedAbbrev-Feld ist
+  // genau der uralte Vor-#297-Fall, den migrations[6] grandfathert (siehe store/versioning.ts).
+  // Alle anderen Felder bleiben unverändert.
+  expect(SaveStore.readState()).toEqual({
+    ...legacy,
+    owned: ABBREVS.map(a => a.id),
+    unlockedComfort: ABBREVS.map(a => a.id),
+    comfortUsage: {},
+  });
 });
 
 test("readState: kaputte Datei führt zu frischem Start (null), nicht zum Crash", async () => {
@@ -199,13 +208,19 @@ test("readState: ein v1-Stand wird auf das aktuelle Format migriert und vorher g
 
   // #353 hat das Format auf v2 gehoben (Quest-Fortschritt zusätzlich als ID). Ein v1-Stand
   // ist also älter als CURRENT -> wird gesichert. Die ID-Ableitung selbst macht game.ts
-  // (deckt auch den JSON-Import ab), darum bleibt die store-Migration strukturell ein No-op:
-  // die Nutzlast kommt unverändert zurück, nur in den Backup-Slot kopiert.
+  // (deckt auch den JSON-Import ab), darum bleibt die store-Migration für DIESES Feld ein
+  // No-op. Seit #574 ist migrations[6] aber KEIN reines No-op mehr: xp>0 ohne unlockedAbbrev-
+  // Feld grandfathert alle aktuellen Abkürzungen (uralter Vor-#297-Fall, siehe store/versioning.ts).
   expect(CURRENT_SAVE_VERSION).toBeGreaterThanOrEqual(2);
   const v1Raw = JSON.stringify({ v: 1, data: { xp: 5, questIdx: 2 } });
   ls._map.set(SAVE_KEY, v1Raw);
 
-  expect(SaveStore.readState()).toEqual({ xp: 5, questIdx: 2 }); // Daten unverändert
+  expect(SaveStore.readState()).toEqual({
+    xp: 5, questIdx: 2,
+    owned: ABBREVS.map(a => a.id),
+    unlockedComfort: ABBREVS.map(a => a.id),
+    comfortUsage: {},
+  });
   expect(SaveStore.readBackup()).toBe(v1Raw);                    // Original gesichert
 });
 

@@ -13,6 +13,7 @@
  */
 import { test, expect, vi, afterEach, beforeEach } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
+import { ABBREVS } from "../src/content/abbrev";
 
 const SAVE_KEY = "kubernia-save-v3";        // = Daten-Key des Default-Slots (Legacy)
 const SLOTS_KEY = "kubernia-slots-v1";
@@ -72,7 +73,14 @@ test("Default-Slot nutzt den Legacy-Key: ein bestehender Einzelstand ist automat
   ls._map.set(SAVE_KEY, JSON.stringify({ v: 3, data: { xp: 42, coins: 7 } }));
 
   expect(SaveStore.activeSlotId()).toBe(DEFAULT_SLOT_ID);
-  expect(SaveStore.readState()).toEqual({ xp: 42, coins: 7 }); // ohne jede Migration lesbar
+  // v3 < aktuelle Version -> läuft durch die Migrationskette; seit #574 grandfathert xp>0 ohne
+  // unlockedAbbrev-Feld alle aktuellen Abkürzungen (uralter Vor-#297-Fall), sonst unverändert.
+  expect(SaveStore.readState()).toEqual({
+    xp: 42, coins: 7,
+    owned: ABBREVS.map(a => a.id),
+    unlockedComfort: ABBREVS.map(a => a.id),
+    comfortUsage: {},
+  });
 });
 
 test("Single-Slot bleibt byte-identisch: writeState schreibt nur den Save-Key, keinen Index", async () => {

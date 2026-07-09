@@ -202,15 +202,16 @@ export const radioUI = part({
 
     if (verdict.outcome === "solved") {
       this.failCount = 0;
-      // #313: jede korrekt getippte Langform eines noch gesperrten Bausteins zählt
-      // Richtung Freischaltung; bei Erreichen der Schwelle ist die Kurzform „verdient".
+      // #313/#574: jede korrekt getippte Langform eines noch gesperrten Bausteins zählt Richtung
+      // „verdient" (Komfort-Kauf-Mechanik #572) – bei Erreichen der Schwelle ist die Kurzform im
+      // Shop kaufbar (noch nicht aktiv, das macht erst der Kauf).
       for (const id of verdict.longForms) {
-        if (Game.recordAbbrevLongFormUse(id)) {
+        if (Game.recordComfortUse(id)) {
           const pair = ABBREVS.find(a => a.id === id);
           if (pair) this.celebrate({
             kind: "abbrev", icon: "🔓",
             title: `${pair.short[pair.short.length - 1]} = ${pair.long}`,
-            detail: `Profi-Abkürzung verdient – ${ABBREV_EARN_THRESHOLD}× ausgeschrieben!`,
+            detail: `Profi-Abkürzung verdient – ${ABBREV_EARN_THRESHOLD}× ausgeschrieben, jetzt im Shop kaufbar!`,
           });
         }
       }
