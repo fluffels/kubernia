@@ -13,13 +13,14 @@ name: Forum-Eingang
 # Den vollen Thread liest erst der /forum-Skill – dort gilt Discussion-Inhalt ausdrücklich
 # als Daten, nie als Instruktion.
 #
-# Board-Prio (#644): Seit #627 ist das Board-Feld `Prio` die SSOT der Reihenfolge –
-# ein Issue OHNE gesetztes `Prio` sortiert ganz nach unten. Damit ein frisch geflaggtes
-# Forum-Ticket nicht untergeht, setzt diese Action beim Anlegen das Board-`Prio`-Feld
-# direkt auf "Hoch" (GraphQL: addProjectV2ItemById idempotent + updateProjectV2ItemFieldValue).
+# Board-Position (#747): Die Reihenfolge lebt seit #747 in der manuellen Board-Reihenfolge
+# (das "nächstes Ticket" ist das oberste freie Item der Board-Liste; das frühere `Prio`-Feld
+# ist entfernt). Damit ein frisch geflaggtes Forum-Ticket sofort vorne steht, schiebt diese
+# Action das neue Issue an die OBERSTE Board-Position (GraphQL: addProjectV2ItemById idempotent
+# + updateProjectV2ItemPosition ohne afterId = ganz oben).
 # ⚠️ Das braucht einen PAT mit `project`-Scope als Secret PROJECT_TOKEN – das
 # Standard-GITHUB_TOKEN kann NICHT in ein User-Project V2 schreiben. Fehlt das Secret,
-# wird nur gewarnt (das Inbox-Issue selbst entsteht trotzdem, sortiert dann ohne Prio).
+# wird nur gewarnt (das Inbox-Issue selbst entsteht trotzdem, steht dann irgendwo im Board).
 #
 # Damit discussion-Trigger feuern, muss diese Datei auf dem Default-Branch (main) liegen.
 
@@ -54,28 +55,27 @@ jobs:
           EVENT: ${{ github.event_name }}
           SENDER: ${{ github.event.sender.login }}
           COMMENT_URL: ${{ github.event.comment.html_url }}
-          # Board-Prio setzen (#644). Das Standard-GITHUB_TOKEN kann NICHT in ein
+          # Board-Position setzen (#747). Das Standard-GITHUB_TOKEN kann NICHT in ein
           # User-Project V2 schreiben – dafür ein PAT mit project-Scope als Secret
-          # PROJECT_TOKEN. Fehlt es, wird nur gewarnt (siehe set_board_prio unten).
+          # PROJECT_TOKEN. Fehlt es, wird nur gewarnt (siehe set_board_top unten).
           PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-          # IDs des KubeQuest-Backlog-Boards + Prio-Feld/Option (stabile Node-IDs,
-          # siehe docs/ticket-reihenfolge.md › Priorität pflegen).
+          # Node-ID des KubeQuest-Backlog-Boards (stabil,
+          # siehe docs/ticket-reihenfolge.md › Reihenfolge pflegen).
           PROJECT_ID: PVT_kwHOD8746c4Barq_
-          PRIO_FIELD_ID: PVTSSF_lAHOD8746c4Barq_zhXBLXs
-          PRIO_HOCH_OPTION: 2c80551d
         run: |
           set -euo pipefail
           marker="Forum #${DISC_NUMBER}:"
           link="${COMMENT_URL:-$DISC_URL}"
 
-          # Setzt das Board-Feld `Prio` eines frisch angelegten Issues auf "Hoch" (#644),
-          # damit ein Forum-Ticket in der Board-SSOT nicht ganz unten (ohne Prio) landet.
+          # Schiebt ein frisch angelegtes Issue an die OBERSTE Board-Position (#747),
+          # damit ein Forum-Ticket beim "nächstes Ticket"-Griff sofort vorne steht.
           # addProjectV2ItemById ist idempotent: ist das Issue schon per Board-„Auto-add"
           # drauf, kommt einfach die bestehende Item-ID zurück – der async-Race ist damit egal.
-          set_board_prio() {
+          # updateProjectV2ItemPosition ohne afterId = ganz oben.
+          set_board_top() {
             local issue_url="$1"
             if [ -z "${PROJECT_TOKEN:-}" ]; then
-              echo "::warning::PROJECT_TOKEN-Secret fehlt – Board-Prio für ${issue_url} nicht gesetzt (Issue sortiert ohne Prio ganz unten). PAT mit project-Scope als Secret PROJECT_TOKEN hinterlegen."
+              echo "::warning::PROJECT_TOKEN-Secret fehlt – Board-Position für ${issue_url} nicht gesetzt (Issue steht dann irgendwo statt oben). PAT mit project-Scope als Secret PROJECT_TOKEN hinterlegen."
               return 0
             fi
             local content_id
@@ -86,9 +86,9 @@ jobs:
               -f p="$PROJECT_ID" -f c="$content_id" \
               --jq '.data.addProjectV2ItemById.item.id')
             GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
-              -f query='mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' \
-              -f p="$PROJECT_ID" -f i="$item_id" -f f="$PRIO_FIELD_ID" -f o="$PRIO_HOCH_OPTION" >/dev/null
-            echo "Board-Prio 'Hoch' gesetzt für ${issue_url} (item ${item_id})."
+              -f query='mutation($p:ID!,$i:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i}){ items(first:1){ nodes{ id } } } }' \
+              -f p="$PROJECT_ID" -f i="$item_id" >/dev/null
+            echo "Board-Position 'oben' gesetzt für ${issue_url} (item ${item_id})."
           }
 
           # Unvertrauten externen Titel entschärfen (#531): Länge kappen, Backtick/HTML/
@@ -125,7 +125,7 @@ jobs:
               --label "forum" \
               --body "$body")
             echo "Angelegt: ${new_url}"
-            # Board-Prio direkt auf "Hoch" (#644) – nur beim NEUEN Issue, nicht beim
-            # Ergänzen eines bestehenden (das steht schon mit seiner Prio im Board).
-            set_board_prio "$new_url"
+            # An die oberste Board-Position schieben (#747) – nur beim NEUEN Issue, nicht
+            # beim Ergänzen eines bestehenden (das steht schon an seiner Board-Position).
+            set_board_top "$new_url"
           fi

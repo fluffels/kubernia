@@ -89,7 +89,7 @@ Dieses Repo ist **öffentlich – aber zur Sichtbarkeit für Kollegen**, nicht a
 
 > **Auto-Merge – jetzt möglich (seit #592).** GitHub-natives Auto-Merge für grüne Patch/Minor-PRs setzt **Required Status Checks** auf `main` voraus. Die sind seit **#592** gesetzt (der frühere Direkt-Push-Workflow, der das blockierte, ist auf PR-Gating umgestellt) — die Voraussetzung ist also erfüllt. Der Merge grüner Updates bleibt bis auf Weiteres ein **bewusster Handgriff** (`gh pr merge --squash`, sobald die Required-Checks grün sind); das Grouping oben senkt das PR-Aufkommen bereits deutlich. **Wenn voll automatisiert gewünscht:** `allow_auto_merge` am Repo aktivieren und via `dependabot/fetch-metadata` + `gh pr merge --auto` nur Patch/Minor automatisieren (Majors bleiben manuell im Review).
 
-> **Damit offene Dependabot-PRs nicht vergessen werden (#712):** die Action [`dependabot-inbox.yml`](.github/workflows/dependabot-inbox.yml) sammelt sie täglich in einem Board-Ticket „🤖 Dependabot-PRs auflösen" mit Prio **Kritisch** — der bewusste Merge-Handgriff oben bleibt, aber er wird nicht mehr übersehen.
+> **Damit offene Dependabot-PRs nicht vergessen werden (#712):** die Action [`dependabot-inbox.yml`](.github/workflows/dependabot-inbox.yml) sammelt sie täglich in einem Board-Ticket „🤖 Dependabot-PRs auflösen" an der **obersten** Board-Position — der bewusste Merge-Handgriff oben bleibt, aber er wird nicht mehr übersehen.
 
 ### PRs von fremden GitHub-Nutzern (Menschen)
 

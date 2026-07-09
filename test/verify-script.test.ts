@@ -143,10 +143,11 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
  *  2. ein Alarm-Job öffnet bei rotem main ein Alarm-Issue, NUR auf push (nicht
  *     bei PRs) und ohne den Workflow zu blockieren.
  *
- * #658: Seit #627 sind die `prio:*`-Labels entfernt — der Alarm-Job darf sich nicht
- * mehr auf das nicht mehr existierende `prio:hoch`-Label verlassen (sonst bräche
- * `gh issue create` mit „label not found" genau dann, wenn der Alarm greifen soll).
- * Stattdessen: existierendes Label + Board-`Prio` per GraphQL (Muster wie #644).
+ * #658/#747: Seit #627 sind die `prio:*`-Labels entfernt, seit #747 auch das
+ * Board-`Prio`-Feld — der Alarm-Job darf sich weder auf `prio:hoch` (bräche
+ * `gh issue create` mit „label not found") noch auf das Prio-Feld verlassen.
+ * Stattdessen: existierendes Label + an die OBERSTE Board-Position schieben per
+ * GraphQL (Muster wie forum-inbox.yml).
  */
 describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
   const ci = readRepo(".github/workflows/ci.yml");
@@ -178,17 +179,18 @@ describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
     expect(ci).toMatch(/gh issue create[\s\S]*?--label "\$ALARM_LABEL"/);
   });
 
-  it("priorisiert stattdessen über die Board-Prio per GraphQL (Muster #644, #658)", () => {
-    // Board-, Prio-Feld- und Kritisch-Options-ID müssen verdrahtet sein.
+  it("priorisiert stattdessen über die Board-Position per GraphQL (Muster forum-inbox.yml, #747)", () => {
+    // Board-Node-ID muss verdrahtet sein.
     expect(ci).toContain("PVT_kwHOD8746c4Barq_");
-    expect(ci).toContain("PVTSSF_lAHOD8746c4Barq_zhXBLXs");
-    expect(ci, "Options-ID für 'Kritisch' fehlt").toContain("0663cd9e");
-    // Beide Mutationen: idempotent aufs Board hängen UND das Feld setzen.
+    // Das entfernte Prio-Feld darf NICHT mehr beschrieben werden (#747).
+    expect(ci, "das Prio-Feld ist seit #747 entfernt").not.toContain("updateProjectV2ItemFieldValue");
+    expect(ci, "die Prio-Feld-ID gehört seit #747 nicht mehr in den Workflow").not.toContain("PVTSSF_lAHOD8746c4Barq_zhXBLXs");
+    // Beide Mutationen: idempotent aufs Board hängen UND an die Spitze schieben.
     expect(ci).toContain("addProjectV2ItemById");
-    expect(ci).toContain("updateProjectV2ItemFieldValue");
+    expect(ci).toContain("updateProjectV2ItemPosition");
     // Am NEU angelegten Issue aufgerufen.
     expect(ci).toMatch(/new_url=\$\(gh issue create/);
-    expect(ci).toContain('set_board_prio "$new_url"');
+    expect(ci).toContain('set_board_top "$new_url"');
   });
 
   it("degradiert ohne PROJECT_TOKEN graceful (nur Warnung, Issue entsteht trotzdem, #658)", () => {
