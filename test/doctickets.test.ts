@@ -75,10 +75,18 @@ describe("Doku-Aktualitäts-Wächter (#610)", () => {
 
   // ── Gegen das echte Doc: die Marker existieren und #492 ist nicht (mehr) offen ──
 
-  test("das echte agent-harness.md hat die Marker und listet eine nicht-leere, gültige Menge", () => {
+  test("das echte agent-harness.md hat die Marker und listet eine gültige (ggf. leere) Menge", () => {
     const md = readFileSync(join(ROOT, HARNESS_DOC), "utf8");
+    // Die Marker müssen existieren UND richtig herum stehen — ein versehentlich
+    // gelöschter/verdrehter Marker würde die Roadmap-Prüfung sonst still lahmlegen
+    // (parseOpenHarnessTickets liefert dann [] aus dem falschen Grund).
+    const start = md.indexOf(OPEN_TICKETS_START);
+    const end = md.indexOf(OPEN_TICKETS_END);
+    assert.ok(start >= 0 && end >= 0 && end > start, "Die open-harness-tickets-Marker müssen existieren und in Reihenfolge stehen.");
+    // Eine LEERE Menge ist ein legitimer Zustand: die Roadmap kann vollständig
+    // abgearbeitet sein (#695/#704 — der letzte offene Punkt #612 ist gelandet).
+    // Geprüft wird darum nur die Gültigkeit der (ggf. leeren) Menge, nicht ihre Größe.
     const open = parseOpenHarnessTickets(md);
-    assert.ok(open.length > 0, "Es sollte mindestens ein offen-markiertes Roadmap-Ticket geben.");
     // sortiert, eindeutig, positive Ganzzahlen
     assert.deepEqual(open, [...new Set(open)].sort((a, b) => a - b));
     assert.ok(
