@@ -54,6 +54,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "<code>ls</code> verschafft dir zuerst den Überblick, was überhaupt im Ordner liegt – Bauplan, App und Manifeste. Man arbeitet nie blind in einem Verzeichnis, sondern schaut erst, welches Material da ist.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -63,6 +64,7 @@
               "^cat\\s+Dockerfile$"
             ],
             "solution": "cat Dockerfile",
+            "why": "Das <code>Dockerfile</code> ist der Bauplan deines Images: <code>FROM</code> nennt das Basis-Image, <code>EXPOSE</code> den Port. Diese Werte musst du kennen, bevor du baust – sie bestimmen, was am Ende im Image steckt und worauf es lauscht.",
             "hint": "cat <datei> – die Datei heißt genau 'Dockerfile' (großes D, ohne Endung)."
           },
           {
@@ -72,6 +74,7 @@
               "^cat\\s+server\\.js$"
             ],
             "solution": "cat server.js",
+            "why": "Ein Blick in die App verrät den entscheidenden Wert: den <b>Port</b> in <code>listen(...)</code>. Der muss später zu <code>containerPort</code> und <code>targetPort</code> passen – Portfehler sind eine der häufigsten Ursachen für „läuft, antwortet aber nicht“.",
             "hint": "cat <datei> – achte auf die Portnummer in listen(...)."
           },
           {
@@ -81,6 +84,7 @@
               "^cat\\s+deployment\\.yaml$"
             ],
             "solution": "cat deployment.yaml",
+            "why": "Das Deployment-Manifest verknüpft alles: der <code>image</code>-Name sagt, welches Image gestartet wird, der <code>containerPort</code>, wohin der Verkehr geht. Diese Werte im Kopf zu haben, bevor du anwendest, erspart dir das Rätselraten, wenn etwas hakt.",
             "hint": "cat <datei> – das Image heißt 'werft-dienst:1.0', der containerPort ist 8080."
           }
         ]
@@ -115,6 +119,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"werft-dienst"}},
             "solution": "kubectl apply --filename deployment.yaml",
+            "why": "<code>apply</code> meldet Kubernetes den Wunschzustand aus der Datei – deklarativ. Der Cluster legt das Deployment sofort an und <i>versucht</i>, es zu erfüllen; ob das gelingt, ist eine zweite Frage – deshalb schaust du gleich mit get pods nach.",
             "hint": "kubectl apply --filename <datei> (die Kurzform -f verdienst du dir durch Nutzung)"
           },
           {
@@ -124,6 +129,7 @@
               "^kubectl\\s+get\\s+(pods|po)$"
             ],
             "solution": "kubectl get pods",
+            "why": "<code>get pods</code> deckt auf, dass der Wunsch nicht erfüllt ist: <b>ImagePullBackOff</b>, weil das Image noch gar nicht existiert. Der Cluster kann nur starten, was gebaut wurde – das Manifest allein zaubert kein Image herbei.",
             "hint": "kubectl get pods – Spalte STATUS zeigt ImagePullBackOff."
           }
         ]
@@ -157,6 +163,7 @@
               "^docker\\s+build\\s+(?:-t|--tag)\\s+werft-dienst:1\\.0\\s+\\.$"
             ],
             "solution": "docker build --tag werft-dienst:1.0 .",
+            "why": "<code>docker build</code> backt App und Abhängigkeiten aus dem Dockerfile in ein fertiges Image; der Punkt am Ende ist der <b>Build-Kontext</b> – der Ordner, den du der Engine zum Bauen reichst. Erst jetzt existiert das Image, das dein Deployment schon verlangt.",
             "hint": "docker build --tag <name>:<tag> . – vergiss den Punkt am Ende nicht (die Kurzform -t verdienst du dir durch Nutzung)."
           },
           {
@@ -167,6 +174,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"werft-dienst","broken":{"truthy":false}}},
             "solution": "kubectl rollout restart deployment werft-dienst",
+            "why": "Das Deployment sucht sein Image beim Start der Pods – die alten hängen fest. <code>rollout restart</code> zieht frische Pods hoch, die das nun vorhandene Image finden. So bringst du gebautes Image und wartendes Deployment kontrolliert zusammen.",
             "hint": "kubectl rollout restart deployment <name>"
           },
           {
@@ -176,6 +184,7 @@
               "^kubectl\\s+get\\s+(pods|po)$"
             ],
             "solution": "kubectl get pods",
+            "why": "Kontrolle nach dem Fix: <b>Running, 1/1</b> beweist, dass der frische Pod sein Image gefunden hat. Ohne den Blick würdest du nur hoffen, dass der Rollout gegriffen hat.",
             "hint": "kubectl get pods – STATUS jetzt Running."
           }
         ]
@@ -192,6 +201,7 @@
             ],
             "check": {"some":"services","where":{"name":"werft-dienst"}},
             "solution": "kubectl apply --filename service.yaml",
+            "why": "Ein laufender Pod ist noch nicht erreichbar – ein <b>Service</b> gibt ihm eine stabile Adresse und übersetzt Port 80 auf den <code>targetPort</code> 8080 des Containers. Erst diese Trennung von Adresse (Service) und Prozess (Pod) macht einen Dienst im Cluster ansprechbar.",
             "hint": "kubectl apply --filename <datei>"
           }
         ]
@@ -208,6 +218,7 @@
           ],
           "check": {"all":[{"some":"services","where":{"name":"werft-dienst"}},{"some":"deployments","where":{"name":"werft-dienst","broken":{"truthy":false}}}]},
           "solution": "curl http://werft-dienst",
+          "why": "<code>curl</code> ist der Klopftest von außen: Eine <b>200</b> beweist, dass die ganze Kette wirklich trägt – Service, Port-Weiterleitung und laufender Container zusammen. Ein Dienst gilt erst als fertig, wenn er nachweislich antwortet, nicht wenn er nur „da“ ist.",
           "hint": "curl http://<service-name> – der Name ist 'werft-dienst'."
         }
       },

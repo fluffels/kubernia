@@ -29,6 +29,7 @@
             "^helm\\s+repo\\s+add\\s+bitnami\\s+https:\\/\\/charts\\.bitnami\\.com\\/bitnami$"
           ],
           "solution": "helm repo add bitnami https://charts.bitnami.com/bitnami",
+          "why": "Charts wohnen in Repos wie Images in einer Registry – erst die Quelle bekannt machen, dann findet Helm überhaupt Pakete. Ohne hinzugefügtes Repo sucht Helm ins Leere.",
           "hint": "Muster: helm repo add <name> <url>"
         }
       },
@@ -43,6 +44,7 @@
             "^helm\\s+repo\\s+update$"
           ],
           "solution": "helm repo update",
+          "why": "Helm hält nur eine lokale Kopie des Katalogs – <code>update</code> holt die aktuelle Chart-Liste, damit du nicht versehentlich eine veraltete Version installierst. Wie „Paketquellen aktualisieren“ vor dem Einkauf.",
           "hint": "helm repo …"
         }
       },
@@ -57,6 +59,7 @@
             "^helm\\s+search\\s+repo\\s+nginx$"
           ],
           "solution": "helm search repo nginx",
+          "why": "Statt den Chart-Namen blind zu raten, durchsuchst du die Repos gezielt – so findest du den exakten Namen und tippst dich beim Installieren nicht vertan.",
           "hint": "helm search repo <begriff>"
         }
       },
@@ -124,6 +127,7 @@
             "^helm\\s+install\\s+mein-web\\s+bitnami\\/nginx$"
           ],
           "solution": "helm install mein-web bitnami/nginx",
+          "why": "Ein Release ist eine benannte Installation eines Charts – der Name macht daraus etwas, das du später gezielt upgraden, zurückrollen oder löschen kannst. So läuft EIN Chart auch mehrfach nebeneinander.",
           "hint": "Muster: helm install <release-name> <repo>/<chart>"
         }
       },
@@ -138,6 +142,7 @@
             "^helm\\s+(list|ls)$"
           ],
           "solution": "helm list",
+          "why": "<code>helm list</code> zeigt deine Releases mit Revision und Status – der Überblick, was gerade im Cluster hängt. Ohne ihn arbeitest du blind an dem, was du installiert hast.",
           "hint": "Schreib es aus: helm list (Englisch für „auflisten“; die Kurzform ls verdienst du dir durch Nutzung)."
         }
       },
@@ -153,6 +158,7 @@
             ],
             "check": {"count":"releases","cmp":">","value":0},
             "solution": "kubectl get pods",
+            "why": "Helm zaubert nichts Eigenes – es rendert und erzeugt ganz normale Kubernetes-Ressourcen. Darum siehst du das Ergebnis mit demselben <code>kubectl</code> wie jedes andere Deployment.",
             "hint": "Kennst du im Schlaf."
           }
         ]
@@ -213,6 +219,7 @@
             "^helm\\s+upgrade\\s+mein-web\\s+bitnami\\/nginx\\s+--set\\s+replicaCount=3$"
           ],
           "solution": "helm upgrade mein-web bitnami/nginx --set replicaCount=3",
+          "why": "Statt Manifeste von Hand zu ändern, drehst du mit <code>--set</code> an den Werten des Charts – Helm rendert neu und zählt die Revision hoch. So wird jede Änderung nachvollziehbar und umkehrbar.",
           "hint": "Muster: helm upgrade <release> <chart> --set replicaCount=3"
         }
       },
@@ -234,6 +241,7 @@
             "^helm\\s+rollback\\s+mein-web(\\s+1)?$"
           ],
           "solution": "helm rollback mein-web 1",
+          "why": "Weil Helm jede Revision aufhebt, ist ein kaputtes Upgrade kein Drama – <code>rollback</code> setzt den Release auf einen früheren, funktionierenden Stand zurück. Die Revisions-Historie ist dein Sicherheitsnetz.",
           "hint": "Muster: helm rollback <release> <revision>"
         }
       },
@@ -248,6 +256,7 @@
             "^helm\\s+uninstall\\s+mein-web$"
           ],
           "solution": "helm uninstall mein-web",
+          "why": "<code>uninstall</code> räumt alle Ressourcen des Releases in einem Rutsch weg – ein Paket rein, ein Paket raus, kein manuelles Aufsammeln einzelner Objekte. Genau dafür bündelt Helm alles unter einem Release-Namen.",
           "hint": "Das Gegenteil von install."
         }
       },
@@ -309,6 +318,7 @@
             "^helm\\s+create\\s+funkdienst$"
           ],
           "solution": "helm create funkdienst",
+          "why": "<code>helm create</code> legt die feste Chart-Struktur (Chart.yaml, values.yaml, templates/) fertig an – so startest du nicht mit einer leeren Datei, sondern mit einem lauffähigen Gerüst nach Konvention.",
           "hint": "Muster: helm create <chart-name>"
         }
       },
@@ -330,6 +340,7 @@
             "^helm\\s+lint\\s+(\\.\\/)?funkdienst$"
           ],
           "solution": "helm lint funkdienst",
+          "why": "<code>lint</code> prüft Struktur und Stil, bevor du das Chart teilst oder ausrollst – Fehler früh am Schreibtisch fangen ist billiger als ein kaputtes Deployment im Cluster.",
           "hint": "Muster: helm lint <chart>"
         }
       },
@@ -344,6 +355,7 @@
             "^helm\\s+package\\s+(\\.\\/)?funkdienst$"
           ],
           "solution": "helm package funkdienst",
+          "why": "<code>package</code> schnürt das Chart in ein versioniertes <code>.tgz</code> – ein einzelnes, verteilbares Artefakt, das überall identisch installiert. So wandert dein Chart reproduzierbar in ein Repo oder zum Kollegen.",
           "hint": "Muster: helm package <chart>"
         }
       },
@@ -358,6 +370,7 @@
             "^helm\\s+install\\s+mein-funk\\s+\\.\\/funkdienst$"
           ],
           "solution": "helm install mein-funk ./funkdienst",
+          "why": "Ein lokaler Pfad statt <code>repo/chart</code> zeigt: die Quelle ist austauschbar, der Install-Befehl bleibt gleich. So testest du dein EIGENES Chart, noch bevor es je in ein Repo wandert.",
           "hint": "Muster: helm install <release> ./<chart>"
         }
       },
@@ -412,6 +425,7 @@
             "^helm\\s+upgrade\\s+mein-funk\\s+\\.\\/funkdienst\\s+(--values|-f)\\s+funkdienst\\/values\\.yaml$"
           ],
           "solution": "helm upgrade mein-funk ./funkdienst --values funkdienst/values.yaml",
+          "why": "Mit <code>--values</code> überschreibst du die Defaults aus <code>values.yaml</code>, ohne das Chart selbst anzufassen – dasselbe Chart läuft so mit anderen Werten je Hafen (Test, Prod). Vorlage bleibt, nur die Werte wechseln.",
           "hint": "Muster: helm upgrade <release> <chart> --values <datei>"
         }
       },
@@ -426,6 +440,7 @@
             "^helm\\s+(dependency|dep)\\s+(update|up)\\s+(\\.\\/)?funkdienst$"
           ],
           "solution": "helm dependency update funkdienst",
+          "why": "<code>dependency update</code> zieht die deklarierten Subcharts und zurrt ihre Versionen in <code>Chart.lock</code> fest – reproduzierbar, überall dieselben Abhängigkeiten. Ohne Lock baut morgen vielleicht ein anderer Stand.",
           "hint": "Muster: helm dependency update <chart>"
         }
       }
@@ -461,6 +476,7 @@
             "^helm\\s+create\\s+vorlage$"
           ],
           "solution": "helm create vorlage",
+          "why": "Ein frisches Beispiel-Chart ist die schnellste Art, echte Templates zu lesen – <code>helm create</code> liefert dir fertige Vorlagen mit allen typischen Platzhaltern zum Anschauen.",
           "hint": "Muster: helm create <chart-name>"
         }
       },
@@ -475,6 +491,7 @@
             "^cat\\s+vorlage\\/templates\\/deployment\\.yaml$"
           ],
           "solution": "cat vorlage/templates/deployment.yaml",
+          "why": "Ein Template ist YAML mit Platzhaltern <code>{{ … }}</code> – erst wenn du die Vorlage liest, verstehst du, was beim Rendern eingesetzt wird. Merksatz: Vorlage plus Werte ergibt das fertige Manifest.",
           "hint": "Muster: cat <pfad/zur/datei>"
         }
       },
@@ -489,6 +506,7 @@
             "^cat\\s+vorlage\\/templates\\/_helpers\\.tpl$"
           ],
           "solution": "cat vorlage/templates/_helpers.tpl",
+          "why": "In <code>_helpers.tpl</code> definierst du Schnipsel einmal und ziehst sie per <code>include</code> überall ein – wie eine Funktion statt Copy-Paste. Einheitliche Namen und Labels pflegst du so an EINER Stelle.",
           "hint": "Muster: cat <pfad/zur/datei>"
         }
       },
@@ -503,6 +521,7 @@
             "^helm\\s+template\\s+(\\.\\/)?vorlage$"
           ],
           "solution": "helm template vorlage",
+          "why": "<code>helm template</code> rendert die Vorlagen lokal zu fertigen Manifesten, ohne etwas zu installieren – so prüfst du gefahrlos, was <code>install</code> ausrollen würde. Vorschau statt Blindflug in den Cluster.",
           "hint": "Muster: helm template <chart>"
         }
       },

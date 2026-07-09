@@ -28,6 +28,7 @@
             ],
             "check": {"some":"serviceAccounts","where":{"name":"default"}},
             "solution": "kubectl get sa",
+            "why": "Bevor man etwas anlegt, schaut man erst, was schon da ist – so legst du nichts doppelt an und siehst, dass jeder Namespace die <code>default</code>-SA von Haus aus mitbringt.",
             "hint": "kubectl get sa"
           }
         ]
@@ -44,6 +45,7 @@
           ],
           "check": {"some":"serviceAccounts","where":{"name":"wachdienst"}},
           "solution": "kubectl create serviceaccount wachdienst",
+          "why": "Ein <b>eigener</b> ServiceAccount statt der geteilten <code>default</code>-SA ist der Kern von Least Privilege: nur so kann man einem einzelnen Dienst gezielt Rechte geben, ohne sie gleich allen anderen mitzuschenken.",
           "hint": "kubectl create serviceaccount <name>"
         }
       },
@@ -59,6 +61,7 @@
             ],
             "check": {"some":"serviceAccounts","where":{"name":"wachdienst"}},
             "solution": "kubectl get sa",
+            "why": "Nach einer Änderung gegenprüfen: erst wenn <code>wachdienst</code> wirklich in der Liste steht, weißt du, dass das Anlegen geklappt hat – nicht auf gut Glück weitermachen.",
             "hint": "kubectl get sa"
           }
         ]
@@ -89,6 +92,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Erst hinsehen, was auf der Wachstube liegt, dann handeln – mit einem Manifest arbeitest du nur sicher, wenn du weißt, welche Dateien überhaupt da sind.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -98,6 +102,7 @@
               "^cat\\s+wachposten\\.yaml$"
             ],
             "solution": "cat wachposten.yaml",
+            "why": "Ein Manifest liest man, bevor man es anwendet: nur so siehst du, dass der Ausweis über <code>spec.template.spec.serviceAccountName</code> ins Pod-Template gehört – und nicht an den fertigen Pod geheftet wird.",
             "hint": "cat <datei>"
           }
         ]
@@ -114,6 +119,7 @@
           ],
           "check": {"some":"deployments","where":{"name":"wachposten","serviceAccountName":"wachdienst"}},
           "solution": "kubectl apply --filename wachposten.yaml",
+          "why": "Die Identität heftet man ans Pod-Template, nicht an einen laufenden Pod: so trägt jeder Pod, den das Deployment neu erzeugt, automatisch denselben Ausweis – deklarativ statt von Hand nachbessern.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -129,6 +135,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"wachposten"}},
             "solution": "kubectl get pods",
+            "why": "Nach dem Ausrollen erst prüfen, ob der Pod wirklich läuft, bevor man weiterzieht – und sein Name aus dieser Liste ist genau das, was der nächste Schritt braucht.",
             "hint": "kubectl get pods"
           },
           {
@@ -139,6 +146,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"wachposten","serviceAccountName":"wachdienst"}},
             "solution": "kubectl describe pod <wachposten-pod>",
+            "why": "<code>describe</code> zeigt die Einzelheiten eines Objekts – hier belegt die Zeile <code>Service Account:</code> schwarz auf weiß, dass die Zuordnung wirklich griff, statt sie nur zu vermuten.",
             "hint": "Erst kubectl get pods, dann kubectl describe pod <name> mit dem wachposten-Pod."
           }
         ]
@@ -204,6 +212,7 @@
               "^kubectl\\s+auth\\s+can-i\\s+get\\s+pods\\s+--as=system:serviceaccount:default:wachdienst$"
             ],
             "solution": "kubectl auth can-i get pods --as=system:serviceaccount:default:wachdienst",
+            "why": "<code>kubectl auth can-i</code> fragt die echte Autorisierung ab, statt zu raten – die Gegenprobe VOR der Änderung macht später sichtbar, dass erst dein Binding den Unterschied bewirkt hat.",
             "hint": "kubectl auth can-i get pods --as=system:serviceaccount:default:wachdienst"
           }
         ]
@@ -240,6 +249,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Erst nachsehen, welche Manifeste bereitliegen, dann anwenden – so wendest du nichts blind an, dessen Inhalt du nicht kennst.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -249,6 +259,7 @@
               "^cat\\s+role\\.yaml$"
             ],
             "solution": "cat role.yaml",
+            "why": "Eine Role liest man vor dem Anwenden: unter <code>rules</code> stehen die erlaubten <code>verbs</code> auf <code>resources</code> – bewusst nur Lesen, denn mehr braucht der Dienst nicht (Least Privilege).",
             "hint": "cat <datei>"
           },
           {
@@ -258,6 +269,7 @@
               "^cat\\s+rolebinding\\.yaml$"
             ],
             "solution": "cat rolebinding.yaml",
+            "why": "Ein RoleBinding trennt sauber WER (<code>subjects</code>) von WAS (<code>roleRef</code>) – das Lesen zeigt dir, dass das Recht nicht in der Role klebt, sondern erst durch die Übergabe an ein Subjekt wirkt.",
             "hint": "cat <datei>"
           }
         ]
@@ -274,6 +286,7 @@
           ],
           "check": {"some":"roles","where":{"name":"pod-leser","cluster":false}},
           "solution": "kubectl apply --filename role.yaml",
+          "why": "Die Role allein bewirkt nichts – sie ist nur die Liste möglicher Rechte. Man legt sie zuerst an, damit das Binding im nächsten Schritt etwas hat, worauf es zeigen kann.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -289,6 +302,7 @@
           ],
           "check": {"some":"roleBindings","where":{"name":"wachdienst-darf-lesen","subjects":{"has":{"name":"wachdienst"}}}},
           "solution": "kubectl apply --filename rolebinding.yaml",
+          "why": "Erst das Binding macht die Rechte scharf: es verbindet die Role (WAS) mit dem ServiceAccount (WER). Ohne diesen Schritt bleibt die schönste Role folgenlos.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -304,6 +318,7 @@
             ],
             "check": {"some":"roleBindings","where":{"name":"wachdienst-darf-lesen"}},
             "solution": "kubectl auth can-i get pods --as=system:serviceaccount:default:wachdienst",
+            "why": "Dieselbe Frage wie vor dem Binding, jetzt mit <b>yes</b> – so beweist du die Wirkung deiner Änderung durch Vorher/Nachher statt durch Vermutung.",
             "hint": "kubectl auth can-i get pods --as=system:serviceaccount:default:wachdienst"
           },
           {
@@ -313,6 +328,7 @@
               "^kubectl\\s+auth\\s+can-i\\s+delete\\s+pods\\s+--as=system:serviceaccount:default:wachdienst$"
             ],
             "solution": "kubectl auth can-i delete pods --as=system:serviceaccount:default:wachdienst",
+            "why": "Die Rechte reichen genau so weit wie die <code>verbs</code> in der Role – <code>delete</code> steht nicht drin, also <b>no</b>. Genau diese scharfe Grenze ist der Sinn von Least Privilege.",
             "hint": "kubectl auth can-i delete pods --as=system:serviceaccount:default:wachdienst"
           },
           {
@@ -323,6 +339,7 @@
             ],
             "check": {"some":"roles","where":{"name":"pod-leser","cluster":false}},
             "solution": "kubectl describe role pod-leser",
+            "why": "<code>describe</code> übersetzt das YAML in Klartext: du siehst Resources und Verbs, ohne die Datei kennen zu müssen – die Quelle der Wahrheit ist der Cluster-Zustand, nicht dein Manifest auf der Platte.",
             "hint": "kubectl describe role <name>"
           }
         ]
@@ -389,6 +406,7 @@
             ],
             "check": {"some":"nodes"},
             "solution": "kubectl get nodes",
+            "why": "Nodes sind die Maschinen, auf denen alles läuft, und gehören zu <b>keinem</b> Namespace – dass man sie überhaupt cluster-weit auflistet, erklärt, warum gleich eine Role hier nicht ausreicht.",
             "hint": "kubectl get nodes"
           }
         ]
@@ -404,6 +422,7 @@
               "^kubectl\\s+auth\\s+can-i\\s+list\\s+nodes\\s+--as=system:serviceaccount:default:wachdienst$"
             ],
             "solution": "kubectl auth can-i list nodes --as=system:serviceaccount:default:wachdienst",
+            "why": "Die Gegenprobe zeigt: die namespace-gebundene Role <code>pod-leser</code> kommt an die Nodes gar nicht heran – das motiviert die ClusterRole, statt sie einfach zu behaupten.",
             "hint": "kubectl auth can-i list nodes --as=system:serviceaccount:default:wachdienst"
           }
         ]
@@ -442,6 +461,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Erst schauen, welche Manifeste bereitliegen – man wendet nur an, was man vorher gesehen hat.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -451,6 +471,7 @@
               "^cat\\s+clusterrole\\.yaml$"
             ],
             "solution": "cat clusterrole.yaml",
+            "why": "Der fehlende <code>namespace</code> ist kein Versehen, sondern das Wesen einer ClusterRole: nur ohne Namespace-Grenze kann sie nicht-namespaced Ressourcen wie <code>nodes</code> überhaupt adressieren.",
             "hint": "cat <datei>"
           },
           {
@@ -460,6 +481,7 @@
               "^cat\\s+clusterrolebinding\\.yaml$"
             ],
             "solution": "cat clusterrolebinding.yaml",
+            "why": "Auch cluster-weit gilt WER (<code>subjects</code>) getrennt von WAS (<code>roleRef</code>) – und der <code>roleRef</code> zeigt auf eine ClusterRole, denn ein ClusterRoleBinding kann nur eine ClusterRole binden.",
             "hint": "cat <datei>"
           }
         ]
@@ -476,6 +498,7 @@
           ],
           "check": {"some":"roles","where":{"name":"knoten-spaeher","cluster":true}},
           "solution": "kubectl apply --filename clusterrole.yaml",
+          "why": "Wie die Role bewirkt auch die ClusterRole allein nichts – sie ist nur die (cluster-weite) Rechteliste; erst das Binding im nächsten Schritt macht sie scharf.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -491,6 +514,7 @@
           ],
           "check": {"some":"roleBindings","where":{"name":"wachdienst-rundblick","cluster":true}},
           "solution": "kubectl apply --filename clusterrolebinding.yaml",
+          "why": "Das ClusterRoleBinding lässt das Recht in <b>allen</b> Namespaces gelten. Bräuchtest du es nur in einem, nähmst du ein RoleBinding auf dieselbe ClusterRole – die Wahl des Bindings bestimmt die Reichweite.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -506,6 +530,7 @@
             ],
             "check": {"some":"roleBindings","where":{"name":"wachdienst-rundblick","cluster":true}},
             "solution": "kubectl auth can-i list nodes --as=system:serviceaccount:default:wachdienst",
+            "why": "Vorher <b>no</b>, jetzt <b>yes</b>: der Vorher/Nachher-Vergleich beweist, dass genau dein ClusterRoleBinding den cluster-weiten Zugriff freigeschaltet hat.",
             "hint": "kubectl auth can-i list nodes --as=system:serviceaccount:default:wachdienst"
           },
           {
@@ -515,6 +540,7 @@
               "^kubectl\\s+auth\\s+can-i\\s+delete\\s+nodes\\s+--as=system:serviceaccount:default:wachdienst$"
             ],
             "solution": "kubectl auth can-i delete nodes --as=system:serviceaccount:default:wachdienst",
+            "why": "Sehen ja, löschen nein – der Zugriff endet exakt an den <code>verbs</code> der ClusterRole. So bleibt der Blast Radius klein, selbst wenn der Ausweis in falsche Hände gerät.",
             "hint": "kubectl auth can-i delete nodes --as=system:serviceaccount:default:wachdienst"
           },
           {
@@ -525,6 +551,7 @@
             ],
             "check": {"some":"roles","where":{"name":"knoten-spaeher","cluster":true}},
             "solution": "kubectl describe clusterrole knoten-spaeher",
+            "why": "<code>describe</code> zeigt Resources und Verbs im Klartext – und die fehlende Namespace-Zeile bestätigt sichtbar, dass diese Rechteliste cluster-weit und nicht an einen Namespace gebunden ist.",
             "hint": "kubectl describe clusterrole <name>"
           }
         ]
@@ -633,6 +660,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Erst sehen, was bereitliegt: hier die eine Fassung roh, die andere gehärtet – dieser Vergleich ist schon der ganze Lerninhalt der Wache.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -642,6 +670,7 @@
               "^cat\\s+spaehposten-roh\\.yaml$"
             ],
             "solution": "cat spaehposten-roh.yaml",
+            "why": "Ohne <code>securityContext</code> läuft ein Container per Default als <b>root</b> – man muss das rohe Manifest lesen, um zu erkennen, dass hier nicht etwas fehlt, sondern der unsichere Default gilt.",
             "hint": "cat <datei>"
           },
           {
@@ -652,6 +681,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"spaehposten"}},
             "solution": "kubectl apply --filename spaehposten-roh.yaml",
+            "why": "Dass der ungehärtete Posten glatt durchgeht, ist genau der Punkt: solange der Namespace auf <code>privileged</code> steht, prüft niemand – das zeigt, warum man die Stufe aktiv hochsetzen muss.",
             "hint": "kubectl apply --filename <datei>"
           }
         ]
@@ -668,6 +698,7 @@
           ],
           "check": {"flag":["podSecurity"],"eq":"restricted"},
           "solution": "kubectl label namespace default pod-security.kubernetes.io/enforce=restricted",
+          "why": "Pod-Security setzt man als Namespace-Label, nicht pro Pod – so gilt die Regel für den ganzen Namespace und wird beim Ausrollen zentral durchgesetzt, statt sie an jedem Manifest einzeln zu erhoffen.",
           "hint": "kubectl label namespace default pod-security.kubernetes.io/enforce=restricted"
         }
       },
@@ -683,6 +714,7 @@
             ],
             "check": {"none":"deployments","where":{"name":"spaehposten"}},
             "solution": "kubectl delete deployment spaehposten",
+            "why": "Einen laufenden Pod härtet man nicht im Flug – man ersetzt ihn. Erst den unsicheren abräumen, dann den gehärteten neu ausrollen: Pods sind wegwerfbar, das ist Absicht.",
             "hint": "kubectl delete deployment <name>"
           },
           {
@@ -692,6 +724,7 @@
               "^cat\\s+spaehposten\\.yaml$"
             ],
             "solution": "cat spaehposten.yaml",
+            "why": "Die gehärtete Fassung liest man, um zu sehen, welche Felder <code>restricted</code> verlangt: <code>runAsNonRoot</code>, <code>allowPrivilegeEscalation: false</code> und ein read-only-Dateisystem – jede Zeile schrumpft die Angriffsfläche.",
             "hint": "cat <datei>"
           }
         ]
@@ -708,6 +741,7 @@
           ],
           "check": {"some":"deployments","where":{"name":"spaehposten"}},
           "solution": "kubectl apply --filename spaehposten.yaml",
+          "why": "Derselbe Namespace, der den rohen Posten jetzt abweist, lässt diesen durch – der Unterschied ist allein der <code>securityContext</code>. So sieht man direkt, dass die Härtung im Manifest das Tor passieren lässt.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -723,6 +757,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"spaehposten"}},
             "solution": "kubectl get pods",
+            "why": "Zum Schluss die Kontrolle: läuft der Pod wirklich? Erst wenn er unter <code>restricted</code> gehärtet durchs Tor kommt und steht, ist der sichere Weg auch praktisch bewiesen.",
             "hint": "kubectl get pods"
           }
         ]

@@ -33,6 +33,26 @@ function drillsMissingWhy(drills: typeof KQContent.DRILLS): string[] {
   return out;
 }
 
+/** Findet geführte Terminal-Aufgaben (`terminal`-Schritt `tasks`) und Teach-Befehle
+ *  (`teach`-Schritt `cmd`) ohne nicht-leere Begründung (`why`, #252, Nachzug zu #233).
+ *  Beide sind `QuestTask` und laufen durch dasselbe Funkgerät-Feedback – ohne `why`
+ *  bliebe die falsche Eingabe „nur falsch ohne Warum". Red-Green-absicherbarer Helfer;
+ *  akzeptiert eine übergebene Questliste, damit der Red-Test eine kaputte Task einschleusen kann. */
+function questTasksMissingWhy(quests: typeof KQContent.QUESTS): string[] {
+  const out: string[] = [];
+  for (const quest of quests) {
+    for (const step of quest.steps) {
+      if (step.type === "terminal") {
+        for (const t of step.tasks) if (!t.why || !t.why.trim()) out.push(`${quest.id}/${t.id}`);
+      }
+      if (step.type === "teach") {
+        if (!step.cmd.why || !step.cmd.why.trim()) out.push(`${quest.id}/${step.cmd.id}`);
+      }
+    }
+  }
+  return out;
+}
+
 /** Findet NPCs ohne Sprite-Asset (tex fehlt im Manifest) – das macht einen NPC
  *  „tot": Phaser fiele auf den grün-schwarzen Platzhalter zurück. Smalltalk ist
  *  bewusst NICHT universell Pflicht (z.B. Kralle führt direkt ins Quiz, ohne
@@ -343,6 +363,21 @@ test("Red-Green: ein Drill ohne why wird gemeldet", () => {
   const kaputt = { ...KQContent.DRILLS, "drill-leer": (_sim: KQSim) => ({ text: "x", accept: [/^x$/], solution: "x", hint: "x", why: "" }) };
   const fehlend = drillsMissingWhy(kaputt as typeof KQContent.DRILLS);
   assert.ok(fehlend.includes("drill-leer"), "Drill ohne why nicht gemeldet: " + fehlend.join(", "));
+});
+
+test("Story-Terminal-Tasks & Teach-Befehle: jede trägt eine nicht-leere Begründung (why, #252)", () => {
+  const fehlend = questTasksMissingWhy(KQContent.QUESTS);
+  assert.deepEqual(fehlend, [], "QuestTasks ohne why: " + fehlend.join(", "));
+});
+
+test("Red-Green: eine Terminal-Aufgabe ohne why wird gemeldet", () => {
+  // Ein Check, der auch bei fehlender Begründung grün bliebe, wäre wertlos (#252).
+  const kaputt = [
+    ...KQContent.QUESTS,
+    { id: "q-leer", steps: [{ type: "terminal", tasks: [{ id: "t-leer", why: "" }] }] },
+  ] as unknown as typeof KQContent.QUESTS;
+  const fehlend = questTasksMissingWhy(kaputt);
+  assert.ok(fehlend.includes("q-leer/t-leer"), "Task ohne why nicht gemeldet: " + fehlend.join(", "));
 });
 
 test("Quests: NPCs existieren, Choices haben genau richtige Antworten, reviewIds gültig", () => {
