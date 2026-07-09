@@ -32,6 +32,7 @@
   "helm-templates",
   "network-policy",
   "secrets-encrypted",
+  "security-cert-manager",
   "dns-service-discovery",
   "k8s-routing-lotse-minigame",
   "k8s-service-endpoints",

@@ -1109,6 +1109,86 @@
     ]
   },
   {
+    "id": "security-cert-manager",
+    "title": "Das Tor erneuert sich selbst",
+    "giver": "ada",
+    "topic": "security",
+    "rewardXp": 55,
+    "rewardCoins": 45,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "ada",
+        "lines": [
+          "Sauber, Lotse – das Hafentor spricht jetzt HTTPS. Aber unter uns: Wir haben das Zertifikat <b>von Hand</b> hinterlegt. Du hast das <code>hafen-tls</code>-Secret selbst angelegt und im Ingress verdrahtet. Funktioniert – bis zum Haken.",
+          "Zertifikate <b>laufen ab</b>. Eines von <b>Let's Encrypt</b> gilt nur <b>90 Tage</b>. Danach muss jemand rechtzeitig ein neues besorgen, das Secret austauschen und den Termin bloß nicht verschlafen. Verpasst du ihn, wirft das Tor plötzlich Zertifikatsfehler – und kein Besucher kommt mehr rein. Auf Dauer ist Handarbeit hier ein Risiko."
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "ada",
+        "lines": [
+          "Dafür gibt es <b>cert-manager</b> – einen kleinen Verwalter, der <b>im Cluster wohnt</b> und dir genau diese Handarbeit abnimmt. Du legst kein Secret mehr selbst an. Stattdessen beschreibst du nur deinen Wunsch als <code>Certificate</code>-Objekt: «Ich hätte gern ein gültiges Zertifikat für <code>hafen.de</code>.»",
+          "cert-manager liest diesen Wunsch, holt das Zertifikat von einer Ausstellungs-Quelle (z.B. <b>Let's Encrypt</b>), legt es als genau das <code>hafen-tls</code>-Secret ab, das dein Ingress schon nutzt – und <b>erneuert es automatisch</b>, lange bevor es abläuft. Einmal eingerichtet, kümmert es sich selbst.",
+          "Die Ausstellungs-Quelle konfigurierst du als <code>ClusterIssuer</code> (cluster-weit gültig) oder <code>Issuer</code> (nur ein Namespace): sie sagt cert-manager, <b>woher</b> die Zertifikate kommen. Kurz gemerkt: der <code>Issuer</code> ist die Quelle, das <code>Certificate</code> dein Wunsch daraus, das TLS-Secret das fertige Ergebnis."
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "ada",
+        "reviewId": "q-cert-manager",
+        "q": "Wozu nimmt dir <b>cert-manager</b> das Hafentor-Zertifikat ab – und was tust du noch selbst?",
+        "options": [
+          {
+            "t": "Du legst nur ein <code>Certificate</code>-Objekt an; cert-manager holt das Zertifikat von einem <code>Issuer</code>/<code>ClusterIssuer</code>, legt es als TLS-Secret ab und erneuert es automatisch vor Ablauf.",
+            "ok": true,
+            "reply": "Genau! Einmal den Wunsch beschreiben, den Rest – ausstellen, ablegen, rechtzeitig erneuern – erledigt cert-manager von selbst. Kein verpasster Termin mehr. 🔒"
+          },
+          {
+            "t": "cert-manager macht nichts automatisch – du musst das Zertifikat weiterhin selbst besorgen und das Secret bei jedem Ablauf von Hand austauschen.",
+            "ok": false,
+            "reply": "Andersherum: Genau diese Handarbeit nimmt cert-manager dir ab. Du beschreibst nur den Wunsch als <code>Certificate</code>, das Erneuern läuft dann von allein."
+          },
+          {
+            "t": "cert-manager verschlüsselt deine YAML-Dateien auf der Festplatte, damit niemand das Zertifikat stehlen kann.",
+            "ok": false,
+            "reply": "Nein, mit dem Verschlüsseln von Dateien hat er nichts zu tun. cert-manager <b>besorgt und erneuert</b> die Zertifikate fürs Tor – das ist seine Aufgabe."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "ada",
+        "q": "Und was ist dabei ein <code>ClusterIssuer</code> bzw. <code>Issuer</code>?",
+        "options": [
+          {
+            "t": "Die Ausstellungs-Quelle – sie sagt cert-manager, WOHER die Zertifikate kommen (z.B. Let's Encrypt). <code>ClusterIssuer</code> gilt cluster-weit, <code>Issuer</code> nur in einem Namespace.",
+            "ok": true,
+            "reply": "Richtig. Der Issuer ist die Quelle, das <code>Certificate</code> dein Wunsch daraus. Ein <code>ClusterIssuer</code> steht allen Namespaces zur Verfügung, ein <code>Issuer</code> nur seinem eigenen. ⚓"
+          },
+          {
+            "t": "Der Name des Ingress-Controllers, an dem das Zertifikat hängt.",
+            "ok": false,
+            "reply": "Nein – der Controller ist das Tor selbst. Der <code>Issuer</code> ist die <b>Quelle</b> der Zertifikate, aus der cert-manager sie holt."
+          },
+          {
+            "t": "Das fertige TLS-Secret mit <code>tls.crt</code> und <code>tls.key</code>.",
+            "ok": false,
+            "reply": "Das Secret ist das <b>Ergebnis</b>. Der <code>Issuer</code> ist die Quelle, die cert-manager anzapft, um genau dieses Secret zu füllen."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "ada",
+        "lines": [
+          "Fällt dir das Muster auf? Du sagst nur, <b>was</b> gelten soll (ein gültiges Zertifikat fürs Tor), und ein Verwalter im Cluster sorgt unermüdlich dafür, dass die Wirklichkeit dazu passt – ausstellen, ablegen, erneuern. Das ist das <b>Operator-Prinzip</b>: ein spezialisierter Helfer, der ein eigenes Objekt beobachtet und den Ist-Zustand laufend nachführt.",
+          "So ging's von Hand – so nimmt's dir cert-manager ab. Genau diesem Muster begegnest du im Cluster noch öfter. Merk's dir gut, Lotse. 🔒⚓"
+        ]
+      }
+    ]
+  },
+  {
     "id": "dns-service-discovery",
     "title": "Das Adressbuch des Hafens",
     "giver": "ada",
