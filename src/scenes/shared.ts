@@ -121,9 +121,10 @@ export interface SceneNpc {
   marker: Phaser.GameObjects.BitmapText;
 }
 
-/** Spieler-Laufzeitzustand der einfachen Szenen (Insel/Innenraum): Pixel-Position,
- *  Blickrichtung, ob gerade gelaufen wird. Die WorldScene hat eine eigene, um `dir`
- *  erweiterte Variante (`playerPos`). */
+/** Spieler-Laufzeitzustand aller Szenen (Insel/Innenraum und Hauptkarte): Pixel-
+ *  Position, Blickrichtung (`face`), ob gerade gelaufen wird. Die WorldScene nutzt
+ *  denselben Typ als `playerPos` (früher eine eigene, um ein totes `dir`-Feld
+ *  erweiterte Variante, #625). */
 export interface ScenePlayer {
   x: number;
   y: number;
