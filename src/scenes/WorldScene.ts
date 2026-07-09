@@ -9,7 +9,7 @@ import { setWorldScene } from "../runtime";
 import { expandRect, cull, FrameSampler, type Cullable } from "../hud/cull";
 import { getMapEntry, type MapId } from "../world/maps/mapregistry";
 import { DAY_CYCLE_MS } from "../core/clock";
-import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, readMoveInput, faceFrom, renderPlayer, type SceneNpc } from "./shared";
+import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, readMoveInput, faceFrom, renderPlayer, type SceneNpc, type ScenePlayer } from "./shared";
 import { HIT_R, LAMP_HIT } from "./geometry";
 // Spiel-Systeme als eigene, fokussierte Module (WorldScene.ts-Split #393, analog
 // scenes.ts-Split #345): freie Funktionen mit der Szene als Parameter (`scene`).
@@ -29,7 +29,7 @@ import { updateWarps } from "./worldscene/warps";
 // über WorldSceneLike sehen, hier wirklich existiert – ohne dass ein Modul eine zweite
 // Feldliste von Hand pflegt (frühere DynTagLike-Doppelpflege).
 import type {
-  WorldSceneFields, DecoItem, LabelSpec, DynTagData, DynDecorItem, PodSlot, Butterfly, PlayerPos,
+  WorldSceneFields, DecoItem, LabelSpec, DynTagData, DynDecorItem, PodSlot, Butterfly,
 } from "./worldscene/types";
 
 // #343/#386: Sub-Tile-Kollisionsradien liegen jetzt zentral in scenes/geometry.ts (#590).
@@ -85,7 +85,7 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   stormOverlay!: Phaser.GameObjects.Rectangle;
   dayNight!: Phaser.GameObjects.Rectangle;
   // Spieler + Haustier
-  playerPos!: PlayerPos;
+  playerPos!: ScenePlayer;
   playerShadow!: Phaser.GameObjects.Image;
   playerSprite!: Phaser.GameObjects.Image;
   petShadow!: Phaser.GameObjects.Image;
@@ -373,7 +373,7 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     this.playerPos = {
       x: sp && sp.x ? sp.x : spawn.x * T,
       y: sp && sp.y ? sp.y : spawn.y * T,
-      dir: 1, moving: false, face: "south",   // face: Blickrichtung für die 4-Richtungs-Sprites
+      moving: false, face: "south",   // face: Blickrichtung für die 4-Richtungs-Sprites
     };
     this.playerShadow = this.addShadow(this.playerPos.x, this.playerPos.y + 6);
     this.playerSprite = this.add.image(this.playerPos.x, this.playerPos.y + 6, "char_player").setOrigin(0.5, 0.81).setScale(0.6).setDepth(this.playerPos.y + 8);
@@ -497,7 +497,6 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     pl.moving = dx !== 0 || dy !== 0;
     if (pl.moving) {
       const len = Math.hypot(dx, dy);
-      if (dx) pl.dir = Math.sign(dx);
       // Blickrichtung für die 4 PixelLab-Richtungen (horizontal hat Vorrang bei Diagonale)
       pl.face = faceFrom(dx, dy, pl.face);
       this.tryMove(dx / len * 75 * dt, dy / len * 75 * dt);

@@ -25,7 +25,7 @@ import type { Spawn } from "../../content/entities";
 import type { LayoutBox } from "../../hud/labellayout";
 import type { Cullable, FrameSampler } from "../../hud/cull";
 import type { MapId } from "../../world/maps/mapregistry";
-import type { SceneNpc } from "../shared";
+import type { SceneNpc, ScenePlayer } from "../shared";
 
 /* ── Laufzeit-Typen der WorldScene-Felder (#423, hierher gezogen mit #496). ── */
 /** Gesetztes/gestreutes Deko-Element (Bäume/Möbel/Objekte) – renderStatics liest es. */
@@ -53,8 +53,6 @@ export interface DynDecorItem {
 export interface PodSlot { slot: number; crate: Phaser.GameObjects.Image; band: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; dep: string; }
 /** Über die Wiese flatternder Schmetterling. */
 export interface Butterfly { spr: Phaser.GameObjects.Image; ax: number; ay: number; ph: number; sp: number; }
-/** Spieler-Laufzeitzustand der Hauptkarte (wie `ScenePlayer`, plus `dir` für den Wurf). */
-export interface PlayerPos { x: number; y: number; dir: number; moving: boolean; face: string; }
 
 /** Die konkreten WorldScene-Felder + die Render-Primitive, die die Systemmodule auf
  *  der Szene aufrufen – als reines Typ-Interface (#496). WorldScene implementiert es,
@@ -111,7 +109,7 @@ export interface WorldSceneFields {
   stormOverlay: Phaser.GameObjects.Rectangle;
   dayNight: Phaser.GameObjects.Rectangle;
   // Spieler + Haustier
-  playerPos: PlayerPos;
+  playerPos: ScenePlayer;
   playerShadow: Phaser.GameObjects.Image;
   playerSprite: Phaser.GameObjects.Image;
   petShadow: Phaser.GameObjects.Image;
