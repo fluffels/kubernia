@@ -57,4 +57,9 @@ export const SHOP: ShopItem[] = [
     desc: "Arrr! Streng genommen nicht erlaubt. Ole drückt ein Auge zu." },
   { id: "kanone", icon: "💣", name: "Hafen-Kanone", price: 300, type: "upgrade",
     desc: "Steht danach am Dock. Piraten-Überfälle bringen dir +50% Kopfgeld." },
+  // #573: erste echte Komfort-Funktion (Zwei-Stufen-Gate #572) – die ID hier muss zu
+  // CMD_HISTORY_ITEM_ID in game/shared.ts passen (Content ist pure Domäne und darf die
+  // Anwendungsschicht nicht importieren, daher kein geteilter Konstanten-Import).
+  { id: "befehlshistorie", icon: "⌨️", name: "Befehlshistorie", price: 40, type: "comfort", unlockAt: 10,
+    desc: "Schaltet ↑/↓ im Funkgerät-Terminal frei: vorherige Befehle zurückholen, wie in einer echten Shell." },
 ];

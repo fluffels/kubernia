@@ -7,7 +7,7 @@
  * als Fallback). Anwendungsschicht – bewusst Phaser-frei und im Node-Test prüfbar.
  *
  * Die öffentliche API ist unverändert: kein Aufrufer wurde angefasst. Auch die Konstanten
- * ALL_ABBREV_UNLOCKED/ABBREV_EARN_THRESHOLD/CMD_HISTORY_UNLOCK_AT bleiben hier importierbar
+ * ALL_ABBREV_UNLOCKED/ABBREV_EARN_THRESHOLD bleiben hier importierbar
  * (ui/radio.ts + game.test.ts) – re-exportiert aus src/game/shared.ts. */
 import { Sim as KQSim } from "./sim";
 import type { GameState } from "./types";
@@ -22,7 +22,7 @@ import { tickBundle } from "./game/tick";
 import { hazardsBundle } from "./game/hazards";
 import { sandboxBundle } from "./game/sandbox";
 
-export { ALL_ABBREV_UNLOCKED, ABBREV_EARN_THRESHOLD, CMD_HISTORY_UNLOCK_AT } from "./game/shared";
+export { ALL_ABBREV_UNLOCKED, ABBREV_EARN_THRESHOLD } from "./game/shared";
 
 /* Die Annotation `: GameApi` ist der Drift-Wächter (#513): der Compiler prüft, dass die
  * komponierte Fassade GENAU die deklarierte Oberfläche erfüllt. Fehlt eine Bündel-Methode in
