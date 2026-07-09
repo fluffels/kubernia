@@ -1,9 +1,10 @@
 /* „Verdiente" Freischaltungen (#392, game.ts-Split): die per Nutzung freigeschalteten
- * Abkürzungen (#287/#297/#313) und die ↑/↓-Befehlshistorie des Funkgerät-Terminals (#316).
- * Beide folgen demselben Muster: additives Flag/Array, das ein Alt-Stand regulär
- * nachverdient (kein Bruch, kein Versions-Bump). Anwendungsschicht, Phaser-frei. */
+ * Abkürzungen (#287/#297/#313, additives Array) und die generische Komfort-Kauf-/
+ * Freischalt-Mechanik (#572) — deren erste konkrete Nutzung die ↑/↓-Befehlshistorie des
+ * Funkgerät-Terminals ist (#316, seit #573 Kauf statt eigenes additives Flag). Anwendungsschicht,
+ * Phaser-frei. */
 import { KQContent } from "../content";
-import { part, ALL_ABBREV_UNLOCKED, ABBREV_EARN_THRESHOLD, CMD_HISTORY_UNLOCK_AT } from "./shared";
+import { part, ALL_ABBREV_UNLOCKED, ABBREV_EARN_THRESHOLD, CMD_HISTORY_ITEM_ID } from "./shared";
 
 /** Freischalt-Methoden der Game-Fassade (Abkürzungen + Befehlshistorie). */
 export const unlocksBundle = part({
@@ -40,22 +41,12 @@ export const unlocksBundle = part({
     return false;
   },
 
-  /* ---------- Befehlshistorie freischalten (#316) ---------- */
-  /** Ist die ↑/↓-Befehlshistorie im Funkgerät-Terminal freigeschaltet? */
+  /* ---------- Befehlshistorie freischalten (#316, Kauf-Mechanik seit #573) ---------- */
+  /** Ist die ↑/↓-Befehlshistorie im Funkgerät-Terminal freigeschaltet, d.h. GEKAUFT (#573)?
+   *  Die Nutzung ("verdienen") zählt `recordComfortUse(CMD_HISTORY_ITEM_ID)`; erst der Kauf
+   *  danach (`Game.buy`/`state.owned`) aktiviert sie – wie jede andere Komfort-Funktion. */
   isCmdHistoryUnlocked(): boolean {
-    return this.state.cmdHistoryUnlocked;
-  },
-
-  /** Schaltet die Befehlshistorie frei, sobald genug Befehle getippt wurden
-   *  (`CMD_HISTORY_UNLOCK_AT`, Zähler = `stats.commands`). Idempotent; speichert bei der
-   *  Freischaltung. Gibt `true` zurück, wenn GENAU dieser Aufruf sie freigeschaltet hat
-   *  (für die einmalige Freischalt-Feier), sonst `false`. */
-  maybeUnlockCmdHistory(): boolean {
-    if (this.state.cmdHistoryUnlocked) return false;
-    if ((this.state.stats.commands || 0) < CMD_HISTORY_UNLOCK_AT) return false;
-    this.state.cmdHistoryUnlocked = true;
-    this.save();
-    return true;
+    return this.state.owned.includes(CMD_HISTORY_ITEM_ID);
   },
 
   /* ---------- Komfort-Funktionen: Kauf-/Freischalt-Mechanik (#572) ----------

@@ -139,15 +139,15 @@ export const radioUI = part({
     this._echoCommand(line, result);
     Game.state.stats.commands++;
     Game.save();
-    // #316: Befehlshistorie „durch Nutzung" freischalten – einmalige Feier beim Erreichen
-    // der Schwelle. Vorher tun ↑/↓ nichts (kleine Komfort-Funktion als Upgrade, nicht von
-    // Anfang an da). Echte Shells können das auch – kurz erwähnt im Toast.
-    if (Game.maybeUnlockCmdHistory()) {
+    // #316/#573: Befehlshistorie ist eine Komfort-Funktion (Zwei-Stufen-Gate #572) – Nutzung
+    // zählt Richtung „verdient" (dann im Shop kaufbar); ↑/↓ selbst tut erst nach dem Kauf
+    // etwas. Einmalige Feier GENAU beim Erreichen der Schwelle.
+    if (Game.recordComfortUse("befehlshistorie")) {
       // #314: als Erfolg feiern (gebündelt, sobald der Spieler das Terminal verlässt) statt
       // nur als Toast – die Feier poppt nie während des Tippens auf.
       this.celebrate({
-        kind: "cmdhistory", icon: "⌨️", title: "Befehlshistorie freigeschaltet",
-        detail: "Mit ↑/↓ holst du im Terminal vorherige Befehle zurück – wie in einer echten Shell.",
+        kind: "cmdhistory", icon: "⌨️", title: "Befehlshistorie jetzt im Shop kaufbar",
+        detail: "Mit ↑/↓ holst du im Terminal vorherige Befehle zurück – wie in einer echten Shell. Jetzt im Shop erhältlich!",
       });
     }
     this._maybeFunkExplain(line, result);
@@ -352,7 +352,7 @@ export const radioUI = part({
   },
 
   /** #316: ↑/↓ im Terminal-Eingabefeld blättert durch die Sitzungs-Befehlshistorie –
-   *  aber nur, wenn die Komfort-Funktion freigeschaltet ist (sonst No-op, default-Verhalten
+   *  aber nur, wenn die Komfort-Funktion GEKAUFT ist (#573, sonst No-op, default-Verhalten
    *  des Browsers bleibt). Die pure Navigations-Mathematik liegt in cmdhistory.ts; hier nur
    *  die DOM-Anbindung (Eingabefeld setzen, Cursor ans Ende). Gibt `true` zurück, wenn der
    *  Tastendruck verarbeitet wurde – dann unterdrückt main.ts das Default-Verhalten. */

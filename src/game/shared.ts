@@ -156,7 +156,6 @@ export interface GameApi extends GameData {
   unlockAbbrev(id: string): void;
   recordAbbrevLongFormUse(id: string): boolean;
   isCmdHistoryUnlocked(): boolean;
-  maybeUnlockCmdHistory(): boolean;
   // ---- unlocks.ts: Komfort-Funktionen Kauf-/Freischalt-Mechanik (#572) ----
   isComfortUnlocked(itemId: string): boolean;
   recordComfortUse(itemId: string): boolean;
@@ -216,10 +215,12 @@ export const ALL_ABBREV_UNLOCKED = "*";
  *  zugehörige Kurzform „verdient" und freischaltet. Zentral & bewusst tunebar. */
 export const ABBREV_EARN_THRESHOLD = 20;
 
-/** Schwelle (#316): so viele Befehle müssen im Funkgerät-Terminal getippt sein, bis die
- *  ↑/↓-Befehlshistorie „durch Nutzung" freigeschaltet wird. Bewusst früh – es soll ein
- *  spürbares kleines Upgrade sein, sobald man das Terminal ein paar Mal benutzt hat. */
-export const CMD_HISTORY_UNLOCK_AT = 10;
+/** Shop-Item-ID der Befehlshistorie-Komfort-Funktion (#316, Kauf-Mechanik seit #573): EINE
+ *  Stelle, die sowohl das Gate (`isCmdHistoryUnlocked`) als auch die Alt-Modell-Migration
+ *  (`sanitizeState`) kennen müssen. Die Nutzungs-Schwelle selbst steckt im SHOP-Eintrag
+ *  (`unlockAt`, content/progression.ts) – Content ist pure Domäne und kann diese Konstante
+ *  nicht importieren, daher muss die ID dort als passender Literal-String stehen. */
+export const CMD_HISTORY_ITEM_ID = "befehlshistorie";
 
 /** Tages-Index (Tage seit der Unix-Epoche) als SSOT für die persistierte Leitner-Fälligkeit
  *  (`due`) und den Streak (`lastDay`). Bewusst ein **UTC**-Tageszähler (kein
@@ -327,7 +328,6 @@ export function makeDefaultState(): GameState {
     questLogIntroShown: false,
     unlockedAbbrev: [],
     abbrevUsage: {},
-    cmdHistoryUnlocked: false,
     comfortUsage: {},
     unlockedComfort: [],
     stats: { commands: 0, reviews: 0, quizRight: 0, quizWrong: 0, piratesBeaten: 0, krakenBeaten: 0, stackBest: 0, packingBest: 0, yamlstructBest: 0, routingBest: 0, drifthealBest: 0, rbackeyringBest: 0, krallePractice: 0 },

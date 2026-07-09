@@ -9,7 +9,7 @@ import { SaveStore } from "../store";
 import { worldScene, applyAudioConfig, notifySaveFailed } from "../runtime";
 import { add, toCoins } from "../core/coins";
 import type { GameState, QuestProgress, QuestStep, LeitnerEntry } from "../types";
-import { part, makeDefaultState, questIdForIndex, questIndexForId, canonicalActiveQuests, isEventMode, ALL_ABBREV_UNLOCKED, type SlotView } from "./shared";
+import { part, makeDefaultState, questIdForIndex, questIndexForId, canonicalActiveQuests, isEventMode, ALL_ABBREV_UNLOCKED, CMD_HISTORY_ITEM_ID, type SlotView } from "./shared";
 
 /** Save-Migration #354: alte numerische Quest-IDs (q0, q2b, …) → neue sprechende Slugs.
  *  Quest-IDs sind in Spielständen persistiert (completedQuests + currentQuestId aus #353),
@@ -164,6 +164,18 @@ function resolveUnlockedAbbrev(raw: Record<string, unknown>): string[] {
   return hatFortschritt ? [ALL_ABBREV_UNLOCKED] : [];
 }
 
+/** Migration #573: das alte additive Freischalt-Flag der Befehlshistorie (#316,
+ *  `cmdHistoryUnlocked`) auf die Komfort-Kauf-Mechanik (#572) heben. Wer sie im alten Modell
+ *  schon freigeschaltet hatte, gilt als bereits VERDIENT UND GEKAUFT (grandfathered) – kein
+ *  Rückschritt für Alt-Stände, obwohl das neue Gate über `state.owned` statt eines eigenen
+ *  Bool-Felds läuft. Additiv, kein Versions-Bump (gleiches Prinzip wie `resolveUnlockedAbbrev`).
+ *  Mutiert `owned`/`unlockedComfort` nur, wenn das Alt-Flag WAHR ist. */
+function grandfatherLegacyCmdHistory(raw: Record<string, unknown>, owned: string[], unlockedComfort: string[]): void {
+  if (raw.cmdHistoryUnlocked !== true) return;
+  if (!unlockedComfort.includes(CMD_HISTORY_ITEM_ID)) unlockedComfort.push(CMD_HISTORY_ITEM_ID);
+  if (!owned.includes(CMD_HISTORY_ITEM_ID)) owned.push(CMD_HISTORY_ITEM_ID);
+}
+
 /** Quest-Fortschritts-Index auflösen (#353): die Quest-ID ist die Autorität, der numerische
  *  questIdx nur abgeleitet. So bricht das Einfügen/Umsortieren von Quests keinen Stand.
  *   - currentQuestId vorhanden (Stand ab #353): ID gewinnt → Index daraus. Unbekannte ID
@@ -280,6 +292,12 @@ export function sanitizeState(raw: unknown): GameState {
   const currentQuestId = questIdForIndex(questIdx);
   const activeQuests = resolveActiveQuests(raw, currentQuestId, safeCount(raw.questStep, 0), safeCount(raw.taskIdx, 0));
 
+  // #573: Komfort-Kauf-Mechanik (#572) auflösen, dann ggf. das alte Befehlshistorie-Flag
+  // hineinheben (grandfathern), bevor beide unten in die Rückgabe wandern.
+  const owned = safeStrArray(raw.owned);
+  const unlockedComfort = safeStrArray(raw.unlockedComfort);
+  grandfatherLegacyCmdHistory(raw, owned, unlockedComfort);
+
   return {
     xp: safeCount(raw.xp, def.xp),
     coins: toCoins(safeCount(raw.coins, def.coins)),
@@ -291,7 +309,7 @@ export function sanitizeState(raw: unknown): GameState {
     currentQuestId,
     completedQuests: safeStrArray(raw.completedQuests).map(migrateQuestId), // alte Quest-IDs -> neue Slugs (#354)
     inventory: sanitizeCountMap(raw.inventory),
-    owned: safeStrArray(raw.owned),
+    owned,
     activePet: safeStrOrNull(raw.activePet),
     activeFlag: safeStrOrNull(raw.activeFlag),
     review: sanitizeLeitnerMap(raw.review),
@@ -302,14 +320,11 @@ export function sanitizeState(raw: unknown): GameState {
     questLogIntroShown: safeBool(raw.questLogIntroShown, def.questLogIntroShown),
     unlockedAbbrev: resolveUnlockedAbbrev(raw),
     abbrevUsage: sanitizeCountMap(raw.abbrevUsage), // Nutzungszähler je Baustein (#313)
-    // #316: additives Bool-Flag wie die Abkürzungs-Freischaltung – fehlt es (Alt-Stand),
-    // gilt der Default (gesperrt); ein Vielspieler schaltet es beim nächsten Befehl regulär frei.
-    cmdHistoryUnlocked: safeBool(raw.cmdHistoryUnlocked, def.cmdHistoryUnlocked),
     // #572: additive Komfort-Funktionen-Felder wie abbrevUsage/unlockedAbbrev – fehlen sie
-    // (Alt-Stand von vor der Mechanik), gilt der leere Default (kein Grandfathering nötig,
-    // es gibt noch keine echte Komfort-Funktion, die rückwirkend verdient sein könnte).
+    // (Alt-Stand von vor der Mechanik), gilt der leere Default; das alte Befehlshistorie-Flag
+    // wird oben (grandfatherLegacyCmdHistory, #573) bereits hineingehoben.
     comfortUsage: sanitizeCountMap(raw.comfortUsage),
-    unlockedComfort: safeStrArray(raw.unlockedComfort),
+    unlockedComfort,
     stats: sanitizeStats(def.stats, raw.stats),
     lastSeen: safeCount(raw.lastSeen, def.lastSeen),
     // Snapshot ist die serialisierte Sim-Form: gegen die SSOT (den Simulator) härten (#586),
