@@ -112,7 +112,8 @@ Spielstand speichert automatisch im Browser.
 | Taste | Aktion |
 |---|---|
 | WASD / Pfeile | Laufen |
-| E | Reden / Benutzen / im Dialog weiter |
+| E | Reden / Benutzen |
+| Leer / Enter | Im Dialog weiter (auch E) |
 | ← / Backspace | Im Dialog eine Zeile zurück (nachlesen) |
 | T | 💻 Terminal |
 | J | 📜 Logbuch (Questlog) |
