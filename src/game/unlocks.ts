@@ -1,44 +1,31 @@
-/* „Verdiente" Freischaltungen (#392, game.ts-Split): die per Nutzung freigeschalteten
- * Abkürzungen (#287/#297/#313, additives Array) und die generische Komfort-Kauf-/
- * Freischalt-Mechanik (#572) — deren erste konkrete Nutzung die ↑/↓-Befehlshistorie des
- * Funkgerät-Terminals ist (#316, seit #573 Kauf statt eigenes additives Flag). Anwendungsschicht,
- * Phaser-frei. */
+/* „Verdiente" Freischaltungen (#392, game.ts-Split): Abkürzungen (#287/#297/#313) und die
+ * generische Komfort-Kauf-/Freischalt-Mechanik (#572) — seit #573/#574 der EINZIGE Freischalt-
+ * Weg für alle Komfort-Funktionen (Befehlshistorie, jede einzelne Abkürzung): Nutzung zählt
+ * Richtung „verdient" (SHOP-Item kaufbar), erst der Kauf (`Game.buy`/`state.owned`) aktiviert
+ * sie dauerhaft. Anwendungsschicht, Phaser-frei. */
 import { KQContent } from "../content";
-import { part, ALL_ABBREV_UNLOCKED, ABBREV_EARN_THRESHOLD, CMD_HISTORY_ITEM_ID } from "./shared";
+import { part, CMD_HISTORY_ITEM_ID } from "./shared";
 
 /** Freischalt-Methoden der Game-Fassade (Abkürzungen + Befehlshistorie). */
 export const unlocksBundle = part({
-  /* ---------- „Verdiente Abkürzungen" (#287/#297) ---------- */
-  /** Ist die Abkürzung mit dieser ID freigeschaltet? true, sobald sie einzeln
-   *  freigeschaltet wurde ODER der Stand grandfathered ist (Sentinel "*").
-   *  Das eigentliche Gating der Eingabe-Akzeptanz baut darauf auf (#299). */
+  /* ---------- Abkürzungen: Komfort-Kauf-Mechanik (#572, seit #574 statt additivem Array) ---------- */
+  /** Ist diese Abkürzung freigeschaltet, d.h. GEKAUFT (#574)? Die Nutzung ("verdienen") zählt
+   *  `recordComfortUse(id)`; erst der Kauf danach (`Game.buy`/`state.owned`) macht die Kurzform
+   *  akzeptiert – das Gating der Eingabe-Akzeptanz (#299) baut darauf auf. */
   isAbbrevUnlocked(id: string): boolean {
-    return this.state.unlockedAbbrev.includes(ALL_ABBREV_UNLOCKED) || this.state.unlockedAbbrev.includes(id);
+    return this.state.owned.includes(id);
   },
 
-  /** Schaltet eine Abkürzung frei (idempotent, speichert sofort). Aufgerufen vom
-   *  Freischalt-Moment im Lernpfad (#300). Bei bereits grandfathertem Stand No-op. */
+  /** Schaltet eine Abkürzung SOFORT & KOSTENLOS frei (verdient UND gekauft) – der Lernpfad-
+   *  Bypass für einen Quest-Schritt, der eine Kurzform direkt einführt (#300, `step.unlockAbbrev`).
+   *  Idempotent, speichert bei echter Änderung. Anders als der reguläre Weg (Nutzung → verdient
+   *  → Shop-Kauf) kostet dieser Weg keine Dublonen: er ist kein Kaufmoment, sondern ein erzähltes
+   *  Lehr-Geschenk der Quest selbst. */
   unlockAbbrev(id: string) {
     if (this.isAbbrevUnlocked(id)) return;
-    this.state.unlockedAbbrev.push(id);
+    if (!this.state.unlockedComfort.includes(id)) this.state.unlockedComfort.push(id);
+    this.state.owned.push(id);
     this.save();
-  },
-
-  /** Zählt eine korrekt getippte Langform Richtung „verdiente Abkürzung" (#313).
-   *  Ist die Kurzform noch gesperrt, erhöht das ihren Zähler; bei Erreichen von
-   *  `ABBREV_EARN_THRESHOLD` wird sie freigeschaltet. Gibt `true` zurück, wenn GENAU
-   *  dieser Aufruf sie verdient hat (für die Freischalt-Feier). No-op + `false`,
-   *  sobald sie freigeschaltet ist (auch grandfathered `*`). */
-  recordAbbrevLongFormUse(id: string): boolean {
-    if (this.isAbbrevUnlocked(id)) return false;
-    const n = (this.state.abbrevUsage[id] || 0) + 1;
-    this.state.abbrevUsage[id] = n;
-    if (n >= ABBREV_EARN_THRESHOLD) {
-      this.unlockAbbrev(id); // pusht + speichert
-      return true;
-    }
-    this.save();
-    return false;
   },
 
   /* ---------- Befehlshistorie freischalten (#316, Kauf-Mechanik seit #573) ---------- */
