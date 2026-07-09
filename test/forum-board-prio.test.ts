@@ -1,13 +1,14 @@
-/* Board-Prio der Forum-Action (#644) — struktureller Guard (Fitness-Function).
+/* Board-Position der Forum-Action (#644/#747) — struktureller Guard (Fitness-Function).
  *
- * Seit #627 ist das Board-Feld `Prio` die SSOT der Reihenfolge; ein Forum-Issue
- * OHNE gesetztes `Prio` sortiert ganz nach unten und geht unter. Die Action
- * forum-inbox.yml setzt darum beim Anlegen eines neuen Inbox-Issues das
- * Board-`Prio`-Feld direkt auf "Hoch" (GraphQL: addProjectV2ItemById idempotent +
- * updateProjectV2ItemFieldValue). Dieser Test bewacht, dass diese Verdrahtung nicht
- * still aus der Workflow-Datei verschwindet — bewusst eine Struktur-/Doku-Prüfung
- * (wie docmap/filesize), keine Verhaltensprüfung (ein YAML-Workflow ist im Node-Test
- * nicht ausführbar). Red-Green: entfernt man die Verdrahtung, wird er rot.
+ * Seit #747 ist die Reihenfolge die manuelle Board-Position (das "nächstes Ticket" ist
+ * das oberste freie Item der Board-Liste; das frühere `Prio`-Feld ist entfernt). Ein
+ * Forum-Issue, das irgendwo im Board landet, kann untergehen. Die Action forum-inbox.yml
+ * schiebt darum ein neues Inbox-Issue an die OBERSTE Board-Position (GraphQL:
+ * addProjectV2ItemById idempotent + updateProjectV2ItemPosition ohne afterId = ganz oben).
+ * Dieser Test bewacht, dass diese Verdrahtung nicht still aus der Workflow-Datei
+ * verschwindet — bewusst eine Struktur-/Doku-Prüfung (wie docmap/filesize), keine
+ * Verhaltensprüfung (ein YAML-Workflow ist im Node-Test nicht ausführbar). Red-Green:
+ * entfernt man die Verdrahtung, wird er rot.
  *
  * Ausführen mit:  npm test
  */
@@ -21,20 +22,32 @@ const yml = readFileSync(
   "utf8",
 );
 
-describe("Forum-Action setzt Board-Prio (#644)", () => {
+describe("Forum-Action schiebt neues Issue an die Board-Spitze (#747)", () => {
   test("liest ein PROJECT_TOKEN-Secret (GITHUB_TOKEN kann kein User-Project V2 schreiben)", () => {
     assert.match(yml, /PROJECT_TOKEN:\s*\$\{\{\s*secrets\.PROJECT_TOKEN\s*\}\}/);
   });
 
-  test("kennt Board-, Prio-Feld- und Hoch-Options-ID", () => {
+  test("kennt die Board-Node-ID", () => {
     assert.ok(yml.includes("PVT_kwHOD8746c4Barq_"), "Projekt-Node-ID fehlt");
-    assert.ok(yml.includes("PVTSSF_lAHOD8746c4Barq_zhXBLXs"), "Prio-Feld-ID fehlt");
-    assert.ok(yml.includes("2c80551d"), "Options-ID für 'Hoch' fehlt");
   });
 
-  test("fügt das Issue idempotent hinzu UND setzt das Feld (beide Mutationen)", () => {
+  test("das entfernte Prio-Feld wird NICHT mehr beschrieben (#747)", () => {
+    assert.ok(
+      !yml.includes("updateProjectV2ItemFieldValue"),
+      "das Prio-Feld ist seit #747 entfernt — es darf nicht mehr gesetzt werden",
+    );
+    assert.ok(
+      !yml.includes("PVTSSF_lAHOD8746c4Barq_zhXBLXs"),
+      "die Prio-Feld-ID gehört seit #747 nicht mehr in den Workflow",
+    );
+  });
+
+  test("fügt das Issue idempotent hinzu UND schiebt es an die Spitze (beide Mutationen)", () => {
     assert.ok(yml.includes("addProjectV2ItemById"), "add-to-board-Mutation fehlt");
-    assert.ok(yml.includes("updateProjectV2ItemFieldValue"), "set-field-Mutation fehlt");
+    assert.ok(
+      yml.includes("updateProjectV2ItemPosition"),
+      "position-to-top-Mutation fehlt",
+    );
   });
 
   test("degradiert ohne Secret graceful (nur Warnung, kein harter Abbruch)", () => {
@@ -45,14 +58,14 @@ describe("Forum-Action setzt Board-Prio (#644)", () => {
     assert.match(yml, /::warning::[^\n]*PROJECT_TOKEN/);
   });
 
-  test("setzt die Prio am NEU angelegten Issue (Aufruf hängt an gh issue create)", () => {
+  test("positioniert das NEU angelegte Issue (Aufruf hängt an gh issue create)", () => {
     assert.ok(
       yml.includes("new_url=$(gh issue create"),
       "die create-Ausgabe muss als URL erfasst werden",
     );
     assert.ok(
-      yml.includes('set_board_prio "$new_url"'),
-      "set_board_prio muss mit der neuen Issue-URL aufgerufen werden",
+      yml.includes('set_board_top "$new_url"'),
+      "set_board_top muss mit der neuen Issue-URL aufgerufen werden",
     );
   });
 });
