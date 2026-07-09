@@ -1,0 +1,11 @@
+[
+  { "xp": 0,    "name": "Landratte",  "icon": "🦔" },
+  { "xp": 110,  "name": "Moses",      "icon": "🧽" },
+  { "xp": 280,  "name": "Deckshand",  "icon": "🧹" },
+  { "xp": 520,  "name": "Matrose",    "icon": "⚓" },
+  { "xp": 820,  "name": "Maat",       "icon": "🪢" },
+  { "xp": 1200, "name": "Steuermaat", "icon": "☸️" },
+  { "xp": 1700, "name": "Navigator",  "icon": "🧭" },
+  { "xp": 2300, "name": "Käpt'n",     "icon": "🫡" },
+  { "xp": 3000, "name": "Admiral",    "icon": "🏅" }
+]
