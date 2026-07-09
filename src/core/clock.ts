@@ -36,9 +36,11 @@ export function withStartOffset(time: number, cycle: number): number {
   return time + START_PHASE * cycle;
 }
 
-const SEASONS: [string, string][] = [
-  ["🌱", "Frühling"], ["☀️", "Sommer"], ["🍂", "Herbst"], ["❄️", "Winter"],
-];
+// Saison-Namen in Reihenfolge des Kalenders; der Index (0..3) wählt zugleich das
+// HUD-Saison-Pixel-Icon (#645, HUD_SEASON_ICONS in assets-data.ts). Früher trug diese
+// Tabelle je Saison auch ein Emoji, das direkt in dateLabel gebacken wurde – seit #645
+// rendert das HUD stattdessen ein gerahmtes Pixel-Icon davor, das Label bleibt reiner Text.
+const SEASONS = ["Frühling", "Sommer", "Herbst", "Winter"];
 const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
 export interface GameClock {
@@ -47,8 +49,9 @@ export interface GameClock {
   dayOfSeason: number; // 1..28 (Stardew: 28 Tage je Saison)
   weekday: string;     // "Mo".."So"
   seasonName: string;  // "Frühling".."Winter"
-  dateLabel: string;   // "🌱 Mo, Tag 3"  (HUD)
-  timeLabel: string;   // "🕐 14:30"      (HUD)
+  seasonIndex: number; // 0..3 (Frühling..Winter) – wählt das HUD-Saison-Icon (#645)
+  dateLabel: string;   // "Mo, Tag 3"  (HUD-Text; das Saison-Icon steht separat davor, #645)
+  timeLabel: string;   // "14:30"      (HUD-Text; das Uhr-Icon steht separat davor, #645)
   title: string;       // "Frühling – Tag 3, 14:30 Uhr" (Tooltip)
 }
 
@@ -76,13 +79,14 @@ export function gameClock(time: number, cycle: number): GameClock {
   // kommt (kein Off-by-one, #336). Für START_PHASE 0 ist der Korrektur-Term -(-1)=+1 und die
   // Formel identisch zur früheren `floor(time/cycle + 0.5) + 1`.
   const day = Math.floor(shifted / cycle - 0.5) + 1 - Math.floor(START_PHASE - 0.5);
-  const [emoji, seasonName] = SEASONS[Math.floor((day - 1) / 28) % 4];
+  const seasonIndex = Math.floor((day - 1) / 28) % 4;
+  const seasonName = SEASONS[seasonIndex];
   const dayOfSeason = ((day - 1) % 28) + 1;
   const weekday = WEEKDAYS[(day - 1) % 7];
   return {
-    hhmm, day, dayOfSeason, weekday, seasonName,
-    dateLabel: `${emoji} ${weekday}, Tag ${dayOfSeason}`,
-    timeLabel: `🕐 ${hhmm}`,
+    hhmm, day, dayOfSeason, weekday, seasonName, seasonIndex,
+    dateLabel: `${weekday}, Tag ${dayOfSeason}`,
+    timeLabel: hhmm,
     title: `${seasonName} – Tag ${dayOfSeason}, ${hhmm} Uhr`,
   };
 }

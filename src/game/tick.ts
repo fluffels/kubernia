@@ -43,7 +43,7 @@ export const tickBundle = part({
     // Unsinns-Delta harmlos: der Kalender ist dann unverändert, die Präsentation schreibt
     // nur bei echter Änderung in den DOM (UI.setClock dedupliziert per Signatur).
     const clock = this.calendar();
-    notifyClock(clock.dateLabel, clock.timeLabel, clock.title);
+    notifyClock(clock.dateLabel, clock.timeLabel, clock.title, clock.seasonIndex);
     if (!Number.isFinite(deltaMs) || deltaMs <= 0) return;
     const payout = this.economyTick(Math.min(MAX_ECONOMY_DT, deltaMs / 1000));
     if (payout > 0) notifyPayout(payout);

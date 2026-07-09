@@ -2,6 +2,7 @@ import { Game } from "../game";
 import { SFX } from "../sfx";
 import { worldScene, interiorOpen } from "../runtime";
 import { part, $, esc, NPCS, SMALLTALK } from "./shared";
+import { HUD_ICONS, HUD_SEASON_ICONS } from "../assets-data";
 import { resolveTalkTarget } from "../hud/viewdecide";
 import { TOAST_LIFE_MS, HINT_LIFE_MS, toastFadeDelaySeconds } from "../hud/toastlife";
 import { enqueueAchievement, bundleCelebration, type Achievement } from "../hud/celebrate";
@@ -12,6 +13,17 @@ const SIGNAL_COLORS = ["#e03131", "#ffd43b", "#1971c2", "#f1f3f5", "#4dd0e1", "#
 
 export const hudUI = part({
   /* ========== HUD, Toasts, Alarm ========== */
+
+  /** HUD-Statuszeilen-Pixel-Icons einmalig verdrahten (#645, Fundament-Slice #204):
+   *  setzt die `src` der dauerhaft gleichen DOM-Icons (Münzen/Streak/Uhr). Das
+   *  Saison-Icon ist dynamisch und wird in `setClock` je `seasonIndex` gesetzt. Läuft
+   *  einmal beim UI-Modul-Laden (ui.ts) – die #hud-Elemente stehen statisch in index.html. */
+  initHudIcons() {
+    (<HTMLImageElement>$("hud-icon-coins")).src = HUD_ICONS.coins;
+    (<HTMLImageElement>$("hud-icon-streak")).src = HUD_ICONS.streak;
+    (<HTMLImageElement>$("hud-icon-time")).src = HUD_ICONS.time;
+  },
+
   refreshHud() {
     const s = Game.state;
     const rank = Game.rank();
@@ -36,13 +48,17 @@ export const hudUI = part({
    *  Die Uhr tickt jede reale Sekunde sichtbar hoch (#121); da updateDayNight
    *  aber pro Frame feuert, schreiben wir nur bei echter Änderung in den DOM –
    *  spart ~60 redundante Text-Node-Ersetzungen pro Sekunde. */
-  setClock(dateLabel: string, timeLabel: string, title: string) {
+  setClock(dateLabel: string, timeLabel: string, title: string, seasonIndex: number) {
     const sig = dateLabel + "|" + timeLabel + "|" + title;
     if (sig === this._lastClock) return;
     this._lastClock = sig;
     $("hud-date").textContent = dateLabel;
     $("hud-time").textContent = timeLabel;
     $("hud-clock").title = title;
+    // Saison-Icon (#645): Index 0..3 → gerahmtes Pixel-Icon. Ein erneutes Setzen auf
+    // dieselbe URL ist im Browser ein No-op (kein Neu-Laden), darum ohne Extra-Guard.
+    const seasonSrc = HUD_SEASON_ICONS[seasonIndex];
+    if (seasonSrc) (<HTMLImageElement>$("hud-icon-season")).src = seasonSrc;
   },
 
   refreshQuestHint() {

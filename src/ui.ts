@@ -176,8 +176,8 @@ setPayoutSink((amount) => {
  * → in Region-/Interior-Szenen fror sie ein. Jetzt meldet der szenen-neutrale Game.tick die
  * Uhr-Labels entkoppelt über den runtime-Sink (wie Payout-#501); hier schreibt die Präsentation
  * sie ins HUD. setClock dedupliziert per Signatur, schreibt also nur bei echter Änderung. */
-setClockSink((dateLabel, timeLabel, title) => {
-  UI.setClock(dateLabel, timeLabel, title);
+setClockSink((dateLabel, timeLabel, title, seasonIndex) => {
+  UI.setClock(dateLabel, timeLabel, title, seasonIndex);
 });
 
 /* #540: der szenen-neutrale Gefahren-Takt (game/hazards.ts) darf ui.ts nicht importieren, will
@@ -185,3 +185,9 @@ setClockSink((dateLabel, timeLabel, title) => {
  * offen ist (kein Alarm mitten ins Modal). Dafür registriert die Präsentation hier eine Sonde,
  * die die Anwendung vor dem Start abfragt. */
 setUiBusyProbe(() => UI.blocking());
+
+/* #645: die dauerhaft gleichen HUD-Statuszeilen-Icons (Münzen/Streak/Uhr) einmalig
+ * verdrahten. Läuft beim Modul-Laden – ui.ts ist ein deferred Module-Script, die
+ * statischen #hud-Elemente aus index.html stehen also bereits im DOM. Das dynamische
+ * Saison-Icon setzt setClock. */
+UI.initHudIcons();

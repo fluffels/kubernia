@@ -134,16 +134,17 @@ export function notifyPayout(amount: number): void {
  * die Präsentation (ui.ts) registriert ihren Handler → die Uhr läuft in JEDER Szene. Der
  * Tag-Nacht-Schleier bleibt weltgebunden (nur die WorldScene malt ihn). Ohne Sink (Node-Test)
  * ist das Melden ein No-op. */
-let _clockSink: ((dateLabel: string, timeLabel: string, title: string) => void) | null = null;
+let _clockSink: ((dateLabel: string, timeLabel: string, title: string, seasonIndex: number) => void) | null = null;
 
 /** Von der Präsentation (ui.ts) beim Modul-Laden gesetzt. */
-export function setClockSink(fn: ((dateLabel: string, timeLabel: string, title: string) => void) | null): void {
+export function setClockSink(fn: ((dateLabel: string, timeLabel: string, title: string, seasonIndex: number) => void) | null): void {
   _clockSink = fn;
 }
 
-/** Der Präsentation die aktuelle HUD-Uhr melden (No-op ohne Sink). */
-export function notifyClock(dateLabel: string, timeLabel: string, title: string): void {
-  _clockSink?.(dateLabel, timeLabel, title);
+/** Der Präsentation die aktuelle HUD-Uhr melden (No-op ohne Sink). `seasonIndex`
+ *  (0..3) wählt in der Präsentation das gerahmte Saison-Pixel-Icon (#645). */
+export function notifyClock(dateLabel: string, timeLabel: string, title: string, seasonIndex: number): void {
+  _clockSink?.(dateLabel, timeLabel, title, seasonIndex);
 }
 
 /* ---------- Gefahren-Sink (#540) ----------
