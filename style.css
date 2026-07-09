@@ -676,6 +676,13 @@ button:focus-visible, select:focus-visible {
 .actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
 
 /* Shop */
+/* Abschnitts-Header je Kategorie (#575): Trennlinie in Akzentfarbe wie ein Kapitel-
+ * Reiter, kein eigener Fokus-Stop – die Tastatur-Navigation bleibt eine flache Liste
+ * über die Kauf-Buttons (resolveOverlayKey), Header werden einfach übersprungen. */
+.shop-cat { display: flex; align-items: center; gap: 6px; margin: 18px 0 10px; padding-bottom: 5px; border-bottom: 2px solid var(--accent); }
+.shop-cat:first-child { margin-top: 0; }
+.shop-cat-icon { font-size: 1.1em; }
+.shop-cat-label { font-size: 0.95em; color: var(--accent); letter-spacing: 0.5px; }
 .shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
 .shop-item {
   background: var(--panel2);
@@ -906,7 +913,7 @@ button.danger { background: linear-gradient(#9a3b3b, #6f2727); color: #ffd9d9; b
 button.danger:hover { filter: brightness(1.2); background: linear-gradient(#b34545, #7f2d2d); }
 
 /* Pixelschrift auch auf kurzen Beschriftungen in den Panels … */
-.dlg-name, .tt-head, .menu-audio-title, .ql-title, .si-name { font-family: "KQPixel", "Segoe UI", system-ui, sans-serif; }
+.dlg-name, .tt-head, .menu-audio-title, .ql-title, .si-name, .shop-cat-label { font-family: "KQPixel", "Segoe UI", system-ui, sans-serif; }
 .dlg-name { font-size: 0.8em; }
 /* … aber Fließtext/Code bleiben in der lesbaren Schrift.
    Die Terminal-Ausgabe (.term-out) NICHT: sie zeigt echte CLI-Tabellen (docker ps,
