@@ -15,13 +15,14 @@ import type { Sim } from "../sim";
 import type { GameState, EventMode, QuestProgress, Quest, QuestStep, FunkStep, QuestTask } from "../types";
 import type { GameClock } from "../core/clock";
 import type { CmdCard, QuizCard } from "../content/loader";
+import type { Rank } from "../content/progression";
 import type { ActiveHazards } from "../world/hazards";
 
 /* ---------- Rückgabe-Typen der Bündel-Oberfläche ---------- */
 
-/** Ein Rang-Eintrag (XP-Schwelle + Anzeige) – der Element-Typ von `KQContent.RANKS`.
- *  Als benannter Typ, damit `rank()`/`nextRank()` in `GameApi` ihn tragen können. */
-export type Rank = { xp: number; name: string; icon: string };
+// `Rank` (XP-Schwelle + Anzeige, der Element-Typ von `KQContent.RANKS`) kommt seit #583
+// als benannter Typ direkt aus `content/progression.ts` – keine eigene Kopie mehr hier.
+export type { Rank };
 
 /** Konkrete Stellschrauben pro Spiel-Feel-Stufe (#71). Bewusst eine reine Daten-Form,
  *  die Wirtschaft (game/economy.ts) und Events (scenes.ts via Game.eventProfile())
