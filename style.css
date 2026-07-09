@@ -88,6 +88,18 @@ button.primary { background: var(--accent); color: #1a1304; font-weight: bold; b
 .hud-label { font-size: 0.72em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
 .hud-clock { font-size: 0.9em; text-shadow: 0 1px 3px #000; color: var(--text-dim); }
 .hud-clock b { color: var(--text); font-weight: bold; }
+/* HUD-Statuszeilen-Pixel-Icons (#645, Fundament-Slice von #204): kleine gerahmte
+   PixelLab-Icons statt Emoji. 32px-Quelle, hart auf 16px gerendert (÷2, ganzzahlig →
+   scharfe Pixel, keine krumme Skalierung wie in der Stardew-Messlatte #44 gefordert),
+   vertikal an der Textmitte ausgerichtet. Die Folge-Slices von #204 nutzen dieselbe Klasse. */
+.pixel-icon {
+  width: 16px;
+  height: 16px;
+  image-rendering: pixelated;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
+}
 .hud-quest {
   flex: 1;
   text-align: center;

@@ -100,6 +100,21 @@ import pet_ratte from "../assets/pixellab/pet_ratte.png";
 import pet_fledermaus from "../assets/pixellab/pet_fledermaus.png";
 import pet_geist from "../assets/pixellab/pet_geist.png";
 
+// HUD-Statuszeilen-Icons (#645, Fundament-Slice von #204): gerahmte Pixel-Icons im
+// warmen Stardew-Ton (16px-Raster, selective outline, detailed shading) für die
+// dauersichtbare DOM-Statuszeile (index.html #hud). BEWUSST getrennt vom
+// ASSET_MANIFEST oben: das speist den Phaser-BootScene-Loader (GPU-Texturen); diese
+// Icons leben nur im DOM als <img>, würden als Phaser-Texturen nur unnötig geladen.
+// Gemeinsame Quelle bleibt trotzdem diese Datei – der Offline-Build inlinet die
+// importierten URLs als Base64-Data-URI (wie bei den Phaser-Assets).
+import hud_coin from "../assets/pixellab/hud_coin.png";
+import hud_streak from "../assets/pixellab/hud_streak.png";
+import hud_clock from "../assets/pixellab/hud_clock.png";
+import hud_season_spring from "../assets/pixellab/hud_season_spring.png";
+import hud_season_summer from "../assets/pixellab/hud_season_summer.png";
+import hud_season_autumn from "../assets/pixellab/hud_season_autumn.png";
+import hud_season_winter from "../assets/pixellab/hud_season_winter.png";
+
 /** Region-Szenen-Keys, deren Assets erst beim Betreten nachgeladen werden (#198,
  *  Lazy-Loading). Wert = Phaser-Szenen-Key der Region (RegionConfig.key in
  *  scenes/regions.ts). Ein Asset OHNE `scene` ist gemeinsam/Startinsel und wird in der
@@ -206,6 +221,23 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
 export const KQAssets: Record<string, string> = Object.fromEntries(
   ASSET_MANIFEST.map((a) => [a.key, a.src]),
 );
+
+/** HUD-DOM-Icon-URLs (#645): Schlüssel → Vite-Asset-URL, für `<img>`-Icons in der
+ *  dauersichtbaren Statuszeile (index.html #hud). Getrennt von `KQAssets`, weil diese
+ *  Icons keine Phaser-Texturen sind (siehe Import-Kommentar oben). Die Folge-Slices von
+ *  #204 (Tastenleiste/Panel-Köpfe/Menü-Buttons) hängen ihre DOM-Icons hier mit an. */
+export const HUD_ICONS = {
+  coins: hud_coin,
+  streak: hud_streak,
+  time: hud_clock,
+} as const;
+
+/** Saison-Icons in Kalender-Reihenfolge (#645): Index 0..3 = Frühling/Sommer/Herbst/
+ *  Winter, exakt gespiegelt zu `GameClock.seasonIndex` (core/clock.ts). Das HUD tauscht
+ *  das Saison-Icon anhand dieses Index (hud.ts › setClock). */
+export const HUD_SEASON_ICONS: readonly string[] = [
+  hud_season_spring, hud_season_summer, hud_season_autumn, hud_season_winter,
+];
 
 /** Gemeinsame + Startinsel-Assets (#198): alles OHNE `scene`-Tag. Die BootScene lädt genau
  *  diese vorab – Figuren/HUD/Terrain der Hauptkarte „Port Kubernia" + alle scene-übergreifend
