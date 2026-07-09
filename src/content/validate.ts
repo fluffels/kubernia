@@ -15,21 +15,20 @@
  *    diese Funktionen – ein reiner Schema-Validator ohne Welt-Wissen könnte
  *    das gar nicht.
  *
- * Entscheidung „Inhalte als externes JSON?" (vom Ticket #81 gefordert):
- *  Bewusst **bei TS-Modulen geblieben**, nicht auf externe JSON-Dateien
- *  umgestellt. Trade-off:
+ * Historische Entscheidung „Inhalte als externes JSON?" (Ticket #81): **nur für
+ *  Drills** bewusst bei TS-Funktionen geblieben, nicht generell. Alle Sammlungen
+ *  OHNE Logik-Felder sind seither auf JSON umgestellt (#348: Quests/NPCs/Karten;
+ *  #583: Ränge/Shop/Stapel-Runden) – Drills bleiben die eine Ausnahme:
  *   + JSON senkt die Einstiegshürde minimal (kein TS nötig) …
  *   – … aber genau die Stärke geht verloren: Die Drills sind **Funktionen**
- *     (`(sim) => DrillTask`), die `accept`-Regeln sind **RegExp**, und die
- *     `scenario`/`check`-Felder enthalten Logik – das ist in JSON gar nicht
- *     ausdrückbar. Außerdem prüft der Compiler heute jeden Quest-Schritt
- *     strukturell (Union in types.ts); bei JSON fiele diese Sicherung weg und
- *     müsste komplett über einen Laufzeit-Validator nachgebaut werden.
- *  Ergebnis: TS bleibt die Quelle (Typsicherheit + Logik-Felder), und dieser
- *  Validator liefert die *zusätzliche* referenzielle Prüfung, die der reine
- *  Typ-Check nicht abdecken kann. Damit skaliert der Inhalt auf viele Inseln,
- *  ohne die niedrige Einstiegshürde („neue Quest als Objekt-Literal anhängen")
- *  aufzugeben.
+ *     (`(sim) => DrillTask`) – das ist in JSON gar nicht ausdrückbar. Quest-
+ *     `accept`/`check`-Felder brauchten früher denselben Grund (RegExp/Logik),
+ *     sind aber seit #411 deklarative Daten (Pattern-Strings bzw. Check-DSL)
+ *     und leben längst als JSON.
+ *  Ergebnis: TS bleibt die Quelle nur, wo echte Logik nötig ist (Drills); dieser
+ *  Validator liefert für alle Sammlungen die *zusätzliche* referenzielle Prüfung
+ *  (existiert der referenzierte NPC/Quest/Drill wirklich?), die weder der
+ *  Typ-Check noch ein Sammlungs-eigener Schema-Parser abdecken kann.
  */
 import type { Quest, QuestStep } from "../types";
 // QuizCard/CmdCard sind NICHT hier neu definiert, sondern die EINE Wahrheit aus dem

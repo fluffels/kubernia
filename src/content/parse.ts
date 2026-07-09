@@ -51,6 +51,15 @@ export function asBool(v: unknown, path: string): boolean {
   return v;
 }
 
+/** Farbwert als lesbarer Hex-String `"#rrggbb"` (Content-Autoren schreiben keine
+ *  `0x......`-Zahlenliterale in JSON) zu der Zahl geparst, die Phaser als Tint/Farbe
+ *  erwartet. */
+export function asHexColor(v: unknown, path: string): number {
+  const s = asNonEmptyString(v, path);
+  if (!/^#[0-9a-fA-F]{6}$/.test(s)) fail(path, `Hex-Farbe „#rrggbb" erwartet (ist „${s}")`);
+  return parseInt(s.slice(1), 16);
+}
+
 export function asArray(v: unknown, path: string): unknown[] {
   if (!Array.isArray(v)) fail(path, "Array erwartet");
   return v;

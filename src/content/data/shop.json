@@ -1,0 +1,49 @@
+[
+  {
+    "id": "fernrohr", "icon": "🔭", "name": "Hinweis-Fernrohr", "price": 25, "type": "consumable",
+    "desc": "Zeigt dir im Terminal einen Hinweis zur aktuellen Aufgabe. Einmal benutzbar."
+  },
+  {
+    "id": "kompass", "icon": "🧭", "name": "Lösungs-Kompass", "price": 50, "type": "consumable",
+    "desc": "Verrät dir im Terminal die komplette Lösung der aktuellen Aufgabe. Einmal benutzbar."
+  },
+  {
+    "id": "pet-ratte", "icon": "🐀", "name": "Hafenratte Taki", "price": 150, "type": "pet",
+    "desc": "Folgt dir überallhin. Hat schon mehr Häfen gesehen als jeder Admiral.",
+    "sprite": 124, "tex": "pet_ratte"
+  },
+  {
+    "id": "pet-fledermaus", "icon": "🦇", "name": "Fledermaus Echo", "price": 250, "type": "pet",
+    "desc": "Flattert hinter dir her. Findet jeden Weg – auch im Dunkeln.",
+    "sprite": 120, "tex": "pet_fledermaus"
+  },
+  {
+    "id": "pet-geist", "icon": "👻", "name": "Archiv-Geist Plotter", "price": 400, "type": "pet",
+    "desc": "Spukt seit Jahren im Kartenhaus. Kennt YAML auswendig. Gruselig.",
+    "sprite": 121, "tex": "pet_geist"
+  },
+  {
+    "id": "flagge-lila", "icon": "🟪", "name": "Lila Schiffsflagge", "price": 80, "type": "flag",
+    "desc": "Dein Schiff am Pier zeigt Flagge – in Edel-Lila.",
+    "color": "#9b6bdf"
+  },
+  {
+    "id": "flagge-gruen", "icon": "🟩", "name": "Grüne Schiffsflagge", "price": 80, "type": "flag",
+    "desc": "Grün wie ein frisch deploytes Release.",
+    "color": "#6fdc8c"
+  },
+  {
+    "id": "flagge-pirat", "icon": "🏴‍☠️", "name": "Piratenflagge", "price": 150, "type": "flag",
+    "desc": "Arrr! Streng genommen nicht erlaubt. Ole drückt ein Auge zu.",
+    "color": "#202028"
+  },
+  {
+    "id": "kanone", "icon": "💣", "name": "Hafen-Kanone", "price": 300, "type": "upgrade",
+    "desc": "Steht danach am Dock. Piraten-Überfälle bringen dir +50% Kopfgeld."
+  },
+  {
+    "id": "befehlshistorie", "icon": "⌨️", "name": "Befehlshistorie", "price": 40, "type": "comfort",
+    "desc": "Schaltet ↑/↓ im Funkgerät-Terminal frei: vorherige Befehle zurückholen, wie in einer echten Shell.",
+    "unlockAt": 10
+  }
+]

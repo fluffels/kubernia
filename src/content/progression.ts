@@ -1,22 +1,42 @@
-/* ===== Inhalte: Fortschritt & Shop =====
- * Ränge (XP-Schwellen) und Shop-Angebot. Reine Daten, ohne Logik.
- *
- * NPC-Stammdaten sind seit #348 Content-as-Data und leben als JSON in
- * `./data/npcs.json` (geladen vom validierenden `./loader.ts`), nicht mehr hier.
+/* ===== Inhalte: Fortschritt & Shop (Content-as-Data, #583) =====
+ * Ränge (XP-Schwellen) und Shop-Angebot sind reine Daten und liegen seit #583 als JSON
+ * (`./data/ranks.json`/`./data/shop.json`), nicht mehr als TS-Objekt-Literal – wie NPCs
+ * (#348) und Übungs-Pools (#521). Einzelne JSON-Dateien ohne Aufteilung (kein Glob-Loader-
+ * Quartett nötig, dafür sind es zu wenige/zu kleine Einträge): beim Modul-Laden einmal
+ * validiert und als Konstante gehalten.
  */
+import ranksData from "./data/ranks.json";
+import shopData from "./data/shop.json";
+import { fail, asArray, asRecord, asNonEmptyString, asInt, asHexColor, assertNoUnknownKeys } from "./parse";
 
 /* ---------- Ränge (geschlechtsneutral) ---------- */
-export const RANKS = [
-  { xp: 0,    name: "Landratte",  icon: "🦔" },
-  { xp: 110,  name: "Moses",      icon: "🧽" },
-  { xp: 280,  name: "Deckshand",  icon: "🧹" },
-  { xp: 520,  name: "Matrose",    icon: "⚓" },
-  { xp: 820,  name: "Maat",       icon: "🪢" },
-  { xp: 1200, name: "Steuermaat", icon: "☸️" },
-  { xp: 1700, name: "Navigator",  icon: "🧭" },
-  { xp: 2300, name: "Käpt'n",     icon: "🫡" },
-  { xp: 3000, name: "Admiral",    icon: "🏅" },
-];
+export interface Rank {
+  xp: number;
+  name: string;
+  icon: string;
+}
+
+const RANK_KEYS = ["xp", "name", "icon"] as const;
+
+/** Validiert die rohen Rang-Daten. Wirft `ContentValidationError` beim ersten Verstoß
+ *  (nie still durchwinken); die inhaltliche Regel „XP aufsteigend" prüft weiterhin
+ *  `content/validate.ts` (referenzielle/Business-Prüfung, nicht Schema). */
+export function parseRanks(raw: unknown): Rank[] {
+  const arr = asArray(raw, "ranks");
+  if (arr.length === 0) fail("ranks", "mindestens ein Rang erwartet");
+  return arr.map((v, i) => {
+    const o = asRecord(v, `ranks[${i}]`);
+    assertNoUnknownKeys(o, `ranks[${i}]`, RANK_KEYS);
+    return {
+      xp: asInt(o.xp, `ranks[${i}].xp`),
+      name: asNonEmptyString(o.name, `ranks[${i}].name`),
+      icon: asNonEmptyString(o.icon, `ranks[${i}].icon`),
+    };
+  });
+}
+
+/** Validierte Ränge – Quelle: `./data/ranks.json`. */
+export const RANKS: Rank[] = parseRanks(ranksData);
 
 /* ---------- Shop ---------- */
 /** Ein Eintrag im Shop-Angebot. Heterogen (Verbrauchsgut/Haustier/Flagge/Upgrade/Komfort-
@@ -38,28 +58,38 @@ export interface ShopItem {
   unlockAt?: number;
 }
 
-export const SHOP: ShopItem[] = [
-  { id: "fernrohr", icon: "🔭", name: "Hinweis-Fernrohr", price: 25, type: "consumable",
-    desc: "Zeigt dir im Terminal einen Hinweis zur aktuellen Aufgabe. Einmal benutzbar." },
-  { id: "kompass", icon: "🧭", name: "Lösungs-Kompass", price: 50, type: "consumable",
-    desc: "Verrät dir im Terminal die komplette Lösung der aktuellen Aufgabe. Einmal benutzbar." },
-  { id: "pet-ratte", icon: "🐀", sprite: 124, tex: "pet_ratte", name: "Hafenratte Taki", price: 150, type: "pet",
-    desc: "Folgt dir überallhin. Hat schon mehr Häfen gesehen als jeder Admiral." },
-  { id: "pet-fledermaus", icon: "🦇", sprite: 120, tex: "pet_fledermaus", name: "Fledermaus Echo", price: 250, type: "pet",
-    desc: "Flattert hinter dir her. Findet jeden Weg – auch im Dunkeln." },
-  { id: "pet-geist", icon: "👻", sprite: 121, tex: "pet_geist", name: "Archiv-Geist Plotter", price: 400, type: "pet",
-    desc: "Spukt seit Jahren im Kartenhaus. Kennt YAML auswendig. Gruselig." },
-  { id: "flagge-lila", icon: "🟪", color: 0x9b6bdf, name: "Lila Schiffsflagge", price: 80, type: "flag",
-    desc: "Dein Schiff am Pier zeigt Flagge – in Edel-Lila." },
-  { id: "flagge-gruen", icon: "🟩", color: 0x6fdc8c, name: "Grüne Schiffsflagge", price: 80, type: "flag",
-    desc: "Grün wie ein frisch deploytes Release." },
-  { id: "flagge-pirat", icon: "🏴‍☠️", color: 0x202028, name: "Piratenflagge", price: 150, type: "flag",
-    desc: "Arrr! Streng genommen nicht erlaubt. Ole drückt ein Auge zu." },
-  { id: "kanone", icon: "💣", name: "Hafen-Kanone", price: 300, type: "upgrade",
-    desc: "Steht danach am Dock. Piraten-Überfälle bringen dir +50% Kopfgeld." },
-  // #573: erste echte Komfort-Funktion (Zwei-Stufen-Gate #572) – die ID hier muss zu
-  // CMD_HISTORY_ITEM_ID in game/shared.ts passen (Content ist pure Domäne und darf die
-  // Anwendungsschicht nicht importieren, daher kein geteilter Konstanten-Import).
-  { id: "befehlshistorie", icon: "⌨️", name: "Befehlshistorie", price: 40, type: "comfort", unlockAt: 10,
-    desc: "Schaltet ↑/↓ im Funkgerät-Terminal frei: vorherige Befehle zurückholen, wie in einer echten Shell." },
-];
+const SHOP_KEYS = ["id", "icon", "name", "price", "type", "desc", "sprite", "tex", "color", "unlockAt"] as const;
+
+/** Validiert die rohen Shop-Daten. `color` steht in der JSON als lesbarer Hex-String
+ *  (`"#rrggbb"`) statt als `0x......`-Zahlenliteral, siehe `asHexColor`. Wirft
+ *  `ContentValidationError` beim ersten Verstoß; die Business-Regeln (eindeutige ID,
+ *  bekannter `type`, positiver `price`, `comfort` braucht `unlockAt` …) prüft weiterhin
+ *  `content/validate.ts`. */
+export function parseShop(raw: unknown): ShopItem[] {
+  const arr = asArray(raw, "shop");
+  if (arr.length === 0) fail("shop", "mindestens ein Shop-Eintrag erwartet");
+  return arr.map((v, i) => {
+    const o = asRecord(v, `shop[${i}]`);
+    assertNoUnknownKeys(o, `shop[${i}]`, SHOP_KEYS);
+    const item: ShopItem = {
+      id: asNonEmptyString(o.id, `shop[${i}].id`),
+      icon: asNonEmptyString(o.icon, `shop[${i}].icon`),
+      name: asNonEmptyString(o.name, `shop[${i}].name`),
+      price: asInt(o.price, `shop[${i}].price`),
+      type: asNonEmptyString(o.type, `shop[${i}].type`),
+      desc: asNonEmptyString(o.desc, `shop[${i}].desc`),
+    };
+    if (o.sprite !== undefined) item.sprite = asInt(o.sprite, `shop[${i}].sprite`);
+    if (o.tex !== undefined) item.tex = asNonEmptyString(o.tex, `shop[${i}].tex`);
+    if (o.color !== undefined) item.color = asHexColor(o.color, `shop[${i}].color`);
+    if (o.unlockAt !== undefined) item.unlockAt = asInt(o.unlockAt, `shop[${i}].unlockAt`);
+    return item;
+  });
+}
+
+// #573: "befehlshistorie" ist die erste echte Komfort-Funktion (Zwei-Stufen-Gate #572) –
+// die ID in shop.json muss zu CMD_HISTORY_ITEM_ID in game/shared.ts passen (Content ist
+// pure Domäne und darf die Anwendungsschicht nicht importieren, daher kein geteilter
+// Konstanten-Import).
+/** Validierter Shop – Quelle: `./data/shop.json`. */
+export const SHOP: ShopItem[] = parseShop(shopData);

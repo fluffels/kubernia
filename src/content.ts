@@ -5,10 +5,11 @@
  * Die Inhalte sind nach Domänen in `./content/` aufgeteilt; diese Datei
  * bündelt sie nur noch zum gewohnten `KQContent`-Objekt (öffentliche API).
  */
+// NPCs, Smalltalk, Quests, Befehls-Karten, Quiz-Karten, Ränge, Shop und Stapel-Runden sind
+// Content-as-Data (#348/#352/#368/#583): als JSON in content/data/, geladen & gegen ein Schema
+// validiert (Loader: accept→RegExp, check→Mechanik-Registry; progression.ts/minigame.ts: eigener
+// eager Parser wie npcs.json/smalltalk.json). Siehe content/loader.ts + content/checks.ts.
 import { RANKS, SHOP } from "./content/progression";
-// NPCs, Smalltalk, Quests, Befehls-Karten und Quiz-Karten sind Content-as-Data
-// (#348/#352/#368): als JSON in content/data/, geladen & gegen ein Schema validiert vom
-// Loader (accept→RegExp, check→Mechanik-Registry). Siehe content/loader.ts + content/checks.ts.
 import { NPCS, SMALLTALK, PRACTICE, getQuests, getCmdCards, getQuizCards, getQuestTopics, groupQuestsByTopic, getTfConfigs, getFunkExplains } from "./content/loader";
 import { DRILLS } from "./content/drills";
 import { STACK_ROUNDS, corruptImage } from "./content/minigame";
