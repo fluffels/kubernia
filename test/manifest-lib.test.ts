@@ -10,7 +10,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 import {
-  getManifest, getManifests, parseManifests, assembleManifests,
+  getManifest, getManifests, parseManifests, assembleManifests, resolveScenarioManifests,
 } from "../src/content/manifest-lib";
 import { parseQuests, ContentValidationError } from "../src/content/loader";
 
@@ -109,4 +109,34 @@ test("manifestRef: derselbe Dateiname in files UND manifests ist mehrdeutig und 
     }), "ref-test"),
     (e: unknown) => e instanceof ContentValidationError && /mehrdeutig/.test((e as Error).message),
   );
+});
+
+/* ===== #584: lokale Schlüssel-Schließung an der Manifest-Auflösung ===== */
+
+test("resolveScenarioManifests: vertippter Scenario-Schlüssel fällt LOKAL an der Auflösung auf (Red-Green, #584)", () => {
+  // `manifets` statt `manifests`: früher lief resolveScenarioManifests einfach durch
+  // (o.manifests === undefined) und der Fehler tauchte erst nachgelagert generisch in
+  // reviveScenario auf. Jetzt schließt die Auflösung ihre Eingabe-Schlüssel selbst –
+  // der Fehler stammt HIER, mit der assertNoUnknownKeys-Meldung („unbekannter Schlüssel").
+  assert.throws(
+    () => resolveScenarioManifests({ manifets: { "x.yaml": "deployment-lager" } }, "q.scenario"),
+    (e: unknown) => e instanceof ContentValidationError
+      && /q\.scenario\.manifets/.test((e as Error).message)
+      && /unbekannter Schlüssel/.test((e as Error).message),
+    "vertippter Schlüssel wurde nicht lokal abgewiesen",
+  );
+});
+
+test("resolveScenarioManifests: echte Scenario-Felder neben manifests bleiben erlaubt (kein False Positive)", () => {
+  // Die lokale Schließung darf die legitimen Scenario-Felder (SSOT keyof Scenario) NICHT
+  // fälschlich abweisen – nur wirklich unbekannte Schlüssel.
+  const resolved = resolveScenarioManifests({
+    deployments: [{ name: "web", image: "nginx", replicas: 1 }],
+    files: { "eigen.yaml": "roh" },
+    manifests: { "deployment.yaml": "deployment-lager" },
+  }, "q.scenario") as Record<string, unknown>;
+  assert.equal((resolved.files as Record<string, string>)["deployment.yaml"], getManifest("deployment-lager"));
+  assert.equal((resolved.files as Record<string, string>)["eigen.yaml"], "roh");
+  assert.deepEqual(resolved.deployments, [{ name: "web", image: "nginx", replicas: 1 }]);
+  assert.equal(resolved.manifests, undefined);
 });
