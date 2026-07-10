@@ -2,7 +2,7 @@ import { Game } from "../game";
 import { SFX } from "../sfx";
 import { worldScene, interiorOpen } from "../runtime";
 import { part, $, esc, NPCS, SMALLTALK } from "./shared";
-import { HUD_ICONS, HUD_SEASON_ICONS, MENU_ICONS, HUD_KEY_ICONS } from "../assets-data";
+import { HUD_ICONS, HUD_SEASON_ICONS, MENU_ICONS, HUD_KEY_ICONS, PANEL_ICONS } from "../assets-data";
 import { resolveTalkTarget } from "../hud/viewdecide";
 import { TOAST_LIFE_MS, HINT_LIFE_MS, toastFadeDelaySeconds } from "../hud/toastlife";
 import { enqueueAchievement, bundleCelebration, type Achievement } from "../hud/celebrate";
@@ -31,6 +31,14 @@ export const hudUI = part({
     (<HTMLImageElement>$("menu-icon-reset")).src = MENU_ICONS.reset;
     // Menü-Button (#hud-menu-btn) – festes Icon, das renderKeyHints nicht anfasst (#646).
     (<HTMLImageElement>$("hud-icon-menu")).src = HUD_KEY_ICONS.menu;
+    // Panel-Kopf-Icons (#647): generisch über `data-icon` verdrahten – jedes
+    // `<img class="pixel-icon" data-icon="KEY">` bekommt die URL aus PANEL_ICONS[KEY].
+    // So kommen Folge-Slices mit einem reinen Datentabellen-Eintrag aus (kein neuer Code).
+    document.querySelectorAll<HTMLImageElement>("img.pixel-icon[data-icon]").forEach((img) => {
+      const key = img.dataset.icon;
+      const src = key ? PANEL_ICONS[key] : undefined;
+      if (src) img.src = src;
+    });
   },
 
   refreshHud() {

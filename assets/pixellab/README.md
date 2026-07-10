@@ -85,6 +85,19 @@ Slice **2/4 von #204** (#646): ersetzen die Emoji der Steuer-Hinweisleiste (`ind
 | `hud_album` | Aufgeschlagenes Buch (Sammelalbum) |
 | `hud_menu` | Schiffssteuerrad (Menü, auch `#hud-menu-btn`) |
 
+## Panel-Kopf-Icons (`create_map_object`, 40×40, `view: side`, DOM-`<img>` statt Phaser)
+Gerahmte Pixel-Icons für die Köpfe der Overlay-Panels (`index.html` `.panel-head`, #647, Slice 3 von #204); ersetzen die früheren Emoji. Gleicher Stil + gleiche Pixeldichte wie die HUD-Statuszeilen-Icons (#645), nur die 40px-Quelle wird auf **20px** gerendert (÷2 ganzzahlig, `.panel-head .pixel-icon` in `style.css`) — Panel-Köpfe sind größer als die HUD-Zeile. In `src/assets-data.ts` als Record `PANEL_ICONS` (`data-icon`-Schlüssel → URL) eingebunden, generisch in `ui/hud.ts` › `initHudIcons()` über das `data-icon`-Attribut verdrahtet (`<img class="pixel-icon" data-icon="…">`). **Eigene neue Icons nur für die Motive, die keine andere Slice hat** (Shop/Krabbe/Spiel); **Logbuch/Album/Terminal/Menü teilen sich bewusst die #646-Tastenleisten-Icons** (`hud_logbook`/`hud_album`/`hud_terminal`/`hud_menu`) — gleiches Motiv, EIN Asset statt Doppel.
+
+| Datei | Motiv (Panel) |
+|---|---|
+| `icon_shop` | Marktstand mit Streifen-Markise (Pelles Handelsposten, `#overlay-shop`) |
+| `icon_kralle` | Runde chibi-Krabbe (Krabbe Kralle, `#overlay-review`) |
+| `icon_game` | Gestapelte Hafen-Kisten — EIN Icon für alle sechs Minispiel-Panels (Stapel/Pod-Pack/YAML/Routing/Drift/RBAC) |
+| `hud_logbook` (geteilt) | Logbuch (`#overlay-quest`) |
+| `hud_album` (geteilt) | Sammelalbum (`#overlay-album`) |
+| `hud_terminal` (geteilt) | Terminal (`#overlay-terminal`) |
+| `hud_menu` (geteilt) | Menü (`#overlay-menu`) |
+
 ## Figuren (`create_character`, 4-dir, nur `south.png` genutzt)
 `char_player` daae9195 · `char_ole` b89f37e2 · `char_runa` 723246a6 · `char_pelle` 793f0232
 `char_bo` f8a654e6 · `char_ada` 4b44fcee · `char_theo` f7d6621a · `char_kralle` 6551e699 · `char_juno` 8d0a9892
