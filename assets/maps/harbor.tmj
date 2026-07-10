@@ -245,7 +245,7 @@
             {
               "name": "title",
               "type": "string",
-              "value": "Deine Kajüte"
+              "value": "Dein Deck"
             },
             {
               "name": "npc",

@@ -97,10 +97,10 @@ export const DOORS: Door[] = [
  * baut sein this.ship daraus, damit Trigger-Luke und Rumpf nicht auseinanderdriften. */
 export const SHIP = { x: 30, y: 29, w: 9, h: 6 } as const;
 
-/** Companionway-Luke auf dem Deck: Trigger zum Betreten der Kajüte. Liegt mittig
- *  im Deck (begehbar), nicht am Steg-Rand – so triggert man bewusst beim Drüberlaufen.
- *  Bewusst NICHT in DOORS: das Schiff hängt nicht an einem NPC_SPAWN. */
-export const SHIP_DOOR: Door = { id: "schiff", tx: 34, ty: 32, title: "Deine Kajüte", theme: "ship", npc: "kralle" };
+/** Companionway-Luke auf dem Deck: Trigger zum Betreten des begehbaren Decks (#758).
+ *  Liegt mittig im Deck (begehbar), nicht am Steg-Rand – so triggert man beim
+ *  Drüberlaufen. Bewusst NICHT in DOORS: das Schiff hängt nicht an einem NPC_SPAWN. */
+export const SHIP_DOOR: Door = { id: "schiff", tx: 34, ty: 32, title: "Dein Deck", theme: "ship", npc: "kralle" };
 
 /* ===== Begehbares Deck als Boots-Silhouette (#205) =====
  * Früher war die GANZE rechteckige SHIP-Grundfläche begehbar – dadurch lief man auf
