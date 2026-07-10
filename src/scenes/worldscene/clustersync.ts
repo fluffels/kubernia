@@ -1,6 +1,6 @@
 /* ===== KubeQuest – WorldScene-Cluster-Sync (worldscene/clustersync.ts) =====
  * Schritt des WorldScene.ts-Splits (#393). Hier wird der simulierte Cluster
- * (Game.sim) auf die sichtbare Hafenwelt gespiegelt: Pods als Kisten an den
+ * (Game.sim) auf die sichtbare Hafenwelt gespiegelt: Pods als offene Bootsrümpfe an den
  * Stegen (syncCluster), Deployment-/Docker-/Helm-/Service-Tags neu bauen bei
  * Änderung (rebuildDynamic) und die Nähe-Aufdeckung + Entzerrung der dynamischen
  * Tags (updateDynamicTags).
@@ -91,11 +91,11 @@ function syncPods(scene: WorldSceneLike) {
       const pos = podSlotPos(scene, slot);
       const hue = hashHue(p.dep);
       const shadow = scene.addShadow(pos.x, pos.y + 7, 11);
-      const crate = scene.add.image(pos.x, pos.y - 44, "crate").setScale(0.6).setDepth(pos.y + 8);
-      const band = scene.add.image(pos.x, pos.y - 44 - 5, "px").setScale(6, 1.5).setTint(hueColor(hue)).setDepth(pos.y + 9);
-      scene.tweens.add({ targets: [crate, band], y: "+=44", duration: 550, ease: "Bounce.easeOut",
+      const hull = scene.add.image(pos.x, pos.y - 44, "pod_hull").setScale(0.6).setDepth(pos.y + 8);
+      const barrel = scene.add.image(pos.x, pos.y - 44 - 2, "barrel").setScale(0.35).setTint(hueColor(hue)).setDepth(pos.y + 9);
+      scene.tweens.add({ targets: [hull, barrel], y: "+=44", duration: 550, ease: "Bounce.easeOut",
         onComplete: () => scene.burstAt(pos.x, pos.y + 4, "dust") });
-      scene.podSlots[p.name] = { slot, crate, band, shadow, dep: p.dep };
+      scene.podSlots[p.name] = { slot, hull, barrel, shadow, dep: p.dep };
     }
   }
   for (const name of Object.keys(scene.podSlots)) {
@@ -104,17 +104,17 @@ function syncPods(scene: WorldSceneLike) {
       const pos = podSlotPos(scene, info.slot);
       scene.burstAt(pos.x, pos.y + 4, "splash");
       SFX.splash();
-      info.crate.destroy(); info.band.destroy(); info.shadow.destroy();
+      info.hull.destroy(); info.barrel.destroy(); info.shadow.destroy();
       scene.slotUsed[info.slot] = false;
       delete scene.podSlots[name];
     }
   }
 
-  // Kaputte Deployments: Kisten rot einfärben
+  // Kaputte Deployments: Rumpf rot einfärben
   const brokenMap: Record<string, boolean> = {};
   for (const d of Game.sim.deployments) brokenMap[d.name] = !!d.broken;
-  for (const info of Object.values(scene.podSlots) as { crate: Phaser.GameObjects.Image; dep: string }[]) {
-    info.crate.setTint(brokenMap[info.dep] ? 0xff8d8d : 0xffffff);
+  for (const info of Object.values(scene.podSlots) as { hull: Phaser.GameObjects.Image; dep: string }[]) {
+    info.hull.setTint(brokenMap[info.dep] ? 0xff8d8d : 0xffffff);
   }
 
   // Signaturen: Fässer / Flaggen / Laternen / Deployment-Labels nur bei Änderung neu bauen
