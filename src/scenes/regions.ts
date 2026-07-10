@@ -14,8 +14,10 @@
 import Phaser from "phaser";
 import { circleHitbox, rectHitbox } from "../world/world";
 import { npcSpawnsForMap } from "../content/entities";
+import { Game } from "../game";
 import { T } from "./shared";
 import { HIT_R, CRATE_HIT } from "./geometry";
+import { harborTexture } from "./worldscene/harbordamage";
 import type { RegionConfig, RegionScene } from "./RegionScene";
 import { buildArchipel, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL, ARCHIPEL_NPC, ARCHIPEL_QUEST_TRIGGER, type ArchipelMap } from "../world/regions/archipel";
 import { buildLighthouse, LIGHTHOUSE_TO_WORLD, LIGHTHOUSE_ARRIVAL, LIGHTHOUSE_NPC, LIGHTHOUSE_QUEST_TRIGGER, LIGHTHOUSE_TOWER, type LighthouseMap } from "../world/regions/lighthouse";
@@ -139,6 +141,13 @@ const warehouse: RegionConfig = {
         scene.softObstacles.push(rectHitbox(g.x * T + off, g.y * T + off, CRATE_HIT, CRATE_HIT));
       }
     }
+    // Kran-Schadensoptik (#692): Control-Plane-Zustand auf die via spawnIslandObject
+    // erzeugten Kran-Sprites übertragen (spawnen vor dem decorate-Hook, daher hier auffindbar).
+    const cpUp = Game.sim?.controlPlane.up ?? true;
+    scene.children.getAll().forEach(child => {
+      const img = child as Phaser.GameObjects.Image;
+      if (img.texture?.key === "crane") img.setTexture(harborTexture("crane", cpUp));
+    });
   },
 };
 

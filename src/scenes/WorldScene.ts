@@ -74,6 +74,11 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   lhBeam!: Phaser.GameObjects.Image;
   lhLight!: Phaser.GameObjects.Image;
   cannon!: Phaser.GameObjects.Image;
+  // Hafen-Kernobjekte für die Sturm-Schadensoptik (#692)
+  lighthouseImg!: Phaser.GameObjects.Image;
+  shipImg!: Phaser.GameObjects.Image;
+  houseOfficeImg!: Phaser.GameObjects.Image;
+  lastControlPlaneUp?: boolean;
   tfGroup!: Phaser.GameObjects.Container;
   tfBuoys!: Phaser.GameObjects.Image[];
   butterflies!: Butterfly[];
@@ -270,10 +275,10 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   /** PixelLab-Gebäude: ein ganzes Haus als Bild über der w×3-Kachel-Grundfläche.
    *  Kollision = die Grundfläche solide (wie früher); das hohe Dach ragt sichtbar
    *  nach oben (begehbar dahinter, Tiefe nach Fußlinie → korrektes Vorne/Hinten). */
-  building(x: number, y: number, w: number, tex: string, scale: number) {
+  building(x: number, y: number, w: number, tex: string, scale: number): Phaser.GameObjects.Image {
     for (let i = 0; i < w; i++) for (let r = 0; r < 3; r++) this.solidGrid[(y + r) * this.W + (x + i)] = 1;
     const cx = (x + w / 2) * T, baseY = (y + 3) * T;
-    this.add.image(cx, baseY, tex).setOrigin(0.5, 1).setScale(scale).setDepth(baseY);
+    return this.add.image(cx, baseY, tex).setOrigin(0.5, 1).setScale(scale).setDepth(baseY);
   }
 
   /** Festes Orts-Schild: eingravierte Schrift auf einem PixelLab-Holzbrett,
