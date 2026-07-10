@@ -18,6 +18,9 @@
 import town from "../assets/town.png";
 import dungeon from "../assets/dungeon.png";
 
+// Terraform-Plateau-Boden (#672): 16px-Holzplanken-Tile, ersetzt Kenney-dungeon-WOOD
+import tf_floor from "../assets/pixellab/tf_floor.png";
+
 // Interior-Boden/Wand-Tiles (#187): 16px-Einzelkacheln (Holzboden, Haus-Stein-Wand, Schiffsrumpf-Wand)
 import interior_floor from "../assets/pixellab/interior_floor.png";
 import interior_wall_house from "../assets/pixellab/interior_wall_house.png";
@@ -210,6 +213,7 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
   { key: "door_forge", src: door_forge, kind: "plain" },
   { key: "door_chart", src: door_chart, kind: "plain" },
   { key: "ship", src: ship, kind: "plain" },
+  { key: "tf_floor", src: tf_floor, kind: "plain" },           // Terraform-Plateau-Boden (#672)
   // Interior-Einrichtung (#187): Bullauge/Tür/Luke + Boden/Wand-Kacheln ersetzen prozedurale Formen im Innenraum
   { key: "porthole", src: porthole, kind: "plain" },
   { key: "interior_door", src: interior_door, kind: "plain" },
