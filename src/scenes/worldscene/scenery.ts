@@ -208,14 +208,14 @@ export function renderStatics(scene: WorldSceneLike) {
   scene.shipFlag = scene.add.image(mastTopX, mastTopY, "px").setScale(6, 4).setDepth(3);
   scene.tweens.add({ targets: scene.shipFlag, y: mastTopY - 2, duration: 700, yoyo: true, repeat: -1, ease: "Sine.inOut" });
 
-  // Companionway-Luke (#42): begehbarer Eingang zur Kajüte. Liegt auf SHIP_DOOR,
+  // Companionway-Luke (#758): begehbarer Eingang zum Deck. Liegt auf SHIP_DOOR,
   // damit der Trigger (doorAt) optisch sichtbar ist. Tiefe knapp unter der Figur,
   // damit man sichtbar darüber steht, bevor der Szenenwechsel auslöst.
   const hx = SHIP_DOOR.tx * T + 8, hy = SHIP_DOOR.ty * T + 8, hatch = scene.add.graphics().setDepth(SHIP_DOOR.ty * T);
   hatch.fillStyle(0x3a2e22); hatch.fillRoundedRect(hx - 8, hy - 7, 16, 14, 3);   // Holzrahmen
   hatch.fillStyle(0x140d08); hatch.fillRoundedRect(hx - 6, hy - 5, 12, 10, 2);   // dunkle Öffnung
   hatch.fillStyle(0x6b4f35); for (let i = 0; i < 3; i++) hatch.fillRect(hx - 5, hy - 3 + i * 3, 10, 1.4); // Leitersprossen
-  scene.labels.push({ x: SHIP_DOOR.tx + 0.5, y: SHIP_DOOR.ty - 0.7, text: "↓ Kajüte", color: "#ffe9b0" });
+  scene.labels.push({ x: SHIP_DOOR.tx + 0.5, y: SHIP_DOOR.ty - 0.7, text: "↓ Deck", color: "#ffe9b0" });
 
   // === Leuchtturm (Sturmwache) – PixelLab-Turm + rotierender Lichtkegel ===
   const lh = scene.lighthouse, lx = lh.x * T + 8, lyB = (lh.y + 1) * T;
