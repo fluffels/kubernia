@@ -42,6 +42,7 @@ import bush from "../assets/pixellab/bush.png";
 import rock from "../assets/pixellab/rock.png";
 import barrel from "../assets/pixellab/barrel.png";
 import crate from "../assets/pixellab/crate.png";
+import pod_hull from "../assets/pixellab/pod_hull.png";
 import well from "../assets/pixellab/well.png";
 import stall from "../assets/pixellab/stall.png";
 import lamppost from "../assets/pixellab/lamppost.png";
@@ -168,6 +169,7 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
   { key: "rock", src: rock, kind: "plain" },
   { key: "barrel", src: barrel, kind: "plain" },
   { key: "crate", src: crate, kind: "plain" },
+  { key: "pod_hull", src: pod_hull, kind: "plain" },
   { key: "well", src: well, kind: "plain" },
   { key: "stall", src: stall, kind: "plain" },
   { key: "lamppost", src: lamppost, kind: "plain" },
