@@ -72,7 +72,7 @@ export const radioUI = part({
         Keine Sorge: Alles, was du hier eingibst, wirkt nur im Hafen-Cluster dieser Spielwelt – nichts auf deinem echten Rechner.
         <br><br>Mit <code>help</code> siehst du die Befehle, die du schon freigeschaltet hast – die Liste wächst, je weiter du kommst.
         <br><br>💡 Übungs-Aufgaben mit Belohnung bekommst du bei der Crew: ansprechen → „Üben”.
-        <br><br>💬 Bug gefunden oder Idee? <a href="https://github.com/fluffels/kubequest/discussions" target="_blank" rel="noopener noreferrer">GitHub Discussions</a></div>
+        <br><br>💬 Bug gefunden oder Idee? <a href="https://github.com/fluffels/kubernia/discussions" target="_blank" rel="noopener noreferrer">GitHub Discussions</a></div>
         <div id="tt-feedback"></div>`;
       actions.innerHTML = "";
       return;

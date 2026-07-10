@@ -1,8 +1,8 @@
 # ADR 0006: Braucht Kubernia bei Stardew-Scope ein Backend? — Skalierungs-Review
 
 - **Status:** akzeptiert (2026-06-21) · ergebnisoffenes Grundsatz-Review
-- **Kontext-Ticket:** [#400](https://github.com/fluffels/kubequest/issues/400)
-- **Verwandt:** [ADR 0001 – Engine Phaser](0001-engine-phaser.md), [ADR 0002 – Kein Backend, keine DB](0002-kein-backend-keine-db.md), [ADR 0004 – Skalierungs-Fundament](0004-skalierungs-fundament.md); **eng verzahnt mit [#355](https://github.com/fluffels/kubequest/issues/355) (Auslieferungsform Web vs. Desktop)** — die Backend-Frage ist von der Auslieferungsform **nicht unabhängig** entscheidbar (siehe unten).
+- **Kontext-Ticket:** [#400](https://github.com/fluffels/kubernia/issues/400)
+- **Verwandt:** [ADR 0001 – Engine Phaser](0001-engine-phaser.md), [ADR 0002 – Kein Backend, keine DB](0002-kein-backend-keine-db.md), [ADR 0004 – Skalierungs-Fundament](0004-skalierungs-fundament.md); **eng verzahnt mit [#355](https://github.com/fluffels/kubernia/issues/355) (Auslieferungsform Web vs. Desktop)** — die Backend-Frage ist von der Auslieferungsform **nicht unabhängig** entscheidbar (siehe unten).
 
 ## Warum dieser ADR — die alten Annahmen bewusst anzweifeln
 
@@ -43,8 +43,8 @@ Damit ist **#400 nicht ohne #355 entscheidbar**: „kein Backend" ist für die D
 
 Die große Zahl bei Stardew ist **nicht** der Save (10 MB), sondern die **Asset-Menge** (~490 MB–1 GB: hunderte Sprites, Tilemaps, Sounds, Musik). Das ist die Dimension, die bei Kubernia zuerst gegen eine Wand läuft — und sie wird **client-seitig** gelöst, ohne Backend:
 
-- **Texture-Atlas** statt Einzel-Dateien (TexturePacker-JSON, von Phaser nativ unterstützt) → weniger Draw-Calls, weniger HTTP-Requests. → **bereits als [#339](https://github.com/fluffels/kubequest/issues/339) erfasst.**
-- **Lazy-Loading pro Insel/Szene** statt alles im `preload` → keine Minuten-Ladezeit beim Start. → **bereits als [#198](https://github.com/fluffels/kubequest/issues/198) erfasst.**
+- **Texture-Atlas** statt Einzel-Dateien (TexturePacker-JSON, von Phaser nativ unterstützt) → weniger Draw-Calls, weniger HTTP-Requests. → **bereits als [#339](https://github.com/fluffels/kubernia/issues/339) erfasst.**
+- **Lazy-Loading pro Insel/Szene** statt alles im `preload` → keine Minuten-Ladezeit beim Start. → **bereits als [#198](https://github.com/fluffels/kubernia/issues/198) erfasst.**
 - **Caching:** statisches Hosting + CDN (Web-Auslieferung) bzw. Service Worker / Cache API für Offline-Wiederbesuch.
 
 **Statisches Hosting/CDN ist kein „Backend" im Sinne von ADR 0002** (kein Server-Stack, keine DB, kein Service-Split) — es ist nur das Ausliefern unveränderlicher Dateien. Das widerspricht ADR 0002 nicht.
@@ -91,9 +91,9 @@ Neu zu bewerten, sobald **einer** eintritt (ergänzt die Trigger aus ADR 0002):
 
 ## Folge-Tickets
 
-- **Neu angelegt: [#401](https://github.com/fluffels/kubequest/issues/401)** — „`navigator.storage.persist()` + Quota-Monitoring beim Boot anfordern". Schließt die in Befund 3 gefundene Eviction-Lücke (heute ruft Kubernia `persist()` nirgends auf). Client-seitig, session-groß, ohne Backend.
-- **Bereits im Backlog (Asset-Skalierung):** [#198](https://github.com/fluffels/kubequest/issues/198) Lazy-Asset-Loading, [#339](https://github.com/fluffels/kubequest/issues/339) Texture-Atlas.
-- **Offen, koppelt hier an:** [#355](https://github.com/fluffels/kubequest/issues/355) Auslieferungsform — entscheidet, ob die Plattform die Backend-Features liefert.
+- **Neu angelegt: [#401](https://github.com/fluffels/kubernia/issues/401)** — „`navigator.storage.persist()` + Quota-Monitoring beim Boot anfordern". Schließt die in Befund 3 gefundene Eviction-Lücke (heute ruft Kubernia `persist()` nirgends auf). Client-seitig, session-groß, ohne Backend.
+- **Bereits im Backlog (Asset-Skalierung):** [#198](https://github.com/fluffels/kubernia/issues/198) Lazy-Asset-Loading, [#339](https://github.com/fluffels/kubernia/issues/339) Texture-Atlas.
+- **Offen, koppelt hier an:** [#355](https://github.com/fluffels/kubernia/issues/355) Auslieferungsform — entscheidet, ob die Plattform die Backend-Features liefert.
 
 ## Quellen (Recherche 2026-06)
 
