@@ -101,10 +101,10 @@ describe("tileLayer", () => {
 describe("resolveTilesets", () => {
   const keys = ASSET_MANIFEST.map((a) => a.key);
 
-  it("löst das Tileset 'town' auf den gleichnamigen Asset-Schlüssel auf", () => {
+  it("löst das Tileset 'coast' auf den gleichnamigen Asset-Schlüssel auf", () => {
     const map = parseTiledMap(freshRaw());
     const resolved = resolveTilesets(map, keys);
-    expect(resolved).toEqual([{ tiledName: "town", assetKey: "town", firstgid: 1 }]);
+    expect(resolved).toEqual([{ tiledName: "coast", assetKey: "coast", firstgid: 1 }]);
   });
 
   it("wirft, wenn ein Tileset-Name keinen Asset-Schlüssel trifft", () => {
