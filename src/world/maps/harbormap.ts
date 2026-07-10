@@ -158,7 +158,11 @@ export function harborGeometry(W = HARBOR_W, H = HARBOR_H): { ground: number[]; 
  * Bodencode linear um GROUND_GID_OFFSET verschoben gespeichert; der Datenpfad
  * rechnet beim Laden zurück. Da JEDE Kachel ein Terrain trägt, kommt im
  * Boden-Layer nie eine 0 vor. Der minimale Code (-10) landet so auf gid 2,
- * der maximale (98) auf gid 110 – beides innerhalb des town-Tilesets (132). */
+ * der maximale (98) auf gid 110.
+ * Das eingebettete Tileset ("coast") ist ein reiner Schema-Platzhalter – Tiled
+ * erwartet mindestens ein Tileset, das Rendering erfolgt jedoch ausschließlich
+ * über den Wang-Autotile-Renderer (renderGround in terrain.ts) aus den PixelLab-
+ * Tilesets. Das Tileset-Bild wird für die Hafenkarte nie direkt gerendert. */
 export const GROUND_GID_OFFSET = 12;
 /** gid, mit dem der Kollisions-Layer solide Kacheln markiert (frei = 0). */
 const COLLISION_GID = 14;
@@ -286,16 +290,14 @@ export function harborTiledMap(): Record<string, unknown> {
     tilesets: [
       {
         firstgid: 1,
-        name: "town",
-        image: "../town.png",
-        imagewidth: 192,
-        imageheight: 176,
+        name: "coast",
+        image: "../pixellab/water-sand.png",
+        imagewidth: 64,
+        imageheight: 64,
         tilewidth: 16,
         tileheight: 16,
-        tilecount: 132,
-        columns: 12,
-        margin: 0,
-        spacing: 0,
+        tilecount: 16,
+        columns: 4,
       },
     ],
     layers: [

@@ -15,16 +15,14 @@
   "tilesets": [
     {
       "firstgid": 1,
-      "name": "town",
-      "image": "../town.png",
-      "imagewidth": 192,
-      "imageheight": 176,
+      "name": "coast",
+      "image": "../pixellab/water-sand.png",
+      "imagewidth": 64,
+      "imageheight": 64,
       "tilewidth": 16,
       "tileheight": 16,
-      "tilecount": 132,
-      "columns": 12,
-      "margin": 0,
-      "spacing": 0
+      "tilecount": 16,
+      "columns": 4
     }
   ],
   "layers": [
