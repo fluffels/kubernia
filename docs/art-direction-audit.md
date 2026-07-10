@@ -55,11 +55,11 @@ Fast alle Abweichungen sind bereits geführt – das Audit ordnet sie der Messla
 
 | # | Bereich | Status |
 |---|---|---|
-| [#106](https://github.com/fluffels/kubequest/issues/106) | **Voraussetzung:** echte Stardew-Referenz sammeln → [`stardew-referenz.md`](stardew-referenz.md) | ✅ erledigt |
-| [#107](https://github.com/fluffels/kubequest/issues/107) | Gras als echtes Pixelart (Re-Do von #40) | offen |
-| [#53](https://github.com/fluffels/kubequest/issues/53) | Inventar aller Nicht-Pixelart-Grafiken (Gegner, HUD, Emojis) + Per-Element-Tickets | offen |
-| [#108](https://github.com/fluffels/kubequest/issues/108) | Schiff schwimmt im Wasser statt auf Holz-Plattform (Platzierung) | offen |
-| [#181](https://github.com/fluffels/kubequest/issues/181) | **Stil-Entscheidung Gebäude:** 2.5D (`high top-down`) vs. frontale `view: side`-Messlatte | ✅ entschieden: 2.5D bleibt (Stardew-konforme Ausnahme) |
+| [#106](https://github.com/fluffels/kubernia/issues/106) | **Voraussetzung:** echte Stardew-Referenz sammeln → [`stardew-referenz.md`](stardew-referenz.md) | ✅ erledigt |
+| [#107](https://github.com/fluffels/kubernia/issues/107) | Gras als echtes Pixelart (Re-Do von #40) | offen |
+| [#53](https://github.com/fluffels/kubernia/issues/53) | Inventar aller Nicht-Pixelart-Grafiken (Gegner, HUD, Emojis) + Per-Element-Tickets | offen |
+| [#108](https://github.com/fluffels/kubernia/issues/108) | Schiff schwimmt im Wasser statt auf Holz-Plattform (Platzierung) | offen |
+| [#181](https://github.com/fluffels/kubernia/issues/181) | **Stil-Entscheidung Gebäude:** 2.5D (`high top-down`) vs. frontale `view: side`-Messlatte | ✅ entschieden: 2.5D bleibt (Stardew-konforme Ausnahme) |
 
 Bewusst **kein** neues Ticket: Krake & Piraten-Schiff werden über das #53-Inventar
 erfasst (sonst Doppelung); die gemischten NPC-Größen sind auf gleiche Höhe
