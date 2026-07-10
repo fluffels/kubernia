@@ -259,13 +259,23 @@ export const hudUI = part({
     // nicht erneut.
     if (this.pendingCelebrations.length) { this.flushCelebrations(); return; }
     const near = ws.nearestNpc();
-    if (!near) { p.classList.add("hidden"); return; }
-    const meta = NPCS[near.id];
-    let label = "💬 Mit " + meta.name + " reden";
-    if (near.id === "pelle") label = "🛒 Bei Pelle einkaufen";
-    if (near.id === "kralle") label = "🦀 Quizrunde mit Kralle";
-    p.innerHTML = "<b>E</b> – " + label;
-    p.classList.remove("hidden");
+    if (near) {
+      const meta = NPCS[near.id];
+      let label = "💬 Mit " + meta.name + " reden";
+      if (near.id === "pelle") label = "🛒 Bei Pelle einkaufen";
+      if (near.id === "kralle") label = "🦀 Quizrunde mit Kralle";
+      p.innerHTML = "<b>E</b> – " + label;
+      p.classList.remove("hidden");
+      return;
+    }
+    // Fallback: Pod-Kiste in Reichweite (#650)?
+    const pod = ws.nearestPod();
+    if (pod) {
+      p.innerHTML = "<b>E</b> – 📦 Pod inspizieren";
+      p.classList.remove("hidden");
+      return;
+    }
+    p.classList.add("hidden");
   },
 
   interact() {
@@ -275,8 +285,46 @@ export const hudUI = part({
     const ws = worldScene();
     if (!ws) return;
     const near = ws.nearestNpc();
-    if (!near) return;
-    this.talkTo(near.id);
+    if (near) { this.talkTo(near.id); return; }
+    // Fallback: Pod-Kiste inspizieren (#650).
+    const pod = ws.nearestPod();
+    if (pod) this.openPodInspect(pod);
+  },
+
+  /** Pod-Inspektions-Panel öffnen (#650): zeigt Container-Name, Image, Status
+   *  und Restarts des angegebenen Pods aus Game.sim. */
+  openPodInspect(podName: string) {
+    if (!Game.sim) return;
+    let dep = null;
+    let pod = null;
+    for (const d of Game.sim.deployments) {
+      for (const p of d.pods) {
+        if (p.name === podName) { dep = d; pod = p; break; }
+      }
+      if (dep) break;
+    }
+    if (!dep || !pod) return;
+
+    const status = dep.broken
+      ? (dep.broken.type === "imagepull" ? "ImagePullBackOff"
+        : dep.broken.type === "crashloop" ? "CrashLoopBackOff"
+        : dep.broken.type === "pending" ? "Pending"
+        : dep.broken.type === "notready" ? "NotReady"
+        : dep.broken.type === "oomkilled" ? "OOMKilled"
+        : dep.broken.type)
+      : "Running";
+    const statusColor = dep.broken ? "#ff8d8d" : "#6fe09a";
+
+    $("podinspect-body").innerHTML =
+      '<table class="podinspect-table">' +
+        '<tr><th>Name</th><td><code>' + esc(String(podName)) + '</code></td></tr>' +
+        '<tr><th>Image</th><td><code>' + esc(dep.image) + '</code></td></tr>' +
+        '<tr><th>Status</th><td style="color:' + statusColor + '">' + esc(status) + '</td></tr>' +
+        '<tr><th>Restarts</th><td>' + pod.restarts + '</td></tr>' +
+      '</table>';
+
+    $("overlay-podinspect").classList.remove("hidden");
+    $("overlay-podinspect").focus();
   },
 
   /** Talk-Routing für einen NPC: Pelle→Shop, Kralle→Quiz, laufender Quest-Step,

@@ -203,6 +203,15 @@
     </div>
   </div>
 
+  <!-- Pod-Inspektions-Panel (#650): zeigt Container-Name, Image, Status und
+       Restarts des angespielten Pods. Rein lesend, kein keyNav. -->
+  <div id="overlay-podinspect" class="panel hidden" role="dialog" aria-modal="true" aria-label="Pod-Inspektion">
+    <div class="panel-head">📦 Pod-Inspektion
+      <button class="close-btn" data-action="closeOverlays">✕ (Esc)</button>
+    </div>
+    <div id="podinspect-body" class="panel-body"></div>
+  </div>
+
   <!-- Live-Region (#506): neu eingehängte Toasts (Belohnungen/Hinweise) werden von
        Screenreadern vorgelesen, ohne den Fokus zu stehlen (höflich = polite). -->
   <div id="toasts" role="status" aria-live="polite"></div>

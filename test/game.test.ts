@@ -180,7 +180,7 @@ test("reset: kehrt zur Default-Startposition zurück, auch wenn die WorldScene l
   // Jetzt das laufende Spiel simulieren: die WorldScene lebt und meldet eine andere
   // Position (Spieler ist herumgelaufen, z.B. aufs Schiff). Beim echten Reset-Button
   // ist genau diese Szene noch da, wenn Game.reset() läuft.
-  setWorldScene({ player: { x: 544, y: 496 }, nearestNpc: () => null, burstAtPlayer: () => {} });
+  setWorldScene({ player: { x: 544, y: 496 }, nearestNpc: () => null, nearestPod: () => null, burstAtPlayer: () => {} });
   Game.reset();
   setWorldScene(null); // aufräumen für die übrigen Tests
 
@@ -1174,7 +1174,7 @@ test("jumpToQuest: Giver-Position überlebt eine LAUFENDE WorldScene (#335, glei
   expect(spawn).toBeTruthy(); // Quest 3 hat einen festen Giver-Standplatz
   const giverPos = { x: spawn.x * TILE, y: spawn.y * TILE };
 
-  setWorldScene({ player: { x: 9999, y: 9999 }, nearestNpc: () => null, burstAtPlayer: () => {} });
+  setWorldScene({ player: { x: 9999, y: 9999 }, nearestNpc: () => null, nearestPod: () => null, burstAtPlayer: () => {} });
   expect(Game.jumpToQuest(3)).toBe(true);
   setWorldScene(null); // aufräumen für die übrigen Tests
 
