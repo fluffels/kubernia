@@ -52,13 +52,12 @@ test("loader: NPCS lädt alle erwarteten NPCs mit vollständigen Feldern", () =>
     assert.equal(typeof npc.name, "string");
     assert.ok(npc.name.trim().length > 0, `NPC „${id}": leerer Name`);
     assert.equal(typeof npc.title, "string");
-    assert.ok(Number.isInteger(npc.sprite), `NPC „${id}": sprite keine Ganzzahl`);
     assert.ok(npc.tex.startsWith("char_"), `NPC „${id}": tex-Key unerwartet`);
   }
   // Stichprobe gegen versehentliche Daten-Verschiebung beim JSON-Umzug.
   assert.equal(NPCS.argo.tex, "char_argos");
   assert.equal(NPCS.kralle.name, "Krabbe Kralle");
-  assert.equal(NPCS.knut.sprite, 100);
+  assert.equal(NPCS.knut.tex, "char_knut");
 });
 
 test("loader: SMALLTALK lädt nicht-leere Zeilen, jeder Schlüssel ist ein bekannter NPC", () => {
@@ -73,8 +72,8 @@ test("loader: SMALLTALK lädt nicht-leere Zeilen, jeder Schlüssel ist ein bekan
 /* ---------- parseNpcs: gültige Daten ---------- */
 
 test("parseNpcs: akzeptiert wohlgeformte Daten", () => {
-  const ok = parseNpcs({ x: { name: "X", title: "Titel", sprite: 7, tex: "char_x" } });
-  assert.equal(ok.x.sprite, 7);
+  const ok = parseNpcs({ x: { name: "X", title: "Titel", tex: "char_x" } });
+  assert.equal(ok.x.tex, "char_x");
   assert.equal(ok.x.name, "X");
 });
 
@@ -95,25 +94,28 @@ test("parseNpcs: wirft bei leerem Katalog", () => {
 
 test("parseNpcs: wirft bei fehlendem Pflichtfeld (mit Pfad)", () => {
   assert.throws(
-    () => parseNpcs({ ole: { title: "T", sprite: 1, tex: "char_o" } }),
+    () => parseNpcs({ ole: { title: "T", tex: "char_o" } }),
     (e: unknown) => e instanceof ContentValidationError && /npcs\.ole\.name/.test(e.message),
   );
 });
 
 test("parseNpcs: wirft bei leerem Namen", () => {
   assert.throws(
-    () => parseNpcs({ ole: { name: "   ", title: "T", sprite: 1, tex: "char_o" } }),
+    () => parseNpcs({ ole: { name: "   ", title: "T", tex: "char_o" } }),
     ContentValidationError,
   );
 });
 
-test("parseNpcs: wirft bei sprite ohne Ganzzahl (String oder Float)", () => {
+test("parseNpcs: wirft bei fehlender tex (jeder NPC braucht eine PixelLab-Figur, #670)", () => {
   assert.throws(
-    () => parseNpcs({ ole: { name: "Ole", title: "T", sprite: "100", tex: "char_o" } }),
-    (e: unknown) => e instanceof ContentValidationError && /npcs\.ole\.sprite/.test(e.message),
+    () => parseNpcs({ ole: { name: "Ole", title: "T" } }),
+    (e: unknown) => e instanceof ContentValidationError && /npcs\.ole\.tex/.test(e.message),
   );
+});
+
+test("parseNpcs: wirft bei unbekanntem Feld (Kenney-`sprite` ist mit #670 raus)", () => {
   assert.throws(
-    () => parseNpcs({ ole: { name: "Ole", title: "T", sprite: 1.5, tex: "char_o" } }),
+    () => parseNpcs({ ole: { name: "Ole", title: "T", tex: "char_o", sprite: 100 } }),
     ContentValidationError,
   );
 });

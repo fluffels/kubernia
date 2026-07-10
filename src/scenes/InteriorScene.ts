@@ -132,10 +132,10 @@ export class InteriorScene extends Phaser.Scene {
     this.npcY = nty * T + 8;
     const nbaseY = nty * T + 15;
     this.add.ellipse(ntx * T + 8, nty * T + 15, 10, 4, 0x000000, 0.26).setDepth(1.6);
-    const npc = meta && meta.tex
+    const npc = meta
       ? this.add.image(ntx * T + 8, nbaseY, meta.tex).setOrigin(0.5, 0.81).setScale(0.6).setDepth(nty * T + T)
-      : this.add.image(ntx * T + 8, nty * T + 8, "dungeon", meta ? meta.sprite : 0).setDepth(nty * T + T);
-    this.tweens.add({ targets: npc, y: npc.y - 1, duration: 1000, yoyo: true, repeat: -1, ease: "Sine.inOut" });
+      : undefined;
+    if (npc) this.tweens.add({ targets: npc, y: npc.y - 1, duration: 1000, yoyo: true, repeat: -1, ease: "Sine.inOut" });
     return meta;
   }
 
