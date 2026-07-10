@@ -78,5 +78,49 @@
         { "name": "lager_schluessel", "value": "werft-geheim-2347", "sensitive": true }
       ]
     }
+  },
+  {
+    "id": "flotte-echte-provider",
+    "label": "Provider für alles: Datenbank & Identity-System statt nur Cloud",
+    "scenario": {
+      "files": {
+        "provider.tf": "# Ein Provider ist die BRÜCKE: er übersetzt Terraform-Ressourcen in API-Aufrufe\n# eines Zielsystems. Das muss keine Cloud sein – hier reden wir mit einer\n# Datenbank (postgresql) und einem Identity-System (keycloak).\nterraform {\n  required_providers {\n    postgresql = {\n      source  = \"cyrilgdn/postgresql\"\n      version = \"1.22.0\"\n    }\n    keycloak = {\n      source  = \"mrparkers/keycloak\"\n      version = \"4.4.0\"\n    }\n  }\n}\n\nprovider \"postgresql\" {\n  host = \"hafenbuch-db.kubernia.local\"\n}\n\nprovider \"keycloak\" {\n  url = \"https://tuersteher.kubernia.local\"\n}\n",
+        "main.tf": "# Vier Ressourcen bei ZWEI ganz verschiedenen Systemen – in EINEM Terraform-Lauf.\n\n# Datenbank-Seite (postgresql-Provider): der Provider legt über die DB-API\n# reale Objekte an – eine Datenbank und eine Login-Rolle.\nresource \"postgresql_database\" \"hafenbuch\" {\n  name = \"hafenbuch\"\n}\n\nresource \"postgresql_role\" \"kapitaen\" {\n  name  = \"kapitaen\"\n  login = true\n}\n\n# Identity-Seite (keycloak-Provider): derselbe Terraform-Lauf, ein völlig anderes\n# Zielsystem – ein Realm (Mandant) und ein Client (angemeldete App).\nresource \"keycloak_realm\" \"hafen\" {\n  realm = \"hafen\"\n}\n\nresource \"keycloak_openid_client\" \"logbuch_app\" {\n  realm_id  = keycloak_realm.hafen.id\n  client_id = \"logbuch\"\n}\n"
+      },
+      "tfProviders": [
+        { "name": "postgresql", "source": "cyrilgdn/postgresql", "version": "1.22.0" },
+        { "name": "keycloak", "source": "mrparkers/keycloak", "version": "4.4.0" }
+      ],
+      "tfResources": [
+        { "addr": "postgresql_database.hafenbuch", "desc": "name = \"hafenbuch\"" },
+        { "addr": "postgresql_role.kapitaen", "desc": "name = \"kapitaen\", login = true" },
+        { "addr": "keycloak_realm.hafen", "desc": "realm = \"hafen\"" },
+        { "addr": "keycloak_openid_client.logbuch_app", "desc": "client_id = \"logbuch\"" }
+      ],
+      "tfModules": [],
+      "tfOutputs": [],
+      "tfBackend": null
+    }
+  },
+  {
+    "id": "flotte-configs-umgebung",
+    "label": "Eine Konfig, viele Umgebungen: dieselbe Logik je dev/qs/prod",
+    "scenario": {
+      "files": {
+        "main.tf": "# EINE Konfiguration – sie beschreibt den Dienst nur EINMAL. Die konkreten Werte\n# (Umgebung, Replikas, Domain) kommen von außen über Variablen, nichts fest eingetippt.\nresource \"hafen_dienst\" \"kasse\" {\n  name     = \"kasse-${var.umgebung}\"\n  replicas = var.replicas\n  domain   = var.domain\n}\n\noutput \"dienst_adresse\" {\n  value = \"kasse.${var.domain}\"\n}\n",
+        "variables.tf": "# Die Stellschrauben, die je Umgebung anders gesetzt werden – dieselbe Konfig,\n# andere Werte.\nvariable \"umgebung\" {\n  description = \"Name der Umgebung (dev, qs, prod).\"\n  type        = string\n}\n\nvariable \"replicas\" {\n  description = \"Wie viele Instanzen des Dienstes laufen sollen.\"\n  type        = number\n}\n\nvariable \"domain\" {\n  description = \"Basis-Domain der Umgebung.\"\n  type        = string\n}\n",
+        "environments/dev.tfvars": "# Werte für die DEV-Umgebung – klein und günstig.\numgebung = \"dev\"\nreplicas = 1\ndomain   = \"dev.kubernia.local\"\n",
+        "environments/prod.tfvars": "# Werte für die PROD-Umgebung – DIESELBE Konfig, nur andere Werte.\numgebung = \"prod\"\nreplicas = 5\ndomain   = \"kubernia.local\"\n"
+      },
+      "tfResources": [
+        { "addr": "hafen_dienst.kasse", "desc": "name = \"kasse-prod\", replicas = 5, domain = \"kubernia.local\"" }
+      ],
+      "tfProviders": [],
+      "tfModules": [],
+      "tfBackend": null,
+      "tfOutputs": [
+        { "name": "dienst_adresse", "value": "kasse.kubernia.local" }
+      ]
+    }
   }
 ]

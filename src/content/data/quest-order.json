@@ -64,6 +64,8 @@
   "terraform-remote-state",
   "terraform-provider",
   "terraform-variablen-outputs",
+  "terraform-echte-provider",
+  "terraform-configs-umgebung",
   "werft-eigener-dienst",
   "aufbau-sturm",
   "aufbau-control-plane",
