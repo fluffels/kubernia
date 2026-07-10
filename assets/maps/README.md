@@ -1,17 +1,17 @@
 # Tiled-Maps (`assets/maps/`)
 
 Hier liegen die Spielkarten als **Tiled-JSON** (`.tmj`). Begonnen als Teil 1 der
-Tiled-Migration ([#191](https://github.com/fluffels/kubequest/issues/191), Epic
-[#57](https://github.com/fluffels/kubequest/issues/57)) – das Fundament:
+Tiled-Migration ([#191](https://github.com/fluffels/kubernia/issues/191), Epic
+[#57](https://github.com/fluffels/kubernia/issues/57)) – das Fundament:
 ein Export-Format + ein generischer Loader, der **eine** Map rendert.
 
-Seit **Teil 2 ([#192](https://github.com/fluffels/kubequest/issues/192))** liegt
+Seit **Teil 2 ([#192](https://github.com/fluffels/kubernia/issues/192))** liegt
 zusätzlich die **echte Hafenkarte** als Daten vor (`harbor.tmj`, 52×40): mit
 `?tiledmap` in der URL kommt der Hafen-Boden + die Kollision aus der Datei statt
 aus der prozeduralen `buildMap()`. Das ist **pixelgleich** – derselbe Renderer
 (`renderGround()`), nur die Geometrie-Quelle wechselt. `buildMap()` bleibt der
 Default (Umschalt-Pfad); abgelöst wird sie erst in
-[#196](https://github.com/fluffels/kubequest/issues/196).
+[#196](https://github.com/fluffels/kubernia/issues/196).
 
 ## Format-Konvention
 

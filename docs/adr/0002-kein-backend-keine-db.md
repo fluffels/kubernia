@@ -1,8 +1,8 @@
 # ADR 0002: Kein Backend, keine Datenbank, keine Service-Aufteilung fürs Kern-Spiel
 
 - **Status:** akzeptiert (2026-06-16)
-- **Kontext-Ticket:** [#85](https://github.com/fluffels/kubequest/issues/85)
-- **Verwandt:** [ADR 0001 – Engine-Wahl Phaser 3](0001-engine-phaser.md) ([#84](https://github.com/fluffels/kubequest/issues/84))
+- **Kontext-Ticket:** [#85](https://github.com/fluffels/kubernia/issues/85)
+- **Verwandt:** [ADR 0001 – Engine-Wahl Phaser 3](0001-engine-phaser.md) ([#84](https://github.com/fluffels/kubernia/issues/84))
 
 ## Kontext
 
@@ -22,9 +22,9 @@ Der Kern-Wert von Kubernia ist „läuft offline im Browser, eine Datei, einfach
 
 **Kein Backend, keine Datenbank, kein Service-Split fürs Spiel selbst.**
 
-- **Persistenz = lokale Saves.** Spielstand läuft über die SaveStore-Schicht ([`src/store.ts`](../../src/store.ts)): seit #350 IndexedDB (localStorage/In-Memory als Fallback) + Auto-Save alle 5 s + JSON-Export/Import – rein client-seitig, ohne Server. Eine Save-Datei via Tauri-Wrapper ist die spätere Desktop-Variante ([#83](https://github.com/fluffels/kubequest/issues/83)) – weiterhin **lokal**, ohne Server.
-- **Kein Docker fürs Spiel.** Docker/Cluster ist ausschließlich **Lerninhalt** – im optionalen „echter-Cluster"-Modus ([#28](https://github.com/fluffels/kubequest/issues/28)) bzw. als Meister-Abschluss ([#26](https://github.com/fluffels/kubequest/issues/26)) – **nicht** Betriebsinfrastruktur des Spiels. Die Simulation in [`src/sim.ts`](../../src/sim.ts) bildet den Cluster im Spiel nach, statt einen echten zu betreiben.
-  - **Abgrenzung — Docker als reine Entwicklungs-Tooling ist erlaubt ([#388](https://github.com/fluffels/kubequest/issues/388)).** Diese ADR verbietet Docker als **Laufzeit-/Betriebs-Infrastruktur des ausgelieferten Spiels**, nicht als Werkzeug zum *Entwickeln*. Die containerisierte Dev-Umgebung ([`.devcontainer/`](../../.devcontainer/devcontainer.json) + [`docker-compose.yml`](../../docker-compose.yml)) startet nur Node + den Vite-Dev-Server, damit Mitwirkende und Cloud-/CI-KI-Agenten ohne lokale Node-Installation sofort entwickeln können. Das ausgelieferte Spiel bleibt die offline-fähige Single-File-Web-App (`npm run build:offline`) – ohne Server, ohne Container, ohne DB.
+- **Persistenz = lokale Saves.** Spielstand läuft über die SaveStore-Schicht ([`src/store.ts`](../../src/store.ts)): seit #350 IndexedDB (localStorage/In-Memory als Fallback) + Auto-Save alle 5 s + JSON-Export/Import – rein client-seitig, ohne Server. Eine Save-Datei via Tauri-Wrapper ist die spätere Desktop-Variante ([#83](https://github.com/fluffels/kubernia/issues/83)) – weiterhin **lokal**, ohne Server.
+- **Kein Docker fürs Spiel.** Docker/Cluster ist ausschließlich **Lerninhalt** – im optionalen „echter-Cluster"-Modus ([#28](https://github.com/fluffels/kubernia/issues/28)) bzw. als Meister-Abschluss ([#26](https://github.com/fluffels/kubernia/issues/26)) – **nicht** Betriebsinfrastruktur des Spiels. Die Simulation in [`src/sim.ts`](../../src/sim.ts) bildet den Cluster im Spiel nach, statt einen echten zu betreiben.
+  - **Abgrenzung — Docker als reine Entwicklungs-Tooling ist erlaubt ([#388](https://github.com/fluffels/kubernia/issues/388)).** Diese ADR verbietet Docker als **Laufzeit-/Betriebs-Infrastruktur des ausgelieferten Spiels**, nicht als Werkzeug zum *Entwickeln*. Die containerisierte Dev-Umgebung ([`.devcontainer/`](../../.devcontainer/devcontainer.json) + [`docker-compose.yml`](../../docker-compose.yml)) startet nur Node + den Vite-Dev-Server, damit Mitwirkende und Cloud-/CI-KI-Agenten ohne lokale Node-Installation sofort entwickeln können. Das ausgelieferte Spiel bleibt die offline-fähige Single-File-Web-App (`npm run build:offline`) – ohne Server, ohne Container, ohne DB.
 - **Keine Service-Aufteilung.** Die Schichtung (pure Domäne ↔ Anwendung ↔ Präsentation, siehe [AGENTS.md › Architektur](../../AGENTS.md#architektur)) ist eine **In-Process-Trennung von Verantwortlichkeiten**, kein verteiltes System.
 
 ## Konsequenzen

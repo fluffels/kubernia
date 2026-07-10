@@ -1,12 +1,12 @@
 # ADR 0005: Auslieferungsform bei Stardew-Scope — Web-App vs. Desktop-Download (bewusst offen gehalten)
 
 > Architecture Decision Record. Format: Kontext → Optionen → Entscheidung → Konsequenzen → Re-Evaluierung.
-> Status: **akzeptiert als ergebnisoffener Grundsatz-ADR** · Datum: 2026-07-03 · Ticket: [#355](https://github.com/fluffels/kubequest/issues/355) (Grundsatz-Review), angelegt via [#606](https://github.com/fluffels/kubequest/issues/606)
-> Verwandt: [ADR 0001 – Engine Phaser](0001-engine-phaser.md), [ADR 0002 – Kein Backend, keine DB](0002-kein-backend-keine-db.md), [ADR 0006 – Backend & Skalierung](0006-backend-und-skalierung.md); Bezug [#83](https://github.com/fluffels/kubequest/issues/83) (Tauri-Wrapper), [#198](https://github.com/fluffels/kubequest/issues/198) (Lazy-Load), [#339](https://github.com/fluffels/kubequest/issues/339) (Texture-Atlas).
+> Status: **akzeptiert als ergebnisoffener Grundsatz-ADR** · Datum: 2026-07-03 · Ticket: [#355](https://github.com/fluffels/kubernia/issues/355) (Grundsatz-Review), angelegt via [#606](https://github.com/fluffels/kubernia/issues/606)
+> Verwandt: [ADR 0001 – Engine Phaser](0001-engine-phaser.md), [ADR 0002 – Kein Backend, keine DB](0002-kein-backend-keine-db.md), [ADR 0006 – Backend & Skalierung](0006-backend-und-skalierung.md); Bezug [#83](https://github.com/fluffels/kubernia/issues/83) (Tauri-Wrapper), [#198](https://github.com/fluffels/kubernia/issues/198) (Lazy-Load), [#339](https://github.com/fluffels/kubernia/issues/339) (Texture-Atlas).
 
 ## Status
 
-**Akzeptiert — die Frage bleibt bewusst offen.** Kubernia legt sich **nicht** vorab auf eine einzige Auslieferungsform fest. Dieser ADR hält den Entscheidungsraum, die bereits getroffenen Präzisierungen und die Re-Evaluierungs-Trigger fest, statt eine Option zu wählen. Er ist das Artefakt zu dem in [arc42 §9](../arc42-architektur.md#9-architekturentscheidungen-adrs) und in der [Ticket-Reihenfolge](../ticket-reihenfolge.md) als „offen gehalten" geführten ADR 0005 — bisher fehlte genau diese Datei (der Doku-vs-Realität-Drift, den das Projekt sonst maschinell bekämpft; iSAQB-Runde 3, [#606](https://github.com/fluffels/kubequest/issues/606)).
+**Akzeptiert — die Frage bleibt bewusst offen.** Kubernia legt sich **nicht** vorab auf eine einzige Auslieferungsform fest. Dieser ADR hält den Entscheidungsraum, die bereits getroffenen Präzisierungen und die Re-Evaluierungs-Trigger fest, statt eine Option zu wählen. Er ist das Artefakt zu dem in [arc42 §9](../arc42-architektur.md#9-architekturentscheidungen-adrs) und in der [Ticket-Reihenfolge](../ticket-reihenfolge.md) als „offen gehalten" geführten ADR 0005 — bisher fehlte genau diese Datei (der Doku-vs-Realität-Drift, den das Projekt sonst maschinell bekämpft; iSAQB-Runde 3, [#606](https://github.com/fluffels/kubernia/issues/606)).
 
 ## Warum dieser ADR — und warum ergebnisoffen
 
@@ -17,7 +17,7 @@ Die Auslieferungsform **färbt save-, asset- und build-nahe Entscheidungen** (Pe
 | Option | Kurz | Backend-Implikation (siehe [ADR 0006](0006-backend-und-skalierung.md)) | Passt zu Stardew-Scope? |
 |---|---|---|---|
 | **A — Gehostete Web-App** | statisches Hosting + CDN, im Browser gespielt | Cloud-Save/Achievements/Cross-Device gäbe es **nur mit eigenem (minimalem) Backend** — teuer, kippt [ADR 0002](0002-kein-backend-keine-db.md) | ja, wenn kein Cloud-Anspruch; Asset-Delivery via Lazy-Load/CDN (#198/#339) |
-| **B — Desktop-Download über Plattform** | Steam/GOG/itch, ggf. via Tauri-Wrapper ([#83](https://github.com/fluffels/kubequest/issues/83)) | Cloud-Save/Achievements/Auto-Update/DLC kommen **gratis von der Plattform**, kein Eigenbau | ja — so löst es auch Stardew selbst |
+| **B — Desktop-Download über Plattform** | Steam/GOG/itch, ggf. via Tauri-Wrapper ([#83](https://github.com/fluffels/kubernia/issues/83)) | Cloud-Save/Achievements/Auto-Update/DLC kommen **gratis von der Plattform**, kein Eigenbau | ja — so löst es auch Stardew selbst |
 | **C — Single-File-Offline** | eine `dist-offline/index.html` mit allen Assets als Data-URI, verschenkbar per Doppelklick | keine (rein lokal) | **nur bei kleiner Größe** — Base64 bläht ~33 %, hunderte MB müssten vor dem Boot komplett geparst werden ⇒ Boot-Killer |
 
 Die Optionen schließen sich **nicht** gegenseitig aus: A und B können koexistieren (dieselbe Quelle, zwei Build-Wege — vgl. [`vite.config.ts`](../../vite.config.ts) `build` vs. `build:offline`), C ist ein reiner Zusatz-Export.
@@ -35,7 +35,7 @@ Die Optionen schließen sich **nicht** gegenseitig aus: A und B können koexisti
 ### Bewusst *nicht* entschieden
 
 - **Web (A) vs. Desktop (B)** — die eigentliche #355-Frage. Kein Termin, nur Trigger.
-- **Konkreter Desktop-Wrapper** — Tauri ([#83](https://github.com/fluffels/kubequest/issues/83)) ist die vorgemerkte Richtung, aber erst relevant, wenn Option B gewählt wird.
+- **Konkreter Desktop-Wrapper** — Tauri ([#83](https://github.com/fluffels/kubernia/issues/83)) ist die vorgemerkte Richtung, aber erst relevant, wenn Option B gewählt wird.
 - **Cloud-Save-Mechanismus** — hängt an A-mit-Cloud-Anspruch und damit an [ADR 0006](0006-backend-und-skalierung.md); erst bei Trigger.
 
 ## Konsequenzen
@@ -50,5 +50,5 @@ Neu zu bewerten (dann Web vs. Desktop konkret entscheiden), sobald **einer** ein
 
 - **Asset-Bundle übersteigt ~150 MB** oder die Start-Ladezeit wird spürbar (Richtwert aus [ADR 0006](0006-backend-und-skalierung.md)) → Multi-File + Lazy-Load/Atlas werden Pflicht, Single-File (C) fällt praktisch weg, die A/B-Wahl wird dringlich.
 - **Cloud-Save / Cross-Device** wird hartes Feature-Ziel → zwingt die Backend-Frage ([ADR 0006](0006-backend-und-skalierung.md)) und damit A-mit-Backend vs. B-über-Plattform.
-- **Plattform-Vertrieb** (Steam/itch/GOG) wird angestrebt → Option B inkl. Wrapper ([#83](https://github.com/fluffels/kubequest/issues/83)) konkret planen.
+- **Plattform-Vertrieb** (Steam/itch/GOG) wird angestrebt → Option B inkl. Wrapper ([#83](https://github.com/fluffels/kubernia/issues/83)) konkret planen.
 - **Der Offline-eine-Datei-Wert entfällt als Anforderung** → deckt sich mit dem gleichnamigen Engine-Trigger in [ADR 0001](0001-engine-phaser.md#re-evaluierungs-trigger); öffnet zusätzlich den Auslieferungs-Optionsraum.
