@@ -2,7 +2,7 @@ import { Game } from "../game";
 import { SFX } from "../sfx";
 import { worldScene, interiorOpen } from "../runtime";
 import { part, $, esc, NPCS, SMALLTALK } from "./shared";
-import { HUD_ICONS, HUD_SEASON_ICONS, MENU_ICONS } from "../assets-data";
+import { HUD_ICONS, HUD_SEASON_ICONS, MENU_ICONS, HUD_KEY_ICONS } from "../assets-data";
 import { resolveTalkTarget } from "../hud/viewdecide";
 import { TOAST_LIFE_MS, HINT_LIFE_MS, toastFadeDelaySeconds } from "../hud/toastlife";
 import { enqueueAchievement, bundleCelebration, type Achievement } from "../hud/celebrate";
@@ -29,6 +29,8 @@ export const hudUI = part({
     (<HTMLImageElement>$("menu-icon-save")).src = MENU_ICONS.save;
     (<HTMLImageElement>$("menu-icon-load")).src = MENU_ICONS.load;
     (<HTMLImageElement>$("menu-icon-reset")).src = MENU_ICONS.reset;
+    // Menü-Button (#hud-menu-btn) – festes Icon, das renderKeyHints nicht anfasst (#646).
+    (<HTMLImageElement>$("hud-icon-menu")).src = HUD_KEY_ICONS.menu;
   },
 
   refreshHud() {

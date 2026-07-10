@@ -114,6 +114,13 @@ import hud_season_spring from "../assets/pixellab/hud_season_spring.png";
 import hud_season_summer from "../assets/pixellab/hud_season_summer.png";
 import hud_season_autumn from "../assets/pixellab/hud_season_autumn.png";
 import hud_season_winter from "../assets/pixellab/hud_season_winter.png";
+// HUD-Tastenleisten-Icons (#646, Slice 2/4 von #204): ersetzen die Emoji in #hud-keys.
+import hud_walk from "../assets/pixellab/hud_walk.png";
+import hud_talk from "../assets/pixellab/hud_talk.png";
+import hud_terminal from "../assets/pixellab/hud_terminal.png";
+import hud_logbook from "../assets/pixellab/hud_logbook.png";
+import hud_album from "../assets/pixellab/hud_album.png";
+import hud_menu from "../assets/pixellab/hud_menu.png";
 
 // Menü-Button-Icons (#648, Slice 4/4 von #204): dieselben gerahmten DOM-Icons wie die
 // HUD-Statuszeile oben, nur für die vier Menü-Aktionen (Weiterspielen/Sichern/Laden/
@@ -255,6 +262,19 @@ export const MENU_ICONS = {
   save: menu_save,
   load: menu_load,
   reset: menu_reset,
+} as const;
+
+/** HUD-Tastenleisten-Icon-URLs (#646, Slice 2/4 von #204): Aktion → Vite-Asset-URL, für
+ *  die `<img>`-Icons in der Steuer-Hinweisleiste (index.html #hud-keys, gerendert in
+ *  ui/overlay.ts › renderKeyHints). Schlüssel = die umbelegbaren Aktionen (core/keybindings.ts)
+ *  plus die festen `walk`/`menu`. Gleiche DOM-Icon-Idee wie `HUD_ICONS`, keine Phaser-Textur. */
+export const HUD_KEY_ICONS = {
+  walk: hud_walk,
+  talk: hud_talk,
+  radio: hud_terminal,
+  logbook: hud_logbook,
+  album: hud_album,
+  menu: hud_menu,
 } as const;
 
 /** Gemeinsame + Startinsel-Assets (#198): alles OHNE `scene`-Tag. Die BootScene lädt genau
