@@ -59,6 +59,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Bevor du irgendetwas anwendest: erst schauen, was überhaupt da liegt. <code>ls</code> ist der billigste, gefahrloseste Blick – reine Orientierung, ändert nichts am Cluster.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -68,6 +69,7 @@
               "^cat\\s+deployment\\.yaml$"
             ],
             "solution": "cat deployment.yaml",
+            "why": "Ein Manifest liest man IMMER, bevor man es anwendet – <code>cat</code> zeigt dir den Wunschzustand (<code>kind</code>, <code>replicas</code> …), den der Cluster gleich herstellen soll. Blind anwenden ist wie einer Karte folgen, die man nie angeschaut hat.",
             "hint": "cat <datei>"
           }
         ]
@@ -83,6 +85,7 @@
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+deployment\\.yaml$"
           ],
           "solution": "kubectl apply --filename deployment.yaml",
+          "why": "<code>apply</code> sagt dem Cluster nicht <i>wie</i>, sondern <i>was</i> gelten soll – er vergleicht die Datei mit dem Ist-Zustand und stellt die Differenz selbst her. Genau das ist <b>deklarativ</b>: du beschreibst das Ziel, nicht die einzelnen Schritte.",
           "hint": "kubectl apply --filename <datei> (statt --filename geht später auch die Kurzform -f)"
         }
       },
@@ -97,6 +100,7 @@
               "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+service\\.yaml$"
             ],
             "solution": "kubectl apply --filename service.yaml",
+            "why": "Derselbe Befehl für jede Ressourcenart – Deployment, Service, Ingress: <code>apply</code> schert sich nicht um den Typ, es liest <code>kind</code> aus der Karte. Ein Werkzeug für alles, statt für jede Sache ein eigenes Kommando.",
             "hint": "Gleicher Befehl, andere Datei."
           },
           {
@@ -106,6 +110,7 @@
               "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+deployment\\.yaml$"
             ],
             "solution": "kubectl apply --filename deployment.yaml",
+            "why": "Zweimal dieselbe Karte anwenden schadet nie – ist der Soll-Zustand schon erreicht, meldet der Cluster nur <code>unchanged</code>. Das nennt man <b>idempotent</b>: du kannst <code>apply</code> gefahrlos wiederholen, ohne dass etwas doppelt entsteht.",
             "hint": "Wirklich nochmal exakt derselbe Befehl."
           },
           {
@@ -115,6 +120,7 @@
               "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+ingress\\.yaml$"
             ],
             "solution": "kubectl apply --filename ingress.yaml",
+            "why": "Auch das Hafentor ist nur eine Karte: der Ingress ist die deklarierte Regel, welcher Weg von außen zu welchem Service führt. Nicht das Tor selbst tippst du, sondern seinen Wunschzustand – den Rest baut der Ingress-Controller.",
             "hint": "Gleicher apply, Datei ingress.yaml."
           },
           {
@@ -125,6 +131,7 @@
             ],
             "check": {"some":"ingresses","where":{"name":"hafentor"}},
             "solution": "kubectl get ingress",
+            "why": "Nach dem Anwenden immer gegenprüfen: <code>get</code> zeigt dir, was der Cluster <i>wirklich</i> hergestellt hat, nicht nur was du wolltest. Vertrauen ist gut, die HOSTS-Spalte ist besser.",
             "hint": "kubectl get ingress (die Kurzform ing verdienst du dir durch Nutzung)."
           }
         ]
@@ -214,6 +221,7 @@
             "^git\\s+init$"
           ],
           "solution": "git init",
+          "why": "<code>init</code> ist der Startschuss jedes Projekts – erst danach beobachtet Git den Ordner überhaupt und legt seinen versteckten <code>.git</code>-Speicher an. Ohne diesen Schritt gibt es keine Historie, in die du etwas festhalten könntest.",
           "hint": "Wirklich nur: git init"
         }
       },
@@ -235,6 +243,7 @@
             "^git\\s+status$"
           ],
           "solution": "git status",
+          "why": "<code>status</code> ist dein Fernglas: es ändert nichts, zeigt dir aber, was neu, geändert oder vorgemerkt ist. Vor jedem <code>add</code>/<code>commit</code> erst fragen, was Git gerade sieht – so hältst du nie versehentlich das Falsche fest.",
           "hint": "git + ein Wort für „Stand“."
         }
       },
@@ -256,6 +265,7 @@
             "^git\\s+add\\s+seekarte\\.md$"
           ],
           "solution": "git add seekarte.md",
+          "why": "<code>add</code> hält noch nichts fest – es <b>wählt aus</b>, was in den nächsten Schnappschuss soll (Staging). Diese Trennung ist Absicht: du entscheidest bewusst, welche Änderungen zusammengehören, statt immer alles auf einmal festzuhalten.",
           "hint": "Muster: git add <datei>"
         }
       },
@@ -270,6 +280,7 @@
             "^git\\s+commit\\s+(?:-m|--message)\\s+(\"[^\"]+\"|'[^']+'|\\S+)$"
           ],
           "solution": "git commit --message \"Erste Seekarte\"",
+          "why": "Ein Commit friert die vorgemerkten Änderungen dauerhaft ein – die Nachricht ist das Etikett, an dem du (und dein Team) später erkennst, <i>warum</i> etwas geändert wurde. Eine gute Nachricht ist oft mehr wert als der Diff selbst.",
           "hint": "Muster: git commit --message \"deine Nachricht\" (statt --message geht später auch die Kurzform -m)"
         }
       },
@@ -291,6 +302,7 @@
             "^git\\s+log$"
           ],
           "solution": "git log",
+          "why": "<code>log</code> ist das Logbuch: es beweist, dass jede Version erhalten bleibt und wer wann was änderte. Erst dadurch wird Git zur Zeitmaschine – du kannst immer nachlesen und zu jedem Punkt zurück.",
           "hint": "git + ein Wort für „Logbuch“."
         }
       },
@@ -383,6 +395,7 @@
             "^git\\s+checkout\\s+-b\\s+experiment-route$"
           ],
           "solution": "git checkout -b experiment-route",
+          "why": "Ein eigener Zweig kapselt riskante Arbeit ab, während <code>main</code> unberührt und stabil bleibt. Das <code>-b</code> spart nur einen Schritt (anlegen UND hineinwechseln) – der eigentliche Gewinn ist die Isolation: dein Experiment stört niemanden.",
           "hint": "Muster: git checkout -b <name>"
         }
       },
@@ -405,6 +418,7 @@
             "^git\\s+branch\\s+reserve-route$"
           ],
           "solution": "git branch reserve-route",
+          "why": "Manchmal willst du einen Zweig nur <b>vorbereiten</b>, ohne deine aktuelle Arbeit zu unterbrechen – <code>git branch</code> legt an und lässt dich stehen. Der Unterschied zu <code>checkout -b</code> ist bewusste Kontrolle: anlegen und wechseln sind zwei getrennte Entscheidungen.",
           "hint": "Muster: git branch <name>"
         }
       },
@@ -426,6 +440,7 @@
             "^git\\s+add\\s+route-neu\\.md$"
           ],
           "solution": "git add route-neu.md",
+          "why": "Derselbe Rhythmus wie gestern: erst vormerken, was in den Schnappschuss soll. <code>add</code> gehört immer VOR den <code>commit</code> – ohne Vormerken bleibt die Datei außen vor.",
           "hint": "Muster: git add <datei>"
         }
       },
@@ -440,6 +455,7 @@
             "^git\\s+commit\\s+(?:-m|--message)\\s+(\"[^\"]+\"|'[^']+'|\\S+)$"
           ],
           "solution": "git commit --message \"Neue Route skizziert\"",
+          "why": "Der Commit landet in DEINEM Zweig, nicht in <code>main</code> – so wächst dein Experiment sicher getrennt weiter. Genau deshalb committest du auf dem Branch: die Arbeit ist festgehalten, ohne die geprüfte Hauptkarte anzufassen.",
           "hint": "Muster: git commit --message \"Nachricht\""
         }
       },
@@ -461,6 +477,7 @@
             "^git\\s+checkout\\s+main$"
           ],
           "solution": "git checkout main",
+          "why": "Wechselst du den Branch, tauscht Git deinen ganzen Arbeitsstand aus – auf <code>main</code> ist die neue Route zu Recht (noch) nicht zu sehen. Nichts ist weg: du schaust nur gerade auf eine andere Version der Karte.",
           "hint": "git checkout <branchname>"
         }
       },
@@ -482,6 +499,7 @@
             "^git\\s+merge\\s+experiment-route$"
           ],
           "solution": "git merge experiment-route",
+          "why": "<code>merge</code> holt die Arbeit aus dem Zweig in deinen aktuellen – erst jetzt fließt das Experiment in <code>main</code>. Trennen und später bewusst zusammenführen ist der Kern von Teamarbeit: jede:r arbeitet frei, vereint wird kontrolliert.",
           "hint": "Muster: git merge <branch>"
         }
       },
@@ -503,6 +521,7 @@
             "^git\\s+push$"
           ],
           "solution": "git push",
+          "why": "Bis hierher lebt alles nur auf deinem Rechner – erst <code>push</code> schiebt die Commits auf den Server, wo das Team sie sieht. Merke die Trennung: committen ist lokal, teilen ist push.",
           "hint": "Wirklich nur: git push"
         }
       },
@@ -583,6 +602,7 @@
             "^cat\\s+\\.gitlab-ci\\.yml$"
           ],
           "solution": "cat .gitlab-ci.yml",
+          "why": "Bevor du einer Pipeline vertraust, lies ihre Bauanleitung: die <code>.gitlab-ci.yml</code> ist selbst nur Text im Repo – <code>stages</code> und <code>script</code>-Zeilen, versioniert wie jede andere Datei. Automatik heißt nicht Blackbox.",
           "hint": "cat <datei> – wie bei meiner Seekarte."
         }
       },
@@ -606,6 +626,7 @@
             "^git\\s+add\\s+\\.$"
           ],
           "solution": "git add .",
+          "why": "Der Punkt merkt alles Neue/Geänderte auf einmal vor – praktisch, wenn wirklich alles zusammengehört. Als Prinzip aber mit Bedacht: <code>git add .</code> nimmt WIRKLICH alles, auch Ungewolltes – ein kurzer <code>status</code>-Blick vorher schadet nie.",
           "hint": "git add + ein einzelner Punkt."
         }
       },
@@ -620,6 +641,7 @@
             "^git\\s+commit\\s+(?:-m|--message)\\s+(\"[^\"]+\"|'[^']+'|\\S+)$"
           ],
           "solution": "git commit --message \"CI-Pipeline eingerichtet\"",
+          "why": "Erst festhalten, dann teilen: nur committete Änderungen wandern gleich per <code>push</code> zum Server – und lösen dort die Pipeline aus. Der Commit ist die Einheit, die die Automatik überhaupt zu sehen bekommt.",
           "hint": "Muster: git commit --message \"Nachricht\""
         }
       },
@@ -634,6 +656,7 @@
             "^git\\s+push$"
           ],
           "solution": "git push",
+          "why": "Der Clou von CI/CD: du deployst nichts von Hand, du <b>pushst</b> nur. Weil eine <code>.gitlab-ci.yml</code> im Repo liegt, ist der Push selbst der Auslöser – der Runner erledigt build, test und deploy. Ein Ereignis statt vieler Handgriffe.",
           "hint": "Wirklich nur: git push"
         }
       },
@@ -655,6 +678,7 @@
             "^glab\\s+ci\\s+status$"
           ],
           "solution": "glab ci status",
+          "why": "Automatik heißt nicht blind vertrauen – <code>glab ci status</code> zeigt dir, ob jede Stage durchlief. Gerade weil niemand mehr von Hand deployt, brauchst du ein Fenster, durch das du der Pipeline bei der Arbeit zusiehst.",
           "hint": "glab ci <unterbefehl> fürs Nachschauen."
         }
       },
@@ -676,6 +700,7 @@
             "^kubectl\\s+get\\s+(pods|pod|po)$"
           ],
           "solution": "kubectl get pods",
+          "why": "Der letzte Beweis: nicht die grüne Pipeline zählt, sondern was im Cluster läuft. <code>get pods</code> zeigt schwarz auf weiß, dass der deploy-Stage <code>funkdienst</code> wirklich hergestellt hat – ohne dass du den Cluster berührt hast.",
           "hint": "kubectl get pods"
         }
       },
@@ -772,6 +797,7 @@
           ],
           "check": {"flag":["git","fetched"]},
           "solution": "git fetch",
+          "why": "<code>fetch</code> ist die vorsichtige Variante: es lädt herunter, was auf dem Server liegt, rührt deine Arbeit aber NICHT an. So siehst du gefahrlos, was das Team gemacht hat, bevor du entscheidest, es hereinzuholen.",
           "hint": "git + ein Wort fürs „abholen, aber nicht einfügen“."
         }
       },
@@ -794,6 +820,7 @@
           ],
           "check": {"flag":["git","remoteAhead"],"eq":0},
           "solution": "git pull",
+          "why": "<code>pull</code> ist <code>fetch</code> + <code>merge</code> in einem: holen UND einfügen. Die Regel dahinter: erst pullen, dann pushen – wer auf veraltetem Stand pusht, wird vom Server abgewiesen oder überschreibt fremde Arbeit.",
           "hint": "git + ein Wort fürs „herziehen“."
         }
       },
@@ -817,6 +844,7 @@
           ],
           "check": {"flag":["git","conflict"]},
           "solution": "git merge lennart-route",
+          "why": "Ändern zwei Seiten dieselbe Zeile, kann Git nicht raten – es meldet einen <b>Konflikt</b>. Das ist kein Fehler, sondern eine ehrliche Rückfrage: Git legt beide Versionen nebeneinander und überlässt DIR die Entscheidung.",
           "hint": "Muster: git merge <branch>"
         }
       },
@@ -838,6 +866,7 @@
               "^cat\\s+seekarte\\.md$"
             ],
             "solution": "cat seekarte.md",
+            "why": "Panik ist der falsche Reflex – erst lesen. Git hat beide Versionen mit Markern (<code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> / <code>=======</code> / <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code>) in die Datei geschrieben; du siehst genau, was kollidiert, bevor du wählst.",
             "hint": "cat <datei> – wie bei jeder Seekarte."
           },
           {
@@ -847,6 +876,7 @@
               "^git\\s+status$"
             ],
             "solution": "git status",
+            "why": "Auch mitten im Konflikt ist <code>status</code> dein Kompass: es listet die „nicht zusammengeführten Pfade“ und sagt dir, was noch auf deine Entscheidung wartet. Bei Unsicherheit immer erst fragen, wo du stehst.",
             "hint": "Der vertraute Stand-Befehl."
           },
           {
@@ -857,6 +887,7 @@
             ],
             "check": {"all":[{"flag":["files","seekarte.md"],"eq":"Nordpassage: weiter Bogen ums Riff – sicher, etwas laenger."},{"flag":["git","conflict"]}]},
             "solution": "git checkout --theirs seekarte.md",
+            "why": "Einen Konflikt löst du durch eine bewusste Entscheidung, nicht durch Raten: <code>--theirs</code> nimmt die hereinkommende Seite, <code>--ours</code> deine. Du wählst die inhaltlich bessere Version – hier Lennarts sichere Route.",
             "hint": "git checkout --theirs <datei> wählt die hereinkommende Seite (--ours wäre deine)."
           },
           {
@@ -867,6 +898,7 @@
             ],
             "check": {"all":[{"not":{"flag":["git","conflict"]}},{"includes":["git","staged"],"value":"seekarte.md"}]},
             "solution": "git add seekarte.md",
+            "why": "Nach dem Wählen sagt <code>add</code> dem Git „diese Stelle ist erledigt“ – es markiert den Konflikt als gelöst. Derselbe Vormerk-Befehl wie immer, nur in neuer Rolle: Vormerken heißt hier <i>bestätigen</i>.",
             "hint": "Wie immer: git add <datei> – das sagt Git „erledigt“."
           },
           {
@@ -877,6 +909,7 @@
             ],
             "check": {"not":{"flag":["git","conflict"]}},
             "solution": "git commit --message \"Konflikt geloest: Lennarts Route\"",
+            "why": "Der abschließende Commit besiegelt den Merge – erst er macht aus „beide Versionen gesehen und entschieden“ einen sauberen, gemeinsamen Stand. Ein Merge ist erst fertig, wenn er committet ist.",
             "hint": "Muster: git commit --message \"Nachricht\""
           }
         ]
@@ -900,6 +933,7 @@
           ],
           "check": {"flag":["git","pushed"]},
           "solution": "git push",
+          "why": "Jetzt ist der Push gefahrlos, weil du vorher gepullt und den Konflikt gelöst hast – dein Stand enthält Lennarts Arbeit UND deine. Genau deshalb kommt „erst holen, dann pushen“ vor dem Teilen: du überschreibst nichts.",
           "hint": "Wirklich nur: git push"
         }
       },
@@ -986,6 +1020,7 @@
             "^kubectl\\s+create\\s+secret\\s+tls\\s+hafen-tls\\s+--cert[=\\s]\\S+\\s+--key[=\\s]\\S+$"
           ],
           "solution": "kubectl create secret tls hafen-tls --cert=tls.crt --key=tls.key",
+          "why": "Ein Zertifikat mit privatem Schlüssel gehört nie ins Manifest, sondern in ein <b>Secret</b> – so ist das Geheimnis vom Rest der Konfiguration getrennt und gesondert behandelt. Der Ingress verweist später nur auf den Namen, nie auf den Schlüssel selbst.",
           "hint": "Muster: kubectl create secret tls hafen-tls --cert=tls.crt --key=tls.key"
         }
       },
@@ -1020,6 +1055,7 @@
               "^cat\\s+ingress-tls\\.yaml$"
             ],
             "solution": "cat ingress-tls.yaml",
+            "why": "Erst die neue Karte lesen, dann anwenden: hier siehst du, was HTTPS ausmacht – ein einziger frischer Block <code>spec.tls</code>, der auf das Secret zeigt. Verstehen, was sich ändert, bevor du es scharfschaltest.",
             "hint": "cat <datei>"
           },
           {
@@ -1029,6 +1065,7 @@
               "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+ingress-tls\\.yaml$"
             ],
             "solution": "kubectl apply --filename ingress-tls.yaml",
+            "why": "Weil das Tor schon existiert, meldet <code>apply</code> diesmal <code>configured</code> statt <code>created</code> – dasselbe deklarative Prinzip: du beschreibst den neuen Soll-Zustand (jetzt mit TLS), der Cluster passt das Bestehende an, statt es neu zu bauen.",
             "hint": "Gleicher apply wie immer, Datei ingress-tls.yaml."
           },
           {
@@ -1039,6 +1076,7 @@
             ],
             "check": {"some":"ingresses","where":{"name":"hafentor","tls":{"truthy":true}}},
             "solution": "kubectl get ingress",
+            "why": "Gegenprüfen, ob HTTPS wirklich aktiv ist: erst wenn in der PORTS-Spalte die <code>443</code> auftaucht, terminiert das Tor TLS. Ein Blick auf das Ist, nicht auf die Hoffnung.",
             "hint": "Kurzform 'ing' geht auch."
           },
           {
@@ -1048,6 +1086,7 @@
               "^kubectl\\s+describe\\s+(ingress|ingresses|ing)\\s+hafentor$"
             ],
             "solution": "kubectl describe ingress hafentor",
+            "why": "<code>get</code> gibt den Überblick, <code>describe</code> die Tiefe: die TLS-Zeile verrät, welches Secret welchen Host verschlüsselt. Wenn du wissen willst, WARUM eine Ressource sich so verhält, ist <code>describe</code> dein Werkzeug.",
             "hint": "kubectl describe ingress <name>"
           }
         ]
@@ -1226,6 +1265,7 @@
               "^kubectl\\s+get\\s+(pods|pod|po)\\s+(-n|--namespace)[=\\s]?kube-system$"
             ],
             "solution": "kubectl get pods --namespace kube-system",
+            "why": "Cluster-Infrastruktur wie CoreDNS lebt bewusst getrennt im Namespace <code>kube-system</code>, nicht bei deinen Apps. Mit <code>--namespace</code> schaust du gezielt in diesen Maschinenraum – Namespaces sortieren den Cluster in Abteilungen.",
             "hint": "kubectl get pods --namespace kube-system – CoreDNS steht in der Liste."
           }
         ]
@@ -1241,6 +1281,7 @@
             "^nslookup\\s+kasse(\\.default(\\.svc\\.cluster\\.local)?)?$"
           ],
           "solution": "nslookup kasse",
+          "why": "<code>nslookup</code> fragt das Adressbuch (CoreDNS), welche Adresse hinter einem Namen steckt. Das Prinzip dahinter: im Cluster sprichst du Dienste über ihren stabilen <b>Namen</b> an – die dahinterliegende IP darf sich jederzeit ändern.",
           "hint": "Muster: nslookup <service> (oder voll: <service>.default.svc.cluster.local)"
         }
       },
@@ -1256,6 +1297,7 @@
             ],
             "check": { "some": "services", "where": { "name": "kasse" } },
             "solution": "kubectl get services",
+            "why": "Die Gegenprobe zeigt das Prinzip: die CLUSTER-IP des Service ist genau die Adresse, die CoreDNS dir nannte – stabil, egal wie oft die Pods dahinter neu starten. Der Service ist die feste Anlaufstelle vor den flüchtigen Pods.",
             "hint": "kubectl get services – vergleich die CLUSTER-IP von kasse mit der nslookup-Antwort."
           }
         ]
@@ -1302,6 +1344,7 @@
               "^cat\\s+externalname\\.yaml$"
             ],
             "solution": "cat externalname.yaml",
+            "why": "Vor dem Anwenden die Karte lesen und den Typ verstehen: <code>type: ExternalName</code> ist ein Sonderfall ohne Selector und ohne ClusterIP. Wer die Felder kennt, wird von der DNS-Antwort später nicht überrascht.",
             "hint": "cat <datei>"
           },
           {
@@ -1312,6 +1355,7 @@
             ],
             "check": { "some": "services", "where": { "name": "bank-extern" } },
             "solution": "kubectl apply --filename externalname.yaml",
+            "why": "Auch ein Verweis nach draußen ist nur eine deklarierte Karte – derselbe <code>apply</code> wie immer. Der Service <code>bank-extern</code> gibt dir einen festen internen Namen für ein externes Ziel, damit dein Code nie die rohe Fremd-Adresse kennen muss.",
             "hint": "Der vertraute Befehl: kubectl apply --filename externalname.yaml"
           },
           {
@@ -1321,6 +1365,7 @@
               "^nslookup\\s+bank-extern(\\.default(\\.svc\\.cluster\\.local)?)?$"
             ],
             "solution": "nslookup bank-extern",
+            "why": "Frag das Adressbuch und sieh den Unterschied: statt einer ClusterIP kommt ein <b>CNAME</b> auf den externen Namen zurück. So beweist DNS, dass ein ExternalName kein eigener Dienst ist, sondern nur ein Aliasschild, das nach draußen zeigt.",
             "hint": "Muster: nslookup <service> – hier bank-extern."
           }
         ]

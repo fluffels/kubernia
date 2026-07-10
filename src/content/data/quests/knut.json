@@ -51,6 +51,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Bevor du irgendetwas anwendest, verschaffst du dir mit <code>ls</code> einen Überblick über die Manifeste am Kai – blind <code>apply</code>-en heißt, nicht zu wissen, was man in den Cluster lässt.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -60,6 +61,7 @@
               "^cat\\s+statefulset\\.yaml$"
             ],
             "solution": "cat statefulset.yaml",
+            "why": "Ein Manifest liest man, bevor man es ausrollt: nur wer <code>serviceName</code> und <code>volumeClaimTemplates</code> im Text erkennt, versteht, warum dieser Workload stabile Namen und eigene Volumes bekommt.",
             "hint": "cat <datei>"
           }
         ]
@@ -75,6 +77,7 @@
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+headless-service\\.yaml$"
           ],
           "solution": "kubectl apply --filename headless-service.yaml",
+          "why": "Der headless Service muss <b>vor</b> dem StatefulSet stehen, weil er die stabilen DNS-Namen (…-0, …-1) bereitstellt, unter denen die Pods sich später finden – die Reihenfolge ist hier kein Zufall, sondern Voraussetzung.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -90,6 +93,7 @@
           ],
           "check": {"some":"statefulSets","where":{"name":"speicher-datenbank"}},
           "solution": "kubectl apply --filename statefulset.yaml",
+          "why": "Auch ein StatefulSet rollst du mit dem vertrauten <code>kubectl apply --filename</code> aus – du beschreibst den Wunschzustand deklarativ, und Kubernetes sorgt für durchnummerierte Pods mit je eigenem Volume.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -105,6 +109,7 @@
             ],
             "check": {"some":"statefulSets","where":{"name":"speicher-datenbank"}},
             "solution": "kubectl get statefulset",
+            "why": "<code>get</code> zeigt dir die Spalte READY (<code>3/3</code>) – so prüfst du, ob Ist- und Soll-Zustand übereinstimmen, statt einfach anzunehmen, dass das Ausrollen geklappt hat.",
             "hint": "kubectl get statefulset (oder sts)."
           },
           {
@@ -115,6 +120,7 @@
             ],
             "check": {"some":"statefulSets","where":{"name":"speicher-datenbank","pods":{"has":{"name":"speicher-datenbank-0"}}}},
             "solution": "kubectl get pods",
+            "why": "An den durchnummerierten Namen (<code>-0</code>, <code>-1</code>, <code>-2</code>) erkennst du den Kern des StatefulSets: die Identität ist stabil und vorhersehbar, nicht zufällig wie beim Deployment.",
             "hint": "kubectl get pods"
           }
         ]
@@ -131,6 +137,7 @@
           ],
           "check": {"some":"statefulSets","where":{"name":"speicher-datenbank","pods":{"has":{"name":"speicher-datenbank-0"}}}},
           "solution": "kubectl delete pod speicher-datenbank-0",
+          "why": "Einen Pod bewusst zu löschen ist der beste Test für stabile Identität: kommt er mit gleichem Namen und gleichem Volume zurück, hast du bewiesen, dass die Daten den Neustart überleben.",
           "hint": "kubectl delete pod <name> – nimm speicher-datenbank-0."
         }
       },
@@ -218,6 +225,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Erst der Blick aufs Regal: <code>ls</code> zeigt, welche Karten bereitliegen, bevor du StorageClass und Anforderung anwendest – man arbeitet nicht mit Dateien, die man nicht gesehen hat.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -227,6 +235,7 @@
               "^cat\\s+pvc\\.yaml$"
             ],
             "solution": "cat pvc.yaml",
+            "why": "Im PVC-Text stehen <code>storageClassName</code> und die angeforderte <code>storage</code>-Größe – genau die zwei Angaben, die entscheiden, welche Sorte Speicher du wie viel bekommst. Lies sie, bevor du anforderst.",
             "hint": "cat <datei>"
           }
         ]
@@ -243,6 +252,7 @@
           ],
           "check": {"some":"storageClasses","where":{"name":"kai-ssd"}},
           "solution": "kubectl apply --filename storageclass.yaml",
+          "why": "Die StorageClass legst du zuerst an, weil sie nur die <b>Vorlage</b> ist (Provisioner, Tempo, reclaimPolicy) – erst sie ermöglicht dem Cluster, auf eine spätere Anforderung hin echten Speicher zu beschaffen.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -258,6 +268,7 @@
           ],
           "check": {"some":"pvcs","where":{"name":"lager-daten","status":"Bound"}},
           "solution": "kubectl apply --filename pvc.yaml",
+          "why": "Du beschreibst nur, <b>was</b> du brauchst (das PVC), nicht wie es beschafft wird – die StorageClass provisioniert daraufhin selbst ein passendes PV und bindet es. Genau das ist dynamische Provisionierung: anfordern statt von Hand bauen.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -273,6 +284,7 @@
             ],
             "check": {"some":"pvcs","where":{"name":"lager-daten","status":"Bound"}},
             "solution": "kubectl get pvc",
+            "why": "Der Status <b>Bound</b> ist der Beweis, dass deine Anforderung echten Speicher bekommen hat – <code>Pending</code> hieße, es wartet noch. Man prüft den Bindungszustand, statt ihn zu vermuten.",
             "hint": "kubectl get pvc"
           },
           {
@@ -283,6 +295,7 @@
             ],
             "check": {"some":"pvs","where":{"status":"Bound","claim":"default/lager-daten"}},
             "solution": "kubectl get pv",
+            "why": "Das PV zeigt dir die andere Seite der Bindung: der Cluster hat dynamisch ein echtes Regalfach erzeugt und über die CLAIM-Spalte an genau dein PVC gekoppelt – Anforderung und Fach gehören jetzt zusammen.",
             "hint": "kubectl get pv"
           }
         ]
@@ -299,6 +312,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"datenbank"}},
             "solution": "kubectl create deployment datenbank --image=postgres",
+            "why": "Der Workload wird bewusst getrennt vom Speicher angelegt – Pod und Volume sind eigenständige Objekte. Genau diese Entkopplung erlaubt es gleich, den Pod zu löschen, ohne die Daten zu verlieren.",
             "hint": "kubectl create deployment <name> --image=<image>"
           },
           {
@@ -309,6 +323,7 @@
             ],
             "check": {"none":"deployments","where":{"name":"datenbank"}},
             "solution": "kubectl delete deployment datenbank",
+            "why": "Den Workload abzureißen ist der Test: verschwindet mit dem Deployment auch der Speicher? Nur so siehst du, dass ein PVC ein eigenes, vom Pod-Lebenszyklus unabhängiges Objekt ist.",
             "hint": "kubectl delete deployment <name>"
           },
           {
@@ -319,6 +334,7 @@
             ],
             "check": {"all":[{"some":"pvcs","where":{"name":"lager-daten","status":"Bound"}},{"none":"deployments","where":{"name":"datenbank"}}]},
             "solution": "kubectl get pvc",
+            "why": "Dass das PVC nach dem Löschen des Deployments <b>immer noch Bound</b> ist, beweist das Prinzip dauerhaften Speichers: Pods kommen und gehen, das Volume bleibt – deshalb legt man Daten nie in den Pod selbst.",
             "hint": "kubectl get pvc"
           }
         ]
@@ -398,6 +414,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Bevor du einen Pod ausrollst, siehst du mit <code>ls</code> nach, welches Manifest am Kai liegt – der erste Schritt ist immer, den Ist-Zustand zu kennen.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -407,6 +424,7 @@
               "^cat\\s+zwischenlager\\.yaml$"
             ],
             "solution": "cat zwischenlager.yaml",
+            "why": "Am <code>emptyDir: {}</code> im Text erkennst du den Speichertyp, bevor du ihn nutzt: kein Größenwunsch, keine StorageClass – nur Platz, der mit dem Pod entsteht und vergeht. Wer das liest, weiß, dass hier nichts überleben soll.",
             "hint": "cat <datei>"
           }
         ]
@@ -423,6 +441,7 @@
           ],
           "check": {"some":"deployments","where":{"name":"zwischenlager","emptyDir":{"truthy":true}}},
           "solution": "kubectl apply --filename zwischenlager.yaml",
+          "why": "Ein <code>emptyDir</code> braucht keine Anforderung und kein PVC – der kubelet legt einfach ein leeres Verzeichnis auf der Node-Disk an. Genau diese Einfachheit ist der Grund, es für Wegwerfbares zu nehmen.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -437,6 +456,7 @@
               "^kubectl\\s+get\\s+(pods|pod|po)$"
             ],
             "solution": "kubectl get pods",
+            "why": "Mit <code>get pods</code> holst du dir den echten Pod-Namen, den du gleich brauchst – man rät Namen nicht, man liest sie aus dem laufenden Zustand ab.",
             "hint": "kubectl get pods"
           },
           {
@@ -447,6 +467,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"zwischenlager","emptyDir":{"match":{"data":"warenkorb-cache"}}}},
             "solution": "kubectl describe pod <zwischenlager-pod>",
+            "why": "<code>describe</code> zeigt dir den <code>Volumes:</code>-Abschnitt mit belegter Menge und Inhalt – so beobachtest du den tatsächlichen Zustand des Schmierzettels, statt ihn dir nur vorzustellen.",
             "hint": "Erst kubectl get pods, dann kubectl describe pod <name> mit dem zwischenlager-Pod."
           }
         ]
@@ -463,6 +484,7 @@
           ],
           "check": {"some":"deployments","where":{"name":"zwischenlager","emptyDir":{"match":{"data":""}}}},
           "solution": "kubectl rollout restart deployment zwischenlager",
+          "why": "Ein Neustart tauscht den Pod gegen einen frischen aus – und weil das <code>emptyDir</code> am Pod-Leben hängt, ist sein Inhalt danach weg. Das ist der eine Unterschied, den man zum PVC im Kopf behalten muss.",
           "hint": "kubectl rollout restart deployment <name>"
         }
       },
@@ -478,6 +500,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"zwischenlager","emptyDir":{"match":{"usedMi":0}}}},
             "solution": "kubectl describe pod <zwischenlager-pod>",
+            "why": "Der Blick auf <code>Used: 0Mi</code> nach dem Neustart ist der Beweis: flüchtiger Speicher ist wirklich weg, sobald der Pod weg ist. Man verifiziert das Verhalten, statt es zu glauben.",
             "hint": "kubectl describe pod <name> – Name aus get pods."
           }
         ]
@@ -494,6 +517,7 @@
           ],
           "check": {"some":"deployments","where":{"name":"zwischenlager","ephemeralLimit":512}},
           "solution": "kubectl set resources deployment/zwischenlager --limits=ephemeral-storage=512Mi",
+          "why": "Ein <code>ephemeral-storage</code>-Limit deckelt, wie viel flüchtigen Speicher ein Pod belegen darf – so schützt du die geteilte Node-Disk davor, dass ein einzelner Vielschreiber sie füllt.",
           "hint": "kubectl set resources deployment/<name> --limits=ephemeral-storage=512Mi"
         }
       },
@@ -509,6 +533,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"zwischenlager","ephemeralLimit":512}},
             "solution": "kubectl describe pod <zwischenlager-pod>",
+            "why": "Nach dem Setzen liest du das Limit über <code>describe</code> wieder ab – erst wenn du siehst, dass <code>ephemeral-storage: 512Mi</code> wirklich am Pod steht, ist die Änderung bestätigt.",
             "hint": "kubectl describe pod <name> – Name aus get pods."
           }
         ]
@@ -563,6 +588,7 @@
               "^cat\\s+protokoll\\.yaml$"
             ],
             "solution": "cat protokoll.yaml",
+            "why": "Erst lesen, dann urteilen: das Limit <code>256Mi</code> im Text macht diesen Pod diszipliniert – er sagt dem kubelet, wie viel er höchstens verbraucht, und bleibt damit aus der ersten Eviction-Reihe.",
             "hint": "cat <datei>"
           },
           {
@@ -572,6 +598,7 @@
               "^cat\\s+wildwuchs\\.yaml$"
             ],
             "solution": "cat wildwuchs.yaml",
+            "why": "Das Fehlen eines Limits ist hier die entscheidende Zeile: ohne Deckel ist der Pod BestEffort und fliegt bei DiskPressure zuerst. Am Manifest erkennst du das Risiko, bevor es zuschlägt.",
             "hint": "cat <datei>"
           }
         ]
@@ -588,6 +615,7 @@
           ],
           "check": {"some":"deployments","where":{"name":"protokoll"}},
           "solution": "kubectl apply --filename protokoll.yaml",
+          "why": "Den disziplinierten Pod rollst du zuerst aus, solange noch Platz ist – so siehst du sauber, dass er allein noch keinen Druck erzeugt und der Ärger erst mit dem zweiten, ungedeckelten Pod kommt.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -603,6 +631,7 @@
           ],
           "check": {"some":"deployments","where":{"name":"wildwuchs","emptyDir":{"truthy":true}}},
           "solution": "kubectl apply --filename wildwuchs.yaml",
+          "why": "Der ungedeckelte Pod bringt die Node-Disk über die Kante – und der kubelet reagiert mit DiskPressure und Eviction. Genau dieses Zusammenspiel zeigt, warum flüchtig nicht grenzenlos heißt.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -618,6 +647,7 @@
             ],
             "check": {"some":"nodes","where":{"name":"ahoi-worker-1","diskPressure":true}},
             "solution": "kubectl get nodes",
+            "why": "Die Condition <code>DiskPressure</code> am Knoten ist das Signal des kubelet, dass die Disk zu voll ist – man schaut auf den Knoten-Zustand, um die Ursache zu sehen, nicht nur das Symptom am Pod.",
             "hint": "kubectl get nodes"
           },
           {
@@ -628,6 +658,7 @@
             ],
             "check": {"all":[{"some":"deployments","where":{"name":"wildwuchs","evicted":{"truthy":true}}},{"some":"deployments","where":{"name":"protokoll","evicted":{"truthy":false}}}]},
             "solution": "kubectl get pods",
+            "why": "Dass <code>wildwuchs</code> (ohne Limit) fliegt und <code>protokoll</code> (mit Limit) bleibt, ist die Faustregel in Aktion: BestEffort-Pods werden bei Disk-Druck zuerst evictet. Ein Limit ist damit Selbstschutz.",
             "hint": "kubectl get pods"
           },
           {
@@ -638,6 +669,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"wildwuchs","evicted":{"truthy":true}}},
             "solution": "kubectl describe pod <wildwuchs-pod>",
+            "why": "<code>describe</code> nennt dir den Eviction-Grund schwarz auf weiß (<code>low on resource: ephemeral-storage</code>) – man belegt eine Vermutung mit dem Ereignis, statt sich mit „irgendwas mit der Disk“ zufriedenzugeben.",
             "hint": "kubectl describe pod <name> – Name aus get pods."
           }
         ]
@@ -654,6 +686,7 @@
           ],
           "check": {"some":"deployments","where":{"name":"wildwuchs","emptyDir":{"match":{"usedMi":0}}}},
           "solution": "kubectl rollout restart deployment wildwuchs",
+          "why": "Der Neustart gibt das flüchtige Volume frei und damit die belegte Disk – deshalb verschwindet der Druck von selbst, sobald wieder Platz da ist. Man behebt DiskPressure, indem man Verbrauch zurücknimmt, nicht mit mehr CPU.",
           "hint": "kubectl rollout restart deployment <name>"
         }
       },
@@ -669,6 +702,7 @@
             ],
             "check": {"none":"nodes","where":{"diskPressure":true}},
             "solution": "kubectl get nodes",
+            "why": "Zum Schluss prüfst du am Knoten, dass <code>DiskPressure</code> weg ist – erst der Blick auf <code>Ready</code> ohne Zusatz bestätigt, dass die Entspannung wirklich eingetreten ist.",
             "hint": "kubectl get nodes"
           }
         ]
@@ -749,6 +783,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Wie immer am Kai: erst mit <code>ls</code> sehen, was bereitliegt, bevor du ausrollst – der Überblick kommt vor der Aktion.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -758,6 +793,7 @@
               "^cat\\s+vorbereiter\\.yaml$"
             ],
             "solution": "cat vorbereiter.yaml",
+            "why": "Im Text erkennst du, dass der <code>initContainer</code> vor der App läuft und das gemeinsame <code>emptyDir</code> füllt – wer diese Reihenfolge im Manifest liest, versteht, warum die App beim Start alles vorfindet.",
             "hint": "cat <datei>"
           }
         ]
@@ -774,6 +810,7 @@
           ],
           "check": {"some":"deployments","where":{"name":"vorbereiter","initContainer":{"truthy":true}}},
           "solution": "kubectl apply --filename vorbereiter.yaml",
+          "why": "Kubernetes fährt den initContainer zuerst hoch, lässt ihn fertigwerden und startet erst dann die Hauptcontainer – diese garantierte Reihenfolge ist der ganze Sinn eines initContainers.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -788,6 +825,7 @@
               "^kubectl\\s+get\\s+(pods|pod|po)$"
             ],
             "solution": "kubectl get pods",
+            "why": "<code>get pods</code> zeigt <code>1/1 Running</code> – der initContainer ist da längst beendet. So liest du ab, dass die Vorbereitung durch ist und die App übernommen hat.",
             "hint": "kubectl get pods"
           },
           {
@@ -798,6 +836,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"vorbereiter","initContainer":{"truthy":true}}},
             "solution": "kubectl describe pod <vorbereiter-pod>",
+            "why": "Im <code>Init Containers:</code>-Abschnitt siehst du den Vorbereiter als <b>Completed</b> – der Beweis, dass ein initContainer einmal läuft, seine Arbeit tut und sich dann beendet, statt mitzulaufen.",
             "hint": "Erst kubectl get pods, dann kubectl describe pod <name> mit dem vorbereiter-Pod."
           }
         ]
@@ -850,6 +889,7 @@
               "^cat\\s+doppelt\\.yaml$"
             ],
             "solution": "cat doppelt.yaml",
+            "why": "Am Weg über <code>/tmp</code> mit anschließendem Kopieren erkennst du die Falle im Text: die Daten liegen kurz doppelt, der Peak wird fast doppelt so hoch. Solche Tücken liest man aus dem Manifest, bevor sie zur Eviction führen.",
             "hint": "cat <datei>"
           },
           {
@@ -859,6 +899,7 @@
               "^cat\\s+direkt\\.yaml$"
             ],
             "solution": "cat direkt.yaml",
+            "why": "Direkt ins <code>/cache</code> zu entpacken vermeidet die Doppelablage – gleiches Endergebnis, halber Peak. Am Vergleich der beiden Texte siehst du, dass der <b>Weg</b> des Befüllens über den Spitzenverbrauch entscheidet.",
             "hint": "cat <datei>"
           }
         ]
@@ -875,6 +916,7 @@
           ],
           "check": {"some":"deployments","where":{"name":"doppelt","initContainer":{"match":{"doubleStage":true}}}},
           "solution": "kubectl apply --filename doppelt.yaml",
+          "why": "Der kubelet misst den <b>Peak</b> während der Vorbereitung, nicht den Endstand – deshalb kann dieser Pod trotz kleinem Endergebnis (300Mi) am 512Mi-Limit scheitern. Genau das rollst du hier bewusst aus, um es zu sehen.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -890,6 +932,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"doppelt","evicted":{"truthy":true}}},
             "solution": "kubectl get pods",
+            "why": "Dass <code>doppelt</code> evicted ist, obwohl am Ende nur 300Mi übrig blieben, ist die Lehre: fürs Limit zählt der Spitzenverbrauch beim Befüllen, nicht der finale Stand.",
             "hint": "kubectl get pods"
           },
           {
@@ -900,6 +943,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"doppelt","evicted":{"truthy":true}}},
             "solution": "kubectl describe pod <doppelt-pod>",
+            "why": "<code>describe</code> nennt die Spitze (600Mi) und den Grund – so belegst du, dass der Init-Peak das Limit sprengte. Ein Ereignis ist beweiskräftiger als eine Vermutung.",
             "hint": "kubectl describe pod <name> – Name aus get pods."
           }
         ]
@@ -916,6 +960,7 @@
           ],
           "check": {"some":"deployments","where":{"name":"direkt","initContainer":{"match":{"doubleStage":false}}}},
           "solution": "kubectl apply --filename direkt.yaml",
+          "why": "Derselbe Endstand, dasselbe Limit, aber direkt entpackt: der Peak bleibt bei 300Mi und passt bequem. Das zeigt, dass man den Peak über den Befüll-Weg steuert, nicht über ein größeres Limit.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -931,6 +976,7 @@
             ],
             "check": {"all":[{"some":"deployments","where":{"name":"direkt","evicted":{"truthy":false}}},{"some":"deployments","where":{"name":"doppelt","evicted":{"truthy":true}}}]},
             "solution": "kubectl get pods",
+            "why": "Der direkte Vergleich – einer läuft, einer evicted – macht das Prinzip greifbar: bei gleichem Ergebnis und Limit entschied allein der Weg des Befüllens über Erfolg oder Eviction.",
             "hint": "kubectl get pods"
           }
         ]
@@ -1028,6 +1074,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Erst der Überblick: <code>ls</code> zeigt, welche Karten für Sichern, Verlieren und Zurückholen bereitliegen – man kennt die Werkzeuge, bevor man den Ernstfall probt.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -1037,6 +1084,7 @@
               "^cat\\s+snapshot\\.yaml$"
             ],
             "solution": "cat snapshot.yaml",
+            "why": "Unter <code>source</code> steht, <b>welches</b> PVC gesichert wird – ein Snapshot braucht ein klares Ziel. Wer das im Text prüft, sichert nicht versehentlich das falsche Volume.",
             "hint": "cat <datei>"
           }
         ]
@@ -1053,6 +1101,7 @@
           ],
           "check": {"some":"pvcs","where":{"name":"kai-datenbank","status":"Bound"}},
           "solution": "kubectl apply --filename db.yaml",
+          "why": "Zuerst muss es überhaupt Daten geben, die man schützt – deshalb steht das Datenbank-Volume am Anfang. Ein Backup ist nur so sinnvoll wie die Daten, die dahinterstehen.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -1068,6 +1117,7 @@
           ],
           "check": {"some":"volumeSnapshots","where":{"name":"kai-datenbank-snap","readyToUse":true}},
           "solution": "kubectl apply --filename snapshot.yaml",
+          "why": "Der VolumeSnapshot friert den Stand des Volumes zu einem Zeitpunkt ein und ist ein <b>eigenes Objekt</b>, kein Teil des PVC – genau deshalb kann er später den Verlust des Volumes überleben.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -1083,6 +1133,7 @@
             ],
             "check": {"some":"volumeSnapshots","where":{"name":"kai-datenbank-snap","readyToUse":true}},
             "solution": "kubectl get volumesnapshot",
+            "why": "<code>READYTOUSE: true</code> ist die Bestätigung, dass der Abzug fertig und wiederherstellbar ist – man verlässt sich nie auf ein Backup, dessen Zustand man nicht geprüft hat.",
             "hint": "kubectl get volumesnapshot (oder vs)."
           }
         ]
@@ -1099,6 +1150,7 @@
           ],
           "check": {"none":"pvcs","where":{"name":"kai-datenbank"}},
           "solution": "kubectl delete pvc kai-datenbank",
+          "why": "Bei <code>reclaimPolicy: Delete</code> nimmt das Löschen des PVC auch das Volume samt Daten mit – dieser bewusst herbeigeführte Verlust zeigt, warum man überhaupt sichert, bevor es aus Versehen passiert.",
           "hint": "kubectl delete pvc <name> – nimm kai-datenbank."
         }
       },
@@ -1114,6 +1166,7 @@
             ],
             "check": {"none":"pvcs","where":{"name":"kai-datenbank"}},
             "solution": "kubectl get pvc",
+            "why": "Erst den Verlust bestätigen: ist das PVC wirklich weg, ist klar, dass die Wiederherstellung allein am Backup hängt. Man prüft den Schaden, bevor man auf die Rettung baut.",
             "hint": "kubectl get pvc"
           },
           {
@@ -1124,6 +1177,7 @@
             ],
             "check": {"all":[{"none":"pvcs","where":{"name":"kai-datenbank"}},{"some":"volumeSnapshots","where":{"name":"kai-datenbank-snap","readyToUse":true}}]},
             "solution": "kubectl get volumesnapshot",
+            "why": "Dass der Snapshot den Verlust des Volumes überlebt, ist der Kern eines Backups: es ist ein <b>unabhängiges</b> Objekt. Ein „Backup“, das mit dem Original stirbt, wäre keines.",
             "hint": "kubectl get volumesnapshot"
           }
         ]
@@ -1140,6 +1194,7 @@
           ],
           "check": {"some":"pvcs","where":{"name":"kai-datenbank","data":"stammkundenverzeichnis"}},
           "solution": "kubectl apply --filename restore.yaml",
+          "why": "Über <code>spec.dataSource</code> zeigt das neue PVC auf den Snapshot – so bekommst du statt eines leeren Volumes den gesicherten Inhalt zurück. Genau das ist Wiederherstellung: aus dem Backup neu befüllen.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -1208,6 +1263,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Erst schauen, was am Kai liegt – <code>ls</code> zeigt die Datei, die du gleich in den Eimer legst. Man kennt seine Fracht, bevor man sie verschifft.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -1217,6 +1273,7 @@
               "^cat\\s+frachtliste\\.txt$"
             ],
             "solution": "cat frachtliste.txt",
+            "why": "Bevor du eine Datei hochlädst, siehst du ihren Inhalt an – so weißt du, was tatsächlich ins Object Storage wandert, statt eine unbekannte Datei zu verschieben.",
             "hint": "cat <datei>"
           }
         ]
@@ -1233,6 +1290,7 @@
           ],
           "check": {"some":"buckets","where":{"name":"hafen-backup"}},
           "solution": "aws s3 mb s3://hafen-backup",
+          "why": "Ein Bucket ist der oberste, global eindeutig benannte Behälter – er muss existieren, bevor Objekte hineinkommen. <code>mb</code> (make bucket) legt genau diesen Rahmen an.",
           "hint": "aws s3 mb s3://<bucket>"
         }
       },
@@ -1248,6 +1306,7 @@
           ],
           "check": {"some":"buckets","where":{"name":"hafen-backup","objects":{"has":{"key":"manifeste/frachtliste.txt"}}}},
           "solution": "aws s3 cp frachtliste.txt s3://hafen-backup/manifeste/frachtliste.txt",
+          "why": "Der <b>Key</b> ist der ganze Name des Objekts – Schrägstriche darin <b>sehen</b> aus wie Ordner, sind aber nur Teil des Schlüssels. Der Namensraum ist flach: es gibt keine echten Verzeichnisse, nur Key→Inhalt.",
           "hint": "aws s3 cp <datei> s3://<bucket>/<key>"
         }
       },
@@ -1263,6 +1322,7 @@
             ],
             "check": {"some":"buckets","where":{"name":"hafen-backup","objects":{"has":{"key":"manifeste/frachtliste.txt"}}}},
             "solution": "aws s3 ls s3://hafen-backup",
+            "why": "<code>ls</code> auf den Bucket zeigt den vollen Key deines Objekts – so bestätigst du, dass der Upload ankam, und siehst zugleich, dass der Schrägstrich nur ein Zeichen im Schlüssel ist.",
             "hint": "aws s3 ls s3://<bucket>"
           }
         ]
@@ -1279,6 +1339,7 @@
           ],
           "check": {"flag":["files","wiederhergestellt.txt"]},
           "solution": "aws s3 cp s3://hafen-backup/manifeste/frachtliste.txt wiederhergestellt.txt",
+          "why": "Herunterladen ist dasselbe <code>cp</code>, nur mit S3-Adresse als Quelle – Object Storage kennt keine Mounts, sondern nur ganze Objekte über ihren Key. Genau dieser Round-Trip ist die Wiederherstellung aus dem Eimer.",
           "hint": "aws s3 cp s3://<bucket>/<key> <ziel-datei>"
         }
       },
@@ -1378,6 +1439,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Erst der Überblick mit <code>ls</code>, bevor du off-cluster sicherst – man startet eine Sicherung nie, ohne zu wissen, was am Kai liegt.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -1387,6 +1449,7 @@
               "^cat\\s+kai-stammdaten\\.dump$"
             ],
             "solution": "cat kai-stammdaten.dump",
+            "why": "Den Export liest du an, bevor du ihn sicherst – nur so weißt du, dass wirklich die Stammkundendaten im Dump stehen, die du gleich off-cluster ablegst.",
             "hint": "cat <datei>"
           }
         ]
@@ -1403,6 +1466,7 @@
           ],
           "check": {"some":"pvcs","where":{"name":"kai-stammdaten","status":"Bound"}},
           "solution": "kubectl apply --filename db.yaml",
+          "why": "Zuerst das Volume mit den echten Daten – erst wenn es etwas Wertvolles zu schützen gibt, ergibt die off-site-Sicherung Sinn.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -1418,6 +1482,7 @@
           ],
           "check": {"some":"buckets","where":{"name":"hafen-offsite"}},
           "solution": "aws s3 mb s3://hafen-offsite",
+          "why": "Der Backup-Eimer liegt bewusst <b>außerhalb</b> des Clusters – das ist der ganze Sinn von off-site. Ein Ziel, das das Schicksal des Clusters teilt, wäre kein sicherer Ablageort.",
           "hint": "aws s3 mb s3://<bucket>"
         }
       },
@@ -1433,6 +1498,7 @@
           ],
           "check": {"some":"buckets","where":{"name":"hafen-offsite","objects":{"has":{"key":"backups/kai-stammdaten-2024-01-01.dump"}}}},
           "solution": "aws s3 cp kai-stammdaten.dump s3://hafen-offsite/backups/kai-stammdaten-2024-01-01.dump",
+          "why": "Ein Datum im Key (<code>…-2024-01-01.dump</code>) lässt mehrere Stände nebeneinander bestehen, statt sich zu überschreiben – so hast du eine Historie und nicht nur den letzten, womöglich schon kaputten Stand.",
           "hint": "aws s3 cp <datei> s3://<bucket>/<key>"
         }
       },
@@ -1448,6 +1514,7 @@
             ],
             "check": {"some":"buckets","where":{"name":"hafen-offsite","objects":{"has":{"key":"backups/kai-stammdaten-2024-01-01.dump"}}}},
             "solution": "aws s3 ls s3://hafen-offsite",
+            "why": "Der Blick in den Eimer bestätigt, dass das Backup an einem zweiten, cluster-unabhängigen Ort liegt – man verlässt sich erst auf eine Sicherung, wenn man sie dort auch sieht.",
             "hint": "aws s3 ls s3://<bucket>"
           }
         ]
@@ -1464,6 +1531,7 @@
           ],
           "check": {"none":"pvcs","where":{"name":"kai-stammdaten"}},
           "solution": "kubectl delete pvc kai-stammdaten",
+          "why": "Diesmal simulierst du den Verlust des ganzen Cluster-Speichers – genau den Fall, den ein Snapshot im selben System <b>nicht</b> überlebt hätte. Das zeigt, warum off-site mehr ist als ein Snapshot.",
           "hint": "kubectl delete pvc <name> – nimm kai-stammdaten."
         }
       },
@@ -1479,6 +1547,7 @@
             ],
             "check": {"none":"pvcs","where":{"name":"kai-stammdaten"}},
             "solution": "kubectl get pvc",
+            "why": "Erst den Totalverlust im Cluster bestätigen: ist wirklich nichts mehr da, hängt die Rettung allein an der off-site-Kopie. Man prüft den Schaden, bevor man auf das Backup zählt.",
             "hint": "kubectl get pvc"
           },
           {
@@ -1489,6 +1558,7 @@
             ],
             "check": {"all":[{"none":"pvcs","where":{"name":"kai-stammdaten"}},{"some":"buckets","where":{"name":"hafen-offsite","objects":{"has":{"key":"backups/kai-stammdaten-2024-01-01.dump"}}}}]},
             "solution": "aws s3 ls s3://hafen-offsite",
+            "why": "Dass das Backup im Eimer den Cluster-Verlust überlebt, ist der Sinn von 3-2-1: eine Kopie liegt an einem Ort, der nicht mit dem Cluster untergeht.",
             "hint": "aws s3 ls s3://<bucket>"
           }
         ]
@@ -1505,6 +1575,7 @@
           ],
           "check": {"flag":["files","wiederhergestellt.dump"]},
           "solution": "aws s3 cp s3://hafen-offsite/backups/kai-stammdaten-2024-01-01.dump wiederhergestellt.dump",
+          "why": "Die Wiederherstellung beginnt off-cluster – erst holst du den Export mit <code>aws s3 cp</code> aus dem Eimer zurück. Ohne diesen Download aus der off-site-Kopie gäbe es nach dem Totalverlust nichts zum Zurückspielen.",
           "hint": "aws s3 cp s3://<bucket>/<key> <ziel-datei>"
         }
       },
@@ -1520,6 +1591,7 @@
           ],
           "check": {"some":"pvcs","where":{"name":"kai-stammdaten","data":"stammkundenverzeichnis"}},
           "solution": "kubectl apply --filename restore.yaml",
+          "why": "Der zweite Schritt legt ein frisches Volume an und befüllt es mit dem heruntergeladenen Dump – Restore heißt: neuen Speicher schaffen und den geretteten Inhalt hineinladen.",
           "hint": "kubectl apply --filename <datei>"
         }
       },
@@ -1535,6 +1607,7 @@
             ],
             "check": {"some":"pvcs","where":{"name":"kai-stammdaten","status":"Bound"}},
             "solution": "kubectl get pvc",
+            "why": "Der Status <b>Bound</b> am neuen PVC bestätigt, dass der Betrieb aus einer Kopie zurückkam, die der Katastrophe entging – erst die geprüfte Wiederherstellung macht das Backup vollständig.",
             "hint": "kubectl get pvc"
           }
         ]

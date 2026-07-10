@@ -27,6 +27,7 @@
             "^help$"
           ],
           "solution": "help",
+          "why": "<code>help</code> ist dein Spickzettel an Bord – es listet nur Befehle, die du schon gelernt hast, statt dich mit hunderten zu erschlagen. Darum lohnt der Blick nach jedem neuen Handgriff.",
           "hint": "Wirklich nur das Wort help."
         }
       },
@@ -72,6 +73,7 @@
             "^kubectl\\s+get\\s+(nodes|node|no)$"
           ],
           "solution": "kubectl get nodes",
+          "why": "<code>kubectl get &lt;typ&gt;</code> ist das Grundmuster zum Auflisten: erst schauen, was da ist, bevor du eingreifst. Nodes sind die Server, auf denen alles läuft – ihr Zustand ist dein erster Blick auf die Gesundheit des Clusters.",
           "hint": "Muster: kubectl get <ressourcentyp>"
         }
       },
@@ -102,6 +104,7 @@
             "^kubectl\\s+get\\s+(pods|pod|po)$"
           ],
           "solution": "kubectl get pods",
+          "why": "Ein Pod ist die kleinste Einheit, die Kubernetes wirklich betreibt – <code>get pods</code> zeigt dir also, was gerade tatsächlich fährt. Dasselbe <code>get</code>-Muster wie bei nodes, nur ein anderer Ressourcentyp.",
           "hint": "Gleiches Muster wie bei nodes."
         }
       },
@@ -175,6 +178,7 @@
             "^kubectl\\s+describe\\s+pods?\\s+kantine-\\S+$"
           ],
           "solution": "kubectl describe pod <name aus get pods>",
+          "why": "<code>get</code> zeigt die Übersicht, <code>describe</code> die volle Akte samt Events – bei der Fehlersuche willst du das Warum, nicht nur den Status. Weil jeder Pod-Name ein zufälliges Anhängsel trägt, tippst du ihn aus der Liste ab, statt zu raten.",
           "hint": "Erst kubectl get pods, dann kubectl describe pod <name>."
         }
       },
@@ -197,6 +201,7 @@
             "^kubectl\\s+get\\s+(pods|pod|po)\\s+(-n|--namespace)[=\\s]?kube-system$"
           ],
           "solution": "kubectl get pods --namespace kube-system",
+          "why": "Namespaces teilen den Cluster in getrennte Bereiche; ohne Angabe siehst du nur den Standard. Mit <code>--namespace</code> schaust du gezielt woanders hin – hier ins Maschinenherz, wo Kubernetes seine eigenen Pods versteckt.",
           "hint": "kubectl get pods --namespace kube-system (statt --namespace geht später auch die Kurzform -n)"
         }
       },
@@ -285,6 +290,7 @@
             "^kubectl\\s+create\\s+deployment\\s+kasse\\s+--image[=\\s]nginx(:\\S+)?$"
           ],
           "solution": "kubectl create deployment kasse --image=nginx",
+          "why": "Ein Deployment ist ein Dauerauftrag: Es hält immer die gewünschte Zahl Pods am Laufen, statt dass du sterbliche Pods einzeln pflegst. Der Name ist nur ein Etikett zum Wiederfinden, <code>--image</code> bestimmt, was wirklich läuft.",
           "hint": "Muster: kubectl create deployment <name> --image=<image>"
         }
       },
@@ -306,6 +312,7 @@
             "^kubectl\\s+scale\\s+deployment\\s+kasse\\s+--replicas[=\\s]3$"
           ],
           "solution": "kubectl scale deployment kasse --replicas=3",
+          "why": "Beim Deployment änderst du nur die Wunsch-Zahl – Kubernetes gleicht Ist an Soll an und startet die fehlenden Pods selbst. Genau deshalb ist Skalieren ein Einzeiler statt Handarbeit pro Pod.",
           "hint": "Muster: kubectl scale deployment <name> --replicas=<zahl>"
         }
       },
@@ -366,6 +373,7 @@
               "^kubectl\\s+get\\s+(pods|pod|po)$"
             ],
             "solution": "kubectl get pods",
+            "why": "Bevor du eingreifst, verschaffst du dir mit <code>get pods</code> den Ist-Stand und die echten Namen – blind auf einen Pod loszugehen, den du nicht gesehen hast, endet im Ratespiel.",
             "hint": "Kennst du längst!"
           }
         ]
@@ -381,6 +389,7 @@
             "^kubectl\\s+delete\\s+pods?\\s+kasse-\\S+$"
           ],
           "solution": "kubectl delete pod <kasse-pod-name>",
+          "why": "<code>delete</code> ist zustandsändernd – anders als <code>get</code>/<code>describe</code> greift es wirklich ein. Weil ein Deployment den Soll-Zustand hält, ersetzt es den versenkten Pod sofort – das ist Self-Healing zum Anfassen.",
           "hint": "Muster: kubectl delete pod <name> – Namen aus der Liste oben abtippen."
         }
       },
@@ -396,6 +405,7 @@
             ],
             "check": "k8s-self-healing/t-storm-3",
             "solution": "kubectl get pods",
+            "why": "Nach einem Eingriff prüfst du das Ergebnis, statt es zu glauben: Ein frischer Pod mit kleinem AGE beweist, dass Kubernetes von selbst nachgesteuert hat. Der Kontrollblick gehört zu jeder Änderung dazu.",
             "hint": "Nochmal die Pod-Liste."
           }
         ]
@@ -420,6 +430,7 @@
             "^kubectl\\s+expose\\s+deployment\\s+kasse\\s+--port[=\\s]80$"
           ],
           "solution": "kubectl expose deployment kasse --port=80",
+          "why": "Pod-IPs wechseln bei jedem Neustart – ein Service legt eine feste Adresse davor, damit andere die Kasse zuverlässig finden. Ohne diese stabile Front müsste jeder Aufrufer die flüchtigen Pods selbst jagen.",
           "hint": "Muster: kubectl expose deployment <name> --port=80"
         }
       },
@@ -435,6 +446,7 @@
           ],
           "check": {"some":"services","where":{"name":"kasse"}},
           "solution": "kubectl get services",
+          "why": "So prüfst du, dass dein Service wirklich steht und eine feste CLUSTER-IP bekommen hat. Dasselbe <code>get</code>-Muster wie bei Pods und Nodes – nur eben für die Adressen.",
           "hint": "Schreib es aus: kubectl get services (die Kurzform svc verdienst du dir durch Nutzung)."
         }
       },
@@ -501,6 +513,7 @@
               "^cat\\s+boese-config\\.yaml$"
             ],
             "solution": "cat boese-config.yaml",
+            "why": "<code>cat</code> zeigt dir den rohen Datei-Inhalt – der erste Schritt jeder Fehlersuche ist hinschauen. Genau so entdeckst du hier das Passwort im Klartext, das dort niemals stehen dürfte.",
             "hint": "cat <datei>"
           }
         ]
@@ -524,6 +537,7 @@
             "^kubectl\\s+create\\s+secret\\s+generic\\s+db-zugang\\s+--from-literal[=\\s][\\w.-]+=\\S+$"
           ],
           "solution": "kubectl create secret generic db-zugang --from-literal=passwort=tintenfisch88",
+          "why": "Vertrauliches gehört in ein Secret, nie in Klartext-YAML oder ConfigMaps – Kubernetes behandelt Secrets bewusst gesondert und zeigt ihren Inhalt nicht einfach an. <code>--from-literal</code> legt Schlüssel und Wert direkt ab.",
           "hint": "Muster: kubectl create secret generic <name> --from-literal=schluessel=wert"
         }
       },
@@ -538,6 +552,7 @@
             "^kubectl\\s+get\\s+(secrets|secret)$"
           ],
           "solution": "kubectl get secrets",
+          "why": "Die Liste zeigt, dass die Truhe existiert, aber nicht ihren Inhalt – genau das ist der Sinn eines Secrets. Wer eine Ressource anlegt, überzeugt sich anschließend, dass sie da ist.",
           "hint": "kubectl get …"
         }
       },
@@ -616,6 +631,7 @@
             "^kubectl\\s+create\\s+configmap\\s+passagier-config\\s+--from-literal[=\\s][\\w.-]+=\\S+$"
           ],
           "solution": "kubectl create configmap passagier-config --from-literal=db_host=hafen-db",
+          "why": "Harmlose Einstellungen wie Hostnamen oder Ports gehören in eine ConfigMap – bewusst Klartext, weil kein Geheimnis. Diese Trennung von Konfiguration und Geheimnis hält dein Setup sauber und die Krake hungrig.",
           "hint": "Muster: kubectl create configmap <name> --from-literal=schluessel=wert"
         }
       },
@@ -630,6 +646,7 @@
               "^kubectl\\s+create\\s+secret\\s+generic\\s+passagier-geheim\\s+--from-literal[=\\s][\\w.-]+=\\S+$"
             ],
             "solution": "kubectl create secret generic passagier-geheim --from-literal=db_passwort=tiefsee42",
+            "why": "Das Passwort ist Krakenfutter, wenn es offen liegt – deshalb ins Secret, nicht in die ConfigMap. Gleiche Mechanik wie beim ConfigMap-Befehl, nur der Behälter ist der sichere.",
             "hint": "Wie bei der Krake: kubectl create secret generic <name> --from-literal=k=v"
           }
         ]
@@ -645,6 +662,7 @@
             "^kubectl\\s+set\\s+env\\s+deployment\\/passagierliste\\s+--from[=\\s]configmap\\/passagier-config$"
           ],
           "solution": "kubectl set env deployment/passagierliste --from=configmap/passagier-config",
+          "why": "Anlegen allein nützt der App nichts – erst <code>set env --from</code> reicht die Werte als Umgebungsvariablen in die Pods hinein. So bleibt Konfiguration außerhalb des Images und lässt sich ändern, ohne die App neu zu bauen.",
           "hint": "Muster: kubectl set env deployment/<name> --from=configmap/<configmap-name>"
         }
       },
@@ -660,6 +678,7 @@
             ],
             "solution": "kubectl set env deployment/passagierliste --from=secret/passagier-geheim",
             "check": {"some":"deployments","where":{"name":"passagierliste","envFrom":{"match":{"configMaps":{"includes":"passagier-config"},"secrets":{"includes":"passagier-geheim"}}}}},
+            "why": "Ein Secret wird genau wie eine ConfigMap eingebunden – nur mit <code>secret/</code> statt <code>configmap/</code>. Erst durch dieses Einbinden kennt die App ihr Passwort, ohne dass es je in einer Datei stand.",
             "hint": "kubectl set env deployment/passagierliste --from=secret/<secret-name>"
           }
         ]
@@ -732,6 +751,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "<code>ls</code> zeigt, was im aktuellen Ordner liegt – der erste Griff, um sich zu orientieren, wenn man nicht weiß, was da ist. Hier beweist es, dass die Baupläne den Sturm überlebt haben.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -741,6 +761,7 @@
               "^cat\\s+lagebericht\\.txt$"
             ],
             "solution": "cat lagebericht.txt",
+            "why": "Bevor man loslegt, liest man die Lage – <code>cat</code> gibt den Inhalt einer Textdatei aus. Der Bericht sagt dir nicht nur, was kaputt ist, sondern auch die Reihenfolge des Wiederaufbaus.",
             "hint": "cat <datei> – die Datei heißt 'lagebericht.txt'."
           }
         ]
@@ -820,6 +841,7 @@
             "^kubeadm\\s+init$"
           ],
           "solution": "kubeadm init",
+          "why": "<code>kubeadm init</code> zieht die Control-Plane hoch – ohne sie gibt es kein Tor zum Cluster, und <code>kubectl</code> läuft ins Leere. Darum ist sie immer der erste Baustein: erst das Fundament, dann alles Weitere.",
           "hint": "Wirklich nur 'kubeadm init' – ohne weitere Flags.",
           "check": {
             "flag": [
@@ -849,6 +871,7 @@
             "^kubectl\\s+get\\s+(nodes|node|no)$"
           ],
           "solution": "kubectl get nodes",
+          "why": "Derselbe Befehl, der eben noch «connection refused» gab, antwortet jetzt – der beste Beweis, dass die Control-Plane wirklich steht. <code>kubectl</code> war nie kaputt, ihm fehlte nur die Gegenstelle.",
           "hint": "Genau der Befehl, der vor dem init noch «connection refused» gab.",
           "check": {
             "some": "nodes",
@@ -947,6 +970,7 @@
             "^kubeadm\\s+join\\s+(--token\\s+)?abcdef\\.0123456789abcdef$"
           ],
           "solution": "kubeadm join abcdef.0123456789abcdef",
+          "why": "Ein Worker darf sich nur mit dem Token aus <code>kubeadm init</code> anmelden – ein Geheimnis auf Zeit, das Fremde draußen hält. So wächst der Cluster kontrolliert, Knoten für Knoten.",
           "hint": "kubeadm join abcdef.0123456789abcdef – den Token aus init unverändert übernehmen.",
           "check": {
             "some": "nodes",
@@ -975,6 +999,7 @@
             "^kubeadm\\s+join\\s+(--token\\s+)?abcdef\\.0123456789abcdef$"
           ],
           "solution": "kubeadm join abcdef.0123456789abcdef",
+          "why": "Jeder weitere Knoten kommt mit exakt demselben Join-Befehl dazu – so skaliert ein echter Cluster: ein Kommando, auf jedem neuen Server ausgeführt. Mehr Knoten heißt mehr Kapazität und Ausfallsicherheit.",
           "hint": "Exakt derselbe Befehl wie eben.",
           "check": {
             "count": "nodes",
@@ -997,6 +1022,7 @@
             "^kubectl\\s+get\\s+(nodes|node|no)$"
           ],
           "solution": "kubectl get nodes",
+          "why": "Nach dem Anschließen kontrollierst du das Ergebnis: Die neuen Worker tragen die Rolle <code>&lt;none&gt;</code>, die Control-Plane ihre eigene. So siehst du auf einen Blick, wer entscheidet und wer arbeitet.",
           "hint": "Derselbe get-nodes-Befehl wie beim Control-Plane-Schritt.",
           "check": {
             "count": "nodes",
@@ -1127,6 +1153,7 @@
               "^kubectl\\s+get\\s+(pods|po)$"
             ],
             "solution": "kubectl get pods",
+            "why": "Erst den Ausgangszustand festhalten: Ein leerer Cluster zeigt «No resources found». Diesen Nullpunkt zu sehen macht später sichtbar, dass dein <code>apply</code> wirklich etwas bewirkt hat.",
             "hint": "kubectl get pods – noch zeigt er „No resources found“."
           },
           {
@@ -1136,6 +1163,7 @@
               "^cat\\s+deployment\\.yaml$"
             ],
             "solution": "cat deployment.yaml",
+            "why": "Bevor du ein Manifest anwendest, liest du es – <code>cat</code> zeigt, was gleich entstehen wird. Ein Deployment-Manifest ist der Bauplan, der überlebt, während die laufenden Pods vergänglich sind.",
             "hint": "cat <datei> – die Datei heißt 'deployment.yaml'."
           }
         ]
@@ -1151,6 +1179,7 @@
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+deployment\\.yaml$"
           ],
           "solution": "kubectl apply --filename deployment.yaml",
+          "why": "<code>apply</code> ist deklarativ: Du sagst, was gelten soll, und Kubernetes stellt genau das her – aus einer Datei, die reviewt und wiederverwendet werden kann. Zuverlässiger, als jeden Pod von Hand zu erzeugen.",
           "hint": "kubectl apply --filename deployment.yaml (die Kurzform -f verdienst du dir durch Nutzung).",
           "check": {
             "some": "deployments",
@@ -1174,6 +1203,7 @@
             "^kubectl\\s+get\\s+(pods|po)$"
           ],
           "solution": "kubectl get pods",
+          "why": "Der Kontrollblick nach dem <code>apply</code>: Zwei Pods auf <code>Running</code> beweisen, dass aus dem Bauplan echte, laufende Fracht geworden ist. Anwenden und prüfen gehören zusammen.",
           "hint": "Derselbe get-pods-Befehl wie eben – nur ist der Cluster jetzt nicht mehr leer.",
           "check": {
             "some": "deployments",
@@ -1197,6 +1227,7 @@
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+service\\.yaml$"
           ],
           "solution": "kubectl apply --filename service.yaml",
+          "why": "Laufende Pods sind noch nicht erreichbar – der Service davor gibt ihnen eine feste Adresse. Gleiche <code>apply</code>-Mechanik wie beim Deployment, nur eine andere Karte: Ressourcen beschreibt man einheitlich als Manifest.",
           "hint": "kubectl apply --filename service.yaml – dieselbe Mechanik, andere Karte.",
           "check": {
             "all": [
@@ -1306,6 +1337,7 @@
               "^cat\\s+cluster\\.tf$"
             ],
             "solution": "cat cluster.tf",
+            "why": "Auch beim Cluster-als-Code gilt: erst den Bauplan lesen, dann bauen. <code>cat</code> zeigt dir, dass hier Control-Plane und Worker als Ressourcen beschrieben sind – dieselben Knoten, die du sonst per kubeadm von Hand anlegst.",
             "hint": "cat <datei> – die Datei heißt 'cluster.tf'."
           }
         ]
@@ -1321,6 +1353,7 @@
             "^terraform\\s+init$"
           ],
           "solution": "terraform init",
+          "why": "<code>init</code> lädt die Provider-Plugins in den Ordner – ohne diesen ersten Schritt weiß Terraform gar nicht, WIE es die Infrastruktur bauen soll. Darum immer Schritt 1 in jedem Terraform-Projekt.",
           "hint": "terraform init – der erste Schritt, immer."
         }
       },
@@ -1335,6 +1368,7 @@
             "^terraform\\s+plan$"
           ],
           "solution": "terraform plan",
+          "why": "<code>plan</code> ist die Generalprobe: Es zeigt dir, was entstehen würde, bevor real etwas gebaut wird. So fängst du Fehler ab, solange sie noch nichts gekostet haben.",
           "hint": "terraform plan – zeigt den Bauplan, baut noch nichts."
         }
       },
@@ -1349,6 +1383,7 @@
             "^terraform\\s+apply(\\s+-auto-approve)?$"
           ],
           "solution": "terraform apply",
+          "why": "<code>apply</code> baut den beschriebenen Soll-Zustand auf einmal auf – ein deklarativer Befehl ersetzt <code>kubeadm init</code> plus jedes einzelne <code>join</code>. Reproduzierbar und ohne Vertipper, jedes Mal gleich.",
           "hint": "terraform apply – baut alles, was im Plan stand.",
           "check": {
             "all": [
@@ -1369,6 +1404,7 @@
             "^kubectl\\s+get\\s+(nodes|node|no)$"
           ],
           "solution": "kubectl get nodes",
+          "why": "Der Beweis aus Code: Derselbe Befehl, der ohne Control-Plane «connection refused» gab, zeigt jetzt vier Knoten – gebaut, ohne einen einzigen kubeadm-Befehl zu tippen. Genau das ist Infrastructure as Code.",
           "hint": "Derselbe get-nodes-Befehl wie im manuellen Bogen – nur diesmal aus Code gebaut.",
           "check": {
             "count": "nodes",

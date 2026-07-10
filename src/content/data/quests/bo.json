@@ -27,6 +27,7 @@
             "^docker\\s+pull\\s+lotsen-dienst(:\\S+)?$"
           ],
           "solution": "docker pull lotsen-dienst",
+          "why": "<code>docker pull</code> holt einen fertigen <b>Bauplan</b> (Image) aus der Registry auf deinen Rechner – es läuft noch nichts. Das Trennen von „Bauplan holen“ und „starten“ ist der Kern von Docker: dasselbe Image läuft später überall gleich.",
           "hint": "Muster: docker pull <image>"
         }
       },
@@ -48,6 +49,7 @@
             "^docker\\s+run\\s+lotsen-dienst(:\\S+)?$"
           ],
           "solution": "docker run lotsen-dienst",
+          "why": "<code>docker run</code> erweckt den Bauplan zum Leben: Aus dem Image wird ein laufender <b>Container</b>. Image = Vorlage, Container = die laufende Instanz davon – wie Tiefkühlpizza und Pizza im Ofen.",
           "hint": "Muster: docker run <image>"
         }
       },
@@ -124,6 +126,7 @@
             "^docker\\s+run\\s+busybox(:\\S+)?$"
           ],
           "solution": "docker run busybox",
+          "why": "Der Befehl bleibt <code>docker run</code>, nur der Bauplan-Name wechselt – das ist Absicht: Einmal gelernt, startest du <b>jedes</b> Image gleich. BusyBox ist die winzige Werkzeug-Kiste, die man für schnelle Tests hochfährt.",
           "hint": "Muster: docker run <image> – das Image heißt busybox."
         }
       },
@@ -146,6 +149,7 @@
             "^docker\\s+run\\s+redis(:\\S+)?$"
           ],
           "solution": "docker run redis",
+          "why": "Gleicher Befehl, anderes Image – hier <b>Redis</b>, ein schneller, flüchtiger In-Memory-Cache. Wichtig ist nicht der Befehl, sondern die Ware in der Kiste: das richtige Image für den Job zu wählen.",
           "hint": "Muster: docker run <image> – das Image heißt redis."
         }
       },
@@ -168,6 +172,7 @@
             "^docker\\s+run\\s+postgres(:\\S+)?$"
           ],
           "solution": "docker run postgres",
+          "why": "Wieder nur ein neuer Bauplan-Name: <b>Postgres</b>, die dauerhafte Datenbank – das Gegenstück zum flüchtigen Redis. Dass der Startbefehl derselbe ist, unterstreicht: Container sind genormte Kisten, egal was drin ist.",
           "hint": "Muster: docker run <image> – das Image heißt postgres."
         }
       },
@@ -243,6 +248,7 @@
             "^docker\\s+ps$"
           ],
           "solution": "docker ps",
+          "why": "<code>docker ps</code> listet die <b>laufenden</b> Container – wie <code>ps</code> (process status) in Unix die Prozesse. Ohne diese Übersicht weißt du nicht, was gerade läuft und welchen Namen du zum Stoppen brauchst.",
           "hint": "ps wie process status – zwei Buchstaben nach docker."
         }
       },
@@ -266,6 +272,7 @@
           ],
           "check": {"some":"containers","where":{"running":false}},
           "solution": "docker stop <name aus docker ps>",
+          "why": "<code>docker stop</code> hält eine Kiste gezielt über ihren <b>Namen</b> an – deshalb hast du vorher <code>ps</code> gebraucht. Man spricht Container über den lesbaren Namen an, nicht über die kryptische ID.",
           "hint": "Erst docker ps für den Namen, dann docker stop <name>."
         }
       },
@@ -287,6 +294,7 @@
             "^docker\\s+ps\\s+(-a|--all)$"
           ],
           "solution": "docker ps --all",
+          "why": "Gestoppt heißt <b>nicht</b> gelöscht – die Kiste steht noch im Lager. <code>--all</code> zeigt auch die beendeten (Status „Exited“). Zu wissen, dass gestoppte Container weiterexistieren, verhindert böse Überraschungen und vollgelaufene Platten.",
           "hint": "docker ps + die ausgeschriebene Flag für „alle“ (<code>--all</code>)."
         }
       },
@@ -383,6 +391,7 @@
             "^docker\\s+run\\s+(?:(?:-d|--detach)\\s+--name\\s+webserver|--name\\s+webserver\\s+(?:-d|--detach))\\s+nginx(:\\S+)?$"
           ],
           "solution": "docker run --detach --name webserver nginx",
+          "why": "<code>--name</code> gibt der Kiste einen merkbaren Namen statt der kryptischen ID, <code>--detach</code> schickt sie in den Hintergrund, damit dein Terminal frei bleibt. Regel: erst die Optionen, dann das Image ganz zuletzt – was danach steht, hielte die Kiste für einen eigenen Befehl.",
           "hint": "Muster: docker run --detach --name <wunschname> <image>"
         }
       },
@@ -465,6 +474,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "<code>ls</code> zeigt zuerst, was im aktuellen Ordner liegt – hier dein Bauplan. Bevor du eine Datei liest oder baust, schaust du erst, was überhaupt da ist; blind ins Verzeichnis greifen führt nur zu Tippfehlern.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -474,6 +484,7 @@
               "^cat\\s+Dockerfile$"
             ],
             "solution": "cat Dockerfile",
+            "why": "<code>cat</code> schreibt den Inhalt der Datei ins Terminal – du liest den Bauplan, <b>bevor</b> du ihn baust. Das <code>FROM</code> ganz oben ist die Grundschicht, auf der alles Weitere aufsetzt; wer den Bauplan nicht liest, baut blind.",
             "hint": "cat <datei>"
           }
         ]
@@ -497,6 +508,7 @@
             "^docker\\s+build\\s+(?:-t|--tag)\\s+hafenwache:1\\.0\\s+\\.$"
           ],
           "solution": "docker build --tag hafenwache:1.0 .",
+          "why": "<code>docker build</code> macht aus <b>deinem</b> Dockerfile ein eigenes Image – du bist nicht mehr auf fremde Baupläne angewiesen. Das <code>--tag</code> gibt ihm einen wiederauffindbaren Namen, der Punkt ist der Build-Kontext, den du der Engine reichst.",
           "hint": "Muster: docker build --tag <name>:<tag> . (statt --tag geht auch die Kurzform -t) – der Punkt ist der Build-Kontext: der Ordner voll Baumaterial (= aktueller Ordner), den du der Engine zum Bauen rüberreichst."
         }
       },
@@ -511,6 +523,7 @@
             "^docker\\s+images$"
           ],
           "solution": "docker images",
+          "why": "<code>docker images</code> listet die lokal bereitliegenden Images (gebaut oder gezogen) – so prüfst du, ob dein Build wirklich geklappt hat. Der Gegenpol zu <code>docker ps</code>: das eine zeigt Baupläne, das andere laufende Kisten.",
           "hint": "docker + Mehrzahl von „image“."
         }
       },
@@ -535,6 +548,7 @@
             "^docker\\s+tag\\s+hafenwache:1\\.0\\s+hafenwache:latest$"
           ],
           "solution": "docker tag hafenwache:1.0 hafenwache:latest",
+          "why": "<code>docker tag</code> hängt einem Image nur ein <b>zweites Etikett</b> an – es entsteht kein neues Image. Die Lesart „erst Quelle, dann Ziel“ (von wo → wohin) steckt in vielen Befehlen; ein Tag ist ein Zeiger, keine Kopie.",
           "hint": "Muster: docker tag <quelle> <ziel> – erst das vorhandene Image, dann der neue Name."
         }
       },
@@ -603,6 +617,7 @@
             "^docker\\s+pull\\s+nginx:1\\.27$"
           ],
           "solution": "docker pull nginx:1.27",
+          "why": "Der <b>Tag</b> hinter dem Doppelpunkt nagelt eine <b>bestimmte Version</b> fest, statt „irgendeine“ zu bekommen. Profis pinnen Versionen, damit morgen exakt dasselbe läuft wie heute – Reproduzierbarkeit statt Überraschung.",
           "hint": "Muster: docker pull <image>:<tag> – also nginx:1.27"
         }
       },
@@ -626,6 +641,7 @@
             "^docker\\s+pull\\s+ghcr\\.io/hafen/leuchtfeuer:2\\.1$"
           ],
           "solution": "docker pull ghcr.io/hafen/leuchtfeuer:2.1",
+          "why": "Der volle Image-Name beginnt mit der <b>Registry-Adresse</b>: Ohne sie fragt Docker still Docker Hub, mit <code>ghcr.io/…</code> holst du gezielt aus einer bestimmten (oft privaten) Registry. So ziehst du eigene, nicht-öffentliche Images statt nur fremder.",
           "hint": "Muster: docker pull <registry>/<namespace>/<image>:<tag> – ghcr.io/hafen/leuchtfeuer:2.1"
         }
       },
@@ -696,6 +712,7 @@
             "^docker\\s+pull\\s+rabbitmq(:\\S+)?$"
           ],
           "solution": "docker pull rabbitmq",
+          "why": "Gleicher <code>pull</code>, neuer Bauplan: <b>RabbitMQ</b>, ein Message Broker. Das Muster „Bauplan zuerst holen, dann starten“ bleibt – nur die Ware wechselt, hier eine Kiste, die Nachrichten weiterreicht statt rechnet oder speichert.",
           "hint": "Muster: docker pull <image> – das Image heißt rabbitmq."
         }
       },
@@ -718,6 +735,7 @@
             "^docker\\s+run\\s+rabbitmq(:\\S+)?$"
           ],
           "solution": "docker run rabbitmq",
+          "why": "Starten wie immer mit <code>docker run</code> – die Posthalle nimmt sofort Nachrichten an. Der Witz von RabbitMQ ist die <b>entkoppelte</b> Kommunikation: Absender und Empfänger müssen nicht gleichzeitig bereit sein, die Queue puffert dazwischen.",
           "hint": "Muster: docker run <image> – das Image heißt rabbitmq."
         }
       },

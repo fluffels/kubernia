@@ -46,6 +46,7 @@
               "^cat\\s+main\\.tf$"
             ],
             "solution": "cat main.tf",
+            "why": "Vor dem Bauen erst den Bauplan LESEN. <code>cat main.tf</code> zeigt die Infrastruktur als Text – ein <code>resource</code>-Block pro Ding, das gebaut wird. Genau das meint „Infrastructure as Code“: eine versionierbare Datei statt einmaligem Zusammenklicken.",
             "hint": "Wie bei Ada."
           }
         ]
@@ -61,6 +62,7 @@
             "^terraform\\s+init$"
           ],
           "solution": "terraform init",
+          "why": "<code>init</code> lädt die Provider-Plugins in den Projektordner – ohne diesen ersten Schritt weiß Terraform gar nicht, WIE es mit deiner Infrastruktur redet. Darum immer Schritt 1 in jedem neuen Projekt.",
           "hint": "Der allererste Befehl jedes Terraform-Projekts."
         }
       },
@@ -75,6 +77,7 @@
             "^terraform\\s+plan$"
           ],
           "solution": "terraform plan",
+          "why": "<code>plan</code> ist die Generalprobe: Terraform zeigt, was es ändern WÜRDE, ohne etwas anzufassen. Profis lesen den Plan immer erst – so fängst du einen Fehler ab, bevor er echte Infrastruktur trifft.",
           "hint": "Die Generalprobe."
         }
       },
@@ -107,6 +110,7 @@
             "^terraform\\s+apply(\\s+-auto-approve)?$"
           ],
           "solution": "terraform apply",
+          "why": "Erst nach der Generalprobe die Aufführung: <code>apply</code> setzt genau den geprüften Plan in echte Infrastruktur um. Die Reihenfolge plan→apply schützt davor, Ungeprüftes zu bauen.",
           "hint": "Nach der Generalprobe die Aufführung."
         }
       },
@@ -145,6 +149,7 @@
             "^terraform\\s+state\\s+list$"
           ],
           "solution": "terraform state list",
+          "why": "Der State ist Terraforms Gedächtnis – die Liste zeigt, was es bereits gebaut hat. Ohne dieses Ist-Bild könnte Terraform beim nächsten Lauf nicht die Differenz zum Soll (den Dateien) berechnen.",
           "hint": "terraform state …"
         }
       },
@@ -160,6 +165,7 @@
             ],
             "check": {"flag":["tf","applied"]},
             "solution": "terraform plan",
+            "why": "„No changes“ beweist das Kern-Prinzip: Soll (Dateien) = Ist (State), also gibt es nichts zu tun. Deklarativ heißt genau das – dieselbe Eingabe erzeugt keinen neuen Effekt (idempotent).",
             "hint": "Einfach nochmal plan."
           }
         ]
@@ -175,6 +181,7 @@
             "^terraform\\s+destroy(\\s+-auto-approve)?$"
           ],
           "solution": "terraform destroy",
+          "why": "<code>destroy</code> ist das kontrollierte Gegenteil von <code>apply</code>: Terraform reißt genau das ab, was in seinem State steht – kein manuelles Aufräumen, keine vergessenen Reste, die weiter Miete kosten.",
           "hint": "Das Gegenteil von apply."
         }
       },

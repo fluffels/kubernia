@@ -39,6 +39,7 @@
               "^kubectl\\s+get\\s+(pods|pod|po)$"
             ],
             "solution": "kubectl get pods",
+            "why": "<code>get pods</code> ist immer Schritt 1: Die STATUS-Spalte verrät die Fehlerklasse (ImagePullBackOff, Pending, CrashLoop …). Erst den Zustand lesen, dann gezielt weitergraben – nie ins Blaue raten.",
             "hint": "Der Übersichts-Befehl."
           },
           {
@@ -48,6 +49,7 @@
               "^kubectl\\s+describe\\s+pods?\\s+leuchtfeuer-\\S+$"
             ],
             "solution": "kubectl describe pod <leuchtfeuer-pod>",
+            "why": "Der STATUS nennt nur das <i>Was</i>; das <i>Warum</i> steht in den <b>Events</b> ganz unten in <code>describe</code>. Das ist Kubernetes' eigene Sicht auf den Pod – hier steht schwarz auf weiß, welches Image nicht geladen werden konnte.",
             "hint": "kubectl describe pod <name> – Name aus get pods."
           }
         ]
@@ -86,6 +88,7 @@
             "^kubectl\\s+set\\s+image\\s+deployment\\/leuchtfeuer\\s+\\S+=nginx(:\\S+)?$"
           ],
           "solution": "kubectl set image deployment/leuchtfeuer leuchtfeuer=nginx",
+          "why": "Du reparierst am <b>Deployment</b>, nicht am einzelnen Pod: <code>set image</code> ändert den Wunschzustand an einer Stelle, und Kubernetes rollt die neuen Pods von selbst aus. Am Wunschzustand schrauben statt an flüchtigen Pods ist das Grundprinzip.",
           "hint": "Muster: kubectl set image deployment/<name> <container>=<richtiges-image>"
         }
       },
@@ -101,6 +104,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"leuchtfeuer","broken":{"truthy":false}}},
             "solution": "kubectl get pods",
+            "why": "Ein Fix gilt erst als erledigt, wenn du ihn <b>gesehen</b> hast. Nach jeder Reparatur nochmal <code>get pods</code>: Steht dort Running, war die Ursache wirklich weg – nicht bloß vermutet.",
             "hint": "get pods – STATUS muss Running sein."
           }
         ]
@@ -174,6 +178,7 @@
               "^kubectl\\s+get\\s+(pods|pod|po)$"
             ],
             "solution": "kubectl get pods",
+            "why": "Gleiche erste Regel beim Flackern: Die <b>RESTARTS</b>-Spalte ist hier der Verräter. Klettert sie hoch, stirbt der Container immer wieder – ein anderes Muster als ein Image-Fehler, den du sofort am STATUS unterscheidest.",
             "hint": "Wie immer zuerst."
           }
         ]
@@ -189,6 +194,7 @@
             "^kubectl\\s+logs\\s+funkboje-\\S+$"
           ],
           "solution": "kubectl logs <funkboje-pod>",
+          "why": "Bei CrashLoopBackOff sind Image und Node in Ordnung – die <b>App selbst</b> stirbt. Was sie dabei ausgibt, steht nur in <code>logs</code> (stdout/stderr), nirgends sonst. Darum ist logs die dritte Stufe: Wenn der Container läuft und trotzdem crasht, verrät nur die App-Ausgabe den echten Grund.",
           "hint": "Muster: kubectl logs <pod-name> – Namen aus der Liste oben abtippen."
         }
       },
@@ -221,6 +227,7 @@
               "^kubectl\\s+create\\s+secret\\s+generic\\s+funk-schluessel\\s+--from-literal[=\\s][\\w.-]+=\\S+$"
             ],
             "solution": "kubectl create secret generic funk-schluessel --from-literal=code=blinkblink1",
+            "why": "Erst die <b>Ursache</b> beheben, dann neu starten: Hier fehlt das Secret, das die App zum Start braucht. Ein Neustart ohne das Secret würde dieselbe Schleife nur wiederholen – du reparierst die Wurzel, nicht das Symptom.",
             "hint": "kubectl create secret generic <name> --from-literal=k=v"
           }
         ]
@@ -236,6 +243,7 @@
             "^kubectl\\s+rollout\\s+restart\\s+deployment[\\/\\s]funkboje$"
           ],
           "solution": "kubectl rollout restart deployment funkboje",
+          "why": "Die Pods wurden gestartet, bevor das Secret da war – sie kennen es nicht. <code>rollout restart</code> zieht sie sauber neu hoch, sodass sie das jetzt vorhandene Secret frisch einlesen: ein kontrollierter Neustart, ohne das Deployment zu löschen.",
           "hint": "Muster: kubectl rollout restart deployment <name>"
         }
       },
@@ -251,6 +259,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"funkboje","broken":{"truthy":false}}},
             "solution": "kubectl get pods",
+            "why": "Der Schluss-Check: Nur <code>get pods</code> mit STATUS Running beweist, dass die Kette Ursache → Fix → Neustart wirklich gegriffen hat. Ohne Verifikation weißt du nur, dass du <i>etwas</i> getan hast, nicht dass es half.",
             "hint": "STATUS muss Running sein."
           }
         ]
@@ -319,6 +328,7 @@
               "^kubectl\\s+get\\s+(pods|pod|po)$"
             ],
             "solution": "kubectl get pods",
+            "why": "Gleiche erste Regel, neues Fehlerbild: kein Absturz, kein Image-Fehler – der STATUS steht auf Pending. Auch das erkennst du nur, wenn du zuerst schaust statt zu vermuten.",
             "hint": "Schritt 1, immer."
           },
           {
@@ -328,6 +338,7 @@
               "^kubectl\\s+describe\\s+pods?\\s+frachtplaner-\\S+$"
             ],
             "solution": "kubectl describe pod <frachtplaner-pod>",
+            "why": "Warum ein Pod <i>wartet</i>, steht wieder in den Events von <code>describe</code>. Bei Pending ist das fast immer eine Scheduling-Meldung – „insufficient capacity“ heißt: Der Scheduler findet keinen Node mit Platz.",
             "hint": "describe + Events lesen."
           }
         ]
@@ -361,6 +372,7 @@
               "^terraform\\s+init$"
             ],
             "solution": "terraform init",
+            "why": "<code>init</code> lädt die Provider-Plugins in den Projektordner – ohne diesen ersten Schritt weiß Terraform gar nicht, WIE es mit deiner Infrastruktur redet. Darum immer Schritt 1 in jedem neuen Projekt.",
             "hint": "Schritt 1 jedes Terraform-Projekts."
           },
           {
@@ -370,6 +382,7 @@
               "^terraform\\s+plan$"
             ],
             "solution": "terraform plan",
+            "why": "<code>plan</code> zeigt, was <code>apply</code> gleich <b>tun würde</b>, ohne schon etwas zu ändern – die Generalprobe. Erst lesen, dann bauen: So fängst du Überraschungen ab, bevor sie echte Infrastruktur anfassen.",
             "hint": "Immer erst lesen."
           },
           {
@@ -379,6 +392,7 @@
               "^terraform\\s+apply(\\s+-auto-approve)?$"
             ],
             "solution": "terraform apply",
+            "why": "<code>apply</code> macht aus dem Plan echte Ressourcen und schreibt sie in den State. Weil du vorher <code>plan</code> gelesen hast, gibt es hier keine Überraschung – apply führt nur aus, was du schon abgenickt hast.",
             "hint": "Die Aufführung."
           },
           {
@@ -389,6 +403,7 @@
             ],
             "check": {"count":"nodes","cmp":">","value":3},
             "solution": "kubectl get nodes",
+            "why": "Terraform <b>baut</b> die Nodes, aber ob der <b>Cluster</b> sie sieht, fragst du mit <code>kubectl</code>. Zwei Werkzeuge, zwei Sichten – das ist der Übergang von „gebaut“ zu „im Cluster nutzbar“.",
             "hint": "kubectl, nicht terraform!"
           },
           {
@@ -399,6 +414,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"frachtplaner","broken":{"truthy":false}}},
             "solution": "kubectl get pods",
+            "why": "Der eigentliche Beweis: Erst wenn die vorher Pending-Pods jetzt Running sind, hat das Mehr an Kapazität wirklich geholfen. Ein Fix an der Infrastruktur zählt nur, wenn der Workload ihn auch nutzt.",
             "hint": "get pods – STATUS lesen."
           }
         ]
@@ -459,6 +475,7 @@
             "^kubectl\\s+get\\s+(networkpolicies|networkpolicy|netpol|netpols)$"
           ],
           "solution": "kubectl get networkpolicies",
+          "why": "Bevor du eine Mauer baust, schaust du, was schon steht – sonst baust du blind. Dass die Liste hier <b>leer</b> ist, ist die eigentliche Lektion: Ohne NetworkPolicy ist der Cluster komplett offen (default-allow).",
           "hint": "kubectl get networkpolicies (die Kurzform netpol verdienst du dir durch Nutzung)."
         }
       },
@@ -487,6 +504,7 @@
               "^cat\\s+netpol\\.yaml$"
             ],
             "solution": "cat netpol.yaml",
+            "why": "Ein Manifest liest man <b>vor</b> dem Anwenden: <code>podSelector</code> (wen schützt die Regel?) und <code>ingress.from</code> (wer darf rein?) bestimmen die ganze Wirkung. Wer blind anwendet, weiß hinterher nicht, was er scharf geschaltet hat.",
             "hint": "cat <datei>"
           },
           {
@@ -496,6 +514,7 @@
               "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+netpol\\.yaml$"
             ],
             "solution": "kubectl apply --filename netpol.yaml",
+            "why": "<code>apply</code> meldet Kubernetes den <b>Wunschzustand</b> aus der Datei – deklarativ, nicht Schritt für Schritt. Sobald die Policy greift, schaltet sie die gewählten Pods auf default-deny: Nur noch ausdrücklich erlaubter Verkehr kommt durch.",
             "hint": "Gleicher apply wie bei Adas Karten, Datei netpol.yaml."
           },
           {
@@ -506,6 +525,7 @@
             ],
             "check": {"some":"networkPolicies","where":{"name":"hafenmauer"}},
             "solution": "kubectl get networkpolicies",
+            "why": "Nach dem Anwenden prüfst du, ob die Mauer wirklich in der Liste steht – dasselbe „erst gucken“, das du beim Debuggen gelernt hast, gilt auch beim Absichern.",
             "hint": "kubectl get networkpolicies (die Kurzform netpol verdienst du dir durch Nutzung)."
           },
           {
@@ -515,6 +535,7 @@
               "^kubectl\\s+describe\\s+(networkpolicy|networkpolicies|netpol|netpols)\\s+hafenmauer$"
             ],
             "solution": "kubectl describe networkpolicy hafenmauer",
+            "why": "<code>get</code> zeigt nur, <b>dass</b> die Policy existiert; <code>describe</code> zeigt ihren <b>Inhalt</b> – welche from-Regel tatsächlich gilt. Bei Sicherheitsregeln willst du nie raten, sondern die wirksame Regel schwarz auf weiß sehen.",
             "hint": "kubectl describe networkpolicy <name> (die Kurzform netpol verdienst du dir durch Nutzung)"
           }
         ]
@@ -598,6 +619,7 @@
               "^kubectl\\s+get\\s+(pods|pod|po)$"
             ],
             "solution": "kubectl get pods",
+            "why": "Schritt 1 wie immer – aber hier zählt neben STATUS die <b>READY</b>-Spalte: Running heißt „gestartet“, READY heißt „kann bedienen“. Zwei verschiedene Dinge, und genau der Unterschied ist heute der Fall.",
             "hint": "Der Übersichts-Befehl. STATUS = Running, aber die READY-Spalte …?"
           },
           {
@@ -607,6 +629,7 @@
               "^kubectl\\s+describe\\s+pods?\\s+kombuese-\\S+$"
             ],
             "solution": "kubectl describe pod <kombuese-pod>",
+            "why": "<code>0/1 READY</code> bei Running: Der Grund steht in den Events – hier eine fehlgeschlagene <b>Readiness-Probe</b>. describe ist die einzige Stelle, die dir verrät, welcher Wächter Alarm schlägt.",
             "hint": "kubectl describe pod <name> – Name aus get pods."
           }
         ]
@@ -646,6 +669,7 @@
             ],
             "check": {"some":"services","where":{"name":"kombuese"}},
             "solution": "kubectl expose deployment kombuese --port=80",
+            "why": "Ein Pod allein ist nicht erreichbar; ein <b>Service</b> gibt ihm eine stabile Adresse und verteilt den Verkehr – aber nur auf <b>bereite</b> Pods. Genau deshalb ist der Service die Bühne, auf der Readiness sichtbar wird.",
             "hint": "Muster: kubectl expose deployment <name> --port=<zahl>"
           }
         ]
@@ -661,6 +685,7 @@
             "^kubectl\\s+get\\s+(endpoints|endpoint|ep)\\s+kombuese$"
           ],
           "solution": "kubectl get endpoints kombuese",
+          "why": "<code>endpoints</code> zeigt die <b>Wahrheit</b> hinter einem Service: welche Pods wirklich Traffic bekommen. Ein nicht-bereiter Pod fehlt hier – so beweist du, dass die rote Readiness-Probe ihn aus dem Verkehr nimmt, statt es nur zu vermuten.",
           "hint": "Muster: kubectl get endpoints <service>"
         }
       },
@@ -683,6 +708,7 @@
               "^kubectl\\s+create\\s+secret\\s+generic\\s+kombuese-menue\\s+--from-literal[=\\s][\\w.-]+=\\S+$"
             ],
             "solution": "kubectl create secret generic kombuese-menue --from-literal=menue=fischeintopf",
+            "why": "Auch hier: Ursache vor Neustart. Die Readiness-Probe wird erst grün, wenn die App ihr Secret hat – also legst du die Wurzel-Ursache an, statt am Symptom (dem roten READY) herumzudoktern.",
             "hint": "kubectl create secret generic <name> --from-literal=k=v"
           },
           {
@@ -693,6 +719,7 @@
             ],
             "check": {"all":[{"some":"deployments","where":{"name":"kombuese","broken":{"truthy":false}}},{"some":"services","where":{"name":"kombuese"}}]},
             "solution": "kubectl get endpoints kombuese",
+            "why": "Bewusst <b>kein</b> Neustart: Die Readiness-Probe prüft im Takt von selbst weiter. Kaum ist das Secret da, meldet der Pod sich bereit und taucht als Endpoint auf – das zeigt, dass Kubernetes ständig abgleicht, nicht nur beim Start.",
             "hint": "Gleicher Befehl wie eben – jetzt steht eine Pod-IP drin statt <none>."
           },
           {
@@ -703,6 +730,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"kombuese","broken":{"truthy":false}}},
             "solution": "kubectl get pods",
+            "why": "Die Gegenprobe: <code>1/1</code> READY ganz ohne <code>rollout restart</code>. Das ist der feine Unterschied zum Crash – eine rote Readiness heilt von selbst, sobald die Ursache weg ist.",
             "hint": "READY 1/1, Status Running – ganz ohne Neustart."
           }
         ]
@@ -757,6 +785,7 @@
               "^kubectl\\s+get\\s+(pods|pod|po)$"
             ],
             "solution": "kubectl get pods",
+            "why": "Erst schauen: STATUS und vor allem die <b>RESTARTS</b>-Zahl. Klettert sie, stirbt der Pod wiederholt – ob wegen Code oder Speicher, verrät erst der nächste Schritt. Ohne den Überblick tappst du im Dunkeln.",
             "hint": "Der Übersichts-Befehl. STATUS zeigt OOMKilled, RESTARTS klettern."
           },
           {
@@ -766,6 +795,7 @@
               "^kubectl\\s+describe\\s+pods?\\s+kartograf-\\S+$"
             ],
             "solution": "kubectl describe pod <kartograf-pod>",
+            "why": "Der Beweis für OOMKilled steht <b>nie</b> in den App-Logs, sondern in <code>describe</code> unter <b>Last State / Reason</b> samt dem gesetzten memory-Limit. Der Kernel killt den Container von außen – die App selbst merkt davon nichts, kann also nichts loggen.",
             "hint": "kubectl describe pod <name> – Name aus get pods."
           }
         ]
@@ -809,6 +839,7 @@
               "^cat\\s+resources\\.yaml$"
             ],
             "solution": "cat resources.yaml",
+            "why": "Bevor du Grenzen setzt, liest du, wie sie richtig aussehen: der <code>resources</code>-Block mit <code>requests</code> (fest reserviert) und <code>limits</code> (harte Obergrenze). Diese zwei Zahlen sind der Kern des ganzen Themas – erst verstehen, dann setzen.",
             "hint": "cat <datei>"
           }
         ]
@@ -832,6 +863,7 @@
             "^kubectl\\s+set\\s+resources\\s+deployment\\/kartograf\\s+(?:--limits[=\\s][^\\s]*memory=256Mi\\s+--requests[=\\s][^\\s]*memory=128Mi|--requests[=\\s][^\\s]*memory=128Mi\\s+--limits[=\\s][^\\s]*memory=256Mi)$"
           ],
           "solution": "kubectl set resources deployment/kartograf --limits=memory=256Mi --requests=memory=128Mi",
+          "why": "<code>set resources</code> hebt das zu knappe Limit direkt am laufenden Deployment an, ohne das ganze Manifest neu zu schreiben. requests und limits zusammen bestimmen später auch die QoS-Klasse – deshalb setzt man bewusst beide, nicht nur das Limit.",
           "hint": "Muster: kubectl set resources deployment/<name> --limits=memory=256Mi --requests=memory=128Mi"
         }
       },
@@ -847,6 +879,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"kartograf","broken":{"truthy":false}}},
             "solution": "kubectl get pods",
+            "why": "Verifizieren zum Dritten: Nur wenn der Pod stabil Running <i>bleibt</i> und keine neuen Restarts dazukommen, war das Limit die Ursache. Ein einmaliges Running reicht bei OOM nicht – es zählt, dass er nicht gleich wieder zerplatzt.",
             "hint": "STATUS muss Running sein, keine neuen Restarts."
           }
         ]

@@ -60,6 +60,7 @@
             "^kubectl\\s+top\\s+(pods|pod|po)$"
           ],
           "solution": "kubectl top pods",
+          "why": "<code>top</code> liest die Live-Last direkt aus dem metrics-server – derselben Quelle, aus der auch Prometheus schöpft. So findest du in Sekunden den Pod, der gerade CPU oder Speicher frisst, ohne erst ein Dashboard zu öffnen.",
           "hint": "kubectl top pods (Kurzform: po)."
         }
       },
@@ -74,6 +75,7 @@
               "^kubectl\\s+top\\s+(nodes|node|no)$"
             ],
             "solution": "kubectl top nodes",
+            "why": "Eine Ebene höher zu schauen zeigt dir, ob nicht nur ein einzelner Pod, sondern ein ganzer <b>Node</b> an seine Grenze kommt – Last verstehst du erst, wenn du Pod- und Node-Sicht zusammen liest.",
             "hint": "kubectl top nodes (Kurzform: no)."
           }
         ]
@@ -136,6 +138,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Erst schauen, was überhaupt im Verzeichnis liegt, bevor du blind etwas anwendest – <code>ls</code> ist der billige Blick, der dir spätere Tippfehler beim Dateinamen erspart.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -145,6 +148,7 @@
               "^cat\\s+servicemonitor\\.yaml$"
             ],
             "solution": "cat servicemonitor.yaml",
+            "why": "Ein Manifest wendet man nie ungelesen an: <code>cat</code> zeigt dir <code>kind</code>, <code>selector</code> und <code>interval</code>, damit du weißt, was du gleich in den Cluster gibst – Verstehen vor Ausführen.",
             "hint": "cat servicemonitor.yaml"
           }
         ]
@@ -161,6 +165,7 @@
           ],
           "check": {"some":"serviceMonitors","where":{"name":"lager-monitor"}},
           "solution": "kubectl apply --filename servicemonitor.yaml",
+          "why": "Auch Monitoring ist nur deklaratives YAML: mit dem immer gleichen <code>apply</code> beschreibst du den Soll-Zustand, statt Prometheus von Hand zu konfigurieren. Ein Befehl für jede Ressourcenart – das ist die Stärke von Kubernetes.",
           "hint": "kubectl apply --filename <datei> – der vertraute Befehl aus dem Kartenhaus."
         }
       },
@@ -176,6 +181,7 @@
             ],
             "check": {"some":"serviceMonitors","where":{"name":"lager-monitor"}},
             "solution": "kubectl get servicemonitors",
+            "why": "Nach jedem <code>apply</code> gegenprüfen, ob die Ressource wirklich steht: <code>get</code> bestätigt dir, dass Prometheus den Scrape-Auftrag angenommen hat – nicht raten, sondern nachsehen.",
             "hint": "kubectl get servicemonitors (Kurzform: smon)."
           }
         ]
@@ -263,6 +269,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Der schnelle Blick ins Verzeichnis vor dem Anwenden – so weißt du sicher, welche Datei du gleich an den Cluster gibst, statt einen falschen Namen zu tippen.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -272,6 +279,7 @@
               "^cat\\s+grafanadatasource\\.yaml$"
             ],
             "solution": "cat grafanadatasource.yaml",
+            "why": "Vor dem Anbinden liest du die Datenquelle: <code>cat</code> zeigt Typ und Cluster-URL, damit du verstehst, <i>wohin</i> Grafana später greift – ein Manifest ohne gelesenen Inhalt ist ein blinder Befehl.",
             "hint": "cat grafanadatasource.yaml"
           }
         ]
@@ -288,6 +296,7 @@
           ],
           "check": {"some":"grafanaDatasources","where":{"name":"prometheus-quelle"}},
           "solution": "kubectl apply --filename grafanadatasource.yaml",
+          "why": "Die Datasource ist die Brücke zu den Daten – ohne sie zeigt jedes Dashboard nur leere Graphen. Mit <code>apply</code> deklarierst du diese Verbindung genau wie jede andere Ressource.",
           "hint": "kubectl apply --filename <datei> – der vertraute Befehl."
         }
       },
@@ -303,6 +312,7 @@
             ],
             "check": {"some":"grafanaDatasources","where":{"name":"prometheus-quelle"}},
             "solution": "kubectl get grafanadatasources",
+            "why": "<code>get</code> bestätigt, dass Grafana die Quelle jetzt kennt – die Gegenprobe nach dem Anwenden gehört immer dazu, sonst weißt du nur, dass du den Befehl abgeschickt hast, nicht dass er wirkte.",
             "hint": "kubectl get grafanadatasources (Kurzform: grafanadatasrc)."
           }
         ]
@@ -371,6 +381,7 @@
               "^cat\\s+grafanadashboard\\.yaml$"
             ],
             "solution": "cat grafanadashboard.yaml",
+            "why": "Auch das Dashboard steckt komplett im Manifest – <code>cat</code> zeigt dir <code>title</code> und die Panels, sodass du das ganze Dashboard versionierbar im Blick hast, statt es per Hand in der Oberfläche zusammenzuklicken.",
             "hint": "cat grafanadashboard.yaml"
           }
         ]
@@ -387,6 +398,7 @@
           ],
           "check": {"some":"grafanaDashboards","where":{"name":"hafen-uebersicht"}},
           "solution": "kubectl apply --filename grafanadashboard.yaml",
+          "why": "Ein Dashboard als Code statt als Klick-Werk: mit <code>apply</code> ist es reproduzierbar und wandert mit ins Git – genau wie jede andere Cluster-Ressource, kein Sonderweg.",
           "hint": "kubectl apply --filename <datei> – wie immer."
         }
       },
@@ -402,6 +414,7 @@
             ],
             "check": {"some":"grafanaDashboards","where":{"name":"hafen-uebersicht"}},
             "solution": "kubectl get grafanadashboards",
+            "why": "Die Gegenprobe: <code>get</code> zeigt, dass das Dashboard registriert ist. Verifizieren gehört zu jedem Schritt – so entdeckst du sofort, wenn das Manifest gar nicht angekommen ist.",
             "hint": "kubectl get grafanadashboards (Kurzform: grafanadash)."
           }
         ]
@@ -484,6 +497,7 @@
             "^kubectl\\s+logs\\s+(signalgeber|signalgeber-\\S+)$"
           ],
           "solution": "kubectl logs <signalgeber-pod>",
+          "why": "Metriken sagen <i>was</i> passiert, Logs sagen <i>warum</i>: <code>kubectl logs</code> ist der direkte Draht zu <code>stdout</code>/<code>stderr</code> der App – ihre eigene Stimme, die kein Dashboard ersetzt.",
           "hint": "kubectl logs <pod-name> – den Namen siehst du mit kubectl get pods."
         }
       },
@@ -499,6 +513,7 @@
             "^kubectl\\s+logs\\s+(signalgeber|signalgeber-\\S+)\\s+(-f|--follow)$"
           ],
           "solution": "kubectl logs -f <signalgeber-pod>",
+          "why": "Mit <code>-f</code> siehst du neue Zeilen live erscheinen, statt immer wieder neu abzufragen – ideal, um ein Problem in dem Moment zu beobachten, in dem es entsteht.",
           "hint": "kubectl logs -f <pod-name> – das -f steht für follow."
         }
       },
@@ -557,6 +572,7 @@
               "^kubectl\\s+get\\s+(pods|pod|po)$"
             ],
             "solution": "kubectl get pods",
+            "why": "Bevor du Logs liest, brauchst du den echten Pod-Namen und den Status: <code>get pods</code> zeigt auch die Restart-Zahl – der erste Hinweis, dass etwas immer wieder abstürzt.",
             "hint": "kubectl get pods – oder kurz: po."
           },
           {
@@ -566,6 +582,7 @@
               "^kubectl\\s+logs\\s+(bakenbote|bakenbote-\\S+)$"
             ],
             "solution": "kubectl logs <bakenbote-pod>",
+            "why": "Bei einem Absturz liegt die Wahrheit in der letzten Log-Zeile: was die App unmittelbar vor dem Exit geschrieben hat, verrät den Grund – Logs lesen, nicht raten.",
             "hint": "kubectl logs <pod-name> – den Namen aus kubectl get pods kopieren."
           }
         ]
@@ -582,6 +599,7 @@
             "^kubectl\\s+logs\\s+(bakenbote|bakenbote-\\S+)\\s+(--previous|-p)$"
           ],
           "solution": "kubectl logs --previous <bakenbote-pod>",
+          "why": "<code>--previous</code> holt die Logs des <b>bereits gestorbenen</b> Containers – bei einem CrashLoop ist der aktuelle oft zu jung, um etwas zu sagen. Die Absturzursache steht im Log des Vorgängers.",
           "hint": "kubectl logs --previous <pod-name> – oder: -p als Kurzform."
         }
       },
@@ -725,6 +743,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Erst der Blick ins Verzeichnis, dann das Anwenden – <code>ls</code> stellt sicher, dass die Datei wirklich da ist und du ihren Namen richtig tippst.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -734,6 +753,7 @@
               "^cat\\s+prometheusrule\\.yaml$"
             ],
             "solution": "cat prometheusrule.yaml",
+            "why": "Eine Alert-Regel gibst du nie ungelesen frei: <code>cat</code> zeigt <code>expr</code> (die Bedingung) und <code>for</code> (die Wartezeit), damit du weißt, <i>wann</i> der Alarm feuern wird – sonst weckt er dich zur falschen Zeit.",
             "hint": "cat prometheusrule.yaml"
           }
         ]
@@ -750,6 +770,7 @@
           ],
           "check": {"some":"prometheusRules","where":{"name":"hafen-alarme"}},
           "solution": "kubectl apply --filename prometheusrule.yaml",
+          "why": "Alert-Regeln sind Code, keine handgepflegte Prometheus-Konfig: mit <code>apply</code> kennt Prometheus die Regel und prüft sie laufend – versionierbar und reproduzierbar wie jedes Manifest.",
           "hint": "kubectl apply --filename <datei> – der vertraute Befehl."
         }
       },
@@ -765,6 +786,7 @@
             ],
             "check": {"some":"prometheusRules","where":{"name":"hafen-alarme"}},
             "solution": "kubectl get prometheusrules",
+            "why": "Nach dem Anwenden gegenprüfen, dass die Regel wirklich registriert ist: <code>get</code> ist die Bestätigung, bevor du dich darauf verlässt, dass Prometheus im Ernstfall Alarm schlägt.",
             "hint": "kubectl get prometheusrules (Kurzform: promrules)."
           }
         ]
@@ -781,6 +803,7 @@
           ],
           "check": {"some":"alerts","where":{"name":"HighPodCPU","state":"firing"}},
           "solution": "kubectl get alerts",
+          "why": "Ob eine Regel greift, siehst du erst an den aktiven Alerts: <code>get alerts</code> zeigt dir <code>firing</code> vs. <code>resolved</code> – so prüfst du, dass dein Monitoring nicht nur existiert, sondern auch tatsächlich auslöst.",
           "hint": "kubectl get alerts"
         }
       },
@@ -826,6 +849,7 @@
               "^kubectl\\s+top\\s+(pods|pod|po)$"
             ],
             "solution": "kubectl top pods",
+            "why": "Bevor du eingreifst, misst du: <code>top</code> weist dir schwarz auf weiß den Pod nach, der die Schwelle reißt – so behandelst du die Ursache und nicht ein Bauchgefühl.",
             "hint": "kubectl top pods – zeigt CPU und Memory je laufendem Pod."
           }
         ]
@@ -842,6 +866,7 @@
           ],
           "check": {"some":"alerts","where":{"name":"HighPodCPU","state":"resolved"}},
           "solution": "kubectl scale deployment rechenknecht --replicas=0",
+          "why": "Auf null skalieren nimmt die Last sofort weg und löst den Alert auf – in der Praxis eine Sofort-Maßnahme, die Luft verschafft, während du die eigentliche Ursache suchst. Verschwindet die Bedingung, verschwindet der Alarm von selbst.",
           "hint": "kubectl scale deployment rechenknecht --replicas=0"
         }
       },
@@ -856,6 +881,7 @@
               "^kubectl\\s+get\\s+alerts$"
             ],
             "solution": "kubectl get alerts",
+            "why": "<code>resolved</code> ist kein stilles Verschwinden, sondern ein bestätigter Zustandswechsel: <code>get alerts</code> beweist dir, dass die Bedingung nicht mehr zutrifft – gemessen, nicht gehofft.",
             "hint": "kubectl get alerts"
           }
         ]
