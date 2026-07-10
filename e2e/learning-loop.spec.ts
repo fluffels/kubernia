@@ -111,7 +111,7 @@ async function playQuestToEnd(page: Page, questId: string): Promise<PlayResult> 
           await page.waitForTimeout(120);
         }
       } else {
-        await page.keyboard.press("e");
+        await page.keyboard.press("r");
         await page.waitForTimeout(120);
       }
       continue;
@@ -137,9 +137,9 @@ async function playQuestToEnd(page: Page, questId: string): Promise<PlayResult> 
       continue;
     }
 
-    // Weltansicht: HUD-Hinweis sagt, ob Terminal (T) oder Reden (E) dran ist.
+    // Weltansicht: HUD-Hinweis sagt, ob Terminal (F) oder Reden (R) dran ist.
     const hint = (await page.locator("#hud-quest").textContent()) ?? "";
-    await page.keyboard.press(/Terminal öffnen/.test(hint) ? "t" : "e");
+    await page.keyboard.press(/Terminal öffnen/.test(hint) ? "f" : "r");
     await page.waitForTimeout(150);
   }
   // #314: Ein Quest-Abschluss kann ein blockierendes Erfolgs-Feier-Popup öffnen (Album-
@@ -187,7 +187,7 @@ test("Lern-Loop über die UI: Drill lösen und Quiz bei Krabbe Kralle", async ({
   await teleport(page, 36, 32); // Kralle an Deck des Schiffs
   await expect(page.locator("#prompt")).toContainText("Kralle", { timeout: 5_000 });
 
-  await page.keyboard.press("e");
+  await page.keyboard.press("r");
   await expect(page.locator("#overlay-review")).toBeVisible();
 
   // Nichts ist heute fällig (frisch geseedete Karten sind erst morgen dran) → Kralle bietet

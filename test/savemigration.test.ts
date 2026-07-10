@@ -34,6 +34,7 @@ import { dirname, join } from "node:path";
 import { KQContent } from "../src/content";
 import { ABBREVS } from "../src/content/abbrev";
 import { setWorldScene } from "../src/runtime";
+import { DEFAULT_KEYBINDINGS } from "../src/core/keybindings";
 
 const SAVE_KEY = "kubernia-save-v3";        // muss zum Key in store.ts passen
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
@@ -169,7 +170,7 @@ test("v1 (Docker-Bogen): currentQuestId aus questIdx abgeleitet, alte IDs gemapp
   // #574: die Migration hängt alle grandfatherten Abkürzungs-IDs hinter den echten Besitz an.
   expect(Game.state.owned).toEqual(["pet-ratte", ...ABBREVS.map(a => a.id)]);
   expect(Game.state.audio).toEqual({ music: true, sfx: true, musicVol: 0.5, sfxVol: 0.8, track: "hafen" });
-  expect(Game.state.settings).toEqual({ events: "normal" });
+  expect(Game.state.settings).toEqual({ events: "normal", keys: DEFAULT_KEYBINDINGS });
   // #573: kein Alt-Modell-Flag im Fixture -> kein Grandfathering, Historie bleibt ungekauft.
   expect(Game.isCmdHistoryUnlocked()).toBe(false);
 
@@ -224,7 +225,7 @@ test("v1 (voller Stand): reiches Deck/Abkürzungen/Stats/Cluster-Snapshot laden 
   expect(Game.state.stats.commands).toBe(310);
 
   // Cozy-Modus + individuelle Audio-Einstellungen überleben.
-  expect(Game.state.settings).toEqual({ events: "cozy" });
+  expect(Game.state.settings).toEqual({ events: "cozy", keys: DEFAULT_KEYBINDINGS });
   expect(Game.state.audio).toEqual({ music: false, sfx: true, musicVol: 0.3, sfxVol: 0.9, track: "leuchtturm" });
 
   expect(Game.state.coins).toBe(860); // Snapshot wirft Einkommen ab, aber Uhr gepinnt → 0 Offline-Einnahmen
@@ -276,7 +277,7 @@ test("v2 (alle Quests durch): Endzustand + vollständige completedQuests-Migrati
     new Set(KQContent.QUESTS.filter(q => !addedAfterFixture.includes(q.id)).map(q => q.id)),
   );
 
-  expect(Game.state.settings).toEqual({ events: "off" });
+  expect(Game.state.settings).toEqual({ events: "off", keys: DEFAULT_KEYBINDINGS });
   expect(Game.state.coins).toBe(5000);
   expect(Game.state.stats.stormsFixed).toBe(19);
   expectFocusedActiveQuests(); // #410: Endzustand -> keine offene Quest
@@ -313,7 +314,7 @@ test("v3 (voller Stand, vor #410): Einzel-Quest -> activeQuests-Set, verlustfrei
   expect(Game.isCmdHistoryUnlocked()).toBe(true);
   expect(Game.state.owned).toContain("befehlshistorie");
   expect(Game.state.audio).toEqual({ music: true, sfx: false, musicVol: 0.6, sfxVol: 0.4, track: "archipel" });
-  expect(Game.state.settings).toEqual({ events: "cozy" });
+  expect(Game.state.settings).toEqual({ events: "cozy", keys: DEFAULT_KEYBINDINGS });
   expect(Game.state.stats.stormsFixed).toBe(9);
 
   // #410: aus der fokussierten Einzel-Quest wird genau ein offener Eintrag.
@@ -447,12 +448,13 @@ test("v6 (vor #574): unlockedAbbrev/abbrevUsage in Komfort-Kauf-Mechanik migrier
 });
 
 /* ============================================================================
- * v7 (aktuelles Format, #574): Abkürzungen + Befehlshistorie liegen nur noch in der Komfort-
+ * v7 (Format #574, vor #232): Abkürzungen + Befehlshistorie liegen nur noch in der Komfort-
  * Kauf-Mechanik (owned/unlockedComfort/comfortUsage) – kein unlockedAbbrev/abbrevUsage/
- * cmdHistoryUnlocked mehr. Muss UNVERÄNDERT laden (kein Backup) und byte-stabil round-trippen.
+ * cmdHistoryUnlocked mehr. Kannte `settings.keys` noch nicht → bekommt beim Laden die Default-
+ * Tastenbelegung (#232) und wird als Alt-Stand vor dem Überschreiben gesichert.
  * ========================================================================== */
 
-test("v7 (aktueller Stand, #574): Komfort-Kauf-Felder laden unverändert, kein Backup", () => {
+test("v7 (vor #232): Komfort-Kauf-Felder laden unverändert, Default-Tastenbelegung ergänzt, migriert + gesichert", () => {
   loadFixture("savegame-v7-current.json");
 
   // gitops-argocd-intro rückt durch die acht Einschübe davor (zuletzt #267
@@ -480,12 +482,35 @@ test("v7 (aktueller Stand, #574): Komfort-Kauf-Felder laden unverändert, kein B
 
   expect(Game.state.gameDays).toBe(47.625);
 
+  // #232: ein v7-Stand kannte `settings.keys` noch nicht → bekommt die Default-Belegung.
+  expect(Game.state.settings.keys).toEqual(DEFAULT_KEYBINDINGS);
+
   // Der persistierte Stand trägt das alte Modell (#574) nicht (mehr).
   const env = JSON.parse(SaveStore.read()!) as { data?: Record<string, unknown> };
   expect(env.data).toBeTruthy();
   expect("unlockedAbbrev" in env.data!).toBe(false);
   expect("abbrevUsage" in env.data!).toBe(false);
   expect("cmdHistoryUnlocked" in env.data!).toBe(false);
+
+  // v7 < CURRENT (8) → herauf-migriert → Original vor dem Überschreiben ins Backup gesichert.
+  expect(SaveStore.readBackup()).toBe(fixtureRaw("savegame-v7-current.json"));
+
+  expectRoundTripFixedPoint();
+});
+
+/* ============================================================================
+ * v8 (aktuelles Format, #232): eigene Tastenbelegung lädt verlustfrei, kein Backup.
+ * ========================================================================== */
+
+test("v8 (aktueller Stand): eigene Tastenbelegung lädt verlustfrei, kein Backup", () => {
+  loadFixture("savegame-v8-current.json");
+
+  // Der Cursor lädt wie beim v7-Zwilling (nur die Belegung kam hinzu).
+  expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
+  expect(Game.state.gameDays).toBe(47.625);
+
+  // #232: die IM Stand gespeicherte (nicht-Default-)Belegung überlebt das Laden exakt.
+  expect(Game.state.settings.keys).toEqual({ talk: "q", radio: "e", logbook: "l", album: "b" });
 
   // Aktuelle Version → kein Herauf-Migrieren → kein Sichern ins Backup.
   expect(SaveStore.readBackup()).toBeNull();
@@ -552,7 +577,7 @@ test("Red-Green: kaputtes v2-Fixture lädt sanitisiert (kein Crash, Defaults sta
   // obige exakte owned-Prüfung ["pet-1", "flag"] mitbewiesen).
   expect(Game.isCmdHistoryUnlocked()).toBe(false);
   expect(Game.state.introSeen).toBe(false);
-  expect(Game.state.settings).toEqual({ events: "normal" }); // "ultrahart" verworfen
+  expect(Game.state.settings).toEqual({ events: "normal", keys: DEFAULT_KEYBINDINGS }); // "ultrahart" verworfen
   expect(Game.state.audio).toEqual({ music: false, sfx: true, musicVol: 1, sfxVol: 0, track: "hafen" });
 
   // #413: kaputte Zeit-Achse ("bald", kein number) → Default 0, nicht der Müll-String.
@@ -672,10 +697,10 @@ const ALL_FIXTURES = [
   "savegame-v1-docker-arc.json", "savegame-v1-rich.json",
   "savegame-v2-stale-index.json", "savegame-v2-allquests.json",
   "savegame-v3-current.json", "savegame-v4-current.json", "savegame-v5-current.json",
-  "savegame-v6-current.json", "savegame-v7-current.json",
+  "savegame-v6-current.json", "savegame-v7-current.json", "savegame-v8-current.json",
 ];
 
-test("#493 Import-Pfad: jeder Fixture-Stand (v1..v7) wird in der AKTUELLEN Versions-Hülle abgelegt (nicht hüllenlos/alt)", () => {
+test("#493 Import-Pfad: jeder Fixture-Stand (v1..v8) wird in der AKTUELLEN Versions-Hülle abgelegt (nicht hüllenlos/alt)", () => {
   for (const f of ALL_FIXTURES) {
     lsMap.clear();
     Game.importData(fixtureRaw(f));

@@ -33,7 +33,9 @@
       <span class="hud-clock" id="hud-clock" title="Spielzeit – läuft im Tag-Nacht-Takt"><img id="hud-icon-season" class="pixel-icon" alt="" aria-hidden="true"> <b id="hud-date">Mo, Tag 1</b> · <img id="hud-icon-time" class="pixel-icon" alt="" aria-hidden="true"> <b id="hud-time">12:00</b></span>
     </div>
     <div class="hud-quest" id="hud-quest"></div>
-    <div class="hud-keys">🚶 WASD/Pfeile · 💬 E reden · 💻 T Terminal · 📜 J Logbuch · 📖 B Album · ☰ Esc Menü</div>
+    <!-- #232: Beschriftung wird beim Boot aus der (umbelegbaren) Belegung gesetzt
+         (UI.renderKeyHints); der Default-Text hier ist nur der Vor-Boot-Fallback. -->
+    <div class="hud-keys" id="hud-keys">🚶 WASD/Pfeile · 💬 R reden · 💻 F Funkgerät · 📜 L Logbuch · 📖 B Album · ☰ Esc Menü</div>
     <button id="hud-menu-btn" class="hud-menu-btn" data-action="openMenu" title="Menü öffnen (Esc)">☰ Menü</button>
   </div>
 
@@ -177,6 +179,7 @@
       <div id="menu-slots" class="menu-audio"></div>
       <div id="menu-audio" class="menu-audio"></div>
       <div id="menu-events" class="menu-audio"></div>
+      <div id="menu-keys" class="menu-audio"></div>
       <div class="dim" style="margin-top:14px">Gespeichert wird automatisch alle 5 Sekunden im Browser. Du kannst mehrere Spielstände nebeneinander halten und zwischen ihnen wechseln. Die Datei brauchst du nur als Backup oder für einen anderen Rechner/Browser. „Zurücksetzen“ leert den <b>aktiven</b> Spielstand – das lässt sich nicht rückgängig machen.</div>
     </div>
   </div>

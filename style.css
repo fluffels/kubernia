@@ -132,6 +132,20 @@ button.danger:hover { background: var(--bad); color: #1a0606; filter: none; }
 .audio-row input[type="range"] { flex: 1; max-width: 150px; cursor: pointer; accent-color: var(--accent); }
 .audio-row input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
 
+/* ===== Umbelegbare Tastenbelegung (#232) ===== */
+.audio-row-list { display: flex; flex-direction: column; margin-bottom: 10px; }
+.key-row button {
+  min-width: 120px; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 6px 10px; cursor: pointer;
+}
+.key-row button[disabled] { cursor: default; opacity: 0.9; }
+.key-cap {
+  display: inline-block; min-width: 1.4em; padding: 1px 7px; border: 1px solid var(--border);
+  border-bottom-width: 2px; border-radius: 5px; background: var(--panel2);
+  font-family: "KQPixel", "Segoe UI", system-ui, sans-serif; font-size: 0.95em;
+}
+.key-capturing { color: var(--accent); font-size: 0.85em; }
+
 /* ===== Mehrere Spielstände / Save-Slots (#306) ===== */
 .slot-list { display: flex; flex-direction: column; gap: 8px; max-width: 360px; margin-bottom: 12px; }
 .slot-row {

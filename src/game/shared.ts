@@ -11,6 +11,7 @@
 import { KQContent } from "../content";
 import { coins } from "../core/coins";
 import type { Coins } from "../core/coins";
+import { DEFAULT_KEYBINDINGS } from "../core/keybindings";
 import type { Sim } from "../sim";
 import type { GameState, EventMode, QuestProgress, Quest, QuestStep, FunkStep, QuestTask } from "../types";
 import type { GameClock } from "../core/clock";
@@ -336,7 +337,7 @@ export function makeDefaultState(): GameState {
     lastSeen: 0,
     clusterSnapshot: null,
     audio: { music: true, sfx: true, musicVol: 0.5, sfxVol: 0.8, track: "hafen" },
-    settings: { events: "normal" },
+    settings: { events: "normal", keys: { ...DEFAULT_KEYBINDINGS } },
     questsSinceGate: 0,
     // Spiel-Zeit-Achse (#413): frischer Stand startet bei Tag 1. gameDays 0 zeigt seit
     // #336 den frühen Morgen (06:00) statt Mittag – die Start-Tageszeit liegt als

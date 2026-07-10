@@ -47,7 +47,7 @@ import { readActiveRaw, writeActiveRaw, backupActive } from "./slots";
 import { ABBREVS } from "../content/abbrev";
 import { ALL_ABBREV_UNLOCKED } from "../game/shared";
 
-export const CURRENT_SAVE_VERSION = 7;
+export const CURRENT_SAVE_VERSION = 8;
 
 /** Migration von Format-Version n auf n+1 (reine Funktion auf dem `data`-Objekt). */
 type Migration = (data: unknown) => unknown;
@@ -188,6 +188,15 @@ const migrations: Record<number, Migration> = {
     const { unlockedAbbrev: _unlockedAbbrev, abbrevUsage: _abbrevUsage, ...rest } = d;
     return { ...rest, owned: acc.owned, unlockedComfort: acc.unlockedComfort, comfortUsage: acc.comfortUsage };
   },
+  // 7 -> 8 (#232): umbelegbare Aktionstasten neu als `settings.keys` (Aktion -> Taste) im
+  //         GameState, damit die Belegung (Reden/Funkgerät/Logbuch/Album) einen Reload
+  //         überlebt. Strukturell ein No-op auf store-Ebene: das Ergänzen der Default-Belegung
+  //         liegt ZENTRAL in game/save.ts › safeSettings (sanitizeKeybindings), damit es ALLE
+  //         Ladewege trifft (auch den rohen JSON-Import, der seit #493 durch migrateParsed +
+  //         sanitizeState läuft). Verlustfrei – vorher war keine Belegung gespeichert, ein
+  //         Alt-Stand bekommt schlicht die Default-Belegung. Der Bump sichert jeden v7-Stand
+  //         vor dem ersten Überschreiben ins Backup.
+  7: (data) => data,
 };
 
 /** Hebt `data` von `version` schrittweise auf CURRENT_SAVE_VERSION. */
