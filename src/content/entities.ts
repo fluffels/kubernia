@@ -35,15 +35,51 @@ import entitiesData from "./data/entities.json";
  *  Import-Zyklus zu bauen; world.ts re-exportiert `Spawn` für seine Altaufrufer. */
 export interface Spawn { id: string; x: number; y: number }
 
-/** Registry-Eintrag = Standplatz + Karte. Die `map`-ID gruppiert NPCs je Szene
- *  (z.B. "harbor", "archipel", "lighthouse", "warehouse"). */
-export interface EntityNpc extends Spawn { map: string }
+/** Ein Eintrag im Tagesplan eines NPC (#420): Standplatz für den Zeitraum [timeStart, timeEnd)
+ *  im Format "HH:MM" (24h). Treffen mehrere Einträge zu, gilt der erste. Kein Eintrag trifft
+ *  zu → Default-Standplatz aus der Registry. Übernacht-Einträge (timeStart > timeEnd) werden
+ *  bewusst NICHT unterstützt (Hafen-Szene hat kein Nachtleben, das reichen würde). */
+export interface ScheduleEntry { timeStart: string; timeEnd: string; x: number; y: number }
+
+/** Registry-Eintrag = Standplatz + Karte + optionaler Tagesplan (#420). Die `map`-ID
+ *  gruppiert NPCs je Szene (z.B. "harbor", "archipel", "lighthouse", "warehouse"). */
+export interface EntityNpc extends Spawn {
+  map: string;
+  schedule?: readonly ScheduleEntry[];
+}
 
 /** Endliche Zahl (Kachel-Koordinaten dürfen Brüche sein, z.B. 14.6 – darum NICHT
  *  asInt). NaN/Infinity werden abgewiesen. Registry-spezifisch → bleibt lokal. */
 function asFiniteNumber(v: unknown, path: string): number {
   if (typeof v !== "number" || !Number.isFinite(v)) fail(path, "endliche Zahl erwartet");
   return v;
+}
+
+/** "HH:MM" (24h) validieren. Lehnt falsche Formate und Stunden ≥ 24 ab. */
+function asHhmm(v: unknown, path: string): string {
+  if (typeof v !== "string" || !/^\d{2}:\d{2}$/.test(v)) fail(path, `Uhrzeit im Format "HH:MM" erwartet, bekommen: ${String(v)}`);
+  const h = parseInt(v.slice(0, 2), 10), m = parseInt(v.slice(3), 10);
+  if (h > 23 || m > 59) fail(path, `ungültige Uhrzeit „${v}"`);
+  return v;
+}
+
+/** Wandelt "HH:MM" in Minuten seit Mitternacht um. */
+function toMinutes(hhmm: string): number {
+  return parseInt(hhmm.slice(0, 2), 10) * 60 + parseInt(hhmm.slice(3), 10);
+}
+
+/** Parst einen einzelnen Tagesplan-Eintrag (#420). Wirft bei Schema-Verstoß. */
+function parseScheduleEntry(e: unknown, path: string): ScheduleEntry {
+  const o = asRecord(e, path);
+  assertNoUnknownKeys(o, path, ["timeStart", "timeEnd", "x", "y"]);
+  const timeStart = asHhmm(o.timeStart, `${path}.timeStart`);
+  const timeEnd = asHhmm(o.timeEnd, `${path}.timeEnd`);
+  if (toMinutes(timeStart) >= toMinutes(timeEnd)) {
+    fail(path, `timeStart (${timeStart}) muss vor timeEnd (${timeEnd}) liegen – Übernacht-Einträge nicht unterstützt`);
+  }
+  const x = asFiniteNumber(o.x, `${path}.x`);
+  const y = asFiniteNumber(o.y, `${path}.y`);
+  return { timeStart, timeEnd, x, y };
 }
 
 /** Validiert die rohe Registry gegen das Schema und gibt sie typisiert + in
@@ -57,7 +93,7 @@ export function parseEntities(raw: unknown): EntityNpc[] {
   const seen = new Set<string>();
   return list.map((entry, i) => {
     const o = asRecord(entry, `entities.npcs[${i}]`);
-    assertNoUnknownKeys(o, `entities.npcs[${i}]`, ["id", "map", "x", "y"]);
+    assertNoUnknownKeys(o, `entities.npcs[${i}]`, ["id", "map", "x", "y", "schedule"]);
     const id = asNonEmptyString(o.id, `entities.npcs[${i}].id`);
     const map = asNonEmptyString(o.map, `entities.npcs[${i}].map`);
     const x = asFiniteNumber(o.x, `entities.npcs[${i}].x`);
@@ -66,12 +102,34 @@ export function parseEntities(raw: unknown): EntityNpc[] {
     const key = `${map}/${id}`;
     if (seen.has(key)) fail(`entities.npcs[${i}]`, `doppelter Standplatz „${key}"`);
     seen.add(key);
+    let schedule: readonly ScheduleEntry[] | undefined;
+    if (o.schedule !== undefined) {
+      const rawSched = asArray(o.schedule, `entities.npcs[${i}].schedule`);
+      schedule = rawSched.map((se, j) => parseScheduleEntry(se, `entities.npcs[${i}].schedule[${j}]`));
+    }
+    if (schedule !== undefined) return { id, map, x, y, schedule };
     return { id, map, x, y };
   });
 }
 
 /** Validierte Registry – Quelle: `./data/entities.json`. */
 export const ENTITY_NPCS: EntityNpc[] = parseEntities(entitiesData);
+
+/** Gibt zurück, wo sich ein NPC zum Zeitpunkt `hhmm` ("HH:MM") aufhalten soll.
+ *  Durchsucht den optionalen Tagesplan und gibt den Standplatz des ersten zutreffenden
+ *  Eintrags zurück. Trifft keiner zu (auch kein Plan vorhanden), gilt der Default-
+ *  Standplatz aus der Registry. Stardew-Scope-sicher: funktioniert mit beliebig vielen
+ *  Einträgen pro NPC; Priorität liegt beim ersten treffenden Eintrag. */
+export function npcPositionAt(npc: EntityNpc, hhmm: string): { x: number; y: number } {
+  if (!npc.schedule?.length) return { x: npc.x, y: npc.y };
+  const now = toMinutes(hhmm);
+  for (const entry of npc.schedule) {
+    if (now >= toMinutes(entry.timeStart) && now < toMinutes(entry.timeEnd)) {
+      return { x: entry.x, y: entry.y };
+    }
+  }
+  return { x: npc.x, y: npc.y };
+}
 
 /** Alle NPC-Standplätze einer Karte, in Datei-Reihenfolge. Leeres Array, wenn die
  *  Karte (noch) keine NPCs hat. Szenen loopen darüber → neuer NPC = nur JSON-Eintrag. */

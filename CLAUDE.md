@@ -215,9 +215,10 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | [`src/scenes/worldscene/terrain.ts`](src/scenes/worldscene/terrain.ts) | Präsentation | Hafen-Szenerie (Objekte/Gebäude/Türen-Optik) + Wang-Autotile-Boden (#393). |
 | [`src/scenes/worldscene/scenery.ts`](src/scenes/worldscene/scenery.ts) | Präsentation | Deko, statische Props/Effekte, Möwen, Tag-Nacht-Schleier (#393). |
 | [`src/scenes/worldscene/clustersync.ts`](src/scenes/worldscene/clustersync.ts) | Präsentation | Cluster→Welt-Sync: Pod-Kisten + dynamische Tags als Daten + gedeckelter Render-Pool (#393/#416). |
-| [`src/scenes/worldscene/harbordamage.ts`](src/scenes/worldscene/harbordamage.ts) | Präsentation | Phaser-freies Textur-Mapping für die Sturm-Schadensoptik (#692): `harborTexture` (heile Key → Trümmer-Variante je CP-Zustand). |
+| [`src/scenes/worldscene/harbordamage.ts`](src/scenes/worldscene/harbordamage.ts) | Präsentation | Phaser-freies Textur-Mapping für die Sturm-Schadensoptik: `harborTexture` (heile Key → Trümmer-Variante je CP-Zustand, #692) + `pierHealed` (Steg heil je Node-Beitritt, #693). |
 | [`src/scenes/worldscene/events.ts`](src/scenes/worldscene/events.ts) | Präsentation | Gefahren-RENDERER (#540): setzt den `notifyHazard`-Sink um – globaler Alarm/roter Rahmen + weltgebundene Sprites (Boot/Krake/Sturm), Sprite-Rekonstruktion beim Aufwachen; Zustand/Takt liegen in `game/hazards.ts`. |
 | [`src/scenes/worldscene/warps.ts`](src/scenes/worldscene/warps.ts) | Präsentation | Übergänge Haus/Archipel/Leuchtturm/Lager + Warp-Gates (#393). |
+| [`src/scenes/worldscene/npcschedule.ts`](src/scenes/worldscene/npcschedule.ts) | Präsentation | NPC-Tagesplan-Sync (#420): verschiebt NPCs mit `schedule` in `entities.json` zur Laufzeit auf ihre Zielposition + ersetzt Bob-Tween. |
 | [`src/scenes/worldscene/types.ts`](src/scenes/worldscene/types.ts) | Präsentation | Feld-/Primitive-Interface `WorldSceneFields` (WorldScene `implements` es) + `WorldSceneLike = Phaser.Scene & WorldSceneFields` fürs System-Modul-Muster; volltypisiert statt `any` (#393/#496). |
 | [`src/scenes/InteriorScene.ts`](src/scenes/InteriorScene.ts) | Präsentation | Betretbarer Hausinnenraum (#6). |
 | [`src/scenes/RegionScene.ts`](src/scenes/RegionScene.ts) | Präsentation | EINE datengetriebene Szene für alle Nachbar-Regionen (Archipel/Leuchtturm/Lager/Wachturm), gesteuert über eine `RegionConfig` (#427); ersetzt die früheren Insel-Szenen-Klassen. |
@@ -280,6 +281,7 @@ Die Landkarte oben sagt, **wo** ein Modul liegt; diese Tabelle sagt, **was du im
 |---|---|
 | 🤝 Mitentwickeln (Einstieg + One-Command-Setup `npm run setup`) | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | 🐳 Im Container entwickeln (devcontainer / `docker compose up`, #388) | [CONTRIBUTING.md › Im Container entwickeln](CONTRIBUTING.md) · [`.devcontainer/`](.devcontainer/devcontainer.json) · [`docker-compose.yml`](docker-compose.yml) |
+| 🚀 Container-Deploy (Spiel-Image bauen + lokal starten, #752) | [docs/deploy.md](docs/deploy.md) |
 | 📖 Spiel-Doku (Story, Steuerung, Lernpfad) | [README.md](README.md) |
 | 📋 Agenten-Regeln, Board-Workflow, Konventionen | [AGENTS.md](AGENTS.md) |
 | ❓ Häufige Fragen zum Agenten-Harness (FAQ) | [docs/agent-harness-faq.md](docs/agent-harness-faq.md) |

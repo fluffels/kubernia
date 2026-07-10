@@ -92,6 +92,8 @@ export interface WorldSceneFields {
   slotUsed: boolean[];
   lastClusterRev: number;   // #523: zuletzt synchronisierte Sim.rev (Frame-Sparbremse)
   lastControlPlaneUp?: boolean;  // #692: zuletzt angewendeter CP-Zustand (Guard für syncHarborDamage)
+  pierDamageImgs: Phaser.GameObjects.Image[];  // #693: pier_ruined-Overlays je Pier
+  lastNodesSig?: string;                        // #693: Guard für syncPierDamage
   dynamic: { barrelsSig: string; flagsSig: string; svcSig: string; depSig: string };
   dynGroup: Phaser.GameObjects.Group;
   // statische Props/Effekte aus scenery.ts
