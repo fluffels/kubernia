@@ -62,6 +62,16 @@ Kleine gerahmte Pixel-Icons für die dauersichtbare DOM-Statuszeile (`index.html
 | `hud_clock` | Analog-Zifferblatt mit Messingrahmen (Uhrzeit, `#hud-time`) |
 | `hud_season_spring` · `hud_season_summer` · `hud_season_autumn` · `hud_season_winter` | Spross / Sonne / Herbstblatt / Schneeflocke (Saison-Marker `#hud-date`, wechselt mit `seasonIndex`) |
 
+## Menü-Button-Icons (`create_map_object`, 32×32, `view: side`, DOM-`<img>` statt Phaser)
+Slice 4/4 von #204 (#648): dieselbe Machart und `.pixel-icon`-Klasse wie die HUD-Statuszeilen-Icons oben, für die vier Menü-Aktionen (`index.html` #overlay-menu `.menu-actions`); ersetzen die früheren Emoji. In `src/assets-data.ts` als Record `MENU_ICONS` eingebunden (reine DOM-Icons, keine Phaser-Textur), verdrahtet in `ui/hud.ts` › `initHudIcons()`.
+
+| Datei | Motiv |
+|---|---|
+| `menu_play` | Grünes Play-Dreieck auf Kachel (Weiterspielen, `closeOverlays`) |
+| `menu_save` | Blaue Diskette (Spielstand sichern, `exportSave`) |
+| `menu_load` | Offener Ordner mit Dokument (Spielstand laden, `importPick`) |
+| `menu_reset` | Rote Kreis-Pfeile (Spielstand zurücksetzen, `resetGame`, `.danger`) |
+
 ## Figuren (`create_character`, 4-dir, nur `south.png` genutzt)
 `char_player` daae9195 · `char_ole` b89f37e2 · `char_runa` 723246a6 · `char_pelle` 793f0232
 `char_bo` f8a654e6 · `char_ada` 4b44fcee · `char_theo` f7d6621a · `char_kralle` 6551e699 · `char_juno` 8d0a9892
