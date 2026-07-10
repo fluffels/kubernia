@@ -166,11 +166,11 @@ jedes Asset teurer wird als nötig.
 
 | # | Titel | Prio |
 |---|---|---|
-| [#57](https://github.com/fluffels/kubequest/issues/57) | Tiled-basierte Tilemaps + Map-/Warp-Registry statt handgebauter Karte | 🔴 hoch |
-| [#58](https://github.com/fluffels/kubequest/issues/58) | Build-Strategie entkoppeln: Prod-Build (Lazy-Loading) vs. Single-File-Offline-Export | 🟠 mittel |
-| [#59](https://github.com/fluffels/kubequest/issues/59) | Asset-Pipeline: Manifest-getriebenes Laden statt manueller `assets-data.ts` + Frame-Slicing | 🟠 mittel |
-| [#60](https://github.com/fluffels/kubequest/issues/60) | Content-Typsicherheit: diskriminierte Union für `QuestStep` | 🟠 mittel |
-| [#61](https://github.com/fluffels/kubequest/issues/61) | Spielstand beim Laden validieren/sanitisieren (defensives Schema) | 🟡 niedrig |
+| [#57](https://github.com/fluffels/kubernia/issues/57) | Tiled-basierte Tilemaps + Map-/Warp-Registry statt handgebauter Karte | 🔴 hoch |
+| [#58](https://github.com/fluffels/kubernia/issues/58) | Build-Strategie entkoppeln: Prod-Build (Lazy-Loading) vs. Single-File-Offline-Export | 🟠 mittel |
+| [#59](https://github.com/fluffels/kubernia/issues/59) | Asset-Pipeline: Manifest-getriebenes Laden statt manueller `assets-data.ts` + Frame-Slicing | 🟠 mittel |
+| [#60](https://github.com/fluffels/kubernia/issues/60) | Content-Typsicherheit: diskriminierte Union für `QuestStep` | 🟠 mittel |
+| [#61](https://github.com/fluffels/kubernia/issues/61) | Spielstand beim Laden validieren/sanitisieren (defensives Schema) | 🟡 niedrig |
 
 Verwandt/bereits erfasst: #42 (Schiff betretbar – profitiert von #57), #47
 (Audio), #11 (content.ts-Split – erledigt).

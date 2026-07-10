@@ -10,8 +10,8 @@ Willkommen! Diese Seite bringt dich – Mensch **oder** KI-Agent – in **einem 
 ## In einem Befehl startklar
 
 ```bash
-git clone <repo-url> kubequest
-cd kubequest
+git clone <repo-url> kubernia
+cd kubernia
 npm run setup
 ```
 

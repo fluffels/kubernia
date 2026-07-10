@@ -84,7 +84,7 @@ describe("Harness-Doku-Drift (#529)", () => {
   test("extractLinks liefert interne Links (mit Anker), lässt externe aus", () => {
     const md = [
       "Siehe [Regeln](AGENTS.md#konventionen) und [Karte](../CLAUDE.md).",
-      "Extern: [Repo](https://github.com/fluffels/kubequest) und [Mail](mailto:x@y.z).",
+      "Extern: [Repo](https://github.com/fluffels/kubernia) und [Mail](mailto:x@y.z).",
       "Bild: ![Logo](assets/logo.png).",
     ].join("\n");
     const links = extractLinks(md);

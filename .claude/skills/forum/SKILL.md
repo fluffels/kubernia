@@ -5,7 +5,7 @@ description: Arbeitet die offenen Forum-Eingänge von kubequest ab (GitHub Discu
 
 # Forum-Eingang bearbeiten (GitHub Discussions)
 
-Das Forum sind die **GitHub Discussions** von `fluffels/kubequest`. Die Action [`forum-inbox.yml`](../../../.github/workflows/forum-inbox.yml) legt für **jede neue Forum-Nachricht** automatisch ein offenes `forum`-Issue „Forum #N: …" an (reines Flaggen, **keine** Antwort, **kein** echtes Bug-Ticket). Dieser Skill ist der **interaktive Teil**: Antworten + Triage passieren **mit Freigabe der Maintainerin**.
+Das Forum sind die **GitHub Discussions** von `fluffels/kubernia`. Die Action [`forum-inbox.yml`](../../../.github/workflows/forum-inbox.yml) legt für **jede neue Forum-Nachricht** automatisch ein offenes `forum`-Issue „Forum #N: …" an (reines Flaggen, **keine** Antwort, **kein** echtes Bug-Ticket). Dieser Skill ist der **interaktive Teil**: Antworten + Triage passieren **mit Freigabe der Maintainerin**.
 
 > Identität, Anonymität, Board-Regeln, Commit-Stil: es gelten die Regeln aus **[AGENTS.md](../../../AGENTS.md)**. Posten/Committen immer als `fluffels` (nie Klarname). Vollständiges Vorgehen auch in [AGENTS.md › Forum-Eingang](../../../AGENTS.md#forum-eingang-discussions-bearbeiten).
 
