@@ -87,21 +87,12 @@ export interface GameState {
   introSeen: boolean;
   /** Wurde das einmalige Bo-Onboarding zum Logbuch (Freischaltung nach Quest 1) schon gezeigt? (#326) */
   questLogIntroShown: boolean;
-  /** Freigeschaltete „verdiente Abkürzungen" (Kürzel-IDs, #287/#297). Leer = noch keine
-   *  freigeschaltet. Der Sentinel `"*"` bedeutet „alle freigeschaltet" – damit werden
-   *  Alt-Spielstände (von vor der Mechanik, mit Fortschritt) grandfathered, sodass kein
-   *  bereits gelerntes Kürzel rückwirkend gesperrt wird. Das Gating kommt in #299, der
-   *  Katalog der IDs in #298. */
-  unlockedAbbrev: string[];
-  /** Nutzungszähler je Abkürzungs-Baustein (#313): wie oft die Langform schon
-   *  korrekt getippt wurde. Erreicht der Zähler `ABBREV_EARN_THRESHOLD`, wird die
-   *  Kurzform verdient (landet in `unlockedAbbrev`). Fehlt/`{}` = noch nichts gezählt;
-   *  bereits freigeschaltete Bausteine werden nicht weitergezählt. */
-  abbrevUsage: Record<string, number>;
-  /** Komfort-Funktionen (#572): Zwei-Stufen-Gate „verdienen -> kaufbar -> kaufen",
-   *  verallgemeinert aus `abbrevUsage`/`cmdHistoryUnlocked`. Nutzungszähler je Shop-Item-ID
-   *  (SHOP-Items vom `type: "comfort"`) – wie oft die Grundlage schon benutzt wurde. Fehlt/leer
-   *  = noch nichts gezählt; ein bereits verdientes Item wird nicht weitergezählt. */
+  /** Komfort-Funktionen (#572): Zwei-Stufen-Gate „verdienen -> kaufbar -> kaufen". Seit #574 der
+   *  EINZIGE Freischalt-Weg für ALLE Komfort-Funktionen, inkl. jeder einzelnen „verdienten
+   *  Abkürzung" (#287/#297/#313, vorher ein eigenes additives `unlockedAbbrev`-Array) und der
+   *  Befehlshistorie (#316, seit #573). Nutzungszähler je Shop-Item-ID (SHOP-Items vom
+   *  `type: "comfort"`) – wie oft die Grundlage schon benutzt wurde. Fehlt/leer = noch nichts
+   *  gezählt; ein bereits verdientes Item wird nicht weitergezählt. */
   comfortUsage: Record<string, number>;
   /** Komfort-Funktionen (#572): welche Komfort-Items bereits VERDIENT (kaufbar
    *  freigeschaltet) sind. Der eigentliche Kauf/Besitz läuft weiterhin über `owned` (wie bei

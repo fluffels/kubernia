@@ -44,11 +44,63 @@
  * Die Kette läuft dann automatisch jede Zwischenstufe der Reihe nach durch.
  */
 import { readActiveRaw, writeActiveRaw, backupActive } from "./slots";
+import { ABBREVS } from "../content/abbrev";
+import { ALL_ABBREV_UNLOCKED } from "../game/shared";
 
-export const CURRENT_SAVE_VERSION = 7;
+export const CURRENT_SAVE_VERSION = 8;
 
 /** Migration von Format-Version n auf n+1 (reine Funktion auf dem `data`-Objekt). */
 type Migration = (data: unknown) => unknown;
+
+/** Akkumulator der migrations[6]-Transformation (#574): owned/unlockedComfort/comfortUsage,
+ *  die die beiden Alt-Modell-Schritte unten schrittweise befüllen (Zwischenstände sind noch
+ *  ungehärtete `unknown[]`/`Record<string, unknown>` – die eigentliche Typ-/Wert-Härtung macht
+ *  weiterhin sanitizeState in game/save.ts). Ausgelagert aus migrations[6], sonst reißt die
+ *  Verzweigungslast der Funktion das Komplexitäts-Gate (#502, max. 15). */
+interface ComfortMigrationAcc {
+  owned: unknown[];
+  unlockedComfort: unknown[];
+  comfortUsage: Record<string, unknown>;
+}
+
+/** Trägt eine ID als „verdient UND gekauft" ein (idempotent). */
+function grantComfort(acc: ComfortMigrationAcc, id: string): void {
+  if (!acc.unlockedComfort.includes(id)) acc.unlockedComfort.push(id);
+  if (!acc.owned.includes(id)) acc.owned.push(id);
+}
+
+/** Migriert das alte additive `unlockedAbbrev`-Array (#297/#313) auf die Komfort-Kauf-Mechanik.
+ *  Wie das alte `safeStrArray`: ein VORHANDENES, aber falsch typisiertes Feld (z.B. ein String
+ *  statt Array) zählt als „definiert, aber leer" – KEIN Grandfather-Fallback. Nur ein wirklich
+ *  FEHLENDES Feld (undefined) ist der uralte Vor-#297-Fall, der bei Fortschritt grandfathert. */
+function migrateLegacyUnlockedAbbrev(acc: ComfortMigrationAcc, d: Record<string, unknown>): void {
+  const legacy = d.unlockedAbbrev;
+  if (legacy === undefined) {
+    const hatFortschritt = (typeof d.xp === "number" && d.xp > 0)
+      || (typeof d.questIdx === "number" && d.questIdx > 0)
+      || (Array.isArray(d.completedQuests) && d.completedQuests.length > 0);
+    if (hatFortschritt) for (const a of ABBREVS) grantComfort(acc, a.id);
+    return;
+  }
+  if (!Array.isArray(legacy)) return;
+  for (const id of legacy) {
+    if (typeof id !== "string") continue;
+    if (id === ALL_ABBREV_UNLOCKED) { for (const a of ABBREVS) grantComfort(acc, a.id); continue; }
+    grantComfort(acc, id);
+  }
+}
+
+/** Hebt den alten `abbrevUsage`-Nutzungszähler (#313) additiv nach `comfortUsage` – nur für IDs,
+ *  die NICHT schon (per Grandfather oder expliziter Liste) verdient+gekauft sind, sonst zählt
+ *  eine bereits freigeschaltete Abkürzung fälschlich weiter. */
+function mergeLegacyAbbrevUsage(acc: ComfortMigrationAcc, d: Record<string, unknown>): void {
+  const legacyUsage = d.abbrevUsage;
+  if (typeof legacyUsage !== "object" || legacyUsage === null) return;
+  for (const [id, n] of Object.entries(legacyUsage as Record<string, unknown>)) {
+    if (acc.owned.includes(id) || acc.comfortUsage[id] !== undefined) continue;
+    acc.comfortUsage[id] = n;
+  }
+}
 
 const migrations: Record<number, Migration> = {
   // 0 -> 1: Alt-Stände lagen ohne Hülle als blanker GameState unter dem Key.
@@ -98,15 +150,53 @@ const migrations: Record<number, Migration> = {
   //         die weggefallenen Felder waren ohnehin nur Spiegel von activeQuests[currentQuestId].
   //         Der Bump sichert jeden v5-Stand vor dem ersten Überschreiben ins Backup.
   5: (data) => data,
-  // 6 -> 7 (#232): umbelegbare Aktionstasten neu als `settings.keys` (Aktion -> Taste) im
+  // 6 -> 7 (#574): additives Abkürzungs-Array (unlockedAbbrev/abbrevUsage, #297/#313) auf die
+  //         Komfort-Kauf-Mechanik (#572) gehoben. ANDERS als 0->1..5->6 oben KEIN No-op: das ist
+  //         eine ECHTE Umdeutung (Alt-Wert muss aktiv transformiert werden, siehe SSOT-Regel im
+  //         Datei-Kopf), weil ein rein additiver Fallback in sanitizeState hier nicht mehr
+  //         eindeutig wäre. Ein alter Stand konnte KEIN unlockedAbbrev-Feld haben, weil er von
+  //         vor #297 stammt (dann grandfathern wir bei Fortschritt) ODER weil ein bereits auf
+  //         #574 migrierter Stand das Feld gar nicht mehr schreibt (dann NICHT grandfathern,
+  //         sonst bekäme jeder Spieler mit Fortschritt bei JEDEM Laden erneut ALLE – auch künftig
+  //         neu hinzukommende – Abkürzungen kostenlos gutgeschrieben und die ganze Kauf-Mechanik
+  //         wäre ausgehebelt). Der Versions-Bump macht daraus zwei unterscheidbare Fälle: läuft
+  //         diese Migration, ist der Stand GARANTIERT < v7, das Feld also entweder ein echter
+  //         Alt-Wert oder wirklich nie vorhanden gewesen – sie läuft GENAU EINMAL pro Stand.
+  //           - unlockedAbbrev enthält den Sentinel "*" (ALL_ABBREV_UNLOCKED, #297) → ALLE zum
+  //             Migrations-Zeitpunkt bekannten ABBREVS-IDs gelten als verdient+gekauft (Snapshot;
+  //             künftig neu hinzukommende Kürzel müssen wie gewohnt verdient+gekauft werden –
+  //             das ist ja der Sinn dieses Tickets, keine offene Wildcard mehr).
+  //           - unlockedAbbrev enthält konkrete IDs → genau diese gelten als verdient+gekauft.
+  //           - kein unlockedAbbrev-Feld, aber allgemeiner Fortschritt (xp/questIdx/
+  //             completedQuests) → wie zuvor alles grandfathern (uralter Stand von vor #297).
+  //         abbrevUsage-Zähler für noch NICHT verdiente IDs wandert nach comfortUsage (kein
+  //         Fortschritts-Verlust beim Zählen). Danach fallen unlockedAbbrev/abbrevUsage weg;
+  //         sanitizeState (game/save.ts) kennt nur noch owned/unlockedComfort/comfortUsage.
+  6: (data) => {
+    if (typeof data !== "object" || data === null) return data;
+    const d = data as Record<string, unknown>;
+    const acc: ComfortMigrationAcc = {
+      owned: Array.isArray(d.owned) ? [...d.owned as unknown[]] : [],
+      unlockedComfort: Array.isArray(d.unlockedComfort) ? [...d.unlockedComfort as unknown[]] : [],
+      comfortUsage: typeof d.comfortUsage === "object" && d.comfortUsage !== null
+        ? { ...d.comfortUsage as Record<string, unknown> } : {},
+    };
+
+    migrateLegacyUnlockedAbbrev(acc, d);
+    mergeLegacyAbbrevUsage(acc, d);
+
+    const { unlockedAbbrev: _unlockedAbbrev, abbrevUsage: _abbrevUsage, ...rest } = d;
+    return { ...rest, owned: acc.owned, unlockedComfort: acc.unlockedComfort, comfortUsage: acc.comfortUsage };
+  },
+  // 7 -> 8 (#232): umbelegbare Aktionstasten neu als `settings.keys` (Aktion -> Taste) im
   //         GameState, damit die Belegung (Reden/Funkgerät/Logbuch/Album) einen Reload
-  //         überlebt. Wie 1->2/.../5->6 strukturell ein No-op auf store-Ebene: das Ergänzen
-  //         der Default-Belegung liegt ZENTRAL in game/save.ts › safeSettings (sanitizeKeybindings),
-  //         damit es ALLE Ladewege trifft (auch den rohen JSON-Import, der seit #493 durch
-  //         migrateParsed + sanitizeState läuft). Verlustfrei – vorher war keine Belegung
-  //         gespeichert, ein Alt-Stand bekommt schlicht die Default-Belegung. Der Bump sichert
-  //         jeden v6-Stand vor dem ersten Überschreiben ins Backup.
-  6: (data) => data,
+  //         überlebt. Strukturell ein No-op auf store-Ebene: das Ergänzen der Default-Belegung
+  //         liegt ZENTRAL in game/save.ts › safeSettings (sanitizeKeybindings), damit es ALLE
+  //         Ladewege trifft (auch den rohen JSON-Import, der seit #493 durch migrateParsed +
+  //         sanitizeState läuft). Verlustfrei – vorher war keine Belegung gespeichert, ein
+  //         Alt-Stand bekommt schlicht die Default-Belegung. Der Bump sichert jeden v7-Stand
+  //         vor dem ersten Überschreiben ins Backup.
+  7: (data) => data,
 };
 
 /** Hebt `data` von `version` schrittweise auf CURRENT_SAVE_VERSION. */

@@ -32,6 +32,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { KQContent } from "../src/content";
+import { ABBREVS } from "../src/content/abbrev";
 import { setWorldScene } from "../src/runtime";
 import { DEFAULT_KEYBINDINGS } from "../src/core/keybindings";
 
@@ -157,16 +158,17 @@ test("v1 (Docker-Bogen): currentQuestId aus questIdx abgeleitet, alte IDs gemapp
   // #354: alte numerische IDs (q0..q3b) → sprechende Slugs, vollständig & in Reihenfolge.
   expect(Game.state.completedQuests).toEqual(slugs(6));
 
-  // Stand hat Fortschritt, aber kein unlockedAbbrev-Feld → grandfathered ("*"): kein
-  // bereits gelerntes Kürzel wird rückwirkend gesperrt.
-  expect(Game.state.unlockedAbbrev).toEqual(["*"]);
-  expect(Game.isAbbrevUnlocked("-a")).toBe(true);
+  // Stand hat Fortschritt, aber kein unlockedAbbrev-Feld → uralter Stand von vor #297. Die
+  // Migration (v6->v7, #574) grandfathert ihn: ALLE aktuell bekannten Abkürzungen gelten als
+  // verdient+gekauft, kein bereits gelerntes Kürzel wird rückwirkend gesperrt.
+  for (const a of ABBREVS) expect(Game.isAbbrevUnlocked(a.id)).toBe(true);
 
   // Fehlende Felder bekommen die Defaults, vorhandene Daten bleiben unverändert.
   expect(Game.state.xp).toBe(95);
   expect(Game.state.coins).toBe(120); // keine Offline-Einnahmen (Uhr gepinnt)
   expect(Game.state.inventory).toEqual({ fernrohr: 1 });
-  expect(Game.state.owned).toEqual(["pet-ratte"]);
+  // #574: die Migration hängt alle grandfatherten Abkürzungs-IDs hinter den echten Besitz an.
+  expect(Game.state.owned).toEqual(["pet-ratte", ...ABBREVS.map(a => a.id)]);
   expect(Game.state.audio).toEqual({ music: true, sfx: true, musicVol: 0.5, sfxVol: 0.8, track: "hafen" });
   expect(Game.state.settings).toEqual({ events: "normal", keys: DEFAULT_KEYBINDINGS });
   // #573: kein Alt-Modell-Flag im Fixture -> kein Grandfathering, Historie bleibt ungekauft.
@@ -192,17 +194,20 @@ test("v1 (voller Stand): reiches Deck/Abkürzungen/Stats/Cluster-Snapshot laden 
   expect(Game.state.currentQuestId).toBe(KQContent.QUESTS[16].id);
   expect(Game.state.completedQuests).toEqual(slugsSansRegistry(16));
 
-  // Explizite unlockedAbbrev-Liste vorhanden → wird übernommen, NICHT pauschal grandfathered.
-  expect(Game.state.unlockedAbbrev).toEqual(["-a", "-n", "-d", "--name"]);
+  // Explizite unlockedAbbrev-Liste vorhanden → wird NICHT pauschal grandfathered, sondern per
+  // Migration (v6->v7, #574) 1:1 in die Komfort-Kauf-Mechanik gehoben (verdient+gekauft).
+  expect(Game.state.owned).toEqual(expect.arrayContaining(["-a", "-n", "-d", "--name"]));
   expect(Game.isAbbrevUnlocked("-a")).toBe(true);
   expect(Game.isAbbrevUnlocked("--noch-nie")).toBe(false);
-  expect(Game.state.abbrevUsage).toEqual({ "docker-ps-all": 19, "kubectl-get-pods": 7 });
+  // Der alte Nutzungszähler wandert additiv nach comfortUsage (nur für noch NICHT verdiente IDs).
+  expect(Game.state.comfortUsage).toEqual(expect.objectContaining({ "docker-ps-all": 19, "kubectl-get-pods": 7 }));
   // #573: Alt-Modell-Flag true -> als verdient+gekauft grandfathered (kein Rückschritt).
   expect(Game.isCmdHistoryUnlocked()).toBe(true);
 
-  // Volle Sammlungen exakt erhalten (+ die grandfatherte Befehlshistorie, #573).
+  // Volle Sammlungen exakt erhalten (+ die per Migration gehobenen Abkürzungen #574 und die
+  // grandfatherte Befehlshistorie #573).
   expect(Game.state.inventory).toEqual({ fernrohr: 3, kompass: 1 });
-  expect(Game.state.owned).toEqual(["pet-ratte", "pet-moewe", "flag-blau", "fernrohr-upgrade", "befehlshistorie"]);
+  expect(Game.state.owned).toEqual(["pet-ratte", "pet-moewe", "flag-blau", "fernrohr-upgrade", "-a", "-n", "-d", "--name", "befehlshistorie"]);
   expect(Game.state.activePet).toBe("pet-moewe");
   expect(Game.state.activeFlag).toBe("flag-blau");
   // Die 6 gespeicherten Review-Einträge werden verlustfrei übernommen (jeder bleibt erhalten,
@@ -242,9 +247,10 @@ test("v2 (veralteter Zahl-Index): currentQuestId gewinnt über stale questIdx, I
   expect(Game.state.currentQuestId).toBe("k8s-inspect-pods");
   expect(Game.state.completedQuests).toEqual(slugsSansRegistry(7));
 
-  // Explizit leeres unlockedAbbrev wird respektiert (kein Grandfather trotz Fortschritt).
-  expect(Game.state.unlockedAbbrev).toEqual([]);
-  expect(Game.isAbbrevUnlocked("-a")).toBe(false);
+  // Explizit leeres unlockedAbbrev wird respektiert (kein Grandfather trotz Fortschritt) – die
+  // Migration (v6->v7, #574) grandfathert nur bei FEHLENDEM Feld, nicht bei leerem Array.
+  expect(Game.state.owned).toEqual([]);
+  expect(Game.isAbbrevUnlocked("docker-ps-all")).toBe(false);
 
   expect(Game.state.coins).toBe(410);
   expectFocusedActiveQuests(); // #410: k8s-inspect-pods ist die einzige offene Quest
@@ -259,13 +265,13 @@ test("v2 (alle Quests durch): Endzustand + vollständige completedQuests-Migrati
   expect(Game.allQuestsDone()).toBe(true);
 
   // Alle alten numerischen IDs (+ später als Slug ergänzte Quests) → die neuen Slugs.
-  // #449/#450/#461/#568/#569/#570/#571: docker-registry, docker-rabbitmq, aufbau-sturm,
-  // k8s-yaml-struct-minigame, k8s-routing-lotse-minigame, gitops-driftheal-minigame UND
-  // k8s-rbac-keyring-minigame wurden NACH diesem „alles durch"-Stand eingeschoben/angehängt;
+  // #449/#450/#461/#568/#569/#570/#571/#267: docker-registry, docker-rabbitmq, aufbau-sturm,
+  // k8s-yaml-struct-minigame, k8s-routing-lotse-minigame, gitops-driftheal-minigame,
+  // k8s-rbac-keyring-minigame UND security-cert-manager wurden NACH diesem „alles durch"-Stand eingeschoben/angehängt;
   // ein solcher Alt-Stand kennt sie folgerichtig nicht (sie bleiben ungespielt, niemand wird
   // zurückgeschickt). Der Endzustand (questIdx == length, currentQuestId "") bleibt trotzdem
   // erhalten.
-  const addedAfterFixture = ["docker-registry", "docker-rabbitmq", "storage-init", "k8s-pod-packing", "k8s-yaml-struct-minigame", "k8s-routing-lotse-minigame", "gitops-driftheal-minigame", "k8s-rbac-keyring-minigame", "aufbau-sturm", "aufbau-control-plane", "aufbau-worker-join", "aufbau-dienste", "aufbau-cluster-als-code"];
+  const addedAfterFixture = ["docker-registry", "docker-rabbitmq", "storage-init", "k8s-pod-packing", "k8s-yaml-struct-minigame", "k8s-routing-lotse-minigame", "gitops-driftheal-minigame", "k8s-rbac-keyring-minigame", "security-cert-manager", "aufbau-sturm", "aufbau-control-plane", "aufbau-worker-join", "aufbau-dienste", "aufbau-cluster-als-code"];
   expect(Game.state.completedQuests.length).toBe(KQContent.QUESTS.length - addedAfterFixture.length);
   expect(new Set(Game.state.completedQuests)).toEqual(
     new Set(KQContent.QUESTS.filter(q => !addedAfterFixture.includes(q.id)).map(q => q.id)),
@@ -288,11 +294,11 @@ test("v2 (alle Quests durch): Endzustand + vollständige completedQuests-Migrati
 test("v3 (voller Stand, vor #410): Einzel-Quest -> activeQuests-Set, verlustfrei migriert + gesichert", () => {
   loadFixture("savegame-v3-current.json");
 
-  // Sieben mitten eingeschobene Quests vor gitops-argocd-intro: #448 docker-common-images,
+  // Acht mitten eingeschobene Quests vor gitops-argocd-intro: #448 docker-common-images,
   // #449 docker-registry, #450 docker-rabbitmq, #273 helm-templates, #567 k8s-pod-packing,
-  // #568 k8s-yaml-struct-minigame, #569 k8s-routing-lotse-minigame → Index 31 + 7 = 38;
-  // das Completed-Set des Alt-Stands bleibt verlustfrei unverändert.
-  expect(Game.questIdx()).toBe(38);
+  // #568 k8s-yaml-struct-minigame, #569 k8s-routing-lotse-minigame, #267 security-cert-manager
+  // → Index 31 + 8 = 39; das Completed-Set des Alt-Stands bleibt verlustfrei unverändert.
+  expect(Game.questIdx()).toBe(39);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.questStep()).toBe(1);
   expect(Game.state.completedQuests).toEqual(fixtureCompleted("savegame-v3-current.json"));
@@ -300,8 +306,10 @@ test("v3 (voller Stand, vor #410): Einzel-Quest -> activeQuests-Set, verlustfrei
   expect(Game.state.coins).toBe(2000);
   expect(Game.state.character).toBe(1);
   expect(Game.state.player).toEqual({ x: 640, y: 480 });
-  expect(Game.state.unlockedAbbrev).toEqual(["-a", "-n"]);
-  expect(Game.state.abbrevUsage).toEqual({ "docker-ps-all": 5 });
+  // #574: das alte additive unlockedAbbrev-Array wird per Migration (v6->v7) 1:1 in die
+  // Komfort-Kauf-Mechanik gehoben (verdient+gekauft); der Nutzungszähler wandert nach comfortUsage.
+  expect(Game.state.owned).toEqual(expect.arrayContaining(["-a", "-n"]));
+  expect(Game.state.comfortUsage).toEqual(expect.objectContaining({ "docker-ps-all": 5 }));
   // #573: Alt-Modell-Flag true -> als verdient+gekauft grandfathered.
   expect(Game.isCmdHistoryUnlocked()).toBe(true);
   expect(Game.state.owned).toContain("befehlshistorie");
@@ -329,9 +337,9 @@ test("v4 (vor #413): mehrere offene Quests bleiben, gameDays default 0, migriert
   loadFixture("savegame-v4-current.json");
 
   // #448 docker-common-images + #449 docker-registry + #450 docker-rabbitmq + #273 helm-templates
-  // + #567 k8s-pod-packing + #568 k8s-yaml-struct-minigame + #569 k8s-routing-lotse-minigame:
-  // sieben Einschübe vor gitops-argocd-intro → 31 + 7 = 38.
-  expect(Game.questIdx()).toBe(38);
+  // + #567 k8s-pod-packing + #568 k8s-yaml-struct-minigame + #569 k8s-routing-lotse-minigame
+  // + #267 security-cert-manager: acht Einschübe vor gitops-argocd-intro → 31 + 8 = 39.
+  expect(Game.questIdx()).toBe(39);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.questStep()).toBe(1);
   expect(Game.state.completedQuests).toEqual(fixtureCompleted("savegame-v4-current.json"));
@@ -365,8 +373,8 @@ test("v5 (vor #559): gameDays exakt, Arbeitskopie-Felder fallen weg, migriert + 
 
   // #448 docker-common-images + #449 docker-registry + #450 docker-rabbitmq + #273 helm-templates
   // + #567 k8s-pod-packing + #568 k8s-yaml-struct-minigame + #569 k8s-routing-lotse-minigame
-  // → 31 + 7 = 38.
-  expect(Game.questIdx()).toBe(38);
+  // + #267 security-cert-manager → 31 + 8 = 39.
+  expect(Game.questIdx()).toBe(39);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.state.activeQuests).toEqual({
     "gitops-argocd-intro": { step: 1, task: 0 },
@@ -390,16 +398,18 @@ test("v5 (vor #559): gameDays exakt, Arbeitskopie-Felder fallen weg, migriert + 
 });
 
 /* ============================================================================
- * v6 (aktuelles Format, #559): die Quest-Arbeitskopie (questIdx/questStep/taskIdx) wird NICHT
- * mehr persistiert – der Save trägt nur noch activeQuests + currentQuestId, der Rest wird zur
- * Laufzeit abgeleitet. Muss UNVERÄNDERT laden (kein Backup) und byte-stabil round-trippen.
+ * v6 (vor #574): die Quest-Arbeitskopie ist schon abgeleitet (#559), aber Abkürzungen liegen
+ * noch im alten additiven unlockedAbbrev/abbrevUsage-Modell (#297/#313), die Befehlshistorie
+ * noch als eigenes Bool-Flag (#316). Lädt jetzt als Alt-Stand -> wird auf v7 migriert (die
+ * Abkürzungen + abbrevUsage-Zähler wandern in die Komfort-Kauf-Mechanik #572, siehe Migration
+ * v6->v7 in store/versioning.ts) und vorher gesichert.
  * ========================================================================== */
 
-test("v6 (vor #232): kein persistiertes questStep, Default-Tastenbelegung ergänzt, migriert + gesichert", () => {
+test("v6 (vor #574): unlockedAbbrev/abbrevUsage in Komfort-Kauf-Mechanik migriert, gesichert", () => {
   loadFixture("savegame-v6-current.json");
 
   // currentQuestId ist die Autorität; questIdx()/questStep()/taskIdx() leiten daraus ab.
-  expect(Game.questIdx()).toBe(38);
+  expect(Game.questIdx()).toBe(39);
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.questStep()).toBe(1);
   expect(Game.taskIdx()).toBe(0);
@@ -411,28 +421,91 @@ test("v6 (vor #232): kein persistiertes questStep, Default-Tastenbelegung ergän
   // Die persistente Zeit-Achse lädt weiterhin exakt.
   expect(Game.state.gameDays).toBe(47.625);
 
-  // #232: ein v6-Stand kannte `settings.keys` noch nicht → bekommt die Default-Belegung.
-  expect(Game.state.settings.keys).toEqual(DEFAULT_KEYBINDINGS);
-  // Bestehende Einstellung (events) bleibt erhalten.
-  expect(Game.state.settings.events).toBe("cozy");
+  // #574: unlockedAbbrev: ["-a", "-n"] wird 1:1 in owned/unlockedComfort gehoben (verdient+
+  // gekauft), abbrevUsage: {"docker-ps-all": 5} wandert nach comfortUsage. cmdHistoryUnlocked:
+  // true grandfathert (wie seit #573) zusätzlich "befehlshistorie".
+  expect(Game.state.owned).toEqual(expect.arrayContaining(["-a", "-n", "befehlshistorie"]));
+  expect(Game.isAbbrevUnlocked("-a")).toBe(true);
+  expect(Game.isAbbrevUnlocked("-n")).toBe(true);
+  expect(Game.state.comfortUsage).toEqual(expect.objectContaining({ "docker-ps-all": 5 }));
+  expect(Game.isCmdHistoryUnlocked()).toBe(true);
 
-  // Der persistierte Stand trägt die Arbeitskopie-Felder NICHT mehr (#559).
+  // Der persistierte Stand trägt die Arbeitskopie-Felder NICHT mehr (#559) und auch NICHT mehr
+  // das alte Abkürzungs-/Befehlshistorie-Modell (#574).
   const env = JSON.parse(SaveStore.read()!) as { data?: Record<string, unknown> };
   expect(env.data).toBeTruthy();
   expect("questIdx" in env.data!).toBe(false);
   expect("questStep" in env.data!).toBe(false);
   expect("taskIdx" in env.data!).toBe(false);
+  expect("unlockedAbbrev" in env.data!).toBe(false);
+  expect("abbrevUsage" in env.data!).toBe(false);
+  expect("cmdHistoryUnlocked" in env.data!).toBe(false);
 
-  // v6 < CURRENT (7) → herauf-migriert → Original vor dem Überschreiben ins Backup gesichert.
+  // v6 < aktuelle Version (7) → Herauf-Migrieren → Original VORHER gesichert.
   expect(SaveStore.readBackup()).toBe(fixtureRaw("savegame-v6-current.json"));
 
   expectRoundTripFixedPoint();
 });
 
-test("v7 (aktueller Stand): eigene Tastenbelegung lädt verlustfrei, kein Backup", () => {
+/* ============================================================================
+ * v7 (Format #574, vor #232): Abkürzungen + Befehlshistorie liegen nur noch in der Komfort-
+ * Kauf-Mechanik (owned/unlockedComfort/comfortUsage) – kein unlockedAbbrev/abbrevUsage/
+ * cmdHistoryUnlocked mehr. Kannte `settings.keys` noch nicht → bekommt beim Laden die Default-
+ * Tastenbelegung (#232) und wird als Alt-Stand vor dem Überschreiben gesichert.
+ * ========================================================================== */
+
+test("v7 (vor #232): Komfort-Kauf-Felder laden unverändert, Default-Tastenbelegung ergänzt, migriert + gesichert", () => {
   loadFixture("savegame-v7-current.json");
 
-  // Der Cursor lädt wie beim v6-Zwilling (nur die Belegung kam hinzu).
+  // gitops-argocd-intro rückt durch die acht Einschübe davor (zuletzt #267
+  // security-cert-manager) auf Index 39 (31 + 8), currentQuestId bleibt die Autorität.
+  expect(Game.questIdx()).toBe(39);
+  expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
+  expect(Game.state.activeQuests).toEqual({
+    "gitops-argocd-intro": { step: 1, task: 0 },
+    "gitops-self-sync": { step: 0, task: 0 },
+  });
+
+  // Bereits gekaufte Komfort-Funktionen (Befehlshistorie + zwei Abkürzungen) sind aktiv.
+  expect(Game.isCmdHistoryUnlocked()).toBe(true);
+  expect(Game.isAbbrevUnlocked("docker-ps-all")).toBe(true);
+  expect(Game.isAbbrevUnlocked("kubectl-pods")).toBe(true);
+  // "helm-list" ist verdient (unlockedComfort), aber noch NICHT gekauft (nicht in owned).
+  expect(Game.isComfortUnlocked("helm-list")).toBe(true);
+  expect(Game.isAbbrevUnlocked("helm-list")).toBe(false);
+  // "git-commit-message" ist erst teilweise verdient (comfortUsage, unter der Schwelle).
+  expect(Game.isComfortUnlocked("git-commit-message")).toBe(false);
+  expect(Game.state.comfortUsage["git-commit-message"]).toBe(12);
+  // Eine völlig unangetastete Abkürzung ist weder verdient noch gekauft.
+  expect(Game.isAbbrevUnlocked("kubectl-nodes")).toBe(false);
+  expect(Game.isComfortUnlocked("kubectl-nodes")).toBe(false);
+
+  expect(Game.state.gameDays).toBe(47.625);
+
+  // #232: ein v7-Stand kannte `settings.keys` noch nicht → bekommt die Default-Belegung.
+  expect(Game.state.settings.keys).toEqual(DEFAULT_KEYBINDINGS);
+
+  // Der persistierte Stand trägt das alte Modell (#574) nicht (mehr).
+  const env = JSON.parse(SaveStore.read()!) as { data?: Record<string, unknown> };
+  expect(env.data).toBeTruthy();
+  expect("unlockedAbbrev" in env.data!).toBe(false);
+  expect("abbrevUsage" in env.data!).toBe(false);
+  expect("cmdHistoryUnlocked" in env.data!).toBe(false);
+
+  // v7 < CURRENT (8) → herauf-migriert → Original vor dem Überschreiben ins Backup gesichert.
+  expect(SaveStore.readBackup()).toBe(fixtureRaw("savegame-v7-current.json"));
+
+  expectRoundTripFixedPoint();
+});
+
+/* ============================================================================
+ * v8 (aktuelles Format, #232): eigene Tastenbelegung lädt verlustfrei, kein Backup.
+ * ========================================================================== */
+
+test("v8 (aktueller Stand): eigene Tastenbelegung lädt verlustfrei, kein Backup", () => {
+  loadFixture("savegame-v8-current.json");
+
+  // Der Cursor lädt wie beim v7-Zwilling (nur die Belegung kam hinzu).
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.state.gameDays).toBe(47.625);
 
@@ -495,7 +568,9 @@ test("Red-Green: kaputtes v2-Fixture lädt sanitisiert (kein Crash, Defaults sta
   expect(Game.state.review.good).toEqual({ box: 2, due: 5 });
   expect(Game.state.review.bad).toBeUndefined();   // kaputter Eintrag verworfen
   expect(Game.state.review.over.box).toBe(5);      // box auf 1..5 geklemmt
-  expect(Game.state.abbrevUsage).toEqual({ z: 4 }); // neg/falscher Typ raus
+  // #574: der alte abbrevUsage-Zähler wandert bei der Migration nach comfortUsage; das
+  // kaputte unlockedAbbrev "alles" (kein Array) grandfathert nichts (siehe unten).
+  expect(Game.state.comfortUsage).toEqual({ z: 4 }); // neg/falscher Typ raus
 
   // Booleans & Enums.
   // #573: "ja" ist kein exaktes `=== true` -> kein Grandfathering (bereits durch die
@@ -622,10 +697,10 @@ const ALL_FIXTURES = [
   "savegame-v1-docker-arc.json", "savegame-v1-rich.json",
   "savegame-v2-stale-index.json", "savegame-v2-allquests.json",
   "savegame-v3-current.json", "savegame-v4-current.json", "savegame-v5-current.json",
-  "savegame-v6-current.json", "savegame-v7-current.json",
+  "savegame-v6-current.json", "savegame-v7-current.json", "savegame-v8-current.json",
 ];
 
-test("#493 Import-Pfad: jeder Fixture-Stand (v1..v7) wird in der AKTUELLEN Versions-Hülle abgelegt (nicht hüllenlos/alt)", () => {
+test("#493 Import-Pfad: jeder Fixture-Stand (v1..v8) wird in der AKTUELLEN Versions-Hülle abgelegt (nicht hüllenlos/alt)", () => {
   for (const f of ALL_FIXTURES) {
     lsMap.clear();
     Game.importData(fixtureRaw(f));

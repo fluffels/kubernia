@@ -10,7 +10,7 @@ import { worldScene, applyAudioConfig, notifySaveFailed } from "../runtime";
 import { add, toCoins } from "../core/coins";
 import { sanitizeKeybindings } from "../core/keybindings";
 import type { GameState, QuestProgress, QuestStep, LeitnerEntry } from "../types";
-import { part, makeDefaultState, questIdForIndex, questIndexForId, canonicalActiveQuests, isEventMode, ALL_ABBREV_UNLOCKED, CMD_HISTORY_ITEM_ID, type SlotView } from "./shared";
+import { part, makeDefaultState, questIdForIndex, questIndexForId, canonicalActiveQuests, isEventMode, CMD_HISTORY_ITEM_ID, type SlotView } from "./shared";
 
 /** Save-Migration #354: alte numerische Quest-IDs (q0, q2b, …) → neue sprechende Slugs.
  *  Quest-IDs sind in Spielständen persistiert (completedQuests + currentQuestId aus #353),
@@ -160,23 +160,15 @@ function sanitizeStats(base: GameState["stats"], raw: unknown): GameState["stats
   return base;
 }
 
-/** „Verdiente Abkürzungen" (#297) auflösen: vorhandenes Feld übernehmen. Fehlt es ganz,
- *  stammt der Stand von VOR der Mechanik – wer schon Fortschritt hat, wird per Sentinel "*"
- *  grandfathered (alles frei), damit das spätere Gating (#299) kein gelerntes Kürzel
- *  rückwirkend sperrt. Frischer Stand ohne Fortschritt startet leer. */
-function resolveUnlockedAbbrev(raw: Record<string, unknown>): string[] {
-  if (raw.unlockedAbbrev !== undefined) return safeStrArray(raw.unlockedAbbrev);
-  const hatFortschritt = safeCount(raw.xp, 0) > 0 || safeCount(raw.questIdx, 0) > 0 ||
-    (Array.isArray(raw.completedQuests) && raw.completedQuests.length > 0);
-  return hatFortschritt ? [ALL_ABBREV_UNLOCKED] : [];
-}
-
 /** Migration #573: das alte additive Freischalt-Flag der Befehlshistorie (#316,
  *  `cmdHistoryUnlocked`) auf die Komfort-Kauf-Mechanik (#572) heben. Wer sie im alten Modell
  *  schon freigeschaltet hatte, gilt als bereits VERDIENT UND GEKAUFT (grandfathered) – kein
  *  Rückschritt für Alt-Stände, obwohl das neue Gate über `state.owned` statt eines eigenen
- *  Bool-Felds läuft. Additiv, kein Versions-Bump (gleiches Prinzip wie `resolveUnlockedAbbrev`).
- *  Mutiert `owned`/`unlockedComfort` nur, wenn das Alt-Flag WAHR ist. */
+ *  Bool-Felds läuft. Additiv, kein Versions-Bump: ein reines Boolean-Flag ist beim Entfernen
+ *  unmissverständlich (fehlt/false → nie gesetzt gewesen), anders als das ARRAY-basierte
+ *  `unlockedAbbrev`, dessen Migration deshalb seit #574 versionsgetrieben in
+ *  `store/versioning.ts` läuft (siehe Kommentar dort). Mutiert `owned`/`unlockedComfort` nur,
+ *  wenn das Alt-Flag WAHR ist. */
 function grandfatherLegacyCmdHistory(raw: Record<string, unknown>, owned: string[], unlockedComfort: string[]): void {
   if (raw.cmdHistoryUnlocked !== true) return;
   if (!unlockedComfort.includes(CMD_HISTORY_ITEM_ID)) unlockedComfort.push(CMD_HISTORY_ITEM_ID);
@@ -325,11 +317,13 @@ export function sanitizeState(raw: unknown): GameState {
     streakHintShown: safeBool(raw.streakHintShown, def.streakHintShown),
     introSeen: safeBool(raw.introSeen, def.introSeen),
     questLogIntroShown: safeBool(raw.questLogIntroShown, def.questLogIntroShown),
-    unlockedAbbrev: resolveUnlockedAbbrev(raw),
-    abbrevUsage: sanitizeCountMap(raw.abbrevUsage), // Nutzungszähler je Baustein (#313)
-    // #572: additive Komfort-Funktionen-Felder wie abbrevUsage/unlockedAbbrev – fehlen sie
-    // (Alt-Stand von vor der Mechanik), gilt der leere Default; das alte Befehlshistorie-Flag
-    // wird oben (grandfatherLegacyCmdHistory, #573) bereits hineingehoben.
+    // #572/#574: additive Komfort-Funktionen-Felder (Nutzungszähler je Shop-Item-ID, inkl. jeder
+    // einzelnen Abkürzung seit #574) – fehlen sie (Alt-Stand von vor der Mechanik), gilt der
+    // leere Default. Die STRUKTURELLE Alt-Modell-Migration (additives `unlockedAbbrev`-Array
+    // #297/#313 → Komfort-Kauf, altes `cmdHistoryUnlocked`-Flag #316 → Komfort-Kauf) ist hier
+    // bereits erledigt: die Befehlshistorie hebt `grandfatherLegacyCmdHistory` oben hinein, die
+    // Abkürzungen die versionsgetriebene Migration (v6→v7, `store/versioning.ts` – ECHTE
+    // Umdeutung statt additivem Defaulting, siehe Kommentar dort).
     comfortUsage: sanitizeCountMap(raw.comfortUsage),
     unlockedComfort,
     stats: sanitizeStats(def.stats, raw.stats),

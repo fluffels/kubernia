@@ -52,6 +52,16 @@ Gemeinsame Basis-Tile-IDs (zum Weiter-Verketten neuer Sets):
 
 > **`sign`** (Holz-Schildbrett, `view: side`, 96×40 → auf Inhalt zugeschnitten **75×30**, Aufhänge-Knäufe oben abgeschnitten) ist die Grundlage der **festen Orts-Schilder**. Es wird in `scenes.ts` per **Phaser `NineSlice`** (Insets 8/8/8/6) auf jede Textlänge gedehnt – Rahmen bleibt fix, Holzmitte streckt. So genügt **eine** Grafik für alle Schilder (`makeSign`). Die *dynamischen* Cluster-Labels nutzen bewusst KEIN Holz, sondern „digitale" Tech-Tags (`makeTechTag`, Monospace + Status-Punkt, Nähe-Aufdeckung).
 
+## HUD-Statuszeilen-Icons (`create_map_object`, 32×32, `view: side`, DOM-`<img>` statt Phaser)
+Kleine gerahmte Pixel-Icons für die dauersichtbare DOM-Statuszeile (`index.html` #hud, #645, Fundament-Slice von #204); ersetzen die früheren Emoji. Stil: `selective outline`, `detailed shading`, warme Stardew-Palette, „soft dark-tinted outline not pure black, single light source top-left". Gerendert als `<img class="pixel-icon">` (CSS: 32px-Quelle hart auf 16px = ÷2 ganzzahlig, `image-rendering: pixelated`). **BEWUSST getrennt vom Phaser-`ASSET_MANIFEST`:** in `src/assets-data.ts` als eigene Records `HUD_ICONS` (Münzen/Streak/Uhr) + `HUD_SEASON_ICONS` (Index 0..3 = Frühling/Sommer/Herbst/Winter, gespiegelt zu `GameClock.seasonIndex`) eingebunden — sie sind reine DOM-Icons, keine GPU-Texturen. Statische Icons werden einmalig in `ui/hud.ts` › `initHudIcons()` verdrahtet, das dynamische Saison-Icon in `setClock`.
+
+| Datei | Motiv |
+|---|---|
+| `hud_coin` | Golddublone (Währung „Dublonen", `.hud-coins`) |
+| `hud_streak` | Einzelne Flamme (Tages-Streak, `.hud-streak`) |
+| `hud_clock` | Analog-Zifferblatt mit Messingrahmen (Uhrzeit, `#hud-time`) |
+| `hud_season_spring` · `hud_season_summer` · `hud_season_autumn` · `hud_season_winter` | Spross / Sonne / Herbstblatt / Schneeflocke (Saison-Marker `#hud-date`, wechselt mit `seasonIndex`) |
+
 ## Figuren (`create_character`, 4-dir, nur `south.png` genutzt)
 `char_player` daae9195 · `char_ole` b89f37e2 · `char_runa` 723246a6 · `char_pelle` 793f0232
 `char_bo` f8a654e6 · `char_ada` 4b44fcee · `char_theo` f7d6621a · `char_kralle` 6551e699 · `char_juno` 8d0a9892

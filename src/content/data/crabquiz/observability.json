@@ -184,5 +184,42 @@
     ],
     "correct": 0,
     "explain": "<b>Prometheus</b> trägt den Namen des Titanen, der den Menschen das Feuer brachte – sein Name bedeutet sinngemäß „der Vorausdenkende“. Genau darum geht es beim Monitoring: aus Messwerten <i>vorausschauend</i> erkennen, wann etwas kippt, bevor der Dienst ausfällt. (Prometheus war nach Kubernetes das zweite Projekt der CNCF.)"
+  },
+  {
+    "id": "q-obs-metrics-vs-logs",
+    "q": "Was ist der Unterschied zwischen <b>Monitoring</b> (Metriken) und <b>Logging</b> (Logs)?",
+    "options": [
+      "Monitoring sind <b>Zahlen über die Zeit</b> (CPU, Requests, up/down), Logging sind die <b>Textmeldungen</b>, die die App selbst schreibt. Metriken sagen <i>wie viel</i>, Logs sagen <i>was genau</i>.",
+      "Monitoring zeigt die Vergangenheit, Logging nur die Gegenwart – beide messen dieselben Zahlen, nur zu anderen Zeitpunkten.",
+      "Monitoring ist für Nodes, Logging für Pods – es ist derselbe Datentyp, nur auf einer anderen Ebene gesammelt.",
+      "Es ist dasselbe: <code>kubectl top</code> und <code>kubectl logs</code> zeigen beide die Auslastung eines Pods, nur in anderem Format."
+    ],
+    "correct": 0,
+    "explain": "Die zwei Säulen der Observability haben einen unterschiedlichen <b>Datentyp</b>: <b>Metriken</b> sind Zahlen über die Zeit – CPU-Last, Request-Rate, up/down –, aus denen Prometheus Trends und Alerts bildet. <b>Logs</b> sind die Textzeilen, die die App auf <code>stdout</code>/<code>stderr</code> schreibt (Meldungen, Fehler, Stacktraces). Metriken zeigen, <i>dass</i> etwas klemmt und <i>wie stark</i>; die Logs zeigen, <i>warum</i>. Erst beide zusammen ergeben das ganze Bild."
+  },
+  {
+    "id": "q-obs-logging-central",
+    "q": "<code>kubectl logs</code> ist der direkte Draht zu einem Pod. Warum braucht ein echter Cluster trotzdem einen <b>zentralen Logging-Stack</b>?",
+    "options": [
+      "Pods sind <b>vergänglich</b> – stirbt ein Pod (Absturz, Rollout, Skalierung), sind seine Logs weg. Ein zentraler Stack sammelt sie laufend an einen <b>dauerhaften</b> Ort, wo man sie auch später und über <i>alle</i> Pods hinweg durchsuchen kann.",
+      "<code>kubectl logs</code> ist zu langsam – ein zentraler Stack cacht die Logs nur, damit der Befehl schneller antwortet.",
+      "Ohne zentralen Stack darf nur der Cluster-Admin <code>kubectl logs</code> ausführen – er verteilt darüber die Leserechte.",
+      "Ein zentraler Stack verschlüsselt die Logs, die sonst im Klartext im Pod sichtbar wären."
+    ],
+    "correct": 0,
+    "explain": "<code>kubectl logs</code> liest direkt vom laufenden Container – nur ist der <b>flüchtig</b>: Ist der Pod weg (CrashLoop, Rollout, Skalierung auf 0), sind seine Logs verloren; <code>--previous</code> rettet bestenfalls den letzten Versuch. Ein zentraler Logging-Stack (bei uns <b>ECK</b>) sammelt die Logs aller Pods fortlaufend und legt sie <b>dauerhaft</b> ab – so liest du auch Tage später noch nach und suchst über den ganzen Cluster, statt Pod für Pod einzeln."
+  },
+  {
+    "id": "q-obs-logging-eck",
+    "chapter": "observability-logs",
+    "q": "Im <b>ECK</b>-Logging-Stack (Elasticsearch/Kibana/Beats) – wer übernimmt welche Rolle?",
+    "options": [
+      "<b>Beats</b> sammelt die Logs auf jedem Node ein, <b>Elasticsearch</b> speichert und durchsucht sie, <b>Kibana</b> zeigt sie in der Weboberfläche – und der <b>ECK</b>-Operator betreibt den ganzen Stack.",
+      "<b>Elasticsearch</b> sammelt auf jedem Node ein, <b>Beats</b> speichert die Daten, <b>Kibana</b> scrapt die Metriken der Pods.",
+      "<b>Kibana</b> sammelt die Logs, <b>Beats</b> zeigt sie an, <b>Elasticsearch</b> verschickt bei Fehlern die Alerts.",
+      "<b>ECK</b> sammelt und speichert alles allein – Elasticsearch, Kibana und Beats sind nur andere Namen für dasselbe Werkzeug."
+    ],
+    "correct": 0,
+    "explain": "Arbeitsteilung im Stack: <b>Beats/Agent</b> läuft auf jedem Node (als <b>DaemonSet</b>) und sammelt die Logzeilen ein → <b>Elasticsearch</b> speichert sie durchsuchbar → <b>Kibana</b> ist die Weboberfläche zum Ansehen und Suchen. <b>ECK</b> (Elastic Cloud on Kubernetes) ist der <b>Operator</b>, der diesen Stack im Cluster installiert und am Laufen hält – dasselbe Operator-Prinzip wie der Prometheus-Operator beim Monitoring."
   }
 ]

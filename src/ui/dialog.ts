@@ -20,7 +20,10 @@ export const dialogUI = part({
   renderDialogueLine() {
     const d = this.dialogue;
     $("dlg-text").innerHTML = fmtCmd(d.lines[d.idx]);
-    const fwd = d.idx < d.lines.length - 1 ? "▼ weiter (E)" : "✔ fertig (E)";
+    // #312: die akzeptierten Weiter-Tasten drangeschrieben (Leer/Enter, wie in den
+    // meisten Spielen); E schaltet weiterhin auch weiter, ist aber nicht mehr der
+    // genannte Standard.
+    const fwd = d.idx < d.lines.length - 1 ? "▼ weiter (Leer/Enter)" : "✔ fertig (Leer/Enter)";
     // #310: Lese-Rückblick – ab der zweiten Zeile sichtbar machen, dass man eine
     // Zeile zurückblättern kann (analog zum „weiter"-Hinweis, rein per Tastatur).
     const back = d.idx > 0 ? '<span class="dlg-back">◀ zurück (←)</span>' : "";
@@ -61,7 +64,7 @@ export const dialogUI = part({
     $("dlg-name").textContent = npc.name + " · " + npc.title;
     this.drawNpcPortrait($("dlg-portrait-canvas") as HTMLCanvasElement, npc);
     $("dlg-text").innerHTML = "🤔 " + fmtCmd(step.q);
-    $("dlg-next").textContent = "↑/↓ wählen · Enter bestätigen";
+    $("dlg-next").textContent = "↑/↓ wählen · Leer/Enter bestätigen";
     $("dlg-next").classList.remove("hidden");
     const box = $("dlg-choices");
     box.innerHTML = "";
@@ -91,7 +94,7 @@ export const dialogUI = part({
     if (opt.ok) this.reward(12, 6);
     else SFX.wrong();
     $("dlg-text").innerHTML = (opt.ok ? "✅ " : "❌ ") + fmtCmd(opt.reply);
-    $("dlg-next").textContent = "✔ weiter (E)";
+    $("dlg-next").textContent = "✔ weiter (Leer/Enter)";
     $("dlg-next").classList.remove("hidden");
     d.choice = null;
     d.lines = [""];

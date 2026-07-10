@@ -18,6 +18,10 @@ jscpd-report/
 !.env.example
 .claude/*
 !.claude/skills/
+# Worktree-Guard-Hook (#735): settings.json trägt den PreToolUse-Hook, der
+# git commit/push außerhalb eines Worktrees blockt — muss geteilt/getrackt sein,
+# sonst driftet er über parallele Worktrees (dieselbe Ausnahme wie .claude/skills/).
+!.claude/settings.json
 .vscode/
 .idea/*
 !.idea/runConfigurations/

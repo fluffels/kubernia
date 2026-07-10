@@ -56,12 +56,18 @@ test("#336 Tag bleibt am Start 1 und springt erst zur ERSTEN Mitternacht (18h na
 
 /* ---------- Stardew-Datum: Saison & Wochentag ---------- */
 
-test("Tag 1 ist 🌱 Frühling, Montag, dayOfSeason 1", () => {
+test("Tag 1 ist Frühling (Saison-Index 0), Montag, dayOfSeason 1", () => {
   const c = gameClock(0, CYCLE);
   expect(c.seasonName).toBe("Frühling");
+  expect(c.seasonIndex).toBe(0);
   expect(c.weekday).toBe("Mo");
   expect(c.dayOfSeason).toBe(1);
-  expect(c.dateLabel).toBe("🌱 Mo, Tag 1");
+  // #645: das Datums-Label trägt KEIN Emoji mehr (reiner Text) – das HUD rendert das
+  // Saison-Pixel-Icon separat über seasonIndex. dateLabel/timeLabel bleiben icon-frei.
+  expect(c.dateLabel).toBe("Mo, Tag 1");
+  expect(c.timeLabel).toBe("06:00");
+  expect(c.dateLabel).not.toMatch(/🌱|☀️|🍂|❄️/);
+  expect(c.timeLabel).not.toContain("🕐");
 });
 
 test("Saison wechselt nach 28 Tagen, Wochentag rolliert nach 7 Tagen", () => {
@@ -73,6 +79,19 @@ test("Saison wechselt nach 28 Tagen, Wochentag rolliert nach 7 Tagen", () => {
   expect(day29.dayOfSeason).toBe(1);
   // Tag 8 hat wieder Wochentag "Mo" ((8-1) % 7 === 0)
   expect(gameClock(7 * CYCLE, CYCLE).weekday).toBe("Mo");
+});
+
+test("#645 seasonIndex rolliert 0→1→2→3→0 im Gleichtakt mit seasonName (wählt das HUD-Icon)", () => {
+  // Je Saison 28 Tage; der Index muss exakt zu seasonName passen (er indexiert
+  // HUD_SEASON_ICONS in assets-data.ts) und nach Winter wieder auf Frühling springen.
+  const expected: [number, number, string][] = [
+    [0, 0, "Frühling"], [28, 1, "Sommer"], [56, 2, "Herbst"], [84, 3, "Winter"], [112, 0, "Frühling"],
+  ];
+  for (const [days, idx, name] of expected) {
+    const c = gameClock(days * CYCLE, CYCLE);
+    expect(c.seasonIndex).toBe(idx);
+    expect(c.seasonName).toBe(name);
+  }
 });
 
 /* ---------- Invarianten über den ganzen Zyklus ---------- */
