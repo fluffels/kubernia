@@ -29,6 +29,8 @@ export interface WorldSceneRef {
   player?: { x: number; y: number };
   playerSprite?: { setTexture(texture: string, frame: number): void } | null;
   nearestNpc(): { id: string } | null;
+  /** Nächste Pod-Kiste im Interaktions-Radius (#650). */
+  nearestPod(): string | null;
   burstAtPlayer(kind: string): void;
   /** Spielfigur sofort an eine Weltposition setzen (Wiederspiel-Sandbox #332:
    *  ohne Reload an den Quest-Giver bzw. zurück an die gemerkte Live-Position). */

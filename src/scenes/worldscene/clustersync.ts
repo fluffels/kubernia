@@ -95,7 +95,7 @@ function syncPods(scene: WorldSceneLike) {
       const barrel = scene.add.image(pos.x, pos.y - 44 - 2, "barrel").setScale(0.35).setTint(hueColor(hue)).setDepth(pos.y + 9);
       scene.tweens.add({ targets: [hull, barrel], y: "+=44", duration: 550, ease: "Bounce.easeOut",
         onComplete: () => scene.burstAt(pos.x, pos.y + 4, "dust") });
-      scene.podSlots[p.name] = { slot, hull, barrel, shadow, dep: p.dep };
+      scene.podSlots[p.name] = { slot, hull, barrel, shadow, dep: p.dep, wx: pos.x, wy: pos.y };
     }
   }
   for (const name of Object.keys(scene.podSlots)) {

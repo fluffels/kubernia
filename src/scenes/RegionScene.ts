@@ -310,6 +310,9 @@ export class RegionScene extends IslandScene {
     return best;
   }
 
+  /** Regionen haben keine Pod-Kisten – immer null (#650). */
+  nearestPod(): string | null { return null; }
+
   /** Partikel-Effekt am Spieler – die Region hat (noch) keine eigenen Emitter, daher ein
    *  kurzer Funken-Text. ui.ts ruft das bei Quest-Belohnungen auf. */
   burstAtPlayer(_kind: string) {

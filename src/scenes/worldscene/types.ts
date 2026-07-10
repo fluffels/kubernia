@@ -50,7 +50,7 @@ export interface DynDecorItem {
   anim?: { kind: "flag" | "lamp"; baseY: number; phase: number };
 }
 /** Pod-Rumpf an einem Steg-Slot (Cluster→Welt-Sync): offener Holzrumpf + sichtbares Container-Fass. */
-export interface PodSlot { slot: number; hull: Phaser.GameObjects.Image; barrel: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; dep: string; }
+export interface PodSlot { slot: number; hull: Phaser.GameObjects.Image; barrel: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; dep: string; wx: number; wy: number; }
 /** Über die Wiese flatternder Schmetterling. */
 export interface Butterfly { spr: Phaser.GameObjects.Image; ax: number; ay: number; ph: number; sp: number; }
 
