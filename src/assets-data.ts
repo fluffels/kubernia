@@ -99,6 +99,7 @@ import char_greta from "../assets/pixellab/char_greta.png";   // Werftmeisterin 
 import pet_ratte from "../assets/pixellab/pet_ratte.png";
 import pet_fledermaus from "../assets/pixellab/pet_fledermaus.png";
 import pet_geist from "../assets/pixellab/pet_geist.png";
+import pet_katze from "../assets/pixellab/pet_katze.png";
 
 /** Region-Szenen-Keys, deren Assets erst beim Betreten nachgeladen werden (#198,
  *  Lazy-Loading). Wert = Phaser-Szenen-Key der Region (RegionConfig.key in
@@ -199,6 +200,7 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
   { key: "pet_ratte", src: pet_ratte, kind: "plain" },
   { key: "pet_fledermaus", src: pet_fledermaus, kind: "plain" },
   { key: "pet_geist", src: pet_geist, kind: "plain" },
+  { key: "pet_katze", src: pet_katze, kind: "plain" },
 ];
 
 /** Abgeleitete Schlüssel→Pfad-Tabelle (für ui.ts-Porträts u.a.).

@@ -378,7 +378,7 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     this.playerShadow = this.addShadow(this.playerPos.x, this.playerPos.y + 6);
     this.playerSprite = this.add.image(this.playerPos.x, this.playerPos.y + 6, "char_player").setOrigin(0.5, 0.81).setScale(0.6).setDepth(this.playerPos.y + 8);
     this.petShadow = this.addShadow(0, 0, 7).setVisible(false);
-    this.petSprite = this.add.image(0, 0, "dungeon", 124).setVisible(false).setDepth(1);
+    this.petSprite = this.add.image(0, 0, "pet_katze").setVisible(false).setDepth(1);
     this.petTrail = [];
     this.bobT = 0;
     this.stepAcc = 0;
