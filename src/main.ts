@@ -272,6 +272,7 @@ import { resolveAction } from "./core/keybindings";
       parent: "game-container",
       backgroundColor: "#356dab",
       pixelArt: true,
+      roundPixels: true,
       scale: { mode: Phaser.Scale.RESIZE, width: window.innerWidth, height: window.innerHeight },
       scene: [KQScenes.BootScene, KQScenes.WorldScene, KQScenes.InteriorScene, ...KQScenes.REGION_SCENES, KQScenes.TilemapTestScene],
     });

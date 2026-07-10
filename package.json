@@ -41,7 +41,7 @@
     "verify:full": "npm run verify && npm run test:coverage && npm run build && npm run build:offline && npm run check:bundle && npm run test:smoke"
   },
   "dependencies": {
-    "phaser": "^3.87.0"
+    "phaser": "^4.2.1"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",

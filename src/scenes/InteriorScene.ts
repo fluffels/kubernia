@@ -88,10 +88,13 @@ export class InteriorScene extends Phaser.Scene {
     const { RW, RH } = this;
     const wallKey = isShip ? "interior_wall_ship" : "interior_wall_house";
     const rt = this.add.renderTexture(0, 0, RW * T, RH * T).setOrigin(0).setDepth(0);
+    // Phaser 4: draw() zentriert intern per stamp() – fuer Tile-Raster originX/Y = 0 (oben-links); render() flusht den Puffer.
+    const topLeft = { originX: 0, originY: 0 };
     for (let y = 0; y < RH; y++) for (let x = 0; x < RW; x++) {
-      if (this.isWallTile(x, y)) { rt.draw(wallKey, x * T, y * T); this.solid[y * RW + x] = 1; }
-      else rt.draw("interior_floor", x * T, y * T);
+      if (this.isWallTile(x, y)) { rt.stamp(wallKey, undefined, x * T, y * T, topLeft); this.solid[y * RW + x] = 1; }
+      else rt.stamp("interior_floor", undefined, x * T, y * T, topLeft);
     }
+    rt.render();
   }
 
   /** Schiff (#42/#187): zwei Messing-Bullaugen (echtes Asset) mit Blick aufs Meer an der oberen
