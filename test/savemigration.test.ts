@@ -96,13 +96,14 @@ function fixtureCompleted(name: string): string[] {
 }
 
 /** Wie `slugs`, aber zusätzlich OHNE die später eingeschobenen `docker-registry` (#449, Index 7),
- *  `docker-rabbitmq` (#450, Index 8) und `k8s-yaml-struct-minigame` (#568, vor `helm-intro`).
+ *  `docker-rabbitmq` (#450, Index 8), `k8s-yaml-struct-minigame` (#568, vor `helm-intro`) und
+ *  `k8s-configmap-secret` (#775, von Position 21 auf 14 verschoben, vor den Helm-Einstieg).
  *  Die ganz alten v1/v2-Fixtures stammen aus der Zeit vor all diesen Einschüben; ihr migrierter
  *  Fortschritt überspringt sie (passierte Einschübe schicken niemanden zurück, #353). „Die ersten
  *  n erledigten Quests" ist daher die Reihenfolge ohne diese Einschübe. */
 function slugsSansRegistry(n: number): string[] {
   return KQContent.QUESTS.map(q => q.id)
-    .filter(id => id !== "docker-common-images" && id !== "docker-registry" && id !== "docker-rabbitmq" && id !== "k8s-yaml-struct-minigame")
+    .filter(id => id !== "docker-common-images" && id !== "docker-registry" && id !== "docker-rabbitmq" && id !== "k8s-yaml-struct-minigame" && id !== "k8s-configmap-secret")
     .slice(0, n);
 }
 
@@ -188,9 +189,10 @@ test("v1 (voller Stand): reiches Deck/Abkürzungen/Stats/Cluster-Snapshot laden 
   loadFixture("savegame-v1-rich.json");
 
   expect(Game.questIdx()).toBe(16);
-  // QUESTS[16] = "terraform-intro": der gespeicherte Zahl-Index 16 bleibt, löst aber durch die
-  // beiden Docker-Einschübe (#448/#449) eine andere Quest auf. Die 16 abgeschlossenen Alt-IDs
-  // sind unverändert – „alles bis dahin", nur ohne die nie gespielten Einschübe.
+  // QUESTS[16] = "helm-intro" (verschoben durch mehrere Einschübe: docker-registry/#449,
+  // docker-rabbitmq/#450, k8s-yaml-struct-minigame/#568, k8s-configmap-secret/#775). Der
+  // gespeicherte Zahl-Index 16 bleibt erhalten; alte IDs sind unverändert – „alles bis dahin",
+  // nur ohne die nie gespielten Einschübe.
   expect(Game.state.currentQuestId).toBe(KQContent.QUESTS[16].id);
   expect(Game.state.completedQuests).toEqual(slugsSansRegistry(16));
 
