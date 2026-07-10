@@ -48,6 +48,9 @@ export const OVERLAYS = [
   // damit Enter/Leer/E den „Weiter"-Button über die generische Modal-Tastatur (#283)
   // auslöst und das Overlay schließt.
   { key: "celebrate", id: "overlay-celebrate", blocking: true, keyNav: true },
+  // Pod-Inspektions-Panel (#650): blockierend (sperrt Weltinteraktion), kein keyNav
+  // (keine Buttons – nur Daten + Esc-Schließen).
+  { key: "podinspect", id: "overlay-podinspect", blocking: true, keyNav: false },
 ] as const satisfies readonly OverlayDef[];
 
 export type OverlayKey = (typeof OVERLAYS)[number]["key"];

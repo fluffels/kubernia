@@ -424,6 +424,17 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     return best;
   }
 
+  /** Nächste Pod-Kiste im Interaktions-Radius (Fallback zu nearestNpc). */
+  nearestPod(): string | null {
+    const pl = this.playerPos;
+    let bestName: string | null = null, bestD = 1.7 * T;
+    for (const [name, info] of Object.entries(this.podSlots)) {
+      const d = Math.hypot(info.wx - pl.x, info.wy - pl.y);
+      if (d < bestD) { bestD = d; bestName = name; }
+    }
+    return bestName;
+  }
+
   /* ============ Effekte (von der UI aufrufbar) ============ */
   burstAt(x: number, y: number, kind: string) {
     const e = kind === "splash" ? this.splash : kind === "dust" ? this.dust : this.sparkle;

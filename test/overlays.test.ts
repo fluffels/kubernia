@@ -35,9 +35,9 @@ describe("Overlay-Register (#505)", () => {
     );
   });
 
-  test("BLOCKING_OVERLAY_IDS = alle zwölf blockierenden Overlays", () => {
+  test("BLOCKING_OVERLAY_IDS = alle vierzehn blockierenden Overlays", () => {
     assert.deepEqual([...BLOCKING_OVERLAY_IDS].sort(), OVERLAYS.filter(o => o.blocking).map(o => o.id).sort());
-    assert.equal(BLOCKING_OVERLAY_IDS.length, 13, "aktuell sind alle dreizehn Overlays blockierend (inkl. Erfolgs-Feier #314, Pod-Packspiel #567, YAML-Bausteine #568, Routing-Lotse #569, Wunschzustand-Minispiel #570, RBAC-Schlüsselbund #571)");
+    assert.equal(BLOCKING_OVERLAY_IDS.length, 14, "aktuell sind alle vierzehn Overlays blockierend (inkl. Erfolgs-Feier #314, Pod-Packspiel #567, YAML-Bausteine #568, Routing-Lotse #569, Wunschzustand-Minispiel #570, RBAC-Schlüsselbund #571, Pod-Inspektion #650)");
   });
 
   test("KEYNAV_OVERLAY_IDS schließt Terminal + Wissensrunde bewusst aus (eigene Tastatur-Handler)", () => {
