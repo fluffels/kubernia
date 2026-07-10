@@ -103,11 +103,12 @@ export const overlayUI = part({
     else img.addEventListener("load", draw, { once: true });
   },
 
-  // NPC-Porträt aus der PixelLab-Figur (Kopf/Schulter-Ausschnitt der 48x48-Textur),
-  // mit Fallback aufs alte Kenney-Icon, falls die Figur (noch) keine tex hat.
+  // NPC-Porträt aus der PixelLab-Figur (Kopf/Schulter-Ausschnitt der 48x48-Textur).
+  // Jeder NPC hat eine eigene, geladene tex (#670, bewacht in test/assets.test.ts) –
+  // kein Kenney-`dungeon`-Fallback mehr; fehlt das Bild wider Erwarten, still nichts zeichnen.
   drawNpcPortrait(canvas: HTMLCanvasElement, npc: UINpc) {
-    const img = npc && npc.tex ? sheetImgs[npc.tex] : null;
-    if (!img) { this.drawPortrait(canvas, npc.sprite); return; }
+    const img = sheetImgs[npc.tex];
+    if (!img) return;
     const ctx = canvas.getContext("2d")!;
     ctx.imageSmoothingEnabled = false;
     const draw = () => {

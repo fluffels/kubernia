@@ -144,7 +144,7 @@ test("Schema-Drift: unbekannter Schlüssel in einer Funk-Erklärung scheitert", 
 });
 
 test("Schema-Drift: unbekannter Schlüssel in NPC-Stammdaten scheitert", () => {
-  const valid = { n: { name: "N", title: "T", sprite: 0, tex: "t" } };
+  const valid = { n: { name: "N", title: "T", tex: "t" } };
   assert.doesNotThrow(() => parseNpcs(valid));
   rejectsKey(() => parseNpcs({ n: { ...valid.n, bogus: 1 } }), "bogus");
 });

@@ -356,10 +356,8 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     this.npcs = defs.map(d => {
       const meta = KQContent.NPCS[d.id as keyof typeof KQContent.NPCS];
       this.addShadow(d.x * T + 8, d.y * T + 15);
-      const baseY = meta.tex ? d.y * T + 15 : d.y * T + 8;   // tex-Figur an den Schatten (d.y*T+15) verankern, Füße = Schatten
-      const spr = meta.tex
-        ? this.add.image(d.x * T + 8, baseY, meta.tex).setOrigin(0.5, 0.81).setScale(0.6).setDepth(d.y * T + T)
-        : this.add.image(d.x * T + 8, baseY, "dungeon", meta.sprite).setDepth(d.y * T + T);
+      const baseY = d.y * T + 15;   // tex-Figur an den Schatten (d.y*T+15) verankern, Füße = Schatten
+      const spr = this.add.image(d.x * T + 8, baseY, meta.tex).setOrigin(0.5, 0.81).setScale(0.6).setDepth(d.y * T + T);
       this.tweens.add({ targets: spr, y: baseY - 1, duration: 900 + Math.random() * 400, yoyo: true, repeat: -1, ease: "Sine.inOut" });
       const marker = pixelText(this, d.x * T + 8, d.y * T - 6, "!", { color: "#ffc857", origin: [0.5, 1], depth: 10000, shadow: true });
       this.tweens.add({ targets: marker, y: d.y * T - 9, duration: 500, yoyo: true, repeat: -1, ease: "Sine.inOut" });

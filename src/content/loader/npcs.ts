@@ -10,17 +10,18 @@
  */
 import npcsData from "../data/npcs.json";
 import smalltalkData from "../data/smalltalk.json";
-import { fail, asRecord, asNonEmptyString, asInt, asNonEmptyStringArray, assertNoUnknownKeys } from "../parse";
+import { fail, asRecord, asNonEmptyString, asNonEmptyStringArray, assertNoUnknownKeys } from "../parse";
 
-/** NPC-Stammdaten: Anzeigename, Funktions-Titel, Spritesheet-Frame, Textur-Key. */
+/** NPC-Stammdaten: Anzeigename, Funktions-Titel, PixelLab-Textur-Key.
+ *  `tex` ist Pflicht – jeder NPC hat eine eigene PixelLab-Figur (#670); der frühere
+ *  Kenney-`dungeon`-Frame-Index `sprite` ist mit dem Fallback entfallen. */
 export interface NpcMeta {
   name: string;
   title: string;
-  sprite: number;
   tex: string;
 }
 
-const NPC_KEYS = ["name", "title", "sprite", "tex"] as const;
+const NPC_KEYS = ["name", "title", "tex"] as const;
 
 /** Validiert rohe NPC-Daten gegen das Schema und gibt sie typisiert zurück.
  *  Wirft `ContentValidationError` beim ersten Verstoß (nie still durchwinken). */
@@ -35,7 +36,6 @@ export function parseNpcs(raw: unknown): Record<string, NpcMeta> {
     out[id] = {
       name: asNonEmptyString(m.name, `npcs.${id}.name`),
       title: asNonEmptyString(m.title, `npcs.${id}.title`),
-      sprite: asInt(m.sprite, `npcs.${id}.sprite`),
       tex: asNonEmptyString(m.tex, `npcs.${id}.tex`),
     };
   }
