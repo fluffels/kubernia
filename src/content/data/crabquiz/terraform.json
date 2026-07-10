@@ -248,5 +248,109 @@
     ],
     "correct": 0,
     "explain": "sensitive verbirgt den Wert nur in der Übersicht (damit er nicht versehentlich in Logs landet). Gezielt abgefragt – <code>terraform output <name></code> – liefert Terraform ihn bei Bedarf trotzdem im Klartext."
+  },
+  {
+    "id": "q-flotte-echte-provider-1",
+    "chapter": "terraform-echte-provider",
+    "q": "Was kann ein Terraform-Provider verwalten?",
+    "options": [
+      "Alles mit einer API: Cloud-Server, aber auch Datenbanken, ein Identity-System (Keycloak), DNS – sogar Kubernetes/Helm selbst.",
+      "Nur virtuelle Server (VMs) bei einem Cloud-Anbieter.",
+      "Nur Ressourcen innerhalb eines Kubernetes-Clusters.",
+      "Nur die lokale Terraform-State-Datei."
+    ],
+    "correct": 0,
+    "explain": "Ein Provider übersetzt Terraform-Ressourcen in API-Aufrufe eines Zielsystems. Gibt es für ein System einen Provider, kann Terraform es verwalten – Cloud ist nur einer von vielen Fällen."
+  },
+  {
+    "id": "q-flotte-echte-provider-2",
+    "chapter": "terraform-echte-provider",
+    "q": "Was macht der <code>postgresql</code>- bzw. <code>keycloak</code>-Provider?",
+    "options": [
+      "Er legt über die API des jeweiligen Systems reale Objekte an: postgresql Datenbanken/Rollen/Rechte, keycloak Realms/Clients/User.",
+      "Er installiert PostgreSQL bzw. Keycloak als Container im Cluster.",
+      "Er ist nur ein Alias für den generischen Cloud-Provider.",
+      "Er verschlüsselt den Terraform-State der Datenbank."
+    ],
+    "correct": 0,
+    "explain": "Der Provider betreibt das System nicht, er verwaltet ein erreichbares: postgresql spricht die Datenbank-API (Datenbanken/Rollen), keycloak die Identity-API (Realms/Clients) – Terraform beschreibt nur das Soll."
+  },
+  {
+    "id": "q-flotte-echte-provider-3",
+    "chapter": "terraform-echte-provider",
+    "q": "Gibt es Terraform-Provider für Kubernetes und Helm selbst?",
+    "options": [
+      "Ja – der kubernetes-Provider legt K8s-Objekte an, der helm-Provider rollt Charts aus; Terraform kann den Cluster so von außen mitverwalten.",
+      "Nein, dafür sind ausschließlich kubectl und Helm zuständig.",
+      "Nur für Kubernetes – einen Helm-Provider gibt es nicht.",
+      "Ja, aber sie funktionieren nur ohne echten Cluster."
+    ],
+    "correct": 0,
+    "explain": "Auch Kubernetes und Helm haben eine API – also gibt es Provider dafür. Terraform kann damit K8s-Objekte anlegen und Helm-Charts ausrollen, den Cluster also als Code mitverwalten."
+  },
+  {
+    "id": "q-flotte-configs-umgebung-1",
+    "chapter": "terraform-configs-umgebung",
+    "q": "Warum je Umgebung (dev/qs/prod) eine eigene <code>.tfvars</code>-Datei statt die Konfig zu kopieren?",
+    "options": [
+      "Weil so EINE Konfiguration die Wahrheit bleibt und sich die Umgebungen nur in den Werten unterscheiden – kein Copy-Paste, keine auseinanderdriftenden Kopien.",
+      "Weil Terraform ohne <code>.tfvars</code> gar nicht startet.",
+      "Weil kopierte Konfigs langsamer planen als eine gemeinsame.",
+      "Weil jede Umgebung einen eigenen Provider braucht."
+    ],
+    "correct": 0,
+    "explain": "Eine Quelle der Wahrheit: ein Fix an der Konfig wirkt sofort für dev, qs und prod. Nur die Werte-Dateien unterscheiden sich – das ist DRY über Umgebungen."
+  },
+  {
+    "id": "q-flotte-configs-umgebung-2",
+    "chapter": "terraform-configs-umgebung",
+    "q": "Wie baust du dieselbe Konfig gezielt für die Prod-Umgebung?",
+    "options": [
+      "Mit <code>terraform apply -var-file=environments/prod.tfvars</code> – dieselbe Konfig, aber mit den Prod-Werten aus der Variablen-Datei.",
+      "Indem du main.tf nach environments/prod/ kopierst und dort anpasst.",
+      "Mit <code>terraform apply --prod</code>.",
+      "Gar nicht – Prod muss immer von Hand geklickt werden."
+    ],
+    "correct": 0,
+    "explain": "<code>-var-file=<datei></code> sagt Terraform, welche Werte-Datei gelten soll. Die Konfig bleibt dieselbe, nur die eingespeisten Werte wechseln je Umgebung."
+  },
+  {
+    "id": "q-flotte-configs-umgebung-3",
+    "chapter": "terraform-configs-umgebung",
+    "q": "Ein Modul + Variablen + je Umgebung eine <code>.tfvars</code> – wofür ist das das Muster?",
+    "options": [
+      "Für DRY über viele Umgebungen: derselbe Baustein wird mit dev-, qs-, prod- und Kunden-Werten instanziiert, ohne den Ressourcen-Code je Umgebung zu duplizieren.",
+      "Für schnellere Applies, weil Terraform die Umgebungen parallel baut.",
+      "Für die Verschlüsselung der Umgebungs-Geheimnisse.",
+      "Nur zur Dokumentation der Umgebungen, ohne Wirkung."
+    ],
+    "correct": 0,
+    "explain": "Ein Bauplan (Modul), je Umgebung nur eine Werte-Datei: so betreibt ein Team dieselbe Infrastruktur sauber für dev, qs, prod und jeden Kunden – ohne den Code zu duplizieren."
+  },
+  {
+    "id": "q-flotte-echte-provider-4",
+    "chapter": "terraform-echte-provider",
+    "q": "Ist ein Cloud-Provider technisch etwas anderes als der <code>postgresql</code>- oder <code>keycloak</code>-Provider?",
+    "options": [
+      "Nein – alle sind Plugins nach demselben Muster, sie sprechen nur je eine andere Ziel-API an; man bindet sie gleich ein (required_providers + provider-Block), und init lädt sie.",
+      "Ja – nur Cloud-Provider sind echte Terraform-Provider, die anderen sind bloße Add-ons.",
+      "Ja – Nicht-Cloud-Provider brauchen kein <code>terraform init</code>.",
+      "Ja – Datenbank- und Identity-Provider laufen nur lokal, ganz ohne State."
+    ],
+    "correct": 0,
+    "explain": "Ein Provider ist immer dasselbe Muster – ein Plugin, das eine Ziel-API bedient. Ob AWS, PostgreSQL oder Keycloak ändert nur das Zielsystem, nicht die Mechanik: required_providers deklariert, init lädt, der provider-Block konfiguriert."
+  },
+  {
+    "id": "q-flotte-configs-umgebung-4",
+    "chapter": "terraform-configs-umgebung",
+    "q": "Was gehört in die gemeinsame Konfig, was in die je-Umgebung-<code>.tfvars</code>?",
+    "options": [
+      "In die Konfig die Struktur/Logik (Ressourcen, Module, Variablen-Deklarationen); in die tfvars nur die je Umgebung anderen Werte (Replikas, Domain, Namen).",
+      "Umgekehrt: die Ressourcen in die tfvars, die Werte in die Konfig.",
+      "Alles in die tfvars – die Konfig bleibt leer.",
+      "In beide dasselbe, sicherheitshalber doppelt gepflegt."
+    ],
+    "correct": 0,
+    "explain": "Die Konfig beschreibt das WAS und WIE (einmal, für alle Umgebungen gleich); die tfvars liefern nur das je Umgebung andere WOMIT. So bleibt eine Quelle der Wahrheit, und nur die Werte-Dateien unterscheiden sich."
   }
 ]

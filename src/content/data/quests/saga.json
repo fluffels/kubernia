@@ -613,7 +613,283 @@
         "npc": "saga",
         "lines": [
           "Sauber! Eine Konfig ohne fest verdrahtete Werte: oben die Variablen als Stellschrauben, unten die Outputs als saubere Rückgaben, Geheimnisse verborgen. Genau so übergibt man später echte Infrastruktur an ein Team.",
-          "Damit ist die Expeditions-Flotte vollständig: Module, Remote State, Provider, Variablen & Outputs – du beherrschst die Werkzeuge, mit denen man Terraform im Großen fährt. Stolz auf dich, Kapitän. Die See gehört dir. ⚓🧭"
+          "Module, Remote State, Provider, Variablen & Outputs – die Werkzeuge sitzen. Aber wir haben Terraform bisher nur Inseln bauen lassen. In echt baut es viel mehr: Datenbanken, Login-Systeme, ganze Cluster. Komm morgen wieder, dann zeige ich dir, was Provider WIRKLICH können. ⚓🧭"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "terraform-echte-provider",
+    "title": "Provider für alles",
+    "giver": "saga",
+    "topic": "terraform",
+    "rewardXp": 60,
+    "rewardCoins": 45,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "saga",
+        "lines": [
+          "Da bist du, Kapitän! Gestern hatten wir zwei Provider für zwei Inseln – nordwind und passat, beides Anbieter für Land und Server. Heute räume ich mit einem Missverständnis auf: Ein Provider ist NICHT nur für Cloud-Server da.",
+          "Ein <b>Provider</b> ist eine Brücke – er übersetzt deine Terraform-Ressourcen in <b>API-Aufrufe eines Zielsystems</b>. Und ein Zielsystem ist alles, was eine API hat: eine <b>Datenbank</b>, ein <b>Identity-System</b> (der Türsteher, der Logins verwaltet), ein DNS-Dienst – sogar Kubernetes und Helm selbst.",
+          "Schau her: EIN Terraform-Projekt, das gleichzeitig eine Datenbank UND einen Türsteher-Mandanten einrichtet. Zwei völlig verschiedene Systeme, ein Lauf. Lies erst die Provider."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Zwei echte Anbieter lesen",
+        "scenarioRef": "flotte-echte-provider",
+        "tasks": [
+          {
+            "id": "t-saga-ep-1",
+            "text": "Lies die Provider-Konfig: <code>cat provider.tf</code>. Zwei Provider – aber diesmal keine Cloud: <code>postgresql</code> (die Datenbank) und <code>keycloak</code> (das Login-/Identity-System).",
+            "accept": [
+              "^cat\\s+provider\\.tf$"
+            ],
+            "solution": "cat provider.tf",
+"why": "Bevor du baust, liest du die Provider – hier siehst du sofort, dass es nicht um Cloud geht: postgresql spricht mit einer Datenbank, keycloak mit einem Identity-System. Der provider-Block sagt Terraform, mit welchem System es reden soll.",
+                        "hint": "cat <datei> – achte auf die zwei Blöcke unter required_providers: postgresql und keycloak."
+          },
+          {
+            "id": "t-saga-ep-2",
+            "text": "Jetzt die Ressourcen: <code>cat main.tf</code>. Sieh, wie derselbe Terraform-Lauf eine Datenbank + Rolle (postgresql) UND einen Realm + Client (keycloak) anlegt.",
+            "accept": [
+              "^cat\\s+main\\.tf$"
+            ],
+            "solution": "cat main.tf",
+"why": "Die Ressourcen zeigen, was in den Zielsystemen entsteht – eine Datenbank samt Rolle und ein Realm samt Client. Ein Terraform-Lauf, zwei völlig verschiedene Systeme: genau das macht ein Provider möglich.",
+                        "hint": "cat <datei> – vier Ressourcen bei zwei ganz verschiedenen Systemen."
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Beide Provider holen",
+        "tasks": [
+          {
+            "id": "t-saga-ep-3",
+            "text": "Wie immer Schritt 1: <code>terraform init</code>. Terraform lädt beide Provider-Plugins – das für die Datenbank UND das fürs Identity-System.",
+            "accept": [
+              "^terraform\\s+init$"
+            ],
+            "solution": "terraform init",
+"why": "init lädt beide Provider-Plugins herunter – erst damit kann Terraform mit Datenbank UND Identity-System sprechen. Ohne den passenden Provider kennt Terraform das Zielsystem gar nicht.",
+                        "hint": "Der allererste Befehl jedes Terraform-Projekts – er lädt die Provider-Plugins."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "saga",
+        "reviewId": "q-flotte-echte-provider-1",
+        "q": "Was kann ein Terraform-Provider verwalten?",
+        "options": [
+          {
+            "t": "Alles mit einer API – nicht nur Cloud-Server, sondern auch Datenbanken, ein Identity-System, DNS, sogar Kubernetes/Helm selbst.",
+            "ok": true,
+            "reply": "Genau! Der Provider übersetzt deine Ressourcen in API-Aufrufe des Zielsystems. Gibt es für ein System einen Provider, kann Terraform es verwalten – Cloud hin oder her."
+          },
+          {
+            "t": "Nur virtuelle Server (VMs) bei einem Cloud-Anbieter.",
+            "ok": false,
+            "reply": "Das ist der häufigste Irrtum. Cloud-VMs sind nur EIN Fall. Es gibt Provider für Datenbanken, Identity-Systeme, DNS – überall, wo eine API dranhängt."
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Datenbank und Türsteher aufbauen",
+        "tasks": [
+          {
+            "id": "t-saga-ep-4",
+            "text": "Generalprobe: <code>terraform plan</code>. Vier Ressourcen sollen entstehen – zwei in der Datenbank, zwei im Identity-System.",
+            "accept": [
+              "^terraform\\s+plan$"
+            ],
+            "solution": "terraform plan",
+"why": "plan zeigt vor dem Bauen, welche vier Objekte in den beiden Systemen entstehen würden. Erst prüfen, dann anlegen – gerade wenn echte Datenbanken und Logins betroffen sind.",
+                        "hint": "Erst die Generalprobe, dann die Aufführung."
+          },
+          {
+            "id": "t-saga-ep-5",
+            "text": "Jetzt bauen: <code>terraform apply</code>. In EINEM Lauf entstehen Datenbank + Login-Rolle und Realm + Client – bei zwei komplett verschiedenen Systemen.",
+            "accept": [
+              "^terraform\\s+apply(\\s+-auto-approve)?$"
+            ],
+            "check": {"flag":["tf","applied"]},
+            "solution": "terraform apply",
+"why": "apply setzt den geprüften Plan um – und legt in EINEM Lauf Objekte bei zwei ganz verschiedenen Anbietern an. Das ist der Kern: Terraform verwaltet alles, wofür es einen Provider gibt.",
+                        "hint": "Nach der Generalprobe die Aufführung."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "saga",
+        "reviewId": "q-flotte-echte-provider-2",
+        "q": "Der <code>postgresql</code>- bzw. <code>keycloak</code>-Provider – was macht er?",
+        "options": [
+          {
+            "t": "Er legt über die API des jeweiligen Systems reale Objekte an: postgresql Datenbanken/Rollen, keycloak Realms/Clients.",
+            "ok": true,
+            "reply": "Richtig. Der Provider spricht die API des Zielsystems. postgresql redet mit der Datenbank, keycloak mit dem Identity-System – Terraform beschreibt nur das Soll, der Provider setzt es dort um."
+          },
+          {
+            "t": "Er installiert PostgreSQL bzw. Keycloak als Container im Cluster.",
+            "ok": false,
+            "reply": "Nein – der Provider betreibt das System nicht, er VERWALTET ein bereits erreichbares: er legt darin Datenbanken, Rollen, Realms und Clients an, über dessen API."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "saga",
+        "lines": [
+          "Verstanden? Terraform ist nicht „das Cloud-Werkzeug“ – es ist das Werkzeug für <b>alles mit einer API</b>. Datenbank, Türsteher, DNS, Cluster: gibt es einen Provider, baut Terraform es reproduzierbar.",
+          "Eine letzte Sache fehlt dir noch für den Alltag: Dieselbe Infrastruktur brauchst du meist mehrfach – für <b>dev</b>, <b>qs</b>, <b>prod</b> und vielleicht je Kunde. Willst du die Konfig dafür kopieren? Bloß nicht. Komm morgen, dann zeige ich dir Configs je Umgebung. 🧭"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "terraform-configs-umgebung",
+    "title": "Eine Konfig, viele Umgebungen",
+    "giver": "saga",
+    "topic": "terraform",
+    "rewardXp": 60,
+    "rewardCoins": 45,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "saga",
+        "lines": [
+          "Der letzte Baustein, Kapitän – und der wichtigste für den Alltag. Denselben Dienst brauchst du in mehreren <b>Umgebungen</b>: <b>dev</b> zum Ausprobieren, <b>qs</b> zum Testen, <b>prod</b> für die Kundschaft. Oft sogar je Kunde eine eigene.",
+          "Die Versuchung: die Konfig kopieren – einmal je Umgebung. Nach dem dritten Kopieren driften sie auseinander, ein Fix landet nur in einer, und keiner weiß mehr, was wo gilt.",
+          "Besser: die Konfig gibt es <b>genau einmal</b>. Was sich je Umgebung unterscheidet, sind nur die <b>Werte</b> – und die stehen je Umgebung in einer eigenen <b>.tfvars</b>-Datei. Eine Wahrheit, viele Umgebungen. Schau's dir an."
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Die eine Konfig lesen",
+        "scenarioRef": "flotte-configs-umgebung",
+        "tasks": [
+          {
+            "id": "t-saga-cu-1",
+            "text": "Lies die Konfig: <code>cat main.tf</code>. Der Dienst wird nur EINMAL beschrieben – die Werte liest er über <code>var.umgebung</code>, <code>var.replicas</code>, <code>var.domain</code>.",
+            "accept": [
+              "^cat\\s+main\\.tf$"
+            ],
+            "solution": "cat main.tf",
+"why": "Die Konfig beschreibt den Dienst nur einmal und liest jeden Wert über var.<name>. Nichts ist fest eingetippt – so lässt sich dieselbe Konfig mit anderen Werten wiederverwenden.",
+                        "hint": "cat <datei> – nichts ist fest eingetippt, alles kommt aus var.<name>."
+          },
+          {
+            "id": "t-saga-cu-2",
+            "text": "Und die Stellschrauben: <code>cat variables.tf</code>. Drei Variablen – für jede Umgebung dieselben Namen, aber gleich unterschiedliche Werte.",
+            "accept": [
+              "^cat\\s+variables\\.tf$"
+            ],
+            "solution": "cat variables.tf",
+"why": "Die variable-Blöcke sind die Stellschrauben, die je Umgebung anders belegt werden. Sie deklarieren, was von außen kommen darf – die Werte selbst stehen woanders.",
+                        "hint": "cat <datei> – die variable-Blöcke sind die Eingaben je Umgebung."
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "dev und prod nebeneinander",
+        "tasks": [
+          {
+            "id": "t-saga-cu-3",
+            "text": "Die DEV-Werte: <code>cat environments/dev.tfvars</code>. Klein und günstig – 1 Replika, dev-Domain.",
+            "accept": [
+              "^cat\\s+environments\\/dev\\.tfvars$"
+            ],
+            "solution": "cat environments/dev.tfvars",
+"why": "Die tfvars liefern die konkreten Werte NUR für dev – klein und günstig. Dieselben Schlüssel wie in variables.tf, aber mit dev-spezifischen Werten.",
+                        "hint": "cat <datei> – die Werte NUR für dev."
+          },
+          {
+            "id": "t-saga-cu-4",
+            "text": "Und die PROD-Werte: <code>cat environments/prod.tfvars</code>. Dieselben Schlüssel, andere Werte – 5 Replikas, echte Domain. EINE Konfig, zwei Umgebungen.",
+            "accept": [
+              "^cat\\s+environments\\/prod\\.tfvars$"
+            ],
+            "solution": "cat environments/prod.tfvars",
+"why": "Dieselbe Konfig, dieselben Schlüssel – nur andere Werte für prod. Der direkte Vergleich mit dev.tfvars zeigt: der Unterschied zwischen den Umgebungen sind allein die Werte, nicht die Logik.",
+                        "hint": "cat <datei> – vergleich Zeile für Zeile mit dev.tfvars."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "saga",
+        "reviewId": "q-flotte-configs-umgebung-1",
+        "q": "Warum je Umgebung eine eigene <code>.tfvars</code> statt die Konfig zu kopieren?",
+        "options": [
+          {
+            "t": "Weil so EINE Konfiguration die Wahrheit bleibt und sich die Umgebungen nur in den Werten unterscheiden – kein Copy-Paste, keine auseinanderdriftenden Kopien.",
+            "ok": true,
+            "reply": "Genau. Ein Fix an der Konfig wirkt sofort für dev, qs und prod. Nur die Werte-Dateien unterscheiden sich – das ist DRY über Umgebungen."
+          },
+          {
+            "t": "Weil kopierte Konfigs langsamer planen als eine gemeinsame.",
+            "ok": false,
+            "reply": "Ums Tempo geht es nicht. Der Gewinn ist EINE Quelle der Wahrheit: dieselbe Konfig, je Umgebung nur andere Werte – so driftet nichts auseinander."
+          }
+        ]
+      },
+      {
+        "type": "terminal",
+        "brief": "Gezielt die Prod-Umgebung bauen",
+        "tasks": [
+          {
+            "id": "t-saga-cu-5",
+            "text": "Wie immer zuerst: <code>terraform init</code>.",
+            "accept": [
+              "^terraform\\s+init$"
+            ],
+            "solution": "terraform init",
+"why": "init macht den Ordner einsatzbereit – der Pflicht-Schritt vor jedem plan/apply, egal für welche Umgebung du gleich baust.",
+                        "hint": "Der allererste Befehl jedes Terraform-Projekts."
+          },
+          {
+            "id": "t-saga-cu-6",
+            "text": "Bau gezielt PROD: <code>terraform apply -var-file=environments/prod.tfvars</code>. Dieselbe Konfig – aber mit den Prod-Werten aus der Variablen-Datei.",
+            "accept": [
+              "^terraform\\s+apply\\s+-var-file=environments\\/prod\\.tfvars$"
+            ],
+            "check": {"flag":["tf","applied"]},
+            "solution": "terraform apply -var-file=environments/prod.tfvars",
+"why": "Mit -var-file wählst du, welche Werte-Datei gilt – hier prod. Dieselbe Konfig, gezielt mit den Prod-Werten gebaut: so entsteht aus EINER Quelle jede Umgebung.",
+                        "hint": "terraform apply -var-file=<datei> – zeigt Terraform, welche Werte-Datei gilt."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "saga",
+        "reviewId": "q-flotte-configs-umgebung-2",
+        "q": "Modul + Variablen + je Umgebung eine <code>.tfvars</code> – wofür ist das das Muster?",
+        "options": [
+          {
+            "t": "Für DRY über viele Umgebungen: derselbe Baustein wird mit dev-, qs-, prod- und Kunden-Werten instanziiert, ohne den Ressourcen-Code je Umgebung zu duplizieren.",
+            "ok": true,
+            "reply": "Perfekt. Ein Modul als Bauplan, je Umgebung eine Werte-Datei – so betreibt ein Team dieselbe Infrastruktur sauber für dev, qs, prod und jeden Kunden."
+          },
+          {
+            "t": "Für Verschlüsselung der Umgebungs-Geheimnisse.",
+            "ok": false,
+            "reply": "Nein, ums Verschlüsseln geht es hier nicht. Das Muster dient der <b>Wiederverwendung</b>: ein Bauplan, je Umgebung nur andere Werte."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "saga",
+        "lines": [
+          "Jetzt ist die Expeditions-Flotte wirklich vollständig: Module, Remote State, Provider für ALLES mit einer API, Variablen & Outputs – und dieselbe Konfig sauber für dev, qs und prod. Das ist Terraform, wie ein echtes Team es fährt.",
+          "Du beherrschst die Werkzeuge, mit denen man Infrastruktur im Großen baut. Stolz auf dich, Kapitän. Die See gehört dir. ⚓🧭"
         ]
       }
     ]
