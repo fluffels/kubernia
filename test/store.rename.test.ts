@@ -44,8 +44,16 @@ const fixtureData = JSON.parse(fixtureRaw).data as unknown;
 // in game/save.ts liest/verwirft es erst später).
 const { unlockedAbbrev: _fixtureUnlockedAbbrev, abbrevUsage: _fixtureAbbrevUsage, ...fixtureRest } =
   fixtureData as Record<string, unknown>;
+// v8→v9 (#421): Inventar-Zahlen werden zu ItemStack-Objekten migriert.
+const rawInv = (fixtureRest.inventory ?? {}) as Record<string, number>;
+const migratedInventory = Object.fromEntries(
+  Object.entries(rawInv)
+    .filter(([, n]) => typeof n === "number" && n > 0)
+    .map(([id, n]) => [id, { count: Math.floor(n) }]),
+);
 const migratedFixtureData = {
   ...fixtureRest,
+  inventory: migratedInventory,
   owned: [...(fixtureRest.owned as string[]), "-a", "-n"],
   unlockedComfort: ["-a", "-n"],
   comfortUsage: { "docker-ps-all": 5 },

@@ -43,7 +43,7 @@ import type { QuizCard, CmdCard } from "./loader";
  *  zuweisbar, aber auch ein bewusst kaputtes Test-Objekt lässt sich übergeben. */
 export interface ContentBundle {
   RANKS: { xp: number; name: string; icon: string }[];
-  SHOP: { id: string; type: string; price: number; tex?: string; unlockAt?: number }[];
+  SHOP: { id: string; type: string; price: number; tex?: string; unlockAt?: number; maxStack?: number }[];
   NPCS: Record<string, { name: string }>;
   QUESTS: Quest[];
   QUEST_TOPICS: { id: string; label: string }[];
@@ -106,6 +106,9 @@ function validateShop(c: ContentBundle, err: Err): void {
     // (#572) – ohne sie wäre die Funktion nie verdienbar, ohne dass es hier auffällt.
     if (item.type === "comfort" && (!Number.isInteger(item.unlockAt) || (item.unlockAt as number) <= 0)) {
       err(`SHOP ${item.id}: type "comfort" braucht ein positives ganzzahliges unlockAt (ist ${item.unlockAt})`);
+    }
+    if (item.maxStack !== undefined && (!Number.isInteger(item.maxStack) || item.maxStack <= 0)) {
+      err(`SHOP ${item.id}: maxStack muss eine positive ganze Zahl sein (ist ${item.maxStack})`);
     }
   }
 }

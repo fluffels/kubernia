@@ -112,8 +112,8 @@ export const radioUI = part({
     }
     box.innerHTML = html;
 
-    const fernrohr = Game.state.inventory["fernrohr"] || 0;
-    const kompass = Game.state.inventory["kompass"] || 0;
+    const fernrohr = Game.state.inventory["fernrohr"]?.count ?? 0;
+    const kompass = Game.state.inventory["kompass"]?.count ?? 0;
     actions.innerHTML = `
       <button data-action="termHint">🔭 Hinweis ${fernrohr > 0 ? "(Fernrohr: " + fernrohr + ")" : "(25 🪙)"}</button>
       <button data-action="termSolution">🧭 Lösung ${kompass > 0 ? "(Kompass: " + kompass + ")" : "(50 🪙)"}</button>
