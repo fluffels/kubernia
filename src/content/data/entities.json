@@ -1,12 +1,27 @@
 {
   "npcs": [
-    { "id": "ole",   "map": "harbor",     "x": 26,   "y": 14.6 },
+    { "id": "ole",   "map": "harbor",     "x": 26,   "y": 14.6,
+      "schedule": [
+        { "timeStart": "07:00", "timeEnd": "11:00", "x": 22,   "y": 24   },
+        { "timeStart": "14:00", "timeEnd": "19:00", "x": 34,   "y": 22   }
+      ]
+    },
     { "id": "bo",    "map": "harbor",     "x": 8,    "y": 25 },
     { "id": "ada",   "map": "harbor",     "x": 40,   "y": 13.6 },
     { "id": "runa",  "map": "harbor",     "x": 13,   "y": 13 },
     { "id": "theo",  "map": "harbor",     "x": 44,   "y": 20.6 },
-    { "id": "pelle", "map": "harbor",     "x": 31,   "y": 17.2 },
-    { "id": "juno",  "map": "harbor",     "x": 45.8, "y": 24.2 },
+    { "id": "pelle", "map": "harbor",     "x": 31,   "y": 17.2,
+      "schedule": [
+        { "timeStart": "07:00", "timeEnd": "11:00", "x": 26,   "y": 22   },
+        { "timeStart": "15:00", "timeEnd": "21:00", "x": 16,   "y": 20   }
+      ]
+    },
+    { "id": "juno",  "map": "harbor",     "x": 45.8, "y": 24.2,
+      "schedule": [
+        { "timeStart": "09:00", "timeEnd": "14:00", "x": 38,   "y": 24   },
+        { "timeStart": "17:00", "timeEnd": "22:00", "x": 42,   "y": 18   }
+      ]
+    },
     { "id": "argo",  "map": "archipel",   "x": 12,   "y": 8 },
     { "id": "lumi",  "map": "lighthouse", "x": 11,   "y": 9 },
     { "id": "knut",  "map": "warehouse",  "x": 12,   "y": 8 },
