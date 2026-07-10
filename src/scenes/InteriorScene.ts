@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { UI } from "../ui";
 import { KQContent } from "../content";
 import { SFX } from "../sfx";
-import { TALK_RANGE, interiorEAction, interiorEFlank, type Door } from "../world/world";
+import { TALK_RANGE, interiorEAction, interiorEFlank, UNDERDECK_DOOR, type Door } from "../world/world";
 import { keys, setInteriorOpen } from "../runtime";
 import { sanitize } from "../hud/pixelfont";
 import { T, pixelText, renderPlayer, stepSimplePlayer, type ScenePlayer } from "./shared";
@@ -13,13 +13,16 @@ import { T, pixelText, renderPlayer, stepSimplePlayer, type ScenePlayer } from "
  * Raum aus vorhandenen Tiles, themengerechte Möbel, die NPC-Figur des Hauses
  * und eine Tür-Schwelle unten zum Hinausgehen (E oder runterlaufen).
  * Schiff-Deck (#758): statt eines kleinen Kajüten-Raums öffnet das „ship"-Thema
- * jetzt ein begehbares, bootsförmig zugeschnittenes Deck (15×11). */
+ * jetzt ein begehbares, bootsförmig zugeschnittenes Deck (15×11).
+ * Unterdeck (#759): „ship_underdeck" startet einen zweiten Innenraum (Laderaum)
+ * mit returnDoor=SHIP_DOOR – Verlassen führt zurück aufs Deck statt zur Weltkarte. */
 type NpcMeta = (typeof KQContent.NPCS)[keyof typeof KQContent.NPCS];
 
 const INTERIORS: Record<string, { tex: string; tx: number; ty: number }[]> = {
   office: [{ tex: "interior_table", tx: 3, ty: 2 }, { tex: "interior_console", tx: 7, ty: 2 }, { tex: "interior_book", tx: 8, ty: 2 }, { tex: "crate", tx: 2, ty: 5 }, { tex: "barrel", tx: 8, ty: 5 }],
   forge:  [{ tex: "interior_anvil", tx: 3, ty: 2 }, { tex: "interior_table", tx: 7, ty: 2 }, { tex: "interior_console", tx: 8, ty: 2 }, { tex: "barrel", tx: 2, ty: 5 }, { tex: "crate", tx: 8, ty: 5 }],
   chart:  [{ tex: "interior_table", tx: 3, ty: 2 }, { tex: "interior_book", tx: 7, ty: 2 }, { tex: "interior_book", tx: 8, ty: 2 }, { tex: "crate", tx: 2, ty: 5 }, { tex: "barrel", tx: 8, ty: 5 }],
+  ship_underdeck: [{ tex: "barrel", tx: 2, ty: 2 }, { tex: "crate", tx: 8, ty: 2 }, { tex: "barrel", tx: 2, ty: 5 }, { tex: "crate", tx: 8, ty: 5 }],
 };
 
 // Deck-Silhouette (bootsförmig): pro Zeile der offene Tile-Bereich [x0..x1].
@@ -37,7 +40,7 @@ const DECK_SHAPE: ReadonlyArray<{ x0: number; x1: number }> = [
   { x0: 4, x1: 10 },  // 9
 ];
 
-// Unterdeck-Luke: visueller Platzhalter (#758), interaktiv ab #759.
+// Unterdeck-Luke auf dem Deck (#759): interaktiv (Betreten führt ins Unterdeck).
 const DECK_HATCH_TX = 7;
 const DECK_HATCH_TY = 8;
 
@@ -66,6 +69,7 @@ export class InteriorScene extends Phaser.Scene {
     const door = data.door;
     this.door = door;
     const isShip = door.theme === "ship";
+    const isUnderdeck = door.theme === "ship_underdeck";
     this.isShip = isShip;
 
     if (isShip) {
@@ -74,14 +78,14 @@ export class InteriorScene extends Phaser.Scene {
       this.exitTy = 10;  // Gangway-Reihe (zurück ans Land)
     } else {
       this.RW = 11; this.RH = 8;
-      this.exitTx = Math.floor(this.RW / 2);
+      this.exitTx = 5;
       this.exitTy = this.RH - 1;
     }
     this.solid = new Uint8Array(this.RW * this.RH);
 
-    this.renderRoom(isShip);
-    if (!isShip) this.renderPortholes();
-    this.renderThreshold(isShip);
+    this.renderRoom(isShip, isUnderdeck);
+    if (!isShip && !isUnderdeck) this.renderPortholes();
+    this.renderThreshold(isShip, isUnderdeck);
     if (isShip) {
       this.renderMast();
       this.renderDeckHatch();
@@ -95,8 +99,8 @@ export class InteriorScene extends Phaser.Scene {
     this.pShadow = this.add.ellipse(this.pl.x, this.pl.y + 6, 10, 4, 0x000000, 0.26).setDepth(1.6);
     this.pSprite = this.add.image(this.pl.x, this.pl.y + 6, "char_player").setOrigin(0.5, 0.81).setScale(0.6).setDepth(this.pl.y + 8);
 
-    const cam = this.setupCamera(isShip);
-    this.buildLabels(cam, door, meta, isShip);
+    const cam = this.setupCamera(isShip, isUnderdeck);
+    this.buildLabels(cam, door, meta, isShip, isUnderdeck);
 
     this.ePrev = true;
   }
@@ -114,9 +118,9 @@ export class InteriorScene extends Phaser.Scene {
     return x < shape.x0 || x > shape.x1;
   }
 
-  private renderRoom(isShip: boolean): void {
+  private renderRoom(isShip: boolean, isUnderdeck: boolean): void {
     const { RW, RH } = this;
-    const wallKey = isShip ? "interior_wall_ship" : "interior_wall_house";
+    const wallKey = (isShip || isUnderdeck) ? "interior_wall_ship" : "interior_wall_house";
     const rt = this.add.renderTexture(0, 0, RW * T, RH * T).setOrigin(0).setDepth(0);
     const topLeft = { originX: 0, originY: 0 };
     for (let y = 0; y < RH; y++) for (let x = 0; x < RW; x++) {
@@ -127,17 +131,17 @@ export class InteriorScene extends Phaser.Scene {
     rt.render();
   }
 
-  /** Zwei Messing-Bullaugen (nur im Kajüten-Modus, nicht an Deck). */
+  /** Zwei Messing-Bullaugen (nur im Haus-Kajüten-Modus, nicht an Deck oder Unterdeck). */
   private renderPortholes(): void {
     for (const px of [3, 7]) {
       this.add.image(px * T + 8, T - 6, "porthole").setScale(0.42).setDepth(0.5);
     }
   }
 
-  /** Schwelle/Austritt: Gangway-Luke (Deck → Land) oder Holztür (Haus). */
-  private renderThreshold(isShip: boolean): void {
+  /** Schwelle/Austritt: Luke (Deck/Unterdeck) oder Holztür (Haus). */
+  private renderThreshold(isShip: boolean, isUnderdeck: boolean): void {
     const cx = this.exitTx * T + 8;
-    if (isShip) {
+    if (isShip || isUnderdeck) {
       this.add.image(cx, this.exitTy * T + 8, "ship_hatch").setScale(0.42).setDepth(1);
     } else {
       this.add.image(cx, this.exitTy * T + T + 2, "interior_door").setOrigin(0.5, 1).setScale(0.42).setDepth(1);
@@ -151,7 +155,7 @@ export class InteriorScene extends Phaser.Scene {
     this.add.rectangle(mx, my + 4, 22, 3, 0x5a3e28).setDepth(my + T + 1); // Querbaum
   }
 
-  /** Unterdeck-Luke (Heck-Bereich, Spalte 7, Zeile 8) – visueller Platzhalter (#758). */
+  /** Unterdeck-Luke auf dem Deck (Heck, Spalte 7, Zeile 8) – ab #759 interaktiv. */
   private renderDeckHatch(): void {
     const hx = DECK_HATCH_TX * T + 8, hy = DECK_HATCH_TY * T + 8;
     this.add.image(hx, hy, "ship_hatch").setScale(0.42).setDepth(hy);
@@ -164,7 +168,7 @@ export class InteriorScene extends Phaser.Scene {
     }
   }
 
-  /** NPC-Figur: auf dem Deck im Mittelteil (Zeile 5), im Haus fixer Platz oben (Zeile 2). */
+  /** NPC-Figur: auf dem Deck im Mittelteil (Zeile 5), in Häusern/Unterdeck fixer Platz (Zeile 2). */
   private spawnResident(door: Door, isShip: boolean): NpcMeta | undefined {
     const meta = door.npc ? KQContent.NPCS[door.npc] : undefined;
     const ntx = this.exitTx;
@@ -182,28 +186,30 @@ export class InteriorScene extends Phaser.Scene {
     return meta;
   }
 
-  private setupCamera(isShip: boolean): Phaser.Cameras.Scene2D.Camera {
+  private setupCamera(isShip: boolean, isUnderdeck: boolean): Phaser.Cameras.Scene2D.Camera {
     const { RW, RH } = this;
     const cam = this.cameras.main;
     cam.setBounds(0, 0, RW * T, RH * T);
-    // Deck: leichter Blauton (Tageshimmel-Reflex), Haus-Kajüte: dunkler Holzraum
-    cam.setBackgroundColor(isShip ? 0x0a1e2e : 0x140f0a);
+    // Deck: leichter Blauton (Tageshimmel-Reflex), Unterdeck: tiefes Dunkelblau (Laderaum), Haus: dunkler Holzraum
+    cam.setBackgroundColor(isShip ? 0x0a1e2e : isUnderdeck ? 0x060e18 : 0x140f0a);
     cam.centerOn(RW * T / 2, RH * T / 2);
     const fit = Math.min(window.innerWidth / (RW * T), window.innerHeight / (RH * T)) * 0.85;
     cam.setZoom(Phaser.Math.Clamp(fit, 2.4, 6));
     return cam;
   }
 
-  private buildLabels(cam: Phaser.Cameras.Scene2D.Camera, door: Door, meta: NpcMeta | undefined, isShip: boolean): void {
+  private buildLabels(cam: Phaser.Cameras.Scene2D.Camera, door: Door, meta: NpcMeta | undefined, isShip: boolean, isUnderdeck: boolean): void {
     const cw = cam.width, ch = cam.height;
     const npcName = meta ? meta.name + " · " + meta.title : "";
-    pixelText(this, cw / 2, 12, (isShip ? "⛵ " : "🚪 ") + door.title, { color: "#ffe9b0", size: 16, origin: [0.5, 0], depth: 20000, shadow: true }).setScrollFactor(0);
+    pixelText(this, cw / 2, 12, ((isShip || isUnderdeck) ? "⛵ " : "🚪 ") + door.title, { color: "#ffe9b0", size: 16, origin: [0.5, 0], depth: 20000, shadow: true }).setScrollFactor(0);
     if (npcName) pixelText(this, cw / 2, 34, npcName, { color: "#cdd9e8", size: 12, origin: [0.5, 0], depth: 20000, shadow: true }).setScrollFactor(0);
     this.hintExit = isShip
       ? "E – an Land   ·   ↓ Gangway"
+      : isUnderdeck
+      ? "E – ans Deck"
       : "E – Hinausgehen   ·   ↓ durch die Tür";
     this.hintTalk = (meta ? "E – mit " + meta.name + " reden" : "E – reden")
-      + (isShip ? "   ·   ↓ Gangway" : "   ·   ↓ Tür");
+      + (isShip ? "   ·   ↓ Gangway" : isUnderdeck ? "" : "   ·   ↓ Tür");
     this.hint = pixelText(this, cw / 2, ch - 22, this.hintExit, { color: "#ffd97a", size: 12, origin: [0.5, 1], depth: 20000, shadow: true }).setScrollFactor(0);
   }
 
@@ -222,11 +228,22 @@ export class InteriorScene extends Phaser.Scene {
     if (!probe(pl.x, pl.y + dy)) pl.y += dy;
   }
 
+  /** Verlässt den Innenraum: geht zur Weltkarte zurück (oder zur returnDoor, wenn gesetzt). */
   exitInterior() {
     SFX.door();
-    setInteriorOpen(false);
-    this.scene.wake("World");
-    this.scene.stop();
+    if (this.door.returnDoor) {
+      this.scene.restart({ door: this.door.returnDoor });
+    } else {
+      setInteriorOpen(false);
+      this.scene.wake("World");
+      this.scene.stop();
+    }
+  }
+
+  /** Wechselt vom Deck ins Unterdeck (Schiff-Luken-Kachel betreten). */
+  enterUnderdeck() {
+    SFX.door();
+    this.scene.restart({ door: UNDERDECK_DOOR });
   }
 
   update(_time: number, delta: number) {
@@ -244,8 +261,11 @@ export class InteriorScene extends Phaser.Scene {
     const { eFlank, ePrev } = interiorEFlank({ ePhys, ePrev: this.ePrev, blocked });
     this.ePrev = ePrev;
     if (!blocked) {
+      // Hatch-Kachel hat Vorrang vor dem normalen Exit (E-Taste am Exit-Tile wäre sonst "exit")
+      const onHatch = this.isShip && Math.floor(pl.x / T) === DECK_HATCH_TX && Math.floor(pl.y / T) === DECK_HATCH_TY;
       const action = interiorEAction({ eFlank, onExit, nearNpc });
       if (action === "talk") { UI.talkTo(this.npcId!); return; }
+      if (onHatch) { this.enterUnderdeck(); return; }
       if (action === "exit") { this.exitInterior(); return; }
     }
   }
