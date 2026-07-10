@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kubernia
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    # kubequest.localtest.me → löst per DNS immer zu 127.0.0.1 auf,
+    # kein /etc/hosts-Eintrag nötig.
+    - host: kubequest.localtest.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kubernia
+                port:
+                  number: 80
