@@ -88,7 +88,8 @@ export const BUNDLE_BUDGETS = [
     dir: "dist/assets",
     // #252: +~66 KB — die 349 „why"-Begründungen im Content-JSON wachsen den Spielcode-Chunk.
     // #669: +~4 KB — 4 neue Innenraum-Möbel-PNGs (Tisch/Konsole/Buch/Amboss, je 32×32).
-    maxBytes: 1_390_000,
+    // #690: +~2 KB — lighthouse_ruined.png (4095 B) von Vite base64-inline in den JS-Chunk.
+    maxBytes: 1_400_000,
   },
   {
     label: "Phaser-vendor-Chunk in dist/ (#595)",
