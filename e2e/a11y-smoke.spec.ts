@@ -36,14 +36,14 @@ test("A11y: HUD und Overlay-Panels sind ohne Verletzung zugänglich", async ({ p
   expect(await a11yViolations(page), "Weltansicht (HUD)").toEqual([]);
 
   // Terminal-Overlay (Funkgerät) – die interaktivste DOM-Fläche.
-  await page.keyboard.press("t");
+  await page.keyboard.press("f");
   await expect(page.locator("#overlay-terminal")).toBeVisible();
   expect(await a11yViolations(page), "Terminal-Overlay").toEqual([]);
   await page.keyboard.press("Escape");
   await expect(page.locator("#overlay-terminal")).toBeHidden();
 
   // Logbuch-Overlay.
-  await page.keyboard.press("j");
+  await page.keyboard.press("l");
   await expect(page.locator("#overlay-quest")).toBeVisible();
   expect(await a11yViolations(page), "Logbuch-Overlay").toEqual([]);
   await page.keyboard.press("Escape");

@@ -18,8 +18,8 @@ test("Terminal: Befehl eintippen zeigt ein Ergebnis", async ({ page }) => {
   await bootGame(page);
   await dismissIntro(page);
 
-  // Terminal öffnen (T) und auf das Eingabefeld warten.
-  await page.keyboard.press("t");
+  // Terminal öffnen (F) und auf das Eingabefeld warten.
+  await page.keyboard.press("f");
   await expect(page.locator("#overlay-terminal")).toBeVisible();
 
   // `help` ist immer verfügbar (#358) und liefert eine deterministische Ausgabe.
@@ -42,8 +42,8 @@ test("Overlays: Logbuch, Album und Menü öffnen und wieder schließen", async (
   const album = page.locator("#overlay-album");
   const menu = page.locator("#overlay-menu");
 
-  // Logbuch (J) auf/zu.
-  await page.keyboard.press("j");
+  // Logbuch (L) auf/zu.
+  await page.keyboard.press("l");
   await expect(quest).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(quest).toBeHidden();
@@ -73,12 +73,12 @@ test("Quest annehmen und abschließen (Onboarding bei Ole)", async ({ page }) =>
 
   // Ole ansprechen (E) → Onboarding-Quest wird angenommen (Begrüßungs-Dialog),
   // durchblättern bis zum ersten Terminal-Schritt.
-  await page.keyboard.press("e");
+  await page.keyboard.press("r");
   await expect(page.locator("#dialogue")).toBeVisible();
   await advanceDialogueUntilHidden(page);
 
   // Der Schritt verlangt `help` im Terminal – eintippen löst ihn.
-  await page.keyboard.press("t");
+  await page.keyboard.press("f");
   await expect(page.locator("#overlay-terminal")).toBeVisible();
   const input = page.locator("#term-input");
   await input.fill("help");
@@ -88,7 +88,7 @@ test("Quest annehmen und abschließen (Onboarding bei Ole)", async ({ page }) =>
   // Terminal schließen, wieder Ole ansprechen → Abschluss-Dialog → Quest fertig.
   await page.keyboard.press("Escape");
   await expect(page.locator("#overlay-terminal")).toBeHidden();
-  await page.keyboard.press("e");
+  await page.keyboard.press("r");
   await expect(page.locator("#dialogue")).toBeVisible();
   await advanceDialogueUntilHidden(page);
 

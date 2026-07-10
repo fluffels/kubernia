@@ -3,6 +3,14 @@ import { SFX, MUSIC_THEMES } from "../sfx";
 import { resolveOverlayKey, nextFocusIndex } from "../hud/overlaykbd";
 import { BLOCKING_OVERLAY_IDS, KEYNAV_OVERLAY_IDS } from "./overlays";
 import { part, $, esc, sheetImgs, type UINpc } from "./shared";
+import {
+  BINDABLE_ACTIONS, ACTION_LABELS, DEFAULT_KEYBINDINGS,
+  isAssignableKey, findConflict, normalizeKey, type BindableAction,
+} from "../core/keybindings";
+
+/** Läuft im Menü gerade ein „Taste umbelegen"? (#232) Dann verschluckt der nächste
+ *  Tastendruck die Zuweisung (main.ts › captureKeybindKey), statt normal zu wirken. */
+let capturingKeybind: BindableAction | null = null;
 
 /** „Zuletzt gespielt" grob als Text fürs Slot-Listing (#306). */
 function slotRelTime(ms: number): string {
@@ -51,6 +59,8 @@ export const overlayUI = part({
       nextReviewItem: () => this.nextReviewItem(),
       answerReviewQuiz: el => this.answerReviewQuiz(Number(el.dataset.oi)),
       revealReviewCmd: () => this.revealReviewCmd(),
+      rebindKey: el => { if (el.dataset.arg) this.startRebind(el.dataset.arg as BindableAction); },
+      resetKeybinds: () => this.resetKeybinds(),
     };
     document.addEventListener("click", ev => {
       const el = (ev.target as HTMLElement).closest("[data-action]") as HTMLElement | null;
@@ -75,6 +85,8 @@ export const overlayUI = part({
     $("review-body").addEventListener("keydown", ev => {
       if ((ev.target as HTMLElement).id === "review-input") this.answerReviewCmd(ev);
     });
+    // #232: HUD-Tastenleiste einmalig aus der geladenen (umbelegbaren) Belegung beschriften.
+    this.renderKeyHints();
   },
 
   drawPortrait(canvas: HTMLCanvasElement, idx: number) {
@@ -126,6 +138,7 @@ export const overlayUI = part({
   closeOverlays() {
     BLOCKING_OVERLAY_IDS.forEach(id => $(id).classList.add("hidden"));
     if (this.practice && this.practice.idx >= this.practice.drills.length) this.practice = null;
+    capturingKeybind = null; // #232: ein hängendes „Umbelegen" nicht über das Menü hinaus mitschleppen
     this.blurToGame();
   },
 
@@ -196,7 +209,7 @@ export const overlayUI = part({
     const btns = Array.from(ov.querySelectorAll("button")) as HTMLButtonElement[];
     if (!btns.length) return false;
     const current = btns.findIndex(b => b.classList.contains("sel"));
-    const res = resolveOverlayKey(btns.map(b => ({ disabled: b.disabled, primary: b.classList.contains("primary") })), current, k);
+    const res = resolveOverlayKey(btns.map(b => ({ disabled: b.disabled, primary: b.classList.contains("primary") })), current, k, Game.state.settings.keys.talk);
     if (!res) return false;
     ev.preventDefault();
     if (res.kind === "nav") {
@@ -214,6 +227,7 @@ export const overlayUI = part({
     this.renderSlots();
     this.renderAudioSettings();
     this.renderEventSettings();
+    this.renderKeySettings();
     $("overlay-menu").classList.remove("hidden");
     this.focusFirstIn($("overlay-menu"));
   },
@@ -263,6 +277,88 @@ export const overlayUI = part({
       '<h3 class="menu-audio-title">⛈️ Stürme &amp; Piraten</h3>' +
       '<div class="audio-row">' + radios + "</div>" +
       '<div class="dim">Cozy macht Zufalls-Events seltener &amp; sanfter und mildert den Verdienst-Ausfall kaputter Dienste. „Aus" schaltet sie ganz ab – entspanntes Lernen ohne Zeitdruck.</div>';
+  },
+
+  /** Tastenbelegungs-Block im Menü (#232): je umbelegbarer Aktion die aktuelle Taste als
+   *  Knopf; Klick startet das Umbelegen (nächster Tastendruck weist zu). Spiegelt
+   *  Game.state.settings.keys. */
+  renderKeySettings() {
+    const keys = Game.state.settings.keys;
+    const rows = BINDABLE_ACTIONS.map(a => {
+      const capturing = capturingKeybind === a;
+      const cap = capturing
+        ? '<span class="key-capturing">… Taste drücken (Esc bricht ab)</span>'
+        : '<kbd class="key-cap">' + esc(keys[a].toUpperCase()) + "</kbd>";
+      return '<div class="audio-row key-row">' +
+        "<label>" + esc(ACTION_LABELS[a]) + "</label>" +
+        '<button data-action="rebindKey" data-arg="' + a + '"' + (capturing ? " disabled" : "") +
+        ' aria-label="Taste für ' + esc(ACTION_LABELS[a]) + ' umbelegen">' + cap + "</button>" +
+        "</div>";
+    }).join("");
+    $("menu-keys").innerHTML =
+      '<h3 class="menu-audio-title">⌨️ Tastenbelegung</h3>' +
+      '<div class="audio-row-list">' + rows + "</div>" +
+      '<button data-action="resetKeybinds" class="slot-new">↺ Standard-Belegung</button>' +
+      '<div class="dim">Klick auf eine Taste, dann die neue Taste drücken. Laufen (WASD/Pfeile), ' +
+      "Bestätigen (Enter/Leer), Zahlen 1–4 und Menü (Esc) bleiben fest.</div>";
+  },
+
+  /** HUD-Tastenleiste (index.html #hud-keys) aus der aktuellen Belegung neu beschriften
+   *  (#232). Beim Boot und nach jedem Umbelegen aufgerufen, damit die Leiste nie eine
+   *  veraltete Default-Taste anzeigt. */
+  renderKeyHints() {
+    const k = Game.state.settings.keys;
+    const up = (a: BindableAction) => k[a].toUpperCase();
+    $("hud-keys").textContent =
+      "🚶 WASD/Pfeile · 💬 " + up("talk") + " reden · 💻 " + up("radio") + " Funkgerät · 📜 " +
+      up("logbook") + " Logbuch · 📖 " + up("album") + " Album · ☰ Esc Menü";
+  },
+
+  /** Startet das Umbelegen einer Aktion: merkt sie, zeichnet den Block neu (Knopf zeigt
+   *  „… Taste drücken"). Die eigentliche Zuweisung macht captureKeybindKey beim nächsten
+   *  Tastendruck. */
+  startRebind(action: BindableAction) {
+    capturingKeybind = action;
+    this.renderKeySettings();
+  },
+
+  /** Verschluckt den nächsten Tastendruck, wenn gerade umbelegt wird (aus main.ts VOR dem
+   *  normalen Dispatch aufgerufen, #232). Esc bricht ab; eine reservierte/belegte Taste wird
+   *  mit Hinweis abgelehnt; sonst wird zugewiesen, gespeichert und HUD/Menü neu beschriftet.
+   *  Gibt true zurück, wenn der Druck hier verbraucht wurde. */
+  captureKeybindKey(e: KeyboardEvent): boolean {
+    const action = capturingKeybind;
+    if (!action) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === "Escape") { capturingKeybind = null; this.renderKeySettings(); return true; }
+    const k = normalizeKey(e.key);
+    if (!isAssignableKey(k)) {
+      this.hint("Diese Taste ist reserviert (Laufen/Bestätigen/Menü). Bitte einen Buchstaben ohne W/A/S/D wählen.");
+      capturingKeybind = null; this.renderKeySettings(); return true;
+    }
+    const clash = findConflict(Game.state.settings.keys, action, k);
+    if (clash) {
+      this.hint("Taste „" + k.toUpperCase() + "“ ist schon für " + ACTION_LABELS[clash] + " belegt.");
+      capturingKeybind = null; this.renderKeySettings(); return true;
+    }
+    Game.state.settings.keys[action] = k;
+    Game.save();
+    if (Game.state.audio.sfx) SFX.coin();
+    capturingKeybind = null;
+    this.renderKeySettings();
+    this.renderKeyHints();
+    return true;
+  },
+
+  /** Setzt die Tastenbelegung auf die Default-Belegung zurück (#232). */
+  resetKeybinds() {
+    capturingKeybind = null;
+    Game.state.settings.keys = { ...DEFAULT_KEYBINDINGS };
+    Game.save();
+    if (Game.state.audio.sfx) SFX.coin();
+    this.renderKeySettings();
+    this.renderKeyHints();
   },
 
   /** Audio-Block im Menü neu aufbauen (spiegelt Game.state.audio). */

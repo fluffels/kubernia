@@ -77,12 +77,16 @@ export const questUI = part({
    *  Szene. Gezeigt wird das genau einmal; main.ts merkt sich das per
    *  Game.state.introSeen. */
   showIntro() {
+    // #232: Tasten aus der (umbelegbaren) Belegung, nicht fest verdrahtet – sonst
+    // widerspricht das Intro einer geänderten Belegung.
+    const keys = Game.state.settings.keys;
+    const kb = (a: "talk" | "radio" | "logbook") => "<b>" + keys[a].toUpperCase() + "</b>";
     this.showDialogue("ole", [
       "⚓ Ahoi und herzlich willkommen in <b>Port Kubernia</b>! Ich bin Ole, der Hafenmeister – schön, dass du anheuerst.",
       "Hier wird dein Hafen Stück für Stück zu einem echten Cluster: Du lernst Docker, Kubernetes &amp; Co., indem du den Betrieb am Laufen hältst. Aber der Reihe nach – kurz zur Steuerung:",
-      "🕹️ <b>Laufen:</b> Pfeiltasten oder <b>WASD</b>. <b>Reden &amp; bestätigen:</b> <b>E</b> (oder Enter/Leertaste), sobald jemand in der Nähe ist.",
-      "💻 <b>T</b> öffnet dein Terminal (deine Kommandozeile), 📜 <b>J</b> das Logbuch mit deiner aktuellen Aufgabe, <b>Esc</b> das Menü.",
-      "Du stehst ja schon vor meiner <b>Hafenmeisterei</b> – wunderbar! Sprich mich einfach an (drück <b>E</b>), dann gebe ich dir deinen ersten Auftrag. Auf geht's! ⚓",
+      "🕹️ <b>Laufen:</b> Pfeiltasten oder <b>WASD</b>. <b>Reden &amp; bestätigen:</b> " + kb("talk") + " (oder Enter/Leertaste), sobald jemand in der Nähe ist.",
+      "💻 " + kb("radio") + " öffnet dein Funkgerät-Terminal (deine Kommandozeile), 📜 " + kb("logbook") + " das Logbuch mit deiner aktuellen Aufgabe, <b>Esc</b> das Menü. Die Tasten kannst du im <b>Menü</b> (Esc) umbelegen.",
+      "Du stehst ja schon vor meiner <b>Hafenmeisterei</b> – wunderbar! Sprich mich einfach an (drück " + kb("talk") + "), dann gebe ich dir deinen ersten Auftrag. Auf geht's! ⚓",
     ]);
   },
 

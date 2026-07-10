@@ -8,6 +8,7 @@ import { Sim as KQSim, type Scenario } from "../sim";
 import { SaveStore } from "../store";
 import { worldScene, applyAudioConfig, notifySaveFailed } from "../runtime";
 import { add, toCoins } from "../core/coins";
+import { sanitizeKeybindings } from "../core/keybindings";
 import type { GameState, QuestProgress, QuestStep, LeitnerEntry } from "../types";
 import { part, makeDefaultState, questIdForIndex, questIndexForId, canonicalActiveQuests, isEventMode, ALL_ABBREV_UNLOCKED, CMD_HISTORY_ITEM_ID, type SlotView } from "./shared";
 
@@ -90,7 +91,13 @@ function safeVol(v: unknown, def: number): number {
 function safeSettings(v: unknown): GameState["settings"] {
   const d = makeDefaultState().settings;
   const s = isPlainObject(v) ? v : {};
-  return { events: isEventMode(s.events) ? s.events : d.events };
+  // Tastenbelegung (#232) immer zu einer gültigen, kollisionsfreien Belegung normalisieren
+  // (unbelegbare/doppelte Tasten fallen auf den Default zurück). Ein Alt-Stand ohne `keys`
+  // (v ≤ 6) bekommt so beim Laden die Default-Belegung – die Migration 6→7 bleibt No-op.
+  return {
+    events: isEventMode(s.events) ? s.events : d.events,
+    keys: sanitizeKeybindings(s.keys),
+  };
 }
 /** Audio-Einstellungen gegen die Defaults absichern (Booleans + geklemmte Lautstärken). */
 function safeAudio(v: unknown): GameState["audio"] {

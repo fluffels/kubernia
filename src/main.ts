@@ -10,6 +10,10 @@ import { SaveStore } from "./store";
 import { OVERLAY_ID } from "./ui/overlays";
 import { keys, clearKeys } from "./runtime";
 import { buildCrashReport, type CrashReport } from "./crashreport";
+import { resolveAction } from "./core/keybindings";
+
+  /** Aktuelle (umbelegbare, #232) Aktionstaste `k` → Aktion, aus dem gespeicherten Stand. */
+  const actionFor = (k: string) => resolveAction(Game.state.settings.keys, k);
 
   // Wie in ui.ts: die DOM-Knoten liegen fest in index.html, darum nicht-nullbar.
   const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
@@ -116,7 +120,7 @@ import { buildCrashReport, type CrashReport } from "./crashreport";
   function handleDialogueChoiceKey(e: KeyboardEvent, k: string): void {
     if (k === "ArrowUp" || k === "w") { UI.dlgMoveSel(-1); e.preventDefault(); return; }
     if (k === "ArrowDown" || k === "s") { UI.dlgMoveSel(1); e.preventDefault(); return; }
-    if (k === "e" || k === "Enter" || k === " ") { UI.dlgActivateSel(); e.preventDefault(); return; }
+    if (actionFor(k) === "talk" || k === "Enter" || k === " ") { UI.dlgActivateSel(); e.preventDefault(); return; }
     if (["1", "2", "3", "4"].includes(k)) { UI.dlgPickNumber(parseInt(k, 10)); e.preventDefault(); }
   }
 
@@ -124,20 +128,22 @@ import { buildCrashReport, type CrashReport } from "./crashreport";
    *  (#310, reines Nachlesen ohne Zustandsänderung), E/Enter/Leer wieder vorwärts. */
   function handleDialogueReadKey(e: KeyboardEvent, k: string): void {
     if (k === "ArrowLeft" || k === "Backspace") { UI.dialogueBack(); e.preventDefault(); return; }
-    if (k === "e" || k === "Enter" || k === " ") { UI.advanceDialogue(); e.preventDefault(); }
+    if (actionFor(k) === "talk" || k === "Enter" || k === " ") { UI.advanceDialogue(); e.preventDefault(); }
   }
 
-  /** Overlay-Umschalt-Tasten: T Funkgerät, J Logbuch, B Sammelalbum (offen → schließen).
+  /** Overlay-Umschalt-Tasten (umbelegbar, #232): Funkgerät / Logbuch / Sammelalbum
+   *  (offen → schließen). Die konkrete Taste kommt aus der gespeicherten Belegung.
    *  Gibt true zurück, wenn die Taste ein Overlay bediente. */
   function handleOverlayToggleKey(e: KeyboardEvent, k: string): boolean {
-    if (k === "t") { UI.toggleTerminal(); e.preventDefault(); return true; }
-    if (k === "j") {
+    const action = actionFor(k);
+    if (action === "radio") { UI.toggleTerminal(); e.preventDefault(); return true; }
+    if (action === "logbook") {
       if ($(OVERLAY_ID.quest).classList.contains("hidden")) UI.openQuestLog();
       else UI.closeOverlays();
       e.preventDefault();
       return true;
     }
-    if (k === "b") {
+    if (action === "album") {
       if ($(OVERLAY_ID.album).classList.contains("hidden")) UI.openAlbum();
       else UI.closeOverlays();
       e.preventDefault();
@@ -182,12 +188,15 @@ import { buildCrashReport, type CrashReport } from "./crashreport";
     // Generische Tastatur-Bedienung blockierender Modals ohne eigene Navigation (#283):
     // Stapel-Spiel, Shop, Logbuch, Menü per ↑/↓ + Enter/Leer steuern (Primär-Button als Default).
     if (UI.overlayKey(k, e)) return;
-    if (!UI.blocking() && (k === "e" || k === "Enter" || k === " ")) { UI.interact(); e.preventDefault(); }
+    if (!UI.blocking() && (actionFor(k) === "talk" || k === "Enter" || k === " ")) { UI.interact(); e.preventDefault(); }
   }
 
   function wireKeyboard() {
     window.addEventListener("keydown", e => {
       SFX.ensure();
+      // #232: Läuft im Menü gerade ein „Taste umbelegen"? Dann verschluckt das Umbelegen
+      // die nächste Taste (zuweisen/ablehnen/Esc-abbrechen) VOR jedem normalen Dispatch.
+      if (UI.captureKeybindKey(e)) return;
       const k = preprocessKey(e);
       if (k === null) return;
       dispatchGameKey(e, k);

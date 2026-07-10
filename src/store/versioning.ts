@@ -45,7 +45,7 @@
  */
 import { readActiveRaw, writeActiveRaw, backupActive } from "./slots";
 
-export const CURRENT_SAVE_VERSION = 6;
+export const CURRENT_SAVE_VERSION = 7;
 
 /** Migration von Format-Version n auf n+1 (reine Funktion auf dem `data`-Objekt). */
 type Migration = (data: unknown) => unknown;
@@ -98,6 +98,15 @@ const migrations: Record<number, Migration> = {
   //         die weggefallenen Felder waren ohnehin nur Spiegel von activeQuests[currentQuestId].
   //         Der Bump sichert jeden v5-Stand vor dem ersten Überschreiben ins Backup.
   5: (data) => data,
+  // 6 -> 7 (#232): umbelegbare Aktionstasten neu als `settings.keys` (Aktion -> Taste) im
+  //         GameState, damit die Belegung (Reden/Funkgerät/Logbuch/Album) einen Reload
+  //         überlebt. Wie 1->2/.../5->6 strukturell ein No-op auf store-Ebene: das Ergänzen
+  //         der Default-Belegung liegt ZENTRAL in game/save.ts › safeSettings (sanitizeKeybindings),
+  //         damit es ALLE Ladewege trifft (auch den rohen JSON-Import, der seit #493 durch
+  //         migrateParsed + sanitizeState läuft). Verlustfrei – vorher war keine Belegung
+  //         gespeichert, ein Alt-Stand bekommt schlicht die Default-Belegung. Der Bump sichert
+  //         jeden v6-Stand vor dem ersten Überschreiben ins Backup.
+  6: (data) => data,
 };
 
 /** Hebt `data` von `version` schrittweise auf CURRENT_SAVE_VERSION. */
