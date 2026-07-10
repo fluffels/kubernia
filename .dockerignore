@@ -1,4 +1,4 @@
-# Schlanker Build-Context für Dockerfile.devpanel (#334).
+# Schlanker Build-Context für alle Dockerfiles (#334/#752).
 # node_modules wird im Image per `npm ci` frisch installiert; Build-Artefakte und
 # VCS/Worktrees gehören nicht in den Context.
 node_modules
