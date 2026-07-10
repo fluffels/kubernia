@@ -66,7 +66,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
  * `> maxBytes`, == Budget ist ok — analog zu check-size `loc > budget`).
  *
  * Ist-Werte bei Kalibrierung (2026-07-02/03, `npm run build` + `build:offline`):
- *   • dist-offline/index.html        ~2.77 MiB (2_901_994 B)  → Budget 2_930_000 (seit #647, +~13 KB für die 3 Panel-Kopf-Icons Shop/Krabbe/Spiel)
+ *   • dist-offline/index.html        ~2.91 MiB (3_048_514 B)  → Budget 3_100_000 (seit #690, +~118 KB für 4 Sturm-Trümmer-Assets + pier_ruined #691)
  *   • Spielcode (dist/, ohne vendor) ~1.26 MiB (1_317_022 B)  → Budget 1_380_000 (seit #252, +~66 KB für die 349 why-Begründungen)
  *   • Phaser-vendor-Chunk (dist/)    ~1.14 MiB (1_198_788 B)  → Budget 1_350_000 (~+12 %, #595)
  */
@@ -79,6 +79,7 @@ export const BUNDLE_BUDGETS = [
     // #252: +~60 KB — die 349 „why"-Begründungen (Terminal-Tasks + Teach-Befehle) landen als Content-JSON im Bundle.
     // #647: +~13 KB — die 3 neuen Panel-Kopf-Icons (Shop/Krabbe/Spiel; Logbuch/Album/Terminal/Menü teilen sich #646-Icons, kein Zusatz-Byte).
     // #474: +~160 KB — Phaser 3→4 (v4 ist groesser als v3, Renderer komplett neu geschrieben).
+    // #690: +~118 KB — 4 Sturm-Trümmer-PixelLab-Assets (lighthouse_ruined, crane_wrecked, house_office_damaged, ship_wrecked) + pier_ruined (#691); base64-inline.
     maxBytes: 3_200_000,
   },
   {
