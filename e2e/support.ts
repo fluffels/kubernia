@@ -34,13 +34,13 @@ export async function bootGame(page: Page, query = ""): Promise<void> {
   await expect(page.locator("#game-container canvas")).toBeVisible();
 }
 
-/** Blättert einen offenen Lese-Dialog per E bis zum Ende durch (schließt ihn).
+/** Blättert einen offenen Lese-Dialog per R (Reden-Taste) bis zum Ende durch (schließt ihn).
  *  Poll-basiert statt an einer festen Zeilenzahl, damit es robust bleibt, wenn
  *  ein Dialog eine Zeile mehr/weniger bekommt. */
 export async function advanceDialogueUntilHidden(page: Page): Promise<void> {
   const dlg = page.locator("#dialogue");
   for (let i = 0; i < 20 && (await dlg.isVisible()); i++) {
-    await page.keyboard.press("e");
+    await page.keyboard.press("r");
     await page.waitForTimeout(150);
   }
   await expect(dlg).toBeHidden();
@@ -48,9 +48,9 @@ export async function advanceDialogueUntilHidden(page: Page): Promise<void> {
 
 /** Schließt die einmalige Begrüßung (Intro-Dialog), die beim ersten Start ~600 ms
  *  nach dem Boot erscheint. Tolerant: erscheint sie wider Erwarten nicht, geht es
- *  ohne Fehler weiter. Wichtig: der Intro-Dialog blockiert Tastenkürzel (T/J/B),
+ *  ohne Fehler weiter. Wichtig: der Intro-Dialog blockiert Tastenkürzel (F/L/B),
  *  darum vor allen anderen Interaktionen sauber wegblättern (nicht nur ausblenden –
- *  das ließe den Dialog-Zustand aktiv und würde spätere E-Eingaben verschlucken). */
+ *  das ließe den Dialog-Zustand aktiv und würde spätere R-Eingaben verschlucken). */
 export async function dismissIntro(page: Page): Promise<void> {
   const dlg = page.locator("#dialogue");
   try {

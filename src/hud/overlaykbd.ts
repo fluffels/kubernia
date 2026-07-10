@@ -28,7 +28,10 @@ export type OverlayKeyResult =
 
 const NAV_DOWN = ["ArrowDown", "s"];
 const NAV_UP = ["ArrowUp", "w"];
-const ACTIVATE = ["Enter", " ", "e"];
+// Enter/Leer sind die festen, universellen Bestätigen-Tasten; die Reden-/Interagieren-
+// Taste bestätigt zusätzlich (umbelegbar, #232 – als Parameter hereingereicht, Default "e"
+// hält die reinen overlaykbd-Unit-Tests bindungsfrei gültig).
+const ACTIVATE = ["Enter", " "];
 
 /**
  * Entscheidet, wie eine Taste in einem einfachen Modal wirkt.
@@ -51,6 +54,7 @@ export function resolveOverlayKey(
   buttons: OverlayButton[],
   current: number,
   key: string,
+  talkKey = "e",
 ): OverlayKeyResult {
   // Nur aktivierbare Buttons mit ihrem Original-Index betrachten.
   const enabled = buttons
@@ -71,7 +75,7 @@ export function resolveOverlayKey(
     return { kind: "nav", sel: positions[next] };
   }
 
-  if (ACTIVATE.includes(key)) {
+  if (ACTIVATE.includes(key) || key === talkKey) {
     // 1. markierter (sofern aktivierbar), 2. primary, 3. erster aktivierbarer.
     if (current >= 0 && current < buttons.length && !buttons[current].disabled) {
       return { kind: "activate", index: current };

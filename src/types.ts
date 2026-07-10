@@ -8,6 +8,7 @@
 // zurück (ExecResult liegt jetzt in sim/state.ts) – die Kante types → sim ist einseitig, kein Zyklus.
 import type { Sim, Scenario } from "./sim";
 import type { Coins } from "./core/coins";
+import type { Keybindings } from "./core/keybindings";
 
 /** Fortschritt EINER offenen Quest: aktueller Schritt + Aufgabe innerhalb des Schritts.
  *  Wert-Typ von `GameState.activeQuests` (#410). Pro offener Quest genau ein solcher Stand;
@@ -125,8 +126,10 @@ export interface GameState {
   clusterSnapshot: Scenario | null;
   /** Audio-Einstellungen (Musik & Sounds getrennt schaltbar, je mit Lautstärke; track = gewähltes Musikstück). */
   audio: AudioConfig;
-  /** Spiel-Feel: Frequenz/Härte der Zufalls-Events (Anti-Frust, #71). */
-  settings: { events: EventMode };
+  /** Spiel-Feel: Frequenz/Härte der Zufalls-Events (Anti-Frust, #71) + umbelegbare
+   *  Aktionstasten (#232, `keys`: Aktion → Taste; SSOT der Belegungsregeln in
+   *  `src/core/keybindings.ts`). */
+  settings: { events: EventMode; keys: Keybindings };
   /** Abgeschlossene Quests seit dem letzten Review-Gate-Feuern (#323).
    *  Zähler für das Quest-Count-Gate: ab 3 wird Kralle auch ohne fällige Karten vorgeschlagen. */
   questsSinceGate: number;

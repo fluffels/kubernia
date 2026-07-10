@@ -15,6 +15,7 @@ import { setWorldScene, setPayoutSink, setClockSink } from "../src/runtime";
 import { MAP_REGISTRY } from "../src/world/maps/mapregistry";
 import { DAY_CYCLE_MS } from "../src/core/clock";
 import { coins } from "../src/core/coins";
+import { DEFAULT_KEYBINDINGS } from "../src/core/keybindings";
 
 let Game: typeof import("../src/game").Game;
 let Sim: typeof import("../src/sim").Sim;
@@ -206,7 +207,7 @@ test("Registry-Fallback-Spawn (harbor) zeigt auf denselben Ort wie der Spielstan
 /* ---------- Spiel-Feel: Cozy-Modus (#71) ---------- */
 
 test("defaultState: Spiel-Feel steht standardmäßig auf 'normal'", () => {
-  expect(Game.state.settings).toEqual({ events: "normal" });
+  expect(Game.state.settings).toEqual({ events: "normal", keys: DEFAULT_KEYBINDINGS });
 });
 
 test("load: alter Spielstand OHNE settings-Feld bekommt 'normal'", () => {
@@ -214,7 +215,7 @@ test("load: alter Spielstand OHNE settings-Feld bekommt 'normal'", () => {
   Game.importData(JSON.stringify({ v: 1, data: { xp: 5, coins: 99 } }));
   Game.load();
   expect(Game.state.coins).toBe(99);                 // Altdaten erhalten
-  expect(Game.state.settings).toEqual({ events: "normal" });
+  expect(Game.state.settings).toEqual({ events: "normal", keys: DEFAULT_KEYBINDINGS });
 });
 
 test("load: unbekannte/kaputte Spiel-Feel-Stufe fällt auf 'normal' zurück", () => {
