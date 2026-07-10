@@ -28,6 +28,7 @@
               "^cat\\s+main\\.tf$"
             ],
             "solution": "cat main.tf",
+            "why": "Bevor du an einer Konfig schraubst, verschaffst du dir erst den Überblick – hier siehst du, dass EIN Baustein zweimal mit anderen Werten aufgerufen wird. Das ist DRY für Infrastruktur: ein Bauplan, viele Aufrufe statt Copy-Paste.",
             "hint": "cat <datei> – achte auf die beiden module-Blöcke."
           },
           {
@@ -37,6 +38,7 @@
               "^cat\\s+modules\\/anleger\\/main\\.tf$"
             ],
             "solution": "cat modules/anleger/main.tf",
+            "why": "Ein Modul kapselt zusammengehörige Ressourcen hinter EINEM Namen – so denkst du in „ein Anleger“ statt in „ein Kai plus drei Poller plus …“. Genau diese Bündelung macht die Wiederverwendung überhaupt erst möglich.",
             "hint": "Ein Kai plus ein paar Poller – das ist der wiederverwendbare Block."
           },
           {
@@ -46,6 +48,7 @@
               "^cat\\s+modules\\/anleger\\/variables\\.tf$"
             ],
             "solution": "cat modules/anleger/variables.tf",
+            "why": "Die <code>variable</code>-Blöcke sind der Eingang des Bausteins: nur was hier deklariert ist, darf der Aufrufer von außen setzen. Eine klare Schnittstelle trennt „was rein darf“ von „wie es innen gebaut wird“.",
             "hint": "variable-Blöcke = was der Baustein von außen erwartet (name, laenge)."
           }
         ]
@@ -61,6 +64,7 @@
               "^terraform\\s+init$"
             ],
             "solution": "terraform init",
+            "why": "<code>init</code> holt nicht nur die Provider, sondern auch die aufgerufenen Module in den Projektordner – vorher kennt Terraform die Bausteine gar nicht. Darum steht init immer als Schritt 1, auch wenn du mit Modulen arbeitest.",
             "hint": "Der allererste Befehl jedes Terraform-Projekts – „Initializing modules…“."
           },
           {
@@ -70,6 +74,7 @@
               "^terraform\\s+plan$"
             ],
             "solution": "terraform plan",
+            "why": "<code>plan</code> zeigt dir VOR dem Bauen, was entstehen würde – hier vervielfacht ein Modul-Aufruf seine Ressourcen. Erst prüfen, dann anlegen, erspart dir böse Überraschungen im echten System.",
             "hint": "Erst lesen, dann bauen. Achte auf die „aus Modul“-Zeilen."
           }
         ]
@@ -104,6 +109,7 @@
             ],
             "check": {"flag":["tf","applied"]},
             "solution": "terraform apply",
+            "why": "<code>apply</code> setzt den geprüften Plan real um. Weil du vorher <code>plan</code> gelesen hast, hältst du keine Überraschung in der Hand, sondern genau das, was du bestätigt hast – hier vier Ressourcen aus nur zwei Modul-Aufrufen.",
             "hint": "Nach der Generalprobe die Aufführung."
           }
         ]
@@ -119,6 +125,7 @@
             "^terraform\\s+output\\s+nordanleger_adresse$"
           ],
           "solution": "terraform output nordanleger_adresse",
+          "why": "Outputs sind der offizielle Ausgang eines Moduls – statt im State zu wühlen, fragst du berechnete Werte sauber über ihren Namen ab. So reicht ein Baustein seine Ergebnisse kontrolliert nach oben durch.",
           "hint": "Muster: terraform output <output-name>"
         }
       },
@@ -179,6 +186,7 @@
               "^cat\\s+backend\\.tf$"
             ],
             "solution": "cat backend.tf",
+            "why": "Der <code>backend</code>-Block entscheidet bewusst, WO der State lebt und WER ihn sperrt – das liest du zuerst, statt es zu erraten. Bucket ist das gemeinsame Lager, die Lock-Tabelle das Schloss davor.",
             "hint": "cat <datei> – achte auf bucket (das Lager) und dynamodb_table (das Schloss)."
           },
           {
@@ -188,6 +196,7 @@
               "^cat\\s+main\\.tf$"
             ],
             "solution": "cat main.tf",
+            "why": "Erst schaust du, welche Ressource überhaupt verwaltet wird, bevor du ihren Zustand umziehst. Wer den State verlagert, sollte wissen, wessen Zustand da eigentlich umzieht.",
             "hint": "cat <datei> – ein Leuchtfeuer für die Einfahrt."
           }
         ]
@@ -203,6 +212,7 @@
               "^terraform\\s+init$"
             ],
             "solution": "terraform init",
+            "why": "<code>init</code> richtet auch das Backend ein – erst danach schreibt Terraform den State ins gemeinsame Lager statt auf deinen Laptop. Ein Backend-Wechsel verlangt darum immer ein erneutes init.",
             "hint": "Der erste Befehl jedes Terraform-Projekts – er richtet auch das Backend ein."
           },
           {
@@ -213,6 +223,7 @@
             ],
             "check": {"flag":["tf","applied"]},
             "solution": "terraform apply",
+            "why": "Der Bau läuft wie gewohnt – neu ist nur, dass der resultierende Zustand jetzt zentral landet. So sieht die ganze Crew dieselbe Wahrheit, egal wer appliziert.",
             "hint": "Nach init kommt apply."
           }
         ]
@@ -228,6 +239,7 @@
               "^terraform\\s+state\\s+list$"
             ],
             "solution": "terraform state list",
+            "why": "Der State ist Terraforms Landkarte für den Soll-Ist-Abgleich – <code>state list</code> zeigt, was es laut Gedächtnis verwaltet. Aus dem Remote-Backend gelesen, sehen ihn alle gleich.",
             "hint": "terraform state <unterbefehl> – du willst die Liste."
           }
         ]
@@ -307,6 +319,7 @@
               "^cat\\s+provider\\.tf$"
             ],
             "solution": "cat provider.tf",
+            "why": "Der <code>provider</code>-Block sagt Terraform, mit WEM es redet und mit welchen Einstellungen (z. B. der Region). Erst die Anbieter verstehen, dann die Ressourcen – sonst weißt du gar nicht, wo etwas landet.",
             "hint": "cat <datei> – achte auf die beiden Blöcke unter required_providers und die zwei provider-Blöcke."
           },
           {
@@ -316,6 +329,7 @@
               "^cat\\s+main\\.tf$"
             ],
             "solution": "cat main.tf",
+            "why": "Über <code>provider = …</code> hängt jede Ressource an einem bestimmten Anbieter – so steuerst du im selben Lauf, was bei nordwind und was bei passat entsteht. Ohne diese Zuordnung nähme Terraform stumm den Default-Provider.",
             "hint": "cat <datei> – zwei Ressourcen, jede mit ihrem eigenen provider = …"
           }
         ]
@@ -331,6 +345,7 @@
               "^terraform\\s+init$"
             ],
             "solution": "terraform init",
+            "why": "Jeder Anbieter braucht sein eigenes Plugin, und <code>init</code> lädt sie alle – hier gleich zwei. Ohne das passende Plugin kann Terraform mit dem Anbieter gar nicht sprechen, darum läuft init immer zuerst.",
             "hint": "Der allererste Befehl jedes Terraform-Projekts – er lädt die Provider-Plugins."
           }
         ]
@@ -364,6 +379,7 @@
               "^terraform\\s+plan$"
             ],
             "solution": "terraform plan",
+            "why": "<code>plan</code> zeigt beide geplanten Ressourcen vorab – je eine pro Anbieter. Die Vorschau prüft, ob deine Provider-Zuordnung wirklich das ergibt, was du willst, bevor real gebaut wird.",
             "hint": "Erst die Generalprobe, dann die Aufführung."
           },
           {
@@ -374,6 +390,7 @@
             ],
             "check": {"flag":["tf","applied"]},
             "solution": "terraform apply",
+            "why": "<code>apply</code> baut beide Vorposten in EINEM Lauf – Multi-Cloud heißt nicht mehrere Tools, sondern mehrere Provider unter einer Konfig. Ein Befehl, zwei Anbieter.",
             "hint": "Nach der Generalprobe die Aufführung."
           }
         ]
@@ -389,6 +406,7 @@
               "^terraform\\s+state\\s+list$"
             ],
             "solution": "terraform state list",
+            "why": "Ein gemeinsamer State hält Ressourcen verschiedener Anbieter nebeneinander – Terraform verwaltet sie einheitlich, egal wo sie physisch liegen. Genau das macht Multi-Cloud aus einer Hand möglich.",
             "hint": "terraform state <unterbefehl> – du willst die Liste."
           }
         ]
@@ -450,6 +468,7 @@
               "^cat\\s+variables\\.tf$"
             ],
             "solution": "cat variables.tf",
+            "why": "Variablen sammeln alle Stellschrauben an EINER Stelle, statt Werte im Code zu verstreuen: <code>type</code> schützt vor Falscheingaben, <code>default</code> gibt Bequemlichkeit, <code>sensitive</code> schützt Geheimnisse. Zentrale Eingaben statt Schnitzeljagd durch die Ressourcen.",
             "hint": "cat <datei> – die variable-Blöcke sind die Eingaben des Aufrufers."
           },
           {
@@ -459,6 +478,7 @@
               "^cat\\s+main\\.tf$"
             ],
             "solution": "cat main.tf",
+            "why": "Wenn die Ressource nur noch <code>var.<name></code> liest, änderst du ihr Verhalten über die Variable – ohne den Ressourcen-Code selbst anzufassen. Das ist der ganze Trick: eine Konfig, viele Ausprägungen.",
             "hint": "cat <datei> – such die var.-Verweise statt fester Werte."
           },
           {
@@ -468,6 +488,7 @@
               "^cat\\s+outputs\\.tf$"
             ],
             "solution": "cat outputs.tf",
+            "why": "Outputs geben berechnete Ergebnisse sauber nach außen, statt dass jemand im State danach sucht. Und <code>sensitive</code> markiert dabei, was nicht versehentlich ins Log rutschen darf.",
             "hint": "cat <datei> – output-Blöcke geben berechnete Werte nach außen."
           }
         ]
@@ -501,6 +522,7 @@
               "^terraform\\s+init$"
             ],
             "solution": "terraform init",
+            "why": "Ohne <code>init</code> ist der Projektordner nicht einsatzbereit – Provider und Module fehlen sonst. Es ist zuverlässig Schritt 1 in jedem neuen Projekt.",
             "hint": "Der allererste Befehl jedes Terraform-Projekts."
           },
           {
@@ -510,6 +532,7 @@
               "^terraform\\s+plan$"
             ],
             "solution": "terraform plan",
+            "why": "<code>plan</code> zeigt, welche Werte tatsächlich aus den Variablen in die Ressource fließen – so prüfst du deine Stellschrauben, bevor real etwas entsteht.",
             "hint": "Erst lesen, dann bauen."
           }
         ]
@@ -526,6 +549,7 @@
             ],
             "check": {"flag":["tf","applied"]},
             "solution": "terraform apply",
+            "why": "Beim <code>apply</code> siehst du <code>sensitive</code> in Aktion: der geheime Wert steht in der Ausgabe nur als <code>&lt;sensitive&gt;</code>. So landet ein Schlüssel nicht versehentlich im Terminal-Mitschnitt.",
             "hint": "Nach der Generalprobe die Aufführung."
           }
         ]
@@ -541,6 +565,7 @@
               "^terraform\\s+output\\s+anleger_adresse$"
             ],
             "solution": "terraform output anleger_adresse",
+            "why": "Eine berechnete Adresse fragst du über ihren Output-Namen ab, statt sie irgendwo doppelt zu pflegen – EINE Quelle, überall dieselbe Wahrheit. Ändert sich die Grundlage, zieht die Adresse automatisch nach.",
             "hint": "Muster: terraform output <output-name>"
           },
           {
@@ -550,6 +575,7 @@
               "^terraform\\s+output$"
             ],
             "solution": "terraform output",
+            "why": "Ohne Namen listet <code>output</code> alle Rückgaben auf einmal – praktisch für den Überblick, und Geheimnisse bleiben dabei als <code>&lt;sensitive&gt;</code> verborgen. Sicher gucken, ohne alles offenzulegen.",
             "hint": "terraform output ganz ohne Namen listet alle deklarierten Outputs."
           },
           {
@@ -559,6 +585,7 @@
               "^terraform\\s+output\\s+lager_schluessel$"
             ],
             "solution": "terraform output lager_schluessel",
+            "why": "<code>sensitive</code> verbirgt nur in der Übersicht – gezielt beim Namen abgefragt bekommst du den Rohwert, wenn du ihn wirklich brauchst. Es ist ein Log-Schutz, keine Sperre.",
             "hint": "Derselbe Befehl mit dem Output-Namen – gezielt liefert er den Rohwert."
           }
         ]

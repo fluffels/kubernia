@@ -67,7 +67,7 @@ function reviveCheck(v: unknown, path: string): ((sim: Sim) => unknown) | undefi
 }
 
 /* Schema-Drift-Wächter (#498): vom Reviver konsumierte JSON-Schlüssel je Objektform (unbekannte scheitern beim Laden; Begründung in parse.ts). */
-const TASK_KEYS = ["id", "text", "accept", "solution", "hint", "check"] as const;
+const TASK_KEYS = ["id", "text", "accept", "solution", "hint", "why", "check"] as const;
 const OPTION_KEYS = ["t", "ok", "reply"] as const;
 const STEP_BASE_KEYS = ["type", "scenario", "scenarioRef", "unlockAbbrev"] as const;
 /** Typ-spezifische Schritt-Felder; `Record<QuestStep["type"],…>` zwingt bei neuem Schritt-Typ eine Zeile (Type→Loader-Kopplung). */
@@ -92,6 +92,10 @@ function reviveTaskCommon(o: Record<string, unknown>, path: string, keys: readon
     solution: asNonEmptyString(o.solution, `${path}.solution`),
     hint: asNonEmptyString(o.hint, `${path}.hint`),
   };
+  // #252: Begründung (Prinzip hinter der Lösung). Optional im Reviver – WENN gesetzt, dann
+  // nicht leer (fängt einen Tippfehler/leeren Wert); die Vollständigkeit über alle realen
+  // Quests erzwingt der Konsistenz-Wächter in content.test.ts (verstehen statt auswendig, #233).
+  if (o.why !== undefined) task.why = asNonEmptyString(o.why, `${path}.why`);
   const check = reviveCheck(o.check, `${path}.check`);
   if (check) task.check = check;
   return task;

@@ -128,6 +128,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Erst nachsehen, was im Verzeichnis liegt, bevor du etwas ausrollst – der billige Blick mit <code>ls</code> bewahrt dich davor, den falschen Dateinamen zu tippen.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -137,6 +138,7 @@
               "^cat\\s+application\\.yaml$"
             ],
             "solution": "cat application.yaml",
+            "why": "Eine Application liest man, bevor man sie anlegt: <code>cat</code> zeigt <code>kind: Application</code> und den <code>source</code>-Block (Repo + Pfad), damit du weißt, welche Seekarte Argo künftig verfolgt.",
             "hint": "cat <datei>"
           }
         ]
@@ -152,6 +154,7 @@
             "^kubectl\\s+apply\\s+(?:-f|--filename)\\s+application\\.yaml$"
           ],
           "solution": "kubectl apply --filename application.yaml",
+          "why": "Die Application selbst ist nur ein Manifest – mit dem gewohnten <code>apply</code> gibst du Argo den <i>Auftrag</i>, nicht die Dienste. Argo zieht den Soll-Zustand danach selbst aus Git (Pull), statt dass du ihn hineindrückst.",
           "hint": "Der vertraute Befehl aus dem Kartenhaus: kubectl apply --filename <datei>."
         }
       },
@@ -173,6 +176,7 @@
             "^argocd\\s+app\\s+(list|ls)$"
           ],
           "solution": "argocd app list",
+          "why": "Bevor du in eine einzelne Akte schaust, verschaffst du dir den Flotten-Überblick: <code>app list</code> zeigt Sync- und Health-Status aller Applications auf einen Blick – vom Groben ins Feine.",
           "hint": "Schreib es aus: argocd app list (die Kurzform ls verdienst du dir durch Nutzung)."
         }
       },
@@ -188,6 +192,7 @@
           ],
           "check": {"some":"argoApps","where":{"name":"hafen-lager"}},
           "solution": "argocd app get hafen-lager",
+          "why": "<code>OutOfSync</code> heißt, Git und Cluster klaffen auseinander. Die Einzel-Akte zu lesen, bevor du synchronisierst, sagt dir <i>was</i> fehlt – Diagnose vor Aktion.",
           "hint": "argocd app get <name> – den Namen zeigt 'argocd app list'."
         }
       },
@@ -211,6 +216,7 @@
           ],
           "check": {"some":"deployments","where":{"name":"hafen-lager"}},
           "solution": "argocd app sync hafen-lager",
+          "why": "<code>sync</code> zieht den in Git deklarierten Soll-Zustand in den Cluster (Pull) und legt die fehlenden Ressourcen an – Git bleibt die Quelle der Wahrheit, der Cluster holt sie sich ab.",
           "hint": "argocd app sync <name>."
         }
       },
@@ -226,6 +232,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"hafen-lager"}},
             "solution": "kubectl get deployments",
+            "why": "Das Ergebnis eines Sync prüfst du an der echten Ressource: <code>get deployments</code> beweist, dass der Cluster-Ist jetzt der Seekarte entspricht – nicht das Tool fragen, sondern das Ergebnis ansehen.",
             "hint": "kubectl get deployments (oder deploy)."
           }
         ]
@@ -306,6 +313,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Der kurze Blick ins Verzeichnis vor dem Anwenden – so triffst du sicher die aktualisierte Seekarte und nicht die alte.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -315,6 +323,7 @@
               "^cat\\s+application-selfheal\\.yaml$"
             ],
             "solution": "cat application-selfheal.yaml",
+            "why": "Vor dem Umschalten liest du die neue Seekarte: <code>cat</code> zeigt <code>syncPolicy.automated</code> und <code>selfHeal: true</code>, damit du verstehst, welches Verhalten du gleich scharf schaltest.",
             "hint": "cat application-selfheal.yaml"
           }
         ]
@@ -331,6 +340,7 @@
           ],
           "check": {"some":"argoApps","where":{"name":"hafen-lager","selfHeal":true}},
           "solution": "kubectl apply --filename application-selfheal.yaml",
+          "why": "<code>apply</code> ist idempotent: dieselbe Datei erneut anzuwenden ändert nur, was sich geändert hat (<code>configured</code> statt neu anlegen). So schaltest du Self-Heal an einer bestehenden Application ein, ohne sie löschen zu müssen.",
           "hint": "kubectl apply --filename <datei> – der vertraute Befehl."
         }
       },
@@ -353,6 +363,7 @@
             ],
             "check": {"some":"argoApps","where":{"name":"hafen-lager","selfHeal":true}},
             "solution": "argocd app get hafen-lager",
+            "why": "Vor dem Test prüfst du, dass die Sync-Policy wirklich <b>Automated (self-heal)</b> zeigt – erst den Wächter scharf sehen, dann bewusst Drift erzeugen, sonst weißt du nicht, ob es der Wächter oder Zufall war.",
             "hint": "argocd app get hafen-lager"
           },
           {
@@ -363,6 +374,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"hafen-lager","replicas":0}},
             "solution": "kubectl scale deployment hafen-lager --replicas=0",
+            "why": "Absichtlich Drift zu erzeugen ist der ehrliche Test: nur so siehst du live, ob Self-Heal die Hand-Änderung wirklich zurückdreht. Ein Kontrollmechanismus, den man nie prüft, ist keiner.",
             "hint": "kubectl scale deployment hafen-lager --replicas=0"
           },
           {
@@ -373,6 +385,7 @@
             ],
             "check": {"some":"deployments","where":{"name":"hafen-lager","replicas":2}},
             "solution": "kubectl get deployments",
+            "why": "Der Beweis kommt aus dem Cluster, nicht aus der Erwartung: du hast auf 0 skaliert, doch <code>get deployments</code> zeigt wieder 2 – Argo hat den Drift im selben Atemzug geheilt. Git gewinnt.",
             "hint": "kubectl get deployments"
           }
         ]
@@ -507,6 +520,7 @@
               "^ls$"
             ],
             "solution": "ls",
+            "why": "Erst schauen, dann ausrollen – <code>ls</code> bestätigt, dass die Wurzel-Seekarte da ist, bevor du mit einem Befehl die ganze Flotte in Gang setzt.",
             "hint": "Zwei Buchstaben."
           },
           {
@@ -516,6 +530,7 @@
               "^cat\\s+app-of-apps\\.yaml$"
             ],
             "solution": "cat app-of-apps.yaml",
+            "why": "Die Wurzel liest man genau: ihr <code>source.path</code> zeigt auf den Sammel-Ordner <code>flotte</code>, nicht auf einen einzelnen Dienst – daran erkennst du das App-of-Apps-Muster, bevor du es anwendest.",
             "hint": "cat app-of-apps.yaml"
           }
         ]
@@ -532,6 +547,7 @@
           ],
           "check": {"all":[{"some":"argoApps","where":{"name":"hafen-flotte","childApps":{"truthy":true}}},{"some":"argoApps","where":{"name":"flotte-lager"}},{"some":"argoApps","where":{"name":"flotte-funk"}},{"some":"argoApps","where":{"name":"flotte-kran"}}]},
           "solution": "kubectl apply --filename app-of-apps.yaml",
+          "why": "Ein <code>apply</code> statt n einzelner: die Wurzel-Application zeigt auf einen Ordner voller weiterer Applications und legt so die ganze Flotte in einem Rutsch an – genau die Skalierung, für die GitOps gemacht ist.",
           "hint": "kubectl apply --filename app-of-apps.yaml – der vertraute Befehl, diesmal für die Wurzel."
         }
       },
@@ -554,6 +570,7 @@
             ],
             "check": {"all":[{"some":"argoApps","where":{"name":"flotte-lager"}},{"some":"argoApps","where":{"name":"flotte-funk"}},{"some":"argoApps","where":{"name":"flotte-kran"}}]},
             "solution": "argocd app list",
+            "why": "<code>app list</code> zeigt, dass aus einer Wurzel die ganze Flotte geworden ist – der Flotten-Überblick beweist, dass ein einziger Auftrag die Kind-Applications erzeugt hat.",
             "hint": "argocd app list (oder ls)."
           },
           {
@@ -564,6 +581,7 @@
             ],
             "check": {"some":"argoApps","where":{"name":"hafen-flotte","childApps":{"len":3}}},
             "solution": "argocd app get hafen-flotte",
+            "why": "Die Wurzel-Akte zeigt unter <b>Managed Apps</b> ihre Kinder – sie selbst rollt keinen Dienst aus. Diese Trennung (Wurzel verwaltet, Kinder liefern) ist der Kern des Musters.",
             "hint": "argocd app get hafen-flotte"
           },
           {
@@ -574,6 +592,7 @@
             ],
             "check": {"all":[{"some":"deployments","where":{"name":"flotte-lager"}},{"some":"deployments","where":{"name":"flotte-funk"}},{"some":"deployments","where":{"name":"flotte-kran"}}]},
             "solution": "kubectl get deployments",
+            "why": "Der letzte Beweis liegt im Cluster: <code>get deployments</code> zeigt jeden Dienst der Kind-Applications – ausgerollt, ohne dass du sie einzeln anlegen musstest. Ergebnis prüfen, nicht annehmen.",
             "hint": "kubectl get deployments"
           }
         ]

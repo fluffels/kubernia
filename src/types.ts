@@ -185,6 +185,13 @@ export interface QuestTask {
   /** Musterlösung (Anzeige + Selbsttest in content.test.ts). */
   solution: string;
   hint: string;
+  /** Begründet bei falscher Eingabe das *Prinzip* hinter der Musterlösung – „nie nur
+   *  falsch", verstehen statt auswendig (#233/#252, Nachzug zu `DrillTask.why`). Wird im
+   *  Funkgerät-Feedback (viewdecide.ts `evaluateSubmission`, radio.ts `termSolution`) gezeigt.
+   *  Typ-optional (hält Test-Fixtures/Grün-Pfad schlank), inhaltlich aber PFLICHT: der
+   *  Konsistenz-Wächter in content.test.ts erzwingt, dass jede reale Terminal-Aufgabe UND
+   *  jeder Teach-Befehl ein nicht-leeres `why` trägt (der Reviver prüft: wenn gesetzt, nicht leer). */
+  why?: string;
   /** Optionale Zusatzbedingung gegen den Sim-Zustand – es zählt nur die Truthiness. */
   check?: (sim: Sim) => unknown;
 }
