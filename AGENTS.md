@@ -147,7 +147,7 @@ Der Backlog wird als **GitHub Issues** geführt, gruppiert im **GitHub Project-B
   ```bash
   gh project item-list 1 --owner fluffels --format json --limit 800 --jq '
     .items
-    | map(select(.content.type=="Issue" and (.status // "")!="Done" and ((.labels // [])|index("status:zurückgestellt")|not)))
+    | map(select(.content.type=="Issue" and (.status // "")=="Todo" and ((.labels // [])|index("status:zurückgestellt")|not)))
     | .[] | "#\(.content.number)\t\(.title)"'
   ```
   (Assignee/Branch/Worktree-Gegencheck trotzdem: `gh issue view <nr>` + `git worktree list` + `git branch -a`.)
