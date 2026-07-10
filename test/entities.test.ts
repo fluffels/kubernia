@@ -18,6 +18,7 @@ import {
   objectForId,
   objectFootprint,
   entityMapProblems,
+  npcPositionAt,
 } from "../src/content/entities";
 import { NPCS, ContentValidationError } from "../src/content/loader";
 import { NPC_SPAWNS } from "../src/world/world";
@@ -144,6 +145,83 @@ test("parseEntities: akzeptiert einen gültigen Datensatz (Gegenprobe gegen Fals
   assert.deepEqual(parseEntities({ npcs: [{ id: "ole", map: "harbor", x: 0, y: 14.6 }] }), [
     { id: "ole", map: "harbor", x: 0, y: 14.6 },
   ]);
+});
+
+test("parseEntities: akzeptiert Tagesplan + liefert schedule-Einträge korrekt (Gegenprobe)", () => {
+  const withSched = {
+    npcs: [{ id: "ole", map: "harbor", x: 1, y: 2,
+      schedule: [{ timeStart: "08:00", timeEnd: "12:00", x: 5, y: 6 }],
+    }],
+  };
+  const result = parseEntities(withSched);
+  assert.equal(result.length, 1);
+  assert.deepEqual(result[0].schedule, [{ timeStart: "08:00", timeEnd: "12:00", x: 5, y: 6 }]);
+  // Ohne schedule → kein schedule-Schlüssel im Ergebnis (kein undefined-Müll)
+  assert.equal("schedule" in parseEntities(OK)[0], false);
+});
+
+test("parseEntities: wirft bei ungültigem Tagesplan-Eintrag (Format/Reihenfolge/unbekannte Felder)", () => {
+  const base = { id: "ole", map: "harbor", x: 1, y: 2 };
+  // Falsches Zeitformat
+  assert.throws(() => parseEntities({ npcs: [{ ...base, schedule: [{ timeStart: "8:00", timeEnd: "12:00", x: 1, y: 2 }] }] }), ContentValidationError);
+  assert.throws(() => parseEntities({ npcs: [{ ...base, schedule: [{ timeStart: "08:00", timeEnd: "25:00", x: 1, y: 2 }] }] }), ContentValidationError);
+  assert.throws(() => parseEntities({ npcs: [{ ...base, schedule: [{ timeStart: "00:60", timeEnd: "12:00", x: 1, y: 2 }] }] }), ContentValidationError);
+  // timeStart >= timeEnd (Übernacht nicht unterstützt)
+  assert.throws(() => parseEntities({ npcs: [{ ...base, schedule: [{ timeStart: "12:00", timeEnd: "08:00", x: 1, y: 2 }] }] }), ContentValidationError);
+  assert.throws(() => parseEntities({ npcs: [{ ...base, schedule: [{ timeStart: "08:00", timeEnd: "08:00", x: 1, y: 2 }] }] }), ContentValidationError);
+  // Unbekannter Schlüssel
+  assert.throws(() => parseEntities({ npcs: [{ ...base, schedule: [{ timeStart: "08:00", timeEnd: "12:00", x: 1, y: 2, label: "?" }] }] }), ContentValidationError);
+  // Fehlende/ungültige Koordinate
+  assert.throws(() => parseEntities({ npcs: [{ ...base, schedule: [{ timeStart: "08:00", timeEnd: "12:00", y: 2 }] }] }), ContentValidationError);
+  assert.throws(() => parseEntities({ npcs: [{ ...base, schedule: [{ timeStart: "08:00", timeEnd: "12:00", x: "a", y: 2 }] }] }), ContentValidationError);
+});
+
+/* ====== npcPositionAt: Tagesplan-Auflösung zur Laufzeit (#420) ====== */
+
+test("npcPositionAt: NPC ohne Tagesplan gibt immer den Standardplatz zurück", () => {
+  const npc = { id: "bo", map: "harbor", x: 8, y: 25 };
+  assert.deepEqual(npcPositionAt(npc, "00:00"), { x: 8, y: 25 });
+  assert.deepEqual(npcPositionAt(npc, "12:00"), { x: 8, y: 25 });
+  assert.deepEqual(npcPositionAt(npc, "23:59"), { x: 8, y: 25 });
+});
+
+test("npcPositionAt: gibt Planstandplatz zurück, wenn Uhrzeit im Fenster liegt", () => {
+  const npc = {
+    id: "ole", map: "harbor", x: 26, y: 14.6,
+    schedule: [
+      { timeStart: "08:00", timeEnd: "12:00", x: 22, y: 24 },
+      { timeStart: "14:00", timeEnd: "18:00", x: 34, y: 20 },
+    ] as const,
+  };
+  assert.deepEqual(npcPositionAt(npc, "08:00"), { x: 22, y: 24 });  // inklusiv Start
+  assert.deepEqual(npcPositionAt(npc, "10:30"), { x: 22, y: 24 });  // Mitte Fenster
+  assert.deepEqual(npcPositionAt(npc, "14:00"), { x: 34, y: 20 });  // zweites Fenster
+  assert.deepEqual(npcPositionAt(npc, "17:59"), { x: 34, y: 20 });  // kurz vor Ende
+});
+
+test("npcPositionAt: gibt Standardplatz zurück, wenn keine Fenster zutreffen", () => {
+  const npc = {
+    id: "ole", map: "harbor", x: 26, y: 14.6,
+    schedule: [
+      { timeStart: "08:00", timeEnd: "12:00", x: 22, y: 24 },
+    ] as const,
+  };
+  assert.deepEqual(npcPositionAt(npc, "07:59"), { x: 26, y: 14.6 }); // vor dem Fenster
+  assert.deepEqual(npcPositionAt(npc, "12:00"), { x: 26, y: 14.6 }); // exklusiv Ende
+  assert.deepEqual(npcPositionAt(npc, "20:00"), { x: 26, y: 14.6 }); // nach dem Fenster
+});
+
+test("npcPositionAt: echte ENTITY_NPCS-Daten – Ole wandert nach Tagesplan", () => {
+  const ole = ENTITY_NPCS.find((e) => e.id === "ole" && e.map === "harbor")!;
+  assert.ok(ole, "ole muss in der Registry stehen");
+  // Morgens: 07:00-11:00 → Fenster 1
+  assert.deepEqual(npcPositionAt(ole, "09:00"), { x: 22, y: 24 });
+  // Mittags: außerhalb aller Fenster → Default
+  assert.deepEqual(npcPositionAt(ole, "13:00"), { x: 26, y: 14.6 });
+  // Nachmittags: 14:00-19:00 → Fenster 2
+  assert.deepEqual(npcPositionAt(ole, "15:00"), { x: 34, y: 22 });
+  // Abends → Default
+  assert.deepEqual(npcPositionAt(ole, "21:00"), { x: 26, y: 14.6 });
 });
 
 test("parseEntities: wirft bei Nicht-Objekt / fehlendem npcs-Array", () => {
