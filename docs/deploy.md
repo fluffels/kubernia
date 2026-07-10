@@ -53,22 +53,24 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8080
 
 ### Image in den Cluster laden
 
+Das Deployment referenziert das Image als `kubernia:latest`. Beim Bauen in Slice 1 diesen Tag verwenden:
+
+```bash
+docker build -t kubernia .
+```
+
+Dann in den Cluster laden:
+
 **kind:**
 
 ```bash
-kind load docker-image kubequest:latest --name <cluster-name>
+kind load docker-image kubernia:latest --name <cluster-name>
 ```
 
 **minikube:**
 
 ```bash
-minikube image load kubequest:latest
-```
-
-### Manifeste anwenden
-
-```bash
-kubectl apply -f deploy/
+minikube image load kubernia:latest
 ```
 
 ### Ingress-Controller installieren (kind)
@@ -78,15 +80,33 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main
 kubectl -n ingress-nginx wait --for=condition=Ready pod -l app.kubernetes.io/component=controller --timeout=90s
 ```
 
+### Manifeste anwenden
+
+```bash
+kubectl apply -f deploy/deployment.yaml
+kubectl apply -f deploy/service.yaml
+kubectl apply -f deploy/ingress.yaml
+```
+
+Das Verzeichnis `deploy/` enthält:
+
+| Datei | Inhalt |
+|---|---|
+| `deployment.yaml` | Deployment (1 Replica, Ressourcen-Limits, readiness/liveness-Probe) |
+| `service.yaml` | ClusterIP-Service (Port 80) |
+| `ingress.yaml` | Ingress für `kubequest.localtest.me` (lokaler Cluster) |
+| `ingress-tls.yaml` | Ingress mit TLS für öffentliches Hosting (Domain eintragen, s. Slice 4) |
+| `cert-issuer.yaml` | Let's-Encrypt-ClusterIssuer für cert-manager (öffentliches Hosting) |
+
 ### Spiel im Browser öffnen
 
-Das Spiel ist unter `http://kubequest.localtest.me` erreichbar (`.localtest.me` löst immer zu `127.0.0.1` auf, kein `/etc/hosts`-Eintrag nötig).
+Das Spiel ist unter <http://kubequest.localtest.me> erreichbar. Die Domain `.localtest.me` löst per öffentlichem DNS immer zu `127.0.0.1` auf – kein `/etc/hosts`-Eintrag nötig.
 
 ### Verifizierung
 
 ```bash
 # Pod muss Running sein und Probes grün
-kubectl get pods -l app=kubequest
+kubectl get pods -l app=kubernia
 
 # Smoke gegen den Ingress
 curl -s -o /dev/null -w "%{http_code}" http://kubequest.localtest.me
