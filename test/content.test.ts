@@ -1030,16 +1030,16 @@ test("#154 tf-output-list-Drill verbirgt den sensiblen Wert in der Übersicht, g
   assert.equal(sim.exec("terraform output lager_schluessel").output, "werft-geheim");
 });
 
-test("#155 die acht vertiefenden Flotte-Quiz-Karten existieren und hängen an ihrer Quest (chapter)", () => {
+test("#155/#280 die vertiefenden Flotte-Quiz-Karten existieren und hängen an ihrer Quest (chapter)", () => {
   const questIds = new Set(KQContent.QUESTS.map(q => q.id));
   const deepening = KQContent.CRAB_QUIZ.filter(c => /^q-flotte-.*-(3|4)$/.test(c.id));
-  assert.equal(deepening.length, 8, "es gibt acht vertiefende Karten (zwei je Phase-9-Quest)");
+  assert.equal(deepening.length, 12, "es gibt zwölf vertiefende Karten (zwei je Flotte-Quest)");
   for (const card of deepening) {
     assert.ok(card.chapter, card.id + ": vertiefende Karte braucht ein chapter (SR-Pool nach Quest-Abschluss)");
     assert.ok(questIds.has(card.chapter!), card.id + ": chapter zeigt auf eine unbekannte Quest: " + card.chapter);
   }
-  // Genau zwei je Flotte-Quest.
-  for (const q of ["terraform-modul", "terraform-remote-state", "terraform-provider", "terraform-variablen-outputs"]) {
+  // Genau zwei je Flotte-Quest (die vier Phase-9-Quests + die zwei Vertiefungen aus #280).
+  for (const q of ["terraform-modul", "terraform-remote-state", "terraform-provider", "terraform-variablen-outputs", "terraform-echte-provider", "terraform-configs-umgebung"]) {
     assert.equal(deepening.filter(c => c.chapter === q).length, 2, "zwei vertiefende Karten für " + q);
   }
 });
