@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubernia
+  labels:
+    app: kubernia
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubernia
+  template:
+    metadata:
+      labels:
+        app: kubernia
+    spec:
+      containers:
+        - name: kubernia
+          # Lokal: nach `docker build -t kubernia .` + `kind load docker-image kubernia:latest`
+          # Öffentlich: ghcr.io/fluffels/kubernia:latest (nach Registry-Push via CI)
+          image: kubernia:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "200m"
+              memory: "64Mi"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 30
