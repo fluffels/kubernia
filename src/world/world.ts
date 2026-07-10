@@ -84,6 +84,10 @@ export interface Door {
   target?: string;
   targetX?: number;
   targetY?: number;
+  /** Rückkehr-Tür (#759): Ist gesetzt, führt das Verlassen des Innenraums nicht
+   *  zur Weltkarte zurück, sondern startet die InteriorScene mit dieser Tür neu.
+   *  Ermöglicht mehrstufige Innenräume (Deck → Unterdeck → Deck). */
+  returnDoor?: Door;
 }
 
 export const DOORS: Door[] = [
@@ -101,6 +105,10 @@ export const SHIP = { x: 30, y: 29, w: 9, h: 6 } as const;
  *  Liegt mittig im Deck (begehbar), nicht am Steg-Rand – so triggert man beim
  *  Drüberlaufen. Bewusst NICHT in DOORS: das Schiff hängt nicht an einem NPC_SPAWN. */
 export const SHIP_DOOR: Door = { id: "schiff", tx: 34, ty: 32, title: "Dein Deck", theme: "ship", npc: "kralle" };
+
+/** Unterdeck-Eingang (#759): wird von der InteriorScene beim Betreten der Luken-Kachel
+ *  gesetzt. `returnDoor` führt beim Verlassen zurück aufs Deck statt zur Weltkarte. */
+export const UNDERDECK_DOOR: Door = { id: "unterdeck", tx: 34, ty: 32, title: "Unterdeck", theme: "ship_underdeck", returnDoor: SHIP_DOOR };
 
 /* ===== Begehbares Deck als Boots-Silhouette (#205) =====
  * Früher war die GANZE rechteckige SHIP-Grundfläche begehbar – dadurch lief man auf
