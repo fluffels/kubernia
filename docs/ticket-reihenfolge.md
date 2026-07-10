@@ -24,7 +24,7 @@ Freie Auswahl in Board-Reihenfolge in einem Befehl (oberste Zeile ist „dran"):
 ```bash
 gh project item-list 1 --owner fluffels --format json --limit 800 --jq '
   .items
-  | map(select(.content.type=="Issue" and (.status // "")!="Done" and (has("assignees")|not) and ((.labels // [])|index("status:zurückgestellt")|not)))
+  | map(select(.content.type=="Issue" and (.status // "")!="Done" and ((.labels // [])|index("status:zurückgestellt")|not)))
   | .[] | "#\(.content.number)\t\(.title)"'
 ```
 
