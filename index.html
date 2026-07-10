@@ -34,9 +34,10 @@
     </div>
     <div class="hud-quest" id="hud-quest"></div>
     <!-- #232: Beschriftung wird beim Boot aus der (umbelegbaren) Belegung gesetzt
-         (UI.renderKeyHints); der Default-Text hier ist nur der Vor-Boot-Fallback. -->
-    <div class="hud-keys" id="hud-keys">🚶 WASD/Pfeile · 💬 R reden · 💻 F Funkgerät · 📜 L Logbuch · 📖 B Album · ☰ Esc Menü</div>
-    <button id="hud-menu-btn" class="hud-menu-btn" data-action="openMenu" title="Menü öffnen (Esc)">☰ Menü</button>
+         (UI.renderKeyHints) – dort seit #646 mit PixelLab-Pixel-Icons statt Emoji.
+         Der emoji-freie Text hier ist nur der Vor-Boot-Fallback. -->
+    <div class="hud-keys" id="hud-keys">WASD/Pfeile · R reden · F Funkgerät · L Logbuch · B Album · Esc Menü</div>
+    <button id="hud-menu-btn" class="hud-menu-btn" data-action="openMenu" title="Menü öffnen (Esc)"><img id="hud-icon-menu" class="pixel-icon" alt="" aria-hidden="true"> Menü</button>
   </div>
 
   <!-- Globaler Gefahren-Warnrahmen (#540): sichtbar in JEDER Szene, solange eine Gefahr läuft.

@@ -3,6 +3,7 @@ import { SFX, MUSIC_THEMES } from "../sfx";
 import { resolveOverlayKey, nextFocusIndex } from "../hud/overlaykbd";
 import { BLOCKING_OVERLAY_IDS, KEYNAV_OVERLAY_IDS } from "./overlays";
 import { part, $, esc, sheetImgs, type UINpc } from "./shared";
+import { HUD_KEY_ICONS } from "../assets-data";
 import {
   BINDABLE_ACTIONS, ACTION_LABELS, DEFAULT_KEYBINDINGS,
   isAssignableKey, findConflict, normalizeKey, type BindableAction,
@@ -305,13 +306,19 @@ export const overlayUI = part({
 
   /** HUD-Tastenleiste (index.html #hud-keys) aus der aktuellen Belegung neu beschriften
    *  (#232). Beim Boot und nach jedem Umbelegen aufgerufen, damit die Leiste nie eine
-   *  veraltete Default-Taste anzeigt. */
+   *  veraltete Default-Taste anzeigt. Die früheren Emoji sind seit #646 (Slice 2/4 von
+   *  #204) PixelLab-Pixel-Icons (`<img class="pixel-icon">` aus HUD_KEY_ICONS); darum
+   *  `innerHTML` statt `textContent`. Die Tastenkürzel bleiben `esc()`-escaped (der Wert
+   *  ist umbelegbar). */
   renderKeyHints() {
     const k = Game.state.settings.keys;
-    const up = (a: BindableAction) => k[a].toUpperCase();
-    $("hud-keys").textContent =
-      "🚶 WASD/Pfeile · 💬 " + up("talk") + " reden · 💻 " + up("radio") + " Funkgerät · 📜 " +
-      up("logbook") + " Logbuch · 📖 " + up("album") + " Album · ☰ Esc Menü";
+    const up = (a: BindableAction) => esc(k[a].toUpperCase());
+    const ic = (key: keyof typeof HUD_KEY_ICONS) =>
+      '<img class="pixel-icon" src="' + HUD_KEY_ICONS[key] + '" alt="" aria-hidden="true">';
+    $("hud-keys").innerHTML =
+      ic("walk") + " WASD/Pfeile · " + ic("talk") + " " + up("talk") + " reden · " +
+      ic("radio") + " " + up("radio") + " Funkgerät · " + ic("logbook") + " " + up("logbook") + " Logbuch · " +
+      ic("album") + " " + up("album") + " Album · " + ic("menu") + " Esc Menü";
   },
 
   /** Startet das Umbelegen einer Aktion: merkt sie, zeichnet den Block neu (Knopf zeigt
