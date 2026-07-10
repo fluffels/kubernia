@@ -47,7 +47,7 @@ import { readActiveRaw, writeActiveRaw, backupActive } from "./slots";
 import { ABBREVS } from "../content/abbrev";
 import { ALL_ABBREV_UNLOCKED } from "../game/shared";
 
-export const CURRENT_SAVE_VERSION = 8;
+export const CURRENT_SAVE_VERSION = 9;
 
 /** Migration von Format-Version n auf n+1 (reine Funktion auf dem `data`-Objekt). */
 type Migration = (data: unknown) => unknown;
@@ -194,9 +194,25 @@ const migrations: Record<number, Migration> = {
   //         liegt ZENTRAL in game/save.ts › safeSettings (sanitizeKeybindings), damit es ALLE
   //         Ladewege trifft (auch den rohen JSON-Import, der seit #493 durch migrateParsed +
   //         sanitizeState läuft). Verlustfrei – vorher war keine Belegung gespeichert, ein
-  //         Alt-Stand bekommt schlicht die Default-Belegung. Der Bump sichert jeden v7-Stand
+  //         Alt-Stand bekommt schlicht die Default-Belegung. Der Bump sichert jeden v8-Stand
   //         vor dem ersten Überschreiben ins Backup.
   7: (data) => data,
+  // 8 -> 9 (#421): Inventar-Modell von `Record<string, number>` auf `Record<string, ItemStack>`
+  //         gehoben. ECHTE Transformation (kein No-op): jede alte Zahl n wird zu { count: n }.
+  //         Einträge mit n <= 0 fallen weg (waren schon vorher semantisch leer). Der Bump sichert
+  //         jeden v8-Stand vor dem ersten Überschreiben ins Backup; sanitizeInventory in save.ts
+  //         bietet zusätzlich einen Graceful-Fallback für etwaige Kanten-Fälle.
+  8: (data) => {
+    if (typeof data !== "object" || data === null) return data;
+    const d = data as Record<string, unknown>;
+    const inv = d.inventory;
+    if (typeof inv !== "object" || inv === null) return d;
+    const newInv: Record<string, unknown> = {};
+    for (const [id, n] of Object.entries(inv as Record<string, unknown>)) {
+      if (typeof n === "number" && n > 0) newInv[id] = { count: Math.floor(n) };
+    }
+    return { ...d, inventory: newInv };
+  },
 };
 
 /** Hebt `data` von `version` schrittweise auf CURRENT_SAVE_VERSION. */

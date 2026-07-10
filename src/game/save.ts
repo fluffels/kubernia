@@ -9,7 +9,7 @@ import { SaveStore } from "../store";
 import { worldScene, applyAudioConfig, notifySaveFailed } from "../runtime";
 import { add, toCoins } from "../core/coins";
 import { sanitizeKeybindings } from "../core/keybindings";
-import type { GameState, QuestProgress, QuestStep, LeitnerEntry } from "../types";
+import type { GameState, QuestProgress, QuestStep, LeitnerEntry, ItemStack } from "../types";
 import { part, makeDefaultState, questIdForIndex, questIndexForId, canonicalActiveQuests, isEventMode, CMD_HISTORY_ITEM_ID, type SlotView } from "./shared";
 
 /** Save-Migration #354: alte numerische Quest-IDs (q0, q2b, …) → neue sprechende Slugs.
@@ -133,6 +133,25 @@ function sanitizeCountMap(v: unknown): Record<string, number> {
   }
   return out;
 }
+/** Inventar als ItemStack-Map sanitisieren (#421). Versteht sowohl das alte Format
+ *  (Zahl: Direkt-Migrations-Fallback für unmigrierte Kanten-Fälle) als auch das neue
+ *  { count, quality? }-Format. Einträge mit count <= 0 oder ungültigem Typ fallen weg. */
+function sanitizeInventory(v: unknown): Record<string, ItemStack> {
+  const out: Record<string, ItemStack> = {};
+  if (isPlainObject(v)) {
+    for (const [id, raw] of Object.entries(v)) {
+      if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+        // Graceful fallback für unmigrierten number-Stand (sollte durch Migration 8 nie auftreten)
+        out[id] = { count: Math.floor(raw) };
+      } else if (isPlainObject(raw)) {
+        const count = safeCount(raw.count, 0);
+        if (count > 0) out[id] = { count };
+      }
+    }
+  }
+  return out;
+}
+
 /** Leitner-Einträge { box (1..5), due } defensiv übernehmen. EINE Quelle für die
  *  gleich geformten Maps `review` (Quiz) und `mastery` (Übungen #219) – fehlt das Feld
  *  (Alt-Stand) → leer, die verlustfreie Migration. */
@@ -307,7 +326,7 @@ export function sanitizeState(raw: unknown): GameState {
     activeQuests,
     currentQuestId,
     completedQuests: safeStrArray(raw.completedQuests).map(migrateQuestId), // alte Quest-IDs -> neue Slugs (#354)
-    inventory: sanitizeCountMap(raw.inventory),
+    inventory: sanitizeInventory(raw.inventory),
     owned,
     activePet: safeStrOrNull(raw.activePet),
     activeFlag: safeStrOrNull(raw.activeFlag),

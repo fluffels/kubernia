@@ -56,9 +56,12 @@ export interface ShopItem {
   /** Komfort-Funktionen (#572, Zwei-Stufen-Gate verdienen→kaufen): wie oft die Grundlage
    *  benutzt werden muss, bevor der Kauf freigeschaltet wird. Nur bei `type: "comfort"`. */
   unlockAt?: number;
+  /** Maximale Stapelgröße (#421): wie viele Exemplare ein Inventar-Stapel maximal fassen darf.
+   *  Fehlt/undefined = unbegrenzt (aktuell noch nicht erzwungen, Fundament für künftigen Scope). */
+  maxStack?: number;
 }
 
-const SHOP_KEYS = ["id", "icon", "name", "price", "type", "desc", "sprite", "tex", "color", "unlockAt"] as const;
+const SHOP_KEYS = ["id", "icon", "name", "price", "type", "desc", "sprite", "tex", "color", "unlockAt", "maxStack"] as const;
 
 /** Validiert die rohen Shop-Daten. `color` steht in der JSON als lesbarer Hex-String
  *  (`"#rrggbb"`) statt als `0x......`-Zahlenliteral, siehe `asHexColor`. Wirft
@@ -83,6 +86,7 @@ export function parseShop(raw: unknown): ShopItem[] {
     if (o.tex !== undefined) item.tex = asNonEmptyString(o.tex, `shop[${i}].tex`);
     if (o.color !== undefined) item.color = asHexColor(o.color, `shop[${i}].color`);
     if (o.unlockAt !== undefined) item.unlockAt = asInt(o.unlockAt, `shop[${i}].unlockAt`);
+    if (o.maxStack !== undefined) item.maxStack = asInt(o.maxStack, `shop[${i}].maxStack`);
     return item;
   });
 }

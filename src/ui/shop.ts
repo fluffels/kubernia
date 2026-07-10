@@ -36,7 +36,7 @@ function groupShopItems(items: UIShopItem[]): { label: string; icon: string; ite
 function shopItemAction(item: UIShopItem, s: GameState): string {
   const ownedPerm = s.owned.includes(item.id);
   if (item.type === "consumable") {
-    const ownedCount = s.inventory[item.id] || 0;
+    const ownedCount = s.inventory[item.id]?.count ?? 0;
     return `<button class="primary" data-action="buyItem" data-arg="${item.id}">Kaufen – ${item.price} 🪙</button>
       ${ownedCount > 0 ? `<div class="si-owned">Im Beutel: ${ownedCount}</div>` : ""}`;
   }
