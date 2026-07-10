@@ -80,6 +80,7 @@ import cannon from "../assets/pixellab/cannon.png";             // Hafen-Kanone 
 import ship_frame from "../assets/pixellab/ship_frame.png";     // Schiffsrumpf im Bau, Heimat-Werft (#456)
 import scaffold from "../assets/pixellab/scaffold.png";         // Werft-Baugerüst, Heimat-Werft (#456)
 import shed from "../assets/pixellab/shed.png";                 // Lagerschuppen für gestoppte Container (#678)
+import pier_ruined from "../assets/pixellab/pier_ruined.png";   // Beschädigter Steg (Sturm-Optik #691)
 
 // PixelLab-Figuren (nur south-Frame genutzt)
 import char_player from "../assets/pixellab/char_player.png";
@@ -226,6 +227,7 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
   { key: "seagull", src: seagull, kind: "plain" },           // Möwe (#182)
   { key: "cannon", src: cannon, kind: "plain" },             // Hafen-Kanone (Shop-Upgrade, #183)
   { key: "shed", src: shed, kind: "plain" },                 // Lagerschuppen für gestoppte Container (#678)
+  { key: "pier_ruined", src: pier_ruined, kind: "plain" },   // Beschädigter Steg (Sturm-Optik #691)
 
   // PixelLab-Figuren (nur south-Frame genutzt)
   { key: "char_player", src: char_player, kind: "plain" },
