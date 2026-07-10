@@ -72,6 +72,18 @@ Slice 4/4 von #204 (#648): dieselbe Machart und `.pixel-icon`-Klasse wie die HUD
 | `menu_load` | Offener Ordner mit Dokument (Spielstand laden, `importPick`) |
 | `menu_reset` | Rote Kreis-Pfeile (Spielstand zurücksetzen, `resetGame`, `.danger`) |
 
+## HUD-Tastenleisten-Icons (`create_map_object`, 32×32, `view: side`, DOM-`<img>`)
+Slice **2/4 von #204** (#646): ersetzen die Emoji der Steuer-Hinweisleiste (`index.html` #hud-keys) durch dieselben gerahmten Pixel-Icons wie die Statuszeile (gleicher Stil/gleiches Raster wie oben). In `src/assets-data.ts` als Record `HUD_KEY_ICONS` (Aktion → URL) eingebunden. Gerendert in `src/ui/overlay.ts` › `renderKeyHints()` (dynamisch, weil die Tastenkürzel umbelegbar sind, #232) als `<img class="pixel-icon">`; das feste Menü-Icon im `#hud-menu-btn` verdrahtet `ui/hud.ts` › `initHudIcons()`.
+
+| Datei | Motiv |
+|---|---|
+| `hud_walk` | Seefahrer-Stiefel (Laufen, WASD/Pfeile) |
+| `hud_talk` | Sprechblase (Reden) |
+| `hud_terminal` | Retro-CRT-Terminal mit grünem Text (Funkgerät/Terminal) |
+| `hud_logbook` | Aufgerollte Schriftrolle (Logbuch) |
+| `hud_album` | Aufgeschlagenes Buch (Sammelalbum) |
+| `hud_menu` | Schiffssteuerrad (Menü, auch `#hud-menu-btn`) |
+
 ## Figuren (`create_character`, 4-dir, nur `south.png` genutzt)
 `char_player` daae9195 · `char_ole` b89f37e2 · `char_runa` 723246a6 · `char_pelle` 793f0232
 `char_bo` f8a654e6 · `char_ada` 4b44fcee · `char_theo` f7d6621a · `char_kralle` 6551e699 · `char_juno` 8d0a9892
