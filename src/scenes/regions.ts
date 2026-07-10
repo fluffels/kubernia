@@ -14,7 +14,7 @@
 import Phaser from "phaser";
 import { circleHitbox, rectHitbox } from "../world/world";
 import { npcSpawnsForMap } from "../content/entities";
-import { T, DEVICE } from "./shared";
+import { T } from "./shared";
 import { HIT_R, CRATE_HIT } from "./geometry";
 import type { RegionConfig, RegionScene } from "./RegionScene";
 import { buildArchipel, ARCHIPEL_TO_WORLD, ARCHIPEL_ARRIVAL, ARCHIPEL_NPC, ARCHIPEL_QUEST_TRIGGER, type ArchipelMap } from "../world/regions/archipel";
@@ -58,7 +58,7 @@ const archipel: RegionConfig = {
     // Quest-Trigger-Statue: ein „dungeon"-Tile als Mahnmal, bis #94–97 echte Quests einhängen.
     const cx = ARCHIPEL_QUEST_TRIGGER.x * T + 8, baseY = (ARCHIPEL_QUEST_TRIGGER.y + 1) * T;
     scene.add.ellipse(cx, baseY - 1, 14, 5, 0x000000, 0.22).setDepth(baseY - 1);
-    scene.add.image(cx, baseY, "dungeon", DEVICE).setOrigin(0.5, 1).setScale(1.1).setDepth(baseY);
+    scene.add.image(cx, baseY, "interior_console").setScale(0.55).setOrigin(0.5, 1).setDepth(baseY);
   },
 };
 

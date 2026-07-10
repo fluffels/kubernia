@@ -85,7 +85,8 @@ export const BUNDLE_BUDGETS = [
     kind: "game-chunks",
     dir: "dist/assets",
     // #252: +~66 KB — die 349 „why"-Begründungen im Content-JSON wachsen den Spielcode-Chunk.
-    maxBytes: 1_380_000,
+    // #669: +~4 KB — 4 neue Innenraum-Möbel-PNGs (Tisch/Konsole/Buch/Amboss, je 32×32).
+    maxBytes: 1_390_000,
   },
   {
     label: "Phaser-vendor-Chunk in dist/ (#595)",
