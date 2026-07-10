@@ -95,7 +95,70 @@ curl -s -o /dev/null -w "%{http_code}" http://kubequest.localtest.me
 
 ---
 
+## Slice 3 – Helm-Chart (optional): deploy/chart/ (#754)
+
+Alternativ zu den rohen Manifesten aus Slice 2 lässt sich das Spiel über das
+Helm-Chart in `deploy/chart/` installieren. Das bündelt Deployment + Service +
+Ingress als Helm-Templates und macht alle Konfig-Werte über `values.yaml`
+steuerbar.
+
+> *Voraussetzung: Image aus Slice 1, Cluster + Ingress-Controller aus Slice 2.*
+
+### Helm installieren
+
+```bash
+helm install kubernia ./deploy/chart \
+  --set image.repository=kubequest \
+  --set image.tag=latest \
+  --set ingress.host=kubequest.localtest.me
+```
+
+Danach ist das Spiel unter **http://kubequest.localtest.me** erreichbar
+(Port-Forward-Alternative: `kubectl port-forward svc/kubernia 8080:80`).
+
+### Häufige Konfig-Änderungen
+
+```bash
+# Anderen Image-Tag deployen
+helm upgrade kubernia ./deploy/chart --set image.tag=1.2.3
+
+# Anderen Hostnamen + mehr Replicas
+helm upgrade kubernia ./deploy/chart \
+  --set ingress.host=spiel.example.com \
+  --set replicaCount=2
+
+# Ingress deaktivieren (reines Port-Forward)
+helm upgrade kubernia ./deploy/chart --set ingress.enabled=false
+```
+
+### Chart-Verifikation (ohne echten Cluster)
+
+```bash
+# Lint: Chart-Struktur + Values prüfen
+helm lint deploy/chart
+
+# Template: generierten YAML-Output inspizieren
+helm template kubernia deploy/chart
+```
+
+### Chart-Struktur
+
+```
+deploy/chart/
+├── Chart.yaml            # Name, Version, appVersion
+├── values.yaml           # Standardwerte (image, ingress, resources …)
+└── templates/
+    ├── _helpers.tpl      # Namens-/Label-Helfer
+    ├── deployment.yaml   # 1 nginx-Replica, Liveness-/Readiness-Probe
+    ├── service.yaml      # ClusterIP, Port 80
+    └── ingress.yaml      # nginx-Ingress, host + optionales TLS
+```
+
+Für TLS-Betrieb (z.B. mit cert-manager) die `tls`-Sektion in `values.yaml`
+aktivieren und den gewünschten `secretName` eintragen.
+
+---
+
 ## Weitere Slices
 
-- **Slice 3/4** (#754): optionale Helm-Bündelung
-- **Slice 4/4** (#755): öffentliches Hosting / Registry / DNS / TLS
+- **Slice 4/4** (#755): öffentliches Hosting / Registry-Push / Managed K8s / DNS / TLS
