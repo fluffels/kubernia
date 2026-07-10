@@ -23,6 +23,7 @@ import { spawnGull, spawnFlowers, spawnGrassDetail, scatter, renderStatics, upda
 import { syncCluster, updateDynamicTags, updateDynDecor } from "./worldscene/clustersync";
 import { registerHazardRenderer } from "./worldscene/events";
 import { updateWarps } from "./worldscene/warps";
+import { updateNpcSchedules } from "./worldscene/npcschedule";
 // #496: die Feld-Typen + das WorldSceneFields-Interface liegen in worldscene/types.ts
 // (dieselbe Datei wie WorldSceneLike). Die Klasse implementiert WorldSceneFields, damit
 // der Compiler garantiert, dass jedes Feld/jede Render-Primitive, die die Systemmodule
@@ -537,6 +538,7 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     syncCluster(this);
     updateDynamicTags(this);
     updateDynDecor(this, time);
+    updateNpcSchedules(this, Game.calendar().hhmm);
     // Persistente Spiel-Zeit (#413) um die reale Frame-Zeit vorrücken und den Tag-Nacht-
     // Schleier/die HUD-Uhr daraus speisen – NICHT mehr aus der flüchtigen Phaser-`time`,
     // die bei jedem Reload bei 0 begänne. So überlebt der Kalender den Reload (Auto-Save
