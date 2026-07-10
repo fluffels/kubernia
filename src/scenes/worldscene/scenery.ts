@@ -236,6 +236,16 @@ export function renderStatics(scene: WorldSceneLike) {
   scene.lhLight = scene.add.image(lx, lampY, "px").setScale(4.5, 2.5).setTint(0xffe28a).setDepth(lyB + 5);
   scene.tweens.add({ targets: scene.lhLight, alpha: { from: 0.5, to: 1 }, duration: 1100, yoyo: true, repeat: -1, ease: "Sine.inOut" });
 
+  // === Steg-Schadensoptik (#693): pier_ruined-Overlays, zunächst ausgeblendet ===
+  // pier_ruined.png ist 48×112 px = 3×7 Kacheln bei T=16 → scale=1.0 passt exakt.
+  // Mitte-X = (pier.x + 1.5)*T, Unterkante = Kachelreihe 34 (erste feste Bodenkachel nach dem Steg).
+  scene.pierDamageImgs = scene.piers.map(p =>
+    scene.add.image((p.x + 1.5) * T, 34 * T, "pier_ruined")
+      .setOrigin(0.5, 1)
+      .setDepth(2)
+      .setVisible(false)
+  );
+
   // === Schornstein-Rauch (Hafenmeisterei & Kartenhaus) ===
   for (const [sx, sy] of [[24.6, 10], [38.6, 9]]) {
     scene.add.particles(sx * T, sy * T, "px", {

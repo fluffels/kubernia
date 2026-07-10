@@ -79,6 +79,9 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   shipImg!: Phaser.GameObjects.Image;
   houseOfficeImg!: Phaser.GameObjects.Image;
   lastControlPlaneUp?: boolean;
+  // Steg-Schadensoptik (#693): pier_ruined-Overlays + Node-Guard
+  pierDamageImgs!: Phaser.GameObjects.Image[];
+  lastNodesSig?: string;
   tfGroup!: Phaser.GameObjects.Container;
   tfBuoys!: Phaser.GameObjects.Image[];
   butterflies!: Butterfly[];

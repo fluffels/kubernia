@@ -27,8 +27,8 @@ import { T, hashHue, hueColor, SIGN_FONT, SIGN_SCALE } from "../shared";
 // Pod-Steg-Belegung + Tag-Rendering-Konstanten liegen zentral in scenes/geometry.ts (#590).
 import { SLOTS_PER_PIER, TAG_CAP, REVEAL_FULL, REVEAL_FADE } from "../geometry";
 import type { WorldSceneLike, DynTagData } from "./types";
-import { harborTexture } from "./harbordamage";
-export { harborTexture } from "./harbordamage";
+import { harborTexture, pierHealed } from "./harbordamage";
+export { harborTexture, pierHealed } from "./harbordamage";
 
 // Sichtfeld fürs Tag-Culling großzügig erweitern, damit am Bildrand nichts aufpoppt
 // (Tags ragen über ihren Bezugspunkt + werden beim Entzerren nach oben geschoben).
@@ -76,15 +76,25 @@ export function syncCluster(scene: WorldSceneLike) {
   scene.cannon.setVisible(Game.hasUpgrade("kanone"));
 }
 
-/** Synchronisiert die Sturm-Schadensoptik (Leuchtturm/Schiff/Hafenmeisterei) mit dem
- *  Control-Plane-Zustand (#692). Guard verhindert redundante setTexture-Aufrufe. */
+/** Synchronisiert die Sturm-Schadensoptik mit dem Cluster-Zustand:
+ *  - Gebäude/Schiff per CP-Zustand (#692)
+ *  - Steg-Overlays granular per Node-Beitritt (#693) */
 function syncHarborDamage(scene: WorldSceneLike) {
   const cpUp = Game.sim.controlPlane.up;
-  if (cpUp === scene.lastControlPlaneUp) return;
-  scene.lastControlPlaneUp = cpUp;
-  scene.lighthouseImg.setTexture(harborTexture("lighthouse", cpUp));
-  scene.shipImg.setTexture(harborTexture("ship", cpUp));
-  scene.houseOfficeImg.setTexture(harborTexture("house_office", cpUp));
+  if (cpUp !== scene.lastControlPlaneUp) {
+    scene.lastControlPlaneUp = cpUp;
+    scene.lighthouseImg.setTexture(harborTexture("lighthouse", cpUp));
+    scene.shipImg.setTexture(harborTexture("ship", cpUp));
+    scene.houseOfficeImg.setTexture(harborTexture("house_office", cpUp));
+  }
+  const nodeNames = Game.sim.nodes.map((n: { name: string }) => n.name);
+  const nodeSig = `${cpUp}|${nodeNames.join(",")}`;
+  if (nodeSig !== scene.lastNodesSig) {
+    scene.lastNodesSig = nodeSig;
+    for (let i = 0; i < scene.piers.length; i++) {
+      scene.pierDamageImgs[i].setVisible(!pierHealed(scene.piers[i].name, cpUp, nodeNames));
+    }
+  }
 }
 
 /** Pod-Kisten + Signatur-abhängige Deko an den aktuellen Cluster-Zustand angleichen.
