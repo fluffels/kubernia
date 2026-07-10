@@ -80,7 +80,8 @@ export const BUNDLE_BUDGETS = [
     // #647: +~13 KB — die 3 neuen Panel-Kopf-Icons (Shop/Krabbe/Spiel; Logbuch/Album/Terminal/Menü teilen sich #646-Icons, kein Zusatz-Byte).
     // #474: +~160 KB — Phaser 3→4 (v4 ist groesser als v3, Renderer komplett neu geschrieben).
     // #690: +~118 KB — 4 Sturm-Trümmer-PixelLab-Assets (lighthouse_ruined, crane_wrecked, house_office_damaged, ship_wrecked) + pier_ruined (#691); base64-inline.
-    maxBytes: 3_200_000,
+    // Ist nach #474+#690 zusammen: 3.07 MiB (3_216_743 B) → Budget auf 3_300_000 angehoben.
+    maxBytes: 3_300_000,
   },
   {
     label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor)",
