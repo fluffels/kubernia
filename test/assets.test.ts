@@ -79,7 +79,7 @@ describe("ASSET_MANIFEST – Szenen-Zuordnung (#198 Lazy-Loading)", () => {
   const EXPECTED_LAZY: Record<string, string[]> = {
     Archipel: ["char_argos"],
     Lighthouse: ["grafana_board", "alert_bell", "char_lumi"],
-    Warehouse: ["container", "crane", "char_knut"],
+    Warehouse: ["container", "crane", "crane_wrecked", "char_knut"],
     Watchtower: ["char_vidar", "watchtower"],
     Flotte: ["char_saga"],
     Werft: ["char_greta", "ship_frame", "scaffold"],
