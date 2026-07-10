@@ -81,6 +81,11 @@ import ship_frame from "../assets/pixellab/ship_frame.png";     // Schiffsrumpf 
 import scaffold from "../assets/pixellab/scaffold.png";         // Werft-Baugerüst, Heimat-Werft (#456)
 import shed from "../assets/pixellab/shed.png";                 // Lagerschuppen für gestoppte Container (#678)
 import pier_ruined from "../assets/pixellab/pier_ruined.png";   // Beschädigter Steg (Sturm-Optik #691)
+// Sturm-Trümmer-Varianten (#690)
+import lighthouse_ruined from "../assets/pixellab/lighthouse_ruined.png";
+import crane_wrecked from "../assets/pixellab/crane_wrecked.png";
+import house_office_damaged from "../assets/pixellab/house_office_damaged.png";
+import ship_wrecked from "../assets/pixellab/ship_wrecked.png";
 
 // PixelLab-Figuren (nur south-Frame genutzt)
 import char_player from "../assets/pixellab/char_player.png";
@@ -228,6 +233,11 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
   { key: "cannon", src: cannon, kind: "plain" },             // Hafen-Kanone (Shop-Upgrade, #183)
   { key: "shed", src: shed, kind: "plain" },                 // Lagerschuppen für gestoppte Container (#678)
   { key: "pier_ruined", src: pier_ruined, kind: "plain" },   // Beschädigter Steg (Sturm-Optik #691)
+  // Sturm-Trümmer-Varianten (#690)
+  { key: "lighthouse_ruined", src: lighthouse_ruined, kind: "plain" },
+  { key: "crane_wrecked", src: crane_wrecked, kind: "plain", scene: "Warehouse" },
+  { key: "house_office_damaged", src: house_office_damaged, kind: "plain" },
+  { key: "ship_wrecked", src: ship_wrecked, kind: "plain" },
 
   // PixelLab-Figuren (nur south-Frame genutzt)
   { key: "char_player", src: char_player, kind: "plain" },
