@@ -142,17 +142,20 @@ export function rebuildDynamic(scene: WorldSceneLike) {
     scene.dynTags.push({ tx: lx, ty: ly, ax, ay, text: str, status, compact });
   };
 
-  // Deployment-Tags über der ersten Kiste (kaputte rot mit Status!)
+  // Deployment-Tags AM Rumpf der ersten Kiste (kaputte rot mit Status!)
+  // #651: Bezugspunkt auf die Kisten-Mitte (pos.y - 44) gesetzt; Label schwebt
+  // knapp über der Kiste statt zwischen Kiste und Boden.
   const seen: Record<string, boolean> = {};
   for (const d of Game.sim.deployments) {
     const first = d.pods[0] && scene.podSlots[d.pods[0].name];
     if (first && !seen[d.name]) {
       seen[d.name] = true;
       const pos = podSlotPos(scene, first.slot);
+      const crateY = pos.y - 44;  // Kisten-Mitte (Sprite-Ursprung der Image)
       const text = d.broken
         ? d.name + " ⚠ " + (d.broken.type === "imagepull" ? "ImagePullBackOff" : d.broken.type === "crashloop" ? "CrashLoopBackOff" : "Pending")
         : d.name + " " + d.replicas + "/" + d.replicas;
-      mkTag(pos.x, pos.y - 12, text, d.broken ? 0xff7b7b : 0x6fe09a, pos.x, pos.y);
+      mkTag(pos.x, crateY - 14, text, d.broken ? 0xff7b7b : 0x6fe09a, pos.x, crateY);
     }
   }
   // Docker-Fässer (max. 10 sichtbar): laufende am Dock bei Bo, gestoppte im
