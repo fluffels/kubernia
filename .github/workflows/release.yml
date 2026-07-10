@@ -1,0 +1,54 @@
+name: Release – Image bauen und in ghcr.io pushen
+
+# Läuft bei neuem vX.Y.Z-Tag – z.B. nach `git tag v1.0.0 && git push --tags`.
+# Das Image landet unter: ghcr.io/fluffels/kubernia:latest + :v1.0.0
+#
+# Kein separates Registry-Secret nötig: GITHUB_TOKEN reicht für ghcr.io.
+# Die Maintainerin muss nur sicherstellen, dass das Package-Sichtbarkeitsrecht
+# in den Repository-Settings passt (Packages → Public oder Private).
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-push:
+    name: Image bauen & pushen
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Docker Buildx einrichten
+        uses: docker/setup-buildx-action@v3
+
+      - name: Bei ghcr.io anmelden
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image-Metadaten bestimmen
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/fluffels/kubernia
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - name: Image bauen und pushen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
