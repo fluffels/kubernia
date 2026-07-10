@@ -8,8 +8,8 @@
 #     (Dockerfile.devpanel) und NICHT die Dev-Umgebung (docker-compose.yml).
 #
 # Lokaler Schnellstart:
-#   docker build -t kubequest .
-#   docker run --rm -p 8080:80 kubequest
+#   docker build -t kubernia .
+#   docker run --rm -p 8080:80 kubernia
 #   → http://localhost:8080
 
 # --- Stage 1: Build (Node-Toolchain, erzeugt dist/) ---
