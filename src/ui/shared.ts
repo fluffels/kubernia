@@ -22,9 +22,10 @@ const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElemen
 
 // NPC-/Smalltalk-Tabellen werden per NPC-Id (Laufzeit-String) nachgeschlagen –
 // als String-indizierbare Maps typisiert, statt jeden Zugriff einzeln zu casten.
-/** NPC-Stammdaten, wie sie die Porträt-/Dialog-Schicht braucht (Name, Titel, Sprite,
- *  optionale PixelLab-Textur). Eigener UI-Wert-Typ, damit Porträt-Helfer nicht `any` brauchen. */
-export type UINpc = { name: string; title: string; sprite: number; tex?: string };
+/** NPC-Stammdaten, wie sie die Porträt-/Dialog-Schicht braucht (Name, Titel, PixelLab-Textur).
+ *  `tex` ist Pflicht – jeder NPC hat eine eigene Figur (#670). Eigener UI-Wert-Typ, damit
+ *  Porträt-Helfer nicht `any` brauchen. */
+export type UINpc = { name: string; title: string; tex: string };
 const NPCS = KQContent.NPCS as Record<string, UINpc>;
 const SMALLTALK = KQContent.SMALLTALK as Record<string, string[]>;
 

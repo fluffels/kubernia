@@ -535,7 +535,7 @@ test("der Heimat-Werft-NPC Greta (#166) ist in der Registry verdrahtet, mit Spri
 
 test("Red-Green: ein NPC mit fehlendem Sprite-Asset wird gemeldet", () => {
   // Ein Check, der auch bei fehlendem Sprite grün bliebe, wäre wertlos.
-  const npcs = { ...KQContent.NPCS, geist: { name: "Geist", title: "?", sprite: 0, tex: "char_gibtsnicht" } };
+  const npcs = { ...KQContent.NPCS, geist: { name: "Geist", title: "?", tex: "char_gibtsnicht" } };
   const problems = npcSpriteProblems(npcs as Record<string, { tex?: string }>, KQAssets);
   assert.ok(problems.some(p => p.includes("geist") && p.includes("Sprite-Asset")), "fehlendes Sprite-Asset nicht gemeldet:\n" + problems.join("\n"));
 });
