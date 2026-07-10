@@ -630,8 +630,55 @@
         "type": "dialog",
         "npc": "lumi",
         "lines": [
-          "Sieh an – Logs gelesen wie ein echter Wächter. Basis-Ausgabe, live folgen, Absturz-Log des Vorgängers: das Dreigespann trägt dich durch die meisten Nächte auf der Klippe.",
-          "Metriken zeigen <i>was</i>, Logs zeigen <i>warum</i>. Ein letztes Werkzeug fehlt noch: <b>Alerts</b> – damit der Cluster dich weckt, bevor du überhaupt auf das Dashboard schauen musst. Komm wieder hoch! 🔦"
+          "Ein letzter Kniff, dann bist du durch. <code>kubectl logs</code> ist der direkte Draht in einen Pod – aber ein <b>kurzer</b>: Ein Pod ist vergänglich. Stirbt er – Absturz, Rollout, Skalierung auf null –, sind seine Logzeilen mit ihm weg. <code>--previous</code> rettet nur den allerletzten Versuch.",
+          "Darum fährt jeder echte Cluster einen <b>zentralen Logging-Stack</b>. Bei uns ist das der <b>ECK</b>-Stack (Elastic Cloud on Kubernetes). Drei Rollen greifen ineinander: <b>Beats</b> sammelt die Logs auf jedem Steg (Node) ein, <b>Elasticsearch</b> speichert und durchsucht sie, <b>Kibana</b> zeigt sie in einer Weboberfläche.",
+          "Und <b>ECK</b> selbst ist der <b>Operator</b>, der diesen Stack betreibt – dasselbe Prinzip wie der Prometheus-Operator beim Monitoring. Merk dir die zwei Säulen: <b>Metriken</b> (Prometheus/Grafana) sagen dir <i>wie viel</i>, <b>Logs</b> (ECK) sagen dir <i>was genau</i> – und der zentrale Stack hält sie fest, auch wenn der Pod längst weg ist."
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "lumi",
+        "reviewId": "q-obs-metrics-vs-logs",
+        "q": "Kurz gegengecheckt: Was ist der Unterschied zwischen <b>Metriken</b> und <b>Logs</b>?",
+        "options": [
+          {
+            "t": "Metriken sind <b>Zahlen über die Zeit</b> (CPU, Requests, up/down), Logs sind die <b>Textmeldungen</b> der App. Metriken sagen <i>wie viel</i>, Logs sagen <i>was genau</i>.",
+            "ok": true,
+            "reply": "Genau! Zwei Säulen, zwei Datentypen: Prometheus zählt und misst, die Logs erzählen den Klartext dazu. Erst beide zusammen zeigen dir <i>dass</i>, <i>wie stark</i> und <i>warum</i>. 🔦"
+          },
+          {
+            "t": "Nichts – <code>kubectl top</code> und <code>kubectl logs</code> zeigen beide die Auslastung eines Pods, nur anders formatiert.",
+            "ok": false,
+            "reply": "Nein: <code>top</code> zeigt Zahlen (Last), <code>logs</code> zeigt Text (was die App schreibt). Verschiedene Datentypen für verschiedene Fragen – nicht dasselbe in anderem Format."
+          },
+          {
+            "t": "Metriken sind für Nodes, Logs für Pods – derselbe Datentyp, nur auf anderer Ebene.",
+            "ok": false,
+            "reply": "Nicht die Ebene macht den Unterschied, sondern der <i>Datentyp</i>: Metriken sind Messzahlen, Logs sind Textzeilen. Beide gibt es auf Pod- wie auf Node-Ebene."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "lumi",
+        "reviewId": "q-obs-logging-central",
+        "q": "Und warum reicht <code>kubectl logs</code> allein nicht – wozu der <b>zentrale</b> Stack?",
+        "options": [
+          {
+            "t": "Pods sind <b>vergänglich</b> – stirbt ein Pod, sind seine Logs weg. Der zentrale Stack sammelt sie laufend an einen <b>dauerhaften</b> Ort und macht sie über alle Pods durchsuchbar.",
+            "ok": true,
+            "reply": "Genau! <code>kubectl logs</code> liest vom laufenden Container – ist der weg, sind die Logs weg. ECK hält sie fest, damit du auch Tage später und clusterweit noch nachlesen kannst. 🔦"
+          },
+          {
+            "t": "<code>kubectl logs</code> ist zu langsam – der Stack cacht die Logs nur, damit der Befehl schneller antwortet.",
+            "ok": false,
+            "reply": "Es geht nicht um Tempo, sondern um <b>Haltbarkeit</b>: Der Pod-Log ist flüchtig. Der zentrale Stack bewahrt die Logs auf, statt sie mit dem Pod verschwinden zu lassen."
+          },
+          {
+            "t": "Ohne zentralen Stack darf nur der Cluster-Admin <code>kubectl logs</code> ausführen.",
+            "ok": false,
+            "reply": "Die Leserechte hängen an RBAC, nicht am Logging-Stack. Der Stack löst ein anderes Problem: dass Pod-Logs beim Pod-Tod verloren gehen."
+          }
         ]
       }
     ]

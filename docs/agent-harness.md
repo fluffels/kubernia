@@ -30,14 +30,14 @@ Alles, was ein Agent braucht, liegt **im Repo selbst** — versioniert und gepus
 
 ### 2.2 Board-getriebener Ein-Ticket-Workflow
 
-Der Backlog lebt als **GitHub Issues** + Project-Board — **nicht** im Code, nicht in einem externen System. Priorität im Board-Feld `Prio` (Kritisch → Hoch → Mittel → Niedrig → Später, seit #627), Bereiche als `area:`-Labels.
+Der Backlog lebt als **GitHub Issues** + Project-Board — **nicht** im Code, nicht in einem externen System. Reihenfolge = manuelle Board-Position (die Maintainerin zieht wie eine Warteschlange, seit #747), Bereiche als `area:`-Labels.
 
-- **Was als Nächstes dran ist,** entscheidet eine rein deterministische Regel (keine handgepflegte Reihenfolge): das **oberste freie Ticket nach Board-`Prio` → niedrigste Nummer** ([Ticket-Auswahl](ticket-reihenfolge.md)). Der Agent **wägt nicht ab** und sucht nicht nach Inhalt — `Prio`-Feld + Nummer entscheiden. Das hält die Auswahl billig, reproduzierbar und Stardew-fest (nichts, was mit dem Backlog mitwächst und driftet).
+- **Was als Nächstes dran ist,** entscheidet eine rein deterministische Regel: das **oberste freie Item in der Board-Reihenfolge** ([Ticket-Auswahl](ticket-reihenfolge.md)) — genau die Reihenfolge, die `gh project item-list` liefert. Der Agent **wägt nicht ab**, sucht nicht nach Inhalt und sortiert nicht um. Das hält die Auswahl billig, reproduzierbar und Stardew-fest (nichts, was mit dem Backlog mitwächst und driftet).
 - **Ein Agent nimmt genau EIN Ticket** und arbeitet es end-to-end ab: umsetzen → alle Gates grün → im Browser verifizieren → über PR nach `main` → Issue schließen → Board pflegen (keine Reihenfolge-Datei mehr, #627). Der enge Fokus ist Absicht: ein kleiner, abgeschlossener Diff ist review- und verifizierbar; ein „ich mach schnell noch fünf Sachen mit"-Lauf ist es nicht.
 - **Der Agent managt das Board selbst** (nur in kubequest an ihn delegiert): Issues schließen/kommentieren/labeln und **neue Tickets anlegen, wenn etwas auffällt** (Bug, Lücke, Tech-Debt, Idee) — lieber ein Ticket zu viel als verlorenes Wissen. GitHub ist die SSOT für den Stand.
 - **Zu großes Ticket (Epic/Phase) → aufteilen statt umsetzen:** in session-große Kinder zerlegen (ohne Assignee), Übersichts-Kommentar posten, Epic auf `done` schließen. Kein Code.
 
-Operative Details (Auswahl-Befehl, Board-Prio-Pflege): [AGENTS.md › Wo die TODOs leben](../AGENTS.md#wo-die-todos-leben) + [ticket-reihenfolge.md](ticket-reihenfolge.md).
+Operative Details (Auswahl-Befehl, Board-Reihenfolge-Pflege): [AGENTS.md › Wo die TODOs leben](../AGENTS.md#wo-die-todos-leben) + [ticket-reihenfolge.md](ticket-reihenfolge.md).
 
 ### 2.3 Kollisionsschutz für parallele Agenten
 
@@ -58,6 +58,10 @@ Das eigentliche Sicherheitsnetz: eine Reihe von Prüfungen, die **lokal und in d
 - **Skills** kodifizieren wiederkehrende Abläufe statt freihändiger Improvisation: der `kubequest`-Skill (der Ticket-Ablauf end-to-end), der `forum`-Skill (GitHub Discussions bearbeiten, mit verbindlichem Freigabe-Stopp vor dem Posten), der `review-lenses`-Skill (gestaffelter Mehr-Perspektiven-Review vor dem Merge, #532 — siehe unten). Der Skill ist ein dünner Zeiger auf die Repo-SSOT (AGENTS.md), damit er auch ohne Skill-Datei funktioniert.
 - **Gestaffelter Review vor `main` (`review-lenses`-Skill, #532)** — Vorbild WPS-KI-Fabrik: erst die billigen deterministischen Gates (`npm run verify`), und **nur bei Grün** drei getrennte agentische Lens-Pässe (Architektur / Requirement-Treue / Test-Adäquanz) mit strukturierten Findings. Rote Gates ⇒ **Abbruch ohne Lens-Pass** (Token-Short-Circuit: kein LLM-Aufwand auf einen Diff, der schon deterministisch scheitert). Kein Ersatz für die CI-Gates (hängt sich davor), **kein Auto-Merge** — der Review liefert nur Findings für den normalen Ticket-Abschluss.
 - **One-Command-Setup** (`npm run setup`, #387) + **Devcontainer** ([`.devcontainer/`](../.devcontainer/devcontainer.json), #388): ein Agent (oder Mensch) ist mit einem Befehl bzw. `docker compose up` startklar — Node-Check, `npm install`, einmal alle Checks. Reproduzierbare Umgebung statt „bei mir lief's".
+- **Modellwahl: planen stark, umsetzen schnell (#741).** Wunsch: die *Planungsphase* soll das stärkste Modell mit hohem Reasoning bekommen (bei Claude: Opus 4.8), die *Umsetzung* ein schnelleres Modell. **Wichtige Erkenntnis:** das ist **nicht** tool-übergreifend erzwingbar — welches Modell läuft, steuert immer der Harness/das Tool, keine Repo-Datei; eine fremde KI (Cursor/Codex/Gemini) liest `.claude/` gar nicht. Darum **zweischichtig** umgesetzt:
+  - **Portabel (der Kern):** eine werkzeugneutrale **Prosa-Konvention** in [AGENTS.md](../AGENTS.md) — von jeder KI lesbar, kein Zwang, jedes Tool setzt sie auf seine Art um. Das ist der einzige Teil, der „mit jeder KI" geht.
+  - **Claude-Code-Automatik (additiv):** der Skill [`plan-feature`](../.claude/skills/plan-feature/SKILL.md) trägt `model: claude-opus-4-8` + `effort: high` im Frontmatter; er ist committet (`.gitignore` nimmt `!.claude/skills/` aus), propagiert in jeden Worktree und greift nur unter Claude Code (danach fällt die Session aufs normale Modell zurück).
+  - **Bewusst zurückgestellt:** den **Kern-Workflow** (`kubequest`-Skill) intern erst einen Opus-Planungs-**Subagenten** forken zu lassen (`context: fork` + `.claude/agents/` mit eigener `.gitignore`-Ausnahme) wäre die stärkste Automatik, ist aber **fragil** (hängt am Fork-/Agent-Mechanismus, nur Claude Code) und lädt Latenz/Komplexität in den *meistgelaufenen* Loop — auf jedes kleine Ticket. Stardew-Scope-Abwägung: das Kosten-Argument skaliert dafür, die Komplexität im Kern dagegen; da Stufe 0 + 1 den Planungsnutzen schon liefern und Stufe 2 später **ohne Rückbau** additiv nachrüstbar ist, bleibt der Kern-Loop vorerst schlank. Als eigenes Opt-in-Ticket im Board erfasst (#745).
 
 ## 3. Die Fitness-Functions im Detail
 
@@ -134,7 +138,7 @@ So greifen die Bausteine bei **einem** Ticket ineinander — jeder Schritt ist e
    ┌─ Doku (SSOT) ────────────────────────────────────────────────┐
    │  Agent liest CLAUDE.md + AGENTS.md + modul-lokale Regeln       │
    │                          ▼                                     │
-   │  Board: oberstes freies Ticket nach Prio→Nummer                │  ← kein Abwägen
+   │  Board: oberstes freies Item der Board-Reihenfolge             │  ← kein Abwägen
    │                          ▼                                     │
    │  Kollisionsschutz: self-assign (verifiziert) + eigener Worktree│  ← parallel-sicher
    │                          ▼                                     │
@@ -181,12 +185,10 @@ Der Harness ist bewusst ein **lebendes System** — seine eigenen Schwachstellen
      gelandet"). NUR Nummern ZWISCHEN den beiden Markern zählen als „offen dokumentiert" —
      die #-Nummern in Prosa/„erledigt"-Notizen (z.B. das erledigte #492) bleiben außen vor. -->
 <!-- open-harness-tickets:start -->
-| Ticket | Was es schließt |
-|---|---|
-| **#612** | Optionaler jscpd-Duplikations-Detektor als weiches CI-Artefakt gegen SSOT-/Copy-Paste-Umgehung (einzige Regressionsklasse ohne direkten Guard). |
+_Aktuell keine offenen Harness-Roadmap-Punkte — die Liste ist vollständig abgearbeitet. Eine neue Lücke kommt als Tabellenzeile mit fett gesetzter Ticketnummer zwischen diese beiden Marker (nur fett gesetzte Nummern zwischen den Markern zählen als „offen dokumentiert")._
 <!-- open-harness-tickets:end -->
 
-> **Erledigt & darum aus der Tabelle raus:** **#492** (Determinismus-Gate, siehe §3), **#591** (Determinismus-Scope auf `game/**`), **#604** (`no-explicit-any`-Suppression-Ratchet), **#593** (Lockfile-Sync-Check), **#594** (tsconfig-`target`-Prüfung), **#595** (Phaser-vendor-Byte-Gate), das PR-Gating **#592** und die zweite CI-Grenze **#605** (`verify` post-hoc auf `main`) — sowie **#610** selbst: dieser **Doku-Aktualitäts-Wächter** (`npm run check:doctickets`) macht genau diese Tabelle jetzt maschinell ehrlich (der alte stale „#492 ist offen"-Eintrag war der Auslöser). Die Roadmap wird laufend auf die verbleibenden Lücken eingedampft.
+> **Erledigt & darum aus der Tabelle raus:** **#492** (Determinismus-Gate, siehe §3), **#591** (Determinismus-Scope auf `game/**`), **#604** (`no-explicit-any`-Suppression-Ratchet), **#593** (Lockfile-Sync-Check), **#594** (tsconfig-`target`-Prüfung), **#595** (Phaser-vendor-Byte-Gate), der optionale jscpd-**Duplikations-Detektor #612** (weiches, nicht-blockierendes CI-Artefakt gegen SSOT-/Copy-Paste-Umgehung), das PR-Gating **#592** und die zweite CI-Grenze **#605** (`verify` post-hoc auf `main`) — sowie **#610** selbst: dieser **Doku-Aktualitäts-Wächter** (`npm run check:doctickets`) macht genau diese Tabelle jetzt maschinell ehrlich (der alte stale „#492 ist offen"-Eintrag war der Auslöser). Die Roadmap wird laufend auf die verbleibenden Lücken eingedampft.
 
 **Schon gelandet** (Block „Harness & Vorzeige-Doku", 2026-07-01): das Aggregat-Kommando `npm run verify` (#527), der Git-**pre-push-Hook** (#528, schließt die Post-hoc-CI-Lücke des Direkt-Push, §4), der **Harness-Drift-Wächter** `check:docdrift` (#529, §3), die **Forum-Inbox-Härtung** gegen Prompt-Injection (#531, §4), der **`review-lenses`-Skill** — der gestaffelte Mehr-Perspektiven-Review mit Gate-Short-Circuit (#532, §2.5) — und das **Diff-Größenbudget-Gate** `check:diffsize` (#533, §3): misst den Slice gegen `main` (max. 20 Dateien / 800 Zeilen, Override mit Pflicht-Begründung) und erzwingt so die Slice-Disziplin der KI-Fabrik auf Commit-Ebene; seit **#592** ist der Durchsetzungspunkt der **PR-Required-Check** (CI-Checkout `fetch-depth: 0` + `KQ_DIFF_BASE`), nicht mehr nur der lokale pre-push-Hook. Und das **PR-Gating selbst** (#592, [ADR 0009](adr/0009-pr-gating-required-checks.md)): `main` ist server-seitig geschützt (Merge nur über PR mit grünen Required-Checks, `enforce_admins` an) — die größte Vibe-Coding-Lücke (ein Agent schiebt roten Code auf `main`, ein paralleler baut darauf auf) ist damit geschlossen.
 
@@ -198,6 +200,6 @@ Mit **#530** ([ADR 0008](adr/0008-ki-agenten-harness.md)) ist der ADR jetzt die 
 - **[AGENTS.md](../AGENTS.md)** — operative Arbeitsanweisung (harte Regeln, Board-Workflow, Konventionen). *Bei Konflikt maßgeblich.*
 - **[CLAUDE.md](../CLAUDE.md)** — Schnellstart + Datei-Landkarte.
 - **[docs/arc42-architektur.md](arc42-architektur.md)** — Architektur-Gesamtsicht; §1.4 (KI-Entwickel-Effizienz als Qualitätsziel), §8 (Querschnittskonzepte), §9 (ADR-Übersicht inkl. geplantem 0008).
-- **[docs/ticket-reihenfolge.md](ticket-reihenfolge.md)** — was als Nächstes dran ist (deterministisch Board-`Prio` → Nummer).
+- **[docs/ticket-reihenfolge.md](ticket-reihenfolge.md)** — was als Nächstes dran ist (deterministisch: oberstes freies Item der Board-Reihenfolge).
 - **[docs/adr/](adr/)** — die festgehaltenen Grundsatzentscheidungen (Engine, kein Backend/DB, kein Multiplayer, Skalierungs-Fundament, …).
 - **[CONTRIBUTING.md](../CONTRIBUTING.md)** — Einstieg für Menschen (`npm run setup`, Devcontainer, PR-/Dependabot-Policy).

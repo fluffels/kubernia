@@ -34,6 +34,26 @@ test("Terminal: Befehl eintippen zeigt ein Ergebnis", async ({ page }) => {
   await expect(out).toContainText("Hilfe");
 });
 
+test("Dialoge lassen sich mit Leertaste und Enter weiterschalten (#312)", async ({ page }) => {
+  await bootGame(page);
+
+  // Der Intro-Dialog erscheint ~600 ms nach dem Boot – ein mehrzeiliger Lese-Dialog.
+  const dlg = page.locator("#dialogue");
+  await expect(dlg).toBeVisible({ timeout: 5_000 });
+
+  // Der Weiter-Hinweis nennt genau die Tasten, die auch wirken (#312: "Leer/Enter",
+  // statt wie früher nur "(E)").
+  await expect(page.locator("#dlg-next")).toContainText("Leer/Enter");
+
+  // Abwechselnd Leertaste und Enter blättern den Dialog bis zum Ende durch – beweist,
+  // dass BEIDE Tasten (nicht nur das weiterhin erlaubte E) zuverlässig weiterschalten.
+  for (let i = 0; i < 20 && (await dlg.isVisible()); i++) {
+    await page.keyboard.press(i % 2 === 0 ? "Space" : "Enter");
+    await page.waitForTimeout(150);
+  }
+  await expect(dlg).toBeHidden();
+});
+
 test("Overlays: Logbuch, Album und Menü öffnen und wieder schließen", async ({ page }) => {
   await bootGame(page);
   await dismissIntro(page);

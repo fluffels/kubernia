@@ -66,7 +66,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
  * `> maxBytes`, == Budget ist ok — analog zu check-size `loc > budget`).
  *
  * Ist-Werte bei Kalibrierung (2026-07-02/03, `npm run build` + `build:offline`):
- *   • dist-offline/index.html        ~2.39 MiB (2_509_465 B)  → Budget 2_750_000 (~+10 %)
+ *   • dist-offline/index.html        ~2.39 MiB (2_509_465 B)  → Budget 2_780_000 (seit #645, +30 KB für die 7 HUD-Icons)
  *   • Spielcode (dist/, ohne vendor) ~1.07 MiB (1_119_019 B)  → Budget 1_250_000 (~+12 %)
  *   • Phaser-vendor-Chunk (dist/)    ~1.14 MiB (1_198_788 B)  → Budget 1_350_000 (~+12 %, #595)
  */
@@ -75,7 +75,8 @@ export const BUNDLE_BUDGETS = [
     label: "Offline-Build (self-contained HTML, alle Assets inline)",
     kind: "file",
     path: "dist-offline/index.html",
-    maxBytes: 2_750_000,
+    // #645: +30 KB für die 7 gerahmten HUD-Statuszeilen-Pixel-Icons (base64 inline).
+    maxBytes: 2_780_000,
   },
   {
     label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor)",

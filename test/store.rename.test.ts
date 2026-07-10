@@ -17,6 +17,7 @@ import { IDBFactory } from "fake-indexeddb";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { ABBREVS } from "../src/content/abbrev";
 
 // Neue (Kubernia-)Identität – muss zu store.ts passen.
 const SAVE_KEY = "kubernia-save-v3";
@@ -35,6 +36,28 @@ const STORE = "saves";
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const fixtureRaw = readFileSync(join(FIXTURES, "savegame-v5-current.json"), "utf8").trim();
 const fixtureData = JSON.parse(fixtureRaw).data as unknown;
+
+// #574: die Migration (v6->v7) hebt das alte additive unlockedAbbrev/abbrevUsage dieses
+// Fixture-Stands ("-a"/"-n" verdient+gekauft, "docker-ps-all": 5 Nutzungen) in die Komfort-
+// Kauf-Mechanik (owned/unlockedComfort/comfortUsage) – das ist die nach readState() erwartete
+// Form (cmdHistoryUnlocked bleibt auf DIESER rohen Store-Ebene unverändert liegen, sanitizeState
+// in game/save.ts liest/verwirft es erst später).
+const { unlockedAbbrev: _fixtureUnlockedAbbrev, abbrevUsage: _fixtureAbbrevUsage, ...fixtureRest } =
+  fixtureData as Record<string, unknown>;
+const migratedFixtureData = {
+  ...fixtureRest,
+  owned: [...(fixtureRest.owned as string[]), "-a", "-n"],
+  unlockedComfort: ["-a", "-n"],
+  comfortUsage: { "docker-ps-all": 5 },
+};
+
+/** #574: ein minimaler `{ xp }`-Testpayload OHNE unlockedAbbrev-Feld ist (bei xp>0) genau der
+ *  uralte Vor-#297-Fall, den migrations[6] grandfathert – alle aktuellen Abkürzungen gelten
+ *  dann als verdient+gekauft. Diese Datei prüft die Namensraum-Migration, nicht die Abkürzungs-
+ *  Mechanik; der Helfer hält die dadurch nötige Zusatz-Erwartung an einer Stelle. */
+function grandfathered(xp: number) {
+  return { xp, owned: ABBREVS.map(a => a.id), unlockedComfort: ABBREVS.map(a => a.id), comfortUsage: {} };
+}
 
 function makeLocalStorageStub() {
   const map = new Map<string, string>();
@@ -111,7 +134,7 @@ test("localStorage: ein echter Alt-Stand unter kubequest-save-v3 wird nach kuber
 
   expect(ls._map.get(SAVE_KEY)).toBe(fixtureRaw);     // liegt jetzt unter dem neuen Key
   expect(ls._map.get(OLD_SAVE_KEY)).toBe(fixtureRaw); // Alt-Key bleibt als Netz erhalten
-  expect(SaveStore.readState()).toEqual(fixtureData); // und ist voll lesbar
+  expect(SaveStore.readState()).toEqual(migratedFixtureData); // und ist voll lesbar (+ #574-Migration)
 });
 
 test("localStorage: Mehr-Slot-Alt-Stand (Index + Slot-2-Daten) wird komplett migriert", async () => {
@@ -128,9 +151,9 @@ test("localStorage: Mehr-Slot-Alt-Stand (Index + Slot-2-Daten) wird komplett mig
 
   expect(ls._map.get(SLOTS_KEY)).toBeTruthy();                       // Index gehoben
   expect(SaveStore.listSlots().map(s => s.id)).toEqual(["slot-1", "slot-2"]);
-  expect(SaveStore.readState()).toEqual({ xp: 1 });                  // aktiver Slot 1
+  expect(SaveStore.readState()).toEqual(grandfathered(1));           // aktiver Slot 1 (+ #574)
   expect(SaveStore.switchSlot("slot-2")).toBe(true);
-  expect(SaveStore.readState()).toEqual({ xp: 2 });                  // Slot-2-Daten mitmigriert
+  expect(SaveStore.readState()).toEqual(grandfathered(2));           // Slot-2-Daten mitmigriert (+ #574)
 });
 
 test("localStorage no-clobber: ein bereits vorhandener kubernia-Stand wird NICHT überschrieben", async () => {
@@ -144,7 +167,7 @@ test("localStorage no-clobber: ein bereits vorhandener kubernia-Stand wird NICHT
   const { SaveStore } = await import("../src/store");
   await SaveStore.init();
 
-  expect(SaveStore.readState()).toEqual({ xp: 1 }); // Neu-Key gewinnt, Migration klobbert nicht
+  expect(SaveStore.readState()).toEqual(grandfathered(1)); // Neu-Key gewinnt, Migration klobbert nicht (+ #574)
 });
 
 /* ===================== IndexedDB-Modus (DB-Rename) ===================== */
@@ -157,7 +180,7 @@ test("IndexedDB: ein echter Alt-Stand in DB 'kubequest' wird in die DB 'kubernia
   const { SaveStore } = await import("../src/store");
   await SaveStore.init(); // migriert DB "kubequest" → DB "kubernia"
 
-  expect(SaveStore.readState()).toEqual(fixtureData);            // synchron aus dem Cache lesbar
+  expect(SaveStore.readState()).toEqual(migratedFixtureData);   // synchron aus dem Cache lesbar (+ #574)
   expect(await directRead(DB_NAME, SAVE_KEY)).toBe(fixtureRaw);  // liegt in der neuen DB
   expect(await directRead(OLD_DB_NAME, OLD_SAVE_KEY)).toBe(fixtureRaw); // Alt-DB unangetastet (Netz)
 });
@@ -171,7 +194,7 @@ test("IndexedDB no-clobber: eine bereits befüllte 'kubernia'-DB wird NICHT aus 
   const { SaveStore } = await import("../src/store");
   await SaveStore.init();
 
-  expect(SaveStore.readState()).toEqual({ xp: 1 }); // Ziel-DB behält ihren Stand
+  expect(SaveStore.readState()).toEqual(grandfathered(1)); // Ziel-DB behält ihren Stand (+ #574)
 });
 
 test("IndexedDB: ohne Alt-DB startet das Spiel frisch (keine Phantom-Migration, kein Crash)", async () => {

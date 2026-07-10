@@ -87,5 +87,17 @@
     ],
     "correct": 0,
     "explain": "Beim Login hasht das Tool die Eingabe erneut und vergleicht nur die Hashes – das Klartext-Passwort muss nirgends gespeichert sein. Tools wie <code>htpasswd</code> erzeugen einen <b>bcrypt</b>-Hash (mit Salt + Arbeitsfaktor, damit Brute-Force teuer bleibt). Wichtig: Hashen ≠ Verschlüsseln – ein Hash ist absichtlich NICHT umkehrbar."
+  },
+  {
+    "id": "q-cert-manager",
+    "q": "Wozu dient <b>cert-manager</b> mit <code>ClusterIssuer</code> und <code>Certificate</code> am Hafentor?",
+    "options": [
+      "Du legst ein <code>Certificate</code>-Objekt an; cert-manager holt das Zertifikat von einem <code>ClusterIssuer</code> (z.B. Let's Encrypt), legt es als TLS-Secret ab und <b>erneuert es automatisch</b> vor Ablauf.",
+      "cert-manager verschlüsselt die YAML-Manifeste im Git-Repo, damit Zertifikate nicht im Klartext liegen.",
+      "Ein <code>Certificate</code> ist nur ein anderes Wort für ein von Hand angelegtes <code>tls</code>-Secret – automatisch passiert dabei nichts.",
+      "cert-manager verteilt ein einzelnes Zertifikat an jeden Pod, damit jeder Pod HTTPS selbst beendet."
+    ],
+    "correct": 0,
+    "explain": "cert-manager ist ein Operator im Cluster: Du beschreibst mit einem <code>Certificate</code>-Objekt, welches Zertifikat du brauchst; der <code>ClusterIssuer</code> bzw. <code>Issuer</code> ist die Ausstellungs-Quelle (z.B. Let's Encrypt). cert-manager besorgt das Zertifikat, legt es als TLS-Secret ab (das der Ingress unter <code>spec.tls</code> nutzt) und erneuert es rechtzeitig automatisch – die fehleranfällige Handarbeit, das Zertifikat vor Ablauf zu tauschen, entfällt. Verschlüsselt werden dabei keine Dateien; es geht ums Ausstellen und Erneuern der TLS-Zertifikate."
   }
 ]
