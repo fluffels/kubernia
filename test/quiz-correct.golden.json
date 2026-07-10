@@ -8,6 +8,7 @@
   "q-bootstrap-cp-worker": "Control-Plane = die Kommandobrücke, sie entscheidet (verwaltet den Cluster). Worker = die Stege, sie arbeiten und tragen die Pods.",
   "q-bootstrap-init-join": "init zieht die Control-Plane hoch (einmal), join hängt mit dem Token jeweils einen Worker an.",
   "q-bootstrap-manual-vs-code": "Reproduzierbar, versioniert, überprüfbar : dieselbe Datei baut jedes Mal denselben Cluster, liegt in Git und lässt sich reviewen.",
+  "q-cert-manager": "Du legst ein Certificate -Objekt an; cert-manager holt das Zertifikat von einem ClusterIssuer (z.B. Let's Encrypt), legt es als TLS-Secret ab und erneuert es automatisch vor Ablauf.",
   "q-ch1-1": "Eine App läuft mit allem Drumherum überall gleich – Laptop, Server, Cloud.",
   "q-ch1-10": "Ein winziges Image, das viele kleine Unix-Werkzeuge (ls, cat, wget …) in einer Datei bündelt – die handliche Allzweck-Kiste für schnelle Tests.",
   "q-ch1-11": "Ein In-Memory Key-Value-Store – ein blitzschnelles, aber flüchtiges Gedächtnis, typisch als Cache oder für Sessions.",
