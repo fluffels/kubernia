@@ -180,7 +180,7 @@ kubequest/
 │   └── …              ui, world, decor, clock, runtime, store, sfx, types, assets-data
 ├── test/             Test-Suite (Vitest) – Simulator, Inhalte, kompletter Story-Durchlauf u.a.
 ├── e2e/              Boot- & Interaktions-Smokes (Playwright, gegen den Offline-Build)
-├── assets/           Kenney- & PixelLab-Grafiken (CC0) + Lizenzen
+├── assets/           PixelLab-Grafiken + Lizenzen
 ├── docs/             Konzept-, Architektur- & Harness-Doku (arc42, ADRs, Analysen, Reihenfolge)
 ├── dist/             Host-Build von `npm run build` (Multi-File, nicht eingecheckt)
 └── dist-offline/     Offline-Build von `npm run build:offline` (eine self-contained index.html, nicht eingecheckt)
@@ -199,8 +199,7 @@ Tests ausführen: `npm test` (Vitest). Typen prüfen: `npm run typecheck` (voll 
 Verwendete Fremd-Bausteine mit eigener Lizenz:
 
 - **Phaser 3** – MIT-Lizenz (kostenlos, auch kommerziell): https://phaser.io
-- **Grafiken (eigener Pixel-Art-Stil)** – mit **[PixelLab AI](https://pixellab.ai)** im Top-down-Pixel-Art-Look erzeugt; sie ersetzen nach und nach die ursprünglichen Platzhalter. Asset-Liste, IDs & Workflow: [`assets/pixellab/README.md`](assets/pixellab/README.md).
-- **Grafiken (Platzhalter)** – „Tiny Town" & „Tiny Dungeon" von [Kenney](https://kenney.nl), **CC0** (public domain), noch für einzelne Tiles im Einsatz, bis der PixelLab-Ersatz steht. Danke, Kenney! 💛
+- **Grafiken** – mit **[PixelLab AI](https://pixellab.ai)** im Top-down-Pixel-Art-Look erzeugt. Asset-Liste, IDs & Workflow: [`assets/pixellab/README.md`](assets/pixellab/README.md).
 - Sounds werden zur Laufzeit synthetisiert (WebAudio) – keine Audio-Dateien nötig.
 
 ## Spielstand
