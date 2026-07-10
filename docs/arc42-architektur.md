@@ -62,6 +62,66 @@ pure Domäne       sim.ts + sim/* (docker/kubectl/helm/…) · content.ts + cont
 Persistenz (seitlich, von Anwendung genutzt):  store.ts — SaveStore, IndexedDB, sync API via In-Memory-Cache
 ```
 
+### Systemkontext (C4 Level 1)
+
+```mermaid
+C4Context
+    title Systemkontext – Kubernia
+    Person(spieler, "Spieler:in", "Lernt DevOps durch Spielen")
+    System(kubernia, "Kubernia", "Browser-Lernspiel: simulierter K8s-Cluster als Hafenstadt")
+    System_Ext(browser, "Browser-Plattform", "Canvas/WebGL · DOM · WebAudio · IndexedDB")
+    Rel(spieler, kubernia, "tippt Befehle, löst Quests")
+    Rel(kubernia, browser, "Rendering, Sounds, Spielstand-Persistenz")
+```
+
+### Container-Sicht (C4 Level 2)
+
+```mermaid
+C4Container
+    title Container-Sicht – Kubernia (Browser-Bundle)
+    Person(spieler, "Spieler:in")
+    Container_Boundary(b, "Kubernia — statische HTML/JS-Datei") {
+        Container(pres, "Präsentation", "Phaser 3 + DOM", "Szenen (WorldScene …), UI-Overlays (Terminal, Quiz …), Sounds")
+        Container(app, "Anwendung", "TypeScript", "Spielstand, Wirtschaft, Progression, Spaced Repetition, Gefahren (game/*)")
+        Container(dom, "pure Domäne", "TypeScript — Phaser-frei, unit-testbar", "Cluster-Sim (sim/*), Content-as-Data (content/*), Welt (world/*)")
+        Container(store, "Persistenz", "TypeScript + IndexedDB", "SaveStore (store/*): versionierte Hülle {v,data}, Migrationskette, sync API via In-Memory-Cache")
+    }
+    System_Ext(idb, "IndexedDB", "Browser-nativer Key-Value-Store")
+    Rel(spieler, pres, "Tastatur / Maus")
+    Rel(pres, app, "Dispatch + State-Abfragen")
+    Rel(app, dom, "reine Domänen-Aufrufe — kein Phaser-Objekt überquert die Grenze")
+    Rel(app, store, "load / save (sync API via In-Memory-Cache)")
+    Rel(store, idb, "async r/w")
+```
+
+### Komponentensicht – sim/* (C4 Level 3)
+
+> Abgestimmt auf [`docs/module/sim.md`](module/sim.md) (Tiefendoc). Hier die Hauptmodule; weitere Familien (glab · net · eviction · s3 · kubeadm · rbac · invariants · workload · nodes) s. Tiefendoc.
+
+```mermaid
+C4Component
+    title Komponentensicht – sim/* (Cluster-Simulator, pure Domäne)
+    Container_Boundary(sim, "sim") {
+        Component(exec, "sim.ts", "Aggregat-Dispatch", "exec() — Dispatch auf Befehlsfamilien; Invarianten-Prüfung an der Aggregat-Grenze")
+        Component(state, "sim/state.ts", "Zustandstypen", "ClusterState, Pod, Deployment, Service, Node …")
+        Component(kube, "sim/kubectl/*", "kubectl-Familie", "inspect · lifecycle · ops · security (4 Blätter)")
+        Component(dock, "sim/docker.ts", "docker-Familie", "pull · run · build · tag · push")
+        Component(helm, "sim/helm.ts", "helm-Familie", "install · upgrade · rollback · template")
+        Component(tf, "sim/terraform.ts", "terraform-Familie", "plan · apply · state · output")
+        Component(git, "sim/git.ts", "git/CI", "push → runPipeline")
+        Component(argo, "sim/argocd.ts", "argocd/GitOps", "sync · reconcile")
+        Component(obs, "sim/observability.ts", "Observability", "deterministisch: Metriken · Alerts")
+    }
+    Rel(exec, state, "liest/schreibt ClusterState")
+    Rel(exec, kube, "dispatcht")
+    Rel(exec, dock, "dispatcht")
+    Rel(exec, helm, "dispatcht")
+    Rel(exec, tf, "dispatcht")
+    Rel(exec, git, "dispatcht")
+    Rel(exec, argo, "dispatcht")
+    Rel(exec, obs, "dispatcht")
+```
+
 Die gestrichelte Linie ist eine **erzwungene Fitness Function**, keine Konvention. Große Familien sind hinter einer **Fassade/Barrel** gesplittet (`sim.ts`, `ui.ts`, `scenes.ts`, `game.ts` spreaden je ihre `*/`-Bündel): öffentliche API stabil, Innenstruktur skaliert. Ein Datei-Budget (800 LOC) meldet neue God-Files früh.
 
 ## 6. Laufzeitsicht — „Self-Healing zum Zugucken"

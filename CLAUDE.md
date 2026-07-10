@@ -281,6 +281,7 @@ Die Landkarte oben sagt, **wo** ein Modul liegt; diese Tabelle sagt, **was du im
 | 📖 Spiel-Doku (Story, Steuerung, Lernpfad) | [README.md](README.md) |
 | 📋 Agenten-Regeln, Board-Workflow, Konventionen | [AGENTS.md](AGENTS.md) |
 | ❓ Häufige Fragen zum Agenten-Harness (FAQ) | [docs/agent-harness-faq.md](docs/agent-harness-faq.md) |
+| 🏗️ Architektur (arc42 + C4/Mermaid-Diagramme §5) | [docs/arc42-architektur.md](docs/arc42-architektur.md) |
 | 🗣️ Glossar (Hafen↔K8s↔Code) + Kontext-Landkarte der Subdomänen | [docs/glossar.md](docs/glossar.md) – welche Sprache/welcher Context gilt in welchem Verzeichnis (Token-lokal arbeiten) |
 | 🎨 PixelLab-Assets (Liste + IDs) | [assets/pixellab/README.md](assets/pixellab/README.md) |
 | 🔤 Pixelschrift fürs HUD (`KQPixel`/Silkscreen) | [`fonts.css`](fonts.css) (base64-`@font-face`) + Quelle/Lizenz in [`assets/fonts/`](assets/fonts/) (#189) |
