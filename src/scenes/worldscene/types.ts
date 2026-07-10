@@ -49,8 +49,8 @@ export interface DynDecorItem {
   obj: Phaser.GameObjects.Image;
   anim?: { kind: "flag" | "lamp"; baseY: number; phase: number };
 }
-/** Pod-Kiste an einem Steg-Slot (Cluster→Welt-Sync). */
-export interface PodSlot { slot: number; crate: Phaser.GameObjects.Image; band: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; dep: string; }
+/** Pod-Rumpf an einem Steg-Slot (Cluster→Welt-Sync): offener Holzrumpf + sichtbares Container-Fass. */
+export interface PodSlot { slot: number; hull: Phaser.GameObjects.Image; barrel: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; dep: string; }
 /** Über die Wiese flatternder Schmetterling. */
 export interface Butterfly { spr: Phaser.GameObjects.Image; ax: number; ay: number; ph: number; sp: number; }
 /** Spieler-Laufzeitzustand der Hauptkarte (wie `ScenePlayer`, plus `dir` für den Wurf). */
