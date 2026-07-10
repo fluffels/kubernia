@@ -260,7 +260,9 @@ export function renderStatics(scene: WorldSceneLike) {
   const p = scene.tfPlatform;
   scene.tfGroup = scene.add.container(0, 0).setDepth(2);
   const tfRt = scene.add.renderTexture(p.x * T, p.y * T, p.w * T, p.h * T).setOrigin(0);
-  for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) tfRt.draw("tf_floor", x * T, y * T);
+  // Phaser 4: draw() zentriert intern per stamp() – fuer Tile-Raster originX/Y = 0 (oben-links); render() flusht den Puffer.
+  for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) tfRt.stamp("tf_floor", undefined, x * T, y * T, { originX: 0, originY: 0 });
+  tfRt.render();
   tfRt.fill(FOAM, 0.7, 0, 0, p.w * T, 2);
   scene.tfGroup.add(tfRt);
   const mkSign = (tx: number, ty: number, txt: string) => scene.makeSign(tx, ty, txt);

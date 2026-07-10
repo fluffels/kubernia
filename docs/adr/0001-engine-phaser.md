@@ -1,11 +1,11 @@
-# ADR 0001: Engine-Wahl – Phaser 3 behalten (vs. Godot/Unity/MonoGame)
+# ADR 0001: Engine-Wahl – Phaser (vs. Godot/Unity/MonoGame)
 
 > Architecture Decision Record. Format: Kontext → Optionen → Entscheidung → Konsequenzen → Re-Evaluierung.
-> Status: **akzeptiert** · Datum: 2026-06-16 · Ticket: #84
+> Status: **aktualisiert** · Datum: 2026-07-10 · Ticket: #474 (urspr. #84)
 
 ## Status
 
-**Akzeptiert.** Phaser 3 bleibt die Engine von Kubernia.
+**Aktualisiert.** Phaser 4 ist seit 2026-07-10 (#474) die Engine von Kubernia. Phaser 3 abgeloest.
 
 ## Kontext
 
@@ -110,3 +110,15 @@ Dependabot wollte `phaser` von **3.90 → 4.2.0** heben (Major, CI dabei rot). D
 - **Kontext:** Phaser 4 ist sehr jung (4.0.0 = 2026-04-10, 4.2.0 = 2026-06-19, ~2,5 Monate, Renderer komplett neu geschrieben). Es gibt **keine neuere 4.x** zum Ausweichen und **kein offenes GitHub-Issue**, das diesen Fall beschreibt (also noch nicht auf Phasers Reparaturliste).
 
 **Entscheidung:** Auf **Phaser 3.90.x** bleiben (rendert alle Szenen korrekt, null Risiko), der 4er-Sprung wird **verschoben**, nicht verworfen. Re-Eval, wenn der Renderer-Bug upstream gefixt ist bzw. 4.x reift (Folge-Ticket). Der fertige Migrations-Patch (drawFrame→stamp etc.) hängt an #443 und ist gegen ein gefixtes Phaser 4 in Minuten erneut anwendbar.
+
+## Phaser 4.2.1 – Renderer-Bug gefixt, Migration abgeschlossen (2026-07-10, #474)
+
+Re-Evaluierung gemaess Folge-Ticket #474. Phaser **4.2.1** erschien am 2026-07-07 und schliesst den in #443 beschriebenen Renderer-Bug.
+
+**Ergebnis der Pruefung:**
+
+- **Renderer-Bug behoben.** In `InteriorScene` (Welt kleiner als Viewport, 176×128 px) wird der Bereich ausserhalb der Welt-Bounds jetzt korrekt mit dem Hintergrund-Clearcolor gefuellt. Der alte Framebuffer-Rest taucht nicht mehr auf.
+- **Migration identisch mit #443-Patch.** Betroffene Dateien (5 Praesentation-Module): `InteriorScene`, `RegionScene`, `worldscene/terrain`, `worldscene/scenery`. Aenderungen: `drawFrame()` → `stamp(key, frame, x, y, { originX: 0, originY: 0 })` + `render()`-Flush nach der Tile-Schleife; `draw()` (zentriert in Phaser 4) ebenfalls auf `stamp(..., { originX: 0, originY: 0 })` + `render()` umgestellt; frame-Argument `null` → `undefined` (Phaser-4-Typen verbieten `null`); `roundPixels: true` explizit in der Game-Config gesetzt (v4-Default geaendert).
+- **Alle Gates gruen.** TypeCheck, `npm test` (2047 Tests), `npm run verify` — keine neuen Fehler.
+
+**Entscheidung:** **Phaser 4.2.1 uebernommen** (package.json `"phaser": "^4.2.1"`). Phaser 3 ist abgeloest. Der Migrations-Aufwand war trivial; die Domanen-Schicht ist weiterhin Phaser-frei.

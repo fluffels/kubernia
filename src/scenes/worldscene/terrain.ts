@@ -231,22 +231,25 @@ export function renderGround(scene: WorldSceneLike) {
     return "coast";
   };
 
+  // Phaser 4: drawFrame ist weg -> stamp() mit Ursprung oben-links (default zentriert); render() flusht den Puffer.
+  const topLeft = { originX: 0, originY: 0 };
   for (let y = 0; y < scene.H; y++) {
     for (let x = 0; x < scene.W; x++) {
       const v = scene.get(x, y);
       if (has(x, y, 0)) {                                              // berührt Wasser -> Rand-Set nach Material
-        rt.drawFrame(edgeSet(x, y), WANG[corners(x, y, 1)], x * T, y * T);
+        rt.stamp(edgeSet(x, y), WANG[corners(x, y, 1)], x * T, y * T, topLeft);
       } else if (v === -10) {                                         // Steg/Anleger innen -> volle Planke
-        rt.drawFrame("dock", WANG[15], x * T, y * T);
+        rt.stamp("dock", WANG[15], x * T, y * T, topLeft);
       } else if (v === 96 || v === 97 || v === 98) {                  // Stein-Kai innen -> voller Stein
-        rt.drawFrame("kai", WANG[15], x * T, y * T);
+        rt.stamp("kai", WANG[15], x * T, y * T, topLeft);
       } else if (has(x, y, 3)) {                                      // Gras/Weg-Ebene
-        rt.drawFrame("path", WANG[corners(x, y, 3)], x * T, y * T);
+        rt.stamp("path", WANG[corners(x, y, 3)], x * T, y * T, topLeft);
       } else {                                                        // Sand/Gras-Ebene
-        rt.drawFrame("meadow", WANG[corners(x, y, 2)], x * T, y * T);
+        rt.stamp("meadow", WANG[corners(x, y, 2)], x * T, y * T, topLeft);
       }
     }
   }
+  rt.render();
   // Wellen-Glitzer
   for (let i = 0; i < 60; i++) {
     const x = Phaser.Math.Between(1, scene.W - 2), y = Phaser.Math.Between(28, scene.H - 1);
