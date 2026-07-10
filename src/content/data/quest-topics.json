@@ -13,5 +13,6 @@
   { "id": "observability", "label": "Observability" },
   { "id": "storage", "label": "Storage" },
   { "id": "capstone", "label": "Meister-Abschluss: Eigener Dienst" },
-  { "id": "cluster-aufbau", "label": "Cluster selbst aufbauen" }
+  { "id": "cluster-aufbau", "label": "Cluster selbst aufbauen" },
+  { "id": "platform-engineering", "label": "Platform Engineering" }
 ]

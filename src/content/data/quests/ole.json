@@ -1456,5 +1456,120 @@
         ]
       }
     ]
+  },
+  {
+    "id": "platform-addons-overview",
+    "title": "Das große Ganze: was einen echten Cluster ausmacht",
+    "giver": "ole",
+    "topic": "platform-engineering",
+    "rewardXp": 80,
+    "rewardCoins": 60,
+    "steps": [
+      {
+        "type": "dialog",
+        "npc": "ole",
+        "scenario": {
+          "helmRepos": [
+            "bitnami"
+          ]
+        },
+        "lines": [
+          "Setz dich noch mal, Kapitän – eine letzte Seekarte, die größte. Du kannst jetzt einen Cluster <b>von Hand</b> und <b>als Code</b> bauen: Control-Plane, Worker, Dienste. Aber Hand aufs Herz – was du gebaut hast, ist ein <b>nackter</b> Cluster. Er läuft, klar. Nur: In keiner echten Firma würdest du auf so einem produktiv gehen.",
+          "Denn ein nackter Cluster kann erstaunlich <b>wenig</b>. Er weiß nicht, wie Besucher aus dem Internet reinkommen. Er stellt keine <b>Zertifikate</b> aus, pflegt keine <b>DNS-Einträge</b>, sammelt keine <b>Logs</b>, überwacht sich nicht selbst, macht keine <b>Backups</b>. All das kommt nicht „aus der Kiste“ – es wird <b>dazugebaut</b>.",
+          "Und genau <b>das</b> ist mein – nein, ab heute <b>dein</b> – Job: das <b>Plattform-Team</b>. Wir rüsten den nackten Cluster mit einem festen Satz <b>Plattform-Add-ons</b> aus, bis er eine echte <b>Plattform</b> ist. Damit die App-Teams am Ende nur noch ihre App deployen und sich um den ganzen Unterbau nicht kümmern müssen."
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "ole",
+        "lines": [
+          "Schauen wir uns die Grundausstattung an – jedes Add-on löst <b>eine</b> Aufgabe:",
+          "🚪 <b>Rein-Kommen:</b> ein <b>Ingress-Controller</b> (oder Gateway) – das Hafentor, das Besucher aus dem Internet an den richtigen Service lotst.<br>🔐 <b>Zertifikate:</b> <b>cert-manager</b> – stellt TLS-Zertifikate automatisch aus und erneuert sie, bevor sie ablaufen.<br>🧭 <b>DNS:</b> <b>external-dns</b> – trägt für deine Dienste automatisch die passenden DNS-Namen ein.",
+          "📜 <b>Logging:</b> ein Log-Stack (z.B. <b>ECK</b>, der Elastic-Operator) – sammelt die Ausgaben aller Pods an einem durchsuchbaren Ort.<br>📈 <b>Monitoring:</b> <b>Prometheus + Grafana</b> – Metriken und Dashboards (die kennst du schon vom Leuchtturm bei Lumi).<br>💾 <b>Backups</b> und 🛡️ <b>Image-Scanning</b> – Sicherungen und die Prüfung, dass keine löchrigen Images einlaufen.",
+          "Der rote Faden: Das sind alles <b>Operatoren und Helm-Charts</b>, die man in den Cluster installiert. Kein Add-on ist von Hand gebautes Sonderwerk – jedes ist ein <b>Paket</b>, das man einspielt und pflegt. Genau das macht das Plattform-Team."
+        ]
+      },
+      {
+        "type": "teach",
+        "brief": "Ein Add-on im Katalog finden",
+        "cmd": {
+          "id": "t-platform-search-ingress",
+          "intro": "🔁 Kein neuer Befehl – das <code>helm search repo</code> von Runa. Beweis, dass ein Add-on wirklich nur ein Chart ist: such das Hafentor im Katalog.",
+          "text": "Such nach dem Ingress-Add-on: <code>helm search repo ingress</code>. Es taucht als ganz gewöhnliches Chart auf – <code>nginx-ingress-controller</code>, bereit zum Installieren wie jede andere App.",
+          "accept": [
+            "^helm\\s+search\\s+repo\\s+ingress$"
+          ],
+          "solution": "helm search repo ingress",
+          "hint": "helm search repo <begriff> – der Begriff ist 'ingress'.",
+          "why": "Der Beweis fürs große Ganze: ein Plattform-Add-on ist kein Sonderwerk, sondern ein ganz normales <b>Helm-Chart</b> im Katalog – hier der <code>nginx-ingress-controller</code>. Genau darum installiert und pflegt das Plattform-Team Ingress, cert-manager & Co. als Charts/Operatoren, statt sie je Cluster von Hand zu bauen."
+        }
+      },
+      {
+        "type": "dialog",
+        "npc": "ole",
+        "lines": [
+          "Siehst du? Der Ingress-Controller ist im Katalog nichts Besonderes – ein Chart wie <code>nginx</code> oder <code>postgresql</code>. Genau darum liefert man Add-ons als Charts/Operatoren aus: einmal installiert, halten sie ihre Aufgabe per <b>Reconcile-Loop</b> selbst in Ordnung – dasselbe Prinzip wie Argo CD und das Self-Healing, nur je für eine Spezialaufgabe."
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "ole",
+        "q": "Auf den Punkt: Warum reicht ein „nackter“ Cluster (Control-Plane + Worker + deine Dienste) im echten Betrieb meist nicht?",
+        "options": [
+          {
+            "t": "Weil ihm die <b>Plattform-Grundausstattung</b> fehlt: Ingress, Zertifikate, DNS, Logging, Monitoring, Backups – all das kommt nicht eingebaut, sondern wird als Add-ons dazugebaut.",
+            "ok": true,
+            "reply": "Genau. Der nackte Cluster kann Pods planen und starten – mehr nicht. Erreichbarkeit von außen, TLS, DNS, Logs, Überwachung, Sicherungen: alles Add-ons. Erst mit ihnen wird aus dem Cluster eine <b>Plattform</b>."
+          },
+          {
+            "t": "Weil ein nackter Cluster keine Pods starten kann, bevor man die Add-ons installiert hat.",
+            "ok": false,
+            "reply": "Nein – Pods laufen auch nackt (das hast du im Wiederaufbau selbst gesehen). Es fehlt nicht das Starten, sondern der <b>Betriebs-Unterbau</b> drumherum: Rein-Kommen, Zertifikate, DNS, Logs, Monitoring, Backups."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "ole",
+        "q": "Wie teilt sich die Arbeit zwischen <b>Plattform-Team</b> und <b>App-Team</b> auf?",
+        "options": [
+          {
+            "t": "Das Plattform-Team baut und pflegt die <b>Grundausstattung</b> (die Add-ons), damit die App-Teams nur noch <b>ihre App deployen</b> und sich nicht um den Unterbau kümmern müssen.",
+            "ok": true,
+            "reply": "So ist es. Das Plattform-Team stellt die <i>Straße</i> bereit – Ingress, TLS, DNS, Logging, Monitoring – und die App-Teams <i>fahren</i> nur noch drauf. Weniger Doppelarbeit, gleiche Standards für alle. Das ist Platform Engineering."
+          },
+          {
+            "t": "Jedes App-Team installiert und betreibt seine eigenen Add-ons (Ingress, cert-manager, Logging) komplett selbst.",
+            "ok": false,
+            "reply": "Das wäre teuer und uneinheitlich – jedes Team würde dasselbe Rad neu bauen und anders pflegen. Genau das <b>verhindert</b> das Plattform-Team: es liefert die Grundausstattung <b>einmal</b> für alle."
+          }
+        ]
+      },
+      {
+        "type": "choice",
+        "npc": "ole",
+        "q": "In welcher Form werden solche Add-ons typischerweise in den Cluster gebracht?",
+        "options": [
+          {
+            "t": "Als <b>Helm-Charts / Operatoren</b> – installierbare Pakete, die ihre Aufgabe danach per Reconcile-Loop selbst am Laufen halten.",
+            "ok": true,
+            "reply": "Genau – cert-manager, external-dns, der ingress-controller, der Log-Operator: alles Charts/Operatoren. Installieren, konfigurieren, und sie regeln ihr Gebiet selbstständig. Kein handgeschnitztes Sonderwerk pro Cluster."
+          },
+          {
+            "t": "Als von Hand geschriebener Sonder-Code, den man für jeden Cluster einzeln neu programmiert.",
+            "ok": false,
+            "reply": "Nein – das wäre das Gegenteil von skalierbar. Add-ons sind fertige <b>Pakete</b> (Charts/Operatoren): einmal gebaut, überall reproduzierbar eingespielt. Genau wie du den ganzen Cluster als Code beschrieben hast."
+          }
+        ]
+      },
+      {
+        "type": "dialog",
+        "npc": "ole",
+        "lines": [
+          "Damit hast du das <b>große Ganze</b>, Kapitän: Ein produktiver Cluster ist <b>Basis + ein Satz Plattform-Add-ons</b>. Die Basis baust du (von Hand oder als Code), die Add-ons rüstest du als Charts/Operatoren nach – Ingress, cert-manager, external-dns, Logging, Monitoring, Backups, Scanning.",
+          "Und der wichtigste Satz zum Schluss: Das ist keine Nebentätigkeit, das ist ein <b>eigener Beruf</b> – <b>Platform Engineering</b>. Ihr baut die Plattform, auf der alle anderen bauen. Willkommen im Plattform-Team, Kapitän. Der Hafen ist in guten Händen. ⚓🎓"
+        ]
+      }
+    ]
   }
 ]
