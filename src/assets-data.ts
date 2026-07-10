@@ -130,6 +130,15 @@ import menu_play from "../assets/pixellab/menu_play.png";
 import menu_save from "../assets/pixellab/menu_save.png";
 import menu_load from "../assets/pixellab/menu_load.png";
 import menu_reset from "../assets/pixellab/menu_reset.png";
+// Panel-Kopf-Icons (#647, Slice 3 von #204): dieselbe DOM-Icon-Idee wie die HUD-Icons oben,
+// für die Köpfe der Overlay-Panels (index.html `.panel-head`). Bewusst NUR die Motive, die
+// keine andere Slice bespielt: Shop/Krabbe/Spiel. Logbuch/Album/Terminal/Menü liegen in der
+// Tastenleisten-Slice #646 (hud_logbook/hud_album/hud_terminal/hud_menu) – die Panel-Köpfe
+// dieser vier werden erst nach deren Merge auf die gemeinsamen Icons umgestellt (kein Doppel).
+// Ein Spiel-Icon deckt alle sechs Minispiel-Panels ab (Stapel/Pod-Pack/YAML/Routing/Drift/RBAC).
+import icon_shop from "../assets/pixellab/icon_shop.png";
+import icon_kralle from "../assets/pixellab/icon_kralle.png";
+import icon_game from "../assets/pixellab/icon_game.png";
 
 /** Region-Szenen-Keys, deren Assets erst beim Betreten nachgeladen werden (#198,
  *  Lazy-Loading). Wert = Phaser-Szenen-Key der Region (RegionConfig.key in
@@ -278,6 +287,23 @@ export const HUD_KEY_ICONS = {
   album: hud_album,
   menu: hud_menu,
 } as const;
+
+/** Panel-Kopf-DOM-Icons (#647, Slice 3 von #204): `data-icon`-Schlüssel → Vite-Asset-URL,
+ *  für die `<img class="pixel-icon" data-icon="…">` in den `.panel-head`-Leisten (index.html).
+ *  `initHudIcons` (ui/hud.ts) verdrahtet sie generisch über das `data-icon`-Attribut, damit
+ *  neue Panel-Köpfe hier nur einen Eintrag ergänzen müssen. Eigene Motive (Shop/Krabbe/Spiel);
+ *  `game` teilen sich alle sechs Minispiel-Panels. Logbuch/Album/Terminal/Menü **teilen sich
+ *  bewusst die #646-Tastenleisten-Icons** (`hud_logbook`/`hud_album`/`hud_terminal`/`hud_menu`) –
+ *  gleiches Motiv, EIN Asset statt Doppel. Getrennt von `KQAssets` (keine Phaser-Texturen). */
+export const PANEL_ICONS: Record<string, string> = {
+  shop: icon_shop,
+  kralle: icon_kralle,
+  game: icon_game,
+  logbuch: hud_logbook,
+  album: hud_album,
+  terminal: hud_terminal,
+  menu: hud_menu,
+};
 
 /** Gemeinsame + Startinsel-Assets (#198): alles OHNE `scene`-Tag. Die BootScene lädt genau
  *  diese vorab – Figuren/HUD/Terrain der Hauptkarte „Port Kubernia" + alle scene-übergreifend

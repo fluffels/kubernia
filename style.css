@@ -100,6 +100,15 @@ button.primary { background: var(--accent); color: #1a1304; font-weight: bold; b
   position: relative;
   top: -1px;
 }
+/* Panel-Kopf-Icons (#647, Slice 3 von #204): dieselben gerahmten Pixel-Icons wie in der
+   HUD-Statuszeile (#645), aber im größeren Panel-Kopf bewusst auf 20px hochgesetzt – 40px-
+   Quelle ÷2 (ganzzahlig → scharf, gleiche Pixeldichte wie die 32px→16px-HUD-Icons). Ohne den
+   -1px-Versatz, da die Panel-Kopf-Zeile via flex/align-items:center schon mittig sitzt. */
+.panel-head .pixel-icon {
+  width: 20px;
+  height: 20px;
+  top: 0;
+}
 .hud-quest {
   flex: 1;
   text-align: center;
