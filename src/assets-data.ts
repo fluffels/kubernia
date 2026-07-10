@@ -14,10 +14,6 @@
  * Die PNGs in assets/ sind damit die einzige Quelle. Schlüssel = wie in scenes.ts/ui.ts
  * referenziert; Mapping der Tileset-Schlüssel auf Dateinamen siehe assets/pixellab/README.md. */
 
-// Kenney-Spritesheets (Tiny Town / Tiny Dungeon, CC0)
-import town from "../assets/town.png";
-import dungeon from "../assets/dungeon.png";
-
 // Terraform-Plateau-Boden (#672): 16px-Holzplanken-Tile, ersetzt Kenney-dungeon-WOOD
 import tf_floor from "../assets/pixellab/tf_floor.png";
 
@@ -167,8 +163,6 @@ export type AssetEntry =
  *  (plus den Import oben) – kein Nachziehen in scenes.ts mehr nötig. */
 export const ASSET_MANIFEST: readonly AssetEntry[] = [
   // Spritesheets (werden in 16er-Frames geschnitten)
-  { key: "town", src: town, kind: "sheet", cols: 12 },
-  { key: "dungeon", src: dungeon, kind: "sheet", cols: 12 },
   { key: "coast", src: coast, kind: "sheet", cols: 4 },
   { key: "meadow", src: meadow, kind: "sheet", cols: 4 },
   { key: "path", src: path, kind: "sheet", cols: 4 },
