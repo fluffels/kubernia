@@ -27,6 +27,8 @@ import { T, hashHue, hueColor, SIGN_FONT, SIGN_SCALE } from "../shared";
 // Pod-Steg-Belegung + Tag-Rendering-Konstanten liegen zentral in scenes/geometry.ts (#590).
 import { SLOTS_PER_PIER, TAG_CAP, REVEAL_FULL, REVEAL_FADE } from "../geometry";
 import type { WorldSceneLike, DynTagData } from "./types";
+import { harborTexture } from "./harbordamage";
+export { harborTexture } from "./harbordamage";
 
 // Sichtfeld fürs Tag-Culling großzügig erweitern, damit am Bildrand nichts aufpoppt
 // (Tags ragen über ihren Bezugspunkt + werden beim Entzerren nach oben geschoben).
@@ -64,6 +66,7 @@ export function syncCluster(scene: WorldSceneLike) {
   if (Game.sim.rev !== scene.lastClusterRev) {
     scene.lastClusterRev = Game.sim.rev;
     syncPods(scene);
+    syncHarborDamage(scene);
   }
   // Billige, jeden Frame nötige Sichtbarkeit (hängt an Game-State/tf, NICHT an rev –
   // die Kanone wird per Shop-Kauf freigeschaltet, ohne den Cluster zu ändern):
@@ -71,6 +74,17 @@ export function syncCluster(scene: WorldSceneLike) {
   scene.tfGroup.setVisible(applied);
   scene.tfBuoys.forEach((b: Phaser.GameObjects.Image) => b.setVisible(Game.sim.tf.initialized && !applied));
   scene.cannon.setVisible(Game.hasUpgrade("kanone"));
+}
+
+/** Synchronisiert die Sturm-Schadensoptik (Leuchtturm/Schiff/Hafenmeisterei) mit dem
+ *  Control-Plane-Zustand (#692). Guard verhindert redundante setTexture-Aufrufe. */
+function syncHarborDamage(scene: WorldSceneLike) {
+  const cpUp = Game.sim.controlPlane.up;
+  if (cpUp === scene.lastControlPlaneUp) return;
+  scene.lastControlPlaneUp = cpUp;
+  scene.lighthouseImg.setTexture(harborTexture("lighthouse", cpUp));
+  scene.shipImg.setTexture(harborTexture("ship", cpUp));
+  scene.houseOfficeImg.setTexture(harborTexture("house_office", cpUp));
 }
 
 /** Pod-Kisten + Signatur-abhängige Deko an den aktuellen Cluster-Zustand angleichen.

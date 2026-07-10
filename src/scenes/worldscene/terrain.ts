@@ -112,7 +112,7 @@ export function placeHarborObjects(scene: WorldSceneLike) {
   scene.objDeco(24, 22, "signpost", 0.6, false);
 
   // Gebäude & Zonen
-  scene.building(23, 10, 7, "house_office", 1.05);
+  scene.houseOfficeImg = scene.building(23, 10, 7, "house_office", 1.05);
   // depth = Gebäude-Fußlinie (baseY) + 1 → Schild vor dem hohen Dach statt dahinter (#290)
   scene.labels.push({ x: 26.5, y: 9.4, text: "Hafenmeisterei", color: "#ffffff", depth: (10 + 3) * T + 1 });
   scene.building(8, 8, 5, "house_forge", 0.82);
