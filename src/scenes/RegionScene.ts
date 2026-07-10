@@ -221,16 +221,19 @@ export class RegionScene extends IslandScene {
       if (cs.some(isStone)) return "kai";              // Stein-Kai/-Klippe trifft Wasser
       return "coast";
     };
+    // Phaser 4: drawFrame ist weg -> stamp() mit Ursprung oben-links (default zentriert); render() flusht den Puffer.
+    const topLeft = { originX: 0, originY: 0 };
     for (let y = 0; y < this.H; y++) {
       for (let x = 0; x < this.W; x++) {
         const v = this.ground[y * this.W + x];
-        if (has(x, y, 0)) rt.drawFrame(edgeSet(x, y), WANG[corners(x, y, 1)], x * T, y * T);
-        else if (v === DOCK) rt.drawFrame("dock", WANG[15], x * T, y * T);
-        else if (isStone(v)) rt.drawFrame("kai", WANG[15], x * T, y * T);
-        else if (has(x, y, 3)) rt.drawFrame("path", WANG[corners(x, y, 3)], x * T, y * T);
-        else rt.drawFrame("meadow", WANG[corners(x, y, 2)], x * T, y * T);
+        if (has(x, y, 0)) rt.stamp(edgeSet(x, y), WANG[corners(x, y, 1)], x * T, y * T, topLeft);
+        else if (v === DOCK) rt.stamp("dock", WANG[15], x * T, y * T, topLeft);
+        else if (isStone(v)) rt.stamp("kai", WANG[15], x * T, y * T, topLeft);
+        else if (has(x, y, 3)) rt.stamp("path", WANG[corners(x, y, 3)], x * T, y * T, topLeft);
+        else rt.stamp("meadow", WANG[corners(x, y, 2)], x * T, y * T, topLeft);
       }
     }
+    rt.render();
     // Wellen-Glitzer auf dem Wasser
     for (let i = 0; i < 40; i++) {
       const x = Phaser.Math.Between(0, this.W - 1), y = Phaser.Math.Between(0, this.H - 1);

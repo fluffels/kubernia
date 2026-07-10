@@ -78,7 +78,8 @@ export const BUNDLE_BUDGETS = [
     // #645: +30 KB für die 7 gerahmten HUD-Statuszeilen-Pixel-Icons (base64 inline).
     // #252: +~60 KB — die 349 „why"-Begründungen (Terminal-Tasks + Teach-Befehle) landen als Content-JSON im Bundle.
     // #647: +~13 KB — die 3 neuen Panel-Kopf-Icons (Shop/Krabbe/Spiel; Logbuch/Album/Terminal/Menü teilen sich #646-Icons, kein Zusatz-Byte).
-    maxBytes: 2_930_000,
+    // #474: +~160 KB — Phaser 3→4 (v4 ist groesser als v3, Renderer komplett neu geschrieben).
+    maxBytes: 3_200_000,
   },
   {
     label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor)",
@@ -92,7 +93,8 @@ export const BUNDLE_BUDGETS = [
     label: "Phaser-vendor-Chunk in dist/ (#595)",
     kind: "vendor-chunk",
     dir: "dist/assets",
-    maxBytes: 1_350_000,
+    // #474: +~26 KB — Phaser 3→4 (v4 vendor-Chunk ist groesser als v3).
+    maxBytes: 1_450_000,
   },
 ];
 
