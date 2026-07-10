@@ -198,13 +198,13 @@ export function renderStatics(scene: WorldSceneLike) {
   // hier wird nur die Optik gerendert, Tiefe 2 wie zuvor, damit die Figur aufs Deck läuft.
   const s = scene.ship, px = s.x * T, py = s.y * T, pw = s.w * T, ph = s.h * T;
   const midY = py + ph / 2;
-  const shipImg = scene.add.image(px + pw / 2, midY - 6, "ship").setDepth(2);
-  const shipScale = (pw + 46) / shipImg.width;   // Rumpf etwas breiter als das Deck – Bug/Heck ragen über
-  shipImg.setScale(shipScale);
+  scene.shipImg = scene.add.image(px + pw / 2, midY - 6, "ship").setDepth(2);
+  const shipScale = (pw + 46) / scene.shipImg.width;   // Rumpf etwas breiter als das Deck – Bug/Heck ragen über
+  scene.shipImg.setScale(shipScale);
   // Dynamische Fortschritts-Flagge am Masttop (Tint wird beim Sync gesetzt, s. shipFlag.setTint).
   // Mast sitzt im Asset knapp links der Bildmitte; Offsets relativ zur Bildmitte, mitskaliert.
-  const mastTopX = shipImg.x + (-14) * shipScale + 7;
-  const mastTopY = shipImg.y + (-76) * shipScale;
+  const mastTopX = scene.shipImg.x + (-14) * shipScale + 7;
+  const mastTopY = scene.shipImg.y + (-76) * shipScale;
   scene.shipFlag = scene.add.image(mastTopX, mastTopY, "px").setScale(6, 4).setDepth(3);
   scene.tweens.add({ targets: scene.shipFlag, y: mastTopY - 2, duration: 700, yoyo: true, repeat: -1, ease: "Sine.inOut" });
 
@@ -221,7 +221,7 @@ export function renderStatics(scene: WorldSceneLike) {
   const lh = scene.lighthouse, lx = lh.x * T + 8, lyB = (lh.y + 1) * T;
   const lhSc = 0.5;                                   // 45x100-Bild ~ auf alte Turmhöhe (~50px)
   scene.add.ellipse(lx, lyB - 1, 28, 9, 0x5a6470).setDepth(lyB - 2);   // Felsen-Sockel
-  scene.add.image(lx, lyB, "lighthouse").setOrigin(0.5, 1).setScale(lhSc).setDepth(lyB + 4);
+  scene.lighthouseImg = scene.add.image(lx, lyB, "lighthouse").setOrigin(0.5, 1).setScale(lhSc).setDepth(lyB + 4);
   const lampY = lyB - Math.round(100 * lhSc) + 9;    // Laternenraum nahe der Bildoberkante
   // Lichtkegel: weiches Dreieck (Spitze = Lampe), per ADD-Blend, dreht sich 360° übers Wasser
   if (!scene.textures.exists("lhbeam")) {

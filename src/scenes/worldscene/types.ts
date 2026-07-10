@@ -91,6 +91,7 @@ export interface WorldSceneFields {
   podSlots: Record<string, PodSlot>;
   slotUsed: boolean[];
   lastClusterRev: number;   // #523: zuletzt synchronisierte Sim.rev (Frame-Sparbremse)
+  lastControlPlaneUp?: boolean;  // #692: zuletzt angewendeter CP-Zustand (Guard für syncHarborDamage)
   dynamic: { barrelsSig: string; flagsSig: string; svcSig: string; depSig: string };
   dynGroup: Phaser.GameObjects.Group;
   // statische Props/Effekte aus scenery.ts
@@ -98,6 +99,10 @@ export interface WorldSceneFields {
   lhBeam: Phaser.GameObjects.Image;
   lhLight: Phaser.GameObjects.Image;
   cannon: Phaser.GameObjects.Image;
+  // Hafen-Kernobjekte für die Sturm-Schadensoptik (#692)
+  lighthouseImg: Phaser.GameObjects.Image;
+  shipImg: Phaser.GameObjects.Image;
+  houseOfficeImg: Phaser.GameObjects.Image;
   tfGroup: Phaser.GameObjects.Container;
   tfBuoys: Phaser.GameObjects.Image[];
   butterflies: Butterfly[];
@@ -139,7 +144,7 @@ export interface WorldSceneFields {
   deco(x: number, y: number, sheet: string, idx: number, solid?: boolean): void;
   tree(x: number, y: number): void;
   objDeco(x: number, y: number, tex: string, scale: number, solid?: boolean): void;
-  building(x: number, y: number, w: number, tex: string, scale: number): void;
+  building(x: number, y: number, w: number, tex: string, scale: number): Phaser.GameObjects.Image;
   burstAt(x: number, y: number, kind: string): void;
   registerCullable<T extends Phaser.GameObjects.Components.Visible>(obj: T, px: number, py: number): T;
   makeSign(x: number, y: number, text: string, depth?: number): Phaser.GameObjects.Container;
