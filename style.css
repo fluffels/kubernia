@@ -122,6 +122,9 @@ button.primary { background: var(--accent); color: #1a1304; font-weight: bold; b
 /* ===== Menü / Pause ===== */
 .menu-actions { display: flex; flex-direction: column; gap: 10px; max-width: 360px; }
 .menu-actions button { padding: 12px 16px; font-size: 1.0em; text-align: left; }
+/* Menü-Button-Pixel-Icons (#648, Slice 4/4 von #204): dieselbe .pixel-icon-Klasse wie die
+   HUD-Statuszeile (#645), nur mit etwas Luft zum Label. */
+.menu-actions button .pixel-icon { margin-right: 8px; }
 button.danger { border-color: var(--bad); color: var(--bad); }
 button.danger:hover { background: var(--bad); color: #1a0606; filter: none; }
 

@@ -115,6 +115,14 @@ import hud_season_summer from "../assets/pixellab/hud_season_summer.png";
 import hud_season_autumn from "../assets/pixellab/hud_season_autumn.png";
 import hud_season_winter from "../assets/pixellab/hud_season_winter.png";
 
+// Menü-Button-Icons (#648, Slice 4/4 von #204): dieselben gerahmten DOM-Icons wie die
+// HUD-Statuszeile oben, nur für die vier Menü-Aktionen (Weiterspielen/Sichern/Laden/
+// Zurücksetzen). Auch diese sind reine DOM-<img>, keine Phaser-Texturen.
+import menu_play from "../assets/pixellab/menu_play.png";
+import menu_save from "../assets/pixellab/menu_save.png";
+import menu_load from "../assets/pixellab/menu_load.png";
+import menu_reset from "../assets/pixellab/menu_reset.png";
+
 /** Region-Szenen-Keys, deren Assets erst beim Betreten nachgeladen werden (#198,
  *  Lazy-Loading). Wert = Phaser-Szenen-Key der Region (RegionConfig.key in
  *  scenes/regions.ts). Ein Asset OHNE `scene` ist gemeinsam/Startinsel und wird in der
@@ -238,6 +246,16 @@ export const HUD_ICONS = {
 export const HUD_SEASON_ICONS: readonly string[] = [
   hud_season_spring, hud_season_summer, hud_season_autumn, hud_season_winter,
 ];
+
+/** Menü-Button-DOM-Icon-URLs (#648, Slice 4/4 von #204): Schlüssel → Vite-Asset-URL, für
+ *  die `<img>`-Icons der vier Menü-Aktionen (index.html #overlay-menu .menu-actions).
+ *  Wie `HUD_ICONS` getrennt von `KQAssets`, weil reine DOM-Icons, keine Phaser-Texturen. */
+export const MENU_ICONS = {
+  play: menu_play,
+  save: menu_save,
+  load: menu_load,
+  reset: menu_reset,
+} as const;
 
 /** Gemeinsame + Startinsel-Assets (#198): alles OHNE `scene`-Tag. Die BootScene lädt genau
  *  diese vorab – Figuren/HUD/Terrain der Hauptkarte „Port Kubernia" + alle scene-übergreifend

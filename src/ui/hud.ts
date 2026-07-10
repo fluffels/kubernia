@@ -2,7 +2,7 @@ import { Game } from "../game";
 import { SFX } from "../sfx";
 import { worldScene, interiorOpen } from "../runtime";
 import { part, $, esc, NPCS, SMALLTALK } from "./shared";
-import { HUD_ICONS, HUD_SEASON_ICONS } from "../assets-data";
+import { HUD_ICONS, HUD_SEASON_ICONS, MENU_ICONS } from "../assets-data";
 import { resolveTalkTarget } from "../hud/viewdecide";
 import { TOAST_LIFE_MS, HINT_LIFE_MS, toastFadeDelaySeconds } from "../hud/toastlife";
 import { enqueueAchievement, bundleCelebration, type Achievement } from "../hud/celebrate";
@@ -17,11 +17,18 @@ export const hudUI = part({
   /** HUD-Statuszeilen-Pixel-Icons einmalig verdrahten (#645, Fundament-Slice #204):
    *  setzt die `src` der dauerhaft gleichen DOM-Icons (Münzen/Streak/Uhr). Das
    *  Saison-Icon ist dynamisch und wird in `setClock` je `seasonIndex` gesetzt. Läuft
-   *  einmal beim UI-Modul-Laden (ui.ts) – die #hud-Elemente stehen statisch in index.html. */
+   *  einmal beim UI-Modul-Laden (ui.ts) – die #hud-Elemente stehen statisch in index.html.
+   *  Seit #648 verdrahtet dieselbe Routine auch die vier statischen Menü-Button-Icons
+   *  (Weiterspielen/Sichern/Laden/Zurücksetzen) – ebenfalls dauerhaft gleich, ebenfalls
+   *  statisch in index.html (#overlay-menu .menu-actions). */
   initHudIcons() {
     (<HTMLImageElement>$("hud-icon-coins")).src = HUD_ICONS.coins;
     (<HTMLImageElement>$("hud-icon-streak")).src = HUD_ICONS.streak;
     (<HTMLImageElement>$("hud-icon-time")).src = HUD_ICONS.time;
+    (<HTMLImageElement>$("menu-icon-play")).src = MENU_ICONS.play;
+    (<HTMLImageElement>$("menu-icon-save")).src = MENU_ICONS.save;
+    (<HTMLImageElement>$("menu-icon-load")).src = MENU_ICONS.load;
+    (<HTMLImageElement>$("menu-icon-reset")).src = MENU_ICONS.reset;
   },
 
   refreshHud() {
