@@ -8,6 +8,11 @@
     "desc": "Verrät dir im Terminal die komplette Lösung der aktuellen Aufgabe. Einmal benutzbar."
   },
   {
+    "id": "pet-katze", "icon": "🐱", "name": "Dockkater Mango", "price": 200, "type": "pet",
+    "desc": "Schläft auf Takelage, jagt Mäuse im Laderaum und folgt dir durch jeden Sturm.",
+    "tex": "pet_katze"
+  },
+  {
     "id": "pet-ratte", "icon": "🐀", "name": "Hafenratte Taki", "price": 150, "type": "pet",
     "desc": "Folgt dir überallhin. Hat schon mehr Häfen gesehen als jeder Admiral.",
     "sprite": 124, "tex": "pet_ratte"
