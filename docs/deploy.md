@@ -16,20 +16,19 @@ Reproduzierbarer Weg, um die Spiel-App in einem Container oder einem Kubernetes-
 ### Image bauen
 
 ```bash
-docker build -t kubernia .
+docker build -t kubequest .
 ```
 
-Der Multi-Stage-Build (`Dockerfile` im Repo-Root) tut:
-
+Der Multi-Stage-Build (Dockerfile im Repo-Root) tut:
 1. **Build-Stage** (`node:22-bookworm-slim`): `npm ci` + `npm run build` → `dist/`
 2. **Serve-Stage** (`nginx:1.27-alpine`): serviert `dist/` über Port 80 mit SPA-Fallback
 
-Das fertige Image enthält keinen Node-Laufzeit-Layer – nur nginx + statische Assets.
+Das fertige Image enthält keinen Node-Laufzeit-Layer, nur nginx + statische Assets.
 
 ### Container starten
 
 ```bash
-docker run --rm -p 8080:80 kubernia
+docker run --rm -p 8080:80 kubequest
 ```
 
 Dann im Browser öffnen: <http://localhost:8080>
@@ -53,6 +52,14 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8080
 - Image aus Slice 1 lokal gebaut
 
 ### Image in den Cluster laden
+
+Das Deployment referenziert das Image als `kubernia:latest`. Beim Bauen in Slice 1 diesen Tag verwenden:
+
+```bash
+docker build -t kubernia .
+```
+
+Dann in den Cluster laden:
 
 **kind:**
 
@@ -86,10 +93,10 @@ Das Verzeichnis `deploy/` enthält:
 | Datei | Inhalt |
 |---|---|
 | `deployment.yaml` | Deployment (1 Replica, Ressourcen-Limits, readiness/liveness-Probe) |
-| `service.yaml` | ClusterIP-Service |
+| `service.yaml` | ClusterIP-Service (Port 80) |
 | `ingress.yaml` | Ingress für `kubequest.localtest.me` (lokaler Cluster) |
-| `ingress-tls.yaml` | Ingress mit TLS für öffentliches Hosting (Domain eintragen, s.u.) |
-| `cert-issuer.yaml` | Let's-Encrypt-ClusterIssuer für cert-manager |
+| `ingress-tls.yaml` | Ingress mit TLS für öffentliches Hosting (Domain eintragen, s. Slice 4) |
+| `cert-issuer.yaml` | Let's-Encrypt-ClusterIssuer für cert-manager (öffentliches Hosting) |
 
 ### Spiel im Browser öffnen
 
@@ -108,9 +115,67 @@ curl -s -o /dev/null -w "%{http_code}" http://kubequest.localtest.me
 
 ---
 
-## Slice 3 – Helm-Chart (optional, #754)
+## Slice 3 – Helm-Chart (optional): deploy/chart/ (#754)
 
-> *In Arbeit. Das Helm-Chart bündelt die Manifeste aus Slice 2 und macht sie über `helm install` deploybar.*
+Alternativ zu den rohen Manifesten aus Slice 2 lässt sich das Spiel über das
+Helm-Chart in `deploy/chart/` installieren. Das bündelt Deployment + Service +
+Ingress als Helm-Templates und macht alle Konfig-Werte über `values.yaml`
+steuerbar.
+
+> *Voraussetzung: Image aus Slice 1, Cluster + Ingress-Controller aus Slice 2.*
+
+### Helm installieren
+
+```bash
+helm install kubernia ./deploy/chart \
+  --set image.repository=kubequest \
+  --set image.tag=latest \
+  --set ingress.host=kubequest.localtest.me
+```
+
+Danach ist das Spiel unter **http://kubequest.localtest.me** erreichbar
+(Port-Forward-Alternative: `kubectl port-forward svc/kubernia 8080:80`).
+
+### Häufige Konfig-Änderungen
+
+```bash
+# Anderen Image-Tag deployen
+helm upgrade kubernia ./deploy/chart --set image.tag=1.2.3
+
+# Anderen Hostnamen + mehr Replicas
+helm upgrade kubernia ./deploy/chart \
+  --set ingress.host=spiel.example.com \
+  --set replicaCount=2
+
+# Ingress deaktivieren (reines Port-Forward)
+helm upgrade kubernia ./deploy/chart --set ingress.enabled=false
+```
+
+### Chart-Verifikation (ohne echten Cluster)
+
+```bash
+# Lint: Chart-Struktur + Values prüfen
+helm lint deploy/chart
+
+# Template: generierten YAML-Output inspizieren
+helm template kubernia deploy/chart
+```
+
+### Chart-Struktur
+
+```
+deploy/chart/
+├── Chart.yaml            # Name, Version, appVersion
+├── values.yaml           # Standardwerte (image, ingress, resources …)
+└── templates/
+    ├── _helpers.tpl      # Namens-/Label-Helfer
+    ├── deployment.yaml   # 1 nginx-Replica, Liveness-/Readiness-Probe
+    ├── service.yaml      # ClusterIP, Port 80
+    └── ingress.yaml      # nginx-Ingress, host + optionales TLS
+```
+
+Für TLS-Betrieb (z.B. mit cert-manager) die `tls`-Sektion in `values.yaml`
+aktivieren und den gewünschten `secretName` eintragen.
 
 ---
 

@@ -60,6 +60,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | Linter (ESLint, #389; Komplexitäts-Gates complexity/max-lines-per-function/max-depth #502) | `npm run lint` |
 | Stale Komplexitäts-Suppressions prunen / Baseline neu aufbauen (#502) | `npm run lint:prune` / `npm run lint:suppress` |
 | Quiz-Korrektheits-Golden nach bewusstem Review aktualisieren (#597) | `npm run quiz:golden` |
+| Sprite-Sheets aus Quell-PNGs neu packen (nach Asset-Aenderung, #339) | `npm run pack:sprites` |
 | Architektur-Wächter (Schichtung + Zyklen + Orphans, #347/#390) | `npm run check:arch` |
 | Dateigröße-Wächter (God-File-Budget 800 LOC, #390) | `npm run check:size` |
 | Root-Kontextdatei-Wächter (Zeilenbudget für AGENTS.md/CLAUDE.md, #719) | `npm run check:contextsize` |
@@ -294,6 +295,7 @@ Die Landkarte oben sagt, **wo** ein Modul liegt; diese Tabelle sagt, **was du im
 | 🚦 Boot- & Interaktions-Smokes (Playwright, E2E) | [`e2e/`](e2e/) – lädt den gebauten Offline-Build headless: Boot fehlerfrei (#391) **plus** schlanke Interaktions-Smokes (#480: Terminal-Eingabe, Overlay auf/zu, ein Quest-Durchlauf) **plus** ein FPS-Budget- und ein a11y-Smoke (#524: `perf-smoke.spec.ts` liest die auf `body[data-kq-fps]` gespiegelten FrameSampler-FPS bei `?perf`; `a11y-smoke.spec.ts` scannt HUD + Overlays mit axe-core) über Tastatur/DOM ohne Test-Hintertür; geteilte Helfer in [`e2e/support.ts`](e2e/support.ts). **Plus** der Lern-Loop-Smoke (#602: `learning-loop.spec.ts` spielt Onboarding → Docker-Quest bei Bo (Terminal-Aufgabe/Drill/Inline-Quiz) → Kralle-Quiz über die echte UI) – als EINZIGER Smoke gegen den **Dev-Build** (nutzt `window.kqGame` nur, um die Figur an den NPC zu setzen, weil Blind-Navigation headless nicht robust ist; Details im Datei-Kopf), Playwright startet dafür den Vite-Dev-Server (`webServer`). Config: [`playwright.config.ts`](playwright.config.ts) (`workers: 1`, damit die FPS-Messung nicht durch parallele Runs einbricht). Bewusst getrennt von den Vitest-Unit-Tests (`npm run smoke`). |
 | ✅ Backlog / TODOs | GitHub Issues + Project-Board (`gh issue list --state open --limit 500`, `gh project list --owner fluffels`) |
 | 🥇 Nächstes Ticket (Auswahl-Regel) | [docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md) – oberstes freies Item der Board-Reihenfolge (Drag & Drop, kein Prio-Feld, keine Datei-Pflege) |
+| 🚀 Spiel deployen (Helm-Chart, lokaler Cluster) | [docs/deploy.md](docs/deploy.md) – `helm install kubernia ./deploy/chart`, kind/minikube, values |
 
 ## ❓ Die vier Einstiegsfragen
 

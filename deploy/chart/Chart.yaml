@@ -1,0 +1,13 @@
+apiVersion: v2
+name: kubernia
+description: Kubernia – statisches Lernspiel (Docker/K8s/Helm) als nginx-SPA im Cluster
+type: application
+version: 0.1.0
+appVersion: "latest"
+keywords:
+  - kubernetes
+  - learning
+  - game
+  - devops
+maintainers:
+  - name: die Maintainerin
