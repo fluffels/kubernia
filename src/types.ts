@@ -37,6 +37,15 @@ export interface LeitnerEntry {
   due: number;
 }
 
+/** Ein Inventar-Stapel: wie viele Exemplare eines Items der Spieler besitzt, plus
+ *  optionale Qualitätsstufe (Fundament #421). Ersetzt den rohen `number`-Wert in
+ *  `GameState.inventory` – so trägt das Modell künftig Qualität, Haltbarkeit o.Ä.,
+ *  ohne das Save-Format erneut zu brechen. */
+export interface ItemStack {
+  count: number;
+  quality?: number;
+}
+
 /** Vollständiger, serialisierbarer Spielstand (genau die Form aus Game.defaultState). */
 export interface GameState {
   xp: number;
@@ -67,7 +76,7 @@ export interface GameState {
    *  einschieben/umsortieren verschiebt keinen Stand), seit #410 Schlüssel in `activeQuests`. */
   currentQuestId: string;
   completedQuests: string[];
-  inventory: Record<string, number>;
+  inventory: Record<string, ItemStack>;
   owned: string[];
   activePet: string | null;
   activeFlag: string | null;

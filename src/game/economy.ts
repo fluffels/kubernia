@@ -118,7 +118,8 @@ export const economyBundle = part({
       return { ok: false, msg: "Nicht genug Dublonen! Quests, Üben und ein gesunder Hafen füllen den Beutel." };
     }
     if (item.type === "consumable") {
-      this.state.inventory[itemId] = (this.state.inventory[itemId] || 0) + 1;
+      const stack = this.state.inventory[itemId];
+      this.state.inventory[itemId] = { count: (stack?.count ?? 0) + 1 };
     } else {
       this.state.owned.push(itemId);
       if (item.type === "pet") this.state.activePet = itemId;
@@ -129,8 +130,10 @@ export const economyBundle = part({
   },
 
   useConsumable(itemId: string) {
-    if (!this.state.inventory[itemId]) return false;
-    this.state.inventory[itemId]--;
+    const stack = this.state.inventory[itemId];
+    if (!stack || stack.count <= 0) return false;
+    stack.count--;
+    if (stack.count === 0) delete this.state.inventory[itemId];
     this.save();
     return true;
   },

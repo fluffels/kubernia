@@ -428,7 +428,7 @@ test("buy: Verbrauchsgut wird gekauft, Dublonen abgezogen, Inventar erhöht", ()
   const res = Game.buy("fernrohr");
   expect(res.ok).toBe(true);
   expect(Game.state.coins).toBe(75);                 // 100 - 25
-  expect(Game.state.inventory["fernrohr"]).toBe(1);
+  expect(Game.state.inventory["fernrohr"]).toEqual({ count: 1 });
 });
 
 test("buy: nicht-verbrauchbare Ware lässt sich nicht doppelt kaufen", () => {
@@ -441,9 +441,9 @@ test("buy: nicht-verbrauchbare Ware lässt sich nicht doppelt kaufen", () => {
 
 test("useConsumable: ohne Bestand false, mit Bestand true + Dekrement", () => {
   expect(Game.useConsumable("fernrohr")).toBe(false); // nichts da
-  Game.state.inventory["fernrohr"] = 2;
+  Game.state.inventory["fernrohr"] = { count: 2 };
   expect(Game.useConsumable("fernrohr")).toBe(true);
-  expect(Game.state.inventory["fernrohr"]).toBe(1);
+  expect(Game.state.inventory["fernrohr"]).toEqual({ count: 1 });
 });
 
 /* ---------- Komfort-Funktionen: Kauf-/Freischalt-Mechanik (#572) ----------
@@ -814,7 +814,7 @@ test("load: kaputte Sammlungen/Typen werden gefiltert oder verworfen", () => {
 
   expect(Game.state.completedQuests).toEqual([]);          // String war kein Array
   expect(Game.state.owned).toEqual(["pet-1", "flag"]);     // nur Strings bleiben
-  expect(Game.state.inventory).toEqual({ potion: 3 });     // negativ/Nicht-Zahl entfernt
+  expect(Game.state.inventory).toEqual({ potion: { count: 3 } }); // negativ/Nicht-Zahl entfernt
   expect(Game.state.character).toBe(null);                 // falscher Typ -> null
   expect(Game.state.activePet).toBe(null);                 // falscher Typ -> null
   expect(Game.state.review.good).toEqual({ box: 2, due: 5 });
@@ -850,7 +850,7 @@ test("load: ein VOLLSTÄNDIG valider Stand überlebt unverändert (kein Over-San
   expect(Game.questIdx()).toBe(4);
   expect(Game.state.completedQuests).toEqual(["docker-first-container", "docker-list-containers"]);
   expect(Game.state.owned).toEqual(["pet-cat"]);
-  expect(Game.state.inventory).toEqual({ potion: 2 });
+  expect(Game.state.inventory).toEqual({ potion: { count: 2 } });
   expect(Game.state.review["q-ch1-1"]).toEqual({ box: 3, due: 10 });
   expect(Game.state.streakHintShown).toBe(true);
   expect(Game.state.stats.stackBest).toBe(30);

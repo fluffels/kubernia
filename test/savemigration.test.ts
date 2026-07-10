@@ -166,7 +166,7 @@ test("v1 (Docker-Bogen): currentQuestId aus questIdx abgeleitet, alte IDs gemapp
   // Fehlende Felder bekommen die Defaults, vorhandene Daten bleiben unverändert.
   expect(Game.state.xp).toBe(95);
   expect(Game.state.coins).toBe(120); // keine Offline-Einnahmen (Uhr gepinnt)
-  expect(Game.state.inventory).toEqual({ fernrohr: 1 });
+  expect(Game.state.inventory).toEqual({ fernrohr: { count: 1 } });
   // #574: die Migration hängt alle grandfatherten Abkürzungs-IDs hinter den echten Besitz an.
   expect(Game.state.owned).toEqual(["pet-ratte", ...ABBREVS.map(a => a.id)]);
   expect(Game.state.audio).toEqual({ music: true, sfx: true, musicVol: 0.5, sfxVol: 0.8, track: "hafen" });
@@ -206,7 +206,7 @@ test("v1 (voller Stand): reiches Deck/Abkürzungen/Stats/Cluster-Snapshot laden 
 
   // Volle Sammlungen exakt erhalten (+ die per Migration gehobenen Abkürzungen #574 und die
   // grandfatherte Befehlshistorie #573).
-  expect(Game.state.inventory).toEqual({ fernrohr: 3, kompass: 1 });
+  expect(Game.state.inventory).toEqual({ fernrohr: { count: 3 }, kompass: { count: 1 } });
   expect(Game.state.owned).toEqual(["pet-ratte", "pet-moewe", "flag-blau", "fernrohr-upgrade", "-a", "-n", "-d", "--name", "befehlshistorie"]);
   expect(Game.state.activePet).toBe("pet-moewe");
   expect(Game.state.activeFlag).toBe("flag-blau");
@@ -503,15 +503,50 @@ test("v7 (vor #232): Komfort-Kauf-Felder laden unverändert, Default-Tastenbeleg
  * v8 (aktuelles Format, #232): eigene Tastenbelegung lädt verlustfrei, kein Backup.
  * ========================================================================== */
 
-test("v8 (aktueller Stand): eigene Tastenbelegung lädt verlustfrei, kein Backup", () => {
+test("v8 (wird auf v9 migriert): eigene Tastenbelegung überlebt die Migration verlustfrei", () => {
   loadFixture("savegame-v8-current.json");
 
   // Der Cursor lädt wie beim v7-Zwilling (nur die Belegung kam hinzu).
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.state.gameDays).toBe(47.625);
 
-  // #232: die IM Stand gespeicherte (nicht-Default-)Belegung überlebt das Laden exakt.
+  // #232: die IM Stand gespeicherte (nicht-Default-)Belegung überlebt die Migration exakt.
   expect(Game.state.settings.keys).toEqual({ talk: "q", radio: "e", logbook: "l", album: "b" });
+
+  expectRoundTripFixedPoint();
+});
+
+/* ============================================================================
+ * v8 → v9 (#421): Inventar-Modell number → ItemStack.
+ * ========================================================================== */
+
+test("v8 → v9: Inventar-Zahlen werden zu ItemStack-Objekten migriert", () => {
+  loadFixture("savegame-v8-current.json");
+
+  // Kernprüfung: die alte Zahl 2 für "fernrohr" wurde zu { count: 2 } migriert.
+  expect(Game.state.inventory).toEqual({ fernrohr: { count: 2 } });
+
+  // Alles andere vom v8-Fixture bleibt erhalten.
+  expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
+  expect(Game.state.gameDays).toBe(47.625);
+  expect(Game.state.settings.keys).toEqual({ talk: "q", radio: "e", logbook: "l", album: "b" });
+
+  // v8 → v9 Herauf-Migration → Stand wurde gesichert.
+  expect(SaveStore.readBackup()).toBe(fixtureRaw("savegame-v8-current.json"));
+
+  expectRoundTripFixedPoint();
+});
+
+/* ============================================================================
+ * v9 (aktuelles Format, #421): ItemStack-Inventar lädt verlustfrei, kein Backup.
+ * ========================================================================== */
+
+test("v9 (aktueller Stand): ItemStack-Inventar lädt verlustfrei, kein Backup", () => {
+  loadFixture("savegame-v9-current.json");
+
+  expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
+  expect(Game.state.gameDays).toBe(47.625);
+  expect(Game.state.inventory).toEqual({ fernrohr: { count: 2 } });
 
   // Aktuelle Version → kein Herauf-Migrieren → kein Sichern ins Backup.
   expect(SaveStore.readBackup()).toBeNull();
@@ -563,7 +598,7 @@ test("Red-Green: kaputtes v2-Fixture lädt sanitisiert (kein Crash, Defaults sta
 
   // Sammlungen gefiltert.
   expect(Game.state.owned).toEqual(["pet-1", "flag"]);
-  expect(Game.state.inventory).toEqual({ potion: 3 });
+  expect(Game.state.inventory).toEqual({ potion: { count: 3 } });
   expect(Game.state.activePet).toBeNull();
   expect(Game.state.activeFlag).toBeNull();
   expect(Game.state.review.good).toEqual({ box: 2, due: 5 });
@@ -699,9 +734,10 @@ const ALL_FIXTURES = [
   "savegame-v2-stale-index.json", "savegame-v2-allquests.json",
   "savegame-v3-current.json", "savegame-v4-current.json", "savegame-v5-current.json",
   "savegame-v6-current.json", "savegame-v7-current.json", "savegame-v8-current.json",
+  "savegame-v9-current.json",
 ];
 
-test("#493 Import-Pfad: jeder Fixture-Stand (v1..v8) wird in der AKTUELLEN Versions-Hülle abgelegt (nicht hüllenlos/alt)", () => {
+test("#493 Import-Pfad: jeder Fixture-Stand (v1..v9) wird in der AKTUELLEN Versions-Hülle abgelegt (nicht hüllenlos/alt)", () => {
   for (const f of ALL_FIXTURES) {
     lsMap.clear();
     Game.importData(fixtureRaw(f));
