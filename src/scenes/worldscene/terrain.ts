@@ -148,7 +148,7 @@ export function placeHarborObjects(scene: WorldSceneLike) {
 
   const spots = [[5, 5], [7, 3], [15, 4], [20, 6], [33, 5], [36, 4], [44, 5], [47, 8], [47, 13], [36, 15], [20, 12], [5, 17], [3, 21], [8, 20], [18, 16], [34, 9], [30, 7], [45, 15], [37, 22], [6, 22], [21, 21]];
   spots.forEach(([x, y]) => scene.tree(x, y));
-  scene.deco(16, 21, "town", 29, false);   // Pilze (Kenney) – noch kein PixelLab-Ersatz, bleibt vorerst
+  scene.objDeco(16, 21, "mushroom", 0.28, false);
 
   carveDoors(scene);   // #6: Häuser betretbar machen
 }
