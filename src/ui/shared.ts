@@ -77,11 +77,6 @@ function shuffled<T>(arr: T[]): T[] {
 // Spritesheet-Bilder für Porträts (unabhängig von Phaser, geht auch per file://)
 const sheetImgs: Record<string, HTMLImageElement> = {};
 const assets = KQAssets as Record<string, string>;
-for (const key of ["town", "dungeon"]) {
-  const img = new Image();
-  img.src = assets[key];
-  sheetImgs[key] = img;
-}
 // PixelLab-NPC-Figuren fürs Dialog-Porträt vorladen (Kopf/Schulter-Ausschnitt)
 for (const npc of Object.values(NPCS)) {
   if (npc.tex && assets[npc.tex] && !sheetImgs[npc.tex]) {
