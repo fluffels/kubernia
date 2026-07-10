@@ -69,6 +69,11 @@ import ship from "../assets/pixellab/ship.png";
 import porthole from "../assets/pixellab/porthole.png";         // Messing-Bullauge (Schiff)
 import interior_door from "../assets/pixellab/interior_door.png"; // Innen-Tür (Haus, Austritt)
 import ship_hatch from "../assets/pixellab/ship_hatch.png";     // Decksluke (Schiff, Austritt)
+// Innenraum-Möbel (#669): Tisch/Konsole/Buch/Amboss ersetzen die dungeon-Frames
+import interior_table from "../assets/pixellab/interior_table.png";
+import interior_console from "../assets/pixellab/interior_console.png";
+import interior_book from "../assets/pixellab/interior_book.png";
+import interior_anvil from "../assets/pixellab/interior_anvil.png";
 import kraken from "../assets/pixellab/kraken.png";   // Hacker-Krake (Gegner, #184)
 import pirate_ship from "../assets/pixellab/pirate_ship.png";   // Piraten-Schiff (Gegner, #185)
 import seagull from "../assets/pixellab/seagull.png";           // Möwe (#182)
@@ -211,6 +216,11 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
   { key: "interior_floor", src: interior_floor, kind: "plain" },
   { key: "interior_wall_house", src: interior_wall_house, kind: "plain" },
   { key: "interior_wall_ship", src: interior_wall_ship, kind: "plain" },
+  // Innenraum-Möbel (#669): Tisch/Konsole/Buch/Amboss ersetzen die dungeon-Frames
+  { key: "interior_table", src: interior_table, kind: "plain" },
+  { key: "interior_console", src: interior_console, kind: "plain" },
+  { key: "interior_book", src: interior_book, kind: "plain" },
+  { key: "interior_anvil", src: interior_anvil, kind: "plain" },
   { key: "kraken", src: kraken, kind: "plain" },   // Hacker-Krake (Gegner, #184)
   { key: "pirate_ship", src: pirate_ship, kind: "plain" },   // Piraten-Schiff (Gegner, #185)
   { key: "seagull", src: seagull, kind: "plain" },           // Möwe (#182)
