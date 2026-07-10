@@ -60,6 +60,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | Linter (ESLint, #389; Komplexitäts-Gates complexity/max-lines-per-function/max-depth #502) | `npm run lint` |
 | Stale Komplexitäts-Suppressions prunen / Baseline neu aufbauen (#502) | `npm run lint:prune` / `npm run lint:suppress` |
 | Quiz-Korrektheits-Golden nach bewusstem Review aktualisieren (#597) | `npm run quiz:golden` |
+| Sprite-Sheets aus Quell-PNGs neu packen (nach Asset-Aenderung, #339) | `npm run pack:sprites` |
 | Architektur-Wächter (Schichtung + Zyklen + Orphans, #347/#390) | `npm run check:arch` |
 | Dateigröße-Wächter (God-File-Budget 800 LOC, #390) | `npm run check:size` |
 | Root-Kontextdatei-Wächter (Zeilenbudget für AGENTS.md/CLAUDE.md, #719) | `npm run check:contextsize` |

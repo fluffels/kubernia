@@ -31,10 +31,9 @@ import dock from "../assets/pixellab/water-wood.png";
 
 // PixelLab-Objekte
 import flowers from "../assets/pixellab/flowers.png";
-// Gestreute Gras-Büschel (#107): echte Pixelart-Sprites statt prozeduraler Dreieck-Halme
-import grasstuft0 from "../assets/pixellab/grasstuft0.png";
-import grasstuft1 from "../assets/pixellab/grasstuft1.png";
-import grasstuft2 from "../assets/pixellab/grasstuft2.png";
+// Gestreute Gras-Büschel (#107, Sprite-Sheet #339): 3 Varianten als 192×64-Strip (grasstuft0/1/2 nebeneinander).
+// Regenerieren: npm run pack:sprites
+import grasstufts from "../assets/pixellab/grasstufts.png";
 import tree from "../assets/pixellab/tree.png";
 import pine from "../assets/pixellab/pine.png";
 import bush from "../assets/pixellab/bush.png";
@@ -178,10 +177,8 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
 
   // Einzelobjekte ohne Slicing (ganze Bilder)
   { key: "flowers", src: flowers, kind: "plain" },
-  // Gras-Büschel-Varianten (#107) – gestreut über die Wiese (spawnGrassDetail)
-  { key: "grasstuft0", src: grasstuft0, kind: "plain" },
-  { key: "grasstuft1", src: grasstuft1, kind: "plain" },
-  { key: "grasstuft2", src: grasstuft2, kind: "plain" },
+  // Gras-Büschel-Varianten (#107, Sheet #339) – 3 Frames (64px) im 192×64-Strip, Index 0..2
+  { key: "grasstufts", src: grasstufts, kind: "sheet", cols: 3, frame: 64 },
   { key: "tree", src: tree, kind: "plain" },
   { key: "pine", src: pine, kind: "plain" },
   { key: "bush", src: bush, kind: "plain" },

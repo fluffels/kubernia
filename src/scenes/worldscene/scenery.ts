@@ -75,7 +75,7 @@ export function spawnGrassDetail(scene: WorldSceneLike) {
     // damit nicht jedes Büschel exakt gleich wirkt – ohne den Pixelart-Farbton zu
     // überfärben (das wäre der alte Stilbruch aus #40).
     const b = Math.round((0.82 + (s.shade * 0.5 + 0.5) * 0.18) * 255);
-    const img = scene.add.image(p.x * T + p.jx, p.y * T + p.jy, "grasstuft" + s.variant)
+    const img = scene.add.image(p.x * T + p.jx, p.y * T + p.jy, "grasstufts", s.variant)
       .setOrigin(0.5, 1)
       .setScale((s.flip ? -1 : 1) * s.scale * BASE, s.scale * BASE)
       .setAngle(s.angle)
