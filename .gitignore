@@ -18,6 +18,9 @@ jscpd-report/
 !.env.example
 .claude/*
 !.claude/skills/
+# Planungs-Agenten-Datei (#745): kubequest-planner.md trägt model: claude-opus-4-8 und
+# propagiert in jeden Worktree — dieselbe Ausnahme wie .claude/skills/.
+!.claude/agents/
 # Worktree-Guard-Hook (#735): settings.json trägt den PreToolUse-Hook, der
 # git commit/push außerhalb eines Worktrees blockt — muss geteilt/getrackt sein,
 # sonst driftet er über parallele Worktrees (dieselbe Ausnahme wie .claude/skills/).

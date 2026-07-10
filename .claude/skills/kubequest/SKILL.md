@@ -20,4 +20,17 @@ Kurzfassung: **Genau EIN** offenes Issue, das **nicht** schon bearbeitet wird (k
 
 **Sonderfall zu großes Epic/Phase:** nicht selbst umsetzen — nach dem Claimen in viele konkrete, session-große Kindertickets (ohne Assignee) aufteilen, im Epic einen Übersichts-Kommentar mit Reihenfolge posten und das Epic mit `gh issue close <nr> --reason completed` auf **done** setzen (nicht löschen), Schließung verifizieren. Kein Worktree/Code nötig.
 
+**Planungs-Subagent (Opus, opt-in automatisch, #745).** Direkt nach dem Claimen und **vor dem Coden** den Planungs-Subagenten rufen:
+
+```
+Agent({
+  subagent_type: "kubequest-planner",
+  description: "Planungspass für #<nr>",
+  prompt: "Ticket #<nr>: <Titel>. Body:\n<Volltext des gh issue view>",
+  run_in_background: false
+})
+```
+
+Den zurückgegebenen Plan als Orientierung nutzen (betroffene Dateien, TDD-Schritte, Gate-Check, Risiken); er ersetzt nicht das eigene Urteil. Ist der Agent nicht verfügbar (Modell nicht im Account), den Plan kurz selbst skizzieren und weitermachen.
+
 **Inhaltliche Änderungen am Ablauf immer in der Repo-`AGENTS.md` machen, nicht in dieser Skill-Datei.**
