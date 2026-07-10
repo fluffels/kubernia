@@ -66,7 +66,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
  * `> maxBytes`, == Budget ist ok — analog zu check-size `loc > budget`).
  *
  * Ist-Werte bei Kalibrierung (2026-07-02/03, `npm run build` + `build:offline`):
- *   • dist-offline/index.html        ~2.71 MiB (2_840_452 B)  → Budget 2_900_000 (seit #252, +~60 KB für die 349 why-Begründungen)
+ *   • dist-offline/index.html        ~2.77 MiB (2_901_994 B)  → Budget 2_930_000 (seit #647, +~13 KB für die 3 Panel-Kopf-Icons Shop/Krabbe/Spiel)
  *   • Spielcode (dist/, ohne vendor) ~1.26 MiB (1_317_022 B)  → Budget 1_380_000 (seit #252, +~66 KB für die 349 why-Begründungen)
  *   • Phaser-vendor-Chunk (dist/)    ~1.14 MiB (1_198_788 B)  → Budget 1_350_000 (~+12 %, #595)
  */
@@ -77,7 +77,8 @@ export const BUNDLE_BUDGETS = [
     path: "dist-offline/index.html",
     // #645: +30 KB für die 7 gerahmten HUD-Statuszeilen-Pixel-Icons (base64 inline).
     // #252: +~60 KB — die 349 „why"-Begründungen (Terminal-Tasks + Teach-Befehle) landen als Content-JSON im Bundle.
-    maxBytes: 2_900_000,
+    // #647: +~13 KB — die 3 neuen Panel-Kopf-Icons (Shop/Krabbe/Spiel; Logbuch/Album/Terminal/Menü teilen sich #646-Icons, kein Zusatz-Byte).
+    maxBytes: 2_930_000,
   },
   {
     label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor)",
