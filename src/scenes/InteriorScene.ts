@@ -5,7 +5,7 @@ import { SFX } from "../sfx";
 import { TALK_RANGE, interiorEAction, interiorEFlank, type Door } from "../world/world";
 import { keys, setInteriorOpen } from "../runtime";
 import { sanitize } from "../hud/pixelfont";
-import { T, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, pixelText, renderPlayer, stepSimplePlayer, type ScenePlayer } from "./shared";
+import { T, pixelText, renderPlayer, stepSimplePlayer, type ScenePlayer } from "./shared";
 
 /* ===== InteriorScene (#6) – betretbarer Hausinnenraum =====
  * Wird von WorldScene.enterInterior() als eigene Szene gestartet, während die
@@ -16,12 +16,12 @@ import { T, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, pixelText, renderPlayer, 
  *  zwischen NPC-Aufbau und Beschriftung. */
 type NpcMeta = (typeof KQContent.NPCS)[keyof typeof KQContent.NPCS];
 
-const INTERIORS: Record<string, { frame: number; tx: number; ty: number }[]> = {
-  office: [{ frame: TABLE, tx: 3, ty: 2 }, { frame: DEVICE, tx: 7, ty: 2 }, { frame: BOOK, tx: 8, ty: 2 }, { frame: CRATE, tx: 2, ty: 5 }, { frame: BARREL, tx: 8, ty: 5 }],
-  forge:  [{ frame: ANVIL, tx: 3, ty: 2 }, { frame: TABLE, tx: 7, ty: 2 }, { frame: DEVICE, tx: 8, ty: 2 }, { frame: BARREL, tx: 2, ty: 5 }, { frame: CRATE, tx: 8, ty: 5 }],
-  chart:  [{ frame: TABLE, tx: 3, ty: 2 }, { frame: BOOK, tx: 7, ty: 2 }, { frame: BOOK, tx: 8, ty: 2 }, { frame: CRATE, tx: 2, ty: 5 }, { frame: BARREL, tx: 8, ty: 5 }],
+const INTERIORS: Record<string, { tex: string; tx: number; ty: number }[]> = {
+  office: [{ tex: "interior_table", tx: 3, ty: 2 }, { tex: "interior_console", tx: 7, ty: 2 }, { tex: "interior_book", tx: 8, ty: 2 }, { tex: "crate", tx: 2, ty: 5 }, { tex: "barrel", tx: 8, ty: 5 }],
+  forge:  [{ tex: "interior_anvil", tx: 3, ty: 2 }, { tex: "interior_table", tx: 7, ty: 2 }, { tex: "interior_console", tx: 8, ty: 2 }, { tex: "barrel", tx: 2, ty: 5 }, { tex: "crate", tx: 8, ty: 5 }],
+  chart:  [{ tex: "interior_table", tx: 3, ty: 2 }, { tex: "interior_book", tx: 7, ty: 2 }, { tex: "interior_book", tx: 8, ty: 2 }, { tex: "crate", tx: 2, ty: 5 }, { tex: "barrel", tx: 8, ty: 5 }],
   // Kajüte (#42): Kartentisch + Logbuch, Navigationsgerät, Proviant
-  ship:   [{ frame: TABLE, tx: 2, ty: 2 }, { frame: BOOK, tx: 3, ty: 2 }, { frame: DEVICE, tx: 8, ty: 2 }, { frame: BARREL, tx: 2, ty: 5 }, { frame: CRATE, tx: 8, ty: 5 }],
+  ship:   [{ tex: "interior_table", tx: 2, ty: 2 }, { tex: "interior_book", tx: 3, ty: 2 }, { tex: "interior_console", tx: 8, ty: 2 }, { tex: "barrel", tx: 2, ty: 5 }, { tex: "crate", tx: 8, ty: 5 }],
 };
 
 export class InteriorScene extends Phaser.Scene {
@@ -114,7 +114,7 @@ export class InteriorScene extends Phaser.Scene {
   /** Themengerechte Möbel (solide, damit man sie nicht durchläuft). */
   private placeFurniture(theme: string): void {
     for (const f of (INTERIORS[theme] || [])) {
-      this.add.image(f.tx * T + 8, f.ty * T + 12, "dungeon", f.frame).setOrigin(0.5, 0.7).setDepth(f.ty * T + T);
+      this.add.image(f.tx * T + 8, f.ty * T + 12, f.tex).setScale(0.5).setOrigin(0.5, 0.7).setDepth(f.ty * T + T);
       this.solid[f.ty * this.RW + f.tx] = 1;
     }
   }

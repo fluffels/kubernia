@@ -19,7 +19,7 @@ import { DOCK as WT_DOCK, WORLD_JETTY_WT, WORLD_TO_WATCHTOWER } from "../../worl
 import { DOCK as FL_DOCK, WORLD_JETTY_FL, WORLD_TO_FLOTTE } from "../../world/regions/flotte";
 import { DOCK as WF_DOCK, WORLD_JETTY_WF, WORLD_TO_WERFT } from "../../world/regions/werft";
 import { PIER_XS } from "../../world/maps/harbormap";
-import { T, DIRT, ANVIL, TABLE, DEVICE, BOOK, WATER, FOAM, WANG } from "../shared";
+import { T, DIRT, WATER, FOAM, WANG } from "../shared";
 import type { WorldSceneLike } from "./types";
 
 /** Sichtbare Hafen-Objekte (Bäume, Stege-Schilder, Schiff, Markt, Gebäude,
@@ -116,17 +116,17 @@ export function placeHarborObjects(scene: WorldSceneLike) {
   // depth = Gebäude-Fußlinie (baseY) + 1 → Schild vor dem hohen Dach statt dahinter (#290)
   scene.labels.push({ x: 26.5, y: 9.4, text: "Hafenmeisterei", color: "#ffffff", depth: (10 + 3) * T + 1 });
   scene.building(8, 8, 5, "house_forge", 0.82);
-  scene.deco(12, 12, "dungeon", ANVIL, true);
-  scene.deco(14, 12, "dungeon", TABLE, true);
-  scene.deco(14, 11.6, "dungeon", DEVICE, false);
+  scene.objDeco(12, 12, "interior_anvil", 0.5, true);
+  scene.objDeco(14, 12, "interior_table", 0.5, true);
+  scene.objDeco(14, 11.6, "interior_console", 0.5, false);
   scene.labels.push({ x: 12.5, y: 7.4, text: "Werft", color: "#ffffff", depth: (8 + 3) * T + 1 });
   scene.flagPoles = [{ x: 9, y: 10 }, { x: 10.5, y: 10 }, { x: 16, y: 10 }];
 
   scene.building(38, 9, 5, "house_chart", 0.9);
   scene.labels.push({ x: 40.5, y: 8.4, text: "Kartenhaus", color: "#ffffff", depth: (9 + 3) * T + 1 });
 
-  scene.deco(43, 19, "dungeon", TABLE, true);
-  scene.deco(43, 18.6, "dungeon", BOOK, false);
+  scene.objDeco(43, 19, "interior_table", 0.5, true);
+  scene.objDeco(43, 18.6, "interior_book", 0.5, false);
   scene.labels.push({ x: 43.5, y: 17.4, text: "Vermessung", color: "#ffffff" });
 
   scene.tfPlatform = { x: 44, y: 28, w: 7, h: 5 };
