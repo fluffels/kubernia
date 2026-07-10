@@ -195,8 +195,7 @@ export abstract class IslandScene extends Phaser.Scene {
 // Vor-Wang-Ära wird seit dem PixelLab-Terrain nicht mehr gebraucht und ist entfernt.
 const DIRT = 25;
 const STONE = [96, 97, 98];
-const WOOD = [48, 49, 50, 51, 52, 53];
-
+const CRATE = 63, BARREL = 82, ANVIL = 74, TABLE = 72, DEVICE = 65, BOOK = 66;
 const WELL = 104, SIGN = 83, CART = 57;
 const WATER = 0x3f7fc4, FOAM = 0xbfe3f5;
 // PixelLab Wang-Tileset (Wasser->Sand): Eck-Code (NW,NE,SW,SE; Bit=1 => Land/oben) -> Frame im 4x4-Sheet "coast"
@@ -411,5 +410,5 @@ function floatPixelText(scene: Phaser.Scene, x: number, y: number, str: string, 
 }
 
 export {
-  T, DIRT, STONE, WOOD, WELL, SIGN, CART, WATER, FOAM, WANG, hashHue, hueColor, hueColorLight, FONT_KEY, FONT_TEX, COIN_TEX, buildPixelFont, buildCoinIcon, queueAssetLoad, sliceSheets, fontColor, pixelText, spawnIslandNpc, spawnIslandObject, SIGN_BORDER, SIGN_PAD, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, readMoveInput, faceFrom, playerFaceTexture, playerBob, renderPlayer, stepSimplePlayer,
+  T, DIRT, STONE, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, WELL, SIGN, CART, WATER, FOAM, WANG, hashHue, hueColor, hueColorLight, FONT_KEY, FONT_TEX, COIN_TEX, buildPixelFont, buildCoinIcon, queueAssetLoad, sliceSheets, fontColor, pixelText, spawnIslandNpc, spawnIslandObject, SIGN_BORDER, SIGN_PAD, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, readMoveInput, faceFrom, playerFaceTexture, playerBob, renderPlayer, stepSimplePlayer,
 };
