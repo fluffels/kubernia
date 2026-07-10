@@ -265,13 +265,13 @@ test("v2 (alle Quests durch): Endzustand + vollständige completedQuests-Migrati
   expect(Game.allQuestsDone()).toBe(true);
 
   // Alle alten numerischen IDs (+ später als Slug ergänzte Quests) → die neuen Slugs.
-  // #449/#450/#461/#568/#569/#570/#571/#267: docker-registry, docker-rabbitmq, aufbau-sturm,
+  // #449/#450/#461/#568/#569/#570/#571/#267/#270: docker-registry, docker-rabbitmq, aufbau-sturm,
   // k8s-yaml-struct-minigame, k8s-routing-lotse-minigame, gitops-driftheal-minigame,
-  // k8s-rbac-keyring-minigame UND security-cert-manager wurden NACH diesem „alles durch"-Stand eingeschoben/angehängt;
-  // ein solcher Alt-Stand kennt sie folgerichtig nicht (sie bleiben ungespielt, niemand wird
-  // zurückgeschickt). Der Endzustand (questIdx == length, currentQuestId "") bleibt trotzdem
-  // erhalten.
-  const addedAfterFixture = ["docker-registry", "docker-rabbitmq", "storage-init", "k8s-pod-packing", "k8s-yaml-struct-minigame", "k8s-routing-lotse-minigame", "gitops-driftheal-minigame", "k8s-rbac-keyring-minigame", "security-cert-manager", "aufbau-sturm", "aufbau-control-plane", "aufbau-worker-join", "aufbau-dienste", "aufbau-cluster-als-code"];
+  // k8s-rbac-keyring-minigame, security-cert-manager UND platform-addons-overview wurden NACH diesem
+  // „alles durch"-Stand eingeschoben/angehängt; ein solcher Alt-Stand kennt sie folgerichtig nicht
+  // (sie bleiben ungespielt, niemand wird zurückgeschickt). Der Endzustand (questIdx == length,
+  // currentQuestId "") bleibt trotzdem erhalten.
+  const addedAfterFixture = ["docker-registry", "docker-rabbitmq", "storage-init", "k8s-pod-packing", "k8s-yaml-struct-minigame", "k8s-routing-lotse-minigame", "gitops-driftheal-minigame", "k8s-rbac-keyring-minigame", "security-cert-manager", "aufbau-sturm", "aufbau-control-plane", "aufbau-worker-join", "aufbau-dienste", "aufbau-cluster-als-code", "platform-addons-overview"];
   expect(Game.state.completedQuests.length).toBe(KQContent.QUESTS.length - addedAfterFixture.length);
   expect(new Set(Game.state.completedQuests)).toEqual(
     new Set(KQContent.QUESTS.filter(q => !addedAfterFixture.includes(q.id)).map(q => q.id)),
