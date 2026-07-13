@@ -15,7 +15,7 @@ import { DEFAULT_KEYBINDINGS } from "../core/keybindings";
 import type { Sim } from "../sim";
 import type { GameState, EventMode, QuestProgress, Quest, QuestStep, FunkStep, QuestTask } from "../types";
 import type { GameClock } from "../core/clock";
-import type { CmdCard, QuizCard } from "../content/loader";
+import type { CmdCard, QuizCard, ChapterInfo } from "../content/loader";
 import type { Rank } from "../content/progression";
 import type { ActiveHazards } from "../world/hazards";
 
@@ -135,6 +135,7 @@ export interface GameApi extends GameData {
   // KQContent.QUESTS[idx] gilt dem Compiler als Quest, `|| null` bleibt darum Quest.
   currentQuest(): Quest;
   currentStep(): QuestStep | null;
+  currentChapter(): ChapterInfo | null;
   isFunkStep(step: QuestStep | null): step is FunkStep;
   stepTasks(step: QuestStep): QuestTask[] | null;
   unlockedCommandFamilies(): Set<string>;

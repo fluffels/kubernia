@@ -124,6 +124,8 @@ Im 📜 **Logbuch (J)** blätterst du durch alle Quests: abgeschlossene zum **Na
 
 Im 📖 **Sammelalbum (B)** sammelst du wie in einem Sticker-Album alles, was du lernst: **jeden Befehl** (z.B. `docker pull`, `kubectl get`) und **jedes Wissens-Stück** aus den Quiz-Karten. Einträge starten **verdeckt** und werden freigeschaltet, sobald du sie im Spiel kennengelernt hast – mit Fortschrittsanzeige „X von Y gesammelt“, gruppiert nach Themen-Seiten (Docker, Kubernetes, Helm …). Auch das Album wird nach deiner ersten abgeschlossenen Quest frei.
 
+Über deiner aktuellen Aufgabe zeigt die Statusleiste dein **📖 Kapitel** im Lernpfad – „Kapitel X von Y · Thema“ (z.B. „Kapitel 2 von 16 · Docker“). So siehst du jederzeit, wo im großen Ganzen du gerade stehst; die Kapitel entsprechen genau den Themen-Seiten des Sammelalbums.
+
 ### Lernen in kleinen Schritten
 
 Jeder Befehl wird **einzeln** eingeführt und sofort geübt:

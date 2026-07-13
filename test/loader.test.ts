@@ -23,6 +23,7 @@ import {
   assembleQuizCards,
   parseQuestTopics,
   groupQuestsByTopic,
+  chapterForTopic,
   parsePractice,
   PRACTICE,
   ContentValidationError,
@@ -351,6 +352,35 @@ test("groupQuestsByTopic: echte Quests verteilen sich lückenlos auf die echten 
   const total = groups.reduce((n, g) => n + g.quests.length, 0);
   assert.equal(total, QUESTS.length, "Quests gehen beim Gruppieren verloren oder doppelt");
   for (const g of groups) assert.ok(g.quests.length > 0, `Thema „${g.id}" ist leer (totes Thema)`);
+});
+
+/* ---------- chapterForTopic: Kapitel-Anzeige fürs HUD (#776) ---------- */
+
+test("chapterForTopic: 1-basierte Position + Gesamtzahl + Label", () => {
+  const topics = [{ id: "onboarding", label: "Einstieg" }, { id: "docker", label: "Docker" }, { id: "helm", label: "Helm" }];
+  assert.deepEqual(chapterForTopic("onboarding", topics), { index: 1, total: 3, label: "Einstieg" });
+  assert.deepEqual(chapterForTopic("docker", topics), { index: 2, total: 3, label: "Docker" });
+  assert.deepEqual(chapterForTopic("helm", topics), { index: 3, total: 3, label: "Helm" });
+});
+
+test("chapterForTopic: null bei unbekanntem Thema (HUD-Absicherung gegen kaputtes topic)", () => {
+  const topics = [{ id: "docker", label: "Docker" }];
+  assert.equal(chapterForTopic("gibtsnicht", topics), null);
+  assert.equal(chapterForTopic("", topics), null);
+});
+
+test("chapterForTopic: gegen die echte Taxonomie – jedes Thema hat ein gültiges Kapitel", () => {
+  // total == Anzahl echter Themen; die Indizes decken lückenlos 1..total ab (keine Dublette/Lücke).
+  const seen = new Set<number>();
+  for (const t of QUEST_TOPICS) {
+    const ch = chapterForTopic(t.id, QUEST_TOPICS);
+    assert.ok(ch, `Thema „${t.id}" liefert kein Kapitel`);
+    assert.equal(ch!.total, QUEST_TOPICS.length);
+    assert.equal(ch!.label, t.label);
+    assert.ok(ch!.index >= 1 && ch!.index <= QUEST_TOPICS.length, `Index ${ch!.index} außerhalb 1..${QUEST_TOPICS.length}`);
+    seen.add(ch!.index);
+  }
+  assert.equal(seen.size, QUEST_TOPICS.length, "Kapitel-Indizes nicht lückenlos/eindeutig");
 });
 
 /* ---------- assembleQuests: Regionen + explizite Reihenfolge zusammenführen ---------- */

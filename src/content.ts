@@ -10,7 +10,7 @@
 // validiert (Loader: accept→RegExp, check→Mechanik-Registry; progression.ts/minigame.ts: eigener
 // eager Parser wie npcs.json/smalltalk.json). Siehe content/loader.ts + content/checks.ts.
 import { RANKS, SHOP } from "./content/progression";
-import { NPCS, SMALLTALK, PRACTICE, getQuests, getCmdCards, getQuizCards, getQuestTopics, groupQuestsByTopic, getTfConfigs, getFunkExplains } from "./content/loader";
+import { NPCS, SMALLTALK, PRACTICE, getQuests, getCmdCards, getQuizCards, getQuestTopics, groupQuestsByTopic, chapterForTopic, getTfConfigs, getFunkExplains } from "./content/loader";
 import { DRILLS } from "./content/drills";
 import { STACK_ROUNDS, corruptImage } from "./content/minigame";
 import { POD_PACKING_ROUNDS } from "./content/podpacking";
@@ -25,7 +25,7 @@ import type { ContentBundle } from "./content/validate";
 // auslösen (memoisiert im Loader). Die öffentliche API `KQContent.QUESTS` etc. bleibt
 // unverändert synchron. NPCS/SMALLTALK bleiben eager (winzig, schon beim Boot gebraucht).
 export const KQContent = {
-  RANKS, SHOP, NPCS, SMALLTALK, DRILLS, PRACTICE, STACK_ROUNDS, POD_PACKING_ROUNDS, YAML_STRUCT_ROUNDS, ROUTING_ROUNDS, DRIFT_HEAL_ROUNDS, RBAC_KEYRING_ROUNDS, corruptImage, groupQuestsByTopic,
+  RANKS, SHOP, NPCS, SMALLTALK, DRILLS, PRACTICE, STACK_ROUNDS, POD_PACKING_ROUNDS, YAML_STRUCT_ROUNDS, ROUTING_ROUNDS, DRIFT_HEAL_ROUNDS, RBAC_KEYRING_ROUNDS, corruptImage, groupQuestsByTopic, chapterForTopic,
   get QUESTS() { return getQuests(); },
   get QUEST_TOPICS() { return getQuestTopics(); },
   get CRAB_QUIZ() { return getQuizCards(); },
