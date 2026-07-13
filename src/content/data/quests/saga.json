@@ -11,7 +11,7 @@
         "type": "dialog",
         "npc": "saga",
         "lines": [
-          "Willkommen bei der Expeditions-Flotte! Saga, Flottenkommandantin. Theo hat dir das Land gebaut – ich zeige dir, wie man <b>im Großen</b> baut, ohne sich zu wiederholen.",
+          "Willkommen bei der Expeditions-Flotte! Saga, Flottenkommandantin. Theo hat dich schon mit Terraform bekannt gemacht – jetzt zeige ich dir die Fortsetzung: wie man <b>im Großen</b> baut, ohne sich zu wiederholen.",
           "Eine Flotte braucht <b>viele</b> Anleger: Nord, Süd, später Ost und West. Jeder Anleger ist derselbe Bauplan – ein Kai plus ein paar Poller. Würde ich den für jeden Anleger neu abtippen, schleicht sich beim zehnten ein Tippfehler ein.",
           "Die Lösung heißt <b>Modul</b>: EIN wiederverwendbarer Baustein, den du mit unterschiedlichen Werten beliebig oft <b>aufrufst</b>. Klare Schnittstelle – oben rein (<b>Variablen</b>), unten raus (<b>Outputs</b>). Einmal sauber, hundertmal gleich. Schau dir den Bauplan an."
         ]
