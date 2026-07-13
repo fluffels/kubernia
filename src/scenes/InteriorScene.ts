@@ -121,12 +121,14 @@ export class InteriorScene extends Phaser.Scene {
   private renderRoom(isShip: boolean, isUnderdeck: boolean): void {
     const { RW, RH } = this;
     const wallKey = (isShip || isUnderdeck) ? "interior_wall_ship" : "interior_wall_house";
+    // Unterdeck (#761): dunklerer, feuchter Laderaum-Boden; Deck/Haus behalten den hellen Holzdielen-Boden.
+    const floorKey = isUnderdeck ? "underdeck_floor" : "interior_floor";
     const rt = this.add.renderTexture(0, 0, RW * T, RH * T).setOrigin(0).setDepth(0);
     const topLeft = { originX: 0, originY: 0 };
     for (let y = 0; y < RH; y++) for (let x = 0; x < RW; x++) {
       const isWall = isShip ? this.isDeckWall(x, y) : this.isWallTile(x, y);
       if (isWall) { rt.stamp(wallKey, undefined, x * T, y * T, topLeft); this.solid[y * RW + x] = 1; }
-      else rt.stamp("interior_floor", undefined, x * T, y * T, topLeft);
+      else rt.stamp(floorKey, undefined, x * T, y * T, topLeft);
     }
     rt.render();
   }
@@ -138,10 +140,13 @@ export class InteriorScene extends Phaser.Scene {
     }
   }
 
-  /** Schwelle/Austritt: Luke (Deck/Unterdeck) oder Holztür (Haus). */
+  /** Schwelle/Austritt: Deck-Luke (Deck), Niedergang-Treppe (Unterdeck, #761) oder Holztür (Haus). */
   private renderThreshold(isShip: boolean, isUnderdeck: boolean): void {
     const cx = this.exitTx * T + 8;
-    if (isShip || isUnderdeck) {
+    if (isUnderdeck) {
+      // Niedergang-Treppe zurück aufs Deck (#761): ersetzt die flache Luke durch echte Stufen.
+      this.add.image(cx, this.exitTy * T + 8, "hold_stairs").setScale(0.42).setDepth(1);
+    } else if (isShip) {
       this.add.image(cx, this.exitTy * T + 8, "ship_hatch").setScale(0.42).setDepth(1);
     } else {
       this.add.image(cx, this.exitTy * T + T + 2, "interior_door").setOrigin(0.5, 1).setScale(0.42).setDepth(1);
