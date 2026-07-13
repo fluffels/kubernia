@@ -13,7 +13,7 @@
 2. npm run dev                              # Dev-Server, angezeigte Adresse im Browser öffnen
 3. docs/ticket-reihenfolge.md               # nächstes Ticket = oberstes freies Item der Board-Reihenfolge (gh project item-list 1 --owner fluffels --format json --limit 800; braucht read:project-Scope)
 4. gh issue edit <nr> --add-assignee @me    # SOFORT claimen = "in Arbeit"-Marker, dann mit gh issue view <nr> prüfen
-5. git worktree add .claude/worktrees/kq-<nr> -b feature/kq-<nr>-<slug>   # eigener Worktree, bevor du Dateien anfasst
+5. git fetch origin && git worktree add .claude/worktrees/kq-<nr> -b feature/kq-<nr>-<slug> origin/main   # eigener Worktree vom FRISCH geholten origin/main (nicht lokal veraltet, #772), bevor du Dateien anfasst
 6. coden                                    # im Worktree umsetzen, deutsche Umlaute in Texten/Kommentaren
 7. npm test                                 # muss grün sein (auch Negativfälle abdecken, Red-Green)
 8. npm run typecheck                        # muss grün sein (strict)

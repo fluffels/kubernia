@@ -133,7 +133,7 @@ export function decide({ cwd, command, repoRoot, deps }) {
     reason:
       `git commit/push ist im geteilten main-Checkout (${ctx.toplevel}) blockiert. ` +
       `Bitte in einem eigenen \`git worktree\` arbeiten (siehe AGENTS.md § Git-Workflow) ` +
-      `— z.B. \`git worktree add .claude/worktrees/kq-<nr> -b feature/kq-<nr>-<slug>\`. (#735)`,
+      `— z.B. \`git fetch origin && git worktree add .claude/worktrees/kq-<nr> -b feature/kq-<nr>-<slug> origin/main\` (vom frischen origin/main, #772). (#735)`,
   };
 }
 
