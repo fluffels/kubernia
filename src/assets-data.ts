@@ -27,6 +27,10 @@ import interior_floor from "../assets/pixellab/interior_floor.png";
 import interior_wall_house from "../assets/pixellab/interior_wall_house.png";
 import interior_wall_ship from "../assets/pixellab/interior_wall_ship.png";
 
+// Unterdeck-Tiles (#761): dunkler Laderaum-Boden + Niedergang-Treppe für die Unterdeck-Szene (#759)
+import underdeck_floor from "../assets/pixellab/underdeck_floor.png";
+import hold_stairs from "../assets/pixellab/hold_stairs.png";
+
 // PixelLab Wang-Tilesets (water-sand = coast, sand-grass = meadow, grass-dirt = path, …)
 import coast from "../assets/pixellab/water-sand.png";
 import meadow from "../assets/pixellab/sand-grass.png";
@@ -228,6 +232,9 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
   { key: "interior_floor", src: interior_floor, kind: "plain" },
   { key: "interior_wall_house", src: interior_wall_house, kind: "plain" },
   { key: "interior_wall_ship", src: interior_wall_ship, kind: "plain" },
+  // Unterdeck-Tiles (#761): dunkler Laderaum-Boden + Niedergang-Treppe (Unterdeck-Szene #759)
+  { key: "underdeck_floor", src: underdeck_floor, kind: "plain" },
+  { key: "hold_stairs", src: hold_stairs, kind: "plain" },
   // Innenraum-Möbel (#669): Tisch/Konsole/Buch/Amboss ersetzen die dungeon-Frames
   { key: "interior_table", src: interior_table, kind: "plain" },
   { key: "interior_console", src: interior_console, kind: "plain" },
