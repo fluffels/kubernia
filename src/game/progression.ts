@@ -42,6 +42,13 @@ export const progressionBundle = part({
     const q = this.currentQuest();
     return q ? q.steps[this.questStep()] || null : null;
   },
+  /** Kapitel der aktuell fokussierten Quest fürs HUD (#776): das Quest-Thema als
+   *  „Kapitel X von Y" (Thema = Kapitel, siehe `chapterForTopic`). `null` im
+   *  Endzustand (keine Quest offen) – das HUD zeigt dann keine Kapitel-Zeile. */
+  currentChapter() {
+    const q = this.currentQuest();
+    return q ? KQContent.chapterForTopic(q.topic, KQContent.QUEST_TOPICS) : null;
+  },
   /** Ist der aktuelle Schritt einer fürs Funkgerät? (Typ-Guard fürs Narrowing) */
   isFunkStep(step: QuestStep | null): step is FunkStep {
     return !!step && (step.type === "teach" || step.type === "drill" || step.type === "terminal");

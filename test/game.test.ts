@@ -204,6 +204,30 @@ test("Registry-Fallback-Spawn (harbor) zeigt auf denselben Ort wie der Spielstan
   expect(spawn.y * TILE).toBe(Game.state.player.y);
 });
 
+/* ---------- Kapitel-Anzeige fürs HUD (#776) ---------- */
+
+describe("currentChapter: Kapitel (= Quest-Thema) der fokussierten Quest", () => {
+  const TOTAL = KQContent.QUEST_TOPICS.length;
+
+  test("frischer Stand startet in Kapitel 1 (Einstieg)", () => {
+    Game.reset();
+    expect(Game.currentChapter()).toEqual({ index: 1, total: TOTAL, label: "Einstieg" });
+  });
+
+  test("Sprung zur ersten Docker-Quest ergibt Kapitel 2 (Docker)", () => {
+    // quest-order[1] = docker-first-container (topic „docker" = 2. Thema der Taxonomie).
+    expect(Game.jumpToQuest(1)).toBe(true);
+    expect(Game.currentChapter()).toEqual({ index: 2, total: TOTAL, label: "Docker" });
+  });
+
+  test("Endzustand (alle Quests durch) hat kein Kapitel → null", () => {
+    // jumpToQuest(QUESTS.length) ist der erlaubte Endzustand: keine Quest fokussiert.
+    expect(Game.jumpToQuest(KQContent.QUESTS.length)).toBe(true);
+    expect(Game.allQuestsDone()).toBe(true);
+    expect(Game.currentChapter()).toBe(null);
+  });
+});
+
 /* ---------- Spiel-Feel: Cozy-Modus (#71) ---------- */
 
 test("defaultState: Spiel-Feel steht standardmäßig auf 'normal'", () => {

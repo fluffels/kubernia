@@ -41,6 +41,28 @@ export function parseQuestTopics(raw: unknown, where = "quest-topics"): QuestTop
  *  Lazy (#435): erst beim ersten Zugriff geparst (Logbuch-Accordion #326), dann gecacht. */
 export const getQuestTopics = memo<QuestTopic[]>(() => parseQuestTopics(questTopicsData));
 
+/** Kapitel-Anzeige fürs HUD (#776): ein Quest-Thema als „Kapitel X von Y".
+ *  Die Themen-Taxonomie IST der Kapitel-Lernpfad (eine geordnete SSOT), darum kein
+ *  zweites Kapitel-Mapping – ein Kapitel = ein Thema. */
+export interface ChapterInfo {
+  /** 1-basierte Position des Themas in der Taxonomie (Anzeige „Kapitel X"). */
+  index: number;
+  /** Gesamtzahl der Themen/Kapitel (Anzeige „von Y"). */
+  total: number;
+  /** Anzeige-Label des Themas (z.B. „Docker"). */
+  label: string;
+}
+
+/** Bestimmt das Kapitel eines Quest-Themas fürs HUD (#776): die 1-basierte Position
+ *  von `topicId` in der Themen-Taxonomie, deren Gesamtzahl und das Label. `null`, wenn
+ *  `topicId` kein bekanntes Thema ist – defensiv, damit das HUD bei einem kaputten
+ *  `topic` nicht crasht (referenziell fängt validateContent ein unbekanntes Quest-`topic`
+ *  ohnehin schon beim Laden). Pure Funktion (kein Spielzustand) → unit-testbar. */
+export function chapterForTopic(topicId: string, topics: QuestTopic[]): ChapterInfo | null {
+  const i = topics.findIndex(t => t.id === topicId);
+  return i < 0 ? null : { index: i + 1, total: topics.length, label: topics[i].label };
+}
+
 /** Eine Themen-Gruppe: das Thema + die ihm zugeordneten Quests (in Spielreihenfolge). */
 export interface TopicGroup {
   id: string;
