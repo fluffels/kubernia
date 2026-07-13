@@ -36,7 +36,7 @@ export { type NpcMeta, parseNpcs, parseSmalltalk, NPCS, SMALLTALK } from "./load
 export { parseQuests, assembleQuests, getQuests } from "./loader/quests";
 
 // Quest-Themen/Kapitel: Taxonomie fürs Logbuch-Accordion (#327/#326).
-export { type QuestTopic, type TopicGroup, parseQuestTopics, getQuestTopics, groupQuestsByTopic } from "./loader/topics";
+export { type QuestTopic, type TopicGroup, type ChapterInfo, parseQuestTopics, getQuestTopics, groupQuestsByTopic, chapterForTopic } from "./loader/topics";
 
 // Befehls-Karten (Spaced-Repetition-Drills), pro Geber (#352).
 export { type CmdCard, parseCmdCards, assembleCmdCards, getCmdCards } from "./loader/cmdcards";

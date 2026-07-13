@@ -78,13 +78,24 @@ export const hudUI = part({
     if (seasonSrc) (<HTMLImageElement>$("hud-icon-season")).src = seasonSrc;
   },
 
+  /** Kapitel-Badge fürs HUD (#776): „📖 Kapitel X von Y · Label" als kleine Zeile über
+   *  dem Quest-Hinweis. Leer, wenn kein Kapitel aktiv ist (Endzustand) – dann fällt die
+   *  Zeile weg. Die Themen-Taxonomie ist der Kapitel-Lernpfad (ein Kapitel = ein Thema). */
+  chapterBadgeHtml(): string {
+    const ch = Game.currentChapter();
+    if (!ch) return "";
+    return '<div class="hud-chapter">📖 Kapitel ' + ch.index + " von " + ch.total + " · " + esc(ch.label) + "</div>";
+  },
+
   refreshQuestHint() {
     const el = $("hud-quest");
     // Wiederspiel-Sandbox (#332): solange ein Replay läuft, zeigt das HUD statt der
     // Quest-Aufgabe den Wiederspiel-Hinweis + Ausstieg (ohne erst das Logbuch zu öffnen).
+    // Das Kapitel-Badge bleibt auch hier sichtbar (Game.currentChapter zeigt das Thema
+    // der wiedergespielten Quest, weil der Replay den fokussierten Cursor umbiegt).
     if (Game.isReplaying()) {
       const rq = Game.currentQuest();
-      el.innerHTML = "🔁 <b>Wiederspiel:</b> " + (rq ? rq.title : "—") +
+      el.innerHTML = this.chapterBadgeHtml() + "🔁 <b>Wiederspiel:</b> " + (rq ? rq.title : "—") +
         ' <button class="hud-replay-exit" data-action="exitReplay">↩️ Zur aktuellen Quest</button>';
       return;
     }
@@ -95,16 +106,17 @@ export const hudUI = part({
     const q = Game.currentQuest();
     const step = Game.currentStep();
     if (!q || !step) { el.textContent = ""; return; }
+    const chapter = this.chapterBadgeHtml();
     if (Game.isFunkStep(step)) {
-      el.innerHTML = "📜 <b>" + q.title + "</b> – 💻 Terminal öffnen (<b>T</b>)!";
+      el.innerHTML = chapter + "📜 <b>" + q.title + "</b> – 💻 Terminal öffnen (<b>T</b>)!";
     } else if (step.type === "minigame") {
       const npc = NPCS[step.npc];
       const GAME_LABELS: Record<typeof step.game, string> = { stack: "🎮 Stapel-Spiel", packing: "🎮 Pod-Packspiel", yamlstruct: "🎮 YAML-Bausteine", routing: "🎮 Routing-Lotse", driftheal: "🎮 Wunschzustand einstellen", rbaskeyring: "🎮 RBAC-Schlüsselbund" };
       const gameLabel = GAME_LABELS[step.game];
-      el.innerHTML = "📜 <b>" + q.title + "</b> – Sprich <b>" + npc.name + "</b> an und wähle " + gameLabel;
+      el.innerHTML = chapter + "📜 <b>" + q.title + "</b> – Sprich <b>" + npc.name + "</b> an und wähle " + gameLabel;
     } else {
       const npc = NPCS[step.npc];
-      el.innerHTML = "📜 <b>" + q.title + "</b> – Sprich mit <b>" + npc.name + "</b> (" + npc.title + ")";
+      el.innerHTML = chapter + "📜 <b>" + q.title + "</b> – Sprich mit <b>" + npc.name + "</b> (" + npc.title + ")";
     }
   },
 

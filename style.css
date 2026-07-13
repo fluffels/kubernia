@@ -117,6 +117,15 @@ button.primary { background: var(--accent); color: #1a1304; font-weight: bold; b
   text-shadow: 0 1px 3px #000;
   min-width: 200px;
 }
+/* Kapitel-Badge über dem Quest-Hinweis (#776): kleine, gedämpfte Lernpfad-Verortung
+   „📖 Kapitel X von Y · Thema". Bewusst als eigene Block-Zeile (kein Farb-/Größen-Wettbewerb
+   mit dem Quest-Text darunter) – das Thema IST das Kapitel (Themen-Taxonomie als SSOT). */
+.hud-chapter {
+  font-size: 0.72em;
+  color: var(--text-dim);
+  letter-spacing: 0.02em;
+  margin-bottom: 1px;
+}
 .hud-keys { font-size: 0.75em; color: var(--text-dim); text-shadow: 0 1px 3px #000; }
 .hud-menu-btn {
   pointer-events: auto;
