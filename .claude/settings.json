@@ -23,5 +23,8 @@
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "langfuse-observability@langfuse-observability": true
   }
 }
