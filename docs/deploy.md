@@ -16,7 +16,7 @@ Reproduzierbarer Weg, um die Spiel-App in einem Container oder einem Kubernetes-
 ### Image bauen
 
 ```bash
-docker build -t kubequest .
+docker build -t kubernia .
 ```
 
 Der Multi-Stage-Build (Dockerfile im Repo-Root) tut:
@@ -28,7 +28,7 @@ Das fertige Image enthält keinen Node-Laufzeit-Layer, nur nginx + statische Ass
 ### Container starten
 
 ```bash
-docker run --rm -p 8080:80 kubequest
+docker run --rm -p 8080:80 kubernia
 ```
 
 Dann im Browser öffnen: <http://localhost:8080>
@@ -94,13 +94,13 @@ Das Verzeichnis `deploy/` enthält:
 |---|---|
 | `deployment.yaml` | Deployment (1 Replica, Ressourcen-Limits, readiness/liveness-Probe) |
 | `service.yaml` | ClusterIP-Service (Port 80) |
-| `ingress.yaml` | Ingress für `kubequest.localtest.me` (lokaler Cluster) |
+| `ingress.yaml` | Ingress für `kubernia.localtest.me` (lokaler Cluster) |
 | `ingress-tls.yaml` | Ingress mit TLS für öffentliches Hosting (Domain eintragen, s. Slice 4) |
 | `cert-issuer.yaml` | Let's-Encrypt-ClusterIssuer für cert-manager (öffentliches Hosting) |
 
 ### Spiel im Browser öffnen
 
-Das Spiel ist unter <http://kubequest.localtest.me> erreichbar. Die Domain `.localtest.me` löst per öffentlichem DNS immer zu `127.0.0.1` auf – kein `/etc/hosts`-Eintrag nötig.
+Das Spiel ist unter <http://kubernia.localtest.me> erreichbar. Die Domain `.localtest.me` löst per öffentlichem DNS immer zu `127.0.0.1` auf – kein `/etc/hosts`-Eintrag nötig.
 
 ### Verifizierung
 
@@ -109,7 +109,7 @@ Das Spiel ist unter <http://kubequest.localtest.me> erreichbar. Die Domain `.loc
 kubectl get pods -l app=kubernia
 
 # Smoke gegen den Ingress
-curl -s -o /dev/null -w "%{http_code}" http://kubequest.localtest.me
+curl -s -o /dev/null -w "%{http_code}" http://kubernia.localtest.me
 # erwartet: 200
 ```
 
@@ -128,12 +128,12 @@ steuerbar.
 
 ```bash
 helm install kubernia ./deploy/chart \
-  --set image.repository=kubequest \
+  --set image.repository=kubernia \
   --set image.tag=latest \
-  --set ingress.host=kubequest.localtest.me
+  --set ingress.host=kubernia.localtest.me
 ```
 
-Danach ist das Spiel unter **http://kubequest.localtest.me** erreichbar
+Danach ist das Spiel unter **http://kubernia.localtest.me** erreichbar
 (Port-Forward-Alternative: `kubectl port-forward svc/kubernia 8080:80`).
 
 ### Häufige Konfig-Änderungen

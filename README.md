@@ -1,8 +1,8 @@
 # ⚓ Kubernia – Das Hafen-Abenteuer
 
 [![CI](https://github.com/fluffels/kubernia/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fluffels/kubernia/actions/workflows/ci.yml)
-[![Gemergte PRs](https://img.shields.io/github/issues-search/fluffels/kubequest?query=is%3Apr%20is%3Amerged&label=gemergte%20PRs&color=blue)](https://github.com/fluffels/kubernia/pulls?q=is%3Apr+is%3Amerged)
-[![Geschlossene Issues](https://img.shields.io/github/issues-search/fluffels/kubequest?query=is%3Aissue%20is%3Aclosed&label=geschlossene%20Issues&color=blue)](https://github.com/fluffels/kubernia/issues?q=is%3Aissue+is%3Aclosed)
+[![Gemergte PRs](https://img.shields.io/github/issues-search/fluffels/kubernia?query=is%3Apr%20is%3Amerged&label=gemergte%20PRs&color=blue)](https://github.com/fluffels/kubernia/pulls?q=is%3Apr+is%3Amerged)
+[![Geschlossene Issues](https://img.shields.io/github/issues-search/fluffels/kubernia?query=is%3Aissue%20is%3Aclosed&label=geschlossene%20Issues&color=blue)](https://github.com/fluffels/kubernia/issues?q=is%3Aissue+is%3Aclosed)
 
 > **🚧 Work in Progress** – Kubernia ist in aktiver Entwicklung. Bugs und unfertige Ecken sind möglich.
 > Hast du etwas gefunden oder eine Idee? Meld dich gern in den **[GitHub Discussions](https://github.com/fluffels/kubernia/discussions)** – einfach lostippen (GitHub-Login nötig).
@@ -36,7 +36,7 @@ Der komplette Code von Kubernia entsteht durch **autonome KI-Coding-Agenten** �
 
 ### Der Ticket-Lebenszyklus
 
-![Lebenszyklus eines kubequest-Tickets: Board lesen → claimen → eigener Worktree → Umsetzen (TDD) → lokale Gates → Pull Request → CI-Pipeline → CI-Feedback → Merge → Aufräumen. Beide Rückkopplungsschleifen bei roten Gates führen zurück zu „Umsetzen", nicht zu einem neuen Ticket; ein Post-hoc-Alarm öffnet ein Issue, falls main trotz grüner Checks rot wird.](docs/img/agenten-lebenszyklus.png)
+![Lebenszyklus eines kubernia-Tickets: Board lesen → claimen → eigener Worktree → Umsetzen (TDD) → lokale Gates → Pull Request → CI-Pipeline → CI-Feedback → Merge → Aufräumen. Beide Rückkopplungsschleifen bei roten Gates führen zurück zu „Umsetzen", nicht zu einem neuen Ticket; ein Post-hoc-Alarm öffnet ein Issue, falls main trotz grüner Checks rot wird.](docs/img/agenten-lebenszyklus.png)
 
 Ein Agent nimmt **genau ein** Ticket vom Board, arbeitet es end-to-end ab und räumt danach auf. Beide Rückkopplungsschleifen – lokale Gates und CI – führen zurück zum **Umsetzen**-Schritt, nie zu einem neuen Ticket.
 
@@ -47,7 +47,7 @@ Ein Agent nimmt **genau ein** Ticket vom Board, arbeitet es end-to-end ab und r�
 - **🚦 Kollisionsschutz für parallele Agenten.** Mehrere Agenten können gleichzeitig laufen, ohne sich in die Quere zu kommen: Ein Ticket wird per **Assignee** als „in Arbeit" markiert (der einzige Zustand, den ein paralleler Agent sieht) und in einem **eigenen `git worktree`** auf eigenem Branch bearbeitet – so teilen sich zwei Chats nie dasselbe Arbeitsverzeichnis.
 - **🛡️ Automatische Gates als Sicherheitsnetz.** Genau die [Fitness-Functions unten](#-architektur--qualität) (typecheck/lint/arch/size/docmap/docdrift/test/smoke/audit) sind das, was autonome Entwicklung absichert: Ein Agent kann keinen Schichtbruch, keinen `any`, kein God-File, keine veraltete Doku-Landkarte und keine gebrochene Save-Migration unbemerkt einschleusen – der Build wird rot. **Determinismus** (seedbare Zufälligkeit statt `Math.random` in der Domäne) und die **Save-nie-brechen-Regel** gehören zum selben Netz.
 - **🪝 Hooks.** Kein Claude-Code-natives Hook-System im Einsatz, sondern ein klassischer Git-Hook (`.githooks/pre-push`, über `core.hooksPath`): fährt `npm run verify` lokal vor jedem Push auf `main`. Seit **serverseitiges PR-Gating** greift (Required Checks, `enforce_admins`), ist der Hook nur noch ein *sekundäres* Netz – die eigentliche Durchsetzung liegt auf dem PR, nicht mehr lokal.
-- **🧩 Skills für wiederkehrende Abläufe.** Der immer gleiche Ticket-Ablauf ist als **Skill** kodifiziert (`kubequest`), ebenso das Bearbeiten des Forums (`forum`, GitHub Discussions mit Freigabe-Stopp vor dem Posten) – reproduzierbare Abläufe statt freihändiger Improvisation.
+- **🧩 Skills für wiederkehrende Abläufe.** Der immer gleiche Ticket-Ablauf ist als **Skill** kodifiziert (`kubernia`), ebenso das Bearbeiten des Forums (`forum`, GitHub Discussions mit Freigabe-Stopp vor dem Posten) – reproduzierbare Abläufe statt freihändiger Improvisation.
 - **🔌 MCP, gezielt statt global.** Nur ein projekt-scoped Server (`pixellab` für Pixel-Art-Generierung) in `.mcp.json`, Token über Umgebungsvariable – kein globales Tooling, das jede Session automatisch mitschleppt.
 - **📐 ADRs statt nachträglicher Rechtfertigung.** Grundsatzentscheidungen (Engine, kein Backend, der Harness selbst, PR-Gating …) werden **vor** der Umsetzung als [Architecture Decision Record](docs/adr/) festgehalten – nachvollziehbar, warum eine Alternative verworfen wurde, nicht nur was am Ende dabei rauskam.
 
@@ -171,7 +171,7 @@ Gebaut mit **Vite** + **TypeScript** (ES-Module) und **Phaser 3** (als npm-Paket
 Grobe Aufteilung:
 
 ```
-kubequest/
+kubernia/
 ├── index.html        Dev-Einstieg (lädt src/main.ts; braucht den Vite-Server)
 ├── style.css         UI (HUD, Dialoge, Terminal, Shop, Alarm, Minispiel)
 ├── src/              Spielcode
