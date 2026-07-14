@@ -36,6 +36,7 @@ afterEach(() => {
   vi.resetModules();
 });
 
+// erster loadGameStack()-Aufruf kompiliert den gesamten Stack kalt → auf Windows > 5 s (#815)
 test("save(): voller localStorage-Fallback meldet den Fehlschlag EINMAL an den Sink", async () => {
   stubWindowLocalStorage(makeQuotaStub()); // jeder echte Schreibvorgang scheitert (QuotaExceeded)
   vi.resetModules();
@@ -53,7 +54,7 @@ test("save(): voller localStorage-Fallback meldet den Fehlschlag EINMAL an den S
   expect(sink).toHaveBeenCalledTimes(1);
 
   setSaveFailedSink(null);
-});
+}, 15_000);
 
 test("save(): kein Sink-Aufruf, solange das Schreiben klappt", async () => {
   stubWindowLocalStorage(); // frischer Stub – Schreiben gelingt
