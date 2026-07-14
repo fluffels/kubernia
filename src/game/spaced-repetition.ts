@@ -82,7 +82,7 @@ export const spacedRepetitionBundle = part({
       this.ensureReviewItem(itemId);
       if (!correct) {
         this.state.review[itemId].box = 1;
-        this.state.review[itemId].due = today() + 1;
+        this.state.review[itemId].due = today();
       }
     }
     if (correct) this.state.stats.quizRight++; else this.state.stats.quizWrong++;
