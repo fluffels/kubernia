@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Sammelalbum / Glossar (#278) =====
+/* ===== Kubernia – Sammelalbum / Glossar (#278) =====
  * Pure, Phaser-/DOM-freie Logik fürs spielerseitige Sammelalbum: ein Nachschlage-
  * und Sammel-Bereich (wie ein Sticker-Album), in dem alles Gelernte auftaucht –
  * jeder eingeführte Befehl und jedes Wissens-Stück (Quiz-Karte). Einträge starten

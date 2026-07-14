@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Logbuch-Übersicht & Navigation (#326) =====
+/* ===== Kubernia – Logbuch-Übersicht & Navigation (#326) =====
  * Pure, Phaser-/DOM-freie Logik fürs spielerseitige Logbuch (Quest-Log):
  *  1. Welche Quests die Übersicht zeigt und in welchem Zustand (abgeschlossen /
  *     aktuell / gesperrt) – Grundlage für „zukünftige Quests sichtbar aber

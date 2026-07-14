@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Mini-Synthesizer (SFX) + Hintergrundmusik =====
+/* ===== Kubernia – Mini-Synthesizer (SFX) + Hintergrundmusik =====
  * Erzeugt alle Sounds UND die Hintergrundmusik zur Laufzeit per WebAudio –
  * keine Audio-Dateien nötig (passt zum Single-File-Offline-Build, keine Lizenz-
  * Frage). Bewusst OHNE Abhängigkeiten (auch kein Phaser/Game), damit zwischen

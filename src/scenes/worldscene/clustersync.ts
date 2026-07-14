@@ -1,4 +1,4 @@
-/* ===== KubeQuest – WorldScene-Cluster-Sync (worldscene/clustersync.ts) =====
+/* ===== Kubernia – WorldScene-Cluster-Sync (worldscene/clustersync.ts) =====
  * Schritt des WorldScene.ts-Splits (#393). Hier wird der simulierte Cluster
  * (Game.sim) auf die sichtbare Hafenwelt gespiegelt: Pods als offene Bootsrümpfe an den
  * Stegen (syncCluster), Deployment-/Docker-/Helm-/Service-Tags neu bauen bei

@@ -1,4 +1,4 @@
-/* ===== KubeQuest – generischer Karten-Terrain-Lader (worldscene/mapterrain.ts) =====
+/* ===== Kubernia – generischer Karten-Terrain-Lader (worldscene/mapterrain.ts) =====
  * #425 (Kind von #415, Block „Skalierungs-Enabler"). Lädt Boden/Kollision/Türen/
  * NPC-Standplätze einer Karte DATENGETRIEBEN aus der Map-Registry über
  * `getMapEntry(scene.mapId)` – statt fest „harbor" zu verdrahten. Eine zweite

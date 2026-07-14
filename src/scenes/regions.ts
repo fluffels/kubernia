@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Region-Konfigurationen (scenes/regions.ts) =====
+/* ===== Kubernia – Region-Konfigurationen (scenes/regions.ts) =====
  * #427: die DATEN der drei Nachbar-Regionen (GitOps-Archipel #92, Monitoring-Leuchtturm
  * #111, Lagerhallen-Viertel #124) als RegionConfig-Liste – die generische RegionScene baut
  * daraus die jeweilige Szene. Eine neue Standard-Region ist ein weiterer Eintrag hier, KEINE

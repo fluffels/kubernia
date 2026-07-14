@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Reine Präsentations-Entscheidungen (#500) =====
+/* ===== Kubernia – Reine Präsentations-Entscheidungen (#500) =====
  * Pure Domäne (Phaser-/DOM-frei, unit-testbar): die Spiel-/Bewertungslogik, die
  * bislang in innerHTML-Methoden der Präsentationsschicht steckte und nur über
  * e2e (nicht Unit) prüfbar war. Wie bei `overlaykbd.ts` bleibt die DOM-Anbindung

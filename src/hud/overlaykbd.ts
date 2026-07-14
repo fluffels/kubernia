@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Tastatur-Logik für einfache Modals (#283) =====
+/* ===== Kubernia – Tastatur-Logik für einfache Modals (#283) =====
  * Pure Domäne (Phaser-/DOM-frei, unit-testbar): entscheidet, was eine Taste in
  * einem blockierenden Overlay ohne eigene Navigation (Stapel-Spiel, Shop,
  * Logbuch, Menü) bewirkt – navigieren zwischen den Buttons oder einen auslösen.
