@@ -1,4 +1,4 @@
-/* ===== KubeQuest – terraform-Befehle (sim/terraform.ts) =====
+/* ===== Kubernia – terraform-Befehle (sim/terraform.ts) =====
  * Schritt 5/7 des sim.ts-Datei-Splits (#376, aus Epic #346, ADR 0004).
  *
  * Hier liegt die komplette `terraform`-Befehlsfamilie. Wie bei docker (#373),

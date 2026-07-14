@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Value Object für Dublonen/Wirtschaft (coins.ts) =====
+/* ===== Kubernia – Value Object für Dublonen/Wirtschaft (coins.ts) =====
  * Zweiter Schritt der schrittweisen Value-Object-Einführung (#490, Forts. #479, DDD).
  *
  * Eine Dublonen-Menge ist im Spiel KEINE beliebige Zahl, sondern per Definition

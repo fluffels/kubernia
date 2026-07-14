@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Laufzeit-Singletons =====
+/* ===== Kubernia – Laufzeit-Singletons =====
  * Diese paar Werte hingen früher als Migrations-Shim am globalen `window`
  * (siehe alte vite-env.d.ts). Jetzt sind es echte Modul-Exporte – kein
  * globaler Zustand mehr, dafür sauber typisiert und importierbar.

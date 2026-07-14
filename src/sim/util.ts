@@ -1,4 +1,4 @@
-/* ===== KubeQuest – geteilte Sim-Helfer (sim/util.ts) =====
+/* ===== Kubernia – geteilte Sim-Helfer (sim/util.ts) =====
  * Schritt-übergreifende, pure Helfer der Befehls-Module aus dem sim.ts-Datei-Split
  * (#373 ff., Epic #346, ADR 0004): Zufalls-IDs (`randSuffix`) und die monospace-
  * Tabellen-Ausgabe (`pad`/`table`), wie sie `docker ps`, `kubectl get` usw. brauchen.

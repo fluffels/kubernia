@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Baustein-Katalog: Langform ↔ Kürzel (#287/#298) =====
+/* ===== Kubernia – Baustein-Katalog: Langform ↔ Kürzel (#287/#298) =====
  * Die EINE zentrale Liste aller Konsolen-Bausteine, die in ZWEI gültigen Formen
  * existieren: eine selbsterklärende Langform und eine (oder mehrere) kürzere
  * Abkürzung(en). Pure Domäne (Phaser-/DOM-frei), damit im Node-Test prüfbar.

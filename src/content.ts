@@ -1,4 +1,4 @@
-/* ===== KubeQuest 3.0 – Inhalte (Fassade) =====
+/* ===== Kubernia 3.0 – Inhalte (Fassade) =====
  * Kleinschrittiges Lernen: jeder Befehl wird einzeln eingeführt (teach),
  * dann in Zufalls-Varianten geübt (drill), erst dann kommt der nächste.
  *

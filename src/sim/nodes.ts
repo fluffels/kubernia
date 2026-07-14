@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Node-Aggregat-Mutationen (sim/nodes.ts) =====
+/* ===== Kubernia – Node-Aggregat-Mutationen (sim/nodes.ts) =====
  * EIN Zuhause für das Cluster-**Node**-Aggregat, analog zu workload.ts für Deployments/
  * StatefulSets (#478/#488/#508). Angelegt für #534 (iSAQB-Domänen-Analyse, Nachtrag
  * Rest-Sim-Familien): die Node-Provisionierung war über vier Dateien dupliziert –

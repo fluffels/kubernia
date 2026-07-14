@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Workload-Mutationen (sim/workload.ts) =====
+/* ===== Kubernia – Workload-Mutationen (sim/workload.ts) =====
  * Getippte Aggregat-Mutationen für den Workload-Kern (Deployments/Pods/StatefulSets),
  * Fortsetzung von #478 im Rahmen des taktischen DDD (#488).
  *
