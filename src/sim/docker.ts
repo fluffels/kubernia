@@ -1,4 +1,4 @@
-/* ===== KubeQuest – docker-Befehle (sim/docker.ts) =====
+/* ===== Kubernia – docker-Befehle (sim/docker.ts) =====
  * Schritt 2/7 des sim.ts-Datei-Splits (#373, aus Epic #346, ADR 0004).
  *
  * Hier liegt die komplette `docker`-Befehlsfamilie (pull/build/tag/images/run/ps/

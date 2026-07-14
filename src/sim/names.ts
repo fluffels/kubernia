@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Value Objects für Ressourcen-Namen (sim/names.ts) =====
+/* ===== Kubernia – Value Objects für Ressourcen-Namen (sim/names.ts) =====
  * Schrittweise Value-Object-Einführung (#479, DDD); auf ALLE Ressourcennamen
  * verallgemeinert (#507).
  *

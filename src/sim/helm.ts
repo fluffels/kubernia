@@ -1,4 +1,4 @@
-/* ===== KubeQuest – helm-Befehle (sim/helm.ts) =====
+/* ===== Kubernia – helm-Befehle (sim/helm.ts) =====
  * Schritt 4/7 des sim.ts-Datei-Splits (#375, aus Epic #346, ADR 0004).
  *
  * Hier liegt die komplette `helm`-Befehlsfamilie (repo add|update|list, search,

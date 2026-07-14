@@ -1,4 +1,4 @@
-/* ===== KubeQuest – kubectl Lifecycle (sim/kubectl/lifecycle.ts) =====
+/* ===== Kubernia – kubectl Lifecycle (sim/kubectl/lifecycle.ts) =====
  * Die Ressourcen-Lebenszyklus-Befehle: `create` (imperativ anlegen), `apply -f`
  * (deklarativ aus Manifest, größter Block: alle CRDs/Workloads/RBAC/Observability/
  * Storage) und `delete` (löschen, inkl. `-f`). Die drei teilen sich die

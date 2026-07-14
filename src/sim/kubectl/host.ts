@@ -1,4 +1,4 @@
-/* ===== KubeQuest – KubectlHost-Interface (sim/kubectl/host.ts) =====
+/* ===== Kubernia – KubectlHost-Interface (sim/kubectl/host.ts) =====
  * Das schmale Interface, das alle kubectl-Unterfamilien (inspect/lifecycle/ops/
  * security) vom Simulator brauchen. Bewusst ein eng umrissenes Interface statt der
  * ganzen `Sim`-Klasse: es dokumentiert die (große) Kopplung von kubectl an den

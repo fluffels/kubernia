@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Netzwerk-/Erreichbarkeits-Befehle (sim/net.ts) =====
+/* ===== Kubernia – Netzwerk-/Erreichbarkeits-Befehle (sim/net.ts) =====
  * Die beiden „frag einen Service"-Welt-Befehle, die KEINE kubectl-Unterbefehle sind:
  *   - `nslookup <name>`  – Namensauflösung über CoreDNS (#337)
  *   - `curl [http://]<service>[:port][/pfad]` – Erreichbarkeit (#164, Werft-Capstone)

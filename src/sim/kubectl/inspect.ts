@@ -1,4 +1,4 @@
-/* ===== KubeQuest – kubectl Inspect (sim/kubectl/inspect.ts) =====
+/* ===== Kubernia – kubectl Inspect (sim/kubectl/inspect.ts) =====
  * Die lesenden kubectl-Befehle (kein Cluster-Zustand wird verändert): `get` (alle
  * Ressourcen-Listen), `describe` (Detail zu Pod/Ingress/NetworkPolicy/Role/SA),
  * `top` (Pod-/Node-Metriken, #109) und `logs` (#…). Die eigentliche

@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Ephemeral Storage & Eviction (sim/eviction.ts, #240) =====
+/* ===== Kubernia – Ephemeral Storage & Eviction (sim/eviction.ts, #240) =====
  * Die flüchtige-Speicher-Mechanik des Simulators: emptyDir + Container-Writable-Layer
  * zählen als ephemeral storage auf Pod und Node. Zwei deterministische Eviction-Auslöser,
  * genau wie in echtem Kubernetes:
