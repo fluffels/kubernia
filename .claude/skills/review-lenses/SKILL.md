@@ -1,17 +1,17 @@
 ---
 name: review-lenses
-description: Gestaffelter Mehr-Perspektiven-Review des aktuellen kubequest-Diffs (Vorbild WPS-KI-Fabrik). Fährt ZUERST die billigen deterministischen Gates (`npm run verify`) und macht NUR bei Grün drei getrennte agentische Lens-Pässe — Architektur, Requirement-Treue, Test-Adäquanz — mit strukturierten Findings. Rote Gates ⇒ Abbruch mit den Gate-Findings, KEINE Lens-Pässe (Token-Short-Circuit). Ersetzt die CI-Gates nicht (hängt sich davor), kein Auto-Merge. Auslösen bei "Lens-Review", "Mehr-Augen-Review", "Viewpoint-Review", "Review mit Lenses", "gestaffelter Review", "review den Diff gründlich vor dem Merge", oder wenn der aktuelle Ticket-Diff aus mehreren Perspektiven geprüft werden soll.
+description: Gestaffelter Mehr-Perspektiven-Review des aktuellen kubernia-Diffs (Vorbild WPS-KI-Fabrik). Fährt ZUERST die billigen deterministischen Gates (`npm run verify`) und macht NUR bei Grün drei getrennte agentische Lens-Pässe — Architektur, Requirement-Treue, Test-Adäquanz — mit strukturierten Findings. Rote Gates ⇒ Abbruch mit den Gate-Findings, KEINE Lens-Pässe (Token-Short-Circuit). Ersetzt die CI-Gates nicht (hängt sich davor), kein Auto-Merge. Auslösen bei "Lens-Review", "Mehr-Augen-Review", "Viewpoint-Review", "Review mit Lenses", "gestaffelter Review", "review den Diff gründlich vor dem Merge", oder wenn der aktuelle Ticket-Diff aus mehreren Perspektiven geprüft werden soll.
 ---
 
 # Mehr-Perspektiven-Review mit Gate-Short-Circuit
 
 Ein **gestaffelter** Review des aktuellen Ticket-Diffs — Vorbild ist die WPS-`roads/ki-fabrik`-Pipeline (#532). Die Idee: **erst die billigen, verlässlichen deterministischen Gates, dann die teuren LLM-Lenses — und die Lenses nur, wenn die Gates grün sind.** Das gibt zuerst das sicherste Feedback und verbrennt keine Tokens auf einem Diff, der schon an einem Gate scheitert.
 
-> Kein Ersatz für die CI-Gates, sondern eine Schicht **davor/darüber** (Feinschliff vor `main`). **Kein Auto-Merge** — der Review liefert Findings, das Mergen bleibt der normale [kubequest](../kubequest/SKILL.md)-Ablauf. Regeln/Begründungen: **[AGENTS.md](../../../AGENTS.md)**; die Harness-Gesamtsicht: [docs/agent-harness.md](../../../docs/agent-harness.md).
+> Kein Ersatz für die CI-Gates, sondern eine Schicht **davor/darüber** (Feinschliff vor `main`). **Kein Auto-Merge** — der Review liefert Findings, das Mergen bleibt der normale [kubernia](../kubernia/SKILL.md)-Ablauf. Regeln/Begründungen: **[AGENTS.md](../../../AGENTS.md)**; die Harness-Gesamtsicht: [docs/agent-harness.md](../../../docs/agent-harness.md).
 
 ## Was ist „der Diff"?
 
-Die Änderungen des aktuellen Tickets gegen `main` — im kubequest-Worktree-Ablauf also alles auf dem Feature-Branch plus noch Uncommittetes:
+Die Änderungen des aktuellen Tickets gegen `main` — im kubernia-Worktree-Ablauf also alles auf dem Feature-Branch plus noch Uncommittetes:
 
 ```bash
 git diff main --stat        # Überblick: welche Dateien
