@@ -7,5 +7,7 @@
   { "xp": 1200, "name": "Steuermaat", "icon": "☸️" },
   { "xp": 1700, "name": "Navigator",  "icon": "🧭" },
   { "xp": 2300, "name": "Käpt'n",     "icon": "🫡" },
-  { "xp": 3000, "name": "Admiral",    "icon": "🏅" }
+  { "xp": 3000, "name": "Admiral",              "icon": "🏅" },
+  { "xp": 3200, "name": "Kommodore",             "icon": "⭐" },
+  { "xp": 3500, "name": "Flottenkommandant",      "icon": "👑" }
 ]
