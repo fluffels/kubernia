@@ -605,6 +605,29 @@ test("#489 create deployment: gültiger DNS-1123-Name funktioniert weiter (Gegen
   assert.equal(sim.deployments.filter(d => d.name === "web-app").length, 1);
 });
 
+// Bug #811: StatefulSet-Pods zeigten immer "1/1 Running" – unabhängig vom PVC-Status
+test("#811 kubectl get pods: StatefulSet-Pod mit Pending-PVC zeigt Pending, nicht Running", () => {
+  // storageClass "" → statische Bindung, aber kein PV vorhanden → PVC bleibt Pending
+  sim.mergeScenario({ statefulSets: [{ name: "mysql", image: "mysql", replicas: 1, storageClass: "" }] });
+  const pvc = sim.pvcs.find(p => p.name === "data-mysql-0");
+  assert.ok(pvc, "PVC muss angelegt worden sein");
+  assert.equal(pvc!.status, "Pending", "PVC bleibt Pending ohne verfügbares PV");
+  const out = sim.exec("kubectl get pods").output!;
+  assert.match(out, /mysql-0/, "Pod erscheint in der Liste");
+  assert.doesNotMatch(out, /1\/1/, "kein 1/1 Ready bei Pending-PVC");
+  assert.match(out, /Pending/, "Pod-Status muss Pending anzeigen");
+});
+
+test("#811 kubectl get pods: StatefulSet-Pod mit gebundenem PVC zeigt Running (Normalfall)", () => {
+  sim.mergeScenario({ statefulSets: [{ name: "redis", image: "redis", replicas: 1 }] });
+  const pvc = sim.pvcs.find(p => p.name === "data-redis-0");
+  assert.ok(pvc, "PVC muss angelegt worden sein");
+  assert.equal(pvc!.status, "Bound", "Standard-StorageClass mit Provisioner → Bound");
+  const out = sim.exec("kubectl get pods").output!;
+  assert.match(out, /redis-0/, "Pod erscheint in der Liste");
+  assert.match(out, /1\/1.*Running/, "laufender Pod zeigt 1/1 Running");
+});
+
 test("#489 create: auch secret/configmap/serviceaccount lehnen ungültige Namen ab", () => {
   const sec = sim.exec("kubectl create secret generic DB_Zugang --from-literal=pw=geheim123");
   assert.ok(sec.error, "Secret-Name mit Großbuchstaben/'_' abgelehnt");

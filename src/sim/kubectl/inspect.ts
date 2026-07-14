@@ -36,6 +36,13 @@ function aliasMap(entries: { aliases: string[]; render: Renderer }[]): Map<strin
 
 // ===== kubectl get – ein Renderer je Ressourcentyp =====
 
+function statefulPodRow(host: KubectlHost, s: { name: string; volumeClaimName: string; pods: PodInstance[] }, p: PodInstance): (string | number)[] {
+  const ordinal = String(p.name).split("-").pop() ?? "0";
+  const pvcName = s.volumeClaimName + "-" + s.name + "-" + ordinal;
+  const pending = host.pvcs.find(pv => pv.name === pvcName)?.status === "Pending";
+  return [p.name, pending ? "0/1" : "1/1", pending ? "Pending" : "Running", String(p.restarts), host._age(p.created)];
+}
+
 function getPods(host: KubectlHost, t: string[]): string {
   const ns = flagValue(t, "-n") || flagValue(t, "--namespace");
   const allNs = t.includes("-A") || t.includes("--all-namespaces");
@@ -57,9 +64,9 @@ function getPods(host: KubectlHost, t: string[]): string {
     const st = host._podStatus(d);
     for (const p of d.pods) rows.push([p.name, st.ready, st.status, String(st.restarts || p.restarts), host._age(p.created)]);
   }
-  // StatefulSet-Pods (#122): stabile Namen <sts>-0, immer Running/ready.
+  // StatefulSet-Pods: Status aus PVC-Bindung ableiten – Pending wenn kein Volume verfügbar (#811)
   for (const s of host.statefulSets) {
-    for (const p of s.pods) rows.push([p.name, "1/1", "Running", String(p.restarts), host._age(p.created)]);
+    for (const p of s.pods) rows.push(statefulPodRow(host, s, p));
   }
   if (rows.length === 0) return "No resources found in default namespace.";
   return table(["NAME", "READY", "STATUS", "RESTARTS", "AGE"], rows);
