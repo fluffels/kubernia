@@ -86,6 +86,8 @@ export interface WorldSceneFields {
   lighthouse: { x: number; y: number };
   tfPlatform: { x: number; y: number; w: number; h: number };
   doors: Door[];
+  doorSprites: Map<string, Phaser.GameObjects.Image>;
+  doorAnimating: boolean;
   npcSpawns: Spawn[];
   // Cluster→Welt-Sync
   podSlots: Record<string, PodSlot>;

@@ -63,6 +63,8 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   lighthouse!: { x: number; y: number };
   tfPlatform!: { x: number; y: number; w: number; h: number };
   doors!: Door[];
+  doorSprites!: Map<string, Phaser.GameObjects.Image>;
+  doorAnimating!: boolean;
   npcSpawns!: Spawn[];
   // Cluster→Welt-Sync
   podSlots!: Record<string, PodSlot>;
@@ -157,6 +159,8 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     // #426: Anti-Pingpong-Gate aller Region-Warps – leer = alle disarmt; updateWarps
     // armiert jeden Warp, sobald man ihn verlassen und die Lauftaste losgelassen hat.
     this.warpArmed = new Set();
+    this.doorSprites = new Map();
+    this.doorAnimating = false;
 
     // Performance-Budget (#82): Off-screen-Culling + Messung.
     // cullables = statische Deko (Blumen, Gras, Büsche, Steine, Bäume …), die

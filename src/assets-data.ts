@@ -71,6 +71,10 @@ import house_chart from "../assets/pixellab/house_chart.png";
 import door_office from "../assets/pixellab/door_office.png";
 import door_forge from "../assets/pixellab/door_forge.png";
 import door_chart from "../assets/pixellab/door_chart.png";
+// Tür-Offen-Sprites (#840): Stardew-Stil Tür-Animation beim Betreten
+import door_office_open from "../assets/pixellab/door_office_open.png";
+import door_forge_open from "../assets/pixellab/door_forge_open.png";
+import door_chart_open from "../assets/pixellab/door_chart_open.png";
 import ship from "../assets/pixellab/ship.png";
 // Interior-Einrichtung (#187): echte Pixelart statt prozeduraler Ellipsen/Rechtecke
 import porthole from "../assets/pixellab/porthole.png";         // Messing-Bullauge (Schiff)
@@ -219,6 +223,10 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
   { key: "door_office", src: door_office, kind: "plain" },
   { key: "door_forge", src: door_forge, kind: "plain" },
   { key: "door_chart", src: door_chart, kind: "plain" },
+  // Tür-Offen-Sprites (#840): Stardew-Stil Tür-Animation beim Betreten
+  { key: "door_office_open", src: door_office_open, kind: "plain" },
+  { key: "door_forge_open", src: door_forge_open, kind: "plain" },
+  { key: "door_chart_open", src: door_chart_open, kind: "plain" },
   { key: "ship", src: ship, kind: "plain" },
   { key: "tf_floor", src: tf_floor, kind: "plain" },           // Terraform-Plateau-Boden (#672)
   // Schiff-Deck-Tiles (#760): Boden/Reling/Mast für die begehbare Deck-Szene (#758)
