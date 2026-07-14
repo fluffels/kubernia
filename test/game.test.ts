@@ -575,6 +575,29 @@ test("reviewResult: richtig schiebt die Box hoch (max 5), falsch setzt auf 1 zur
   expect(Game.state.review["k1"].box).toBe(5);
 });
 
+test("choiceResult: falsch beantwortet → Box 1 und heute fällig (nicht morgen, #807)", () => {
+  const heute = Game.state.streak.lastDay;
+  Game.ensureReviewItem("choice-id");
+  Game.state.review["choice-id"].box = 3;
+
+  Game.choiceResult("choice-id", false);
+
+  expect(Game.state.review["choice-id"].box).toBe(1);
+  expect(Game.state.review["choice-id"].due).toBe(heute); // NICHT heute + 1
+  expect(Game.state.stats.quizWrong).toBe(1);
+});
+
+test("choiceResult: richtig beantwortet → Box/Fälligkeit unverändert, quizRight gezählt", () => {
+  const heute = Game.state.streak.lastDay;
+  Game.state.review["choice-id2"] = { box: 3, due: heute + 4 };
+
+  Game.choiceResult("choice-id2", true);
+
+  expect(Game.state.review["choice-id2"].box).toBe(3);
+  expect(Game.state.review["choice-id2"].due).toBe(heute + 4);
+  expect(Game.state.stats.quizRight).toBe(1);
+});
+
 test("dueReviewItems: liefert nur fällige Karten, niedrigste Box zuerst", () => {
   const heute = Game.state.streak.lastDay; // today() wurde beim reset gesetzt
   // fällig, hohe Box
