@@ -1,4 +1,4 @@
-/* ===== KubeQuest – WorldScene-Deko & Props (worldscene/scenery.ts) =====
+/* ===== Kubernia – WorldScene-Deko & Props (worldscene/scenery.ts) =====
  * Schritt des WorldScene.ts-Splits (#393). Hier liegt die rein optische Ausstattung
  * der Hafenwelt: gestreute Deko (Blumen, Gras, Büsche/Steine/Laternen via scatter),
  * die statischen Props/Effekte (renderStatics: Schiff, Leuchtturm, Rauch,

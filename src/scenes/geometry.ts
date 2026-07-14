@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Szenen-Geometrie-/Hitbox-Konstanten (scenes/geometry.ts) =====
+/* ===== Kubernia – Szenen-Geometrie-/Hitbox-Konstanten (scenes/geometry.ts) =====
  * #590 (iSAQB Präsentation). EINE Quelle für die Geometrie-/Hitbox-Maße, die vorher
  * über die Szenen verstreut und mehrfach byte-gleich standen: der Sub-Tile-Hitbox-
  * Radius lag als `NPC_HIT_R`/`ROCK_HIT_R`/`BUSH_HIT_R` (WorldScene.ts), `HIT_R`

@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Freigeschaltete Befehlsfamilien fürs gefilterte help (#358) =====
+/* ===== Kubernia – Freigeschaltete Befehlsfamilien fürs gefilterte help (#358) =====
  * Pure, Phaser-/DOM-freie Logik: Welche Befehls*familien* (docker, kubectl, git …)
  * hat der Spieler bei seinem aktuellen Fortschritt schon kennengelernt? Das gefilterte
  * help (im Simulator) listet nur diese – zu Spielbeginn praktisch nur `help` selbst,

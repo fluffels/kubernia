@@ -1,4 +1,4 @@
-/* ===== KubeQuest – WorldScene-Gefahren-RENDERER (worldscene/events.ts) =====
+/* ===== Kubernia – WorldScene-Gefahren-RENDERER (worldscene/events.ts) =====
  * Seit #540 lebt der Gefahren-*Zustand* + die *Zeitachse* szenen-neutral in der Anwendung
  * (src/game/hazards.ts, getaktet aus Game.tick), damit Piraten/Krake/Sturm in JEDER Szene
  * starten und fortschreiten. Dieses Modul ist nur noch die PRÄSENTATION: es registriert einen

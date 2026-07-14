@@ -1,4 +1,4 @@
-/* ===== KubeQuest 3.0 – UI & Quest-Steuerung (Orchestrator/Barrel, #356) =====
+/* ===== Kubernia 3.0 – UI & Quest-Steuerung (Orchestrator/Barrel, #356) =====
  * Das öffentliche UI-Objekt entsteht aus den Domänen-Bündeln unter src/ui/
  * (Dialog/Funkgerät/Quiz/Minispiel/Shop/Logbuch/HUD …); der veränderliche
  * UI-Zustand (this.*) ist hier zentral deklariert, gemeinsame Helfer liegen in

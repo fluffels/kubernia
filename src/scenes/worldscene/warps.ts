@@ -1,4 +1,4 @@
-/* ===== KubeQuest – WorldScene-Warps (worldscene/warps.ts) =====
+/* ===== Kubernia – WorldScene-Warps (worldscene/warps.ts) =====
  * Schritt des WorldScene.ts-Splits (#393). Hier liegt das Übergangs-System der
  * Hauptkarte: Häuser/Schiff betreten (#6) und das Übersetzen auf die Region-Szenen
  * – GitOps-Archipel (#92), Monitoring-Leuchtturm (#111) und Lagerhallen-Viertel
