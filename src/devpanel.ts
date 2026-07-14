@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Dev-/Test-Panel (#325) =====
+/* ===== Kubernia – Dev-/Test-Panel (#325) =====
  * Komfortschicht über die #329-Jump-API: ein klickbares (Maus ODER Tastatur)
  * Panel, mit dem man zu einem beliebigen Quest-/Story-Stand springen und
  * Erststart vs. Zurücksetzen gezielt herstellen kann – statt sich jedes Mal von

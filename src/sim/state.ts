@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Simulator-Zustand & Domänentypen (sim/state.ts) =====
+/* ===== Kubernia – Simulator-Zustand & Domänentypen (sim/state.ts) =====
  * Schritt 1/7 des sim.ts-Datei-Splits (#372, aus Epic #346, ADR 0004).
  *
  * Hier liegt der **gemeinsame Cluster-Zustand** als Typen: alle Interfaces der

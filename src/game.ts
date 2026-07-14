@@ -1,4 +1,4 @@
-/* ===== KubeQuest 3.0 – Spiel-Logik (Orchestrator/Barrel, #392) =====
+/* ===== Kubernia 3.0 – Spiel-Logik (Orchestrator/Barrel, #392) =====
  * Die öffentliche `Game`-Fassade entsteht aus den fokussierten Bündeln unter src/game/
  * (Persistenz/Wirtschaft/Progression/Freischaltungen/Spaced-Repetition); der veränderliche
  * Spielzustand (this.*) ist hier zentral deklariert, gemeinsame Helfer liegen in

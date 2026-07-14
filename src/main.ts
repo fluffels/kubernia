@@ -1,4 +1,4 @@
-/* ===== KubeQuest 3.0 – Start =====
+/* ===== Kubernia 3.0 – Start =====
  * Spielstand laden, Phaser starten, Tastatur verdrahten.
  */
 import Phaser from "phaser";

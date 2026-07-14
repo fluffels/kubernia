@@ -1,4 +1,4 @@
-/* ===== KubeQuest – RBAC-Identität (sim/rbac.ts) =====
+/* ===== Kubernia – RBAC-Identität (sim/rbac.ts) =====
  * Die EINE Stelle, die entscheidet, WORÜBER eine Role/ClusterRole bzw. ein RoleBinding/
  * ClusterRoleBinding identifiziert wird (#609, konzeptueller Kern hinter #578).
  *
