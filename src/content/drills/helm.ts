@@ -4,7 +4,7 @@ import type { DrillTask } from "./shared";
 
 export const HELM_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   "helm-install": sim => {
-    if (!sim.helmRepos.includes("bitnami")) sim.exec("helm repo add bitnami https://charts.bitnami.com/bitnami");
+    if (!sim.helmRepos.some(r => r.name === "bitnami")) sim.exec("helm repo add bitnami https://charts.bitnami.com/bitnami");
     let rel = pick(NAMES);
     while (sim.releases.some(r => r.name === rel)) rel = pick(NAMES) + rnd(2, 9);
     const chart = pick(["nginx", "redis"]);

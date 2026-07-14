@@ -131,6 +131,34 @@ test("helm template: unbekanntes Chart meckert (Negativfall)", () => {
   assert.ok(none.error && /Welches Chart/.test(none.output!), "template ohne Argument meckert");
 });
 
+/* ---------- helm repo: URL korrekt speichern + anzeigen (#806) ---------- */
+
+test("helm repo list zeigt die beim 'add' angegebene URL – nicht eine erfundene bitnami-URL", () => {
+  sim.exec("helm repo add meinrepo https://meinrepo.example.com");
+  const out = sim.exec("helm repo list").output!;
+  assert.match(out, /https:\/\/meinrepo\.example\.com/, "eingetragene URL muss erscheinen");
+  assert.doesNotMatch(out, /charts\.bitnami\.com\/meinrepo/, "erfundene bitnami-URL darf NICHT erscheinen");
+});
+
+test("helm repo list: mehrere Repos zeigen je ihre eigene URL (Negativfall: keine Verwechslung)", () => {
+  sim.exec("helm repo add bitnami https://charts.bitnami.com/bitnami");
+  sim.exec("helm repo add jetstack https://charts.jetstack.io");
+  const out = sim.exec("helm repo list").output!;
+  assert.match(out, /bitnami.*https:\/\/charts\.bitnami\.com\/bitnami/s);
+  assert.match(out, /jetstack.*https:\/\/charts\.jetstack\.io/s);
+  // Die jetstack-Zeile darf NICHT die bitnami-URL enthalten
+  const lines = out.split("\n");
+  const jetsLine = lines.find(l => l.includes("jetstack"))!;
+  assert.doesNotMatch(jetsLine, /bitnami/, "jetstack-Zeile enthält nicht die bitnami-URL");
+});
+
+test("snapshot/restore erhält Repo-URLs", () => {
+  sim.exec("helm repo add custom https://helm.custom.io/charts");
+  const restored = new KQSim(JSON.parse(JSON.stringify(sim.snapshot())));
+  const out = restored.exec("helm repo list").output!;
+  assert.match(out, /https:\/\/helm\.custom\.io\/charts/, "URL bleibt nach Snapshot/Restore erhalten");
+});
+
 test("snapshot/restore erhält selbst gebaute Charts", () => {
   sim.exec("helm create funkdienst");
   sim.exec("helm package funkdienst");

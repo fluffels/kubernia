@@ -12,7 +12,7 @@ import type {
   Broken, PodInstance, Deployment, ServiceRes, IngressRes, NetworkPolicyRes,
   Secret, ConfigMap, ClusterNode, Container, Release,
   Chart, TfResource, TfProvider, TfModule, TfBackend, TfOutput, GitCommit, GitConflict, GitPending,
-  Pipeline, CiDeploy, ArgoApp, ApplyEffect,
+  Pipeline, CiDeploy, ArgoApp, ApplyEffect, HelmRepo,
   ServiceMonitorRes, PrometheusRuleRes, GrafanaDatasourceRes, GrafanaDashboardRes, StatefulSetRes, PvcRes,
   PvRes, StorageClassRes, VolumeSnapshotRes, S3Bucket, ServiceAccountRes, RoleRes,
   RoleBindingRes, PodSecurityLevel, PodStatus, NodeMetrics,
@@ -219,7 +219,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     roleBindings!: RoleBindingRes[];   // RoleBindings UND ClusterRoleBindings (per .cluster)
     podSecurity!: PodSecurityLevel;    // durchgesetzte Pod-Security-Stufe des default-Namespace
     argoApps!: ArgoApp[];
-    helmRepos!: string[];
+    helmRepos!: HelmRepo[];
     releases!: Release[];
     charts!: Chart[];
     tf!: { initialized: boolean; applied: boolean; resources: TfResource[]; providers: TfProvider[]; modules: TfModule[]; backend: TfBackend | null; outputs: TfOutput[]; locked: boolean; lockHolder?: string };
@@ -350,7 +350,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     }
 
     _resetHelm(sc: Scenario) {
-      this.helmRepos = (sc.helmRepos || []).slice();
+      this.helmRepos = (sc.helmRepos || []).map(r => typeof r === "string" ? { name: r, url: "" } : { name: r.name, url: r.url });
       this.releases = (sc.releases || []).map(r => buildRelease(r));
       this.charts = (sc.charts || []).map(c => buildChart(c));
     }
@@ -723,8 +723,9 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     }
 
     _mergeHelm(sc: Scenario) {
-      for (const repo of sc.helmRepos || []) {
-        if (!this.helmRepos.includes(repo)) this.helmRepos.push(repo);
+      for (const entry of sc.helmRepos || []) {
+        const repo: HelmRepo = typeof entry === "string" ? { name: entry, url: "" } : { name: entry.name, url: entry.url };
+        if (!this.helmRepos.some(r => r.name === repo.name)) this.helmRepos.push(repo);
       }
       for (const c of sc.charts || []) {
         if (!this.charts.some(x => x.name === c.name)) this.charts.push(buildChart(c));
@@ -795,7 +796,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
         roleBindings: this.roleBindings.map(b => ({ name: b.name, cluster: b.cluster, roleRef: { kind: b.roleRef.kind, name: b.roleRef.name }, subjects: b.subjects.map(s => Object.assign({}, s)) })),
         podSecurity: this.podSecurity,
         argoApps: this.argoApps.map(a => cloneArgoApp(a)),
-        helmRepos: this.helmRepos.slice(),
+        helmRepos: this.helmRepos.map(r => ({ name: r.name, url: r.url })),
         releases: this.releases.map(r => ({
           name: r.name, chart: r.chart, revision: r.revision, depName: r.depName,
           history: r.history.map(h => Object.assign({}, h)),
