@@ -68,6 +68,18 @@ updates:
       prefix-development: "chore(deps-dev)"
     labels:
       - "dependencies"
+    # #847: typescript-Major (>=7) vorübergehend NICHT vorschlagen. Der native TS-7-
+    # Compiler-Port wird von KEINEM veröffentlichten typescript-eslint unterstützt
+    # (harter Peer `typescript <6.1.0`; @typescript-eslint/typescript-estree crasht mit
+    # TS 7 zur Laufzeit → der Lint-Gate wäre tot). Ohne dieses ignore öffnet Dependabot
+    # den TS-7-Major-Bump wöchentlich als dauerhaft roten, nicht mergebaren PR.
+    # ⚠️ KEIN „ignore und vergessen": #847 bleibt als Tracker offen UND der Wächter
+    # `npm run check:tseslint-ts7` (CI-Job `ts7-readiness`) alarmiert aktiv, sobald
+    # typescript-eslint TS 7 zulässt. DANN: diesen ignore-Eintrag entfernen, `typescript`
+    # + `typescript-eslint` koordiniert hochziehen, TypeCheck+Lint grün, #847 schließen.
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # --- GitHub-Actions in den Workflows aktuell halten (verwandt mit #398) ---
   # Eine Gruppe über ALLE Action-Updates (auch major): Action-Bumps sind klein und
