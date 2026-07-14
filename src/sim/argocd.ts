@@ -1,4 +1,4 @@
-/* ===== KubeQuest – argocd-Befehle (sim/argocd.ts) =====
+/* ===== Kubernia – argocd-Befehle (sim/argocd.ts) =====
  * Schritt 7/7 (letzter) des sim.ts-Datei-Splits (#378, aus Epic #346, ADR 0004).
  * Danach ist `sim.ts` ein schlankes Barrel + der Sim-Kern (State/Dispatch/
  * Observability/glab), aber keine Befehlsfamilie mehr.

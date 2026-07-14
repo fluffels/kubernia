@@ -1,4 +1,4 @@
-/* ===== KubeQuest – kubectl Security (sim/kubectl/security.ts) =====
+/* ===== Kubernia – kubectl Security (sim/kubectl/security.ts) =====
  * RBAC-Auswertung (#126) + Pod-Security-Admission (#128): die beiden Sicherheits-
  * Mechaniken der kubectl-Familie an EINEM Ort.
  *  - `kubectl auth can-i` (RBAC): `subjectKeyOf`/`asKey`/`canI` + `kubectlAuth`.

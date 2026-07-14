@@ -1,4 +1,4 @@
-/* ===== KubeQuest – glab/CI (sim/glab.ts) =====
+/* ===== Kubernia – glab/CI (sim/glab.ts) =====
  * Folge zum sim.ts-Datei-Split (Epic #346, ADR 0004): die letzte kohärente
  * Nicht-Befehls-Familie, die nach den 7 Befehls-Splits (#372–#378) + der
  * Observability-Auslagerung (#384) noch im Sim-Kern lag (#385).

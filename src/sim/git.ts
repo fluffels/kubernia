@@ -1,4 +1,4 @@
-/* ===== KubeQuest – git-Befehle (sim/git.ts) =====
+/* ===== Kubernia – git-Befehle (sim/git.ts) =====
  * Schritt 6/7 des sim.ts-Datei-Splits (#377, aus Epic #346, ADR 0004).
  *
  * Hier liegt die komplette `git`-Befehlsfamilie (init/status/add/commit/log/

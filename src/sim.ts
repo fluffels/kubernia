@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Terminal-Simulator =====
+/* ===== Kubernia – Terminal-Simulator =====
  * Simuliert einen kleinen Kubernetes-Cluster samt Docker, Helm und Terraform.
  * Kein echtes Cluster nötig – aber die Befehle und Ausgaben fühlen sich echt an.
  */

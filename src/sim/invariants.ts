@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Cluster-Invarianten (sim/invariants.ts) =====
+/* ===== Kubernia – Cluster-Invarianten (sim/invariants.ts) =====
  * Die EINE Quelle der Wahrheit dafür, was ein *legaler* `ClusterState` ist (#478,
  * taktisches DDD aus der arc42-Analyse). Bisher waren die Zustandsregeln über die
  * Befehlsfamilien (docker/kubectl/helm …) verstreut – ein neuer Sim-Befehl konnte
