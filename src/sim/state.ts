@@ -182,6 +182,11 @@ export interface HistoryEntry {
   revision: number;
   replicas: number;
 }
+/** Ein konfiguriertes Helm-Repository (Name + Chart-Index-URL). */
+export interface HelmRepo {
+  name: string;
+  url: string;
+}
 export interface Release {
   name: string;
   chart: string;
@@ -583,7 +588,7 @@ export interface Scenario {
   roleBindings?: Array<{ name: string; cluster?: boolean; roleRef: { kind: "Role" | "ClusterRole"; name: string }; subjects: RbacSubject[] }>;
   podSecurity?: PodSecurityLevel;
   argoApps?: ArgoApp[];
-  helmRepos?: string[];
+  helmRepos?: Array<HelmRepo | string>; // string = Backwards-Compat (alte Spielstände ohne URL)
   releases?: Array<{ name: string; chart: string; revision: number; depName: string; history?: HistoryEntry[] }>;
   charts?: Array<{ name: string; version?: string; packaged?: boolean }>;
   tfInitialized?: boolean;
@@ -647,7 +652,7 @@ export interface ClusterState {
   roleBindings: RoleBindingRes[];
   podSecurity: PodSecurityLevel;
   argoApps: ArgoApp[];
-  helmRepos: string[];
+  helmRepos: HelmRepo[];
   releases: Release[];
   charts: Chart[];
   tf: { initialized: boolean; applied: boolean; resources: TfResource[]; providers: TfProvider[]; modules: TfModule[]; backend: TfBackend | null; outputs: TfOutput[]; locked: boolean; lockHolder?: string };

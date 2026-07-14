@@ -20,7 +20,7 @@
  * Phaser-frei (pure Domäne): die geteilten Ausgabe-/Pod-Namen-Helfer kommen aus
  * ./util, die Domänentypen aus ./state – kein Rückimport nach sim.ts (kein Zyklus).
  */
-import type { ClusterState, Deployment, ServiceRes, Broken } from "./state";
+import type { ClusterState, Deployment, ServiceRes, Broken, HelmRepo } from "./state";
 import { table } from "./util";
 import { addDeployment, removeDeployment, scaleDeployment } from "./workload";
 
@@ -61,18 +61,18 @@ function helmRepo(host: HelmHost, t: string[]): string {
   if (action === "add") {
     const name = t[3], url = t[4];
     if (!name || !url) return host._err("helm repo add: Name und URL fehlen.", "z.B. 'helm repo add bitnami https://charts.bitnami.com/bitnami'");
-    if (!host.helmRepos.includes(name)) host.helmRepos.push(name);
+    if (!host.helmRepos.some((r: HelmRepo) => r.name === name)) host.helmRepos.push({ name, url });
     return '"' + name + '" has been added to your repositories';
   }
   if (action === "update") {
     if (host.helmRepos.length === 0) return host._err("Error: no repositories found.", "Erst ein Repo hinzufügen: 'helm repo add ...'");
     return "Hang tight while we grab the latest from your chart repositories...\n" +
-      host.helmRepos.map(r => '...Successfully got an update from the "' + r + '" chart repository').join("\n") +
+      host.helmRepos.map((r: HelmRepo) => '...Successfully got an update from the "' + r.name + '" chart repository').join("\n") +
       "\nUpdate Complete. ⎈Happy Helming!⎈";
   }
   if (action === "list") {
     if (host.helmRepos.length === 0) return "Error: no repositories to show";
-    return table(["NAME", "URL"], host.helmRepos.map(r => [r, "https://charts.bitnami.com/" + r]));
+    return table(["NAME", "URL"], host.helmRepos.map((r: HelmRepo) => [r.name, r.url]));
   }
   return host._err("helm repo: unbekannte Aktion '" + (action || "") + "'");
 }
@@ -260,7 +260,7 @@ function helmInstall(host: HelmHost, t: string[], raw: string): string {
   const isLocal = chart.startsWith(".") || chart.startsWith("/") || host.charts.some(c => c.name === localName);
   if (isLocal) {
     if (!host.charts.some(c => c.name === localName)) return host._err('Error: path "' + chart + '" not found', "Erst mit 'helm create " + localName + "' ein Chart anlegen – oder den Pfad prüfen.");
-  } else if (chart.includes("/") && !host.helmRepos.includes(chart.split("/")[0])) {
+  } else if (chart.includes("/") && !host.helmRepos.some((r: HelmRepo) => r.name === chart.split("/")[0])) {
     return host._err("Error: repo " + chart.split("/")[0] + " not found", "Erst 'helm repo add ...' ausführen.");
   }
   if (host.releases.some(r => r.name === release)) return host._err("Error: INSTALLATION FAILED: cannot re-use a name that is still in use", "Der Release-Name ist schon vergeben. Nimm 'helm upgrade' oder einen anderen Namen.");
