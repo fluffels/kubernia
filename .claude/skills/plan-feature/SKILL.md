@@ -1,6 +1,6 @@
 ---
 name: plan-feature
-description: Plant ein Feature oder Ticket für kubequest GRÜNDLICH, bevor eine Zeile Code fällt — auf dem stärksten Modell mit hohem Reasoning (Opus 4.8), gemäß der Konvention „Planung stark, Umsetzung schnell" (#741). Erzeugt einen konkreten, umsetzbaren Plan (Ziel, betroffene Dateien/Schichten, Schritte, Tests, Risiken/Trade-offs, Stardew-Scope-Check) und übergibt danach an die normale Umsetzung. Auslösen bei "plane ein Feature", "plane das Ticket", "mach mir einen Plan", "wie setze ich #X um", "Umsetzungsplan", "plan feature", oder wenn vor dem Coden erst durchdacht werden soll.
+description: Plant ein Feature oder Ticket für kubernia GRÜNDLICH, bevor eine Zeile Code fällt — auf dem stärksten Modell mit hohem Reasoning (Opus 4.8), gemäß der Konvention „Planung stark, Umsetzung schnell" (#741). Erzeugt einen konkreten, umsetzbaren Plan (Ziel, betroffene Dateien/Schichten, Schritte, Tests, Risiken/Trade-offs, Stardew-Scope-Check) und übergibt danach an die normale Umsetzung. Auslösen bei "plane ein Feature", "plane das Ticket", "mach mir einen Plan", "wie setze ich #X um", "Umsetzungsplan", "plan feature", oder wenn vor dem Coden erst durchdacht werden soll.
 model: claude-opus-4-8
 effort: high
 ---
@@ -11,7 +11,7 @@ Dieser Skill ist die **Planungsphase** der Konvention „Planung stark, Umsetzun
 
 > ⚠️ Die feste Versions-ID `claude-opus-4-8` im Frontmatter veraltet mit dem nächsten Release (ein Alias wie `opus` zöge automatisch mit, ist hier aber bewusst gepinnt) — gelegentlich nachziehen. Für die **Umsetzung** wird hier **bewusst kein** Modellname festgenagelt: „schnelles Modell" bleibt tool-/versionsneutral (dasselbe Prinzip wie die portable Konvention in AGENTS.md).
 
-> ⚠️ **Nur planen, nicht bauen.** Dieser Skill schreibt **keinen** Produktionscode, öffnet **keinen** PR und legt **keinen** Worktree an. Er liefert einen Plan, den danach der normale Ablauf (bzw. der [`kubequest`-Skill](../kubequest/SKILL.md)) umsetzt. Nach dem Skill fällt die Session automatisch aufs normale Modell zurück.
+> ⚠️ **Nur planen, nicht bauen.** Dieser Skill schreibt **keinen** Produktionscode, öffnet **keinen** PR und legt **keinen** Worktree an. Er liefert einen Plan, den danach der normale Ablauf (bzw. der [`kubernia`-Skill](../kubernia/SKILL.md)) umsetzt. Nach dem Skill fällt die Session automatisch aufs normale Modell zurück.
 
 ## Vorher lesen (Kontext)
 
@@ -38,4 +38,4 @@ Gib einen kompakten, konkreten Plan aus — kein Fließtext-Essay:
 
 ## Danach
 
-Plan vorlegen. Bei einer echten Design-Weiche per `AskUserQuestion` abstimmen. Wenn der Plan steht, in die Umsetzung übergehen — die läuft auf dem normalen (schnellen) Modell, z.B. über den [`kubequest`-Skill](../kubequest/SKILL.md) (claimen → Worktree → coden → EIN PR bis Merge).
+Plan vorlegen. Bei einer echten Design-Weiche per `AskUserQuestion` abstimmen. Wenn der Plan steht, in die Umsetzung übergehen — die läuft auf dem normalen (schnellen) Modell, z.B. über den [`kubernia`-Skill](../kubernia/SKILL.md) (claimen → Worktree → coden → EIN PR bis Merge).
