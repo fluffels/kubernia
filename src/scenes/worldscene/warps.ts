@@ -55,6 +55,23 @@ export function enterRegion(scene: WorldSceneLike, warp: RegionWarp) {
   scene.scene.sleep();
 }
 
+/** #840: Tür-Animation beim Betreten (Stardew-Stil): Textur auf offen wechseln,
+ *  dann nach kurzem Delay enterInterior aufrufen. Guard über doorAnimating verhindert
+ *  doppeltes Auslösen während das Delay läuft. */
+export function openDoorAndEnter(scene: WorldSceneLike, door: Door) {
+  if (scene.doorAnimating) return;
+  scene.doorAnimating = true;
+  const sprite = scene.doorSprites.get(`${door.tx},${door.ty}`);
+  const openTex = door.theme ? `door_${door.theme}_open` : undefined;
+  if (sprite && openTex && scene.textures.exists(openTex)) {
+    sprite.setTexture(openTex);
+  }
+  scene.time.delayedCall(180, () => {
+    scene.doorAnimating = false;
+    enterInterior(scene, door);
+  });
+}
+
 /** Pro Frame aus update(): die Warp-Gates „scharf machen" und bei Betreten einer
  *  Tür-/Warp-Kachel die Zielszene starten. Gibt true zurück, wenn ein
  *  Szenenwechsel ausgelöst wurde – dann überspringt update() den Rest des Frames
@@ -83,7 +100,7 @@ export function updateWarps(scene: WorldSceneLike, blocked: boolean): boolean {
   // überspringen). scene.doors kommt aus dem Tiled-Objektlayer (Datenpfad) bzw.
   // den Code-Eingängen (Default) – findDoorAt prüft generisch dagegen.
   const door = findDoorAt(scene.doors as Door[], pl.x, pl.y);
-  if (door) { enterInterior(scene, door); return true; }
+  if (door) { openDoorAndEnter(scene, door); return true; }
 
   // Region-Warp betreten (scharf + auf der Trigger-Kachel)? -> Zielszene starten.
   const warp = triggeredWarp(scene.warpArmed, warps, pl.x, pl.y);

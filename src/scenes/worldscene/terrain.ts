@@ -190,6 +190,7 @@ export function makeDoor(scene: WorldSceneLike, tx: number, ty: number, theme?: 
     const src = scene.textures.get(tex).getSourceImage() as { height: number };
     img.setScale(DOOR_WORLD_HEIGHT / src.height);   // Fußlinie bündig, Höhe vereinheitlicht
     img.setDepth(baseY + 0.5);
+    scene.doorSprites.set(`${tx},${ty}`, img);
     return;
   }
   // Fallback: schlichte prozedurale Tür (unbekanntes Thema / Asset fehlt)
