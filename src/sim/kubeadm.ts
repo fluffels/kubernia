@@ -1,4 +1,4 @@
-/* ===== KubeQuest – kubeadm-Befehlsfamilie (sim/kubeadm.ts) =====
+/* ===== Kubernia – kubeadm-Befehlsfamilie (sim/kubeadm.ts) =====
  * Das Sim-Fundament des Aufbau-Bogens (#460, Lernbogen #239 „Cluster nach Sturm selbst
  * neu aufbauen", Spät-Spiel). Alles in der Spielwelt simuliert – kein echtes kind/minikube.
  *

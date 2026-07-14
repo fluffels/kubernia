@@ -1,4 +1,4 @@
-/* ===== KubeQuest – kubectl Workload-Ops (sim/kubectl/ops.ts) =====
+/* ===== Kubernia – kubectl Workload-Ops (sim/kubectl/ops.ts) =====
  * Befehle, die an einem BEREITS bestehenden Workload drehen (statt Ressourcen
  * anzulegen/zu löschen): `scale`, `expose`, `set image|env|resources`, `rollout
  * restart`. Inklusive der set-Unterhelfer (`kubectlSetEnv`/`kubectlSetImage`/

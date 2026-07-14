@@ -1,4 +1,4 @@
-/* ===== KubeQuest – kubectl-Befehlsfamilie (sim/kubectl.ts) =====
+/* ===== Kubernia – kubectl-Befehlsfamilie (sim/kubectl.ts) =====
  * Dünner Dispatch-Barrel der kompletten `kubectl`-Familie. Die eigentliche Logik
  * liegt seit #397 in fokussierten Unterfamilien unter src/sim/kubectl/ (analog zum
  * sim.ts-Split #346 und zum WorldScene.ts-Split #393) – kleine, je-für-sich testbare
