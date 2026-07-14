@@ -243,7 +243,7 @@ export function renderGround(scene: WorldSceneLike) {
       } else if (v === 96 || v === 97 || v === 98) {                  // Stein-Kai innen -> voller Stein
         rt.stamp("kai", WANG[15], x * T, y * T, topLeft);
       } else if (has(x, y, 3)) {                                      // Gras/Weg-Ebene
-        rt.stamp("path", WANG[corners(x, y, 3)], x * T, y * T, topLeft);
+        rt.stamp("path", WANG[corners(x, y, 3) ^ 15], x * T, y * T, topLeft);
       } else {                                                        // Sand/Gras-Ebene
         rt.stamp("meadow", WANG[corners(x, y, 2)], x * T, y * T, topLeft);
       }

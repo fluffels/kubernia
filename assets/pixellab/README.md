@@ -18,7 +18,7 @@ Verkettet über `lower_base_tile_id`, damit gemeinsame Terrains pixelgleich ansc
 |---|---|---|---|
 | `water-sand` (coast) | Wasser→Sand | 6e493a2f-96c4-4f87-94cd-4e09440c242b | water c50ea16a… → sand 591e7962… (neu generiert #866: `flat shading`, kein Klippeneffekt) |
 | `sand-grass` (meadow) | Sand→Gras | 6d5d549e-0248-4b77-9c66-ba5aebdbbe7f | sand 591e7962… → grass 2a6e0d3d… (neu generiert #866: `flat shading`) |
-| `grass-dirt` (path) | Gras→Weg | 2ee27044-f79e-4854-999f-b0d9d02c087c | grass 2a6e0d3d… → dirt e8734988… (neu generiert #866: `flat shading`, lower=Gras/upper=Weg) |
+| `grass-dirt` (path) | Gras→Weg | f5327de8-ac7b-4f0f-91db-7665ece32284 | dirt e8734988… → grass 2a6e0d3d… (neu generiert #866: lower=Weg/upper=Gras, Gras wächst über Wegkante; `^ 15` in terrain.ts invertiert Eck-Code) |
 | `water-stone` (kai) | Wasser→Stein | 50e3123e-5605-4b8f-be91-2b358b58ea81 | water c50ea16a… → stone 83b435ec… (neu generiert #866: `flat shading`) |
 | `water-wood` (dock) | Wasser→Holz | 9791ecec-830d-4135-8d90-85bdad4da5a4 | water c50ea16a… → wood 9e0b8efc… (neu generiert #866: `flat shading`) |
 
