@@ -1,4 +1,4 @@
-/* ===== KubeQuest – WorldScene-System-Typ (worldscene/types.ts) =====
+/* ===== Kubernia – WorldScene-System-Typ (worldscene/types.ts) =====
  * Schritt des WorldScene.ts-Splits (#393, analog scenes.ts-Split #345): die großen
  * Spiel-Systeme der World-Szene (Gefahren-Events, Cluster-Sync, Warps, Terrain,
  * Deko) liegen als eigene, fokussierte Module unter src/scenes/worldscene/ und

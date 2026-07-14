@@ -1,4 +1,4 @@
-/* ===== KubeQuest – help-Hilfetext: Katalog + gefiltertes Rendering (#358/#359) =====
+/* ===== Kubernia – help-Hilfetext: Katalog + gefiltertes Rendering (#358/#359) =====
  * Reine Daten + Render-Funktion für die `help`-Ausgabe des Simulator-Terminals.
  * Bewusst ein eigenes Modul (kein Typ-Import → kein Zyklus, hält den Simulator-Kern
  * unter dem God-File-Budget #390): der Simulator delegiert sein `help` nur hierher,

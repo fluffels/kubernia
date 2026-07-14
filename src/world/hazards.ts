@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Gefahren-Entscheidungskern (hazards.ts) =====
+/* ===== Kubernia – Gefahren-Entscheidungskern (hazards.ts) =====
  * Pure Domäne (kein Phaser/UI/Game), damit die *spielentscheidende* Logik der
  * Zufalls-Gefahren (Piraten/Krake/Sturm) im Node-Test prüfbar ist (#512). Die
  * Präsentation (`src/scenes/worldscene/events.ts`) führt nur noch die Effekte

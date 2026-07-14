@@ -1,4 +1,4 @@
-/* ===== KubeQuest – generische Region-Szene (scenes/RegionScene.ts) =====
+/* ===== Kubernia – generische Region-Szene (scenes/RegionScene.ts) =====
  * #427 (Kind von #415, Block „Skalierungs-Enabler"). EINE datengetriebene Phaser-Szene
  * für alle Nachbar-Regionen (GitOps-Archipel #92, Monitoring-Leuchtturm #111,
  * Lagerhallen-Viertel #124) – vorher drei zu ~90% identische Klassen (ArchipelScene/

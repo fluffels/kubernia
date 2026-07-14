@@ -1,4 +1,4 @@
-/* ===== KubeQuest – WorldScene-Terrain (worldscene/terrain.ts) =====
+/* ===== Kubernia – WorldScene-Terrain (worldscene/terrain.ts) =====
  * Schritt des WorldScene.ts-Splits (#393). Hier wird die HAFEN-spezifische Welt
  * aufgebaut: die sichtbaren Hafen-Objekte/Gebäude/Warpschilder setzen
  * (placeHarborObjects), die Gebäudetüren begehbar schneiden (carveDoors/makeDoor)
