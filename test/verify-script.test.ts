@@ -36,9 +36,10 @@ const BUILD_DEPENDENT_GATES = new Set(["check:bundle"]);
 // Netz-/nicht-deterministische Gates, die bewusst NICHT in der hermetischen,
 // offline-fähigen `verify`-Kette laufen dürfen: #610 check:doctickets gleicht die
 // offen-markierten Roadmap-Tickets gegen den echten `gh issue`-Status ab — das
-// braucht Netz + Token und ist nicht deterministisch. Es läuft als eigener,
-// non-blocking CI-Job (alarmierend) + lokal auf Zuruf, nicht als verify-Gate.
-const NETWORK_DEPENDENT_GATES = new Set(["check:doctickets"]);
+// braucht Netz + Token und ist nicht deterministisch. #847 check:tseslint-ts7 fragt
+// die npm-Registry, ob typescript-eslint schon TS 7 zulässt (braucht Netz). Beide
+// laufen als eigener, non-blocking CI-Job (alarmierend) + lokal auf Zuruf.
+const NETWORK_DEPENDENT_GATES = new Set(["check:doctickets", "check:tseslint-ts7"]);
 
 // Bewusst WEICHE, NICHT-blockierende `check:*` — keine Gates, sondern nur berichtende
 // CI-Artefakte, die daher AUSDRÜCKLICH NICHT in die `verify`-Kette gehören. #612:
@@ -116,8 +117,14 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
       // Aber es MUSS ein package.json-Skript sein (existiert & wird gepflegt).
       expect(scripts[gate], `"${gate}" muss als package.json-Skript existieren`).toBeTruthy();
       // ... und als eigener Schritt in der CI laufen (sonst alarmiert es nie automatisch).
+      // Generisch je Gate: entweder `npm run <gate>` ODER der direkte Skript-Aufruf aus
+      // dem package.json-Kommando (Muster doctickets: `node scripts/check-doc-tickets.mjs`).
       const ci = readRepo(".github/workflows/ci.yml");
-      expect(ci.includes(`scripts/check-doc-tickets.mjs`) || needle.test(ci)).toBe(true);
+      const scriptFile = scripts[gate].match(/scripts\/[\w.-]+\.mjs/)?.[0];
+      expect(
+        needle.test(ci) || (scriptFile != null && ci.includes(scriptFile)),
+        `"${gate}" muss als eigener CI-Schritt laufen (npm run ${gate} oder ${scriptFile ?? "sein Skript"})`,
+      ).toBe(true);
     }
   });
 

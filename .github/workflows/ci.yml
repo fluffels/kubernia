@@ -171,6 +171,32 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/check-doc-tickets.mjs
 
+  # TS-7-Freigabe-Wächter (#847): das TypeScript-7-Upgrade ist upstream blockiert —
+  # kein veröffentlichtes @typescript-eslint/typescript-estree unterstützt den nativen
+  # TS-7-Compiler-Port (harter Peer typescript <6.1.0, crasht sonst zur Laufzeit). Der
+  # TS-Major ist darum in .github/dependabot.yml ge-ignore-t und #847 bleibt als Tracker
+  # offen. Damit der stille ignore NICHT vergessen wird, fragt dieser Wächter die
+  # npm-Registry nach dem estree-Peer und ALARMIERT (roter, aber non-blocking Schritt),
+  # sobald er eine 7.x-Version zulässt → dann ignore raus + koordiniert upgraden + #847 zu.
+  # BEWUSST NICHT in der hermetischen `verify`-Kette (Netz, nicht deterministisch) und
+  # continue-on-error (ein Alarm darf keinen fremden PR rot-blocken, ⚠️-Anti-Pattern #395);
+  # der rote Schritt bleibt als Signal sichtbar. Kein npm ci nötig (nur Node-Builtins + fetch).
+  ts7-readiness:
+    name: TS-7-Freigabe (typescript-eslint-Peer, #847)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Node einrichten
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: estree-Peer gegen TS 7 prüfen (#847)
+        continue-on-error: true
+        run: node scripts/check-tseslint-ts7.mjs
+
   # Duplikations-Report (#612): jscpd als WEICHES, NICHT-BLOCKIERENDES CI-Artefakt.
   # Hintergrund (iSAQB-Runde 3, docs/architektur-analyse-2026-07-03-iSAQB.md): die
   # SSOT-Umgehungen (#534/#577/#578, _resetNodes/#596) sind die einzige Regressionsklasse
