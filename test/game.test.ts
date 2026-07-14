@@ -614,6 +614,25 @@ test("dueReviewItems: liefert nur fällige Karten, niedrigste Box zuerst", () =>
   expect(due.indexOf("zuerst")).toBeLessThan(due.indexOf("spaeter")); // Sortierung
 });
 
+test("#810 dueReviewItems: deckelt auf MAX_REVIEW_SESSION ohne explizites Limit", () => {
+  // Red-Green: mehr fällige Karten als Session-Limit -> Ausgabe muss begrenzt sein
+  const heute = Game.state.streak.lastDay;
+  for (let i = 0; i < 15; i++) {
+    Game.state.review[`karte-${i}`] = { box: 1, due: heute };
+  }
+  const due = Game.dueReviewItems(); // kein explizites Limit -> MAX_REVIEW_SESSION greift
+  expect(due.length).toBe(10);       // genau MAX_REVIEW_SESSION, nicht mehr
+});
+
+test("#810 dueReviewItems: explizites Limit überschreibt MAX_REVIEW_SESSION", () => {
+  const heute = Game.state.streak.lastDay;
+  for (let i = 0; i < 15; i++) {
+    Game.state.review[`karte-${i}`] = { box: 1, due: heute };
+  }
+  expect(Game.dueReviewItems(5).length).toBe(5);   // explizit kleiner
+  expect(Game.dueReviewItems(50).length).toBe(15); // explizit größer als Bestand
+});
+
 test("freeReviewItems: liefert ALLE Karten (auch nicht fällige) und ändert den SR-Plan nicht", () => {
   const heute = Game.state.streak.lastDay;
   Game.state.review["faellig"] = { box: 1, due: heute };

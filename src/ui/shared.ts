@@ -95,4 +95,5 @@ for (const item of KQContent.SHOP as UIShopItem[]) {
 }
 
 
+export { MAX_REVIEW_SESSION } from "../game/shared";
 export { $, esc, NPCS, SMALLTALK, CMD_MAX_ATTEMPTS, shuffled, masteryBadge, sheetImgs, assets };
