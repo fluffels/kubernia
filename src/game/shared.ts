@@ -228,6 +228,12 @@ export const ABBREV_EARN_THRESHOLD = 20;
  *  nicht importieren, daher muss die ID dort als passender Literal-String stehen. */
 export const CMD_HISTORY_ITEM_ID = "befehlshistorie";
 
+/** Maximale Kartenzahl EINER Review-Session (#810): bewusst begrenzt, damit eine
+ *  lange Pause mit 30+ fälligen Karten den Spieler nicht überrollt. Die Session-Grenze
+ *  gilt für `dueReviewItems` und `freeReviewItems`; die UI zeigt an, wenn danach noch
+ *  weitere Karten ausstehen – das Gate feuert beim nächsten Quest-Anfang erneut. */
+export const MAX_REVIEW_SESSION = 10;
+
 /** Tages-Index (Tage seit der Unix-Epoche) als SSOT für die persistierte Leitner-Fälligkeit
  *  (`due`) und den Streak (`lastDay`). Bewusst ein **UTC**-Tageszähler (kein
  *  `getTimezoneOffset()` mehr, #587): ein lokal-zeitzonengebundener Zähler verschob bei

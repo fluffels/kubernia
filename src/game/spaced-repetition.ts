@@ -4,7 +4,7 @@
 import { KQContent } from "../content";
 import { krallePracticeMilestone, kralleClawAside } from "../hud/kralle";
 import { nextRandom } from "../core/rng";
-import { part, today, pickWeighted } from "./shared";
+import { part, today, pickWeighted, MAX_REVIEW_SESSION } from "./shared";
 
 const BOX_INTERVALS: Record<number, number> = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16 };
 
@@ -96,7 +96,7 @@ export const spacedRepetitionBundle = part({
       if (info.due <= t) due.push({ id, box: info.box });
     }
     due.sort((a, b) => a.box - b.box);
-    return due.slice(0, limit || 10).map(d => d.id);
+    return due.slice(0, limit ?? MAX_REVIEW_SESSION).map(d => d.id);
   },
 
   /** Sanftes Wiederholungs-Gate (#222/#323): true, wenn der Spieler am ANFANG einer
@@ -120,7 +120,7 @@ export const spacedRepetitionBundle = part({
       const j = Math.floor(nextRandom() * (i + 1));
       [ids[i], ids[j]] = [ids[j], ids[i]];
     }
-    return ids.slice(0, limit || 10);
+    return ids.slice(0, limit ?? MAX_REVIEW_SESSION);
   },
 
   /** #236/#237: Zählt eine abgeschlossene Übungsrunde mit Kralle (täglich, Gate oder frei)
