@@ -1,7 +1,7 @@
 # Kubernia — Architektur-Analyse nach arc42
 
 > **Stand: 2026-07-01** (nach #475; ergänzt um die iSAQB-Analyse #492–#524). Beschreibung + Bewertung der Architektur entlang der arc42-Gliederung (die Vorlage, die iSAQB lehrt).
-> Diese Datei ist die aktuelle, versionierte Architektur-**Gesamtsicht**. Sie **ergänzt** (a) die ältere, Infrastruktur-fokussierte [architektur-analyse-2026-06.md](architektur-analyse-2026-06.md) (deren Baustellen #350/#389/#390/#391/#392/#393/#411/#413 inzwischen erledigt sind) und (b) die frische, doku-unabhängige **[architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md)** (fünf Durchläufe je Schicht → 33 Tickets #492–#524; die Risiken/Qualitäts-Aktualisierungen daraus sind unten in §8/§10/§11 eingearbeitet).
+> Diese Datei ist die aktuelle, versionierte Architektur-**Gesamtsicht**. Sie **ergänzt** (a) die ältere, Infrastruktur-fokussierte [architektur-analyse-2026-06.md](architektur-analyse-2026-06.md) (deren Baustellen #350/#389/#390/#391/#392/#393/#411/#413 inzwischen erledigt sind), (b) die doku-unabhängige **[architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md)** (fünf Durchläufe je Schicht → 33 Tickets #492–#524) und (c) die jüngste, doku-unabhängige **[architektur-analyse-2026-07-14-iSAQB.md](architektur-analyse-2026-07-14-iSAQB.md)** (erneut fünf Schicht-Durchläufe + Verifikation der harten Doku-Claims gegen den Code → 19 Tickets #861–880; die verifizierten **Drifts** und neuen Risiken daraus sind unten in §8-Nachtrag/§11 eingearbeitet).
 > Ticket-Auswahl (oberstes freies Item der Board-Reihenfolge): [ticket-reihenfolge.md](ticket-reihenfolge.md).
 
 ## 1. Einführung und Ziele
@@ -194,6 +194,20 @@ Die **strukturellen** Querschnittskonzepte sind exzellent mechanisiert (Schichtu
 
 Dazu kommt: an einzelnen **Grenzen hört die sonst konsequente Disziplin auf** — `scenario`/`applyEffects` ungeprüft (#494), `importData` umgeht die Migrationskette (#493), `WorldSceneLike = any` (#496). Kein Umbau, sondern Absicherung des bereits richtig Angelegten.
 
+### Nachtrag iSAQB 2026-07-14 — verifizierte Drifts (Doku ≠ Code)
+
+Eine erneute doku-freie Runde hat gezielt die harten „erledigt/erzwungen"-Claims gegen den Code geprüft. Die meisten halten (Schichtung, Determinismus-SSOT in der Domäne, `any`-Disziplin, Coverage-Messung). Fünf **Drifts** — die Doku behauptet mehr, als der Code einlöst — sind zu korrigieren:
+
+| Drift | Beleg | Ticket |
+|---|---|---|
+| **Invarianten laufen nur in Dev/Test, nicht im Prod-Build** — §5/§8 feiern den Wächter als *den* Schutz, im ausgelieferten Spiel ist er aus. | `sim.ts:235` `!import.meta.env.PROD` | #862 |
+| **ACL „nur an zwei Stellen" verletzt** — die UI mappt Sim-interne Fehlertypen direkt (dritter Leak neben clustersync/markup). | `ui/hud.ts:320-327` | #872 |
+| **Determinismus-SSOT in der Präsentation umgangen** — `shuffled()` nutzt `Math.random` (Quiz-Optionen/Dialog); Lint erzwingt die RNG nur in Domäne+Anwendung. | `ui/shared.ts:68-75` | #876 |
+| **Stale Ticket-Referenz** — der sim.ts-Split wird als „#545 (Split offen)" geführt, #545 ist geschlossen; der Split ist untracked (`check:doctickets` non-blocking). | `scripts/check-size.mjs:39` | #864/#877 |
+| **`tsconfig.strict.json` ist ein No-op-Alias** — `typecheck` und `typecheck:strict` prüfen identisch. | `tsconfig.strict.json` | #877 |
+
+**Supply-Chain-Präzisierung:** §8 oben nennt Supply-Chain „abgedeckt" — das gilt für npm-Deps, **nicht** für das ausgelieferte Container-Image (`release.yml` pusht ohne Test-Gate/Scan/SBOM, #861) und **nicht** für den eigenen Code (kein SAST/CodeQL/Secret-Scanning, #875). Volle Herleitung: [architektur-analyse-2026-07-14-iSAQB.md](architektur-analyse-2026-07-14-iSAQB.md).
+
 ## 9. Architekturentscheidungen (ADRs)
 
 | ADR | Entscheidung | Status |
@@ -247,6 +261,17 @@ Konkrete Szenarien (Reiz → Reaktion) statt vager Adjektive:
 | Verhaltens-Governance fehlt (Komplexität/Bundle) | ungemessene Erosion bei Scale | mittel | #502/#503 (Fehler-Diagnostik #504 erledigt) |
 | Spiel-/Bewertungslogik in DOM-Methoden; `events.ts` ungetestet | Kernlogik nur e2e-testbar; `economyTick` läuft nicht in RegionScene | mittel | #500/#512/#501 |
 | Value Objects/Invarianten/Workload nur teilverdrahtet | Namensgrenzen/Aggregat-Mutationen umgangen | mittel | #507/#508/#509 |
+| **Release-Image ohne Test-Gate + ohne Image-Scan/SBOM** (iSAQB 2026-07-14) | Ungeprüftes/verwundbares Artefakt kommt nach außen | hoch | #861 |
+| **Invarianten im Prod-Build aus** | Zustands-Korruption erreicht Spieler:innen still, wird gespeichert | hoch | #862 |
+| **WorldScene hafen-monolithisch trotz `mapId`-Fassade** | Zweite Überwelt-Karte nicht real möglich | hoch | #863 |
+| **Ressourcentyp-Erweiterung nicht Open-Closed** (3× reset/merge/snapshot, sim.ts God-File, #545-Split untracked) | sim.ts wächst mit jedem Typ; Haupt-Fehlerquelle | hoch | #864/#865 |
+| Monolithischer 5s-Vollserialisierungs-Autosave | CPU/GC-Bremse bei Stardew-Stand-Größe (Serialisierungs-, nicht Kapazitätskosten) | mittel | #869 |
+| Zwei divergente Karten-Modelle (Tiled vs Code-Builder, zwei renderGround) | Doppelte Pipeline/Rendering blockiert viele Maps | mittel | #870 |
+| NPCs ohne Entitäts-/System-Modell (Sprite+`splice(6)`) | Stardew-NPCs (Verhalten/Beziehungen) haben kein Zuhause | mittel | #871 |
+| ESLint `recommended` statt `recommendedTypeChecked` | typed-lint-Kosten ohne Ertrag; `no-unsafe-*` aus | mittel | #868 |
+| Präsentation faktisch ungetestet (Floor 3 %, nur Chromium) + Copy-Paste-Minispiele | größte Codemenge im schwächsten Netz; UI skaliert nicht | mittel | #873/#874 |
+
+> **Ergänzung 2026-07-14 (Details: [architektur-analyse-2026-07-14-iSAQB.md](architektur-analyse-2026-07-14-iSAQB.md)):** Die strategischen ADRs (0001–0007) tragen auch unter unabhängiger Neubewertung — **keine Umkehr**. Neu ist die Erkenntnis, dass die exzellente Disziplin **an der Präsentations-/Auslieferungs-Grenze aussetzt** (Release-Härtung, Präsentations-Tests, WorldScene-/Karten-/NPC-Schicht) und dass einige „erledigt/erzwungen"-Claims gedriftet sind (§8-Nachtrag). Neu-Entscheidungen (kein Widerspruch, sondern fehlende explizite ADRs): Präsentations-Test-Strategie (#874) und Karten-Modell-Festlegung als Präzisierung von ADR 0004 (#870).
 
 **Gesamtverdikt (aktualisiert nach der iSAQB-Analyse 2026-07):** Das Infrastruktur-Fundament trägt — Schichtung, Content-as-Data und versionierte Persistenz sind die richtigen, automatisch bewachten Weichen. Die frische Analyse bestätigt das, findet aber zwei konkrete Arbeitsstränge: (1) **verhaltensbezogene Governance** als Gate nachrüsten (Determinismus/Coverage/Komplexität/Bundle/Fehler — #492/#495/#502/#503/#504), und (2) die **wenigen Grenzen schließen, an denen die Disziplin aussetzt** (`scenario`-Validierung #494, `importData` #493, `WorldSceneLike` #496, VO/Invarianten/Workload #507–#509). Dazu zwei verifizierte latente Bugs (#501 economyTick, #493 hüllenloser Import). Alles **Präzisierung + Absicherung**, kein Umbau. Volle Details: [architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md).
 
