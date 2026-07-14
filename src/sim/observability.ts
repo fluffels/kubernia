@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Observability (sim/observability.ts) =====
+/* ===== Kubernia – Observability (sim/observability.ts) =====
  * Folge zum sim.ts-Datei-Split (#384, aus Epic #346, ADR 0004). Nach den sieben
  * Befehlsfamilien-Splits (#372–#378) liegt hier die nächste kohärente
  * Nicht-Befehls-Familie aus sim.ts: die Observability-Grundlage (#109/#110).

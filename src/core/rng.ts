@@ -1,4 +1,4 @@
-/* ===== KubeQuest – Zufall & Determinismus (rng.ts) =====
+/* ===== Kubernia – Zufall & Determinismus (rng.ts) =====
  * Querschnitts-SSOT für „Zufall" in der puren Domäne + Content (#492).
  *
  * Warum überhaupt: Die Domäne ist als deterministisch/testbar deklariert, streute

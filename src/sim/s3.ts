@@ -1,4 +1,4 @@
-/* ===== KubeQuest – S3-kompatibler Object Store (sim/s3.ts, #241) =====
+/* ===== Kubernia – S3-kompatibler Object Store (sim/s3.ts, #241) =====
  * Ein MinIO-/S3-artiger Object Store als eigene Befehlsfamilie `aws s3 …`. Der Store
  * liegt bewusst **off-cluster** („im Hafen"): Buckets + Objekte sind ein eigener,
  * vom Cluster-Volume getrennter Speicher. Sie überleben Pod/Node/PVC – genau das macht
