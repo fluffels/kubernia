@@ -3,7 +3,7 @@ import { SFX } from "../sfx";
 import { lockedAbbrevInInput, abbrevLockHint } from "../content/abbrev";
 import { fmtCmd } from "../hud/markup";
 import { scoreReview } from "../hud/viewdecide";
-import { part, $, esc, CMD_MAX_ATTEMPTS, shuffled } from "./shared";
+import { part, $, esc, CMD_MAX_ATTEMPTS, shuffled, MAX_REVIEW_SESSION } from "./shared";
 
 export const quizUI = part({
   /* ========== Krabben-Quiz ========== */
@@ -11,7 +11,7 @@ export const quizUI = part({
     this.closeOverlays();
     $("overlay-review").classList.remove("hidden");
     const total = Object.keys(Game.state.review).length;
-    const dueIds = Game.dueReviewItems(10);
+    const dueIds = Game.dueReviewItems(MAX_REVIEW_SESSION);
     if (dueIds.length === 0) {
       // Kein Dead-End mehr: solange Karten existieren, bieten wir freies Üben an.
       $("review-body").innerHTML = total === 0
@@ -41,7 +41,7 @@ export const quizUI = part({
     this.closeOverlays();
     Game.state.questsSinceGate = 0; // Gate feuert: Zähler immer zurücksetzen (#323).
     Game.save();
-    const dueIds = Game.dueReviewItems(10);
+    const dueIds = Game.dueReviewItems(MAX_REVIEW_SESSION);
     if (dueIds.length === 0) {
       // Quest-Count-Gate (#323): nichts fällig, aber ≥ 3 Quests am Stück – sanfter Nudge.
       this._gateClearedIdx = Game.questIdx();
@@ -70,7 +70,7 @@ export const quizUI = part({
    *  Spaced-Repetition-Plan unangetastet und gibt keine Belohnung (kein Farmen). */
   startFreePractice() {
     $("overlay-review").classList.remove("hidden");
-    const ids = Game.freeReviewItems(10);
+    const ids = Game.freeReviewItems(MAX_REVIEW_SESSION);
     if (ids.length === 0) { this.openReview(); return; }
     this.review = { ids, idx: 0, right: 0, assisted: 0, free: true };
     this.renderReviewItem();
@@ -114,10 +114,17 @@ export const quizUI = part({
     if (r.gate) {
       this._gateClearedIdx = r.gate.questIdx;
       const npcId = r.gate.npcId;
+      // (#810) Noch weitere fällige Karten nach dieser Session? Transparent anzeigen –
+      // das Gate feuert beim nächsten Quest-Anfang automatisch erneut.
+      const stillDue = Game.dueReviewItems().length;
+      const stillDueHtml = stillDue > 0
+        ? `<p class="dim">🦀 Noch <b>${stillDue}</b> fällige Karte${stillDue === 1 ? "" : "n"} – Kralle wartet bei der nächsten Aufgabe!</p>`
+        : "";
       $("review-body").innerHTML = `<div style="text-align:center">
         <div style="font-size:3em">🦀</div>
         <h2>Aufgefrischt! ${r.right} von ${r.ids.length} richtig.</h2>
         <p class="dim">Schnipp – jetzt sitzt's wieder. Weiter geht dein Abenteuer!</p>
+        ${stillDueHtml}
         ${milestoneHtml}
         <button class="primary" id="gate-continue">Weiter geht's! ⚓</button></div>`;
       $("gate-continue").onclick = () => { this.closeOverlays(); this.talkTo(npcId); };
