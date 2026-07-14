@@ -7,7 +7,7 @@ der Single-File-Offline-Build inlinet sie automatisch als Base64-Data-URI, bleib
 self-contained. Die `.json` sind die Tileset-Metadaten.
 
 ## Einheitlicher Stil (immer mitgeben)
-- **Tiles:** 16×16, `selective outline`, `detailed shading`, `highly detailed`, `high top-down`
+- **Tiles:** 16×16, `flat shading`, `high top-down` (Terrain-Tilesets seit #866 flat; Objekte/Figuren weiter `selective outline`, `detailed shading`)
 - **Figuren:** `low top-down`, `chibi`, `selective outline`, `high detail`, size 32, 4 Richtungen (nur `south`-Frame genutzt)
 - **Maßstab:** Mensch = **1 Kachel (16px)**. Daran alles ausrichten (Baum ~3 Kacheln, Busch ~1, Fass ~1).
 
@@ -16,11 +16,11 @@ Verkettet über `lower_base_tile_id`, damit gemeinsame Terrains pixelgleich ansc
 
 | Datei | Übergang | tileset_id | base tiles (lower→upper) |
 |---|---|---|---|
-| `water-sand` (coast) | Wasser→Sand | ad0e0dfe-8b9b-4811-8317-732f3570c08a | water c50ea16a… → sand 591e7962… (neu generiert #852: `pro`-Modus, raggedness 0.35, Stardew Valley Stil, warme Palette) |
-| `sand-grass` (meadow) | Sand→Gras | 0ae66228-c2ee-41c3-a195-f2d29660247e | sand 591e7962… → grass 2a6e0d3d… (neu generiert #852: an coast-sand gekettet) |
-| `grass-dirt` (path) | Gras→Weg | 5feecda6-337d-4a90-88af-b7246e041fff | grass 2a6e0d3d… → dirt e8734988… (neu generiert #852: an meadow-grass gekettet) |
-| `water-stone` (kai) | Wasser→Stein | fd2b6712-8192-4e77-85f2-af767016582d | water c50ea16a… → stone 83b435ec… (neu generiert #852: an coast-water gekettet) |
-| `water-wood` (dock) | Wasser→Holz | 9e11e1c2-c288-4d3c-a0f4-e26567bd7808 | water c50ea16a… → wood 9e0b8efc… (neu generiert #852: an coast-water gekettet) |
+| `water-sand` (coast) | Wasser→Sand | 6e493a2f-96c4-4f87-94cd-4e09440c242b | water c50ea16a… → sand 591e7962… (neu generiert #866: `flat shading`, kein Klippeneffekt) |
+| `sand-grass` (meadow) | Sand→Gras | 6d5d549e-0248-4b77-9c66-ba5aebdbbe7f | sand 591e7962… → grass 2a6e0d3d… (neu generiert #866: `flat shading`) |
+| `grass-dirt` (path) | Gras→Weg | 2ee27044-f79e-4854-999f-b0d9d02c087c | grass 2a6e0d3d… → dirt e8734988… (neu generiert #866: `flat shading`, lower=Gras/upper=Weg) |
+| `water-stone` (kai) | Wasser→Stein | 50e3123e-5605-4b8f-be91-2b358b58ea81 | water c50ea16a… → stone 83b435ec… (neu generiert #866: `flat shading`) |
+| `water-wood` (dock) | Wasser→Holz | 9791ecec-830d-4135-8d90-85bdad4da5a4 | water c50ea16a… → wood 9e0b8efc… (neu generiert #866: `flat shading`) |
 
 Gemeinsame Basis-Tile-IDs (zum Weiter-Verketten neuer Sets):
 `water c50ea16a-a715-4601-b9cc-5909f9b64975` · `sand 591e7962-0d9a-4cb5-bed6-a31ab5e946a7` ·
