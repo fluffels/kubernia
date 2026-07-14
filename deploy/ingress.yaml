@@ -7,9 +7,9 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    # kubequest.localtest.me → löst per DNS immer zu 127.0.0.1 auf,
+    # kubernia.localtest.me → löst per DNS immer zu 127.0.0.1 auf,
     # kein /etc/hosts-Eintrag nötig.
-    - host: kubequest.localtest.me
+    - host: kubernia.localtest.me
       http:
         paths:
           - path: /

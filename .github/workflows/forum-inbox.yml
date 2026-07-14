@@ -59,7 +59,7 @@ jobs:
           # User-Project V2 schreiben – dafür ein PAT mit project-Scope als Secret
           # PROJECT_TOKEN. Fehlt es, wird nur gewarnt (siehe set_board_top unten).
           PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-          # Node-ID des KubeQuest-Backlog-Boards (stabil,
+          # Node-ID des Kubernia-Backlog-Boards (stabil,
           # siehe docs/ticket-reihenfolge.md › Reihenfolge pflegen).
           PROJECT_ID: PVT_kwHOD8746c4Barq_
         run: |
