@@ -24,8 +24,11 @@
  * (`src/game/**`) – dort ist `Math.random` verboten (ESLint `no-restricted-properties`
  * + Fitness-Function `test/rng.test.ts`). BEWUSST ausgenommen ist die Präsentation
  * (`src/scenes/**`, `src/ui/**`, `src/sfx.ts`): dort ist Zufall rein optisch/Timing
- * (Möwen-Spawns, Tween-Jitter, floatText-Position, Phaser-Gefahren-Terminierung) und
- * berührt keinen snapshot-stabilen Zustand.
+ * (Möwen-Spawns, Tween-Jitter, floatText-Position, Phaser-Gefahren-Terminierung,
+ * Quiz-Optionen-Reihenfolge in `ui/quiz.ts`, Dialog-Antwort-Reihenfolge in `ui/dialog.ts`)
+ * und berührt keinen snapshot-stabilen Zustand. Die Korrektheit wird über die originalen
+ * Option-Indizes (`data-oi`) bzw. Option-Objekte abgesichert — die angezeigte Reihenfolge
+ * ist bewusst nicht reproduzierbar (#876).
  */
 
 /** mulberry32 – winziger, schneller, seedbarer 32-Bit-PRNG. Gleicher Seed →
