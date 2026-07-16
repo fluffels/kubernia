@@ -177,7 +177,7 @@ iSAQB ist **stil-neutral**: Architektur folgt Qualitätszielen, nicht Mode. Micr
 ### Weitere Querschnitts-Konzepte (Status)
 
 - **Sicherheit/Supply-Chain:** Dependabot + zweistufiges `npm audit`-CI-Gate (blockt nur ausgelieferte Deps). Dev-Panel aus Prod-Builds gestrippt + passwortgated. **Abgedeckt.**
-- **Determinismus/Zufall:** Tests brauchen Determinismus; `observability.ts` macht es per FNV-Hash vor. Die iSAQB-Analyse fand aber **ungeseedeten `Math.random` in 8 puren Domänen-/Content-Dateien** (`sim/util`, `docker`, `helm`, `argocd`, `kubectl/ops|lifecycle|inspect`, `content/util`) — Widerspruch zum eigenen Anspruch, blockiert Golden-/Snapshot-Tests. → **zentrale seedbare RNG + Fitness-Function (#492).**
+- **Determinismus/Zufall:** Tests brauchen Determinismus; `observability.ts` macht es per FNV-Hash vor. Die iSAQB-Analyse fand aber **ungeseedeten `Math.random` in 8 puren Domänen-/Content-Dateien** (`sim/util`, `docker`, `helm`, `argocd`, `kubectl/ops|lifecycle|inspect`, `content/util`) — Widerspruch zum eigenen Anspruch, blockiert Golden-/Snapshot-Tests. → **zentrale seedbare RNG + Fitness-Function (#492).** Bewusst ausgeklammert ist die Präsentation (`src/ui/**`, `src/scenes/**`): dort ist Zufall rein optisch (Quiz-Optionen-Reihenfolge, Dialog-Antwort-Reihenfolge, Möwen-Spawns, Tween-Jitter) und berührt keinen persistierten Zustand — dokumentiert in `core/rng.ts` (#876).
 - **Fehlerbehandlung/Diagnostik:** EIN globaler `window.onerror`/`unhandledrejection`-Handler in `main.ts` fängt jeden unbehandelten Laufzeitfehler zentral ab, loggt ihn an einer Stelle und zeigt statt eines stillen schwarzen Canvas ein lesbares Fallback-Overlay mit „Neu laden"-Knopf; die reine Aufbereitung des geworfenen Werts liegt DOM-frei/testbar in `src/crashreport.ts` (`buildCrashReport`). In JEDEM Build aktiv (auch der ausgelieferten Offline-Datei). Fitness-Function: `e2e/crash-overlay.spec.ts` feuert einen synthetischen Fehler gegen den Offline-Build und prüft das Overlay; der Boot-Smoke (#391) bleibt das Gegenstück (sauberer Boot ⇒ kein Fehler, kein Overlay). **Abgedeckt (#504).**
 
 ### Der rote Faden der iSAQB-Analyse 2026-07: struktur- vs. verhaltensbezogene Governance
@@ -186,7 +186,7 @@ Die **strukturellen** Querschnittskonzepte sind exzellent mechanisiert (Schichtu
 
 | Verhaltens-Governance | Heute | Gate-Ticket |
 |---|---|---|
-| Determinismus | `Math.random` in der Domäne | #492 |
+| Determinismus | ~~`Math.random` in der Domäne~~ ✅ Domäne + Anwendung durch seedbare RNG abgedeckt; Präsentation bewusst ausgenommen (`core/rng.ts`) | #492 ✓ / #876 ✓ |
 | Coverage | 91 Tests, **0 Messung** | #495 |
 | Komplexität | nur LOC-Deckel (800), keine `complexity`-Regel | #502 |
 | Bundle-Größe | nur Warnung, kein Fail | #503 |
@@ -196,13 +196,12 @@ Dazu kommt: an einzelnen **Grenzen hört die sonst konsequente Disziplin auf** �
 
 ### Nachtrag iSAQB 2026-07-14 — verifizierte Drifts (Doku ≠ Code)
 
-Eine erneute doku-freie Runde hat gezielt die harten „erledigt/erzwungen"-Claims gegen den Code geprüft. Die meisten halten (Schichtung, Determinismus-SSOT in der Domäne, `any`-Disziplin, Coverage-Messung). Fünf **Drifts** — die Doku behauptet mehr, als der Code einlöst — sind zu korrigieren:
+Eine erneute doku-freie Runde hat gezielt die harten „erledigt/erzwungen"-Claims gegen den Code geprüft. Die meisten halten (Schichtung, Determinismus-SSOT in der Domäne, `any`-Disziplin, Coverage-Messung). Vier **Drifts** — die Doku behauptet mehr, als der Code einlöst — sind zu korrigieren:
 
 | Drift | Beleg | Ticket |
 |---|---|---|
 | **Invarianten laufen nur in Dev/Test, nicht im Prod-Build** — §5/§8 feiern den Wächter als *den* Schutz, im ausgelieferten Spiel ist er aus. | `sim.ts:235` `!import.meta.env.PROD` | #862 |
 | **ACL „nur an zwei Stellen" verletzt** — die UI mappt Sim-interne Fehlertypen direkt (dritter Leak neben clustersync/markup). | `ui/hud.ts:320-327` | #872 |
-| **Determinismus-SSOT in der Präsentation umgangen** — `shuffled()` nutzt `Math.random` (Quiz-Optionen/Dialog); Lint erzwingt die RNG nur in Domäne+Anwendung. | `ui/shared.ts:68-75` | #876 |
 | **Stale Ticket-Referenz** — der sim.ts-Split wird als „#545 (Split offen)" geführt, #545 ist geschlossen; der Split ist untracked (`check:doctickets` non-blocking). | `scripts/check-size.mjs:39` | #864/#877 |
 | **`tsconfig.strict.json` ist ein No-op-Alias** — `typecheck` und `typecheck:strict` prüfen identisch. | `tsconfig.strict.json` | #877 |
 
@@ -236,7 +235,7 @@ Konkrete Szenarien (Reiz → Reaktion) statt vager Adjektive:
 | Portabilität | Spiel weitergeben → ein Doppelklick-HTML, offline | erfüllt |
 | Wartbarkeit (KI) | Agent ändert Modul → Lint/Arch/Größe/**Doku-Drift** (#482)/Smoke fangen Fehler vor dem Merge | erfüllt |
 | Testbarkeit (Messung) | „Welche Teile sind untertestet?" → Coverage messbar mit Per-Verzeichnis-Schwellen | **offen (#495)** |
-| Determinismus | Domäne reproduzierbar → seedbare RNG, kein `Math.random` in `sim/`/`content/` | **teilweise (#492)** |
+| Determinismus | Domäne + Anwendung reproduzierbar → seedbare RNG, kein `Math.random` in `sim/`/`content/`/`game/`; Präsentation bewusst ausgenommen (Display-only, `core/rng.ts`) | **erfüllt (#492/#876)** |
 | Zuverlässigkeit | Laufzeitfehler/Save-Fehler → sichtbarer Fallback statt schwarzem Canvas / stillem Verlust | Laufzeitfehler abgedeckt (#504); Save-Fehler-Hinweis offen (#497) |
 | Performance | Viele Inseln/Sprites → Culling greift, aber Assets werden noch eager geladen; kein Bundle-Budget | teilweise (#503) |
 
