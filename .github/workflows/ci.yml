@@ -379,3 +379,88 @@ jobs:
             # beim Ergänzen eines bestehenden (das steht schon an seiner Board-Position).
             set_board_top "$new_url"
           fi
+
+  # Goodhart-Guard (#903): deterministischer Sign-off-Zwang für PRs, die
+  # Gate-/Fitness-Function-Konfiguration ändern. CODEOWNERS + require_code_owner_reviews
+  # ist im Single-Account-Modell (@fluffels ist Autor UND einziger Codeowner gleichzeitig)
+  # empirisch wirkungslos — GitHub lässt die Review-Anforderung ersatzlos fallen
+  # (mergeStateStatus=CLEAN ohne jede Freigabe). Dieser Job ersetzt den technischen Zwang:
+  # Findet er Änderungen an den geschützten Pfaden (Spiegel der CODEOWNERS-Liste), prüft er,
+  # ob das Label 'maintainer-approved' gesetzt ist — ohne es bleibt der Check ROT.
+  #
+  # Ehrliche Einschränkung: im Single-Account-Modell kann @fluffels das Label selbst setzen
+  # — einen kryptographisch-unabhängigen Approver gibt es nicht (bewusst verworfen, #723).
+  # Der Guard ist ein SPEED-BUMP: er erzwingt eine explizite, sichtbare Zusatz-Aktion statt
+  # stillschweigend durchzumergen, und macht Gate-Abschwächungen damit im PR-Log auditierbar.
+  # Nur auf PRs (push:main hat kein Label-Konzept; wäre nach dem Merge ohnehin zu spät).
+  gate-change-guard:
+    name: Gate-Config-Aenderungsschutz (Goodhart-Guard, #903)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Gate-Dateien pruefen + Sign-off-Label erzwingen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Geschuetzte Pfade — Spiegel der CODEOWNERS-Liste.
+          # Substring-Match: "scripts/check-" trifft alle check-*.mjs,
+          # ".github/workflows/" trifft alle *.yml-Workflows.
+          PROTECTED=(
+            '.dependency-cruiser.cjs'
+            'scripts/layers.cjs'
+            'scripts/check-'
+            'eslint.config.js'
+            'eslint-suppressions.json'
+            'any-suppressions.json'
+            'vite.config.ts'
+            '.jscpd.json'
+            '.github/workflows/'
+            '.github/CODEOWNERS'
+          )
+
+          changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          gate_files=()
+          while IFS= read -r f; do
+            for pat in "${PROTECTED[@]}"; do
+              if [[ "$f" == *"$pat"* ]]; then
+                gate_files+=("$f")
+                break
+              fi
+            done
+          done <<< "$changed"
+
+          if [ ${#gate_files[@]} -eq 0 ]; then
+            echo "Keine Gate-Config-Dateien geaendert — kein Sign-off noetig."
+            exit 0
+          fi
+
+          echo "Gate-Config-Dateien in diesem PR:"
+          printf '  %s\n' "${gate_files[@]}"
+          echo ""
+
+          has_label=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels \
+            --jq '[.labels[].name] | any(. == "maintainer-approved")')
+
+          if [ "$has_label" = "true" ]; then
+            echo "Label 'maintainer-approved' gefunden — Sign-off OK."
+            exit 0
+          fi
+
+          echo "::error title=Gate-Config-Aenderung ohne Sign-off::Dieser PR aendert Gate-/Fitness-Function-Konfiguration (${gate_files[*]}). Label 'maintainer-approved' fehlt."
+          echo "::error::Losung: gh pr edit $PR_NUMBER --add-label maintainer-approved (oder ueber die GitHub-UI)."
+          echo "::error::Warum: Wer die Gate-Configs selbst aendert und den PR ohne explizites Sign-off mergt, kann ein Gate unbemerkt abschwaechen — Goodhart-Schutz (#903)."
+          exit 1
