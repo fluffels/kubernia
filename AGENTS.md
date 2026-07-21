@@ -130,7 +130,7 @@ Der Backlog wird als **GitHub Issues** geführt, gruppiert im **GitHub Project-B
      - `git worktree list` → der Pfad `.claude/worktrees/kq-<nr>` darf **nicht** erscheinen (git-Registrierung gelöscht)
      - PowerShell: `Test-Path C:\git\kubernia\.claude\worktrees\kq-<nr>` muss `False` liefern (Ordner physisch weg)
 
-     Bleibt etwas zurück → Ursache aus Punkt 1 oder 2 noch aktiv; beheben und `git worktree remove` erneut versuchen. Schnell-Diagnose und Massenkur verwaister Ordner: `node scripts/cleanup-worktrees.mjs` (Dry-Run) bzw. `node scripts/cleanup-worktrees.mjs --fix` (löscht verwaiste Ordner + prunet git-Einträge).
+     Bleibt etwas zurück → Ursache aus Punkt 1 oder 2 noch aktiv; beheben und `git worktree remove` erneut versuchen. Schnell-Diagnose und Massenkur verwaister Ordner: `node scripts/cleanup-worktrees.mjs` (Dry-Run) bzw. `node scripts/cleanup-worktrees.mjs --fix` (löscht verwaiste Ordner + prunet git-Einträge). **Seit #952 zusätzlich automatisch abgesichert:** der `Stop`-Hook (`scripts/stop-verify-hook.mjs`) prüft bei jedem Turn-Ende `.claude/worktrees/` gegen `git worktree list` und räumt Waisen selbst per `fs.rmSync` auf (kein Shell-`rm` — seit #913 ist `rm -rf` hart in `deny`, dieser Weg bleibt erlaubt) — still im Erfolgsfall, blockierend mit Meldung wenn das Löschen selbst scheitert (Datei-Lock). Der manuelle Verify oben bleibt trotzdem der Sofort-Check direkt nach dem `remove`.
 
 **Der Agent managt das Board (nur kubernia).** Die Maintainerin hat die Issue-Verwaltung hier an den Agenten delegiert. Das heißt konkret:
 - **GitHub ist die Single Source of Truth für den Stand.** Was erledigt ist, wird sofort dort geschlossen (mit kurzem Ergebnis-Kommentar) – nicht nur im Chat berichten. Den Board-Status aktuell halten.
