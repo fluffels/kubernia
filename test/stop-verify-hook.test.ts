@@ -204,3 +204,71 @@ describe("repoRootFromScriptUrl", () => {
     );
   });
 });
+
+// ── checkAndFixOrphanWorktrees (#908/#952) ───────────────────────────────────
+
+describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
+  type OrphanDeps = {
+    execSync?: (cmd: string, opts: object) => string;
+    existsSync?: (path: string) => boolean;
+    readdirSync?: () => Array<{ name: string; isDirectory: () => boolean }>;
+    rmSync?: (path: string) => void;
+  };
+
+  function makeDeps(opts: { orphanName: string | null; existsAfterRm: boolean }): OrphanDeps {
+    let existsCalls = 0;
+    return {
+      execSync: (cmd: string) =>
+        cmd.includes("worktree list")
+          ? "worktree /root\nHEAD abc\nbranch refs/heads/main\n\n"
+          : "",
+      existsSync: () => {
+        existsCalls++;
+        // Erster Aufruf: prueft, ob der Worktrees-Ordner selbst existiert (fuer readdirSync).
+        // Weitere Aufrufe: prueft nach rmSync, ob der Waisen-Ordner noch da ist.
+        return existsCalls === 1 ? true : opts.existsAfterRm;
+      },
+      readdirSync: () =>
+        opts.orphanName ? [{ name: opts.orphanName, isDirectory: () => true }] : [],
+      rmSync: () => {},
+    };
+  }
+
+  const checkAndFixOrphanWorktrees: (
+    repoRoot: string,
+    deps?: OrphanDeps
+  ) => { blocked: boolean; reason?: string; removed?: string[] } = hook.checkAndFixOrphanWorktrees;
+
+  test("keine Waisen-Ordner vorhanden, blocked false", () => {
+    const result = checkAndFixOrphanWorktrees("/root", makeDeps({ orphanName: null, existsAfterRm: false }));
+    assert.equal(result.blocked, false);
+  });
+
+  test("Waisen-Ordner gefunden und erfolgreich geloescht, blocked false, still", () => {
+    const result = checkAndFixOrphanWorktrees(
+      "/root",
+      makeDeps({ orphanName: "kq-862", existsAfterRm: false })
+    );
+    assert.equal(result.blocked, false);
+    assert.deepEqual(result.removed, ["kq-862"]);
+  });
+
+  test("Waisen-Ordner gefunden, Loeschen schlaegt fehl (Datei-Lock), blocked true mit Ordnername in reason", () => {
+    const result = checkAndFixOrphanWorktrees(
+      "/root",
+      makeDeps({ orphanName: "kq-862", existsAfterRm: true })
+    );
+    assert.equal(result.blocked, true);
+    assert.ok(result.reason?.includes("kq-862"), `reason sollte kq-862 nennen: ${result.reason}`);
+  });
+
+  test("git worktree list schlaegt fehl, fail-open, blocked false", () => {
+    const deps: OrphanDeps = {
+      execSync: () => {
+        throw new Error("kein git");
+      },
+    };
+    const result = checkAndFixOrphanWorktrees("/root", deps);
+    assert.equal(result.blocked, false);
+  });
+});
