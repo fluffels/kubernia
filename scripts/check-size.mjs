@@ -33,10 +33,10 @@ export const LOC_BUDGET = 800
  *  Fällt die Datei unter Budget (Split erledigt), meldet der Wächter den Eintrag als
  *  stale und schlägt fehl – das erinnert daran, die Ausnahme wieder zu entfernen. */
 export const ALLOWLIST = [
-  // sim.ts war exakt am Budget (800); #523 ergänzt den `rev`-Dirty-Marker (Feld + touch()),
-  // was den bekannten God-File-Kern knapp darüber schiebt. Der Split ist als #545 offen
-  // (Burn-down: sim-Befehlsfamilien + Kern entzerren) und zieht die Datei wieder unter Budget.
-  { file: 'src/sim.ts', reason: '#545 (Split offen): God-File-Kern; #523 fügt rev-Marker hinzu.' },
+  // sim.ts liegt über dem Budget; der Split ist als #942 offen (Kern nach sim/core.ts
+  // auslagern, Ziel: unter 800 LOC). #864 (Builder-Registry) hat die Datei geringfügig
+  // vergrößert, aber den Erweiterungs-Aufwand für neue Ressourcentypen auf 1 Eintrag reduziert.
+  { file: 'src/sim.ts', reason: '#942 (Split offen): God-File-Kern auslagern.' },
 ]
 
 /** Zählt physische Zeilen (wie `wc -l`; ein abschließender Zeilenumbruch zählt nicht doppelt). */
