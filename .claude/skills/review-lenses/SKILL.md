@@ -25,7 +25,7 @@ git diff main               # der volle Diff (Grundlage aller Lenses)
 **Immer zuerst.** Fahre das SSOT-Aggregat aller Gates (#527):
 
 ```bash
-npm run verify   # typecheck → lint → check:arch → check:size → check:docmap → check:docdrift → test
+npm run verify   # typecheck → lint → check:arch → check:size → check:contextsize → check:anysuppress → check:docmap → check:docdrift → check:lockfile → check:diffsize → test
 ```
 
 - **Exit ≠ 0 (rot):** **HIER STOPPEN.** Berichte, welches Gate rot ist, mit der Fehlerausgabe — und **starte KEINEN Lens-Pass** (das ist der Short-Circuit: kein LLM-Token auf einen Diff, der schon deterministisch scheitert). Das gerötete Gate zuerst grün machen (im normalen Ticket-Ablauf), dann den Review erneut anstoßen.
