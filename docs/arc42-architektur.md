@@ -200,7 +200,7 @@ Eine erneute doku-freie Runde hat gezielt die harten „erledigt/erzwungen"-Clai
 
 | Drift | Beleg | Ticket |
 |---|---|---|
-| **Invarianten laufen nur in Dev/Test, nicht im Prod-Build** — §5/§8 feiern den Wächter als *den* Schutz, im ausgelieferten Spiel ist er aus. | `sim.ts:235` `!import.meta.env.PROD` | #862 |
+| ~~**Invarianten laufen nur in Dev/Test, nicht im Prod-Build**~~ → **erledigt (#862)**: Prod loggt via `console.error` statt zu werfen; `invariantChecks = true` immer aktiv. | ~~`sim.ts:235` `!import.meta.env.PROD`~~ | #862 ✓ |
 | **ACL „nur an zwei Stellen" verletzt** — die UI mappt Sim-interne Fehlertypen direkt (dritter Leak neben clustersync/markup). | `ui/hud.ts:320-327` | #872 |
 | **Stale Ticket-Referenz** — der sim.ts-Split wird als „#545 (Split offen)" geführt, #545 ist geschlossen; der Split ist untracked (`check:doctickets` non-blocking). | `scripts/check-size.mjs:39` | #864/#877 |
 | **`tsconfig.strict.json` ist ein No-op-Alias** — `typecheck` und `typecheck:strict` prüfen identisch. | `tsconfig.strict.json` | #877 |
@@ -261,7 +261,7 @@ Konkrete Szenarien (Reiz → Reaktion) statt vager Adjektive:
 | Spiel-/Bewertungslogik in DOM-Methoden; `events.ts` ungetestet | Kernlogik nur e2e-testbar; `economyTick` läuft nicht in RegionScene | mittel | #500/#512/#501 |
 | Value Objects/Invarianten/Workload nur teilverdrahtet | Namensgrenzen/Aggregat-Mutationen umgangen | mittel | #507/#508/#509 |
 | **Release-Image ohne Test-Gate + ohne Image-Scan/SBOM** (iSAQB 2026-07-14) | Ungeprüftes/verwundbares Artefakt kommt nach außen | hoch | #861 |
-| **Invarianten im Prod-Build aus** | Zustands-Korruption erreicht Spieler:innen still, wird gespeichert | hoch | #862 |
+| ~~**Invarianten im Prod-Build aus**~~ → **erledigt (#862)**: Prod loggt `console.error` statt zu werfen; `warnClusterInvariants` immer aktiv. | ~~Zustands-Korruption erreicht Spieler:innen still~~ | ~~hoch~~ | #862 ✓ |
 | **WorldScene hafen-monolithisch trotz `mapId`-Fassade** | Zweite Überwelt-Karte nicht real möglich | hoch | #863 |
 | **Ressourcentyp-Erweiterung nicht Open-Closed** (3× reset/merge/snapshot, sim.ts God-File, #545-Split untracked) | sim.ts wächst mit jedem Typ; Haupt-Fehlerquelle | hoch | #864/#865 |
 | Monolithischer 5s-Vollserialisierungs-Autosave | CPU/GC-Bremse bei Stardew-Stand-Größe (Serialisierungs-, nicht Kapazitätskosten) | mittel | #869 |
