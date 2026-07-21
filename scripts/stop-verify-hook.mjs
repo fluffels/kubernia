@@ -1,9 +1,10 @@
 // Kein Shebang: wie worktree-guard-hook.mjs, kein #! wegen Test-Import via Vitest/esbuild.
 /**
- * Stop-Verify-Hook (#708/#909) — Claude-Code-`Stop`-Hook.
+ * Stop-Verify-Hook (#708/#909/#952) — Claude-Code-`Stop`-Hook.
  *
  * Läuft, wenn der Agent seinen Turn beendet. Frühindikator:
- * prüft ob `npm run verify` im aktuellen Checkout/Worktree grün ist.
+ * prüft ob `npm run verify` im aktuellen Checkout/Worktree grün ist, UND räumt
+ * verwaiste Worktree-Ordner automatisch auf (#952).
  *
  * Design-Entscheidung (#708/#909):
  *  - Prüft zuerst den Haupt-Checkout auf uncommittete Änderungen.
@@ -17,6 +18,18 @@
  *  - KEIN Ersatz für PR-Gate (CI bleibt die Mauer) und pre-push-Hook —
  *    ergänzt sie als zusätzlicher lokaler Frühindikator.
  *
+ * Waisen-Cleanup (#952): seit #913 ist `rm -rf` hart in `deny` — der frühere
+ * Shell-Fallback, wenn `git worktree remove` auf Windows am physischen Löschen
+ * scheitert (laufender Dev-Server / Shell-cwd im Worktree, AGENTS.md Punkte 1-2),
+ * ist damit blockiert. Statt darauf zu vertrauen, dass jemand manuell an
+ * `node scripts/cleanup-worktrees.mjs --fix` denkt, prüft und räumt dieser Hook
+ * bei JEDEM Stop automatisch auf (Logik aus cleanup-worktrees.mjs, EINE Quelle).
+ * Erfolgreich (keine Waisen oder alle entfernt) → still, kein Reibungsverlust.
+ * Löschen schlägt fehl (Datei-Lock) → Stop blockieren mit klarer Meldung, gleiche
+ * Philosophie wie der Verify-Check unten. Bewusst NICHT die `rm -rf`-Deny
+ * aufweichen — der Workaround über `fs.rmSync` (kein Shell-`rm`) bleibt sauber
+ * innerhalb der Least-Privilege-Policy (#901).
+ *
  * Output bei blockiertem Stop: { "reason": "…" } auf stdout, exit-code != 0.
  */
 
@@ -24,6 +37,7 @@ import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { diagnoseOrphans, fixOrphans } from "./cleanup-worktrees.mjs";
 
 /** Parst das Hook-stdin-JSON tolerant (wirft nie). */
 export function parseStopInput(text) {
@@ -91,6 +105,30 @@ export function listLinkedWorktrees(repoRoot, deps = {}) {
   }
 }
 
+/**
+ * Prüft `.claude/worktrees/` auf verwaiste Ordner und räumt sie automatisch auf
+ * (#908/#952). Siehe Datei-Kopf für die Begründung (rm-rf-Deny seit #913).
+ *  - Keine Waisen ODER alle erfolgreich entfernt → { blocked: false }.
+ *  - Waisen gefunden, Löschen schlägt fehl (Datei-Lock) → { blocked: true, reason }.
+ *  - git-Fehler (diagnoseOrphans meldet ok:false) → fail-open, { blocked: false }.
+ */
+export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
+  const { ok, orphans, mainRoot, worktreesDir } = diagnoseOrphans(repoRoot, deps);
+  if (!ok || orphans.length === 0) return { blocked: false };
+
+  const { removed, errors } = fixOrphans(mainRoot, worktreesDir, orphans, deps);
+  if (errors.length === 0) return { blocked: false, removed };
+
+  return {
+    blocked: true,
+    reason:
+      `Stop-Verify-Hook (#908/#952): ${errors.length} verwaiste Worktree-Ordner ` +
+      `(${errors.join(", ")}) konnten nicht gelöscht werden (Datei-Lock? laufender ` +
+      `Dev-Server?). Bitte PowerShell "Stop-Process -Name node -Force" prüfen, dann ` +
+      `"node scripts/cleanup-worktrees.mjs --fix" erneut versuchen (AGENTS.md § Worktree entfernen).`,
+  };
+}
+
 // ── CLI (vom Stop-Hook aufgerufen) ───────────────────────────────────────────
 function main() {
   let stdinText;
@@ -106,6 +144,13 @@ function main() {
   }
 
   const repoRoot = repoRootFromScriptUrl(import.meta.url);
+
+  // 0. Verwaiste Worktree-Ordner automatisch aufräumen (#908/#952)
+  const orphanResult = checkAndFixOrphanWorktrees(repoRoot);
+  if (orphanResult.blocked) {
+    console.log(JSON.stringify({ reason: orphanResult.reason }));
+    process.exit(2);
+  }
 
   // 1. Haupt-Checkout: uncommittete Änderungen → verify dort laufen lassen (#708)
   if (hasUncommittedChanges(repoRoot)) {
