@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { Game } from "../game";
 import { UI } from "../ui";
 import { KQContent } from "../content";
-import { npcSolidIndices, npcHitboxes, resolveMove, SHIP_KRALLE, type Hitbox, type Door } from "../world/world";
+import { npcSolidIndices, npcHitboxes, resolveMove, type Hitbox, type Door } from "../world/world";
 import { type Spawn } from "../content/entities";
 import { type LayoutBox } from "../hud/labellayout";
 import { setWorldScene } from "../runtime";
@@ -10,7 +10,7 @@ import { expandRect, cull, FrameSampler, type Cullable } from "../hud/cull";
 import { getMapEntry, type MapId } from "../world/maps/mapregistry";
 import { DAY_CYCLE_MS } from "../core/clock";
 import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, readMoveInput, faceFrom, renderPlayer, type SceneNpc, type ScenePlayer } from "./shared";
-import { HIT_R, LAMP_HIT } from "./geometry";
+import { HIT_R } from "./geometry";
 // Spiel-Systeme als eigene, fokussierte Module (WorldScene.ts-Split #393, analog
 // scenes.ts-Split #345): freie Funktionen mit der Szene als Parameter (`scene`).
 // WorldScene ist seither nur noch der schlanke Orchestrator (Aufbau in create(),
@@ -18,8 +18,8 @@ import { HIT_R, LAMP_HIT } from "./geometry";
 // tree/objDeco/building/registerCullable/makeSign/makeTechTag/addShadow), Spieler-/
 // NPC-Setup, Kollision/Bewegung, Effekte und das Off-screen-Culling.
 import { loadMapTerrain } from "./worldscene/mapterrain";
-import { placeHarborObjects, renderGround } from "./worldscene/terrain";
-import { spawnGull, spawnFlowers, spawnGrassDetail, scatter, renderStatics, updateDayNight } from "./worldscene/scenery";
+import { spawnFlowers, spawnGrassDetail, updateDayNight } from "./worldscene/scenery";
+import { WORLD_CONFIGS, type WorldSceneConfig } from "./worldscene/worldconfig";
 import { syncCluster, updateDynamicTags, updateDynDecor } from "./worldscene/clustersync";
 import { registerHazardRenderer } from "./worldscene/events";
 import { updateWarps } from "./worldscene/warps";
@@ -61,7 +61,7 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   ship!: { x: number; y: number; w: number; h: number };
   flagPoles!: { x: number; y: number }[];
   lighthouse!: { x: number; y: number };
-  tfPlatform!: { x: number; y: number; w: number; h: number };
+  tfPlatform?: { x: number; y: number; w: number; h: number };
   doors!: Door[];
   doorSprites!: Map<string, Phaser.GameObjects.Image>;
   doorAnimating!: boolean;
@@ -72,8 +72,10 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   lastClusterRev!: number;
   dynamic!: { barrelsSig: string; flagsSig: string; svcSig: string; depSig: string };
   dynGroup!: Phaser.GameObjects.Group;
-  // statische Props/Effekte aus scenery.ts
-  shipFlag!: Phaser.GameObjects.Image;
+  // Per-Karte Konfiguration (worldscene/worldconfig.ts, #863)
+  private worldConfig?: WorldSceneConfig;
+  // statische Props/Effekte aus scenery.ts (nur für Hafen-Karten gesetzt)
+  shipFlag?: Phaser.GameObjects.Image;
   lhBeam!: Phaser.GameObjects.Image;
   lhLight!: Phaser.GameObjects.Image;
   cannon!: Phaser.GameObjects.Image;
@@ -87,7 +89,7 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   lastNodesSig?: string;
   tfGroup!: Phaser.GameObjects.Container;
   tfBuoys!: Phaser.GameObjects.Image[];
-  butterflies!: Butterfly[];
+  butterflies?: Butterfly[];
   // Partikel + Wetter/Tag-Nacht
   splash!: Phaser.GameObjects.Particles.ParticleEmitter;
   dust!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -126,9 +128,10 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
 
   /** Phaser ruft init() vor create() mit den Start-Daten. Default-Karte „harbor"
    *  (BootScene startet ohne Daten). Re-Entry aus den Insel-Szenen läuft über
-   *  scene.wake() – init() läuft dann NICHT, mapId bleibt also erhalten. */
+   *  scene.wake() – init() läuft dann NICHT, mapId/worldConfig bleiben erhalten. */
   init(data?: { mapId?: MapId }) {
     this.mapId = data?.mapId ?? "harbor";
+    this.worldConfig = WORLD_CONFIGS[this.mapId];
   }
 
   /* ============ Aufbau ============ */
@@ -183,24 +186,16 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     this.makeFxTextures();   // weiche Schatten- & Glüh-Textur (#4)
     this.lampGlows = [];     // Laternen-Glühen, das nachts aufleuchtet (#4)
 
-    // #425: gemeinsamer Terrain-Schritt datengetrieben aus getMapEntry(this.mapId)
-    // (Boden/Kollision/Türen/NPC-Standplätze), dann die HAFEN-spezifische Szenerie.
-    // Letztere wird mit #427 (RegionScene) selbst datengetrieben; bis dahin ist
-    // „harbor" die einzige WorldScene-Karte.
+    // Generischer Terrain-Schritt (Boden/Kollision/Türen/NPC-Standplätze aus dem
+    // Registry-Eintrag), dann der karten-spezifische Aufbau über WorldSceneConfig
+    // (#863): Objekte/Gebäude/Deko-Streuung kommen aus WORLD_CONFIGS[mapId].setup,
+    // sodass WorldScene.create() hafen-unabhängig bleibt.
     loadMapTerrain(this);
-    placeHarborObjects(this);
-    renderGround(this);
-    renderStatics(this);
+    this.worldConfig?.setup(this);
     spawnFlowers(this);
     spawnGrassDetail(this);   // #40: dichtes, variiertes Gras (Stardew-Look)
     this.spawnNpcs();
     this.spawnPlayer();
-    scatter(this, "bush", 16, 0.5, [0, 1, 2], false, HIT_R); // Büsche: runde Hitbox (#386) statt voller Kachel, nicht an Wegen
-    scatter(this, "rock", 14, 0.45, [0, 1, 2, -3], false, HIT_R); // Steine: runde Hitbox (#343), auch am Strand
-    scatter(this, "lamppost", 4, 0.55, [0, 1, 2], false, 0, LAMP_HIT); // Hafenlaternen: schmales Pfosten-Rechteck (#386)
-    scatter(this, "mushroom", 10, 0.28, [0, 1, 2]);       // Pilze: kleine Wald-/Wiesendeko, begehbar (#7)
-    scatter(this, "seashell", 8, 0.22, [-3]);             // Muscheln: nur am Sandstrand (#7)
-    scatter(this, "driftwood", 5, 0.3, [-3]);             // Treibholz: nur am Sandstrand (#7)
 
     this.splash = this.add.particles(0, 0, "px", {
       speed: { min: 25, max: 80 }, angle: { min: 200, max: 340 }, gravityY: 140,
@@ -248,9 +243,8 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     // als RENDERER an (Welt-Sprites) und rekonstruiert einen ggf. schon laufenden Zustand.
     registerHazardRenderer(this);
 
-    // Möwen für die Hafen-Atmosphäre
-    this.time.addEvent({ delay: 6500, loop: true, callback: () => { if (Math.random() < 0.65) spawnGull(this); } });
-    spawnGull(this);
+    // Karten-spezifische Hintergrund-Animationen (z.B. Möwen für den Hafen)
+    this.worldConfig?.scheduleAmbient?.(this);
   }
 
   set(x: number, y: number, v: number) { this.ground[y * this.W + x] = v; }
@@ -356,10 +350,10 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
 
   spawnNpcs() {
     // Feste Standplätze aus this.npcSpawns (Code-Default oder – im Datenpfad –
-    // aus dem Tiled-Objektlayer, #195); Kralle wird auf ihren Deck-Standplatz
-    // (SHIP_KRALLE, #205) eingefügt und steht bewusst NICHT im Objektlayer.
-    const defs = [...this.npcSpawns];
-    defs.splice(6, 0, { id: "kralle", x: SHIP_KRALLE.x, y: SHIP_KRALLE.y });
+    // aus dem Tiled-Objektlayer, #195); karten-spezifische Sonder-NPCs (z.B.
+    // Kralle schiff-relativ, #205) kommen aus worldConfig.extraNpcs und werden
+    // angehängt statt per Magic-Index gespliced (#863).
+    const defs = [...this.npcSpawns, ...(this.worldConfig?.extraNpcs ?? [])];
     // #31/#343: NPCs sind solide – man läuft nicht durch sie hindurch –, aber als
     // RUNDE Hitbox (Kreis um den Standplatz) statt volles Kachel-Quadrat, sodass man
     // weich an ihnen vorbeigleitet. Reden (E) bleibt möglich (nearestNpc greift von
@@ -409,9 +403,12 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   isSolidAt(px: number, py: number) {
     const tx = Math.floor(px / T), ty = Math.floor(py / T);
     if (tx < 0 || ty < 0 || tx >= this.W || ty >= this.H) return true;
-    const p = this.tfPlatform;
-    if (tx >= p.x && tx < p.x + p.w && ty >= p.y && ty < p.y + p.h) {
-      return !(Game.sim && Game.sim.tf.applied);
+    // Bedingte Plattformen aus der Karten-Konfiguration (#863): jede Plattform
+    // ist solide, bis ihre passable()-Bedingung erfüllt ist (z.B. terraform apply).
+    for (const cp of this.worldConfig?.conditionalPlatforms ?? []) {
+      if (tx >= cp.x && tx < cp.x + cp.w && ty >= cp.y && ty < cp.y + cp.h) {
+        return !cp.passable();
+      }
     }
     return !!this.solidGrid[ty * this.W + tx];
   }
@@ -461,10 +458,13 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
    *  meldet die Auszahlung über den runtime-Sink (ui.ts), die den Floater an der aktiven
    *  WorldScene anfordert. Nur zeigen, wenn diese Szene tatsächlich läuft – bei offenem
    *  Innenraum schläft sie (scene.sleep), dann würde der Floater unsichtbar auflaufen; der
-   *  HUD-Dublonenstand wird trotzdem aktualisiert (ui.ts). Hafen-Kachel als Anker. */
+   *  HUD-Dublonenstand wird trotzdem aktualisiert (ui.ts). Position aus der Karten-Config
+   *  (#863): fehlt payoutPos, wird kein Floater angezeigt. */
   payoutFloat(amount: number) {
     if (!this.scene.isActive()) return;
-    this.floatText((11 + Math.random() * 8) * T, 25 * T, "+" + amount + " 🪙", "#ffd97a");
+    const pos = this.worldConfig?.payoutPos?.();
+    if (!pos) return;
+    this.floatText(pos.x, pos.y, "+" + amount + " 🪙", "#ffd97a");
   }
 
   /* ============ Off-screen-Culling (#82) ============ */
@@ -541,9 +541,9 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
 
     this.updatePet(time);
 
-    // Schiffsflagge einfärben
+    // Schiffsflagge einfärben (nur für Karten, die das Schiff haben)
     const flagItem = KQContent.SHOP.find(f => f.id === Game.state.activeFlag);
-    this.shipFlag.setTint(flagItem ? flagItem.color : 0x4dd0e1);
+    this.shipFlag?.setTint(flagItem ? flagItem.color : 0x4dd0e1);
 
     this.updateQuestMarkers(blocked);
 
@@ -562,9 +562,9 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     updateDayNight(this, Game.state.gameDays * DAY_CYCLE_MS);
     this.cullDecor(delta);
 
-    // Schmetterlinge flattern über die Wiesen
+    // Schmetterlinge flattern über die Wiesen (nur für Karten mit Schmetterling-Deko)
     const t = time / 1000;
-    for (const b of this.butterflies) {
+    for (const b of this.butterflies ?? []) {
       b.spr.setPosition(
         b.ax + Math.sin(t * b.sp + b.ph) * 22,
         b.ay + Math.sin(t * b.sp * 1.7 + b.ph) * 10 + Math.cos(t * 0.9 + b.ph) * 4

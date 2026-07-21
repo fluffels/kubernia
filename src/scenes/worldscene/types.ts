@@ -84,7 +84,8 @@ export interface WorldSceneFields {
   ship: { x: number; y: number; w: number; h: number };
   flagPoles: { x: number; y: number }[];
   lighthouse: { x: number; y: number };
-  tfPlatform: { x: number; y: number; w: number; h: number };
+  /** Terraform-Plattform; nur für Karten gesetzt, die eine solche haben (#863). */
+  tfPlatform?: { x: number; y: number; w: number; h: number };
   doors: Door[];
   doorSprites: Map<string, Phaser.GameObjects.Image>;
   doorAnimating: boolean;
@@ -98,8 +99,8 @@ export interface WorldSceneFields {
   lastNodesSig?: string;                        // #693: Guard für syncPierDamage
   dynamic: { barrelsSig: string; flagsSig: string; svcSig: string; depSig: string };
   dynGroup: Phaser.GameObjects.Group;
-  // statische Props/Effekte aus scenery.ts
-  shipFlag: Phaser.GameObjects.Image;
+  // statische Props/Effekte aus scenery.ts (nur für Hafen-Karten gesetzt, #863)
+  shipFlag?: Phaser.GameObjects.Image;
   lhBeam: Phaser.GameObjects.Image;
   lhLight: Phaser.GameObjects.Image;
   cannon: Phaser.GameObjects.Image;
@@ -109,7 +110,7 @@ export interface WorldSceneFields {
   houseOfficeImg: Phaser.GameObjects.Image;
   tfGroup: Phaser.GameObjects.Container;
   tfBuoys: Phaser.GameObjects.Image[];
-  butterflies: Butterfly[];
+  butterflies?: Butterfly[];
   // Partikel + Wetter/Tag-Nacht
   splash: Phaser.GameObjects.Particles.ParticleEmitter;
   dust: Phaser.GameObjects.Particles.ParticleEmitter;
