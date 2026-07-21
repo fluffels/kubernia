@@ -67,3 +67,54 @@ Eine `teach`/`terminal`-Aufgabe kann ein `check`-Prädikat tragen, das nach der 
 **Sammlungen** sind eine **geschlossene Allowlist** (`CHECK_COLLECTIONS` in `check-dsl.ts`): u.a. `services`, `deployments`, `ingresses`, `networkPolicies`, `argoApps`, `statefulSets`, `pvcs`, `pvs`, `storageClasses`, `volumeSnapshots`, `buckets` (S3-Object-Store #241/#243), `serviceMonitors`, `containers`, `nodes`, `releases` und die **virtuelle** `alerts` (= `sim.alerts()`). Eine unbekannte Sammlung scheitert hart beim Laden (`ContentValidationError`) — so ist die Regel referenziell an den echten Sim-Zustand gebunden. Die konkreten Ressourcen-*Namen* (z.B. `"hafen-lager"`) lassen sich **nicht** statisch prüfen: sie entstehen erst, wenn der Spieler die Quest löst — genau das verifiziert der Check. Ein Tippfehler im Namen fällt im `quests.test.ts`-Durchlauf auf (Check bliebe fälschlich falsch → roter Test).
 
 **Wann doch Code (`checks.ts`):** nur echte Sonderfälle, die kein deklarativer *Zustand* sind, sondern eine transiente *Aktions-Markierung* (z.B. „der Spieler hat gerade einen Pod gelöscht", `sim.lastDeletedPod`). Im Zweifel zuerst die DSL prüfen — sie deckt Sammlungen/Flags/Pfade ab; nur was wirklich nicht passt, kommt nach `checks.ts` und wird per String-Key referenziert.
+
+## Loader-Leaves (`src/content/loader/*`, Split #517)
+
+`src/content/loader.ts` ist das Barrel; die einzelnen Datenquellen liegen je als eigenständiges Leaf unter `src/content/loader/`:
+
+| Modul | Inhalt |
+|---|---|
+| `src/content/loader/shared.ts` | Generische Loader-Bausteine (#517): `loadGroups`/`assembleUnique`/`makeGlobLoader` (geteiltes glob→parse→dedup-Skelett) + `reviveAccept`. |
+| `src/content/loader/npcs.ts` | NPC-Stammdaten + Smalltalk (`NPCS`/`SMALLTALK`, #348/#517). |
+| `src/content/loader/quests.ts` | Quests: Schritt-Reviver + `parseQuests`/`assembleQuests`/`getQuests` (order-basiert, #348/#517). |
+| `src/content/loader/topics.ts` | Quest-Themen-Taxonomie fürs Logbuch-Accordion (`getQuestTopics`/`groupQuestsByTopic`, #327/#517). |
+| `src/content/loader/cmdcards.ts` | Befehls-Karten (Spaced-Repetition-Drills), pro Geber (`getCmdCards`, #352/#517). |
+| `src/content/loader/quizcards.ts` | Quiz-Karteikarten (Krabbe Kralle), pro Thema (`getQuizCards`, #368/#517). |
+| `src/content/loader/tfconfigs.ts` | Terraform-Konfig-Szenarien + `resolveScenarioRef` (`getTfConfigs`, #147/#517). |
+| `src/content/loader/funkexplain.ts` | Freies-Funken-Erklärungen, pro Tool (`getFunkExplains`, #362/#517). |
+| `src/content/loader/practice.ts` | Übungs-Pools je NPC (`PRACTICE`): lädt `data/practice.json` und expandiert zu `{ drill, after }[]` (#521). |
+
+## Drills (`src/content/drills.ts` + `src/content/drills/*`, Split #457)
+
+`src/content/drills.ts` ist der Barrel; Befehls-Drills liegen je als Leaf-Datei unter `src/content/drills/`:
+
+| Modul | Inhalt |
+|---|---|
+| `src/content/drills/shared.ts` | Geteilte Helfer + `DrillTask`-Typ + ensure*-Fabriken + YAML-Konstanten-Re-Exporte (#457). |
+| `src/content/drills/docker.ts` | Docker-Drills (pull/run/build/tag/push, #457). |
+| `src/content/drills/kubectl.ts` | kubectl/Secret/Ingress-Drills (#457). |
+| `src/content/drills/git.ts` | Git/CI-Drills (#457). |
+| `src/content/drills/helm.ts` | Helm-Drills (install/upgrade/rollback/create/template, #457). |
+| `src/content/drills/terraform.ts` | Terraform-Drills (plan/apply/state/output, #457). |
+| `src/content/drills/network.ts` | Netzwerk-Drills (NetworkPolicy/DNS, #457). |
+| `src/content/drills/gitops.ts` | GitOps/ArgoCD-Drills (#457). |
+| `src/content/drills/observability.ts` | Observability-Drills (Metriken/Logs/Alerts, #457). |
+| `src/content/drills/rbac.ts` | RBAC/Pod-Security-Drills (#457). |
+| `src/content/drills/storage.ts` | Storage-Drills (StatefulSet/PVC/Snapshot, #457). |
+| `src/content/drills/werft.ts` | Werft-Capstone-Drills (Build→Deploy→Expose→Test, #457). |
+
+## Weitere Inhalts-Module
+
+| Modul | Inhalt |
+|---|---|
+| `src/content/progression.ts` | Reine Inhalts-Daten: Ränge (XP-Schwellen) + Shop-Angebot. |
+| `src/content/util.ts` | Kleine geteilte Inhalts-Helfer (Zufall: `pick`/Range), von Drills u.a. genutzt. |
+| `src/content/minigame.ts` | Stapel-Minispiel-Daten (Docker-Image-Schichten aufsteigend, #218) + Sturm-Image-Namen-Verfälscher. |
+| `src/content/podpacking.ts` | Pod-Packspiel-Daten (#567): `POD_PACKING_ROUNDS` (Nodes/Pods/requests aufsteigend) + Platzier-/Kapazitäts-Kern (`canPlacePod`/`podFitsAnyNode`). |
+| `src/content/yamlstruct.ts` | YAML-Bausteine-Minispiel-Daten (#568): `YAML_STRUCT_ROUNDS` + Struktur-Prüf-Kern (`yamlStructLines`/`checkYamlOrder`/`checkYamlDepth`). |
+| `src/content/routing.ts` | Routing-Lotse-Minispiel-Daten (#569): `ROUTING_ROUNDS` + Match-/Routing-Kern (`podMatchesSelector`/`matchingPods`/`checkIngressChoice`/`checkPodChoice`/`checkNoEndpoints`). |
+| `src/content/driftheal.ts` | Wunschzustand-Minispiel-Daten (#570): `DRIFT_HEAL_ROUNDS` + Reconcile-Kern (`applyDriftEvent`/`resolveChoice`): deklarativ hält gegen erneuten Drift, imperativ nicht. |
+| `src/content/rbacKeyring.ts` | RBAC-Schlüsselbund-Minispiel-Daten (#571): `RBAC_KEYRING_ROUNDS` + Grant-/Breite-Kern (`ruleGrants`/`optionGrants`/`optionBreadth`/`checkKeyringChoice`) für kleinste passende Role/ClusterRole (Least Privilege). |
+| `src/content/learnorder.ts` | Lernreihenfolge-Wächter (#235/#412): keine Quiz-/Review-Karte vor Einführung ihres Konzepts; Prüflogik wird nur vom Test-Wächter `test/learnorder.test.ts` aufgerufen. |
+| `src/content/quizcheck.ts` | Quiz-Korrektheits-Wächter (#597): `correctAnswers`/`snapshotViolations` (Golden-Ratchet der als correct markierten Antwort) + `indexConventionViolations` (correct===0). Nur vom Test-Wächter `test/quizcheck.test.ts` aufgerufen. |
+| `src/content/quizdistractors.ts` | Quiz-Distraktor-Wächter (#598): `duplicateOptionViolations` + `tooFewOptionsViolations` (`MIN_QUIZ_OPTIONS`); strukturelle Eindeutigkeit „genau eine plausible Lösung". Nur vom Test-Wächter `test/quizdistractors.test.ts` aufgerufen. |

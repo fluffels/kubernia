@@ -64,7 +64,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | Architektur-Wächter (Schichtung + Zyklen + Orphans, #347/#390) | `npm run check:arch` |
 | Dateigröße-Wächter (God-File-Budget 800 LOC, #390) | `npm run check:size` |
 | Root-Kontextdatei-Wächter (Zeilenbudget für AGENTS.md/CLAUDE.md, #719) | `npm run check:contextsize` |
-| Doku↔Code-Drift-Wächter (CLAUDE.md-Landkarte gegen den Code, #482) | `npm run check:docmap` |
+| Tiefendoc-Abdeckungs-Wächter (jede `src/`-Datei in einem `docs/module/`-Tiefendoc, #482/#907) | `npm run check:docmap` |
 | Harness-Drift-Wächter (dokumentierte `npm run`-Kommandos + interne Doku-Links/Anker, #529) | `npm run check:docdrift` |
 | Doku-Aktualitäts-Wächter (offen-markierte Roadmap-Tickets gegen den gh-Status, non-blocking, braucht `gh`, #610) | `npm run check:doctickets` |
 | TS-7-Freigabe-Wächter (npm-Registry: erlaubt typescript-eslint schon TS 7? non-blocking, braucht Netz, #847) | `npm run check:tseslint-ts7` |
@@ -79,186 +79,17 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 
 ## 🗺️ Repo-Landkarte – wo finde ich was?
 
-**Code** (`src/`, gebaut mit Vite + TypeScript + Phaser 4; `index.html` lädt nur `src/main.ts`, Vite bündelt den Rest). **Eine Zeile pro Modul** (Datei · Schicht · ein Satz Zweck); ausführliche Historie/Interface-Details liegen in den **on-demand-Tiefendocs** unter [`docs/module/`](docs/module/) — nur lesen, wenn du am jeweiligen Bereich arbeitest:
+**Code** (`src/`, gebaut mit Vite + TypeScript + Phaser 4). Gliederung nach Subsystem — alle Module je Subsystem im zugehörigen Tiefendoc unter [`docs/module/`](docs/module/) (on-demand, nur lesen wenn du dort arbeitest):
 
-| Datei | Schicht | Zweck |
+| Subsystem | Schicht(en) | Tiefendoc |
 |---|---|---|
-| [`src/main.ts`](src/main.ts) | Einstieg | Start & Tastatursteuerung; `SaveStore.init()` vor `Game.load()`. |
-| [`src/sim.ts`](src/sim.ts) | pure Domäne | Cluster-Simulator-**Kern** (State/reset/Fabriken/`exec`-Dispatch/snapshot); Befehlsfamilien ausgelagert nach `src/sim/*`. → [sim.md](docs/module/sim.md) |
-| [`src/sim/state.ts`](src/sim/state.ts) | pure Domäne | Simulator-Zustand & Domänentypen (Pod/Deployment/…, `ClusterState`). |
-| [`src/sim/util.ts`](src/sim/util.ts) | pure Domäne | Geteilte pure Sim-Helfer (IDs, Pod-Namen, Tabellen). |
-| [`src/sim/names.ts`](src/sim/names.ts) | pure Domäne | Value Objects für Ressourcen-Namen (#479/#507): DNS-1123-Regel + `ResourceName`/`PodName`-Brand + prüfender Constructor `resourceName()` (von den _make*-Fabriken zentral genutzt) + `asPodName` an EINER Stelle. |
-| [`src/sim/docker.ts`](src/sim/docker.ts) | pure Domäne | docker-Befehlsfamilie. |
-| [`src/sim/kubectl.ts`](src/sim/kubectl.ts) | pure Domäne | kubectl-Familie: dünner Dispatch-Barrel über `src/sim/kubectl/*` (Split #397). → [sim.md](docs/module/sim.md) |
-| [`src/sim/kubectl/host.ts`](src/sim/kubectl/host.ts) | pure Domäne | `KubectlHost`-Interface (was kubectl von der Sim-Klasse braucht). |
-| [`src/sim/kubectl/inspect.ts`](src/sim/kubectl/inspect.ts) | pure Domäne | kubectl lesend: get/describe/top/logs (#397). |
-| [`src/sim/kubectl/lifecycle.ts`](src/sim/kubectl/lifecycle.ts) | pure Domäne | kubectl Lebenszyklus: create/apply/delete (#397). |
-| [`src/sim/kubectl/ops.ts`](src/sim/kubectl/ops.ts) | pure Domäne | kubectl Workload-Ops: scale/expose/set/rollout (#397). |
-| [`src/sim/kubectl/security.ts`](src/sim/kubectl/security.ts) | pure Domäne | kubectl RBAC (auth can-i #126) + Pod-Security (label/admitPod #128). |
-| [`src/sim/helm.ts`](src/sim/helm.ts) | pure Domäne | helm-Befehlsfamilie. |
-| [`src/sim/terraform.ts`](src/sim/terraform.ts) | pure Domäne | terraform-Befehlsfamilie. |
-| [`src/sim/git.ts`](src/sim/git.ts) | pure Domäne | git-Befehlsfamilie (`git push` stößt die CI an). |
-| [`src/sim/argocd.ts`](src/sim/argocd.ts) | pure Domäne | argocd-Befehlsfamilie + GitOps-Reconcile. |
-| [`src/sim/observability.ts`](src/sim/observability.ts) | pure Domäne | Metriken/Scrape-Targets/Alerts (deterministisch, #109/#110). |
-| [`src/sim/glab.ts`](src/sim/glab.ts) | pure Domäne | glab/CI-Familie + Pipeline-Maschinerie (`runPipeline`). |
-| [`src/sim/net.ts`](src/sim/net.ts) | pure Domäne | Erreichbarkeits-Befehle `nslookup` (DNS #337) + `curl` (Service erreichbar? #164). |
-| [`src/sim/eviction.ts`](src/sim/eviction.ts) | pure Domäne | Ephemeral Storage & Eviction: emptyDir/ephemeral-storage-Bilanz + DiskPressure-Auswertung (#240). |
-| [`src/sim/s3.ts`](src/sim/s3.ts) | pure Domäne | S3-/MinIO-Object-Store: `aws s3`-Familie (mb/rb/ls/cp/rm) + off-cluster Buckets/Objekte (#241). |
-| [`src/sim/kubeadm.ts`](src/sim/kubeadm.ts) | pure Domäne | kubeadm-Familie (Aufbau-Bogen #460): leerer/zerstörter Cluster + `kubeadm init/join/reset`; vor init scheitert kubectl mit „connection refused". |
-| [`src/sim/invariants.ts`](src/sim/invariants.ts) | pure Domäne | Cluster-Invarianten (#478): `clusterInvariantViolations`/`assertClusterInvariants` als SSOT für einen legalen `ClusterState` (Replica Ist/Soll, Pods auf realen Nodes, PV/PVC-Bindung); `Sim.exec()` prüft sie an der Aggregat-Grenze. |
-| [`src/sim/rbac.ts`](src/sim/rbac.ts) | pure Domäne | RBAC-Identitäts-SSOT (#609, Kern hinter #578): entscheidet an EINER Stelle, dass Role/ClusterRole (bzw. deren Binding) über `(name, cluster)` identifiziert werden – `rbacKey`/`sameRbac`/`roleKind`/`roleMatchesRef`; Merge/Invariante/create-apply/describe/roleRef/Drills nutzen sie gemeinsam statt den Schlüssel je einzeln zu raten. |
-| [`src/sim/workload.ts`](src/sim/workload.ts) | pure Domäne | Getippte Workload-Mutationen (#488/#508, Forts. #478): `scaleDeployment`/`replacePods`/`replaceDeploymentPod`/`restartStatefulPod`/`addDeployment`/`removeDeployment`/`addStatefulSet`/`removeStatefulSet` halten `pods.length === replicas` by-construction; die Befehlsfamilien (lifecycle/ops/helm/argocd/glab) mutieren den Workload-Kern (Deployments UND StatefulSets) nur noch hierüber. |
-| [`src/sim/nodes.ts`](src/sim/nodes.ts) | pure Domäne | Node-Aggregat-Mutationen (#534): `provisionNode` (idempotent per Name) / `removeNode` (spiegelt `removeDeployment`) + geteilte `NODE_VERSION` + das EINE Control-Plane-Prädikat `isControlPlane`; terraform/kubeadm/observability/eviction provisionieren/prüfen Knoten nur noch hierüber (vorher über 4 Dateien dupliziert). |
-| [`src/content.ts`](src/content.ts) | pure Domäne | Fassade über `src/content/*` → `KQContent`. → [content.md](docs/module/content.md) |
-| [`src/content/loader.ts`](src/content/loader.ts) | pure Domäne | Content-as-Data-Loader: dünnes Barrel (#517), re-exportiert die öffentliche API der `loader/*`-Leaves. → [content.md](docs/module/content.md) |
-| [`src/content/loader/shared.ts`](src/content/loader/shared.ts) | pure Domäne | Generische Loader-Bausteine (#517): `loadGroups`/`assembleUnique`/`makeGlobLoader` (das geteilte glob→parse→dedup-Skelett) + `reviveAccept`. |
-| [`src/content/loader/npcs.ts`](src/content/loader/npcs.ts) | pure Domäne | NPC-Stammdaten + Smalltalk (`NPCS`/`SMALLTALK`, #348/#517). |
-| [`src/content/loader/quests.ts`](src/content/loader/quests.ts) | pure Domäne | Quests: Schritt-Reviver + `parseQuests`/`assembleQuests`/`getQuests` (order-basiert, #348/#517). |
-| [`src/content/loader/topics.ts`](src/content/loader/topics.ts) | pure Domäne | Quest-Themen-Taxonomie fürs Logbuch-Accordion (`getQuestTopics`/`groupQuestsByTopic`, #327/#517). |
-| [`src/content/loader/cmdcards.ts`](src/content/loader/cmdcards.ts) | pure Domäne | Befehls-Karten (Spaced-Repetition-Drills), pro Geber (`getCmdCards`, #352/#517). |
-| [`src/content/loader/quizcards.ts`](src/content/loader/quizcards.ts) | pure Domäne | Quiz-Karteikarten (Krabbe Kralle), pro Thema (`getQuizCards`, #368/#517). |
-| [`src/content/loader/tfconfigs.ts`](src/content/loader/tfconfigs.ts) | pure Domäne | Terraform-Konfig-Szenarien + `resolveScenarioRef` (`getTfConfigs`, #147/#517). |
-| [`src/content/loader/funkexplain.ts`](src/content/loader/funkexplain.ts) | pure Domäne | Freies-Funken-Erklärungen, pro Tool (`getFunkExplains`, #362/#517). |
-| [`src/content/loader/practice.ts`](src/content/loader/practice.ts) | pure Domäne | Übungs-Pools je NPC (`PRACTICE`): welcher Drill nach welcher Quest freigeschaltet wird; lädt die gruppierte `data/practice.json` und expandiert sie in `{ drill, after }[]` (#521). |
-| [`src/content/parse.ts`](src/content/parse.ts) | pure Domäne | Geteilte Parse-Primitiven + `ContentValidationError` (Leaf, bricht den Zyklus loader↔check-dsl, #411). |
-| [`src/content/check-dsl.ts`](src/content/check-dsl.ts) | pure Domäne | Deklarative Quest-Check-DSL: `compileCheck` Regel→Prädikat (#411). → [content.md](docs/module/content.md) |
-| [`src/content/scenario.ts`](src/content/scenario.ts) | pure Domäne | Scenario-Validierung (#494): `reviveScenario` prüft Inline-`scenario` strukturell gegen eine geschlossene Feld-/applyEffect-Allowlist (fail-fast gegen stille Tippfehler). |
-| [`src/content/checks.ts`](src/content/checks.ts) | pure Domäne | `QUEST_CHECKS`: nur noch echte Code-Sonderfälle (der Rest ist DSL-Daten, #411). |
-| [`src/content/entities.ts`](src/content/entities.ts) | pure Domäne | Entity-Registry: datengesteuerte NPC- & Objekt-Platzierung (#349/#357). |
-| [`src/content/validate.ts`](src/content/validate.ts) | pure Domäne | Schema-Validierung des Inhalts-Bündels (`validateContent`): strukturelle Konsistenz aller Quests/Drills/Quiz/Karten/Pools, ohne Fremd-Library (null Laufzeit-Deps). → [content.md](docs/module/content.md) |
-| [`src/content/learnorder.ts`](src/content/learnorder.ts) | pure Domäne | Lernreihenfolge-Wächter (#235/#412): keine Quiz-/Review-Karte vor Einführung ihres Konzepts; Prüflogik wird nur vom Test-Wächter `test/learnorder.test.ts` aufgerufen. |
-| [`src/content/quizcheck.ts`](src/content/quizcheck.ts) | pure Domäne | Quiz-Korrektheits-Wächter (#597): `correctAnswers`/`snapshotViolations` (Golden-Ratchet der als correct markierten Antwort) + `indexConventionViolations` (correct===0); fängt eine still vertauschte/verschobene richtige Antwort. Nur vom Test-Wächter `test/quizcheck.test.ts` aufgerufen. |
-| [`src/content/quizdistractors.ts`](src/content/quizdistractors.ts) | pure Domäne | Quiz-Distraktor-Wächter (#598): `duplicateOptionViolations` (Optionen paarweise verschieden – kein Distraktor dupliziert die richtige Antwort, keine markup-/interpunktions-only-Mehrdeutigkeit) + `tooFewOptionsViolations` (`MIN_QUIZ_OPTIONS`); strukturelle Eindeutigkeit „genau eine plausible Lösung". Nur vom Test-Wächter `test/quizdistractors.test.ts` aufgerufen. |
-| [`src/content/manifest-lib.ts`](src/content/manifest-lib.ts) | pure Domäne | Manifest-Bibliothek (#514): benannte „virtuelle Dateien" (YAML/Dockerfile/CI/Terraform) als Daten (`data/manifests/*.json`); `getManifest(id)` für Drills, `manifestRef` (`scenario.manifests`) für Quests – EINE Quelle statt TS-Monolith. |
-| [`src/content/minigame.ts`](src/content/minigame.ts) | pure Domäne | Stapel-Minispiel-Daten (Docker-Image-Schichten aufsteigend, #218) + Sturm-Image-Namen-Verfälscher. |
-| [`src/content/podpacking.ts`](src/content/podpacking.ts) | pure Domäne | Pod-Packspiel-Daten (#567): `POD_PACKING_ROUNDS` (Nodes/Pods/requests aufsteigend) + Platzier-/Kapazitäts-Kern (`canPlacePod`/`podFitsAnyNode`). |
-| [`src/content/yamlstruct.ts`](src/content/yamlstruct.ts) | pure Domäne | YAML-Bausteine-Minispiel-Daten (#568): `YAML_STRUCT_ROUNDS` (Manifest-Bibliothek-IDs, aufsteigend verschachtelt) + Struktur-Prüf-Kern (`yamlStructLines`/`checkYamlOrder`/`checkYamlDepth`). |
-| [`src/content/routing.ts`](src/content/routing.ts) | pure Domäne | Routing-Lotse-Minispiel-Daten (#569): `ROUTING_ROUNDS` (Ingress-Regeln/Services+Selector/Pods+Labels, aufsteigend) + Match-/Routing-Kern (`podMatchesSelector`/`matchingPods`/`checkIngressChoice`/`checkPodChoice`/`checkNoEndpoints`). |
-| [`src/content/driftheal.ts`](src/content/driftheal.ts) | pure Domäne | Wunschzustand-Minispiel-Daten (#570): `DRIFT_HEAL_ROUNDS` (Drift-Ereignisse aufsteigend) + Reconcile-Kern (`applyDriftEvent`/`resolveChoice`): deklarativ hält gegen erneuten Drift, imperativ nicht. |
-| [`src/content/rbacKeyring.ts`](src/content/rbacKeyring.ts) | pure Domäne | RBAC-Schlüsselbund-Minispiel-Daten (#571): `RBAC_KEYRING_ROUNDS` (Schlüsselbund + Subjekt-Aufgaben, aufsteigend) + Grant-/Breite-Kern (`ruleGrants`/`optionGrants`/`optionBreadth`/`checkKeyringChoice`) für die kleinste passende Role/ClusterRole (Least Privilege). |
-| [`src/content/progression.ts`](src/content/progression.ts) | pure Domäne | Reine Inhalts-Daten: Ränge (XP-Schwellen) + Shop-Angebot. |
-| [`src/content/util.ts`](src/content/util.ts) | pure Domäne | Kleine geteilte Inhalts-Helfer (Zufall: `pick`/Range), von Drills u.a. genutzt. |
-| [`src/content/data/`](src/content/data/) | Daten | Quests/NPCs/Smalltalk/Reihenfolge/Drills/Quiz + Terraform-Konfigs (#147) + Manifeste (#514) + Funk-Erklärungen (#362) + Übungs-Pools (`practice.json`, #521) als JSON. |
-| [`src/content/drills.ts`](src/content/drills.ts) | pure Domäne | Barrel: mergt `DRILLS` aus `src/content/drills/*` (#457); `PRACTICE` ist seit #521 Content-as-Data (`loader/practice.ts`). |
-| [`src/content/drills/shared.ts`](src/content/drills/shared.ts) | pure Domäne | Geteilte Helfer + `DrillTask`-Typ + ensure*-Fabriken + YAML-Konstanten-Re-Exporte (#457). |
-| [`src/content/drills/docker.ts`](src/content/drills/docker.ts) | pure Domäne | Docker-Drills (pull/run/build/tag/push, #457). |
-| [`src/content/drills/kubectl.ts`](src/content/drills/kubectl.ts) | pure Domäne | kubectl/Secret/Ingress-Drills (#457). |
-| [`src/content/drills/git.ts`](src/content/drills/git.ts) | pure Domäne | Git/CI-Drills (#457). |
-| [`src/content/drills/helm.ts`](src/content/drills/helm.ts) | pure Domäne | Helm-Drills (install/upgrade/rollback/create/template, #457). |
-| [`src/content/drills/terraform.ts`](src/content/drills/terraform.ts) | pure Domäne | Terraform-Drills (plan/apply/state/output, #457). |
-| [`src/content/drills/network.ts`](src/content/drills/network.ts) | pure Domäne | Netzwerk-Drills (NetworkPolicy/DNS, #457). |
-| [`src/content/drills/gitops.ts`](src/content/drills/gitops.ts) | pure Domäne | GitOps/ArgoCD-Drills (#457). |
-| [`src/content/drills/observability.ts`](src/content/drills/observability.ts) | pure Domäne | Observability-Drills (Metriken/Logs/Alerts, #457). |
-| [`src/content/drills/rbac.ts`](src/content/drills/rbac.ts) | pure Domäne | RBAC/Pod-Security-Drills (#457). |
-| [`src/content/drills/storage.ts`](src/content/drills/storage.ts) | pure Domäne | Storage-Drills (StatefulSet/PVC/Snapshot, #457). |
-| [`src/content/drills/werft.ts`](src/content/drills/werft.ts) | pure Domäne | Werft-Capstone-Drills (Build→Deploy→Expose→Test, #457). |
-| [`src/content/abbrev.ts`](src/content/abbrev.ts) | pure Domäne | Langform↔Kürzel-Katalog („verdiente Abkürzung"). |
-| [`src/world/world.ts`](src/world/world.ts) | pure Domäne | Welt-Geometrie + Autotile (#340) + Sub-Tile-Kollision (#343/#386). → [world.md](docs/module/world.md) |
-| [`src/world/regions/geometry.ts`](src/world/regions/geometry.ts) | pure Domäne | Geteilte Region-Bausteine (#566): `grassFrame` + `fillTerrain` (Grundterrain aus `landLevel`) + `markRegistrySolids`; einmal statt byte-gleich je Region. |
-| [`src/world/regions/archipel.ts`](src/world/regions/archipel.ts) | pure Domäne | GitOps-Archipel-Insel: Geometrie + Warp. |
-| [`src/world/regions/lighthouse.ts`](src/world/regions/lighthouse.ts) | pure Domäne | Monitoring-Leuchtturm-Klippe: Geometrie + Warp (#111). |
-| [`src/world/regions/warehouse.ts`](src/world/regions/warehouse.ts) | pure Domäne | Lagerhallen-Viertel/Hafenkai: Geometrie + Warp (#124). |
-| [`src/world/regions/watchtower.ts`](src/world/regions/watchtower.ts) | pure Domäne | Wachturm-Quartier: Festungs-Bailey-Geometrie + Anleger/Warp + Turm-Fußabdruck (#130). |
-| [`src/world/regions/flotte.ts`](src/world/regions/flotte.ts) | pure Domäne | Expeditions-Flotte: Flaggschiff-Deck-Geometrie + Anleger/Warp (#148). |
-| [`src/world/regions/werft.ts`](src/world/regions/werft.ts) | pure Domäne | Heimat-Werft: Werft-Hof-Geometrie + Helling/Anleger/Warp (Phase-10-Capstone, #165). |
-| [`src/world/warps.ts`](src/world/warps.ts) | pure Domäne | Region-Übergänge als Daten-Liste (`REGION_WARPS`) + reiner Anti-Pingpong-Kern `armWarps`/`triggeredWarp` (#426). |
-| [`src/world/decor.ts`](src/world/decor.ts) | pure Domäne | Deterministische Deko-Platzierung. |
-| [`src/world/hazards.ts`](src/world/hazards.ts) | pure Domäne | Gefahren-Entscheidungskern (#512): `resolveHazardTick` (welche Gefahr startet/löst auf/tickt) + Start-Gate + Opfer-Eignung + `pirateSteal`/`stormFixKind`; dazu die szenen-neutralen `HazardEvent`/`HazardStartInfo`-Typen (#540). |
-| [`src/core/clock.ts`](src/core/clock.ts) | pure Domäne | Zeit-/Datums-Ableitung für die HUD-Uhr. |
-| [`src/core/coins.ts`](src/core/coins.ts) | pure Domäne | Value Object für Dublonen (#490, Forts. #479): Regel „nicht-negativ + ganzzahlig" + zentrale Arithmetik (Rundung/Multiplikator/Affordability) als `Coins`-Brand + Fabriken/Operationen. |
-| [`src/crashreport.ts`](src/crashreport.ts) | pure Domäne | Absturz-Diagnostik (#504): `buildCrashReport` normalisiert einen beliebigen geworfenen Wert (Error/String/DOMException/Promise-reason) DOM-frei in einen anzeigbaren `{title,message,detail}`-Bericht; die DOM-Umsetzung (globaler Handler + Fallback-Overlay) sitzt in `main.ts`. |
-| [`src/core/rng.ts`](src/core/rng.ts) | pure Domäne | Zufall/Determinismus-SSOT (#492): seedbarer PRNG `mulberry32`/`nextRandom`/`seedGlobalRng` + aus Namen abgeleitete stabile Werte `hashStr`/`hashHex`; ersetzt `Math.random` in `src/sim/**` + `src/content/**`. |
-| [`src/core/keybindings.ts`](src/core/keybindings.ts) | pure Domäne | Umbelegbare Tastatur-Aktionen (#232): diskrete Aktionstasten (Reden/Funkgerät/Logbuch/Album) als frei konfigurierbare Bindings, Phaser-/DOM-frei. |
-| [`src/hud/pixelfont.ts`](src/hud/pixelfont.ts) | pure Domäne | Glyphen-Daten der In-Welt-Bitmap-Font (#188). |
-| [`src/hud/markup.ts`](src/hud/markup.ts) | pure Domäne | `fmtCmd`: zeichnet variable Platzhalter `<token>` in Content-Texten als sichtbares „ändere-mich"-Badge aus (#311); die EINE Quelle der Platzhalter-Konvention, angewandt an der Render-Grenze (radio/dialog/quiz/questlog/album). |
-| [`src/hud/cull.ts`](src/hud/cull.ts) | pure Domäne | Off-screen-Culling & FPS-Messung (#82) + Cluster-Tag-Auswahl `selectVisibleTags` (#416). |
-| [`src/hud/containeryard.ts`](src/hud/containeryard.ts) | pure Domäne | Container-Hof-Layout (#303): `CONTAINER_DOCK`/`CONTAINER_LAGER` + `containerBarrelTile` (laufende→Dock, gestoppte→Lagerschuppen); reine Geometrie für clustersync (Fässer) + scenery (Schuppen). |
-| [`src/hud/overlaykbd.ts`](src/hud/overlaykbd.ts) | pure Domäne | Tastatur-Logik für Modals (#283) + Dialog-Blättern (#310) + Fokusfallen-Index (#506). |
-| [`src/hud/viewdecide.ts`](src/hud/viewdecide.ts) | pure Domäne | Reine Präsentations-Entscheidungen (#500), DOM-frei/testbar: Funk-Session-Priorität + `evaluateSubmission` (Terminal-Bewertung) + `scoreReview` (Quiz) + `resolveTalkTarget` (NPC-Routing). |
-| [`src/hud/toastlife.ts`](src/hud/toastlife.ts) | pure Domäne | Toast-Anzeigedauer-Politik: kurze Belohnung vs. lesbarer Hinweis (>= 15 s) + Fade-Timing (#370). |
-| [`src/hud/kralle.ts`](src/hud/kralle.ts) | pure Domäne | Kralle-Meilenstein-Sprüche: `krallePracticeMilestone(count)` (zählbewusster Spruch an 1/10/25/50/100…, sonst null, #236). |
-| [`src/hud/celebrate.ts`](src/hud/celebrate.ts) | pure Domäne | Erfolgs-Feier-Kern (#314, löst den Rang-Feier-Kern #223 ab): `enqueueAchievement` bündelt aufgelaufene Erfolge (Rang faltet, andere deduplizieren), `bundleCelebration`/`celebrationQuip`/`celebrationTitle` bauen die Anzeige-Sicht + deterministischen DevOps-Spruch; die Präsentation (Feier-Overlay + Signalflaggen-Konfetti) sitzt in `ui/hud.ts`. |
-| [`src/hud/cmdhistory.ts`](src/hud/cmdhistory.ts) | pure Domäne | Befehlshistorie fürs Funkgerät-Terminal (#316). |
-| [`src/hud/cmdunlock.ts`](src/hud/cmdunlock.ts) | pure Domäne | Freigeschaltete Befehlsfamilien fürs gefilterte `help` (#358): aus dem Quest-Fortschritt abgeleitet (kein neues Save-Feld), `help`/`clear` immer dabei. |
-| [`src/hud/helptext.ts`](src/hud/helptext.ts) | pure Domäne | `help`-Katalog + gefiltertes Rendering (#358) im CLI-Format (ein Befehl/Zeile, ausgerichtete Spalten, #359); der Simulator delegiert sein `help` hierher (eigenes, typfreies Modul → kein Zyklus). |
-| [`src/hud/funkexplain.ts`](src/hud/funkexplain.ts) | pure Domäne | Freies Funken „Was ist gerade passiert?": dosierte Auswahl einer In-World-Erklärung zur Befehlszeile (#362); Katalog ist Content-as-Data (`content/data/funk-explain/<tool>.json`). |
-| [`src/hud/questlog.ts`](src/hud/questlog.ts) | pure Domäne | Logbuch-Übersicht: Quest-Zustände, Nachlese (#326). |
-| [`src/hud/album.ts`](src/hud/album.ts) | pure Domäne | Sammelalbum/Glossar (#278): Befehle (Teach-Intros) + Wissen (Quiz) aus dem Content, nach Thema gruppiert, Freischalt-Ableitung aus `completedQuests`/`review` (kein neues Save-Feld). |
-| [`src/hud/labellayout.ts`](src/hud/labellayout.ts) | pure Domäne | Entzerrt überlappende In-Welt-Beschriftungen (#207). |
-| [`src/world/maps/tilemap.ts`](src/world/maps/tilemap.ts) | pure Domäne | Tiled-`.tmj`-Grundgerüst (Typen/Validierung/Kollision, #191). |
-| [`src/world/maps/harbormap.ts`](src/world/maps/harbormap.ts) | pure Domäne | Hafenkarte als Daten + Tiled-Serialisierung (#192). |
-| [`src/world/maps/mapregistry.ts`](src/world/maps/mapregistry.ts) | pure Domäne | Zentrale Map-Registry (ID → `.tmj` + Metadaten, #193). |
-| [`src/types.ts`](src/types.ts) | Typen | Zentrale Typen (GameState, Quest, …). → [app.md](docs/module/app.md) |
-| [`src/game.ts`](src/game.ts) | Anwendung | `Game`-Fassade/Barrel (#356-Muster): State-Felder + Spread der `src/game/*`-Bündel. → [app.md](docs/module/app.md) |
-| [`src/game/shared.ts`](src/game/shared.ts) | Anwendung | Geteilte Bausteine: `part`/`GameSelf`, `today`, Quest-ID↔Index-Brücke, `makeDefaultState`, Freischalt-Konstanten. |
-| [`src/game/save.ts`](src/game/save.ts) | Anwendung | Laden/Speichern/Reset/Export/Import + `sanitizeState` + `LEGACY_QUEST_ID_MAP`. |
-| [`src/game/economy.ts`](src/game/economy.ts) | Anwendung | Hafen-Wirtschaft, Streak, XP/Rang, Dublonen, Shop. |
-| [`src/game/progression.ts`](src/game/progression.ts) | Anwendung | Quest-Fortschritt, Dev-Sprung (#329), freies Üben. |
-| [`src/game/sandbox.ts`](src/game/sandbox.ts) | Anwendung | Wiederspiel-Sandbox (#332): abgeschlossene Quest erneut spielen, Live-Stand als RAM-Lesezeichen, `save()` währenddessen No-Op. |
-| [`src/game/unlocks.ts`](src/game/unlocks.ts) | Anwendung | Verdiente Abkürzungen (#313) + Befehlshistorie (#316). |
-| [`src/game/spaced-repetition.ts`](src/game/spaced-repetition.ts) | Anwendung | Leitner-Spaced-Repetition + Review-Gate + Übungs-Lernstand (Drills/Stapel-Runden, gewichtete Auswahl, #219). |
-| [`src/game/clock.ts`](src/game/clock.ts) | Anwendung | Persistente Spiel-Zeit/Kalender (#413): `advanceClock` (Achse `gameDays` vorrücken) + `calendar` (abgeleiteter Tag/Saison/Uhrzeit). |
-| [`src/game/tick.ts`](src/game/tick.ts) | Anwendung | Szenen-neutraler Taktgeber (#501): `Game.tick(dtMs)` rückt frame-unabhängige Domäne (Spiel-Zeit + Hafen-Wirtschaft + Gefahren #540) an EINER Stelle vor; aus Phasers globalem Pre-Step (main.ts) getrieben → läuft in JEDER Szene, Auszahlung entkoppelt über runtime-Sink. |
-| [`src/game/hazards.ts`](src/game/hazards.ts) | Anwendung | Szenen-neutrale Zufalls-Gefahren (#540): Hazard-Zeitachse + Zustand (Piraten/Krake/Sturm) + Cluster-Mutation, getaktet aus `Game.hazardTick` → Gefahren starten/schreiten in JEDER Szene fort (flüchtig, kein Save); Entscheidungen aus dem reinen Kern `world/hazards.ts`, Effekte entkoppelt über `notifyHazard`-Sink. |
-| [`src/runtime.ts`](src/runtime.ts) | Anwendung | Laufzeit-Singletons (bricht Import-Zyklen). |
-| [`src/devpanel.ts`](src/devpanel.ts) | Anwendung | Dev-/Test-Panel (#325/#331). |
-| [`src/store.ts`](src/store.ts) | Persistenz | SaveStore: dünne Fassade (#515), orchestriert den Boot (`init` + einmalige Namensraum-Migrationen `kubernia` #557) und delegiert an `store/*`. |
-| [`src/store/backend.ts`](src/store/backend.ts) | Persistenz | Backend-Auswahl (IndexedDB #350 / localStorage / In-Memory) + synchrones Roh-IO (`rawGet`/`rawSet`/`rawRemove`) via In-Memory-Cache; `hydrate`/`activateIdb` fürs Boot-Hydrieren (#515). |
-| [`src/store/slots.ts`](src/store/slots.ts) | Persistenz | Mehrere Save-Slots (#306): Slot-Index, Slot-Keys (Default-Slot am Legacy-Key), Slot-CRUD + Roh-IO auf dem AKTIVEN Slot (#515). |
-| [`src/store/versioning.ts`](src/store/versioning.ts) | Persistenz | Save-Format-Versionierung (#350/#510): `{ v, data }`-Hülle, Migrationskette (`CURRENT_SAVE_VERSION`), `readState`/`writeState`/`migrateParsed` + Backup-vor-Überschreiben (#515). |
-| [`src/store/persistence.ts`](src/store/persistence.ts) | Persistenz | Eviction-Schutz + Quota-Monitoring (#401): `requestPersistentStorage()`/`StorageHealth`/`QUOTA_WARN_RATIO` (#515). |
-| [`src/store/legacy-idb.ts`](src/store/legacy-idb.ts) | Persistenz | Rename-Migration KubeQuest→Kubernia (#557): hebt einen Alt-Bestand aus der IndexedDB `kubequest` in die neue DB `kubernia` (nur in ein leeres Ziel, Alt-DB bleibt als Netz). |
-| [`src/scenes.ts`](src/scenes.ts) | Präsentation | Barrel der 7 Phaser-Szenen (`KQScenes`, #345). → [presentation.md](docs/module/presentation.md) |
-| [`src/scenes/shared.ts`](src/scenes/shared.ts) | Präsentation | Geteilte Szenen-Bausteine (Font/Schilder/NPC-Render) + Insel-Szenen-Basisklasse `IslandScene` (#423). |
-| [`src/scenes/geometry.ts`](src/scenes/geometry.ts) | Präsentation | Szenen-Geometrie-/Hitbox-Konstanten-SSOT (#590): Sub-Tile-Hitbox-Radius `HIT_R` + `LAMP_HIT`/`CRATE_HIT` + Pod-Steg-/Tag-Layout (`SLOTS_PER_PIER`/`TAG_CAP`/`REVEAL_*`); vorher über WorldScene/RegionScene/regions/clustersync verstreut. |
-| [`src/scenes/BootScene.ts`](src/scenes/BootScene.ts) | Präsentation | Lädt Assets + Frame-Slicing, startet World. |
-| [`src/scenes/WorldScene.ts`](src/scenes/WorldScene.ts) | Präsentation | Port Kubernia: schlanker Orchestrator (create/update) + Render-Primitive; Spiel-Systeme in `worldscene/*` (#393). |
-| [`src/scenes/worldscene/mapterrain.ts`](src/scenes/worldscene/mapterrain.ts) | Präsentation | Generischer, Phaser-freier Terrain-Lader: Boden/Kollision/Türen/NPCs aus `getMapEntry(scene.mapId)` statt fest „harbor" (#425). |
-| [`src/scenes/worldscene/terrain.ts`](src/scenes/worldscene/terrain.ts) | Präsentation | Hafen-Szenerie (Objekte/Gebäude/Türen-Optik) + Wang-Autotile-Boden (#393). |
-| [`src/scenes/worldscene/scenery.ts`](src/scenes/worldscene/scenery.ts) | Präsentation | Deko, statische Props/Effekte, Möwen, Tag-Nacht-Schleier (#393). |
-| [`src/scenes/worldscene/clustersync.ts`](src/scenes/worldscene/clustersync.ts) | Präsentation | Cluster→Welt-Sync: Pod-Kisten + dynamische Tags als Daten + gedeckelter Render-Pool (#393/#416). |
-| [`src/scenes/worldscene/harbordamage.ts`](src/scenes/worldscene/harbordamage.ts) | Präsentation | Phaser-freies Textur-Mapping für die Sturm-Schadensoptik: `harborTexture` (heile Key → Trümmer-Variante je CP-Zustand, #692) + `pierHealed` (Steg heil je Node-Beitritt, #693). |
-| [`src/scenes/worldscene/events.ts`](src/scenes/worldscene/events.ts) | Präsentation | Gefahren-RENDERER (#540): setzt den `notifyHazard`-Sink um – globaler Alarm/roter Rahmen + weltgebundene Sprites (Boot/Krake/Sturm), Sprite-Rekonstruktion beim Aufwachen; Zustand/Takt liegen in `game/hazards.ts`. |
-| [`src/scenes/worldscene/warps.ts`](src/scenes/worldscene/warps.ts) | Präsentation | Übergänge Haus/Archipel/Leuchtturm/Lager + Warp-Gates (#393). |
-| [`src/scenes/worldscene/npcschedule.ts`](src/scenes/worldscene/npcschedule.ts) | Präsentation | NPC-Tagesplan-Sync (#420): verschiebt NPCs mit `schedule` in `entities.json` zur Laufzeit auf ihre Zielposition + ersetzt Bob-Tween. |
-| [`src/scenes/worldscene/types.ts`](src/scenes/worldscene/types.ts) | Präsentation | Feld-/Primitive-Interface `WorldSceneFields` (WorldScene `implements` es) + `WorldSceneLike = Phaser.Scene & WorldSceneFields` fürs System-Modul-Muster; volltypisiert statt `any` (#393/#496). |
-| [`src/scenes/InteriorScene.ts`](src/scenes/InteriorScene.ts) | Präsentation | Betretbarer Hausinnenraum (#6). |
-| [`src/scenes/RegionScene.ts`](src/scenes/RegionScene.ts) | Präsentation | EINE datengetriebene Szene für alle Nachbar-Regionen (Archipel/Leuchtturm/Lager/Wachturm), gesteuert über eine `RegionConfig` (#427); ersetzt die früheren Insel-Szenen-Klassen. |
-| [`src/scenes/regions.ts`](src/scenes/regions.ts) | Präsentation | Die `RegionConfig`-Liste (`REGION_CONFIGS`): Archipel #92/Leuchtturm #111/Lager #124/Wachturm #130 als Daten + `decorate`-Hooks für echte Sondermechanik (Bäume/Statue, Lichtkegel, Lager-Güter, Wachturm-Platzhalter), #427. |
-| [`src/scenes/TilemapTestScene.ts`](src/scenes/TilemapTestScene.ts) | Präsentation | Tiled-Loader-Testszene (`?maptest`, #191). |
-| [`src/ui.ts`](src/ui.ts) | Präsentation | UI-Orchestrator/Barrel (komponiert `UI` aus `src/ui/*`, #356). → [presentation.md](docs/module/presentation.md) |
-| [`src/ui/shared.ts`](src/ui/shared.ts) | Präsentation | Geteilte UI-Helfer + `part()`-Typ-Helper. |
-| [`src/ui/overlays.ts`](src/ui/overlays.ts) | Präsentation | Overlay-Register (#505): EINE Datenliste `OVERLAYS` (id/blocking/keyNav) als SSOT; `blocking`/`closeOverlays`/`overlayKey` + Einzel-Checks leiten daraus ab (`BLOCKING_OVERLAY_IDS`/`KEYNAV_OVERLAY_IDS`/`OVERLAY_ID`), an index.html gebunden. |
-| [`src/ui/overlay.ts`](src/ui/overlay.ts) | Präsentation | Event-Delegation, Modal-Tastatur, Menü/Pause. |
-| [`src/ui/hud.ts`](src/ui/hud.ts) | Präsentation | HUD/Toasts/Alarm, Interaktion, Antwort-Buttons. |
-| [`src/ui/quest.ts`](src/ui/quest.ts) | Präsentation | Quest-Maschine + Begrüßung/Intro (#288). |
-| [`src/ui/dialog.ts`](src/ui/dialog.ts) | Präsentation | NPC-/Bo-Dialoge. |
-| [`src/ui/radio.ts`](src/ui/radio.ts) | Präsentation | Funkgerät-Terminal (teach/drill/terminal) + freies Üben. |
-| [`src/ui/minigame.ts`](src/ui/minigame.ts) | Präsentation | Stapel-Minispiel. |
-| [`src/ui/podpacking.ts`](src/ui/podpacking.ts) | Präsentation | Pod-Packspiel (#567): Pods per Klick auf Nodes verteilen, Kapazitätsbalken, Pending-Erkennung. |
-| [`src/ui/yamlstruct.ts`](src/ui/yamlstruct.ts) | Präsentation | YAML-Bausteine-Minispiel (#568): Zeile wählen (Reihenfolge) → Ebene wählen (Einrückung), Sofort-Feedback + Tab-Distraktor. |
-| [`src/ui/routing.ts`](src/ui/routing.ts) | Präsentation | Routing-Lotse-Minispiel (#569): Anfrage wählen → optional Ingress-Regel → Pod (oder „keine Endpoints“) treffen, Sofort-Feedback. |
-| [`src/ui/driftheal.ts`](src/ui/driftheal.ts) | Präsentation | Wunschzustand-Minispiel (#570): Ist/Soll-Board, Drift-Ereignis auflösen (imperativ vs. deklarativ), Reconcile-Loop-Anzeige. |
-| [`src/ui/rbaskeyring.ts`](src/ui/rbaskeyring.ts) | Präsentation | RBAC-Schlüsselbund-Minispiel (#571): Subjekt wählen → kleinsten passenden Schlüssel (Role/ClusterRole) aus dem Bund binden, Sofort-Feedback. |
-| [`src/ui/questlog.ts`](src/ui/questlog.ts) | Präsentation | Logbuch-Übersicht & -Detail (DOM, #326). |
-| [`src/ui/album.ts`](src/ui/album.ts) | Präsentation | Sammelalbum/Glossar (DOM, #278): Album-Seiten je Thema + Sticker-Detail, Taste B. |
-| [`src/ui/shop.ts`](src/ui/shop.ts) | Präsentation | Shop. |
-| [`src/ui/quiz.ts`](src/ui/quiz.ts) | Präsentation | Krabben-Quiz (Spaced-Repetition). |
-| [`src/ui/save.ts`](src/ui/save.ts) | Präsentation | Spielstand-Export/Import + `resetGame`. |
-| [`src/sfx.ts`](src/sfx.ts) | Präsentation | WebAudio-Sounds (synthetisiert). |
-| [`src/assets-data.ts`](src/assets-data.ts) | Assets | `ASSET_MANIFEST` (eine Quelle pro Grafik). |
+| `src/sim.ts` + `src/sim/` | pure Domäne | [sim.md](docs/module/sim.md) — Cluster-Simulator-Kern + Befehlsfamilien, Split #346/#372–#385 |
+| `src/content.ts` + `src/content/` | pure Domäne | [content.md](docs/module/content.md) — Content-as-Data (#348/#349/#352/#368): Loader/Schema/Checks/Drills |
+| `src/world/` + `src/core/` + `src/hud/` + `src/crashreport.ts` | pure Domäne | [world.md](docs/module/world.md) — Welt/Karten/HUD-Logik: Geometrie, Autotile #340, Hitbox, Inseln |
+| `src/game.ts` + `src/game/` + `src/store.ts` + `src/store/` + `src/runtime.ts` + `src/devpanel.ts` + `src/types.ts` | Anwendung/Persistenz | [app.md](docs/module/app.md) — `game.ts`/`sanitizeState`, SaveStore/IndexedDB #350, Spiel-Zeit #413 |
+| `src/scenes.ts` + `src/scenes/` + `src/ui.ts` + `src/ui/` + `src/sfx.ts` + `src/main.ts` + `src/assets-data.ts` | Präsentation/Einstieg | [presentation.md](docs/module/presentation.md) — Szenen-Split #345, UI-Split #356, SFX/Assets |
 
-**Tiefendocs (on-demand, je Subsystem):**
-
-| Doc | Deckt ab |
-|---|---|
-| [`docs/module/sim.md`](docs/module/sim.md) | Simulator-Kern + alle Befehlsfamilien (`src/sim/*`), Split-Historie #346/#372–#385, Host-Interfaces, Observability #109/#110, RBAC #126/#128. |
-| [`docs/module/content.md`](docs/module/content.md) | Content-as-Data (#348/#349/#352/#368): Loader/Schema, Checks, Entity-Registry, `data/`-Struktur. |
-| [`docs/module/world.md`](docs/module/world.md) | Welt/Karten (pure Domäne): Geometrie, Autotile #340, Hitbox #343/#386, Inseln, Tiled-Pipeline, HUD-Helfer. |
-| [`docs/module/presentation.md`](docs/module/presentation.md) | Präsentation: Szenen-Barrel & -Split #345, UI-Barrel & -Bündel #356, SFX/Assets. |
-| [`docs/module/app.md`](docs/module/app.md) | Anwendung/Persistenz/Typen: `game.ts`/`sanitizeState`, runtime, devpanel, SaveStore/IndexedDB #350. |
-
-> **Konvention (gegen erneutes Aufblähen):** Neues `src/`-Modul = **eine** knappe Zeile hier (Datei · Schicht · ein Satz Zweck). Ausführliche Historie/Interface-Details kommen in das passende [`docs/module/`](docs/module/)-Tiefendoc, **nicht** in diese Tabelle. Tiefe Begründung der Schichtung (Domäne ↔ Anwendung ↔ Präsentation): [AGENTS.md › Architektur](AGENTS.md#architektur). **Diese Konvention ist maschinell bewacht (#482):** `npm run check:docmap` (CI-Gate + `test/docmap.test.ts`) meldet jede `src/`-Datei ohne Landkarten-Zeile, jede Zeile ohne Datei und jede Schicht, die von der `dependency-cruiser`-Zuordnung abweicht — die Landkarte kann also nicht mehr leise veralten.
+> **Konvention (Stardew-skalierbar, #907):** Neues `src/`-Modul → Backtick-Pfad-Zeile im passenden [`docs/module/`](docs/module/)-Tiefendoc (Datei · kurzer Zweck). Diese Übersicht bleibt Subsystem-granular (wächst sub-linear zur Modul-Zahl). Tiefe Begründung der Schichtung: [AGENTS.md › Architektur](AGENTS.md#architektur). **Maschinell bewacht (#482/#907):** `npm run check:docmap` (CI-Gate + `test/docmap.test.ts`) meldet jede `src/`-Datei ohne Tiefendoc-Erwähnung — die Abdeckung kann nicht mehr leise veralten.
 
 ## 🧭 Schichtregeln beim Arbeiten im Verzeichnis (welche Imports gelten wo, #472)
 

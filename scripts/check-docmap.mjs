@@ -2,71 +2,49 @@
 // `node scripts/check-docmap.mjs` (npm run check:docmap) gestartet UND von
 // test/docmap.test.ts importiert. Ein `#!` bricht genau diesen Vitest/esbuild-Import.
 /**
- * Doku↔Code-Drift-Wächter (#482) — hält die CLAUDE.md-Landkarte ehrlich gegenüber dem Code.
+ * Doku↔Code-Drift-Wächter (#482, Stardew-Skalierung #907) — hält die Tiefendoc-Abdeckung ehrlich.
  *
- * Hintergrund: Die CLAUDE.md-Landkarte und die arc42-Doku beschreiben, welche Datei zu
- * welcher Schicht/Subdomäne gehört. Ein KI-Agent wählt anhand dieser Doku das betroffene
- * Modul und lädt nur dessen Kontext — driftet Doku↔Code, zieht er das falsche/zu viel
- * Paket rein (explizites Qualitätsziel „KI-Entwickel-Effizienz", arc42 §1). Bisher hielt
- * nur die Prosa-Regel „Doku aktuell halten ist Teil von fertig" (AGENTS.md) die Landkarte
- * synchron — prozessual, nicht mechanisch. Dieser Wächter macht Drift **rot**:
+ * Hintergrund: Eine per-Datei-Zeile in CLAUDE.md wächst linear mit den Modulen (~163→490 bei
+ * Stardew-Scope). #907 ersetzt den CLAUDE.md-per-File-Check durch einen Tiefendoc-Abdeckungs-Check:
+ * jedes `src/*.ts` muss als Backtick-Pfad in `docs/module/*.md` vorkommen.
  *
- *   1. Keine Geister-Zeilen: jede in der Landkarte genannte Datei/jedes Verzeichnis existiert.
- *   2. Keine verwaisten Module: jede src/-*.ts hat genau eine Landkarten-Zeile.
- *   3. Schicht-Konsistenz: die in der Landkarte deklarierte Schicht stimmt mit der
- *      dependency-cruiser-Zuordnung überein (EINE Quelle: scripts/layers.cjs).
+ *   1. Keine Geister-Einträge: jeder in den Tiefendocs genannte `src/…ts`-Pfad existiert.
+ *   2. Keine verwaisten Module: jede src/-*.ts ist in min. einem Tiefendoc erwähnt.
+ *   3. Schicht-Konsistenz: weggefallen (#907) — `check:arch` (dependency-cruiser) erzwingt
+ *      die eigentlichen Schichtgrenzen als CI-Gate; Doku-Schicht-Angaben sind nur noch Prosa.
  *
- * Bewusst ein reines Node-Skript (nur Builtins), analog zu check-size.mjs: läuft
- * plattformübergreifend über `npm run check:docmap` und im CI. Die Parse-/Prüf-Logik
- * wird zusätzlich von test/docmap.test.ts importiert — EINE Quelle der Wahrheit.
- *
- * Ausführen mit:  npm run check:docmap   (oder als Teil von: npm test)
+ * Bewusst ein reines Node-Skript (nur Builtins). Ausführen mit: npm run check:docmap
  */
 
-import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, sep } from "node:path";
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
-const { layerOf, LABEL_TO_LAYER } = require("./layers.cjs");
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Module, die bewusst KEINE Landkarten-Zeile brauchen (repo-relativ, POSIX).
- *  Leer gehalten: die AGENTS.md-Konvention verlangt für JEDES src-Modul eine Zeile.
+/** Module, die bewusst KEINE Tiefendoc-Zeile brauchen (repo-relativ, POSIX).
+ *  Leer gehalten: die Konvention verlangt für JEDES src-Modul eine Tiefendoc-Erwähnung.
  *  Reine Typdeklarationen (.d.ts) werden separat gefiltert (kein Laufzeit-Modul). */
 export const ORPHAN_ALLOWLIST = [];
 
-/** Liest die CLAUDE.md-Landkarte (nur die Tabelle mit Kopf „| Datei | Schicht | Zweck |").
- *  Gibt je Zeile { file, layer, isDir } zurück (file = repo-relativer POSIX-Pfad aus der
- *  ersten Spalte, layer = zweite Spalte). Bricht die Tabelle an der ersten Nicht-|-Zeile ab,
- *  damit die nachfolgende Tiefendoc-Tabelle NICHT mitgelesen wird. */
-export function parseDocMap(claudeMd) {
-  const lines = claudeMd.split(/\r?\n/);
-  const headerIdx = lines.findIndex((l) => /^\|\s*Datei\s*\|\s*Schicht\s*\|/.test(l));
-  if (headerIdx < 0)
-    throw new Error("CLAUDE.md-Landkarte (Tabelle mit Kopf Datei/Schicht/Zweck) nicht gefunden.");
-
-  const out = [];
-  for (let i = headerIdx + 2; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line.startsWith("|")) break; // Tabellenende
-    const cells = line.split("|").slice(1, -1).map((c) => c.trim());
-    if (cells.length < 2) continue;
-    const m = cells[0].match(/`([^`]+)`/); // Pfad steht als `…` in der ersten Spalte
-    if (!m) continue;
-    const raw = m[1];
-    const isDir = raw.endsWith("/");
-    out.push({ file: isDir ? raw.replace(/\/$/, "") : raw, layer: cells[1], isDir });
+/** Scannt alle `docs/module/*.md` nach Backtick-Pfaden der Form `src/…ts`.
+ *  Gibt ein Set der gefundenen Pfade zurück (repo-relativ, POSIX).
+ *  `rootDir` überschreibbar, damit der Test deterministisch dasselbe Repo misst. */
+export function parseDeepDocMaps(rootDir = ROOT) {
+  const docsDir = join(rootDir, "docs", "module");
+  const covered = new Set();
+  for (const filename of readdirSync(docsDir)) {
+    if (!filename.endsWith(".md")) continue;
+    const text = readFileSync(join(docsDir, filename), "utf8");
+    for (const m of text.matchAll(/`(src\/[^`]+\.ts)`/g)) {
+      covered.add(m[1]);
+    }
   }
-  return out;
+  return covered;
 }
 
 /** Sammelt alle src/**\/*.ts (repo-relativer POSIX-Pfad), OHNE reine Typdeklarationen
- *  (.d.ts sind kein Laufzeit-Modul und stehen — wie beim dependency-cruiser — nicht in
- *  der Landkarte). `rootDir` überschreibbar, damit der Test deterministisch dasselbe
- *  Repo misst, unabhängig vom Arbeitsverzeichnis. */
+ *  (.d.ts sind kein Laufzeit-Modul und stehen nicht in den Tiefendocs). */
 export function collectSrcModules(rootDir = ROOT) {
   const out = [];
   const walk = (dir) => {
@@ -81,45 +59,23 @@ export function collectSrcModules(rootDir = ROOT) {
   return out.sort();
 }
 
-/** Vergleicht Landkarte gegen Code. Gibt strukturierte Befunde zurück (leere Arrays = ok). */
+/** Vergleicht Tiefendocs gegen Code. Gibt strukturierte Befunde zurück (leere Arrays = ok). */
 export function auditDocMap(rootDir = ROOT) {
-  const claudeMd = readFileSync(join(rootDir, "CLAUDE.md"), "utf8");
-  const entries = parseDocMap(claudeMd);
   const modules = collectSrcModules(rootDir);
   const moduleSet = new Set(modules);
   const allowed = new Set(ORPHAN_ALLOWLIST);
+  const covered = parseDeepDocMaps(rootDir);
 
-  const mappedFiles = new Set(entries.filter((e) => !e.isDir).map((e) => e.file));
+  // 1. Geister-Einträge: Tiefendoc nennt einen Pfad, der nicht in src/ existiert.
+  const ghosts = [...covered].filter((f) => !moduleSet.has(f));
 
-  // 1. Geister-Zeilen: Landkarten-Eintrag ohne Datei/Verzeichnis auf der Platte.
-  const ghosts = entries.filter((e) => {
-    const abs = join(rootDir, e.file);
-    if (!existsSync(abs)) return true;
-    return e.isDir ? !statSync(abs).isDirectory() : !statSync(abs).isFile();
-  });
+  // 2. Verwaiste Module: src-*.ts ohne Tiefendoc-Erwähnung (außer Allowlist).
+  const orphans = modules.filter((f) => !covered.has(f) && !allowed.has(f));
 
-  // 2. Verwaiste Module: src-*.ts ohne Landkarten-Zeile (außer Allowlist).
-  const orphans = modules.filter((f) => !mappedFiles.has(f) && !allowed.has(f));
+  // 3. Stale Allowlist-Einträge (Datei weg oder inzwischen doch in einem Tiefendoc).
+  const staleAllowlist = ORPHAN_ALLOWLIST.filter((f) => !moduleSet.has(f) || covered.has(f));
 
-  // 3. Schicht-Konsistenz: deklarierte Schicht (Landkarte) vs. dependency-cruiser-Bucket.
-  //    Nur für existierende .ts-Einträge (Verzeichnis-/Daten-Zeilen haben keine Code-Schicht).
-  const layerMismatches = [];
-  const unknownLabels = [];
-  for (const e of entries) {
-    if (e.isDir || !moduleSet.has(e.file)) continue;
-    const expected = LABEL_TO_LAYER[e.layer];
-    if (expected === undefined) {
-      unknownLabels.push(e);
-      continue;
-    }
-    const actual = layerOf(e.file);
-    if (expected !== actual) layerMismatches.push({ ...e, expected, actual });
-  }
-
-  // 4. Stale Allowlist-Einträge (Datei existiert nicht mehr oder steht inzwischen doch in der Karte).
-  const staleAllowlist = ORPHAN_ALLOWLIST.filter((f) => !moduleSet.has(f) || mappedFiles.has(f));
-
-  return { entries, modules, ghosts, orphans, layerMismatches, unknownLabels, staleAllowlist };
+  return { modules, ghosts, orphans, staleAllowlist };
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
@@ -129,25 +85,18 @@ function main() {
   const red = (s) => paint("31", s);
   const green = (s) => paint("32", s);
 
-  const { entries, modules, ghosts, orphans, layerMismatches, unknownLabels, staleAllowlist } =
-    auditDocMap();
+  const { modules, ghosts, orphans, staleAllowlist } = auditDocMap();
 
   let bad = false;
-  for (const g of ghosts) {
+  for (const f of ghosts) {
     bad = true;
-    console.error(red(`✖ Geister-Zeile: „${g.file}" steht in der CLAUDE.md-Landkarte, existiert aber nicht.`));
+    console.error(red(`✖ Geister-Eintrag: „${f}" steht in einem Tiefendoc, existiert aber nicht in src/.`));
   }
   for (const o of orphans) {
     bad = true;
-    console.error(red(`✖ Verwaistes Modul: „${o}" hat keine Zeile in der CLAUDE.md-Landkarte (Zeile ergänzen).`));
-  }
-  for (const u of unknownLabels) {
-    bad = true;
-    console.error(red(`✖ Unbekannte Schicht „${u.layer}" für ${u.file} — in scripts/layers.cjs (LABEL_TO_LAYER) pflegen oder Tippfehler in CLAUDE.md fixen.`));
-  }
-  for (const m of layerMismatches) {
-    bad = true;
-    console.error(red(`✖ Schicht-Drift: ${m.file} steht als „${m.layer}" (→ ${m.expected}), gehört laut dependency-cruiser aber zu ${m.actual}.`));
+    console.error(
+      red(`✖ Verwaistes Modul: „${o}" ist in keinem docs/module/*.md als Backtick-Pfad erwähnt (Zeile ergänzen).`),
+    );
   }
   for (const f of staleAllowlist) {
     bad = true;
@@ -155,11 +104,11 @@ function main() {
   }
 
   if (bad) {
-    console.error(`\nDoku↔Code-Drift. Landkarte in CLAUDE.md bzw. Schicht-Definition in scripts/layers.cjs angleichen.`);
+    console.error(`\nDoku↔Code-Drift. Tiefendoc-Abdeckung in docs/module/*.md ergänzen.`);
     process.exit(1);
   }
   console.log(
-    green(`✔ CLAUDE.md-Landkarte deckt sich mit dem Code (${entries.length} Zeilen, ${modules.length} src-Module, Schichten konsistent).`),
+    green(`✔ Tiefendoc-Abdeckung vollständig (${modules.length} src-Module alle in docs/module/*.md erwähnt).`),
   );
 }
 
