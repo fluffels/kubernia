@@ -19,6 +19,7 @@
  */
 import Phaser from "phaser";
 import { Game } from "../../game";
+import { BROKEN_STATUS } from "../../sim";
 import { SFX } from "../../sfx";
 import { spreadLabelsVertically, type LayoutBox } from "../../hud/labellayout";
 import { selectVisibleTags, expandRect, flagBobOffset, lampFlickerAlpha } from "../../hud/cull";
@@ -176,8 +177,10 @@ export function rebuildDynamic(scene: WorldSceneLike) {
       seen[d.name] = true;
       const pos = podSlotPos(scene, first.slot);
       const crateY = pos.y - 44;  // Kisten-Mitte (Sprite-Ursprung der Image)
+      // #867: vorher eine eigene Ternärkette, die nur imagepull/crashloop kannte und
+      // notready/oomkilled fälschlich als "Pending" beschriftete – jetzt zentrale Tabelle.
       const text = d.broken
-        ? d.name + " ⚠ " + (d.broken.type === "imagepull" ? "ImagePullBackOff" : d.broken.type === "crashloop" ? "CrashLoopBackOff" : "Pending")
+        ? d.name + " ⚠ " + BROKEN_STATUS[d.broken.type].label
         : d.name + " " + d.replicas + "/" + d.replicas;
       mkTag(pos.x, crateY - 14, text, d.broken ? 0xff7b7b : 0x6fe09a, pos.x, crateY);
     }

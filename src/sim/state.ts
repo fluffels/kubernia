@@ -26,27 +26,73 @@ export interface ExecResult {
   clear?: boolean;
 }
 
-/** Art einer absichtlich kaputten Workload (für die Troubleshooting-Quests). */
-export interface Broken {
-  type: string; // "imagepull" | "crashloop" | "pending" | "notready" | "oomkilled"
-  badImage?: string;
-  // Bei "imagepull": der Pod scheitert NICHT an einem Tippfehler, sondern weil das
-  // (richtig benannte) eigene Image noch nicht lokal gebaut/gezogen ist (#164, Werft-
-  // Capstone). Anders als ein echter Tippfehler heilt das von selbst, sobald
-  // `docker build`/`docker pull` das Image bereitstellt (der kubelet zieht es nach).
-  needsBuild?: boolean;
-  // Fehlendes Secret, das die App braucht. Bei "crashloop" stirbt sie ohne es,
-  // bei "notready" läuft sie zwar (liveness ok), meldet sich aber erst als
-  // bereit, sobald das Secret da ist (readiness). Sobald es existiert, heilt
-  // crashloop per `rollout restart`, notready ganz von selbst (Probe prüft weiter).
-  needsSecret?: string;
-  // Bei "oomkilled": So viel Speicher (in Mi) braucht die App wirklich. Solange
-  // das memory-Limit darunter liegt, killt der Kernel den Container immer wieder
-  // (OOMKilled). Wird das Limit per `kubectl set resources` auf >= memNeeded
-  // angehoben, heilt der Dienst. Diagnose nur über `describe` (Last State /
-  // Reason: OOMKilled) – die App-Logs verraten den OOM-Kill NICHT.
-  memNeeded?: number;
+/** Art einer absichtlich kaputten Workload (für die Troubleshooting-Quests). Echte
+ *  discriminated union (#867 – vorher ein Kommentar-„Union" über `type: string`, mit
+ *  allen Feldern alle Typen hindurch optional): der Compiler kennt jetzt je Variante
+ *  genau ihre eigenen Felder, und die zentrale `BROKEN_STATUS`-Tabelle unten erzwingt
+ *  bei einer neuen Variante einen Typfehler statt einer klammheimlich falschen Anzeige
+ *  – genau das ist vorher passiert (`clustersync.ts` zeigte notready/oomkilled
+ *  fälschlich als "Pending", weil ihre eigene Ternärkette die beiden Typen nicht
+ *  kannte und niemand das merkte, weil der Compiler nicht helfen konnte). */
+export type Broken =
+  | {
+      type: "imagepull";
+      badImage?: string;
+      // Der Pod scheitert NICHT an einem Tippfehler, sondern weil das (richtig
+      // benannte) eigene Image noch nicht lokal gebaut/gezogen ist (#164, Werft-
+      // Capstone). Anders als ein echter Tippfehler heilt das von selbst, sobald
+      // `docker build`/`docker pull` das Image bereitstellt (der kubelet zieht es nach).
+      needsBuild?: boolean;
+    }
+  | {
+      type: "crashloop";
+      // Fehlendes Secret, das die App braucht – sie stirbt ohne es. Sobald es
+      // existiert, heilt crashloop per `rollout restart`.
+      needsSecret?: string;
+    }
+  | { type: "pending" }
+  | {
+      type: "notready";
+      // Fehlendes Secret: die App läuft zwar (liveness ok), meldet sich aber erst als
+      // bereit, sobald das Secret da ist (readiness). Heilt ganz von selbst (Probe
+      // prüft weiter), kein `rollout restart` nötig – anders als crashloop.
+      needsSecret?: string;
+    }
+  | {
+      type: "oomkilled";
+      // So viel Speicher (in Mi) braucht die App wirklich. Solange das memory-Limit
+      // darunter liegt, killt der Kernel den Container immer wieder (OOMKilled). Wird
+      // das Limit per `kubectl set resources` auf >= memNeeded angehoben, heilt der
+      // Dienst. Diagnose nur über `describe` (Last State / Reason: OOMKilled) – die
+      // App-Logs verraten den OOM-Kill NICHT.
+      memNeeded?: number;
+    };
+
+/** Statuszeile + Anzeige-Label je `Broken`-Typ. */
+export interface BrokenStatusEntry {
+  /** `kubectl get pods` STATUS-Spalte. */
+  status: string;
+  /** `kubectl get pods` READY-Spalte. */
+  ready: string;
+  /** `kubectl get pods` RESTARTS-Spalte. */
+  restarts: number;
+  /** Kurzes Label für HUD/Weltkarte (z.B. Steg-Tag über einem kaputten Deployment). */
+  label: string;
 }
+
+/** Zentrale Status-Tabelle je Broken-Typ (#867): einzige Quelle für die kubectl-
+ *  Statuszeile UND das HUD-/Weltkarten-Label – vorher dieselbe Fallunterscheidung
+ *  dreifach dupliziert (`sim.ts#_podStatus`, `ui/hud.ts`, `clustersync.ts`), einmal
+ *  sogar unvollständig (siehe Kommentar an `Broken` oben). Der Typ als
+ *  `Record<Broken["type"], …>` erzwingt Vollständigkeit: ein neuer Broken-Typ ohne
+ *  Eintrag hier ist ein TS-Fehler, keine stillschweigend falsche Anzeige mehr. */
+export const BROKEN_STATUS: Record<Broken["type"], BrokenStatusEntry> = {
+  imagepull: { status: "ImagePullBackOff", ready: "0/1", restarts: 0, label: "ImagePullBackOff" },
+  crashloop: { status: "CrashLoopBackOff", ready: "0/1", restarts: 5, label: "CrashLoopBackOff" },
+  pending: { status: "Pending", ready: "0/1", restarts: 0, label: "Pending" },
+  notready: { status: "Running", ready: "0/1", restarts: 0, label: "NotReady" },
+  oomkilled: { status: "OOMKilled", ready: "0/1", restarts: 4, label: "OOMKilled" },
+};
 /** Eine einzelne Pod-Instanz eines Deployments. */
 export interface PodInstance {
   name: PodName;   // Value Object (#479): ein Pod-Name ist kein beliebiger String, sondern DNS-1123.

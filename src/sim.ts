@@ -18,6 +18,8 @@ import type {
   RoleBindingRes, PodSecurityLevel, PodStatus, NodeMetrics,
   ScrapeTarget, Alert, Scenario, ClusterState,
 } from "./sim/state";
+import { BROKEN_STATUS } from "./sim/state";
+export { BROKEN_STATUS } from "./sim/state";
 export type {
   ExecResult,
   Broken, PodInstance, Deployment, ServiceRes, IngressRes, NetworkPolicyRes,
@@ -551,22 +553,16 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       };
     }
 
-    /** Pod-Status eines Deployments (für get/describe/logs). */
+    /** Pod-Status eines Deployments (für get/describe/logs). Die Zuordnung Broken-Typ
+     *  → Status/Ready/Restarts lebt zentral in `BROKEN_STATUS` (#867) – hier nur noch
+     *  der Evicted-/gesund-Sonderfall plus Tabellen-Lookup. */
     _podStatus(d: Deployment): PodStatus {
       // Evicted überschreibt alles (#240): der kubelet hat den Pod wegen Disk-Druck oder
       // gesprengtem ephemeral-storage-Limit beendet – er läuft nicht und ist nicht bereit.
       if (d.evicted) return { status: "Evicted", ready: "0/1", restarts: 0 };
       if (!d.broken) return { status: "Running", ready: "1/1", restarts: 0 };
-      if (d.broken.type === "imagepull") return { status: "ImagePullBackOff", ready: "0/1", restarts: 0 };
-      if (d.broken.type === "crashloop") return { status: "CrashLoopBackOff", ready: "0/1", restarts: 5 };
-      if (d.broken.type === "pending") return { status: "Pending", ready: "0/1", restarts: 0 };
-      // oomkilled: Der Container sprengt sein memory-Limit, der Kernel killt ihn,
-      // Kubernetes startet neu, er sprengt es wieder … RESTARTS klettern, READY 0/1.
-      if (d.broken.type === "oomkilled") return { status: "OOMKilled", ready: "0/1", restarts: 4 };
-      // notready: Container läuft (liveness ok) – aber die Readiness-Probe meldet
-      // "noch nicht bereit", also Running mit READY 0/1 und kein Restart.
-      if (d.broken.type === "notready") return { status: "Running", ready: "0/1", restarts: 0 };
-      return { status: "Running", ready: "1/1", restarts: 0 };
+      const t = BROKEN_STATUS[d.broken.type];
+      return { status: t.status, ready: t.ready, restarts: t.restarts };
     }
 
     /** Ein Pod ist bereit (zählt für den Service), wenn er läuft UND ready ist. */
@@ -586,8 +582,13 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
      * der notready-Pod von selbst bereit – ganz ohne Neustart (anders als Crash). */
     _recheckReadiness() {
       for (const d of this.deployments) {
-        if (d.broken && d.broken.type === "notready" &&
-            (!d.broken.needsSecret || this.secrets.some(s => s.name === d.broken!.needsSecret))) {
+        // In eine lokale const zwischengespeichert, damit die "notready"-Verengung
+        // auch in der `some`-Closure unten erhalten bleibt (TS verengt Property-
+        // Zugriffe wie `d.broken` über Closure-Grenzen hinweg nicht, eine `const`
+        // dagegen schon).
+        const broken = d.broken;
+        if (broken && broken.type === "notready" &&
+            (!broken.needsSecret || this.secrets.some(s => s.name === broken.needsSecret))) {
           d.broken = null;
         }
       }

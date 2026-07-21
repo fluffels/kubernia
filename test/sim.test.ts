@@ -8,6 +8,7 @@
 import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./sim/helpers";
+import { BROKEN_STATUS, type Broken } from "../src/sim";
 
 let sim: KQSim;
 beforeEach(() => { sim = freshSim(); });
@@ -111,4 +112,44 @@ test("#307 Szenario: Subcommand-Vertauscher produziert Sim-Fehler", () => {
   // docker stop auf nicht-existenten Container → error:true, aber cmdOk für docker-run-Task = false
   const r = sim.exec("docker stop nicht-vorhanden");
   assert.ok(r.error, "docker stop auf unbekannten Container liefert error:true");
+});
+
+// #867: Broken.type war vorher ein Kommentar-„Union" (type: string) mit allen Feldern
+// über alle Typen hinweg optional – die Fallunterscheidung war über 4+ Dateien verstreut
+// und OHNE Exhaustiveness-Check. `clustersync.ts` hatte dadurch tatsächlich einen Bug:
+// notready/oomkilled zeigten auf der Weltkarte fälschlich "Pending" an, weil die eigene
+// Ternärkette dort nur imagepull/crashloop kannte. Jetzt ist `Broken` eine echte
+// discriminated union + `BROKEN_STATUS` die eine zentrale Tabelle, aus der sim.ts,
+// ui/hud.ts UND clustersync.ts ihr Label ziehen – als `Record<Broken["type"], …>`
+// erzwingt der Compiler Vollständigkeit bei einer neuen Variante.
+test("#867 BROKEN_STATUS: alle fünf Broken-Typen haben ein eigenes, korrektes Label", () => {
+  const labels: Record<Broken["type"], string> = {
+    imagepull: "ImagePullBackOff",
+    crashloop: "CrashLoopBackOff",
+    pending: "Pending",
+    notready: "NotReady",
+    oomkilled: "OOMKilled",
+  };
+  for (const type of Object.keys(labels) as Broken["type"][]) {
+    assert.equal(BROKEN_STATUS[type].label, labels[type], `Label für "${type}" muss "${labels[type]}" sein`);
+  }
+  // Die eigentliche Regression: notready/oomkilled dürfen NICHT auf "Pending" fallen.
+  assert.notEqual(BROKEN_STATUS.notready.label, "Pending");
+  assert.notEqual(BROKEN_STATUS.oomkilled.label, "Pending");
+});
+
+test("#867 BROKEN_STATUS treibt _podStatus (kubectl get pods) für alle fünf Typen", () => {
+  const brokens: Broken[] = [
+    { type: "imagepull" }, { type: "crashloop" }, { type: "pending" },
+    // needsSecret auf ein fehlendes Secret gesetzt – sonst heilt "kubectl get pods"
+    // selbst den notready-Pod sofort (die Readiness-Probe braucht dann kein Secret).
+    { type: "notready", needsSecret: "fehlt" }, { type: "oomkilled" },
+  ];
+  for (const broken of brokens) {
+    const s = freshSim();
+    s.mergeScenario({ deployments: [{ name: "app", image: "nginx", replicas: 1, broken }] });
+    const out = s.exec("kubectl get pods").output!;
+    const t = BROKEN_STATUS[broken.type];
+    assert.match(out, new RegExp(t.ready.replace("/", "\\/") + "\\s+" + t.status), `"${broken.type}" muss READY=${t.ready} + STATUS=${t.status} zeigen`);
+  }
 });
