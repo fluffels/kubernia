@@ -6,6 +6,10 @@ Jede Datei liegt hier als PNG und wird in `src/assets-data.ts` per `import` eing
 der Single-File-Offline-Build inlinet sie automatisch als Base64-Data-URI, bleibt also
 self-contained. Die `.json` sind die Tileset-Metadaten.
 
+## Zugriff
+
+Der pixellab-MCP-Server ist bewusst **nur in diesem Repo** aktiv (`.mcp.json`, HTTP mit `Authorization: ${PIXELLAB_TOKEN}`), nicht global — spart Kontext in Sessions ohne Grafik-Arbeit. Fehlt der Zugriff: (1) Claude Code muss im Ordner `kubernia` gestartet sein, (2) `PIXELLAB_TOKEN` muss als User-Env-Var gesetzt sein, (3) in Worktrees muss `.mcp.json` committet sein. Der Key rotiert gelegentlich — die Maintainerin trägt ihn dann selbst neu ein, Verifikation über `get_balance`, den Key nie selbst anfordern/ausgeben.
+
 ## Einheitlicher Stil (immer mitgeben)
 - **Tiles:** 16×16, `flat shading`, `high top-down` (Terrain-Tilesets seit #866 flat; Objekte/Figuren weiter `selective outline`, `detailed shading`)
 - **Figuren:** `low top-down`, `chibi`, `selective outline`, `high detail`, size 32, 4 Richtungen (nur `south`-Frame genutzt)

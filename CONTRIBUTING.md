@@ -23,6 +23,17 @@ npm run dev   # lokaler Server (Vite) – angezeigte Adresse im Browser öffnen
 
 > Lieber von Hand? Statt `npm run setup` reicht zum Loslegen `npm install`; die Checks unten dann bei Bedarf einzeln.
 
+### Git-Identität (Anonymität, #418)
+
+Commits in diesem Repo laufen unter der anonymen Identität `fluffels`, nie unter einem Klarnamen oder einer dienstlichen Mail (siehe [AGENTS.md › Anonymität wahren](AGENTS.md#das-wichtigste-zuerst-harte-regeln)). Bei einem **frischen Klon** einmalig **lokal** setzen (nicht global, sonst betrifft es auch andere Repos):
+
+```bash
+git config --local user.name fluffels
+git config --local user.email 265222377+fluffels@users.noreply.github.com
+```
+
+Worktrees übernehmen die lokale Config automatisch mit.
+
 ## Im Container entwickeln (optional, ohne lokales Node)
 
 Wer **kein Node lokal installieren** will (oder eine garantiert reproduzierbare Umgebung braucht – auch für Cloud-/CI-KI-Agenten), entwickelt im Container. Zwei Wege, beide nur fürs **Entwickeln** (das ausgelieferte Spiel bleibt die offline-fähige Single-File-Web-App, kein Server-Betrieb – siehe [ADR 0002](docs/adr/0002-kein-backend-keine-db.md)):
