@@ -11,7 +11,7 @@ Der Simulator ist das **pure-Domäne-Herz** des Spiels: die Spielwelt _ist_ der 
 Ursprünglich war alles ein großes `sim.ts`. Mit #346 wurde es in einen **Kern** + **eine Datei je Befehlsfamilie** unter `src/sim/` aufgeteilt. Leitidee des Splits:
 
 - **`src/sim.ts` (Kern):** State/reset/Fabriken (`_makeDeployment` u.a.)/geteilte Pod-Helfer/`exec`-Dispatch/`snapshot`. `class Sim implements ClusterState`. Re-exportiert `src/sim/state.ts` als **Barrel**, damit bestehende Importe (`from "./sim"`) unverändert bleiben.
-- **Je Befehlsfamilie eine freie Funktion** `xCommand(host, …)` in `src/sim/<x>.ts`. Der `exec`-Dispatch im Kern ruft sie (`dockerCommand(this, …)` usw.).
+- **Je Befehlsfamilie eine freie Funktion** `xCommand(host, …)` in *src/sim/\<x\>.ts*. Der `exec`-Dispatch im Kern ruft sie (`dockerCommand(this, …)` usw.).
 - **Schmales Host-Interface je Familie** (`DockerHost`, `KubectlHost`, …): `extends Pick<ClusterState, …>` mit **genau den Cluster-Feldern, die die Familie berührt** (Interface Segregation, #516) + genau die Sim-Helfer, die sie nutzt. So bekommt die Familie die Sim-Instanz **ohne Import-Zyklus** und **ohne Vollzugriff auf alle 30+ State-Felder** – ein `extends ClusterState` war eine Leaky Abstraction (git konnte helm-State mutieren o.ä.). Die Feld-**Typen** bleiben über `Pick<ClusterState, …>` an die eine SSOT (`sim/state.ts`) gebunden, driften also nicht. `class Sim implements ClusterState` erfüllt jedes Pick-Subset automatisch.
 - **Öffentliche API bleibt stabil** auf der `Sim`-Klasse / dem Barrel → Aufrufer (content/checks, content/drills) und Tests rufen unverändert `sim.X()`.
 
@@ -85,6 +85,17 @@ In `src/sim/kubectl/` (seit Split #397): ServiceAccounts + Role/ClusterRole + Ro
 **RBAC-Identität ist EINE Entscheidung (`src/sim/rbac.ts`, #609, Kern hinter #578).** Role (namespaced) und ClusterRole (cluster-weit) sind verschiedene Arten; der Simulator führt beide in einer Liste, per `.cluster` unterschieden. Worüber ein Objekt identifiziert wird — der Schlüssel `(name, cluster)`, nicht der Name allein — entscheidet jetzt an genau einer Stelle das Prädikat-Set `rbacKey`/`sameRbac`/`roleKind`/`roleMatchesRef`. Merge-Dedup (`sim.ts` `_mergeRbac`), Eindeutigkeits-Invariante (`invariants.ts`), das create/apply-„already exists" und die describe-Suche (`kubectl/lifecycle.ts`/`inspect.ts`), die roleRef-Auflösung von `can-i` (`kubectl/security.ts`) und die Drill-Namensvergabe (`content/drills/*`) nutzen dieses Set gemeinsam, statt den Schlüssel je einzeln zu raten (was zur Merge/Invariante-Divergenz #578 geführt hatte). Test: `test/sim/rbac-identity.test.ts` (Schlüssel-Definition) + `test/sim/invariants.test.ts` (#578-Koexistenz).
 
 **Pod-Security bleibt nach Phase 6 dauerhaft gehärtet (#444).** Die Wachturm-Quest `k8s-pod-security` schaltet im teach-Schritt `enforce=restricted` an der **geteilten** `Game.sim` scharf; das ist narrativ bewusst dauerhaft („an diesem Tor kommt sie nicht durch") und wird **nicht** zurückgenommen. Folge: ein danach **imperativ** (ohne securityContext) angelegtes Deployment wird abgewiesen – im freien Funken ist das gewolltes, selbsterklärendes Verhalten (die Fehlermeldung nennt den Ausweg). Damit aber **Übungs-Drills**, die genau so ein rohes Deployment anlegen (Oles `k-create`, dazu alles über `ensureDeployment`), nicht unlösbar werden, normalisieren sie ihren Sandbox-Cluster in der Drill-Vorbereitung auf `privileged` (`ensureBarePodAdmission` in `src/content/drills.ts`) – wie der `pod-security-enforce`-Drill schon „jede Übung startet sauber". Die Cluster-Härtung selbst rührt das nicht an. Test: `test/podsecurity-leftover.test.ts`.
+
+## Aggregat- und Wert-Helfer (pure Domäne, #478–#534)
+
+Vier orthogonale Helfer, die quer über die Befehlsfamilien hinausgehen — je ein klarer Schnitt:
+
+| Modul | Inhalt |
+|---|---|
+| `src/sim/names.ts` | Value Objects für Ressourcen-Namen (#479/#507): DNS-1123-Regel + `ResourceName`/`PodName`-Brand + prüfender Constructor `resourceName()` (von den _make*-Fabriken zentral genutzt) + `asPodName` an EINER Stelle. |
+| `src/sim/workload.ts` | Getippte Workload-Mutationen (#488/#508, Forts. #478): `scaleDeployment`/`replacePods`/`replaceDeploymentPod`/`restartStatefulPod`/`addDeployment`/`removeDeployment`/`addStatefulSet`/`removeStatefulSet` halten `pods.length === replicas` by-construction; Befehlsfamilien (lifecycle/ops/helm/argocd/glab) mutieren Workloads nur noch hierüber. |
+| `src/sim/nodes.ts` | Node-Aggregat-Mutationen (#534): `provisionNode` (idempotent per Name) / `removeNode` + geteilte `NODE_VERSION` + das EINE Control-Plane-Prädikat `isControlPlane`; terraform/kubeadm/observability/eviction provisionieren/prüfen Knoten nur noch hierüber (vorher über 4 Dateien dupliziert). |
+| `src/sim/invariants.ts` | Cluster-Invarianten (#478): `clusterInvariantViolations`/`assertClusterInvariants` als SSOT für einen legalen `ClusterState` (Replica Ist/Soll, Pods auf realen Nodes, PV/PVC-Bindung); `Sim.exec()` prüft sie an der Aggregat-Grenze. |
 
 ## Tests
 

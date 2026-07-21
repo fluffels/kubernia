@@ -9,6 +9,7 @@
 | Modul | Inhalt |
 |---|---|
 | `src/scenes/shared.ts` | Geteilte Szenen-Bausteine (#345): Karten-/Tile-Konstanten, In-Welt-Pixel-Bitmap-Font (#188, `buildPixelFont`/`pixelText`), Orts-Schilder (#254, `buildSign`), schwebende Belohnungstexte (`floatPixelText`), datengesteuertes Insel-NPC-Rendering (#349, `spawnIslandNpc`). |
+| `src/scenes/geometry.ts` | Szenen-Geometrie-/Hitbox-Konstanten-SSOT (#590): Sub-Tile-Hitbox-Radius `HIT_R` + `LAMP_HIT`/`CRATE_HIT` + Pod-Steg-/Tag-Layout (`SLOTS_PER_PIER`/`TAG_CAP`/`REVEAL_*`); vorher über WorldScene/RegionScene/regions/clustersync verstreut. |
 | `src/scenes/BootScene.ts` | Lädt alle Grafiken + Frame-Slicing aus `ASSET_MANIFEST`, backt Font/Münz-Icon, startet dann `World` (bzw. `MapTest` via `?maptest`). |
 | `src/scenes/WorldScene.ts` | Port Kubernia — seit dem Split (#393) **schlanker Orchestrator** (~460 LOC, vorher 1344): `create()` (Aufbau), `update()` (Per-Frame-Takt) plus die geteilten Render-Primitive (`set`/`get`/`deco`/`tree`/`objDeco`/`building`/`registerCullable`/`makeSign`/`makeTechTag`/`addShadow`/`makeFxTextures`), Spieler-/NPC-Setup, Kollision/Bewegung, Effekte und Off-screen-Culling. Die Spiel-Systeme liegen in `src/scenes/worldscene/*` (siehe unten). |
 | `src/scenes/InteriorScene.ts` | Betretbarer Hausinnenraum (#6), von `WorldScene.enterInterior()` gestartet; `INTERIORS` legt die Möbel je Haus-Thema fest. |
@@ -27,8 +28,10 @@
 | `src/scenes/worldscene/terrain.ts` | HAFEN-spezifische Welt: sichtbare Objekte/Gebäude/Warpschilder setzen (`placeHarborObjects`), Türen begehbar schneiden (`carveDoors`/`makeDoor`), Wang-Autotile-Boden zeichnen (`renderGround`). Der gemeinsame Terrain-Schritt liegt seit #425 in `mapterrain.ts`; die datengetriebene Region-Szenerie der Nachbar-Regionen wurde mit #427 (RegionScene + `regions.ts`) umgesetzt. |
 | `src/scenes/worldscene/scenery.ts` | Rein optische Ausstattung: gestreute Deko (`spawnFlowers`/`spawnGrassDetail`/`scatter`), statische Props/Effekte (`renderStatics`: Schiff, Leuchtturm, Rauch, Schmetterlinge, Schilder, Terraform-Plateau, Warp-Marker), Möwen (`spawnGull`), Tag-Nacht-Schleier (`updateDayNight`). |
 | `src/scenes/worldscene/clustersync.ts` | Cluster (`Game.sim`) → Welt spiegeln: Pods als Kisten an den Stegen (`syncCluster`), Deployment-/Docker-/Helm-/Service-Tags neu bauen bei Änderung (`rebuildDynamic`), Nähe-Aufdeckung + Entzerrung der Tags (`revealNearbyLabels`, #207). |
-| `src/scenes/worldscene/events.ts` | Zufalls-Gefahren: Piraten-Überfall, Hacker-Krake, Sturmschaden (je `tryStart…`/`resolve…`), gemeinsame Terminierung (`scheduleEvents`/`anyEventActive`) und Per-Frame-Tick (`tickEvents`). EIN kohäsives Modul; wächst es bei Stardew-Scope über das Datei-Budget (#390), ist der Schnitt je Gefahr offensichtlich. |
-| `src/scenes/worldscene/warps.ts` | Phaser-Hülle der Übergänge: Haus/Schiff (`enterInterior`, #6) + generischer Region-Übergang (`enterRegion`, #426 — ersetzt die früheren enterArchipel/-Lighthouse/-Warehouse) + Per-Frame-Tür-/Warp-Auslösung (`updateWarps`). Die Übergangs-DATEN (`REGION_WARPS`) und der reine Anti-Pingpong-Kern (`armWarps`/`triggeredWarp`, node-testbar) liegen Phaser-frei in `src/world/warps.ts`; das Armed-Gate hält seinen Zustand pro Warp-ID im Set `scene.warpArmed` statt je ein benanntes Flag. Der byte-gleiche Insel→Welt-Rück-Warp liegt als `IslandScene.updateReturn`/`exitToWorld` zentral; die drei Insel-Szenen, die ihn nutzten, sind seit #427 zu einer datengetriebenen `RegionScene` zusammengelegt. |
+| `src/scenes/worldscene/events.ts` | Gefahren-RENDERER (#540): setzt den `notifyHazard`-Sink um – globaler Alarm/roter Rahmen + weltgebundene Sprites (Boot/Krake/Sturm), Sprite-Rekonstruktion beim Aufwachen; Zustand/Takt liegen in `game/hazards.ts`. |
+| `src/scenes/worldscene/warps.ts` | Phaser-Hülle der Übergänge: Haus/Schiff (`enterInterior`, #6) + generischer Region-Übergang (`enterRegion`, #426) + Per-Frame-Tür-/Warp-Auslösung (`updateWarps`). |
+| `src/scenes/worldscene/harbordamage.ts` | Phaser-freies Textur-Mapping für die Sturm-Schadensoptik: `harborTexture` (heile Key → Trümmer-Variante je CP-Zustand, #692) + `pierHealed` (Steg heil je Node-Beitritt, #693). |
+| `src/scenes/worldscene/npcschedule.ts` | NPC-Tagesplan-Sync (#420): verschiebt NPCs mit `schedule` in `entities.json` zur Laufzeit auf ihre Zielposition + ersetzt Bob-Tween. |
 
 ## UI (`src/ui.ts` + `src/ui/*`, Split #356)
 
@@ -43,7 +46,14 @@
 | `src/ui/dialog.ts` | `dialogUI` | NPC-/Bo-Dialoge. |
 | `src/ui/radio.ts` | `radioUI` | Funkgerät-Terminal (teach/drill/terminal) + freies Üben. |
 | `src/ui/minigame.ts` | `minigameUI` | Stapel-Minispiel. |
+| `src/ui/podpacking.ts` | `podpackingUI` | Pod-Packspiel (#567): Pods per Klick auf Nodes verteilen, Kapazitätsbalken, Pending-Erkennung. |
+| `src/ui/yamlstruct.ts` | `yamlstructUI` | YAML-Bausteine-Minispiel (#568): Zeile wählen (Reihenfolge) → Ebene wählen (Einrückung), Sofort-Feedback + Tab-Distraktor. |
+| `src/ui/routing.ts` | `routingUI` | Routing-Lotse-Minispiel (#569): Anfrage wählen → optional Ingress-Regel → Pod (oder „keine Endpoints") treffen, Sofort-Feedback. |
+| `src/ui/driftheal.ts` | `drifthealUI` | Wunschzustand-Minispiel (#570): Ist/Soll-Board, Drift-Ereignis auflösen (imperativ vs. deklarativ), Reconcile-Loop-Anzeige. |
+| `src/ui/rbaskeyring.ts` | `rbaskeyringUI` | RBAC-Schlüsselbund-Minispiel (#571): Subjekt wählen → kleinsten passenden Schlüssel aus dem Bund binden, Sofort-Feedback. |
+| `src/ui/overlays.ts` | — | Overlay-Register (#505): EINE Datenliste `OVERLAYS` (id/blocking/keyNav) als SSOT; `blocking`/`closeOverlays`/`overlayKey` + Einzel-Checks leiten daraus ab, an index.html gebunden. |
 | `src/ui/questlog.ts` | `questlogUI` | Logbuch-Übersicht & -Detail (#326); pure Logik in `src/hud/questlog.ts`. |
+| `src/ui/album.ts` | `albumUI` | Sammelalbum/Glossar (DOM, #278): Album-Seiten je Thema + Sticker-Detail, Taste B. |
 | `src/ui/shop.ts` | `shopUI` | Shop. |
 | `src/ui/quiz.ts` | `quizUI` | Krabben-Quiz (Spaced-Repetition). |
 | `src/ui/save.ts` | `saveUI` | Spielstand-Export/Import + `resetGame`. |
