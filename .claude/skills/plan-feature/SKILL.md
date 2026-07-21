@@ -7,9 +7,9 @@ effort: high
 
 # Feature/Ticket planen (Planungsphase, starkes Modell)
 
-Dieser Skill ist die **Planungsphase** der Konvention „Planung stark, Umsetzung schnell" (**[AGENTS.md › Modellwahl nach Phase](../../../AGENTS.md)**, #741). Er läuft bewusst auf **Opus 4.8 mit hohem Reasoning** (`model:`/`effort:` im Frontmatter). Denke hier gründlich nach — die eigentliche **Umsetzung** darf danach ein **schnelleres Modell** tippen.
+Dieser Skill ist die **Planungsphase** der Konvention „Planung stark, Umsetzung schnell" (**[AGENTS.md › Modellwahl nach Phase](../../../AGENTS.md#modellwahl-nach-phase-910)**, #741). Er läuft bewusst auf **Opus 4.8 mit hohem Reasoning** (`model:`/`effort:` im Frontmatter). Denke hier gründlich nach — die eigentliche **Umsetzung** darf danach ein **schnelleres Modell** tippen.
 
-> ⚠️ Die feste Versions-ID `claude-opus-4-8` im Frontmatter veraltet mit dem nächsten Release (ein Alias wie `opus` zöge automatisch mit, ist hier aber bewusst gepinnt) — gelegentlich nachziehen. Für die **Umsetzung** wird hier **bewusst kein** Modellname festgenagelt: „schnelles Modell" bleibt tool-/versionsneutral (dasselbe Prinzip wie die portable Konvention in AGENTS.md).
+> Die Modell-ID im Frontmatter (`claude-opus-4-8`) ist bewusst gepinnt; Claude Code hat keine Runtime-Aliases. Bei einem Modell-Wechsel: SSOT + Update-Checkliste in **[docs/model-routing.md](../../../docs/model-routing.md)** (#910). Für die **Umsetzung** wird hier bewusst **kein** Modellname festgenagelt — Session-Default ist der kuratierte Coding-Sweet-Spot.
 
 > ⚠️ **Nur planen, nicht bauen.** Dieser Skill schreibt **keinen** Produktionscode, öffnet **keinen** PR und legt **keinen** Worktree an. Er liefert einen Plan, den danach der normale Ablauf (bzw. der [`kubernia`-Skill](../kubernia/SKILL.md)) umsetzt. Nach dem Skill fällt die Session automatisch aufs normale Modell zurück.
 
