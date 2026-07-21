@@ -41,6 +41,10 @@ Seit dem **Festgefahren-Protokoll** ([AGENTS.md](../AGENTS.md), #710) gilt: nach
 
 Wichtig dabei: das ist eine **Verhaltensregel, kein Gate**. Nichts erzwingt technisch, dass der Agent nach drei Versuchen wirklich aufhört — ein echter, erzwungener Stopp bräuchte einen Zähler außerhalb der Agenten-Session (z. B. ein Wrapper-Skript, das fehlgeschlagene `gh pr checks`-Läufe von außen mitzählt). Das existiert bisher nicht, siehe [agent-harness.md › Wo die Grenzen sind](agent-harness.md).
 
+## Der erste `gh pr merge`-Versuch wird als "ungeprüfter Self-Merge" geblockt, obwohl AGENTS.md volle Autonomie zusagt — was tun?
+
+Das ist ein bekannter Reibungspunkt des Auto-Mode-Classifiers (nicht des Repos): Er erkennt die Merge-Autonomie-Freigabe unter anderem am Projekt-/Repo-Namen, den er aus `CLAUDE.md`/`AGENTS.md` liest. Rund um die Umbenennung `kubequest` → `kubernia` (#557) kannte der Classifier den neuen Namen zunächst nicht und blockte deshalb den ersten Self-Merge-Versuch. **Wie damit umgehen:** den ersten `gh pr merge`-Versuch nicht als selbstverständlich autonom einplanen — entweder vorab kurz Freigabe von der Maintainerin holen, oder erwarten, dass der erste Versuch geblockt wird und nach explizitem "merge" im Chat klappt. Alle Schritte davor (Tickets anlegen, Worktree, PR öffnen, CI abwarten) laufen unverändert autonom.
+
 ## Verwandte Dokumente
 
 - [agent-harness.md](agent-harness.md) — die erklärende Gesamtsicht auf den Harness
