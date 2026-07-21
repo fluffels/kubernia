@@ -23,8 +23,11 @@ import type { WorldSceneLike } from "./types";
  *  WorldScene.create() / isSolidAt / payoutFloat kapselt. */
 export interface WorldSceneConfig {
   /** Wird in WorldScene.create() nach loadMapTerrain aufgerufen: platziert
-   *  Karten-Objekte, rendert den Boden und streut karten-spezifische Deko. */
+   *  Karten-Objekte und rendert den Boden. */
   setup(scene: WorldSceneLike): void;
+  /** Wird nach spawnPlayer() aufgerufen: Deko-Streuung, die playerPos kennen
+   *  muss (scatter() liest playerPos für die Freihaltezone). */
+  postSetup?(scene: WorldSceneLike): void;
   /** Zusätzliche NPCs, die nicht im Tiled-Objektlayer stehen (z.B. schiff-
    *  relative Positionen). Werden an die Spawns aus dem Objektlayer angehängt. */
   extraNpcs?: ReadonlyArray<{ readonly id: string; readonly x: number; readonly y: number }>;
@@ -50,6 +53,9 @@ const harborConfig: WorldSceneConfig = {
     placeHarborObjects(scene);
     renderGround(scene);
     renderStatics(scene);
+  },
+  // scatter() braucht playerPos (Freihaltezone um den Spawn) → erst nach spawnPlayer().
+  postSetup(scene) {
     scatter(scene, "bush", 16, 0.5, [0, 1, 2], false, HIT_R);
     scatter(scene, "rock", 14, 0.45, [0, 1, 2, -3], false, HIT_R);
     scatter(scene, "lamppost", 4, 0.55, [0, 1, 2], false, 0, LAMP_HIT);

@@ -196,6 +196,7 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     spawnGrassDetail(this);   // #40: dichtes, variiertes Gras (Stardew-Look)
     this.spawnNpcs();
     this.spawnPlayer();
+    this.worldConfig?.postSetup?.(this);   // Deko-Streuung nach spawnPlayer: scatter() braucht playerPos (#863).
 
     this.splash = this.add.particles(0, 0, "px", {
       speed: { min: 25, max: 80 }, angle: { min: 200, max: 340 }, gravityY: 140,
