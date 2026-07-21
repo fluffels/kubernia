@@ -28,13 +28,13 @@ import { countLines } from "./check-size.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Zeilen-Budget je Root-Kontextdatei (repo-relativer Pfad). Kalibriert am Bestand zum
- *  Anlegen dieses Wächters (AGENTS.md 180, CLAUDE.md 295 Zeilen) + rund ein Drittel
- *  Kopffreiheit – fängt unbegrenztes Anwachsen ab, nicht den nächsten normalen Absatz.
+/** Zeilen-Budget je Root-Kontextdatei (repo-relativer Pfad). Kalibriert am Bestand nach
+ *  Kontext-Diät #906 (AGENTS.md ~153, CLAUDE.md ~310 Zeilen) + kleine Kopffreiheit –
+ *  fängt unbegrenztes Anwachsen ab, nicht den nächsten normalen Absatz.
  *  Weitere immer geladene Dateien (z.B. README) können hier bei Bedarf ergänzt werden. */
 export const CONTEXT_BUDGETS = [
-  { file: "AGENTS.md", budget: 240 },
-  { file: "CLAUDE.md", budget: 380 },
+  { file: "AGENTS.md", budget: 200 },
+  { file: "CLAUDE.md", budget: 350 },
 ];
 
 /** Bewusst geduldete Ausnahmen: Datei → Grund mit offenem Tracking-Ticket. Gleiche
