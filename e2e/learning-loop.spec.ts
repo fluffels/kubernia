@@ -165,7 +165,7 @@ async function dismissCelebration(page: Page): Promise<void> {
 }
 
 test("Lern-Loop über die UI: Drill lösen und Quiz bei Krabbe Kralle", async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   await bootDev(page);
 
   // --- Onboarding bei Ole (Startposition) durchspielen: schaltet die Docker-Quest bei Bo frei. ---

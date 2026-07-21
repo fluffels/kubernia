@@ -1,0 +1,62 @@
+name: Festgefahren-Wächter
+
+# Erzwungener Festgefahren-Stopp (#904): session-externer Retry-Zähler.
+#
+# Hintergrund: Das Festgefahren-Protokoll (AGENTS.md #710) ist bis #904 eine
+# Verhaltensregel (Bitte) — nichts erzwingt den Stopp nach 3 gescheiterten
+# Fix-Versuchen technisch. Dieser Workflow schließt genau diese Lücke:
+# Er zählt, wie viele distinct Commits auf einem PR zu einem failed CI-Lauf
+# geführt haben. Wird die Schwelle (4 = 1 initial + 3 Fix-Versuche) erreicht,
+# setzt er das Label `status:festgefahren` und postet einen Konsolidierungs-
+# Kommentar — unabhängig davon, ob der Agent die Verhaltensregel befolgt.
+#
+# Design:
+#   - Trigger: workflow_run (nach CI-Abschluss mit failure auf einem PR).
+#     Läuft im Haupt-Branch-Kontext → keine Forks-Sicherheitslücke, volle
+#     Repo-Permissions für den GITHUB_TOKEN.
+#   - Graceful degradation: ein API-Fehler (kein Token, offline) überspringt
+#     den Wächter statt fälschlich zu blocken.
+#   - Idempotenz: ist das Label bereits gesetzt, wird kein zweiter Kommentar
+#     gepostet.
+#   - Manuelle CI-Reruns (Rerun eines Commits) zählen NICHT extra: gleicher
+#     Commit → gleiche head_sha → wird nur einmal gezählt.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+jobs:
+  stuck-check:
+    # Nur bei failed CI-Läufen, die durch einen PR ausgelöst wurden.
+    # push:main und workflow_dispatch bleiben außen vor.
+    if: >
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.event == 'pull_request'
+    name: Festgefahren-Zähler prüfen (#904)
+    runs-on: ubuntu-latest
+    permissions:
+      # Nur was der Job wirklich braucht:
+      # - pull-requests: write → Label + Kommentar auf dem PR
+      # - contents: read → Checkout für das Skript (main-Branch)
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout (scripts/check-festgefahren.mjs aus main)
+        uses: actions/checkout@v7
+        # Kein `ref:` → default-Branch (main). Das Skript soll NIE aus dem
+        # PR-Branch stammen — ein PR-Autor könnte es sonst modifizieren.
+
+      - name: Node einrichten
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Festgefahren-Zähler prüfen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: node scripts/check-festgefahren.mjs
