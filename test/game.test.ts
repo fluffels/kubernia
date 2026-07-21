@@ -16,6 +16,7 @@ import { MAP_REGISTRY } from "../src/world/maps/mapregistry";
 import { DAY_CYCLE_MS } from "../src/core/clock";
 import { coins } from "../src/core/coins";
 import { DEFAULT_KEYBINDINGS } from "../src/core/keybindings";
+import type { Scenario } from "../src/sim";
 
 let Game: typeof import("../src/game").Game;
 let Sim: typeof import("../src/sim").Sim;
@@ -274,7 +275,10 @@ test("eventProfile: normal/cozy/off liefern die richtigen Stellschrauben", () =>
 });
 
 test("incomeRate: Cozy mildert den Verdienst-Malus, Aus hebt ihn auf", () => {
-  const cluster = {
+  // Explizit als Scenario annotiert (#867): ohne Kontext-Typ weitet TS den
+  // literalen `broken.type`-Wert beim Inferieren des Array-Elementtyps auf
+  // `string`, was gegen die jetzt echte discriminated union nicht mehr passt.
+  const cluster: Scenario = {
     deployments: [
       { name: "gesund", image: "nginx", replicas: 2 },                          // 2 * 0.5 = 1.0
       { name: "kaputt", image: "x", replicas: 4, broken: { type: "imagepull" } }, // 4 Replicas

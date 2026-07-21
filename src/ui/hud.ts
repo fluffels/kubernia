@@ -1,4 +1,5 @@
 import { Game } from "../game";
+import { BROKEN_STATUS } from "../sim";
 import { SFX } from "../sfx";
 import { worldScene, interiorOpen } from "../runtime";
 import { part, $, esc, NPCS, SMALLTALK } from "./shared";
@@ -317,14 +318,7 @@ export const hudUI = part({
     }
     if (!dep || !pod) return;
 
-    const status = dep.broken
-      ? (dep.broken.type === "imagepull" ? "ImagePullBackOff"
-        : dep.broken.type === "crashloop" ? "CrashLoopBackOff"
-        : dep.broken.type === "pending" ? "Pending"
-        : dep.broken.type === "notready" ? "NotReady"
-        : dep.broken.type === "oomkilled" ? "OOMKilled"
-        : dep.broken.type)
-      : "Running";
+    const status = dep.broken ? BROKEN_STATUS[dep.broken.type].label : "Running";
     const statusColor = dep.broken ? "#ff8d8d" : "#6fe09a";
 
     $("podinspect-body").innerHTML =
