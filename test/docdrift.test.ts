@@ -31,7 +31,10 @@ const auditDocDrift: () => {
   undocumentedScripts: string[];
   deadLinks: { file: string; target: string; resolved: string }[];
   deadAnchors: { file: string; target: string; resolved: string; anchor: string }[];
+  verifyChainViolations: { file: string; chain: string[]; missing: string[] }[];
 } = checkDocDrift.auditDocDrift;
+const parseVerifyChain: (pkgScripts: Record<string, string>) => string[] = checkDocDrift.parseVerifyChain;
+const findDocumentedVerifyChains: (md: string) => string[][] = checkDocDrift.findDocumentedVerifyChains;
 
 const audit = auditDocDrift();
 
@@ -66,6 +69,16 @@ describe("Harness-Doku-Drift (#529)", () => {
       audit.deadAnchors.map((a) => `${a.file}: „${a.target}" (#${a.anchor} fehlt in ${a.resolved})`),
       [],
       "Diese Anker-Links treffen keine Überschrift – Anker/Überschrift angleichen (GitHub-Slug-Regel).",
+    );
+  });
+
+  test("keine veralteten verify-Ketten: alle typecheck→…→test-Sequenzen enthalten alle Gates", () => {
+    assert.deepEqual(
+      audit.verifyChainViolations.map(
+        (v) => `${v.file}: fehlende Gates ${v.missing.join(", ")}`,
+      ),
+      [],
+      "Diese Dateien dokumentieren eine unvollständige verify-Kette – an package.json angleichen.",
     );
   });
 
@@ -115,6 +128,57 @@ describe("Harness-Doku-Drift (#529)", () => {
       slugify("⭐ Oberste Regel — über allem, auch über den ADRs"),
       "-oberste-regel--über-allem-auch-über-den-adrs",
     );
+  });
+
+  test("parseVerifyChain extrahiert Gate-Reihenfolge aus package.json-verify-Skript", () => {
+    const chain = parseVerifyChain({
+      verify: "npm run typecheck && npm run lint && npm run check:arch && npm test",
+    });
+    assert.deepEqual(chain, ["typecheck", "lint", "check:arch", "test"]);
+  });
+
+  test("findDocumentedVerifyChains erkennt typecheck→…→test-Sequenz, nicht andere Pfeile", () => {
+    const md = [
+      "Fahre `npm run verify` (typecheck → lint → check:arch → test) und schau.",
+      "Aber Build→Deploy→Test ist kein verify-Gate.",
+    ].join("\n");
+    const chains = findDocumentedVerifyChains(md);
+    assert.equal(chains.length, 1);
+    assert.deepEqual(chains[0], ["typecheck", "lint", "check:arch", "test"]);
+  });
+
+  test("findDocumentedVerifyChains erkennt Ketten auch in Code-Block-Kommentaren", () => {
+    const md = "```bash\nnpm run verify   # typecheck → lint → check:arch → test\n```";
+    const chains = findDocumentedVerifyChains(md);
+    assert.equal(chains.length, 1, "Kette im Code-Kommentar muss erkannt werden (SKILL.md-Muster)");
+  });
+
+  test("auditVerifyChain meldet fehlende Gates in dokumentierter Kette (Red-Green)", () => {
+    const pkgScripts = {
+      verify: "npm run typecheck && npm run lint && npm run check:arch && npm run check:size && npm test",
+    };
+    // Kette ohne check:size dokumentiert → soll als Verletzung gemeldet werden
+    const violations = checkDocDrift.auditVerifyChain(
+      "",
+      ["fake.md"],
+      new Map([["fake.md", "npm run verify (typecheck → lint → check:arch → test)"]]),
+      pkgScripts,
+    );
+    assert.equal(violations.length, 1);
+    assert.deepEqual(violations[0]!.missing, ["check:size"]);
+  });
+
+  test("auditVerifyChain ist still bei vollständiger Kette", () => {
+    const pkgScripts = {
+      verify: "npm run typecheck && npm run lint && npm run check:arch && npm test",
+    };
+    const violations = checkDocDrift.auditVerifyChain(
+      "",
+      ["ok.md"],
+      new Map([["ok.md", "verify: typecheck → lint → check:arch → test"]]),
+      pkgScripts,
+    );
+    assert.equal(violations.length, 0);
   });
 
   test("collectHeadingSlugs überspringt Code-Fences und dedupliziert mit -1/-2", () => {

@@ -74,8 +74,12 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 | Lint | `npm run lint` (`eslint . --max-warnings 0`) |
 | Architektur | `npm run check:arch` (dependency-cruiser) |
 | Dateigröße | `npm run check:size` |
+| Root-Kontextdatei-Größe | `npm run check:contextsize` |
+| `any`-Suppression-Ratchet | `npm run check:anysuppress` |
 | Doku↔Code-Drift | `npm run check:docmap` |
-| Harness-Drift (Kommandos + Links) | `npm run check:docdrift` |
+| Harness-Drift (Kommandos + Links + verify-Kette) | `npm run check:docdrift` |
+| Lockfile-Integrität | `npm run check:lockfile` |
+| Diff-Größenbudget | `npm run check:diffsize` |
 | Boot-/Interaktions-Smoke | `npm run smoke` (Playwright, headless) |
 | Security-Audit | `npm audit --omit=dev --audit-level=high` |
 
@@ -144,8 +148,11 @@ So greifen die Bausteine bei **einem** Ticket ineinander — jeder Schritt ist e
    │                          ▼                                     │
    │  Umsetzen (TDD: rot → grün → aufräumen)                        │
    │                          ▼                                     │
-   │  Gates lokal grün: test · typecheck · lint · arch · size ·     │  ← Fehler an der Grenze
-   │  docmap · docdrift · smoke · audit + im Browser verifiziert    │
+   │  Gates lokal grün:                                              │  ← Fehler an der Grenze
+   │  typecheck → lint → check:arch → check:size →                  │
+   │  check:contextsize → check:anysuppress → check:docmap →        │
+   │  check:docdrift → check:lockfile → check:diffsize → test       │
+   │  + smoke · audit + im Browser verifiziert                      │
    │                          ▼                                     │
    │  PR öffnen → CI abwarten → mergt (rot? fixen bis grün)         │  ← blockierende Grenze; fertig erst bei Merge (#618)
    │                          ▼                                     │
