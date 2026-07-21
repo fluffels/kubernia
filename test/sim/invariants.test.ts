@@ -8,7 +8,7 @@
 import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./helpers";
-import { clusterInvariantViolations, assertClusterInvariants, ClusterInvariantError } from "../../src/sim/invariants";
+import { clusterInvariantViolations, assertClusterInvariants, ClusterInvariantError, warnClusterInvariants } from "../../src/sim/invariants";
 
 let sim: KQSim;
 beforeEach(() => { sim = freshSim(); });
@@ -231,6 +231,36 @@ test("aggregat: eine an exec() vorbei verbogene Verletzung wird an der Grenze la
   const res = sim.exec("kubectl get pods");
   assert.equal(res.error, true);
   assert.match(res.output!, /Invariante/i);
+});
+
+/* ---------- (c) warnClusterInvariants – Prod-Variante (loggt, wirft nicht, #862) ---------- */
+
+test("warnClusterInvariants: loggt via console.error bei Verletzung, wirft nicht", () => {
+  // RED-GREEN: die Funktion darf bei Verletzung NICHT werfen; sie soll console.error aufrufen
+  sim.deployments.push({ name: "kaputt", image: "x", replicas: 2, created: 0,
+    pods: [], broken: null, envFrom: { configMaps: [], secrets: [] } });
+  const errors: unknown[] = [];
+  const orig = console.error;
+  console.error = (...args: unknown[]) => { errors.push(args.join(" ")); };
+  try {
+    assert.doesNotThrow(() => warnClusterInvariants(sim));
+    assert.equal(errors.length, 1);
+    assert.match(String(errors[0]), /Invariante/i);
+  } finally {
+    console.error = orig;
+  }
+});
+
+test("warnClusterInvariants: kein console.error bei legalem Cluster", () => {
+  const errors: unknown[] = [];
+  const orig = console.error;
+  console.error = (...args: unknown[]) => { errors.push(args.join(" ")); };
+  try {
+    warnClusterInvariants(sim);
+    assert.equal(errors.length, 0);
+  } finally {
+    console.error = orig;
+  }
 });
 
 test("aggregat: alle normalen kubectl-Lebenszyklus-Befehle halten die Invarianten", () => {

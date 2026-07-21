@@ -232,6 +232,15 @@ export function clusterInvariantViolations(s: ClusterState): string[] {
   return INVARIANT_CHECKS.flatMap(check => check(s));
 }
 
+/** Prüft alle Invarianten; bei Verletzungen: `console.error`, kein Wurf (#862). Für den
+ *  Prod-Build: Verletzungen werden in den Browser-Devtools sichtbar, das Spiel läuft weiter. */
+export function warnClusterInvariants(s: ClusterState): void {
+  const violations = clusterInvariantViolations(s);
+  if (violations.length > 0) {
+    console.error("Kubernia: Cluster-Invariante verletzt:\n- " + violations.join("\n- "));
+  }
+}
+
 /** Wird geworfen, wenn der Cluster-Zustand seine Invarianten verletzt (#478). */
 export class ClusterInvariantError extends Error {
   readonly violations: string[];
