@@ -49,7 +49,7 @@ import { randSuffix, clusterIP, suggest } from "./sim/util";
 import { makeRng, DEFAULT_SEED } from "./core/rng";
 import { resourceName, InvalidResourceNameError, rfc1123ErrorText, RFC1123_TIP } from "./sim/names";
 import { sameRbac } from "./sim/rbac";
-import { assertClusterInvariants } from "./sim/invariants";
+import { assertClusterInvariants, warnClusterInvariants } from "./sim/invariants";
 import { scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod } from "./sim/workload";
 import { provisionNode } from "./sim/nodes";
 import { renderHelp } from "./hud/helptext";
@@ -229,10 +229,10 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     controlPlane!: { up: boolean; token: string | null; node: string | null };
     lastDeletedPod: string | null = null;
     lastError!: boolean;
-    // #478: Aggregat-Invarianten-Wächter (sim/invariants.ts). In Dev/Test an, im
-    // Prod-Build aus – Spieler:innen sehen nie einen Invarianten-Fehler, CI + Dev
-    // fangen jede Verletzung sofort (wie die Architektur-Fitness-Functions).
-    invariantChecks: boolean = !import.meta.env.PROD;
+    // #478/#862: Aggregat-Invarianten-Wächter (sim/invariants.ts). Immer aktiv (auch im
+    // Prod-Build). Dev/Test: wirft ClusterInvariantError → sichtbarer Fehler im Terminal;
+    // Prod: console.error, kein Wurf → Verletzung sichtbar in Devtools, Spiel läuft weiter.
+    invariantChecks: boolean = true;
     // Alert-Verlauf der Sitzung (Observability #109). Wie memLimit ein reines
     // Laufzeit-Feld: NICHT serialisiert – Alerts leiten sich aus dem Cluster-Zustand
     // ab, nur der firing→resolved-Übergang braucht ein kurzes Gedächtnis.
@@ -856,10 +856,13 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       let out: string;
       try {
         out = this._runCommand(cmd, tokens, raw, available);
-        // #478: Aggregat-Grenze – nach jeder Befehls-Transaktion prüfen, dass der Cluster
-        // legal bleibt; eine Verletzung fällt in den catch unten (wird zur Fehlermeldung),
-        // statt still einen illegalen Zustand zu hinterlassen (Dev/Test, siehe invariantChecks).
-        if (this.invariantChecks) assertClusterInvariants(this);
+        // #478/#862: Aggregat-Grenze – nach jeder Befehls-Transaktion invariant bleiben.
+        // Dev/Test: wirft ClusterInvariantError → fällt in catch → Fehlermeldung im Terminal.
+        // Prod: console.error, kein Wurf → Verletzung sichtbar in Devtools, Spiel läuft weiter.
+        if (this.invariantChecks) {
+          if (import.meta.env.PROD) warnClusterInvariants(this);
+          else assertClusterInvariants(this);
+        }
       } catch (e) {
         out = this._handleExecError(e);
       }
