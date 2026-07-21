@@ -6,6 +6,10 @@ name: Release – Image bauen und in ghcr.io pushen
 # Kein separates Registry-Secret nötig: GITHUB_TOKEN reicht für ghcr.io.
 # Die Maintainerin muss nur sicherstellen, dass das Package-Sichtbarkeitsrecht
 # in den Repository-Settings passt (Packages → Public oder Private).
+#
+# Ablauf (#861):
+#   1. verify – alle Quality-Gates (npm run verify), Pendant zu build-test in ci.yml
+#   2. build-and-push – Image lokal bauen → Trivy-Scan + SBOM → erst dann pushen
 
 on:
   push:
@@ -13,12 +17,44 @@ on:
       - "v*"
 
 jobs:
+  # Qualitäts-Gate vor dem Release: ein Tag auf einem roten Commit soll NIE
+  # ein Image shippen. Läuft npm run verify (dieselbe SSOT-Kette wie ci.yml:
+  # typecheck → lint → check:arch → check:size … → test). Damit ist kein
+  # separates Test-Ergebnis von ci.yml nötig (das läuft nur auf main/PRs).
+  verify:
+    name: Qualitätsgates vor dem Release (#861)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Volle Historie für check:diffsize (#533): misst Slice gegen main-Basis.
+          # Ohne Histoire degradiert der Check zu Grün (kein Vergleichspunkt).
+          fetch-depth: 0
+
+      - name: Node einrichten
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Alle Gates prüfen (npm run verify, #527)
+        run: npm run verify
+
+  # Image-Build + Sicherheitscheck + Push. Erst wenn verify grün ist (#861).
+  # Reihenfolge: lokal bauen → Trivy-Scan → SBOM → pushen (kein blindes Shippen
+  # eines ungescannten Images).
   build-and-push:
-    name: Image bauen & pushen
+    name: Image bauen, scannen & pushen (#861)
+    needs: [verify]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+      security-events: write  # Trivy-SARIF in den Security-Tab hochladen
 
     steps:
       - name: Checkout
@@ -43,7 +79,56 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=latest
 
-      - name: Image bauen und pushen
+      # Erst lokal bauen, noch KEIN Push in die Registry. So läuft der
+      # Trivy-Scan gegen das fertige Image, bevor es öffentlich ist.
+      # load: true funktioniert für single-platform (linux/amd64) problemlos.
+      - name: Image lokal bauen (Scan-Ziel, kein Push)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true
+          tags: kubernia:scan-target
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Trivy scannt das lokal geladene Image auf fixierbare CRITICAL/HIGH-
+      # Schwachstellen. ignore-unfixed überspringt Lücken ohne verfügbaren Fix
+      # (typisch für Alpine-Basis-Images) – es werden nur behebbare blockiert.
+      # exit-code: 1 lässt den Schritt fehlschlagen → kein Push bei Fund.
+      - name: Trivy-Sicherheitsscan (CRITICAL/HIGH, nur fixierbare)
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref: kubernia:scan-target
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+
+      # SARIF-Upload macht die Trivy-Ergebnisse im Security-Tab sichtbar –
+      # auch wenn der Scan bestanden hat (always(), damit Findings sichtbar
+      # bleiben, selbst wenn ein nachgeordneter Schritt fehlschlägt).
+      - name: Trivy-Ergebnisse in den Security-Tab hochladen
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+      # SBOM (Software Bill of Materials) dokumentiert alle Pakete im Image;
+      # wird als Workflow-Artefakt und – bei Tag-Triggern – an den Release
+      # angehängt (upload-release-assets: true).
+      - name: SBOM generieren (SPDX via Syft) und an Release anhängen
+        uses: anchore/sbom-action@v0
+        with:
+          image: kubernia:scan-target
+          artifact-name: kubernia-sbom.spdx.json
+          output-file: kubernia-sbom.spdx.json
+          upload-release-assets: true
+
+      # Nach bestandenem Scan: Image mit finalen Tags in die Registry pushen.
+      # Der Buildx-Cache ist noch warm → minimal extra Zeit für den zweiten Build.
+      - name: Image pushen (nach bestandenem Scan)
         uses: docker/build-push-action@v7
         with:
           context: .
