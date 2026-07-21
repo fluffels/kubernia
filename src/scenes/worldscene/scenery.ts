@@ -266,8 +266,9 @@ export function renderStatics(scene: WorldSceneLike) {
     scene.makeSign(l.x * T, l.y * T, l.text, l.depth);
   }
 
-  // Terraform-Plateau (Container, an/aus je nach State)
-  const p = scene.tfPlatform;
+  // Terraform-Plateau (Container, an/aus je nach State) – tfPlatform ist für den
+  // Hafen immer gesetzt, weil placeHarborObjects() vor renderStatics() läuft (#863).
+  const p = scene.tfPlatform!;
   scene.tfGroup = scene.add.container(0, 0).setDepth(2);
   const tfRt = scene.add.renderTexture(p.x * T, p.y * T, p.w * T, p.h * T).setOrigin(0);
   // Phaser 4: draw() zentriert intern per stamp() – fuer Tile-Raster originX/Y = 0 (oben-links); render() flusht den Puffer.
