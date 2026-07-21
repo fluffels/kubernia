@@ -19,6 +19,13 @@
 | `src/devpanel.ts` | Anwendung | Dev-/Test-Panel (#325): klickbares Panel zum Springen auf beliebigen Quest-Stand (Jump-API #329), Erststart und Reset — nur aktiv wenn `__KQ_DEVPANEL__` true (Devpanel-Build #331); Phaser-frei, DOM-Anbindung in `ui.ts`. |
 | `src/store.ts` | Persistenz | **SaveStore** — siehe unten. |
 | `src/store/legacy-idb.ts` | Persistenz | Rename-Migration KubeQuest→Kubernia (#557): hebt einen Alt-Bestand aus der IndexedDB `kubequest` in die neue DB `kubernia` (nur in ein leeres Ziel, Alt-DB bleibt als Netz). |
+| `src/store/backend.ts` | Persistenz | Backend-Auswahl (IndexedDB #350 / localStorage / In-Memory) + synchrones Roh-IO (`rawGet`/`rawSet`/`rawRemove`) via In-Memory-Cache; `hydrate`/`activateIdb` fürs Boot-Hydrieren (#515). |
+| `src/store/slots.ts` | Persistenz | Mehrere Save-Slots (#306): Slot-Index, Slot-Keys (Default-Slot am Legacy-Key), Slot-CRUD + Roh-IO auf dem AKTIVEN Slot (#515). |
+| `src/store/versioning.ts` | Persistenz | Save-Format-Versionierung (#350/#510): `{ v, data }`-Hülle, Migrationskette (`CURRENT_SAVE_VERSION`), `readState`/`writeState`/`migrateParsed` + Backup-vor-Überschreiben (#515). |
+| `src/store/persistence.ts` | Persistenz | Eviction-Schutz + Quota-Monitoring (#401): `requestPersistentStorage()`/`StorageHealth`/`QUOTA_WARN_RATIO` (#515). |
+| `src/game/tick.ts` | Anwendung | Szenen-neutraler Taktgeber (#501): `Game.tick(dtMs)` rückt frame-unabhängige Domäne (Spiel-Zeit + Hafen-Wirtschaft + Gefahren #540) an EINER Stelle vor; aus Phasers globalem Pre-Step (main.ts) getrieben → läuft in JEDER Szene, Auszahlung entkoppelt über runtime-Sink. |
+| `src/game/hazards.ts` | Anwendung | Szenen-neutrale Zufalls-Gefahren (#540): Hazard-Zeitachse + Zustand (Piraten/Krake/Sturm) + Cluster-Mutation, getaktet aus `Game.hazardTick`; Entscheidungen aus dem reinen Kern `world/hazards.ts`, Effekte entkoppelt über `notifyHazard`-Sink. |
+| `src/crashreport.ts` | pure Domäne | Absturz-Diagnostik (#504): `buildCrashReport` normalisiert einen beliebigen geworfenen Wert (Error/String/DOMException/Promise-reason) DOM-frei in `{title,message,detail}`; die DOM-Umsetzung (globaler Handler + Fallback-Overlay) sitzt in `main.ts`. |
 
 ## SaveStore / Persistenz (#350)
 
