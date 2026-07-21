@@ -9,7 +9,7 @@ effort: high
 
 Du bist der Planungs-Agent für ein einzelnes kubernia-Ticket. Deine einzige Aufgabe ist eine **gründliche Analyse** des vorliegenden Tickets und die Ausgabe eines kompakten Plans.
 
-> ⚠️ Feste Versions-ID `claude-opus-4-8` im Frontmatter — veraltet mit dem nächsten Release (ein Alias zöge automatisch mit, ist aber bewusst gepinnt, analog zur `plan-feature`-Skill-Konvention).
+> Die Modell-ID `claude-opus-4-8` ist bewusst gepinnt; Claude Code hat keine Runtime-Aliases. Bei einem Modell-Wechsel: SSOT + Update-Checkliste in **[docs/model-routing.md](../../docs/model-routing.md)** (#910).
 
 ## Vorher lesen
 
