@@ -167,6 +167,44 @@ export function collectHeadingSlugs(md) {
   return slugs;
 }
 
+// ── verify-Kette ─────────────────────────────────────────────────────────────────
+
+/** Liest die verify-Gate-Sequenz aus dem verify-Skript in package.json aus:
+ *  alle `npm run <x>`-Aufrufe in Reihenfolge, gefolgt von `npm test` → `"test"`. */
+export function parseVerifyChain(pkgScripts) {
+  const script = pkgScripts["verify"] ?? "";
+  const steps = [];
+  for (const m of script.matchAll(/\bnpm\s+run\s+([a-zA-Z0-9:_-]+)/g)) steps.push(m[1]);
+  if (/\bnpm\s+test\b/.test(script)) steps.push("test");
+  return steps;
+}
+
+/** Findet alle `typecheck → … → test`-Sequenzen in `md` (roh, inkl. Codeblöcke).
+ *  Der `→`-Pfeil ist das kanonische Trennzeichen für dokumentierte verify-Ketten
+ *  in diesem Repo (CLAUDE.md, SKILL.md, agent-harness.md). */
+export function findDocumentedVerifyChains(md) {
+  const chains = [];
+  for (const m of md.matchAll(/\btypecheck(?:\s*→\s*[a-zA-Z0-9:_-]+)+\s*→\s*test\b/g)) {
+    chains.push(m[0].split(/\s*→\s*/).map((s) => s.trim()));
+  }
+  return chains;
+}
+
+/** Prüft alle in Markdown-Dateien dokumentierten verify-Ketten gegen die echte
+ *  Kette aus package.json. Gibt je unvollständiger Kette zurück:
+ *  { file, chain: string[], missing: string[] }. */
+export function auditVerifyChain(rootDir, mdFiles, content, pkgScripts) {
+  const real = parseVerifyChain(pkgScripts);
+  const violations = [];
+  for (const f of mdFiles) {
+    for (const chain of findDocumentedVerifyChains(content.get(f))) {
+      const missing = real.filter((g) => !chain.includes(g));
+      if (missing.length > 0) violations.push({ file: f, chain, missing });
+    }
+  }
+  return violations;
+}
+
 // ── Audit ────────────────────────────────────────────────────────────────────────
 
 const isMd = (p) => p.toLowerCase().endsWith(".md");
@@ -241,7 +279,10 @@ export function auditDocDrift(rootDir = ROOT) {
     }
   }
 
-  return { mdFiles, scripts: [...scripts], deadCommands, undocumentedScripts, deadLinks, deadAnchors };
+  // 5. verify-Ketten-Drift: dokumentierte typecheck→…→test-Sequenzen gegen echte Kette.
+  const verifyChainViolations = auditVerifyChain(rootDir, mdFiles, content, pkg.scripts ?? {});
+
+  return { mdFiles, scripts: [...scripts], deadCommands, undocumentedScripts, deadLinks, deadAnchors, verifyChainViolations };
 }
 
 /** Löst einen relativen (oder `/`-absoluten) Link-Pfad auf repo-relativen
@@ -261,7 +302,7 @@ function main() {
   const red = (s) => paint("31", s);
   const green = (s) => paint("32", s);
 
-  const { mdFiles, deadCommands, undocumentedScripts, deadLinks, deadAnchors } = auditDocDrift();
+  const { mdFiles, deadCommands, undocumentedScripts, deadLinks, deadAnchors, verifyChainViolations } = auditDocDrift();
 
   let bad = false;
   for (const c of deadCommands) {
@@ -283,6 +324,14 @@ function main() {
   for (const a of deadAnchors) {
     bad = true;
     console.error(red(`✖ Toter Anker: „${a.target}" in ${a.file} — Überschrift „#${a.anchor}" gibt es in ${a.resolved} nicht.`));
+  }
+  for (const v of verifyChainViolations) {
+    bad = true;
+    console.error(
+      red(
+        `✖ Veraltete verify-Kette in ${v.file} — fehlende Gates: ${v.missing.join(", ")}. Kette an package.json angleichen.`,
+      ),
+    );
   }
 
   if (bad) {
