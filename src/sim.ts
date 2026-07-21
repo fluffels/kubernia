@@ -150,6 +150,29 @@ const DEFAULT_NODES: ClusterNode[] = [
 /** Ohne Vorgabe genau eine Default-StorageClass "standard", die PVCs dynamisch ein PV beschafft. */
 const DEFAULT_STORAGE_CLASS: StorageClassSpec = { name: "standard", provisioner: "rancher.io/local-path", reclaimPolicy: "Delete", isDefault: true };
 
+/* ---------- Builder-Ressourcen-Registry (#864) ----------
+ * Ressourcentypen mit eigener Fabrik-Funktion (build) – gleiches reset/merge/snapshot-Schema wie
+ * SIMPLE_RESOURCE_KEYS (#499): Neuer Typ = EIN Eintrag hier statt drei Stellen synchron pflegen
+ * (iSAQB: Open-Closed, dieser Kommentar selbst). TypeScript-Brücken nötig (kein „correlated
+ * unions"), analog zu simpleList(). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type BuildEntry = { key: string; build: (s: any, c: number) => NamedRes; snap?: (r: any) => any; default?: any[] };
+function rawBuilderList(obj: object, key: string): NamedRes[] | undefined {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (obj as any)[key];
+}
+function setBuilderList(obj: object, key: string, list: NamedRes[]): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (obj as any)[key] = list;
+}
+const BUILDER_RESOURCE_REGISTRY: BuildEntry[] = [
+  { key: 'storageClasses', build: buildStorageClass, default: [DEFAULT_STORAGE_CLASS] },
+  { key: 'pvs',             build: buildPv },
+  { key: 'volumeSnapshots', build: buildVolumeSnapshot },
+  { key: 'charts',          build: buildChart },
+  { key: 'argoApps',        build: cloneArgoApp, snap: cloneArgoApp },
+];
+
 /* ---------- Befehls-Dispatch (#563) ----------
  * Statt eines wachsenden switch in exec() (jeder Fall = +1 zyklomatische Komplexität) dispatcht
  * exec() über diese Handler-Tabelle (Alias → Handler), wie helm/docker (HELM_/DOCKER_SUBCOMMANDS).
@@ -259,10 +282,12 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       // „Einfach additive" Ressourcen (services/ingresses/networkPolicies/serviceMonitors/
       // prometheusRules/grafana*) über die Resource-Registry (#499) klonen – ein Durchlauf.
       for (const k of SIMPLE_RESOURCE_KEYS) setSimpleList(this, k, cloneNamed(simpleList(sc, k)));
+      // Builder-Registry-Typen (#864): storageClasses/pvs/volumeSnapshots/charts/argoApps.
+      for (const e of BUILDER_RESOURCE_REGISTRY)
+        setBuilderList(this, e.key, (rawBuilderList(sc, e.key) ?? e.default ?? []).map(x => e.build(x, this.clock)));
       this._resetConfig(sc);
       this._resetStorage(sc);
       this._resetRbac(sc);
-      this.argoApps = (sc.argoApps || []).map(a => cloneArgoApp(a));
       this._resetHelm(sc);
       this._resetTf(sc);
       this._resetGit(sc);
@@ -314,14 +339,11 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
 
     _resetStorage(sc: Scenario) {
       // Speicher (#122) – Reihenfolge zählt: StorageClass + PVs müssen stehen, bevor
-      // PVCs/StatefulSets binden. Ohne Vorgabe genau eine Default-StorageClass "standard".
-      this.storageClasses = (sc.storageClasses || [DEFAULT_STORAGE_CLASS]).map(s => buildStorageClass(s, this.clock));
-      this.pvs = (sc.pvs || []).map(p => buildPv(p, this.clock));
+      // PVCs/StatefulSets binden. storageClasses/pvs/volumeSnapshots kommen jetzt aus
+      // BUILDER_RESOURCE_REGISTRY (#864), der in reset() vor _resetStorage() läuft.
       this.pvcs = [];
       for (const p of sc.pvcs || []) this.pvcs.push(this._pvcFromSpec(p));
       this.statefulSets = (sc.statefulSets || []).map(s => this._makeStatefulSet(s));
-      // Backup/Restore (#140): VolumeSnapshots sind eigenständige, persistierte Objekte.
-      this.volumeSnapshots = (sc.volumeSnapshots || []).map(v => buildVolumeSnapshot(v, this.clock));
       // S3-/MinIO-Object-Store (#241): off-cluster Buckets + Objekte.
       this.objectStore = { buckets: (sc.s3Buckets || []).map(b => this._makeBucket(b)) };
     }
@@ -352,7 +374,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     _resetHelm(sc: Scenario) {
       this.helmRepos = (sc.helmRepos || []).map(r => typeof r === "string" ? { name: r, url: "" } : { name: r.name, url: r.url });
       this.releases = (sc.releases || []).map(r => buildRelease(r));
-      this.charts = (sc.charts || []).map(c => buildChart(c));
+      // charts kommen jetzt aus BUILDER_RESOURCE_REGISTRY (#864).
     }
 
     _resetTf(sc: Scenario) {
@@ -623,10 +645,16 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       // „Einfach additive" Ressourcen (services/ingresses/networkPolicies/serviceMonitors/
       // prometheusRules/grafana*) additiv über die Resource-Registry (#499) einmischen.
       for (const k of SIMPLE_RESOURCE_KEYS) mergeByName(simpleList(this, k), simpleList(sc, k));
+      // Builder-Registry-Typen (#864): storageClasses/pvs/volumeSnapshots/charts/argoApps additiv.
+      for (const e of BUILDER_RESOURCE_REGISTRY) {
+        const list = rawBuilderList(this, e.key) ?? [];
+        for (const item of rawBuilderList(sc, e.key) ?? [])
+          if (!list.some((x: NamedRes) => x.name === (item as NamedRes).name)) list.push(e.build(item, this.clock));
+        setBuilderList(this, e.key, list);
+      }
       this._mergeVolumes(sc);
       this._mergeStatefulAndBackups(sc);
       this._mergeRbac(sc);
-      this._mergeArgo(sc);
       this._mergeTf(sc);
       this._mergeDeployments(sc);
       this._mergeHelm(sc);
@@ -649,13 +677,8 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     }
 
     _mergeVolumes(sc: Scenario) {
-      // Speicher (#122) – Reihenfolge wie in reset(): StorageClass + PVs vor PVCs.
-      for (const s of sc.storageClasses || []) {
-        if (!this.storageClasses.some(x => x.name === s.name)) this.storageClasses.push(buildStorageClass(s, this.clock));
-      }
-      for (const p of sc.pvs || []) {
-        if (!this.pvs.some(x => x.name === p.name)) this.pvs.push(buildPv(p, this.clock));
-      }
+      // storageClasses/pvs kommen jetzt aus BUILDER_RESOURCE_REGISTRY (#864), der in
+      // mergeScenario() vor _mergeVolumes() läuft. PVCs bleiben hier (kein Builder).
       for (const p of sc.pvcs || []) {
         if (!this.pvcs.some(x => x.name === p.name)) this.pvcs.push(this._pvcFromSpec(p));
       }
@@ -665,9 +688,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       for (const s of sc.statefulSets || []) {
         if (!this.statefulSets.some(x => x.name === s.name)) addStatefulSet(this, this._makeStatefulSet(s));
       }
-      for (const v of sc.volumeSnapshots || []) { // Backup/Restore (#140)
-        if (!this.volumeSnapshots.some(x => x.name === v.name)) this.volumeSnapshots.push(buildVolumeSnapshot(v, this.clock));
-      }
+      // volumeSnapshots kommen jetzt aus BUILDER_RESOURCE_REGISTRY (#864).
       for (const b of sc.s3Buckets || []) { // Object Store (#241) – additiv, ohne Doppler.
         if (!this.objectStore.buckets.some(x => x.name === b.name)) this.objectStore.buckets.push(this._makeBucket(b));
       }
@@ -686,12 +707,6 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       }
       // Höhere enforce-Stufe gewinnt nicht automatisch – eine explizit gesetzte Stufe übernehmen.
       if (sc.podSecurity) this.podSecurity = sc.podSecurity;
-    }
-
-    _mergeArgo(sc: Scenario) {
-      for (const a of sc.argoApps || []) {
-        if (!this.argoApps.some(x => x.name === a.name)) this.argoApps.push(cloneArgoApp(a));
-      }
     }
 
     _mergeTf(sc: Scenario) {
@@ -727,9 +742,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
         const repo: HelmRepo = typeof entry === "string" ? { name: entry, url: "" } : { name: entry.name, url: entry.url };
         if (!this.helmRepos.some(r => r.name === repo.name)) this.helmRepos.push(repo);
       }
-      for (const c of sc.charts || []) {
-        if (!this.charts.some(x => x.name === c.name)) this.charts.push(buildChart(c));
-      }
+      // charts kommen jetzt aus BUILDER_RESOURCE_REGISTRY (#864).
       // (services/ingresses/networkPolicies laufen über die Resource-Registry #499.)
       if (sc.ciDeploy) this.ci.deploy = Object.assign({}, sc.ciDeploy);
     }
@@ -773,6 +786,9 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
         // services/ingresses/networkPolicies/serviceMonitors/prometheusRules/grafana* über die
         // Resource-Registry serialisieren (#499) – flacher Klon, gespiegelt zu reset/mergeScenario.
         ...snapshotSimple(this),
+        // storageClasses/pvs/volumeSnapshots/charts/argoApps über die Builder-Registry (#864).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ...Object.fromEntries(BUILDER_RESOURCE_REGISTRY.map(({ key, snap }) => [key, ((rawBuilderList(this, key) ?? []) as any[]).map((x: any) => snap ? snap(x) : Object.assign({}, x))])),
         secrets: this.secrets.map(s => ({ name: s.name, keys: s.keys.slice() })),
         configMaps: this.configMaps.map(c => ({ name: c.name, keys: c.keys.slice() })),
         files: Object.assign({}, this.files),
@@ -780,12 +796,9 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
         // Speicher (#122): PVCs gebunden serialisieren (volume + status), damit ein Reload
         // sie NICHT neu provisioniert; StatefulSets nur als Spezifikation – ihre Pods (stabile
         // Namen) und bereits vorhandene PVCs baut reset() deterministisch wieder auf.
-        storageClasses: this.storageClasses.map(s => Object.assign({}, s)),
-        pvs: this.pvs.map(p => Object.assign({}, p)),
+        // storageClasses/pvs/volumeSnapshots kommen aus dem Builder-Registry-Spread (#864).
         pvcs: this.pvcs.map(p => ({ name: p.name, storage: p.capacity, status: p.status, volume: p.volume, storageClass: p.storageClass, accessModes: p.accessModes, data: p.data })),
         statefulSets: this.statefulSets.map(s => ({ name: s.name, image: s.image, replicas: s.replicas, serviceName: s.serviceName, volumeClaimName: s.volumeClaimName, storage: s.storage, storageClass: s.storageClass })),
-        // Backup/Restore (#140): VolumeSnapshots überleben Reloads als eigenständige Objekte.
-        volumeSnapshots: this.volumeSnapshots.map(v => Object.assign({}, v)),
         // Object Store (#241): Buckets + Objekte (mit Inhalt) überleben den Reload – sie sind
         // off-cluster und damit das natürliche Backup-Ziel. `size` wird beim Laden neu abgeleitet.
         s3Buckets: this.objectStore.buckets.map(b => ({ name: b.name, objects: b.objects.map(o => ({ key: o.key, content: o.content, size: o.size })) })),
@@ -795,13 +808,11 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
         roles: this.roles.map(r => ({ name: r.name, cluster: r.cluster, rules: r.rules.map(rule => ({ verbs: rule.verbs.slice(), resources: rule.resources.slice() })) })),
         roleBindings: this.roleBindings.map(b => ({ name: b.name, cluster: b.cluster, roleRef: { kind: b.roleRef.kind, name: b.roleRef.name }, subjects: b.subjects.map(s => Object.assign({}, s)) })),
         podSecurity: this.podSecurity,
-        argoApps: this.argoApps.map(a => cloneArgoApp(a)),
         helmRepos: this.helmRepos.map(r => ({ name: r.name, url: r.url })),
         releases: this.releases.map(r => ({
           name: r.name, chart: r.chart, revision: r.revision, depName: r.depName,
           history: r.history.map(h => Object.assign({}, h)),
         })),
-        charts: this.charts.map(c => Object.assign({}, c)),
         tfResources: this.tf.resources.map(r => ({ addr: r.addr, desc: r.desc, provider: r.provider })),
         tfInitialized: this.tf.initialized,
         tfApplied: this.tf.applied,
