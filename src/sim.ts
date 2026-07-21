@@ -789,7 +789,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
         // storageClasses/pvs/volumeSnapshots/charts/argoApps über die Builder-Registry (#864).
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ...Object.fromEntries(BUILDER_RESOURCE_REGISTRY.map(({ key, snap }) => [key, ((rawBuilderList(this, key) ?? []) as any[]).map((x: any) => snap ? snap(x) : Object.assign({}, x))])),
-        secrets: this.secrets.map(s => ({ name: s.name, keys: s.keys.slice() })),
+        secrets: this.secrets.map(s => ({ name: s.name, keys: s.keys.slice(), type: s.type })),
         configMaps: this.configMaps.map(c => ({ name: c.name, keys: c.keys.slice() })),
         files: Object.assign({}, this.files),
         applyEffects: JSON.parse(JSON.stringify(this.applyEffects)),
