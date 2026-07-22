@@ -23,6 +23,7 @@ import { clockBundle } from "./game/clock";
 import { tickBundle } from "./game/tick";
 import { hazardsBundle } from "./game/hazards";
 import { sandboxBundle } from "./game/sandbox";
+import { autosaveBundle } from "./game/autosave";
 
 export { ABBREV_EARN_THRESHOLD } from "./game/shared";
 
@@ -42,6 +43,10 @@ export const Game: GameApi = {
   // Wiederspiel-Sandbox (#332): Lesezeichen des Live-Stands während eines Replays –
   // bewusst flüchtig im RAM (NICHT Teil von GameState/Save). null = kein Wiederspiel.
   replayBookmark: null as GameState | null,
+  // Autosave-Baseline (#869): Startwert vor dem ersten load()/save() – wird von save() sofort
+  // auf den echten Stand gezogen (load() endet mit save()), hier nur ein gültiger Platzhalter.
+  autosaveBaseline: { rev: 0, coins: 0, playerX: null, playerY: null, savedAt: 0 },
+  autosavePendingSince: null,
   ...saveBundle,
   ...economyBundle,
   ...progressionBundle,
@@ -51,4 +56,5 @@ export const Game: GameApi = {
   ...tickBundle,
   ...hazardsBundle,
   ...sandboxBundle,
+  ...autosaveBundle,
 };

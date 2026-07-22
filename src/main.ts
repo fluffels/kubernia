@@ -7,6 +7,7 @@ import { UI } from "./ui";
 import { KQScenes } from "./scenes";
 import { SFX } from "./sfx";
 import { SaveStore } from "./store";
+import { AUTOSAVE_CHECK_MS } from "./game/autosave";
 import { OVERLAY_ID } from "./ui/overlays";
 import { keys, clearKeys } from "./runtime";
 import { buildCrashReport, type CrashReport } from "./crashreport";
@@ -359,8 +360,16 @@ import { resolveAction } from "./core/keybindings";
       Game.save();
     }
 
-    // Spielstand regelmäßig sichern
-    setInterval(() => Game.save(), 5000);
+    // Spielstand dirty-gegatet + debounced sichern (#869): der Takt prüft nur billige Skalare
+    // (Cluster-Revision/Münzstand/Spielerposition) und serialisiert nur bei echter Änderung oder
+    // nach Ablauf der Ceiling – siehe src/game/autosave.ts.
+    setInterval(() => Game.autosaveTick(Date.now()), AUTOSAVE_CHECK_MS);
+    // Sicherheitsnetz gegen die Debounce-Verzögerung: beim Verstecken/Schließen des Tabs sofort
+    // sichern, statt auf den nächsten Tick zu warten (vorher gab es KEINEN Close-Flush).
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") Game.autosaveFlush();
+    });
+    window.addEventListener("pagehide", () => Game.autosaveFlush());
 
     // Boot-Markierung fürs Sicherheitsnetz in index.html (früher: window.Game)
     document.body.dataset.kqBooted = "1";
