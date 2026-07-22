@@ -42,9 +42,13 @@ export default tseslint.config(
   // 3) TypeScript (src/, test/, vite.config.ts – exakt der tsconfig-Scope).
   //    Typbewusstes Linting via projectService: nötig für no-floating-promises,
   //    das der async-Speicher (#350) konkret motiviert.
+  //    #868: `recommendedTypeChecked` (Superset von `recommended`) nutzt den
+  //    ohnehin aktiven typbewussten Modus endlich für no-unsafe-*/no-misused-
+  //    promises/restrict-template-expressions. Alt-Bestand per ESLint-Bulk-
+  //    Suppression in `eslint-suppressions.json` eingefroren (Abbau: eigene Tickets).
   {
     files: ["**/*.ts"],
-    extends: [js.configs.recommended, ...tseslint.configs.recommended],
+    extends: [js.configs.recommended, ...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: {
         projectService: true,

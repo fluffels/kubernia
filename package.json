@@ -36,7 +36,7 @@
     "check:duplication": "jscpd src",
     "lint": "eslint . --max-warnings 0",
     "lint:prune": "eslint . --prune-suppressions",
-    "lint:suppress": "eslint . --suppress-rule complexity --suppress-rule max-depth --suppress-rule max-lines-per-function",
+    "lint:suppress": "eslint . --suppress-rule complexity --suppress-rule max-depth --suppress-rule max-lines-per-function --suppress-rule @typescript-eslint/no-unsafe-member-access --suppress-rule @typescript-eslint/no-unsafe-call --suppress-rule @typescript-eslint/no-unnecessary-type-assertion --suppress-rule @typescript-eslint/no-unsafe-assignment --suppress-rule @typescript-eslint/no-unsafe-return --suppress-rule @typescript-eslint/no-unsafe-argument --suppress-rule @typescript-eslint/prefer-promise-reject-errors --suppress-rule @typescript-eslint/restrict-template-expressions --suppress-rule @typescript-eslint/no-base-to-string --suppress-rule @typescript-eslint/no-redundant-type-constituents --suppress-rule @typescript-eslint/unbound-method --suppress-rule @typescript-eslint/no-misused-promises",
     "quiz:golden": "node scripts/quiz-golden.mjs",
     "pack:sprites": "node scripts/pack-sprites.mjs",
     "verify": "npm run typecheck && npm run lint && npm run check:arch && npm run check:size && npm run check:contextsize && npm run check:anysuppress && npm run check:docmap && npm run check:docdrift && npm run check:lockfile && npm run check:diffsize && npm test",
