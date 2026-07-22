@@ -51,4 +51,26 @@ describe("Forum-Action fügt Issue zum Board hinzu (#644)", () => {
       "set_board_top muss mit der neuen Issue-URL aufgerufen werden",
     );
   });
+
+  test("fängt einen GraphQL-Fehler ab, statt das ganze Script per set -e abzubrechen (#950)", () => {
+    // Ein gesetztes, aber zu eng skopiertes PROJECT_TOKEN lässt gh api graphql
+    // fehlschlagen. Bare Zuweisungen (item_id=$(...)) reißen unter `set -euo
+    // pipefail` den ganzen Step ab (genau der Bug aus #950) – die Mutation muss
+    // darum explizit gegen einen Fehlschlag abgesichert sein.
+    assert.ok(
+      yml.includes("if ! item_id=$(GH_TOKEN="),
+      "die addProjectV2ItemById-Mutation muss gegen einen Fehlschlag abgesichert sein",
+    );
+    assert.ok(
+      yml.includes('if ! GH_TOKEN="$PROJECT_TOKEN" gh api graphql'),
+      "die updateProjectV2ItemPosition-Mutation muss gegen einen Fehlschlag abgesichert sein",
+    );
+    // Ein GraphQL-Fehler ist ein anderer Fall als das fehlende Secret – er braucht
+    // eine eigene, sichtbare Meldung statt der set -e-Rohmeldung im Log.
+    assert.match(
+      yml,
+      /::error::[^\n]*Scope/,
+      "ein GraphQL-Fehler (z.B. falscher Token-Scope) muss sichtbar als ::error:: gemeldet werden",
+    );
+  });
 });
