@@ -56,15 +56,29 @@ jobs:
               return 0
             fi
             local content_id
-            content_id=$(gh issue view "$issue_url" --repo "$REPO" --json id --jq .id)
+            if ! content_id=$(gh issue view "$issue_url" --repo "$REPO" --json id --jq .id); then
+              echo "::error::Board-Position für ${issue_url} nicht gesetzt – gh issue view ist fehlgeschlagen (Repo/Issue nicht auflösbar?)."
+              return 0
+            fi
+            # #950: ein gesetztes, aber zu eng skopiertes PROJECT_TOKEN lässt genau
+            # diese Mutation fehlschlagen ("Could not resolve to a node ..."). Eine
+            # bare Zuweisung würde unter `set -euo pipefail` den ganzen Step abbrechen,
+            # NACHDEM das Alarm-/Inbox-Issue schon angelegt wurde – darum abfangen und
+            # sichtbar melden statt den Job stillschweigend crashen zu lassen.
             local item_id
-            item_id=$(GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
+            if ! item_id=$(GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
               -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }' \
               -f p="$PROJECT_ID" -f c="$content_id" \
-              --jq '.data.addProjectV2ItemById.item.id')
-            GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
+              --jq '.data.addProjectV2ItemById.item.id'); then
+              echo "::error::Board-Position für ${issue_url} nicht gesetzt – PROJECT_TOKEN kann den Issue-Node nicht auflösen (Scope prüfen: braucht Issues-Zugriff auf ${REPO} UND Projects-Schreibrecht, #950)."
+              return 0
+            fi
+            if ! GH_TOKEN="$PROJECT_TOKEN" gh api graphql \
               -f query='mutation($p:ID!,$i:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i}){ items(first:1){ nodes{ id } } } }' \
-              -f p="$PROJECT_ID" -f i="$item_id" >/dev/null
+              -f p="$PROJECT_ID" -f i="$item_id" >/dev/null; then
+              echo "::error::Board-Position für ${issue_url} (item ${item_id}) konnte nicht an die Spitze geschoben werden – updateProjectV2ItemPosition ist fehlgeschlagen."
+              return 0
+            fi
             echo "Board-Position 'oben' gesetzt für ${issue_url} (item ${item_id})."
           }
 

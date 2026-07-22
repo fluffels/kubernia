@@ -210,4 +210,17 @@ describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
     // Das offene Alarm-Issue wird über den 🚨-Titel-Präfix gefunden, nicht über prio:hoch.
     expect(ci).toMatch(/startswith\(\\"\$marker\\"\)/);
   });
+
+  it("fängt einen GraphQL-Fehler ab, statt das ganze Script per set -e abzubrechen (#950)", () => {
+    // Ein gesetztes, aber zu eng skopiertes PROJECT_TOKEN lässt gh api graphql
+    // fehlschlagen. Bare Zuweisungen (item_id=$(...)) reißen unter `set -euo
+    // pipefail` den ganzen Step ab (genau der Bug aus #950, der das Alarm-Issue
+    // NACH dem Anlegen abstürzen ließ) – die Mutation muss darum explizit gegen
+    // einen Fehlschlag abgesichert sein.
+    expect(ci).toContain("if ! item_id=$(GH_TOKEN=");
+    expect(ci).toContain('if ! GH_TOKEN="$PROJECT_TOKEN" gh api graphql');
+    // Ein GraphQL-Fehler ist ein anderer Fall als das fehlende Secret – er braucht
+    // eine eigene, sichtbare Meldung statt der set -e-Rohmeldung im Log.
+    expect(ci).toMatch(/::error::[^\n]*Scope/);
+  });
 });
