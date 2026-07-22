@@ -53,7 +53,7 @@ test("save: voller Speicher → false, aber nur EINE Meldung pro Fehler-Episode 
   const { Game, sink } = await loadWithSink();
 
   expect(Game.save()).toBe(false);
-  expect(Game.save()).toBe(false);          // jeder 5-s-Auto-Save-Tick scheitert sauber
+  expect(Game.save()).toBe(false);          // jeder Autosave-Tick scheitert sauber
   expect(sink()).toBe(1);                    // aber der Spieler wird nicht im Sekundentakt zugespammt
 });
 

@@ -2,7 +2,7 @@
  * QuotaExceeded) war für den Spieler unsichtbar – writeState meldete ihn nur einmalig
  * in die Konsole. Jetzt hebt die Anwendung den Fehlschlag entkoppelt über den
  * Laufzeit-Sink (runtime.ts) an die Präsentation. Hier prüfen wir die Anwendungs-Seite:
- * save() ruft den Sink bei Fehlschlag genau EINMAL pro Fehler-Episode (der 5-s-Auto-Save
+ * save() ruft den Sink bei Fehlschlag genau EINMAL pro Fehler-Episode (der Autosave
  * darf nicht im Sekundentakt warnen) und re-armt nach einem wieder geglückten Save.
  *
  * Bewusst gegen echtes Verhalten getestet, nicht gegen Interna: ein umschaltbarer

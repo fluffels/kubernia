@@ -11,7 +11,7 @@
  *    Slots bekommen "<LEGACY_SAVE_KEY>:<id>".
  *  • Solange NUR der Default-Slot existiert, wird KEIN Index geschrieben: activeSlotId()/
  *    listSlots() liefern dann einen synthetischen Default. Damit ist der Single-Slot-Fall
- *    byte-identisch zu vor diesem Feature (keine neue Datei, kein Churn beim 5-s-Auto-Save).
+ *    byte-identisch zu vor diesem Feature (keine neue Datei, kein Churn beim Autosave).
  *
  * Slot-WECHSEL = aktiven Zeiger setzen + die Seite neu laden (der Aufrufer): nach dem Reload
  * hydriert init() den jetzt aktiven Slot. So muss der synchrone Pfad nie einen fremden Slot
@@ -201,7 +201,7 @@ export function deleteSlot(id: string): boolean {
 
 /**
  * Die opake Vorschau-Nutzlast (summary) des AKTIVEN Slots setzen (für den Spielstand-Wähler).
- * Ohne persistierten Index ein No-op – so erzeugt der 5-s-Auto-Save im Single-Slot-Fall
+ * Ohne persistierten Index ein No-op – so erzeugt der Autosave im Single-Slot-Fall
  * keinen Index-Churn und der pristine Zustand bleibt erhalten.
  */
 export function setActiveSlotSummary(summary: unknown): void {

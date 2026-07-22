@@ -40,6 +40,25 @@ export interface EventProfile {
   enabled: boolean;
 }
 
+/** Billige Skalare, die der dirty-gegatete Autosave (#869) je Tick vergleicht, statt bei jeder
+ *  Prüfung neu zu serialisieren: die Cluster-Revision (sim.ts `rev`, deckt JEDE Sim-Mutation ab),
+ *  der Münzstand und die LIVE-Spielerposition (aus der WorldScene, nicht aus `state.player` – das
+ *  nur `save()` selbst schreibt, das Signal wäre sonst zirkulär). Liegt hier (statt in
+ *  game/autosave.ts), weil sowohl `game/autosave.ts` als auch `game/save.ts` (Baseline-Update nach
+ *  erfolgreichem Schreiben) den Typ brauchen – shared bleibt das zyklenfreie Blatt. */
+export interface AutosaveSignals {
+  rev: number;
+  coins: number;
+  playerX: number | null;
+  playerY: number | null;
+}
+
+/** Momentaufnahme der Signale zum Zeitpunkt der letzten erfolgreichen Sicherung + deren
+ *  Zeitstempel (Basis für die Autosave-Ceiling, #869). */
+export interface AutosaveBaseline extends AutosaveSignals {
+  savedAt: number;
+}
+
 /** Anzeigefertige Slot-Beschreibung für den Spielstand-Wähler (#306). Die Anwendungsschicht
  *  leitet Rang/Quest-Titel aus den Roh-Zahlen ab, damit die UI dumm bleibt. Liegt hier (statt
  *  in save.ts), weil `GameApi.slots()` sie als Rückgabetyp trägt. */
@@ -76,6 +95,12 @@ export interface GameData {
   /** Wiederspiel-Sandbox (#332): geklonter Live-Stand während eines Replays, sonst
    *  null. Flüchtig (RAM), NICHT Teil von GameState/Save. */
   replayBookmark: GameState | null;
+  /** Autosave-Baseline (#869): Signale + Zeitstempel der letzten erfolgreichen Sicherung.
+   *  Flüchtig (RAM), NICHT Teil von GameState/Save – wird von `save()` gepflegt. */
+  autosaveBaseline: AutosaveBaseline;
+  /** Zeitpunkt (ms), seit dem der aktuelle Dirty-Zustand ansteht (Debounce-Settle, #869);
+   *  null = clean seit der letzten Baseline. Flüchtig (RAM), NICHT Teil von GameState/Save. */
+  autosavePendingSince: number | null;
 }
 
 /** Die vollständige Oberfläche der komponierten Game-Fassade: Zustandsfelder (GameData) +
@@ -201,6 +226,10 @@ export interface GameApi extends GameData {
   isReplaying(): boolean;
   startReplay(questIdx: number): boolean;
   endReplay(): boolean;
+
+  // ---- autosave.ts: dirty-gegateter, debounced Autosave (#869) ----
+  autosaveTick(now: number): void;
+  autosaveFlush(): void;
 }
 
 /** Typisiert ein Methodenbündel so, dass this = GameApi ist, ohne die Methoden-Signaturen
