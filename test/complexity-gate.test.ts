@@ -13,7 +13,11 @@ import eslintConfig from "../eslint.config.js";
  * max-lines-per-function (Funktionslänge) und max-depth (Verschachtelung). Diese
  * Fitness-Function bindet die Regel-KONFIG fest, damit niemand die Gates still
  * aufweicht (Schwelle hochdrehen, Regel entfernen, auf test/** ausweiten) und der
- * Suppressions-Ratchet nicht durch Suppression FREMDER Regeln umgangen wird. */
+ * Suppressions-Ratchet nicht durch Suppression FREMDER Regeln umgangen wird.
+ *
+ * Ticket #868 teilt sich dieselbe Bulk-Suppression-Datei für eine ZWEITE, repo-
+ * weite Regel-Familie (`recommendedTypeChecked`: no-unsafe-*, no-misused-promises,
+ * …) – darum unten zwei erlaubte Familien statt einer einzelnen src-Pflicht. */
 
 type RuleEntry = unknown;
 interface FlatConfig {
@@ -58,14 +62,47 @@ describe("Komplexitäts-Gate #502: Regel-Konfiguration bleibt scharf", () => {
   });
 });
 
+describe("Typecheck-Gate #868: recommendedTypeChecked bleibt aktiv", () => {
+  // Stellvertretend: eine Regel, die NUR in recommendedTypeChecked steckt – fängt
+  // ein stilles Downgrade zurück auf `recommended`.
+  const typeCheckedBlocks = configs.filter(
+    (c) => c.rules && "@typescript-eslint/no-unsafe-assignment" in c.rules,
+  );
+
+  it("wird an genau EINER Stelle gesetzt, repo-weit als Fehler (nicht Warnung/aus)", () => {
+    expect(typeCheckedBlocks).toHaveLength(1);
+    expect(typeCheckedBlocks[0].files).toEqual(["**/*.ts"]);
+    expect(typeCheckedBlocks[0].rules?.["@typescript-eslint/no-unsafe-assignment"]).toBe("error");
+  });
+});
+
 describe("Komplexitäts-Gate #502: Suppressions-Baseline ist ehrlich", () => {
   const suppressions = JSON.parse(
     readFileSync(fileURLToPath(new URL("../eslint-suppressions.json", import.meta.url)), "utf8"),
   ) as Record<string, Record<string, { count: number }>>;
 
-  const ALLOWED = new Set(["complexity", "max-depth", "max-lines-per-function"]);
+  const COMPLEXITY_RULES = new Set(["complexity", "max-depth", "max-lines-per-function"]);
 
-  it("unterdrückt AUSSCHLIESSLICH die drei Komplexitäts-Regeln (kein Gaming über Fremd-Regeln)", () => {
+  // #868: bewusst fest statt aus typescript-eslint abgeleitet – eine künftig NEUE
+  // Regel in recommendedTypeChecked soll als "fremde Regel" auffallen.
+  const TYPECHECKED_RULES = new Set([
+    "@typescript-eslint/no-unsafe-member-access",
+    "@typescript-eslint/no-unsafe-call",
+    "@typescript-eslint/no-unnecessary-type-assertion",
+    "@typescript-eslint/no-unsafe-assignment",
+    "@typescript-eslint/no-unsafe-return",
+    "@typescript-eslint/no-unsafe-argument",
+    "@typescript-eslint/prefer-promise-reject-errors",
+    "@typescript-eslint/restrict-template-expressions",
+    "@typescript-eslint/no-base-to-string",
+    "@typescript-eslint/no-redundant-type-constituents",
+    "@typescript-eslint/unbound-method",
+    "@typescript-eslint/no-misused-promises",
+  ]);
+
+  const ALLOWED = new Set([...COMPLEXITY_RULES, ...TYPECHECKED_RULES]);
+
+  it("unterdrückt AUSSCHLIESSLICH die Komplexitäts- oder die #868-Typsicherheits-Regeln (kein Gaming über sonstige Fremd-Regeln)", () => {
     const suppressedRules = new Set<string>();
     for (const perFile of Object.values(suppressions)) {
       for (const rule of Object.keys(perFile)) suppressedRules.add(rule);
@@ -74,8 +111,13 @@ describe("Komplexitäts-Gate #502: Suppressions-Baseline ist ehrlich", () => {
     expect(leaked, `Fremde Regel(n) in der Baseline: ${leaked.join(", ")}`).toEqual([]);
   });
 
-  it("betrifft nur Produktionscode (src/**) – kein Test/Tooling in der Baseline", () => {
-    const nonSrc = Object.keys(suppressions).filter((f) => !f.startsWith("src/"));
-    expect(nonSrc, `Nicht-src-Einträge: ${nonSrc.join(", ")}`).toEqual([]);
+  it("Komplexitäts-Familie bleibt auf Produktionscode (src/**) beschränkt – kein Test/Tooling", () => {
+    const nonSrcWithComplexity = Object.entries(suppressions).filter(
+      ([file, rules]) => !file.startsWith("src/") && Object.keys(rules).some((r) => COMPLEXITY_RULES.has(r)),
+    );
+    expect(
+      nonSrcWithComplexity.map(([f]) => f),
+      `Komplexitäts-Suppression außerhalb src/**: ${nonSrcWithComplexity.map(([f]) => f).join(", ")}`,
+    ).toEqual([]);
   });
 });
