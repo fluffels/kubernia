@@ -25,8 +25,9 @@ export const clockBundle = part({
   /** Rückt die persistente Spiel-Zeit-Achse um die real vergangene Frame-Zeit `deltaMs` vor.
    *  Pro Frame aus der WorldScene-Update-Schleife aufgerufen. Speichert in TAGEN (entkoppelt
    *  vom Tempo `DAY_CYCLE_MS`, siehe types.ts › gameDays). Unsinnige Deltas (NaN/≤0) werden
-   *  ignoriert, große gegen `MAX_FRAME_MS` gedeckelt. Der 5-s-Auto-Save persistiert den Wert
-   *  dann automatisch mit. */
+   *  ignoriert, große gegen `MAX_FRAME_MS` gedeckelt. `gameDays` ist bewusst KEIN Dirty-Signal
+   *  des Autosaves (#869, driftet praktisch jeden Frame) – dessen Ceiling persistiert den Wert
+   *  trotzdem spätestens periodisch mit. */
   advanceClock(deltaMs: number) {
     if (!Number.isFinite(deltaMs) || deltaMs <= 0) return;
     this.state.gameDays += Math.min(deltaMs, MAX_FRAME_MS) / DAY_CYCLE_MS;

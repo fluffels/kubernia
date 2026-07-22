@@ -361,15 +361,15 @@ export function sanitizeState(raw: unknown): GameState {
 
 /* Nach einem Slot-Wechsel (#306) wird die Seite gleich neu geladen; bis dahin darf KEIN
  * `save()` mehr laufen, sonst trägt der noch im Speicher liegende ALTE Spielstand (oder ein
- * im ~800-ms-Fenster feuernder 5-s-Auto-Save) sich in den jetzt aktiven (neuen) Slot ein – der
- * „neue" Slot würde dann nicht von vorn starten. Das Flag wird beim Reload (frisches Modul)
+ * im ~800-ms-Fenster feuernder Autosave-Tick, #869) sich in den jetzt aktiven (neuen) Slot ein –
+ * der „neue" Slot würde dann nicht von vorn starten. Das Flag wird beim Reload (frisches Modul)
  * automatisch wieder false. */
 let saveSuspended = false;
 
 /* Ein fehlgeschlagener save() (voller localStorage im Fallback-Modus, QuotaExceeded) war
  * bisher für den Spieler unsichtbar (#497) – writeState meldet ihn nur einmalig in die
  * Konsole. Wir heben ihn an die Präsentation, aber nur EINMAL pro Fehler-Episode: der
- * 5-s-Auto-Save darf nicht im Sekundentakt warnen. Nach einem wieder geglückten Save
+ * Autosave darf nicht im Sekundentakt warnen. Nach einem wieder geglückten Save
  * re-armen, damit ein späterer neuer Fehlschlag erneut gemeldet wird. */
 let saveFailedNotified = false;
 
@@ -441,7 +441,7 @@ export const saveBundle = part({
 
   /** Sichert den Stand. `syncFromScene` (Default true) übernimmt dabei die
    *  aktuelle Spielerposition aus der laufenden WorldScene – das ist im normalen
-   *  Spiel richtig (der 5-s-Auto-Save soll dem Spieler folgen). Wer die Position
+   *  Spiel richtig (der Autosave soll dem Spieler folgen). Wer die Position
    *  aber GERADE BEWUSST gesetzt hat (Sprung/Reset), ruft `save(false)`: sonst
    *  überschreibt die noch lebende Szene die frische Position sofort wieder und
    *  der reload landet am alten Ort (#335 / Reset-Position-Falle #295/#296). */
@@ -470,8 +470,23 @@ export const saveBundle = part({
     // fehlgeschlagener Save (voller localStorage-Fallback) verpufft so nicht still.
     const written = persistState(this.state);
     // Vorschau des aktiven Slots für den Spielstand-Wähler aktualisieren (#306). Im
-    // Single-Slot-Fall (kein Index) ist das ein No-op – kein Churn beim 5-s-Auto-Save.
+    // Single-Slot-Fall (kein Index) ist das ein No-op – kein Churn beim Autosave.
     SaveStore.setActiveSlotSummary(this.slotSummary());
+    // Autosave-Baseline aktualisieren (#869): NUR nach einem ECHT erfolgreichen Schreiben die
+    // aktuellen Signale + Zeitstempel als neue Referenz übernehmen – EINE Stelle (SSOT), damit
+    // auch die diskreten Sofort-Saves (addXp/addCoins/buy/…) den Autosave-Scheduler auf „clean"
+    // setzen und der nicht kurz danach nochmal schreibt. Scheitert das Schreiben, bleibt die alte
+    // Baseline stehen (weiter „dirty" – der nächste Tick versucht es erneut).
+    if (written) {
+      this.autosaveBaseline = {
+        rev: this.sim.rev,
+        coins: this.state.coins,
+        playerX: ws?.player ? ws.player.x : null,
+        playerY: ws?.player ? ws.player.y : null,
+        savedAt: this.state.lastSeen,
+      };
+      this.autosavePendingSince = null;
+    }
     return written;
   },
 

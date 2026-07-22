@@ -7,7 +7,7 @@
  * bzw. flüchtiger In-Memory-Speicher.
  *
  * Knackpunkt: IndexedDB ist ASYNCHRON, die SaveStore-API ist synchron und wird an
- * vielen Stellen synchron aufgerufen (u.a. Game.load() beim Boot, der 5-s-Auto-Save,
+ * vielen Stellen synchron aufgerufen (u.a. Game.load() beim Boot, der Autosave,
  * exportData()). Statt die halbe Codebasis auf async umzustellen (großer Ripple,
  * Risiko für bestehende Stände), liegt vor IndexedDB ein synchroner In-Memory-Cache:
  *   • hydrate() zieht einen Key beim Boot EINMAL aus IndexedDB (async) in den Cache,

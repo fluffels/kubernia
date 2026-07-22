@@ -156,7 +156,7 @@ export const UI = {
  * den Laufzeit-Sink (runtime.ts, wie beim Audio-Sink #344); hier zeigt die Präsentation
  * einen lesbaren Hinweis mit dem konkreten Ausweg (Stand exportieren). `hint()` bleibt
  * mindestens 15 s stehen (#370). Läuft beim Modul-Laden – main.ts importiert ui.ts vor
- * Game.load() und dem 5-s-Auto-Save, der Sink steht also rechtzeitig. */
+ * Game.load() und dem Autosave, der Sink steht also rechtzeitig. */
 setSaveFailedSink(() => {
   UI.hint("⚠️ <b>Speichern fehlgeschlagen</b> – der Browser-Speicher ist voll. Sichere deinen Fortschritt über Menü → Spielstand exportieren.");
 });
