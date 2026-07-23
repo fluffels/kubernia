@@ -23,6 +23,7 @@
 import { warpAt, type Warp } from "./archipel";
 import { objectForId } from "../../content/entities";
 import { markRegistrySolids } from "./geometry";
+import { WATER, DOCK, PATH } from "./terraincodes";
 
 export { warpAt, type Warp };
 
@@ -34,7 +35,7 @@ export const WTH = 18;
 /** Bodenraster-Codes – identisch zur Hauptkarte (renderGround), damit die RegionScene
  *  exakt dieselbe Wang-Logik nutzen kann: -2 Wasser, -10 Holz-Steg, 25 Pfad/Tor,
  *  0/1/2 Gras (Bailey), 96/97/98 Stein (die Wehrmauer zum Meer). */
-export const WATER = -2, DOCK = -10, PATH = 25;
+export { WATER, DOCK, PATH };
 export const STONE_CODES = [96, 97, 98] as const;
 
 /** Gepflasterter Bailey als RECHTECK (eine Festung ist gebaut und gerade): Gras-Innenfläche

@@ -18,6 +18,7 @@ Jeweils Geometrie/Kollision + Anleger/Warp + reservierte NPC-/Quest-Trigger-Stan
 | Modul | Inhalt |
 |---|---|
 | `src/world/regions/geometry.ts` | Geteilte Region-Bausteine (#566): `grassFrame` + `fillTerrain` (Grundterrain aus `landLevel`) + `markRegistrySolids`; einmal statt byte-gleich je Region. |
+| `src/world/regions/terraincodes.ts` | Geteilte Terrain-Bodencodes (`WATER/SAND/PATH/DOCK`) als neutrale SSOT (#959) – Regionen re-exportieren von hier statt selbst zu definieren; `RegionScene`/`worldscene/terrain.ts` importieren direkt von hier statt von einer konkreten Region. Werte == Hafenkarte, per Pin-Test gesichert. |
 | `src/world/regions/archipel.ts` | GitOps-Archipel: Insel-Geometrie + Anleger/Warp (Hauptkarte ⇄ Insel). |
 | `src/world/regions/lighthouse.ts` | Monitoring-Leuchtturm (#111): Klippen-Geometrie (Gras-Hochebene + begehbarer Stein-Klippenrand) + Aufgang/Warp am Turmfuß + Monitoring-Deko-Plätze. |
 | `src/world/regions/warehouse.ts` | Lagerhallen-Viertel/Hafenkai (#124): Quay-Geometrie + Stein-Kai-Wand + Holz-Steg/Warp + Standplätze für Verladekräne/Frachtcontainer + deterministisch gestreute Lager-Güter (Kisten/Fässer). |
