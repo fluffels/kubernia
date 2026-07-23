@@ -9,6 +9,7 @@
 import { TILE } from "../world";
 import { npcSpawnForMap, objectForId, type Spawn } from "../../content/entities";
 import { fillTerrain, markRegistrySolids } from "./geometry";
+import { WATER, SAND, PATH, DOCK } from "./terraincodes";
 
 /** Inselraster (Kacheln). Kleiner als die Hauptkarte – eine kompakte, voll
  *  umrundbare Insel, die in einer Session sauber gefüllt werden kann. */
@@ -17,8 +18,9 @@ export const AH = 22;
 
 /** Bodenraster-Codes – identisch zur Hauptkarte, damit ArchipelScene exakt
  *  dieselbe renderGround-/Wang-Logik nutzen kann (-2 Wasser, -3 Sand, 0/1/2
- *  Gras, 25 Weg, -10 Steg/Planken). */
-export const WATER = -2, SAND = -3, PATH = 25, DOCK = -10;
+ *  Gras, 25 Weg, -10 Steg/Planken). SSOT liegt seit #959 in terraincodes.ts,
+ *  hier nur re-exportiert (Region bleibt der etablierte Import-Pfad). */
+export { WATER, SAND, PATH, DOCK };
 
 const CX = 14, CY = 9;   // Inselmittelpunkt (Lichtung mit NPC/Quest-Trigger)
 

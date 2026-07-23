@@ -14,10 +14,11 @@ import Phaser from "phaser";
 import { SHIP, type Door } from "../../world/world";
 import { WORLD_TO_ARCHIPEL } from "../../world/regions/archipel";
 import { WORLD_TO_LIGHTHOUSE, WORLD_RETURN_LH } from "../../world/regions/lighthouse";
-import { DOCK as WH_DOCK, WORLD_JETTY_WH, WORLD_TO_WAREHOUSE } from "../../world/regions/warehouse";
-import { DOCK as WT_DOCK, WORLD_JETTY_WT, WORLD_TO_WATCHTOWER } from "../../world/regions/watchtower";
-import { DOCK as FL_DOCK, WORLD_JETTY_FL, WORLD_TO_FLOTTE } from "../../world/regions/flotte";
-import { DOCK as WF_DOCK, WORLD_JETTY_WF, WORLD_TO_WERFT } from "../../world/regions/werft";
+import { WORLD_JETTY_WH, WORLD_TO_WAREHOUSE } from "../../world/regions/warehouse";
+import { WORLD_JETTY_WT, WORLD_TO_WATCHTOWER } from "../../world/regions/watchtower";
+import { WORLD_JETTY_FL, WORLD_TO_FLOTTE } from "../../world/regions/flotte";
+import { WORLD_JETTY_WF, WORLD_TO_WERFT } from "../../world/regions/werft";
+import { DOCK } from "../../world/regions/terraincodes";
 import { PIER_XS } from "../../world/maps/harbormap";
 import { T, DIRT, WATER, FOAM, WANG } from "../shared";
 import type { WorldSceneLike } from "./types";
@@ -61,7 +62,7 @@ export function placeHarborObjects(scene: WorldSceneLike) {
   // malt und man hinauslaufen kann. So bleibt harbor.tmj unberührt.
   for (let y = WORLD_JETTY_WH.y0; y <= WORLD_JETTY_WH.y1; y++) {
     for (let x = WORLD_JETTY_WH.x; x < WORLD_JETTY_WH.x + WORLD_JETTY_WH.w; x++) {
-      scene.ground[y * W + x] = WH_DOCK;
+      scene.ground[y * W + x] = DOCK;
       scene.solidGrid[y * W + x] = 0;
     }
   }
@@ -73,7 +74,7 @@ export function placeHarborObjects(scene: WorldSceneLike) {
   // bleibt harbor.tmj unberührt.
   for (let y = WORLD_JETTY_WT.y0; y <= WORLD_JETTY_WT.y1; y++) {
     for (let x = WORLD_JETTY_WT.x; x < WORLD_JETTY_WT.x + WORLD_JETTY_WT.w; x++) {
-      scene.ground[y * W + x] = WT_DOCK;
+      scene.ground[y * W + x] = DOCK;
       scene.solidGrid[y * W + x] = 0;
     }
   }
@@ -85,7 +86,7 @@ export function placeHarborObjects(scene: WorldSceneLike) {
   // sie als „dock" malt und man hinauslaufen kann. So bleibt harbor.tmj unberührt.
   for (let y = WORLD_JETTY_FL.y0; y <= WORLD_JETTY_FL.y1; y++) {
     for (let x = WORLD_JETTY_FL.x; x < WORLD_JETTY_FL.x + WORLD_JETTY_FL.w; x++) {
-      scene.ground[y * W + x] = FL_DOCK;
+      scene.ground[y * W + x] = DOCK;
       scene.solidGrid[y * W + x] = 0;
     }
   }
@@ -99,7 +100,7 @@ export function placeHarborObjects(scene: WorldSceneLike) {
   // Archipel-/Wachturm-Schildern (beide am Steg-Ende y30.3) kollidiert.
   for (let y = WORLD_JETTY_WF.y0; y <= WORLD_JETTY_WF.y1; y++) {
     for (let x = WORLD_JETTY_WF.x; x < WORLD_JETTY_WF.x + WORLD_JETTY_WF.w; x++) {
-      scene.ground[y * W + x] = WF_DOCK;
+      scene.ground[y * W + x] = DOCK;
       scene.solidGrid[y * W + x] = 0;
     }
   }

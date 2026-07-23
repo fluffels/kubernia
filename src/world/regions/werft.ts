@@ -27,6 +27,7 @@
  */
 import { warpAt, type Warp } from "./archipel";
 import { objectsForMap, objectFootprint } from "../../content/entities";
+import { WATER, DOCK, PATH } from "./terraincodes";
 
 export { warpAt, type Warp };
 
@@ -38,7 +39,7 @@ export const WERFT_H = 20;
 /** Bodenraster-Codes – identisch zur Hauptkarte (renderGround), damit die RegionScene exakt
  *  dieselbe Wang-Logik nutzen kann: -2 Wasser, -10 Holz-Helling/-Steg, 25 Pfad, 0/1/2 Gras
  *  (Hof-Fläche), 96/97/98 Stein-Kai (die Hof-Wand zum Meer). */
-export const WATER = -2, DOCK = -10, PATH = 25;
+export { WATER, DOCK, PATH };
 export const STONE_CODES = [96, 97, 98] as const;
 
 /** Gepflasterte Hof-Fläche als RECHTECK (eine gebaute Werft ist gerade, keine organische

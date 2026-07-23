@@ -15,6 +15,7 @@
 import { warpAt, type Warp } from "./archipel";
 import { npcSpawnForMap, objectForId, type Spawn } from "../../content/entities";
 import { fillTerrain, markRegistrySolids } from "./geometry";
+import { WATER, PATH } from "./terraincodes";
 
 export { warpAt, type Warp };
 
@@ -26,7 +27,7 @@ export const LH = 22;
  *  exakt dieselbe Wang-Logik nutzen kann: -2 Wasser, 25 Pfad, 0/1/2 Gras,
  *  96/97/98 Stein-Kai (der felsige Klippenrand/-kamm). KEIN Sandstrand – eine Klippe
  *  fällt steinig zum Meer ab. */
-export const WATER = -2, PATH = 25;
+export { WATER, PATH };
 export const STONE_CODES = [96, 97, 98] as const;
 
 const CX = 13, CY = 9;   // Mittelpunkt der Gras-Hochebene

@@ -27,6 +27,7 @@
  */
 import { warpAt, type Warp } from "./archipel";
 import { objectsForMap, objectFootprint } from "../../content/entities";
+import { WATER, DOCK } from "./terraincodes";
 
 export { warpAt, type Warp };
 
@@ -38,7 +39,7 @@ export const FH = 16;
 /** Bodenraster-Codes – identisch zur Hauptkarte (renderGround), damit die RegionScene
  *  exakt dieselbe Wang-Logik nutzen kann: -2 Wasser, -10 Holz-Deck/-Steg. Das Deck ist
  *  durchgehend Holz (kein Gras/Stein) – ein Schiffsdeck, kein Land. */
-export const WATER = -2, DOCK = -10;
+export { WATER, DOCK };
 
 /** Rechteckiges Holz-Deck (ein gebautes Deck ist gerade): Planken-Innenfläche
  *  [DX0..DX1]×[DY0..DY1], ringsum offenes Meer. */
