@@ -9,9 +9,7 @@
  * von Bäumen/Fels/Gütern.
  */
 import { objectsForMap, objectFootprint, type EntityObject } from "../../content/entities";
-
-/** Wasser-Bodencode – identisch zur Hauptkarte (renderGround) in allen Regionen. */
-const WATER = -2;
+import { WATER } from "./terraincodes";
 
 /** Deterministischer Gras-Frame-Index (0/1/2) wie auf der Hauptkarte: meist 0,
  *  seltener 1/2 für etwas Textur. Aus (x,y) gehasht, also stabil pro Kachel. */

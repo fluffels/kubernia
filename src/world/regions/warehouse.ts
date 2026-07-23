@@ -17,6 +17,7 @@
 import { warpAt, type Warp } from "./archipel";
 import { npcSpawnForMap, objectForId, objectsForMap, objectFootprint, type EntityObject, type Spawn } from "../../content/entities";
 import { fillTerrain, markRegistrySolids } from "./geometry";
+import { WATER, DOCK, PATH } from "./terraincodes";
 
 export { warpAt, type Warp };
 
@@ -27,7 +28,7 @@ export const WH = 20;
 /** Bodenraster-Codes – identisch zur Hauptkarte (renderGround), damit WarehouseScene
  *  exakt dieselbe Wang-Logik nutzen kann: -2 Wasser, -10 Holz-Steg, 25 Pfad,
  *  0/1/2 Gras (Quay-Fläche), 96/97/98 Stein-Kai (die Quay-Wand zum Meer). */
-export const WATER = -2, DOCK = -10, PATH = 25;
+export { WATER, DOCK, PATH };
 export const STONE_CODES = [96, 97, 98] as const;
 
 /** Gepflasterte Quay-Fläche als RECHTECK (ein gebauter Hafen ist gerade, keine

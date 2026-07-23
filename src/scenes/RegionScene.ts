@@ -21,7 +21,7 @@ import Phaser from "phaser";
 import { UI } from "../ui";
 import { resolveMove, circleHitbox, npcHitboxes, type Hitbox } from "../world/world";
 import { npcSpawnsForMap, objectsForMap } from "../content/entities";
-import { WATER, SAND, PATH, DOCK } from "../world/regions/archipel";
+import { WATER, SAND, PATH, DOCK } from "../world/regions/terraincodes";
 import { setWorldScene, setInteriorOpen } from "../runtime";
 import { T, FOAM, WANG, STONE, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText, queueAssetLoad, sliceSheets, renderPlayer, stepSimplePlayer, IslandScene, type SceneNpc } from "./shared";
 import { HIT_R } from "./geometry";
