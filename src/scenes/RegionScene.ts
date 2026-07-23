@@ -21,15 +21,13 @@ import Phaser from "phaser";
 import { UI } from "../ui";
 import { resolveMove, circleHitbox, npcHitboxes, type Hitbox } from "../world/world";
 import { npcSpawnsForMap, objectsForMap } from "../content/entities";
-import { WATER, SAND, PATH, DOCK } from "../world/regions/terraincodes";
+import { DOCK } from "../world/regions/terraincodes";
 import { setWorldScene, setInteriorOpen } from "../runtime";
-import { T, FOAM, WANG, STONE, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText, queueAssetLoad, sliceSheets, renderPlayer, stepSimplePlayer, IslandScene, type SceneNpc } from "./shared";
+import { T, pixelText, spawnIslandNpc, spawnIslandObject, buildSign, floatPixelText, queueAssetLoad, sliceSheets, renderPlayer, stepSimplePlayer, IslandScene, type SceneNpc } from "./shared";
+import { renderGround as renderGroundShared } from "./worldscene/renderground";
 import { HIT_R } from "./geometry";
 import type { Warp } from "../world/warps";
 import { assetsForScene } from "../assets-data";
-
-/** Stein-Kai/-Klippe (Boden-Codes 96–98) – als volle Kachel gerendert + edge-„kai". */
-const isStone = (c: number) => c === STONE[0] || c === STONE[1] || c === STONE[2];
 
 /** Mindest-Bauplan einer Region: das, was renderGround/Kollision/Kamera brauchen. Die
  *  Geometrie-Builder (buildArchipel/-Lighthouse/-Warehouse) liefern zusätzlich ihre
@@ -196,52 +194,11 @@ export class RegionScene extends IslandScene {
    *  (dock/kai/coast je nach Nachbar) → Sand → Gras → Pfad; Steg-Planken (DOCK) und Stein-Kai
    *  (96–98) als volle Kacheln. Die Region-Unterschiede (Sand nur am Archipel, Steg nur bei
    *  Archipel/Lager, Stein-Kai bei Leuchtturm/Lager) ergeben sich automatisch aus den Boden-
-   *  Codes – kein Sonderzweig je Region nötig. */
+   *  Codes – kein Sonderzweig je Region nötig. Die Kachel-Wahl selbst ist mit dem Hafen geteilt
+   *  (worldscene/groundtiles.ts, worldscene/renderground.ts, #958) – die Regionen haben nur
+   *  Schaum-Sparkles, keine Hafen-Atmosphäre (Wasser-Hintergrund/Küstenwellen). */
   renderGround() {
-    const rt = this.add.renderTexture(0, 0, this.W * T, this.H * T).setOrigin(0).setDepth(0);
-    const lv = (cx: number, cy: number) => {
-      const ix = cx < 0 ? 0 : cx >= this.W ? this.W - 1 : cx;
-      const iy = cy < 0 ? 0 : cy >= this.H ? this.H - 1 : cy;
-      const c = this.ground[iy * this.W + ix];
-      return c === WATER ? 0 : c === SAND ? 1 : c === PATH ? 3 : 2;
-    };
-    const rawAt = (cx: number, cy: number) => {
-      const ix = cx < 0 ? 0 : cx >= this.W ? this.W - 1 : cx;
-      const iy = cy < 0 ? 0 : cy >= this.H ? this.H - 1 : cy;
-      return this.ground[iy * this.W + ix];
-    };
-    const corners = (x: number, y: number, hi: number) =>
-      (((lv(x - 1, y - 1) >= hi ? 1 : 0) << 3) | ((lv(x, y - 1) >= hi ? 1 : 0) << 2) |
-       ((lv(x - 1, y) >= hi ? 1 : 0) << 1) | (lv(x, y) >= hi ? 1 : 0));
-    const has = (x: number, y: number, t: number) =>
-      lv(x - 1, y - 1) === t || lv(x, y - 1) === t || lv(x - 1, y) === t || lv(x, y) === t;
-    const edgeSet = (x: number, y: number) => {
-      const cs = [rawAt(x - 1, y - 1), rawAt(x, y - 1), rawAt(x - 1, y), rawAt(x, y)];
-      if (cs.some((c) => c === DOCK)) return "dock";   // Holz-Steg trifft Wasser
-      if (cs.some(isStone)) return "kai";              // Stein-Kai/-Klippe trifft Wasser
-      return "coast";
-    };
-    // Phaser 4: drawFrame ist weg -> stamp() mit Ursprung oben-links (default zentriert); render() flusht den Puffer.
-    const topLeft = { originX: 0, originY: 0 };
-    for (let y = 0; y < this.H; y++) {
-      for (let x = 0; x < this.W; x++) {
-        const v = this.ground[y * this.W + x];
-        if (has(x, y, 0)) rt.stamp(edgeSet(x, y), WANG[corners(x, y, 1)], x * T, y * T, topLeft);
-        else if (v === DOCK) rt.stamp("dock", WANG[15], x * T, y * T, topLeft);
-        else if (isStone(v)) rt.stamp("kai", WANG[15], x * T, y * T, topLeft);
-        else if (has(x, y, 3)) rt.stamp("path", WANG[corners(x, y, 3)], x * T, y * T, topLeft);
-        else rt.stamp("meadow", WANG[corners(x, y, 2)], x * T, y * T, topLeft);
-      }
-    }
-    rt.render();
-    // Wellen-Glitzer auf dem Wasser
-    for (let i = 0; i < 40; i++) {
-      const x = Phaser.Math.Between(0, this.W - 1), y = Phaser.Math.Between(0, this.H - 1);
-      if (this.ground[y * this.W + x] !== WATER) continue;
-      const s = this.add.image(x * T + Phaser.Math.Between(2, 12), y * T + Phaser.Math.Between(3, 12), "px")
-        .setScale(2.5, 0.8).setTint(FOAM).setAlpha(0).setDepth(1);
-      this.tweens.add({ targets: s, alpha: { from: 0, to: 0.55 }, duration: Phaser.Math.Between(900, 1800), yoyo: true, repeat: -1, delay: Phaser.Math.Between(0, 2000) });
-    }
+    renderGroundShared(this, { sparkleCount: 40 });
   }
 
   /** Deterministische Boden-Deko (Blumen begehbar, Büsche/Steine solide) auf dem Gras –

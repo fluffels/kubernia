@@ -10,6 +10,8 @@ import { SFX } from "../sfx";
 import { keys, setWorldScene, setInteriorOpen, type WorldSceneRef } from "../runtime";
 import { warpAt, type Warp } from "../world/warps";
 import { type AssetEntry } from "../assets-data";
+import { STONE } from "../world/maps/harbormap";
+import { WANG } from "./worldscene/groundtiles";
 
 // Kachelgröße in Pixeln – die EINE Quelle ist `TILE` in world.ts (#607). `T` ist nur der
 // kurze, in der Szenen-Mathematik (`x * T`) breit genutzte Alias darauf, kein zweites Literal.
@@ -194,12 +196,9 @@ export abstract class IslandScene extends Phaser.Scene {
 // spawnFlowers/spawnGrassDetail). Die alte GRASS-Verteilung [0,0,0,0,1,2] aus der
 // Vor-Wang-Ära wird seit dem PixelLab-Terrain nicht mehr gebraucht und ist entfernt.
 const DIRT = 25;
-const STONE = [96, 97, 98];
 const CRATE = 63, BARREL = 82, ANVIL = 74, TABLE = 72, DEVICE = 65, BOOK = 66;
 const WELL = 104, SIGN = 83, CART = 57;
 const WATER = 0x3f7fc4, FOAM = 0xbfe3f5;
-// PixelLab Wang-Tileset (Wasser->Sand): Eck-Code (NW,NE,SW,SE; Bit=1 => Land/oben) -> Frame im 4x4-Sheet "coast"
-const WANG = [6, 7, 10, 9, 2, 11, 4, 15, 5, 14, 1, 8, 3, 0, 13, 12];
 
 function hashHue(str: string) {
   let h = 0;
