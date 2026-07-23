@@ -10,7 +10,6 @@
  * Freie Funktionen mit der Szene als Parameter; die Zellen-/Deko-Primitive
  * (scene.tree/objDeco/deco/building/get) bleiben auf der Szene.
  */
-import Phaser from "phaser";
 import { SHIP, type Door } from "../../world/world";
 import { WORLD_TO_ARCHIPEL } from "../../world/regions/archipel";
 import { WORLD_TO_LIGHTHOUSE, WORLD_RETURN_LH } from "../../world/regions/lighthouse";
@@ -20,7 +19,8 @@ import { WORLD_JETTY_FL, WORLD_TO_FLOTTE } from "../../world/regions/flotte";
 import { WORLD_JETTY_WF, WORLD_TO_WERFT } from "../../world/regions/werft";
 import { DOCK } from "../../world/regions/terraincodes";
 import { PIER_XS } from "../../world/maps/harbormap";
-import { T, DIRT, WATER, FOAM, WANG } from "../shared";
+import { T, DIRT } from "../shared";
+import { renderGround as renderGroundShared } from "./renderground";
 import type { WorldSceneLike } from "./types";
 
 /** Sichtbare Hafen-Objekte (Bäume, Stege-Schilder, Schiff, Markt, Gebäude,
@@ -202,76 +202,15 @@ export function makeDoor(scene: WorldSceneLike, tx: number, ty: number, theme?: 
   scene.add.container(cx, baseY, [frame, leaf, seam, knob]).setDepth(baseY + 0.5);
 }
 
+/** Wang-Autotile-Boden des Hafens: Wasser-Hintergrund + Schaum-Sparkles auf dem
+ *  sichtbaren Meeresstreifen (y>=28) + Küstenwellen sind reine Hafen-Atmosphäre,
+ *  die Kachel-Wahl selbst ist mit den Regionen geteilt (worldscene/groundtiles.ts,
+ *  worldscene/renderground.ts, #958). */
 export function renderGround(scene: WorldSceneLike) {
-  const rt = scene.add.renderTexture(0, 0, scene.W * T, scene.H * T).setOrigin(0).setDepth(0);
-  // Meer als Hintergrund-Fallback (wird von den Wang-Wasserkacheln überdeckt)
-  rt.fill(WATER, 1, 0, 24 * T, scene.W * T, (scene.H - 24) * T);
-
-  // PixelLab-Terrain: Wasser(0) < Sand(1) < Gras/Land(2) < Weg(3). Wasser-Ränder nach Material.
-  const lv = (cx: number, cy: number) => {
-    const ix = cx < 0 ? 0 : cx >= scene.W ? scene.W - 1 : cx;
-    const iy = cy < 0 ? 0 : cy >= scene.H ? scene.H - 1 : cy;
-    const c = scene.ground[iy * scene.W + ix];
-    return c === -2 ? 0 : c === -3 ? 1 : c === 25 ? 3 : 2;
-  };
-  const rawAt = (cx: number, cy: number) => {
-    const ix = cx < 0 ? 0 : cx >= scene.W ? scene.W - 1 : cx;
-    const iy = cy < 0 ? 0 : cy >= scene.H ? scene.H - 1 : cy;
-    return scene.ground[iy * scene.W + ix];
-  };
-  // Eck-Code (NW,NE,SW,SE) gegen Schwelle hi: Ecke >= hi => "oben" (Bit gesetzt)
-  const corners = (x: number, y: number, hi: number) =>
-    (((lv(x - 1, y - 1) >= hi ? 1 : 0) << 3) | ((lv(x, y - 1) >= hi ? 1 : 0) << 2) |
-     ((lv(x - 1, y) >= hi ? 1 : 0) << 1) | (lv(x, y) >= hi ? 1 : 0));
-  const has = (x: number, y: number, t: number) =>
-    lv(x - 1, y - 1) === t || lv(x, y - 1) === t || lv(x - 1, y) === t || lv(x, y) === t;
-  // Wasser-Rand-Set nach Nachbar-Material: Holz (Steg/Schiff) > Stein (Kai) > Sand (Küste)
-  const edgeSet = (x: number, y: number) => {
-    const cs = [rawAt(x - 1, y - 1), rawAt(x, y - 1), rawAt(x - 1, y), rawAt(x, y)];
-    if (cs.some((c) => c === -10)) return "dock";   // Holz-Steg/Anleger (#108: kein Schiffsdeck-Holz mehr)
-    if (cs.some((c) => c === 96 || c === 97 || c === 98)) return "kai";
-    return "coast";
-  };
-
-  // Phaser 4: drawFrame ist weg -> stamp() mit Ursprung oben-links (default zentriert); render() flusht den Puffer.
-  const topLeft = { originX: 0, originY: 0 };
-  for (let y = 0; y < scene.H; y++) {
-    for (let x = 0; x < scene.W; x++) {
-      const v = scene.get(x, y);
-      if (has(x, y, 0)) {                                              // berührt Wasser -> Rand-Set nach Material
-        rt.stamp(edgeSet(x, y), WANG[corners(x, y, 1)], x * T, y * T, topLeft);
-      } else if (v === -10) {                                         // Steg/Anleger innen -> volle Planke
-        rt.stamp("dock", WANG[15], x * T, y * T, topLeft);
-      } else if (v === 96 || v === 97 || v === 98) {                  // Stein-Kai innen -> voller Stein
-        rt.stamp("kai", WANG[15], x * T, y * T, topLeft);
-      } else if (has(x, y, 3)) {                                      // Gras/Weg-Ebene
-        rt.stamp("path", WANG[corners(x, y, 3) ^ 15], x * T, y * T, topLeft);
-      } else {                                                        // Sand/Gras-Ebene
-        rt.stamp("meadow", WANG[corners(x, y, 2)], x * T, y * T, topLeft);
-      }
-    }
-  }
-  rt.render();
-  // Wellen-Glitzer
-  for (let i = 0; i < 60; i++) {
-    const x = Phaser.Math.Between(1, scene.W - 2), y = Phaser.Math.Between(28, scene.H - 1);
-    if (scene.get(x, y) !== -2) continue;
-    const s = scene.add.image(x * T + Phaser.Math.Between(2, 12), y * T + Phaser.Math.Between(3, 12), "px")
-      .setScale(2.5, 0.8).setTint(FOAM).setAlpha(0).setDepth(1);
-    scene.tweens.add({ targets: s, alpha: { from: 0, to: 0.55 }, duration: Phaser.Math.Between(900, 1800), yoyo: true, repeat: -1, delay: Phaser.Math.Between(0, 2000) });
-  }
-  // Wellen, die Richtung Küste rollen
-  for (let i = 0; i < 14; i++) {
-    const wv = scene.add.image(0, 0, "px").setScale(Phaser.Math.Between(6, 11), 0.8).setTint(0xdfeefb).setAlpha(0).setDepth(1);
-    const reset = () => {
-      wv.x = Phaser.Math.Between(2, scene.W - 2) * T;
-      wv.y = Phaser.Math.Between(30, scene.H - 2) * T;
-    };
-    reset();
-    scene.tweens.add({
-      targets: wv, y: "-=10", alpha: { from: 0, to: 0.45 },
-      duration: Phaser.Math.Between(1700, 2700), yoyo: true, repeat: -1,
-      delay: Phaser.Math.Between(0, 2600), onRepeat: reset,
-    });
-  }
+  renderGroundShared(scene, {
+    waterFill: true,
+    sparkleCount: 60,
+    sparkleBounds: { xFrom: 1, xTo: scene.W - 2, yFrom: 28, yTo: scene.H - 1 },
+    rollingWaveCount: 14,
+  });
 }
