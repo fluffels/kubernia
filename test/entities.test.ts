@@ -176,6 +176,55 @@ test("parseEntities: wirft bei ungültigem Tagesplan-Eintrag (Format/Reihenfolge
   assert.throws(() => parseEntities({ npcs: [{ ...base, schedule: [{ timeStart: "08:00", timeEnd: "12:00", x: "a", y: 2 }] }] }), ContentValidationError);
 });
 
+/* ---------- ADR 0011 / #964: role (NPC) + activity (Tagesplan-Eintrag) ---------- */
+
+test("parseEntities: akzeptiert role am NPC + liefert korrekt (Gegenprobe)", () => {
+  const withRole = { npcs: [{ id: "ole", map: "harbor", x: 1, y: 2, role: "vendor" }] };
+  assert.deepEqual(parseEntities(withRole), [{ id: "ole", map: "harbor", x: 1, y: 2, role: "vendor" }]);
+  // Ohne role → kein role-Schlüssel im Ergebnis (kein undefined-Müll, wie bei schedule).
+  assert.equal("role" in parseEntities(OK)[0], false);
+});
+
+test("parseEntities: akzeptiert jede erlaubte NpcRole (Gegenprobe gegen „immer rot“)", () => {
+  for (const role of ["vendor", "quest-giver", "trainer", "flavor"]) {
+    const result = parseEntities({ npcs: [{ id: "ole", map: "harbor", x: 1, y: 2, role }] });
+    assert.equal(result[0].role, role);
+  }
+});
+
+test("parseEntities: wirft bei unbekannter/ungültiger role", () => {
+  const base = { id: "ole", map: "harbor", x: 1, y: 2 };
+  assert.throws(() => parseEntities({ npcs: [{ ...base, role: "boss" }] }), ContentValidationError);
+  assert.throws(() => parseEntities({ npcs: [{ ...base, role: "" }] }), ContentValidationError);
+  assert.throws(() => parseEntities({ npcs: [{ ...base, role: 5 }] }), ContentValidationError);
+});
+
+test("parseEntities: akzeptiert activity an Tagesplan-Eintrag + liefert korrekt (Gegenprobe)", () => {
+  const base = { id: "ole", map: "harbor", x: 1, y: 2 };
+  const withActivity = { npcs: [{ ...base, schedule: [{ timeStart: "08:00", timeEnd: "12:00", x: 5, y: 6, activity: "working" }] }] };
+  const result = parseEntities(withActivity);
+  assert.deepEqual(result[0].schedule, [{ timeStart: "08:00", timeEnd: "12:00", x: 5, y: 6, activity: "working" }]);
+  // Ohne activity → kein activity-Schlüssel im Schedule-Eintrag (kein undefined-Müll).
+  const withoutActivity = parseEntities({ npcs: [{ ...base, schedule: [{ timeStart: "08:00", timeEnd: "12:00", x: 5, y: 6 }] }] });
+  assert.equal("activity" in withoutActivity[0].schedule![0], false);
+});
+
+test("parseEntities: akzeptiert jede erlaubte NpcActivity im Tagesplan (Gegenprobe gegen „immer rot“)", () => {
+  for (const activity of ["idle", "working", "walking", "asleep", "away"]) {
+    const result = parseEntities({
+      npcs: [{ id: "ole", map: "harbor", x: 1, y: 2, schedule: [{ timeStart: "08:00", timeEnd: "12:00", x: 5, y: 6, activity }] }],
+    });
+    assert.equal(result[0].schedule![0].activity, activity);
+  }
+});
+
+test("parseEntities: wirft bei unbekannter/ungültiger activity im Tagesplan-Eintrag", () => {
+  const base = { id: "ole", map: "harbor", x: 1, y: 2 };
+  assert.throws(() => parseEntities({ npcs: [{ ...base, schedule: [{ timeStart: "08:00", timeEnd: "12:00", x: 1, y: 2, activity: "dancing" }] }] }), ContentValidationError);
+  assert.throws(() => parseEntities({ npcs: [{ ...base, schedule: [{ timeStart: "08:00", timeEnd: "12:00", x: 1, y: 2, activity: "" }] }] }), ContentValidationError);
+  assert.throws(() => parseEntities({ npcs: [{ ...base, schedule: [{ timeStart: "08:00", timeEnd: "12:00", x: 1, y: 2, activity: 5 }] }] }), ContentValidationError);
+});
+
 /* ====== npcPositionAt: Tagesplan-Auflösung zur Laufzeit (#420) ====== */
 
 test("npcPositionAt: NPC ohne Tagesplan gibt immer den Standardplatz zurück", () => {
