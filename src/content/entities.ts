@@ -35,17 +35,41 @@ import entitiesData from "./data/entities.json";
  *  Import-Zyklus zu bauen; world.ts re-exportiert `Spawn` für seine Altaufrufer. */
 export interface Spawn { id: string; x: number; y: number }
 
+/** Verhaltenszustand eines NPC zu einem Tagesplan-Zeitfenster (ADR 0011, #964). Wird hier
+ *  nur als Daten-Enum am Tagesplan-Eintrag geführt; die Ableitung des AKTUELLEN Zustands
+ *  zur Laufzeit (Zeit/Interaktion → NpcActivity) ist bewusst #965, nicht Teil dieses Tickets. */
+export type NpcActivity = "idle" | "working" | "walking" | "asleep" | "away";
+
+/** Rolle eines NPC im Spiel (ADR 0011, #964) – steuert später, welche Interaktionen ein
+ *  NPC anbietet (Shop, Quest, Training, reiner Smalltalk). Rein deklarativ; die Auswertung
+ *  bleibt Folge-Tickets vorbehalten. */
+export type NpcRole = "vendor" | "quest-giver" | "trainer" | "flavor";
+
+const NPC_ACTIVITIES: readonly NpcActivity[] = ["idle", "working", "walking", "asleep", "away"];
+const NPC_ROLES: readonly NpcRole[] = ["vendor", "quest-giver", "trainer", "flavor"];
+
+/** Validiert einen String gegen eine geschlossene Werte-Liste (Vorbild `OBJECT_TYPES` unten).
+ *  Geteilt zwischen `role` und `activity`, weil beide demselben Allowlist-Muster folgen. */
+function asAllowedValue<T extends string>(v: unknown, path: string, allowed: readonly T[], label: string): T {
+  const s = asNonEmptyString(v, path);
+  if (!allowed.includes(s as T)) fail(path, `unbekannte(r) ${label} „${s}" (erlaubt: ${allowed.join(", ")})`);
+  return s as T;
+}
+
 /** Ein Eintrag im Tagesplan eines NPC (#420): Standplatz für den Zeitraum [timeStart, timeEnd)
  *  im Format "HH:MM" (24h). Treffen mehrere Einträge zu, gilt der erste. Kein Eintrag trifft
  *  zu → Default-Standplatz aus der Registry. Übernacht-Einträge (timeStart > timeEnd) werden
- *  bewusst NICHT unterstützt (Hafen-Szene hat kein Nachtleben, das reichen würde). */
-export interface ScheduleEntry { timeStart: string; timeEnd: string; x: number; y: number }
+ *  bewusst NICHT unterstützt (Hafen-Szene hat kein Nachtleben, das reichen würde).
+ *  `activity` ist optional (Default "idle", ADR 0011) – additiv, keine Save-Migration nötig. */
+export interface ScheduleEntry { timeStart: string; timeEnd: string; x: number; y: number; activity?: NpcActivity }
 
 /** Registry-Eintrag = Standplatz + Karte + optionaler Tagesplan (#420). Die `map`-ID
- *  gruppiert NPCs je Szene (z.B. "harbor", "archipel", "lighthouse", "warehouse"). */
+ *  gruppiert NPCs je Szene (z.B. "harbor", "archipel", "lighthouse", "warehouse").
+ *  `role` ist optional (Default "flavor", ADR 0011) – additiv, keine Save-Migration nötig. */
 export interface EntityNpc extends Spawn {
   map: string;
   schedule?: readonly ScheduleEntry[];
+  role?: NpcRole;
 }
 
 /** Endliche Zahl (Kachel-Koordinaten dürfen Brüche sein, z.B. 14.6 – darum NICHT
@@ -71,7 +95,7 @@ function toMinutes(hhmm: string): number {
 /** Parst einen einzelnen Tagesplan-Eintrag (#420). Wirft bei Schema-Verstoß. */
 function parseScheduleEntry(e: unknown, path: string): ScheduleEntry {
   const o = asRecord(e, path);
-  assertNoUnknownKeys(o, path, ["timeStart", "timeEnd", "x", "y"]);
+  assertNoUnknownKeys(o, path, ["timeStart", "timeEnd", "x", "y", "activity"]);
   const timeStart = asHhmm(o.timeStart, `${path}.timeStart`);
   const timeEnd = asHhmm(o.timeEnd, `${path}.timeEnd`);
   if (toMinutes(timeStart) >= toMinutes(timeEnd)) {
@@ -79,7 +103,9 @@ function parseScheduleEntry(e: unknown, path: string): ScheduleEntry {
   }
   const x = asFiniteNumber(o.x, `${path}.x`);
   const y = asFiniteNumber(o.y, `${path}.y`);
-  return { timeStart, timeEnd, x, y };
+  if (o.activity === undefined) return { timeStart, timeEnd, x, y };
+  const activity = asAllowedValue(o.activity, `${path}.activity`, NPC_ACTIVITIES, "Aktivität");
+  return { timeStart, timeEnd, x, y, activity };
 }
 
 /** Validiert die rohe Registry gegen das Schema und gibt sie typisiert + in
@@ -93,7 +119,7 @@ export function parseEntities(raw: unknown): EntityNpc[] {
   const seen = new Set<string>();
   return list.map((entry, i) => {
     const o = asRecord(entry, `entities.npcs[${i}]`);
-    assertNoUnknownKeys(o, `entities.npcs[${i}]`, ["id", "map", "x", "y", "schedule"]);
+    assertNoUnknownKeys(o, `entities.npcs[${i}]`, ["id", "map", "x", "y", "schedule", "role"]);
     const id = asNonEmptyString(o.id, `entities.npcs[${i}].id`);
     const map = asNonEmptyString(o.map, `entities.npcs[${i}].map`);
     const x = asFiniteNumber(o.x, `entities.npcs[${i}].x`);
@@ -107,8 +133,11 @@ export function parseEntities(raw: unknown): EntityNpc[] {
       const rawSched = asArray(o.schedule, `entities.npcs[${i}].schedule`);
       schedule = rawSched.map((se, j) => parseScheduleEntry(se, `entities.npcs[${i}].schedule[${j}]`));
     }
-    if (schedule !== undefined) return { id, map, x, y, schedule };
-    return { id, map, x, y };
+    const role = o.role === undefined ? undefined : asAllowedValue(o.role, `entities.npcs[${i}].role`, NPC_ROLES, "Rolle");
+    const npc: EntityNpc = { id, map, x, y };
+    if (schedule !== undefined) npc.schedule = schedule;
+    if (role !== undefined) npc.role = role;
+    return npc;
   });
 }
 
