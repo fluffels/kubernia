@@ -221,6 +221,7 @@ Eine erneute doku-freie Runde hat gezielt die harten „erledigt/erzwungen"-Clai
 | 0008 | **KI-Agenten-Harness** als Entwicklungsmodell (autonomer Ein-Ticket-Worktree-Workflow + Fitness-Functions als Leitplanken + selbstdokumentierendes Repo) | **akzeptiert** ([ADR 0008](adr/0008-ki-agenten-harness.md), #530) — die prägendste Entscheidung, jetzt als ADR festgehalten (Kontext/Alternativen/Re-Eval-Trigger). Kanonische Erklärung des Harness: [agent-harness.md](agent-harness.md) (#526). Integrationsweg seit #592 durch 0009 präzisiert. |
 | 0009 | **PR-Gating mit Required-Checks** auf `main` (`enforce_admins` an) statt Direkt-Push | **akzeptiert** ([ADR 0009](adr/0009-pr-gating-required-checks.md), #592) — der dritte Re-Eval-Trigger von 0008 ist eingetreten; Gate-Durchsetzung jetzt server-seitig und nicht mehr per `--no-verify` umgehbar. |
 | 0010 | **Karten-Modell:** zwei Pipelines bewusst nebeneinander (Tiled-Daten für bespoke Karten, Code-Builder für prozedurale Regionen) statt Konvergenz | **akzeptiert** ([ADR 0010](adr/0010-karten-modell-tiled-vs-code-builder.md), #957) — folgt derselben Content-as-Data-Logik wie 0004 auf die Karten-Ebene. |
+| 0011 | **NPC-System-Fundament:** Datenmodell für lebendige NPCs — statische Design-Daten (Rolle, Verhaltenszustand) additiv im Entity-Schema, dynamischer Zustand (Beziehungslevel) als einzige Save-Migration | **akzeptiert** ([ADR 0011](adr/0011-npc-system-fundament.md), #963) — löst die von 0007 offen gelassene NPC-Scope-Frage (#420) positiv auf, vor den Folge-Tickets #964–#968. |
 
 iSAQB-konform: jeder ADR trägt einen expliziten **Re-Evaluierungs-Trigger** — Entscheidungen sind an nachprüfbare Bedingungen geknüpft, nicht „für immer".
 
@@ -267,7 +268,7 @@ Konkrete Szenarien (Reiz → Reaktion) statt vager Adjektive:
 | **Ressourcentyp-Erweiterung nicht Open-Closed** (3× reset/merge/snapshot, sim.ts God-File, #545-Split untracked) | sim.ts wächst mit jedem Typ; Haupt-Fehlerquelle | hoch | #864/#865 |
 | Monolithischer 5s-Vollserialisierungs-Autosave | CPU/GC-Bremse bei Stardew-Stand-Größe (Serialisierungs-, nicht Kapazitätskosten) | mittel | #869 |
 | ~~Zwei divergente Karten-Modelle~~ → **entschieden ([ADR 0010](adr/0010-karten-modell-tiled-vs-code-builder.md), #957)**: bewusst zwei Pipelines mit Grenzregel; die Renderer-Duplizierung (zwei `renderGround`) und die fragile Bodencode-Import-Kopplung bleiben als eigene Tickets offen | Doppelte Pipeline war die offene Weiche, jetzt per ADR geschlossen; Renderer-Duplizierung/Kopplung als Rest-Risiko | mittel | #958/#959 |
-| NPCs ohne Entitäts-/System-Modell (Sprite+`splice(6)`) | Stardew-NPCs (Verhalten/Beziehungen) haben kein Zuhause | mittel | #871 |
+| ~~NPCs ohne Entitäts-/System-Modell (Sprite+`splice(6)`)~~ → **entschieden ([ADR 0011](adr/0011-npc-system-fundament.md), #963)**: Datenmodell (Rolle/Zustand additiv, Beziehung als einzige Save-Migration) festgelegt; die Umsetzung selbst steht noch aus | Stardew-NPCs (Verhalten/Beziehungen) haben kein Zuhause; Datenmodell jetzt entschieden, Code folgt in #964–#968 | mittel | #871/#964-#968 |
 | ESLint `recommended` statt `recommendedTypeChecked` | typed-lint-Kosten ohne Ertrag; `no-unsafe-*` aus | mittel | #868 |
 | Präsentation faktisch ungetestet (Floor 3 %, nur Chromium) + Copy-Paste-Minispiele | größte Codemenge im schwächsten Netz; UI skaliert nicht | mittel | #873/#874 |
 

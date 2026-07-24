@@ -36,6 +36,8 @@ Tag/Nacht existiert nur als Render-Effekt aus der Frame-Zeit; `GameState` hat **
 
 - **NPC-Tagesplan/Routinen (#420)** und **reiches Item-/Crafting-Modell (#421)** sind `status:zurückgestellt` + `question`. Sie hängen an einer Design-Entscheidung: bedeutet „Stardew-Scope" für ein **K8s-Lernspiel** simulierte Alltagsroutinen/Crafting – oder vor allem **Lern-Tiefe** (mehr Themen/Quests/Welten)? Erst entscheiden, dann ggf. bauen. (#420 setzt zudem #413 voraus.)
 
+**Ergänzung 2026-07-24:** Die NPC-Teilfrage ist inzwischen positiv entschieden — siehe [ADR 0011 – NPC-System-Fundament](0011-npc-system-fundament.md) (#963): Kubernia bekommt lebendige NPCs mit Zustand/Routinen/Beziehungen. Das Item-/Crafting-Modell (#421) bleibt weiterhin offen.
+
 ## Konsequenzen
 
 **Positiv**
