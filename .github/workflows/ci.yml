@@ -2,8 +2,8 @@ name: CI
 
 # Qualitätstore bei jedem Push auf main und bei jedem Pull Request.
 # Hält main grün: Tests + Typecheck + beide Builds müssen durchlaufen.
-# workflow_dispatch erlaubt zusätzlich den manuellen Start – v.a. um den
-# Dev-Panel-Build (#331) zwischendurch anzustoßen und das Artefakt zu ziehen.
+# workflow_dispatch erlaubt zusätzlich den manuellen Start – z.B. um die Gate-Kette
+# nach einer Tooling-Änderung zwischendurch einmal komplett durchzufahren.
 on:
   push:
     branches: [main]
@@ -237,13 +237,25 @@ jobs:
           path: jscpd-report/
           if-no-files-found: warn
 
-  # Dev-Panel-Build (#331): liefert das sonst dev-server-only Panel als eine
-  # self-contained Datei aus, passwortgated über das Repo-Secret VITE_KQ_DEVPANEL_PW.
-  # WICHTIG (Geheimhaltung): nur bei Push auf main bzw. manuellem Start – NICHT bei
-  # pull_request, damit das Secret nie an (Fork-)PRs gerät. GitHub liefert Secrets
-  # ohnehin nicht an Fork-PRs aus; das if ist der zusätzliche, explizite Riegel.
+  # Dev-Panel-Build (#331) als reines KOMPILIER-Gate: prüft, dass der eigene
+  # Vite-Mode (`npm run build:devpanel`) weiter durchbaut — mehr nicht.
+  #
+  # KEIN Artefakt-Upload und KEIN Passwort mehr (#979): Vite backt `VITE_*` zur
+  # BUILD-Zeit als Klartext-String-Literal ins Bundle, und Workflow-Artefakte eines
+  # ÖFFENTLICHEN Repos sind für jeden herunterladbar — das Passwort wäre damit aus
+  # dem Artefakt trivial auslesbar. Das Repo-Secret ist deshalb entfernt; der
+  # Build läuft ohne Wert durch und das Panel bleibt im Ergebnis gesperrt
+  # (siehe src/devpanel.ts: kein/leeres Passwort ⇒ immer `false`).
+  #
+  # Verteilungsweg für ein BENUTZBARES Panel ist der Docker-Weg mit Laufzeit-
+  # Injection (#334, docs/devpanel-docker.md) — der braucht kein Build-Secret.
+  #
+  # Das `if` ist seit dem Secret-Wegfall keine Geheimhaltungsmaßnahme mehr, sondern
+  # nur noch Laufzeit-Sparen: der Mode weicht vom Prod-Build kaum ab, ein Bruch
+  # fällt auf `main` früh genug auf. Auf PRs mitlaufen zu lassen wäre ein eigenes
+  # Ticket, kein stiller Zusatz hier.
   devpanel-build:
-    name: Dev-Panel-Build (passwortgated, nur main/manuell)
+    name: Dev-Panel-Build (Kompilier-Gate, nur main/manuell)
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -259,19 +271,11 @@ jobs:
       - name: Abhängigkeiten installieren
         run: npm ci
 
-      - name: Dev-Panel-Build (Single-File, Passwort aus Secret injiziert)
+      # Bewusst OHNE `env: VITE_KQ_DEVPANEL_PW` – kein Passwort in den Build, damit
+      # aus dem Ergebnis keins auslesbar ist. Das Panel bleibt dadurch gesperrt;
+      # genau das ist hier gewollt (nur Kompilier-Prüfung).
+      - name: Dev-Panel-Build (Single-File, ohne Passwort)
         run: npm run build:devpanel
-        env:
-          # Wert steht NICHT im Repo – kommt aus dem Repo-Secret. Fehlt das Secret,
-          # baut es trotzdem durch; das Panel bleibt dann nur gesperrt.
-          VITE_KQ_DEVPANEL_PW: ${{ secrets.VITE_KQ_DEVPANEL_PW }}
-
-      - name: Dev-Panel-Build als Artefakt hochladen
-        uses: actions/upload-artifact@v7
-        with:
-          name: kubernia-devpanel
-          path: dist-devpanel/index.html
-          if-no-files-found: error
 
   # Post-hoc-Alarm (#605): die ZWEITE Grenze hinter dem PR-Gate (#592). `main` ist
   # seit #592 PR-gegated, aber ein roter `main` TROTZ grüner PR-Checks bleibt möglich

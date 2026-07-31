@@ -169,7 +169,7 @@ describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
     expect(ci, "der Alarm-Job muss existieren").toMatch(/alarm-red-main:/);
     // Läuft NUR bei Fehlschlag UND nur auf push (ein roter PR ist Sache der Autorin).
     expect(ci).toMatch(/if:\s*failure\(\)\s*&&\s*github\.event_name\s*==\s*'push'/);
-    // Hängt an den Korrektheits-/Security-Gates (nicht am passwortgated Devpanel-Build).
+    // Hängt an den Korrektheits-/Security-Gates (nicht am Devpanel-Kompilier-Gate).
     expect(ci).toMatch(/needs:\s*\[build-test,\s*security-audit\]/);
     // Braucht Schreibrecht auf Issues, um den Alarm anzulegen.
     expect(ci).toMatch(/issues:\s*write/);
