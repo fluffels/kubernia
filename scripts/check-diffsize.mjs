@@ -5,8 +5,9 @@
 /**
  * Diff-Größenbudget-Wächter (#533) — Frühwarnung gegen zu breite Änderungen.
  *
- * Hintergrund (Quelle: WPS `roads/ki-fabrik`-Pipeline): eine KI-Fabrik plant Code
- * in **Commit-Slices mit hartem Größenbudget** und prüft das programmatisch,
+ * Hintergrund (Vorbild: produktiv eingesetzte KI-Entwicklungspipelines): so eine
+ * Pipeline plant Code in **Commit-Slices mit hartem Größenbudget** und prüft das
+ * programmatisch,
  * LLM-frei. kubequest hat das Budget bisher nur auf DATEI-Ebene (check-size.mjs,
  * 800 LOC je Modul), aber KEIN Budget für die Größe EINER Änderung/eines Tickets.
  * Ein Epic, das eigentlich in session-große Kinder gehört (siehe AGENTS.md), kann
