@@ -8,11 +8,11 @@ description: Arbeitet eigenständig EIN offenes kubernia-Ticket end-to-end ab (a
 **Dieses Repo ist selbstdokumentierend.** Das komplette Vorgehen lebt versioniert im Repo, damit **jeder Agent — egal welches Tool und welcher Account** — es nutzen kann. Quellen im Repo-Root:
 
 ```
-AGENTS.md     ← SSOT: harte Regeln, Board-Workflow, Konventionen
-CLAUDE.md     ← Schnellstart (10-Schritte-Checkliste) + Repo-Landkarte
+AGENTS.md     ← SSOT: harte Regeln, Board-Workflow, Konventionen — jede Regel genau einmal
+CLAUDE.md     ← Brücke dorthin (@AGENTS.md-Import) + Referenz-Tabellen (Befehle, Repo-Landkarte, Schichtregeln)
 ```
 
-**Lies diese beiden und folge ihnen Schritt für Schritt.** Bei Konflikt gilt `AGENTS.md`.
+**Lies diese beiden und folge ihnen Schritt für Schritt** – den **Ablauf** ausschließlich aus `AGENTS.md` (seit #992 steht er nicht mehr zusätzlich in `CLAUDE.md`). Bei Konflikt gilt `AGENTS.md`.
 
 Kurzfassung: **Genau EIN** offenes Issue, das **nicht** schon bearbeitet wird (kein Assignee/Branch/Worktree) — rein deterministisch ausgewählt als **oberstes freies Item der manuellen Board-Reihenfolge** (die, die `gh project item-list` liefert; `status:zurückgestellt` überspringen), nie nach Inhalt aussuchen und **nicht nachsortieren**; fertig gefilterter Auswahl-Befehl (`gh project item-list`, braucht `read:project`-Scope) + Sonderfälle in `docs/ticket-reihenfolge.md`. **Claimen per `gh issue edit <nr> --add-assignee @me` und mit `gh issue view <nr>` verifizieren ist Pflicht und blockierend** — ohne bestätigte Zuweisung kein Implementieren. Dann **eigener `git worktree`** (Pflicht, sonst Kollision mit Parallel-Agenten), umsetzen, `npm test` + `npm run typecheck` grün, im Browser verifizieren, committen mit `(#<nr>)`. **Integration läuft über EINEN Pull Request** (seit #592 ist `main` PR-gegated, kein Direkt-Push): ggf. Doku-Anpassung in denselben Branch, `gh pr create` (Body `Closes #<nr>`), dann **den PR bis zum Merge bringen** — CI abwarten (Auto-Merge via `gh pr merge --auto` + `gh pr checks --watch`), grün → mergt, **rot → auf demselben Branch fixen bis grün** (#618); **ein Ticket ist erst fertig, wenn sein PR gemergt ist**. Danach Worktree+Branch entfernen **und verifizieren**; das `Closes #<nr>` schließt das Issue automatisch (mit `gh issue view` verifizieren).
 

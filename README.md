@@ -42,7 +42,7 @@ Ein Agent nimmt **genau ein** Ticket vom Board, arbeitet es end-to-end ab und r�
 
 ### Die Bausteine
 
-- **📖 Selbstdokumentierendes Repo (SSOT im Code).** Ein Agent findet alles, was er braucht, im Repo selbst – auch ohne externes Wissen (frischer Clone, Cloud-Agent). [CLAUDE.md](CLAUDE.md) ist der Schnellstart + die Datei-für-Datei-Landkarte, [AGENTS.md](AGENTS.md) die ausführliche Arbeitsanweisung (harte Regeln, Board-Workflow, Konventionen), dazu **modul-lokale** `AGENTS.md` (z.B. in `src/content/`), die nur gelesen werden, wenn man im jeweiligen Bereich arbeitet (Kontext als Token-Grenze).
+- **📖 Selbstdokumentierendes Repo (SSOT im Code).** Ein Agent findet alles, was er braucht, im Repo selbst – auch ohne externes Wissen (frischer Clone, Cloud-Agent). [AGENTS.md](AGENTS.md) ist die **SSOT** (harte Regeln, Board-Workflow, Konventionen – jede Regel genau einmal), [CLAUDE.md](CLAUDE.md) die **Brücke** dorthin (`@AGENTS.md`-Import, weil Claude Code nur CLAUDE.md automatisch lädt) samt den Nachschlage-Tabellen (Befehle, Subsystem-Landkarte, Schichtregeln, Anlaufstellen), dazu **modul-lokale** `AGENTS.md` (z.B. in `src/content/`), die nur gelesen werden, wenn man im jeweiligen Bereich arbeitet (Kontext als Token-Grenze).
 - **🗂️ Board-getriebener Ein-Ticket-Workflow.** Der Backlog lebt als **GitHub Issues** + Project-Board; eine [deterministische Auswahl-Regel](docs/ticket-reihenfolge.md) (oberstes freies Item der manuellen Board-Reihenfolge) sagt, was als Nächstes dran ist. Ein Agent nimmt **genau ein** Ticket, arbeitet es end-to-end ab (umsetzen → Gates grün → im Browser verifizieren → nach `main` → Issue schließen) und pflegt danach das Board.
 - **🚦 Kollisionsschutz für parallele Agenten.** Mehrere Agenten können gleichzeitig laufen, ohne sich in die Quere zu kommen: Ein Ticket wird per **Assignee** als „in Arbeit" markiert (der einzige Zustand, den ein paralleler Agent sieht) und in einem **eigenen `git worktree`** auf eigenem Branch bearbeitet – so teilen sich zwei Chats nie dasselbe Arbeitsverzeichnis.
 - **🛡️ Automatische Gates als Sicherheitsnetz.** Genau die [Fitness-Functions unten](#-architektur--qualität) (typecheck/lint/arch/size/docmap/docdrift/test/smoke/audit) sind das, was autonome Entwicklung absichert: Ein Agent kann keinen Schichtbruch, keinen `any`, kein God-File, keine veraltete Doku-Landkarte und keine gebrochene Save-Migration unbemerkt einschleusen – der Build wird rot. **Determinismus** (seedbare Zufälligkeit statt `Math.random` in der Domäne) und die **Save-nie-brechen-Regel** gehören zum selben Netz.
@@ -66,7 +66,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 
 **Warum das funktioniert:** Nicht ein einzelner cleverer Prompt macht autonome KI-Entwicklung sicher, sondern die **Leitplanken drumherum** – SSOT-Doku, ein enger Ticket-Fokus, Kollisionsschutz und ein Gate-Netz, das jeden Fehler an der Grenze abfängt. Genau diese Kombination ist selbst ein Architekturziel (siehe [arc42 §8](docs/arc42-architektur.md)).
 
-> 📝 Die **kanonische Harness-Tiefendoku** — der KI-Agenten-Harness als System, „wie + warum" an einer Stelle — steht in **[docs/agent-harness.md](docs/agent-harness.md)**, konkrete Einzelfragen dazu in der **[Harness-FAQ](docs/agent-harness-faq.md)**. Beide sind die erklärende Gesamtsicht; die operative Arbeitsanweisung bleibt [AGENTS.md](AGENTS.md), der Schnellstart + die Datei-Landkarte [CLAUDE.md](CLAUDE.md).
+> 📝 Die **kanonische Harness-Tiefendoku** — der KI-Agenten-Harness als System, „wie + warum" an einer Stelle — steht in **[docs/agent-harness.md](docs/agent-harness.md)**, konkrete Einzelfragen dazu in der **[Harness-FAQ](docs/agent-harness-faq.md)**. Beide sind die erklärende Gesamtsicht; die operative Arbeitsanweisung bleibt [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md) ist die Brücke dorthin + die Referenz-Tabellen.
 
 ---
 
@@ -88,7 +88,7 @@ Kubernia ist bewusst so gebaut, dass es **so groß wie Stardew Valley** werden k
   | `npm run lint` | ESLint typbewusst, `--max-warnings 0`, `any` blockt |
   | `npm run check:arch` | Schichtung + keine Zyklen + kein toter Code (dependency-cruiser) |
   | `npm run check:size` | God-File-Frühwarnung (Zeilen-Budget je Modul) |
-  | `npm run check:docmap` | die Datei-Landkarte in CLAUDE.md kann nicht leise veralten |
+  | `npm run check:docmap` | jede `src/`-Datei ist in einem Tiefendoc erwähnt – die Landkarte kann nicht leise veralten |
   | `npm run check:docdrift` | dokumentierte `npm run`-Kommandos + interne Doku-Links/Anker können nicht leise veralten |
   | `npm run smoke` | Boot- & Interaktions-Smokes headless gegen den echten Offline-Build (Playwright) |
   | `npm audit --omit=dev` | Security-Gate über die ausgelieferten Produktiv-Deps |
@@ -188,7 +188,7 @@ kubernia/
 └── dist-offline/     Offline-Build von `npm run build:offline` (eine self-contained index.html, nicht eingecheckt)
 ```
 
-> **Datei-für-Datei-Landkarte** (welches Modul macht was, Schicht für Schicht) steht in **[CLAUDE.md › Repo-Landkarte](CLAUDE.md)**, die Agenten-Regeln & Konventionen in **[AGENTS.md](AGENTS.md)**. Diese Listen werden dort gepflegt – hier bewusst nicht doppelt.
+> **Repo-Landkarte** (welches Subsystem liegt wo, Schicht für Schicht) steht in **[CLAUDE.md › Repo-Landkarte](CLAUDE.md)**, die Module im Detail in den Tiefendocs unter **[`docs/module/`](docs/module/)**, die Agenten-Regeln & Konventionen in **[AGENTS.md](AGENTS.md)**. Diese Listen werden dort gepflegt – hier bewusst nicht doppelt.
 
 Tests ausführen: `npm test` (Vitest). Typen prüfen: `npm run typecheck` (voll strict, ganzes Projekt).
 
@@ -221,7 +221,7 @@ npm run dev     # Dev-Server – angezeigte Adresse im Browser öffnen
 
 Voller Einstieg (Voraussetzungen, Alltags-Befehle, „wo finde ich was"): **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
-- **Wo liegt was?** Datei-für-Datei-Landkarte: [CLAUDE.md](CLAUDE.md).
+- **Wo liegt was?** Repo-Landkarte: [CLAUDE.md](CLAUDE.md), Module im Detail: [`docs/module/`](docs/module/).
 - **Wie wird hier gearbeitet** (Regeln, Board-Workflow, Konventionen): [AGENTS.md](AGENTS.md).
 - **Wie KI-Agenten hier bauen** (der Harness): siehe [Gebaut von KI-Agenten](#-gebaut-von-ki-agenten) oben.
 - **Architektur-Stand & Ticket-Auswahl** (Stardew-Scope): [docs/arc42-architektur.md](docs/arc42-architektur.md) + [docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md).

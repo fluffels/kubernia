@@ -48,8 +48,9 @@ const REPO = 'C:\\git\\kubernia'
 /** Gemeinsamer Kopf jedes Phasen-Prompts: verankert Arbeitsort + SSOT. */
 const kopf = `Du arbeitest am Repo kubernia in ${REPO}.
 
-Die verbindliche Arbeitsanweisung ist ${REPO}\\AGENTS.md (bei Konflikt maßgeblich),
-der Schnellstart ${REPO}\\CLAUDE.md. Lies die für deine Aufgabe genannten Abschnitte
+Die verbindliche Arbeitsanweisung ist ${REPO}\\AGENTS.md (bei Konflikt maßgeblich);
+${REPO}\\CLAUDE.md ist nur die Brücke dorthin plus die Referenz-Tabellen (Befehle,
+Repo-Landkarte, Schichtregeln). Lies die für deine Aufgabe genannten Abschnitte
 und befolge sie wörtlich — dieser Auftrag fasst sie absichtlich nicht zusammen,
 damit keine zweite, veraltende Wahrheit entsteht.
 
@@ -322,8 +323,8 @@ ${
 AUFGABE — das Ticket umsetzen und committen. Noch NICHT pushen, KEINEN PR öffnen:
 der Review läuft bewusst vor dem PR.
 
-Das Ticket ist bereits auf dich geclaimt. Folge dem Ablauf in CLAUDE.md § Schnellstart
-ab Schritt 5 und den harten Regeln in AGENTS.md, insbesondere:
+Das Ticket ist bereits auf dich geclaimt. Folge dem Ablauf und den harten Regeln in
+AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
 - § Kollisionsschutz bei parallelen Agenten — eigener Worktree, erst git fetch origin,
   dann von origin/main aufsetzen (nicht vom lokal veralteten main), Pfad
   .claude/worktrees/kq-${nr}, Branch feature/kq-${nr}-<slug>. Im frischen Worktree
