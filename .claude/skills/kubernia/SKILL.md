@@ -33,4 +33,6 @@ Agent({
 
 Den zurückgegebenen Plan als Orientierung nutzen (betroffene Dateien, TDD-Schritte, Gate-Check, Risiken); er ersetzt nicht das eigene Urteil. Ist der Agent nicht verfügbar (Modell nicht im Account), den Plan kurz selbst skizzieren und weitermachen.
 
-**Inhaltliche Änderungen am Ablauf immer in der Repo-`AGENTS.md` machen, nicht in dieser Skill-Datei.**
+**Variante mit Phasen-Fortschritt (nur Claude Code, optional).** Denselben Ablauf gibt es zusätzlich als orchestrierten Workflow — [`kubernia-workflow`](../kubernia-workflow/SKILL.md) bzw. [`.claude/workflows/kubernia-ticket.js`](../../workflows/kubernia-ticket.js). Er bringt sichtbaren Phasen-Fortschritt (`/workflows`), Resume nach Abbruch, die drei Review-Lenses parallel und die Fix-Versuchsgrenze aus #710 als echte Schleifengrenze; er ist dafür **nicht-interaktiv** (Tickets mit nötiger Rückfrage — 🎨 Optik, ⚠️ riskante Weichen — laufen über diesen Skill hier). **Dieser Skill bleibt der maßgebliche, tool-neutrale Weg**, weil eine fremde KI `.claude/` nicht liest.
+
+**Inhaltliche Änderungen am Ablauf immer in der Repo-`AGENTS.md` machen, nicht in dieser Skill-Datei** — und erst recht nicht im Workflow-Skript, das bewusst nur Orchestrierung enthält (Reihenfolge, Parallelität, Abbruchbedingungen).

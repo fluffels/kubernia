@@ -25,6 +25,10 @@ jscpd-report/
 # git commit/push außerhalb eines Worktrees blockt — muss geteilt/getrackt sein,
 # sonst driftet er über parallele Worktrees (dieselbe Ausnahme wie .claude/skills/).
 !.claude/settings.json
+# Workflow-Orchestrierung (Claude Code): kubernia-ticket.js fährt den Ticket-Ablauf
+# als Phasen-Workflow und muss wie die Skills mitgetrackt werden, damit jeder Clone
+# und jeder Worktree denselben Stand hat (dieselbe Ausnahme wie .claude/skills/).
+!.claude/workflows/
 .vscode/
 .idea/*
 !.idea/runConfigurations/
