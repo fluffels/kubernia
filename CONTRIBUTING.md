@@ -23,6 +23,24 @@ npm run dev   # lokaler Server (Vite) – angezeigte Adresse im Browser öffnen
 
 > Lieber von Hand? Statt `npm run setup` reicht zum Loslegen `npm install`; die Checks unten dann bei Bedarf einzeln.
 
+### Aus IntelliJ starten (Ein-Klick)
+
+Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/runConfigurations/) – sie tauchen in IntelliJ/WebStorm automatisch oben rechts im Run-Auswahlmenü auf:
+
+| Run-Config | macht | entspricht |
+|---|---|---|
+| **dev** | startet den Vite-Dev-Server; Browser über die angezeigte Adresse öffnen | `npm run dev` |
+| **build** | Host-/Prod-Build nach `dist/` | `npm run build` |
+| **test** | Vitest einmalig | `npm test` |
+| **typecheck** | TypeScript prüfen (Standard-Config) | `npm run typecheck` |
+| **typecheck:strict** | TypeScript voll strict prüfen (`tsconfig.strict.json`, seit dem abgeschlossenen Strenge-Ratchet nur noch ein Alias) | `npm run typecheck:strict` |
+
+**Zum Entwickeln musst du nichts extra installieren** – nur einmalig `npm install`, dann Run-Config **dev** wählen und auf ▶ klicken; der Browser zeigt das Spiel über die im Run-Fenster angezeigte Adresse.
+
+> Eine doppelklickbare Desktop-`.exe` (wie bei Stardew) ist ein **separates** Thema (#83 Tauri) und fürs Entwickeln **nicht** nötig.
+>
+> Warum das hier steht und nicht in CLAUDE.md (#992): IDE-Komfort ist Menschen-Onboarding. CLAUDE.md wird von **jeder** Agenten-Session vollständig geladen (Token-Budget `check:contextsize`, #719) – dort gehört nur hinein, was ein Agent wirklich braucht.
+
 ### Git-Identität (Anonymität, #418)
 
 Commits in diesem Repo laufen unter der anonymen Identität `fluffels`, nie unter einem Klarnamen oder einer dienstlichen Mail (siehe [AGENTS.md › Anonymität wahren](AGENTS.md#das-wichtigste-zuerst-harte-regeln)). Bei einem **frischen Klon** einmalig **lokal** setzen (nicht global, sonst betrifft es auch andere Repos):
@@ -70,14 +88,14 @@ Vollständige Erklärung (Runtime-Config-Hook, Sicherheitshinweise): [`docs/devp
 | Architektur-Wächter (Schichtung) | `npm run check:arch` |
 | Offline-Build (eine self-contained Datei zum Doppelklicken) | `npm run build:offline` |
 
-Die **vollständige** Befehlsliste (alle Build-Wege) steht in [CLAUDE.md › Befehle](CLAUDE.md) – hier bewusst nur die Alltags-Befehle, nicht doppelt gepflegt.
+Die **vollständige** Befehlsliste (alle Build-Wege, alle Wächter) steht in [CLAUDE.md › Befehle](CLAUDE.md#-befehle) – hier bewusst nur die Alltags-Befehle, nicht doppelt gepflegt.
 
 ## Wo finde ich was?
 
 Damit nichts doppelt gepflegt wird, lebt jedes Thema an **genau einer** Stelle:
 
-- **Datei-für-Datei-Landkarte** (welches Modul macht was): [CLAUDE.md › Repo-Landkarte](CLAUDE.md)
-- **Wie hier gearbeitet wird** (harte Regeln, Board-/Ticket-Workflow, Konventionen): [AGENTS.md](AGENTS.md)
+- **Repo-Landkarte** (welches Subsystem liegt wo, welches Tiefendoc gehört dazu): [CLAUDE.md › Repo-Landkarte](CLAUDE.md) – die Module im Detail dann in [`docs/module/`](docs/module/)
+- **Wie hier gearbeitet wird** (harte Regeln, Board-/Ticket-Workflow, Konventionen): [AGENTS.md](AGENTS.md) – die SSOT, auf die CLAUDE.md nur brückt
 - **Was das Spiel ist** (Story, Steuerung, Lernpfad): [README.md](README.md)
 - **Architektur-Stand & Ticket-Auswahl** (Stardew-Scope): [docs/architektur-analyse-2026-06.md](docs/architektur-analyse-2026-06.md) + [docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md)
 

@@ -1,7 +1,7 @@
 # AGENTS.md – Arbeitsanweisung für KI-Agenten
 
-> Diese Datei ist für dich als Agent (egal welches Tool). Sie sagt dir, **wie** hier gearbeitet wird.
-> **Neu hier oder nur kurz reinschauen?** Schnellstart-Checkliste & Repo-Landkarte auf einen Blick: [CLAUDE.md](CLAUDE.md). Diese Datei hier ist die ausführliche Fassung (harte Regeln, Board-Workflow, Konventionen).
+> Diese Datei ist für dich als Agent (egal welches Tool) und die **SSOT**: Sie sagt dir, **wie** hier gearbeitet wird, und **jede harte Regel steht genau hier — nur hier.**
+> **Rollentrennung (#992):** [CLAUDE.md](CLAUDE.md) ist die **Brücke** hierher (per `@AGENTS.md`-Import, weil Claude Code nur CLAUDE.md automatisch lädt) und die **Heimat der Nachschlage-Tabellen**, auf die diese Datei verweist: Befehle, Repo-Landkarte, Schichtregeln, Anlaufstellen. Steht eine **Regel** doppelt in CLAUDE.md, ist das ein Drift-Bug → hierher zurückführen, nicht dort pflegen. Einzige bewusste Ausnahme: die oberste Regel unten, als Kurzfassung.
 > Was das Spiel **ist** (Story, Spielsysteme, Lernpfad), steht in der [README.md](README.md) – nicht doppeln.
 
 ## Das Wichtigste zuerst (harte Regeln)

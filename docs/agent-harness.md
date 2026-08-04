@@ -20,8 +20,8 @@ Alles, was ein Agent braucht, liegt **im Repo selbst** — versioniert und gepus
 
 > **Abgrenzung — was „kein externes Notiz-/Wissenssystem" NICHT heißt.** Das gilt für den Harness: kein Schritt im Ticket-Workflow und keine Agenten-Entscheidung hängt an etwas außerhalb von Repo + GitHub, sonst könnten weder ein frischer Clone noch ein Cloud-Agent ohne die Maintainerin loslegen. Die Maintainerin führt daneben **privat** ein Obsidian-Second-Brain (Lernfortschritt, Konzept-Notizen für einen möglichen Weiterbildungstag) — rein additiv für sie als Mensch, kein Teil des Harness und für keinen Agenten-Schritt Voraussetzung. Fiele der Vault weg, liefe der Harness unverändert weiter.
 
-- **[CLAUDE.md](../CLAUDE.md)** — Schnellstart (10-Schritte-Checkliste) + die **eine** Datei-für-Datei-Repo-Landkarte (Datei · Schicht · ein Satz Zweck).
-- **[AGENTS.md](../AGENTS.md)** — die ausführliche Arbeitsanweisung: harte Regeln, Board-Workflow, Konventionen, Begründungen.
+- **[AGENTS.md](../AGENTS.md)** — die **SSOT**: harte Regeln, Board-Workflow, Konventionen, Begründungen. **Jede harte Regel steht genau hier, nur hier** (#992).
+- **[CLAUDE.md](../CLAUDE.md)** — die **Brücke** dorthin: eine `@AGENTS.md`-Import-Zeile (Claude Code lädt CLAUDE.md automatisch, AGENTS.md nicht) plus die Nachschlage-Tabellen, deren Heimat sie ist — Befehle, die **eine** Subsystem-Repo-Landkarte, Schichtregeln, Anlaufstellen. Dass der Import nicht still verschwindet, bewacht [`test/claude-bridge.test.ts`](../test/claude-bridge.test.ts).
 - **Modul-lokale `AGENTS.md`** (z.B. [`src/content/AGENTS.md`](../src/content/AGENTS.md), #483) — Regeln, die nur gelten, wenn man in *diesem* Verzeichnis arbeitet. **Kontext als Token-Grenze:** ein Agent, der an `src/content/` arbeitet, lädt die Content-Regeln; wer woanders arbeitet, schleppt sie nicht mit.
 - **[`docs/module/`](module/)** — on-demand-Tiefendocs je Subsystem (sim/content/world/presentation/app). Nur lesen, wenn man am Bereich arbeitet — die CLAUDE.md-Landkarte bleibt dafür schlank.
 - **[README.md](../README.md)** — die spielerseitige Sicht (Story, Steuerung, Lernpfad). Nicht für Agenten, aber Teil der „Doku aktuell halten ist Teil von fertig"-Regel.
@@ -117,8 +117,8 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **Absicherung:** eine Überschreitung ist nur mit offenem Split-Ticket in der `ALLOWLIST` erlaubt; fällt eine Datei wieder unter Budget, meldet der Wächter den Eintrag als **stale** (die Ausnahme kann nicht faul liegenbleiben).
 
 ### Doku↔Code-Drift-Wächter (`npm run check:docmap`, #482)
-- **WAS:** meldet jede `src/`-Datei ohne Landkarten-Zeile in CLAUDE.md, jede Zeile ohne Datei und jede deklarierte Schicht, die von der dependency-cruiser-Zuordnung abweicht (gemeinsame Schicht-Quelle [`scripts/layers.cjs`](../scripts/layers.cjs)). Auch als `test/docmap.test.ts`.
-- **WARUM:** die CLAUDE.md-Landkarte ist der **Kontext-Selektor** jeder KI-Session (§2.1). Driftet sie leise, führt sie Agenten in die Irre — genau das darf nicht passieren, also ist „die Doku stimmt" selbst maschinell geprüft.
+- **WAS:** meldet seit #907 jede `src/`-Datei, die in **keinem** [`docs/module/`](module/)-Tiefendoc als Backtick-Pfad auftaucht, sowie jede deklarierte Schicht, die von der dependency-cruiser-Zuordnung abweicht (gemeinsame Schicht-Quelle [`scripts/layers.cjs`](../scripts/layers.cjs)). Auch als `test/docmap.test.ts`.
+- **WARUM:** Landkarte (CLAUDE.md, Subsystem-granular) + Tiefendocs sind der **Kontext-Selektor** jeder KI-Session (§2.1). Driftet die Abdeckung leise, führt sie Agenten in die Irre — genau das darf nicht passieren, also ist „die Doku stimmt" selbst maschinell geprüft.
 
 ### Harness-Drift-Wächter (`npm run check:docdrift`, #529)
 - **WAS:** hält die Doku jenseits der Datei-Landkarte ehrlich: (1) jedes in einem Markdown erwähnte `npm run <x>` (bzw. `npm test`) existiert als Skript in `package.json`; (2) jedes Kern-Skript (außer bewusst ausgenommener Convenience) ist in AGENTS.md/CLAUDE.md/README dokumentiert; (3) jeder interne, repo-relative Markdown-Link zeigt auf eine existierende Datei; (4) jeder `#anker` trifft eine reale Überschrift (GitHub-Slug-Regel). Auch als `test/docdrift.test.ts`.
@@ -216,7 +216,7 @@ Mit **#530** ([ADR 0008](adr/0008-ki-agenten-harness.md)) ist der ADR jetzt die 
 
 - **[docs/agent-harness-faq.md](agent-harness-faq.md)** — häufig gestellte Einzelfragen zum Harness (CI-Feedback-Mechanismus, Deploybarkeit, Portabilität, Hook vs. PR-Gate), gesammelt statt einzeln neu beantwortet.
 - **[AGENTS.md](../AGENTS.md)** — operative Arbeitsanweisung (harte Regeln, Board-Workflow, Konventionen). *Bei Konflikt maßgeblich.*
-- **[CLAUDE.md](../CLAUDE.md)** — Schnellstart + Datei-Landkarte.
+- **[CLAUDE.md](../CLAUDE.md)** — die Brücke zu AGENTS.md (`@AGENTS.md`-Import) + die Referenz-Tabellen (Befehle, Repo-Landkarte, Schichtregeln, Anlaufstellen).
 - **[docs/arc42-architektur.md](arc42-architektur.md)** — Architektur-Gesamtsicht; §1.4 (KI-Entwickel-Effizienz als Qualitätsziel), §8 (Querschnittskonzepte), §9 (ADR-Übersicht inkl. geplantem 0008).
 - **[docs/ticket-reihenfolge.md](ticket-reihenfolge.md)** — was als Nächstes dran ist (deterministisch: oberstes freies Item der Board-Reihenfolge).
 - **[docs/adr/](adr/)** — die festgehaltenen Grundsatzentscheidungen (Engine, kein Backend/DB, kein Multiplayer, Skalierungs-Fundament, …).

@@ -49,4 +49,4 @@ Das ist ein bekannter Reibungspunkt des Auto-Mode-Classifiers (nicht des Repos):
 
 - [agent-harness.md](agent-harness.md) — die erklärende Gesamtsicht auf den Harness
 - [AGENTS.md](../AGENTS.md) — operative Arbeitsanweisung
-- [CLAUDE.md](../CLAUDE.md) — Schnellstart + Repo-Landkarte
+- [CLAUDE.md](../CLAUDE.md) — Brücke zu AGENTS.md (`@AGENTS.md`-Import) + Referenz-Tabellen (Befehle, Repo-Landkarte, Schichtregeln)
