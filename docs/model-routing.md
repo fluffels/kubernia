@@ -27,9 +27,12 @@ Bei einem Modell-Wechsel (neuer Opus, neuer Haiku) diese **zwei Dateien** anpass
 
 Explore-Agenten (wenn in Skills explizit geroutet) stehen ebenfalls hier, sobald welche hinzukommen.
 
+**Nicht nachzuziehen — bewusst per Alias statt Pin:** der Phasen-Workflow [`.claude/workflows/kubernia-ticket.js`](../.claude/workflows/kubernia-ticket.js) routet seine drei Review-Lens-Agenten mit `model: 'opus'` + `effort: 'high'`, also über den **Tier-Alias** des Workflow-Tools, nicht über eine Modell-ID. Er profitiert damit automatisch von einem neuen Opus und taucht in der Checkliste oben absichtlich **nicht** auf. Seine Planungsphase setzt gar kein Modell, sondern ruft den `kubernia-planner`-Agenten (Zeile 1) — der Pin bleibt so an genau einer Stelle. Wo ein Alias zur Verfügung steht, ist er dem harten Pin vorzuziehen: er ist die einzige Form von Routing, die einen Modellwechsel ohne Wartung übersteht.
+
 ## 4. Konvention im Ticket-Workflow
 
-- **Ticket claimen → Planungs-Subagent** → Opus (`kubernia-planner`-Agent, aufgerufen vom `kubernia`-Skill)
+- **Ticket claimen → Planungs-Subagent** → Opus (`kubernia-planner`-Agent, aufgerufen vom `kubernia`-Skill bzw. der Plan-Phase des `kubernia-ticket`-Workflows)
+- **Review (die drei Lenses)** → Opus, im Workflow per Alias `model: 'opus'` + `effort: 'high'` (kein Pin, siehe Kasten oben)
 - **Ticket umsetzen** → Session-Default (kein Pin nötig, kubernia-loop spawnt `general-purpose` ohne Modell-Override)
 - **Codebase-Suche / Explore** → explizit `model: claude-haiku-4-5-20251001` setzen, wenn in einem Skill ein reiner Explore-Subagent gespawnt wird; der `subagent_type: Explore` aus dem Agent-Registry hat seinen eigenen Overhead — alternativ einen `Agent({model: "haiku", …})`-Call verwenden
 
