@@ -2,7 +2,7 @@
 
 @AGENTS.md
 
-> ⬆️ **Die Zeile darüber ist kein Verweis, sondern ein Import (#992).** Claude Code lädt `CLAUDE.md` automatisch, **`AGENTS.md` nicht** — ein reiner Prosa-Zeiger würde darauf setzen, dass jeder Agent freiwillig nachliest. Der `@`-Import zieht die SSOT [AGENTS.md](AGENTS.md) verlässlich in **jede** Session, ohne dass hier eine einzige Regel abgeschrieben werden muss. Tool-neutral bleibt es trotzdem: wer den `@`-Import nicht auswertet (Gemini CLI, Cloud-Agenten, Mensch), folgt demselben Link — **verbindlich, nicht optional: ohne AGENTS.md gelesen zu haben, fängst du nicht an.** Beim Umbau gegengeprüft: **ohne** die Import-Zeile war AGENTS.md nachweislich **nicht** im Sitzungskontext, **mit** ihr ist es drin; dass sie nicht still verschwindet (umformuliert, in einen Codeblock verschoben, in Backticks gesetzt), bewacht [`test/claude-bridge.test.ts`](test/claude-bridge.test.ts).
+> ⬆️ **Die Zeile darüber ist kein Verweis, sondern ein Import (#992).** Claude Code lädt `CLAUDE.md` automatisch, **`AGENTS.md` nicht** — ein reiner Prosa-Zeiger würde darauf setzen, dass jeder Agent freiwillig nachliest. Der `@`-Import zieht die SSOT [AGENTS.md](AGENTS.md) verlässlich in **jede** Session, ohne dass hier eine einzige Regel abgeschrieben werden muss. Tool-neutral bleibt es trotzdem: wer den `@`-Import nicht auswertet (Gemini CLI, Cloud-Agenten, Mensch), folgt demselben Link — **verbindlich, nicht optional: ohne AGENTS.md gelesen zu haben, fängst du nicht an.** Beim Umbau gegengeprüft: **ohne** die Import-Zeile war AGENTS.md nachweislich **nicht** im Sitzungskontext, **mit** ihr ist es drin; dass sie nicht still verschwindet (umformuliert, in einen Codeblock verschoben, in Backticks gesetzt), bewacht [`test/claude-bridge.test.ts`](test/claude-bridge.test.ts) — derselbe Wächter wird auch rot, wenn irgendeine Doku dieser Datei wieder eine abgelegte Rolle (`Schnellstart`, `Datei-für-Datei`-Landkarte) zuschreibt, denn genau diese Prosa-Drift hat #992 ausgelöst.
 
 ## 🧭 Rollentrennung – was steht wo (#992)
 
@@ -12,16 +12,18 @@
 | **CLAUDE.md** (hier) | **Brücke + Referenz-Heimat** | der Import oben, die Erste-Minute-Mechanik und die vier Nachschlage-Tabellen, auf die AGENTS.md/README/CONTRIBUTING **verweisen**: Befehle, Repo-Landkarte, Schichtregeln, Anlaufstellen |
 | **[README.md](README.md)** | spielerseitig | was das Spiel *ist* (Story, Steuerung, Lernpfad) – nicht für dich als Agent |
 
-**Warum die Tabellen hier bleiben statt nach AGENTS.md zu wandern:** Sie sind **Referenz zum Nachschlagen, keine Regeln** — und rund 15 Stellen (AGENTS.md, README, CONTRIBUTING, das Glossar, arc42, alle `docs/module/`-Köpfe) zeigen bereits hierher; fünf npm-Skripte sind **ausschließlich** in der Befehle-Tabelle dokumentiert, `check:docdrift`-Regel 2 hängt also daran. Eine **Regel**, die du hier wiederholt findest, ist dagegen ein **Drift-Bug** → zurück nach AGENTS.md führen, statt sie an zwei Orten zu pflegen.
+**Warum die Tabellen hier bleiben statt nach AGENTS.md zu wandern:** Sie sind **Referenz zum Nachschlagen, keine Regeln** — und rund 15 Stellen (AGENTS.md, README, CONTRIBUTING, das Glossar, arc42, alle `docs/module/`-Köpfe) zeigen bereits hierher; fünf npm-Skripte sind **ausschließlich** in der Befehle-Tabelle dokumentiert, `check:docdrift`-Regel 2 hängt also daran. **Der Text einer Regel**, den du hier wiederholt findest, ist dagegen ein **Drift-Bug** → zurück nach AGENTS.md führen, statt ihn an zwei Orten zu pflegen.
 
-> ⭐ **Die einzige bewusste Doppelung — die oberste Regel** (weil sie über allen ADRs/Konventionen steht und in Sekunde 1 sichtbar sein muss; verbindlich formuliert in [AGENTS.md › Oberste Regel](AGENTS.md#-oberste-regel--über-allem-auch-über-den-adrs)): „Ist das okay, wenn Kubernia ein Spiel in **Stardew-Valley-Größe** wird?" — nur umsetzen, wenn ja. Was auffällt, aber gerade nicht dran ist → **Ticket anlegen**.
+> **Die zwei bewusst gedoppelten Dinge — Absicht, nicht Zufall** (identisch deklariert in [AGENTS.md](AGENTS.md), damit die Grenze nicht selbst driftet):
+> - ⭐ **Die oberste Regel**, weil sie über allen ADRs/Konventionen steht und in Sekunde 1 sichtbar sein muss (verbindlich formuliert in [AGENTS.md › Oberste Regel](AGENTS.md#-oberste-regel--über-allem-auch-über-den-adrs)): „Ist das okay, wenn Kubernia ein Spiel in **Stardew-Valley-Größe** wird?" — nur umsetzen, wenn ja. Was auffällt, aber gerade nicht dran ist → **Ticket anlegen**.
+> - 🚦 **Die Gate-Markierungen in den Tabellen unten** („hart", „❌ verboten, erzwingt `check:arch`"). Eine Referenz-Tabelle, die verschweigt, was maschinell erzwungen wird, führt in die Irre. Sie geben die **maschinelle** SSOT wieder ([`scripts/layers.cjs`](scripts/layers.cjs), `.dependency-cruiser.cjs`, die `scripts/check-*.mjs`) — nicht eine zweite Fassung der Verhaltens-Regeln („kein Grün-durch-Aufweichen", „was muss wann grün sein"): die stehen ausschließlich in AGENTS.md.
 
 ## ⚡ Erste Minute (nur Mechanik – der Ablauf steht in AGENTS.md)
 
 ```bash
 npm run setup   # einmalig: Node-Check, npm install, Git-Hooks, alle Checks (Minimalweg: npm install)
 npm run dev     # Dev-Server – angezeigte Adresse im Browser öffnen
-npm run verify  # alle schnellen Gates auf einmal; muss vor dem PR grün sein
+npm run verify  # alle schnellen Gates auf einmal (wann sie grün sein müssen: AGENTS.md)
 ```
 
 **Der verbindliche Ticket-Ablauf** — Board-Auswahl, sofortiges Claimen, eigener Worktree von **frisch geholtem** `origin/main`, Umsetzung test-first, Doku im selben Branch, **ein** PR bis zum Merge — steht **nicht hier**, sondern in [AGENTS.md › Das Wichtigste zuerst](AGENTS.md#das-wichtigste-zuerst-harte-regeln) und [AGENTS.md › Wo die TODOs leben](AGENTS.md#wo-die-todos-leben). Durch den Import oben ist er schon in deinem Kontext — lies ihn dort, nicht aus dem Gedächtnis.
@@ -37,7 +39,7 @@ npm run verify  # alle schnellen Gates auf einmal; muss vor dem PR grün sein
 | One-Command-Setup (Node-Check + install + Git-Hooks + alle Checks, #387/#528) | `npm run setup` |
 | **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (typecheck → lint → check:arch → check:size → check:contextsize → check:anysuppress → check:docmap → check:docdrift → check:internalrefs → check:lockfile → check:diffsize → test) |
 | Voller Vor-Push-Check inkl. beider Builds + Boot-Smoke (#527) | `npm run verify:full` (= `verify` + `test:coverage` + Builds + `check:bundle` + `test:smoke`) |
-| Required-Checks auf dem PR = maßgeblicher Gate (server-seitig, seit #592) | Merge nur über `gh pr merge` bei grüner CI; kein Direkt-Push auf `main` |
+| Required-Checks auf dem PR = maßgeblicher Gate (server-seitig, seit #592) | `gh pr merge <nr> --squash --delete-branch --auto` + `gh pr checks <nr> --watch` (Regel-Heimat: [AGENTS.md](AGENTS.md#das-wichtigste-zuerst-harte-regeln)) |
 | pre-push-Hook (fährt `verify`; seit #592 nur noch sekundäres Netz) | verdrahtet via `npm run setup`; greift nur bei Push auf `main` (server-seitig ohnehin blockiert) |
 | Erstinstallation | `npm install` |
 | Dev-Server | `npm run dev` |
@@ -47,7 +49,7 @@ npm run verify  # alle schnellen Gates auf einmal; muss vor dem PR grün sein
 | Tests | `npm test` (Vitest) |
 | Coverage-Gate (v8, Schwellen PRO Schicht statt Repo-Mittel, #495) | `npm run test:coverage` |
 | Boot-Smoke-Test (headless, gegen den Offline-Build, #391) | `npm run smoke` (baut Offline + Playwright) bzw. `npm run test:smoke` (nur Lauf, Build muss da sein) |
-| Typen prüfen (voll strict) | `npm run typecheck` (`npm run typecheck:strict` ist nur noch ein Alias darauf, siehe `tsconfig.strict.json`) |
+| Typen prüfen (voll strict) | `npm run typecheck` |
 | Linter (ESLint, #389; Komplexitäts-Gates complexity/max-lines-per-function/max-depth #502) | `npm run lint` |
 | Stale Suppressions prunen / Baseline neu aufbauen (Komplexität #502 + Typsicherheit #868) | `npm run lint:prune` / `npm run lint:suppress` |
 | Quiz-Korrektheits-Golden nach bewusstem Review aktualisieren (#597) | `npm run quiz:golden` |
@@ -87,7 +89,7 @@ npm run verify  # alle schnellen Gates auf einmal; muss vor dem PR grün sein
 
 ## 🧭 Schichtregeln beim Arbeiten im Verzeichnis (welche Imports gelten wo, #472)
 
-Die Landkarte oben sagt, **wo** ein Modul liegt; diese Tabelle sagt, **was du importieren darfst**, sobald du in einem Bereich arbeitest. Die **harten** Regeln (❌) sind keine Bitte, sondern werden von **`npm run check:arch`** (dependency-cruiser, #347) als CI-Gate erzwungen — eine Verletzung ist **rot**, nicht nur unschön. EINE Quelle der Schicht-Grenzen: [`scripts/layers.cjs`](scripts/layers.cjs); das *Warum* der Schichtung: [AGENTS.md › Architektur](AGENTS.md#architektur).
+Die Landkarte oben sagt, **wo** ein Modul liegt; diese Tabelle sagt, **was du importieren darfst**, sobald du in einem Bereich arbeitest. Die **harten** Regeln (❌) sind keine Bitte, sondern werden von **`npm run check:arch`** (dependency-cruiser, #347) als CI-Gate erzwungen — eine Verletzung ist **rot**, nicht nur unschön. EINE Quelle der Schicht-Grenzen: [`scripts/layers.cjs`](scripts/layers.cjs) — diese Tabelle liest sie nur ab. Das *Warum* der Schichtung: [AGENTS.md › Architektur](AGENTS.md#architektur); wie mit einem roten Gate umzugehen ist (**kein Grün-durch-Aufweichen**): [AGENTS.md](AGENTS.md#das-wichtigste-zuerst-harte-regeln).
 
 | Wenn du hier arbeitest | Schicht | Darf importieren | ❌ Verboten (hart, `check:arch`) |
 |---|---|---|---|
@@ -100,7 +102,7 @@ Die Landkarte oben sagt, **wo** ein Modul liegt; diese Tabelle sagt, **was du im
 
 **Weiche Konvention für die Präsentation (kein `check:arch`, aber gewollt):** Die Präsentation *darf* technisch nach unten alles importieren — die Übersetzung Hafen ↔ Sim läuft aber bewusst nur über die **Anti-Corruption-Layer** an genau zwei Stellen ([`src/scenes/worldscene/clustersync.ts`](src/scenes/worldscene/clustersync.ts) für den Cluster→Welt-Sync, [`src/hud/markup.ts`](src/hud/markup.ts) für Content-Texte), **nicht** als verstreute Sim-Zugriffe quer durch die UI. Warum: [docs/glossar.md](docs/glossar.md).
 
-**Braucht ein Bereich eigene, tiefe Regeln → modul-lokale `AGENTS.md`, statt diese Datei aufzublähen.** Dafür gibt es den **Kontext-Selektor** (#483): sehr detaillierte Bereichs-Konventionen liegen in einer `src/<bereich>/AGENTS.md`, die du **nur liest, wenn du dort arbeitest** — Vorbild [`src/content/AGENTS.md`](src/content/AGENTS.md) (Content-as-Data). Das ist die **Vorstufe zu Sub-CLAUDE.mds**: Wächst ein Modul so, dass ein Agent ohne Tiefenkontext regelmäßig falsch liegt, bekommt es eine eigene lokale Regel-Datei — statt die Root-Kontextdateien (die JEDE Session lädt) zu überfrachten.
+**Tiefe Bereichs-Konventionen liegen modul-lokal** — `src/<bereich>/AGENTS.md`, die du **nur liest, wenn du dort arbeitest** (Kontext-Selektor #483; Vorbild [`src/content/AGENTS.md`](src/content/AGENTS.md), Content-as-Data). Die Auslagerungs-Regel dazu (was hierher darf und was nicht) steht in [AGENTS.md](AGENTS.md#das-wichtigste-zuerst-harte-regeln).
 
 ## 📚 Weitere Anlaufstellen
 

@@ -33,7 +33,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 | **build** | Host-/Prod-Build nach `dist/` | `npm run build` |
 | **test** | Vitest einmalig | `npm test` |
 | **typecheck** | TypeScript prüfen (Standard-Config) | `npm run typecheck` |
-| **typecheck:strict** | TypeScript voll strict prüfen (`tsconfig.strict.json`, seit dem abgeschlossenen Strenge-Ratchet nur noch ein Alias) | `npm run typecheck:strict` |
+| **typecheck:strict** | TypeScript voll strict prüfen (`tsconfig.strict.json`) | `npm run typecheck:strict` |
 
 **Zum Entwickeln musst du nichts extra installieren** – nur einmalig `npm install`, dann Run-Config **dev** wählen und auf ▶ klicken; der Browser zeigt das Spiel über die im Run-Fenster angezeigte Adresse.
 
