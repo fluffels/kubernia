@@ -18,8 +18,8 @@
 # @fluffels (Branch Protection: require_code_owner_reviews=true auf main). Alle
 # anderen Pfade mergen weiterhin autonom bei gruener CI (kein pauschaler Review-
 # Zwang). Diese Liste ist die menschenlesbare SSOT, die der CI-Job
-# gate-change-guard (ci.yml, Array PROTECTED) spiegelt - Sync bewacht
-# test/harness-approval.test.ts (#1012).
+# gate-change-guard (.github/workflows/gate-change-guard.yml, Array PROTECTED) spiegelt -
+# Sync bewacht test/harness-approval.test.ts (#1012).
 
 # Gate-Config
 /.dependency-cruiser.cjs   @fluffels

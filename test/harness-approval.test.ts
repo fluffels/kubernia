@@ -9,7 +9,8 @@
  *      brauchen menschliche Freigabe" lebt tool-neutral in AGENTS.md. Wird sie umformuliert bis
  *      der Marker fehlt, liest ein fremder Agent (der nur AGENTS.md kennt) sie nicht mehr.
  *   2. **Die zwei Durchsetzungs-Listen driften auseinander.** Der CI-Riegel `gate-change-guard`
- *      (ci.yml, Array PROTECTED) ist laut eigenem Kommentar „Spiegel der CODEOWNERS-Liste".
+ *      (.github/workflows/gate-change-guard.yml, Array PROTECTED) ist laut eigenem Kommentar
+ *      „Spiegel der CODEOWNERS-Liste".
  *      Ergänzt jemand einen Leitplanken-Pfad nur in einer der beiden Dateien, greift der Riegel
  *      halb – von außen (grüne Checks) nicht von einem echten Schutz zu unterscheiden. Hier ROT.
  *
@@ -35,8 +36,8 @@ const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../${rel}`, im
 /**
  * Normalisiert einen geschützten Pfad auf seine Substring-Form: führenden `/` weg
  * (CODEOWNERS-Anker) und ab dem ersten Glob-`*` abschneiden. So werden die zwei
- * Schreibweisen vergleichbar – CODEOWNERS `/scripts/check-*.mjs` und ci.yml-Substring
- * `scripts/check-` landen beide auf `scripts/check-`.
+ * Schreibweisen vergleichbar – CODEOWNERS `/scripts/check-*.mjs` und der
+ * gate-change-guard.yml-Substring `scripts/check-` landen beide auf `scripts/check-`.
  */
 function normalizeProtected(p: string): string {
   return p.replace(/^\//, "").replace(/\*.*$/, "");
@@ -54,12 +55,12 @@ function codeownersPaths(text: string): Set<string> {
   return set;
 }
 
-/** Die geschützten Pfade aus dem `PROTECTED=( '...' … )`-Bash-Array in ci.yml. */
-function ciProtectedPaths(text: string): Set<string> {
+/** Die geschützten Pfade aus dem `PROTECTED=( '...' … )`-Bash-Array in gate-change-guard.yml. */
+function guardProtectedPaths(text: string): Set<string> {
   // Bis zur schliessenden Klammer auf EIGENER Zeile (^\s*\)) – nicht bis zum ersten `)`,
   // sonst schneidet ein Kommentar mit Klammer wie "(#903)" das Array zu frueh ab.
   const block = text.match(/PROTECTED=\(\s*([\s\S]*?)^\s*\)/m);
-  assert.ok(block, "PROTECTED=(...)-Array im gate-change-guard (ci.yml) nicht gefunden");
+  assert.ok(block, "PROTECTED=(...)-Array im gate-change-guard (gate-change-guard.yml) nicht gefunden");
   const set = new Set<string>();
   for (const m of block[1].matchAll(/'([^']+)'/g)) set.add(normalizeProtected(m[1]));
   return set;
@@ -83,26 +84,26 @@ const AGENTS_MARKER = [
 ];
 
 const codeowners = read(".github/CODEOWNERS");
-const ci = read(".github/workflows/ci.yml");
+const guardWf = read(".github/workflows/gate-change-guard.yml");
 const agentsMd = read("AGENTS.md");
 
 describe("Harness-Freigabe – die zwei Durchsetzungs-Listen bleiben synchron (#1012)", () => {
   test("CODEOWNERS und gate-change-guard/PROTECTED schützen dieselben Pfade", () => {
     assert.deepEqual(
       [...codeownersPaths(codeowners)].sort(),
-      [...ciProtectedPaths(ci)].sort(),
-      "Die geschützten Pfade in .github/CODEOWNERS und im PROTECTED-Array (ci.yml) sind auseinandergelaufen. " +
+      [...guardProtectedPaths(guardWf)].sort(),
+      "Die geschützten Pfade in .github/CODEOWNERS und im PROTECTED-Array (.github/workflows/gate-change-guard.yml) sind auseinandergelaufen. " +
         "Der CI-Kommentar nennt PROTECTED ausdrücklich 'Spiegel der CODEOWNERS-Liste' - beide Listen zusammen pflegen.",
     );
   });
 
   test("beide Listen decken die Leitplanken-Dateien ab (nicht nur Gate-Config)", () => {
     const co = codeownersPaths(codeowners);
-    const cp = ciProtectedPaths(ci);
+    const cp = guardProtectedPaths(guardWf);
     const fehlend: string[] = [];
     for (const p of LEITPLANKEN) {
       if (!co.has(p)) fehlend.push(`.github/CODEOWNERS: ${p}`);
-      if (!cp.has(p)) fehlend.push(`ci.yml PROTECTED: ${p}`);
+      if (!cp.has(p)) fehlend.push(`gate-change-guard.yml PROTECTED: ${p}`);
     }
     assert.deepEqual(
       fehlend,
@@ -110,6 +111,21 @@ describe("Harness-Freigabe – die zwei Durchsetzungs-Listen bleiben synchron (#
       "Leitplanken-Dateien fehlen im Freigabe-Riegel (#1012: Harness-Änderungen brauchen menschliche Freigabe):\n" +
         fehlend.join("\n"),
     );
+  });
+});
+
+describe("Der Guard-Workflow triggert auf Label-Änderung (#1015)", () => {
+  test("gate-change-guard.yml reagiert auf labeled/unlabeled (sonst bleibt der Required-Check nach dem Label rot)", () => {
+    // Kern-Deliverable von #1015: der ausgelagerte Guard MUSS zusätzlich auf
+    // labeled/unlabeled triggern, damit das Setzen von 'maintainer-approved' den
+    // Required-Check automatisch neu grün laufen lässt. Ohne diesen Wächter könnte
+    // jemand `labeled` aus types entfernen und der Ticket-Zweck regressierte still
+    // (alle anderen Tests blieben grün) – genau das „von außen grün, kein echter
+    // Schutz"-Muster, das diese Fitness-Function-Familie adressiert.
+    const m = guardWf.match(/pull_request:\s*\n\s*types:\s*\[([^\]]*)\]/);
+    assert.ok(m, "kein pull_request.types-Trigger in gate-change-guard.yml gefunden");
+    assert.match(m[1], /\blabeled\b/, "Trigger enthält 'labeled' nicht");
+    assert.match(m[1], /\bunlabeled\b/, "Trigger enthält 'unlabeled' nicht");
   });
 });
 
@@ -138,7 +154,7 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
       [...codeownersPaths("# Kopf\n\n/foo.js   @fluffels\n/bar/*.yml  @fluffels")].sort(),
       ["bar/", "foo.js"],
     );
-    assert.deepEqual([...ciProtectedPaths("x\nPROTECTED=(\n  'a.js'\n  'b/'\n)\ny")].sort(), ["a.js", "b/"]);
+    assert.deepEqual([...guardProtectedPaths("x\nPROTECTED=(\n  'a.js'\n  'b/'\n)\ny")].sort(), ["a.js", "b/"]);
   });
 
   test("ein einseitig ergänzter Pfad würde als Drift auffallen", () => {
