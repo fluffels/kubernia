@@ -36,8 +36,8 @@ const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../${rel}`, im
 /**
  * Normalisiert einen geschützten Pfad auf seine Substring-Form: führenden `/` weg
  * (CODEOWNERS-Anker) und ab dem ersten Glob-`*` abschneiden. So werden die zwei
- * Schreibweisen vergleichbar – CODEOWNERS `/scripts/check-*.mjs` und ci.yml-Substring
- * `scripts/check-` landen beide auf `scripts/check-`.
+ * Schreibweisen vergleichbar – CODEOWNERS `/scripts/check-*.mjs` und der
+ * gate-change-guard.yml-Substring `scripts/check-` landen beide auf `scripts/check-`.
  */
 function normalizeProtected(p: string): string {
   return p.replace(/^\//, "").replace(/\*.*$/, "");
@@ -103,7 +103,7 @@ describe("Harness-Freigabe – die zwei Durchsetzungs-Listen bleiben synchron (#
     const fehlend: string[] = [];
     for (const p of LEITPLANKEN) {
       if (!co.has(p)) fehlend.push(`.github/CODEOWNERS: ${p}`);
-      if (!cp.has(p)) fehlend.push(`ci.yml PROTECTED: ${p}`);
+      if (!cp.has(p)) fehlend.push(`gate-change-guard.yml PROTECTED: ${p}`);
     }
     assert.deepEqual(
       fehlend,
@@ -111,6 +111,21 @@ describe("Harness-Freigabe – die zwei Durchsetzungs-Listen bleiben synchron (#
       "Leitplanken-Dateien fehlen im Freigabe-Riegel (#1012: Harness-Änderungen brauchen menschliche Freigabe):\n" +
         fehlend.join("\n"),
     );
+  });
+});
+
+describe("Der Guard-Workflow triggert auf Label-Änderung (#1015)", () => {
+  test("gate-change-guard.yml reagiert auf labeled/unlabeled (sonst bleibt der Required-Check nach dem Label rot)", () => {
+    // Kern-Deliverable von #1015: der ausgelagerte Guard MUSS zusätzlich auf
+    // labeled/unlabeled triggern, damit das Setzen von 'maintainer-approved' den
+    // Required-Check automatisch neu grün laufen lässt. Ohne diesen Wächter könnte
+    // jemand `labeled` aus types entfernen und der Ticket-Zweck regressierte still
+    // (alle anderen Tests blieben grün) – genau das „von außen grün, kein echter
+    // Schutz"-Muster, das diese Fitness-Function-Familie adressiert.
+    const m = guardWf.match(/pull_request:\s*\n\s*types:\s*\[([^\]]*)\]/);
+    assert.ok(m, "kein pull_request.types-Trigger in gate-change-guard.yml gefunden");
+    assert.match(m[1], /\blabeled\b/, "Trigger enthält 'labeled' nicht");
+    assert.match(m[1], /\bunlabeled\b/, "Trigger enthält 'unlabeled' nicht");
   });
 });
 
