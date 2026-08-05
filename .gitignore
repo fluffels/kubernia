@@ -18,7 +18,7 @@ jscpd-report/
 !.env.example
 .claude/*
 !.claude/skills/
-# Planungs-Agenten-Datei (#745): kubequest-planner.md trägt model: claude-opus-4-8 und
+# Planungs-Agenten-Datei (#745): kubernia-planner.md trägt model: claude-opus-5 und
 # propagiert in jeden Worktree — dieselbe Ausnahme wie .claude/skills/.
 !.claude/agents/
 # Worktree-Guard-Hook (#735): settings.json trägt den PreToolUse-Hook, der

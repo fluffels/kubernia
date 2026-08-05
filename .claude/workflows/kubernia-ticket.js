@@ -6,8 +6,8 @@ export const meta = {
   phases: [
     { title: 'Auswahl', detail: 'oberstes freies Board-Item claimen + Zuweisung verifizieren' },
     { title: 'Sonderfall', detail: 'Epic aufteilen bzw. Dependabot-Sammelticket auflösen (kein Code)' },
-    { title: 'Plan', detail: 'Planungs-Subagent vor der ersten Zeile Code', model: 'kubernia-planner (Opus, gepinnt)' },
-    { title: 'Umsetzen', detail: 'Worktree, TDD, npm run verify, im Browser verifizieren, committen' },
+    { title: 'Plan', detail: 'Planungs-Subagent vor der ersten Zeile Code', model: 'kubernia-planner (Opus 5, gepinnt) + effort high' },
+    { title: 'Umsetzen', detail: 'Worktree, TDD, npm run verify, im Browser verifizieren, committen', model: 'sonnet' },
     { title: 'Review', detail: '3 Lenses parallel: Architektur / Requirement-Treue / Test-Adäquanz', model: 'opus' },
     { title: 'Nachbessern', detail: 'nur bei blockierenden Findings oder rotem verify' },
     { title: 'PR + Merge', detail: 'PR öffnen, Auto-Merge, CI abwarten; rot → max. 3 Fix-Versuche' },
@@ -288,16 +288,20 @@ geschlossen und verifiziert wurde.`,
   }
 
   // ── Phase 3: Plan ─────────────────────────────────────────────────────────
-  // Der Planungs-Agent trägt sein Modell selbst im Frontmatter (#745/#910) —
+  // Der Planungs-Agent trägt sein MODELL selbst im Frontmatter (#745/#910) —
   // hier bewusst KEIN model-Override, damit docs/model-routing.md die einzige
-  // Stelle mit gepinnten Modell-IDs bleibt.
+  // Stelle mit gepinnten Modell-IDs bleibt. Der Reasoning-Aufwand steht
+  // dagegen explizit hier: `effort` ist kein Modell-Pin, und die Planung ist
+  // die eine Phase, in der hohes Reasoning den Ausschlag gibt ("Planung
+  // stark, Umsetzung schnell", #741) — explizit gesetzt greift er unabhängig
+  // davon, ob das Agent-Frontmatter ihn durchreicht.
   phase('Plan')
 
   const plan = await agent(
     `${ticketKontext}
 
 Repo: ${REPO}. Liefere den Plan wie in deiner Rolle beschrieben.`,
-    { label: `plan:#${nr}`, phase: 'Plan', agentType: 'kubernia-planner' },
+    { label: `plan:#${nr}`, phase: 'Plan', agentType: 'kubernia-planner', effort: 'high' },
   )
 
   if (plan) log(`Plan für ${ticket} liegt vor.`)
@@ -307,6 +311,11 @@ Repo: ${REPO}. Liefere den Plan wie in deiner Rolle beschrieben.`,
   // Bewusst EIN Agent für Worktree + Code + Tests + Commit: Coden und Testen zu
   // trennen hieße, dass der Test-Agent den Code erst wieder lesen muss, und zwei
   // Agenten im selben Worktree kollidieren.
+  // Modell: `sonnet` per Tier-Alias — die zweite Hälfte von "Planung stark,
+  // Umsetzung schnell" (#741). Ohne dieses Override erbt die Umsetzung das
+  // Session-Modell, und wer den Workflow aus einer Opus-Session startet, tippt
+  // seinen Code auf Opus. Alias statt Modell-ID, damit ein neuer Sonnet ohne
+  // Wartung greift (docs/model-routing.md).
   phase('Umsetzen')
 
   const umsetzung = await agent(
@@ -344,7 +353,7 @@ oder ein Gate abzuschwächen (AGENTS.md § Kein Grün-durch-Aufweichen, § Goodh
 Sichtbare Änderungen zusätzlich im Browser verifizieren.
 
 Committe mit (#${nr}) in der Nachricht. Gib Branch und absoluten Worktree-Pfad zurück.`,
-    { label: `umsetzen:#${nr}`, phase: 'Umsetzen', schema: UMSETZUNG_SCHEMA },
+    { label: `umsetzen:#${nr}`, phase: 'Umsetzen', schema: UMSETZUNG_SCHEMA, model: 'sonnet' },
   )
 
   if (!umsetzung || umsetzung.ergebnis !== 'committet') {
