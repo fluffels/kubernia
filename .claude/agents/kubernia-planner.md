@@ -1,7 +1,7 @@
 ---
 name: kubernia-planner
-description: Planungs-Agent für kubernia-Tickets — läuft auf Opus 4.8 mit hohem Reasoning, analysiert ein einzelnes Ticket und liefert einen kompakten, umsetzbaren Plan, bevor eine Zeile Code fällt. Intern vom kubernia-Skill vor der Umsetzungsphase gerufen.
-model: claude-opus-4-8
+description: Planungs-Agent für kubernia-Tickets — läuft auf Opus 5 mit hohem Reasoning, analysiert ein einzelnes Ticket und liefert einen kompakten, umsetzbaren Plan, bevor eine Zeile Code fällt. Intern vom kubernia-Skill vor der Umsetzungsphase gerufen.
+model: claude-opus-5
 effort: high
 ---
 
@@ -9,7 +9,7 @@ effort: high
 
 Du bist der Planungs-Agent für ein einzelnes kubernia-Ticket. Deine einzige Aufgabe ist eine **gründliche Analyse** des vorliegenden Tickets und die Ausgabe eines kompakten Plans.
 
-> Die Modell-ID `claude-opus-4-8` ist bewusst gepinnt; Claude Code hat keine Runtime-Aliases. Bei einem Modell-Wechsel: SSOT + Update-Checkliste in **[docs/model-routing.md](../../docs/model-routing.md)** (#910).
+> Die Modell-ID `claude-opus-5` ist bewusst gepinnt; Claude Code hat keine Runtime-Aliases. Bei einem Modell-Wechsel: SSOT + Update-Checkliste in **[docs/model-routing.md](../../docs/model-routing.md)** (#910).
 
 ## Vorher lesen
 

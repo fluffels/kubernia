@@ -1,15 +1,15 @@
 ---
 name: plan-feature
-description: Plant ein Feature oder Ticket für kubernia GRÜNDLICH, bevor eine Zeile Code fällt — auf dem stärksten Modell mit hohem Reasoning (Opus 4.8), gemäß der Konvention „Planung stark, Umsetzung schnell" (#741). Erzeugt einen konkreten, umsetzbaren Plan (Ziel, betroffene Dateien/Schichten, Schritte, Tests, Risiken/Trade-offs, Stardew-Scope-Check) und übergibt danach an die normale Umsetzung. Auslösen bei "plane ein Feature", "plane das Ticket", "mach mir einen Plan", "wie setze ich #X um", "Umsetzungsplan", "plan feature", oder wenn vor dem Coden erst durchdacht werden soll.
-model: claude-opus-4-8
+description: Plant ein Feature oder Ticket für kubernia GRÜNDLICH, bevor eine Zeile Code fällt — auf dem stärksten Modell mit hohem Reasoning (Opus 5), gemäß der Konvention „Planung stark, Umsetzung schnell" (#741). Erzeugt einen konkreten, umsetzbaren Plan (Ziel, betroffene Dateien/Schichten, Schritte, Tests, Risiken/Trade-offs, Stardew-Scope-Check) und übergibt danach an die normale Umsetzung. Auslösen bei "plane ein Feature", "plane das Ticket", "mach mir einen Plan", "wie setze ich #X um", "Umsetzungsplan", "plan feature", oder wenn vor dem Coden erst durchdacht werden soll.
+model: claude-opus-5
 effort: high
 ---
 
 # Feature/Ticket planen (Planungsphase, starkes Modell)
 
-Dieser Skill ist die **Planungsphase** der Konvention „Planung stark, Umsetzung schnell" (**[AGENTS.md › Modellwahl nach Phase](../../../AGENTS.md#modellwahl-nach-phase-910)**, #741). Er läuft bewusst auf **Opus 4.8 mit hohem Reasoning** (`model:`/`effort:` im Frontmatter). Denke hier gründlich nach — die eigentliche **Umsetzung** darf danach ein **schnelleres Modell** tippen.
+Dieser Skill ist die **Planungsphase** der Konvention „Planung stark, Umsetzung schnell" (**[AGENTS.md › Modellwahl nach Phase](../../../AGENTS.md#modellwahl-nach-phase-910)**, #741). Er läuft bewusst auf **Opus 5 mit hohem Reasoning** (`model:`/`effort:` im Frontmatter). Denke hier gründlich nach — die eigentliche **Umsetzung** tippt danach **Sonnet**.
 
-> Die Modell-ID im Frontmatter (`claude-opus-4-8`) ist bewusst gepinnt; Claude Code hat keine Runtime-Aliases. Bei einem Modell-Wechsel: SSOT + Update-Checkliste in **[docs/model-routing.md](../../../docs/model-routing.md)** (#910). Für die **Umsetzung** wird hier bewusst **kein** Modellname festgenagelt — Session-Default ist der kuratierte Coding-Sweet-Spot.
+> Die Modell-ID im Frontmatter (`claude-opus-5`) ist bewusst gepinnt; Claude Code hat keine Runtime-Aliases. Bei einem Modell-Wechsel: SSOT + Update-Checkliste in **[docs/model-routing.md](../../../docs/model-routing.md)** (#910). Für die **Umsetzung** wird hier **kein** Modellname festgenagelt — sie läuft auf dem Tier-Alias `sonnet` (im Phasen-Workflow gesetzt), damit ein neuer Sonnet ohne Wartung greift.
 
 > ⚠️ **Nur planen, nicht bauen.** Dieser Skill schreibt **keinen** Produktionscode, öffnet **keinen** PR und legt **keinen** Worktree an. Er liefert einen Plan, den danach der normale Ablauf (bzw. der [`kubernia`-Skill](../kubernia/SKILL.md)) umsetzt. Nach dem Skill fällt die Session automatisch aufs normale Modell zurück.
 
