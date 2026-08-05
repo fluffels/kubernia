@@ -637,18 +637,10 @@
   },
   "test/stop-verify-hook.test.ts": {
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 5
+      "count": 3
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 5
-    }
-  },
-  "test/stop-verify.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
+      "count": 3
     }
   },
   "test/storage-arc-quests.test.ts": {
