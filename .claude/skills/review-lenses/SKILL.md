@@ -70,6 +70,17 @@ Verdikt: ✅ ok  |  ⚠️ Hinweise  |  ❌ blockierend
 
 Am Ende **ein Gesamt-Verdikt** über alle drei Lenses (mergefähig ✅ / erst nachbessern ❌) und, falls beim Review etwas **außerhalb des Ticket-Scopes** aufgefallen ist, den Vorschlag, dafür ein neues Issue anzulegen (nicht inline mitfixen — oberste Regel).
 
+## Als beschränkte Konvergenzschleife im Ticket-Ablauf (#1012)
+
+Im kubernia-Ticket-Ablauf ist dieser Review **Pflicht** vor dem PR — und läuft nicht einmalig, sondern als **beschränkte review↔fix-Konvergenzschleife** (Marktstandard 2026, generator-critic + capped reflexion):
+
+1. Lenses auf den **aktuellen** Diff (frische, unabhängige Kritiker — nicht der Agent, der gefixt hat).
+2. Keine blockierenden Findings mehr ⇒ **konvergiert**, weiter zum PR.
+3. Sonst nachbessern, dann **zurück zu 1** — mit einem **frischen** Kritiker, damit der finale „OK"-Blick nie ein Self-Grading des eigenen Fixes ist.
+4. **Cap 2** Fix-Runden (unbeschränktes Iterieren ist schlechter, nicht besser — jenseits echter Fehler werden Stil-Nörgeleien erfunden); danach **Hand-off** an die Maintainerin (Festgefahren), kein PR mit bekannten Blockern.
+
+Regel-Heimat: [AGENTS.md › Mehr-Perspektiven-Review](../../../AGENTS.md). Deterministisch verdrahtet ist die Schleife im Workflow [`.claude/workflows/kubernia-ticket.js`](../../workflows/kubernia-ticket.js) (`MAX_REVIEW_RUNDEN`).
+
 ## Wichtig
 
 - **Short-Circuit ist hart.** Rote Stufe 0 ⇒ **keine** Lens-Pässe. Der Beweis ist der Exit-Code von `npm run verify` (≠ 0), nicht ein Bauchgefühl.
