@@ -7,10 +7,11 @@ export const meta = {
     { title: 'Auswahl', detail: 'oberstes freies Board-Item claimen + Zuweisung verifizieren' },
     { title: 'Sonderfall', detail: 'Epic aufteilen bzw. Dependabot-Sammelticket auflösen (kein Code)' },
     { title: 'Plan', detail: 'Planungs-Subagent vor der ersten Zeile Code', model: 'kubernia-planner (Opus 5, gepinnt) + effort high' },
+    { title: 'Pre-Flight', detail: 'Risiko-Klärung vor dem Coden: Harness/Optik/Weiche → anhalten + Fragen vorlegen (#1012)' },
     { title: 'Umsetzen', detail: 'Worktree, TDD, npm run verify, im Browser verifizieren, committen', model: 'sonnet' },
-    { title: 'Review', detail: '3 Lenses parallel: Architektur / Requirement-Treue / Test-Adäquanz', model: 'opus' },
+    { title: 'Review', detail: '3 Lenses parallel als Konvergenzschleife (Cap 2, frischer Kritiker, #1012)', model: 'opus' },
     { title: 'Nachbessern', detail: 'nur bei blockierenden Findings oder rotem verify' },
-    { title: 'PR + Merge', detail: 'PR öffnen, Auto-Merge, CI abwarten; rot → max. 3 Fix-Versuche' },
+    { title: 'PR + Merge', detail: 'PR öffnen; Harness-Diff → kein Self-Merge (Hand-off); sonst Auto-Merge; rot → max. 3 Fix-Versuche' },
     { title: 'Festgefahren', detail: 'nach 3 erfolglosen Fix-Versuchen: Entscheidungsoptionen + Label, assigned bleiben' },
     { title: 'Cleanup', detail: 'Worktree + Branch entfernen und verifizieren, Issue-Schließung prüfen' },
   ],
@@ -94,6 +95,11 @@ const UMSETZUNG_SCHEMA = {
     worktree: { type: 'string', description: 'absoluter Pfad des Worktrees' },
     verifyGruen: { type: 'boolean', description: 'npm run verify mit Exit-Code 0 gelaufen' },
     verifyAusgabe: { type: 'string', description: 'bei rotem verify: die relevante Fehlerausgabe' },
+    beruehrtHarness: {
+      type: 'boolean',
+      description:
+        'true, wenn git diff --name-only main einen Harness-/Gate-Pfad trifft (Merge-Checkpoint #1012: dann kein Self-Merge)',
+    },
     browserVerifiziert: {
       type: 'string',
       enum: ['ja', 'nicht-nötig', 'nein'],
@@ -140,13 +146,46 @@ const MERGE_SCHEMA = {
   properties: {
     ergebnis: {
       type: 'string',
-      enum: ['gemergt', 'ci-rot', 'fehler'],
-      description: 'gemergt nur, wenn der PR wirklich gemergt ist — ein offener/grüner PR zählt nicht',
+      enum: ['gemergt', 'wartet-auf-freigabe', 'ci-rot', 'fehler'],
+      description:
+        'gemergt nur, wenn der PR wirklich gemergt ist. wartet-auf-freigabe = Harness-Diff (#1012): PR offen + CI grün, aber bewusst NICHT self-gemergt, Übergabe an die Maintainerin. Ein offener/grüner Nicht-Harness-PR zählt nicht als gemergt.',
     },
     prNummer: { type: 'integer' },
     roterCheck: { type: 'string', description: 'Name des fehlschlagenden Checks' },
     fehlerAusgabe: { type: 'string', description: 'die relevanten Zeilen aus dem CI-Log' },
     meldung: { type: 'string' },
+  },
+}
+
+const PREFLIGHT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['brauchtKlaerung'],
+  properties: {
+    brauchtKlaerung: {
+      type: 'boolean',
+      description: 'true, wenn eine menschliche Entscheidung VOR dem Coden nötig ist',
+    },
+    grund: {
+      type: 'string',
+      description: 'welches Signal: Harness-/Gate-Datei, 🎨 Optik, ⚠️ riskante Weiche oder eine vom Plan gemeldete offene Weiche',
+    },
+    offeneFragen: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'konkrete Entscheidungsfragen an die Maintainerin (leer, wenn brauchtKlaerung=false)',
+    },
+  },
+}
+
+const NACHBESSERN_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['verifyGruen'],
+  properties: {
+    verifyGruen: { type: 'boolean', description: 'npm run verify nach dem Nachbessern mit Exit-Code 0' },
+    verifyAusgabe: { type: 'string', description: 'bei weiterhin rotem verify: die relevante Fehlerausgabe' },
+    zusammenfassung: { type: 'string', description: 'was behoben, was bewusst liegen gelassen wurde (mit Grund)' },
   },
 }
 
@@ -193,6 +232,39 @@ Grundlagen: AGENTS.md § TDD ist der Default, § Tests gegen False Positives abs
  * ob ein Agent die Regel befolgt.
  */
 const MAX_FIX_VERSUCHE = 3
+
+/**
+ * Konvergenz-Schleife für den agentischen Review (#1012). Marktstandard 2026 ist
+ * generator-critic + capped reflexion: review↔fix wiederholen, aber beschränkt — ein
+ * unbeschränkter Loop ist schlechter als 2 Runden (jenseits echter Fehler erfindet der
+ * Agent Stil-Nörgeleien). Ein FRISCHER Kritiker pro Runde beurteilt den aktuellen Diff,
+ * damit der finale „OK"-Blick nie der Agent ist, der zuletzt gefixt hat (kein Self-Grading).
+ */
+const MAX_REVIEW_RUNDEN = 2
+
+/**
+ * Harness-/Gate-Pfade (#1012) — Substring-Form, Spiegel des PROTECTED-Arrays in
+ * .github/workflows/ci.yml und der .github/CODEOWNERS-Liste (Sync bewacht
+ * test/harness-approval.test.ts). Fasst ein Diff einen dieser Pfade an, greift der
+ * Merge-Checkpoint: der Agent merged NICHT selbst, sondern übergibt an die Maintainerin.
+ */
+const HARNESS_PFADE = [
+  '.dependency-cruiser.cjs',
+  'scripts/layers.cjs',
+  'scripts/check-',
+  'eslint.config.js',
+  'eslint-suppressions.json',
+  'any-suppressions.json',
+  'vite.config.ts',
+  '.jscpd.json',
+  '.github/workflows/',
+  '.github/CODEOWNERS',
+  'AGENTS.md',
+  'CLAUDE.md',
+  '.claude/',
+  '.agents/',
+  'docs/agent-harness',
+]
 
 async function ticketAbarbeiten() {
   // ── Phase 1: Auswahl ───────────────────────────────────────────────────────
@@ -307,6 +379,55 @@ Repo: ${REPO}. Liefere den Plan wie in deiner Rolle beschrieben.`,
   if (plan) log(`Plan für ${ticket} liegt vor.`)
   else log('Planungs-Agent nicht verfügbar — die Umsetzungsphase plant selbst (dokumentierter Fallback).')
 
+  // ── Phase 3b: Pre-Flight-Klärung (#1012) ──────────────────────────────────
+  // Weil das Ticket automatisch gezogen wird, weiß man im Auswahl-Moment noch nicht,
+  // ob es eine Rückfrage braucht — also klassifizieren statt raten. Braucht es eine
+  // Entscheidung und liegen noch keine Antworten vor: ANHALTEN und die Fragen
+  // zurückgeben. Das Workflow-Tool hat kein Mid-Run-Ask-Primitiv; der Aufrufer legt
+  // die Fragen der Maintainerin vor und resumt per resumeFromRunId mit den Antworten
+  // in args.klaerungAntworten (Auswahl + Plan kommen dann aus dem Cache).
+  phase('Pre-Flight')
+
+  const klaerungAntworten =
+    args && typeof args === 'object' && Array.isArray(args.klaerungAntworten) ? args.klaerungAntworten : null
+
+  const preflight = await agent(
+    `${kopf}
+
+${ticketKontext}
+
+${plan ? `--- Plan des Planungs-Agenten ---\n${plan}\n--- Ende Plan ---` : '(kein Vorab-Plan vorhanden)'}
+
+AUFGABE — klassifiziere, ob dieses Ticket VOR dem Coden eine menschliche Entscheidung
+braucht. Triff selbst KEINE inhaltliche Entscheidung — sammle nur die offenen Fragen.
+
+brauchtKlaerung = true, wenn EINES zutrifft:
+- der zu erwartende Diff fasst Harness-/Gate-Dateien an (${HARNESS_PFADE.join(', ')}) — Selbstmodifikation der Leitplanken;
+- das Ticket ist 🎨 Optik/Grafik (das Aussehen legt die Maintainerin fest, AGENTS.md § Grafik-Stil);
+- eine ⚠️ riskante Weiche (z.B. Major-Migration mit Breaking Changes);
+- der Plan meldet eine offene Weiche/Entscheidung, die nicht eindeutig aus dem Ticket folgt.
+
+Grundlage: AGENTS.md § Human-in-the-Loop-Checkpoints. Gib bei brauchtKlaerung=true
+1-4 konkrete Entscheidungsfragen in offeneFragen zurück.`,
+    { label: `preflight:#${nr}`, phase: 'Pre-Flight', schema: PREFLIGHT_SCHEMA },
+  )
+
+  if (preflight && preflight.brauchtKlaerung && !klaerungAntworten) {
+    log(
+      `⏸ #${nr} braucht eine Vorab-Klärung (${preflight.grund || 'risikoreich'}) — Workflow hält an und legt die Fragen vor.`,
+    )
+    return {
+      ergebnis: 'wartet-auf-klaerung',
+      nummer: nr,
+      titel: auswahl.titel,
+      grund: preflight.grund,
+      offeneFragen: preflight.offeneFragen || [],
+      hinweis:
+        'Die Fragen der Maintainerin vorlegen, dann den Workflow per resumeFromRunId fortsetzen — mit den Antworten in args.klaerungAntworten (Auswahl + Plan kommen aus dem Cache, kaum Extra-Tokens).',
+    }
+  }
+  if (klaerungAntworten) log(`Pre-Flight-Klärung mit ${klaerungAntworten.length} Antwort(en) fortgesetzt.`)
+
   // ── Phase 4: Umsetzen ─────────────────────────────────────────────────────
   // Bewusst EIN Agent für Worktree + Code + Tests + Commit: Coden und Testen zu
   // trennen hieße, dass der Test-Agent den Code erst wieder lesen muss, und zwei
@@ -328,7 +449,11 @@ ${
     ? `--- Plan des Planungs-Agenten (Orientierung, ersetzt dein Urteil nicht) ---\n${plan}\n--- Ende Plan ---`
     : 'Es liegt kein Vorab-Plan vor — skizziere dir selbst kurz einen, bevor du anfängst.'
 }
-
+${
+  klaerungAntworten
+    ? `\n--- Antworten der Maintainerin aus der Pre-Flight-Klärung (verbindlich) ---\n${klaerungAntworten.map((a, i) => `${i + 1}. ${a}`).join('\n')}\n--- Ende Antworten ---\n`
+    : ''
+}
 AUFGABE — das Ticket umsetzen und committen. Noch NICHT pushen, KEINEN PR öffnen:
 der Review läuft bewusst vor dem PR.
 
@@ -352,7 +477,11 @@ beheben, gib verifyGruen=false mit der Fehlerausgabe zurück statt es zu verschl
 oder ein Gate abzuschwächen (AGENTS.md § Kein Grün-durch-Aufweichen, § Goodhart-Guard).
 Sichtbare Änderungen zusätzlich im Browser verifizieren.
 
-Committe mit (#${nr}) in der Nachricht. Gib Branch und absoluten Worktree-Pfad zurück.`,
+Committe mit (#${nr}) in der Nachricht. Gib Branch und absoluten Worktree-Pfad zurück.
+
+Setze beruehrtHarness=true, wenn git diff --name-only main einen Harness-/Gate-Pfad trifft
+(${HARNESS_PFADE.join(', ')}) — dann greift später der Merge-Checkpoint (#1012): der PR
+wird nicht self-gemergt, sondern an die Maintainerin übergeben.`,
     { label: `umsetzen:#${nr}`, phase: 'Umsetzen', schema: UMSETZUNG_SCHEMA, model: 'sonnet' },
   )
 
@@ -369,21 +498,21 @@ Committe mit (#${nr}) in der Nachricht. Gib Branch und absoluten Worktree-Pfad z
   const branch = umsetzung.branch || `feature/kq-${nr}-*`
   log(`${ticket} committet auf ${branch}.`)
 
-  // ── Phase 5: Review ───────────────────────────────────────────────────────
-  // Der Token-Short-Circuit aus dem review-lenses-Skill (#532), hier als Code
-  // statt als Bitte: rotes verify ⇒ KEIN Lens-Pass.
-  let lensBerichte = []
+  // ── Phase 5+6: Review ↔ Nachbessern als beschränkte Konvergenzschleife (#1012) ──
+  // Generator-critic + capped reflexion (Marktstandard 2026): ein FRISCHER, unabhängiger
+  // Kritiker pro Runde beurteilt den AKTUELLEN Diff; sobald keine blockierenden Findings
+  // mehr offen sind, ist konvergiert. Der finale „OK"-Blick ist damit nie der Agent, der
+  // zuletzt gefixt hat (kein Self-Grading). Cap MAX_REVIEW_RUNDEN — unbeschränktes Iterieren
+  // ist schlechter, nicht besser. Der Token-Short-Circuit (#532) bleibt: rotes verify ⇒
+  // kein Lens-Pass, direkt nachbessern.
 
-  if (!umsetzung.verifyGruen) {
-    log('npm run verify ist rot — Short-Circuit (#532): keine Lens-Pässe, direkt zum Nachbessern.')
-  } else {
-    phase('Review')
-    lensBerichte = (
-      await parallel(
-        LENSES.map(
-          (lens) => () =>
-            agent(
-              `${kopf}
+  // Ein Review-Pass: die drei Lenses parallel auf den aktuellen Diff (je ein frischer Agent).
+  const reviewPass = () =>
+    parallel(
+      LENSES.map(
+        (lens) => () =>
+          agent(
+            `${kopf}
 
 ${ticketKontext}
 
@@ -403,33 +532,57 @@ sein — mit Ort (datei.ts:zeile), kein „könnte man schöner machen" ohne Fun
 „blockierend" ist für echte Fehler/Regelverstöße reserviert, nicht für Geschmack.
 Was dir außerhalb des Ticket-Scopes auffällt, gehört nach ausserhalbScope (daraus wird
 ein neues Issue) — nicht in die Findings.`,
-              { label: `lens:${lens.key}`, phase: 'Review', schema: LENS_SCHEMA, model: 'opus', effort: 'high' },
-            ),
-        ),
-      )
-    ).filter(Boolean)
+            { label: `lens:${lens.key}`, phase: 'Review', schema: LENS_SCHEMA, model: 'opus', effort: 'high' },
+          ),
+      ),
+    ).then((r) => r.filter(Boolean))
 
-    if (lensBerichte.length < LENSES.length) {
+  // Ohne Initializer: die Schleife (for(;;) läuft immer) weist sie vor jedem break zu —
+  // ein `= []` hier wäre eine tote Zuweisung (no-useless-assignment).
+  let lensBerichte
+  let blockierend
+  let hinweise
+  let ausserhalbScope
+  let verifyGruen = umsetzung.verifyGruen
+  let letzteVerifyAusgabe = umsetzung.verifyAusgabe
+  let reviewRunden = 0
+
+  for (;;) {
+    if (verifyGruen) {
+      phase('Review')
+      lensBerichte = await reviewPass()
+      if (lensBerichte.length < LENSES.length) {
+        log(
+          `⚠ Nur ${lensBerichte.length} von ${LENSES.length} Lens-Pässen lieferten ein Ergebnis — die fehlenden sind ungeprüft.`,
+        )
+      }
+    } else {
+      log('npm run verify ist rot — Short-Circuit (#532): keine Lens-Pässe, direkt zum Nachbessern.')
+      lensBerichte = []
+    }
+    // Findings einmal aus dem aktuellen Pass ableiten (bei rotem verify aus dem leeren Bericht).
+    blockierend = lensBerichte.flatMap((b) => (b.findings || []).filter((f) => f.schwere === 'blockierend'))
+    hinweise = lensBerichte.flatMap((b) => (b.findings || []).filter((f) => f.schwere === 'hinweis'))
+    ausserhalbScope = lensBerichte.flatMap((b) => b.ausserhalbScope || [])
+    if (verifyGruen) {
       log(
-        `⚠ Nur ${lensBerichte.length} von ${LENSES.length} Lens-Pässen lieferten ein Ergebnis — die fehlenden sind ungeprüft.`,
+        `Review-Runde ${reviewRunden + 1}: ${blockierend.length} blockierend, ${hinweise.length} Hinweise, ${ausserhalbScope.length} außerhalb Scope.`,
       )
     }
-  }
 
-  const blockierend = lensBerichte.flatMap((b) => (b.findings || []).filter((f) => f.schwere === 'blockierend'))
-  const hinweise = lensBerichte.flatMap((b) => (b.findings || []).filter((f) => f.schwere === 'hinweis'))
-  const ausserhalbScope = lensBerichte.flatMap((b) => b.ausserhalbScope || [])
+    if (verifyGruen && blockierend.length === 0) {
+      log(`Review konvergiert nach ${reviewRunden} Fix-Runde(n): keine blockierenden Findings, verify grün.`)
+      break
+    }
+    if (reviewRunden >= MAX_REVIEW_RUNDEN) {
+      log(`⛔ Review nach ${MAX_REVIEW_RUNDEN} Fix-Runden nicht konvergiert — Hand-off an die Maintainerin (kein PR).`)
+      break
+    }
 
-  if (lensBerichte.length) {
-    log(
-      `Review: ${blockierend.length} blockierend, ${hinweise.length} Hinweise, ${ausserhalbScope.length} außerhalb Scope.`,
-    )
-  }
-
-  // ── Phase 6: Nachbessern ──────────────────────────────────────────────────
-  // EIN Agent für alle Findings zusammen: mehrere parallele Fixer im selben
-  // Worktree würden sich überschreiben.
-  if (!umsetzung.verifyGruen || blockierend.length) {
+    // Nachbessern: EIN Agent für alle Findings zusammen (parallele Fixer im selben Worktree
+    // würden sich überschreiben). Frischer Agent, nicht der Kritiker — im nächsten Loop-Durchlauf
+    // beurteilt wieder ein frischer Kritiker das Ergebnis.
+    reviewRunden += 1
     phase('Nachbessern')
     const nachbesserung = await agent(
       `${kopf}
@@ -437,13 +590,14 @@ ein neues Issue) — nicht in die Findings.`,
 ${ticketKontext}
 
 Du arbeitest im bestehenden Worktree ${worktree} auf ${branch} (absolute Pfade, NICHT
-hinein-cd'en). AUFGABE — die unten gelisteten Punkte beheben und committen.
+hinein-cd'en). AUFGABE — die unten gelisteten Punkte beheben und committen. Das ist
+Fix-Runde ${reviewRunden} von ${MAX_REVIEW_RUNDEN} (danach Hand-off an die Maintainerin, #1012).
 
 ${
-  umsetzung.verifyGruen
+  verifyGruen
     ? ''
-    : `ZUERST: npm run verify ist rot. Das hat der Umsetzungs-Agent so gemeldet:
-${umsetzung.verifyAusgabe || '(keine Ausgabe übergeben — selbst nachfahren)'}
+    : `ZUERST: npm run verify ist rot. Zuletzt gemeldet:
+${letzteVerifyAusgabe || '(keine Ausgabe übergeben — selbst nachfahren)'}
 Bring es grün, ohne ein Gate abzuschwächen (AGENTS.md § Kein Grün-durch-Aufweichen).
 `
 }${
@@ -461,17 +615,66 @@ ${hinweise.map((f) => `- [${f.ort}] ${f.befund}`).join('\n')}
 }
 Danach npm run verify erneut, bis grün. Bleib im Ticket-Scope: Punkte, die ein eigenes
 Ticket brauchen, nicht inline mitfixen (⭐ oberste Regel). Committe mit (#${nr}).
-
-Melde am Ende, was du behoben hast, was du bewusst liegen gelassen hast (mit Grund),
-und ob npm run verify jetzt grün ist.`,
-      { label: `nachbessern:#${nr}`, phase: 'Nachbessern' },
+Melde verifyGruen und was du behoben bzw. bewusst liegen gelassen hast (mit Grund).`,
+      { label: `nachbessern ${reviewRunden}/${MAX_REVIEW_RUNDEN}:#${nr}`, phase: 'Nachbessern', schema: NACHBESSERN_SCHEMA },
     )
-    log('Nachbesserung abgeschlossen.')
-    if (nachbesserung) log(String(nachbesserung).split('\n')[0])
+    verifyGruen = nachbesserung ? !!nachbesserung.verifyGruen : false
+    letzteVerifyAusgabe = (nachbesserung && nachbesserung.verifyAusgabe) || letzteVerifyAusgabe
+    if (nachbesserung && nachbesserung.zusammenfassung) log(String(nachbesserung.zusammenfassung).split('\n')[0])
+  }
+
+  const reviewKonvergiert = verifyGruen && blockierend.length === 0
+
+  // Hand-off VOR dem PR: nach dem Cap noch blockierende Findings oder rotes verify. Keinen
+  // PR mit bekannten Blockern öffnen — an die Maintainerin übergeben (Kommentar am ISSUE,
+  // Label, Worktree + Claim bleiben stehen).
+  if (!reviewKonvergiert) {
+    phase('Festgefahren')
+    const offenePunkte = [
+      ...(verifyGruen ? [] : ['npm run verify ist rot']),
+      ...blockierend.map((f) => `[${f.ort}] ${f.befund}`),
+    ]
+    const festgefahren = await agent(
+      `${kopf}
+
+${ticketKontext}
+
+Der Review zu #${nr} ist nach ${MAX_REVIEW_RUNDEN} Fix-Runden nicht konvergiert. Es gibt
+noch KEINEN PR (bewusst kein PR mit bekannten Blockern). Der Code liegt im Worktree
+${worktree} auf ${branch}.
+
+Offene Punkte:
+${offenePunkte.map((p, i) => `${i + 1}. ${p}`).join('\n') || '(keine übergeben — selbst am Worktree nachsehen)'}
+
+AUFGABE — das Festgefahren-Protokoll ausführen (AGENTS.md § Festgefahren-Protokoll), aber
+am ISSUE statt am PR (es gibt noch keinen): EIN konsolidierter Kommentar auf Issue #${nr}
+(was versucht wurde, die offenen Punkte, 2-3 Entscheidungsoptionen für die Maintainerin),
+Label status:festgefahren, du bleibst assigned. Räume den Worktree NICHT auf. Melde am
+Ende die zur Entscheidung gestellten Optionen.`,
+      { label: `review-festgefahren:#${nr}`, phase: 'Festgefahren' },
+    )
+    log(`⛔ ${ticket} ist im Review festgefahren — Entscheidung der Maintainerin nötig. Worktree ${worktree} bleibt stehen.`)
+    return {
+      ergebnis: 'review-festgefahren',
+      nummer: nr,
+      titel: auswahl.titel,
+      reviewRunden,
+      worktree,
+      offenePunkte,
+      optionen: festgefahren,
+      ausserhalbScope,
+    }
   }
 
   // ── Phase 7: PR + Merge, mit erzwungener Fix-Versuchsgrenze ───────────────
   phase('PR + Merge')
+
+  // Merge-Checkpoint (#1012): fasst der Diff Harness-/Leitplanken-Dateien an, merged der
+  // Agent NICHT selbst — PR öffnen, CI grün, dann Hand-off an die Maintainerin.
+  const harnessDiff = !!umsetzung.beruehrtHarness
+  if (harnessDiff) {
+    log('Diff fasst Harness-/Leitplanken-Dateien an (#1012) — Merge-Checkpoint: kein Self-Merge, Hand-off an die Maintainerin.')
+  }
 
   let merge = await agent(
     `${kopf}
@@ -480,19 +683,31 @@ ${ticketKontext}
 
 Du arbeitest im Worktree ${worktree} auf ${branch} (absolute Pfade, NICHT hinein-cd'en).
 
-AUFGABE — EINEN Pull Request öffnen und bis zum Merge bringen, genau nach
-AGENTS.md § Git-Workflow — PR-gegated (erste harte Regel) und § Kollisionsschutz,
-letzter Punkt. Kurz: Branch pushen, gh pr create mit "Closes #${nr}" im Body,
-Auto-Merge setzen, CI abwarten.
-
 Vor dem PR: prüfe kurz gh issue view ${nr} --json state,closedAt. Ist das Issue
 zwischenzeitlich extern geschlossen (paralleler Agent), NICHT überschreiben —
 ergebnis="fehler" mit der Kollision als meldung.
 
+${
+  harnessDiff
+    ? `AUFGABE — EINEN Pull Request öffnen und die CI grün bringen, aber bewusst NICHT self-mergen
+(Merge-Checkpoint #1012: dieser Diff fasst Harness-/Leitplanken-Dateien an — die Freigabe +
+der Merge sind der Maintainerin vorbehalten). Branch pushen, gh pr create mit "Closes #${nr}"
+im Body. KEIN Auto-Merge (kein gh pr merge --auto), KEIN maintainer-approved-Label setzen.
+- CI grün: ergebnis="wartet-auf-freigabe" mit prNummer. Der Check gate-change-guard ist ohne
+  das Label ERWARTET rot — das ist kein Fehler, sondern genau der Riegel; ignoriere ihn für die
+  Grün-Bewertung und melde trotzdem "wartet-auf-freigabe".
+- Ein ANDERER Required-Check rot: ergebnis="ci-rot" mit roterCheck + relevanten Log-Zeilen
+  (Fix in der nächsten Runde, NICHT selbst).`
+    : `AUFGABE — EINEN Pull Request öffnen und bis zum Merge bringen, genau nach
+AGENTS.md § Git-Workflow — PR-gegated (erste harte Regel) und § Kollisionsschutz,
+letzter Punkt. Kurz: Branch pushen, gh pr create mit "Closes #${nr}" im Body,
+Auto-Merge setzen, CI abwarten.
+
 Ein Ticket ist erst fertig, wenn sein PR gemergt ist. Ein offener oder grüner,
 aber nicht gemergter PR ist ergebnis="ci-rot" bzw. "fehler", nie "gemergt".
 Ist die CI rot, gib ergebnis="ci-rot" mit roterCheck und den relevanten Log-Zeilen
-zurück — versuche den Fix NICHT selbst, das übernimmt die nächste Runde.`,
+zurück — versuche den Fix NICHT selbst, das übernimmt die nächste Runde.`
+}`,
     { label: `pr+merge:#${nr}`, phase: 'PR + Merge', schema: MERGE_SCHEMA },
   )
 
@@ -519,10 +734,37 @@ Kein Gate abschwächen, um grün zu werden, und kein maintainer-approved-Label a
 Workaround setzen (AGENTS.md § Goodhart-Guard) — nur bei einer echten, intendierten
 Gate-Änderung. Behebe die Ursache, nicht das Symptom.
 
-Wird der PR grün und gemergt: ergebnis="gemergt". Bleibt er rot: ergebnis="ci-rot"
-mit dem AKTUELLEN Fehler (auch wenn es derselbe ist wie vorher).`,
+${
+  harnessDiff
+    ? `Wird die CI grün (bis auf den ERWARTET roten gate-change-guard ohne Label): ergebnis="wartet-auf-freigabe"
+— NICHT self-mergen, kein Auto-Merge/Label (Merge-Checkpoint #1012). Bleibt ein anderer Check rot:
+ergebnis="ci-rot" mit dem AKTUELLEN Fehler.`
+    : `Wird der PR grün und gemergt: ergebnis="gemergt". Bleibt er rot: ergebnis="ci-rot"
+mit dem AKTUELLEN Fehler (auch wenn es derselbe ist wie vorher).`
+}`,
       { label: `ci-fix ${fixVersuche}/${MAX_FIX_VERSUCHE}:#${nr}`, phase: 'PR + Merge', schema: MERGE_SCHEMA },
     )
+  }
+
+  if (merge && merge.ergebnis === 'wartet-auf-freigabe') {
+    // Merge-Checkpoint (#1012): PR offen + CI grün, aber bewusst NICHT self-gemergt.
+    // Übergabe an die Maintainerin — Worktree + Claim bleiben stehen (kein Cleanup).
+    log(
+      `⏸ PR #${merge.prNummer} zu ${ticket} ist grün, aber Harness-/Leitplanken-Diff — Übergabe an die Maintainerin (kein Self-Merge). Worktree ${worktree} bleibt stehen.`,
+    )
+    return {
+      ergebnis: 'wartet-auf-freigabe',
+      nummer: nr,
+      titel: auswahl.titel,
+      prNummer: merge.prNummer,
+      worktree,
+      umsetzung: umsetzung.zusammenfassung,
+      review: lensBerichte.map((b) => ({ lens: b.lens, verdikt: b.verdikt })),
+      hinweiseOffen: hinweise.length,
+      ausserhalbScope,
+      hinweis:
+        'Harness-/Leitplanken-Änderung (#1012): PR reviewen, maintainer-approved setzen und mergen. DANACH Worktree/Branch aufräumen und die ausserhalbScope-Punkte als Issues anlegen.',
+    }
   }
 
   if (!merge || merge.ergebnis !== 'gemergt') {

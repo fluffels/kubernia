@@ -398,13 +398,16 @@ jobs:
             set_board_top "$new_url"
           fi
 
-  # Goodhart-Guard (#903): deterministischer Sign-off-Zwang für PRs, die
-  # Gate-/Fitness-Function-Konfiguration ändern. CODEOWNERS + require_code_owner_reviews
-  # ist im Single-Account-Modell (@fluffels ist Autor UND einziger Codeowner gleichzeitig)
-  # empirisch wirkungslos — GitHub lässt die Review-Anforderung ersatzlos fallen
-  # (mergeStateStatus=CLEAN ohne jede Freigabe). Dieser Job ersetzt den technischen Zwang:
-  # Findet er Änderungen an den geschützten Pfaden (Spiegel der CODEOWNERS-Liste), prüft er,
-  # ob das Label 'maintainer-approved' gesetzt ist — ohne es bleibt der Check ROT.
+  # Goodhart-Guard (#903, erweitert #1012): deterministischer Sign-off-Zwang für PRs, die
+  # Gate-/Fitness-Function-Konfiguration ODER Harness-/Leitplanken-Dateien ändern (AGENTS.md,
+  # CLAUDE.md, .claude/, .agents/, Harness-Doku). Zwei Gründe, eine Pflicht: Gate-Aufweichen
+  # (Goodhart) bzw. Selbstmodifikation der Leitplanken (#1012 — „am Harness darf die KI nicht
+  # komplett allein"). CODEOWNERS + require_code_owner_reviews ist im Single-Account-Modell
+  # (@fluffels ist Autor UND einziger Codeowner gleichzeitig) empirisch wirkungslos — GitHub
+  # lässt die Review-Anforderung ersatzlos fallen (mergeStateStatus=CLEAN ohne jede Freigabe).
+  # Dieser Job ersetzt den technischen Zwang: Findet er Änderungen an den geschützten Pfaden
+  # (Spiegel der CODEOWNERS-Liste), prüft er, ob das Label 'maintainer-approved' gesetzt ist
+  # — ohne es bleibt der Check ROT.
   #
   # Ehrliche Einschränkung: im Single-Account-Modell kann @fluffels das Label selbst setzen
   # — einen kryptographisch-unabhängigen Approver gibt es nicht (bewusst verworfen, #723).
@@ -434,10 +437,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Geschuetzte Pfade — Spiegel der CODEOWNERS-Liste.
+          # Geschuetzte Pfade — Spiegel der CODEOWNERS-Liste (Sync bewacht
+          # test/harness-approval.test.ts, #1012).
           # Substring-Match: "scripts/check-" trifft alle check-*.mjs,
-          # ".github/workflows/" trifft alle *.yml-Workflows.
+          # ".github/workflows/" trifft alle *.yml-Workflows, ".claude/" den
+          # ganzen Claude-Code-Ordner, "docs/agent-harness" die Harness-Doku(s).
           PROTECTED=(
+            # Gate-Config (Goodhart, #903)
             '.dependency-cruiser.cjs'
             'scripts/layers.cjs'
             'scripts/check-'
@@ -448,6 +454,12 @@ jobs:
             '.jscpd.json'
             '.github/workflows/'
             '.github/CODEOWNERS'
+            # Harness/Leitplanken (Selbstmodifikation, #1012)
+            'AGENTS.md'
+            'CLAUDE.md'
+            '.claude/'
+            '.agents/'
+            'docs/agent-harness'
           )
 
           changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
@@ -478,7 +490,7 @@ jobs:
             exit 0
           fi
 
-          echo "::error title=Gate-Config-Aenderung ohne Sign-off::Dieser PR aendert Gate-/Fitness-Function-Konfiguration (${gate_files[*]}). Label 'maintainer-approved' fehlt."
+          echo "::error title=Gate-/Harness-Aenderung ohne Sign-off::Dieser PR aendert Gate-Config oder Harness-/Leitplanken-Dateien (${gate_files[*]}). Label 'maintainer-approved' fehlt."
           echo "::error::Losung: gh pr edit $PR_NUMBER --add-label maintainer-approved (oder ueber die GitHub-UI)."
-          echo "::error::Warum: Wer die Gate-Configs selbst aendert und den PR ohne explizites Sign-off mergt, kann ein Gate unbemerkt abschwaechen — Goodhart-Schutz (#903)."
+          echo "::error::Warum: Gate-Config aendern kann ein Gate unbemerkt abschwaechen (Goodhart, #903); Harness-/Leitplanken-Dateien sind Selbstmodifikation (#1012) — beides braucht menschliche Freigabe."
           exit 1

@@ -1,15 +1,27 @@
-# Codeowners fuer Gate-/Fitness-Function-Konfiguration (#723)
+# Codeowners fuer Gate-Config UND Harness-/Leitplanken-Dateien (#723, erweitert #1012)
 #
-# Diese Dateien VERDRAHTEN die automatischen Qualitaets-/Architektur-Gates
-# selbst (dependency-cruiser, ESLint-Komplexitaet, Groessen-/Diff-/Bundle-
-# Budgets, Coverage-Schwellen, CI-Pipeline). Wer sie aendert, kann ein Gate
-# unbemerkt abschwaechen, statt die eigentliche Ursache zu beheben - das
-# Ergebnis waere von aussen (gruene Checks) nicht von einem echten Fix zu
-# unterscheiden. Darum brauchen NUR PRs, die diese Pfade anfassen, eine
-# explizite Freigabe von @fluffels (Branch Protection: require_code_owner_
-# reviews=true auf main). Alle anderen Pfade bleiben unangetastet und
-# mergen weiterhin autonom bei gruener CI (kein pauschaler Review-Zwang).
+# Zwei Gruppen, ein Prinzip (menschliche Freigabe noetig):
+#
+# 1. GATE-CONFIG - diese Dateien VERDRAHTEN die automatischen Qualitaets-/
+#    Architektur-Gates selbst (dependency-cruiser, ESLint-Komplexitaet,
+#    Groessen-/Diff-/Bundle-Budgets, Coverage-Schwellen, CI-Pipeline). Wer sie
+#    aendert, kann ein Gate unbemerkt abschwaechen, statt die eigentliche
+#    Ursache zu beheben - von aussen (gruene Checks) nicht von einem echten Fix
+#    zu unterscheiden (Goodhart-Schutz).
+# 2. HARNESS/LEITPLANKEN (#1012) - die Agenten-Anweisungen selbst (AGENTS.md,
+#    CLAUDE.md, .claude/, .agents/, die Harness-Doku). Ein Agent, der seine
+#    eigenen Leitplanken aendert, ist der Paradefall fuer einen Pflicht-Stopp
+#    ("am Harness darf die KI nicht komplett allein"): Selbstmodifikation, nicht
+#    Gate-Aufweichen - dieselbe Freigabe-Pflicht, anderer Grund.
+#
+# Darum brauchen NUR PRs, die diese Pfade anfassen, eine explizite Freigabe von
+# @fluffels (Branch Protection: require_code_owner_reviews=true auf main). Alle
+# anderen Pfade mergen weiterhin autonom bei gruener CI (kein pauschaler Review-
+# Zwang). Diese Liste ist die menschenlesbare SSOT, die der CI-Job
+# gate-change-guard (ci.yml, Array PROTECTED) spiegelt - Sync bewacht
+# test/harness-approval.test.ts (#1012).
 
+# Gate-Config
 /.dependency-cruiser.cjs   @fluffels
 /scripts/layers.cjs        @fluffels
 /scripts/check-*.mjs       @fluffels
@@ -20,3 +32,10 @@
 /.jscpd.json               @fluffels
 /.github/workflows/*.yml   @fluffels
 /.github/CODEOWNERS        @fluffels
+
+# Harness/Leitplanken (#1012)
+/AGENTS.md                 @fluffels
+/CLAUDE.md                 @fluffels
+/.claude/                  @fluffels
+/.agents/                  @fluffels
+/docs/agent-harness*       @fluffels
