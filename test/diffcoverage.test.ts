@@ -98,14 +98,20 @@ describe("Diff-Coverage: Diff-Parsing", () => {
     assert.equal(changed.has("src/sim/pods.ts"), true);
   });
 
-  test("eine INHALTS-Zeile, die mit `++ ` beginnt, kapert den Datei-Header NICHT", () => {
-    // Als Header gelesen, landeten die folgenden Hunks unter einem Phantom-Pfad und
-    // fielen still aus der Messung — ein Gate, das weniger misst, als es soll.
+  test("INHALTS-Zeilen, die wie Header aussehen, kapern den Datei-Pfad NICHT", () => {
+    // Als Header gelesen, fielen die folgenden Hunks unter einem Phantom-Pfad still aus
+    // der Messung. Der zweite Fall sieht sogar wie ein vollständiges Header-PAAR aus —
+    // nur die Bindung an `diff --git` fängt ihn.
     const changed = parseDiffLines(
       diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+++ inhalt mit plus", "+b", "@@ -9,0 +30 @@", "+c"]),
     );
     assert.deepEqual([...changed.keys()], ["src/sim/pods.ts"]);
     assert.deepEqual([...(changed.get("src/sim/pods.ts") ?? [])].sort((a, b) => a - b), [1, 2, 30]);
+
+    const paar = parseDiffLines(
+      diffFor("src/sim/pods.ts", ["@@ -20,1 +20,2 @@", "--- a/alt", "+++ b/phantom", "@@ -30,0 +40 @@", "+x"]),
+    );
+    assert.deepEqual([...paar.keys()], ["src/sim/pods.ts"]);
   });
 
   test("gelöschte Datei leckt nicht in die nächste (echter /dev/null-Fall mit folgendem Hunk)", () => {
@@ -168,6 +174,7 @@ describe("Diff-Coverage: lcov-Parsing", () => {
     assert.deepEqual([...(lcov.get("src/sim/a.ts")?.keys() ?? [])], [3]);
     // DA ohne Trefferzahl gilt als UNgetestet — im Zweifel streng, nicht lasch.
     assert.equal(parseLcov(["SF:src/sim/b.ts", "DA:3", "end_of_record"].join("\n")).get("src/sim/b.ts")?.get(3), 0);
+    assert.equal(parseLcov("").size, 0); // leerer Report: leere Abbildung, kein Absturz
   });
 
   test("fehlendes end_of_record vermischt zwei Dateien nicht (SF: schaltet um)", () => {
@@ -176,9 +183,6 @@ describe("Diff-Coverage: lcov-Parsing", () => {
     assert.deepEqual([...(lcov.get("src/sim/b.ts")?.keys() ?? [])], [2]);
   });
 
-  test("leerer Report ergibt eine leere Abbildung, keinen Absturz", () => {
-    assert.equal(parseLcov("").size, 0);
-  });
 });
 
 describe("Diff-Coverage: Bewertung pro Schicht", () => {
@@ -302,6 +306,7 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     });
     assert.equal(r.skipped, false);
     assert.equal(r.noReport, true);
+    assert.equal(r.failed, true); // die Leitregel: nichts gemessen ⇒ niemals grün
   });
 
   test("ungetesteter Domänen-Slice → rot; Override mit Begründung lässt ihn bewusst durch", () => {
@@ -406,8 +411,8 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
       readFile: () => lcovOk,
       env: { KQ_DIFF_BASE: "basesha" },
     });
-    const diffArgs = gesehen.find((a) => a[0] === "diff");
-    assert.equal(diffArgs?.includes("basesha...HEAD"), true);
+    // Pinnt zugleich `-U0` (Kontextzeilen zählten sonst als geändert mit) und den Scope.
+    assert.deepEqual(gesehen.find((a) => a[0] === "diff"), ["diff", "-U0", "basesha...HEAD", "--", "src"]);
   });
 
   test("vollständig getesteter Slice ist grün", () => {

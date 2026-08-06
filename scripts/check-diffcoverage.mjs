@@ -36,8 +36,8 @@ import { resolveBase } from "./check-diffsize.mjs";
 const require = createRequire(import.meta.url);
 const { LAYERS, layerOf } = require("./layers.cjs");
 
-/** Wo der v8-Reporter das lcov ablegt (reportsDirectory `coverage` in vite.config.ts).
- *  Relativ zur Skript-Datei aufgelöst, damit der Wächter unabhängig vom cwd misst. */
+/** Wo der v8-Reporter das lcov ablegt (reportsDirectory in vite.config.ts) — relativ zur
+ *  Skript-Datei aufgelöst, damit der Wächter unabhängig vom cwd misst. */
 export const LCOV_PATH = fileURLToPath(new URL("../coverage/lcov.info", import.meta.url));
 
 /** Mindest-Abdeckung der GEÄNDERTEN Zeilen je Schicht in Prozent; `null` = messen und
@@ -69,20 +69,25 @@ export function normalizePath(p) {
 export function parseDiffLines(text) {
   const byFile = new Map();
   let current = null;
-  let prevWasOldHeader = false;
+  // `+++ ` zählt nur im Kopfbereich (zwischen `diff --git` und dem ersten `@@`) als
+  // Datei-Header — sonst kapert eine INHALTS-Zeile, die mit `++ ` beginnt, den Pfad und
+  // die folgenden Hunks fallen unter einer Phantom-Datei still aus der Messung.
+  // `diff --git ` ist der fälschungssichere Anker: eine Inhaltszeile trägt immer ein
+  // `+`/`-` davor (`--- ` dagegen kann eine entfernte Zeile `-- a/x` sein).
+  let imKopf = false;
   for (const raw of String(text).split(/\r?\n/)) {
-    // `+++ ` gilt NUR direkt nach der `--- `-Zeile als Datei-Header. Sonst kapert eine
-    // hinzugefügte INHALTS-Zeile, die mit `++ ` beginnt, den Pfad: die folgenden Hunks
-    // fielen unter einer Phantom-Datei still aus der Messung.
-    const isOldHeader = raw.startsWith("--- ");
-    if (raw.startsWith("+++ ") && prevWasOldHeader) {
-      const target = raw.slice(4).trim();
-      current = target === "/dev/null" ? null : normalizePath(target.replace(/^b\//, ""));
-      prevWasOldHeader = false;
+    if (raw.startsWith("diff --git ")) {
+      imKopf = true;
+      current = null;
       continue;
     }
-    prevWasOldHeader = isOldHeader;
+    if (imKopf && raw.startsWith("+++ ")) {
+      const target = raw.slice(4).trim();
+      current = target === "/dev/null" ? null : normalizePath(target.replace(/^b\//, ""));
+      continue;
+    }
     if (!raw.startsWith("@@") || current === null) continue;
+    imKopf = false;
     const m = /^@@ -\S+ \+(\d+)(?:,(\d+))? @@/.exec(raw);
     if (!m) continue;
     const start = Number.parseInt(m[1], 10);
@@ -126,9 +131,8 @@ export function parseLcov(text) {
  *  `include: ["src/**\/*.ts"]` in vite.config.ts — Content-JSON, Assets und Skripte
  *  außerhalb von `src` sind kein ausführbarer Spielcode und fallen raus.
  *
- *  `.d.ts` ist ausgenommen: reine Typdeklarationen haben keine ausführbare Zeile. Sie
- *  stehen heute zwar im Report, aber darauf zu bauen wäre spröde — ein Vitest-Bump, der
- *  sie ausschließt, machte jeden PR darauf über den missing-Pfad falsch rot. */
+ *  `.d.ts` ist ausgenommen: reine Typdeklarationen haben keine ausführbare Zeile, und ein
+ *  Vitest-Bump, der sie aus dem Report nimmt, machte jeden PR darauf falsch rot. */
 export function isMeasured(path) {
   return path.startsWith("src/") && path.endsWith(".ts") && !path.endsWith(".d.ts");
 }

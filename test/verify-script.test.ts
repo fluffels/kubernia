@@ -119,22 +119,15 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
     const full = scripts["verify:full"];
     for (const [gate, producer] of REPORT_DEPENDENT_GATES) {
       const needle = new RegExp(`\\bnpm run ${gate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
-      expect(full, `verify:full muss das report-abhängige Gate "${gate}" enthalten`).toMatch(needle);
-      // ... und zwar hinter dem Lauf, der den Report erzeugt (sonst misst es nichts
-      // bzw. einen veralteten Stand).
-      expect(
-        full.indexOf(`npm run ${gate}`) > full.indexOf(`npm run ${producer}`),
-        `"${gate}" muss NACH "${producer}" stehen`,
-      ).toBe(true);
-      // NICHT in der schnellen verify-Kette — dort läuft der Erzeuger nicht.
-      expect(needle.test(scripts.verify), `"${gate}" darf NICHT in der verify-Kette stehen`).toBe(false);
-      // ... und als eigener CI-Schritt, ebenfalls hinter seinem Erzeuger.
       const ci = readRepo(".github/workflows/ci.yml");
+      const nachErzeuger = (s: string) => s.indexOf(`npm run ${gate}`) > s.indexOf(`npm run ${producer}`);
+      expect(full, `verify:full muss "${gate}" enthalten`).toMatch(needle);
+      // ... und zwar hinter dem Erzeuger, sonst misst es nichts bzw. einen alten Stand.
+      expect(nachErzeuger(full), `"${gate}" muss NACH "${producer}" stehen`).toBe(true);
+      // NICHT in der schnellen verify-Kette — dort läuft der Erzeuger nicht.
+      expect(needle.test(scripts.verify), `"${gate}" gehört nicht in die verify-Kette`).toBe(false);
       expect(needle.test(ci), `"${gate}" muss als eigener CI-Schritt laufen`).toBe(true);
-      expect(
-        ci.indexOf(`npm run ${gate}`) > ci.indexOf(`npm run ${producer}`),
-        `"${gate}" muss in der CI NACH "${producer}" stehen`,
-      ).toBe(true);
+      expect(nachErzeuger(ci), `"${gate}" muss in der CI NACH "${producer}" stehen`).toBe(true);
     }
   });
 
