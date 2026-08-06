@@ -168,7 +168,10 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         // `all: true` (v8-Default) zählt auch NICHT importierte Dateien mit → untestete
         // Präsentation wird sichtbar statt still 0.
         include: ["src/**/*.ts"],
-        reporter: ["text", "json-summary"],
+        // `lcovonly` (nicht `lcov`) neben den beiden bestehenden Reportern: #1021 wertet
+        // coverage/lcov.info gegen den PR-Diff aus (Diff-Coverage). Bewusst NICHT `lcov`,
+        // denn das ist `lcovonly` PLUS ein kompletter HTML-Baum unter coverage/.
+        reporter: ["text", "json-summary", "lcovonly"],
         reportsDirectory: "coverage",
         // Kein autoUpdate: die Floors werden bewusst per Commit angehoben (Ratchet), nie
         // still von der Maschine abgesenkt.

@@ -33,6 +33,14 @@ const scripts = pkg.scripts;
 // die dist/-Chunks, existiert also erst NACH `build`/`build:offline`.
 const BUILD_DEPENDENT_GATES = new Set(["check:bundle"]);
 
+// Report-ABHÄNGIGE Gates werten ein Artefakt aus, das erst ein anderer Lauf erzeugt —
+// sie können darum ebenfalls nicht in der schnellen `verify`-Kette laufen. #1021:
+// check:diffcoverage schneidet coverage/lcov.info gegen den Diff, und dieses lcov
+// entsteht erst durch `test:coverage` (bewusst nicht in `verify`, weil die
+// v8-Instrumentierung die Suite spürbar verlangsamt, #495). Platz ist darum
+// `verify:full`, direkt HINTER `test:coverage`.
+const REPORT_DEPENDENT_GATES = new Map([["check:diffcoverage", "test:coverage"]]);
+
 // Netz-/nicht-deterministische Gates, die bewusst NICHT in der hermetischen,
 // offline-fähigen `verify`-Kette laufen dürfen: #610 check:doctickets gleicht die
 // offen-markierten Roadmap-Tickets gegen den echten `gh issue`-Status ab — das
@@ -57,6 +65,7 @@ const GATE_SCRIPTS = [
     (n) =>
       n.startsWith("check:") &&
       !BUILD_DEPENDENT_GATES.has(n) &&
+      !REPORT_DEPENDENT_GATES.has(n) &&
       !NETWORK_DEPENDENT_GATES.has(n) &&
       !SOFT_NONBLOCKING_GATES.has(n),
   ),
@@ -103,6 +112,22 @@ describe("#527 verify: eine SSOT-Kette über alle Gates", () => {
         new RegExp(`\\bnpm run ${gate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(scripts.verify),
         `"${gate}" darf NICHT in der build-freien verify-Kette stehen`,
       ).toBe(false);
+    }
+  });
+
+  it("report-abhängige Gates (#1021 check:diffcoverage) laufen in verify:full, NACH ihrem Erzeuger", () => {
+    const full = scripts["verify:full"];
+    for (const [gate, producer] of REPORT_DEPENDENT_GATES) {
+      const needle = new RegExp(`\\bnpm run ${gate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+      const ci = readRepo(".github/workflows/ci.yml");
+      const nachErzeuger = (s: string) => s.indexOf(`npm run ${gate}`) > s.indexOf(`npm run ${producer}`);
+      expect(full, `verify:full muss "${gate}" enthalten`).toMatch(needle);
+      // ... und zwar hinter dem Erzeuger, sonst misst es nichts bzw. einen alten Stand.
+      expect(nachErzeuger(full), `"${gate}" muss NACH "${producer}" stehen`).toBe(true);
+      // NICHT in der schnellen verify-Kette — dort läuft der Erzeuger nicht.
+      expect(needle.test(scripts.verify), `"${gate}" gehört nicht in die verify-Kette`).toBe(false);
+      expect(needle.test(ci), `"${gate}" muss als eigener CI-Schritt laufen`).toBe(true);
+      expect(nachErzeuger(ci), `"${gate}" muss in der CI NACH "${producer}" stehen`).toBe(true);
     }
   });
 
