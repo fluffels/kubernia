@@ -1,18 +1,11 @@
 /* Diff-Coverage-Wächter (#1021) — geänderte Zeilen pro PR müssen getestet sein.
  *
- * Das bestehende Coverage-Gate (#495) misst ein Schicht-AGGREGAT: neuer, komplett
- * ungetesteter Code in einer bereits hoch abgedeckten Schicht reißt den Floor nicht,
- * weil er im Nenner der ganzen Schicht untergeht. Dieser Wächter misst stattdessen
- * genau die Zeilen, die der aktuelle Slice ANFASST — dieselbe Diff-Basis-Semantik
- * wie check:diffsize (#533), dieselben Schicht-Buckets wie das Aggregat-Gate.
- *
  * Harness-Test in derselben Familie wie test/diffsize.test.ts und test/bundle.test.ts:
- * er prüft das Verhalten der TOOLING-Logik über deren öffentliche Exporte, nicht das
- * Spielverhalten — die Parse-/Bewertungs-/Override-Logik wird aus
- * scripts/check-diffcoverage.mjs importiert, EINE Quelle der Wahrheit (kein Drift
- * zwischen Test und CLI). git und Dateisystem werden NICHT angefasst: `runGit` und
- * `readFile` sind injiziert, damit der Test deterministisch ohne Repo-/Coverage-
- * Zustand läuft.
+ * er prüft das Verhalten der TOOLING-Logik über deren öffentliche Exporte (importiert
+ * aus scripts/check-diffcoverage.mjs — EINE Quelle der Wahrheit, kein Drift zwischen
+ * Test und CLI). git und Dateisystem bleiben unangetastet: `runGit`/`readFile` sind
+ * injiziert, damit der Test ohne Repo-/Coverage-Zustand deterministisch läuft. Das
+ * Warum des Gates steht in AGENTS.md › Testabdeckung.
  *
  * Ausführen mit:  npm test   (oder gezielt: npm run check:diffcoverage)
  */
@@ -47,10 +40,9 @@ type CheckDiffCoverageModule = {
   checkDiffCoverage: (opts: { runGit: RunGit; readFile?: (p: string) => string; env?: Env }) => Record<string, unknown>;
 };
 
-// Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im
-// tsconfig-include) – der Laufzeit-Import genügt. Der Namespace wird EINMAL auf die
-// Oberfläche oben festgelegt, statt jeden Zugriff einzeln zu casten: sonst meldet der
-// typbewusste Linter (#868) für jeden Zugriff no-unsafe-member-access.
+// Tooling-Skript ohne Declaration-File (scripts/ ist nicht im tsconfig-include). Der
+// Namespace wird EINMAL auf die Oberfläche oben festgelegt, statt jeden Zugriff einzeln
+// zu casten — sonst meldet der typbewusste Linter (#868) lauter no-unsafe-member-access.
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkCovRaw from "../scripts/check-diffcoverage.mjs";
 
@@ -66,15 +58,12 @@ const {
   checkDiffCoverage,
 } = checkCovRaw as CheckDiffCoverageModule;
 
-/** Minimaler `git diff -U0`-Ausschnitt für eine Datei. */
+/** Minimaler `git diff -U0`-Ausschnitt bzw. lcov-Block für eine Datei. */
 function diffFor(path: string, hunks: string[]): string {
   return [`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`, ...hunks].join("\n");
 }
-
-/** lcov-Block für eine Datei: `hits` bildet Zeile → Trefferzahl ab. */
 function lcovFor(path: string, hits: Record<number, number>): string {
-  const da = Object.entries(hits).map(([line, n]) => `DA:${line},${n}`);
-  return [`TN:`, `SF:${path}`, ...da, `end_of_record`].join("\n");
+  return [`TN:`, `SF:${path}`, ...Object.entries(hits).map(([l, n]) => `DA:${l},${n}`), `end_of_record`].join("\n");
 }
 
 describe("Diff-Coverage: Diff-Parsing", () => {
@@ -110,8 +99,7 @@ describe("Diff-Coverage: Diff-Parsing", () => {
   });
 
   test("eine INHALTS-Zeile, die mit `++ ` beginnt, kapert den Datei-Header NICHT", () => {
-    // Im Diff erscheint sie als `+++ …` und sähe aus wie ein Header. Würde sie als
-    // solcher gelesen, landeten die folgenden Hunks unter einem Phantom-Pfad und
+    // Als Header gelesen, landeten die folgenden Hunks unter einem Phantom-Pfad und
     // fielen still aus der Messung — ein Gate, das weniger misst, als es soll.
     const changed = parseDiffLines(
       diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+++ inhalt mit plus", "+b", "@@ -9,0 +30 @@", "+c"]),
@@ -134,22 +122,15 @@ describe("Diff-Coverage: Diff-Parsing", () => {
     assert.deepEqual([...changed.keys()], ["src/sim/neu.ts"]);
   });
 
-  test("Umbenennung zählt nur den NEUEN Pfad", () => {
-    const changed = parseDiffLines(
+  test("Umbenennung zählt den NEUEN Pfad, ein Binärdatei-Block leckt nicht in die Folgedatei", () => {
+    const rename = parseDiffLines(
       ["diff --git a/src/sim/alt.ts b/src/sim/neu.ts", "--- a/src/sim/alt.ts", "+++ b/src/sim/neu.ts", "@@ -0,0 +1 @@", "+x"].join("\n"),
     );
-    assert.deepEqual([...changed.keys()], ["src/sim/neu.ts"]);
-  });
-
-  test("Binärdatei-Block (ohne Hunks) leckt nicht in die Folgedatei", () => {
-    const changed = parseDiffLines(
-      [
-        "diff --git a/assets/x.png b/assets/x.png",
-        "Binary files a/assets/x.png and b/assets/x.png differ",
-        diffFor("src/sim/pods.ts", ["@@ -0,0 +1 @@", "+x"]),
-      ].join("\n"),
+    assert.deepEqual([...rename.keys()], ["src/sim/neu.ts"]);
+    const binaer = parseDiffLines(
+      ["diff --git a/a.png b/a.png", "Binary files a/a.png and b/a.png differ", diffFor("src/sim/p.ts", ["@@ -0,0 +1 @@", "+x"])].join("\n"),
     );
-    assert.deepEqual([...changed.keys()], ["src/sim/pods.ts"]);
+    assert.deepEqual([...binaer.keys()], ["src/sim/p.ts"]);
   });
 
   test("CRLF-Zeilenenden (Windows-git) werden verarbeitet", () => {
@@ -181,17 +162,12 @@ describe("Diff-Coverage: lcov-Parsing", () => {
     assert.equal(lcov.get("src/sim/b.ts")?.get(1), 0);
   });
 
-  test("`DA:` vor jedem `SF:` wird ignoriert statt zu werfen (kaputter Report)", () => {
+  test("kaputter Report: DA vor SF, leere und unparsbare DA-Zeilen werden verworfen statt zu werfen", () => {
     assert.deepEqual([...parseLcov("DA:1,1\nDA:2,0").keys()], []);
-  });
-
-  test("kaputte/leere DA-Zeilen werden verworfen, keine NaN-Zeilennummer", () => {
     const lcov = parseLcov(["TN:", "SF:src/sim/a.ts", "DA:", "DA:x,y", "DA:3,1", "end_of_record"].join("\n"));
     assert.deepEqual([...(lcov.get("src/sim/a.ts")?.keys() ?? [])], [3]);
-  });
-
-  test("DA ohne Trefferzahl zählt als ungetestet (0), nicht als getestet", () => {
-    assert.equal(parseLcov(["SF:src/sim/a.ts", "DA:3", "end_of_record"].join("\n")).get("src/sim/a.ts")?.get(3), 0);
+    // DA ohne Trefferzahl gilt als UNgetestet — im Zweifel streng, nicht lasch.
+    assert.equal(parseLcov(["SF:src/sim/b.ts", "DA:3", "end_of_record"].join("\n")).get("src/sim/b.ts")?.get(3), 0);
   });
 
   test("fehlendes end_of_record vermischt zwei Dateien nicht (SF: schaltet um)", () => {

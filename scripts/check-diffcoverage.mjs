@@ -5,51 +5,22 @@
 /**
  * Diff-Coverage-Wächter (#1021) — die geänderten Zeilen eines Slices müssen getestet sein.
  *
- * WARUM zusätzlich zum bestehenden Coverage-Gate (#495): jenes misst ein Schicht-
- * AGGREGAT. Neuer, komplett ungetesteter Code in einer bereits hoch abgedeckten
- * Schicht reißt den Floor NICHT — er verschwindet im Nenner der ganzen Schicht
- * (bei ~4000 Domänen-Zeilen fallen 40 neue ungetestete unter die Rundungsschwelle).
- * Dieser Wächter dreht den Nenner um: gemessen wird ausschließlich, was der aktuelle
- * Slice ANFASST.
+ * WARUM zusätzlich zum Coverage-Gate (#495): jenes misst ein Schicht-AGGREGAT. Neuer,
+ * komplett ungetesteter Code verschwindet im Nenner der ganzen Schicht und reißt keinen
+ * Floor (bei ~4000 Domänen-Zeilen fallen 40 neue unter die Rundungsschwelle). Dieser
+ * Wächter dreht den Nenner um: gemessen wird nur, was der aktuelle Slice ANFASST.
  *
- * Mechanik: `git diff -U0 <basis> HEAD -- src` liefert über die Hunk-Header die
+ * Mechanik: die Hunk-Header aus `git diff -U0 <basis>...HEAD -- src` liefern die
  * geänderten Zeilen der NEUEN Seite; geschnitten mit den `DA:`-Records aus
- * `coverage/lcov.info` (v8-Provider) ergibt das je Zeile „getestet / nicht getestet".
- * Bewertet wird PRO SCHICHT-BUCKET über `layerOf()` aus der Schicht-SSOT
- * scripts/layers.cjs — dieselben Grenzen, die dependency-cruiser erzwingt und an
- * denen auch die Aggregat-Floors in vite.config.ts hängen.
+ * `coverage/lcov.info` (v8) ergibt das je Zeile „getestet / nicht getestet". Bewertet
+ * wird PRO SCHICHT über `layerOf()` aus der Schicht-SSOT scripts/layers.cjs — dieselben
+ * Grenzen, an denen auch die Aggregat-Floors in vite.config.ts hängen. Die Basis-Semantik
+ * teilt es sich mit check:diffsize (#533), dessen `resolveBase` es IMPORTIERT statt kopiert.
  *
- * WARUM pro Schicht statt pauschal 100 %: eine Kalibrierung an den letzten zehn
- * `src`-Commits zeigt die pure Domäne durchgehend bei 100 % Diff-Coverage, die
- * Präsentation/den Einstieg dagegen bei 0-47 % — Phaser/DOM ist per Architektur
- * unit-untestbar und wird nur vom e2e-Smoke berührt (#391/#480). Ein globaler
- * Floor wäre bei JEDEM Szenen-PR rot und würde binnen weniger Tickets abgeschaltet
- * (das #395-Antipattern). Präsentation/Einstieg werden darum gemessen und
- * BERICHTET, aber nicht gegatet; hart sind Domäne und Anwendung.
- *
- * WO er beißt — dieselbe Basis-Semantik wie check:diffsize (#533), dessen
- * `resolveBase` bewusst IMPORTIERT statt kopiert wird (eine Quelle für „was ist die
- * Basis"): auf einem PR die PR-Basis (CI setzt KQ_DIFF_BASE, fetch-depth: 0), auf
- * push:main der Vorgänger-Commit, lokal die Merge-Base gegen origin/main.
- *
- * Degradation bewusst ASYMMETRISCH:
- *  - keine auflösbare Basis / leerer Diff / keine geänderte `src`-.ts → GRÜN (No-op),
- *    genau wie check:diffsize; ein Doku-PR soll nicht an einem fehlenden Coverage-
- *    Lauf scheitern.
- *  - `coverage/lcov.info` fehlt, obwohl `src` geändert wurde → ROT mit Hinweis
- *    „erst npm run test:coverage". Präzedenz check-bundle.mjs: ein Gate, das nichts
- *    gemessen hat, darf nicht grün melden.
- *  - eine geänderte `src/**\/*.ts` fehlt im lcov → ROT. Mit `all: true` MUSS sie dort
- *    stehen; sie still zu überspringen wäre der Gaming-Vektor (Code verstecken).
- *
- * Kein Grün-durch-Aufweichen: das Druckventil ist NICHT das Absenken eines Floors,
- * sondern `KQ_DIFFCOV_OVERRIDE="#<nr> warum"` mit Pflicht-Begründung — inklusive
- * stale-Meldung (Override gesetzt, Slice aber im Budget ⇒ rot), 1:1 das etablierte
- * KQ_DIFFSIZE_OVERRIDE-Muster.
- *
- * Reines Node-Skript (nur Builtins). Die Parse-/Bewertungslogik ist als pure,
- * IO-freie Funktionen exportiert und wird von test/diffcoverage.test.ts importiert —
- * EINE Quelle der Wahrheit für Parsing, Floors und Override-Logik.
+ * Die volle Begründung (Floors je Schicht, asymmetrische Degradation, Ratchet) steht als
+ * Regel in AGENTS.md › Testabdeckung. Reines Node-Skript (nur Builtins); die Parse-/
+ * Bewertungslogik ist als pure, IO-freie Funktionen exportiert und wird von
+ * test/diffcoverage.test.ts importiert — EINE Quelle der Wahrheit.
  *
  * Ausführen mit:  npm run check:diffcoverage   (nach: npm run test:coverage)
  */
@@ -69,21 +40,15 @@ const { LAYERS, layerOf } = require("./layers.cjs");
  *  Relativ zur Skript-Datei aufgelöst, damit der Wächter unabhängig vom cwd misst. */
 export const LCOV_PATH = fileURLToPath(new URL("../coverage/lcov.info", import.meta.url));
 
-/** Mindest-Abdeckung der GEÄNDERTEN Zeilen je Schicht, in Prozent. `null` heißt
- *  „messen und berichten, aber nicht gaten".
- *
- *  Kalibriert an den letzten zehn `src`-Commits (Domäne 6/6-mal bei 100 %,
- *  Anwendung 100 %, Präsentation/Einstieg 0-47 %). Die 90/80 liegen bewusst UNTER
- *  dem gemessenen Ist: sie fangen echten Zuwachs an ungetestetem Code, lassen aber
- *  Luft für defensive `throw`-/Guard-Zweige, die v8 als coverbar zählt — sonst
- *  erzwingt jede Kleinigkeit ein Override und der Wächter wird ignoriert (#395).
- *  RATCHET: diese Zahlen werden per reviewtem Commit ANGEHOBEN, nie gesenkt, um
- *  einen roten Lauf grün zu bekommen (dann greift das Override mit Begründung). */
+/** Mindest-Abdeckung der GEÄNDERTEN Zeilen je Schicht in Prozent; `null` = messen und
+ *  berichten, aber nicht gaten (Präsentation/Einstieg sind Phaser/DOM, per Architektur
+ *  unit-untestbar). Kalibriert an den letzten zehn `src`-Commits: Domäne/Anwendung lagen
+ *  bei 100 %, Präsentation/Einstieg bei 0-47 %. Die 90/80 liegen bewusst unter dem Ist —
+ *  Luft für defensive Guard-Zweige, sonst erzwingt jede Kleinigkeit ein Override (#395).
+ *  RATCHET: nur per reviewtem Commit ANHEBEN, nie senken, um Rot grün zu bekommen. */
 export const LAYER_DIFF_FLOORS = {
   [LAYERS.DOMAIN]: 90,
   [LAYERS.APPLICATION]: 80,
-  // Präsentation/Einstieg: Phaser/DOM, per Architektur unit-untestbar (nur e2e-Smoke).
-  // Gemessen und im Report sichtbar, aber bewusst nicht gegatet — siehe Kopf.
   [LAYERS.PRESENTATION]: null,
   [LAYERS.ENTRY]: null,
 };
@@ -97,21 +62,18 @@ export function normalizePath(p) {
 
 /** Parst `git diff -U0` und liefert je Datei die Zeilennummern der NEUEN Seite.
  *
- *  Nur die Hunk-Header werden gelesen (`@@ -a,b +c,d @@`): `c` ist die erste Zeile
- *  der neuen Seite, `d` ihre Anzahl (fehlt `,d`, ist es genau eine Zeile). `d === 0`
- *  markiert eine reine LÖSCHUNG — die darf keine Zeile beitragen, sonst zählte
- *  entfernter Code als ungetesteter neuer Code. Eine gelöschte Datei (`+++ /dev/null`)
- *  fällt komplett raus. Pure — kein git, voll testbar. */
+ *  Gelesen werden nur die Hunk-Header (`@@ -a,b +c,d @@`): `c` ist die erste Zeile der
+ *  neuen Seite, `d` ihre Anzahl (ohne `,d`: genau eine). `d === 0` ist eine reine
+ *  LÖSCHUNG und darf nichts beitragen, sonst zählte entfernter Code als neuer
+ *  ungetesteter; `+++ /dev/null` fällt ganz raus. Pure — kein git, voll testbar. */
 export function parseDiffLines(text) {
   const byFile = new Map();
   let current = null;
   let prevWasOldHeader = false;
   for (const raw of String(text).split(/\r?\n/)) {
-    // `+++ ` gilt NUR als Datei-Header, wenn direkt davor die `--- `-Zeile stand.
-    // Sonst kapert eine hinzugefügte INHALTS-Zeile, die mit `++ ` beginnt (im Diff
-    // also als `+++ …` erscheint), den Pfad: die folgenden Hunks würden einer
-    // Phantom-Datei zugeschlagen und fielen still aus der Messung — genau die
-    // Klasse „Gate misst weniger als es soll", gegen die der missing-Pfad schützt.
+    // `+++ ` gilt NUR direkt nach der `--- `-Zeile als Datei-Header. Sonst kapert eine
+    // hinzugefügte INHALTS-Zeile, die mit `++ ` beginnt, den Pfad: die folgenden Hunks
+    // fielen unter einer Phantom-Datei still aus der Messung.
     const isOldHeader = raw.startsWith("--- ");
     if (raw.startsWith("+++ ") && prevWasOldHeader) {
       const target = raw.slice(4).trim();
@@ -164,21 +126,18 @@ export function parseLcov(text) {
  *  `include: ["src/**\/*.ts"]` in vite.config.ts — Content-JSON, Assets und Skripte
  *  außerhalb von `src` sind kein ausführbarer Spielcode und fallen raus.
  *
- *  `.d.ts` ist bewusst ausgenommen: reine Typdeklarationen enthalten keine
- *  ausführbare Zeile. Sie stehen heute zwar im Report (Vitest schließt sie per
- *  Default nicht aus), aber sich darauf zu verlassen wäre spröde — ein Vitest-Bump,
- *  der sie ausschließt, würde jeden PR auf `src/vite-env.d.ts` über den
- *  missing-Pfad falsch rot machen. */
+ *  `.d.ts` ist ausgenommen: reine Typdeklarationen haben keine ausführbare Zeile. Sie
+ *  stehen heute zwar im Report, aber darauf zu bauen wäre spröde — ein Vitest-Bump, der
+ *  sie ausschließt, machte jeden PR darauf über den missing-Pfad falsch rot. */
 export function isMeasured(path) {
   return path.startsWith("src/") && path.endsWith(".ts") && !path.endsWith(".d.ts");
 }
 
 /** Schneidet die geänderten Zeilen gegen das lcov und aggregiert PRO SCHICHT.
  *
- *  Der Floor-Vergleich läuft bewusst ganzzahlig (`covered * 100 < floor * total`)
- *  statt über einen Prozent-Float: `9/10*100` ist in IEEE754 `90.00000000000001`,
- *  ein Float-Vergleich würde also je nach Zahlenpaar mal knapp zu streng, mal knapp
- *  zu lasch entscheiden. `pct` bleibt daneben nur für die Anzeige stehen. Pure. */
+ *  Der Floor-Vergleich läuft ganzzahlig (`covered * 100 < floor * total`) statt über
+ *  einen Prozent-Float: `9/10*100` ist in IEEE754 `90.00000000000001`, ein Float-Vergleich
+ *  entschiede je nach Zahlenpaar mal zu streng, mal zu lasch. `pct` ist nur Anzeige. Pure. */
 export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS) {
   const buckets = {};
   for (const layer of Object.values(LAYERS)) {
@@ -239,13 +198,10 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env } = {}) 
 
   let diff;
   try {
-    // Drei-Punkt (`base...HEAD`), NICHT `base HEAD`: die CI setzt KQ_DIFF_BASE auf
-    // `pull_request.base.sha`, also den aktuellen Kopf von main — nicht den
-    // Branchpunkt. Ein Zwei-Punkt-Diff würde jede Änderung, die main NACH dem
-    // Abzweigen bekam, spiegelverkehrt als Addition dieses Slices ausweisen und
-    // fremde Zeilen in den Nenner ziehen (falsches Rot aus fremdem Code). Die
-    // Drei-Punkt-Form misst gegen die Merge-Base und damit genau den eigenen Slice;
-    // wo `resolveBase` ohnehin schon eine Merge-Base liefert, ist sie identisch.
+    // Drei-Punkt, NICHT `base HEAD`: KQ_DIFF_BASE ist `pull_request.base.sha`, also der
+    // Kopf von main statt des Branchpunkts. Zwei-Punkt wiese jede Änderung, die main NACH
+    // dem Abzweigen bekam, spiegelverkehrt als Addition dieses Slices aus — fremde Zeilen
+    // im Nenner, potenziell falsches Rot. `A...B` misst gegen die Merge-Base.
     diff = git(["diff", "-U0", `${base}...HEAD`, "--", "src"]);
   } catch {
     return { skipped: true, failed: false, base };
@@ -267,11 +223,9 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env } = {}) 
   }
 
   const verdict = evaluateByLayer(changed, parseLcov(lcovText));
-  // Bewusste Trennung: `below` ist eine COVERAGE-Lücke (bewertbar, darum override-bar),
-  // `missing` ist ein MESSfehler — der Report kennt eine geänderte Datei nicht, es wurde
-  // also gar nicht gemessen. Den still zu übergehen wäre dasselbe „grün ohne Messung",
-  // das der noReport-Zweig oben verbietet; darum deckt ihn das Override NICHT ab, es
-  // gibt nur einen Ausweg: neu messen.
+  // `below` ist eine COVERAGE-Lücke (bewertbar, darum override-bar), `missing` ein
+  // MESSfehler — für diese Datei wurde gar nichts gemessen. Ihn durchzuwinken wäre
+  // dasselbe „grün ohne Messung", das der noReport-Zweig verbietet: nicht override-bar.
   const violated = verdict.below.length > 0;
   const reason = overrideReason(env);
   const allowed = violated && reason !== null;
@@ -331,25 +285,16 @@ function main() {
 
   renderBuckets(r, colors);
 
-  // Messfehler, nicht Coverage-Lücke: bewusst NICHT über das Override abkürzbar
-  // (`failed` bleibt gesetzt, der allowed-Zweig unten greift dann nicht).
+  // Messfehler, nicht Coverage-Lücke — bewusst NICHT über das Override abkürzbar.
   if (r.missing.length > 0) {
     console.error(red(`✖ ${r.missing.length} geänderte src-Datei(en) fehlen im Coverage-Report:`));
     for (const p of r.missing) console.error(`    ${p}`);
-    console.error(
-      `\nDer Report ist veraltet oder unvollständig — es wurde für diese Dateien NICHTS gemessen.\n` +
-        `Neu messen:  npm run test:coverage`,
-    );
+    console.error(`\nFür sie wurde NICHTS gemessen — Report veraltet. Neu messen:  npm run test:coverage`);
     process.exit(1);
   }
 
   if (r.stale) {
-    console.error(
-      red(
-        "✖ KQ_DIFFCOV_OVERRIDE ist gesetzt, aber der Slice erfüllt die Floors.\n" +
-          "  Das Override ist stale — entfernen (KQ_DIFFCOV_OVERRIDE leeren).",
-      ),
-    );
+    console.error(red("✖ KQ_DIFFCOV_OVERRIDE gesetzt, aber der Slice erfüllt die Floors — stale, bitte entfernen."));
     process.exit(1);
   }
 
@@ -361,9 +306,8 @@ function main() {
 
   if (r.failed) {
     console.error(
-      `\nDie in diesem Slice geänderten Zeilen sind nicht ausreichend getestet. Tests für genau\n` +
-        `diese Zeilen ergänzen (TDD: erst der fehlschlagende Test, siehe AGENTS.md) — ODER, wenn\n` +
-        `die Lücke bewusst und begründet ist, mit Pflicht-Begründung durchlassen:\n` +
+      `\nTests für genau diese Zeilen ergänzen (TDD: erst der fehlschlagende Test, AGENTS.md) —\n` +
+        `ODER, wenn die Lücke bewusst ist, mit Pflicht-Begründung durchlassen:\n` +
         `  KQ_DIFFCOV_OVERRIDE="#<nr> warum ungetestet" npm run check:diffcoverage`,
     );
     process.exit(1);
