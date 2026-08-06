@@ -14,13 +14,17 @@ Ein **gestaffelter** Review des aktuellen Ticket-Diffs — Vorbild sind produkti
 Die Änderungen des aktuellen Tickets gegen `origin/main` — im kubernia-Worktree-Ablauf also alles auf dem Feature-Branch. **Der Diff wird EINMAL in eine Patch-Datei geschrieben; die Lenses bekommen den Pfad**, statt jede ihren eigenen `git diff` zu fahren:
 
 ```bash
+TMP=$(mktemp -d)                                        # Scratch-Ordner der Session
 git fetch origin
+git status --porcelain                                  # MUSS leer sein — s.u.
 git diff origin/main...HEAD --stat                      # Überblick: welche Dateien
 git diff origin/main...HEAD > "$TMP/kq-<nr>-r<runde>.patch"   # die EINE Grundlage aller Lenses
 git rev-parse HEAD                                      # Frische-Guard, s.u.
 ```
 
 **Warum Drei-Punkt (`origin/main...HEAD`)** statt `git diff main`: so sieht der Review genau den Slice, den `check:diffsize`/`check:diffcoverage` messen — ein Zwei-Punkt-Diff gegen ein lokal veraltetes `main` zieht fremde Zeilen mit hinein.
+
+⚠️ **Erst committen, sonst reviewt niemand deine letzte Änderung.** Drei-Punkt gegen `HEAD` enthält **nur Committetes** — die frühere Fassung erhob per Zwei-Punkt `git diff main` auch den Arbeitsbaum („plus noch Uncommittetes"). Der Frische-Guard unten vergleicht nur `HEAD`; die Abweichung „Arbeitsbaum ≠ HEAD" ist für ihn strukturell unsichtbar. Wer den Review mitten in der Arbeit anstößt, bekommt sonst ein „ok" über Code, den keine Lens gesehen hat. Darum `git status --porcelain` **vor** dem Schreiben prüfen. (Im orchestrierten Workflow ist das gesetzt: dort entsteht der Patch **nach** dem Commit.)
 
 **Warum überhaupt eine Datei:** gemessen an #1021 kostete ein Review 878k Tokens, und der dominante Anteil war **Beschaffung, nicht Analyse** — derselbe Diff fünfmal erhoben, die geänderten Dateien fünfmal vollständig gelesen, `AGENTS.md`/`CLAUDE.md` von jeder Lens erneut geöffnet. Das produziert keinen einzigen zusätzlichen Befund.
 

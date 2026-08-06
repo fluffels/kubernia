@@ -230,6 +230,14 @@ gemessen der teuerste redundante Posten des Reviews. Schreib die Datei wirklich;
 der Review auf den alten, teuren Weg zurück.`
 
 /**
+ * Der materialisierte Diff aus der Selbstauskunft einer Phase (#1034) — EINE Abbildung statt
+ * zweier Kopien. Ein fehlender/abgebrochener Agent ergibt bewusst ein durchgehend leeres Tripel,
+ * damit die nächste Lens den Diff einmal selbst erhebt (und das meldet), statt stillschweigend
+ * den Patch der Vorrunde weiterzuverwenden.
+ */
+const diffAus = (r) => ({ pfad: r && r.diffPfad, stat: r && r.diffStat, head: r && r.diffHead })
+
+/**
  * Kontext-Diät für die Review-Lenses (#1034). Gemessen an #1021: fünf Lens-Pässe verbrannten
  * ~878k Tokens, und der größte Einzelposten war reine BESCHAFFUNG — jeder Agent öffnete
  * AGENTS.md (~24k) + CLAUDE.md (~6k) erneut per Read, obwohl der `@AGENTS.md`-Import in
@@ -548,9 +556,11 @@ Sichtbare Änderungen zusätzlich im Browser verifizieren.
 
 Committe mit (#${nr}) in der Nachricht. Gib Branch und absoluten Worktree-Pfad zurück.
 
-Setze beruehrtHarness=true, wenn git diff --name-only main einen Harness-/Gate-Pfad trifft
-(${HARNESS_PFADE.join(', ')}) — dann greift später der Merge-Checkpoint (#1012): der PR
-wird nicht self-gemergt, sondern an die Maintainerin übergeben.
+Setze beruehrtHarness=true, wenn git diff --name-only origin/main...HEAD einen Harness-/Gate-Pfad
+trifft (${HARNESS_PFADE.join(', ')}) — dann greift später der Merge-Checkpoint (#1012): der PR
+wird nicht self-gemergt, sondern an die Maintainerin übergeben. Drei-Punkt gegen origin/main aus
+demselben Grund wie beim Patch unten: gegen ein lokal veraltetes main klassifizierte der
+Checkpoint anhand fremder Dateien.
 
 ${patchAuftrag(nr, 1)}`,
     { label: `umsetzen:#${nr}`, phase: 'Umsetzen', schema: UMSETZUNG_SCHEMA, model: 'sonnet' },
@@ -599,16 +609,17 @@ ${
   ${diff.pfad}
 ${diff.stat ? `\nÜberblick (git diff --stat):\n${diff.stat}\n` : ''}
 Frische-Guard: die Datei wurde bei HEAD ${diff.head || '(unbekannt)'} geschrieben. Prüfe mit
-EINEM git rev-parse HEAD im Worktree, dass der Stand übereinstimmt. Weicht er ab, ist die Datei
-veraltet — dann schreibe sie mit git diff origin/main...HEAD neu und melde die Abweichung im
-Befund, statt einen alten Stand zu reviewen.`
+EINEM git rev-parse HEAD im Worktree, dass der Stand übereinstimmt. Weicht er ab — oder ist die
+Datei nicht lesbar — dann ist sie als Grundlage unbrauchbar: erhebe den Diff in DEM Fall einmal
+selbst (Drei-Punkt gegen origin/main) und melde die Abweichung bzw. das fehlende Artefakt als
+Harness-Defekt im Bericht, statt stillschweigend einen alten Stand zu reviewen.`
     : `⚠ Es liegt KEINE vorbereitete Patch-Datei vor (der ausführende Agent hat sie nicht
 geschrieben). Erhebe den Diff EINMAL selbst mit git diff origin/main...HEAD und arbeite dann
 damit weiter — und erwähne das fehlende Artefakt in deinem Bericht, es ist ein Harness-Defekt.`
 }
 
-Umsetzungs-Zusammenfassung des ausführenden Agenten (Runde ${runde}):
-${umsetzung.zusammenfassung || '(keine)'}
+Zusammenfassung des ausführenden Agenten zum Stand, den du reviewst (Runde ${runde}):
+${letzteZusammenfassung || '(keine)'}
 
 Lies NUR durch diese eine Brille, nicht vermischt „mal drüberschauen":
 
@@ -634,10 +645,11 @@ ein neues Issue) — nicht in die Findings.`,
   let ausserhalbScope
   let verifyGruen = umsetzung.verifyGruen
   let letzteVerifyAusgabe = umsetzung.verifyAusgabe
+  let letzteZusammenfassung = umsetzung.zusammenfassung
   let reviewRunden = 0
-  // Der materialisierte Diff (#1034). Wird nach jeder Nachbesserung ersetzt, nie
+  // Der materialisierte Diff (#1034). Wird nach jeder Nachbesserung ERSETZT, nie
   // weiterverwendet — ein Patch aus der Vorrunde würde einen Review vortäuschen.
-  let diff = { pfad: umsetzung.diffPfad, stat: umsetzung.diffStat, head: umsetzung.diffHead }
+  let diff = diffAus(umsetzung)
   if (!diff.pfad) {
     log('⚠ Kein materialisierter Diff vom Umsetzungs-Agenten (#1034) — die Lenses erheben ihn selbst (teurer).')
   }
@@ -717,12 +729,22 @@ ${patchAuftrag(nr, reviewRunden + 1)}`,
     )
     verifyGruen = nachbesserung ? !!nachbesserung.verifyGruen : false
     letzteVerifyAusgabe = (nachbesserung && nachbesserung.verifyAusgabe) || letzteVerifyAusgabe
+    // Die Zusammenfassung der NEUESTEN Runde geht an die nächsten Kritiker (#1034): sonst liest
+    // Runde 2 einen als aktuell etikettierten Begleittext aus Runde 1 und meldet bewusst liegen
+    // gelassene Punkte erneut als blockierend — genau die Runde, die der Cap 2 knapp macht.
+    if (nachbesserung && nachbesserung.zusammenfassung) letzteZusammenfassung = nachbesserung.zusammenfassung
     // Frische-Guard (#1034): der Patch der NÄCHSTEN Runde ist der neue — bewusst KEIN Fallback
-    // auf den alten Pfad. Lieber lässt die nächste Lens ihn einmal selbst erheben (sie meldet
-    // das) als dass sie stillschweigend den Vor-Fix-Stand als geprüft ausgibt.
-    diff = nachbesserung
-      ? { pfad: nachbesserung.diffPfad, stat: nachbesserung.diffStat, head: nachbesserung.diffHead }
-      : { pfad: undefined, stat: undefined, head: undefined }
+    // auf den alten Pfad (kein `|| diff`). Lieber lässt die nächste Lens ihn einmal selbst
+    // erheben (sie meldet das) als dass sie stillschweigend den Vor-Fix-Stand als geprüft ausgibt.
+    const vorherigerHead = diff.head
+    diff = diffAus(nachbesserung)
+    // Deterministisch statt nur als Bitte an den Agenten: identischer HEAD über zwei Runden heißt,
+    // es wurde nichts committet — der „neue" Patch zeigt dann den Vor-Fix-Stand. Das ist mit den
+    // vorhandenen Daten ein String-Vergleich, also ein echtes Gate statt einer Verhaltensregel.
+    if (diff.head && vorherigerHead && diff.head === vorherigerHead) {
+      log(`⚠ diffHead unverändert (${diff.head}) — es wurde nichts committet, der Patch zeigt den Vor-Fix-Stand. Verworfen.`)
+      diff = diffAus(null)
+    }
     if (nachbesserung && nachbesserung.zusammenfassung) log(String(nachbesserung.zusammenfassung).split('\n')[0])
   }
 
