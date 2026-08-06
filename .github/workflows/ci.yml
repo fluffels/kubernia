@@ -71,6 +71,17 @@ jobs:
       - name: Coverage-Gate – pro Schicht (#495)
         run: npm run test:coverage
 
+      # Diff-Coverage-Gate (#1021): das Aggregat-Gate oben misst ganze Schichten —
+      # neuer, komplett ungetesteter Code verschwindet dort im Nenner. Dieser Schritt
+      # dreht den Nenner um und misst NUR die im Slice geänderten Zeilen (coverage/
+      # lcov.info aus dem Lauf davor, geschnitten mit dem Diff). Muss darum NACH
+      # test:coverage stehen — ohne Report wird er bewusst rot, nicht still grün.
+      # KQ_DIFF_BASE wie bei check:diffsize: PR → PR-Basis, push:main → Vorgänger.
+      - name: Diff-Coverage-Gate – geänderte Zeilen (#1021)
+        env:
+          KQ_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: npm run check:diffcoverage
+
       - name: Host-Build
         run: npm run build
 

@@ -29,6 +29,7 @@
     "check:docdrift": "node scripts/check-docdrift.mjs",
     "check:internalrefs": "node scripts/check-internalrefs.mjs",
     "check:diffsize": "node scripts/check-diffsize.mjs",
+    "check:diffcoverage": "node scripts/check-diffcoverage.mjs",
     "check:anysuppress": "node scripts/check-any-suppressions.mjs",
     "check:lockfile": "node scripts/check-lockfile.mjs",
     "check:bundle": "node scripts/check-bundle.mjs",
@@ -41,7 +42,7 @@
     "quiz:golden": "node scripts/quiz-golden.mjs",
     "pack:sprites": "node scripts/pack-sprites.mjs",
     "verify": "npm run typecheck && npm run lint && npm run check:arch && npm run check:size && npm run check:contextsize && npm run check:anysuppress && npm run check:docmap && npm run check:docdrift && npm run check:internalrefs && npm run check:lockfile && npm run check:diffsize && npm test",
-    "verify:full": "npm run verify && npm run test:coverage && npm run build && npm run build:offline && npm run check:bundle && npm run test:smoke"
+    "verify:full": "npm run verify && npm run test:coverage && npm run check:diffcoverage && npm run build && npm run build:offline && npm run check:bundle && npm run test:smoke"
   },
   "dependencies": {
     "phaser": "^4.2.1"
