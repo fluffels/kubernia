@@ -105,12 +105,21 @@ export function normalizePath(p) {
 export function parseDiffLines(text) {
   const byFile = new Map();
   let current = null;
+  let prevWasOldHeader = false;
   for (const raw of String(text).split(/\r?\n/)) {
-    if (raw.startsWith("+++ ")) {
+    // `+++ ` gilt NUR als Datei-Header, wenn direkt davor die `--- `-Zeile stand.
+    // Sonst kapert eine hinzugefügte INHALTS-Zeile, die mit `++ ` beginnt (im Diff
+    // also als `+++ …` erscheint), den Pfad: die folgenden Hunks würden einer
+    // Phantom-Datei zugeschlagen und fielen still aus der Messung — genau die
+    // Klasse „Gate misst weniger als es soll", gegen die der missing-Pfad schützt.
+    const isOldHeader = raw.startsWith("--- ");
+    if (raw.startsWith("+++ ") && prevWasOldHeader) {
       const target = raw.slice(4).trim();
       current = target === "/dev/null" ? null : normalizePath(target.replace(/^b\//, ""));
+      prevWasOldHeader = false;
       continue;
     }
+    prevWasOldHeader = isOldHeader;
     if (!raw.startsWith("@@") || current === null) continue;
     const m = /^@@ -\S+ \+(\d+)(?:,(\d+))? @@/.exec(raw);
     if (!m) continue;
@@ -153,9 +162,15 @@ export function parseLcov(text) {
 
 /** Ist die Datei überhaupt Gegenstand der Coverage-Messung? Deckungsgleich mit dem
  *  `include: ["src/**\/*.ts"]` in vite.config.ts — Content-JSON, Assets und Skripte
- *  außerhalb von `src` sind kein ausführbarer Spielcode und fallen raus. */
+ *  außerhalb von `src` sind kein ausführbarer Spielcode und fallen raus.
+ *
+ *  `.d.ts` ist bewusst ausgenommen: reine Typdeklarationen enthalten keine
+ *  ausführbare Zeile. Sie stehen heute zwar im Report (Vitest schließt sie per
+ *  Default nicht aus), aber sich darauf zu verlassen wäre spröde — ein Vitest-Bump,
+ *  der sie ausschließt, würde jeden PR auf `src/vite-env.d.ts` über den
+ *  missing-Pfad falsch rot machen. */
 export function isMeasured(path) {
-  return path.startsWith("src/") && path.endsWith(".ts");
+  return path.startsWith("src/") && path.endsWith(".ts") && !path.endsWith(".d.ts");
 }
 
 /** Schneidet die geänderten Zeilen gegen das lcov und aggregiert PRO SCHICHT.
@@ -224,7 +239,14 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env } = {}) 
 
   let diff;
   try {
-    diff = git(["diff", "-U0", base, "HEAD", "--", "src"]);
+    // Drei-Punkt (`base...HEAD`), NICHT `base HEAD`: die CI setzt KQ_DIFF_BASE auf
+    // `pull_request.base.sha`, also den aktuellen Kopf von main — nicht den
+    // Branchpunkt. Ein Zwei-Punkt-Diff würde jede Änderung, die main NACH dem
+    // Abzweigen bekam, spiegelverkehrt als Addition dieses Slices ausweisen und
+    // fremde Zeilen in den Nenner ziehen (falsches Rot aus fremdem Code). Die
+    // Drei-Punkt-Form misst gegen die Merge-Base und damit genau den eigenen Slice;
+    // wo `resolveBase` ohnehin schon eine Merge-Base liefert, ist sie identisch.
+    diff = git(["diff", "-U0", `${base}...HEAD`, "--", "src"]);
   } catch {
     return { skipped: true, failed: false, base };
   }
@@ -245,10 +267,15 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env } = {}) 
   }
 
   const verdict = evaluateByLayer(changed, parseLcov(lcovText));
-  const violated = verdict.below.length > 0 || verdict.missing.length > 0;
+  // Bewusste Trennung: `below` ist eine COVERAGE-Lücke (bewertbar, darum override-bar),
+  // `missing` ist ein MESSfehler — der Report kennt eine geänderte Datei nicht, es wurde
+  // also gar nicht gemessen. Den still zu übergehen wäre dasselbe „grün ohne Messung",
+  // das der noReport-Zweig oben verbietet; darum deckt ihn das Override NICHT ab, es
+  // gibt nur einen Ausweg: neu messen.
+  const violated = verdict.below.length > 0;
   const reason = overrideReason(env);
   const allowed = violated && reason !== null;
-  const stale = !violated && reason !== null;
+  const stale = !violated && verdict.missing.length === 0 && reason !== null;
 
   return {
     skipped: false,
@@ -257,7 +284,7 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env } = {}) 
     reason,
     allowed,
     stale,
-    failed: (violated && !allowed) || stale,
+    failed: (violated && !allowed) || stale || verdict.missing.length > 0,
   };
 }
 
@@ -304,10 +331,16 @@ function main() {
 
   renderBuckets(r, colors);
 
+  // Messfehler, nicht Coverage-Lücke: bewusst NICHT über das Override abkürzbar
+  // (`failed` bleibt gesetzt, der allowed-Zweig unten greift dann nicht).
   if (r.missing.length > 0) {
     console.error(red(`✖ ${r.missing.length} geänderte src-Datei(en) fehlen im Coverage-Report:`));
     for (const p of r.missing) console.error(`    ${p}`);
-    console.error(`\nDer Report ist veraltet oder unvollständig — neu messen:  npm run test:coverage`);
+    console.error(
+      `\nDer Report ist veraltet oder unvollständig — es wurde für diese Dateien NICHTS gemessen.\n` +
+        `Neu messen:  npm run test:coverage`,
+    );
+    process.exit(1);
   }
 
   if (r.stale) {

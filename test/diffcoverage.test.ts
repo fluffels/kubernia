@@ -6,9 +6,10 @@
  * genau die Zeilen, die der aktuelle Slice ANFASST — dieselbe Diff-Basis-Semantik
  * wie check:diffsize (#533), dieselben Schicht-Buckets wie das Aggregat-Gate.
  *
- * Rein struktureller Wächter (wie filesize/diffsize/docdrift), bewusst kein
- * Verhaltens-Test. Die Parse-/Bewertungs-/Override-Logik wird aus
- * scripts/check-diffcoverage.mjs importiert — EINE Quelle der Wahrheit (kein Drift
+ * Harness-Test in derselben Familie wie test/diffsize.test.ts und test/bundle.test.ts:
+ * er prüft das Verhalten der TOOLING-Logik über deren öffentliche Exporte, nicht das
+ * Spielverhalten — die Parse-/Bewertungs-/Override-Logik wird aus
+ * scripts/check-diffcoverage.mjs importiert, EINE Quelle der Wahrheit (kein Drift
  * zwischen Test und CLI). git und Dateisystem werden NICHT angefasst: `runGit` und
  * `readFile` sind injiziert, damit der Test deterministisch ohne Repo-/Coverage-
  * Zustand läuft.
@@ -17,6 +18,14 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+
+// Schicht-SSOT (bewusst CommonJS, siehe scripts/layers.cjs) — damit der Floor-Test
+// unten an die ECHTEN Schicht-Buckets gebunden ist statt an vier abgeschriebene Namen.
+const requireCjs = createRequire(import.meta.url);
+const { LAYERS } = requireCjs("../scripts/layers.cjs") as { LAYERS: Record<string, string> };
 
 type Env = Record<string, string | undefined>;
 type RunGit = (args: string[]) => string;
@@ -28,6 +37,9 @@ type Verdict = { buckets: Record<string, Bucket>; missing: string[]; below: stri
 /** Die öffentliche Oberfläche des Wächters, wie dieser Test sie nutzt. */
 type CheckDiffCoverageModule = {
   LAYER_DIFF_FLOORS: Record<string, number | null>;
+  LCOV_PATH: string;
+  normalizePath: (p: string) => string;
+  isMeasured: (path: string) => boolean;
   parseDiffLines: (text: string) => Changed;
   parseLcov: (text: string) => Lcov;
   evaluateByLayer: (changed: Changed, lcov: Lcov, floors?: Record<string, number | null>) => Verdict;
@@ -42,8 +54,17 @@ type CheckDiffCoverageModule = {
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkCovRaw from "../scripts/check-diffcoverage.mjs";
 
-const { LAYER_DIFF_FLOORS, parseDiffLines, parseLcov, evaluateByLayer, overrideReason, checkDiffCoverage } =
-  checkCovRaw as CheckDiffCoverageModule;
+const {
+  LAYER_DIFF_FLOORS,
+  LCOV_PATH,
+  normalizePath,
+  isMeasured,
+  parseDiffLines,
+  parseLcov,
+  evaluateByLayer,
+  overrideReason,
+  checkDiffCoverage,
+} = checkCovRaw as CheckDiffCoverageModule;
 
 /** Minimaler `git diff -U0`-Ausschnitt für eine Datei. */
 function diffFor(path: string, hunks: string[]): string {
@@ -88,6 +109,54 @@ describe("Diff-Coverage: Diff-Parsing", () => {
     assert.equal(changed.has("src/sim/pods.ts"), true);
   });
 
+  test("eine INHALTS-Zeile, die mit `++ ` beginnt, kapert den Datei-Header NICHT", () => {
+    // Im Diff erscheint sie als `+++ …` und sähe aus wie ein Header. Würde sie als
+    // solcher gelesen, landeten die folgenden Hunks unter einem Phantom-Pfad und
+    // fielen still aus der Messung — ein Gate, das weniger misst, als es soll.
+    const changed = parseDiffLines(
+      diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+++ inhalt mit plus", "+b", "@@ -9,0 +30 @@", "+c"]),
+    );
+    assert.deepEqual([...changed.keys()], ["src/sim/pods.ts"]);
+    assert.deepEqual([...(changed.get("src/sim/pods.ts") ?? [])].sort((a, b) => a - b), [1, 2, 30]);
+  });
+
+  test("gelöschte Datei leckt nicht in die nächste (echter /dev/null-Fall mit folgendem Hunk)", () => {
+    const changed = parseDiffLines(
+      [
+        "diff --git a/src/sim/alt.ts b/src/sim/alt.ts",
+        "--- a/src/sim/alt.ts",
+        "+++ /dev/null",
+        "@@ -1,2 +1,2 @@", // count > 0: NUR die /dev/null-Abzweigung kann das verwerfen
+        "-x",
+        diffFor("src/sim/neu.ts", ["@@ -0,0 +1 @@", "+y"]),
+      ].join("\n"),
+    );
+    assert.deepEqual([...changed.keys()], ["src/sim/neu.ts"]);
+  });
+
+  test("Umbenennung zählt nur den NEUEN Pfad", () => {
+    const changed = parseDiffLines(
+      ["diff --git a/src/sim/alt.ts b/src/sim/neu.ts", "--- a/src/sim/alt.ts", "+++ b/src/sim/neu.ts", "@@ -0,0 +1 @@", "+x"].join("\n"),
+    );
+    assert.deepEqual([...changed.keys()], ["src/sim/neu.ts"]);
+  });
+
+  test("Binärdatei-Block (ohne Hunks) leckt nicht in die Folgedatei", () => {
+    const changed = parseDiffLines(
+      [
+        "diff --git a/assets/x.png b/assets/x.png",
+        "Binary files a/assets/x.png and b/assets/x.png differ",
+        diffFor("src/sim/pods.ts", ["@@ -0,0 +1 @@", "+x"]),
+      ].join("\n"),
+    );
+    assert.deepEqual([...changed.keys()], ["src/sim/pods.ts"]);
+  });
+
+  test("CRLF-Zeilenenden (Windows-git) werden verarbeitet", () => {
+    const changed = parseDiffLines(diffFor("src/sim/pods.ts", ["@@ -0,0 +1 @@", "+x"]).replace(/\n/g, "\r\n"));
+    assert.deepEqual([...(changed.get("src/sim/pods.ts") ?? [])], [1]);
+  });
+
   test("mehrere Hunks derselben Datei werden vereinigt", () => {
     const changed = parseDiffLines(diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+a", "+b", "@@ -9,0 +20,1 @@", "+c"]));
     assert.deepEqual([...(changed.get("src/sim/pods.ts") ?? [])].sort((a, b) => a - b), [1, 2, 20]);
@@ -110,6 +179,29 @@ describe("Diff-Coverage: lcov-Parsing", () => {
     const lcov = parseLcov([lcovFor("src/sim/a.ts", { 1: 1 }), lcovFor("src/sim/b.ts", { 1: 0 })].join("\n"));
     assert.equal(lcov.size, 2);
     assert.equal(lcov.get("src/sim/b.ts")?.get(1), 0);
+  });
+
+  test("`DA:` vor jedem `SF:` wird ignoriert statt zu werfen (kaputter Report)", () => {
+    assert.deepEqual([...parseLcov("DA:1,1\nDA:2,0").keys()], []);
+  });
+
+  test("kaputte/leere DA-Zeilen werden verworfen, keine NaN-Zeilennummer", () => {
+    const lcov = parseLcov(["TN:", "SF:src/sim/a.ts", "DA:", "DA:x,y", "DA:3,1", "end_of_record"].join("\n"));
+    assert.deepEqual([...(lcov.get("src/sim/a.ts")?.keys() ?? [])], [3]);
+  });
+
+  test("DA ohne Trefferzahl zählt als ungetestet (0), nicht als getestet", () => {
+    assert.equal(parseLcov(["SF:src/sim/a.ts", "DA:3", "end_of_record"].join("\n")).get("src/sim/a.ts")?.get(3), 0);
+  });
+
+  test("fehlendes end_of_record vermischt zwei Dateien nicht (SF: schaltet um)", () => {
+    const lcov = parseLcov(["SF:src/sim/a.ts", "DA:1,1", "SF:src/sim/b.ts", "DA:2,0"].join("\n"));
+    assert.deepEqual([...(lcov.get("src/sim/a.ts")?.keys() ?? [])], [1]);
+    assert.deepEqual([...(lcov.get("src/sim/b.ts")?.keys() ?? [])], [2]);
+  });
+
+  test("leerer Report ergibt eine leere Abbildung, keinen Absturz", () => {
+    assert.equal(parseLcov("").size, 0);
   });
 });
 
@@ -184,6 +276,25 @@ describe("Diff-Coverage: Floors + Override (Ratchet-Disziplin)", () => {
     assert.equal(LAYER_DIFF_FLOORS["einstieg"], null);
   });
 
+  test("JEDE Schicht der SSOT hat einen Floor-Eintrag — eine neue Schicht fällt nicht still in 'berichtend'", () => {
+    assert.deepEqual(Object.keys(LAYER_DIFF_FLOORS).sort(), [...Object.values(LAYERS)].sort());
+  });
+
+  test("Erzeuger-Vertrag: vite.config.ts schreibt das lcov, das dieser Wächter liest", () => {
+    // Ohne diese Bindung könnte der `lcovonly`-Reporter entfernt werden, ohne dass ein
+    // Test rot wird — das Gate liefe dann in der CI auf „noReport" statt zu messen.
+    const viteConfig = readFileSync(fileURLToPath(new URL("../vite.config.ts", import.meta.url)), "utf8");
+    assert.match(viteConfig, /reporter:\s*\[[^\]]*"lcovonly"/);
+    assert.match(viteConfig, /reportsDirectory:\s*"coverage"/);
+    assert.equal(normalizePath(LCOV_PATH).endsWith("coverage/lcov.info"), true);
+  });
+
+  test("Typdeklarationen (.d.ts) fallen aus der Messung — sie enthalten keine ausführbare Zeile", () => {
+    assert.equal(isMeasured("src/vite-env.d.ts"), false);
+    assert.equal(isMeasured("src/sim/pods.ts"), true);
+    assert.equal(isMeasured("scripts/check-size.mjs"), false);
+  });
+
   test("leeres/whitespace-Override zählt nicht — Pflicht-Begründung", () => {
     assert.equal(overrideReason({}), null);
     assert.equal(overrideReason({ KQ_DIFFCOV_OVERRIDE: "   " }), null);
@@ -240,6 +351,87 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     });
     assert.equal(r.stale, true);
     assert.equal(r.failed, true);
+  });
+
+  test("geänderte src-Datei fehlt im Report → ROT (Anti-Gaming: Code verstecken)", () => {
+    const r = checkDiffCoverage({
+      runGit: (args) => (args[0] === "diff" ? diffFor("src/sim/versteckt.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
+      readFile: () => lcovFor("src/sim/andere.ts", { 1: 1 }),
+      env: { KQ_DIFF_BASE: "basesha" },
+    });
+    assert.equal(r.failed, true);
+    assert.deepEqual(r.missing, ["src/sim/versteckt.ts"]);
+  });
+
+  test("ein Messfehler (missing) ist NICHT über das Override abkürzbar — nur neu messen hilft", () => {
+    const r = checkDiffCoverage({
+      runGit: (args) => (args[0] === "diff" ? diffFor("src/sim/versteckt.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
+      readFile: () => lcovFor("src/sim/andere.ts", { 1: 1 }),
+      env: { KQ_DIFF_BASE: "basesha", KQ_DIFFCOV_OVERRIDE: "#1021 durchwinken" },
+    });
+    assert.equal(r.failed, true);
+    assert.equal(r.allowed, false);
+    // ... und das Override gilt dabei NICHT als stale (es gibt ja ein echtes Problem).
+    assert.equal(r.stale, false);
+  });
+
+  test("below UND missing zugleich: beide werden gemeldet, der Lauf ist rot", () => {
+    const runGit: RunGit = (args) =>
+      args[0] === "diff"
+        ? [
+            diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]),
+            diffFor("src/sim/versteckt.ts", ["@@ -0,0 +1 @@", "+z"]),
+          ].join("\n")
+        : "basesha";
+    const r = checkDiffCoverage({
+      runGit,
+      readFile: () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 }),
+      env: { KQ_DIFF_BASE: "basesha" },
+    });
+    assert.equal(r.failed, true);
+    assert.deepEqual(r.below, ["domaene"]);
+    assert.deepEqual(r.missing, ["src/sim/versteckt.ts"]);
+  });
+
+  test("reiner Doku-/Tooling-Slice braucht KEINEN Coverage-Report (grün statt rot)", () => {
+    const r = checkDiffCoverage({
+      runGit: (args) => (args[0] === "diff" ? diffFor("docs/agent-harness.md", ["@@ -0,0 +1 @@", "+text"]) : "basesha"),
+      readFile: () => {
+        throw new Error("ENOENT — es gab nichts zu messen");
+      },
+      env: { KQ_DIFF_BASE: "basesha" },
+    });
+    assert.equal(r.failed, false);
+    assert.equal(r.nothingToMeasure, true);
+  });
+
+  test("nicht messbarer Diff (git wirft trotz Basis) degradiert zu grün, statt main rot zu machen", () => {
+    const r = checkDiffCoverage({
+      runGit: (args) => {
+        if (args[0] === "diff") throw new Error("bad revision");
+        return "basesha";
+      },
+      readFile: () => lcovOk,
+      env: { KQ_DIFF_BASE: "basesha" },
+    });
+    assert.equal(r.skipped, true);
+    assert.equal(r.failed, false);
+  });
+
+  test("gemessen wird der EIGENE Slice (Drei-Punkt gegen die Merge-Base), nicht base..HEAD", () => {
+    // Sonst zählen Änderungen, die main NACH dem Abzweigen bekam, als Additionen
+    // dieses Slices — fremder Code im Nenner, potenziell falsches Rot.
+    const gesehen: string[][] = [];
+    checkDiffCoverage({
+      runGit: (args) => {
+        gesehen.push(args);
+        return args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha";
+      },
+      readFile: () => lcovOk,
+      env: { KQ_DIFF_BASE: "basesha" },
+    });
+    const diffArgs = gesehen.find((a) => a[0] === "diff");
+    assert.equal(diffArgs?.includes("basesha...HEAD"), true);
   });
 
   test("vollständig getesteter Slice ist grün", () => {
