@@ -9,14 +9,34 @@ Ein **gestaffelter** Review des aktuellen Ticket-Diffs — Vorbild sind produkti
 
 > Kein Ersatz für die CI-Gates, sondern eine Schicht **davor/darüber** (Feinschliff vor `main`). **Kein Auto-Merge** — der Review liefert Findings, das Mergen bleibt der normale [kubernia](../kubernia/SKILL.md)-Ablauf. Regeln/Begründungen: **[AGENTS.md](../../../AGENTS.md)**; die Harness-Gesamtsicht: [docs/agent-harness.md](../../../docs/agent-harness.md).
 
-## Was ist „der Diff"?
+## Was ist „der Diff"? — einmal materialisieren, nicht pro Lens erheben (#1034)
 
-Die Änderungen des aktuellen Tickets gegen `main` — im kubernia-Worktree-Ablauf also alles auf dem Feature-Branch plus noch Uncommittetes:
+Die Änderungen des aktuellen Tickets gegen `origin/main` — im kubernia-Worktree-Ablauf also alles auf dem Feature-Branch. **Der Diff wird EINMAL in eine Patch-Datei geschrieben; die Lenses bekommen den Pfad**, statt jede ihren eigenen `git diff` zu fahren:
 
 ```bash
-git diff main --stat        # Überblick: welche Dateien
-git diff main               # der volle Diff (Grundlage aller Lenses)
+git fetch origin
+git diff origin/main...HEAD --stat                      # Überblick: welche Dateien
+git diff origin/main...HEAD > "$TMP/kq-<nr>-r<runde>.patch"   # die EINE Grundlage aller Lenses
+git rev-parse HEAD                                      # Frische-Guard, s.u.
 ```
+
+**Warum Drei-Punkt (`origin/main...HEAD`)** statt `git diff main`: so sieht der Review genau den Slice, den `check:diffsize`/`check:diffcoverage` messen — ein Zwei-Punkt-Diff gegen ein lokal veraltetes `main` zieht fremde Zeilen mit hinein.
+
+**Warum überhaupt eine Datei:** gemessen an #1021 kostete ein Review 878k Tokens, und der dominante Anteil war **Beschaffung, nicht Analyse** — derselbe Diff fünfmal erhoben, die geänderten Dateien fünfmal vollständig gelesen, `AGENTS.md`/`CLAUDE.md` von jeder Lens erneut geöffnet. Das produziert keinen einzigen zusätzlichen Befund.
+
+**Ablage im Temp-/Scratch-Ordner, nicht im Worktree** — eine untracked Datei dort verunreinigt `git status` und könnte mitcommittet werden.
+
+⚠️ **Frische-Guard — der gefährliche Fehlerfall.** Die Patch-Datei trägt die **Runden-Nummer**, und jede Lens prüft mit einem `git rev-parse HEAD`, dass der Stand zu dem passt, bei dem der Patch geschrieben wurde. Ohne das liest Runde 2 der Konvergenzschleife (unten) den Patch aus Runde 1 und attestiert Fixes, die sie nie gesehen hat — ein Review, der von außen grün aussieht und nichts geprüft hat. Weicht der HEAD ab: Patch neu schreiben **und die Abweichung melden**, nicht den alten Stand reviewen.
+
+### Kontext-Diät je Lens (#1034)
+
+Jede Lens bekommt zusätzlich diese drei Regeln — sie kosten keinen Befund:
+
+1. **`AGENTS.md`/`CLAUDE.md` nicht erneut öffnen.** Unter Claude Code liegen sie durch den `@AGENTS.md`-Import ohnehin vollständig im Kontext; ein `Read` darauf ist reine Duplikation (~30k Tokens pro Lens). Wird eine Regel wörtlich gebraucht: **punktuell greppen**.
+2. **Nur den eigenen Regel-Ausschnitt.** Architektur → Schichtregeln + oberste Regel; Requirement-Treue → Doku-Disziplin + Spielstände; Test-Adäquanz → TDD + Red-Green. Die Ausschnitte der anderen Brillen liest man nicht mit — dafür gibt es ja die anderen Brillen.
+3. **Der Patch ist die Primärquelle.** Eine geänderte Datei nur öffnen, wenn ein konkreter Befund den umgebenden Kontext braucht — und dann gezielt um die Hunk-Zeilen, nicht die ganze Datei.
+
+> **Was die Diät ausdrücklich NICHT trifft:** die **Sabotage-/Red-Green-Prüfung** der Test-Lens (Implementierung testweise verfälschen → wird ein Test rot?). Sie ist der teuerste Schritt und der einzige, der harte Fehler statt Stil-Anmerkungen liefert — in der Messsession fand genau sie den einzigen echten Blocker. Sie bleibt vollständig; sie ist auch die eine erlaubte Ausnahme von „die Lens ändert nichts" (danach zurücksetzen und mit leerem `git status --porcelain` belegen).
 
 ## Ablauf — Stufe 0 zuerst, dann (nur bei Grün) die drei Lenses
 

@@ -95,6 +95,13 @@ const UMSETZUNG_SCHEMA = {
     worktree: { type: 'string', description: 'absoluter Pfad des Worktrees' },
     verifyGruen: { type: 'boolean', description: 'npm run verify mit Exit-Code 0 gelaufen' },
     verifyAusgabe: { type: 'string', description: 'bei rotem verify: die relevante Fehlerausgabe' },
+    diffPfad: {
+      type: 'string',
+      description:
+        'absoluter Pfad der geschriebenen Patch-Datei (#1034) — die Review-Lenses lesen sie statt je selbst git diff zu fahren',
+    },
+    diffStat: { type: 'string', description: 'Ausgabe von git diff --stat: welche Dateien, wie viele Zeilen' },
+    diffHead: { type: 'string', description: 'git rev-parse HEAD zum Zeitpunkt des Schreibens (Frische-Guard)' },
     beruehrtHarness: {
       type: 'boolean',
       description:
@@ -185,9 +192,62 @@ const NACHBESSERN_SCHEMA = {
   properties: {
     verifyGruen: { type: 'boolean', description: 'npm run verify nach dem Nachbessern mit Exit-Code 0' },
     verifyAusgabe: { type: 'string', description: 'bei weiterhin rotem verify: die relevante Fehlerausgabe' },
+    diffPfad: {
+      type: 'string',
+      description:
+        'absoluter Pfad der NEU geschriebenen Patch-Datei dieser Runde (#1034) — nie die aus der Vorrunde weiterverwenden',
+    },
+    diffStat: { type: 'string', description: 'Ausgabe von git diff --stat nach dem Nachbessern' },
+    diffHead: { type: 'string', description: 'git rev-parse HEAD nach dem Nachbessern (Frische-Guard)' },
     zusammenfassung: { type: 'string', description: 'was behoben, was bewusst liegen gelassen wurde (mit Grund)' },
   },
 }
+
+/**
+ * Der Auftrag, den Diff EINMAL zu materialisieren (#1034) — angehängt an die Phasen, die den
+ * Code ohnehin in der Hand haben (Umsetzen/Nachbessern). Bewusst kein eigener Agent dafür: ein
+ * zusätzlicher Round-Trip nur zum Schreiben einer Datei würde einen Teil der Ersparnis
+ * gleich wieder auffressen.
+ *
+ * Drei-Punkt-Diff gegen origin/main (Entscheidung zu #1034): so sieht der Review genau den
+ * Slice, den check:diffsize/check:diffcoverage messen — ein Zwei-Punkt-Diff gegen ein lokal
+ * veraltetes `main` zöge fremde Zeilen in den Review.
+ *
+ * Der Dateiname trägt die RUNDEN-Nummer. Ohne sie könnte Runde 2 den Patch aus Runde 1 lesen
+ * und Fixes attestieren, die sie nie gesehen hat — ein Review, der von außen grün aussieht,
+ * aber nichts geprüft hat. Der Pfad liegt im Temp-/Scratch-Ordner, nicht im Worktree: eine
+ * untracked Datei dort würde die git-status-Prüfungen verunreinigen und könnte mitcommittet
+ * werden (AGENTS.md § Scratch-Dumps in einen temporären Ordner).
+ */
+const patchAuftrag = (nr, runde) => `Zum Schluss, NACH dem Commit — den Diff für den Review einmal materialisieren (#1034):
+- git fetch origin, dann git diff origin/main...HEAD in eine Datei schreiben. Dateiname
+  kq-${nr}-r${runde}.patch, Ablage im Temp-/Scratch-Ordner, NICHT im Worktree (eine untracked
+  Datei dort verunreinigt git status und könnte mitcommittet werden).
+- Gib den absoluten Pfad in diffPfad zurück, die Ausgabe von git diff origin/main...HEAD --stat
+  in diffStat und git rev-parse HEAD in diffHead.
+Die Review-Lenses lesen danach diese eine Datei, statt den Diff je selbst zu erheben — das war
+gemessen der teuerste redundante Posten des Reviews. Schreib die Datei wirklich; ohne sie fällt
+der Review auf den alten, teuren Weg zurück.`
+
+/**
+ * Kontext-Diät für die Review-Lenses (#1034). Gemessen an #1021: fünf Lens-Pässe verbrannten
+ * ~878k Tokens, und der größte Einzelposten war reine BESCHAFFUNG — jeder Agent öffnete
+ * AGENTS.md (~24k) + CLAUDE.md (~6k) erneut per Read, obwohl der `@AGENTS.md`-Import in
+ * CLAUDE.md sie ohnehin vollständig in seinen Kontext legt. Das erzeugt keinen zusätzlichen
+ * Befund, nur Kosten. Zweitgrößter Posten: „lies die geänderten Dateien vollständig".
+ *
+ * Bewusst als Anweisung an den Agenten statt als Werkzeug-Verbot: die Lens SOLL eine Datei
+ * öffnen dürfen, wenn ein Befund den umgebenden Kontext braucht — nur eben gezielt.
+ */
+const KONTEXT_DIAET = `Kontext-Ökonomie (#1034) — halte dich daran, sie kostet dich keinen Befund:
+- AGENTS.md und CLAUDE.md liegen durch den @AGENTS.md-Import BEREITS vollständig in deinem
+  Kontext. Öffne sie NICHT erneut mit Read — das ist reine Duplikation. Brauchst du eine
+  Stelle wörtlich, greppe punktuell danach (Grep mit dem Regel-Begriff).
+- Die Patch-Datei ist deine Primärquelle. Öffne eine geänderte Datei nur, wenn ein konkreter
+  Befund den umgebenden Kontext braucht — und dann gezielt mit offset/limit um die
+  Hunk-Zeilen, nicht die ganze Datei.
+- Beschaffe nichts, was du nicht für einen Befund brauchst. Analyse ist dein Beitrag,
+  Beschaffung nicht.`
 
 /** Die drei Review-Brillen aus dem review-lenses-Skill (#532), je ein eigener Pass. */
 const LENSES = [
@@ -200,7 +260,9 @@ inhaltlich in die Domäne ein, ohne einen Import zu verletzen? God-Function (der
 check:size sieht nur Dateien, nicht Funktionen)? Duplizierung einer bestehenden Fabrik/
 Abstraktion statt Wiederverwendung? Und die ⭐ oberste Regel: trägt der Ansatz noch bei
 10× Content/NPCs/Welten, oder reproduziert er dasselbe Problem größer?
-Grundlagen: AGENTS.md § Architektur + § Oberste Regel, CLAUDE.md § Schichtregeln.`,
+Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):
+AGENTS.md § Architektur + § Oberste Regel, CLAUDE.md § Schichtregeln. Die Doku-/Test-Regeln
+gehören den anderen beiden Brillen — lies sie nicht mit.`,
   },
   {
     key: 'requirement-treue',
@@ -210,7 +272,9 @@ Prüfe Scope-Kriechen (ein Ein-Ticket-Diff bleibt klein; Aufgefallenes gehört i
 Issue, nicht inline mitgefixt). Spielinhalte/Quests/Steuerung berührt ⇒ README mitgezogen?
 Neues src/-Modul ⇒ Backtick-Pfad-Zeile im passenden docs/module/-Tiefendoc? Save-Format
 berührt ⇒ migriert (Version-Bump + Migrationskette), alter Stand bleibt heil?
-Grundlagen: AGENTS.md § Doku aktuell halten + § Spielstände.`,
+Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):
+AGENTS.md § Doku aktuell halten + § Spielstände. Schichtungs- und Test-Fragen gehören den
+anderen beiden Brillen — lies sie nicht mit.`,
   },
   {
     key: 'test-adaequanz',
@@ -218,10 +282,15 @@ Grundlagen: AGENTS.md § Doku aktuell halten + § Spielstände.`,
 Prüft er die öffentliche API / beobachtbares Verhalten (überlebt Refactoring) statt Interna?
 Sind Negativfälle dabei (kaputter Zustand, falsche Eingabe, „darf nicht passieren")?
 Kein False Positive: würde der Test rot, wenn man die Logik testweise verfälscht? Wo du
-zweifelst, sabotiere die Assertion/den Fix kurz, sieh rot, setze zurück. Bugfix ⇒ gab es
-den fehlschlagenden Repro-Test zuerst? Präsentations-Code (Phaser/DOM) wird im Browser
-verifiziert statt per Unit-Test — ist das passiert und belegt?
-Grundlagen: AGENTS.md § TDD ist der Default, § Tests gegen False Positives absichern.`,
+zweifelst, sabotiere die Assertion/den Fix kurz, sieh rot, setze zurück. Diese Sabotage ist
+die EINE Ausnahme von „du änderst nichts": sie ist erlaubt und bei Zweifel Pflicht, denn sie
+ist der einzige Schritt, der harte Fehler statt Stil-Anmerkungen findet. Sie wird NICHT
+wegoptimiert. Setz sie danach vollständig zurück und belege das mit einem leeren
+git status --porcelain. Bugfix ⇒ gab es den fehlschlagenden Repro-Test zuerst?
+Präsentations-Code (Phaser/DOM) wird im Browser verifiziert statt per Unit-Test — ist das
+passiert und belegt?
+Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):
+AGENTS.md § TDD ist der Default, § Tests gegen False Positives absichern.`,
   },
 ]
 
@@ -481,7 +550,9 @@ Committe mit (#${nr}) in der Nachricht. Gib Branch und absoluten Worktree-Pfad z
 
 Setze beruehrtHarness=true, wenn git diff --name-only main einen Harness-/Gate-Pfad trifft
 (${HARNESS_PFADE.join(', ')}) — dann greift später der Merge-Checkpoint (#1012): der PR
-wird nicht self-gemergt, sondern an die Maintainerin übergeben.`,
+wird nicht self-gemergt, sondern an die Maintainerin übergeben.
+
+${patchAuftrag(nr, 1)}`,
     { label: `umsetzen:#${nr}`, phase: 'Umsetzen', schema: UMSETZUNG_SCHEMA, model: 'sonnet' },
   )
 
@@ -507,7 +578,10 @@ wird nicht self-gemergt, sondern an die Maintainerin übergeben.`,
   // kein Lens-Pass, direkt nachbessern.
 
   // Ein Review-Pass: die drei Lenses parallel auf den aktuellen Diff (je ein frischer Agent).
-  const reviewPass = () =>
+  // Der Diff kommt als einmal geschriebene Patch-DATEI herein (#1034) — nicht als Auftrag, ihn
+  // selbst zu erheben. `runde` nummeriert die Patch-Datei, damit eine spätere Runde nie die
+  // Fassung der Vorrunde reviewt und Fixes attestiert, die sie nie gesehen hat.
+  const reviewPass = (diff, runde) =>
     parallel(
       LENSES.map(
         (lens) => () =>
@@ -517,15 +591,30 @@ wird nicht self-gemergt, sondern an die Maintainerin übergeben.`,
 ${ticketKontext}
 
 Du reviewst den Diff des Feature-Branches ${branch} im Worktree ${worktree}
-(Überblick: git diff main --stat, voller Diff: git diff main — mit absoluten Pfaden
-arbeiten, NICHT in den Worktree cd'en).
+(mit absoluten Pfaden arbeiten, NICHT in den Worktree cd'en).
 
-Umsetzungs-Zusammenfassung des ausführenden Agenten:
+${
+  diff.pfad
+    ? `Der Diff liegt bereits als Patch-Datei bereit — lies sie, statt ihn selbst zu erheben:
+  ${diff.pfad}
+${diff.stat ? `\nÜberblick (git diff --stat):\n${diff.stat}\n` : ''}
+Frische-Guard: die Datei wurde bei HEAD ${diff.head || '(unbekannt)'} geschrieben. Prüfe mit
+EINEM git rev-parse HEAD im Worktree, dass der Stand übereinstimmt. Weicht er ab, ist die Datei
+veraltet — dann schreibe sie mit git diff origin/main...HEAD neu und melde die Abweichung im
+Befund, statt einen alten Stand zu reviewen.`
+    : `⚠ Es liegt KEINE vorbereitete Patch-Datei vor (der ausführende Agent hat sie nicht
+geschrieben). Erhebe den Diff EINMAL selbst mit git diff origin/main...HEAD und arbeite dann
+damit weiter — und erwähne das fehlende Artefakt in deinem Bericht, es ist ein Harness-Defekt.`
+}
+
+Umsetzungs-Zusammenfassung des ausführenden Agenten (Runde ${runde}):
 ${umsetzung.zusammenfassung || '(keine)'}
 
 Lies NUR durch diese eine Brille, nicht vermischt „mal drüberschauen":
 
 ${lens.auftrag}
+
+${KONTEXT_DIAET}
 
 Du reviewst, du änderst NICHTS und mergst NICHTS. Findings müssen konkret und belegt
 sein — mit Ort (datei.ts:zeile), kein „könnte man schöner machen" ohne Fundstelle.
@@ -546,11 +635,17 @@ ein neues Issue) — nicht in die Findings.`,
   let verifyGruen = umsetzung.verifyGruen
   let letzteVerifyAusgabe = umsetzung.verifyAusgabe
   let reviewRunden = 0
+  // Der materialisierte Diff (#1034). Wird nach jeder Nachbesserung ersetzt, nie
+  // weiterverwendet — ein Patch aus der Vorrunde würde einen Review vortäuschen.
+  let diff = { pfad: umsetzung.diffPfad, stat: umsetzung.diffStat, head: umsetzung.diffHead }
+  if (!diff.pfad) {
+    log('⚠ Kein materialisierter Diff vom Umsetzungs-Agenten (#1034) — die Lenses erheben ihn selbst (teurer).')
+  }
 
   for (;;) {
     if (verifyGruen) {
       phase('Review')
-      lensBerichte = await reviewPass()
+      lensBerichte = await reviewPass(diff, reviewRunden + 1)
       if (lensBerichte.length < LENSES.length) {
         log(
           `⚠ Nur ${lensBerichte.length} von ${LENSES.length} Lens-Pässen lieferten ein Ergebnis — die fehlenden sind ungeprüft.`,
@@ -615,11 +710,19 @@ ${hinweise.map((f) => `- [${f.ort}] ${f.befund}`).join('\n')}
 }
 Danach npm run verify erneut, bis grün. Bleib im Ticket-Scope: Punkte, die ein eigenes
 Ticket brauchen, nicht inline mitfixen (⭐ oberste Regel). Committe mit (#${nr}).
-Melde verifyGruen und was du behoben bzw. bewusst liegen gelassen hast (mit Grund).`,
+Melde verifyGruen und was du behoben bzw. bewusst liegen gelassen hast (mit Grund).
+
+${patchAuftrag(nr, reviewRunden + 1)}`,
       { label: `nachbessern ${reviewRunden}/${MAX_REVIEW_RUNDEN}:#${nr}`, phase: 'Nachbessern', schema: NACHBESSERN_SCHEMA },
     )
     verifyGruen = nachbesserung ? !!nachbesserung.verifyGruen : false
     letzteVerifyAusgabe = (nachbesserung && nachbesserung.verifyAusgabe) || letzteVerifyAusgabe
+    // Frische-Guard (#1034): der Patch der NÄCHSTEN Runde ist der neue — bewusst KEIN Fallback
+    // auf den alten Pfad. Lieber lässt die nächste Lens ihn einmal selbst erheben (sie meldet
+    // das) als dass sie stillschweigend den Vor-Fix-Stand als geprüft ausgibt.
+    diff = nachbesserung
+      ? { pfad: nachbesserung.diffPfad, stat: nachbesserung.diffStat, head: nachbesserung.diffHead }
+      : { pfad: undefined, stat: undefined, head: undefined }
     if (nachbesserung && nachbesserung.zusammenfassung) log(String(nachbesserung.zusammenfassung).split('\n')[0])
   }
 
