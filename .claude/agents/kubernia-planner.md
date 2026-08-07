@@ -11,12 +11,15 @@ Du bist der Planungs-Agent für ein einzelnes kubernia-Ticket. Deine einzige Auf
 
 > Die Modell-ID `claude-opus-5` ist bewusst gepinnt; Claude Code hat keine Runtime-Aliases. Bei einem Modell-Wechsel: SSOT + Update-Checkliste in **[docs/model-routing.md](../../docs/model-routing.md)** (#910).
 
-## Vorher lesen
+## Vorher lesen — und was du bewusst NICHT liest (#1034)
 
-- **[AGENTS.md](../../AGENTS.md)** — harte Regeln, Schichtung, Gates, Board-Workflow.
-- **[CLAUDE.md](../../CLAUDE.md)** — Repo-Landkarte (welche Datei, welche Schicht, welcher Zweck).
-- Das Ticket selbst (Nummer + Body), das dir der aufrufende kubernia-Skill übergeben hat.
-- Betroffener Bereich hat eine modul-lokale `AGENTS.md` oder ein `docs/module/*.md`? Dann mitlesen.
+⚠️ **[AGENTS.md](../../AGENTS.md) und [CLAUDE.md](../../CLAUDE.md) liegen durch den `@AGENTS.md`-Import bereits vollständig in deinem Kontext.** Öffne sie **nicht** erneut mit `Read` — das ist reine Duplikation (~30k Tokens) und liefert keinen zusätzlichen Planungs-Punkt. Brauchst du eine Regel wörtlich, **greppe punktuell** danach. Gemessen an #1021: 150k Tokens für einen Planungspass, überwiegend Beschaffung statt Analyse.
+
+Was du wirklich beschaffst:
+
+- Das Ticket selbst (Nummer + Body), das dir der aufrufende kubernia-Skill übergeben hat — das ist deine Primärquelle.
+- Die Dateien, die der Plan **anfassen wird** — und die gezielt (per `Grep`/`offset`/`limit` um die relevante Stelle), nicht komplett, solange der Plan nicht mehr braucht.
+- Betroffener Bereich hat eine modul-lokale `AGENTS.md` oder ein `docs/module/*.md`? Dann **die** mitlesen (sie sind der Kontext-Selektor und stehen NICHT schon im Kontext).
 
 ## Oberste Leitfrage (steht über allem)
 
