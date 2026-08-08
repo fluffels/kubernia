@@ -343,11 +343,78 @@ const HARNESS_PFADE = [
   'docs/agent-harness',
 ]
 
+// ── args-Auswertung (#1027) — Anfang ─────────────────────────────────────────
+// EINE Normalisierungsstelle für die gesamte args-Grenze: die Laufzeit reicht args
+// als STRING durch — auch ein übergebenes Objekt kommt als JSON-String an (beides
+// gemessen, nicht vermutet). Die alte Fassung prüfte nur `typeof args === 'number'`
+// bzw. `typeof args === 'object'`; beide Zweige fielen still durch, der Workflow
+// claimte dann das oberste Board-Item statt des gemeinten Tickets (~275k Tokens am
+// falschen Ticket) und der Pre-Flight-Resume verlor seine Antworten lautlos.
+// Getrennte Ad-hoc-Checks je Feld wären genau das „shotgun parsing", das dieser Fix
+// beseitigt — darum werden Nummer UND klaerungAntworten hier gemeinsam gelesen.
+//
+// ⚠ Der Block ist bewusst SELBSTTRAGEND: zwischen den Markern darf nichts aus dem
+// Modul referenziert werden (nur Sprach-Globals). test/workflow-args.test.ts
+// schneidet ihn genau an diesen Markern aus und führt ihn per node:vm real aus —
+// beim Umbenennen/Verschieben die Marker mitziehen, sonst wird der Test laut rot.
+function argsLesen(roh) {
+  // Bewusst Regex statt Number(): Number('0x10') ergibt 16, Number('') und
+  // Number(' ') ergeben 0 — beides wären lautlos falsche Ticketnummern. Ein
+  // führendes '#' und Whitespace sind erlaubt, weil Ticketnummern real so
+  // getippt werden (dasselbe Zugeständnis macht `gh issue view`).
+  const zahl = (wert) => {
+    if (typeof wert === 'number') return Number.isSafeInteger(wert) && wert > 0 ? wert : null
+    if (typeof wert !== 'string') return null
+    const treffer = wert.trim().match(/^#?(\d+)$/)
+    if (!treffer) return null
+    const n = Number(treffer[1])
+    return Number.isSafeInteger(n) && n > 0 ? n : null
+  }
+
+  if (roh === undefined || roh === null) return {}
+
+  let wert = roh
+  if (typeof wert === 'string') {
+    const text = wert.trim()
+    if (text === '') return {}
+    if (text.startsWith('{') || text.startsWith('[')) {
+      try {
+        wert = JSON.parse(text)
+      } catch {
+        return { fehler: `args ist weder eine Ticketnummer noch gültiges JSON: ${text}` }
+      }
+    }
+  }
+
+  if (wert && typeof wert === 'object' && !Array.isArray(wert)) {
+    const ergebnis = {}
+    if (Array.isArray(wert.klaerungAntworten)) ergebnis.klaerungAntworten = wert.klaerungAntworten
+    if (wert.nummer !== undefined && wert.nummer !== null) {
+      const n = zahl(wert.nummer)
+      if (n === null) return { fehler: `args.nummer ist keine gültige Ticketnummer: ${JSON.stringify(wert.nummer)}` }
+      ergebnis.nummer = n
+    }
+    return ergebnis
+  }
+
+  const n = zahl(wert)
+  if (n === null) return { fehler: `args ist keine gültige Ticketnummer: ${JSON.stringify(roh)}` }
+  return { nummer: n }
+}
+// ── args-Auswertung (#1027) — Ende ───────────────────────────────────────────
+
 async function ticketAbarbeiten() {
   // ── Phase 1: Auswahl ───────────────────────────────────────────────────────
   phase('Auswahl')
 
-  const gewuenscht = typeof args === 'number' ? args : args && args.nummer
+  // Vor dem ersten agent()-Aufruf, damit ein unbrauchbares args keine Tokens am
+  // falschen Ticket verbrennt: lieber lauter Abbruch als stiller Fremd-Claim.
+  const eingabe = argsLesen(args)
+  if (eingabe.fehler) {
+    log(`⛔ ${eingabe.fehler} — Abbruch statt stillem Rückfall aufs oberste Board-Item (#1027).`)
+    return { ergebnis: 'ungueltige-args', meldung: eingabe.fehler }
+  }
+  const gewuenscht = eingabe.nummer
 
   const auswahl = await agent(
     `${kopf}
@@ -465,8 +532,10 @@ Repo: ${REPO}. Liefere den Plan wie in deiner Rolle beschrieben.`,
   // in args.klaerungAntworten (Auswahl + Plan kommen dann aus dem Cache).
   phase('Pre-Flight')
 
-  const klaerungAntworten =
-    args && typeof args === 'object' && Array.isArray(args.klaerungAntworten) ? args.klaerungAntworten : null
+  // Aus derselben Normalisierung wie die Nummer (#1027): die frühere Prüfung
+  // `typeof args === 'object'` griff nie, weil die Laufzeit auch Objekte als
+  // JSON-String durchreicht — der Resume verlor seine Antworten lautlos.
+  const klaerungAntworten = eingabe.klaerungAntworten || null
 
   const preflight = await agent(
     `${kopf}
