@@ -19,8 +19,11 @@ Soll ein **bestimmtes** Ticket laufen statt des obersten freien Board-Items, die
 Workflow({ name: "kubernia-ticket", args: 815 })
 ```
 
+**Die Form ist egal, seit #1027.** Die Laufzeit reicht `args` als **String** durch — auch ein übergebenes Objekt kommt als JSON-String an (gemessen). Vorher prüfte das Skript nur `typeof args === 'number'`, wodurch die Nummer still verfiel und das **oberste Board-Item** statt des gemeinten Tickets geclaimt wurde; derselbe Fehlmodus fraß auch die `klaerungAntworten` des Resumes. Jetzt normalisiert **eine** Stelle die ganze `args`-Grenze: `815`, `"815"`, `"#815"`, `{nummer: 815}` und `'{"nummer": "815"}'` führen alle zum selben Ticket. **Lässt sich aus einem gesetzten `args` weder eine Nummer noch Klärungsantworten ableiten, bricht der Lauf ab** (`ergebnis: "ungueltige-args"`) statt still auf das Board-Item zurückzufallen — ein stiller Fremd-Claim ist teurer als ein Abbruch. Ein reines Resume-`args` (`{klaerungAntworten: [...]}`) trägt bewusst keine Nummer und läuft normal weiter. Bewacht von [`test/workflow-args.test.ts`](../../../test/workflow-args.test.ts).
+
 Der Workflow läuft im Hintergrund. Danach: den zurückgegebenen Endstand knapp berichten — was gelaufen ist, welche Nummer, ob gemergt. Sonderausgänge (#1012):
-- **`wartet-auf-klaerung`** — die Pre-Flight-Klärung hält an: die `offeneFragen` der Maintainerin vorlegen (z.B. per `AskUserQuestion`), dann `Workflow({ name: "kubernia-ticket", resumeFromRunId, args: { klaerungAntworten: [...] } })`.
+- **`wartet-auf-klaerung`** — die Pre-Flight-Klärung hält an: die `offeneFragen` der Maintainerin vorlegen (z.B. per `AskUserQuestion`), dann `Workflow({ name: "kubernia-ticket", resumeFromRunId, args: { klaerungAntworten: [...] } })`. **Lief der Ursprungslauf auf einer vorgegebenen Nummer, diese mitgeben** — `args: { nummer: 815, klaerungAntworten: [...] }` —, sonst fehlt sie dem Auswahl-Prompt beim Resume.
+- **`ungueltige-args`** — aus `args` ließ sich keine Ticketnummer ableiten; der Lauf bricht bewusst ab, statt still das oberste Board-Item zu claimen (#1027). `args` korrigieren und neu starten (kein Resume nötig, es wurde noch kein Agent gestartet).
 - **`wartet-auf-freigabe`** — Harness-/Leitplanken-Diff: PR offen + CI grün, aber bewusst **nicht** self-gemergt. Der Maintainerin zum Review + `maintainer-approved` + Merge übergeben; Worktree bleibt bis dahin stehen.
 - **`festgefahren` / `review-festgefahren`** — die Entscheidungsoptionen zeigen, statt weiter zu probieren.
 
