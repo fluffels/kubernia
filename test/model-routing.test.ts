@@ -43,6 +43,11 @@
  * `scripts/check-` ist gate-config-geschützt (Goodhart-Guard #903, Label-Pflicht), und
  * für rein doku-strukturelle Wächter gibt es die etablierte test-only-Familie.
  *
+ * ⚠️ Bekannte Duplikation: die Retired-Claims-Mechanik unten ist strukturgleich zu
+ * test/claude-bridge.test.ts (#992). Bei zwei Kopien noch Rule-of-Three-konform, aber
+ * beticketet als **#1046** (nach test/support/ ziehen) – jscpd ist bewusst
+ * nicht-blockierend, es fängt das also kein Gate automatisch.
+ *
  * Ausführen mit:  npm test
  */
 import { describe, test } from "vitest";
@@ -107,11 +112,14 @@ function claudeMarkdown(): string[] {
     }
     return out;
   };
-  // Bewusst nur die VERSIONIERTEN Ordner statt „alles außer worktrees": .gitignore trackt
-  // unter .claude/ nur skills/, agents/, workflows/ und settings.json. Ein Walk über den
-  // ganzen Baum scannte auch lokal abgelegte, untrackte Dateien mit – und verlangte für
-  // sie einen Checklisten-Eintrag, den niemand committen kann (lokal rot, CI grün).
-  return [`${REPO_ROOT}.claude/skills`, `${REPO_ROOT}.claude/agents`].flatMap(walk);
+  // Bewusst genau die VERSIONIERTEN Ordner statt „alles außer worktrees": .gitignore trackt
+  // unter .claude/ nur skills/, agents/ und workflows/ (+ settings.json). Ein Walk über den
+  // ganzen Baum scannte auch lokal abgelegte, untrackte Dateien mit – und verlangte für sie
+  // einen Checklisten-Eintrag, den niemand committen kann (lokal rot, CI grün).
+  // `workflows` ist mit drin, obwohl dort heute nur .js liegt: `collectMarkdown` klammert
+  // `.claude` komplett aus, ein künftiges .claude/workflows/*.md entginge sonst BEIDEN
+  // Prüfungen – Pin-Checkliste und Drift-Scan.
+  return [`${REPO_ROOT}.claude/skills`, `${REPO_ROOT}.claude/agents`, `${REPO_ROOT}.claude/workflows`].flatMap(walk);
 }
 
 /**
@@ -151,9 +159,17 @@ const checklistTableRows = (section: string) =>
  * Frontmatter zu prüfen ließe die Checkliste genau bei dem Pin-Typ verrotten, den die SSOT
  * selbst verlangt – wer eine harte ID hinschreibt, muss sie beim nächsten Modell-Release
  * anfassen, egal an welcher Stelle der Datei sie steht.
+ *
+ * **Escape-Hatch, symmetrisch zu retiredRoutingClaims:** Codeblöcke und Inline-Backticks
+ * zählen NICHT. Eine Datei, die eine Modell-ID nur zitiert (Negativbeispiel, historische
+ * Notiz, die Anleitung „schreib `model: claude-haiku-…` in den Explore-Spawn"), pinnt
+ * nichts – sie deshalb in die Checkliste zu zwingen wäre ein Falsch-Rot, und der von der
+ * Fehlermeldung nahegelegte „Fix" wäre sachlich falsch. **Achtung Frontmatter:** das
+ * `---`-Preamble ist kein Codeblock und bleibt darum voll geprüft.
  */
 function hatHartenPin(md: string): boolean {
-  return /model:\s*["']?claude-[a-z0-9.-]+/i.test(md);
+  const ohneZitate = stripFencedCode(md).replace(/`[^`\n]*`/g, "");
+  return /model:\s*["']?claude-[a-z0-9.-]+/i.test(ohneZitate);
 }
 
 /**
@@ -229,16 +245,22 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
     // der Tier-Aliase je Phase): die Zuordnung Phase↔Aufruf ist Sache des Workflows,
     // hier geht es nur darum, dass die Overrides nicht ersatzlos verschwinden.
     const wf = read(".claude/workflows/kubernia-ticket.js");
+    // An den echten `agent(…)`-SPAWN gebunden (über sein Schema), nicht datei-weit: die
+    // `meta.phases`-Einträge oben tragen dieselben Tier-Namen als reine Anzeige-Labels
+    // fürs /workflows-Panel. Ein datei-weiter Match bliebe grün, wenn der Spawn sein
+    // `model` verliert und nur die Kosmetik stehen bleibt — ein Gate, das nichts gemessen
+    // hat, darf nicht grün melden.
     assert.match(
       wf,
-      /model:\s*["']sonnet["']/,
-      "Im Phasen-Workflow fehlt der Coding-Tier für die Umsetzungsphase (`model: 'sonnet'`) – " +
-        "ohne ihn erbt der Umsetzungs-Subagent das Session-Modell (#910/#1035).",
+      /UMSETZUNG_SCHEMA[^}]*model:\s*["']sonnet["']/s,
+      "Im Phasen-Workflow fehlt der Coding-Tier am Umsetzungs-`agent()` (`model: 'sonnet'`) – " +
+        "ohne ihn erbt der Umsetzungs-Subagent das Session-Modell (#910/#1035). " +
+        "Achtung: die `meta.phases`-Zeilen oben sind nur Anzeige-Labels und zählen nicht.",
     );
     assert.match(
       wf,
-      /model:\s*["']opus["']/,
-      "Im Phasen-Workflow fehlt der starke Tier für die Review-Lenses (`model: 'opus'`) – " +
+      /LENS_SCHEMA[^}]*model:\s*["']opus["']/s,
+      "Im Phasen-Workflow fehlt der starke Tier am Lens-`agent()` (`model: 'opus'`) – " +
         "der Review darf nicht auf den Coding-Tier absacken (#1012/#1035).",
     );
   });
@@ -259,7 +281,11 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
 
 describe("Die Pin-Checkliste in docs/model-routing.md bleibt vollständig (#910/#1035)", () => {
   test("jede .claude-Datei mit hartem Modell-Pin steht in der Checkliste – und umgekehrt", () => {
-    const checkliste = pinChecklistSection(read(ROUTING_SSOT));
+    // BEIDE Richtungen sehen dieselbe Quelle (nur die Tabellenzeilen). Prüfte die
+    // Hinrichtung gegen den ganzen Abschnitt, würde eine Datei, die im Fließtext des
+    // „Nicht nachzuziehen"-Absatzes verlinkt ist, als „gelistet" gelten — ein später dort
+    // hinzugefügter harter Pin rutschte still durch.
+    const checkliste = checklistTableRows(pinChecklistSection(read(ROUTING_SSOT)));
     const gepinnt = claudeMarkdown()
       .filter((abs) => hatHartenPin(readFileSync(abs, "utf8")))
       .map((abs) => abs.slice(REPO_ROOT.length).replace(/\\/g, "/"));
@@ -274,7 +300,7 @@ describe("Die Pin-Checkliste in docs/model-routing.md bleibt vollständig (#910/
     );
 
     // Gegenrichtung: die Checkliste darf keine Datei führen, die gar keinen Pin (mehr) trägt.
-    const gelistet = [...checklistTableRows(checkliste).matchAll(/`(\.claude\/[^`]+\.md)`/g)].map((m) => m[1]);
+    const gelistet = [...checkliste.matchAll(/`(\.claude\/[^`]+\.md)`/g)].map((m) => m[1]);
     const stale = gelistet.filter((rel) => !gepinnt.includes(rel));
     assert.deepEqual(
       stale,
@@ -288,6 +314,9 @@ describe("Die Pin-Checkliste in docs/model-routing.md bleibt vollständig (#910/
     assert.ok(hatHartenPin("---\nmodel: claude-opus-5\n---\n"), "harte ID ist ein Pin");
     assert.ok(!hatHartenPin("---\nmodel: sonnet\n---\n"), "Tier-Alias ist KEIN Pin");
     assert.ok(!hatHartenPin("---\nname: x\n---\n"), "ohne model kein Pin");
+    assert.ok(hatHartenPin('Spawn: Agent({model: "claude-haiku-4-5-20251001"})'), "Body-Pin zählt");
+    assert.ok(!hatHartenPin("Schreibe `model: claude-haiku-4-5` in den Spawn."), "Backtick-Zitat pinnt nichts");
+    assert.ok(!hatHartenPin("```\nmodel: claude-opus-5\n```\n"), "Codeblock-Beispiel pinnt nichts");
     assert.ok(claudeMarkdown().length > 0, "der .claude-Walk darf nicht leer laufen (sonst prüft der Test nichts)");
     // Der Abschnitts-Schnitt muss wirklich schneiden – sonst prüfte die Gegenrichtung die ganze Datei.
     const section = pinChecklistSection("## 3. Gepinnte Dateien\ndrin\n## 4. Weiter\ndraußen\n");
@@ -299,8 +328,12 @@ describe("Keine Doku behauptet mehr den alten Routing-Ist-Zustand (#1035)", () =
   test("kein Markdown im Repo schreibt die Umsetzung auf den Session-Default", () => {
     const violations: string[] = [];
     const rel = (abs: string) => abs.replace(/\\/g, "/").replace(REPO_ROOT.replace(/\\/g, "/"), "");
+    // `collectMarkdown` liefert repo-RELATIVE Pfade, `claudeMarkdown` absolute. Ohne das
+    // Auflösen gegen REPO_ROOT hinge der Lauf am cwd: startet Vitest nicht im Repo-Root,
+    // gäbe es ein nacktes ENOENT statt einer verständlichen Gate-Meldung.
+    const absolut = (f: string) => (/^([A-Za-z]:|\/)/.test(f) ? f : `${REPO_ROOT}${f}`);
     for (const file of [...collectMarkdown(REPO_ROOT), ...claudeMarkdown()]) {
-      for (const v of retiredRoutingClaims(readFileSync(file, "utf8"))) {
+      for (const v of retiredRoutingClaims(readFileSync(absolut(file), "utf8"))) {
         violations.push(`${rel(file)}:${v.line} behauptet „${v.term}" – ${v.home}. Zeile: „${v.text}"`);
       }
     }
