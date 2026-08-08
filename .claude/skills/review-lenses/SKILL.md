@@ -61,6 +61,27 @@ npm run verify   # typecheck → lint → check:arch → check:size → check:co
 
 **Jeder Lens ist ein eigener, fokussierter Pass** — nicht ein vermischter „schau mal drüber"-Blick. Jeweils **nur** durch die eine Brille lesen, dann strukturierte Findings ausgeben (Format unten). Reihenfolge ist egal, aber alle drei laufen.
 
+**Jede Lens läuft als eigener Subagent auf dem starken Tier (#1035)** — nicht inline im Hauptagenten:
+
+```
+Agent({
+  subagent_type: "general-purpose",
+  description: "Lens <n>: <Architektur|Requirement-Treue|Test-Adäquanz>",
+  model: "opus", effort: "high",
+  prompt: "<Brille WÖRTLICH> · Arbeitsverzeichnis: <worktree> · Patch: <TMP>/kq-<nr>-r<runde>.patch · erwarteter HEAD: <sha> · <Kontext-Diät WÖRTLICH> · <Findings-Format WÖRTLICH>"
+})
+```
+
+⚠️ **Die Lenses lesen, sie schreiben nicht — mit genau einer Ausnahme.** Drei parallele Subagenten teilen sich **einen** Worktree. Fährt einer Sabotage-Proben (die Red-Green-Prüfung der Test-Lens, s.o.) oder „hilft" mit einem Edit, prüfen die anderen gegen eine veränderte Basis und melden Findings, die gegen den echten Stand nicht reproduzierbar sind — beim Einführungs-PR dieses Umbaus (#1035) genau so passiert. Darum: **jeder Lens-Prompt sagt ausdrücklich „du liest nur, du änderst nichts"**, und die **Sabotage-Proben der Test-Lens laufen als letzte bzw. allein** — danach `git status --porcelain` als leer belegen. (Der Workflow hat das Problem nicht: dort sind die Lenses schema-gebunden und ändern nichts.)
+
+⚠️ **Die Blöcke wörtlich in den Prompt kopieren, nicht referenzieren.** Ein `general-purpose`-Subagent liest diese Datei **nicht** — „die Brille unten", „Kontext-Diät oben" oder „Format wie im Skill" sind für ihn leer, und die #1034-Diät fiele still weg. Der Workflow löst dasselbe durch Interpolation (`${KONTEXT_DIAET}`, `lens.auftrag` — bewacht von `test/review-context.test.ts`); auf diesem Pfad ist es Handarbeit des Orchestrators.
+
+Warum überhaupt Subagenten:
+- **Der Review darf nicht mit dem Coding-Tier mitrutschen (#1035).** Der [kubernia](../kubernia/SKILL.md)-Skill setzt per Frontmatter `model: sonnet` für die **Umsetzung**, und dieser Override gilt (nach bisheriger Beobachtung, siehe [docs/model-routing.md](../../../docs/model-routing.md)) für den **Rest des Turns**. Liefe eine Lens inline im Hauptagenten, reviewte Sonnet — die eine Konventionshälfte repariert, die andere still kaputt. Ein Subagent mit eigenem `model:` umgeht das vollständig.
+- **Kein Self-Grading — schon vorher gefordert (#1012), jetzt auch strukturell erfüllt.** Inline urteilt derselbe Kontext, der den Code gerade geschrieben hat; die Konvergenzschleife unten verlangt ohnehin „frische, unabhängige Kritiker". Der Subagent macht aus der Verhaltensregel eine Eigenschaft des Ablaufs — und ist **billiger**, weil er nur Patch + Auftrag sieht statt der vollen Ticket-Historie.
+
+Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket.js`), der seine Lenses längst so spawnt.
+
 **Lens 1 — Architektur.** Was `dependency-cruiser` (`check:arch`) statisch **nicht** sieht:
 - Liegt neue Logik in der **richtigen Schicht**? (pure Domäne ↔ Anwendung ↔ Präsentation — Domäne/Anwendung bleibt Phaser-/DOM-frei und Node-testbar.)
 - Schleicht sich **Präsentation in die Domäne** (oder umgekehrt) inhaltlich ein, ohne einen Import zu verletzen?
