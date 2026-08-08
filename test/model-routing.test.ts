@@ -1,0 +1,268 @@
+/* Modell-Routing-Wächter (#1035) – „Planung stark, Umsetzung schnell" darf nicht
+ * ins Leere greifen, und keine Doku darf das Gegenteil behaupten.
+ *
+ * Vorgeschichte: AGENTS.md § Modellwahl (#910) verlangt den Coding-Tier für die
+ * Umsetzung. Im Phasen-Workflow ist das gesetzt (`agent(..., {model:'sonnet'})`),
+ * auf dem **Skill-Pfad** – dem tool-neutralen, maßgeblichen Weg – schreibt aber der
+ * **Hauptagent** den Code. Der lief auf dem Session-Modell: startet die Maintainerin
+ * aus einer Opus-Session (der Normalfall, weil Planung/Review Opus verlangen), tippte
+ * die gesamte Umsetzung auf Opus. Die Regel existierte, der Hebel war nicht gezogen.
+ *
+ * Der Wächter deckt die drei Fehlklassen ab, die das leise zurückbringen:
+ *
+ *   1. **Der Hebel verschwindet.** Die Frontmatter-Zeile `model:` im kubernia-Skill
+ *      ist eine Zeile – gelöscht/umformuliert fällt die Umsetzung wortlos auf das
+ *      Session-Modell zurück, ohne dass irgendein Gate meckert.
+ *   2. **Der Review wird still mitdemoviert.** `model:` gilt für den Hauptagenten
+ *      für den Rest des Turns. Liefen die Lens-Pässe wie früher INLINE im
+ *      Hauptagenten, zöge die Coding-Tier-Zeile den Review von Opus auf Sonnet –
+ *      Fix der einen Konventionshälfte, Regression der anderen. Darum spawnt
+ *      review-lenses seine Lenses als eigene Subagenten mit explizitem Opus-Routing.
+ *   3. **Prosa-Drift.** Eine Doku, die weiter „Session-Default" als Ist-Zustand der
+ *      Umsetzung behauptet, schickt den nächsten Agenten auf die alte Fährte. Genau
+ *      diese Klasse sieht `check:docdrift` (#529) nicht – es prüft Kommandos/Links.
+ *
+ * Dazu hält Test 2 das SSOT-Versprechen von docs/model-routing.md ehrlich („diese
+ * ZWEI Dateien anpassen"): jeder harte Modell-Pin unter `.claude/` muss dort gelistet
+ * sein und umgekehrt – sonst verrottet die Update-Checkliste beim nächsten Modell.
+ *
+ * Grenze dieses Wächters (bewusst, ehrlich): Er belegt, dass die Zeile DA ist und die
+ * Doku nicht dagegen driftet – NICHT, dass Claude Code das Frontmatter zur Laufzeit
+ * wirklich anwendet. Das ist Tool-Verhalten und für einen Vitest-Lauf unbeobachtbar
+ * (gleiche Ehrlichkeit wie die „Grenze"-Notiz in test/claude-bridge.test.ts).
+ *
+ * Fitness-Function-Kategorie neben layering/filesize/docmap/claude-bridge, nicht mit
+ * Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`:
+ * `scripts/check-` ist gate-config-geschützt (Goodhart-Guard #903, Label-Pflicht), und
+ * für rein doku-strukturelle Wächter gibt es die etablierte test-only-Familie.
+ *
+ * Ausführen mit:  npm test
+ */
+import { describe, test } from "vitest";
+import assert from "node:assert/strict";
+import { readFileSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+// Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im tsconfig)
+// – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as checkDocDrift from "../scripts/check-docdrift.mjs";
+
+// Begründete Ausnahme, identisch zu test/claude-bridge.test.ts: das .mjs hat kein
+// Declaration-File, der Namespace ist für tsc „error typed". Eng begrenzter
+// Inline-Disable statt einer Gate-Config-Änderung.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+const stripFencedCode: (md: string) => string = checkDocDrift.stripFencedCode;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+const collectMarkdown: (rootDir?: string) => string[] = checkDocDrift.collectMarkdown;
+
+const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
+const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");
+
+/** Der Skill, der die Umsetzung tippt – hier MUSS der Coding-Tier stehen (#1035). */
+const UMSETZUNGS_SKILL = ".claude/skills/kubernia/SKILL.md";
+/** Der Skill, dessen Lenses trotz Coding-Tier-Umsetzung auf dem starken Tier bleiben müssen. */
+const REVIEW_SKILL = ".claude/skills/review-lenses/SKILL.md";
+/** Die SSOT-/Checklisten-Datei für Modell-Pins. */
+const ROUTING_SSOT = "docs/model-routing.md";
+
+/**
+ * Das YAML-Frontmatter einer Markdown-Datei als flache Key→Value-Map. Bewusst
+ * minimal (keine YAML-Abhängigkeit): Frontmatter ist hier immer ein `---`-Block
+ * am Dateianfang mit einfachen `key: wert`-Zeilen. Kein Frontmatter ⇒ leere Map.
+ */
+function frontmatter(md: string): Record<string, string> {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(md);
+  if (!m) return {};
+  const out: Record<string, string> = {};
+  for (const line of m[1].split(/\r?\n/)) {
+    const kv = /^([A-Za-z_][\w-]*):\s*(.*)$/.exec(line);
+    if (kv) out[kv[1]] = kv[2].trim().replace(/^["']|["']$/g, "");
+  }
+  return out;
+}
+
+/** Bezeichnet der Wert den Coding-Tier? Alias `sonnet` ODER eine gepinnte Sonnet-ID. */
+const istCodingTier = (wert: string) => /(^|[-\s])sonnet/i.test(wert);
+
+/**
+ * Alle Markdown-Dateien unter `.claude/` (Skills + Agent-Definitionen), rekursiv.
+ * `collectMarkdown` sammelt die Repo-Doku, nicht die Harness-Definitionen – darum hier
+ * ein eigener, winziger Walk.
+ */
+function claudeMarkdown(dir = `${REPO_ROOT}.claude`): string[] {
+  const out: string[] = [];
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (e.name === "worktrees" || e.name === "node_modules") continue;
+    const p = `${dir}/${e.name}`;
+    if (e.isDirectory()) out.push(...claudeMarkdown(p));
+    else if (e.name.endsWith(".md")) out.push(p);
+  }
+  return out;
+}
+
+/**
+ * Nur der Abschnitt „Gepinnte Dateien" (die Update-Checkliste) von docs/model-routing.md.
+ * Bewusst NICHT die ganze Datei: sie **verlinkt** alias-geroutete Skills auch anderswo
+ * (§4 Konvention), und eine Erwähnung dort ist ein Verweis, kein Checklisten-Eintrag —
+ * gegen die ganze Datei zu prüfen würde jeden solchen Link als „gepinnt" missverstehen.
+ */
+function pinChecklistSection(ssot: string): string {
+  const lines = ssot.split(/\r?\n/);
+  const start = lines.findIndex((l) => /^##\s.*[Gg]epinnte Dateien/.test(l));
+  assert.ok(start >= 0, `In ${ROUTING_SSOT} fehlt der Abschnitt „Gepinnte Dateien" – die Update-Checkliste (#910).`);
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((l) => /^##\s/.test(l));
+  return (end === -1 ? rest : rest.slice(0, end)).join("\n");
+}
+
+/** Trägt die Datei einen HARTEN Modell-Pin (`model: claude-…`) statt eines Tier-Alias? */
+function hatHartenPin(md: string): boolean {
+  const model = frontmatter(md).model ?? "";
+  return /^claude-/.test(model);
+}
+
+/**
+ * Die abgelegte Behauptung. Nach #1035 gibt es keinen wahren Satz mehr, in dem die
+ * Umsetzung „auf dem Session-Default" läuft – der Coding-Tier ist auf BEIDEN Pfaden
+ * gesetzt (Workflow per `agent({model})`, Skill per Frontmatter).
+ *
+ * **Escape-Hatch** (gleiche Logik wie test/claude-bridge.test.ts): Wer den Begriff
+ * diskutieren muss, setzt ihn in Inline-Backticks oder einen Codeblock – Zitat ist
+ * keine Behauptung. Bewusst NICHT gelistet: „Session-Modell". Der Satz „ein Subagent
+ * ohne Modell-Angabe erbt das Session-Modell" ist die weiterhin GÜLTIGE Warnung, die
+ * überhaupt erst zur Konvention geführt hat.
+ */
+const RETIRED_ROUTING_CLAIMS: { term: string; home: string }[] = [
+  {
+    term: "Session-Default",
+    home: `seit #1035 tippt die Umsetzung auf beiden Pfaden den Coding-Tier – im Workflow per agent({model}), im Skill per Frontmatter in ${UMSETZUNGS_SKILL}`,
+  },
+];
+
+/** Zeilen in `md`, die noch den abgelegten Routing-Ist-Zustand behaupten. */
+function retiredRoutingClaims(md: string): { line: number; term: string; home: string; text: string }[] {
+  const found: { line: number; term: string; home: string; text: string }[] = [];
+  stripFencedCode(md)
+    .split(/\r?\n/)
+    .forEach((raw, i) => {
+      const line = raw.replace(/`[^`\n]*`/g, "");
+      for (const { term, home } of RETIRED_ROUTING_CLAIMS) {
+        if (line.includes(term)) found.push({ line: i + 1, term, home, text: raw.trim().slice(0, 120) });
+      }
+    });
+  return found;
+}
+
+describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#1035)", () => {
+  test(`${UMSETZUNGS_SKILL} routet per Frontmatter auf den Coding-Tier`, () => {
+    const fm = frontmatter(read(UMSETZUNGS_SKILL));
+    assert.ok(
+      fm.model && istCodingTier(fm.model),
+      `Im Frontmatter von ${UMSETZUNGS_SKILL} fehlt ein \`model:\` auf dem Coding-Tier (Alias \`sonnet\`). ` +
+        "Ohne die Zeile schreibt der Hauptagent den Code auf dem Session-Modell – aus einer Opus-Session " +
+        `also die komplette Umsetzung auf Opus (#1035). Gefunden: model=„${fm.model ?? "(fehlt)"}".`,
+    );
+    assert.ok(
+      fm.effort,
+      `Im Frontmatter von ${UMSETZUNGS_SKILL} fehlt \`effort:\` – der Reasoning-Aufwand der Umsetzungsphase ` +
+        "wird sonst ebenfalls von der Session geerbt (#1035).",
+    );
+  });
+
+  test(`${REVIEW_SKILL} hält die Lenses auf dem starken Tier (kein Mitziehen durch den Coding-Tier)`, () => {
+    const md = read(REVIEW_SKILL);
+    assert.match(
+      md,
+      /model:\s*["']?opus/,
+      `${REVIEW_SKILL} muss seine Lens-Pässe explizit auf den starken Tier routen (\`model: "opus"\`). ` +
+        "Das Frontmatter-`model:` des kubernia-Skills gilt für den REST DES TURNS – laufen die Lenses inline " +
+        "im Hauptagenten, reviewt Sonnet statt Opus, und der finale Blick wäre zudem ein Self-Grading des " +
+        "eigenen Fixes (#1012).",
+    );
+  });
+
+  test("Erkennung greift wirklich (Red-Green): Frontmatter-Parser + Tier-Erkennung", () => {
+    // No-op-Schutz: ein Wächter, der immer grün ist, wäre wertlos.
+    assert.deepEqual(frontmatter("---\nname: x\nmodel: sonnet\neffort: medium\n---\nText"), {
+      name: "x",
+      model: "sonnet",
+      effort: "medium",
+    });
+    assert.deepEqual(frontmatter("# Kein Frontmatter\nmodel: sonnet\n"), {}, "nur ein `---`-Block am Anfang zählt");
+    assert.deepEqual(frontmatter('---\nmodel: "claude-opus-5"\n---\n').model, "claude-opus-5", "Quotes fallen weg");
+    assert.ok(istCodingTier("sonnet") && istCodingTier("claude-sonnet-5"), "Alias und Pin gelten beide");
+    assert.ok(!istCodingTier("opus") && !istCodingTier("claude-opus-5") && !istCodingTier(""), "Opus ist kein Coding-Tier");
+  });
+});
+
+describe("Die Pin-Checkliste in docs/model-routing.md bleibt vollständig (#910/#1035)", () => {
+  test("jede .claude-Datei mit hartem Modell-Pin steht in der Checkliste – und umgekehrt", () => {
+    const checkliste = pinChecklistSection(read(ROUTING_SSOT));
+    const gepinnt = claudeMarkdown()
+      .filter((abs) => hatHartenPin(readFileSync(abs, "utf8")))
+      .map((abs) => abs.slice(REPO_ROOT.length).replace(/\\/g, "/"));
+
+    const fehlend = gepinnt.filter((rel) => !checkliste.includes(rel));
+    assert.deepEqual(
+      fehlend,
+      [],
+      `Diese Dateien pinnen eine harte Modell-ID, stehen aber nicht in ${ROUTING_SSOT}. Damit verrottet die ` +
+        `Update-Checkliste beim nächsten Modell-Release – entweder eintragen oder auf einen Tier-Alias ` +
+        `umstellen (Alias schlägt Pin, wo „das jeweils aktuelle Modell dieses Tiers" richtig ist):\n${fehlend.join("\n")}`,
+    );
+
+    // Gegenrichtung: die Checkliste darf keine Datei führen, die gar keinen Pin (mehr) trägt.
+    const gelistet = [...checkliste.matchAll(/`(\.claude\/[^`]+\.md)`/g)].map((m) => m[1]);
+    const stale = gelistet.filter((rel) => !gepinnt.includes(rel));
+    assert.deepEqual(
+      stale,
+      [],
+      `${ROUTING_SSOT} listet diese Dateien als gepinnt, sie tragen aber keinen harten \`model: claude-…\`-Pin ` +
+        `(mehr). Stale Einträge machen die Checkliste unglaubwürdig – Zeile entfernen:\n${stale.join("\n")}`,
+    );
+  });
+
+  test("Erkennung greift wirklich (Red-Green): Pin vs. Alias vs. kein Modell", () => {
+    assert.ok(hatHartenPin("---\nmodel: claude-opus-5\n---\n"), "harte ID ist ein Pin");
+    assert.ok(!hatHartenPin("---\nmodel: sonnet\n---\n"), "Tier-Alias ist KEIN Pin");
+    assert.ok(!hatHartenPin("---\nname: x\n---\n"), "ohne model kein Pin");
+    assert.ok(claudeMarkdown().length > 0, "der .claude-Walk darf nicht leer laufen (sonst prüft der Test nichts)");
+    // Der Abschnitts-Schnitt muss wirklich schneiden – sonst prüfte die Gegenrichtung die ganze Datei.
+    const section = pinChecklistSection("## 3. Gepinnte Dateien\ndrin\n## 4. Weiter\ndraußen\n");
+    assert.ok(section.includes("drin") && !section.includes("draußen"), "die Checkliste endet an der nächsten ##-Überschrift");
+  });
+});
+
+describe("Keine Doku behauptet mehr den alten Routing-Ist-Zustand (#1035)", () => {
+  test("kein Markdown im Repo schreibt die Umsetzung auf den Session-Default", () => {
+    const violations: string[] = [];
+    const rel = (abs: string) => abs.replace(/\\/g, "/").replace(REPO_ROOT.replace(/\\/g, "/"), "");
+    for (const file of [...collectMarkdown(REPO_ROOT), ...claudeMarkdown()]) {
+      for (const v of retiredRoutingClaims(readFileSync(file, "utf8"))) {
+        violations.push(`${rel(file)}:${v.line} behauptet „${v.term}" – ${v.home}. Zeile: „${v.text}"`);
+      }
+    }
+    assert.deepEqual(
+      violations,
+      [],
+      "Veraltete Routing-Beschreibung gefunden. Entweder nachziehen (der Coding-Tier ist auf beiden Pfaden " +
+        `gesetzt) oder – wenn der Begriff bewusst zitiert wird – in Inline-Backticks setzen:\n${violations.join("\n")}`,
+    );
+  });
+
+  test("Erkennung greift wirklich (Red-Green): Behauptung ja, Zitat/gültige Warnung nein", () => {
+    assert.deepEqual(
+      retiredRoutingClaims("Der Skill läuft auf dem Session-Default.").map((v) => [v.line, v.term]),
+      [[1, "Session-Default"]],
+      "eine echte Behauptung muss zählen",
+    );
+    assert.deepEqual(retiredRoutingClaims("Der Begriff `Session-Default` ist abgelegt."), [], "Backticks = Zitat");
+    assert.deepEqual(retiredRoutingClaims("```\nSession-Default\n```\n"), [], "im Codeblock zählt nicht");
+    assert.deepEqual(
+      retiredRoutingClaims("Ein Subagent ohne Modell-Angabe erbt das Session-Modell."),
+      [],
+      "die weiterhin gültige Warnung darf NICHT rot werden",
+    );
+  });
+});

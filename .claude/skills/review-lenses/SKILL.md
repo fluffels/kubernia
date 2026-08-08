@@ -61,6 +61,23 @@ npm run verify   # typecheck → lint → check:arch → check:size → check:co
 
 **Jeder Lens ist ein eigener, fokussierter Pass** — nicht ein vermischter „schau mal drüber"-Blick. Jeweils **nur** durch die eine Brille lesen, dann strukturierte Findings ausgeben (Format unten). Reihenfolge ist egal, aber alle drei laufen.
 
+**Jede Lens läuft als eigener Subagent auf dem starken Tier (#1035)** — nicht inline im Hauptagenten:
+
+```
+Agent({
+  subagent_type: "general-purpose",
+  description: "Lens <n>: <Architektur|Requirement-Treue|Test-Adäquanz>",
+  model: "opus", effort: "high",
+  prompt: "<Brille unten> · Patch: <TMP>/kq-<nr>-r<runde>.patch · erwarteter HEAD: <sha> · Findings-Format unten · Kontext-Diät oben"
+})
+```
+
+Zwei Gründe, beide hart:
+- **Der Review darf nicht mit dem Coding-Tier mitrutschen.** Der [kubernia](../kubernia/SKILL.md)-Skill setzt per Frontmatter `model: sonnet` für die **Umsetzung**, und dieser Override gilt für den **Rest des Turns**. Liefe eine Lens inline im Hauptagenten, reviewte Sonnet — die eine Konventionshälfte repariert, die andere still kaputt (#1035). Ein Subagent mit eigenem `model:` umgeht das vollständig.
+- **Kein Self-Grading (#1012).** Inline urteilt derselbe Kontext, der den Code gerade geschrieben hat. Ein frischer Subagent ist der unabhängige Kritiker, den die Konvergenzschleife unten ohnehin fordert — und er ist **billiger**, weil er nur Patch + Auftrag sieht statt der vollen Ticket-Historie.
+
+Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket.js`), der seine Lenses längst so spawnt.
+
 **Lens 1 — Architektur.** Was `dependency-cruiser` (`check:arch`) statisch **nicht** sieht:
 - Liegt neue Logik in der **richtigen Schicht**? (pure Domäne ↔ Anwendung ↔ Präsentation — Domäne/Anwendung bleibt Phaser-/DOM-frei und Node-testbar.)
 - Schleicht sich **Präsentation in die Domäne** (oder umgekehrt) inhaltlich ein, ohne einen Import zu verletzen?

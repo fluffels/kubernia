@@ -1,6 +1,8 @@
 ---
 name: kubernia
 description: Arbeitet eigenständig EIN offenes kubernia-Ticket end-to-end ab (auswählen → per Assignee claimen → eigener git-Worktree → umsetzen → ggf. Doku im selben Branch anpassen → EINEN PR öffnen und bis zum Merge bringen (CI abwarten, Rot fixen) → Worktree/Branch aufräumen), kollisionssicher neben parallel laufenden Agenten. Ist das Ticket ein zu großes Epic/eine Phase, wird es stattdessen in viele konkrete neue Tickets aufgeteilt und das Epic auf done geschlossen (nicht selbst umgesetzt). Auslösen bei "arbeite ein kubernia-Ticket ab", "neues kubernia-Ticket", "starte ein kubernia-Ticket", "nimm dir ein kubernia-Ticket", "setz das nächste kubernia-Ticket um", "nimm das nächste kubernia-Ticket", "mach das nächste kubernia-Ticket", "nächstes Ticket für kubernia", oder wenn autonom das nächste offene kubernia-Issue umgesetzt werden soll.
+model: sonnet
+effort: medium
 ---
 
 # Kubernia-Ticket abarbeiten
@@ -32,6 +34,8 @@ Agent({
 ```
 
 Den zurückgegebenen Plan als Orientierung nutzen (betroffene Dateien, TDD-Schritte, Gate-Check, Risiken); er ersetzt nicht das eigene Urteil. Ist der Agent nicht verfügbar (Modell nicht im Account), den Plan kurz selbst skizzieren und weitermachen.
+
+**Modell-Routing dieses Skills (#1035).** Das Frontmatter oben setzt `model: sonnet` + `effort: medium`: die **Umsetzung** tippt damit auf dem Coding-Tier, statt das Session-Modell zu erben (aus einer Opus-Session liefe sonst die komplette Umsetzung auf Opus — die Regel „Umsetzung schnell" griff auf diesem Pfad bis #1035 ins Leere, weil hier der **Hauptagent** codet und nicht ein `model:`-fähiger Subagent). Die zwei Phasen, die den **starken** Tier brauchen, laufen bewusst als **eigene Subagenten** und sind vom Coding-Tier unberührt: die **Planung** über `kubernia-planner` (Opus 5 / `high`, oben) und der **Review** über die Lens-Subagenten des [review-lenses](../review-lenses/SKILL.md)-Skills (Opus / `high`). ⚠️ **Ehrliche Grenze:** der Frontmatter-Override gilt für den **Rest des Turns**. Hält der Lauf für eine Pre-Flight-Rückfrage an, beginnt mit der Antwort der Maintainerin ein **neuer** Turn auf dem Session-Modell — dann den Skill erneut aufrufen, damit das Routing wieder greift. Tier-Strategie + Pin-Checkliste: [docs/model-routing.md](../../../docs/model-routing.md).
 
 **Human-in-the-Loop-Checkpoints (#1012) — verbindlich, Regel-Heimat [AGENTS.md › Human-in-the-Loop-Checkpoints](../../../AGENTS.md).** Zwei Pflicht-Stopps: **(a) Pre-Flight-Klärung** — direkt nach Claim + Plan klassifizieren, ob das Ticket eine menschliche Entscheidung braucht (Harness-/Gate-Dateien, 🎨 Optik, ⚠️ riskante Weiche, oder der Plan meldet eine offene Weiche); trifft das zu, **vor dem Coden per `AskUserQuestion` mit der Maintainerin klären** statt zu raten. **(b) Merge-Checkpoint** — fasst der Diff Harness-/Leitplanken-Dateien an (`AGENTS.md`, `CLAUDE.md`, `.claude/`, `.agents/`, `docs/agent-harness*`, plus die Goodhart-Gate-Config), **nicht selbst mergen**: PR öffnen, CI grün, dann an die Maintainerin übergeben (sie setzt `maintainer-approved` und mergt).
 
