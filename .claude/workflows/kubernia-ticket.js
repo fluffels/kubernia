@@ -388,11 +388,22 @@ function argsLesen(roh) {
 
   if (wert && typeof wert === 'object' && !Array.isArray(wert)) {
     const ergebnis = {}
-    if (Array.isArray(wert.klaerungAntworten)) ergebnis.klaerungAntworten = wert.klaerungAntworten
+    if (wert.klaerungAntworten !== undefined && wert.klaerungAntworten !== null) {
+      if (!Array.isArray(wert.klaerungAntworten)) {
+        return { fehler: `args.klaerungAntworten ist keine Liste: ${JSON.stringify(wert.klaerungAntworten)}` }
+      }
+      ergebnis.klaerungAntworten = wert.klaerungAntworten
+    }
     if (wert.nummer !== undefined && wert.nummer !== null) {
       const n = zahl(wert.nummer)
       if (n === null) return { fehler: `args.nummer ist keine gültige Ticketnummer: ${JSON.stringify(wert.nummer)}` }
       ergebnis.nummer = n
+    }
+    // Ein Objekt, aus dem sich NICHTS ableiten lässt (vertippter Schlüssel wie
+    // {nummber: 965}, leeres Objekt), ist derselbe stille Fremd-Claim wie zuvor —
+    // also ebenfalls lauter Abbruch statt Rückfall aufs Board-Item.
+    if (ergebnis.nummer === undefined && ergebnis.klaerungAntworten === undefined) {
+      return { fehler: `args-Objekt enthält weder nummer noch klaerungAntworten: ${JSON.stringify(wert)}` }
     }
     return ergebnis
   }

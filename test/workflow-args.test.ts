@@ -134,6 +134,16 @@ describe("Workflow-args: unbrauchbare Eingabe bricht ab, statt still zurückzufa
     ["Objekt mit Nummer 0", { nummer: 0 }],
     ["JSON-String mit Müll-Nummer", '{"nummer": "abc"}'],
     ["kaputtes JSON", "{nummer: 965"],
+    // Vertippter Schlüssel: früher ein stiller Rückfall aufs Board-Item —
+    // also exakt der Fehlmodus, den #1027 beenden soll.
+    ["Objekt mit vertipptem Schlüssel", { nummber: 965 }],
+    ["JSON-String mit vertipptem Schlüssel", '{"nummber": 965}'],
+    ["leeres Objekt", {}],
+    ["klaerungAntworten als String statt Liste", { klaerungAntworten: "A" }],
+    ["Array statt Nummer", [965]],
+    ["JSON-Array", "[965]"],
+    ["Kommazahl als Zahl (nicht String)", 9.5],
+    ["jenseits von Number.MAX_SAFE_INTEGER", "99999999999999999999"],
   ])("%s -> Fehler, keine Nummer", (_name, eingabe) => {
     const ergebnis = argsLesen(eingabe)
     expect(ergebnis.fehler).toBeTruthy()
@@ -149,15 +159,32 @@ describe("Workflow-args: unbrauchbare Eingabe bricht ab, statt still zurückzufa
   })
 })
 
+/**
+ * Bewusst eine andere Test-Kategorie als die Blöcke oben: die prüfen VERHALTEN
+ * (vm-ausgeführte Logik), dieser prüft STRUKTUR/Text — Fitness-Function-Art.
+ * Beides steht hier zusammen, weil es dieselbe Regression bewacht; die Grenze
+ * ist genau diese Notiz.
+ *
+ * ⚠ Was diese Prüfungen NICHT können: `ticketAbarbeiten()` ist nicht ausführbar
+ * (Top-Level-await gegen Laufzeit-Globals), also belegen sie nur die REIHENFOLGE
+ * im Quelltext, nicht die Erreichbarkeit zur Laufzeit. Ein in `if (false)`
+ * eingewickelter Abbruch bliebe unbemerkt. Sie fangen den konkreten
+ * Rückfall-in-die-alte-Zeile — mehr nicht, und das ehrlich benannt.
+ */
 describe("Workflow-args: der Orchestrator nutzt den Parser wirklich", () => {
-  // Verhaltenstest oben + Verdrahtungstest hier: eine perfekte Funktion nützt
-  // nichts, wenn ticketAbarbeiten() sie nicht aufruft.
   it("ruft argsLesen(args) auf und hat die alte typeof-number-Zeile nicht mehr", () => {
     expect(quelle).toContain("argsLesen(args)")
     expect(quelle).not.toContain("typeof args === 'number' ? args : args && args.nummer")
   })
 
-  it("bricht ab, BEVOR der erste Agent Tokens verbrennt", () => {
+  // Gegenstück zur Nummer-Zeile darüber: ohne diesen Riegel könnte der
+  // Resume-Pfad unbemerkt auf die alte, nie greifende Form zurückfallen.
+  it("speist auch klaerungAntworten aus der Normalisierung", () => {
+    expect(quelle).toContain("eingabe.klaerungAntworten")
+    expect(quelle).not.toContain("Array.isArray(args.klaerungAntworten)")
+  })
+
+  it("steht im Quelltext vor dem ersten Agenten-Aufruf", () => {
     const abbruch = quelle.indexOf("'ungueltige-args'")
     const ersterAgent = quelle.indexOf("const auswahl = await agent(")
     expect(abbruch).toBeGreaterThan(-1)
