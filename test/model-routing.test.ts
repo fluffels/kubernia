@@ -26,10 +26,17 @@
  * ZWEI Dateien anpassen"): jeder harte Modell-Pin unter `.claude/` muss dort gelistet
  * sein und umgekehrt – sonst verrottet die Update-Checkliste beim nächsten Modell.
  *
- * Grenze dieses Wächters (bewusst, ehrlich): Er belegt, dass die Zeile DA ist und die
- * Doku nicht dagegen driftet – NICHT, dass Claude Code das Frontmatter zur Laufzeit
- * wirklich anwendet. Das ist Tool-Verhalten und für einen Vitest-Lauf unbeobachtbar
- * (gleiche Ehrlichkeit wie die „Grenze"-Notiz in test/claude-bridge.test.ts).
+ * Grenzen dieses Wächters (bewusst, ehrlich – ein Wächter, dessen Kopf mehr verspricht
+ * als er misst, erzeugt genau das falsche Sicherheitsgefühl):
+ *   - Er belegt, dass die Zeile DA ist und die Doku nicht dagegen driftet – NICHT, dass
+ *     Claude Code das Frontmatter zur Laufzeit wirklich anwendet. Das ist Tool-Verhalten
+ *     und für einen Vitest-Lauf unbeobachtbar (wie die „Grenze"-Notiz in claude-bridge).
+ *   - Die Drift-Erkennung ist **literal und case-sensitiv**: „Session Default" ohne
+ *     Bindestrich rutscht durch (bekannte Grenze des Begriffs-Ansatzes, identisch in
+ *     test/claude-bridge.test.ts).
+ *   - Beim `effort:` wird nur die **Anwesenheit** geprüft, nicht die Stufe (siehe dort).
+ *   - Der Workflow-Pfad wird nur grob geprüft (Tier-Aliase vorhanden), nicht welche
+ *     Phase welchen Alias bekommt – die Phasen-Zuordnung bleibt Review-Sache.
  *
  * Fitness-Function-Kategorie neben layering/filesize/docmap/claude-bridge, nicht mit
  * Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`:
@@ -90,15 +97,21 @@ const istCodingTier = (wert: string) => /(^|[-\s])sonnet/i.test(wert);
  * `collectMarkdown` sammelt die Repo-Doku, nicht die Harness-Definitionen – darum hier
  * ein eigener, winziger Walk.
  */
-function claudeMarkdown(dir = `${REPO_ROOT}.claude`): string[] {
-  const out: string[] = [];
-  for (const e of readdirSync(dir, { withFileTypes: true })) {
-    if (e.name === "worktrees" || e.name === "node_modules") continue;
-    const p = `${dir}/${e.name}`;
-    if (e.isDirectory()) out.push(...claudeMarkdown(p));
-    else if (e.name.endsWith(".md")) out.push(p);
-  }
-  return out;
+function claudeMarkdown(): string[] {
+  const walk = (dir: string): string[] => {
+    const out: string[] = [];
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = `${dir}/${e.name}`;
+      if (e.isDirectory()) out.push(...walk(p));
+      else if (e.name.endsWith(".md")) out.push(p);
+    }
+    return out;
+  };
+  // Bewusst nur die VERSIONIERTEN Ordner statt „alles außer worktrees": .gitignore trackt
+  // unter .claude/ nur skills/, agents/, workflows/ und settings.json. Ein Walk über den
+  // ganzen Baum scannte auch lokal abgelegte, untrackte Dateien mit – und verlangte für
+  // sie einen Checklisten-Eintrag, den niemand committen kann (lokal rot, CI grün).
+  return [`${REPO_ROOT}.claude/skills`, `${REPO_ROOT}.claude/agents`].flatMap(walk);
 }
 
 /**
@@ -116,10 +129,31 @@ function pinChecklistSection(ssot: string): string {
   return (end === -1 ? rest : rest.slice(0, end)).join("\n");
 }
 
-/** Trägt die Datei einen HARTEN Modell-Pin (`model: claude-…`) statt eines Tier-Alias? */
+/**
+ * Nur die TABELLENZEILEN der Checkliste (`| … |`). Die Gegenrichtung („was hier steht,
+ * muss auch gepinnt sein") darf ausschließlich echte Einträge sehen: im selben Abschnitt
+ * steht der Absatz „Nicht nachzuziehen — bewusst per Alias statt Pin", dessen ganzer Zweck
+ * es ist, alias-geroutete Dateien zu NENNEN. Verlinkt jemand sie dort regulär mit Pfad
+ * (wie §4 es tut), meldete ein abschnittsweiter Scan sie als „stale" – ein Wächter, der
+ * bei korrekter Verlinkung rot wird, ist der klassische Abschalt-Kandidat.
+ */
+const checklistTableRows = (section: string) =>
+  section
+    .split(/\r?\n/)
+    .filter((l) => /^\s*\|/.test(l))
+    .join("\n");
+
+/**
+ * Trägt die Datei einen HARTEN Modell-Pin (`claude-…`) statt eines Tier-Alias?
+ *
+ * Bewusst **Frontmatter UND Body**: docs/model-routing.md schreibt für Explore-Subagenten
+ * ausdrücklich einen Pin im Skill-*Text* vor (`Agent({model: "claude-haiku-…"})`). Nur das
+ * Frontmatter zu prüfen ließe die Checkliste genau bei dem Pin-Typ verrotten, den die SSOT
+ * selbst verlangt – wer eine harte ID hinschreibt, muss sie beim nächsten Modell-Release
+ * anfassen, egal an welcher Stelle der Datei sie steht.
+ */
 function hatHartenPin(md: string): boolean {
-  const model = frontmatter(md).model ?? "";
-  return /^claude-/.test(model);
+  return /model:\s*["']?claude-[a-z0-9.-]+/i.test(md);
 }
 
 /**
@@ -163,6 +197,9 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
         "Ohne die Zeile schreibt der Hauptagent den Code auf dem Session-Modell – aus einer Opus-Session " +
         `also die komplette Umsetzung auf Opus (#1035). Gefunden: model=„${fm.model ?? "(fehlt)"}".`,
     );
+    // Absichtlich nur Anwesenheit, nicht der Wert: die Regel ist „explizit statt erben".
+    // Welche Stufe richtig ist, entscheidet docs/model-routing.md und darf sich dort ohne
+    // Test-Änderung bewegen – gebunden wäre nur eine Doppelpflege.
     assert.ok(
       fm.effort,
       `Im Frontmatter von ${UMSETZUNGS_SKILL} fehlt \`effort:\` – der Reasoning-Aufwand der Umsetzungsphase ` +
@@ -172,13 +209,37 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
 
   test(`${REVIEW_SKILL} hält die Lenses auf dem starken Tier (kein Mitziehen durch den Coding-Tier)`, () => {
     const md = read(REVIEW_SKILL);
+    // Bewusst an den `Agent({…})`-Spawn-Block gebunden, nicht datei-weit: sonst hält ein
+    // beliebiger Prosa-Satz („historisch stand hier model: opus") den Test grün, während
+    // die Lenses längst wieder inline laufen – genau die Regression, die er fangen soll.
     assert.match(
       md,
-      /model:\s*["']?opus/,
-      `${REVIEW_SKILL} muss seine Lens-Pässe explizit auf den starken Tier routen (\`model: "opus"\`). ` +
+      /Agent\(\{[^}]*model:\s*["']?opus/s,
+      `${REVIEW_SKILL} muss seine Lens-Pässe in einem \`Agent({…})\`-Spawn explizit auf den starken Tier ` +
+        `routen (\`model: "opus"\`). ` +
         "Das Frontmatter-`model:` des kubernia-Skills gilt für den REST DES TURNS – laufen die Lenses inline " +
         "im Hauptagenten, reviewt Sonnet statt Opus, und der finale Blick wäre zudem ein Self-Grading des " +
         "eigenen Fixes (#1012).",
+    );
+  });
+
+  test("der Workflow-Pfad routet weiterhin explizit (Umsetzung Sonnet, Lenses Opus)", () => {
+    // AGENTS.md behauptet „BEIDE Ticket-Pfade setzen es explizit" – ein Wächter, der nur
+    // den Skill-Pfad prüft, ließe die halbe Aussage ungedeckt. Bewusst grob (Anwesenheit
+    // der Tier-Aliase je Phase): die Zuordnung Phase↔Aufruf ist Sache des Workflows,
+    // hier geht es nur darum, dass die Overrides nicht ersatzlos verschwinden.
+    const wf = read(".claude/workflows/kubernia-ticket.js");
+    assert.match(
+      wf,
+      /model:\s*["']sonnet["']/,
+      "Im Phasen-Workflow fehlt der Coding-Tier für die Umsetzungsphase (`model: 'sonnet'`) – " +
+        "ohne ihn erbt der Umsetzungs-Subagent das Session-Modell (#910/#1035).",
+    );
+    assert.match(
+      wf,
+      /model:\s*["']opus["']/,
+      "Im Phasen-Workflow fehlt der starke Tier für die Review-Lenses (`model: 'opus'`) – " +
+        "der Review darf nicht auf den Coding-Tier absacken (#1012/#1035).",
     );
   });
 
@@ -213,7 +274,7 @@ describe("Die Pin-Checkliste in docs/model-routing.md bleibt vollständig (#910/
     );
 
     // Gegenrichtung: die Checkliste darf keine Datei führen, die gar keinen Pin (mehr) trägt.
-    const gelistet = [...checkliste.matchAll(/`(\.claude\/[^`]+\.md)`/g)].map((m) => m[1]);
+    const gelistet = [...checklistTableRows(checkliste).matchAll(/`(\.claude\/[^`]+\.md)`/g)].map((m) => m[1]);
     const stale = gelistet.filter((rel) => !gepinnt.includes(rel));
     assert.deepEqual(
       stale,

@@ -68,13 +68,15 @@ Agent({
   subagent_type: "general-purpose",
   description: "Lens <n>: <Architektur|Requirement-Treue|Test-Adäquanz>",
   model: "opus", effort: "high",
-  prompt: "<Brille unten> · Patch: <TMP>/kq-<nr>-r<runde>.patch · erwarteter HEAD: <sha> · Findings-Format unten · Kontext-Diät oben"
+  prompt: "<Brille WÖRTLICH> · Arbeitsverzeichnis: <worktree> · Patch: <TMP>/kq-<nr>-r<runde>.patch · erwarteter HEAD: <sha> · <Kontext-Diät WÖRTLICH> · <Findings-Format WÖRTLICH>"
 })
 ```
 
-Zwei Gründe, beide hart:
-- **Der Review darf nicht mit dem Coding-Tier mitrutschen.** Der [kubernia](../kubernia/SKILL.md)-Skill setzt per Frontmatter `model: sonnet` für die **Umsetzung**, und dieser Override gilt für den **Rest des Turns**. Liefe eine Lens inline im Hauptagenten, reviewte Sonnet — die eine Konventionshälfte repariert, die andere still kaputt (#1035). Ein Subagent mit eigenem `model:` umgeht das vollständig.
-- **Kein Self-Grading (#1012).** Inline urteilt derselbe Kontext, der den Code gerade geschrieben hat. Ein frischer Subagent ist der unabhängige Kritiker, den die Konvergenzschleife unten ohnehin fordert — und er ist **billiger**, weil er nur Patch + Auftrag sieht statt der vollen Ticket-Historie.
+⚠️ **Die Blöcke wörtlich in den Prompt kopieren, nicht referenzieren.** Ein `general-purpose`-Subagent liest diese Datei **nicht** — „die Brille unten", „Kontext-Diät oben" oder „Format wie im Skill" sind für ihn leer, und die #1034-Diät fiele still weg. Der Workflow löst dasselbe durch Interpolation (`${KONTEXT_DIAET}`, `lens.auftrag` — bewacht von `test/review-context.test.ts`); auf diesem Pfad ist es Handarbeit des Orchestrators.
+
+Warum überhaupt Subagenten:
+- **Der Review darf nicht mit dem Coding-Tier mitrutschen (#1035).** Der [kubernia](../kubernia/SKILL.md)-Skill setzt per Frontmatter `model: sonnet` für die **Umsetzung**, und dieser Override gilt (nach bisheriger Beobachtung, siehe [docs/model-routing.md](../../../docs/model-routing.md)) für den **Rest des Turns**. Liefe eine Lens inline im Hauptagenten, reviewte Sonnet — die eine Konventionshälfte repariert, die andere still kaputt. Ein Subagent mit eigenem `model:` umgeht das vollständig.
+- **Kein Self-Grading — schon vorher gefordert (#1012), jetzt auch strukturell erfüllt.** Inline urteilt derselbe Kontext, der den Code gerade geschrieben hat; die Konvergenzschleife unten verlangt ohnehin „frische, unabhängige Kritiker". Der Subagent macht aus der Verhaltensregel eine Eigenschaft des Ablaufs — und ist **billiger**, weil er nur Patch + Auftrag sieht statt der vollen Ticket-Historie.
 
 Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket.js`), der seine Lenses längst so spawnt.
 
