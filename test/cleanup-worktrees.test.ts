@@ -15,13 +15,10 @@ import assert from "node:assert/strict";
 import * as cleanupModule from "../scripts/cleanup-worktrees.mjs";
 
 /**
- * Die Modul-Form EINMAL zentral deklarieren und den Import genau hier casten.
- *
- * Vorher haengte jede Funktion einzeln direkt am untypisierten Namespace, was pro
- * Zeile ein `no-unsafe-assignment`/`no-unsafe-member-access` erzeugte (12 Stueck,
- * in eslint-suppressions.json eingefroren). Ein einziger expliziter Cast auf
- * diesen Typ macht dieselbe Zusicherung sichtbar an EINER Stelle -- die Signaturen
- * sind ohnehin von Hand gepflegt, jetzt aber ohne stumm geschaltete Regel.
+ * Die Modul-Form EINMAL deklarieren und den Import genau hier casten. Vorher hing
+ * jede Funktion am untypisierten Namespace -- 12 `no-unsafe-*`-Verletzungen, in
+ * eslint-suppressions.json eingefroren. Ein expliziter Cast macht dieselbe
+ * Zusicherung an EINER Stelle sichtbar, ohne stumm geschaltete Regel.
  */
 type CleanupModule = {
   parseWorktreeListPorcelain: (output: string) => string[];
@@ -215,15 +212,9 @@ describe("diagnoseOrphans (#952)", () => {
 
 
 // ── assertSafeOrphanTarget (#1051) ───────────────────────────────────────────
-//
-// Der Schutzgurt vor dem `rmSync`. Kern des Tickets: am 2026-08-08 wurden beim
-// Aufräumen des Worktrees kq-1027 ALLE versionierten Dateien unter `.claude/`
-// im Haupt-Checkout gelöscht. Die Ursache liess sich aus der Code-Lesart nicht
-// bestimmen (siehe Skript-Kopf) — dieser Guard sichert den Löschpfad daher
-// URSACHENUNABHÄNGIG ab: er verweigert, sobald das Ziel nicht beweisbar ein
-// echtes Verzeichnis ECHT UNTERHALB von `<mainRoot>/.claude/worktrees/` ist.
-// Bewusst fail-closed — ein Löschpfad, der den Agenten entwaffnen kann, darf im
-// Zweifel nichts tun.
+// Der Schutzgurt vor dem `rmSync` (Begruendung im Skript-Kopf): fail-closed,
+// sobald das Ziel nicht beweisbar ein echtes Verzeichnis echt unterhalb von
+// `<mainRoot>/.claude/worktrees/` ist.
 
 describe("assertSafeOrphanTarget (#1051)", () => {
   const MAIN = "/root";
@@ -250,11 +241,9 @@ describe("assertSafeOrphanTarget (#1051)", () => {
     assert.equal(r.safe, true, `Guard darf sich nicht selbst blockieren, reason: ${r.reason}`);
   });
 
-  // ── Negativfaelle: das ist der eigentliche Wert dieses Guards ──────────────
-  //
-  // Tabellengetrieben, damit JEDER Fall automatisch beides prueft: safe:false UND
-  // eine nicht-leere Begruendung (eine Verweigerung ohne Grund waere fuer die
-  // Maintainerin unbrauchbar). `wt` ueberschreibt worktreesDir, `lstat` das stat.
+  // ── Negativfaelle: der eigentliche Wert dieses Guards ─────────────────────
+  // Tabellengetrieben, damit JEDER Fall beides prueft: safe:false UND eine
+  // nicht-leere Begruendung. `wt` ueberschreibt worktreesDir, `lstat` das stat.
   const symlink = { lstatSync: () => ({ isDirectory: () => false, isSymbolicLink: () => true }) };
   const REFUSE: Array<{ was: string; name: string; wt?: string; lstat?: object }> = [
     { was: "leerer Name (zeigte sonst auf worktreesDir SELBST)", name: "" },
@@ -264,41 +253,15 @@ describe("assertSafeOrphanTarget (#1051)", () => {
     { was: "Slash-Trenner im Namen (nur EIN Pfad-Segment erlaubt)", name: "a/b" },
     { was: "Backslash-Trenner im Namen (Windows-Variante)", name: "a" + BS + "b" },
     { was: "worktreesDir ist mainRoot selbst (Hypothese 3 des Tickets)", name: "kq-1027", wt: MAIN },
-    {
-      was: "worktreesDir ist .claude selbst (der real eingetretene Schaden)",
-      name: "worktrees",
-      wt: "/root/.claude",
-    },
-    {
-      was: "worktreesDir ausserhalb von mainRoot",
-      name: "kq-1027",
-      wt: "/anderswo/.claude/worktrees",
-    },
-    // Deckt gezielt die Gleichheits-Pruefung ab: das Ziel liegt UNTERHALB des
-    // erwarteten Ordners, die reine Prefix-Pruefung liesse es also durch. Ohne
-    // diesen Fall bliebe der Zweig ungetestet (bewiesen in der Red-Green-Probe
-    // zu #1051: Zweig deaktivieren liess die Suite gruen).
+    { was: "worktreesDir ist .claude selbst (der real eingetretene Schaden)", name: "worktrees", wt: "/root/.claude" },
+    { was: "worktreesDir ausserhalb von mainRoot", name: "kq-1027", wt: "/anderswo/.claude/worktrees" },
+    // Deckt die Gleichheits-Pruefung: das Ziel liegt UNTERHALB des erwarteten
+    // Ordners, die Prefix-Pruefung allein liesse es durch (Red-Green-Probe #1051).
     { was: "worktreesDir eine Ebene ZU TIEF aufgeloest", name: "kq-1027", wt: WT + "/sub" },
     { was: "Ziel ist ein Symlink/Reparse-Point (Junction nie folgen)", name: "kq-1027", lstat: symlink },
-    {
-      was: "Symlink, der sich als Verzeichnis ausgibt (isDirectory allein genuegt nicht)",
-      name: "kq-1027",
-      lstat: { lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => true }) },
-    },
-    {
-      was: "Ziel ist eine Datei",
-      name: "kq-1027",
-      lstat: { lstatSync: () => ({ isDirectory: () => false, isSymbolicLink: () => false }) },
-    },
-    {
-      was: "lstat wirft ENOENT (Ziel existiert nicht) statt Absturz",
-      name: "kq-1027",
-      lstat: {
-        lstatSync: () => {
-          throw new Error("ENOENT");
-        },
-      },
-    },
+    { was: "Symlink, der sich als Verzeichnis ausgibt", name: "kq-1027", lstat: { lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => true }) } },
+    { was: "Ziel ist eine Datei", name: "kq-1027", lstat: { lstatSync: () => ({ isDirectory: () => false, isSymbolicLink: () => false }) } },
+    { was: "lstat wirft ENOENT statt Absturz", name: "kq-1027", lstat: { lstatSync: () => { throw new Error("ENOENT"); } } },
   ];
 
   for (const { was, name, wt, lstat } of REFUSE) {
@@ -308,6 +271,15 @@ describe("assertSafeOrphanTarget (#1051)", () => {
       assert.ok((r.reason ?? "").length > 0, `Verweigerung ohne Begruendung: ${was}`);
     });
   }
+
+  test("Nicht-String als Name, safe false statt TypeError", () => {
+    // Die Typ-Pruefung ist NICHT von der Pfad-Pruefung subsumiert: ohne sie
+    // wirft fixOrphans einen TypeError, obwohl es "wirft nie" zusagt (#1051).
+    for (const krumm of [null, undefined, 42, {}] as unknown[]) {
+      const r = assertSafeOrphanTarget(MAIN, WT, krumm as string, dirLstat);
+      assert.equal(r.safe, false, `haette verweigern muessen: ${JSON.stringify(krumm)}`);
+    }
+  });
 
   test("die Symlink-Begruendung nennt den Reparse-Point beim Namen", () => {
     const r = safe("kq-1027", symlink);
@@ -320,10 +292,8 @@ describe("assertSafeOrphanTarget (#1051)", () => {
 
 // ── suspiciousWorktreeEntries (#1051) ────────────────────────────────────────
 //
-// Dirent.isDirectory() ist FALSE fuer eine Junction/einen Symlink. Der Filter in
-// localWorktreeDirs uebersah einen Reparse-Point an Worktree-Stelle deshalb
-// STILLSCHWEIGEND: nie als Waise gemeldet, nie aufgeraeumt, nie gewarnt — genau
-// die gefaehrlichste Form war unsichtbar. Diese Funktion macht sie sichtbar.
+// Dirent.isDirectory() ist FALSE fuer eine Junction: localWorktreeDirs uebersah
+// einen Reparse-Point deshalb STILLSCHWEIGEND. Jetzt wird er gemeldet.
 
 describe("suspiciousWorktreeEntries (#1051)", () => {
   test("Ordner existiert nicht, leeres Array", () => {

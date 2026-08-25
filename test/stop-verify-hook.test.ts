@@ -80,22 +80,19 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
     lstatSync?: (path: string) => { isDirectory: () => boolean; isSymbolicLink: () => boolean };
   };
 
+  const NUL = String.fromCharCode(0); // git status -z trennt mit NUL statt Zeilenumbruch
+
   const MAIN = "/root";
   const WT = "/root/.claude/worktrees";
 
-  /**
-   * Fake-IO fuer den Waisen-Cleanup.
-   *
-   * ⚠️ Bewusst PFADBASIERT, nicht ueber einen Aufruf-Zaehler (#1051): der
-   * Schutzgurt schiebt zusaetzliche fs-Aufrufe dazwischen: eine zaehlerbasierte
-   * Attrappe waere danach aus dem falschen Grund rot und wuerde echte Regressionen
-   * verdecken. `existsSync` antwortet jetzt nach dem gefragten Pfad.
-   */
+  /** Fake-IO. Bewusst PFADBASIERT statt per Aufruf-Zaehler (#1051): der Guard
+   *  schiebt fs-Aufrufe dazwischen, eine Zaehler-Attrappe waere danach aus dem
+   *  falschen Grund rot und wuerde echte Regressionen verdecken. */
   function makeDeps(opts: {
     orphanName: string | null;
     existsAfterRm: boolean;
-    statusBefore?: string;
-    statusAfter?: string;
+    statusBefore?: string[];
+    statusAfter?: string[];
     symlink?: boolean;
   }): OrphanDeps {
     let statusCalls = 0;
@@ -105,8 +102,11 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
           return "worktree /root\nHEAD abc\nbranch refs/heads/main\n\n";
         }
         if (cmd.includes("status --porcelain")) {
+          // Pathspec-Pin: ohne ihn wuerde repo-weit gemessen (Fehlalarm-Risiko).
+          if (!cmd.includes("-- .claude")) throw new Error("Pathspec -- .claude fehlt");
           statusCalls++;
-          return statusCalls === 1 ? (opts.statusBefore ?? "") : (opts.statusAfter ?? "");
+          const eintraege = statusCalls === 1 ? (opts.statusBefore ?? []) : (opts.statusAfter ?? []);
+          return eintraege.map((e) => e + NUL).join("");
         }
         return "";
       },
@@ -115,13 +115,7 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
         path.replace(/\\/g, "/") === WT ? true : opts.existsAfterRm,
       readdirSync: () =>
         opts.orphanName
-          ? [
-              {
-                name: opts.orphanName,
-                isDirectory: () => !opts.symlink,
-                isSymbolicLink: () => Boolean(opts.symlink),
-              },
-            ]
+          ? [{ name: opts.orphanName, isDirectory: () => !opts.symlink, isSymbolicLink: () => Boolean(opts.symlink) }]
           : [],
       rmSync: () => {},
       lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => false }),
@@ -173,32 +167,16 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
   });
 
   // ── Datenverlust-Nachpruefung (#1051) ─────────────────────────────────────
-  //
-  // Der Hook laeuft unbeaufsichtigt bei JEDEM Turn-Ende. Loescht der Cleanup
-  // versionierte Dateien mit (wie am 2026-08-08 alle 9 Dateien unter .claude/),
-  // muss das LAUT gemeldet werden statt still durchzugehen. Gezaehlt werden nur
-  // NEU hinzugekommene Loeschungen -- ein Turn darf legitim mit eigenen enden.
-  const STATUS: Array<{ was: string; before: string; after: string; blockt: boolean }> = [
-    { was: "unveraenderter Status", before: " M src/game.ts\n", after: " M src/game.ts\n", blockt: false },
-    {
-      was: "Loeschung war VORHER schon da (agenten-eigene, kein Fehlalarm)",
-      before: " D docs/alt.md\n",
-      after: " D docs/alt.md\n",
-      blockt: false,
-    },
-    {
-      was: "Loeschung erst NACHHER (der eigentliche Alarm)",
-      before: "",
-      after: " D .claude/settings.json\n D .claude/skills/kubernia/SKILL.md\n",
-      blockt: true,
-    },
-    { was: "gestagete Loeschung (D im ersten Spaltenzeichen)", before: "", after: "D  .claude/settings.json\n", blockt: true },
-    {
-      was: "untracked-Eintrag, dessen Pfad mit D beginnt (kein Fehlalarm)",
-      before: "",
-      after: "?? Dokumente/neu.md\n",
-      blockt: false,
-    },
+  // Nur NEU hinzugekommene Loeschungen zaehlen -- ein Turn darf legitim mit
+  // eigenen enden. Eintraege sind eine LISTE, erst im Fake NUL-verkettet: als
+  // Zeilen-String waeren sie EIN Eintrag und die Tests gruen aus falschem Grund.
+  const STATUS: Array<{ was: string; before: string[]; after: string[]; blockt: boolean }> = [
+    { was: "unveraenderter Status", before: [" M src/game.ts"], after: [" M src/game.ts"], blockt: false },
+    { was: "Loeschung war VORHER schon da (agenten-eigene, kein Fehlalarm)", before: [" D docs/alt.md"], after: [" D docs/alt.md"], blockt: false },
+    { was: "Loeschung erst NACHHER (der eigentliche Alarm)", before: [], after: [" D .claude/settings.json", " D .claude/skills/kubernia/SKILL.md"], blockt: true },
+    { was: "gestagete Loeschung (D im ersten Spaltenzeichen)", before: [], after: ["D  .claude/settings.json"], blockt: true },
+    { was: "untracked-Eintrag, dessen Pfad mit D beginnt: kein Fehlalarm", before: [], after: ["?? Dokumente/neu.md"], blockt: false },
+    { was: "nur eine von zwei Loeschungen ist neu", before: [" D docs/alt.md"], after: [" D docs/alt.md", " D .claude/settings.json"], blockt: true },
   ];
 
   for (const { was, before, after, blockt } of STATUS) {
@@ -216,18 +194,38 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
     });
   }
 
-  test("der Alarm nennt den Pfad UND den Wiederherstellungs-Befehl", () => {
+  test("der Alarm nennt den Pfad UND den gequoteten Wiederherstellungs-Befehl", () => {
     const result = checkAndFixOrphanWorktrees(
       MAIN,
       makeDeps({
         orphanName: "kq-862",
         existsAfterRm: false,
-        statusBefore: "",
-        statusAfter: " D .claude/settings.json\n",
+        statusBefore: [],
+        statusAfter: [" D .claude/mit leerzeichen.json"],
       })
     );
-    assert.ok(result.reason?.includes(".claude/settings.json"), `Pfad fehlt: ${result.reason}`);
-    assert.ok(result.reason?.includes("git checkout --"), `Befehl fehlt: ${result.reason}`);
+    assert.ok(
+      result.reason?.includes('git -C /root checkout -- ".claude/mit leerzeichen.json"'),
+      `Pfad muss gequotet sein, sonst zerfaellt der Befehl: ${result.reason}`
+    );
+  });
+
+  test("mehrere Loeschungen werden EINZELN erkannt und einzeln gequotet", () => {
+    // Schaerft die NUL-Trennung: bei Zeilen-Split waeren beide Eintraege EIN Pfad.
+    const result = checkAndFixOrphanWorktrees(
+      MAIN,
+      makeDeps({
+        orphanName: "kq-862",
+        existsAfterRm: false,
+        statusBefore: [],
+        statusAfter: [" D .claude/a.json", " D .claude/b.json"],
+      })
+    );
+    assert.ok(
+      result.reason?.includes('git -C /root checkout -- ".claude/a.json" ".claude/b.json"'),
+      `beide Pfade muessen einzeln gequotet sein: ${result.reason}`
+    );
+    assert.ok(result.reason?.includes("2 versionierte"), `Anzahl falsch: ${result.reason}`);
   });
 
   test("git status wirft, fail-open, blocked false statt jeden Turn zu blockieren", () => {
@@ -257,6 +255,37 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
     };
     checkAndFixOrphanWorktrees(MAIN, deps);
     assert.equal(statusCalls, 0, "ohne Waisen darf kein git status laufen");
+  });
+
+  test("Junction OHNE Waise blockt, ruft aber KEIN git status, deckt den Latenz-Wrapper", () => {
+    // Ohne diesen Fall bliebe `if (orphans.length > 0)` ungetestet (#1051).
+    let statusCalls = 0;
+    const base = makeDeps({ orphanName: "kq-junction", existsAfterRm: false, symlink: true });
+    const deps: OrphanDeps = {
+      ...base,
+      execSync: (cmd: string) => {
+        if (cmd.includes("status --porcelain")) statusCalls++;
+        return base.execSync?.(cmd) ?? "";
+      },
+    };
+    const result = checkAndFixOrphanWorktrees(MAIN, deps);
+    assert.equal(result.blocked, true);
+    assert.equal(statusCalls, 0, "ohne Waisen kein git status, auch wenn eine Junction blockt");
+  });
+
+  test("Waise UND Junction zugleich, beide Gruende stehen in reason", () => {
+    // Mischzustand: `problems.join` war ungetestet, problems[0] blieb gruen (#1051).
+    const deps: OrphanDeps = {
+      ...makeDeps({ orphanName: "kq-locked", existsAfterRm: true }),
+      readdirSync: () => [
+        { name: "kq-locked", isDirectory: () => true, isSymbolicLink: () => false },
+        { name: "kq-junction", isDirectory: () => false, isSymbolicLink: () => true },
+      ],
+    };
+    const result = checkAndFixOrphanWorktrees(MAIN, deps);
+    assert.equal(result.blocked, true);
+    assert.ok(result.reason?.includes("kq-locked"), `Datei-Lock fehlt: ${result.reason}`);
+    assert.ok(result.reason?.includes("kq-junction"), `Junction fehlt: ${result.reason}`);
   });
 
   // ── Junction an Worktree-Stelle (#1051) ───────────────────────────────────

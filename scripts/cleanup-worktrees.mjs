@@ -27,12 +27,9 @@ import { existsSync, lstatSync, readdirSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-/** Pfad-Normalisierung für Vergleiche: Backslashes → Slashes, kein Trailing-Slash.
- *  Nötig, weil `mainRoot` slash-normalisiert aus `parseWorktreeListPorcelain`
- *  kommt, `join()` auf Windows aber Backslashes anhängt — es entstehen also real
- *  gemischte Pfade wie `C:/git/kubernia\.claude\worktrees`. Ohne diese
- *  Normalisierung würde der Guard unten legitime Löschungen verweigern
- *  (Denial-of-Service gegen sich selbst). */
+/** Pfad-Normalisierung: Backslashes → Slashes, kein Trailing-Slash. Real entstehen
+ *  gemischte Pfade (`mainRoot` slash-normalisiert, `join()` hängt auf Windows
+ *  Backslashes an) — ohne das verweigert der Guard legitime Löschungen. */
 function norm(p) {
   return String(p).replace(/\\/g, "/").replace(/\/+$/, "");
 }
@@ -74,12 +71,9 @@ export function localWorktreeDirs(worktreesDir, deps = {}) {
 /**
  * Einträge unter `worktreesDir`, die ein **Symlink/Reparse-Point** sind (#1051).
  *
- * `Dirent.isDirectory()` ist für eine Junction **false** — der Filter in
- * `localWorktreeDirs()` übersah einen Reparse-Point an Worktree-Stelle deshalb
- * STILLSCHWEIGEND: nie als Waise gemeldet, nie aufgeräumt, nie gewarnt. Genau
- * die gefährlichste Form (`git worktree remove --force` folgt Junctions und
- * leert dadurch echte Ziele, siehe AGENTS.md § Worktree entfernen) war damit
- * unsichtbar. Diese Funktion macht sie sichtbar — sie löscht **nie** selbst.
+ * `Dirent.isDirectory()` ist für eine Junction **false** — `localWorktreeDirs()`
+ * übersah sie STILLSCHWEIGEND, obwohl `git worktree remove --force` Junctions
+ * folgt und echte Ziele leert. Sichtbar machen, nie selbst löschen.
  */
 export function suspiciousWorktreeEntries(worktreesDir, deps = {}) {
   const exists = deps.existsSync ?? existsSync;
@@ -93,18 +87,13 @@ export function suspiciousWorktreeEntries(worktreesDir, deps = {}) {
 /**
  * Schutzgurt vor dem `rmSync` (#1051) — `{ safe, reason? }`.
  *
- * Anlass: Beim Aufräumen des Worktrees `kq-1027` wurden ALLE versionierten
- * Dateien unter `.claude/` im Haupt-Checkout gelöscht, obwohl der Code dem
- * Wortlaut nach nur den Waisen-Pfad anfasst. Die Ursache liess sich aus der
- * Code-Lesart nicht bestimmen (Kandidaten: ein Reparse-Point im Worktree, ein
- * Folgeschaden des mit ENOSYS gescheiterten `git worktree remove`, ein
- * Pfad-Auflösungsfehler in `diagnoseOrphans`). Dieser Guard sichert den
- * Löschpfad daher URSACHENUNABHÄNGIG ab und **fail-closed**: gelöscht wird nur,
- * was beweisbar ein echtes Verzeichnis ECHT UNTERHALB von
- * `<mainRoot>/.claude/worktrees/` ist — im Zweifel nichts. Dieser Pfad läuft
- * unbeaufsichtigt bei jedem Turn-Ende (`scripts/stop-verify-hook.mjs`, #952) und
- * kann im Schadensfall genau die Dateien treffen, die den Agenten steuern:
- * lieber ein Geister-Ordner zu viel als eine entwaffnete Harness.
+ * Anlass: Beim Aufräumen von `kq-1027` wurden ALLE versionierten Dateien unter
+ * `.claude/` im Haupt-Checkout gelöscht, obwohl der Code dem Wortlaut nach nur
+ * den Waisen-Pfad anfasst; die Ursache bleibt offen (#1058). Der Guard sichert
+ * daher URSACHENUNABHÄNGIG und **fail-closed** ab: gelöscht wird nur, was
+ * beweisbar ein echtes Verzeichnis ECHT UNTERHALB von
+ * `<mainRoot>/.claude/worktrees/` ist. Dieser Pfad läuft unbeaufsichtigt bei
+ * jedem Turn-Ende (#952) und träfe sonst die Dateien, die den Agenten steuern.
  */
 export function assertSafeOrphanTarget(mainRoot, worktreesDir, name, deps = {}) {
   const lstat = deps.lstatSync ?? lstatSync;
@@ -113,8 +102,8 @@ export function assertSafeOrphanTarget(mainRoot, worktreesDir, name, deps = {}) 
     return { safe: false, reason: "mainRoot/worktreesDir nicht aufgelöst" };
   }
 
-  // 1) Der Name muss GENAU EIN Pfad-Segment sein. Ein leerer Name oder "."
-  //    liesse `join()` auf worktreesDir SELBST zeigen, ".." auf `.claude/`.
+  // 1) GENAU EIN Pfad-Segment: "" und "." zeigen auf worktreesDir SELBST, ".."
+  //    auf `.claude/` — genau der real eingetretene Schaden.
   if (typeof name !== "string" || name === "" || name === "." || name === "..") {
     return { safe: false, reason: `unzulässiger Ordnername ${JSON.stringify(name)}` };
   }
@@ -122,7 +111,7 @@ export function assertSafeOrphanTarget(mainRoot, worktreesDir, name, deps = {}) 
     return { safe: false, reason: `Ordnername enthält einen Pfad-Trenner: ${name}` };
   }
 
-  // 2) worktreesDir muss exakt <mainRoot>/.claude/worktrees sein — fängt einen
+  // 2) worktreesDir exakt <mainRoot>/.claude/worktrees — fängt einen
   //    Auflösungsfehler, der den Löschpfad eine Ebene zu hoch zeigen liesse.
   const expected = norm(join(mainRoot, ".claude", "worktrees"));
   if (norm(worktreesDir) !== expected) {
@@ -138,9 +127,8 @@ export function assertSafeOrphanTarget(mainRoot, worktreesDir, name, deps = {}) 
     return { safe: false, reason: `Ziel liegt nicht echt unterhalb von ${expected}: ${target}` };
   }
 
-  // 4) Nur ein ECHTES Verzeichnis, niemals ein Symlink/Reparse-Point: rekursives
-  //    Löschen darf einem Link nicht folgen (dieselbe Klasse wie die
-  //    node_modules-Junction-Falle in AGENTS.md).
+  // 4) Nur ein ECHTES Verzeichnis: rekursives Löschen darf keinem Link folgen
+  //    (dieselbe Klasse wie die node_modules-Junction-Falle in AGENTS.md).
   let st;
   try {
     st = lstat(join(worktreesDir, name));
@@ -282,7 +270,7 @@ function main() {
   if (orphans.length === 0) {
     console.log("Keine verwaisten Ordner — alles sauber.");
     // Ein gemeldeter Reparse-Point ist NICHT "sauber": exit 1, damit die
-    // Warnung nicht in einem gruenen Lauf untergeht (#1051).
+    // Warnung nicht in einem grünen Lauf untergeht (#1051).
     process.exit(suspicious.length > 0 ? 1 : 0);
   }
 

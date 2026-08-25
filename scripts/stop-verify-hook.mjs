@@ -35,27 +35,32 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { diagnoseOrphans, fixOrphans, suspiciousWorktreeEntries } from "./cleanup-worktrees.mjs";
 
 /**
- * Pfade **versionierter** Dateien, die `git status --porcelain` als gelöscht
+ * Pfade **versionierter** Dateien unter `.claude/`, die `git status` als gelöscht
  * meldet — `null`, wenn git nicht befragbar ist (Aufrufer entscheidet fail-open).
+ *
+ * **Pathspec bewusst auf `.claude`**: der Löschpfad kann dank Guard strukturell
+ * nur dort zuschlagen, und ein repo-weiter Vergleich würde die Löschung eines
+ * PARALLEL arbeitenden Agenten im Haupt-Checkout als eigenen Datenverlust melden
+ * (Fehlalarm mit gefährlicher Empfehlung — siehe Aufrufer).
  *
  * Nur die beiden Status-Spalten zählen (`" D"` unstaged, `"D "` staged, `"AD"`,
  * `"MD"`): ein `??`-Eintrag, dessen Pfad zufällig mit `D` beginnt, ist KEINE
- * Löschung und darf keinen Fehlalarm auslösen.
+ * Löschung. `-z` statt Zeilen, weil `core.quotepath` Umlaut-Pfade sonst gequotet
+ * liefert und der Wiederherstellungs-Befehl damit ins Leere zeigt.
  */
 export function deletedTrackedPaths(cwd, deps = {}) {
   const exec = deps.execSync ?? execSync;
   let out;
   try {
-    out = exec("git status --porcelain", { cwd, encoding: "utf-8" });
+    out = exec("git status --porcelain -z -- .claude", { cwd, encoding: "utf-8" });
   } catch {
     return null;
   }
   const paths = [];
-  for (const line of String(out).split(/\r?\n/)) {
-    if (line.length < 4) continue;
-    const xy = line.slice(0, 2);
-    if (xy.includes("?")) continue;
-    if (xy[0] === "D" || xy[1] === "D") paths.push(line.slice(3).trim());
+  for (const entry of String(out).split("\0")) {
+    if (entry.length < 4) continue;
+    const xy = entry.slice(0, 2);
+    if (xy[0] === "D" || xy[1] === "D") paths.push(entry.slice(3));
   }
   return paths;
 }
@@ -127,10 +132,16 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
     if (before && after) {
       const newlyDeleted = after.filter((p) => !before.includes(p));
       if (newlyDeleted.length > 0) {
+        // Bewusst "prüfen, ggf. wiederherstellen" statt "sofort wiederherstellen":
+        // ein blind ausgeführtes checkout würde eine ABSICHTLICHE Löschung des
+        // laufenden Turns zurückholen. Pfade einzeln gequotet (Leerzeichen).
+        const cmd = newlyDeleted.map((p) => `"${p}"`).join(" ");
         problems.push(
-          `DATENVERLUST: das Aufräumen hat ${newlyDeleted.length} versionierte Datei(en) gelöscht: ` +
-            `${newlyDeleted.join(", ")} — sofort wiederherstellen mit ` +
-            `"git checkout -- ${newlyDeleted.join(" ")}" und den Vorfall an #1051 melden.`
+          `MÖGLICHER DATENVERLUST: nach dem Aufräumen sind ${newlyDeleted.length} versionierte ` +
+            `Datei(en) unter .claude/ als gelöscht gemeldet: ${newlyDeleted.join(", ")} — bitte ` +
+            `prüfen und, falls das Aufräumen sie mitgerissen hat, wiederherstellen mit ` +
+            `"git -C ${mainRoot} checkout -- ${cmd}" — ohne das -C no-oppt der ` +
+            `Befehl im Worktree lautlos. Vorfall an #1051 melden.`
         );
       }
     }
