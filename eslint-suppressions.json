@@ -393,14 +393,6 @@
       "count": 9
     }
   },
-  "test/cleanup-worktrees.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 6
-    }
-  },
   "test/content.test.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 69

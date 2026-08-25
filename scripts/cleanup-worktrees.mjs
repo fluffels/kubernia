@@ -23,9 +23,16 @@
  */
 
 import { execSync } from "node:child_process";
-import { existsSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
+/** Pfad-Normalisierung: Backslashes → Slashes, kein Trailing-Slash. Real entstehen
+ *  gemischte Pfade (`mainRoot` slash-normalisiert, `join()` hängt auf Windows
+ *  Backslashes an) — ohne das verweigert der Guard legitime Löschungen. */
+function norm(p) {
+  return String(p).replace(/\\/g, "/").replace(/\/+$/, "");
+}
 
 /** Parst `git worktree list --porcelain`-Output zu einer Liste absoluter Pfade
  *  (normalisiert auf `/`). Gits eigene Konvention: der ERSTE Eintrag ist immer
@@ -59,6 +66,83 @@ export function localWorktreeDirs(worktreesDir, deps = {}) {
   return readdir(worktreesDir, { withFileTypes: true })
     .filter((e) => e.isDirectory())
     .map((e) => e.name);
+}
+
+/**
+ * Einträge unter `worktreesDir`, die ein **Symlink/Reparse-Point** sind (#1051).
+ *
+ * `Dirent.isDirectory()` ist für eine Junction **false** — `localWorktreeDirs()`
+ * übersah sie STILLSCHWEIGEND, obwohl `git worktree remove --force` Junctions
+ * folgt und echte Ziele leert. Sichtbar machen, nie selbst löschen.
+ */
+export function suspiciousWorktreeEntries(worktreesDir, deps = {}) {
+  const exists = deps.existsSync ?? existsSync;
+  const readdir = deps.readdirSync ?? readdirSync;
+  if (!exists(worktreesDir)) return [];
+  return readdir(worktreesDir, { withFileTypes: true })
+    .filter((e) => typeof e.isSymbolicLink === "function" && e.isSymbolicLink())
+    .map((e) => e.name);
+}
+
+/**
+ * Schutzgurt vor dem `rmSync` (#1051) — `{ safe, reason? }`.
+ *
+ * Anlass: Beim Aufräumen von `kq-1027` wurden ALLE versionierten Dateien unter
+ * `.claude/` im Haupt-Checkout gelöscht, obwohl der Code dem Wortlaut nach nur
+ * den Waisen-Pfad anfasst; die Ursache bleibt offen (#1058). Der Guard sichert
+ * daher URSACHENUNABHÄNGIG und **fail-closed** ab: gelöscht wird nur, was
+ * beweisbar ein echtes Verzeichnis ECHT UNTERHALB von
+ * `<mainRoot>/.claude/worktrees/` ist. Dieser Pfad läuft unbeaufsichtigt bei
+ * jedem Turn-Ende (#952) und träfe sonst die Dateien, die den Agenten steuern.
+ */
+export function assertSafeOrphanTarget(mainRoot, worktreesDir, name, deps = {}) {
+  const lstat = deps.lstatSync ?? lstatSync;
+
+  if (!mainRoot || !worktreesDir) {
+    return { safe: false, reason: "mainRoot/worktreesDir nicht aufgelöst" };
+  }
+
+  // 1) GENAU EIN Pfad-Segment: "" und "." zeigen auf worktreesDir SELBST, ".."
+  //    auf `.claude/` — genau der real eingetretene Schaden.
+  if (typeof name !== "string" || name === "" || name === "." || name === "..") {
+    return { safe: false, reason: `unzulässiger Ordnername ${JSON.stringify(name)}` };
+  }
+  if (name.includes("/") || name.includes("\\")) {
+    return { safe: false, reason: `Ordnername enthält einen Pfad-Trenner: ${name}` };
+  }
+
+  // 2) worktreesDir exakt <mainRoot>/.claude/worktrees — fängt einen
+  //    Auflösungsfehler, der den Löschpfad eine Ebene zu hoch zeigen liesse.
+  const expected = norm(join(mainRoot, ".claude", "worktrees"));
+  if (norm(worktreesDir) !== expected) {
+    return {
+      safe: false,
+      reason: `worktreesDir ist nicht <mainRoot>/.claude/worktrees (erwartet ${expected}, bekam ${norm(worktreesDir)})`,
+    };
+  }
+
+  // 3) Defense in Depth: das Ziel muss ECHT unterhalb liegen, nie gleich sein.
+  const target = norm(join(worktreesDir, name));
+  if (!target.startsWith(expected + "/") || target.length <= expected.length + 1) {
+    return { safe: false, reason: `Ziel liegt nicht echt unterhalb von ${expected}: ${target}` };
+  }
+
+  // 4) Nur ein ECHTES Verzeichnis: rekursives Löschen darf keinem Link folgen
+  //    (dieselbe Klasse wie die node_modules-Junction-Falle in AGENTS.md).
+  let st;
+  try {
+    st = lstat(join(worktreesDir, name));
+  } catch {
+    return { safe: false, reason: `Ziel nicht statbar (existiert nicht?): ${target}` };
+  }
+  if (st.isSymbolicLink()) {
+    return { safe: false, reason: `Ziel ist ein Symlink/Junction (Reparse-Point), wird nicht gelöscht: ${target}` };
+  }
+  if (!st.isDirectory()) {
+    return { safe: false, reason: `Ziel ist kein Verzeichnis: ${target}` };
+  }
+
+  return { safe: true };
 }
 
 /** Pure Berechnung: welche `dirs` (Ordnernamen relativ zu `worktreesDir`) sind
@@ -97,9 +181,13 @@ export function diagnoseOrphans(cwd, deps = {}) {
 
 /**
  * Pruned veraltete git-Registrierungen und löscht `orphans` (Ordnernamen unter
- * `worktreesDir`) physisch per `fs.rmSync`. Gibt `{ removed, errors }` zurück —
- * `errors` enthält Namen, die nach dem Löschversuch noch existieren (Datei-Lock
- * durch laufenden Dev-Server o.ä., siehe AGENTS.md Windows-Fallen). Wirft nie.
+ * `worktreesDir`) physisch per `fs.rmSync`. Wirft nie. Drei Ergebnis-Buckets:
+ *  - `removed`: erfolgreich gelöscht
+ *  - `errors`:  Löschversuch gelaufen, Ordner existiert weiter (Datei-Lock durch
+ *               laufenden Dev-Server o.ä., siehe AGENTS.md Windows-Fallen)
+ *  - `refused`: `assertSafeOrphanTarget` hat das Ziel abgelehnt — es wurde
+ *               **gar nicht** angefasst (#1051). Semantisch bewusst getrennt von
+ *               `errors`: „bewusst nicht gelöscht" statt „löschen fehlgeschlagen".
  */
 export function fixOrphans(mainRoot, worktreesDir, orphans, deps = {}) {
   const exec = deps.execSync ?? execSync;
@@ -114,7 +202,15 @@ export function fixOrphans(mainRoot, worktreesDir, orphans, deps = {}) {
 
   const removed = [];
   const errors = [];
+  const refused = [];
   for (const name of orphans) {
+    // Schutzgurt VOR jedem Löschen (#1051) — bei Zweifel gar nicht anfassen.
+    const guard = assertSafeOrphanTarget(mainRoot, worktreesDir, name, deps);
+    if (!guard.safe) {
+      refused.push({ name, reason: guard.reason });
+      continue;
+    }
+
     const absPath = join(worktreesDir, name);
     try {
       rm(absPath, { recursive: true, force: true });
@@ -127,7 +223,7 @@ export function fixOrphans(mainRoot, worktreesDir, orphans, deps = {}) {
       errors.push(name);
     }
   }
-  return { removed, errors };
+  return { removed, errors, refused };
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
@@ -148,7 +244,18 @@ function main() {
   console.log(`Worktrees-Ordner: ${worktreesDir}`);
   console.log(`Lokal vorhanden: ${dirs.length} Ordner\n`);
 
-  if (dirs.length === 0) {
+  // Reparse-Points an Worktree-Stelle sind nie ein normaler Ordner (#1051) und
+  // werden NIE gelöscht — nur gemeldet, mit dem Auflöse-Befehl.
+  const suspicious = suspiciousWorktreeEntries(worktreesDir);
+  if (suspicious.length > 0) {
+    console.error(`Symlink/Junction an Worktree-Stelle (${suspicious.length}) — NICHT automatisch löschbar:`);
+    for (const name of suspicious) {
+      console.error(`  ⚠ ${name} — bitte von Hand lösen: cmd /c rmdir "${join(worktreesDir, name)}"`);
+    }
+    console.error();
+  }
+
+  if (dirs.length === 0 && suspicious.length === 0) {
     console.log(".claude/worktrees/ ist leer — alles sauber.");
     process.exit(0);
   }
@@ -162,7 +269,9 @@ function main() {
 
   if (orphans.length === 0) {
     console.log("Keine verwaisten Ordner — alles sauber.");
-    process.exit(0);
+    // Ein gemeldeter Reparse-Point ist NICHT "sauber": exit 1, damit die
+    // Warnung nicht in einem grünen Lauf untergeht (#1051).
+    process.exit(suspicious.length > 0 ? 1 : 0);
   }
 
   console.log(`Verwaiste Ordner (${orphans.length}):`);
@@ -177,10 +286,20 @@ function main() {
   }
 
   console.log("Pruning veralteter git-Einträge + Löschen...");
-  const { removed, errors } = fixOrphans(mainRoot, worktreesDir, orphans);
+  const { removed, errors, refused } = fixOrphans(mainRoot, worktreesDir, orphans);
   for (const name of removed) console.log(`  ✓ ${name} entfernt`);
+  for (const { name, reason } of refused) {
+    console.error(`  VERWEIGERT: ${name} — ${reason} (Schutzgurt #1051, nichts gelöscht)`);
+  }
   for (const name of errors) {
     console.error(`  FEHLER: ${name} noch vorhanden — möglicherweise noch ein Prozess aktiv (Dev-Server?)`);
+  }
+
+  if (refused.length > 0) {
+    console.error(
+      `\n${refused.length} Ziel(e) vom Schutzgurt abgelehnt — bewusst NICHT gelöscht. Bitte von Hand prüfen (#1051).`
+    );
+    process.exit(1);
   }
 
   if (errors.length > 0) {
@@ -195,6 +314,10 @@ function main() {
   console.log(
     "  pwsh -c \"Test-Path C:\\git\\kubernia\\.claude\\worktrees\" # muss False oder leerer Ordner sein"
   );
+
+  // Ein gemeldeter Reparse-Point bleibt offen (wird nie automatisch gelöscht,
+  // #1051) — der Lauf darf deshalb nicht grün enden.
+  if (suspicious.length > 0) process.exit(1);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
