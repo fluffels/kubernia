@@ -12,27 +12,57 @@ import assert from "node:assert/strict";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts fuer das .mjs-Tooling-Skript.
-import * as cleanup from "../scripts/cleanup-worktrees.mjs";
+import * as cleanupModule from "../scripts/cleanup-worktrees.mjs";
 
-const parseWorktreeListPorcelain: (output: string) => string[] =
-  cleanup.parseWorktreeListPorcelain;
-const registeredWorktreePaths: (cwd: string, deps?: object) => string[] =
-  cleanup.registeredWorktreePaths;
-const localWorktreeDirs: (worktreesDir: string, deps?: object) => string[] =
-  cleanup.localWorktreeDirs;
-const computeOrphans: (worktreesDir: string, dirs: string[], registered: Set<string>) => string[] =
-  cleanup.computeOrphans;
-const diagnoseOrphans: (
-  cwd: string,
-  deps?: object
-) => { ok: boolean; orphans: string[]; mainRoot: string | null; worktreesDir: string | null } =
-  cleanup.diagnoseOrphans;
-const fixOrphans: (
-  mainRoot: string,
-  worktreesDir: string,
-  orphans: string[],
-  deps?: object
-) => { removed: string[]; errors: string[] } = cleanup.fixOrphans;
+/**
+ * Die Modul-Form EINMAL zentral deklarieren und den Import genau hier casten.
+ *
+ * Vorher haengte jede Funktion einzeln direkt am untypisierten Namespace, was pro
+ * Zeile ein `no-unsafe-assignment`/`no-unsafe-member-access` erzeugte (12 Stueck,
+ * in eslint-suppressions.json eingefroren). Ein einziger expliziter Cast auf
+ * diesen Typ macht dieselbe Zusicherung sichtbar an EINER Stelle -- die Signaturen
+ * sind ohnehin von Hand gepflegt, jetzt aber ohne stumm geschaltete Regel.
+ */
+type CleanupModule = {
+  parseWorktreeListPorcelain: (output: string) => string[];
+  registeredWorktreePaths: (cwd: string, deps?: object) => string[];
+  localWorktreeDirs: (worktreesDir: string, deps?: object) => string[];
+  suspiciousWorktreeEntries: (worktreesDir: string, deps?: object) => string[];
+  computeOrphans: (worktreesDir: string, dirs: string[], registered: Set<string>) => string[];
+  diagnoseOrphans: (
+    cwd: string,
+    deps?: object
+  ) => { ok: boolean; orphans: string[]; mainRoot: string | null; worktreesDir: string | null };
+  fixOrphans: (
+    mainRoot: string,
+    worktreesDir: string,
+    orphans: string[],
+    deps?: object
+  ) => {
+    removed: string[];
+    errors: string[];
+    refused: Array<{ name: string; reason: string }>;
+  };
+  assertSafeOrphanTarget: (
+    mainRoot: string,
+    worktreesDir: string,
+    name: string,
+    deps?: object
+  ) => { safe: boolean; reason?: string };
+};
+
+const cleanup = cleanupModule as unknown as CleanupModule;
+
+const {
+  parseWorktreeListPorcelain,
+  registeredWorktreePaths,
+  localWorktreeDirs,
+  suspiciousWorktreeEntries,
+  computeOrphans,
+  diagnoseOrphans,
+  fixOrphans,
+  assertSafeOrphanTarget,
+} = cleanup;
 
 describe("parseWorktreeListPorcelain (#952)", () => {
   test("ein Eintrag (nur Haupt-Checkout)", () => {
@@ -183,24 +213,183 @@ describe("diagnoseOrphans (#952)", () => {
   });
 });
 
-describe("fixOrphans (#952)", () => {
-  test("erfolgreiches Loeschen, removed enthaelt Namen, errors leer", () => {
+
+// ── assertSafeOrphanTarget (#1051) ───────────────────────────────────────────
+//
+// Der Schutzgurt vor dem `rmSync`. Kern des Tickets: am 2026-08-08 wurden beim
+// Aufräumen des Worktrees kq-1027 ALLE versionierten Dateien unter `.claude/`
+// im Haupt-Checkout gelöscht. Die Ursache liess sich aus der Code-Lesart nicht
+// bestimmen (siehe Skript-Kopf) — dieser Guard sichert den Löschpfad daher
+// URSACHENUNABHÄNGIG ab: er verweigert, sobald das Ziel nicht beweisbar ein
+// echtes Verzeichnis ECHT UNTERHALB von `<mainRoot>/.claude/worktrees/` ist.
+// Bewusst fail-closed — ein Löschpfad, der den Agenten entwaffnen kann, darf im
+// Zweifel nichts tun.
+
+describe("assertSafeOrphanTarget (#1051)", () => {
+  const MAIN = "/root";
+  const WT = "/root/.claude/worktrees";
+  const BS = String.fromCharCode(92);
+
+  /** lstat-Fake: meldet ein echtes Verzeichnis (der legitime Normalfall). */
+  const dirLstat = { lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => false }) };
+
+  function safe(name: string, deps: object = dirLstat, main = MAIN, wt = WT) {
+    return assertSafeOrphanTarget(main, wt, name, deps);
+  }
+
+  test("legitimer Waisen-Ordner unterhalb .claude/worktrees, safe true", () => {
+    const r = safe("kq-1027");
+    assert.equal(r.safe, true, `sollte safe sein, reason: ${r.reason}`);
+  });
+
+  test("gemischte Separatoren im worktreesDir werden trotzdem als legitim erkannt", () => {
+    // So entsteht der Pfad real: mainRoot ist slash-normalisiert (aus
+    // parseWorktreeListPorcelain), join() haengt auf Windows Backslashes an.
+    const mixed = "C:/git/kubernia" + BS + ".claude" + BS + "worktrees";
+    const r = safe("kq-1027", dirLstat, "C:/git/kubernia", mixed);
+    assert.equal(r.safe, true, `Guard darf sich nicht selbst blockieren, reason: ${r.reason}`);
+  });
+
+  // ── Negativfaelle: das ist der eigentliche Wert dieses Guards ──────────────
+  //
+  // Tabellengetrieben, damit JEDER Fall automatisch beides prueft: safe:false UND
+  // eine nicht-leere Begruendung (eine Verweigerung ohne Grund waere fuer die
+  // Maintainerin unbrauchbar). `wt` ueberschreibt worktreesDir, `lstat` das stat.
+  const symlink = { lstatSync: () => ({ isDirectory: () => false, isSymbolicLink: () => true }) };
+  const REFUSE: Array<{ was: string; name: string; wt?: string; lstat?: object }> = [
+    { was: "leerer Name (zeigte sonst auf worktreesDir SELBST)", name: "" },
+    { was: "Name ist ein Punkt (zeigte sonst auf worktreesDir selbst)", name: "." },
+    { was: "Name ist zwei Punkte (genau der real eingetretene .claude-Schaden)", name: ".." },
+    { was: "Name steigt zwei Ebenen auf (traefe sonst den Haupt-Checkout)", name: "../.." },
+    { was: "Slash-Trenner im Namen (nur EIN Pfad-Segment erlaubt)", name: "a/b" },
+    { was: "Backslash-Trenner im Namen (Windows-Variante)", name: "a" + BS + "b" },
+    { was: "worktreesDir ist mainRoot selbst (Hypothese 3 des Tickets)", name: "kq-1027", wt: MAIN },
+    {
+      was: "worktreesDir ist .claude selbst (der real eingetretene Schaden)",
+      name: "worktrees",
+      wt: "/root/.claude",
+    },
+    {
+      was: "worktreesDir ausserhalb von mainRoot",
+      name: "kq-1027",
+      wt: "/anderswo/.claude/worktrees",
+    },
+    // Deckt gezielt die Gleichheits-Pruefung ab: das Ziel liegt UNTERHALB des
+    // erwarteten Ordners, die reine Prefix-Pruefung liesse es also durch. Ohne
+    // diesen Fall bliebe der Zweig ungetestet (bewiesen in der Red-Green-Probe
+    // zu #1051: Zweig deaktivieren liess die Suite gruen).
+    { was: "worktreesDir eine Ebene ZU TIEF aufgeloest", name: "kq-1027", wt: WT + "/sub" },
+    { was: "Ziel ist ein Symlink/Reparse-Point (Junction nie folgen)", name: "kq-1027", lstat: symlink },
+    {
+      was: "Symlink, der sich als Verzeichnis ausgibt (isDirectory allein genuegt nicht)",
+      name: "kq-1027",
+      lstat: { lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => true }) },
+    },
+    {
+      was: "Ziel ist eine Datei",
+      name: "kq-1027",
+      lstat: { lstatSync: () => ({ isDirectory: () => false, isSymbolicLink: () => false }) },
+    },
+    {
+      was: "lstat wirft ENOENT (Ziel existiert nicht) statt Absturz",
+      name: "kq-1027",
+      lstat: {
+        lstatSync: () => {
+          throw new Error("ENOENT");
+        },
+      },
+    },
+  ];
+
+  for (const { was, name, wt, lstat } of REFUSE) {
+    test(`verweigert: ${was}`, () => {
+      const r = safe(name, lstat ?? dirLstat, MAIN, wt ?? WT);
+      assert.equal(r.safe, false, `haette verweigern muessen: ${was}`);
+      assert.ok((r.reason ?? "").length > 0, `Verweigerung ohne Begruendung: ${was}`);
+    });
+  }
+
+  test("die Symlink-Begruendung nennt den Reparse-Point beim Namen", () => {
+    const r = safe("kq-1027", symlink);
+    assert.ok(
+      /symlink|junction|reparse/i.test(r.reason ?? ""),
+      `reason sollte den Reparse-Point nennen: ${r.reason}`
+    );
+  });
+});
+
+// ── suspiciousWorktreeEntries (#1051) ────────────────────────────────────────
+//
+// Dirent.isDirectory() ist FALSE fuer eine Junction/einen Symlink. Der Filter in
+// localWorktreeDirs uebersah einen Reparse-Point an Worktree-Stelle deshalb
+// STILLSCHWEIGEND: nie als Waise gemeldet, nie aufgeraeumt, nie gewarnt — genau
+// die gefaehrlichste Form war unsichtbar. Diese Funktion macht sie sichtbar.
+
+describe("suspiciousWorktreeEntries (#1051)", () => {
+  test("Ordner existiert nicht, leeres Array", () => {
+    const deps = { existsSync: () => false };
+    assert.deepEqual(suspiciousWorktreeEntries("/x/.claude/worktrees", deps), []);
+  });
+
+  test("nur echte Verzeichnisse, nichts verdaechtig", () => {
     const deps = {
-      execSync: () => "",
-      rmSync: () => {},
-      existsSync: () => false,
+      existsSync: () => true,
+      readdirSync: () => [
+        { name: "kq-1", isDirectory: () => true, isSymbolicLink: () => false },
+        { name: "kq-2", isDirectory: () => true, isSymbolicLink: () => false },
+      ],
     };
+    assert.deepEqual(suspiciousWorktreeEntries("/x/.claude/worktrees", deps), []);
+  });
+
+  test("Symlink an Worktree-Stelle wird gemeldet, war vorher unsichtbar", () => {
+    const deps = {
+      existsSync: () => true,
+      readdirSync: () => [
+        { name: "kq-1", isDirectory: () => true, isSymbolicLink: () => false },
+        { name: "kq-junction", isDirectory: () => false, isSymbolicLink: () => true },
+      ],
+    };
+    assert.deepEqual(suspiciousWorktreeEntries("/x/.claude/worktrees", deps), ["kq-junction"]);
+  });
+
+  test("gewoehnliche Datei ist NICHT verdaechtig, kein Fehlalarm auf .gitkeep", () => {
+    const deps = {
+      existsSync: () => true,
+      readdirSync: () => [
+        { name: ".gitkeep", isDirectory: () => false, isSymbolicLink: () => false },
+      ],
+    };
+    assert.deepEqual(suspiciousWorktreeEntries("/x/.claude/worktrees", deps), []);
+  });
+
+  test("Dirent ohne isSymbolicLink-Methode, kein Absturz", () => {
+    const deps = {
+      existsSync: () => true,
+      readdirSync: () => [{ name: "kq-1", isDirectory: () => true }],
+    };
+    assert.deepEqual(suspiciousWorktreeEntries("/x/.claude/worktrees", deps), []);
+  });
+});
+
+// ── fixOrphans (#952) + Guard-Verdrahtung (#1051) ────────────────────────────
+
+describe("fixOrphans (#952)", () => {
+  /** Legitimer lstat-Fake (echtes Verzeichnis) — der Guard muss durchlassen. */
+  const okDeps = {
+    lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => false }),
+  };
+
+  test("erfolgreiches Loeschen, removed enthaelt Namen, errors leer", () => {
+    const deps = { ...okDeps, execSync: () => "", rmSync: () => {}, existsSync: () => false };
     const result = fixOrphans("/root", "/root/.claude/worktrees", ["kq-1"], deps);
     assert.deepEqual(result.removed, ["kq-1"]);
     assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.refused, []);
   });
 
   test("Ordner besteht nach rmSync weiter, Datei-Lock, errors enthaelt Namen", () => {
-    const deps = {
-      execSync: () => "",
-      rmSync: () => {},
-      existsSync: () => true,
-    };
+    const deps = { ...okDeps, execSync: () => "", rmSync: () => {}, existsSync: () => true };
     const result = fixOrphans("/root", "/root/.claude/worktrees", ["kq-1"], deps);
     assert.deepEqual(result.removed, []);
     assert.deepEqual(result.errors, ["kq-1"]);
@@ -208,6 +397,7 @@ describe("fixOrphans (#952)", () => {
 
   test("rmSync wirft, als error gezaehlt, kein Absturz", () => {
     const deps = {
+      ...okDeps,
       execSync: () => "",
       rmSync: () => {
         throw new Error("EBUSY");
@@ -220,6 +410,7 @@ describe("fixOrphans (#952)", () => {
 
   test("git worktree prune schlaegt fehl, nicht fatal, Loeschung laeuft trotzdem", () => {
     const deps = {
+      ...okDeps,
       execSync: () => {
         throw new Error("prune failed");
       },
@@ -232,13 +423,19 @@ describe("fixOrphans (#952)", () => {
 
   test("mehrere Waisen, gemischtes Ergebnis", () => {
     const deps = {
+      ...okDeps,
       execSync: () => "",
       rmSync: (path: string) => {
         if (path.includes("kq-locked")) throw new Error("EBUSY");
       },
       existsSync: () => false,
     };
-    const result = fixOrphans("/root", "/root/.claude/worktrees", ["kq-1", "kq-locked", "kq-2"], deps);
+    const result = fixOrphans(
+      "/root",
+      "/root/.claude/worktrees",
+      ["kq-1", "kq-locked", "kq-2"],
+      deps
+    );
     assert.deepEqual(result.removed, ["kq-1", "kq-2"]);
     assert.deepEqual(result.errors, ["kq-locked"]);
   });
@@ -248,5 +445,86 @@ describe("fixOrphans (#952)", () => {
     const result = fixOrphans("/root", "/root/.claude/worktrees", [], deps);
     assert.deepEqual(result.removed, []);
     assert.deepEqual(result.errors, []);
+  });
+
+  // ── Guard-Verdrahtung (#1051) ─────────────────────────────────────────────
+
+  test("Guard verweigert, rmSync wird NACHWEISLICH nicht aufgerufen", () => {
+    let rmCalls = 0;
+    const deps = {
+      execSync: () => "",
+      rmSync: () => {
+        rmCalls++;
+      },
+      existsSync: () => false,
+      lstatSync: () => ({ isDirectory: () => false, isSymbolicLink: () => true }),
+    };
+    const result = fixOrphans("/root", "/root/.claude/worktrees", ["kq-junction"], deps);
+    assert.equal(rmCalls, 0, "bei safe:false darf NICHT geloescht werden");
+    assert.deepEqual(result.removed, []);
+    assert.deepEqual(result.errors, []);
+    assert.equal(result.refused.length, 1);
+    assert.equal(result.refused[0].name, "kq-junction");
+    assert.ok((result.refused[0].reason ?? "").length > 0);
+  });
+
+  test("verweigertes Ziel landet in refused, NICHT in errors, semantisch getrennt", () => {
+    const deps = {
+      execSync: () => "",
+      rmSync: () => {},
+      existsSync: () => false,
+      lstatSync: () => {
+        throw new Error("ENOENT");
+      },
+    };
+    const result = fixOrphans("/root", "/root/.claude/worktrees", ["kq-weg"], deps);
+    assert.deepEqual(result.errors, [], "refused ist kein Loeschfehler");
+    assert.deepEqual(
+      result.refused.map((r) => r.name),
+      ["kq-weg"]
+    );
+  });
+
+  test("drei Buckets zugleich, ok und refused und locked, korrekt getrennt", () => {
+    const deps = {
+      execSync: () => "",
+      rmSync: (path: string) => {
+        if (path.includes("kq-locked")) throw new Error("EBUSY");
+      },
+      existsSync: () => false,
+      lstatSync: (path: string) =>
+        path.includes("kq-junction")
+          ? { isDirectory: () => false, isSymbolicLink: () => true }
+          : { isDirectory: () => true, isSymbolicLink: () => false },
+    };
+    const result = fixOrphans(
+      "/root",
+      "/root/.claude/worktrees",
+      ["kq-ok", "kq-junction", "kq-locked"],
+      deps
+    );
+    assert.deepEqual(result.removed, ["kq-ok"]);
+    assert.deepEqual(
+      result.refused.map((r) => r.name),
+      ["kq-junction"]
+    );
+    assert.deepEqual(result.errors, ["kq-locked"]);
+  });
+
+  test("falsch aufgeloester worktreesDir, KEIN einziges rmSync, der Datenverlust-Fall", () => {
+    let rmCalls = 0;
+    const deps = {
+      ...okDeps,
+      execSync: () => "",
+      rmSync: () => {
+        rmCalls++;
+      },
+      existsSync: () => false,
+    };
+    // worktreesDir faellt auf .claude/ zurueck (Hypothese 3): darf NICHTS loeschen.
+    const result = fixOrphans("/root", "/root/.claude", ["worktrees"], deps);
+    assert.equal(rmCalls, 0);
+    assert.deepEqual(result.removed, []);
+    assert.equal(result.refused.length, 1);
   });
 });
