@@ -891,11 +891,8 @@ Ende die zur Entscheidung gestellten Optionen.`,
 (gh pr edit <pr> --add-label maintainer-approved) — es ist die intendierte Änderung dieses
 Tickets, kein Workaround (AGENTS.md § Goodhart-Guard gilt weiter). Reihenfolge, damit der
 gate-change-guard keine späteren Gate-Änderungen übersieht:
-- das Label ERST setzen, wenn alle anderen Checks grün sind (der gate-change-guard ist bis
-  dahin erwartet rot — das ist kein CI-Fehler);
-- brauchst du danach noch einen Fix-Push, das Label VOR dem Push wieder entfernen
-  (gh pr edit <pr> --remove-label maintainer-approved) und erst nach erneut grünen anderen
-  Checks neu setzen.
+das Label ERST setzen, wenn alle anderen Checks grün sind (der gate-change-guard ist bis
+dahin erwartet rot — das ist kein CI-Fehler).
 Den Audit-Kommentar erst posten, wenn gh pr view <pr> --json state,mergeCommit den Merge
 bestätigt: gh pr comment, Kopfzeile "🛡️ Leitplanken-Änderung selbst gemergt", darunter drei
 kurze Punkte — was sich an den Leitplanken ändert, warum, wie reverten (git revert <squash-sha>
@@ -947,7 +944,13 @@ Kein Gate abschwächen, um grün zu werden, und kein maintainer-approved-Label a
 Workaround setzen (AGENTS.md § Goodhart-Guard) — nur bei einer echten, intendierten
 Gate-Änderung. Behebe die Ursache, nicht das Symptom.
 
-${harnessDiff ? `${harnessMergeAuftrag}\n\n` : ''}Wird der PR grün und gemergt: ergebnis="gemergt". Bleibt er rot: ergebnis="ci-rot"
+${
+  harnessDiff
+    ? `${harnessMergeAuftrag}
+Ist das Label schon gesetzt, entferne es VOR deinem Fix-Push (gh pr edit <pr> --remove-label
+maintainer-approved) und setze es erst nach erneut grünen anderen Checks neu.\n\n`
+    : ''
+}Wird der PR grün und gemergt: ergebnis="gemergt". Bleibt er rot: ergebnis="ci-rot"
 mit dem AKTUELLEN Fehler (auch wenn es derselbe ist wie vorher).`,
       { label: `ci-fix ${fixVersuche}/${MAX_FIX_VERSUCHE}:#${nr}`, phase: 'PR + Merge', schema: MERGE_SCHEMA },
     )
