@@ -18,7 +18,7 @@ Eine Backlog-Triage am 2026-09-28 zeigte zwei Dinge:
 
 ## Das Problem
 
-Menschliche Freigabe ist die stärkste Absicherung gegen einen Agenten, der seine eigenen Leitplanken aufweicht — aber sie skaliert nicht, wenn gerade die Leitplanken das Arbeitsgebiet sind. Im Single-Account-Modell ist das Label `maintainer-approved` ohnehin selbst setzbar (#723); der echte menschliche Schritt war nur der **Nicht-Self-Merge**. Gesucht ist ein Ersatz, der Autonomie erlaubt, ohne Leitplanken-Änderungen unsichtbar zu machen.
+Menschliche Freigabe ist die stärkste Absicherung gegen einen Agenten, der seine eigenen Leitplanken aufweicht — aber sie skaliert nicht, wenn gerade die Leitplanken das Arbeitsgebiet sind. Im Single-Account-Modell greift der CODEOWNERS-Pflichtreview nicht (#723), und das Label `maintainer-approved` des `gate-change-guard` (#1012/#1015) ist ebenso selbst setzbar; der echte menschliche Schritt war nur der **Nicht-Self-Merge**. Gesucht ist ein Ersatz, der Autonomie erlaubt, ohne Leitplanken-Änderungen unsichtbar zu machen.
 
 ## Optionen
 
@@ -39,7 +39,7 @@ Die Maintainerin wählt **„komplett alles"**:
 4. **Pre-Flight nur noch für echte Entscheidungen:** 🎨 Optik, ⚠️ riskante Weiche, offene Plan-Weiche. Harness-/Gate-Dateien allein sind kein Stopp-Grund.
 5. **Unverändert:** `gate-change-guard` + CODEOWNERS (das Label markiert jede Leitplanken-Änderung im PR-Log), der Mehr-Perspektiven-Review vor dem Merge, die Goodhart-Verhaltensregel (nie ein Gate abschwächen, nur um grün zu werden).
 
-**Fokus der Harness-Phase.** Parallel entschieden: erst das KI-Gerüst fertig machen, dann wieder Spielentwicklung. Ziele: **wenig Human-in-the-Loop, wenig Tokens, hohe Qualität.** Umgesetzt über die Board-Reihenfolge — Windows-Start des Workflows (#1026), Token-/Loop-Baseline (#1068), dann die Sammeltickets (AGENTS.md kürzen #1064, genau ein Ablauf #1067 mit Folgepunkten #1070, Modell-Routing #1065, native Worktree-Isolation #1066), die Qualitäts-Gates #1023/#1022, danach Security/Repo-Tickets und das Spiel. Ein separates „Projekt-Brain" neben dem Repo wurde verworfen (#935): das Repo selbst (AGENTS.md, ADRs, `docs/`, Issues) ist der Wissensspeicher; nur übertragbare Konzepte gehen ins persönliche Brain der Maintainerin.
+**Fokus der Harness-Phase.** Parallel entschieden: erst das KI-Gerüst fertig machen, dann wieder Spielentwicklung. Ziele: **wenig Human-in-the-Loop, wenig Tokens, hohe Qualität.** Umgesetzt über die Board-Reihenfolge — Windows-Start des Workflows (#1026), Token-/Loop-Baseline (#1068), dann die Sammeltickets (AGENTS.md kürzen #1064, genau ein Ablauf #1067 mit Folgepunkten #1070, Modell-Routing #1065, native Worktree-Isolation #1066), die Qualitäts-Gates #1023/#1022, danach Security/Repo-Tickets und das Spiel. Ein separates „Projekt-Brain" oder Wiki neben dem Repo wurde bewusst nicht angelegt: das Repo selbst (AGENTS.md, ADRs, `docs/`, Issues) ist der Wissensspeicher; nur übertragbare Konzepte und persönliche Arbeitskonventionen (z.B. der Chat-Abschlusssatz, #935) gehören ins persönliche Brain der Maintainerin.
 
 ## Konsequenzen
 
@@ -51,7 +51,7 @@ Die Maintainerin wählt **„komplett alles"**:
 **Negativ / Trade-offs**
 - **Kein Mensch mehr vor dem Merge einer Leitplanken-Änderung.** Ein Agent könnte eine eigene Leitplanke aufweichen; die Absicherung ist nachgelagert (Audit + Revert) und die Goodhart-Regel ist eine Verhaltensregel, kein technischer Riegel.
 - **Harness-Erkennung ist Selbstauskunft** des Umsetzungs-Agenten (`beruehrtHarness`); fasst eine Fix-Runde neu Leitplanken an, merkt die Merge-Phase das nicht — offen in #1070.
-- **Der Auto-Modus von Claude Code bremst trotzdem.** Unabhängig von der Repo-Regel blockt dessen Klassifikator Self-Modification (Änderungen an eigenen Sicherungen, Permissions, Hooks) und teils externe Schreibzugriffe. Solche Tickets brauchen die Maintainerin weiter kurz im normalen Modus; bei Spiel-Tickets fällt das weg.
+- **Der Auto-Modus von Claude Code kann trotzdem bremsen.** Unabhängig von der Repo-Regel kann dessen Klassifikator Änderungen an `.claude/`-Dateien, Hooks oder Permissions als Self-Modification blocken (vgl. [docs/agent-harness.md](../agent-harness.md)); bei der Umsetzung von #1069 blockte er genau die Prompt-Stellen, die den Merge-Checkpoint entfernten, und vereinzelt auch GitHub-Schreib- und Warte-Befehle. Solche Tickets brauchen die Maintainerin weiter kurz im normalen Modus; bei Spiel-Tickets entfällt das weitgehend.
 
 ## Re-Evaluierungs-Trigger
 
