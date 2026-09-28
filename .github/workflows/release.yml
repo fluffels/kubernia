@@ -97,7 +97,7 @@ jobs:
       # (typisch für Alpine-Basis-Images) – es werden nur behebbare blockiert.
       # exit-code: 1 lässt den Schritt fehlschlagen → kein Push bei Fund.
       - name: Trivy-Sicherheitsscan (CRITICAL/HIGH, nur fixierbare)
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: kubernia:scan-target
           format: sarif
@@ -111,7 +111,7 @@ jobs:
       # bleiben, selbst wenn ein nachgeordneter Schritt fehlschlägt).
       - name: Trivy-Ergebnisse in den Security-Tab hochladen
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
 
