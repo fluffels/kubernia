@@ -3,6 +3,7 @@
 > Architecture Decision Record. Format: Kontext → Problem → Optionen → Entscheidung → Konsequenzen → Re-Evaluierung.
 > Status: **akzeptiert** · Datum: 2026-07-01 · Ticket: #530
 > ⚠️ **Integrationsweg teilweise abgelöst durch [ADR 0009](0009-pr-gating-required-checks.md) (2026-07-03, #592):** Der hier bewusst beibehaltene **Direkt-Push auf `main`** ist auf **PR-Gating mit Required-Checks** (`enforce_admins` an) umgestellt — der dritte Re-Eval-Trigger unten ist eingetreten. Das **Entwicklungsmodell** dieses ADR (Harness, Ein-Ticket-Worktree, Fitness-Functions, Kollisionsschutz) bleibt unverändert gültig; nur wie der Slice auf `main` landet, regelt jetzt 0009.
+> ⚠️ **Merge-Recht für Leitplanken-Änderungen präzisiert durch [ADR 0012](0012-harness-autonomie-audit-spur.md) (2026-09-28, #1069):** Harness-/Leitplanken-/Gate-PRs merged der Agent seitdem selbst (Label selbst gesetzt, Audit-Kommentar statt Merge-Freigabe); der Merge-Checkpoint aus #1012 ist zurückgenommen.
 
 ## Status
 
