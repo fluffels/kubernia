@@ -7,11 +7,11 @@ export const meta = {
     { title: 'Auswahl', detail: 'oberstes freies Board-Item claimen + Zuweisung verifizieren' },
     { title: 'Sonderfall', detail: 'Epic aufteilen bzw. Dependabot-Sammelticket auflösen (kein Code)' },
     { title: 'Plan', detail: 'Planungs-Subagent vor der ersten Zeile Code', model: 'kubernia-planner (Opus 5, gepinnt) + effort high' },
-    { title: 'Pre-Flight', detail: 'Risiko-Klärung vor dem Coden: Harness/Optik/Weiche → anhalten + Fragen vorlegen (#1012)' },
+    { title: 'Pre-Flight', detail: 'Risiko-Klärung vor dem Coden: Optik/Weiche → anhalten + Fragen vorlegen (#1012/#1069)' },
     { title: 'Umsetzen', detail: 'Worktree, TDD, npm run verify, im Browser verifizieren, committen', model: 'sonnet' },
     { title: 'Review', detail: '3 Lenses parallel als Konvergenzschleife (Cap 2, frischer Kritiker, #1012)', model: 'opus' },
     { title: 'Nachbessern', detail: 'nur bei blockierenden Findings oder rotem verify' },
-    { title: 'PR + Merge', detail: 'PR öffnen; Harness-Diff → kein Self-Merge (Hand-off); sonst Auto-Merge; rot → max. 3 Fix-Versuche' },
+    { title: 'PR + Merge', detail: 'PR öffnen, Auto-Merge; Harness-Diff → Label selbst + Audit-Kommentar (#1069); rot → max. 3 Fix-Versuche' },
     { title: 'Festgefahren', detail: 'nach 3 erfolglosen Fix-Versuchen: Entscheidungsoptionen + Label, assigned bleiben' },
     { title: 'Cleanup', detail: 'Worktree + Branch entfernen und verifizieren, Issue-Schließung prüfen' },
   ],
@@ -105,7 +105,7 @@ const UMSETZUNG_SCHEMA = {
     beruehrtHarness: {
       type: 'boolean',
       description:
-        'true, wenn git diff --name-only main einen Harness-/Gate-Pfad trifft (Merge-Checkpoint #1012: dann kein Self-Merge)',
+        'true, wenn git diff --name-only main einen Harness-/Gate-Pfad trifft (#1069: dann maintainer-approved selbst setzen + Audit-Kommentar nach dem Merge)',
     },
     browserVerifiziert: {
       type: 'string',
@@ -153,9 +153,9 @@ const MERGE_SCHEMA = {
   properties: {
     ergebnis: {
       type: 'string',
-      enum: ['gemergt', 'wartet-auf-freigabe', 'ci-rot', 'fehler'],
+      enum: ['gemergt', 'ci-rot', 'fehler'],
       description:
-        'gemergt nur, wenn der PR wirklich gemergt ist. wartet-auf-freigabe = Harness-Diff (#1012): PR offen + CI grün, aber bewusst NICHT self-gemergt, Übergabe an die Maintainerin. Ein offener/grüner Nicht-Harness-PR zählt nicht als gemergt.',
+        'gemergt nur, wenn der PR wirklich gemergt ist — auch ein Harness-Diff wird seit #1069 selbst gemergt. Ein offener oder grüner, aber nicht gemergter PR zählt nicht als gemergt.',
     },
     prNummer: { type: 'integer' },
     roterCheck: { type: 'string', description: 'Name des fehlschlagenden Checks' },
@@ -175,7 +175,7 @@ const PREFLIGHT_SCHEMA = {
     },
     grund: {
       type: 'string',
-      description: 'welches Signal: Harness-/Gate-Datei, 🎨 Optik, ⚠️ riskante Weiche oder eine vom Plan gemeldete offene Weiche',
+      description: 'welches Signal: 🎨 Optik, ⚠️ riskante Weiche oder eine vom Plan gemeldete offene Weiche',
     },
     offeneFragen: {
       type: 'array',
@@ -322,8 +322,8 @@ const MAX_REVIEW_RUNDEN = 2
 /**
  * Harness-/Gate-Pfade (#1012) — Substring-Form, Spiegel des PROTECTED-Arrays in
  * .github/workflows/ci.yml und der .github/CODEOWNERS-Liste (Sync bewacht
- * test/harness-approval.test.ts). Fasst ein Diff einen dieser Pfade an, greift der
- * Merge-Checkpoint: der Agent merged NICHT selbst, sondern übergibt an die Maintainerin.
+ * test/harness-approval.test.ts). Fasst ein Diff einen dieser Pfade an, setzt der Agent
+ * maintainer-approved selbst, mergt und hinterlässt einen Audit-Kommentar (#1069).
  */
 const HARNESS_PFADE = [
   '.dependency-cruiser.cjs',
@@ -559,10 +559,11 @@ AUFGABE — klassifiziere, ob dieses Ticket VOR dem Coden eine menschliche Entsc
 braucht. Triff selbst KEINE inhaltliche Entscheidung — sammle nur die offenen Fragen.
 
 brauchtKlaerung = true, wenn EINES zutrifft:
-- der zu erwartende Diff fasst Harness-/Gate-Dateien an (${HARNESS_PFADE.join(', ')}) — Selbstmodifikation der Leitplanken;
 - das Ticket ist 🎨 Optik/Grafik (das Aussehen legt die Maintainerin fest, AGENTS.md § Grafik-Stil);
 - eine ⚠️ riskante Weiche (z.B. Major-Migration mit Breaking Changes);
 - der Plan meldet eine offene Weiche/Entscheidung, die nicht eindeutig aus dem Ticket folgt.
+
+Harness-/Gate-Dateien allein sind KEIN Grund (#1069) — der Agent mergt solche Diffs selbst.
 
 Grundlage: AGENTS.md § Human-in-the-Loop-Checkpoints. Gib bei brauchtKlaerung=true
 1-4 konkrete Entscheidungsfragen in offeneFragen zurück.`,
@@ -637,10 +638,10 @@ Sichtbare Änderungen zusätzlich im Browser verifizieren.
 Committe mit (#${nr}) in der Nachricht. Gib Branch und absoluten Worktree-Pfad zurück.
 
 Setze beruehrtHarness=true, wenn git diff --name-only origin/main...HEAD einen Harness-/Gate-Pfad
-trifft (${HARNESS_PFADE.join(', ')}) — dann greift später der Merge-Checkpoint (#1012): der PR
-wird nicht self-gemergt, sondern an die Maintainerin übergeben. Drei-Punkt gegen origin/main aus
-demselben Grund wie beim Patch unten: gegen ein lokal veraltetes main klassifizierte der
-Checkpoint anhand fremder Dateien.
+trifft (${HARNESS_PFADE.join(', ')}) — dann setzt die Merge-Phase maintainer-approved selbst und
+hinterlässt nach dem Merge einen Audit-Kommentar (#1069). Drei-Punkt gegen origin/main aus
+demselben Grund wie beim Patch unten: gegen ein lokal veraltetes main klassifizierte die
+Merge-Phase anhand fremder Dateien.
 
 ${patchAuftrag(nr, 1)}`,
     { label: `umsetzen:#${nr}`, phase: 'Umsetzen', schema: UMSETZUNG_SCHEMA, model: 'sonnet' },
@@ -874,12 +875,20 @@ Ende die zur Entscheidung gestellten Optionen.`,
   // ── Phase 7: PR + Merge, mit erzwungener Fix-Versuchsgrenze ───────────────
   phase('PR + Merge')
 
-  // Merge-Checkpoint (#1012): fasst der Diff Harness-/Leitplanken-Dateien an, merged der
-  // Agent NICHT selbst — PR öffnen, CI grün, dann Hand-off an die Maintainerin.
+  // Harness-/Leitplanken-Diff (#1069): kein Hand-off mehr — der Agent setzt
+  // maintainer-approved selbst (die Änderung ist die intendierte des Tickets, kein
+  // Workaround), mergt wie sonst auch und hinterlässt danach einen Audit-Kommentar,
+  // den die Maintainerin asynchron gegenlesen kann.
   const harnessDiff = !!umsetzung.beruehrtHarness
   if (harnessDiff) {
-    log('Diff fasst Harness-/Leitplanken-Dateien an (#1012) — Merge-Checkpoint: kein Self-Merge, Hand-off an die Maintainerin.')
+    log('Diff fasst Harness-/Leitplanken-Dateien an (#1069) — Label selbst setzen, mergen, Audit-Kommentar hinterlassen.')
   }
+  const harnessMergeAuftrag = `Dieser Diff fasst Harness-/Leitplanken-Dateien an (#1069). Setze deshalb VOR dem
+Auto-Merge selbst das Label: gh pr edit <pr> --add-label maintainer-approved — es ist die
+intendierte Änderung dieses Tickets, kein Workaround (AGENTS.md § Goodhart-Guard gilt weiter).
+Direkt NACH dem Merge einen Audit-Kommentar auf den PR posten (gh pr comment), Kopfzeile
+"🛡️ Leitplanken-Änderung selbst gemergt", darunter drei kurze Punkte: was sich an den
+Leitplanken ändert, warum, und wie reverten (git revert <squash-sha> per PR).`
 
   let merge = await agent(
     `${kopf}
@@ -892,27 +901,15 @@ Vor dem PR: prüfe kurz gh issue view ${nr} --json state,closedAt. Ist das Issue
 zwischenzeitlich extern geschlossen (paralleler Agent), NICHT überschreiben —
 ergebnis="fehler" mit der Kollision als meldung.
 
-${
-  harnessDiff
-    ? `AUFGABE — EINEN Pull Request öffnen und die CI grün bringen, aber bewusst NICHT self-mergen
-(Merge-Checkpoint #1012: dieser Diff fasst Harness-/Leitplanken-Dateien an — die Freigabe +
-der Merge sind der Maintainerin vorbehalten). Branch pushen, gh pr create mit "Closes #${nr}"
-im Body. KEIN Auto-Merge (kein gh pr merge --auto), KEIN maintainer-approved-Label setzen.
-- CI grün: ergebnis="wartet-auf-freigabe" mit prNummer. Der Check gate-change-guard ist ohne
-  das Label ERWARTET rot — das ist kein Fehler, sondern genau der Riegel; ignoriere ihn für die
-  Grün-Bewertung und melde trotzdem "wartet-auf-freigabe".
-- Ein ANDERER Required-Check rot: ergebnis="ci-rot" mit roterCheck + relevanten Log-Zeilen
-  (Fix in der nächsten Runde, NICHT selbst).`
-    : `AUFGABE — EINEN Pull Request öffnen und bis zum Merge bringen, genau nach
+AUFGABE — EINEN Pull Request öffnen und bis zum Merge bringen, genau nach
 AGENTS.md § Git-Workflow — PR-gegated (erste harte Regel) und § Kollisionsschutz,
 letzter Punkt. Kurz: Branch pushen, gh pr create mit "Closes #${nr}" im Body,
 Auto-Merge setzen, CI abwarten.
-
+${harnessDiff ? `\n${harnessMergeAuftrag}\n` : ''}
 Ein Ticket ist erst fertig, wenn sein PR gemergt ist. Ein offener oder grüner,
 aber nicht gemergter PR ist ergebnis="ci-rot" bzw. "fehler", nie "gemergt".
 Ist die CI rot, gib ergebnis="ci-rot" mit roterCheck und den relevanten Log-Zeilen
-zurück — versuche den Fix NICHT selbst, das übernimmt die nächste Runde.`
-}`,
+zurück — versuche den Fix NICHT selbst, das übernimmt die nächste Runde.`,
     { label: `pr+merge:#${nr}`, phase: 'PR + Merge', schema: MERGE_SCHEMA },
   )
 
@@ -939,37 +936,10 @@ Kein Gate abschwächen, um grün zu werden, und kein maintainer-approved-Label a
 Workaround setzen (AGENTS.md § Goodhart-Guard) — nur bei einer echten, intendierten
 Gate-Änderung. Behebe die Ursache, nicht das Symptom.
 
-${
-  harnessDiff
-    ? `Wird die CI grün (bis auf den ERWARTET roten gate-change-guard ohne Label): ergebnis="wartet-auf-freigabe"
-— NICHT self-mergen, kein Auto-Merge/Label (Merge-Checkpoint #1012). Bleibt ein anderer Check rot:
-ergebnis="ci-rot" mit dem AKTUELLEN Fehler.`
-    : `Wird der PR grün und gemergt: ergebnis="gemergt". Bleibt er rot: ergebnis="ci-rot"
-mit dem AKTUELLEN Fehler (auch wenn es derselbe ist wie vorher).`
-}`,
+${harnessDiff ? `${harnessMergeAuftrag}\n\n` : ''}Wird der PR grün und gemergt: ergebnis="gemergt". Bleibt er rot: ergebnis="ci-rot"
+mit dem AKTUELLEN Fehler (auch wenn es derselbe ist wie vorher).`,
       { label: `ci-fix ${fixVersuche}/${MAX_FIX_VERSUCHE}:#${nr}`, phase: 'PR + Merge', schema: MERGE_SCHEMA },
     )
-  }
-
-  if (merge && merge.ergebnis === 'wartet-auf-freigabe') {
-    // Merge-Checkpoint (#1012): PR offen + CI grün, aber bewusst NICHT self-gemergt.
-    // Übergabe an die Maintainerin — Worktree + Claim bleiben stehen (kein Cleanup).
-    log(
-      `⏸ PR #${merge.prNummer} zu ${ticket} ist grün, aber Harness-/Leitplanken-Diff — Übergabe an die Maintainerin (kein Self-Merge). Worktree ${worktree} bleibt stehen.`,
-    )
-    return {
-      ergebnis: 'wartet-auf-freigabe',
-      nummer: nr,
-      titel: auswahl.titel,
-      prNummer: merge.prNummer,
-      worktree,
-      umsetzung: umsetzung.zusammenfassung,
-      review: lensBerichte.map((b) => ({ lens: b.lens, verdikt: b.verdikt })),
-      hinweiseOffen: hinweise.length,
-      ausserhalbScope,
-      hinweis:
-        'Harness-/Leitplanken-Änderung (#1012): PR reviewen, maintainer-approved setzen und mergen. DANACH Worktree/Branch aufräumen und die ausserhalbScope-Punkte als Issues anlegen.',
-    }
   }
 
   if (!merge || merge.ergebnis !== 'gemergt') {
