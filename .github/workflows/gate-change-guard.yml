@@ -119,5 +119,5 @@ jobs:
 
           echo "::error title=Gate-/Harness-Aenderung ohne Sign-off::Dieser PR aendert Gate-Config oder Harness-/Leitplanken-Dateien (${gate_files[*]}). Label 'maintainer-approved' fehlt."
           echo "::error::Losung: gh pr edit $PR_NUMBER --add-label maintainer-approved (oder ueber die GitHub-UI)."
-          echo "::error::Warum: Gate-Config aendern kann ein Gate unbemerkt abschwaechen (Goodhart, #903); Harness-/Leitplanken-Dateien sind Selbstmodifikation (#1012) — beides braucht menschliche Freigabe."
+          echo "::error::Warum: Gate-Config aendern kann ein Gate unbemerkt abschwaechen (Goodhart, #903); Harness-/Leitplanken-Dateien sind Selbstmodifikation (#1012). Seit #1069 darf der Agent das Label bei der INTENDIERTEN Aenderung seines Tickets selbst setzen (danach Audit-Kommentar auf dem PR) — nie als Workaround, um ein Gate gruen zu bekommen."
           exit 1

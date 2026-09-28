@@ -24,7 +24,6 @@ Workflow({ name: "kubernia-ticket", args: 815 })
 Der Workflow läuft im Hintergrund. Danach: den zurückgegebenen Endstand knapp berichten — was gelaufen ist, welche Nummer, ob gemergt. Sonderausgänge (#1012):
 - **`wartet-auf-klaerung`** — die Pre-Flight-Klärung hält an: die `offeneFragen` der Maintainerin vorlegen (z.B. per `AskUserQuestion`), dann `Workflow({ name: "kubernia-ticket", resumeFromRunId, args: { klaerungAntworten: [...] } })`. **Lief der Ursprungslauf auf einer vorgegebenen Nummer, diese mitgeben** — `args: { nummer: 815, klaerungAntworten: [...] }` —, sonst fehlt sie dem Auswahl-Prompt beim Resume.
 - **`ungueltige-args`** — aus `args` ließ sich keine Ticketnummer ableiten; der Lauf bricht bewusst ab, statt still das oberste Board-Item zu claimen (#1027). `args` korrigieren und neu starten (kein Resume nötig, es wurde noch kein Agent gestartet).
-- **`wartet-auf-freigabe`** — Harness-/Leitplanken-Diff: PR offen + CI grün, aber bewusst **nicht** self-gemergt. Der Maintainerin zum Review + `maintainer-approved` + Merge übergeben; Worktree bleibt bis dahin stehen.
 - **`festgefahren` / `review-festgefahren`** — die Entscheidungsoptionen zeigen, statt weiter zu probieren.
 
 ## Wann dieser Skill statt `/kubernia`?
@@ -34,12 +33,12 @@ Der Workflow läuft im Hintergrund. Danach: den zurückgegebenen Endstand knapp 
 | Läuft mit | **jedem** Agenten/Tool (liest nur `AGENTS.md`) | **nur** Claude Code |
 | Fortschritt | Chat-Verlauf | Phasen-Baum in `/workflows` |
 | Rückfragen mitten drin | ja (live `AskUserQuestion`) | **ja, via Halt → `resumeFromRunId`** (kein Live-Prompt; #1012) |
-| Human-in-the-Loop (#1012) | Pre-Flight + Merge per `AskUserQuestion`/Hand-off | Pre-Flight **hält an + gibt Fragen zurück**; Harness-Diff → kein Self-Merge |
+| Human-in-the-Loop (#1012/#1069) | Pre-Flight per `AskUserQuestion`; Harness-Diff → Label selbst + Audit-Kommentar | Pre-Flight **hält an + gibt Fragen zurück**; Harness-Diff → Label selbst + Audit-Kommentar |
 | Abbruch/Absturz | von vorn | `resumeFromRunId` — unveränderte Phasen kommen aus dem Cache |
 | Review-Lenses (#532) | Konvergenzschleife (Cap 2) | **parallel**, als Konvergenzschleife (Cap 2, #1012) |
 | Fix-Versuchsgrenze (#710) | Verhaltensregel | **Schleifengrenze im Skript** |
 
-✅ **Auch heikle Tickets laufen jetzt über den Workflow (#1012).** Weil das Ticket automatisch gezogen wird, weiß man vorab nicht, ob es eine Rückfrage braucht — der Workflow **klassifiziert das selbst** (Pre-Flight): braucht ein Ticket eine Entscheidung (🎨 Optik/Grafik, ⚠️ riskante Weiche, Harness-/Gate-Datei, offene Plan-Weiche), **hält er an und gibt die Fragen zurück**, statt zu codieren. Das Workflow-Tool hat kein Mid-Run-Ask-Primitiv: die Fragen der Maintainerin vorlegen, dann per `resumeFromRunId` mit den Antworten in `args.klaerungAntworten` fortsetzen (Auswahl + Plan kommen aus dem Cache, kaum Extra-Tokens). Am Merge übergibt er Harness-/Leitplanken-Diffs bewusst an die Maintainerin (kein Self-Merge). Epics und das 🤖-Dependabot-Sammelticket steigen wie bisher nach dem Claimen in eine eigene Phase aus (kein Code, kein Worktree).
+✅ **Auch heikle Tickets laufen jetzt über den Workflow (#1012).** Weil das Ticket automatisch gezogen wird, weiß man vorab nicht, ob es eine Rückfrage braucht — der Workflow **klassifiziert das selbst** (Pre-Flight): braucht ein Ticket eine Entscheidung (🎨 Optik/Grafik, ⚠️ riskante Weiche, offene Plan-Weiche), **hält er an und gibt die Fragen zurück**, statt zu codieren. Das Workflow-Tool hat kein Mid-Run-Ask-Primitiv: die Fragen der Maintainerin vorlegen, dann per `resumeFromRunId` mit den Antworten in `args.klaerungAntworten` fortsetzen (Auswahl + Plan kommen aus dem Cache, kaum Extra-Tokens). Harness-/Leitplanken-Diffs mergt er seit #1069 selbst (Label selbst gesetzt, danach Audit-Kommentar auf dem PR). Epics und das 🤖-Dependabot-Sammelticket steigen wie bisher nach dem Claimen in eine eigene Phase aus (kein Code, kein Worktree).
 
 ## Warum es beides gibt
 
