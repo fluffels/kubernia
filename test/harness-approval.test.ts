@@ -1,12 +1,12 @@
-/* Harness-Freigabe-Wächter (#1012) – Human-in-the-Loop-Checkpoints für risikoreiche Diffs.
+/* Harness-Freigabe-Wächter (#1012, Regel seit #1069) – Sign-off + Audit-Spur für Leitplanken-Diffs.
  *
- * Kubernia mergt autonom. Der Marktstandard 2026 gate't nicht den ganzen Lauf, sondern die
- * RISKANTE ENTSCHEIDUNG – und Selbstmodifikation der Leitplanken ist der Paradefall für einen
- * Pflicht-Stopp („am Harness darf die KI nicht komplett allein"). Dieser Wächter deckt die zwei
- * Fehlklassen ab, die diese Regel leise aushöhlen:
+ * Kubernia mergt autonom. Leitplanken-Änderungen (Selbstmodifikation) waren bis #1069 ein
+ * Pflicht-Stopp; seitdem setzt der Agent das Label `maintainer-approved` bei der intendierten
+ * Änderung seines Tickets selbst, mergt und hinterlässt einen Audit-Kommentar. Dieser Wächter
+ * deckt die zwei Fehlklassen ab, die diese Regel leise aushöhlen:
  *
- *   1. **Die portable Regel verschwindet.** Die Verhaltensregel „Harness-/Leitplanken-Änderungen
- *      brauchen menschliche Freigabe" lebt tool-neutral in AGENTS.md. Wird sie umformuliert bis
+ *   1. **Die portable Regel verschwindet.** Die Verhaltensregel (Pre-Flight-Klärung + Audit-
+ *      Kommentar nach dem Selbst-Merge) lebt tool-neutral in AGENTS.md. Wird sie umformuliert bis
  *      der Marker fehlt, liest ein fremder Agent (der nur AGENTS.md kennt) sie nicht mehr.
  *   2. **Die zwei Durchsetzungs-Listen driften auseinander.** Der CI-Riegel `gate-change-guard`
  *      (.github/workflows/gate-change-guard.yml, Array PROTECTED) ist laut eigenem Kommentar
@@ -67,8 +67,8 @@ function guardProtectedPaths(text: string): Set<string> {
 }
 
 /**
- * Leitplanken-Dateien, die über die reine Gate-Config hinaus eine menschliche Freigabe
- * brauchen (Ticket #1012 / Maintainerin-Entscheidung „breit"). In Substring-Form – so wie
+ * Leitplanken-Dateien, die über die reine Gate-Config hinaus den sichtbaren Sign-off tragen
+ * (Ticket #1012 / Maintainerin-Entscheidung „breit"). In Substring-Form – so wie
  * beide Listen sie nach der Normalisierung führen müssen.
  */
 const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", ".claude/", ".agents/", "docs/agent-harness"];
@@ -79,7 +79,8 @@ const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", ".claude/", ".agents/", "docs/age
  * sonst findet ihn ein fremder Agent nicht mehr.
  */
 const AGENTS_MARKER = [
-  "Human-in-the-Loop", // der Checkpoint-Regel-Bullet (Pre-Flight + Merge-Hand-off)
+  "Human-in-the-Loop", // der Checkpoint-Regel-Bullet (Pre-Flight-Klärung)
+  "Leitplanken-Änderung selbst gemergt", // Audit-Kommentar-Pflicht nach dem Selbst-Merge (#1069)
   "Mehr-Perspektiven-Review", // die erzwungene Review-Konvergenzschleife vor dem Merge
 ];
 
@@ -108,7 +109,7 @@ describe("Harness-Freigabe – die zwei Durchsetzungs-Listen bleiben synchron (#
     assert.deepEqual(
       fehlend,
       [],
-      "Leitplanken-Dateien fehlen im Freigabe-Riegel (#1012: Harness-Änderungen brauchen menschliche Freigabe):\n" +
+      "Leitplanken-Dateien fehlen im Sign-off-Riegel (#1012/#1069: Harness-Änderungen tragen das Label als sichtbaren Marker):\n" +
         fehlend.join("\n"),
     );
   });

@@ -158,6 +158,10 @@ const MERGE_SCHEMA = {
         'gemergt nur, wenn der PR wirklich gemergt ist — auch ein Harness-Diff wird seit #1069 selbst gemergt. Ein offener oder grüner, aber nicht gemergter PR zählt nicht als gemergt.',
     },
     prNummer: { type: 'integer' },
+    auditKommentar: {
+      type: 'string',
+      description: 'nur bei Harness-/Leitplanken-Diff (#1069): URL des Audit-Kommentars nach dem Merge',
+    },
     roterCheck: { type: 'string', description: 'Name des fehlschlagenden Checks' },
     fehlerAusgabe: { type: 'string', description: 'die relevanten Zeilen aus dem CI-Log' },
     meldung: { type: 'string' },
@@ -883,12 +887,19 @@ Ende die zur Entscheidung gestellten Optionen.`,
   if (harnessDiff) {
     log('Diff fasst Harness-/Leitplanken-Dateien an (#1069) — Label selbst setzen, mergen, Audit-Kommentar hinterlassen.')
   }
-  const harnessMergeAuftrag = `Dieser Diff fasst Harness-/Leitplanken-Dateien an (#1069). Setze deshalb VOR dem
-Auto-Merge selbst das Label: gh pr edit <pr> --add-label maintainer-approved — es ist die
-intendierte Änderung dieses Tickets, kein Workaround (AGENTS.md § Goodhart-Guard gilt weiter).
-Direkt NACH dem Merge einen Audit-Kommentar auf den PR posten (gh pr comment), Kopfzeile
-"🛡️ Leitplanken-Änderung selbst gemergt", darunter drei kurze Punkte: was sich an den
-Leitplanken ändert, warum, und wie reverten (git revert <squash-sha> per PR).`
+  const harnessMergeAuftrag = `Dieser Diff fasst Harness-/Leitplanken-Dateien an (#1069). Setze das Label selbst
+(gh pr edit <pr> --add-label maintainer-approved) — es ist die intendierte Änderung dieses
+Tickets, kein Workaround (AGENTS.md § Goodhart-Guard gilt weiter). Reihenfolge, damit der
+gate-change-guard keine späteren Gate-Änderungen übersieht:
+- das Label ERST setzen, wenn alle anderen Checks grün sind (der gate-change-guard ist bis
+  dahin erwartet rot — das ist kein CI-Fehler);
+- brauchst du danach noch einen Fix-Push, das Label VOR dem Push wieder entfernen
+  (gh pr edit <pr> --remove-label maintainer-approved) und erst nach erneut grünen anderen
+  Checks neu setzen.
+Den Audit-Kommentar erst posten, wenn gh pr view <pr> --json state,mergeCommit den Merge
+bestätigt: gh pr comment, Kopfzeile "🛡️ Leitplanken-Änderung selbst gemergt", darunter drei
+kurze Punkte — was sich an den Leitplanken ändert, warum, wie reverten (git revert <squash-sha>
+per PR). Gib die URL des Kommentars im Feld auditKommentar zurück.`
 
   let merge = await agent(
     `${kopf}
@@ -981,6 +992,13 @@ Melde am Ende, welche Optionen du zur Entscheidung gestellt hast.`,
   }
 
   log(`PR #${merge.prNummer} gemergt.`)
+  // Die Audit-Spur ersetzt seit #1069 die menschliche Freigabe — fehlt sie, laut melden
+  // statt still als normales "gemergt" durchzulaufen.
+  if (harnessDiff && !merge.auditKommentar) {
+    log(
+      `⚠️ Harness-/Leitplanken-Diff ohne Audit-Kommentar gemergt (#1069) — bitte auf PR #${merge.prNummer} nachholen: "🛡️ Leitplanken-Änderung selbst gemergt" (was / warum / wie reverten).`,
+    )
+  }
 
   // ── Phase 8: Cleanup ──────────────────────────────────────────────────────
   phase('Cleanup')
