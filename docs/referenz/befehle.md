@@ -4,7 +4,7 @@
 >
 > Die Gate-Markierungen („hart", „blockt") geben die **maschinelle** SSOT wieder (die `scripts/check-*.mjs`, CI) — wann welches Gate grün sein muss und dass es **kein Grün-durch-Aufweichen** gibt, steht ausschließlich in [AGENTS.md](../../AGENTS.md#das-wichtigste-zuerst-harte-regeln).
 
-## ⚡ Erste Minute
+## ⚡ Erste Minute (nur Mechanik – der Ablauf steht in AGENTS.md)
 
 ```bash
 npm run setup   # einmalig: Node-Check, npm install, Git-Hooks, alle Checks (Minimalweg: npm install)

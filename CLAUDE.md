@@ -2,7 +2,7 @@
 
 @AGENTS.md
 
-> ⬆️ **Die Zeile darüber ist kein Verweis, sondern ein Import (#992).** Sie zieht die SSOT [AGENTS.md](AGENTS.md) verlässlich in jede Claude-Code-Session; wer den `@`-Import nicht auswertet (andere Tools, Mensch), folgt demselben Link — **ohne AGENTS.md gelesen zu haben, fängst du nicht an.** Bewacht von [`test/claude-bridge.test.ts`](test/claude-bridge.test.ts). Diese Datei trägt **keine eigenen Regeln**; sie entfällt ganz, sobald Claude Code AGENTS.md nativ lädt (#1078).
+> ⬆️ **Die Zeile darüber ist kein Verweis, sondern ein Import (#992).** Sie zieht die SSOT [AGENTS.md](AGENTS.md) verlässlich in jede Claude-Code-Session; wer den `@`-Import nicht auswertet (andere Tools, Mensch), folgt demselben Link — **ohne AGENTS.md gelesen zu haben, fängst du nicht an.** Bewacht von [`test/claude-bridge.test.ts`](test/claude-bridge.test.ts). Diese Datei trägt **keine eigenen Regeln**; sie entfällt mit #1087 ganz (Claude Code ≥ 2.1.277 lädt AGENTS.md nativ, sobald keine CLAUDE.md mehr im Pfad liegt, #1078).
 
 **Nachschlage-Referenz (on-demand, nicht in jeder Session geladen, #1078):**
 

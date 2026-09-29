@@ -46,7 +46,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
  *  Weitere immer geladene Dateien (z.B. README) können hier bei Bedarf ergänzt werden. */
 export const CONTEXT_BUDGETS = [
   { file: "AGENTS.md", budget: 28_000 },
-  { file: "CLAUDE.md", budget: 1_150 },
+  { file: "CLAUDE.md", budget: 1_120 },
 ];
 
 /** Grobe Umrechnung nur für die INFO-Ausgabe (deutscher Markdown-Text, ~4,2 Zeichen/Token).

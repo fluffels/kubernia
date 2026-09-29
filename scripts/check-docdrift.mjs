@@ -5,8 +5,8 @@
  * Harness-Drift-Wächter (#529) — hält die "Doku als Kontext-Selektor" ehrlich,
  * jenseits der Datei-Landkarte (die bewacht #482 / check-docmap.mjs).
  *
- * Hintergrund: AGENTS.md und README werden von JEDER KI-Session als Kontext
- * geladen, die Befehls-Referenz docs/referenz/befehle.md on-demand (#1078). Sie nennen (1) `npm run <x>`-Kommandos, die es in package.json
+ * Hintergrund: AGENTS.md lädt JEDE KI-Session als Kontext; README und die Befehls-
+ * Referenz docs/referenz/befehle.md (#1078) werden on-demand gelesen. Sie nennen (1) `npm run <x>`-Kommandos, die es in package.json
  * geben MUSS, und (2) viele interne Markdown-Links + `#anker` zwischen den Docs.
  * Beides kann leise veralten — ein Agent tippt dann ein totes Kommando oder folgt
  * einem toten Link ins Leere. Der Datei-Landkarten-Wächter (#482) deckt das NICHT
