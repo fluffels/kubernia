@@ -38,7 +38,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Die Docs, die die Befehls-Referenz tragen — nur DIESE zählen als Beleg, dass ein
  *  Kern-Skript dokumentiert ist (Rückwärts-Check). Seit #1078 liegt die vollständige
- *  Befehlsliste on-demand in docs/referenz/befehle.md statt in der (seit #1087 gelöschten)
+ *  Befehlsliste on-demand in docs/referenz/befehle.md statt in der immer geladenen
  *  CLAUDE.md; AGENTS.md und README bleiben, weil sie Alltags-Kommandos selbst nennen. */
 export const CORE_DOCS = ["AGENTS.md", "README.md", "docs/referenz/befehle.md"];
 
