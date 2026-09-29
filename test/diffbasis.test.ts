@@ -139,6 +139,10 @@ describe("Prädikat findeZweiPunktTreffer (#1108)", () => {
     "git diff origin/main...HEAD --stat && git diff --name-only main",
     "git diff origin/main...HEAD; git diff main",
     "git diff origin/main...HEAD | cat; git diff HEAD..main",
+    "git diff origin/main...HEAD | git diff main",
+    // `origin/main` allein reicht nicht – nur der DREI-Punkt gegen die Remote-Ref ist kanonisch.
+    "git diff origin/main..main",
+    "git diff --stat origin/main main",
   ])("meldet %j", (text) => {
     assert.equal(findeZweiPunktTreffer(text).length, 1);
   });
@@ -150,6 +154,12 @@ describe("Prädikat findeZweiPunktTreffer (#1108)", () => {
     "git diff HEAD~1",
     "git diff feature/main-x",
     "git diff -- main.ts",
+    "git diff -- docs/main",
+    "git diff feature/main",
+    "git diff main-branch",
+    // Bewusste Auslegung (Kopf): Zwei-Punkt gegen die FRISCHE Remote-Ref wird (noch) nicht gemeldet.
+    "git diff origin/main..HEAD",
+    "git diff origin/main HEAD",
     "git diff HEAD~1 -- src/main.ts main/x",
     "git -C .claude/worktrees/kq-1 diff origin/main...HEAD",
     // Kanonischer Aufruf im Fence mit Shell-Kommentar, der „main" nennt – die KANONISCH-Ausnahme.
@@ -175,8 +185,11 @@ describe("Harness-Texte diffen nur gegen origin/main... (#1108)", () => {
       ".claude/workflows/kubernia-ticket.js",
       ".claude/skills/review-lenses/SKILL.md",
       ".claude/agents/kubernia-planner.md",
+      ".claude/settings.json",
       "docs/agent-harness.md",
+      "docs/agent-harness-faq.md",
       "AGENTS.md",
+      "CLAUDE.md",
     ]) {
       assert.ok(SCAN.includes(pflicht), `${pflicht} fehlt im Scan-Umfang`);
     }
