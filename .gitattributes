@@ -12,3 +12,9 @@
 # ein CRLF-Checkout (core.autocrlf=true) machte den Workflow unstartbar. Bewacht von
 # test/line-endings.test.ts.
 .claude/** text eol=lf
+# Vorsorglich: Binär-Assets eines künftigen Skills nicht durch die Textregel oben
+# verbiegen lassen (spätere Zeile gewinnt).
+.claude/**/*.png binary
+.claude/**/*.jpg binary
+.claude/**/*.gif binary
+.claude/**/*.webp binary
