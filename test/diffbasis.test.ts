@@ -37,8 +37,8 @@
  * Scan-Umfang: ALLE Dateien der versionierten `.claude`-Ordner (SSOT `VERSIONED_CLAUDE_DIRS` aus
  * scripts/check-docdrift.mjs – ein neuer versionierter Ordner ist damit automatisch drin, egal mit
  * welcher Endung), `.claude/settings.json` (Hook-Kommandos), `docs/agent-harness*.md` und die
- * Root-Kontextdateien. Nicht gescannt: `scripts/**` (dort ist `merge-base … main` ein dokumentierter,
- * korrekter Fallback für flache Checkouts in `check-diffsize.mjs`), `test/**` (Fixtures tragen per
+ * Root-Kontextdatei `AGENTS.md` (eine `CLAUDE.md` ist seit #1087 verboten). Nicht gescannt:
+ * `scripts/**` (dort ist `merge-base … main` ein dokumentierter, korrekter Fallback für flache Checkouts in `check-diffsize.mjs`), `test/**` (Fixtures tragen per
  * Definition beide Formen) und `.github/workflows/*.yml` (diffen gegen SHA-Variablen, kein literales
  * `main`; die Diff-Basis des Goodhart-Guards bewacht `test/harness-approval.test.ts`).
  *
@@ -118,7 +118,6 @@ const SCAN = [
     .filter((n) => n.startsWith("agent-harness") && n.endsWith(".md"))
     .map((n) => `docs/${n}`),
   "AGENTS.md",
-  "CLAUDE.md",
 ].filter((rel) => existsSync(ROOT + rel));
 
 describe("Prädikat findeZweiPunktTreffer (#1108)", () => {
@@ -189,7 +188,6 @@ describe("Harness-Texte diffen nur gegen origin/main... (#1108)", () => {
       "docs/agent-harness.md",
       "docs/agent-harness-faq.md",
       "AGENTS.md",
-      "CLAUDE.md",
     ]) {
       assert.ok(SCAN.includes(pflicht), `${pflicht} fehlt im Scan-Umfang`);
     }
