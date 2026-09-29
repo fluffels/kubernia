@@ -245,15 +245,15 @@ const diffAus = (r) => ({ pfad: r && r.diffPfad, stat: r && r.diffStat, head: r 
 /**
  * Kontext-Diät für die Review-Lenses (#1034). Gemessen an #1021: fünf Lens-Pässe verbrannten
  * ~878k Tokens, und der größte Einzelposten war reine BESCHAFFUNG — jeder Agent öffnete
- * die Root-Kontextdateien (~30k) erneut per Read, obwohl der `@AGENTS.md`-Import sie
- * ohnehin vollständig in seinen Kontext legt. Das erzeugt keinen zusätzlichen
+ * die Root-Kontextdateien (~30k) erneut per Read, obwohl Claude Code sie nativ lädt (#1087)
+ * und sie ohnehin vollständig in seinen Kontext legt. Das erzeugt keinen zusätzlichen
  * Befund, nur Kosten. Zweitgrößter Posten: „lies die geänderten Dateien vollständig".
  *
  * Bewusst als Anweisung an den Agenten statt als Werkzeug-Verbot: die Lens SOLL eine Datei
  * öffnen dürfen, wenn ein Befund den umgebenden Kontext braucht — nur eben gezielt.
  */
 const KONTEXT_DIAET = `Kontext-Ökonomie (#1034) — halte dich daran, sie kostet dich keinen Befund:
-- AGENTS.md liegt durch den @AGENTS.md-Import BEREITS vollständig in deinem
+- AGENTS.md lädt Claude Code nativ – sie liegt BEREITS vollständig in deinem
   Kontext. Öffne sie NICHT erneut mit Read — das ist reine Duplikation. Brauchst du eine
   Stelle wörtlich, greppe punktuell danach (Grep mit dem Regel-Begriff).
 - Die Patch-Datei ist deine Primärquelle. Öffne eine geänderte Datei nur, wenn ein konkreter
@@ -327,7 +327,7 @@ const MAX_REVIEW_RUNDEN = 2
 
 /**
  * Harness-/Gate-Pfade (#1012) — Substring-Form, Spiegel des PROTECTED-Arrays in
- * .github/workflows/ci.yml und der .github/CODEOWNERS-Liste (Sync bewacht
+ * .github/workflows/gate-change-guard.yml und der .github/CODEOWNERS-Liste (Sync bewacht
  * test/harness-approval.test.ts). Fasst ein Diff einen dieser Pfade an, setzt der Agent
  * maintainer-approved selbst, mergt und hinterlässt einen Audit-Kommentar (#1069).
  */

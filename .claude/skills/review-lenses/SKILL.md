@@ -36,7 +36,7 @@ git rev-parse HEAD                                      # Frische-Guard, s.u.
 
 Jede Lens bekommt zusätzlich diese drei Regeln — sie kosten keinen Befund:
 
-1. **`AGENTS.md` nicht erneut öffnen.** Unter Claude Code liegt sie durch den `@AGENTS.md`-Import ohnehin vollständig im Kontext; ein `Read` darauf ist reine Duplikation (~30k Tokens pro Lens). Wird eine Regel wörtlich gebraucht: **punktuell greppen**.
+1. **`AGENTS.md` nicht erneut öffnen.** Unter Claude Code lädt Claude Code sie nativ (#1087), sie liegt also ohnehin vollständig im Kontext; ein `Read` darauf ist reine Duplikation (~30k Tokens pro Lens). Wird eine Regel wörtlich gebraucht: **punktuell greppen**.
 2. **Nur den eigenen Regel-Ausschnitt.** Architektur → Schichtregeln + oberste Regel; Requirement-Treue → Doku-Disziplin + Spielstände; Test-Adäquanz → TDD + Red-Green. Die Ausschnitte der anderen Brillen liest man nicht mit — dafür gibt es ja die anderen Brillen.
 3. **Der Patch ist die Primärquelle.** Eine geänderte Datei nur öffnen, wenn ein konkreter Befund den umgebenden Kontext braucht — und dann gezielt um die Hunk-Zeilen, nicht die ganze Datei.
 

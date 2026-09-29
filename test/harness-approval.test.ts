@@ -18,11 +18,11 @@
  * Gate-Config hinaus: AGENTS.md, CLAUDE.md, .claude/, .agents/, docs/agent-harness) wirklich
  * enthalten – sonst wäre die Regel dokumentiert, aber der Riegel liefe ins Leere.
  *
- * Fitness-Function-Kategorie neben claude-bridge/docmap/readme (#992/#482), nicht mit
+ * Fitness-Function-Kategorie neben agents-md-native/docmap/readme (#1087/#482), nicht mit
  * Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`: `scripts/check-`
  * ist selbst gate-config-geschützt (Goodhart-Guard #903, Label-Pflicht) – für rein
  * doku-/config-strukturelle Wächter gibt es die etablierte test-only-Familie (Präzedenz:
- * `test/claude-bridge.test.ts`).
+ * `test/agents-md-native.test.ts`).
  *
  * Ausführen mit:  npm test
  */
@@ -74,6 +74,8 @@ function guardProtectedPaths(text: string): Set<string> {
  * (Ticket #1012 / Maintainerin-Entscheidung „breit"). In Substring-Form – so wie
  * beide Listen sie nach der Normalisierung führen müssen.
  */
+// CLAUDE.md bleibt geschützt, obwohl sie seit #1087 gelöscht ist: ihre Wiederanlage würde
+// AGENTS.md als geladene SSOT verdrängen und muss darum die Label-Pflicht auslösen.
 const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", ".claude/", ".agents/", "docs/agent-harness"];
 
 /**

@@ -1,5 +1,5 @@
-/* Root-Kontextdatei-Wächter (#719) – Frühwarnung gegen unbegrenzt wachsende AGENTS.md/
- * CLAUDE.md. Analog zu test/filesize.test.ts (#390), aber für die Dateien, die JEDE
+/* Root-Kontextdatei-Wächter (#719) – Frühwarnung gegen eine unbegrenzt wachsende
+ * AGENTS.md. Analog zu test/filesize.test.ts (#390), aber für die Datei(en), die JEDE
  * Agenten-Session vollständig lädt statt für src/-Module.
  *
  * Die Mess-/Allowlist-Logik wird aus scripts/check-context-size.mjs importiert – EINE
@@ -27,7 +27,7 @@ const ALLOWLIST: Allow[] = checkContextSize.ALLOWLIST;
 const collectContextSizes: (rootDir?: string, budgets?: Budget[]) => Sized[] = checkContextSize.collectContextSizes;
 const findOversized: (sizes: Sized[]) => Sized[] = checkContextSize.findOversized;
 // Neu mit #1064: sichtbarer Inline-Disable statt die Bulk-Baseline (Gate-Config) anzuheben,
-// gleiches Muster wie test/claude-bridge.test.ts.
+// gleiches Muster wie test/agents-md-native.test.ts.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const countChars: (text: string) => number = checkContextSize.countChars;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access

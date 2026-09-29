@@ -1,5 +1,5 @@
 /* Verweis-Wächter (#1079) – Freitext-Verweise „AGENTS.md § …" in den versionierten
- * `.claude/`-Dateien müssen in AGENTS.md (bzw. CLAUDE.md) wirklich existieren.
+ * `.claude/`-Dateien müssen in AGENTS.md wirklich existieren (CLAUDE.md ist seit #1087 gelöscht).
  *
  * Warum: Workflow-Skript, Skills und Planer-Agent schicken Phasen-Agenten per Freitext
  * auf Stellen in AGENTS.md (`AGENTS.md § Zu großes Ticket`, `§ Kein
@@ -32,9 +32,9 @@
  * Gegen den umgekehrten Fehlermodus – eine Extraktion, die nach einer Umformulierung
  * still nichts mehr findet – schützt der Leerlauf-Test, und zwar je Verweis-Form.
  *
- * Fitness-Function-Kategorie neben claude-bridge/docmap/docdrift (#482/#529/#992),
+ * Fitness-Function-Kategorie neben agents-md-native/docmap/docdrift (#482/#529/#992),
  * bewusst test-only ohne `scripts/check-*.mjs` (Begründung: Kopf von
- * `test/claude-bridge.test.ts`).
+ * `test/agents-md-native.test.ts`).
  *
  * Ausführen mit:  npm test
  */
@@ -46,7 +46,7 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkInternalRefs from "../scripts/check-internalrefs.mjs";
 
-// Begründete Ausnahme wie in test/claude-bridge.test.ts: das .mjs hat kein Declaration-File.
+// Begründete Ausnahme wie in test/agents-md-native.test.ts: das .mjs hat kein Declaration-File.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const listTrackedFiles: (rootDir?: string) => string[] = checkInternalRefs.listTrackedFiles;
 
@@ -118,7 +118,7 @@ function pruefe<V extends Verweis>(verweise: V[], docs: Record<Ziel, string>): V
 
 const nurBegriffe = (vs: Verweis[]) => vs.map(({ ziel, begriff }) => ({ ziel, begriff }));
 
-// CLAUDE.md ist eine auslaufende Brücke (#1078/#1087): fehlt sie, gilt sie als leer – ein noch
+// CLAUDE.md ist seit #1087 gelöscht: fehlt sie, gilt sie als leer – ein noch
 // übrig gebliebener `CLAUDE.md § …`-Verweis wird dann rot gemeldet, statt dass der Test crasht.
 const DOCS: Record<Ziel, string> = {
   "AGENTS.md": read("AGENTS.md"),
