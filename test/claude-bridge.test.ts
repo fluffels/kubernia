@@ -107,10 +107,9 @@ const RETIRED_ROLE_CLAIMS: { term: string; home: string; pattern?: RegExp }[] = 
 
 /**
  * Versionierte Agenten-Konfiguration (#1002/#1064): Skills, Agents, Workflows unter `.claude/`.
- * `collectMarkdown` nimmt `.claude/` wegen der Parallel-Worktrees komplett aus – damit war auch
- * die versionierte Konfiguration blind. Hier kommt sie über `git ls-files` zurück (Worktrees
- * sind nie versioniert); der Filter schließt `.claude/worktrees/` zusätzlich explizit aus.
- * Auch `.js`, weil die Workflow-Prompts als Freitext in `.claude/workflows/*.js` stehen.
+ * Deren Markdown erfasst seit #1091 auch `collectMarkdown`; nötig bleibt dieser Walk für
+ * `.js`, weil die Workflow-Prompts als Freitext in `.claude/workflows/*.js` stehen. Quelle ist
+ * `git ls-files` (Worktrees sind nie versioniert); `.claude/worktrees/` zusätzlich explizit aus.
  */
 function isVersionedAgentConfig(path: string): boolean {
   return path.startsWith(".claude/") && !path.startsWith(".claude/worktrees/") && /\.(md|js)$/.test(path);
@@ -173,7 +172,7 @@ describe("CLAUDE.md ist eine tragende Brücke zu AGENTS.md (#992)", () => {
 describe("Die Rolle von CLAUDE.md ist überall gleich beschrieben (#992)", () => {
   test("kein Markdown im Repo schreibt CLAUDE.md eine abgelegte Rolle zu", () => {
     const violations: string[] = [];
-    for (const file of [...collectMarkdown(REPO_ROOT), ...collectAgentConfig()]) {
+    for (const file of new Set([...collectMarkdown(REPO_ROOT), ...collectAgentConfig()])) {
       for (const v of retiredRoleClaims(read(file))) {
         violations.push(`${file}:${v.line} nennt CLAUDE.md „${v.term}" – ${v.home}. Zeile: „${v.text}"`);
       }

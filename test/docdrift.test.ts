@@ -16,7 +16,9 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im tsconfig)
@@ -38,6 +40,12 @@ const auditDocDrift: () => {
 } = checkDocDrift.auditDocDrift;
 const parseVerifyChain: (pkgScripts: Record<string, string>) => string[] = checkDocDrift.parseVerifyChain;
 const findDocumentedVerifyChains: (md: string) => string[][] = checkDocDrift.findDocumentedVerifyChains;
+// Neue Bindings (#1091) typisiert per Assertion statt per unsafe-Zugriff: der Alt-Bestand
+// oben ist in eslint-suppressions.json eingefroren und soll nicht wachsen.
+const { collectMarkdown, VERSIONED_CLAUDE_DIRS } = checkDocDrift as unknown as {
+  collectMarkdown: (rootDir?: string) => string[];
+  VERSIONED_CLAUDE_DIRS: Set<string>;
+};
 
 // Begründete Ausnahme wie in claude-bridge.test.ts: eng begrenzter Inline-Disable statt die
 // Gate-Config-Baseline eslint-suppressions.json anzufassen (das .mjs hat kein .d.ts).
@@ -207,5 +215,50 @@ describe("Harness-Doku-Drift (#529)", () => {
       "## Abschnitt",
     ].join("\n");
     assert.deepEqual(collectHeadingSlugs(md), ["titel", "abschnitt", "abschnitt-1"]);
+  });
+});
+
+// #1091: .claude war pauschal ausgeklammert – damit blieben Links/Anker/verify-Ketten in
+// den versionierten Skills/Agenten ungeprüft. Gescannt werden jetzt genau die
+// versionierten .claude-Unterordner; Worktrees und lokaler, untrackter Kram bleiben draußen.
+describe("collectMarkdown: versionierte .claude-Ordner ja, Worktrees/Lokales nein (#1091)", () => {
+  test("erfasst skills/agents/workflows, lässt worktrees, untrackte Ordner und node_modules aus", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kq-docdrift-"));
+    try {
+      const files = [
+        "docs/x.md",
+        ".claude/skills/a/SKILL.md",
+        ".claude/agents/b.md",
+        ".claude/workflows/c.md",
+        ".claude/worktrees/kq-1/AGENTS.md", // Repo-Kopie eines parallelen Agenten
+        ".claude/plugins/lokal.md", // untrackter .claude-Unterordner
+        ".claude/lokal.md", // untrackte Datei direkt unter .claude
+        "node_modules/pkg/README.md",
+        "docs/.claude/y.md", // verschachteltes .claude: KEIN Root-.claude, wird normal gescannt
+      ];
+      for (const f of files) {
+        mkdirSync(dirname(join(dir, f)), { recursive: true });
+        writeFileSync(join(dir, f), "# x\n");
+      }
+      writeFileSync(join(dir, ".claude/settings.local.json"), "{}");
+      assert.deepEqual(collectMarkdown(dir), [
+        ".claude/agents/b.md",
+        ".claude/skills/a/SKILL.md",
+        ".claude/workflows/c.md",
+        "docs/.claude/y.md",
+        "docs/x.md",
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("VERSIONED_CLAUDE_DIRS deckt sich mit den !.claude/<ordner>/-Ausnahmen in .gitignore", () => {
+    // Wird künftig ein weiterer .claude-Unterordner versioniert, darf er nicht still
+    // ungescannt bleiben – und umgekehrt darf die Liste nichts Untracktes öffnen.
+    const gitignore = readFileSync(fileURLToPath(new URL("../.gitignore", import.meta.url)), "utf8");
+    const unignored = [...gitignore.matchAll(/^!\.claude\/([^/\s]+)\/\s*$/gm)].map((m) => m[1]).sort();
+    assert.ok(unignored.length > 0, "Leerlauf-Schutz: keine !.claude/<ordner>/-Zeilen in .gitignore gefunden");
+    assert.deepEqual([...VERSIONED_CLAUDE_DIRS].sort(), unignored);
   });
 });
