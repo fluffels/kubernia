@@ -1,8 +1,8 @@
 /* Doku↔Code-Drift-Wächter (#482, Stardew-Skalierung #907) – hält die Tiefendoc-Abdeckung ehrlich.
  *
- * Seit #907 wird nicht mehr die CLAUDE.md-per-File-Tabelle gegen den Code geprüft, sondern
+ * Seit #907 wird nicht mehr die per-File-Tabelle der Landkarte gegen den Code geprüft, sondern
  * ob jede `src/*.ts` als Backtick-Pfad in min. einem `docs/module/*.md`-Tiefendoc erwähnt ist.
- * CLAUDE.md zeigt nur noch 5 Subsystem-Zeilen (wächst sub-linear zur Modul-Zahl).
+ * Die Repo-Landkarte (docs/referenz/repo-landkarte.md) zeigt nur noch 5 Subsystem-Zeilen (wächst sub-linear zur Modul-Zahl).
  *
  * Die Schicht-Konsistenz-Checks entfallen (#907): `check:arch` (dependency-cruiser) erzwingt
  * die eigentlichen Schichtgrenzen als CI-Gate — die Doku-Schicht-Angaben sind nur noch Prosa.

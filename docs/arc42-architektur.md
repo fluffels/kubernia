@@ -21,7 +21,7 @@ Kubernia bringt DevOps-Grundlagen (Docker, Kubernetes, Helm, Terraform, Security
 | Kategorie | Randbedingung |
 |---|---|
 | Technisch | Reiner Client, keine Server-Laufzeit. Genau **eine** Laufzeit-Dep (Phaser 3.90). TypeScript durchgängig `strict`. Node ≥ 22. Browser **und** self-contained Doppelklick-HTML. |
-| Organisatorisch | Solo-Maintainerin, KI-Agenten-getriebener Weiterbau. Selbstdokumentierendes Repo (AGENTS.md als SSOT, CLAUDE.md als Brücke + Referenz-Tabellen). Board-getriebener Ein-Ticket-Workflow mit Worktrees. |
+| Organisatorisch | Solo-Maintainerin, KI-Agenten-getriebener Weiterbau. Selbstdokumentierendes Repo (AGENTS.md als SSOT, Nachschlage-Referenzen on-demand unter `docs/referenz/`). Board-getriebener Ein-Ticket-Workflow mit Worktrees. |
 | Fachlich | Der simulierte Cluster muss sich plausibel wie echtes `kubectl`/`helm`/`docker` verhalten (Lerntransfer). Deutsch in Texten/Kommentaren. |
 | Rechtlich | Öffentliches, aber **proprietäres** Repo. Fremdbausteine sauber lizenziert (Phaser MIT, Kenney CC0). |
 
@@ -154,7 +154,7 @@ Vier Konzepte durchziehen den Code: **Schichtung** (§5), **Content-as-Data**, *
 | Lern-/Progression | Pädagogik (Quest/XP/Dublonen/Leitner-Box) | `game/*`, Lern-Teile `content/*` |
 | Welt/Präsentation | räumlich/Hafen (Kiste/Steg/Laterne) | `world`, `scenes/*` |
 
-Die Modul-Splits + die on-demand-Tiefendocs der CLAUDE.md **sind** bereits solche Token-Grenzen. *Nuance:* mehr Kontexte ≠ automatisch weniger Tokens — zu viele Nähte erzeugen Übersetzungs-Code; Sweet Spot sind die 2–3, nicht zehn. **Contexts benennen, nicht auseinanderreißen.**
+Die Modul-Splits + die on-demand-Tiefendocs unter `docs/module/` **sind** bereits solche Token-Grenzen. *Nuance:* mehr Kontexte ≠ automatisch weniger Tokens — zu viele Nähte erzeugen Übersetzungs-Code; Sweet Spot sind die 2–3, nicht zehn. **Contexts benennen, nicht auseinanderreißen.**
 
 > ✅ **#477 erledigt:** die Subdomänen sind explizit benannt und die Übersetzung Hafen↔K8s (die Anti-Corruption-Layer) als Glossar festgehalten — beides als SSOT in **[docs/glossar.md](glossar.md)** (Glossar mit Code-Ort + Kontext-Landkarte mit Tiefendoc-Zuordnung; die Prüfung dort bestätigt, dass die Tiefendocs schon entlang der Grenzen schneiden, mit `content.md` als bewusstem Shared Kernel).
 

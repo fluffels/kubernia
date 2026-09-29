@@ -4,8 +4,8 @@
 /**
  * Doku↔Code-Drift-Wächter (#482, Stardew-Skalierung #907) — hält die Tiefendoc-Abdeckung ehrlich.
  *
- * Hintergrund: Eine per-Datei-Zeile in CLAUDE.md wächst linear mit den Modulen (~163→490 bei
- * Stardew-Scope). #907 ersetzt den CLAUDE.md-per-File-Check durch einen Tiefendoc-Abdeckungs-Check:
+ * Hintergrund: Eine per-Datei-Zeile in der Repo-Landkarte wächst linear mit den Modulen (~163→490 bei
+ * Stardew-Scope). #907 ersetzt den per-File-Check der Landkarte durch einen Tiefendoc-Abdeckungs-Check:
  * jedes `src/*.ts` muss als Backtick-Pfad in `docs/module/*.md` vorkommen.
  *
  *   1. Keine Geister-Einträge: jeder in den Tiefendocs genannte `src/…ts`-Pfad existiert.
