@@ -39,11 +39,14 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
  *  kleine Kopffreiheit. Das ist KEIN Aufweichen: das alte Zeilen-Budget hat die Größe nie
  *  gemessen. Im zweiten #1064-Slice wurde AGENTS.md auf ~24k Zeichen gekürzt
  *  (Langbegründung nach docs/agent-harness.md §3a) und das Budget auf 28.000 gezogen
- *  (Ist + ~15 %, wie beim ersten Kalibrieren; Ratchet nach unten).
+ *  (Ist + ~15 %, wie beim ersten Kalibrieren; Ratchet nach unten). Mit #1078 (Slice A1) sind
+ *  die Nachschlage-Tabellen der CLAUDE.md on-demand nach docs/referenz/ gezogen; CLAUDE.md ist
+ *  nur noch die Import-Brücke (~1k Zeichen) und das Budget folgt auf Ist + ~15 % (Ratchet nach
+ *  unten). Der Eintrag entfällt, wenn CLAUDE.md in #1087 gelöscht wird.
  *  Weitere immer geladene Dateien (z.B. README) können hier bei Bedarf ergänzt werden. */
 export const CONTEXT_BUDGETS = [
   { file: "AGENTS.md", budget: 28_000 },
-  { file: "CLAUDE.md", budget: 21_000 },
+  { file: "CLAUDE.md", budget: 1_120 },
 ];
 
 /** Grobe Umrechnung nur für die INFO-Ausgabe (deutscher Markdown-Text, ~4,2 Zeichen/Token).

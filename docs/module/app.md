@@ -1,6 +1,6 @@
 # Tiefendoc: Anwendung, Persistenz, Typen & Einstieg
 
-> On-demand-Detail zur Anwendungs-/Persistenz-Schicht. Der schlanke Always-Index steht in [CLAUDE.md](../../CLAUDE.md). Pfade sind repo-relativ als Inline-Code.
+> On-demand-Detail zur Anwendungs-/Persistenz-Schicht. Die schlanke Subsystem-Übersicht steht in [referenz/repo-landkarte.md](../referenz/repo-landkarte.md). Pfade sind repo-relativ als Inline-Code.
 
 | Modul | Schicht | Inhalt |
 |---|---|---|

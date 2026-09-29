@@ -2,7 +2,7 @@
 
 > **SSOT für die _ubiquitäre Sprache_ und die _Subdomänen_ von Kubernia** (#477, aus der [arc42-Analyse › §8 DDD](arc42-architektur.md#8-querschnittliche-konzepte--ddd-bewertung)).
 > Warum diese Datei existiert: Kubernia hat faktisch **mehrere ubiquitäre Sprachen** (echtes K8s, die Hafen-Metapher, die Lern-/Progressions-Begriffe), deren Übersetzung bisher nur „im Kopf" lebte. Explizit gemacht ist sie eine echte **Anti-Corruption-Layer** und — weil der Weiterbau KI-getrieben ist — ein **Token-Effizienz-Hebel**: Wer weiß, welche Sprache in welchem Verzeichnis gilt, lädt kontext-lokal und weniger.
-> Verwandt: die Repo-Landkarte steht **einmal** in [CLAUDE.md](../CLAUDE.md) (Subsystem-granular, Datei-Granularität in den Tiefendocs unter [`module/`](module/)), die Schichtungs-Begründung in [AGENTS.md › Architektur](../AGENTS.md#architektur).
+> Verwandt: die Repo-Landkarte steht **einmal** in [referenz/repo-landkarte.md](referenz/repo-landkarte.md) (Subsystem-granular, Datei-Granularität in den Tiefendocs unter [`module/`](module/)), die Schichtungs-Begründung in [AGENTS.md › Architektur](../AGENTS.md#architektur).
 
 ## 1. Ubiquitous Language — Glossar Hafen ↔ K8s/DevOps ↔ Code
 
@@ -69,4 +69,4 @@ Weitgehend **ja** — die on-demand-Tiefendocs der CLAUDE.md waren nach Schichtu
 
 Das ist **kein Schnittfehler, sondern gewollt**: Content-as-Data ist die eine, validierte Daten-/Übersetzungsschicht (ADR 0004). Sie hier aufzureißen würde genau die Nähte und den Übersetzungs-Code schaffen, vor denen §2 warnt — also **benennen, nicht auseinanderreißen**. Deshalb behält content.md seine Sonderrolle und wird in der Landkarte oben explizit als Shared Kernel geführt.
 
-**Angleichungen aus diesem Ticket:** keine Code-/Doc-Verschiebung nötig — die Grenzen stimmen. Sichtbar gemacht wurde nur die Zuordnung (dieses Glossar + die Verweise aus [arc42 §8/§12](arc42-architektur.md) und [CLAUDE.md](../CLAUDE.md)).
+**Angleichungen aus diesem Ticket:** keine Code-/Doc-Verschiebung nötig — die Grenzen stimmen. Sichtbar gemacht wurde nur die Zuordnung (dieses Glossar + die Verweise aus [arc42 §8/§12](arc42-architektur.md) und [referenz/anlaufstellen.md](referenz/anlaufstellen.md)).

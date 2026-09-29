@@ -5,8 +5,8 @@
  * Harness-Drift-Wächter (#529) — hält die "Doku als Kontext-Selektor" ehrlich,
  * jenseits der Datei-Landkarte (die bewacht #482 / check-docmap.mjs).
  *
- * Hintergrund: AGENTS.md, CLAUDE.md und README werden von JEDER KI-Session als
- * Kontext geladen. Sie nennen (1) `npm run <x>`-Kommandos, die es in package.json
+ * Hintergrund: AGENTS.md lädt JEDE KI-Session als Kontext; README und die Befehls-
+ * Referenz docs/referenz/befehle.md (#1078) werden on-demand gelesen. Sie nennen (1) `npm run <x>`-Kommandos, die es in package.json
  * geben MUSS, und (2) viele interne Markdown-Links + `#anker` zwischen den Docs.
  * Beides kann leise veralten — ein Agent tippt dann ein totes Kommando oder folgt
  * einem toten Link ins Leere. Der Datei-Landkarten-Wächter (#482) deckt das NICHT
@@ -16,7 +16,7 @@
  *      existiert als Skript in package.json.
  *   2. Undokumentierte Kern-Skripte: jedes package.json-Skript (außer der bewusst
  *      ausgenommenen Entwickler-Convenience) wird in mind. einem der drei
- *      Kern-Docs (AGENTS.md/CLAUDE.md/README) erwähnt.
+ *      Kern-Docs (AGENTS.md/README/docs/referenz/befehle.md) erwähnt.
  *   3. Tote Links: jeder interne, repo-relative Markdown-Link zeigt auf eine
  *      existierende Datei/ein Verzeichnis.
  *   4. Tote Anker: jeder `#anker` (gleiche Datei oder auf eine .md) trifft eine
@@ -36,9 +36,11 @@ import { dirname, join, relative, resolve, sep, posix } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Die drei Docs, die JEDE KI-Session lädt — nur DIESE verlangen, dass ein
- *  Kern-Skript dokumentiert ist (Rückwärts-Check). */
-export const CORE_DOCS = ["AGENTS.md", "CLAUDE.md", "README.md"];
+/** Die Docs, die die Befehls-Referenz tragen — nur DIESE zählen als Beleg, dass ein
+ *  Kern-Skript dokumentiert ist (Rückwärts-Check). Seit #1078 liegt die vollständige
+ *  Befehlsliste on-demand in docs/referenz/befehle.md statt in der immer geladenen
+ *  CLAUDE.md; AGENTS.md und README bleiben, weil sie Alltags-Kommandos selbst nennen. */
+export const CORE_DOCS = ["AGENTS.md", "README.md", "docs/referenz/befehle.md"];
 
 /** package.json-Skripte, die bewusst NICHT dokumentiert sein müssen: reine
  *  Entwickler-Convenience, kein Teil der Harness-Story (Gates/Builds/Tests). */
@@ -181,7 +183,7 @@ export function parseVerifyChain(pkgScripts) {
 
 /** Findet alle `typecheck → … → test`-Sequenzen in `md` (roh, inkl. Codeblöcke).
  *  Der `→`-Pfeil ist das kanonische Trennzeichen für dokumentierte verify-Ketten
- *  in diesem Repo (CLAUDE.md, SKILL.md, agent-harness.md). */
+ *  in diesem Repo (docs/referenz/befehle.md, SKILL.md, agent-harness.md). */
 export function findDocumentedVerifyChains(md) {
   const chains = [];
   for (const m of md.matchAll(/\btypecheck(?:\s*→\s*[a-zA-Z0-9:_-]+)+\s*→\s*test\b/g)) {
@@ -313,7 +315,7 @@ function main() {
     bad = true;
     console.error(
       red(
-        `✖ Undokumentiertes Kern-Skript „${s}" — in AGENTS.md/CLAUDE.md/README erwähnen oder (mit Begründung) in scripts/check-docdrift.mjs › DOC_EXEMPT_SCRIPTS aufnehmen.`,
+        `✖ Undokumentiertes Kern-Skript „${s}" — in AGENTS.md/README/docs/referenz/befehle.md erwähnen oder (mit Begründung) in scripts/check-docdrift.mjs › DOC_EXEMPT_SCRIPTS aufnehmen.`,
       ),
     );
   }

@@ -88,13 +88,13 @@ Vollständige Erklärung (Runtime-Config-Hook, Sicherheitshinweise): [`docs/devp
 | Architektur-Wächter (Schichtung) | `npm run check:arch` |
 | Offline-Build (eine self-contained Datei zum Doppelklicken) | `npm run build:offline` |
 
-Die **vollständige** Befehlsliste (alle Build-Wege, alle Wächter) steht in [CLAUDE.md › Befehle](CLAUDE.md#-befehle) – hier bewusst nur die Alltags-Befehle, nicht doppelt gepflegt.
+Die **vollständige** Befehlsliste (alle Build-Wege, alle Wächter) steht in [docs/referenz/befehle.md](docs/referenz/befehle.md) – hier bewusst nur die Alltags-Befehle, nicht doppelt gepflegt.
 
 ## Wo finde ich was?
 
 Damit nichts doppelt gepflegt wird, lebt jedes Thema an **genau einer** Stelle:
 
-- **Repo-Landkarte** (welches Subsystem liegt wo, welches Tiefendoc gehört dazu): [CLAUDE.md › Repo-Landkarte](CLAUDE.md) – die Module im Detail dann in [`docs/module/`](docs/module/)
+- **Repo-Landkarte** (welches Subsystem liegt wo, welches Tiefendoc gehört dazu): [docs/referenz/repo-landkarte.md](docs/referenz/repo-landkarte.md) – die Module im Detail dann in [`docs/module/`](docs/module/)
 - **Wie hier gearbeitet wird** (harte Regeln, Board-/Ticket-Workflow, Konventionen): [AGENTS.md](AGENTS.md) – die SSOT, auf die CLAUDE.md nur brückt
 - **Was das Spiel ist** (Story, Steuerung, Lernpfad): [README.md](README.md)
 - **Architektur-Stand & Ticket-Auswahl** (Stardew-Scope): [docs/architektur-analyse-2026-06.md](docs/architektur-analyse-2026-06.md) + [docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md)

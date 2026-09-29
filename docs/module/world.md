@@ -1,6 +1,6 @@
 # Tiefendoc: Welt, Karten & pure-Domäne-Helfer
 
-> On-demand-Detail zu den Phaser-freien Welt-/Karten-/HUD-Bausteinen. Der schlanke Always-Index steht in [CLAUDE.md](../../CLAUDE.md). Diese Module liegen bewusst **außerhalb** von `scenes.ts`, damit Welt-Geometrie, Deko und HUD-Logik im Node-Test prüfbar bleiben. Das Phaser-Rendering dazu liegt in [presentation.md](presentation.md). Pfade sind repo-relativ als Inline-Code.
+> On-demand-Detail zu den Phaser-freien Welt-/Karten-/HUD-Bausteinen. Die schlanke Subsystem-Übersicht steht in [referenz/repo-landkarte.md](../referenz/repo-landkarte.md). Diese Module liegen bewusst **außerhalb** von `scenes.ts`, damit Welt-Geometrie, Deko und HUD-Logik im Node-Test prüfbar bleiben. Das Phaser-Rendering dazu liegt in [presentation.md](presentation.md). Pfade sind repo-relativ als Inline-Code.
 
 ## Welt-Geometrie & Kollision
 

@@ -1,6 +1,6 @@
 # Tiefendoc: Präsentation (Szenen, UI, SFX, Assets)
 
-> On-demand-Detail zur Präsentations-Schicht — die einzige Schicht, die Phaser bzw. das DOM anfasst. Der schlanke Always-Index steht in [CLAUDE.md](../../CLAUDE.md). Die pure Logik hinter UI/Szenen liegt in [world.md](world.md) (Welt/Karten) bzw. den jeweiligen Domänen-Modulen. Pfade sind repo-relativ als Inline-Code.
+> On-demand-Detail zur Präsentations-Schicht — die einzige Schicht, die Phaser bzw. das DOM anfasst. Die schlanke Subsystem-Übersicht steht in [referenz/repo-landkarte.md](../referenz/repo-landkarte.md). Die pure Logik hinter UI/Szenen liegt in [world.md](world.md) (Welt/Karten) bzw. den jeweiligen Domänen-Modulen. Pfade sind repo-relativ als Inline-Code.
 
 ## Szenen (`src/scenes.ts` + `src/scenes/*`, Split #345)
 

@@ -1,7 +1,8 @@
 /* Harness-Drift-Wächter (#529) – hält die "Doku als Kontext-Selektor" ehrlich,
  * jenseits der Datei-Landkarte (die bewacht #482 / docmap.test.ts).
  *
- * AGENTS.md, CLAUDE.md und README werden von JEDER KI-Session als Kontext geladen.
+ * AGENTS.md lädt JEDE KI-Session als Kontext; README und die Befehls-Referenz
+ * docs/referenz/befehle.md (#1078) werden on-demand gelesen.
  * Sie nennen `npm run <x>`-Kommandos (die es geben muss) und verweisen mit vielen
  * internen Markdown-Links + `#ankern` quer auf andere Harness-Docs. Beides veraltet
  * leise – ein Agent tippt dann ein totes Kommando oder folgt einem toten Link.
@@ -15,6 +16,8 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im tsconfig)
 // – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
@@ -36,9 +39,22 @@ const auditDocDrift: () => {
 const parseVerifyChain: (pkgScripts: Record<string, string>) => string[] = checkDocDrift.parseVerifyChain;
 const findDocumentedVerifyChains: (md: string) => string[][] = checkDocDrift.findDocumentedVerifyChains;
 
+// Begründete Ausnahme wie in claude-bridge.test.ts: eng begrenzter Inline-Disable statt die
+// Gate-Config-Baseline eslint-suppressions.json anzufassen (das .mjs hat kein .d.ts).
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+const CORE_DOCS: string[] = checkDocDrift.CORE_DOCS;
+
 const audit = auditDocDrift();
 
 describe("Harness-Doku-Drift (#529)", () => {
+  test("jedes CORE_DOCS-Dokument existiert (#1078) – sonst zählte der Rückwärts-Check es still nicht mit", () => {
+    // check-docdrift überspringt ein fehlendes Kern-Doc (`content.has(f)`); ohne diesen Test würde
+    // ein Umbenennen von docs/referenz/befehle.md nur indirekt auffallen.
+    const fehlend = CORE_DOCS.filter((f) => !existsSync(fileURLToPath(new URL(`../${f}`, import.meta.url))));
+    assert.deepEqual(fehlend, [], "Kern-Doc(s) fehlen – Datei wiederherstellen oder CORE_DOCS nachziehen.");
+    assert.ok(CORE_DOCS.includes("docs/referenz/befehle.md"), "die Befehls-Referenz muss Kern-Doc sein");
+  });
+
   test("keine toten Kommandos: jedes dokumentierte `npm run <x>` existiert in package.json", () => {
     assert.deepEqual(
       audit.deadCommands.map((c) => `${c.file}: npm run ${c.script}`),
@@ -47,7 +63,7 @@ describe("Harness-Doku-Drift (#529)", () => {
     );
   });
 
-  test("keine undokumentierten Kern-Skripte: jedes package.json-Skript steht in AGENTS.md/CLAUDE.md/README", () => {
+  test("keine undokumentierten Kern-Skripte: jedes package.json-Skript steht in AGENTS.md/README/docs/referenz/befehle.md", () => {
     assert.deepEqual(
       audit.undocumentedScripts,
       [],

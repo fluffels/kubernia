@@ -1,6 +1,6 @@
 # Tiefendoc: Content-as-Data (`src/content.ts` + `src/content/*`)
 
-> On-demand-Detail zur Content-Schicht. Der schlanke Always-Index steht in [CLAUDE.md](../../CLAUDE.md). **Wie man tatsächlich neuen Inhalt hinzufügt** (Quest/NPC anlegen, Save-Migration), steht in der modul-lokalen [`src/content/AGENTS.md`](../../src/content/AGENTS.md) (#483) — hier liegen nur die **Modul-Interna**, nicht doppelt. Pfade sind repo-relativ als Inline-Code.
+> On-demand-Detail zur Content-Schicht. Die schlanke Subsystem-Übersicht steht in [referenz/repo-landkarte.md](../referenz/repo-landkarte.md). **Wie man tatsächlich neuen Inhalt hinzufügt** (Quest/NPC anlegen, Save-Migration), steht in der modul-lokalen [`src/content/AGENTS.md`](../../src/content/AGENTS.md) (#483) — hier liegen nur die **Modul-Interna**, nicht doppelt. Pfade sind repo-relativ als Inline-Code.
 
 ## Worum es geht
 

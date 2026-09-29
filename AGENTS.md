@@ -1,7 +1,7 @@
 # AGENTS.md – Arbeitsanweisung für KI-Agenten
 
 > Diese Datei ist für dich als Agent (egal welches Tool) und die **SSOT**: Sie sagt dir, **wie** hier gearbeitet wird, und **jede harte Regel steht genau hier — nur hier**, knapp formuliert. Langbegründungen und Historie stehen verlinkt in [docs/agent-harness.md › §3a](docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd-1064) (bei Konflikt gilt diese Datei).
-> **Rollentrennung (#992):** [CLAUDE.md](CLAUDE.md) ist die **Brücke** hierher (`@AGENTS.md`-Import) und die **Heimat der Nachschlage-Tabellen** (Befehle, Repo-Landkarte, Schichtregeln, Anlaufstellen). Steht der **Text einer Regel** doppelt in CLAUDE.md, ist das ein Drift-Bug → hierher zurückführen. **Bewusst gedoppelt** sind nur (1) die **oberste Regel** und (2) die **Gate-Markierungen** in den Referenz-Tabellen („hart, erzwingt `check:arch`"). Bewacht von [`test/claude-bridge.test.ts`](test/claude-bridge.test.ts).
+> **Rollentrennung (#992/#1078):** [CLAUDE.md](CLAUDE.md) ist nur noch die **Brücke** hierher (`@AGENTS.md`-Import, bewacht von [`test/claude-bridge.test.ts`](test/claude-bridge.test.ts)). Die **Nachschlage-Tabellen** liegen on-demand unter [`docs/referenz/`](docs/referenz/anlaufstellen.md): [Befehle](docs/referenz/befehle.md), [Repo-Landkarte](docs/referenz/repo-landkarte.md), [Schichtregeln](docs/referenz/schichtregeln.md), [Anlaufstellen](docs/referenz/anlaufstellen.md). Steht der **Text einer Regel** dort doppelt, ist das ein Drift-Bug → hierher zurückführen; **bewusst gedoppelt** sind nur die **Gate-Markierungen** in den Tabellen („hart, erzwingt `check:arch`").
 > Was das Spiel **ist** (Story, Spielsysteme, Lernpfad), steht in der [README.md](README.md) – nicht doppeln.
 
 ## Das Wichtigste zuerst (harte Regeln)
@@ -45,16 +45,16 @@ Alle schnellen Gates laufen gebündelt in **`npm run verify`**; `npm run verify:
 
 - **Alles wird abgetestet – auch Negativfälle.** Neue/geänderte Logik bekommt Tests für Fehler-/Grenzfälle (kaputter Zustand, falsche Eingabe, „darf NICHT passieren"), nicht nur den Happy Path.
 - **Tests gegen False Positives absichern (Red-Green).** Beim Schreiben beweisen, dass der Test rot wird, wenn die Logik bricht (testweise verfälschen → rot → zurück → grün). **Bugfixes test-first:** erst der fehlschlagende Repro-Test.
-- **TDD ist der Default für Logik – nicht nur bei Bugfixes.** Spiel-/Sim-/Wirtschaftslogik in der **puren Domäne + Anwendung** (welche Dateien: [CLAUDE.md › Schichtregeln](CLAUDE.md)) entsteht test-first: rot → grün → aufräumen. Kostet netto nicht mehr Tokens, weil ein fehlschlagender Test die Rate-/Debug-Schleifen abkürzt. **Ausnahmen:** triviale Einzeiler, reine Doku; **Präsentations-Code** (Phaser/DOM) wird im Browser verifiziert.
+- **TDD ist der Default für Logik – nicht nur bei Bugfixes.** Spiel-/Sim-/Wirtschaftslogik in der **puren Domäne + Anwendung** (welche Dateien: [Schichtregeln](docs/referenz/schichtregeln.md)) entsteht test-first: rot → grün → aufräumen. Kostet netto nicht mehr Tokens, weil ein fehlschlagender Test die Rate-/Debug-Schleifen abkürzt. **Ausnahmen:** triviale Einzeiler, reine Doku; **Präsentations-Code** (Phaser/DOM) wird im Browser verifiziert.
 - **Tests prüfen Verhalten über die öffentliche API**, nicht Interna. Querschnitts-Umgebung in `test/support/`, valide Domänen-Eingaben über Factories in `test/factories/` (`freshSim()`). Fitness-Functions (Struktur-/Doku-Regeln) sind eine eigene Kategorie. Details inkl. e2e-Smokes: [docs/agent-harness.md › §3a](docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd-1064).
 - **Im Browser verifizieren**, nicht nur „sollte gehen": sicht-/spielbare Änderungen mit `npm run dev` wirklich anschauen. Im Dev-Build liegt die Phaser-Instanz unter `window.kqGame` (z.B. `kqGame.scene.get("World").playerPos`, `kqGame.scene.run("Archipel")`). **Der Dev-Server lädt bei JS/TS-Änderungen NICHT automatisch neu (#301)** — nach einem Edit bewusst `location.reload()`/F5, sonst verifizierst du den alten Stand (CSS-HMR bleibt live). Manche Preview-Tools drosseln Timer im Hintergrund: Screenshot als erste Aktion nach frischem Start, hängende Tasten per `keyup` lösen.
 - **Deutsch mit echten Umlauten** (ä/ö/ü/ß) in Code-Kommentaren, Dialogen und Texten. Dateinamen bleiben ASCII (ae/oe/ue/ss).
 - **Backlog/TODOs leben in GitHub** (Issues + Project-Board), nicht im Code und nicht in einem externen Notiz-System (siehe unten).
-- **Doku aktuell halten ist Teil von „fertig".** Spielinhalte/Quests/Steuerung geändert → **README** im selben PR (die Quest-Zahl prüft [`test/readme.test.ts`](test/readme.test.ts)). Neues/umbenanntes `src/`-Modul → Backtick-Pfad-Zeile im passenden [`docs/module/`](docs/module/)-Tiefendoc, **nicht** in die CLAUDE.md-Übersicht (bleibt Subsystem-granular). Die Datei-Landkarte gibt es nur einmal; `npm run check:docmap` meldet jede unerwähnte `src/`-Datei.
+- **Doku aktuell halten ist Teil von „fertig".** Spielinhalte/Quests/Steuerung geändert → **README** im selben PR (die Quest-Zahl prüft [`test/readme.test.ts`](test/readme.test.ts)). Neues/umbenanntes `src/`-Modul → Backtick-Pfad-Zeile im passenden [`docs/module/`](docs/module/)-Tiefendoc, **nicht** in die [Repo-Landkarte](docs/referenz/repo-landkarte.md) (bleibt Subsystem-granular). Die Datei-Landkarte gibt es nur einmal; `npm run check:docmap` meldet jede unerwähnte `src/`-Datei.
 
 ## Befehle
 
-→ vollständige Referenz: [CLAUDE.md › 🛠️ Befehle](CLAUDE.md#-befehle).
+→ vollständige Referenz: [docs/referenz/befehle.md](docs/referenz/befehle.md) (on-demand).
 
 ## Architektur
 
@@ -72,7 +72,7 @@ Vite + TypeScript + ES-Module, Phaser als npm-Paket; `index.html` lädt nur `src
 - **Präsentation** (Phaser/DOM): die **einzige** Schicht mit Phaser/DOM; die Übersetzung Hafen ↔ Sim läuft über die Anti-Corruption-Layer ([Glossar](docs/glossar.md)), nicht als verstreute Sim-Zugriffe.
 - **Einstieg/Assets:** Start, Tastatur, Spritesheet-`import`s — bewusst von den Import-Regeln ausgenommen, weil hier Phaser bootet.
 
-> **Welche Datei in welcher Schicht liegt und was sie importieren darf**, steht **einmal** in [CLAUDE.md › Schichtregeln](CLAUDE.md) + [CLAUDE.md › Repo-Landkarte](CLAUDE.md); maschinelle SSOT ist [`scripts/layers.cjs`](scripts/layers.cjs). Hier nur das *Warum*, keine Dateiliste.
+> **Welche Datei in welcher Schicht liegt und was sie importieren darf**, steht **einmal** in [Schichtregeln](docs/referenz/schichtregeln.md) + [Repo-Landkarte](docs/referenz/repo-landkarte.md); maschinelle SSOT ist [`scripts/layers.cjs`](scripts/layers.cjs). Hier nur das *Warum*, keine Dateiliste.
 
 ## Konventionen
 
