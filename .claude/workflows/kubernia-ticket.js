@@ -221,7 +221,8 @@ const NACHBESSERN_SCHEMA = {
  * und Fixes attestieren, die sie nie gesehen hat — ein Review, der von außen grün aussieht,
  * aber nichts geprüft hat. Der Pfad liegt im Temp-/Scratch-Ordner, nicht im Worktree: eine
  * untracked Datei dort würde die git-status-Prüfungen verunreinigen und könnte mitcommittet
- * werden (AGENTS.md § Scratch-Dumps in einen temporären Ordner).
+ * werden (AGENTS.md § „Auch Nicht-Ticket-Arbeit gehört committet, nicht liegen gelassen").
+ * Scratch-Dumps gehören in einen temporären Ordner.
  */
 const patchAuftrag = (nr, runde) => `Zum Schluss, NACH dem Commit — den Diff für den Review einmal materialisieren (#1034):
 - git fetch origin, dann git diff origin/main...HEAD in eine Datei schreiben. Dateiname
@@ -890,7 +891,7 @@ Ende die zur Entscheidung gestellten Optionen.`,
   }
   const harnessMergeAuftrag = `Dieser Diff fasst Harness-/Leitplanken-Dateien an (#1069). Setze das Label selbst
 (gh pr edit <pr> --add-label maintainer-approved) — es ist die intendierte Änderung dieses
-Tickets, kein Workaround (AGENTS.md § Goodhart-Guard gilt weiter). Reihenfolge, damit der
+Tickets, kein Workaround (AGENTS.md § Goodhart-Guard; er gilt weiter). Reihenfolge, damit der
 gate-change-guard keine späteren Gate-Änderungen übersieht:
 das Label ERST setzen, wenn alle anderen Checks grün sind (der gate-change-guard ist bis
 dahin erwartet rot — das ist kein CI-Fehler).
@@ -970,7 +971,7 @@ Letzter Stand: ${merge ? `${merge.ergebnis} — ${merge.roterCheck || ''} ${merg
 ${(merge && merge.fehlerAusgabe) || ''}
 
 AUFGABE — das Festgefahren-Protokoll ausführen, genau nach AGENTS.md
-§ „Festgefahren-Protokoll (#710, erzwungen seit #904)".
+§ „Festgefahren-Protokoll (#710/#904)".
 
 Kurz: EIN konsolidierter Kommentar auf dem PR (was versucht wurde, aktueller Fehler,
 2-3 konkrete Entscheidungsoptionen für die Maintainerin), Label status:festgefahren,
@@ -1013,7 +1014,8 @@ Melde am Ende, welche Optionen du zur Entscheidung gestellt hast.`,
 AUFGABE — nach dem gemergten PR #${merge.prNummer} zu #${nr} aufräumen und verifizieren.
 
 Maßgeblich: AGENTS.md § „Worktree entfernen auf Windows – zwei Fallen" (die drei
-numerierten Punkte inkl. Verify-Schritt #908) und § node_modules im Worktree.
+numerierten Punkte inkl. Verify-Schritt #908) und § „Eigener Worktree von frisch geholtem origin/main"
+(dort: node_modules nie verlinken).
 
 Zu entfernen: Worktree ${worktree}, Branch ${branch}.
 
