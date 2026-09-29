@@ -1,7 +1,8 @@
 /* Harness-Drift-Wächter (#529) – hält die "Doku als Kontext-Selektor" ehrlich,
  * jenseits der Datei-Landkarte (die bewacht #482 / docmap.test.ts).
  *
- * AGENTS.md, CLAUDE.md und README werden von JEDER KI-Session als Kontext geladen.
+ * AGENTS.md und README werden von JEDER KI-Session als Kontext geladen, die Befehls-Referenz
+ * docs/referenz/befehle.md on-demand (#1078).
  * Sie nennen `npm run <x>`-Kommandos (die es geben muss) und verweisen mit vielen
  * internen Markdown-Links + `#ankern` quer auf andere Harness-Docs. Beides veraltet
  * leise – ein Agent tippt dann ein totes Kommando oder folgt einem toten Link.
@@ -47,7 +48,7 @@ describe("Harness-Doku-Drift (#529)", () => {
     );
   });
 
-  test("keine undokumentierten Kern-Skripte: jedes package.json-Skript steht in AGENTS.md/CLAUDE.md/README", () => {
+  test("keine undokumentierten Kern-Skripte: jedes package.json-Skript steht in AGENTS.md/README/docs/referenz/befehle.md", () => {
     assert.deepEqual(
       audit.undocumentedScripts,
       [],

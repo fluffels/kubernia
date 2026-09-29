@@ -279,6 +279,6 @@ Konkrete Szenarien (Reiz → Reaktion) statt vager Adjektive:
 
 ## 12. Glossar & Kontext-Landkarte
 
-Die ubiquitäre Sprache (Glossar Hafen ↔ K8s ↔ Code — die explizit gemachte Anti-Corruption-Layer aus §8) **und** die Kontext-Landkarte der Subdomänen leben seit #477 als eigene, aus [CLAUDE.md](../CLAUDE.md) verlinkte SSOT — hier nicht doppeln:
+Die ubiquitäre Sprache (Glossar Hafen ↔ K8s ↔ Code — die explizit gemachte Anti-Corruption-Layer aus §8) **und** die Kontext-Landkarte der Subdomänen leben seit #477 als eigene, aus [referenz/anlaufstellen.md](referenz/anlaufstellen.md) verlinkte SSOT — hier nicht doppeln:
 
 > 📖 **[docs/glossar.md](glossar.md)** — Glossar (Cluster-als-Hafen + Lern-als-Seefahrer-Karriere, je mit Code-Ort) + Kontext-Landkarte (DevOps-Simulation / Lern-Progression / Welt-Präsentation, je mit Sprache + Verzeichnissen + Tiefendoc) + die Prüfung „schneiden die Tiefendocs schon entlang dieser Grenzen?".

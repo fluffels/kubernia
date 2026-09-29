@@ -1,6 +1,6 @@
 # Tiefendoc: Simulator (`src/sim.ts` + `src/sim/*`)
 
-> On-demand-Detail zum Cluster-Simulator. Der schlanke Always-Index steht in [CLAUDE.md](../../CLAUDE.md); hier liegt die ausführliche Historie + die Interface-Details, die man nur beim Arbeiten am Simulator braucht. Pfade sind repo-relativ als Inline-Code geschrieben (keine Links), damit dieses tief liegende Doc nicht bei jeder Verschiebung Linkpflege braucht.
+> On-demand-Detail zum Cluster-Simulator. Die schlanke Subsystem-Übersicht steht in [referenz/repo-landkarte.md](../referenz/repo-landkarte.md); hier liegt die ausführliche Historie + die Interface-Details, die man nur beim Arbeiten am Simulator braucht. Pfade sind repo-relativ als Inline-Code geschrieben (keine Links), damit dieses tief liegende Doc nicht bei jeder Verschiebung Linkpflege braucht.
 
 ## Worum es geht
 
