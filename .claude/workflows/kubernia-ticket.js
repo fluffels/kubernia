@@ -327,7 +327,7 @@ const MAX_REVIEW_RUNDEN = 2
 
 /**
  * Harness-/Gate-Pfade (#1012) — Substring-Form, Spiegel des PROTECTED-Arrays in
- * .github/workflows/ci.yml und der .github/CODEOWNERS-Liste (Sync bewacht
+ * .github/workflows/gate-change-guard.yml und der .github/CODEOWNERS-Liste (Sync bewacht
  * test/harness-approval.test.ts). Fasst ein Diff einen dieser Pfade an, setzt der Agent
  * maintainer-approved selbst, mergt und hinterlässt einen Audit-Kommentar (#1069).
  */
@@ -343,7 +343,6 @@ const HARNESS_PFADE = [
   '.github/workflows/',
   '.github/CODEOWNERS',
   'AGENTS.md',
-  'CLAUDE.md',
   '.claude/',
   '.agents/',
   'docs/agent-harness',

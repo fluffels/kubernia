@@ -32,9 +32,9 @@
  * Gegen den umgekehrten Fehlermodus – eine Extraktion, die nach einer Umformulierung
  * still nichts mehr findet – schützt der Leerlauf-Test, und zwar je Verweis-Form.
  *
- * Fitness-Function-Kategorie neben claude-bridge/docmap/docdrift (#482/#529/#992),
+ * Fitness-Function-Kategorie neben agents-md-native/docmap/docdrift (#482/#529/#992),
  * bewusst test-only ohne `scripts/check-*.mjs` (Begründung: Kopf von
- * `test/claude-bridge.test.ts`).
+ * `test/agents-md-native.test.ts`).
  *
  * Ausführen mit:  npm test
  */
@@ -46,7 +46,7 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkInternalRefs from "../scripts/check-internalrefs.mjs";
 
-// Begründete Ausnahme wie in test/claude-bridge.test.ts: das .mjs hat kein Declaration-File.
+// Begründete Ausnahme wie in test/agents-md-native.test.ts: das .mjs hat kein Declaration-File.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const listTrackedFiles: (rootDir?: string) => string[] = checkInternalRefs.listTrackedFiles;
 

@@ -34,10 +34,10 @@
  * Prädikat über DIESELBE Funktion gegen (a) das echte Artefakt und (b) ein Gegenbeispiel, das
  * rot sein MUSS. Ein aufgeweichtes Prädikat lässt damit sofort seinen eigenen Gegenbeweis fallen.
  *
- * Fitness-Function-Kategorie neben claude-bridge/harness-approval/docmap (#992/#1012/#482), nicht
+ * Fitness-Function-Kategorie neben agents-md-native/harness-approval/docmap (#992/#1012/#482), nicht
  * mit Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`: `scripts/check-`
  * ist selbst gate-config-geschützt (Goodhart-Guard) – für doku-/prompt-strukturelle Wächter gibt es
- * die etablierte test-only-Familie (Präzedenz: `test/claude-bridge.test.ts`).
+ * die etablierte test-only-Familie (Präzedenz: `test/agents-md-native.test.ts`).
  *
  * ⚠️ Das Workflow-Skript wird bewusst als TEXT gelesen, nicht importiert: es ruft auf Top-Level
  * `await ticketAbarbeiten()` gegen Globals, die nur die Workflow-Laufzeit bereitstellt.

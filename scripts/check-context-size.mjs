@@ -2,7 +2,7 @@
 // (npm run check:contextsize) gestartet UND von test/context-size.test.ts importiert. Ein
 // `#!`-Token bricht sonst den Vitest/esbuild-Import (gleiche Falle wie bei check-size.mjs).
 /**
- * Root-Kontextdatei-Wächter (#719) – Frühwarnung, dass AGENTS.md/CLAUDE.md zu groß werden.
+ * Root-Kontextdatei-Wächter (#719) – Frühwarnung, dass AGENTS.md zu groß wird.
  *
  * Hintergrund: anders als src/-Module (check:size, #390) haben die beiden Dateien, die
  * laut eigener Aussage JEDE Agenten-Session vollständig lädt, kein eigenes Größen-Gate.
@@ -40,13 +40,12 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
  *  gemessen. Im zweiten #1064-Slice wurde AGENTS.md auf ~24k Zeichen gekürzt
  *  (Langbegründung nach docs/agent-harness.md §3a) und das Budget auf 28.000 gezogen
  *  (Ist + ~15 %, wie beim ersten Kalibrieren; Ratchet nach unten). Mit #1078 (Slice A1) sind
- *  die Nachschlage-Tabellen der CLAUDE.md on-demand nach docs/referenz/ gezogen; CLAUDE.md ist
- *  nur noch die Import-Brücke (~1k Zeichen) und das Budget folgt auf Ist + ~15 % (Ratchet nach
- *  unten). Der Eintrag entfällt, wenn CLAUDE.md in #1087 gelöscht wird.
+ *  die Nachschlage-Tabellen der CLAUDE.md on-demand nach docs/referenz/ gezogen; seit #1087 ist
+ *  CLAUDE.md gelöscht (AGENTS.md wird nativ geladen) und ihr Eintrag entfallen – dass sie nicht
+ *  zurückkehrt, bewacht test/agents-md-native.test.ts.
  *  Weitere immer geladene Dateien (z.B. README) können hier bei Bedarf ergänzt werden. */
 export const CONTEXT_BUDGETS = [
   { file: "AGENTS.md", budget: 28_000 },
-  { file: "CLAUDE.md", budget: 1_120 },
 ];
 
 /** Grobe Umrechnung nur für die INFO-Ausgabe (deutscher Markdown-Text, ~4,2 Zeichen/Token).

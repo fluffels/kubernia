@@ -20,7 +20,7 @@
  * CR-Scan des Working Trees wäre in der Linux-CI immer grün und darum kein Gate.
  *
  * Fitness-Function-Kategorie (Struktur-Regel, kein Verhaltens-Test), Präzedenz
- * test/claude-bridge.test.ts. Ausführen mit:  npm test
+ * test/agents-md-native.test.ts. Ausführen mit:  npm test
  */
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";

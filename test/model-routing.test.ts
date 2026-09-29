@@ -30,21 +30,21 @@
  * als er misst, erzeugt genau das falsche Sicherheitsgefühl):
  *   - Er belegt, dass die Zeile DA ist und die Doku nicht dagegen driftet – NICHT, dass
  *     Claude Code das Frontmatter zur Laufzeit wirklich anwendet. Das ist Tool-Verhalten
- *     und für einen Vitest-Lauf unbeobachtbar (wie die „Grenze"-Notiz in claude-bridge).
+ *     und für einen Vitest-Lauf unbeobachtbar (wie die „Grenze"-Notiz in agents-md-native).
  *   - Die Drift-Erkennung ist **literal und case-sensitiv**: „Session Default" ohne
  *     Bindestrich rutscht durch (bekannte Grenze des Begriffs-Ansatzes, identisch in
- *     test/claude-bridge.test.ts).
+ *     test/agents-md-native.test.ts).
  *   - Beim `effort:` wird nur die **Anwesenheit** geprüft, nicht die Stufe (siehe dort).
  *   - Der Workflow-Pfad wird nur grob geprüft (Tier-Aliase vorhanden), nicht welche
  *     Phase welchen Alias bekommt – die Phasen-Zuordnung bleibt Review-Sache.
  *
- * Fitness-Function-Kategorie neben layering/filesize/docmap/claude-bridge, nicht mit
+ * Fitness-Function-Kategorie neben layering/filesize/docmap/agents-md-native, nicht mit
  * Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`:
  * `scripts/check-` ist gate-config-geschützt (Goodhart-Guard #903, Label-Pflicht), und
  * für rein doku-strukturelle Wächter gibt es die etablierte test-only-Familie.
  *
  * ⚠️ Bekannte Duplikation: die Retired-Claims-Mechanik unten ist strukturgleich zu
- * test/claude-bridge.test.ts (#992). Bei zwei Kopien noch Rule-of-Three-konform, aber
+ * test/agents-md-native.test.ts (#992). Bei zwei Kopien noch Rule-of-Three-konform, aber
  * beticketet als **#1046** (nach test/support/ ziehen) – jscpd ist bewusst
  * nicht-blockierend, es fängt das also kein Gate automatisch.
  *
@@ -60,7 +60,7 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkDocDrift from "../scripts/check-docdrift.mjs";
 
-// Begründete Ausnahme, identisch zu test/claude-bridge.test.ts: das .mjs hat kein
+// Begründete Ausnahme, identisch zu test/agents-md-native.test.ts: das .mjs hat kein
 // Declaration-File, der Namespace ist für tsc „error typed". Eng begrenzter
 // Inline-Disable statt einer Gate-Config-Änderung.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
@@ -165,7 +165,7 @@ function hatHartenPin(md: string): boolean {
  * Umsetzung „auf dem Session-Default" läuft – der Coding-Tier ist auf BEIDEN Pfaden
  * gesetzt (Workflow per `agent({model})`, Skill per Frontmatter).
  *
- * **Escape-Hatch** (gleiche Logik wie test/claude-bridge.test.ts): Wer den Begriff
+ * **Escape-Hatch** (gleiche Logik wie test/agents-md-native.test.ts): Wer den Begriff
  * diskutieren muss, setzt ihn in Inline-Backticks oder einen Codeblock – Zitat ist
  * keine Behauptung. Bewusst NICHT gelistet: „Session-Modell". Der Satz „ein Subagent
  * ohne Modell-Angabe erbt das Session-Modell" ist die weiterhin GÜLTIGE Warnung, die
