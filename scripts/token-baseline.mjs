@@ -1,0 +1,408 @@
+// Kein Shebang: wird per `node scripts/token-baseline.mjs` gestartet UND von
+// test/token-baseline.test.ts importiert (ein `#!` bricht den Test-Import).
+/**
+ * Token- und Loop-Baseline pro Ticket-Lauf (#1068).
+ *
+ * Schlüsselt einen Ticket-Lauf auf:
+ *   - Tokens nach Phase × Modell, getrennt in Input / Cache-Write / Cache-Read /
+ *     Output,
+ *   - Loop-Kennzahlen: Review-Runden, CI-Fix-Runden, Rückfragen, gemergt ohne
+ *     Nacharbeit.
+ *
+ * Aufruf:
+ *   node scripts/token-baseline.mjs --session <id> [--session <id>…] \
+ *        [--issue <nr>] [--pr <nr>] [--from <ISO-Zeit>] [--langfuse] [--json]
+ *
+ *   --from schneidet eine Session mit mehreren Tickets: Calls davor zählen nicht.
+ *
+ * ZWEI Quellen, EINE Auswertung (beide werden auf dieselben Call-Datensätze
+ * normalisiert, `summarize` kennt die Quelle nicht):
+ *   1. Standard: das lokale Claude-Code-Transkript
+ *      (~/.claude/projects/<projekt>/<session>.jsonl + <session>/subagents/*).
+ *      Vollständig und ohne Schlüssel. Maßgeblich, weil der Langfuse-Hook beim
+ *      Nachmessen von #1064 nur 11 von 91 Hauptagent-Calls und 2 von 7
+ *      Subagenten erfasst hatte (Umsetzungs- und Lens-Subagenten fehlten ganz).
+ *   2. `--langfuse`: die v2-Observations-API (Langfuse v4 hat die v1-Traces-API
+ *      abgeschaltet). Braucht LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY, optional
+ *      LANGFUSE_BASE_URL (Default http://localhost:3000). Liefert zusätzlich
+ *      Kosten, ist aber nur so vollständig wie die Hook-Aufzeichnung.
+ *
+ * Phasen-Zuordnung (deterministisch, ohne Marker im Lauf):
+ *   - Subagent-Calls: Phase aus `agentType` + Beschreibung (Planer → Planung,
+ *     Lens/Kritiker/Review → Review, Explore → Recherche).
+ *   - Hauptagent-Calls: über GitHub-Zeitstempel geschnitten — vor dem Claim
+ *     (erstes `assigned` am Issue) → Auswahl, bis PR-Erstellung → Umsetzung,
+ *     bis Merge → CI/Merge, danach → Nachlauf (gehört nicht mehr zum Ticket).
+ *
+ * Bewusst NICHT in `npm run verify`: liest lokale Transkripte bzw. braucht
+ * Netz und gh-Auth. Die Auswertungslogik ist pure/exportiert und in
+ * test/token-baseline.test.ts ohne Netz und ohne echte Dateien geprüft.
+ */
+
+import { execFileSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+
+/** Lenses pro Review-Runde (Architektur / Requirement-Treue / Test-Adäquanz, #1012). */
+export const LENSES_PER_ROUND = 3;
+
+export const PHASES = [
+  "Auswahl",
+  "Planung",
+  "Umsetzung",
+  "Review",
+  "CI/Merge",
+  "Recherche",
+  "Subagent (sonstig)",
+  "Nachlauf",
+];
+
+/** Phase eines Subagenten aus `agentType` + Beschreibung ableiten. */
+export function classifySubagent(agentType, description) {
+  const t = String(agentType ?? "");
+  const d = String(description ?? "");
+  if (/planner|^plan$/i.test(t) || /plan/i.test(d)) return "Planung";
+  if (/lens|review/i.test(t) || /lens|review|kritiker/i.test(d)) return "Review";
+  if (/explore/i.test(t)) return "Recherche";
+  return "Subagent (sonstig)";
+}
+
+/** Hauptagent-Phase aus dem Zeitpunkt; fehlende Grenzen fallen auf Umsetzung. */
+export function classifyMainByTime(ts, { claimAt, prCreatedAt, mergedAt } = {}) {
+  const t = Date.parse(ts);
+  if (claimAt && t < Date.parse(claimAt)) return "Auswahl";
+  if (mergedAt && t >= Date.parse(mergedAt)) return "Nachlauf";
+  if (prCreatedAt && t >= Date.parse(prCreatedAt)) return "CI/Merge";
+  return "Umsetzung";
+}
+
+/**
+ * Review-Runden: je drei Lenses sind eine Runde (#1012), jeder weitere
+ * Review-Subagent ohne „Lens" im Namen (z.B. „Frischer Kritiker Runde 2")
+ * ist eine eigene Runde.
+ */
+export function countReviewRounds(reviewDescriptions) {
+  const lenses = reviewDescriptions.filter((d) => /lens/i.test(d)).length;
+  return Math.ceil(lenses / LENSES_PER_ROUND) + (reviewDescriptions.length - lenses);
+}
+
+function num(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Pure Kernlogik über normalisierte Calls:
+ *   calls:     [{ ts, model, input, cacheWrite, cacheRead, output, cost?, subagent?: {id, agentType, description} }]
+ *   questions: Anzahl AskUserQuestion-Aufrufe
+ * Review-Runden zählen nur Subagenten mit Calls IM Ticket-Fenster — sonst
+ * erbte ein Ticket die Lenses eines früheren Tickets derselben Session.
+ */
+export function summarize({ calls, questions = 0 }, bounds = {}) {
+  const rows = new Map();
+  const inWindow = new Map();
+  let hasCost = false;
+  for (const c of calls) {
+    // Vor `from` liegt fremde Arbeit derselben Session (z.B. ein vorheriges Ticket) — weglassen.
+    if (bounds.from && Date.parse(c.ts) < Date.parse(bounds.from)) continue;
+    // Nach dem Merge ist alles Nachlauf — auch ein Subagent, den erst das Gespräch danach startet.
+    const afterMerge = bounds.mergedAt && Date.parse(c.ts) >= Date.parse(bounds.mergedAt);
+    const phase = afterMerge
+      ? "Nachlauf"
+      : c.subagent
+        ? classifySubagent(c.subagent.agentType, c.subagent.description)
+        : classifyMainByTime(c.ts, bounds);
+    if (c.subagent && phase !== "Nachlauf") inWindow.set(c.subagent.id ?? c.subagent, c.subagent);
+    const model = c.model || "unbekannt";
+    const key = `${phase}\u0000${model}`;
+    const r = rows.get(key) ?? { phase, model, calls: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0, cost: 0 };
+    r.calls += 1;
+    r.input += num(c.input);
+    r.cacheWrite += num(c.cacheWrite);
+    r.cacheRead += num(c.cacheRead);
+    r.output += num(c.output);
+    if (c.cost !== undefined && c.cost !== null) {
+      hasCost = true;
+      r.cost += num(c.cost);
+    }
+    rows.set(key, r);
+  }
+  const sorted = [...rows.values()].sort(
+    (a, b) => PHASES.indexOf(a.phase) - PHASES.indexOf(b.phase) || a.model.localeCompare(b.model),
+  );
+  // Summe = das Ticket; der Nachlauf nach dem Merge wird gezeigt, aber nicht mitgezählt.
+  const total = sorted
+    .filter((r) => r.phase !== "Nachlauf")
+    .reduce(
+      (t, r) => ({
+        calls: t.calls + r.calls,
+        input: t.input + r.input,
+        cacheWrite: t.cacheWrite + r.cacheWrite,
+        cacheRead: t.cacheRead + r.cacheRead,
+        output: t.output + r.output,
+        cost: t.cost + r.cost,
+      }),
+      { calls: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0, cost: 0 },
+    );
+  const reviewDescriptions = [...inWindow.values()]
+    .filter((s) => classifySubagent(s.agentType, s.description) === "Review")
+    .map((s) => String(s.description ?? ""));
+  return { rows: sorted, total, hasCost, reviewRounds: countReviewRounds(reviewDescriptions), questions };
+}
+
+// ── Quelle 1: Claude-Code-Transkript ─────────────────────────────────────────
+
+/**
+ * JSONL-Zeilen eines Transkripts → Calls. Claude Code schreibt pro Content-
+ * Block eine Zeile mit derselben `message.id`; die Usage wird je Nachricht
+ * genau einmal gezählt (Output = Maximum über die Zeilen, weil Zwischenzeilen
+ * einen Teilstand tragen).
+ */
+export function callsFromTranscript(jsonlText, subagent = null) {
+  const byId = new Map();
+  let questions = 0;
+  for (const line of String(jsonlText).split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    let row;
+    try {
+      row = JSON.parse(line);
+    } catch {
+      continue; // abgeschnittene letzte Zeile eines laufenden Transkripts
+    }
+    const msg = row?.message;
+    if (row?.type !== "assistant" || !msg?.usage) continue;
+    // Eine Zeile trägt genau einen Content-Block — jede Rückfrage zählt also einmal.
+    for (const c of msg.content ?? []) if (c?.type === "tool_use" && c.name === "AskUserQuestion") questions += 1;
+    const key = msg.id ?? row.uuid;
+    const u = msg.usage;
+    const prev = byId.get(key);
+    if (prev) {
+      prev.output = Math.max(prev.output, num(u.output_tokens));
+      continue;
+    }
+    byId.set(key, {
+      ts: row.timestamp,
+      model: msg.model,
+      input: num(u.input_tokens),
+      cacheWrite: num(u.cache_creation_input_tokens),
+      cacheRead: num(u.cache_read_input_tokens),
+      output: num(u.output_tokens),
+      subagent,
+    });
+  }
+  return { calls: [...byId.values()], questions };
+}
+
+/** Sucht <id>.jsonl in allen Projektordnern unter ~/.claude/projects (Worktree-Sessions liegen in eigenen). */
+function readTranscriptSession(sessionId, projectsRoot) {
+  const candidates = readdirSync(projectsRoot).map((d) => join(projectsRoot, d, `${sessionId}.jsonl`));
+  const main = candidates.find((p) => existsSync(p));
+  if (!main) throw new Error(`Kein Transkript für Session ${sessionId} unter ${projectsRoot}`);
+  const all = callsFromTranscript(readFileSync(main, "utf8"));
+  const dir = main.replace(/\.jsonl$/, "") + "/subagents";
+  if (existsSync(dir)) {
+    for (const f of readdirSync(dir).filter((n) => n.endsWith(".jsonl"))) {
+      const metaPath = join(dir, f.replace(/\.jsonl$/, ".meta.json"));
+      const meta = existsSync(metaPath) ? JSON.parse(readFileSync(metaPath, "utf8")) : {};
+      const sub = { id: f, agentType: meta.agentType, description: meta.description };
+      const r = callsFromTranscript(readFileSync(join(dir, f), "utf8"), sub);
+      all.calls.push(...r.calls);
+      all.questions += r.questions;
+    }
+  }
+  return all;
+}
+
+// ── Quelle 2: Langfuse v2-Observations-API ───────────────────────────────────
+
+function isSubagentSpan(o) {
+  return typeof o?.name === "string" && o.name.startsWith("Subagent") && o.type !== "GENERATION";
+}
+
+function spanInfo(span) {
+  return { id: span.id, agentType: span.metadata?.agent_type, description: String(span.name ?? "").replace(/^Subagent:?\s*/, "") };
+}
+
+/** Nächster umschließender Subagent-Span (über parentObservationId) oder null. */
+export function findSubagentAncestor(obs, byId) {
+  let cur = obs.parentObservationId ? byId.get(obs.parentObservationId) : undefined;
+  const seen = new Set();
+  while (cur && !seen.has(cur.id)) {
+    if (isSubagentSpan(cur)) return cur;
+    seen.add(cur.id);
+    cur = cur.parentObservationId ? byId.get(cur.parentObservationId) : undefined;
+  }
+  return null;
+}
+
+/** Langfuse-Observations (Hook `langfuse-observability`) → Calls. */
+export function callsFromLangfuse(observations) {
+  const byId = new Map(observations.map((o) => [o.id, o]));
+  const calls = observations
+    .filter((o) => o.type === "GENERATION")
+    .map((o) => {
+      const span = findSubagentAncestor(o, byId);
+      const u = o.usageDetails ?? {};
+      return {
+        ts: o.startTime,
+        model: o.providedModelName ?? o.model,
+        input: u.input,
+        cacheWrite: u.cache_creation_input_tokens,
+        cacheRead: u.cache_read_input_tokens,
+        output: u.output,
+        cost: o.totalCost ?? 0,
+        subagent: span ? spanInfo(span) : null,
+      };
+    });
+  return {
+    calls,
+    questions: observations.filter((o) => o.name === "Tool: AskUserQuestion").length,
+  };
+}
+
+/** Alle Observations einer Session über die v2-API holen (cursor-paginiert). */
+export async function fetchSessionObservations(sessionId, { baseUrl, publicKey, secretKey, fetchImpl = fetch }) {
+  const auth = "Basic " + Buffer.from(`${publicKey}:${secretKey}`).toString("base64");
+  const out = [];
+  let cursor;
+  do {
+    const q = new URLSearchParams({ sessionId, limit: "1000", fields: "core,basic,model,usage,metadata" });
+    if (cursor) q.set("cursor", cursor);
+    const res = await fetchImpl(`${baseUrl.replace(/\/$/, "")}/api/public/v2/observations?${q}`, {
+      headers: { Authorization: auth },
+    });
+    if (!res.ok) throw new Error(`Langfuse ${res.status}: ${await res.text()}`);
+    const body = await res.json();
+    out.push(...(body.data ?? []));
+    cursor = body.meta?.cursor;
+  } while (cursor);
+  return out;
+}
+
+// ── Loop-Kennzahlen aus GitHub ───────────────────────────────────────────────
+
+/** CI-Fix-Runden = distinct head_sha mit failed CI-Lauf (dieselbe Zählung wie #904). */
+export function countFailedPushes(workflowRuns) {
+  return new Set((workflowRuns ?? []).map((r) => r.head_sha)).size;
+}
+
+/** Gemergt ohne Nacharbeit = gemergt und kein einziger roter CI-Push. */
+export function mergedWithoutRework(mergedAt, failedPushes) {
+  return Boolean(mergedAt) && failedPushes === 0;
+}
+
+function ghJson(args) {
+  return JSON.parse(execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }));
+}
+
+/** Claim-Zeitpunkt = erstes `assigned`-Event im Issue-Verlauf. */
+function claimAt(issue) {
+  const events = ghJson(["api", `repos/{owner}/{repo}/issues/${issue}/events`, "--paginate"]);
+  return events.find((e) => e.event === "assigned")?.created_at;
+}
+
+function prInfo(pr) {
+  const p = ghJson(["pr", "view", String(pr), "--json", "createdAt,mergedAt,headRefName"]);
+  const runs = ghJson([
+    "api",
+    `repos/{owner}/{repo}/actions/workflows/ci.yml/runs?branch=${encodeURIComponent(p.headRefName)}&status=failure&event=pull_request&per_page=100`,
+  ]);
+  return { prCreatedAt: p.createdAt, mergedAt: p.mergedAt, failedPushes: countFailedPushes(runs.workflow_runs) };
+}
+
+// ── Ausgabe + CLI ────────────────────────────────────────────────────────────
+
+const fmt = (n) => Math.round(n).toLocaleString("de-DE");
+
+/** Markdown-Report (Tabelle Phase × Modell + Loop-Zeile). */
+export function renderMarkdown(summary, loop = {}) {
+  const cost = (v) => (summary.hasCost ? v.toFixed(2) : "–");
+  const lines = [
+    "| Phase | Modell | Calls | Input | Cache-Write | Cache-Read | Output | Kosten $ |",
+    "|---|---|--:|--:|--:|--:|--:|--:|",
+  ];
+  for (const r of summary.rows) {
+    lines.push(
+      `| ${r.phase} | \`${r.model}\` | ${r.calls} | ${fmt(r.input)} | ${fmt(r.cacheWrite)} | ${fmt(r.cacheRead)} | ${fmt(r.output)} | ${cost(r.cost)} |`,
+    );
+  }
+  const t = summary.total;
+  lines.push(
+    `| **Summe (ohne Nachlauf)** | | ${t.calls} | ${fmt(t.input)} | ${fmt(t.cacheWrite)} | ${fmt(t.cacheRead)} | ${fmt(t.output)} | ${cost(t.cost)} |`,
+  );
+  const ci = loop.failedPushes ?? "–";
+  const merged =
+    loop.mergedAt === undefined ? "–" : mergedWithoutRework(loop.mergedAt, loop.failedPushes) ? "ja" : "nein";
+  lines.push(
+    "",
+    `Review-Runden: ${summary.reviewRounds} · CI-Fix-Runden: ${ci} · Rückfragen: ${summary.questions} · gemergt ohne Nacharbeit: ${merged}`,
+  );
+  return lines.join("\n");
+}
+
+export function parseArgs(argv) {
+  const a = { sessions: [], json: false, langfuse: false };
+  for (let i = 0; i < argv.length; i++) {
+    const k = argv[i];
+    if (k === "--session") a.sessions.push(argv[++i]);
+    else if (k === "--issue") a.issue = argv[++i];
+    else if (k === "--pr") a.pr = argv[++i];
+    else if (k === "--json") a.json = true;
+    else if (k === "--langfuse") a.langfuse = true;
+    else if (k === "--from") a.from = argv[++i];
+    else throw new Error(`Unbekanntes Argument: ${k}`);
+  }
+  return a;
+}
+
+/** Mehrere Sessions (z.B. Abbruch + Resume) zu einem Lauf zusammenlegen. */
+function merge(parts) {
+  return {
+    calls: parts.flatMap((p) => p.calls),
+    questions: parts.reduce((n, p) => n + p.questions, 0),
+  };
+}
+
+async function loadRun(args) {
+  if (!args.langfuse) {
+    const root = join(homedir(), ".claude", "projects");
+    return merge(args.sessions.map((s) => readTranscriptSession(s, root)));
+  }
+  const { LANGFUSE_PUBLIC_KEY: publicKey, LANGFUSE_SECRET_KEY: secretKey } = process.env;
+  if (!publicKey || !secretKey) throw new Error("--langfuse braucht LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY.");
+  const baseUrl = process.env.LANGFUSE_BASE_URL ?? "http://localhost:3000";
+  const parts = [];
+  for (const s of args.sessions)
+    parts.push(callsFromLangfuse(await fetchSessionObservations(s, { baseUrl, publicKey, secretKey })));
+  return merge(parts);
+}
+
+async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.sessions.length === 0) {
+    console.error(
+      "Aufruf: node scripts/token-baseline.mjs --session <id> [--issue <nr>] [--pr <nr>] [--from <ISO>] [--langfuse] [--json]",
+    );
+    process.exit(2);
+  }
+  const run = await loadRun(args);
+  const loop = args.pr ? prInfo(args.pr) : {};
+  const bounds = {
+    from: args.from,
+    claimAt: args.issue ? claimAt(args.issue) : undefined,
+    prCreatedAt: loop.prCreatedAt,
+    mergedAt: loop.mergedAt,
+  };
+  const summary = summarize(run, bounds);
+  if (args.json) console.log(JSON.stringify({ bounds, loop, ...summary }, null, 2));
+  else console.log(renderMarkdown(summary, loop));
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error(err.message);
+    process.exit(1);
+  });
+}
