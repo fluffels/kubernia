@@ -28,7 +28,10 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");
@@ -163,5 +166,69 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
     const co = new Set(["AGENTS.md", "CLAUDE.md"]);
     const cp = new Set(["AGENTS.md"]);
     assert.notDeepEqual([...co].sort(), [...cp].sort());
+  });
+});
+
+describe("Der Guard diffed gegen die Merge-Base, nicht gegen den main-Tip (#1095)", () => {
+  /** Die `git diff …`-Argumente aus der `changed=$(git diff …)`-Zeile des Guards, mit eingesetzten SHAs. */
+  function guardDiffArgs(wf: string, base: string, head: string): string[] {
+    const m = wf.match(/changed=\$\(git diff ([^)]*)\)/);
+    assert.ok(
+      m,
+      "changed=$(git diff …)-Zeile in gate-change-guard.yml nicht gefunden",
+    );
+    return [
+      "diff",
+      ...m[1]
+        .replaceAll("$BASE_SHA", base)
+        .replaceAll("$HEAD_SHA", head)
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((a) => a.replace(/^"|"$/g, "")),
+    ];
+  }
+
+  test("ein nach dem Abzweigen auf main gemergter Harness-Commit zählt NICHT als PR-Änderung", () => {
+    // Repro von PR #1093: der PR ändert nur Doku, auf main landet derweil eine .claude/-Änderung.
+    // Mit Zwei-Punkt-Diff (base.sha = main-Tip) meldete der Guard die fremde Datei und blieb rot.
+    const dir = mkdtempSync(join(tmpdir(), "kq-guard-"));
+    const git = (...args: string[]) =>
+      execFileSync("git", args, {
+        cwd: dir,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }).trim();
+    try {
+      git("init", "-q", "-b", "main");
+      git("config", "user.email", "t@example.invalid");
+      git("config", "user.name", "t");
+      git("config", "commit.gpgsign", "false");
+      writeFileSync(join(dir, "README.md"), "x\n");
+      git("add", ".");
+      git("commit", "-q", "-m", "basis");
+      git("checkout", "-q", "-b", "feature");
+      mkdirSync(join(dir, "docs"));
+      writeFileSync(join(dir, "docs", "adr.md"), "pr\n");
+      git("add", ".");
+      git("commit", "-q", "-m", "pr");
+      const head = git("rev-parse", "HEAD");
+      git("checkout", "-q", "main");
+      mkdirSync(join(dir, ".claude"));
+      writeFileSync(join(dir, ".claude", "fremd.js"), "main\n");
+      git("add", ".");
+      git("commit", "-q", "-m", "fremder main-commit");
+      const base = git("rev-parse", "HEAD");
+
+      const changed = git(...guardDiffArgs(guardWf, base, head))
+        .split(/\r?\n/)
+        .filter(Boolean);
+      assert.deepEqual(
+        changed,
+        ["docs/adr.md"],
+        "Der Guard zählt Dateien fremder main-Commits zum PR (Zwei- statt Drei-Punkt-Diff)",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
