@@ -8,14 +8,14 @@
  *   1. **Die portable Regel verschwindet.** Die Verhaltensregel (Pre-Flight-Klärung + Audit-
  *      Kommentar nach dem Selbst-Merge) lebt tool-neutral in AGENTS.md. Wird sie umformuliert bis
  *      der Marker fehlt, liest ein fremder Agent (der nur AGENTS.md kennt) sie nicht mehr.
- *   2. **Die zwei Durchsetzungs-Listen driften auseinander.** Der CI-Riegel `gate-change-guard`
+ *   2. **Die Durchsetzungs-Listen driften auseinander.** Der CI-Riegel `gate-change-guard`
  *      (.github/workflows/gate-change-guard.yml, Array PROTECTED) ist laut eigenem Kommentar
- *      „Spiegel der CODEOWNERS-Liste".
- *      Ergänzt jemand einen Leitplanken-Pfad nur in einer der beiden Dateien, greift der Riegel
+ *      „Spiegel der CODEOWNERS-Liste"; `HARNESS_PFADE` im Ticket-Workflow spiegelt ihn (#1116).
+ *      Ergänzt jemand einen Leitplanken-Pfad nur in einer der Dateien, greift der Riegel
  *      halb – von außen (grüne Checks) nicht von einem echten Schutz zu unterscheiden. Hier ROT.
  *
- * Zusätzlich wird geprüft, dass beide Listen die Leitplanken-Dateien (über die reine
- * Gate-Config hinaus: AGENTS.md, CLAUDE.md, .claude/, .agents/, docs/agent-harness) wirklich
+ * Zusätzlich wird geprüft, dass alle Listen die Leitplanken-Dateien (über die reine Gate-Config
+ * hinaus: AGENTS.md, CLAUDE.md, CLAUDE.local.md, .claude/, .agents/, docs/agent-harness) wirklich
  * enthalten – sonst wäre die Regel dokumentiert, aber der Riegel liefe ins Leere.
  *
  * Fitness-Function-Kategorie neben agents-md-native/docmap/readme (#1087/#482), nicht mit
@@ -186,6 +186,15 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
       ["bar/", "foo.js"],
     );
     assert.deepEqual([...guardProtectedPaths("x\nPROTECTED=(\n  'a.js'\n  'b/'\n)\ny")].sort(), ["a.js", "b/"]);
+    assert.deepEqual(
+      [...workflowHarnessPaths("// 'kommentar/'\nconst HARNESS_PFADE = [\n  'a.js',\n  'b/',\n]\nconst X = ['c']")].sort(),
+      ["a.js", "b/"],
+    );
+  });
+
+  test("CLAUDE.md deckt CLAUDE.local.md im Substring-Guard NICHT mit ab (#1116)", () => {
+    // Der Grund für den eigenen Eintrag: PROTECTED matcht per Substring auf den geänderten Pfad.
+    assert.equal("CLAUDE.local.md".includes("CLAUDE.md"), false);
   });
 
   test("ein einseitig ergänzter Pfad würde als Drift auffallen", () => {
