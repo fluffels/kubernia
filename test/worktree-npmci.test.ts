@@ -18,7 +18,10 @@
  * PFLICHT_QUELLEN sind nur der Leerlauf-Schutz: dort muss die Anweisung gefunden werden.
  *
  * Grenze (bewusst): kein Semantik-Prüfer, nur die abgelegte Formulierung neben einem
- * Worktree-Bezug. Fitness-Function der test-only-Familie (wie
+ * Worktree-Bezug, und nur innerhalb EINER Einheit: steht „Worktree" im Elternpunkt und
+ * `npm install` in einem Unterpunkt oder Folgeabsatz, sieht er das nicht. Erklärende
+ * Erwähnungen von `npm install` neben einem Worktree-Bezug meldet er mit – solche Sätze
+ * ohne den Befehl formulieren. Fitness-Function der test-only-Familie (wie
  * `test/agents-md-native.test.ts`), ohne eigenes `scripts/check-*.mjs` (gate-config-geschützt).
  *
  * Ausführen mit:  npm test
@@ -57,12 +60,12 @@ function alleQuellen(): string[] {
   return [...collectMarkdown(ROOT), ...workflows];
 }
 
-/** Zerlegt Text in Absätze und innerhalb davon in einzelne Listenpunkte. */
+/** Zerlegt Text in Absätze und innerhalb davon in einzelne Listenpunkte bzw. Tabellenzeilen. */
 function einheiten(text: string): string[] {
   return text
     .replace(/\r\n/g, "\n")
     .split(/\n\s*\n/)
-    .flatMap((absatz) => absatz.split(/\n(?=\s*(?:[-*]|\d+\.) )/));
+    .flatMap((absatz) => absatz.split(/\n(?=\s*(?:(?:[-*]|\d+\.) |\|))/));
 }
 
 interface Treffer {
@@ -126,6 +129,13 @@ describe("Worktree-Setup nutzt npm ci (#1119)", () => {
       "- Nach Hand-Änderung an `package.json` `npm install` und den Lockfile mitcommitten.",
       "- Im frischen Worktree einmal `npm ci`.",
     ].join("\n");
+    const t = worktreeInstallAbsaetze("x.md", text);
+    assert.equal(t.length, 1);
+    assert.deepEqual(verstoesse(t), []);
+  });
+
+  test("Grenzfall: fremde Tabellenzeile mit Worktree-Bezug steckt npm install nicht an", () => {
+    const text = ["| Erstinstallation | `npm install` |", "| Worktree anlegen | `npm ci` |"].join("\n");
     const t = worktreeInstallAbsaetze("x.md", text);
     assert.equal(t.length, 1);
     assert.deepEqual(verstoesse(t), []);
