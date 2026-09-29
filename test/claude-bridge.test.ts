@@ -37,13 +37,14 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im tsconfig)
 // – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkDocDrift from "../scripts/check-docdrift.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as checkInternalRefs from "../scripts/check-internalrefs.mjs";
 
 // Begründete Ausnahme: das .mjs hat kein Declaration-File, der Namespace ist für tsc
 // „error typed". Die Schwester-Tests (docdrift/docmap/context-size) haben dafür Einträge
@@ -53,6 +54,9 @@ import * as checkDocDrift from "../scripts/check-docdrift.mjs";
 const stripFencedCode: (md: string) => string = checkDocDrift.stripFencedCode;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const collectMarkdown: (rootDir?: string) => string[] = checkDocDrift.collectMarkdown;
+// Getrackte Dateien per `git ls-files -z` (quotepath-sicher) – dieselbe Quelle wie check:internalrefs.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+const listTrackedFiles: (rootDir?: string) => string[] = checkInternalRefs.listTrackedFiles;
 
 const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");
@@ -82,7 +86,7 @@ function bridgeImportLines(md: string, target: string): number[] {
  * Wer den Begriff diskutieren muss („der Schnellstart steht NICHT in CLAUDE.md"), setzt
  * ihn in Inline-Backticks oder schreibt ihn ohne die Datei in derselben Zeile.
  */
-const RETIRED_ROLE_CLAIMS: { term: string; home: string }[] = [
+const RETIRED_ROLE_CLAIMS: { term: string; home: string; pattern?: RegExp }[] = [
   {
     term: "Schnellstart",
     home: "seit #992 hat AGENTS.md den Ticket-Ablauf und CONTRIBUTING.md das Setup; CLAUDE.md ist die Brücke + die Referenz-Tabellen",
@@ -91,11 +95,14 @@ const RETIRED_ROLE_CLAIMS: { term: string; home: string }[] = [
     term: "Datei-für-Datei",
     home: "die Landkarte in CLAUDE.md ist seit #907 Subsystem-granular – Datei-Granularität steckt in den docs/module/-Tiefendocs",
   },
-  // Umschreibungen derselben abgelegten Rolle (#1002/#1064) – trafen keinen der Begriffe oben.
-  ...["welche Datei, welche Schicht", "welche Datei welche Schicht"].map((term) => ({
-    term,
+  // Umschreibung derselben abgelegten Rolle (#1002/#1064), traf keinen der Begriffe oben. Als
+  // tolerantes Muster statt Variantenliste; bewusst NICHT „in welcher Schicht" – das beschreibt
+  // korrekt die Schichtregel-Tabelle (AGENTS.md › Architektur).
+  {
+    term: "welche Datei welche Schicht",
+    pattern: /welche Datei,?\s+welche Schicht/i,
     home: "die Landkarte in CLAUDE.md ist seit #907 Subsystem-granular – Datei-Granularität steckt in den docs/module/-Tiefendocs",
-  })),
+  },
 ];
 
 /**
@@ -110,9 +117,7 @@ function isVersionedAgentConfig(path: string): boolean {
 }
 
 function collectAgentConfig(): string[] {
-  return execFileSync("git", ["ls-files", ".claude"], { cwd: REPO_ROOT, encoding: "utf8" })
-    .split(/\r?\n/)
-    .filter(isVersionedAgentConfig);
+  return listTrackedFiles(REPO_ROOT).filter(isVersionedAgentConfig);
 }
 
 /**
@@ -126,8 +131,8 @@ function retiredRoleClaims(md: string): { line: number; term: string; home: stri
     .forEach((raw, i) => {
       const line = raw.replace(/`[^`\n]*`/g, "");
       if (!line.includes("CLAUDE.md")) return;
-      for (const { term, home } of RETIRED_ROLE_CLAIMS) {
-        if (line.includes(term)) found.push({ line: i + 1, term, home, text: raw.trim().slice(0, 120) });
+      for (const { term, home, pattern } of RETIRED_ROLE_CLAIMS) {
+        if (pattern ? pattern.test(line) : line.includes(term)) found.push({ line: i + 1, term, home, text: raw.trim().slice(0, 120) });
       }
     });
   return found;
@@ -200,6 +205,12 @@ describe("Die Rolle von CLAUDE.md ist überall gleich beschrieben (#992)", () =>
       retiredRoleClaims("- **[CLAUDE.md](CLAUDE.md)** — Repo-Landkarte (welche Datei welche Schicht/Zweck).").map((v) => v.term),
       ["welche Datei welche Schicht"],
       "die Umschreibung aus #1002 muss zählen",
+    );
+    assert.equal(retiredRoleClaims("Siehe CLAUDE.md: welche Datei,  welche Schicht.").length, 1, "Varianten mit Komma/Leerraum");
+    assert.deepEqual(
+      retiredRoleClaims("Welche Datei in welcher Schicht liegt, steht in CLAUDE.md › Schichtregeln."),
+      [],
+      "die korrekte Schichtregel-Beschreibung ist keine abgelegte Rolle",
     );
   });
 
