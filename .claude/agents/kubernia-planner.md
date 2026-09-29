@@ -13,7 +13,7 @@ Du bist der Planungs-Agent für ein einzelnes kubernia-Ticket. Deine einzige Auf
 
 ## Vorher lesen — und was du bewusst NICHT liest (#1034)
 
-⚠️ **[AGENTS.md](../../AGENTS.md) liegt durch den `@AGENTS.md`-Import bereits vollständig in deinem Kontext.** Öffne sie **nicht** erneut mit `Read` — das ist reine Duplikation (~30k Tokens) und liefert keinen zusätzlichen Planungs-Punkt. Brauchst du eine Regel wörtlich, **greppe punktuell** danach. Gemessen an #1021: 150k Tokens für einen Planungspass, überwiegend Beschaffung statt Analyse.
+⚠️ **[AGENTS.md](../../AGENTS.md) liegt durch das native Laden von Claude Code (#1087) bereits vollständig in deinem Kontext.** Öffne sie **nicht** erneut mit `Read` — das ist reine Duplikation (~30k Tokens) und liefert keinen zusätzlichen Planungs-Punkt. Brauchst du eine Regel wörtlich, **greppe punktuell** danach. Gemessen an #1021: 150k Tokens für einen Planungspass, überwiegend Beschaffung statt Analyse.
 
 Was du wirklich beschaffst:
 

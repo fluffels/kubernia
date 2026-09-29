@@ -3,7 +3,7 @@
  * Gemessen an Ticket #1021 / PR #1029: ein einzelnes Ticket verbrauchte 1,03 Mio Subagent-Tokens,
  * 85 % davon im Review. Die Befunde rechtfertigten den Review inhaltlich – die Kontext-BESCHAFFUNG
  * war aber fünffach redundant: jeder Lens-Agent fuhr `git diff` selbst, las die geänderten Dateien
- * vollständig und öffnete die Root-Kontextdateien erneut, obwohl der `@AGENTS.md`-Import sie bereits
+ * vollständig und öffnete die Root-Kontextdateien erneut, obwohl Claude Code sie bereits (seit #1087 nativ)
  * vollständig in seinen Kontext legt. Das produziert keinen einzigen zusätzlichen Befund.
  * (Die gemessenen Zahlen und ihre Deutung stehen in docs/agent-harness.md § 2.5 – hier nur, was
  * maschinell festgenagelt wird.)
@@ -243,7 +243,7 @@ describe("Kontext-Diät: AGENTS.md wird nicht erneut gelesen (#1034)", () => {
     assert.ok(
       haeltKontextDiaet(prompt()),
       "Dem Lens-Prompt fehlt der Hinweis, dass AGENTS.md schon vollständig im Kontext " +
-        "liegt (per @AGENTS.md-Import), oder die Anweisung, statt zu lesen punktuell zu greppen. " +
+        "liegt (Claude Code lädt sie nativ), oder die Anweisung, statt zu lesen punktuell zu greppen. " +
         "Das erneute Read ist der größte Einzelposten (~30k pro Lens).",
     );
   });
@@ -269,8 +269,8 @@ describe("Kontext-Diät: AGENTS.md wird nicht erneut gelesen (#1034)", () => {
     // Redundanz-Muster und wird mit einbezogen.
     assert.ok(
       haeltKontextDiaet(planner),
-      "Der kubernia-planner fordert AGENTS.md weiter zum Lesen an, obwohl der " +
-        "@AGENTS.md-Import sie schon vollständig in seinen Kontext legt (#1034).",
+      "Der kubernia-planner fordert AGENTS.md weiter zum Lesen an, obwohl Claude " +
+        "Code sie nativ und schon vollständig in seinen Kontext legt (#1034).",
     );
   });
 });

@@ -118,7 +118,7 @@ function pruefe<V extends Verweis>(verweise: V[], docs: Record<Ziel, string>): V
 
 const nurBegriffe = (vs: Verweis[]) => vs.map(({ ziel, begriff }) => ({ ziel, begriff }));
 
-// CLAUDE.md ist eine auslaufende Brücke (#1078/#1087): fehlt sie, gilt sie als leer – ein noch
+// CLAUDE.md ist seit #1087 gelöscht: fehlt sie, gilt sie als leer – ein noch
 // übrig gebliebener `CLAUDE.md § …`-Verweis wird dann rot gemeldet, statt dass der Test crasht.
 const DOCS: Record<Ziel, string> = {
   "AGENTS.md": read("AGENTS.md"),
