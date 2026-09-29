@@ -43,6 +43,8 @@ import { fileURLToPath } from "node:url";
 // – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkDocDrift from "../scripts/check-docdrift.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as checkInternalRefs from "../scripts/check-internalrefs.mjs";
 
 // Begründete Ausnahme: das .mjs hat kein Declaration-File, der Namespace ist für tsc
 // „error typed". Die Schwester-Tests (docdrift/docmap/context-size) haben dafür Einträge
@@ -52,6 +54,9 @@ import * as checkDocDrift from "../scripts/check-docdrift.mjs";
 const stripFencedCode: (md: string) => string = checkDocDrift.stripFencedCode;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const collectMarkdown: (rootDir?: string) => string[] = checkDocDrift.collectMarkdown;
+// Getrackte Dateien per `git ls-files -z` (quotepath-sicher) – dieselbe Quelle wie check:internalrefs.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+const listTrackedFiles: (rootDir?: string) => string[] = checkInternalRefs.listTrackedFiles;
 
 const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");
@@ -81,7 +86,7 @@ function bridgeImportLines(md: string, target: string): number[] {
  * Wer den Begriff diskutieren muss („der Schnellstart steht NICHT in CLAUDE.md"), setzt
  * ihn in Inline-Backticks oder schreibt ihn ohne die Datei in derselben Zeile.
  */
-const RETIRED_ROLE_CLAIMS: { term: string; home: string }[] = [
+const RETIRED_ROLE_CLAIMS: { term: string; home: string; pattern?: RegExp }[] = [
   {
     term: "Schnellstart",
     home: "seit #992 hat AGENTS.md den Ticket-Ablauf und CONTRIBUTING.md das Setup; CLAUDE.md ist die Brücke + die Referenz-Tabellen",
@@ -90,7 +95,30 @@ const RETIRED_ROLE_CLAIMS: { term: string; home: string }[] = [
     term: "Datei-für-Datei",
     home: "die Landkarte in CLAUDE.md ist seit #907 Subsystem-granular – Datei-Granularität steckt in den docs/module/-Tiefendocs",
   },
+  // Umschreibung derselben abgelegten Rolle (#1002/#1064), traf keinen der Begriffe oben. Als
+  // tolerantes Muster statt Variantenliste; bewusst NICHT „in welcher Schicht" – das beschreibt
+  // korrekt die Schichtregel-Tabelle (AGENTS.md › Architektur).
+  {
+    term: "welche Datei welche Schicht",
+    pattern: /welche Datei,?\s+welche Schicht/i,
+    home: "die Landkarte in CLAUDE.md ist seit #907 Subsystem-granular – Datei-Granularität steckt in den docs/module/-Tiefendocs",
+  },
 ];
+
+/**
+ * Versionierte Agenten-Konfiguration (#1002/#1064): Skills, Agents, Workflows unter `.claude/`.
+ * `collectMarkdown` nimmt `.claude/` wegen der Parallel-Worktrees komplett aus – damit war auch
+ * die versionierte Konfiguration blind. Hier kommt sie über `git ls-files` zurück (Worktrees
+ * sind nie versioniert); der Filter schließt `.claude/worktrees/` zusätzlich explizit aus.
+ * Auch `.js`, weil die Workflow-Prompts als Freitext in `.claude/workflows/*.js` stehen.
+ */
+function isVersionedAgentConfig(path: string): boolean {
+  return path.startsWith(".claude/") && !path.startsWith(".claude/worktrees/") && /\.(md|js)$/.test(path);
+}
+
+function collectAgentConfig(): string[] {
+  return listTrackedFiles(REPO_ROOT).filter(isVersionedAgentConfig);
+}
 
 /**
  * Zeilen in `md`, die CLAUDE.md eine abgelegte Rolle zuschreiben. Codeblöcke und
@@ -103,8 +131,8 @@ function retiredRoleClaims(md: string): { line: number; term: string; home: stri
     .forEach((raw, i) => {
       const line = raw.replace(/`[^`\n]*`/g, "");
       if (!line.includes("CLAUDE.md")) return;
-      for (const { term, home } of RETIRED_ROLE_CLAIMS) {
-        if (line.includes(term)) found.push({ line: i + 1, term, home, text: raw.trim().slice(0, 120) });
+      for (const { term, home, pattern } of RETIRED_ROLE_CLAIMS) {
+        if (pattern ? pattern.test(line) : line.includes(term)) found.push({ line: i + 1, term, home, text: raw.trim().slice(0, 120) });
       }
     });
   return found;
@@ -145,7 +173,7 @@ describe("CLAUDE.md ist eine tragende Brücke zu AGENTS.md (#992)", () => {
 describe("Die Rolle von CLAUDE.md ist überall gleich beschrieben (#992)", () => {
   test("kein Markdown im Repo schreibt CLAUDE.md eine abgelegte Rolle zu", () => {
     const violations: string[] = [];
-    for (const file of collectMarkdown(REPO_ROOT)) {
+    for (const file of [...collectMarkdown(REPO_ROOT), ...collectAgentConfig()]) {
       for (const v of retiredRoleClaims(read(file))) {
         violations.push(`${file}:${v.line} nennt CLAUDE.md „${v.term}" – ${v.home}. Zeile: „${v.text}"`);
       }
@@ -173,5 +201,24 @@ describe("Die Rolle von CLAUDE.md ist überall gleich beschrieben (#992)", () =>
     assert.deepEqual(retiredRoleClaims("Der `Schnellstart` steht nicht mehr in CLAUDE.md."), [], "Backticks = Zitat");
     assert.deepEqual(retiredRoleClaims("```\nCLAUDE.md ist der Schnellstart\n```\n"), [], "im Codeblock zählt nicht");
     assert.deepEqual(retiredRoleClaims("AGENTS.md trägt den Schnellstart."), [], "ohne CLAUDE.md keine Behauptung");
+    assert.deepEqual(
+      retiredRoleClaims("- **[CLAUDE.md](CLAUDE.md)** — Repo-Landkarte (welche Datei welche Schicht/Zweck).").map((v) => v.term),
+      ["welche Datei welche Schicht"],
+      "die Umschreibung aus #1002 muss zählen",
+    );
+    assert.equal(retiredRoleClaims("Siehe CLAUDE.md: welche Datei,  welche Schicht.").length, 1, "Varianten mit Komma/Leerraum");
+    assert.deepEqual(
+      retiredRoleClaims("Welche Datei in welcher Schicht liegt, steht in CLAUDE.md › Schichtregeln."),
+      [],
+      "die korrekte Schichtregel-Beschreibung ist keine abgelegte Rolle",
+    );
+  });
+
+  test("versionierte .claude/-Konfiguration wird mitgeprüft, Parallel-Worktrees nicht (#1002)", () => {
+    assert.ok(isVersionedAgentConfig(".claude/skills/plan-feature/SKILL.md"));
+    assert.ok(isVersionedAgentConfig(".claude/workflows/kubernia-ticket.js"), "Workflow-Prompts stehen in .js");
+    assert.ok(!isVersionedAgentConfig(".claude/worktrees/kq-1/AGENTS.md"), "Worktrees paralleler Agenten nicht");
+    assert.ok(!isVersionedAgentConfig(".claude/settings.json"));
+    assert.ok(collectAgentConfig().includes(".claude/agents/kubernia-planner.md"), "Inventar ist nicht leer");
   });
 });
