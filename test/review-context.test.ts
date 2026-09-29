@@ -69,8 +69,9 @@ function konstante(text: string, name: string): string {
 
 /**
  * Rumpf einer Arrow-Funktion mit Template-Literal (`const NAME = (…) => \`…\``).
- * `\r?\n` statt `\n`: die Datei liegt im Arbeitsbaum mit CRLF (git-Autoconversion) — ein
- * reines `\n` hinter dem schließenden Backtick findet den Block auf Windows nie.
+ * `\r?\n` statt `\n`: seit #1026 wird `.claude/` per `.gitattributes` mit LF ausgecheckt,
+ * eine ältere Windows-Arbeitskopie kann aber noch CRLF tragen (git-Autoconversion) — ein
+ * reines `\n` hinter dem schließenden Backtick fände den Block dort nie.
  */
 function templateFunktion(text: string, name: string): string {
   const m = text.match(new RegExp(`const ${name} = \\([^)]*\\) =>\\s*\`([\\s\\S]*?)\`\\r?\\n`));
