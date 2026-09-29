@@ -37,11 +37,12 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 /** Zeichen-Budget je Root-Kontextdatei (repo-relativer Pfad, #1064). Kalibriert am Bestand
  *  bei der Umstellung von Zeilen auf Zeichen (AGENTS.md 73.612, CLAUDE.md 18.068 Zeichen) +
  *  kleine Kopffreiheit. Das ist KEIN Aufweichen: das alte Zeilen-Budget hat die Größe nie
- *  gemessen. AGENTS.md wird im zweiten #1064-Slice auf ≤ 36.000 Zeichen gekürzt und das
- *  Budget dann auf 40.000 gezogen (Ratchet nach unten).
+ *  gemessen. Im zweiten #1064-Slice wurde AGENTS.md auf ~24k Zeichen gekürzt
+ *  (Langbegründung nach docs/agent-harness.md §3a) und das Budget auf 28.000 gezogen
+ *  (Ist + ~15 %, wie beim ersten Kalibrieren; Ratchet nach unten).
  *  Weitere immer geladene Dateien (z.B. README) können hier bei Bedarf ergänzt werden. */
 export const CONTEXT_BUDGETS = [
-  { file: "AGENTS.md", budget: 76_000 },
+  { file: "AGENTS.md", budget: 28_000 },
   { file: "CLAUDE.md", budget: 21_000 },
 ];
 
