@@ -1,5 +1,7 @@
 # Kubernia — Architektur-Analyse 2026-07-01 (iSAQB, frische Code-Sicht)
 
+> 📸 **Momentaufnahme vom 2026-07-01 — wird nicht aktualisiert** ([Lebenszyklus-Regel](referenz/doku-vorlagen.md#schnappschuss-analyse-audit-review)).
+
 > **Stand: 2026-07-01.** Diese Analyse wurde **bewusst ohne Rücksicht auf die bestehende Doku/ADRs** erstellt — fünf unabhängige Durchläufe (je eine Schicht) haben ausschließlich den echten Code mit der iSAQB-Brille bewertet (Modularität, Kopplung/Kohäsion, konzeptuelle Integrität, Testbarkeit, Fehlerbehandlung, Querschnittskonzepte, Governance). Ziel: Kubernia zu einem **beispiellosen Vorzeigeprojekt für Code-Qualität** machen.
 >
 > Sie **ergänzt** die strukturierte Gesamtsicht [arc42-architektur.md](arc42-architektur.md) (die aus dieser Analyse aktualisiert wurde) und die ältere [architektur-analyse-2026-06.md](architektur-analyse-2026-06.md). Alle Befunde sind als Tickets **#492–#524** ticketiert und stehen im Kopf der [ticket-reihenfolge.md](ticket-reihenfolge.md).

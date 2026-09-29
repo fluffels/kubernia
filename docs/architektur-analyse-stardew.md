@@ -1,6 +1,8 @@
 # Architektur-Analyse: Trägt der Stack ein großes Spiel (Stardew-Maßstab)? (#46)
 
-> ⚠️ **Historisch (Stand #46).** Für den **aktuellen** Stand siehe [architektur-analyse-2026-06.md](architektur-analyse-2026-06.md) – die meisten hier genannten Lücken sind inzwischen geschlossen (Tiled-Maps #191–196, Build-Split #58, Content-as-Data #348/#349, ID-basierte Saves #353/#354). Dieses Dokument bleibt als Entscheidungs-Historie erhalten.
+> 📸 **Momentaufnahme vom 2026-06-15 — wird nicht aktualisiert** ([Lebenszyklus-Regel](referenz/doku-vorlagen.md#schnappschuss-analyse-audit-review)).
+
+> ➡️ Für den **neueren** Stand siehe [architektur-analyse-2026-06.md](architektur-analyse-2026-06.md) – die meisten hier genannten Lücken sind inzwischen geschlossen (Tiled-Maps #191–196, Build-Split #58, Content-as-Data #348/#349, ID-basierte Saves #353/#354). Dieses Dokument bleibt als Entscheidungs-Historie erhalten.
 
 > Spike/Analyse, kein Feature-Bau. Grundlage für die Ausbau-Roadmap.
 > Stand: Juni 2026, Code-Stand `main` zum Zeitpunkt von #46.

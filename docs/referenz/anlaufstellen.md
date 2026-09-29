@@ -21,3 +21,4 @@
 | ✅ Backlog / TODOs | GitHub Issues + Project-Board (`gh issue list --state open --limit 500`, `gh project list --owner fluffels`) |
 | 🥇 Nächstes Ticket (Auswahl-Regel) | [docs/ticket-reihenfolge.md](../ticket-reihenfolge.md) – oberstes freies Item der Board-Reihenfolge; **verbindlich** in [AGENTS.md › Wo die TODOs leben](../../AGENTS.md#wo-die-todos-leben) |
 | 🚀 Spiel deployen (Helm-Chart, lokaler Cluster) | [docs/deploy.md](../deploy.md) – `helm install kubernia ./deploy/chart`, kind/minikube, values |
+| 🧩 Kopfzeilen-Vorlagen für Wiki-Seiten („fachlich geprüft am", Schnappschuss-Hinweis) | [doku-vorlagen.md](doku-vorlagen.md) – Lebenszyklus-Regel aus [ADR 0013](../adr/0013-docs-als-agentengepflegtes-wiki.md) |

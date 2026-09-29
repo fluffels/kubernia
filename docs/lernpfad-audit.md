@@ -1,5 +1,7 @@
 # Lernpfad-Audit: Lernreihenfolge des ganzen Spiels (#227)
 
+> 📸 **Momentaufnahme vom 2026-06-18 — wird nicht aktualisiert** ([Lebenszyklus-Regel](referenz/doku-vorlagen.md#schnappschuss-analyse-audit-review)). Der aktuelle Status der genannten Folge-Tickets steht in GitHub, nicht hier.
+
 > **Was ist das hier?** Eine einmalige, ganzheitliche Prüfung der Lernreihenfolge: Wird
 > irgendwo ein Befehl/Konzept **benutzt oder vorausgesetzt, bevor er eingeführt wurde**
 > (Vorwärts-Referenz / verletzte Voraussetzung)? Ergebnis ist dieser Bericht + daraus

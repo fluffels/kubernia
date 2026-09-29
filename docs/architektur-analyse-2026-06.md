@@ -1,5 +1,7 @@
 # Architektur-Analyse 2026-06 – Trägt der Stack ein Spiel in Stardew-Größe?
 
+> 📸 **Momentaufnahme vom 2026-06-20 — wird nicht aktualisiert** ([Lebenszyklus-Regel](referenz/doku-vorlagen.md#schnappschuss-analyse-audit-review)).
+
 > ➡️ **Neuere Gesamtsicht:** Eine strukturierte **arc42-Analyse** (aktueller Stand) liegt in [arc42-architektur.md](arc42-architektur.md). Die dort erledigt markierten Baustellen dieser 2026-06-Analyse (#350/#389/#390/#391/#392/#393/#411/#413) sind inzwischen umgesetzt; diese Datei bleibt als historischer Infrastruktur-Fokus erhalten.
 
 > **Stand: 2026-06-20.** Kritische Gesamtanalyse vor dem großen Ausbau (viele Quests/Orte/Charaktere, Spielstände, Stardew-Scope).

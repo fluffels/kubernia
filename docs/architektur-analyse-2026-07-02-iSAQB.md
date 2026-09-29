@@ -1,5 +1,7 @@
 # Kubernia — Architektur-Analyse 2026-07-02 (iSAQB, frische Code-Sicht)
 
+> 📸 **Momentaufnahme vom 2026-07-02 — wird nicht aktualisiert** ([Lebenszyklus-Regel](referenz/doku-vorlagen.md#schnappschuss-analyse-audit-review)).
+
 > **Stand: 2026-07-02.** Zweite vollständige iSAQB-Runde, **einen Tag nach** der ersten ([architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md)). Wieder **bewusst ohne Rücksicht auf Doku/ADRs**: fünf unabhängige Durchläufe (je eine Schicht) haben ausschließlich den echten Code mit der iSAQB-Brille bewertet (Modularität, Kopplung/Kohäsion, konzeptuelle Integrität, Testbarkeit, Fehlerbehandlung, Invarianten/Value-Objects, Querschnittskonzepte, Governance). Jeder Befund ist gegen die konkrete Datei:Zeile verifiziert.
 >
 > Alle Befunde sind als Tickets **#577–#595** ticketiert. Drei bereits offene Tickets decken weitere Befunde ab: **#539** (Coverage-Glob), **#540** (Hazard szenen-neutral), **#560** (Landmark-A11y).

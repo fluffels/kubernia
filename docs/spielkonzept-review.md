@@ -1,5 +1,7 @@
 # Spielkonzept-Review: Führt der Lernpfad zu Senior-DevOps UND macht es Spaß? (#52)
 
+> 📸 **Momentaufnahme vom 2026-06-15 — wird nicht aktualisiert** ([Lebenszyklus-Regel](referenz/doku-vorlagen.md#schnappschuss-analyse-audit-review)).
+
 > Review/Konzept-Ticket, kein Feature-Bau. Wunsch der Maintainerin (sie ist die
 > Zielspielerin/-lernerin). Grundlage für gezielte Folge-Tickets.
 > Stand: Juni 2026, Code-Stand `main`. Verifiziert am Quest-Content
