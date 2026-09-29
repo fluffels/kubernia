@@ -273,7 +273,8 @@ check:size sieht nur Dateien, nicht Funktionen)? Duplizierung einer bestehenden 
 Abstraktion statt Wiederverwendung? Und die ⭐ oberste Regel: trägt der Ansatz noch bei
 10× Content/NPCs/Welten, oder reproduziert er dasselbe Problem größer?
 Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):
-AGENTS.md § Architektur + § Oberste Regel, docs/referenz/schichtregeln.md. Die Doku-/Test-Regeln
+AGENTS.md § Architektur + § Oberste Regel. Die Schicht-Tabelle liegt on-demand (nicht im Kontext)
+in docs/referenz/schichtregeln.md — die darfst du gezielt öffnen. Die Doku-/Test-Regeln
 gehören den anderen beiden Brillen — lies sie nicht mit.`,
   },
   {

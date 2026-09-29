@@ -243,7 +243,7 @@ describe("Kontext-Diät: AGENTS.md wird nicht erneut gelesen (#1034)", () => {
     assert.ok(
       haeltKontextDiaet(prompt()),
       "Dem Lens-Prompt fehlt der Hinweis, dass AGENTS.md schon vollständig im Kontext " +
-        "liegen (per @AGENTS.md-Import), oder die Anweisung, statt zu lesen punktuell zu greppen. " +
+        "liegt (per @AGENTS.md-Import), oder die Anweisung, statt zu lesen punktuell zu greppen. " +
         "Das erneute Read ist der größte Einzelposten (~30k pro Lens).",
     );
   });
