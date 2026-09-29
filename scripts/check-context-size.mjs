@@ -75,6 +75,13 @@ export function findOversized(sizes) {
   return sizes.filter((s) => s.chars > s.budget);
 }
 
+/** Allowlist-Einträge, deren Datei nicht (mehr) über Budget liegt oder gar nicht gemessen
+ *  wird – EINE Implementierung für CLI und Test. */
+export function findStale(sizes, allowlist = ALLOWLIST) {
+  const oversized = new Set(findOversized(sizes).map((s) => s.file));
+  return allowlist.filter((a) => !oversized.has(a.file));
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────────
 function main() {
   const tty = process.stdout.isTTY;
@@ -95,7 +102,7 @@ function main() {
 
   const violations = oversized.filter((s) => !allow.has(s.file));
   const allowed = oversized.filter((s) => allow.has(s.file));
-  const stale = ALLOWLIST.filter((a) => !oversizedFiles.has(a.file));
+  const stale = findStale(sizes, ALLOWLIST);
 
   for (const a of allowed)
     console.log(dim(`• geduldet: ${a.file} (${fmt(a.chars)} > ${fmt(a.budget)} Zeichen) – ${allow.get(a.file)}`));

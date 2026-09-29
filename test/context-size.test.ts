@@ -30,6 +30,8 @@ const findOversized: (sizes: Sized[]) => Sized[] = checkContextSize.findOversize
 // gleiches Muster wie test/claude-bridge.test.ts.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const countChars: (text: string) => number = checkContextSize.countChars;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+const findStale: (sizes: Sized[], allowlist: Allow[]) => Allow[] = checkContextSize.findStale;
 
 const sizes = collectContextSizes();
 const allowedFiles = new Set(ALLOWLIST.map((a) => a.file));
@@ -50,11 +52,7 @@ describe("Root-Kontextdatei-Budget (#719, Zeichen seit #1064)", () => {
   test("Allowlist ist ehrlich: jeder Eintrag liegt wirklich noch über seinem Budget (sonst stale)", () => {
     // Sobald eine Auslagerung die Datei unter ihr Budget bringt, wird der Eintrag stale
     // und dieser Test bricht – das erinnert daran, die Ausnahme wieder zu entfernen.
-    const byFile = new Map(sizes.map((s) => [s.file, s]));
-    const stale = ALLOWLIST.filter((a) => {
-      const s = byFile.get(a.file);
-      return s === undefined || s.chars <= s.budget;
-    });
+    const stale = findStale(sizes, ALLOWLIST);
     assert.deepEqual(
       stale,
       [],
@@ -99,6 +97,29 @@ describe("Root-Kontextdatei-Budget (#719, Zeichen seit #1064)", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("Grenze exakt: Budget == Zeichen ist grün, eins weniger ist rot", () => {
+    const at: Sized[] = [{ file: "AGENTS.md", chars: 100, budget: 100 }];
+    const over: Sized[] = [{ file: "AGENTS.md", chars: 100, budget: 99 }];
+    assert.deepEqual(findOversized(at), []);
+    assert.equal(findOversized(over).length, 1);
+  });
+
+  test("Stale-Erkennung (Red-Green): Eintrag für Datei im Budget oder ohne Messung ist stale, über Budget nicht", () => {
+    const sized: Sized[] = [
+      { file: "AGENTS.md", chars: 500, budget: 100 },
+      { file: "CLAUDE.md", chars: 50, budget: 100 },
+    ];
+    const allow: Allow[] = [
+      { file: "AGENTS.md", reason: "#1 Auslagerung offen" },
+      { file: "CLAUDE.md", reason: "#2 längst erledigt" },
+      { file: "GIBTS-NICHT.md", reason: "#3 Tippfehler" },
+    ];
+    assert.deepEqual(
+      findStale(sized, allow).map((a) => a.file),
+      ["CLAUDE.md", "GIBTS-NICHT.md"],
+    );
   });
 
   test("Zählung ist zeilenenden-neutral: CRLF-Checkout (Windows/autocrlf) misst wie LF auf der CI", () => {
