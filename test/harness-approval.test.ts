@@ -70,13 +70,26 @@ function guardProtectedPaths(text: string): Set<string> {
 }
 
 /**
+ * Die Harness-Pfade aus `const HARNESS_PFADE = [ '...' … ]` im Ticket-Workflow – die dritte
+ * Spiegel-Liste, nach der der Workflow `maintainer-approved` selbst setzt (#1069, Sync seit #1116).
+ */
+function workflowHarnessPaths(text: string): Set<string> {
+  const block = text.match(/const HARNESS_PFADE = \[([\s\S]*?)^\]/m);
+  assert.ok(block, "const HARNESS_PFADE = [...] in .claude/workflows/kubernia-ticket.js nicht gefunden");
+  const set = new Set<string>();
+  for (const m of block[1].matchAll(/'([^']+)'/g)) set.add(normalizeProtected(m[1]));
+  return set;
+}
+
+/**
  * Leitplanken-Dateien, die über die reine Gate-Config hinaus den sichtbaren Sign-off tragen
  * (Ticket #1012 / Maintainerin-Entscheidung „breit"). In Substring-Form – so wie
  * beide Listen sie nach der Normalisierung führen müssen.
  */
 // CLAUDE.md bleibt geschützt, obwohl sie seit #1087 gelöscht ist: ihre Wiederanlage würde
 // AGENTS.md als geladene SSOT verdrängen und muss darum die Label-Pflicht auslösen.
-const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", ".claude/", ".agents/", "docs/agent-harness"];
+// Dasselbe gilt für CLAUDE.local.md (#1116) – der Guard matcht per Substring, `CLAUDE.md` trifft sie nicht.
+const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/", ".agents/", "docs/agent-harness"];
 
 /**
  * Marker der portablen Regeln in AGENTS.md. Bewusst wording-gekoppelt (wie readme.test.ts die
@@ -92,8 +105,9 @@ const AGENTS_MARKER = [
 const codeowners = read(".github/CODEOWNERS");
 const guardWf = read(".github/workflows/gate-change-guard.yml");
 const agentsMd = read("AGENTS.md");
+const ticketWf = read(".claude/workflows/kubernia-ticket.js");
 
-describe("Harness-Freigabe – die zwei Durchsetzungs-Listen bleiben synchron (#1012)", () => {
+describe("Harness-Freigabe – die Durchsetzungs-Listen bleiben synchron (#1012, #1116)", () => {
   test("CODEOWNERS und gate-change-guard/PROTECTED schützen dieselben Pfade", () => {
     assert.deepEqual(
       [...codeownersPaths(codeowners)].sort(),
@@ -103,13 +117,24 @@ describe("Harness-Freigabe – die zwei Durchsetzungs-Listen bleiben synchron (#
     );
   });
 
-  test("beide Listen decken die Leitplanken-Dateien ab (nicht nur Gate-Config)", () => {
+  test("HARNESS_PFADE im Ticket-Workflow spiegelt PROTECTED (#1116)", () => {
+    assert.deepEqual(
+      [...workflowHarnessPaths(ticketWf)].sort(),
+      [...guardProtectedPaths(guardWf)].sort(),
+      "HARNESS_PFADE in .claude/workflows/kubernia-ticket.js und das PROTECTED-Array in gate-change-guard.yml sind auseinandergelaufen - " +
+        "sonst setzt der Workflow maintainer-approved für einen Pfad nicht, den der Guard sperrt (oder umgekehrt).",
+    );
+  });
+
+  test("alle Listen decken die Leitplanken-Dateien ab (nicht nur Gate-Config)", () => {
     const co = codeownersPaths(codeowners);
     const cp = guardProtectedPaths(guardWf);
+    const hp = workflowHarnessPaths(ticketWf);
     const fehlend: string[] = [];
     for (const p of LEITPLANKEN) {
       if (!co.has(p)) fehlend.push(`.github/CODEOWNERS: ${p}`);
       if (!cp.has(p)) fehlend.push(`gate-change-guard.yml PROTECTED: ${p}`);
+      if (!hp.has(p)) fehlend.push(`kubernia-ticket.js HARNESS_PFADE: ${p}`);
     }
     assert.deepEqual(
       fehlend,

@@ -84,6 +84,7 @@ jobs:
             # Harness/Leitplanken (Selbstmodifikation, #1012)
             'AGENTS.md'
             'CLAUDE.md'
+            'CLAUDE.local.md'
             '.claude/'
             '.agents/'
             'docs/agent-harness'

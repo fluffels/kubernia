@@ -36,6 +36,7 @@
 # Harness/Leitplanken (#1012)
 /AGENTS.md                 @fluffels
 /CLAUDE.md                 @fluffels
+/CLAUDE.local.md           @fluffels
 /.claude/                  @fluffels
 /.agents/                  @fluffels
 /docs/agent-harness*       @fluffels
