@@ -31,7 +31,7 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -105,6 +105,14 @@ const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/", ".
  * check-Skript (z.B. settings-permissions, diffbasis) kommen mit der Namensregel test/harness/ bzw. #1157.
  */
 const WAECHTER_TESTS = ["test/agents-md-native.test.ts", "test/harness-approval.test.ts"];
+
+/**
+ * Deckt ein normalisierter Schutz-Eintrag den ganzen test/-Ordner ab? Das gilt für `test/` selbst,
+ * jedes kürzere Präfix davon (`t`, aus `/t*`) und den Leer-String (aus `/*.test.ts` oder `/**`).
+ */
+function decktTestOrdnerAb(p: string): boolean {
+  return "test/".startsWith(p);
+}
 
 /**
  * Marker der portablen Regeln in AGENTS.md. Bewusst wording-gekoppelt (wie readme.test.ts die
@@ -182,10 +190,16 @@ describe("Harness-Freigabe – die Durchsetzungs-Listen bleiben synchron (#1012,
     // Teständerung das Label, und ein immer nötiges Label markiert nichts mehr (Label-Fatigue).
     const alle = [...codeownersPaths(codeowners), ...guardProtectedPaths(guardWf), ...workflowHarnessPaths(ticketWf)];
     assert.deepEqual(
-      alle.filter((p) => p === "test/" || p === "test"),
+      alle.filter(decktTestOrdnerAb),
       [],
       "Ein Schutzlisten-Eintrag deckt den ganzen test/-Ordner ab – Wächter-Tests einzeln eintragen (#1156)",
     );
+  });
+
+  test("die geschützten Wächter-Tests existieren wirklich (#1156)", () => {
+    // Nach einem Umbenennen stünde sonst ein verwaister Pfad in allen Listen – grün, aber ohne Schutz.
+    const fehlend = WAECHTER_TESTS.filter((p) => !existsSync(fileURLToPath(new URL(`../${p}`, import.meta.url))));
+    assert.deepEqual(fehlend, [], `Geschützte Wächter-Tests gibt es nicht (umbenannt?):\n${fehlend.join("\n")}`);
   });
 });
 
@@ -253,6 +267,15 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
     // Negativ-Wächter oben ein solches Muster wirklich fängt. Feste Literale, nicht WAECHTER_TESTS.
     assert.equal(normalizeProtected("/test/*harness*.test.ts"), "test/");
     assert.equal(normalizeProtected("/test/harness-approval.test.ts"), "test/harness-approval.test.ts");
+  });
+
+  test("der test/-Pauschal-Filter fängt auch breitere Muster, aber keine Einzelpfade (#1156)", () => {
+    for (const muster of ["/test/*x*", "/test", "/t*", "/*.test.ts", "/**"]) {
+      assert.equal(decktTestOrdnerAb(normalizeProtected(muster)), true, `nicht erkannt: ${muster}`);
+    }
+    for (const einzeln of ["/test/agents-md-native.test.ts", "/.claude/", "/AGENTS.md", "/tests-x/"]) {
+      assert.equal(decktTestOrdnerAb(normalizeProtected(einzeln)), false, `fälschlich erkannt: ${einzeln}`);
+    }
   });
 });
 
