@@ -344,6 +344,7 @@ const HARNESS_PFADE = [
   '.github/CODEOWNERS',
   'AGENTS.md',
   'CLAUDE.md',
+  'CLAUDE.local.md',
   '.claude/',
   '.agents/',
   'docs/agent-harness',
