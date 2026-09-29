@@ -92,6 +92,17 @@ function workflowHarnessPaths(text: string): Set<string> {
 const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/", ".agents/", "docs/agent-harness"];
 
 /**
+ * Wächter-Tests, die selbst der EINZIGE Durchsetzer ihrer Regel sind (#1156) – ohne eigenes,
+ * schon geschütztes `scripts/check-*.mjs` dahinter. Liefen sie ungeschützt, könnte ein PR den
+ * Riegel ohne `maintainer-approved` still abschwächen: agents-md-native bewacht die eine
+ * Root-Kontextdatei (auch den ungetrackten CLAUDE.local.md-Fall, den kein PR-Diff zeigt),
+ * dieser Test hier den Sync der drei Listen. Bewusst einzeln statt als Muster: ein Glob
+ * würde von `normalizeProtected` auf `test/` gekürzt und jeden Test-PR label-pflichtig machen.
+ * Tests mit geschütztem check-Skript dahinter (filesize, docmap, diffsize, …) gehören nicht hierher.
+ */
+const WAECHTER_TESTS = ["test/agents-md-native.test.ts", "test/harness-approval.test.ts"];
+
+/**
  * Marker der portablen Regeln in AGENTS.md. Bewusst wording-gekoppelt (wie readme.test.ts die
  * Quest-Zahl): die Regel darf umformuliert werden, aber der tragende Begriff muss stehen bleiben,
  * sonst findet ihn ein fremder Agent nicht mehr.
@@ -141,6 +152,35 @@ describe("Harness-Freigabe – die Durchsetzungs-Listen bleiben synchron (#1012,
       [],
       "Leitplanken-Dateien fehlen im Sign-off-Riegel (#1012/#1069: Harness-Änderungen tragen das Label als sichtbaren Marker):\n" +
         fehlend.join("\n"),
+    );
+  });
+
+  test("alle Listen schützen die Wächter-Tests selbst (#1156)", () => {
+    const co = codeownersPaths(codeowners);
+    const cp = guardProtectedPaths(guardWf);
+    const hp = workflowHarnessPaths(ticketWf);
+    const fehlend: string[] = [];
+    for (const p of WAECHTER_TESTS) {
+      if (!co.has(p)) fehlend.push(`.github/CODEOWNERS: ${p}`);
+      if (!cp.has(p)) fehlend.push(`gate-change-guard.yml PROTECTED: ${p}`);
+      if (!hp.has(p)) fehlend.push(`kubernia-ticket.js HARNESS_PFADE: ${p}`);
+    }
+    assert.deepEqual(
+      fehlend,
+      [],
+      "Wächter-Tests fehlen im Sign-off-Riegel (#1156) – sonst lässt sich der Wächter des Riegels ohne Label abschwächen:\n" +
+        fehlend.join("\n"),
+    );
+  });
+
+  test("kein Listen-Eintrag schützt pauschal den ganzen test/-Ordner (#1156)", () => {
+    // Ein Muster wie /test/*harness*.test.ts normalisiert auf `test/` – dann bräuchte jeder PR mit
+    // Teständerung das Label, und ein immer nötiges Label markiert nichts mehr (Label-Fatigue).
+    const alle = [...codeownersPaths(codeowners), ...guardProtectedPaths(guardWf), ...workflowHarnessPaths(ticketWf)];
+    assert.deepEqual(
+      alle.filter((p) => p === "test/" || p === "test"),
+      [],
+      "Ein Schutzlisten-Eintrag deckt den ganzen test/-Ordner ab – Wächter-Tests einzeln eintragen (#1156)",
     );
   });
 });
@@ -202,6 +242,13 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
     const co = new Set(["AGENTS.md", "CLAUDE.md"]);
     const cp = new Set(["AGENTS.md"]);
     assert.notDeepEqual([...co].sort(), [...cp].sort());
+  });
+
+  test("ein Glob-Muster für Tests würde auf den ganzen test/-Ordner kürzen (#1156)", () => {
+    // Belegt, warum die Wächter-Tests einzeln statt als Muster eingetragen sind – und dass der
+    // Negativ-Wächter oben ein solches Muster wirklich fängt. Feste Literale, nicht WAECHTER_TESTS.
+    assert.equal(normalizeProtected("/test/*harness*.test.ts"), "test/");
+    assert.equal(normalizeProtected("/test/harness-approval.test.ts"), "test/harness-approval.test.ts");
   });
 });
 

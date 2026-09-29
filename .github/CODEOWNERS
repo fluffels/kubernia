@@ -40,3 +40,8 @@
 /.claude/                  @fluffels
 /.agents/                  @fluffels
 /docs/agent-harness*       @fluffels
+
+# Waechter-Tests (#1156) - der Test IST hier das Gate (kein geschuetztes check-Skript dahinter).
+# Einzeln statt als Muster: ein Glob wuerde im Guard auf den ganzen test/-Ordner kuerzen.
+/test/agents-md-native.test.ts  @fluffels
+/test/harness-approval.test.ts  @fluffels
