@@ -14,8 +14,8 @@
  * Dateien laden nur bei Bedarf, ein Summen-Cap bestrafte genau das Auslagern, das das
  * Wurzel-Gate erzwingen soll – die Summe steht darum nur als INFO in der CLI.
  *
- * Hintergrund: anders als src/-Module (check:size, #390) haben die beiden Dateien, die
- * laut eigener Aussage JEDE Agenten-Session vollständig lädt, kein eigenes Größen-Gate.
+ * Hintergrund (#719): anders als src/-Module (check:size, #390) hatte die Wurzel-AGENTS.md,
+ * die JEDE Agenten-Session vollständig lädt, kein eigenes Größen-Gate.
  * Jede neue Regel bekommt Begründung + Präzedenzfall-Verweis in AGENTS.md – einzeln
  * sinnvoll, akkumuliert aber unbegrenzt in einer Datei, die pro Session mitläuft (reiner
  * Token-Kostentreiber ohne Bremse). Der Auslagerungsmechanismus existiert schon
@@ -31,7 +31,8 @@
  * grobe INFO aus (≈ Zeichen / CHARS_PER_TOKEN) – das Budget selbst bleibt in Zeichen.
  * CR (`\r`) zählt nicht mit: sonst misst ein Windows-Checkout (core.autocrlf) mehr als die CI.
  *
- * Bewusst ein reines Node-Skript (nur Builtins), analog zu check-size.mjs.
+ * Bewusst ein reines Node-Skript (nur Builtins + der Walk aus check-docdrift.mjs), analog zu
+ * check-size.mjs.
  * Die Mess-/Allowlist-Logik wird zusätzlich von test/context-size.test.ts importiert –
  * EINE Quelle der Wahrheit für Budget + Ausnahmen.
  *

@@ -199,6 +199,13 @@ describe("Modul-lokale AGENTS.md im Budget (#1088)", () => {
     });
   });
 
+  test("Ausgabe ist über konfigurierte und gefundene Dateien hinweg sortiert", () => {
+    withTempRepo({ "AGENTS.md": "wurzel", ".claude/skills/x/AGENTS.md": "skill" }, (dir) => {
+      const got = collectContextSizes(dir, [{ file: "AGENTS.md", budget: 100 }], 100).map((s) => s.file);
+      assert.deepEqual(got, [".claude/skills/x/AGENTS.md", "AGENTS.md"]);
+    });
+  });
+
   test("konfigurierte, aber fehlende Datei wird trotzdem gemeldet (0 Zeichen) statt still zu verschwinden", () => {
     withTempRepo({ "src/x/AGENTS.md": "modul" }, (dir) => {
       const got = collectContextSizes(dir, [{ file: "AGENTS.md", budget: 10 }], 100);
