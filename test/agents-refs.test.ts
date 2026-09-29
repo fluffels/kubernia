@@ -1,5 +1,5 @@
 /* Verweis-Wächter (#1079) – Freitext-Verweise „AGENTS.md § …" in den versionierten
- * `.claude/`-Dateien müssen in AGENTS.md (bzw. CLAUDE.md) wirklich existieren.
+ * `.claude/`-Dateien müssen in AGENTS.md wirklich existieren (CLAUDE.md ist seit #1087 gelöscht).
  *
  * Warum: Workflow-Skript, Skills und Planer-Agent schicken Phasen-Agenten per Freitext
  * auf Stellen in AGENTS.md (`AGENTS.md § Zu großes Ticket`, `§ Kein

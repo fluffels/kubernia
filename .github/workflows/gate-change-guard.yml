@@ -27,7 +27,7 @@ concurrency:
 jobs:
   # Goodhart-Guard (#903, erweitert #1012): deterministischer Sign-off-Zwang für PRs, die
   # Gate-/Fitness-Function-Konfiguration ODER Harness-/Leitplanken-Dateien ändern (AGENTS.md,
-  # .claude/, .agents/, Harness-Doku; CLAUDE.md ist seit #1087 gelöscht und per Test verboten). Zwei Gründe, eine Pflicht: Gate-Aufweichen
+  # CLAUDE.md, .claude/, .agents/, Harness-Doku). Zwei Gründe, eine Pflicht: Gate-Aufweichen
   # (Goodhart) bzw. Selbstmodifikation der Leitplanken (#1012 — „am Harness darf die KI nicht
   # komplett allein"). CODEOWNERS + require_code_owner_reviews ist im Single-Account-Modell
   # (@fluffels ist Autor UND einziger Codeowner gleichzeitig) empirisch wirkungslos — GitHub
@@ -83,6 +83,7 @@ jobs:
             '.github/CODEOWNERS'
             # Harness/Leitplanken (Selbstmodifikation, #1012)
             'AGENTS.md'
+            'CLAUDE.md'
             '.claude/'
             '.agents/'
             'docs/agent-harness'

@@ -343,6 +343,7 @@ const HARNESS_PFADE = [
   '.github/workflows/',
   '.github/CODEOWNERS',
   'AGENTS.md',
+  'CLAUDE.md',
   '.claude/',
   '.agents/',
   'docs/agent-harness',

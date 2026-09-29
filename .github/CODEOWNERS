@@ -11,8 +11,8 @@
 #    Ursache zu beheben - von aussen (gruene Checks) nicht von einem echten Fix
 #    zu unterscheiden (Goodhart-Schutz).
 # 2. HARNESS/LEITPLANKEN (#1012) - die Agenten-Anweisungen selbst (AGENTS.md,
-#    .claude/, .agents/, die Harness-Doku; CLAUDE.md ist seit #1087 geloescht und
-#    per test/agents-md-native.test.ts verboten). Ein Agent, der seine
+#    CLAUDE.md, .claude/, .agents/, die Harness-Doku). CLAUDE.md ist seit #1087
+#    geloescht, bleibt aber geschuetzt: ihre Wiederanlage verdraengt AGENTS.md. Ein Agent, der seine
 #    eigenen Leitplanken aendert, ist Selbstmodifikation, nicht Gate-Aufweichen.
 #    Bis #1069 war das ein Pflicht-Stopp (Merge nur durch die Maintainerin);
 #    seitdem ersetzt eine Audit-Spur (Label + Kommentar) diese Freigabe.
@@ -36,6 +36,7 @@
 
 # Harness/Leitplanken (#1012)
 /AGENTS.md                 @fluffels
+/CLAUDE.md                 @fluffels
 /.claude/                  @fluffels
 /.agents/                  @fluffels
 /docs/agent-harness*       @fluffels

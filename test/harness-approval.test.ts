@@ -15,7 +15,7 @@
  *      halb – von außen (grüne Checks) nicht von einem echten Schutz zu unterscheiden. Hier ROT.
  *
  * Zusätzlich wird geprüft, dass beide Listen die Leitplanken-Dateien (über die reine
- * Gate-Config hinaus: AGENTS.md, .claude/, .agents/, docs/agent-harness) wirklich
+ * Gate-Config hinaus: AGENTS.md, CLAUDE.md, .claude/, .agents/, docs/agent-harness) wirklich
  * enthalten – sonst wäre die Regel dokumentiert, aber der Riegel liefe ins Leere.
  *
  * Fitness-Function-Kategorie neben agents-md-native/docmap/readme (#1087/#482), nicht mit
@@ -74,7 +74,9 @@ function guardProtectedPaths(text: string): Set<string> {
  * (Ticket #1012 / Maintainerin-Entscheidung „breit"). In Substring-Form – so wie
  * beide Listen sie nach der Normalisierung führen müssen.
  */
-const LEITPLANKEN = ["AGENTS.md", ".claude/", ".agents/", "docs/agent-harness"];
+// CLAUDE.md bleibt geschützt, obwohl sie seit #1087 gelöscht ist: ihre Wiederanlage würde
+// AGENTS.md als geladene SSOT verdrängen und muss darum die Label-Pflicht auslösen.
+const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", ".claude/", ".agents/", "docs/agent-harness"];
 
 /**
  * Marker der portablen Regeln in AGENTS.md. Bewusst wording-gekoppelt (wie readme.test.ts die
@@ -163,7 +165,7 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
 
   test("ein einseitig ergänzter Pfad würde als Drift auffallen", () => {
     // Beweist, dass der Sync-Test nicht immer grün ist: fehlt ein Pfad in einer Liste, kippt der Vergleich.
-    const co = new Set(["AGENTS.md", ".agents/"]);
+    const co = new Set(["AGENTS.md", "CLAUDE.md"]);
     const cp = new Set(["AGENTS.md"]);
     assert.notDeepEqual([...co].sort(), [...cp].sort());
   });

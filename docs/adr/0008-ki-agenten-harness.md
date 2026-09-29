@@ -74,6 +74,6 @@ Tritt ein Trigger ein: neuen/abgelösten ADR schreiben (`0009-…`), diesen hier
 ## Verwandte ADRs & Dokumente
 
 - [`docs/agent-harness.md`](../agent-harness.md) (#526): die **kanonische, erklärende** Gesamtsicht auf den Harness (fünf Bausteine, jede Fitness-Function mit WAS/WARUM/Red-Green, Autonomie-Schleife, Roadmap). Dieser ADR ist die formale Grundsatzentscheidung daneben.
-- [AGENTS.md](../../AGENTS.md) / `CLAUDE.md`: die operative Arbeitsanweisung (SSOT) + die Brücke dorthin (`@AGENTS.md`-Import + Referenz-Tabellen, #992), die der Harness voraussetzt. *Bei Konflikt maßgeblich.*
+- [AGENTS.md](../../AGENTS.md): die operative Arbeitsanweisung (SSOT), die der Harness voraussetzt; seit #1087 die einzige Root-Kontextdatei (die frühere Weiterleitung über `CLAUDE.md` aus #992 ist entfallen, die Referenz-Tabellen liegen unter `docs/referenz/`). *Bei Konflikt maßgeblich.*
 - [ADR 0004 – Skalierungs-Fundament](0004-skalierungs-fundament.md): der Harness muss unter derselben obersten Regel tragen („trägt das bei Stardew-Scope?") — ein Harness, der bei 10× Content/parallelen Agenten zusammenbricht, ist keiner.
 - [docs/arc42-architektur.md](../arc42-architektur.md): §1.4 (KI-Entwickel-Effizienz als Qualitätsziel), §9 (ADR-Übersicht), §10 (Qualitätsszenario „Wartbarkeit (KI)").

@@ -90,10 +90,11 @@ const RETIRED_ROLE_CLAIMS: { term: string; home: string; pattern?: RegExp }[] = 
     home: "seit #1087 gibt es keine CLAUDE.md mehr – Claude Code lädt AGENTS.md nativ",
   },
   // Im Markdown steht die Import-Zeile meist als `@AGENTS.md`-Import; die Backtick-Strippung
-  // lässt davon nur „-Import" übrig. Deshalb auf das Wort „Import" neben CLAUDE.md prüfen.
+  // lässt davon nur „-Import" übrig. Darum das Substantiv „Import" als eigenes Wort (auch nach
+  // Bindestrich) – bewusst NICHT „importiert"/„Import-Zyklus", die treffen Schichtregel-Prosa.
   {
     term: "@AGENTS.md-Import",
-    pattern: /Import/i,
+    pattern: /(?:^|[\s(-])Import(?![\w-])/,
     home: "seit #1087 zieht keine CLAUDE.md mehr AGENTS.md per @-Import – Claude Code lädt AGENTS.md nativ",
   },
   {
@@ -136,8 +137,10 @@ function retiredRoleClaims(md: string): { line: number; term: string; home: stri
   stripFencedCode(md)
     .split(/\r?\n/)
     .forEach((raw, i) => {
+      // Die Datei zählt auch in Backticks (`CLAUDE.md` ist die übliche Schreibweise) – nur der
+      // BEGRIFF in Backticks ist ein Zitat. Sonst rutschte jede Behauptung per Backticks durch.
+      if (!raw.includes("CLAUDE.md")) return;
       const line = raw.replace(/`[^`\n]*`/g, "");
-      if (!line.includes("CLAUDE.md")) return;
       for (const { term, home, pattern } of RETIRED_ROLE_CLAIMS) {
         if (pattern ? pattern.test(line) : line.includes(term)) found.push({ line: i + 1, term, home, text: raw.trim().slice(0, 120) });
       }
@@ -164,7 +167,9 @@ describe("Keine CLAUDE.md verdrängt das native Laden von AGENTS.md (#1087)", ()
       mkdirSync(join(dir, "src"));
       writeFileSync(join(dir, "src", "CLAUDE.md"), "x");
       assert.deepEqual(blockingMemoryFiles(dir), [], "CLAUDE.md im Unterordner ist kein Root-Memory");
-      for (const rel of BLOCKING_MEMORY_FILES) {
+      // Bewusst ein festes Literal statt BLOCKING_MEMORY_FILES: sonst fiele mit einem gestrichenen
+      // Pfad auch sein Prüffall weg, und die Selbstprobe bliebe grün (Sabotage-Befund im Review).
+      for (const rel of ["CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md"]) {
         const sub = mkdtempSync(join(tmpdir(), "kq-agents-native-"));
         try {
           mkdirSync(join(sub, ".claude"));
@@ -224,7 +229,17 @@ describe("Kein Markdown beschreibt CLAUDE.md noch in einer abgelegten Rolle (#99
       "die Umschreibung aus #1002 muss zählen",
     );
     assert.equal(retiredRoleClaims("Siehe CLAUDE.md: welche Datei,  welche Schicht.").length, 1, "Varianten mit Komma/Leerraum");
-    assert.deepEqual(retiredRoleClaims("Die `Brücke` in `CLAUDE.md` gibt es nicht mehr."), [], "Backticks = Zitat");
+    assert.deepEqual(retiredRoleClaims("Die `Brücke` in CLAUDE.md gibt es nicht mehr."), [], "Begriff in Backticks = Zitat");
+    assert.deepEqual(
+      retiredRoleClaims("`CLAUDE.md`: die Brücke dorthin.").map((v) => v.term),
+      ["Brücke"],
+      "die Datei in Backticks ist KEIN Freibrief – sonst rutscht jede Behauptung durch",
+    );
+    assert.deepEqual(
+      retiredRoleClaims("Seit #1087 lädt Claude Code AGENTS.md nativ; eine CLAUDE.md importiert nichts, kein Import-Zyklus."),
+      [],
+      "„importiert\"/„Import-Zyklus\" sind keine Import-Behauptung",
+    );
     assert.deepEqual(retiredRoleClaims("```\nCLAUDE.md ist die Brücke\n```\n"), [], "im Codeblock zählt nicht");
     assert.deepEqual(retiredRoleClaims("AGENTS.md ist die Brücke zur README."), [], "ohne CLAUDE.md keine Behauptung");
     assert.deepEqual(

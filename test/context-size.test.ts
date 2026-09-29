@@ -1,5 +1,5 @@
-/* Root-Kontextdatei-Wächter (#719) – Frühwarnung gegen unbegrenzt wachsende AGENTS.md/
- * CLAUDE.md. Analog zu test/filesize.test.ts (#390), aber für die Dateien, die JEDE
+/* Root-Kontextdatei-Wächter (#719) – Frühwarnung gegen eine unbegrenzt wachsende
+ * AGENTS.md. Analog zu test/filesize.test.ts (#390), aber für die Datei(en), die JEDE
  * Agenten-Session vollständig lädt statt für src/-Module.
  *
  * Die Mess-/Allowlist-Logik wird aus scripts/check-context-size.mjs importiert – EINE
