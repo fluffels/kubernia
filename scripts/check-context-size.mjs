@@ -2,7 +2,17 @@
 // (npm run check:contextsize) gestartet UND von test/context-size.test.ts importiert. Ein
 // `#!`-Token bricht sonst den Vitest/esbuild-Import (gleiche Falle wie bei check-size.mjs).
 /**
- * Root-Kontextdatei-Wächter (#719) – Frühwarnung, dass AGENTS.md zu groß wird.
+ * Kontextdatei-Wächter (#719) – Frühwarnung, dass AGENTS.md zu groß wird.
+ *
+ * Seit #1088 zählt JEDE AGENTS.md im Repo, nicht nur die Wurzel: Claude Code (und andere
+ * Tools) laden eine modul-lokale AGENTS.md automatisch, sobald dort eine Datei gelesen
+ * wird. Ohne Messung wären sie eine neue, ungebremste On-Demand-Quelle – bei Stardew-Scope
+ * mit vielen Bereichen genau die Stelle, an die das Wurzel-Gate den Inhalt hindrängt.
+ * Modul-lokale Dateien bekommen ohne eigenen Eintrag MODULE_AGENTS_BUDGET (Default statt
+ * Pflicht-Registrierung: der Walk misst jede neue Datei ohnehin sofort, eine Registrierung
+ * brächte nur einen Gate-Config-Diff pro Content-PR). Bewusst KEIN Summen-Gate: modul-lokale
+ * Dateien laden nur bei Bedarf, ein Summen-Cap bestrafte genau das Auslagern, das das
+ * Wurzel-Gate erzwingen soll – die Summe steht darum nur als INFO in der CLI.
  *
  * Hintergrund: anders als src/-Module (check:size, #390) haben die beiden Dateien, die
  * laut eigener Aussage JEDE Agenten-Session vollständig lädt, kein eigenes Größen-Gate.
@@ -31,6 +41,9 @@
 import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
+// Derselbe Walk wie check:docdrift (#1091) – EINE Skip-Liste (node_modules, Builds,
+// unversionierte .claude-Ordner inkl. .claude/worktrees). Änderungen dort wirken hier mit.
+import { collectMarkdown } from "./check-docdrift.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -48,6 +61,11 @@ export const CONTEXT_BUDGETS = [
   { file: "AGENTS.md", budget: 28_000 },
 ];
 
+/** Default-Zeichen-Budget je modul-lokaler AGENTS.md ohne eigenen Eintrag in
+ *  CONTEXT_BUDGETS (#1088). Kalibriert wie die Wurzel: Ist von src/content/AGENTS.md
+ *  (~10.300 Zeichen) + ~15 % Kopffreiheit. Ratchet nur nach unten. */
+export const MODULE_AGENTS_BUDGET = 12_000;
+
 /** Grobe Umrechnung nur für die INFO-Ausgabe (deutscher Markdown-Text, ~4,2 Zeichen/Token).
  *  Modellabhängig und damit bewusst kein Budget-Maßstab. */
 export const CHARS_PER_TOKEN = 4.2;
@@ -63,13 +81,21 @@ export function countChars(text) {
  *  unter ihr Budget, meldet der Wächter den Eintrag als stale. */
 export const ALLOWLIST = [];
 
-/** Zeichenzahl je Root-Kontextdatei gegen ihr Budget. `rootDir`/`budgets` überschreibbar
- *  für deterministische Tests. */
-export function collectContextSizes(rootDir = ROOT, budgets = CONTEXT_BUDGETS) {
-  return budgets.map(({ file, budget }) => {
+/** Alle AGENTS.md im Repo (repo-relativer POSIX-Pfad, sortiert). */
+export function collectAgentsFiles(rootDir = ROOT) {
+  return collectMarkdown(rootDir).filter((f) => f === "AGENTS.md" || f.endsWith("/AGENTS.md"));
+}
+
+/** Zeichenzahl je Kontextdatei gegen ihr Budget: alle konfigurierten Dateien (auch
+ *  fehlende, mit 0 Zeichen) plus jede gefundene AGENTS.md; ein expliziter Eintrag gewinnt
+ *  über `moduleBudget`. `rootDir`/`budgets`/`moduleBudget` überschreibbar für Tests. */
+export function collectContextSizes(rootDir = ROOT, budgets = CONTEXT_BUDGETS, moduleBudget = MODULE_AGENTS_BUDGET) {
+  const budgetOf = new Map(budgets.map((b) => [b.file, b.budget]));
+  const files = [...new Set([...budgets.map((b) => b.file), ...collectAgentsFiles(rootDir)])].sort();
+  return files.map((file) => {
     const abs = join(rootDir, file);
     const chars = existsSync(abs) ? countChars(readFileSync(abs, "utf8")) : 0;
-    return { file, chars, budget };
+    return { file, chars, budget: budgetOf.get(file) ?? moduleBudget };
   });
 }
 
@@ -119,16 +145,19 @@ function main() {
       ),
     );
 
+  const total = sizes.reduce((sum, s) => sum + s.chars, 0);
+  console.log(dim(`• INFO: ${sizes.length} Kontextdatei(en), zusammen ${fmt(total)} Zeichen (${tokens(total)}), kein Gate.`));
+
   if (violations.length === 0 && stale.length === 0) {
     console.log(
-      green(`✔ Root-Kontextdateien im Budget (${sizes.length} geprüft, außer ${allowed.length} dokumentierte Ausnahme(n)).`),
+      green(`✔ Kontextdateien im Budget (${sizes.length} geprüft, außer ${allowed.length} dokumentierte Ausnahme(n)).`),
     );
     return;
   }
 
   if (violations.length)
     console.error(
-      `\n${violations.length} Root-Kontextdatei(en) über dem Budget. Inhalt auslagern – ` +
+      `\n${violations.length} Kontextdatei(en) über dem Budget. Inhalt auslagern – ` +
         `bereichsspezifische Tiefe in eine modul-lokale AGENTS.md (Vorbild src/content/AGENTS.md, #483) ` +
         `bzw. ein docs/module/*.md-Tiefendoc (#394) – oder, mit offenem Auslagerungs-Ticket, bewusst in ` +
         `die ALLOWLIST in scripts/check-context-size.mjs aufnehmen.`,
@@ -136,4 +165,4 @@ function main() {
   process.exit(1);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

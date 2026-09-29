@@ -1,4 +1,4 @@
-/* Root-Kontextdatei-Wächter (#719) – Frühwarnung gegen eine unbegrenzt wachsende
+/* Kontextdatei-Wächter (#719, jede AGENTS.md seit #1088) – Frühwarnung gegen eine unbegrenzt wachsende
  * AGENTS.md. Analog zu test/filesize.test.ts (#390), aber für die Datei(en), die JEDE
  * Agenten-Session vollständig lädt statt für src/-Module.
  *
@@ -9,9 +9,9 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs ist aus, scripts/ nicht im
 // tsconfig-include) – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
@@ -24,7 +24,7 @@ type Allow = { file: string; reason: string };
 
 const CONTEXT_BUDGETS: Budget[] = checkContextSize.CONTEXT_BUDGETS;
 const ALLOWLIST: Allow[] = checkContextSize.ALLOWLIST;
-const collectContextSizes: (rootDir?: string, budgets?: Budget[]) => Sized[] = checkContextSize.collectContextSizes;
+const collectContextSizes: (rootDir?: string, budgets?: Budget[], moduleBudget?: number) => Sized[] = checkContextSize.collectContextSizes;
 const findOversized: (sizes: Sized[]) => Sized[] = checkContextSize.findOversized;
 // Neu mit #1064: sichtbarer Inline-Disable statt die Bulk-Baseline (Gate-Config) anzuheben,
 // gleiches Muster wie test/agents-md-native.test.ts.
@@ -32,6 +32,25 @@ const findOversized: (sizes: Sized[]) => Sized[] = checkContextSize.findOversize
 const countChars: (text: string) => number = checkContextSize.countChars;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const findStale: (sizes: Sized[], allowlist: Allow[]) => Allow[] = checkContextSize.findStale;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+const MODULE_AGENTS_BUDGET: number = checkContextSize.MODULE_AGENTS_BUDGET;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+const collectAgentsFiles: (rootDir?: string) => string[] = checkContextSize.collectAgentsFiles;
+
+/** Legt Dateien (repo-relativer POSIX-Pfad → Inhalt) in einem Temp-Repo an. */
+function withTempRepo(files: Record<string, string>, fn: (dir: string) => void): void {
+  const dir = mkdtempSync(join(tmpdir(), "kq-contextsize-"));
+  try {
+    for (const [rel, content] of Object.entries(files)) {
+      const abs = join(dir, ...rel.split("/"));
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, content);
+    }
+    fn(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
 
 const sizes = collectContextSizes();
 const allowedFiles = new Set(ALLOWLIST.map((a) => a.file));
@@ -73,9 +92,9 @@ describe("Root-Kontextdatei-Budget (#719, Zeichen seit #1064)", () => {
     // No-op-Schutz: ein Wächter, der immer grün ist, wäre wertlos.
     const tinyBudgets = CONTEXT_BUDGETS.map((b) => ({ ...b, budget: 1 }));
     const hugeBudgets = CONTEXT_BUDGETS.map((b) => ({ ...b, budget: 1_000_000 }));
-    const tiny = findOversized(collectContextSizes(undefined, tinyBudgets)).length;
-    const huge = findOversized(collectContextSizes(undefined, hugeBudgets)).length;
-    assert.equal(tiny, CONTEXT_BUDGETS.length, "Budget 1 sollte für jede Datei einen Treffer liefern.");
+    const tiny = findOversized(collectContextSizes(undefined, tinyBudgets, 1)).length;
+    const huge = findOversized(collectContextSizes(undefined, hugeBudgets, 1_000_000)).length;
+    assert.equal(tiny, sizes.length, "Budget 1 sollte für jede gemessene Datei einen Treffer liefern.");
     assert.equal(huge, 0, "Ein riesiges Budget sollte nichts melden.");
   });
 
@@ -127,5 +146,78 @@ describe("Root-Kontextdatei-Budget (#719, Zeichen seit #1064)", () => {
     const crlf = ["a", "bb", "ccc"].join(String.fromCharCode(13, 10));
     assert.equal(countChars(crlf), countChars(lf));
     assert.equal(countChars(lf), lf.length);
+  });
+});
+
+describe("Modul-lokale AGENTS.md im Budget (#1088)", () => {
+  test("die echte src/content/AGENTS.md wird gemessen, gegen das Modul-Default-Budget", () => {
+    const s = sizes.find((x) => x.file === "src/content/AGENTS.md");
+    assert.ok(s && s.chars > 0, "src/content/AGENTS.md sollte gefunden und gemessen werden.");
+    assert.equal(s.budget, MODULE_AGENTS_BUDGET);
+  });
+
+  test("expliziter Eintrag gewinnt über das Default-Budget (Wurzel bleibt bei ihrem eigenen Budget)", () => {
+    const root = sizes.find((x) => x.file === "AGENTS.md");
+    const configured = CONTEXT_BUDGETS.find((b) => b.file === "AGENTS.md");
+    assert.ok(root && configured);
+    assert.equal(root.budget, configured.budget);
+    assert.notEqual(root.budget, MODULE_AGENTS_BUDGET);
+  });
+
+  test("Walk findet verschachtelte AGENTS.md, sortiert + POSIX-Pfade, und ignoriert Builds/Deps/Worktrees", () => {
+    withTempRepo(
+      {
+        "AGENTS.md": "wurzel",
+        "src/b/AGENTS.md": "b",
+        "src/a/tief/AGENTS.md": "a",
+        "src/a/NOTAGENTS.md": "kein Treffer: anderer Name",
+        "node_modules/pkg/AGENTS.md": "fremd",
+        ".git/AGENTS.md": "intern",
+        "dist/AGENTS.md": "Build",
+        ".claude/worktrees/kq-1/AGENTS.md": "Repo-Kopie eines Parallel-Agenten",
+        ".claude/AGENTS.md": "lose, unversioniert",
+        ".claude/skills/x/AGENTS.md": "versioniert",
+      },
+      (dir) => {
+        assert.deepEqual(collectAgentsFiles(dir), [
+          ".claude/skills/x/AGENTS.md",
+          "AGENTS.md",
+          "src/a/tief/AGENTS.md",
+          "src/b/AGENTS.md",
+        ]);
+      },
+    );
+  });
+
+  test("Red-Green: ein um 5.000 Zeichen gewachsenes Modul-Doc wird rot, das Wurzel-Budget bleibt unberührt", () => {
+    withTempRepo({ "AGENTS.md": "kurz", "src/x/AGENTS.md": "y".repeat(100) }, (dir) => {
+      const budgets = [{ file: "AGENTS.md", budget: 1_000 }];
+      assert.deepEqual(findOversized(collectContextSizes(dir, budgets, 100)), [], "Grenze exakt: == Budget ist grün.");
+      writeFileSync(join(dir, "src", "x", "AGENTS.md"), "y".repeat(5_100));
+      const over = findOversized(collectContextSizes(dir, budgets, 100));
+      assert.deepEqual(over, [{ file: "src/x/AGENTS.md", chars: 5_100, budget: 100 }]);
+    });
+  });
+
+  test("konfigurierte, aber fehlende Datei wird trotzdem gemeldet (0 Zeichen) statt still zu verschwinden", () => {
+    withTempRepo({ "src/x/AGENTS.md": "modul" }, (dir) => {
+      const got = collectContextSizes(dir, [{ file: "AGENTS.md", budget: 10 }], 100);
+      assert.deepEqual(got, [
+        { file: "AGENTS.md", chars: 0, budget: 10 },
+        { file: "src/x/AGENTS.md", chars: 5, budget: 100 },
+      ]);
+    });
+  });
+
+  test("Allowlist-Eintrag für eine Modul-Datei im Budget ist stale, über Budget nicht", () => {
+    const sized: Sized[] = [
+      { file: "src/a/AGENTS.md", chars: 50, budget: 100 },
+      { file: "src/b/AGENTS.md", chars: 500, budget: 100 },
+    ];
+    const allow: Allow[] = [
+      { file: "src/a/AGENTS.md", reason: "#1 erledigt" },
+      { file: "src/b/AGENTS.md", reason: "#2 Auslagerung offen" },
+    ];
+    assert.deepEqual(findStale(sized, allow).map((a) => a.file), ["src/a/AGENTS.md"]);
   });
 });
