@@ -15,7 +15,7 @@ Regeltext steht nur in diesen Dateien; alle anderen Seiten erklären oder schlag
 
 ## ⚖️ Entscheidungen — ADRs (historisch, werden nicht umgeschrieben)
 
-Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Einordnung und Begründungs-Übersicht: [arc42 › Architekturentscheidungen](../arc42-architektur.md).
+Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Einordnung und Begründungs-Übersicht: [arc42 › Architekturentscheidungen](../arc42-architektur.md#9-architekturentscheidungen-adrs).
 
 | ADR | Wann lesen |
 |---|---|
@@ -96,4 +96,4 @@ Momentaufnahmen eines damaligen Stands. Lesen, um Herkunft und Begründung zu ve
 | [art-direction-audit.md](../art-direction-audit.md) | Optik gegen die Stardew-Messlatte (#44, Juni 2026) — Abweichungsliste vor Optik-Tickets |
 | [spielkonzept-review.md](../spielkonzept-review.md) | führt der Lernpfad zu Senior-DevOps und macht es Spaß? (#52, Juni 2026) |
 | [lernpfad-audit.md](../lernpfad-audit.md) | wird ein Befehl benutzt, bevor er eingeführt ist? (#227, Juni 2026) |
-| [barrierefreiheit-audit.md](../barrierefreiheit-audit.md) | Zugänglichkeit: nur-Farbe-Status, Tastatur, Kontraste (#481) |
+| [barrierefreiheit-audit.md](../barrierefreiheit-audit.md) | Zugänglichkeit: nur-Farbe-Status, Tastatur, Kontraste (#481, Juli 2026) |
