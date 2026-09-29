@@ -325,34 +325,6 @@ const MAX_FIX_VERSUCHE = 3
  */
 const MAX_REVIEW_RUNDEN = 2
 
-/**
- * Harness-/Gate-Pfade (#1012) — Substring-Form, Spiegel des PROTECTED-Arrays in
- * .github/workflows/gate-change-guard.yml und der .github/CODEOWNERS-Liste (Sync bewacht
- * test/harness-approval.test.ts). Fasst ein Diff einen dieser Pfade an, setzt der Agent
- * maintainer-approved selbst, mergt und hinterlässt einen Audit-Kommentar (#1069).
- */
-const HARNESS_PFADE = [
-  '.dependency-cruiser.cjs',
-  'scripts/layers.cjs',
-  'scripts/check-',
-  'eslint.config.js',
-  'eslint-suppressions.json',
-  'any-suppressions.json',
-  'vite.config.ts',
-  '.jscpd.json',
-  '.github/workflows/',
-  '.github/CODEOWNERS',
-  'AGENTS.md',
-  'CLAUDE.md',
-  'CLAUDE.local.md',
-  '.claude/',
-  '.agents/',
-  'docs/agent-harness',
-  // Wächter-Tests (#1156): der Test ist hier selbst das Gate, einzeln statt Muster
-  'test/agents-md-native.test.ts',
-  'test/harness-approval.test.ts',
-]
-
 // ── args-Auswertung (#1027) — Anfang ─────────────────────────────────────────
 // EINE Normalisierungsstelle für die gesamte args-Grenze: die Laufzeit reicht args
 // als STRING durch — auch ein übergebenes Objekt kommt als JSON-String an (beides
@@ -648,7 +620,9 @@ Sichtbare Änderungen zusätzlich im Browser verifizieren.
 Committe mit (#${nr}) in der Nachricht. Gib Branch und absoluten Worktree-Pfad zurück.
 
 Setze beruehrtHarness=true, wenn git diff --name-only origin/main...HEAD einen Harness-/Gate-Pfad
-trifft (${HARNESS_PFADE.join(', ')}) — dann setzt die Merge-Phase maintainer-approved selbst und
+trifft — maßgeblich ist die Liste in .github/protected-paths.json (#1157; lies sie, die Sandbox dieses
+Skripts kann es nicht; Substring-Match nach führendem '/' und ab dem ersten '*' abgeschnitten, wie
+der gate-change-guard) — dann setzt die Merge-Phase maintainer-approved selbst und
 hinterlässt nach dem Merge einen Audit-Kommentar (#1069). Drei-Punkt gegen origin/main aus
 demselben Grund wie beim Patch unten: gegen ein lokal veraltetes main klassifizierte die
 Merge-Phase anhand fremder Dateien.

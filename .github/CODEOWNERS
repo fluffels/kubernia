@@ -17,12 +17,15 @@
 #    seitdem ersetzt eine Audit-Spur (Label + Kommentar) diese Freigabe.
 #    Dazu (#1156) Waechter-Tests, die selbst der einzige Durchsetzer ihrer
 #    Regel sind - vorerst nur die zwei Waechter des Riegels; weitere folgen
-#    mit der Namensregel test/harness/ bzw. #1157.
+#    mit der Namensregel test/harness/.
 #
 # Darum tragen NUR PRs, die diese Pfade anfassen, das Label als sichtbaren
-# Marker im PR-Log. Alle anderen Pfade mergen ohne Label autonom bei gruener CI. Diese Liste ist die menschenlesbare SSOT, die der CI-Job
-# gate-change-guard (.github/workflows/gate-change-guard.yml, Array PROTECTED) spiegelt -
-# Sync bewacht test/harness-approval.test.ts (#1012).
+# Marker im PR-Log. Alle anderen Pfade mergen ohne Label autonom bei gruener CI.
+#
+# SSOT der geschuetzten Pfade ist .github/protected-paths.json (#1157): der CI-Job
+# gate-change-guard liest sie von dort (vom Base-Commit). GitHub kann CODEOWNERS nicht
+# aus einer Datei einbinden, darum steht die Liste hier noch einmal - neue Pfade ZUERST
+# in der Quelle eintragen, dann hier nachziehen. Sync bewacht test/harness-approval.test.ts.
 
 # Gate-Config
 /.dependency-cruiser.cjs   @fluffels
@@ -35,6 +38,7 @@
 /.jscpd.json               @fluffels
 /.github/workflows/*.yml   @fluffels
 /.github/CODEOWNERS        @fluffels
+/.github/protected-paths.json @fluffels
 
 # Harness/Leitplanken (#1012)
 /AGENTS.md                 @fluffels

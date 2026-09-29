@@ -33,7 +33,7 @@ jobs:
   # (@fluffels ist Autor UND einziger Codeowner gleichzeitig) empirisch wirkungslos — GitHub
   # lässt die Review-Anforderung ersatzlos fallen (mergeStateStatus=CLEAN ohne jede Freigabe).
   # Dieser Job ersetzt den technischen Zwang: Findet er Änderungen an den geschützten Pfaden
-  # (Spiegel der CODEOWNERS-Liste), prüft er, ob das Label 'maintainer-approved' gesetzt ist
+  # (SSOT .github/protected-paths.json, #1157), prüft er, ob das Label 'maintainer-approved' gesetzt ist
   # — ohne es bleibt der Check ROT.
   #
   # Ehrliche Einschränkung: im Single-Account-Modell kann @fluffels das Label selbst setzen
@@ -64,34 +64,27 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Geschuetzte Pfade — Spiegel der CODEOWNERS-Liste (Sync bewacht
-          # test/harness-approval.test.ts, #1012).
-          # Substring-Match: "scripts/check-" trifft alle check-*.mjs,
-          # ".github/workflows/" trifft alle *.yml-Workflows, ".claude/" den
-          # ganzen Claude-Code-Ordner, "docs/agent-harness" die Harness-Doku(s).
-          PROTECTED=(
-            # Gate-Config (Goodhart, #903)
-            '.dependency-cruiser.cjs'
-            'scripts/layers.cjs'
-            'scripts/check-'
-            'eslint.config.js'
-            'eslint-suppressions.json'
-            'any-suppressions.json'
-            'vite.config.ts'
-            '.jscpd.json'
-            '.github/workflows/'
-            '.github/CODEOWNERS'
-            # Harness/Leitplanken (Selbstmodifikation, #1012)
-            'AGENTS.md'
-            'CLAUDE.md'
-            'CLAUDE.local.md'
-            '.claude/'
-            '.agents/'
-            'docs/agent-harness'
-            # Waechter-Tests (#1156): der Test ist hier selbst das Gate, einzeln statt Muster
-            'test/agents-md-native.test.ts'
-            'test/harness-approval.test.ts'
-          )
+          # Geschuetzte Pfade — SSOT ist .github/protected-paths.json (#1157), keine eigene
+          # Liste mehr. jq bringt die CODEOWNERS-Schreibweise in die Substring-Form: fuehrenden
+          # '/' weg, ab dem ersten '*' abschneiden ("/scripts/check-*.mjs" -> "scripts/check-")
+          # — dieselbe Abbildung wie normalizeProtected in test/harness-approval.test.ts.
+          #
+          # Gelesen vom BASE-Commit, nicht aus der Arbeitskopie: der Checkout ist der
+          # PR-Merge-Ref, ein PR koennte die Quelle sonst leeren und sich damit selbst
+          # entschuetzen. (Aendert ein PR diesen Workflow selbst, laeuft dessen Fassung — das
+          # bleibt, wie der ganze Guard, ein Speed-Bump; darum ist .github/workflows/ geschuetzt.) Die Head-Fassung kommt nur ADDITIV dazu, damit ein neu ergaenzter
+          # Pfad schon im einfuehrenden PR greift. Fail-closed: fehlt die Base-Quelle oder ist
+          # sie leer/kaputt, gilt JEDE geaenderte Datei als geschuetzt (Label-Pflicht).
+          QUELLE=.github/protected-paths.json
+          JQ_PFADE='[.[]] | flatten | .[] | sub("^/"; "") | sub("\\*.*$"; "")'
+          alles_geschuetzt=0
+          if ! base_pfade=$(git show "$BASE_SHA:$QUELLE" 2>/dev/null | jq -r "$JQ_PFADE") || [ -z "$base_pfade" ]; then
+            echo "::warning::$QUELLE auf dem Base-Commit fehlt oder ist unlesbar — jede geaenderte Datei gilt als geschuetzt."
+            alles_geschuetzt=1
+            base_pfade=""
+          fi
+          head_pfade=$(git show "$HEAD_SHA:$QUELLE" 2>/dev/null | jq -r "$JQ_PFADE" 2>/dev/null || true)
+          mapfile -t PROTECTED < <(printf '%s\n%s\n' "$base_pfade" "$head_pfade" | grep -v '^$' | sort -u || true)
 
           # Drei-Punkt-Diff (#1095): nur was der PR seit der Merge-Base aendert. Der
           # Zwei-Punkt-Diff gegen base.sha (= main-Tip) zaehlte Dateien fremder, nach dem
@@ -100,6 +93,11 @@ jobs:
           changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
           gate_files=()
           while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            if [ "$alles_geschuetzt" = 1 ]; then
+              gate_files+=("$f")
+              continue
+            fi
             for pat in "${PROTECTED[@]}"; do
               if [[ "$f" == *"$pat"* ]]; then
                 gate_files+=("$f")
