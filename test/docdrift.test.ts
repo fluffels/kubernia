@@ -234,6 +234,7 @@ describe("collectMarkdown: versionierte .claude-Ordner ja, Worktrees/Lokales nei
         ".claude/plugins/lokal.md", // untrackter .claude-Unterordner
         ".claude/lokal.md", // untrackte Datei direkt unter .claude
         "node_modules/pkg/README.md",
+        "docs/.claude/y.md", // verschachteltes .claude: KEIN Root-.claude, wird normal gescannt
       ];
       for (const f of files) {
         mkdirSync(dirname(join(dir, f)), { recursive: true });
@@ -244,6 +245,7 @@ describe("collectMarkdown: versionierte .claude-Ordner ja, Worktrees/Lokales nei
         ".claude/agents/b.md",
         ".claude/skills/a/SKILL.md",
         ".claude/workflows/c.md",
+        "docs/.claude/y.md",
         "docs/x.md",
       ]);
     } finally {
