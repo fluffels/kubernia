@@ -16,7 +16,9 @@
  *
  * Zusätzlich wird geprüft, dass alle Listen die Leitplanken-Dateien (über die reine Gate-Config
  * hinaus: AGENTS.md, CLAUDE.md, CLAUDE.local.md, .claude/, .agents/, docs/agent-harness) wirklich
- * enthalten – sonst wäre die Regel dokumentiert, aber der Riegel liefe ins Leere.
+ * enthalten – sonst wäre die Regel dokumentiert, aber der Riegel liefe ins Leere. Seit #1156
+ * schützen die Listen auch die Wächter-Tests selbst (diese Datei eingeschlossen), und kein Eintrag
+ * darf pauschal den ganzen test/-Ordner sperren.
  *
  * Fitness-Function-Kategorie neben agents-md-native/docmap/readme (#1087/#482), nicht mit
  * Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`: `scripts/check-`
@@ -29,7 +31,7 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -92,6 +94,27 @@ function workflowHarnessPaths(text: string): Set<string> {
 const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/", ".agents/", "docs/agent-harness"];
 
 /**
+ * Wächter-Tests, die selbst der EINZIGE Durchsetzer ihrer Regel sind (#1156) – ohne eigenes,
+ * schon geschütztes `scripts/check-*.mjs` dahinter. Liefen sie ungeschützt, könnte ein PR den
+ * Riegel ohne `maintainer-approved` still abschwächen: agents-md-native bewacht die eine
+ * Root-Kontextdatei (auch den ungetrackten CLAUDE.local.md-Fall, den kein PR-Diff zeigt),
+ * dieser Test hier den Sync der drei Listen. Bewusst einzeln statt als Muster: ein Glob
+ * würde von `normalizeProtected` auf `test/` gekürzt und jeden Test-PR label-pflichtig machen.
+ * Tests mit geschütztem check-Skript dahinter (filesize, docmap, diffsize, …) gehören nicht hierher.
+ * Bewusst vorerst nur diese zwei (Maintainerin-Entscheidung #1156): weitere Wächter ohne
+ * check-Skript (z.B. settings-permissions, diffbasis) kommen mit der Namensregel test/harness/ bzw. #1157.
+ */
+const WAECHTER_TESTS = ["test/agents-md-native.test.ts", "test/harness-approval.test.ts"];
+
+/**
+ * Deckt ein normalisierter Schutz-Eintrag den ganzen test/-Ordner ab? Das gilt für `test/` selbst,
+ * jedes kürzere Präfix davon (`t`, aus `/t*`) und den Leer-String (aus `/*.test.ts` oder `/**`).
+ */
+function decktTestOrdnerAb(p: string): boolean {
+  return "test/".startsWith(p);
+}
+
+/**
  * Marker der portablen Regeln in AGENTS.md. Bewusst wording-gekoppelt (wie readme.test.ts die
  * Quest-Zahl): die Regel darf umformuliert werden, aber der tragende Begriff muss stehen bleiben,
  * sonst findet ihn ein fremder Agent nicht mehr.
@@ -142,6 +165,41 @@ describe("Harness-Freigabe – die Durchsetzungs-Listen bleiben synchron (#1012,
       "Leitplanken-Dateien fehlen im Sign-off-Riegel (#1012/#1069: Harness-Änderungen tragen das Label als sichtbaren Marker):\n" +
         fehlend.join("\n"),
     );
+  });
+
+  test("alle Listen schützen die Wächter-Tests selbst (#1156)", () => {
+    const co = codeownersPaths(codeowners);
+    const cp = guardProtectedPaths(guardWf);
+    const hp = workflowHarnessPaths(ticketWf);
+    const fehlend: string[] = [];
+    for (const p of WAECHTER_TESTS) {
+      if (!co.has(p)) fehlend.push(`.github/CODEOWNERS: ${p}`);
+      if (!cp.has(p)) fehlend.push(`gate-change-guard.yml PROTECTED: ${p}`);
+      if (!hp.has(p)) fehlend.push(`kubernia-ticket.js HARNESS_PFADE: ${p}`);
+    }
+    assert.deepEqual(
+      fehlend,
+      [],
+      "Wächter-Tests fehlen im Sign-off-Riegel (#1156) – sonst lässt sich der Wächter des Riegels ohne Label abschwächen:\n" +
+        fehlend.join("\n"),
+    );
+  });
+
+  test("kein Listen-Eintrag schützt pauschal den ganzen test/-Ordner (#1156)", () => {
+    // Ein Muster wie /test/*harness*.test.ts normalisiert auf `test/` – dann bräuchte jeder PR mit
+    // Teständerung das Label, und ein immer nötiges Label markiert nichts mehr (Label-Fatigue).
+    const alle = [...codeownersPaths(codeowners), ...guardProtectedPaths(guardWf), ...workflowHarnessPaths(ticketWf)];
+    assert.deepEqual(
+      alle.filter(decktTestOrdnerAb),
+      [],
+      "Ein Schutzlisten-Eintrag deckt den ganzen test/-Ordner ab – Wächter-Tests einzeln eintragen (#1156)",
+    );
+  });
+
+  test("die geschützten Wächter-Tests existieren wirklich (#1156)", () => {
+    // Nach einem Umbenennen stünde sonst ein verwaister Pfad in allen Listen – grün, aber ohne Schutz.
+    const fehlend = WAECHTER_TESTS.filter((p) => !existsSync(fileURLToPath(new URL(`../${p}`, import.meta.url))));
+    assert.deepEqual(fehlend, [], `Geschützte Wächter-Tests gibt es nicht (umbenannt?):\n${fehlend.join("\n")}`);
   });
 });
 
@@ -202,6 +260,22 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
     const co = new Set(["AGENTS.md", "CLAUDE.md"]);
     const cp = new Set(["AGENTS.md"]);
     assert.notDeepEqual([...co].sort(), [...cp].sort());
+  });
+
+  test("ein Glob-Muster für Tests würde auf den ganzen test/-Ordner kürzen (#1156)", () => {
+    // Belegt, warum die Wächter-Tests einzeln statt als Muster eingetragen sind – und dass der
+    // Negativ-Wächter oben ein solches Muster wirklich fängt. Feste Literale, nicht WAECHTER_TESTS.
+    assert.equal(normalizeProtected("/test/*harness*.test.ts"), "test/");
+    assert.equal(normalizeProtected("/test/harness-approval.test.ts"), "test/harness-approval.test.ts");
+  });
+
+  test("der test/-Pauschal-Filter fängt auch breitere Muster, aber keine Einzelpfade (#1156)", () => {
+    for (const muster of ["/test/*x*", "/test", "/t*", "/*.test.ts", "/**"]) {
+      assert.equal(decktTestOrdnerAb(normalizeProtected(muster)), true, `nicht erkannt: ${muster}`);
+    }
+    for (const einzeln of ["/test/agents-md-native.test.ts", "/.claude/", "/AGENTS.md", "/tests-x/"]) {
+      assert.equal(decktTestOrdnerAb(normalizeProtected(einzeln)), false, `fälschlich erkannt: ${einzeln}`);
+    }
   });
 });
 

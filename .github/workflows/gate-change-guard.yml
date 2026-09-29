@@ -88,6 +88,9 @@ jobs:
             '.claude/'
             '.agents/'
             'docs/agent-harness'
+            # Waechter-Tests (#1156): der Test ist hier selbst das Gate, einzeln statt Muster
+            'test/agents-md-native.test.ts'
+            'test/harness-approval.test.ts'
           )
 
           # Drei-Punkt-Diff (#1095): nur was der PR seit der Merge-Base aendert. Der

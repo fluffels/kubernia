@@ -348,6 +348,9 @@ const HARNESS_PFADE = [
   '.claude/',
   '.agents/',
   'docs/agent-harness',
+  // Wächter-Tests (#1156): der Test ist hier selbst das Gate, einzeln statt Muster
+  'test/agents-md-native.test.ts',
+  'test/harness-approval.test.ts',
 ]
 
 // ── args-Auswertung (#1027) — Anfang ─────────────────────────────────────────
