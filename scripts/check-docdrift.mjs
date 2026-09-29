@@ -74,7 +74,8 @@ export const VERSIONED_CLAUDE_DIRS = new Set(["agents", "skills", "workflows"]);
 // ── Markdown sammeln ───────────────────────────────────────────────────────────
 
 /** Alle *.md im Repo (repo-relativer POSIX-Pfad), IGNORED_DIRS ausgenommen; unter
- *  .claude nur die VERSIONED_CLAUDE_DIRS (und keine losen Dateien direkt in .claude). */
+ *  dem .claude im Repo-Root nur die VERSIONED_CLAUDE_DIRS (und keine losen Dateien direkt
+ *  darin). Anders als früher (Basename-Match) gilt das nur für das Root-.claude. */
 export function collectMarkdown(rootDir = ROOT) {
   const out = [];
   const walk = (dir) => {

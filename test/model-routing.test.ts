@@ -52,7 +52,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im tsconfig)
@@ -98,27 +98,16 @@ function frontmatter(md: string): Record<string, string> {
 const istCodingTier = (wert: string) => /(^|[-\s])sonnet/i.test(wert);
 
 /**
- * Alle Markdown-Dateien unter `.claude/` (Skills + Agent-Definitionen), rekursiv, als
- * ABSOLUTE Pfade – für die Pin-Checkliste. Den Drift-Scan deckt seit #1091
- * `collectMarkdown` selbst ab (gleiche Allowlist, `VERSIONED_CLAUDE_DIRS`).
+ * Alle Markdown-Dateien der versionierten `.claude`-Ordner (Skills, Agents, Workflows) als
+ * ABSOLUTE Pfade – für die Pin-Checkliste. Abgeleitet aus `collectMarkdown` (#1091), damit die
+ * Ordner-Allowlist (`VERSIONED_CLAUDE_DIRS`, gegen .gitignore abgeglichen) genau EINMAL lebt:
+ * bewusst nur versionierte Ordner statt „alles außer worktrees", sonst verlangte die Checkliste
+ * Einträge für lokal abgelegte, untrackte Dateien, die niemand committen kann (lokal rot, CI grün).
  */
 function claudeMarkdown(): string[] {
-  const walk = (dir: string): string[] => {
-    const out: string[] = [];
-    for (const e of readdirSync(dir, { withFileTypes: true })) {
-      const p = `${dir}/${e.name}`;
-      if (e.isDirectory()) out.push(...walk(p));
-      else if (e.name.endsWith(".md")) out.push(p);
-    }
-    return out;
-  };
-  // Bewusst genau die VERSIONIERTEN Ordner statt „alles außer worktrees": .gitignore trackt
-  // unter .claude/ nur skills/, agents/ und workflows/ (+ settings.json). Ein Walk über den
-  // ganzen Baum scannte auch lokal abgelegte, untrackte Dateien mit – und verlangte für sie
-  // einen Checklisten-Eintrag, den niemand committen kann (lokal rot, CI grün).
-  // `workflows` ist mit drin, obwohl dort heute nur .js liegt: ein künftiges
-  // .claude/workflows/*.md entginge sonst der Pin-Checkliste.
-  return [`${REPO_ROOT}.claude/skills`, `${REPO_ROOT}.claude/agents`, `${REPO_ROOT}.claude/workflows`].flatMap(walk);
+  return collectMarkdown(REPO_ROOT)
+    .filter((f) => f.startsWith(".claude/"))
+    .map((f) => `${REPO_ROOT}${f}`);
 }
 
 /**
