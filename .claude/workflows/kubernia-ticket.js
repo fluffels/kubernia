@@ -627,7 +627,7 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
 - § Kollisionsschutz bei parallelen Agenten — eigener Worktree, erst git fetch origin,
   dann von origin/main aufsetzen (nicht vom lokal veralteten main), Pfad
   .claude/worktrees/kq-${nr}, Branch feature/kq-${nr}-<slug>. Im frischen Worktree
-  einmal npm install. Kein Junction/Symlink auf fremde node_modules.
+  einmal npm ci (schreibt den Lockfile nie, #1119). Kein Junction/Symlink auf fremde node_modules.
 - § Worktree entfernen auf Windows, Falle 2: arbeite mit absoluten Pfaden und cd NICHT
   in den Worktree hinein — die Shell behält ihre cwd und blockiert später das Entfernen.
 - § TDD ist der Default für Logik, § Alles wird abgetestet – auch Negativfälle,

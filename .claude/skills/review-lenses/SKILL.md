@@ -55,7 +55,7 @@ npm run verify   # typecheck → lint → check:arch → check:size → check:co
 - **Exit ≠ 0 (rot):** **HIER STOPPEN.** Berichte, welches Gate rot ist, mit der Fehlerausgabe — und **starte KEINEN Lens-Pass** (das ist der Short-Circuit: kein LLM-Token auf einen Diff, der schon deterministisch scheitert). Das gerötete Gate zuerst grün machen (im normalen Ticket-Ablauf), dann den Review erneut anstoßen.
 - **Exit == 0 (grün):** weiter zu den Lenses.
 
-> Warum `npm run verify` statt einer eigenen Kommandokette: es ist die **eine** gepflegte Gate-Quelle (#527) — so kann der Review nicht gegen eine veraltete Teilmenge der Gates prüfen. Fehlt im Worktree `node_modules`, einmal `npm install`.
+> Warum `npm run verify` statt einer eigenen Kommandokette: es ist die **eine** gepflegte Gate-Quelle (#527) — so kann der Review nicht gegen eine veraltete Teilmenge der Gates prüfen. Fehlt im Worktree `node_modules`, einmal `npm ci` (#1119).
 
 ### Die drei Lens-Pässe (nur nach grüner Stufe 0)
 
