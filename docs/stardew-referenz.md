@@ -131,3 +131,15 @@ Wenn ein Punkt ❌ ist: nicht „nah genug" durchwinken — das sind genau die A
 - [Pixilart – Stardew-Valley-Palette](https://www.pixilart.com/palettes/stardew-valley-45323) (gedämpft-warme Töne als Referenz)
 - [Nexus Mods – „More Grass" (Stardew)](https://www.nexusmods.com/stardewvalley/mods/5398) (Gras ist PNG-/sprite-basiert, nicht prozedural)
 - [Stardew Valley Wiki – Grass](https://stardewvalleywiki.com/Grass)
+
+## Die Messlatte in Kurzform (ausgelagert aus AGENTS.md › Grafik-Stil, #1064)
+
+> Wörtlich aus [AGENTS.md](../AGENTS.md) ausgelagert (#1064): dort steht jetzt nur die knappe Regel, hier die Langbegründung + Historie. **Bei Konflikt gilt AGENTS.md.**
+
+- **Grafik-Stil – Stardew-Look als verbindliche Messlatte (Nordstern, #44).** Das Spiel-Thema bleibt unser eigenes (DevOps/K8s-Hafen), aber **Qualität, Genauigkeit und Politur auf Stardew-Niveau** sind der verbindliche Maßstab für jede neue oder geänderte Grafik. Der Stardew-Look entsteht **nicht** aus einer bestimmten Rastergröße, sondern aus *Einheitlichkeit* + *ganzzahliger Skalierung*. Konkret prüfbar (das ist die „Messlatte" fürs Audit):
+- **Einheitliche Pixeldichte:** alles auf demselben **16px-Raster** gezeichnet (Tiles 16×16, Figuren auf den etablierten 32²/48²-Canvas mit gleicher Körperhöhe/Fußlinie). **Kein gemischtes Auflösungs-Niveau** – fein detaillierte Assets direkt neben grob gerasterten wirken sofort „nicht Stardew".
+- **Ganzzahlige Skalierung:** nur ×2/×3/×4 usw., **nie 1.5×/2.3×** – krumme Faktoren matschen die Kanten, der `pixelArt`-Renderer braucht ganze Pixel.
+- **Frontale Ansicht** (`view: side`) als Default für Objekte, Figuren und senkrechte Strukturen (z.B. Leuchtturm). **Ausnahme Gebäude:** Gebäude via `building()` verwenden bewusst `high top-down` (2.5D-Schrägansicht mit sichtbarem Dach + Tiefe) – das entspricht exakt der leicht erhöhten Schrägperspektive, die Stardew für Gebäude nutzt, und ermöglicht korrekte Depth-Sortierung nach Fußlinie (#181, entschieden 2026-06-19).
+- **Kohärente Palette:** gedämpfte, warme Stardew-nahe Farbwelt statt grell/neon, einheitliche Licht-/Schattenrichtung.
+- **Keine simpel-prozeduralen Platzhalter dort, wo ein Asset hingehört:** code-gezeichnete Primitive (Dreieck-Grashalme, mit `graphics` gemalte Gegner/Boote) sind nur Übergangslösung und bekommen ein Asset-Ticket. *Dynamische Effekte* (rotierender Leuchtturm-Lichtkegel, Schatten/Glow, Tag-Nacht-Schleier) sind **kein** Platzhalter und bleiben bewusst Code.
+- **Hoch auflösen, dann ganzzahlig verkleinern:** große Objekte (Häuser, Bäume, Schiff) in hoher Auflösung generieren (PixelLab-Abo Tier 1 erlaubt große Bilder) statt klein erzeugen + hochskalieren, damit der Renderer scharf bleibt.
