@@ -2,7 +2,7 @@
 // statt sie nur per Review-Disziplin zu hoffen. Befund #292 (game.ts → sfx.ts) hatte
 // gezeigt, dass sich eine Verletzung sonst unbemerkt einschleicht.
 //
-// Schichten (siehe AGENTS.md › Architektur, CLAUDE.md › Repo-Landkarte):
+// Schichten (siehe AGENTS.md › Architektur, docs/referenz/schichtregeln.md):
 //   • pure Domäne      – Phaser-frei, im Node-Test prüfbar (sim, content*, world, decor,
 //                        clock, …). Darf NICHT phaser und NICHT die Präsentation importieren.
 //   • Anwendung        – game, runtime, devpanel, store (Persistenz). Wie Domäne: kein

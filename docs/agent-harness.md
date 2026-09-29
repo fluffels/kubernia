@@ -2,7 +2,7 @@
 
 > **Was ist dieses Dokument?** Die **eine** erklärende Gesamtsicht auf den „Harness": die Maschinerie, mit der autonome KI-Coding-Agenten dieses Repo **billig und sicher** weiterbauen. Der komplette Code von Kubernia entsteht durch solche Agenten — kein Mensch tippt die Implementierung.
 >
-> **Abgrenzung — was hier NICHT steht.** Dies ist die *erklärende* Sicht (das System als Ganzes, das „warum"), nicht die operative Arbeitsanweisung. Die **harten Regeln + den Schritt-für-Schritt-Ablauf** hat weiterhin die [AGENTS.md](../AGENTS.md) (SSOT für „wie arbeite ich"), die Nachschlage-Tabellen (Befehle, Repo-Landkarte, Schichtregeln, Anlaufstellen) die [CLAUDE.md](../CLAUDE.md) — die zugleich per `@AGENTS.md`-Import die Brücke in die SSOT ist (#992). Dieses Doc **verlinkt** dorthin, statt zu doppeln — driftet etwas, gilt AGENTS.md (SSOT). Es ist die Tiefenquelle, auf die die [README › Gebaut von KI-Agenten](../README.md#-gebaut-von-ki-agenten) (Marketing-Ebene 3) und [arc42 §8](arc42-architektur.md#8-querschnittliche-konzepte--ddd-bewertung) verweisen.
+> **Abgrenzung — was hier NICHT steht.** Dies ist die *erklärende* Sicht (das System als Ganzes, das „warum"), nicht die operative Arbeitsanweisung. Die **harten Regeln + den Schritt-für-Schritt-Ablauf** hat weiterhin die [AGENTS.md](../AGENTS.md) (SSOT für „wie arbeite ich"), die Nachschlage-Tabellen liegen on-demand unter [`docs/referenz/`](referenz/anlaufstellen.md) ([Befehle](referenz/befehle.md), [Repo-Landkarte](referenz/repo-landkarte.md), [Schichtregeln](referenz/schichtregeln.md), [Anlaufstellen](referenz/anlaufstellen.md), #1078). Dieses Doc **verlinkt** dorthin, statt zu doppeln — driftet etwas, gilt AGENTS.md (SSOT). Es ist die Tiefenquelle, auf die die [README › Gebaut von KI-Agenten](../README.md#-gebaut-von-ki-agenten) (Marketing-Ebene 3) und [arc42 §8](arc42-architektur.md#8-querschnittliche-konzepte--ddd-bewertung) verweisen.
 
 ## 1. Die Kernidee
 
@@ -21,9 +21,9 @@ Alles, was ein Agent braucht, liegt **im Repo selbst** — versioniert und gepus
 > **Abgrenzung — was „kein externes Notiz-/Wissenssystem" NICHT heißt.** Das gilt für den Harness: kein Schritt im Ticket-Workflow und keine Agenten-Entscheidung hängt an etwas außerhalb von Repo + GitHub, sonst könnten weder ein frischer Clone noch ein Cloud-Agent ohne die Maintainerin loslegen. Die Maintainerin führt daneben **privat** ein Obsidian-Second-Brain (Lernfortschritt, Konzept-Notizen für einen möglichen Weiterbildungstag) — rein additiv für sie als Mensch, kein Teil des Harness und für keinen Agenten-Schritt Voraussetzung. Fiele der Vault weg, liefe der Harness unverändert weiter.
 
 - **[AGENTS.md](../AGENTS.md)** — die **SSOT**: harte Regeln, Board-Workflow, Konventionen, Begründungen. **Jede harte Regel steht genau hier, nur hier** (#992).
-- **[CLAUDE.md](../CLAUDE.md)** — die **Brücke** dorthin: eine `@AGENTS.md`-Import-Zeile (Claude Code lädt CLAUDE.md automatisch, AGENTS.md nicht) plus die Nachschlage-Tabellen, deren Heimat sie ist — Befehle, die **eine** Subsystem-Repo-Landkarte, Schichtregeln, Anlaufstellen. Dass der Import nicht still verschwindet, bewacht [`test/claude-bridge.test.ts`](../test/claude-bridge.test.ts).
+- **[`docs/referenz/`](referenz/anlaufstellen.md)** — die Nachschlage-Tabellen, on-demand statt in jeder Session geladen (#1078): [Befehle](referenz/befehle.md), die **eine** Subsystem-[Repo-Landkarte](referenz/repo-landkarte.md), [Schichtregeln](referenz/schichtregeln.md), [Anlaufstellen](referenz/anlaufstellen.md). Solange Claude Code AGENTS.md nur über eine `@AGENTS.md`-Import-Brücke lädt, bewacht [`test/claude-bridge.test.ts`](../test/claude-bridge.test.ts), dass der Import nicht still verschwindet (entfällt mit #1087).
 - **Modul-lokale `AGENTS.md`** (z.B. [`src/content/AGENTS.md`](../src/content/AGENTS.md), #483) — Regeln, die nur gelten, wenn man in *diesem* Verzeichnis arbeitet. **Kontext als Token-Grenze:** ein Agent, der an `src/content/` arbeitet, lädt die Content-Regeln; wer woanders arbeitet, schleppt sie nicht mit.
-- **[`docs/module/`](module/)** — on-demand-Tiefendocs je Subsystem (sim/content/world/presentation/app). Nur lesen, wenn man am Bereich arbeitet — die CLAUDE.md-Landkarte bleibt dafür schlank.
+- **[`docs/module/`](module/)** — on-demand-Tiefendocs je Subsystem (sim/content/world/presentation/app). Nur lesen, wenn man am Bereich arbeitet — die [Repo-Landkarte](referenz/repo-landkarte.md) bleibt dafür schlank.
 - **[README.md](../README.md)** — die spielerseitige Sicht (Story, Steuerung, Lernpfad). Nicht für Agenten, aber Teil der „Doku aktuell halten ist Teil von fertig"-Regel.
 
 **Warum das die erste Leitplanke ist:** Ein Agent, der sich das Nötige zusammensuchen oder raten muss, produziert teure Fehl-Läufe. Die Doku ist bewusst als **Kontext-Selektor** gebaut (schlanker Always-Index + on-demand-Tiefe + modul-lokale Regeln), damit sie bei Stardew-Scope nicht zum unlesbaren Monolithen wird. Dass sie nicht leise veraltet, sichert selbst ein Gate ab (`check:docmap`, siehe §3).
@@ -126,11 +126,11 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 
 ### Doku↔Code-Drift-Wächter (`npm run check:docmap`, #482)
 - **WAS:** meldet seit #907 jede `src/`-Datei, die in **keinem** [`docs/module/`](module/)-Tiefendoc als Backtick-Pfad auftaucht, sowie jede deklarierte Schicht, die von der dependency-cruiser-Zuordnung abweicht (gemeinsame Schicht-Quelle [`scripts/layers.cjs`](../scripts/layers.cjs)). Auch als `test/docmap.test.ts`.
-- **WARUM:** Landkarte (CLAUDE.md, Subsystem-granular) + Tiefendocs sind der **Kontext-Selektor** jeder KI-Session (§2.1). Driftet die Abdeckung leise, führt sie Agenten in die Irre — genau das darf nicht passieren, also ist „die Doku stimmt" selbst maschinell geprüft.
+- **WARUM:** Landkarte ([`docs/referenz/repo-landkarte.md`](referenz/repo-landkarte.md), Subsystem-granular) + Tiefendocs sind der **Kontext-Selektor** jeder KI-Session (§2.1). Driftet die Abdeckung leise, führt sie Agenten in die Irre — genau das darf nicht passieren, also ist „die Doku stimmt" selbst maschinell geprüft.
 
 ### Harness-Drift-Wächter (`npm run check:docdrift`, #529)
-- **WAS:** hält die Doku jenseits der Datei-Landkarte ehrlich: (1) jedes in einem Markdown erwähnte `npm run <x>` (bzw. `npm test`) existiert als Skript in `package.json`; (2) jedes Kern-Skript (außer bewusst ausgenommener Convenience) ist in AGENTS.md/CLAUDE.md/README dokumentiert; (3) jeder interne, repo-relative Markdown-Link zeigt auf eine existierende Datei; (4) jeder `#anker` trifft eine reale Überschrift (GitHub-Slug-Regel). Auch als `test/docdrift.test.ts`.
-- **WARUM:** AGENTS.md/CLAUDE.md/README werden von **jeder** KI-Session als Kontext geladen und nennen Kommandos + verweisen quer auf andere Harness-Docs. Ein totes Kommando oder ein toter Link/Anker schickt einen Agenten ins Leere — der Datei-Landkarten-Wächter (#482) deckt genau diese Fehlklasse **nicht** ab.
+- **WAS:** hält die Doku jenseits der Datei-Landkarte ehrlich: (1) jedes in einem Markdown erwähnte `npm run <x>` (bzw. `npm test`) existiert als Skript in `package.json`; (2) jedes Kern-Skript (außer bewusst ausgenommener Convenience) ist in AGENTS.md/README/`docs/referenz/befehle.md` dokumentiert; (3) jeder interne, repo-relative Markdown-Link zeigt auf eine existierende Datei; (4) jeder `#anker` trifft eine reale Überschrift (GitHub-Slug-Regel). Auch als `test/docdrift.test.ts`.
+- **WARUM:** AGENTS.md (in **jeder** KI-Session geladen), README und die on-demand-Referenzen unter `docs/referenz/` nennen Kommandos + verweisen quer auf andere Harness-Docs. Ein totes Kommando oder ein toter Link/Anker schickt einen Agenten ins Leere — der Datei-Landkarten-Wächter (#482) deckt genau diese Fehlklasse **nicht** ab.
 - **Absicherung:** Code-Fences werden ausgeblendet (ein `#`-Kommentar in einem bash-Block ist keine Überschrift, ein Beispiel-Link keiner); Ausnahmen (undokumentierte Convenience-Skripte) stehen begründet in `DOC_EXEMPT_SCRIPTS`. Red-Green über `test/docdrift.test.ts` (totes Kommando, toter Link, toter Anker werden jeweils erkannt; die Slug-Regel trifft Emoji-/Umlaut-Überschriften).
 
 ### Doku-Aktualitäts-Wächter (`npm run check:doctickets`, #610)
@@ -204,7 +204,7 @@ So greifen die Bausteine bei **einem** Ticket ineinander — jeder Schritt ist e
 
 ```
    ┌─ Doku (SSOT) ────────────────────────────────────────────────┐
-   │  Agent liest CLAUDE.md + AGENTS.md + modul-lokale Regeln       │
+   │  Agent liest AGENTS.md + modul-lokale Regeln                   │
    │                          ▼                                     │
    │  Board: oberstes freies Item der Board-Reihenfolge             │  ← kein Abwägen
    │                          ▼                                     │
@@ -276,7 +276,7 @@ Mit **#530** ([ADR 0008](adr/0008-ki-agenten-harness.md)) ist der ADR jetzt die 
 
 - **[docs/agent-harness-faq.md](agent-harness-faq.md)** — häufig gestellte Einzelfragen zum Harness (CI-Feedback-Mechanismus, Deploybarkeit, Portabilität, Hook vs. PR-Gate), gesammelt statt einzeln neu beantwortet.
 - **[AGENTS.md](../AGENTS.md)** — operative Arbeitsanweisung (harte Regeln, Board-Workflow, Konventionen). *Bei Konflikt maßgeblich.*
-- **[CLAUDE.md](../CLAUDE.md)** — die Brücke zu AGENTS.md (`@AGENTS.md`-Import) + die Referenz-Tabellen (Befehle, Repo-Landkarte, Schichtregeln, Anlaufstellen).
+- **[`docs/referenz/`](referenz/anlaufstellen.md)** — die Nachschlage-Referenz on-demand (Befehle, Repo-Landkarte, Schichtregeln, Anlaufstellen).
 - **[docs/arc42-architektur.md](arc42-architektur.md)** — Architektur-Gesamtsicht; §1.4 (KI-Entwickel-Effizienz als Qualitätsziel), §8 (Querschnittskonzepte), §9 (ADR-Übersicht inkl. geplantem 0008).
 - **[docs/ticket-reihenfolge.md](ticket-reihenfolge.md)** — was als Nächstes dran ist (deterministisch: oberstes freies Item der Board-Reihenfolge).
 - **[docs/adr/](adr/)** — die festgehaltenen Grundsatzentscheidungen (Engine, kein Backend/DB, kein Multiplayer, Skalierungs-Fundament, …).

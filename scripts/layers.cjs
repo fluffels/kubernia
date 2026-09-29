@@ -2,7 +2,7 @@
 //
 // Vorher gab es die Schicht-Zuordnung faktisch zweimal nebeneinander: einmal als
 // Import-Grenzen im dependency-cruiser (.dependency-cruiser.cjs) und einmal als
-// Prosa in der CLAUDE.md-Landkarte. Der Doku↔Code-Drift-Wächter (#482,
+// Prosa in der Repo-Landkarte (docs/referenz/repo-landkarte.md). Der Doku↔Code-Drift-Wächter (#482,
 // scripts/check-docmap.mjs) prüft, dass beide übereinstimmen — dafür müssen beide
 // aus derselben Quelle ableiten, sonst hätte der Wächter selbst zwei Wahrheiten.
 // Darum leben die Schicht-Muster hier, und sowohl der Cruiser-Config als auch der
@@ -38,7 +38,7 @@ function layerOf(file) {
   return LAYERS.DOMAIN;
 }
 
-/** Übersetzt die in der CLAUDE.md-Landkarte genannten Schicht-Labels in die kanonischen
+/** Übersetzt die in der Repo-Landkarte genannten Schicht-Labels in die kanonischen
  *  Buckets. Die Landkarte ist bewusst feiner (trennt „Persistenz" von „Anwendung",
  *  „Typen"/„Assets" von Domäne/Einstieg, damit ein Mensch die Rolle sofort sieht) — der
  *  Wächter gleicht auf Bucket-Ebene ab, weil dependency-cruiser nur diese vier kennt.

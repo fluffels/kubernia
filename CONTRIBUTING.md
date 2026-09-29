@@ -39,7 +39,7 @@ Im Repo liegen fertige npm-Run-Configs unter [`.idea/runConfigurations/`](.idea/
 
 > Eine doppelklickbare Desktop-`.exe` (wie bei Stardew) ist ein **separates** Thema (#83 Tauri) und fürs Entwickeln **nicht** nötig.
 >
-> Warum das hier steht und nicht in CLAUDE.md (#992): IDE-Komfort ist Menschen-Onboarding. CLAUDE.md wird von **jeder** Agenten-Session vollständig geladen (Token-Budget `check:contextsize`, #719) – dort gehört nur hinein, was ein Agent wirklich braucht.
+> Warum das hier steht und nicht in AGENTS.md (#992): IDE-Komfort ist Menschen-Onboarding. AGENTS.md wird von **jeder** Agenten-Session vollständig geladen (Token-Budget `check:contextsize`, #719) – dort gehört nur hinein, was ein Agent wirklich braucht.
 
 ### Git-Identität (Anonymität, #418)
 
@@ -95,7 +95,7 @@ Die **vollständige** Befehlsliste (alle Build-Wege, alle Wächter) steht in [do
 Damit nichts doppelt gepflegt wird, lebt jedes Thema an **genau einer** Stelle:
 
 - **Repo-Landkarte** (welches Subsystem liegt wo, welches Tiefendoc gehört dazu): [docs/referenz/repo-landkarte.md](docs/referenz/repo-landkarte.md) – die Module im Detail dann in [`docs/module/`](docs/module/)
-- **Wie hier gearbeitet wird** (harte Regeln, Board-/Ticket-Workflow, Konventionen): [AGENTS.md](AGENTS.md) – die SSOT, auf die CLAUDE.md nur brückt
+- **Wie hier gearbeitet wird** (harte Regeln, Board-/Ticket-Workflow, Konventionen): [AGENTS.md](AGENTS.md) – die SSOT (Nachschlage-Referenz on-demand unter [`docs/referenz/`](docs/referenz/anlaufstellen.md))
 - **Was das Spiel ist** (Story, Steuerung, Lernpfad): [README.md](README.md)
 - **Architektur-Stand & Ticket-Auswahl** (Stardew-Scope): [docs/architektur-analyse-2026-06.md](docs/architektur-analyse-2026-06.md) + [docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md)
 
