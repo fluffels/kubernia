@@ -16,7 +16,9 @@
  *
  * Zusätzlich wird geprüft, dass alle Listen die Leitplanken-Dateien (über die reine Gate-Config
  * hinaus: AGENTS.md, CLAUDE.md, CLAUDE.local.md, .claude/, .agents/, docs/agent-harness) wirklich
- * enthalten – sonst wäre die Regel dokumentiert, aber der Riegel liefe ins Leere.
+ * enthalten – sonst wäre die Regel dokumentiert, aber der Riegel liefe ins Leere. Seit #1156
+ * schützen die Listen auch die Wächter-Tests selbst (diese Datei eingeschlossen), und kein Eintrag
+ * darf pauschal den ganzen test/-Ordner sperren.
  *
  * Fitness-Function-Kategorie neben agents-md-native/docmap/readme (#1087/#482), nicht mit
  * Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`: `scripts/check-`
@@ -99,6 +101,8 @@ const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/", ".
  * dieser Test hier den Sync der drei Listen. Bewusst einzeln statt als Muster: ein Glob
  * würde von `normalizeProtected` auf `test/` gekürzt und jeden Test-PR label-pflichtig machen.
  * Tests mit geschütztem check-Skript dahinter (filesize, docmap, diffsize, …) gehören nicht hierher.
+ * Bewusst vorerst nur diese zwei (Maintainerin-Entscheidung #1156): weitere Wächter ohne
+ * check-Skript (z.B. settings-permissions, diffbasis) kommen mit der Namensregel test/harness/ bzw. #1157.
  */
 const WAECHTER_TESTS = ["test/agents-md-native.test.ts", "test/harness-approval.test.ts"];
 

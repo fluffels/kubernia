@@ -15,6 +15,9 @@
 #    eigenen Leitplanken aendert, ist Selbstmodifikation, nicht Gate-Aufweichen.
 #    Bis #1069 war das ein Pflicht-Stopp (Merge nur durch die Maintainerin);
 #    seitdem ersetzt eine Audit-Spur (Label + Kommentar) diese Freigabe.
+#    Dazu (#1156) Waechter-Tests, die selbst der einzige Durchsetzer ihrer
+#    Regel sind - vorerst nur die zwei Waechter des Riegels; weitere folgen
+#    mit der Namensregel test/harness/ bzw. #1157.
 #
 # Darum tragen NUR PRs, die diese Pfade anfassen, das Label als sichtbaren
 # Marker im PR-Log. Alle anderen Pfade mergen ohne Label autonom bei gruener CI. Diese Liste ist die menschenlesbare SSOT, die der CI-Job
