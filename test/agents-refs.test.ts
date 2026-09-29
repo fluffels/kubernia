@@ -40,7 +40,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -118,7 +118,12 @@ function pruefe<V extends Verweis>(verweise: V[], docs: Record<Ziel, string>): V
 
 const nurBegriffe = (vs: Verweis[]) => vs.map(({ ziel, begriff }) => ({ ziel, begriff }));
 
-const DOCS: Record<Ziel, string> = { "AGENTS.md": read("AGENTS.md"), "CLAUDE.md": read("CLAUDE.md") };
+// CLAUDE.md ist eine auslaufende Brücke (#1078/#1087): fehlt sie, gilt sie als leer – ein noch
+// übrig gebliebener `CLAUDE.md § …`-Verweis wird dann rot gemeldet, statt dass der Test crasht.
+const DOCS: Record<Ziel, string> = {
+  "AGENTS.md": read("AGENTS.md"),
+  "CLAUDE.md": existsSync(ROOT + "CLAUDE.md") ? read("CLAUDE.md") : "",
+};
 const CLAUDE_DATEIEN = listTrackedFiles(ROOT).filter(
   (f) => f.startsWith(".claude/") && /\.(md|js|mjs|cjs|ts)$/.test(f),
 );
@@ -149,7 +154,7 @@ describe("Verweis-Wächter: AGENTS.md § … aus .claude/ muss existieren (#1079
     }
     assert.ok(ECHTE_VERWEISE.some((v) => v.datei === ".claude/workflows/kubernia-ticket.js"));
     assert.ok(ECHTE_VERWEISE.some((v) => v.datei.startsWith(".claude/skills/")));
-    assert.ok(ECHTE_VERWEISE.some((v) => v.ziel === "CLAUDE.md"));
+    // Bewusst KEINE Pflicht auf ein CLAUDE.md-Ziel: diese Verweise sollen mit #1086/#1087 aussterben.
   });
 
   test("Red-Green: ein erfundener Verweis wird gemeldet", () => {
