@@ -54,32 +54,33 @@ Bezugspunkt für die Token-Optimierungen **#1065** (Modell-/Effort-Routing) und 
 
 ```bash
 node scripts/token-baseline.mjs --session <claude-session-id> --issue <nr> --pr <pr-nr>
-# Session mit mehreren Tickets: ab Claim (oder Merge des Vorgängers) schneiden
-node scripts/token-baseline.mjs --session <id> --issue <nr> --pr <pr-nr> --from <ISO-Zeit>
+# Session mit mehreren Tickets: immer ab dem Claim des Tickets schneiden (Zeit aus dem assigned-Event)
+node scripts/token-baseline.mjs --session <id> --issue <nr> --pr <pr-nr> --from <ISO-Zeit des Claims>
 ```
 
-- **Quelle ist das lokale Claude-Code-Transkript** (`~/.claude/projects/<projekt>/<session>.jsonl` + `subagents/`). `--langfuse` liest stattdessen die Langfuse-v2-Observations-API (braucht `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`, liefert zusätzlich Kosten). ⚠️ Die Langfuse-Aufzeichnung ist **unvollständig**: beim Nachmessen von #1064 fehlten 80 der 91 Hauptagent-Calls und 5 von 7 Subagenten (Umsetzung und Lenses) — für die Baseline zählt deshalb das Transkript. Transkripte rotieren nach einigen Wochen: **direkt nach dem Merge messen.**
-- **Phasen** ohne Marker im Lauf: Subagenten nach `agentType`/Beschreibung (Planer → Planung, Lens/Kritiker → Review, Explore → Recherche); der Hauptagent über GitHub-Zeitstempel — vor dem Claim **Auswahl**, bis zum PR **Umsetzung**, bis zum Merge **CI/Merge**, danach **Nachlauf** (wird gezeigt, zählt nicht zum Ticket).
-- **Loop-Kennzahlen:** Review-Runden (3 Lenses = 1 Runde, jeder weitere Kritiker +1), CI-Fix-Runden (distinct `head_sha` mit rotem CI, dieselbe Zählung wie #904), Rückfragen (`AskUserQuestion`), gemergt ohne Nacharbeit (Merge und 0 rote Pushes).
+- **Quelle ist das lokale Claude-Code-Transkript** (`~/.claude/projects/<projekt>/<session>.jsonl` + `subagents/`). `--langfuse` liest stattdessen die Langfuse-v2-Observations-API (braucht `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`, liefert zusätzlich Kosten). ⚠️ Die Langfuse-Aufzeichnung war zum Messzeitpunkt **unvollständig**: für #1064 enthielt sie nur 11 der Hauptagent-Calls und 2 von 7 Subagenten (Lenses, Kritiker und Recherche fehlten ganz) — für die Baseline zählt deshalb das Transkript. Transkripte rotieren nach einigen Wochen: **direkt nach dem Merge messen.**
+- **Phasen** ohne Marker im Lauf: Subagenten nach `agentType`, Workflow-Label (`umsetzen:`, `ci-fix` …) bzw. Beschreibung (Planer → Planung, Lens/Kritiker → Review, Explore → Recherche); der Hauptagent und nicht zuordenbare Subagenten über GitHub-Zeitstempel — vor dem Claim **Auswahl**, bis zum PR **Umsetzung**, bis zum Merge **CI/Merge**, danach **Nachlauf** (wird gezeigt, zählt nicht zum Ticket).
+- **Loop-Kennzahlen:** Review-Runden (Heuristik: 3 Lenses = 1 Runde, jeder weitere Kritiker +1), CI-Fix-Runden (distinct `head_sha` mit rotem CI, dieselbe Zählung wie #904), Rückfragen (`AskUserQuestion`), gemergt ohne Nacharbeit (Merge und 0 rote Pushes).
 
 ### Baseline (Stand 2026-09-29, alle vier Läufe vor #1065/#1067)
 
-„Tokens" = Input + Cache-Write + Cache-Read + Output ohne Nachlauf. Die Phasen-Spalten zeigen den Anteil an diesen Tokens in %.
+„Tokens" = Input + Cache-Write + Cache-Read + Output ohne Nachlauf; Input allein liegt je Lauf unter 300 und ist weggelassen. Die Phasen-Spalten zeigen den Anteil an diesen Tokens in %.
 
 | Lauf | Calls | Tokens | davon Cache-Read | Cache-Write | Output | Auswahl | Planung | Umsetzung | Review | CI/Merge | Recherche | Modell Umsetzung | Review-Runden | CI-Fix | Rückfragen | ohne Nacharbeit |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|---|--:|--:|--:|---|
 | #1026 (Workflow-Bugfix) | 60 | 6.781k | 95 % | 320k | 21k | 12 | – | 60 | 17 | 12 | – | `claude-opus-5-5` | 1 | 0 | 0 | ja |
 | #1064 (Kontext-Gate) | 133 | 20.514k | 95 % | 883k | 49k | 3 | 9 | 65 | 12 | 3 | 8 | `claude-opus-5-5` | 2 | 0 | 1 | ja |
-| #1069 (Harness-Regel) | 84 | 18.592k | 96 % | 678k | 72k | – | – | 64 | 30 | 6 | – | `claude-opus-5-5` | 2 | 0 | 1 | ja |
-| #1072 (ADR, Doku) | 37 | 12.105k | 98 % | 155k | 27k | 46¹ | – | 35 | 4 | 15 | – | `claude-opus-5-5` | 1 | 0 | 1 | ja |
+| #1069 (Harness-Regel)¹ | 84 | 18.592k | 96 % | 678k | 72k | –¹ | – | 64 | 30 | 6 | – | `claude-opus-5-5` | 2 | 0 | 1 | ja |
+| #1072 (ADR, Doku)¹ | 22 | 6.542k | 98 % | 140k | 18k | –¹ | – | 65 | 8 | 27 | – | `claude-opus-5-5` | 1 | 0 | 1 | ja |
 
-¹ #1069 und #1072 liefen in derselben Session; die „Auswahl" von #1072 enthält den Audit-Kommentar von #1069 nach dessen Merge.
+¹ #1069 und #1072 liefen in derselben Session und sind ab dem jeweiligen Claim geschnitten (`--from`); ihre Auswahl ist deshalb nicht gemessen.
 
 **Was die Baseline zeigt:**
-- **Die Umsetzung lief in allen vier Läufen auf Opus 5.5, nie auf Sonnet.** #1026 und #1064 hatten den `kubernia`-Skill geladen (`model: sonnet` im Frontmatter, §4), trotzdem kam **kein einziger** Hauptagent-Call von Sonnet. Der Coding-Tier greift in der Praxis also nicht. Das ist der größte Hebel für #1065.
+- **Die Umsetzung lief in allen vier Läufen auf Opus 5.5, nie auf Sonnet.** #1026 und #1064 hatten den `kubernia`-Skill geladen (`model: sonnet` im Frontmatter, §4), trotzdem kam **kein einziger** Hauptagent-Call von Sonnet. Die Modelle an **Subagenten** greifen dagegen: in #1064 lief der Planer auf `claude-opus-5`, die Recherche auf `claude-sonnet-5-5`. Es hakt also am Frontmatter-Override des Hauptagenten — der größte Hebel für #1065. (`test/model-routing.test.ts` prüft nur, dass die Zeile da ist, nicht, dass sie wirkt.)
 - **95–98 % der Tokens sind Cache-Reads**, also der pro Call neu gelesene Kontext. Weniger Calls und ein kleinerer Grundkontext sparen mehr als kürzere Antworten.
-- **Loops sind schon billig:** kein einziger roter CI-Push, 1–2 Review-Runden, höchstens eine Rückfrage. Die Kosten stecken in der Umsetzung (35–65 %) und im Review (bis 30 %).
+- **Loops sind schon billig:** kein einziger roter CI-Push, 1–2 Review-Runden, höchstens eine Rückfrage. Die Kosten stecken in der Umsetzung (60–65 %) und im Review (bis 30 %).
 - **Die Planung fehlt bei drei von vier Läufen.** Nur #1064 hat den `kubernia-planner` gerufen; #1026 lief über den Skill und übersprang ihn trotzdem.
+- **Grenze der Baseline:** alle vier sind Harness-/Doku-Tickets ohne Spielcode unter `src/`. Ein `src/`-Lauf wird bei Gelegenheit ergänzt; bis dahin nur Harness-Tickets gegen diese Zeilen vergleichen.
 
 ### Nach einer Optimierung vergleichen
 

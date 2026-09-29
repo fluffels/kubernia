@@ -1,42 +1,23 @@
 // Kein Shebang: wird per `node scripts/token-baseline.mjs` gestartet UND von
 // test/token-baseline.test.ts importiert (ein `#!` bricht den Test-Import).
 /**
- * Token- und Loop-Baseline pro Ticket-Lauf (#1068).
+ * Token- und Loop-Baseline pro Ticket-Lauf (#1068): Tokens nach Phase × Modell
+ * (Input / Cache-Write / Cache-Read / Output) plus Loop-Kennzahlen.
+ * Aufruf, Phasen-Regeln und Baseline: docs/model-routing.md §5.
  *
- * Schlüsselt einen Ticket-Lauf auf:
- *   - Tokens nach Phase × Modell, getrennt in Input / Cache-Write / Cache-Read /
- *     Output,
- *   - Loop-Kennzahlen: Review-Runden, CI-Fix-Runden, Rückfragen, gemergt ohne
- *     Nacharbeit.
- *
- * Aufruf:
  *   node scripts/token-baseline.mjs --session <id> [--session <id>…] \
  *        [--issue <nr>] [--pr <nr>] [--from <ISO-Zeit>] [--langfuse] [--json]
  *
- *   --from schneidet eine Session mit mehreren Tickets: Calls davor zählen nicht.
+ * ZWEI Quellen, EINE Auswertung (`summarize` kennt die Quelle nicht):
+ *   1. Standard: das lokale Claude-Code-Transkript (vollständig, ohne Schlüssel).
+ *   2. `--langfuse`: die v2-Observations-API (v4 hat die v1-Traces-API
+ *      abgeschaltet); LANGFUSE_PUBLIC_KEY/_SECRET_KEY, optional _BASE_URL.
+ *      Nur so vollständig wie die Hook-Aufzeichnung — für #1064 fehlte der
+ *      Großteil, darum ist das Transkript maßgeblich.
  *
- * ZWEI Quellen, EINE Auswertung (beide werden auf dieselben Call-Datensätze
- * normalisiert, `summarize` kennt die Quelle nicht):
- *   1. Standard: das lokale Claude-Code-Transkript
- *      (~/.claude/projects/<projekt>/<session>.jsonl + <session>/subagents/*).
- *      Vollständig und ohne Schlüssel. Maßgeblich, weil der Langfuse-Hook beim
- *      Nachmessen von #1064 nur 11 von 91 Hauptagent-Calls und 2 von 7
- *      Subagenten erfasst hatte (Umsetzungs- und Lens-Subagenten fehlten ganz).
- *   2. `--langfuse`: die v2-Observations-API (Langfuse v4 hat die v1-Traces-API
- *      abgeschaltet). Braucht LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY, optional
- *      LANGFUSE_BASE_URL (Default http://localhost:3000). Liefert zusätzlich
- *      Kosten, ist aber nur so vollständig wie die Hook-Aufzeichnung.
- *
- * Phasen-Zuordnung (deterministisch, ohne Marker im Lauf):
- *   - Subagent-Calls: Phase aus `agentType` + Beschreibung (Planer → Planung,
- *     Lens/Kritiker/Review → Review, Explore → Recherche).
- *   - Hauptagent-Calls: über GitHub-Zeitstempel geschnitten — vor dem Claim
- *     (erstes `assigned` am Issue) → Auswahl, bis PR-Erstellung → Umsetzung,
- *     bis Merge → CI/Merge, danach → Nachlauf (gehört nicht mehr zum Ticket).
- *
- * Bewusst NICHT in `npm run verify`: liest lokale Transkripte bzw. braucht
- * Netz und gh-Auth. Die Auswertungslogik ist pure/exportiert und in
- * test/token-baseline.test.ts ohne Netz und ohne echte Dateien geprüft.
+ * Bewusst NICHT in `npm run verify` (liest lokale Transkripte bzw. braucht Netz
+ * und gh-Auth). Die Auswertung ist pure/exportiert und ohne IO getestet; die
+ * dünnen IO-Helfer (Dateisuche, gh) sind bewusst ungetestet.
  */
 
 import { execFileSync } from "node:child_process";
@@ -55,18 +36,32 @@ export const PHASES = [
   "Review",
   "CI/Merge",
   "Recherche",
-  "Subagent (sonstig)",
   "Nachlauf",
 ];
 
-/** Phase eines Subagenten aus `agentType` + Beschreibung ableiten. */
+/** Workflow-Labels (`.claude/workflows/kubernia-ticket.js`) → Phase, per Präfix. */
+const WORKFLOW_LABELS = [
+  [/^auswahl/i, "Auswahl"],
+  [/^(plan|preflight):/i, "Planung"],
+  [/^(umsetzen|nachbessern)\b/i, "Umsetzung"],
+  [/^(pr\+merge|ci-fix)\b/i, "CI/Merge"],
+];
+
+/**
+ * Phase eines Subagenten: erst der eindeutige `agentType`, dann Workflow-Label,
+ * dann Skill-Beschreibung (Review vor Plan — „Lens 2 gegen den Plan" ist Review).
+ * Unklar → null: der Call fällt auf den Zeitschnitt des Hauptagenten zurück,
+ * statt in einem Sammeltopf zu verschwinden.
+ */
 export function classifySubagent(agentType, description) {
   const t = String(agentType ?? "");
   const d = String(description ?? "");
-  if (/planner|^plan$/i.test(t) || /plan/i.test(d)) return "Planung";
-  if (/lens|review/i.test(t) || /lens|review|kritiker/i.test(d)) return "Review";
+  if (/planner/i.test(t)) return "Planung";
   if (/explore/i.test(t)) return "Recherche";
-  return "Subagent (sonstig)";
+  for (const [re, phase] of WORKFLOW_LABELS) if (re.test(d)) return phase;
+  if (/\blens\b|review|kritiker/i.test(d)) return "Review";
+  if (/\bplan/i.test(d)) return "Planung";
+  return null;
 }
 
 /** Hauptagent-Phase aus dem Zeitpunkt; fehlende Grenzen fallen auf Umsetzung. */
@@ -79,13 +74,15 @@ export function classifyMainByTime(ts, { claimAt, prCreatedAt, mergedAt } = {}) 
 }
 
 /**
- * Review-Runden: je drei Lenses sind eine Runde (#1012), jeder weitere
- * Review-Subagent ohne „Lens" im Namen (z.B. „Frischer Kritiker Runde 2")
- * ist eine eigene Runde.
+ * Review-Runden (Heuristik): je drei Lenses sind eine Runde (#1012), jeder
+ * weitere Review-Subagent ohne „Lens" (z.B. „Frischer Kritiker Runde 2") ist
+ * eine eigene Runde. Annahme: jede Lens-Runde fährt alle drei Lenses. Der
+ * Festgefahren-Review ist keine Konvergenz-Runde und zählt nicht.
  */
 export function countReviewRounds(reviewDescriptions) {
-  const lenses = reviewDescriptions.filter((d) => /lens/i.test(d)).length;
-  return Math.ceil(lenses / LENSES_PER_ROUND) + (reviewDescriptions.length - lenses);
+  const rounds = reviewDescriptions.filter((d) => !/festgefahren/i.test(d));
+  const lenses = rounds.filter((d) => /\blens\b/i.test(d)).length;
+  return Math.ceil(lenses / LENSES_PER_ROUND) + (rounds.length - lenses);
 }
 
 function num(v) {
@@ -109,11 +106,8 @@ export function summarize({ calls, questions = 0 }, bounds = {}) {
     if (bounds.from && Date.parse(c.ts) < Date.parse(bounds.from)) continue;
     // Nach dem Merge ist alles Nachlauf — auch ein Subagent, den erst das Gespräch danach startet.
     const afterMerge = bounds.mergedAt && Date.parse(c.ts) >= Date.parse(bounds.mergedAt);
-    const phase = afterMerge
-      ? "Nachlauf"
-      : c.subagent
-        ? classifySubagent(c.subagent.agentType, c.subagent.description)
-        : classifyMainByTime(c.ts, bounds);
+    const subPhase = c.subagent ? classifySubagent(c.subagent.agentType, c.subagent.description) : null;
+    const phase = afterMerge ? "Nachlauf" : (subPhase ?? classifyMainByTime(c.ts, bounds));
     if (c.subagent && phase !== "Nachlauf") inWindow.set(c.subagent.id ?? c.subagent, c.subagent);
     const model = c.model || "unbekannt";
     const key = `${phase}\u0000${model}`;
@@ -252,7 +246,7 @@ export function callsFromLangfuse(observations) {
         cacheWrite: u.cache_creation_input_tokens,
         cacheRead: u.cache_read_input_tokens,
         output: u.output,
-        cost: o.totalCost ?? 0,
+        cost: o.totalCost ?? null,
         subagent: span ? spanInfo(span) : null,
       };
     });

@@ -44,7 +44,7 @@ type Obs = {
 
 /** Modul-Form EINMAL deklarieren und genau hier casten (Muster wie cleanup-worktrees.test.ts). */
 const m = baselineModule as {
-  classifySubagent: (agentType?: string, description?: string) => string;
+  classifySubagent: (agentType?: string, description?: string) => string | null;
   classifyMainByTime: (ts: string, bounds?: Bounds) => string;
   countReviewRounds: (descriptions: string[]) => number;
   summarize: (run: Run, bounds?: Bounds) => Summary;
@@ -76,13 +76,29 @@ const call = (ts: string, output: number, extra: Partial<Call> = {}): Call => ({
 });
 
 describe("token-baseline: Phasen-Zuordnung", () => {
-  test("Subagent-Typen: Planer, Lens, Kritiker, Explore, Rest", () => {
+  test("Subagent-Typen: Planer, Lens, Kritiker, Explore; Unklares → null (Zeitschnitt)", () => {
     assert.equal(m.classifySubagent("kubernia-planner", "Planungspass für #1064"), "Planung");
     assert.equal(m.classifySubagent("general-purpose", "Lens 1: Architektur"), "Review");
     assert.equal(m.classifySubagent("general-purpose", "Frischer Kritiker Runde 2"), "Review");
-    assert.equal(m.classifySubagent("Explore", "suche X"), "Recherche");
-    assert.equal(m.classifySubagent("claude-code-guide", "Liest Claude Code AGENTS.md?"), "Subagent (sonstig)");
-    assert.equal(m.classifySubagent(undefined, undefined), "Subagent (sonstig)");
+    assert.equal(m.classifySubagent("Explore", "Review-Kontext sammeln"), "Recherche");
+    assert.equal(m.classifySubagent("general-purpose", "Lens 2: Requirement-Treue gegen den Plan"), "Review");
+    assert.equal(m.classifySubagent("claude-code-guide", "Liest Claude Code AGENTS.md?"), null);
+    assert.equal(m.classifySubagent(undefined, undefined), null);
+  });
+
+  test("Workflow-Labels werden per Präfix ihrer Phase zugeordnet", () => {
+    assert.equal(m.classifySubagent(undefined, "auswahl+claim"), "Auswahl");
+    assert.equal(m.classifySubagent(undefined, "preflight:#12"), "Planung");
+    assert.equal(m.classifySubagent(undefined, "umsetzen:#12"), "Umsetzung");
+    assert.equal(m.classifySubagent(undefined, "nachbessern 1/2:#12"), "Umsetzung");
+    assert.equal(m.classifySubagent(undefined, "lens:architektur"), "Review");
+    assert.equal(m.classifySubagent(undefined, "pr+merge:#12"), "CI/Merge");
+    assert.equal(m.classifySubagent(undefined, "ci-fix 2/3:#12"), "CI/Merge");
+  });
+
+  test("unklarer Subagent fällt in summarize auf den Zeitschnitt zurück", () => {
+    const s = m.summarize({ calls: [call("2026-09-29T12:30:00Z", 1, { subagent: { id: "g", agentType: "claude-code-guide" } })] }, BOUNDS);
+    assert.equal(s.rows[0].phase, "CI/Merge");
   });
 
   test("Hauptagent: Auswahl → Umsetzung → CI/Merge → Nachlauf an den Grenzen", () => {
@@ -102,6 +118,7 @@ describe("token-baseline: Phasen-Zuordnung", () => {
     assert.equal(m.countReviewRounds(["Lens 1", "Lens 2", "Lens 3"]), 1);
     assert.equal(m.countReviewRounds(["Lens 1", "Lens 2", "Lens 3", "Frischer Kritiker Runde 2"]), 2);
     assert.equal(m.countReviewRounds(["Lens 1", "Lens 2", "Lens 3", "Lens 1 (R2)"]), 2);
+    assert.equal(m.countReviewRounds(["Lens 1", "Lens 2", "Lens 3", "review-festgefahren:#12"]), 1);
   });
 });
 
@@ -119,10 +136,14 @@ describe("token-baseline: summarize", () => {
       call("2026-09-29T10:30:00Z", 9, { model: "claude-opus-5", subagent: plan }),
       // Lens läuft zeitlich nach dem PR — der Subagent schlägt die Zeit.
       call("2026-09-29T12:10:00Z", 1, { model: "claude-opus-5-5", subagent: lens }),
+      // Zweiter Call derselben Lens: bleibt EINE Lens (Dedupe über id), keine zweite Runde.
+      call("2026-09-29T12:10:30Z", 0, { model: "claude-opus-5-5", subagent: lens, input: 0, cacheWrite: 0, cacheRead: 0 }),
       call("2026-09-29T12:11:00Z", 0, { model: "claude-opus-5-5", subagent: lens2, input: 0, cacheWrite: 0, cacheRead: 0 }),
       call("2026-09-29T12:12:00Z", 0, { model: "claude-opus-5-5", subagent: lens3, input: 0, cacheWrite: 0, cacheRead: 0 }),
       // Subagent NACH dem Merge gehört in den Nachlauf, nicht in seine Phase.
       call("2026-09-29T13:30:00Z", 3, { model: "claude-haiku-4-5", subagent: plan }),
+      // Kritiker NACH dem Merge: Nachlauf, zählt keine Review-Runde.
+      call("2026-09-29T13:40:00Z", 0, { model: "claude-opus-5-5", subagent: { id: "k", description: "Kritiker Runde 2" }, input: 0, cacheWrite: 0, cacheRead: 0 }),
     ],
     questions: 2,
   };
@@ -138,6 +159,7 @@ describe("token-baseline: summarize", () => {
         "Review/claude-opus-5-5",
         "CI/Merge/claude-sonnet-5-5",
         "Nachlauf/claude-haiku-4-5",
+        "Nachlauf/claude-opus-5-5",
         "Nachlauf/claude-sonnet-5-5",
       ],
     );
@@ -146,7 +168,7 @@ describe("token-baseline: summarize", () => {
 
   test("Summe zählt den Nachlauf nicht mit, trennt Cache-Read/-Write", () => {
     const s = m.summarize(run, BOUNDS);
-    assert.equal(s.total.calls, 7);
+    assert.equal(s.total.calls, 8);
     assert.equal(s.total.output, 5 + 50 + 7 + 9 + 1);
     assert.equal(s.total.cacheRead, 500);
     assert.equal(s.total.cacheWrite, 50);
@@ -166,7 +188,7 @@ describe("token-baseline: summarize", () => {
   test("--from schneidet fremde Arbeit derselben Session weg (Session mit mehreren Tickets)", () => {
     const s = m.summarize(run, { ...BOUNDS, from: "2026-09-29T10:00:00Z" });
     assert.equal(s.rows.some((r) => r.phase === "Auswahl"), false);
-    assert.equal(s.total.calls, 6);
+    assert.equal(s.total.calls, 7);
   });
 
   test("kaputte Usage wird 0 statt NaN, fehlendes Modell heißt 'unbekannt', ohne Kosten kein $", () => {
@@ -194,11 +216,12 @@ describe("token-baseline: Quelle Transkript", () => {
   test("eine Nachricht über mehrere Zeilen zählt einmal, Output = Maximum", () => {
     const jsonl = [
       row("msg_1", "2026-09-29T10:00:00Z", 480),
-      row("msg_1", "2026-09-29T10:00:01Z", 12, [{ type: "tool_use", name: "Bash" }]),
+      row("msg_1", "2026-09-29T10:00:01Z", 12, [{ type: "tool_use", name: "AskUserQuestion" }]),
       row("msg_2", "2026-09-29T10:01:00Z", 7),
     ].join("\n");
-    const { calls } = m.callsFromTranscript(jsonl);
+    const { calls, questions } = m.callsFromTranscript(jsonl);
     assert.equal(calls.length, 2);
+    assert.equal(questions, 1, "Rückfrage auf einer Folgezeile derselben Nachricht zählt");
     assert.equal(calls[0].output, 480);
     assert.equal(calls[0].cacheRead, 400);
     assert.equal(calls[0].ts, "2026-09-29T10:00:00Z");
