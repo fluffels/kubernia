@@ -214,6 +214,8 @@ describe("Kein Markdown beschreibt CLAUDE.md noch in einer abgelegten Rolle (#99
       "die Import-Behauptung muss auch mit gebacktickter Import-Zeile zählen",
     );
     assert.equal(retiredRoleClaims("CLAUDE.md ist die Bruecke.").length, 1, "ASCII-Umschrift zählt auch");
+    assert.equal(retiredRoleClaims("CLAUDE.md: BRÜCKE zu AGENTS.md").length, 1, "Groß-/Kleinschreibung egal");
+    assert.deepEqual(retiredRoleClaims("CLAUDE.md steht in der ReImportliste."), [], "Import mitten im Wort ist kein Substantiv");
     assert.deepEqual(
       retiredRoleClaims("CLAUDE.md ist der Schnellstart.").map((v) => [v.line, v.term]),
       [[1, "Schnellstart"]],
