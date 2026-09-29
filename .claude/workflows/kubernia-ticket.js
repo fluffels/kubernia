@@ -105,7 +105,7 @@ const UMSETZUNG_SCHEMA = {
     beruehrtHarness: {
       type: 'boolean',
       description:
-        'true, wenn git diff --name-only main einen Harness-/Gate-Pfad trifft (#1069: dann maintainer-approved selbst setzen + Audit-Kommentar nach dem Merge)',
+        'true, wenn git diff --name-only origin/main...HEAD einen Harness-/Gate-Pfad trifft (#1069: dann maintainer-approved selbst setzen + Audit-Kommentar nach dem Merge)',
     },
     browserVerifiziert: {
       type: 'string',
