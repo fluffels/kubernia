@@ -1,0 +1,27 @@
+{
+  "gate": [
+    "/.dependency-cruiser.cjs",
+    "/scripts/layers.cjs",
+    "/scripts/check-*.mjs",
+    "/eslint.config.js",
+    "/eslint-suppressions.json",
+    "/any-suppressions.json",
+    "/vite.config.ts",
+    "/.jscpd.json",
+    "/.github/workflows/*.yml",
+    "/.github/CODEOWNERS",
+    "/.github/protected-paths.json"
+  ],
+  "harness": [
+    "/AGENTS.md",
+    "/CLAUDE.md",
+    "/CLAUDE.local.md",
+    "/.claude/",
+    "/.agents/",
+    "/docs/agent-harness*"
+  ],
+  "waechter": [
+    "/test/agents-md-native.test.ts",
+    "/test/harness-approval.test.ts"
+  ]
+}

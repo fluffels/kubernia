@@ -8,16 +8,17 @@
  *   1. **Die portable Regel verschwindet.** Die Verhaltensregel (Pre-Flight-Klärung + Audit-
  *      Kommentar nach dem Selbst-Merge) lebt tool-neutral in AGENTS.md. Wird sie umformuliert bis
  *      der Marker fehlt, liest ein fremder Agent (der nur AGENTS.md kennt) sie nicht mehr.
- *   2. **Die Durchsetzungs-Listen driften auseinander.** Der CI-Riegel `gate-change-guard`
- *      (.github/workflows/gate-change-guard.yml, Array PROTECTED) ist laut eigenem Kommentar
- *      „Spiegel der CODEOWNERS-Liste"; `HARNESS_PFADE` im Ticket-Workflow spiegelt ihn (#1116).
- *      Ergänzt jemand einen Leitplanken-Pfad nur in einer der Dateien, greift der Riegel
- *      halb – von außen (grüne Checks) nicht von einem echten Schutz zu unterscheiden. Hier ROT.
+ *   2. **Die Durchsetzungs-Artefakte driften von der Quelle weg.** Seit #1157 stehen die geschützten
+ *      Pfade genau einmal in `.github/protected-paths.json`. Der CI-Riegel `gate-change-guard` liest
+ *      sie zur Laufzeit vom **Base**-Commit (über die Quelle kann sich ein PR so nicht entschützen);
+ *      `.github/CODEOWNERS` bleibt handgepflegt (GitHub kann keine Datei einbinden) und wird hier
+ *      gegen die Quelle geprüft. Die frühere dritte Liste `HARNESS_PFADE` im Ticket-Workflow ist
+ *      entfallen – die Workflow-Sandbox kann keine Dateien lesen, der Prompt verweist auf die Quelle.
  *
- * Zusätzlich wird geprüft, dass alle Listen die Leitplanken-Dateien (über die reine Gate-Config
+ * Zusätzlich wird geprüft, dass die Quelle die Leitplanken-Dateien (über die reine Gate-Config
  * hinaus: AGENTS.md, CLAUDE.md, CLAUDE.local.md, .claude/, .agents/, docs/agent-harness) wirklich
  * enthalten – sonst wäre die Regel dokumentiert, aber der Riegel liefe ins Leere. Seit #1156
- * schützen die Listen auch die Wächter-Tests selbst (diese Datei eingeschlossen), und kein Eintrag
+ * schützt die Quelle auch die Wächter-Tests selbst (diese Datei eingeschlossen), und kein Eintrag
  * darf pauschal den ganzen test/-Ordner sperren.
  *
  * Fitness-Function-Kategorie neben agents-md-native/docmap/readme (#1087/#482), nicht mit
@@ -30,7 +31,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -60,33 +61,18 @@ function codeownersPaths(text: string): Set<string> {
   return set;
 }
 
-/** Die geschützten Pfade aus dem `PROTECTED=( '...' … )`-Bash-Array in gate-change-guard.yml. */
-function guardProtectedPaths(text: string): Set<string> {
-  // Bis zur schliessenden Klammer auf EIGENER Zeile (^\s*\)) – nicht bis zum ersten `)`,
-  // sonst schneidet ein Kommentar mit Klammer wie "(#903)" das Array zu frueh ab.
-  const block = text.match(/PROTECTED=\(\s*([\s\S]*?)^\s*\)/m);
-  assert.ok(block, "PROTECTED=(...)-Array im gate-change-guard (gate-change-guard.yml) nicht gefunden");
-  const set = new Set<string>();
-  for (const m of block[1].matchAll(/'([^']+)'/g)) set.add(normalizeProtected(m[1]));
-  return set;
-}
+/** Die Quelle der geschützten Pfade (#1157): Gruppe → Pfade in CODEOWNERS-Schreibweise. */
+type ProtectedSource = Record<string, string[]>;
 
-/**
- * Die Harness-Pfade aus `const HARNESS_PFADE = [ '...' … ]` im Ticket-Workflow – die dritte
- * Spiegel-Liste, nach der der Workflow `maintainer-approved` selbst setzt (#1069, Sync seit #1116).
- */
-function workflowHarnessPaths(text: string): Set<string> {
-  const block = text.match(/const HARNESS_PFADE = \[([\s\S]*?)^\]/m);
-  assert.ok(block, "const HARNESS_PFADE = [...] in .claude/workflows/kubernia-ticket.js nicht gefunden");
-  const set = new Set<string>();
-  for (const m of block[1].matchAll(/'([^']+)'/g)) set.add(normalizeProtected(m[1]));
-  return set;
+/** Alle Pfade der Quelle in Substring-Form – dieselbe Abbildung, die der Guard per jq vornimmt. */
+function sourcePaths(src: ProtectedSource): Set<string> {
+  return new Set(Object.values(src).flat().map(normalizeProtected));
 }
 
 /**
  * Leitplanken-Dateien, die über die reine Gate-Config hinaus den sichtbaren Sign-off tragen
  * (Ticket #1012 / Maintainerin-Entscheidung „breit"). In Substring-Form – so wie
- * beide Listen sie nach der Normalisierung führen müssen.
+ * die Quelle sie nach der Normalisierung führen muss.
  */
 // CLAUDE.md bleibt geschützt, obwohl sie seit #1087 gelöscht ist: ihre Wiederanlage würde
 // AGENTS.md als geladene SSOT verdrängen und muss darum die Label-Pflicht auslösen.
@@ -98,11 +84,11 @@ const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/", ".
  * schon geschütztes `scripts/check-*.mjs` dahinter. Liefen sie ungeschützt, könnte ein PR den
  * Riegel ohne `maintainer-approved` still abschwächen: agents-md-native bewacht die eine
  * Root-Kontextdatei (auch den ungetrackten CLAUDE.local.md-Fall, den kein PR-Diff zeigt),
- * dieser Test hier den Sync der drei Listen. Bewusst einzeln statt als Muster: ein Glob
+ * dieser Test hier den Sync von Quelle und CODEOWNERS. Bewusst einzeln statt als Muster: ein Glob
  * würde von `normalizeProtected` auf `test/` gekürzt und jeden Test-PR label-pflichtig machen.
  * Tests mit geschütztem check-Skript dahinter (filesize, docmap, diffsize, …) gehören nicht hierher.
  * Bewusst vorerst nur diese zwei (Maintainerin-Entscheidung #1156): weitere Wächter ohne
- * check-Skript (z.B. settings-permissions, diffbasis) kommen mit der Namensregel test/harness/ bzw. #1157.
+ * check-Skript (z.B. settings-permissions, diffbasis) kommen mit der Namensregel test/harness/.
  */
 const WAECHTER_TESTS = ["test/agents-md-native.test.ts", "test/harness-approval.test.ts"];
 
@@ -127,38 +113,42 @@ const AGENTS_MARKER = [
 
 const codeowners = read(".github/CODEOWNERS");
 const guardWf = read(".github/workflows/gate-change-guard.yml");
+const QUELLE = ".github/protected-paths.json";
+const quelle = JSON.parse(read(QUELLE)) as ProtectedSource;
 const agentsMd = read("AGENTS.md");
 const ticketWf = read(".claude/workflows/kubernia-ticket.js");
 
-describe("Harness-Freigabe – die Durchsetzungs-Listen bleiben synchron (#1012, #1116)", () => {
-  test("CODEOWNERS und gate-change-guard/PROTECTED schützen dieselben Pfade", () => {
+describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #1157)", () => {
+  test("die Quelle ist eine nicht-leere Gruppe→Pfade-Liste in CODEOWNERS-Schreibweise", () => {
+    const gruppen = Object.entries(quelle);
+    assert.ok(gruppen.length > 0, `${QUELLE} ist leer`);
+    for (const [gruppe, pfade] of gruppen) {
+      assert.ok(Array.isArray(pfade) && pfade.length > 0, `${QUELLE}: Gruppe '${gruppe}' ist keine nicht-leere Liste`);
+      for (const p of pfade) {
+        assert.match(p, /^\/\S+$/, `${QUELLE}: '${p}' muss wie in CODEOWNERS mit '/' beginnen`);
+        // Der Guard verwirft leere Muster – ein Eintrag wie '/*' fiele sonst still aus dem Schutz.
+        assert.notEqual(normalizeProtected(p), "", `${QUELLE}: '${p}' normalisiert zu einem leeren Muster`);
+      }
+    }
+  });
+
+  test("CODEOWNERS schützt genau die Pfade der Quelle", () => {
     assert.deepEqual(
       [...codeownersPaths(codeowners)].sort(),
-      [...guardProtectedPaths(guardWf)].sort(),
-      "Die geschützten Pfade in .github/CODEOWNERS und im PROTECTED-Array (.github/workflows/gate-change-guard.yml) sind auseinandergelaufen. " +
-        "Der CI-Kommentar nennt PROTECTED ausdrücklich 'Spiegel der CODEOWNERS-Liste' - beide Listen zusammen pflegen.",
+      [...sourcePaths(quelle)].sort(),
+      `.github/CODEOWNERS und ${QUELLE} sind auseinandergelaufen – neue Leitplanken in der Quelle eintragen ` +
+        "und die CODEOWNERS-Zeile nachziehen (GitHub kann CODEOWNERS nicht aus einer Datei einbinden).",
     );
   });
 
-  test("HARNESS_PFADE im Ticket-Workflow spiegelt PROTECTED (#1116)", () => {
-    assert.deepEqual(
-      [...workflowHarnessPaths(ticketWf)].sort(),
-      [...guardProtectedPaths(guardWf)].sort(),
-      "HARNESS_PFADE in .claude/workflows/kubernia-ticket.js und das PROTECTED-Array in gate-change-guard.yml sind auseinandergelaufen - " +
-        "sonst setzt der Workflow maintainer-approved für einen Pfad nicht, den der Guard sperrt (oder umgekehrt).",
-    );
+  test("die Quelle schützt sich selbst", () => {
+    // Sonst streicht ein PR still einen Pfad aus der Quelle, ohne dass das Label fällig wird.
+    assert.ok(sourcePaths(quelle).has(QUELLE), `${QUELLE} fehlt in sich selbst`);
   });
 
-  test("alle Listen decken die Leitplanken-Dateien ab (nicht nur Gate-Config)", () => {
-    const co = codeownersPaths(codeowners);
-    const cp = guardProtectedPaths(guardWf);
-    const hp = workflowHarnessPaths(ticketWf);
-    const fehlend: string[] = [];
-    for (const p of LEITPLANKEN) {
-      if (!co.has(p)) fehlend.push(`.github/CODEOWNERS: ${p}`);
-      if (!cp.has(p)) fehlend.push(`gate-change-guard.yml PROTECTED: ${p}`);
-      if (!hp.has(p)) fehlend.push(`kubernia-ticket.js HARNESS_PFADE: ${p}`);
-    }
+  test("die Quelle deckt die Leitplanken-Dateien ab (nicht nur Gate-Config)", () => {
+    const sp = sourcePaths(quelle);
+    const fehlend = LEITPLANKEN.filter((p) => !sp.has(p));
     assert.deepEqual(
       fehlend,
       [],
@@ -167,16 +157,9 @@ describe("Harness-Freigabe – die Durchsetzungs-Listen bleiben synchron (#1012,
     );
   });
 
-  test("alle Listen schützen die Wächter-Tests selbst (#1156)", () => {
-    const co = codeownersPaths(codeowners);
-    const cp = guardProtectedPaths(guardWf);
-    const hp = workflowHarnessPaths(ticketWf);
-    const fehlend: string[] = [];
-    for (const p of WAECHTER_TESTS) {
-      if (!co.has(p)) fehlend.push(`.github/CODEOWNERS: ${p}`);
-      if (!cp.has(p)) fehlend.push(`gate-change-guard.yml PROTECTED: ${p}`);
-      if (!hp.has(p)) fehlend.push(`kubernia-ticket.js HARNESS_PFADE: ${p}`);
-    }
+  test("die Quelle schützt die Wächter-Tests selbst (#1156)", () => {
+    const sp = sourcePaths(quelle);
+    const fehlend = WAECHTER_TESTS.filter((p) => !sp.has(p));
     assert.deepEqual(
       fehlend,
       [],
@@ -185,21 +168,50 @@ describe("Harness-Freigabe – die Durchsetzungs-Listen bleiben synchron (#1012,
     );
   });
 
-  test("kein Listen-Eintrag schützt pauschal den ganzen test/-Ordner (#1156)", () => {
+  test("kein Eintrag schützt pauschal den ganzen test/-Ordner (#1156)", () => {
     // Ein Muster wie /test/*harness*.test.ts normalisiert auf `test/` – dann bräuchte jeder PR mit
     // Teständerung das Label, und ein immer nötiges Label markiert nichts mehr (Label-Fatigue).
-    const alle = [...codeownersPaths(codeowners), ...guardProtectedPaths(guardWf), ...workflowHarnessPaths(ticketWf)];
+    const alle = [...sourcePaths(quelle), ...codeownersPaths(codeowners)];
     assert.deepEqual(
       alle.filter(decktTestOrdnerAb),
       [],
-      "Ein Schutzlisten-Eintrag deckt den ganzen test/-Ordner ab – Wächter-Tests einzeln eintragen (#1156)",
+      "Ein Schutz-Eintrag deckt den ganzen test/-Ordner ab – Wächter-Tests einzeln eintragen (#1156)",
     );
   });
 
   test("die geschützten Wächter-Tests existieren wirklich (#1156)", () => {
-    // Nach einem Umbenennen stünde sonst ein verwaister Pfad in allen Listen – grün, aber ohne Schutz.
+    // Nach einem Umbenennen stünde sonst ein verwaister Pfad in der Quelle – grün, aber ohne Schutz.
     const fehlend = WAECHTER_TESTS.filter((p) => !existsSync(fileURLToPath(new URL(`../${p}`, import.meta.url))));
     assert.deepEqual(fehlend, [], `Geschützte Wächter-Tests gibt es nicht (umbenannt?):\n${fehlend.join("\n")}`);
+  });
+
+  test("der Guard führt keine eigene Pfadliste mehr, sondern liest die Quelle", () => {
+    assert.doesNotMatch(guardWf, /PROTECTED=\(\s*'/, "gate-change-guard.yml führt wieder ein handgepflegtes PROTECTED-Array");
+    assert.ok(guardWf.includes(`QUELLE=${QUELLE}`), `gate-change-guard.yml verweist nicht auf ${QUELLE}`);
+  });
+
+  test("der Guard liest die Quelle vom Base-Commit – über die Quelle kann sich ein PR nicht entschützen", () => {
+    // Der Checkout ist der PR-Merge-Ref (Head-Inhalt). Läse der Guard nur die Arbeitskopie, könnte ein PR
+    // die Quelle leeren und gleichzeitig eine Gate-Datei ändern – grün ohne Label.
+    assert.match(guardWf, /git show "\$BASE_SHA:\$QUELLE"/, "Guard liest die Quelle nicht per git show vom BASE_SHA");
+  });
+
+  test("der Guard ist fail-closed: fehlende oder leere Base-Quelle macht jede Datei label-pflichtig", () => {
+    assert.match(guardWf, /alles_geschuetzt=1/, "Guard hat keinen fail-closed-Zweig für eine fehlende/leere Base-Quelle");
+  });
+
+  test("der Guard leitet die Substring-Form genau wie normalizeProtected ab", () => {
+    // jq-Filter im Guard und normalizeProtected hier müssen dieselbe Abbildung sein, sonst prüft der
+    // CODEOWNERS-Sync etwas anderes, als der Guard matcht.
+    assert.ok(
+      guardWf.includes(String.raw`sub("^/"; "") | sub("\\*.*$"; "")`),
+      "jq-Normalisierung im Guard weicht von normalizeProtected ab (führenden '/' weg, ab '*' abschneiden)",
+    );
+  });
+
+  test("der Ticket-Workflow führt keine Spiegel-Liste mehr, sondern verweist auf die Quelle", () => {
+    assert.doesNotMatch(ticketWf, /HARNESS_PFADE/, "kubernia-ticket.js führt wieder eine eigene Pfadliste (HARNESS_PFADE)");
+    assert.ok(ticketWf.includes(QUELLE), `kubernia-ticket.js verweist im Umsetzungs-Prompt nicht auf ${QUELLE}`);
   });
 });
 
@@ -243,23 +255,19 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
       [...codeownersPaths("# Kopf\n\n/foo.js   @fluffels\n/bar/*.yml  @fluffels")].sort(),
       ["bar/", "foo.js"],
     );
-    assert.deepEqual([...guardProtectedPaths("x\nPROTECTED=(\n  'a.js'\n  'b/'\n)\ny")].sort(), ["a.js", "b/"]);
-    assert.deepEqual(
-      [...workflowHarnessPaths("// 'kommentar/'\nconst HARNESS_PFADE = [\n  'a.js',\n  'b/',\n]\nconst X = ['c']")].sort(),
-      ["a.js", "b/"],
-    );
+    assert.deepEqual([...sourcePaths({ gate: ["/a.js", "/c/*.yml"], harness: ["/b/"] })].sort(), ["a.js", "b/", "c/"]);
   });
 
   test("CLAUDE.md deckt CLAUDE.local.md im Substring-Guard NICHT mit ab (#1116)", () => {
-    // Der Grund für den eigenen Eintrag: PROTECTED matcht per Substring auf den geänderten Pfad.
+    // Der Grund für den eigenen Eintrag: der Guard matcht per Substring auf den geänderten Pfad.
     assert.equal("CLAUDE.local.md".includes("CLAUDE.md"), false);
   });
 
-  test("ein einseitig ergänzter Pfad würde als Drift auffallen", () => {
-    // Beweist, dass der Sync-Test nicht immer grün ist: fehlt ein Pfad in einer Liste, kippt der Vergleich.
-    const co = new Set(["AGENTS.md", "CLAUDE.md"]);
-    const cp = new Set(["AGENTS.md"]);
-    assert.notDeepEqual([...co].sort(), [...cp].sort());
+  test("ein nur in der Quelle ergänzter Pfad würde als Drift auffallen", () => {
+    // Beweist, dass der Sync-Test nicht immer grün ist: fehlt ein Pfad in CODEOWNERS, kippt der Vergleich.
+    const co = codeownersPaths("/AGENTS.md  @fluffels");
+    const sp = sourcePaths({ harness: ["/AGENTS.md", "/CLAUDE.md"] });
+    assert.notDeepEqual([...co].sort(), [...sp].sort());
   });
 
   test("ein Glob-Muster für Tests würde auf den ganzen test/-Ordner kürzen (#1156)", () => {
@@ -351,4 +359,121 @@ describe("Der Guard diffed gegen die Merge-Base, nicht gegen den main-Tip (#1095
   test("der Checkout holt die volle Historie (ohne sie findet der Drei-Punkt-Diff keine Merge-Base)", () => {
     assert.match(guardWf, /fetch-depth:\s*0\b/, "gate-change-guard.yml: actions/checkout braucht fetch-depth: 0");
   });
+});
+
+describe("Der Guard liest die Quelle wirklich richtig – echter Lauf mit bash + jq (#1157)", () => {
+  // Führt das run:-Skript des Guards wirklich aus (Fixture-Repo, gefälschtes `gh`). jq/bash gibt es auf
+  // ubuntu-latest; lokal ohne jq wird der Block sichtbar übersprungen. In CI MUSS er laufen (Test unten),
+  // sonst fiele der einzige Verhaltensbeweis des Guards still weg.
+  const hatJq = (() => {
+    try {
+      execFileSync("jq", ["--version"], { stdio: "ignore" });
+      execFileSync("bash", ["--version"], { stdio: "ignore" });
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+
+  /** Das `run: |`-Skript des Guard-Steps, um die YAML-Einrückung bereinigt. */
+  function guardSkript(wf: string): string {
+    const blk = wf.split(/\r?\n {8}run: \|\r?\n/)[1];
+    assert.ok(blk, "run: |-Block in gate-change-guard.yml nicht gefunden");
+    return blk
+      .split(/\r?\n/)
+      .map((l) => l.replace(/^ {10}/, ""))
+      .join("\n");
+  }
+
+  const ECHTE_QUELLE = JSON.stringify(quelle);
+  const SIGN_OFF_FEHLT = "Gate-/Harness-Aenderung ohne Sign-off";
+
+  /**
+   * Baut Base (Quelle mit `baseQuelle` als Inhalt, `null` = keine Quelle) + PR-Commit, lässt den Guard
+   * ohne Label laufen und liefert Exit-Code + Ausgabe (die Ausgabe trennt „Label fehlt" von einem Absturz).
+   */
+  function guardLauf(baseQuelle: string | null, pr: Record<string, string>): { exit: number; out: string } {
+    const dir = mkdtempSync(join(tmpdir(), "kq-guard-e2e-"));
+    const env: NodeJS.ProcessEnv = Object.fromEntries(
+      Object.entries(process.env).filter(([k]) => !/^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|PREFIX)$/.test(k)),
+    );
+    const git = (...args: string[]) =>
+      execFileSync("git", args, { cwd: dir, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    const schreibe = (dateien: Record<string, string>) => {
+      for (const [rel, inhalt] of Object.entries(dateien)) {
+        mkdirSync(join(dir, rel, ".."), { recursive: true });
+        writeFileSync(join(dir, rel), inhalt);
+      }
+    };
+    try {
+      git("init", "-q", "-b", "main");
+      git("config", "user.email", "t@example.invalid");
+      git("config", "user.name", "t");
+      git("config", "commit.gpgsign", "false");
+      schreibe({ "README.md": "x\n", "eslint.config.js": "e\n", ...(baseQuelle === null ? {} : { [QUELLE]: baseQuelle }) });
+      git("add", "-A");
+      git("commit", "-q", "-m", "basis");
+      const base = git("rev-parse", "HEAD");
+      git("checkout", "-q", "-b", "pr");
+      schreibe(pr);
+      git("add", "-A");
+      git("commit", "-q", "-m", "pr");
+      const head = git("rev-parse", "HEAD");
+      // Gefälschtes gh: meldet „kein maintainer-approved-Label".
+      const bin = join(dir, ".fake-bin");
+      mkdirSync(bin);
+      writeFileSync(join(bin, "gh"), "#!/bin/sh\necho false\n", { mode: 0o755 });
+      const skript = join(dir, ".guard.sh");
+      writeFileSync(skript, guardSkript(guardWf));
+      const lauf = spawnSync("bash", [skript], {
+        cwd: dir,
+        env: { ...env, PATH: `${bin}:${env.PATH ?? ""}`, BASE_SHA: base, HEAD_SHA: head, PR_NUMBER: "1", REPO: "x/y" },
+        encoding: "utf8",
+      });
+      return { exit: lauf.status ?? -1, out: `${lauf.stdout}${lauf.stderr}` };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  /** Erwartet „rot, weil das Label fehlt" – und dass die genannte Datei als geschützt gemeldet wird. */
+  function erwarteSignOffFehlt(lauf: { exit: number; out: string }, datei: string): void {
+    assert.equal(lauf.exit, 1, `Guard sollte rot sein:\n${lauf.out}`);
+    assert.ok(lauf.out.includes(SIGN_OFF_FEHLT), `Guard ist rot, aber nicht wegen des fehlenden Labels (Absturz?):\n${lauf.out}`);
+    assert.ok(lauf.out.includes(datei), `Guard meldet ${datei} nicht als geschützt:\n${lauf.out}`);
+  }
+
+  test("in CI läuft dieser Block wirklich (jq + bash vorhanden)", () => {
+    if (process.env.CI) assert.ok(hatJq, "CI ohne jq/bash – der Verhaltensbeweis des Guards würde still übersprungen");
+  });
+
+  test.skipIf(!hatJq)("ein harmloser PR bleibt grün (Gegenprobe: der Guard ist nicht immer rot)", () => {
+    const lauf = guardLauf(ECHTE_QUELLE, { "README.md": "y\n" });
+    assert.equal(lauf.exit, 0, lauf.out);
+  });
+
+  test.skipIf(!hatJq)("ein Wildcard-Pfad greift (/scripts/check-*.mjs trifft scripts/check-neu.mjs)", () => {
+    erwarteSignOffFehlt(guardLauf(ECHTE_QUELLE, { "scripts/check-neu.mjs": "x\n" }), "scripts/check-neu.mjs");
+  });
+
+  test.skipIf(!hatJq)("ein PR, der die Quelle leert und eine Gate-Datei ändert, bleibt ohne Label rot", () => {
+    const lauf = guardLauf(ECHTE_QUELLE, { [QUELLE]: '{"gate":["/nix"]}', "eslint.config.js": "aufgeweicht\n" });
+    erwarteSignOffFehlt(lauf, "eslint.config.js");
+  });
+
+  test.skipIf(!hatJq)("ein im PR neu eingetragener Pfad greift schon im selben PR (Head additiv)", () => {
+    const erweitert = JSON.stringify({ ...quelle, harness: [...(quelle.harness ?? []), "/neu.txt"] });
+    erwarteSignOffFehlt(guardLauf(ECHTE_QUELLE, { [QUELLE]: erweitert, "neu.txt": "x\n" }), "neu.txt");
+  });
+
+  for (const [fall, inhalt] of [
+    ["fehlt", null],
+    ["ist leer ({})", "{}"],
+    ["ist kaputtes JSON", "kaputt{"],
+    ["hat nur leere Gruppen", '{"gate":[]}'],
+  ] as const) {
+    test.skipIf(!hatJq)(`Base-Quelle ${fall} → jede Änderung ist label-pflichtig (fail-closed)`, () => {
+      erwarteSignOffFehlt(guardLauf(inhalt, { "README.md": "y\n" }), "README.md");
+    });
+  }
 });
