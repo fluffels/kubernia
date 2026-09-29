@@ -1,5 +1,7 @@
 # Kubernia — unabhängige iSAQB-Architektur-Analyse (2026-07-14)
 
+> 📸 **Momentaufnahme vom 2026-07-14 — wird nicht aktualisiert** (Lebenszyklus-Regel: [ADR 0013](adr/0013-docs-als-agentengepflegtes-wiki.md)). Neue Erkenntnisse kommen als datierter Nachtrag dazu, überschreiben den Text aber nicht.
+
 > **Auftrag:** Alle bisherigen ADRs, Analysen und Entscheidungen bewusst **ignorieren**, die Architektur aus dem **echten Code** neu und **sehr kritisch** bewerten („was da ist, kann falsch sein"), dann mit dem Doku-Stand abgleichen. Diese Datei ist die vierte doku-freie Runde und ergänzt die frühere [architektur-analyse-2026-07-iSAQB.md](architektur-analyse-2026-07-iSAQB.md).
 >
 > **Methode:** Fünf unabhängige Schicht-Durchläufe am Code (sim · world/scenes/game · ui/hud · store/content · build/CI/tooling), plus gezielte Verifikation der harten Doku-Behauptungen (Determinismus, Coverage, Schichtung, `any`-Disziplin, Release-Pfad) gegen die Realität. Alle Befunde sind mit Datei:Zeile belegt.

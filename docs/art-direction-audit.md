@@ -1,5 +1,7 @@
 # Art-Direction-Audit: Optik gegen die Stardew-Messlatte (#44)
 
+> 📸 **Momentaufnahme vom 2026-06-15 — wird nicht aktualisiert** (Lebenszyklus-Regel: [ADR 0013](adr/0013-docs-als-agentengepflegtes-wiki.md)). Neue Erkenntnisse kommen als datierter Nachtrag dazu, überschreiben den Text aber nicht. Der aktuelle Status der genannten Folge-Tickets steht in GitHub, nicht hier.
+
 > Abweichungsliste, kein Feature-Bau. Grundlage für die Folge-Optik-Tickets.
 > Stand: Juni 2026, Code-Stand `main` zum Zeitpunkt von #44.
 > Die **Messlatte selbst** steht in [`AGENTS.md` §Grafik-Stil](../AGENTS.md#konventionen) – hier wird die bestehende Optik dagegen geprüft.

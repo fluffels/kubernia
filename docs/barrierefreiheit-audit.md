@@ -1,5 +1,7 @@
 # Barrierefreiheit-Audit (#481)
 
+> 📸 **Momentaufnahme vom 2026-07-01 — wird nicht aktualisiert** (Lebenszyklus-Regel: [ADR 0013](adr/0013-docs-als-agentengepflegtes-wiki.md)). Neue Erkenntnisse kommen als datierter Nachtrag dazu, überschreiben den Text aber nicht.
+
 > **Was ist das hier?** Eine einmalige, ganzheitliche Prüfung der Zugänglichkeit von
 > Kubernia über drei Dimensionen: **(1)** wird Status irgendwo **nur über Farbe**
 > kodiert (ohne Form/Icon/Text), **(2)** ist das Spiel **vollständig per Tastatur**
