@@ -89,7 +89,11 @@ jobs:
             'docs/agent-harness'
           )
 
-          changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          # Drei-Punkt-Diff (#1095): nur was der PR seit der Merge-Base aendert. Der
+          # Zwei-Punkt-Diff gegen base.sha (= main-Tip) zaehlte Dateien fremder, nach dem
+          # Abzweigen gemergter main-Commits mit (PR #1093). fetch-depth: 0 oben liefert
+          # die Historie fuer die Merge-Base; bewacht von test/harness-approval.test.ts.
+          changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
           gate_files=()
           while IFS= read -r f; do
             for pat in "${PROTECTED[@]}"; do
