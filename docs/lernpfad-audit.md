@@ -1,6 +1,6 @@
 # Lernpfad-Audit: Lernreihenfolge des ganzen Spiels (#227)
 
-> 📸 **Momentaufnahme vom 2026-06-18 — wird nicht aktualisiert** (Lebenszyklus-Regel: [ADR 0013](adr/0013-docs-als-agentengepflegtes-wiki.md)). Neue Erkenntnisse kommen als datierter Nachtrag dazu, überschreiben den Text aber nicht. Der aktuelle Status der genannten Folge-Tickets steht in GitHub, nicht hier.
+> 📸 **Momentaufnahme vom 2026-06-18 — wird nicht aktualisiert** ([Lebenszyklus-Regel](referenz/doku-vorlagen.md#schnappschuss-analyse-audit-review)). Der aktuelle Status der genannten Folge-Tickets steht in GitHub, nicht hier.
 
 > **Was ist das hier?** Eine einmalige, ganzheitliche Prüfung der Lernreihenfolge: Wird
 > irgendwo ein Befehl/Konzept **benutzt oder vorausgesetzt, bevor er eingeführt wurde**

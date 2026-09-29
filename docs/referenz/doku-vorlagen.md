@@ -22,9 +22,10 @@ Direkt unter der H1:
 Direkt unter der H1, als erste Zeile vor allen anderen Kopfzeilen:
 
 ```markdown
-> 📸 **Momentaufnahme vom JJJJ-MM-TT — wird nicht aktualisiert** (Lebenszyklus-Regel: [ADR 0013](adr/0013-docs-als-agentengepflegtes-wiki.md)). Neue Erkenntnisse kommen als datierter Nachtrag dazu, überschreiben den Text aber nicht.
+> 📸 **Momentaufnahme vom JJJJ-MM-TT — wird nicht aktualisiert** ([Lebenszyklus-Regel](referenz/doku-vorlagen.md#schnappschuss-analyse-audit-review)).
 ```
 
+- **Was die Zeile bedeutet:** der Text bleibt so, wie er zum Datum war. Neue Erkenntnisse kommen als datierter Nachtrag dazu, überschreiben ihn aber nicht. Wer den Stand von heute braucht, liest die lebende Doku oder GitHub.
 - Das Datum ist der **Stand der Analyse**, nicht der letzte Commit.
 - Führt die Seite Folge-Tickets mit Status, den Zusatz anhängen: „Der aktuelle Status der genannten Folge-Tickets steht in GitHub, nicht hier." (laufender Stand gehört nach GitHub, nie ins Wiki).
-- Der Link-Pfad oben gilt für Seiten direkt unter `docs/`; tiefer liegende Seiten passen ihn an.
+- Die Hinweiszeile verlinkt bewusst nur hierher, damit der Regeltext genau einmal steht. Der Link-Pfad oben gilt für Seiten direkt unter `docs/`; tiefer liegende Seiten passen ihn an.
