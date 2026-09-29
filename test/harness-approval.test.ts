@@ -192,9 +192,15 @@ describe("Der Guard diffed gegen die Merge-Base, nicht gegen den main-Tip (#1095
     // Repro von PR #1093: der PR ändert nur Doku, auf main landet derweil eine .claude/-Änderung.
     // Mit Zwei-Punkt-Diff (base.sha = main-Tip) meldete der Guard die fremde Datei und blieb rot.
     const dir = mkdtempSync(join(tmpdir(), "kq-guard-"));
+    // GIT_DIR & Co. aus einem umgebenden git-Hook (pre-push → verify) nicht erben –
+    // sonst liefen die Fixture-Befehle gegen das echte Repo statt gegen `dir`.
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(([k]) => !/^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|PREFIX)$/.test(k)),
+    );
     const git = (...args: string[]) =>
       execFileSync("git", args, {
         cwd: dir,
+        env,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
       }).trim();
@@ -230,5 +236,9 @@ describe("Der Guard diffed gegen die Merge-Base, nicht gegen den main-Tip (#1095
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("der Checkout holt die volle Historie (ohne sie findet der Drei-Punkt-Diff keine Merge-Base)", () => {
+    assert.match(guardWf, /fetch-depth:\s*0\b/, "gate-change-guard.yml: actions/checkout braucht fetch-depth: 0");
   });
 });
