@@ -13,8 +13,15 @@
  * docs/module/*.md, #394) – nur erzwang bisher nichts, ihn auch zu benutzen, BEVOR die
  * Wurzel wächst.
  *
- * Bewusst ein reines Node-Skript (nur Builtins), analog zu check-size.mjs – misst mit
- * derselben `countLines`-Logik (Re-Export von dort, keine zweite Zähl-Implementierung).
+ * Gemessen werden ZEICHEN, nicht Zeilen (#1064, vorher #977/#1061): in Markdown-Fließtext
+ * ist eine „Zeile" ein Absatz – AGENTS.md stand bei 159/200 Zeilen schon bei 75k Zeichen,
+ * das Zeilen-Gate war nie bindend, weil die Datei in die Breite wuchs. Zeichen sind der
+ * beste Token-Proxy, der in die build-freie `verify`-Kette passt (echte Tokens bräuchten
+ * Netz + API-Key bzw. einen Tokenizer als Dependency). Die Token-Zahl gibt die CLI nur als
+ * grobe INFO aus (≈ Zeichen / CHARS_PER_TOKEN) – das Budget selbst bleibt in Zeichen.
+ * CR (`\r`) zählt nicht mit: sonst misst ein Windows-Checkout (core.autocrlf) mehr als die CI.
+ *
+ * Bewusst ein reines Node-Skript (nur Builtins), analog zu check-size.mjs.
  * Die Mess-/Allowlist-Logik wird zusätzlich von test/context-size.test.ts importiert –
  * EINE Quelle der Wahrheit für Budget + Ausnahmen.
  *
@@ -24,18 +31,28 @@
 import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
-import { countLines } from "./check-size.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Zeilen-Budget je Root-Kontextdatei (repo-relativer Pfad). Kalibriert am Bestand nach
- *  Kontext-Diät #906 (AGENTS.md ~153, CLAUDE.md ~310 Zeilen) + kleine Kopffreiheit –
- *  fängt unbegrenztes Anwachsen ab, nicht den nächsten normalen Absatz.
+/** Zeichen-Budget je Root-Kontextdatei (repo-relativer Pfad, #1064). Kalibriert am Bestand
+ *  bei der Umstellung von Zeilen auf Zeichen (AGENTS.md 73.612, CLAUDE.md 18.068 Zeichen) +
+ *  kleine Kopffreiheit. Das ist KEIN Aufweichen: das alte Zeilen-Budget hat die Größe nie
+ *  gemessen. AGENTS.md wird im zweiten #1064-Slice auf ≤ 36.000 Zeichen gekürzt und das
+ *  Budget dann auf 40.000 gezogen (Ratchet nach unten).
  *  Weitere immer geladene Dateien (z.B. README) können hier bei Bedarf ergänzt werden. */
 export const CONTEXT_BUDGETS = [
-  { file: "AGENTS.md", budget: 200 },
-  { file: "CLAUDE.md", budget: 350 },
+  { file: "AGENTS.md", budget: 76_000 },
+  { file: "CLAUDE.md", budget: 21_000 },
 ];
+
+/** Grobe Umrechnung nur für die INFO-Ausgabe (deutscher Markdown-Text, ~4,2 Zeichen/Token).
+ *  Modellabhängig und damit bewusst kein Budget-Maßstab. */
+export const CHARS_PER_TOKEN = 4.2;
+
+/** Zeichen eines Textes, zeilenenden-neutral (CRLF zählt wie LF). */
+export function countChars(text) {
+  return text.replace(/\r/g, "").length;
+}
 
 /** Bewusst geduldete Ausnahmen: Datei → Grund mit offenem Tracking-Ticket. Gleiche
  *  Ratchet-Philosophie wie scripts/check-size.mjs (#390) – kein Grün-durch-Aufweichen
@@ -43,19 +60,19 @@ export const CONTEXT_BUDGETS = [
  *  unter ihr Budget, meldet der Wächter den Eintrag als stale. */
 export const ALLOWLIST = [];
 
-/** Zeilenzahl je Root-Kontextdatei gegen ihr Budget. `rootDir`/`budgets` überschreibbar
+/** Zeichenzahl je Root-Kontextdatei gegen ihr Budget. `rootDir`/`budgets` überschreibbar
  *  für deterministische Tests. */
 export function collectContextSizes(rootDir = ROOT, budgets = CONTEXT_BUDGETS) {
   return budgets.map(({ file, budget }) => {
     const abs = join(rootDir, file);
-    const loc = existsSync(abs) ? countLines(readFileSync(abs, "utf8")) : 0;
-    return { file, loc, budget };
+    const chars = existsSync(abs) ? countChars(readFileSync(abs, "utf8")) : 0;
+    return { file, chars, budget };
   });
 }
 
 /** Dateien strikt über ihrem eigenen Budget. */
 export function findOversized(sizes) {
-  return sizes.filter((s) => s.loc > s.budget);
+  return sizes.filter((s) => s.chars > s.budget);
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
@@ -65,6 +82,8 @@ function main() {
   const red = (s) => paint("31", s);
   const green = (s) => paint("32", s);
   const dim = (s) => paint("2", s);
+  const fmt = (n) => n.toLocaleString("de-DE");
+  const tokens = (n) => `≈ ${fmt(Math.round(n / CHARS_PER_TOKEN))} Tokens`;
 
   const sizes = collectContextSizes();
   const allow = new Map(ALLOWLIST.map((a) => [a.file, a.reason]));
@@ -72,16 +91,16 @@ function main() {
   const oversizedFiles = new Set(oversized.map((s) => s.file));
 
   for (const s of sizes.filter((x) => !oversizedFiles.has(x.file)))
-    console.log(dim(`• ${s.file}: ${s.loc}/${s.budget} Zeilen`));
+    console.log(dim(`• ${s.file}: ${fmt(s.chars)}/${fmt(s.budget)} Zeichen (${tokens(s.chars)})`));
 
   const violations = oversized.filter((s) => !allow.has(s.file));
   const allowed = oversized.filter((s) => allow.has(s.file));
   const stale = ALLOWLIST.filter((a) => !oversizedFiles.has(a.file));
 
   for (const a of allowed)
-    console.log(dim(`• geduldet: ${a.file} (${a.loc} > ${a.budget} Zeilen) – ${allow.get(a.file)}`));
+    console.log(dim(`• geduldet: ${a.file} (${fmt(a.chars)} > ${fmt(a.budget)} Zeichen) – ${allow.get(a.file)}`));
 
-  for (const v of violations) console.error(red(`✖ ${v.file}: ${v.loc} Zeilen > Budget ${v.budget}`));
+  for (const v of violations) console.error(red(`✖ ${v.file}: ${fmt(v.chars)} Zeichen > Budget ${fmt(v.budget)} (${tokens(v.chars)})`));
 
   for (const s of stale)
     console.error(

@@ -1,6 +1,6 @@
 # Häufig gestellte Fragen zum Agenten-Harness (FAQ)
 
-> Fragen, die im Umfeld dieses Projekts wiederkehrend zum Agenten-Harness aufkommen — hier einmal zentral beantwortet statt einzeln immer wieder neu. Ergänzt [agent-harness.md](agent-harness.md) (die erklärende Gesamtsicht) um konkrete Einzelfragen, ohne sie zu duplizieren. Bei Konflikt gelten [AGENTS.md](../AGENTS.md)/[CLAUDE.md](../CLAUDE.md).
+> Fragen, die im Umfeld dieses Projekts wiederkehrend zum Agenten-Harness aufkommen — hier einmal zentral beantwortet statt einzeln immer wieder neu. Ergänzt [agent-harness.md](agent-harness.md) (die erklärende Gesamtsicht) um konkrete Einzelfragen, ohne sie zu duplizieren. Bei Konflikt gilt [AGENTS.md](../AGENTS.md) (SSOT).
 
 ## Wie kommt das CI-Ergebnis zum Agenten zurück? Läuft dafür ein GitHub-MCP-Server?
 

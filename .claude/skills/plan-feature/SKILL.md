@@ -16,7 +16,7 @@ Dieser Skill ist die **Planungsphase** der Konvention „Planung stark, Umsetzun
 ## Vorher lesen (Kontext)
 
 - **[AGENTS.md](../../../AGENTS.md)** — harte Regeln, Schichtung, Gates, Board-Workflow. Bei Konflikt gilt diese Datei.
-- **[CLAUDE.md](../../../CLAUDE.md)** — Repo-Landkarte (welche Datei welche Schicht/Zweck) + Schichtregeln beim Arbeiten im Verzeichnis.
+- **[CLAUDE.md](../../../CLAUDE.md)** — Brücke zu AGENTS.md (`@AGENTS.md`-Import) + Referenz-Tabellen (Befehle, Subsystem-Landkarte, Schichtregeln, Anlaufstellen); die Datei-Granularität steckt in den `docs/module/`-Tiefendocs.
 - Geht es um ein konkretes Issue: `gh issue view <nr> --repo fluffels/kubernia` (Body + Akzeptanzkriterien).
 - Betroffener Bereich hat eine modul-lokale `AGENTS.md` oder ein `docs/module/*.md`? Dann mitlesen.
 
