@@ -98,9 +98,9 @@ function frontmatter(md: string): Record<string, string> {
 const istCodingTier = (wert: string) => /(^|[-\s])sonnet/i.test(wert);
 
 /**
- * Alle Markdown-Dateien unter `.claude/` (Skills + Agent-Definitionen), rekursiv.
- * `collectMarkdown` sammelt die Repo-Doku, nicht die Harness-Definitionen – darum hier
- * ein eigener, winziger Walk.
+ * Alle Markdown-Dateien unter `.claude/` (Skills + Agent-Definitionen), rekursiv, als
+ * ABSOLUTE Pfade – für die Pin-Checkliste. Den Drift-Scan deckt seit #1091
+ * `collectMarkdown` selbst ab (gleiche Allowlist, `VERSIONED_CLAUDE_DIRS`).
  */
 function claudeMarkdown(): string[] {
   const walk = (dir: string): string[] => {
@@ -116,9 +116,8 @@ function claudeMarkdown(): string[] {
   // unter .claude/ nur skills/, agents/ und workflows/ (+ settings.json). Ein Walk über den
   // ganzen Baum scannte auch lokal abgelegte, untrackte Dateien mit – und verlangte für sie
   // einen Checklisten-Eintrag, den niemand committen kann (lokal rot, CI grün).
-  // `workflows` ist mit drin, obwohl dort heute nur .js liegt: `collectMarkdown` klammert
-  // `.claude` komplett aus, ein künftiges .claude/workflows/*.md entginge sonst BEIDEN
-  // Prüfungen – Pin-Checkliste und Drift-Scan.
+  // `workflows` ist mit drin, obwohl dort heute nur .js liegt: ein künftiges
+  // .claude/workflows/*.md entginge sonst der Pin-Checkliste.
   return [`${REPO_ROOT}.claude/skills`, `${REPO_ROOT}.claude/agents`, `${REPO_ROOT}.claude/workflows`].flatMap(walk);
 }
 
@@ -327,14 +326,12 @@ describe("Die Pin-Checkliste in docs/model-routing.md bleibt vollständig (#910/
 describe("Keine Doku behauptet mehr den alten Routing-Ist-Zustand (#1035)", () => {
   test("kein Markdown im Repo schreibt die Umsetzung auf den Session-Default", () => {
     const violations: string[] = [];
-    const rel = (abs: string) => abs.replace(/\\/g, "/").replace(REPO_ROOT.replace(/\\/g, "/"), "");
-    // `collectMarkdown` liefert repo-RELATIVE Pfade, `claudeMarkdown` absolute. Ohne das
-    // Auflösen gegen REPO_ROOT hinge der Lauf am cwd: startet Vitest nicht im Repo-Root,
-    // gäbe es ein nacktes ENOENT statt einer verständlichen Gate-Meldung.
-    const absolut = (f: string) => (/^([A-Za-z]:|\/)/.test(f) ? f : `${REPO_ROOT}${f}`);
-    for (const file of [...collectMarkdown(REPO_ROOT), ...claudeMarkdown()]) {
-      for (const v of retiredRoutingClaims(readFileSync(absolut(file), "utf8"))) {
-        violations.push(`${rel(file)}:${v.line} behauptet „${v.term}" – ${v.home}. Zeile: „${v.text}"`);
+    // `collectMarkdown` erfasst seit #1091 auch die versionierten .claude-Ordner und liefert
+    // repo-RELATIVE Pfade. Das Auflösen gegen REPO_ROOT entkoppelt den Lauf vom cwd: startet
+    // Vitest nicht im Repo-Root, gäbe es sonst ein nacktes ENOENT statt einer Gate-Meldung.
+    for (const file of collectMarkdown(REPO_ROOT)) {
+      for (const v of retiredRoutingClaims(readFileSync(`${REPO_ROOT}${file}`, "utf8"))) {
+        violations.push(`${file}:${v.line} behauptet „${v.term}" – ${v.home}. Zeile: „${v.text}"`);
       }
     }
     assert.deepEqual(

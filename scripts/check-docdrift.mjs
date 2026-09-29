@@ -59,19 +59,32 @@ const IGNORED_DIRS = new Set([
   "dist-devpanel",
   "test-results",
   "playwright-report",
-  ".claude", // Worktrees paralleler Agenten (.claude/worktrees) nicht mitscannen
 ]);
+
+/** Unterordner von .claude, die versioniert sind (Gegenstück zu den `!.claude/…/`-
+ *  Ausnahmen in .gitignore) — nur DIESE werden unter .claude gescannt. Alles andere
+ *  dort ist nicht versioniert: Worktrees paralleler Agenten (.claude/worktrees, volle
+ *  Repo-Kopien), lokale Einstellungen, Tool-Caches. Bewusst eine Allowlist statt
+ *  „alles außer worktrees": sonst röte der Wächter an lokal abgelegten, untrackten
+ *  Dateien — lokal rot, CI grün (#1091; gleiche Abwägung wie test/model-routing.test.ts).
+ *  Bewusst auch kein `git ls-files`: eine neue, noch nicht ge-`add`-ete .md bliebe
+ *  sonst lokal ungeprüft. test/docdrift.test.ts gleicht die Liste mit .gitignore ab. */
+export const VERSIONED_CLAUDE_DIRS = new Set(["agents", "skills", "workflows"]);
 
 // ── Markdown sammeln ───────────────────────────────────────────────────────────
 
-/** Alle *.md im Repo (repo-relativer POSIX-Pfad), IGNORED_DIRS ausgenommen. */
+/** Alle *.md im Repo (repo-relativer POSIX-Pfad), IGNORED_DIRS ausgenommen; unter
+ *  .claude nur die VERSIONED_CLAUDE_DIRS (und keine losen Dateien direkt in .claude). */
 export function collectMarkdown(rootDir = ROOT) {
   const out = [];
   const walk = (dir) => {
+    const inClaude = relative(rootDir, dir) === ".claude";
     for (const ent of readdirSync(dir, { withFileTypes: true })) {
       if (ent.isDirectory()) {
-        if (!IGNORED_DIRS.has(ent.name)) walk(join(dir, ent.name));
-      } else if (ent.isFile() && ent.name.endsWith(".md")) {
+        if (IGNORED_DIRS.has(ent.name)) continue;
+        if (inClaude && !VERSIONED_CLAUDE_DIRS.has(ent.name)) continue;
+        walk(join(dir, ent.name));
+      } else if (ent.isFile() && ent.name.endsWith(".md") && !inClaude) {
         out.push(relative(rootDir, join(dir, ent.name)).split(sep).join("/"));
       }
     }
