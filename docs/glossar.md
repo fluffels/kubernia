@@ -54,7 +54,7 @@ Kubernia ist ein **modularer Monolith** mit **2–3 Kern-Subdomänen** plus unte
 
 ## 3. Schneiden die Tiefendocs schon entlang dieser Grenzen? (DoD 3)
 
-Weitgehend **ja** — die on-demand-Tiefendocs der CLAUDE.md waren nach Schichtung/Modul geschnitten und decken die Subdomänen fast 1:1 ab:
+Weitgehend **ja** — die on-demand-Tiefendocs unter [`docs/module/`](module/) sind nach Schichtung/Modul geschnitten und decken die Subdomänen fast 1:1 ab:
 
 | Subdomäne | Tiefendoc | Deckung |
 |---|---|---|

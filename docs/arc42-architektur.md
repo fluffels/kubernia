@@ -21,7 +21,7 @@ Kubernia bringt DevOps-Grundlagen (Docker, Kubernetes, Helm, Terraform, Security
 | Kategorie | Randbedingung |
 |---|---|
 | Technisch | Reiner Client, keine Server-Laufzeit. Genau **eine** Laufzeit-Dep (Phaser 3.90). TypeScript durchgängig `strict`. Node ≥ 22. Browser **und** self-contained Doppelklick-HTML. |
-| Organisatorisch | Solo-Maintainerin, KI-Agenten-getriebener Weiterbau. Selbstdokumentierendes Repo (AGENTS.md als SSOT, CLAUDE.md als Brücke + Referenz-Tabellen). Board-getriebener Ein-Ticket-Workflow mit Worktrees. |
+| Organisatorisch | Solo-Maintainerin, KI-Agenten-getriebener Weiterbau. Selbstdokumentierendes Repo (AGENTS.md als SSOT, Nachschlage-Referenzen on-demand unter `docs/referenz/`). Board-getriebener Ein-Ticket-Workflow mit Worktrees. |
 | Fachlich | Der simulierte Cluster muss sich plausibel wie echtes `kubectl`/`helm`/`docker` verhalten (Lerntransfer). Deutsch in Texten/Kommentaren. |
 | Rechtlich | Öffentliches, aber **proprietäres** Repo. Fremdbausteine sauber lizenziert (Phaser MIT, Kenney CC0). |
 
@@ -154,7 +154,7 @@ Vier Konzepte durchziehen den Code: **Schichtung** (§5), **Content-as-Data**, *
 | Lern-/Progression | Pädagogik (Quest/XP/Dublonen/Leitner-Box) | `game/*`, Lern-Teile `content/*` |
 | Welt/Präsentation | räumlich/Hafen (Kiste/Steg/Laterne) | `world`, `scenes/*` |
 
-Die Modul-Splits + die on-demand-Tiefendocs der CLAUDE.md **sind** bereits solche Token-Grenzen. *Nuance:* mehr Kontexte ≠ automatisch weniger Tokens — zu viele Nähte erzeugen Übersetzungs-Code; Sweet Spot sind die 2–3, nicht zehn. **Contexts benennen, nicht auseinanderreißen.**
+Die Modul-Splits + die on-demand-Tiefendocs unter `docs/module/` **sind** bereits solche Token-Grenzen. *Nuance:* mehr Kontexte ≠ automatisch weniger Tokens — zu viele Nähte erzeugen Übersetzungs-Code; Sweet Spot sind die 2–3, nicht zehn. **Contexts benennen, nicht auseinanderreißen.**
 
 > ✅ **#477 erledigt:** die Subdomänen sind explizit benannt und die Übersetzung Hafen↔K8s (die Anti-Corruption-Layer) als Glossar festgehalten — beides als SSOT in **[docs/glossar.md](glossar.md)** (Glossar mit Code-Ort + Kontext-Landkarte mit Tiefendoc-Zuordnung; die Prüfung dort bestätigt, dass die Tiefendocs schon entlang der Grenzen schneiden, mit `content.md` als bewusstem Shared Kernel).
 
@@ -223,6 +223,7 @@ Eine erneute doku-freie Runde hat gezielt die harten „erledigt/erzwungen"-Clai
 | 0010 | **Karten-Modell:** zwei Pipelines bewusst nebeneinander (Tiled-Daten für bespoke Karten, Code-Builder für prozedurale Regionen) statt Konvergenz | **akzeptiert** ([ADR 0010](adr/0010-karten-modell-tiled-vs-code-builder.md), #957) — folgt derselben Content-as-Data-Logik wie 0004 auf die Karten-Ebene. |
 | 0011 | **NPC-System-Fundament:** Datenmodell für lebendige NPCs — statische Design-Daten (Rolle, Verhaltenszustand) additiv im Entity-Schema, dynamischer Zustand (Beziehungslevel) als einzige Save-Migration | **akzeptiert** ([ADR 0011](adr/0011-npc-system-fundament.md), #963) — löst die von 0007 offen gelassene NPC-Scope-Frage (#420) positiv auf, vor den Folge-Tickets #964–#968. |
 | 0012 | **Harness-Autonomie:** Agent merged auch Harness-/Leitplanken-/Gate-PRs selbst, Audit-Kommentar statt Merge-Freigabe; Fokus der Harness-Phase (wenig Loop, wenig Tokens, hohe Qualität) | **akzeptiert** ([ADR 0012](adr/0012-harness-autonomie-audit-spur.md), #1069/#1072) — nimmt den Merge-Checkpoint aus #1012 zurück; präzisiert 0008/0009. |
+| 0013 | **`docs/` als agentengepflegtes Wiki:** kein zweiter Wissensspeicher und kein externes Brain; Wissensarten (Regeln/Entscheidungen/Evergreen/Stand/Schnappschüsse) mit festem Ort, kuratierte Pflege im selben PR, eine Landkarte (`anlaufstellen.md`) + Erreichbarkeits-Wächter | **akzeptiert** ([ADR 0013](adr/0013-docs-als-agentengepflegtes-wiki.md), #1083) — präzisiert 0012. |
 
 iSAQB-konform: jeder ADR trägt einen expliziten **Re-Evaluierungs-Trigger** — Entscheidungen sind an nachprüfbare Bedingungen geknüpft, nicht „für immer".
 

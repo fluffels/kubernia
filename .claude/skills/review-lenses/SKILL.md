@@ -26,7 +26,7 @@ git rev-parse HEAD                                      # Frische-Guard, s.u.
 
 ⚠️ **Erst committen, sonst reviewt niemand deine letzte Änderung.** Drei-Punkt gegen `HEAD` enthält **nur Committetes** — die frühere Fassung erhob per Zwei-Punkt `git diff main` auch den Arbeitsbaum („plus noch Uncommittetes"). Der Frische-Guard unten vergleicht nur `HEAD`; die Abweichung „Arbeitsbaum ≠ HEAD" ist für ihn strukturell unsichtbar. Wer den Review mitten in der Arbeit anstößt, bekommt sonst ein „ok" über Code, den keine Lens gesehen hat. Darum `git status --porcelain` **vor** dem Schreiben prüfen. (Im orchestrierten Workflow ist das gesetzt: dort entsteht der Patch **nach** dem Commit.)
 
-**Warum überhaupt eine Datei:** gemessen an #1021 kostete ein Review 878k Tokens, und der dominante Anteil war **Beschaffung, nicht Analyse** — derselbe Diff fünfmal erhoben, die geänderten Dateien fünfmal vollständig gelesen, `AGENTS.md`/`CLAUDE.md` von jeder Lens erneut geöffnet. Das produziert keinen einzigen zusätzlichen Befund.
+**Warum überhaupt eine Datei:** gemessen an #1021 kostete ein Review 878k Tokens, und der dominante Anteil war **Beschaffung, nicht Analyse** — derselbe Diff fünfmal erhoben, die geänderten Dateien fünfmal vollständig gelesen, die Root-Kontextdateien von jeder Lens erneut geöffnet. Das produziert keinen einzigen zusätzlichen Befund.
 
 **Ablage im Temp-/Scratch-Ordner, nicht im Worktree** — eine untracked Datei dort verunreinigt `git status` und könnte mitcommittet werden.
 
@@ -36,7 +36,7 @@ git rev-parse HEAD                                      # Frische-Guard, s.u.
 
 Jede Lens bekommt zusätzlich diese drei Regeln — sie kosten keinen Befund:
 
-1. **`AGENTS.md`/`CLAUDE.md` nicht erneut öffnen.** Unter Claude Code liegen sie durch den `@AGENTS.md`-Import ohnehin vollständig im Kontext; ein `Read` darauf ist reine Duplikation (~30k Tokens pro Lens). Wird eine Regel wörtlich gebraucht: **punktuell greppen**.
+1. **`AGENTS.md` nicht erneut öffnen.** Unter Claude Code liegt sie durch den `@AGENTS.md`-Import ohnehin vollständig im Kontext; ein `Read` darauf ist reine Duplikation (~30k Tokens pro Lens). Wird eine Regel wörtlich gebraucht: **punktuell greppen**.
 2. **Nur den eigenen Regel-Ausschnitt.** Architektur → Schichtregeln + oberste Regel; Requirement-Treue → Doku-Disziplin + Spielstände; Test-Adäquanz → TDD + Red-Green. Die Ausschnitte der anderen Brillen liest man nicht mit — dafür gibt es ja die anderen Brillen.
 3. **Der Patch ist die Primärquelle.** Eine geänderte Datei nur öffnen, wenn ein konkreter Befund den umgebenden Kontext braucht — und dann gezielt um die Hunk-Zeilen, nicht die ganze Datei.
 
@@ -92,7 +92,7 @@ Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket
 **Lens 2 — Requirement-Treue.** Tut der Diff **wirklich, was das Ticket verlangt**?
 - Ticket lesen (`gh issue view <nr>`) und den Diff **gegen die Akzeptanzkriterien** halten — jedes Kriterium einzeln: erfüllt / offen / darüber hinausgegangen.
 - **Scope-Kriechen:** ändert der Diff mehr als das Ticket (ein Ein-Ticket-Diff bleibt klein — Aufgefallenes gehört in ein neues Issue, nicht inline mitgefixt)?
-- Betrifft es Spielinhalte/Quests/Steuerung → **README mitgezogen**? Neues `src/`-Modul → Backtick-Pfad-Zeile im passenden **`docs/module/`-Tiefendoc** ergänzt (nicht in die CLAUDE.md-Übersicht, #907)?
+- Betrifft es Spielinhalte/Quests/Steuerung → **README mitgezogen**? Neues `src/`-Modul → Backtick-Pfad-Zeile im passenden **`docs/module/`-Tiefendoc** ergänzt (nicht in die [Repo-Landkarte](../../../docs/referenz/repo-landkarte.md), #907)?
 - Berührt es das **Save-Format** → migriert (Version-Bump + Migrationskette), alter Stand bleibt heil?
 
 **Lens 3 — Test-Adäquanz.** Deckt der Test das **Verhalten** ab — und ist er echt?

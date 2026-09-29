@@ -13,7 +13,7 @@
 
 Kubernia wird von **einer** Maintainerin verantwortet, die den Weiterbau bewusst an KI-Agenten delegiert: DevOps-Lernspiel als eigenes Weiterbildungsprojekt, Solo, ohne Team-Review-Kapazität. Der komplette Code entsteht so.
 
-Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI ändert das billig **und** sicher"), gleichrangig neben Testbarkeit, Erweiterbarkeit und Datensicherheit. Anders als die prägenden Nachbar-Entscheidungen — Engine ([ADR 0001](0001-engine-phaser.md)), kein Backend ([0002](0002-kein-backend-keine-db.md)), kein Multiplayer ([0003](0003-multiplayer-coop-out-of-scope.md)), Skalierung ([0004](0004-skalierungs-fundament.md)) — war dieses Entwicklungsmodell bisher **nirgends als ADR** festgehalten, sondern nur in AGENTS.md/CLAUDE.md gelebt. Dieser ADR schließt die Lücke iSAQB-konform (mit explizitem Re-Eval-Trigger wie die anderen).
+Das ist selbst ein **Architekturziel** (arc42-Qualitätsziel §1.4: „eine KI ändert das billig **und** sicher"), gleichrangig neben Testbarkeit, Erweiterbarkeit und Datensicherheit. Anders als die prägenden Nachbar-Entscheidungen — Engine ([ADR 0001](0001-engine-phaser.md)), kein Backend ([0002](0002-kein-backend-keine-db.md)), kein Multiplayer ([0003](0003-multiplayer-coop-out-of-scope.md)), Skalierung ([0004](0004-skalierungs-fundament.md)) — war dieses Entwicklungsmodell bisher **nirgends als ADR** festgehalten, sondern nur in `AGENTS.md`/`CLAUDE.md` gelebt. Dieser ADR schließt die Lücke iSAQB-konform (mit explizitem Re-Eval-Trigger wie die anderen).
 
 ## Das Problem
 
@@ -36,7 +36,7 @@ Die Verlässlichkeit muss also **nicht am Modell**, sondern an der **Umgebung** 
 
 **Der Agenten-Harness ist das Entwicklungsmodell.** Konkret festgehalten:
 
-1. **Selbstdokumentierendes Repo (SSOT im Code).** Alles, was ein Agent braucht, liegt versioniert im Repo — kein externes Notiz-/Wissenssystem als Voraussetzung, damit auch ein frischer Clone / Cloud-Agent arbeiten kann. Die Doku ist bewusst als **Kontext-Selektor** gebaut (schlanker Always-Index in CLAUDE.md + on-demand-Tiefendocs + modul-lokale `AGENTS.md`), damit sie bei Stardew-Scope nicht zum unlesbaren Monolithen wird.
+1. **Selbstdokumentierendes Repo (SSOT im Code).** Alles, was ein Agent braucht, liegt versioniert im Repo — kein externes Notiz-/Wissenssystem als Voraussetzung, damit auch ein frischer Clone / Cloud-Agent arbeiten kann. Die Doku ist bewusst als **Kontext-Selektor** gebaut (schlanker Always-Index in `CLAUDE.md` + on-demand-Tiefendocs + modul-lokale `AGENTS.md`), damit sie bei Stardew-Scope nicht zum unlesbaren Monolithen wird.
 2. **Board-getriebener Ein-Ticket-Worktree-Workflow.** Der Backlog lebt als GitHub Issues + Board; was als Nächstes dran ist, entscheidet eine deterministische Regel (Prio → niedrigste Nummer, [Ticket-Auswahl](../ticket-reihenfolge.md)) — der Agent **wägt nicht ab**. Ein Agent nimmt **genau ein** Ticket und arbeitet es end-to-end in einem **eigenen `git worktree`** ab. Der enge Fokus ist Absicht: ein kleiner, abgeschlossener Diff ist verifizierbar.
 3. **Fitness-Functions als Leitplanken statt Review-Disziplin.** Das eigentliche Sicherheitsnetz sind **automatische Gates** (lokal + CI), die `main` grün halten: Tests, Typecheck, Lint, Architektur-Wächter, Dateigröße, Doku-Drift (`check:docmap`/`check:docdrift`), Boot-/Interaktions-Smoke, Security-Audit — gebündelt hinter `npm run verify` (#527) und vorgelagert durch den pre-push-Hook (#528). Jede Fehlklasse hat ihre eigene Grenze; kein Fehler verlässt sich darauf, dass „der Lauf schon gut war". Details je Gate: [agent-harness.md §3](../agent-harness.md#3-die-fitness-functions-im-detail).
 4. **Kollisionsschutz für parallele Agenten.** Self-assign als „in Arbeit"-Marker (verifiziert, blockierend) + eigener Worktree pro Ticket, damit sich mehrere gleichzeitig laufende Agenten nie dasselbe Ticket oder Arbeitsverzeichnis greifen.
@@ -56,7 +56,7 @@ Die Verlässlichkeit muss also **nicht am Modell**, sondern an der **Umgebung** 
 
 **Negativ / Trade-offs**
 - **Direkt-Push-auf-`main`-Lücke:** die CI-Gates laufen *nach* dem Push (post-hoc). Die lokalen Gates sind die eigentliche Vorab-Prüfung — ein vergessener lokaler Lauf ist die reale Netzlücke. Gegenmittel: der pre-push-Hook (#528) fährt die schnellen Gates lokal vor dem Push.
-- **Doku-als-Kontext-Kosten:** die SSOT-Doku (AGENTS.md/CLAUDE.md/Landkarte) muss **aktuell** gehalten werden — sie ist der Kontext-Selektor jeder Session; driftet sie leise, führt sie Agenten in die Irre. Darum ist „die Doku stimmt" selbst maschinell gegated (`check:docmap` #482, `check:docdrift` #529), nicht nur Disziplin.
+- **Doku-als-Kontext-Kosten:** die SSOT-Doku (`AGENTS.md`/`CLAUDE.md`/Landkarte) muss **aktuell** gehalten werden — sie ist der Kontext-Selektor jeder Session; driftet sie leise, führt sie Agenten in die Irre. Darum ist „die Doku stimmt" selbst maschinell gegated (`check:docmap` #482, `check:docdrift` #529), nicht nur Disziplin.
 - **Prompt-Injection-Vektor:** der Forum-Eingang (GitHub Discussions → auto-erzeugte Issues) ist der einzige Pfad, auf dem unvertrauter externer Text in die Agenten-Queue gelangt (Härtung: #531).
 - **Gates sind nur so gut wie ihre Abdeckung:** was kein Gate prüft (Determinismus ist erst teilweise erzwungen #492, Coverage ungemessen #495), kann durchrutschen — die bekannten Lücken sind erfasst ([agent-harness.md §5](../agent-harness.md#5-roadmap--bekannte-lücken)).
 
@@ -74,6 +74,6 @@ Tritt ein Trigger ein: neuen/abgelösten ADR schreiben (`0009-…`), diesen hier
 ## Verwandte ADRs & Dokumente
 
 - [`docs/agent-harness.md`](../agent-harness.md) (#526): die **kanonische, erklärende** Gesamtsicht auf den Harness (fünf Bausteine, jede Fitness-Function mit WAS/WARUM/Red-Green, Autonomie-Schleife, Roadmap). Dieser ADR ist die formale Grundsatzentscheidung daneben.
-- [AGENTS.md](../../AGENTS.md) / [CLAUDE.md](../../CLAUDE.md): die operative Arbeitsanweisung (SSOT) + die Brücke dorthin (`@AGENTS.md`-Import + Referenz-Tabellen, #992), die der Harness voraussetzt. *Bei Konflikt maßgeblich.*
+- [AGENTS.md](../../AGENTS.md) / `CLAUDE.md`: die operative Arbeitsanweisung (SSOT) + die Brücke dorthin (`@AGENTS.md`-Import + Referenz-Tabellen, #992), die der Harness voraussetzt. *Bei Konflikt maßgeblich.*
 - [ADR 0004 – Skalierungs-Fundament](0004-skalierungs-fundament.md): der Harness muss unter derselben obersten Regel tragen („trägt das bei Stardew-Scope?") — ein Harness, der bei 10× Content/parallelen Agenten zusammenbricht, ist keiner.
 - [docs/arc42-architektur.md](../arc42-architektur.md): §1.4 (KI-Entwickel-Effizienz als Qualitätsziel), §9 (ADR-Übersicht), §10 (Qualitätsszenario „Wartbarkeit (KI)").

@@ -50,7 +50,7 @@ const REPO = 'C:\\git\\kubernia'
 const kopf = `Du arbeitest am Repo kubernia in ${REPO}.
 
 Die verbindliche Arbeitsanweisung ist ${REPO}\\AGENTS.md (bei Konflikt maßgeblich);
-${REPO}\\CLAUDE.md ist nur die Brücke dorthin plus die Referenz-Tabellen (Befehle,
+die Nachschlage-Referenzen liegen on-demand unter ${REPO}\\docs\\referenz\\ (Befehle,
 Repo-Landkarte, Schichtregeln). Lies die für deine Aufgabe genannten Abschnitte
 und befolge sie wörtlich — dieser Auftrag fasst sie absichtlich nicht zusammen,
 damit keine zweite, veraltende Wahrheit entsteht.
@@ -245,15 +245,15 @@ const diffAus = (r) => ({ pfad: r && r.diffPfad, stat: r && r.diffStat, head: r 
 /**
  * Kontext-Diät für die Review-Lenses (#1034). Gemessen an #1021: fünf Lens-Pässe verbrannten
  * ~878k Tokens, und der größte Einzelposten war reine BESCHAFFUNG — jeder Agent öffnete
- * AGENTS.md + CLAUDE.md erneut per Read, obwohl der `@AGENTS.md`-Import in
- * CLAUDE.md sie ohnehin vollständig in seinen Kontext legt. Das erzeugt keinen zusätzlichen
+ * die Root-Kontextdateien (~30k) erneut per Read, obwohl der `@AGENTS.md`-Import sie
+ * ohnehin vollständig in seinen Kontext legt. Das erzeugt keinen zusätzlichen
  * Befund, nur Kosten. Zweitgrößter Posten: „lies die geänderten Dateien vollständig".
  *
  * Bewusst als Anweisung an den Agenten statt als Werkzeug-Verbot: die Lens SOLL eine Datei
  * öffnen dürfen, wenn ein Befund den umgebenden Kontext braucht — nur eben gezielt.
  */
 const KONTEXT_DIAET = `Kontext-Ökonomie (#1034) — halte dich daran, sie kostet dich keinen Befund:
-- AGENTS.md und CLAUDE.md liegen durch den @AGENTS.md-Import BEREITS vollständig in deinem
+- AGENTS.md liegt durch den @AGENTS.md-Import BEREITS vollständig in deinem
   Kontext. Öffne sie NICHT erneut mit Read — das ist reine Duplikation. Brauchst du eine
   Stelle wörtlich, greppe punktuell danach (Grep mit dem Regel-Begriff).
 - Die Patch-Datei ist deine Primärquelle. Öffne eine geänderte Datei nur, wenn ein konkreter
@@ -274,7 +274,8 @@ check:size sieht nur Dateien, nicht Funktionen)? Duplizierung einer bestehenden 
 Abstraktion statt Wiederverwendung? Und die ⭐ oberste Regel: trägt der Ansatz noch bei
 10× Content/NPCs/Welten, oder reproduziert er dasselbe Problem größer?
 Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):
-AGENTS.md § Architektur + § Oberste Regel, CLAUDE.md § Schichtregeln. Die Doku-/Test-Regeln
+AGENTS.md § Architektur + § Oberste Regel. Die Schicht-Tabelle liegt on-demand (nicht im Kontext)
+in docs/referenz/schichtregeln.md — die darfst du gezielt öffnen. Die Doku-/Test-Regeln
 gehören den anderen beiden Brillen — lies sie nicht mit.`,
   },
   {
