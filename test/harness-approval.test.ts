@@ -176,8 +176,16 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
     const roh = Object.values(quelle).flat();
     assert.ok(roh.includes("AGENTS.md"), `${QUELLE}: tiefen-unabhängiger Eintrag 'AGENTS.md' fehlt`);
     assert.ok(!roh.includes("/AGENTS.md"), `${QUELLE}: '/AGENTS.md' ist root-verankert und trifft in CODEOWNERS keine modul-lokale AGENTS.md`);
-    assert.match(codeowners, /^AGENTS\.md\s+@\S+/m, "CODEOWNERS: unverankerte Zeile 'AGENTS.md @…' fehlt (#1168)");
-    assert.doesNotMatch(codeowners, /^\/AGENTS\.md\s/m, "CODEOWNERS: '/AGENTS.md' ist root-verankert (#1168)");
+  });
+
+  test("CODEOWNERS spiegelt die Anker-Form der Quelle: unverankert genau die tiefen-unabhängigen Einträge (#1168)", () => {
+    // Der Sync-Test vergleicht normalisierte Mengen und sieht '/X' vs. 'X' nicht – hier die rohe Form.
+    const roh = codeowners
+      .split(/\r?\n/)
+      .map((l) => l.trim().match(/^(\S+)\s+@\S+/)?.[1])
+      .filter((p): p is string => p !== undefined);
+    const unverankert = roh.filter((p) => !p.startsWith("/")).sort();
+    assert.deepEqual(unverankert, [...TIEFENUNABHAENGIG].sort(), "CODEOWNERS: Anker-Form weicht von der Quelle ab (#1168)");
   });
 
   test("die Quelle schützt die Wächter-Tests selbst (#1156)", () => {
