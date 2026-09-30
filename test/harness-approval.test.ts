@@ -93,6 +93,14 @@ const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/", ".
 const WAECHTER_TESTS = ["test/agents-md-native.test.ts", "test/harness-approval.test.ts"];
 
 /**
+ * Bewusst tiefen-unabhängige Einträge (#1168): ohne führenden `/` schützen sie die Datei auf JEDER
+ * Ebene – in CODEOWNERS (gitignore-Semantik) genauso wie im Substring-Guard. Jede modul-lokale
+ * AGENTS.md (#1088) ist eine Agenten-Anweisung und damit Leitplanke. Geschlossene Liste: jeder
+ * andere unverankerte Eintrag bleibt ein Fehler.
+ */
+const TIEFENUNABHAENGIG = ["AGENTS.md"];
+
+/**
  * Deckt ein normalisierter Schutz-Eintrag den ganzen test/-Ordner ab? Das gilt für `test/` selbst,
  * jedes kürzere Präfix davon (`t`, aus `/t*`) und den Leer-String (aus `/*.test.ts` oder `/**`).
  */
@@ -125,7 +133,11 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
     for (const [gruppe, pfade] of gruppen) {
       assert.ok(Array.isArray(pfade) && pfade.length > 0, `${QUELLE}: Gruppe '${gruppe}' ist keine nicht-leere Liste`);
       for (const p of pfade) {
-        assert.match(p, /^\/\S+$/, `${QUELLE}: '${p}' muss wie in CODEOWNERS mit '/' beginnen`);
+        assert.match(p, /^\S+$/, `${QUELLE}: '${p}' enthält Leerraum`);
+        assert.ok(
+          p.startsWith("/") || TIEFENUNABHAENGIG.includes(p),
+          `${QUELLE}: '${p}' muss wie in CODEOWNERS mit '/' beginnen oder bewusst tiefen-unabhängig sein (#1168)`,
+        );
         // Der Guard verwirft leere Muster – ein Eintrag wie '/*' fiele sonst still aus dem Schutz.
         assert.notEqual(normalizeProtected(p), "", `${QUELLE}: '${p}' normalisiert zu einem leeren Muster`);
       }
@@ -155,6 +167,17 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
       "Leitplanken-Dateien fehlen im Sign-off-Riegel (#1012/#1069: Harness-Änderungen tragen das Label als sichtbaren Marker):\n" +
         fehlend.join("\n"),
     );
+  });
+
+  test("jede AGENTS.md ist geschützt, auch modul-lokale – in Quelle UND CODEOWNERS (#1168)", () => {
+    // Der Sync-Test oben fängt das nicht: `/AGENTS.md` und `AGENTS.md` normalisieren beide auf
+    // `AGENTS.md`. Der Guard traf modul-lokale Dateien per Substring schon immer, CODEOWNERS
+    // (root-verankert) nicht – darum der Anker-Test auf die rohe Schreibweise.
+    const roh = Object.values(quelle).flat();
+    assert.ok(roh.includes("AGENTS.md"), `${QUELLE}: tiefen-unabhängiger Eintrag 'AGENTS.md' fehlt`);
+    assert.ok(!roh.includes("/AGENTS.md"), `${QUELLE}: '/AGENTS.md' ist root-verankert und trifft in CODEOWNERS keine modul-lokale AGENTS.md`);
+    assert.match(codeowners, /^AGENTS\.md\s+@\S+/m, "CODEOWNERS: unverankerte Zeile 'AGENTS.md @…' fehlt (#1168)");
+    assert.doesNotMatch(codeowners, /^\/AGENTS\.md\s/m, "CODEOWNERS: '/AGENTS.md' ist root-verankert (#1168)");
   });
 
   test("die Quelle schützt die Wächter-Tests selbst (#1156)", () => {
@@ -261,6 +284,15 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
   test("CLAUDE.md deckt CLAUDE.local.md im Substring-Guard NICHT mit ab (#1116)", () => {
     // Der Grund für den eigenen Eintrag: der Guard matcht per Substring auf den geänderten Pfad.
     assert.equal("CLAUDE.local.md".includes("CLAUDE.md"), false);
+  });
+
+  test("der unverankerte AGENTS.md-Eintrag ist für den Guard verhaltensneutral (#1168)", () => {
+    // Guard-Seite unverändert: beide Schreibweisen ergeben dasselbe Muster, und es trifft Modul-Dateien.
+    assert.equal(normalizeProtected("AGENTS.md"), normalizeProtected("/AGENTS.md"));
+    assert.equal("src/content/AGENTS.md".includes(normalizeProtected("AGENTS.md")), true);
+    assert.equal(decktTestOrdnerAb(normalizeProtected("AGENTS.md")), false);
+    // Darum sieht der Sync-Test den Unterschied nie – der Anker-Test auf die rohe Schreibweise ist nötig.
+    assert.deepEqual([...codeownersPaths("/AGENTS.md @fluffels")], [...codeownersPaths("AGENTS.md @fluffels")]);
   });
 
   test("ein nur in der Quelle ergänzter Pfad würde als Drift auffallen", () => {
@@ -454,6 +486,12 @@ describe("Der Guard liest die Quelle wirklich richtig – echter Lauf mit bash +
 
   test.skipIf(!hatJq)("ein Wildcard-Pfad greift (/scripts/check-*.mjs trifft scripts/check-neu.mjs)", () => {
     erwarteSignOffFehlt(guardLauf(ECHTE_QUELLE, { "scripts/check-neu.mjs": "x\n" }), "scripts/check-neu.mjs");
+  });
+
+  test.skipIf(!hatJq)("eine modul-lokale AGENTS.md ist label-pflichtig (#1168)", () => {
+    // Regressions-Pin: der Substring-Guard trifft sie schon seit jeher; ein späteres verankertes
+    // Glob-Matching darf sie nicht still entschützen.
+    erwarteSignOffFehlt(guardLauf(ECHTE_QUELLE, { "src/content/AGENTS.md": "x\n" }), "src/content/AGENTS.md");
   });
 
   test.skipIf(!hatJq)("ein PR, der die Quelle leert und eine Gate-Datei ändert, bleibt ohne Label rot", () => {

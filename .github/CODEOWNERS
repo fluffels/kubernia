@@ -41,7 +41,11 @@
 /.github/protected-paths.json @fluffels
 
 # Harness/Leitplanken (#1012)
-/AGENTS.md                 @fluffels
+# AGENTS.md bewusst OHNE fuehrenden '/' (#1168): trifft jede AGENTS.md auf jeder Ebene, auch
+# modul-lokale (#1088) - sie sind Agenten-Anweisungen und damit Leitplanken. Der Guard matcht die
+# Eintraege ohnehin als Substring/Praefix (bewusst ueber-approximierend, fail-closed); unverankert
+# deckt CODEOWNERS dasselbe ab wie der Guard.
+AGENTS.md                  @fluffels
 /CLAUDE.md                 @fluffels
 /CLAUDE.local.md           @fluffels
 /.claude/                  @fluffels

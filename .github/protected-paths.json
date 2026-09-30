@@ -13,7 +13,7 @@
     "/.github/protected-paths.json"
   ],
   "harness": [
-    "/AGENTS.md",
+    "AGENTS.md",
     "/CLAUDE.md",
     "/CLAUDE.local.md",
     "/.claude/",
