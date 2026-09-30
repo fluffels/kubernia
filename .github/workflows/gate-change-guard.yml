@@ -31,7 +31,11 @@ name: Gate-Change-Guard
 # ⚠️ Uebergang (Phase 1): `pull_request` bleibt vorerst stehen, sonst meldet der PR, der
 # pull_request_target einfuehrt, den Required-Check nie (main kennt den Trigger noch nicht,
 # bypass_actors ist leer → Deadlock). Solange beide laufen, meldet derselbe Kontext zweimal und
-# das Loch ist nur halb zu — Phase 2 (#1170) entfernt `pull_request`.
+# das Loch ist nur halb zu — Phase 2 (#1170) entfernt `pull_request`, nachdem dort belegt ist,
+# dass der pull_request_target-Run wirklich auf dem PR-Head zaehlt.
+# Ehrliche Grenze: das Ruleset gleicht den Kontext nur ueber den Job-Namen ab. Ein PR kann eine
+# NEUE Workflow-Datei mit gleichnamigem Job danebenlegen — geschlossen ist nur das direkte
+# Editieren dieser Datei. Der Guard bleibt ein Speed-Bump.
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
@@ -87,7 +91,8 @@ jobs:
 
           # Unter pull_request_target ist die Base ausgecheckt; bei Fork-PRs fehlt der Head-Commit
           # dann in der Historie. Nur als DATEN nachholen (git show/diff), nie auschecken (#1167).
-          git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null             || git fetch --no-tags --quiet origin "+refs/pull/$PR_NUMBER/head:refs/kq/pr-head"
+          git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null \
+            || git fetch --no-tags --quiet origin "+refs/pull/$PR_NUMBER/head:refs/kq/pr-head"
 
           # Geschuetzte Pfade — SSOT ist .github/protected-paths.json (#1157), keine eigene
           # Liste mehr. jq bringt die CODEOWNERS-Schreibweise in die Substring-Form: fuehrenden

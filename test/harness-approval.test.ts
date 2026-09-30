@@ -238,7 +238,13 @@ describe("Der Guard läuft aus der Base-Fassung, nicht aus dem PR (#1167)", () =
   // selbst ändert (z.B. `exit 0`), wäre im selben Lauf schon entschärft. pull_request_target nimmt
   // die Fassung von main. Phase 1 lässt pull_request als Übergang stehen (sonst meldet der
   // einführende PR den Required-Check nie – Deadlock), Phase 2 entfernt ihn.
-  const guardJob = guardWf.slice(guardWf.indexOf("\n  gate-change-guard:"));
+  // Fehlt der Job-Schlüssel, liefe slice(-1) auf das letzte Zeichen – alle doesNotMatch-Tests wären still grün.
+  const jobStart = guardWf.indexOf("\n  gate-change-guard:");
+  const guardJob = guardWf.slice(Math.max(jobStart, 0));
+
+  test("der Guard-Job wird gefunden (sonst prüfen die Negativfälle unten ins Leere)", () => {
+    assert.ok(jobStart > 0, "Job-Schlüssel gate-change-guard: nicht gefunden");
+  });
 
   test("der Guard triggert auf pull_request_target", () => {
     assert.match(guardWf, /\n {2}pull_request_target:\s*\n/, "gate-change-guard.yml triggert nicht auf pull_request_target");
@@ -275,7 +281,7 @@ describe("Der Guard läuft aus der Base-Fassung, nicht aus dem PR (#1167)", () =
   });
 
   test("der Head-Commit wird nachgeholt, falls er fehlt (Fork-PR unter pull_request_target)", () => {
-    assert.match(guardJob, /git cat-file -e "\$HEAD_SHA\^\{commit\}"[^\n]*\|\|[^\n]*\n?[^\n]*git fetch[^\n]*refs\/pull\/\$PR_NUMBER\/head/, "kein Nachholen des PR-Heads");
+    assert.match(guardJob, /git cat-file -e "\$HEAD_SHA\^\{commit\}"[^\n]*?(?:\\\r?\n\s*)?\|\|\s*git fetch[^\n]*refs\/pull\/\$PR_NUMBER\/head/, "kein Nachholen des PR-Heads");
   });
 
   test("der Job-Name bleibt wortgleich – der Required-Check-Kontext im Ruleset hängt daran (#984)", () => {
