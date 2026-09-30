@@ -227,8 +227,10 @@ describe("Der Guard-Workflow triggert auf Label-Änderung (#1015)", () => {
     for (const trigger of ["pull_request", "pull_request_target"]) {
       const m = guardWf.match(new RegExp(`\\n  ${trigger}:\\s*\\n\\s*types:\\s*\\[([^\\]]*)\\]`));
       assert.ok(m, `kein ${trigger}.types-Trigger in gate-change-guard.yml gefunden`);
-      assert.match(m[1], /\blabeled\b/, `${trigger}: Trigger enthält 'labeled' nicht`);
-      assert.match(m[1], /\bunlabeled\b/, `${trigger}: Trigger enthält 'unlabeled' nicht`);
+      // Auch die Push-Events: fehlt z.B. synchronize, bliebe nach einem neuen Push ein altes Grün stehen.
+      for (const typ of ["opened", "synchronize", "reopened", "labeled", "unlabeled"]) {
+        assert.match(m[1], new RegExp(`\\b${typ}\\b`), `${trigger}: Trigger enthält '${typ}' nicht`);
+      }
     }
   });
 });
@@ -250,10 +252,12 @@ describe("Der Guard läuft aus der Base-Fassung, nicht aus dem PR (#1167)", () =
     assert.match(guardWf, /\n {2}pull_request_target:\s*\n/, "gate-change-guard.yml triggert nicht auf pull_request_target");
   });
 
-  test("der Job ist NICHT per if: auf das pull_request-Event beschränkt (übersprungen zählt als bestanden)", () => {
+  test("der Job hat kein if: und kein continue-on-error (übersprungen bzw. geschluckt zählt als bestanden)", () => {
     // Ein per if: übersprungener Job meldet „skipped" – Branch-Protection wertet das als bestanden.
-    // Unter pull_request_target wäre der Guard damit ohne jedes rote Signal wirkungslos.
-    assert.doesNotMatch(guardJob, /\n\s+if:[^\n]*event_name\s*==\s*'pull_request'/, "Guard-Job ist auf event_name == 'pull_request' beschränkt");
+    // Jede Form zählt (if: false, != 'pull_request_target', an Job oder Step), darum gar kein if:.
+    // continue-on-error schluckt das exit 1 des Label-Gates genauso still.
+    assert.doesNotMatch(guardJob, /\n\s+(?:-\s+)?if:/, "Guard-Job oder ein Step hat ein if:");
+    assert.doesNotMatch(guardJob, /continue-on-error/, "Guard-Job oder ein Step hat continue-on-error");
   });
 
   test("die Concurrency-Gruppe hängt an PR-Nummer + Event, nicht an github.ref", () => {
@@ -274,7 +278,10 @@ describe("Der Guard läuft aus der Base-Fassung, nicht aus dem PR (#1167)", () =
   });
 
   test("es wird kein PR-Code ausgecheckt oder ausgeführt", () => {
-    assert.doesNotMatch(guardJob, /\n\s+ref:\s*\$\{\{\s*github\.event\.pull_request\.head/, "Checkout holt den PR-Head als Arbeitskopie");
+    // Jedes ref: am Checkout (head.sha, github.head_ref, …) holte PR-Code als Arbeitskopie.
+    assert.doesNotMatch(guardJob, /\n\s+ref:/, "Checkout setzt ein ref: – die Arbeitskopie muss die Base bleiben");
+    assert.doesNotMatch(guardJob, /uses:\s*\.\//, "Guard-Job lädt eine lokale Action aus dem Repo");
+    assert.doesNotMatch(guardJob, /git (checkout|switch|worktree)\b/, "Guard-Job checkt einen anderen Stand aus");
     assert.doesNotMatch(guardJob, /allow-unsafe-pr-checkout/, "unsicherer PR-Checkout ist erlaubt");
     assert.match(guardJob, /persist-credentials:\s*false/, "Checkout lässt das Token in der Git-Config liegen");
     assert.doesNotMatch(guardJob, /\b(npm|npx|node)\s|bash\s+\.?\/?[\w-]+\//, "Guard-Job führt Repo-Code aus");
