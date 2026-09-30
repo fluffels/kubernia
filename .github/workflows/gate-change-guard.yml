@@ -15,13 +15,37 @@ name: Gate-Change-Guard
 # ⚠️ Fuer den PR, der diese Datei EINFUEHRT, greift der labeled-Trigger erst nach dem
 # Merge auf main zuverlaessig — dieser eine PR braucht ggf. noch einen manuellen Re-run
 # des Guards nach dem Label.
+#
+# 🛡️ pull_request_target (#1167): Unter `pull_request` kaeme DIESE Datei aus dem PR-Merge-Ref —
+# ein PR, der hier `exit 0` einbaut, waere im selben Lauf schon entschaerft. Unter
+# `pull_request_target` laeuft die Fassung von main. Sicherheitsregeln dafuer (NICHT aufweichen):
+#   - Workflow, Checkout und GITHUB_SHA kommen vom Default-Branch. PR-Inhalt wird AUSSCHLIESSLICH
+#     per `git show`/`git diff` als Daten gelesen — nie ausgecheckt, nie ausgefuehrt (kein npm,
+#     kein node, kein Skript aus dem PR), kein `ref:` auf den Head, kein allow-unsafe-pr-checkout.
+#   - `permissions:` bleibt rein lesend; unter pull_request_target ist der Block tragend, nicht
+#     kosmetisch (Default waere schreibend + Secrets). `persist-credentials: false` am Checkout.
+#   - Kein `if:` auf den Event-Namen: ein uebersprungener Job meldet „skipped", und das wertet
+#     Branch-Protection als BESTANDEN — der Guard waere still wirkungslos.
+#   - concurrency haengt an PR-Nummer + Event, nicht an github.ref (unter pull_request_target
+#     ist das refs/heads/main fuer ALLE PRs — sie wuerden sich gegenseitig den Check abbrechen).
+# ⚠️ Uebergang (Phase 1): `pull_request` bleibt vorerst stehen, sonst meldet der PR, der
+# pull_request_target einfuehrt, den Required-Check nie (main kennt den Trigger noch nicht,
+# bypass_actors ist leer → Deadlock). Solange beide laufen, meldet derselbe Kontext zweimal und
+# das Loch ist nur halb zu — Phase 2 (#1170) entfernt `pull_request`, nachdem dort belegt ist,
+# dass der pull_request_target-Run wirklich auf dem PR-Head zaehlt.
+# Ehrliche Grenze: das Ruleset gleicht den Kontext nur ueber den Job-Namen ab. Ein PR kann eine
+# NEUE Workflow-Datei mit gleichnamigem Job danebenlegen — geschlossen ist nur das direkte
+# Editieren dieser Datei. Der Guard bleibt ein Speed-Bump.
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
-# Veraltete Runs desselben PRs abbrechen, sobald ein neuer startet.
+# Veraltete Runs desselben PRs abbrechen, sobald ein neuer startet (je Event getrennt, damit sich
+# die beiden Uebergangs-Trigger nicht gegenseitig canceln).
 concurrency:
-  group: gate-change-guard-${{ github.ref }}
+  group: gate-change-guard-${{ github.event_name }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -43,8 +67,8 @@ jobs:
   # Nur auf PRs (push:main hat kein Label-Konzept; wäre nach dem Merge ohnehin zu spät).
   gate-change-guard:
     name: Gate-Config-Aenderungsschutz (Goodhart-Guard, #903)
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    # Rein lesend — unter pull_request_target tragend (#1167), nicht „aufraeumen".
     permissions:
       contents: read
       pull-requests: read
@@ -53,6 +77,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Gate-Dateien pruefen + Sign-off-Label erzwingen
         env:
@@ -64,15 +89,21 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Unter pull_request_target ist die Base ausgecheckt; bei Fork-PRs fehlt der Head-Commit
+          # dann in der Historie. Nur als DATEN nachholen (git show/diff), nie auschecken (#1167).
+          git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null \
+            || git fetch --no-tags --quiet origin "+refs/pull/$PR_NUMBER/head:refs/kq/pr-head"
+
           # Geschuetzte Pfade — SSOT ist .github/protected-paths.json (#1157), keine eigene
           # Liste mehr. jq bringt die CODEOWNERS-Schreibweise in die Substring-Form: fuehrenden
           # '/' weg, ab dem ersten '*' abschneiden ("/scripts/check-*.mjs" -> "scripts/check-")
           # — dieselbe Abbildung wie normalizeProtected in test/harness-approval.test.ts.
           #
-          # Gelesen vom BASE-Commit, nicht aus der Arbeitskopie: der Checkout ist der
-          # PR-Merge-Ref, ein PR koennte die Quelle sonst leeren und sich damit selbst
-          # entschuetzen. (Aendert ein PR diesen Workflow selbst, laeuft dessen Fassung — das
-          # bleibt, wie der ganze Guard, ein Speed-Bump; darum ist .github/workflows/ geschuetzt.) Die Head-Fassung kommt nur ADDITIV dazu, damit ein neu ergaenzter
+          # Gelesen vom BASE-Commit, nicht aus der Arbeitskopie: unter pull_request ist der
+          # Checkout der PR-Merge-Ref, ein PR koennte die Quelle sonst leeren und sich damit
+          # selbst entschuetzen. (Den Workflow selbst schuetzt pull_request_target, #1167 —
+          # vollstaendig erst, wenn Phase 2 (#1170) den pull_request-Trigger entfernt hat.) Die
+          # Head-Fassung kommt nur ADDITIV dazu, damit ein neu ergaenzter
           # Pfad schon im einfuehrenden PR greift. Fail-closed: fehlt die Base-Quelle oder ist
           # sie leer/kaputt, gilt JEDE geaenderte Datei als geschuetzt (Label-Pflicht).
           QUELLE=.github/protected-paths.json

@@ -254,10 +254,84 @@ describe("Der Guard-Workflow triggert auf Label-Änderung (#1015)", () => {
     // jemand `labeled` aus types entfernen und der Ticket-Zweck regressierte still
     // (alle anderen Tests blieben grün) – genau das „von außen grün, kein echter
     // Schutz"-Muster, das diese Fitness-Function-Familie adressiert.
-    const m = guardWf.match(/pull_request:\s*\n\s*types:\s*\[([^\]]*)\]/);
-    assert.ok(m, "kein pull_request.types-Trigger in gate-change-guard.yml gefunden");
-    assert.match(m[1], /\blabeled\b/, "Trigger enthält 'labeled' nicht");
-    assert.match(m[1], /\bunlabeled\b/, "Trigger enthält 'unlabeled' nicht");
+    // Beide Trigger-Blöcke prüfen (#1167): auch pull_request_target muss aufs Label reagieren.
+    for (const trigger of ["pull_request", "pull_request_target"]) {
+      const m = guardWf.match(new RegExp(`\\n  ${trigger}:\\s*\\n\\s*types:\\s*\\[([^\\]]*)\\]`));
+      assert.ok(m, `kein ${trigger}.types-Trigger in gate-change-guard.yml gefunden`);
+      // Auch die Push-Events: fehlt z.B. synchronize, bliebe nach einem neuen Push ein altes Grün stehen.
+      for (const typ of ["opened", "synchronize", "reopened", "labeled", "unlabeled"]) {
+        assert.match(m[1], new RegExp(`\\b${typ}\\b`), `${trigger}: Trigger enthält '${typ}' nicht`);
+      }
+    }
+  });
+});
+
+describe("Der Guard läuft aus der Base-Fassung, nicht aus dem PR (#1167)", () => {
+  // Unter pull_request käme die Workflow-Definition aus dem PR-Merge-Ref: ein PR, der diese Datei
+  // selbst ändert (z.B. `exit 0`), wäre im selben Lauf schon entschärft. pull_request_target nimmt
+  // die Fassung von main. Phase 1 lässt pull_request als Übergang stehen (sonst meldet der
+  // einführende PR den Required-Check nie – Deadlock), Phase 2 entfernt ihn.
+  // Fehlt der Job-Schlüssel, liefe slice(-1) auf das letzte Zeichen – alle doesNotMatch-Tests wären still grün.
+  const jobStart = guardWf.indexOf("\n  gate-change-guard:");
+  const guardJob = guardWf.slice(Math.max(jobStart, 0));
+
+  test("der Guard-Job wird gefunden (sonst prüfen die Negativfälle unten ins Leere)", () => {
+    assert.ok(jobStart > 0, "Job-Schlüssel gate-change-guard: nicht gefunden");
+  });
+
+  test("der Guard triggert auf pull_request_target", () => {
+    assert.match(guardWf, /\n {2}pull_request_target:\s*\n/, "gate-change-guard.yml triggert nicht auf pull_request_target");
+  });
+
+  test("der Job hat kein if: und kein continue-on-error (übersprungen bzw. geschluckt zählt als bestanden)", () => {
+    // Ein per if: übersprungener Job meldet „skipped" – Branch-Protection wertet das als bestanden.
+    // Jede Form zählt (if: false, != 'pull_request_target', an Job oder Step), darum gar kein if:.
+    // continue-on-error schluckt das exit 1 des Label-Gates genauso still.
+    assert.doesNotMatch(guardJob, /\n\s+(?:-\s+)?if:/, "Guard-Job oder ein Step hat ein if:");
+    assert.doesNotMatch(guardJob, /continue-on-error/, "Guard-Job oder ein Step hat continue-on-error");
+  });
+
+  test("die Concurrency-Gruppe hängt an PR-Nummer + Event, nicht an github.ref", () => {
+    // Unter pull_request_target ist github.ref = refs/heads/main für ALLE PRs: eine Gruppe mit
+    // cancel-in-progress würde den Guard fremder PRs abbrechen. Das Event gehört mit hinein, damit
+    // sich die beiden Übergangs-Trigger desselben PRs nicht gegenseitig canceln.
+    const m = guardWf.match(/\n\s+group:\s*([^\n]+)/);
+    assert.ok(m, "keine concurrency.group in gate-change-guard.yml");
+    assert.doesNotMatch(m[1], /github\.ref\b/, "concurrency.group hängt an github.ref");
+    assert.match(m[1], /github\.event\.pull_request\.number/, "concurrency.group enthält die PR-Nummer nicht");
+    assert.match(m[1], /github\.event_name/, "concurrency.group enthält den Event-Namen nicht");
+  });
+
+  test("der Job hat minimale, rein lesende Permissions", () => {
+    const m = guardJob.match(/\n {4}permissions:\s*\n((?: {6}[^\n]*\n)+)/);
+    assert.ok(m, "Guard-Job hat keinen eigenen permissions:-Block (Default unter pull_request_target wäre schreibend)");
+    assert.doesNotMatch(m[1], /\bwrite\b/, "Guard-Job hat schreibende Permissions");
+  });
+
+  test("es wird kein PR-Code ausgecheckt oder ausgeführt", () => {
+    // Jedes ref: am Checkout (head.sha, github.head_ref, …) holte PR-Code als Arbeitskopie.
+    assert.doesNotMatch(guardJob, /\n\s+ref:/, "Checkout setzt ein ref: – die Arbeitskopie muss die Base bleiben");
+    assert.doesNotMatch(guardJob, /uses:\s*\.\//, "Guard-Job lädt eine lokale Action aus dem Repo");
+    assert.doesNotMatch(guardJob, /git (checkout|switch|worktree)\b/, "Guard-Job checkt einen anderen Stand aus");
+    assert.doesNotMatch(guardJob, /allow-unsafe-pr-checkout/, "unsicherer PR-Checkout ist erlaubt");
+    assert.match(guardJob, /persist-credentials:\s*false/, "Checkout lässt das Token in der Git-Config liegen");
+    assert.doesNotMatch(guardJob, /\b(npm|npx|node)\s|bash\s+\.?\/?[\w-]+\//, "Guard-Job führt Repo-Code aus");
+  });
+
+  test("der Head-Commit wird nachgeholt, falls er fehlt (Fork-PR unter pull_request_target)", () => {
+    assert.match(guardJob, /git cat-file -e "\$HEAD_SHA\^\{commit\}"[^\n]*?(?:\\\r?\n\s*)?\|\|\s*git fetch[^\n]*refs\/pull\/\$PR_NUMBER\/head/, "kein Nachholen des PR-Heads");
+  });
+
+  test("der Job-Name bleibt wortgleich – der Required-Check-Kontext im Ruleset hängt daran (#984)", () => {
+    assert.match(
+      guardJob,
+      /\r?\n {4}name: Gate-Config-Aenderungsschutz \(Goodhart-Guard, #903\)\r?\n/,
+      "Job-Name geändert/gequotet – der Required-Check-Kontext im Ruleset main-schutz bricht",
+    );
+  });
+
+  test("der Guard-Job hat genau einen run:-Block (das e2e-Skript unten extrahiert den ersten)", () => {
+    assert.equal(guardJob.match(/\n {8}run: \|/g)?.length, 1, "mehr/weniger als ein run: |-Block im Guard-Job");
   });
 });
 
