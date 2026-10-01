@@ -16,7 +16,7 @@
 #    Bis #1069 war das ein Pflicht-Stopp (Merge nur durch die Maintainerin);
 #    seitdem ersetzt eine Audit-Spur (Label + Kommentar) diese Freigabe.
 #    Dazu (#1156) Waechter-Tests, die selbst der einzige Durchsetzer ihrer
-#    Regel sind - seit #1165 gesammelt im Ordner test/harness/.
+#    Regel sind - seit #1165 gesammelt im Ordner test/harness/ (Rest: #1177).
 #
 # Darum tragen NUR PRs, die diese Pfade anfassen, das Label als sichtbaren
 # Marker im PR-Log. Alle anderen Pfade mergen ohne Label autonom bei gruener CI.

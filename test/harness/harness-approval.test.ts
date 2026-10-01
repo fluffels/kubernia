@@ -96,7 +96,8 @@ const WAECHTER_ORDNER = "test/harness/";
  * Marker im Dateikopf jedes Wächter-Tests (#1165). Erst er macht den Ordner prüfbar: ohne ihn hieße
  * „vier Einträge vergessen" nur noch „den Ordner vergessen" – ein neuer Wächter direkt unter test/
  * wäre wieder still ungeschützt. Erkannt nur als eigene Kommentar-Zeile (` * @harness-waechter`),
- * damit eine Erwähnung im Fließtext oder Code nicht zählt.
+ * damit eine Erwähnung im Fließtext oder Code nicht zählt. Grenze: ein Wächter, der weder Marker
+ * noch Ordner bekommt, bleibt unsichtbar – die Regel senkt die Vergess-Stellen von vier auf eine.
  */
 const WAECHTER_MARKER = /^\s*(?:\/\*+|\*)?\s*@harness-waechter(?![\w-])/m;
 
