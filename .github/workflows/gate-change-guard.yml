@@ -28,22 +28,20 @@ name: Gate-Change-Guard
 #     Branch-Protection als BESTANDEN — der Guard waere still wirkungslos.
 #   - concurrency haengt an PR-Nummer + Event, nicht an github.ref (unter pull_request_target
 #     ist das refs/heads/main fuer ALLE PRs — sie wuerden sich gegenseitig den Check abbrechen).
-# ⚠️ Uebergang (Phase 1): `pull_request` bleibt vorerst stehen, sonst meldet der PR, der
-# pull_request_target einfuehrt, den Required-Check nie (main kennt den Trigger noch nicht,
-# bypass_actors ist leer → Deadlock). Solange beide laufen, meldet derselbe Kontext zweimal und
-# das Loch ist nur halb zu — Phase 2 (#1170) entfernt `pull_request`, nachdem dort belegt ist,
-# dass der pull_request_target-Run wirklich auf dem PR-Head zaehlt.
+# Phase 2 (#1170): der Uebergangs-Trigger `pull_request` aus Phase 1 ist entfernt, nachdem belegt
+# war, dass der pull_request_target-Run auf dem PR-Head den Required-Check meldet. NICHT wieder
+# hinzufuegen: ein zweiter Lauf aus dem PR-Merge-Ref meldet denselben Kontext und koennte den
+# Base-Lauf ueberschreiben — das Selbst-Editier-Loch waere wieder halb offen (bewacht von
+# test/harness/harness-approval.test.ts).
 # Ehrliche Grenze: das Ruleset gleicht den Kontext nur ueber den Job-Namen ab. Ein PR kann eine
 # NEUE Workflow-Datei mit gleichnamigem Job danebenlegen — geschlossen ist nur das direkte
 # Editieren dieser Datei. Der Guard bleibt ein Speed-Bump.
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
   pull_request_target:
     types: [opened, synchronize, reopened, labeled, unlabeled]
 
-# Veraltete Runs desselben PRs abbrechen, sobald ein neuer startet (je Event getrennt, damit sich
-# die beiden Uebergangs-Trigger nicht gegenseitig canceln).
+# Veraltete Runs desselben PRs abbrechen, sobald ein neuer startet. Das Event bleibt in der Gruppe,
+# damit ein spaeter ergaenzter zweiter Trigger den Guard nicht still abbricht.
 concurrency:
   group: gate-change-guard-${{ github.event_name }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -99,10 +97,10 @@ jobs:
           # '/' weg, ab dem ersten '*' abschneiden ("/scripts/check-*.mjs" -> "scripts/check-")
           # — dieselbe Abbildung wie normalizeProtected in test/harness/harness-approval.test.ts.
           #
-          # Gelesen vom BASE-Commit, nicht aus der Arbeitskopie: unter pull_request ist der
-          # Checkout der PR-Merge-Ref, ein PR koennte die Quelle sonst leeren und sich damit
-          # selbst entschuetzen. (Den Workflow selbst schuetzt pull_request_target, #1167 —
-          # vollstaendig erst, wenn Phase 2 (#1170) den pull_request-Trigger entfernt hat.) Die
+          # Gelesen vom BASE-Commit, nicht aus der Arbeitskopie: so koennte ein PR die Quelle
+          # selbst dann nicht leeren und sich entschuetzen, wenn der Checkout je wieder der
+          # PR-Merge-Ref waere (frueher unter pull_request). Den Workflow selbst schuetzt
+          # pull_request_target (#1167, seit #1170 einziger Trigger). Die
           # Head-Fassung kommt nur ADDITIV dazu, damit ein neu ergaenzter
           # Pfad schon im einfuehrenden PR greift. Fail-closed: fehlt die Base-Quelle oder ist
           # sie leer/kaputt, gilt JEDE geaenderte Datei als geschuetzt (Label-Pflicht).
