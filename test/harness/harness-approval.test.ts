@@ -51,6 +51,24 @@ function normalizeProtected(p: string): string {
   return p.replace(/^\//, "").replace(/\*.*$/, "");
 }
 
+/** Der top-level `on:`-Block eines Workflows (bis zur nächsten top-level-Zeile), sonst "". */
+function onBlock(wf: string): string {
+  const zeilen = wf.split(/\r?\n/);
+  const start = zeilen.findIndex((z) => /^on:/.test(z));
+  if (start < 0) return "";
+  const rest = zeilen.slice(start + 1);
+  const ende = rest.findIndex((z) => /^\S/.test(z));
+  return [zeilen[start], ...(ende < 0 ? rest : rest.slice(0, ende))].join("\n");
+}
+
+/**
+ * Triggert der Workflow auf `pull_request` (nicht `pull_request_target`)? Ohne YAML-Lib, deckt aber
+ * Block-, Flow- und Listen-Style des `on:`-Blocks ab (Hinweis aus dem Review von #1167).
+ */
+function hatPullRequestTrigger(wf: string): boolean {
+  return /(?:^on:|[\s{[,])\s*pull_request(?![\w-])/.test(onBlock(wf));
+}
+
 /** Die geschützten Pfade aus `.github/CODEOWNERS` (jeweils vor dem `@owner`). */
 function codeownersPaths(text: string): Set<string> {
   const set = new Set<string>();
@@ -279,8 +297,8 @@ describe("Der Guard-Workflow triggert auf Label-Änderung (#1015)", () => {
     // jemand `labeled` aus types entfernen und der Ticket-Zweck regressierte still
     // (alle anderen Tests blieben grün) – genau das „von außen grün, kein echter
     // Schutz"-Muster, das diese Fitness-Function-Familie adressiert.
-    // Beide Trigger-Blöcke prüfen (#1167): auch pull_request_target muss aufs Label reagieren.
-    for (const trigger of ["pull_request", "pull_request_target"]) {
+    // Seit #1170 gibt es nur noch pull_request_target – der muss aufs Label reagieren.
+    for (const trigger of ["pull_request_target"]) {
       const m = guardWf.match(new RegExp(`\\n  ${trigger}:\\s*\\n\\s*types:\\s*\\[([^\\]]*)\\]`));
       assert.ok(m, `kein ${trigger}.types-Trigger in gate-change-guard.yml gefunden`);
       // Auch die Push-Events: fehlt z.B. synchronize, bliebe nach einem neuen Push ein altes Grün stehen.
@@ -294,8 +312,8 @@ describe("Der Guard-Workflow triggert auf Label-Änderung (#1015)", () => {
 describe("Der Guard läuft aus der Base-Fassung, nicht aus dem PR (#1167)", () => {
   // Unter pull_request käme die Workflow-Definition aus dem PR-Merge-Ref: ein PR, der diese Datei
   // selbst ändert (z.B. `exit 0`), wäre im selben Lauf schon entschärft. pull_request_target nimmt
-  // die Fassung von main. Phase 1 lässt pull_request als Übergang stehen (sonst meldet der
-  // einführende PR den Required-Check nie – Deadlock), Phase 2 entfernt ihn.
+  // die Fassung von main. Phase 1 (#1167) ließ pull_request als Übergang stehen, Phase 2 (#1170)
+  // hat ihn entfernt – er darf nicht zurückkommen, sonst ist das Selbst-Editier-Loch wieder halb offen.
   // Fehlt der Job-Schlüssel, liefe slice(-1) auf das letzte Zeichen – alle doesNotMatch-Tests wären still grün.
   const jobStart = guardWf.indexOf("\n  gate-change-guard:");
   const guardJob = guardWf.slice(Math.max(jobStart, 0));
@@ -306,6 +324,24 @@ describe("Der Guard läuft aus der Base-Fassung, nicht aus dem PR (#1167)", () =
 
   test("der Guard triggert auf pull_request_target", () => {
     assert.match(guardWf, /\n {2}pull_request_target:\s*\n/, "gate-change-guard.yml triggert nicht auf pull_request_target");
+  });
+
+  test("der Guard triggert NICHT mehr auf pull_request (Phase 2, #1170)", () => {
+    assert.notEqual(onBlock(guardWf), "", "kein on:-Block in gate-change-guard.yml gefunden");
+    assert.equal(hatPullRequestTrigger(guardWf), false, "gate-change-guard.yml triggert wieder auf pull_request");
+  });
+
+  test("die pull_request-Erkennung greift in Block-, Flow- und Listen-Style (Red-Green)", () => {
+    const wf = (on: string) => `name: x\n${on}\njobs:\n  x:\n    pull_request: 1\n`;
+    assert.equal(hatPullRequestTrigger(wf("on:\n  pull_request_target:\n    types: [labeled]")), false);
+    assert.equal(hatPullRequestTrigger(wf("on:\n  pull_request:\n  pull_request_target:")), true);
+    assert.equal(hatPullRequestTrigger(wf("on:\n  pull_request_target:\n  pull_request:\n    types: [x]")), true);
+    assert.equal(hatPullRequestTrigger(wf("on: {pull_request: {types: [labeled]}, pull_request_target: {}}")), true);
+    assert.equal(hatPullRequestTrigger(wf("on: [pull_request_target, pull_request]")), true);
+    assert.equal(hatPullRequestTrigger(wf("on: pull_request")), true);
+    assert.equal(hatPullRequestTrigger(wf("on: pull_request_target")), false);
+    // `pull_request:` unter jobs: (außerhalb von on:) ist kein Trigger – darum der Fixture-Rahmen oben.
+    assert.equal(hatPullRequestTrigger("jobs:\n  x:\n    pull_request: 1\n"), false);
   });
 
   test("der Job hat kein if: und kein continue-on-error (übersprungen bzw. geschluckt zählt als bestanden)", () => {
