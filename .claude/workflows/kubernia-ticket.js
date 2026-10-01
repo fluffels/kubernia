@@ -336,7 +336,7 @@ const MAX_REVIEW_RUNDEN = 2
 // beseitigt — darum werden Nummer UND klaerungAntworten hier gemeinsam gelesen.
 //
 // ⚠ Der Block ist bewusst SELBSTTRAGEND: zwischen den Markern darf nichts aus dem
-// Modul referenziert werden (nur Sprach-Globals). test/workflow-args.test.ts
+// Modul referenziert werden (nur Sprach-Globals). test/harness/workflow-args.test.ts
 // schneidet ihn genau an diesen Markern aus und führt ihn per node:vm real aus —
 // beim Umbenennen/Verschieben die Marker mitziehen, sonst wird der Test laut rot.
 function argsLesen(roh) {

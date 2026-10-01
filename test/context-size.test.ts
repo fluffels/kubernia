@@ -27,7 +27,7 @@ const ALLOWLIST: Allow[] = checkContextSize.ALLOWLIST;
 const collectContextSizes: (rootDir?: string, budgets?: Budget[], moduleBudget?: number) => Sized[] = checkContextSize.collectContextSizes;
 const findOversized: (sizes: Sized[]) => Sized[] = checkContextSize.findOversized;
 // Neu mit #1064: sichtbarer Inline-Disable statt die Bulk-Baseline (Gate-Config) anzuheben,
-// gleiches Muster wie test/agents-md-native.test.ts.
+// gleiches Muster wie test/harness/agents-md-native.test.ts.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const countChars: (text: string) => number = checkContextSize.countChars;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access

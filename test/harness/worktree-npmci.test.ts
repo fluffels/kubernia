@@ -1,6 +1,8 @@
 /* Worktree-Setup-Wächter (#1119) – ein frischer Worktree wird mit `npm ci` bestückt,
  * nicht mit `npm install`.
  *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
  * Hintergrund: `npm install` darf `package-lock.json` neu schreiben. In jedem Ticket-Lauf
  * wurde der Lockfile im frischen Worktree dirty und musste von Hand zurückgesetzt werden
  * (#998, #1107: einmal versehentlich mitcommittet). `npm ci` installiert exakt nach
@@ -22,7 +24,7 @@
  * `npm install` in einem Unterpunkt oder Folgeabsatz, sieht er das nicht. Erklärende
  * Erwähnungen von `npm install` neben einem Worktree-Bezug meldet er mit – solche Sätze
  * ohne den Befehl formulieren. Fitness-Function der test-only-Familie (wie
- * `test/agents-md-native.test.ts`), ohne eigenes `scripts/check-*.mjs` (gate-config-geschützt).
+ * `test/harness/agents-md-native.test.ts`), ohne eigenes `scripts/check-*.mjs` (gate-config-geschützt).
  *
  * Ausführen mit:  npm test
  */
@@ -32,14 +34,14 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as checkDocDrift from "../scripts/check-docdrift.mjs";
+import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
 
-// Begründete Ausnahme wie in test/agents-md-native.test.ts: das .mjs hat kein
+// Begründete Ausnahme wie in test/harness/agents-md-native.test.ts: das .mjs hat kein
 // Declaration-File, der Namespace ist für tsc „error typed".
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const collectMarkdown: (rootDir?: string) => string[] = checkDocDrift.collectMarkdown;
 
-const ROOT = fileURLToPath(new URL("..", import.meta.url));
+const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 /** Die Texte, die heute die Worktree-Anlage beschreiben (Leerlauf-Schutz). */
 const PFLICHT_QUELLEN = [

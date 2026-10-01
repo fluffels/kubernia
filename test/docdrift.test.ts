@@ -47,7 +47,7 @@ const { collectMarkdown, VERSIONED_CLAUDE_DIRS } = checkDocDrift as unknown as {
   VERSIONED_CLAUDE_DIRS: Set<string>;
 };
 
-// Begründete Ausnahme wie in agents-md-native.test.ts: eng begrenzter Inline-Disable statt die
+// Begründete Ausnahme wie in test/harness/agents-md-native.test.ts: eng begrenzter Inline-Disable statt die
 // Gate-Config-Baseline eslint-suppressions.json anzufassen (das .mjs hat kein .d.ts).
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const CORE_DOCS: string[] = checkDocDrift.CORE_DOCS;
