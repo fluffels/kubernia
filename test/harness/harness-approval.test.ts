@@ -1,5 +1,7 @@
 /* Harness-Freigabe-Wächter (#1012, Regel seit #1069) – Sign-off + Audit-Spur für Leitplanken-Diffs.
  *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
  * Kubernia mergt autonom. Leitplanken-Änderungen (Selbstmodifikation) waren bis #1069 ein
  * Pflicht-Stopp; seitdem setzt der Agent das Label `maintainer-approved` bei der intendierten
  * Änderung seines Tickets selbst, mergt und hinterlässt einen Audit-Kommentar. Dieser Wächter
@@ -25,19 +27,19 @@
  * Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`: `scripts/check-`
  * ist selbst gate-config-geschützt (Goodhart-Guard #903, Label-Pflicht) – für rein
  * doku-/config-strukturelle Wächter gibt es die etablierte test-only-Familie (Präzedenz:
- * `test/agents-md-native.test.ts`).
+ * `test/harness/agents-md-native.test.ts`).
  *
  * Ausführen mit:  npm test
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");
+const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
 /**
  * Normalisiert einen geschützten Pfad auf seine Substring-Form: führenden `/` weg
@@ -82,15 +84,29 @@ const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/", ".
 /**
  * Wächter-Tests, die selbst der EINZIGE Durchsetzer ihrer Regel sind (#1156) – ohne eigenes,
  * schon geschütztes `scripts/check-*.mjs` dahinter. Liefen sie ungeschützt, könnte ein PR den
- * Riegel ohne `maintainer-approved` still abschwächen: agents-md-native bewacht die eine
- * Root-Kontextdatei (auch den ungetrackten CLAUDE.local.md-Fall, den kein PR-Diff zeigt),
- * dieser Test hier den Sync von Quelle und CODEOWNERS. Bewusst einzeln statt als Muster: ein Glob
- * würde von `normalizeProtected` auf `test/` gekürzt und jeden Test-PR label-pflichtig machen.
+ * Riegel ohne `maintainer-approved` still abschwächen. Seit #1165 liegen sie alle in EINEM Ordner,
+ * der als echtes Präfix geschützt ist: ein neuer Wächter braucht damit keinen eigenen Eintrag mehr
+ * (vorher vier: Quelle, CODEOWNERS, diese Liste, Prosa). Ein Präfix statt eines Globs, weil
+ * `normalizeProtected` jedes Glob ab dem `*` kürzt (`/test/*harness*` → `test/`).
  * Tests mit geschütztem check-Skript dahinter (filesize, docmap, diffsize, …) gehören nicht hierher.
- * Bewusst vorerst nur diese zwei (Maintainerin-Entscheidung #1156): weitere Wächter ohne
- * check-Skript (z.B. settings-permissions, diffbasis) kommen mit der Namensregel test/harness/.
  */
-const WAECHTER_TESTS = ["test/agents-md-native.test.ts", "test/harness-approval.test.ts"];
+const WAECHTER_ORDNER = "test/harness/";
+
+/**
+ * Marker im Dateikopf jedes Wächter-Tests (#1165). Erst er macht den Ordner prüfbar: ohne ihn hieße
+ * „vier Einträge vergessen" nur noch „den Ordner vergessen" – ein neuer Wächter direkt unter test/
+ * wäre wieder still ungeschützt. Erkannt nur als eigene Kommentar-Zeile (` * @harness-waechter`),
+ * damit eine Erwähnung im Fließtext oder Code nicht zählt.
+ */
+const WAECHTER_MARKER = /^\s*(?:\/\*+|\*)?\s*@harness-waechter\b/m;
+
+/** Alle `*.test.ts` unter `test/` (rekursiv), relativ zum Repo-Root mit `/`. */
+function testDateien(): string[] {
+  const wurzel = fileURLToPath(new URL("../../", import.meta.url));
+  return readdirSync(join(wurzel, "test"), { recursive: true, encoding: "utf8" })
+    .map((f) => `test/${f.replace(/\\/g, "/")}`)
+    .filter((f) => f.endsWith(".test.ts"));
+}
 
 /**
  * Bewusst tiefen-unabhängige Einträge (#1168): ohne führenden `/` schützen sie die Datei auf JEDER
@@ -188,14 +204,10 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
     assert.deepEqual(unverankert, [...TIEFENUNABHAENGIG].sort(), "CODEOWNERS: Anker-Form weicht von der Quelle ab (#1168)");
   });
 
-  test("die Quelle schützt die Wächter-Tests selbst (#1156)", () => {
-    const sp = sourcePaths(quelle);
-    const fehlend = WAECHTER_TESTS.filter((p) => !sp.has(p));
-    assert.deepEqual(
-      fehlend,
-      [],
-      "Wächter-Tests fehlen im Sign-off-Riegel (#1156) – sonst lässt sich der Wächter des Riegels ohne Label abschwächen:\n" +
-        fehlend.join("\n"),
+  test("die Quelle schützt den Wächter-Ordner als Präfix (#1156, #1165)", () => {
+    assert.ok(
+      sourcePaths(quelle).has(WAECHTER_ORDNER),
+      `${QUELLE}: '/${WAECHTER_ORDNER}' fehlt – sonst lässt sich der Wächter des Riegels ohne Label abschwächen`,
     );
   });
 
@@ -210,10 +222,22 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
     );
   });
 
-  test("die geschützten Wächter-Tests existieren wirklich (#1156)", () => {
-    // Nach einem Umbenennen stünde sonst ein verwaister Pfad in der Quelle – grün, aber ohne Schutz.
-    const fehlend = WAECHTER_TESTS.filter((p) => !existsSync(fileURLToPath(new URL(`../${p}`, import.meta.url))));
-    assert.deepEqual(fehlend, [], `Geschützte Wächter-Tests gibt es nicht (umbenannt?):\n${fehlend.join("\n")}`);
+  test("der Wächter-Ordner existiert und ist nicht leer (#1165)", () => {
+    // Nach einem Umbenennen/Leeren stünde sonst ein verwaister Präfix in der Quelle – grün, aber ohne Schutz.
+    const drin = testDateien().filter((f) => f.startsWith(WAECHTER_ORDNER));
+    assert.ok(existsSync(fileURLToPath(new URL(`../../${WAECHTER_ORDNER}`, import.meta.url))), `${WAECHTER_ORDNER} fehlt`);
+    assert.ok(drin.length > 0, `${WAECHTER_ORDNER} enthält keine Tests`);
+  });
+
+  test("jeder Test mit @harness-waechter liegt in test/harness/ – und jeder dort trägt den Marker (#1165)", () => {
+    const falsch: string[] = [];
+    for (const f of testDateien()) {
+      const markiert = WAECHTER_MARKER.test(read(f));
+      const imOrdner = f.startsWith(WAECHTER_ORDNER);
+      if (markiert && !imOrdner) falsch.push(`${f}: trägt @harness-waechter, liegt aber außerhalb von ${WAECHTER_ORDNER} (ungeschützt)`);
+      if (!markiert && imOrdner) falsch.push(`${f}: liegt in ${WAECHTER_ORDNER}, aber ohne @harness-waechter im Kopf`);
+    }
+    assert.deepEqual(falsch, [], `Wächter-Tests falsch abgelegt (#1165):\n${falsch.join("\n")}`);
   });
 
   test("der Guard führt keine eigene Pfadliste mehr, sondern liest die Quelle", () => {
@@ -386,7 +410,7 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
 
   test("ein Glob-Muster für Tests würde auf den ganzen test/-Ordner kürzen (#1156)", () => {
     // Belegt, warum die Wächter-Tests einzeln statt als Muster eingetragen sind – und dass der
-    // Negativ-Wächter oben ein solches Muster wirklich fängt. Feste Literale, nicht WAECHTER_TESTS.
+    // Negativ-Wächter oben ein solches Muster wirklich fängt. Feste Literale.
     assert.equal(normalizeProtected("/test/*harness*.test.ts"), "test/");
     assert.equal(normalizeProtected("/test/harness-approval.test.ts"), "test/harness-approval.test.ts");
   });
@@ -395,8 +419,22 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
     for (const muster of ["/test/*x*", "/test", "/t*", "/*.test.ts", "/**"]) {
       assert.equal(decktTestOrdnerAb(normalizeProtected(muster)), true, `nicht erkannt: ${muster}`);
     }
-    for (const einzeln of ["/test/agents-md-native.test.ts", "/.claude/", "/AGENTS.md", "/tests-x/"]) {
+    for (const einzeln of ["/test/agents-md-native.test.ts", `/${WAECHTER_ORDNER}`, "/.claude/", "/AGENTS.md", "/tests-x/"]) {
       assert.equal(decktTestOrdnerAb(normalizeProtected(einzeln)), false, `fälschlich erkannt: ${einzeln}`);
+    }
+  });
+});
+
+describe("Der @harness-waechter-Marker zählt nur als eigene Kommentar-Zeile (#1165)", () => {
+  test("Kopf-Zeilen werden erkannt", () => {
+    for (const kopf of [" * @harness-waechter", "/* @harness-waechter */", "/** @harness-waechter", "// x\n * @harness-waechter (#1165)"]) {
+      assert.match(kopf, WAECHTER_MARKER, `nicht erkannt: ${kopf}`);
+    }
+  });
+
+  test("Erwähnungen in Fließtext oder Code zählen nicht", () => {
+    for (const text of [" * siehe @harness-waechter im Kopf", 'const m = "@harness-waechter";', " * @harness-waechterX"]) {
+      assert.doesNotMatch(text, WAECHTER_MARKER, `fälschlich erkannt: ${text}`);
     }
   });
 });
@@ -574,6 +612,13 @@ describe("Der Guard liest die Quelle wirklich richtig – echter Lauf mit bash +
     // Regressions-Pin: der Substring-Guard trifft sie schon seit jeher; ein späteres verankertes
     // Glob-Matching darf sie nicht still entschützen.
     erwarteSignOffFehlt(guardLauf(ECHTE_QUELLE, { "src/content/AGENTS.md": "x\n" }), "src/content/AGENTS.md");
+  });
+
+  test.skipIf(!hatJq)("ein neuer Test in test/harness/ ist label-pflichtig, ein Test daneben nicht (#1165)", () => {
+    // Der Präfix greift wirklich im Guard – und sperrt nicht den ganzen test/-Ordner (Label-Fatigue).
+    erwarteSignOffFehlt(guardLauf(ECHTE_QUELLE, { "test/harness/neu.test.ts": "x\n" }), "test/harness/neu.test.ts");
+    const daneben = guardLauf(ECHTE_QUELLE, { "test/sonstwas.test.ts": "x\n" });
+    assert.equal(daneben.exit, 0, daneben.out);
   });
 
   test.skipIf(!hatJq)("ein PR, der die Quelle leert und eine Gate-Datei ändert, bleibt ohne Label rot", () => {

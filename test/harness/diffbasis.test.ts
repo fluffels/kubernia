@@ -1,5 +1,7 @@
 /* Diff-Basis-Wächter (#1108) – Harness-Texte lehren NUR den Drei-Punkt-Diff gegen `origin/main`.
  *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
  * In #1095 und #1105 stand in Harness-Texten jeweils ein Zwei-Punkt-Diff `git diff … main` gegen ein
  * womöglich veraltetes LOKALES `main`. Dabei zählen fremde main-Commits mit: der Review sieht Zeilen,
  * die gar nicht zum Slice gehören, und `beruehrtHarness`-artige Entscheidungen kippen. Beide Stellen
@@ -40,7 +42,7 @@
  * Root-Kontextdatei `AGENTS.md` (eine `CLAUDE.md` ist seit #1087 verboten). Nicht gescannt:
  * `scripts/**` (dort ist `merge-base … main` ein dokumentierter, korrekter Fallback für flache Checkouts in `check-diffsize.mjs`), `test/**` (Fixtures tragen per
  * Definition beide Formen) und `.github/workflows/*.yml` (diffen gegen SHA-Variablen, kein literales
- * `main`; die Diff-Basis des Goodhart-Guards bewacht `test/harness-approval.test.ts`).
+ * `main`; die Diff-Basis des Goodhart-Guards bewacht `test/harness/harness-approval.test.ts`).
  *
  * Wie in `review-context.test.ts` (#1034) läuft das Prädikat als EINE benannte Funktion über das
  * echte Artefakt UND über Gegenbeispiele, die rot sein MÜSSEN – kein abgeschriebener Zweit-Regex.
@@ -57,14 +59,14 @@ import { fileURLToPath } from "node:url";
 
 // Reines Node-Tooling-Skript ohne Declaration-File – wie in claude-bridge.test.ts.
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as checkDocDrift from "../scripts/check-docdrift.mjs";
+import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
 
 // Begründete Ausnahme wie in claude-bridge.test.ts: der Namespace des .mjs ist für tsc
 // „error typed"; eng begrenzter Inline-Disable statt Gate-Config anzufassen.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const VERSIONED_CLAUDE_DIRS: Set<string> = checkDocDrift.VERSIONED_CLAUDE_DIRS;
 
-const ROOT = fileURLToPath(new URL("../", import.meta.url));
+const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const read = (rel: string) => readFileSync(ROOT + rel, "utf8");
 
 /** Ein git-diff-Aufruf samt globaler Optionen und Argumenten; Backtick, Zeilenende und

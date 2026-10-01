@@ -1,5 +1,7 @@
 /* Least-Privilege-Wächter für die Agenten-Permissions (#901).
  *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
  * Ein voll-autonomer Agent mit Merge-Recht hat unbegrenzten Shell-Zugriff, wenn
  * `.claude/settings.json` keinen `permissions`-Block hat — die einzige Leitplanke
  * wären dann zwei eng geschnittene Hooks. Anthropics Permissions-Doku + OWASP
@@ -32,7 +34,7 @@ type Permissions = { allow?: string[]; ask?: string[]; deny?: string[] };
 type Settings = { permissions?: Permissions };
 
 const settings = JSON.parse(
-  readFileSync(fileURLToPath(new URL("../.claude/settings.json", import.meta.url)), "utf8"),
+  readFileSync(fileURLToPath(new URL("../../.claude/settings.json", import.meta.url)), "utf8"),
 ) as Settings;
 
 const perms = settings.permissions ?? {};

@@ -97,7 +97,7 @@ jobs:
           # Geschuetzte Pfade — SSOT ist .github/protected-paths.json (#1157), keine eigene
           # Liste mehr. jq bringt die CODEOWNERS-Schreibweise in die Substring-Form: fuehrenden
           # '/' weg, ab dem ersten '*' abschneiden ("/scripts/check-*.mjs" -> "scripts/check-")
-          # — dieselbe Abbildung wie normalizeProtected in test/harness-approval.test.ts.
+          # — dieselbe Abbildung wie normalizeProtected in test/harness/harness-approval.test.ts.
           #
           # Gelesen vom BASE-Commit, nicht aus der Arbeitskopie: unter pull_request ist der
           # Checkout der PR-Merge-Ref, ein PR koennte die Quelle sonst leeren und sich damit
@@ -120,7 +120,7 @@ jobs:
           # Drei-Punkt-Diff (#1095): nur was der PR seit der Merge-Base aendert. Der
           # Zwei-Punkt-Diff gegen base.sha (= main-Tip) zaehlte Dateien fremder, nach dem
           # Abzweigen gemergter main-Commits mit (PR #1093). fetch-depth: 0 oben liefert
-          # die Historie fuer die Merge-Base; bewacht von test/harness-approval.test.ts.
+          # die Historie fuer die Merge-Base; bewacht von test/harness/harness-approval.test.ts.
           changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
           gate_files=()
           while IFS= read -r f; do

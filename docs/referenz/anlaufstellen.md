@@ -79,7 +79,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Einordnung u
 | [assets/pixellab/README.md](../../assets/pixellab/README.md) | wenn du ein PixelLab-Asset suchst oder ablegst (Liste + IDs) |
 | [assets/maps/README.md](../../assets/maps/README.md) | beim Arbeiten an Tiled-Maps (`.tmj`) |
 | [`fonts.css`](../../fonts.css) · [`assets/fonts/`](../../assets/fonts/) | bei der HUD-Pixelschrift `KQPixel`/Silkscreen (Quelle + Lizenz, #189) |
-| [`test/`](../../test/) | wenn du Tests schreibst: Querschnitts-Umgebung in [`test/support/`](../../test/support/), Factories in [`test/factories/`](../../test/factories/) (`freshSim`); Kategorien und Fitness-Functions erklärt [agent-harness.md](../agent-harness.md) |
+| [`test/`](../../test/) | wenn du Tests schreibst: Querschnitts-Umgebung in [`test/support/`](../../test/support/), Factories in [`test/factories/`](../../test/factories/) (`freshSim`); Harness-Wächter (Kopf-Marker `@harness-waechter`, geschützt) in [`test/harness/`](../../test/harness/); Kategorien und Fitness-Functions erklärt [agent-harness.md](../agent-harness.md) |
 | [`e2e/`](../../e2e/) | bei Boot-, Interaktions-, FPS-, a11y- und Lern-Loop-Smokes (Playwright, `npm run smoke`); Details in [agent-harness.md › Test-Harness und e2e-Smokes](../agent-harness.md#test-harness-und-e2e-smokes), den Datei-Köpfen und [`playwright.config.ts`](../../playwright.config.ts) |
 
 ## 📸 Schnappschüsse — datiert, werden nicht aktualisiert
