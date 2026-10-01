@@ -153,8 +153,9 @@ function retiredRoleClaims(md: string): { line: number; term: string; home: stri
 describe("Keine CLAUDE.md verdrängt das native Laden von AGENTS.md (#1087)", () => {
   test("im Repo-Root liegt weder CLAUDE.md noch .claude/CLAUDE.md noch CLAUDE.local.md", () => {
     // Anker: zeigt REPO_ROOT nach einem Umzug in die falsche Tiefe, fände die Prüfung unten
-    // dort nie eine CLAUDE.md und bliebe still grün (Review #1165/#1177).
-    assert.ok(existsSync(join(REPO_ROOT, "AGENTS.md")), `REPO_ROOT ist nicht der Repo-Root: ${REPO_ROOT}`);
+    // dort nie eine CLAUDE.md und bliebe still grün (Review #1165/#1177). Bewusst package.json
+    // statt AGENTS.md: modul-lokale AGENTS.md (#1168) gibt es auch in Unterordnern.
+    assert.ok(existsSync(join(REPO_ROOT, "package.json")), `REPO_ROOT ist nicht der Repo-Root: ${REPO_ROOT}`);
     assert.deepEqual(
       blockingMemoryFiles(REPO_ROOT),
       [],
