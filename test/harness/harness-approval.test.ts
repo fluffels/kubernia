@@ -51,9 +51,12 @@ function normalizeProtected(p: string): string {
   return p.replace(/^\//, "").replace(/\*.*$/, "");
 }
 
-/** Der top-level `on:`-Block eines Workflows (bis zur nächsten top-level-Zeile), sonst "". */
+/**
+ * Der top-level `on:`-Block eines Workflows (bis zur nächsten top-level-Zeile), sonst "".
+ * Kommentarzeilen beenden den Block nicht (auch nicht in Spalte 0) und fallen heraus.
+ */
 function onBlock(wf: string): string {
-  const zeilen = wf.split(/\r?\n/);
+  const zeilen = wf.split(/\r?\n/).filter((z) => !/^\s*#/.test(z));
   const start = zeilen.findIndex((z) => /^on:/.test(z));
   if (start < 0) return "";
   const rest = zeilen.slice(start + 1);
@@ -63,10 +66,10 @@ function onBlock(wf: string): string {
 
 /**
  * Triggert der Workflow auf `pull_request` (nicht `pull_request_target`)? Ohne YAML-Lib, deckt aber
- * Block-, Flow- und Listen-Style des `on:`-Blocks ab (Hinweis aus dem Review von #1167).
+ * Block-, Flow- und Listen-Style des `on:`-Blocks ab, auch gequotet (Hinweis aus dem Review von #1167).
  */
 function hatPullRequestTrigger(wf: string): boolean {
-  return /(?:^on:|[\s{[,])\s*pull_request(?![\w-])/.test(onBlock(wf));
+  return /(?:^on:|[\s{[,])\s*["']?pull_request(?![\w-])/.test(onBlock(wf));
 }
 
 /** Die geschützten Pfade aus `.github/CODEOWNERS` (jeweils vor dem `@owner`). */
@@ -298,13 +301,11 @@ describe("Der Guard-Workflow triggert auf Label-Änderung (#1015)", () => {
     // (alle anderen Tests blieben grün) – genau das „von außen grün, kein echter
     // Schutz"-Muster, das diese Fitness-Function-Familie adressiert.
     // Seit #1170 gibt es nur noch pull_request_target – der muss aufs Label reagieren.
-    for (const trigger of ["pull_request_target"]) {
-      const m = guardWf.match(new RegExp(`\\n  ${trigger}:\\s*\\n\\s*types:\\s*\\[([^\\]]*)\\]`));
-      assert.ok(m, `kein ${trigger}.types-Trigger in gate-change-guard.yml gefunden`);
-      // Auch die Push-Events: fehlt z.B. synchronize, bliebe nach einem neuen Push ein altes Grün stehen.
-      for (const typ of ["opened", "synchronize", "reopened", "labeled", "unlabeled"]) {
-        assert.match(m[1], new RegExp(`\\b${typ}\\b`), `${trigger}: Trigger enthält '${typ}' nicht`);
-      }
+    const m = guardWf.match(/\n {2}pull_request_target:\s*\n\s*types:\s*\[([^\]]*)\]/);
+    assert.ok(m, "kein pull_request_target.types-Trigger in gate-change-guard.yml gefunden");
+    // Auch die Push-Events: fehlt z.B. synchronize, bliebe nach einem neuen Push ein altes Grün stehen.
+    for (const typ of ["opened", "synchronize", "reopened", "labeled", "unlabeled"]) {
+      assert.match(m[1], new RegExp(`\\b${typ}\\b`), `pull_request_target: Trigger enthält '${typ}' nicht`);
     }
   });
 });
@@ -340,6 +341,13 @@ describe("Der Guard läuft aus der Base-Fassung, nicht aus dem PR (#1167)", () =
     assert.equal(hatPullRequestTrigger(wf("on: [pull_request_target, pull_request]")), true);
     assert.equal(hatPullRequestTrigger(wf("on: pull_request")), true);
     assert.equal(hatPullRequestTrigger(wf("on: pull_request_target")), false);
+    // Gequotete Keys/Listen-Einträge sind gültiges YAML und zählen genauso.
+    assert.equal(hatPullRequestTrigger(wf('on:\n  "pull_request":\n  pull_request_target:')), true);
+    assert.equal(hatPullRequestTrigger(wf("on: ['pull_request', pull_request_target]")), true);
+    assert.equal(hatPullRequestTrigger(wf('on: ["pull_request_target"]')), false);
+    // Ein Kommentar in Spalte 0 beendet den on:-Block nicht; ein Kommentar ist selbst kein Trigger.
+    assert.equal(hatPullRequestTrigger(wf("on:\n# Übergang\n  pull_request:\n  pull_request_target:")), true);
+    assert.equal(hatPullRequestTrigger(wf("on:\n  # früher auch pull_request\n  pull_request_target:")), false);
     // `pull_request:` unter jobs: (außerhalb von on:) ist kein Trigger – darum der Fixture-Rahmen oben.
     assert.equal(hatPullRequestTrigger("jobs:\n  x:\n    pull_request: 1\n"), false);
   });
@@ -354,8 +362,8 @@ describe("Der Guard läuft aus der Base-Fassung, nicht aus dem PR (#1167)", () =
 
   test("die Concurrency-Gruppe hängt an PR-Nummer + Event, nicht an github.ref", () => {
     // Unter pull_request_target ist github.ref = refs/heads/main für ALLE PRs: eine Gruppe mit
-    // cancel-in-progress würde den Guard fremder PRs abbrechen. Das Event gehört mit hinein, damit
-    // sich die beiden Übergangs-Trigger desselben PRs nicht gegenseitig canceln.
+    // cancel-in-progress würde den Guard fremder PRs abbrechen. Das Event bleibt mit drin, damit
+    // ein später ergänzter zweiter Trigger den Guard nicht still abbricht.
     const m = guardWf.match(/\n\s+group:\s*([^\n]+)/);
     assert.ok(m, "keine concurrency.group in gate-change-guard.yml");
     assert.doesNotMatch(m[1], /github\.ref\b/, "concurrency.group hängt an github.ref");
