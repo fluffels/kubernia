@@ -1,9 +1,9 @@
 /* Worktree-Guard-Hook (#735) — PreToolUse-Hook, der git commit/push AUSSERHALB
- *
- * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  * eines eigenen git-Worktrees blockt (Bitte-zu-Mauer-Verschiebung für die reale,
  * wiederholt aufgetretene Kollision: zwei parallele Agenten im selben geteilten
  * main-Checkout, siehe Kontext in #735).
+ *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
  * Rein struktureller Wächter (wie diffsize/docdrift): die Erkennungslogik lebt in
  * scripts/worktree-guard-hook.mjs (EINE Quelle für Hook-CLI und Test). git selbst

@@ -1,7 +1,7 @@
 /* Stop-Worktree-Cleanup-Hook (#708/#909/#952) — Stop-Hook, der verwaiste
+ * Worktree-Ordner aufräumt.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
- * Worktree-Ordner aufräumt.
  *
  * Der frühere verify-Frühindikator (#708 Haupt-Checkout, #909 Linked Worktrees)
  * wurde entfernt (Maintainerin-Wunsch, 2026-08-05); PR-/CI-Gate + pre-push-Hook
@@ -15,6 +15,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -53,19 +54,16 @@ describe("parseStopInput (#708)", () => {
 
 describe("repoRootFromScriptUrl", () => {
   test("leitet Repo-Root korrekt aus scripts/-Pfad ab (zwei Ebenen hoch)", () => {
-    // Nutzt import.meta.url des TESTS selbst: test/harness/ → repo-root (zwei Ebenen hoch).
-    // Das Skript liegt in scripts/ (eine Ebene unter Root), also muss
-    // repoRootFromScriptUrl auf eine gefakte scripts/-URL dieselbe Tiefe liefern.
-    // Wir simulieren mit einem Pfad, der auf der aktuellen Plattform gültig ist,
-    // indem wir den echten scripts/-Pfad aus dem bekannten import.meta.url ableiten.
+    // Das Skript liegt in scripts/ (eine Ebene unter Root). Wir leiten seine echte URL
+    // aus import.meta.url des TESTS ab (test/harness/<datei> → scripts/stop-verify-hook.mjs),
+    // damit der Pfad auf der aktuellen Plattform gültig ist.
     const scriptUrl = import.meta.url.replace(/\/test\/harness\/[^/]+$/, "/scripts/stop-verify-hook.mjs");
     const root = repoRootFromScriptUrl(scriptUrl);
-    const rootNorm = root.replace(/\\/g, "/");
-    // Repo-Root muss auf "kubernia" enden (keine scripts/-Komponente mehr)
-    assert.ok(
-      !rootNorm.endsWith("/scripts") && rootNorm.includes("kubernia"),
-      `Erwartet Pfad mit kubernia ohne /scripts/, bekam: ${root}`
-    );
+    // Exakt der Repo-Root (zwei Ebenen über diesem Test). Der frühere Check „enthält
+    // kubernia, endet nicht auf /scripts" blieb grün, wenn die Regex oben nicht traf
+    // und der Root auf …/test fiel (Review #1177).
+    const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/$/, "");
+    assert.equal(norm(root), norm(fileURLToPath(new URL("../../", import.meta.url))));
   });
 });
 
