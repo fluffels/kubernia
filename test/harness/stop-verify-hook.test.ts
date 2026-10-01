@@ -1,4 +1,6 @@
 /* Stop-Worktree-Cleanup-Hook (#708/#909/#952) — Stop-Hook, der verwaiste
+ *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  * Worktree-Ordner aufräumt.
  *
  * Der frühere verify-Frühindikator (#708 Haupt-Checkout, #909 Linked Worktrees)
@@ -16,7 +18,7 @@ import assert from "node:assert/strict";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as hook from "../scripts/stop-verify-hook.mjs";
+import * as hook from "../../scripts/stop-verify-hook.mjs";
 
 const parseStopInput: (text: string) => { stopHookActive: boolean } = hook.parseStopInput;
 const repoRootFromScriptUrl: (url: string) => string = hook.repoRootFromScriptUrl;
@@ -51,12 +53,12 @@ describe("parseStopInput (#708)", () => {
 
 describe("repoRootFromScriptUrl", () => {
   test("leitet Repo-Root korrekt aus scripts/-Pfad ab (zwei Ebenen hoch)", () => {
-    // Nutzt import.meta.url des TESTS selbst: test/ → repo-root (eine Ebene hoch).
-    // Das Skript liegt in scripts/ (auch eine Ebene unter Root), also muss
+    // Nutzt import.meta.url des TESTS selbst: test/harness/ → repo-root (zwei Ebenen hoch).
+    // Das Skript liegt in scripts/ (eine Ebene unter Root), also muss
     // repoRootFromScriptUrl auf eine gefakte scripts/-URL dieselbe Tiefe liefern.
     // Wir simulieren mit einem Pfad, der auf der aktuellen Plattform gültig ist,
     // indem wir den echten scripts/-Pfad aus dem bekannten import.meta.url ableiten.
-    const scriptUrl = import.meta.url.replace(/\/test\/[^/]+$/, "/scripts/stop-verify-hook.mjs");
+    const scriptUrl = import.meta.url.replace(/\/test\/harness\/[^/]+$/, "/scripts/stop-verify-hook.mjs");
     const root = repoRootFromScriptUrl(scriptUrl);
     const rootNorm = root.replace(/\\/g, "/");
     // Repo-Root muss auf "kubernia" enden (keine scripts/-Komponente mehr)

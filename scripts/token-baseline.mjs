@@ -1,5 +1,5 @@
 // Kein Shebang: wird per `node scripts/token-baseline.mjs` gestartet UND von
-// test/token-baseline.test.ts importiert (ein `#!` bricht den Test-Import).
+// test/harness/token-baseline.test.ts importiert (ein `#!` bricht den Test-Import).
 /**
  * Token- und Loop-Baseline pro Ticket-Lauf (#1068): Tokens nach Phase × Modell
  * (Input / Cache-Write / Cache-Read / Output) plus Loop-Kennzahlen.

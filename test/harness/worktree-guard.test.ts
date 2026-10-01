@@ -1,4 +1,6 @@
 /* Worktree-Guard-Hook (#735) — PreToolUse-Hook, der git commit/push AUSSERHALB
+ *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  * eines eigenen git-Worktrees blockt (Bitte-zu-Mauer-Verschiebung für die reale,
  * wiederholt aufgetretene Kollision: zwei parallele Agenten im selben geteilten
  * main-Checkout, siehe Kontext in #735).
@@ -16,7 +18,7 @@ import { join } from "node:path";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as guard from "../scripts/worktree-guard-hook.mjs";
+import * as guard from "../../scripts/worktree-guard-hook.mjs";
 
 type ExecDeps = { execFileSync?: (...a: unknown[]) => string; statSync?: (...a: unknown[]) => { isDirectory(): boolean } };
 type Decision = { block: boolean; reason?: string };

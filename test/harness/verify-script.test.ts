@@ -1,5 +1,7 @@
 /* #527: `npm run verify` ist die EINE SSOT-Kette über alle Gates.
  *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
  * Motivation (siehe Ticket #527): Vor diesem Ticket musste ein Agent typecheck +
  * lint + check:arch + check:size + check:docmap + test EINZELN laufen lassen und
  * die CI listete dieselben Schritte separat – zwei Drift-Risiken: (a) ein Agent
@@ -20,7 +22,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const readRepo = (rel: string) =>
-  readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");
+  readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
 const pkg = JSON.parse(readRepo("package.json")) as {
   scripts: Record<string, string>;
