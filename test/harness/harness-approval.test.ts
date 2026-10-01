@@ -98,7 +98,7 @@ const WAECHTER_ORDNER = "test/harness/";
  * wäre wieder still ungeschützt. Erkannt nur als eigene Kommentar-Zeile (` * @harness-waechter`),
  * damit eine Erwähnung im Fließtext oder Code nicht zählt.
  */
-const WAECHTER_MARKER = /^\s*(?:\/\*+|\*)?\s*@harness-waechter\b/m;
+const WAECHTER_MARKER = /^\s*(?:\/\*+|\*)?\s*@harness-waechter(?![\w-])/m;
 
 /** Alle `*.test.ts` unter `test/` (rekursiv), relativ zum Repo-Root mit `/`. */
 function testDateien(): string[] {
@@ -218,7 +218,7 @@ describe("Harness-Freigabe – eine Quelle, die Artefakte folgen ihr (#1012, #11
     assert.deepEqual(
       alle.filter(decktTestOrdnerAb),
       [],
-      "Ein Schutz-Eintrag deckt den ganzen test/-Ordner ab – Wächter-Tests einzeln eintragen (#1156)",
+      `Ein Schutz-Eintrag deckt den ganzen test/-Ordner ab – Wächter-Tests stattdessen nach ${WAECHTER_ORDNER} legen (#1156, #1165)`,
     );
   });
 
@@ -409,10 +409,10 @@ describe("Erkennung greift wirklich (Red-Green, #1012)", () => {
   });
 
   test("ein Glob-Muster für Tests würde auf den ganzen test/-Ordner kürzen (#1156)", () => {
-    // Belegt, warum die Wächter-Tests einzeln statt als Muster eingetragen sind – und dass der
-    // Negativ-Wächter oben ein solches Muster wirklich fängt. Feste Literale.
+    // Belegt, warum der Wächter-Ordner als Präfix statt als Glob eingetragen ist (#1165) – und dass
+    // der Negativ-Wächter oben ein solches Muster wirklich fängt. Feste Literale.
     assert.equal(normalizeProtected("/test/*harness*.test.ts"), "test/");
-    assert.equal(normalizeProtected("/test/harness-approval.test.ts"), "test/harness-approval.test.ts");
+    assert.equal(normalizeProtected("/test/harness/"), "test/harness/");
   });
 
   test("der test/-Pauschal-Filter fängt auch breitere Muster, aber keine Einzelpfade (#1156)", () => {
@@ -433,7 +433,7 @@ describe("Der @harness-waechter-Marker zählt nur als eigene Kommentar-Zeile (#1
   });
 
   test("Erwähnungen in Fließtext oder Code zählen nicht", () => {
-    for (const text of [" * siehe @harness-waechter im Kopf", 'const m = "@harness-waechter";', " * @harness-waechterX"]) {
+    for (const text of [" * siehe @harness-waechter im Kopf", 'const m = "@harness-waechter";', " * @harness-waechterX", " * @harness-waechter-alt", " * @harness-waechter_x"]) {
       assert.doesNotMatch(text, WAECHTER_MARKER, `fälschlich erkannt: ${text}`);
     }
   });
