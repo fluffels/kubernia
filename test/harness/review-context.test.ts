@@ -1,5 +1,7 @@
 /* Review-Kontext-Wächter (#1034) – die Lens-Pässe beschaffen ihren Kontext EINMAL, nicht fünfmal.
  *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
  * Gemessen an Ticket #1021 / PR #1029: ein einzelnes Ticket verbrauchte 1,03 Mio Subagent-Tokens,
  * 85 % davon im Review. Die Befunde rechtfertigten den Review inhaltlich – die Kontext-BESCHAFFUNG
  * war aber fünffach redundant: jeder Lens-Agent fuhr `git diff` selbst, las die geänderten Dateien
@@ -37,7 +39,7 @@
  * Fitness-Function-Kategorie neben agents-md-native/harness-approval/docmap (#992/#1012/#482), nicht
  * mit Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`: `scripts/check-`
  * ist selbst gate-config-geschützt (Goodhart-Guard) – für doku-/prompt-strukturelle Wächter gibt es
- * die etablierte test-only-Familie (Präzedenz: `test/agents-md-native.test.ts`).
+ * die etablierte test-only-Familie (Präzedenz: `test/harness/agents-md-native.test.ts`).
  *
  * ⚠️ Das Workflow-Skript wird bewusst als TEXT gelesen, nicht importiert: es ruft auf Top-Level
  * `await ticketAbarbeiten()` gegen Globals, die nur die Workflow-Laufzeit bereitstellt.
@@ -49,7 +51,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");
+const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
 const workflow = read(".claude/workflows/kubernia-ticket.js");
 const lensSkill = read(".claude/skills/review-lenses/SKILL.md");

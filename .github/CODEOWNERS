@@ -16,8 +16,7 @@
 #    Bis #1069 war das ein Pflicht-Stopp (Merge nur durch die Maintainerin);
 #    seitdem ersetzt eine Audit-Spur (Label + Kommentar) diese Freigabe.
 #    Dazu (#1156) Waechter-Tests, die selbst der einzige Durchsetzer ihrer
-#    Regel sind - vorerst nur die zwei Waechter des Riegels; weitere folgen
-#    mit der Namensregel test/harness/.
+#    Regel sind - seit #1165 gesammelt im Ordner test/harness/ (Rest: #1177).
 #
 # Darum tragen NUR PRs, die diese Pfade anfassen, das Label als sichtbaren
 # Marker im PR-Log. Alle anderen Pfade mergen ohne Label autonom bei gruener CI.
@@ -25,7 +24,7 @@
 # SSOT der geschuetzten Pfade ist .github/protected-paths.json (#1157): der CI-Job
 # gate-change-guard liest sie von dort (vom Base-Commit). GitHub kann CODEOWNERS nicht
 # aus einer Datei einbinden, darum steht die Liste hier noch einmal - neue Pfade ZUERST
-# in der Quelle eintragen, dann hier nachziehen. Sync bewacht test/harness-approval.test.ts.
+# in der Quelle eintragen, dann hier nachziehen. Sync bewacht test/harness/harness-approval.test.ts.
 
 # Gate-Config
 /.dependency-cruiser.cjs   @fluffels
@@ -52,7 +51,7 @@ AGENTS.md                  @fluffels
 /.agents/                  @fluffels
 /docs/agent-harness*       @fluffels
 
-# Waechter-Tests (#1156) - der Test IST hier das Gate (kein geschuetztes check-Skript dahinter).
-# Einzeln statt als Muster: ein Glob wuerde im Guard auf den ganzen test/-Ordner kuerzen.
-/test/agents-md-native.test.ts  @fluffels
-/test/harness-approval.test.ts  @fluffels
+# Waechter-Tests (#1156, #1165) - der Test IST hier das Gate (kein geschuetztes check-Skript dahinter).
+# Als Ordner-Praefix statt Glob: ein Glob wuerde im Guard auf den ganzen test/-Ordner kuerzen.
+# Neuer Waechter = Datei nach test/harness/ mit Marker @harness-waechter, kein neuer Eintrag.
+/test/harness/             @fluffels

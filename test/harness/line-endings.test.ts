@@ -1,5 +1,7 @@
 /* Zeilenende-Wächter (#1026) – alles unter `.claude/` muss mit LF ausgecheckt werden.
  *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
  * WARUM: Auf einem Windows-Checkout mit `core.autocrlf=true` landete
  * `.claude/workflows/kubernia-ticket.js` mit CRLF im Working Tree. Claude Code übergibt
  * den Skript-Text an den Permission-Dialog, und der lehnt Steuerzeichen ab (`\r` wäre im
@@ -20,13 +22,13 @@
  * CR-Scan des Working Trees wäre in der Linux-CI immer grün und darum kein Gate.
  *
  * Fitness-Function-Kategorie (Struktur-Regel, kein Verhaltens-Test), Präzedenz
- * test/agents-md-native.test.ts. Ausführen mit:  npm test
+ * test/harness/agents-md-native.test.ts. Ausführen mit:  npm test
  */
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
+const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const git = (args: string[]) => execFileSync("git", args, { cwd: REPO_ROOT, encoding: "utf8" });
 
 /**

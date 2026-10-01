@@ -56,7 +56,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
  *  (Ist + ~15 %, wie beim ersten Kalibrieren; Ratchet nach unten). Mit #1078 (Slice A1) sind
  *  die Nachschlage-Tabellen der CLAUDE.md on-demand nach docs/referenz/ gezogen; seit #1087 ist
  *  CLAUDE.md gelöscht (AGENTS.md wird nativ geladen) und ihr Eintrag entfallen – dass sie nicht
- *  zurückkehrt, bewacht test/agents-md-native.test.ts.
+ *  zurückkehrt, bewacht test/harness/agents-md-native.test.ts.
  *  Weitere immer geladene Dateien (z.B. README) können hier bei Bedarf ergänzt werden. */
 export const CONTEXT_BUDGETS = [
   { file: "AGENTS.md", budget: 28_000 },

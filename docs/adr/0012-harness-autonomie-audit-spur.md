@@ -46,7 +46,7 @@ Die Maintainerin wählt **„komplett alles"**:
 **Positiv**
 - Harness-Tickets laufen durch, ohne dass die Maintainerin pro Ticket freigeben muss; liegengebliebene grüne PRs wie #1059 entstehen nicht mehr.
 - Jede Leitplanken-Änderung bleibt sichtbar (Label + Audit-Kommentar) und ist per Revert-PR zurückholbar.
-- Die Regel ist tool-neutral in AGENTS.md verankert und per Fitness-Function bewacht ([`test/harness-approval.test.ts`](../../test/harness-approval.test.ts), Marker „Leitplanken-Änderung selbst gemergt").
+- Die Regel ist tool-neutral in AGENTS.md verankert und per Fitness-Function bewacht ([`test/harness/harness-approval.test.ts`](../../test/harness/harness-approval.test.ts), Marker „Leitplanken-Änderung selbst gemergt").
 
 **Negativ / Trade-offs**
 - **Kein Mensch mehr vor dem Merge einer Leitplanken-Änderung.** Ein Agent könnte eine eigene Leitplanke aufweichen; die Absicherung ist nachgelagert (Audit + Revert) und die Goodhart-Regel ist eine Verhaltensregel, kein technischer Riegel.

@@ -1,6 +1,8 @@
 /* Native-Load-Wächter (#1087, Nachfolger des Bridge-Wächters aus #992) – AGENTS.md wird von
  * Claude Code nur dann selbst geladen, wenn KEINE CLAUDE.md im Weg liegt.
  *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
  * Seit #1087 gibt es genau EINE Root-Kontextdatei: AGENTS.md (SSOT, jede harte Regel genau
  * einmal). Claude Code ≥ 2.1.277 lädt sie nativ – aber nur, solange im Projekt-Root weder
  * `CLAUDE.md` noch `.claude/CLAUDE.md` noch `CLAUDE.local.md` liegt. Taucht eine davon auf,
@@ -43,9 +45,9 @@ import { fileURLToPath } from "node:url";
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im tsconfig)
 // – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as checkDocDrift from "../scripts/check-docdrift.mjs";
+import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as checkInternalRefs from "../scripts/check-internalrefs.mjs";
+import * as checkInternalRefs from "../../scripts/check-internalrefs.mjs";
 
 // Begründete Ausnahme: das .mjs hat kein Declaration-File, der Namespace ist für tsc
 // „error typed". Die Schwester-Tests (docdrift/docmap/context-size) haben dafür Einträge
@@ -59,8 +61,8 @@ const collectMarkdown: (rootDir?: string) => string[] = checkDocDrift.collectMar
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const listTrackedFiles: (rootDir?: string) => string[] = checkInternalRefs.listTrackedFiles;
 
-const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
-const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");
+const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
 /**
  * Die Projekt-Memory-Dateien, deren bloße Existenz das native Laden von AGENTS.md abschaltet

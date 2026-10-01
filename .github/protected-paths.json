@@ -21,7 +21,6 @@
     "/docs/agent-harness*"
   ],
   "waechter": [
-    "/test/agents-md-native.test.ts",
-    "/test/harness-approval.test.ts"
+    "/test/harness/"
   ]
 }
