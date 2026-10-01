@@ -1,5 +1,5 @@
 // Kein Shebang: wird über `.claude/settings.json` per `node scripts/worktree-guard-hook.mjs`
-// gestartet UND von test/worktree-guard.test.ts importiert (ein `#!` bricht den
+// gestartet UND von test/harness/worktree-guard.test.ts importiert (ein `#!` bricht den
 // Test-Import, analog zu check-diffsize.mjs).
 /**
  * Worktree-Guard-Hook (#735) — Claude-Code-`PreToolUse`-Hook für `Bash`.

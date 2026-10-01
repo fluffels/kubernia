@@ -1,5 +1,5 @@
 // Kein Shebang: wird per `node scripts/cleanup-worktrees.mjs` gestartet UND von
-// test/cleanup-worktrees.test.ts sowie scripts/stop-verify-hook.mjs importiert
+// test/harness/cleanup-worktrees.test.ts sowie scripts/stop-verify-hook.mjs importiert
 // (ein `#!` bricht den Test-Import, analog zu worktree-guard-hook.mjs).
 /**
  * Diagnostik und Cleanup verwaister Worktree-Ordner (#908, #952).

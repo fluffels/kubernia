@@ -1,5 +1,7 @@
 /* #528: Git pre-push-Hook — schnelle Gates lokal VOR `git push origin main`.
  *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
  * Motivation (siehe Ticket #528): Der Workflow pusht bewusst DIREKT auf main
  * (kein PR/Required-Checks). Die CI-Gates laufen dadurch erst NACH dem Push —
  * in der Lücke dazwischen kann kaputter Code main rot machen. Ein committeter,
@@ -21,7 +23,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const readRepo = (rel: string) =>
-  readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");
+  readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
 const hook = readRepo(".githooks/pre-push");
 const setup = readRepo("scripts/setup.mjs");

@@ -1,5 +1,7 @@
 /* Verwaiste-Worktree-Diagnose/-Cleanup (#908/#952).
  *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
  * Die Logik lebt in scripts/cleanup-worktrees.mjs (EINE Quelle fuer das
  * CLI-Skript und den automatischen Check in scripts/stop-verify-hook.mjs).
  * git/fs werden NICHT ausgefuehrt -- execSync/fs-Funktionen sind injiziert,
@@ -12,7 +14,7 @@ import assert from "node:assert/strict";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts fuer das .mjs-Tooling-Skript.
-import * as cleanupModule from "../scripts/cleanup-worktrees.mjs";
+import * as cleanupModule from "../../scripts/cleanup-worktrees.mjs";
 
 /**
  * Die Modul-Form EINMAL deklarieren und den Import genau hier casten. Vorher hing

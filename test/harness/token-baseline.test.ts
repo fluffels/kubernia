@@ -1,5 +1,7 @@
 /* Token- und Loop-Baseline pro Ticket-Lauf (#1068).
  *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
  * Die Auswertungslogik lebt in scripts/token-baseline.mjs. Weder Transkript-
  * Dateien noch Langfuse noch gh werden hier angefasst: die Tests füttern
  * JSONL-Text bzw. Observations in der Form, die Claude Code bzw. die
@@ -13,7 +15,7 @@ import assert from "node:assert/strict";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as baselineModule from "../scripts/token-baseline.mjs";
+import * as baselineModule from "../../scripts/token-baseline.mjs";
 
 type Sub = { id?: string; agentType?: string; description?: string };
 type Call = {

@@ -3,6 +3,8 @@
  * wiederholt aufgetretene Kollision: zwei parallele Agenten im selben geteilten
  * main-Checkout, siehe Kontext in #735).
  *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
  * Rein struktureller Wächter (wie diffsize/docdrift): die Erkennungslogik lebt in
  * scripts/worktree-guard-hook.mjs (EINE Quelle für Hook-CLI und Test). git selbst
  * wird NICHT ausgeführt — execFile/stat sind injiziert, damit der Test
@@ -16,7 +18,7 @@ import { join } from "node:path";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as guard from "../scripts/worktree-guard-hook.mjs";
+import * as guard from "../../scripts/worktree-guard-hook.mjs";
 
 type ExecDeps = { execFileSync?: (...a: unknown[]) => string; statSync?: (...a: unknown[]) => { isDirectory(): boolean } };
 type Decision = { block: boolean; reason?: string };
