@@ -66,7 +66,7 @@ const IGNORED_DIRS = new Set([
  *  dort ist nicht versioniert: Worktrees paralleler Agenten (.claude/worktrees, volle
  *  Repo-Kopien), lokale Einstellungen, Tool-Caches. Bewusst eine Allowlist statt
  *  „alles außer worktrees": sonst röte der Wächter an lokal abgelegten, untrackten
- *  Dateien — lokal rot, CI grün (#1091; gleiche Abwägung wie test/model-routing.test.ts).
+ *  Dateien — lokal rot, CI grün (#1091; gleiche Abwägung wie test/harness/model-routing.test.ts).
  *  Bewusst auch kein `git ls-files`: eine neue, noch nicht ge-`add`-ete .md bliebe
  *  sonst lokal ungeprüft. test/docdrift.test.ts gleicht die Liste mit .gitignore ab. */
 export const VERSIONED_CLAUDE_DIRS = new Set(["agents", "skills", "workflows"]);

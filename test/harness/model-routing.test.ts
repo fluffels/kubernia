@@ -1,6 +1,8 @@
 /* Modell-Routing-Wächter (#1035) – „Planung stark, Umsetzung schnell" darf nicht
  * ins Leere greifen, und keine Doku darf das Gegenteil behaupten.
  *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
  * Vorgeschichte: AGENTS.md § Modellwahl (#910) verlangt den Coding-Tier für die
  * Umsetzung. Im Phasen-Workflow ist das gesetzt (`agent(..., {model:'sonnet'})`),
  * auf dem **Skill-Pfad** – dem tool-neutralen, maßgeblichen Weg – schreibt aber der
@@ -33,7 +35,7 @@
  *     und für einen Vitest-Lauf unbeobachtbar (wie die „Grenze"-Notiz in agents-md-native).
  *   - Die Drift-Erkennung ist **literal und case-sensitiv**: „Session Default" ohne
  *     Bindestrich rutscht durch (bekannte Grenze des Begriffs-Ansatzes, identisch in
- *     test/agents-md-native.test.ts).
+ *     test/harness/agents-md-native.test.ts).
  *   - Beim `effort:` wird nur die **Anwesenheit** geprüft, nicht die Stufe (siehe dort).
  *   - Der Workflow-Pfad wird nur grob geprüft (Tier-Aliase vorhanden), nicht welche
  *     Phase welchen Alias bekommt – die Phasen-Zuordnung bleibt Review-Sache.
@@ -44,7 +46,7 @@
  * für rein doku-strukturelle Wächter gibt es die etablierte test-only-Familie.
  *
  * ⚠️ Bekannte Duplikation: die Retired-Claims-Mechanik unten ist strukturgleich zu
- * test/agents-md-native.test.ts (#992). Bei zwei Kopien noch Rule-of-Three-konform, aber
+ * test/harness/agents-md-native.test.ts (#992). Bei zwei Kopien noch Rule-of-Three-konform, aber
  * beticketet als **#1046** (nach test/support/ ziehen) – jscpd ist bewusst
  * nicht-blockierend, es fängt das also kein Gate automatisch.
  *
@@ -58,9 +60,9 @@ import { fileURLToPath } from "node:url";
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im tsconfig)
 // – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as checkDocDrift from "../scripts/check-docdrift.mjs";
+import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
 
-// Begründete Ausnahme, identisch zu test/agents-md-native.test.ts: das .mjs hat kein
+// Begründete Ausnahme, identisch zu test/harness/agents-md-native.test.ts: das .mjs hat kein
 // Declaration-File, der Namespace ist für tsc „error typed". Eng begrenzter
 // Inline-Disable statt einer Gate-Config-Änderung.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
@@ -68,8 +70,8 @@ const stripFencedCode: (md: string) => string = checkDocDrift.stripFencedCode;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const collectMarkdown: (rootDir?: string) => string[] = checkDocDrift.collectMarkdown;
 
-const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
-const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");
+const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
 /** Der Skill, der die Umsetzung tippt – hier MUSS der Coding-Tier stehen (#1035). */
 const UMSETZUNGS_SKILL = ".claude/skills/kubernia/SKILL.md";
@@ -165,7 +167,7 @@ function hatHartenPin(md: string): boolean {
  * Umsetzung „auf dem Session-Default" läuft – der Coding-Tier ist auf BEIDEN Pfaden
  * gesetzt (Workflow per `agent({model})`, Skill per Frontmatter).
  *
- * **Escape-Hatch** (gleiche Logik wie test/agents-md-native.test.ts): Wer den Begriff
+ * **Escape-Hatch** (gleiche Logik wie test/harness/agents-md-native.test.ts): Wer den Begriff
  * diskutieren muss, setzt ihn in Inline-Backticks oder einen Codeblock – Zitat ist
  * keine Behauptung. Bewusst NICHT gelistet: „Session-Modell". Der Satz „ein Subagent
  * ohne Modell-Angabe erbt das Session-Modell" ist die weiterhin GÜLTIGE Warnung, die

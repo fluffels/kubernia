@@ -1,6 +1,8 @@
 /* Verweis-Wächter (#1079) – Freitext-Verweise „AGENTS.md § …" in den versionierten
  * `.claude/`-Dateien müssen in AGENTS.md wirklich existieren (CLAUDE.md ist seit #1087 gelöscht).
  *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
  * Warum: Workflow-Skript, Skills und Planer-Agent schicken Phasen-Agenten per Freitext
  * auf Stellen in AGENTS.md (`AGENTS.md § Zu großes Ticket`, `§ Kein
  * Grün-durch-Aufweichen`, `§ „Worktree entfernen auf Windows – zwei Fallen"`,
@@ -34,7 +36,7 @@
  *
  * Fitness-Function-Kategorie neben agents-md-native/docmap/docdrift (#482/#529/#992),
  * bewusst test-only ohne `scripts/check-*.mjs` (Begründung: Kopf von
- * `test/agents-md-native.test.ts`).
+ * `test/harness/agents-md-native.test.ts`).
  *
  * Ausführen mit:  npm test
  */
@@ -44,13 +46,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as checkInternalRefs from "../scripts/check-internalrefs.mjs";
+import * as checkInternalRefs from "../../scripts/check-internalrefs.mjs";
 
-// Begründete Ausnahme wie in test/agents-md-native.test.ts: das .mjs hat kein Declaration-File.
+// Begründete Ausnahme wie in test/harness/agents-md-native.test.ts: das .mjs hat kein Declaration-File.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 const listTrackedFiles: (rootDir?: string) => string[] = checkInternalRefs.listTrackedFiles;
 
-const ROOT = fileURLToPath(new URL("..", import.meta.url));
+const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const read = (rel: string) => readFileSync(ROOT + rel, "utf8");
 
 type Ziel = "AGENTS.md" | "CLAUDE.md";

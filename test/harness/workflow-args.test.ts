@@ -1,10 +1,12 @@
 /**
  * Fitness-Function für die args-Auswertung des Ticket-Workflows (#1027).
  *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
  * WARUM DIESE TESTFORM: Die Parse-Logik lebt in .claude/workflows/kubernia-ticket.js
  * und lässt sich NICHT importieren — das Skript ruft auf Top-Level
  * `await ticketAbarbeiten()` gegen Globals, die nur die Workflow-Laufzeit stellt
- * (dieselbe Feststellung wie im Kopf von test/review-context.test.ts). Die
+ * (dieselbe Feststellung wie im Kopf von test/harness/review-context.test.ts). Die
  * literaturseitig richtige Lösung — pure Logik in ein importierbares Modul
  * auslagern (Humble Object) — ist hier technisch versperrt: die Workflow-Laufzeit
  * lehnt Importe hart ab ("import() is not available in workflow scripts",
@@ -23,7 +25,7 @@
  * jedes Mal fälschlich grün: sie belegt nur, dass bestimmte Zeichenketten
  * dastehen, nicht dass "965" wirklich als 965 ankommt.
  *
- * ⚠ GRENZE DIESES TESTS (ehrlich, Präzedenz test/model-routing.test.ts):
+ * ⚠ GRENZE DIESES TESTS (ehrlich, Präzedenz test/harness/model-routing.test.ts):
  * Er belegt, dass UNSERE Funktion Strings/JSON versteht — nicht, dass die
  * Workflow-Laufzeit weiterhin Strings schickt. Dass sie es tut, wurde für #1027
  * empirisch gemessen (auch ein übergebenes Objekt kommt als JSON-String an);
@@ -33,7 +35,7 @@ import { readFileSync } from "node:fs"
 import { runInNewContext } from "node:vm"
 import { describe, expect, it } from "vitest"
 
-const WORKFLOW = new URL("../.claude/workflows/kubernia-ticket.js", import.meta.url)
+const WORKFLOW = new URL("../../.claude/workflows/kubernia-ticket.js", import.meta.url)
 const MARKER_ANFANG = "// ── args-Auswertung (#1027) — Anfang"
 const MARKER_ENDE = "// ── args-Auswertung (#1027) — Ende"
 
