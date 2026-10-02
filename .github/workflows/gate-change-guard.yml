@@ -35,7 +35,8 @@ name: Gate-Change-Guard
 # test/harness/harness-approval.test.ts).
 # Ehrliche Grenze: das Ruleset gleicht den Kontext nur ueber den Job-Namen ab. Ein PR kann eine
 # NEUE Workflow-Datei mit gleichnamigem Job danebenlegen — geschlossen ist nur das direkte
-# Editieren dieser Datei. Der Guard bleibt ein Speed-Bump.
+# Editieren dieser Datei. Der Guard bleibt ein Speed-Bump. Lokal macht
+# test/harness/required-check-shadowing.test.ts einen gleichnamigen Job rot (#1172).
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled, unlabeled]
