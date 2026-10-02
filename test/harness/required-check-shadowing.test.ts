@@ -21,8 +21,11 @@
  * jede eingerückte `name:`-Zeile (Job- wie Step-Ebene, beliebige Einrückung), deren Wert mit einem
  * Kontext **beginnt**. Lieber ein Fehlalarm als ein still durchgerutschter Doppelgänger. Job-Keys
  * ohne `name:` sind kein Weg: Keys erlauben weder Leerzeichen noch Klammern, die Kontexte schon.
- * Ehrliche Grenze: Flow-Style-YAML (`{ name: … }`) liest der Regex-Parser nicht (keine YAML-Lib im
- * Projekt, Präzedenz harness-approval.test.ts).
+ * Ehrliche Grenzen: (1) Wirkung nur lokal – in CI läuft dieser Test im Job „Tests, Typecheck &
+ * Builds", der per demselben Trick ebenfalls überschreibbar ist. (2) Der Regex-Parser liest nur
+ * wörtlich notierte Namen: zur Laufzeit erzeugte (`${{ … }}`, Matrix), Block-Scalars, YAML-Escapes
+ * und Flow-Style (`{ name: … }`) erkennt er nicht (keine YAML-Lib im Projekt, Präzedenz
+ * harness-approval.test.ts).
  *
  * Ausführen mit:  npm test
  */
