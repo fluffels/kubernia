@@ -23,8 +23,8 @@
  * ohne `name:` sind kein Weg: Keys erlauben weder Leerzeichen noch Klammern, die Kontexte schon.
  * Ehrliche Grenzen: (1) Wirkung nur lokal – in CI läuft dieser Test im Job „Tests, Typecheck &
  * Builds", der per demselben Trick ebenfalls überschreibbar ist. (2) Der Regex-Parser liest nur
- * wörtlich notierte Namen: zur Laufzeit erzeugte (`${{ … }}`, Matrix), Block-Scalars, YAML-Escapes
- * und Flow-Style (`{ name: … }`) erkennt er nicht (keine YAML-Lib im Projekt, Präzedenz
+ * wörtlich notierte Namen: zur Laufzeit erzeugte (`${{ … }}`, Matrix), Block-Scalars, über
+ * Folgezeilen gefaltete Werte, YAML-Escapes und Flow-Style (`{ name: … }`) erkennt er nicht (keine YAML-Lib im Projekt, Präzedenz
  * harness-approval.test.ts).
  *
  * Ausführen mit:  npm test
@@ -81,10 +81,15 @@ function verstoesse(workflows: Map<string, string>, kontexte: readonly string[])
     .map(([k, orte]) => `„${k}": ${orte.length} Quellen${orte.length ? ` (${orte.join("; ")})` : ""}`);
 }
 
+/** GitHub liest beide Endungen – ein `fake.yaml` darf dem Wächter nicht entgehen. */
+function istWorkflowDatei(datei: string): boolean {
+  return /\.ya?ml$/.test(datei);
+}
+
 function echteWorkflows(): Map<string, string> {
   return new Map(
     readdirSync(WORKFLOW_DIR)
-      .filter((f) => /\.ya?ml$/.test(f))
+      .filter(istWorkflowDatei)
       .map((f) => [f, readFileSync(join(WORKFLOW_DIR, f), "utf8")]),
   );
 }
@@ -144,6 +149,13 @@ describe("verstoesse – gleichnamige Fremd-Jobs werden erkannt (#1172)", () => 
   test("Kontext ganz ohne Quelle ⇒ Verstoß (sonst prüfte der Wächter nach Umbenennung ins Leere)", () => {
     assert.match(verstoesse(new Map([["ci.yml", "jobs:\n  a:\n    name: Anderes\n"]]), K)[0], /0 Quellen/);
   });
+});
+
+test("istWorkflowDatei zählt .yml UND .yaml, aber nichts anderes", () => {
+  assert.ok(istWorkflowDatei("ci.yml"));
+  assert.ok(istWorkflowDatei("fake.yaml"));
+  assert.ok(!istWorkflowDatei("README.md"));
+  assert.ok(!istWorkflowDatei("ci.yml.bak"));
 });
 
 describe("echte Workflows – jeder Required-Check-Kontext hat genau eine Quelle", () => {
