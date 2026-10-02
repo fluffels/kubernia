@@ -14,7 +14,7 @@
  *      abgeschaltet); LANGFUSE_PUBLIC_KEY/_SECRET_KEY, optional _BASE_URL.
  *      Nur so vollständig wie die Hook-Aufzeichnung — ohne den lokalen
  *      Hook-Patch aus #1084 fehlt Folgearbeit nach Hintergrund-Subagenten
- *      (für #1064 der Großteil), mit Patch gleichwertig. Die Baseline misst
+ *      (für #1064 der Großteil), mit Patch Calls und Tokens identisch. Die Baseline misst
  *      deshalb über das Transkript (docs/model-routing.md §5).
  *
  * Bewusst NICHT in `npm run verify` (liest lokale Transkripte bzw. braucht Netz
