@@ -12,8 +12,10 @@
  *   1. Standard: das lokale Claude-Code-Transkript (vollständig, ohne Schlüssel).
  *   2. `--langfuse`: die v2-Observations-API (v4 hat die v1-Traces-API
  *      abgeschaltet); LANGFUSE_PUBLIC_KEY/_SECRET_KEY, optional _BASE_URL.
- *      Nur so vollständig wie die Hook-Aufzeichnung — für #1064 fehlte der
- *      Großteil, darum ist das Transkript maßgeblich.
+ *      Nur so vollständig wie die Hook-Aufzeichnung — ohne den lokalen
+ *      Hook-Patch aus #1084 fehlt Folgearbeit nach Hintergrund-Subagenten
+ *      (für #1064 der Großteil), mit Patch gleichwertig. Die Baseline misst
+ *      deshalb über das Transkript (docs/model-routing.md §5).
  *
  * Bewusst NICHT in `npm run verify` (liest lokale Transkripte bzw. braucht Netz
  * und gh-Auth). Die Auswertung ist pure/exportiert und ohne IO getestet; die
