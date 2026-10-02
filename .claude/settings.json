@@ -80,6 +80,9 @@
       }
     ]
   },
+  "env": {
+    "CC_LANGFUSE_TRACE_TAGS": "kubernia"
+  },
   "enabledPlugins": {
     "langfuse-observability@langfuse-observability": true
   }
