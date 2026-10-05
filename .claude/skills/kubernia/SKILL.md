@@ -1,6 +1,6 @@
 ---
 name: kubernia
-description: Arbeitet eigenständig EIN offenes kubernia-Ticket end-to-end ab (auswählen → per Assignee claimen → eigener git-Worktree → umsetzen → ggf. Doku im selben Branch anpassen → EINEN PR öffnen und bis zum Merge bringen (CI abwarten, Rot fixen) → Worktree/Branch aufräumen), kollisionssicher neben parallel laufenden Agenten. Ist das Ticket ein zu großes Epic/eine Phase, wird es stattdessen in viele konkrete neue Tickets aufgeteilt und das Epic auf done geschlossen (nicht selbst umgesetzt). Auslösen bei "arbeite ein kubernia-Ticket ab", "neues kubernia-Ticket", "starte ein kubernia-Ticket", "nimm dir ein kubernia-Ticket", "setz das nächste kubernia-Ticket um", "nimm das nächste kubernia-Ticket", "mach das nächste kubernia-Ticket", "nächstes Ticket für kubernia", oder wenn autonom das nächste offene kubernia-Issue umgesetzt werden soll.
+description: Arbeitet EIN kubernia-Ticket end-to-end ab (claimen, Worktree, umsetzen, PR bis zum Merge); zu große Epics werden aufgeteilt. Auslösen bei "arbeite ein kubernia-Ticket ab", "neues kubernia-Ticket", "nimm das nächste kubernia-Ticket", "nächstes Ticket für kubernia".
 model: sonnet
 effort: medium
 ---

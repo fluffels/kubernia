@@ -1,7 +1,8 @@
 ---
 name: kubernia-planner
-description: Planungs-Agent für kubernia-Tickets — läuft auf dem Opus-Alias mit Reasoning-Stufe xhigh, analysiert ein einzelnes Ticket oder Feature und liefert einen kompakten, umsetzbaren Plan, bevor eine Zeile Code fällt. Vom kubernia-Skill und -Workflow vor der Umsetzung gerufen, ebenso bei Handplanung. Auslösen bei "plane das Ticket", "plane ein Feature", "mach mir einen Plan", "wie setze ich #X um", "Umsetzungsplan".
+description: Planungs-Agent für kubernia-Tickets: analysiert ein Ticket und liefert einen kompakten Umsetzungsplan vor dem Coden. Auslösen bei "plane das Ticket", "mach mir einen Plan", "wie setze ich #X um", "Umsetzungsplan".
 model: opus
+tools: Read, Grep, Glob, Bash, PowerShell, WebFetch, WebSearch, Agent
 effort: xhigh
 ---
 

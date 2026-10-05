@@ -1,6 +1,6 @@
 ---
 name: kubernia-loop
-description: Arbeitet MEHRERE offene kubernia-Tickets nacheinander im Stapel ab — pro Ticket ein frischer Subagent mit eigenem, leerem Kontext (kein Kontext-Ballast zwischen Tickets), der jeweils den normalen kubernia-Skill end-to-end fährt. Fragt zuerst nach der Anzahl, arbeitet dann N Tickets sequenziell ab (Merge-kollisionssicher), meldet nach jedem Ticket eine Statuszeile und stoppt hart nach N oder früher, wenn keine freien Tickets mehr da sind. Auslösen bei "kubernia-loop", "mehrere kubernia-tickets", "arbeite N kubernia tickets ab", "kubernia im loop", "kubernia im stapel", "batch kubernia", "arbeite kubernia tickets ab bis", oder wenn autonom mehr als ein kubernia-Ticket hintereinander umgesetzt werden soll.
+description: Arbeitet MEHRERE kubernia-Tickets nacheinander ab, pro Ticket ein frischer Subagent; fragt zuerst nach der Anzahl N. Auslösen bei "kubernia-loop", "mehrere kubernia-tickets", "arbeite N kubernia tickets ab", "kubernia im stapel", "batch kubernia".
 ---
 
 # Kubernia-Tickets im Stapel abarbeiten (Loop)

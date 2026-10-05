@@ -64,7 +64,9 @@
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PROJECT_DIR}/scripts/worktree-guard-hook.mjs"]
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/worktree-guard-hook.mjs"
+            ]
           }
         ]
       }
@@ -75,7 +77,9 @@
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PROJECT_DIR}/scripts/stop-verify-hook.mjs"]
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/stop-verify-hook.mjs"
+            ]
           }
         ]
       }
@@ -85,6 +89,10 @@
     "CC_LANGFUSE_TRACE_TAGS": "kubernia"
   },
   "enabledPlugins": {
-    "langfuse-observability@langfuse-observability": true
-  }
+    "langfuse-observability@langfuse-observability": true,
+    "data@synced": false,
+    "cowork-plugin-management@synced": false
+  },
+  "disableClaudeAiConnectors": true,
+  "skillListingMaxDescChars": 300
 }

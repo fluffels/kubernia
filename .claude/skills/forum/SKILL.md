@@ -1,6 +1,6 @@
 ---
 name: forum
-description: Arbeitet die offenen Forum-Eingänge von kubernia ab (GitHub Discussions). Liest pro Eingang die Nachricht + den Thread, entwirft eine Antwort und holt vor dem Posten die Freigabe der Formulierung von der Maintainerin ein, postet sie dann als fluffels, legt – falls nötig – das passende Ticket an (Bug/Feature) oder schließt nur als beantwortet, und räumt den Inbox-Eintrag auf. Auslösen bei "Forum", "Forum-Eingang", "neue Forum-Nachricht", "Forum bearbeiten", "Discussion beantworten", "forum inbox", oder wenn die offenen Forum-Nachrichten abgearbeitet werden sollen.
+description: Arbeitet offene kubernia-Forum-Eingänge (GitHub Discussions) ab: Thread lesen, Antwort entwerfen, Freigabe der Maintainerin einholen, posten, ggf. Ticket anlegen. Auslösen bei "Forum", "Forum-Eingang", "Forum bearbeiten", "Discussion beantworten", "forum inbox".
 ---
 
 # Forum-Eingang bearbeiten (GitHub Discussions)

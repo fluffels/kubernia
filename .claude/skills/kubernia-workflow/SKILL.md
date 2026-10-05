@@ -1,6 +1,6 @@
 ---
 name: kubernia-workflow
-description: Arbeitet EIN offenes kubernia-Ticket end-to-end ab wie der kubernia-Skill, aber als orchestrierter Phasen-Workflow — mit sichtbarem Fortschritt in /workflows, Resume nach Abbruch, den drei Review-Lenses parallel und erzwungener Fix-Versuchsgrenze. Nur unter Claude Code; der normale kubernia-Skill bleibt der tool-neutrale Weg. Auslösen bei "kubernia als Workflow", "Ticket als Workflow", "kubernia-Workflow", "Ticket mit Workflow abarbeiten", "starte den Ticket-Workflow", oder wenn beim Abarbeiten eines kubernia-Tickets der Phasen-Fortschritt in /workflows mitlaufen soll.
+description: Arbeitet EIN kubernia-Ticket als orchestrierten Phasen-Workflow ab (Fortschritt in /workflows, Resume, Lenses parallel); nur Claude Code. Auslösen bei "kubernia als Workflow", "Ticket als Workflow", "kubernia-Workflow", "starte den Ticket-Workflow".
 ---
 
 # Kubernia-Ticket als Workflow abarbeiten
