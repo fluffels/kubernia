@@ -66,16 +66,16 @@ esac
 
 ## Sammelticket „Harness-Härtung (gesammelt)" (#1199)
 
-Regel: [AGENTS.md › Nicht jeder Befund wird ein Ticket](../AGENTS.md#wo-die-todos-leben). Es gibt **höchstens ein** offenes, **ungeclaimtes** Sammelticket (`area:harness`); Befunde werden ohne Rückfrage eingetragen. Ein geclaimtes (Assignee) zählt nicht: Zeile ins nächste, fehlt es, sofort anlegen.
+Regel: [AGENTS.md › Nicht jeder Befund wird ein Ticket](../AGENTS.md#wo-die-todos-leben). Es gibt **höchstens ein** ungeclaimtes Sammelticket (`area:harness`); ein geclaimtes (Assignee) läuft daneben weiter.
 
 - **Befund eintragen:** erst suchen, dann als **Kommentar** anhängen (Kommentare kollidieren bei parallelen Agenten nicht, Body-Edits schon):
   ```bash
   gh issue list --state open --search 'in:title "Harness-Härtung (gesammelt)"' --json number,assignees --jq '.[] | select((.assignees|length)==0) | .number'
   gh issue comment <nr> --body "- [ ] <Befund>"
   ```
-  Kein ungeclaimter Treffer → anlegen (unten). Zwei offene (Wettlauf) → das jüngere schließen, seine Zeilen ins ältere übertragen.
+  Kein ungeclaimter Treffer → anlegen (unten). Zwei offene **ungeclaimte** (Wettlauf) → das jüngere schließen, seine Zeilen ins ältere übertragen.
 
-- **Anlegen auf Position 5** (fehlt es, oder nach dem Abarbeiten das nächste):
+- **Anlegen auf Position 5** (fehlt ein ungeclaimtes, auch während ein geclaimtes abgearbeitet wird; vorher mit dem Suchbefehl oben prüfen, nie doppelt anlegen):
   ```bash
   NR=$(gh issue create --label area:harness --title "Harness-Härtung (gesammelt)" --body "- [ ] <Befund>" | grep -o '[0-9]*$')
   NODE=$(gh issue view "$NR" --json id --jq .id)
@@ -87,7 +87,7 @@ Regel: [AGENTS.md › Nicht jeder Befund wird ein Ticket](../AGENTS.md#wo-die-to
   gh api graphql -f query='mutation($p:ID!,$i:ID!,$a:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }' \
     -f p=PVT_kwHOD8746c4Barq_ -f i="$ITEM" -f a="$AFTER"
   ```
-- **Abarbeiten:** zuerst der feste **Langfuse-Blick** ([docs/model-routing.md › Langfuse-Blick](model-routing.md#langfuse-blick-beim-sammelticket-1199)) — dessen Befunde werden weitere Zeilen. Dann so viele Zeilen umsetzen, wie in **einen** PR passen (`check:diffsize`). **Vor dem PR** die Kommentare erneut lesen (andere Agenten hängen weiter an); was offen ist, ins **nächste** Sammelticket auf Position 5 übertragen — nur wenn Zeilen übrig sind, kein leeres. Das alte schließt der PR per `Closes`.
+- **Abarbeiten:** zuerst der feste **Langfuse-Blick** ([docs/model-routing.md › Langfuse-Blick](model-routing.md#langfuse-blick-beim-sammelticket-1199)) — dessen Befunde werden weitere Zeilen. Dann so viele Zeilen umsetzen, wie in **einen** PR passen (`check:diffsize`). **Vor dem PR** die Kommentare erneut lesen; was offen ist, ins **bestehende ungeclaimte** Sammelticket übertragen, sonst eines auf Position 5 anlegen — nur wenn Zeilen übrig sind, kein leeres. Das alte schließt der PR per `Closes`.
 - **Konvergenz-Signal:** Zeilenzahl pro Sammelticket-Generation ([ADR 0012](adr/0012-harness-autonomie-audit-spur.md#fortschreibung-1199-2026-10-05-spielquote-sammelticket-abschlusskriterium)).
 
 ## Reihenfolge pflegen — im Board, nicht in einer Datei
