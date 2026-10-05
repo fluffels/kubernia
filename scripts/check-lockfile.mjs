@@ -13,8 +13,8 @@
  * entfernen) und `npm install` vergisst, bemerkt das erst, wenn die PR-CI an
  * `npm ci` rot anläuft — eine teure, späte Rückmeldung.
  *
- * Dieser Wächter macht denselben Drift SOFORT lokal (in `npm run verify`, also im
- * pre-push-Hook) rot.
+ * Dieser Wächter macht denselben Drift SOFORT lokal (in `npm run verify`, also vor
+ * dem PR) rot.
  *
  * WARUM statischer Vergleich statt `npm ci --dry-run` (das „o.ä." aus dem Ticket)?
  *  - Kein Netz, kein `node_modules`, deterministisch, in Millisekunden — passt in
