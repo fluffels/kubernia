@@ -21,6 +21,7 @@ import tf_floor from "../assets/pixellab/tf_floor.png";
 import deck_floor from "../assets/pixellab/deck_floor.png";
 import deck_reling from "../assets/pixellab/deck_reling.png";
 import deck_mast from "../assets/pixellab/deck_mast.png";
+import coin_icon from "../assets/pixellab/coin_icon.png";
 
 // Interior-Boden/Wand-Tiles (#187): 16px-Einzelkacheln (Holzboden, Haus-Stein-Wand, Schiffsrumpf-Wand)
 import interior_floor from "../assets/pixellab/interior_floor.png";
@@ -233,6 +234,7 @@ export const ASSET_MANIFEST: readonly AssetEntry[] = [
   { key: "deck_floor", src: deck_floor, kind: "plain" },
   { key: "deck_reling", src: deck_reling, kind: "plain" },
   { key: "deck_mast", src: deck_mast, kind: "plain" },
+  { key: "coin_icon", src: coin_icon, kind: "plain" },
   // Interior-Einrichtung (#187): Bullauge/Tür/Luke + Boden/Wand-Kacheln ersetzen prozedurale Formen im Innenraum
   { key: "porthole", src: porthole, kind: "plain" },
   { key: "interior_door", src: interior_door, kind: "plain" },
