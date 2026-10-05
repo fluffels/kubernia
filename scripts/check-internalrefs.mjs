@@ -28,7 +28,7 @@
  * Herkunftsbegriffe (ENCODED_TERMS) brauchen für Flexionsformen einen eigenen Eintrag (Wortgrenzen:
  * der Grundbegriff trifft z.B. den Genitiv nicht); Namensbezüge (ENCODED_NAME_TERMS) matchen als
  * Wortstamm und decken Flexion/Komposita ab. Geprüft werden getrackte Dateien UND die Commit-Messages
- * des Branches (`origin/main..HEAD`); PR-Titel/-Body per `--text` über stdin. Wer in einem Content-Ticket einen NPC-/Ortsnamen wählt und hier rot wird, wählt
+ * des Branches (`origin/main..HEAD`); PR-Titel/-Body nur manuell per `--text` über stdin (keine CI-Verdrahtung). Wer in einem Content-Ticket einen NPC-/Ortsnamen wählt und hier rot wird, wählt
  * einen anderen Namen — der Begriff bleibt in der Liste.
  *
  * Liste erweitern, ohne Klartext anzufassen:
@@ -53,9 +53,11 @@ const ROOT = join(dirname(SELF), "..");
  *  Nur über `--add` pflegen, damit hier nie Klartext landet. */
 export const ENCODED_TERMS = ["d3Bz", "a2ktZmFicmlr"];
 
-/** Namensbezüge der Maintainerin (Vorname, Kurzformen), base64-kodiert. Anders als ENCODED_TERMS
- *  matchen diese Einträge als **Wortstamm** (`\bTerm\w*`): Flexion und Komposita (Genitiv-s,
- *  „…-Review“, „…Skript“) brauchen keinen eigenen Eintrag. Meldung und Rat sind namensspezifisch.
+/** Namensbezüge der Maintainerin, base64-kodiert (gelistet ist der Vorname; Kurzformen sind nicht
+ *  erratbar und kommen bei Bedarf per `--add-name` dazu). Anders als ENCODED_TERMS matchen diese
+ *  Einträge als **Wortstamm** (`\bTerm\w*`): Flexion und Komposita mit angehängtem Teil (Genitiv-s,
+ *  Bindestrich-Zusammensetzungen) brauchen keinen eigenen Eintrag; ein vorangestelltes Teil ohne
+ *  Bindestrich trifft er nicht (der Wortanfang bleibt Pflicht). Meldung und Rat sind namensspezifisch.
  *  Der Nachname ist bewusst NICHT gelistet: er ist ein gewöhnliches deutsches Wort und würde das
  *  Gate dauerhaft mit Fehltreffern belegen. Pflege: `--add-name "<begriff>"`. */
 export const ENCODED_NAME_TERMS = ["S2F0aGFyaW5h"];

@@ -12,7 +12,9 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs ist aus, scripts/ nicht im
@@ -40,6 +42,7 @@ type InternalRefsApi = {
     nameTerms?: string[],
   ) => Violation[];
   runCheck: () => { files: string[]; violations: Violation[] };
+  addTerm: (term: string, selfPath: string, listName?: string) => { ok: boolean; reason?: string; encoded?: string; count?: number };
 };
 
 const {
@@ -52,6 +55,7 @@ const {
   isCheckable,
   findViolations,
   runCheck,
+  addTerm,
 } = rawModule as unknown as InternalRefsApi;
 
 const DUMMY = "zzzdummyfirma";
@@ -165,9 +169,8 @@ describe("Interne-Referenzen-Wächter (#990)", () => {
   });
 
   test("Commit-Messages werden als Pseudo-Dateien geprüft; ohne Vergleichs-Basis leer (#1217)", () => {
-    const log = () => `aaaaaaa1111 feat: ok
-
-Body ${DUMMY}bbbbbbb2222 fix: harmlos`;
+    const log = () =>
+      [`aaaaaaa1111\x00feat: ok\n\nBody ${DUMMY}\x01`, `bbbbbbb2222\x00fix: harmlos\x01`].join("");
     const commits = listBranchCommitMessages("/x", log);
     assert.deepEqual(commits.map((c) => c.name), ["commit:aaaaaaa", "commit:bbbbbbb"]);
     const hits = findViolations(
@@ -179,5 +182,23 @@ Body ${DUMMY}bbbbbbb2222 fix: harmlos`;
 
     const keineBasis = () => { throw new Error("unknown revision origin/main"); };
     assert.deepEqual(listBranchCommitMessages("/x", keineBasis), [], "fail-open wie check:diffsize");
+  });
+
+  test("addTerm trägt in die gewählte Liste ein und lässt die andere unberührt (#1217)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kq-internalrefs-"));
+    const file = join(dir, "liste.mjs");
+    const source = 'export const ENCODED_TERMS = ["YQ=="];' + String.fromCharCode(10) + 'export const ENCODED_NAME_TERMS = ["Yg=="];' + String.fromCharCode(10);
+    writeFileSync(file, source);
+
+    const res = addTerm(DUMMY, file, "ENCODED_NAME_TERMS");
+    assert.equal(res.ok, true);
+    const after = readFileSync(file, "utf8");
+    assert.ok(after.includes('ENCODED_TERMS = ["YQ=="]'), "Herkunftsliste bleibt unverändert.");
+    assert.ok(after.includes(encodeTerm(DUMMY)), "Der Namensliste wurde der kodierte Begriff angehängt.");
+    assert.ok(!after.includes(DUMMY), "Kein Klartext in der Datei.");
+
+    assert.equal(addTerm(DUMMY, file, "ENCODED_NAME_TERMS").ok, false, "Doppelt eintragen wird abgelehnt.");
+    assert.equal(addTerm("  ", file).ok, false, "Leerer Begriff wird abgelehnt.");
+    assert.equal(addTerm(DUMMY, file, "GIBT_ES_NICHT").ok, false, "Unbekannte Liste wird gemeldet.");
   });
 });

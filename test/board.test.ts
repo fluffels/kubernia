@@ -30,6 +30,7 @@ type Lib = {
     after?: number | null,
   ) => { steps: Move[]; missing: number[]; anchorMissing: boolean };
   blockerNumbers: (body: string) => number[];
+  isUnfree: (item: Item & { body: string }, branches: string, stateOf: (n: number) => string) => boolean;
   isRateLimit: (m: string) => boolean;
 };
 type Place = { parseArgs: (argv: string[]) => { anchor: number | null; numbers: number[]; dry: boolean } | null };
@@ -107,6 +108,36 @@ describe("Spielrhythmus (#1215/#1217)", () => {
     expect(cur.filter((i) => !L.isGame(i)).map((i) => i.number)).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
+  test("Kopfgrenze exakt: Lücke an den Indizes 3-5 wird gepflegt, an 4-6 nicht", () => {
+    const luecke35 = [item(1), game(2), game(3), item(4), item(5), item(6), game(7)];
+    expect(L.planRhythmStep(luecke35).action).toBe("move");
+    const luecke46 = [item(1), game(2), game(3), game(4), item(5), item(6), item(7), game(8)];
+    expect(L.planRhythmStep(luecke46).action).toBe("ok");
+  });
+
+  test("Randfälle: leere Liste, weniger als drei Items, nur Spieltickets", () => {
+    expect(L.planRhythmStep([]).action).toBe("ok");
+    expect(L.planRhythmStep([item(1), item(2)]).action).toBe("ok");
+    expect(L.planRhythmStep([game(1), game(2), game(3), game(4)]).action).toBe("ok");
+  });
+
+  test("Konvergenz: erwartete Endreihenfolge und Schrittzahl explizit", () => {
+    const items = [item(1), item(2), item(3), item(4), item(5), item(6), game(7), game(8), game(9)];
+    const { moves } = L.planRhythm(items);
+    expect(moves.map((m) => m.item.number)).toEqual([7, 8]);
+    let cur = items;
+    for (const m of moves) cur = L.applyMove(cur, m.item, m.afterId);
+    expect(cur.map((i) => i.number)).toEqual([1, 2, 7, 3, 4, 8, 5, 6, 9]);
+  });
+
+  test("nicht freie Items zwischen Anker und drittem Item: Einsortieren gegen die volle Liste stimmt", () => {
+    // I3 ist belegt (Assignee) und steht zwischen den freien Items: das Spielticket kommt hinter den freien Vorgänger I2.
+    const items = [item(1), item(2), item(3, { assignees: ["x"] }), item(4), game(5)];
+    const step = L.planRhythmStep(items);
+    expect(step).toMatchObject({ action: "move", afterId: "I2" });
+    expect(L.applyMove(items, game(5), "I2").map((i) => i.number)).toEqual([1, 2, 5, 3, 4]);
+  });
+
   test("Schrittgrenze verhindert Endlosschleifen", () => {
     const items = [item(1), item(2), item(3), item(4), item(5), item(6), game(7), game(8), game(9)];
     expect(L.planRhythm(items, 6, 1).end).toBe("limit");
@@ -147,6 +178,39 @@ describe("Einsortieren mehrerer Tickets (#1217)", () => {
     expect(P.parseArgs(["--top"])).toBeNull();
     expect(P.parseArgs(["--top", "abc"])).toBeNull();
     expect(P.parseArgs(["5", "6"])).toBeNull();
+  });
+});
+
+describe("Nicht frei: Branch und Blocker (#1217)", () => {
+  const withBody = (n: number, body = "") => ({ ...item(n), body });
+  const open = () => "OPEN";
+  const closed = () => "CLOSED";
+
+  test("vorhandener Branch macht ein Item nicht frei; kq-12 trifft weder kq-123 noch kq-112", () => {
+    const branches = "main" + String.fromCharCode(10) + "origin/feature/kq-12-foo" + String.fromCharCode(10);
+    expect(L.isUnfree(withBody(12), branches, closed)).toBe(true);
+    expect(L.isUnfree(withBody(123), branches, closed)).toBe(false);
+    expect(L.isUnfree(withBody(112), branches, closed)).toBe(false);
+  });
+
+  test("offener Blocker macht nicht frei, geschlossener nicht; ohne Branch wird der Status erfragt", () => {
+    expect(L.isUnfree(withBody(5, "blockiert durch #9"), "", open)).toBe(true);
+    expect(L.isUnfree(withBody(5, "blockiert durch #9"), "", closed)).toBe(false);
+    expect(L.isUnfree(withBody(5, "kein Blocker"), "", open)).toBe(false);
+  });
+
+  test("ein Fehler beim Blocker-Status (Rate-Limit) wird nicht verschluckt", () => {
+    const boom = () => {
+      throw new Error("API rate limit exceeded");
+    };
+    expect(() => L.isUnfree(withBody(5, "blockiert durch #9"), "", boom)).toThrow(/rate limit/);
+  });
+
+  test("Branch gefunden: der Status wird gar nicht erst erfragt (spart REST-Aufrufe)", () => {
+    const boom = () => {
+      throw new Error("darf nicht aufgerufen werden");
+    };
+    expect(L.isUnfree(withBody(5, "blockiert durch #9"), "feature/kq-5-x", boom)).toBe(true);
   });
 });
 

@@ -37,7 +37,14 @@ async function main(argv = process.argv.slice(2)) {
     console.error("Aufruf: board-place.mjs [--dry-run] (--top <nr>... | --after <ankernr> <nr>...)");
     process.exit(2);
   }
-  const { steps, missing, anchorMissing } = planPlacements(loadItems(), args.numbers, args.anchor);
+  let plan;
+  try {
+    plan = planPlacements(loadItems(), args.numbers, args.anchor);
+  } catch (e) {
+    console.error(`✖ Abbruch${isRateLimit(e.message) ? " (API-Rate-Limit)" : ""}: ${e.message.split("\n")[0]}. Später erneut fahren.`);
+    process.exit(1);
+  }
+  const { steps, missing, anchorMissing } = plan;
   if (anchorMissing) {
     console.error(`✖ Anker #${args.anchor} steht nicht in der Board-Liste (frische Items kommen verzögert). Später erneut.`);
     process.exit(1);

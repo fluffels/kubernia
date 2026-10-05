@@ -1,23 +1,23 @@
 // Kein Shebang: wird von board-rhythm.mjs/board-place.mjs gestartet UND von test/board.test.ts importiert.
 /**
  * Board-Helfer (#1217): die Berechnungen für Spielrhythmus und Einsortieren als pure, getestete
- * Funktionen. Vorher stand der Rhythmus als Inline-`jq` in docs/ticket-reihenfolge.md — dort prüfte
- * nur ein Text-Wächter, ob die Formulierungen stehen, nicht ob der Befehl richtig rechnet.
+ * Funktionen (test/board.test.ts); nur die gh-/git-Aufrufe ganz unten sind ungetestet.
  *
  * Item-Form (normalisiert aus `gh project item-list`): { id, number, title, status, labels[],
- * assignees[], unfree } — `unfree` heißt: offener Blocker („blockiert durch #X“) oder schon ein
- * Branch/Worktree trotz fehlendem Assignee. Solche Items zählen weder als Spielticket noch als
- * Kandidat zum Vorziehen.
+ * assignees[], body, unfree } — `unfree` heißt: offener Blocker („blockiert durch #X“) oder schon ein
+ * Branch trotz fehlendem Assignee. Solche Items zählen weder als Spielticket noch als Kandidat zum
+ * Vorziehen.
  *
  * Nur Node-Builtins, analog zu den anderen scripts/-Wächtern.
  */
 import { execFileSync } from "node:child_process";
 
 export const PROJECT_ID = "PVT_kwHOD8746c4Barq_";
-export const STATUS_FIELD_ID = "PVTSSF_lAHOD8746c4Barq_zhVhdTM";
-export const STATUS_TODO_OPTION_ID = "f75ad846";
 /** Wie viele freie Nicht-Vorrang-Items den „Kopf“ bilden, in dem der Rhythmus gepflegt wird. */
 export const HEAD_SIZE = 6;
+/** Wie viele freie Todo-Items `markUnfree` prüft: der Kopf plus Reserve zum Vorziehen. Weiter unten
+ *  stehende Items ändern den Rhythmus-Schritt nicht und kosten nur REST-Aufrufe (Rate-Limit). */
+export const UNFREE_CHECK_LIMIT = 15;
 
 const GAME_LABEL = /^area:(inhalt|lernpfad|grafik)$/;
 
@@ -51,7 +51,7 @@ export function planRhythmStep(items, headSize = HEAD_SIZE) {
   return { action: "ok" };
 }
 
-/** Setzt `item` direkt hinter `afterId` (null = an die Spitze) — rein lokal, ohne API. */
+/** Setzt `item` direkt hinter `afterId` (null = an die Spitze), rein lokal ohne API. */
 export function applyMove(items, item, afterId) {
   const rest = items.filter((i) => i.id !== item.id);
   const at = afterId === null ? 0 : rest.findIndex((i) => i.id === afterId) + 1;
@@ -74,7 +74,7 @@ export function planRhythm(items, headSize = HEAD_SIZE, maxSteps = 10) {
 /**
  * Einsortieren mehrerer Tickets mit EINER Listenabfrage: `numbers` in der gewünschten Reihenfolge
  * hinter `afterNumber` (oder an die Spitze bei null). Liefert die Positionsschritte [{ item, afterId }],
- * wobei jedes Item am Vorgänger hängt (Reihenfolge bleibt erhalten) — und `missing`: Nummern, die
+ * wobei jedes Item am Vorgänger hängt (Reihenfolge bleibt erhalten), und `missing`: Nummern, die
  * (noch) nicht in der Liste stehen (`gh project item-list` liefert frische Items verzögert).
  */
 export function planPlacements(items, numbers, afterNumber = null) {
@@ -101,15 +101,28 @@ export function blockerNumbers(body) {
   return [...String(body ?? "").matchAll(/blockiert durch\s+#(\d+)/gi)].map((m) => Number(m[1]));
 }
 
+/**
+ * Nicht frei = schon ein Branch `feature/kq-<nr>-…` (trotz fehlendem Assignee) oder ein offener
+ * Blocker. `stateOf(n)` liefert "OPEN"/"CLOSED"; es wird nur gefragt, wenn kein Branch gefunden wurde.
+ */
+export function isUnfree(item, branchesText, stateOf) {
+  if (new RegExp(`feature/kq-${item.number}-`).test(branchesText)) return true;
+  return blockerNumbers(item.body).some((n) => stateOf(n) === "OPEN");
+}
+
 /** True bei GitHubs Rate-Limit-Fehler (Meldung der gh-CLI/GraphQL). */
 export const isRateLimit = (message) => /rate limit/i.test(String(message ?? ""));
 
-// ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
+// ── gh-/git-Anbindung (nur CLI, nicht Teil der getesteten Logik) ────────────
 const gh = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 
-/** Eine Listenabfrage: alle Issue-Items des Boards in Board-Reihenfolge, normalisiert. */
+/** Eine Listenabfrage: alle Issue-Items des Boards in Board-Reihenfolge, normalisiert. Bricht laut ab,
+ *  wenn die Liste abgeschnitten ist (mehr Items als `--limit`), statt still falsch zu rechnen. */
 export function loadItems() {
   const raw = JSON.parse(gh(["project", "item-list", "1", "--owner", "fluffels", "--format", "json", "--limit", "800"]));
+  if (typeof raw.totalCount === "number" && raw.totalCount > raw.items.length) {
+    throw new Error(`Board-Liste abgeschnitten (${raw.items.length} von ${raw.totalCount}), --limit erhöhen.`);
+  }
   return raw.items
     .filter((i) => i.content?.type === "Issue")
     .map((i) => ({
@@ -124,26 +137,18 @@ export function loadItems() {
     }));
 }
 
-/** Markiert Items mit offenem Blocker oder vorhandenem Branch als nicht frei (nur für freie Todo-Items). */
+/** Markiert die ersten UNFREE_CHECK_LIMIT freien Todo-Items als nicht frei (Branch/Blocker). Ein
+ *  Fehler beim Blocker-Status (z.B. Rate-Limit) bricht ab: ein blockiertes Ticket darf nicht still
+ *  als frei gelten und vorgezogen werden. */
 export function markUnfree(items) {
-  const branches = gh(["branch", "-a", "--format=%(refname:short)"]);
-  const issueState = new Map();
+  const branches = execFileSync("git", ["branch", "-a", "--format=%(refname:short)"], { encoding: "utf8" });
+  const cache = new Map();
   const stateOf = (n) => {
-    if (!issueState.has(n)) {
-      try {
-        issueState.set(n, JSON.parse(gh(["issue", "view", String(n), "--json", "state"])).state);
-      } catch {
-        issueState.set(n, "UNKNOWN");
-      }
-    }
-    return issueState.get(n);
+    if (!cache.has(n)) cache.set(n, JSON.parse(gh(["issue", "view", String(n), "--json", "state"])).state);
+    return cache.get(n);
   };
-  for (const item of items) {
-    if (item.status !== "Todo" || item.assignees.length > 0) continue;
-    const hasBranch = new RegExp(`feature/kq-${item.number}-`).test(branches);
-    const blocked = blockerNumbers(item.body).some((n) => stateOf(n) === "OPEN");
-    item.unfree = hasBranch || blocked;
-  }
+  const candidates = items.filter((i) => i.status === "Todo" && i.assignees.length === 0).slice(0, UNFREE_CHECK_LIMIT);
+  for (const item of candidates) item.unfree = isUnfree(item, branches, stateOf);
   return items;
 }
 

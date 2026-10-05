@@ -43,7 +43,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Kontextdatei-Wächter (Zeichen-Budget für jede AGENTS.md, Wurzel + modul-lokal, #719/#1064/#1088) | `npm run check:contextsize` |
 | Tiefendoc-Abdeckungs-Wächter (jede `src/`-Datei in einem `docs/module/`-Tiefendoc, #482/#907) | `npm run check:docmap` |
 | Harness-Drift-Wächter (dokumentierte `npm run`-Kommandos + interne Doku-Links/Anker, #529) | `npm run check:docdrift` |
-| Interne-Referenzen-Wächter (Arbeitgeber-/Kundenbezüge aus dem öffentlichen Repo halten, #990) | `npm run check:internalrefs` (prüft getrackte Dateien und die Commit-Messages des Branches; Herkunftsbegriff ergänzen: `node scripts/check-internalrefs.mjs --add "<begriff>"`, Namensbezug als Wortstamm: `--add-name "<begriff>"`; PR-Titel/-Body: `… \| node scripts/check-internalrefs.mjs --text`) |
+| Interne-Referenzen-Wächter (Arbeitgeber-/Kundenbezüge aus dem öffentlichen Repo halten, #990) | `npm run check:internalrefs` (prüft getrackte Dateien und die Commit-Messages des Branches; Herkunftsbegriff ergänzen: `node scripts/check-internalrefs.mjs --add "<begriff>"`, Namensbezug als Wortstamm: `--add-name "<begriff>"`; PR-Titel/-Body (manuell, nicht in CI): `… \| node scripts/check-internalrefs.mjs --text`) |
 | Spielrhythmus im Board pflegen (#1215) | `node scripts/board-rhythm.mjs` (`--dry-run`) |
 | Mehrere Tickets einsortieren, eine Listenabfrage (#1217) | `node scripts/board-place.mjs --top <nr>…` / `--after <ankernr> <nr>…` |
 | Doku-Aktualitäts-Wächter (offen-markierte Roadmap-Tickets gegen den gh-Status, non-blocking, braucht `gh`, #610) | `npm run check:doctickets` |
