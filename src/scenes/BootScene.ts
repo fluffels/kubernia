@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { COMMON_ASSETS } from "../assets-data";
-import { buildPixelFont, buildCoinIcon, queueAssetLoad, sliceSheets } from "./shared";
+import { buildPixelFont, queueAssetLoad, sliceSheets } from "./shared";
 
 export class BootScene extends Phaser.Scene {
   constructor() { super("Boot"); }
@@ -13,10 +13,9 @@ export class BootScene extends Phaser.Scene {
     queueAssetLoad(this, COMMON_ASSETS);
   }
   create() {
-    // Pixel-Bitmap-Font + Münz-Icon einmalig backen (#188) – global im Cache,
+    // Pixel-Bitmap-Font einmalig backen (#188) – global im Cache,
     // damit World/Interior/Region/MapTest sie ohne erneutes Laden nutzen.
     buildPixelFont(this);
-    buildCoinIcon(this);
     // Sheets der gemeinsamen Assets in Frames schneiden (plains bleiben ganze Bilder);
     // Region-Sheets schneidet später die jeweilige RegionScene (#198).
     sliceSheets(this, COMMON_ASSETS);
