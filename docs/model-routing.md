@@ -1,48 +1,46 @@
-# Modell-Routing im Kubernia-Harness (#910)
+# Modell-Routing im Kubernia-Harness (#910, #1065)
 
-> **SSOT für alle Modell-Pins.** Wenn Anthropic ein neues Modell released und die Pins nachgezogen werden müssen, genügt es, diese Datei zu lesen — sie listet die **zwei Dateien** mit harten Modell-IDs und erklärt die Strategie.
+> **SSOT für Modell- und Effort-Routing.** Es gibt keine festen Modell-IDs mehr im Harness, nur die Tier-Aliase `opus`, `sonnet` und `haiku`. Sie lösen auf das jeweils neueste Modell der Stufe auf ([Claude-Code-Doku › Model configuration](https://code.claude.com/docs/en/model-config)). Ein neues Modell braucht deshalb keine Wartung.
 
-## 1. Die drei Tiers
+## 1. Phasen-Matrix
 
-| Rolle | Tier | Modell-ID | Effort | Warum |
-|---|---|---|---|---|
-| **Plan + Review** (Planungs-Subagent, plan-feature-Skill) | stark | `claude-opus-5` | `high` | Fehler hier sind teuer — schlechte Architektur-Entscheidungen kosten viele Sessions; das stärkste Modell mit hohem Reasoning amortisiert sich schnell (#741, #745). |
-| **Umsetzung** (kubernia-Skill, Workflow-/Loop-Subagenten) | Coding-Sweet-Spot | Tier-Alias `sonnet` (kein hartes Pin) | `medium` — **bislang nur im kubernia-Skill gesetzt** (Frontmatter); Workflow und Loop setzen `model`, aber noch keinen `effort` (#1010) | Sonnet ist der Coding-Sweet-Spot: schnell und günstig genug, um viele Tickets zu tippen, wenn der Plan schon steht; `medium` reicht für Tipparbeit nach fertigem Plan, lässt aber genug Reasoning für die CI-Fix-Schleife. **Muss explizit gesetzt werden:** wer aus einer Opus-Session startet, tippt seinen Code ohne Override auf Opus — „Umsetzung schnell" passiert nicht von allein. Der Alias profitiert trotzdem automatisch von einem neuen Sonnet. |
-| **Explore / Recherche** (reine Lesereisen, Codebase-Suche) | günstig | `claude-haiku-4-5-20251001` | default | Explore-Agenten lesen und suchen — kein komplexes Reasoning nötig; Haiku ist 10–20× billiger als Opus und für reine Code-Navigation mehr als ausreichend. |
+Gültige Effort-Stufen: `low`, `medium`, `high`, `xhigh`, `max`. Bei Sonnet 5+ und Opus 4.7+ ist der Effort die Obergrenze des adaptiven Reasonings. Spalte „Skill-Pfad" nennt, was dort tatsächlich greift.
 
-## 2. Claude Code hat keine Runtime-Aliases
+| Phase | Alias | Effort | Workflow (`kubernia-ticket.js`) | Skill-Pfad (`kubernia`) | Loop (`kubernia-loop`) |
+|---|---|---|---|---|---|
+| Auswahl + Claim | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent (Session-Modell) | im Ticket-Subagenten |
+| Sonderfall (Epic-Split, Dependabot) | `sonnet` | `medium` | `agent()`-Optionen (vorerst, Folgeticket) | Hauptagent | im Ticket-Subagenten |
+| **Planung** | `opus` | `xhigh` | `agentType: 'kubernia-planner'` + `effort` | Subagent `kubernia-planner` (Frontmatter) | über den Skill im Subagenten |
+| Pre-Flight | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent | im Ticket-Subagenten |
+| Umsetzung | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent | Spawn mit `model` + `effort` |
+| **Review (3 Lenses)** | `opus` | `high` | `agent()`-Optionen je Lens | Subagenten aus `review-lenses` | über den Skill |
+| Nachbessern, CI-Fix | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent | im Ticket-Subagenten |
+| PR + Merge, Festgefahren, Cleanup | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent | im Ticket-Subagenten |
+| Explore / Recherche | `haiku` | `low` | n/a | `Agent({model: "haiku", …})` | n/a |
 
-In Claude Code steuert das `model:`-Feld im Skill-/Agent-Frontmatter den Modell-Aufruf. Es gibt **keine repo-eigenen Aliases**, die zur Laufzeit aufgelöst werden — wir können also nicht zentral definieren, was „unser Coding-Modell" heißt. (Die **Tier-Aliase des Tools** — `opus`/`sonnet`/`haiku` — gibt es sehr wohl und wir nutzen sie; sie zeigen auf „das jeweils aktuelle Modell dieses Tiers", lassen sich aber nicht umkonfigurieren.) Das bedeutet:
-- Ein Modell-Update (z.B. Opus 5 → 6) erfordert manuelle Anpassung der gepinnten Dateien.
-- **Diese Datei ist der Alias:** sie ist die eine Stelle, die einem sagt, WO nachzuziehen ist.
+**Warum so:** Fehler in Planung und Review sind teuer (schlechte Architektur kostet viele Sessions), dort lohnt das stärkste Modell mit hohem Reasoning (#741, #745). Tippen nach fertigem Plan ist Sonnet-Arbeit, `medium` lässt genug Reasoning für die CI-Fix-Schleife. Explore liest und sucht nur, Haiku genügt.
 
-## 3. Gepinnte Dateien — das "Update hier"-Checkliste
+**Ehrlich zum Skill-Pfad:** Auswahl, Pre-Flight, Umsetzung, Nachbessern, CI-Fix und Merge laufen dort im einen Hauptagenten, also auf dem Session-Modell (per `.claude/settings.json` Sonnet) und mit dem Effort-Default der Session (Sonnet 5.5: `medium`). Explizit pro Phase gesetzt wird nur im Workflow und an Subagent-Spawns.
 
-Bei einem Modell-Wechsel (neuer Opus, neuer Haiku) diese **zwei Dateien** anpassen:
+## 2. Wie das Routing in Claude Code wirkt
 
-| Datei | Was steckt drin | Welcher Tier |
-|---|---|---|
-| [`.claude/agents/kubernia-planner.md`](../.claude/agents/kubernia-planner.md) | `model: claude-opus-5` + `effort: high` | Plan |
-| [`.claude/skills/plan-feature/SKILL.md`](../.claude/skills/plan-feature/SKILL.md) | `model: claude-opus-5` + `effort: high` im Frontmatter | Plan |
+- **Aliase gibt es.** `opus`, `sonnet`, `haiku` (dazu `opusplan`, `best`, `fable`) lösen auf das neueste Modell der Stufe auf. Es gibt keinen Auto-Modus, der pro Phase selbst wechselt.
+- **Subagenten:** `model:` im Agent-Frontmatter bzw. an `Agent({…})`/`agent({…})` greift nachweislich. Ohne Angabe erbt ein Subagent das Session-Modell.
+- **Skill-Frontmatter greift beim Skill-Tool nicht.** Claude-Code-Bug [anthropics/claude-code#98898](https://github.com/anthropics/claude-code/issues/98898) (offen, reproduzierbar): `model:`/`effort:` im `SKILL.md` wirkt nur beim Aufruf per `/skill-name`, nicht wenn Claude den Skill per Skill-Tool lädt. Belegt durch Langfuse (siehe §5): in rund 22 `skill:kubernia`-Traces kein einziger Sonnet-Call.
+- **Konsequenz:** Der Hebel für den Hauptagenten ist der Projekt-Default `"model": "sonnet"` in [`.claude/settings.json`](../.claude/settings.json). Interaktiv per `/model` überschreibbar. Das Frontmatter `model: sonnet`/`effort: medium` im `kubernia`-Skill bleibt als Zusatz für `/kubernia`. Planer und Review bleiben Opus, weil sie Subagenten sind.
+- **Turn-Scope:** Ein Skill-Override gälte laut Doku nur für den Rest des Turns. Darum laufen die starken Phasen (Planung, Review) bewusst als eigene Subagenten, auch das Self-Grading-Verbot (#1012) hängt daran: Lenses nie inline im Hauptagenten.
 
-Explore-Agenten (wenn in Skills explizit geroutet) stehen ebenfalls hier, sobald welche hinzukommen.
+## 3. Keine Pins mehr
 
-**Nicht nachzuziehen — bewusst per Alias statt Pin:** drei Stellen routen über die **Tier-Aliase** (`opus`/`sonnet`/`haiku`) statt über Modell-IDs und tauchen in der Checkliste oben deshalb absichtlich **nicht** auf — sie profitieren automatisch von einem neuen Opus bzw. Sonnet:
-
-- der **`kubernia`-Skill**: `model: sonnet` im Frontmatter (Umsetzung, seit #1035),
-- **`review-lenses`**: `model: "opus"` an seinen drei Lens-Subagenten (seit #1035),
-- der **Phasen-Workflow** [`.claude/workflows/kubernia-ticket.js`](../.claude/workflows/kubernia-ticket.js): Lens-Agenten mit `model: 'opus'` + `effort: 'high'`, Umsetzungsphase mit `model: 'sonnet'`. Seine **Planungsphase** setzt bewusst kein Modell, sondern ruft den `kubernia-planner`-Agenten (Checklisten-Zeile 1) — so bleibt dieser Pin an genau einer Stelle; nur `effort: 'high'` steht am Aufruf, weil das kein Modell-Pin ist.
-
-Wo ein Alias zur Verfügung steht, ist er dem harten Pin vorzuziehen: er ist die einzige Form von Routing, die einen Modellwechsel ohne Wartung übersteht.
-
-⚠️ **Der Alias kennt keine Generation.** `model: 'opus'` löst auf „irgendein Opus" auf — welchen, entscheidet das Tool, nicht diese Datei. Wo eine **bestimmte** Generation zwingend ist (die Planung: Opus 5), muss es der harte Pin im Frontmatter sein; der Alias taugt nur, wo „das jeweils aktuelle Modell dieses Tiers" die richtige Antwort ist (Review, Umsetzung).
+Der Harness enthält keine festen Modell-IDs (`claude-opus-…` und Verwandte) in `model:`-Feldern. Es gibt deshalb keine Update-Checkliste. [`test/harness/model-routing.test.ts`](../test/harness/model-routing.test.ts) verbietet harte IDs in `.claude/agents`, `.claude/skills`, `.claude/workflows` und `.claude/settings.json`. Wer eine bestimmte Generation braucht, muss die Ausnahme begründet im Wächter eintragen, nicht still pinnen.
 
 ## 4. Konvention im Ticket-Workflow
 
-- **Ticket claimen → Planungs-Subagent** → Opus 5 mit `effort: high` (`kubernia-planner`-Agent, aufgerufen vom `kubernia`-Skill bzw. der Plan-Phase des `kubernia-ticket`-Workflows)
-- **Review (die drei Lenses)** → Opus mit `effort: 'high'`, per Alias (kein Pin, siehe Kasten oben) — **auf beiden Pfaden als eigene Subagenten**: im Workflow am `agent()`-Aufruf, auf dem Skill-Pfad spawnt [`review-lenses`](../.claude/skills/review-lenses/SKILL.md) seine drei Lenses selbst so (#1035). Inline im Hauptagenten dürfen sie **nicht** laufen: dort gilt der Coding-Tier der Umsetzung, der Review rutschte still auf Sonnet — und der finale Blick wäre ein Self-Grading des eigenen Fixes (#1012).
-- **Ticket umsetzen** → Sonnet, per Alias `model: 'sonnet'` (kein Pin). Im **Workflow** am `agent()`-Aufruf; auf dem **Skill-Pfad** seit #1035 im **Frontmatter** von [`.claude/skills/kubernia/SKILL.md`](../.claude/skills/kubernia/SKILL.md) — dort schreibt der **Hauptagent** den Code, es gibt also gar keinen Subagenten, an dem ein `model:` hinge. ⚠️ **Muss explizit gesetzt sein:** ohne Override erbt beides das Session-Modell — aus einer Opus-Session wäre die „schnelle" Umsetzung sonst Opus. ⚠️ **Turn-Scope des Frontmatters:** der Skill-Override gilt für den **Rest des Turns** und ist nach einer Rückfrage-Pause (neuer Turn) weg — dann den Skill erneut aufrufen. Die Tier-Grenze ist damit ehrlicherweise „**ab Skill-Load bis Turn-Ende**", nicht „Code vs. Urteil": auch die **Epic-Aufteilung**, die **Pre-Flight-Risikoklassifikation** und das Festgefahren-Urteil des `kubernia`-Skills laufen auf dem Coding-Tier. Vertretbar, weil das Denken davor im Opus-Planungs-Subagenten passiert — wandert künftig mehr Urteilsarbeit in den Skill, gehört sie wie Planung und Review in einen eigenen Subagenten. ⚠️ **Beleg-Grenze, ehrlich:** dass `model:`/`effort:` im Frontmatter greifen, ist im Repo belegt (`plan-feature`, `kubernia-planner` nutzen es seit #741/#910); die **Turn-Scope-Semantik** stammt aus der Claude-Code-Doku und lässt sich hier **nicht** testen — [`test/harness/model-routing.test.ts`](../test/harness/model-routing.test.ts) prüft nur, dass die Zeilen da sind. Ändert das Tool sein Verhalten, fällt es keinem Gate auf; die Konsequenz daraus (starke Phasen als eigene Subagenten) ist deshalb bewusst so gebaut, dass sie **auch dann** noch richtig ist.
-- **Codebase-Suche / Explore** → explizit `model: claude-haiku-4-5-20251001` setzen, wenn in einem Skill ein reiner Explore-Subagent gespawnt wird; der `subagent_type: Explore` aus dem Agent-Registry hat seinen eigenen Overhead — alternativ einen `Agent({model: "haiku", …})`-Call verwenden
+- Ticket claimen, dann **Planung** durch den `kubernia-planner` (`opus`, `xhigh`), aufgerufen vom `kubernia`-Skill bzw. der Plan-Phase des Workflows. Er ist auch der Weg für Handplanung („plane das Ticket"). Es gibt keine zweite Planungs-Oberfläche.
+- **Review** durch drei Lens-Subagenten (`opus`, `high`), auf beiden Pfaden, nie inline ([`review-lenses`](../.claude/skills/review-lenses/SKILL.md)).
+- **Umsetzung** auf `sonnet`: Workflow per `agent()`-Optionen, Skill-Pfad per Projekt-Default, Loop per Spawn-Parameter.
+- **Explore** als `Agent({model: "haiku", …})` mit `effort: "low"`.
+- Der Wächter [`test/harness/model-routing.test.ts`](../test/harness/model-routing.test.ts) prüft, dass die Angaben da sind (jeder Workflow-`agent()` mit `effort` und `model` oder `agentType`, settings-Default, Planer, Loop, Lenses), nicht dass Claude Code sie zur Laufzeit anwendet.
 
 > Details zur Modellwahl-Philosophie (Planung stark, Umsetzung schnell): [docs/agent-harness.md § Skills + Setup](agent-harness.md#25-skills--setup-als-reproduzierbare-abläufe) (#741, #745).
 
@@ -99,6 +97,23 @@ Der Patch bleibt **bewusst lokal** im Plugin-Cache (`~/.claude/plugins/cache/lan
 - **Loops sind schon billig:** kein einziger roter CI-Push, 1–2 Review-Runden, höchstens eine Rückfrage. Die Kosten stecken in der Umsetzung (60–65 %) und im Review (bis 30 %).
 - **Die Planung fehlt bei drei von vier Läufen.** Nur #1064 hat den `kubernia-planner` gerufen; #1026 lief über den Skill und übersprang ihn trotzdem.
 - **Grenze der Baseline:** alle vier sind Harness-/Doku-Tickets ohne Spielcode unter `src/`. Ein `src/`-Lauf wird bei Gelegenheit ergänzt; bis dahin nur Harness-Tickets gegen diese Zeilen vergleichen.
+
+### Langfuse-Nachmessung 28.09.–05.10.2026 (vor #1065)
+
+Quelle: Langfuse, alle Calls der Woche nach Modell.
+
+| Modell | Rolle | Calls | Kosten | Anteil |
+|---|---|--:|--:|--:|
+| `claude-opus-5-5` | Hauptagent | 3.399 | 209,60 $ | 88 % |
+| `claude-opus-5` | Planer, Lenses | 272 | 27,56 $ | 12 % |
+| `claude-haiku-4-5` | Recherche | 39 | 0,64 $ | <1 % |
+| `claude-sonnet-5-5` | ein Trace (29.09.) | 45 | 0 $¹ | 0 % |
+
+¹ Langfuse hat für `sonnet-5-5` keinen Preis hinterlegt (#1123).
+
+In rund 22 Traces mit Tag `skill:kubernia`: 1.284 Calls Opus 5.5, 257 Opus 5, 9 Haiku, **0 Sonnet**. Das belegt Bug #98898 (§2): das Skill-Frontmatter wirkt beim Skill-Tool nicht, daher der Projekt-Default in `settings.json`.
+
+**Erwartete Ersparnis** durch den Sonnet-Hauptagenten: etwa ein Viertel, nicht die Hälfte. Cache-Reads kosten bei Opus 5.5 und Sonnet 5.5 gleich viel (0,20 $/Mio) und machen 44 % der Kosten aus. Die Nachmessung des ersten Laufs unter dem neuen Routing folgt in einem Folgeticket.
 
 ### Nach einer Optimierung vergleichen
 

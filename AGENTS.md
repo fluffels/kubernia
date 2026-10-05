@@ -90,7 +90,7 @@ Vite + TypeScript + ES-Module, Phaser als npm-Paket; `index.html` lädt nur `src
 
 ### Modellwahl nach Phase (#910)
 
-Drei Tiers (#910/#1035): Explore/Recherche → Haiku, **Planung + Review → Opus (`high`)**, **Umsetzung → Sonnet (`medium`)**. Ohne Modell-Angabe wird das Session-Modell geerbt — deshalb setzen **beide** Ticket-Pfade es explizit: im Workflow der Umsetzungs-Subagent (`agent({model:'sonnet'})`), im Skill das Frontmatter (`model:`/`effort:`). Weil dieser Override für den Rest des Turns gilt, laufen die starken Phasen als **eigene Subagenten** (`kubernia-planner`, Lenses von `review-lenses`). SSOT für Modell-IDs + Update-Checkliste: [docs/model-routing.md](docs/model-routing.md).
+Projekt-Default ist Sonnet (`"model": "sonnet"` in `.claude/settings.json`, #1065); Planung (`kubernia-planner`, `xhigh`) und Review (Lenses, `high`) laufen als Opus-Subagenten, Explore als Haiku. Immer per Alias (`opus`/`sonnet`/`haiku`), nie mit fester Modell-ID. Ohne Modell-Angabe erbt ein Subagent das Session-Modell, darum setzt der Workflow an jedem `agent()` `model` und `effort`. SSOT (Phasen-Matrix, Grenzen): [docs/model-routing.md](docs/model-routing.md).
 
 ## Wo die TODOs leben
 
