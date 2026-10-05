@@ -40,7 +40,11 @@ describe("Spielrhythmus im Board (#1215)", () => {
 
   it("Workflow-Cleanup und Einsortier-Stellen verweisen auf den Spielrhythmus-Schritt", () => {
     const w = read(".claude/workflows/kubernia-ticket.js");
-    expect(w.match(/Spielrhythmus/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+    expect(w).toMatch(/Fahre danach den Spielrhythmus-Schritt/); // Cleanup-Phase
+    expect(w.match(/danach der Spielrhythmus-Schritt/g)?.length ?? 0).toBe(2); // beide Einsortier-Stellen
+    for (const f of [".claude/skills/kubernia/SKILL.md", ".claude/skills/forum/SKILL.md"]) {
+      expect(read(f), f).toMatch(/Spielrhythmus-Schritt/);
+    }
     expect(read("AGENTS.md")).toMatch(/Danach den Spielrhythmus-Schritt fahren/);
   });
 

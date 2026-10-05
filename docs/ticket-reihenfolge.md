@@ -55,7 +55,8 @@ read -r ITEM AFTER < <(gh project item-list 1 --owner fluffels --format json --l
 case "$ITEM" in
   OK)   echo "OK: Rhythmus intakt" ;;
   LEER) echo "LEER: im Kopf fehlt ein Spielticket und tiefer gibt es keins, melden (siehe unten)" ;;
-  *)    gh api graphql -f query='mutation($p:ID!,$i:ID!,$a:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }'           -f p=$PROJ -f i="$ITEM" -f a="$AFTER" ;;
+  *)    gh api graphql -f query='mutation($p:ID!,$i:ID!,$a:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }' \
+          -f p=$PROJ -f i="$ITEM" -f a="$AFTER" ;;
 esac
 ```
 
