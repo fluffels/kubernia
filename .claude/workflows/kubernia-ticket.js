@@ -423,10 +423,7 @@ ${
     ? `Die Maintainerin hat Ticket #${gewuenscht} vorgegeben — nimm dieses statt der Board-Auswahl,
 prüfe es aber genauso (offen? kein Assignee? kein offener Blocker?).
 Ist es nicht frei, gib ergebnis="kein-freies-ticket" zurück und unternimm nichts weiter.`
-    : `Prüfe zuerst die Spielquote (AGENTS.md § Wo die TODOs leben, Befehl in
-docs/ticket-reihenfolge.md): ist der Spiel-Slot dran, nimm das oberste freie Spielticket — außer das oberste
-freie Item ist ein Vorrang-Ticket (🚨/🤖 im Titel, Label forum, Sicherheitslücke), dann dieses.
-Sonst nimm das oberste freie Item der Board-Reihenfolge. Wähle NICHT nach Inhalt aus und
+    : `Nimm das oberste freie Item der Board-Reihenfolge (der Spielrhythmus steckt in der Reihenfolge, AGENTS.md § Wo die TODOs leben). Wähle NICHT nach Inhalt aus und
 sortiere NICHT nach. Prüfe nur dieses eine Kandidaten-Ticket gegen den Live-Stand,
 nicht die ganze Liste. Zeigt es einen Assignee: sofort weiter zum nächsten, ohne
 Worktree-Inspektion und ohne Weiterarbeit an fremder Arbeit.`

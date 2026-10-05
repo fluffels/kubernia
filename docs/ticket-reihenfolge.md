@@ -14,7 +14,7 @@ Bevor irgendein Ticket angefasst wird, **zuerst zweifeln** — das steht über d
 
 ## Was „nächstes Ticket" heißt
 
-Rein deterministisch — **kein Abwägen nach Inhalt, kein Vorab-Sichten der ganzen Liste** (einzige Ausnahme: die [Spielquote](#spielquote--jedes-dritte-ticket-ein-spielticket-1199) wählt per Label):
+Rein deterministisch — **kein Abwägen nach Inhalt, kein Vorab-Sichten der ganzen Liste**:
 
 1. **oberstes freies Item in der Board-Reihenfolge** — genau die Reihenfolge, die `gh project item-list` liefert (= was in View 1 von oben nach unten steht). Keine Nachsortierung nach Inhalt oder Nummer.
 2. **frei** heißt: **kein Assignee** (der „in Arbeit"-Marker), **kein** offener Branch/Worktree und **kein offener Blocker** (`blockiert durch #X` im Body).
@@ -32,35 +32,35 @@ gh project item-list 1 --owner fluffels --format json --limit 800 --jq '
 
 Dann nur **dieses eine** Kandidaten-Ticket kurz gegen den Live-Stand prüfen (`gh issue view <nr>`). **⛔ Hat das Ticket einen Assignee → sofort weiter zum nächsten, fertig. Kein Worktree inspizieren, kein Prüfen wie weit die Arbeit ist, kein Weiterarbeiten.** Ein Assignee bedeutet: ein anderer Agent arbeitet daran — nicht anfassen. Kein Assignee + offen + kein Blocker → sofort self-assignen (`gh issue edit <nr> --add-assignee @me`) und mit dem normalen Workflow abarbeiten (eigener Worktree → umsetzen → alle Gates grün + im Browser verifizieren → **ein** PR → CI abwarten + bis Merge). Voller Ablauf: [AGENTS.md](../AGENTS.md).
 
-## Spielquote — jedes dritte Ticket ein Spielticket (#1199)
+## Spielrhythmus — jede dritte Position ein Spielticket (#1215)
 
-Regel, Spielticket-Labels und Vorrang: [AGENTS.md › Wo die TODOs leben](../AGENTS.md#wo-die-todos-leben). **0. Vorrang zuerst:** ist das oberste freie Item ein Vorrang-Ticket, ist es dran — die Quote greift erst danach.
+Regel, Spielticket-Labels und Vorrang: [AGENTS.md › Wo die TODOs leben](../AGENTS.md#wo-die-todos-leben). Die Auswahl bleibt schlicht „oberstes freies Item"; der Rhythmus wird **beim Pflegen** des Boards hergestellt, nicht beim Auswählen.
 
-**1. Ist der Spiel-Slot dran?** Die Labels der zuletzt gemergten Ticket-Issues (Merge-Reihenfolge von `main`; Dependabot-PRs ohne `Closes` zählen nicht):
+**Wann pflegen:** am Ende jedes Tickets (nach dem Merge) **und** nach jedem Einsortieren eines neuen Tickets. Vorrang-Tickets (`🚨`/`🤖`, `forum`, Sicherheitslücke) stehen vor dem Rhythmus und zählen nicht mit: gezählt wird ab dem ersten Nicht-Vorrang-Item. Wird etwas ganz nach oben gelegt, danach den Rhythmus erneut herstellen, damit ein Spielticket nie dauerhaft nach unten rutscht.
 
-```bash
-n=0
-for pr in $(git log origin/main --first-parent -n 20 --format=%s | grep -o '(#[0-9]*)$' | tr -d '(#)'); do
-  for nr in $(gh pr view "$pr" --json closingIssuesReferences --jq '.closingIssuesReferences[].number'); do
-    gh issue view "$nr" --json number,labels --jq '"#\(.number)\t\([.labels[].name]|join(","))"'
-    n=$((n+1))
-  done
-  [ "$n" -ge 2 ] && break
-done
-```
-
-Trägt **keine** der beiden Zeilen ein Spiel-Label, ist der Spiel-Slot dran (vorher `git fetch origin`). Gezählt werden geschlossene Issues; ein PR, der zwei schließt, belegt beide Plätze. Bewusst akzeptiert: Spieltickets in Arbeit zählen nicht, parallele Agenten können also beide ein Spielticket ziehen — die Quote ist eine Untergrenze.
-
-**2. Oberstes freies Spielticket** (dieselben Frei-Regeln wie oben: kein Assignee, kein Worktree, kein Blocker):
+**Ein Schritt** (so oft wiederholen, bis die Ausgabe `OK` lautet) — findet die erste Position 3k (ohne Vorrang), die kein Spielticket trägt, und zieht das oberste noch tiefer liegende freie Spielticket direkt davor:
 
 ```bash
-gh project item-list 1 --owner fluffels --format json --limit 800 --jq '
-  .items | map(select(.content.type=="Issue" and (.status // "")=="Todo"
-    and ((.labels // []) | any(test("^area:(inhalt|lernpfad|grafik)$")))))
-  | .[] | "#\(.content.number)\t\(.title)"'
+PROJ=PVT_kwHOD8746c4Barq_
+read -r ITEM AFTER < <(gh project item-list 1 --owner fluffels --format json --limit 800 --jq '
+  def game: ((.labels // []) | any(test("^area:(inhalt|lernpfad|grafik)$")));
+  def prio: (.title | test("🚨|🤖")) or ((.labels // []) | any(. == "forum"));
+  [.items[] | select(.content.type=="Issue" and (.status // "")=="Todo")] as $all
+  | ($all | map(select(prio|not))) as $q
+  | ($all | map(select(prio))) as $p
+  | [range(2; ($q|length); 3)] as $slots
+  | (first($slots[] | select(($q[.]|game)|not)) // null) as $s
+  | if $s == null then "OK OK" else
+      (first($q[($s+1):][] | select(game)) // null) as $g
+      | if $g == null then "OK OK"   # kein freies Spielticket tiefer: melden, Slot bleibt belegt
+        else "\($g.id) \($q[$s-1].id)" end
+    end')
+[ "$ITEM" = OK ] && echo OK || gh api graphql -f query='mutation($p:ID!,$i:ID!,$a:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }'   -f p=$PROJ -f i="$ITEM" -f a="$AFTER"
 ```
 
-**3. Kein freies Spielticket:** im Chat melden („Kein freies Spielticket mehr"), das normale oberste Item nehmen und — falls noch keins offen ist — ein Issue „Spiel-Backlog leer: neue Spieltickets planen" (`area:inhalt`, ohne Assignee) anlegen und mit dem Befehl unter „Reihenfolge pflegen" (ohne `afterId`) ganz nach oben schieben. Neue Spielinhalte brauchen Story-/Optik-Entscheidungen der Maintainerin; das Ticket wird darum mit ihr per Pre-Flight-Klärung geplant, nicht autonom erfunden.
+> `$q[$s-1]` ist das Item direkt vor dem Slot; das Spielticket landet dahinter, also **auf** dem Slot. Items mit Assignee bzw. Blocker zählen als belegte Positionen wie jedes andere (nur `Todo` ist im Board sichtbar). Der Befehl verschiebt höchstens ein Item pro Lauf und ist idempotent.
+
+**Kein freies Spielticket:** im Chat melden („Kein freies Spielticket mehr"), der Slot bleibt mit dem nächsten normalen Ticket belegt, und — falls noch keins offen ist — ein Issue „Spiel-Backlog leer: neue Spieltickets planen" (`area:inhalt`, ohne Assignee) anlegen und mit dem Befehl unter „Reihenfolge pflegen" (ohne `afterId`) ganz nach oben schieben. Neue Spielinhalte brauchen Story-/Optik-Entscheidungen der Maintainerin; das Ticket wird darum mit ihr per Pre-Flight-Klärung geplant, nicht autonom erfunden.
 
 ## Sammelticket „Harness-Härtung (gesammelt)" (#1199)
 
