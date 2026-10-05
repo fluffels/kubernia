@@ -1014,7 +1014,7 @@ ${ausserhalbScope.map((p) => `- ${p}`).join('\n')}`
     : ''
 }
 
-Fahre danach den Spielrhythmus-Schritt aus docs/ticket-reihenfolge.md (Abschnitt „Spielrhythmus"), bis er OK oder LEER meldet.
+Fahre danach den Spielrhythmus-Schritt aus docs/ticket-reihenfolge.md (Abschnitt „Spielrhythmus"), bis er OK oder LEER meldet; bei LEER im Chat melden und ggf. das Ticket „Spiel-Backlog leer: neue Spieltickets planen" anlegen (steht dort).
 
 Melde das Ergebnis jedes Verify-Schritts einzeln${ausserhalbScope.length ? ' sowie die angelegten Issue-Nummern bzw. die Sammelticket-Zeilen' : ''}.`,
     { label: `cleanup:#${nr}`, phase: 'Cleanup', model: 'sonnet', effort: 'medium' },

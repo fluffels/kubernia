@@ -36,9 +36,9 @@ Dann nur **dieses eine** Kandidaten-Ticket kurz gegen den Live-Stand prüfen (`g
 
 Regel, Spielticket-Labels und Vorrang: [AGENTS.md › Wo die TODOs leben](../AGENTS.md#wo-die-todos-leben). Die Auswahl bleibt schlicht „oberstes freies Item"; der Rhythmus wird **beim Pflegen** des Boards hergestellt, nicht beim Auswählen. **Wann:** am Ticket-Ende (nach dem Merge) und nach jedem Einsortieren, auch nach „ganz nach oben schieben".
 
-**Invariante:** ab dem ersten Nicht-Vorrang-Item folgen auf höchstens **zwei** Nicht-Spieltickets ein Spielticket. Anders als feste Positionen (3, 6, 9 …) bleibt sie stabil, wenn das oberste Item erledigt wird — feste Slots würden nach jedem Merge ein weiteres Spielticket nach oben ziehen. Items **mit Assignee** (in Arbeit) zählen nicht mit.
+**Invariante:** ab dem ersten Nicht-Vorrang-Item folgen auf höchstens **zwei** Nicht-Spieltickets ein Spielticket. Anders als feste Positionen (3, 6, 9 …) bleibt sie stabil, wenn das oberste Item erledigt wird — feste Slots würden nach jedem Merge ein weiteres Spielticket nach oben ziehen. Items **mit Assignee** (in Arbeit) zählen nicht mit. Gepflegt wird nur der Kopf: weil die Invariante beim Wegfall des obersten Items stabil bleibt, reicht das nach jedem Ticket und jedem Einsortieren — das Board wird nie als Ganzes umsortiert, unten einsortierte Spieltickets bleiben unten, bis sie in den Kopf rücken.
 
-**Ein Schritt** (am Ticket-Ende und nach jedem Einsortieren; wiederholen, bis die Ausgabe `OK` oder `LEER` lautet) — findet die erste Stelle mit drei Nicht-Spieltickets in Folge und zieht das oberste tiefer liegende Spielticket direkt vor das dritte:
+**Ein Schritt** (am Ticket-Ende und nach jedem Einsortieren; wiederholen, bis die Ausgabe `OK` oder `LEER` lautet) — prüft nur den **Kopf** (die ersten 6 freien Nicht-Vorrang-Items), findet dort die erste Stelle mit drei Nicht-Spieltickets in Folge und zieht das oberste tiefer liegende Spielticket direkt vor das dritte:
 
 ```bash
 PROJ=PVT_kwHOD8746c4Barq_
@@ -47,14 +47,14 @@ read -r ITEM AFTER < <(gh project item-list 1 --owner fluffels --format json --l
   def prio: (.title | test("🚨|🤖")) or ((.labels // []) | any(. == "forum"));
   [.items[] | select(.content.type=="Issue" and (.status // "")=="Todo" and ((.assignees // []) | length)==0)
     | select(prio|not)] as $q
-  | (first(range(2; ($q|length)) | select(($q[.]|game|not) and ($q[.-1]|game|not) and ($q[.-2]|game|not))) // null) as $i
+  | (first(range(2; ([($q|length), 6] | min)) | select(($q[.]|game|not) and ($q[.-1]|game|not) and ($q[.-2]|game|not))) // null) as $i
   | if $i == null then "OK OK" else
       (first($q[($i+1):][] | select(game)) // null) as $g
       | if $g == null then "LEER LEER" else "\($g.id) \($q[$i-1].id)" end
     end')
 case "$ITEM" in
   OK)   echo "OK: Rhythmus intakt" ;;
-  LEER) echo "LEER: kein freies Spielticket tiefer, melden (siehe unten)" ;;
+  LEER) echo "LEER: im Kopf fehlt ein Spielticket und tiefer gibt es keins, melden (siehe unten)" ;;
   *)    gh api graphql -f query='mutation($p:ID!,$i:ID!,$a:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }'           -f p=$PROJ -f i="$ITEM" -f a="$AFTER" ;;
 esac
 ```

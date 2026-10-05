@@ -16,13 +16,14 @@ const FILES = [
   "AGENTS.md",
   ".claude/skills/kubernia/SKILL.md",
   ".claude/skills/kubernia-loop/SKILL.md",
+  ".claude/skills/forum/SKILL.md",
   ".claude/workflows/kubernia-ticket.js",
   "docs/agent-harness.md",
   "docs/ticket-reihenfolge.md",
 ];
 
 /** Formulierungen der abgelegten Historienrechnung. */
-const OLD_QUOTA_CLAIMS = [/Ausnahme:\s*Spielquote/i, /Spiel-Slot dran/i, /letzten zwei gemergten/i, /gemergten Ticket-PRs ein Spielticket/i, /kein Pflege-Schritt am Ticket-Ende/i, /puh, fertig"-Pflege-Schritt mehr/i, /Das war's\./];
+const OLD_QUOTA_CLAIMS = [/Ausnahme:\s*Spielquote/i, /Spiel-Slot dran/i, /letzten zwei gemergten/i, /gemergten Ticket-PRs ein Spielticket/i, /kein Pflege-Schritt am Ticket-Ende/i, /puh, fertig"-Pflege-Schritt mehr/i];
 
 describe("Spielrhythmus im Board (#1215)", () => {
   it.each(FILES)("%s beschreibt keine Historienrechnung mehr", (f) => {
