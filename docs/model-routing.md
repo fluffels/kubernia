@@ -9,14 +9,14 @@ Gültige Effort-Stufen: `low`, `medium`, `high`, `xhigh`, `max`. Bei Sonnet 5+ u
 | Phase | Alias | Effort | Workflow (`kubernia-ticket.js`) | Skill-Pfad (`kubernia`) | Loop (`kubernia-loop`) |
 |---|---|---|---|---|---|
 | Auswahl + Claim | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent (Session-Modell) | im Ticket-Subagenten |
-| Sonderfall (Epic-Split, Dependabot) | `sonnet` | `medium` | `agent()`-Optionen (vorerst, Folgeticket) | Hauptagent | im Ticket-Subagenten |
+| Sonderfall (Epic-Split, Dependabot) | `sonnet` | `medium` | `agent()`-Optionen (vorerst; Opus-Tier: #1207) | Hauptagent | im Ticket-Subagenten |
 | **Planung** | `opus` | `xhigh` | `agentType: 'kubernia-planner'` + `effort` | Subagent `kubernia-planner` (Frontmatter) | über den Skill im Subagenten |
 | Pre-Flight | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent | im Ticket-Subagenten |
-| Umsetzung | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent | Spawn mit `model` + `effort` |
-| **Review (3 Lenses)** | `opus` | `high` | `agent()`-Optionen je Lens | Subagenten aus `review-lenses` | über den Skill |
+| Umsetzung | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent | Spawn mit `model` (Effort = Sonnet-Default `medium`, deckt sich mit dem Ziel) |
+| **Review (3 Lenses)** | `opus` | `high` | `agent()`-Optionen je Lens (`high` wirkt) | Subagenten aus `review-lenses`; Effort faktisch Opus-Default (`medium`), `high` nur per Folgeticket #LENSAGENT | über den Skill (Effort wie Skill-Pfad) |
 | Nachbessern, CI-Fix | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent | im Ticket-Subagenten |
 | PR + Merge, Festgefahren, Cleanup | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent | im Ticket-Subagenten |
-| Explore / Recherche | `haiku` | `low` | n/a | `Agent({model: "haiku", …})` | n/a |
+| Explore / Recherche | `haiku` | `low` | n/a | keine feste Aufrufstelle; Empfehlung `Agent({model: "haiku"})`, Effort nicht per Tool setzbar (§2, #LENSAGENT) | n/a |
 
 **Warum so:** Fehler in Planung und Review sind teuer (schlechte Architektur kostet viele Sessions), dort lohnt das stärkste Modell mit hohem Reasoning (#741, #745). Tippen nach fertigem Plan ist Sonnet-Arbeit, `medium` lässt genug Reasoning für die CI-Fix-Schleife. Explore liest und sucht nur, Haiku genügt.
 
@@ -24,23 +24,24 @@ Gültige Effort-Stufen: `low`, `medium`, `high`, `xhigh`, `max`. Bei Sonnet 5+ u
 
 ## 2. Wie das Routing in Claude Code wirkt
 
-- **Aliase gibt es.** `opus`, `sonnet`, `haiku` (dazu `opusplan`, `best`, `fable`) lösen auf das neueste Modell der Stufe auf. Es gibt keinen Auto-Modus, der pro Phase selbst wechselt.
+- **Aliase gibt es.** `opus`, `sonnet`, `haiku` (dazu `opusplan`, `best`, `fable`) lösen auf das neueste Modell der Stufe auf. Es gibt keinen Modus, der nach kubernia-Phasen wechselt. `opusplan` wechselt nur zwischen dem Claude-Code-Plan-Modus (opus) und der Ausführung (sonnet) und passt nicht zum Ticket-Ablauf.
 - **Subagenten:** `model:` im Agent-Frontmatter bzw. an `Agent({…})`/`agent({…})` greift nachweislich. Ohne Angabe erbt ein Subagent das Session-Modell.
+- **Das Agent-Tool hat keinen `effort`-Parameter.** Sein Schema kennt `description`, `isolation`, `model`, `prompt`, `subagent_type`, `run_in_background`. `effort` greift nur im Agent-/Skill-Frontmatter (Skill-Frontmatter nur bei `/slash`, siehe nächster Punkt) und als Option von `agent()` in Workflow-Skripten. Darum sind `effort`-Angaben an `Agent({…})`-Spawns wirkungslos und stehen dort nicht: Lenses laufen auf dem Skill-Pfad mit dem Opus-Standard-Effort (Opus 5.5: `medium`), im Workflow mit `high`; der Loop-Spawn mit dem Sonnet-Default (`medium`). Behebung über eigene Agent-Definitionen mit `effort`-Frontmatter (Lenses, Explore): #LENSAGENT.
 - **Skill-Frontmatter greift beim Skill-Tool nicht.** Claude-Code-Bug [anthropics/claude-code#98898](https://github.com/anthropics/claude-code/issues/98898) (offen, reproduzierbar): `model:`/`effort:` im `SKILL.md` wirkt nur beim Aufruf per `/skill-name`, nicht wenn Claude den Skill per Skill-Tool lädt. Belegt durch Langfuse (siehe §5): in rund 22 `skill:kubernia`-Traces kein einziger Sonnet-Call.
-- **Konsequenz:** Der Hebel für den Hauptagenten ist der Projekt-Default `"model": "sonnet"` in [`.claude/settings.json`](../.claude/settings.json). Interaktiv per `/model` überschreibbar. Das Frontmatter `model: sonnet`/`effort: medium` im `kubernia`-Skill bleibt als Zusatz für `/kubernia`. Planer und Review bleiben Opus, weil sie Subagenten sind.
+- **Konsequenz:** Der Hebel für den Hauptagenten ist der Projekt-Default `"model": "sonnet"` in [`.claude/settings.json`](../.claude/settings.json). Interaktiv per `/model` überschreibbar. Das Frontmatter `model: sonnet`/`effort: medium` im `kubernia`-Skill greift nur bei `/kubernia`. Planer und Review bleiben Opus, weil sie Subagenten sind.
 - **Turn-Scope:** Ein Skill-Override gälte laut Doku nur für den Rest des Turns. Darum laufen die starken Phasen (Planung, Review) bewusst als eigene Subagenten, auch das Self-Grading-Verbot (#1012) hängt daran: Lenses nie inline im Hauptagenten.
 
 ## 3. Keine Pins mehr
 
-Der Harness enthält keine festen Modell-IDs (`claude-opus-…` und Verwandte) in `model:`-Feldern. Es gibt deshalb keine Update-Checkliste. [`test/harness/model-routing.test.ts`](../test/harness/model-routing.test.ts) verbietet harte IDs in `.claude/agents`, `.claude/skills`, `.claude/workflows` und `.claude/settings.json`. Wer eine bestimmte Generation braucht, muss die Ausnahme begründet im Wächter eintragen, nicht still pinnen.
+Der Harness enthält keine festen Modell-IDs (`claude-opus-…` und Verwandte) in `model:`-Feldern. Es gibt deshalb keine Update-Checkliste. [`test/harness/model-routing.test.ts`](../test/harness/model-routing.test.ts) verbietet harte IDs in `.claude/agents`, `.claude/skills`, `.claude/workflows` und `.claude/settings.json`. Wer eine bestimmte Generation braucht, muss den Wächter bewusst (per reviewtem Commit mit Begründung) anpassen, nicht still pinnen.
 
 ## 4. Konvention im Ticket-Workflow
 
 - Ticket claimen, dann **Planung** durch den `kubernia-planner` (`opus`, `xhigh`), aufgerufen vom `kubernia`-Skill bzw. der Plan-Phase des Workflows. Er ist auch der Weg für Handplanung („plane das Ticket"). Es gibt keine zweite Planungs-Oberfläche.
-- **Review** durch drei Lens-Subagenten (`opus`, `high`), auf beiden Pfaden, nie inline ([`review-lenses`](../.claude/skills/review-lenses/SKILL.md)).
+- **Review** durch drei Lens-Subagenten (`opus`; `high` nur im Workflow wirksam, §2), auf beiden Pfaden, nie inline ([`review-lenses`](../.claude/skills/review-lenses/SKILL.md)).
 - **Umsetzung** auf `sonnet`: Workflow per `agent()`-Optionen, Skill-Pfad per Projekt-Default, Loop per Spawn-Parameter.
-- **Explore** als `Agent({model: "haiku", …})` mit `effort: "low"`.
-- Der Wächter [`test/harness/model-routing.test.ts`](../test/harness/model-routing.test.ts) prüft, dass die Angaben da sind (jeder Workflow-`agent()` mit `effort` und `model` oder `agentType`, settings-Default, Planer, Loop, Lenses), nicht dass Claude Code sie zur Laufzeit anwendet.
+- **Explore** als `Agent({model: "haiku"})`; Effort ist dort nicht per Tool setzbar (§2).
+- Der Wächter [`test/harness/model-routing.test.ts`](../test/harness/model-routing.test.ts) prüft, dass die Angaben da sind (jeder Workflow-`agent()` mit `effort` und `model` oder `agentType`, Plan-Effort im Workflow gleich dem Planer-Frontmatter, settings-Default, Planer, Loop-Spawn mit `model`, Lenses mit `model`), nicht dass Claude Code sie zur Laufzeit anwendet.
 
 > Details zur Modellwahl-Philosophie (Planung stark, Umsetzung schnell): [docs/agent-harness.md § Skills + Setup](agent-harness.md#25-skills--setup-als-reproduzierbare-abläufe) (#741, #745).
 
@@ -92,7 +93,7 @@ Der Patch bleibt **bewusst lokal** im Plugin-Cache (`~/.claude/plugins/cache/lan
 ¹ #1069 und #1072 liefen in derselben Session und sind ab dem jeweiligen Claim geschnitten (`--from`); ihre Auswahl ist deshalb nicht gemessen.
 
 **Was die Baseline zeigt:**
-- **Die Umsetzung lief in allen vier Läufen auf Opus 5.5, nie auf Sonnet.** #1026 und #1064 hatten den `kubernia`-Skill geladen (`model: sonnet` im Frontmatter, §4), trotzdem kam **kein einziger** Hauptagent-Call von Sonnet. Die Modelle an **Subagenten** greifen dagegen: in #1064 lief der Planer auf `claude-opus-5`, die Recherche auf `claude-sonnet-5-5`. Es hakt also am Frontmatter-Override des Hauptagenten — der größte Hebel für #1065. (`test/harness/model-routing.test.ts` prüft nur, dass die Zeile da ist, nicht, dass sie wirkt.)
+- **Die Umsetzung lief in allen vier Läufen auf Opus 5.5, nie auf Sonnet.** #1026 und #1064 hatten den `kubernia`-Skill geladen (`model: sonnet` im Frontmatter; der Hebel ist seitdem `settings.json`, §2), trotzdem kam **kein einziger** Hauptagent-Call von Sonnet. Die Modelle an **Subagenten** greifen dagegen: in #1064 lief der Planer auf `claude-opus-5`, die Recherche auf `claude-sonnet-5-5`. Es hakt also am Frontmatter-Override des Hauptagenten — der größte Hebel für #1065. (`test/harness/model-routing.test.ts` prüft nur, dass die Zeile da ist, nicht, dass sie wirkt.)
 - **95–98 % der Tokens sind Cache-Reads**, also der pro Call neu gelesene Kontext. Weniger Calls und ein kleinerer Grundkontext sparen mehr als kürzere Antworten.
 - **Loops sind schon billig:** kein einziger roter CI-Push, 1–2 Review-Runden, höchstens eine Rückfrage. Die Kosten stecken in der Umsetzung (60–65 %) und im Review (bis 30 %).
 - **Die Planung fehlt bei drei von vier Läufen.** Nur #1064 hat den `kubernia-planner` gerufen; #1026 lief über den Skill und übersprang ihn trotzdem.
@@ -109,15 +110,15 @@ Quelle: Langfuse, alle Calls der Woche nach Modell.
 | `claude-haiku-4-5` | Recherche | 39 | 0,64 $ | <1 % |
 | `claude-sonnet-5-5` | ein Trace (29.09.) | 45 | 0 $¹ | 0 % |
 
-¹ Langfuse hat für `sonnet-5-5` keinen Preis hinterlegt (#1123).
+¹ Langfuse hat für `claude-sonnet-5-5` keinen Preis hinterlegt (#1123).
 
 In rund 22 Traces mit Tag `skill:kubernia`: 1.284 Calls Opus 5.5, 257 Opus 5, 9 Haiku, **0 Sonnet**. Das belegt Bug #98898 (§2): das Skill-Frontmatter wirkt beim Skill-Tool nicht, daher der Projekt-Default in `settings.json`.
 
-**Erwartete Ersparnis** durch den Sonnet-Hauptagenten: etwa ein Viertel, nicht die Hälfte. Cache-Reads kosten bei Opus 5.5 und Sonnet 5.5 gleich viel (0,20 $/Mio) und machen 44 % der Kosten aus. Die Nachmessung des ersten Laufs unter dem neuen Routing folgt in einem Folgeticket.
+**Erwartete Ersparnis** durch den Sonnet-Hauptagenten: etwa ein Viertel, nicht die Hälfte. Cache-Reads kosten bei Opus 5.5 und Sonnet 5.5 gleich viel (0,20 $/Mio) und machen 44 % der Kosten aus. Die Nachmessung des ersten Laufs unter dem neuen Routing läuft in #1206.
 
 ### Nach einer Optimierung vergleichen
 
-Im PR von #1065/#1067 (bzw. im ersten Ticket-Lauf danach): das Skript für 1–3 neue Läufe fahren, die Zeilen unter diese Tabelle hängen und die Veränderung von **Tokens**, **Modell Umsetzung** und den Loop-Spalten im PR-Text benennen. Eine Einsparung gilt nur, wenn die Loop-Spalten nicht schlechter werden (mehr CI-Fix-Runden oder Nacharbeit fressen den Gewinn).
+Die Nachmessung läuft in #1206: das Skript für 1–3 neue Läufe fahren, die Zeilen unter diese Tabelle hängen und die Veränderung von **Tokens**, **Modell Umsetzung** und den Loop-Spalten im PR-Text benennen. Eine Einsparung gilt nur, wenn die Loop-Spalten nicht schlechter werden (mehr CI-Fix-Runden oder Nacharbeit fressen den Gewinn).
 
 ### Langfuse-Blick beim Sammelticket (#1199)
 

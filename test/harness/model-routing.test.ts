@@ -40,6 +40,15 @@
  *   - Beim `effort:` wird nur die **Anwesenheit** geprüft, nicht die Stufe (siehe dort).
  *   - Der Workflow-Pfad wird nur auf Anwesenheit von `model`/`effort` je Aufrufstelle geprüft,
  *     nicht welche Phase welchen Alias bekommt – die Zuordnung steht in docs/model-routing.md.
+ *     Ausnahme: der Plan-Effort im Workflow muss dem Frontmatter des kubernia-planner gleichen.
+ *   - Die Optionen-Zählung paart Aufrufe und Optionsobjekte nur über die SUMME: ein Aufruf ohne
+ *     Optionen plus ein überzähliges Optionsobjekt heben sich auf.
+ *   - Der Text-Scan erkennt keine Spread-Konstanten (`{ ...OPTS, label: … }`): `effort`/`model`
+ *     aus einer ausgelagerten Konstante sähe er nicht.
+ *   - `routingFiles()` liest das Dateisystem (nicht `git ls-files`, wie `collectMarkdown`, #1091):
+ *     untrackte lokale Dateien in .claude/ werden mitgeprüft und können lokal rot machen, die CI nicht.
+ *   - Das Agent-Tool hat keinen `effort`-Parameter (docs/model-routing.md §2); für Spawns wird
+ *     daher nur `model` geprüft.
  *
  * Fitness-Function-Kategorie neben layering/filesize/docmap/agents-md-native, nicht mit
  * Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`:
@@ -138,6 +147,9 @@ function workflowAgentCalls(js: string): { optionen: string[]; aufrufe: number }
   return { optionen, aufrufe };
 }
 
+/** Der `effort:`-Wert aus einem Optionsobjekt (undefined, wenn keiner da ist). */
+const planEffort = (optionen: string) => /\beffort:\s*['"]([a-z]+)['"]/.exec(optionen)?.[1];
+
 /** Eine Aufrufstelle ist geroutet: `effort` UND (`model` ODER `agentType`; der Agent trägt sein Modell selbst). */
 const istGeroutet = (optionen: string) => /\beffort:/.test(optionen) && /\b(model|agentType):/.test(optionen);
 
@@ -155,7 +167,7 @@ const istGeroutet = (optionen: string) => /\beffort:/.test(optionen) && /\b(mode
 const RETIRED_ROUTING_CLAIMS: { term: string; home: string }[] = [
   {
     term: "Session-Default",
-    home: `seit #1035 tippt die Umsetzung auf beiden Pfaden den Coding-Tier – im Workflow per agent({model}), im Skill per Frontmatter in ${UMSETZUNGS_SKILL}`,
+    home: `seit #1035/#1065 tippt die Umsetzung auf beiden Pfaden den Coding-Tier – im Workflow per agent({model}), im Skill-Pfad per Projekt-Default in .claude/settings.json (das Frontmatter in ${UMSETZUNGS_SKILL} greift nur bei /kubernia)`,
   },
 ];
 
@@ -284,12 +296,31 @@ describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
     );
   });
 
-  test("Planer opus/xhigh, Loop-Spawn mit model und effort, Lenses opus/high", () => {
+  test("Planer opus/xhigh, Loop-Spawn mit model (ohne effort), Lenses opus", () => {
     const planer = frontmatter(read(".claude/agents/kubernia-planner.md"));
     assert.equal(planer.model, "opus");
     assert.equal(planer.effort, "xhigh");
-    assert.match(read(".claude/skills/kubernia-loop/SKILL.md"), /model:\s*"sonnet"[^\n]*effort:\s*"/, "Loop-Spawn ohne effort (#1047)");
-    assert.match(read(REVIEW_SKILL), /Agent\(\{[^}]*model:\s*"opus"[^}]*effort:\s*"high"/s, "Lenses müssen opus/high sein");
+    // Das Agent-Tool hat keinen `effort`-Parameter (docs/model-routing.md §2): nur `model` ist Pflicht.
+    assert.match(read(".claude/skills/kubernia-loop/SKILL.md"), /Agent-Tool[^\n]*`model: "sonnet"`/, "Loop-Spawn ohne model (#1047)");
+    assert.match(read(REVIEW_SKILL), /Agent\(\{[^}]*model:\s*"opus"/s, "Lenses müssen opus sein");
+  });
+
+  test("der Plan-Effort im Workflow gleicht dem Frontmatter des kubernia-planner (Drift-Schutz)", () => {
+    const planer = frontmatter(read(".claude/agents/kubernia-planner.md"));
+    const { optionen } = workflowAgentCalls(read(".claude/workflows/kubernia-ticket.js"));
+    const planCalls = optionen.filter((o) => /agentType:\s*['"]kubernia-planner['"]/.test(o));
+    assert.equal(planCalls.length, 1, "Genau eine Plan-Aufrufstelle im Workflow erwartet.");
+    assert.equal(
+      planEffort(planCalls[0]),
+      planer.effort,
+      "Der Workflow überstimmt sonst still das Frontmatter des Planers – beide Stellen müssen denselben effort tragen.",
+    );
+  });
+
+  test("Erkennung greift wirklich (Red-Green): abweichender Plan-Effort fällt auf", () => {
+    assert.equal(planEffort("{ label: 'p', agentType: 'kubernia-planner', effort: 'xhigh' }"), "xhigh");
+    assert.notEqual(planEffort("{ label: 'p', agentType: 'kubernia-planner', effort: 'high' }"), "xhigh", "Abweichung muss auffallen");
+    assert.equal(planEffort("{ label: 'p', agentType: 'kubernia-planner' }"), undefined, "ohne effort ⇒ undefined");
   });
 });
 
