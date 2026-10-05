@@ -6,8 +6,8 @@
  * vor dem ersten Call jeder Session im Kontext und werden bei jedem der 100–250 Calls
  * neu gelesen. Repo-seitig steuerbar sind drei Hebel, die hier festgenagelt werden:
  *
- *   1. Subagenten bekommen eine `tools:`-Whitelist (ohne `*`, `Skill`, `Artifact`).
- *   2. Beschreibungen von Repo-Skills, Agenten und Workflow bleiben kurz.
+ *   1. Subagenten bekommen eine `tools:`-Whitelist (ohne `*`, `Skill`, `Artifact`, MCP-Wildcards).
+ *   2. Beschreibungen von Repo-Skills, Agenten und Workflows bleiben kurz (einzeilig, ≤ 300 Zeichen).
  *   3. Die gemessen wirksamen Schalter in `.claude/settings.json` bleiben gesetzt.
  */
 import { describe, test } from "vitest";
@@ -18,30 +18,41 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const lies = (rel: string): string => readFileSync(root + rel, "utf8");
 
+/** Obergrenze = der Schalter `skillListingMaxDescChars` (unten gegen settings.json geprüft). */
 export const MAX_BESCHREIBUNG = 300;
 
-/** Liest eine einzeilige Frontmatter-Zeile `key: wert`; `null`, wenn sie fehlt. */
+/** Liest eine einzeilige Frontmatter-Zeile `key: wert` (ohne Anführungszeichen); `null`, wenn sie fehlt.
+ *  Mehrzeilige YAML-Werte (`>`, `|`) würden die Längenprüfung umgehen und werfen deshalb. */
 export function frontmatterZeile(text: string, key: string): string | null {
   const kopf = /^---\n([\s\S]*?)\n---/.exec(text)?.[1] ?? "";
   const treffer = new RegExp("^" + key + ": *(.*)$", "m").exec(kopf);
-  return treffer ? treffer[1].trim() : null;
+  if (!treffer) return null;
+  const wert = treffer[1].trim().replace(/^(["'])([\s\S]*)\1$/, "$2");
+  if (/^[>|]/.test(wert)) throw new Error(`${key}: mehrzeiliger YAML-Wert nicht erlaubt, einzeilig schreiben`);
+  return wert;
 }
 
-/** Findet unzulässige Einträge einer `tools:`-Zeile (Wildcard, Skill, Artifact) bzw. eine fehlende Liste. */
+/** Findet unzulässige Einträge einer `tools:`-Zeile (Wildcard, Skill, Artifact, MCP-Wildcard) bzw. eine fehlende Liste. */
 export function toolsProbleme(tools: string | null): string[] {
   if (tools === null || tools === "") return ["keine tools:-Whitelist"];
   const probleme: string[] = [];
-  for (const t of tools.split(",").map((s) => s.trim())) {
-    if (t === "*" || t === "Skill" || t === "Artifact") probleme.push(`unzulässiges Tool ${t}`);
+  for (const roh of tools.split(",")) {
+    const t = roh.trim().replace(/^\[|\]$/g, "").replace(/^["']|["']$/g, "").trim();
+    if (t === "*" || t.startsWith("Skill") || t === "Artifact" || t.endsWith("__*")) {
+      probleme.push(`unzulässiges Tool ${t}`);
+    }
   }
   return probleme;
 }
 
 const agenten = readdirSync(root + ".claude/agents").filter((f) => f.endsWith(".md"));
-const skills = readdirSync(root + ".claude/skills");
+const workflows = readdirSync(root + ".claude/workflows").filter((f) => f.endsWith(".js"));
+const skills = readdirSync(root + ".claude/skills", { withFileTypes: true })
+  .filter((e) => e.isDirectory())
+  .map((e) => e.name);
 
 describe("Kontext-Sockel (#1198)", () => {
-  test("jeder Agent hat eine Tool-Whitelist ohne *, Skill und Artifact", () => {
+  test("jeder Agent hat eine Tool-Whitelist ohne *, Skill, Artifact und MCP-Wildcards", () => {
     assert.ok(agenten.length > 0);
     for (const f of agenten) {
       const text = lies(`.claude/agents/${f}`);
@@ -64,22 +75,26 @@ describe("Kontext-Sockel (#1198)", () => {
   });
 
   test("Workflow-whenToUse ist höchstens 300 Zeichen lang", () => {
-    const m = /whenToUse:\s*'([^']*)'/.exec(lies(".claude/workflows/kubernia-ticket.js"));
-    assert.ok(m, "whenToUse nicht gefunden");
-    assert.ok(m[1].length <= MAX_BESCHREIBUNG, `${m[1].length} Zeichen`);
+    assert.ok(workflows.length > 0);
+    for (const w of workflows) {
+      const m = /whenToUse:\s*'((?:[^'\\]|\\.)*)'/.exec(lies(`.claude/workflows/${w}`));
+      assert.ok(m, `${w}: whenToUse nicht gefunden`);
+      const laenge = m[1].replace(/\\(.)/g, "$1").length;
+      assert.ok(laenge <= MAX_BESCHREIBUNG, `${w}: ${laenge} Zeichen`);
+    }
   });
 
   test("die gemessen wirksamen Schalter in settings.json bleiben gesetzt", () => {
     const s = JSON.parse(lies(".claude/settings.json")) as Record<string, unknown>;
     assert.equal(s.disableClaudeAiConnectors, true);
-    assert.equal(s.skillListingMaxDescChars, 300);
+    assert.equal(s.skillListingMaxDescChars, MAX_BESCHREIBUNG);
     const plugins = s.enabledPlugins as Record<string, boolean>;
     assert.equal(plugins["data@synced"], false);
     assert.equal(plugins["cowork-plugin-management@synced"], false);
   });
 
   describe("Hilfsfunktionen (Negativfälle)", () => {
-    test("toolsProbleme meldet fehlende Liste, Wildcard, Skill und Artifact", () => {
+    test("toolsProbleme meldet fehlende Liste, Wildcard, Skill, Artifact und MCP-Wildcards", () => {
       assert.deepEqual(toolsProbleme(null), ["keine tools:-Whitelist"]);
       assert.deepEqual(toolsProbleme(""), ["keine tools:-Whitelist"]);
       assert.deepEqual(toolsProbleme("*"), ["unzulässiges Tool *"]);
@@ -87,14 +102,24 @@ describe("Kontext-Sockel (#1198)", () => {
         "unzulässiges Tool Skill",
         "unzulässiges Tool Artifact",
       ]);
+      assert.deepEqual(toolsProbleme('"*"'), ["unzulässiges Tool *"]);
+      assert.deepEqual(toolsProbleme("[Read, Skill]"), ["unzulässiges Tool Skill"]);
+      assert.deepEqual(toolsProbleme("Read, Skill(forum)"), ["unzulässiges Tool Skill(forum)"]);
+      assert.deepEqual(toolsProbleme("Read, mcp__pixellab__*"), ["unzulässiges Tool mcp__pixellab__*"]);
       assert.deepEqual(toolsProbleme("Read, Grep, Agent"), []);
     });
 
-    test("frontmatterZeile liest nur den Kopf und meldet Fehlendes als null", () => {
+    test("frontmatterZeile liest nur den Kopf, entfernt Quotes und meldet Fehlendes als null", () => {
       const t = "---\nname: x\ntools: Read\n---\ntools: Bash";
       assert.equal(frontmatterZeile(t, "tools"), "Read");
       assert.equal(frontmatterZeile(t, "model"), null);
       assert.equal(frontmatterZeile("kein Kopf", "name"), null);
+      assert.equal(frontmatterZeile('---\ndescription: "Text"\n---', "description"), "Text");
+    });
+
+    test("frontmatterZeile verweigert mehrzeilige YAML-Werte (Längenumgehung)", () => {
+      assert.throws(() => frontmatterZeile("---\ndescription: >\n  lang\n---", "description"), /mehrzeilig/);
+      assert.throws(() => frontmatterZeile("---\ndescription: |-\n  lang\n---", "description"), /mehrzeilig/);
     });
   });
 });

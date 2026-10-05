@@ -134,7 +134,7 @@ In rund 22 Traces mit Tag `skill:kubernia`: 1.284 Calls Opus 5.5, 257 Opus 5, 9 
 
 **Messung vorher/nachher** (`claude -p` im Projekt, Sonnet, gleicher Prompt; Headless liegt unter den interaktiven Werten, weil weniger Hooks und Tools laden, die Differenzen sind aber übertragbar):
 
-| Variante | Sockel |
+| Variante (Einzeleffekte gegen „vorher“, sie überlappen sich) | Sockel |
 |---|--:|
 | Hauptagent vorher | 52,3k |
 | `disableClaudeAiConnectors` | −2,5k |
@@ -149,7 +149,7 @@ Ohne Wirkung gemessen und deshalb **nicht** gesetzt: `enableArtifact: false` (0)
 
 **Umgesetzt:** Tool-Whitelist für den Planer; Beschreibungen aller Repo-Skills, des Planers und des Workflows auf höchstens 300 Zeichen; die drei wirksamen Schalter in `.claude/settings.json`; Wächter `test/harness/kontext-sockel.test.ts` (Whitelist ohne `*`/`Skill`/`Artifact`, Längenobergrenze, Schalter bleiben).
 
-**Grenzen:** Das Ziel „unter 40k" erreicht der **Planer** (27k). Der Hauptagent liegt headless bei 45,6k; weiter geht es nur im User-Scope (siehe unten) oder durch weniger `AGENTS.md`. Lens- und Explore-Agenten haben noch keine Whitelist (Sockel ca. 55k bzw. 31k) und gehören zu #1209; der Wächter erzwingt die Whitelist dort automatisch, sobald die Agenten angelegt sind. PixelLab bleibt in `.mcp.json`; ob es in einer Session lädt, entscheidet `enabledMcpjsonServers` in der lokalen `.claude/settings.local.json` der Maintainerin.
+**Grenzen:** Das Ziel „unter 40k" erreicht der **Planer** headless (27k); interaktiv ist er noch nicht nachgemessen und läge, das Delta auf den interaktiven Wert von 56–57k übertragen, bei ca. 43k. Der Hauptagent liegt headless bei 45,6k, übertragen auf den interaktiven Wert von ca. 70k bei ca. 63k; weiter geht es nur im User-Scope (siehe unten) oder durch weniger `AGENTS.md`. Lens- und Explore-Agenten haben noch keine Whitelist (Sockel ca. 55k bzw. 31k) und gehören zu #1209; der Wächter erzwingt die Whitelist dort automatisch, sobald die Agenten angelegt sind. PixelLab bleibt in `.mcp.json`; ob es in einer Session lädt, entscheidet `enabledMcpjsonServers` in der lokalen `.claude/settings.local.json` der Maintainerin.
 
 **Hinweise für den User-Scope** (nur die Maintainerin kann das ändern): persönliche Skills, die claude.ai-Skills doppeln, aus `~/.claude/skills` entfernen; Trello- und Langfuse-MCP nur in den Projekten aktivieren, die sie brauchen; `/mcp` bzw. `disabledMcpServers` für nicht benötigte Server; SessionStart-Hooks und den Chrome-Default prüfen; Server mit dauerhaftem Verbindungsfehler entfernen.
 
