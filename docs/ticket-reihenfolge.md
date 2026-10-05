@@ -1,6 +1,6 @@
 # Ticket-Auswahl
 
-> **Seit #747 zählt die manuelle Board-Reihenfolge.** Das „nächste Ticket" ist das **oberste freie Item im GitHub-Project-Board** — in genau der Reihenfolge, in der die Tickets im Board (View 1) stehen. Die Maintainerin steuert die Reihenfolge **per Ziehen** (Drag & Drop) wie eine Warteschlange; oben wird genommen. Das frühere Feld **Prio** ist entfernt.
+> **Es zählt die manuelle Board-Reihenfolge.** Das „nächste Ticket" ist das **oberste freie Item im GitHub-Project-Board** — in genau der Reihenfolge, in der die Tickets im Board (View 1) stehen. Die Maintainerin steuert die Reihenfolge **per Ziehen** (Drag & Drop) wie eine Warteschlange; oben wird genommen. Es gibt kein `Prio`-Feld.
 >
 > Das bleibt kompatibel mit #627 (der Grund, warum es damals *weg von* einer handsortierten Datei ging): Die Reihenfolge lebt im **Board**, nicht in einer Datei — parallele Agenten kollidieren nicht auf ihr (keine Merge-Konflikt-Quelle). Der Kollisionsschutz bleibt der **Assignee-Marker**.
 
@@ -90,7 +90,7 @@ Regel: [AGENTS.md › Nicht jeder Befund wird ein Ticket](../AGENTS.md#wo-die-to
 
 ## Reihenfolge pflegen — im Board, nicht in einer Datei
 
-Die manuelle Board-Reihenfolge ist die **einzige** Reihenfolge-Quelle; die früheren `prio:*`-Labels und das `Prio`-Feld sind entfernt.
+Die manuelle Board-Reihenfolge ist die **einzige** Reihenfolge-Quelle; es gibt keine `prio:*`-Labels und kein `Prio`-Feld (ältere Issues tragen sie noch, ignorieren).
 
 - **Reihenfolge ändern:** im Board (View 1) das Item per **Drag & Drop** hoch-/runterziehen. Weiter oben = früher dran. Das ist das „einpriorisieren".
 - **Neues Item ganz nach oben schieben** (per CLI, wenn kein UI-Zugriff) — `afterId` weglassen = an die Spitze:
@@ -102,7 +102,7 @@ Die manuelle Board-Reihenfolge ist die **einzige** Reihenfolge-Quelle; die früh
     -f p=PVT_kwHOD8746c4Barq_ -f i="$ITEM"
   ```
 - **Abhängigkeit** („A vor B"): als Notiz `blockiert durch #X` in den **Body** des abhängigen Issues. Die Auswahl fängt das am Kandidaten-Check ab (offener Blocker → überspringen).
-- **Unwichtig:** im Board nach unten ziehen, oder schließen bzw. löschen (`gh issue delete` nur mit Rückfrage). Ein Zurückstellen-Label gibt es seit #1201 nicht mehr.
+- **Unwichtig:** im Board nach unten ziehen, oder schließen bzw. löschen (`gh issue delete` nur mit Rückfrage). Ein Zurückstellen-Label gibt es nicht.
 - **Neues Issue:** wandert per „Auto-add to project"-Board-Workflow automatisch aufs Board — danach ggf. an die gewünschte Stelle ziehen.
 - **Forum-Issues schieben sich selbst nach oben:** die Action [`.github/workflows/forum-inbox.yml`](../.github/workflows/forum-inbox.yml) schiebt ein frisch geflaggtes Forum-Ticket beim Anlegen an die **oberste** Board-Position (#747, GraphQL `addProjectV2ItemById` idempotent + `updateProjectV2ItemPosition`). ⚠️ Das braucht ein Repo-Secret **`PROJECT_TOKEN`** (PAT mit `project`-Scope) — das Standard-`GITHUB_TOKEN` kann kein User-Project V2 beschreiben; fehlt es, warnt die Action nur (Issue steht dann irgendwo im Board). Board-Node-ID: `PVT_kwHOD8746c4Barq_`.
 - **Offene Dependabot-PRs sammeln sich selbst ein** (#712): die Action [`.github/workflows/dependabot-inbox.yml`](../.github/workflows/dependabot-inbox.yml) prüft täglich (+ `workflow_dispatch`), ob Dependabot-PRs offen sind, und legt bei Bedarf **ein** Sammel-Issue „🤖 Dependabot-PRs auflösen" an — direkt an die **oberste** Board-Position geschoben (dieselbe GraphQL-Verdrahtung/`PROJECT_TOKEN` wie bei den Forum-Issues), damit es beim nächsten „nächstes Ticket"-Griff sofort oben steht. Bleibt es offen, hängt jeder weitere Lauf nur den aktuellen PR-Stand als Kommentar an (kein Issue-Spam); sind keine Dependabot-PRs mehr offen, schließt die Action das Sammel-Issue automatisch. **Abarbeiten ohne Worktree/Code:** die gelisteten PRs einzeln gegen grüne CI prüfen (`gh pr checks <nr>`) und mergen (`gh pr merge <nr> --squash --delete-branch`), danach das Issue schließen.
