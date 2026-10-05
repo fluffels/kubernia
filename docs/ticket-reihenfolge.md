@@ -87,6 +87,7 @@ Regel: [AGENTS.md › Nicht jeder Befund wird ein Ticket](../AGENTS.md#wo-die-to
   gh api graphql -f query='mutation($p:ID!,$i:ID!,$a:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }' \
     -f p=PVT_kwHOD8746c4Barq_ -f i="$ITEM" -f a="$AFTER"
   ```
+- **Beim Claimen des Sammeltickets** sofort prüfen, ob ein ungeclaimtes existiert; fehlt es, direkt eines anlegen (unten), damit Befunde nie ohne Ziel sind.
 - **Abarbeiten:** zuerst der feste **Langfuse-Blick** ([docs/model-routing.md › Langfuse-Blick](model-routing.md#langfuse-blick-beim-sammelticket-1199)) — dessen Befunde werden weitere Zeilen. Dann so viele Zeilen umsetzen, wie in **einen** PR passen (`check:diffsize`). **Vor dem PR** die Kommentare erneut lesen; was offen ist, ins **bestehende ungeclaimte** Sammelticket übertragen, sonst eines auf Position 5 anlegen — nur wenn Zeilen übrig sind, kein leeres. Das alte schließt der PR per `Closes`.
 - **Konvergenz-Signal:** Zeilenzahl pro Sammelticket-Generation ([ADR 0012](adr/0012-harness-autonomie-audit-spur.md#fortschreibung-1199-2026-10-05-spielquote-sammelticket-abschlusskriterium)).
 
