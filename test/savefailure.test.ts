@@ -8,9 +8,20 @@
  * Jeder Test lädt den Spiel-Stack FRISCH (resetModules), damit das modul-lokale
  * saveFailedNotified-Flag (Einmal-pro-Episode-Meldung) sauber getrennt ist –
  * dieselbe Isolations-Disziplin wie store.test.ts. */
-import { test, expect, vi, afterEach } from "vitest";
+import { test, expect, vi, afterEach, beforeAll } from "vitest";
 import { stubWindowLocalStorage, type LocalStorageStub } from "./support/browser-env";
 import { makeQuotaStub } from "./support/quota-stub";
+
+/* Der erste dynamische Import des Spiel-Stacks transformiert alle Module kalt und lief
+ * unter Last (voller `npm run verify`) in den 5000-ms-Testtimeout. Einmal vorwärmen, damit
+ * jeder Test nur noch den warmen Re-Import (resetModules) zahlt. Das Timeout bleibt unverändert. */
+beforeAll(async () => {
+  stubWindowLocalStorage();
+  await import("../src/game");
+  await import("../src/runtime");
+  vi.unstubAllGlobals();
+  vi.resetModules();
+}, 60_000);
 
 afterEach(() => {
   vi.unstubAllGlobals();

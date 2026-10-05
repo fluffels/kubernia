@@ -103,6 +103,8 @@ Die manuelle Board-Reihenfolge ist die **einzige** Reihenfolge-Quelle; es gibt k
   gh api graphql -f query='mutation($p:ID!,$i:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i}){ items(first:1){ nodes{ id } } } }' \
     -f p=PVT_kwHOD8746c4Barq_ -f i="$ITEM"
   ```
+- **Status setzen:** ein per `addProjectV2ItemById` ergänztes Item hat keinen Status und fehlt in der Auswahl (`.status == "Todo"`). Darum nach dem Hinzufügen den Status auf Todo setzen (`gh project item-edit --id <ITEM> --project-id PVT_kwHOD8746c4Barq_ --field-id PVTSSF_lAHOD8746c4Barq_zhVhdTM --single-select-option-id f75ad846`). `gh project item-list` liefert frisch hinzugefügte Items verzögert, einen Moment warten. In Git-Bash ist `jq` nicht installiert; die `--jq`-Variante von `gh` genügt.
+- **Mehrere Tickets auf einmal einsortieren (z.B. Epic-Aufteilung):** Board-Liste **einmal** laden, Item-IDs wiederverwenden, Positionen nacheinander mit kurzer Pause setzen, nie je Ticket die komplette Liste (`--limit 800`) neu laden. Bei `API rate limit exceeded` sofort stoppen, nur REST nutzen (Kommentar, Schließen, Labels) und den Board-Rest als Folgeaufgabe melden statt in einer Schleife weiterzuversuchen.
 - **Abhängigkeit** („A vor B"): als Notiz `blockiert durch #X` in den **Body** des abhängigen Issues. Die Auswahl fängt das am Kandidaten-Check ab (offener Blocker → überspringen).
 - **Unwichtig:** im Board nach unten ziehen, oder schließen bzw. löschen (`gh issue delete` nur mit Rückfrage). Ein Zurückstellen-Label gibt es nicht.
 - **Neues Issue:** wandert per „Auto-add to project"-Board-Workflow automatisch aufs Board — danach ggf. an die gewünschte Stelle ziehen und den [Spielrhythmus-Schritt](#spielrhythmus--jede-dritte-position-ein-spielticket-1215) fahren.
