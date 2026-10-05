@@ -4,7 +4,7 @@
 
 ## 1. Phasen-Matrix
 
-Gültige Effort-Stufen: `low`, `medium`, `high`, `xhigh`, `max`. Bei Sonnet 5+ und Opus 4.7+ ist der Effort die Obergrenze des adaptiven Reasonings. Spalte „Skill-Pfad" nennt, was dort tatsächlich greift.
+Gültige Effort-Stufen: `low`, `medium`, `high`, `xhigh`, `max`. Bei Sonnet 5+ und Opus 4.7+ ist der Effort die Obergrenze des adaptiven Reasonings; ohne explizite Angabe gilt bei Opus 5.5 und Sonnet 5.5 `medium` ([Claude-Code-Doku › Model configuration](https://code.claude.com/docs/en/model-config), Stand 2026-10-05). Spalte „Skill-Pfad" nennt, was dort tatsächlich greift.
 
 | Phase | Alias | Effort | Workflow (`kubernia-ticket.js`) | Skill-Pfad (`kubernia`) | Loop (`kubernia-loop`) |
 |---|---|---|---|---|---|

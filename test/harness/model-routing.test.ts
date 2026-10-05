@@ -12,11 +12,12 @@
  *
  * Der Wächter deckt die drei Fehlklassen ab, die das leise zurückbringen:
  *
- *   1. **Der Hebel verschwindet.** Die Frontmatter-Zeile `model:` im kubernia-Skill
- *      ist eine Zeile – gelöscht/umformuliert fällt die Umsetzung wortlos auf das
- *      Session-Modell zurück, ohne dass irgendein Gate meckert.
- *   2. **Der Review wird still mitdemoviert.** `model:` gilt für den Hauptagenten
- *      für den Rest des Turns. Liefen die Lens-Pässe wie früher INLINE im
+ *   1. **Der Hebel verschwindet.** Seit #1065 ist der Hebel `"model": "sonnet"` in
+ *      `.claude/settings.json` (das Skill-Frontmatter greift wegen anthropics/claude-code#98898
+ *      nur bei `/kubernia`). Beides ist je eine Zeile – gelöscht/umformuliert fällt die
+ *      Umsetzung wortlos auf Opus zurück, ohne dass irgendein Gate meckert.
+ *   2. **Der Review wird still mitdemoviert.** Der Hauptagent läuft auf dem Coding-Tier
+ *      (Projekt-Default bzw. `/kubernia`-Frontmatter). Liefen die Lens-Pässe wie früher INLINE im
  *      Hauptagenten, zöge die Coding-Tier-Zeile den Review von Opus auf Sonnet –
  *      Fix der einen Konventionshälfte, Regression der anderen. Darum spawnt
  *      review-lenses seine Lenses als eigene Subagenten mit explizitem Opus-Routing.
@@ -37,7 +38,8 @@
  *   - Die Drift-Erkennung ist **literal und case-sensitiv**: „Session Default" ohne
  *     Bindestrich rutscht durch (bekannte Grenze des Begriffs-Ansatzes, identisch in
  *     test/harness/agents-md-native.test.ts).
- *   - Beim `effort:` wird nur die **Anwesenheit** geprüft, nicht die Stufe (siehe dort).
+ *   - Beim `effort:` wird meist nur die **Anwesenheit** geprüft, nicht die Stufe; bewusste
+ *     Ausnahme ist der Planer (Wert im Frontmatter + Gleichheit mit der Workflow-Plan-Phase).
  *   - Der Workflow-Pfad wird nur auf Anwesenheit von `model`/`effort` je Aufrufstelle geprüft,
  *     nicht welche Phase welchen Alias bekommt – die Zuordnung steht in docs/model-routing.md.
  *     Ausnahme: der Plan-Effort im Workflow muss dem Frontmatter des kubernia-planner gleichen.
@@ -191,8 +193,8 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
     assert.ok(
       fm.model && istCodingTier(fm.model),
       `Im Frontmatter von ${UMSETZUNGS_SKILL} fehlt ein \`model:\` auf dem Coding-Tier (Alias \`sonnet\`). ` +
-        "Ohne die Zeile schreibt der Hauptagent den Code auf dem Session-Modell – aus einer Opus-Session " +
-        `also die komplette Umsetzung auf Opus (#1035). Gefunden: model=„${fm.model ?? "(fehlt)"}".`,
+        "Die Zeile wirkt nur bei Aufruf als `/kubernia` (anthropics/claude-code#98898); der eigentliche Hebel " +
+        `ist der Projekt-Default in .claude/settings.json (#1065). Gefunden: model=„${fm.model ?? "(fehlt)"}".`,
     );
     // Absichtlich nur Anwesenheit, nicht der Wert: die Regel ist „explizit statt erben".
     // Welche Stufe richtig ist, entscheidet docs/model-routing.md und darf sich dort ohne
@@ -214,7 +216,7 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
       /Agent\(\{[^}]*model:\s*["']?opus/s,
       `${REVIEW_SKILL} muss seine Lens-Pässe in einem \`Agent({…})\`-Spawn explizit auf den starken Tier ` +
         `routen (\`model: "opus"\`). ` +
-        "Das Frontmatter-`model:` des kubernia-Skills gilt für den REST DES TURNS – laufen die Lenses inline " +
+        "Der Hauptagent läuft auf dem Coding-Tier (Projekt-Default sonnet, #1065) – laufen die Lenses inline " +
         "im Hauptagenten, reviewt Sonnet statt Opus, und der finale Blick wäre zudem ein Self-Grading des " +
         "eigenen Fixes (#1012).",
     );
