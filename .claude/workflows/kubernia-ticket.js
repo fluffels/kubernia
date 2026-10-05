@@ -2,7 +2,7 @@ export const meta = {
   name: 'kubernia-ticket',
   description: 'Ein kubernia-Ticket end-to-end als orchestrierter Workflow (Claude Code)',
   whenToUse:
-    'Nur unter Claude Code, als additive Variante des kubernia-Skills. Gewinn gegenüber dem Skill: sichtbarer Phasen-Fortschritt (/workflows), Resume nach Abbruch, die drei Review-Lenses parallel, und die Fix-Versuchsgrenze des Festgefahren-Protokolls (#710/#904) deterministisch erzwungen statt als Verhaltensregel. Der Ablauf selbst steht NICHT hier, sondern in AGENTS.md.',
+    'Nur Claude Code, additive Variante des kubernia-Skills: Phasen-Fortschritt in /workflows, Resume, parallele Lenses, erzwungene Fix-Versuchsgrenze (#710/#904). Ablauf steht in AGENTS.md.',
   phases: [
     { title: 'Auswahl', detail: 'oberstes freies Board-Item claimen + Zuweisung verifizieren' },
     { title: 'Sonderfall', detail: 'Epic aufteilen bzw. Dependabot-Sammelticket auflösen (kein Code)' },

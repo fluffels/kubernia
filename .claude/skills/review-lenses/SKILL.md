@@ -1,6 +1,6 @@
 ---
 name: review-lenses
-description: Gestaffelter Mehr-Perspektiven-Review des aktuellen kubernia-Diffs. Fährt ZUERST die billigen deterministischen Gates (`npm run verify`) und macht NUR bei Grün drei getrennte agentische Lens-Pässe — Architektur, Requirement-Treue, Test-Adäquanz — mit strukturierten Findings. Rote Gates ⇒ Abbruch mit den Gate-Findings, KEINE Lens-Pässe (Token-Short-Circuit). Ersetzt die CI-Gates nicht (hängt sich davor), kein Auto-Merge. Auslösen bei "Lens-Review", "Mehr-Augen-Review", "Viewpoint-Review", "Review mit Lenses", "gestaffelter Review", "review den Diff gründlich vor dem Merge", oder wenn der aktuelle Ticket-Diff aus mehreren Perspektiven geprüft werden soll.
+description: Gestaffelter Mehr-Perspektiven-Review des kubernia-Diffs: erst `npm run verify`, nur bei Grün drei Lens-Pässe (Architektur, Requirement-Treue, Test-Adäquanz). Auslösen bei "Lens-Review", "Mehr-Augen-Review", "Review mit Lenses", "gestaffelter Review".
 ---
 
 # Mehr-Perspektiven-Review mit Gate-Short-Circuit

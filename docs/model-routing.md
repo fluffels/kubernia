@@ -116,6 +116,45 @@ In rund 22 Traces mit Tag `skill:kubernia`: 1.284 Calls Opus 5.5, 257 Opus 5, 9 
 
 **Erwartete Ersparnis** durch den Sonnet-Hauptagenten: etwa ein Viertel, nicht die Hälfte. Cache-Reads kosten bei Opus 5.5 und Sonnet 5.5 gleich viel (0,20 $/Mio) und machen 44 % der Kosten aus. Die Nachmessung des ersten Laufs unter dem neuen Routing läuft in #1206.
 
+### Grundkontext pro Session (#1198)
+
+**Metrik:** Sockel = `input + cache_creation + cache_read` des ersten Assistant-Calls einer Session bzw. eines Subagenten. Er steht vor jeder Nutzereingabe im Kontext und wird bei jedem der 100–250 Calls neu gelesen.
+
+**Befund:** Die 55k aus dem Ticket sind der Sockel der **Subagenten** (Planer 56–57k, Lens 54–57k). Der Hauptagent liegt in echten Sessions bei **ca. 70k** (Transkripte 02.–05.10.2026, stabil über 10 Sessions). Zum Vergleich: ein Agent mit nur 5 Tools und ohne Skill-/MCP-Listen liegt bei 28k, Explore (Haiku) bei 31k.
+
+**Quellen des Hauptagenten** (Zeichen aus den Transkript-Attachments vor dem ersten Call; Tool-Schemas stehen nicht im Transkript und machen den Rest von ca. 40k Tokens aus):
+
+| Quelle | Zeichen | Scope |
+|---|--:|---|
+| Skill-Listing (73 Skills) | 29,9k | Repo 3,9k, Rest User/claude.ai/Plugins/Claude Code |
+| `AGENTS.md` | 27,0k | Repo (gegated, `check:contextsize`) |
+| Namen der verzögerten Tools (261) | 8,8k | PixelLab 3,2k (Repo `.mcp.json`), Langfuse 2,8k, Chrome 0,8k, übrige User |
+| MCP-Instruktionen | 6,6k | User/claude.ai, PixelLab 1,0k |
+| Systemprompt-Snapshot, Agent-Listing, SessionStart-Hook | 12,8k | Claude Code/User |
+
+**Messung vorher/nachher** (`claude -p` im Projekt, Sonnet, gleicher Prompt; Headless liegt unter den interaktiven Werten, weil weniger Hooks und Tools laden, die Differenzen sind aber übertragbar):
+
+| Variante (Einzeleffekte gegen „vorher“, sie überlappen sich) | Sockel |
+|---|--:|
+| Hauptagent vorher | 52,3k |
+| `disableClaudeAiConnectors` | −2,5k |
+| `enabledPlugins` data/cowork aus | −2,6k |
+| `skillListingMaxDescChars: 300` | −3,4k |
+| **Hauptagent nachher** (alle drei) | **45,6k** (−6,7k, −13 %) |
+| Planer vorher (volle Tool-Liste) | 40,2k |
+| **Planer nachher** (`tools:`-Whitelist) | **27,0k** (−33 %) |
+| Gegenprobe ohne Skills / ohne MCP / ohne User-Scope | 46,3k / 45,5k / 37,9k |
+
+Ohne Wirkung gemessen und deshalb **nicht** gesetzt: `enableArtifact: false` (0), `deniedMcpServers` für einen User-Server (±0).
+
+**Umgesetzt:** Tool-Whitelist für den Planer; Beschreibungen aller Repo-Skills, des Planers und des Workflows auf höchstens 300 Zeichen; die drei wirksamen Schalter in `.claude/settings.json`; Wächter `test/harness/kontext-sockel.test.ts` (Whitelist ohne `*`/`Skill`/`Artifact`, Längenobergrenze, Schalter bleiben).
+
+**Grenzen:** Das Ziel „unter 40k" erreicht der **Planer** headless (27k); interaktiv ist er noch nicht nachgemessen und läge, das Delta auf den interaktiven Wert von 56–57k übertragen, bei ca. 43k. Der Hauptagent liegt headless bei 45,6k, übertragen auf den interaktiven Wert von ca. 70k bei ca. 63k; weiter geht es nur im User-Scope (siehe unten) oder durch weniger `AGENTS.md`. Lens- und Explore-Agenten haben noch keine Whitelist (Sockel ca. 55k bzw. 31k) und gehören zu #1209; der Wächter erzwingt die Whitelist dort automatisch, sobald die Agenten angelegt sind. PixelLab bleibt in `.mcp.json`; ob es in einer Session lädt, entscheidet `enabledMcpjsonServers` in der lokalen `.claude/settings.local.json` der Maintainerin.
+
+**Hinweise für den User-Scope** (nur die Maintainerin kann das ändern): persönliche Skills, die claude.ai-Skills doppeln, aus `~/.claude/skills` entfernen; Trello- und Langfuse-MCP nur in den Projekten aktivieren, die sie brauchen; `/mcp` bzw. `disabledMcpServers` für nicht benötigte Server; SessionStart-Hooks und den Chrome-Default prüfen; Server mit dauerhaftem Verbindungsfehler entfernen.
+
+**Nachmessen:** frische Session starten, danach das Transkript unter `~/.claude/projects/<projekt>/<session>.jsonl` lesen: erster Assistant-Call mit `usage`, Summe aus `input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`; Subagenten liegen unter `<session>/subagents/`. Alternativ in Langfuse `usageDetails` der ersten Generation einer Session.
+
 ### Nach einer Optimierung vergleichen
 
 Die Nachmessung läuft in #1206: das Skript für 1–3 neue Läufe fahren, die Zeilen unter diese Tabelle hängen und die Veränderung von **Tokens**, **Modell Umsetzung** und den Loop-Spalten im PR-Text benennen. Eine Einsparung gilt nur, wenn die Loop-Spalten nicht schlechter werden (mehr CI-Fix-Runden oder Nacharbeit fressen den Gewinn).
