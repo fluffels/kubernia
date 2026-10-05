@@ -44,13 +44,14 @@ export const meta = {
 
 /* global agent, parallel, phase, log, args */
 
-const REPO = 'C:\\git\\kubernia'
+// Kein absoluter Pfad (#1211): der Repo-Root ist das Arbeitsverzeichnis des Aufrufers.
+const REPO = 'dem Repo-Root (Arbeitsverzeichnis des Aufrufers, `git rev-parse --show-toplevel`)'
 
 /** Gemeinsamer Kopf jedes Phasen-Prompts: verankert Arbeitsort + SSOT. */
 const kopf = `Du arbeitest am Repo kubernia in ${REPO}.
 
-Die verbindliche Arbeitsanweisung ist ${REPO}\\AGENTS.md (bei Konflikt maßgeblich);
-die Nachschlage-Referenzen liegen on-demand unter ${REPO}\\docs\\referenz\\ (Befehle,
+Die verbindliche Arbeitsanweisung ist \`AGENTS.md\` im Repo-Root (bei Konflikt maßgeblich);
+die Nachschlage-Referenzen liegen on-demand unter \`docs/referenz/\` (Befehle,
 Repo-Landkarte, Schichtregeln). Lies die für deine Aufgabe genannten Abschnitte
 und befolge sie wörtlich — dieser Auftrag fasst sie absichtlich nicht zusammen,
 damit keine zweite, veraltende Wahrheit entsteht.
@@ -636,7 +637,7 @@ ${patchAuftrag(nr, 1)}`,
     return { ergebnis: 'umsetzung-abgebrochen', nummer: nr, titel: auswahl.titel, grund }
   }
 
-  const worktree = umsetzung.worktree || `${REPO}\\.claude\\worktrees\\kq-${nr}`
+  const worktree = umsetzung.worktree || `.claude/worktrees/kq-${nr}`
   const branch = umsetzung.branch || `feature/kq-${nr}-*`
   log(`${ticket} committet auf ${branch}.`)
 
