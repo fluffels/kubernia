@@ -435,7 +435,7 @@ ${
     ? `Die Maintainerin hat Ticket #${gewuenscht} vorgegeben — nimm dieses statt der Board-Auswahl,
 prüfe es aber genauso (offen? kein Assignee? kein offener Blocker?).
 Ist es nicht frei, gib ergebnis="kein-freies-ticket" zurück und unternimm nichts weiter.`
-    : `Nimm das oberste freie Item der Board-Reihenfolge (der Spielrhythmus steckt in der Reihenfolge, AGENTS.md § Wo die TODOs leben). Wähle NICHT nach Inhalt aus und
+    : `Nimm das oberste freie Item der Board-Reihenfolge. Wähle NICHT nach Inhalt aus und
 sortiere NICHT nach. Prüfe nur dieses eine Kandidaten-Ticket gegen den Live-Stand,
 nicht die ganze Liste. Zeigt es einen Assignee: sofort weiter zum nächsten, ohne
 Worktree-Inspektion und ohne Weiterarbeit an fremder Arbeit.`
@@ -493,7 +493,7 @@ ${
 AGENTS.md § „Zu großes Ticket (Epic/Phase) → aufteilen statt umsetzen".
 
 Dazu gehört auch der Pflichtschritt „Neue Issues sofort ins Board einsortieren"
-(beide GraphQL-Calls, danach der Spielrhythmus-Schritt aus docs/ticket-reihenfolge.md) — ein neu angelegtes Issue liegt sonst in keinem Board.
+(beide GraphQL-Calls) — ein neu angelegtes Issue liegt sonst in keinem Board.
 Neue Kindertickets ohne Assignee. Am Ende das Epic auf done schließen und die
 Schließung verifizieren.`
     : `AUFGABE — das Dependabot-Sammelticket auflösen, genau nach
@@ -1019,7 +1019,7 @@ ${
   ausserhalbScope.length
     ? `Zusätzlich: der Review hat Punkte AUSSERHALB des Ticket-Scopes gefunden. Ordne jeden
 ein (AGENTS.md § Nicht jeder Befund wird ein Ticket): ein echter Defekt wird ein neues
-Issue (ohne Assignee, passendes area:-Label, beide GraphQL-Calls zum Einsortieren, danach der Spielrhythmus-Schritt —
+Issue (ohne Assignee, passendes area:-Label, beide GraphQL-Calls zum Einsortieren —
 AGENTS.md § Neue Issues sofort ins Board einsortieren; vorher per gh issue list auf
 Duplikate prüfen). Härtung/Kosmetik wird eine Zeile im offenen Sammelticket
 „Harness-Härtung (gesammelt)" (fehlt es: anlegen auf Position 5, docs/ticket-reihenfolge.md):
@@ -1027,7 +1027,6 @@ ${ausserhalbScope.map((p) => `- ${p}`).join('\n')}`
     : ''
 }
 
-Fahre danach den Spielrhythmus-Schritt aus docs/ticket-reihenfolge.md (Abschnitt „Spielrhythmus"), bis er OK oder LEER meldet; bei LEER im Chat melden und ggf. das Ticket „Spiel-Backlog leer: neue Spieltickets planen" anlegen (steht dort).
 
 Melde das Ergebnis jedes Verify-Schritts einzeln${ausserhalbScope.length ? ' sowie die angelegten Issue-Nummern bzw. die Sammelticket-Zeilen' : ''}.`,
     { label: `cleanup:#${nr}`, phase: 'Cleanup', model: 'sonnet', effort: 'medium' },
