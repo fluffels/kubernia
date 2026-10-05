@@ -85,7 +85,7 @@ Vite + TypeScript + ES-Module, Phaser als npm-Paket; `index.html` lädt nur `src
   - **📦 Epic:** mit der Aufteilung loslegen (siehe „Zu großes Ticket" unten).
   - **🤖 Dependabot-Sammel-Ticket:** mit dem Mergen loslegen (siehe unten).
   - **⚠️ riskant** (z.B. Major-Migration): erst evaluieren, bei einer echten Weiche per Rückfrage abstimmen.
-  - **„Zuletzt"/„blockiert durch"** gehören ans Issue: Label `status:zurückgestellt` bzw. Body-Notiz „blockiert durch #X". Keine zentrale Reihenfolge-Liste.
+  - **„Zuletzt"/„blockiert durch"**: Unwichtiges steht im Board unten, Abhängigkeiten als Body-Notiz „blockiert durch #X". Keine zentrale Reihenfolge-Liste.
 - **Spielstände** über die SaveStore-Schicht (`store.ts`, IndexedDB, Auto-Save alle 5 s, JSON-Export/Import). **Was live geht, darf NIE einen bestehenden Stand brechen – immer migrieren:** Formatänderung ⇒ `version`-Bump + Migration (aktuell `CURRENT_SAVE_VERSION = 3`), alte Stände vorher in den Backup-Slot, `sanitizeState` in `game.ts` härtet kaputte Felder ab. Quest-Fortschritt persistiert per Quest-ID (`currentQuestId`, #353), nicht per Index.
 
 ### Modellwahl nach Phase (#910)
@@ -96,7 +96,7 @@ Drei Tiers (#910/#1035): Explore/Recherche → Haiku, **Planung + Review → Opu
 
 Der Backlog sind **GitHub Issues** im **Project-Board**. Die Reihenfolge ist die **Board-Position** (Drag & Drop, #747) — keine `prio:*`-Labels, keine Reihenfolge-Datei, kein Pflege-Schritt am Ticket-Ende (#627). Befehl, Sonderfälle und Board-IDs: **[docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md)** (die SSOT der Auswahl-Mechanik; braucht `read:project`-Scope, `gh auth refresh -s project`).
 
-**Auswahl des nächsten Tickets — deterministisch, nicht abwägen.** „Nächstes Ticket" = **oberstes freies Item** der Board-Auswahl (`.status == "Todo"`, nicht `status:zurückgestellt`, kein offener Blocker, kein offener PR/Branch/Worktree — Gegencheck `git worktree list` + `git branch -a`; **immer `--limit 800`**, sonst fehlen Items). **Kein Vorab-Abgleich der ganzen Liste** — nur **dieses eine** Kandidaten-Ticket prüfen (`gh issue view <nr>`).
+**Auswahl des nächsten Tickets — deterministisch, nicht abwägen.** „Nächstes Ticket" = **oberstes freies Item** der Board-Auswahl (`.status == "Todo"`, kein offener Blocker, kein offener PR/Branch/Worktree — Gegencheck `git worktree list` + `git branch -a`; **immer `--limit 800`**, sonst fehlen Items). **Kein Vorab-Abgleich der ganzen Liste** — nur **dieses eine** Kandidaten-Ticket prüfen (`gh issue view <nr>`).
 
 **Kollisionsschutz bei parallelen Agenten:**
 - **⛔ Assignee = sofort weiter.** Hat der Kandidat einen Assignee: überspringen, nächstes nehmen — kein Worktree inspizieren, kein Weiterarbeiten an fremden Tickets.
@@ -110,8 +110,8 @@ Der Backlog sind **GitHub Issues** im **Project-Board**. Die Reihenfolge ist die
 - **Selbst Issues verwalten** ohne Rückfrage: schließen, kommentieren, labeln, neue Tickets schreiben, wenn etwas auffällt. **Neue Tickets ohne Assignee** anlegen (sonst sperren sie fälschlich).
 - **Neue Issues sofort ins Board einsortieren** (Pflicht nach `gh issue create`): `addProjectV2ItemById` (Projekt `PVT_kwHOD8746c4Barq_`) → `updateProjectV2ItemPosition`. Dringendes (Security, `🚨`, `🤖`, Blocker) ganz oben (`afterId: null`), alles andere prioritätsmäßig einordnen — **nie einfach ans Ende**.
 - **Zu großes Ticket (Epic/Phase) → aufteilen statt umsetzen.** Nicht in einer Session umsetzbar ⇒ nicht implementieren, sondern in session-große Kindertickets zerlegen (ohne Assignee, `area:`-Label, im Board einsortiert), Übersichts-Kommentar mit Reihenfolge im Epic, Epic mit `gh issue close <nr> --reason completed` schließen (nicht löschen). Kein Worktree nötig.
-- **🤖 Dependabot-Sammel-Ticket „Dependabot-PRs auflösen" → mergen statt implementieren.** Die gelisteten PRs einzeln gegen grüne CI prüfen (`gh pr checks <nr>`) und mergen (`gh pr merge <nr> --squash --delete-branch`); rote PRs **nie blind**, sondern zurückstellen/eigenes Ticket ([CONTRIBUTING.md](CONTRIBUTING.md)). Danach das Sammel-Issue schließen.
-- **Zurückstellen:** `status:zurückgestellt` parkt ein Ticket (Label entfernen = reaktivieren).
+- **🤖 Dependabot-Sammel-Ticket „Dependabot-PRs auflösen" → mergen statt implementieren.** Die gelisteten PRs einzeln gegen grüne CI prüfen (`gh pr checks <nr>`) und mergen (`gh pr merge <nr> --squash --delete-branch`); rote PRs **nie blind**, sondern eigenes Ticket ([CONTRIBUTING.md](CONTRIBUTING.md)). Danach das Sammel-Issue schließen.
+- **Kein Parken (#1201):** Ein Ticket ist im Board einsortiert (Unwichtiges unten) oder wird geschlossen bzw. gelöscht (`gh issue delete` nur mit Rückfrage). Kein Zurückstellen-Label.
 
 ## Forum-Eingang (Discussions) bearbeiten
 

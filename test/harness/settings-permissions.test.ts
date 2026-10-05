@@ -76,6 +76,14 @@ describe("Agenten-Permissions in .claude/settings.json (#901)", () => {
     }
   });
 
+  test("Issue-Löschen steht auf ask: erlaubt, aber jede Löschung bestätigt die Maintainerin (#1201)", () => {
+    const rule = "Bash(gh issue delete:*)";
+    // ask gewinnt gegen das breite `Bash(gh issue:*)` in allow; deny würde das Löschen ganz verbieten.
+    assert.ok(ask.includes(rule), `ask muss ${rule} enthalten — Löschen ist unumkehrbar und braucht eine Rückfrage (#1201)`);
+    assert.ok(!deny.includes(rule), `${rule} gehört nicht mehr in deny — die Maintainerin will Issues löschen lassen (#1201)`);
+    assert.ok(!allow.includes(rule), `${rule} darf nicht in allow stehen — sonst entfällt die Rückfrage (#1201)`);
+  });
+
   test("allow deckt die bekannten Workflow-Kommandos ab (npm/git/gh), damit der Ablauf nicht ausgebremst wird", () => {
     for (const rule of ["Bash(npm:*)", "Bash(git:*)", "Bash(gh issue:*)", "Bash(gh pr:*)"]) {
       assert.ok(allow.includes(rule), `allow sollte ${rule} enthalten (kuratierte Workflow-Allowlist, #901)`);

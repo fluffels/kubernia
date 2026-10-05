@@ -17,14 +17,14 @@ Bevor irgendein Ticket angefasst wird, **zuerst zweifeln** — das steht über d
 Rein deterministisch — **kein Abwägen nach Inhalt, kein Vorab-Sichten der ganzen Liste:**
 
 1. **oberstes freies Item in der Board-Reihenfolge** — genau die Reihenfolge, die `gh project item-list` liefert (= was in View 1 von oben nach unten steht). Keine Nachsortierung nach Inhalt oder Nummer.
-2. **frei** heißt: **kein Assignee** (der „in Arbeit"-Marker), **kein** offener Branch/Worktree, **nicht** `status:zurückgestellt`, und **kein offener Blocker** (`blockiert durch #X` im Body).
+2. **frei** heißt: **kein Assignee** (der „in Arbeit"-Marker), **kein** offener Branch/Worktree und **kein offener Blocker** (`blockiert durch #X` im Body).
 
 Freie Auswahl in Board-Reihenfolge in einem Befehl (oberste Zeile ist „dran"):
 
 ```bash
 gh project item-list 1 --owner fluffels --format json --limit 800 --jq '
   .items
-  | map(select(.content.type=="Issue" and (.status // "") == "Todo" and ((.labels // [])|index("status:zurückgestellt")|not)))
+  | map(select(.content.type=="Issue" and (.status // "") == "Todo"))
   | .[] | "#\(.content.number)\t\(.title)"'
 ```
 
@@ -46,7 +46,7 @@ Die manuelle Board-Reihenfolge ist die **einzige** Reihenfolge-Quelle; die früh
     -f p=PVT_kwHOD8746c4Barq_ -f i="$ITEM"
   ```
 - **Abhängigkeit** („A vor B"): als Notiz `blockiert durch #X` in den **Body** des abhängigen Issues. Die Auswahl fängt das am Kandidaten-Check ab (offener Blocker → überspringen).
-- **Zurückstellen:** Label `status:zurückgestellt` (wird übersprungen, **nicht** verworfen). Reaktivieren = Label entfernen.
+- **Unwichtig:** im Board nach unten ziehen, oder schließen bzw. löschen (`gh issue delete` nur mit Rückfrage). Ein Zurückstellen-Label gibt es seit #1201 nicht mehr.
 - **Neues Issue:** wandert per „Auto-add to project"-Board-Workflow automatisch aufs Board — danach ggf. an die gewünschte Stelle ziehen.
 - **Forum-Issues schieben sich selbst nach oben:** die Action [`.github/workflows/forum-inbox.yml`](../.github/workflows/forum-inbox.yml) schiebt ein frisch geflaggtes Forum-Ticket beim Anlegen an die **oberste** Board-Position (#747, GraphQL `addProjectV2ItemById` idempotent + `updateProjectV2ItemPosition`). ⚠️ Das braucht ein Repo-Secret **`PROJECT_TOKEN`** (PAT mit `project`-Scope) — das Standard-`GITHUB_TOKEN` kann kein User-Project V2 beschreiben; fehlt es, warnt die Action nur (Issue steht dann irgendwo im Board). Board-Node-ID: `PVT_kwHOD8746c4Barq_`.
 - **Offene Dependabot-PRs sammeln sich selbst ein** (#712): die Action [`.github/workflows/dependabot-inbox.yml`](../.github/workflows/dependabot-inbox.yml) prüft täglich (+ `workflow_dispatch`), ob Dependabot-PRs offen sind, und legt bei Bedarf **ein** Sammel-Issue „🤖 Dependabot-PRs auflösen" an — direkt an die **oberste** Board-Position geschoben (dieselbe GraphQL-Verdrahtung/`PROJECT_TOKEN` wie bei den Forum-Issues), damit es beim nächsten „nächstes Ticket"-Griff sofort oben steht. Bleibt es offen, hängt jeder weitere Lauf nur den aktuellen PR-Stand als Kommentar an (kein Issue-Spam); sind keine Dependabot-PRs mehr offen, schließt die Action das Sammel-Issue automatisch. **Abarbeiten ohne Worktree/Code:** die gelisteten PRs einzeln gegen grüne CI prüfen (`gh pr checks <nr>`) und mergen (`gh pr merge <nr> --squash --delete-branch`), danach das Issue schließen.
