@@ -191,6 +191,9 @@ describe("Nicht frei: Branch und Blocker (#1217)", () => {
     expect(L.isUnfree(withBody(12), branches, closed)).toBe(true);
     expect(L.isUnfree(withBody(123), branches, closed)).toBe(false);
     expect(L.isUnfree(withBody(112), branches, closed)).toBe(false);
+    // Gegenrichtung: ein Branch kq-123 macht #12 nicht unfrei, und nur das Präfix feature/ zählt.
+    expect(L.isUnfree(withBody(12), "feature/kq-123-x", closed)).toBe(false);
+    expect(L.isUnfree(withBody(12), "other/kq-12-x", closed)).toBe(false);
   });
 
   test("offener Blocker macht nicht frei, geschlossener nicht; ohne Branch wird der Status erfragt", () => {

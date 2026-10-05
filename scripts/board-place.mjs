@@ -2,7 +2,7 @@
 /**
  * Mehrere Tickets in einem Rutsch einsortieren (#1217), z.B. nach einer Epic-Aufteilung.
  * EINE Listenabfrage, Item-IDs werden wiederverwendet, die Positionen laufen nacheinander mit kurzer
- * Pause — statt je Ticket die komplette Liste neu zu laden (das riss das GraphQL-Rate-Limit).
+ * Pause — statt je Ticket die komplette Liste neu zu laden (vermeidet das GraphQL-Rate-Limit).
  *
  *   node scripts/board-place.mjs --top 1240 1241 1242        # in dieser Reihenfolge an die Spitze
  *   node scripts/board-place.mjs --after 1206 1240 1241      # in dieser Reihenfolge hinter #1206
