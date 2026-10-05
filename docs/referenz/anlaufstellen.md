@@ -50,6 +50,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Einordnung u
 | [module/presentation.md](../module/presentation.md) | bei Szenen, UI, SFX und Assets (Phaser/DOM) |
 | [performance-budget.md](../performance-budget.md) | bevor die Welt wächst: FPS- und Sprite-Budget, Culling, Messen |
 | [stardew-referenz.md](../stardew-referenz.md) | vor jedem Optik-Ticket — so sieht das Vorbild wirklich aus |
+| [art-direction.md](../art-direction.md) | lebende Abweichungsliste der Optik gegen die Messlatte — vor Optik-Tickets |
 
 ### Arbeitsablauf und Nachschlagen
 
@@ -94,7 +95,7 @@ Momentaufnahmen eines damaligen Stands. Lesen, um Herkunft und Begründung zu ve
 | [architektur-analyse-2026-07-02-iSAQB.md](../architektur-analyse-2026-07-02-iSAQB.md) | iSAQB-Runde 2 (2026-07-02), Herkunft von #577–#595 |
 | [architektur-analyse-2026-07-03-iSAQB.md](../architektur-analyse-2026-07-03-iSAQB.md) | iSAQB-Runde 3 (2026-07-03): ADRs, DDD, Tests, Harness, Herkunft von #596–#612 |
 | [architektur-analyse-2026-07-14-iSAQB.md](../architektur-analyse-2026-07-14-iSAQB.md) | doku-freie iSAQB-Runde vom 2026-07-14, Herkunft von #861–#880 |
-| [art-direction-audit.md](../art-direction-audit.md) | Optik gegen die Stardew-Messlatte (#44, Juni 2026) — Abweichungsliste vor Optik-Tickets |
+| [art-direction-audit.md](../art-direction-audit.md) | Historie: Optik gegen die Stardew-Messlatte (#44, Juni 2026); lebender Stand in [art-direction.md](../art-direction.md) |
 | [spielkonzept-review.md](../spielkonzept-review.md) | führt der Lernpfad zu Senior-DevOps und macht es Spaß? (#52, Juni 2026) |
 | [lernpfad-audit.md](../lernpfad-audit.md) | wird ein Befehl benutzt, bevor er eingeführt ist? (#227, Juni 2026) |
 | [barrierefreiheit-audit.md](../barrierefreiheit-audit.md) | Zugänglichkeit: nur-Farbe-Status, Tastatur, Kontraste (#481, Juli 2026) |
