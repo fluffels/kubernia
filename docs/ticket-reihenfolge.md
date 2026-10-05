@@ -66,14 +66,14 @@ esac
 
 ## Sammelticket „Harness-Härtung (gesammelt)" (#1199)
 
-Regel: [AGENTS.md › Nicht jeder Befund wird ein Ticket](../AGENTS.md#wo-die-todos-leben). Es gibt **höchstens ein** offenes Sammelticket (`area:harness`).
+Regel: [AGENTS.md › Nicht jeder Befund wird ein Ticket](../AGENTS.md#wo-die-todos-leben). Es gibt **höchstens ein** offenes, **ungeclaimtes** Sammelticket (`area:harness`); Befunde werden ohne Rückfrage eingetragen. Ein geclaimtes (Assignee) zählt nicht: Zeile ins nächste, fehlt es, sofort anlegen.
 
 - **Befund eintragen:** erst suchen, dann als **Kommentar** anhängen (Kommentare kollidieren bei parallelen Agenten nicht, Body-Edits schon):
   ```bash
-  gh issue list --state open --search 'in:title "Harness-Härtung (gesammelt)"' --json number --jq '.[].number'
+  gh issue list --state open --search 'in:title "Harness-Härtung (gesammelt)"' --json number,assignees --jq '.[] | select((.assignees|length)==0) | .number'
   gh issue comment <nr> --body "- [ ] <Befund>"
   ```
-  Kein Treffer → anlegen (unten). Zwei offene (Wettlauf) → das jüngere schließen, seine Zeilen ins ältere übertragen.
+  Kein ungeclaimter Treffer → anlegen (unten). Zwei offene (Wettlauf) → das jüngere schließen, seine Zeilen ins ältere übertragen.
 
 - **Anlegen auf Position 5** (fehlt es, oder nach dem Abarbeiten das nächste):
   ```bash
