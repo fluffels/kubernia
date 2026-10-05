@@ -76,7 +76,7 @@ Die Sim-Domäne wird durchweg **verhaltensbasiert** über `sim.exec("…")` gete
 
 ## 4) Harness / Governance — Regressions-Matrix
 
-Katharinas Kernfrage: **Verhindern die Guards, dass das Aufgeräumte wiederkehrt?** Antwort je Problemklasse:
+Die Kernfrage der Maintainerin: **Verhindern die Guards, dass das Aufgeräumte wiederkehrt?** Antwort je Problemklasse:
 
 | # | Problemklasse | Status | Gegated durch | Lücke |
 |---|---|---|---|---|
