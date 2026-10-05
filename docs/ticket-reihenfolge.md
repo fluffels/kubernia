@@ -38,29 +38,9 @@ Regel, Spielticket-Labels und Vorrang: [AGENTS.md › Wo die TODOs leben](../AGE
 
 **Invariante:** ab dem ersten Nicht-Vorrang-Item folgen auf höchstens **zwei** Nicht-Spieltickets ein Spielticket. Anders als feste Positionen (3, 6, 9 …) bleibt sie stabil, wenn das oberste Item erledigt wird — feste Slots würden nach jedem Merge ein weiteres Spielticket nach oben ziehen. Items **mit Assignee** (in Arbeit) zählen nicht mit. Gepflegt wird nur der Kopf: weil die Invariante beim Wegfall des obersten Items stabil bleibt, reicht das nach jedem Ticket und jedem Einsortieren — das Board wird nie als Ganzes umsortiert, unten einsortierte Spieltickets bleiben unten, bis sie in den Kopf rücken.
 
-**Ein Schritt** (am Ticket-Ende und nach jedem Einsortieren; wiederholen, bis die Ausgabe `OK` oder `LEER` lautet) — prüft nur den **Kopf** (die ersten 6 freien Nicht-Vorrang-Items), findet dort die erste Stelle mit drei Nicht-Spieltickets in Folge und zieht das oberste tiefer liegende Spielticket direkt vor das dritte:
+**Ein Aufruf** (am Ticket-Ende und nach jedem Einsortieren) — `node scripts/board-rhythm.mjs` (`--dry-run` zeigt nur an) lädt das Board **einmal**, prüft nur den **Kopf** (die ersten 6 freien Nicht-Vorrang-Items), findet dort die erste Stelle mit drei Nicht-Spieltickets in Folge, zieht das oberste tiefer liegende freie Spielticket direkt vor das dritte (per `updateProjectV2ItemPosition`) und wiederholt das lokal, bis die Ausgabe `OK` oder `LEER` lautet. Die Rechnung steht als getestete Funktion in [`scripts/board-lib.mjs`](../scripts/board-lib.mjs) ([`test/board.test.ts`](../test/board.test.ts)), nicht mehr als Inline-`jq`.
 
-```bash
-PROJ=PVT_kwHOD8746c4Barq_
-read -r ITEM AFTER < <(gh project item-list 1 --owner fluffels --format json --limit 800 --jq '
-  def game: ((.labels // []) | any(test("^area:(inhalt|lernpfad|grafik)$")));
-  def prio: (.title | test("🚨|🤖")) or ((.labels // []) | any(. == "forum"));
-  [.items[] | select(.content.type=="Issue" and (.status // "")=="Todo" and ((.assignees // []) | length)==0)
-    | select(prio|not)] as $q
-  | (first(range(2; ([($q|length), 6] | min)) | select(($q[.]|game|not) and ($q[.-1]|game|not) and ($q[.-2]|game|not))) // null) as $i
-  | if $i == null then "OK OK" else
-      (first($q[($i+1):][] | select(game)) // null) as $g
-      | if $g == null then "LEER LEER" else "\($g.id) \($q[$i-1].id)" end
-    end')
-case "$ITEM" in
-  OK)   echo "OK: Rhythmus intakt" ;;
-  LEER) echo "LEER: im Kopf fehlt ein Spielticket und tiefer gibt es keins, melden (siehe unten)" ;;
-  *)    gh api graphql -f query='mutation($p:ID!,$i:ID!,$a:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }' \
-          -f p=$PROJ -f i="$ITEM" -f a="$AFTER" ;;
-esac
-```
-
-> Vorrang-Items (`🚨`/`🤖`, `forum`) stehen oben und zählen nicht mit; **Sicherheitslücken** trägt der Agent von Hand mit `🚨` im Titel ein, damit sie hier als Vorrang erkannt werden. Ein Spielticket mit offenem `blockiert durch #X` im Body ist im Board nicht erkennbar — der Kandidaten-Check bei der Auswahl springt dann zum nächsten Item.
+> Vorrang-Items (`🚨`/`🤖`, `forum`) stehen oben und zählen nicht mit; **Sicherheitslücken** trägt der Agent von Hand mit `🚨` im Titel ein, damit sie als Vorrang erkannt werden. **Nicht frei** (zählt weder als Spielticket noch wird es vorgezogen) ist ein Item mit Assignee, mit offenem `blockiert durch #X` im Body oder mit vorhandenem Branch `feature/kq-<nr>-…`. Bei API-Rate-Limit stoppt das Skript und nennt die offenen Schritte: später erneut fahren, nicht in einer Schleife wiederholen.
 
 **Ausgabe `LEER` (kein freies Spielticket):** im Chat melden („Kein freies Spielticket mehr"), die Position bleibt mit dem nächsten normalen Ticket belegt, und — falls noch keins offen ist — ein Issue „Spiel-Backlog leer: neue Spieltickets planen" (`area:inhalt`, ohne Assignee) anlegen und mit dem Befehl unter „Reihenfolge pflegen" (ohne `afterId`) ganz nach oben schieben. Neue Spielinhalte brauchen Story-/Optik-Entscheidungen der Maintainerin; das Ticket wird darum mit ihr per Pre-Flight-Klärung geplant, nicht autonom erfunden.
 
@@ -81,6 +61,7 @@ Regel: [AGENTS.md › Nicht jeder Befund wird ein Ticket](../AGENTS.md#wo-die-to
   NODE=$(gh issue view "$NR" --json id --jq .id)
   ITEM=$(gh api graphql -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }' \
     -f p=PVT_kwHOD8746c4Barq_ -f c="$NODE" --jq .data.addProjectV2ItemById.item.id)
+  gh project item-edit --id "$ITEM" --project-id PVT_kwHOD8746c4Barq_ --field-id PVTSSF_lAHOD8746c4Barq_zhVhdTM --single-select-option-id f75ad846   # Status Todo, sonst fehlt das Item in der Auswahl
   AFTER=$(gh project item-list 1 --owner fluffels --format json --limit 800 \
     --jq '[.items[] | select((.status // "")=="Todo")][3].id // empty')   # 4. Item → neues landet auf 5
   # leer (weniger als 4 Todo-Items): afterId weglassen, dann landet es oben
@@ -104,7 +85,7 @@ Die manuelle Board-Reihenfolge ist die **einzige** Reihenfolge-Quelle; es gibt k
     -f p=PVT_kwHOD8746c4Barq_ -f i="$ITEM"
   ```
 - **Status setzen:** ein per `addProjectV2ItemById` ergänztes Item hat keinen Status und fehlt in der Auswahl (`.status == "Todo"`). Darum nach dem Hinzufügen den Status auf Todo setzen (`gh project item-edit --id <ITEM> --project-id PVT_kwHOD8746c4Barq_ --field-id PVTSSF_lAHOD8746c4Barq_zhVhdTM --single-select-option-id f75ad846`). `gh project item-list` liefert frisch hinzugefügte Items verzögert, einen Moment warten. In Git-Bash ist `jq` nicht installiert; die `--jq`-Variante von `gh` genügt.
-- **Mehrere Tickets auf einmal einsortieren (z.B. Epic-Aufteilung):** Board-Liste **einmal** laden, Item-IDs wiederverwenden, Positionen nacheinander mit kurzer Pause setzen, nie je Ticket die komplette Liste (`--limit 800`) neu laden. Bei `API rate limit exceeded` sofort stoppen, nur REST nutzen (Kommentar, Schließen, Labels) und den Board-Rest als Folgeaufgabe melden statt in einer Schleife weiterzuversuchen.
+- **Mehrere Tickets auf einmal einsortieren (z.B. Epic-Aufteilung):** `node scripts/board-place.mjs --top <nr>…` bzw. `--after <ankernr> <nr>…` (`--dry-run` zeigt nur an) lädt die Board-Liste **einmal**, nutzt die Item-IDs wieder und setzt die Positionen nacheinander mit kurzer Pause; nie je Ticket die komplette Liste (`--limit 800`) neu laden. Noch nicht gelistete Nummern meldet das Skript (frische Items kommen verzögert): später erneut aufrufen. Bei `API rate limit exceeded` sofort stoppen, nur REST nutzen (Kommentar, Schließen, Labels) und den Board-Rest als Folgeaufgabe melden statt in einer Schleife weiterzuversuchen.
 - **Abhängigkeit** („A vor B"): als Notiz `blockiert durch #X` in den **Body** des abhängigen Issues. Die Auswahl fängt das am Kandidaten-Check ab (offener Blocker → überspringen).
 - **Unwichtig:** im Board nach unten ziehen, oder schließen bzw. löschen (`gh issue delete` nur mit Rückfrage). Ein Zurückstellen-Label gibt es nicht.
 - **Neues Issue:** wandert per „Auto-add to project"-Board-Workflow automatisch aufs Board — danach ggf. an die gewünschte Stelle ziehen und den [Spielrhythmus-Schritt](#spielrhythmus--jede-dritte-position-ein-spielticket-1215) fahren.

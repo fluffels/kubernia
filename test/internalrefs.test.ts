@@ -23,20 +23,29 @@ import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawModule from "../scripts/check-internalrefs.mjs";
 
-type Violation = { file: string; line: number; term: string; excerpt: string };
+type Violation = { file: string; line: number; term: string; kind: "ref" | "name"; excerpt: string };
 
 type InternalRefsApi = {
   ENCODED_TERMS: string[];
+  ENCODED_NAME_TERMS: string[];
   decodeTerms: (encoded?: string[]) => string[];
   encodeTerm: (term: string) => string;
-  buildTermPattern: (term: string) => RegExp;
+  buildTermPattern: (term: string, opts?: { stem?: boolean }) => RegExp;
+  listBranchCommitMessages: (root: string, exec: () => string) => { name: string; text: string }[];
   isCheckable: (file: string) => boolean;
-  findViolations: (files: string[], terms: string[], readFile: (f: string) => string) => Violation[];
+  findViolations: (
+    files: string[],
+    terms: string[],
+    readFile: (f: string) => string,
+    nameTerms?: string[],
+  ) => Violation[];
   runCheck: () => { files: string[]; violations: Violation[] };
 };
 
 const {
   ENCODED_TERMS,
+  ENCODED_NAME_TERMS,
+  listBranchCommitMessages,
   decodeTerms,
   encodeTerm,
   buildTermPattern,
@@ -131,5 +140,44 @@ describe("Interne-Referenzen-Wächter (#990)", () => {
       ["da.md"],
       "Eine unlesbare Datei wird übersprungen, die lesbare weiter geprüft.",
     );
+  });
+  test("Namensbezüge matchen als Wortstamm: Flexion und Komposita ohne eigenen Eintrag (#1217)", () => {
+    // Dummy-Stamm statt echtem Namen. Ein Herkunftsbegriff braucht für den Genitiv einen eigenen
+    // Eintrag, ein Namensbezug nicht — das nagelt der Test fest, damit niemand Flexionsformen
+    // doppelt pflegt oder den Stamm-Match still zurückbaut.
+    const stamm = "zzzdummyname";
+    const flexion = [`${stamm}s Review`, `${stamm}-Skript`, `${stamm}Notiz`, `Review von ${stamm}.`];
+    for (const text of flexion) {
+      const hits = findViolations(["a.md"], [], () => text, [stamm]);
+      assert.equal(hits.length, 1, `Namensbezug muss treffen: ${text}`);
+      assert.equal(hits[0]?.kind, "name");
+    }
+    assert.deepEqual(findViolations(["a.md"], [], () => `xx${stamm}`, [stamm]), [], "Wortanfang bleibt Pflicht.");
+    // Gegenprobe: derselbe Begriff als Herkunftsbegriff trifft die Flexion NICHT.
+    assert.deepEqual(findViolations(["a.md"], [DUMMY], () => `${DUMMY}s Pipeline`), []);
+  });
+
+  test("Treffer tragen ihre Art, die Namensliste ist nicht leer und dekodierbar (#1217)", () => {
+    assert.ok(ENCODED_NAME_TERMS.length > 0, "Eine leere Namensliste wäre ein stiller No-op.");
+    for (const term of decodeTerms(ENCODED_NAME_TERMS)) assert.ok(term.length >= 3);
+    const hit = findViolations(["a.md"], [DUMMY], () => DUMMY)[0];
+    assert.equal(hit?.kind, "ref");
+  });
+
+  test("Commit-Messages werden als Pseudo-Dateien geprüft; ohne Vergleichs-Basis leer (#1217)", () => {
+    const log = () => `aaaaaaa1111 feat: ok
+
+Body ${DUMMY}bbbbbbb2222 fix: harmlos`;
+    const commits = listBranchCommitMessages("/x", log);
+    assert.deepEqual(commits.map((c) => c.name), ["commit:aaaaaaa", "commit:bbbbbbb"]);
+    const hits = findViolations(
+      commits.map((c) => c.name),
+      [DUMMY],
+      (f) => commits.find((c) => c.name === f)?.text ?? "",
+    );
+    assert.deepEqual(hits.map((h) => `${h.file}:${h.line}`), ["commit:aaaaaaa:3"]);
+
+    const keineBasis = () => { throw new Error("unknown revision origin/main"); };
+    assert.deepEqual(listBranchCommitMessages("/x", keineBasis), [], "fail-open wie check:diffsize");
   });
 });
