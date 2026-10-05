@@ -101,7 +101,7 @@ So macht Stardew Wiesen „dicht/lebendig" — **das ist die Vorlage für #107**
 Aligned mit [`assets/pixellab/README.md`](../assets/pixellab/README.md) — diese Stil-Tokens **immer** mitgeben:
 
 - **Tiles/Terrain:** `16x16`, `flat shading`, `high top-down` (Terrain seit #866 flat); gedämpft-warme Palette; mehrere Tile-Varianten für Variation.
-- **Figuren:** `low top-down`, `chibi`, `selective outline`, `high detail`, size 32, 4 Richtungen; gleiche Körperhöhe/Fußlinie wie Bestand.
+- **Figuren:** `low top-down`, `chibi`, `selective outline`, `high detail`, 4 Richtungen; gleiche Körperhöhe/Fußlinie wie Bestand (size 48 → 48² runtergerechnet).
 - **Objekte:** `create_map_object`, transparent, `high top-down` (senkrechte Strukturen, Türen, Icons: `side`; Gebäude: `low top-down`), `selective outline`, `detailed shading`; Maßstab **Mensch = 1 Kachel (16px)** als Anker (Baum ~3 Kacheln, Busch ~1).
 - **Palette im Prompt verankern:** „muted warm earthy palette, soft dark-tinted outlines (not pure black), single light source top-left" statt nur „Stardew style".
 - **Groß generieren, klein rechnen:** Häuser/Bäume/Schiffe in hoher Auflösung, dann ganzzahlig verkleinern — nie klein generieren + hochskalieren.
