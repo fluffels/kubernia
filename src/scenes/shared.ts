@@ -214,7 +214,7 @@ function hueColorLight(h: number) { return Phaser.Display.Color.HSLToColor(h / 3
  * Belohnungen und Interior-/Archipel-Titeln → echter Pixelart-Look (Stardew-Messlatte #44).
  * Die Glyphen-Daten liegen Phaser-frei + unit-getestet in pixelfont.ts; hier wird daraus
  * EINMALIG (global im Cache) eine Canvas-Textur gebacken und als Phaser-RetroFont registriert. */
-const FONT_KEY = "pixelfont", FONT_TEX = "pixelfontTex", COIN_TEX = "coinIcon";
+const FONT_KEY = "pixelfont", FONT_TEX = "pixelfontTex", COIN_TEX = "coin_icon";
 
 function buildPixelFont(scene: Phaser.Scene) {
   if (scene.cache.bitmapFont.exists(FONT_KEY)) return;   // global, nur einmal nötig
@@ -239,17 +239,6 @@ function buildPixelFont(scene: Phaser.Scene) {
     "spacing.x": 0, "spacing.y": 0, "offset.x": 0, "offset.y": 0, lineSpacing: 0,
   });
   scene.cache.bitmapFont.add(FONT_KEY, data);
-}
-
-/** Pixel-Münz-Icon für schwebende Belohnungs-Texte (ersetzt das 🪙-Emoji, #188). */
-function buildCoinIcon(scene: Phaser.Scene) {
-  if (scene.textures.exists(COIN_TEX)) return;
-  const g = scene.make.graphics({}, false);
-  g.fillStyle(0x8a5a12, 1); g.fillCircle(5, 5, 5);         // dunkler Rand
-  g.fillStyle(0xf2b937, 1); g.fillCircle(5, 5, 4);         // Gold-Körper
-  g.fillStyle(0xffe08a, 1); g.fillCircle(3.6, 3.6, 1.3);   // Glanzpunkt
-  g.fillStyle(0xc8881f, 1); g.fillRect(3, 4, 4, 2);        // eingeprägter Steg
-  g.generateTexture(COIN_TEX, 10, 10); g.destroy();
 }
 
 /* ---------- Lazy-Asset-Loading pro Szene (#198) ----------
@@ -401,7 +390,7 @@ function floatPixelText(scene: Phaser.Scene, x: number, y: number, str: string, 
   if (coin) {
     const gap = clean ? 3 : 0;
     const icon = scene.add.image(cursor + gap, 0, COIN_TEX).setOrigin(0, 0.5);
-    parts.push(icon); cursor += gap + 10;
+    parts.push(icon); cursor += gap + icon.width;
   }
   cont.add(parts);
   cont.x = x - cursor / 2;   // ganzes Float zentrieren (wie früher origin 0.5)
@@ -409,5 +398,5 @@ function floatPixelText(scene: Phaser.Scene, x: number, y: number, str: string, 
 }
 
 export {
-  T, DIRT, STONE, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, WELL, SIGN, CART, WATER, FOAM, WANG, hashHue, hueColor, hueColorLight, FONT_KEY, FONT_TEX, COIN_TEX, buildPixelFont, buildCoinIcon, queueAssetLoad, sliceSheets, fontColor, pixelText, spawnIslandNpc, spawnIslandObject, SIGN_BORDER, SIGN_PAD, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, readMoveInput, faceFrom, playerFaceTexture, playerBob, renderPlayer, stepSimplePlayer,
+  T, DIRT, STONE, CRATE, BARREL, ANVIL, TABLE, DEVICE, BOOK, WELL, SIGN, CART, WATER, FOAM, WANG, hashHue, hueColor, hueColorLight, FONT_KEY, FONT_TEX, COIN_TEX, buildPixelFont, queueAssetLoad, sliceSheets, fontColor, pixelText, spawnIslandNpc, spawnIslandObject, SIGN_BORDER, SIGN_PAD, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, readMoveInput, faceFrom, playerFaceTexture, playerBob, renderPlayer, stepSimplePlayer,
 };

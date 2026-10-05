@@ -96,7 +96,7 @@ const lighthouse: RegionConfig = {
     }
     // Großer Leuchtturm + rotierender Lichtkegel + pulsierende Lampe (PixelLab-Turm).
     const lx = LIGHTHOUSE_TOWER.x * T + 8, lyB = (LIGHTHOUSE_TOWER.y + 1) * T, lhSc = 0.6;
-    scene.add.ellipse(lx, lyB - 1, 32, 10, 0x5a6470).setDepth(lyB - 2);   // Felsen-Sockel
+    scene.add.ellipse(lx, lyB - 1, 32, 10, 0x000000, 0.2).setDepth(lyB - 2);   // Schlagschatten (Steinfuß steckt im Sprite)
     scene.add.image(lx, lyB, "lighthouse").setOrigin(0.5, 1).setScale(lhSc).setDepth(lyB + 4);
     const lampY = lyB - Math.round(100 * lhSc) + 9;
     if (!scene.textures.exists("lhbeam")) {

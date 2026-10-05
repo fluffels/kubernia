@@ -153,11 +153,10 @@ export class InteriorScene extends Phaser.Scene {
     }
   }
 
-  /** Mast-Platzhalter (Bug-Bereich, Spalte 7, Zeile 1). */
+  /** Mastfuß (Bug-Bereich, Spalte 7, Zeile 1): Pixelart-Asset, Kachel blockiert. */
   private renderMast(): void {
-    const mx = 7 * T + 8, my = 1 * T + 4;
-    this.add.rectangle(mx, my + 10, 5, 22, 0x5a3e28).setDepth(my + T);
-    this.add.rectangle(mx, my + 4, 22, 3, 0x5a3e28).setDepth(my + T + 1); // Querbaum
+    this.add.image(7 * T + 8, 1 * T + 8, "deck_mast").setDepth(2 * T);
+    this.solid[1 * this.RW + 7] = 1;
   }
 
   /** Unterdeck-Luke auf dem Deck (Heck, Spalte 7, Zeile 8) – ab #759 interaktiv. */

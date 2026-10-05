@@ -110,7 +110,7 @@ describe("ASSET_MANIFEST – Szenen-Zuordnung (#198 Lazy-Loading)", () => {
     // barrel/crate: Cluster-Pods; coast…: Terrain überall; char_player/seagull/flowers: überall.)
     const mustBeCommon = [
       "tree", "pine", "lighthouse", "barrel", "crate", "coast", "meadow", "path", "kai", "dock",
-      "flowers", "seagull", "char_player", "sign", "rock", "bush",
+      "flowers", "seagull", "char_player", "sign", "rock", "bush", "coin_icon", "deck_mast", "ship_hatch",
     ];
     const commonSet = new Set(COMMON_ASSETS.map((a) => a.key));
     for (const k of mustBeCommon) expect(commonSet.has(k), k).toBe(true);
