@@ -5,7 +5,7 @@
  * Motivation (siehe Ticket #527): Vor diesem Ticket musste ein Agent typecheck +
  * lint + check:arch + check:size + check:docmap + test EINZELN laufen lassen und
  * die CI listete dieselben Schritte separat – zwei Drift-Risiken: (a) ein Agent
- * VERGISST lokal ein Gate (die CI fängt es erst nach dem Direkt-Push auf main),
+ * VERGISST lokal ein Gate (die CI fängt es erst auf dem PR),
  * (b) CI-Reihenfolge und lokale Reihenfolge laufen auseinander.
  *
  * Diese Fitness-Function sichert genau das ab:

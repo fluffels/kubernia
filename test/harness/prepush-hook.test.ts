@@ -1,13 +1,16 @@
-/* #528: Git pre-push-Hook — schnelle Gates lokal VOR `git push origin main`.
+/* #528: Git pre-push-Hook — schnelle Gates lokal vor einem Push auf `main`.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
- * Motivation (siehe Ticket #528): Der Workflow pusht bewusst DIREKT auf main
- * (kein PR/Required-Checks). Die CI-Gates laufen dadurch erst NACH dem Push —
- * in der Lücke dazwischen kann kaputter Code main rot machen. Ein committeter,
- * per `npm run setup` via `core.hooksPath` verdrahteter pre-push-Hook schließt
- * genau diese Lücke, indem er `npm run verify` lokal fährt und den Push bei Rot
- * abbricht (Umgehung bewusst per `git push --no-verify`).
+ * Motivation (Ticket #528, seit #592 nur noch Zusatznetz): `main` ist
+ * server-seitig PR-gegated (Branch-Protection, enforce_admins, ADR 0009) — der
+ * maßgebliche, nicht umgehbare Riegel sind die Required-Checks auf dem PR. Das
+ * frühe lokale Feedback vor dem PR holt sich der Agent per manuellem
+ * `npm run verify`. Der committete, per `npm run setup` via `core.hooksPath`
+ * verdrahtete pre-push-Hook bleibt als Restnetz für den Fall, dass die
+ * Protection je gelockert wird: Bei einem Push auf `main` fährt er
+ * `npm run verify` lokal und bricht bei Rot ab (Umgehung bewusst per
+ * `git push --no-verify`). Feature-Branch-Pushes lässt er ungeprüft durch.
  *
  * Diese Fitness-Function sichert ab, dass der Schutz nicht leise wegbröckelt:
  *  - der Hook existiert und fährt die verify-Kette (nicht ein Einzel-Gate),
@@ -46,6 +49,17 @@ describe("#528 pre-push-Hook: schnelle Gates vor Push auf main", () => {
       hook,
       "pre-push muss auf refs/heads/main prüfen",
     ).toMatch(/refs\/heads\/main/);
+    // Ohne Push auf main steigt der Hook früh grün aus, BEVOR verify läuft –
+    // sonst würde jeder Feature-Branch-Push (rot→fix-Schleife) ausgebremst.
+    const earlyExit = hook.search(/push_to_main"?\s*-eq\s*0[\s\S]*?exit 0/);
+    expect(
+      earlyExit,
+      "pre-push muss ohne Push auf main früh mit exit 0 aussteigen",
+    ).toBeGreaterThan(-1);
+    expect(
+      earlyExit,
+      "der Früh-Ausstieg muss VOR dem verify-Aufruf stehen",
+    ).toBeLessThan(hook.search(/^\s*if\s+npm run verify\b/m));
   });
 
   it("bricht den Push bei Rot ab (exit-Code ≠ 0 im Rot-Fall)", () => {
