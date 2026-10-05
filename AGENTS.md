@@ -10,7 +10,7 @@
 
 **Vor jeder Änderung und jeder Entscheidung die eine Frage stellen: „Ist das okay, wenn Kubernia ein Spiel in Stardew-Valley-Größe wird?" — nur umsetzen, wenn die Antwort Ja ist.** Die Frage steht **über** allen ADRs und Konventionen. Eine Lösung, die bei 10× Inhalt/NPCs/Welten dasselbe Problem reproduziert, ist keine — **Granularität und Struktur mitdenken, nicht nur das Format** (Beispiel #348: Content nicht nur TS→JSON, sondern pro Region/NPC aufgeteilt). Im Zweifel recherchieren, wie ein Spiel dieser Größe es macht.
 
-**Was beim Entwickeln auffällt, aber gerade nicht dran ist → sofort als GitHub-Issue anlegen** (nicht inline mitfixen, nicht „im Kopf" behalten). Lieber ein Ticket zu viel als verlorenes Wissen — gilt für echte Defekte; Härtung und Kosmetik werden gesammelt (§ Nicht jeder Befund wird ein Ticket).
+**Was beim Entwickeln auffällt, aber gerade nicht dran ist → sofort in GitHub festhalten** (nicht inline mitfixen, nicht „im Kopf" behalten): echte Defekte als eigenes Issue, Härtung und Kosmetik als Zeile im Sammelticket (siehe „Wo die TODOs leben"). Lieber festgehalten als verlorenes Wissen.
 
 ### Git, PR und Merge
 
@@ -98,7 +98,7 @@ Der Backlog sind **GitHub Issues** im **Project-Board**. Die Reihenfolge ist die
 
 **Auswahl des nächsten Tickets — deterministisch, nicht abwägen.** „Nächstes Ticket" = **oberstes freies Item** der Board-Auswahl (`.status == "Todo"`, kein offener Blocker, kein offener PR/Branch/Worktree — Gegencheck `git worktree list` + `git branch -a`; **immer `--limit 800`**, sonst fehlen Items). **Kein Vorab-Abgleich der ganzen Liste** — nur **dieses eine** Kandidaten-Ticket prüfen (`gh issue view <nr>`).
 
-**Spielquote (#1199): jedes dritte Ticket ist ein Spielticket** (`area:inhalt`, `area:lernpfad` oder `area:grafik`). Hat keiner der letzten zwei gemergten Ticket-PRs ein Spielticket geschlossen, ist statt des obersten Items das **oberste freie Spielticket** dran. Vorrang vor der Quote behalten `🚨`, Security, `🤖` und Forum. Gibt es kein freies Spielticket: melden, normal weiter, und einmalig ein Ticket „Spiel-Backlog leer: neue Spieltickets planen" ganz oben anlegen. Befehl: [docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md).
+**Spielquote (#1199): jedes dritte Ticket ist ein Spielticket** (`area:inhalt`, `area:lernpfad` oder `area:grafik`). Hat keiner der letzten zwei gemergten Ticket-PRs ein Spielticket geschlossen, ist statt des obersten Items das **oberste freie Spielticket** dran. Vorrang vor der Quote behalten `🚨`/`🤖` im Titel, Label `forum` und Sicherheitslücken. Gibt es kein freies Spielticket: melden, normal weiter, und einmalig ein Ticket „Spiel-Backlog leer: neue Spieltickets planen" ganz oben anlegen. Befehl: [docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md).
 
 **Kollisionsschutz bei parallelen Agenten:**
 - **⛔ Assignee = sofort weiter.** Hat der Kandidat einen Assignee: überspringen, nächstes nehmen — kein Worktree inspizieren, kein Weiterarbeiten an fremden Tickets.

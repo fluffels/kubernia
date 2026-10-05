@@ -14,7 +14,7 @@ Bevor irgendein Ticket angefasst wird, **zuerst zweifeln** — das steht über d
 
 ## Was „nächstes Ticket" heißt
 
-Rein deterministisch — **kein Abwägen nach Inhalt, kein Vorab-Sichten der ganzen Liste:**
+Rein deterministisch — **kein Abwägen nach Inhalt, kein Vorab-Sichten der ganzen Liste** (einzige Ausnahme: die [Spielquote](#spielquote--jedes-dritte-ticket-ein-spielticket-1199) wählt per Label):
 
 1. **oberstes freies Item in der Board-Reihenfolge** — genau die Reihenfolge, die `gh project item-list` liefert (= was in View 1 von oben nach unten steht). Keine Nachsortierung nach Inhalt oder Nummer.
 2. **frei** heißt: **kein Assignee** (der „in Arbeit"-Marker), **kein** offener Branch/Worktree und **kein offener Blocker** (`blockiert durch #X` im Body).
@@ -34,7 +34,7 @@ Dann nur **dieses eine** Kandidaten-Ticket kurz gegen den Live-Stand prüfen (`g
 
 ## Spielquote — jedes dritte Ticket ein Spielticket (#1199)
 
-Regel: [AGENTS.md › Spielquote](../AGENTS.md#wo-die-todos-leben). **Spielticket** = Label `area:inhalt`, `area:lernpfad` oder `area:grafik`. Vorrang vor der Quote behalten `🚨`, Security, `🤖` und Forum.
+Regel, Spielticket-Labels und Vorrang: [AGENTS.md › Wo die TODOs leben](../AGENTS.md#wo-die-todos-leben). **0. Vorrang zuerst:** ist das oberste freie Item ein Vorrang-Ticket, ist es dran — die Quote greift erst danach.
 
 **1. Ist der Spiel-Slot dran?** Die Labels der zuletzt gemergten Ticket-Issues (Merge-Reihenfolge von `main`; Dependabot-PRs ohne `Closes` zählen nicht):
 
@@ -49,7 +49,7 @@ for pr in $(git log origin/main --first-parent -n 20 --format=%s | grep -o '(#[0
 done
 ```
 
-Trägt **keine** der beiden Zeilen ein Spiel-Label, ist der Spiel-Slot dran (vorher `git fetch origin`).
+Trägt **keine** der beiden Zeilen ein Spiel-Label, ist der Spiel-Slot dran (vorher `git fetch origin`). Gezählt werden geschlossene Issues; ein PR, der zwei schließt, belegt beide Plätze. Bewusst akzeptiert: Spieltickets in Arbeit zählen nicht, parallele Agenten können also beide ein Spielticket ziehen — die Quote ist eine Untergrenze.
 
 **2. Oberstes freies Spielticket** (dieselben Frei-Regeln wie oben: kein Assignee, kein Worktree, kein Blocker):
 
@@ -60,11 +60,18 @@ gh project item-list 1 --owner fluffels --format json --limit 800 --jq '
   | .[] | "#\(.content.number)\t\(.title)"'
 ```
 
-**3. Kein freies Spielticket:** im Chat melden („Kein freies Spielticket mehr"), das normale oberste Item nehmen und — falls noch keins offen ist — ein Issue „Spiel-Backlog leer: neue Spieltickets planen" (`area:inhalt`, ohne Assignee) ganz oben anlegen. Neue Spielinhalte brauchen Story-/Optik-Entscheidungen der Maintainerin; das Ticket wird darum mit ihr per Pre-Flight-Klärung geplant, nicht autonom erfunden.
+**3. Kein freies Spielticket:** im Chat melden („Kein freies Spielticket mehr"), das normale oberste Item nehmen und — falls noch keins offen ist — ein Issue „Spiel-Backlog leer: neue Spieltickets planen" (`area:inhalt`, ohne Assignee) anlegen und mit dem Befehl unter „Reihenfolge pflegen" (ohne `afterId`) ganz nach oben schieben. Neue Spielinhalte brauchen Story-/Optik-Entscheidungen der Maintainerin; das Ticket wird darum mit ihr per Pre-Flight-Klärung geplant, nicht autonom erfunden.
 
 ## Sammelticket „Harness-Härtung (gesammelt)" (#1199)
 
-Regel: [AGENTS.md › Nicht jeder Befund wird ein Ticket](../AGENTS.md#wo-die-todos-leben). Es gibt **höchstens ein** offenes Sammelticket (`area:harness`); jeder Befund ist eine Checkbox-Zeile im Body bzw. ein Kommentar.
+Regel: [AGENTS.md › Nicht jeder Befund wird ein Ticket](../AGENTS.md#wo-die-todos-leben). Es gibt **höchstens ein** offenes Sammelticket (`area:harness`).
+
+- **Befund eintragen:** erst suchen, dann als **Kommentar** anhängen (Kommentare kollidieren bei parallelen Agenten nicht, Body-Edits schon):
+  ```bash
+  gh issue list --state open --search 'in:title "Harness-Härtung (gesammelt)"' --json number --jq '.[].number'
+  gh issue comment <nr> --body "- [ ] <Befund>"
+  ```
+  Kein Treffer → anlegen (unten). Zwei offene (Wettlauf) → das jüngere schließen, seine Zeilen ins ältere übertragen.
 
 - **Anlegen auf Position 5** (fehlt es, oder nach dem Abarbeiten das nächste):
   ```bash
@@ -73,12 +80,13 @@ Regel: [AGENTS.md › Nicht jeder Befund wird ein Ticket](../AGENTS.md#wo-die-to
   ITEM=$(gh api graphql -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }' \
     -f p=PVT_kwHOD8746c4Barq_ -f c="$NODE" --jq .data.addProjectV2ItemById.item.id)
   AFTER=$(gh project item-list 1 --owner fluffels --format json --limit 800 \
-    --jq '[.items[] | select((.status // "")=="Todo")][3].id')   # 4. Item → neues landet auf 5
+    --jq '[.items[] | select((.status // "")=="Todo")][3].id // empty')   # 4. Item → neues landet auf 5
+  # leer (weniger als 4 Todo-Items): afterId weglassen, dann landet es oben
   gh api graphql -f query='mutation($p:ID!,$i:ID!,$a:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }' \
     -f p=PVT_kwHOD8746c4Barq_ -f i="$ITEM" -f a="$AFTER"
   ```
-- **Abarbeiten:** zuerst der feste **Langfuse-Blick** ([docs/model-routing.md › Langfuse-Blick](model-routing.md#langfuse-blick-beim-sammelticket-1199)) — dessen Befunde werden weitere Zeilen. Dann so viele Zeilen umsetzen, wie in **einen** PR passen (`check:diffsize`); erledigte abhaken, den Rest und neue Befunde ins **nächste** Sammelticket auf Position 5 übertragen, das alte mit `Closes` schließen.
-- **Konvergenz-Signal:** Die Zeilenzahl pro Sammelticket ist die Kennzahl, ob der Harness besser wird — sinkt sie über die Generationen, konvergiert er; bleibt sie gleich, erzeugen die Reviews nur Arbeit (dann ADR 0012 neu bewerten).
+- **Abarbeiten:** zuerst der feste **Langfuse-Blick** ([docs/model-routing.md › Langfuse-Blick](model-routing.md#langfuse-blick-beim-sammelticket-1199)) — dessen Befunde werden weitere Zeilen. Dann so viele Zeilen umsetzen, wie in **einen** PR passen (`check:diffsize`). **Vor dem PR** die Kommentare erneut lesen (andere Agenten hängen weiter an); was offen ist, ins **nächste** Sammelticket auf Position 5 übertragen — nur wenn Zeilen übrig sind, kein leeres. Das alte schließt der PR per `Closes`.
+- **Konvergenz-Signal:** Zeilenzahl pro Sammelticket-Generation ([ADR 0012](adr/0012-harness-autonomie-audit-spur.md#fortschreibung-1199-2026-10-05-spielquote-sammelticket-abschlusskriterium)).
 
 ## Reihenfolge pflegen — im Board, nicht in einer Datei
 
