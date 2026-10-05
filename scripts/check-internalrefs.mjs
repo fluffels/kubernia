@@ -44,7 +44,7 @@ const ROOT = join(dirname(SELF), "..");
 
 /** Verbotene Begriffe, base64-kodiert (siehe Datei-Kopf: Obfuskierung, kein Schutz).
  *  Nur über `--add` pflegen, damit hier nie Klartext landet. */
-export const ENCODED_TERMS = ["d3Bz", "a2ktZmFicmlr"];
+export const ENCODED_TERMS = ["d3Bz", "a2ktZmFicmlr", "S2F0aGFyaW5h", "S2F0aGFyaW5hcw=="];
 
 /** Dateien, die bewusst NICHT geprüft werden. Grund ist in jedem Fall base64-/Binärrauschen,
  *  nicht Bequemlichkeit: `package-lock.json` trägt tausende base64-Integrity-Hashes, in denen
