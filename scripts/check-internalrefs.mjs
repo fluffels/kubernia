@@ -2,7 +2,8 @@
 // (npm run check:internalrefs) gestartet UND von test/internalrefs.test.ts importiert. Ein
 // `#!`-Token bricht sonst den Vitest/esbuild-Import (gleiche Falle wie bei check-size.mjs).
 /**
- * Interne-Referenzen-Wächter (#990) — hält Arbeitgeber-/Kundenbezüge aus dem öffentlichen Repo.
+ * Interne-Referenzen-Wächter (#990) — hält Arbeitgeber-/Kundenbezüge und (#1218) den Klarnamen der
+ * Maintainerin aus dem öffentlichen Repo (Anonymitätsregel in AGENTS.md).
  *
  * Hintergrund: #978/#980 hat interne Projektreferenzen aus dem damaligen Stand entfernt, aber
  * nichts verhinderte einen Rückfall. Die Fehlerquelle ist strukturell, nicht Nachlässigkeit:
@@ -23,6 +24,10 @@
  * per Textsuche/Suchmaschinen-Index im Repo auffindbar sind, nicht dass jemand sie gezielt
  * dekodiert. Für den Zweck („soll nicht auffindbar rumstehen") genügt das; für echte Geheimnisse
  * wäre es das NICHT — Secrets gehören nie ins Repo, auch nicht kodiert.
+ *
+ * Flexionsformen brauchen einen eigenen Eintrag (Wortgrenzen: der Grundbegriff trifft z.B. den
+ * Genitiv nicht). Wer in einem Content-Ticket einen NPC-/Ortsnamen wählt und hier rot wird, wählt
+ * einen anderen Namen — der Begriff bleibt in der Liste.
  *
  * Liste erweitern, ohne Klartext anzufassen:
  *   node scripts/check-internalrefs.mjs --add "<begriff>"
