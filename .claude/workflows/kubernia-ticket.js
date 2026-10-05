@@ -67,7 +67,7 @@ const AUSWAHL_SCHEMA = {
     ergebnis: {
       type: 'string',
       enum: ['ticket-geclaimt', 'kein-freies-ticket'],
-      description: 'kein-freies-ticket, wenn alle offenen Items assigned/zurückgestellt sind oder das Board leer ist',
+      description: 'kein-freies-ticket, wenn alle offenen Items assigned oder blockiert sind oder das Board leer ist',
     },
     nummer: { type: 'integer', description: 'Issue-Nummer ohne #' },
     titel: { type: 'string' },
@@ -420,7 +420,7 @@ Tickets" und „Kollisionsschutz bei parallelen Agenten") sowie docs/ticket-reih
 ${
   gewuenscht
     ? `Die Maintainerin hat Ticket #${gewuenscht} vorgegeben — nimm dieses statt der Board-Auswahl,
-prüfe es aber genauso (offen? kein Assignee? kein offener Blocker? nicht zurückgestellt?).
+prüfe es aber genauso (offen? kein Assignee? kein offener Blocker?).
 Ist es nicht frei, gib ergebnis="kein-freies-ticket" zurück und unternimm nichts weiter.`
     : `Nimm das oberste freie Item der Board-Reihenfolge. Wähle NICHT nach Inhalt aus und
 sortiere NICHT nach. Prüfe nur dieses eine Kandidaten-Ticket gegen den Live-Stand,
@@ -442,7 +442,7 @@ nicht selbst.`,
   )
 
   if (!auswahl || auswahl.ergebnis === 'kein-freies-ticket') {
-    log('Kein freies Ticket — Board leer oder alles assigned/zurückgestellt. Workflow endet.')
+    log('Kein freies Ticket — Board leer oder alles assigned/blockiert. Workflow endet.')
     return { ergebnis: 'kein-freies-ticket' }
   }
 
