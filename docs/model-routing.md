@@ -103,3 +103,13 @@ Der Patch bleibt **bewusst lokal** im Plugin-Cache (`~/.claude/plugins/cache/lan
 ### Nach einer Optimierung vergleichen
 
 Im PR von #1065/#1067 (bzw. im ersten Ticket-Lauf danach): das Skript für 1–3 neue Läufe fahren, die Zeilen unter diese Tabelle hängen und die Veränderung von **Tokens**, **Modell Umsetzung** und den Loop-Spalten im PR-Text benennen. Eine Einsparung gilt nur, wenn die Loop-Spalten nicht schlechter werden (mehr CI-Fix-Runden oder Nacharbeit fressen den Gewinn).
+
+### Langfuse-Blick beim Sammelticket (#1199)
+
+Kommt das Sammelticket „Harness-Härtung (gesammelt)" dran ([Mechanik](ticket-reihenfolge.md#sammelticket-harness-härtung-gesammelt-1199)), steht **vor** dem Abarbeiten ein fester, kurzer Blick in Langfuse auf die Läufe seit dem letzten Sammelticket (Tag `kubernia`). Genau drei Fragen, kein freies Stöbern:
+
+1. **Wirkung:** Tokens und Kosten pro Ticket gegen die [Baseline](#baseline-stand-2026-09-29-alle-vier-läufe-vor-10651067) — haben die seitdem gemergten Harness-Änderungen gewirkt? Je Lauf eine Zeile unter die Tabelle (Skript oben, `--langfuse`).
+2. **Tokenfresser:** der teuerste Lauf des Zeitraums und woran es lag (Phase, Subagent, wiederholtes Lesen großer Dateien).
+3. **Prozess:** Läufe mit auffällig vielen CI-Fix- oder Review-Runden bzw. Nacharbeit.
+
+Jeder Befund wird eine Zeile im Sammelticket; ein eigenes Issue nur bei einem echten Defekt (AGENTS.md § Nicht jeder Befund wird ein Ticket). Ohne erreichbares Langfuse (Keys fehlen, Server aus) den Punkt im PR als „übersprungen" melden, nicht raten.

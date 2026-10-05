@@ -140,7 +140,7 @@ const LENS_SCHEMA = {
     },
     ausserhalbScope: {
       type: 'array',
-      description: 'Aufgefallenes außerhalb des Ticket-Scopes — gehört in ein NEUES Issue, nicht inline gefixt',
+      description: 'Aufgefallenes außerhalb des Ticket-Scopes, nicht inline gefixt — eigenes Issue nur bei echtem Defekt, sonst Zeile im Sammelticket (AGENTS.md § Nicht jeder Befund wird ein Ticket)',
       items: { type: 'string' },
     },
   },
@@ -422,7 +422,10 @@ ${
     ? `Die Maintainerin hat Ticket #${gewuenscht} vorgegeben — nimm dieses statt der Board-Auswahl,
 prüfe es aber genauso (offen? kein Assignee? kein offener Blocker?).
 Ist es nicht frei, gib ergebnis="kein-freies-ticket" zurück und unternimm nichts weiter.`
-    : `Nimm das oberste freie Item der Board-Reihenfolge. Wähle NICHT nach Inhalt aus und
+    : `Prüfe zuerst die Spielquote (AGENTS.md § Wo die TODOs leben, Befehl in
+docs/ticket-reihenfolge.md): ist der Spiel-Slot dran, nimm das oberste freie Spielticket — außer das oberste
+freie Item ist ein Vorrang-Ticket (🚨/🤖 im Titel, Label forum, Sicherheitslücke), dann dieses.
+Sonst nimm das oberste freie Item der Board-Reihenfolge. Wähle NICHT nach Inhalt aus und
 sortiere NICHT nach. Prüfe nur dieses eine Kandidaten-Ticket gegen den Live-Stand,
 nicht die ganze Liste. Zeigt es einen Assignee: sofort weiter zum nächsten, ohne
 Worktree-Inspektion und ohne Weiterarbeit an fremder Arbeit.`
@@ -608,7 +611,8 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
 - § TDD ist der Default für Logik, § Alles wird abgetestet – auch Negativfälle,
   § Tests gegen False Positives absichern (Red-Green).
 - ⭐ Oberste Regel (Stardew-Valley-Größe) — sie steht über allen Konventionen.
-  Was auffällt, aber nicht zum Ticket gehört: neues Issue, nicht inline mitfixen.
+  Was auffällt, aber nicht zum Ticket gehört: nicht inline mitfixen, sondern festhalten
+  (§ Nicht jeder Befund wird ein Ticket): echter Defekt → Issue, sonst Sammelticket.
 - § Doku aktuell halten ist Teil von „fertig" — im SELBEN Branch.
 - Deutsch mit echten Umlauten in Texten und Kommentaren; Dateinamen bleiben ASCII.
 
@@ -695,8 +699,8 @@ ${KONTEXT_DIAET}
 Du reviewst, du änderst NICHTS und mergst NICHTS. Findings müssen konkret und belegt
 sein — mit Ort (datei.ts:zeile), kein „könnte man schöner machen" ohne Fundstelle.
 „blockierend" ist für echte Fehler/Regelverstöße reserviert, nicht für Geschmack.
-Was dir außerhalb des Ticket-Scopes auffällt, gehört nach ausserhalbScope (daraus wird
-ein neues Issue) — nicht in die Findings.`,
+Was dir außerhalb des Ticket-Scopes auffällt, gehört nach ausserhalbScope (echter Defekt →
+eigenes Issue, sonst Zeile im Sammelticket) — nicht in die Findings.`,
             { label: `lens:${lens.key}`, phase: 'Review', schema: LENS_SCHEMA, model: 'opus', effort: 'high' },
           ),
       ),
@@ -1010,15 +1014,17 @@ stillschweigend weitermachen:
 
 ${
   ausserhalbScope.length
-    ? `Zusätzlich: der Review hat Punkte AUSSERHALB des Ticket-Scopes gefunden. Lege dafür
-neue Issues an — ohne Assignee, mit passendem area:-Label, und beide GraphQL-Calls
-zum Einsortieren ins Board (AGENTS.md § Neue Issues sofort ins Board einsortieren).
-Prüfe vorher per gh issue list, ob es dafür schon ein Ticket gibt, statt zu duplizieren:
+    ? `Zusätzlich: der Review hat Punkte AUSSERHALB des Ticket-Scopes gefunden. Ordne jeden
+ein (AGENTS.md § Nicht jeder Befund wird ein Ticket): ein echter Defekt wird ein neues
+Issue (ohne Assignee, passendes area:-Label, beide GraphQL-Calls zum Einsortieren —
+AGENTS.md § Neue Issues sofort ins Board einsortieren; vorher per gh issue list auf
+Duplikate prüfen). Härtung/Kosmetik wird eine Zeile im offenen Sammelticket
+„Harness-Härtung (gesammelt)" (fehlt es: anlegen auf Position 5, docs/ticket-reihenfolge.md):
 ${ausserhalbScope.map((p) => `- ${p}`).join('\n')}`
     : ''
 }
 
-Melde das Ergebnis jedes Verify-Schritts einzeln${ausserhalbScope.length ? ' sowie die angelegten Issue-Nummern' : ''}.`,
+Melde das Ergebnis jedes Verify-Schritts einzeln${ausserhalbScope.length ? ' sowie die angelegten Issue-Nummern bzw. die Sammelticket-Zeilen' : ''}.`,
     { label: `cleanup:#${nr}`, phase: 'Cleanup' },
   )
 

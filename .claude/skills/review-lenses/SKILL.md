@@ -91,7 +91,7 @@ Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket
 
 **Lens 2 — Requirement-Treue.** Tut der Diff **wirklich, was das Ticket verlangt**?
 - Ticket lesen (`gh issue view <nr>`) und den Diff **gegen die Akzeptanzkriterien** halten — jedes Kriterium einzeln: erfüllt / offen / darüber hinausgegangen.
-- **Scope-Kriechen:** ändert der Diff mehr als das Ticket (ein Ein-Ticket-Diff bleibt klein — Aufgefallenes gehört in ein neues Issue, nicht inline mitgefixt)?
+- **Scope-Kriechen:** ändert der Diff mehr als das Ticket (ein Ein-Ticket-Diff bleibt klein — Aufgefallenes wird festgehalten, nicht inline mitgefixt)?
 - Betrifft es Spielinhalte/Quests/Steuerung → **README mitgezogen**? Neues `src/`-Modul → Backtick-Pfad-Zeile im passenden **`docs/module/`-Tiefendoc** ergänzt (nicht in die [Repo-Landkarte](../../../docs/referenz/repo-landkarte.md), #907)?
 - Berührt es das **Save-Format** → migriert (Version-Bump + Migrationskette), alter Stand bleibt heil?
 
@@ -113,7 +113,7 @@ Verdikt: ✅ ok  |  ⚠️ Hinweise  |  ❌ blockierend
 - [⚠️ Hinweis]     <Befund> — `datei.ts:zeile` — <warum>
 ```
 
-Am Ende **ein Gesamt-Verdikt** über alle drei Lenses (mergefähig ✅ / erst nachbessern ❌) und, falls beim Review etwas **außerhalb des Ticket-Scopes** aufgefallen ist, den Vorschlag, dafür ein neues Issue anzulegen (nicht inline mitfixen — oberste Regel).
+Am Ende **ein Gesamt-Verdikt** über alle drei Lenses (mergefähig ✅ / erst nachbessern ❌) und, falls beim Review etwas **außerhalb des Ticket-Scopes** aufgefallen ist, eine Vorschlagsliste: je Punkt „echter Defekt → eigenes Issue" oder „Härtung/Kosmetik → Zeile im Sammelticket" (AGENTS.md § Nicht jeder Befund wird ein Ticket). Nicht inline mitfixen — oberste Regel.
 
 ## Als beschränkte Konvergenzschleife im Ticket-Ablauf (#1012)
 
