@@ -25,8 +25,10 @@
  * dekodiert. Für den Zweck („soll nicht auffindbar rumstehen") genügt das; für echte Geheimnisse
  * wäre es das NICHT — Secrets gehören nie ins Repo, auch nicht kodiert.
  *
- * Flexionsformen brauchen einen eigenen Eintrag (Wortgrenzen: der Grundbegriff trifft z.B. den
- * Genitiv nicht). Wer in einem Content-Ticket einen NPC-/Ortsnamen wählt und hier rot wird, wählt
+ * Herkunftsbegriffe (ENCODED_TERMS) brauchen für Flexionsformen einen eigenen Eintrag (Wortgrenzen:
+ * der Grundbegriff trifft z.B. den Genitiv nicht); Namensbezüge (ENCODED_NAME_TERMS) matchen als
+ * Wortstamm und decken Flexion/Komposita ab. Geprüft werden getrackte Dateien UND die Commit-Messages
+ * des Branches (`origin/main..HEAD`); PR-Titel/-Body nur manuell per `--text` über stdin (keine CI-Verdrahtung). Wer in einem Content-Ticket einen NPC-/Ortsnamen wählt und hier rot wird, wählt
  * einen anderen Namen — der Begriff bleibt in der Liste.
  *
  * Liste erweitern, ohne Klartext anzufassen:
@@ -49,7 +51,16 @@ const ROOT = join(dirname(SELF), "..");
 
 /** Verbotene Begriffe, base64-kodiert (siehe Datei-Kopf: Obfuskierung, kein Schutz).
  *  Nur über `--add` pflegen, damit hier nie Klartext landet. */
-export const ENCODED_TERMS = ["d3Bz", "a2ktZmFicmlr", "S2F0aGFyaW5h", "S2F0aGFyaW5hcw=="];
+export const ENCODED_TERMS = ["d3Bz", "a2ktZmFicmlr"];
+
+/** Namensbezüge der Maintainerin, base64-kodiert (gelistet ist der Vorname; Kurzformen sind nicht
+ *  erratbar und kommen bei Bedarf per `--add-name` dazu). Anders als ENCODED_TERMS matchen diese
+ *  Einträge als **Wortstamm** (`\bTerm\w*`): Flexion und Komposita mit angehängtem Teil (Genitiv-s,
+ *  Bindestrich-Zusammensetzungen) brauchen keinen eigenen Eintrag; ein vorangestelltes Teil ohne
+ *  Bindestrich trifft er nicht (der Wortanfang bleibt Pflicht). Meldung und Rat sind namensspezifisch.
+ *  Der Nachname ist bewusst NICHT gelistet: er ist ein gewöhnliches deutsches Wort und würde das
+ *  Gate dauerhaft mit Fehltreffern belegen. Pflege: `--add-name "<begriff>"`. */
+export const ENCODED_NAME_TERMS = ["S2F0aGFyaW5h"];
 
 /** Dateien, die bewusst NICHT geprüft werden. Grund ist in jedem Fall base64-/Binärrauschen,
  *  nicht Bequemlichkeit: `package-lock.json` trägt tausende base64-Integrity-Hashes, in denen
@@ -86,10 +97,10 @@ function escapeRegex(s) {
  *  Seiten, an denen der Begriff überhaupt mit einem Wortzeichen anfängt/endet (`\b` neben einem
  *  Sonderzeichen würde sonst das Gegenteil bewirken und den Treffer verhindern). Die Grenzen
  *  sind der Grund, dass zufällige Substrings in base64-Blobs nicht als Fund gelten. */
-export function buildTermPattern(term) {
+export function buildTermPattern(term, { stem = false } = {}) {
   const escaped = escapeRegex(term);
   const left = /^\w/.test(term) ? "\\b" : "";
-  const right = /\w$/.test(term) ? "\\b" : "";
+  const right = !stem && /\w$/.test(term) ? "\\b" : "";
   return new RegExp(`${left}${escaped}${right}`, "i");
 }
 
@@ -109,8 +120,11 @@ export function isCheckable(file, excludedFiles = EXCLUDED_FILES, excludedExts =
 /** Sucht die Begriffe in den Dateien und liefert je Treffer { file, line, term, excerpt }.
  *  `readFile` ist injizierbar (Tests brauchen kein Dateisystem); Dateien, die nicht als Text
  *  lesbar sind, werden übersprungen statt das Gate zu sprengen. */
-export function findViolations(files, terms, readFile) {
-  const patterns = terms.map((term) => ({ term, re: buildTermPattern(term) }));
+export function findViolations(files, terms, readFile, nameTerms = []) {
+  const patterns = [
+    ...terms.map((term) => ({ term, kind: "ref", re: buildTermPattern(term) })),
+    ...nameTerms.map((term) => ({ term, kind: "name", re: buildTermPattern(term, { stem: true }) })),
+  ];
   const hits = [];
 
   for (const file of files) {
@@ -124,33 +138,54 @@ export function findViolations(files, terms, readFile) {
 
     const lines = content.split(/\r?\n/);
     lines.forEach((text, i) => {
-      for (const { term, re } of patterns) {
+      for (const { term, kind, re } of patterns) {
         if (!re.test(text)) continue;
-        hits.push({ file, line: i + 1, term, excerpt: text.trim().slice(0, 120) });
+        hits.push({ file, line: i + 1, term, kind, excerpt: text.trim().slice(0, 120) });
       }
     });
   }
   return hits;
 }
 
-/** Kompletter Lauf gegen das echte Repo. */
+/** Commit-Messages des Branches gegen die Merge-Base (`origin/main..HEAD`) als Pseudo-Dateien
+ *  `commit:<sha7>`. Ohne Vergleichs-Basis (flacher Checkout, kein origin/main) leer — fail-open
+ *  wie check:diffsize. Die Anonymitätsregel nennt Commits/PR-Metadaten ausdrücklich; `refs/pull/*`
+ *  macht sie genauso dauerhaft öffentlich wie Dateiinhalt. */
+export function listBranchCommitMessages(rootDir = ROOT, exec = execFileSync) {
+  try {
+    const out = exec("git", ["log", "origin/main..HEAD", "--format=%H%x00%B%x01"], {
+      cwd: rootDir, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"],
+    });
+    return out.split("\x01").map((e) => e.trim()).filter(Boolean).map((entry) => {
+      const [sha, ...body] = entry.split("\0");
+      return { name: `commit:${sha.slice(0, 7)}`, text: body.join("\0") };
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** Kompletter Lauf gegen das echte Repo: getrackte Dateien plus Commit-Messages des Branches. */
 export function runCheck(rootDir = ROOT) {
   const files = listTrackedFiles(rootDir).filter((f) => isCheckable(f));
-  const readFile = (rel) => readFileSync(join(rootDir, rel), "utf8");
-  return { files, violations: findViolations(files, decodeTerms(), readFile) };
+  const commits = listBranchCommitMessages(rootDir);
+  const texts = new Map(commits.map((c) => [c.name, c.text]));
+  const readFile = (rel) => (texts.has(rel) ? texts.get(rel) : readFileSync(join(rootDir, rel), "utf8"));
+  const all = [...files, ...texts.keys()];
+  return { files: all, violations: findViolations(all, decodeTerms(), readFile, decodeTerms(ENCODED_NAME_TERMS)) };
 }
 
 /** Trägt einen neuen Begriff kodiert in DIESE Datei ein (idempotent). Gibt zurück, was passiert
  *  ist, damit die CLI es melden kann, ohne selbst zu formatieren. */
-export function addTerm(term, selfPath = SELF) {
+export function addTerm(term, selfPath = SELF, listName = "ENCODED_TERMS") {
   const trimmed = String(term).trim();
   if (!trimmed) return { ok: false, reason: "leerer Begriff" };
 
   const encoded = encodeTerm(trimmed);
   const source = readFileSync(selfPath, "utf8");
-  const listPattern = /(export const ENCODED_TERMS = \[)([^\]]*)(\])/;
+  const listPattern = new RegExp(String.raw`(export const ${listName} = \[)([^\]]*)(\])`);
   const match = source.match(listPattern);
-  if (!match) return { ok: false, reason: "ENCODED_TERMS-Liste nicht gefunden" };
+  if (!match) return { ok: false, reason: `${listName}-Liste nicht gefunden` };
   if (match[2].includes(`"${encoded}"`)) return { ok: false, reason: "Begriff steht schon in der Liste" };
 
   const entries = [...match[2].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
@@ -167,11 +202,12 @@ function main(argv = process.argv.slice(2)) {
   const green = (s) => paint("32", s);
   const dim = (s) => paint("2", s);
 
-  const addIndex = argv.indexOf("--add");
-  if (addIndex !== -1) {
-    const result = addTerm(argv[addIndex + 1] ?? "");
+  for (const [flag, listName] of [["--add", "ENCODED_TERMS"], ["--add-name", "ENCODED_NAME_TERMS"]]) {
+    const addIndex = argv.indexOf(flag);
+    if (addIndex === -1) continue;
+    const result = addTerm(argv[addIndex + 1] ?? "", SELF, listName);
     if (!result.ok) {
-      console.error(red(`✖ --add fehlgeschlagen: ${result.reason}`));
+      console.error(red(`✖ ${flag} fehlgeschlagen: ${result.reason}`));
       process.exit(1);
     }
     console.log(green(`✔ Begriff kodiert aufgenommen (${result.count} in der Liste).`));
@@ -179,23 +215,47 @@ function main(argv = process.argv.slice(2)) {
     return;
   }
 
-  const { files, violations } = runCheck();
-
-  if (violations.length === 0) {
-    console.log(green(`✔ Keine internen Referenzen (${files.length} getrackte Dateien geprüft).`));
+  // `--text`: Text von stdin prüfen (PR-Titel/-Body vor dem `gh pr create`/`gh pr edit`), z.B.
+  //   gh pr view <nr> --json title,body --jq '.title, .body' | node scripts/check-internalrefs.mjs --text
+  if (argv.includes("--text")) {
+    const text = readFileSync(0, "utf8");
+    reportAndExit(findViolations(["stdin"], decodeTerms(), () => text, decodeTerms(ENCODED_NAME_TERMS)), 1, red, green);
     return;
   }
 
-  // Der Begriff selbst wird NICHT ausgegeben — die Fundstelle genügt, und eine Fehlermeldung
-  // landet leicht in Logs/CI-Ausgaben, die wieder öffentlich sind.
-  for (const v of violations) console.error(red(`✖ ${v.file}:${v.line} — interner Bezug im Text`));
+  const { files, violations } = runCheck();
+  reportAndExit(violations, files.length, red, green);
+}
 
-  console.error(
-    `\n${violations.length} interne Referenz(en) gefunden. Bitte neutral umformulieren ` +
-      `(die Sache benennen, nicht die Herkunft) — Begründung siehe Kopf von ` +
-      `scripts/check-internalrefs.mjs und AGENTS.md › Konventionen. Einmal gemergt lässt sich das ` +
-      `nicht mehr vollständig zurücknehmen (PR-Refs bleiben).`,
-  );
+/** Gemeinsame Ausgabe. Der Begriff selbst wird NICHT ausgegeben — die Fundstelle genügt, und eine
+ *  Fehlermeldung landet leicht in Logs/CI-Ausgaben, die wieder öffentlich sind. */
+function reportAndExit(violations, checked, red, green) {
+  if (violations.length === 0) {
+    console.log(green(`✔ Keine internen Referenzen (${checked} Quellen geprüft: Dateien, Commit-Messages).`));
+    return;
+  }
+
+  for (const v of violations) {
+    const what = v.kind === "name" ? "Namensbezug im Text" : "interner Bezug im Text";
+    console.error(red(`✖ ${v.file}:${v.line} — ${what}`));
+  }
+
+  const names = violations.filter((v) => v.kind === "name").length;
+  const refs = violations.length - names;
+  if (refs > 0) {
+    console.error(
+      `\n${refs} interne Referenz(en) gefunden. Bitte neutral umformulieren ` +
+        `(die Sache benennen, nicht die Herkunft) — Begründung siehe Kopf von ` +
+        `scripts/check-internalrefs.mjs und AGENTS.md › Konventionen. Einmal gemergt lässt sich das ` +
+        `nicht mehr vollständig zurücknehmen (PR-Refs bleiben).`,
+    );
+  }
+  if (names > 0) {
+    console.error(
+      `\n${names} Namensbezug/-bezüge gefunden. Neutral „die Maintainerin“ schreiben; in Commits ` +
+        `und PR-Texten genauso (AGENTS.md › Anonymität wahren).`,
+    );
+  }
   process.exit(1);
 }
 
