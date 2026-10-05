@@ -68,9 +68,9 @@ node scripts/token-baseline.mjs --session <id> --issue <nr> --pr <pr-nr> --from 
 Der Patch bleibt **bewusst lokal** im Plugin-Cache (`~/.claude/plugins/cache/langfuse-observability/…/hooks/langfuse_hook.py`, User-Scope, wirkt damit für alle Projekte), nicht im Repo versioniert und nicht upstream gemeldet (Maintainerin-Entscheidung). Jedes Plugin-Update überschreibt ihn.
 
 - **Prüfregel (gilt dauerhaft):** `grep -c "LOCAL PATCH" langfuse_hook.py` → `2`. Neben der Datei liegt das unveränderte Original als `langfuse_hook.py.orig`.
-- **Stand (seit #1122):** Plugin 1.2.0 (upstream `main` `8870487`), Patch portiert. Inhaltlich gleich wie unter 1.0.0, nur übernimmt die umgewandelte Meldung zusätzlich `sessionId`/`uuid`, damit der neue Fork-Filter (`is_row_from_another_session`) greift. Upstream hat beide Bugs auch dort noch. Per Probe-Session belegt: Tool-Fehler als `ERROR`, `project`-Metadatum, Tags. Der Zählvergleich unter 1.2.0 steht noch aus (#1187).
+- **Stand (seit #1122):** Plugin 1.2.0 (upstream `main` `8870487`), Patch portiert. Inhaltlich gleich wie unter 1.0.0, nur übernimmt die umgewandelte Meldung zusätzlich `sessionId`/`uuid`, damit der neue Fork-Filter (`is_row_from_another_session`) greift. Upstream hat beide Bugs auch dort noch. Per Probe-Session belegt: Tool-Fehler als `ERROR`, `project`-Metadatum, Tags. Zählvergleich unter 1.2.0 (#1187, Session `14dfbfb5-1f2f-439a-8f23-f2135cfa563a` mit Ticket-Lauf #1181 vom 05.10.2026, Planer und drei Lenses): gemessen ab Session-Start bis zum Ende des #1181-Turns, weil die Session danach noch weiterlief. Ergebnis: 57/57 Calls (Hauptagent 41, Subagenten 16), Input 124, Cache-Write 404 901, Cache-Read 5 066 237, Output 23 324, auf beiden Seiten identisch. Direkt nach dem Turn standen in Langfuse erst 56 Calls; der letzte kam beim nächsten Stop nach (siehe Log-Meldung).
 - **Trace-Tag:** `.claude/settings.json` setzt `CC_LANGFUSE_TRACE_TAGS=kubernia`, damit sich kubernia-Läufe in Langfuse neben `claude-code` und `skill:<name>` filtern lassen.
-- **Log-Meldung:** Seit 1.2.0 meldet der Stop-Hook den letzten Turn als „Processed 0 turns … Holding trailing open turn“, schreibt seine Observations aber trotzdem; das ist kein Datenverlust.
+- **Log-Meldung:** Seit 1.2.0 meldet der Stop-Hook den letzten Turn als „Processed 0 turns … Holding trailing open turn“, schreibt seine Observations aber trotzdem; das ist kein Datenverlust. ⚠️ **Verzögert, nicht verloren:** Der **letzte Call eines Turns** kann in Langfuse bis zum nächsten Hook-Lauf fehlen, weil Claude Code ihn erst ins Transkript schreibt, nachdem der Stop-Hook gelesen hat (in #1187 begann er genau am gespeicherten Lese-Offset und kam beim nächsten Stop an). Ob `SessionEnd` ihn am Session-Ende ebenso nachliefert, ist plausibel (der Hook ist dort registriert), aber nicht beobachtet. **Messregel:** erst vergleichen, wenn nach dem gemessenen Turn noch ein Stop gelaufen ist. Den Abgleich Transkript ↔ Langfuse über die ganze Session fahren; ist ein Zeitschnitt nötig, ihn mit mindestens einer Minute Abstand hinter den letzten gemessenen Call legen, denn Langfuse führt einen Call unter seiner Startzeit, das Transkript unter seiner Schreibzeit (in #1187 13 s später).
 - **Alternative ohne Patch:** gibt es derzeit nicht. Der native OTel-Export von Claude Code liefert Tokens nicht als `gen_ai.usage.*`, und Langfuse übernimmt sie deshalb nicht als Usage (#1185).
 
 **Nach einem Plugin-Update:**
@@ -78,7 +78,7 @@ Der Patch bleibt **bewusst lokal** im Plugin-Cache (`~/.claude/plugins/cache/lan
 1. Beide Scopes heben: `claude plugin update langfuse-observability@langfuse-observability` aktualisiert nur einen Scope, also zusätzlich mit `--scope user` aufrufen.
 2. Das neue Original als `langfuse_hook.py.orig` sichern.
 3. Den Patch an einer Kopie portieren, gegen die Plugin-Tests prüfen (mit und ohne Patch dieselben Ergebnisse), dann einspielen.
-4. Prüfregel oben, danach Zählvergleich wie unter [Messen](#messen) (Erwartung ±0).
+4. Prüfregel oben, danach Zählvergleich wie unter [Messen](#messen) (Erwartung ±0, Messregel unter „Log-Meldung“ beachten).
 
 ### Baseline (Stand 2026-09-29, alle vier Läufe vor #1065/#1067)
 
