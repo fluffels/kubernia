@@ -60,6 +60,18 @@ Commit-Identität ist die lokale Repo-Config (fluffels). Das Repo ist öffentlic
 bewusst anonym: nie Klarname, externer Benutzername oder dienstliche/private
 E-Mail in Dateien, Commits oder Kommentaren (AGENTS.md § Anonymität wahren).`
 
+// ── rename-Kurztitel (#1213) — Anfang
+// Kurztitel für die /rename-Zeile (#1213): ASCII-tauglich, höchstens ~40 Zeichen.
+function renameKurztitel(titel) {
+  const ascii = String(titel)
+    .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/Ä/g, 'Ae').replace(/Ö/g, 'Oe').replace(/Ü/g, 'Ue').replace(/ß/g, 'ss')
+    .replace(/[^ -~]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return ascii.length > 40 ? ascii.slice(0, 40).trim() : ascii
+}
+// ── rename-Kurztitel (#1213) — Ende
+
 const AUSWAHL_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -455,6 +467,7 @@ nicht selbst.`,
   const nr = auswahl.nummer
   const ticket = `#${nr} — ${auswahl.titel}`
   log(`Geclaimt: ${ticket} (art: ${auswahl.art})`)
+  log(`Session benennen: /rename kq-${nr} ${renameKurztitel(auswahl.titel)}`)
 
   const ticketKontext = `Ticket #${nr}: ${auswahl.titel}
 
