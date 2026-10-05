@@ -480,7 +480,7 @@ ${
 AGENTS.md § „Zu großes Ticket (Epic/Phase) → aufteilen statt umsetzen".
 
 Dazu gehört auch der Pflichtschritt „Neue Issues sofort ins Board einsortieren"
-(beide GraphQL-Calls) — ein neu angelegtes Issue liegt sonst in keinem Board.
+(beide GraphQL-Calls, danach der Spielrhythmus-Schritt aus docs/ticket-reihenfolge.md) — ein neu angelegtes Issue liegt sonst in keinem Board.
 Neue Kindertickets ohne Assignee. Am Ende das Epic auf done schließen und die
 Schließung verifizieren.`
     : `AUFGABE — das Dependabot-Sammelticket auflösen, genau nach
@@ -1006,13 +1006,15 @@ ${
   ausserhalbScope.length
     ? `Zusätzlich: der Review hat Punkte AUSSERHALB des Ticket-Scopes gefunden. Ordne jeden
 ein (AGENTS.md § Nicht jeder Befund wird ein Ticket): ein echter Defekt wird ein neues
-Issue (ohne Assignee, passendes area:-Label, beide GraphQL-Calls zum Einsortieren —
+Issue (ohne Assignee, passendes area:-Label, beide GraphQL-Calls zum Einsortieren, danach der Spielrhythmus-Schritt —
 AGENTS.md § Neue Issues sofort ins Board einsortieren; vorher per gh issue list auf
 Duplikate prüfen). Härtung/Kosmetik wird eine Zeile im offenen Sammelticket
 „Harness-Härtung (gesammelt)" (fehlt es: anlegen auf Position 5, docs/ticket-reihenfolge.md):
 ${ausserhalbScope.map((p) => `- ${p}`).join('\n')}`
     : ''
 }
+
+Fahre danach den Spielrhythmus-Schritt aus docs/ticket-reihenfolge.md (Abschnitt „Spielrhythmus"), bis er OK oder LEER meldet.
 
 Melde das Ergebnis jedes Verify-Schritts einzeln${ausserhalbScope.length ? ' sowie die angelegten Issue-Nummern bzw. die Sammelticket-Zeilen' : ''}.`,
     { label: `cleanup:#${nr}`, phase: 'Cleanup', model: 'sonnet', effort: 'medium' },
