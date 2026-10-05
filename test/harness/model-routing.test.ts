@@ -12,11 +12,12 @@
  *
  * Der Wächter deckt die drei Fehlklassen ab, die das leise zurückbringen:
  *
- *   1. **Der Hebel verschwindet.** Die Frontmatter-Zeile `model:` im kubernia-Skill
- *      ist eine Zeile – gelöscht/umformuliert fällt die Umsetzung wortlos auf das
- *      Session-Modell zurück, ohne dass irgendein Gate meckert.
- *   2. **Der Review wird still mitdemoviert.** `model:` gilt für den Hauptagenten
- *      für den Rest des Turns. Liefen die Lens-Pässe wie früher INLINE im
+ *   1. **Der Hebel verschwindet.** Seit #1065 ist der Hebel `"model": "sonnet"` in
+ *      `.claude/settings.json` (das Skill-Frontmatter greift wegen anthropics/claude-code#98898
+ *      nur bei `/kubernia`). Beides ist je eine Zeile – gelöscht/umformuliert fällt die
+ *      Umsetzung wortlos auf Opus zurück, ohne dass irgendein Gate meckert.
+ *   2. **Der Review wird still mitdemoviert.** Der Hauptagent läuft auf dem Coding-Tier
+ *      (Projekt-Default bzw. `/kubernia`-Frontmatter). Liefen die Lens-Pässe wie früher INLINE im
  *      Hauptagenten, zöge die Coding-Tier-Zeile den Review von Opus auf Sonnet –
  *      Fix der einen Konventionshälfte, Regression der anderen. Darum spawnt
  *      review-lenses seine Lenses als eigene Subagenten mit explizitem Opus-Routing.
@@ -24,9 +25,10 @@
  *      Umsetzung behauptet, schickt den nächsten Agenten auf die alte Fährte. Genau
  *      diese Klasse sieht `check:docdrift` (#529) nicht – es prüft Kommandos/Links.
  *
- * Dazu hält Test 2 das SSOT-Versprechen von docs/model-routing.md ehrlich („diese
- * ZWEI Dateien anpassen"): jeder harte Modell-Pin unter `.claude/` muss dort gelistet
- * sein und umgekehrt – sonst verrottet die Update-Checkliste beim nächsten Modell.
+ * Seit #1065 gilt zusätzlich: jede `agent()`-Aufrufstelle im Workflow setzt `effort` und
+ * `model` (oder `agentType`), settings.json trägt den Projekt-Default `sonnet` (Hebel gegen den
+ * Claude-Code-Bug anthropics/claude-code#98898), es gibt keine festen Modell-IDs mehr und genau
+ * eine Planungs-Oberfläche.
  *
  * Grenzen dieses Wächters (bewusst, ehrlich – ein Wächter, dessen Kopf mehr verspricht
  * als er misst, erzeugt genau das falsche Sicherheitsgefühl):
@@ -36,9 +38,19 @@
  *   - Die Drift-Erkennung ist **literal und case-sensitiv**: „Session Default" ohne
  *     Bindestrich rutscht durch (bekannte Grenze des Begriffs-Ansatzes, identisch in
  *     test/harness/agents-md-native.test.ts).
- *   - Beim `effort:` wird nur die **Anwesenheit** geprüft, nicht die Stufe (siehe dort).
- *   - Der Workflow-Pfad wird nur grob geprüft (Tier-Aliase vorhanden), nicht welche
- *     Phase welchen Alias bekommt – die Phasen-Zuordnung bleibt Review-Sache.
+ *   - Beim `effort:` wird meist nur die **Anwesenheit** geprüft, nicht die Stufe; bewusste
+ *     Ausnahme ist der Planer (Wert im Frontmatter + Gleichheit mit der Workflow-Plan-Phase).
+ *   - Der Workflow-Pfad wird nur auf Anwesenheit von `model`/`effort` je Aufrufstelle geprüft,
+ *     nicht welche Phase welchen Alias bekommt – die Zuordnung steht in docs/model-routing.md.
+ *     Ausnahme: der Plan-Effort im Workflow muss dem Frontmatter des kubernia-planner gleichen.
+ *   - Die Optionen-Zählung paart Aufrufe und Optionsobjekte nur über die SUMME: ein Aufruf ohne
+ *     Optionen plus ein überzähliges Optionsobjekt heben sich auf.
+ *   - Der Text-Scan erkennt keine Spread-Konstanten (`{ ...OPTS, label: … }`): `effort`/`model`
+ *     aus einer ausgelagerten Konstante sähe er nicht.
+ *   - `routingFiles()` liest das Dateisystem (nicht `git ls-files`, wie `collectMarkdown`, #1091):
+ *     untrackte lokale Dateien in .claude/ werden mitgeprüft und können lokal rot machen, die CI nicht.
+ *   - Das Agent-Tool hat keinen `effort`-Parameter (docs/model-routing.md §2); für Spawns wird
+ *     daher nur `model` geprüft.
  *
  * Fitness-Function-Kategorie neben layering/filesize/docmap/agents-md-native, nicht mit
  * Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`:
@@ -54,7 +66,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im tsconfig)
@@ -99,68 +111,49 @@ function frontmatter(md: string): Record<string, string> {
 /** Bezeichnet der Wert den Coding-Tier? Alias `sonnet` ODER eine gepinnte Sonnet-ID. */
 const istCodingTier = (wert: string) => /(^|[-\s])sonnet/i.test(wert);
 
-/**
- * Alle Markdown-Dateien der versionierten `.claude`-Ordner (Skills, Agents, Workflows) als
- * ABSOLUTE Pfade – für die Pin-Checkliste. Abgeleitet aus `collectMarkdown` (#1091), damit die
- * Ordner-Allowlist (`VERSIONED_CLAUDE_DIRS`, gegen .gitignore abgeglichen) genau EINMAL lebt:
- * bewusst nur versionierte Ordner statt „alles außer worktrees", sonst verlangte die Checkliste
- * Einträge für lokal abgelegte, untrackte Dateien, die niemand committen kann (lokal rot, CI grün).
- */
-function claudeMarkdown(): string[] {
-  return collectMarkdown(REPO_ROOT)
-    .filter((f) => f.startsWith(".claude/"))
-    .map((f) => `${REPO_ROOT}${f}`);
+/** Alle versionierten Routing-Dateien: Agents, Skills, Workflows und die Projekt-Settings. */
+function routingFiles(): string[] {
+  const out = [".claude/settings.json"];
+  for (const d of readdirSync(`${REPO_ROOT}.claude/agents`)) out.push(`.claude/agents/${d}`);
+  for (const d of readdirSync(`${REPO_ROOT}.claude/skills`)) out.push(`.claude/skills/${d}/SKILL.md`);
+  for (const d of readdirSync(`${REPO_ROOT}.claude/workflows`)) out.push(`.claude/workflows/${d}`);
+  return out.filter((f) => existsSync(`${REPO_ROOT}${f}`));
 }
 
-/**
- * Nur der Abschnitt „Gepinnte Dateien" (die Update-Checkliste) von docs/model-routing.md.
- * Bewusst NICHT die ganze Datei: sie **verlinkt** alias-geroutete Skills auch anderswo
- * (§4 Konvention), und eine Erwähnung dort ist ein Verweis, kein Checklisten-Eintrag —
- * gegen die ganze Datei zu prüfen würde jeden solchen Link als „gepinnt" missverstehen.
- */
-function pinChecklistSection(ssot: string): string {
-  const lines = ssot.split(/\r?\n/);
-  const start = lines.findIndex((l) => /^##\s.*[Gg]epinnte Dateien/.test(l));
-  assert.ok(start >= 0, `In ${ROUTING_SSOT} fehlt der Abschnitt „Gepinnte Dateien" – die Update-Checkliste (#910).`);
-  const rest = lines.slice(start + 1);
-  const end = rest.findIndex((l) => /^##\s/.test(l));
-  return (end === -1 ? rest : rest.slice(0, end)).join("\n");
-}
+/** Trägt der Text eine feste Modell-ID (`model: claude-opus-5`, `"model": "claude-haiku-4-5-…"`)? */
+const hatHartenPin = (text: string) => /\bmodel["']?\s*:\s*["']?claude-(opus|sonnet|haiku|fable)-\d/i.test(text);
 
 /**
- * Nur die TABELLENZEILEN der Checkliste (`| … |`). Die Gegenrichtung („was hier steht,
- * muss auch gepinnt sein") darf ausschließlich echte Einträge sehen: im selben Abschnitt
- * steht der Absatz „Nicht nachzuziehen — bewusst per Alias statt Pin", dessen ganzer Zweck
- * es ist, alias-geroutete Dateien zu NENNEN. Verlinkt jemand sie dort regulär mit Pfad
- * (wie §4 es tut), meldete ein abschnittsweiter Scan sie als „stale" – ein Wächter, der
- * bei korrekter Verlinkung rot wird, ist der klassische Abschalt-Kandidat.
+ * Die Optionsobjekte aller `agent()`-Aufrufe im Workflow: jedes `{ label: …}` bis zur passenden
+ * schließenden Klammer (Klammern in `${…}` heben sich gegenseitig auf). Zusätzlich die Zahl der
+ * echten Aufrufstellen (`agent(` mit Argument, Kommentarzeilen ausgenommen) – weicht sie von der
+ * Zahl der Optionsobjekte ab, hat eine Aufrufstelle gar keine Optionen.
  */
-const checklistTableRows = (section: string) =>
-  section
+function workflowAgentCalls(js: string): { optionen: string[]; aufrufe: number } {
+  const code = js
     .split(/\r?\n/)
-    .filter((l) => /^\s*\|/.test(l))
+    .filter((l) => !l.trim().startsWith("//"))
     .join("\n");
-
-/**
- * Trägt die Datei einen HARTEN Modell-Pin (`claude-…`) statt eines Tier-Alias?
- *
- * Bewusst **Frontmatter UND Body**: docs/model-routing.md schreibt für Explore-Subagenten
- * ausdrücklich einen Pin im Skill-*Text* vor (`Agent({model: "claude-haiku-…"})`). Nur das
- * Frontmatter zu prüfen ließe die Checkliste genau bei dem Pin-Typ verrotten, den die SSOT
- * selbst verlangt – wer eine harte ID hinschreibt, muss sie beim nächsten Modell-Release
- * anfassen, egal an welcher Stelle der Datei sie steht.
- *
- * **Escape-Hatch, symmetrisch zu retiredRoutingClaims:** Codeblöcke und Inline-Backticks
- * zählen NICHT. Eine Datei, die eine Modell-ID nur zitiert (Negativbeispiel, historische
- * Notiz, die Anleitung „schreib `model: claude-haiku-…` in den Explore-Spawn"), pinnt
- * nichts – sie deshalb in die Checkliste zu zwingen wäre ein Falsch-Rot, und der von der
- * Fehlermeldung nahegelegte „Fix" wäre sachlich falsch. **Achtung Frontmatter:** das
- * `---`-Preamble ist kein Codeblock und bleibt darum voll geprüft.
- */
-function hatHartenPin(md: string): boolean {
-  const ohneZitate = stripFencedCode(md).replace(/`[^`\n]*`/g, "");
-  return /model:\s*["']?claude-[a-z0-9.-]+/i.test(ohneZitate);
+  const aufrufe = [...code.matchAll(/\bagent\((?!\))/g)].length;
+  const optionen: string[] = [];
+  for (const m of code.matchAll(/\{\s*label:/g)) {
+    let depth = 0;
+    for (let i = m.index; i < code.length; i++) {
+      if (code[i] === "{") depth++;
+      else if (code[i] === "}" && --depth === 0) {
+        optionen.push(code.slice(m.index, i + 1));
+        break;
+      }
+    }
+  }
+  return { optionen, aufrufe };
 }
+
+/** Der `effort:`-Wert aus einem Optionsobjekt (undefined, wenn keiner da ist). */
+const planEffort = (optionen: string) => /\beffort:\s*['"]([a-z]+)['"]/.exec(optionen)?.[1];
+
+/** Eine Aufrufstelle ist geroutet: `effort` UND (`model` ODER `agentType`; der Agent trägt sein Modell selbst). */
+const istGeroutet = (optionen: string) => /\beffort:/.test(optionen) && /\b(model|agentType):/.test(optionen);
 
 /**
  * Die abgelegte Behauptung. Nach #1035 gibt es keinen wahren Satz mehr, in dem die
@@ -176,7 +169,7 @@ function hatHartenPin(md: string): boolean {
 const RETIRED_ROUTING_CLAIMS: { term: string; home: string }[] = [
   {
     term: "Session-Default",
-    home: `seit #1035 tippt die Umsetzung auf beiden Pfaden den Coding-Tier – im Workflow per agent({model}), im Skill per Frontmatter in ${UMSETZUNGS_SKILL}`,
+    home: `seit #1035/#1065 tippt die Umsetzung auf beiden Pfaden den Coding-Tier – im Workflow per agent({model}), im Skill-Pfad per Projekt-Default in .claude/settings.json (das Frontmatter in ${UMSETZUNGS_SKILL} greift nur bei /kubernia)`,
   },
 ];
 
@@ -200,8 +193,8 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
     assert.ok(
       fm.model && istCodingTier(fm.model),
       `Im Frontmatter von ${UMSETZUNGS_SKILL} fehlt ein \`model:\` auf dem Coding-Tier (Alias \`sonnet\`). ` +
-        "Ohne die Zeile schreibt der Hauptagent den Code auf dem Session-Modell – aus einer Opus-Session " +
-        `also die komplette Umsetzung auf Opus (#1035). Gefunden: model=„${fm.model ?? "(fehlt)"}".`,
+        "Die Zeile wirkt nur bei Aufruf als `/kubernia` (anthropics/claude-code#98898); der eigentliche Hebel " +
+        `ist der Projekt-Default in .claude/settings.json (#1065). Gefunden: model=„${fm.model ?? "(fehlt)"}".`,
     );
     // Absichtlich nur Anwesenheit, nicht der Wert: die Regel ist „explizit statt erben".
     // Welche Stufe richtig ist, entscheidet docs/model-routing.md und darf sich dort ohne
@@ -223,7 +216,7 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
       /Agent\(\{[^}]*model:\s*["']?opus/s,
       `${REVIEW_SKILL} muss seine Lens-Pässe in einem \`Agent({…})\`-Spawn explizit auf den starken Tier ` +
         `routen (\`model: "opus"\`). ` +
-        "Das Frontmatter-`model:` des kubernia-Skills gilt für den REST DES TURNS – laufen die Lenses inline " +
+        "Der Hauptagent läuft auf dem Coding-Tier (Projekt-Default sonnet, #1065) – laufen die Lenses inline " +
         "im Hauptagenten, reviewt Sonnet statt Opus, und der finale Blick wäre zudem ein Self-Grading des " +
         "eigenen Fixes (#1012).",
     );
@@ -269,48 +262,94 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
   });
 });
 
-describe("Die Pin-Checkliste in docs/model-routing.md bleibt vollständig (#910/#1035)", () => {
-  test("jede .claude-Datei mit hartem Modell-Pin steht in der Checkliste – und umgekehrt", () => {
-    // BEIDE Richtungen sehen dieselbe Quelle (nur die Tabellenzeilen). Prüfte die
-    // Hinrichtung gegen den ganzen Abschnitt, würde eine Datei, die im Fließtext des
-    // „Nicht nachzuziehen"-Absatzes verlinkt ist, als „gelistet" gelten — ein später dort
-    // hinzugefügter harter Pin rutschte still durch.
-    const checkliste = checklistTableRows(pinChecklistSection(read(ROUTING_SSOT)));
-    const gepinnt = claudeMarkdown()
-      .filter((abs) => hatHartenPin(readFileSync(abs, "utf8")))
-      .map((abs) => abs.slice(REPO_ROOT.length).replace(/\\/g, "/"));
-
-    const fehlend = gepinnt.filter((rel) => !checkliste.includes(rel));
+describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
+  test("jeder agent()-Aufruf im Workflow setzt effort und (model oder agentType)", () => {
+    const { optionen, aufrufe } = workflowAgentCalls(read(".claude/workflows/kubernia-ticket.js"));
+    assert.ok(optionen.length >= 10, `Der Scan fand nur ${optionen.length} Optionsobjekte – er misst nichts mehr.`);
+    assert.equal(optionen.length, aufrufe, "Es gibt agent()-Aufrufe ohne Optionsobjekt – sie erben Session-Modell und -Effort.");
+    const ungeroutet = optionen.filter((o) => !istGeroutet(o)).map((o) => o.slice(0, 80));
     assert.deepEqual(
-      fehlend,
+      ungeroutet,
       [],
-      `Diese Dateien pinnen eine harte Modell-ID, stehen aber nicht in ${ROUTING_SSOT}. Damit verrottet die ` +
-        `Update-Checkliste beim nächsten Modell-Release – entweder eintragen oder auf einen Tier-Alias ` +
-        `umstellen (Alias schlägt Pin, wo „das jeweils aktuelle Modell dieses Tiers" richtig ist):\n${fehlend.join("\n")}`,
-    );
-
-    // Gegenrichtung: die Checkliste darf keine Datei führen, die gar keinen Pin (mehr) trägt.
-    const gelistet = [...checkliste.matchAll(/`(\.claude\/[^`]+\.md)`/g)].map((m) => m[1]);
-    const stale = gelistet.filter((rel) => !gepinnt.includes(rel));
-    assert.deepEqual(
-      stale,
-      [],
-      `${ROUTING_SSOT} listet diese Dateien als gepinnt, sie tragen aber keinen harten \`model: claude-…\`-Pin ` +
-        `(mehr). Stale Einträge machen die Checkliste unglaubwürdig – Zeile entfernen:\n${stale.join("\n")}`,
+      "Diese agent()-Aufrufe erben still Session-Modell oder -Effort. Jede Stelle braucht `effort` und `model` " +
+        `(bzw. \`agentType\`), Matrix in ${ROUTING_SSOT}:\n${ungeroutet.join("\n")}`,
     );
   });
 
-  test("Erkennung greift wirklich (Red-Green): Pin vs. Alias vs. kein Modell", () => {
-    assert.ok(hatHartenPin("---\nmodel: claude-opus-5\n---\n"), "harte ID ist ein Pin");
-    assert.ok(!hatHartenPin("---\nmodel: sonnet\n---\n"), "Tier-Alias ist KEIN Pin");
-    assert.ok(!hatHartenPin("---\nname: x\n---\n"), "ohne model kein Pin");
-    assert.ok(hatHartenPin('Spawn: Agent({model: "claude-haiku-4-5-20251001"})'), "Body-Pin zählt");
-    assert.ok(!hatHartenPin("Schreibe `model: claude-haiku-4-5` in den Spawn."), "Backtick-Zitat pinnt nichts");
-    assert.ok(!hatHartenPin("```\nmodel: claude-opus-5\n```\n"), "Codeblock-Beispiel pinnt nichts");
-    assert.ok(claudeMarkdown().length > 0, "der .claude-Walk darf nicht leer laufen (sonst prüft der Test nichts)");
-    // Der Abschnitts-Schnitt muss wirklich schneiden – sonst prüfte die Gegenrichtung die ganze Datei.
-    const section = pinChecklistSection("## 3. Gepinnte Dateien\ndrin\n## 4. Weiter\ndraußen\n");
-    assert.ok(section.includes("drin") && !section.includes("draußen"), "die Checkliste endet an der nächsten ##-Überschrift");
+  test("Erkennung greift wirklich (Red-Green): fehlender effort bzw. model schlägt an", () => {
+    assert.ok(!istGeroutet("{ label: 'x', model: 'sonnet' }"), "model ohne effort ist ungeroutet");
+    assert.ok(!istGeroutet("{ label: 'x', phase: 'P' }"), "ohne beides ungeroutet");
+    assert.ok(!istGeroutet("{ label: 'x', effort: 'medium' }"), "effort ohne model/agentType ist ungeroutet");
+    assert.ok(istGeroutet("{ label: 'x', model: 'sonnet', effort: 'medium' }"));
+    assert.ok(istGeroutet("{ label: 'x', agentType: 'kubernia-planner', effort: 'xhigh' }"), "Agent trägt sein Modell selbst");
+    const fixture = "const a = await agent(`p ${x}`, { label: `a:${n}`, phase: 'A' })\n// agent() im Kommentar\nawait agent(`q`)";
+    const r = workflowAgentCalls(fixture);
+    assert.equal(r.optionen.length, 1);
+    assert.equal(r.aufrufe, 2, "ein Aufruf ohne Optionen fällt über die Zählung auf");
+  });
+
+  test(".claude/settings.json setzt den Projekt-Default auf den Alias sonnet", () => {
+    const settings = JSON.parse(read(".claude/settings.json")) as { model?: string };
+    assert.equal(
+      settings.model,
+      "sonnet",
+      'Ohne `"model": "sonnet"` läuft der Hauptagent auf dem Session-Modell: das Skill-Frontmatter wird beim ' +
+        "Skill-Tool-Aufruf ignoriert (anthropics/claude-code#98898).",
+    );
+  });
+
+  test("Planer opus/xhigh, Loop-Spawn mit model (ohne effort), Lenses opus", () => {
+    const planer = frontmatter(read(".claude/agents/kubernia-planner.md"));
+    assert.equal(planer.model, "opus");
+    assert.equal(planer.effort, "xhigh");
+    // Das Agent-Tool hat keinen `effort`-Parameter (docs/model-routing.md §2): nur `model` ist Pflicht.
+    assert.match(read(".claude/skills/kubernia-loop/SKILL.md"), /Agent-Tool[^\n]*`model: "sonnet"`/, "Loop-Spawn ohne model (#1047)");
+    assert.match(read(REVIEW_SKILL), /Agent\(\{[^}]*model:\s*"opus"/s, "Lenses müssen opus sein");
+  });
+
+  test("der Plan-Effort im Workflow gleicht dem Frontmatter des kubernia-planner (Drift-Schutz)", () => {
+    const planer = frontmatter(read(".claude/agents/kubernia-planner.md"));
+    const { optionen } = workflowAgentCalls(read(".claude/workflows/kubernia-ticket.js"));
+    const planCalls = optionen.filter((o) => /agentType:\s*['"]kubernia-planner['"]/.test(o));
+    assert.equal(planCalls.length, 1, "Genau eine Plan-Aufrufstelle im Workflow erwartet.");
+    assert.equal(
+      planEffort(planCalls[0]),
+      planer.effort,
+      "Der Workflow überstimmt sonst still das Frontmatter des Planers – beide Stellen müssen denselben effort tragen.",
+    );
+  });
+
+  test("Erkennung greift wirklich (Red-Green): abweichender Plan-Effort fällt auf", () => {
+    assert.equal(planEffort("{ label: 'p', agentType: 'kubernia-planner', effort: 'xhigh' }"), "xhigh");
+    assert.notEqual(planEffort("{ label: 'p', agentType: 'kubernia-planner', effort: 'high' }"), "xhigh", "Abweichung muss auffallen");
+    assert.equal(planEffort("{ label: 'p', agentType: 'kubernia-planner' }"), undefined, "ohne effort ⇒ undefined");
+  });
+});
+
+describe("Keine festen Modell-IDs, genau eine Planungs-Oberfläche (#1065)", () => {
+  test("keine harte Modell-ID in agents, skills, workflows und settings.json", () => {
+    const treffer = routingFiles().filter((f) => hatHartenPin(read(f)));
+    assert.deepEqual(treffer, [], `Feste Modell-IDs statt Alias (opus/sonnet/haiku) in:\n${treffer.join("\n")}`);
+    assert.ok(routingFiles().length >= 7, "Der Datei-Walk darf nicht leer laufen");
+  });
+
+  test("Erkennung greift wirklich (Red-Green): ID ja, Alias nein", () => {
+    assert.ok(hatHartenPin("---\nmodel: claude-opus-5\n---\n"));
+    assert.ok(hatHartenPin("Agent({model: 'claude-haiku-4-5-20251001'})"));
+    assert.ok(hatHartenPin('{ "model": "claude-sonnet-5-5" }'));
+    assert.ok(!hatHartenPin("---\nmodel: opus\n---\n"));
+    assert.ok(!hatHartenPin('{ "model": "sonnet" }'));
+  });
+
+  test("der Skill plan-feature existiert nicht mehr, höchstens eine Planungsrolle", () => {
+    assert.ok(!existsSync(`${REPO_ROOT}.claude/skills/plan-feature`), "plan-feature ging in den kubernia-planner auf (#1065)");
+    const planend = routingFiles()
+      .filter((f) => f.endsWith(".md"))
+      .filter((f) => {
+        const fm = frontmatter(read(f));
+        return /plan/i.test(fm.name ?? "") || /plane das ticket|mach mir einen plan/i.test(fm.description ?? "");
+      });
+    assert.deepEqual(planend, [".claude/agents/kubernia-planner.md"], "Es darf nur EINEN Agent/Skill mit Planungsrolle geben.");
   });
 });
 

@@ -6,7 +6,7 @@ export const meta = {
   phases: [
     { title: 'Auswahl', detail: 'oberstes freies Board-Item claimen + Zuweisung verifizieren' },
     { title: 'Sonderfall', detail: 'Epic aufteilen bzw. Dependabot-Sammelticket auflösen (kein Code)' },
-    { title: 'Plan', detail: 'Planungs-Subagent vor der ersten Zeile Code', model: 'kubernia-planner (Opus 5, gepinnt) + effort high' },
+    { title: 'Plan', detail: 'Planungs-Subagent vor der ersten Zeile Code', model: 'kubernia-planner (opus) + effort xhigh' },
     { title: 'Pre-Flight', detail: 'Risiko-Klärung vor dem Coden: Optik/Weiche → anhalten + Fragen vorlegen (#1012/#1069)' },
     { title: 'Umsetzen', detail: 'Worktree, TDD, npm run verify, im Browser verifizieren, committen', model: 'sonnet' },
     { title: 'Review', detail: '3 Lenses parallel als Konvergenzschleife (Cap 2, frischer Kritiker, #1012)', model: 'opus' },
@@ -441,7 +441,7 @@ Far-Future ist und nicht in EINER Session vollständig umsetz- und schließbar w
 
 Gib den Issue-Body im Feld body vollständig zurück — die Folgephasen sehen das Issue
 nicht selbst.`,
-    { label: 'auswahl+claim', phase: 'Auswahl', schema: AUSWAHL_SCHEMA },
+    { label: 'auswahl+claim', phase: 'Auswahl', schema: AUSWAHL_SCHEMA, model: 'sonnet', effort: 'medium' },
   )
 
   if (!auswahl || auswahl.ergebnis === 'kein-freies-ticket') {
@@ -493,27 +493,23 @@ Am Ende das Sammel-Issue schließen und die Schließung verifizieren.`
 
 Berichte am Ende knapp, was entstanden bzw. gemergt ist und dass das Issue
 geschlossen und verifiziert wurde.`,
-      { label: istEpic ? `epic-aufteilen:#${nr}` : `dependabot:#${nr}`, phase: 'Sonderfall' },
+      { label: istEpic ? `epic-aufteilen:#${nr}` : `dependabot:#${nr}`, phase: 'Sonderfall', model: 'sonnet', effort: 'medium' },
     )
     log(`Sonderfall ${auswahl.art} für ${ticket} abgeschlossen.`)
     return { ergebnis: auswahl.art, nummer: nr, titel: auswahl.titel, bericht: sonderfall }
   }
 
   // ── Phase 3: Plan ─────────────────────────────────────────────────────────
-  // Der Planungs-Agent trägt sein MODELL selbst im Frontmatter (#745/#910) —
-  // hier bewusst KEIN model-Override, damit docs/model-routing.md die einzige
-  // Stelle mit gepinnten Modell-IDs bleibt. Der Reasoning-Aufwand steht
-  // dagegen explizit hier: `effort` ist kein Modell-Pin, und die Planung ist
-  // die eine Phase, in der hohes Reasoning den Ausschlag gibt ("Planung
-  // stark, Umsetzung schnell", #741) — explizit gesetzt greift er unabhängig
-  // davon, ob das Agent-Frontmatter ihn durchreicht.
+  // Modell-Routing (#1065): JEDER agent()-Aufruf setzt `model` (Tier-Alias) UND `effort`
+  // explizit – sonst erbt er das Session-Modell. Matrix + Begründung: docs/model-routing.md.
+  // Der Planer trägt sein Modell im Agent-Frontmatter (`opus`), hier nur der Effort.
   phase('Plan')
 
   const plan = await agent(
     `${ticketKontext}
 
 Repo: ${REPO}. Liefere den Plan wie in deiner Rolle beschrieben.`,
-    { label: `plan:#${nr}`, phase: 'Plan', agentType: 'kubernia-planner', effort: 'high' },
+    { label: `plan:#${nr}`, phase: 'Plan', agentType: 'kubernia-planner', effort: 'xhigh' },
   )
 
   if (plan) log(`Plan für ${ticket} liegt vor.`)
@@ -552,7 +548,7 @@ Harness-/Gate-Dateien allein sind KEIN Grund (#1069) — der Agent mergt solche 
 
 Grundlage: AGENTS.md § Human-in-the-Loop-Checkpoints. Gib bei brauchtKlaerung=true
 1-4 konkrete Entscheidungsfragen in offeneFragen zurück.`,
-    { label: `preflight:#${nr}`, phase: 'Pre-Flight', schema: PREFLIGHT_SCHEMA },
+    { label: `preflight:#${nr}`, phase: 'Pre-Flight', schema: PREFLIGHT_SCHEMA, model: 'sonnet', effort: 'medium' },
   )
 
   if (preflight && preflight.brauchtKlaerung && !klaerungAntworten) {
@@ -575,11 +571,7 @@ Grundlage: AGENTS.md § Human-in-the-Loop-Checkpoints. Gib bei brauchtKlaerung=t
   // Bewusst EIN Agent für Worktree + Code + Tests + Commit: Coden und Testen zu
   // trennen hieße, dass der Test-Agent den Code erst wieder lesen muss, und zwei
   // Agenten im selben Worktree kollidieren.
-  // Modell: `sonnet` per Tier-Alias — die zweite Hälfte von "Planung stark,
-  // Umsetzung schnell" (#741). Ohne dieses Override erbt die Umsetzung das
-  // Session-Modell, und wer den Workflow aus einer Opus-Session startet, tippt
-  // seinen Code auf Opus. Alias statt Modell-ID, damit ein neuer Sonnet ohne
-  // Wartung greift (docs/model-routing.md).
+  // Modell/Effort: siehe Kommentar an der Plan-Phase und docs/model-routing.md.
   phase('Umsetzen')
 
   const umsetzung = await agent(
@@ -632,7 +624,7 @@ demselben Grund wie beim Patch unten: gegen ein lokal veraltetes main klassifizi
 Merge-Phase anhand fremder Dateien.
 
 ${patchAuftrag(nr, 1)}`,
-    { label: `umsetzen:#${nr}`, phase: 'Umsetzen', schema: UMSETZUNG_SCHEMA, model: 'sonnet' },
+    { label: `umsetzen:#${nr}`, phase: 'Umsetzen', schema: UMSETZUNG_SCHEMA, model: 'sonnet', effort: 'medium' },
   )
 
   if (!umsetzung || umsetzung.ergebnis !== 'committet') {
@@ -794,7 +786,7 @@ Ticket brauchen, nicht inline mitfixen (⭐ oberste Regel). Committe mit (#${nr}
 Melde verifyGruen und was du behoben bzw. bewusst liegen gelassen hast (mit Grund).
 
 ${patchAuftrag(nr, reviewRunden + 1)}`,
-      { label: `nachbessern ${reviewRunden}/${MAX_REVIEW_RUNDEN}:#${nr}`, phase: 'Nachbessern', schema: NACHBESSERN_SCHEMA },
+      { label: `nachbessern ${reviewRunden}/${MAX_REVIEW_RUNDEN}:#${nr}`, phase: 'Nachbessern', schema: NACHBESSERN_SCHEMA, model: 'sonnet', effort: 'medium' },
     )
     verifyGruen = nachbesserung ? !!nachbesserung.verifyGruen : false
     letzteVerifyAusgabe = (nachbesserung && nachbesserung.verifyAusgabe) || letzteVerifyAusgabe
@@ -845,7 +837,7 @@ am ISSUE statt am PR (es gibt noch keinen): EIN konsolidierter Kommentar auf Iss
 (was versucht wurde, die offenen Punkte, 2-3 Entscheidungsoptionen für die Maintainerin),
 Label status:festgefahren, du bleibst assigned. Räume den Worktree NICHT auf. Melde am
 Ende die zur Entscheidung gestellten Optionen.`,
-      { label: `review-festgefahren:#${nr}`, phase: 'Festgefahren' },
+      { label: `review-festgefahren:#${nr}`, phase: 'Festgefahren', model: 'sonnet', effort: 'medium' },
     )
     log(`⛔ ${ticket} ist im Review festgefahren — Entscheidung der Maintainerin nötig. Worktree ${worktree} bleibt stehen.`)
     return {
@@ -902,7 +894,7 @@ Ein Ticket ist erst fertig, wenn sein PR gemergt ist. Ein offener oder grüner,
 aber nicht gemergter PR ist ergebnis="ci-rot" bzw. "fehler", nie "gemergt".
 Ist die CI rot, gib ergebnis="ci-rot" mit roterCheck und den relevanten Log-Zeilen
 zurück — versuche den Fix NICHT selbst, das übernimmt die nächste Runde.`,
-    { label: `pr+merge:#${nr}`, phase: 'PR + Merge', schema: MERGE_SCHEMA },
+    { label: `pr+merge:#${nr}`, phase: 'PR + Merge', schema: MERGE_SCHEMA, model: 'sonnet', effort: 'medium' },
   )
 
   let fixVersuche = 0
@@ -936,7 +928,7 @@ maintainer-approved) und setze es erst nach erneut grünen anderen Checks neu.\n
     : ''
 }Wird der PR grün und gemergt: ergebnis="gemergt". Bleibt er rot: ergebnis="ci-rot"
 mit dem AKTUELLEN Fehler (auch wenn es derselbe ist wie vorher).`,
-      { label: `ci-fix ${fixVersuche}/${MAX_FIX_VERSUCHE}:#${nr}`, phase: 'PR + Merge', schema: MERGE_SCHEMA },
+      { label: `ci-fix ${fixVersuche}/${MAX_FIX_VERSUCHE}:#${nr}`, phase: 'PR + Merge', schema: MERGE_SCHEMA, model: 'sonnet', effort: 'medium' },
     )
   }
 
@@ -962,7 +954,7 @@ und du bleibst assigned — kein De-Assign, kein weiterer Fix-Versuch.
 Räume den Worktree NICHT auf: die Maintainerin braucht ihn für die Entscheidung.
 
 Melde am Ende, welche Optionen du zur Entscheidung gestellt hast.`,
-      { label: `festgefahren:#${nr}`, phase: 'Festgefahren' },
+      { label: `festgefahren:#${nr}`, phase: 'Festgefahren', model: 'sonnet', effort: 'medium' },
     )
 
     log(`⛔ ${ticket} ist festgefahren — Entscheidung der Maintainerin nötig. Worktree ${worktree} bleibt stehen.`)
@@ -1025,7 +1017,7 @@ ${ausserhalbScope.map((p) => `- ${p}`).join('\n')}`
 }
 
 Melde das Ergebnis jedes Verify-Schritts einzeln${ausserhalbScope.length ? ' sowie die angelegten Issue-Nummern bzw. die Sammelticket-Zeilen' : ''}.`,
-    { label: `cleanup:#${nr}`, phase: 'Cleanup' },
+    { label: `cleanup:#${nr}`, phase: 'Cleanup', model: 'sonnet', effort: 'medium' },
   )
 
   log(`✅ ${ticket} fertig — PR #${merge.prNummer} gemergt, aufgeräumt.`)

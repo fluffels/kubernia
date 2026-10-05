@@ -258,7 +258,7 @@ describe("Kein Markdown beschreibt CLAUDE.md noch in einer abgelegten Rolle (#99
   });
 
   test("versionierte .claude/-Konfiguration wird mitgeprüft, Parallel-Worktrees nicht (#1002)", () => {
-    assert.ok(isVersionedAgentConfig(".claude/skills/plan-feature/SKILL.md"));
+    assert.ok(isVersionedAgentConfig(".claude/skills/kubernia/SKILL.md"));
     assert.ok(isVersionedAgentConfig(".claude/workflows/kubernia-ticket.js"), "Workflow-Prompts stehen in .js");
     assert.ok(!isVersionedAgentConfig(".claude/worktrees/kq-1/AGENTS.md"), "Worktrees paralleler Agenten nicht");
     assert.ok(!isVersionedAgentConfig(".claude/settings.json"));
