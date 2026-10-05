@@ -10,7 +10,7 @@ Bevor irgendein Ticket angefasst wird, **zuerst zweifeln** — das steht über d
 
 1. **Stardew-Scope-Frage:** „Ist das, was ich hier mache, noch sinnvoll, wenn Kubernia **so groß wie Stardew Valley** wird?" Nur umsetzen, wenn ja.
 2. **Bisherige Entscheidungen aktiv anzweifeln** — auch abgeschlossene Tickets, ADRs, „gesetzte" Annahmen dürfen falsch sein.
-3. **Auffälliges → sofort ein neues Issue anlegen** (Bug, Lücke, Tech-Debt, falsche Annahme) und im Board an die richtige Stelle ziehen — nicht inline mitfixen, nicht „im Kopf" behalten.
+3. **Auffälliges → sofort festhalten:** echter Defekt (Bug, reale Drift, Datenverlust, Security) als neues Issue an die richtige Board-Stelle; Härtung/Kosmetik als Zeile ins Sammelticket ([AGENTS.md › Nicht jeder Befund wird ein Ticket](../AGENTS.md#wo-die-todos-leben)) — nicht inline mitfixen, nicht „im Kopf" behalten.
 
 ## Was „nächstes Ticket" heißt
 
@@ -31,6 +31,54 @@ gh project item-list 1 --owner fluffels --format json --limit 800 --jq '
 > ⚠️ Die Board-Auswahl braucht **`read:project`-Scope** im `gh`-Token (`gh auth refresh -s project`). ⚠️ Ohne `--limit` liefert `gh project item-list` nur **30** Items — immer `--limit 800` mitgeben, sonst fallen genau die unteren Tickets weg. **Nicht** nach `.content.number` o.ä. sortieren — das würde die Board-Reihenfolge zerstören, die hier gerade das Maßgebliche ist. **`.status == "Todo"` (nicht `!="Done"`)** — „In Progress"-Tickets dürfen gar nicht erst in der Kandidatenliste auftauchen, sonst greifen parallele Agenten irrtümlich dasselbe Ticket.
 
 Dann nur **dieses eine** Kandidaten-Ticket kurz gegen den Live-Stand prüfen (`gh issue view <nr>`). **⛔ Hat das Ticket einen Assignee → sofort weiter zum nächsten, fertig. Kein Worktree inspizieren, kein Prüfen wie weit die Arbeit ist, kein Weiterarbeiten.** Ein Assignee bedeutet: ein anderer Agent arbeitet daran — nicht anfassen. Kein Assignee + offen + kein Blocker → sofort self-assignen (`gh issue edit <nr> --add-assignee @me`) und mit dem normalen Workflow abarbeiten (eigener Worktree → umsetzen → alle Gates grün + im Browser verifizieren → **ein** PR → CI abwarten + bis Merge). Voller Ablauf: [AGENTS.md](../AGENTS.md).
+
+## Spielquote — jedes dritte Ticket ein Spielticket (#1199)
+
+Regel: [AGENTS.md › Spielquote](../AGENTS.md#wo-die-todos-leben). **Spielticket** = Label `area:inhalt`, `area:lernpfad` oder `area:grafik`. Vorrang vor der Quote behalten `🚨`, Security, `🤖` und Forum.
+
+**1. Ist der Spiel-Slot dran?** Die Labels der zuletzt gemergten Ticket-Issues (Merge-Reihenfolge von `main`; Dependabot-PRs ohne `Closes` zählen nicht):
+
+```bash
+n=0
+for pr in $(git log origin/main --first-parent -n 20 --format=%s | grep -o '(#[0-9]*)$' | tr -d '(#)'); do
+  for nr in $(gh pr view "$pr" --json closingIssuesReferences --jq '.closingIssuesReferences[].number'); do
+    gh issue view "$nr" --json number,labels --jq '"#\(.number)\t\([.labels[].name]|join(","))"'
+    n=$((n+1))
+  done
+  [ "$n" -ge 2 ] && break
+done
+```
+
+Trägt **keine** der beiden Zeilen ein Spiel-Label, ist der Spiel-Slot dran (vorher `git fetch origin`).
+
+**2. Oberstes freies Spielticket** (dieselben Frei-Regeln wie oben: kein Assignee, kein Worktree, kein Blocker):
+
+```bash
+gh project item-list 1 --owner fluffels --format json --limit 800 --jq '
+  .items | map(select(.content.type=="Issue" and (.status // "")=="Todo"
+    and ((.labels // []) | any(test("^area:(inhalt|lernpfad|grafik)$")))))
+  | .[] | "#\(.content.number)\t\(.title)"'
+```
+
+**3. Kein freies Spielticket:** im Chat melden („Kein freies Spielticket mehr"), das normale oberste Item nehmen und — falls noch keins offen ist — ein Issue „Spiel-Backlog leer: neue Spieltickets planen" (`area:inhalt`, ohne Assignee) ganz oben anlegen. Neue Spielinhalte brauchen Story-/Optik-Entscheidungen der Maintainerin; das Ticket wird darum mit ihr per Pre-Flight-Klärung geplant, nicht autonom erfunden.
+
+## Sammelticket „Harness-Härtung (gesammelt)" (#1199)
+
+Regel: [AGENTS.md › Nicht jeder Befund wird ein Ticket](../AGENTS.md#wo-die-todos-leben). Es gibt **höchstens ein** offenes Sammelticket (`area:harness`); jeder Befund ist eine Checkbox-Zeile im Body bzw. ein Kommentar.
+
+- **Anlegen auf Position 5** (fehlt es, oder nach dem Abarbeiten das nächste):
+  ```bash
+  NR=$(gh issue create --label area:harness --title "Harness-Härtung (gesammelt)" --body "- [ ] <Befund>" | grep -o '[0-9]*$')
+  NODE=$(gh issue view "$NR" --json id --jq .id)
+  ITEM=$(gh api graphql -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }' \
+    -f p=PVT_kwHOD8746c4Barq_ -f c="$NODE" --jq .data.addProjectV2ItemById.item.id)
+  AFTER=$(gh project item-list 1 --owner fluffels --format json --limit 800 \
+    --jq '[.items[] | select((.status // "")=="Todo")][3].id')   # 4. Item → neues landet auf 5
+  gh api graphql -f query='mutation($p:ID!,$i:ID!,$a:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }' \
+    -f p=PVT_kwHOD8746c4Barq_ -f i="$ITEM" -f a="$AFTER"
+  ```
+- **Abarbeiten:** zuerst der feste **Langfuse-Blick** ([docs/model-routing.md › Langfuse-Blick](model-routing.md#langfuse-blick-beim-sammelticket-1199)) — dessen Befunde werden weitere Zeilen. Dann so viele Zeilen umsetzen, wie in **einen** PR passen (`check:diffsize`); erledigte abhaken, den Rest und neue Befunde ins **nächste** Sammelticket auf Position 5 übertragen, das alte mit `Closes` schließen.
+- **Konvergenz-Signal:** Die Zeilenzahl pro Sammelticket ist die Kennzahl, ob der Harness besser wird — sinkt sie über die Generationen, konvergiert er; bleibt sie gleich, erzeugen die Reviews nur Arbeit (dann ADR 0012 neu bewerten).
 
 ## Reihenfolge pflegen — im Board, nicht in einer Datei
 
@@ -53,4 +101,4 @@ Die manuelle Board-Reihenfolge ist die **einzige** Reihenfolge-Quelle; die früh
 
 ## Kein „puh, fertig"-Schritt mehr
 
-Am Ticket-Ende ist **keine** Reihenfolge-Datei mehr zu pflegen (das war die alte, konfliktträchtige Kopf-Pflege). Der Abschluss ist nur noch: Issue schließen (via `Closes #<nr>` im gemergten PR) und — falls beim Arbeiten etwas auffiel — ein neues Issue anlegen und im Board an die richtige Stelle ziehen. Das war's.
+Am Ticket-Ende ist **keine** Reihenfolge-Datei mehr zu pflegen (das war die alte, konfliktträchtige Kopf-Pflege). Der Abschluss ist nur noch: Issue schließen (via `Closes #<nr>` im gemergten PR) und — falls beim Arbeiten etwas auffiel — einen echten Defekt als Issue an die richtige Board-Stelle, Härtung/Kosmetik als Zeile ins Sammelticket (oben). Das war's.

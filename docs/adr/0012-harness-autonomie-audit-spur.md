@@ -53,9 +53,29 @@ Die Maintainerin wählt **„komplett alles"**:
 - **Harness-Erkennung ist Selbstauskunft** des Umsetzungs-Agenten (`beruehrtHarness`); fasst eine Fix-Runde neu Leitplanken an, merkt die Merge-Phase das nicht — offen in #1070.
 - **Der Auto-Modus von Claude Code kann trotzdem bremsen.** Unabhängig von der Repo-Regel kann dessen Klassifikator Änderungen an `.claude/`-Dateien, Hooks oder Permissions als Self-Modification blocken (vgl. [docs/agent-harness.md](../agent-harness.md)); bei der Umsetzung von #1069 blockte er genau die Prompt-Stellen, die den Merge-Checkpoint entfernten, und vereinzelt auch GitHub-Schreib- und Warte-Befehle. Solche Tickets brauchen die Maintainerin weiter kurz im normalen Modus; bei Spiel-Tickets entfällt das weitgehend.
 
+## Fortschreibung #1199 (2026-10-05): Spielquote, Sammelticket, Abschlusskriterium
+
+**Befund.** Seit dem 28.09.2026 waren alle rund 40 gemergten PRs Harness-PRs; der letzte Spiel-PR war #964 (24.07.). Auf dem Board standen die Positionen 1–45 ausschließlich Harness/Infra/Security/Doku, das erste Spielticket auf Position 46. Ursache war ein Kreislauf: Lens-Befunde „außerhalb des Scopes" wurden nach „lieber ein Ticket zu viel" Einzeltickets, oben einsortiert, und jedes davon erzeugte im eigenen Review neue Befunde. Viele härteten Wächter gegen hypothetische Umgehungen. Die Menge der Befunde war damit kein Maß für die Güte des Harness — ein Reviewer findet in jedem neuen Diff etwas, und jeder Härtungs-PR ist neuer Diff.
+
+**Entscheidung (Ideen der Maintainerin, Details von ihr an den Agenten delegiert und kritisch abgewogen).**
+1. **Spielquote:** jedes dritte Ticket ist ein Spielticket (`area:inhalt`/`lernpfad`/`grafik`); Notfälle (`🚨`, Security, `🤖`, Forum) behalten Vorrang. Gibt es keins mehr, meldet der Agent das und legt ein Planungsticket an. Verworfen: „alle neuen Harness-Tickets unter den Spiel-Block" — hätte bei Position 46 faktisch „ans Board-Ende" bedeutet und auch berechtigte Harness-Arbeit geparkt.
+2. **Nicht jeder Befund wird ein Ticket:** ein eigenes Issue nur für echte Defekte; Härtung und Kosmetik als Zeile in **ein** Sammelticket auf Board-Position 5, das pro Durchgang einen PR abarbeitet und den Rest ins nächste Sammelticket (wieder Position 5) überträgt. Die Härtung geht also nicht verloren, sie wird nur gebündelt und in der Frequenz begrenzt.
+3. **Langfuse-Blick beim Sammelticket:** vor dem Abarbeiten drei feste Fragen an die Läufe seit dem letzten Sammelticket (Wirkung, Tokenfresser, Prozess) — so entstehen Befunde aus echten Läufen statt nur aus Review-Hypothesen ([docs/model-routing.md](../model-routing.md#langfuse-blick-beim-sammelticket-1199)).
+
+Regeln: [AGENTS.md › Wo die TODOs leben](../../AGENTS.md#wo-die-todos-leben), Mechanik: [docs/ticket-reihenfolge.md](../ticket-reihenfolge.md).
+
+**Abschlusskriterium der Harness-Phase (messbar).** Die Phase ist abgeschlossen, wenn
+- **#1065** (Modell-/Effort-Routing), **#1120** (Zwei-Stufen-Prüfung), **#1121** (nicht blockierend auf CI warten) und **#1198** (Grundkontext) geschlossen sind **und**
+- die Nachmessung **#1206** als Zeilen unter der Baseline in [docs/model-routing.md §5](../model-routing.md#5-token--und-loop-baseline-1068) steht.
+
+Bewusst **keine** harte Token-Schwelle als Bedingung: eine nie erreichte Schwelle würde die Phase endlos verlängern — genau der Kreislauf, den diese Fortschreibung bremst. Das Messergebnis wird hier festgehalten; fällt es schlecht aus, ist das eine eigene Entscheidung, keine Verlängerung der Phase. **Danach: Fokus zurück aufs Spiel** — die Maintainerin sortiert das Board spielzuerst, die Spielquote bleibt als Untergrenze, Harness-Arbeit läuft über das Sammelticket und Notfälle.
+
+**Konvergenz-Signal.** Die Zeilenzahl pro Sammelticket-Generation zeigt, ob der Harness besser wird. Sinkt sie nicht, wird dieser ADR neu bewertet.
+
 ## Re-Evaluierungs-Trigger
 
 - **Ein selbst gemergter PR hat eine Leitplanke tatsächlich aufgeweicht** (per Audit-Kommentar oder später entdeckt) — dann auf „alles außer Gate-Aufweichung" zurückgehen oder einen technischen Riegel für Gate-Schwellen einziehen.
 - **Audit-Kommentare fehlen wiederholt** oder werden nicht gelesen — dann ist die Audit-Spur kein Ersatz mehr für die Freigabe.
-- **Die Harness-Phase ist abgeschlossen** (Sammeltickets erledigt, Baseline aus #1068 zeigt die Wirkung) — Fokus zurück aufs Spiel, diesen ADR um das Ergebnis fortschreiben.
+- **Die Harness-Phase ist abgeschlossen** (Kriterium: [Fortschreibung #1199](#fortschreibung-1199-2026-10-05-spielquote-sammelticket-abschlusskriterium)) — Fokus zurück aufs Spiel, diesen ADR um das Messergebnis fortschreiben.
+- **Die Zeilenzahl der Sammeltickets sinkt über mehrere Generationen nicht** — dann erzeugen die Reviews nur Arbeit; Lens-Umfang oder Sammelticket-Takt neu bewerten.
 - **Die Solo-Konstellation ändert sich** (weitere Beitragende) — dann den Merge-Checkpoint neu bewerten, wie schon in ADR 0009 für Pflicht-Reviews vorgesehen.
