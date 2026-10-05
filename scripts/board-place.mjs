@@ -10,7 +10,6 @@
  *
  * Nummern, die `gh project item-list` noch nicht liefert (frische Items kommen verzögert), werden
  * gemeldet und übersprungen: später erneut aufrufen. Bei Rate-Limit sofort stoppen, den Rest melden.
- * Danach den Spielrhythmus-Schritt fahren (`node scripts/board-rhythm.mjs`).
  */
 import { pathToFileURL } from "node:url";
 import { isRateLimit, loadItems, planPlacements, setPosition } from "./board-lib.mjs";

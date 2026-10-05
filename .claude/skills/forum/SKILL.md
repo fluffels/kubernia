@@ -56,7 +56,7 @@ gh api graphql -f query='mutation($id:ID!,$body:String!){addDiscussionComment(in
 ```bash
 gh issue create --title "<knapper Titel>" --label "<bug|...>" --label "<area:...>" \
   --body "Aus dem Forum: <Thread-URL>\n\n<Zusammenfassung des Problems/Wunsches>"
-# danach im Board an die gewünschte Position ziehen und den Spielrhythmus-Schritt fahren (siehe docs/ticket-reihenfolge.md)
+# danach im Board an die gewünschte Position ziehen
 ```
 
 **7. Inbox-Eintrag schließen** mit kurzem Ergebnis-Kommentar (was geantwortet, welches Ticket entstand):
