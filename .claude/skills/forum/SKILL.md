@@ -80,7 +80,7 @@ gh issue close <Inbox-Nr> --reason completed \
 | Komponente | (a) unvertrauter Input | (b) Secrets | (c) State-Änderung | Befund |
 |---|---|---|---|---|
 | `forum-inbox.yml` (Action) | ✅ Discussion-Titel | ✅ `PROJECT_TOKEN`, `GH_TOKEN` | ✅ Issue anlegen, Board setzen | Alle drei — **Milderung:** Titel wird sanitisiert, Body nur verlinkt (nicht eingebettet) |
-| `/forum`-Skill (dieser Skill) | ✅ Body + Kommentare | ✅ `GH_TOKEN` in Env | ✅ Comment posten, Issue anlegen | Alle drei — **Milderung seit #902:** Body + Kommentare werden über `--body` entschärft + als externe Daten gerahmt; Freigabe-Stopp (Schritt 4) vor jeder externen Aktion |
+| `/forum`-Skill (dieser Skill) | ✅ Body + Kommentare | ✅ `GH_TOKEN` in Env | ✅ Comment posten, Issue anlegen | Alle drei — **Milderung (#902):** Body + Kommentare werden über `--body` entschärft + als externe Daten gerahmt; Freigabe-Stopp (Schritt 4) vor jeder externen Aktion |
 | Dependabot-inbox | ⬜ PRs von GitHub-Bot (semi-trusted) | ✅ `GH_TOKEN` | ✅ PRs mergen | Nur zwei — akzeptiertes Risiko (verifizierter Bot-Autor) |
 
 **Fazit:** Eine vollständige Einhaltung der Rule of Two wäre nur durch vollständige Isolation des Input-Verarbeitungsschritts ohne Secrets möglich (separater Sandbox-Schritt). Das ist für diesen Single-Account-Workflow unverhältnismäßig aufwändig (s. #723 zu CODEOWNERS). Die stattdessen gewählte Defense-in-Depth-Schichtung ist: strukturelle Entschärfung (sanitizeForumBody) + explizite Daten-Rahmung + verbindlicher Mensch-im-Loop vor jeder externen Aktion.
