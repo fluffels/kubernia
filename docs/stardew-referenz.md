@@ -20,10 +20,10 @@ Stardew Valley wurde komplett von einer Person (Eric „ConcernedApe" Barone) in
 | Aspekt | Stardew Valley | Quelle | Unser Stand |
 |---|---|---|---|
 | **Basis-Raster** | **16×16 px** pro Tile (Boden, Items, Objekt-Bausteine) | [SV-Forum](https://forums.stardewvalley.net/threads/sprite-sizes-character-sheets-pixel-art.5597/) | ✅ 16px, deckt sich |
-| **Runtime-Skalierung** | **×4 ganzzahlig**, Nearest-Neighbor (16px → 64px am Bildschirm) | [FreeGameSprites](https://freegamesprites.com/en/news/tile-size-2d-game-pixel-art-guide) | ✅ `pixelArt`-Renderer, ganzzahlig (AGENTS.md) |
+| **Runtime-Skalierung** | **×4 ganzzahlig**, Nearest-Neighbor (16px → 64px am Bildschirm) | [FreeGameSprites](https://freegamesprites.com/en/news/tile-size-2d-game-pixel-art-guide) | ⚠️ `pixelArt`-Renderer, aber krumme Skalierung/Zoom 2.4 im Bestand, siehe [art-direction.md](art-direction.md) |
 | **Figur (Welt-Sprite)** | **16×32 px** (1×2 Tiles, Kopf+Körper hoch) | [SV-Forum](https://forums.stardewvalley.net/threads/sprite-sizes-character-sheets-pixel-art.5597/) | ⚠️ unsere Figuren auf 32²/48²-Canvas, gleiche Fußlinie — höher, aber konsistent |
 | **NPC-Portrait** | **64×64 px** (separate Dialog-Brustbilder, nicht der Welt-Sprite) | [SV-Forum](https://forums.stardewvalley.net/threads/sprite-sizes-character-sheets-pixel-art.5597/) | – (wir haben keine Portraits, nur Welt-Sprites) |
-| **Ansicht** | leicht erhöhte **Frontal-/Schrägansicht**; Figuren & Objekte werden **von vorn** gezeigt (keine echte Iso, keine reine Top-Down-Draufsicht) | Spielbeobachtung | Figuren/Gebäude `low top-down`, Boden/flache Objekte `high top-down`, Leuchtturm/Türen/Schild `side` (Gebäude seit #794 `low top-down`, #181 abgelöst) |
+| **Ansicht** | leicht erhöhte **Frontal-/Schrägansicht**; Figuren & Objekte werden **von vorn** gezeigt (keine echte Iso, keine reine Top-Down-Draufsicht) | Spielbeobachtung | Figuren/Gebäude `low top-down`, Boden/Objekte `high top-down`, Leuchtturm/Türen/Schild `side` (Gebäude seit #794 `low top-down`, #181 abgelöst) |
 | **Technik** | Antialiasing (sparsam), **Dithering**, **Cluster** (zusammenhängende Farbflächen), **selective outlining** | [Lospec-Tutorial](https://lospec.com/pixel-art-tutorials/create-a-pixel-texture-stardew-valley-tileset-tutorial-1-by-etosurvival) | – |
 
 **Merksatz:** Stardew ist **16px @ ×4**. Jede krumme Skalierung (1.5×, 2.3×) oder gemischte Pixeldichte (fein detailliertes Asset neben grobem) liest sich sofort als „nicht Stardew".
@@ -100,8 +100,8 @@ So macht Stardew Wiesen „dicht/lebendig" — **das ist die Vorlage für #107**
 
 Aligned mit [`assets/pixellab/README.md`](../assets/pixellab/README.md) — diese Stil-Tokens **immer** mitgeben:
 
-- **Tiles/Terrain:** `16x16`, `selective outline`, `detailed shading`, `highly detailed`, `high top-down`; gedämpft-warme Palette; mehrere Tile-Varianten für Variation.
-- **Figuren:** `low top-down`, `chibi`, `selective outline`, `high detail`, 4 Richtungen; gleiche Körperhöhe/Fußlinie wie Bestand (size 48 → 48² runtergerechnet).
+- **Tiles/Terrain:** `16x16`, `flat shading`, `high top-down` (Terrain seit #866 flat); gedämpft-warme Palette; mehrere Tile-Varianten für Variation.
+- **Figuren:** `low top-down`, `chibi`, `selective outline`, `high detail`, size 32, 4 Richtungen; gleiche Körperhöhe/Fußlinie wie Bestand.
 - **Objekte:** `create_map_object`, transparent, `high top-down` (senkrechte Strukturen, Türen, Icons: `side`; Gebäude: `low top-down`), `selective outline`, `detailed shading`; Maßstab **Mensch = 1 Kachel (16px)** als Anker (Baum ~3 Kacheln, Busch ~1).
 - **Palette im Prompt verankern:** „muted warm earthy palette, soft dark-tinted outlines (not pure black), single light source top-left" statt nur „Stardew style".
 - **Groß generieren, klein rechnen:** Häuser/Bäume/Schiffe in hoher Auflösung, dann ganzzahlig verkleinern — nie klein generieren + hochskalieren.
@@ -141,7 +141,7 @@ Wenn ein Punkt ❌ ist: nicht „nah genug" durchwinken — das sind genau die A
 - **Grafik-Stil – Stardew-Look als verbindliche Messlatte (Nordstern, #44).** Das Spiel-Thema bleibt unser eigenes (DevOps/K8s-Hafen), aber **Qualität, Genauigkeit und Politur auf Stardew-Niveau** sind der verbindliche Maßstab für jede neue oder geänderte Grafik. Der Stardew-Look entsteht **nicht** aus einer bestimmten Rastergröße, sondern aus *Einheitlichkeit* + *ganzzahliger Skalierung*. Konkret prüfbar (das ist die „Messlatte" fürs Audit):
 - **Einheitliche Pixeldichte:** alles auf demselben **16px-Raster** gezeichnet (Tiles 16×16, Figuren auf den etablierten 32²/48²-Canvas mit gleicher Körperhöhe/Fußlinie). **Kein gemischtes Auflösungs-Niveau** – fein detaillierte Assets direkt neben grob gerasterten wirken sofort „nicht Stardew".
 - **Ganzzahlige Skalierung:** nur ×2/×3/×4 usw., **nie 1.5×/2.3×** – krumme Faktoren matschen die Kanten, der `pixelArt`-Renderer braucht ganze Pixel.
-- **Leicht erhöhte Frontalansicht** wie das Vorbild. Pro Asset-Art: Figuren und Gebäude `low top-down` (Gebäude seit #794; die frühere Entscheidung #181 für `high top-down` ist abgelöst), Boden und flache Objekte `high top-down`, senkrechte Strukturen (Leuchtturm, Türen, Schilder) und Icons `side`. Gebäude via `building()` zeigen Dach und Tiefe und werden nach Fußlinie tiefensortiert.
+- **Leicht erhöhte Frontalansicht** wie das Vorbild. Pro Asset-Art: Figuren und Gebäude `low top-down` (Gebäude seit #794; die frühere Entscheidung #181 für `high top-down` ist abgelöst), Boden und Objekte `high top-down`, senkrechte Strukturen (Leuchtturm, Türen, Schilder) und Icons `side`. Gebäude via `building()` zeigen Dach und Tiefe und werden nach Fußlinie tiefensortiert.
 - **Kohärente Palette:** gedämpfte, warme Stardew-nahe Farbwelt statt grell/neon, einheitliche Licht-/Schattenrichtung.
 - **Keine simpel-prozeduralen Platzhalter dort, wo ein Asset hingehört:** code-gezeichnete Primitive (Dreieck-Grashalme, mit `graphics` gemalte Gegner/Boote) sind nur Übergangslösung und bekommen ein Asset-Ticket. *Dynamische Effekte* (rotierender Leuchtturm-Lichtkegel, Schatten/Glow, Tag-Nacht-Schleier) sind **kein** Platzhalter und bleiben bewusst Code.
 - **Hoch auflösen, dann ganzzahlig verkleinern:** große Objekte (Häuser, Bäume, Schiff) in hoher Auflösung generieren (PixelLab-Abo Tier 1 erlaubt große Bilder) statt klein erzeugen + hochskalieren, damit der Renderer scharf bleibt.

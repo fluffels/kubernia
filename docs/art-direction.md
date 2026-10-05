@@ -13,7 +13,7 @@ Gegliedert nach **Bereich bzw. Befund-Klasse**, nicht pro Asset. Wächst das Spi
 |---|---|---|---|
 | **Skalierung** | Krumme Faktoren statt ganzzahlig: rund 40 `setScale(0.x)`-Aufrufe auf hochaufgelösten Sprites, Kamera-Zoom 2.4 unter 900 px, `Clamp(fit, 2.4, 6)` im Innenraum. Mit `pixelArt: true` (Nearest-Neighbor) ungleichmäßige Pixeldichte. | `scenes/worldscene/scenery.ts`, `scenes/InteriorScene.ts`, `scenes/regions.ts`, `scenes/WorldScene.ts`, `scenes/RegionScene.ts` | [#1220](https://github.com/fluffels/kubernia/issues/1220) |
 | **Prozedurale Platzhalter** | Primitive, wo ein Asset hingehört: Schiffs-Luke außen (das Asset `ship_hatch` existiert und wird innen schon genutzt), Münz-Textur, grauer Felssockel unter dem Leuchtturm, Innenraum-Mast. | `scenes/worldscene/scenery.ts`, `scenes/shared.ts`, `scenes/regions.ts`, `scenes/InteriorScene.ts` | [#1221](https://github.com/fluffels/kubernia/issues/1221) |
-| **Emojis als Icon** | Titel und Hinweise der Regionen, Minispiel-Panels, Shop-Artikel, Ränge, Toasts, Funkgerät und Quiz nutzen Emojis als Icon. Plattform- und fontabhängig, bricht die Pixelart-Optik. | `scenes/regions.ts`, `ui/*` (Minispiele, Shop, Radio, Quiz), `content/data/shop.json`, `content/data/ranks.json`, `main.ts` | [#1222](https://github.com/fluffels/kubernia/issues/1222) |
+| **Emojis als Icon** | Titel und Hinweise der Regionen, Minispiel-Panels, Shop-Artikel, Ränge, Toasts, Funkgerät und Quiz nutzen Emojis als Icon. Plattform- und fontabhängig, bricht die Pixelart-Optik. | `scenes/regions.ts`, `ui/*` (Minispiele, Shop, Radio, Quiz), `content/data/shop.json`, `content/data/ranks.json`, `main.ts`, `scenes/worldscene/scenery.ts` (Welt-Marker im Canvas), `scenes/worldscene/events.ts` (Event-Toasts), `scenes/worldscene/clustersync.ts` (Status-Tags) | [#1222](https://github.com/fluffels/kubernia/issues/1222) |
 
 ## Kohärent (Stichprobe gegen den Code)
 
@@ -21,11 +21,12 @@ Terrain (Wang-Tilesets, `flat shading` seit #866), Gebäude (`low top-down`), Ge
 
 ## Bewusste Ausnahmen
 
-Diese Abweichungen sind entschieden und gelten auch dann, wenn einzelne Tickets geschlossen sind:
+Diese Abweichungen sind entschieden und kein Befund:
 
 - **Dynamische Effekte** bleiben prozedural: Lichtkegel, Schatten, Tag-Nacht- und Sturm-Overlay, Banner, Fortschrittsflagge.
-- **Ansicht:** Figuren und Gebäude `low top-down`, Boden und flache Objekte `high top-down`, senkrechte Strukturen, Türen und Icons `side`. Das entspricht der leicht erhöhten Schrägansicht des Vorbilds; Tokens je Asset-Art in [`stardew-referenz.md`](stardew-referenz.md) §6.
+- **Ansicht:** die Aufteilung je Asset-Art (`low top-down` / `high top-down` / `side`) steht einmal in [`stardew-referenz.md`](stardew-referenz.md) §6; sie entspricht der leicht erhöhten Schrägansicht des Vorbilds.
 - **Figuren-Canvas** 32² bzw. 48² statt 16×32, auf gleiche Höhe und Fußlinie normalisiert.
+- **Prozeduraler Tür-Fallback** in `makeDoor` (`scenes/worldscene/terrain.ts`): greift nur defensiv, alle Hafentüren haben ein Asset.
 - **DOM-UI** (Dialog, Panels) mit Pixelrahmen statt Canvas-Rendering.
 - **Emojis in Dialog-Prosa** (Quest- und Smalltalk-Texte) sind Sprache, kein Icon.
 
@@ -35,7 +36,7 @@ Zahlen und Fundstellen veralten, das Rezept nicht. Ein Durchgang:
 
 1. **Skalierung:** `setScale(` mit Dezimalzahl und `setZoom(` in `src/scenes` suchen.
 2. **Primitive:** `fillRoundedRect`, `fillCircle`, `fillTriangle`, `add.ellipse`, `add.rectangle` in `src/scenes` suchen. Jede Stelle ist ein dynamischer Effekt (erlaubt) oder ein Platzhalter (Befund).
-3. **Emojis:** Zeichenklasse `\p{Extended_Pictographic}` in `src/ui`, `src/scenes`, `src/main.ts` und `src/content/data` suchen. Icon-Funktion ist ein Befund, Dialog-Prosa nicht.
+3. **Emojis:** `rg -n "\p{Extended_Pictographic}" src/ui src/scenes src/main.ts src/content/data` (Testszenen wie `TilemapTestScene` sind Rauschen). Icon-Funktion ist ein Befund, Dialog-Prosa nicht.
 4. **Browser-Tour:** `npm run dev`, dann per `kqGame.scene.run(...)` Hafen (Tag, Nacht, Sturm), alle Regionen, Innenräume, HUD und Overlays ansehen, einmal auch in einem Fenster unter 900 px Breite.
 
-Ergebnis: Tabelle oben anpassen, Datum in der Kopfzeile hochsetzen.
+Ergebnis: Tabelle oben anpassen, Datum in der Kopfzeile hochsetzen. Der PR, der einen Befund behebt, streicht im selben PR seine Zeile.
