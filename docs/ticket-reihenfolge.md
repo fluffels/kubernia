@@ -14,7 +14,7 @@ Bevor irgendein Ticket angefasst wird, **zuerst zweifeln** — das steht über d
 
 ## Was „nächstes Ticket" heißt
 
-Rein deterministisch — **kein Abwägen nach Inhalt, kein Vorab-Sichten der ganzen Liste** (einzige Ausnahme: die [Spielquote](#spielquote--jedes-dritte-ticket-ein-spielticket-1199) wählt per Label):
+Rein deterministisch — **kein Abwägen nach Inhalt, kein Vorab-Sichten der ganzen Liste**:
 
 1. **oberstes freies Item in der Board-Reihenfolge** — genau die Reihenfolge, die `gh project item-list` liefert (= was in View 1 von oben nach unten steht). Keine Nachsortierung nach Inhalt oder Nummer.
 2. **frei** heißt: **kein Assignee** (der „in Arbeit"-Marker), **kein** offener Branch/Worktree und **kein offener Blocker** (`blockiert durch #X` im Body).
@@ -32,35 +32,37 @@ gh project item-list 1 --owner fluffels --format json --limit 800 --jq '
 
 Dann nur **dieses eine** Kandidaten-Ticket kurz gegen den Live-Stand prüfen (`gh issue view <nr>`). **⛔ Hat das Ticket einen Assignee → sofort weiter zum nächsten, fertig. Kein Worktree inspizieren, kein Prüfen wie weit die Arbeit ist, kein Weiterarbeiten.** Ein Assignee bedeutet: ein anderer Agent arbeitet daran — nicht anfassen. Kein Assignee + offen + kein Blocker → sofort self-assignen (`gh issue edit <nr> --add-assignee @me`) und mit dem normalen Workflow abarbeiten (eigener Worktree → umsetzen → alle Gates grün + im Browser verifizieren → **ein** PR → CI abwarten + bis Merge). Voller Ablauf: [AGENTS.md](../AGENTS.md).
 
-## Spielquote — jedes dritte Ticket ein Spielticket (#1199)
+## Spielrhythmus — jede dritte Position ein Spielticket (#1215)
 
-Regel, Spielticket-Labels und Vorrang: [AGENTS.md › Wo die TODOs leben](../AGENTS.md#wo-die-todos-leben). **0. Vorrang zuerst:** ist das oberste freie Item ein Vorrang-Ticket, ist es dran — die Quote greift erst danach.
+Regel, Spielticket-Labels und Vorrang: [AGENTS.md › Wo die TODOs leben](../AGENTS.md#wo-die-todos-leben). Die Auswahl bleibt schlicht „oberstes freies Item"; der Rhythmus wird **beim Pflegen** des Boards hergestellt, nicht beim Auswählen. **Wann:** am Ticket-Ende (nach dem Merge) und nach jedem Einsortieren, auch nach „ganz nach oben schieben".
 
-**1. Ist der Spiel-Slot dran?** Die Labels der zuletzt gemergten Ticket-Issues (Merge-Reihenfolge von `main`; Dependabot-PRs ohne `Closes` zählen nicht):
+**Invariante:** ab dem ersten Nicht-Vorrang-Item folgen auf höchstens **zwei** Nicht-Spieltickets ein Spielticket. Anders als feste Positionen (3, 6, 9 …) bleibt sie stabil, wenn das oberste Item erledigt wird — feste Slots würden nach jedem Merge ein weiteres Spielticket nach oben ziehen. Items **mit Assignee** (in Arbeit) zählen nicht mit. Gepflegt wird nur der Kopf: weil die Invariante beim Wegfall des obersten Items stabil bleibt, reicht das nach jedem Ticket und jedem Einsortieren — das Board wird nie als Ganzes umsortiert, unten einsortierte Spieltickets bleiben unten, bis sie in den Kopf rücken.
 
-```bash
-n=0
-for pr in $(git log origin/main --first-parent -n 20 --format=%s | grep -o '(#[0-9]*)$' | tr -d '(#)'); do
-  for nr in $(gh pr view "$pr" --json closingIssuesReferences --jq '.closingIssuesReferences[].number'); do
-    gh issue view "$nr" --json number,labels --jq '"#\(.number)\t\([.labels[].name]|join(","))"'
-    n=$((n+1))
-  done
-  [ "$n" -ge 2 ] && break
-done
-```
-
-Trägt **keine** der beiden Zeilen ein Spiel-Label, ist der Spiel-Slot dran (vorher `git fetch origin`). Gezählt werden geschlossene Issues; ein PR, der zwei schließt, belegt beide Plätze. Bewusst akzeptiert: Spieltickets in Arbeit zählen nicht, parallele Agenten können also beide ein Spielticket ziehen — die Quote ist eine Untergrenze.
-
-**2. Oberstes freies Spielticket** (dieselben Frei-Regeln wie oben: kein Assignee, kein Worktree, kein Blocker):
+**Ein Schritt** (am Ticket-Ende und nach jedem Einsortieren; wiederholen, bis die Ausgabe `OK` oder `LEER` lautet) — prüft nur den **Kopf** (die ersten 6 freien Nicht-Vorrang-Items), findet dort die erste Stelle mit drei Nicht-Spieltickets in Folge und zieht das oberste tiefer liegende Spielticket direkt vor das dritte:
 
 ```bash
-gh project item-list 1 --owner fluffels --format json --limit 800 --jq '
-  .items | map(select(.content.type=="Issue" and (.status // "")=="Todo"
-    and ((.labels // []) | any(test("^area:(inhalt|lernpfad|grafik)$")))))
-  | .[] | "#\(.content.number)\t\(.title)"'
+PROJ=PVT_kwHOD8746c4Barq_
+read -r ITEM AFTER < <(gh project item-list 1 --owner fluffels --format json --limit 800 --jq '
+  def game: ((.labels // []) | any(test("^area:(inhalt|lernpfad|grafik)$")));
+  def prio: (.title | test("🚨|🤖")) or ((.labels // []) | any(. == "forum"));
+  [.items[] | select(.content.type=="Issue" and (.status // "")=="Todo" and ((.assignees // []) | length)==0)
+    | select(prio|not)] as $q
+  | (first(range(2; ([($q|length), 6] | min)) | select(($q[.]|game|not) and ($q[.-1]|game|not) and ($q[.-2]|game|not))) // null) as $i
+  | if $i == null then "OK OK" else
+      (first($q[($i+1):][] | select(game)) // null) as $g
+      | if $g == null then "LEER LEER" else "\($g.id) \($q[$i-1].id)" end
+    end')
+case "$ITEM" in
+  OK)   echo "OK: Rhythmus intakt" ;;
+  LEER) echo "LEER: im Kopf fehlt ein Spielticket und tiefer gibt es keins, melden (siehe unten)" ;;
+  *)    gh api graphql -f query='mutation($p:ID!,$i:ID!,$a:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }' \
+          -f p=$PROJ -f i="$ITEM" -f a="$AFTER" ;;
+esac
 ```
 
-**3. Kein freies Spielticket:** im Chat melden („Kein freies Spielticket mehr"), das normale oberste Item nehmen und — falls noch keins offen ist — ein Issue „Spiel-Backlog leer: neue Spieltickets planen" (`area:inhalt`, ohne Assignee) anlegen und mit dem Befehl unter „Reihenfolge pflegen" (ohne `afterId`) ganz nach oben schieben. Neue Spielinhalte brauchen Story-/Optik-Entscheidungen der Maintainerin; das Ticket wird darum mit ihr per Pre-Flight-Klärung geplant, nicht autonom erfunden.
+> Vorrang-Items (`🚨`/`🤖`, `forum`) stehen oben und zählen nicht mit; **Sicherheitslücken** trägt der Agent von Hand mit `🚨` im Titel ein, damit sie hier als Vorrang erkannt werden. Ein Spielticket mit offenem `blockiert durch #X` im Body ist im Board nicht erkennbar — der Kandidaten-Check bei der Auswahl springt dann zum nächsten Item.
+
+**Ausgabe `LEER` (kein freies Spielticket):** im Chat melden („Kein freies Spielticket mehr"), die Position bleibt mit dem nächsten normalen Ticket belegt, und — falls noch keins offen ist — ein Issue „Spiel-Backlog leer: neue Spieltickets planen" (`area:inhalt`, ohne Assignee) anlegen und mit dem Befehl unter „Reihenfolge pflegen" (ohne `afterId`) ganz nach oben schieben. Neue Spielinhalte brauchen Story-/Optik-Entscheidungen der Maintainerin; das Ticket wird darum mit ihr per Pre-Flight-Klärung geplant, nicht autonom erfunden.
 
 ## Sammelticket „Harness-Härtung (gesammelt)" (#1199)
 
@@ -103,10 +105,10 @@ Die manuelle Board-Reihenfolge ist die **einzige** Reihenfolge-Quelle; es gibt k
   ```
 - **Abhängigkeit** („A vor B"): als Notiz `blockiert durch #X` in den **Body** des abhängigen Issues. Die Auswahl fängt das am Kandidaten-Check ab (offener Blocker → überspringen).
 - **Unwichtig:** im Board nach unten ziehen, oder schließen bzw. löschen (`gh issue delete` nur mit Rückfrage). Ein Zurückstellen-Label gibt es nicht.
-- **Neues Issue:** wandert per „Auto-add to project"-Board-Workflow automatisch aufs Board — danach ggf. an die gewünschte Stelle ziehen.
+- **Neues Issue:** wandert per „Auto-add to project"-Board-Workflow automatisch aufs Board — danach ggf. an die gewünschte Stelle ziehen und den [Spielrhythmus-Schritt](#spielrhythmus--jede-dritte-position-ein-spielticket-1215) fahren.
 - **Forum-Issues schieben sich selbst nach oben:** die Action [`.github/workflows/forum-inbox.yml`](../.github/workflows/forum-inbox.yml) schiebt ein frisch geflaggtes Forum-Ticket beim Anlegen an die **oberste** Board-Position (#747, GraphQL `addProjectV2ItemById` idempotent + `updateProjectV2ItemPosition`). ⚠️ Das braucht ein Repo-Secret **`PROJECT_TOKEN`** (PAT mit `project`-Scope) — das Standard-`GITHUB_TOKEN` kann kein User-Project V2 beschreiben; fehlt es, warnt die Action nur (Issue steht dann irgendwo im Board). Board-Node-ID: `PVT_kwHOD8746c4Barq_`.
 - **Offene Dependabot-PRs sammeln sich selbst ein** (#712): die Action [`.github/workflows/dependabot-inbox.yml`](../.github/workflows/dependabot-inbox.yml) prüft täglich (+ `workflow_dispatch`), ob Dependabot-PRs offen sind, und legt bei Bedarf **ein** Sammel-Issue „🤖 Dependabot-PRs auflösen" an — direkt an die **oberste** Board-Position geschoben (dieselbe GraphQL-Verdrahtung/`PROJECT_TOKEN` wie bei den Forum-Issues), damit es beim nächsten „nächstes Ticket"-Griff sofort oben steht. Bleibt es offen, hängt jeder weitere Lauf nur den aktuellen PR-Stand als Kommentar an (kein Issue-Spam); sind keine Dependabot-PRs mehr offen, schließt die Action das Sammel-Issue automatisch. **Abarbeiten ohne Worktree/Code:** die gelisteten PRs einzeln gegen grüne CI prüfen (`gh pr checks <nr>`) und mergen (`gh pr merge <nr> --squash --delete-branch`), danach das Issue schließen.
 
-## Kein „puh, fertig"-Schritt mehr
+## Am Ticket-Ende: nur der Spielrhythmus-Schritt
 
-Am Ticket-Ende ist **keine** Reihenfolge-Datei mehr zu pflegen. Der Abschluss ist: Issue schließen (via `Closes #<nr>` im gemergten PR) und — falls beim Arbeiten etwas auffiel — einen echten Defekt als Issue an die richtige Board-Stelle, Härtung/Kosmetik als Zeile ins Sammelticket (oben). Das war's.
+Am Ticket-Ende ist **keine** Reihenfolge-Datei mehr zu pflegen. Der Abschluss ist: Issue schließen (via `Closes #<nr>` im gemergten PR), den [Spielrhythmus-Schritt](#spielrhythmus--jede-dritte-position-ein-spielticket-1215) im Board fahren und — falls beim Arbeiten etwas auffiel — einen echten Defekt als Issue an die richtige Board-Stelle, Härtung/Kosmetik als Zeile ins Sammelticket (oben).
