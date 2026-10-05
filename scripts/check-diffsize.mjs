@@ -21,7 +21,7 @@
  *    ci.yml) ist die Vergleichs-Basis auflösbar → der Slice wird als **Required
  *    Check** gemessen und ein zu breiter PR am Merge gehindert. Das ist der
  *    eigentliche Durchsetzungspunkt.
- *  - Auf einem Feature-Branch / im lokalen pre-push-Hook (#528) greift er ebenso
+ *  - Auf einem Feature-Branch (lokales `npm run verify`) greift er ebenso
  *    (volle Historie da) — als schnelle Vorab-Rückmeldung vor dem PR.
  *  - Auf dem push-auf-main-Event (nach dem Merge) setzt ci.yml die Basis auf den
  *    Vorgänger-Commit (KQ_DIFF_BASE=github.event.before) → der Check misst den

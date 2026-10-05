@@ -51,15 +51,21 @@ describe("#528 pre-push-Hook: schnelle Gates vor Push auf main", () => {
     ).toMatch(/refs\/heads\/main/);
     // Ohne Push auf main steigt der Hook früh grün aus, BEVOR verify läuft –
     // sonst würde jeder Feature-Branch-Push (rot→fix-Schleife) ausgebremst.
-    const earlyExit = hook.search(/push_to_main"?\s*-eq\s*0[\s\S]*?exit 0/);
+    // Die Spanne endet am eigenen `fi` – ein `exit 0` aus einem späteren Block
+    // (z.B. dem Grün-Zweig nach verify) zählt nicht als Früh-Ausstieg.
+    const earlyExit = /push_to_main"?\s*-eq\s*0(?:(?!\bfi\b)[\s\S])*?\bexit 0\b/.exec(
+      hook,
+    );
     expect(
       earlyExit,
       "pre-push muss ohne Push auf main früh mit exit 0 aussteigen",
-    ).toBeGreaterThan(-1);
+    ).not.toBeNull();
+    const verifyCall = hook.search(/^\s*if\s+npm run verify\b/m);
+    expect(verifyCall, "pre-push muss `if npm run verify` enthalten").toBeGreaterThan(-1);
     expect(
-      earlyExit,
+      earlyExit!.index + earlyExit![0].length,
       "der Früh-Ausstieg muss VOR dem verify-Aufruf stehen",
-    ).toBeLessThan(hook.search(/^\s*if\s+npm run verify\b/m));
+    ).toBeLessThan(verifyCall);
   });
 
   it("bricht den Push bei Rot ab (exit-Code ≠ 0 im Rot-Fall)", () => {
