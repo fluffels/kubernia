@@ -55,6 +55,7 @@ AGENTS.md                  @fluffels
 /scripts/hook-io.mjs @fluffels
 /scripts/bash-parser.mjs @fluffels
 /scripts/quote-folge.mjs @fluffels
+/scripts/shell-tabellen.mjs @fluffels
 /scripts/worktree-guard-eval.mjs @fluffels
 /scripts/worktree-guard-git.mjs @fluffels
 /scripts/worktree-guard-tabellen.mjs @fluffels

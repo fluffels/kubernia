@@ -16,7 +16,7 @@ const VALUE_OPTS = ["--namespace", "--config-env", "--attr-source", "--super-pre
 /** `-c key=value`: Aliase und `core.worktree` merken. */
 function konfiguration(g, cfg) {
   if (!cfg || cfg.dynamic) return;
-  const a = /^alias\.([^=]+)=(.*)$/s.exec(cfg.text);
+  const a = /^alias\.([^=]+)=(.*)$/is.exec(cfg.text);
   const wt = /^core\.worktree=(.*)$/is.exec(cfg.text);
   if (a) g.aliases.set(a[1].toLowerCase(), a[2]); // git-Konfigurationsnamen sind nicht case-sensitiv
   if (wt) g.workTrees.push({ text: wt[1], dynamic: false });
@@ -162,7 +162,7 @@ function foreachKommando(rest) {
 
 /** `git config alias.X …` im selben Befehl vormerken. */
 function configAliasMerken(c, rest) {
-  const k = rest.findIndex((w) => !w.dynamic && /^alias\.[^=\s]+$/.test(w.text));
+  const k = rest.findIndex((w) => !w.dynamic && /^alias\.[^=\s]+$/i.test(w.text));
   if (k >= 0) c.cfgAliases.set(rest[k].text.slice(6).toLowerCase(), rest[k + 1] && !rest[k + 1].dynamic ? rest[k + 1].text : null);
 }
 
@@ -170,22 +170,23 @@ function configAliasMerken(c, rest) {
 function aliasAufloesen(g, words, k, rest, pe, D, c, depth) {
   const sub = g.sub.text;
   const cfgName = sub.toLowerCase(); // git-Konfigurationsnamen sind nicht case-sensitiv
-  if (PROTECTED_SUBS.has(sub) || !(g.aliases.has(cfgName) || !KNOWN_SUBS.has(sub)) || sub === "") return false;
+  if (PROTECTED_SUBS.has(sub) || !(g.aliases.has(cfgName) || c.cAliases.has(cfgName) || !KNOWN_SUBS.has(sub)) || sub === "") return false;
   if (c.cfgAliases.get(cfgName) === null) ask(c, real(D), `Der git-Alias \`${sub}\` ist nicht statisch auflösbar.`, true);
-  const al = g.aliases.has(cfgName) ? g.aliases.get(cfgName) : (c.cfgAliases.get(cfgName) ?? configAlias(c, sub, D));
+  const lokal = g.aliases.has(cfgName) ? g.aliases.get(cfgName) : c.cAliases.get(cfgName); // -c des Aufrufs, dann -c der äußeren !-Aliase
+  const al = lokal ?? c.cfgAliases.get(cfgName) ?? configAlias(c, sub, D);
   if (!al) return false;
   if (depth >= MAX_INTERPRETER || (al.startsWith("!") && c.depth >= MAX_INTERPRETER)) {
     ask(c, real(D), `Die Alias-Kette von \`${sub}\` ist zu tief verschachtelt, der Inhalt wird nicht mehr ausgewertet.`, true);
     return true;
   }
   if (al.startsWith("!")) {
-    // `-c alias.x=…` gelten für den inneren git-Aufruf, aber nur für ihn (danach wird der befehlsweite Zustand wiederhergestellt)
-    const vorher = new Map(c.cfgAliases);
-    for (const [name, wert] of g.aliases) c.cfgAliases.set(name, wert);
+    // `-c alias.x=…` gelten für den inneren git-Aufruf, aber nur für ihn: eine eigene Ebene, die der befehlsweite Zustand (`git config alias.*`) nicht berührt
+    const vorher = c.cAliases;
+    c.cAliases = new Map([...vorher, ...g.aliases]);
     try {
       c.evalString(`${al.slice(1)} ${rest.map((w) => w.text).join(" ")}`, gitTargetDirs(g, pe, D, c));
     } finally {
-      c.cfgAliases = vorher;
+      c.cAliases = vorher;
     }
     return true;
   }

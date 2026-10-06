@@ -10,6 +10,9 @@
 import { statSync } from "node:fs";
 import { homedir as osHomedir } from "node:os";
 import path from "node:path";
+import { SHELLS, baseName } from "./shell-tabellen.mjs";
+
+export { SHELLS, baseName };
 
 /** Grobe Wortregel (Rückfall, wenn der Parser nicht zerlegen kann oder ein Interpreter den eigentlichen
  *  Befehl verbirgt): ein Segment (Split auf `&&`/`||`/`;`/Zeilenumbruch) mit "git" UND "commit"/"push" als Wort. */
@@ -23,7 +26,6 @@ export const ASSIGN_RE = /^[A-Za-z_]\w*=/;
 export const PROTECTED_SUBS = new Set(["commit", "push"]);
 /** Reine Text-Kommandos: ein Wortpaar "git commit/push" darin ist kein Aufruf. */
 export const TEXT_COMMANDS = new Set(["gh", "echo", "printf", "cat", "grep", "egrep", "fgrep", "rg"]);
-export const SHELLS = new Set(["bash", "sh", "zsh", "dash", "ksh", "ash"]);
 export const CD_LIKE = new Set(["cd", "pushd", "popd"]);
 /** Wrapper, hinter denen ein `cd` weiterhin die aktuelle Shell wechselt. */
 export const CD_WRAPPERS = new Set(["builtin", "command", "time"]);
@@ -97,6 +99,7 @@ export function makeCtx(cwd, deps) {
     seen: new Set(),
     depth: 0,
     aliasCache: new Map(),
+    cAliases: new Map(), // `-c alias.x=…` der äußeren `!`-Aliase (gelten nur für den inneren Lauf)
     cfgAliases: new Map(), // `git config alias.X …` im selben Befehl (Schlüssel klein geschrieben)
     evalString: () => {
       throw new Error("evalString nicht gesetzt");
@@ -154,7 +157,6 @@ export const hereStringOf = (words) => {
   return i >= 0 ? (words[i + 1] ?? null) : null;
 };
 
-export const baseName = (text) => text.replace(/\\/g, "/").split("/").pop().toLowerCase().replace(/\.exe$/, "");
 
 export const isTextCommand = (name, words) => TEXT_COMMANDS.has(name) && !(name === "rg" && words.some((w) => w.text === "--pre" || w.text.startsWith("--pre=")));
 

@@ -32,6 +32,7 @@ export function dispatch(text, repoRoot, guards = { decide, bewertePowerShell, b
   const { tool, cwd, command } = parseHookInput(text);
   if (tool !== "Bash" && tool !== "PowerShell") return null;
   const worktree = tool === "Bash" ? sicher(() => guards.decide({ cwd, command, repoRoot })) : sicher(() => guards.bewertePowerShell({ command, cwd, repoRoot }));
+  if (worktree?.block) return mergeDecisions([worktree]); // deny geht vor ask: ein langsamer gh-Guard darf es nicht aushebeln
   return mergeDecisions([worktree, sicher(() => guards.bewerteGh(command))]);
 }
 

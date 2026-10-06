@@ -33,7 +33,8 @@
 import { statSync } from "node:fs";
 import { dirname, resolve, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
-import { analyse, resolveGitContext } from "./worktree-guard-hook.mjs"; // eine Quelle für Entscheidung und Bash-Auswertung
+import { analyse, resolveGitContext } from "./worktree-guard-hook.mjs";
+import { SHELLS } from "./shell-tabellen.mjs"; // eine Quelle für Entscheidung und Bash-Auswertung
 import { MAX_INTERPRETER, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
 
 export { parseHookInput };
@@ -336,7 +337,7 @@ function interpreterUmweg(k, raw, toks, cmd) {
     const name = basename(cmd).replace(/\.exe$/, "");
     const skript = interpreterSkript(k, toks, name);
     let r = null;
-    if (skript && /^(bash|sh|zsh|dash|ksh)$/.test(name)) r = bashBruecke(k, skript, name);
+    if (skript && SHELLS.has(name)) r = bashBruecke(k, skript, name);
     else if (skript && /^(iex|invoke-expression|pwsh|powershell)$/.test(name)) r = bewertePowerShell({ command: skript, cwd: k.ort, repoRoot: k.repoRoot, deps: k.deps, tiefe: k.tiefe + 1 });
     if (r && (r.block || r.ask)) return r;
   }

@@ -195,7 +195,8 @@ describe("gh api über Variablen, eval und Interpreter-Strings fragt nach (#1311
     fragt("if true; then eval \"gh api -X DELETE x\"; fi");
     laeuft("if true; then gh issue list; fi");
     laeuft("if ($true) { gh api repos/o/r/issues/1 }");
-    laeuft("echo { gh api -X DELETE x }");
+    laeuft("echo \"{ gh api -X DELETE x }\"");
+    fragt("echo { gh api -X DELETE x }"); // ungequotet zählt das offene gh api
     // Cast rechts vom = und direkt am Segmentanfang
     fragt("$r = [array](gh api -X DELETE repos/o/r/issues/1)");
     fragt("$r = [array]@(gh api -X DELETE repos/o/r/issues/1)");

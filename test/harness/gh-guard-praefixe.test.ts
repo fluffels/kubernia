@@ -40,8 +40,8 @@ describe("Wrapper und Kontroll-Präfixe vor gh api", () => {
   });
 
   test("Gegenprobe: gh api als Text hinter einem Wrapper-Kommando ist kein Aufruf", () => {
-    laeuft("env FOO=1 echo gh api -X DELETE repos/o/r/issues/1");
-    laeuft("timeout 5 echo gh api -X DELETE x");
+    laeuft("env FOO=1 echo \"gh api -X DELETE repos/o/r/issues/1\"");
+    laeuft("timeout 5 echo 'gh api -X DELETE x'");
   });
 
   test("PowerShell -Process, if rechts vom =, Bash-case-Arm", () => {

@@ -120,6 +120,19 @@ describe("Verdrahtung (#1311)", () => {
     }
   });
 
+  test("bei deny wird der gh-Guard gar nicht erst gefragt (ein langsamer Guard darf deny nicht aushebeln)", () => {
+    let ghAufrufe = 0;
+    const gh = () => {
+      ghAufrufe++;
+      return { ask: true, reason: "x" };
+    };
+    const blockt = () => ({ block: true, reason: "y" });
+    assert.equal(hook.dispatch(payload("Bash", "x"), WURZEL, { decide: blockt, bewertePowerShell: blockt, bewerteGh: gh })?.hookSpecificOutput.permissionDecision, "deny");
+    assert.equal(ghAufrufe, 0);
+    assert.equal(hook.dispatch(payload("PowerShell", "x"), WURZEL, { decide: blockt, bewertePowerShell: blockt, bewerteGh: gh })?.hookSpecificOutput.permissionDecision, "deny");
+    assert.equal(ghAufrufe, 0);
+  });
+
   test("ein werfender Guard legt den anderen nicht lahm", () => {
     const wirft = () => {
       throw new Error("kaputt");
