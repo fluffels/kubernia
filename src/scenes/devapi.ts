@@ -49,7 +49,7 @@ function collect(game: Phaser.Game, readyLatched: boolean): DevSnapshotSource {
   const top = views.find((v): v is SceneView => v !== null) ?? null;
   const step = Game.currentStep();
   const cal = Game.calendar();
-  const task = step?.type === "terminal" ? step.tasks[Game.taskIdx()] : undefined;
+  const task = step ? Game.stepTasks(step)?.[Game.taskIdx()] : undefined;
   return {
     scenes: running.map((s) => s.scene.key),
     scene: top?.key ?? null,

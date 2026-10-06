@@ -5,8 +5,7 @@
 
 /** Standard-Frame-Länge (60 fps). */
 export const DEV_FRAME_MS = 1000 / 60;
-/** Größte erlaubte Frame-Länge: darüber kappt die Spielzeit-Achse (MAX_FRAME_MS) ohnehin
- *  und das Stepping wäre kein 1:1-Vorlauf mehr. */
+/** Größte erlaubte Frame-Länge: die Bewegung in den Szenen deckelt dt auf 50 ms, darüber\n *  wäre das Stepping kein 1:1-Vorlauf mehr. */
 export const MAX_DEV_FRAME_MS = 50;
 /** Deckel für einen Vorlauf: er blockiert synchron den Main-Thread. */
 export const MAX_ADVANCE_MS = 600_000;
