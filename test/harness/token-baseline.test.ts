@@ -837,9 +837,9 @@ describe("token-baseline: Nachweis, Zeitpunkt, Cache-Neuaufbau (#1309)", () => {
     const gemischt = [
       lauf("2026-10-05T10:09:00Z", { subagent: umsetzer, cacheRead: 0, cacheWrite: 900 }),
       lauf("2026-10-05T10:00:00Z", { subagent: umsetzer }),
-      lauf("2026-10-05T10:00:30Z", { subagent: { id: "u2", agentType: "kubernia-lens" } }),
+      lauf("2026-10-05T10:04:30Z", { subagent: { id: "u2", agentType: "kubernia-lens" } }),
     ];
-    assert.equal(m.countCacheRebuilds(gemischt).count, 1, "ein anderer Subagent dazwischen verdeckt die Pause nicht");
+    assert.equal(m.countCacheRebuilds(gemischt).count, 1, "ein anderer Subagent dazwischen verdeckt die Pause nicht (zusammengelegt wären beide Lücken unter 5 min)");
   });
 
   test("renderMarkdown nennt die Cache-Neuaufbauten", () => {

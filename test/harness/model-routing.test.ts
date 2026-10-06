@@ -622,12 +622,12 @@ type AgentAufruf = { label: string; agentType?: string; model?: string; effort?:
  * VERHALTEN der Sonderfall-Zweige statt ihrer Textreihenfolge. Unbekannte Labels brechen laut ab,
  * damit ein neuer früher Aufruf den Stub bewusst erweitern muss.
  */
-async function workflowLauf(art: "epic" | "dependabot" | "normal", opts: { planerDa: boolean; plan?: string; preflight?: Record<string, unknown> }) {
+async function workflowLauf(art: "epic" | "dependabot" | "normal", opts: { planerDa: boolean; plan?: string; titel?: string; preflight?: Record<string, unknown> }) {
   const aufrufe: AgentAufruf[] = [];
   const agent = (prompt: string, o: { label: string; agentType?: string; model?: string; effort?: string }) => {
     aufrufe.push({ prompt, label: o.label, agentType: o.agentType, model: o.model, effort: o.effort });
     if (o.label === "auswahl+claim") {
-      return Promise.resolve({ ergebnis: "ticket-geclaimt", claimVerifiziert: true, nummer: 42, titel: "Testticket", body: "Body", art });
+      return Promise.resolve({ ergebnis: "ticket-geclaimt", claimVerifiziert: true, nummer: 42, titel: opts.titel ?? "Testticket", body: "Body", art });
     }
     if (o.agentType === "kubernia-planner") return Promise.resolve(opts.planerDa ? (opts.plan ?? "PLAN-TEXT") : null);
     if (o.label.startsWith("preflight")) return Promise.resolve(opts.preflight ?? { brauchtKlaerung: true, grund: "Test", offeneFragen: ["?"] });
@@ -686,6 +686,11 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
     assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "epic-anlegen:#42"]);
     assert.match(aufrufe[2].prompt, /zu groß/, "Der Anlege-Agent bekommt den Plan mit der Aufteilung");
     assert.equal(ergebnis, "epic");
+  });
+
+  test("Plan-Weiche greift nie bei einem Sammelticket („(gesammelt)“ im Titel): normaler Weg", async () => {
+    const { aufrufe } = await workflowLauf("normal", { planerDa: true, titel: "Harness-Härtung (gesammelt)", plan: "PLAN #42\nWeiche Epic: ja, weil zu groß" });
+    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "preflight:#42"]);
   });
 
   test("Plan-Weiche „Weiche Epic: nein“ oder fehlende Zeile: normaler Weg bis zum Pre-Flight", async () => {

@@ -84,7 +84,7 @@ Bewusst **keine** harte Token-Schwelle als Bedingung: eine nie erreichte Schwell
 
 **Anlass.** Das Konvergenz-Signal oben schlug an: Generation #1276 hatte 66 offene Harness-Zeilen, Generation #1308 wieder 66, weil „abarbeiten, was in einen PR passt“ in jeder Generation Zeilen übrig ließ und Reviews neue erzeugten.
 
-**Entscheidung (Vorgabe der Maintainerin).** Beim Claimen wird die Zeilenliste halbiert: die zweite Hälfte (bei ungerader Zahl die kleinere) wandert sofort wörtlich ins nächste Sammelticket, die erste wird in **einem** PR vollständig erledigt (jede Zeile mit Ergebnis: umgesetzt, geprüft und dokumentiert, oder begründet „bewusst nicht“; zurück nur, was nachweislich nicht machbar ist). Der PR darf breit sein (`KQ-Diffsize-Override`). Neue Befunde gehen ins nächste Sammelticket, nie in den laufenden PR. Bei ungerader Zeilenzahl bleibt die größere Hälfte im aktuellen Ticket.
+**Entscheidung (Vorgabe der Maintainerin).** Beim Claimen wird die Zeilenliste halbiert: die zweite Hälfte (bei ungerader Zahl die kleinere) wandert sofort wörtlich ins nächste Sammelticket, die erste wird in **einem** PR vollständig erledigt (jede Zeile mit Ergebnis: umgesetzt, geprüft und dokumentiert, oder begründet „bewusst nicht“ (nur bei optionalen Teilen); zurück nur, was nachweislich nicht machbar ist). Der PR darf breit sein (`KQ-Diffsize-Override`). Neue Befunde gehen ins nächste Sammelticket, nie in den laufenden PR. Bei ungerader Zeilenzahl bleibt die größere Hälfte im aktuellen Ticket.
 
 **Trade-off.** Ein breiter PR ist schwerer zu reviewen und zu reverten als mehrere kleine; dafür sinkt die Liste je Generation planbar, statt dass jede Generation nur umschichtet.
 

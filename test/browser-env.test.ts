@@ -10,11 +10,10 @@ test("nach dem Warmup ist kein window gestubbt", () => {
   expect(typeof window).toBe("undefined");
 });
 
-test("nach dem Warmup ist der Modul-Cache leer: ein frischer Import liefert eine neue Instanz", async () => {
+test("nach dem Warmup ist der Modul-Cache leer: ein Import liefert eine frische Instanz", async () => {
+  const vorher = await warmupGameStack();
   vi.stubGlobal("window", { localStorage: { getItem: () => null, setItem: () => undefined, removeItem: () => undefined } });
-  const a = await import("../src/runtime");
-  vi.resetModules();
-  const b = await import("../src/runtime");
+  const nachher = await import("../src/runtime");
   vi.unstubAllGlobals();
-  expect(a).not.toBe(b);
+  expect(nachher).not.toBe(vorher);
 });

@@ -40,14 +40,15 @@ export function stubWindowLocalStorage(
  *  lief unter Last (voller `npm run verify`, Windows) in den 5000-ms-Testtimeout. Tests, die den Stack nach
  *  `vi.resetModules()` frisch laden, rufen das einmal in `beforeAll(warmupGameStack, 60_000)` auf; danach zahlt
  *  jeder Test nur noch den warmen Re-Import. Räumt hinter sich auf (kein gestubbtes `window`, leerer Modul-Cache). */
-export async function warmupGameStack(): Promise<void> {
+export async function warmupGameStack(): Promise<typeof import("../../src/runtime")> {
   stubWindowLocalStorage();
   await import("../../src/game");
   await import("../../src/sim");
   await import("../../src/store");
-  await import("../../src/runtime");
+  const runtime = await import("../../src/runtime");
   vi.unstubAllGlobals();
   vi.resetModules();
+  return runtime; // Instanz vor dem Leeren des Caches: Tests prüfen damit, dass danach wirklich frisch geladen wird
 }
 
 /** Lädt den Spiel-Stack FRISCH. Erst aufrufen, NACHDEM `window` gestubbt ist –

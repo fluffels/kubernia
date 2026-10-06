@@ -676,7 +676,8 @@ Dieses Ticket ist als Epic klassifiziert: liefere die Aufteilung in session-gro�
     { label: `plan:#${nr}`, phase: 'Plan', agentType: 'kubernia-planner', effort: 'xhigh' },
   )
 
-  const epicAbspalten = istEpic || planSagtEpic(plan)
+  // Ein Sammelticket ist nie ein Epic (AGENTS.md: Harness-Befunde sind Zeilen): der Titel schließt die Plan-Weiche aus.
+  const epicAbspalten = istEpic || (planSagtEpic(plan) && !/\(gesammelt\)/i.test(String(auswahl.titel ?? '')))
   if (!istEpic && epicAbspalten) log(`Plan für ${ticket} meldet „Weiche Epic: ja" — Aufteilung statt Umsetzung (#1309).`)
   else if (plan) log(`Plan für ${ticket} liegt vor.`)
   else if (istEpic) log('Planungs-Agent nicht verfügbar — der Anlege-Agent teilt das Epic selbst auf (dokumentierter Fallback).')

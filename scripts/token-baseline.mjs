@@ -308,7 +308,7 @@ const CACHE_PAUSE_MS = { subagent: 5 * 60_000, main: 60 * 60_000 };
 export function countCacheRebuilds(calls) {
   const byConv = new Map();
   for (const c of calls) {
-    const key = c.subagent ? String(c.subagent.id ?? c.subagent) : "main";
+    const key = c.subagent ? String(subKey(c)) : "main";
     if (!byConv.has(key)) byConv.set(key, []);
     byConv.get(key).push(c);
   }
