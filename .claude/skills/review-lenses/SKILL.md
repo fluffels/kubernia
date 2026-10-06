@@ -138,7 +138,7 @@ Im kubernia-Ticket-Ablauf ist dieser Review **Pflicht** vor dem PR — und läuf
 
 ### Nachweis nach Konvergenz (#1270)
 
-Sobald konvergiert ist, setzt der Orchestrator direkt danach einen **leeren Nachweis-Commit** mit den Zeilen `KQ-Plan:` und `KQ-Review:` (Format, Warum und Grenzen: [docs/agent-harness.md › §3a](../../../docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd-1064), nicht hier kopieren). `head` ist der zuletzt reviewte Stand, `runden` die Zahl der Pässe, `lenses` die Brillen der Runde 1. Lokal prüfen mit `node scripts/check-review-nachweis.mjs` (gibt bei Rot die Vorlage aus); die PR-CI erzwingt es als Required-Check. Danach kein Rebase/Amend mehr, sonst liegt `head` nicht mehr im PR.
+Sobald konvergiert ist, setzt der Orchestrator direkt danach einen **leeren Nachweis-Commit** mit den Zeilen `KQ-Plan:` und `KQ-Review:` (Format, Warum und Grenzen: [docs/agent-harness.md › §3a](../../../docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd-1064), nicht hier kopieren). `head` ist der zuletzt reviewte Stand, `runden` die Zahl der Pässe, `lenses` die Brillen des vollen Passes (Runde 1). Lokal prüfen mit `node scripts/check-review-nachweis.mjs` (gibt bei Rot die Vorlage aus); die PR-CI erzwingt es als Required-Check. Danach kein Rebase/Amend mehr, sonst liegt `head` nicht mehr im PR.
 
 Regel-Heimat: [AGENTS.md › Mehr-Perspektiven-Review](../../../AGENTS.md). Deterministisch verdrahtet ist die Schleife im Workflow [`.claude/workflows/kubernia-ticket.js`](../../workflows/kubernia-ticket.js) (`MAX_REVIEW_RUNDEN`).
 

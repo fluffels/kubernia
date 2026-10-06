@@ -11,7 +11,7 @@
  * Zeilen am Zeilenanfang einer Commit-Message, gleiches Muster wie `KQ-Diffsize-Override`:
  *
  *   KQ-Plan: kubernia-planner            |  KQ-Plan: ohne — <Begründung>
- *   KQ-Review: head=<sha> runden=<1..3> lenses=<Brillen der Runde 1, kommagetrennt> verdikt=ok
+ *   KQ-Review: head=<sha> runden=<1..3> lenses=<Brillen des vollen Passes (Runde 1), kommagetrennt> verdikt=ok
  *
  * Geprüft wird Konsistenz und Existenz, nicht Wahrheit: der Nachweis ist Selbstauskunft.
  * Aus einer stillen Auslassung wird so eine bewusste Falschangabe; die unabhängige Prüfung
@@ -43,7 +43,7 @@ const CODE_LENSES = ["architektur", "requirement-treue", "test-adaequanz"];
 export const VORLAGE =
   `KQ-Plan: kubernia-planner\n` +
   `KQ-Review: head=<sha-des-zuletzt-reviewten-Stands> runden=<1..${MAX_REVIEW_PAESSE}> ` +
-  `lenses=<Brillen der Runde 1, kommagetrennt> verdikt=ok`;
+  `lenses=<Brillen des vollen Passes (Runde 1), kommagetrennt> verdikt=ok`;
 
 /** Welche Brillen Runde 1 mindestens abdecken muss: nur `*.md` → doku, sonst die drei
  *  Code-Brillen. Leere oder kaputte Dateiliste → voller Code-Satz (fail-closed). Gleiche
