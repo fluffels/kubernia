@@ -54,6 +54,9 @@ const WRAPPERS = {
   unbuffer: W(),
 };
 
+/** Namen der Wrapper (Schlüssel der Wrapper-Tabelle). */
+export const WRAPPER_NAMEN = new Set(Object.keys(WRAPPERS));
+
 /** Eingebaute git-Unterbefehle (Rest: möglicher Alias, wird per `git config` aufgelöst). */
 export const KNOWN_SUBS = new Set(
   ("add am annotate apply archive bisect blame branch bundle cat-file check-attr check-ignore checkout checkout-index cherry cherry-pick clean clone column " +
@@ -94,7 +97,7 @@ export function makeCtx(cwd, deps) {
     seen: new Set(),
     depth: 0,
     aliasCache: new Map(),
-    cfgAliases: new Map(), // `git config alias.X …` im selben Befehl
+    cfgAliases: new Map(), // `git config alias.X …` im selben Befehl (Schlüssel klein geschrieben)
     evalString: () => {
       throw new Error("evalString nicht gesetzt");
     },
@@ -199,7 +202,7 @@ function wrapperOptionen(spec, words, start, res) {
 export function peel(words) {
   const res = { i: -1, name: null, wrappers: [], chdirs: [], env: [], dynamicCmd: false, noop: false };
   let i = 0;
-  for (let round = 0; round < 20; round++) {
+  for (let round = 0; round <= words.length; round++) { // jede Runde verbraucht mindestens ein Wort
     while (i < words.length && ASSIGN_RE.test(words[i].text)) merkeZuweisung(res, words[i++]);
     if (i >= words.length) return res;
     const w = words[i];

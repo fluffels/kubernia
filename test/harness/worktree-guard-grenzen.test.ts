@@ -52,6 +52,7 @@ describe("Alias-Tiefe: dieselbe Grenze wie bei Interpretern, fail-closed", () =>
   test("bis zur Tiefe wird aufgelöst, darüber fragt der Hook (mainOnly)", () => {
     assert.ok(ziele(kette(2)).length > 0, "zwei Ebenen: commit/push erkannt");
     assert.ok(ziele(kette(3)).length > 0, "drei Ebenen: noch erkannt");
+    assert.equal(lauf(kette(4)).asks.get(HAUPT)?.mainOnly, true, "ab der vierten Ebene fragt der Hook");
     const tief = lauf(kette(5));
     assert.equal(tief.targets.length, 0);
     assert.equal(tief.asks.get(HAUPT)?.mainOnly, true, "über der Tiefe: Rückfrage statt stilles Durchlassen");
@@ -61,6 +62,23 @@ describe("Alias-Tiefe: dieselbe Grenze wie bei Interpretern, fail-closed", () =>
     assert.ok(lauf(kette(5), WT).asks.has(WT), "Frage vorgemerkt; decide entscheidet nach Haupt-Checkout");
   });
 
+  test("`-c`-Aliase gelten nur für ihren git-Aufruf: ein späteres `git p` sieht die echte Konfiguration", () => {
+    const konfig = { ...deps, execFileSync: (_c: string, args: string[]) => { if (args[0] === "config") return "push"; throw new Error("kein git"); } };
+    assert.ok(analyse("git -c alias.p='!git status' p; git p", HAUPT, konfig).targets.length > 0, "der Push aus der echten Konfiguration wird erkannt");
+    assert.ok(analyse("git -c alias.p='!echo' p; git p", HAUPT, konfig).targets.length > 0);
+  });
+
+  test("-c-Aliasnamen sind nicht case-sensitiv (wie in git)", () => {
+    assert.ok(ziele("git -c alias.P=push p").length > 0);
+    assert.ok(ziele("git -c alias.p=push P").length > 0);
+  });
+
+  test("`!`-Alias-Ketten über der Tiefe fragen", () => {
+    const aliase = Array.from({ length: 6 }, (_x, i) => `-c alias.g${i}='!git g${i + 1}'`).join(" ").replace("alias.g5='!git g6'", "alias.g5='!git push'");
+    const r = lauf(`git ${aliase} g0`);
+    assert.ok(r.targets.length > 0 || r.asks.get(HAUPT)?.mainOnly === true, "nicht still durchlassen");
+  });
+
   test("ein `!`-Alias sieht die -c-Aliase des Elternaufrufs", () => {
     assert.ok(ziele("git -c alias.g0='!git g1' -c alias.g1='!git push' g0").length > 0);
   });
@@ -68,11 +86,11 @@ describe("Alias-Tiefe: dieselbe Grenze wie bei Interpretern, fail-closed", () =>
 
 describe("bash-parser: Operatoren ;;& |& >| und $\"…\" (über analyse)", () => {
   test("|& ist eine Pipeline: das git-Kommando dahinter wird bewertet", () => {
-    assert.ok(ziele("echo a |& git push").length > 0);
+    assert.deepEqual(ziele(`cd '${WT}'; echo a |& git push`), [WT], "die Pipeline wirkt nicht nach außen, das cd davor gilt");
   });
 
   test(">| ist eine Umleitung, kein Pipe-Trenner", () => {
-    assert.ok(ziele("echo a >| datei; git push").length > 0);
+    assert.deepEqual(ziele(`cd '${WT}'; echo a >| datei; git push`), [WT]);
     assert.deepEqual(ziele("echo a >| git"), [], "git als Dateiname hinter >| ist kein Aufruf");
   });
 
@@ -82,7 +100,7 @@ describe("bash-parser: Operatoren ;;& |& >| und $\"…\" (über analyse)", () =>
   });
 
   test(";;& beendet einen case-Arm", () => {
-    assert.ok(ziele("case x in a) echo a ;;& *) git push ;; esac").length > 0);
+    assert.deepEqual(ziele(`cd '${WT}'; case x in a) echo a ;;& *) git push ;; esac`), [WT], "der zweite Arm läuft im Verzeichnis nach dem cd");
   });
 });
 
@@ -106,6 +124,10 @@ describe("PowerShell-Tokenizer: Altverhalten, das der Umbau mitnimmt", () => {
 
   test("Here-String-Opener nur am Tokenanfang; ein @' mitten im Token ist normaler Text", () => {
     assert.deepEqual(worte("x@'a'"), [["x@a"]]);
+  });
+
+  test("Here-String-Opener mitten im Token (@' hinter x) ist Text, kein Here-String", () => {
+    assert.deepEqual(worte("x@'\na'"), [["x@\na"]]);
   });
 
   test("Punkt-Aufruf . git push wird als Aufruf erkannt", () => {

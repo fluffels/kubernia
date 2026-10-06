@@ -18,7 +18,7 @@ function konfiguration(g, cfg) {
   if (!cfg || cfg.dynamic) return;
   const a = /^alias\.([^=]+)=(.*)$/s.exec(cfg.text);
   const wt = /^core\.worktree=(.*)$/is.exec(cfg.text);
-  if (a) g.aliases.set(a[1], a[2]);
+  if (a) g.aliases.set(a[1].toLowerCase(), a[2]); // git-Konfigurationsnamen sind nicht case-sensitiv
   if (wt) g.workTrees.push({ text: wt[1], dynamic: false });
 }
 
@@ -169,18 +169,24 @@ function configAliasMerken(c, rest) {
 /** Alias auflösen (Aufruf-lokal, im selben Befehl gesetzt oder aus der git-Konfiguration); true, wenn der Aufruf damit erledigt ist. */
 function aliasAufloesen(g, words, k, rest, pe, D, c, depth) {
   const sub = g.sub.text;
-  if (PROTECTED_SUBS.has(sub) || !(g.aliases.has(sub) || !KNOWN_SUBS.has(sub)) || sub === "") return false;
   const cfgName = sub.toLowerCase(); // git-Konfigurationsnamen sind nicht case-sensitiv
+  if (PROTECTED_SUBS.has(sub) || !(g.aliases.has(cfgName) || !KNOWN_SUBS.has(sub)) || sub === "") return false;
   if (c.cfgAliases.get(cfgName) === null) ask(c, real(D), `Der git-Alias \`${sub}\` ist nicht statisch auflösbar.`, true);
-  const al = g.aliases.has(sub) ? g.aliases.get(sub) : (c.cfgAliases.get(cfgName) ?? configAlias(c, sub, D));
+  const al = g.aliases.has(cfgName) ? g.aliases.get(cfgName) : (c.cfgAliases.get(cfgName) ?? configAlias(c, sub, D));
   if (!al) return false;
-  if (depth >= MAX_INTERPRETER) {
+  if (depth >= MAX_INTERPRETER || (al.startsWith("!") && c.depth >= MAX_INTERPRETER)) {
     ask(c, real(D), `Die Alias-Kette von \`${sub}\` ist zu tief verschachtelt, der Inhalt wird nicht mehr ausgewertet.`, true);
     return true;
   }
   if (al.startsWith("!")) {
-    for (const [name, wert] of g.aliases) c.cfgAliases.set(name.toLowerCase(), wert); // `-c alias.x=…` gelten auch für den inneren git-Aufruf
-    c.evalString(`${al.slice(1)} ${rest.map((w) => w.text).join(" ")}`, gitTargetDirs(g, pe, D, c));
+    // `-c alias.x=…` gelten für den inneren git-Aufruf, aber nur für ihn (danach wird der befehlsweite Zustand wiederhergestellt)
+    const vorher = new Map(c.cfgAliases);
+    for (const [name, wert] of g.aliases) c.cfgAliases.set(name, wert);
+    try {
+      c.evalString(`${al.slice(1)} ${rest.map((w) => w.text).join(" ")}`, gitTargetDirs(g, pe, D, c));
+    } finally {
+      c.cfgAliases = vorher;
+    }
     return true;
   }
   const aw = al.trim().split(/\s+/).map((text) => ({ text, dynamic: false, quoted: false }));

@@ -32,6 +32,7 @@
  */
 import { MAX_INTERPRETER, buildAskOutput, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
 import { quoteFolge } from "./quote-folge.mjs";
+import { SHELLS, WRAPPER_NAMEN, baseName, peel } from "./worktree-guard-tabellen.mjs";
 
 export { buildAskOutput, parseHookInput };
 
@@ -60,12 +61,14 @@ const REST_PFADE = [
 ];
 
 /**
- * Präfixe vor einem Befehl, die iterativ abgeschält werden (jedes Muster einzeln und verankert, kein geschachteltes
- * Backtracking): PowerShell-Zuweisung `$r = ` und Cast `[array]`, Kontrollwörter (`if (…) {`, `foreach (…) {`, `then`, `do`,
- * `else`, `ForEach-Object {`, `-Process`), ein Block vor `else`/`catch`, Bash-`case`-Arme, Wrapper (`env`, `timeout 5`,
- * `xargs -n 1`, `time -p` …) und Variablen-Zuweisungen `FOO=1`. Hinter ihnen steht der eigentliche Befehl wie am Segmentanfang.
+ * Präfixe vor einem Befehl, die iterativ abgeschält werden (jedes Muster einzeln, verankert und sticky, kein geschachteltes
+ * Backtracking, kein Kopieren des Restes): PowerShell-Zuweisung `$r = ` und Cast `[array]`, Kontrollwörter (`if (…) {`,
+ * `foreach (…) {`, `then`, `do`, `else`, `ForEach-Object {`, `-Process`), ein Block vor `else`/`catch`, Bash-`case`-Arme,
+ * Variablen-Zuweisungen `FOO=1`. Wrapper (`env`, `timeout -s KILL 5`, `xargs -I {}`, `sudo -u x`, `time -p` …) schält
+ * `wrapperAbschaelen` mit der Wrapper-Tabelle des Worktree-Guards (`peel`) ab. Hinter allem steht der eigentliche Befehl
+ * wie am Segmentanfang. Keine Obergrenze der Schritte: jeder Schritt verbraucht mindestens ein Zeichen.
  */
-const WRAPPER = "env|nice|nohup|sudo|doas|xargs|timeout|stdbuf|ionice|setsid|winpty|unbuffer|time|command|exec|builtin";
+const sticky = (re) => new RegExp(re.source.replace(/^\^/, ""), `${re.flags}y`);
 const PRAEFIXE = [
   /^\$[\w:]+\s*=\s*/,
   /^\[[\w.,[\] ]+\]\s*/,
@@ -75,26 +78,80 @@ const PRAEFIXE = [
   /^\{(?:[^{}]|\{[^{}]*\})*\}\s*(?=(?:else|elseif|catch|finally)\b)/,
   /^case\s+[^)]*\)\s*/,
   /^[\w*|]+\)\s+/,
-  new RegExp(String.raw`^(?:${WRAPPER})\b(?:\s+(?:-\S*|\d+\S*|\w+=\S*))*\s+`),
   /^\w+=\S*\s+/,
-];
-const ZEICHEN_VOLL = /^[\s(`$@&!{]+/; // `$(gh api`, `@(gh api`, `& gh api`, `{ gh api`
-const ZEICHEN_ENG = /^[\s(!{]+/; // wie voll, aber ein `$` bleibt stehen (dynamisches Kommando `$CMD`)
+].map(sticky);
+const ZEICHEN_VOLL = sticky(/^[\s(`$@&!{]+/); // `$(gh api`, `@(gh api`, `& gh api`, `{ gh api`, `! gh api`
+const ZEICHEN_ENG = sticky(/^[\s(!{]+/); // wie voll, aber ein `$` bleibt stehen (dynamisches Kommando `$CMD`)
+/** Befehle länger als das werden nicht mehr zerlegt (Laufzeit der Hook-Prüfung): enthält er `gh api`, wird gefragt. */
+const LAENGE_MAX = 100_000;
+
+/** Basisname des Kommandowortes (`/usr/bin/gh`, `'gh'`, `C:\Windows\cmd.exe`): Quotes außen entfernen, der Rest bleibt roh (ein `\` ist hier ein Pfadtrenner). */
+const kommandoName = (roh) => baseName(roh.replace(/^['"]|['"]$/g, ""));
+
+/** Wrapper und ihre Optionen/Positionsargumente vor dem Kommando abschälen: der Rest ab dem Kommando oder null. */
+function wrapperAbschaelen(rest) {
+  const t = woerter(rest);
+  if (!t.length || !WRAPPER_NAMEN.has(kommandoName(t[0]))) return null;
+  const pe = peel(t.map((text) => ({ text, dynamic: false, quoted: false })));
+  return pe.i > 0 ? t.slice(pe.i).join(" ") : null;
+}
 
 /** Schält die Präfixe ab; `mitSonderzeichen: false` lässt ein führendes `$`/`@`/`&` stehen. */
 function abschaelen(segment, mitSonderzeichen) {
   const regeln = [...PRAEFIXE, mitSonderzeichen ? ZEICHEN_VOLL : ZEICHEN_ENG];
-  let rest = segment;
-  for (let n = 0; n < 50; n++) {
-    const treffer = regeln.map((re) => re.exec(rest)).find((m) => m && m[0].length > 0);
-    if (!treffer) break;
-    rest = rest.slice(treffer[0].length);
+  let text = segment;
+  let pos = 0;
+  for (;;) {
+    const m = regeln.map((re) => ((re.lastIndex = pos), re.exec(text))).find((x) => x && x[0].length > 0);
+    if (m) {
+      pos += m[0].length;
+      continue;
+    }
+    const w = wrapperAbschaelen(text.slice(pos));
+    if (w === null) return text.slice(pos);
+    text = w;
+    pos = 0;
   }
-  return rest;
 }
 
-/** Steht `gh api` am Segmentanfang (hinter den Präfixen)? Ein Treffer in einem Textargument eines anderen Befehls zählt nicht. */
-const beginntMitGhApi = (segment) => /^gh(?:\.exe)?\s+api\b/.test(abschaelen(segment, true));
+/** Steht `gh api` am Segmentanfang (hinter den Präfixen, auch als `/usr/bin/gh` oder `'gh'`)? Ein Treffer in einem Textargument
+ *  eines anderen Befehls zählt nicht. */
+function beginntMitGhApi(segment) {
+  const t = woerter(abschaelen(segment, true));
+  return t.length >= 2 && kommandoName(t[0]) === "gh" && wortWert(t[1]) === "api";
+}
+
+/** Zeilenfortsetzungen (`\`+Zeilenumbruch in Bash, Backtick+Zeilenumbruch in PowerShell, auch CRLF) außerhalb von `'…'` durch ein Leerzeichen ersetzen. */
+function ohneFortsetzung(text) {
+  const f = quoteFolge(text);
+  let out = "";
+  for (let k = 0; k < f.length; k++) {
+    const n = f[k + 1];
+    if (n?.masked && (n.c === "\n" || n.c === "\r")) {
+      out += " ";
+      k++;
+      if (f[k].c === "\r" && f[k + 1]?.masked && f[k + 1].c === "\n") k++;
+    } else out += f[k].c;
+  }
+  return out;
+}
+
+/** Die Inhalte von `$( … )` außerhalb von `'…'` (auch geschachtelt, jeweils einzeln). */
+function ersetzungen(text) {
+  const f = quoteFolge(text);
+  const out = [];
+  for (let k = 0; k < f.length - 1; k++) {
+    if (f[k].c !== "$" || f[k].q === "'" || f[k].masked || f[k + 1].c !== "(") continue;
+    let tiefe = 1;
+    let j = k + 2;
+    for (; j < f.length && tiefe > 0; j++) {
+      const e = f[j];
+      if (e.q !== "'" && !e.masked) tiefe += e.c === "(" ? 1 : e.c === ")" ? -1 : 0;
+    }
+    out.push(f.slice(k + 2, tiefe === 0 ? j - 1 : j).map((e) => e.c).join(""));
+  }
+  return out;
+}
 
 /**
  * Zerlegt einen Befehl an `&&`, `||`, `;`, `|` und Zeilenumbrüchen, aber NICHT innerhalb von Anführungszeichen
@@ -218,24 +275,23 @@ function wortWert(roh) {
   return out;
 }
 
-const SHELL_OPTIONEN_MIT_WERT = ["-o", "+o", "-O", "+O", "--rcfile", "--init-file"];
-
-/** Die Skript-Zeichenkette hinter `-c`/`-Command` bzw. `cmd /c` eines Interpreter-Segments, sonst null. */
+/** Die Skript-Zeichenkette hinter `-c`/`-lc`/`-ec`/`-Command` bzw. `cmd /c` eines Interpreter-Segments (`roh` mit Quotes der
+ *  äußeren Shell, `wert` ohne), sonst null. Die Option wird irgendwo in den Wörtern gesucht (`-ExecutionPolicy Bypass -Command`). */
 function interpreterString(segment) {
   const t = woerter(abschaelen(segment, false));
-  while (t.length && /^\w+=/.test(t[0])) t.shift();
-  const name = (t.shift() ?? "").replace(/\\/g, "/").split("/").pop().toLowerCase().replace(/\.exe$/, "");
+  let i = 0;
+  while (i < t.length && /^\w+=/.test(t[i])) i++;
+  const name = kommandoName(t[i++] ?? "");
+  const rest = t.slice(i);
   if (name === "cmd") {
-    const k = t.findIndex((x) => /^\/c$/i.test(x));
-    return k >= 0 && t.length > k + 1 ? wortWert(t.slice(k + 1).join(" ")) : null;
+    const k = rest.findIndex((x) => /^\/c$/i.test(x));
+    const roh = rest.slice(k + 1).join(" ");
+    return k >= 0 && roh ? { roh, wert: wortWert(roh) } : null;
   }
-  if (!["bash", "sh", "zsh", "dash", "pwsh", "powershell"].includes(name)) return null;
-  for (let i = 0; i < t.length; i++) {
-    if (/^-(?:c|lc|ec|command)$/i.test(t[i])) return t[i + 1] === undefined ? null : wortWert(t[i + 1]);
-    if (SHELL_OPTIONEN_MIT_WERT.includes(t[i])) i++;
-    else if (!t[i].startsWith("-")) return null;
-  }
-  return null;
+  if (!SHELLS.has(name) && name !== "pwsh" && name !== "powershell") return null;
+  const k = rest.findIndex((x) => /^-(?:c|lc|ec|command)$/i.test(x));
+  const v = k < 0 ? undefined : rest[k + 1] === "--" ? rest[k + 2] : rest[k + 1];
+  return v === undefined ? null : { roh: v, wert: wortWert(v) };
 }
 
 const REGEL = "Pre-Flight-Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints, Rückfrage bei der Maintainerin.";
@@ -256,22 +312,36 @@ function umweg(segment, tiefe) {
   const rest = abschaelen(segment, false);
   if (/^(?:eval|iex|Invoke-Expression)\b/i.test(rest)) return frage("`eval`/`iex` neben `gh api`: der zusammengesetzte Aufruf ist nicht prüfbar");
   if (/^\$\{?\w+\}?(?![\w:]|\s*=)/.test(rest)) return frage("dynamisches Kommando ($CMD) neben `gh api`: der Aufruf ist nicht prüfbar");
-  const inner = tiefe < MAX_INTERPRETER ? interpreterString(segment) : null;
-  if (!inner) return null;
-  if (hatVariable(inner)) return frage("Interpreter-String mit Variable neben `gh api`: der Aufruf ist nicht prüfbar");
-  const r = bewerte(inner, tiefe + 1);
+  const ip = tiefe < MAX_INTERPRETER ? interpreterString(segment) : null;
+  if (!ip) return null;
+  if (hatVariable(ip.roh)) return frage("Interpreter-String mit Variable neben `gh api`: der Aufruf ist nicht prüfbar");
+  const r = bewerte(ip.wert, tiefe + 1);
   return r.ask ? r : null;
 }
 
+/** Ein `$( … )` innerhalb eines Segments (`R=$(gh api -X DELETE …)`, `echo $(…)`): der Inhalt wird einzeln bewertet. */
+function ersetzung(segment, tiefe) {
+  if (tiefe >= MAX_INTERPRETER) return null;
+  for (const inner of ersetzungen(segment)) {
+    const r = bewerte(inner, tiefe + 1);
+    if (r.ask) return r;
+  }
+  return null;
+}
+
 /** Bewertet einen Befehl: `{ ask: true, reason }` bei einem `gh api`-Segment mit Außenwirkung oder nicht prüfbarem
- *  Inhalt (Variablen, `eval`/`iex`, Interpreter-Strings), sonst `{ ask: false }`. Nie `deny`. Segmentiert wird zweimal: mit
- *  Bash-Escapes (`\`+Zeilenumbruch ist eine Fortsetzung) und ohne (PowerShell-Pfade `C:\dev\;`); das strengere Ergebnis gilt. */
+ *  Inhalt (Variablen, `eval`/`iex`, Interpreter-Strings, Ersetzungen), sonst `{ ask: false }`. Nie `deny`. Segmentiert wird
+ *  zweimal: mit Bash-Escapes (`\`+Zeilenumbruch ist eine Fortsetzung) und ohne (PowerShell-Pfade `C:\dev\;`); das
+ *  strengere Ergebnis gilt. Fortsetzungen werden vor den Textprüfungen zu Leerzeichen. */
 export function bewerte(command, tiefe = 0) {
   if (!command || typeof command !== "string") return { ask: false };
   const hatGhApi = /\bgh(?:\.exe)?\b/.test(command) && /\bapi\b/.test(command);
-  for (const segment of new Set([...segmente(command, true), ...segmente(command, false)])) {
+  if (hatGhApi && command.length > LAENGE_MAX) return frage("der Befehl ist für die Textprüfung zu lang");
+  for (const roh of new Set([...segmente(command, true), ...segmente(command, false)])) {
+    const segment = ohneFortsetzung(roh);
     const r = beginntMitGhApi(segment) ? ghApiSegment(segment) : hatGhApi ? umweg(segment, tiefe) : null;
-    if (r) return r;
+    const e = r ?? (hatGhApi ? ersetzung(segment, tiefe) : null);
+    if (e) return e;
   }
   return { ask: false };
 }
