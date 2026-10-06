@@ -7,11 +7,10 @@
  * mehrfach (5 → 7 → 6), und jede Verschiebung hätte vier Stellen gebraucht. Regel jetzt:
  *
  *   1. AGENTS.md nennt die Position genau einmal (SSOT).
- *   2. Der jq-Index im Anlegen-Snippet von docs/ticket-reihenfolge.md ist Position − 2
- *      (0-basiert, und das frisch angelegte Item steht selbst nicht in der Zählung).
- *   3. Das Snippet schließt das neue Item aus (`.id != "$ITEM"`), sonst bekäme `afterId` bei
- *      genau Position-1 Todo-Items das neue Item selbst.
- *   4. Workflow und Sammelticket-Abschnitt von docs/ticket-reihenfolge.md nennen keine eigene Zahl
+ *   2. Das Anlegen-Snippet von docs/ticket-reihenfolge.md setzt die Position über
+ *      `board-place.mjs --position "$N" "$NR"`; die Zählung (N-1. Todo-Item ohne das neue Item) liegt
+ *      getestet in scripts/board-lib.mjs › afterIdForPosition.
+ *   3. Workflow und Sammelticket-Abschnitt von docs/ticket-reihenfolge.md nennen keine eigene Zahl
  *      und verweisen auf AGENTS.md. Das ADR darf die Historie mit Zahlen erzählen.
  */
 import { describe, test } from "vitest";
@@ -56,13 +55,13 @@ describe("Sammelticket-Position (#1276)", () => {
     assert.ok(positionAusAgentsMd(agents) >= 1);
   });
 
-  test("der Index im Snippet ist N − 2 (N = Position aus AGENTS.md, als Variable statt Literal)", () => {
-    assert.match(anlegen, /\(\.\[\$N-2\] \/\/ \.\[-1\]\)\.id/);
+  test("das Snippet setzt die Position über board-place.mjs mit N als Variable (die Zählung ist in test/board.test.ts getestet)", () => {
+    assert.match(anlegen, /board-place\.mjs --position "\$N" "\$NR"/);
     assert.match(anlegen, /^N=<Position>/m, "das Snippet trägt keine eigene Zahl für das Sammelticket");
   });
 
-  test("das Snippet schließt das frisch angelegte Item aus der Zählung aus", () => {
-    assert.ok(anlegen.includes('and .id != \\"$ITEM\\")]'), 'select(... and .id != \\"$ITEM\\")');
+  test("das Snippet zählt nicht selbst per jq nach (sonst driftet es von der getesteten Logik)", () => {
+    assert.doesNotMatch(anlegen, /\$N-2/);
   });
 
   test("der Workflow doppelt die Zahl nicht, sondern verweist auf AGENTS.md", () => {

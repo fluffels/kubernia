@@ -7,20 +7,28 @@
  *   node scripts/board-place.mjs --top 1240 1241 1242        # in dieser Reihenfolge an die Spitze
  *   node scripts/board-place.mjs --after 1206 1240 1241      # in dieser Reihenfolge hinter #1206
  *   node scripts/board-place.mjs --dry-run --top 1240        # nur anzeigen
+ *   node scripts/board-place.mjs --position 6 1312           # als N. Todo-Item (z.B. Sammelticket)
+ *   node scripts/board-place.mjs --missing                   # offene Issues ohne Board-Item (nur Bericht)
  *
- * Nummern, die `gh project item-list` noch nicht liefert (frische Items kommen verzögert), werden
+ * Nummern, die die Board-Liste noch nicht liefert (frische Items kommen verzögert), werden
  * gemeldet und übersprungen: später erneut aufrufen. Bei Rate-Limit sofort stoppen, den Rest melden.
  */
 import { pathToFileURL } from "node:url";
-import { abortMessage, loadItems, planPlacements, setPosition } from "./board-lib.mjs";
+import { abortMessage, afterIdForPosition, loadItems, loadOpenIssueNumbers, missingFromBoard, planPlacements, setPosition } from "./board-lib.mjs";
 
 const PAUSE_MS = 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** Argumente → { mode, anchor, numbers, dry } oder null bei falscher Benutzung. */
+/** Argumente → { anchor, numbers, dry } bzw. { position, numbers, dry } bzw. { missing } oder null bei falscher Benutzung. */
 export function parseArgs(argv) {
   const dry = argv.includes("--dry-run");
   const rest = argv.filter((a) => a !== "--dry-run");
+  if (rest.length === 1 && rest[0] === "--missing") return { missing: true, dry };
+  if (rest[0] === "--position") {
+    const [n, nr, ...more] = rest.slice(1).map((a) => Number(a.replace(/^#/, "")));
+    if (more.length > 0 || ![n, nr].every((x) => Number.isInteger(x) && x > 0)) return null;
+    return { anchor: null, position: n, numbers: [nr], dry };
+  }
   const top = rest[0] === "--top";
   const after = rest[0] === "--after";
   if (!top && !after) return null;
@@ -30,15 +38,32 @@ export function parseArgs(argv) {
   return nums.length < 2 ? null : { anchor: nums[0], numbers: nums.slice(1), dry };
 }
 
+/** Bericht: offene Issues, die nicht auf dem Board stehen (Einsortieren bleibt eine Abwägung der Agentin). */
+function reportMissing() {
+  try {
+    const missing = missingFromBoard(loadOpenIssueNumbers(), loadItems());
+    console.log(missing.length === 0 ? "Alle offenen Issues stehen im Board." : `Offen, aber nicht im Board: ${missing.map((n) => `#${n}`).join(", ")}`);
+  } catch (e) {
+    console.error(`✖ Abbruch: ${abortMessage(e.message)}.`);
+    process.exit(1);
+  }
+}
+
 async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   if (!args) {
-    console.error("Aufruf: board-place.mjs [--dry-run] (--top <nr>... | --after <ankernr> <nr>...)");
+    console.error("Aufruf: board-place.mjs [--dry-run] (--top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing)");
     process.exit(2);
   }
+  if (args.missing) return reportMissing();
   let plan;
   try {
-    plan = planPlacements(loadItems(), args.numbers, args.anchor);
+    const items = loadItems();
+    if (args.position) {
+      const afterId = afterIdForPosition(items, args.position, args.numbers[0]);
+      const anchor = afterId === null ? null : items.find((i) => i.id === afterId)?.number ?? null;
+      plan = planPlacements(items, args.numbers, anchor);
+    } else plan = planPlacements(items, args.numbers, args.anchor);
   } catch (e) {
     console.error(`✖ Abbruch: ${abortMessage(e.message)}. Später erneut fahren.`);
     process.exit(1);

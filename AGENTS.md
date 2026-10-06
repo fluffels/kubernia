@@ -96,7 +96,7 @@ Der Hauptchat läuft auf dem gewählten Session-Modell (kein Projekt-Pin); die U
 
 Der Backlog sind **GitHub Issues** im **Project-Board**. Die Reihenfolge ist die **Board-Position** (Drag & Drop, #747) — keine `prio:*`-Labels, keine Reihenfolge-Datei (#627);. Befehl, Sonderfälle und Board-IDs: **[docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md)** (die SSOT der Auswahl-Mechanik; braucht `read:project`-Scope, `gh auth refresh -s project`).
 
-**Auswahl des nächsten Tickets — deterministisch, nicht abwägen.** „Nächstes Ticket" = **oberstes freies Item** der Board-Auswahl (`.status == "Todo"`, kein offener Blocker, kein offener PR/Branch/Worktree — Gegencheck `git worktree list` + `git branch -a`; **immer `--limit 800`**, sonst fehlen Items). **Kein Vorab-Abgleich der ganzen Liste** — nur **dieses eine** Kandidaten-Ticket prüfen (`gh issue view <nr>`).
+**Auswahl des nächsten Tickets — deterministisch, nicht abwägen.** „Nächstes Ticket" = **oberstes freies Item** der Board-Auswahl (`.status == "Todo"`, kein offener Blocker, kein offener PR/Branch/Worktree — Gegencheck `git worktree list` + `git branch -a`). **Kein Vorab-Abgleich der ganzen Liste** — nur **dieses eine** Kandidaten-Ticket prüfen (`gh issue view <nr>`).
 
 
 **Kollisionsschutz bei parallelen Agenten:**
