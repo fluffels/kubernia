@@ -43,7 +43,7 @@ Regel: [AGENTS.md › Nicht jeder Befund wird ein Ticket](../AGENTS.md#wo-die-to
   ```
   Kein ungeclaimter Treffer → anlegen (unten). Zwei offene **ungeclaimte** (Wettlauf) → das jüngere schließen, seine Zeilen ins ältere übertragen.
 
-- **Anlegen auf Position 5** (fehlt ein ungeclaimtes, auch während ein geclaimtes abgearbeitet wird; vorher mit dem Suchbefehl oben prüfen, nie doppelt anlegen):
+- **Anlegen auf Position 7** (fehlt ein ungeclaimtes, auch während ein geclaimtes abgearbeitet wird; vorher mit dem Suchbefehl oben prüfen, nie doppelt anlegen):
   ```bash
   NR=$(gh issue create --label area:harness --title "Harness-Härtung (gesammelt)" --body "- [ ] <Befund>" | grep -o '[0-9]*$')
   NODE=$(gh issue view "$NR" --json id --jq .id)
@@ -51,13 +51,13 @@ Regel: [AGENTS.md › Nicht jeder Befund wird ein Ticket](../AGENTS.md#wo-die-to
     -f p=PVT_kwHOD8746c4Barq_ -f c="$NODE" --jq .data.addProjectV2ItemById.item.id)
   gh project item-edit --id "$ITEM" --project-id PVT_kwHOD8746c4Barq_ --field-id PVTSSF_lAHOD8746c4Barq_zhVhdTM --single-select-option-id f75ad846   # Status Todo, sonst fehlt das Item in der Auswahl
   AFTER=$(gh project item-list 1 --owner fluffels --format json --limit 800 \
-    --jq '[.items[] | select((.status // "")=="Todo")][3].id // empty')   # 4. Item → neues landet auf 5
-  # leer (weniger als 4 Todo-Items): afterId weglassen, dann landet es oben
+    --jq '[.items[] | select((.status // "")=="Todo")][5].id // empty')   # 6. Item → neues landet auf 7
+  # leer (weniger als 6 Todo-Items): afterId weglassen, dann landet es oben
   gh api graphql -f query='mutation($p:ID!,$i:ID!,$a:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }' \
     -f p=PVT_kwHOD8746c4Barq_ -f i="$ITEM" -f a="$AFTER"
   ```
 - **Beim Claimen des Sammeltickets** sofort prüfen, ob ein ungeclaimtes existiert; fehlt es, direkt eines anlegen (unten), damit Befunde nie ohne Ziel sind.
-- **Abarbeiten:** zuerst der feste **Langfuse-Blick** ([docs/model-routing.md › Langfuse-Blick](model-routing.md#langfuse-blick-beim-sammelticket-1199)) — dessen Befunde werden weitere Zeilen. Dann so viele Zeilen umsetzen, wie in **einen** PR passen (`check:diffsize`). **Vor dem PR** die Kommentare erneut lesen; was offen ist, ins **bestehende ungeclaimte** Sammelticket übertragen, sonst eines auf Position 5 anlegen — nur wenn Zeilen übrig sind, kein leeres. Das alte schließt der PR per `Closes`.
+- **Abarbeiten:** zuerst der feste **Langfuse-Blick** ([docs/model-routing.md › Langfuse-Blick](model-routing.md#langfuse-blick-beim-sammelticket-1199)) — dessen Befunde werden weitere Zeilen. Dann so viele Zeilen umsetzen, wie in **einen** PR passen (`check:diffsize`). **Vor dem PR** die Kommentare erneut lesen; was offen ist, ins **bestehende ungeclaimte** Sammelticket übertragen, sonst eines auf Position 7 anlegen — nur wenn Zeilen übrig sind, kein leeres. Das alte schließt der PR per `Closes`.
 - **Konvergenz-Signal:** Zeilenzahl pro Sammelticket-Generation ([ADR 0012](adr/0012-harness-autonomie-audit-spur.md#fortschreibung-1199-2026-10-05-spielquote-sammelticket-abschlusskriterium)).
 
 ## Reihenfolge pflegen — im Board, nicht in einer Datei

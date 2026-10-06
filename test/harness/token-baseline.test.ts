@@ -101,6 +101,8 @@ describe("token-baseline: Phasen-Zuordnung", () => {
     assert.equal(m.classifySubagent("general-purpose", "Frischer Kritiker Runde 2"), "Review");
     assert.equal(m.classifySubagent("Explore", "Review-Kontext sammeln"), "Recherche");
     assert.equal(m.classifySubagent("general-purpose", "Lens 2: Requirement-Treue gegen den Plan"), "Review");
+    // kubernia-lens mit einer Beschreibung ohne Review-Wort: der agentType allein ordnet zu.
+    assert.equal(m.classifySubagent("kubernia-lens", "Architektur-Blick auf #1264"), "Review");
     assert.equal(m.classifySubagent("claude-code-guide", "Liest Claude Code AGENTS.md?"), null);
     assert.equal(m.classifySubagent(undefined, undefined), null);
   });

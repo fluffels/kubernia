@@ -30,7 +30,7 @@ Eine Absicherung, die man mit einem Flag umgehen kann, ist bei einem **unzuverl�
 **`main` ist server-seitig PR-gegated.** Konkret:
 
 1. **Branch-Protection auf `main`:** Merge nur über einen **Pull Request** mit **grünen Required-Status-Checks** (die CI-Jobs *Tests, Typecheck & Builds* und *Security-Audit (npm audit)*). **`enforce_admins` ist an** — die Regel gilt auch für die Maintainerin und die Agenten (die als Repo-Admin/`fluffels` arbeiten). Kein Direkt-Push, kein `--no-verify`-Schlupf. Kein Pflicht-Review (`required_approving_review_count: 0`), damit der **autonome Selbst-Merge** des Agenten erhalten bleibt: er mergt seinen eigenen PR, sobald die Checks grün sind.
-2. **CI setzt `check:diffsize` real durch (#592):** der CI-Checkout holt die **volle Historie** (`fetch-depth: 0`) und setzt `KQ_DIFF_BASE` auf die PR-Basis, sodass der Diff-Größen-Wächter auf PRs den **echten** Slice misst statt zu Grün zu degradieren.
+2. **CI setzt `check:diffsize` real durch (#592):** der CI-Checkout holt die **volle Historie** (`fetch-depth: 0`) und setzt `KQ_DIFF_BASE` auf den Kopf der PR-Basis (HEAD^1 des Merge-Checkouts), sodass der Diff-Größen-Wächter auf PRs den **echten** Slice misst statt zu Grün zu degradieren.
 3. **Der pre-push-Hook (#528) bleibt als sekundäres Netz** (schnelle lokale Rückmeldung), ist aber nicht mehr die maßgebliche Durchsetzung. Vor dem PR fährt der Agent `npm run verify` lokal, damit die PR-CI selten rot anläuft.
 
 ## Konsequenzen
