@@ -225,4 +225,4 @@ Kommt das Sammelticket „Harness-Härtung (gesammelt)" dran ([Mechanik](ticket-
 2. **Tokenfresser:** der teuerste Lauf des Zeitraums und woran es lag (Phase, Subagent, wiederholtes Lesen großer Dateien).
 3. **Prozess:** Läufe mit auffällig vielen CI-Fix- oder Review-Runden bzw. Nacharbeit.
 
-Jeder Befund wird eine Zeile im Sammelticket; ein eigenes Issue nur bei einem echten Defekt (AGENTS.md § Nicht jeder Befund wird ein Ticket). Ohne erreichbares Langfuse (Keys fehlen, Server aus) den Punkt im PR als „übersprungen" melden, nicht raten.
+Jeder Befund wird eine Zeile im Sammelticket; ein eigenes Issue nur bei einem Notfall (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets). Ohne erreichbares Langfuse (Keys fehlen, Server aus) den Punkt im PR als „übersprungen" melden, nicht raten.
