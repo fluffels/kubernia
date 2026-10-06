@@ -27,8 +27,8 @@ docs/referenz/ ← Nachschlage-Referenz on-demand (Befehle, Repo-Landkarte, Schi
      prompt: "Ticket #<nr>: <Titel>. Body:\n<Volltext des gh issue view>"
    })
    ```
-   Ist der Agent nicht verfügbar, den Plan kurz selbst skizzieren.
-3. **Pre-Flight-Klärung** nach AGENTS.md § Human-in-the-Loop-Checkpoints: braucht das Ticket eine menschliche Entscheidung (🎨 Optik, ⚠️ riskante Weiche, offene Weiche im Plan), **jetzt** per `AskUserQuestion` klären. Optik-Iterationen mit PixelLab laufen hier (der Umsetzer hat keine MCP-Tools); Kandidaten liegen im Temp-Ordner, der Umsetzer bekommt Pfad oder Job-ID.
+   Ist der Agent nicht verfügbar, skizziert der Hauptchat den Plan kurz selbst und gibt ihn dem Umsetzer mit.
+3. **Pre-Flight-Klärung** nach AGENTS.md § Human-in-the-Loop-Checkpoints: braucht das Ticket eine menschliche Entscheidung (🎨 Optik, ⚠️ riskante Weiche, offene Weiche im Plan), **jetzt** per `AskUserQuestion` klären. Optik-Iterationen mit PixelLab laufen hier (der Umsetzer hat keine MCP-Tools); das gewählte Asset liegt als Datei im Temp-Ordner, der Umsetzer bekommt den Pfad (eine Job-ID nützt ihm ohne MCP nichts).
 4. **Umsetzer spawnen** (nächster Abschnitt) und sein Ergebnis behandeln.
 
 Solange der Umsetzer läuft, fasst der Hauptchat weder Repo noch Worktree an und startet keinen zweiten Umsetzer.
@@ -41,7 +41,7 @@ Solange der Umsetzer läuft, fasst der Hauptchat weder Repo noch Worktree an und
 Agent({
   subagent_type: "kubernia-umsetzer",
   description: "Umsetzung #<nr>",
-  prompt: "Ticket #<nr>: <Titel>. Body:\n<Volltext>\n\n--- Plan ---\n<Plan des kubernia-planner, sonst: kein Plan, skizziere selbst>\n--- Ende Plan ---\n\n--- Pre-Flight-Antworten (verbindlich) ---\n<Antworten der Maintainerin, sonst: keine>\n--- Ende ---"
+  prompt: "Ticket #<nr>: <Titel>. Body:\n<Volltext>\n\n--- Plan ---\n<Plan des kubernia-planner bzw. Skizze des Hauptchats>\n--- Ende Plan ---\n\n--- Pre-Flight-Antworten (verbindlich) ---\n<Antworten der Maintainerin, sonst: keine>\n--- Ende ---"
 })
 ```
 
@@ -49,10 +49,10 @@ Kein `model:` am Spawn: Modell und Effort stehen im Frontmatter des Umsetzers un
 
 - **`gemergt`** — der Maintainerin kurz berichten (Ticket, PR, Entscheidungen, Befunde).
 - **`entscheidung-noetig`** — die `FRAGEN` per `AskUserQuestion` vorlegen, dann denselben Umsetzer mit der Antwort fortsetzen: `SendMessage({ to: "<agentId aus dem Spawn>", message: "Antwort der Maintainerin: …" })`. Sein Kontext bleibt erhalten. Ist die Session inzwischen verloren, startet ein neuer Umsetzer; er übernimmt vorhandenen Worktree und Branch.
-- **`festgefahren`** — die Optionen aus dem PR-Kommentar vorlegen, nicht selbst weiterprobieren.
+- **`festgefahren`** — die Optionen vorlegen (aus dem PR-Kommentar bzw. bei Review-Blockern nach Cap 2, ohne PR, aus der Zusammenfassung), nicht selbst weiterprobieren.
 - **`abgebrochen`** — Grund melden; das Ticket bleibt zugewiesen.
 
-**Mehrere Tickets:** nacheinander, je Ticket der ganze Ablauf oben mit einem frischen Umsetzer, nie parallel (Merge-Kollision auf `main`). Der Hauptchat wächst pro Ticket nur um Plan und Bericht.
+**Mehrere Tickets:** Anzahl N aus der Auslöse-Nachricht übernehmen, sonst kurz fragen. Dann nacheinander je Ticket der ganze Ablauf oben mit einem frischen Umsetzer, nie parallel (Merge-Kollision auf `main`); kein freies Ticket mehr ⇒ sofort aufhören. Im Stapel statt einer `/rename`-Zeile je Ticket nur eine am Ende (`/rename kq-<erste>-<letzte>`), sonst überschreibt jede die vorige. Zum Schluss eine Übersicht: erledigte Tickets, wie viele von N. Der Hauptchat wächst pro Ticket nur um Plan und Bericht.
 
 ## Warum so
 

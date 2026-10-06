@@ -32,9 +32,9 @@ Der Workflow läuft im Hintergrund. Danach: den zurückgegebenen Endstand knapp 
 |---|---|---|
 | Läuft mit | **jedem** Agenten/Tool (liest nur `AGENTS.md`) | **nur** Claude Code |
 | Fortschritt | Chat-Verlauf | Phasen-Baum in `/workflows` |
-| Rückfragen mitten drin | ja (live `AskUserQuestion`) | **ja, via Halt → `resumeFromRunId`** (kein Live-Prompt; #1012) |
+| Rückfragen mitten drin | ja: Pre-Flight live per `AskUserQuestion`, danach meldet der Umsetzer `entscheidung-noetig` und wird per `SendMessage` fortgesetzt | **ja, via Halt → `resumeFromRunId`** (kein Live-Prompt; #1012) |
 | Human-in-the-Loop (#1012/#1069) | Pre-Flight per `AskUserQuestion`; Harness-Diff → Label selbst + Audit-Kommentar | Pre-Flight **hält an + gibt Fragen zurück**; Harness-Diff → Label selbst + Audit-Kommentar |
-| Abbruch/Absturz | von vorn | `resumeFromRunId` — unveränderte Phasen kommen aus dem Cache |
+| Abbruch/Absturz | ein neuer Umsetzer übernimmt vorhandenen Worktree und Branch | `resumeFromRunId` — unveränderte Phasen kommen aus dem Cache |
 | Review-Lenses (#532) | Konvergenzschleife (Cap 2) | **parallel**, als Konvergenzschleife (Cap 2, #1012) |
 | Fix-Versuchsgrenze (#710) | Verhaltensregel | **Schleifengrenze im Skript** |
 

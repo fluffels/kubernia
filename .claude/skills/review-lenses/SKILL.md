@@ -67,7 +67,7 @@ npm run verify   # typecheck → lint → check:arch → check:size → check:co
 - **Ab Runde 2:** nur die Brillen, die in der Vorrunde **blockiert** haben, auf dem **Delta-Patch** des Fixes (`git diff <Vorrunden-HEAD>..HEAD > "$TMP/kq-<nr>-r<runde>-delta.patch"`), mit ihren Vorrunden-Blockern als Prüfliste; der volle Patch bleibt Referenz für gezielte Zugriffe. Ändert der Fix Nicht-Markdown, läuft **Test-Adäquanz immer mit**.
 - **Fail-closed:** Fehlt die Dateiliste, gab es keinen Vorrunden-Pass (`verify` war rot), fiel eine Lens aus, hat die Diff-Art gewechselt oder wurde `main` in den Branch gemergt bzw. rebased: der volle Satz auf dem vollen Patch.
 
-**Jede Lens läuft als eigener Subagent auf dem starken Tier (#1035)** — nicht inline im Hauptagenten:
+**Jede Lens läuft als eigener Subagent auf dem starken Tier (#1035)** — nie inline im orchestrierenden Agenten (Hauptagent oder `kubernia-umsetzer`):
 
 ```
 Agent({
@@ -83,7 +83,7 @@ Agent({
 ⚠️ **Die Blöcke wörtlich in den Prompt kopieren, nicht referenzieren.** Ein `kubernia-lens`-Subagent liest diese Datei **nicht** — „die Brille unten", „Kontext-Diät oben" oder „Format wie im Skill" sind für ihn leer, und die #1034-Diät fiele still weg. Der Workflow löst dasselbe durch Interpolation (`${KONTEXT_DIAET}`, `lens.auftrag` — bewacht von `test/harness/review-context.test.ts`); auf diesem Pfad ist es Handarbeit des Orchestrators.
 
 Warum überhaupt Subagenten:
-- **Der Review darf nicht mit dem Coding-Tier mitrutschen (#1035).** Der Hauptagent läuft per Projekt-Default (`.claude/settings.json`) auf Sonnet; das Frontmatter des [kubernia](../kubernia/SKILL.md)-Skills greift nur bei `/kubernia`, dann gälte es laut Doku für den **Rest des Turns** (Stand und Bug #98898: [docs/model-routing.md](../../../docs/model-routing.md)). Liefe eine Lens inline im Hauptagenten, reviewte Sonnet — die eine Konventionshälfte repariert, die andere still kaputt. Ein Subagent mit eigenem Modell im Frontmatter (`kubernia-lens`) umgeht das vollständig.
+- **Der Review darf nicht mit dem Coding-Tier mitrutschen (#1035).** Orchestriert wird der Review auf dem Skill-Pfad vom Umsetzer `kubernia-umsetzer` (Sonnet, der Skill ist dort vorgeladen), ohne ihn vom Hauptagenten auf dem Session-Modell (Stand: [docs/model-routing.md](../../../docs/model-routing.md)). Liefe eine Lens inline in einem von beiden, reviewte der Coding-Tier — die eine Konventionshälfte repariert, die andere still kaputt. Ein Subagent mit eigenem Modell im Frontmatter (`kubernia-lens`) umgeht das vollständig.
 - **Kein Self-Grading — schon vorher gefordert (#1012), jetzt auch strukturell erfüllt.** Inline urteilt derselbe Kontext, der den Code gerade geschrieben hat; die Konvergenzschleife unten verlangt ohnehin „frische, unabhängige Kritiker". Der Subagent macht aus der Verhaltensregel eine Eigenschaft des Ablaufs — und ist **billiger**, weil er nur Patch + Auftrag sieht statt der vollen Ticket-Historie.
 
 Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket.js`), der seine Lenses längst so spawnt.
