@@ -234,6 +234,11 @@ describe("isProtectedGitCommand (#1308) — Quotes, Heredocs und Substitutionen"
       "if true; then git push; fi",
       "find . -exec git commit {} \\;",
       "echo a | git push",
+      "timeout 60 git push",
+      "xargs -n 1 git push",
+      "env -u FOO git commit -m x",
+      "winpty git push",
+      "sudo -u me git push",
       "git add -A && git commit -m x",
       "cat <<EOF\n$(git push)\nEOF",
     ];
@@ -244,6 +249,8 @@ describe("isProtectedGitCommand (#1308) — Quotes, Heredocs und Substitutionen"
     assert.equal(isProtectedGitCommand('bash -c "git push"'), true);
     assert.equal(isProtectedGitCommand('eval "git push"'), true);
     assert.equal(isProtectedGitCommand('sh -c \'git commit -m "x"\''), true);
+    assert.equal(isProtectedGitCommand(`node -e "execSync('git push')"`), true);
+    assert.equal(isProtectedGitCommand("python3 -c \"os.system('git commit -m x')\""), true);
     assert.equal(isProtectedGitCommand('git commit -m "x'), true, "offenes Quote");
     assert.equal(isProtectedGitCommand('echo "x'), false, "offenes Quote ohne git commit");
     assert.equal(isProtectedGitCommand("bash scripts/build.sh"), false);
@@ -370,6 +377,19 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(run("cd src && git commit -m x"), true, "Unterordner des Haupt-Checkouts");
     assert.equal(run(`cd - && git commit -m x`), true, "cd -");
     assert.equal(run(`(echo x); cd '${wt}' && (echo y) && git commit -m x`), false, "echtes cd bleibt nach Subshells wirksam");
+  });
+
+  test("cd, das nicht verfolgbar ist, setzt auf das Session-cwd zurück (kein altes Ziel behalten)", () => {
+    for (const mitte of ["cd -", "cd ~", `pushd '${repoRoot}'`, "popd", 'cd "$X"']) {
+      assert.equal(run(`cd '${wt}' && ${mitte} && git push`), true, mitte);
+    }
+    assert.equal(run(`false && cd '${wt}'; git push`), true, "bedingtes cd");
+    assert.equal(run(`cd '${wt}' && git -C sub push && git push`), false);
+  });
+
+  test("--git-dir und GIT_DIR prüfen zusätzlich das Session-cwd", () => {
+    assert.equal(run(`cd '${wt}' && git --git-dir='${repoRoot}/.git' commit -m x`), true);
+    assert.equal(run(`cd '${wt}' && GIT_DIR=x git commit -m x`), true);
   });
 
   test("Interpreter-Rückfall prüft gegen das Session-cwd (keine neuen False Negatives)", () => {

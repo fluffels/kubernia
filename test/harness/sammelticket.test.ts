@@ -13,6 +13,10 @@
  *      genau Position-1 Todo-Items das neue Item selbst.
  *   4. Workflow und Sammelticket-Abschnitt von docs/ticket-reihenfolge.md nennen keine eigene Zahl
  *      und verweisen auf AGENTS.md. Das ADR darf die Historie mit Zahlen erzählen.
+ *
+ * Jede weitere „Position <N>“ (auch „Position: <N>“) in AGENTS.md macht den Test absichtlich rot,
+ * auch in anderem Zusammenhang; darum steht die Position des wiederkehrenden Status-Tickets (20)
+ * nur in docs/ticket-reihenfolge.md.
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";

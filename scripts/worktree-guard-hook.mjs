@@ -31,9 +31,9 @@
  *  - Rückfall auf die alte grobe Regel (Wortsuche "git" + "commit"/"push" je Segment)
  *    gegen das Session-`cwd`, wenn der Lexer nicht zerlegen kann oder ein Interpreter
  *    (`bash -c`, `eval`, `source`) den Befehl verbirgt: keine neuen False Negatives.
- *  - Nicht erkannt: Aliase/Shell-Funktionen, `pushd`/`popd`, `env -C`; `--git-dir`/
- *    `--work-tree` und dynamische `-C`-Wörter gelten gegen das verfolgte Verzeichnis;
- *    das PowerShell-Tool deckt der Hook nicht ab.
+ *  - Nicht erkannt: Aliase/Shell-Funktionen, `env -C`; `pushd`/`popd` und ein nicht
+ *    verfolgbares `cd` setzen auf das Session-`cwd` zurück; `--git-dir`/`GIT_DIR` prüfen
+ *    zusätzlich das Session-`cwd`; das PowerShell-Tool deckt der Hook nicht ab.
  *  - Fail-open bei Unsicherheit (kein cwd im Payload, cwd ist gar kein Git-Repo,
  *    cwd gehört zu einem anderen Repo): NICHT blocken — dieselbe "kein falsches
  *    Rot"-Philosophie wie check-diffsize.mjs bei fehlender Vergleichsbasis.
@@ -320,7 +320,7 @@ const GIT_RE = /^(?:.*[\\/])?git(?:\.exe)?$/i;
 const FIND_RE = /^(?:.*[\\/])?find(?:\.exe)?$/i;
 const PREFIX_WORDS = new Set(["then", "do", "else", "elif", "if", "while", "until", "{", "!", "time", "command", "exec", "env", "nohup", "sudo", "xargs", "nice"]);
 const EXEC_FLAGS = new Set(["-exec", "-execdir", "-ok", "-okdir"]);
-const INTERPRETER_RE = /^(?:.*[\\/])?(?:bash|sh|zsh|dash|ksh|fish|pwsh|powershell|cmd)(?:\.exe)?$/i;
+const INTERPRETER_RE = /^(?:.*[\\/])?(?:bash|sh|zsh|dash|ksh|fish|pwsh|powershell|cmd|node|nodejs|python[\d.]*|perl|ruby|php|deno|bun|npx)(?:\.exe)?$/i;
 
 /** Index des Wortes, das den eigentlichen Befehl nennt (hinter Schlüsselwörtern,
  *  Zuweisungen und Wrappern wie `env`/`xargs`/`find -exec`); -1 wenn keiner. */
@@ -344,8 +344,12 @@ function commandIndex(words) {
 /** `null` ohne git-Aufruf, sonst `{ sub, cDirs, unsure }` (Unterbefehl, `-C`-Wörter,
  *  `--git-dir`/`--work-tree` gesetzt). */
 export function gitInvocation(words) {
-  const i = commandIndex(words);
-  if (i < 0 || words[i].dynamic || !GIT_RE.test(words[i].text)) return null;
+  let i = commandIndex(words);
+  if (i < 0 || words[i].dynamic || !GIT_RE.test(words[i].text)) {
+    // Unbekannter Wrapper (`timeout 60 git push`, `xargs -n 1 git …`): erstes git-Wort nehmen.
+    i = words.findIndex((w) => !w.dynamic && GIT_RE.test(w.text));
+    if (i < 0) return null;
+  }
   const cDirs = [];
   let unsure = false;
   let j = i + 1;
@@ -386,10 +390,7 @@ function usesInterpreter(cmds) {
  *  Quotes, Heredoc-Bodies und Kommentaren zählt nicht. Nicht zerlegbar oder mit
  *  Interpreter: alte grobe Regel (keine neuen False Negatives). */
 export function isProtectedGitCommand(command) {
-  if (!command) return false;
-  const lexed = lexShell(command);
-  if (!lexed.ok || usesInterpreter(lexed.cmds)) return coarseProtected(command);
-  return lexed.cmds.some((c) => !c.boundary && isProtectedInvocation(gitInvocation(c.words)));
+  return protectedGitTargets(command, ".", { statSync: () => ({ isDirectory: () => false }) }).length > 0;
 }
 
 /** MSYS-/Git-Bash-Pfad `/c/foo` → `C:/foo` (nur unter Windows). */
@@ -426,6 +427,7 @@ export function protectedGitTargets(command, cwd, deps = {}) {
   let cur = cwd;
   let listStart = cwd;
   let prevPiped = false;
+  let prevSep = "";
   for (const c of lexed.cmds) {
     if (c.boundary === "(") {
       stack.push({ cur, listStart });
@@ -439,14 +441,18 @@ export function protectedGitTargets(command, cwd, deps = {}) {
     const inv = gitInvocation(c.words);
     if (isProtectedInvocation(inv)) {
       targets.add(inv.cDirs.reduce((d, w) => (w.dynamic ? d : resolve(d, fromMsysPath(w.text))), cur));
-    } else if (!inv && c.words[0].text === "cd" && !c.words[0].dynamic && !prevPiped && c.sep !== "|" && c.sep !== "&") {
-      const t = cdTarget(c.words);
-      if (t !== null) {
-        const dir = resolve(cur, fromMsysPath(t));
-        if (isDirectory(dir, stat)) cur = dir;
-      }
+      // --git-dir/--work-tree/GIT_DIR können woanders hin zeigen: zusätzlich das Session-cwd prüfen.
+      if (inv.unsure || c.words.some((w) => /^GIT_(DIR|WORK_TREE)=/.test(w.text))) targets.add(cwd);
+    } else if (!inv && !c.words[0].dynamic && ["cd", "pushd", "popd"].includes(c.words[0].text) && !prevPiped && c.sep !== "|" && c.sep !== "&") {
+      // Ein cd, das nicht verfolgbar ist (dynamisch, `-`, `~`, pushd/popd, fehlender Ordner, bedingt),
+      // setzt zurück auf das Session-cwd: lieber blocken als ein altes Ziel behalten.
+      const bedingt = (prevSep === "&&" || prevSep === "||") && [";", "\n", ""].includes(c.sep);
+      const t = c.words[0].text === "cd" && !bedingt ? cdTarget(c.words) : null;
+      const dir = t === null ? null : resolve(cur, fromMsysPath(t));
+      cur = dir !== null && isDirectory(dir, stat) ? dir : cwd;
     }
     prevPiped = c.sep === "|";
+    prevSep = c.sep;
     if (c.sep === "&") cur = listStart; // Hintergrund-Liste lief in einer Subshell
     if (c.sep === "&" || c.sep === ";" || c.sep === "\n" || c.sep === "") listStart = cur;
   }
@@ -508,7 +514,13 @@ export function resolveGitContext(cwd, repoRoot, deps = {}) {
  *  (kein Linked Worktree). Alles andere: durchlassen. */
 export function decide({ cwd, command, repoRoot, deps }) {
   if (!cwd) return { block: false }; // kein cwd im Payload -> nicht entscheidbar, fail-open
-  for (const target of protectedGitTargets(command, cwd, deps)) {
+  let targets;
+  try {
+    targets = protectedGitTargets(command, cwd, deps);
+  } catch {
+    targets = coarseProtected(command) ? [cwd] : []; // unerwarteter Lexer-Fehler: alte Regel statt Durchwinken
+  }
+  for (const target of targets) {
     const ctx = resolveGitContext(target, repoRoot, deps);
     if (!ctx.relevant || !ctx.isMainWorktree) continue;
     return {
