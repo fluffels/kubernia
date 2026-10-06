@@ -681,6 +681,11 @@ describe("Pre-Flight-Weichen entscheidet der Agent selbst (#1279, #1276)", () =>
     assert.match(prompt, /im PR-Text/, "der Umsetzer muss die Entscheidung im PR dokumentieren");
   });
 
+  test("leere oder nicht-String-Einträge in entscheidungen werden verworfen", async () => {
+    const { aufrufe } = await workflowLauf("normal", { planerDa: true, preflight: { brauchtKlaerung: false, entscheidungen: ["", null] } });
+    assert.doesNotMatch(aufrufe[3].prompt, /Entscheidungen aus Plan\/Pre-Flight/);
+  });
+
   test("ohne Entscheidungen kein leerer Block im Umsetzen-Prompt", async () => {
     const { aufrufe } = await workflowLauf("normal", { planerDa: true, preflight: { brauchtKlaerung: false } });
     assert.doesNotMatch(aufrufe[3].prompt, /Entscheidungen aus Plan\/Pre-Flight/);
@@ -691,6 +696,7 @@ describe("Pre-Flight-Weichen entscheidet der Agent selbst (#1279, #1276)", () =>
     assert.doesNotMatch(quelle, /Triff selbst KEINE inhaltliche Entscheidung/);
     assert.match(quelle, /entscheidungen: \{\s*type: 'array'/, "PREFLIGHT_SCHEMA braucht das Feld entscheidungen");
     assert.match(quelle, /Irreversibles oder Außenwirkung/);
+    assert.match(quelle, /brauchtKlaerung = true NUR bei Irreversiblem oder Außenwirkung/, "die Prompt-Regel selbst");
   });
 });
 

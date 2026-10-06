@@ -21,12 +21,12 @@ import { fileURLToPath } from "node:url";
 
 const lies = (rel: string): string => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
-const POSITION = /Board-Position (\d+)/g;
+const POSITION = /Position (\d+)/g;
 
 /** Die Position aus AGENTS.md (genau ein Treffer) – wirft, wenn es keiner oder mehrere sind. */
 function positionAusAgentsMd(text: string): number {
   const treffer = [...text.matchAll(POSITION)];
-  assert.equal(treffer.length, 1, `AGENTS.md muss „Board-Position <N>“ genau einmal nennen, gefunden: ${treffer.length}`);
+  assert.equal(treffer.length, 1, `AGENTS.md muss „Board-Position <N>“ genau einmal nennen (jede „Position <N>“), gefunden: ${treffer.length}`);
   return Number(treffer[0][1]);
 }
 
@@ -64,7 +64,7 @@ describe("Sammelticket-Position (#1276)", () => {
 
   test("der Workflow doppelt die Zahl nicht, sondern verweist auf AGENTS.md", () => {
     const wf = lies(".claude/workflows/kubernia-ticket.js");
-    assert.doesNotMatch(wf, /auf Position \d+/);
+    assert.doesNotMatch(wf, /Position \d+/);
     assert.match(wf, /Position laut AGENTS\.md/);
   });
 
@@ -74,7 +74,7 @@ describe("Sammelticket-Position (#1276)", () => {
   });
 
   test("Negativfall: eine zweite Zahl in AGENTS.md oder keine wird erkannt", () => {
-    assert.throws(() => positionAusAgentsMd("Board-Position 6 und wieder Board-Position 7"));
+    assert.throws(() => positionAusAgentsMd("Board-Position 6 und wieder auf Position 7"));
     assert.throws(() => positionAusAgentsMd("keine Zahl hier"));
     assert.throws(() => jqIndex("kein Index"));
   });

@@ -33,7 +33,7 @@ docs/referenz/ ← Nachschlage-Referenz on-demand (Befehle, Repo-Landkarte, Schi
 
 Solange der Umsetzer läuft, fasst der Hauptchat weder Repo noch Worktree an und startet keinen zweiten Umsetzer.
 
-**Sonderfall zu großes Epic/Phase:** nicht umsetzen. Die Aufteilung ist Planungsarbeit: nach dem Claimen den `kubernia-planner` (Opus) mit dem Aufruf oben rufen, im Prompt der Hinweis „Epic: liefere die Aufteilung“. Du legst genau die vorgeschlagenen session-großen Kindertickets an (ohne Assignee, `area:`-Label, im Board einsortiert; offene Weichen des Plans in den Body des betroffenen Kindes), postest im Epic einen Übersichts-Kommentar mit Reihenfolge und schließt das Epic mit `gh issue close <nr> --reason completed` (nicht löschen), Schließung verifizieren. Kein Worktree, kein Umsetzer. Ist der Planer nicht verfügbar, teilst du selbst auf. **🤖 Dependabot-Sammelticket:** ebenfalls im Hauptchat nach AGENTS.md, ohne Planer und Umsetzer.
+**Sonderfall zu großes Epic/Phase:** nicht umsetzen. Die Aufteilung ist Planungsarbeit: nach dem Claimen den `kubernia-planner` (Opus) mit dem Aufruf oben rufen, im Prompt der Hinweis „Epic: liefere die Aufteilung“. Du legst genau die vorgeschlagenen session-großen Kindertickets an (ohne Assignee, `area:`-Label, im Board einsortiert; Weichen samt Entscheidung des Plans in den Body des betroffenen Kindes), postest im Epic einen Übersichts-Kommentar mit Reihenfolge und schließt das Epic mit `gh issue close <nr> --reason completed` (nicht löschen), Schließung verifizieren. Kein Worktree, kein Umsetzer. Ist der Planer nicht verfügbar, teilst du selbst auf. **🤖 Dependabot-Sammelticket:** ebenfalls im Hauptchat nach AGENTS.md, ohne Planer und Umsetzer.
 
 ## Umsetzung als Subagent
 
@@ -47,8 +47,8 @@ Agent({
 
 Kein `model:` am Spawn: Modell und Effort stehen im Frontmatter des Umsetzers und gelten unabhängig vom Modell der Session. Der Umsetzer setzt um, fährt `npm run verify`, den [review-lenses](../review-lenses/SKILL.md)-Review (spawnt selbst die `kubernia-lens`-Subagenten), PR, CI-Fix, Merge und Cleanup. Seine letzte Nachricht beginnt mit `ERGEBNIS:`:
 
-- **`gemergt`** — der Maintainerin kurz berichten (Ticket, PR, Entscheidungen, Befunde, die Zeile `LERNKANDIDATEN` des Umsetzers im Abschlussbericht durchreichen).
-- **`entscheidung-noetig`** — die `FRAGEN` per `AskUserQuestion` vorlegen, dann denselben Umsetzer mit der Antwort fortsetzen: `SendMessage({ to: "<agentId aus dem Spawn>", message: "Antwort der Maintainerin: …" })`. Sein Kontext bleibt erhalten. Ist die Session inzwischen verloren, startet ein neuer Umsetzer; er übernimmt vorhandenen Worktree und Branch.
+- **`gemergt`** — der Maintainerin kurz berichten (Ticket, PR, Entscheidungen, Befunde, die Zeile `LERNKANDIDATEN` des Umsetzers im Abschlussbericht durchreichen; bei `festgefahren` und `abgebrochen` ebenso).
+- **`entscheidung-noetig`** — bei einem fehlenden PixelLab-Asset das Asset selbst erzeugen und den Dateipfad per `SendMessage` zurückgeben, sonst die `FRAGEN` per `AskUserQuestion` vorlegen, dann denselben Umsetzer mit der Antwort fortsetzen: `SendMessage({ to: "<agentId aus dem Spawn>", message: "Antwort der Maintainerin: …" })`. Sein Kontext bleibt erhalten. Ist die Session inzwischen verloren, startet ein neuer Umsetzer; er übernimmt vorhandenen Worktree und Branch.
 - **`festgefahren`** — die Optionen vorlegen (aus dem PR-Kommentar bzw. bei Review-Blockern nach Cap 2, ohne PR, aus der Zusammenfassung), nicht selbst weiterprobieren.
 - **`abgebrochen`** — Grund melden; das Ticket bleibt zugewiesen.
 

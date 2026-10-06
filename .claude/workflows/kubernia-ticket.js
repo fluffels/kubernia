@@ -646,7 +646,7 @@ Dieses Ticket ist bewusst KEIN Code-Ticket. Kein Worktree, kein Branch, kein PR.
 AUFGABE — Epic aufteilen statt umsetzen, genau nach
 AGENTS.md § „Zu großes Ticket (Epic/Phase) → aufteilen statt umsetzen".
 ${plan ? 'Lege genau die im Plan vorgeschlagenen Kindertickets an; Abweichungen begründest du im Übersichts-Kommentar.' : 'Zerlege das Epic selbst in session-große Kindertickets.'}
-Offene Weichen aus dem Plan gehören in den Body des betroffenen Kindtickets (sie werden in dessen Pre-Flight geklärt).
+Weichen samt Entscheidung aus dem Plan gehören in den Body des betroffenen Kindtickets.
 
 Dazu gehört auch der Pflichtschritt „Neue Issues sofort ins Board einsortieren"
 (Mechanik, auch für mehrere Tickets auf einmal: docs/ticket-reihenfolge.md) — ein neu
@@ -683,8 +683,9 @@ ${ticketKontext}
 
 ${plan ? `--- Plan des Planungs-Agenten ---\n${plan}\n--- Ende Plan ---` : '(kein Vorab-Plan vorhanden)'}
 
-AUFGABE — Weichen VOR dem Coden entscheiden. Die Weichen (🎨 Optik, ⚠️ riskante Weiche,
-offene Plan-Weiche) entscheidest du selbst: wäge ab, entscheide und trage je Weiche eine
+AUFGABE — Weichen VOR dem Coden entscheiden. Entscheidungen, die der Plan in Abschnitt 7
+schon trifft, übernimmst du wörtlich in entscheidungen; die übrigen Weichen (🎨 Optik,
+⚠️ riskante Weiche, offene Plan-Weiche) entscheidest du selbst: wäge ab, entscheide und trage je Weiche eine
 Zeile „Weiche: X, weil Y“ in entscheidungen ein. Optik misst du an docs/stardew-referenz.md
 und deren Checkliste; die Maintainerin kann per Revert widersprechen.
 
