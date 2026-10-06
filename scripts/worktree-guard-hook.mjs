@@ -31,7 +31,7 @@
  *  - Rückfall auf die grobe Wortregel (Wortsuche "git" + "commit"/"push"): gegen das Session-
  *    `cwd`, wenn der Lexer nicht zerlegen kann; je Kommando als Sicherheitsnetz gegen das
  *    verfolgte Verzeichnis, wenn dessen Worttext sie trifft (`bash -c "git push"`,
- *    `timeout 5 …`); ausgenommen reine Text-Kommandos (gh, echo, printf, cat, git). Text in
+ *    `timeout 5 …`); ausgenommen reine Text-Kommandos (gh, echo, printf, cat, git; nicht hinter `find -exec`). Text in
  *    Heredoc-Bodies (außer `$(…)`/Backticks bei unquotiertem Delimiter) und Kommentaren
  *    zählt nie. Bewusst konservativ: im Zweifel blocken; ein `cd`-Ziel, das nicht sicher
  *    gilt (bedingt, in Blöcken, hinter `then`/`{`), wird zusätzlich als Ziel geprüft.
