@@ -16,9 +16,9 @@
  *      `kubernia-umsetzer` (Skill-Frontmatter greift wegen anthropics/claude-code#98898 nur bei
  *      `/kubernia`, ein Projekt-Default ließ sich per `/model` überstimmen). Es ist je eine Zeile –
  *      gelöscht/umformuliert fällt die Umsetzung wortlos aufs Session-Modell zurück.
- *   2. **Der Review wird still mitdemoviert.** Der Hauptagent läuft auf dem Coding-Tier
- *      (Projekt-Default bzw. `/kubernia`-Frontmatter). Liefen die Lens-Pässe wie früher INLINE im
- *      Hauptagenten, zöge die Coding-Tier-Zeile den Review von Opus auf Sonnet –
+ *   2. **Der Review wird still mitdemoviert.** Umsetzer und Workflow-Phasen laufen auf dem
+ *      Coding-Tier. Liefen die Lens-Pässe INLINE in einem orchestrierenden Agenten (Umsetzer oder
+ *      Hauptagent), zöge die Coding-Tier-Zeile den Review von Opus auf Sonnet –
  *      Fix der einen Konventionshälfte, Regression der anderen. Darum spawnt
  *      review-lenses seine Lenses als eigene Subagenten mit explizitem Opus-Routing.
  *   3. **Prosa-Drift.** Eine Doku, die weiter „Session-Default" als Ist-Zustand der

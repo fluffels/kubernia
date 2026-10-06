@@ -10,10 +10,10 @@ Gültige Effort-Stufen: `low`, `medium`, `high`, `xhigh`, `max`. Bei Sonnet 5+ u
 |---|---|---|---|---|
 | Auswahl + Claim | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent (Session-Modell) |
 | **Epic-Aufteilung** (Schnitt der Kinder; ohne verfügbaren Planer teilt der Anlege-Agent selbst auf) | `opus` | `xhigh` | dieselbe Plan-Aufrufstelle (`kubernia-planner`) mit Epic-Hinweis im Prompt | Subagent `kubernia-planner` schlägt vor |
-| Epic-Kinder anlegen | `sonnet` | `medium` | `agent()`-Optionen (`epic-anlegen`) | Hauptagent |
-| Dependabot-Sammelticket | `sonnet` | `medium` | `agent()`-Optionen (ohne Planer) | Hauptagent |
+| Epic-Kinder anlegen | `sonnet` | `medium` | `agent()`-Optionen (`epic-anlegen`) | Hauptagent (Session-Modell) |
+| Dependabot-Sammelticket | `sonnet` | `medium` | `agent()`-Optionen (ohne Planer) | Hauptagent (Session-Modell) |
 | **Planung** | `opus` | `xhigh` | `agentType: 'kubernia-planner'` + `effort` | Subagent `kubernia-planner` (Frontmatter) |
-| Pre-Flight | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent (fragt per `AskUserQuestion`) |
+| Pre-Flight | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent (Session-Modell, fragt per `AskUserQuestion`) |
 | Umsetzung | `sonnet` | `medium` | `agent()`-Optionen | Subagent [`kubernia-umsetzer`](../.claude/agents/kubernia-umsetzer.md) (Frontmatter, unabhängig vom Session-Modell) |
 | **Review (1–3 Lenses, [Staffel](#review-staffel-1265))** | `opus` | `high` | `agentType: 'kubernia-lens'` + `effort` | Subagenten `kubernia-lens`, vom Umsetzer über `review-lenses` gespawnt (Frontmatter, `high` wirkt) |
 | Nachbessern, CI-Fix | `sonnet` | `medium` | `agent()`-Optionen | im Umsetzer |
@@ -33,7 +33,7 @@ Der Review war nach #1065 der größte Kostenblock je Ticket (38–40 %, bei kle
 
 **Fail-closed:** Fehlt die Dateiliste, gab es keinen Vorrunden-Pass (`verify` rot), fiel eine Lens aus, wechselte die Diff-Art oder fehlt das Delta (der Nachbesserer lässt es nach Merge/Rebase von `main` leer; vergisst er das, enthält das Delta die `main`-Änderungen, also mehr Review, nicht weniger), läuft der volle Satz auf dem vollen Patch. Implementiert als `lensPlan` in [`.claude/workflows/kubernia-ticket.js`](../.claude/workflows/kubernia-ticket.js), auf dem Skill-Pfad als Regel in [`review-lenses`](../.claude/skills/review-lenses/SKILL.md); bewacht von [`test/harness/review-staffel.test.ts`](../test/harness/review-staffel.test.ts). Die Nachmessung muss Lenses je Ticket und Kosten je Lens getrennt ausweisen, weil #1209 parallel den Sockel je Lens senkt.
 
-**Ehrlich zum Skill-Pfad:** Im Hauptagenten bleiben nur Auswahl, Claim, Pre-Flight (mit Rückfrage), Epic-Kinder und Dependabot, also kurze Phasen auf dem Session-Modell, das die Maintainerin wählt (`.claude/settings.json` pinnt bewusst keins). Alles Teure von der Umsetzung bis zum Cleanup läuft im Subagenten `kubernia-umsetzer` mit `sonnet`/`medium` aus seinem Frontmatter, egal auf welchem Modell die Session steht.
+**Ehrlich zum Skill-Pfad:** Im Hauptagenten bleiben nur Auswahl, Claim, Pre-Flight (mit Rückfrage), Epic-Kinder und Dependabot, auf dem Session-Modell, das die Maintainerin wählt (`.claude/settings.json` pinnt bewusst keins), im Normalfall also Opus. Bewusst in Kauf genommen: Auswahl und Pre-Flight sind kurz und profitieren vom Abwägen, Epic-Kinder und Dependabot sind selten; wer dort sparen will, stellt vorher `/model sonnet`. Alles Teure von der Umsetzung bis zum Cleanup läuft im Subagenten `kubernia-umsetzer` mit `sonnet`/`medium` aus seinem Frontmatter, egal auf welchem Modell die Session steht.
 
 ## 2. Wie das Routing in Claude Code wirkt
 
@@ -109,7 +109,7 @@ Der Patch bleibt **bewusst lokal** im Plugin-Cache (`~/.claude/plugins/cache/lan
 ¹ #1069 und #1072 liefen in derselben Session und sind ab dem jeweiligen Claim geschnitten (`--from`); ihre Auswahl ist deshalb nicht gemessen.
 
 **Was die Baseline zeigt:**
-- **Die Umsetzung lief in allen vier Läufen auf Opus 5.5, nie auf Sonnet.** #1026 und #1064 hatten den `kubernia`-Skill geladen (`model: sonnet` im Frontmatter; der Hebel ist seitdem `settings.json`, §2), trotzdem kam **kein einziger** Hauptagent-Call von Sonnet. Die Modelle an **Subagenten** greifen dagegen: in #1064 lief der Planer auf `claude-opus-5`, die Recherche auf `claude-sonnet-5-5`. Es hakt also am Frontmatter-Override des Hauptagenten — der größte Hebel für #1065. (`test/harness/model-routing.test.ts` prüft nur, dass die Zeile da ist, nicht, dass sie wirkt.)
+- **Die Umsetzung lief in allen vier Läufen auf Opus 5.5, nie auf Sonnet.** #1026 und #1064 hatten den `kubernia`-Skill geladen (`model: sonnet` im Frontmatter; der Hebel war ab #1065 `settings.json`, seit #1280 der Subagent `kubernia-umsetzer`, §2), trotzdem kam **kein einziger** Hauptagent-Call von Sonnet. Die Modelle an **Subagenten** greifen dagegen: in #1064 lief der Planer auf `claude-opus-5`, die Recherche auf `claude-sonnet-5-5`. Es hakt also am Frontmatter-Override des Hauptagenten — der größte Hebel für #1065. (`test/harness/model-routing.test.ts` prüft nur, dass die Zeile da ist, nicht, dass sie wirkt.)
 - **95–98 % der Tokens sind Cache-Reads**, also der pro Call neu gelesene Kontext. Weniger Calls und ein kleinerer Grundkontext sparen mehr als kürzere Antworten.
 - **Loops sind schon billig:** kein einziger roter CI-Push, 1–2 Review-Runden, höchstens eine Rückfrage. Die Kosten stecken in der Umsetzung (60–65 %) und im Review (bis 30 %).
 - **Die Planung fehlt bei drei von vier Läufen.** Nur #1064 hat den `kubernia-planner` gerufen; #1026 lief über den Skill und übersprang ihn trotzdem.
