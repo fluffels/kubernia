@@ -10,7 +10,7 @@ Bevor irgendein Ticket angefasst wird, **zuerst zweifeln** — das steht über d
 
 1. **Stardew-Scope-Frage:** „Ist das, was ich hier mache, noch sinnvoll, wenn Kubernia **so groß wie Stardew Valley** wird?" Nur umsetzen, wenn ja.
 2. **Bisherige Entscheidungen aktiv anzweifeln** — auch abgeschlossene Tickets, ADRs, „gesetzte" Annahmen dürfen falsch sein.
-3. **Auffälliges → sofort festhalten:** echter Defekt (Bug, reale Drift, Datenverlust, Security) als neues Issue an die richtige Board-Stelle; Härtung/Kosmetik als Zeile ins Sammelticket ([AGENTS.md › Nicht jeder Befund wird ein Ticket](../AGENTS.md#wo-die-todos-leben)) — nicht inline mitfixen, nicht „im Kopf" behalten.
+3. **Auffälliges → sofort festhalten:** Spiel-/Inhalts-Befund jeder Art als neues Issue an die richtige Board-Stelle; alles zum Harness (Defekt, Härtung, Kosmetik, Wunsch) als Zeile ins Sammelticket, ein eigenes Harness-Issue nur bei Notfall (roter `main`, Security, Datenverlust) ([AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets](../AGENTS.md#wo-die-todos-leben)) — nicht inline mitfixen, nicht „im Kopf" behalten.
 
 ## Was „nächstes Ticket" heißt
 
@@ -34,7 +34,7 @@ Dann nur **dieses eine** Kandidaten-Ticket kurz gegen den Live-Stand prüfen (`g
 
 ## Sammelticket „Harness-Härtung (gesammelt)" (#1199)
 
-Regel: [AGENTS.md › Nicht jeder Befund wird ein Ticket](../AGENTS.md#wo-die-todos-leben). Es gibt **höchstens ein** ungeclaimtes Sammelticket (`area:harness`); ein geclaimtes (Assignee) läuft daneben weiter.
+Regel: [AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets](../AGENTS.md#wo-die-todos-leben). Es gibt **höchstens ein** ungeclaimtes Sammelticket (`area:harness`); ein geclaimtes (Assignee) läuft daneben weiter.
 
 - **Befund eintragen:** erst suchen, dann als **Kommentar** anhängen (Kommentare kollidieren bei parallelen Agenten nicht, Body-Edits schon):
   ```bash
@@ -83,4 +83,4 @@ Die manuelle Board-Reihenfolge ist die **einzige** Reihenfolge-Quelle; es gibt k
 
 ## Am Ticket-Ende
 
-Am Ticket-Ende ist **keine** Reihenfolge-Datei mehr zu pflegen. Der Abschluss ist: Issue schließen (via `Closes #<nr>` im gemergten PR), und — falls beim Arbeiten etwas auffiel — einen echten Defekt als Issue an die richtige Board-Stelle, Härtung/Kosmetik als Zeile ins Sammelticket (oben).
+Am Ticket-Ende ist **keine** Reihenfolge-Datei mehr zu pflegen. Der Abschluss ist: Issue schließen (via `Closes #<nr>` im gemergten PR), und — falls beim Arbeiten etwas auffiel — Spiel-/Inhalts-Befunde jeder Art als Issue an die richtige Board-Stelle, alles zum Harness als Zeile ins Sammelticket, nur Notfälle als Issue (oben).

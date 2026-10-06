@@ -125,7 +125,7 @@ Verdikt: ✅ ok  |  ⚠️ Hinweise  |  ❌ blockierend
 - [⚠️ Hinweis]     <Befund> — `datei.ts:zeile` — <warum>
 ```
 
-Am Ende **ein Gesamt-Verdikt** über alle gelaufenen Lenses (mergefähig ✅ / erst nachbessern ❌) und, falls beim Review etwas **außerhalb des Ticket-Scopes** aufgefallen ist, eine Vorschlagsliste: je Punkt „echter Defekt → eigenes Issue" oder „Härtung/Kosmetik → Zeile im Sammelticket" (AGENTS.md § Nicht jeder Befund wird ein Ticket). Nicht inline mitfixen — oberste Regel.
+Am Ende **ein Gesamt-Verdikt** über alle gelaufenen Lenses (mergefähig ✅ / erst nachbessern ❌) und, falls beim Review etwas **außerhalb des Ticket-Scopes** aufgefallen ist, eine Vorschlagsliste: je Punkt „Spiel-/Inhalts-Befund oder Notfall → eigenes Issue" oder „Harness → Zeile im Sammelticket" (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets). Nicht inline mitfixen — oberste Regel.
 
 ## Als beschränkte Konvergenzschleife im Ticket-Ablauf (#1012)
 

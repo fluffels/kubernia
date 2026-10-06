@@ -167,7 +167,7 @@ const LENS_SCHEMA = {
     },
     ausserhalbScope: {
       type: 'array',
-      description: 'Aufgefallenes außerhalb des Ticket-Scopes, nicht inline gefixt — eigenes Issue nur bei echtem Defekt, sonst Zeile im Sammelticket (AGENTS.md § Nicht jeder Befund wird ein Ticket)',
+      description: 'Aufgefallenes außerhalb des Ticket-Scopes, nicht inline gefixt — Harness-Befunde als Zeile im Sammelticket, eigenes Issue nur bei Spiel-/Inhalts-Befund oder Notfall (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets)',
       items: { type: 'string' },
     },
   },
@@ -764,7 +764,7 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
   § Tests gegen False Positives absichern (Red-Green).
 - ⭐ Oberste Regel (Stardew-Valley-Größe) — sie steht über allen Konventionen.
   Was auffällt, aber nicht zum Ticket gehört: nicht inline mitfixen, sondern festhalten
-  (§ Nicht jeder Befund wird ein Ticket): echter Defekt → Issue, sonst Sammelticket.
+  (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Notfälle ausgenommen), Spiel-/Inhalts-Befund → Issue.
 - § Doku aktuell halten ist Teil von „fertig" — im SELBEN Branch.
 - Deutsch mit echten Umlauten in Texten und Kommentaren; Dateinamen bleiben ASCII.
 
@@ -872,8 +872,8 @@ ${KONTEXT_DIAET}
 Du reviewst, du änderst NICHTS und mergst NICHTS. Findings müssen konkret und belegt
 sein — mit Ort (datei.ts:zeile), kein „könnte man schöner machen" ohne Fundstelle.
 „blockierend" ist für echte Fehler/Regelverstöße reserviert, nicht für Geschmack.
-Was dir außerhalb des Ticket-Scopes auffällt, gehört nach ausserhalbScope (echter Defekt →
-eigenes Issue, sonst Zeile im Sammelticket) — nicht in die Findings.`,
+Was dir außerhalb des Ticket-Scopes auffällt, gehört nach ausserhalbScope (Harness → Zeile im
+Sammelticket, Spiel-/Inhalts-Befund oder Notfall → eigenes Issue) — nicht in die Findings.`,
             // Modell und Effort der Lens stehen im Frontmatter von kubernia-lens (#1209), hier nur der Effort
             // (muss gleich sein, bewacht von test/harness/model-routing.test.ts).
             { label: `lens:${lens.key}:r${runde}`, phase: 'Review', schema: LENS_SCHEMA, agentType: 'kubernia-lens', effort: 'high' },
@@ -1205,10 +1205,11 @@ stillschweigend weitermachen:
 ${
   ausserhalbScope.length
     ? `Zusätzlich: der Review hat Punkte AUSSERHALB des Ticket-Scopes gefunden. Ordne jeden
-ein (AGENTS.md § Nicht jeder Befund wird ein Ticket): ein echter Defekt wird ein neues
-Issue (ohne Assignee, passendes area:-Label, beide GraphQL-Calls zum Einsortieren —
-AGENTS.md § Neue Issues sofort ins Board einsortieren; vorher per gh issue list auf
-Duplikate prüfen). Härtung/Kosmetik wird eine Zeile im ungeclaimten Sammelticket
+ein (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets): ein Spiel-/Inhalts-Befund oder
+Notfall (roter main, Security, Datenverlust) wird ein neues Issue (ohne Assignee, passendes
+area:-Label, beide GraphQL-Calls zum Einsortieren — AGENTS.md § Neue Issues sofort ins Board
+einsortieren; vorher per gh issue list auf Duplikate prüfen). Alles zum Harness (Defekt,
+Härtung, Kosmetik, Wunsch) wird eine Zeile im ungeclaimten Sammelticket
 „Harness-Härtung (gesammelt)" (fehlt es: anlegen auf Position 7, docs/ticket-reihenfolge.md):
 ${ausserhalbScope.map((p) => `- ${p}`).join('\n')}`
     : ''

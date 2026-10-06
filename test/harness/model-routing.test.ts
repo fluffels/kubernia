@@ -459,6 +459,39 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
     );
   });
 
+  test("Umsetzer hat die MCP-Tools für Browser-Prüfung und Langfuse-Blick (#1291)", () => {
+    const tools = (frontmatter(read(UMSETZER)).tools ?? "").split(",").map((t) => t.trim());
+    // Eine Whitelist ohne mcp__-Einträge nimmt dem Subagenten ALLE MCP-Tools: dann gäbe es keine
+    // Browser-Prüfung über den Playwright-MCP (AGENTS.md) und keinen Langfuse-Blick beim Sammelticket.
+    // Kernablauf der FAQ (#wie-verifiziere-ich-im-browser) plus Dialoge/Datei-Import des Spiels,
+    // dazu die Langfuse-Lesetools: fehlt einer, fällt er still aus der Whitelist.
+    for (const tool of [
+      "navigate", "evaluate", "take_screenshot", "snapshot", "press_key", "click", "wait_for",
+      "console_messages", "handle_dialog", "file_upload",
+    ].map((t) => `mcp__playwright__browser_${t}`).concat(
+      ["queryMetrics", "listObservations", "getObservation"].map((t) => `mcp__langfuse__${t}`),
+    )) {
+      assert.ok(tools.includes(tool), `tools: ohne ${tool}`);
+    }
+    // Darf NICHT passieren: andere Server (PixelLab bleibt im Hauptchat, Claude in Chrome ist
+    // gesperrt) und Node-Code im Serverprozess (steht in settings.json bewusst auf ask).
+    // Langfuse nur lesend: der Server bietet auch create/update/upsert/delete an.
+    const LANGFUSE_LESEN = new Set(["queryMetrics", "getMetricsSchema", "listObservations", "getObservation"]);
+    const fremd = tools.filter(
+      (t) =>
+        t.startsWith("mcp__") &&
+        (!/^mcp__(playwright|langfuse)__\w+$/.test(t) ||
+          /run_code_unsafe/.test(t) ||
+          (t.startsWith("mcp__langfuse__") && !LANGFUSE_LESEN.has(t.slice("mcp__langfuse__".length)))),
+    );
+    assert.deepEqual(fremd, [], "Unzulässige MCP-Tools in der Umsetzer-Whitelist");
+    const server = (JSON.parse(read(".mcp.json")) as { mcpServers?: Record<string, unknown> }).mcpServers ?? {};
+    assert.ok(
+      "playwright" in server,
+      "Die mcp__playwright__*-Namen im Umsetzer setzen den Server-Schlüssel `playwright` in .mcp.json voraus.",
+    );
+  });
+
   test("der kubernia-Skill spawnt den Umsetzer ohne model-Override", () => {
     const spawn = spawnFuer(read(UMSETZUNGS_SKILL), "kubernia-umsetzer");
     assert.notEqual(spawn, "", `${UMSETZUNGS_SKILL} braucht einen \`Agent({ subagent_type: "kubernia-umsetzer", … })\`-Spawn`);
