@@ -23,14 +23,26 @@ type Call = {
   model?: string | null;
   input?: number;
   cacheWrite?: number;
+  cacheWrite1h?: number;
   cacheRead?: number;
   output?: number;
-  cost?: number | string;
+  cost?: number | string | null;
   subagent?: Sub | null;
 };
 type Run = { calls: Call[]; questions?: number };
 type Row = { phase: string; model: string; calls: number; input: number; cacheWrite: number; cacheRead: number; output: number; cost: number };
-type Summary = { rows: Row[]; total: Omit<Row, "phase" | "model">; hasCost: boolean; reviewRounds: number; questions: number };
+type Parts = { input: number; cacheWrite: number; cacheRead: number; output: number };
+type Summary = {
+  rows: Row[];
+  total: Omit<Row, "phase" | "model">;
+  hasCost: boolean;
+  reviewRounds: number;
+  questions: number;
+  unpriced: number;
+  costParts: Parts;
+  medianContext: { all: number | null; main: number | null };
+  sockel: { main: number | null; planung: number | null; review: number | null };
+};
 type Bounds = { from?: string; claimAt?: string; prCreatedAt?: string; mergedAt?: string };
 type Obs = {
   id: string;
@@ -55,6 +67,8 @@ const m = baselineModule as {
   countFailedPushes: (runs: { head_sha: string }[] | undefined) => number;
   mergedWithoutRework: (mergedAt: string | null | undefined, failedPushes: number) => boolean;
   renderMarkdown: (s: Summary, loop?: { failedPushes?: number; mergedAt?: string | null }) => string;
+  priceCall: (c: Call, prices?: unknown) => number | null;
+  priceParts: (c: Call, prices?: unknown) => Parts | null;
   parseArgs: (argv: string[]) => { sessions: string[]; issue?: string; pr?: string; from?: string; json: boolean; langfuse: boolean };
   fetchSessionObservations: (
     sessionId: string,
@@ -347,5 +361,161 @@ describe("token-baseline: CI-/Merge-Kennzahlen und CLI", () => {
       langfuse: true,
     });
     assert.throws(() => m.parseArgs(["--foo"]), /Unbekanntes Argument/);
+  });
+});
+
+describe("token-baseline: Preise (#1206)", () => {
+  const MIO = 1_000_000;
+  const only = (extra: Partial<Call>): Call => ({
+    ts: "2026-10-05T10:00:00Z",
+    model: "claude-sonnet-5-5",
+    input: 0,
+    cacheWrite: 0,
+    cacheRead: 0,
+    output: 0,
+    ...extra,
+  });
+  const line = (id: string, model: string, usage: Record<string, unknown>, ts = "2026-10-05T10:00:00Z") =>
+    JSON.stringify({ type: "assistant", timestamp: ts, message: { id, model, usage } });
+
+  test("Input, Cache-Read und Output nach Preisliste (Sonnet 5.5: 2 / 0,20 / 10 $ je Mio)", () => {
+    assert.equal(m.priceCall(only({ input: MIO })), 2);
+    assert.equal(m.priceCall(only({ cacheRead: MIO })), 0.2);
+    assert.equal(m.priceCall(only({ output: MIO })), 10);
+  });
+
+  test("Cache-Write: 5m- und 1h-Anteil haben verschiedene Preise (Sonnet 2,50 / 4 $)", () => {
+    assert.equal(m.priceCall(only({ cacheWrite: MIO })), 2.5);
+    assert.equal(m.priceCall(only({ cacheWrite: MIO, cacheWrite1h: MIO })), 4);
+    assert.equal(m.priceCall(only({ cacheWrite: MIO, cacheWrite1h: MIO / 2 })), 3.25);
+  });
+
+  test("Modell-ID mit Datum findet den Preis per Präfix (Haiku 4.5)", () => {
+    assert.equal(m.priceCall(only({ model: "claude-haiku-4-5-20251001", input: MIO })), 1);
+  });
+
+  test("Opus 5.5 ist billiger als Opus 5 (Cache-Read 0,20 statt 0,50), Präfix darf nicht verwechseln", () => {
+    assert.equal(m.priceCall(only({ model: "claude-opus-5-5", cacheRead: MIO })), 0.2);
+    assert.equal(m.priceCall(only({ model: "claude-opus-5", cacheRead: MIO })), 0.5);
+  });
+
+  test("unbekanntes oder fehlendes Modell → null, nie 0", () => {
+    assert.equal(m.priceCall(only({ model: "gpt-x", input: MIO })), null);
+    assert.equal(m.priceCall(only({ model: null, input: MIO })), null);
+    assert.equal(m.priceParts(only({ model: "gpt-x" })), null);
+  });
+
+  test("kaputte Usage wird 0 statt NaN; 1h-Anteil über dem Gesamt-Write wird gedeckelt", () => {
+    assert.equal(m.priceCall(only({ input: NaN, output: undefined })), 0);
+    assert.equal(m.priceCall(only({ cacheWrite: MIO, cacheWrite1h: 3 * MIO })), 4);
+  });
+
+  test("Teilkosten ergeben zusammen den Gesamtbetrag", () => {
+    const c = only({ input: 10, cacheWrite: 1000, cacheWrite1h: 400, cacheRead: 5000, output: 70 });
+    const p = m.priceParts(c)!;
+    assert.ok(Math.abs(p.input + p.cacheWrite + p.cacheRead + p.output - m.priceCall(c)!) < 1e-12);
+  });
+
+  test("Transkript: cache_creation.ephemeral_1h wird als cacheWrite1h gelesen und bepreist", () => {
+    const usage = {
+      cache_creation_input_tokens: MIO,
+      cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: MIO },
+    };
+    const r = m.callsFromTranscript(line("a", "claude-sonnet-5-5", usage));
+    assert.equal(r.calls[0].cacheWrite1h, MIO);
+    assert.equal(r.calls[0].cost, 4);
+  });
+
+  test("Transkript ohne cache_creation-Aufteilung: alles zählt als 5m", () => {
+    const r = m.callsFromTranscript(line("a", "claude-sonnet-5-5", { cache_creation_input_tokens: MIO }));
+    assert.equal(r.calls[0].cacheWrite1h, 0);
+    assert.equal(r.calls[0].cost, 2.5);
+  });
+});
+
+describe("token-baseline: Sockel, Median-Kontext, Kosten-Teile (#1206)", () => {
+  const plan: Sub = { id: "p", agentType: "kubernia-planner", description: "Planungspass" };
+  const lensA: Sub = { id: "la", agentType: "general-purpose", description: "Lens 1" };
+  const lensB: Sub = { id: "lb", agentType: "general-purpose", description: "Lens 2" };
+  // Kontext je Call = input + cacheWrite + cacheRead
+  const ctx = (ts: string, total: number, extra: Partial<Call> = {}): Call => ({
+    ts,
+    model: "claude-sonnet-5-5",
+    input: 0,
+    cacheWrite: 0,
+    cacheRead: total,
+    output: 0,
+    ...extra,
+  });
+  const line = (id: string, model: string, usage: Record<string, unknown>, ts: string) =>
+    JSON.stringify({ type: "assistant", timestamp: ts, message: { id, model, usage } });
+
+  test("Sockel = erster Call (nach Zeit) des Hauptagenten bzw. je Subagent, Median je Phase", () => {
+    const s = m.summarize({
+      calls: [
+        ctx("2026-10-05T10:05:00Z", 90_000),
+        ctx("2026-10-05T10:00:00Z", 60_000), // erster Hauptagent-Call
+        ctx("2026-10-05T10:10:00Z", 30_000, { subagent: plan }),
+        ctx("2026-10-05T10:11:00Z", 99_000, { subagent: plan }),
+        ctx("2026-10-05T10:20:00Z", 50_000, { subagent: lensA }),
+        ctx("2026-10-05T10:20:00Z", 54_000, { subagent: lensB }),
+      ],
+    });
+    assert.equal(s.sockel.main, 60_000);
+    assert.equal(s.sockel.planung, 30_000);
+    assert.equal(s.sockel.review, 52_000);
+  });
+
+  test("--from ändert den Sockel des Hauptagenten nicht (Größe der Session)", () => {
+    const calls = [ctx("2026-10-05T10:00:00Z", 60_000), ctx("2026-10-05T11:00:00Z", 80_000)];
+    const s = m.summarize({ calls }, { from: "2026-10-05T10:30:00Z" });
+    assert.equal(s.sockel.main, 60_000);
+    assert.equal(s.medianContext.all, 80_000);
+  });
+
+  test("Median-Kontext: gerade Anzahl mittelt, Nachlauf zählt nicht, Hauptagent getrennt", () => {
+    const calls = [
+      ctx("2026-10-05T10:00:00Z", 10),
+      ctx("2026-10-05T10:01:00Z", 30),
+      ctx("2026-10-05T10:02:00Z", 20),
+      ctx("2026-10-05T10:03:00Z", 1000, { subagent: plan }),
+      ctx("2026-10-05T12:00:00Z", 9_999_999), // Nachlauf
+    ];
+    const s = m.summarize({ calls }, { mergedAt: "2026-10-05T11:00:00Z" });
+    assert.equal(s.medianContext.main, 20);
+    assert.equal(s.medianContext.all, 25); // 10, 20, 30, 1000 → (20+30)/2
+  });
+
+  test("ohne Calls: Median und Sockel sind null, nicht 0", () => {
+    const s = m.summarize({ calls: [] });
+    assert.equal(s.medianContext.all, null);
+    assert.equal(s.medianContext.main, null);
+    assert.equal(s.sockel.main, null);
+    assert.equal(s.sockel.planung, null);
+    assert.equal(s.sockel.review, null);
+  });
+
+  test("unpriced zählt Calls ohne Preis, costParts summiert die bepreisten", () => {
+    const text = [
+      line("a", "claude-sonnet-5-5", { input_tokens: 1_000_000, output_tokens: 1_000_000 }, "2026-10-05T10:00:00Z"),
+      line("b", "gpt-x", { input_tokens: 5 }, "2026-10-05T10:01:00Z"),
+    ].join("\n");
+    const s = m.summarize(m.callsFromTranscript(text));
+    assert.equal(s.unpriced, 1);
+    assert.equal(s.costParts.input, 2);
+    assert.equal(s.costParts.output, 10);
+    assert.equal(s.total.cost, 12);
+  });
+
+  test("renderMarkdown nennt Sockel, Median-Kontext, Kostenanteile und Calls ohne Preis", () => {
+    const text = [
+      line("a", "claude-sonnet-5-5", { cache_read_input_tokens: 60_000 }, "2026-10-05T10:00:00Z"),
+      line("b", "gpt-x", { input_tokens: 5 }, "2026-10-05T10:01:00Z"),
+    ].join("\n");
+    const md = m.renderMarkdown(m.summarize(m.callsFromTranscript(text)));
+    assert.match(md, /Sockel Haupt 60\.000/);
+    assert.match(md, /Median-Kontext/);
+    assert.match(md, /Kostenanteile/);
+    assert.match(md, /1 Call\(s\) ohne Preis/);
   });
 });

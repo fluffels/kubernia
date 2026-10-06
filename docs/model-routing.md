@@ -60,6 +60,8 @@ node scripts/token-baseline.mjs --session <id> --issue <nr> --pr <pr-nr> --from 
 - **Quelle ist das lokale Claude-Code-Transkript** (`~/.claude/projects/<projekt>/<session>.jsonl` + `subagents/`). `--langfuse` liest stattdessen die Langfuse-v2-Observations-API (braucht `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`, liefert zusätzlich Kosten). Für die Baseline zählt das Transkript, weil die Langfuse-Aufzeichnung zum Messzeitpunkt **unvollständig** war (für #1064 nur 11 der Hauptagent-Calls und 2 von 7 Subagenten). Mit lokalem Hook-Patch ist `--langfuse` gleichwertig (siehe nächster Punkt). Transkripte rotieren nach einigen Wochen: **direkt nach dem Merge messen.**
 - **Langfuse-Hook-Patch (#1084).** Ursache der Lücke ist ein Bug im Hook des Plugins `langfuse-observability`: Folgearbeit nach Hintergrund-Subagenten und als `queued_command` angehängte Meldungen gehen verloren. Mit lokalem Patch an drei Ticket-Läufen vom 30.09./01.10.2026 verifiziert (Plugin 1.0.0, je ganze Session inkl. Subagenten, ohne `--issue`/`--from`): Calls (122/122, 141/141, 152/152) und alle vier Token-Summen (Input, Cache-Write, Cache-Read, Output) stimmen zwischen Transkript und Langfuse-`GENERATION`s exakt überein. ⚠️ Gilt nur für gepatchte Installationen; Pflege und Stand: [Langfuse-Hook-Patch pflegen](#langfuse-hook-patch-pflegen-10841122).
 - **Phasen** ohne Marker im Lauf: Subagenten nach `agentType`, Workflow-Label (`umsetzen:`, `ci-fix` …) bzw. Beschreibung (Planer → Planung, Lens/Kritiker → Review, Explore → Recherche); der Hauptagent und nicht zuordenbare Subagenten über GitHub-Zeitstempel — vor dem Claim **Auswahl**, bis zum PR **Umsetzung**, bis zum Merge **CI/Merge**, danach **Nachlauf** (wird gezeigt, zählt nicht zum Ticket).
+- **Kosten** kommen im Transkript-Modus aus der Preistabelle `PRICES` im Skript (Quelle und Stand dort), nicht aus Langfuse: Langfuse rechnet nur bei der Ingestion, ein später angelegter Preis gilt nicht rückwirkend. Cache-Writes werden nach 5m- und 1h-TTL getrennt bepreist (der Hauptagent schreibt mit 1h, Subagenten mit 5m). Ein Modell ohne Eintrag ist „ohne Preis" (Hinweis im Report), nie 0 $; ein neues Modell gehört in `PRICES`.
+- **Zusatzzeilen im Report:** Sockel (erster Call des Hauptagenten, Median der Planer bzw. Lenses; unabhängig von `--from`), Median-Kontext und Kostenanteile (Input / Cache-Write / Cache-Read / Output). Läuft ein Ticket in einer Session mit Arbeit an einem anderen Ticket, immer `--from <Claim>` setzen, sonst zählt der Planer des anderen Tickets mit.
 - **Loop-Kennzahlen:** Review-Runden (Heuristik: 3 Lenses = 1 Runde, jeder weitere Kritiker +1), CI-Fix-Runden (distinct `head_sha` mit rotem CI, dieselbe Zählung wie #904), Rückfragen (`AskUserQuestion`), gemergt ohne Nacharbeit (Merge und 0 rote Pushes).
 
 ### Langfuse-Hook-Patch pflegen (#1084/#1122)
@@ -114,7 +116,47 @@ Quelle: Langfuse, alle Calls der Woche nach Modell.
 
 In rund 22 Traces mit Tag `skill:kubernia`: 1.284 Calls Opus 5.5, 257 Opus 5, 9 Haiku, **0 Sonnet**. Das belegt Bug #98898 (§2): das Skill-Frontmatter wirkt beim Skill-Tool nicht, daher der Projekt-Default in `settings.json`.
 
-**Erwartete Ersparnis** durch den Sonnet-Hauptagenten: etwa ein Viertel, nicht die Hälfte. Cache-Reads kosten bei Opus 5.5 und Sonnet 5.5 gleich viel (0,20 $/Mio) und machen 44 % der Kosten aus. Die Nachmessung des ersten Laufs unter dem neuen Routing läuft in #1206.
+**Erwartete Ersparnis** durch den Sonnet-Hauptagenten: etwa ein Viertel, nicht die Hälfte. Cache-Reads kosten bei Opus 5.5 und Sonnet 5.5 gleich viel (0,20 $/Mio) und machen 44 % der Kosten aus. Gemessen: [Nachmessung nach #1065/#1198](#nachmessung-nach-10651198-1206).
+
+### Nachmessung nach #1065/#1198 (#1206)
+
+Gemessen am 2026-10-06 mit `scripts/token-baseline.mjs` über die lokalen Transkripte, Kosten aus der `PRICES`-Tabelle im Skript (Stand 2026-10-06). Ein Langfuse-Vergleich wäre schief: Langfuse rechnet Kosten bei der Ingestion, und der Sonnet-Preis wurde erst am 05.10. um 07:37 angelegt. Alle 14 Läufe sind vollständig bepreist (0 Calls ohne Preis). Die Gruppen nach Merge-Zeit: **vorher** vor #1065 (09:41Z), **A** nur #1065 aktiv, **B** #1065 und #1198 aktiv (nach 14:48Z).
+
+| Gruppe | Läufe | Calls (Median) | Kosten (Median) | $ je Call (Median) | Sockel Haupt / Planer / Lens | Median-Kontext Haupt | Review-Runden (Median) | CI-Fix (Summe) | Rückfragen (Summe) | ohne Nacharbeit |
+|---|--:|--:|--:|--:|---|--:|--:|--:|--:|--:|
+| vorher¹ | 3 | 119 | 7,86 $ | 0,066 | 70,0k / 56,6k / 56,1k | 159k | 1 | 0 | 3 | 3/3 |
+| A (#1065) | 6 | 112 | 5,33 $ | 0,047 | 71,1k / 57,3k / 56,5k | 123k | 2 | 0 | 3 | 6/6 |
+| B (#1065 + #1198) | 5 | 51 | 2,55 $ | 0,050 | 64,6k / 28,1k / 51,1k | 134k | 1 | 2 | 2 | 4/5 |
+
+¹ #1201, #1199 und #1065 (dessen Umsetzung lief zum Teil schon auf Sonnet, daher 20 Sonnet-Calls). Der Planer fehlt in 1 von 3 (vorher), 3 von 6 (A) und 4 von 5 (B) Läufen.
+
+| Lauf | Gruppe | Art | Calls | Kosten | Review | CI-Fix | Planer |
+|---|---|---|--:|--:|--:|--:|---|
+| #1201 | vorher | Harness | 71 | 5,53 $ | 1 | 0 | nein |
+| #1199 | vorher | Harness | 119 | 7,86 $ | 1 | 0 | ja |
+| #1065 | vorher | Harness | 154 | 8,91 $ | 2 | 0 | ja |
+| #1218 | A | Doku | 41 | 1,95 $ | 2 | 0 | nein |
+| #1215 | A | Harness | 75 | 3,97 $ | 2 | 0 | nein |
+| #1110 | A | Doku | 111 | 5,13 $ | 2 | 0 | ja |
+| #1211 | A | Harness | 122 | 5,53 $ | 2 | 0 | ja |
+| #1208 | A | Doku | 112 | 5,85 $ | 2 | 0 | nein |
+| #1198 | A | Harness | 150 | 6,41 $ | 2 | 0 | ja |
+| #1258 | B | Harness | 22 | 0,74 $² | 0 | 0 | nein² |
+| #1213 | B | Harness | 32 | 1,69 $ | 1 | 0 | nein |
+| #1254 | B | Doku | 51 | 2,55 $² | 2 | 0 | nein |
+| #1221 | B | Grafik | 108 | 4,59 $ | 1 | 0 | ja |
+| #1217 | B | Sammelticket | 179 | 9,79 $ | 3³ | 2 | nein |
+
+² #1258 und #1254 liefen in Sessions mit mehreren Tickets, ab dem Claim geschnitten (`--from`). Beim Planer in der Session von #1258 lief die Planung für ein anderes Ticket (#1222), also zählt sie hier nicht.
+³ Eine Runde mehr als die Obergrenze von 2 (AGENTS.md › Mehr-Perspektiven-Review).
+
+**Befunde:**
+- **#1065 wirkt.** Der Hauptagent läuft in allen 11 Läufen danach zu 100 % auf Sonnet, vorher zu 0 %. Der Preis je Call sinkt von 0,066 $ auf 0,047 $ (−29 %), die Erwartung aus der Langfuse-Nachmessung (etwa ein Viertel) trifft zu. Planer und Lenses liefen vorher auf `claude-opus-5` und laufen jetzt auf `claude-opus-5-5` (Cache-Read 0,20 statt 0,50 $ je Mio), das trägt einen Teil dazu bei.
+- **#1198 wirkt beim Sockel, nicht beim Preis je Call.** Der Sockel fällt beim Hauptagenten von 71,1k auf 64,6k (−9 %), beim Planer von 57,3k auf 28,1k (−51 %), bei der Lens von 56,5k auf 51,1k (−10 %). Der Preis je Call bleibt bei 0,050 $ (A: 0,047 $), der Median-Kontext des Hauptagenten steigt sogar (123k → 134k): der Sockel bestimmt nur den Anfang einer Session, danach wächst der Kontext mit der Arbeit. Ob #1198 den Preis je Call senkt, lässt sich mit n = 5 nicht entscheiden.
+- **Kosten je PR sind nicht vergleichbar.** Der Median fällt von 7,86 $ über 5,33 $ auf 2,55 $, aber die Gruppe B besteht zu drei Fünfteln aus kleinen Tickets (22 bis 51 Calls), die Gruppe „vorher" aus mittleren bis großen. Belastbar ist nur der Preis je Call. Mit n = 3, 6 und 5 und gemischten Ticketarten (Harness, Doku, Grafik, Sammelticket) trägt keine Zahl mehr als eine Tendenz.
+- **Kostenverteilung:** Cache-Write 44–49 % und Cache-Read 41–46 %, Output 8–14 %, Input unter 1 %. Rund 90 % der Kosten hängen am Kontext, der bei jedem Call geschrieben bzw. gelesen wird. Wirksam sind Hebel, die Calls oder den Kontext je Call senken.
+- **Loop-Kennzahlen sind nicht besser, in B teils schlechter.** Gemergt ohne Nacharbeit: 4 von 5 statt 3 von 3 bzw. 6 von 6. #1217 brauchte 2 CI-Fix-Runden und 3 Review-Runden. In #1258 gab es keine Review-Runde, in 4 von 5 B-Läufen keinen Planer. Ein Teil der Ersparnis in B stammt also aus übersprungenen Schritten und ist keine Einsparung im Sinne des Tickets.
+- **Der Hauptagent schreibt den Cache mit 1h-TTL, Subagenten mit 5m.** Ohne den 1h-Preis (Sonnet 4 statt 2,50 $ je Mio) wären die Kosten des Hauptagenten zu niedrig; darum liest das Skript `cache_creation.ephemeral_1h_input_tokens`.
 
 ### Grundkontext pro Session (#1198)
 
@@ -149,7 +191,7 @@ Ohne Wirkung gemessen und deshalb **nicht** gesetzt: `enableArtifact: false` (0)
 
 **Umgesetzt:** Tool-Whitelist für den Planer; Beschreibungen aller Repo-Skills, des Planers und des Workflows auf höchstens 300 Zeichen; die drei wirksamen Schalter in `.claude/settings.json`; Wächter `test/harness/kontext-sockel.test.ts` (Whitelist ohne `*`/`Skill`/`Artifact`, Längenobergrenze, Schalter bleiben).
 
-**Grenzen:** Das Ziel „unter 40k" erreicht der **Planer** headless (27k); interaktiv ist er noch nicht nachgemessen und läge, das Delta auf den interaktiven Wert von 56–57k übertragen, bei ca. 43k. Der Hauptagent liegt headless bei 45,6k, übertragen auf den interaktiven Wert von ca. 70k bei ca. 63k; weiter geht es nur im User-Scope (siehe unten) oder durch weniger `AGENTS.md`. Lens- und Explore-Agenten haben noch keine Whitelist (Sockel ca. 55k bzw. 31k) und gehören zu #1209; der Wächter erzwingt die Whitelist dort automatisch, sobald die Agenten angelegt sind. PixelLab bleibt in `.mcp.json`; ob es in einer Session lädt, entscheidet `enabledMcpjsonServers` in der lokalen `.claude/settings.local.json` der Maintainerin.
+**Grenzen:** Das Ziel „unter 40k" erreicht der **Planer** headless (27k); interaktiv liegt er bei 28,1k (Median von 2 Läufen, [Nachmessung](#nachmessung-nach-10651198-1206)). Der Hauptagent liegt headless bei 45,6k, interaktiv bei 64,6k (5 Läufe); weiter geht es nur im User-Scope (siehe unten) oder durch weniger `AGENTS.md`. Lens- und Explore-Agenten haben noch keine Whitelist (Sockel interaktiv 51k bzw. ca. 31k) und gehören zu #1209; der Wächter erzwingt die Whitelist dort automatisch, sobald die Agenten angelegt sind. PixelLab bleibt in `.mcp.json`; ob es in einer Session lädt, entscheidet `enabledMcpjsonServers` in der lokalen `.claude/settings.local.json` der Maintainerin.
 
 **Hinweise für den User-Scope** (nur die Maintainerin kann das ändern): persönliche Skills, die claude.ai-Skills doppeln, aus `~/.claude/skills` entfernen; Trello- und Langfuse-MCP nur in den Projekten aktivieren, die sie brauchen; `/mcp` bzw. `disabledMcpServers` für nicht benötigte Server; SessionStart-Hooks und den Chrome-Default prüfen; Server mit dauerhaftem Verbindungsfehler entfernen.
 
@@ -157,7 +199,7 @@ Ohne Wirkung gemessen und deshalb **nicht** gesetzt: `enableArtifact: false` (0)
 
 ### Nach einer Optimierung vergleichen
 
-Die Nachmessung läuft in #1206: das Skript für 1–3 neue Läufe fahren, die Zeilen unter diese Tabelle hängen und die Veränderung von **Tokens**, **Modell Umsetzung** und den Loop-Spalten im PR-Text benennen. Eine Einsparung gilt nur, wenn die Loop-Spalten nicht schlechter werden (mehr CI-Fix-Runden oder Nacharbeit fressen den Gewinn).
+Das Skript für 1–3 neue Läufe fahren, die Zeilen unter die Tabelle der [Nachmessung](#nachmessung-nach-10651198-1206) hängen und die Veränderung von **Preis je Call**, **Sockel**, **Modell Umsetzung** und den Loop-Spalten im PR-Text benennen (Kosten je PR nur zwischen Tickets gleicher Art vergleichen). Eine Einsparung gilt nur, wenn die Loop-Spalten nicht schlechter werden (mehr CI-Fix-Runden oder Nacharbeit fressen den Gewinn).
 
 ### Langfuse-Blick beim Sammelticket (#1199)
 
