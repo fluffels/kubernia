@@ -182,9 +182,13 @@ const prompt = memo(() => lensPrompt(workflow));
 const primaer = memo(() => primaerpfad(prompt()));
 const patchAuftrag = memo(() => templateFunktion(workflow, "patchAuftrag"));
 const zuweisung = memo(() => diffZuweisung(workflow));
-const testLensAuftrag = memo(() =>
-  workflow.slice(workflow.indexOf("test-adaequanz"), workflow.indexOf("]", workflow.indexOf("test-adaequanz"))),
-);
+// Der LENSES-Eintrag selbst (`key: 'test-adaequanz'`), nicht die erste Erwähnung des Schlüssels: seit
+// #1265 nennt ihn die Review-Staffel weiter oben schon. Ende = Schluss dieses Objekt-Eintrags.
+const testLensAuftrag = memo(() => {
+  const start = workflow.indexOf("key: 'test-adaequanz'");
+  assert.notEqual(start, -1, "LENSES-Eintrag der Test-Lens nicht gefunden");
+  return workflow.slice(start, workflow.indexOf("\n  },", start));
+});
 
 describe("Der Diff wird einmal materialisiert statt pro Lens erhoben (#1034)", () => {
   test("der Lens-Prompt übergibt die Patch-Datei als Pfad", () => {
@@ -264,7 +268,9 @@ describe("Kontext-Diät: AGENTS.md wird nicht erneut gelesen (#1034)", () => {
     // liest jede Lens wieder alles.
     const lenses = workflow.slice(workflow.indexOf("const LENSES"), workflow.indexOf("\nconst MAX_FIX_VERSUCHE"));
     const treffer = lenses.match(/Dein Regel-Ausschnitt/g) || [];
-    assert.equal(treffer.length, 3, `Nur ${treffer.length} von 3 Lens-Aufträgen benennen ihren Regel-Ausschnitt`);
+    const brillen = (lenses.match(/^ {4}key: '/gm) || []).length;
+    assert.ok(brillen >= 4, `Nur ${brillen} Brillen in LENSES gefunden, erwartet die drei Code-Brillen + Doku (#1265)`);
+    assert.equal(treffer.length, brillen, `Nur ${treffer.length} von ${brillen} Lens-Aufträgen benennen ihren Regel-Ausschnitt`);
   });
 
   test("auch der Planungs-Agent liest die Kontextdateien nicht erneut", () => {

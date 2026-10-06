@@ -9,7 +9,7 @@ export const meta = {
     { title: 'Sonderfall', detail: 'Epic-Kinder aus dem Plan anlegen bzw. Dependabot-Sammelticket auflösen (kein Code)', model: 'sonnet' },
     { title: 'Pre-Flight', detail: 'Risiko-Klärung vor dem Coden: Optik/Weiche → anhalten + Fragen vorlegen (#1012/#1069)' },
     { title: 'Umsetzen', detail: 'Worktree, TDD, npm run verify, im Browser verifizieren, committen', model: 'sonnet' },
-    { title: 'Review', detail: '3 Lenses parallel als Konvergenzschleife (Cap 2, frischer Kritiker, #1012)', model: 'kubernia-lens (opus) + effort high' },
+    { title: 'Review', detail: 'Lenses parallel als Konvergenzschleife (Cap 2, frischer Kritiker, #1012): 3 für Code, 1 Doku-Lens für reines Markdown, ab Runde 2 nur blockierte Brillen auf dem Delta (#1265)', model: 'kubernia-lens (opus) + effort high' },
     { title: 'Nachbessern', detail: 'nur bei blockierenden Findings oder rotem verify' },
     { title: 'PR + Merge', detail: 'PR öffnen, Auto-Merge; Harness-Diff → Label selbst + Audit-Kommentar (#1069); rot → max. 3 Fix-Versuche' },
     { title: 'Festgefahren', detail: 'nach 3 erfolglosen Fix-Versuchen: Entscheidungsoptionen + Label, assigned bleiben' },
@@ -104,6 +104,13 @@ const AUSWAHL_SCHEMA = {
   },
 }
 
+/** Die geänderten Dateien des Slice — danach richtet sich der Lens-Satz (#1265). */
+const DIFF_DATEIEN = {
+  type: 'array',
+  items: { type: 'string' },
+  description: 'git diff --name-only origin/main...HEAD, eine Datei je Eintrag (bestimmt den Lens-Satz, #1265)',
+}
+
 const UMSETZUNG_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -121,6 +128,7 @@ const UMSETZUNG_SCHEMA = {
     },
     diffStat: { type: 'string', description: 'Ausgabe von git diff --stat: welche Dateien, wie viele Zeilen' },
     diffHead: { type: 'string', description: 'git rev-parse HEAD zum Zeitpunkt des Schreibens (Frische-Guard)' },
+    diffDateien: DIFF_DATEIEN,
     beruehrtHarness: {
       type: 'boolean',
       description:
@@ -222,6 +230,12 @@ const NACHBESSERN_SCHEMA = {
     },
     diffStat: { type: 'string', description: 'Ausgabe von git diff --stat nach dem Nachbessern' },
     diffHead: { type: 'string', description: 'git rev-parse HEAD nach dem Nachbessern (Frische-Guard)' },
+    diffDateien: DIFF_DATEIEN,
+    deltaPfad: {
+      type: 'string',
+      description: 'absoluter Pfad des Delta-Patches NUR dieses Fixes (#1265); leer, wenn main in den Branch gemergt/rebased wurde',
+    },
+    deltaDateien: { type: 'array', items: { type: 'string' }, description: 'git diff --name-only des Fixes allein (#1265)' },
     zusammenfassung: { type: 'string', description: 'was behoben, was bewusst liegen gelassen wurde (mit Grund)' },
   },
 }
@@ -242,13 +256,25 @@ const NACHBESSERN_SCHEMA = {
  * untracked Datei dort würde die git-status-Prüfungen verunreinigen und könnte mitcommittet
  * werden (AGENTS.md § „Auch Nicht-Ticket-Arbeit gehört committet, nicht liegen gelassen").
  * Scratch-Dumps gehören in einen temporären Ordner.
+ *
+ * `basisHead` (nur beim Nachbessern, #1265): der HEAD, den die Vorrunde reviewt hat. Dann wird
+ * zusätzlich der Fix allein als Delta-Patch geschrieben — Runde 2 prüft ihn statt des ganzen Diffs.
  */
-const patchAuftrag = (nr, runde) => `Zum Schluss, NACH dem Commit — den Diff für den Review einmal materialisieren (#1034):
+const patchAuftrag = (nr, runde, basisHead) => `Zum Schluss, NACH dem Commit — den Diff für den Review einmal materialisieren (#1034):
 - git fetch origin, dann git diff origin/main...HEAD in eine Datei schreiben. Dateiname
   kq-${nr}-r${runde}.patch, Ablage im Temp-/Scratch-Ordner, NICHT im Worktree (eine untracked
   Datei dort verunreinigt git status und könnte mitcommittet werden).
 - Gib den absoluten Pfad in diffPfad zurück, die Ausgabe von git diff origin/main...HEAD --stat
-  in diffStat und git rev-parse HEAD in diffHead.
+  in diffStat, git rev-parse HEAD in diffHead und git diff --name-only origin/main...HEAD
+  (eine Datei je Eintrag) in diffDateien — danach richtet sich, welche Lenses laufen (#1265).${
+  basisHead
+    ? `
+- Zusätzlich den Fix allein (#1265): git diff ${basisHead}..HEAD in kq-${nr}-r${runde}-delta.patch
+  (selber Ordner), den Pfad in deltaPfad, git diff --name-only ${basisHead}..HEAD in deltaDateien.
+  Hast du main in den Branch gemergt oder rebased, lass deltaPfad leer: dann prüft die nächste
+  Runde wieder den vollen Satz.`
+    : ''
+}
 Die Review-Lenses lesen danach diese eine Datei, statt den Diff je selbst zu erheben — das war
 gemessen der teuerste redundante Posten des Reviews. Schreib die Datei wirklich; ohne sie fällt
 der Review auf den alten, teuren Weg zurück.`
@@ -259,7 +285,14 @@ der Review auf den alten, teuren Weg zurück.`
  * damit die nächste Lens den Diff einmal selbst erhebt (und das meldet), statt stillschweigend
  * den Patch der Vorrunde weiterzuverwenden.
  */
-const diffAus = (r) => ({ pfad: r && r.diffPfad, stat: r && r.diffStat, head: r && r.diffHead })
+const diffAus = (r) => ({
+  pfad: r && r.diffPfad,
+  stat: r && r.diffStat,
+  head: r && r.diffHead,
+  dateien: r && r.diffDateien,
+  deltaPfad: r && r.deltaPfad,
+  deltaDateien: r && r.deltaDateien,
+})
 
 /**
  * Kontext-Diät für die Review-Lenses (#1034). Gemessen an #1021: fünf Lens-Pässe verbrannten
@@ -275,13 +308,73 @@ const KONTEXT_DIAET = `Kontext-Ökonomie (#1034) — halte dich daran, sie koste
 - AGENTS.md lädt Claude Code nativ – sie liegt BEREITS vollständig in deinem
   Kontext. Öffne sie NICHT erneut mit Read — das ist reine Duplikation. Brauchst du eine
   Stelle wörtlich, greppe punktuell danach (Grep mit dem Regel-Begriff).
-- Die Patch-Datei ist deine Primärquelle. Öffne eine geänderte Datei nur, wenn ein konkreter
-  Befund den umgebenden Kontext braucht — und dann gezielt mit offset/limit um die
-  Hunk-Zeilen, nicht die ganze Datei.
+- Die Patch-Datei ist deine Primärquelle. Lies sie genau EINMAL vollständig (ist sie sehr groß:
+  abschnittsweise, jede Zeile einmal); danach nur gezielt per Grep oder offset/limit, kein
+  zweites Volllesen, auch nicht per cat/Get-Content (#1265).
+- Öffne eine geänderte Datei nur, wenn ein konkreter Befund den umgebenden Kontext braucht —
+  und dann gezielt mit offset/limit um die Hunk-Zeilen, nicht die ganze Datei.
 - Beschaffe nichts, was du nicht für einen Befund brauchst. Analyse ist dein Beitrag,
   Beschaffung nicht.`
 
-/** Die drei Review-Brillen aus dem review-lenses-Skill (#532), je ein eigener Pass. */
+// ── Review-Staffel (#1265) — Anfang
+// Welche Lenses eine Review-Runde startet. Der Sockel je Lens ist fix (gemessen ~0,26 $ reiner
+// Cache-Write), darum spart nur eine kleinere ZAHL an Lenses spürbar, nicht sparsameres Lesen.
+// Die Diff-Art für Runde 1 ist eine Tabelle (erste Zeile, deren Prüfung ALLE Dateien erfüllen,
+// gewinnt): eine weitere Art (z.B. Content-JSON) ist dort eine Zeile. Die Delta-Regel ab Runde 2
+// (Test-Adäquanz läuft bei Code-Fixes mit) bleibt fest in lensPlan und muss dann mitgedacht werden. Keine Größenschwelle für Code:
+// auch ein kleiner src-Diff kann das Save-Format brechen.
+// Fail-closed überall: jede fehlende oder kaputte Angabe ergibt den vollen Satz auf dem vollen
+// Patch. Ein fehlendes Datum darf nie WENIGER Review bedeuten.
+const istDoku = (d) => /\.md$/i.test(d)
+const VOLLER_SATZ = ['architektur', 'requirement-treue', 'test-adaequanz']
+const LENS_SAETZE = [{ art: 'doku', passt: istDoku, keys: ['doku'] }]
+
+/** Die Dateiliste, oder null, wenn sie fehlt, leer oder kaputt ist. */
+function dateiListe(dateien) {
+  if (!Array.isArray(dateien) || dateien.length === 0) return null
+  if (dateien.some((d) => typeof d !== 'string' || !d.trim())) return null
+  return dateien.map((d) => d.trim())
+}
+
+function lensSatz(dateien) {
+  const liste = dateiListe(dateien)
+  const zeile = liste && LENS_SAETZE.find((z) => liste.every(z.passt))
+  return zeile ? zeile.keys : VOLLER_SATZ
+}
+
+// Ein Blocker ist ein Finding mit schwere=blockierend — dieselbe Definition wie die Schleife, die
+// danach entscheidet, ob nachgebessert wird. Ein Verdikt ohne solches Finding zählt nicht.
+const blockerVon = (b) => (b && Array.isArray(b.findings) ? b.findings.filter((f) => f && f.schwere === 'blockierend') : [])
+const hatBlocker = (b) => blockerVon(b).length > 0
+
+/**
+ * Runde 1 (vorrunde = null): der Satz der Diff-Art. Ab Runde 2: nur die Brillen mit Blocker in der
+ * Vorrunde, auf dem Delta-Patch des Fixes; ändert der Fix Nicht-Markdown, läuft Test-Adäquanz mit
+ * (ein Code-Fix ohne passenden Test ist der wahrscheinlichste neue Fehler, und check:diffcoverage
+ * gatet die Präsentation nicht).
+ */
+function lensPlan({ dateien, vorrunde } = {}) {
+  const satz = lensSatz(dateien)
+  const voll = { keys: satz, modus: 'voll' }
+  if (!vorrunde || !vorrunde.deltaPfad) return voll
+  const berichte = Array.isArray(vorrunde.berichte) ? vorrunde.berichte.filter(Boolean) : []
+  const erwartet = Array.isArray(vorrunde.erwartet) ? vorrunde.erwartet : []
+  const geliefert = new Set(berichte.map((b) => b.lens))
+  if (erwartet.length === 0 || erwartet.some((k) => !geliefert.has(k))) return voll
+  const auswahl = new Set(berichte.filter(hatBlocker).map((b) => b.lens))
+  // Ohne Blocker war Runde 2 nur wegen rotem verify nötig; eine Brille außerhalb des aktuellen
+  // Satzes heißt, die Diff-Art hat gewechselt. Beides: alles neu prüfen.
+  if (auswahl.size === 0 || [...auswahl].some((k) => !satz.includes(k))) return voll
+  const delta = dateiListe(vorrunde.deltaDateien)
+  if (satz.includes('test-adaequanz') && !(delta && delta.every(istDoku))) auswahl.add('test-adaequanz')
+  return { keys: satz.filter((k) => auswahl.has(k)), modus: 'delta' }
+}
+// ── Review-Staffel (#1265) — Ende
+
+/**
+ * Die Review-Brillen aus dem review-lenses-Skill (#532), je ein eigener Pass. Welche davon eine
+ * Runde startet, entscheidet lensPlan (#1265): drei für Code, die Doku-Brille allein für Markdown.
+ */
 const LENSES = [
   {
     key: 'architektur',
@@ -324,6 +417,23 @@ Präsentations-Code (Phaser/DOM) wird im Browser verifiziert statt per Unit-Test
 passiert und belegt?
 Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):
 AGENTS.md § TDD ist der Default, § Tests gegen False Positives absichern.`,
+  },
+  {
+    key: 'doku',
+    auftrag: `Lens „Doku" — der EINZIGE Pass für einen reinen Markdown-Diff (#1265). Eine Test-Brille
+entfällt, weil es ohne Code nichts zu sabotieren gibt; die Architektur-Fragen einer Doku stecken
+in den Punkten 2 und 3. Prüfe darum alle vier:
+1. Requirement-Treue: halte den Diff gegen jedes Akzeptanzkriterium einzeln (erfüllt / offen /
+   darüber hinaus). Scope-Kriechen?
+2. SSOT/Drift: steht eine Regel jetzt doppelt (jede harte Regel lebt genau einmal in AGENTS.md,
+   die Langfassung in docs/)? Widerspricht der neue Text einer anderen Stelle, einem ADR oder dem
+   Verhalten von Code/Skripten? Ist-Zustand statt Historie? Lösen neue Links und Anker auf?
+3. Wächter-Kopplung: ändert der Diff eine Regel, die ein Wächter erzwingt? Greppe den
+   Regel-Begriff in test/harness/ und scripts/. Erzwingt dort weiter die alte Fassung, ist das
+   blockierend — dann fehlt im Diff eine Code-Änderung.
+4. ⭐ Oberste Regel: trägt die Regel noch bei 10× Inhalt, Tickets und parallelen Agenten?
+Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):
+AGENTS.md Kopf (SSOT) + § Doku aktuell halten + § Oberste Regel.`,
   },
 ]
 
@@ -698,13 +808,22 @@ ${patchAuftrag(nr, 1)}`,
   // ist schlechter, nicht besser. Der Token-Short-Circuit (#532) bleibt: rotes verify ⇒
   // kein Lens-Pass, direkt nachbessern.
 
-  // Ein Review-Pass: die drei Lenses parallel auf den aktuellen Diff (je ein frischer Agent).
+  // Ein Review-Pass: die Lenses des Plans (lensPlan) parallel auf den aktuellen Stand (je ein frischer Agent).
   // Der Diff kommt als einmal geschriebene Patch-DATEI herein (#1034) — nicht als Auftrag, ihn
   // selbst zu erheben. `runde` nummeriert die Patch-Datei, damit eine spätere Runde nie die
   // Fassung der Vorrunde reviewt und Fixes attestiert, die sie nie gesehen hat.
-  const reviewPass = (diff, runde) =>
+  // `plan` (lensPlan, #1265) wählt die Brillen; im Modus delta prüfen sie den Fix gegen ihre
+  // Blocker aus `vorrunde`. Der Bericht trägt den Brillen-Schlüssel aus dem Code, nicht die
+  // Selbstauskunft des Agenten — daran hängen die Vorrunden-Prüfung und der Endbericht.
+  const vorBlocker = (vorrunde, key) => {
+    const liste = blockerVon(vorrunde && vorrunde.berichte.find((x) => x.lens === key))
+    return liste.length
+      ? liste.map((f, i) => `${i + 1}. [${f.ort}] ${f.befund}`).join('\n')
+      : '(keine eigenen — du läufst mit, weil der Fix Code ändert: prüfe, ob er angemessen getestet ist)'
+  }
+  const reviewPass = (diff, runde, plan, vorrunde) =>
     parallel(
-      LENSES.map(
+      LENSES.filter((lens) => plan.keys.includes(lens.key)).map(
         (lens) => () =>
           agent(
             `${kopf}
@@ -728,7 +847,19 @@ Harness-Defekt im Bericht, statt stillschweigend einen alten Stand zu reviewen.`
 geschrieben). Erhebe den Diff EINMAL selbst mit git diff origin/main...HEAD und arbeite dann
 damit weiter — und erwähne das fehlende Artefakt in deinem Bericht, es ist ein Harness-Defekt.`
 }
-
+${
+  plan.modus === 'delta'
+    ? `
+Runde ${runde} prüft nur den Fix (#1265). Deine Primärquelle ist der Delta-Patch der Nachbesserung:
+  ${diff.deltaPfad}
+Prüfe zuerst, ob diese Blocker deiner Brille aus der Vorrunde behoben sind:
+${vorBlocker(vorrunde, lens.key)}
+Prüfe danach, ob der Fix selbst durch deine Brille etwas Neues bricht. Der volle Patch oben ist
+hier nur Referenz für gezielte Zugriffe (Grep, offset/limit), nicht zum Volllesen: „die
+Patch-Datei" der Kontext-Ökonomie unten ist in dieser Runde der Delta-Patch.
+`
+    : ''
+}
 Zusammenfassung des ausführenden Agenten zum Stand, den du reviewst (Runde ${runde}):
 ${letzteZusammenfassung || '(keine)'}
 
@@ -745,8 +876,8 @@ Was dir außerhalb des Ticket-Scopes auffällt, gehört nach ausserhalbScope (ec
 eigenes Issue, sonst Zeile im Sammelticket) — nicht in die Findings.`,
             // Modell und Effort der Lens stehen im Frontmatter von kubernia-lens (#1209), hier nur der Effort
             // (muss gleich sein, bewacht von test/harness/model-routing.test.ts).
-            { label: `lens:${lens.key}`, phase: 'Review', schema: LENS_SCHEMA, agentType: 'kubernia-lens', effort: 'high' },
-          ),
+            { label: `lens:${lens.key}:r${runde}`, phase: 'Review', schema: LENS_SCHEMA, agentType: 'kubernia-lens', effort: 'high' },
+          ).then((r) => (r ? { ...r, lens: lens.key } : r)),
       ),
     ).then((r) => r.filter(Boolean))
 
@@ -760,6 +891,13 @@ eigenes Issue, sonst Zeile im Sammelticket) — nicht in die Findings.`,
   let letzteVerifyAusgabe = umsetzung.verifyAusgabe
   let letzteZusammenfassung = umsetzung.zusammenfassung
   let reviewRunden = 0
+  // Letzter Bericht JEDER Brille (#1265): ab Runde 2 laufen nicht mehr alle, der Endbericht und
+  // ausserhalbScope sollen aber den Stand aller zeigen. Blocker/Hinweise kommen dagegen nur aus dem
+  // aktuellen Pass: eine Brille, die nicht erneut lief, hatte in der Vorrunde keinen Blocker.
+  const lensStand = {}
+  const lensEndstand = () => LENSES.map((l) => lensStand[l.key]).filter(Boolean)
+  // Der letzte Lens-Pass (für lensPlan); null nach rotem verify ⇒ die nächste Runde prüft wieder alles.
+  let vorrunde = null
   // Der materialisierte Diff (#1034). Wird nach jeder Nachbesserung ERSETZT, nie
   // weiterverwendet — ein Patch aus der Vorrunde würde einen Review vortäuschen.
   let diff = diffAus(umsetzung)
@@ -770,20 +908,28 @@ eigenes Issue, sonst Zeile im Sammelticket) — nicht in die Findings.`,
   for (;;) {
     if (verifyGruen) {
       phase('Review')
-      lensBerichte = await reviewPass(diff, reviewRunden + 1)
-      if (lensBerichte.length < LENSES.length) {
+      const plan = lensPlan({
+        dateien: diff.dateien,
+        vorrunde: vorrunde && { ...vorrunde, deltaPfad: diff.deltaPfad, deltaDateien: diff.deltaDateien },
+      })
+      log(`Review-Runde ${reviewRunden + 1}: ${plan.keys.join(', ')} (${plan.modus === 'delta' ? 'nur der Fix' : 'voller Diff'}, #1265).`)
+      lensBerichte = await reviewPass(diff, reviewRunden + 1, plan, vorrunde)
+      if (lensBerichte.length < plan.keys.length) {
         log(
-          `⚠ Nur ${lensBerichte.length} von ${LENSES.length} Lens-Pässen lieferten ein Ergebnis — die fehlenden sind ungeprüft.`,
+          `⚠ Nur ${lensBerichte.length} von ${plan.keys.length} Lens-Pässen lieferten ein Ergebnis — die fehlenden sind ungeprüft.`,
         )
       }
+      vorrunde = { erwartet: plan.keys, berichte: lensBerichte }
+      for (const b of lensBerichte) lensStand[b.lens] = b
     } else {
       log('npm run verify ist rot — Short-Circuit (#532): keine Lens-Pässe, direkt zum Nachbessern.')
       lensBerichte = []
+      vorrunde = null
     }
     // Findings einmal aus dem aktuellen Pass ableiten (bei rotem verify aus dem leeren Bericht).
     blockierend = lensBerichte.flatMap((b) => (b.findings || []).filter((f) => f.schwere === 'blockierend'))
     hinweise = lensBerichte.flatMap((b) => (b.findings || []).filter((f) => f.schwere === 'hinweis'))
-    ausserhalbScope = lensBerichte.flatMap((b) => b.ausserhalbScope || [])
+    ausserhalbScope = lensEndstand().flatMap((b) => b.ausserhalbScope || [])
     if (verifyGruen) {
       log(
         `Review-Runde ${reviewRunden + 1}: ${blockierend.length} blockierend, ${hinweise.length} Hinweise, ${ausserhalbScope.length} außerhalb Scope.`,
@@ -837,7 +983,7 @@ Danach npm run verify erneut, bis grün. Bleib im Ticket-Scope: Punkte, die ein 
 Ticket brauchen, nicht inline mitfixen (⭐ oberste Regel). Committe mit (#${nr}).
 Melde verifyGruen und was du behoben bzw. bewusst liegen gelassen hast (mit Grund).
 
-${patchAuftrag(nr, reviewRunden + 1)}`,
+${patchAuftrag(nr, reviewRunden + 1, diff.head)}`,
       { label: `nachbessern ${reviewRunden}/${MAX_REVIEW_RUNDEN}:#${nr}`, phase: 'Nachbessern', schema: NACHBESSERN_SCHEMA, model: 'sonnet', effort: 'medium' },
     )
     verifyGruen = nachbesserung ? !!nachbesserung.verifyGruen : false
@@ -1083,8 +1229,9 @@ Melde das Ergebnis jedes Verify-Schritts einzeln${ausserhalbScope.length ? ' sow
     fixVersuche,
     umsetzung: umsetzung.zusammenfassung,
     browserVerifiziert: umsetzung.browserVerifiziert,
-    review: lensBerichte.map((b) => ({ lens: b.lens, verdikt: b.verdikt })),
-    hinweiseOffen: hinweise.length,
+    review: lensEndstand().map((b) => ({ lens: b.lens, verdikt: b.verdikt })),
+    // Über alle Brillen (#1265): Hinweise einer Brille, die in Runde 2 nicht erneut lief, sind weiter offen.
+    hinweiseOffen: lensEndstand().flatMap((b) => (b.findings || []).filter((f) => f.schwere === 'hinweis')).length,
     ausserhalbScope,
     cleanup,
   }
