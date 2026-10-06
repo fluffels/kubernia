@@ -6,9 +6,9 @@
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
  * Rein struktureller Wächter (wie diffsize/docdrift): die Erkennungslogik lebt in
- * scripts/worktree-guard-hook.mjs (EINE Quelle für Hook-CLI und Test). git selbst
- * wird NICHT ausgeführt — execFile/stat sind injiziert, damit der Test
- * deterministisch und ohne echten Repo-Zustand läuft.
+ * scripts/worktree-guard-hook.mjs (EINE Quelle für Hook-CLI und Test). Die Einheitstests
+ * führen git NICHT aus (execFile/stat sind injiziert); ein eigener Block prüft den Hook
+ * gegen echtes git in einem Temp-Repo mit Worktree und Unterordner (gegen die Fakes).
  *
  * Ausführen mit: npm test
  */
@@ -450,10 +450,15 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
   let linked = "";
   let linkedSub = "";
   const slash = (p: string) => p.replace(/\\/g, "/");
+  // Ohne GIT_*-Variablen der umgebenden Umgebung (z.B. GIT_DIR im pre-push-Hook): das Temp-Repo bleibt isoliert.
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
   const git = (cwd: string, ...args: string[]) =>
-    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: "pipe" });
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: "pipe", env });
 
+  // Auch die git-Aufrufe des Hooks selbst erben process.env: GIT_* für die Dauer dieses Blocks entfernen.
+  const gitEnvVorher = Object.entries(process.env).filter(([k]) => k.startsWith("GIT_"));
   beforeAll(() => {
+    for (const [k] of gitEnvVorher) delete process.env[k];
     base = realpathSync.native(mkdtempSync(join(tmpdir(), "kq-guard-")));
     main = join(base, "main");
     sub = join(main, "src");
@@ -466,7 +471,10 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
     git(main, "commit", "-q", "-m", "init");
     git(main, "worktree", "add", "-q", "-b", "wtbranch", linked);
   });
-  afterAll(() => rmSync(base, { recursive: true, force: true }));
+  afterAll(() => {
+    for (const [k, v] of gitEnvVorher) process.env[k] = v;
+    rmSync(base, { recursive: true, force: true });
+  });
 
   const blockt = (cwd: string, command: string) => decide({ cwd, command, repoRoot: main }).block;
 
@@ -551,6 +559,8 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
     ["git log --grep=push", true],
     ["git stash push", true],
     ["git status # git push", true],
+    ['FOO=1 gh issue comment 1 --body "git push"', true],
+    ['command echo "git push"', true],
   ];
 
   test("Differenz-Matrix aus Haupt-Checkout und Unterordner: nur bewusste Fälle gehen durch", { timeout: 120_000 }, () => {
