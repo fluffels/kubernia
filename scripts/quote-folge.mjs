@@ -4,6 +4,16 @@
  * Interpreter-String-Erkennung des gh-Guards. Pur, nur Builtins, kein Bezug zu Hook-I/O (darum nicht in hook-io.mjs).
  */
 
+/** Maskiert das Zeichen `c` an `i` das nächste (`\` oder Backtick, nicht in `'…'`, ggf. nur innerhalb von `"…"`)? */
+const maskiert = (c, q, hatNaechstes, escAussen) => (c === "\\" || c === "`") && hatNaechstes && (q !== null || escAussen);
+
+/** Zustand nach dem Zeichen `c` (das Quote-Zeichen öffnet, schließt oder bleibt unberührt). */
+function naechsterZustand(q, c) {
+  if (q === "'") return c === "'" ? null : q;
+  if (c === q) return null;
+  return q === null && (c === "'" || c === '"') ? c : q;
+}
+
 /**
  * Quote-Zerlegung für Textprüfungen (gh-Guard): liefert je Zeichen ab `von` den Zustand VOR dem Zeichen
  * `{ i, c, q, masked }` (`q`: `'`, `"` oder null; `masked`: durch `\` oder PowerShell-Backtick maskiert, außerhalb von
@@ -17,13 +27,10 @@ export function quoteFolge(text, von = 0, q0 = null, escAussen = true) {
   for (let i = von; i < text.length; i++) {
     const c = text[i];
     out.push({ i, c, q, masked: false });
-    if (q === "'") {
-      if (c === "'") q = null;
-    } else if ((c === "\\" || c === "`") && i + 1 < text.length && (q !== null || escAussen)) {
+    if (q !== "'" && maskiert(c, q, i + 1 < text.length, escAussen)) {
       out.push({ i: i + 1, c: text[i + 1], q, masked: true });
       i++;
-    } else if (c === q) q = null;
-    else if (q === null && (c === "'" || c === '"')) q = c;
+    } else q = naechsterZustand(q, c);
   }
   out.ende = q;
   return out;

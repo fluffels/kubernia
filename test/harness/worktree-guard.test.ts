@@ -634,6 +634,15 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(run("git config alias.p push && git P"), true, "Alias-Aufruf mit Großbuchstaben");
   });
 
+  test("MAX_INTERPRETER: drei Ebenen verschachtelter Interpreter-Strings werden ausgewertet, die vierte nur grob", () => {
+    const verschachtelt = (n: number, inner: string): string => (n === 0 ? inner : verschachtelt(n - 1, `bash -c ${JSON.stringify(inner)}`));
+    const haupt = repoRoot.replace(/\\/g, "/");
+    const inner = `cd '${haupt}' && git push`;
+    assert.equal(run(verschachtelt(3, inner), wt), true, "Ebene 3: cd in den Haupt-Checkout wird noch ausgewertet");
+    assert.equal(run(verschachtelt(4, inner), wt), false, "Ebene 4: nur die grobe Wortregel gegen den Ausgangsort (Worktree)");
+    assert.equal(run(verschachtelt(4, "git push")), true, "grob blockt im Haupt-Checkout trotzdem");
+  });
+
   test("Review R1: ein rev-parse je Verzeichnis und decide (kontextCache)", () => {
     let aufrufe = 0;
     const base = fsFake([wt]);

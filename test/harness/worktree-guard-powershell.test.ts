@@ -144,6 +144,15 @@ describe("Haupt-Checkout: commit/push wird geblockt (Z25)", () => {
     assert.equal((pruefe(`bash -c 'cd "$X" && git push'; git -C ${HAUPT} commit -m x`, WT) as { block: boolean }).block, true, "ein späteres Statement mit deny geht der Frage vor");
   });
 
+  test("Brücke: unbekannter Inhalt (mainOnly) fragt im Haupt-Checkout, im Worktree und in fremden Repos nicht", () => {
+    const frage = (cmd: string, cwd: string) => (pruefe(cmd, cwd) as { ask?: boolean }).ask === true;
+    assert.equal(frage(`bash -c 'eval "$Y"'`, HAUPT), true);
+    assert.equal(frage(`bash -c 'eval "$Y"'`, WT), false, "im Worktree fragt die Brücke nie nach unbekanntem Inhalt");
+    assert.equal(frage(`bash -c 'eval "$Y"'`, "/anderes/repo"), false, "fremdes Repo");
+    assert.equal(frage(`bash -c 'cd "$X" && git push'`, WT), true, "unbekanntes Ziel fragt dagegen auch im Worktree");
+    assert.equal(frage(`bash -c 'cd "$X" && git push'`, "/anderes/repo"), false, "fremdes Repo");
+  });
+
   test("Ortswechsel IM String eines Interpreters wird ausgewertet (bash -c, sh -c, pwsh -c, iex)", () => {
     blockt(`bash -c "cd ${HAUPT} && git commit -m x"`, WT);
     blockt(`sh -c 'git -C ${HAUPT} push'`, WT);
