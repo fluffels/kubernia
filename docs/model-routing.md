@@ -128,7 +128,7 @@ Quelle: Langfuse, alle Calls der Woche nach Modell.
 
 ¹ Langfuse hat für `claude-sonnet-5-5` keinen Preis hinterlegt (#1123).
 
-In rund 22 Traces mit Tag `skill:kubernia`: 1.284 Calls Opus 5.5, 257 Opus 5, 9 Haiku, **0 Sonnet**. Das belegt Bug #98898 (§2): das Skill-Frontmatter wirkt beim Skill-Tool nicht, daher der Projekt-Default in `settings.json`.
+In rund 22 Traces mit Tag `skill:kubernia`: 1.284 Calls Opus 5.5, 257 Opus 5, 9 Haiku, **0 Sonnet**. Das belegt Bug #98898 (§2): das Skill-Frontmatter wirkt beim Skill-Tool nicht, daher (von #1065 bis #1280) der Projekt-Default in `settings.json`.
 
 **Erwartete Ersparnis** durch den Sonnet-Hauptagenten: etwa ein Viertel, nicht die Hälfte. Cache-Reads kosten bei Opus 5.5 und Sonnet 5.5 gleich viel (0,20 $/Mio) und machen 44 % der Kosten aus. Gemessen: [Nachmessung nach #1065/#1198](#nachmessung-nach-10651198-1206).
 
