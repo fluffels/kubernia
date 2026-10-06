@@ -90,6 +90,24 @@ describe("Agenten-Permissions in .claude/settings.json (#901)", () => {
     }
   });
 
+  test("Langfuse-Lesetools stehen einzeln in allow, ohne Server-Wildcard und ohne Schreib-Tools (#1276)", () => {
+    const lesen = [
+      "mcp__langfuse__queryMetrics",
+      "mcp__langfuse__getMetricsSchema",
+      "mcp__langfuse__listObservations",
+      "mcp__langfuse__getObservation",
+    ];
+    for (const rule of lesen) {
+      assert.ok(allow.includes(rule), `allow muss ${rule} enthalten — Lesezugriff für den Langfuse-Blick (#1276)`);
+    }
+    const langfuse = allow.filter((r) => r.startsWith("mcp__langfuse"));
+    assert.deepEqual(
+      [...langfuse].sort(),
+      [...lesen].sort(),
+      "allow darf für Langfuse nur die vier Lesetools nennen: weder `mcp__langfuse` noch `mcp__langfuse__*` noch Schreib-Tools (Prompts, Scores, Kommentare, Datasets)",
+    );
+  });
+
   test("kein Kommando steht gleichzeitig in allow und deny (deny gewinnt, aber Doppeleinträge sind ein Redaktionsfehler)", () => {
     const overlap = allow.filter((r) => deny.includes(r));
     assert.deepEqual(overlap, [], `Diese Regeln stehen in allow UND deny: ${overlap.join(", ")}`);

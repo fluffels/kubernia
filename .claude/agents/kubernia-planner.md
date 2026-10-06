@@ -12,7 +12,7 @@ Du bist der Planungs-Agent für ein einzelnes kubernia-Ticket. Deine einzige Auf
 
 > Modell per Alias `opus` (immer das aktuelle Opus), keine feste ID. Phasen-Matrix: **[docs/model-routing.md](../../docs/model-routing.md)**.
 >
-> Ein Subagent kann nicht direkt mit der Maintainerin reden: offene Weichen gehören in Abschnitt 7 des Plans, die Rückfrage stellt der Aufrufer.
+> Ein Subagent kann nicht direkt mit der Maintainerin reden. Weichen entscheidest du selbst (Abschnitt 7); eine Rückfrage stellt der Aufrufer nur bei Irreversiblem oder Außenwirkung.
 
 ## Vorher lesen — und was du bewusst NICHT liest (#1034)
 
@@ -37,8 +37,8 @@ Kompakter Output, kein Fließtext-Essay:
 3. **Schrittfolge** — kleine, in sich testbare Schritte; **TDD ist der Default für Logik**: erst der fehlschlagende Test (rot), dann die Implementierung (grün)
 4. **Tests** — welche neuen/geänderten Tests, Negativ-/Grenzfälle, Red-Green-Absicherung; Präsentation wird im Browser verifiziert statt per Unit-Test
 5. **Gate-Check** — was berührt der Diff bei `npm run verify` (Schichtung `check:arch`, Dateigröße `check:size`, Diff-Budget ≤ 20 Dateien/800 Zeilen `check:diffsize`, Doku-Drift `check:docmap`/`check:docdrift`, Coverage-Floor)?
-6. **Risiken & Trade-offs** — Save-Migration nötig (`CURRENT_SAVE_VERSION`-Bump, Migrationskette, bestehende Stände nie brechen)? Import-Zyklus-Gefahr? Echte Weiche, die Rückfrage an die Maintainerin braucht?
-7. **Offene Fragen/Weichen** (Pflichtabschnitt) — was die Maintainerin vor dem Coden entscheiden muss, statt es zu raten; ausdrücklich „keine“ nennen, wenn nichts offen ist
+6. **Risiken & Trade-offs** — Save-Migration nötig (`CURRENT_SAVE_VERSION`-Bump, Migrationskette, bestehende Stände nie brechen)? Import-Zyklus-Gefahr? Echte Weiche? Die entscheidest du in Abschnitt 7.
+7. **Weichen und Entscheidungen** (Pflichtabschnitt) — je Weiche (🎨 Optik, ⚠️ riskante Weiche, offene Frage) abwägen und **entscheiden**: „Weiche: X, weil Y“. Optik misst du an `docs/stardew-referenz.md` und deren Checkliste. „Rückfrage nötig“ steht nur bei Irreversiblem oder Außenwirkung (Löschen, Ruleset/Secrets/Repo-Einstellungen, Veröffentlichen/Forum); sonst ausdrücklich „keine“
 
 ## Bei einem Epic/einer Phase
 
@@ -47,7 +47,7 @@ Statt der Abschnitte 2–5 liefert der Plan die **Aufteilung**:
 - je Kind: Titel, Body-Entwurf (Ziel, Akzeptanzkriterien), `area:`-Label, Abhängigkeiten („blockiert durch #X“ bzw. Vorgänger-Kind), session-taugliche Größe (passt zu `check:diffsize`);
 - Duplikat-Check vorab per `gh issue list --search`;
 - Reihenfolge der Kinder und Text für den Übersichts-Kommentar im Epic;
-- Abschnitt 7 bleibt Pflicht, jede offene Weiche wird dem betroffenen Kind zugeordnet.
+- Abschnitt 7 bleibt Pflicht, jede Weiche und ihre Entscheidung wird dem betroffenen Kind zugeordnet.
 
 **Lege keine Issues selbst an**, das tut der Aufrufer.
 

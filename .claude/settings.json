@@ -30,7 +30,11 @@
       "Bash(sort:*)",
       "Bash(uniq:*)",
       "Bash(diff:*)",
-      "mcp__playwright"
+      "mcp__playwright",
+      "mcp__langfuse__queryMetrics",
+      "mcp__langfuse__getMetricsSchema",
+      "mcp__langfuse__listObservations",
+      "mcp__langfuse__getObservation"
     ],
     "ask": [
       "Bash(curl:*)",

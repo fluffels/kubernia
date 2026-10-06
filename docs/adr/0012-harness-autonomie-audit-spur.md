@@ -36,7 +36,7 @@ Die Maintainerin wählt **„komplett alles"**:
 1. **Kein Merge-Checkpoint mehr.** Bei Harness-/Leitplanken-/Gate-Diffs setzt der Agent `maintainer-approved` **selbst** und merged wie jeden anderen PR — Voraussetzung unverändert: CI grün + Mehr-Perspektiven-Review bestanden.
 2. **Label-Reihenfolge schützt den Guard:** das Label erst setzen, wenn alle anderen Checks grün sind, und vor jedem weiteren Fix-Push wieder entfernen. Sonst sähe der `gate-change-guard` eine später im selben PR nachgeschobene Gate-Änderung nicht mehr.
 3. **Audit-Spur ersetzt die Freigabe:** direkt nach dem Merge ein PR-Kommentar „🛡️ Leitplanken-Änderung selbst gemergt" — *was* sich an den Leitplanken ändert, *warum*, *wie reverten* (`git revert <squash-sha>` per PR). Die Maintainerin liest asynchron gegen. Im Workflow als Schema-Feld `auditKommentar` mit lauter Warnung, wenn er fehlt.
-4. **Pre-Flight nur noch für echte Entscheidungen:** 🎨 Optik, ⚠️ riskante Weiche, offene Plan-Weiche. Harness-/Gate-Dateien allein sind kein Stopp-Grund.
+4. **Pre-Flight nur noch für echte Entscheidungen (abgelöst durch #1279, siehe Fortschreibung unten):** 🎨 Optik, ⚠️ riskante Weiche, offene Plan-Weiche. Harness-/Gate-Dateien allein sind kein Stopp-Grund.
 5. **Unverändert:** `gate-change-guard` + CODEOWNERS (das Label markiert jede Leitplanken-Änderung im PR-Log), der Mehr-Perspektiven-Review vor dem Merge, die Goodhart-Verhaltensregel (nie ein Gate abschwächen, nur um grün zu werden).
 
 **Fokus der Harness-Phase.** Parallel entschieden: erst das KI-Gerüst fertig machen, dann wieder Spielentwicklung. Ziele: **wenig Human-in-the-Loop, wenig Tokens, hohe Qualität.** Umgesetzt über die Board-Reihenfolge — Windows-Start des Workflows (#1026), Token-/Loop-Baseline (#1068), dann die Sammeltickets (AGENTS.md kürzen #1064, genau ein Ablauf #1067 mit Folgepunkten #1070, Modell-Routing #1065, native Worktree-Isolation #1066), die Qualitäts-Gates #1023/#1022, danach Security/Repo-Tickets und das Spiel. Ein separates „Projekt-Brain" oder Wiki neben dem Repo wurde bewusst nicht angelegt: das Repo selbst (AGENTS.md, ADRs, `docs/`, Issues) ist der Wissensspeicher; nur übertragbare Konzepte und persönliche Arbeitskonventionen (z.B. der Chat-Abschlusssatz, #935) gehören ins persönliche Brain der Maintainerin.
@@ -59,7 +59,7 @@ Die Maintainerin wählt **„komplett alles"**:
 
 **Entscheidung (Ideen der Maintainerin, Details von ihr an den Agenten delegiert und kritisch abgewogen).**
 1. **Spielquote (abgelöst durch #1258: kein Rhythmus-Schritt mehr, die Board-Reihenfolge ist rein manuell):** jedes dritte Ticket ist ein Spielticket (`area:inhalt`/`lernpfad`/`grafik`); Notfälle (`🚨`, Security, `🤖`, Forum) behalten Vorrang. Gibt es keins mehr, meldet der Agent das und legt ein Planungsticket an. Verworfen: „alle neuen Harness-Tickets unter den Spiel-Block" — hätte bei Position 46 faktisch „ans Board-Ende" bedeutet und auch berechtigte Harness-Arbeit geparkt.
-2. **Harness-Befunde sind Zeilen, keine Tickets** (erweitert durch #1286: auch Defekte und Wünsche zum Harness, vorher nur Härtung und Kosmetik; ein eigenes Issue nur noch für Notfälle und Befunde außerhalb des Harness): als Zeile in **ein** Sammelticket auf Board-Position 7 (anfangs 5, auf Wunsch der Maintainerin verschoben, #1264), das pro Durchgang einen PR abarbeitet und den Rest ins nächste Sammelticket (wieder Position 7) überträgt. Die Härtung geht also nicht verloren, sie wird nur gebündelt und in der Frequenz begrenzt.
+2. **Harness-Befunde sind Zeilen, keine Tickets** (erweitert durch #1286: auch Defekte und Wünsche zum Harness, vorher nur Härtung und Kosmetik; ein eigenes Issue nur noch für Notfälle und Befunde außerhalb des Harness): als Zeile in **ein** Sammelticket auf Board-Position (aktuelle Zahl: AGENTS.md; Historie: anfangs 5, dann 7 auf Wunsch der Maintainerin #1264, dann 6 #1276), das pro Durchgang einen PR abarbeitet und den Rest ins nächste Sammelticket (gleiche Position) überträgt. Die Härtung geht also nicht verloren, sie wird nur gebündelt und in der Frequenz begrenzt.
 3. **Langfuse-Blick beim Sammelticket:** vor dem Abarbeiten drei feste Fragen an die Läufe seit dem letzten Sammelticket (Wirkung, Tokenfresser, Prozess) — so entstehen Befunde aus echten Läufen statt nur aus Review-Hypothesen ([docs/model-routing.md](../model-routing.md#langfuse-blick-beim-sammelticket-1199)).
 
 Regeln: [AGENTS.md › Wo die TODOs leben](../../AGENTS.md#wo-die-todos-leben), Mechanik: [docs/ticket-reihenfolge.md](../ticket-reihenfolge.md).
@@ -71,6 +71,14 @@ Regeln: [AGENTS.md › Wo die TODOs leben](../../AGENTS.md#wo-die-todos-leben), 
 Bewusst **keine** harte Token-Schwelle als Bedingung: eine nie erreichte Schwelle würde die Phase endlos verlängern — genau der Kreislauf, den diese Fortschreibung bremst. Das Messergebnis wird hier festgehalten; fällt es schlecht aus, ist das eine eigene Entscheidung, keine Verlängerung der Phase. **Danach: Fokus zurück aufs Spiel** — die Maintainerin sortiert das Board spielzuerst, die Spielquote bleibt als Untergrenze, Harness-Arbeit läuft über das Sammelticket und Notfälle.
 
 **Konvergenz-Signal.** Die Zeilenzahl pro Sammelticket-Generation zeigt, ob der Harness besser wird. Sinkt sie nicht, wird dieser ADR neu bewertet.
+
+## Fortschreibung #1279/#1276 (2026-10-06): Weichen entscheidet der Agent selbst
+
+**Anlass.** Die Maintainerin wollte nach #1265 „keine Entscheidungen mehr“ vom Agenten vorgelegt bekommen. Punkt 4 der Entscheidung oben (Pre-Flight für 🎨 Optik, ⚠️ riskante Weiche, offene Plan-Weiche) wird dadurch **abgelöst**.
+
+**Entscheidung.** Der Planer wägt jede Weiche in Abschnitt 7 ab und entscheidet, der Umsetzer dokumentiert sie im PR-Text („Entscheidung: X, weil Y“); Optik misst der Agent an `docs/stardew-referenz.md` und deren Checkliste und zeigt Screenshots im PR. Die Maintainerin widerspricht per Revert. Eine Rückfrage vor dem Coden bleibt nur bei **Irreversiblem oder Außenwirkung** (Löschen, Ruleset/Secrets/Repo-Einstellungen, Veröffentlichen/Forum). Das passt zum Ziel „wenig Human-in-the-Loop“ dieses ADR: die Audit-Spur (PR-Text, Revert) trägt die Kontrolle, nicht ein Vorab-Stopp.
+
+**Trade-off.** Ein falsch entschiedener Optik-Punkt kostet einen Revert-PR statt einer Rückfrage; bei Optik trägt die Messlatte (Stardew-Referenz) das Urteil, nicht Geschmack.
 
 ## Re-Evaluierungs-Trigger
 
