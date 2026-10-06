@@ -19,7 +19,9 @@
  * strukturell (sie tragen nur zusätzliche Phaser-Felder).
  */
 
-export type HazardKind = "pirate" | "kraken" | "storm";
+/** Alle Gefahren-Arten in fester Reihenfolge: die EINE Liste (Snapshot, Freischalt-Tabelle und Typ leiten sich daraus ab). */
+export const HAZARD_KINDS = ["pirate", "kraken", "storm"] as const;
+export type HazardKind = (typeof HAZARD_KINDS)[number];
 
 /** Quest-ID, die eine Gefahr freischaltet – vorher taucht sie nie auf. EINE
  *  Quelle für das Freischalt-Gate (vorher je Gefahr inline in tryStart…). */

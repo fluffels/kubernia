@@ -73,8 +73,8 @@ describe("Umsetzer-Abschluss (#1308)", () => {
     const hinten = UMSETZER.replace("per `TaskStop`", "per Stopp") + "\nTaskStop\n";
     assert.notEqual(hinten, UMSETZER + "\nTaskStop\n", "Muster muss treffen");
     assert.deepEqual(abschlussProbleme(hinten), ["TaskStop steht nicht vor dem Berichtsformat"]);
-    const ohneTick = UMSETZER.replace("tick", "x");
-    const ohneUntil = UMSETZER.replace("until-Schleife", "Schleife");
+    const ohneTick = UMSETZER.replace("wie „tick“", "wie „x“"); // gezielt die Monitor-Regel, nicht die erste Fundstelle von „tick“ (z. B. in „Sammelticket“)
+    const ohneUntil = UMSETZER.replace("einer until-Schleife", "einer Schleife");
     assert.notEqual(ohneTick, UMSETZER, "Muster tick muss treffen");
     assert.notEqual(ohneUntil, UMSETZER, "Muster until muss treffen");
     for (const md of [ohneTick, ohneUntil]) assert.deepEqual(abschlussProbleme(md), ["Monitor-Regel (until-Schleife, keine Zwischenmeldungen) fehlt"]);

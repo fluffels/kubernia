@@ -39,7 +39,7 @@
  *    Heredoc/Pipe als Eingabe (`bash <<EOF`, `echo … | sh`), `git submodule foreach`/
  *    `rebase -x`/`subtree push`, Git-Aliase (`git -c alias.p=push p`), dynamische `cd`/`-C`-
  *    Ziele (`cd "$(…)/.."`) aus einem Worktree, ein vorher exportiertes `GIT_DIR`; das
- *    PowerShell-Tool deckt der Hook nicht ab. `pushd`/`popd`, ein nicht verfolgbares `cd` und `--git-dir`/`GIT_DIR`
+ *    PowerShell-Tool deckt der eigene Hook scripts/worktree-guard-powershell.mjs ab (#1311). `pushd`/`popd`, ein nicht verfolgbares `cd` und `--git-dir`/`GIT_DIR`
  *    wirken über das Session-`cwd` (zurücksetzen bzw. zusätzlich prüfen).
  *  - Fail-open bei Unsicherheit (kein cwd im Payload, cwd ist gar kein Git-Repo,
  *    cwd gehört zu einem anderen Repo): NICHT blocken — dieselbe "kein falsches

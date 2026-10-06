@@ -27,7 +27,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { parseNachweis } from "./check-review-nachweis.mjs";
+import { parseNachweis } from "./slice-override.mjs";
 
 /** Lenses pro Review-Runde für Läufe ohne Runden-Marker (vor #1265 liefen immer alle drei Brillen, #1012). */
 export const LENSES_PER_ROUND = 3;
@@ -389,7 +389,7 @@ export function callsFromTranscript(jsonlText, subagent = null) {
 }
 
 /** Sucht <id>.jsonl in allen Projektordnern unter ~/.claude/projects (Worktree-Sessions liegen in eigenen). */
-function readTranscriptSession(sessionId, projectsRoot) {
+export function readTranscriptSession(sessionId, projectsRoot) {
   const candidates = readdirSync(projectsRoot).map((d) => join(projectsRoot, d, `${sessionId}.jsonl`));
   const main = candidates.find((p) => existsSync(p));
   if (!main) throw new Error(`Kein Transkript für Session ${sessionId} unter ${projectsRoot}`);
@@ -399,7 +399,7 @@ function readTranscriptSession(sessionId, projectsRoot) {
     for (const f of readdirSync(dir).filter((n) => n.endsWith(".jsonl"))) {
       const metaPath = join(dir, f.replace(/\.jsonl$/, ".meta.json"));
       const meta = existsSync(metaPath) ? JSON.parse(readFileSync(metaPath, "utf8")) : {};
-      const sub = { id: f, agentType: meta.agentType, description: meta.description };
+      const sub = { id: f, agentType: meta.agentType, description: meta.description, parentAgentId: meta.parentAgentId };
       const r = callsFromTranscript(readFileSync(join(dir, f), "utf8"), sub);
       all.calls.push(...r.calls);
       all.questions += r.questions;

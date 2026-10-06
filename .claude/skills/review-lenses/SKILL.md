@@ -65,7 +65,8 @@ npm run verify   # typecheck → lint → check:arch → check:size → check:co
 
 - **Runde 1:** Listet `git diff --name-only origin/main...HEAD` **nur `*.md`-Dateien** (auch Harness-Markdown), läuft **eine Lens 4 — Doku**. Sonst laufen **Lens 1–3**, ohne Größenschwelle: auch ein kleiner `src`-Diff kann das Save-Format brechen.
 - **Ab Runde 2:** nur die Brillen, die in der Vorrunde **blockiert** haben, auf dem **Delta-Patch** des Fixes (`git diff <Vorrunden-HEAD>..HEAD > "$TMP/kq-<nr>-r<runde>-delta.patch"`), mit ihren Vorrunden-Blockern als Prüfliste; der volle Patch bleibt Referenz für gezielte Zugriffe. Ändert der Fix Nicht-Markdown, läuft **Test-Adäquanz immer mit**.
-- **Fail-closed:** Fehlt die Dateiliste, gab es keinen Vorrunden-Pass (`verify` war rot), fiel eine Lens aus, hat die Diff-Art gewechselt oder wurde `main` in den Branch gemergt bzw. rebased: der volle Satz auf dem vollen Patch.
+- **Fail-closed:** Fehlt die Dateiliste, gab es keinen Vorrunden-Pass (`verify` war rot), fiel eine Lens aus, hat die Diff-Art gewechselt oder wurde rebased: der volle Satz auf dem vollen Patch.
+- **Merge von `main` in den Branch ist kein Fix-Pass.** Konfliktfrei zählt er nicht als Runde; das Delta der nächsten Runde sind nur die Fixes (`git diff <Vorrunden-HEAD>..<M>^1` plus `git diff <M>..HEAD`, `M` = Merge-Commit). Mit Konflikt kommt die Auflösung (`git show --cc <M>`) ins Delta und zählt wie ein Fix, nicht wie ein voller Pass. Rebase mitten in der Schleife vermeiden (er erzwingt den vollen Satz und macht den Nachweis-`head` ungültig): `main` besser vor Runde 1 oder nach der Konvergenz einmergen. **Ein Merge von `main` NACH dem Nachweis-Commit** lässt `head` hinter dem Branch-Ende zurück: der Check bleibt formal grün, bezeugt den Merge-Stand aber nicht. Konfliktfrei ist das vertretbar (der Merge bringt nur bereits gemergten, geprüften Stand); gab es Konflikte, die Auflösung vorher als Delta reviewen lassen und den Nachweis danach neu setzen, und im PR-Text nennen, dass der Merge nach dem Review kam.
 
 **Jede Lens läuft als eigener Subagent auf dem starken Tier (#1035)** — nie inline im orchestrierenden Agenten (Hauptagent oder `kubernia-umsetzer`):
 
@@ -102,7 +103,7 @@ Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket
 - **Scope-Kriechen:** ändert der Diff mehr als das Ticket (ein Ein-Ticket-Diff bleibt klein — Aufgefallenes wird festgehalten, nicht inline mitgefixt)?
 - Betrifft es Spielinhalte/Quests/Steuerung → **README mitgezogen**? Neues `src/`-Modul → Backtick-Pfad-Zeile im passenden **`docs/module/`-Tiefendoc** ergänzt (nicht in die [Repo-Landkarte](../../../docs/referenz/repo-landkarte.md), #907)?
 - Berührt es das **Save-Format** → migriert (Version-Bump + Migrationskette), alter Stand bleibt heil?
-- Fügt der Diff **Agenten, Subagenten, MCP-Server, Hooks oder Plugins** hinzu oder konfiguriert er sie um → ist die Langfuse-Erfassung im PR belegt (AGENTS.md § Langfuse-Erfassung erhalten)?
+- Fügt der Diff **Agenten, Subagenten, MCP-Server, Hooks oder Plugins** hinzu oder konfiguriert er sie um → ist die Langfuse-Erfassung im PR belegt (AGENTS.md § Langfuse-Erfassung erhalten)? **Messbehauptungen** in Diff, PR oder Zusammenfassung: gib der Lens die Rohwerte mit (Session-IDs, Zeitfenster, Zählung je Quelle), sie hat keine Langfuse-Tools und prüft sonst nur die Transkript-Seite per `node scripts/token-baseline.mjs --session <id>`; ohne Rohwerte meldet sie „nicht belegt“ (Hinweis).
 
 **Lens 3 — Test-Adäquanz.** Deckt der Test das **Verhalten** ab — und ist er echt?
 - Prüft der Test die **öffentliche API / beobachtbares Verhalten** (überlebt Refactoring), nicht Interna?

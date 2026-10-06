@@ -9,6 +9,7 @@ import { setWorldScene } from "../runtime";
 import { expandRect, cull, FrameSampler, type Cullable } from "../hud/cull";
 import { getMapEntry, type MapId } from "../world/maps/mapregistry";
 import { DAY_CYCLE_MS } from "../core/clock";
+import type { SceneDevView } from "../devtools/snapshot";
 import { T, FOAM, pixelText, SIGN_FONT, SIGN_SCALE, buildSign, floatPixelText, readMoveInput, faceFrom, renderPlayer, type SceneNpc, type ScenePlayer } from "./shared";
 import { HIT_R } from "./geometry";
 // Spiel-Systeme als eigene, fokussierte Module (WorldScene.ts-Split #393, analog
@@ -390,6 +391,9 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     this.stepAcc = 0;
   }
   get player() { return this.playerPos; }
+
+  /** Sicht für kqDev.state() (devtools/snapshot). */
+  devView(): SceneDevView { return { map: this.mapId, player: this.playerPos }; }
 
   /** Spielfigur sofort an eine Weltposition setzen (Wiederspiel-Sandbox #332).
    *  Bewegung stoppen, damit sie nicht weiterrutscht; Sprite/Schatten/Kamera ziehen

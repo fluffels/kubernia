@@ -18,6 +18,7 @@
  * Insel→Welt-Rück-Warp (updateReturn/exitToWorld) liegen schon dort.
  */
 import Phaser from "phaser";
+import type { SceneDevView } from "../devtools/snapshot";
 import { UI } from "../ui";
 import { resolveMove, circleHitbox, npcHitboxes, type Hitbox } from "../world/world";
 import { npcSpawnsForMap, objectsForMap } from "../content/entities";
@@ -90,6 +91,8 @@ export interface RegionConfig {
 
 export class RegionScene extends IslandScene {
   constructor(readonly cfg: RegionConfig) { super(cfg.key); }
+
+  devView(): SceneDevView { return { map: this.cfg.map, player: this.pl }; }
 
   /** #198 (Lazy-Asset-Loading): die region-exklusiven Assets erst beim Betreten nachladen,
    *  nicht beim Spielstart. Läuft VOR create() – Phaser wartet auf den Loader, darum ist die

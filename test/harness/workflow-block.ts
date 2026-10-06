@@ -34,7 +34,7 @@ export function workflowBlock(anfang: string, ende: string): { quelle: string; b
  */
 export async function workflowAusfuehren<T = { ergebnis: string }>(
   agent: (prompt: string, o: { label: string; agentType?: string; model?: string; effort?: string }) => Promise<unknown>,
-  opts: { parallel?: (thunks: (() => Promise<unknown>)[]) => Promise<unknown[]> } = {},
+  opts: { parallel?: (thunks: (() => Promise<unknown>)[]) => Promise<unknown[]>; args?: unknown } = {},
 ): Promise<T> {
   const quelle = readFileSync(WORKFLOW, "utf8").replace("export const meta", "const meta")
   const parallel =
@@ -42,7 +42,7 @@ export async function workflowAusfuehren<T = { ergebnis: string }>(
     (() => {
       throw new Error("unerwartet")
     })
-  const kontext = { agent, parallel, phase: () => undefined, log: () => undefined, args: undefined }
+  const kontext = { agent, parallel, phase: () => undefined, log: () => undefined, args: opts.args }
   return (await runInNewContext(`(async () => {
 ${quelle}
 return endstand

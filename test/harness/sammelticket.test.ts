@@ -7,11 +7,10 @@
  * mehrfach (5 → 7 → 6), und jede Verschiebung hätte vier Stellen gebraucht. Regel jetzt:
  *
  *   1. AGENTS.md nennt die Position genau einmal (SSOT).
- *   2. Der jq-Index im Anlegen-Snippet von docs/ticket-reihenfolge.md ist Position − 2
- *      (0-basiert, und das frisch angelegte Item steht selbst nicht in der Zählung).
- *   3. Das Snippet schließt das neue Item aus (`.id != "$ITEM"`), sonst bekäme `afterId` bei
- *      genau Position-1 Todo-Items das neue Item selbst.
- *   4. Workflow und Sammelticket-Abschnitt von docs/ticket-reihenfolge.md nennen keine eigene Zahl
+ *   2. Das Anlegen-Snippet von docs/ticket-reihenfolge.md setzt die Position über
+ *      `board-place.mjs --position "$N" "$NR"`; die Zählung (N-1. Todo-Item ohne das neue Item) liegt
+ *      getestet in scripts/board-lib.mjs › afterIdForPosition.
+ *   3. Workflow und Sammelticket-Abschnitt von docs/ticket-reihenfolge.md nennen keine eigene Zahl
  *      und verweisen auf AGENTS.md. Das ADR darf die Historie mit Zahlen erzählen.
  *
  * Jede weitere „Position <N>“ (auch „Position: <N>“) in AGENTS.md macht den Test absichtlich rot,
@@ -62,13 +61,13 @@ describe("Sammelticket-Position (#1276)", () => {
     assert.ok(positionAusAgentsMd(agents) >= 1);
   });
 
-  test("der Index im Snippet ist N − 2 (N = Position aus AGENTS.md, als Variable statt Literal)", () => {
-    assert.match(anlegen, /\(\.\[\$N-2\] \/\/ \.\[-1\]\)\.id/);
+  test("das Snippet setzt die Position über board-place.mjs mit N als Variable (die Zählung ist in test/board.test.ts getestet)", () => {
+    assert.match(anlegen, /board-place\.mjs --position "\$N" "\$NR"/);
     assert.match(anlegen, /^N=<Position>/m, "das Snippet trägt keine eigene Zahl für das Sammelticket");
   });
 
-  test("das Snippet schließt das frisch angelegte Item aus der Zählung aus", () => {
-    assert.ok(anlegen.includes('and .id != \\"$ITEM\\")]'), 'select(... and .id != \\"$ITEM\\")');
+  test("das Snippet zählt nicht selbst per jq nach (sonst driftet es von der getesteten Logik)", () => {
+    assert.doesNotMatch(anlegen, /\$N-2/);
   });
 
   test("der Workflow doppelt die Zahl nicht, sondern verweist auf AGENTS.md", () => {
@@ -90,32 +89,53 @@ describe("Sammelticket-Position (#1276)", () => {
     assert.match("Position: 6", POSITION_EINZELN, "auch die Einzel-Variante kennt den Doppelpunkt");
     assert.equal(positionAusAgentsMd("Board-Position 6"), 6);
   });
+
+  test("Komplett-Regel: AGENTS.md und ticket-reihenfolge.md verlangen das ganze Sammelticket, keinen Rest-Übertrag (#1311)", () => {
+    assert.match(agents, /Kommt es dran: abarbeiten, und zwar \*\*komplett\*\*/);
+    assert.match(abschnitt, /\*\*Abarbeiten:\*\* \*\*alle\*\* Zeilen umsetzen, kein Teil und kein Rest-Übertrag/);
+    assert.match(abschnitt, /KQ-Diffsize-Override/, "zu große PRs deckt der begründete Override");
+  });
+
+  test("Komplett-Regel: Umsetzer, Planer und Skill nennen sie", () => {
+    assert.match(lies(".claude/agents/kubernia-umsetzer.md"), /setze ALLE Zeilen um/);
+    assert.match(lies(".claude/agents/kubernia-planner.md"), /plane ALLE Zeilen/);
+    assert.match(lies(".claude/skills/kubernia/SKILL.md"), /komplett umsetzen, kein Rest-Übertrag/);
+    assert.match(lies(".claude/workflows/kubernia-ticket.js"), /setze ALLE Zeilen um/);
+  });
+
+  test("Negativfall: der alte Teil-Abarbeiten-Wortlaut steht nirgends mehr im Abschnitt oder in AGENTS.md", () => {
+    assert.doesNotMatch(abschnitt, /passen/);
+    assert.doesNotMatch(agents, new RegExp("was in einen PR " + "passt"));
+  });
 });
 
-describe("Sammelticket halbieren (#1309)", () => {
+describe("Sammelticket komplett statt halbiert (#1311, ersetzt die Halbierung aus #1309)", () => {
   const agents = lies("AGENTS.md");
   const doc = lies("docs/ticket-reihenfolge.md");
   const abarbeiten = doc.split("\n").find((z) => z.startsWith("- **Abarbeiten:**")) ?? "";
   const claimen = doc.split("\n").find((z) => z.startsWith("- **Beim Claimen des Sammeltickets**")) ?? "";
 
-  /** Nennt die Agenten-Regel beide Hälften? Ein Prädikat für Artefakt und Gegenbeispiel. */
-  const nenntHalbierung = (s: string) => s.includes("zweite Hälfte") && s.includes("erste Hälfte") && s.includes("Kommt es dran:");
-  const nenntErgebnisPflicht = (s: string) => s.includes("Ergebnis") && s.includes("nachweislich nicht machbar") && s.includes("KQ-Diffsize-Override");
+  /** Verlangt der Abarbeiten-Bullet ein Ergebnis je Zeile, alle Zeilen und den Override für zu große PRs? Ein Prädikat für Artefakt und Gegenbeispiel. */
+  const nenntErgebnisPflicht = (s: string) => s.includes("**alle** Zeilen") && s.includes("**Ergebnis**") && s.includes("KQ-Diffsize-Override") && s.includes("nichts wird still ausgelagert");
+  /** Beschreibt ein Text noch die Halbierung (die Teilung der Zeilenliste, #1309)? */
+  const halbiert = (s: string) => /zweite Hälfte/.test(s) || /erste Hälfte/.test(s);
 
-  test("AGENTS.md: beim Claimen zweite Hälfte weitergeben, erste Hälfte in einem PR erledigen", () => {
-    assert.ok(nenntHalbierung(agents));
+  test("Abarbeiten verlangt alle Zeilen mit je einem Ergebnis; Claimen überträgt nichts", () => {
+    assert.ok(nenntErgebnisPflicht(abarbeiten), "Abarbeiten-Bullet: alle Zeilen, Ergebnis je Zeile, Override, nichts still auslagern");
+    assert.ok(!halbiert(claimen), "Beim Claimen wird keine Hälfte übertragen");
+    assert.match(claimen, /fehlt es, direkt eines anlegen/);
   });
 
-  test("ticket-reihenfolge.md: Claimen überträgt die zweite Hälfte wörtlich, Abarbeiten verlangt je Zeile ein Ergebnis", () => {
-    assert.match(claimen, /zweite Hälfte/);
-    assert.match(claimen, /wörtlich/);
-    assert.ok(nenntErgebnisPflicht(abarbeiten), "Abarbeiten-Bullet: Ergebnis, nachweislich nicht machbar, KQ-Diffsize-Override");
-    assert.match(abarbeiten, /Neue Befunde/);
+  test("die Halbierung steht nirgends mehr in AGENTS.md oder im Abarbeiten-Bullet", () => {
+    assert.ok(!halbiert(agents));
+    assert.ok(!halbiert(abarbeiten));
   });
 
-  test("Erkennung greift (Red-Green): der alte Wortlaut fällt durch", () => {
-    assert.ok(!nenntHalbierung("Kommt es dran: abarbeiten, was in einen PR passt; Rest und neue Befunde ins nächste Sammelticket."));
-    assert.ok(!nenntErgebnisPflicht("- **Abarbeiten:** so viele Zeilen umsetzen, wie in **einen** PR passen (`check:diffsize`)."));
-    assert.ok(!nenntHalbierung(""));
+  test("Erkennung greift (Red-Green): der alte Wortlaut und die Halbierung fallen durch", () => {
+    assert.ok(!nenntErgebnisPflicht("- **Abarbeiten:** so viele Zeilen umsetzen, wie " + "in **einen** PR " + "passen (`check:diffsize`)."));
+    assert.ok(!nenntErgebnisPflicht("- **Abarbeiten:** jede Zeile der ersten Hälfte bekommt ein **Ergebnis**; KQ-Diffsize-Override."));
+    assert.ok(halbiert("die **zweite " + "Hälfte** ins nächste Sammelticket übertragen"));
+    assert.ok(!halbiert("kein Teil, kein Rest-Übertrag"));
+    assert.ok(!nenntErgebnisPflicht(""));
   });
 });

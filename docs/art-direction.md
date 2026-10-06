@@ -35,7 +35,7 @@ Zahlen und Fundstellen veralten, das Rezept nicht. Ein Durchgang:
 
 1. **Skalierung:** `setScale(` mit Dezimalzahl und `setZoom(` in `src/scenes` suchen.
 2. **Primitive:** `fillRoundedRect`, `fillCircle`, `fillTriangle`, `add.ellipse`, `add.rectangle` in `src/scenes` suchen. Jede Stelle ist ein dynamischer Effekt (erlaubt) oder ein Platzhalter (Befund).
-3. **Emojis:** `rg -n "\p{Extended_Pictographic}" src/ui src/scenes src/main.ts src/content/data` (Testszenen wie `TilemapTestScene` sind Rauschen). Icon-Funktion ist ein Befund, Dialog-Prosa nicht.
+3. **Emojis:** der Wächter `test/harness/emoji-ratchet.test.ts` hält die Zahl je Datei (Baseline `emoji-baseline.json`, nur sinkend); der PR, der Emojis entfernt, senkt die Baseline mit. Fundstellen: `rg -n "\p{Extended_Pictographic}" src/ui src/scenes src/main.ts src/content/data` (Testszenen wie `TilemapTestScene` sind Rauschen). Icon-Funktion ist ein Befund, Dialog-Prosa nicht.
 4. **Browser-Tour:** `npm run dev`, dann per `kqGame.scene.run(...)` Hafen (Tag, Nacht, Sturm), alle Regionen, Innenräume, HUD und Overlays ansehen, einmal auch in einem Fenster unter 900 px Breite.
 
 Ergebnis: Tabelle oben anpassen, Datum in der Kopfzeile hochsetzen. Der PR, der einen Befund behebt, streicht im selben PR seine Zeile.

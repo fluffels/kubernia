@@ -18,7 +18,7 @@ docs/referenz/ ← Nachschlage-Referenz on-demand (Befehle, Repo-Landkarte, Schi
 
 ## Im Hauptchat
 
-1. **Auswählen und claimen.** **Genau EIN** offenes Issue, das **nicht** schon bearbeitet wird (kein Assignee/Branch/Worktree) — rein deterministisch das **oberste freie Item der manuellen Board-Reihenfolge**, nie nach Inhalt aussuchen und **nicht nachsortieren**; Auswahl-Befehl (`gh project item-list`, braucht `read:project`-Scope) + Sonderfälle in `docs/ticket-reihenfolge.md`. **Claimen per `gh issue edit <nr> --add-assignee @me` und mit `gh issue view <nr>` verifizieren ist Pflicht und blockierend.**
+1. **Auswählen und claimen.** **Genau EIN** offenes Issue, das **nicht** schon bearbeitet wird (kein Assignee/Branch/Worktree) — rein deterministisch das **oberste freie Item der manuellen Board-Reihenfolge**, nie nach Inhalt aussuchen und **nicht nachsortieren**; Auswahl-Befehl (`gh api --paginate` über REST, braucht `read:project`-Scope; GraphQL-Limit schonen; bei `API rate limit exceeded` nicht in einer Schleife weiterversuchen, sondern nur REST nutzen und den Board-Rest melden) + Sonderfälle in `docs/ticket-reihenfolge.md`. Ist es das Sammelticket „Harness-Härtung (gesammelt)“, gilt: komplett umsetzen, kein Rest-Übertrag (AGENTS.md § Harness-Befunde sind Zeilen). **Claimen per `gh issue edit <nr> --add-assignee @me` und mit `gh issue view <nr>` verifizieren ist Pflicht und blockierend.**
 2. **Planen.** Den Planungs-Subagenten rufen und auf seinen Bericht warten:
    ```
    Agent({

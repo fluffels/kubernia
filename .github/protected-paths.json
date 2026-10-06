@@ -20,6 +20,10 @@
     "/.claude/",
     "/.mcp.json",
     "/scripts/playwright-mcp.mjs",
+    "/scripts/gh-guard-hook.mjs",
+    "/scripts/worktree-guard-hook.mjs",
+    "/scripts/worktree-guard-powershell.mjs",
+    "/scripts/stop-verify-hook.mjs",
     "/.agents/",
     "/docs/agent-harness*"
   ],

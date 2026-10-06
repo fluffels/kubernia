@@ -16,19 +16,18 @@ Bevor irgendein Ticket angefasst wird, **zuerst zweifeln** — das steht über d
 
 Rein deterministisch — **kein Abwägen nach Inhalt, kein Vorab-Sichten der ganzen Liste**:
 
-1. **oberstes freies Item in der Board-Reihenfolge** — genau die Reihenfolge, die `gh project item-list` liefert (= was in View 1 von oben nach unten steht). Keine Nachsortierung nach Inhalt oder Nummer.
+1. **oberstes freies Item in der Board-Reihenfolge** — genau die Reihenfolge der Board-Items-Liste (= was in View 1 von oben nach unten steht). Keine Nachsortierung nach Inhalt oder Nummer.
 2. **frei** heißt: **kein Assignee** (der „in Arbeit"-Marker), **kein** offener Branch/Worktree und **kein offener Blocker** (`blockiert durch #X` im Body).
 
-Freie Auswahl in Board-Reihenfolge in einem Befehl (oberste Zeile ist „dran"):
+Freie Auswahl in Board-Reihenfolge in einem Befehl (oberste Zeile ist „dran"), **über REST** (Core-Kontingent; `gh project item-list` läuft über GraphQL und kostet je Aufruf rund 200 Punkte, das Stunden-Limit war dadurch binnen 25 Minuten leer):
 
 ```bash
-gh project item-list 1 --owner fluffels --format json --limit 800 --jq '
-  .items
-  | map(select(.content.type=="Issue" and (.status // "") == "Todo"))
-  | .[] | "#\(.content.number)\t\(.title)"'
+gh api --paginate "users/fluffels/projectsV2/1/items?per_page=100&fields=358708531" --jq '
+  .[] | select(.content_type=="Issue" and (.fields[]? | select(.name=="Status") | .value.name.raw)=="Todo")
+  | "#\(.content.number)\t\(.content.title)"'
 ```
 
-> ⚠️ Die Board-Auswahl braucht **`read:project`-Scope** im `gh`-Token (`gh auth refresh -s project`). ⚠️ Ohne `--limit` liefert `gh project item-list` nur **30** Items — immer `--limit 800` mitgeben, sonst fallen genau die unteren Tickets weg. **Nicht** nach `.content.number` o.ä. sortieren — das würde die Board-Reihenfolge zerstören, die hier gerade das Maßgebliche ist. **`.status == "Todo"` (nicht `!="Done"`)** — „In Progress"-Tickets dürfen gar nicht erst in der Kandidatenliste auftauchen, sonst greifen parallele Agenten irrtümlich dasselbe Ticket.
+> ⚠️ Die Board-Auswahl braucht **`read:project`-Scope** im `gh`-Token (`gh auth refresh -s project`). `--paginate` ist Pflicht (eine Seite hat nur 100 Items), `fields=358708531` ist die Feld-ID von „Status" (ohne sie fehlt der Status). **Nicht** sortieren — die Board-Reihenfolge ist hier das Maßgebliche. **`== "Todo"` (nicht `!= "Done"`)** — „In Progress"-Tickets dürfen gar nicht erst in der Kandidatenliste auftauchen, sonst greifen parallele Agenten irrtümlich dasselbe Ticket. **GraphQL nur für Mutationen** (Position setzen, Item hinzufügen, Status setzen); bei `API rate limit exceeded` nicht in einer Schleife weiterversuchen (siehe unten).
 
 Dann nur **dieses eine** Kandidaten-Ticket kurz gegen den Live-Stand prüfen (`gh issue view <nr>`). **⛔ Hat das Ticket einen Assignee → sofort weiter zum nächsten, fertig. Kein Worktree inspizieren, kein Prüfen wie weit die Arbeit ist, kein Weiterarbeiten.** Ein Assignee bedeutet: ein anderer Agent arbeitet daran — nicht anfassen. Kein Assignee + offen + kein Blocker → sofort self-assignen (`gh issue edit <nr> --add-assignee @me`) und mit dem normalen Workflow abarbeiten (eigener Worktree → umsetzen → alle Gates grün + im Browser verifizieren → **ein** PR → CI abwarten + bis Merge). Voller Ablauf: [AGENTS.md](../AGENTS.md).
 
@@ -43,13 +42,10 @@ NODE=$(gh issue view "$NR" --json id --jq .id)
 ITEM=$(gh api graphql -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }' \
   -f p=PVT_kwHOD8746c4Barq_ -f c="$NODE" --jq .data.addProjectV2ItemById.item.id)
 gh project item-edit --id "$ITEM" --project-id PVT_kwHOD8746c4Barq_ --field-id PVTSSF_lAHOD8746c4Barq_zhVhdTM --single-select-option-id f75ad846   # Status Todo sofort setzen (der Board-Workflow setzt es erst verzögert)
-AFTER=$(gh project item-list 1 --owner fluffels --format json --limit 800 \
-  --jq "[.items[] | select((.status // \"\")==\"Todo\" and .id != \"$ITEM\")] | (.[$N-2] // .[-1]).id // empty")   # (N-1). Todo-Item ohne das neue → es landet auf N; kürzeres Board: ans Ende (kein Todo-Item: Mutation überspringen)
-gh api graphql -f query='mutation($p:ID!,$i:ID!,$a:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }' \
-  -f p=PVT_kwHOD8746c4Barq_ -f i="$ITEM" -f a="$AFTER"
+node scripts/board-place.mjs --position "$N" "$NR"   # N. Todo-Item (ohne das neue gezählt), kürzeres Board: ans Ende; Logik getestet in test/board.test.ts
 ```
 
-Danach die Position prüfen: das Ticket ist das N. Todo-Item der Board-Liste (Auswahl-Befehl oben).
+Danach die Position prüfen: das Ticket ist das N. Todo-Item der Board-Liste (Auswahl-Befehl oben). Frische Items liefert die Liste teils verzögert: meldet das Skript „Noch nicht in der Board-Liste“, kurz warten und erneut aufrufen.
 
 ## Sammelticket „Harness-Härtung (gesammelt)" (#1199)
 
@@ -63,8 +59,8 @@ Regel: [AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets](../AGENTS.md#w
   Kein ungeclaimter Treffer → anlegen (unten). Zwei offene **ungeclaimte** (Wettlauf) → das jüngere schließen, seine Zeilen ins ältere übertragen.
 
 - **Anlegen auf der Position laut AGENTS.md** (fehlt ein ungeclaimtes, auch während ein geclaimtes abgearbeitet wird; vorher mit dem Suchbefehl oben prüfen, nie doppelt anlegen). Ablauf und Befehle: [Anlegen auf Position N](#anlegen-auf-position-n), hier mit `N` aus AGENTS.md und dem Titel „Harness-Härtung (gesammelt)".
-- **Beim Claimen des Sammeltickets** sofort prüfen, ob ein ungeclaimtes existiert; fehlt es, direkt eines anlegen (unten), damit Befunde nie ohne Ziel sind. Dann die Zeilen in Kommentar-Reihenfolge zählen und die **zweite Hälfte** (bei ungerader Zahl die kleinere) **wörtlich** ins ungeclaimte Sammelticket übertragen; die **erste Hälfte** bleibt im geclaimten und wird in einem PR erledigt.
-- **Abarbeiten:** jede Zeile der ersten Hälfte bekommt in **einem** PR ein **Ergebnis**: umgesetzt, geprüft und dokumentiert, oder begründet „bewusst nicht“ (nur bei optionalen Teilen). Ein breiter Slice ist zulässig (Commit-Zeile `KQ-Diffsize-Override: #<nr> warum`, eigener leerer Commit). Zurück ins nächste Sammelticket geht nur, was in der Session **nachweislich nicht machbar** ist, mit konkreter Begründung. **Neue Befunde** während der Arbeit gehören als Kommentar ins **nächste** (ungeclaimte) Sammelticket, nicht in den PR. Das alte schließt der PR per `Closes`; fehlt das nächste, vorher anlegen (Position laut AGENTS.md).
+- **Beim Claimen des Sammeltickets** sofort prüfen, ob ein ungeclaimtes existiert; fehlt es, direkt eines anlegen (unten), damit Befunde nie ohne Ziel sind.
+- **Abarbeiten:** **alle** Zeilen umsetzen, kein Teil und kein Rest-Übertrag (sonst staut sich Arbeit an). Jede Zeile bekommt in **einem** PR ein **Ergebnis**: umgesetzt, geprüft und dokumentiert (die Entscheidung steht im PR-Text), oder, nur bei optionalen Teilen, begründet „bewusst nicht“. **Vor dem PR** die Kommentare erneut lesen: Zeilen, die während der Arbeit dazukamen, und Befunde, die dir oder den Lenses (`ausserhalbScope`) auffielen, kommen in denselben PR. Ist er dafür zu groß, deckt eine Commit-Zeile `KQ-Diffsize-Override: #<nr> <Grund>` das ab. Nur was wirklich nicht machbar ist, geht als Entscheidung an die Maintainerin; nichts wird still ausgelagert. Der PR löst auch die `ALLOWLIST`-Einträge auf, die auf das Sammelticket verweisen (es zählt als „offenes Ticket“, solange es offen ist), und schließt es per `Closes`. Erst danach entsteht bei neuen Befunden ein neues Sammelticket (Position laut AGENTS.md).
 - **Konvergenz-Signal:** Zeilenzahl pro Sammelticket-Generation ([ADR 0012](adr/0012-harness-autonomie-audit-spur.md#fortschreibung-1199-2026-10-05-spielquote-sammelticket-abschlusskriterium)).
 
 ## Wiederkehrendes Ticket „Langfuse-Status überprüfen" (#1293)
@@ -86,16 +82,12 @@ Die breite, regelmäßige Auswertung der Langfuse-Daten. Es gibt **höchstens ei
 Die manuelle Board-Reihenfolge ist die **einzige** Reihenfolge-Quelle; es gibt keine `prio:*`-Labels und kein `Prio`-Feld.
 
 - **Reihenfolge ändern:** im Board (View 1) das Item per **Drag & Drop** hoch-/runterziehen. Weiter oben = früher dran. Das ist das „einpriorisieren".
-- **Neues Item ganz nach oben schieben** (per CLI, wenn kein UI-Zugriff) — `afterId` weglassen = an die Spitze:
+- **Neues Item ganz nach oben schieben** (per CLI, wenn kein UI-Zugriff; die Liste kommt per REST, nur die Positions-Mutation läuft über GraphQL):
   ```bash
-  # Item-ID des Issues holen, dann an die oberste Board-Position schieben
-  ITEM=$(gh project item-list 1 --owner fluffels --format json --limit 800 \
-    --jq '.items[] | select(.content.number==<NR>) | .id')
-  gh api graphql -f query='mutation($p:ID!,$i:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i}){ items(first:1){ nodes{ id } } } }' \
-    -f p=PVT_kwHOD8746c4Barq_ -f i="$ITEM"
+  node scripts/board-place.mjs --top <NR>
   ```
-- **Status setzen:** ein per `addProjectV2ItemById` ergänztes Item bekommt Todo vom Board-Workflow „Item added to project" erst verzögert (rund 1 bis 2 Sekunden; Probe in #1309: Status leer bei t+0 s, Todo bei t+1 s); bis dahin fehlt es in der Auswahl (`.status == "Todo"`). Darum nach dem Hinzufügen den Status selbst auf Todo setzen, das gilt sofort und unabhängig vom Workflow (`gh project item-edit --id <ITEM> --project-id PVT_kwHOD8746c4Barq_ --field-id PVTSSF_lAHOD8746c4Barq_zhVhdTM --single-select-option-id f75ad846`). `gh project item-list` liefert frisch hinzugefügte Items verzögert, einen Moment warten. In Git-Bash ist `jq` nicht installiert; die `--jq`-Variante von `gh` genügt.
-- **Mehrere Tickets auf einmal einsortieren (z.B. Epic-Aufteilung):** `node scripts/board-place.mjs --top <nr>…` bzw. `--after <ankernr> <nr>…` (`--dry-run` zeigt nur an) lädt die Board-Liste **einmal**, nutzt die Item-IDs wieder und setzt die Positionen nacheinander mit kurzer Pause; nie je Ticket die komplette Liste (`--limit 800`) neu laden. Noch nicht gelistete Nummern meldet das Skript (frische Items kommen verzögert): später erneut aufrufen. Bei `API rate limit exceeded` sofort stoppen, nur REST nutzen (Kommentar, Schließen, Labels) und den Board-Rest als Folgeaufgabe melden statt in einer Schleife weiterzuversuchen.
+- **Status setzen:** ein per `addProjectV2ItemById` ergänztes Item bekommt Todo vom Board-Workflow „Item added to project" erst verzögert (rund 1 bis 2 Sekunden; Probe in #1309: Status leer bei t+0 s, Todo bei t+1 s); bis dahin fehlt es in der Auswahl (`.status == "Todo"`). Darum nach dem Hinzufügen den Status selbst auf Todo setzen, das gilt sofort und unabhängig vom Workflow (`gh project item-edit --id <ITEM> --project-id PVT_kwHOD8746c4Barq_ --field-id PVTSSF_lAHOD8746c4Barq_zhVhdTM --single-select-option-id f75ad846`). Die Board-Liste liefert frisch hinzugefügte Items verzögert, einen Moment warten. In Git-Bash ist `jq` nicht installiert; die `--jq`-Variante von `gh` genügt.
+- **Mehrere Tickets auf einmal einsortieren (z.B. Epic-Aufteilung):** `node scripts/board-place.mjs --top <nr>…` bzw. `--after <ankernr> <nr>…` (`--dry-run` zeigt nur an) lädt die Board-Liste **einmal** (REST), nutzt die Item-IDs wieder und setzt die Positionen nacheinander mit kurzer Pause; nie je Ticket die komplette Liste neu laden. `--position <N> <nr>` setzt ein Ticket als N. Todo-Item, `--missing` nennt offene Issues ohne Board-Item (nur Bericht; einsortieren ist eine Abwägung der Agentin, danach Status Todo setzen). Noch nicht gelistete Nummern meldet das Skript (frische Items kommen verzögert): später erneut aufrufen. Bei `API rate limit exceeded` sofort stoppen, nur REST nutzen (Kommentar, Schließen, Labels) und den Board-Rest als Folgeaufgabe melden statt in einer Schleife weiterzuversuchen.
 - **Abhängigkeit** („A vor B"): als Notiz `blockiert durch #X` in den **Body** des abhängigen Issues. Die Auswahl fängt das am Kandidaten-Check ab (offener Blocker → überspringen).
 - **Unwichtig:** im Board nach unten ziehen, oder schließen bzw. löschen (`gh issue delete` nur mit Rückfrage). Ein Zurückstellen-Label gibt es nicht.
 - **Neues Issue:** kommt **nicht** von selbst aufs Board (das Projekt hat nur „Auto-add sub-issues"). Nach `gh issue create` selbst hinzufügen (`addProjectV2ItemById`), Status Todo setzen (siehe „Status setzen") und einsortieren (`board-place.mjs` bzw. das Snippet oben).

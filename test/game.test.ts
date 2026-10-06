@@ -1556,3 +1556,22 @@ test("#358 unlockedCommandFamilies: verdrahtet den Quest-Fortschritt (Anfang vs.
   const end = Game.unlockedCommandFamilies();
   for (const c of ["docker", "kubectl", "git", "helm"]) expect(end.has(c)).toBe(true);
 });
+
+test("#1311 Game.setClock: stellt die Tageszeit vor (nur vorwärts), ändert nur gameDays", () => {
+  expect(Game.calendar().hhmm).toBe("06:00");
+  Game.setClock("21:00");
+  expect(Game.calendar().hhmm).toBe("21:00");
+  const days = Game.state.gameDays;
+  Game.setClock("21:00");
+  expect(Game.state.gameDays).toBe(days); // gleiche Minute: unverändert
+  Game.setClock("06:00");
+  expect(Game.calendar().hhmm).toBe("06:00");
+  expect(Game.calendar().day).toBe(2);
+  expect(Game.state.gameDays).toBeGreaterThan(days);
+});
+
+test("#1311 Game.setClock: ungültige Uhrzeit wirft und lässt die Zeit unangetastet", () => {
+  const before = Game.state.gameDays;
+  expect(() => Game.setClock("25:00")).toThrow(RangeError);
+  expect(Game.state.gameDays).toBe(before);
+});

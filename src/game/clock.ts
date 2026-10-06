@@ -10,7 +10,7 @@
  *  - `scenes/worldscene/scenery.ts` (Präsentation): malt den Tag-Nacht-Schleier aus
  *    derselben Achse und ruft die HUD-Uhr.
  */
-import { gameClock, DAY_CYCLE_MS, type GameClock } from "../core/clock";
+import { gameClock, daysUntilClock, DAY_CYCLE_MS, type GameClock } from "../core/clock";
 import { part } from "./shared";
 
 /** Obergrenze für den Zeit-Zuwachs EINES Frames (ms). Ein in den Hintergrund gelegter Tab
@@ -31,6 +31,13 @@ export const clockBundle = part({
   advanceClock(deltaMs: number) {
     if (!Number.isFinite(deltaMs) || deltaMs <= 0) return;
     this.state.gameDays += Math.min(deltaMs, MAX_FRAME_MS) / DAY_CYCLE_MS;
+  },
+
+  /** Dev-Hilfe (kqDev.setClock): stellt die Tageszeit auf die nächste Uhrzeit `"HH:MM"` vor,
+   *  nur vorwärts (gleiche Minute = unverändert). Ändert nur den WERT von `gameDays`, nicht
+   *  das Save-Format. Wirft RangeError bei ungültigem Format. */
+  setClock(hhmm: string) {
+    this.state.gameDays += daysUntilClock(this.state.gameDays, hhmm);
   },
 
   /** Der aus der persistenten Achse abgeleitete Kalender (Anzeige-Tag, Saison, Wochentag,

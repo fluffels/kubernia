@@ -8,6 +8,9 @@
  * Brille (ein Eintrag = ein Prüfpunkt, bestehend aus Stichwörtern, die in BEIDEN Texten vorkommen
  * müssen) und prüft zusätzlich, dass die Zahl der Prüfpunkte im Skill der Tabelle entspricht.
  *
+ * Bewusst keine dritte, gemeinsame Quelle (#1311): Skill (Markdown für den Skill-Pfad) und Workflow (JS-Template) haben
+ * unterschiedliche Formen, die Tabelle hier ist der Abgleich. Bei mehr als vier Brillen lohnt eine gemeinsame Datendatei.
+ *
  * Grenze: ein neuer Prüfpunkt, der NUR im Workflow steht, fällt nicht auf; ein neuer Punkt im Skill
  * lässt die Zählung rot werden und zwingt zum Pflegen der Tabelle (und damit zum Abgleich).
  */
@@ -36,7 +39,7 @@ const TABELLE: { key: string; kopf: string; ende: string; punkt: RegExp; punkte:
     kopf: "**Lens 2 — Requirement-Treue.**",
     ende: "**Lens 3",
     punkt: /^- /,
-    punkte: [["Akzeptanzkriteri"], ["Scope-Kriechen"], ["README", "docs/module/"], ["Save-Format", "migriert"], ["Langfuse-Erfassung"]],
+    punkte: [["Akzeptanzkriteri"], ["Scope-Kriechen"], ["README", "docs/module/"], ["Save-Format", "migriert"], ["Langfuse-Erfassung", "Messbehauptung"]],
   },
   {
     key: "test-adaequanz",
@@ -62,6 +65,17 @@ function skillAbschnitt(kopf: string, ende: string): string {
   return SKILL.slice(von, bis);
 }
 
+/** Stichwörter, die im Skill-Abschnitt ODER im Workflow-Auftrag fehlen (leer = abgeglichen). Pur, damit der Red-Green-Beweis gegen die echten Texte läuft. */
+function fehlendeStichwoerter(skill: string, auftrag: string, punkte: string[][]): string[] {
+  return punkte
+    .flat()
+    .flatMap((w) => [skill.includes(w) ? null : `Skill: ${w}`, auftrag.includes(w) ? null : `Workflow: ${w}`])
+    .filter((x): x is string => x !== null);
+}
+
+/** Zahl der Prüfpunkte eines Skill-Abschnitts. */
+const zaehlePunkte = (skill: string, punkt: RegExp): number => skill.split("\n").filter((z) => punkt.test(z)).length;
+
 describe("Lens-Texte: Skill und Workflow prüfen dasselbe (#1309)", () => {
   test("der Workflow kennt genau die vier Brillen der Tabelle", () => {
     assert.deepEqual([...lensen].map((l) => l.key), TABELLE.map((t) => t.key));
@@ -73,13 +87,19 @@ describe("Lens-Texte: Skill und Workflow prüfen dasselbe (#1309)", () => {
       const auftrag = lensen.find((l) => l.key === t.key)?.auftrag ?? "";
 
       test("jedes Stichwort steht im Skill-Abschnitt UND im Workflow-Auftrag", () => {
-        const fehlt = t.punkte.flat().flatMap((w) => [skill.includes(w) ? null : `Skill: ${w}`, auftrag.includes(w) ? null : `Workflow: ${w}`]).filter(Boolean);
-        assert.deepEqual(fehlt, []);
+        assert.deepEqual(fehlendeStichwoerter(skill, auftrag, t.punkte), []);
       });
 
       test("die Zahl der Prüfpunkte im Skill entspricht der Tabelle", () => {
-        const zahl = skill.split("\n").filter((z) => t.punkt.test(z)).length;
-        assert.equal(zahl, t.punkte.length, "neuer oder entfallener Prüfpunkt im Skill: Tabelle und Workflow-Auftrag mitpflegen");
+        assert.equal(zaehlePunkte(skill, t.punkt), t.punkte.length, "neuer oder entfallener Prüfpunkt im Skill: Tabelle und Workflow-Auftrag mitpflegen");
+      });
+
+      test("Red-Green gegen die echten Texte: ein entferntes Stichwort bzw. ein zusätzlicher Prüfpunkt wird gemeldet", () => {
+        const wort = t.punkte[0][0];
+        assert.deepEqual(fehlendeStichwoerter(skill.split(wort).join("XXX"), auftrag, t.punkte).filter((f) => f === `Skill: ${wort}`), [`Skill: ${wort}`], "Stichwort fehlt im Skill");
+        assert.deepEqual(fehlendeStichwoerter(skill, auftrag.split(wort).join("XXX"), t.punkte).filter((f) => f === `Workflow: ${wort}`), [`Workflow: ${wort}`], "Stichwort fehlt im Workflow");
+        const mehr = skill + (t.key === "doku" ? "\n9. neuer Prüfpunkt\n" : "\n- neuer Prüfpunkt\n");
+        assert.equal(zaehlePunkte(mehr, t.punkt), t.punkte.length + 1, "ein zusätzlicher Prüfpunkt im Skill ändert die Zählung");
       });
     });
   }

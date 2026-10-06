@@ -37,6 +37,12 @@ const settings = JSON.parse(
   readFileSync(fileURLToPath(new URL("../../.claude/settings.json", import.meta.url)), "utf8"),
 ) as Settings;
 
+/** Alle Langfuse-Regeln einer Regelliste (auch die verbotenen Formen `mcp__langfuse` und `mcp__langfuse__*`). */
+const langfuseRegeln = (regeln: string[]): string[] => regeln.filter((r) => r.startsWith("mcp__langfuse"));
+/** Langfuse-Regeln, die keine einzelnen Lesetools sind (Wildcard, Server-Regel, create/update/upsert/delete …). */
+const unzulaessigeLangfuseRegeln = (regeln: string[]): string[] =>
+  regeln.filter((r) => !/^mcp__langfuse__(get|list|query)[A-Z]\w*$/.test(r));
+
 const perms = settings.permissions ?? {};
 const allow = perms.allow ?? [];
 const ask = perms.ask ?? [];
@@ -95,22 +101,28 @@ describe("Agenten-Permissions in .claude/settings.json (#901)", () => {
     }
   });
 
-  test("Langfuse-Lesetools stehen einzeln in allow, ohne Server-Wildcard und ohne Schreib-Tools (#1276)", () => {
-    const lesen = [
-      "mcp__langfuse__queryMetrics",
-      "mcp__langfuse__getMetricsSchema",
-      "mcp__langfuse__listObservations",
-      "mcp__langfuse__getObservation",
-    ];
-    for (const rule of lesen) {
-      assert.ok(allow.includes(rule), `allow muss ${rule} enthalten — Lesezugriff für die Langfuse-Auswertung (#1276)`);
+  test("Langfuse in allow: nur einzelne Lesetools, ohne Server-Wildcard und ohne Schreib-Tools (#1276, #1311)", () => {
+    // `allow` ist die EINZIGE Quelle der Liste (#1311): Umsetzer-Whitelist und Tests leiten sich daraus ab
+    // (model-routing.test.ts gleicht die Umsetzer-Tools gegen diese Menge ab), statt sie ein weiteres Mal zu führen.
+    const langfuse = langfuseRegeln(allow);
+    assert.ok(langfuse.length > 0, "allow braucht die Langfuse-Lesetools (Auswertung, #1276)");
+    assert.deepEqual(unzulaessigeLangfuseRegeln(langfuse), [], "nur Lese-Verben (get/list/query), einzeln, ohne Wildcard");
+  });
+
+  test("Erkennung greift wirklich (Red-Green): Wildcard, Server-Regel und Schreib-Tools werden gemeldet", () => {
+    assert.deepEqual(unzulaessigeLangfuseRegeln(["mcp__langfuse__getObservation", "mcp__langfuse__queryMetrics"]), []);
+    for (const bad of ["mcp__langfuse", "mcp__langfuse__*", "mcp__langfuse__createScore", "mcp__langfuse__updatePrompt", "mcp__langfuse__deleteDataset", "mcp__langfuse__upsertComment"]) {
+      assert.deepEqual(unzulaessigeLangfuseRegeln([bad]), [bad], bad);
     }
-    const langfuse = allow.filter((r) => r.startsWith("mcp__langfuse"));
-    assert.deepEqual(
-      [...langfuse].sort(),
-      [...lesen].sort(),
-      "allow darf für Langfuse nur die vier Lesetools nennen: weder `mcp__langfuse` noch `mcp__langfuse__*` noch Schreib-Tools (Prompts, Scores, Kommentare, Datasets)",
-    );
+    assert.deepEqual(langfuseRegeln(["Bash(npm:*)", "mcp__playwright", "mcp__langfuse__listObservations"]), ["mcp__langfuse__listObservations"]);
+  });
+
+  test("gh-Aufrufe mit Außenwirkung stehen auf ask, nicht in allow (#1204, #1311)", () => {
+    for (const rule of ["Bash(gh label delete:*)", "Bash(gh issue transfer:*)", "Bash(gh project delete:*)", "Bash(gh project item-delete:*)", "Bash(gh project field-delete:*)"]) {
+      assert.ok(ask.includes(rule), `ask muss ${rule} enthalten — unumkehrbar, braucht eine Rückfrage (#1204)`);
+      assert.ok(!allow.includes(rule), `${rule} darf nicht in allow stehen`);
+      assert.ok(!deny.includes(rule), `${rule} gehört auf ask, nicht auf deny`);
+    }
   });
 
   test("kein Kommando steht gleichzeitig in allow und deny (deny gewinnt, aber Doppeleinträge sind ein Redaktionsfehler)", () => {

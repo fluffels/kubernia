@@ -8,6 +8,7 @@
  *  - `kqDev.state()`            JSON-Snapshot des Spielzustands (Agenten: erster Prüfschritt
  *                               vor dem Screenshot)
  *  - `kqDev.advanceTime(ms)`    Spielzeit frame-weise vorspulen, ohne Echtzeit zu warten
+ *  - `kqDev.setClock("HH:MM")`  Tageszeit direkt auf die nächste Uhrzeit stellen (nur vorwärts)
  *  - `kqDev.ready`              wahr ab dem ersten Frame mit Spielfigur
  *  - `roadmap`/`jump`/`freshStart`/`reset`  Quest-Sprung-Werkzeuge (#329) */
 import Phaser from "phaser";
@@ -15,20 +16,16 @@ import { Game } from "../game";
 import { UI } from "../ui";
 import { SaveStore } from "../store";
 import { OVERLAYS } from "../ui/overlays";
-import { buildDevSnapshot, type DevSnapshot, type DevSnapshotSource } from "../devtools/snapshot";
+import { buildDevSnapshot, isDevViewable, type DevSnapshot, type DevSnapshotSource } from "../devtools/snapshot";
 import { planAdvance } from "../devtools/timestep";
-import { WorldScene } from "./WorldScene";
-import { RegionScene } from "./RegionScene";
-import { InteriorScene } from "./InteriorScene";
 
 interface SceneView { key: string; map: string | null; player: DevSnapshotSource["player"] }
 
-/** Spielfigur-Sicht einer laufenden Szene (null für Boot/Test-Szenen ohne Figur). */
+/** Spielfigur-Sicht einer laufenden Szene (null für Boot/Test-Szenen ohne Figur). Jede
+ *  Spielfigur-Szene liefert sie über `devView()` selbst; ein neuer Szenen-Typ muss sie nur
+ *  implementieren (bewacht von test/devapi-scenes.test.ts). */
 function viewScene(scene: Phaser.Scene): SceneView | null {
-  if (scene instanceof WorldScene) return { key: scene.scene.key, map: scene.mapId, player: scene.playerPos };
-  if (scene instanceof RegionScene) return { key: scene.scene.key, map: scene.cfg.map, player: scene.pl };
-  if (scene instanceof InteriorScene) return { key: scene.scene.key, map: `interior:${scene.door.id}`, player: scene.pl };
-  return null;
+  return isDevViewable(scene) ? { key: scene.scene.key, ...scene.devView() } : null;
 }
 
 function openOverlays(): string[] {
@@ -105,6 +102,11 @@ export function installDevApi(game: Phaser.Game): void {
   w.kqDev = {
     /** JSON-Snapshot des Spielzustands (Szene, Spieler/Kachel, Quest, Dialog, Uhr, …). */
     state: (): DevSnapshot => buildDevSnapshot(collect(game, readyLatched)),
+    /** Tageszeit auf die nächste Uhrzeit `"HH:MM"` vorstellen (nur vorwärts) und den Snapshot liefern. */
+    setClock: (hhmm: string): DevSnapshot => {
+      Game.setClock(hhmm);
+      return buildDevSnapshot(collect(game, readyLatched));
+    },
     /** Spielzeit `ms` vorspulen (Frame-Stepping, synchron) und den neuen Snapshot liefern. */
     advanceTime: (ms: number, opts?: { frameMs?: number }): DevSnapshot => {
       advance(game, ms, opts?.frameMs);
@@ -123,5 +125,5 @@ export function installDevApi(game: Phaser.Game): void {
     /** Bestehender Reset-Pfad (wie Menü → Zurücksetzen) + neu laden. */
     reset: () => { Game.reset(); location.reload(); },
   };
-  console.info("🛠️ kqDev bereit: state() · advanceTime(ms) · ready · roadmap() · jump(idx) · freshStart() · reset()");
+  console.info("🛠️ kqDev bereit: state() · advanceTime(ms) · setClock(hhmm) · ready · roadmap() · jump(idx) · freshStart() · reset()");
 }

@@ -9,7 +9,7 @@
  * Mitternacht (inkl. Off-by-one-Schutz beim ERSTEN Übergang), Saison-/Wochentags-Rollover
  * sowie harte Invarianten und ein Red-Green-Schutz gegen eine konstante Ausgabe. */
 import { test, expect } from "vitest";
-import { gameClock, DAY_CYCLE_MS, START_PHASE, withStartOffset } from "../src/core/clock";
+import { gameClock, daysUntilClock, DAY_CYCLE_MS, START_PHASE, withStartOffset } from "../src/core/clock";
 
 const CYCLE = 1440000; // wie in scenes.ts: 24 min realer Zeit = ein Spieltag
 
@@ -156,4 +156,55 @@ test("verschiedene Zeitpunkte liefern verschiedene Uhrzeiten (keine Konstante)",
   const morgen = gameClock(0.7 * CYCLE, CYCLE).hhmm;
   const abend = gameClock(0.3 * CYCLE, CYCLE).hhmm;
   expect(morgen).not.toBe(abend);
+});
+
+/* ---------- #1311: daysUntilClock (kqDev.setClock) ---------- */
+
+const hhmmAfter = (days: number, add: number) => gameClock((days + add) * DAY_CYCLE_MS, DAY_CYCLE_MS).hhmm;
+
+test("daysUntilClock: Spielstart 06:00 → 21:00 am selben Tag, 00:00 und 05:59", () => {
+  expect(daysUntilClock(0, "21:00") * 24).toBeCloseTo(15 + 0.5 / 60, 6); // Mitte der Zielminute
+  for (const t of ["21:00", "00:00", "05:59", "12:30"]) expect(hhmmAfter(0, daysUntilClock(0, t)), t).toBe(t);
+});
+
+test("daysUntilClock: nur vorwärts – 21:00 → 06:00 ist der Folgetag, gleiche Minute bleibt 0", () => {
+  const abends = daysUntilClock(0, "21:00");
+  const d = daysUntilClock(abends, "06:00");
+  expect(d * 24).toBeCloseTo(9, 6);
+  expect(gameClock((abends + d) * DAY_CYCLE_MS, DAY_CYCLE_MS).day).toBe(2);
+  expect(daysUntilClock(0, "06:00")).toBe(0);
+  expect(daysUntilClock(abends, "21:00")).toBe(0);
+});
+
+test("daysUntilClock: Zielminute wird auch bei krummen Startwerten exakt getroffen (kein Float-Kippen)", () => {
+  for (const start of [0.1234567, 3.3333333, 0.5, 12.999999]) {
+    for (const t of ["00:00", "06:00", "13:37", "23:59"]) expect(hhmmAfter(start, daysUntilClock(start, t)), `${start}→${t}`).toBe(t);
+  }
+});
+
+test("daysUntilClock: ungültiges Format wirft RangeError", () => {
+  for (const bad of ["25:00", "7:5", "", "12:60", "12-30", "ab:cd", "24:00", "12:30 "]) {
+    expect(() => daysUntilClock(0, bad), JSON.stringify(bad)).toThrow(RangeError);
+  }
+});
+
+test("daysUntilClock: Starts genau auf dem Minutenraster verfehlen die Zielminute nicht (Repro #1311, Test-Lens R3)", () => {
+  // Echte Fehlschläge des ersten Entwurfs: der Start liegt per Float knapp unter der Minutengrenze.
+  expect(hhmmAfter(21.9625, daysUntilClock(21.9625, "19:17"))).toBe("19:17");
+  expect(hhmmAfter(4.960416666666666, daysUntilClock(4.960416666666666, "09:37"))).toBe("09:37");
+});
+
+test("daysUntilClock: Eigenschaft über das Minutenraster – immer genau die Zielminute, vorwärts, höchstens ein Tag", () => {
+  const ziele = ["00:00", "06:00", "09:37", "12:00", "19:17", "23:59"];
+  for (let k = 0; k < 1440 * 30; k += 37) {
+    for (const start of [k / 1440, k / 1440 + 1e-12, k / 1440 - 1e-12]) {
+      if (start < 0) continue;
+      for (const t of ziele) {
+        const d = daysUntilClock(start, t);
+        expect(hhmmAfter(start, d), `${start} → ${t}`).toBe(t);
+        expect(d, `${start} → ${t}: nur vorwärts`).toBeGreaterThanOrEqual(0);
+        expect(d, `${start} → ${t}: höchstens ein Tag`).toBeLessThan(1 + 1e-6);
+      }
+    }
+  }
 });

@@ -51,6 +51,10 @@ AGENTS.md                  @fluffels
 /.claude/                  @fluffels
 /.mcp.json                 @fluffels
 /scripts/playwright-mcp.mjs @fluffels
+/scripts/gh-guard-hook.mjs @fluffels
+/scripts/worktree-guard-hook.mjs @fluffels
+/scripts/worktree-guard-powershell.mjs @fluffels
+/scripts/stop-verify-hook.mjs @fluffels
 /.agents/                  @fluffels
 /docs/agent-harness*       @fluffels
 
