@@ -26,12 +26,12 @@ Pro Runde **genau einen** Subagenten spawnen (Agent-Tool, `subagent_type: genera
 > Arbeite im Repo-Root deines Arbeitsverzeichnisses (`git rev-parse --show-toplevel`), nicht in einem anderen Pfad. Rufe den `kubernia`-Skill auf und arbeite **GENAU EIN** offenes Ticket vollständig end-to-end ab — strikt nach `AGENTS.md`: das oberste freie Item der Board-Reihenfolge wählen (Auswahl-Befehl in `docs/ticket-reihenfolge.md`, nicht nachsortieren), per `gh issue edit <nr> --add-assignee @me` claimen und verifizieren, eigenen `git worktree` anlegen, umsetzen, `npm run verify` grün, im Browser verifizieren, mit `(#<nr>)` committen, über das Remote nach `main` mergen+pushen, Issue schließen+verifizieren, Worktree+Branch aufräumen+verifizieren. Commit-Identität: `fluffels` (lokale Repo-Config, nie Klarname/Firmen-Mail). **Falls KEIN freies Ticket verfügbar ist** (alle offenen sind bereits assigned/haben Branch/Worktree, oder das Board ist leer): NICHT implementieren, sondern das sofort zurückmelden. **Falls das Ticket ein zu großes Epic/eine Phase ist:** nicht selbst umsetzen, sondern nach dem Claimen in konkrete Kindertickets aufteilen und das Epic auf done schließen (siehe Skill). Gib als LETZTE Zeile eine kompakte Zusammenfassung zurück im Format: `#<nr> — <Titel> — <was gemacht> — <gemerged: ja/nein>` bzw. `KEIN FREIES TICKET`.
 
 Nach jedem Subagenten:
-- Seine Zusammenfassungs-Zeile als **Statuszeile an die Userin** ausgeben (`[i/N] #… — …`). Dazu die kopierfertige Zeile `/rename kq-<nr> <Kurztitel>` (ASCII, max. ~40 Zeichen, aus Nummer und Titel der Zusammenfassung) — nur die Userin kann die Session umbenennen (#1213).
+- Seine Zusammenfassungs-Zeile als **Statuszeile an die Userin** ausgeben (`[i/N] #… — …`).
 - Meldet der Subagent **KEIN FREIES TICKET** → Schleife **sofort beenden** (nicht bis N weiterlaufen) und das der Userin sagen.
 - Sonst weiter mit i+1.
 
 ### 3. Abschluss
-Nach der letzten Runde (oder frühem Stopp) eine **Sammel-Übersicht** ausgeben: welche Tickets erledigt wurden (Nummern + Titel), wie viele von N geschafft, und ob früh gestoppt wurde. Kurz halten.
+Nach der letzten Runde (oder frühem Stopp) eine **Sammel-Übersicht** ausgeben: welche Tickets erledigt wurden (Nummern + Titel), wie viele von N geschafft, und ob früh gestoppt wurde. Kurz halten. Dazu **eine** kopierfertige Sammelzeile `/rename kq-loop <nr1>+<nr2>…` (ASCII, max. ~40 Zeichen) — nur die Userin kann die Session umbenennen (#1213); eine Zeile je Ticket würde den Namen N-mal überschreiben.
 
 ## Regeln
 - **Nie parallel spawnen** — immer erst den einen Subagenten abwarten, dann den nächsten.

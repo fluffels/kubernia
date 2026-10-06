@@ -180,7 +180,10 @@ export function checkDiffSize({ runGit, env = process.env } = {}) {
 
   let numstat;
   try {
-    numstat = git(["diff", "--numstat", base, "HEAD"]);
+    // Drei-Punkt, NICHT `base HEAD`: in der PR-CI ist die Basis der aktuelle Kopf von main.
+    // Zwei-Punkt zählte jede Änderung, die main NACH dem Abzweigen bekam, spiegelverkehrt
+    // als Slice-Zeilen mit (#1240: 832 statt 758). `A...B` misst gegen die Merge-Base.
+    numstat = git(["diff", "--numstat", `${base}...HEAD`]);
   } catch {
     // Diff nicht messbar → nicht rot machen, degradieren.
     return { skipped: true, base, ...thresholds, fileCount: 0, changedLines: 0 };
