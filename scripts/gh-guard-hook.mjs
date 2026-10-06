@@ -301,7 +301,7 @@ function dynamischesKommando(segment, maske, command) {
   const quote = String.raw`["']?`;
   const wort = String.raw`(?:\$\{?\w+\}?|\$\([^)]*\)|\`[^\`]*\`)`; // Variable, Ersetzung oder Backtick als Kommandowort
   if (new RegExp(String.raw`(^|[\s(!{&.])${quote}${wort}${quote}\s+${quote}api${quote}(?=\s|$)`).test(segment)) return true;
-  if (new RegExp(String.raw`${KOMMANDOPOS}[&.]\s*\$\{?\w+`).test(maske)) return true;
+  if (/(?:^|[^&>\w])&\s*\$\{?\w+/.test(maske) || new RegExp(String.raw`${KOMMANDOPOS}\.\s*\$\{?\w+`).test(maske)) return true; // `&` an jeder Stelle, `.` nur an Kommandoposition (`jq . $F`)
   const variable = new RegExp(String.raw`${KOMMANDOPOS}\$\{?(\w+)\}?(?=[\s)}]|$)`).exec(maske);
   return variable !== null && new RegExp(String.raw`\b${variable[1]}\s*=\s*(?:['"][^'"]*\bgh\b|\$\([^)]*\bgh\b|\`[^\`]*\bgh\b)`).test(command);
 }
@@ -317,17 +317,17 @@ function umweg(segment, maske, tiefe, command) {
     const ip = interpreterString(segment.slice(start));
     if (!ip) continue;
     if (hatVariable(ip.roh)) return frage("Interpreter-String mit Variable neben `gh api`: der Aufruf ist nicht prüfbar");
-    const r = bewerte(ip.wert, tiefe + 1);
+    const r = bewerte(ip.wert, tiefe + 1, command);
     if (r.ask) return r;
   }
   return null;
 }
 
 /** Ein `$( … )` innerhalb eines Segments (`echo "$(gh api -X DELETE …)"`): der Inhalt wird einzeln bewertet. */
-function ersetzung(segment, tiefe) {
+function ersetzung(segment, tiefe, command) {
   if (tiefe >= MAX_INTERPRETER) return null;
   for (const inner of ersetzungen(segment)) {
-    const r = bewerte(inner, tiefe + 1);
+    const r = bewerte(inner, tiefe + 1, command);
     if (r.ask) return r;
   }
   return null;
@@ -342,7 +342,7 @@ function segmentUrteil(segment, command, tiefe) {
     const r = ghApiAufruf(segment.slice(start));
     if (r) return r;
   }
-  return umweg(segment, maske, tiefe, command) ?? ersetzung(segment, tiefe);
+  return umweg(segment, maske, tiefe, command) ?? ersetzung(segment, tiefe, command);
 }
 
 const HEREDOC = /<<-?[ \t]*(?:'(\w+)'|"(\w+)"|\\(\w+))/g;
@@ -377,13 +377,13 @@ function ohneDatenHeredocs(text) {
  *  (Variablen, `eval`/`iex`, Interpreter-Strings, Ersetzungen), sonst `{ ask: false }`. Nie `deny`. Segmentiert wird
  *  zweimal: mit Bash-Escapes (`\`+Zeilenumbruch ist eine Fortsetzung) und ohne (PowerShell-Pfade `C:\dev\;`); das
  *  strengere Ergebnis gilt. Fortsetzungen werden vor den Textprüfungen zu Leerzeichen. */
-export function bewerte(command, tiefe = 0) {
+export function bewerte(command, tiefe = 0, kontext = command) {
   if (!command || typeof command !== "string") return { ask: false };
-  if (!(/\bgh(?:\.exe)?\b/i.test(command) && /\bapi\b/.test(command))) return { ask: false }; // ohne gh und api kann nichts davon zutreffen
+  if (!(/\bgh(?:\.exe)?\b/i.test(kontext) && /\bapi\b/.test(kontext))) return { ask: false }; // ohne gh und api kann nichts davon zutreffen
   if (command.length > LAENGE_MAX) return frage("der Befehl ist für die Textprüfung zu lang");
   const text = ohneDatenHeredocs(command);
-  for (const roh of segmente(text, true)) {
-    const r = segmentUrteil(ohneFortsetzung(roh), text, tiefe);
+  for (const roh of new Set([...segmente(text, true), ...segmente(text, false)])) {
+    const r = segmentUrteil(ohneFortsetzung(roh), kontext, tiefe);
     if (r) return r;
   }
   return { ask: false };

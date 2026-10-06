@@ -92,6 +92,28 @@ describe("dynamisches Kommando mit gequotetem oder ersetztem Kommandowort", () =
     laeuft(`X=5; ${LESEN}; $X`);
   });
 
+  test("& $c an jeder Stelle (Zuweisung, Klammer, Pipeline-Block), auch hinter einem PowerShell-Pfad mit Backslash am Ende", () => {
+    fragt("$c='gh'; $a='api'; $r = & $c $a -X DELETE repos/o/r/issues/1");
+    fragt("$c='gh'; $a='api'; $null = & $c $a -X DELETE repos/o/r/issues/1");
+    fragt("$c='gh'; $r = & $c @('api','-X','DELETE','r')");
+    fragt("$c='gh'; $a='api'; Write-Output (& $c $a -X DELETE repos/o/r/issues/1)");
+    fragt("$c='gh'; $a='api'; [void](& $c $a -X DELETE repos/o/r/issues/1)");
+    fragt("$c='gh'; $a='api'; 1..3 | % { & $c $a -X DELETE repos/o/r/issues/$_ }");
+    fragt("$c='gh'; $a='api'; Set-Location C:\\dev\\; & $c $a -X DELETE repos/o/r/issues/1");
+  });
+
+  test("$X in einer Ersetzung: der äußere Befehl liefert die Zuweisung", () => {
+    fragt('GH="gh api"; out=$($GH -X DELETE repos/o/r/issues/1)');
+    fragt('GH="gh api"; echo "$($GH -X DELETE repos/o/r/issues/1)"');
+    laeuft('GH="gh api"; out=$(echo hallo)');
+  });
+
+  test("Gegenprobe: ein & als Hintergrund-Operator oder in && / 2>&1 ist kein Aufrufoperator", () => {
+    laeuft(`${LESEN} 2>&1 | head; echo $N`);
+    laeuft(`${LESEN} && echo $N`);
+    laeuft(`sleep 1 & echo $N; ${LESEN}`);
+  });
+
   test("Gegenprobe: Variable als Argument von gh api (kein Kommando)", () => {
     laeuft(`N=1; ${LESEN}/comments/$N`);
     laeuft(`gh api repos/o/r/issues/$N`);
