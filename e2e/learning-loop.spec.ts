@@ -31,14 +31,17 @@ async function bootDev(page: Page): Promise<void> {
   await page.goto(DEV_URL);
   await expect(page.locator("body")).toHaveAttribute("data-kq-booted", "1", { timeout: 20_000 });
   await expect(page.locator("#game-container canvas")).toBeVisible();
-  await page.waitForFunction(
-    () => !!(window as unknown as { kqDev?: unknown }).kqDev && !!(window as unknown as { kqGame?: unknown }).kqGame,
-    null,
-    { timeout: 10_000 },
-  );
+  // kqDev.ready rastet ab dem ersten Frame mit Spielfigur ein (#1284).
+  await page.waitForFunction(() => (window as unknown as { kqDev?: { ready?: boolean } }).kqDev?.ready === true, null, {
+    timeout: 10_000,
+  });
 }
 
-type KqDev = { roadmap(): { id: string; completed: boolean }[] };
+type KqDev = {
+  roadmap(): { id: string; completed: boolean }[];
+  advanceTime(ms: number): unknown;
+  state(): { player: { tx: number; ty: number } | null; clock: { gameDays: number } };
+};
 type KqGame = { scene: { getScene(k: string): { playerPos: { x: number; y: number } } } };
 
 /** Ist die Quest `id` bereits abgeschlossen? (liest den Live-Stand, kein Reload) */
@@ -47,7 +50,8 @@ function questDone(page: Page, id: string): Promise<boolean> {
 }
 
 /** Setzt die Figur auf die Kachel (tx,ty) – live, ohne Reload (Navigation ist nicht das
- *  Testziel). Kurz warten, damit die Szene die neue Position übernimmt (nearestNpc/Prompt). */
+ *  Testziel). Danach per kqDev.advanceTime einen Moment vorspulen, damit die Szene die
+ *  neue Position übernimmt (nearestNpc/Prompt) – deterministisch statt Echtzeit-Warten. */
 async function teleport(page: Page, tx: number, ty: number): Promise<void> {
   await page.evaluate(
     ({ x, y }) => {
@@ -57,7 +61,15 @@ async function teleport(page: Page, tx: number, ty: number): Promise<void> {
     },
     { x: tx * T, y: ty * T },
   );
-  await page.waitForTimeout(200);
+  // advanceTime muss die Spielzeit tatsächlich vorrücken (synchron, kein Wettlauf mit rAF).
+  const advanced = await page.evaluate(() => {
+    const d = (window as unknown as { kqDev: KqDev }).kqDev;
+    const before = d.state().clock.gameDays;
+    return (d.advanceTime(200) as { clock: { gameDays: number } }).clock.gameDays - before;
+  });
+  expect(advanced, "advanceTime(200) rückt die Spielzeit vor").toBeGreaterThan(0);
+  const pos = await page.evaluate(() => (window as unknown as { kqDev: KqDev }).kqDev.state().player);
+  expect(pos, "Spielfigur steht nach dem Teleport auf der Ziel-Kachel").toMatchObject({ tx, ty });
 }
 
 /** Leitet aus dem HTML der aktuellen Terminal-Aufgabe den zu tippenden Befehl ab.
