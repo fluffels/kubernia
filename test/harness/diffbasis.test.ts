@@ -42,13 +42,13 @@
  * Root-Kontextdatei `AGENTS.md` (eine `CLAUDE.md` ist seit #1087 verboten). Nicht gescannt:
  * `scripts/**` (dort ist `merge-base … main` ein dokumentierter, korrekter Fallback für flache Checkouts in `check-diffsize.mjs`), `test/**` (Fixtures tragen per
  * Definition beide Formen) und `.github/workflows/*.yml` (diffen gegen SHA-Variablen, kein literales
- * `main`; die Diff-Basis des Goodhart-Guards bewacht `test/harness/harness-approval.test.ts`).
+ * `main`; Workflow-Diffs bewachen die Checks selbst).
  *
  * Wie in `review-context.test.ts` (#1034) läuft das Prädikat als EINE benannte Funktion über das
  * echte Artefakt UND über Gegenbeispiele, die rot sein MÜSSEN – kein abgeschriebener Zweit-Regex.
  *
  * Fitness-Function-Kategorie neben claude-bridge/harness-approval/review-context. Bewusst **ohne**
- * eigenes `scripts/check-*.mjs`: `scripts/check-` ist selbst gate-config-geschützt (Goodhart-Guard).
+ * eigenes `scripts/check-*.mjs`: `scripts/check-` ist selbst Gate-Config.
  *
  * Ausführen mit:  npm test
  */

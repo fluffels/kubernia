@@ -5,7 +5,7 @@
 
 ## Status
 
-**Akzeptiert.** Präzisiert [ADR 0008](0008-ki-agenten-harness.md) (Entwicklungsmodell) und [ADR 0009](0009-pr-gating-required-checks.md) (Integrationsweg) an einer Stelle: wer einen PR merged, der die **Leitplanken selbst** ändert. Nimmt den Merge-Checkpoint aus #1012 zurück. Umgesetzt mit #1069 (PR #1071); die operative Regel steht in [AGENTS.md › Human-in-the-Loop-Checkpoints](../../AGENTS.md), die Erklärung in [docs/agent-harness.md](../agent-harness.md).
+**Akzeptiert.** Der Label-/Guard-Teil (Entscheidung 1 „Label selbst setzen“, 2 und 5) ist abgelöst durch [ADR 0014](0014-leitplanken-ohne-label-riegel.md) (#1303). Präzisiert [ADR 0008](0008-ki-agenten-harness.md) (Entwicklungsmodell) und [ADR 0009](0009-pr-gating-required-checks.md) (Integrationsweg) an einer Stelle: wer einen PR merged, der die **Leitplanken selbst** ändert. Nimmt den Merge-Checkpoint aus #1012 zurück. Umgesetzt mit #1069 (PR #1071); die operative Regel steht in [AGENTS.md › Human-in-the-Loop-Checkpoints](../../AGENTS.md), die Erklärung in [docs/agent-harness.md](../agent-harness.md).
 
 ## Kontext
 
@@ -34,10 +34,10 @@ Menschliche Freigabe ist die stärkste Absicherung gegen einen Agenten, der sein
 Die Maintainerin wählt **„komplett alles"**:
 
 1. **Kein Merge-Checkpoint mehr.** Bei Harness-/Leitplanken-/Gate-Diffs setzt der Agent `maintainer-approved` **selbst** und merged wie jeden anderen PR — Voraussetzung unverändert: CI grün + Mehr-Perspektiven-Review bestanden.
-2. **Label-Reihenfolge schützt den Guard:** das Label erst setzen, wenn alle anderen Checks grün sind, und vor jedem weiteren Fix-Push wieder entfernen. Sonst sähe der `gate-change-guard` eine später im selben PR nachgeschobene Gate-Änderung nicht mehr.
+2. (abgelöst durch ADR 0014) **Label-Reihenfolge schützt den Guard:** das Label erst setzen, wenn alle anderen Checks grün sind, und vor jedem weiteren Fix-Push wieder entfernen. Sonst sähe der `gate-change-guard` eine später im selben PR nachgeschobene Gate-Änderung nicht mehr.
 3. **Audit-Spur ersetzt die Freigabe:** direkt nach dem Merge ein PR-Kommentar „🛡️ Leitplanken-Änderung selbst gemergt" — *was* sich an den Leitplanken ändert, *warum*, *wie reverten* (`git revert <squash-sha>` per PR). Die Maintainerin liest asynchron gegen. Im Workflow als Schema-Feld `auditKommentar` mit lauter Warnung, wenn er fehlt.
 4. **Pre-Flight nur noch für echte Entscheidungen (abgelöst durch #1279, siehe Fortschreibung unten):** 🎨 Optik, ⚠️ riskante Weiche, offene Plan-Weiche. Harness-/Gate-Dateien allein sind kein Stopp-Grund.
-5. **Unverändert:** `gate-change-guard` + CODEOWNERS (das Label markiert jede Leitplanken-Änderung im PR-Log), der Mehr-Perspektiven-Review vor dem Merge, die Goodhart-Verhaltensregel (nie ein Gate abschwächen, nur um grün zu werden).
+5. (abgelöst durch ADR 0014) **Unverändert:** `gate-change-guard` + CODEOWNERS (das Label markiert jede Leitplanken-Änderung im PR-Log), der Mehr-Perspektiven-Review vor dem Merge, die Goodhart-Verhaltensregel (nie ein Gate abschwächen, nur um grün zu werden).
 
 **Fokus der Harness-Phase.** Parallel entschieden: erst das KI-Gerüst fertig machen, dann wieder Spielentwicklung. Ziele: **wenig Human-in-the-Loop, wenig Tokens, hohe Qualität.** Umgesetzt über die Board-Reihenfolge — Windows-Start des Workflows (#1026), Token-/Loop-Baseline (#1068), dann die Sammeltickets (AGENTS.md kürzen #1064, genau ein Ablauf #1067 mit Folgepunkten #1070, Modell-Routing #1065, native Worktree-Isolation #1066), die Qualitäts-Gates #1023/#1022, danach Security/Repo-Tickets und das Spiel. Ein separates „Projekt-Brain" oder Wiki neben dem Repo wurde bewusst nicht angelegt: das Repo selbst (AGENTS.md, ADRs, `docs/`, Issues) ist der Wissensspeicher; nur übertragbare Konzepte und persönliche Arbeitskonventionen (z.B. der Chat-Abschlusssatz, #935) gehören ins persönliche Brain der Maintainerin.
 

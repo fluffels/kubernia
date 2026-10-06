@@ -38,7 +38,7 @@
  *
  * Fitness-Function-Kategorie neben agents-md-native/harness-approval/docmap (#992/#1012/#482), nicht
  * mit Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`: `scripts/check-`
- * ist selbst gate-config-geschützt (Goodhart-Guard) – für doku-/prompt-strukturelle Wächter gibt es
+ * ist selbst Gate-Config – für doku-/prompt-strukturelle Wächter gibt es
  * die etablierte test-only-Familie (Präzedenz: `test/harness/agents-md-native.test.ts`).
  *
  * ⚠️ Das Workflow-Skript wird bewusst als TEXT gelesen, nicht importiert: es ruft auf Top-Level

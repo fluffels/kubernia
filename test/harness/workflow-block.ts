@@ -4,8 +4,8 @@
  * sich nicht importieren (Top-Level-await gegen Laufzeit-Globals), darum wird der Block
  * zwischen zwei Markern ausgeschnitten.
  *
- * Liegt bewusst in test/harness/ (geschützter Pfad, Goodhart-Guard) und nicht in test/support/:
- * wer die Schneide-Logik der Wächter verbiegt, soll `maintainer-approved` brauchen.
+ * Liegt bewusst in test/harness/ (geschützter Pfad, Audit-Kommentar) und nicht in test/support/:
+ * wer die Schneide-Logik der Wächter verbiegt, hinterlässt eine Audit-Spur.
  */
 import { readFileSync } from "node:fs"
 import { runInNewContext } from "node:vm"
