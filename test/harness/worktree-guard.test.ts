@@ -12,9 +12,12 @@
  *
  * Ausführen mit: npm test
  */
-import { describe, test } from "vitest";
+import { afterAll, beforeAll, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { join, resolve } from "node:path";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, relative, resolve } from "node:path";
 
 type ExecDeps = { execFileSync?: (...a: unknown[]) => string; statSync?: (...a: unknown[]) => { isDirectory(): boolean } };
 type Decision = { block: boolean; reason?: string };
@@ -214,6 +217,7 @@ describe("isProtectedGitCommand (#1308) — Quotes, Heredocs und Substitutionen"
       "git log --grep=push",
       "git stash push",
       "git status # dann git push",
+      "npm test # git push",
       "gh issue comment 1 --body '`git push`'",
     ];
     for (const cmd of nein) assert.equal(isProtectedGitCommand(cmd), false, cmd);
@@ -236,6 +240,8 @@ describe("isProtectedGitCommand (#1308) — Quotes, Heredocs und Substitutionen"
       "if true; then git push; fi",
       "find . -exec git commit {} \\;",
       "echo a | git push",
+      "echo a#; git push",
+      "git --namespace x push",
       "timeout 60 git push",
       "xargs -n 1 git push",
       "env -u FOO git commit -m x",
@@ -322,7 +328,11 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
         if (dir !== repoRoot && !dir.startsWith(repoRoot)) throw new Error(`kein Repo: ${dir}`);
         if (missing.some((m) => resolve(m) === dir)) throw new Error(`ENOENT: ${dir}`); // git in fehlendem cwd scheitert
         if (a.includes("--show-toplevel")) return topOf(dir) + "\n";
-        if (a.includes("--git-common-dir")) return `${repoRoot}/.git\n`;
+        if (a.includes("--git-common-dir")) {
+          // wie echtes git: im Haupt-Checkout relativ zum Aufruf-Verzeichnis (`.git`, `../.git`), im Worktree absolut
+          const absolut = `${repoRoot}/.git`;
+          return (wts.includes(topOf(dir)) ? absolut : relative(dir, absolut).replace(/\\/g, "/")) + "\n";
+        }
         throw new Error("unerwartet");
       },
       statSync: (p: unknown) => {
@@ -394,6 +404,8 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(run(`if false; then\ncd '${wt}'\nfi\ngit push`), true, "cd in einem Block");
     assert.equal(run(`cd '${wt}' && node scripts/x.mjs && npx vitest run && git commit -m x`), false, "Interpreter in der Kette");
     assert.equal(run(`cd '${wt}' && echo git push`), false, "reiner Text");
+    assert.equal(run(`if true; then cd '${wt}' && git push; fi`), true, "cd hinter then gilt nicht sicher");
+    assert.equal(run("$(".repeat(20000) + "git push" + ")".repeat(20000)), true, "unerwarteter Lexer-Fehler fällt auf die grobe Regel zurück");
     assert.equal(run(`cd '${wt}' && git -C sub push && git push`), false);
   });
 
@@ -428,6 +440,132 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     const r = decide({ cwd: repoRoot, command: "git commit -m x", repoRoot, deps: fsFake([wt]) });
     assert.match(r.reason ?? "", /git -C <worktree>.*cd <worktree> && git/s);
     assert.ok((r.reason ?? "").includes(repoRoot));
+  });
+});
+
+describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordner", () => {
+  let base = "";
+  let main = "";
+  let sub = "";
+  let linked = "";
+  let linkedSub = "";
+  const slash = (p: string) => p.replace(/\\/g, "/");
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: "pipe" });
+
+  beforeAll(() => {
+    base = realpathSync.native(mkdtempSync(join(tmpdir(), "kq-guard-")));
+    main = join(base, "main");
+    sub = join(main, "src");
+    linked = join(base, "wt");
+    linkedSub = join(linked, "src");
+    mkdirSync(sub, { recursive: true });
+    writeFileSync(join(sub, "b.txt"), "x");
+    git(main, "init", "-q");
+    git(main, "add", "-A");
+    git(main, "commit", "-q", "-m", "init");
+    git(main, "worktree", "add", "-q", "-b", "wtbranch", linked);
+  });
+  afterAll(() => rmSync(base, { recursive: true, force: true }));
+
+  const blockt = (cwd: string, command: string) => decide({ cwd, command, repoRoot: main }).block;
+
+  test("resolveGitContext: Unterordner des Haupt-Checkouts und des Worktrees werden richtig zugeordnet", () => {
+    const m = resolveGitContext(sub, main);
+    assert.equal(m.relevant, true, "git liefert ../.git relativ zum Unterordner");
+    assert.equal(m.isMainWorktree, true);
+    const l = resolveGitContext(linkedSub, main);
+    assert.equal(l.relevant, true);
+    assert.equal(l.isMainWorktree, false);
+  });
+
+  test("aus dem Haupt-Checkout und seinem Unterordner: cd src / git -C src blocken, der Worktree geht durch", () => {
+    for (const cwd of [main, sub]) {
+      assert.equal(blockt(cwd, "git commit -m x"), true, cwd);
+      assert.equal(blockt(cwd, `cd '${slash(sub)}' && git commit -m x`), true, "cd in den Unterordner des Haupt-Checkouts");
+      assert.equal(blockt(cwd, `git -C '${slash(sub)}' push`), true, "-C in den Unterordner");
+      assert.equal(blockt(cwd, `cd '${slash(linked)}' && git add -A && git commit -m x`), false, "cd in den Worktree");
+      assert.equal(blockt(cwd, `git -C '${slash(linkedSub)}' push`), false, "-C in einen Unterordner des Worktrees");
+    }
+    assert.equal(blockt(main, "cd src && git commit -m x"), true, "relatives cd src");
+    assert.equal(blockt(main, "git -C src commit -m x"), true, "relatives -C src");
+  });
+
+  test("aus dem Worktree: eigenes commit/push geht, der Haupt-Checkout wird auch über cd/-C geblockt", () => {
+    for (const cwd of [linked, linkedSub]) {
+      assert.equal(blockt(cwd, "git commit -m x"), false, cwd);
+      assert.equal(blockt(cwd, `git -C '${slash(main)}' commit -m x`), true);
+      assert.equal(blockt(cwd, `git -C '${slash(sub)}' push`), true);
+      assert.equal(blockt(cwd, `cd '${slash(main)}' && git push`), true);
+      assert.equal(blockt(cwd, `true && cd '${slash(main)}' && git push`), true, "nicht sicher geltendes cd-Ziel wird zusätzlich geprüft");
+      assert.equal(blockt(cwd, `builtin cd '${slash(main)}' && git push`), true, "builtin cd wird als cd erkannt");
+      assert.equal(blockt(cwd, `if true; then cd '${slash(main)}'; fi; git push`), true, "cd hinter then");
+    }
+  });
+
+  /** Differenz-Matrix: jeder Befehl, den die frühere Wortregel aus dem Haupt-Checkout blockte, muss
+   *  weiter blocken, außer er ist hier bewusst als erlaubt gelistet (cd/-C in den Worktree, Text). */
+  const L = () => slash(linked);
+  const MATRIX: [string, boolean][] = [
+    // [Befehl (L = Worktree), bewusst erlaubt?]
+    ["git commit -m x", false],
+    ["git push", false],
+    ["git add -A && git commit -m x", false],
+    ["npm test; git push origin x", false],
+    ["echo a | git push", false],
+    ["git -c a=b commit", false],
+    ["git commit -F - <<EOF\nm\nEOF", false],
+    ["find . -exec git commit {} \\;", false],
+    ["x=$(git push)", false],
+    ["echo `git commit`", false],
+    ['gh issue comment 1 --body "$(git push)"', false],
+    ['bash -c "git push"', false],
+    ['timeout 5 git push', false],
+    ["xargs -n 1 git push", false],
+    ['grep "git push" x', false],
+    ['node -e "git push"', false],
+    ["cd - && git push", false],
+    ["cd ~ && git push", false],
+    ["cd 'L' && cd - && git push", false],
+    ["true || cd 'L' && git push", false],
+    ["(true) || cd 'L' && git push", false],
+    ["if true; then cd 'L'; fi; git commit", false],
+    ["if true; then cd 'L' && git push; fi", false],
+    ["builtin cd 'L' && git commit -m x", false], // nicht sicher verfolgt: konservativ geblockt
+    ["command cd 'L' && git push", false],
+    ["git --git-dir=M/.git commit", false],
+    ["cd 'L' && git -C \"$X\" push", false],
+    ["cd 'L' && GIT_DIR=x git commit -m x", false],
+    ["cd 'L' && git --git-dir=x push", false],
+    // bewusst erlaubt
+    ["cd 'L' && git add -A && git commit -m x", true],
+    ["cd 'L'; git commit -m x", true],
+    ["cd 'L' && node x.mjs && git commit -m x", true],
+    ["(cd 'L' && git push)", true],
+    ["git -C 'L' push", true],
+    ["timeout 5 git -C 'L' push", true],
+    ['gh issue comment 1 --body "git push und git commit"', true],
+    ['gh pr create --body "$(cat <<\'EOF\'\ngit commit\nEOF\n)"', true],
+    ["cat > f <<'EOF'\ngit push\nEOF", true],
+    ["echo 'git push'", true],
+    ["git log --grep=push", true],
+    ["git stash push", true],
+    ["git status # git push", true],
+  ];
+
+  test("Differenz-Matrix aus Haupt-Checkout und Unterordner: nur bewusste Fälle gehen durch", { timeout: 120_000 }, () => {
+    const coarse = (c: string) => c.split(/&&|\|\||;|\n/).some((s) => /\bgit\b/.test(s) && /\b(commit|push)\b/.test(s)); // frühere Wortregel
+    for (const cwd of [main, sub]) {
+      for (const [roh, erlaubt] of MATRIX) {
+        const cmd = roh.replace(/'L'/g, `'${L()}'`).replace(/\bM\//g, `${slash(main)}/`);
+        assert.equal(blockt(cwd, cmd), !erlaubt, `${cwd}: ${cmd}`);
+        if (!erlaubt) assert.ok(coarse(cmd), `Matrix-Eintrag blockte schon früher: ${cmd}`);
+      }
+    }
+  });
+
+  test("Interpreter mit Heredoc/Pipe als Eingabe ist dokumentierte Restlücke (kein Zusicherungsfall)", () => {
+    assert.equal(blockt(main, "bash <<'EOF'\ngit push\nEOF"), false, "Restlücke, siehe FAQ und Kopfkommentar");
   });
 });
 

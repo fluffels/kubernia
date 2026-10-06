@@ -78,7 +78,7 @@ describe("Umsetzer-Abschluss (#1308)", () => {
     assert.notEqual(ohneTick, UMSETZER, "Muster tick muss treffen");
     assert.notEqual(ohneUntil, UMSETZER, "Muster until muss treffen");
     for (const md of [ohneTick, ohneUntil]) assert.deepEqual(abschlussProbleme(md), ["Monitor-Regel (until-Schleife, keine Zwischenmeldungen) fehlt"]);
-    assert.ok(abschlussProbleme(UMSETZER.replace(/Auf die CI wartest du[^\n]*/, "")).some((p) => p.includes("Monitor-Regel")));
+    assert.ok(abschlussProbleme(UMSETZER.replace(/Wartest du per `Monitor` auf die CI[^\n]*/, "")).some((p) => p.includes("Monitor-Regel")));
     assert.ok(abschlussProbleme(UMSETZER.replace(/^(tools:.*)\bTaskStop, /m, "$1")).some((p) => p.includes("Tool TaskStop")));
     assert.ok(abschlussProbleme(UMSETZER.replace(/^(tools:.*)\bMonitor, /m, "$1")).some((p) => p.includes("Tool Monitor")));
   });

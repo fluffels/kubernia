@@ -28,13 +28,16 @@
  *    Heredocs und Kommentaren ist kein Kommando. Ziel ist das Verzeichnis, in dem
  *    git liefe: Session-`cwd`, ein vorangestelltes `cd <pfad> &&` (nur existierender
  *    Ordner, nicht in Pipeline/bei `&`, Subshells isoliert) und `git -C <pfad>`.
- *  - Rückfall auf die alte grobe Regel (Wortsuche "git" + "commit"/"push") gegen das Session-
- *    `cwd`, wenn der Lexer nicht zerlegen kann, und je Kommando als Sicherheitsnetz, wenn
- *    dessen Worttext sie trifft (`bash -c "git push"`, `timeout 5 …`); ausgenommen reine
- *    Text-Kommandos (gh, echo, printf, cat, git). Bewusst konservativ: im Zweifel blocken.
+ *  - Rückfall auf die grobe Wortregel (Wortsuche "git" + "commit"/"push"): gegen das Session-
+ *    `cwd`, wenn der Lexer nicht zerlegen kann; je Kommando als Sicherheitsnetz gegen das
+ *    verfolgte Verzeichnis, wenn dessen Worttext sie trifft (`bash -c "git push"`,
+ *    `timeout 5 …`); ausgenommen reine Text-Kommandos (gh, echo, printf, cat, git). Text in
+ *    Heredoc-Bodies und Kommentaren zählt nie. Bewusst konservativ: im Zweifel blocken; ein
+ *    `cd`-Ziel, das nicht sicher gilt (bedingt, in Blöcken, hinter `then`/`{`), wird
+ *    zusätzlich als Ziel geprüft.
  *  - Restlücken (nicht erkannt): Aliase/Shell-Funktionen, `env -C`, Interpreter mit Heredoc/Pipe
- *    als Eingabe (`bash <<EOF`, `echo … | sh`), `git submodule foreach`/`rebase -x`, ein `cd`
- *    hinter `then`/`{`/`builtin`, ein vorher exportiertes `GIT_DIR`; das PowerShell-Tool deckt
+ *    als Eingabe (`bash <<EOF`, `echo … | sh`), `git submodule foreach`/`rebase -x`, ein
+ *    vorher exportiertes `GIT_DIR`; das PowerShell-Tool deckt
  *    der Hook nicht ab. `pushd`/`popd`, ein nicht verfolgbares `cd` und `--git-dir`/`GIT_DIR`
  *    wirken über das Session-`cwd` (zurücksetzen bzw. zusätzlich prüfen).
  *  - Fail-open bei Unsicherheit (kein cwd im Payload, cwd ist gar kein Git-Repo,
@@ -322,7 +325,7 @@ export function lexShell(command) {
 // ── git-Aufruf erkennen ─────────────────────────────────────────────────────
 const GIT_RE = /^(?:.*[\\/])?git(?:\.exe)?$/i;
 const FIND_RE = /^(?:.*[\\/])?find(?:\.exe)?$/i;
-const PREFIX_WORDS = new Set(["then", "do", "else", "elif", "if", "while", "until", "{", "!", "time", "command", "exec", "env", "nohup", "sudo", "xargs", "nice"]);
+const PREFIX_WORDS = new Set(["then", "do", "else", "elif", "if", "while", "until", "{", "!", "time", "command", "builtin", "exec", "env", "nohup", "sudo", "xargs", "nice"]);
 const EXEC_FLAGS = new Set(["-exec", "-execdir", "-ok", "-okdir"]);
 
 /** Index des Wortes, das den eigentlichen Befehl nennt (hinter Schlüsselwörtern,
@@ -422,6 +425,7 @@ export function protectedGitTargets(command, cwd, deps = {}) {
   if (!lexed.ok) return coarseProtected(command) ? [cwd] : [];
   const stat = deps.statSync ?? statSync;
   const targets = new Set();
+  const unverfolgt = new Set();
   const stack = [];
   let cur = cwd;
   let listStart = cwd;
@@ -446,18 +450,25 @@ export function protectedGitTargets(command, cwd, deps = {}) {
       continue;
     }
     const first = c.words[0].dynamic ? "" : c.words[0].text;
+    const ci = commandIndex(c.words);
+    const cmdWord = ci >= 0 && !c.words[ci].dynamic ? c.words[ci].text : "";
     const inv = gitInvocation(c.words);
     if (isProtectedInvocation(inv)) {
+      for (const d of unverfolgt) targets.add(d); // cd-Ziele, die nicht sicher galten: zusätzlich prüfen
       const dirs = inv.cDirs.map((w) => (w.dynamic || /^~|[{}]/.test(w.text) ? null : w.text));
       targets.add(resolve(dirs.reduce((d, w) => (w === null ? d : resolve(d, fromMsysPath(w))), cur)));
       // --git-dir/GIT_DIR oder ein nicht auflösbares -C können woanders hin zeigen: Session-cwd prüfen.
       if (inv.unsure || dirs.includes(null)) targets.add(resolve(cwd));
-    } else if (!inv && ["cd", "pushd", "popd"].includes(first) && !prevPiped && c.sep !== "|" && c.sep !== "&") {
+    } else if (!inv && ["cd", "pushd", "popd"].includes(cmdWord) && !prevPiped && c.sep !== "|" && c.sep !== "&") {
       // Ein cd gilt nur am Anfang seiner Liste, außerhalb von Blöcken und mit statischem, existierendem
-      // Ziel; alles andere (cd -, ~, pushd/popd, bedingt) setzt zurück auf das Session-cwd.
-      const t = first === "cd" && pure && depth === 0 ? cdTarget(c.words) : null;
+      // Ziel; alles andere (cd -, ~, pushd/popd, bedingt) setzt zurück auf das Session-cwd. Ein
+      // statisches, existierendes Ziel, das nicht sicher gilt, wird zusätzlich als Ziel geprüft.
+      const t = cdTarget(c.words.slice(ci));
       const dir = t === null ? null : resolve(cur, fromMsysPath(t));
-      cur = dir !== null && isDirectory(dir, stat) ? dir : cwd;
+      const existiert = dir !== null && isDirectory(dir, stat);
+      const wirksam = cmdWord === "cd" && ci === 0 && pure && depth === 0 && existiert;
+      if (existiert && !wirksam) unverfolgt.add(dir);
+      cur = wirksam ? dir : cwd;
     } else if (!inv && !TEXT_COMMANDS.has(first)) {
       const text = c.words.map((w) => w.text).join(" ");
       if (coarseProtected(text)) targets.add(resolve(cur));
@@ -508,7 +519,7 @@ export function resolveGitContext(cwd, repoRoot, deps = {}) {
 
   const commonDirRaw = run(cwd, ["rev-parse", "--git-common-dir"]);
   if (!commonDirRaw) return { relevant: false };
-  const commonDir = resolve(toplevel, commonDirRaw);
+  const commonDir = resolve(cwd, commonDirRaw); // git gibt den Pfad relativ zum Aufruf-Verzeichnis aus (`../.git` im Unterordner)
 
   if (normalizePath(commonDir) !== normalizePath(referenceCommonDir)) {
     return { relevant: false }; // cwd gehört zu einem anderen Repo — nicht unsere Sache

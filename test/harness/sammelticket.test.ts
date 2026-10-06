@@ -87,6 +87,7 @@ describe("Sammelticket-Position (#1276)", () => {
     assert.throws(() => positionAusAgentsMd("keine Zahl hier"));
     assert.throws(() => positionAusAgentsMd("Board-Position 6 und Position: 7"), "auch die Schreibweise mit Doppelpunkt zählt");
     assert.equal(positionAusAgentsMd("Board-Position: 6"), 6);
+    assert.match("Position: 6", POSITION_EINZELN, "auch die Einzel-Variante kennt den Doppelpunkt");
     assert.equal(positionAusAgentsMd("Board-Position 6"), 6);
   });
 });

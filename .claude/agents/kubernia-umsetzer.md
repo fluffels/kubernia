@@ -35,7 +35,7 @@ Befunde außerhalb des Tickets nach AGENTS.md § „Harness-Befunde sind Zeilen,
 
 ## Letzte Nachricht (festes Format)
 
-Vorher beendest du alle eigenen Hintergrund-Tasks (`Monitor`, `run_in_background`, CI-Watch) per `TaskStop`: ein weiterlaufender Task liefert sonst Meldungen nach, und der Bericht kommt mehrfach beim Aufrufer an. Auf die CI wartest du per `Monitor` nur mit einer until-Schleife, die einmal das Endergebnis ausgibt (keine periodischen Zwischenmeldungen wie „tick“), gestartet aus dem Hauptrepo mit absolutem Pfad.
+Vorher beendest du alle eigenen Hintergrund-Tasks (`Monitor`, `run_in_background`, CI-Watch) per `TaskStop`: ein weiterlaufender Task liefert sonst Meldungen nach, und der Bericht kommt mehrfach beim Aufrufer an. Wartest du per `Monitor` auf die CI, dann nur mit einer until-Schleife, die einmal das Endergebnis ausgibt (keine periodischen Zwischenmeldungen wie „tick“), gestartet aus dem Hauptrepo mit absolutem Pfad.
 
 ```
 ERGEBNIS: gemergt | entscheidung-noetig | festgefahren | abgebrochen
