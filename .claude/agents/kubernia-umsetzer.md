@@ -20,7 +20,7 @@ Der Prompt enthält Nummer, Titel, Body, den Plan des `kubernia-planner` und die
 ## Ablauf
 
 1. **Worktree** nach AGENTS.md § Kollisionsschutz bei parallelen Agenten (frisch von `origin/main`, darin einmal `npm ci`). Gibt es Worktree oder Branch zur Nummer schon, weiterverwenden: das ist eine Fortsetzung nach einem Abbruch.
-2. **Umsetzen** nach AGENTS.md § Tests, Verifikation, Sprache, Doku: TDD für Logik, Doku im selben Branch, `npm run verify` grün. Sicht-/spielbare Änderungen im Browser prüfen: du hast keine MCP-Tools, also headless Playwright gegen den Dev-Server ([FAQ](../../docs/agent-harness-faq.md)).
+2. **Umsetzen** nach AGENTS.md § Tests, Verifikation, Sprache, Doku: TDD für Logik, Doku im selben Branch, `npm run verify` grün. Sicht-/spielbare Änderungen im Browser prüfen: du hast keine MCP-Tools, also headless Playwright gegen den Dev-Server ([FAQ](../../docs/agent-harness-faq.md)); Zustand zuerst über `kqDev.state()`, Screenshot nur für die Optik.
 3. **Committen**, dann den vorgeladenen `review-lenses`-Ablauf fahren. Dessen „kein Auto-Merge" heißt nur: der Review selbst mergt nicht. Kannst du keine Lens spawnen (Agent-Tool fehlt, Spawn-Tiefe erreicht), **nicht inline selbst reviewen**, sondern `abgebrochen` melden: sonst bewertet der Umsetzer seine eigene Arbeit (AGENTS.md § Mehr-Perspektiven-Review). Bleiben nach Cap 2 Blocker: kein PR, `festgefahren` melden, Blocker und 2-3 Optionen in die Zusammenfassung.
 4. **PR bis zum Merge** nach AGENTS.md § Git, PR und Merge, inklusive § Human-in-the-Loop-Checkpoints (Label `maintainer-approved` selbst setzen, Audit-Kommentar) und § Festgefahren-Protokoll.
 5. **Aufräumen** nach § „Worktree entfernen auf Windows – zwei Fallen" und verifizieren, dass das Issue geschlossen ist.

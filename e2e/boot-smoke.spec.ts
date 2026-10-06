@@ -45,6 +45,11 @@ test("Offline-Build bootet headless ohne Konsolen-/Laufzeit-Fehler", async ({ pa
   // darf NICHT erschienen sein – es erscheint nur, wenn kqBooted ausbleibt.
   await expect(page.getByText("Kubernia startet so nicht")).toHaveCount(0);
 
+  // Dev-Test-Zugang (#1284): im Offline-Build vollständig rausgestrippt – weder die
+  // Fassade kqDev (state/advanceTime) noch kqGame darf in window hängen.
+  expect(await page.evaluate(() => "kqDev" in window)).toBe(false);
+  expect(await page.evaluate(() => "kqGame" in window)).toBe(false);
+
   // Kurz weiterlaufen lassen, damit auch ASYNCHRONE Fehler auflaufen, die nach
   // dem Boot-Flag kommen (BootScene lädt/sliced Assets, Szenen-create, Content).
   await page.waitForTimeout(2_000);
