@@ -10,3 +10,6 @@ export const SHELLS = new Set(["bash", "sh", "zsh", "dash", "ksh", "ash"]);
 
 /** Basisname eines Kommandowortes: Verzeichnis, `.exe` und Groß-/Kleinschreibung weg (`C:\Git\bin\Git.exe` → `git`). */
 export const baseName = (text) => text.replace(/\\/g, "/").split("/").pop().toLowerCase().replace(/\.exe$/, "");
+
+/** Programme, die einen Befehlstext ausführen (`-c`, `/c`, `-Command`): die POSIX-Shells, PowerShell und cmd. EINE Liste für die Guards. */
+export const INTERPRETER_NAMEN = [...SHELLS, "pwsh", "powershell", "cmd"];

@@ -107,6 +107,6 @@ describe("Ersetzungen $( … ) mitten im Segment", () => {
   test("Gegenprobe: lesend und Single Quotes; ein Backslash davor entschärft nichts", () => {
     laeuft("R=$(gh api repos/o/r/issues/1)");
     laeuft("echo '$(" + DEL + ")'");
-    fragt("echo $(" + DEL + ")"); // ungeprüftes Backslash-Verhalten: ein Backslash außerhalb von Quotes ist ein Pfadzeichen
+    fragt("echo \\$(" + DEL + ")"); // der Backslash davor entschärft nichts
   });
 });

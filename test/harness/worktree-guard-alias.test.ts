@@ -45,6 +45,12 @@ describe("Gültigkeit der -c-Aliase", () => {
     assert.ok(ziele("git -c alias.p='!git status' p; git p", konfig).length > 0);
   });
 
+  test("Vorrang: der -c des Aufrufs schlägt einen im selben Befehl gesetzten git config-Alias", () => {
+    assert.ok(ziele("git config alias.p status; git -c alias.p=push p").length > 0);
+    assert.ok(ziele("git config alias.p status && git -c alias.p=push p").length > 0);
+    assert.deepEqual(ziele("git config alias.p push; git -c alias.p=status p"), [], "umgekehrt: der -c-Alias auf status gilt");
+  });
+
   test("ein -c-Alias gilt für den inneren Aufruf des !-Aliases", () => {
     assert.ok(ziele("git -c alias.a='!git b' -c alias.b=push a").length > 0);
   });
@@ -54,5 +60,7 @@ describe("Umleitung >| ist kein Pipe-Trenner", () => {
   test("exakte Ziele: das Kommando hinter >| ist ein Dateiname, ein cd davor gilt weiter", () => {
     assert.deepEqual(ziele("echo a >| git push"), []);
     assert.deepEqual(analyse(`cd '${WT}' >| log; git push`, HAUPT, deps).targets, [WT]);
+    assert.deepEqual(analyse(`cd '${WT}' >|log; git push`, HAUPT, deps).targets, [WT], "angehängte Form");
+    assert.deepEqual(analyse(`cd '${WT}' 2>|log; git push`, HAUPT, deps).targets, [WT], "mit Dateideskriptor");
   });
 });

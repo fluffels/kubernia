@@ -37,7 +37,7 @@
  */
 import { MAX_INTERPRETER, buildAskOutput, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
 import { quoteFolge } from "./quote-folge.mjs";
-import { SHELLS, baseName } from "./shell-tabellen.mjs";
+import { INTERPRETER_NAMEN, SHELLS, baseName } from "./shell-tabellen.mjs";
 
 export { buildAskOutput, parseHookInput };
 
@@ -160,11 +160,11 @@ function wortWert(roh) {
 /** Basisname des Kommandowortes (`/usr/bin/gh`, `'gh'`, `C:\Windows\cmd.exe`): Quotes außen entfernen, der Rest bleibt roh (ein `\` ist hier ein Pfadtrenner). */
 const kommandoName = (roh) => baseName(roh.replace(/^['"]|['"]$/g, ""));
 
-const GH_BARE = /(^|[^\w.\\/-])((?:[\w.:~-]*[\\/])*gh(?:\.exe)?)\s+(?:api\b|(['"])\uE000*\3)/g;
+const GH_BARE = /(^|[^\w.:~\\/-])((?:[\w.:~-]*[\\/])*gh(?:\.exe)?)\s+(?:api\b|(['"])\uE000*\3)/g;
 const GH_QUOTE = /(^|[^\w])(['"])\uE000*\2\s+(?:api\b|(['"])\uE000*\3)/g;
 const GH_QUOTE_ORIGINAL = /^(['"])(?:[^'"]*[\\/])?gh(?:\.exe)?\1\s/;
-const INTERPRETER_STELLE = /(^|[^\w.\\/-])((?:[\w.:~-]*[\\/])*(?:bash|sh|zsh|dash|ksh|ash|pwsh|powershell|cmd)(?:\.exe)?)\s/gi;
-const EVAL_STELLE = /(^|[^\w.\\/-])(?:eval|iex|Invoke-Expression)\b/i;
+const INTERPRETER_STELLE = new RegExp(String.raw`(^|[^\w.:~\\/-])((?:[\w.:~-]*[\\/])*(?:${INTERPRETER_NAMEN.join("|")})(?:\.exe)?)\s`, "gi");
+const EVAL_STELLE = /(^|[^\w.:~\\/-])(?:eval|iex|Invoke-Expression)\b/i;
 
 /** Startindizes (im Originaltext) von `gh api` an beliebiger Stelle außerhalb von Quotes; das zweite Wort wird geprüft (`gh 'api'`). */
 function ghStellen(text, maske) {
@@ -289,13 +289,19 @@ function interpreterString(aufruf) {
   return v === undefined ? null : { roh: v, wert: wortWert(v) };
 }
 
-/** Dynamisches Kommando am Segmentanfang (`$CMD`, `& $c api …`, `. $c`) neben `gh api`. */
-const dynamischesKommando = (segment) => /^[\s(!{&.]*\$\{?\w+\}?(?![\w:]|\s*=)/.test(segment) && !/^\s*\$\w[\w:]*\s*=/.test(segment);
+/** Dynamisches Kommando neben `gh api`: `$c api …` (die Variable steht für `gh`), `& $c`/`. $c` (PowerShell-Aufruf) oder ein
+ *  alleinstehendes `$CMD`, dem im selben Befehl ein String mit `api` zugewiesen wurde (`CMD="gh api …"; $CMD`). In PowerShell
+ *  führt ein bloßes `$x` nichts aus, darum zählt es dort ohne Zuweisung eines solchen Strings nicht. */
+function dynamischesKommando(segment, maske, command) {
+  if (/(^|[\s(!{&.])\$\{?\w+\}?\s+api\b/.test(maske) || /(^|[\s(!{])[&.]\s*\$\{?\w+/.test(maske)) return true;
+  const alleine = /^[\s(!{]*\$\{?(\w+)\}?[\s)}]*$/.exec(maske);
+  return alleine !== null && new RegExp(String.raw`\b${alleine[1]}\s*=\s*['"][^'"]*\bapi\b`).test(command);
+}
 
 /** Ein Segment, in einem Befehl, der `gh api` irgendwo enthält: Interpreter-Strings (rekursiv), eval/iex, dynamisches Kommando. */
-function umweg(segment, maske, tiefe) {
+function umweg(segment, maske, tiefe, command) {
   if (EVAL_STELLE.test(maske)) return frage("`eval`/`iex` neben `gh api`: der zusammengesetzte Aufruf ist nicht prüfbar");
-  if (dynamischesKommando(segment)) return frage("dynamisches Kommando ($CMD) neben `gh api`: der Aufruf ist nicht prüfbar");
+  if (dynamischesKommando(segment, maske, command)) return frage("dynamisches Kommando ($CMD) neben `gh api`: der Aufruf ist nicht prüfbar");
   if (tiefe >= MAX_INTERPRETER) return null;
   const stellen = interpreterStellen(maske);
   if (stellen.length > STELLEN_MAX) return frage("zu viele Interpreter-Aufrufe für die Textprüfung");
@@ -320,7 +326,7 @@ function ersetzung(segment, tiefe) {
 }
 
 /** Ein Segment bewerten: jedes offene `gh api` (Außenwirkung), dann Umwege und Ersetzungen. */
-function segmentUrteil(segment, hatGhApi, tiefe) {
+function segmentUrteil(segment, command, tiefe) {
   const maske = ohneQuoteInhalt(segment);
   const stellen = ghStellen(segment, maske);
   if (stellen.length > STELLEN_MAX) return frage("zu viele gh-api-Aufrufe für die Textprüfung");
@@ -328,8 +334,29 @@ function segmentUrteil(segment, hatGhApi, tiefe) {
     const r = ghApiAufruf(segment.slice(start));
     if (r) return r;
   }
-  if (!hatGhApi) return null;
-  return umweg(segment, maske, tiefe) ?? ersetzung(segment, tiefe);
+  return umweg(segment, maske, tiefe, command) ?? ersetzung(segment, tiefe);
+}
+
+const HEREDOC = /<<-?[ \t]*(?:'(\w+)'|"(\w+)"|\\(\w+))/g;
+const KONSUMENT = new RegExp(String.raw`(^|[^\w.:~\\/-])(?:${INTERPRETER_NAMEN.join("|")}|eval|source|iex)(?:\.exe)?\b`, "i");
+
+/** Entfernt die Bodies von Heredocs mit gequotetem Begrenzer (`<<'EOF'`: reiner Text), außer die Zeile reicht ihn an einen
+ *  Interpreter weiter (`bash <<'EOF'`, `cat <<'EOF' | sh`, `eval`, `source`). Commit-/PR-Texte, die `gh api` nur erwähnen, fragen so nicht. */
+function ohneDatenHeredocs(text) {
+  let out = "";
+  let pos = 0;
+  for (const m of text.matchAll(HEREDOC)) {
+    if (m.index < pos) continue;
+    const zeilenEnde = text.indexOf("\n", m.index);
+    if (zeilenEnde < 0) break;
+    const zeilenStart = text.lastIndexOf("\n", m.index) + 1;
+    if (KONSUMENT.test(text.slice(zeilenStart, zeilenEnde))) continue;
+    const ende = new RegExp(String.raw`^\t*${m[1] ?? m[2] ?? m[3]}[ \t]*$`, "m").exec(text.slice(zeilenEnde + 1));
+    if (!ende) continue;
+    out += text.slice(pos, zeilenEnde + 1);
+    pos = zeilenEnde + 1 + ende.index + ende[0].length;
+  }
+  return out + text.slice(pos);
 }
 
 /** Bewertet einen Befehl: `{ ask: true, reason }` bei einem `gh api` mit Außenwirkung oder nicht prüfbarem Inhalt
@@ -338,10 +365,11 @@ function segmentUrteil(segment, hatGhApi, tiefe) {
  *  strengere Ergebnis gilt. Fortsetzungen werden vor den Textprüfungen zu Leerzeichen. */
 export function bewerte(command, tiefe = 0) {
   if (!command || typeof command !== "string") return { ask: false };
-  const hatGhApi = /\bgh(?:\.exe)?\b/.test(command) && /\bapi\b/.test(command);
-  if (hatGhApi && command.length > LAENGE_MAX) return frage("der Befehl ist für die Textprüfung zu lang");
-  for (const roh of new Set([...segmente(command, true), ...segmente(command, false)])) {
-    const r = segmentUrteil(ohneFortsetzung(roh), hatGhApi, tiefe);
+  if (!(/\bgh(?:\.exe)?\b/.test(command) && /\bapi\b/.test(command))) return { ask: false }; // ohne gh und api kann nichts davon zutreffen
+  if (command.length > LAENGE_MAX) return frage("der Befehl ist für die Textprüfung zu lang");
+  const text = ohneDatenHeredocs(command);
+  for (const roh of new Set([...segmente(text, true), ...segmente(text, false)])) {
+    const r = segmentUrteil(ohneFortsetzung(roh), text, tiefe);
     if (r) return r;
   }
   return { ask: false };

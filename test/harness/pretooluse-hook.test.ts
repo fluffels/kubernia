@@ -133,6 +133,20 @@ describe("Verdrahtung (#1311)", () => {
     assert.equal(ghAufrufe, 0);
   });
 
+  test("bei einer Rückfrage (kein deny) wird der gh-Guard weiter gefragt, seine Begründung bleibt erhalten", () => {
+    let ghAufrufe = 0;
+    const gh = () => {
+      ghAufrufe++;
+      return { ask: true, reason: "gh-Grund" };
+    };
+    const fragtWorktree = () => ({ block: false, ask: true, reason: "worktree-Grund" });
+    const nichts = () => ({ block: false });
+    assert.equal(hook.dispatch(payload("Bash", "x"), WURZEL, { decide: nichts, bewertePowerShell: nichts, bewerteGh: gh })?.hookSpecificOutput.permissionDecisionReason, "gh-Grund");
+    assert.equal(ghAufrufe, 1);
+    assert.equal(hook.dispatch(payload("Bash", "x"), WURZEL, { decide: fragtWorktree, bewertePowerShell: nichts, bewerteGh: gh })?.hookSpecificOutput.permissionDecision, "ask");
+    assert.equal(ghAufrufe, 2, "auch bei einer Worktree-Frage läuft der gh-Guard");
+  });
+
   test("ein werfender Guard legt den anderen nicht lahm", () => {
     const wirft = () => {
       throw new Error("kaputt");

@@ -33,14 +33,14 @@
 import { statSync } from "node:fs";
 import { dirname, resolve, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
-import { analyse, resolveGitContext } from "./worktree-guard-hook.mjs";
-import { SHELLS } from "./shell-tabellen.mjs"; // eine Quelle für Entscheidung und Bash-Auswertung
+import { analyse, resolveGitContext } from "./worktree-guard-hook.mjs"; // eine Quelle für Entscheidung und Bash-Auswertung
+import { SHELLS } from "./shell-tabellen.mjs";
 import { MAX_INTERPRETER, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
 
 export { parseHookInput };
 
 const ORT_BEFEHLE = new Set(["set-location", "cd", "sl", "chdir", "push-location", "pushd"]);
-const INTERPRETER = new Set(["iex", "invoke-expression", "pwsh", "pwsh.exe", "powershell", "powershell.exe", "cmd", "cmd.exe", "bash", "sh", "wsl", "start-process", "start", "invoke-command", "icm"]);
+const INTERPRETER = new Set([...SHELLS, "iex", "invoke-expression", "pwsh", "pwsh.exe", "powershell", "powershell.exe", "cmd", "cmd.exe", "wsl", "start-process", "start", "invoke-command", "icm"]);
 const GESCHUETZT = new Set(["commit", "push"]);
 
 /** Ein Token: `value` ohne Anführungszeichen, `literal` = komplett aus '…' (keine Variablen-Ersetzung). */
