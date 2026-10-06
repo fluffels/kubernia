@@ -28,9 +28,11 @@
  *    Heredocs und Kommentaren ist kein Kommando. Ziel ist das Verzeichnis, in dem
  *    git liefe: Session-`cwd`, ein vorangestelltes `cd <pfad> &&` (nur existierender
  *    Ordner, nicht in Pipeline/bei `&`, Subshells isoliert) und `git -C <pfad>`.
- *  - Rückfall auf die alte grobe Regel (Wortsuche "git" + "commit"/"push" je Segment)
- *    gegen das Session-`cwd`, wenn der Lexer nicht zerlegen kann oder ein Interpreter
- *    (`bash -c`, `eval`, `source`) den Befehl verbirgt: keine neuen False Negatives.
+ *  - Rückfall auf die alte grobe Regel (Wortsuche "git" + "commit"/"push") gegen das Session-
+ *    `cwd`, wenn der Lexer nicht zerlegen kann, und je Kommando als Sicherheitsnetz, wenn
+ *    dessen Worttext sie trifft (`bash -c "git push"`, `timeout 5 …`); ausgenommen reine
+ *    Text-Kommandos (gh, echo, printf, cat, git). Ziel ist, keine Fälle durchzulassen, die
+ *    die alte Regel blockte; Restlücken: siehe unten.
  *  - Nicht erkannt: Aliase/Shell-Funktionen, `env -C`; `pushd`/`popd` und ein nicht
  *    verfolgbares `cd` setzen auf das Session-`cwd` zurück; `--git-dir`/`GIT_DIR` prüfen
  *    zusätzlich das Session-`cwd`; das PowerShell-Tool deckt der Hook nicht ab.
@@ -320,7 +322,6 @@ const GIT_RE = /^(?:.*[\\/])?git(?:\.exe)?$/i;
 const FIND_RE = /^(?:.*[\\/])?find(?:\.exe)?$/i;
 const PREFIX_WORDS = new Set(["then", "do", "else", "elif", "if", "while", "until", "{", "!", "time", "command", "exec", "env", "nohup", "sudo", "xargs", "nice"]);
 const EXEC_FLAGS = new Set(["-exec", "-execdir", "-ok", "-okdir"]);
-const INTERPRETER_RE = /^(?:.*[\\/])?(?:bash|sh|zsh|dash|ksh|fish|pwsh|powershell|cmd|node|nodejs|python[\d.]*|perl|ruby|php|deno|bun|npx)(?:\.exe)?$/i;
 
 /** Index des Wortes, das den eigentlichen Befehl nennt (hinter Schlüsselwörtern,
  *  Zuweisungen und Wrappern wie `env`/`xargs`/`find -exec`); -1 wenn keiner. */
@@ -351,7 +352,7 @@ export function gitInvocation(words) {
     if (i < 0) return null;
   }
   const cDirs = [];
-  let unsure = false;
+  let unsure = words.slice(0, i).some((w) => /^GIT_(DIR|WORK_TREE)=/.test(w.text));
   let j = i + 1;
   while (j < words.length) {
     const t = words[j].text;
@@ -375,20 +376,8 @@ export function gitInvocation(words) {
 const PROTECTED_SUBS = new Set(["commit", "push"]);
 const isProtectedInvocation = (inv) => inv !== null && PROTECTED_SUBS.has(inv.sub ?? "");
 
-/** Ein Interpreter (`bash -c`, `eval`, `source` …) verbirgt den eigentlichen
- *  Befehl in einem String: dann gilt die alte grobe Regel. */
-function usesInterpreter(cmds) {
-  return cmds.some((c) => {
-    const i = commandIndex(c.words);
-    if (i < 0) return false;
-    const t = c.words[i].text;
-    return INTERPRETER_RE.test(t) || t === "eval" || t === "source" || t === ".";
-  });
-}
-
 /** True, wenn `command` einen echten `git commit`/`git push` ausführt. Text in
- *  Quotes, Heredoc-Bodies und Kommentaren zählt nicht. Nicht zerlegbar oder mit
- *  Interpreter: alte grobe Regel (keine neuen False Negatives). */
+ *  Quotes, Heredoc-Bodies und Kommentaren zählt nicht; Sicherheitsnetz siehe `protectedGitTargets`. */
 export function isProtectedGitCommand(command) {
   return protectedGitTargets(command, ".", { statSync: () => ({ isDirectory: () => false }) }).length > 0;
 }
@@ -415,46 +404,64 @@ function isDirectory(path, stat) {
   }
 }
 
+const OPENERS = new Set(["if", "for", "while", "until", "case", "select", "{"]);
+const CLOSERS = new Set(["fi", "done", "esac", "}"]);
+/** Reine Text-Kommandos: ein Wortpaar "git commit/push" darin ist kein Aufruf. */
+const TEXT_COMMANDS = new Set(["gh", "echo", "printf", "cat", "git"]);
+
 /** Verzeichnisse, in denen `git commit`/`git push` aus `command` liefen (Session-`cwd`,
- *  verfolgtes `cd`, `git -C`); leer ohne solchen Aufruf. Rückfall: `[cwd]` bei grobem Treffer. */
+ *  verfolgtes `cd`, `git -C`); leer ohne solchen Aufruf. Nicht zerlegbar: `[cwd]` bei grobem
+ *  Treffer. Sicherheitsnetz je Kommando: trifft der Worttext eines Kommandos (außer reinen
+ *  Text-Kommandos) die grobe Regel, etwa `bash -c "git push"` oder `timeout 5 bash -c …`,
+ *  gilt das verfolgte Verzeichnis als Ziel. */
 export function protectedGitTargets(command, cwd, deps = {}) {
   if (!command) return [];
   const lexed = lexShell(command);
-  if (!lexed.ok || usesInterpreter(lexed.cmds)) return coarseProtected(command) ? [cwd] : [];
+  if (!lexed.ok) return coarseProtected(command) ? [cwd] : [];
   const stat = deps.statSync ?? statSync;
   const targets = new Set();
   const stack = [];
   let cur = cwd;
   let listStart = cwd;
+  let pure = true; // in dieser Und-Oder-Liste kam bisher nur `cd` (nur dann gilt ein `cd` sicher)
+  let depth = 0; // offene Blöcke (if/for/while/case/{)
   let prevPiped = false;
-  let prevSep = "";
   for (const c of lexed.cmds) {
     if (c.boundary === "(") {
-      stack.push({ cur, listStart });
+      stack.push({ cur, listStart, pure });
       listStart = cur;
       continue;
     }
     if (c.boundary === ")") {
-      ({ cur, listStart } = stack.pop() ?? { cur, listStart });
+      ({ cur, listStart, pure } = stack.pop() ?? { cur, listStart, pure });
       continue;
     }
+    const first = c.words[0].dynamic ? "" : c.words[0].text;
     const inv = gitInvocation(c.words);
     if (isProtectedInvocation(inv)) {
-      targets.add(inv.cDirs.reduce((d, w) => (w.dynamic ? d : resolve(d, fromMsysPath(w.text))), cur));
-      // --git-dir/--work-tree/GIT_DIR können woanders hin zeigen: zusätzlich das Session-cwd prüfen.
-      if (inv.unsure || c.words.some((w) => /^GIT_(DIR|WORK_TREE)=/.test(w.text))) targets.add(cwd);
-    } else if (!inv && !c.words[0].dynamic && ["cd", "pushd", "popd"].includes(c.words[0].text) && !prevPiped && c.sep !== "|" && c.sep !== "&") {
-      // Ein cd, das nicht verfolgbar ist (dynamisch, `-`, `~`, pushd/popd, fehlender Ordner, bedingt),
-      // setzt zurück auf das Session-cwd: lieber blocken als ein altes Ziel behalten.
-      const bedingt = (prevSep === "&&" || prevSep === "||") && [";", "\n", ""].includes(c.sep);
-      const t = c.words[0].text === "cd" && !bedingt ? cdTarget(c.words) : null;
+      const dirs = inv.cDirs.map((w) => (w.dynamic || /^~|[{}]/.test(w.text) ? null : w.text));
+      targets.add(resolve(dirs.reduce((d, w) => (w === null ? d : resolve(d, fromMsysPath(w))), cur)));
+      // --git-dir/GIT_DIR oder ein nicht auflösbares -C können woanders hin zeigen: Session-cwd prüfen.
+      if (inv.unsure || dirs.includes(null)) targets.add(resolve(cwd));
+    } else if (!inv && ["cd", "pushd", "popd"].includes(first) && !prevPiped && c.sep !== "|" && c.sep !== "&") {
+      // Ein cd gilt nur am Anfang seiner Liste, außerhalb von Blöcken und mit statischem, existierendem
+      // Ziel; alles andere (cd -, ~, pushd/popd, bedingt) setzt zurück auf das Session-cwd.
+      const t = first === "cd" && pure && depth === 0 ? cdTarget(c.words) : null;
       const dir = t === null ? null : resolve(cur, fromMsysPath(t));
       cur = dir !== null && isDirectory(dir, stat) ? dir : cwd;
+    } else if (!inv && !TEXT_COMMANDS.has(first)) {
+      const text = c.words.map((w) => w.text).join(" ");
+      if (coarseProtected(text)) targets.add(resolve(cur));
     }
+    if (OPENERS.has(first)) depth++;
+    else if (CLOSERS.has(first)) depth = Math.max(0, depth - 1);
+    pure = pure && first === "cd" && c.sep === "&&";
     prevPiped = c.sep === "|";
-    prevSep = c.sep;
     if (c.sep === "&") cur = listStart; // Hintergrund-Liste lief in einer Subshell
-    if (c.sep === "&" || c.sep === ";" || c.sep === "\n" || c.sep === "") listStart = cur;
+    if (c.sep === "&" || c.sep === ";" || c.sep === "\n" || c.sep === "") {
+      listStart = cur;
+      pure = true;
+    }
   }
   return [...targets];
 }

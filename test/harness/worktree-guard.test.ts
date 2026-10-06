@@ -384,7 +384,21 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
       assert.equal(run(`cd '${wt}' && ${mitte} && git push`), true, mitte);
     }
     assert.equal(run(`false && cd '${wt}'; git push`), true, "bedingtes cd");
+    assert.equal(run(`false && cd '${wt}' && echo x; git push`), true, "cd mitten in der Liste");
+    assert.equal(run(`true || cd '${wt}' && git push`), true, "cd hinter ||");
+    assert.equal(run(`if false; then\ncd '${wt}'\nfi\ngit push`), true, "cd in einem Block");
+    assert.equal(run(`cd '${wt}' && node scripts/x.mjs && npx vitest run && git commit -m x`), false, "Interpreter in der Kette");
+    assert.equal(run(`cd '${wt}' && echo git push`), false, "reiner Text");
     assert.equal(run(`cd '${wt}' && git -C sub push && git push`), false);
+  });
+
+  test("Wrapper vor Interpretern und nicht auflösbares -C bleiben geblockt", () => {
+    for (const cmd of ['timeout 60 bash -c "git push"', 'winpty bash -c "git commit -m x"', 'su -c "git push"', 'py -c "os.system(\'git push\')"', 'git -C ~ push', 'git -C "$MAIN" push', 'xargs -I{} git -C {} push']) {
+      assert.equal(run(cmd), true, cmd);
+    }
+    assert.equal(run(`git -C '${wt}' commit -m "GIT_DIR=x"`), false, "GIT_DIR nur als Zuweisung vor git");
+    assert.equal(run(`cd '${wt}' && git -C "$MAIN" push`), true, "dynamisches -C trotz cd");
+    assert.equal(run(`timeout 5 git -C '${wt}' push`), false, "Wrapper: -C wird trotzdem ausgewertet");
   });
 
   test("--git-dir und GIT_DIR prüfen zusätzlich das Session-cwd", () => {
