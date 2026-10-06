@@ -36,7 +36,7 @@ type CheckDiffCoverageModule = {
   parseDiffLines: (text: string) => Changed;
   parseLcov: (text: string) => Lcov;
   evaluateByLayer: (changed: Changed, lcov: Lcov, floors?: Record<string, number | null>) => Verdict;
-  overrideReason: (env?: Env) => string | null;
+  OVERRIDE_KEY: string;
   checkDiffCoverage: (opts: { runGit: RunGit; readFile?: (p: string) => string; env?: Env }) => Record<string, unknown>;
 };
 
@@ -54,9 +54,17 @@ const {
   parseDiffLines,
   parseLcov,
   evaluateByLayer,
-  overrideReason,
+  OVERRIDE_KEY,
   checkDiffCoverage,
 } = checkCovRaw as CheckDiffCoverageModule;
+
+/** Hängt an einen Fake-git einen Slice-Commit mit `line` als Message (Override-Trailer, #1269). */
+function mitTrailer(runGit: RunGit, line: string): RunGit {
+  return (args) => (args[0] === "log" ? `chore: bewusst
+
+${line}
+` : runGit(args));
+}
 
 /** Minimaler `git diff -U0`-Ausschnitt bzw. lcov-Block für eine Datei. */
 function diffFor(path: string, hunks: string[]): string {
@@ -275,10 +283,15 @@ describe("Diff-Coverage: Floors + Override (Ratchet-Disziplin)", () => {
     assert.equal(isMeasured("scripts/check-size.mjs"), false);
   });
 
-  test("leeres/whitespace-Override zählt nicht — Pflicht-Begründung", () => {
-    assert.equal(overrideReason({}), null);
-    assert.equal(overrideReason({ KQ_DIFFCOV_OVERRIDE: "   " }), null);
-    assert.equal(overrideReason({ KQ_DIFFCOV_OVERRIDE: " #1021 warum " }), "#1021 warum");
+  test("eigener Override-Schlüssel (#1269): ein Diffsize-Trailer gilt hier nicht", () => {
+    assert.equal(OVERRIDE_KEY, "KQ-Diffcov-Override");
+    const runGit = mitTrailer(
+      (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
+      "KQ-Diffsize-Override: #1021 falsches Gate",
+    );
+    const r = checkDiffCoverage({ runGit, readFile: () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 }), env: { KQ_DIFF_BASE: "basesha" } });
+    assert.equal(r.allowed, false);
+    assert.equal(r.failed, true);
   });
 });
 
@@ -316,19 +329,47 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     const rot = checkDiffCoverage({ runGit, readFile, env: { KQ_DIFF_BASE: "basesha" } });
     assert.equal(rot.failed, true);
     const geduldet = checkDiffCoverage({
-      runGit,
+      runGit: mitTrailer(runGit, "KQ-Diffcov-Override: #1021 bewusst"),
       readFile,
-      env: { KQ_DIFF_BASE: "basesha", KQ_DIFFCOV_OVERRIDE: "#1021 bewusst" },
+      env: { KQ_DIFF_BASE: "basesha" },
     });
     assert.equal(geduldet.failed, false);
     assert.equal(geduldet.allowed, true);
+    assert.equal(geduldet.reason, "#1021 bewusst");
+  });
+
+  test("die alte Env KQ_DIFFCOV_OVERRIDE lässt NICHTS mehr durch (kam in der PR-CI nie an)", () => {
+    const r = checkDiffCoverage({
+      runGit: (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
+      readFile: () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 }),
+      env: { KQ_DIFF_BASE: "basesha", KQ_DIFFCOV_OVERRIDE: "#1021 bewusst" },
+    });
+    assert.equal(r.allowed, false);
+    assert.equal(r.failed, true);
+    assert.equal(r.legacyEnv, true);
+  });
+
+  test("ungültige Override-Zeile (ohne #<nr>) lässt nichts durch und wird gemeldet", () => {
+    const r = checkDiffCoverage({
+      runGit: mitTrailer(
+        (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
+        "KQ-Diffcov-Override: einfach so",
+      ),
+      readFile: () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 }),
+      env: { KQ_DIFF_BASE: "basesha" },
+    });
+    assert.equal(r.allowed, false);
+    assert.deepEqual(r.invalidOverrides, ["KQ-Diffcov-Override: einfach so"]);
   });
 
   test("gesetztes Override bei grünem Slice wird als STALE gemeldet (rot)", () => {
     const r = checkDiffCoverage({
-      runGit: (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
+      runGit: mitTrailer(
+        (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
+        "KQ-Diffcov-Override: #1021 unnötig",
+      ),
       readFile: () => lcovOk,
-      env: { KQ_DIFF_BASE: "basesha", KQ_DIFFCOV_OVERRIDE: "#1021 unnötig" },
+      env: { KQ_DIFF_BASE: "basesha" },
     });
     assert.equal(r.stale, true);
     assert.equal(r.failed, true);
@@ -346,9 +387,12 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
 
   test("ein Messfehler (missing) ist NICHT über das Override abkürzbar — nur neu messen hilft", () => {
     const r = checkDiffCoverage({
-      runGit: (args) => (args[0] === "diff" ? diffFor("src/sim/versteckt.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
+      runGit: mitTrailer(
+        (args) => (args[0] === "diff" ? diffFor("src/sim/versteckt.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha"),
+        "KQ-Diffcov-Override: #1021 durchwinken",
+      ),
       readFile: () => lcovFor("src/sim/andere.ts", { 1: 1 }),
-      env: { KQ_DIFF_BASE: "basesha", KQ_DIFFCOV_OVERRIDE: "#1021 durchwinken" },
+      env: { KQ_DIFF_BASE: "basesha" },
     });
     assert.equal(r.failed, true);
     assert.equal(r.allowed, false);

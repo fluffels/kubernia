@@ -31,11 +31,17 @@
  *    origin/main == HEAD) degradiert der Check bewusst zu GRÜN (No-op), statt `main`
  *    rot zu machen — kein falsches Rot.
  *
- * Override mit Pflicht-Begründung (gleiches Muster wie die check-size-ALLOWLIST,
- * inkl. stale-Meldung): ein bewusst breiter Slice (z.B. ein großer God-File-Split)
- * darf über `KQ_DIFFSIZE_OVERRIDE="<Begründung>"` durchgelassen werden. Ist das
- * Override gesetzt, der Diff aber gar nicht über Budget, wird das Override als
- * STALE gemeldet (rot) — genau wie ein stale check-size-Eintrag.
+ * Override mit Pflicht-Begründung (#1269, gleiches Muster wie die check-size-ALLOWLIST,
+ * inkl. stale-Meldung): ein bewusst breiter Slice (z.B. ein großer God-File-Split) wird
+ * über eine Zeile `KQ-Diffsize-Override: #<nr> <warum>` am Zeilenanfang einer Commit-
+ * Message IM SLICE durchgelassen (am besten ein eigener leerer Commit). Gelesen wird
+ * `git log <basis>..HEAD` mit derselben Basis wie der Diff. So wirkt derselbe Mechanismus
+ * lokal, im PR (der Merge-Checkout enthält die PR-Commits) und auf push:main (der
+ * Squash-Commit trägt die Branch-Messages, Repo-Einstellung
+ * squash_merge_commit_message = COMMIT_MESSAGES). Eine Env-Variable kam in der PR-CI nie
+ * an (lokal grün, CI rot) und wird darum nicht mehr ausgewertet. Ist der Trailer gesetzt,
+ * der Diff aber gar nicht über Budget, wird er als STALE gemeldet (rot) — genau wie ein
+ * stale check-size-Eintrag.
  *
  * Reines Node-Skript (nur Builtins). Die Mess-/Bewertungslogik ist als pure,
  * git-freie Funktionen exportiert und wird von test/diffsize.test.ts importiert —
@@ -123,12 +129,41 @@ export function evaluate({ fileCount, changedLines }, { maxFiles, maxLines }) {
   return { overFiles, overLines, over: overFiles || overLines };
 }
 
-/** Eine Override-Begründung zählt nur, wenn sie nicht leer/whitespace ist —
- *  so lässt sich ein zu breiter Slice NICHT ohne echte Begründung stillstellen
- *  (Pflicht-Begründung). Gibt die getrimmte Begründung oder null zurück. */
-export function overrideReason(env = process.env) {
-  const r = (env.KQ_DIFFSIZE_OVERRIDE ?? "").trim();
-  return r === "" ? null : r;
+/** Schlüssel des Override-Trailers für dieses Gate (#1269). */
+export const OVERRIDE_KEY = "KQ-Diffsize-Override";
+
+/** Sucht Zeilen `<key>: <wert>` am ZEILENANFANG (nicht eingerückt, nicht in Prosa) in
+ *  beliebigem Message-Text. Bewusst kein git-Trailer-Parser: im Squash-Body steht die
+ *  Zeile mitten im Text, gefolgt von weiteren `* commit`-Absätzen. Gültig ist ein Wert nur
+ *  mit Ticketnummer UND Begründung (`#<nr> <warum>`, Pflicht-Begründung), sonst landet die
+ *  Zeile in `invalid`. `key` ist eine feste Konstante ohne Regex-Sonderzeichen. Pure, auch
+ *  von check-diffcoverage.mjs mit eigenem Schlüssel genutzt. */
+export function parseOverrideTrailers(text, key) {
+  const valid = [];
+  const invalid = [];
+  const re = new RegExp(`^${key}:[ \\t]*(.*)$`, "gm");
+  for (const m of String(text).replace(/\r/g, "").matchAll(re)) {
+    const value = m[1].trim();
+    const ok = /^#(\d+)\s+\S/.exec(value);
+    if (ok) valid.push({ nr: Number(ok[1]), reason: value });
+    else invalid.push(m[0].trim());
+  }
+  return { valid, invalid };
+}
+
+/** Override für `key` aus den Commit-Messages des Slices (`<basis>..HEAD`, dieselbe Basis
+ *  wie der Diff, damit kein fremder main-Commit einen Trailer einschleppt). Die letzte
+ *  gültige Zeile zählt. Scheitert git, gibt es keinen Override (fail-closed: ein Slice
+ *  über Budget bleibt dann rot). */
+export function sliceOverride(runGit, base, key) {
+  let messages;
+  try {
+    messages = runGit(["log", "--format=%B", `${base}..HEAD`]);
+  } catch {
+    messages = "";
+  }
+  const { valid, invalid } = parseOverrideTrailers(messages, key);
+  return { reason: valid.length > 0 ? valid[valid.length - 1].reason : null, invalid };
 }
 
 /** Löst die Vergleichs-Basis auf (Commit, gegen den der Diff gemessen wird).
@@ -196,7 +231,7 @@ export function checkDiffSize({ runGit, env = process.env } = {}) {
   const fileCount = files.length;
   const changedLines = files.reduce((s, f) => s + f.added + f.deleted, 0);
   const { overFiles, overLines, over } = evaluate({ fileCount, changedLines }, thresholds);
-  const reason = overrideReason(env);
+  const { reason, invalid } = sliceOverride(git, base, OVERRIDE_KEY);
 
   return {
     skipped: false,
@@ -212,6 +247,8 @@ export function checkDiffSize({ runGit, env = process.env } = {}) {
     reason,
     allowed: over && reason !== null, // bewusst durchgelassen
     stale: !over && reason !== null, // Override unnötig → melden
+    invalidOverrides: invalid,
+    legacyEnv: (env.KQ_DIFFSIZE_OVERRIDE ?? "").trim() !== "", // alte Env: nur noch Hinweis
   };
 }
 
@@ -242,11 +279,20 @@ function main() {
     console.log(dim(`• ${r.excludedCount} generierte(s) Lockfile(s) nicht mitgezählt (#612).`));
   }
 
+  if (r.legacyEnv) {
+    console.log(
+      dim(`• KQ_DIFFSIZE_OVERRIDE wird nicht mehr ausgewertet (kam in der PR-CI nie an) — Commit-Trailer nutzen, s.u.`),
+    );
+  }
+  for (const line of r.invalidOverrides) {
+    console.log(dim(`• ungültige Override-Zeile ignoriert (braucht "#<nr> <warum>"): ${line}`));
+  }
+
   if (r.stale) {
     console.error(
       red(
-        `✖ KQ_DIFFSIZE_OVERRIDE ist gesetzt, aber der Diff liegt im Budget (${measured} ≤ ${budget}).\n` +
-          `  Das Override ist stale — entfernen (KQ_DIFFSIZE_OVERRIDE leeren).`,
+        `✖ ${OVERRIDE_KEY} steht im Slice, aber der Diff liegt im Budget (${measured} ≤ ${budget}).\n` +
+          `  Das Override ist stale — den Override-Commit wieder aus dem Branch entfernen.`,
       ),
     );
     process.exit(1);
@@ -270,8 +316,9 @@ function main() {
     console.error(
       `\nDieser Slice ist zu breit für ein reviewbares Ticket. Aufteilen (ein Epic → session-große\n` +
         `Kinder, siehe AGENTS.md) — ODER, wenn die Breite bewusst und begründet ist (z.B. ein großer\n` +
-        `God-File-Split), mit Pflicht-Begründung durchlassen:\n` +
-        `  KQ_DIFFSIZE_OVERRIDE="#<nr> warum bewusst breit" npm run check:diffsize`,
+        `God-File-Split), mit Pflicht-Begründung als Commit-Trailer im Slice durchlassen\n` +
+        `(wirkt lokal, im PR und auf main gleich):\n` +
+        `  git commit --allow-empty -m "chore: Slice bewusst breit (#<nr>)" -m "${OVERRIDE_KEY}: #<nr> warum"`,
     );
     process.exit(1);
   }

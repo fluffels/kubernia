@@ -15,28 +15,48 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
-// Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im
-// tsconfig-include) – der Laufzeit-Import genügt, Typen lokal deklariert.
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as checkDiff from "../scripts/check-diffsize.mjs";
-
+type Env = Record<string, string | undefined>;
 type Sums = { fileCount: number; changedLines: number };
 type Thresholds = { maxFiles: number; maxLines: number };
 type Eval = { overFiles: boolean; overLines: boolean; over: boolean };
 type RunGit = (args: string[]) => string;
+type Trailers = { valid: { nr: number; reason: string }[]; invalid: string[] };
 
-const MAX_FILES: number = checkDiff.MAX_FILES;
-const MAX_LINES: number = checkDiff.MAX_LINES;
-const readThresholds: (env?: Record<string, string | undefined>) => Thresholds = checkDiff.readThresholds;
-const parseNumstat: (text: string) => { files: { path: string; added: number; deleted: number; binary: boolean }[] } & Sums =
-  checkDiff.parseNumstat;
-const evaluate: (sums: Sums, t: Thresholds) => Eval = checkDiff.evaluate;
-const overrideReason: (env?: Record<string, string | undefined>) => string | null = checkDiff.overrideReason;
-const resolveBase: (runGit: RunGit, env?: Record<string, string | undefined>) => string | null = checkDiff.resolveBase;
-const checkDiffSize: (opts: { runGit: RunGit; env?: Record<string, string | undefined> }) => Record<string, unknown> =
-  checkDiff.checkDiffSize;
-const isGeneratedArtifact: (path: string) => boolean = checkDiff.isGeneratedArtifact;
+/** Die öffentliche Oberfläche des Wächters, wie dieser Test sie nutzt. */
+type CheckDiffSizeModule = {
+  MAX_FILES: number;
+  MAX_LINES: number;
+  OVERRIDE_KEY: string;
+  readThresholds: (env?: Env) => Thresholds;
+  parseNumstat: (text: string) => { files: { path: string; added: number; deleted: number; binary: boolean }[] } & Sums;
+  evaluate: (sums: Sums, t: Thresholds) => Eval;
+  parseOverrideTrailers: (text: string, key: string) => Trailers;
+  resolveBase: (runGit: RunGit, env?: Env) => string | null;
+  checkDiffSize: (opts: { runGit: RunGit; env?: Env }) => Record<string, unknown>;
+  isGeneratedArtifact: (path: string) => boolean;
+};
+
+// Tooling-Skript ohne Declaration-File (scripts/ ist nicht im tsconfig-include). Der
+// Namespace wird EINMAL auf die Oberfläche oben festgelegt, statt jeden Zugriff einzeln
+// zu casten (wie test/diffcoverage.test.ts), sonst meldet der typbewusste Linter
+// lauter no-unsafe-member-access.
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as checkDiffRaw from "../scripts/check-diffsize.mjs";
+
+const {
+  MAX_FILES,
+  MAX_LINES,
+  OVERRIDE_KEY,
+  readThresholds,
+  parseNumstat,
+  evaluate,
+  parseOverrideTrailers,
+  resolveBase,
+  checkDiffSize,
+  isGeneratedArtifact,
+} = checkDiffRaw as CheckDiffSizeModule;
 
 describe("Diff-Größenbudget (#533)", () => {
   test("parseNumstat: summiert added+deleted, zählt Dateien, behandelt Binärdateien", () => {
@@ -81,10 +101,47 @@ describe("Diff-Größenbudget (#533)", () => {
     assert.deepEqual(readThresholds({ KQ_DIFFSIZE_MAX_FILES: "abc" }), { maxFiles: MAX_FILES, maxLines: MAX_LINES });
   });
 
-  test("overrideReason: leer/whitespace zählt NICHT (Pflicht-Begründung)", () => {
-    assert.equal(overrideReason({}), null);
-    assert.equal(overrideReason({ KQ_DIFFSIZE_OVERRIDE: "   " }), null, "whitespace ist keine Begründung");
-    assert.equal(overrideReason({ KQ_DIFFSIZE_OVERRIDE: "  #317 bewusst breit " }), "#317 bewusst breit");
+  // ── Override als Commit-Trailer (#1269): wirkt lokal, im PR und auf main gleich ──
+  test("parseOverrideTrailers: gültige Zeile liefert Ticketnummer + Begründung", () => {
+    const r = parseOverrideTrailers("feat: x\n\nKQ-Diffsize-Override: #317 Rename-Welle über 40 Dateien\n", OVERRIDE_KEY);
+    assert.deepEqual(r.valid, [{ nr: 317, reason: "#317 Rename-Welle über 40 Dateien" }]);
+    assert.deepEqual(r.invalid, []);
+  });
+
+  test("parseOverrideTrailers: findet den Trailer mitten in einem Squash-Body (COMMIT_MESSAGES)", () => {
+    const squash = [
+      "feat(x): Welle (#12)",
+      "",
+      "* feat: erster Teil",
+      "",
+      "KQ-Diffsize-Override: #12 bewusst breit",
+      "",
+      "Co-Authored-By: jemand",
+      "",
+      "* fix: zweiter Teil",
+    ].join("\r\n");
+    assert.deepEqual(parseOverrideTrailers(squash, OVERRIDE_KEY).valid, [{ nr: 12, reason: "#12 bewusst breit" }]);
+  });
+
+  test("parseOverrideTrailers: Erwähnung in Prosa, eingerückt oder in Backticks zählt NICHT", () => {
+    const text = [
+      "docs: erklärt KQ-Diffsize-Override: #1 im Satz",
+      "  KQ-Diffsize-Override: #2 eingerückt",
+      "`KQ-Diffsize-Override: #3 backtick`",
+    ].join("\n");
+    assert.deepEqual(parseOverrideTrailers(text, OVERRIDE_KEY), { valid: [], invalid: [] });
+  });
+
+  test("parseOverrideTrailers: ohne #<nr> oder ohne Begründung ungültig (Pflicht-Begründung)", () => {
+    const text = ["KQ-Diffsize-Override: nur warum", "KQ-Diffsize-Override: #12", "KQ-Diffsize-Override:   "].join("\n");
+    const r = parseOverrideTrailers(text, OVERRIDE_KEY);
+    assert.deepEqual(r.valid, []);
+    assert.equal(r.invalid.length, 3);
+  });
+
+  test("parseOverrideTrailers: ein fremder Schlüssel (Diffcov) wird nicht als Diffsize erkannt", () => {
+    assert.deepEqual(parseOverrideTrailers("KQ-Diffcov-Override: #5 warum", OVERRIDE_KEY), { valid: [], invalid: [] });
+    assert.equal(parseOverrideTrailers("KQ-Diffcov-Override: #5 warum", "KQ-Diffcov-Override").valid.length, 1);
   });
 
   test("resolveBase: KQ_DIFF_BASE zuerst, sonst origin/main vor main, sonst null", () => {
@@ -122,7 +179,7 @@ describe("Diff-Größenbudget (#533)", () => {
   const OVER = ["1\t1\ta", "1\t1\tb", "1\t1\tc"].join("\n"); // 3 Dateien, 6 Zeilen
   const tightEnv = { KQ_DIFFSIZE_MAX_FILES: "2", KQ_DIFFSIZE_MAX_LINES: "2" };
   const gitWith =
-    (base: string | null, numstat: string): RunGit =>
+    (base: string | null, numstat: string, log = ""): RunGit =>
     (a) => {
       if (a[0] === "merge-base" && a[2] === "origin/main") {
         if (base === null) throw new Error("keine Basis");
@@ -131,6 +188,7 @@ describe("Diff-Größenbudget (#533)", () => {
       if (a[0] === "merge-base") throw new Error("keine Basis");
       if (a[0] === "rev-parse") return "HEADSHA\n";
       if (a[0] === "diff") return numstat;
+      if (a[0] === "log") return log;
       throw new Error("unerwartet: " + a.join(" "));
     };
 
@@ -159,18 +217,56 @@ describe("Diff-Größenbudget (#533)", () => {
     assert.equal(r.stale, false);
   });
 
-  test("checkDiffSize: über Budget MIT Begründung → allowed (durchgelassen)", () => {
-    const r = checkDiffSize({ runGit: gitWith("BASE", OVER), env: { ...tightEnv, KQ_DIFFSIZE_OVERRIDE: "#317 Epic" } });
+  const TRAILER = "chore: bewusst breit\n\nKQ-Diffsize-Override: #317 Epic-Split\n";
+
+  test("checkDiffSize: über Budget MIT Trailer im Slice → allowed (durchgelassen)", () => {
+    const r = checkDiffSize({ runGit: gitWith("BASE", OVER, TRAILER), env: tightEnv });
     assert.equal(r.over, true);
     assert.equal(r.allowed, true);
     assert.equal(r.stale, false);
-    assert.equal(r.reason, "#317 Epic");
+    assert.equal(r.reason, "#317 Epic-Split");
   });
 
-  test("checkDiffSize: Override gesetzt, aber im Budget → stale", () => {
-    const r = checkDiffSize({ runGit: gitWith("BASE", OVER), env: { KQ_DIFFSIZE_OVERRIDE: "unnötig" } });
+  test("checkDiffSize: liest die Commit-Messages genau im Slice-Bereich <basis>..HEAD", () => {
+    const gerufen: string[][] = [];
+    const runGit: RunGit = (a) => {
+      gerufen.push(a);
+      return gitWith("BASE", OVER, TRAILER)(a);
+    };
+    checkDiffSize({ runGit, env: tightEnv });
+    assert.deepEqual(
+      gerufen.find((a) => a[0] === "log"),
+      ["log", "--format=%B", "BASE..HEAD"],
+    );
+  });
+
+  test("checkDiffSize: Trailer gesetzt, aber im Budget → stale", () => {
+    const r = checkDiffSize({ runGit: gitWith("BASE", OVER, TRAILER), env: {} });
     assert.equal(r.over, false);
     assert.equal(r.stale, true, "unnötiges Override wird als stale gemeldet");
+  });
+
+  test("checkDiffSize: nur ungültiger Trailer → bleibt rot und meldet die Zeile", () => {
+    const r = checkDiffSize({ runGit: gitWith("BASE", OVER, "KQ-Diffsize-Override: ohne nummer"), env: tightEnv });
+    assert.equal(r.over, true);
+    assert.equal(r.allowed, false);
+    assert.deepEqual(r.invalidOverrides, ["KQ-Diffsize-Override: ohne nummer"]);
+  });
+
+  test("checkDiffSize: git log scheitert → kein Override, über Budget bleibt rot", () => {
+    const runGit: RunGit = (a) => {
+      if (a[0] === "log") throw new Error("kaputt");
+      return gitWith("BASE", OVER)(a);
+    };
+    const r = checkDiffSize({ runGit, env: tightEnv });
+    assert.equal(r.allowed, false);
+    assert.equal(r.over, true);
+  });
+
+  test("checkDiffSize: die alte Env KQ_DIFFSIZE_OVERRIDE lässt NICHTS mehr durch (nur Hinweis)", () => {
+    const r = checkDiffSize({ runGit: gitWith("BASE", OVER), env: { ...tightEnv, KQ_DIFFSIZE_OVERRIDE: "#317 Epic" } });
+    assert.equal(r.allowed, false, "lokal grün, CI rot darf es nicht mehr geben");
+    assert.equal(r.legacyEnv, true);
   });
 
   test("checkDiffSize: keine Basis → No-op-grün (skipped), niemals rot", () => {
@@ -214,5 +310,13 @@ describe("Diff-Größenbudget (#533)", () => {
     const r = checkDiffSize({ runGit: gitWith("BASE", numstat), env: {} });
     assert.equal(r.excludedCount, 0);
     assert.equal(r.over, true, "1112 echte Code-Zeilen sprengen das 800er-Budget");
+  });
+
+  test("Doku nennt den Override so, wie das Skript ihn liest (#1269: keine Env-Variable mehr)", () => {
+    for (const datei of ["AGENTS.md", "docs/agent-harness.md"]) {
+      const text = readFileSync(new URL(`../${datei}`, import.meta.url), "utf8");
+      assert.ok(text.includes(`${OVERRIDE_KEY}: #<nr>`), `${datei} beschreibt die Commit-Zeile`);
+      assert.ok(!text.includes("KQ_DIFFSIZE_OVERRIDE="), `${datei} verspricht keine Env-Variable mehr`);
+    }
   });
 });
