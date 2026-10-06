@@ -56,7 +56,7 @@ Kein `model:` am Spawn: Modell und Effort stehen im Frontmatter des Umsetzers un
 
 ## Warum so
 
-- **Modell-Routing (#1035/#1065/#1280).** Skill-Frontmatter (`model`/`effort` oben) gilt laut Claude-Code-Doku nur für den laufenden Turn und greift beim Skill-Tool nicht verlässlich (anthropics/claude-code#98898); der Projekt-Default `"model": "sonnet"` in `.claude/settings.json` lässt sich per `/model` überstimmen. Verlässlich wirkt nur Agent-Frontmatter: darum Umsetzer (`sonnet`), Planer und Lenses (`opus`) als Subagenten. Matrix, Beleg und Grenzen: [docs/model-routing.md](../../../docs/model-routing.md).
+- **Modell-Routing (#1035/#1065/#1280).** Skill-Frontmatter (`model`/`effort` oben) gilt laut Claude-Code-Doku nur für den laufenden Turn und greift beim Skill-Tool nicht verlässlich (anthropics/claude-code#98898); ein Projekt-Default ließe sich per `/model` überstimmen und ist darum nicht gesetzt. Verlässlich wirkt nur Agent-Frontmatter: darum Umsetzer (`sonnet`), Planer und Lenses (`opus`) als Subagenten. Matrix, Beleg und Grenzen: [docs/model-routing.md](../../../docs/model-routing.md).
 - **Rückfragen bleiben möglich.** Subagenten können nicht fragen (`AskUserQuestion` ist dort entfernt); die Pflicht-Rückfrage liegt aber vor dem Coden im Hauptchat, und spätere Fragen laufen über `entscheidung-noetig` und `SendMessage`.
 - **Kein Self-Grading (#1012).** Der Review läuft im Umsetzer über eigene Lens-Subagenten, nie inline. Regel-Heimat: AGENTS.md › Mehr-Perspektiven-Review.
 

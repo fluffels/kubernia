@@ -12,10 +12,10 @@
  *
  * Der Wächter deckt die drei Fehlklassen ab, die das leise zurückbringen:
  *
- *   1. **Der Hebel verschwindet.** Seit #1065 ist der Hebel `"model": "sonnet"` in
- *      `.claude/settings.json` (das Skill-Frontmatter greift wegen anthropics/claude-code#98898
- *      nur bei `/kubernia`). Beides ist je eine Zeile – gelöscht/umformuliert fällt die
- *      Umsetzung wortlos auf Opus zurück, ohne dass irgendein Gate meckert.
+ *   1. **Der Hebel verschwindet.** Seit #1280 ist der Hebel das Frontmatter des Subagenten
+ *      `kubernia-umsetzer` (Skill-Frontmatter greift wegen anthropics/claude-code#98898 nur bei
+ *      `/kubernia`, ein Projekt-Default ließ sich per `/model` überstimmen). Es ist je eine Zeile –
+ *      gelöscht/umformuliert fällt die Umsetzung wortlos aufs Session-Modell zurück.
  *   2. **Der Review wird still mitdemoviert.** Der Hauptagent läuft auf dem Coding-Tier
  *      (Projekt-Default bzw. `/kubernia`-Frontmatter). Liefen die Lens-Pässe wie früher INLINE im
  *      Hauptagenten, zöge die Coding-Tier-Zeile den Review von Opus auf Sonnet –
@@ -28,11 +28,11 @@
  * Seit #1280 schreibt auf dem Skill-Pfad nicht mehr der Hauptagent den Code, sondern der Subagent
  * `kubernia-umsetzer` mit `sonnet`/`medium` im eigenen Frontmatter: Projekt-Default und Skill-Frontmatter
  * ließen sich per `/model` bzw. durch den Turn-Scope still umgehen. Der Wächter prüft Agent, Spawn ohne
- * `model:`, `Agent`-Tool und vorgeladenes `review-lenses` (sonst Inline-Review) und dass kubernia-loop weg ist.
+ * `model:`, `Agent`-Tool und vorgeladenes `review-lenses` (sonst Inline-Review), dass kubernia-loop weg ist
+ * und dass `.claude/settings.json` kein Modell mehr pinnt (der Hauptchat folgt der Wahl der Maintainerin).
  *
  * Seit #1065 gilt zusätzlich: jede `agent()`-Aufrufstelle im Workflow setzt `effort` und
- * `model` (oder `agentType`), settings.json trägt den Projekt-Default `sonnet` (Hebel gegen den
- * Claude-Code-Bug anthropics/claude-code#98898), es gibt keine festen Modell-IDs mehr und genau
+ * `model` (oder `agentType`), es gibt keine festen Modell-IDs mehr und genau
  * eine Planungs-Oberfläche.
  *
  * Grenzen dieses Wächters (bewusst, ehrlich – ein Wächter, dessen Kopf mehr verspricht
@@ -239,7 +239,7 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
       fm.model && istCodingTier(fm.model),
       `Im Frontmatter von ${UMSETZUNGS_SKILL} fehlt ein \`model:\` auf dem Coding-Tier (Alias \`sonnet\`). ` +
         "Die Zeile wirkt nur bei Aufruf als `/kubernia` (anthropics/claude-code#98898); der eigentliche Hebel " +
-        `ist der Projekt-Default in .claude/settings.json (#1065). Gefunden: model=„${fm.model ?? "(fehlt)"}".`,
+        `ist der Subagent ${UMSETZER} (#1280). Gefunden: model=„${fm.model ?? "(fehlt)"}".`,
     );
     // Absichtlich nur Anwesenheit, nicht der Wert: die Regel ist „explizit statt erben".
     // Welche Stufe richtig ist, entscheidet docs/model-routing.md und darf sich dort ohne
@@ -341,13 +341,13 @@ describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
     assert.equal(r.aufrufe, 2, "ein Aufruf ohne Optionen fällt über die Zählung auf");
   });
 
-  test(".claude/settings.json setzt den Projekt-Default auf den Alias sonnet", () => {
+  test(".claude/settings.json pinnt kein Modell für den Hauptchat (#1280)", () => {
     const settings = JSON.parse(read(".claude/settings.json")) as { model?: string };
     assert.equal(
       settings.model,
-      "sonnet",
-      'Ohne `"model": "sonnet"` läuft der Hauptagent auf dem Session-Modell: das Skill-Frontmatter wird beim ' +
-        "Skill-Tool-Aufruf ignoriert (anthropics/claude-code#98898).",
+      undefined,
+      "Das Routing steht in den Agent-Frontmattern (Umsetzer, Planer, Lenses). Ein Projekt-Default überstimmte " +
+        "nur die Modellwahl der Maintainerin für Gespräche und Pre-Flight im Hauptchat und lässt sich per /model ohnehin umgehen.",
     );
   });
 
@@ -441,8 +441,10 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
 
   test("Umsetzer kann die Lenses spawnen und hat den Review-Ablauf vorgeladen", () => {
     const fm = frontmatter(read(UMSETZER));
+    const tools = (fm.tools ?? "").split(",").map((t) => t.trim());
     for (const tool of ["Agent", "Edit", "Write", "Bash"]) {
-      assert.match(fm.tools ?? "", new RegExp(`\\b${tool}\\b`), `tools: ohne ${tool}`);
+      // exakt statt per Wortgrenze: `Agent(kubernia-planner)` schränkt die spawnbaren Typen ein und sperrte die Lenses
+      assert.ok(tools.includes(tool), `tools: ohne uneingeschränktes ${tool}`);
     }
     assert.match(
       fm.skills ?? "",
@@ -460,7 +462,7 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
   test("der kubernia-Skill spawnt den Umsetzer ohne model-Override", () => {
     const spawn = spawnFuer(read(UMSETZUNGS_SKILL), "kubernia-umsetzer");
     assert.notEqual(spawn, "", `${UMSETZUNGS_SKILL} braucht einen \`Agent({ subagent_type: "kubernia-umsetzer", … })\`-Spawn`);
-    assert.doesNotMatch(spawn, /\bmodel:\s*["']/, "Ein `model:` am Spawn überstimmt das Frontmatter des Umsetzers");
+    assert.doesNotMatch(spawn, /\bmodel:/, "Ein `model:` am Spawn (auch ohne Anführungszeichen) überstimmt das Frontmatter des Umsetzers");
   });
 
   test("Erkennung greift wirklich (Red-Green): spawnFuer trennt Blöcke und erkennt den Override", () => {
