@@ -82,6 +82,18 @@
         ]
       },
       {
+        "matcher": "PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/worktree-guard-powershell.mjs"
+            ]
+          }
+        ]
+      },
+      {
         "matcher": "Bash|PowerShell",
         "hooks": [
           {
