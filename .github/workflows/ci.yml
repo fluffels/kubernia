@@ -133,6 +133,17 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
 
+      # Review- und Plan-Nachweis (#1270): jeder Agenten-PR trägt per Commit-Zeilen `KQ-Plan:` /
+      # `KQ-Review:` den Beleg für Planungspass und konvergierten Lens-Review (Format:
+      # docs/agent-harness.md §3a). Bewusst LETZTER Schritt: der Nachweis entsteht erst nach dem
+      # Review, und der Schritt darf die Ausführung der Gates davor nicht beeinflussen. Er läuft auch
+      # nach einem roten Schritt davor (`!cancelled()`), damit ein fehlender Nachweis neben einem
+      # anderen Rot sichtbar bleibt. Nur auf PRs; Dependabot-PRs haben weder Plan noch Review.
+      # KQ_DIFF_BASE kommt aus „Diff-Basis bestimmen“ oben.
+      - name: Review- und Plan-Nachweis prüfen (#1270)
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
+        run: node scripts/check-review-nachweis.mjs
+
   # Security-Audit (#396): npm audit als CI-Gate. Bewusst ZWEISTUFIG, um die
   # ⚠️-Falle aus dem Ticket zu vermeiden – ein hartes high+-Gate über den GANZEN
   # Baum wäre durch die dev-only-Advisories aus #395 (vite high, vitest critical)

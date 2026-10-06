@@ -27,7 +27,7 @@ docs/referenz/ ← Nachschlage-Referenz on-demand (Befehle, Repo-Landkarte, Schi
      prompt: "Ticket #<nr>: <Titel>. Body:\n<Volltext des gh issue view>"
    })
    ```
-   Ist der Agent nicht verfügbar, skizziert der Hauptchat den Plan kurz selbst und gibt ihn dem Umsetzer mit.
+   Den Bericht unverändert mit seiner Kopfzeile `PLAN #<nr> · kubernia-planner` an den Umsetzer weitergeben (Planungs-Nachweis, #1270). Nur wenn der Spawn tatsächlich scheitert, skizziert der Hauptchat den Plan kurz selbst und schreibt `Plan ohne Planer: <Grund>` in den Umsetzer-Prompt; ein ausgelassener Planer ist kein Grund.
 3. **Pre-Flight-Klärung** nach AGENTS.md § Human-in-the-Loop-Checkpoints: braucht das Ticket eine menschliche Entscheidung (🎨 Optik, ⚠️ riskante Weiche, offene Weiche im Plan), **jetzt** per `AskUserQuestion` klären. Optik-Iterationen mit PixelLab laufen hier (der Umsetzer hat PixelLab nicht in seiner Whitelist); das gewählte Asset liegt als Datei im Temp-Ordner, der Umsetzer bekommt den Pfad (eine Job-ID nützt ihm nichts).
 4. **Umsetzer spawnen** (nächster Abschnitt) und sein Ergebnis behandeln.
 
@@ -41,7 +41,7 @@ Solange der Umsetzer läuft, fasst der Hauptchat weder Repo noch Worktree an und
 Agent({
   subagent_type: "kubernia-umsetzer",
   description: "Umsetzung #<nr>",
-  prompt: "Ticket #<nr>: <Titel>. Body:\n<Volltext>\n\n--- Plan ---\n<Plan des kubernia-planner bzw. Skizze des Hauptchats>\n--- Ende Plan ---\n\n--- Pre-Flight-Antworten (verbindlich) ---\n<Antworten der Maintainerin, sonst: keine>\n--- Ende ---"
+  prompt: "Ticket #<nr>: <Titel>. Body:\n<Volltext>\n\n--- Plan ---\n<Plan des kubernia-planner mit Kopfzeile, bzw. Skizze des Hauptchats mit Zeile „Plan ohne Planer: <Grund>“>\n--- Ende Plan ---\n\n--- Pre-Flight-Antworten (verbindlich) ---\n<Antworten der Maintainerin, sonst: keine>\n--- Ende ---"
 })
 ```
 
