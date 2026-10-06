@@ -12,12 +12,15 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as baselineModule from "../../scripts/token-baseline.mjs";
 
-type Sub = { id?: string; agentType?: string; description?: string };
+type Sub = { id?: string; agentType?: string; description?: string; parentAgentId?: string };
 type Call = {
   ts: string;
   model?: string | null;
@@ -64,6 +67,7 @@ const m = baselineModule as {
   countReviewRounds: (descriptions: string[]) => number;
   summarize: (run: Run, bounds?: Bounds) => Summary;
   callsFromTranscript: (jsonl: string, subagent?: Sub | null) => { calls: Call[]; questions: number };
+  readTranscriptSession: (sessionId: string, projectsRoot: string) => { calls: Call[]; questions: number };
   callsFromLangfuse: (obs: Obs[]) => Run & { questions: number };
   countFailedPushes: (runs: { head_sha: string }[] | undefined) => number;
   mergedWithoutRework: (mergedAt: string | null | undefined, failedPushes: number) => boolean;
@@ -328,8 +332,12 @@ describe("token-baseline: Quelle Langfuse", () => {
     ]);
     const nachId = (id: string) => r.calls[["gl", "gu1", "gu2"].indexOf(id)];
     assert.equal(nachId("gl").subagent?.agentType, "kubernia-lens", "nächster umschließender Subagent, nicht der äußerste");
-    const phasen = m.summarize(r, BOUNDS).rows.map((row) => row.phase).sort();
-    assert.deepEqual(phasen, ["CI/Merge", "Review", "Umsetzung"], "Lens → Review, Umsetzer vor dem PR → Umsetzung, danach → CI/Merge");
+    const zeilen = m.summarize(r, BOUNDS).rows.map((row) => [row.phase, row.calls]).sort();
+    assert.deepEqual(
+      zeilen,
+      [["CI/Merge", 1], ["Review", 1], ["Umsetzung", 1]],
+      "Lens → Review, Umsetzer vor dem PR → Umsetzung, danach → CI/Merge; je Phase genau ein Call",
+    );
   });
 
   test("Zyklus in parentObservationId hängt nicht, Hauptagent bleibt Hauptagent", () => {
@@ -764,5 +772,80 @@ describe("token-baseline: eine Preisquelle, Preisperioden, Fensterfilter (#1239)
     assert.deepEqual(w.map((x) => x.call), [drin, nach]);
     assert.equal(w[1].phase, "Nachlauf");
     assert.notEqual(w[0].phase, "Nachlauf");
+  });
+});
+
+describe("token-baseline: readTranscriptSession (#1311)", () => {
+  const zeile = (id: string, ts: string) =>
+    JSON.stringify({
+      type: "assistant",
+      timestamp: ts,
+      uuid: id,
+      message: { id, model: "claude-sonnet-5-5", usage: { input_tokens: 1, output_tokens: 2, cache_read_input_tokens: 3 } },
+    });
+
+  /** Session-Ordner in der Form von ~/.claude/projects/<projekt>/<id>.jsonl (+ <id>/subagents/). */
+  function mitSession(bauen: (dir: string, id: string) => void, body: (root: string) => void) {
+    const root = mkdtempSync(join(tmpdir(), "kq-tb-"));
+    try {
+      const proj = join(root, "proj");
+      mkdirSync(proj);
+      bauen(proj, "sess-1");
+      body(root);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  test("verschachtelte meta.json: Lens unter dem Umsetzer wird als Review gezählt, der Elternbezug bleibt erhalten", () => {
+    mitSession(
+      (proj, id) => {
+        writeFileSync(join(proj, `${id}.jsonl`), zeile("h1", "2026-09-29T09:00:00Z") + "\n");
+        const sub = join(proj, id, "subagents");
+        mkdirSync(sub, { recursive: true });
+        writeFileSync(join(sub, "agent-u.jsonl"), zeile("u1", "2026-09-29T11:00:00Z") + "\n");
+        writeFileSync(
+          join(sub, "agent-u.meta.json"),
+          JSON.stringify({ agentType: "kubernia-umsetzer", description: "Umsetzung #1", spawnDepth: 1 }),
+        );
+        writeFileSync(join(sub, "agent-l.jsonl"), zeile("l1", "2026-09-29T11:30:00Z") + "\n");
+        writeFileSync(
+          join(sub, "agent-l.meta.json"),
+          JSON.stringify({ agentType: "kubernia-lens", description: "Lens Architektur R1", parentAgentId: "u", spawnDepth: 2 }),
+        );
+      },
+      (root) => {
+        const r = m.readTranscriptSession("sess-1", root);
+        assert.equal(r.calls.length, 3);
+        const lens = r.calls.find((c) => c.subagent?.agentType === "kubernia-lens");
+        assert.equal(lens?.subagent?.parentAgentId, "u");
+        const phasen = Object.fromEntries(m.summarize(r, BOUNDS).rows.map((row) => [row.phase, row.calls]));
+        assert.equal(phasen["Review"], 1, "die Lens zählt als Review, obwohl sie unter dem Umsetzer läuft");
+        assert.equal(phasen["Umsetzung"], 1, "der Umsetzer vor dem PR → Umsetzung");
+      },
+    );
+  });
+
+  test("fehlende meta.json: der Subagent hat keinen Typ und fällt auf den Zeitschnitt", () => {
+    mitSession(
+      (proj, id) => {
+        writeFileSync(join(proj, `${id}.jsonl`), "");
+        const sub = join(proj, id, "subagents");
+        mkdirSync(sub, { recursive: true });
+        writeFileSync(join(sub, "agent-x.jsonl"), zeile("x1", "2026-09-29T11:00:00Z") + "\n");
+      },
+      (root) => {
+        const r = m.readTranscriptSession("sess-1", root);
+        assert.equal(r.calls.length, 1);
+        assert.equal(r.calls[0].subagent?.agentType, undefined);
+      },
+    );
+  });
+
+  test("unbekannte Session wirft, statt still leer zu melden", () => {
+    mitSession(
+      () => undefined,
+      (root) => assert.throws(() => m.readTranscriptSession("gibt-es-nicht", root), /Kein Transkript für Session gibt-es-nicht/),
+    );
   });
 });
