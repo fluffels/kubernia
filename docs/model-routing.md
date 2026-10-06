@@ -165,7 +165,7 @@ Planer-Sockel: ² Median über 2 Läufe mit Planer (der Planer fehlt in 1 von 3 
 | #1217 | B | Sammelticket | 179 | 9,79 $ | 3⁶ | 2 | nein |
 
 ⁵ #1258 und #1254 liefen in Sessions mit mehreren Tickets, ab dem Claim geschnitten (`--from`). In der Session von #1258 lief die Planung für ein anderes Ticket (#1222), sie zählt hier nicht.
-⁶ Eine Runde mehr als die Obergrenze von 2 (AGENTS.md › Mehr-Perspektiven-Review).
+⁶ Drei Pässe sind 2 Fix-Runden und damit innerhalb der Obergrenze (Cap 2 = höchstens 2 Fix-Runden = höchstens 3 Pässe, AGENTS.md › Mehr-Perspektiven-Review).
 
 **Befunde:**
 - **Abweichung zu den Ticket-Bezugswerten:** das Ticket nennt aus Langfuse ca. 55k als ersten Call und 125k Median. Das sind Mischwerte über alle Agenten bzw. Calls; die Transkript-Messung trennt: erster Call des Hauptagenten 70,0k, Planer und Lens 56–57k, Median-Kontext des Hauptagenten vorher 159k. Beide Gruppen sind hier mit demselben Skript gemessen, nur diese sind untereinander vergleichbar.

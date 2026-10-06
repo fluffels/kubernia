@@ -371,6 +371,16 @@ function lensPlan({ dateien, vorrunde } = {}) {
 }
 // ── Review-Staffel (#1265) — Ende
 
+// ── Review-Nachweis (#1270) — Anfang
+// Die zwei Commit-Zeilen, die check-review-nachweis.mjs in der PR-CI verlangt (Format: docs/agent-harness.md
+// §3a). Pure und aus Code-Werten gebaut, nicht vom Agenten formuliert; ein Wächter-Test koppelt die
+// Ausgabe an den Parser des Prüfskripts. `lenses` sind die Brillen der Runde 1, `runden` die Zahl der Pässe.
+function nachweisZeilen({ head, runden, lenses, plan }) {
+  const planZeile = plan ? 'KQ-Plan: kubernia-planner' : 'KQ-Plan: ohne — Planer lieferte keinen Plan'
+  return `${planZeile}\nKQ-Review: head=${head} runden=${runden} lenses=${lenses.join(',')} verdikt=ok`
+}
+// ── Review-Nachweis (#1270) — Ende
+
 /**
  * Die Review-Brillen aus dem review-lenses-Skill (#532), je ein eigener Pass. Welche davon eine
  * Runde startet, entscheidet lensPlan (#1265): drei für Code, die Doku-Brille allein für Markdown.
@@ -898,6 +908,9 @@ Sammelticket, Spiel-/Inhalts-Befund oder Notfall → eigenes Issue) — nicht in
   const lensEndstand = () => LENSES.map((l) => lensStand[l.key]).filter(Boolean)
   // Der letzte Lens-Pass (für lensPlan); null nach rotem verify ⇒ die nächste Runde prüft wieder alles.
   let vorrunde = null
+  // Für den Review-Nachweis (#1270): Zahl der Lens-Pässe und die Brillen des ersten Passes.
+  let reviewPaesse = 0
+  let ersteLenses = null
   // Der materialisierte Diff (#1034). Wird nach jeder Nachbesserung ERSETZT, nie
   // weiterverwendet — ein Patch aus der Vorrunde würde einen Review vortäuschen.
   let diff = diffAus(umsetzung)
@@ -920,6 +933,8 @@ Sammelticket, Spiel-/Inhalts-Befund oder Notfall → eigenes Issue) — nicht in
         )
       }
       vorrunde = { erwartet: plan.keys, berichte: lensBerichte }
+      reviewPaesse += 1
+      if (!ersteLenses) ersteLenses = plan.keys
       for (const b of lensBerichte) lensStand[b.lens] = b
     } else {
       log('npm run verify ist rot — Short-Circuit (#532): keine Lens-Pässe, direkt zum Nachbessern.')
@@ -1008,6 +1023,15 @@ ${patchAuftrag(nr, reviewRunden + 1, diff.head)}`,
   }
 
   const reviewKonvergiert = verifyGruen && blockierend.length === 0
+  // Review-Nachweis (#1270): erst nach Konvergenz; head = der zuletzt reviewte Stand.
+  const nachweis = reviewKonvergiert
+    ? nachweisZeilen({
+        head: diff.head || '<Ausgabe von git rev-parse HEAD vor dem Nachweis-Commit>',
+        runden: reviewPaesse,
+        lenses: ersteLenses || VOLLER_SATZ,
+        plan,
+      })
+    : ''
 
   // Hand-off VOR dem PR: nach dem Cap noch blockierende Findings oder rotes verify. Keinen
   // PR mit bekannten Blockern öffnen — an die Maintainerin übergeben (Kommentar am ISSUE,
@@ -1088,6 +1112,13 @@ AGENTS.md § Git-Workflow — PR-gegated (erste harte Regel) und § Kollisionssc
 letzter Punkt. Kurz: Branch pushen, gh pr create mit "Closes #${nr}" im Body,
 Auto-Merge setzen, CI abwarten.
 ${harnessDiff ? `\n${harnessMergeAuftrag}\n` : ''}
+Vor dem Push: setze einen leeren Nachweis-Commit, den die PR-CI verlangt (#1270). Genau diese
+zwei Zeilen als Commit-Message, unverändert:
+${nachweis}
+(leerer Commit mit --allow-empty, die Zeilen am Zeilenanfang). Prüfe ihn lokal mit
+node scripts/check-review-nachweis.mjs. Danach KEIN Rebase/Amend mehr: der head liegt sonst nicht
+mehr im PR.
+
 Ein Ticket ist erst fertig, wenn sein PR gemergt ist. Ein offener oder grüner,
 aber nicht gemergter PR ist ergebnis="ci-rot" bzw. "fehler", nie "gemergt".
 Ist die CI rot, gib ergebnis="ci-rot" mit roterCheck und den relevanten Log-Zeilen
