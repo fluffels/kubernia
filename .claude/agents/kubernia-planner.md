@@ -40,6 +40,17 @@ Kompakter Output, kein Fließtext-Essay:
 6. **Risiken & Trade-offs** — Save-Migration nötig (`CURRENT_SAVE_VERSION`-Bump, Migrationskette, bestehende Stände nie brechen)? Import-Zyklus-Gefahr? Echte Weiche, die Rückfrage an die Maintainerin braucht?
 7. **Offene Fragen/Weichen** (Pflichtabschnitt) — was die Maintainerin vor dem Coden entscheiden muss, statt es zu raten; ausdrücklich „keine“ nennen, wenn nichts offen ist
 
+## Bei einem Epic/einer Phase
+
+Statt der Abschnitte 2–5 liefert der Plan die **Aufteilung**:
+
+- je Kind: Titel, Body-Entwurf (Ziel, Akzeptanzkriterien), `area:`-Label, Abhängigkeiten („blockiert durch #X“ bzw. Vorgänger-Kind), session-taugliche Größe (passt zu `check:diffsize`);
+- Duplikat-Check vorab per `gh issue list --search`;
+- Reihenfolge der Kinder und Text für den Übersichts-Kommentar im Epic;
+- Abschnitt 7 bleibt Pflicht, jede offene Weiche wird dem betroffenen Kind zugeordnet.
+
+**Lege keine Issues selbst an**, das tut der Aufrufer.
+
 ## Was du NICHT tust
 
 - **Keinen Produktionscode schreiben**, keinen Worktree anlegen, keinen PR öffnen

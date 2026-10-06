@@ -9,7 +9,9 @@ Gültige Effort-Stufen: `low`, `medium`, `high`, `xhigh`, `max`. Bei Sonnet 5+ u
 | Phase | Alias | Effort | Workflow (`kubernia-ticket.js`) | Skill-Pfad (`kubernia`) | Loop (`kubernia-loop`) |
 |---|---|---|---|---|---|
 | Auswahl + Claim | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent (Session-Modell) | im Ticket-Subagenten |
-| Sonderfall (Epic-Split, Dependabot) | `sonnet` | `medium` | `agent()`-Optionen (vorerst; Opus-Tier: #1207) | Hauptagent | im Ticket-Subagenten |
+| **Epic-Aufteilung** (Schnitt der Kinder) | `opus` | `xhigh` | dieselbe Plan-Aufrufstelle (`kubernia-planner`) mit Epic-Hinweis im Prompt | Subagent `kubernia-planner` schlägt vor | über den Skill im Subagenten |
+| Epic-Kinder anlegen | `sonnet` | `medium` | `agent()`-Optionen (`epic-anlegen`) | Hauptagent | im Ticket-Subagenten |
+| Dependabot-Sammelticket | `sonnet` | `medium` | `agent()`-Optionen (ohne Planer) | Hauptagent | im Ticket-Subagenten |
 | **Planung** | `opus` | `xhigh` | `agentType: 'kubernia-planner'` + `effort` | Subagent `kubernia-planner` (Frontmatter) | über den Skill im Subagenten |
 | Pre-Flight | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent | im Ticket-Subagenten |
 | Umsetzung | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent | Spawn mit `model` (Effort = Sonnet-Default `medium`, deckt sich mit dem Ziel) |
@@ -18,9 +20,9 @@ Gültige Effort-Stufen: `low`, `medium`, `high`, `xhigh`, `max`. Bei Sonnet 5+ u
 | PR + Merge, Festgefahren, Cleanup | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent | im Ticket-Subagenten |
 | Explore / Recherche | `haiku` | `low` | n/a | keine feste Aufrufstelle; Empfehlung `Agent({model: "haiku"})`, Effort nicht per Tool setzbar (§2, #1209) | n/a |
 
-**Warum so:** Fehler in Planung und Review sind teuer (schlechte Architektur kostet viele Sessions), dort lohnt das stärkste Modell mit hohem Reasoning (#741, #745). Tippen nach fertigem Plan ist Sonnet-Arbeit, `medium` lässt genug Reasoning für die CI-Fix-Schleife. Explore liest und sucht nur, Haiku genügt.
+**Warum so:** Fehler in Planung und Review sind teuer (schlechte Architektur kostet viele Sessions), dort lohnt das stärkste Modell mit hohem Reasoning (#741, #745). Auch der Schnitt eines Epics in Kindertickets ist Planung (#1207): ein schlechter Schnitt kostet viele Sessions, das Anlegen per `gh` ist dagegen Tipparbeit. Tippen nach fertigem Plan ist Sonnet-Arbeit, `medium` lässt genug Reasoning für die CI-Fix-Schleife. Explore liest und sucht nur, Haiku genügt.
 
-**Ehrlich zum Skill-Pfad:** Auswahl, Pre-Flight, Umsetzung, Nachbessern, CI-Fix und Merge laufen dort im einen Hauptagenten, also auf dem Session-Modell (per `.claude/settings.json` Sonnet) und mit dem Effort-Default der Session (Sonnet 5.5: `medium`). Explizit pro Phase gesetzt wird nur im Workflow und an Subagent-Spawns.
+**Ehrlich zum Skill-Pfad:** Auswahl, Pre-Flight, Umsetzung, Anlegen der Epic-Kinder, Nachbessern, CI-Fix und Merge laufen dort im einen Hauptagenten, also auf dem Session-Modell (per `.claude/settings.json` Sonnet) und mit dem Effort-Default der Session (Sonnet 5.5: `medium`). Explizit pro Phase gesetzt wird nur im Workflow und an Subagent-Spawns.
 
 ## 2. Wie das Routing in Claude Code wirkt
 
@@ -37,7 +39,7 @@ Der Harness enthält keine festen Modell-IDs (`claude-opus-…` und Verwandte) i
 
 ## 4. Konvention im Ticket-Workflow
 
-- Ticket claimen, dann **Planung** durch den `kubernia-planner` (`opus`, `xhigh`), aufgerufen vom `kubernia`-Skill bzw. der Plan-Phase des Workflows. Er ist auch der Weg für Handplanung („plane das Ticket"). Es gibt keine zweite Planungs-Oberfläche.
+- Ticket claimen, dann **Planung** durch den `kubernia-planner` (`opus`, `xhigh`), aufgerufen vom `kubernia`-Skill bzw. der Plan-Phase des Workflows. Er ist auch der Weg für Handplanung („plane das Ticket") und für die Aufteilung eines Epics (er schlägt die Kinder vor, der Aufrufer legt sie an). Es gibt keine zweite Planungs-Oberfläche.
 - **Review** durch drei Lens-Subagenten (`opus`; `high` nur im Workflow wirksam, §2), auf beiden Pfaden, nie inline ([`review-lenses`](../.claude/skills/review-lenses/SKILL.md)).
 - **Umsetzung** auf `sonnet`: Workflow per `agent()`-Optionen, Skill-Pfad per Projekt-Default, Loop per Spawn-Parameter.
 - **Explore** als `Agent({model: "haiku"})`; Effort ist dort nicht per Tool setzbar (§2).

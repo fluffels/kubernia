@@ -20,7 +20,7 @@ Kurzfassung: **Genau EIN** offenes Issue, das **nicht** schon bearbeitet wird (k
 
 **Board managen statt Datei pflegen:** die Auswahl läuft über die **manuelle Board-Reihenfolge** (oberstes freies Item, Befehl in `docs/ticket-reihenfolge.md`). Am Ticket-Ende ist **kein** Reihenfolge-Pflegeschritt und **kein** Datei-Edit nötig. Fällt beim Arbeiten was auf: echter Defekt → sofort ein neues Issue mit passendem `area:`-Label an die richtige Board-Stelle (echte Abhängigkeit als „blockiert durch #X"-Notiz im Body), Härtung/Kosmetik → Zeile im Sammelticket (AGENTS.md § Nicht jeder Befund wird ein Ticket).
 
-**Sonderfall zu großes Epic/Phase:** nicht selbst umsetzen — nach dem Claimen in viele konkrete, session-große Kindertickets (ohne Assignee) aufteilen, im Epic einen Übersichts-Kommentar mit Reihenfolge posten und das Epic mit `gh issue close <nr> --reason completed` auf **done** setzen (nicht löschen), Schließung verifizieren. Kein Worktree/Code nötig.
+**Sonderfall zu großes Epic/Phase:** nicht selbst umsetzen. Die Aufteilung ist Planungsarbeit: nach dem Claimen den `kubernia-planner` (Opus) mit dem Aufruf unten rufen, im Prompt der Hinweis „Epic: liefere die Aufteilung“. Du legst genau die vorgeschlagenen session-großen Kindertickets an (ohne Assignee, `area:`-Label, im Board einsortiert; offene Weichen des Plans in den Body des betroffenen Kindes), im Epic einen Übersichts-Kommentar mit Reihenfolge posten und das Epic mit `gh issue close <nr> --reason completed` auf **done** setzen (nicht löschen), Schließung verifizieren. Kein Worktree/Code nötig. Ist der Planer nicht verfügbar, teilst du selbst auf.
 
 **Planungs-Subagent (Opus, opt-in automatisch, #745).** Direkt nach dem Claimen und **vor dem Coden** den Planungs-Subagenten rufen:
 
