@@ -97,7 +97,7 @@ describe("buildDevSnapshot (#1284)", () => {
 
   it("isDevViewable erkennt nur Objekte mit devView()-Methode", () => {
     expect(isDevViewable({ devView: () => ({ map: null, player: null }) })).toBe(true);
-    for (const bad of [null, undefined, 5, "x", {}, { devView: 1 }]) expect(isDevViewable(bad), String(bad)).toBe(false);
+    for (const bad of [null, undefined, 5, "x", {}, { devView: 1 }]) expect(isDevViewable(bad), typeof bad).toBe(false);
   });
 
   it("Vollabbild: jedes Feld kommt aus der passenden Quelle (unterscheidbare Werte)", () => {

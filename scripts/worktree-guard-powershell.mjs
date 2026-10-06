@@ -164,7 +164,6 @@ export function bewertePowerShell({ command, cwd, repoRoot, deps = {} }) {
   const vars = new Map();
   let ort = resolve(cwd);
   let ortOk = true; // Ergebnis des letzten Ortswechsels (für && / ||)
-  let ueberspringen = false;
 
   const blockiert = (dir, was) => {
     const ctx = kontext(dir);
@@ -187,9 +186,7 @@ export function bewertePowerShell({ command, cwd, repoRoot, deps = {} }) {
   let vorherSep = ";";
   for (const stmt of zerlege(command)) {
     // Verkettung: nach fehlgeschlagenem Ortswechsel läuft ein && -Nachfolger nicht, ein || -Nachfolger schon.
-    if (vorherSep === "&&" && !ortOk) ueberspringen = true;
-    else if (vorherSep === "||" && ortOk) ueberspringen = true;
-    else ueberspringen = false;
+    const ueberspringen = (vorherSep === "&&" && !ortOk) || (vorherSep === "||" && ortOk);
     const sep = stmt.sep;
     if (ueberspringen) { vorherSep = sep; continue; }
     ortOk = true;
