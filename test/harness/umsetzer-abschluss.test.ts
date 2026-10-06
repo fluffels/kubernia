@@ -69,7 +69,15 @@ describe("Umsetzer-Abschluss (#1308)", () => {
     const ohneSatz = UMSETZER.replace(/Vorher beendest du alle eigenen Hintergrund-Tasks[^\n]*\n/, "");
     assert.notEqual(ohneSatz, UMSETZER, "Muster muss treffen");
     assert.ok(abschlussProbleme(ohneSatz).some((p) => p.includes("TaskStop")));
-    assert.ok(abschlussProbleme(ohneSatz + "\nTaskStop\n").length > 0, "TaskStop hinter dem Format zählt nicht");
+    // Nur das Wort TaskStop wandert hinter das Format; Monitor-Regel bleibt davor: genau EIN Problem.
+    const hinten = UMSETZER.replace("per `TaskStop`", "per Stopp") + "\nTaskStop\n";
+    assert.notEqual(hinten, UMSETZER + "\nTaskStop\n", "Muster muss treffen");
+    assert.deepEqual(abschlussProbleme(hinten), ["TaskStop steht nicht vor dem Berichtsformat"]);
+    const ohneTick = UMSETZER.replace("tick", "x");
+    const ohneUntil = UMSETZER.replace("until-Schleife", "Schleife");
+    assert.notEqual(ohneTick, UMSETZER, "Muster tick muss treffen");
+    assert.notEqual(ohneUntil, UMSETZER, "Muster until muss treffen");
+    for (const md of [ohneTick, ohneUntil]) assert.deepEqual(abschlussProbleme(md), ["Monitor-Regel (until-Schleife, keine Zwischenmeldungen) fehlt"]);
     assert.ok(abschlussProbleme(UMSETZER.replace(/Auf die CI wartest du[^\n]*/, "")).some((p) => p.includes("Monitor-Regel")));
     assert.ok(abschlussProbleme(UMSETZER.replace(/^(tools:.*)\bTaskStop, /m, "$1")).some((p) => p.includes("Tool TaskStop")));
     assert.ok(abschlussProbleme(UMSETZER.replace(/^(tools:.*)\bMonitor, /m, "$1")).some((p) => p.includes("Tool Monitor")));

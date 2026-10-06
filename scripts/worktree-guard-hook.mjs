@@ -203,6 +203,7 @@ function lexer(src) {
     const endCmd = (sep) => {
       endWord();
       if (words.length) out.push({ words, sep });
+      else if (sep && out.length && out[out.length - 1].boundary === ")") out[out.length - 1].sep = sep; // Trenner hinter einer Subshell
       words = [];
     };
     while (pos < src.length) {
@@ -429,12 +430,19 @@ export function protectedGitTargets(command, cwd, deps = {}) {
   let prevPiped = false;
   for (const c of lexed.cmds) {
     if (c.boundary === "(") {
-      stack.push({ cur, listStart, pure });
+      stack.push({ cur, listStart });
       listStart = cur;
       continue;
     }
     if (c.boundary === ")") {
-      ({ cur, listStart, pure } = stack.pop() ?? { cur, listStart, pure });
+      ({ cur, listStart } = stack.pop() ?? { cur, listStart });
+      pure = false; // die Subshell zählt als Kommando: ein folgendes cd steht nicht am Listenanfang
+      prevPiped = c.sep === "|";
+      if (c.sep === "&") cur = listStart;
+      if ([";", "\n", "&"].includes(c.sep)) {
+        listStart = cur;
+        pure = true;
+      }
       continue;
     }
     const first = c.words[0].dynamic ? "" : c.words[0].text;

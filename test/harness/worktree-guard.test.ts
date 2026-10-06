@@ -227,6 +227,8 @@ describe("isProtectedGitCommand (#1308) — Quotes, Heredocs und Substitutionen"
       "x=$(git push)",
       "echo `git commit`",
       'gh issue comment 1 --body "`git push`"', // Backticks in Double Quotes laufen wirklich
+      'gh issue comment 1 --body "$(git push)"', // ebenso $(…) in Double Quotes
+      'echo "a $(git commit -m x) b"',
       "git commit -F - <<'EOF'\nNachricht\nEOF",
       'git commit -m "$(cat <<\'EOF\'\nNachricht (x)\nEOF\n)"',
       "FOO=bar git push",
@@ -386,6 +388,9 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(run(`false && cd '${wt}'; git push`), true, "bedingtes cd");
     assert.equal(run(`false && cd '${wt}' && echo x; git push`), true, "cd mitten in der Liste");
     assert.equal(run(`true || cd '${wt}' && git push`), true, "cd hinter ||");
+    assert.equal(run(`(true) || cd '${wt}' && git push`), true, "cd hinter || nach einer Subshell");
+    assert.equal(run(`(true) | cd '${wt}' && git push`), true, "cd in einer Pipeline nach einer Subshell");
+    assert.equal(run(`(true); cd '${wt}' && git push`), false, "Subshell mit ; beendet die Liste");
     assert.equal(run(`if false; then\ncd '${wt}'\nfi\ngit push`), true, "cd in einem Block");
     assert.equal(run(`cd '${wt}' && node scripts/x.mjs && npx vitest run && git commit -m x`), false, "Interpreter in der Kette");
     assert.equal(run(`cd '${wt}' && echo git push`), false, "reiner Text");
