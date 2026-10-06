@@ -622,6 +622,7 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
   test("Umsetzer-Whitelist ist die vollständige erwartete Menge (#1309): nichts fällt still weg, nichts kommt still dazu", () => {
     const tools = (frontmatter(read(UMSETZER)).tools ?? "").split(",").map((t) => t.trim());
     const erwartet = [
+      // Monitor/TaskStop: Abschluss-Regel #1308 (umsetzer-abschluss.test.ts prüft nur die Prosa, diese Liste bindet die Tools)
       "Read", "Grep", "Glob", "Bash", "PowerShell", "Edit", "Write", "WebFetch", "WebSearch", "Agent", "Monitor", "TaskStop", "ToolSearch",
       ...["navigate", "evaluate", "take_screenshot", "snapshot", "press_key", "click", "type", "wait_for", "console_messages", "resize", "tabs", "close", "start_video", "stop_video", "handle_dialog", "file_upload"].map((t) => `mcp__playwright__browser_${t}`),
       ...["queryMetrics", "getMetricsSchema", "listObservations", "getObservation"].map((t) => `mcp__langfuse__${t}`),

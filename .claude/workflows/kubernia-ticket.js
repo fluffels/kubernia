@@ -435,73 +435,67 @@ function nachweisFuerPr({ konvergiert, head, stand, plan }) {
  * Runde startet, entscheidet lensPlan (#1265): drei für Code, die Doku-Brille allein für Markdown.
  */
 // ── Lens-Texte (#1309) — Anfang
-const LENSES = [
+// Die Prüfpunkte stehen EINMAL im Skill (.claude/skills/review-lenses/SKILL.md, Quelle) und hier wörtlich (normalisiert:
+// ohne **, Backticks, Links, Doku-Nummerierung); test/harness/lens-abgleich.test.ts verlangt Gleichheit. Der Auftrag wird
+// aus Einleitung, Prüfliste, Hinweis und Regel-Ausschnitt gebaut; der Block bleibt selbsttragend (kein Modulbezug).
+const LENS_QUELLE = [
   {
     key: 'architektur',
-    auftrag: `Lens „Architektur" — was dependency-cruiser (check:arch) statisch NICHT sieht.
-Prüfe: liegt neue Logik in der richtigen Schicht (pure Domäne ↔ Anwendung ↔ Präsentation,
-Domäne/Anwendung bleibt Phaser-/DOM-frei und Node-testbar)? Schleicht sich Präsentation
-inhaltlich in die Domäne ein, ohne einen Import zu verletzen? God-Function (der LOC-Deckel
-check:size sieht nur Dateien, nicht Funktionen)? Duplizierung einer bestehenden Fabrik/
-Abstraktion statt Wiederverwendung? Und die ⭐ oberste Regel: trägt der Ansatz noch bei
-10× Content/NPCs/Welten, oder reproduziert er dasselbe Problem größer?
-Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):
-AGENTS.md § Architektur + § Oberste Regel. Die Schicht-Tabelle liegt on-demand (nicht im Kontext)
-in docs/referenz/schichtregeln.md — die darfst du gezielt öffnen. Die Doku-/Test-Regeln
-gehören den anderen beiden Brillen — lies sie nicht mit.`,
+    intro: 'Lens „Architektur" — was dependency-cruiser (check:arch) statisch NICHT sieht.',
+    pruefpunkte: [
+      'Liegt neue Logik in der richtigen Schicht? (pure Domäne ↔ Anwendung ↔ Präsentation — Domäne/Anwendung bleibt Phaser-/DOM-frei und Node-testbar.)',
+      'Schleicht sich Präsentation in die Domäne (oder umgekehrt) inhaltlich ein, ohne einen Import zu verletzen?',
+      'God-Function / zu viel in einer Einheit (der LOC-Deckel check:size sieht nur Dateien, nicht Funktionen)?',
+      'Duplizierung einer schon existierenden Fabrik/Abstraktion statt Wiederverwendung?',
+      'Stardew-Scope (oberste Regel): trägt der Ansatz noch bei 10× Content/NPCs/Welten, oder reproduziert er dasselbe Problem größer? Content als Daten (nicht als TS-Literal), Granularität mitgedacht?',
+    ],
+    hinweis: '',
+    regel: 'Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):\nAGENTS.md § Architektur + § Oberste Regel. Die Schicht-Tabelle liegt on-demand (nicht im Kontext)\nin docs/referenz/schichtregeln.md — die darfst du gezielt öffnen. Die Doku-/Test-Regeln\ngehören den anderen beiden Brillen — lies sie nicht mit.',
   },
   {
     key: 'requirement-treue',
-    auftrag: `Lens „Requirement-Treue" — tut der Diff wirklich, was das Ticket verlangt?
-Halte den Diff gegen jedes Akzeptanzkriterium einzeln: erfüllt / offen / darüber hinaus.
-Prüfe Scope-Kriechen (ein Ein-Ticket-Diff bleibt klein; Aufgefallenes gehört in ein neues
-Issue, nicht inline mitgefixt). Spielinhalte/Quests/Steuerung berührt ⇒ README mitgezogen?
-Neues src/-Modul ⇒ Backtick-Pfad-Zeile im passenden docs/module/-Tiefendoc? Save-Format
-berührt ⇒ migriert (Version-Bump + Migrationskette), alter Stand bleibt heil?
-Fügt der Diff Agenten/Subagenten, MCP-Server, Hooks oder Plugins hinzu oder konfiguriert er sie
-um ⇒ ist die Langfuse-Erfassung im PR belegt (AGENTS.md § Langfuse-Erfassung erhalten)?
-Messbehauptungen (Tokens, Calls, Kosten aus Langfuse oder dem Transkript) prüfst du nur gegen Rohwerte, die der Auftrag
-mitliefert (Session-IDs, Zeitfenster, Zählung je Quelle); die Transkript-Seite rechnest du per node scripts/token-baseline.mjs --session <id> nach, Langfuse kannst du nicht abfragen. Ohne Rohwerte: Hinweis „nicht belegt“, kein Blocker.
-Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):
-AGENTS.md § Doku aktuell halten + § Spielstände. Schichtungs- und Test-Fragen gehören den
-anderen beiden Brillen — lies sie nicht mit.`,
+    intro: 'Lens „Requirement-Treue" — prüfe, ob der Diff wirklich tut, was das Ticket verlangt.',
+    pruefpunkte: [
+      'Ticket lesen (gh issue view <nr>) und den Diff gegen die Akzeptanzkriterien halten — jedes Kriterium einzeln: erfüllt / offen / darüber hinausgegangen.',
+      'Scope-Kriechen: ändert der Diff mehr als das Ticket (ein Ein-Ticket-Diff bleibt klein — Aufgefallenes wird festgehalten, nicht inline mitgefixt)?',
+      'Betrifft es Spielinhalte/Quests/Steuerung → README mitgezogen? Neues src/-Modul → Backtick-Pfad-Zeile im passenden docs/module/-Tiefendoc ergänzt (nicht in die Repo-Landkarte, #907)?',
+      'Berührt es das Save-Format → migriert (Version-Bump + Migrationskette), alter Stand bleibt heil?',
+      'Fügt der Diff Agenten, Subagenten, MCP-Server, Hooks oder Plugins hinzu oder konfiguriert er sie um → ist die Langfuse-Erfassung im PR belegt (AGENTS.md § Langfuse-Erfassung erhalten)? Messbehauptungen in Diff, PR oder Zusammenfassung: gib der Lens die Rohwerte mit (Session-IDs, Zeitfenster, Zählung je Quelle), sie hat keine Langfuse-Tools und prüft sonst nur die Transkript-Seite per node scripts/token-baseline.mjs --session <id>; ohne Rohwerte meldet sie „nicht belegt“ (Hinweis).',
+    ],
+    hinweis: '',
+    regel: 'Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):\nAGENTS.md § Doku aktuell halten + § Spielstände. Schichtungs- und Test-Fragen gehören den\nanderen beiden Brillen — lies sie nicht mit.',
   },
   {
     key: 'test-adaequanz',
-    auftrag: `Lens „Test-Adäquanz" — deckt der Test Verhalten ab, und ist er echt?
-Prüft er die öffentliche API / beobachtbares Verhalten (überlebt Refactoring) statt Interna?
-Sind Negativfälle dabei (kaputter Zustand, falsche Eingabe, „darf nicht passieren")?
-Kein False Positive: würde der Test rot, wenn man die Logik testweise verfälscht? Wo du
-zweifelst, sabotiere die Assertion/den Fix kurz, sieh rot, setze zurück. Diese Sabotage ist
-die EINE Ausnahme von „du änderst nichts": sie ist erlaubt und bei Zweifel Pflicht, denn sie
-ist der einzige Schritt, der harte Fehler statt Stil-Anmerkungen findet. Sie wird NICHT
-wegoptimiert. Setz sie danach vollständig zurück und belege das mit einem leeren
-git status --porcelain. Bugfix ⇒ gab es den fehlschlagenden Repro-Test zuerst?
-Präsentations-Code (Phaser/DOM) wird im Browser verifiziert statt per Unit-Test — ist das
-passiert und belegt?
-Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):
-AGENTS.md § TDD ist der Default, § Tests gegen False Positives absichern.`,
+    intro: 'Lens „Test-Adäquanz" — prüfe, ob der Test Verhalten abdeckt und echt ist.',
+    pruefpunkte: [
+      'Prüft der Test die öffentliche API / beobachtbares Verhalten (überlebt Refactoring), nicht Interna?',
+      'Negativfälle dabei (kaputter Zustand, falsche Eingabe, „darf nicht passieren"), nicht nur Happy Path?',
+      'Kein False Positive (Red-Green): würde der Test rot, wenn man die Logik testweise verfälscht? Wo Zweifel bestehen, den Fix/die Assertion kurz sabotieren → rot sehen → zurücksetzen (vgl. AGENTS.md „Tests gegen False Positives absichern"). Bugfix ⇒ gab es den fehlschlagenden Repro-Test zuerst?',
+      'Präsentations-Code (Phaser/DOM) wird im Browser verifiziert statt per Unit-Test — ist das passiert und belegt?',
+    ],
+    hinweis: 'Die Sabotage (Assertion oder Fix kurz verfälschen, rot sehen, zurücksetzen) ist die EINE Ausnahme von „du änderst nichts“: sie ist erlaubt und bei Zweifel Pflicht, denn sie ist der einzige Schritt, der harte Fehler statt Stil-Anmerkungen findet. Sie wird NICHT wegoptimiert. Setz sie danach vollständig zurück und belege das mit einem leeren git status --porcelain.',
+    regel: 'Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):\nAGENTS.md § TDD ist der Default, § Tests gegen False Positives absichern.',
   },
   {
     key: 'doku',
-    auftrag: `Lens „Doku" — der EINZIGE Pass für einen reinen Markdown-Diff (#1265). Eine Test-Brille
-entfällt, weil es ohne Code nichts zu sabotieren gibt; die Architektur-Fragen einer Doku stecken
-in den Punkten 2 und 3. Prüfe darum alle fünf:
-1. Requirement-Treue: halte den Diff gegen jedes Akzeptanzkriterium einzeln (erfüllt / offen /
-   darüber hinaus). Scope-Kriechen?
-2. SSOT/Drift: steht eine Regel jetzt doppelt (jede harte Regel lebt genau einmal in AGENTS.md,
-   die Langfassung in docs/)? Widerspricht der neue Text einer anderen Stelle, einem ADR oder dem
-   Verhalten von Code/Skripten? Ist-Zustand statt Historie? Lösen neue Links und Anker auf?
-3. Wächter-Kopplung: ändert der Diff eine Regel, die ein Wächter erzwingt? Greppe den
-   Regel-Begriff in test/harness/ und scripts/. Erzwingt dort weiter die alte Fassung, ist das
-   blockierend — dann fehlt im Diff eine Code-Änderung.
-4. ⭐ Oberste Regel: trägt die Regel noch bei 10× Inhalt, Tickets und parallelen Agenten?
-5. Langfuse-Erfassung: konfiguriert der Diff Agenten/Subagenten, MCP-Server, Hooks oder Plugins
-   um ⇒ ist die Erfassung im PR belegt (AGENTS.md § Langfuse-Erfassung erhalten)?
-Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):
-AGENTS.md Kopf (SSOT) + § Doku aktuell halten + § Oberste Regel.`,
+    intro: 'Lens „Doku" — der EINZIGE Pass für einen reinen Markdown-Diff (#1265).',
+    pruefpunkte: [
+      'Requirement-Treue: der Diff gegen jedes Akzeptanzkriterium einzeln (erfüllt / offen / darüber hinaus), Scope-Kriechen?',
+      'SSOT/Drift: steht eine Regel jetzt doppelt (jede harte Regel genau einmal in AGENTS.md, die Langfassung in docs/)? Widerspricht der Text einer anderen Stelle, einem ADR oder dem Verhalten von Code/Skripten? Ist-Zustand statt Historie? Lösen neue Links und Anker auf?',
+      'Wächter-Kopplung: ändert der Diff eine Regel, die ein Wächter erzwingt (Regel-Begriff in test/harness/ und scripts/ greppen)? Erzwingt er weiter die alte Fassung, ist das blockierend — dann fehlt eine Code-Änderung.',
+      '⭐ Oberste Regel: trägt die Regel noch bei 10× Inhalt, Tickets und parallelen Agenten?',
+      'Langfuse-Erfassung: konfiguriert der Diff Agenten, Subagenten, MCP-Server, Hooks oder Plugins um → ist die Erfassung im PR belegt (AGENTS.md § Langfuse-Erfassung erhalten)?',
+    ],
+    hinweis: 'Eine Test-Brille entfällt, weil es ohne Code nichts zu sabotieren gibt; die Architektur-Fragen einer Doku stecken in den Punkten 2 und 3. Prüfe darum alle fünf.',
+    regel: 'Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):\nAGENTS.md Kopf (SSOT) + § Doku aktuell halten + § Oberste Regel.',
   },
 ]
+const LENSES = LENS_QUELLE.map((l) => ({
+  key: l.key,
+  pruefpunkte: l.pruefpunkte,
+  auftrag: [l.intro, 'Prüfe:', ...l.pruefpunkte.map((p) => '- ' + p), ...(l.hinweis ? [l.hinweis] : []), l.regel].join('\n'),
+}))
 // ── Lens-Texte (#1309) — Ende
 
 /**

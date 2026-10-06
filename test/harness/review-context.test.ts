@@ -266,7 +266,7 @@ describe("Kontext-Diät: AGENTS.md wird nicht erneut gelesen (#1034)", () => {
   test("jede Brille bekommt ihren eigenen Regel-Ausschnitt", () => {
     // Aufgabe (2) des Tickets verlangt ausdrücklich einen ANDEREN Ausschnitt je Brille — sonst
     // liest jede Lens wieder alles.
-    const lenses = workflow.slice(workflow.indexOf("const LENSES"), workflow.indexOf("\nconst MAX_FIX_VERSUCHE"));
+    const lenses = workflow.slice(workflow.indexOf("const LENS_QUELLE"), workflow.indexOf("\nconst MAX_FIX_VERSUCHE"));
     const treffer = lenses.match(/Dein Regel-Ausschnitt/g) || [];
     const brillen = (lenses.match(/^ {4}key: '/gm) || []).length;
     assert.ok(brillen >= 4, `Nur ${brillen} Brillen in LENSES gefunden, erwartet die drei Code-Brillen + Doku (#1265)`);

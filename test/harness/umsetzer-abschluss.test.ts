@@ -34,9 +34,7 @@ const abschnitt = (md: string, kopf: RegExp): string => {
   return zeilen.slice(start, ende).join("\n");
 };
 
-const toolsZeile = (md: string): string => /^tools:\s*(.*)$/m.exec(md)?.[1] ?? "";
-
-/** Probleme beim Abschluss: Hintergrund-Tasks vor dem Bericht stoppen, Tools dafür vorhanden. */
+/** Probleme beim Abschluss: Hintergrund-Tasks vor dem Bericht stoppen (die Tool-Whitelist bindet model-routing.test.ts). */
 function abschlussProbleme(md: string): string[] {
   const probleme: string[] = [];
   const a = abschnitt(md, /^## Letzte Nachricht/);
@@ -44,8 +42,6 @@ function abschlussProbleme(md: string): string[] {
   const vorBericht = a.split("```")[0];
   if (!/TaskStop/.test(vorBericht)) probleme.push("TaskStop steht nicht vor dem Berichtsformat");
   if (!/tick/.test(vorBericht) || !/until/.test(vorBericht)) probleme.push("Monitor-Regel (until-Schleife, keine Zwischenmeldungen) fehlt");
-  const tools = toolsZeile(md).split(",").map((t) => t.trim());
-  for (const t of ["TaskStop", "Monitor"]) if (!tools.includes(t)) probleme.push(`Tool ${t} fehlt in der Whitelist`);
   return probleme;
 }
 
@@ -65,7 +61,7 @@ describe("Umsetzer-Abschluss (#1308)", () => {
     assert.deepEqual(nachweisProbleme(UMSETZER), []);
   });
 
-  test("rot: TaskStop-Satz gestrichen, nur hinter dem Format, Monitor-Regel oder Tools fehlen", () => {
+  test("rot: TaskStop-Satz gestrichen, nur hinter dem Format oder Monitor-Regel fehlt", () => {
     const ohneSatz = UMSETZER.replace(/Vorher beendest du alle eigenen Hintergrund-Tasks[^\n]*\n/, "");
     assert.notEqual(ohneSatz, UMSETZER, "Muster muss treffen");
     assert.ok(abschlussProbleme(ohneSatz).some((p) => p.includes("TaskStop")));
@@ -79,8 +75,6 @@ describe("Umsetzer-Abschluss (#1308)", () => {
     assert.notEqual(ohneUntil, UMSETZER, "Muster until muss treffen");
     for (const md of [ohneTick, ohneUntil]) assert.deepEqual(abschlussProbleme(md), ["Monitor-Regel (until-Schleife, keine Zwischenmeldungen) fehlt"]);
     assert.ok(abschlussProbleme(UMSETZER.replace(/Wartest du per `Monitor` auf die CI[^\n]*/, "")).some((p) => p.includes("Monitor-Regel")));
-    assert.ok(abschlussProbleme(UMSETZER.replace(/^(tools:.*)\bTaskStop, /m, "$1")).some((p) => p.includes("Tool TaskStop")));
-    assert.ok(abschlussProbleme(UMSETZER.replace(/^(tools:.*)\bMonitor, /m, "$1")).some((p) => p.includes("Tool Monitor")));
   });
 
   test("rot: Abschnitt fehlt, Nachweis hinter dem PR-Schritt oder gestrichen", () => {
