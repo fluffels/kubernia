@@ -321,7 +321,8 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
 // ── SubagentStop + Ausgabeformat (#1309) ──────────────────────────────────────
 
 type HookErgebnis = { exit: number; stdout: string; stderr: string };
-const runHook: (stdin: string, root: string, check?: (r: string) => { blocked: boolean; reason?: string }) => HookErgebnis = hook.runHook;
+type RunHook = (stdin: string, root: string, check?: (r: string) => { blocked: boolean; reason?: string }) => HookErgebnis;
+const runHook = (hook as unknown as { runHook: RunHook }).runHook;
 const geblockt = () => ({ blocked: true, reason: "Waise kq-1" });
 const frei = () => ({ blocked: false });
 
