@@ -25,6 +25,11 @@
  *      Umsetzung behauptet, schickt den nächsten Agenten auf die alte Fährte. Genau
  *      diese Klasse sieht `check:docdrift` (#529) nicht – es prüft Kommandos/Links.
  *
+ * Seit #1280 schreibt auf dem Skill-Pfad nicht mehr der Hauptagent den Code, sondern der Subagent
+ * `kubernia-umsetzer` mit `sonnet`/`medium` im eigenen Frontmatter: Projekt-Default und Skill-Frontmatter
+ * ließen sich per `/model` bzw. durch den Turn-Scope still umgehen. Der Wächter prüft Agent, Spawn ohne
+ * `model:`, `Agent`-Tool und vorgeladenes `review-lenses` (sonst Inline-Review) und dass kubernia-loop weg ist.
+ *
  * Seit #1065 gilt zusätzlich: jede `agent()`-Aufrufstelle im Workflow setzt `effort` und
  * `model` (oder `agentType`), settings.json trägt den Projekt-Default `sonnet` (Hebel gegen den
  * Claude-Code-Bug anthropics/claude-code#98898), es gibt keine festen Modell-IDs mehr und genau
@@ -91,8 +96,10 @@ const collectMarkdown: (rootDir?: string) => string[] = checkDocDrift.collectMar
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
-/** Der Skill, der die Umsetzung tippt – hier MUSS der Coding-Tier stehen (#1035). */
+/** Der Einstiegs-Skill im Hauptchat; sein Frontmatter gilt nur bei /kubernia (#1035, #1280). */
 const UMSETZUNGS_SKILL = ".claude/skills/kubernia/SKILL.md";
+/** Der Subagent, der auf dem Skill-Pfad tatsächlich umsetzt (#1280). */
+const UMSETZER = ".claude/agents/kubernia-umsetzer.md";
 /** Der Skill, dessen Lenses trotz Coding-Tier-Umsetzung auf dem starken Tier bleiben müssen. */
 const REVIEW_SKILL = ".claude/skills/review-lenses/SKILL.md";
 /** Die SSOT-/Checklisten-Datei für Modell-Pins. */
@@ -207,7 +214,7 @@ const RETIRED_ROUTING_CLAIMS: { term: string; home: string }[] = [
   },
   {
     term: "Session-Default",
-    home: `seit #1035/#1065 tippt die Umsetzung auf beiden Pfaden den Coding-Tier – im Workflow per agent({model}), im Skill-Pfad per Projekt-Default in .claude/settings.json (das Frontmatter in ${UMSETZUNGS_SKILL} greift nur bei /kubernia)`,
+    home: `die Umsetzung tippt auf beiden Pfaden den Coding-Tier – im Workflow per agent({model}), im Skill-Pfad im Subagenten ${UMSETZER} (Frontmatter, #1280)`,
   },
 ];
 
@@ -344,12 +351,10 @@ describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
     );
   });
 
-  test("Planer opus/xhigh, Loop-Spawn mit model (ohne effort)", () => {
+  test("Planer opus/xhigh", () => {
     const planer = frontmatter(read(".claude/agents/kubernia-planner.md"));
     assert.equal(planer.model, "opus");
     assert.equal(planer.effort, "xhigh");
-    // Das Agent-Tool hat keinen `effort`-Parameter (docs/model-routing.md §2): nur `model` ist Pflicht.
-    assert.match(read(".claude/skills/kubernia-loop/SKILL.md"), /Agent-Tool[^\n]*`model: "sonnet"`/, "Loop-Spawn ohne model (#1047)");
   });
 
   test("genau eine Plan-Aufrufstelle im Workflow", () => {
@@ -411,6 +416,65 @@ describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
       [],
       "Doppelter `name:` in .claude/agents",
     );
+  });
+});
+
+/** Alle `Agent({…})`-Spawn-Blöcke einer Markdown-Datei (ohne verschachtelte `}` im Block). */
+const spawnBloecke = (md: string): string[] => md.match(/Agent\(\{[^}]*\}\)/gs) ?? [];
+/** Der Spawn-Block für genau diesen `subagent_type`, sonst `""`. */
+const spawnFuer = (md: string, typ: string): string =>
+  spawnBloecke(md).find((b) => new RegExp(`subagent_type:\\s*["']${typ}["']`).test(b)) ?? "";
+
+
+describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nicht im Hauptchat (#1280)", () => {
+  test("Umsetzer-Agent: Coding-Tier und Effort aus der Matrix im eigenen Frontmatter", () => {
+    const fm = frontmatter(read(UMSETZER));
+    assert.equal(fm.name, "kubernia-umsetzer");
+    assert.ok(
+      fm.model && istCodingTier(fm.model),
+      "Der Umsetzer muss im Frontmatter auf dem Coding-Tier stehen – nur das Agent-Frontmatter wirkt unabhängig " +
+        "vom Session-Modell (Skill-Frontmatter gilt nur für den Turn, #98898).",
+    );
+    assert.equal(fm.effort, "medium", "Matrix §1: Umsetzung sonnet/medium; das Agent-Tool kennt kein effort");
+    assert.notEqual(fm.omitClaudeMd, "true", "Der Umsetzer braucht AGENTS.md im Kontext");
+  });
+
+  test("Umsetzer kann die Lenses spawnen und hat den Review-Ablauf vorgeladen", () => {
+    const fm = frontmatter(read(UMSETZER));
+    for (const tool of ["Agent", "Edit", "Write", "Bash"]) {
+      assert.match(fm.tools ?? "", new RegExp(`\\b${tool}\\b`), `tools: ohne ${tool}`);
+    }
+    assert.match(
+      fm.skills ?? "",
+      /\breview-lenses\b/,
+      "Ohne `skills: [review-lenses]` kennt der Umsetzer den Review-Ablauf nicht (das Skill-Tool ist per Whitelist gesperrt).",
+    );
+    const env = (JSON.parse(read(".claude/settings.json")) as { env?: Record<string, string> }).env ?? {};
+    const tiefe = env.CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH;
+    assert.ok(
+      tiefe === undefined || Number(tiefe) >= 2,
+      "Hauptchat → Umsetzer → Lens braucht zwei Ebenen; darunter entzieht Claude Code dem Umsetzer das Agent-Tool.",
+    );
+  });
+
+  test("der kubernia-Skill spawnt den Umsetzer ohne model-Override", () => {
+    const spawn = spawnFuer(read(UMSETZUNGS_SKILL), "kubernia-umsetzer");
+    assert.notEqual(spawn, "", `${UMSETZUNGS_SKILL} braucht einen \`Agent({ subagent_type: "kubernia-umsetzer", … })\`-Spawn`);
+    assert.doesNotMatch(spawn, /\bmodel:\s*["']/, "Ein `model:` am Spawn überstimmt das Frontmatter des Umsetzers");
+  });
+
+  test("Erkennung greift wirklich (Red-Green): spawnFuer trennt Blöcke und erkennt den Override", () => {
+    const md =
+      'Agent({\n  subagent_type: "kubernia-planner",\n  prompt: "p"\n})\n\n' +
+      'Agent({\n  subagent_type: "kubernia-umsetzer",\n  model: "opus",\n  prompt: "u"\n})';
+    assert.equal(spawnBloecke(md).length, 2);
+    assert.match(spawnFuer(md, "kubernia-umsetzer"), /model:\s*"opus"/, "der Override fällt am richtigen Block auf");
+    assert.doesNotMatch(spawnFuer(md, "kubernia-planner"), /model:/, "der Nachbarblock bleibt unberührt");
+    assert.equal(spawnFuer(md, "gibt-es-nicht"), "");
+  });
+
+  test("der Skill kubernia-loop existiert nicht mehr (ein Umsetzer pro Ticket ersetzt ihn)", () => {
+    assert.ok(!existsSync(`${REPO_ROOT}.claude/skills/kubernia-loop`), "kubernia-loop ging im Umsetzer-Subagenten auf (#1280)");
   });
 });
 

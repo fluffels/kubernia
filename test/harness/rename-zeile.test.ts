@@ -77,12 +77,6 @@ describe("/rename-Zeile ist in Workflow und Skills verankert", () => {
   it("kubernia-Skill nennt /rename kq-<nr>", () => {
     expect(lies(".claude/skills/kubernia/SKILL.md")).toContain("/rename kq-<nr> <Kurztitel>")
   })
-
-  it("kubernia-loop gibt eine Sammelzeile am Ende statt einer Zeile je Ticket", () => {
-    const loop = lies(".claude/skills/kubernia-loop/SKILL.md")
-    expect(loop).toContain("/rename kq-loop")
-    expect(loop).not.toContain("/rename kq-<nr>")
-  })
 })
 
 describe("workflowBlock (gemeinsamer Wächter-Helfer, #1239)", () => {
