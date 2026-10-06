@@ -54,7 +54,8 @@
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
       "Bash(npm publish:*)",
-      "Bash(gh repo delete:*)"
+      "Bash(gh repo delete:*)",
+      "mcp__claude-in-chrome"
     ]
   },
   "hooks": {
