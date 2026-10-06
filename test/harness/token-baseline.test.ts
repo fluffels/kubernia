@@ -104,6 +104,9 @@ describe("token-baseline: Phasen-Zuordnung", () => {
     // kubernia-lens mit einer Beschreibung ohne Review-Wort: der agentType allein ordnet zu.
     assert.equal(m.classifySubagent("kubernia-lens", "Architektur-Blick auf #1264"), "Review");
     assert.equal(m.classifySubagent("claude-code-guide", "Liest Claude Code AGENTS.md?"), null);
+    // Der Umsetzer (#1280) arbeitet über Umsetzung UND CI/Merge: bewusst keine feste Phase,
+    // der Zeitschnitt an PR-/Merge-Zeitpunkt teilt seine Calls genauer auf (#1291).
+    assert.equal(m.classifySubagent("kubernia-umsetzer", "Umsetzung #1291"), null);
     assert.equal(m.classifySubagent(undefined, undefined), null);
   });
 

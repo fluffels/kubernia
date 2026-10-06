@@ -459,6 +459,26 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
     );
   });
 
+  test("Umsetzer hat die MCP-Tools für Browser-Prüfung und Langfuse-Blick (#1291)", () => {
+    const tools = (frontmatter(read(UMSETZER)).tools ?? "").split(",").map((t) => t.trim());
+    // Eine Whitelist ohne mcp__-Einträge nimmt dem Subagenten ALLE MCP-Tools: dann gäbe es keine
+    // Browser-Prüfung über den Playwright-MCP (AGENTS.md) und keinen Langfuse-Blick beim Sammelticket.
+    for (const tool of [
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_evaluate",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__langfuse__queryMetrics",
+      "mcp__langfuse__listObservations",
+    ]) {
+      assert.ok(tools.includes(tool), `tools: ohne ${tool}`);
+    }
+    const server = (JSON.parse(read(".mcp.json")) as { mcpServers?: Record<string, unknown> }).mcpServers ?? {};
+    assert.ok(
+      "playwright" in server,
+      "Die mcp__playwright__*-Namen im Umsetzer setzen den Server-Schlüssel `playwright` in .mcp.json voraus.",
+    );
+  });
+
   test("der kubernia-Skill spawnt den Umsetzer ohne model-Override", () => {
     const spawn = spawnFuer(read(UMSETZUNGS_SKILL), "kubernia-umsetzer");
     assert.notEqual(spawn, "", `${UMSETZUNGS_SKILL} braucht einen \`Agent({ subagent_type: "kubernia-umsetzer", … })\`-Spawn`);
