@@ -107,6 +107,7 @@ describe("token-baseline: Phasen-Zuordnung", () => {
     // Der Umsetzer (#1280) arbeitet über Umsetzung UND CI/Merge: bewusst keine feste Phase,
     // der Zeitschnitt an PR-/Merge-Zeitpunkt teilt seine Calls genauer auf (#1291).
     assert.equal(m.classifySubagent("kubernia-umsetzer", "Umsetzung #1291"), null);
+    assert.equal(m.classifySubagent("kubernia-umsetzer", "Umsetzung #1291 nach Plan inkl. Review-Fix"), null, "der Typ zählt, nicht die Beschreibung");
     assert.equal(m.classifySubagent(undefined, undefined), null);
   });
 
