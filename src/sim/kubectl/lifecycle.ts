@@ -10,7 +10,7 @@
  * kubectl-Dispatch (../kubectl.ts).
  */
 import type { ApplyEffect, ArgoApp, Deployment, RbacSubject } from "../state";
-import { addDeployment, removeDeployment, addStatefulSet, removeStatefulSet, replaceDeploymentPod, restartStatefulPod } from "../workload";
+import { addDeployment, removeDeployment, scaleDeployment,addStatefulSet, removeStatefulSet, replaceDeploymentPod, restartStatefulPod } from "../workload";
 // Argo-CD-Reconcile/-Klon liegen seit #378 bei der argocd-Familie in ../argocd – `kubectl apply -f`
 // einer Application zieht/kloniert den Soll direkt darüber (statt über eine Host-Methode).
 import { argoReconcile, cloneChildSpec } from "../argocd";
@@ -18,6 +18,7 @@ import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { sameRbac } from "../rbac";
 import { flagValue, multiFlag } from "../util"; // clusterIP entfällt: Service läuft jetzt über host._makeService (#507)
 import { admitPod } from "./security";
+import { fileEffects } from "../manifest/registry";
 import type { KubectlHost } from "./host";
 
 /** #489: Lehnt einen vom Spieler getippten Ressourcennamen ab, wenn er die DNS-1123-Regel
@@ -250,12 +251,17 @@ const FILE_DELETABLE: readonly {
 function deleteFromFile(host: KubectlHost, t: string[]): string {
   const file = filenameArg(t);
   if (!file) return host._err("error: must specify one of -f or -k", "Muster: 'kubectl delete --filename deployment.yaml'");
-  const eff = host.applyEffects[file];
-  if (!eff || !host.files[file]) return host._err("error: the path \"" + file + "\" does not exist", "Mit 'ls' siehst du, welche Dateien hier liegen.");
+  const content = host.files[file];
+  if (typeof content !== "string") return host._err("error: the path \"" + file + "\" does not exist", "Mit 'ls' siehst du, welche Dateien hier liegen.");
+  // Hinterlegter Effekt hat Vorrang; sonst wird der Dateiinhalt geparst und gemappt (#1139).
+  const effects = fileEffects(host.applyEffects[file], content, file);
+  if (!Array.isArray(effects)) return host._err(effects.error, effects.hint);
   const out: string[] = [];
-  for (const d of FILE_DELETABLE) {
-    const res = d.pick(eff);
-    if (res && d.remove(host, res.name)) out.push(d.msg(res.name));
+  for (const eff of effects) {
+    for (const d of FILE_DELETABLE) {
+      const res = d.pick(eff);
+      if (res && d.remove(host, res.name)) out.push(d.msg(res.name));
+    }
   }
   return out.join("\n") || "nothing deleted";
 }
@@ -347,15 +353,19 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
 type ApplyHandler = (host: KubectlHost, eff: ApplyEffect, out: string[]) => string | void;
 
 /** Ein bereits bestehendes Deployment deklarativ nach-konfigurieren (idempotentes apply).
- *  Nur eine geänderte SA-Zuordnung (spec.serviceAccountName, #132) ist heute „configured",
- *  sonst „unchanged". */
-function reconfigureDeployment(existing: Deployment, effDep: NonNullable<ApplyEffect["deployment"]>, out: string[]): void {
+ *  Eine geänderte SA-Zuordnung (spec.serviceAccountName, #132) oder Replikazahl (spec.replicas,
+ *  #1139, über `scaleDeployment`) ist „configured", sonst „unchanged". */
+function reconfigureDeployment(host: KubectlHost, existing: Deployment, effDep: NonNullable<ApplyEffect["deployment"]>, out: string[]): void {
+  let changed = false;
   if (effDep.serviceAccountName && existing.serviceAccountName !== effDep.serviceAccountName) {
     existing.serviceAccountName = effDep.serviceAccountName;
-    out.push("deployment.apps/" + effDep.name + " configured");
-  } else {
-    out.push("deployment.apps/" + effDep.name + " unchanged");
+    changed = true;
   }
+  if (existing.replicas !== effDep.replicas) {
+    scaleDeployment(existing, effDep.replicas, host.clock, host.rng);
+    changed = true;
+  }
+  out.push("deployment.apps/" + effDep.name + (changed ? " configured" : " unchanged"));
 }
 
 /** Ein neues Deployment aus dem Manifest bauen und die optionalen Pod-Template-Felder
@@ -379,7 +389,7 @@ function createDeploymentFromManifest(host: KubectlHost, effDep: NonNullable<App
   if (effDep.ephemeralUsedMi !== undefined) dep.ephemeralUsedMi = effDep.ephemeralUsedMi;
   // initContainer aus dem Pod-Template (#485): füllt beim Ausrollen das emptyDir vor; der (bei
   // Doppelablage doppelte) Vorbereitungs-Peak entscheidet über die ephemeral-storage-Eviction.
-  if (effDep.initContainer) dep.initContainer = { fillsMi: effDep.initContainer.fillsMi, doubleStage: !!effDep.initContainer.doubleStage };
+  if (effDep.initContainer) dep.initContainer = { fillsMi: effDep.initContainer.fillsMi ?? 0, doubleStage: !!effDep.initContainer.doubleStage };
   // Eigenes Image (#164, Werft-Capstone): ist es noch nicht lokal gebaut/gezogen, landet
   // der Pod im ImagePullBackOff – genau wie im echten Cluster. needsBuild markiert: heilt
   // von selbst, sobald 'docker build'/'docker pull' das Image bereitstellt.
@@ -396,7 +406,7 @@ const applyDeployment: ApplyHandler = (host, eff, out) => {
   if (!effDep) return;
   const existing = host.deployments.find(d => d.name === effDep.name);
   // Deklarativ: bestehendes Deployment nach-konfigurieren, sonst neu aus dem Manifest bauen.
-  if (existing) return reconfigureDeployment(existing, effDep, out);
+  if (existing) return reconfigureDeployment(host, existing, effDep, out);
   return createDeploymentFromManifest(host, effDep, out);
 };
 
@@ -706,16 +716,20 @@ const applyHandlers: readonly ApplyHandler[] = [
 export function kubectlApply(host: KubectlHost, t: string[]) {
   const file = filenameArg(t);
   if (!file) return host._err("error: must specify one of -f or -k", "Muster: 'kubectl apply --filename deployment.yaml'");
-  if (!host.files[file]) return host._err("error: the path \"" + file + "\" does not exist", "Mit 'ls' siehst du, welche Dateien hier liegen.");
-  const eff = host.applyEffects[file];
-  if (!eff) return host._err("error: unable to decode " + file);
+  const content = host.files[file];
+  if (typeof content !== "string") return host._err("error: the path \"" + file + "\" does not exist", "Mit 'ls' siehst du, welche Dateien hier liegen.");
+  // Hinterlegter Effekt hat Vorrang; sonst wird der Dateiinhalt geparst und gemappt (#1139).
+  const effects = fileEffects(host.applyEffects[file], content, file);
+  if (!Array.isArray(effects)) return host._err(effects.error, effects.hint);
   const out: string[] = [];
-  for (const handler of applyHandlers) {
-    // Ein Handler, der einen String zurückgibt, meldet einen Fehler mit früher Rückgabe
-    // (Pod-Security-Admission, PVC-dataSource-/VolumeSnapshot-Quellen-Fehler) – exakt das
-    // alte `return host._err(...)`-Verhalten: die Kette bricht ab, der Text ist das Ergebnis.
-    const err = handler(host, eff, out);
-    if (typeof err === "string") return err;
+  for (const eff of effects) {
+    for (const handler of applyHandlers) {
+      // Ein Handler, der einen String zurückgibt, meldet einen Fehler mit früher Rückgabe
+      // (Pod-Security-Admission, PVC-dataSource-/VolumeSnapshot-Quellen-Fehler) – exakt das
+      // alte `return host._err(...)`-Verhalten: die Kette bricht ab, der Text ist das Ergebnis.
+      const err = handler(host, eff, out);
+      if (typeof err === "string") return err;
+    }
   }
   return out.join("\n");
 }
