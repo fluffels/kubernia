@@ -187,3 +187,49 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!erfassungKonfigIntakt(JSON.stringify({ ...ok, disableAllHooks: true })));
   });
 });
+
+// ── #1311: Hook-Patch-Stand, Messbehauptungen, Gruppe C ─────────────────────────
+
+/** Nennt die Hook-Patch-Doku die Prüfregel mit der gepflegten Zahl und KEINE offene Lücke bei fortgesetzten Subagenten mehr? */
+const patchDokuStimmig = (mr: string, zahl: number): boolean =>
+  new RegExp(`grep -c "LOCAL PATCH" langfuse_hook\\.py\` → \`${zahl}\``).test(mr) &&
+  /Patch-Teil fortgesetzte Subagenten/.test(mr) &&
+  !/Für solche Läufe den Transkript-Modus nehmen/.test(mr) &&
+  !/\*\*Lücke:\*\* Ein per `SendMessage` fortgesetzter/.test(mr);
+
+/** Verlangen Lens-Rolle UND Review-Skill, Messbehauptungen nur gegen mitgelieferte Rohwerte zu prüfen? */
+const messbehauptungsRegel = (text: string): boolean => /Messbehauptung/.test(text) && /Rohwerte/.test(text) && /nicht belegt/.test(text);
+
+describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
+  const mr = read("docs/model-routing.md");
+
+  test("Prüfregel steht auf 15 und fortgesetzte Subagenten sind keine offene Lücke mehr", () => {
+    assert.ok(patchDokuStimmig(mr, 15));
+    // darf NICHT passieren: alte Zahl oder die alte Lücke
+    assert.ok(!patchDokuStimmig(mr.replace("→ `15`", "→ `4`"), 15));
+    assert.ok(!patchDokuStimmig(mr + "\nFür solche Läufe den Transkript-Modus nehmen.", 15));
+    assert.ok(!patchDokuStimmig(mr.replace("Patch-Teil fortgesetzte Subagenten", "Patch-Teil x"), 15));
+  });
+
+  test("Lens, Review-Skill und Workflow: Messbehauptungen nur gegen Rohwerte", () => {
+    assert.ok(messbehauptungsRegel(read(".claude/agents/kubernia-lens.md")), "kubernia-lens.md");
+    assert.ok(messbehauptungsRegel(read(".claude/skills/review-lenses/SKILL.md")), "review-lenses/SKILL.md");
+    assert.ok(messbehauptungsRegel(read(".claude/workflows/kubernia-ticket.js")), "kubernia-ticket.js");
+    assert.ok(!messbehauptungsRegel("Prüfe alles."));
+    assert.ok(!messbehauptungsRegel("Messbehauptungen prüfst du gegen Rohwerte."), "ohne den Befund „nicht belegt“ unvollständig");
+  });
+
+  test("die Lens hat keine Langfuse-Tools (darum liefert der Auftrag die Rohwerte)", () => {
+    assert.doesNotMatch(read(".claude/agents/kubernia-lens.md"), /^tools:.*mcp__langfuse/m);
+  });
+
+  test("Gruppe C ist dauerhaft definiert, „Haupt“ meint den dünnen Hauptchat, der Vermerk steht nicht mehr in der Verdichtungszeile", () => {
+    assert.match(mr, /\| C \(Umsetzer-Subagent, #1280\) \|/);
+    assert.match(mr, /„Haupt“ und „Sockel Haupt“ meinen ab #1280 den dünnen Hauptchat/);
+    assert.match(mr, /Neue Läufe werden hier unter C fortgeführt/);
+    const zeile = mr.split("\n").find((z) => z.startsWith("| #1278-Merge bis #1276-Claim")) ?? "";
+    assert.notEqual(zeile, "");
+    assert.doesNotMatch(zeile, /ab #1280 der dünne Hauptchat/);
+    assert.match(zeile, /issuecomment-6019725674/, "der Sockel-Wert verlinkt den Beleg je Lauf");
+  });
+});

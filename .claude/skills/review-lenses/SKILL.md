@@ -101,6 +101,7 @@ Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket
 - **Scope-Kriechen:** ändert der Diff mehr als das Ticket (ein Ein-Ticket-Diff bleibt klein — Aufgefallenes wird festgehalten, nicht inline mitgefixt)?
 - Betrifft es Spielinhalte/Quests/Steuerung → **README mitgezogen**? Neues `src/`-Modul → Backtick-Pfad-Zeile im passenden **`docs/module/`-Tiefendoc** ergänzt (nicht in die [Repo-Landkarte](../../../docs/referenz/repo-landkarte.md), #907)?
 - Berührt es das **Save-Format** → migriert (Version-Bump + Migrationskette), alter Stand bleibt heil?
+- Enthält Diff, PR oder Zusammenfassung eine **Messbehauptung** (Tokens, Calls, Kosten aus Langfuse oder dem Transkript)? Gib der Lens die Rohwerte mit (Session-IDs, Zeitfenster, Zählung je Quelle): sie hat keine Langfuse-Tools und prüft sonst nur die Transkript-Seite per `node scripts/token-baseline.mjs --session <id>`; ohne Rohwerte meldet sie „nicht belegt“.
 - Fügt der Diff **Agenten, Subagenten, MCP-Server, Hooks oder Plugins** hinzu oder konfiguriert er sie um → ist die Langfuse-Erfassung im PR belegt (AGENTS.md § Langfuse-Erfassung erhalten)?
 
 **Lens 3 — Test-Adäquanz.** Deckt der Test das **Verhalten** ab — und ist er echt?

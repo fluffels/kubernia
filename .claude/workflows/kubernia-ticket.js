@@ -134,7 +134,11 @@ const UMSETZUNG_SCHEMA = {
       enum: ['ja', 'nicht-nötig', 'nein'],
       description: 'nicht-nötig nur bei rein nicht-sichtbaren Änderungen (AGENTS.md § Im Browser verifizieren)',
     },
-    zusammenfassung: { type: 'string', description: 'was inhaltlich umgesetzt wurde, 2-4 Sätze' },
+    zusammenfassung: {
+      type: 'string',
+      description:
+        'was inhaltlich umgesetzt wurde, 2-4 Sätze; bei Messbehauptungen (Langfuse/Transkript) die Rohwerte nennen: Session-IDs, Zeitfenster, Zählung je Quelle (#1311)',
+    },
     lernkandidaten: {
       type: 'array',
       maxItems: 3,
@@ -898,6 +902,10 @@ Patch-Datei" der Kontext-Ökonomie unten ist in dieser Runde der Delta-Patch.
 }
 Zusammenfassung des ausführenden Agenten zum Stand, den du reviewst (Runde ${runde}):
 ${letzteZusammenfassung || '(keine)'}
+
+Messbehauptungen (Tokens, Calls, Kosten aus Langfuse oder dem Transkript) prüfst du nur gegen Rohwerte, die in
+der Zusammenfassung oben stehen (Session-IDs, Zeitfenster, Zählung je Quelle); die Transkript-Seite rechnest du per
+node scripts/token-baseline.mjs --session <id> nach. Ohne Rohwerte: Hinweis „nicht belegt“, kein Blocker.
 
 Lies NUR durch diese eine Brille, nicht vermischt „mal drüberschauen":
 

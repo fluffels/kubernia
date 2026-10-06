@@ -866,3 +866,45 @@ describe("Workflow-Pfad: Lernkandidaten und PixelLab (#1311)", () => {
     assert.match(prompt, /höchstens 3 Punkte/);
   });
 });
+
+/**
+ * Prosa-Wächter für die Weichen-Regel auf dem Skill-Pfad (#1311): „Weichen selbst entscheiden, Rückfrage nur
+ * bei Irreversiblem oder Außenwirkung“. Der Workflow-Pfad ist per Stub getestet (oben); der Skill-Pfad hat nur
+ * Text (kubernia/SKILL.md Schritt 3, Planer Abschnitt 7, Umsetzer „entscheidung-noetig“). Ein Prädikat je Stelle,
+ * jeweils mit rotem Gegenbeispiel.
+ */
+const skillSchritt3 = (md: string): string => /^3\. \*\*Pre-Flight\*\*[^\n]*/m.exec(md)?.[0] ?? "";
+/** Skill, Schritt 3: Entscheidungen aus Abschnitt 7 verbindlich, AskUserQuestion nur bei Irreversiblem/Außenwirkung. */
+const skillRegelOk = (md: string): boolean => {
+  const z = skillSchritt3(md);
+  return /Entscheidungen aus Abschnitt 7[^.]*verbindlich/.test(z) && /`AskUserQuestion` nur[^.]*Irreversibles oder Außenwirkung/.test(z);
+};
+/** Planer, Abschnitt 7: entscheiden, „Rückfrage nötig“ nur bei Irreversiblem oder Außenwirkung. */
+const planerRegelOk = (md: string): boolean => {
+  const z = /^7\. \*\*Weichen und Entscheidungen\*\*[^\n]*/m.exec(md)?.[0] ?? "";
+  return /\*\*entscheiden\*\*/.test(z) && /„Rückfrage nötig“ steht nur bei Irreversiblem oder Außenwirkung/.test(z);
+};
+/** Umsetzer: Ermessensfragen selbst entscheiden, `entscheidung-noetig` nur bei Irreversiblem oder Außenwirkung. */
+const umsetzerRegelOk = (md: string): boolean =>
+  /Ermessensfragen[^.]*entscheidest du selbst/.test(md) && /`entscheidung-noetig` melden nur bei Irreversiblem oder Außenwirkung/.test(md);
+
+describe("Weichen-Regel im Skill-Pfad (#1311)", () => {
+  test("Skill, Planer und Umsetzer tragen die Regel", () => {
+    assert.ok(skillRegelOk(read(UMSETZUNGS_SKILL)), `${UMSETZUNGS_SKILL} Schritt 3`);
+    assert.ok(planerRegelOk(read(".claude/agents/kubernia-planner.md")), "kubernia-planner.md Abschnitt 7");
+    assert.ok(umsetzerRegelOk(read(UMSETZER)), `${UMSETZER}`);
+  });
+
+  test("Red-Green: eine aufgeweichte Fassung wird erkannt", () => {
+    const skill = read(UMSETZUNGS_SKILL);
+    assert.ok(!skillRegelOk(skill.replace("`AskUserQuestion` nur, wenn", "`AskUserQuestion` immer, wenn")), "Skill: Rückfrage nicht mehr eingeschränkt");
+    assert.ok(!skillRegelOk(skill.replace("als verbindlich", "als Vorschlag")), "Skill: Entscheidungen nicht mehr verbindlich");
+    const planer = read(".claude/agents/kubernia-planner.md");
+    assert.ok(!planerRegelOk(planer.replace("steht nur bei Irreversiblem oder Außenwirkung", "steht bei jeder Optik-Weiche")), "Planer");
+    assert.ok(!planerRegelOk(planer.replace("**entscheiden**", "vorschlagen")), "Planer: nicht mehr entscheiden");
+    const umsetzer = read(UMSETZER);
+    assert.ok(!umsetzerRegelOk(umsetzer.replace("`entscheidung-noetig` melden nur bei", "`entscheidung-noetig` melden auch bei")), "Umsetzer");
+    assert.ok(!umsetzerRegelOk(umsetzer.replace("entscheidest du selbst", "legst der Maintainerin vor")), "Umsetzer: Ermessen nicht mehr selbst");
+    assert.ok(!skillRegelOk("") && !planerRegelOk("") && !umsetzerRegelOk(""), "leerer Text erfüllt keine Regel");
+  });
+});
