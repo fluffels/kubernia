@@ -8,10 +8,10 @@
  * Reines Node-Skript (nur Builtins).
  */
 import { execFileSync } from "node:child_process";
+import { MAX_INTERPRETER } from "./hook-io.mjs";
 import { KNOWN_SUBS, PROTECTED_SUBS, abs, ask, isDir, real, tildeOf, UNKNOWN } from "./worktree-guard-tabellen.mjs";
 
 const VALUE_OPTS = ["--namespace", "--config-env", "--attr-source", "--super-prefix"];
-const MAX_ALIAS = 3;
 
 /** `-c key=value`: Aliase und `core.worktree` merken. */
 function konfiguration(g, cfg) {
@@ -173,8 +173,13 @@ function aliasAufloesen(g, words, k, rest, pe, D, c, depth) {
   const cfgName = sub.toLowerCase(); // git-Konfigurationsnamen sind nicht case-sensitiv
   if (c.cfgAliases.get(cfgName) === null) ask(c, real(D), `Der git-Alias \`${sub}\` ist nicht statisch auflösbar.`, true);
   const al = g.aliases.has(sub) ? g.aliases.get(sub) : (c.cfgAliases.get(cfgName) ?? configAlias(c, sub, D));
-  if (!al || depth >= MAX_ALIAS) return false;
+  if (!al) return false;
+  if (depth >= MAX_INTERPRETER) {
+    ask(c, real(D), `Die Alias-Kette von \`${sub}\` ist zu tief verschachtelt, der Inhalt wird nicht mehr ausgewertet.`, true);
+    return true;
+  }
   if (al.startsWith("!")) {
+    for (const [name, wert] of g.aliases) c.cfgAliases.set(name.toLowerCase(), wert); // `-c alias.x=…` gelten auch für den inneren git-Aufruf
     c.evalString(`${al.slice(1)} ${rest.map((w) => w.text).join(" ")}`, gitTargetDirs(g, pe, D, c));
     return true;
   }

@@ -30,6 +30,10 @@ export function quoteFolge(text, von = 0, q0 = null, escAussen = true) {
     if (q !== "'" && maskiert(c, q, i + 1 < text.length, escAussen)) {
       out.push({ i: i + 1, c: text[i + 1], q, masked: true });
       i++;
+      if (text[i] === "\r" && text[i + 1] === "\n") {
+        out.push({ i: i + 1, c: "\n", q, masked: true }); // CRLF-Fortsetzung: auch das \n ist maskiert
+        i++;
+      }
     } else q = naechsterZustand(q, c);
   }
   out.ende = q;

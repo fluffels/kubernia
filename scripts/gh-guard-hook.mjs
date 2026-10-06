@@ -59,26 +59,54 @@ const REST_PFADE = [
   /\/(dependabot|codespaces)\/secrets\b/,
 ];
 
-/** `gh api` als Befehl am Segmentanfang (auch nach `&`, `$(`, Klammern, Variablen-Zuweisungen, auch mit PowerShell-Cast
- *  `[array]$r = (gh api …)`), nicht als Text in einem fremden Befehl. */
-const CAST = String.raw`(?:\[[\w.,[\] ]+\]\s*)*`;
-const KL = String.raw`[\s(\`$@&]*`;
-/** Kontroll-Präfixe vor einem Befehl: Bash `then`/`do`/`else`/`time`/`!`/`{`, PowerShell `if (…) {`, `foreach (…) {`, `else {`,
- *  `ForEach-Object {`. Hinter ihnen steht der Befehl wie am Segmentanfang. */
-const KONTROLLE = String.raw`(?:(?:if|elseif|foreach|while|for|switch|until)\s*\((?:[^()]|\([^()]*\))*\)\s*|(?:if|then|else|elif|do|while|until|time|try|catch|finally|command|exec|nohup|builtin|ForEach-Object|%)\s+|\{(?:[^{}]|\{[^{}]*\})*\}\s*(?=(?:else|elseif|catch|finally)\b)|[{(!]\s*)*`;
-const GH_API_AM_ANFANG = new RegExp(String.raw`^${KL}${KONTROLLE}${CAST}${KL}(?:\$[\w:]+\s*=\s*${KL}${CAST}${KL})?(?:\w+=\S*\s+)*gh(?:\.exe)?\s+api\b`);
-const NACH_KONTROLLE = new RegExp(String.raw`^\s*${KONTROLLE}`);
+/**
+ * Präfixe vor einem Befehl, die iterativ abgeschält werden (jedes Muster einzeln und verankert, kein geschachteltes
+ * Backtracking): PowerShell-Zuweisung `$r = ` und Cast `[array]`, Kontrollwörter (`if (…) {`, `foreach (…) {`, `then`, `do`,
+ * `else`, `ForEach-Object {`, `-Process`), ein Block vor `else`/`catch`, Bash-`case`-Arme, Wrapper (`env`, `timeout 5`,
+ * `xargs -n 1`, `time -p` …) und Variablen-Zuweisungen `FOO=1`. Hinter ihnen steht der eigentliche Befehl wie am Segmentanfang.
+ */
+const WRAPPER = "env|nice|nohup|sudo|doas|xargs|timeout|stdbuf|ionice|setsid|winpty|unbuffer|time|command|exec|builtin";
+const PRAEFIXE = [
+  /^\$[\w:]+\s*=\s*/,
+  /^\[[\w.,[\] ]+\]\s*/,
+  /^(?:if|elseif|foreach|while|for|switch|until)\s*\((?:[^()]|\([^()]*\))*\)\s*/,
+  /^(?:if|then|else|elif|do|while|until|try|catch|finally|ForEach-Object|%)\s+/,
+  /^-(?:Process|Begin|End)\s+/i,
+  /^\{(?:[^{}]|\{[^{}]*\})*\}\s*(?=(?:else|elseif|catch|finally)\b)/,
+  /^case\s+[^)]*\)\s*/,
+  /^[\w*|]+\)\s+/,
+  new RegExp(String.raw`^(?:${WRAPPER})\b(?:\s+(?:-\S*|\d+\S*|\w+=\S*))*\s+`),
+  /^\w+=\S*\s+/,
+];
+const ZEICHEN_VOLL = /^[\s(`$@&!{]+/; // `$(gh api`, `@(gh api`, `& gh api`, `{ gh api`
+const ZEICHEN_ENG = /^[\s(!{]+/; // wie voll, aber ein `$` bleibt stehen (dynamisches Kommando `$CMD`)
+
+/** Schält die Präfixe ab; `mitSonderzeichen: false` lässt ein führendes `$`/`@`/`&` stehen. */
+function abschaelen(segment, mitSonderzeichen) {
+  const regeln = [...PRAEFIXE, mitSonderzeichen ? ZEICHEN_VOLL : ZEICHEN_ENG];
+  let rest = segment;
+  for (let n = 0; n < 50; n++) {
+    const treffer = regeln.map((re) => re.exec(rest)).find((m) => m && m[0].length > 0);
+    if (!treffer) break;
+    rest = rest.slice(treffer[0].length);
+  }
+  return rest;
+}
+
+/** Steht `gh api` am Segmentanfang (hinter den Präfixen)? Ein Treffer in einem Textargument eines anderen Befehls zählt nicht. */
+const beginntMitGhApi = (segment) => /^gh(?:\.exe)?\s+api\b/.test(abschaelen(segment, true));
 
 /**
  * Zerlegt einen Befehl an `&&`, `||`, `;`, `|` und Zeilenumbrüchen, aber NICHT innerhalb von Anführungszeichen
  * (`'…'`, `"…"`, Escapes mit Backslash oder PowerShell-Backtick): eine mehrzeilige GraphQL-Query im Argument bleibt
- * ein Segment.
+ * ein Segment. `escAussen`: Backslash/Backtick maskieren auch außerhalb von Quotes (Bash: ``+Zeilenumbruch ist eine
+ * Fortsetzung); ohne bleibt `C:dev; gh api …` getrennt (PowerShell-Pfade).
  */
-export function segmente(command) {
+export function segmente(command, escAussen = false) {
   const text = String(command);
   const out = [];
   let cur = "";
-  const folge = quoteFolge(text, 0, null, false);
+  const folge = quoteFolge(text, 0, null, escAussen);
   for (let k = 0; k < folge.length; k++) {
     const { i, c, q, masked } = folge[k];
     if (q === null && !masked) {
@@ -177,33 +205,42 @@ function dynamischerGrund(segment, mutierend) {
   return null;
 }
 
-/** Entfernt die äußeren Anführungszeichen eines Wortes (und das Escape des Anführungszeichens im Inneren). */
-function ohneQuotes(roh) {
-  const q = roh[0];
-  if (roh.length < 2 || (q !== '"' && q !== "'") || roh.at(-1) !== q) return roh;
-  return roh.slice(1, -1).split(q === '"' ? '\\"' : "''").join(q);
+/** Wert eines Rohwortes: Anführungszeichen weglassen, maskierte Zeichen übernehmen (auch zusammengesetzte Wörter `'a'"b"c`). */
+function wortWert(roh) {
+  const f = quoteFolge(roh);
+  let out = "";
+  for (let k = 0; k < f.length; k++) {
+    const { c, q, masked } = f[k];
+    if (f[k + 1]?.masked) continue; // das Escape-Zeichen selbst
+    if (!masked && (q === null ? c === "'" || c === '"' : c === q)) continue; // öffnendes/schließendes Quote
+    out += c;
+  }
+  return out;
 }
+
+const SHELL_OPTIONEN_MIT_WERT = ["-o", "+o", "-O", "+O", "--rcfile", "--init-file"];
 
 /** Die Skript-Zeichenkette hinter `-c`/`-Command` bzw. `cmd /c` eines Interpreter-Segments, sonst null. */
 function interpreterString(segment) {
-  const t = woerter(segment.replace(NACH_KONTROLLE, ""));
+  const t = woerter(abschaelen(segment, false));
   while (t.length && /^\w+=/.test(t[0])) t.shift();
   const name = (t.shift() ?? "").replace(/\\/g, "/").split("/").pop().toLowerCase().replace(/\.exe$/, "");
   if (name === "cmd") {
     const k = t.findIndex((x) => /^\/c$/i.test(x));
-    return k >= 0 && t.length > k + 1 ? ohneQuotes(t.slice(k + 1).join(" ")) : null;
+    return k >= 0 && t.length > k + 1 ? wortWert(t.slice(k + 1).join(" ")) : null;
   }
   if (!["bash", "sh", "zsh", "dash", "pwsh", "powershell"].includes(name)) return null;
   for (let i = 0; i < t.length; i++) {
-    if (/^-(?:c|lc|ec|command)$/i.test(t[i])) return t[i + 1] === undefined ? null : ohneQuotes(t[i + 1]);
-    if (!t[i].startsWith("-")) return null;
+    if (/^-(?:c|lc|ec|command)$/i.test(t[i])) return t[i + 1] === undefined ? null : wortWert(t[i + 1]);
+    if (SHELL_OPTIONEN_MIT_WERT.includes(t[i])) i++;
+    else if (!t[i].startsWith("-")) return null;
   }
   return null;
 }
 
 const REGEL = "Pre-Flight-Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints, Rückfrage bei der Maintainerin.";
 const frage = (grund, nr = "#1311") => ({ ask: true, reason: `gh-Guard (${nr}): ${grund}. ${REGEL}` });
-const hatVariable = (text) => /\$/.test(text.replace(/'[^']*'/g, "").replace(/\\\$|`\$/g, ""));
+const hatVariable = (text) => quoteFolge(text).some(({ c, q, masked }) => c === "$" && q !== "'" && !masked);
 
 /** Ein `gh api`-Segment: Außenwirkung (#1204) oder nicht lesbarer Inhalt (#1311), sonst null. */
 function ghApiSegment(segment) {
@@ -216,7 +253,7 @@ function ghApiSegment(segment) {
 
 /** Ein Segment ohne `gh api` am Anfang, in einem Befehl, der `gh api` irgendwo enthält. */
 function umweg(segment, tiefe) {
-  const rest = segment.replace(NACH_KONTROLLE, "");
+  const rest = abschaelen(segment, false);
   if (/^(?:eval|iex|Invoke-Expression)\b/i.test(rest)) return frage("`eval`/`iex` neben `gh api`: der zusammengesetzte Aufruf ist nicht prüfbar");
   if (/^\$\{?\w+\}?(?![\w:]|\s*=)/.test(rest)) return frage("dynamisches Kommando ($CMD) neben `gh api`: der Aufruf ist nicht prüfbar");
   const inner = tiefe < MAX_INTERPRETER ? interpreterString(segment) : null;
@@ -227,12 +264,13 @@ function umweg(segment, tiefe) {
 }
 
 /** Bewertet einen Befehl: `{ ask: true, reason }` bei einem `gh api`-Segment mit Außenwirkung oder nicht prüfbarem
- *  Inhalt (Variablen, `eval`/`iex`, Interpreter-Strings), sonst `{ ask: false }`. Nie `deny`. */
+ *  Inhalt (Variablen, `eval`/`iex`, Interpreter-Strings), sonst `{ ask: false }`. Nie `deny`. Segmentiert wird zweimal: mit
+ *  Bash-Escapes (`\`+Zeilenumbruch ist eine Fortsetzung) und ohne (PowerShell-Pfade `C:\dev\;`); das strengere Ergebnis gilt. */
 export function bewerte(command, tiefe = 0) {
   if (!command || typeof command !== "string") return { ask: false };
   const hatGhApi = /\bgh(?:\.exe)?\b/.test(command) && /\bapi\b/.test(command);
-  for (const segment of segmente(command)) {
-    const r = GH_API_AM_ANFANG.test(segment) ? ghApiSegment(segment) : hatGhApi ? umweg(segment, tiefe) : null;
+  for (const segment of new Set([...segmente(command, true), ...segmente(command, false)])) {
+    const r = beginntMitGhApi(segment) ? ghApiSegment(segment) : hatGhApi ? umweg(segment, tiefe) : null;
     if (r) return r;
   }
   return { ask: false };
