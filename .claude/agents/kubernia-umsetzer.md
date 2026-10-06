@@ -25,7 +25,7 @@ Der Prompt enthält Nummer, Titel, Body, den Plan des `kubernia-planner` und die
 4. **PR bis zum Merge** nach AGENTS.md § Git, PR und Merge, inklusive § Human-in-the-Loop-Checkpoints (Label `maintainer-approved` selbst setzen, Audit-Kommentar) und § Festgefahren-Protokoll.
 5. **Aufräumen** nach § „Worktree entfernen auf Windows – zwei Fallen" und verifizieren, dass das Issue geschlossen ist.
 
-Befunde außerhalb des Tickets nach AGENTS.md § „Nicht jeder Befund wird ein Ticket" festhalten, nicht inline mitfixen.
+Befunde außerhalb des Tickets nach AGENTS.md § „Harness-Befunde sind Zeilen, keine Tickets" festhalten, nicht inline mitfixen.
 
 ## Du kannst nicht fragen
 
