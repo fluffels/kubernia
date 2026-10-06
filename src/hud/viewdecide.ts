@@ -127,8 +127,8 @@ export function evaluateSubmission(
   const norm = input.trim().replace(/\s+/g, " ");
   const cmdOk = task.accept.some((re) => re.test(norm));
 
-  // #299/#366: Befehl trifft, nutzt aber ein noch gesperrtes Profi-Kürzel →
-  // Langform-Hinweis, nicht als gelöst UND nicht als Fehlversuch werten.
+  // #299/#366: Befehl trifft (accept) bzw. erreicht das Ziel (check), nutzt aber ein noch
+  // gesperrtes Profi-Kürzel → Langform-Hinweis, nicht als gelöst UND nicht als Fehlversuch werten.
   const reached = isReached(task, ctx, cmdOk);
   const lockedHit = cmdOk || reached
     ? lockedAbbrevInInput(norm, ctx.isAbbrevUnlocked, ctx.unlockAbbrev)

@@ -774,18 +774,21 @@ for (const [label, task] of [
   });
 }
 
-test("parseQuests: solvedBy an einem Teach-Befehl ist verboten (#891)", () => {
-  const teach = [
+test("parseQuests: explizites solvedBy 'accept' bleibt erhalten, altSolutions dazu verboten (#891)", () => {
+  const step = parseQuests(termQuest({ solvedBy: "accept", check: goalCheck }))[0].steps[0];
+  if (step.type !== "terminal") throw new Error("terminal erwartet");
+  assert.equal(step.tasks[0].solvedBy, "accept");
+});
+
+test("parseQuests: solvedBy/altSolutions an einem Teach-Befehl sind verboten (#891)", () => {
+  const teach = (extra: Record<string, unknown>) => [
     {
       ...minimalQuest,
-      steps: [
-        {
-          type: "teach",
-          brief: "B",
-          cmd: { id: "t-x", intro: "I", text: "T", accept: ["^x$"], solution: "x", hint: "H", check: "qx/t-x", solvedBy: "check", altSolutions: ["a"] },
-        },
-      ],
+      steps: [{ type: "teach", brief: "B", cmd: { id: "t-x", intro: "I", text: "T", accept: ["^x$"], solution: "x", hint: "H", check: goalCheck, ...extra } }],
     },
   ];
-  assert.throws(() => parseQuests(teach), ContentValidationError);
+  // Positiv-Kontrolle: derselbe Teach-Befehl OHNE die neuen Felder lädt – sonst prüfte der Test etwas anderes.
+  assert.doesNotThrow(() => parseQuests(teach({})));
+  assert.throws(() => parseQuests(teach({ solvedBy: "check", altSolutions: ["a"] })), /solvedBy/);
+  assert.throws(() => parseQuests(teach({ altSolutions: ["a"] })), /altSolutions/);
 });
