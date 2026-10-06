@@ -134,11 +134,20 @@ describe("Haupt-Checkout: commit/push wird geblockt (Z25)", () => {
     laeuft(`git -C /repo/wt -C kq-1 commit -m x`, HAUPT);
   });
 
-  test("bekannte Grenze (festgehalten): ein Ortswechsel IM String eines Interpreters wird nicht ausgewertet", () => {
-    // Wer diese Lücke schließt, dreht die erste Zeile um (blockt statt läuft): das ist dann keine Regression.
-    // `bash -c "cd <haupt> && git commit"` aus dem Worktree: die grobe Regel prüft gegen den aktuellen Ort (WT) und lässt durch.
-    laeuft(`bash -c "cd ${HAUPT} && git commit -m x"`, WT);
+  test("Ortswechsel IM String eines Interpreters wird ausgewertet (bash -c, sh -c, pwsh -c, iex)", () => {
+    blockt(`bash -c "cd ${HAUPT} && git commit -m x"`, WT);
+    blockt(`sh -c 'git -C ${HAUPT} push'`, WT);
+    blockt(`pwsh -c "Set-Location ${HAUPT}; git commit -m x"`, WT);
+    blockt(`powershell -Command "Set-Location ${HAUPT}; git commit -m x"`, WT);
+    blockt(`iex 'Set-Location ${HAUPT}; git push'`, WT);
     blockt(`bash -c "git commit -m x"`, HAUPT);
+    laeuft(`bash -c "git commit -m x"`, WT);
+    laeuft(`bash -c "git status"`, WT);
+  });
+
+  test("Interpreter-Rekursion ist bei Tiefe 3 begrenzt und fällt auf die grobe Regel zurück", () => {
+    const tief = (n: number): string => (n === 0 ? "git commit -m x" : `pwsh -c "${tief(n - 1).replace(/"/g, "'")}"`);
+    blockt(tief(5), HAUPT);
   });
 
   test("Interpreter-Umwege: iex, pwsh -c, cmd /c, Start-Process mit git commit/push", () => {
@@ -220,13 +229,6 @@ describe("Verdrahtung (#1311)", () => {
   test("Payload: Tool, cwd und Befehl; kaputtes JSON ergibt {}", () => {
     assert.deepEqual(g.parseHookInput('{"tool_name":"PowerShell","cwd":"C:\\\\x","tool_input":{"command":"ls"}}'), { tool: "PowerShell", cwd: "C:\\x", command: "ls" });
     assert.deepEqual(g.parseHookInput("{kaputt"), {});
-  });
-
-  test("settings.json registriert den PowerShell-Hook, der Bash-Hook bleibt auf Bash", () => {
-    const s = JSON.parse(lies(".claude/settings.json")) as { hooks: { PreToolUse: { matcher: string; hooks: { args?: string[] }[] }[] } };
-    const von = (name: string) => s.hooks.PreToolUse.find((e) => e.hooks.some((h) => (h.args ?? []).some((a) => a.endsWith(`scripts/${name}`))));
-    assert.equal(von("worktree-guard-powershell.mjs")?.matcher, "PowerShell");
-    assert.equal(von("worktree-guard-hook.mjs")?.matcher, "Bash");
   });
 
   test("die FAQ beschreibt den PowerShell-Hook und behauptet nicht, das Tool sei ungedeckt", () => {

@@ -22,8 +22,9 @@
  *
  * Reines Node-Skript (nur Builtins). `bewerte` ist pur und exportiert.
  */
-import { readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
+import { buildAskOutput, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
+
+export { buildAskOutput, parseHookInput };
 
 /** Tools, für die der Hook gilt. */
 export const GEPRUEFTE_TOOLS = ["Bash", "PowerShell"];
@@ -105,44 +106,114 @@ function segmentGrund(segment) {
   return null;
 }
 
-/** Bewertet einen Befehl: `{ ask: true, reason }` bei einem `gh api`-Segment mit Außenwirkung, sonst `{ ask: false }`. */
-export function bewerte(command) {
+const MAX_INTERPRETER = 3; // Rekursionstiefe für Interpreter-Strings
+
+/** Liest ab `von` ein Wort bis zum nächsten unquotierten Leerraum (bzw. bis zum schließenden Quote, wenn `von` schon in
+ *  Anführungszeichen steht) und meldet, ob darin ein unmaskiertes `$` außerhalb von `'…'` steht. Maskiert: `\$` (Bash),
+ *  `` `$ `` (PowerShell). */
+function dynamischesWort(text, von, quote) {
+  let q = quote;
+  for (let i = von; i < text.length; i++) {
+    const c = text[i];
+    if (q === "'") {
+      if (c === "'") q = null;
+      continue;
+    }
+    if (c === "\\" || c === "`") {
+      i++;
+      continue;
+    }
+    if (c === "$") return true;
+    if (c === q) q = null;
+    else if (q === null && (c === "'" || c === '"')) q = c;
+    else if (q === null && /\s/.test(c)) return false;
+  }
+  return false;
+}
+
+/** Quote-Zustand (`'`, `"` oder null) des Textes direkt vor Position `ende`. */
+function quoteZustand(text, ende) {
+  let q = null;
+  for (let i = 0; i < ende; i++) {
+    const c = text[i];
+    if (q === "'") {
+      if (c === "'") q = null;
+    } else if (c === "\\" || c === "`") i++;
+    else if (c === q) q = null;
+    else if (q === null && (c === "'" || c === '"')) q = c;
+  }
+  return q;
+}
+
+/** Wörter ohne Optionen (und deren Werte) eines gh-api-Segments; das erste ist der Endpunkt. */
+function endpunkt(segment) {
+  const m = /gh(?:\.exe)?\s+api\b(.*)$/s.exec(segment);
+  const tokens = (m?.[1] ?? "").match(/"(?:[^"\\`]|\\.|`.)*"|'[^']*'|\S+/g) ?? [];
+  const MIT_WERT = new Set(["-X", "--method", "-f", "-F", "--field", "--raw-field", "-H", "--header", "-q", "--jq", "-t", "--template", "--hostname", "--input", "--cache"]);
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i].startsWith("-")) {
+      if (MIT_WERT.has(tokens[i])) i++;
+    } else return tokens[i];
+  }
+  return null;
+}
+
+/** Zusätzliche Rückfrage-Gründe für ein `gh api`-Segment, dessen Inhalt nicht statisch lesbar ist. */
+function dynamischerGrund(segment, mutierend) {
+  if (/(?:^|\s)(?:-X\s*|--method(?:\s+|=))['"]?\$/.test(segment)) return "die HTTP-Methode von `gh api` ist dynamisch (Variable)";
+  if (/(?:^|\s)--input(?:\s|=)/.test(segment) || /query=@/.test(segment)) return "`gh api` liest die Anfrage aus einer Datei (--input / query=@), der Inhalt ist nicht prüfbar";
+  const qi = segment.search(/\bquery=/);
+  if (qi >= 0 && dynamischesWort(segment, qi + 6, quoteZustand(segment, qi))) return "die GraphQL-Query von `gh api` ist dynamisch zusammengesetzt (Variable im query=)";
+  const ep = endpunkt(segment);
+  if (mutierend && ep && /^["']?\$/.test(ep)) return "schreibender `gh api`-Aufruf mit dynamischem Endpunkt (Variable)";
+  return null;
+}
+
+/** Die Skript-Zeichenkette hinter `-c`/`-Command` bzw. `cmd /c` eines Interpreter-Segments, sonst null. */
+function interpreterString(segment) {
+  const m = /^[\s(`$&]*(?:\w+=\S*\s+)*(?:bash|sh|zsh|dash|pwsh|powershell)(?:\.exe)?\s+(?:-\w+\s+)*?-(?:c|lc|ec|Command)\s+(.+)$/is.exec(segment) ?? /^[\s(]*cmd(?:\.exe)?\s+\/c\s+(.+)$/is.exec(segment);
+  if (!m) return null;
+  const rest = m[1].trim();
+  const q = rest[0];
+  if ((q === '"' || q === "'") && rest.lastIndexOf(q) > 0) return rest.slice(1, rest.lastIndexOf(q)).replace(q === '"' ? /\\"/g : /''/g, q);
+  return rest;
+}
+
+const REGEL = "Pre-Flight-Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints, Rückfrage bei der Maintainerin.";
+
+/** Bewertet einen Befehl: `{ ask: true, reason }` bei einem `gh api`-Segment mit Außenwirkung oder nicht prüfbarem
+ *  Inhalt (Variablen, `eval`/`iex`, Interpreter-Strings), sonst `{ ask: false }`. Nie `deny`. */
+export function bewerte(command, tiefe = 0) {
   if (!command || typeof command !== "string") return { ask: false };
+  const hatGhApi = /\bgh(?:\.exe)?\b/.test(command) && /\bapi\b/.test(command);
   for (const segment of segmente(command)) {
-    if (!GH_API_AM_ANFANG.test(segment)) continue;
-    const grund = segmentGrund(segment);
-    if (grund) return { ask: true, reason: `gh-Guard (#1204): ${grund}. Pre-Flight-Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints, Rückfrage bei der Maintainerin.` };
+    if (GH_API_AM_ANFANG.test(segment)) {
+      const grund = segmentGrund(segment);
+      if (grund) return { ask: true, reason: `gh-Guard (#1204): ${grund}. ${REGEL}` };
+      const methode_ = methode(segment);
+      const dyn = dynamischerGrund(segment, methode_ !== null ? methode_ !== "GET" : hatFelder(segment));
+      if (dyn) return { ask: true, reason: `gh-Guard (#1311): ${dyn}. ${REGEL}` };
+      continue;
+    }
+    if (hatGhApi && /^[\s(]*(?:eval|iex|Invoke-Expression)\b/i.test(segment)) {
+      return { ask: true, reason: `gh-Guard (#1311): \`eval\`/\`iex\` neben \`gh api\`: der zusammengesetzte Aufruf ist nicht prüfbar. ${REGEL}` };
+    }
+    const inner = hatGhApi && tiefe < MAX_INTERPRETER ? interpreterString(segment) : null;
+    if (inner) {
+      const r = bewerte(inner, tiefe + 1);
+      if (r.ask) return r;
+    }
   }
   return { ask: false };
 }
 
-/** Parst das Hook-stdin-JSON tolerant: bei kaputtem/leerem Input `{}` statt zu werfen. */
-export function parseHookInput(text) {
-  try {
-    const data = JSON.parse(text);
-    return { tool: data.tool_name, command: data.tool_input?.command };
-  } catch {
-    return {};
-  }
-}
-
-/** Die dokumentierte `hookSpecificOutput`-JSON für ein `PreToolUse`-Ask. */
-export function buildAskOutput(reason) {
-  return { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "ask", permissionDecisionReason: reason } };
-}
+/** Für den Dispatcher: dieselbe Entscheidung als Objekt. */
+export const pruefeGh = (command) => bewerte(command);
 
 function main() {
-  let text;
-  try {
-    text = readFileSync(0, "utf8");
-  } catch {
-    text = "";
-  }
-  const { tool, command } = parseHookInput(text);
+  const { tool, command } = parseHookInput(readStdin());
   if (tool !== undefined && !GEPRUEFTE_TOOLS.includes(tool)) return;
-  const r = bewerte(command);
-  if (r.ask) console.log(JSON.stringify(buildAskOutput(r.reason)));
-  // Kein process.exit(): natürliches Ende flusht stdout auf Windows zuverlässig (wie worktree-guard-hook.mjs).
+  emit(mergeDecisions([bewerte(command)]));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();

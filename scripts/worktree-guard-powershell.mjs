@@ -30,10 +30,14 @@
  * Ehrliche Grenze: kein vollständiger PowerShell-Parser. Eine zur Laufzeit zusammengesetzte Befehlszeile
  * (`& ([string]'gi'+'t') commit`) sieht er nicht; die Durchsetzung bleibt das PR-Gate.
  */
-import { statSync, readFileSync } from "node:fs";
+import { statSync } from "node:fs";
 import { dirname, resolve, isAbsolute } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { buildDenyOutput, resolveGitContext } from "./worktree-guard-hook.mjs"; // eine Quelle für Entscheidung und Ausgabeform
+import { fileURLToPath } from "node:url";
+import { protectedGitTargets, resolveGitContext } from "./worktree-guard-hook.mjs"; // eine Quelle für Entscheidung und Bash-Auswertung
+import { emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
+
+export { parseHookInput };
+const MAX_INTERPRETER = 3; // Rekursionstiefe für Interpreter-Strings
 
 const ORT_BEFEHLE = new Set(["set-location", "cd", "sl", "chdir", "push-location", "pushd"]);
 const INTERPRETER = new Set(["iex", "invoke-expression", "pwsh", "pwsh.exe", "powershell", "powershell.exe", "cmd", "cmd.exe", "bash", "sh", "wsl", "start-process", "start", "invoke-command", "icm"]);
@@ -209,7 +213,7 @@ function gitZiel(rest, start, vars, istOrdnerStart) {
  * (Tests); Standard: echtes Dateisystem und `resolveGitContext` aus dem Bash-Hook.
  * @returns {{ block: boolean, reason?: string }}
  */
-export function bewertePowerShell({ command, cwd, repoRoot, deps = {} }) {
+export function bewertePowerShell({ command, cwd, repoRoot, deps = {}, tiefe = 0 }) {
   if (!command || !cwd) return { block: false }; // nicht entscheidbar → fail-open
   const istOrdner = deps.istOrdner ?? ((p) => { try { return statSync(p).isDirectory(); } catch { return false; } });
   const kontext = deps.kontext ?? ((dir) => resolveGitContext(dir, repoRoot));
@@ -258,8 +262,28 @@ export function bewertePowerShell({ command, cwd, repoRoot, deps = {} }) {
     else ortStatus = false;
   };
 
-  /** Interpreter-Umweg: kommt im Text des Statements git … commit|push vor, gilt das gegen den aktuellen Ort. */
-  const interpreter = (raw) => {
+  /** Interpreter-Umweg: der String hinter `bash -c` läuft durch den Bash-Auswerter, der hinter `pwsh -c`/`iex`
+   *  rekursiv durch diesen Guard (Tiefe ≤ 3); zusätzlich die grobe Regel: kommt im Text git … commit|push vor, gilt
+   *  das gegen den aktuellen Ort. */
+  const interpreter = (raw, toks, cmd) => {
+    if (ort !== null && tiefe < MAX_INTERPRETER) {
+      const rest = toks.slice(1).map((t) => expandiere(t, vars));
+      const ci = rest.findIndex((a) => /^-[A-Za-z]*c[A-Za-z]*$/.test(a) || /^-command$/i.test(a));
+      const name = basename(cmd).replace(/\.exe$/, "");
+      const bashLike = /^(bash|sh|zsh|dash|ksh)$/.test(name);
+      const psLike = /^(iex|invoke-expression|pwsh|powershell)$/.test(name);
+      const skript = /^(iex|invoke-expression)$/.test(name) ? rest.join(" ") : ci >= 0 ? rest.slice(ci + 1).join(" ") : null;
+      if (skript && bashLike) {
+        const stat = (p) => ({ isDirectory: () => istOrdner(p) });
+        for (const ziel of protectedGitTargets(skript, ort, { statSync: stat })) {
+          const b = blockiert(ziel, `commit/push (in \`${name} -c\`)`);
+          if (b) return b;
+        }
+      } else if (skript && psLike) {
+        const r = bewertePowerShell({ command: skript, cwd: ort, repoRoot, deps, tiefe: tiefe + 1 });
+        if (r.block) return r;
+      }
+    }
     if (!/\bgit(\.exe)?\b[^;|]*\b(commit|push)\b/i.test(raw)) return null;
     return ort === null ? unklar("commit/push") : blockiert(ort, "commit/push (über einen Interpreter)");
   };
@@ -282,34 +306,20 @@ export function bewertePowerShell({ command, cwd, repoRoot, deps = {} }) {
     let r = null;
     if (ORT_BEFEHLE.has(cmd.toLowerCase())) ortWechsel(rest);
     else if (kopfTok && istGit(kopfTok.value)) r = gitStatement(rest);
-    else if (INTERPRETER.has(cmd.toLowerCase()) || INTERPRETER.has(basename(cmd))) r = interpreter(stmt.raw);
+    else if (INTERPRETER.has(cmd.toLowerCase()) || INTERPRETER.has(basename(cmd))) r = interpreter(stmt.raw, toks.slice(aufruf ? 1 : 0), cmd);
     if (r) return r;
   }
   return { block: false };
 }
 
-/** Parst das Hook-stdin-JSON tolerant. */
-export function parseHookInput(text) {
-  try {
-    const data = JSON.parse(text);
-    return { tool: data.tool_name, cwd: data.cwd, command: data.tool_input?.command };
-  } catch {
-    return {};
-  }
-}
+/** Entscheidung für den Dispatcher: `{ block, reason }`. */
+export const pruefePowerShell = (opts) => bewertePowerShell(opts);
 
 function main() {
-  let text;
-  try {
-    text = readFileSync(0, "utf8");
-  } catch {
-    text = "";
-  }
-  const { tool, cwd, command } = parseHookInput(text);
+  const { tool, cwd, command } = parseHookInput(readStdin());
   if (tool !== undefined && tool !== "PowerShell") return;
   const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
-  const r = bewertePowerShell({ command, cwd, repoRoot });
-  if (r.block) console.log(JSON.stringify(buildDenyOutput(r.reason)));
+  emit(mergeDecisions([bewertePowerShell({ command, cwd, repoRoot })]));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();
