@@ -24,13 +24,23 @@
  *  - Scoped auf DIESES Repo: `git-common-dir` des cwd wird gegen das eigene `.git`
  *    verglichen (aus dem Skript-Pfad abgeleitet) — ein Bash-Aufruf gegen ein
  *    komplett anderes Repo im selben Claude-Code-Workspace wird nie angefasst.
- *  - Grobe Kommando-Erkennung (Segment-Split auf `&&`/`||`/`;`/Zeilenumbruch, dann
- *    Wortgrenzen-Suche nach "git" + "commit"/"push" im selben Segment) statt vollem
- *    Shell-Parsing — bewusst einfach gehalten (siehe Tests für dokumentierte
- *    Grenzfälle), kann in seltenen Fällen ein rein lesendes Kommando wie
- *    `git log --grep=push` mit-treffen (false positive, nur Reibung) — nie
- *    umgekehrt ein echtes commit/push mit `-C`/Flags übersehen (false negative
- *    wäre hier die schlimmere Richtung, siehe Tests).
+ *  - Kommando-Erkennung über einen kleinen Shell-Lexer (`lexShell`): Text in Quotes,
+ *    Heredocs und Kommentaren ist kein Kommando. Ziel ist das Verzeichnis, in dem
+ *    git liefe: Session-`cwd`, ein vorangestelltes `cd <pfad> &&` (nur existierender
+ *    Ordner, nicht in Pipeline/bei `&`, Subshells isoliert) und `git -C <pfad>`.
+ *  - Rückfall auf die grobe Wortregel (Wortsuche "git" + "commit"/"push"): gegen das Session-
+ *    `cwd`, wenn der Lexer nicht zerlegen kann; je Kommando als Sicherheitsnetz gegen das
+ *    verfolgte Verzeichnis, wenn dessen Worttext sie trifft (`bash -c "git push"`,
+ *    `timeout 5 …`); ausgenommen reine Text-Kommandos (gh, echo, printf, cat, git; nicht hinter `find -exec`). Text in
+ *    Heredoc-Bodies (außer `$(…)`/Backticks bei unquotiertem Delimiter) und Kommentaren
+ *    zählt nie. Bewusst konservativ: im Zweifel blocken; ein `cd`-Ziel, das nicht sicher
+ *    gilt (bedingt, in Blöcken, hinter `then`/`{`), wird zusätzlich als Ziel geprüft.
+ *  - Restlücken (nicht erkannt): Shell-Aliase/-Funktionen, `env -C`, Interpreter mit
+ *    Heredoc/Pipe als Eingabe (`bash <<EOF`, `echo … | sh`), `git submodule foreach`/
+ *    `rebase -x`/`subtree push`, Git-Aliase (`git -c alias.p=push p`), dynamische `cd`/`-C`-
+ *    Ziele (`cd "$(…)/.."`) aus einem Worktree, ein vorher exportiertes `GIT_DIR`; das
+ *    PowerShell-Tool deckt der Hook nicht ab. `pushd`/`popd`, ein nicht verfolgbares `cd` und `--git-dir`/`GIT_DIR`
+ *    wirken über das Session-`cwd` (zurücksetzen bzw. zusätzlich prüfen).
  *  - Fail-open bei Unsicherheit (kein cwd im Payload, cwd ist gar kein Git-Repo,
  *    cwd gehört zu einem anderen Repo): NICHT blocken — dieselbe "kein falsches
  *    Rot"-Philosophie wie check-diffsize.mjs bei fehlender Vergleichsbasis.
@@ -60,13 +70,421 @@ function normalizePath(p) {
   return process.platform === "win32" ? slashed.toLowerCase() : slashed;
 }
 
-/** True, wenn `command` (irgendwo, nach Aufteilen auf `&&`/`||`/`;`/Zeilenumbruch)
- *  ein Segment enthält, das sowohl "git" als auch "commit"/"push" als eigenes
- *  Wort trägt. Pure, kein Shell-Parsing (Grenzfälle: siehe Datei-Kopf-Kommentar). */
-export function isProtectedGitCommand(command) {
-  if (!command) return false;
+/** Alte, grobe Regel (Rückfall, wenn der Lexer nicht zerlegen kann oder ein
+ *  Interpreter den eigentlichen Befehl verbirgt): ein Segment (Split auf
+ *  `&&`/`||`/`;`/Zeilenumbruch) mit "git" UND "commit"/"push" als Wort. */
+function coarseProtected(command) {
   const segments = String(command).split(/&&|\|\||;|\n/);
   return segments.some((seg) => /\bgit\b/.test(seg) && /\b(commit|push)\b/.test(seg));
+}
+
+// ── Minimaler Shell-Lexer ───────────────────────────────────────────────────
+// Zerlegt einen Bash-Befehl in Kommandos aus Wörtern. Versteht Quotes, Escapes,
+// Kommentare, Heredocs und Substitutionen; Text darin ist KEIN Kommando.
+
+class LexError extends Error {}
+
+const boundary = (kind) => ({ words: [], sep: "", boundary: kind });
+
+function lexer(src) {
+  let pos = 0;
+  const pending = []; // wartende Heredocs { delim, strip, quoted }
+  const fail = () => {
+    throw new LexError("nicht zerlegbar");
+  };
+
+  /** pos steht hinter `(`: Liste bis `)` lesen, als `(`…`)`-Grenzen einreihen. */
+  function subst(out) {
+    out.push(boundary("("));
+    parseList(out, true);
+    out.push(boundary(")"));
+  }
+
+  /** pos steht hinter dem öffnenden Backtick. */
+  function backtick(out) {
+    let end = pos;
+    while (end < src.length && src[end] !== "`") end += src[end] === "\\" ? 2 : 1;
+    if (end >= src.length) fail();
+    const inner = src.slice(pos, end).replace(/\\([`\\$])/g, "$1");
+    pos = end + 1;
+    out.push(boundary("("), ...lexer(inner).run(), boundary(")"));
+  }
+
+  /** pos steht hinter dem öffnenden `"`. */
+  function readDouble(out, w) {
+    for (;;) {
+      if (pos >= src.length) fail();
+      const ch = src[pos];
+      if (ch === '"') {
+        pos++;
+        return;
+      }
+      if (ch === "\\") {
+        const n = src[pos + 1];
+        if (n !== undefined && '$`"\\\n'.includes(n)) {
+          if (n !== "\n") w.text += n;
+          pos += 2;
+        } else {
+          w.text += "\\";
+          pos++;
+        }
+        continue;
+      }
+      if (ch === "$" || ch === "`") {
+        w.dynamic = true;
+        if (ch === "`") {
+          pos++;
+          backtick(out);
+        } else if (src[pos + 1] === "(") {
+          pos += 2;
+          subst(out);
+        } else pos++;
+        continue;
+      }
+      w.text += ch;
+      pos++;
+    }
+  }
+
+  /** `<<[-]DELIM`: pos steht hinter `<<`. Das Delimiter-Wort wird vorgemerkt. */
+  function heredocStart() {
+    const strip = src[pos] === "-";
+    if (strip) pos++;
+    while (src[pos] === " " || src[pos] === "\t") pos++;
+    let delim = "";
+    let quoted = false;
+    while (pos < src.length && !/[\s;|&()<>]/.test(src[pos])) {
+      const ch = src[pos];
+      if (ch === "'" || ch === '"') {
+        const end = src.indexOf(ch, pos + 1);
+        if (end < 0) fail();
+        delim += src.slice(pos + 1, end);
+        quoted = true;
+        pos = end + 1;
+      } else if (ch === "\\") {
+        delim += src[pos + 1] ?? "";
+        quoted = true;
+        pos += 2;
+      } else {
+        delim += ch;
+        pos++;
+      }
+    }
+    if (!delim) fail();
+    pending.push({ delim, strip, quoted });
+  }
+
+  /** Nach einem Zeilenumbruch: die Bodies der vorgemerkten Heredocs lesen. */
+  function readHeredocs(out) {
+    while (pending.length) {
+      const { delim, strip, quoted } = pending.shift();
+      let body = "";
+      for (;;) {
+        if (pos >= src.length) fail();
+        const end = src.indexOf("\n", pos);
+        const line = src.slice(pos, end < 0 ? src.length : end).replace(/\r$/, "");
+        pos = end < 0 ? src.length : end + 1;
+        if ((strip ? line.replace(/^\t+/, "") : line) === delim) break;
+        if (end < 0) fail();
+        body += line + "\n";
+      }
+      // Quotierter Delimiter: Body wörtlich. Sonst nur Substitutionen darin auswerten.
+      if (!quoted) {
+        const inner = lexer(body).scanBody();
+        if (inner.length) out.push(boundary("("), ...inner, boundary(")"));
+      }
+    }
+  }
+
+  function parseList(out, nested) {
+    let words = [];
+    let w = null;
+    const ensure = () => (w ??= { text: "", dynamic: false });
+    const endWord = () => {
+      if (w) words.push(w);
+      w = null;
+    };
+    const endCmd = (sep) => {
+      endWord();
+      if (words.length) out.push({ words, sep });
+      else if (sep && out.length && out[out.length - 1].boundary === ")") out[out.length - 1].sep = sep; // Trenner hinter einer Subshell
+      words = [];
+    };
+    while (pos < src.length) {
+      const ch = src[pos];
+      const next = src[pos + 1];
+      if (ch === " " || ch === "\t" || ch === "\r") {
+        endWord();
+        pos++;
+      } else if (ch === "\n") {
+        endCmd("\n");
+        pos++;
+        readHeredocs(out);
+      } else if (ch === "#" && !w) {
+        while (pos < src.length && src[pos] !== "\n") pos++;
+      } else if (ch === ";") {
+        endCmd(";");
+        pos++;
+      } else if (ch === "|" && !(w && w.text.endsWith(">"))) {
+        const sep = next === "|" ? "||" : "|";
+        endCmd(sep);
+        pos += next === "|" || next === "&" ? 2 : 1;
+      } else if (ch === "&" && next === "&") {
+        endCmd("&&");
+        pos += 2;
+      } else if (ch === "&" && !((w && /[<>]$/.test(w.text)) || next === ">")) {
+        endCmd("&");
+        pos++;
+      } else if (ch === "(" && w && /[<>]$/.test(w.text)) {
+        w.text = w.text.slice(0, -1); // <(…) / >(…): Prozess-Substitution
+        w.dynamic = true;
+        pos++;
+        subst(out);
+      } else if (ch === "(") {
+        if (w) fail(); // z.B. Funktionsdefinition: nicht zerlegbar
+        pos++;
+        subst(out);
+      } else if (ch === ")") {
+        if (!nested) fail();
+        endCmd("");
+        pos++;
+        return;
+      } else if (ch === "<" && next === "<" && src[pos + 2] !== "<") {
+        pos += 2;
+        heredocStart();
+      } else if (ch === "'") {
+        const end = src.indexOf("'", pos + 1);
+        if (end < 0) fail();
+        ensure().text += src.slice(pos + 1, end);
+        pos = end + 1;
+      } else if (ch === '"') {
+        pos++;
+        readDouble(out, ensure());
+      } else if (ch === "\\") {
+        if (next === "\n") pos += 2; // Zeilenfortsetzung
+        else {
+          if (next !== undefined) ensure().text += next;
+          pos += 2;
+        }
+      } else if (ch === "`") {
+        pos++;
+        ensure().dynamic = true;
+        backtick(out);
+      } else if (ch === "$") {
+        ensure().dynamic = true;
+        if (next === "(") {
+          pos += 2;
+          subst(out);
+        } else pos++;
+      } else {
+        ensure().text += ch;
+        pos++;
+      }
+    }
+    if (nested || pending.length) fail();
+    endCmd("");
+  }
+
+  /** Heredoc-Body (unquotierter Delimiter): nur `$(…)` und Backticks sind aktiv. */
+  function scanBody() {
+    const out = [];
+    while (pos < src.length) {
+      const ch = src[pos];
+      if (ch === "\\") pos += 2;
+      else if (ch === "$" && src[pos + 1] === "(") {
+        pos += 2;
+        subst(out);
+      } else if (ch === "`") {
+        pos++;
+        backtick(out);
+      } else pos++;
+    }
+    return out;
+  }
+
+  function run() {
+    const out = [];
+    parseList(out, false);
+    return out;
+  }
+
+  return { run, scanBody };
+}
+
+/** Zerlegt `command` in Kommandos `{ words: {text, dynamic}[], sep }` (`sep`: Trenner
+ *  danach). Substitutionen/Subshells stehen als Einträge `{ boundary: "(" | ")" }`
+ *  vor/nach dem umschließenden Kommando. Nicht zerlegbar → `{ ok: false }`. */
+export function lexShell(command) {
+  try {
+    return { ok: true, cmds: lexer(String(command)).run() };
+  } catch (e) {
+    if (e instanceof LexError) return { ok: false };
+    throw e;
+  }
+}
+
+// ── git-Aufruf erkennen ─────────────────────────────────────────────────────
+const GIT_RE = /^(?:.*[\\/])?git(?:\.exe)?$/i;
+const FIND_RE = /^(?:.*[\\/])?find(?:\.exe)?$/i;
+const PREFIX_WORDS = new Set(["then", "do", "else", "elif", "if", "while", "until", "{", "!", "time", "command", "builtin", "exec", "env", "nohup", "sudo", "xargs", "nice"]);
+const EXEC_FLAGS = new Set(["-exec", "-execdir", "-ok", "-okdir"]);
+
+/** Index des Wortes, das den eigentlichen Befehl nennt (hinter Schlüsselwörtern,
+ *  Zuweisungen und Wrappern wie `env`/`xargs`/`find -exec`); -1 wenn keiner. */
+function commandIndex(words) {
+  if (words.length && FIND_RE.test(words[0].text)) {
+    const k = words.findIndex((w) => EXEC_FLAGS.has(w.text));
+    return k < 0 ? -1 : k + 1;
+  }
+  let i = 0;
+  let wrapped = false;
+  while (i < words.length) {
+    const t = words[i].text;
+    const prefix = !words[i].dynamic && PREFIX_WORDS.has(t);
+    if (prefix) wrapped = true;
+    if (prefix || /^[A-Za-z_]\w*=/.test(t) || (wrapped && t.startsWith("-"))) i++;
+    else break;
+  }
+  return i < words.length ? i : -1;
+}
+
+/** `null` ohne git-Aufruf, sonst `{ sub, cDirs, unsure }` (Unterbefehl, `-C`-Wörter,
+ *  `--git-dir`/`--work-tree` gesetzt). */
+export function gitInvocation(words) {
+  let i = commandIndex(words);
+  if (i < 0 || words[i].dynamic || !GIT_RE.test(words[i].text)) {
+    // Unbekannter Wrapper (`timeout 60 git push`, `xargs -n 1 git …`): erstes git-Wort nehmen.
+    i = words.findIndex((w) => !w.dynamic && GIT_RE.test(w.text));
+    if (i < 0) return null;
+  }
+  const cDirs = [];
+  let unsure = words.slice(0, i).some((w) => /^GIT_(DIR|WORK_TREE)=/.test(w.text));
+  let j = i + 1;
+  while (j < words.length) {
+    const t = words[j].text;
+    if (t === "-C" && words[j + 1]) {
+      cDirs.push(words[j + 1]);
+      j += 2;
+    } else if (t === "-c" || t === "--namespace" || t === "--config-env") j += 2;
+    else if (t === "--git-dir" || t === "--work-tree") {
+      unsure = true;
+      j += 2;
+    } else if (t.startsWith("--git-dir=") || t.startsWith("--work-tree=")) {
+      unsure = true;
+      j++;
+    } else if (t.startsWith("-")) j++;
+    else break;
+  }
+  const sub = words[j];
+  return { sub: sub && !sub.dynamic ? sub.text : null, cDirs, unsure };
+}
+
+const PROTECTED_SUBS = new Set(["commit", "push"]);
+const isProtectedInvocation = (inv) => inv !== null && PROTECTED_SUBS.has(inv.sub ?? "");
+
+/** True, wenn `command` einen echten `git commit`/`git push` ausführt. Text in
+ *  Quotes, Heredoc-Bodies und Kommentaren zählt nicht; Sicherheitsnetz siehe `protectedGitTargets`. */
+export function isProtectedGitCommand(command) {
+  return protectedGitTargets(command, ".", { statSync: () => ({ isDirectory: () => false }) }).length > 0;
+}
+
+/** MSYS-/Git-Bash-Pfad `/c/foo` → `C:/foo` (nur unter Windows). */
+export function fromMsysPath(p, platform = process.platform) {
+  const m = platform === "win32" ? /^\/([a-zA-Z])(?:\/(.*))?$/.exec(p) : null;
+  return m ? `${m[1].toUpperCase()}:/${m[2] ?? ""}` : p;
+}
+
+/** Ziel des `cd`-Kommandos (ohne Optionen) oder null, wenn es nicht statisch ist. */
+function cdTarget(words) {
+  const rest = words.slice(1).filter((w) => w.dynamic || !["-L", "-P", "--", "-e", "-@"].includes(w.text));
+  const t = rest[0];
+  if (!t || t.dynamic || t.text === "-" || t.text.startsWith("~")) return null;
+  return t.text;
+}
+
+function isDirectory(path, stat) {
+  try {
+    return stat(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+const OPENERS = new Set(["if", "for", "while", "until", "case", "select", "{"]);
+const CLOSERS = new Set(["fi", "done", "esac", "}"]);
+/** Reine Text-Kommandos: ein Wortpaar "git commit/push" darin ist kein Aufruf. */
+const TEXT_COMMANDS = new Set(["gh", "echo", "printf", "cat", "git"]);
+
+/** Verzeichnisse, in denen `git commit`/`git push` aus `command` liefen (Session-`cwd`,
+ *  verfolgtes `cd`, `git -C`); leer ohne solchen Aufruf. Nicht zerlegbar: `[cwd]` bei grobem
+ *  Treffer. Sicherheitsnetz je Kommando: trifft der Worttext eines Kommandos (außer reinen
+ *  Text-Kommandos) die grobe Regel, etwa `bash -c "git push"` oder `timeout 5 bash -c …`,
+ *  gilt das verfolgte Verzeichnis als Ziel. */
+export function protectedGitTargets(command, cwd, deps = {}) {
+  if (!command) return [];
+  const lexed = lexShell(command);
+  if (!lexed.ok) return coarseProtected(command) ? [cwd] : [];
+  const stat = deps.statSync ?? statSync;
+  const targets = new Set();
+  const unverfolgt = new Set();
+  const stack = [];
+  let cur = cwd;
+  let listStart = cwd;
+  let pure = true; // in dieser Und-Oder-Liste kam bisher nur `cd` (nur dann gilt ein `cd` sicher)
+  let depth = 0; // offene Blöcke (if/for/while/case/{)
+  let prevPiped = false;
+  for (const c of lexed.cmds) {
+    if (c.boundary === "(") {
+      stack.push({ cur, listStart });
+      listStart = cur;
+      continue;
+    }
+    if (c.boundary === ")") {
+      ({ cur, listStart } = stack.pop() ?? { cur, listStart });
+      pure = false; // die Subshell zählt als Kommando: ein folgendes cd steht nicht am Listenanfang
+      prevPiped = c.sep === "|";
+      if (c.sep === "&") cur = listStart;
+      if ([";", "\n", "&"].includes(c.sep)) {
+        listStart = cur;
+        pure = true;
+      }
+      continue;
+    }
+    const first = c.words[0].dynamic ? "" : c.words[0].text;
+    const ci = commandIndex(c.words);
+    const cmdWord = ci >= 0 && !c.words[ci].dynamic ? c.words[ci].text : "";
+    const inv = gitInvocation(c.words);
+    if (isProtectedInvocation(inv)) {
+      for (const d of unverfolgt) targets.add(d); // cd-Ziele, die nicht sicher galten: zusätzlich prüfen
+      const dirs = inv.cDirs.map((w) => (w.dynamic || /^~|[{}]/.test(w.text) ? null : w.text));
+      targets.add(resolve(dirs.reduce((d, w) => (w === null ? d : resolve(d, fromMsysPath(w))), cur)));
+      // --git-dir/GIT_DIR oder ein nicht auflösbares -C können woanders hin zeigen: Session-cwd prüfen.
+      if (inv.unsure || dirs.includes(null)) targets.add(resolve(cwd));
+    } else if (!inv && ["cd", "pushd", "popd"].includes(cmdWord) && !prevPiped && c.sep !== "|" && c.sep !== "&") {
+      // Ein cd gilt nur am Anfang seiner Liste, außerhalb von Blöcken und mit statischem, existierendem
+      // Ziel; alles andere (cd -, ~, pushd/popd, bedingt) setzt zurück auf das Session-cwd. Ein
+      // statisches, existierendes Ziel, das nicht sicher gilt, wird zusätzlich als Ziel geprüft.
+      const t = cdTarget(c.words.slice(ci));
+      const dir = t === null ? null : resolve(cur, fromMsysPath(t));
+      const existiert = dir !== null && isDirectory(dir, stat);
+      const wirksam = cmdWord === "cd" && ci === 0 && pure && depth === 0 && existiert;
+      if (existiert && !wirksam) unverfolgt.add(dir);
+      cur = wirksam ? dir : cwd;
+    } else if (!inv && !(TEXT_COMMANDS.has(cmdWord) && !FIND_RE.test(first))) {
+      const text = c.words.map((w) => w.text).join(" ");
+      if (coarseProtected(text)) targets.add(resolve(cur));
+    }
+    if (OPENERS.has(first)) depth++;
+    else if (CLOSERS.has(first)) depth = Math.max(0, depth - 1);
+    pure = pure && first === "cd" && c.sep === "&&";
+    prevPiped = c.sep === "|";
+    if (c.sep === "&") cur = listStart; // Hintergrund-Liste lief in einer Subshell
+    if (c.sep === "&" || c.sep === ";" || c.sep === "\n" || c.sep === "") {
+      listStart = cur;
+      pure = true;
+    }
+  }
+  return [...targets];
 }
 
 /** Ermittelt, ob `cwd` zu DEMSELBEN Repo gehört wie `repoRoot` (Vergleich über
@@ -102,8 +520,7 @@ export function resolveGitContext(cwd, repoRoot, deps = {}) {
 
   const commonDirRaw = run(cwd, ["rev-parse", "--git-common-dir"]);
   if (!commonDirRaw) return { relevant: false };
-  // Relativ zum Aufruf-Verzeichnis, nicht zum Toplevel: in einem Unterordner liefert git `../.git` (#1311).
-  const commonDir = resolve(cwd, commonDirRaw);
+  const commonDir = resolve(cwd, commonDirRaw); // git gibt den Pfad relativ zum Aufruf-Verzeichnis aus (`../.git` im Unterordner)
 
   if (normalizePath(commonDir) !== normalizePath(referenceCommonDir)) {
     return { relevant: false }; // cwd gehört zu einem anderen Repo — nicht unsere Sache
@@ -120,22 +537,30 @@ export function resolveGitContext(cwd, repoRoot, deps = {}) {
 }
 
 /** Gesamtentscheidung: block=true nur, wenn (a) das Kommando wirklich commit/push
- *  ist, (b) cwd bekannt ist, (c) cwd zu diesem Repo gehört UND (d) es der
- *  Haupt-Checkout ist (kein Linked Worktree). Alles andere: durchlassen. */
+ *  ist, (b) cwd bekannt ist, (c) mindestens ein Ziel-Verzeichnis (cwd, verfolgtes
+ *  `cd`, `git -C`) zu diesem Repo gehört UND (d) dort der Haupt-Checkout liegt
+ *  (kein Linked Worktree). Alles andere: durchlassen. */
 export function decide({ cwd, command, repoRoot, deps }) {
-  if (!isProtectedGitCommand(command)) return { block: false };
   if (!cwd) return { block: false }; // kein cwd im Payload -> nicht entscheidbar, fail-open
-
-  const ctx = resolveGitContext(cwd, repoRoot, deps);
-  if (!ctx.relevant || !ctx.isMainWorktree) return { block: false };
-
-  return {
-    block: true,
-    reason:
-      `git commit/push ist im geteilten main-Checkout (${ctx.toplevel}) blockiert. ` +
-      `Bitte in einem eigenen \`git worktree\` arbeiten (siehe AGENTS.md § Git-Workflow) ` +
-      `— z.B. \`git fetch origin && git worktree add .claude/worktrees/kq-<nr> -b feature/kq-<nr>-<slug> origin/main\` (vom frischen origin/main, #772). (#735)`,
-  };
+  let targets;
+  try {
+    targets = protectedGitTargets(command, cwd, deps);
+  } catch {
+    targets = coarseProtected(command) ? [cwd] : []; // unerwarteter Lexer-Fehler: alte Regel statt Durchwinken
+  }
+  for (const target of targets) {
+    const ctx = resolveGitContext(target, repoRoot, deps);
+    if (!ctx.relevant || !ctx.isMainWorktree) continue;
+    return {
+      block: true,
+      reason:
+        `git commit/push würde im geteilten main-Checkout (${ctx.toplevel}) laufen und ist blockiert. ` +
+        `Aus einem worktree: \`git -C <worktree> …\` (ändert die Shell-cwd nicht) oder \`cd <worktree> && git …\`, ` +
+        `beides wertet der Hook aus. Neuer Worktree (AGENTS.md § Git-Workflow): ` +
+        `\`git fetch origin && git worktree add .claude/worktrees/kq-<nr> -b feature/kq-<nr>-<slug> origin/main\` (vom frischen origin/main, #772). (#735)`,
+    };
+  }
+  return { block: false };
 }
 
 /** Parst das Hook-stdin-JSON tolerant: liefert bei kaputtem/leerem Input `{}`

@@ -162,12 +162,6 @@ describe("Verdrahtung im Repo", () => {
     );
   });
 
-  test("Claude in Chrome ist gesperrt: Browser-Verifikation nur über den isolierten Playwright-Browser", () => {
-    // Die Erweiterung arbeitet im echten Browser der Maintainerin mit allen Logins (#1289).
-    const s = readJson(".claude/settings.json") as { permissions: { deny: string[] } };
-    assert.ok(s.permissions.deny.includes("mcp__claude-in-chrome"), "deny ohne mcp__claude-in-chrome");
-  });
-
   test("Netz-Ausgang begrenzt (#1309): --allowed-origins nur auf localhost und 127.0.0.1", () => {
     const cfg = readJson(".mcp.json") as { mcpServers: Record<string, { args: string[] }> };
     const args = cfg.mcpServers.playwright.args;

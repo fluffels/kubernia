@@ -12,6 +12,10 @@
  *      getestet in scripts/board-lib.mjs › afterIdForPosition.
  *   3. Workflow und Sammelticket-Abschnitt von docs/ticket-reihenfolge.md nennen keine eigene Zahl
  *      und verweisen auf AGENTS.md. Das ADR darf die Historie mit Zahlen erzählen.
+ *
+ * Jede weitere „Position <N>“ (auch „Position: <N>“) in AGENTS.md macht den Test absichtlich rot,
+ * auch in anderem Zusammenhang; darum steht die Position des wiederkehrenden Status-Tickets (20)
+ * nur in docs/ticket-reihenfolge.md.
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
@@ -20,7 +24,9 @@ import { fileURLToPath } from "node:url";
 
 const lies = (rel: string): string => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
-const POSITION = /Position (\d+)/g;
+/** „Position 6“ und „Position: 6“ (auch mit Zeilenumbruch dazwischen). */
+const POSITION = /Position\s*:?\s*(\d+)/g;
+const POSITION_EINZELN = /Position\s*:?\s*\d+/;
 
 /** Die Position aus AGENTS.md (genau ein Treffer) – wirft, wenn es keiner oder mehrere sind. */
 function positionAusAgentsMd(text: string): number {
@@ -66,18 +72,22 @@ describe("Sammelticket-Position (#1276)", () => {
 
   test("der Workflow doppelt die Zahl nicht, sondern verweist auf AGENTS.md", () => {
     const wf = lies(".claude/workflows/kubernia-ticket.js");
-    assert.doesNotMatch(wf, /Position \d+/);
+    assert.doesNotMatch(wf, POSITION_EINZELN);
     assert.match(wf, /Position laut AGENTS\.md/);
   });
 
   test("der Sammelticket-Abschnitt in ticket-reihenfolge.md doppelt die Zahl nicht", () => {
-    assert.doesNotMatch(abschnitt, /Position \d+/);
+    assert.doesNotMatch(abschnitt, POSITION_EINZELN);
     assert.match(abschnitt, /Position laut AGENTS\.md/);
   });
 
   test("Negativfall: eine zweite Zahl in AGENTS.md oder keine wird erkannt", () => {
     assert.throws(() => positionAusAgentsMd("Board-Position 6 und wieder auf Position 7"));
     assert.throws(() => positionAusAgentsMd("keine Zahl hier"));
+    assert.throws(() => positionAusAgentsMd("Board-Position 6 und Position: 7"), "auch die Schreibweise mit Doppelpunkt zählt");
+    assert.equal(positionAusAgentsMd("Board-Position: 6"), 6);
+    assert.match("Position: 6", POSITION_EINZELN, "auch die Einzel-Variante kennt den Doppelpunkt");
+    assert.equal(positionAusAgentsMd("Board-Position 6"), 6);
   });
 
   test("Komplett-Regel: AGENTS.md und ticket-reihenfolge.md verlangen das ganze Sammelticket, keinen Rest-Übertrag (#1311)", () => {

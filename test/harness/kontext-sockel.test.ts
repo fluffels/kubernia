@@ -38,7 +38,8 @@ export function toolsProbleme(tools: string | null): string[] {
   const probleme: string[] = [];
   for (const roh of tools.split(",")) {
     const t = roh.trim().replace(/^\[|\]$/g, "").replace(/^["']|["']$/g, "").trim();
-    if (t === "*" || t.startsWith("Skill") || t === "Artifact" || t.endsWith("__*")) {
+    const serverOhneTool = t.startsWith("mcp__") && !t.slice(5).includes("__"); // `mcp__<server>` = Server-Wildcard
+    if (t === "*" || t.startsWith("Skill") || t === "Artifact" || t.endsWith("__*") || serverOhneTool) {
       probleme.push(`unzulässiges Tool ${t}`);
     }
   }
@@ -106,6 +107,8 @@ describe("Kontext-Sockel (#1198)", () => {
       assert.deepEqual(toolsProbleme("[Read, Skill]"), ["unzulässiges Tool Skill"]);
       assert.deepEqual(toolsProbleme("Read, Skill(forum)"), ["unzulässiges Tool Skill(forum)"]);
       assert.deepEqual(toolsProbleme("Read, mcp__pixellab__*"), ["unzulässiges Tool mcp__pixellab__*"]);
+      assert.deepEqual(toolsProbleme("Read, mcp__playwright"), ["unzulässiges Tool mcp__playwright"]);
+      assert.deepEqual(toolsProbleme("mcp__playwright__browser_click, mcp__claude_ai_Notion__fetch"), []);
       assert.deepEqual(toolsProbleme("Read, Grep, Agent"), []);
     });
 

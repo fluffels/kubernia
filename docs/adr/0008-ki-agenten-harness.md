@@ -44,7 +44,7 @@ Die Verlässlichkeit muss also **nicht am Modell**, sondern an der **Umgebung** 
 ### Was bewusst *nicht* entschieden wird
 
 - ~~**Kein Wechsel auf PR-mit-Required-Checks — noch nicht.** Der Direkt-Push auf `main` bleibt, solange die Maintainerin solo mit vertrauenswürdigen, gegateten Agenten arbeitet.~~ **Überholt (2026-07-03, #592 → [ADR 0009](0009-pr-gating-required-checks.md)):** der Umstieg auf PR-Gating ist erfolgt, weil die Durchsetzung sonst am lokal umgehbaren Hook hing. Wie angekündigt war er als Re-Eval-Trigger dokumentiert, nicht verbaut.
-- **Menschliches Urteil bleibt für das, was Gates nicht prüfen können:** didaktische Richtigkeit (ist die simulierte Cluster-Mechanik pädagogisch sinnvoll?) und Spielspaß/Look — darum der Browser-Verifizierungs-Schritt und die interaktive Optik-Abstimmung per Rückfrage.
+- **Menschliches Urteil bleibt für das, was Gates nicht prüfen können:** didaktische Richtigkeit (ist die simulierte Cluster-Mechanik pädagogisch sinnvoll?) und Spielspaß/Look — darum der Browser-Verifizierungs-Schritt und die interaktive Optik-Abstimmung per Rückfrage. **Fortgeschrieben ([ADR 0012](0012-harness-autonomie-audit-spur.md), Abschnitt „Fortschreibung #1279/#1276“):** Optik entscheidet der Agent selbst an der Stardew-Referenz (Screenshots im PR, Widerspruch per Revert); eine Rückfrage gibt es nur bei Irreversiblem oder Außenwirkung.
 
 ## Konsequenzen
 
