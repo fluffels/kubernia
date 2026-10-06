@@ -123,6 +123,25 @@ function frontmatter(md: string): Record<string, string> {
   return out;
 }
 
+/** Pins des Hauptchat-Modells in den Projekt-Settings: der Schlüssel `model` und jeder `env`-Schlüssel mit MODEL (generisch, damit neue Variablennamen nicht durchrutschen). */
+function modellPins(settings: { model?: string; env?: Record<string, string> }): string[] {
+  const out = settings.model === undefined ? [] : ["model"];
+  for (const k of Object.keys(settings.env ?? {})) if (/MODEL/i.test(k)) out.push(`env.${k}`);
+  return out;
+}
+
+/** Die in der Routing-Doku genannten User-Scope-MCP-Server, deren Namen das Repo voraussetzt. */
+function userScopeServer(md: string): string[] {
+  const zeile = /User-Scope-MCP-Server, deren Namen das Repo voraussetzt:([^\n]*)/.exec(md)?.[1] ?? "";
+  return [...zeile.matchAll(/`([\w-]+)`/g)].map((m) => m[1]);
+}
+
+/** Server-Namen aus `mcp__<server>[__tool]`-Regeln, die weder in .mcp.json noch als User-Scope-Server bekannt sind. */
+function unbekannteServer(regeln: string[], bekannt: string[]): string[] {
+  const namen = regeln.filter((r) => r.startsWith("mcp__")).map((r) => r.split("__")[1]);
+  return [...new Set(namen)].filter((n) => !bekannt.includes(n));
+}
+
 /** Bezeichnet der Wert den Coding-Tier? Alias `sonnet` ODER eine gepinnte Sonnet-ID. */
 const istCodingTier = (wert: string) => /(^|[-\s])sonnet/i.test(wert);
 
@@ -402,14 +421,23 @@ describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
     assert.equal(r.aufrufe, 2, "ein Aufruf ohne Optionen fällt über die Zählung auf");
   });
 
-  test(".claude/settings.json pinnt kein Modell für den Hauptchat (#1280)", () => {
-    const settings = JSON.parse(read(".claude/settings.json")) as { model?: string };
-    assert.equal(
-      settings.model,
-      undefined,
+  test(".claude/settings.json pinnt kein Modell für den Hauptchat (#1280, #1311)", () => {
+    const settings = JSON.parse(read(".claude/settings.json")) as { model?: string; env?: Record<string, string> };
+    assert.deepEqual(
+      modellPins(settings),
+      [],
       "Das Routing steht in den Agent-Frontmattern (Umsetzer, Planer, Lenses). Ein Projekt-Default überstimmte " +
-        "nur die Modellwahl der Maintainerin für Gespräche und Pre-Flight im Hauptchat und lässt sich per /model ohnehin umgehen.",
+        "nur die Modellwahl der Maintainerin für Gespräche und Pre-Flight im Hauptchat und lässt sich per /model ohnehin umgehen. " +
+        "Das gilt auch für `env` (`ANTHROPIC_MODEL`, `ANTHROPIC_DEFAULT_*_MODEL`, `CLAUDE_CODE_SUBAGENT_MODEL` …).",
     );
+  });
+
+  test("Erkennung greift wirklich (Red-Green): `model` und jeder env-Schlüssel mit MODEL zählt als Pin", () => {
+    assert.deepEqual(modellPins({ env: { CC_LANGFUSE_TRACE_TAGS: "kubernia" } }), []);
+    assert.deepEqual(modellPins({ model: "opus" }), ["model"]);
+    for (const k of ["ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_SMALL_FAST_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL", "anthropic_model"]) {
+      assert.deepEqual(modellPins({ env: { [k]: "x" } }), [`env.${k}`], k);
+    }
   });
 
   test("Planer opus/xhigh", () => {
@@ -529,11 +557,17 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
     for (const tool of [
       "navigate", "evaluate", "take_screenshot", "snapshot", "press_key", "click", "wait_for",
       "console_messages", "handle_dialog", "file_upload",
-    ].map((t) => `mcp__playwright__browser_${t}`).concat(
-      ["queryMetrics", "listObservations", "getObservation"].map((t) => `mcp__langfuse__${t}`),
-    )) {
+    ].map((t) => `mcp__playwright__browser_${t}`)) {
       assert.ok(tools.includes(tool), `tools: ohne ${tool}`);
     }
+    // Die Langfuse-Lesetools stehen einmal in settings.json `allow` (#1311); die Umsetzer-Whitelist muss
+    // mengengleich sein, sonst darf der Hauptchat etwas, was der Umsetzer nicht kann (oder umgekehrt).
+    const erlaubt = (JSON.parse(read(".claude/settings.json")) as { permissions: { allow: string[] } }).permissions.allow;
+    assert.deepEqual(
+      tools.filter((t) => t.startsWith("mcp__langfuse__")).sort(),
+      erlaubt.filter((r) => r.startsWith("mcp__langfuse__")).sort(),
+      "Langfuse-Tools: Umsetzer-`tools:` und `permissions.allow` in .claude/settings.json müssen dieselbe Menge sein",
+    );
     // Darf NICHT passieren: andere Server (PixelLab bleibt im Hauptchat, Claude in Chrome ist
     // gesperrt) und Node-Code im Serverprozess (steht in settings.json bewusst auf ask).
     // Langfuse nur lesend: der Server bietet auch create/update/upsert/delete an.
@@ -551,6 +585,25 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
       "playwright" in server,
       "Die mcp__playwright__*-Namen im Umsetzer setzen den Server-Schlüssel `playwright` in .mcp.json voraus.",
     );
+  });
+
+  test("jedes mcp__<server>__-Präfix in allow und den Agent-Whitelists nennt einen bekannten Server (#1311)", () => {
+    const projekt = Object.keys((JSON.parse(read(".mcp.json")) as { mcpServers?: Record<string, unknown> }).mcpServers ?? {});
+    const userScope = userScopeServer(read(ROUTING_SSOT));
+    assert.ok(userScope.includes("langfuse"), "docs/model-routing.md muss `langfuse` als vorausgesetzten User-Scope-Server nennen");
+    const settings = JSON.parse(read(".claude/settings.json")) as { permissions: { allow: string[] } };
+    const regeln = [...settings.permissions.allow];
+    for (const f of readdirSync(`${REPO_ROOT}.claude/agents`).filter((n) => n.endsWith(".md"))) {
+      regeln.push(...(frontmatter(read(`.claude/agents/${f}`)).tools ?? "").split(",").map((t) => t.trim()));
+    }
+    assert.deepEqual(unbekannteServer(regeln, [...projekt, ...userScope]), [], "Ein MCP-Server-Name wurde umbenannt oder ist nirgends dokumentiert");
+  });
+
+  test("Erkennung greift wirklich (Red-Green): ein umbenannter Server fällt auf", () => {
+    assert.deepEqual(unbekannteServer(["mcp__langfuse__getObservation", "mcp__playwright", "Bash(npm:*)"], ["langfuse", "playwright"]), []);
+    assert.deepEqual(unbekannteServer(["mcp__langfuse2__getObservation"], ["langfuse", "playwright"]), ["langfuse2"]);
+    assert.deepEqual(userScopeServer("- User-Scope-MCP-Server, deren Namen das Repo voraussetzt: `langfuse`, `x`."), ["langfuse", "x"]);
+    assert.deepEqual(userScopeServer("nichts"), []);
   });
 
   test("der kubernia-Skill spawnt den Umsetzer ohne model-Override", () => {

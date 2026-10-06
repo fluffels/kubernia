@@ -46,6 +46,11 @@
       "Bash(scp:*)",
       "Bash(git push --force-with-lease:*)",
       "Bash(gh issue delete:*)",
+      "Bash(gh issue transfer:*)",
+      "Bash(gh label delete:*)",
+      "Bash(gh project delete:*)",
+      "Bash(gh project item-delete:*)",
+      "Bash(gh project field-delete:*)",
       "mcp__playwright__browser_run_code_unsafe"
     ],
     "deny": [
