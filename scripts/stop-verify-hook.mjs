@@ -25,7 +25,12 @@
  * NICHT die `rm -rf`-Deny aufweichen — der Workaround über `fs.rmSync` (kein
  * Shell-`rm`) bleibt sauber innerhalb der Least-Privilege-Policy (#901).
  *
- * Output bei blockiertem Stop: { "reason": "…" } auf stdout, exit-code != 0.
+ * Läuft auch als `SubagentStop`-Hook mit Matcher `kubernia-umsetzer` (#1309): der Stop-Hook feuert nur am
+ * Ende des Hauptchats, das Ende des Umsetzers (der den Worktree anlegt und entfernt) sah er nie.
+ *
+ * Output bei blockiertem Stop: { "decision": "block", "reason": "…" } auf stdout UND derselbe Grund auf
+ * stderr, exit-code 2 (Claude Code wertet bei Exit 2 stderr aus, das JSON deckt die Auswertung per
+ * stdout ab). `stop_hook_active` gibt in beiden Ereignissen frei, damit der Hook nie endlos blockiert.
  */
 
 import { execSync } from "node:child_process";
@@ -164,7 +169,24 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
   };
 }
 
-// ── CLI (vom Stop-Hook aufgerufen) ───────────────────────────────────────────
+/**
+ * Die ganze Hook-Entscheidung ohne Prozess-Exit: `{ exit, stdout, stderr }`. Pure bis auf `check`
+ * (injizierbar), damit der Test Stop UND SubagentStop ohne echten Worktree-Zustand fährt.
+ */
+export function runHook(stdinText, repoRoot, check = checkAndFixOrphanWorktrees) {
+  const { stopHookActive } = parseStopInput(stdinText);
+  if (stopHookActive) return { exit: 0, stdout: "", stderr: "" }; // bereits einmal blockiert → diesmal freigeben
+  // Verwaiste Worktree-Ordner automatisch aufräumen (#908/#952)
+  const orphanResult = check(repoRoot);
+  if (!orphanResult.blocked) return { exit: 0, stdout: "", stderr: "" };
+  return {
+    exit: 2,
+    stdout: JSON.stringify({ decision: "block", reason: orphanResult.reason }),
+    stderr: orphanResult.reason,
+  };
+}
+
+// ── CLI (vom Stop- und vom SubagentStop-Hook aufgerufen) ─────────────────────
 function main() {
   let stdinText;
   try {
@@ -172,20 +194,10 @@ function main() {
   } catch {
     stdinText = "";
   }
-
-  const { stopHookActive } = parseStopInput(stdinText);
-  if (stopHookActive) {
-    process.exit(0); // bereits einmal blockiert → diesmal freigeben
-  }
-
-  const repoRoot = repoRootFromScriptUrl(import.meta.url);
-
-  // Verwaiste Worktree-Ordner automatisch aufräumen (#908/#952)
-  const orphanResult = checkAndFixOrphanWorktrees(repoRoot);
-  if (orphanResult.blocked) {
-    console.log(JSON.stringify({ reason: orphanResult.reason }));
-    process.exit(2);
-  }
+  const r = runHook(stdinText, repoRootFromScriptUrl(import.meta.url));
+  if (r.stdout) console.log(r.stdout);
+  if (r.stderr) console.error(r.stderr);
+  if (r.exit !== 0) process.exit(r.exit);
   // Sauber aufgeräumt (oder nichts zu tun) → Stop freigeben (kein explizites
   // exit(0) nötig, s. worktree-guard-hook.mjs).
 }

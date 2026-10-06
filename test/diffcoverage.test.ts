@@ -430,6 +430,21 @@ describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {
     assert.equal(r.nothingToMeasure, true);
   });
 
+  test("Doku-Slice mit KQ-Diffcov-Override ist stale → rot (#1309); ohne Trailer bleibt er grün", () => {
+    const runGit: RunGit = (args) => (args[0] === "diff" ? diffFor("docs/agent-harness.md", ["@@ -0,0 +1 @@", "+text"]) : "basesha");
+    const lesen = () => {
+      throw new Error("ENOENT");
+    };
+    const r = checkDiffCoverage({ runGit: mitTrailer(runGit, "KQ-Diffcov-Override: #1021 unnötig"), readFile: lesen, env: { KQ_DIFF_BASE: "basesha" } });
+    assert.equal(r.nothingToMeasure, true);
+    assert.equal(r.stale, true);
+    assert.equal(r.failed, true, "nichts zu messen heißt nichts durchzulassen: der Trailer ist überflüssig");
+    const ohne = checkDiffCoverage({ runGit, readFile: lesen, env: { KQ_DIFF_BASE: "basesha" } });
+    assert.equal(ohne.failed, false);
+    const fremd = checkDiffCoverage({ runGit: mitTrailer(runGit, "KQ-Diffsize-Override: #1021 anderes Gate"), readFile: lesen, env: { KQ_DIFF_BASE: "basesha" } });
+    assert.equal(fremd.failed, false, "ein fremder Schlüssel macht diesen Slice nicht stale");
+  });
+
   test("nicht messbarer Diff (git wirft trotz Basis) degradiert zu grün, statt main rot zu machen", () => {
     const r = checkDiffCoverage({
       runGit: (args) => {

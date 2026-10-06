@@ -27,6 +27,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { parseNachweis } from "./check-review-nachweis.mjs";
 
 /** Lenses pro Review-Runde für Läufe ohne Runden-Marker (vor #1265 liefen immer alle drei Brillen, #1012). */
 export const LENSES_PER_ROUND = 3;
@@ -138,10 +139,12 @@ function matchersOf(prices) {
   return list;
 }
 
-/** Eintrag → die zum Zeitpunkt `ts` gültige Periode (Einzelobjekt gilt immer). */
-function periodAt(entry, ts) {
+/** Eintrag → die zum Zeitpunkt `ts` gültige Periode (Einzelobjekt gilt immer). Bei einer Periodenliste
+ *  und fehlendem/ungültigem `ts` ist die Periode nicht bestimmbar: „ohne Preis" (null), nie still die neueste (#1309). */
+export function periodAt(entry, ts) {
   if (!Array.isArray(entry)) return entry;
   const at = Date.parse(ts);
+  if (!Number.isFinite(at)) return null;
   const valid = entry.filter((p) => p.validFrom == null || !(at < Date.parse(p.validFrom)));
   return valid.length ? valid[valid.length - 1] : null;
 }
@@ -226,6 +229,7 @@ export function summarize({ calls, questions = 0 }, bounds = {}) {
     total: totalOf(sorted.filter((r) => r.phase !== "Nachlauf")),
     hasCost: window.some((w) => w.call.cost !== undefined && w.call.cost !== null),
     reviewRounds: countReviewRounds(reviewDescriptions(ticket)),
+    cacheRebuilds: countCacheRebuilds(ticket),
     questions,
     unpriced: ticket.filter((c) => c.cost === undefined || c.cost === null).length,
     costParts: costPartsOf(ticket),
@@ -290,6 +294,39 @@ function costPartsOf(calls) {
   const parts = { input: 0, cacheWrite: 0, cacheRead: 0, output: 0 };
   for (const c of calls) for (const k of Object.keys(parts)) parts[k] += num(c.costParts?.[k]);
   return parts;
+}
+
+/** Pause, ab der ein Cache (5-Minuten-TTL) als abgelaufen gilt: Subagenten schreiben mit 5 m, der Hauptchat mit 1 h. */
+const CACHE_PAUSE_MS = { subagent: 5 * 60_000, main: 60 * 60_000 };
+
+/**
+ * Cache-Neuaufbauten (#1309, Messpunkt zur Cache-TTL des Umsetzers): ein Call gilt als Neuaufbau, wenn
+ * seit dem Vorgänger derselben Konversation (je Subagent bzw. „main") mehr als die TTL vergangen ist UND
+ * der Cache-Read unter der Hälfte des Kontexts liegt (der Prefix wurde also neu geschrieben, nicht gelesen).
+ * Rückgabe: Anzahl und die dabei neu geschriebenen Cache-Write-Tokens.
+ */
+export function countCacheRebuilds(calls) {
+  const byConv = new Map();
+  for (const c of calls) {
+    const key = c.subagent ? String(subKey(c)) : "main";
+    if (!byConv.has(key)) byConv.set(key, []);
+    byConv.get(key).push(c);
+  }
+  let count = 0;
+  let cacheWriteTokens = 0;
+  for (const [key, list] of byConv) {
+    const pause = key === "main" ? CACHE_PAUSE_MS.main : CACHE_PAUSE_MS.subagent;
+    const sorted = [...list].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+    for (let i = 1; i < sorted.length; i++) {
+      const gap = Date.parse(sorted[i].ts) - Date.parse(sorted[i - 1].ts);
+      const ctx = contextOf(sorted[i]);
+      if (gap > pause && ctx > 0 && num(sorted[i].cacheRead) < ctx / 2) {
+        count += 1;
+        cacheWriteTokens += num(sorted[i].cacheWrite);
+      }
+    }
+  }
+  return { count, cacheWriteTokens };
 }
 
 /** Beschreibungen der Review-Subagenten, die im Ticket-Fenster Calls haben (je Subagent einmal). */
@@ -469,13 +506,31 @@ function claimAt(issue) {
   return events.find((e) => e.event === "assigned")?.created_at;
 }
 
+/**
+ * Review-Runden und Planer aus den Nachweis-Zeilen der PR-Commits (`KQ-Review:`/`KQ-Plan:`, #1270) statt
+ * aus der Transkript-Heuristik. null, wenn keine `KQ-Review:`-Zeile im PR steht (älterer Lauf).
+ */
+export function nachweisAusCommits(commits) {
+  const text = (Array.isArray(commits) ? commits : [])
+    .map((c) => `${c?.messageHeadline ?? ""}\n${c?.messageBody ?? ""}`)
+    .join("\n");
+  const { plan, review } = parseNachweis(text);
+  if (!review || !Number.isFinite(review.runden)) return null;
+  return { runden: review.runden, plan: plan ? plan.art === "planer" : null };
+}
+
 function prInfo(pr) {
-  const p = ghJson(["pr", "view", String(pr), "--json", "createdAt,mergedAt,headRefName"]);
+  const p = ghJson(["pr", "view", String(pr), "--json", "createdAt,mergedAt,headRefName,commits"]);
   const runs = ghJson([
     "api",
     `repos/{owner}/{repo}/actions/workflows/ci.yml/runs?branch=${encodeURIComponent(p.headRefName)}&status=failure&event=pull_request&per_page=100`,
   ]);
-  return { prCreatedAt: p.createdAt, mergedAt: p.mergedAt, failedPushes: countFailedPushes(runs.workflow_runs) };
+  return {
+    prCreatedAt: p.createdAt,
+    mergedAt: p.mergedAt,
+    failedPushes: countFailedPushes(runs.workflow_runs),
+    nachweis: nachweisAusCommits(p.commits),
+  };
 }
 
 // ── Ausgabe + CLI ────────────────────────────────────────────────────────────
@@ -516,11 +571,18 @@ export function renderMarkdown(summary, loop = {}) {
       `Kostenanteile: Input ${pct(parts.input)} · Cache-Write ${pct(parts.cacheWrite)} · Cache-Read ${pct(parts.cacheRead)} · Output ${pct(parts.output)}`,
     );
   }
+  if (summary.cacheRebuilds) {
+    const cr = summary.cacheRebuilds;
+    lines.push(`Cache-Neuaufbauten: ${cr.count} (≈ ${fmt(cr.cacheWriteTokens)} Tokens Cache-Write)`);
+  }
   lines.push(`Preise Stand ${PRICES_STAND}`);
-  if (summary.unpriced > 0) lines.push(`⚠️ ${summary.unpriced} Call(s) ohne Preis (Modell nicht in PRICES) — Kosten unvollständig.`);
+  if (summary.unpriced > 0) lines.push(`⚠️ ${summary.unpriced} Call(s) ohne Preis (Modell nicht in PRICES oder Zeitpunkt fehlt) — Kosten unvollständig.`);
+  const nw = loop.nachweis;
+  const runden = nw ? `${nw.runden} (Nachweis)` : `${summary.reviewRounds} (Heuristik)`;
+  const planer = nw && nw.plan !== null ? ` · Planer: ${nw.plan ? "ja" : "nein"} (KQ-Plan)` : "";
   lines.push(
     "",
-    `Review-Runden: ${summary.reviewRounds} · CI-Fix-Runden: ${ci} · Rückfragen: ${summary.questions} · gemergt ohne Nacharbeit: ${merged}`,
+    `Review-Runden: ${runden} · CI-Fix-Runden: ${ci} · Rückfragen: ${summary.questions} · gemergt ohne Nacharbeit: ${merged}${planer}`,
   );
   return lines.join("\n");
 }

@@ -81,3 +81,31 @@ describe("Sammelticket-Position (#1276)", () => {
     assert.throws(() => positionAusAgentsMd("keine Zahl hier"));
   });
 });
+
+describe("Sammelticket halbieren (#1309)", () => {
+  const agents = lies("AGENTS.md");
+  const doc = lies("docs/ticket-reihenfolge.md");
+  const abarbeiten = doc.split("\n").find((z) => z.startsWith("- **Abarbeiten:**")) ?? "";
+  const claimen = doc.split("\n").find((z) => z.startsWith("- **Beim Claimen des Sammeltickets**")) ?? "";
+
+  /** Nennt die Agenten-Regel beide Hälften? Ein Prädikat für Artefakt und Gegenbeispiel. */
+  const nenntHalbierung = (s: string) => s.includes("zweite Hälfte") && s.includes("erste Hälfte") && s.includes("Kommt es dran:");
+  const nenntErgebnisPflicht = (s: string) => s.includes("Ergebnis") && s.includes("nachweislich nicht machbar") && s.includes("KQ-Diffsize-Override");
+
+  test("AGENTS.md: beim Claimen zweite Hälfte weitergeben, erste Hälfte in einem PR erledigen", () => {
+    assert.ok(nenntHalbierung(agents));
+  });
+
+  test("ticket-reihenfolge.md: Claimen überträgt die zweite Hälfte wörtlich, Abarbeiten verlangt je Zeile ein Ergebnis", () => {
+    assert.match(claimen, /zweite Hälfte/);
+    assert.match(claimen, /wörtlich/);
+    assert.ok(nenntErgebnisPflicht(abarbeiten), "Abarbeiten-Bullet: Ergebnis, nachweislich nicht machbar, KQ-Diffsize-Override");
+    assert.match(abarbeiten, /Neue Befunde/);
+  });
+
+  test("Erkennung greift (Red-Green): der alte Wortlaut fällt durch", () => {
+    assert.ok(!nenntHalbierung("Kommt es dran: abarbeiten, was in einen PR passt; Rest und neue Befunde ins nächste Sammelticket."));
+    assert.ok(!nenntErgebnisPflicht("- **Abarbeiten:** so viele Zeilen umsetzen, wie in **einen** PR passen (`check:diffsize`)."));
+    assert.ok(!nenntHalbierung(""));
+  });
+});

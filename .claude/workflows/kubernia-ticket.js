@@ -9,7 +9,7 @@ export const meta = {
     { title: 'Sonderfall', detail: 'Epic-Kinder aus dem Plan anlegen bzw. Dependabot-Sammelticket auflösen (kein Code)', model: 'sonnet' },
     { title: 'Pre-Flight', detail: 'Weichen vor dem Coden selbst entscheiden; nur bei Irreversiblem/Außenwirkung anhalten + Fragen vorlegen (#1012/#1279)' },
     { title: 'Umsetzen', detail: 'Worktree, TDD, npm run verify, im Browser verifizieren, committen', model: 'sonnet' },
-    { title: 'Review', detail: 'Lenses parallel als Konvergenzschleife (Cap 2, frischer Kritiker, #1012): 3 für Code, 1 Doku-Lens für reines Markdown, ab Runde 2 nur blockierte Brillen auf dem Delta (#1265)', model: 'kubernia-lens (opus) + effort high' },
+    { title: 'Review', detail: 'Lenses parallel als Konvergenzschleife (Cap 2 Fix-Runden, höchstens 3 Pässe, frischer Kritiker, #1012): 3 für Code, 1 Doku-Lens für reines Markdown, ab Runde 2 nur blockierte Brillen auf dem Delta (#1265)', model: 'kubernia-lens (opus) + effort high' },
     { title: 'Nachbessern', detail: 'nur bei blockierenden Findings oder rotem verify' },
     { title: 'PR + Merge', detail: 'PR öffnen, Auto-Merge; Harness-Diff → Audit-Kommentar (#1069); rot → max. 3 Fix-Versuche' },
     { title: 'Festgefahren', detail: 'nach 3 erfolglosen Fix-Versuchen: Entscheidungsoptionen + Label, assigned bleiben' },
@@ -359,6 +359,15 @@ function lensPlan({ dateien, vorrunde } = {}) {
 }
 // ── Review-Staffel (#1265) — Ende
 
+// ── Plan-Weiche Epic (#1309) — Anfang
+// Der Planer entscheidet in Abschnitt 7 mit der Pflichtzeile „Weiche Epic: ja, weil …" bzw. „nein“, ob ein
+// als normal eingestuftes Ticket eigentlich ein Epic ist. Pure, damit direkt testbar; ohne Plan oder ohne
+// die Zeile bleibt es bei der Einstufung der Auswahl (kein Plan darf nie ein Ticket zum Epic machen).
+function planSagtEpic(plan) {
+  return typeof plan === 'string' && /^[ \t]*[-*]?[ \t]*\**Weiche Epic:?\**[ \t]*:?[ \t]*ja\b/im.test(plan)
+}
+// ── Plan-Weiche Epic (#1309) — Ende
+
 // ── Review-Nachweis (#1270) — Anfang
 // Die zwei Commit-Zeilen, die check-review-nachweis.mjs in der PR-CI verlangt (Format: docs/agent-harness.md
 // §3a). Pure und aus Code-Werten gebaut, nicht vom Agenten formuliert; ein Wächter-Test koppelt die
@@ -367,12 +376,38 @@ function nachweisZeilen({ head, runden, lenses, plan }) {
   const planZeile = plan ? 'KQ-Plan: kubernia-planner' : 'KQ-Plan: ohne — Planer lieferte keinen Plan'
   return `${planZeile}\nKQ-Review: head=${head} runden=${runden} lenses=${lenses.join(',')} verdikt=ok`
 }
+
+/** Welche der erwarteten Brillen im Pass keinen Bericht geliefert haben (#1309): ein Ausfall ist ungeprüft, nicht ok. */
+function fehlendeLenses(erwartet, berichte) {
+  const geliefert = new Set((berichte || []).filter(Boolean).map((b) => b.lens))
+  return (erwartet || []).filter((k) => !geliefert.has(k))
+}
+
+/**
+ * Konvergiert ist der Review nur mit grünem verify, ohne Blocker UND ohne ausgefallene Brille: sonst
+ * bescheinigte der Nachweis eine ungeprüfte Brille, und erst die PR-CI würde rot (#1309).
+ */
+function reviewKonvergiert({ verifyGruen, blockierend, fehlend }) {
+  return !!verifyGruen && (blockierend || []).length === 0 && (fehlend || []).length === 0
+}
+
+/** Zähler für den Nachweis: ein Pass mehr; die Brillen merkt nur ein VOLLER Pass, ein Delta-Pass nie. */
+function nachweisStand(stand, { modus, berichte }) {
+  return { paesse: stand.paesse + 1, ersteLenses: modus === 'voll' ? berichte.map((b) => b.lens) : stand.ersteLenses }
+}
+
+/** Die Nachweis-Zeilen für den pr+merge-Prompt; leer ohne Konvergenz, `<SHA>` als Platzhalter ohne diffHead. */
+function nachweisFuerPr({ konvergiert, head, stand, plan }) {
+  if (!konvergiert) return ''
+  return nachweisZeilen({ head: head || '<SHA>', runden: stand.paesse, lenses: stand.ersteLenses || [], plan })
+}
 // ── Review-Nachweis (#1270) — Ende
 
 /**
  * Die Review-Brillen aus dem review-lenses-Skill (#532), je ein eigener Pass. Welche davon eine
  * Runde startet, entscheidet lensPlan (#1265): drei für Code, die Doku-Brille allein für Markdown.
  */
+// ── Lens-Texte (#1309) — Anfang
 const LENSES = [
   {
     key: 'architektur',
@@ -438,6 +473,7 @@ Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht 
 AGENTS.md Kopf (SSOT) + § Doku aktuell halten + § Oberste Regel.`,
   },
 ]
+// ── Lens-Texte (#1309) — Ende
 
 /**
  * Das Festgefahren-Protokoll (#710) ist im Skill eine Verhaltensregel und in
@@ -640,13 +676,16 @@ Dieses Ticket ist als Epic klassifiziert: liefere die Aufteilung in session-gro�
     { label: `plan:#${nr}`, phase: 'Plan', agentType: 'kubernia-planner', effort: 'xhigh' },
   )
 
-  if (plan) log(`Plan für ${ticket} liegt vor.`)
+  // Ein Sammelticket ist nie ein Epic (AGENTS.md: Harness-Befunde sind Zeilen): der Titel schließt die Plan-Weiche aus.
+  const epicAbspalten = istEpic || (planSagtEpic(plan) && !/\(gesammelt\)/i.test(String(auswahl.titel ?? '')))
+  if (!istEpic && epicAbspalten) log(`Plan für ${ticket} meldet „Weiche Epic: ja" — Aufteilung statt Umsetzung (#1309).`)
+  else if (plan) log(`Plan für ${ticket} liegt vor.`)
   else if (istEpic) log('Planungs-Agent nicht verfügbar — der Anlege-Agent teilt das Epic selbst auf (dokumentierter Fallback).')
   else log('Planungs-Agent nicht verfügbar — die Umsetzungsphase plant selbst (dokumentierter Fallback).')
 
   // ── Phase 3a: Epic-Kinder anlegen — bewusst KEIN Code ──────────────────────
   // Endet hier — kein Worktree, kein PR. Der Plan entscheidet (Opus), der Agent tippt (Sonnet).
-  if (istEpic) {
+  if (epicAbspalten) {
     phase('Sonderfall')
     const sonderfall = await agent(
       `${kopf}
@@ -905,8 +944,8 @@ Sammelticket, Spiel-/Inhalts-Befund oder Notfall → eigenes Issue) — nicht in
   // Der letzte Lens-Pass (für lensPlan); null nach rotem verify ⇒ die nächste Runde prüft wieder alles.
   let vorrunde = null
   // Für den Review-Nachweis (#1270): Zahl der Lens-Pässe und die Brillen des letzten vollen Passes.
-  let reviewPaesse = 0
-  let ersteLenses = null
+  let nachweisWerte = { paesse: 0, ersteLenses: null }
+  let fehlend
   // Der materialisierte Diff (#1034). Wird nach jeder Nachbesserung ERSETZT, nie
   // weiterverwendet — ein Patch aus der Vorrunde würde einen Review vortäuschen.
   let diff = diffAus(umsetzung)
@@ -923,23 +962,28 @@ Sammelticket, Spiel-/Inhalts-Befund oder Notfall → eigenes Issue) — nicht in
       })
       log(`Review-Runde ${reviewRunden + 1}: ${staffel.keys.join(', ')} (${staffel.modus === 'delta' ? 'nur der Fix' : 'voller Diff'}, #1265).`)
       lensBerichte = await reviewPass(diff, reviewRunden + 1, staffel, vorrunde)
-      if (lensBerichte.length < staffel.keys.length) {
-        log(
-          `⚠ Nur ${lensBerichte.length} von ${staffel.keys.length} Lens-Pässen lieferten ein Ergebnis — die fehlenden sind ungeprüft.`,
-        )
+      fehlend = fehlendeLenses(staffel.keys, lensBerichte)
+      if (fehlend.length > 0) {
+        // Ein Lens-Ausfall gilt als nicht konvergiert (#1309): einmal auf demselben Stand nachholen,
+        // ohne eigenen Pass und ohne Fix-Runde. Fehlt sie danach weiter, ist sie ungeprüft.
+        log(`⚠ Lens ${fehlend.join(', ')} lieferte kein Ergebnis — einmal auf demselben Stand nachholen.`)
+        const nachgeholt = await reviewPass(diff, reviewRunden + 1, { keys: fehlend, modus: staffel.modus }, vorrunde)
+        lensBerichte = [...lensBerichte, ...nachgeholt]
+        fehlend = fehlendeLenses(staffel.keys, lensBerichte)
+        if (fehlend.length > 0) log(`⚠ Lens ${fehlend.join(', ')} lieferte zweimal kein Ergebnis — ungeprüft.`)
       }
       vorrunde = { erwartet: staffel.keys, berichte: lensBerichte }
-      reviewPaesse += 1
       // Nachweis (#1270): die Brillen, die WIRKLICH geliefert haben, nicht die geplanten, und zwar vom
       // letzten VOLLEN Pass (Runde 1; ein voller Wiederholungspass nach einem Lens-Ausfall ersetzt ihn,
       // ein Delta-Pass nie). Fiel eine aus und blieb ungeprüft, fehlt sie im Nachweis und die PR-CI wird
       // rot, statt eine ungeprüfte Brille zu bescheinigen.
-      if (staffel.modus === 'voll') ersteLenses = lensBerichte.map((b) => b.lens)
+      nachweisWerte = nachweisStand(nachweisWerte, { modus: staffel.modus, berichte: lensBerichte })
       for (const b of lensBerichte) lensStand[b.lens] = b
     } else {
       log('npm run verify ist rot — Short-Circuit (#532): keine Lens-Pässe, direkt zum Nachbessern.')
       lensBerichte = []
       vorrunde = null
+      fehlend = []
     }
     // Findings einmal aus dem aktuellen Pass ableiten (bei rotem verify aus dem leeren Bericht).
     blockierend = lensBerichte.flatMap((b) => (b.findings || []).filter((f) => f.schwere === 'blockierend'))
@@ -951,8 +995,13 @@ Sammelticket, Spiel-/Inhalts-Befund oder Notfall → eigenes Issue) — nicht in
       )
     }
 
-    if (verifyGruen && blockierend.length === 0) {
+    if (reviewKonvergiert({ verifyGruen, blockierend, fehlend })) {
       log(`Review konvergiert nach ${reviewRunden} Fix-Runde(n): keine blockierenden Findings, verify grün.`)
+      break
+    }
+    if (verifyGruen && blockierend.length === 0) {
+      // Nur ein Lens-Ausfall, nichts zu fixen: sofort Hand-off statt einer leeren Fix-Runde.
+      log(`⛔ Lens ${fehlend.join(', ')} lieferte zweimal kein Ergebnis (ungeprüft) — Hand-off an die Maintainerin (kein PR).`)
       break
     }
     if (reviewRunden >= MAX_REVIEW_RUNDEN) {
@@ -1005,7 +1054,7 @@ ${patchAuftrag(nr, reviewRunden + 1, diff.head)}`,
     letzteVerifyAusgabe = (nachbesserung && nachbesserung.verifyAusgabe) || letzteVerifyAusgabe
     // Die Zusammenfassung der NEUESTEN Runde geht an die nächsten Kritiker (#1034): sonst liest
     // Runde 2 einen als aktuell etikettierten Begleittext aus Runde 1 und meldet bewusst liegen
-    // gelassene Punkte erneut als blockierend — genau die Runde, die der Cap 2 knapp macht.
+    // gelassene Punkte erneut als blockierend — genau die Runde, die der Cap 2 Fix-Runden knapp macht.
     if (nachbesserung && nachbesserung.zusammenfassung) letzteZusammenfassung = nachbesserung.zusammenfassung
     // Frische-Guard (#1034): der Patch der NÄCHSTEN Runde ist der neue — bewusst KEIN Fallback
     // auf den alten Pfad (kein `|| diff`). Lieber lässt die nächste Lens ihn einmal selbst
@@ -1022,25 +1071,19 @@ ${patchAuftrag(nr, reviewRunden + 1, diff.head)}`,
     if (nachbesserung && nachbesserung.zusammenfassung) log(String(nachbesserung.zusammenfassung).split('\n')[0])
   }
 
-  const reviewKonvergiert = verifyGruen && blockierend.length === 0
+  const konvergiert = reviewKonvergiert({ verifyGruen, blockierend, fehlend })
   // Review-Nachweis (#1270): erst nach Konvergenz; head = der zuletzt reviewte Stand.
-  const nachweis = reviewKonvergiert
-    ? nachweisZeilen({
-        head: diff.head || '<SHA>',
-        runden: reviewPaesse,
-        lenses: ersteLenses || [],
-        plan,
-      })
-    : ''
+  const nachweis = nachweisFuerPr({ konvergiert, head: diff.head, stand: nachweisWerte, plan })
   const shaHinweis = nachweis.includes('<SHA>') ? ' — nur <SHA> ersetzt du durch die Ausgabe von git rev-parse HEAD VOR diesem Commit' : ''
 
   // Hand-off VOR dem PR: nach dem Cap noch blockierende Findings oder rotes verify. Keinen
   // PR mit bekannten Blockern öffnen — an die Maintainerin übergeben (Kommentar am ISSUE,
   // Label, Worktree + Claim bleiben stehen).
-  if (!reviewKonvergiert) {
+  if (!konvergiert) {
     phase('Festgefahren')
     const offenePunkte = [
       ...(verifyGruen ? [] : ['npm run verify ist rot']),
+      ...fehlend.map((k) => `Lens ${k} lieferte zweimal kein Ergebnis (ungeprüft)`),
       ...blockierend.map((f) => `[${f.ort}] ${f.befund}`),
     ]
     const festgefahren = await agent(

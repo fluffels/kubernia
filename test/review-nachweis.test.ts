@@ -149,7 +149,12 @@ function fakeGit(o: { messages: string; files?: string; inSlice?: string[]; know
     // durch und wirft, statt dieselbe Antwort zu liefern (sonst bewacht der Test den Slice nicht).
     if (cmd === `log --format=%B ${B}..HEAD`) return o.messages;
     if (cmd === `diff --name-only ${B}...HEAD`) return o.files ?? "src/x.ts\n";
-    if (cmd.startsWith("rev-list --count --no-merges")) return "1\n";
+    // Exakt (#1309): die Basis des Zählens ist der geprüfte head, nicht beliebig; ein anderer Bereich wirft.
+    const zaehlen = /^rev-list --count --no-merges ([0-9a-f]{40})\.\.HEAD$/.exec(cmd);
+    if (zaehlen) {
+      if (!(o.known ?? [SHA]).includes(zaehlen[1])) throw new Error(`unbekannter head: ${zaehlen[1]}`);
+      return "1\n";
+    }
     if (cmd === `rev-list ${B}..HEAD`) return (o.inSlice ?? [SHA, H]).join("\n") + "\n";
     throw new Error(`unerwartet: ${cmd}`);
   };

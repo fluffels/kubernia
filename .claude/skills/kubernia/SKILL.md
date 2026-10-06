@@ -29,6 +29,7 @@ docs/referenz/ ← Nachschlage-Referenz on-demand (Befehle, Repo-Landkarte, Schi
    ```
    Den Bericht unverändert mit seiner Kopfzeile `PLAN #<nr> · kubernia-planner` an den Umsetzer weitergeben (Planungs-Nachweis, #1270). Nur wenn der Spawn tatsächlich scheitert, skizziert der Hauptchat den Plan kurz selbst und schreibt `Plan ohne Planer: <Grund>` in den Umsetzer-Prompt; ein ausgelassener Planer ist kein Grund.
 3. **Pre-Flight** nach AGENTS.md § Human-in-the-Loop-Checkpoints: Du übernimmst die Entscheidungen aus Abschnitt 7 des Plans (Optik, Weichen) als verbindlich und gibst sie dem Umsetzer mit. `AskUserQuestion` nur, wenn der Plan „Rückfrage nötig“ meldet (Irreversibles oder Außenwirkung), dann **jetzt**. PixelLab-Assets für eine Optik-Entscheidung erzeugt der Hauptchat (der Umsetzer hat PixelLab nicht in seiner Whitelist); das Asset liegt als Datei im Temp-Ordner, der Umsetzer bekommt den Pfad (eine Job-ID nützt ihm nichts).
+   Meldet Abschnitt 7 des Plans `Weiche Epic: ja`, gilt der Sonderfall Epic mit der Aufteilung aus dem Plan; kein Umsetzer.
 4. **Umsetzer spawnen** (nächster Abschnitt) und sein Ergebnis behandeln.
 
 Solange der Umsetzer läuft, fasst der Hauptchat weder Repo noch Worktree an und startet keinen zweiten Umsetzer.
@@ -36,6 +37,8 @@ Solange der Umsetzer läuft, fasst der Hauptchat weder Repo noch Worktree an und
 **Sonderfall zu großes Epic/Phase:** nicht umsetzen. Die Aufteilung ist Planungsarbeit: nach dem Claimen den `kubernia-planner` (Opus) mit dem Aufruf oben rufen, im Prompt der Hinweis „Epic: liefere die Aufteilung“. Du legst genau die vorgeschlagenen session-großen Kindertickets an (ohne Assignee, `area:`-Label, im Board einsortiert; Weichen samt Entscheidung des Plans in den Body des betroffenen Kindes), postest im Epic einen Übersichts-Kommentar mit Reihenfolge und schließt das Epic mit `gh issue close <nr> --reason completed` (nicht löschen), Schließung verifizieren. Kein Worktree, kein Umsetzer. Ist der Planer nicht verfügbar, teilst du selbst auf. **🤖 Dependabot-Sammelticket:** ebenfalls im Hauptchat nach AGENTS.md, ohne Planer und Umsetzer.
 
 ## Umsetzung als Subagent
+
+**Vor dem Spawn:** `git fetch origin`, dann `git diff --quiet HEAD origin/main -- .claude/agents .claude/skills`. Weicht der Hauptcheckout ab (Exit 1), ist die Agenten-Definition dieser Session veraltet (laufende Sessions behalten ihre Definitionen): der Umsetzer-Prompt bekommt den Zusatz „Lies deine Definition (`.claude/agents/kubernia-umsetzer.md`) und den Skill `review-lenses` aus deinem Worktree; bei Abweichung gilt diese Fassung.“ Kein `git pull` im Hauptcheckout (geteilter Checkout, andere Sessions arbeiten darin).
 
 ```
 Agent({
@@ -49,8 +52,10 @@ Kein `model:` am Spawn: Modell und Effort stehen im Frontmatter des Umsetzers un
 
 - **`gemergt`** — der Maintainerin kurz berichten (Ticket, PR, Entscheidungen, Befunde, die Zeile `LERNKANDIDATEN` des Umsetzers im Abschlussbericht durchreichen; bei `festgefahren` und `abgebrochen` ebenso).
 - **`entscheidung-noetig`** — bei einem fehlenden PixelLab-Asset das Asset selbst erzeugen und den Dateipfad per `SendMessage` zurückgeben, sonst die `FRAGEN` per `AskUserQuestion` vorlegen, dann denselben Umsetzer mit der Antwort fortsetzen: `SendMessage({ to: "<agentId aus dem Spawn>", message: "Antwort der Maintainerin: …" })`. Sein Kontext bleibt erhalten. Ist die Session inzwischen verloren, startet ein neuer Umsetzer; er übernimmt vorhandenen Worktree und Branch.
-- **`festgefahren`** — die Optionen vorlegen (aus dem PR-Kommentar bzw. bei Review-Blockern nach Cap 2, ohne PR, aus der Zusammenfassung), nicht selbst weiterprobieren.
+- **`festgefahren`** — die Optionen vorlegen (aus dem PR-Kommentar bzw. bei Review-Blockern nach Cap 2 Fix-Runden, ohne PR, aus der Zusammenfassung), nicht selbst weiterprobieren.
 - **`abgebrochen`** — Grund melden; das Ticket bleibt zugewiesen.
+
+**Blockade nach dem Umsetzer-Ende:** Blockiert der Stop- bzw. SubagentStop-Hook wegen eines Waisen-Worktree-Ordners, im Hauptchat laufende Dev-Server per PowerShell `Stop-Process` beenden, dann `node scripts/cleanup-worktrees.mjs --fix` und mit `git worktree list` plus `Test-Path` verifizieren. Den Guard nie aufweichen.
 
 **Mehrere Tickets:** Anzahl N aus der Auslöse-Nachricht übernehmen, sonst kurz fragen. Dann nacheinander je Ticket der ganze Ablauf oben mit einem frischen Umsetzer, nie parallel (Merge-Kollision auf `main`); kein freies Ticket mehr ⇒ sofort aufhören. Zum Schluss eine Übersicht: erledigte Tickets, wie viele von N. Der Hauptchat wächst pro Ticket nur um Plan und Bericht.
 
