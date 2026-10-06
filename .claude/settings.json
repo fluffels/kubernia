@@ -80,6 +80,18 @@
             ]
           }
         ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/gh-guard-hook.mjs"
+            ]
+          }
+        ]
       }
     ],
     "Stop": [
