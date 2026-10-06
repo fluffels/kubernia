@@ -145,10 +145,12 @@ function fakeGit(o: { messages: string; files?: string; inSlice?: string[]; know
       throw new Error("unknown");
     }
     if (cmd === "rev-parse HEAD") return H + "\n";
-    if (cmd.startsWith("log --format=%B")) return o.messages;
-    if (cmd.startsWith("diff --name-only")) return o.files ?? "src/x.ts\n";
-    if (cmd.startsWith("rev-list --count")) return "1\n";
-    if (cmd.startsWith("rev-list")) return (o.inSlice ?? [SHA, H]).join("\n") + "\n";
+    // Exakte Bereiche: ein Aufruf mit falschem Bereich (z.B. nur "HEAD" statt "<basis>..HEAD") fällt
+    // durch und wirft, statt dieselbe Antwort zu liefern (sonst bewacht der Test den Slice nicht).
+    if (cmd === `log --format=%B ${B}..HEAD`) return o.messages;
+    if (cmd === `diff --name-only ${B}...HEAD`) return o.files ?? "src/x.ts\n";
+    if (cmd.startsWith("rev-list --count --no-merges")) return "1\n";
+    if (cmd === `rev-list ${B}..HEAD`) return (o.inSlice ?? [SHA, H]).join("\n") + "\n";
     throw new Error(`unerwartet: ${cmd}`);
   };
 }
@@ -165,6 +167,17 @@ describe("checkReviewNachweis (git injiziert)", () => {
     const r = checkReviewNachweis({ runGit: fakeGit({ messages: review(), inSlice: ["x".repeat(40)] }), env });
     assert.equal(r.ok, false);
     assert.match(r.fehler.join(), /nicht im Slice/);
+  });
+  test("Markdown-Diff mit lenses=doku ist grün, Code-Diff mit lenses=doku rot (Dateiliste kommt an)", () => {
+    const doku = review(`head=${SHA} runden=1 lenses=doku verdikt=ok`);
+    assert.deepEqual(checkReviewNachweis({ runGit: fakeGit({ messages: doku, files: "docs/a.md\n" }), env }).fehler, []);
+    assert.equal(checkReviewNachweis({ runGit: fakeGit({ messages: doku, files: "src/x.ts\n" }), env }).ok, false);
+  });
+  test("abgekürzter SHA wird zum vollen aufgelöst und im Slice gefunden", () => {
+    const kurz = SHA.slice(0, 8);
+    const git = fakeGit({ messages: review(`head=${kurz} runden=1 lenses=${DREI} verdikt=ok`) });
+    const runGit = (a: string[]) => (a[0] === "rev-parse" && a[3] === `${kurz}^{commit}` ? `${SHA}\n` : git(a));
+    assert.deepEqual(checkReviewNachweis({ runGit, env }).fehler, []);
   });
   test("head unbekannt ist rot", () => {
     const r = checkReviewNachweis({ runGit: fakeGit({ messages: review(), known: [] }), env });
