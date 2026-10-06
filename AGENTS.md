@@ -90,7 +90,7 @@ Vite + TypeScript + ES-Module, Phaser als npm-Paket; `index.html` lädt nur `src
 
 ### Modellwahl nach Phase (#910)
 
-Projekt-Default ist Sonnet (`"model": "sonnet"` in `.claude/settings.json`, #1065); Planung (`kubernia-planner`, auch die Epic-Aufteilung) und Review (Lenses) laufen als Opus-Subagenten, Explore als Haiku. Immer per Alias (`opus`/`sonnet`/`haiku`), nie mit fester Modell-ID. Ohne Modell-Angabe erbt ein Subagent das Session-Modell, darum setzt der Workflow an jedem `agent()` Modell (bzw. `agentType`) und `effort`. SSOT (Phasen-Matrix, Grenzen): [docs/model-routing.md](docs/model-routing.md).
+Der Hauptchat läuft auf dem gewählten Session-Modell (kein Projekt-Pin); die Umsetzung läuft als Sonnet-Subagent `kubernia-umsetzer`, Planung (`kubernia-planner`, auch die Epic-Aufteilung) und Review (Lenses) als Opus-Subagenten, Explore als Haiku. Immer per Alias (`opus`/`sonnet`/`haiku`), nie mit fester Modell-ID. Ohne Modell-Angabe erbt ein Subagent das Session-Modell, darum setzt der Workflow an jedem `agent()` Modell (bzw. `agentType`) und `effort`. SSOT (Phasen-Matrix, Grenzen): [docs/model-routing.md](docs/model-routing.md).
 
 ## Wo die TODOs leben
 

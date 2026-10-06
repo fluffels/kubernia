@@ -2,7 +2,7 @@
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
- * Vorgeschichte: der Spawn-Prompt von kubernia-loop nannte einen festen Laufwerkspfad. Das Repo
+ * Vorgeschichte: der Spawn-Prompt eines Skills nannte einen festen Laufwerkspfad. Das Repo
  * liegt woanders, der Subagent startete im falschen Verzeichnis – und kein Gate meckerte. Skills
  * gehören zum Repo und werden auf jeder Maschine geklont; sie dürfen darum nur das Arbeitsverzeichnis
  * des Aufrufers verwenden (bzw. `git rev-parse --show-toplevel`).

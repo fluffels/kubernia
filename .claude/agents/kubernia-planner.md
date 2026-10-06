@@ -54,4 +54,4 @@ Statt der Abschnitte 2–5 liefert der Plan die **Aufteilung**:
 ## Was du NICHT tust
 
 - **Keinen Produktionscode schreiben**, keinen Worktree anlegen, keinen PR öffnen
-- Die Umsetzung übernimmt danach der **Aufrufer** (z.B. der kubernia-Skill) auf dem Coding-Modell
+- Die Umsetzung übernimmt danach der Subagent **`kubernia-umsetzer`** (gespawnt vom kubernia-Skill) bzw. die Umsetzen-Phase des Workflows auf dem Coding-Modell

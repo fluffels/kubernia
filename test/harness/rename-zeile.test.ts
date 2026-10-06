@@ -78,10 +78,10 @@ describe("/rename-Zeile ist in Workflow und Skills verankert", () => {
     expect(lies(".claude/skills/kubernia/SKILL.md")).toContain("/rename kq-<nr> <Kurztitel>")
   })
 
-  it("kubernia-loop gibt eine Sammelzeile am Ende statt einer Zeile je Ticket", () => {
-    const loop = lies(".claude/skills/kubernia-loop/SKILL.md")
-    expect(loop).toContain("/rename kq-loop")
-    expect(loop).not.toContain("/rename kq-<nr>")
+  it("im Stapel gibt der kubernia-Skill eine Sammelzeile am Ende statt einer Zeile je Ticket", () => {
+    const skill = lies(".claude/skills/kubernia/SKILL.md")
+    expect(skill).toContain("/rename kq-<erste>-<letzte>")
+    expect(skill).toContain("statt einer `/rename`-Zeile je Ticket nur eine am Ende")
   })
 })
 
