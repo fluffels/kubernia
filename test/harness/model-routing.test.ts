@@ -78,7 +78,7 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { runInNewContext } from "node:vm";
+import { workflowAusfuehren } from "./workflow-block";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im tsconfig)
 // – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
@@ -590,7 +590,6 @@ type AgentAufruf = { label: string; agentType?: string; model?: string; effort?:
  * damit ein neuer früher Aufruf den Stub bewusst erweitern muss.
  */
 async function workflowLauf(art: "epic" | "dependabot" | "normal", opts: { planerDa: boolean; preflight?: Record<string, unknown> }) {
-  const quelle = read(".claude/workflows/kubernia-ticket.js").replace("export const meta", "const meta");
   const aufrufe: AgentAufruf[] = [];
   const agent = (prompt: string, o: { label: string; agentType?: string; model?: string; effort?: string }) => {
     aufrufe.push({ prompt, label: o.label, agentType: o.agentType, model: o.model, effort: o.effort });
@@ -603,8 +602,7 @@ async function workflowLauf(art: "epic" | "dependabot" | "normal", opts: { plane
     if (o.label.startsWith("epic-anlegen") || o.label.startsWith("dependabot")) return Promise.resolve("erledigt");
     return Promise.reject(new Error(`Stub kennt das Label "${o.label}" nicht – in workflowLauf() erweitern.`));
   };
-  const kontext = { agent, phase: () => undefined, log: () => undefined, args: undefined, parallel: () => { throw new Error("unerwartet"); } };
-  const ergebnis = (await runInNewContext(`(async () => {\n${quelle}\nreturn endstand\n})()`, kontext)) as { ergebnis: string };
+  const ergebnis = await workflowAusfuehren(agent);
   return { aufrufe, ergebnis: ergebnis.ergebnis };
 }
 

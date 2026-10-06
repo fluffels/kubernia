@@ -49,7 +49,7 @@ Kein `model:` am Spawn: Modell und Effort stehen im Frontmatter des Umsetzers un
 
 - **`gemergt`** — der Maintainerin kurz berichten (Ticket, PR, Entscheidungen, Befunde, die Zeile `LERNKANDIDATEN` des Umsetzers im Abschlussbericht durchreichen; bei `festgefahren` und `abgebrochen` ebenso).
 - **`entscheidung-noetig`** — bei einem fehlenden PixelLab-Asset das Asset selbst erzeugen und den Dateipfad per `SendMessage` zurückgeben, sonst die `FRAGEN` per `AskUserQuestion` vorlegen, dann denselben Umsetzer mit der Antwort fortsetzen: `SendMessage({ to: "<agentId aus dem Spawn>", message: "Antwort der Maintainerin: …" })`. Sein Kontext bleibt erhalten. Ist die Session inzwischen verloren, startet ein neuer Umsetzer; er übernimmt vorhandenen Worktree und Branch.
-- **`festgefahren`** — die Optionen vorlegen (aus dem PR-Kommentar bzw. bei Review-Blockern nach Cap 2, ohne PR, aus der Zusammenfassung), nicht selbst weiterprobieren.
+- **`festgefahren`** — die Optionen vorlegen (aus dem PR-Kommentar bzw. bei Review-Blockern nach Cap 2 Fix-Runden, ohne PR, aus der Zusammenfassung), nicht selbst weiterprobieren.
 - **`abgebrochen`** — Grund melden; das Ticket bleibt zugewiesen.
 
 **Mehrere Tickets:** Anzahl N aus der Auslöse-Nachricht übernehmen, sonst kurz fragen. Dann nacheinander je Ticket der ganze Ablauf oben mit einem frischen Umsetzer, nie parallel (Merge-Kollision auf `main`); kein freies Ticket mehr ⇒ sofort aufhören. Zum Schluss eine Übersicht: erledigte Tickets, wie viele von N. Der Hauptchat wächst pro Ticket nur um Plan und Bericht.
