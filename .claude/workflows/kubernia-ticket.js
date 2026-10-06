@@ -371,6 +371,16 @@ function lensPlan({ dateien, vorrunde } = {}) {
 }
 // ── Review-Staffel (#1265) — Ende
 
+// ── Review-Nachweis (#1270) — Anfang
+// Die zwei Commit-Zeilen, die check-review-nachweis.mjs in der PR-CI verlangt (Format: docs/agent-harness.md
+// §3a). Pure und aus Code-Werten gebaut, nicht vom Agenten formuliert; ein Wächter-Test koppelt die
+// Ausgabe an den Parser des Prüfskripts. `lenses` sind die Brillen des vollen Passes (Runde 1), `runden` die Zahl der Pässe.
+function nachweisZeilen({ head, runden, lenses, plan }) {
+  const planZeile = plan ? 'KQ-Plan: kubernia-planner' : 'KQ-Plan: ohne — Planer lieferte keinen Plan'
+  return `${planZeile}\nKQ-Review: head=${head} runden=${runden} lenses=${lenses.join(',')} verdikt=ok`
+}
+// ── Review-Nachweis (#1270) — Ende
+
 /**
  * Die Review-Brillen aus dem review-lenses-Skill (#532), je ein eigener Pass. Welche davon eine
  * Runde startet, entscheidet lensPlan (#1265): drei für Code, die Doku-Brille allein für Markdown.
@@ -825,9 +835,9 @@ ${patchAuftrag(nr, 1)}`,
       ? liste.map((f, i) => `${i + 1}. [${f.ort}] ${f.befund}`).join('\n')
       : '(keine eigenen — du läufst mit, weil der Fix Code ändert: prüfe, ob er angemessen getestet ist)'
   }
-  const reviewPass = (diff, runde, plan, vorrunde) =>
+  const reviewPass = (diff, runde, staffel, vorrunde) =>
     parallel(
-      LENSES.filter((lens) => plan.keys.includes(lens.key)).map(
+      LENSES.filter((lens) => staffel.keys.includes(lens.key)).map(
         (lens) => () =>
           agent(
             `${kopf}
@@ -852,7 +862,7 @@ geschrieben). Erhebe den Diff EINMAL selbst mit git diff origin/main...HEAD und 
 damit weiter — und erwähne das fehlende Artefakt in deinem Bericht, es ist ein Harness-Defekt.`
 }
 ${
-  plan.modus === 'delta'
+  staffel.modus === 'delta'
     ? `
 Runde ${runde} prüft nur den Fix (#1265). Deine Primärquelle ist der Delta-Patch der Nachbesserung:
   ${diff.deltaPfad}
@@ -902,6 +912,9 @@ Sammelticket, Spiel-/Inhalts-Befund oder Notfall → eigenes Issue) — nicht in
   const lensEndstand = () => LENSES.map((l) => lensStand[l.key]).filter(Boolean)
   // Der letzte Lens-Pass (für lensPlan); null nach rotem verify ⇒ die nächste Runde prüft wieder alles.
   let vorrunde = null
+  // Für den Review-Nachweis (#1270): Zahl der Lens-Pässe und die Brillen des letzten vollen Passes.
+  let reviewPaesse = 0
+  let ersteLenses = null
   // Der materialisierte Diff (#1034). Wird nach jeder Nachbesserung ERSETZT, nie
   // weiterverwendet — ein Patch aus der Vorrunde würde einen Review vortäuschen.
   let diff = diffAus(umsetzung)
@@ -912,18 +925,24 @@ Sammelticket, Spiel-/Inhalts-Befund oder Notfall → eigenes Issue) — nicht in
   for (;;) {
     if (verifyGruen) {
       phase('Review')
-      const plan = lensPlan({
+      const staffel = lensPlan({
         dateien: diff.dateien,
         vorrunde: vorrunde && { ...vorrunde, deltaPfad: diff.deltaPfad, deltaDateien: diff.deltaDateien },
       })
-      log(`Review-Runde ${reviewRunden + 1}: ${plan.keys.join(', ')} (${plan.modus === 'delta' ? 'nur der Fix' : 'voller Diff'}, #1265).`)
-      lensBerichte = await reviewPass(diff, reviewRunden + 1, plan, vorrunde)
-      if (lensBerichte.length < plan.keys.length) {
+      log(`Review-Runde ${reviewRunden + 1}: ${staffel.keys.join(', ')} (${staffel.modus === 'delta' ? 'nur der Fix' : 'voller Diff'}, #1265).`)
+      lensBerichte = await reviewPass(diff, reviewRunden + 1, staffel, vorrunde)
+      if (lensBerichte.length < staffel.keys.length) {
         log(
-          `⚠ Nur ${lensBerichte.length} von ${plan.keys.length} Lens-Pässen lieferten ein Ergebnis — die fehlenden sind ungeprüft.`,
+          `⚠ Nur ${lensBerichte.length} von ${staffel.keys.length} Lens-Pässen lieferten ein Ergebnis — die fehlenden sind ungeprüft.`,
         )
       }
-      vorrunde = { erwartet: plan.keys, berichte: lensBerichte }
+      vorrunde = { erwartet: staffel.keys, berichte: lensBerichte }
+      reviewPaesse += 1
+      // Nachweis (#1270): die Brillen, die WIRKLICH geliefert haben, nicht die geplanten, und zwar vom
+      // letzten VOLLEN Pass (Runde 1; ein voller Wiederholungspass nach einem Lens-Ausfall ersetzt ihn,
+      // ein Delta-Pass nie). Fiel eine aus und blieb ungeprüft, fehlt sie im Nachweis und die PR-CI wird
+      // rot, statt eine ungeprüfte Brille zu bescheinigen.
+      if (staffel.modus === 'voll') ersteLenses = lensBerichte.map((b) => b.lens)
       for (const b of lensBerichte) lensStand[b.lens] = b
     } else {
       log('npm run verify ist rot — Short-Circuit (#532): keine Lens-Pässe, direkt zum Nachbessern.')
@@ -1012,6 +1031,16 @@ ${patchAuftrag(nr, reviewRunden + 1, diff.head)}`,
   }
 
   const reviewKonvergiert = verifyGruen && blockierend.length === 0
+  // Review-Nachweis (#1270): erst nach Konvergenz; head = der zuletzt reviewte Stand.
+  const nachweis = reviewKonvergiert
+    ? nachweisZeilen({
+        head: diff.head || '<SHA>',
+        runden: reviewPaesse,
+        lenses: ersteLenses || [],
+        plan,
+      })
+    : ''
+  const shaHinweis = nachweis.includes('<SHA>') ? ' — nur <SHA> ersetzt du durch die Ausgabe von git rev-parse HEAD VOR diesem Commit' : ''
 
   // Hand-off VOR dem PR: nach dem Cap noch blockierende Findings oder rotes verify. Keinen
   // PR mit bekannten Blockern öffnen — an die Maintainerin übergeben (Kommentar am ISSUE,
@@ -1092,6 +1121,13 @@ AGENTS.md § Git-Workflow — PR-gegated (erste harte Regel) und § Kollisionssc
 letzter Punkt. Kurz: Branch pushen, gh pr create mit "Closes #${nr}" im Body,
 Auto-Merge setzen, CI abwarten.
 ${harnessDiff ? `\n${harnessMergeAuftrag}\n` : ''}
+Vor dem Push: setze einen leeren Nachweis-Commit, den die PR-CI verlangt (#1270). Genau diese
+zwei Zeilen als Commit-Message, unverändert${shaHinweis}:
+${nachweis}
+(leerer Commit mit --allow-empty, die Zeilen am Zeilenanfang). Prüfe ihn lokal mit
+node scripts/check-review-nachweis.mjs. Danach KEIN Rebase/Amend mehr: der head liegt sonst nicht
+mehr im PR.
+
 Ein Ticket ist erst fertig, wenn sein PR gemergt ist. Ein offener oder grüner,
 aber nicht gemergter PR ist ergebnis="ci-rot" bzw. "fehler", nie "gemergt".
 Ist die CI rot, gib ergebnis="ci-rot" mit roterCheck und den relevanten Log-Zeilen
@@ -1113,6 +1149,11 @@ ${ticketKontext}
 PR #${merge.prNummer} auf ${branch} (Worktree ${worktree}, absolute Pfade, NICHT
 hinein-cd'en) ist rot. Das ist Fix-Versuch ${fixVersuche} von ${MAX_FIX_VERSUCHE}
 (AGENTS.md § Festgefahren-Protokoll).
+
+Der Review-Nachweis (#1270) liegt als leerer Commit mit diesen Zeilen im Branch:
+${nachweis}
+Fehlt er oder ist er kaputt, setze genau diese Zeilen neu (leerer Commit${shaHinweis}). KEIN Rebase/Amend (der
+head läge sonst nicht mehr im PR) und kein KQ-Review-Override als Workaround.
 
 Roter Check: ${merge.roterCheck || 'unbekannt'}
 ${merge.fehlerAusgabe || '(keine Ausgabe übergeben — selbst am PR nachsehen)'}
