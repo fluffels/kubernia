@@ -115,7 +115,14 @@ describe("Haupt-Checkout: commit/push wird geblockt (Z25)", () => {
     laeuft(`git diff --quiet || git commit -am x`, WT);
   });
 
-  test("der Ort nach einem fehlgeschlagenen cd bleibt erhalten, ein späteres cd setzt ihn neu (ortOk wird je Statement zurückgesetzt)", () => {
+  test("der Status eines früheren Ortswechsels überdauert kein späteres Statement (ortStatus wird je Statement zurückgesetzt)", () => {
+    // ohne Reset würde der alte Status (gescheitert bzw. gelungen) einen späteren Nachfolger überspringen
+    blockt("cd /gibt/es/nicht; git status && git commit -m x", HAUPT);
+    blockt(`cd ${HAUPT}/src; git diff --quiet || git commit -am x`, WT);
+    blockt("cd /gibt/es/nicht\ngit status && git commit -m x", HAUPT);
+  });
+
+  test("der Ort nach einem fehlgeschlagenen cd bleibt erhalten, ein späteres cd setzt ihn neu", () => {
     blockt(`cd /gibt/es/nicht; cd ${HAUPT} && git commit -m x`, WT);
     laeuft(`cd /gibt/es/nicht; cd ${WT} && git commit -m x`, HAUPT);
   });
