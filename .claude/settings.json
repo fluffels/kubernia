@@ -30,7 +30,8 @@
       "Bash(wc:*)",
       "Bash(sort:*)",
       "Bash(uniq:*)",
-      "Bash(diff:*)"
+      "Bash(diff:*)",
+      "mcp__playwright"
     ],
     "ask": [
       "Bash(curl:*)",
@@ -93,6 +94,7 @@
     "data@synced": false,
     "cowork-plugin-management@synced": false
   },
+  "enabledMcpjsonServers": ["playwright"],
   "disableClaudeAiConnectors": true,
   "skillListingMaxDescChars": 300
 }

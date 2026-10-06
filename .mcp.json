@@ -6,6 +6,18 @@
       "headers": {
         "Authorization": "${PIXELLAB_TOKEN}"
       }
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "node_modules/@playwright/mcp/cli.js",
+        "--isolated",
+        "--caps",
+        "devtools",
+        "--output-dir",
+        ".playwright-mcp"
+      ]
     }
   }
 }
