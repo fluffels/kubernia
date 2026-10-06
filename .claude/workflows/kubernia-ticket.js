@@ -9,7 +9,7 @@ export const meta = {
     { title: 'Sonderfall', detail: 'Epic-Kinder aus dem Plan anlegen bzw. Dependabot-Sammelticket auflösen (kein Code)', model: 'sonnet' },
     { title: 'Pre-Flight', detail: 'Risiko-Klärung vor dem Coden: Optik/Weiche → anhalten + Fragen vorlegen (#1012/#1069)' },
     { title: 'Umsetzen', detail: 'Worktree, TDD, npm run verify, im Browser verifizieren, committen', model: 'sonnet' },
-    { title: 'Review', detail: '3 Lenses parallel als Konvergenzschleife (Cap 2, frischer Kritiker, #1012)', model: 'opus' },
+    { title: 'Review', detail: '3 Lenses parallel als Konvergenzschleife (Cap 2, frischer Kritiker, #1012)', model: 'kubernia-lens (opus) + effort high' },
     { title: 'Nachbessern', detail: 'nur bei blockierenden Findings oder rotem verify' },
     { title: 'PR + Merge', detail: 'PR öffnen, Auto-Merge; Harness-Diff → Label selbst + Audit-Kommentar (#1069); rot → max. 3 Fix-Versuche' },
     { title: 'Festgefahren', detail: 'nach 3 erfolglosen Fix-Versuchen: Entscheidungsoptionen + Label, assigned bleiben' },
@@ -743,7 +743,9 @@ sein — mit Ort (datei.ts:zeile), kein „könnte man schöner machen" ohne Fun
 „blockierend" ist für echte Fehler/Regelverstöße reserviert, nicht für Geschmack.
 Was dir außerhalb des Ticket-Scopes auffällt, gehört nach ausserhalbScope (echter Defekt →
 eigenes Issue, sonst Zeile im Sammelticket) — nicht in die Findings.`,
-            { label: `lens:${lens.key}`, phase: 'Review', schema: LENS_SCHEMA, model: 'opus', effort: 'high' },
+            // Modell und Effort der Lens stehen im Frontmatter von kubernia-lens (#1209), hier nur der Effort
+            // (muss gleich sein, bewacht von test/harness/model-routing.test.ts).
+            { label: `lens:${lens.key}`, phase: 'Review', schema: LENS_SCHEMA, agentType: 'kubernia-lens', effort: 'high' },
           ),
       ),
     ).then((r) => r.filter(Boolean))

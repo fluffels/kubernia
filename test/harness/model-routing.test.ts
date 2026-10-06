@@ -52,8 +52,10 @@
  *   - Die Sonderfall-Zweige (Epic, Dependabot) des Workflows werden per `node:vm` gegen Stub-Globals
  *     AUSGEFÜHRT (Epic-Aufteilung über den Planer, #1207); der Stub kennt nur die frühen Phasen und
  *     bricht bei unbekannten Labels laut ab. Der Skill-Pfad wird nur auf den Verweis im Text geprüft.
- *   - Das Agent-Tool hat keinen `effort`-Parameter (docs/model-routing.md §2); für Spawns wird
- *     daher nur `model` geprüft.
+ *   - Das Agent-Tool hat keinen `effort`-Parameter (docs/model-routing.md §2): der Effort von
+ *     Repo-Agenten (kubernia-lens, Explore) kommt aus ihrem Frontmatter; am Spawn wird geprüft, dass
+ *     KEIN `model:` das Frontmatter überstimmt. `effort: low` am Explore deklariert nur: Haiku
+ *     unterstützt laut Claude-Code-Doku keinen Effort, er wirkt erst bei einem anderen Alias-Ziel.
  *
  * Fitness-Function-Kategorie neben layering/filesize/docmap/agents-md-native, nicht mit
  * Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`:
@@ -156,6 +158,34 @@ function workflowAgentCalls(js: string): { optionen: string[]; aufrufe: number }
 /** Der `effort:`-Wert aus einem Optionsobjekt (undefined, wenn keiner da ist). */
 const planEffort = (optionen: string) => /\beffort:\s*['"]([a-z]+)['"]/.exec(optionen)?.[1];
 
+/** Alle Agent-Definitionen unter .claude/agents, nach `name` (nicht Dateiname) mit ihrem Frontmatter. */
+function agentenNachName(): Record<string, Record<string, string>> {
+  const out: Record<string, Record<string, string>> = {};
+  for (const d of readdirSync(`${REPO_ROOT}.claude/agents`).filter((f) => f.endsWith(".md"))) {
+    const fm = frontmatter(read(`.claude/agents/${d}`));
+    if (fm.name) out[fm.name] = fm;
+  }
+  return out;
+}
+
+/**
+ * Verstöße einer Workflow-Aufrufstelle mit `agentType` gegen die Agent-Definition: der Typ muss
+ * existieren, `effort` muss dem Frontmatter gleichen, ein `model:` daneben überstimmt es still.
+ * Aufrufstellen ohne `agentType` sind nicht betroffen.
+ */
+function agentTypeVerstoesse(optionen: string, agenten: Record<string, Record<string, string>>): string[] {
+  const typ = /agentType:\s*['"]([^'"]+)['"]/.exec(optionen)?.[1];
+  if (!typ) return [];
+  const kopf = optionen.slice(0, 80);
+  const fm = agenten[typ];
+  if (!fm) return [`${kopf}: agentType „${typ}" hat keine Agent-Definition`];
+  const out: string[] = [];
+  const effort = planEffort(optionen);
+  if (effort !== fm.effort) out.push(`${kopf}: effort ${effort ?? "(fehlt)"} ≠ Frontmatter ${fm.effort}`);
+  if (/\bmodel:\s*['"]/.test(optionen)) out.push(`${kopf}: \`model:\` neben agentType überstimmt das Frontmatter`);
+  return out;
+}
+
 /** Eine Aufrufstelle ist geroutet: `effort` UND (`model` ODER `agentType`; der Agent trägt sein Modell selbst). */
 const istGeroutet = (optionen: string) => /\beffort:/.test(optionen) && /\b(model|agentType):/.test(optionen);
 
@@ -171,6 +201,10 @@ const istGeroutet = (optionen: string) => /\beffort:/.test(optionen) && /\b(mode
  * überhaupt erst zur Konvention geführt hat.
  */
 const RETIRED_ROUTING_CLAIMS: { term: string; home: string }[] = [
+  {
+    term: "Opus-Standard-Effort",
+    home: "die Lenses tragen `effort: high` im Frontmatter von kubernia-lens und laufen auf beiden Pfaden damit (#1209)",
+  },
   {
     term: "Session-Default",
     home: `seit #1035/#1065 tippt die Umsetzung auf beiden Pfaden den Coding-Tier – im Workflow per agent({model}), im Skill-Pfad per Projekt-Default in .claude/settings.json (das Frontmatter in ${UMSETZUNGS_SKILL} greift nur bei /kubernia)`,
@@ -210,23 +244,31 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
     );
   });
 
-  test(`${REVIEW_SKILL} hält die Lenses auf dem starken Tier (kein Mitziehen durch den Coding-Tier)`, () => {
+  test(`${REVIEW_SKILL} spawnt die Lenses über den Agenten kubernia-lens (opus/high), ohne model-Override`, () => {
     const md = read(REVIEW_SKILL);
     // Bewusst an den `Agent({…})`-Spawn-Block gebunden, nicht datei-weit: sonst hält ein
     // beliebiger Prosa-Satz („historisch stand hier model: opus") den Test grün, während
-    // die Lenses längst wieder inline laufen – genau die Regression, die er fangen soll.
+    // die Lenses längst wieder inline oder auf general-purpose laufen.
+    const spawn = /Agent\(\{[^}]*\}\)/s.exec(md)?.[0] ?? "";
     assert.match(
-      md,
-      /Agent\(\{[^}]*model:\s*["']?opus/s,
-      `${REVIEW_SKILL} muss seine Lens-Pässe in einem \`Agent({…})\`-Spawn explizit auf den starken Tier ` +
-        `routen (\`model: "opus"\`). ` +
-        "Der Hauptagent läuft auf dem Coding-Tier (Projekt-Default sonnet, #1065) – laufen die Lenses inline " +
-        "im Hauptagenten, reviewt Sonnet statt Opus, und der finale Blick wäre zudem ein Self-Grading des " +
-        "eigenen Fixes (#1012).",
+      spawn,
+      /subagent_type:\s*"kubernia-lens"/,
+      `${REVIEW_SKILL} muss die Lens-Pässe in einem \`Agent({…})\`-Spawn über \`kubernia-lens\` starten: ` +
+        "nur dessen Frontmatter trägt `effort: high`, das Agent-Tool hat keinen effort-Parameter (#1209). " +
+        "Laufen die Lenses inline im Hauptagenten, reviewt Sonnet, und der finale Blick wäre ein Self-Grading (#1012).",
     );
+    assert.doesNotMatch(
+      spawn,
+      /\bmodel:\s*["']/,
+      "Ein `model:` am Spawn überstimmt das Frontmatter von kubernia-lens – das Modell steht nur dort (#1209).",
+    );
+    const lens = frontmatter(read(".claude/agents/kubernia-lens.md"));
+    assert.equal(lens.name, "kubernia-lens");
+    assert.equal(lens.model, "opus", "Lenses laufen auf dem starken Tier");
+    assert.equal(lens.effort, "high", "Effort der Review-Phase laut Matrix (docs/model-routing.md §1)");
   });
 
-  test("der Workflow-Pfad routet weiterhin explizit (Umsetzung Sonnet, Lenses Opus)", () => {
+  test("der Workflow-Pfad routet weiterhin explizit (Umsetzung Sonnet, Lenses über kubernia-lens)", () => {
     // AGENTS.md behauptet „BEIDE Ticket-Pfade setzen es explizit" – ein Wächter, der nur
     // den Skill-Pfad prüft, ließe die halbe Aussage ungedeckt. Bewusst grob (Anwesenheit
     // der Tier-Aliase je Phase): die Zuordnung Phase↔Aufruf ist Sache des Workflows,
@@ -246,9 +288,9 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
     );
     assert.match(
       wf,
-      /LENS_SCHEMA[^}]*model:\s*["']opus["']/s,
-      "Im Phasen-Workflow fehlt der starke Tier am Lens-`agent()` (`model: 'opus'`) – " +
-        "der Review darf nicht auf den Coding-Tier absacken (#1012/#1035).",
+      /LENS_SCHEMA[^}]*agentType:\s*["']kubernia-lens["']/s,
+      "Im Phasen-Workflow fehlt `agentType: 'kubernia-lens'` am Lens-`agent()` – " +
+        "der Review darf nicht auf den Coding-Tier absacken (#1012/#1035/#1209).",
     );
   });
 
@@ -302,31 +344,73 @@ describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
     );
   });
 
-  test("Planer opus/xhigh, Loop-Spawn mit model (ohne effort), Lenses opus", () => {
+  test("Planer opus/xhigh, Loop-Spawn mit model (ohne effort)", () => {
     const planer = frontmatter(read(".claude/agents/kubernia-planner.md"));
     assert.equal(planer.model, "opus");
     assert.equal(planer.effort, "xhigh");
     // Das Agent-Tool hat keinen `effort`-Parameter (docs/model-routing.md §2): nur `model` ist Pflicht.
     assert.match(read(".claude/skills/kubernia-loop/SKILL.md"), /Agent-Tool[^\n]*`model: "sonnet"`/, "Loop-Spawn ohne model (#1047)");
-    assert.match(read(REVIEW_SKILL), /Agent\(\{[^}]*model:\s*"opus"/s, "Lenses müssen opus sein");
   });
 
-  test("der Plan-Effort im Workflow gleicht dem Frontmatter des kubernia-planner (Drift-Schutz)", () => {
-    const planer = frontmatter(read(".claude/agents/kubernia-planner.md"));
+  test("genau eine Plan-Aufrufstelle im Workflow", () => {
     const { optionen } = workflowAgentCalls(read(".claude/workflows/kubernia-ticket.js"));
     const planCalls = optionen.filter((o) => /agentType:\s*['"]kubernia-planner['"]/.test(o));
     assert.equal(planCalls.length, 1, "Genau eine Plan-Aufrufstelle im Workflow erwartet.");
-    assert.equal(
-      planEffort(planCalls[0]),
-      planer.effort,
-      "Der Workflow überstimmt sonst still das Frontmatter des Planers – beide Stellen müssen denselben effort tragen.",
+  });
+
+  test("jede agentType-Aufrufstelle im Workflow gleicht ihrem Agent-Frontmatter (Drift-Schutz)", () => {
+    const { optionen } = workflowAgentCalls(read(".claude/workflows/kubernia-ticket.js"));
+    const verstoesse = optionen.flatMap((o) => agentTypeVerstoesse(o, agentenNachName()));
+    assert.deepEqual(
+      verstoesse,
+      [],
+      "Der Workflow überstimmt sonst still das Frontmatter des Agenten – `agentType` muss existieren, `effort` " +
+        `gleich sein und ein \`model:\` darf nicht daneben stehen (#1209):\n${verstoesse.join("\n")}`,
+    );
+    assert.ok(
+      optionen.some((o) => /agentType:\s*['"]kubernia-lens['"]/.test(o)),
+      "Die Lens-Aufrufstelle muss agentType kubernia-lens tragen – sonst prüft der Test nichts.",
     );
   });
 
-  test("Erkennung greift wirklich (Red-Green): abweichender Plan-Effort fällt auf", () => {
+  test("Erkennung greift wirklich (Red-Green): abweichender Effort, unbekannter Typ, model-Override", () => {
+    const agenten = { "kubernia-planner": { effort: "xhigh", model: "opus" }, "kubernia-lens": { effort: "high", model: "opus" } };
     assert.equal(planEffort("{ label: 'p', agentType: 'kubernia-planner', effort: 'xhigh' }"), "xhigh");
-    assert.notEqual(planEffort("{ label: 'p', agentType: 'kubernia-planner', effort: 'high' }"), "xhigh", "Abweichung muss auffallen");
     assert.equal(planEffort("{ label: 'p', agentType: 'kubernia-planner' }"), undefined, "ohne effort ⇒ undefined");
+    assert.deepEqual(agentTypeVerstoesse("{ label: 'l', agentType: 'kubernia-lens', effort: 'high' }", agenten), [], "konsistent");
+    assert.equal(agentTypeVerstoesse("{ label: 'l', agentType: 'kubernia-lens', effort: 'medium' }", agenten).length, 1, "Effort weicht ab");
+    assert.equal(agentTypeVerstoesse("{ label: 'l', agentType: 'kubernia-lens' }", agenten).length, 1, "Effort fehlt");
+    assert.equal(agentTypeVerstoesse("{ label: 'l', agentType: 'gibt-es-nicht', effort: 'high' }", agenten).length, 1, "unbekannter Typ");
+    assert.equal(agentTypeVerstoesse("{ label: 'l', agentType: 'kubernia-lens', model: 'opus', effort: 'high' }", agenten).length, 1, "model-Override");
+    assert.deepEqual(agentTypeVerstoesse("{ label: 'x', model: 'sonnet', effort: 'medium' }", agenten), [], "ohne agentType nicht betroffen");
+  });
+
+  test("Explore: Override des eingebauten Agenten auf haiku/low (#1209)", () => {
+    const agenten = agentenNachName();
+    const explore = agenten["Explore"];
+    assert.ok(
+      explore,
+      "Es fehlt ein Agent mit exakt `name: Explore` (Groß-/Kleinschreibung zählt): nur so ersetzt er den eingebauten Explore " +
+        "und jede Explore-Delegation läuft auf haiku.",
+    );
+    assert.equal(explore.model, "haiku");
+    assert.equal(explore.effort, "low", "Matrix §1: Explore haiku/low (auf Haiku ohne Wirkung, siehe docs/model-routing.md)");
+    assert.ok(!agenten["explore"], "Ein klein geschriebener Name würde den Override still verfehlen");
+    assert.ok(
+      !/\b(Edit|Write|NotebookEdit)\b/.test(explore.tools ?? ""),
+      "Explore ist ein reiner Lese-Agent: `tools:` darf weder Edit noch Write enthalten.",
+    );
+  });
+
+  test("Agent-Namen unter .claude/agents sind eindeutig (sonst entscheidet die Lese-Reihenfolge)", () => {
+    const namen = readdirSync(`${REPO_ROOT}.claude/agents`)
+      .filter((f) => f.endsWith(".md"))
+      .map((f) => frontmatter(read(`.claude/agents/${f}`)).name);
+    assert.deepEqual(
+      namen.filter((n, i) => namen.indexOf(n) !== i),
+      [],
+      "Doppelter `name:` in .claude/agents",
+    );
   });
 });
 
@@ -381,6 +465,11 @@ describe("Keine Doku behauptet mehr den alten Routing-Ist-Zustand (#1035)", () =
       retiredRoutingClaims("Der Skill läuft auf dem Session-Default.").map((v) => [v.line, v.term]),
       [[1, "Session-Default"]],
       "eine echte Behauptung muss zählen",
+    );
+    assert.deepEqual(
+      retiredRoutingClaims("Lenses laufen mit dem Opus-Standard-Effort.").map((v) => v.term),
+      ["Opus-Standard-Effort"],
+      "die alte Lens-Behauptung muss zählen",
     );
     assert.deepEqual(retiredRoutingClaims("Der Begriff `Session-Default` ist abgelegt."), [], "Backticks = Zitat");
     assert.deepEqual(retiredRoutingClaims("```\nSession-Default\n```\n"), [], "im Codeblock zählt nicht");

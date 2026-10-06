@@ -65,19 +65,19 @@ npm run verify   # typecheck → lint → check:arch → check:size → check:co
 
 ```
 Agent({
-  subagent_type: "general-purpose",
+  subagent_type: "kubernia-lens",
   description: "Lens <n>: <Architektur|Requirement-Treue|Test-Adäquanz>",
-  model: "opus",   // kein effort-Parameter am Agent-Tool: Lenses laufen mit dem Opus-Standard-Effort (docs/model-routing.md §2)
+  // kein model/effort am Spawn: beides steht im Frontmatter von .claude/agents/kubernia-lens.md (opus/high, docs/model-routing.md §1)
   prompt: "<Brille WÖRTLICH> · Arbeitsverzeichnis: <worktree> · Patch: <TMP>/kq-<nr>-r<runde>.patch · erwarteter HEAD: <sha> · <Kontext-Diät WÖRTLICH> · <Findings-Format WÖRTLICH>"
 })
 ```
 
 ⚠️ **Die Lenses lesen, sie schreiben nicht — mit genau einer Ausnahme.** Drei parallele Subagenten teilen sich **einen** Worktree. Fährt einer Sabotage-Proben (die Red-Green-Prüfung der Test-Lens, s.o.) oder „hilft" mit einem Edit, prüfen die anderen gegen eine veränderte Basis und melden Findings, die gegen den echten Stand nicht reproduzierbar sind — beim Einführungs-PR dieses Umbaus (#1035) genau so passiert. Darum: **jeder Lens-Prompt sagt ausdrücklich „du liest nur, du änderst nichts"**, und die **Sabotage-Proben der Test-Lens laufen als letzte bzw. allein** — danach `git status --porcelain` als leer belegen. (Der Workflow hat das Problem nicht: dort sind die Lenses schema-gebunden und ändern nichts.)
 
-⚠️ **Die Blöcke wörtlich in den Prompt kopieren, nicht referenzieren.** Ein `general-purpose`-Subagent liest diese Datei **nicht** — „die Brille unten", „Kontext-Diät oben" oder „Format wie im Skill" sind für ihn leer, und die #1034-Diät fiele still weg. Der Workflow löst dasselbe durch Interpolation (`${KONTEXT_DIAET}`, `lens.auftrag` — bewacht von `test/harness/review-context.test.ts`); auf diesem Pfad ist es Handarbeit des Orchestrators.
+⚠️ **Die Blöcke wörtlich in den Prompt kopieren, nicht referenzieren.** Ein `kubernia-lens`-Subagent liest diese Datei **nicht** — „die Brille unten", „Kontext-Diät oben" oder „Format wie im Skill" sind für ihn leer, und die #1034-Diät fiele still weg. Der Workflow löst dasselbe durch Interpolation (`${KONTEXT_DIAET}`, `lens.auftrag` — bewacht von `test/harness/review-context.test.ts`); auf diesem Pfad ist es Handarbeit des Orchestrators.
 
 Warum überhaupt Subagenten:
-- **Der Review darf nicht mit dem Coding-Tier mitrutschen (#1035).** Der Hauptagent läuft per Projekt-Default (`.claude/settings.json`) auf Sonnet; das Frontmatter des [kubernia](../kubernia/SKILL.md)-Skills greift nur bei `/kubernia`, dann gälte es laut Doku für den **Rest des Turns** (Stand und Bug #98898: [docs/model-routing.md](../../../docs/model-routing.md)). Liefe eine Lens inline im Hauptagenten, reviewte Sonnet — die eine Konventionshälfte repariert, die andere still kaputt. Ein Subagent mit eigenem `model:` umgeht das vollständig.
+- **Der Review darf nicht mit dem Coding-Tier mitrutschen (#1035).** Der Hauptagent läuft per Projekt-Default (`.claude/settings.json`) auf Sonnet; das Frontmatter des [kubernia](../kubernia/SKILL.md)-Skills greift nur bei `/kubernia`, dann gälte es laut Doku für den **Rest des Turns** (Stand und Bug #98898: [docs/model-routing.md](../../../docs/model-routing.md)). Liefe eine Lens inline im Hauptagenten, reviewte Sonnet — die eine Konventionshälfte repariert, die andere still kaputt. Ein Subagent mit eigenem Modell im Frontmatter (`kubernia-lens`) umgeht das vollständig.
 - **Kein Self-Grading — schon vorher gefordert (#1012), jetzt auch strukturell erfüllt.** Inline urteilt derselbe Kontext, der den Code gerade geschrieben hat; die Konvergenzschleife unten verlangt ohnehin „frische, unabhängige Kritiker". Der Subagent macht aus der Verhaltensregel eine Eigenschaft des Ablaufs — und ist **billiger**, weil er nur Patch + Auftrag sieht statt der vollen Ticket-Historie.
 
 Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket.js`), der seine Lenses längst so spawnt.
