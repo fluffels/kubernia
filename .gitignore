@@ -18,8 +18,8 @@ jscpd-report/
 !.env.example
 .claude/*
 !.claude/skills/
-# Planungs-Agenten-Datei (#745): kubernia-planner.md trägt den Alias model: opus und
-# propagiert in jeden Worktree — dieselbe Ausnahme wie .claude/skills/.
+# Agent-Definitionen (#745/#1209): kubernia-planner, kubernia-lens, Explore tragen Alias und Effort im
+# Frontmatter und propagieren in jeden Worktree — dieselbe Ausnahme wie .claude/skills/.
 !.claude/agents/
 # Worktree-Guard-Hook (#735): settings.json trägt den PreToolUse-Hook, der
 # git commit/push außerhalb eines Worktrees blockt — muss geteilt/getrackt sein,

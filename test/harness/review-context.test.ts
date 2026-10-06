@@ -56,6 +56,7 @@ const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`,
 const workflow = read(".claude/workflows/kubernia-ticket.js");
 const lensSkill = read(".claude/skills/review-lenses/SKILL.md");
 const planner = read(".claude/agents/kubernia-planner.md");
+const lensAgent = read(".claude/agents/kubernia-lens.md");
 
 // ── Ausschnitte aus dem Workflow ────────────────────────────────────────────────
 // Der Workflow ist eine Datei; die Zusicherungen gelten aber je Prompt/Block. Ein Regex über die
@@ -273,6 +274,14 @@ describe("Kontext-Diät: AGENTS.md wird nicht erneut gelesen (#1034)", () => {
       haeltKontextDiaet(planner),
       "Der kubernia-planner fordert AGENTS.md weiter zum Lesen an, obwohl Claude " +
         "Code sie nativ und schon vollständig in seinen Kontext legt (#1034).",
+    );
+  });
+
+  test("auch der Lens-Agent liest die Kontextdateien nicht erneut (#1209)", () => {
+    assert.ok(
+      haeltKontextDiaet(lensAgent),
+      "kubernia-lens fordert AGENTS.md weiter zum Lesen an, obwohl Claude Code sie nativ und schon " +
+        "vollständig in seinen Kontext legt (#1034).",
     );
   });
 });
