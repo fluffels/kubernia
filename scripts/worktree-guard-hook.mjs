@@ -1,617 +1,833 @@
-// Kein Shebang: wird über `.claude/settings.json` per `node scripts/worktree-guard-hook.mjs`
-// gestartet UND von test/harness/worktree-guard.test.ts importiert (ein `#!` bricht den
-// Test-Import, analog zu check-diffsize.mjs).
+// Kein Shebang: wird über den Dispatcher `scripts/pretooluse-hook.mjs` (oder direkt per `node scripts/worktree-guard-hook.mjs`)
+// gestartet UND von test/harness/worktree-guard.test.ts importiert (ein `#!` bricht den Test-Import, analog zu check-diffsize.mjs).
 /**
  * Worktree-Guard-Hook (#735) — Claude-Code-`PreToolUse`-Hook für `Bash`.
  *
  * Hintergrund: AGENTS.md verlangt "IMMER im eigenen `git worktree` arbeiten, nie im
- * main-Checkout committen/pushen" — bisher nur eine BITTE an den Agenten. Real
- * vorgekommen: eine parallele Sitzung committete 2026-07-07 eigenständig
- * uncommittete Änderungen im geteilten main-Checkout, weil zwei Sessions denselben
- * Checkout nutzten (siehe #735). Dieser Hook macht daraus eine kleine, technische
- * Mauer: `git commit`/`git push`, dessen cwd der GETEILTE Haupt-Checkout dieses
- * Repos ist (nicht ein Linked Worktree), wird über `PreToolUse` geblockt.
+ * main-Checkout committen/pushen". Real vorgekommen: eine parallele Sitzung committete 2026-07-07
+ * eigenständig im geteilten main-Checkout (siehe #735). Dieser Hook macht daraus eine kleine, technische
+ * Mauer: `git commit`/`git push`, das im GETEILTEN Haupt-Checkout dieses Repos (nicht in einem Linked
+ * Worktree) liefe, wird über `PreToolUse` geblockt.
  *
- * Bewusste Grenzen (siehe #735-Diskussion + docs/agent-harness-faq.md „Warum prüft
- * die Mauer erst im PR-Gate"):
- *  - Ersetzt NICHT den PR-Gate (#592) — der bleibt die eigentliche Durchsetzung für
- *    Code-Qualität. Dieser Hook fängt nur die EINE irreversible Fehlaktion
- *    "Commit/Push vom falschen Ort", analog zum dokumentierten "block rm -rf"-Muster.
- *  - Erkennt den Haupt- vs. Linked-Worktree-Unterschied über gits eigene Konvention:
- *    am Toplevel eines Linked Worktree ist `.git` eine DATEI ("gitdir: …"), im
- *    Haupt-Checkout ein VERZEICHNIS — robuster als eine Pfad-Namenskonvention wie
- *    ".claude/worktrees/*" zu erraten.
- *  - Scoped auf DIESES Repo: `git-common-dir` des cwd wird gegen das eigene `.git`
- *    verglichen (aus dem Skript-Pfad abgeleitet) — ein Bash-Aufruf gegen ein
- *    komplett anderes Repo im selben Claude-Code-Workspace wird nie angefasst.
- *  - Kommando-Erkennung über einen kleinen Shell-Lexer (`lexShell`): Text in Quotes,
- *    Heredocs und Kommentaren ist kein Kommando. Ziel ist das Verzeichnis, in dem
- *    git liefe: Session-`cwd`, ein vorangestelltes `cd <pfad> &&` (nur existierender
- *    Ordner, nicht in Pipeline/bei `&`, Subshells isoliert) und `git -C <pfad>`.
- *  - Rückfall auf die grobe Wortregel (Wortsuche "git" + "commit"/"push"): gegen das Session-
- *    `cwd`, wenn der Lexer nicht zerlegen kann; je Kommando als Sicherheitsnetz gegen das
- *    verfolgte Verzeichnis, wenn dessen Worttext sie trifft (`bash -c "git push"`,
- *    `timeout 5 …`); ausgenommen reine Text-Kommandos (gh, echo, printf, cat, git; nicht hinter `find -exec`). Text in
- *    Heredoc-Bodies (außer `$(…)`/Backticks bei unquotiertem Delimiter) und Kommentaren
- *    zählt nie. Bewusst konservativ: im Zweifel blocken; ein `cd`-Ziel, das nicht sicher
- *    gilt (bedingt, in Blöcken, hinter `then`/`{`), wird zusätzlich als Ziel geprüft.
- *  - Restlücken (nicht erkannt): Shell-Aliase/-Funktionen, `env -C`, Interpreter mit
- *    Heredoc/Pipe als Eingabe (`bash <<EOF`, `echo … | sh`), `git submodule foreach`/
- *    `rebase -x`/`subtree push`, Git-Aliase (`git -c alias.p=push p`), dynamische `cd`/`-C`-
- *    Ziele (`cd "$(…)/.."`) aus einem Worktree, ein vorher exportiertes `GIT_DIR`; das
- *    PowerShell-Tool deckt der eigene Hook scripts/worktree-guard-powershell.mjs ab (#1311). `pushd`/`popd`, ein nicht verfolgbares `cd` und `--git-dir`/`GIT_DIR`
- *    wirken über das Session-`cwd` (zurücksetzen bzw. zusätzlich prüfen).
- *  - Fail-open bei Unsicherheit (kein cwd im Payload, cwd ist gar kein Git-Repo,
- *    cwd gehört zu einem anderen Repo): NICHT blocken — dieselbe "kein falsches
- *    Rot"-Philosophie wie check-diffsize.mjs bei fehlender Vergleichsbasis.
- *  - Verteilung: `.claude/settings.json` ist bewusst NICHT gitignored (Ausnahme wie
- *    `.claude/skills/`) — als getrackte Datei liegt sie automatisch in jedem
- *    frischen Checkout/Worktree, ohne eigenen `npm run setup`-Verteilschritt.
- *  - Offen/nicht abschließend verifiziert: ob Claude Code `.claude/settings.json`
- *    zuverlässig auflöst, wenn die Session-Root ein ELTERN-Verzeichnis dieses Repos
- *    ist (verschachtelter Checkout), war zum Zeitpunkt der Umsetzung nicht
- *    empirisch prüfbar (siehe PR-Beschreibung zu #735) — einmal in echter Session
- *    gegenprüfen.
+ * Aufbau (#1311):
+ *  - `scripts/bash-parser.mjs` zerlegt den Befehl in einen AST (Liste → Und-Oder-Kette → Pipeline → Kommando).
+ *  - Dieser Auswerter führt MENGEN möglicher Verzeichnisse mit: `D` = wo das nächste Kommando laufen kann.
+ *    Eine Und-Oder-Kette liefert `{ S, F }` (Verzeichnisse nach Erfolg bzw. Misserfolg des letzten Gliedes);
+ *    `a && b` wertet b aus S, `a || b` aus F, das Kettenende ist S ∪ F. Ein `cd` auf ein statisches, existierendes
+ *    Ziel ersetzt die Menge exakt; ein fehlendes Ziel oder zu viele Argumente lässt sie unverändert (konservativ);
+ *    ein dynamisches Ziel (`cd "$X"`, `cd -`, `popd`) fügt Session-`cwd` und einen Unbekannt-Marker hinzu.
+ *    Subshells, Substitutionen, Pipelines und Hintergrundlisten (`&`) wirken nicht nach außen; `{ … }` und
+ *    `eval` schon; if/Schleifen/case vereinigen die Enden aller Zweige.
+ *  - Geschützt sind `git commit`/`git push`, `git subtree push`, die Unterkommandos von `git submodule foreach` und
+ *    `git rebase -x/--exec`, Git-Aliase (`-c alias.p=push p`, `git config alias.*`) und exportiertes
+ *    `GIT_DIR`/`GIT_WORK_TREE`. Ziel ist je Verzeichnis aus `D`: `-C`-Kette (relativ, `~` per `os.homedir()`,
+ *    MSYS-Pfade), `--git-dir`/`--work-tree`, Wrapper mit Ortswechsel (`env -C`, `sudo -D`). Ein nicht existierendes
+ *    `-C`-Ziel und `~` prüfen zusätzlich Ausgangsort und Session-`cwd`.
+ *  - Wrapper (`sudo`, `env`, `timeout`, `xargs`, `nice`, `command`, `builtin` …) werden mit ihren Optionen
+ *    übersprungen; `find -exec`-Unterkommandos werden einzeln bewertet. Interpreter (`bash|sh|zsh|dash|ksh -c`,
+ *    `eval`, Heredoc/Here-String/Pipe als Eingabe, Funktionen und Aliase im selben Befehl) werden rekursiv
+ *    ausgewertet und zusätzlich mit der groben Wortregel vereint.
+ *  - Was nicht statisch bestimmbar ist, wird NICHT durchgelassen, sondern gefragt (`permissionDecision: "ask"`):
+ *    ein geschützter git-Aufruf mit dynamischem Ziel (`cd "$X"`, `-C "$D"`, `git "$SUB"`) und ein Interpreter mit
+ *    nicht statischem Text (`bash -c "$X"`, `curl … | sh`, unauflösbarer Alias), Letzteres nur, wenn der Haupt-
+ *    Checkout erreichbar ist. Im eigenen Worktree mit literalem Pfad fragt der Hook nie.
+ *  - Text in Heredoc-Bodies (außer `$(…)`/Backticks bei unquotiertem Delimiter) und Kommentaren zählt nie; Text in
+ *    Quotes zählt bei reinen Text-Kommandos (gh, echo, printf, cat, grep, egrep, fgrep, rg ohne `--pre`) nicht.
+ *  - Nicht zerlegbar (offenes Quote, `for ((…))`, Verschachtelung über MAX_TIEFE): grobe Wortregel (Wortsuche
+ *    "git" + "commit"/"push") gegen das Session-`cwd`.
+ *  - Fail-open nur bei fehlendem `cwd`, Nicht-Git-Verzeichnis und anderem Repo (dieselbe "kein falsches Rot"-
+ *    Philosophie wie check-diffsize.mjs).
+ *  - Ersetzt NICHT den PR-Gate (#592): das bleibt die Durchsetzung für Code-Qualität. Der Hook fängt die EINE
+ *    irreversible Fehlaktion "Commit/Push vom falschen Ort". Er erkennt Haupt- vs. Linked-Worktree über gits
+ *    Konvention (am Toplevel eines Linked Worktree ist `.git` eine DATEI, im Haupt-Checkout ein VERZEICHNIS) und
+ *    vergleicht `git-common-dir` (per `realpath`, also auch über Junction/Symlink) mit dem des eigenen Checkouts.
+ *  - Verbleibende Grenze: eine zur Laufzeit gebaute Befehlszeile aus mehreren Schritten (`X=$(…); $X`), Skripte
+ *    (`bash skript.sh`) und Binärprogramme, die selbst git aufrufen (`npm run x`), sieht er nicht.
+ *  - Das PowerShell-Tool deckt scripts/worktree-guard-powershell.mjs ab, beide hängen am Dispatcher.
  *
- * Reines Node-Skript (nur Builtins). Die Entscheidungslogik ist pure/exportiert
- * und testbar (execFile/stat injizierbar) — EINE Quelle für Hook-CLI und Test.
+ * Reines Node-Skript (nur Builtins). Die Entscheidungslogik ist pur/exportiert und testbar
+ * (execFile/stat/homedir/platform injizierbar) — EINE Quelle für Hook-CLI und Test.
  */
 
 import { execFileSync } from "node:child_process";
-import { statSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { statSync, realpathSync } from "node:fs";
+import { homedir as osHomedir } from "node:os";
+import path, { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseBash } from "./bash-parser.mjs";
+import { buildDenyOutput, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
+
+export { parseHookInput, buildDenyOutput };
 
 /** Normalisiert einen Pfad für den Vergleich: Backslashes -> Slashes, unter
  *  Windows zusätzlich klein geschrieben (case-insensitives Dateisystem); Linux
  *  bleibt case-sensitive. */
-function normalizePath(p) {
+function normalizePath(p, platform = process.platform) {
   const slashed = String(p).replace(/\\/g, "/").replace(/\/+$/, "");
-  return process.platform === "win32" ? slashed.toLowerCase() : slashed;
+  return platform === "win32" ? slashed.toLowerCase() : slashed;
 }
 
-/** Alte, grobe Regel (Rückfall, wenn der Lexer nicht zerlegen kann oder ein
- *  Interpreter den eigentlichen Befehl verbirgt): ein Segment (Split auf
- *  `&&`/`||`/`;`/Zeilenumbruch) mit "git" UND "commit"/"push" als Wort. */
-function coarseProtected(command) {
+/** Grobe Wortregel (Rückfall, wenn der Parser nicht zerlegen kann oder ein Interpreter den eigentlichen
+ *  Befehl verbirgt): ein Segment (Split auf `&&`/`||`/`;`/Zeilenumbruch) mit "git" UND "commit"/"push" als Wort. */
+export function coarseProtected(command) {
   const segments = String(command).split(/&&|\|\||;|\n/);
   return segments.some((seg) => /\bgit\b/.test(seg) && /\b(commit|push)\b/.test(seg));
 }
 
-// ── Minimaler Shell-Lexer ───────────────────────────────────────────────────
-// Zerlegt einen Bash-Befehl in Kommandos aus Wörtern. Versteht Quotes, Escapes,
-// Kommentare, Heredocs und Substitutionen; Text darin ist KEIN Kommando.
-
-class LexError extends Error {}
-
-const boundary = (kind) => ({ words: [], sep: "", boundary: kind });
-
-function lexer(src) {
-  let pos = 0;
-  const pending = []; // wartende Heredocs { delim, strip, quoted }
-  const fail = () => {
-    throw new LexError("nicht zerlegbar");
-  };
-
-  /** pos steht hinter `(`: Liste bis `)` lesen, als `(`…`)`-Grenzen einreihen. */
-  function subst(out) {
-    out.push(boundary("("));
-    parseList(out, true);
-    out.push(boundary(")"));
-  }
-
-  /** pos steht hinter dem öffnenden Backtick. */
-  function backtick(out) {
-    let end = pos;
-    while (end < src.length && src[end] !== "`") end += src[end] === "\\" ? 2 : 1;
-    if (end >= src.length) fail();
-    const inner = src.slice(pos, end).replace(/\\([`\\$])/g, "$1");
-    pos = end + 1;
-    out.push(boundary("("), ...lexer(inner).run(), boundary(")"));
-  }
-
-  /** pos steht hinter dem öffnenden `"`. */
-  function readDouble(out, w) {
-    for (;;) {
-      if (pos >= src.length) fail();
-      const ch = src[pos];
-      if (ch === '"') {
-        pos++;
-        return;
-      }
-      if (ch === "\\") {
-        const n = src[pos + 1];
-        if (n !== undefined && '$`"\\\n'.includes(n)) {
-          if (n !== "\n") w.text += n;
-          pos += 2;
-        } else {
-          w.text += "\\";
-          pos++;
-        }
-        continue;
-      }
-      if (ch === "$" || ch === "`") {
-        w.dynamic = true;
-        if (ch === "`") {
-          pos++;
-          backtick(out);
-        } else if (src[pos + 1] === "(") {
-          pos += 2;
-          subst(out);
-        } else pos++;
-        continue;
-      }
-      w.text += ch;
-      pos++;
-    }
-  }
-
-  /** `<<[-]DELIM`: pos steht hinter `<<`. Das Delimiter-Wort wird vorgemerkt. */
-  function heredocStart() {
-    const strip = src[pos] === "-";
-    if (strip) pos++;
-    while (src[pos] === " " || src[pos] === "\t") pos++;
-    let delim = "";
-    let quoted = false;
-    while (pos < src.length && !/[\s;|&()<>]/.test(src[pos])) {
-      const ch = src[pos];
-      if (ch === "'" || ch === '"') {
-        const end = src.indexOf(ch, pos + 1);
-        if (end < 0) fail();
-        delim += src.slice(pos + 1, end);
-        quoted = true;
-        pos = end + 1;
-      } else if (ch === "\\") {
-        delim += src[pos + 1] ?? "";
-        quoted = true;
-        pos += 2;
-      } else {
-        delim += ch;
-        pos++;
-      }
-    }
-    if (!delim) fail();
-    pending.push({ delim, strip, quoted });
-  }
-
-  /** Nach einem Zeilenumbruch: die Bodies der vorgemerkten Heredocs lesen. */
-  function readHeredocs(out) {
-    while (pending.length) {
-      const { delim, strip, quoted } = pending.shift();
-      let body = "";
-      for (;;) {
-        if (pos >= src.length) fail();
-        const end = src.indexOf("\n", pos);
-        const line = src.slice(pos, end < 0 ? src.length : end).replace(/\r$/, "");
-        pos = end < 0 ? src.length : end + 1;
-        if ((strip ? line.replace(/^\t+/, "") : line) === delim) break;
-        if (end < 0) fail();
-        body += line + "\n";
-      }
-      // Quotierter Delimiter: Body wörtlich. Sonst nur Substitutionen darin auswerten.
-      if (!quoted) {
-        const inner = lexer(body).scanBody();
-        if (inner.length) out.push(boundary("("), ...inner, boundary(")"));
-      }
-    }
-  }
-
-  function parseList(out, nested) {
-    let words = [];
-    let w = null;
-    const ensure = () => (w ??= { text: "", dynamic: false });
-    const endWord = () => {
-      if (w) words.push(w);
-      w = null;
-    };
-    const endCmd = (sep) => {
-      endWord();
-      if (words.length) out.push({ words, sep });
-      else if (sep && out.length && out[out.length - 1].boundary === ")") out[out.length - 1].sep = sep; // Trenner hinter einer Subshell
-      words = [];
-    };
-    while (pos < src.length) {
-      const ch = src[pos];
-      const next = src[pos + 1];
-      if (ch === " " || ch === "\t" || ch === "\r") {
-        endWord();
-        pos++;
-      } else if (ch === "\n") {
-        endCmd("\n");
-        pos++;
-        readHeredocs(out);
-      } else if (ch === "#" && !w) {
-        while (pos < src.length && src[pos] !== "\n") pos++;
-      } else if (ch === ";") {
-        endCmd(";");
-        pos++;
-      } else if (ch === "|" && !(w && w.text.endsWith(">"))) {
-        const sep = next === "|" ? "||" : "|";
-        endCmd(sep);
-        pos += next === "|" || next === "&" ? 2 : 1;
-      } else if (ch === "&" && next === "&") {
-        endCmd("&&");
-        pos += 2;
-      } else if (ch === "&" && !((w && /[<>]$/.test(w.text)) || next === ">")) {
-        endCmd("&");
-        pos++;
-      } else if (ch === "(" && w && /[<>]$/.test(w.text)) {
-        w.text = w.text.slice(0, -1); // <(…) / >(…): Prozess-Substitution
-        w.dynamic = true;
-        pos++;
-        subst(out);
-      } else if (ch === "(") {
-        if (w) fail(); // z.B. Funktionsdefinition: nicht zerlegbar
-        pos++;
-        subst(out);
-      } else if (ch === ")") {
-        if (!nested) fail();
-        endCmd("");
-        pos++;
-        return;
-      } else if (ch === "<" && next === "<" && src[pos + 2] !== "<") {
-        pos += 2;
-        heredocStart();
-      } else if (ch === "'") {
-        const end = src.indexOf("'", pos + 1);
-        if (end < 0) fail();
-        ensure().text += src.slice(pos + 1, end);
-        pos = end + 1;
-      } else if (ch === '"') {
-        pos++;
-        readDouble(out, ensure());
-      } else if (ch === "\\") {
-        if (next === "\n") pos += 2; // Zeilenfortsetzung
-        else {
-          if (next !== undefined) ensure().text += next;
-          pos += 2;
-        }
-      } else if (ch === "`") {
-        pos++;
-        ensure().dynamic = true;
-        backtick(out);
-      } else if (ch === "$") {
-        ensure().dynamic = true;
-        if (next === "(") {
-          pos += 2;
-          subst(out);
-        } else pos++;
-      } else {
-        ensure().text += ch;
-        pos++;
-      }
-    }
-    if (nested || pending.length) fail();
-    endCmd("");
-  }
-
-  /** Heredoc-Body (unquotierter Delimiter): nur `$(…)` und Backticks sind aktiv. */
-  function scanBody() {
-    const out = [];
-    while (pos < src.length) {
-      const ch = src[pos];
-      if (ch === "\\") pos += 2;
-      else if (ch === "$" && src[pos + 1] === "(") {
-        pos += 2;
-        subst(out);
-      } else if (ch === "`") {
-        pos++;
-        backtick(out);
-      } else pos++;
-    }
-    return out;
-  }
-
-  function run() {
-    const out = [];
-    parseList(out, false);
-    return out;
-  }
-
-  return { run, scanBody };
-}
-
-/** Zerlegt `command` in Kommandos `{ words: {text, dynamic}[], sep }` (`sep`: Trenner
- *  danach). Substitutionen/Subshells stehen als Einträge `{ boundary: "(" | ")" }`
- *  vor/nach dem umschließenden Kommando. Nicht zerlegbar → `{ ok: false }`. */
-export function lexShell(command) {
-  try {
-    return { ok: true, cmds: lexer(String(command)).run() };
-  } catch (e) {
-    if (e instanceof LexError) return { ok: false };
-    throw e;
-  }
-}
-
-// ── git-Aufruf erkennen ─────────────────────────────────────────────────────
+// ── Tabellen ────────────────────────────────────────────────────────────────
 const GIT_RE = /^(?:.*[\\/])?git(?:\.exe)?$/i;
-const FIND_RE = /^(?:.*[\\/])?find(?:\.exe)?$/i;
-const PREFIX_WORDS = new Set(["then", "do", "else", "elif", "if", "while", "until", "{", "!", "time", "command", "builtin", "exec", "env", "nohup", "sudo", "xargs", "nice"]);
-const EXEC_FLAGS = new Set(["-exec", "-execdir", "-ok", "-okdir"]);
-
-/** Index des Wortes, das den eigentlichen Befehl nennt (hinter Schlüsselwörtern,
- *  Zuweisungen und Wrappern wie `env`/`xargs`/`find -exec`); -1 wenn keiner. */
-function commandIndex(words) {
-  if (words.length && FIND_RE.test(words[0].text)) {
-    const k = words.findIndex((w) => EXEC_FLAGS.has(w.text));
-    return k < 0 ? -1 : k + 1;
-  }
-  let i = 0;
-  let wrapped = false;
-  while (i < words.length) {
-    const t = words[i].text;
-    const prefix = !words[i].dynamic && PREFIX_WORDS.has(t);
-    if (prefix) wrapped = true;
-    if (prefix || /^[A-Za-z_]\w*=/.test(t) || (wrapped && t.startsWith("-"))) i++;
-    else break;
-  }
-  return i < words.length ? i : -1;
-}
-
-/** `null` ohne git-Aufruf, sonst `{ sub, cDirs, unsure }` (Unterbefehl, `-C`-Wörter,
- *  `--git-dir`/`--work-tree` gesetzt). */
-export function gitInvocation(words) {
-  let i = commandIndex(words);
-  if (i < 0 || words[i].dynamic || !GIT_RE.test(words[i].text)) {
-    // Unbekannter Wrapper (`timeout 60 git push`, `xargs -n 1 git …`): erstes git-Wort nehmen.
-    i = words.findIndex((w) => !w.dynamic && GIT_RE.test(w.text));
-    if (i < 0) return null;
-  }
-  const cDirs = [];
-  let unsure = words.slice(0, i).some((w) => /^GIT_(DIR|WORK_TREE)=/.test(w.text));
-  let j = i + 1;
-  while (j < words.length) {
-    const t = words[j].text;
-    if (t === "-C" && words[j + 1]) {
-      cDirs.push(words[j + 1]);
-      j += 2;
-    } else if (t === "-c" || t === "--namespace" || t === "--config-env") j += 2;
-    else if (t === "--git-dir" || t === "--work-tree") {
-      unsure = true;
-      j += 2;
-    } else if (t.startsWith("--git-dir=") || t.startsWith("--work-tree=")) {
-      unsure = true;
-      j++;
-    } else if (t.startsWith("-")) j++;
-    else break;
-  }
-  const sub = words[j];
-  return { sub: sub && !sub.dynamic ? sub.text : null, cDirs, unsure };
-}
-
+const ASSIGN_RE = /^[A-Za-z_]\w*=/;
 const PROTECTED_SUBS = new Set(["commit", "push"]);
-const isProtectedInvocation = (inv) => inv !== null && PROTECTED_SUBS.has(inv.sub ?? "");
+/** Reine Text-Kommandos: ein Wortpaar "git commit/push" darin ist kein Aufruf. */
+const TEXT_COMMANDS = new Set(["gh", "echo", "printf", "cat", "grep", "egrep", "fgrep", "rg"]);
+const SHELLS = new Set(["bash", "sh", "zsh", "dash", "ksh", "ash"]);
+const CD_LIKE = new Set(["cd", "pushd", "popd"]);
+/** Wrapper, hinter denen ein `cd` weiterhin die aktuelle Shell wechselt. */
+const CD_WRAPPERS = new Set(["builtin", "command", "time"]);
+const EXEC_FLAGS = new Set(["-exec", "-execdir", "-ok", "-okdir"]);
+const EXPORTERS = new Set(["export", "declare", "typeset", "readonly", "local"]);
+const MAX_INTERPRETER = 6; // Rekursionstiefe Interpreter-Strings/Funktionen/Aliase
+const UNKNOWN = "\0unbekannt";
 
-/** True, wenn `command` einen echten `git commit`/`git push` ausführt. Text in
- *  Quotes, Heredoc-Bodies und Kommentaren zählt nicht; Sicherheitsnetz siehe `protectedGitTargets`. */
-export function isProtectedGitCommand(command) {
-  return protectedGitTargets(command, ".", { statSync: () => ({ isDirectory: () => false }) }).length > 0;
-}
+/** Wrapper-Tabelle: Optionen mit Wert (`val`), Optionen mit Ortswechsel (`chdir`), Positionsargumente (`pos`),
+ *  `assign`: NAME=WERT-Argumente. */
+const W = (val = [], extra = {}) => ({ val: new Set(val), chdir: new Set(extra.chdir ?? []), pos: extra.pos ?? 0, assign: extra.assign ?? false, lookup: new Set(extra.lookup ?? []) });
+const WRAPPERS = {
+  time: W(["-f", "-o", "--format", "--output"]),
+  command: W([], { lookup: ["-v", "-V"] }),
+  exec: W(["-a"]),
+  builtin: W(),
+  env: W(["-u", "--unset", "-S", "--split-string", "-C", "--chdir"], { chdir: ["-C", "--chdir"], assign: true }),
+  sudo: W(["-u", "-g", "-p", "-C", "-r", "-t", "-U", "-T", "-R", "-h", "-D", "--user", "--group", "--chdir"], { chdir: ["-D", "--chdir"] }),
+  doas: W(["-u", "-C"]),
+  xargs: W(["-I", "-L", "-n", "-P", "-s", "-d", "-E", "-a", "--max-args", "--max-procs", "--delimiter", "--arg-file"]),
+  nice: W(["-n", "--adjustment"]),
+  timeout: W(["-s", "-k", "--signal", "--kill-after"], { pos: 1 }),
+  stdbuf: W(["-i", "-o", "-e"]),
+  ionice: W(["-c", "-n", "-p"]),
+  nohup: W(),
+  winpty: W(),
+  setsid: W(),
+  unbuffer: W(),
+};
 
+/** Eingebaute git-Unterbefehle (Rest: möglicher Alias, wird per `git config` aufgelöst). */
+const KNOWN_SUBS = new Set(
+  ("add am annotate apply archive bisect blame branch bundle cat-file check-attr check-ignore checkout checkout-index cherry cherry-pick clean clone column " +
+    "commit-graph commit-tree config count-objects credential describe diff diff-files diff-index diff-tree difftool fast-export fast-import fetch filter-branch " +
+    "fmt-merge-msg for-each-ref format-patch fsck gc grep gui hash-object help init interpret-trailers log ls-files ls-remote ls-tree maintenance merge merge-base " +
+    "mergetool mktree mv name-rev notes pack-refs prune pull range-diff read-tree rebase reflog remote repack replace request-pull rerere reset restore rev-list " +
+    "rev-parse revert rm send-email shortlog show show-branch show-ref sparse-checkout stash status submodule subtree switch symbolic-ref tag update-index update-ref " +
+    "var verify-commit verify-tag version whatchanged worktree write-tree bugreport diagnose scalar").split(" "),
+);
+
+// ── Kontext und Pfad-Helfer ─────────────────────────────────────────────────
 /** MSYS-/Git-Bash-Pfad `/c/foo` → `C:/foo` (nur unter Windows). */
 export function fromMsysPath(p, platform = process.platform) {
   const m = platform === "win32" ? /^\/([a-zA-Z])(?:\/(.*))?$/.exec(p) : null;
   return m ? `${m[1].toUpperCase()}:/${m[2] ?? ""}` : p;
 }
 
-/** Ziel des `cd`-Kommandos (ohne Optionen) oder null, wenn es nicht statisch ist. */
-function cdTarget(words) {
-  const rest = words.slice(1).filter((w) => w.dynamic || !["-L", "-P", "--", "-e", "-@"].includes(w.text));
-  const t = rest[0];
-  if (!t || t.dynamic || t.text === "-" || t.text.startsWith("~")) return null;
-  return t.text;
+function makeCtx(cwd, deps) {
+  const platform = deps.platform ?? process.platform;
+  const P = platform === process.platform ? path : platform === "win32" ? path.win32 : path.posix;
+  return {
+    P,
+    platform,
+    deps,
+    stat: deps.statSync ?? statSync,
+    home: () => (deps.homedir ? deps.homedir() : osHomedir()),
+    cwd: P.resolve(cwd),
+    targets: new Set(),
+    asks: new Map(),
+    fns: new Map(),
+    aliases: new Map(),
+    expanding: new Set(),
+    gitEnv: { gitDir: null, workTree: null },
+    seen: new Set(),
+    depth: 0,
+    aliasCache: new Map(),
+  };
 }
 
-function isDirectory(path, stat) {
+const real = (D) => [...D].filter((d) => d !== UNKNOWN);
+const union = (...sets) => new Set(sets.flatMap((s) => [...s]));
+const abs = (c, base, p) => c.P.resolve(base, fromMsysPath(p, c.platform));
+
+function isDir(c, p) {
   try {
-    return stat(path).isDirectory();
+    return c.stat(p).isDirectory();
   } catch {
     return false;
   }
 }
 
-const OPENERS = new Set(["if", "for", "while", "until", "case", "select", "{"]);
-const CLOSERS = new Set(["fi", "done", "esac", "}"]);
-/** Reine Text-Kommandos: ein Wortpaar "git commit/push" darin ist kein Aufruf. */
-const TEXT_COMMANDS = new Set(["gh", "echo", "printf", "cat", "git"]);
-
-/** Verzeichnisse, in denen `git commit`/`git push` aus `command` liefen (Session-`cwd`,
- *  verfolgtes `cd`, `git -C`); leer ohne solchen Aufruf. Nicht zerlegbar: `[cwd]` bei grobem
- *  Treffer. Sicherheitsnetz je Kommando: trifft der Worttext eines Kommandos (außer reinen
- *  Text-Kommandos) die grobe Regel, etwa `bash -c "git push"` oder `timeout 5 bash -c …`,
- *  gilt das verfolgte Verzeichnis als Ziel. */
-export function protectedGitTargets(command, cwd, deps = {}) {
-  if (!command) return [];
-  const lexed = lexShell(command);
-  if (!lexed.ok) return coarseProtected(command) ? [cwd] : [];
-  const stat = deps.statSync ?? statSync;
-  const targets = new Set();
-  const unverfolgt = new Set();
-  const stack = [];
-  let cur = cwd;
-  let listStart = cwd;
-  let pure = true; // in dieser Und-Oder-Liste kam bisher nur `cd` (nur dann gilt ein `cd` sicher)
-  let depth = 0; // offene Blöcke (if/for/while/case/{)
-  let prevPiped = false;
-  for (const c of lexed.cmds) {
-    if (c.boundary === "(") {
-      stack.push({ cur, listStart });
-      listStart = cur;
-      continue;
-    }
-    if (c.boundary === ")") {
-      ({ cur, listStart } = stack.pop() ?? { cur, listStart });
-      pure = false; // die Subshell zählt als Kommando: ein folgendes cd steht nicht am Listenanfang
-      prevPiped = c.sep === "|";
-      if (c.sep === "&") cur = listStart;
-      if ([";", "\n", "&"].includes(c.sep)) {
-        listStart = cur;
-        pure = true;
-      }
-      continue;
-    }
-    const first = c.words[0].dynamic ? "" : c.words[0].text;
-    const ci = commandIndex(c.words);
-    const cmdWord = ci >= 0 && !c.words[ci].dynamic ? c.words[ci].text : "";
-    const inv = gitInvocation(c.words);
-    if (isProtectedInvocation(inv)) {
-      for (const d of unverfolgt) targets.add(d); // cd-Ziele, die nicht sicher galten: zusätzlich prüfen
-      const dirs = inv.cDirs.map((w) => (w.dynamic || /^~|[{}]/.test(w.text) ? null : w.text));
-      targets.add(resolve(dirs.reduce((d, w) => (w === null ? d : resolve(d, fromMsysPath(w))), cur)));
-      // --git-dir/GIT_DIR oder ein nicht auflösbares -C können woanders hin zeigen: Session-cwd prüfen.
-      if (inv.unsure || dirs.includes(null)) targets.add(resolve(cwd));
-    } else if (!inv && ["cd", "pushd", "popd"].includes(cmdWord) && !prevPiped && c.sep !== "|" && c.sep !== "&") {
-      // Ein cd gilt nur am Anfang seiner Liste, außerhalb von Blöcken und mit statischem, existierendem
-      // Ziel; alles andere (cd -, ~, pushd/popd, bedingt) setzt zurück auf das Session-cwd. Ein
-      // statisches, existierendes Ziel, das nicht sicher gilt, wird zusätzlich als Ziel geprüft.
-      const t = cdTarget(c.words.slice(ci));
-      const dir = t === null ? null : resolve(cur, fromMsysPath(t));
-      const existiert = dir !== null && isDirectory(dir, stat);
-      const wirksam = cmdWord === "cd" && ci === 0 && pure && depth === 0 && existiert;
-      if (existiert && !wirksam) unverfolgt.add(dir);
-      cur = wirksam ? dir : cwd;
-    } else if (!inv && !(TEXT_COMMANDS.has(cmdWord) && !FIND_RE.test(first))) {
-      const text = c.words.map((w) => w.text).join(" ");
-      if (coarseProtected(text)) targets.add(resolve(cur));
-    }
-    if (OPENERS.has(first)) depth++;
-    else if (CLOSERS.has(first)) depth = Math.max(0, depth - 1);
-    pure = pure && first === "cd" && c.sep === "&&";
-    prevPiped = c.sep === "|";
-    if (c.sep === "&") cur = listStart; // Hintergrund-Liste lief in einer Subshell
-    if (c.sep === "&" || c.sep === ";" || c.sep === "\n" || c.sep === "") {
-      listStart = cur;
-      pure = true;
-    }
-  }
-  return [...targets];
+/** `~`/`~/x` per `os.homedir()` auflösen; `~user` u.ä. → null (nicht auflösbar); sonst unverändert. */
+function tildeOf(c, text) {
+  if (text === "~") return c.home();
+  if (/^~[\\/]/.test(text)) return c.P.join(c.home(), text.slice(2));
+  return text.startsWith("~") ? null : text;
 }
 
-/** Ermittelt, ob `cwd` zu DEMSELBEN Repo gehört wie `repoRoot` (Vergleich über
- *  `git-common-dir`, NICHT über `<repoRoot>/.git` als Pfad-Konstruktion — das
- *  Skript liegt selbst in `scripts/`, aber `repoRoot` kann je nach Checkout ein
- *  Linked Worktree sein, dessen `.git` nur eine Datei ist, kein Verzeichnis. Der
- *  `git-common-dir` von `repoRoot` selbst ist deshalb die verlässliche Referenz,
- *  nicht `resolve(repoRoot, ".git")`) und ob es der Haupt-Checkout oder ein
- *  Linked Worktree ist (`.git` als Verzeichnis vs. Datei am Toplevel). Wirft nie —
- *  bei jedem git-/fs-Fehler (kein Repo, Pfad existiert nicht, …) `{ relevant:
- *  false }`. `deps` injizierbar fürs Testen (execFileSync/statSync). */
+/** Rückfrage vormerken: für die Verzeichnisse `dirs` (und das Session-`cwd`). `mainOnly`: nur, wenn dort der Haupt-
+ *  Checkout liegt (unbekannter Inhalt); sonst bei jedem Verzeichnis dieses Repos (unbekanntes Ziel). */
+function ask(c, dirs, reason, mainOnly = false) {
+  for (const d of [...dirs, c.cwd]) {
+    if (d === UNKNOWN) continue;
+    const alt = c.asks.get(d);
+    if (!alt || (alt.mainOnly && !mainOnly)) c.asks.set(d, { reason, mainOnly });
+  }
+}
+
+// ── Wörter vorbereiten ──────────────────────────────────────────────────────
+const REDIR_ONLY = /^(?:\d*|&)(?:>>|>\||>&|<&|<>|<<<|>|<)$/;
+const REDIR_ATTACHED = /^(?:\d*|&)(?:>>|>\||>&|<&|<>|>|<)./;
+
+/** Entfernt Umleitungen (`>f`, `2>&1`, `> f`) aus den Wörtern. */
+function stripRedirs(words) {
+  const out = [];
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if (!w.quoted && REDIR_ONLY.test(w.text)) i++;
+    else if (!w.quoted && REDIR_ATTACHED.test(w.text)) continue;
+    else out.push(w);
+  }
+  return out;
+}
+
+const hereStringOf = (words) => {
+  const i = words.findIndex((w) => !w.quoted && w.text === "<<<");
+  return i >= 0 ? (words[i + 1] ?? null) : null;
+};
+
+const baseName = (text) => text.replace(/\\/g, "/").split("/").pop().toLowerCase().replace(/\.exe$/, "");
+
+/** Überspringt Zuweisungen und Wrapper (mit ihren Optionen) vor dem eigentlichen Kommando.
+ *  `i`: Index des Kommandowortes (-1: keines, nur Zuweisungen), `name`: dessen Basisname, `wrappers`, `chdirs`
+ *  (Ortswechsel-Optionen von `env -C`/`sudo -D`), `env`: NAME=WERT-Zuweisungen davor. */
+function peel(words) {
+  const res = { i: -1, name: null, wrappers: [], chdirs: [], env: [], dynamicCmd: false, noop: false };
+  const assign = (w) => {
+    const eq = w.text.indexOf("=");
+    res.env.push({ name: w.text.slice(0, eq), word: { text: w.text.slice(eq + 1), dynamic: w.dynamic } });
+  };
+  let i = 0;
+  for (let round = 0; round < 20; round++) {
+    while (i < words.length && ASSIGN_RE.test(words[i].text)) assign(words[i++]);
+    if (i >= words.length) return res;
+    const w = words[i];
+    if (w.dynamic) return { ...res, i, dynamicCmd: true };
+    const name = baseName(w.text);
+    const spec = WRAPPERS[name];
+    if (!spec) return { ...res, i, name };
+    res.wrappers.push(name);
+    i++;
+    let pos = spec.pos;
+    while (i < words.length) {
+      const a = words[i];
+      const t = a.text;
+      if (spec.assign && ASSIGN_RE.test(t)) {
+        assign(a);
+        i++;
+      } else if (!a.dynamic && t === "--") {
+        i++;
+        break;
+      } else if (!a.dynamic && t.startsWith("-") && t.length > 1) {
+        const eq = t.startsWith("--") ? t.indexOf("=") : -1;
+        const opt = eq > 0 ? t.slice(0, eq) : t;
+        if (spec.lookup.has(opt)) return { ...res, noop: true };
+        if (spec.chdir.has(opt)) {
+          if (eq > 0) res.chdirs.push({ text: t.slice(eq + 1), dynamic: a.dynamic });
+          else res.chdirs.push(words[i + 1] ?? { text: "", dynamic: true });
+        }
+        i += spec.val.has(opt) && eq < 0 ? 2 : 1;
+      } else if (pos > 0) {
+        pos--;
+        i++;
+      } else break;
+    }
+  }
+  return res;
+}
+
+// ── Auswerter ───────────────────────────────────────────────────────────────
+function evalList(list, D, c) {
+  for (const it of list.items) {
+    const r = evalAndOr(it.andor, D, c);
+    if (!it.bg) D = union(r.S, r.F); // Hintergrund: läuft in einer Subshell, D bleibt
+  }
+  return D;
+}
+
+function evalAndOr(andor, D, c) {
+  let { S, F } = evalPipeline(andor.first, D, c);
+  for (const { op, pipe } of andor.rest) {
+    const r = evalPipeline(pipe, op === "&&" ? S : F, c);
+    if (op === "&&") {
+      F = union(F, r.F);
+      S = r.S;
+    } else {
+      S = union(S, r.S);
+      F = r.F;
+    }
+  }
+  return { S, F };
+}
+
+function evalPipeline(p, D, c) {
+  let r;
+  if (p.cmds.length === 1) r = evalCmd(p.cmds[0], D, c, {});
+  else {
+    p.cmds.forEach((cmd, i) => evalCmd(cmd, D, c, { pipeSrc: i > 0 ? p.cmds[i - 1] : null })); // jedes Glied in einer Subshell
+    r = { S: D, F: D };
+  }
+  return p.neg ? { S: r.F, F: r.S } : r;
+}
+
+function evalSubsts(node, D, c) {
+  for (const l of node.substs ?? []) evalList(l, D, c);
+  for (const h of node.heredocs ?? []) for (const l of h.substs) evalList(l, D, c);
+}
+
+function evalCmd(cmd, D, c, opts) {
+  switch (cmd.type) {
+    case "simple":
+      return evalSimple(cmd, D, c, opts);
+    case "subshell":
+      evalSubsts(cmd, D, c);
+      evalList(cmd.body, D, c);
+      return { S: D, F: D };
+    case "group": {
+      evalSubsts(cmd, D, c);
+      const r = evalList(cmd.body, D, c);
+      return { S: r, F: r };
+    }
+    case "funcdef":
+      c.fns.set(cmd.name, cmd.body);
+      return { S: D, F: D };
+    default: {
+      evalSubsts(cmd, D, c);
+      const r = evalCompound(cmd, D, c);
+      return { S: r, F: r };
+    }
+  }
+}
+
+/** if / while / until / for / case: die Enden aller Zweige vereinen (Schleifen zwei Durchläufe). */
+function evalCompound(cmd, D, c) {
+  if (cmd.type === "if") {
+    let cur = D;
+    const ends = [];
+    for (const cl of cmd.clauses) {
+      cur = evalList(cl.cond, cur, c);
+      ends.push(evalList(cl.body, cur, c));
+    }
+    ends.push(cmd.else ? evalList(cmd.else, cur, c) : cur);
+    return union(...ends);
+  }
+  if (cmd.type === "case") return union(D, ...cmd.arms.map((a) => evalList(a, D, c)));
+  let cur = D;
+  for (let i = 0; i < 2; i++) {
+    const dc = cmd.cond ? evalList(cmd.cond, cur, c) : cur;
+    cur = union(cur, dc, evalList(cmd.body, dc, c));
+  }
+  return cur;
+}
+
+const dynamicState = (D, c) => ({ S: union(D, new Set([c.cwd, UNKNOWN]), c.seen), F: D });
+
+/** `cd`/`pushd`/`popd` (Optionen `-L -P -e -@ --` gefiltert). */
+function cdEffect(name, args, D, c) {
+  for (const d of real(D)) c.seen.add(d);
+  const ops = [];
+  let optsDone = false;
+  for (const w of args) {
+    if (!optsDone && !w.dynamic && w.text === "--") optsDone = true;
+    else if (optsDone || w.dynamic || !["-L", "-P", "-e", "-@"].includes(w.text)) ops.push(w);
+  }
+  if (ops.length > 1) return { S: D, F: D }; // zu viele Argumente: cd schlägt fehl
+  const t = ops[0];
+  if (name === "popd" || (name === "pushd" && !t) || (t && (t.dynamic || t.text === "-"))) return dynamicState(D, c);
+  if (!t) return { S: new Set([c.home(), c.cwd]), F: D }; // `cd` ohne Argument: Home
+  const text = tildeOf(c, t.text);
+  if (text === null) return dynamicState(D, c);
+  if (text !== t.text) {
+    const n = abs(c, c.cwd, text);
+    if (!isDir(c, n)) return { S: D, F: D };
+    c.seen.add(n);
+    return { S: new Set([n, c.cwd]), F: D };
+  }
+  const S = new Set();
+  const F = new Set();
+  for (const el of D) {
+    if (el === UNKNOWN) {
+      S.add(c.P.isAbsolute(fromMsysPath(text, c.platform)) ? abs(c, c.cwd, text) : UNKNOWN);
+      continue;
+    }
+    const dir = abs(c, el, text);
+    if (isDir(c, dir)) {
+      S.add(dir);
+      c.seen.add(dir);
+    } else {
+      S.add(el);
+      F.add(el); // fehlendes Ziel: konservativ, der Nachfolger läuft gegen die unveränderte Menge
+    }
+  }
+  return { S, F };
+}
+
+function noteEnv(c, env) {
+  for (const { name, word } of env) {
+    if (name === "GIT_DIR") c.gitEnv.gitDir = word;
+    else if (name === "GIT_WORK_TREE") c.gitEnv.workTree = word;
+  }
+}
+
+const isTextCommand = (name, words) => TEXT_COMMANDS.has(name) && !(name === "rg" && words.some((w) => w.text === "--pre" || w.text.startsWith("--pre=")));
+
+function aliasWordsOf(value) {
+  const p = parseBash(value);
+  const items = p.ok ? p.ast.items : [];
+  const cmd = items.length === 1 && !items[0].bg && !items[0].andor.rest.length && items[0].andor.first.cmds.length === 1 ? items[0].andor.first.cmds[0] : null;
+  return cmd && cmd.type === "simple" && !cmd.substs.length ? stripRedirs(cmd.words) : null;
+}
+
+function evalSimple(cmd, D, c, opts) {
+  evalSubsts(cmd, D, c);
+  const same = { S: D, F: D };
+  const hereString = hereStringOf(cmd.words);
+  const words = stripRedirs(cmd.words);
+  if (!words.length) return same;
+  const pe = peel(words);
+  if (pe.noop) return same;
+  if (pe.i < 0) {
+    noteEnv(c, pe.env); // nur Zuweisungen: gelten für folgende Kommandos (konservativ als exportiert)
+    return same;
+  }
+  const args = words.slice(pe.i + 1);
+  if (pe.dynamicCmd) {
+    if (args.some((w) => !w.dynamic && PROTECTED_SUBS.has(w.text))) ask(c, real(D), "Das Kommando ist dynamisch (`$(…) push`, `$GIT commit`): git commit/push im Haupt-Checkout nicht auswertbar.", true);
+    return same;
+  }
+  const name = pe.name;
+  if (c.fns.has(name) && c.depth < MAX_INTERPRETER) {
+    c.depth++;
+    const r = evalCmd(c.fns.get(name), D, c, opts);
+    c.depth--;
+    return r;
+  }
+  if (name === "alias" || name === "unalias") {
+    for (const w of args) {
+      const m = /^([^=]+)=(.*)$/s.exec(w.text);
+      if (name === "unalias") c.aliases.delete(w.text);
+      else if (m) c.aliases.set(m[1], w.dynamic ? null : aliasWordsOf(m[2]));
+    }
+    return same;
+  }
+  if (c.aliases.has(name) && !c.expanding.has(name) && c.depth < MAX_INTERPRETER) {
+    const aw = c.aliases.get(name);
+    if (aw === null) {
+      ask(c, real(D), `Der Alias \`${name}\` ist nicht statisch auflösbar.`, true);
+      return same;
+    }
+    c.expanding.add(name);
+    c.depth++;
+    const r = evalSimple({ ...cmd, words: [...words.slice(0, pe.i), ...aw, ...args], substs: [], heredocs: cmd.heredocs }, D, c, opts);
+    c.depth--;
+    c.expanding.delete(name);
+    return r;
+  }
+  if (CD_LIKE.has(name) && pe.wrappers.every((w) => CD_WRAPPERS.has(w))) return cdEffect(name, args, D, c);
+  if (EXPORTERS.has(name)) {
+    noteEnv(c, args.filter((w) => ASSIGN_RE.test(w.text)).map((w) => ({ name: w.text.slice(0, w.text.indexOf("=")), word: { text: w.text.slice(w.text.indexOf("=") + 1), dynamic: w.dynamic } })));
+    return same;
+  }
+  if (name === "git") {
+    gitCall(words, pe.i, pe, D, c, 0);
+    return same;
+  }
+  let result = same;
+  if (name === "eval") {
+    if (args.some((w) => w.dynamic)) ask(c, real(D), "`eval` mit nicht statischem Text.", true);
+    else {
+      const r = evalString(args.map((w) => w.text).join(" "), D, c);
+      result = { S: r, F: r }; // eval läuft in der aktuellen Shell
+    }
+  } else if (SHELLS.has(name)) shellCall(args, cmd, opts, hereString, D, c);
+  else if (name === "find") findCall(words.slice(pe.i), D, c);
+  else if (!isTextCommand(name, words)) {
+    // Unbekannter Wrapper (`su -c`, `watch`): das erste git-Wort als Aufruf nehmen.
+    const gi = words.findIndex((w, i) => i > pe.i && !w.dynamic && GIT_RE.test(w.text));
+    if (gi >= 0) {
+      gitCall(words, gi, pe, D, c, 0);
+      return same;
+    }
+  }
+  // Sicherheitsnetz: trifft der Worttext die grobe Regel, gilt jedes verfolgte Verzeichnis als Ziel.
+  if (name !== "find" && !isTextCommand(name, words) && coarseProtected(words.map((w) => w.text).join(" "))) for (const d of real(D)) c.targets.add(d);
+  return result;
+}
+
+/** Wertet einen Shell-Text (Interpreter-Argument, Heredoc, Alias) rekursiv aus; liefert die Endmenge. */
+function evalString(text, D, c) {
+  const grob = () => {
+    if (coarseProtected(text)) for (const d of real(D)) c.targets.add(d);
+    return D;
+  };
+  if (c.depth >= MAX_INTERPRETER) return grob();
+  const p = parseBash(text);
+  if (!p.ok) return grob();
+  c.depth++;
+  try {
+    return evalList(p.ast, D, c);
+  } finally {
+    c.depth--;
+  }
+}
+
+/** Statischer Text, den ein Kommando auf stdout schreibt (echo/printf/cat <<EOF); sonst null. */
+function staticOutput(node) {
+  if (!node || node.type !== "simple" || node.substs.length) return null;
+  const words = stripRedirs(node.words);
+  if (!words.length || words.some((w) => w.dynamic)) return null;
+  const name = baseName(words[0].text);
+  const args = words.slice(1).map((w) => w.text);
+  if (name === "echo") return args.filter((a, i) => !(/^-[neE]+$/.test(a) && args.slice(0, i).every((b) => /^-[neE]+$/.test(b)))).join(" ");
+  if (name === "printf") {
+    const [fmt = "", ...vals] = args;
+    let n = 0;
+    const out = fmt.replace(/%[sb]/g, () => vals[n++] ?? "").replace(/\\n/g, "\n");
+    return [out, ...vals.slice(n)].join(" ");
+  }
+  if (name === "cat" && !args.length && node.heredocs.length) {
+    const h = node.heredocs.at(-1);
+    return h.static ? h.body : null;
+  }
+  return null;
+}
+
+/** `bash|sh|… -c <text>`, `bash <<EOF`, `echo … | sh`, `bash <<< text`. */
+function shellCall(args, cmd, opts, hereString, D, c) {
+  let script = null;
+  let sawC = false;
+  let operand = false;
+  let stdinFlag = false;
+  for (let i = 0; i < args.length; i++) {
+    const w = args[i];
+    const t = w.text;
+    if (w.dynamic) {
+      operand = true;
+      break;
+    }
+    if (/^-[A-Za-z]+$/.test(t) && t.includes("c")) {
+      sawC = true;
+      script = args[i + 1] ?? null;
+      break;
+    }
+    if (["-o", "+o", "-O", "+O", "--rcfile", "--init-file"].includes(t)) i++;
+    else if (t === "-" || t === "-s") stdinFlag = true;
+    else if (!t.startsWith("-") && !t.startsWith("+")) {
+      operand = true;
+      break;
+    }
+  }
+  if (sawC) {
+    if (!script) return;
+    if (script.dynamic) ask(c, real(D), "Interpreter mit nicht statischem Text (`bash -c \"$X\"`).", true);
+    else evalString(script.text, D, c);
+    return;
+  }
+  if (operand && !stdinFlag) return; // `bash skript.sh`: Dateiinhalt ist nicht auswertbar
+  let text;
+  if (cmd.heredocs.length) text = cmd.heredocs.at(-1).static ? cmd.heredocs.at(-1).body : null;
+  else if (hereString) text = hereString.dynamic ? null : hereString.text;
+  else if (opts.pipeSrc) text = staticOutput(opts.pipeSrc);
+  if (text === undefined) return; // keine Eingabe (interaktive Shell)
+  if (text === null) ask(c, real(D), "Interpreter mit nicht statischer Eingabe (Heredoc/Pipe).", true);
+  else evalString(text, D, c);
+}
+
+/** `find … -exec CMD … ;|+`: jedes innere Kommando einzeln bewerten. */
+function findCall(words, D, c) {
+  for (let i = 0; i < words.length; i++) {
+    if (!EXEC_FLAGS.has(words[i].text)) continue;
+    let j = i + 1;
+    while (j < words.length && !(words[j].text === ";" || words[j].text === "+")) j++;
+    evalSimple({ type: "simple", words: words.slice(i + 1, j), substs: [], heredocs: [] }, D, c, {});
+    i = j;
+  }
+}
+
+// ── git ─────────────────────────────────────────────────────────────────────
+function parseGitArgs(words, k) {
+  const g = { cWords: [], gitDirs: [], workTrees: [], aliases: new Map(), sub: null, subIdx: words.length };
+  let j = k + 1;
+  const value = (list, i) => list.push(words[i + 1] ?? { text: "", dynamic: true });
+  while (j < words.length) {
+    const w = words[j];
+    const t = w.text;
+    let m;
+    if (w.dynamic && !t.startsWith("-")) break;
+    if (t === "-C") {
+      value(g.cWords, j);
+      j += 2;
+    } else if (t === "-c") {
+      const cfg = words[j + 1];
+      const a = cfg && !cfg.dynamic ? /^alias\.([^=]+)=(.*)$/s.exec(cfg.text) : null;
+      const wt = cfg && !cfg.dynamic ? /^core\.worktree=(.*)$/is.exec(cfg.text) : null;
+      if (a) g.aliases.set(a[1], a[2]);
+      if (wt) g.workTrees.push({ text: wt[1], dynamic: false });
+      j += 2;
+    } else if (t === "--git-dir" || t === "--work-tree") {
+      value(t === "--git-dir" ? g.gitDirs : g.workTrees, j);
+      j += 2;
+    } else if ((m = /^--(git-dir|work-tree)=(.*)$/s.exec(t))) {
+      (m[1] === "git-dir" ? g.gitDirs : g.workTrees).push({ text: m[2], dynamic: w.dynamic });
+      j++;
+    } else if (["--namespace", "--config-env", "--attr-source", "--super-prefix"].includes(t)) j += 2;
+    else if (t.startsWith("-")) j++;
+    else break;
+  }
+  g.subIdx = j;
+  g.sub = words[j] ?? null;
+  return g;
+}
+
+/** Alias aus der git-Konfiguration (`git config --get alias.<n>`), gecacht; null ohne Alias. */
+function configAlias(c, sub, D) {
+  const base = real(D)[0] ?? c.cwd;
+  const key = `${base}\0${sub}`;
+  if (c.aliasCache.has(key)) return c.aliasCache.get(key);
+  let v;
+  try {
+    const out = (c.deps.execFileSync ?? execFileSync)("git", ["config", "--get", `alias.${sub}`], { cwd: base, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    v = String(out).trim() || null;
+  } catch {
+    v = null;
+  }
+  c.aliasCache.set(key, v);
+  return v;
+}
+
+/** Verzeichnisse, in denen dieser git-Aufruf liefe; vermerkt Rückfragen bei unbestimmbarem Ziel. */
+function gitTargetDirs(g, pe, D, c) {
+  const out = new Set();
+  let unresolved = false;
+  if (D.has(UNKNOWN)) {
+    unresolved = true;
+    out.add(c.cwd);
+  }
+  const envOf = (n, global) => [...pe.env.filter((e) => e.name === n).map((e) => e.word), ...(global ? [global] : [])].filter((w) => w.dynamic || w.text !== "");
+  const gitDirs = [...g.gitDirs, ...envOf("GIT_DIR", c.gitEnv.gitDir)];
+  const workTrees = [...g.workTrees, ...envOf("GIT_WORK_TREE", c.gitEnv.workTree)];
+  for (const b0 of real(D)) {
+    let b = b0;
+    for (const ch of pe.chdirs) {
+      const t = ch.dynamic ? null : tildeOf(c, ch.text);
+      if (t === null) {
+        unresolved = true;
+        out.add(b);
+      } else b = abs(c, b, t);
+    }
+    let cur = b;
+    for (const w of g.cWords) {
+      const t = w.dynamic || /[{}*?]/.test(w.text) ? null : tildeOf(c, w.text);
+      if (t === null) {
+        unresolved = true;
+        out.add(cur);
+        out.add(c.cwd);
+        continue;
+      }
+      const n = abs(c, cur, t);
+      if (t !== w.text || !isDir(c, n)) {
+        out.add(cur); // `~` oder nicht existierendes Ziel: zusätzlich Ausgangsort und Session-cwd
+        out.add(c.cwd);
+      }
+      cur = n;
+    }
+    out.add(cur);
+    const extra = (w, isGitDir) => {
+      const t = w.dynamic ? null : tildeOf(c, w.text);
+      if (t === null) {
+        unresolved = true;
+        out.add(b);
+        out.add(c.cwd);
+        return;
+      }
+      const v = abs(c, b, t);
+      out.add(isGitDir && /[\\/]\.git$/.test(v) ? c.P.dirname(v) : v);
+      out.add(b);
+      out.add(c.cwd);
+    };
+    for (const w of gitDirs) extra(w, true);
+    for (const w of workTrees) extra(w, false);
+  }
+  if (unresolved) ask(c, [...out], "Das Ziel des git-Aufrufs ist nicht statisch bestimmbar (`cd \"$X\"`, `-C \"$D\"`, `cd -`, `--git-dir=$X`).");
+  return out;
+}
+
+const REBASE_EXEC = (rest) => {
+  const cmds = [];
+  for (let i = 0; i < rest.length; i++) {
+    const t = rest[i].text;
+    if (t === "-x" || t === "--exec") cmds.push(rest[++i] ?? { text: "", dynamic: true });
+    else if (t.startsWith("--exec=")) cmds.push({ text: t.slice(7), dynamic: rest[i].dynamic });
+    else if (/^-x./.test(t)) cmds.push({ text: t.slice(2), dynamic: rest[i].dynamic });
+  }
+  return cmds;
+};
+
+function gitCall(words, k, pe, D, c, depth) {
+  const g = parseGitArgs(words, k);
+  if (!g.sub) return;
+  if (g.sub.dynamic) {
+    ask(c, real(D), "Der git-Unterbefehl ist dynamisch (`git \"$SUB\"`).", true);
+    return;
+  }
+  const sub = g.sub.text;
+  const rest = words.slice(g.subIdx + 1);
+  if (!PROTECTED_SUBS.has(sub) && (g.aliases.has(sub) || !KNOWN_SUBS.has(sub)) && sub !== "") {
+    const al = g.aliases.has(sub) ? g.aliases.get(sub) : configAlias(c, sub, D);
+    if (al && depth < 3) {
+      if (al.startsWith("!")) {
+        evalString(`${al.slice(1)} ${rest.map((w) => w.text).join(" ")}`, gitTargetDirs(g, pe, D, c), c);
+        return;
+      }
+      const aw = al.trim().split(/\s+/).map((text) => ({ text, dynamic: false, quoted: false }));
+      gitCall([...words.slice(0, g.subIdx), ...aw, ...rest], k, pe, D, c, depth + 1);
+      return;
+    }
+  }
+  if (PROTECTED_SUBS.has(sub) || (sub === "subtree" && rest[0]?.text === "push")) {
+    for (const d of gitTargetDirs(g, pe, D, c)) c.targets.add(d);
+    return;
+  }
+  const inner = sub === "submodule" && rest.some((w) => w.text === "foreach") ? [{ text: rest.slice(rest.findIndex((w) => w.text === "foreach") + 1).filter((w) => !w.text.startsWith("-")).map((w) => w.text).join(" "), dynamic: rest.some((w) => w.dynamic) }] : sub === "rebase" ? REBASE_EXEC(rest) : [];
+  if (!inner.length) return;
+  const dirs = gitTargetDirs(g, pe, D, c);
+  for (const w of inner) {
+    if (w.dynamic) ask(c, [...dirs], "Unterkommando von `git submodule foreach`/`git rebase -x` ist nicht statisch.", true);
+    else evalString(w.text, dirs, c);
+  }
+}
+
+// ── Einstieg ────────────────────────────────────────────────────────────────
+/** Zerlegt und wertet `command` aus: `{ targets: string[], asks: Map<dir, {reason, mainOnly}> }`. */
+export function analyse(command, cwd, deps = {}) {
+  const c = makeCtx(cwd, deps);
+  if (!command) return { targets: [], asks: c.asks };
+  const parsed = parseBash(command);
+  if (!parsed.ok) return { targets: coarseProtected(command) ? [cwd] : [], asks: c.asks };
+  evalList(parsed.ast, new Set([c.cwd]), c);
+  return { targets: [...c.targets], asks: c.asks };
+}
+
+/** Verzeichnisse, in denen `git commit`/`git push` aus `command` liefen (Session-`cwd`, `cd`, `git -C` …); leer
+ *  ohne solchen Aufruf. Nicht zerlegbar: `[cwd]` bei grobem Treffer. */
+export function protectedGitTargets(command, cwd, deps = {}) {
+  return analyse(command, cwd, deps).targets;
+}
+
+/** True, wenn `command` einen echten `git commit`/`git push` ausführt (Fake: nichts existiert, kein git-Config). */
+export function isProtectedGitCommand(command) {
+  const deps = {
+    statSync: () => ({ isDirectory: () => false }),
+    execFileSync: () => {
+      throw new Error("kein git");
+    },
+    homedir: () => "/home/test",
+  };
+  return protectedGitTargets(command, ".", deps).length > 0;
+}
+
+/** Ermittelt, ob `cwd` zu DEMSELBEN Repo gehört wie `repoRoot` (Vergleich über `git-common-dir`, per `realpath`,
+ *  also auch über Junction/Symlink; der `git-common-dir` von `repoRoot` ist die Referenz, nicht
+ *  `<repoRoot>/.git`) und ob es der Haupt-Checkout oder ein Linked Worktree ist (`.git` als Verzeichnis vs. Datei am
+ *  Toplevel). Ein einziger `git rev-parse` je Verzeichnis, gecacht über `deps.kontextCache`. Wirft nie — bei jedem
+ *  git-/fs-Fehler `{ relevant: false }`. `deps` injizierbar fürs Testen (execFileSync/statSync/platform). */
 export function resolveGitContext(cwd, repoRoot, deps = {}) {
   const exec = deps.execFileSync ?? execFileSync;
   const stat = deps.statSync ?? statSync;
+  const platform = deps.platform ?? process.platform;
+  const P = platform === process.platform ? path : platform === "win32" ? path.win32 : path.posix;
+  const cache = deps.kontextCache;
 
-  const run = (dir, args) => {
+  const lookup = (dir) => {
+    const key = `${repoRoot}\0${dir}`;
+    if (cache?.has(key)) return cache.get(key);
+    let v = null;
     try {
-      return exec("git", args, { cwd: dir, encoding: "utf8" }).trim();
+      const out = exec("git", ["rev-parse", "--show-toplevel", "--git-common-dir"], { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+      const [top, common] = String(out).split(/\r?\n/).map((s) => s.trim());
+      if (top && common) v = { top, common };
     } catch {
-      return null;
+      v = null;
+    }
+    cache?.set(key, v);
+    return v;
+  };
+  const canon = (base, raw) => {
+    const p = P.resolve(base, raw); // git gibt den Pfad relativ zum Aufruf-Verzeichnis aus (`../.git` im Unterordner)
+    try {
+      return realpathSync.native(p);
+    } catch {
+      return p;
     }
   };
 
-  // Referenz: der git-common-dir DIESES Skript-Checkouts (egal ob Haupt-Checkout
-  // oder selbst ein Linked Worktree) — zeigt in beiden Fällen korrekt auf das
-  // eine geteilte `.git` des Repos.
-  const referenceCommonDirRaw = run(repoRoot, ["rev-parse", "--git-common-dir"]);
-  if (!referenceCommonDirRaw) return { relevant: false };
-  const referenceCommonDir = resolve(repoRoot, referenceCommonDirRaw);
-
-  const toplevel = run(cwd, ["rev-parse", "--show-toplevel"]);
-  if (!toplevel) return { relevant: false };
-
-  const commonDirRaw = run(cwd, ["rev-parse", "--git-common-dir"]);
-  if (!commonDirRaw) return { relevant: false };
-  const commonDir = resolve(cwd, commonDirRaw); // git gibt den Pfad relativ zum Aufruf-Verzeichnis aus (`../.git` im Unterordner)
-
-  if (normalizePath(commonDir) !== normalizePath(referenceCommonDir)) {
+  const ref = lookup(repoRoot);
+  if (!ref) return { relevant: false };
+  const mine = lookup(cwd);
+  if (!mine) return { relevant: false };
+  if (normalizePath(canon(cwd, mine.common), platform) !== normalizePath(canon(repoRoot, ref.common), platform)) {
     return { relevant: false }; // cwd gehört zu einem anderen Repo — nicht unsere Sache
   }
-
   let isMainWorktree;
   try {
-    isMainWorktree = stat(join(toplevel, ".git")).isDirectory();
+    isMainWorktree = stat(join(mine.top, ".git")).isDirectory();
   } catch {
     isMainWorktree = true; // .git nicht lesbar -> im Zweifel konservativ blocken
   }
-
-  return { relevant: true, toplevel, isMainWorktree };
+  return { relevant: true, toplevel: mine.top, isMainWorktree };
 }
 
-/** Gesamtentscheidung: block=true nur, wenn (a) das Kommando wirklich commit/push
- *  ist, (b) cwd bekannt ist, (c) mindestens ein Ziel-Verzeichnis (cwd, verfolgtes
- *  `cd`, `git -C`) zu diesem Repo gehört UND (d) dort der Haupt-Checkout liegt
- *  (kein Linked Worktree). Alles andere: durchlassen. */
-export function decide({ cwd, command, repoRoot, deps }) {
+const BLOCK_REASON = (top) =>
+  `git commit/push würde im geteilten main-Checkout (${top}) laufen und ist blockiert. ` +
+  `Aus einem worktree: \`git -C <worktree> …\` (ändert die Shell-cwd nicht) oder \`cd <worktree> && git …\`, ` +
+  `beides wertet der Hook aus. Neuer Worktree (AGENTS.md § Git-Workflow): ` +
+  `\`git fetch origin && git worktree add .claude/worktrees/kq-<nr> -b feature/kq-<nr>-<slug> origin/main\` (vom frischen origin/main, #772). (#735)`;
+
+/** Gesamtentscheidung: `block` nur, wenn (a) das Kommando commit/push ist, (b) cwd bekannt ist, (c) mindestens ein
+ *  Ziel-Verzeichnis zu diesem Repo gehört UND (d) dort der Haupt-Checkout liegt (kein Linked Worktree). `ask`, wenn
+ *  nichts blockt, aber ein Ziel/Inhalt nicht statisch bestimmbar ist (siehe Kopfkommentar). Sonst durchlassen. */
+export function decide({ cwd, command, repoRoot, deps = {} }) {
   if (!cwd) return { block: false }; // kein cwd im Payload -> nicht entscheidbar, fail-open
-  let targets;
+  const d = { ...deps, kontextCache: deps.kontextCache ?? new Map() };
+  let found;
   try {
-    targets = protectedGitTargets(command, cwd, deps);
+    found = analyse(command, cwd, d);
   } catch {
-    targets = coarseProtected(command) ? [cwd] : []; // unerwarteter Lexer-Fehler: alte Regel statt Durchwinken
+    found = { targets: coarseProtected(command) ? [cwd] : [], asks: new Map() }; // unerwarteter Fehler: grobe Regel statt Durchwinken
   }
-  for (const target of targets) {
-    const ctx = resolveGitContext(target, repoRoot, deps);
-    if (!ctx.relevant || !ctx.isMainWorktree) continue;
-    return {
-      block: true,
-      reason:
-        `git commit/push würde im geteilten main-Checkout (${ctx.toplevel}) laufen und ist blockiert. ` +
-        `Aus einem worktree: \`git -C <worktree> …\` (ändert die Shell-cwd nicht) oder \`cd <worktree> && git …\`, ` +
-        `beides wertet der Hook aus. Neuer Worktree (AGENTS.md § Git-Workflow): ` +
-        `\`git fetch origin && git worktree add .claude/worktrees/kq-<nr> -b feature/kq-<nr>-<slug> origin/main\` (vom frischen origin/main, #772). (#735)`,
-    };
+  for (const target of found.targets) {
+    const ctx = resolveGitContext(target, repoRoot, d);
+    if (ctx.relevant && ctx.isMainWorktree) return { block: true, reason: BLOCK_REASON(ctx.toplevel) };
+  }
+  for (const [dir, a] of found.asks) {
+    const ctx = resolveGitContext(dir, repoRoot, d);
+    if (!ctx.relevant || (a.mainOnly && !ctx.isMainWorktree)) continue;
+    return { block: false, ask: true, reason: `Worktree-Guard: ${a.reason} Den Ort literal angeben (\`git -C <worktree-pfad> …\`) oder bestätigen. (#1311)` };
   }
   return { block: false };
 }
 
-/** Parst das Hook-stdin-JSON tolerant: liefert bei kaputtem/leerem Input `{}`
- *  statt zu werfen (der Hook soll NIE selbst crashen und damit versehentlich
- *  jeden Bash-Aufruf blockieren). */
-export function parseHookInput(text) {
-  try {
-    const data = JSON.parse(text);
-    return { cwd: data.cwd, command: data.tool_input?.command };
-  } catch {
-    return {};
-  }
-}
+/** Repo-Root aus dem Skript-Pfad ableiten (`scripts/<datei>.mjs` liegt eine Ebene unter dem Root). */
+export const repoRootFromScriptUrl = (importMetaUrl) => dirname(dirname(fileURLToPath(importMetaUrl)));
 
-/** Baut die dokumentierte `hookSpecificOutput`-JSON für ein `PreToolUse`-Deny. */
-export function buildDenyOutput(reason) {
-  return {
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason: reason,
-    },
-  };
-}
-
-/** Repo-Root aus dem Skript-Pfad ableiten (`scripts/worktree-guard-hook.mjs` liegt
- *  eine Ebene unter dem Root) — portabel, kein hartcodierter absoluter Pfad. */
-function repoRootFromScriptUrl(importMetaUrl) {
-  return dirname(dirname(fileURLToPath(importMetaUrl)));
-}
-
-// ── CLI (vom PreToolUse-Hook aufgerufen) ────────────────────────────────────
+// ── CLI (Direktaufruf; der Dispatcher ruft `decide` selbst) ─────────────────
 function main() {
-  let stdinText;
-  try {
-    stdinText = readFileSync(0, "utf8");
-  } catch {
-    stdinText = "";
-  }
-
-  const { cwd, command } = parseHookInput(stdinText);
-  const repoRoot = repoRootFromScriptUrl(import.meta.url);
-  const result = decide({ cwd, command, repoRoot });
-
-  if (result.block) {
-    console.log(JSON.stringify(buildDenyOutput(result.reason)));
-  }
-  // Bewusst KEIN process.exit(0) hier: auf Windows kann ein Pipe-stdout asynchron
-  // sein, ein sofortiges exit() nach console.log() hat die Ausgabe abgeschnitten
-  // (empirisch beobachtet). Natürliches Skript-Ende flusht zuverlässig und
-  // beendet mit Exit-Code 0 (Default bei erfolgreichem Durchlauf ohne Fehler).
+  const { cwd, command } = parseHookInput(readStdin());
+  emit(mergeDecisions([decide({ cwd, command, repoRoot: repoRootFromScriptUrl(import.meta.url) })]));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();
