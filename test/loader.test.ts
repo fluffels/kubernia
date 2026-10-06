@@ -774,7 +774,7 @@ for (const [label, task] of [
   });
 }
 
-test("parseQuests: explizites solvedBy 'accept' bleibt erhalten, altSolutions dazu verboten (#891)", () => {
+test("parseQuests: explizites solvedBy 'accept' bleibt erhalten (#891)", () => {
   const step = parseQuests(termQuest({ solvedBy: "accept", check: goalCheck }))[0].steps[0];
   if (step.type !== "terminal") throw new Error("terminal erwartet");
   assert.equal(step.tasks[0].solvedBy, "accept");
