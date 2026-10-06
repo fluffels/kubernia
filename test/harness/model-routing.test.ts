@@ -459,10 +459,10 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
     );
   });
 
-  test("Umsetzer hat die MCP-Tools für Browser-Prüfung und Langfuse-Blick (#1291)", () => {
+  test("Umsetzer hat die MCP-Tools für Browser-Prüfung und Langfuse-Status-Ticket (#1291)", () => {
     const tools = (frontmatter(read(UMSETZER)).tools ?? "").split(",").map((t) => t.trim());
     // Eine Whitelist ohne mcp__-Einträge nimmt dem Subagenten ALLE MCP-Tools: dann gäbe es keine
-    // Browser-Prüfung über den Playwright-MCP (AGENTS.md) und keinen Langfuse-Blick beim Sammelticket.
+    // Browser-Prüfung über den Playwright-MCP (AGENTS.md) und keine Langfuse-Auswertung im Status-Ticket.
     // Kernablauf der FAQ (#wie-verifiziere-ich-im-browser) plus Dialoge/Datei-Import des Spiels,
     // dazu die Langfuse-Lesetools: fehlt einer, fällt er still aus der Whitelist.
     for (const tool of [
