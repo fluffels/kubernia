@@ -36,6 +36,20 @@ export function stubWindowLocalStorage(
   return ls;
 }
 
+/** Wärmt den Spiel-Stack einmal vor (#1309): der erste dynamische Import transformiert alle Module kalt und
+ *  lief unter Last (voller `npm run verify`, Windows) in den 5000-ms-Testtimeout. Tests, die den Stack nach
+ *  `vi.resetModules()` frisch laden, rufen das einmal in `beforeAll(warmupGameStack, 60_000)` auf; danach zahlt
+ *  jeder Test nur noch den warmen Re-Import. Räumt hinter sich auf (kein gestubbtes `window`, leerer Modul-Cache). */
+export async function warmupGameStack(): Promise<void> {
+  stubWindowLocalStorage();
+  await import("../../src/game");
+  await import("../../src/sim");
+  await import("../../src/store");
+  await import("../../src/runtime");
+  vi.unstubAllGlobals();
+  vi.resetModules();
+}
+
 /** Lädt den Spiel-Stack FRISCH. Erst aufrufen, NACHDEM `window` gestubbt ist –
  *  game.ts setzt beim Import `(window as any).Game` und store.ts greift auf
  *  window.localStorage zu, deshalb der dynamische Import statt eines top-level. */

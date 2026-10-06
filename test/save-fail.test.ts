@@ -7,8 +7,8 @@
  *
  * Bewusst gegen echtes Verhalten getestet, nicht gegen Interna: ein umschaltbarer
  * localStorage-Stub lässt Schreibvorgänge je nach `fail`-Flag scheitern oder gelingen. */
-import { test, expect, afterEach, vi } from "vitest";
-import { stubWindowLocalStorage, loadGameStack, type LocalStorageStub } from "./support/browser-env";
+import { test, expect, afterEach, beforeAll, vi } from "vitest";
+import { stubWindowLocalStorage, loadGameStack, warmupGameStack, type LocalStorageStub } from "./support/browser-env";
 import { makeQuotaStub } from "./support/quota-stub";
 
 /** Wie makeQuotaStub, aber zur Laufzeit umschaltbar: solange `ctl.fail` true ist,
@@ -30,13 +30,15 @@ function makeToggleStub(): { stub: LocalStorageStub; ctl: { fail: boolean } } {
   return { stub, ctl };
 }
 
+// Der erste loadGameStack()-Aufruf kompiliert den gesamten Stack kalt → auf Windows > 5 s (#815); einmal vorwärmen.
+beforeAll(warmupGameStack, 60_000);
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.resetModules();
 });
 
-// erster loadGameStack()-Aufruf kompiliert den gesamten Stack kalt → auf Windows > 5 s (#815)
 test("save(): voller localStorage-Fallback meldet den Fehlschlag EINMAL an den Sink", async () => {
   stubWindowLocalStorage(makeQuotaStub()); // jeder echte Schreibvorgang scheitert (QuotaExceeded)
   vi.resetModules();
@@ -54,7 +56,7 @@ test("save(): voller localStorage-Fallback meldet den Fehlschlag EINMAL an den S
   expect(sink).toHaveBeenCalledTimes(1);
 
   setSaveFailedSink(null);
-}, 15_000);
+});
 
 test("save(): kein Sink-Aufruf, solange das Schreiben klappt", async () => {
   stubWindowLocalStorage(); // frischer Stub – Schreiben gelingt
