@@ -171,6 +171,10 @@ describe("gh api über Variablen, eval und Interpreter-Strings fragt nach (#1311
     fragt('CMD="gh api -X DELETE repos/o/r/issues/1"; $CMD');
     laeuft('bash -c "gh api repos/o/r/issues/1"');
     laeuft('gh api "$P"');
+    laeuft("$items = gh api graphql -f query='query { viewer { login } }'");
+    laeuft("$env:GH_PAGER=''; gh api repos/o/r/issues/1");
+    fragt('$r = gh api -X DELETE repos/o/r/issues/1');
+    fragt('CMD="gh api -X DELETE x"; ${CMD}');
     laeuft(`gh api graphql -f 'query=mutation($i:ID!){ addProjectV2ItemById(input:{projectId:$i}){ item { id } } }' -f i=X`); // Quote vor query=
     const r = hook.bewerte('eval "gh api -X DELETE x"');
     assert.equal(r.ask, true);

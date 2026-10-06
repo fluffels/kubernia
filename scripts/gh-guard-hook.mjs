@@ -51,7 +51,7 @@ const REST_PFADE = [
 ];
 
 /** `gh api` als Befehl am Segmentanfang (auch nach `&`, `$(`, Klammern oder Variablen-Zuweisungen), nicht als Text in einem fremden Befehl. */
-const GH_API_AM_ANFANG = /^[\s(`$&]*(?:\w+=\S*\s+)*gh(?:\.exe)?\s+api\b/;
+const GH_API_AM_ANFANG = /^[\s(`$&]*(?:\$[\w:]+\s*=\s*)?(?:\w+=\S*\s+)*gh(?:\.exe)?\s+api\b/;
 
 /**
  * Zerlegt einen Befehl an `&&`, `||`, `;`, `|` und Zeilenumbrüchen, aber NICHT innerhalb von Anführungszeichen
@@ -198,7 +198,7 @@ export function bewerte(command, tiefe = 0) {
     if (hatGhApi && /^[\s(]*(?:eval|iex|Invoke-Expression)\b/i.test(segment)) {
       return { ask: true, reason: `gh-Guard (#1311): \`eval\`/\`iex\` neben \`gh api\`: der zusammengesetzte Aufruf ist nicht prüfbar. ${REGEL}` };
     }
-    if (hatGhApi && /^[\s(]*\$\w/.test(segment)) {
+    if (hatGhApi && /^[\s(]*\$\{?\w+\}?(?![\w:]|\s*=)/.test(segment)) {
       return { ask: true, reason: `gh-Guard (#1311): dynamisches Kommando ($CMD) neben \`gh api\`: der Aufruf ist nicht prüfbar. ${REGEL}` };
     }
     const inner = hatGhApi && tiefe < MAX_INTERPRETER ? interpreterString(segment) : null;

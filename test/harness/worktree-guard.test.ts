@@ -419,7 +419,7 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(run("git --attr-source HEAD push", wt), false, "im Worktree bleibt es erlaubt");
   });
 
-  test("nicht existierendes -C-Ziel prüft zusätzlich das Session-cwd", () => {
+  test("nicht existierendes -C-Ziel: xargs-Platzhalter blockt im Haupt-Checkout, im Worktree bleibt es erlaubt", () => {
     const missing = join(repoRoot, "gibt-es-nicht");
     assert.equal(decide({ cwd: repoRoot, command: "git -C gibt-es-nicht push", repoRoot, deps: fsFake([wt], [missing]) }).block, true);
     assert.equal(run("echo . | xargs -I % git -C % push"), true);
@@ -612,6 +612,7 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
 
   test("Review R1: git config alias.X im selben Befehl gilt für das folgende git", () => {
     assert.equal(run("git config alias.p push && git p"), true);
+    assert.equal(run("git config alias.P push && git p"), true, "Alias-Namen sind nicht case-sensitiv");
     assert.equal(run("git config --global alias.p '!git push'; git p"), true);
     assert.equal(run("git config alias.p status && git p"), false);
     assert.equal(run("git config alias.p push && git p", wt), false);
