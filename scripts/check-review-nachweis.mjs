@@ -28,7 +28,8 @@
 
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { parseOverrideTrailers, resolveBase } from "./check-diffsize.mjs";
+import { resolveBase } from "./check-diffsize.mjs";
+import { meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
 
 /** Obergrenze der Fix-Runden (Cap 2 Fix-Runden, höchstens 3 Pässe); der Workflow trägt dieselbe Zahl (Wächter-Test). */
 export const MAX_FIX_RUNDEN = 2;
@@ -180,9 +181,7 @@ function main() {
     console.log("✔ Review-/Plan-Nachweis ok (Override mit Begründung).");
     return;
   }
-  for (const line of r.invalid ?? []) {
-    console.log(`• ungültige Override-Zeile ignoriert (braucht "#<nr> <warum>"): ${line}`);
-  }
+  meldeUngueltigeOverrides(r.invalid);
   if (r.ok) {
     if (typeof r.commitsNachReview === "number") {
       console.log(`• ${r.commitsNachReview} Commit(s) nach dem reviewten Stand (inkl. Nachweis-Commit).`);
