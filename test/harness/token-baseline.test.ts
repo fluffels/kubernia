@@ -519,3 +519,106 @@ describe("token-baseline: Sockel, Median-Kontext, Kosten-Teile (#1206)", () => {
     assert.match(md, /1 Call\(s\) ohne Preis/);
   });
 });
+
+describe("token-baseline: Härtung nach Review (#1206)", () => {
+  const MIO = 1_000_000;
+  const row = (id: string, model: string, usage: Record<string, unknown>, ts = "2026-10-05T10:00:00Z") =>
+    JSON.stringify({ type: "assistant", timestamp: ts, message: { id, model, usage } });
+  const at = (ts: string, total: number, extra: Partial<Call> = {}): Call => ({
+    ts,
+    model: "claude-sonnet-5-5",
+    input: 0,
+    cacheWrite: 0,
+    cacheRead: total,
+    output: 0,
+    ...extra,
+  });
+  const plan: Sub = { id: "p", agentType: "kubernia-planner", description: "Planungspass" };
+
+  test("Präfix-Falle: künftiges claude-opus-5-6 ist ohne Preis, nicht Opus 5; Datums-Suffix bleibt erlaubt", () => {
+    const c = (model: string): Call => ({ ts: "2026-10-05T10:00:00Z", model, input: MIO });
+    assert.equal(m.priceCall(c("claude-opus-5-6")), null);
+    assert.equal(m.priceCall(c("claude-opus-5-20990101")), 5);
+    assert.equal(m.priceCall(c("claude-opus-5-5-20990101")), 4);
+  });
+
+  test("Präfix-Falle unabhängig von der Reihenfolge der Preistabelle", () => {
+    const p = {
+      "claude-opus-5": { input: 5, cacheWrite5m: 0, cacheWrite1h: 0, cacheRead: 0, output: 0 },
+      "claude-opus-5-5": { input: 4, cacheWrite5m: 0, cacheWrite1h: 0, cacheRead: 0, output: 0 },
+    };
+    assert.equal(m.priceCall({ ts: "t", model: "claude-opus-5-5", input: MIO }, p), 4);
+    assert.equal(m.priceCall({ ts: "t", model: "claude-opus-5-6", input: MIO }, p), null);
+  });
+
+  test("mehrzeilige Nachricht: Kosten folgen dem Maximum des Outputs, nicht der ersten Teilzeile", () => {
+    const text = [
+      row("a", "claude-sonnet-5-5", { output_tokens: 0 }),
+      row("a", "claude-sonnet-5-5", { output_tokens: MIO }),
+    ].join("\n");
+    const r = m.callsFromTranscript(text);
+    assert.equal(r.calls.length, 1);
+    assert.equal(r.calls[0].cost, 10);
+    assert.equal((r.calls[0] as Call & { costParts: { output: number } }).costParts.output, 10);
+  });
+
+  test("Nachlauf zählt weder in unpriced noch in costParts", () => {
+    const text = [
+      row("a", "claude-sonnet-5-5", { input_tokens: MIO }, "2026-10-05T10:00:00Z"),
+      row("b", "gpt-x", { input_tokens: 5 }, "2026-10-05T12:00:00Z"),
+      row("c", "claude-sonnet-5-5", { output_tokens: MIO }, "2026-10-05T12:01:00Z"),
+    ].join("\n");
+    const s = m.summarize(m.callsFromTranscript(text), { mergedAt: "2026-10-05T11:00:00Z" });
+    assert.equal(s.unpriced, 0);
+    assert.equal(s.costParts.input, 2);
+    assert.equal(s.costParts.output, 0);
+  });
+
+  test("Sockel: Planer vor --from (anderes Ticket derselben Session) zählt nicht, der Haupt-Sockel bleibt sessionweit", () => {
+    const other: Sub = { id: "other", agentType: "kubernia-planner", description: "Planungspass für #1" };
+    const s = m.summarize(
+      {
+        calls: [
+          at("2026-10-05T09:00:00Z", 60_000),
+          at("2026-10-05T09:10:00Z", 99_000, { subagent: other }),
+          at("2026-10-05T10:10:00Z", 30_000, { subagent: plan }),
+        ],
+      },
+      { from: "2026-10-05T10:00:00Z" },
+    );
+    assert.equal(s.sockel.main, 60_000);
+    assert.equal(s.sockel.planung, 30_000);
+  });
+
+  test("Sockel: Planer nach dem Merge (Nachlauf) zählt nicht", () => {
+    const s = m.summarize(
+      { calls: [at("2026-10-05T10:00:00Z", 60_000), at("2026-10-05T12:00:00Z", 77_000, { subagent: plan })] },
+      { mergedAt: "2026-10-05T11:00:00Z" },
+    );
+    assert.equal(s.sockel.planung, null);
+  });
+
+  test("Sockel: zwei Lens-Subagenten ohne id gehen getrennt in den Median ein", () => {
+    const s = m.summarize({
+      calls: [
+        at("2026-10-05T10:00:00Z", 40_000, { subagent: { agentType: "general-purpose", description: "Lens 1" } }),
+        at("2026-10-05T10:00:01Z", 60_000, { subagent: { agentType: "general-purpose", description: "Lens 2" } }),
+      ],
+    });
+    assert.equal(s.sockel.review, 50_000);
+  });
+
+  test("renderMarkdown: ohne Kosten keine Kostenanteile, ohne unpriced keine Warnung, null-Sockel als –", () => {
+    const md = m.renderMarkdown(m.summarize({ calls: [at("2026-10-05T10:00:00Z", 1_000, { subagent: plan, cost: 0 })] }));
+    assert.doesNotMatch(md, /Kostenanteile/);
+    assert.doesNotMatch(md, /ohne Preis/);
+    assert.match(md, /Sockel Haupt – · Planer 1\.000 · Lens –/);
+  });
+
+  test("renderMarkdown: Kostenanteile sind echte Prozente (25 % Input, 75 % Output)", () => {
+    // Sonnet: 5 Tsd Input = 0,01 $, 3 Tsd Output = 0,03 $ → 25 % / 75 %
+    const text = row("a", "claude-sonnet-5-5", { input_tokens: 5000, output_tokens: 3000 });
+    const md = m.renderMarkdown(m.summarize(m.callsFromTranscript(text)));
+    assert.match(md, /Kostenanteile: Input 25 % · Cache-Write 0 % · Cache-Read 0 % · Output 75 %/);
+  });
+});

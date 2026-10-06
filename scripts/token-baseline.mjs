@@ -144,15 +144,19 @@ function median(values) {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
+const subKey = (c) => c.subagent.id ?? c.subagent;
+
 /**
  * Sockel (#1198/#1206): Kontext des ERSTEN Calls des Hauptagenten (Größe der Session, darum
- * unabhängig von `--from`) bzw. je Subagent; Planung und Review als Median über die Subagenten.
+ * sessionweit und unabhängig von `--from`) bzw. je Subagent; Planung und Review als Median über
+ * die Subagenten IM Ticket-Fenster (`windowCalls`: nach `--from`, ohne Nachlauf), damit der Planer
+ * eines anderen Tickets derselben Session nicht mitzählt.
  */
-function sockelOf(calls) {
-  const byTime = [...calls].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
-  const main = byTime.find((c) => !c.subagent);
+function sockelOf(allCalls, windowCalls) {
+  const first = (calls) => [...calls].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+  const main = first(allCalls).find((c) => !c.subagent);
   const firstBySub = new Map();
-  for (const c of byTime) if (c.subagent && !firstBySub.has(c.subagent.id ?? c.subagent)) firstBySub.set(c.subagent.id ?? c.subagent, c);
+  for (const c of first(windowCalls)) if (c.subagent && !firstBySub.has(subKey(c))) firstBySub.set(subKey(c), c);
   const phaseSockel = (phase) =>
     median(
       [...firstBySub.values()]
@@ -172,6 +176,7 @@ function sockelOf(calls) {
 export function summarize({ calls, questions = 0 }, bounds = {}) {
   const rows = new Map();
   const inWindow = new Map();
+  const windowCalls = [];
   const contexts = { all: [], main: [] };
   const costParts = { input: 0, cacheWrite: 0, cacheRead: 0, output: 0 };
   let unpriced = 0;
@@ -183,8 +188,9 @@ export function summarize({ calls, questions = 0 }, bounds = {}) {
     const afterMerge = bounds.mergedAt && Date.parse(c.ts) >= Date.parse(bounds.mergedAt);
     const subPhase = c.subagent ? classifySubagent(c.subagent.agentType, c.subagent.description) : null;
     const phase = afterMerge ? "Nachlauf" : (subPhase ?? classifyMainByTime(c.ts, bounds));
-    if (c.subagent && phase !== "Nachlauf") inWindow.set(c.subagent.id ?? c.subagent, c.subagent);
+    if (c.subagent && phase !== "Nachlauf") inWindow.set(subKey(c), c.subagent);
     if (phase !== "Nachlauf") {
+      windowCalls.push(c);
       contexts.all.push(contextOf(c));
       if (!c.subagent) contexts.main.push(contextOf(c));
       if (c.cost === undefined || c.cost === null) unpriced += 1;
@@ -233,7 +239,7 @@ export function summarize({ calls, questions = 0 }, bounds = {}) {
     unpriced,
     costParts,
     medianContext: { all: median(contexts.all), main: median(contexts.main) },
-    sockel: sockelOf(calls),
+    sockel: sockelOf(calls, windowCalls),
   };
 }
 
@@ -442,7 +448,7 @@ export function renderMarkdown(summary, loop = {}) {
       `Kostenanteile: Input ${pct(parts.input)} · Cache-Write ${pct(parts.cacheWrite)} · Cache-Read ${pct(parts.cacheRead)} · Output ${pct(parts.output)}`,
     );
   }
-  if (summary.unpriced > 0) lines.push(`⚠️ ${summary.unpriced} Call(s) ohne Preis (Modell nicht in PRICES) — Kosten unvollständig.`);
+  if (summary.unpriced > 0) lines.push(`⚠️ ${summary.unpriced} Call(s) ohne Preis (Transkript: Modell nicht in PRICES; Langfuse: kein Preis für das Modell hinterlegt) — Kosten unvollständig.`);
   lines.push(
     "",
     `Review-Runden: ${summary.reviewRounds} · CI-Fix-Runden: ${ci} · Rückfragen: ${summary.questions} · gemergt ohne Nacharbeit: ${merged}`,
