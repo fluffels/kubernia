@@ -213,6 +213,7 @@ describe("isProtectedGitCommand (#1308) — Quotes, Heredocs und Substitutionen"
       "gh issue comment 1 --body 'git push'",
       'gh pr create --body "$(cat <<\'EOF\'\nZusammenfassung: git commit (x)\nEOF\n)"',
       "cat > f <<'EOF'\ngit push\nEOF",
+      "cat <<'EOF'\n$(git push)\nEOF", // quotierter Delimiter: Body wörtlich
       "cat > f <<-EOF\n\tgit push\n\tEOF",
       "git log --grep=push",
       "git stash push",
@@ -249,6 +250,8 @@ describe("isProtectedGitCommand (#1308) — Quotes, Heredocs und Substitutionen"
       "sudo -u me git push",
       "git add -A && git commit -m x",
       "cat <<EOF\n$(git push)\nEOF",
+      "cat <<EOF\n`git push`\nEOF",
+      "cat <(git push)",
     ];
     for (const cmd of ja) assert.equal(isProtectedGitCommand(cmd), true, cmd);
   });
@@ -443,7 +446,7 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
   });
 });
 
-describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordner", () => {
+describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordner", { timeout: 120_000 }, () => {
   let base = "";
   let main = "";
   let sub = "";
@@ -507,8 +510,17 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
       assert.equal(blockt(cwd, `cd '${slash(main)}' && git push`), true);
       assert.equal(blockt(cwd, `true && cd '${slash(main)}' && git push`), true, "nicht sicher geltendes cd-Ziel wird zusätzlich geprüft");
       assert.equal(blockt(cwd, `builtin cd '${slash(main)}' && git push`), true, "builtin cd wird als cd erkannt");
+      assert.equal(blockt(cwd, `cd '${slash(main)}' && bash -c "git push"`), true, "Sicherheitsnetz prüft das verfolgte Verzeichnis, nicht das Session-cwd");
       assert.equal(blockt(cwd, `if true; then cd '${slash(main)}'; fi; git push`), true, "cd hinter then");
     }
+  });
+
+  test.skipIf(process.platform !== "win32")("Windows: MSYS-Pfade (/c/…) werden in cd und -C aufgelöst", () => {
+    const msys = (p: string) => slash(p).replace(/^([A-Za-z]):/, (_m, d: string) => "/" + d.toLowerCase());
+    assert.equal(blockt(linked, `git -C '${msys(main)}' push`), true);
+    assert.equal(blockt(linked, `cd '${msys(main)}' && git push`), true);
+    assert.equal(blockt(main, `cd '${msys(linked)}' && git commit -m x`), false);
+    assert.equal(blockt(main, `git -C '${msys(linked)}' push`), false);
   });
 
   /** Differenz-Matrix: jeder Befehl, den die frühere Wortregel aus dem Haupt-Checkout blockte, muss
@@ -546,6 +558,12 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
     ["cd 'L' && GIT_DIR=x git commit -m x", false],
     ["cd 'L' && git --git-dir=x push", false],
     ['find . -exec echo {} \\; -exec bash -c "git push" \\;', false], // weitere -exec-Ziele zählen
+    ["git --git-dir .git commit -m x", false],
+    ["cd 'L' && git --git-dir M/.git commit -m x", false],
+    ["git -C ~/x push", false],
+    ["xargs -I{} git -C {} push", false],
+    ["cat <<EOF\n`git push`\nEOF", false],
+    ["cd 'L' && (true) & git push", false],
     // bewusst erlaubt
     ["cd 'L' && git add -A && git commit -m x", true],
     ["cd 'L'; git commit -m x", true],
