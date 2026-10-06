@@ -166,7 +166,12 @@ describe("gh api über Variablen, eval und Interpreter-Strings fragt nach (#1311
     laeuft("gh api repos/o/r/issues/1");
   });
 
-  test("Interpreter-Rekursion ist begrenzt (Tiefe 3) und fragt nie mit deny", () => {
+  test("Variable neben gh api (Interpreter-String, dynamisches Kommando) fragt; lesende dynamische Pfade nicht; die Antwort ist nie deny", () => {
+    fragt('CMD="gh api -X DELETE repos/o/r/issues/1"; bash -c "$CMD"');
+    fragt('CMD="gh api -X DELETE repos/o/r/issues/1"; $CMD');
+    laeuft('bash -c "gh api repos/o/r/issues/1"');
+    laeuft('gh api "$P"');
+    laeuft(`gh api graphql -f 'query=mutation($i:ID!){ addProjectV2ItemById(input:{projectId:$i}){ item { id } } }' -f i=X`); // Quote vor query=
     const r = hook.bewerte('eval "gh api -X DELETE x"');
     assert.equal(r.ask, true);
     assert.equal("block" in r, false);

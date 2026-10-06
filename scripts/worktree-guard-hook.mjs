@@ -147,6 +147,7 @@ function makeCtx(cwd, deps) {
     seen: new Set(),
     depth: 0,
     aliasCache: new Map(),
+    cfgAliases: new Map(), // `git config alias.X …` im selben Befehl
   };
 }
 
@@ -686,8 +687,15 @@ function gitCall(words, k, pe, D, c, depth) {
   }
   const sub = g.sub.text;
   const rest = words.slice(g.subIdx + 1);
+  if (sub === "config") {
+    // `git config [--global] alias.p push`: der Alias gilt für folgende git-Aufrufe im selben Befehl
+    const k2 = rest.findIndex((w) => !w.dynamic && /^alias\.[^=\s]+$/.test(w.text));
+    if (k2 >= 0) c.cfgAliases.set(rest[k2].text.slice(6), rest[k2 + 1] && !rest[k2 + 1].dynamic ? rest[k2 + 1].text : null);
+    return;
+  }
   if (!PROTECTED_SUBS.has(sub) && (g.aliases.has(sub) || !KNOWN_SUBS.has(sub)) && sub !== "") {
-    const al = g.aliases.has(sub) ? g.aliases.get(sub) : configAlias(c, sub, D);
+    if (c.cfgAliases.get(sub) === null) ask(c, real(D), `Der git-Alias \`${sub}\` ist nicht statisch auflösbar.`, true);
+    const al = g.aliases.has(sub) ? g.aliases.get(sub) : (c.cfgAliases.get(sub) ?? configAlias(c, sub, D));
     if (al && depth < 3) {
       if (al.startsWith("!")) {
         evalString(`${al.slice(1)} ${rest.map((w) => w.text).join(" ")}`, gitTargetDirs(g, pe, D, c), c);

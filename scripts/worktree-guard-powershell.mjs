@@ -312,9 +312,6 @@ export function bewertePowerShell({ command, cwd, repoRoot, deps = {}, tiefe = 0
   return { block: false };
 }
 
-/** Entscheidung für den Dispatcher: `{ block, reason }`. */
-export const pruefePowerShell = (opts) => bewertePowerShell(opts);
-
 function main() {
   const { tool, cwd, command } = parseHookInput(readStdin());
   if (tool !== undefined && tool !== "PowerShell") return;

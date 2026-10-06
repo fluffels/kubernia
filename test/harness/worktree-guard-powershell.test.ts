@@ -143,9 +143,11 @@ describe("Haupt-Checkout: commit/push wird geblockt (Z25)", () => {
     blockt(`bash -c "git commit -m x"`, HAUPT);
     laeuft(`bash -c "git commit -m x"`, WT);
     laeuft(`bash -c "git status"`, WT);
+    laeuft(`Set-Location ${WT}; bash -c "git commit -m x"`, HAUPT); // der String läuft ab dem aktuellen Ort, nicht ab der Session-cwd
+    blockt(`Set-Location ${HAUPT}; bash -c "git commit -m x"`, WT);
   });
 
-  test("Interpreter-Rekursion ist bei Tiefe 3 begrenzt und fällt auf die grobe Regel zurück", () => {
+  test("tief verschachtelte Interpreter-Strings blocken weiter (grobe Regel greift bei Tiefe über 3)", () => {
     const tief = (n: number): string => (n === 0 ? "git commit -m x" : `pwsh -c "${tief(n - 1).replace(/"/g, "'")}"`);
     blockt(tief(5), HAUPT);
   });

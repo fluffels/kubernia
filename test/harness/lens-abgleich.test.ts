@@ -102,6 +102,13 @@ describe("Lens-Texte: eine Quelle, Skill und Workflow gleich (#1311)", () => {
     });
   }
 
+  test("der gebaute Auftrag trägt den Hinweis (Sabotage-Regel der Test-Lens, Doku-Lens ohne Test-Brille)", () => {
+    const auftrag = (key: string) => lensen.find((l) => l.key === key)?.auftrag ?? "";
+    assert.match(auftrag("test-adaequanz"), /NICHT wegoptimiert/);
+    assert.match(auftrag("test-adaequanz"), /leeren git status --porcelain/);
+    assert.match(auftrag("doku"), /Test-Brille entfällt/);
+  });
+
   test("fehlende Anker im Skill werden laut gemeldet", () => {
     assert.throws(() => abschnitt(SKILL, "**Lens 9 — Gibt es nicht**", "**Lens 10"), /nicht gefunden/);
   });

@@ -15,8 +15,11 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
 import * as raw from "../../scripts/pretooluse-hook.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
+import * as ioRaw from "../../scripts/hook-io.mjs";
 
 type Out = { hookSpecificOutput: { permissionDecision: string; permissionDecisionReason: string } } | null;
+const io = ioRaw as unknown as { mergeDecisions: (d: unknown[]) => Out };
 const hook = raw as unknown as { dispatch: (text: string, repoRoot: string, guards?: Record<string, (o: never) => unknown>) => Out };
 
 const WURZEL = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -37,13 +40,22 @@ describe("Routing und Entscheidung (#1311)", () => {
     assert.equal(hook.dispatch("", WURZEL), null);
   });
 
-  test("Bash geht an den Bash-Guard, PowerShell an den PowerShell-Guard (Haupt-Checkout-Commit blockt)", () => {
-    // Der Worktree dieses Tests ist selbst ein Linked Worktree (kein Haupt-Checkout) oder in der CI der Haupt-Checkout:
-    // darum nur das Routing prüfen — ein Befehl, den nur der jeweilige Guard versteht, und deny > ask.
-    const beide = 'gh api -X DELETE repos/o/r/issues/1 && git commit -m x';
-    const out = hook.dispatch(payload("Bash", beide), WURZEL);
-    assert.ok(out, "ask oder deny");
-    assert.ok(["ask", "deny"].includes(out.hookSpecificOutput.permissionDecision));
+  test("Routing: Bash geht an den Bash-Guard, PowerShell an den PowerShell-Guard (Attrappen)", () => {
+    const blockt = () => ({ block: true, reason: "x" });
+    const nichts = () => ({ block: false });
+    const nurBash = { decide: blockt, bewertePowerShell: nichts, bewerteGh: nichts };
+    const nurPs = { decide: nichts, bewertePowerShell: blockt, bewerteGh: nichts };
+    assert.equal(hook.dispatch(payload("Bash", "x"), WURZEL, nurBash)?.hookSpecificOutput.permissionDecision, "deny");
+    assert.equal(hook.dispatch(payload("PowerShell", "x"), WURZEL, nurBash), null);
+    assert.equal(hook.dispatch(payload("PowerShell", "x"), WURZEL, nurPs)?.hookSpecificOutput.permissionDecision, "deny");
+    assert.equal(hook.dispatch(payload("Bash", "x"), WURZEL, nurPs), null);
+  });
+
+  test("mergeDecisions: deny vor ask, unabhängig von der Reihenfolge", () => {
+    assert.equal(io.mergeDecisions([{ ask: true, reason: "a" }, { block: true, reason: "d" }])?.hookSpecificOutput.permissionDecision, "deny");
+    assert.equal(io.mergeDecisions([{ block: true, reason: "d" }, { ask: true, reason: "a" }])?.hookSpecificOutput.permissionDecision, "deny");
+    assert.equal(io.mergeDecisions([{ block: false }, { ask: true, reason: "a" }])?.hookSpecificOutput.permissionDecision, "ask");
+    assert.equal(io.mergeDecisions([null, { block: false }]), null);
   });
 
   test("deny geht vor ask: ein Haupt-Checkout-Commit samt gh-Frage ergibt deny", () => {

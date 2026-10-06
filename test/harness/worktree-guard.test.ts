@@ -599,6 +599,33 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(run("cd ~ && echo x", repoRoot, kaputt), false);
   });
 
+  test("Review R1: -C-Ziel fehlt bei Ausgangsort ≠ Session-cwd, F-Seite, Negation, Rückfrage-Vorrang, Wortfortsetzung", () => {
+    const fehlt = join(wt, "gibt-es-nicht");
+    assert.equal(decide({ cwd: repoRoot, command: `cd '${wt}' && git -C gibt-es-nicht push`, repoRoot, deps: fsFake([wt], [fehlt]) }).block, true, "Session-cwd zusätzlich");
+    assert.equal(run(`cd '${join(repoRoot, "weg")}' || git push`, repoRoot, fsFake([wt], [join(repoRoot, "weg")])), true, "fehlendes cd: der ||-Zweig läuft");
+    assert.equal(run(`! cd '${repoRoot}' || git push`, wt), true, "! tauscht Erfolg und Misserfolg");
+    assert.equal(run(`! cd '${repoRoot}' && git push`, wt), false, "Gegenprobe: nach ! cd läuft && nur bei Misserfolg");
+    assert.equal(ask('bash -c "$C"; git -C "$D" push', wt), true, "die Rückfrage ohne mainOnly gilt auch dort, wo die mainOnly-Frage entfällt");
+    assert.equal(run("gi\\\nt push"), true, "Zeilenfortsetzung mitten im Wort");
+    assert.equal(run("command -v git push"), false, "command -v ist nur eine Abfrage");
+  });
+
+  test("Review R1: git config alias.X im selben Befehl gilt für das folgende git", () => {
+    assert.equal(run("git config alias.p push && git p"), true);
+    assert.equal(run("git config --global alias.p '!git push'; git p"), true);
+    assert.equal(run("git config alias.p status && git p"), false);
+    assert.equal(run("git config alias.p push && git p", wt), false);
+    assert.equal(ask('git config alias.p "$X"; git p'), true, "nicht statischer Alias");
+  });
+
+  test("Review R1: ein rev-parse je Verzeichnis und decide (kontextCache)", () => {
+    let aufrufe = 0;
+    const base = fsFake([wt]);
+    const deps: ExecDeps = { ...base, execFileSync: (cmd, args, o) => { aufrufe++; return base.execFileSync?.(cmd, args, o) ?? ""; } };
+    assert.equal(run("git push && git commit -m x && git -C . push", repoRoot, deps), true);
+    assert.equal(aufrufe, 1, "Referenz und Ziel sind dasselbe Verzeichnis: ein einziger rev-parse, nicht einer je Aufruf");
+  });
+
   test("MSYS-Pfade im Verbund (deps.platform), unabhängig vom Betriebssystem", () => {
     const deps: ExecDeps = { statSync: () => ({ isDirectory: () => true }), execFileSync: () => { throw new Error("kein git"); }, platform: "win32" };
     assert.deepEqual(protectedGitTargets("git -C /c/dev/main push", "C:\\work", deps), ["C:\\dev\\main"]);

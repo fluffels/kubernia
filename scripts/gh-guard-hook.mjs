@@ -198,7 +198,13 @@ export function bewerte(command, tiefe = 0) {
     if (hatGhApi && /^[\s(]*(?:eval|iex|Invoke-Expression)\b/i.test(segment)) {
       return { ask: true, reason: `gh-Guard (#1311): \`eval\`/\`iex\` neben \`gh api\`: der zusammengesetzte Aufruf ist nicht prüfbar. ${REGEL}` };
     }
+    if (hatGhApi && /^[\s(]*\$\w/.test(segment)) {
+      return { ask: true, reason: `gh-Guard (#1311): dynamisches Kommando ($CMD) neben \`gh api\`: der Aufruf ist nicht prüfbar. ${REGEL}` };
+    }
     const inner = hatGhApi && tiefe < MAX_INTERPRETER ? interpreterString(segment) : null;
+    if (inner && /\$/.test(inner.replace(/'[^']*'/g, "").replace(/\\\$|`\$/g, ""))) {
+      return { ask: true, reason: `gh-Guard (#1311): Interpreter-String mit Variable neben \`gh api\`: der Aufruf ist nicht prüfbar. ${REGEL}` };
+    }
     if (inner) {
       const r = bewerte(inner, tiefe + 1);
       if (r.ask) return r;
@@ -206,9 +212,6 @@ export function bewerte(command, tiefe = 0) {
   }
   return { ask: false };
 }
-
-/** Für den Dispatcher: dieselbe Entscheidung als Objekt. */
-export const pruefeGh = (command) => bewerte(command);
 
 function main() {
   const { tool, command } = parseHookInput(readStdin());
