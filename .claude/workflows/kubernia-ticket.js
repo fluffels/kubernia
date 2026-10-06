@@ -764,7 +764,7 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
   § Tests gegen False Positives absichern (Red-Green).
 - ⭐ Oberste Regel (Stardew-Valley-Größe) — sie steht über allen Konventionen.
   Was auffällt, aber nicht zum Ticket gehört: nicht inline mitfixen, sondern festhalten
-  (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket, Spiel-Defekt → Issue.
+  (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Notfälle ausgenommen), Spiel-/Inhalts-Befund → Issue.
 - § Doku aktuell halten ist Teil von „fertig" — im SELBEN Branch.
 - Deutsch mit echten Umlauten in Texten und Kommentaren; Dateinamen bleiben ASCII.
 

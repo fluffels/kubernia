@@ -83,4 +83,4 @@ Die manuelle Board-Reihenfolge ist die **einzige** Reihenfolge-Quelle; es gibt k
 
 ## Am Ticket-Ende
 
-Am Ticket-Ende ist **keine** Reihenfolge-Datei mehr zu pflegen. Der Abschluss ist: Issue schließen (via `Closes #<nr>` im gemergten PR), und — falls beim Arbeiten etwas auffiel — einen echten Defekt als Issue an die richtige Board-Stelle, Härtung/Kosmetik als Zeile ins Sammelticket (oben).
+Am Ticket-Ende ist **keine** Reihenfolge-Datei mehr zu pflegen. Der Abschluss ist: Issue schließen (via `Closes #<nr>` im gemergten PR), und — falls beim Arbeiten etwas auffiel — Spiel-/Inhalts-Befunde jeder Art als Issue an die richtige Board-Stelle, alles zum Harness als Zeile ins Sammelticket, nur Notfälle als Issue (oben).
