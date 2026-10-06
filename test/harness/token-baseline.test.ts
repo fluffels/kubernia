@@ -318,6 +318,20 @@ describe("token-baseline: Quelle Langfuse", () => {
     assert.equal(s.hasCost, true);
   });
 
+  test("verschachtelt (#1291): Lens unter dem Umsetzer zählt als Review, der Umsetzer selbst per Zeitschnitt", () => {
+    const r = m.callsFromLangfuse([
+      { id: "u", type: "SPAN", name: "Subagent: Umsetzung #1291", startTime: "x", metadata: { agent_type: "kubernia-umsetzer" } },
+      { id: "l", type: "SPAN", name: "Subagent: Lens Architektur R1", startTime: "x", parentObservationId: "u", metadata: { agent_type: "kubernia-lens" } },
+      gen("gl", "l", { input: 1 }),
+      { ...gen("gu1", "u", { input: 1 }), startTime: "2026-09-29T11:00:00Z" },
+      { ...gen("gu2", "u", { input: 1 }), startTime: "2026-09-29T12:30:00Z" },
+    ]);
+    const nachId = (id: string) => r.calls[["gl", "gu1", "gu2"].indexOf(id)];
+    assert.equal(nachId("gl").subagent?.agentType, "kubernia-lens", "nächster umschließender Subagent, nicht der äußerste");
+    const phasen = m.summarize(r, BOUNDS).rows.map((row) => row.phase).sort();
+    assert.deepEqual(phasen, ["CI/Merge", "Review", "Umsetzung"], "Lens → Review, Umsetzer vor dem PR → Umsetzung, danach → CI/Merge");
+  });
+
   test("Zyklus in parentObservationId hängt nicht, Hauptagent bleibt Hauptagent", () => {
     const r = m.callsFromLangfuse([
       { id: "a", type: "SPAN", name: "A", startTime: "x", parentObservationId: "b" },
