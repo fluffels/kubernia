@@ -69,6 +69,8 @@ const m = baselineModule as {
   renderMarkdown: (s: Summary, loop?: { failedPushes?: number; mergedAt?: string | null }) => string;
   priceCall: (c: Call, prices?: unknown) => number | null;
   priceParts: (c: Call, prices?: unknown) => Parts | null;
+  windowCalls: (calls: Call[], bounds?: Bounds) => { call: Call; phase: string }[];
+  PRICES_STAND: string;
   parseArgs: (argv: string[]) => { sessions: string[]; issue?: string; pr?: string; from?: string; json: boolean; langfuse: boolean };
   fetchSessionObservations: (
     sessionId: string,
@@ -290,7 +292,8 @@ describe("token-baseline: Quelle Langfuse", () => {
     assert.equal(r.questions, 1);
     const s = m.summarize(r);
     assert.equal(s.rows[0].phase, "Planung");
-    assert.equal(s.total.cost, 0.25);
+    // Eine Preisquelle (#1239): Kosten aus PRICES, nicht aus Langfuse-totalCost (0.25 im Fixture).
+    assert.ok(Math.abs(s.total.cost - 0.000325) < 1e-12, `Kosten aus PRICES, war ${s.total.cost}`);
     assert.equal(s.hasCost, true);
   });
 
@@ -659,5 +662,72 @@ describe("token-baseline: Kontext-Formel und Preistabelle (#1206)", () => {
       assert.equal(m.priceCall(c({ cacheRead: MIO })), read, `${model} read`);
       assert.equal(m.priceCall(c({ output: MIO })), output, `${model} output`);
     }
+  });
+});
+
+describe("token-baseline: eine Preisquelle, Preisperioden, Fensterfilter (#1239)", () => {
+  const MIO = 1_000_000;
+  const gen = (usage: Record<string, number>, model = "claude-sonnet-5-5"): Obs => ({
+    id: "g",
+    type: "GENERATION",
+    name: "LLM Call",
+    startTime: "2026-10-05T10:00:00Z",
+    providedModelName: model,
+    usageDetails: usage,
+    totalCost: "99",
+  });
+
+  test("Langfuse: 5m-/1h-Writes aus den echten Schlüsseln, Kostenanteile und Kosten wie im Transkript-Modus", () => {
+    const usage = { input: 1000, output: 500, cache_read_input_tokens: 2000, input_cache_creation_5m: 300, input_cache_creation_1h: 200 };
+    const lf = m.callsFromLangfuse([gen(usage)]).calls[0];
+    assert.equal(lf.cacheWrite, 500);
+    assert.equal(lf.cacheWrite1h, 200);
+    const tr = m.callsFromTranscript(
+      JSON.stringify({
+        type: "assistant",
+        timestamp: lf.ts,
+        message: { id: "x", model: "claude-sonnet-5-5", usage: { input_tokens: 1000, output_tokens: 500, cache_read_input_tokens: 2000, cache_creation_input_tokens: 500, cache_creation: { ephemeral_1h_input_tokens: 200 } } },
+      }),
+    ).calls[0];
+    assert.deepEqual(lf.costParts, tr.costParts);
+    assert.equal(lf.cost, tr.cost);
+    assert.notEqual(lf.cost, 99, "Langfuse-totalCost wird nicht mehr als Kosten genutzt");
+  });
+
+  test("Langfuse: Modell ohne Preis bleibt ohne Preis (null), nie totalCost oder 0", () => {
+    const lf = m.callsFromLangfuse([gen({ input: 5 }, "claude-unbekannt")]).calls[0];
+    assert.equal(lf.cost, null);
+    assert.equal(lf.costParts ?? null, null);
+  });
+
+  test("priceCall summiert vorhandene costParts statt neu zu bepreisen", () => {
+    const c = call("2026-10-05T10:00:00Z", 1, { model: "claude-unbekannt", costParts: { input: 1, cacheWrite: 2, cacheRead: 3, output: 4 } });
+    assert.equal(m.priceCall(c), 10);
+  });
+
+  test("Preisperioden: der Preis gilt ab validFrom, davor die ältere Periode; Einzelobjekt gilt immer", () => {
+    const alt = { input: 1, cacheWrite5m: 1, cacheWrite1h: 1, cacheRead: 1, output: 1 };
+    const neu = { input: 2, cacheWrite5m: 2, cacheWrite1h: 2, cacheRead: 2, output: 2 };
+    const prices = { "claude-x": [{ validFrom: null, ...alt }, { validFrom: "2026-11-01T00:00:00Z", ...neu }], "claude-y": alt };
+    const mk = (ts: string, model: string): Call => ({ ts, model, input: MIO, cacheWrite: 0, cacheRead: 0, output: 0 });
+    assert.equal(m.priceCall(mk("2026-10-31T23:59:59Z", "claude-x"), prices), 1);
+    assert.equal(m.priceCall(mk("2026-11-01T00:00:00Z", "claude-x"), prices), 2);
+    assert.equal(m.priceCall(mk("2030-01-01T00:00:00Z", "claude-y"), prices), 1);
+  });
+
+  test("Report nennt den Stand der Preistabelle", () => {
+    assert.match(m.PRICES_STAND, /^\d{4}-\d{2}-\d{2}$/);
+    const md = m.renderMarkdown(m.summarize({ calls: [call("2026-10-05T10:00:00Z", 1)] }));
+    assert.match(md, new RegExp(`Preise Stand ${m.PRICES_STAND}`));
+  });
+
+  test("windowCalls: lässt Calls vor from weg und kennzeichnet Nachlauf nach dem Merge", () => {
+    const vor = call("2026-09-29T09:00:00Z", 1);
+    const drin = call("2026-09-29T10:30:00Z", 1);
+    const nach = call("2026-09-29T13:30:00Z", 1);
+    const w = m.windowCalls([vor, drin, nach], { ...BOUNDS, from: "2026-09-29T10:00:00Z" });
+    assert.deepEqual(w.map((x) => x.call), [drin, nach]);
+    assert.equal(w[1].phase, "Nachlauf");
+    assert.notEqual(w[0].phase, "Nachlauf");
   });
 });

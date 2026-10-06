@@ -92,12 +92,20 @@ function num(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Stand der Preistabelle (im Report ausgegeben, bei jeder Preisänderung mitziehen). */
+export const PRICES_STAND = "2026-10-06";
+
 /**
- * Preise in $ je Mio Tokens (Stand 2026-10-06, Quelle: Preisliste auf claude.com/pricing,
+ * Preise in $ je Mio Tokens (Stand siehe `PRICES_STAND`, Quelle: Preisliste auf claude.com/pricing,
  * deckungsgleich mit den Modell-Definitionen der lokalen Langfuse-Instanz). Langfuse
  * rechnet Kosten nur bei der Ingestion, ein später angelegter Preis gilt nicht
  * rückwirkend — darum kommen die Kosten im Transkript-Modus aus dieser Tabelle.
  * Ein Modell ohne Eintrag ist „ohne Preis" (null), nie 0 $.
+ *
+ * Ein Eintrag ist ein Preisobjekt (gilt immer) ODER eine Liste von Perioden
+ * `[{ validFrom: null | ISO-Zeit, …Preise }]`, aufsteigend nach `validFrom` (`null` = seit
+ * Modellstart). Eine Preisänderung wird als neue Periode ANGEHÄNGT, damit alte Läufe ihren
+ * damaligen Preis behalten.
  */
 export const PRICES = {
   "claude-sonnet-5-5": { input: 2, cacheWrite5m: 2.5, cacheWrite1h: 4, cacheRead: 0.2, output: 10 },
@@ -106,16 +114,36 @@ export const PRICES = {
   "claude-haiku-4-5": { input: 1, cacheWrite5m: 1.25, cacheWrite1h: 2, cacheRead: 0.1, output: 5 },
 };
 
+const matcherCache = new WeakMap();
+
+/** Je Preistabelle einmal gebaut: [{ key, re }] statt pro Call neuer RegExp. */
+function matchersOf(prices) {
+  let list = matcherCache.get(prices);
+  if (!list) {
+    list = Object.keys(prices).map((key) => ({ key, re: new RegExp(`^${key}-\\d{8}$`) }));
+    matcherCache.set(prices, list);
+  }
+  return list;
+}
+
+/** Eintrag → die zum Zeitpunkt `ts` gültige Periode (Einzelobjekt gilt immer). */
+function periodAt(entry, ts) {
+  if (!Array.isArray(entry)) return entry;
+  const at = Date.parse(ts);
+  const valid = entry.filter((p) => p.validFrom == null || !(at < Date.parse(p.validFrom)));
+  return valid.length ? valid[valid.length - 1] : null;
+}
+
 /** Exakter Name oder Name mit Datums-Suffix (`-20251001`); `claude-opus-5-5` ist kein Opus 5. */
-function priceFor(model, prices) {
+function priceFor(model, prices, ts) {
   const id = String(model ?? "");
-  const key = Object.keys(prices).find((k) => id === k || new RegExp(`^${k}-\\d{8}$`).test(id));
-  return key ? prices[key] : null;
+  const hit = matchersOf(prices).find(({ key, re }) => id === key || re.test(id));
+  return hit ? periodAt(prices[hit.key], ts) : null;
 }
 
 /** Kosten eines Calls je Teil in $; null, wenn das Modell keinen Preis hat. */
 export function priceParts(c, prices = PRICES) {
-  const p = priceFor(c.model, prices);
+  const p = priceFor(c.model, prices, c.ts);
   if (!p) return null;
   const write = num(c.cacheWrite);
   const write1h = Math.min(num(c.cacheWrite1h), write);
@@ -131,9 +159,11 @@ export function priceParts(c, prices = PRICES) {
 
 /** Gesamtkosten eines Calls in $; null = ohne Preis. */
 export function priceCall(c, prices = PRICES) {
-  const parts = priceParts(c, prices);
-  return parts ? parts.input + parts.cacheWrite + parts.cacheRead + parts.output : null;
+  const parts = c.costParts ?? priceParts(c, prices);
+  return parts ? sumParts(parts) : null;
 }
+
+const sumParts = (p) => p.input + p.cacheWrite + p.cacheRead + p.output;
 
 const contextOf = (c) => num(c.input) + num(c.cacheWrite) + num(c.cacheRead);
 
@@ -175,73 +205,88 @@ function sockelOf(allCalls, windowCalls) {
  * erbte ein Ticket die Lenses eines früheren Tickets derselben Session.
  */
 export function summarize({ calls, questions = 0 }, bounds = {}) {
-  const rows = new Map();
-  const inWindow = new Map();
-  const windowCalls = [];
-  const contexts = { all: [], main: [] };
-  const costParts = { input: 0, cacheWrite: 0, cacheRead: 0, output: 0 };
-  let unpriced = 0;
-  let hasCost = false;
+  const window = windowCalls(calls, bounds);
+  const sorted = phaseRows(window);
+  const ticket = window.filter((w) => w.phase !== "Nachlauf").map((w) => w.call);
+  return {
+    rows: sorted,
+    // Summe = das Ticket; der Nachlauf nach dem Merge wird gezeigt, aber nicht mitgezählt.
+    total: totalOf(sorted.filter((r) => r.phase !== "Nachlauf")),
+    hasCost: window.some((w) => w.call.cost !== undefined && w.call.cost !== null),
+    reviewRounds: countReviewRounds(reviewDescriptions(ticket)),
+    questions,
+    unpriced: ticket.filter((c) => c.cost === undefined || c.cost === null).length,
+    costParts: costPartsOf(ticket),
+    medianContext: {
+      all: median(ticket.map(contextOf)),
+      main: median(ticket.filter((c) => !c.subagent).map(contextOf)),
+    },
+    sockel: sockelOf(calls, ticket),
+  };
+}
+
+/**
+ * Calls im Ticket-Fenster samt Phase. Vor `from` liegt fremde Arbeit derselben Session (z.B. ein
+ * vorheriges Ticket) — weglassen; nach dem Merge ist alles Nachlauf, auch ein Subagent, den erst
+ * das Gespräch danach startet.
+ */
+export function windowCalls(calls, bounds = {}) {
+  const out = [];
   for (const c of calls) {
-    // Vor `from` liegt fremde Arbeit derselben Session (z.B. ein vorheriges Ticket) — weglassen.
     if (bounds.from && Date.parse(c.ts) < Date.parse(bounds.from)) continue;
-    // Nach dem Merge ist alles Nachlauf — auch ein Subagent, den erst das Gespräch danach startet.
     const afterMerge = bounds.mergedAt && Date.parse(c.ts) >= Date.parse(bounds.mergedAt);
     const subPhase = c.subagent ? classifySubagent(c.subagent.agentType, c.subagent.description) : null;
-    const phase = afterMerge ? "Nachlauf" : (subPhase ?? classifyMainByTime(c.ts, bounds));
-    if (c.subagent && phase !== "Nachlauf") inWindow.set(subKey(c), c.subagent);
-    if (phase !== "Nachlauf") {
-      windowCalls.push(c);
-      contexts.all.push(contextOf(c));
-      if (!c.subagent) contexts.main.push(contextOf(c));
-      if (c.cost === undefined || c.cost === null) unpriced += 1;
-      for (const k of Object.keys(costParts)) costParts[k] += num(c.costParts?.[k]);
-    }
+    out.push({ call: c, phase: afterMerge ? "Nachlauf" : (subPhase ?? classifyMainByTime(c.ts, bounds)) });
+  }
+  return out;
+}
+
+/** Tabellenzeilen Phase × Modell, nach Phasenreihenfolge sortiert. */
+function phaseRows(window) {
+  const rows = new Map();
+  for (const { call: c, phase } of window) {
     const model = c.model || "unbekannt";
-    const key = `${phase}\u0000${model}`;
+    const key = `${phase} ${model}`;
     const r = rows.get(key) ?? { phase, model, calls: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0, cost: 0 };
     r.calls += 1;
     r.input += num(c.input);
     r.cacheWrite += num(c.cacheWrite);
     r.cacheRead += num(c.cacheRead);
     r.output += num(c.output);
-    if (c.cost !== undefined && c.cost !== null) {
-      hasCost = true;
-      r.cost += num(c.cost);
-    }
+    if (c.cost !== undefined && c.cost !== null) r.cost += num(c.cost);
     rows.set(key, r);
   }
-  const sorted = [...rows.values()].sort(
-    (a, b) => PHASES.indexOf(a.phase) - PHASES.indexOf(b.phase) || a.model.localeCompare(b.model),
+  return [...rows.values()].sort((a, b) => PHASES.indexOf(a.phase) - PHASES.indexOf(b.phase) || a.model.localeCompare(b.model));
+}
+
+function totalOf(rows) {
+  return rows.reduce(
+    (t, r) => ({
+      calls: t.calls + r.calls,
+      input: t.input + r.input,
+      cacheWrite: t.cacheWrite + r.cacheWrite,
+      cacheRead: t.cacheRead + r.cacheRead,
+      output: t.output + r.output,
+      cost: t.cost + r.cost,
+    }),
+    { calls: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0, cost: 0 },
   );
-  // Summe = das Ticket; der Nachlauf nach dem Merge wird gezeigt, aber nicht mitgezählt.
-  const total = sorted
-    .filter((r) => r.phase !== "Nachlauf")
-    .reduce(
-      (t, r) => ({
-        calls: t.calls + r.calls,
-        input: t.input + r.input,
-        cacheWrite: t.cacheWrite + r.cacheWrite,
-        cacheRead: t.cacheRead + r.cacheRead,
-        output: t.output + r.output,
-        cost: t.cost + r.cost,
-      }),
-      { calls: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0, cost: 0 },
-    );
-  const reviewDescriptions = [...inWindow.values()]
+}
+
+/** Kosten je Teil über die bepreisten Calls. */
+function costPartsOf(calls) {
+  const parts = { input: 0, cacheWrite: 0, cacheRead: 0, output: 0 };
+  for (const c of calls) for (const k of Object.keys(parts)) parts[k] += num(c.costParts?.[k]);
+  return parts;
+}
+
+/** Beschreibungen der Review-Subagenten, die im Ticket-Fenster Calls haben (je Subagent einmal). */
+function reviewDescriptions(ticketCalls) {
+  const subs = new Map();
+  for (const c of ticketCalls) if (c.subagent) subs.set(subKey(c), c.subagent);
+  return [...subs.values()]
     .filter((s) => classifySubagent(s.agentType, s.description) === "Review")
     .map((s) => String(s.description ?? ""));
-  return {
-    rows: sorted,
-    total,
-    hasCost,
-    reviewRounds: countReviewRounds(reviewDescriptions),
-    questions,
-    unpriced,
-    costParts,
-    medianContext: { all: median(contexts.all), main: median(contexts.main) },
-    sockel: sockelOf(calls, windowCalls),
-  };
 }
 
 // ── Quelle 1: Claude-Code-Transkript ─────────────────────────────────────────
@@ -344,16 +389,26 @@ export function callsFromLangfuse(observations) {
     .map((o) => {
       const span = findSubagentAncestor(o, byId);
       const u = o.usageDetails ?? {};
-      return {
+      // Die Hook-Aufzeichnung trennt die Cache-Writes nach TTL (`input_cache_creation_5m|1h`); ältere
+      // Aufzeichnungen tragen nur die Summe (`cache_creation_input_tokens`, zählt als 5m).
+      const write5m = num(u.input_cache_creation_5m);
+      const write1h = num(u.input_cache_creation_1h);
+      const split = u.input_cache_creation_5m !== undefined || u.input_cache_creation_1h !== undefined;
+      const call = {
         ts: o.startTime,
         model: o.providedModelName ?? o.model,
-        input: u.input,
-        cacheWrite: u.cache_creation_input_tokens,
-        cacheRead: u.cache_read_input_tokens,
-        output: u.output,
-        cost: o.totalCost ?? null,
+        input: num(u.input),
+        cacheWrite: split ? write5m + write1h : num(u.cache_creation_input_tokens),
+        cacheWrite1h: split ? write1h : 0,
+        cacheRead: num(u.cache_read_input_tokens),
+        output: num(u.output),
         subagent: span ? spanInfo(span) : null,
       };
+      // Eine Preisquelle (#1239): Kosten immer aus PRICES wie im Transkript-Modus, nicht aus Langfuse
+      // (`totalCost` entsteht nur bei der Ingestion und gilt nicht rückwirkend).
+      call.costParts = priceParts(call);
+      call.cost = call.costParts ? priceCall(call) : null;
+      return call;
     });
   return {
     calls,
@@ -442,14 +497,15 @@ export function renderMarkdown(summary, loop = {}) {
     `Sockel Haupt ${dash(sk?.main)} · Planer ${dash(sk?.planung)} · Lens ${dash(sk?.review)} · Median-Kontext Haupt ${dash(mc?.main)} / gesamt ${dash(mc?.all)}`,
   );
   const parts = summary.costParts;
-  const sum = parts ? parts.input + parts.cacheWrite + parts.cacheRead + parts.output : 0;
+  const sum = parts ? sumParts(parts) : 0;
   if (sum > 0) {
     const pct = (v) => `${Math.round((v / sum) * 100)} %`;
     lines.push(
       `Kostenanteile: Input ${pct(parts.input)} · Cache-Write ${pct(parts.cacheWrite)} · Cache-Read ${pct(parts.cacheRead)} · Output ${pct(parts.output)}`,
     );
   }
-  if (summary.unpriced > 0) lines.push(`⚠️ ${summary.unpriced} Call(s) ohne Preis (Transkript: Modell nicht in PRICES; Langfuse: kein Preis für das Modell hinterlegt) — Kosten unvollständig.`);
+  lines.push(`Preise Stand ${PRICES_STAND}`);
+  if (summary.unpriced > 0) lines.push(`⚠️ ${summary.unpriced} Call(s) ohne Preis (Modell nicht in PRICES) — Kosten unvollständig.`);
   lines.push(
     "",
     `Review-Runden: ${summary.reviewRounds} · CI-Fix-Runden: ${ci} · Rückfragen: ${summary.questions} · gemergt ohne Nacharbeit: ${merged}`,
