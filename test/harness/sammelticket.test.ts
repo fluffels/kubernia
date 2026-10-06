@@ -38,28 +38,31 @@ function sammelticketAbschnitt(doc: string): string {
   return doc.slice(von, bis < 0 ? undefined : bis);
 }
 
-/** Der jq-Index des Anlegen-Snippets: `[…][<n>].id`. */
-function jqIndex(abschnitt: string): number {
-  const m = /\]\[(\d+)\]\.id/.exec(abschnitt);
-  assert.ok(m, "Anlegen-Snippet braucht einen jq-Index `[…][<n>].id`");
-  return Number(m[1]);
+/** Der generische Anlegen-Abschnitt (gilt für Sammelticket und Status-Ticket). */
+function anlegenAbschnitt(doc: string): string {
+  const von = doc.indexOf("## Anlegen auf Position N");
+  assert.ok(von >= 0, "docs/ticket-reihenfolge.md braucht den Abschnitt „Anlegen auf Position N“");
+  const bis = doc.indexOf("\n## ", von + 1);
+  return doc.slice(von, bis < 0 ? undefined : bis);
 }
 
 describe("Sammelticket-Position (#1276)", () => {
   const agents = lies("AGENTS.md");
   const doc = lies("docs/ticket-reihenfolge.md");
   const abschnitt = sammelticketAbschnitt(doc);
+  const anlegen = anlegenAbschnitt(doc);
 
   test("AGENTS.md nennt die Position genau einmal", () => {
     assert.ok(positionAusAgentsMd(agents) >= 1);
   });
 
-  test("der jq-Index im Snippet ist Position − 2", () => {
-    assert.equal(jqIndex(abschnitt), positionAusAgentsMd(agents) - 2);
+  test("der Index im Snippet ist N − 2 (N = Position aus AGENTS.md, als Variable statt Literal)", () => {
+    assert.match(anlegen, /\(\.\[\$N-2\] \/\/ \.\[-1\]\)\.id/);
+    assert.match(anlegen, /^N=<Position>/m, "das Snippet trägt keine eigene Zahl für das Sammelticket");
   });
 
   test("das Snippet schließt das frisch angelegte Item aus der Zählung aus", () => {
-    assert.match(abschnitt, /select\(\(\.status \/\/ ""\)=="Todo" and \.id != "'"\$ITEM"'"\)/);
+    assert.ok(anlegen.includes('and .id != \\"$ITEM\\")]'), 'select(... and .id != \\"$ITEM\\")');
   });
 
   test("der Workflow doppelt die Zahl nicht, sondern verweist auf AGENTS.md", () => {
@@ -76,6 +79,5 @@ describe("Sammelticket-Position (#1276)", () => {
   test("Negativfall: eine zweite Zahl in AGENTS.md oder keine wird erkannt", () => {
     assert.throws(() => positionAusAgentsMd("Board-Position 6 und wieder auf Position 7"));
     assert.throws(() => positionAusAgentsMd("keine Zahl hier"));
-    assert.throws(() => jqIndex("kein Index"));
   });
 });

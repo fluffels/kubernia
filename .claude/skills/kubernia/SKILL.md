@@ -27,7 +27,7 @@ docs/referenz/ ← Nachschlage-Referenz on-demand (Befehle, Repo-Landkarte, Schi
      prompt: "Ticket #<nr>: <Titel>. Body:\n<Volltext des gh issue view>"
    })
    ```
-   Ist der Agent nicht verfügbar, skizziert der Hauptchat den Plan kurz selbst und gibt ihn dem Umsetzer mit.
+   Den Bericht unverändert mit seiner Kopfzeile `PLAN #<nr> · kubernia-planner` an den Umsetzer weitergeben (Planungs-Nachweis, #1270). Nur wenn der Spawn tatsächlich scheitert, skizziert der Hauptchat den Plan kurz selbst und schreibt `Plan ohne Planer: <Grund>` in den Umsetzer-Prompt; ein ausgelassener Planer ist kein Grund.
 3. **Pre-Flight** nach AGENTS.md § Human-in-the-Loop-Checkpoints: Du übernimmst die Entscheidungen aus Abschnitt 7 des Plans (Optik, Weichen) als verbindlich und gibst sie dem Umsetzer mit. `AskUserQuestion` nur, wenn der Plan „Rückfrage nötig“ meldet (Irreversibles oder Außenwirkung), dann **jetzt**. PixelLab-Assets für eine Optik-Entscheidung erzeugt der Hauptchat (der Umsetzer hat PixelLab nicht in seiner Whitelist); das Asset liegt als Datei im Temp-Ordner, der Umsetzer bekommt den Pfad (eine Job-ID nützt ihm nichts).
 4. **Umsetzer spawnen** (nächster Abschnitt) und sein Ergebnis behandeln.
 
@@ -41,7 +41,7 @@ Solange der Umsetzer läuft, fasst der Hauptchat weder Repo noch Worktree an und
 Agent({
   subagent_type: "kubernia-umsetzer",
   description: "Umsetzung #<nr>",
-  prompt: "Ticket #<nr>: <Titel>. Body:\n<Volltext>\n\n--- Plan ---\n<Plan des kubernia-planner bzw. Skizze des Hauptchats>\n--- Ende Plan ---\n\n--- Pre-Flight-Entscheidungen (verbindlich) ---\n<Entscheidungen aus Plan Abschnitt 7, ggf. Antworten der Maintainerin, sonst: keine>\n--- Ende ---"
+  prompt: "Ticket #<nr>: <Titel>. Body:\n<Volltext>\n\n--- Plan ---\n<Plan des kubernia-planner mit Kopfzeile, bzw. Skizze des Hauptchats mit Zeile „Plan ohne Planer: <Grund>“>\n--- Ende Plan ---\n\n--- Pre-Flight-Entscheidungen (verbindlich) ---\n<Entscheidungen aus Plan Abschnitt 7, ggf. Antworten der Maintainerin, sonst: keine>\n--- Ende ---"
 })
 ```
 

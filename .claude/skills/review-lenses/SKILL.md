@@ -100,6 +100,7 @@ Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket
 - **Scope-Kriechen:** ändert der Diff mehr als das Ticket (ein Ein-Ticket-Diff bleibt klein — Aufgefallenes wird festgehalten, nicht inline mitgefixt)?
 - Betrifft es Spielinhalte/Quests/Steuerung → **README mitgezogen**? Neues `src/`-Modul → Backtick-Pfad-Zeile im passenden **`docs/module/`-Tiefendoc** ergänzt (nicht in die [Repo-Landkarte](../../../docs/referenz/repo-landkarte.md), #907)?
 - Berührt es das **Save-Format** → migriert (Version-Bump + Migrationskette), alter Stand bleibt heil?
+- Fügt der Diff **Agenten, Subagenten, MCP-Server, Hooks oder Plugins** hinzu oder konfiguriert er sie um → ist die Langfuse-Erfassung im PR belegt (AGENTS.md § Langfuse-Erfassung erhalten)?
 
 **Lens 3 — Test-Adäquanz.** Deckt der Test das **Verhalten** ab — und ist er echt?
 - Prüft der Test die **öffentliche API / beobachtbares Verhalten** (überlebt Refactoring), nicht Interna?
@@ -112,6 +113,7 @@ Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket
 2. **SSOT/Drift:** steht eine Regel jetzt doppelt (jede harte Regel genau einmal in `AGENTS.md`, die Langfassung in `docs/`)? Widerspricht der Text einer anderen Stelle, einem ADR oder dem Verhalten von Code/Skripten? Ist-Zustand statt Historie? Lösen neue Links und Anker auf?
 3. **Wächter-Kopplung:** ändert der Diff eine Regel, die ein Wächter erzwingt (Regel-Begriff in `test/harness/` und `scripts/` greppen)? Erzwingt er weiter die alte Fassung, ist das **blockierend** — dann fehlt eine Code-Änderung.
 4. **⭐ Oberste Regel:** trägt die Regel noch bei 10× Inhalt, Tickets und parallelen Agenten?
+5. **Langfuse-Erfassung:** konfiguriert der Diff Agenten, Subagenten, MCP-Server, Hooks oder Plugins um → ist die Erfassung im PR belegt (AGENTS.md § Langfuse-Erfassung erhalten)?
 
 ## Findings-Format (pro Lens)
 
@@ -134,7 +136,11 @@ Im kubernia-Ticket-Ablauf ist dieser Review **Pflicht** vor dem PR — und läuf
 1. Lenses nach der Staffel oben auf den **aktuellen** Stand (frische, unabhängige Kritiker — nicht der Agent, der gefixt hat): Runde 1 der volle Diff, ab Runde 2 die blockierten Brillen auf dem Delta des Fixes.
 2. Keine blockierenden Findings mehr ⇒ **konvergiert**, weiter zum PR.
 3. Sonst nachbessern, dann **zurück zu 1** — mit einem **frischen** Kritiker, damit der finale „OK"-Blick nie ein Self-Grading des eigenen Fixes ist.
-4. **Cap 2** Fix-Runden (unbeschränktes Iterieren ist schlechter, nicht besser — jenseits echter Fehler werden Stil-Nörgeleien erfunden); danach **Hand-off** an die Maintainerin (Festgefahren), kein PR mit bekannten Blockern.
+4. **Cap 2** Fix-Runden, also höchstens 3 Pässe (unbeschränktes Iterieren ist schlechter, nicht besser — jenseits echter Fehler werden Stil-Nörgeleien erfunden); danach **Hand-off** an die Maintainerin (Festgefahren), kein PR mit bekannten Blockern.
+
+### Nachweis nach Konvergenz (#1270)
+
+Sobald konvergiert ist, setzt der Orchestrator direkt danach einen **leeren Nachweis-Commit** mit den Zeilen `KQ-Plan:` und `KQ-Review:` (Format, Warum und Grenzen: [docs/agent-harness.md › §3a](../../../docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd-1064), nicht hier kopieren). `head` ist der zuletzt reviewte Stand, `runden` die Zahl der Pässe, `lenses` die Brillen des vollen Passes (Runde 1). Lokal prüfen mit `node scripts/check-review-nachweis.mjs` (gibt bei Rot die Vorlage aus); die PR-CI erzwingt es als Required-Check. Danach kein Rebase/Amend mehr, sonst liegt `head` nicht mehr im PR.
 
 Regel-Heimat: [AGENTS.md › Mehr-Perspektiven-Review](../../../AGENTS.md). Deterministisch verdrahtet ist die Schleife im Workflow [`.claude/workflows/kubernia-ticket.js`](../../workflows/kubernia-ticket.js) (`MAX_REVIEW_RUNDEN`).
 

@@ -30,7 +30,7 @@ Was du wirklich beschaffst:
 
 ## Was der Plan enthält
 
-Kompakter Output, kein Fließtext-Essay:
+Kompakter Output, kein Fließtext-Essay. **Die allererste Zeile deines Berichts ist `PLAN #<nr> · kubernia-planner`** (Planungs-Nachweis, #1270; der Umsetzer bricht ohne sie ab). Danach:
 
 1. **Ziel in einem Satz** + die Akzeptanzkriterien aus dem Issue
 2. **Betroffene Dateien & Schichten** (pure Domäne / Anwendung / Persistenz / Präsentation); neue Domänenlogik gehört Phaser-frei und testbar in die pure Domäne, nicht in `scenes`/`ui`
