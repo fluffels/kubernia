@@ -667,7 +667,12 @@
             "accept": [
               "^kubectl\\s+expose\\s+deployment\\s+kombuese\\s+--port[=\\s]80$"
             ],
-            "check": {"some":"services","where":{"name":"kombuese"}},
+            "solvedBy": "check",
+            "check": {"some":"services","where":{"name":"kombuese","port":"80"}},
+            "altSolutions": [
+              "kubectl expose deployment/kombuese --port=80",
+              "kubectl expose deployment kombuese --port=80 --target-port=80"
+            ],
             "solution": "kubectl expose deployment kombuese --port=80",
             "why": "Ein Pod allein ist nicht erreichbar; ein <b>Service</b> gibt ihm eine stabile Adresse und verteilt den Verkehr – aber nur auf <b>bereite</b> Pods. Genau deshalb ist der Service die Bühne, auf der Readiness sichtbar wird.",
             "hint": "Muster: kubectl expose deployment <name> --port=<zahl>"
