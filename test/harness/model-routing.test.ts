@@ -396,6 +396,21 @@ describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
     assert.equal(explore.model, "haiku");
     assert.equal(explore.effort, "low", "Matrix §1: Explore haiku/low (auf Haiku ohne Wirkung, siehe docs/model-routing.md)");
     assert.ok(!agenten["explore"], "Ein klein geschriebener Name würde den Override still verfehlen");
+    assert.ok(
+      !/\b(Edit|Write|NotebookEdit)\b/.test(explore.tools ?? ""),
+      "Explore ist ein reiner Lese-Agent: `tools:` darf weder Edit noch Write enthalten.",
+    );
+  });
+
+  test("Agent-Namen unter .claude/agents sind eindeutig (sonst entscheidet die Lese-Reihenfolge)", () => {
+    const namen = readdirSync(`${REPO_ROOT}.claude/agents`)
+      .filter((f) => f.endsWith(".md"))
+      .map((f) => frontmatter(read(`.claude/agents/${f}`)).name);
+    assert.deepEqual(
+      namen.filter((n, i) => namen.indexOf(n) !== i),
+      [],
+      "Doppelter `name:` in .claude/agents",
+    );
   });
 });
 
