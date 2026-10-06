@@ -31,11 +31,12 @@
  *  - Rückfall auf die alte grobe Regel (Wortsuche "git" + "commit"/"push") gegen das Session-
  *    `cwd`, wenn der Lexer nicht zerlegen kann, und je Kommando als Sicherheitsnetz, wenn
  *    dessen Worttext sie trifft (`bash -c "git push"`, `timeout 5 …`); ausgenommen reine
- *    Text-Kommandos (gh, echo, printf, cat, git). Ziel ist, keine Fälle durchzulassen, die
- *    die alte Regel blockte; Restlücken: siehe unten.
- *  - Nicht erkannt: Aliase/Shell-Funktionen, `env -C`; `pushd`/`popd` und ein nicht
- *    verfolgbares `cd` setzen auf das Session-`cwd` zurück; `--git-dir`/`GIT_DIR` prüfen
- *    zusätzlich das Session-`cwd`; das PowerShell-Tool deckt der Hook nicht ab.
+ *    Text-Kommandos (gh, echo, printf, cat, git). Bewusst konservativ: im Zweifel blocken.
+ *  - Restlücken (nicht erkannt): Aliase/Shell-Funktionen, `env -C`, Interpreter mit Heredoc/Pipe
+ *    als Eingabe (`bash <<EOF`, `echo … | sh`), `git submodule foreach`/`rebase -x`, ein `cd`
+ *    hinter `then`/`{`/`builtin`, ein vorher exportiertes `GIT_DIR`; das PowerShell-Tool deckt
+ *    der Hook nicht ab. `pushd`/`popd`, ein nicht verfolgbares `cd` und `--git-dir`/`GIT_DIR`
+ *    wirken über das Session-`cwd` (zurücksetzen bzw. zusätzlich prüfen).
  *  - Fail-open bei Unsicherheit (kein cwd im Payload, cwd ist gar kein Git-Repo,
  *    cwd gehört zu einem anderen Repo): NICHT blocken — dieselbe "kein falsches
  *    Rot"-Philosophie wie check-diffsize.mjs bei fehlender Vergleichsbasis.
