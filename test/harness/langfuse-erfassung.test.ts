@@ -50,7 +50,9 @@ const CHECKLISTE = [
 const hatErfassungsRegel = (agentsMd: string): boolean => {
   const bullet = agentsMd.split("\n").find((z) => /Langfuse-Erfassung erhalten/.test(z)) ?? "";
   return (
+    /\bAgenten\b/.test(bullet) &&
     /Subagenten/.test(bullet) &&
+    /Probe-Lauf/.test(bullet) &&
     /MCP/.test(bullet) &&
     /Hooks/.test(bullet) &&
     /Plugins/.test(bullet) &&
@@ -71,8 +73,14 @@ const hatBelegAblauf = (modelRouting: string): boolean => {
 };
 
 /** Keine Doppelung: kein alter „Langfuse-Blick"-Abschnitt, die Checklistenpunkte nur in model-routing.md. */
-const hatKeineDoppelung = (modelRouting: string, ticketReihenfolge: string, agentsMd: string): boolean =>
+const hatKeineDoppelung = (
+  modelRouting: string,
+  ticketReihenfolge: string,
+  agentsMd: string,
+  umsetzer: string,
+): boolean =>
   !/^#+ Langfuse-Blick/m.test(modelRouting) &&
+  !/Langfuse-Blick/.test(umsetzer) &&
   !/Langfuse-Blick/.test(ticketReihenfolge) &&
   !/Langfuse-Blick/.test(agentsMd) &&
   !CHECKLISTE.slice(0, 3).every((p) => ticketReihenfolge.includes(`**${p}`));
@@ -90,9 +98,12 @@ const hatWiederkehrendesTicket = (ticketReihenfolge: string): boolean => {
 
 /** Das Sammelticket verweist nicht mehr auf eine Langfuse-Auswertung beim Abarbeiten. */
 const sammelticketOhneLangfuse = (ticketReihenfolge: string, agentsMd: string): boolean => {
-  const a = abschnitt(ticketReihenfolge, /^## Sammelticket/);
+  // Weder „Abarbeiten" des Sammeltickets noch der Harness-Befunde-Bullet nennen eine Langfuse-Auswertung
+  // (egal in welchem Wortlaut); die Ausnahme-Klausel zum Status-Ticket ist ausgenommen.
+  const abarbeiten = ticketReihenfolge.split("\n").find((z) => z.startsWith("- **Abarbeiten:**")) ?? "";
   const bullet = agentsMd.split("\n").find((z) => /Harness-Befunde sind Zeilen, keine Tickets/.test(z)) ?? "";
-  return a !== "" && bullet !== "" && !/Langfuse-Blick/.test(a + bullet);
+  const ohneAusnahme = bullet.split("**Ausnahme:**")[0];
+  return abarbeiten !== "" && ohneAusnahme !== "" && !/Langfuse/i.test(abarbeiten + ohneAusnahme);
 };
 
 /** Die Konfiguration, die die Erfassung trägt (statischer Erfassungsschutz). */
@@ -113,11 +124,18 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
   const agents = read("AGENTS.md");
   const mr = read("docs/model-routing.md");
   const tr = read("docs/ticket-reihenfolge.md");
+  const um = read(".claude/agents/kubernia-umsetzer.md");
 
   test("AGENTS.md: Erfassungsregel nennt Agenten, Subagenten, MCP, Hooks, Plugins und den Ablauf", () => {
     assert.ok(hatErfassungsRegel(agents));
     // darf NICHT passieren: Regel ohne eine der Änderungsarten oder ohne Link
-    assert.ok(!hatErfassungsRegel("- **Langfuse-Erfassung erhalten (#1293).** Subagenten, MCP, Hooks."));
+    const voll =
+      "- **Langfuse-Erfassung erhalten (#1293).** Agenten, Subagenten, MCP-Server, Hooks oder Plugins: Probe-Lauf, [Ablauf](docs/model-routing.md#langfuse-erfassung-belegen-1293).";
+    assert.ok(hatErfassungsRegel(voll));
+    // je Bedingung ein eigenes Gegenbeispiel
+    for (const weg of ["Agenten, ", "Subagenten, ", "MCP-Server, ", "Hooks", "Plugins", "Probe-Lauf", "#langfuse-erfassung-belegen-1293"]) {
+      assert.ok(!hatErfassungsRegel(voll.replace(weg, "")), `ohne ${weg}`);
+    }
     assert.ok(!hatErfassungsRegel(""));
   });
 
@@ -134,11 +152,12 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
   });
 
   test("keine Doppelung mit dem Sammelticket", () => {
-    assert.ok(hatKeineDoppelung(mr, tr, agents));
-    assert.ok(!hatKeineDoppelung(`${mr}\n### Langfuse-Blick beim Sammelticket`, tr, agents));
-    assert.ok(!hatKeineDoppelung(mr, `${tr}\nzuerst der Langfuse-Blick`, agents));
-    assert.ok(!hatKeineDoppelung(mr, tr, `${agents}\nLangfuse-Blick`));
-    assert.ok(!hatKeineDoppelung(mr, `${CHECKLISTE.slice(0, 3).map((p) => `**${p}:**`).join(" ")}`, agents));
+    assert.ok(hatKeineDoppelung(mr, tr, agents, um));
+    assert.ok(!hatKeineDoppelung(`${mr}\n### Langfuse-Blick beim Sammelticket`, tr, agents, um));
+    assert.ok(!hatKeineDoppelung(mr, `${tr}\nzuerst der Langfuse-Blick`, agents, um));
+    assert.ok(!hatKeineDoppelung(mr, tr, `${agents}\nLangfuse-Blick`, um));
+    assert.ok(!hatKeineDoppelung(mr, tr, agents, `${um}\nBeim Sammelticket den Langfuse-Blick machen`));
+    assert.ok(!hatKeineDoppelung(mr, `${CHECKLISTE.slice(0, 3).map((p) => `**${p}:**`).join(" ")}`, agents, um));
   });
 
   test("ticket-reihenfolge.md: wiederkehrendes Ticket auf Position 20, Folgen ganz oben", () => {
@@ -150,7 +169,10 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
 
   test("Sammelticket löst keine Langfuse-Auswertung aus", () => {
     assert.ok(sammelticketOhneLangfuse(tr, agents));
-    assert.ok(!sammelticketOhneLangfuse(`${tr.replace("## Sammelticket", "## Sammelticket\nLangfuse-Blick")}`, agents));
+    // darf NICHT passieren: die Auswertung kehrt in anderem Wortlaut zurück
+    assert.ok(!sammelticketOhneLangfuse(tr.replace("- **Abarbeiten:**", "- **Abarbeiten:** zuerst die Langfuse-Auswertung,"), agents));
+    assert.ok(!sammelticketOhneLangfuse(tr, agents.replace("Kommt es dran: abarbeiten", "Kommt es dran: zuerst Langfuse auswerten, abarbeiten")));
+    assert.ok(!sammelticketOhneLangfuse("", agents));
   });
 
   test("Erfassungs-Konfiguration in settings.json intakt", () => {
