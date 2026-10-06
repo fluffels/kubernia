@@ -11,6 +11,12 @@
 // Passt die lokale Installation dazu → lokal starten (schnell, offline). Sonst
 // `npx -y @playwright/mcp@<exakte Version>` – nie ungepinnt, nie @latest.
 // Alle übrigen Argumente gehen unverändert an den Server.
+//
+// Bekannte Grenzen (#1309, gemessen unter Windows: nach Beenden des Launchers blieben weder im lokalen
+// noch im npx-Modus Prozesse zurück, darum keine Kill-/Retry-Logik): Im npx-Modus werden transitive
+// Abhängigkeiten frisch aufgelöst statt aus dem Lockfile, und mehrere Sessions, die nach einem Bump
+// gleichzeitig erstmals starten, können sich im `_npx`-Cache in die Quere kommen (ENOTEMPTY). Abhilfe:
+// im Haupt-Checkout einmal `npm ci`, dann startet der Server lokal.
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";

@@ -317,3 +317,57 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
     assert.ok(result.reason?.includes("kq-862"), `Name fehlt: ${result.reason}`);
   });
 });
+
+// ── SubagentStop + Ausgabeformat (#1309) ──────────────────────────────────────
+
+type HookErgebnis = { exit: number; stdout: string; stderr: string };
+type RunHook = (stdin: string, root: string, check?: (r: string) => { blocked: boolean; reason?: string }) => HookErgebnis;
+const runHook = (hook as unknown as { runHook: RunHook }).runHook;
+const geblockt = () => ({ blocked: true, reason: "Waise kq-1" });
+const frei = () => ({ blocked: false });
+
+describe("runHook – Ausgabe bei Block und Freigabe (#1309)", () => {
+  test("blockiert: decision+reason auf stdout, Grund auf stderr, Exit 2", () => {
+    const r = runHook("{}", "/x", geblockt);
+    assert.equal(r.exit, 2);
+    assert.deepEqual(JSON.parse(r.stdout), { decision: "block", reason: "Waise kq-1" });
+    assert.equal(r.stderr, "Waise kq-1");
+  });
+
+  test("nicht blockiert: Exit 0 und keine Ausgabe", () => {
+    assert.deepEqual(runHook("{}", "/x", frei), { exit: 0, stdout: "", stderr: "" });
+  });
+
+  test("SubagentStop-Payload mit stop_hook_active:true gibt frei, auch wenn geblockt würde (kein Endlos-Block)", () => {
+    const payload = JSON.stringify({ hook_event_name: "SubagentStop", agent_type: "kubernia-umsetzer", stop_hook_active: true });
+    assert.deepEqual(runHook(payload, "/x", geblockt), { exit: 0, stdout: "", stderr: "" });
+    const ohne = JSON.stringify({ hook_event_name: "SubagentStop", agent_type: "kubernia-umsetzer", stop_hook_active: false });
+    assert.equal(runHook(ohne, "/x", geblockt).exit, 2, "ohne stop_hook_active blockt derselbe Hook");
+  });
+
+  test("kaputtes stdin-JSON blockt nicht pauschal frei, sondern prüft", () => {
+    assert.equal(runHook("{kaputt", "/x", geblockt).exit, 2);
+  });
+});
+
+describe("settings.json hängt den Hook auch an das Ende des Umsetzers (#1309)", () => {
+  test("SubagentStop mit Matcher kubernia-umsetzer startet stop-verify-hook.mjs", async () => {
+    const { readFileSync } = await import("node:fs");
+    const s = JSON.parse(readFileSync(fileURLToPath(new URL("../../.claude/settings.json", import.meta.url)), "utf8")) as {
+      hooks: Record<string, { matcher?: string; hooks: { command: string; args: string[] }[] }[]>;
+    };
+    const eintrag = s.hooks.SubagentStop?.find((e) => e.matcher === "kubernia-umsetzer");
+    assert.ok(eintrag, "hooks.SubagentStop mit matcher kubernia-umsetzer fehlt");
+    assert.ok(eintrag.hooks.some((h) => h.args.some((a) => a.endsWith("scripts/stop-verify-hook.mjs"))));
+    assert.ok(s.hooks.Stop?.some((e) => e.hooks.some((h) => h.args.some((a) => a.endsWith("scripts/stop-verify-hook.mjs")))), "der Stop-Hook des Hauptchats bleibt");
+  });
+
+  test("Umsetzer und Skill sagen, was bei einer Blockade zu tun ist", async () => {
+    const { readFileSync } = await import("node:fs");
+    const lies = (p: string) => readFileSync(fileURLToPath(new URL(`../../${p}`, import.meta.url)), "utf8");
+    assert.match(lies(".claude/agents/kubernia-umsetzer.md"), /SubagentStop-Hook/);
+    assert.match(lies(".claude/skills/kubernia/SKILL.md"), /cleanup-worktrees\.mjs --fix/);
+    assert.match(lies(".claude/skills/kubernia/SKILL.md"), /git diff --quiet HEAD origin\/main -- \.claude\/agents \.claude\/skills/);
+    assert.match(lies(".claude/skills/review-lenses/SKILL.md"), /Agent type 'kubernia-lens' not found/);
+  });
+});

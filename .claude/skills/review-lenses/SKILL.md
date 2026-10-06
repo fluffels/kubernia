@@ -78,6 +78,8 @@ Agent({
 })
 ```
 
+Kennt das Agent-Tool `kubernia-lens` nicht („Agent type 'kubernia-lens' not found“, eine Session, die vor dem Anlegen der Definition gestartet wurde): einmal mit `general-purpose` und `model: "opus"` spawnen, der Prompt beginnt „Lies zuerst `.claude/agents/kubernia-lens.md` im Worktree und befolge deren Rumpf“, und der Bericht vermerkt den Fallback.
+
 ⚠️ **Die Lenses lesen, sie schreiben nicht — mit genau einer Ausnahme.** Parallele Subagenten teilen sich **einen** Worktree. Fährt einer Sabotage-Proben (die Red-Green-Prüfung der Test-Lens, s.o.) oder „hilft" mit einem Edit, prüfen die anderen gegen eine veränderte Basis und melden Findings, die gegen den echten Stand nicht reproduzierbar sind — beim Einführungs-PR dieses Umbaus (#1035) genau so passiert. Darum: **jeder Lens-Prompt sagt ausdrücklich „du liest nur, du änderst nichts"**, und die **Sabotage-Proben der Test-Lens laufen als letzte bzw. allein** — danach `git status --porcelain` als leer belegen. (Der Workflow hat das Problem nicht: dort sind die Lenses schema-gebunden und ändern nichts.)
 
 ⚠️ **Die Blöcke wörtlich in den Prompt kopieren, nicht referenzieren.** Ein `kubernia-lens`-Subagent liest diese Datei **nicht** — „die Brille unten", „Kontext-Diät oben" oder „Format wie im Skill" sind für ihn leer, und die #1034-Diät fiele still weg. Der Workflow löst dasselbe durch Interpolation (`${KONTEXT_DIAET}`, `lens.auftrag` — bewacht von `test/harness/review-context.test.ts`); auf diesem Pfad ist es Handarbeit des Orchestrators.

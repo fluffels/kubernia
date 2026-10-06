@@ -19,8 +19,7 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { runInNewContext } from "node:vm";
-import { blockFunktion, workflowBlock } from "./workflow-block";
+import { blockFunktion, workflowAusfuehren, workflowBlock } from "./workflow-block";
 
 type Bericht = { lens: string; verdikt: string; findings: { schwere: string; befund?: string; ort?: string; begruendung?: string }[]; ausserhalbScope?: string[] };
 type Vorrunde = { erwartet?: string[]; berichte?: Bericht[]; deltaPfad?: string; deltaDateien?: string[] };
@@ -143,15 +142,17 @@ type Szenario = {
   /** Lens-Berichte je Runde, Schlüssel = Lens-Key. Fehlt eine Lens, liefert der Stub null. */
   runden: Record<string, Bericht | null>[];
   nachbessern?: { deltaPfad?: string; deltaDateien?: string[] };
+  /** Ergebnisse je Lens-Key nach Aufruf-Reihenfolge (Ausfall, dann Erfolg); ersetzt `runden` für diese Lens. */
+  versuche?: Record<string, (Bericht | null)[]>;
 };
 
 const WORKFLOW = fileURLToPath(new URL("../../.claude/workflows/kubernia-ticket.js", import.meta.url));
 
 async function lauf(s: Szenario) {
-  const quelle = readFileSync(WORKFLOW, "utf8").replace("export const meta", "const meta");
   const aufrufe: Aufruf[] = [];
   let runde = 0;
   let head = 1;
+  const versuch: Record<string, number> = {};
   const diff = () => ({ diffPfad: `/tmp/kq-42-r${runde + 1}.patch`, diffStat: "stat", diffHead: `h${head}`, diffDateien: s.dateien });
   const agent = (prompt: string, o: { label: string; agentType?: string; effort?: string }) => {
     aufrufe.push({ prompt, label: o.label, agentType: o.agentType, effort: o.effort });
@@ -162,6 +163,8 @@ async function lauf(s: Szenario) {
     if (l.startsWith("umsetzen:")) return Promise.resolve({ ergebnis: "committet", verifyGruen: true, worktree: "/w", branch: "b", zusammenfassung: "z", ...diff() });
     if (l.startsWith("lens:")) {
       const key = l.slice("lens:".length).split(":")[0];
+      const folge = s.versuche?.[key];
+      if (folge) return Promise.resolve(folge[Math.min(versuch[key] = (versuch[key] ?? -1) + 1, folge.length - 1)]);
       const b = s.runden[runde]?.[key];
       return Promise.resolve(b === undefined ? ok(key) : b);
     }
@@ -176,13 +179,12 @@ async function lauf(s: Szenario) {
     return Promise.reject(new Error(`Stub kennt das Label "${l}" nicht`));
   };
   const parallel = (thunks: (() => Promise<unknown>)[]) => Promise.all(thunks.map((t) => t()));
-  const kontext = { agent, parallel, phase: () => undefined, log: () => undefined, args: undefined };
-  const endstand = (await runInNewContext(`(async () => {\n${quelle}\nreturn endstand\n})()`, kontext)) as {
+  const endstand = await workflowAusfuehren<{
     ergebnis: string;
     review?: { lens: string; verdikt: string }[];
     ausserhalbScope?: string[];
     hinweiseOffen?: number;
-  };
+  }>(agent, { parallel });
   return { aufrufe, lenses: aufrufe.filter((a) => a.label.startsWith("lens:")), endstand: JSON.parse(JSON.stringify(endstand)) as typeof endstand };
 }
 
@@ -250,7 +252,41 @@ describe("Workflow verdrahtet die Staffel (#1265)", () => {
       runden: [{ architektur: blockiert("architektur"), "test-adaequanz": null }, {}],
       nachbessern: { deltaPfad: "/tmp/d.patch", deltaDateien: ["docs/a.md"] },
     });
-    assert.deepEqual(lenses.slice(3).map((a) => a.label), ["lens:architektur:r2", "lens:requirement-treue:r2", "lens:test-adaequanz:r2"]);
+    // Der Ausfall wird in Runde 1 einmal nachgeholt (#1309): Index 3 ist der zweite Versuch.
+    assert.deepEqual(lenses.slice(4).map((a) => a.label), ["lens:architektur:r2", "lens:requirement-treue:r2", "lens:test-adaequanz:r2"]);
+  });
+});
+
+describe("Lens-Ausfall gilt als nicht konvergiert (#1309)", () => {
+  const ausfallDann = (...folge: (Bericht | null)[]) => ({ "test-adaequanz": folge });
+
+  test("einmal ausgefallen, beim Nachholen ok: genau ein zweiter Versuch, PR läuft, Nachweis nennt drei Brillen", async () => {
+    const { lenses, aufrufe, endstand } = await lauf({ dateien: ["src/a.ts"], runden: [{}], versuche: ausfallDann(null, ok("test-adaequanz")) });
+    assert.deepEqual(lenses.map((a) => a.label), ["lens:architektur:r1", "lens:requirement-treue:r1", "lens:test-adaequanz:r1", "lens:test-adaequanz:r1"]);
+    assert.equal(endstand.ergebnis, "fertig");
+    const pr = aufrufe.find((a) => a.label.startsWith("pr+merge"));
+    assert.ok(pr, "pr+merge muss laufen");
+    assert.match(pr.prompt, /KQ-Review: head=h1 runden=1 lenses=architektur,requirement-treue,test-adaequanz verdikt=ok/);
+  });
+
+  test("zweimal ausgefallen, keine Blocker: Hand-off statt PR", async () => {
+    const { aufrufe, endstand } = await lauf({ dateien: ["src/a.ts"], runden: [{}], versuche: ausfallDann(null, null) });
+    assert.equal(endstand.ergebnis, "review-festgefahren");
+    assert.ok(!aufrufe.some((a) => a.label.startsWith("pr+merge")), "kein PR mit ungeprüfter Brille");
+    assert.ok(!aufrufe.some((a) => a.label.startsWith("nachbessern")), "keine leere Fix-Runde");
+    const hand = aufrufe.find((a) => a.label.startsWith("review-festgefahren"));
+    assert.match(hand?.prompt ?? "", /Lens test-adaequanz lieferte zweimal kein Ergebnis \(ungeprüft\)/);
+  });
+
+  test("Ausfall plus Blocker einer anderen Brille: normal nachbessern, nächste Runde voll", async () => {
+    const { lenses, endstand } = await lauf({
+      dateien: ["src/a.ts"],
+      runden: [{ architektur: blockiert("architektur") }, {}],
+      versuche: ausfallDann(null, null, ok("test-adaequanz")),
+      nachbessern: { deltaPfad: "/tmp/d.patch", deltaDateien: ["docs/a.md"] },
+    });
+    assert.deepEqual(lenses.slice(4).map((a) => a.label), ["lens:architektur:r2", "lens:requirement-treue:r2", "lens:test-adaequanz:r2"]);
+    assert.equal(endstand.ergebnis, "fertig");
   });
 });
 

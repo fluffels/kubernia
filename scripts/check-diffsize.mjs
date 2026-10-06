@@ -51,6 +51,7 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis } from "./slice-override.mjs";
 import { pathToFileURL } from "node:url";
 
 /** Budget für EINE Änderung. Kalibriert an echten kubequest-Tickets: die letzten
@@ -132,40 +133,6 @@ export function evaluate({ fileCount, changedLines }, { maxFiles, maxLines }) {
 /** Schlüssel des Override-Trailers für dieses Gate (#1269). */
 export const OVERRIDE_KEY = "KQ-Diffsize-Override";
 
-/** Sucht Zeilen `<key>: <wert>` am ZEILENANFANG (nicht eingerückt, nicht in Prosa) in
- *  beliebigem Message-Text. Bewusst kein git-Trailer-Parser: im Squash-Body steht die
- *  Zeile mitten im Text, gefolgt von weiteren `* commit`-Absätzen. Gültig ist ein Wert nur
- *  mit Ticketnummer UND Begründung (`#<nr> <warum>`, Pflicht-Begründung), sonst landet die
- *  Zeile in `invalid`. `key` ist eine feste Konstante ohne Regex-Sonderzeichen. Pure, auch
- *  von check-diffcoverage.mjs mit eigenem Schlüssel genutzt. */
-export function parseOverrideTrailers(text, key) {
-  const valid = [];
-  const invalid = [];
-  const re = new RegExp(`^${key}:[ \\t]*(.*)$`, "gm");
-  for (const m of String(text).replace(/\r/g, "").matchAll(re)) {
-    const value = m[1].trim();
-    const ok = /^#(\d+)\s+\S/.exec(value);
-    if (ok) valid.push({ nr: Number(ok[1]), reason: value });
-    else invalid.push(m[0].trim());
-  }
-  return { valid, invalid };
-}
-
-/** Override für `key` aus den Commit-Messages des Slices (`<basis>..HEAD`, dieselbe Basis
- *  wie der Diff, damit kein fremder main-Commit einen Trailer einschleppt). Die letzte
- *  gültige Zeile zählt. Scheitert git, gibt es keinen Override (fail-closed: ein Slice
- *  über Budget bleibt dann rot). */
-export function sliceOverride(runGit, base, key) {
-  let messages;
-  try {
-    messages = runGit(["log", "--format=%B", `${base}..HEAD`]);
-  } catch {
-    messages = "";
-  }
-  const { valid, invalid } = parseOverrideTrailers(messages, key);
-  return { reason: valid.length > 0 ? valid[valid.length - 1].reason : null, invalid };
-}
-
 /** Löst die Vergleichs-Basis auf (Commit, gegen den der Diff gemessen wird).
  *  Reihenfolge: explizites KQ_DIFF_BASE → Merge-Base gegen origin/main → gegen
  *  main. origin/main ZUERST, weil im pre-push-Hook HEAD == main ist und nur
@@ -197,7 +164,9 @@ export function checkDiffSize({ runGit, env = process.env } = {}) {
   const thresholds = readThresholds(env);
   const base = resolveBase(git, env);
 
-  // Keine Basis (flacher Checkout / origin/main == HEAD) → bewusst No-op-grün.
+  // Keine Basis (flacher Checkout / origin/main == HEAD) → bewusst No-op-grün. Hier gibt es kein
+  // Stale-Urteil über einen Override-Trailer: ohne Slice ist nicht entscheidbar, ob er gebraucht wird
+  // (anders als check:diffcoverage, das bei „nichts zu messen" sicher weiß, dass nichts zu durchlassen ist).
   if (!base) {
     return { skipped: true, base: null, ...thresholds, fileCount: 0, changedLines: 0 };
   }
@@ -284,17 +253,10 @@ function main() {
       dim(`• KQ_DIFFSIZE_OVERRIDE wird nicht mehr ausgewertet (kam in der PR-CI nie an) — Commit-Trailer nutzen, s.u.`),
     );
   }
-  for (const line of r.invalidOverrides) {
-    console.log(dim(`• ungültige Override-Zeile ignoriert (braucht "#<nr> <warum>"): ${line}`));
-  }
+  meldeUngueltigeOverrides(r.invalidOverrides, { dim });
 
   if (r.stale) {
-    console.error(
-      red(
-        `✖ ${OVERRIDE_KEY} steht im Slice, aber der Diff liegt im Budget (${measured} ≤ ${budget}).\n` +
-          `  Das Override ist stale — den Override-Commit wieder aus dem Branch entfernen.`,
-      ),
-    );
+    console.error(red(staleOverrideHinweis(OVERRIDE_KEY, `der Diff liegt im Budget (${measured} ≤ ${budget})`)));
     process.exit(1);
   }
 

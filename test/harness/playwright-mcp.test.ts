@@ -16,9 +16,10 @@
  *
  * Ausführen mit:  npm test
  */
-import { describe, test } from "vitest";
+import { afterAll, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/cleanup-worktrees.mjs).
@@ -37,6 +38,12 @@ type LauncherModule = {
 const launcher = launcherModule as unknown as LauncherModule;
 
 const root = join(import.meta.dirname, "..", "..");
+
+// Die Temp-Ordner der Fixtures und des Handshakes liegen sonst je Lauf herum (#1309): am Ende alle löschen.
+const angelegt: string[] = [];
+afterAll(() => {
+  for (const d of angelegt) rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+});
 const readJson = (rel: string): unknown => JSON.parse(readFileSync(join(root, rel), "utf8"));
 
 describe("planLaunch – Startentscheidung des Launchers", () => {
@@ -65,6 +72,7 @@ describe("readInstalled/readLockVersion – Dateizugriff liefert null/undefined 
   // Startentscheidung abstürzte und der Server still fehlte.
   const fixture = (files: Record<string, string>): string => {
     const dir = mkdtempSync(join(tmpdir(), "kq-pwmcp-"));
+    angelegt.push(dir);
     for (const [rel, content] of Object.entries(files)) {
       mkdirSync(dirname(join(dir, rel)), { recursive: true });
       writeFileSync(join(dir, rel), content);
@@ -137,6 +145,24 @@ describe("Verdrahtung im Repo", () => {
     );
   });
 
+  test("Netz-Ausgang begrenzt (#1309): --allowed-origins nur auf localhost und 127.0.0.1", () => {
+    const cfg = readJson(".mcp.json") as { mcpServers: Record<string, { args: string[] }> };
+    const args = cfg.mcpServers.playwright.args;
+    const i = args.indexOf("--allowed-origins");
+    assert.ok(i >= 0 && args[i + 1], "--allowed-origins mit Wert fehlt in .mcp.json: der Browser dürfte jede Adresse ohne Rückfrage laden");
+    const origins = args[i + 1].split(";").filter(Boolean);
+    assert.deepEqual(origins, ["http://localhost:*", "http://127.0.0.1:*"]);
+    assert.ok(origins.every((o) => /^http:\/\/(localhost|127\.0\.0\.1):\*$/.test(o)), "nur lokale Origins, keine Platzhalter-Hosts");
+  });
+
+  test("das Spiel lädt keine externen Origins (sonst bräche --allowed-origins die Verifikation)", () => {
+    // Eingebettete Ressourcen von fremden Hosts (Skripte, Stylesheets, Bilder, Fonts) wären im Browser geblockt.
+    const html = readFileSync(join(root, "index.html"), "utf8");
+    const extern = [...html.matchAll(/\b(?:src|href)\s*=\s*["'](https?:\/\/[^"']+)["']/g)].map((m) => m[1]);
+    const nurLinks = extern.filter((u) => !/^https:\/\/github\.com\//.test(u));
+    assert.deepEqual(nurLinks, [], "index.html bettet externe Ressourcen ein");
+  });
+
   test("das Ausgabeverzeichnis des Servers ist gitignored", () => {
     const cfg = readJson(".mcp.json") as { mcpServers: Record<string, { args: string[] }> };
     const args = cfg.mcpServers.playwright.args;
@@ -146,4 +172,61 @@ describe("Verdrahtung im Repo", () => {
     const ignore = readFileSync(join(root, ".gitignore"), "utf8").split(/\r?\n/);
     assert.ok(ignore.includes(`${outDir}/`), `${outDir}/ fehlt in .gitignore`);
   });
+});
+
+describe("tools/list-Handshake ohne Browser (#1309)", () => {
+  /** Startet den Launcher mit den Args aus .mcp.json, spricht initialize + tools/list und beendet ihn. */
+  const toolNamen = (): Promise<string[]> =>
+    new Promise((resolve, reject) => {
+      const cfg = readJson(".mcp.json") as { mcpServers: Record<string, { args: string[] }> };
+      const args = cfg.mcpServers.playwright.args.map((a) => (a === "scripts/playwright-mcp.mjs" ? join(root, a) : a));
+      const cwd = mkdtempSync(join(tmpdir(), "kq-pwmcp-hs-"));
+      angelegt.push(cwd);
+      const child = spawn(process.execPath, args, { cwd, stdio: ["pipe", "pipe", "ignore"] });
+      const timer = setTimeout(() => {
+        child.kill();
+        reject(new Error("tools/list-Handshake nach 30 s ohne Antwort"));
+      }, 30_000);
+      let buf = "";
+      const senden = (o: object) => child.stdin.write(JSON.stringify({ jsonrpc: "2.0", ...o }) + "\n");
+      child.stdout.on("data", (d: Buffer) => {
+        buf += d.toString();
+        for (const zeile of buf.split("\n").slice(0, -1)) {
+          try {
+            const o = JSON.parse(zeile) as { id?: number; result?: { tools?: { name: string }[] } };
+            if (o.id === 1) {
+              senden({ method: "notifications/initialized" });
+              senden({ id: 2, method: "tools/list", params: {} });
+            }
+            if (o.id === 2) {
+              clearTimeout(timer);
+              resolve((o.result?.tools ?? []).map((t) => t.name));
+              child.kill(); // Aufräumen des Ordners übernimmt afterAll (Windows hält ihn kurz offen)
+            }
+          } catch {
+            /* unvollständige Zeile */
+          }
+        }
+        buf = buf.slice(buf.lastIndexOf("\n") + 1);
+      });
+      child.on("error", reject);
+      senden({ id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "wachter", version: "1" } } });
+    });
+
+  test("der Server nennt die Tools der FAQ und jedes mcp__playwright__-Tool der Umsetzer-Whitelist", async () => {
+    const namen = new Set(await toolNamen());
+    const faq = ["browser_evaluate", "browser_take_screenshot", "browser_press_key", "browser_start_video"];
+    const umsetzer = readFileSync(join(root, ".claude/agents/kubernia-umsetzer.md"), "utf8");
+    const tools = /^tools:\s*(.+)$/m.exec(umsetzer)?.[1] ?? "";
+    const whitelist = tools.split(",").map((t) => t.trim()).filter((t) => t.startsWith("mcp__playwright__")).map((t) => t.slice("mcp__playwright__".length));
+    assert.ok(whitelist.length >= 10, "Whitelist des Umsetzers enthält keine Playwright-Tools mehr?");
+    const fehlt = [...faq, ...whitelist].filter((n) => !namen.has(n));
+    assert.deepEqual(fehlt, [], "Der Server kennt diese Tools nicht mehr (Umbenennung bei einem Dependabot-Bump?): die Whitelist fiele still aus");
+  }, 60_000);
+
+  test("Erkennung greift (Red-Green): ein erfundener Tool-Name fehlt im Server", async () => {
+    const namen = new Set(await toolNamen());
+    assert.ok(!namen.has("browser_gibt_es_nicht_1309"), "ein erfundener Name darf nicht vorkommen");
+    assert.ok(namen.has("browser_navigate"));
+  }, 60_000);
 });

@@ -67,11 +67,14 @@ const m = baselineModule as {
   callsFromLangfuse: (obs: Obs[]) => Run & { questions: number };
   countFailedPushes: (runs: { head_sha: string }[] | undefined) => number;
   mergedWithoutRework: (mergedAt: string | null | undefined, failedPushes: number) => boolean;
-  renderMarkdown: (s: Summary, loop?: { failedPushes?: number; mergedAt?: string | null }) => string;
+  renderMarkdown: (s: Summary, loop?: { failedPushes?: number; mergedAt?: string | null; nachweis?: { runden: number; plan: boolean | null } | null }) => string;
   priceCall: (c: Call, prices?: unknown) => number | null;
   priceParts: (c: Call, prices?: unknown) => Parts | null;
   windowCalls: (calls: Call[], bounds?: Bounds) => { call: Call; phase: string }[];
   PRICES_STAND: string;
+  periodAt: (entry: unknown, ts?: string) => Record<string, unknown> | null;
+  countCacheRebuilds: (calls: Call[]) => { count: number; cacheWriteTokens: number };
+  nachweisAusCommits: (commits: unknown) => { runden: number; plan: boolean | null } | null;
   parseArgs: (argv: string[]) => { sessions: string[]; issue?: string; pr?: string; from?: string; json: boolean; langfuse: boolean };
   fetchSessionObservations: (
     sessionId: string,
@@ -764,5 +767,83 @@ describe("token-baseline: eine Preisquelle, Preisperioden, Fensterfilter (#1239)
     assert.deepEqual(w.map((x) => x.call), [drin, nach]);
     assert.equal(w[1].phase, "Nachlauf");
     assert.notEqual(w[0].phase, "Nachlauf");
+  });
+});
+
+describe("token-baseline: Nachweis, Zeitpunkt, Cache-Neuaufbau (#1309)", () => {
+  const SHA = "a".repeat(40);
+  const nachweisCommit = (plan = "KQ-Plan: kubernia-planner", runden = 2) => ({
+    messageHeadline: "chore: Nachweis",
+    messageBody: `${plan}\nKQ-Review: head=${SHA} runden=${runden} lenses=architektur,requirement-treue,test-adaequanz verdikt=ok`,
+  });
+
+  test("nachweisAusCommits: Runden und Planer aus den Commit-Zeilen; ohne KQ-Review null", () => {
+    assert.deepEqual(m.nachweisAusCommits([{ messageHeadline: "feat: x", messageBody: "" }, nachweisCommit()]), { runden: 2, plan: true });
+    assert.deepEqual(m.nachweisAusCommits([nachweisCommit("KQ-Plan: ohne — Planer lieferte keinen Plan", 3)]), { runden: 3, plan: false });
+    assert.equal(m.nachweisAusCommits([{ messageHeadline: "feat: x", messageBody: "kein Nachweis" }]), null);
+    assert.equal(m.nachweisAusCommits(undefined), null, "kaputte Eingabe wirft nicht");
+    assert.equal(m.nachweisAusCommits([{ messageHeadline: "x", messageBody: "KQ-Review: head=kaputt runden=viele" }]), null, "kaputte Rundenzahl ist kein Nachweis");
+  });
+
+  test("renderMarkdown: Nachweis ersetzt die Heuristik und nennt den Planer; ohne Nachweis steht Heuristik", () => {
+    const s = m.summarize({ calls: [call("2026-09-29T10:00:00Z", 1)] });
+    assert.match(m.renderMarkdown(s), /Review-Runden: 0 \(Heuristik\)/);
+    const md = m.renderMarkdown(s, { failedPushes: 0, mergedAt: "x", nachweis: { runden: 2, plan: true } });
+    assert.match(md, /Review-Runden: 2 \(Nachweis\)/);
+    assert.match(md, /Planer: ja \(KQ-Plan\)/);
+    assert.match(m.renderMarkdown(s, { nachweis: { runden: 1, plan: false } }), /Planer: nein \(KQ-Plan\)/);
+    assert.doesNotMatch(m.renderMarkdown(s, { nachweis: { runden: 1, plan: null } }), /Planer:/);
+  });
+
+  test("periodAt: fehlender oder ungültiger Zeitpunkt bei Periodenliste → null, gültiger → richtige Periode", () => {
+    const alt = { input: 1 };
+    const neu = { input: 2 };
+    const liste = [{ validFrom: null, ...alt }, { validFrom: "2026-11-01T00:00:00Z", ...neu }];
+    assert.equal(m.periodAt(liste, undefined), null);
+    assert.equal(m.periodAt(liste, ""), null);
+    assert.equal(m.periodAt(liste, "kein-datum"), null);
+    assert.equal(m.periodAt(liste, "2026-10-01T00:00:00Z")?.input, 1);
+    assert.equal(m.periodAt(liste, "2026-11-02T00:00:00Z")?.input, 2);
+    assert.equal(m.periodAt(alt, undefined)?.input, 1, "ein Einzelobjekt gilt immer, auch ohne Zeitpunkt");
+  });
+
+  test("priceCall: Call ohne gültiges ts bei Perioden-Tabelle ist ohne Preis; die Meldung nennt den Zeitpunkt", () => {
+    const p = { input: 1, cacheWrite5m: 1, cacheWrite1h: 1, cacheRead: 1, output: 1 };
+    const prices = { "claude-x": [{ validFrom: null, ...p }, { validFrom: "2026-11-01T00:00:00Z", ...p, input: 2 }] };
+    const ohneTs = { ts: "", model: "claude-x", input: 1_000_000, cacheWrite: 0, cacheRead: 0, output: 0 };
+    assert.equal(m.priceCall(ohneTs, prices), null);
+    assert.equal(m.priceCall({ ...ohneTs, ts: "2026-10-01T00:00:00Z" }, prices), 1);
+    const md = m.renderMarkdown(m.summarize({ calls: [{ ...ohneTs, cost: null }] }));
+    assert.match(md, /Zeitpunkt fehlt/);
+  });
+
+  const lauf = (ts: string, extra: Partial<Call> = {}): Call => ({ ts, model: "claude-sonnet-5-5", input: 10, cacheWrite: 0, cacheRead: 1000, output: 1, ...extra });
+  const umsetzer = { id: "u1", agentType: "kubernia-umsetzer" };
+
+  test("countCacheRebuilds: ohne Pause kein Neuaufbau; Pause + Neuaufbau zählt; Pause + warmer Cache zählt nicht", () => {
+    const ohnePause = [lauf("2026-10-05T10:00:00Z", { subagent: umsetzer }), lauf("2026-10-05T10:02:00Z", { subagent: umsetzer, cacheRead: 0, cacheWrite: 900 })];
+    assert.deepEqual(m.countCacheRebuilds(ohnePause), { count: 0, cacheWriteTokens: 0 }, "unter 5 Minuten: Cache lebt noch");
+    const neuaufbau = [lauf("2026-10-05T10:00:00Z", { subagent: umsetzer }), lauf("2026-10-05T10:09:00Z", { subagent: umsetzer, cacheRead: 100, cacheWrite: 900 })];
+    assert.deepEqual(m.countCacheRebuilds(neuaufbau), { count: 1, cacheWriteTokens: 900 });
+    const warm = [lauf("2026-10-05T10:00:00Z", { subagent: umsetzer }), lauf("2026-10-05T10:09:00Z", { subagent: umsetzer, cacheRead: 900, cacheWrite: 50 })];
+    assert.deepEqual(m.countCacheRebuilds(warm), { count: 0, cacheWriteTokens: 0 }, "Pause, aber der Cache wurde gelesen (1h-TTL oder Nachtreffer)");
+  });
+
+  test("countCacheRebuilds: je Konversation getrennt, Hauptagent erst ab 60 Minuten Pause, unsortiert ok", () => {
+    const haupt = [lauf("2026-10-05T10:00:00Z"), lauf("2026-10-05T10:30:00Z", { cacheRead: 0, cacheWrite: 500 })];
+    assert.equal(m.countCacheRebuilds(haupt).count, 0, "30 min < 60 min (1h-TTL des Hauptchats)");
+    const hauptLang = [lauf("2026-10-05T10:00:00Z"), lauf("2026-10-05T11:30:00Z", { cacheRead: 0, cacheWrite: 500 })];
+    assert.equal(m.countCacheRebuilds(hauptLang).count, 1);
+    const gemischt = [
+      lauf("2026-10-05T10:09:00Z", { subagent: umsetzer, cacheRead: 0, cacheWrite: 900 }),
+      lauf("2026-10-05T10:00:00Z", { subagent: umsetzer }),
+      lauf("2026-10-05T10:04:30Z", { subagent: { id: "u2", agentType: "kubernia-lens" } }),
+    ];
+    assert.equal(m.countCacheRebuilds(gemischt).count, 1, "ein anderer Subagent dazwischen verdeckt die Pause nicht (zusammengelegt wären beide Lücken unter 5 min)");
+  });
+
+  test("renderMarkdown nennt die Cache-Neuaufbauten", () => {
+    const calls = [lauf("2026-10-05T10:00:00Z", { subagent: umsetzer }), lauf("2026-10-05T10:09:00Z", { subagent: umsetzer, cacheRead: 0, cacheWrite: 900 })];
+    assert.match(m.renderMarkdown(m.summarize({ calls })), /Cache-Neuaufbauten: 1 \(≈ 900 Tokens Cache-Write\)/);
   });
 });
