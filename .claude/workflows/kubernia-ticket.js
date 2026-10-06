@@ -39,7 +39,7 @@ export const meta = {
 //     Top-Level-`return` als PARSE-Fehler — und den unterdrückt kein
 //     eslint-disable. Die frühen Ausstiege brauchen aber `return`, also steht
 //     der Ablauf in ticketAbarbeiten() und wird unten per Top-Level-await
-//     gerufen. So bleibt eslint.config.js unangetastet (Goodhart-Guard).
+//     gerufen. So bleibt eslint.config.js unangetastet (§ Kein Grün-durch-Aufweichen).
 // ──────────────────────────────────────────────────────────────────────────────
 
 /* global agent, parallel, phase, log, args */
@@ -114,7 +114,7 @@ const UMSETZUNG_SCHEMA = {
     beruehrtHarness: {
       type: 'boolean',
       description:
-        'true, wenn git diff --name-only origin/main...HEAD einen Harness-/Gate-Pfad trifft (#1069: dann maintainer-approved selbst setzen + Audit-Kommentar nach dem Merge)',
+        'true, wenn git diff --name-only origin/main...HEAD einen Harness-/Gate-Pfad trifft (#1069: dann Audit-Kommentar nach dem Merge)',
     },
     browserVerifiziert: {
       type: 'string',
@@ -777,16 +777,15 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
 
 Gates: npm run verify muss grün sein (Exit 0). Läuft es rot und du kannst es nicht
 beheben, gib verifyGruen=false mit der Fehlerausgabe zurück statt es zu verschleiern
-oder ein Gate abzuschwächen (AGENTS.md § Kein Grün-durch-Aufweichen, § Goodhart-Guard).
+oder ein Gate abzuschwächen (AGENTS.md § Kein Grün-durch-Aufweichen).
 Sichtbare Änderungen zusätzlich im Browser verifizieren.
 
 Committe mit (#${nr}) in der Nachricht. Gib Branch und absoluten Worktree-Pfad zurück.
 
 Setze beruehrtHarness=true, wenn git diff --name-only origin/main...HEAD einen Harness-/Gate-Pfad
 trifft — maßgeblich ist die Liste in .github/protected-paths.json (#1157; lies sie, die Sandbox dieses
-Skripts kann es nicht; Substring-Match nach führendem '/' und ab dem ersten '*' abgeschnitten, wie
-der gate-change-guard) — dann setzt die Merge-Phase maintainer-approved selbst und
-hinterlässt nach dem Merge einen Audit-Kommentar (#1069). Drei-Punkt gegen origin/main aus
+Skripts kann es nicht; Substring-Match nach führendem '/' und ab dem ersten '*' abgeschnitten) —
+dann hinterlässt die Merge-Phase nach dem Merge einen Audit-Kommentar (#1069). Drei-Punkt gegen origin/main aus
 demselben Grund wie beim Patch unten: gegen ein lokal veraltetes main klassifizierte die
 Merge-Phase anhand fremder Dateien.
 
@@ -1079,20 +1078,15 @@ Ende die zur Entscheidung gestellten Optionen.`,
   // ── Phase 7: PR + Merge, mit erzwungener Fix-Versuchsgrenze ───────────────
   phase('PR + Merge')
 
-  // Harness-/Leitplanken-Diff (#1069): kein Hand-off mehr — der Agent setzt
-  // maintainer-approved selbst (die Änderung ist die intendierte des Tickets, kein
-  // Workaround), mergt wie sonst auch und hinterlässt danach einen Audit-Kommentar,
-  // den die Maintainerin asynchron gegenlesen kann.
+  // Harness-/Leitplanken-Diff (#1069): kein Hand-off, kein Label — der Agent mergt
+  // wie sonst auch und hinterlässt danach einen Audit-Kommentar, den die Maintainerin
+  // asynchron gegenlesen kann (ADR 0014).
   const harnessDiff = !!umsetzung.beruehrtHarness
   if (harnessDiff) {
-    log('Diff fasst Harness-/Leitplanken-Dateien an (#1069) — Label selbst setzen, mergen, Audit-Kommentar hinterlassen.')
+    log('Diff fasst Harness-/Leitplanken-Dateien an (#1069) — mergen, Audit-Kommentar hinterlassen.')
   }
-  const harnessMergeAuftrag = `Dieser Diff fasst Harness-/Leitplanken-Dateien an (#1069). Setze das Label selbst
-(gh pr edit <pr> --add-label maintainer-approved) — es ist die intendierte Änderung dieses
-Tickets, kein Workaround (AGENTS.md § Goodhart-Guard; er gilt weiter). Reihenfolge, damit der
-gate-change-guard keine späteren Gate-Änderungen übersieht:
-das Label ERST setzen, wenn alle anderen Checks grün sind (der gate-change-guard ist bis
-dahin erwartet rot — das ist kein CI-Fehler).
+  const harnessMergeAuftrag = `Dieser Diff fasst Harness-/Leitplanken-Dateien an (#1069). Es gibt kein Label und
+keinen Sonder-Check (ADR 0014): mergen wie sonst, sobald CI grün und Review bestanden sind.
 Den Audit-Kommentar erst posten, wenn gh pr view <pr> --json state,mergeCommit den Merge
 bestätigt: gh pr comment, Kopfzeile "🛡️ Leitplanken-Änderung selbst gemergt", darunter drei
 kurze Punkte — was sich an den Leitplanken ändert, warum, wie reverten (git revert <squash-sha>
@@ -1156,15 +1150,12 @@ Roter Check: ${merge.roterCheck || 'unbekannt'}
 ${merge.fehlerAusgabe || '(keine Ausgabe übergeben — selbst am PR nachsehen)'}
 
 AUFGABE — die Ursache auf DEMSELBEN Branch beheben, pushen und die CI erneut abwarten.
-Kein Gate abschwächen, um grün zu werden, und kein maintainer-approved-Label als
-Workaround setzen (AGENTS.md § Goodhart-Guard) — nur bei einer echten, intendierten
-Gate-Änderung. Behebe die Ursache, nicht das Symptom.
+Kein Gate abschwächen, um grün zu werden (AGENTS.md § Kein Grün-durch-Aufweichen) — nur bei
+einer echten, intendierten Gate-Änderung. Behebe die Ursache, nicht das Symptom.
 
 ${
   harnessDiff
-    ? `${harnessMergeAuftrag}
-Ist das Label schon gesetzt, entferne es VOR deinem Fix-Push (gh pr edit <pr> --remove-label
-maintainer-approved) und setze es erst nach erneut grünen anderen Checks neu.\n\n`
+    ? `${harnessMergeAuftrag}\n\n`
     : ''
 }Wird der PR grün und gemergt: ergebnis="gemergt". Bleibt er rot: ergebnis="ci-rot"
 mit dem AKTUELLEN Fehler (auch wenn es derselbe ist wie vorher).`,

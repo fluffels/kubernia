@@ -1,8 +1,8 @@
 # Codeowners fuer Gate-Config UND Harness-/Leitplanken-Dateien (#723, erweitert #1012)
 #
-# Zwei Gruppen, ein Prinzip (sichtbarer Sign-off per Label maintainer-approved;
-# seit #1069 setzt der Agent es bei der intendierten Aenderung seines Tickets
-# selbst und hinterlaesst nach dem Merge einen Audit-Kommentar):
+# Zwei Gruppen, ein Prinzip (der Agent mergt bei der intendierten Aenderung seines
+# Tickets selbst und hinterlaesst nach dem Merge einen Audit-Kommentar; kein Label,
+# kein CI-Riegel, ADR 0014). Diese Datei ist nur noch informativ:
 #
 # 1. GATE-CONFIG - diese Dateien VERDRAHTEN die automatischen Qualitaets-/
 #    Architektur-Gates selbst (dependency-cruiser, ESLint-Komplexitaet,
@@ -14,16 +14,16 @@
 #    CLAUDE.md, .claude/, .agents/, die Harness-Doku). Ein Agent, der seine
 #    eigenen Leitplanken aendert, ist Selbstmodifikation, nicht Gate-Aufweichen.
 #    Bis #1069 war das ein Pflicht-Stopp (Merge nur durch die Maintainerin);
-#    seitdem ersetzt eine Audit-Spur (Label + Kommentar) diese Freigabe.
+#    seitdem ersetzt eine Audit-Spur (Kommentar) diese Freigabe.
 #    Dazu (#1156) Waechter-Tests, die selbst der einzige Durchsetzer ihrer
 #    Regel sind - seit #1165 gesammelt im Ordner test/harness/ (Rest: #1177).
 #
-# Darum tragen NUR PRs, die diese Pfade anfassen, das Label als sichtbaren
-# Marker im PR-Log. Alle anderen Pfade mergen ohne Label autonom bei gruener CI.
+# Darum bekommen NUR PRs, die diese Pfade anfassen, nach dem Merge den Audit-Kommentar.
+# Alle anderen Pfade mergen autonom bei gruener CI.
 #
-# SSOT der geschuetzten Pfade ist .github/protected-paths.json (#1157): der CI-Job
-# gate-change-guard liest sie von dort (vom Base-Commit). GitHub kann CODEOWNERS nicht
-# aus einer Datei einbinden, darum steht die Liste hier noch einmal - neue Pfade ZUERST
+# SSOT der geschuetzten Pfade ist .github/protected-paths.json (#1157): der Workflow-
+# Auftrag beruehrtHarness gleicht den Diff per Substring gegen sie ab. GitHub kann
+# CODEOWNERS nicht aus einer Datei einbinden, darum steht die Liste hier noch einmal - neue Pfade ZUERST
 # in der Quelle eintragen, dann hier nachziehen. Sync bewacht test/harness/harness-approval.test.ts.
 
 # Gate-Config
@@ -41,17 +41,19 @@
 
 # Harness/Leitplanken (#1012)
 # AGENTS.md bewusst OHNE fuehrenden '/' (#1168): trifft jede AGENTS.md auf jeder Ebene, auch
-# modul-lokale (#1088) - sie sind Agenten-Anweisungen und damit Leitplanken. Der Guard matcht die
-# Eintraege ohnehin als Substring/Praefix (bewusst ueber-approximierend, fail-closed); unverankert
-# deckt CODEOWNERS dasselbe ab wie der Guard.
+# modul-lokale (#1088) - sie sind Agenten-Anweisungen und damit Leitplanken. Der Substring-Abgleich matcht die
+# Eintraege ohnehin als Praefix (bewusst ueber-approximierend, fail-closed); unverankert
+# deckt CODEOWNERS dasselbe ab wie der Abgleich.
 AGENTS.md                  @fluffels
 /CLAUDE.md                 @fluffels
 /CLAUDE.local.md           @fluffels
 /.claude/                  @fluffels
+/.mcp.json                 @fluffels
+/scripts/playwright-mcp.mjs @fluffels
 /.agents/                  @fluffels
 /docs/agent-harness*       @fluffels
 
 # Waechter-Tests (#1156, #1165) - der Test IST hier das Gate (kein geschuetztes check-Skript dahinter).
-# Als Ordner-Praefix statt Glob: ein Glob wuerde im Guard auf den ganzen test/-Ordner kuerzen.
+# Als Ordner-Praefix statt Glob: ein Glob wuerde im Abgleich auf den ganzen test/-Ordner kuerzen.
 # Neuer Waechter = Datei nach test/harness/ mit Marker @harness-waechter, kein neuer Eintrag.
 /test/harness/             @fluffels

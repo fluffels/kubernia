@@ -25,7 +25,7 @@
  *
  * Fitness-Function-Kategorie neben layering/filesize/docmap/docdrift (#390/#482/#529),
  * nicht mit Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`:
- * `scripts/check-` ist gate-config-geschützt (Goodhart-Guard #903, Label-Pflicht), und
+ * `scripts/check-` ist Gate-Config (Audit-Kommentar-Pflicht), und
  * für rein doku-strukturelle Wächter gibt es die etablierte test-only-Familie
  * (`test/readme.test.ts`, `test/build-config.test.ts`, `test/forum-board-prio.test.ts`).
  *

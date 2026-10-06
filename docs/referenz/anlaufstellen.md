@@ -32,6 +32,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Einordnung u
 | [0011 NPC-System-Fundament](../adr/0011-npc-system-fundament.md) | bevor du NPC-Zustand, Routinen oder Beziehungen anfasst |
 | [0012 Harness-Autonomie](../adr/0012-harness-autonomie-audit-spur.md) | wenn es um Selbst-Merge von Leitplanken-Änderungen und die Audit-Spur geht |
 | [0013 docs/ als Wiki](../adr/0013-docs-als-agentengepflegtes-wiki.md) | bevor du Doku anlegst oder umziehst — welche Wissensart wohin gehört |
+| [0014 Leitplanken ohne Label-Riegel](../adr/0014-leitplanken-ohne-label-riegel.md) | wenn es um Gate-/Harness-Änderungen, die Pfadquelle und den Audit-Kommentar geht |
 
 ## 🌱 Evergreen — lebendes Wissen, im selben PR gepflegt
 

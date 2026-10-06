@@ -64,7 +64,7 @@
  *
  * Fitness-Function-Kategorie neben layering/filesize/docmap/agents-md-native, nicht mit
  * Verhaltens-Tests vermischen. Bewusst **ohne** eigenes `scripts/check-*.mjs`:
- * `scripts/check-` ist gate-config-geschützt (Goodhart-Guard #903, Label-Pflicht), und
+ * `scripts/check-` ist Gate-Config (Audit-Kommentar-Pflicht), und
  * für rein doku-strukturelle Wächter gibt es die etablierte test-only-Familie.
  *
  * ⚠️ Bekannte Duplikation: die Retired-Claims-Mechanik unten ist strukturgleich zu

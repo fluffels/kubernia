@@ -17,6 +17,8 @@
     "/CLAUDE.md",
     "/CLAUDE.local.md",
     "/.claude/",
+    "/.mcp.json",
+    "/scripts/playwright-mcp.mjs",
     "/.agents/",
     "/docs/agent-harness*"
   ],
