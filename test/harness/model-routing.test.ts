@@ -681,7 +681,7 @@ describe("Pre-Flight-Weichen entscheidet der Agent selbst (#1279, #1276)", () =>
     assert.match(prompt, /im PR-Text/, "der Umsetzer muss die Entscheidung im PR dokumentieren");
   });
 
-  test("leere oder nicht-String-Einträge in entscheidungen werden verworfen", async () => {
+  test("leere und null-Einträge in entscheidungen werden verworfen", async () => {
     const { aufrufe } = await workflowLauf("normal", { planerDa: true, preflight: { brauchtKlaerung: false, entscheidungen: ["", null] } });
     assert.doesNotMatch(aufrufe[3].prompt, /Entscheidungen aus Plan\/Pre-Flight/);
   });
