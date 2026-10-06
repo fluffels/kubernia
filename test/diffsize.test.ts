@@ -17,29 +17,46 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-// Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im
-// tsconfig-include) – der Laufzeit-Import genügt, Typen lokal deklariert.
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as checkDiff from "../scripts/check-diffsize.mjs";
-
+type Env = Record<string, string | undefined>;
 type Sums = { fileCount: number; changedLines: number };
 type Thresholds = { maxFiles: number; maxLines: number };
 type Eval = { overFiles: boolean; overLines: boolean; over: boolean };
 type RunGit = (args: string[]) => string;
-
-const MAX_FILES: number = checkDiff.MAX_FILES;
-const MAX_LINES: number = checkDiff.MAX_LINES;
-const readThresholds: (env?: Record<string, string | undefined>) => Thresholds = checkDiff.readThresholds;
-const parseNumstat: (text: string) => { files: { path: string; added: number; deleted: number; binary: boolean }[] } & Sums =
-  checkDiff.parseNumstat;
-const evaluate: (sums: Sums, t: Thresholds) => Eval = checkDiff.evaluate;
 type Trailers = { valid: { nr: number; reason: string }[]; invalid: string[] };
-const parseOverrideTrailers: (text: string, key: string) => Trailers = checkDiff.parseOverrideTrailers;
-const OVERRIDE_KEY: string = checkDiff.OVERRIDE_KEY;
-const resolveBase: (runGit: RunGit, env?: Record<string, string | undefined>) => string | null = checkDiff.resolveBase;
-const checkDiffSize: (opts: { runGit: RunGit; env?: Record<string, string | undefined> }) => Record<string, unknown> =
-  checkDiff.checkDiffSize;
-const isGeneratedArtifact: (path: string) => boolean = checkDiff.isGeneratedArtifact;
+
+/** Die öffentliche Oberfläche des Wächters, wie dieser Test sie nutzt. */
+type CheckDiffSizeModule = {
+  MAX_FILES: number;
+  MAX_LINES: number;
+  OVERRIDE_KEY: string;
+  readThresholds: (env?: Env) => Thresholds;
+  parseNumstat: (text: string) => { files: { path: string; added: number; deleted: number; binary: boolean }[] } & Sums;
+  evaluate: (sums: Sums, t: Thresholds) => Eval;
+  parseOverrideTrailers: (text: string, key: string) => Trailers;
+  resolveBase: (runGit: RunGit, env?: Env) => string | null;
+  checkDiffSize: (opts: { runGit: RunGit; env?: Env }) => Record<string, unknown>;
+  isGeneratedArtifact: (path: string) => boolean;
+};
+
+// Tooling-Skript ohne Declaration-File (scripts/ ist nicht im tsconfig-include). Der
+// Namespace wird EINMAL auf die Oberfläche oben festgelegt, statt jeden Zugriff einzeln
+// zu casten (wie test/diffcoverage.test.ts), sonst meldet der typbewusste Linter
+// lauter no-unsafe-member-access.
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as checkDiffRaw from "../scripts/check-diffsize.mjs";
+
+const {
+  MAX_FILES,
+  MAX_LINES,
+  OVERRIDE_KEY,
+  readThresholds,
+  parseNumstat,
+  evaluate,
+  parseOverrideTrailers,
+  resolveBase,
+  checkDiffSize,
+  isGeneratedArtifact,
+} = checkDiffRaw as CheckDiffSizeModule;
 
 describe("Diff-Größenbudget (#533)", () => {
   test("parseNumstat: summiert added+deleted, zählt Dateien, behandelt Binärdateien", () => {

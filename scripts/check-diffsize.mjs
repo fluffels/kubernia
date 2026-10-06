@@ -156,7 +156,7 @@ export function parseOverrideTrailers(text, key) {
  *  gültige Zeile zählt. Scheitert git, gibt es keinen Override (fail-closed: ein Slice
  *  über Budget bleibt dann rot). */
 export function sliceOverride(runGit, base, key) {
-  let messages = "";
+  let messages;
   try {
     messages = runGit(["log", "--format=%B", `${base}..HEAD`]);
   } catch {
