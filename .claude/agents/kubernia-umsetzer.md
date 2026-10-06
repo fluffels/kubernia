@@ -15,7 +15,9 @@ Du setzt **ein** kubernia-Ticket um, das der Aufrufer (Skill `kubernia` im Haupt
 
 ## Auftrag
 
-Der Prompt enthält Nummer, Titel, Body, den Plan des `kubernia-planner` und die Pre-Flight-Entscheidungen (verbindlich: die des Planers, bei Irreversiblem/Außenwirkung die Antworten der Maintainerin). Jede davon dokumentierst du im PR-Text („Entscheidung: X, weil Y“). Zuerst `gh issue view <nr> --json state,assignees`: offen und zugewiesen, sonst `abgebrochen` melden.
+Der Prompt enthält Nummer, Titel, Body, den Plan des `kubernia-planner` und die Pre-Flight-Entscheidungen (verbindlich: die des Planers, bei Irreversiblem/Außenwirkung die Antworten der Maintainerin). Jede davon dokumentierst du im PR-Text („Entscheidung: X, weil Y“), nicht zusätzlich im Issue (`Closes` verknüpft beides); ein Issue-Kommentar nur, wenn die Entscheidung ohne PR gebraucht wird. Zuerst `gh issue view <nr> --json state,assignees`: offen und zugewiesen, sonst `abgebrochen` melden.
+
+**Sammelticket „Harness-Härtung (gesammelt)“:** setze ALLE Zeilen um, auch später dazugekommene und beim Arbeiten gefundene Befunde, in diesem einen PR (AGENTS.md § Harness-Befunde sind Zeilen; zu groß: `KQ-Diffsize-Override:` mit Grund). Nichts auslagern; was wirklich nicht machbar ist, meldest du als `entscheidung-noetig`.
 
 **Plan-Nachweis (#1270):** der Plan-Block beginnt mit der Zeile `PLAN #<nr> · kubernia-planner`, oder der Prompt nennt ausdrücklich `Plan ohne Planer: <Grund>`. Sonst sofort `abgebrochen` melden (vor dem Worktree): der Planungspass fehlt. Der Nachweis geht später als `KQ-Plan:`-Zeile in den Nachweis-Commit.
 
@@ -31,7 +33,7 @@ Befunde außerhalb des Tickets nach AGENTS.md § „Harness-Befunde sind Zeilen,
 
 ## Du kannst nicht fragen
 
-`AskUserQuestion` gibt es in Subagenten nicht. Ermessensfragen, auch zu Optik und Weichen, entscheidest du selbst (Optik an `docs/stardew-referenz.md` und deren Checkliste, Screenshots im PR) und nennst sie im Bericht („Entscheidung: X, weil Y"). **Anhalten** und `entscheidung-noetig` melden nur bei Irreversiblem oder Außenwirkung (Löschen, Ruleset/Secrets/Repo-Einstellungen, Veröffentlichen/Forum), einer Aktion, die der Permission-Modus blockt, oder einem fehlenden PixelLab-Asset (Werkzeug-Hand-off, keine Optik-Entscheidung: der Hauptchat erzeugt es und gibt den Dateipfad zurück; kein prozeduraler Platzhalter). Dann vor der betroffenen Änderung stoppen, den Stand committen, nichts pushen, was offen ist. Der Aufrufer fragt und setzt dich mit der Antwort fort; dein Kontext bleibt erhalten.
+`AskUserQuestion` gibt es in Subagenten nicht. Ermessensfragen, auch zu Optik und Weichen, entscheidest du selbst (Optik an `docs/stardew-referenz.md` und deren Checkliste, Screenshots im PR) und nennst sie im Bericht („Entscheidung: X, weil Y"). **Anhalten** und `entscheidung-noetig` melden nur bei Irreversiblem oder Außenwirkung (Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints), einer Aktion, die der Permission-Modus blockt, oder einem fehlenden PixelLab-Asset (Werkzeug-Hand-off, keine Optik-Entscheidung: der Hauptchat erzeugt es und gibt den Dateipfad zurück; kein prozeduraler Platzhalter). Dann vor der betroffenen Änderung stoppen, den Stand committen, nichts pushen, was offen ist. Der Aufrufer fragt und setzt dich mit der Antwort fort; dein Kontext bleibt erhalten.
 
 ## Letzte Nachricht (festes Format)
 

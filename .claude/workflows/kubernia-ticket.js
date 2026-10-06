@@ -207,7 +207,7 @@ const PREFLIGHT_SCHEMA = {
     },
     grund: {
       type: 'string',
-      description: 'welches Signal: Irreversibles oder Außenwirkung (Löschen, Ruleset/Secrets/Repo-Einstellungen, Veröffentlichen/Forum)',
+      description: 'welches Signal: Irreversibles oder Außenwirkung (Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints)',
     },
     entscheidungen: {
       type: 'array',
@@ -724,9 +724,8 @@ schon trifft, übernimmst du wörtlich in entscheidungen; die übrigen Weichen (
 Zeile „Weiche: X, weil Y“ in entscheidungen ein. Optik misst du an docs/stardew-referenz.md
 und deren Checkliste; die Maintainerin kann per Revert widersprechen.
 
-brauchtKlaerung = true NUR bei Irreversiblem oder Außenwirkung, also wenn die Umsetzung
-etwas löschen, am Ruleset, an Secrets oder Repo-Einstellungen drehen oder etwas
-veröffentlichen/posten (Forum) müsste. Dann 1-4 konkrete Fragen in offeneFragen, grund nennen.
+brauchtKlaerung = true NUR bei Irreversiblem oder Außenwirkung (Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints).
+Dann 1-4 konkrete Fragen in offeneFragen, grund nennen.
 
 Harness-/Gate-Dateien allein sind KEIN Grund (#1069) — der Agent mergt solche Diffs selbst.
 
@@ -806,6 +805,10 @@ Verfügung, gib ergebnis="abgebrochen" mit abbruchgrund "PixelLab-Asset fehlt: <
 KEIN prozeduraler Platzhalter.
 Lernkandidaten: gib in lernkandidaten höchstens 3 Punkte zurück, nur projektübergreifendes Wissen
 (nichts Kubernia-Spezifisches, das gehört in Befunde), sonst leer. Du legst nichts selbst ab.
+
+Ist das Ticket das Sammelticket „Harness-Härtung (gesammelt)", setze ALLE Zeilen um (auch später
+dazugekommene und beim Arbeiten gefundene Befunde), nichts auslagern (AGENTS.md § Harness-Befunde sind
+Zeilen); zu groß: begründeter KQ-Diffsize-Override.
 
 Committe mit (#${nr}) in der Nachricht. Gib Branch und absoluten Worktree-Pfad zurück.
 

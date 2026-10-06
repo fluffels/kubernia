@@ -79,4 +79,22 @@ describe("Sammelticket-Position (#1276)", () => {
     assert.throws(() => positionAusAgentsMd("Board-Position 6 und wieder auf Position 7"));
     assert.throws(() => positionAusAgentsMd("keine Zahl hier"));
   });
+
+  test("Komplett-Regel: AGENTS.md und ticket-reihenfolge.md verlangen das ganze Sammelticket, keinen Rest-Übertrag (#1311)", () => {
+    assert.match(agents, /Kommt es dran: abarbeiten, und zwar \*\*komplett\*\*/);
+    assert.match(abschnitt, /\*\*Abarbeiten:\*\* \*\*alle\*\* Zeilen umsetzen, kein Teil und kein Rest-Übertrag/);
+    assert.match(abschnitt, /KQ-Diffsize-Override/, "zu große PRs deckt der begründete Override");
+  });
+
+  test("Komplett-Regel: Umsetzer, Planer und Skill nennen sie", () => {
+    assert.match(lies(".claude/agents/kubernia-umsetzer.md"), /setze ALLE Zeilen um/);
+    assert.match(lies(".claude/agents/kubernia-planner.md"), /plane ALLE Zeilen/);
+    assert.match(lies(".claude/skills/kubernia/SKILL.md"), /komplett umsetzen, kein Rest-Übertrag/);
+    assert.match(lies(".claude/workflows/kubernia-ticket.js"), /setze ALLE Zeilen um/);
+  });
+
+  test("Negativfall: der alte Teil-Abarbeiten-Wortlaut steht nirgends mehr im Abschnitt oder in AGENTS.md", () => {
+    assert.doesNotMatch(abschnitt, /passen/);
+    assert.doesNotMatch(agents, new RegExp("was in einen PR " + "passt"));
+  });
 });

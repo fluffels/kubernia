@@ -24,6 +24,8 @@ Was du wirklich beschaffst:
 - Die Dateien, die der Plan **anfassen wird** — und die gezielt (per `Grep`/`offset`/`limit` um die relevante Stelle), nicht komplett, solange der Plan nicht mehr braucht.
 - Betroffener Bereich hat eine modul-lokale `AGENTS.md` oder ein `docs/module/*.md`? Dann **die** mitlesen (sie sind der Kontext-Selektor und stehen NICHT schon im Kontext).
 
+**Sammelticket „Harness-Härtung (gesammelt)“:** plane ALLE Zeilen (AGENTS.md § Harness-Befunde sind Zeilen: komplett, kein Rest-Übertrag); jede Zeile bekommt einen Schritt oder eine begründete Entscheidung.
+
 ## Oberste Leitfrage (steht über allem)
 
 ⭐ **„Ist das okay, wenn Kubernia ein Spiel in Stardew-Valley-Größe wird?"** — Nur planen, was auch bei 10× Inhalt/NPCs/Welten trägt. Ist das Ticket ein Epic/eine Phase, ist der „Plan" die **Aufteilung** in session-große Kinder (keine Umsetzung). Details: [AGENTS.md § Oberste Regel](../../AGENTS.md#-oberste-regel--über-allem-auch-über-den-adrs).
@@ -38,7 +40,7 @@ Kompakter Output, kein Fließtext-Essay. **Die allererste Zeile deines Berichts 
 4. **Tests** — welche neuen/geänderten Tests, Negativ-/Grenzfälle, Red-Green-Absicherung; Präsentation wird im Browser verifiziert statt per Unit-Test
 5. **Gate-Check** — was berührt der Diff bei `npm run verify` (Schichtung `check:arch`, Dateigröße `check:size`, Diff-Budget ≤ 20 Dateien/800 Zeilen `check:diffsize`, Doku-Drift `check:docmap`/`check:docdrift`, Coverage-Floor)?
 6. **Risiken & Trade-offs** — Save-Migration nötig (`CURRENT_SAVE_VERSION`-Bump, Migrationskette, bestehende Stände nie brechen)? Import-Zyklus-Gefahr? Echte Weiche? Die entscheidest du in Abschnitt 7.
-7. **Weichen und Entscheidungen** (Pflichtabschnitt) — je Weiche (🎨 Optik, ⚠️ riskante Weiche, offene Frage) abwägen und **entscheiden**: „Weiche: X, weil Y“. Optik misst du an `docs/stardew-referenz.md` und deren Checkliste. „Rückfrage nötig“ steht nur bei Irreversiblem oder Außenwirkung (Löschen, Ruleset/Secrets/Repo-Einstellungen, Veröffentlichen/Forum); sonst ausdrücklich „keine“
+7. **Weichen und Entscheidungen** (Pflichtabschnitt) — je Weiche (🎨 Optik, ⚠️ riskante Weiche, offene Frage) abwägen und **entscheiden**: „Weiche: X, weil Y“. Optik misst du an `docs/stardew-referenz.md` und deren Checkliste. „Rückfrage nötig“ steht nur bei Irreversiblem oder Außenwirkung (Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints); sonst ausdrücklich „keine“
 
 ## Bei einem Epic/einer Phase
 

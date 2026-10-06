@@ -340,9 +340,32 @@ describe("Der @harness-waechter-Marker zählt nur als eigene Kommentar-Zeile (#1
  * Job-Bezeichnung (Required-Check-Kontext im Ruleset) und der Pflicht-Begriff. In ADRs bleibt die
  * Historie stehen; sonst darf keine versionierte Datei sie mehr tragen.
  */
-const ABGELOEST = [/maintainer-approved/i, /gate-change-guard/i, /Gate-Config-Aenderungsschutz/i, /Label-Pflicht/i, /Label selbst/i];
+const ABGELOEST = [
+  /maintainer-approved/i,
+  /gate-change-guard/i,
+  /Gate-Config-Aenderungsschutz/i,
+  /Label-Pflicht/i,
+  /Label selbst/i,
+  /legt die Maintainerin fest/i,
+  /Optik-Abstimmung/i,
+  /Optik[^.\n]{0,60}(per|mit|braucht)[^.\n]{0,20}Rückfrage/i,
+  /(Optik|Stil|Look)[^.\n]{0,40}mit der Maintainerin abstimmen/i,
+  /(was|wie) in (\*\*)?einen(\*\*)? PR pass(t|en)/i,
+  /Rest und neue Befunde ins nächste Sammelticket/i,
+];
 const SCAN_ENDUNGEN = /\.(md|js|mjs|cjs|ts|json|yml|yaml)$/;
 const EIGENE_DATEI = "test/harness/harness-approval.test.ts";
+
+/** Alle versionierten Textdateien (Pfad → Inhalt), die die Text-Wächter unten durchsuchen. */
+function gescannteDateien(): Record<string, string> {
+  const dateien: Record<string, string> = {};
+  for (const f of listTrackedFiles(WURZEL)) {
+    if (!(SCAN_ENDUNGEN.test(f) || f === ".github/CODEOWNERS")) continue;
+    if (!existsSync(WURZEL + f)) continue; // gelöscht, aber noch im Index
+    dateien[f] = read(f);
+  }
+  return dateien;
+}
 
 /** Fundstellen der abgelösten Begriffe; ADRs (Historie) und diese Wächterdatei zählen nicht. */
 function abgeloesteFundstellen(dateien: Record<string, string>): string[] {
@@ -366,14 +389,63 @@ describe("Die abgelöste Label-Mechanik kommt nicht zurück (ADR 0014, #1303)", 
     assert.equal(abgeloesteFundstellen({ "README.md": "harmlos" }).length, 0);
   });
 
-  test("keine versionierte Datei außerhalb von docs/adr/ nennt Label oder Guard", () => {
-    const dateien: Record<string, string> = {};
-    for (const f of listTrackedFiles(WURZEL)) {
-      if (!(SCAN_ENDUNGEN.test(f) || f === ".github/CODEOWNERS")) continue;
-      if (!existsSync(WURZEL + f)) continue; // gelöscht, aber noch im Index
-      dateien[f] = read(f);
-    }
+  test("keine versionierte Datei außerhalb von docs/adr/ nennt Label, Guard oder veraltete HITL-/Sammelticket-Aussagen", () => {
+    const dateien = gescannteDateien();
     assert.ok(Object.keys(dateien).length > 50, "Scan liest kaum Dateien – listTrackedFiles liefert nichts?");
-    assert.deepEqual(abgeloesteFundstellen(dateien), [], "Abgelöste Label-Mechanik taucht wieder auf (ADR 0014)");
+    assert.deepEqual(abgeloesteFundstellen(dateien), [], "Abgelöste Mechanik taucht wieder auf (ADR 0014, #1279, #1311)");
+  });
+
+  test("Red-Green: die veralteten HITL- und Sammelticket-Aussagen werden erkannt, die gültigen nicht", () => {
+    for (const alt of [
+      "Die Optik legt die Maintainerin fest.",
+      "Eine Optik-Abstimmung per Rückfrage vor dem Code.",
+      "Optik braucht eine Rückfrage an die Maintainerin.",
+      "Den Stil mit der Maintainerin abstimmen.",
+      "Abarbeiten: so viele Zeilen, wie in einen PR passen.",
+      "Abarbeiten, was in **einen** PR passt",
+      "Rest und neue Befunde ins nächste Sammelticket.",
+    ]) {
+      assert.ok(abgeloesteFundstellen({ "docs/x.md": alt }).length >= 1, alt);
+    }
+    for (const gueltig of [
+      "Weichen (Optik, riskant) entscheidet der Agent selbst, die Maintainerin widerspricht per Revert.",
+      "Optik wird an docs/stardew-referenz.md gemessen.",
+      "Das Sammelticket wird komplett umgesetzt, kein Rest-Übertrag.",
+    ]) {
+      assert.equal(abgeloesteFundstellen({ "docs/x.md": gueltig }).length, 0, gueltig);
+    }
+  });
+});
+
+/** Die Kriterien des Pflicht-Stopps stehen nur in AGENTS.md; alle anderen Stellen verweisen darauf (#1311). */
+const KRITERIEN = [/Ruleset\/Secrets\/Repo-Einstellungen/, /am Ruleset, an Secrets/, /Löschen, Ruleset/];
+
+/** Fundstellen der ausgeschriebenen Kriterienliste außerhalb von AGENTS.md; ADRs (Historie) und diese Datei zählen nicht. */
+function kriterienKopien(dateien: Record<string, string>): string[] {
+  const funde: string[] = [];
+  for (const [pfad, inhalt] of Object.entries(dateien)) {
+    if (pfad === "AGENTS.md" || pfad.startsWith("docs/adr/") || pfad === EIGENE_DATEI) continue;
+    for (const muster of KRITERIEN) if (muster.test(inhalt)) funde.push(`${pfad}: ${String(muster)}`);
+  }
+  return funde;
+}
+
+describe("Die Pre-Flight-Kriterien stehen nur in AGENTS.md (#1311)", () => {
+  test("keine Kopie der Kriterienliste in Agenten, Skills, Workflow oder Doku", () => {
+    assert.deepEqual(
+      kriterienKopien(gescannteDateien()),
+      [],
+      "Die Liste „Löschen, Ruleset/Secrets/Repo-Einstellungen, Veröffentlichen/Forum“ steht nur in AGENTS.md § Human-in-the-Loop-Checkpoints; hier verweisen statt kopieren",
+    );
+    assert.ok(/Ruleset\/Secrets\/Repo-Einstellungen/.test(read("AGENTS.md")), "AGENTS.md trägt die Kriterien (die SSOT)");
+  });
+
+  test("Red-Green: eine Kopie außerhalb von AGENTS.md wird gemeldet, AGENTS.md und ADRs nicht", () => {
+    const text = "Rückfrage nötig bei (Löschen, Ruleset/Secrets/Repo-Einstellungen, Veröffentlichen/Forum)";
+    assert.equal(kriterienKopien({ ".claude/agents/kubernia-planner.md": text }).length, 2);
+    assert.equal(kriterienKopien({ "AGENTS.md": text, "docs/adr/0012-x.md": text }).length, 0);
+    assert.equal(kriterienKopien({ "x.md": "Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints" }).length, 0);
+    assert.equal(kriterienKopien({ "x.js": "Ruleset und Secrets sind Außenwirkung" }).length, 0, "Erwähnung ohne die ausgeschriebene Liste");
+    assert.equal(kriterienKopien({ "x.js": "etwas löschen, am Ruleset, an Secrets oder Repo-Einstellungen drehen" }).length, 1);
   });
 });
