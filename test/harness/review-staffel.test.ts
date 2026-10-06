@@ -143,10 +143,12 @@ type Szenario = {
   /** Lens-Berichte je Runde, Schlüssel = Lens-Key. Fehlt eine Lens, liefert der Stub null. */
   runden: Record<string, Bericht | null>[];
   nachbessern?: { deltaPfad?: string; deltaDateien?: string[] };
+  /** Ergebnisse je Lens-Key nach Aufruf-Reihenfolge (Ausfall, dann Erfolg); ersetzt `runden` für diese Lens. */
+  versuche?: Record<string, (Bericht | null)[]>;
 };
 
 /** Der gemeinsame Vollauf-Stub (workflow-lauf.ts) mit den Szenario-Feldern dieser Datei. */
-const lauf = (s: Szenario) => workflowLauf({ umsetzen: { dateien: s.dateien }, runden: s.runden, nachbessern: s.nachbessern });
+const lauf = (s: Szenario) => workflowLauf({ umsetzen: { dateien: s.dateien }, runden: s.runden, nachbessern: s.nachbessern, versuche: s.versuche });
 
 describe("Workflow verdrahtet die Staffel (#1265)", () => {
   test("reiner Doku-Diff: genau eine Doku-Lens über kubernia-lens mit effort high", async () => {
@@ -212,7 +214,41 @@ describe("Workflow verdrahtet die Staffel (#1265)", () => {
       runden: [{ architektur: blockiert("architektur"), "test-adaequanz": null }, {}],
       nachbessern: { deltaPfad: "/tmp/d.patch", deltaDateien: ["docs/a.md"] },
     });
-    assert.deepEqual(lenses.slice(3).map((a) => a.label), ["lens:architektur:r2", "lens:requirement-treue:r2", "lens:test-adaequanz:r2"]);
+    // Der Ausfall wird in Runde 1 einmal nachgeholt (#1309): Index 3 ist der zweite Versuch.
+    assert.deepEqual(lenses.slice(4).map((a) => a.label), ["lens:architektur:r2", "lens:requirement-treue:r2", "lens:test-adaequanz:r2"]);
+  });
+});
+
+describe("Lens-Ausfall gilt als nicht konvergiert (#1309)", () => {
+  const ausfallDann = (...folge: (Bericht | null)[]) => ({ "test-adaequanz": folge });
+
+  test("einmal ausgefallen, beim Nachholen ok: genau ein zweiter Versuch, PR läuft, Nachweis nennt drei Brillen", async () => {
+    const { lenses, aufrufe, endstand } = await lauf({ dateien: ["src/a.ts"], runden: [{}], versuche: ausfallDann(null, ok("test-adaequanz")) });
+    assert.deepEqual(lenses.map((a) => a.label), ["lens:architektur:r1", "lens:requirement-treue:r1", "lens:test-adaequanz:r1", "lens:test-adaequanz:r1"]);
+    assert.equal(endstand.ergebnis, "fertig");
+    const pr = aufrufe.find((a) => a.label.startsWith("pr+merge"));
+    assert.ok(pr, "pr+merge muss laufen");
+    assert.match(pr.prompt, /KQ-Review: head=h1 runden=1 lenses=architektur,requirement-treue,test-adaequanz verdikt=ok/);
+  });
+
+  test("zweimal ausgefallen, keine Blocker: Hand-off statt PR", async () => {
+    const { aufrufe, endstand } = await lauf({ dateien: ["src/a.ts"], runden: [{}], versuche: ausfallDann(null, null) });
+    assert.equal(endstand.ergebnis, "review-festgefahren");
+    assert.ok(!aufrufe.some((a) => a.label.startsWith("pr+merge")), "kein PR mit ungeprüfter Brille");
+    assert.ok(!aufrufe.some((a) => a.label.startsWith("nachbessern")), "keine leere Fix-Runde");
+    const hand = aufrufe.find((a) => a.label.startsWith("review-festgefahren"));
+    assert.match(hand?.prompt ?? "", /Lens test-adaequanz lieferte zweimal kein Ergebnis \(ungeprüft\)/);
+  });
+
+  test("Ausfall plus Blocker einer anderen Brille: normal nachbessern, nächste Runde voll", async () => {
+    const { lenses, endstand } = await lauf({
+      dateien: ["src/a.ts"],
+      runden: [{ architektur: blockiert("architektur") }, {}],
+      versuche: ausfallDann(null, null, ok("test-adaequanz")),
+      nachbessern: { deltaPfad: "/tmp/d.patch", deltaDateien: ["docs/a.md"] },
+    });
+    assert.deepEqual(lenses.slice(4).map((a) => a.label), ["lens:architektur:r2", "lens:requirement-treue:r2", "lens:test-adaequanz:r2"]);
+    assert.equal(endstand.ergebnis, "fertig");
   });
 });
 

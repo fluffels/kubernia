@@ -11,7 +11,8 @@
  * Import + init() startet store.ts mit leerem Modul-Cache neu – überlebt der Stand das,
  * lag er WIRKLICH in IndexedDB (und nicht nur im flüchtigen Modul-Cache).
  */
-import { test, expect, vi, beforeEach, afterEach } from "vitest";
+import { test, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
+import { warmupGameStack } from "./support/browser-env";
 import { IDBFactory } from "fake-indexeddb";
 import { ABBREVS } from "../src/content/abbrev";
 
@@ -93,6 +94,8 @@ async function directReadIdb(key: string): Promise<string | null> {
   db.close();
   return v;
 }
+
+beforeAll(warmupGameStack, 60_000);
 
 beforeEach(() => {
   // Frische, leere IndexedDB-Welt pro Test (über vi.stubGlobal, damit afterEach sie räumt).

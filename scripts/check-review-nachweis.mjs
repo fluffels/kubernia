@@ -4,7 +4,7 @@
  * Review- und Plan-Nachweis-Wächter (#1270) — macht Planungspass und Review-Konvergenz
  * pfadunabhängig prüfbar.
  *
- * Hintergrund: Review-Pflicht, Cap 2 und der Planer waren nur im Workflow
+ * Hintergrund: Review-Pflicht, Cap 2 Fix-Runden und der Planer waren nur im Workflow
  * (`.claude/workflows/kubernia-ticket.js`) im Code erzwungen. Im Skill-Pfad sind sie
  * Verhaltensregeln: ein PR ohne Review-Runde, mit Überschreitung der Obergrenze oder ohne
  * Planer fiel nirgends auf. Dieser Wächter verlangt im Slice (Commits `<basis>..HEAD`) zwei
@@ -28,9 +28,10 @@
 
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { parseOverrideTrailers, resolveBase } from "./check-diffsize.mjs";
+import { resolveBase } from "./check-diffsize.mjs";
+import { meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
 
-/** Obergrenze der Fix-Runden (Cap 2); der Workflow trägt dieselbe Zahl (Wächter-Test). */
+/** Obergrenze der Fix-Runden (Cap 2 Fix-Runden, höchstens 3 Pässe); der Workflow trägt dieselbe Zahl (Wächter-Test). */
 export const MAX_FIX_RUNDEN = 2;
 /** Höchstens so viele Review-Pässe: 1 Erstpass + MAX_FIX_RUNDEN nach je einem Fix. */
 export const MAX_REVIEW_PAESSE = MAX_FIX_RUNDEN + 1;
@@ -180,9 +181,7 @@ function main() {
     console.log("✔ Review-/Plan-Nachweis ok (Override mit Begründung).");
     return;
   }
-  for (const line of r.invalid ?? []) {
-    console.log(`• ungültige Override-Zeile ignoriert (braucht "#<nr> <warum>"): ${line}`);
-  }
+  meldeUngueltigeOverrides(r.invalid);
   if (r.ok) {
     if (typeof r.commitsNachReview === "number") {
       console.log(`• ${r.commitsNachReview} Commit(s) nach dem reviewten Stand (inkl. Nachweis-Commit).`);

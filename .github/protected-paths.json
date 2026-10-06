@@ -3,6 +3,7 @@
     "/.dependency-cruiser.cjs",
     "/scripts/layers.cjs",
     "/scripts/check-*.mjs",
+    "/scripts/slice-override.mjs",
     "/eslint.config.js",
     "/eslint-suppressions.json",
     "/any-suppressions.json",

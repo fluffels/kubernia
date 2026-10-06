@@ -63,3 +63,7 @@ Das Druckventil war eine Umgebungsvariable (`KQ_DIFFSIZE_OVERRIDE`, analog `KQ_D
 - **Abhängigkeit:** Der Nachlauf auf `main` setzt `squash_merge_commit_message = COMMIT_MESSAGES` voraus (der Squash-Commit enthält die Branch-Messages). Wird die Einstellung geändert, schlägt nach einem Override-Merge der Alarm-Job an.
 - **Audit:** Jede Ausnahme steht dauerhaft in `git log` von `main` (`git log --grep '^KQ-Diffsize-Override:'`), Override-Inflation ist so messbar.
 
+## Fortschreibung #1309 (2026-10-06): ein gemeinsames Modul, neueste Zeile, Stale auch bei „nichts zu messen“
+
+Seit drei Wächter (`check:diffsize`, `check:diffcoverage`, `check-review-nachweis`) den Override lesen, liegen Parser, Slice-Lesen und Ausgabe-Texte in `scripts/slice-override.mjs` (Gate-Pfad in `.github/protected-paths.json`). Gelesen wird `git log --reverse`: die **neueste** gültige Zeile zählt, im lokalen Log wie im Squash-Body auf `main`. Ein `KQ-Diffcov-Override` in einem Slice ohne gemessenen Spielcode ist stale (rot), weil dort nichts durchzulassen ist. Eine fremde stale Zeile im eigenen Slice darf durch Umschreiben des eigenen Feature-Branches vor dem Nachweis-Commit entfernt werden.
+

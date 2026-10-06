@@ -80,6 +80,20 @@ Bewusst **keine** harte Token-Schwelle als Bedingung: eine nie erreichte Schwell
 
 **Trade-off.** Ein falsch entschiedener Optik-Punkt kostet einen Revert-PR statt einer Rückfrage; bei Optik trägt die Messlatte (Stardew-Referenz) das Urteil, nicht Geschmack.
 
+## Fortschreibung #1309 (2026-10-06): Sammelticket halbieren
+
+**Anlass.** Das Konvergenz-Signal oben schlug an: Generation #1276 hatte 66 offene Harness-Zeilen, Generation #1308 wieder 66, weil „abarbeiten, was in einen PR passt“ in jeder Generation Zeilen übrig ließ und Reviews neue erzeugten.
+
+**Entscheidung (Vorgabe der Maintainerin).** Beim Claimen wird die Zeilenliste halbiert: die zweite Hälfte (bei ungerader Zahl die kleinere) wandert sofort wörtlich ins nächste Sammelticket, die erste wird in **einem** PR vollständig erledigt (jede Zeile mit Ergebnis: umgesetzt, geprüft und dokumentiert, oder begründet „bewusst nicht“ (nur bei optionalen Teilen); zurück nur, was nachweislich nicht machbar ist). Der PR darf breit sein (`KQ-Diffsize-Override`). Neue Befunde gehen ins nächste Sammelticket, nie in den laufenden PR. Bei ungerader Zeilenzahl bleibt die größere Hälfte im aktuellen Ticket.
+
+**Trade-off.** Ein breiter PR ist schwerer zu reviewen und zu reverten als mehrere kleine; dafür sinkt die Liste je Generation planbar, statt dass jede Generation nur umschichtet.
+
+## Fortschreibung #1311 (2026-10-06): Sammelticket komplett statt halbiert
+
+**Entscheidung (Vorgabe der Maintainerin, löst die Halbierung aus #1309 ab).** Ein Sammelticket wird, wenn es drankommt, immer komplett umgesetzt: kein Teil, kein Rest-Übertrag ins nächste Sammelticket, weil sich sonst zu viel anstaut. Was beim Arbeiten dazukommt oder auffällt (neue Zeilen-Kommentare, eigene Befunde, Lens-`ausserhalbScope`), kommt in denselben PR. Ist er dafür zu groß, deckt die begründete Commit-Zeile `KQ-Diffsize-Override:` das ab. Nur was wirklich nicht machbar ist, geht als Entscheidung an die Maintainerin, nichts wird still ausgelagert. Jede Zeile bekommt ein Ergebnis (umgesetzt, geprüft und dokumentiert, oder begründet „bewusst nicht“ bei optionalen Teilen).
+
+**Trade-off.** Der PR wird breit und schwerer zu reviewen (mehr Lens-Runden, größerer Revert); dafür bleibt kein Rest, und die Zeilenzahl je Generation sinkt auf null, statt umgeschichtet zu werden.
+
 ## Re-Evaluierungs-Trigger
 
 - **Ein selbst gemergter PR hat eine Leitplanke tatsächlich aufgeweicht** (per Audit-Kommentar oder später entdeckt) — dann auf „alles außer Gate-Aufweichung" zurückgehen oder einen technischen Riegel für Gate-Schwellen einziehen.

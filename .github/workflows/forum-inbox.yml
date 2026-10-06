@@ -69,7 +69,8 @@ jobs:
 
           # Schiebt ein frisch angelegtes Issue an die OBERSTE Board-Position (#747),
           # damit ein Forum-Ticket beim "nächstes Ticket"-Griff sofort vorne steht.
-          # addProjectV2ItemById ist idempotent: ist das Issue schon per Board-„Auto-add"
+          # addProjectV2ItemById ist idempotent (ein Board-Auto-add für Issues gibt es nicht, nur für Sub-Issues; Todo setzt der
+          # Board-Workflow „Item added to project" ~2 s nach dem Hinzufügen, belegt in der Probe zu #1309). Ist das Issue schon
           # drauf, kommt einfach die bestehende Item-ID zurück – der async-Race ist damit egal.
           # updateProjectV2ItemPosition ohne afterId = ganz oben.
           set_board_top() {

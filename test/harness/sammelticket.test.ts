@@ -98,3 +98,34 @@ describe("Sammelticket-Position (#1276)", () => {
     assert.doesNotMatch(agents, new RegExp("was in einen PR " + "passt"));
   });
 });
+
+describe("Sammelticket komplett statt halbiert (#1311, ersetzt die Halbierung aus #1309)", () => {
+  const agents = lies("AGENTS.md");
+  const doc = lies("docs/ticket-reihenfolge.md");
+  const abarbeiten = doc.split("\n").find((z) => z.startsWith("- **Abarbeiten:**")) ?? "";
+  const claimen = doc.split("\n").find((z) => z.startsWith("- **Beim Claimen des Sammeltickets**")) ?? "";
+
+  /** Verlangt der Abarbeiten-Bullet ein Ergebnis je Zeile, alle Zeilen und den Override für zu große PRs? Ein Prädikat für Artefakt und Gegenbeispiel. */
+  const nenntErgebnisPflicht = (s: string) => s.includes("**alle** Zeilen") && s.includes("**Ergebnis**") && s.includes("KQ-Diffsize-Override") && s.includes("nichts wird still ausgelagert");
+  /** Beschreibt ein Text noch die Halbierung (die Teilung der Zeilenliste, #1309)? */
+  const halbiert = (s: string) => /zweite Hälfte/.test(s) || /erste Hälfte/.test(s);
+
+  test("Abarbeiten verlangt alle Zeilen mit je einem Ergebnis; Claimen überträgt nichts", () => {
+    assert.ok(nenntErgebnisPflicht(abarbeiten), "Abarbeiten-Bullet: alle Zeilen, Ergebnis je Zeile, Override, nichts still auslagern");
+    assert.ok(!halbiert(claimen), "Beim Claimen wird keine Hälfte übertragen");
+    assert.match(claimen, /fehlt es, direkt eines anlegen/);
+  });
+
+  test("die Halbierung steht nirgends mehr in AGENTS.md oder im Abarbeiten-Bullet", () => {
+    assert.ok(!halbiert(agents));
+    assert.ok(!halbiert(abarbeiten));
+  });
+
+  test("Erkennung greift (Red-Green): der alte Wortlaut und die Halbierung fallen durch", () => {
+    assert.ok(!nenntErgebnisPflicht("- **Abarbeiten:** so viele Zeilen umsetzen, wie " + "in **einen** PR " + "passen (`check:diffsize`)."));
+    assert.ok(!nenntErgebnisPflicht("- **Abarbeiten:** jede Zeile der ersten Hälfte bekommt ein **Ergebnis**; KQ-Diffsize-Override."));
+    assert.ok(halbiert("die **zweite " + "Hälfte** ins nächste Sammelticket übertragen"));
+    assert.ok(!halbiert("kein Teil, kein Rest-Übertrag"));
+    assert.ok(!nenntErgebnisPflicht(""));
+  });
+});

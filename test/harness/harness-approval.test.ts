@@ -352,6 +352,8 @@ const ABGELOEST = [
   /(Optik|Stil|Look)[^.\n]{0,40}mit der Maintainerin abstimmen/i,
   /(was|wie) in (\*\*)?einen(\*\*)? PR pass(t|en)/i,
   /Rest und neue Befunde ins nächste Sammelticket/i,
+  /zweite Hälfte[^.\n]{0,80}(Sammelticket|übertrag)/i,
+  /erste Hälfte[^.\n]{0,80}(PR|Sammelticket)/i,
 ];
 const SCAN_ENDUNGEN = /\.(md|js|mjs|cjs|ts|json|yml|yaml)$/;
 const EIGENE_DATEI = "test/harness/harness-approval.test.ts";
@@ -404,6 +406,8 @@ describe("Die abgelöste Label-Mechanik kommt nicht zurück (ADR 0014, #1303)", 
       "Abarbeiten: so viele Zeilen, wie in einen PR passen.",
       "Abarbeiten, was in **einen** PR passt",
       "Rest und neue Befunde ins nächste Sammelticket.",
+      "die zweite Hälfte der Zeilen ins nächste Sammelticket übertragen",
+      "die erste Hälfte vollständig in einem PR erledigen",
     ]) {
       assert.ok(abgeloesteFundstellen({ "docs/x.md": alt }).length >= 1, alt);
     }

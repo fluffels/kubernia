@@ -100,7 +100,7 @@ test("parseNpcs: wirft bei leerem Katalog", () => {
 test("parseNpcs: wirft bei fehlendem Pflichtfeld (mit Pfad)", () => {
   assert.throws(
     () => parseNpcs({ ole: { title: "T", tex: "char_o" } }),
-    (e: unknown) => e instanceof ContentValidationError && /npcs\.ole\.name/.test(e.message),
+    validation(/npcs\.ole\.name/),
   );
 });
 
@@ -114,7 +114,7 @@ test("parseNpcs: wirft bei leerem Namen", () => {
 test("parseNpcs: wirft bei fehlender tex (jeder NPC braucht eine PixelLab-Figur, #670)", () => {
   assert.throws(
     () => parseNpcs({ ole: { name: "Ole", title: "T" } }),
-    (e: unknown) => e instanceof ContentValidationError && /npcs\.ole\.tex/.test(e.message),
+    validation(/npcs\.ole\.tex/),
   );
 });
 
@@ -132,7 +132,7 @@ const known = new Set(["ole", "bo"]);
 test("parseSmalltalk: wirft bei unbekanntem NPC-Schlüssel (mit Pfad)", () => {
   assert.throws(
     () => parseSmalltalk({ gibtsnicht: ["hi"] }, known),
-    (e: unknown) => e instanceof ContentValidationError && /smalltalk\.gibtsnicht/.test(e.message),
+    validation(/smalltalk\.gibtsnicht/),
   );
 });
 
@@ -143,7 +143,7 @@ test("parseSmalltalk: wirft bei leerer Zeilen-Liste", () => {
 test("parseSmalltalk: wirft bei nicht-textueller Zeile", () => {
   assert.throws(
     () => parseSmalltalk({ ole: ["ok", 123] }, known),
-    (e: unknown) => e instanceof ContentValidationError && /smalltalk\.ole\[1\]/.test(e.message),
+    validation(/smalltalk\.ole\[1\]/),
   );
 });
 
@@ -223,69 +223,69 @@ test("parseQuests: übernimmt gültige requires-Liste und repeatable-Flag", () =
 test("parseQuests: wirft bei requires mit leerem String (mit Pfad)", () => {
   assert.throws(
     () => parseQuests([{ ...reqQuest, requires: [""] }]),
-    (e: unknown) => e instanceof ContentValidationError && /requires\[0\]/.test((e as Error).message),
+    validation(/requires\[0\]/),
   );
 });
 
 test("parseQuests: wirft bei requires, das kein Array ist", () => {
   assert.throws(
     () => parseQuests([{ ...reqQuest, requires: "docker-first-container" }]),
-    (e: unknown) => e instanceof ContentValidationError && /requires/.test((e as Error).message),
+    validation(/requires/),
   );
 });
 
 test("parseQuests: wirft bei repeatable mit falschem Typ", () => {
   assert.throws(
     () => parseQuests([{ ...reqQuest, repeatable: "ja" }]),
-    (e: unknown) => e instanceof ContentValidationError && /repeatable/.test((e as Error).message),
+    validation(/repeatable/),
   );
 });
 
 /* ---------- parseQuests: kaputte Daten MÜSSEN explizit werfen ---------- */
 
 test("parseQuests: wirft bei Nicht-Array", () => {
-  assert.throws(() => parseQuests({}), ContentValidationError);
+  assert.throws(() => parseQuests({}), validation(/„quests": Array erwartet/));
 });
 
 test("parseQuests: wirft bei unbekanntem Schritt-Typ (mit Pfad)", () => {
   assert.throws(
     () => parseQuests([{ ...minimalQuest, steps: [{ type: "zauberei", npc: "ole", lines: ["x"] }] }]),
-    (e: unknown) => e instanceof ContentValidationError && /steps\[0\]\.type/.test((e as Error).message),
+    validation(/steps\[0\]\.type/),
   );
 });
 
 test("parseQuests: wirft bei leerem accept-Array", () => {
   assert.throws(
     () => parseQuests([{ ...minimalQuest, steps: [{ type: "teach", brief: "B", cmd: { id: "t", intro: "I", text: "T", accept: [], solution: "x", hint: "H" } }] }]),
-    ContentValidationError,
+    validation(/steps\[0\]\.cmd\.accept.*nicht-leeres accept-Array/),
   );
 });
 
 test("parseQuests: wirft bei ungültigem RegExp-Pattern (mit Pfad)", () => {
   assert.throws(
     () => parseQuests([{ ...minimalQuest, steps: [{ type: "teach", brief: "B", cmd: { id: "t", intro: "I", text: "T", accept: ["("], solution: "x", hint: "H" } }] }]),
-    (e: unknown) => e instanceof ContentValidationError && /accept\[0\]/.test((e as Error).message),
+    validation(/accept\[0\]/),
   );
 });
 
 test("parseQuests: wirft bei unbekanntem check-Key (mit Pfad)", () => {
   assert.throws(
     () => parseQuests([{ ...minimalQuest, steps: [{ type: "teach", brief: "B", cmd: { id: "t", intro: "I", text: "T", accept: ["^x$"], solution: "x", hint: "H", check: "gibtsnicht/nie" } }] }]),
-    (e: unknown) => e instanceof ContentValidationError && /check/.test((e as Error).message),
+    validation(/check/),
   );
 });
 
 test("parseQuests: wirft bei dialog-Schritt ohne Zeilen", () => {
   assert.throws(
     () => parseQuests([{ ...minimalQuest, steps: [{ type: "dialog", npc: "ole", lines: [] }] }]),
-    ContentValidationError,
+    validation(/steps\[0\]\.lines.*nicht-leeres Array/),
   );
 });
 
 test("parseQuests: wirft bei choice ohne wohlgeformte Optionen", () => {
   assert.throws(
     () => parseQuests([{ ...minimalQuest, steps: [{ type: "choice", npc: "ole", q: "?", options: [{ t: "A", ok: "ja", reply: "R" }] }] }]),
-    ContentValidationError,
+    validation(/options\[0\]\.ok.*Boolean erwartet/),
   );
 });
 
@@ -295,7 +295,7 @@ test("parseQuests: wirft bei fehlendem topic (struktureller Pflicht-String, #327
   const { topic: _weg, ...ohneTopic } = minimalQuest;
   assert.throws(
     () => parseQuests([ohneTopic]),
-    (e: unknown) => e instanceof ContentValidationError && /\.topic/.test((e as Error).message),
+    validation(/\.topic/),
   );
 });
 
@@ -308,21 +308,21 @@ test("parseQuestTopics: akzeptiert eine wohlgeformte, geordnete Liste", () => {
 });
 
 test("parseQuestTopics: wirft bei Nicht-Array bzw. leerer Liste", () => {
-  assert.throws(() => parseQuestTopics({}), ContentValidationError);
-  assert.throws(() => parseQuestTopics([]), ContentValidationError);
+  assert.throws(() => parseQuestTopics({}), validation(/„quest-topics".*Array erwartet/));
+  assert.throws(() => parseQuestTopics([]), validation(/„quest-topics".*mindestens ein Thema/));
 });
 
 test("parseQuestTopics: wirft bei Eintrag ohne id/label (mit Pfad)", () => {
   assert.throws(
     () => parseQuestTopics([{ id: "docker" }]),
-    (e: unknown) => e instanceof ContentValidationError && /\[0\]\.label/.test((e as Error).message),
+    validation(/\[0\]\.label/),
   );
 });
 
 test("parseQuestTopics: wirft bei doppelter Themen-ID", () => {
   assert.throws(
     () => parseQuestTopics([{ id: "docker", label: "Docker" }, { id: "docker", label: "Nochmal" }]),
-    (e: unknown) => e instanceof ContentValidationError && /doppelte Themen-ID/.test((e as Error).message),
+    validation(/doppelte Themen-ID/),
   );
 });
 
@@ -399,28 +399,28 @@ test("assembleQuests: ordnet nach order-Liste, NICHT nach Regionen-Reihenfolge",
 test("assembleQuests: wirft bei doppelter Quest-ID über Regionen hinweg", () => {
   assert.throws(
     () => assembleQuests([[mkQuest("docker-first-container")], [mkQuest("docker-first-container")]], ["docker-first-container"]),
-    (e: unknown) => e instanceof ContentValidationError && /doppelte Quest-ID/.test((e as Error).message),
+    validation(/doppelte Quest-ID/),
   );
 });
 
 test("assembleQuests: wirft bei order-Eintrag ohne passende Quest (Tippfehler)", () => {
   assert.throws(
     () => assembleQuests([[mkQuest("docker-first-container")]], ["docker-first-container", "q-tippfehler"]),
-    (e: unknown) => e instanceof ContentValidationError && /q-tippfehler/.test((e as Error).message),
+    validation(/q-tippfehler/),
   );
 });
 
 test("assembleQuests: wirft, wenn eine Quest nicht in der order steht (unerreichbar)", () => {
   assert.throws(
     () => assembleQuests([[mkQuest("docker-first-container"), mkQuest("docker-list-containers")]], ["docker-first-container"]),
-    (e: unknown) => e instanceof ContentValidationError && /docker-list-containers.*fehlt in quest-order/.test((e as Error).message),
+    validation(/docker-list-containers.*fehlt in quest-order/),
   );
 });
 
 test("assembleQuests: wirft bei doppeltem Eintrag in der order", () => {
   assert.throws(
     () => assembleQuests([[mkQuest("docker-first-container")]], ["docker-first-container", "docker-first-container"]),
-    ContentValidationError,
+    validation(/„quest-order".*doppelt/),
   );
 });
 
@@ -485,42 +485,42 @@ test("parseCmdCards: übernimmt optionales introducedIn (#412)", () => {
 test("parseCmdCards: wirft bei leerem introducedIn (mit Pfad)", () => {
   assert.throws(
     () => parseCmdCards([{ ...minimalCard, introducedIn: "" }]),
-    (e: unknown) => e instanceof ContentValidationError && /cmdcard c-x\.introducedIn/.test((e as Error).message),
+    validation(/cmdcard c-x\.introducedIn/),
   );
 });
 
 /* ---------- parseCmdCards: kaputte Daten MÜSSEN explizit werfen (Negativfälle) ---------- */
 
 test("parseCmdCards: wirft bei Nicht-Array", () => {
-  assert.throws(() => parseCmdCards({}), ContentValidationError);
+  assert.throws(() => parseCmdCards({}), validation(/„cmdcards".*Array erwartet/));
 });
 
 test("parseCmdCards: wirft bei leerer Liste", () => {
-  assert.throws(() => parseCmdCards([]), ContentValidationError);
+  assert.throws(() => parseCmdCards([]), validation(/„cmdcards".*mindestens eine Befehls-Karte/));
 });
 
 test("parseCmdCards: wirft bei fehlendem chapter (mit Pfad)", () => {
   assert.throws(
     () => parseCmdCards([{ id: "c-x", q: "q", accept: ["^x$"], solution: "x", explain: "e" }]),
-    (e: unknown) => e instanceof ContentValidationError && /cmdcard c-x\.chapter/.test((e as Error).message),
+    validation(/cmdcard c-x\.chapter/),
   );
 });
 
 test("parseCmdCards: wirft bei fehlendem explain (mit Pfad)", () => {
   assert.throws(
     () => parseCmdCards([{ id: "c-x", chapter: "docker-first-container", q: "q", accept: ["^x$"], solution: "x" }]),
-    (e: unknown) => e instanceof ContentValidationError && /cmdcard c-x\.explain/.test((e as Error).message),
+    validation(/cmdcard c-x\.explain/),
   );
 });
 
 test("parseCmdCards: wirft bei leerem accept-Array", () => {
-  assert.throws(() => parseCmdCards([{ ...minimalCard, accept: [] }]), ContentValidationError);
+  assert.throws(() => parseCmdCards([{ ...minimalCard, accept: [] }]), validation(/cmdcard c-x\.accept.*nicht-leeres accept-Array/));
 });
 
 test("parseCmdCards: wirft bei ungültigem RegExp-Pattern (mit Pfad)", () => {
   assert.throws(
     () => parseCmdCards([{ ...minimalCard, accept: ["("] }]),
-    (e: unknown) => e instanceof ContentValidationError && /accept\[0\]/.test((e as Error).message),
+    validation(/accept\[0\]/),
   );
 });
 
@@ -534,7 +534,7 @@ test("assembleCmdCards: führt Geber-Listen zusammen, Reihenfolge bleibt erhalte
 test("assembleCmdCards: wirft bei doppelter Karten-ID über Geber-Dateien hinweg", () => {
   assert.throws(
     () => assembleCmdCards([[mkCard("c-dup")], [mkCard("c-dup")]]),
-    (e: unknown) => e instanceof ContentValidationError && /doppelte Karten-ID/.test((e as Error).message),
+    validation(/doppelte Karten-ID/),
   );
 });
 
@@ -584,42 +584,42 @@ test("parseQuizCards: übernimmt optionales introducedIn (#412)", () => {
 test("parseQuizCards: wirft bei leerem introducedIn (mit Pfad)", () => {
   assert.throws(
     () => parseQuizCards([{ ...minimalQuiz, introducedIn: "" }]),
-    (e: unknown) => e instanceof ContentValidationError && /quizcard q-x\.introducedIn/.test((e as Error).message),
+    validation(/quizcard q-x\.introducedIn/),
   );
 });
 
 /* ---------- parseQuizCards: kaputte Daten MÜSSEN explizit werfen (Negativfälle) ---------- */
 
 test("parseQuizCards: wirft bei Nicht-Array", () => {
-  assert.throws(() => parseQuizCards({}), ContentValidationError);
+  assert.throws(() => parseQuizCards({}), validation(/„crabquiz".*Array erwartet/));
 });
 
 test("parseQuizCards: wirft bei leerer Liste", () => {
-  assert.throws(() => parseQuizCards([]), ContentValidationError);
+  assert.throws(() => parseQuizCards([]), validation(/„crabquiz".*mindestens eine Quiz-Karte/));
 });
 
 test("parseQuizCards: wirft bei nur einer Option (mit Pfad)", () => {
   assert.throws(
     () => parseQuizCards([{ ...minimalQuiz, options: ["nur eine"] }]),
-    (e: unknown) => e instanceof ContentValidationError && /quizcard q-x\.options/.test((e as Error).message),
+    validation(/quizcard q-x\.options/),
   );
 });
 
 test("parseQuizCards: wirft bei correct-Index außerhalb der Optionen (mit Pfad)", () => {
   assert.throws(
     () => parseQuizCards([{ ...minimalQuiz, correct: 5 }]),
-    (e: unknown) => e instanceof ContentValidationError && /quizcard q-x\.correct/.test((e as Error).message),
+    validation(/quizcard q-x\.correct/),
   );
 });
 
 test("parseQuizCards: wirft bei correct ohne Ganzzahl", () => {
-  assert.throws(() => parseQuizCards([{ ...minimalQuiz, correct: 1.5 }]), ContentValidationError);
+  assert.throws(() => parseQuizCards([{ ...minimalQuiz, correct: 1.5 }]), validation(/quizcard q-x\.correct.*Ganzzahl/));
 });
 
 test("parseQuizCards: wirft bei fehlendem explain (mit Pfad)", () => {
   assert.throws(
     () => parseQuizCards([{ id: "q-x", q: "q", options: ["a", "b"], correct: 0 }]),
-    (e: unknown) => e instanceof ContentValidationError && /quizcard q-x\.explain/.test((e as Error).message),
+    validation(/quizcard q-x\.explain/),
   );
 });
 
@@ -633,7 +633,7 @@ test("assembleQuizCards: führt Thema-Listen zusammen, Reihenfolge bleibt erhalt
 test("assembleQuizCards: wirft bei doppelter Quiz-ID über Thema-Dateien hinweg", () => {
   assert.throws(
     () => assembleQuizCards([[mkQuiz("q-dup")], [mkQuiz("q-dup")]]),
-    (e: unknown) => e instanceof ContentValidationError && /doppelte Quiz-ID/.test((e as Error).message),
+    validation(/doppelte Quiz-ID/),
   );
 });
 
@@ -681,43 +681,43 @@ test("parsePractice: expandiert die gruppierte Form korrekt", () => {
 /* ---------- parsePractice: kaputte Daten MÜSSEN explizit werfen (Negativfälle) ---------- */
 
 test("parsePractice: wirft bei Nicht-Objekt", () => {
-  assert.throws(() => parsePractice([]), ContentValidationError);
-  assert.throws(() => parsePractice(null), ContentValidationError);
-  assert.throws(() => parsePractice("nope"), ContentValidationError);
+  assert.throws(() => parsePractice([]), validation(/„practice".*Objekt erwartet/));
+  assert.throws(() => parsePractice(null), validation(/„practice".*Objekt erwartet/));
+  assert.throws(() => parsePractice("nope"), validation(/„practice".*Objekt erwartet/));
 });
 
 test("parsePractice: wirft bei NPC ohne jede Folge-Quest (mit Pfad)", () => {
   assert.throws(
     () => parsePractice({ bo: {} }),
-    (e: unknown) => e instanceof ContentValidationError && /practice\.bo/.test((e as Error).message),
+    validation(/practice\.bo/),
   );
 });
 
 test("parsePractice: wirft bei leerer Drill-Liste einer Quest (mit Pfad)", () => {
   assert.throws(
     () => parsePractice({ bo: { "quest-a": [] } }),
-    (e: unknown) => e instanceof ContentValidationError && /practice\.bo\.quest-a/.test((e as Error).message),
+    validation(/practice\.bo\.quest-a/),
   );
 });
 
 test("parsePractice: wirft bei nicht-textuellem Drill (mit Pfad)", () => {
   assert.throws(
     () => parsePractice({ bo: { "quest-a": ["ok", 123] } }),
-    (e: unknown) => e instanceof ContentValidationError && /practice\.bo\.quest-a\[1\]/.test((e as Error).message),
+    validation(/practice\.bo\.quest-a\[1\]/),
   );
 });
 
 test("parsePractice: wirft bei Gruppe, die kein Objekt ist (mit Pfad)", () => {
   assert.throws(
     () => parsePractice({ bo: ["quest-a"] }),
-    (e: unknown) => e instanceof ContentValidationError && /practice\.bo/.test((e as Error).message),
+    validation(/practice\.bo/),
   );
 });
 
 test("parsePractice: wirft bei doppeltem Drill über Quests hinweg (mit Pfad)", () => {
   assert.throws(
     () => parsePractice({ bo: { "quest-a": ["dup"], "quest-b": ["dup"] } }),
-    (e: unknown) => e instanceof ContentValidationError && /doppelter Drill „dup"/.test((e as Error).message),
+    validation(/doppelter Drill „dup"/),
   );
 });
 
@@ -765,16 +765,16 @@ test("parseQuests: ohne solvedBy bleibt es beim Default (kein Feld gesetzt) (#89
   assert.equal(step.tasks[0].altSolutions, undefined);
 });
 
-for (const [label, task] of [
-  ["solvedBy check ohne check", { solvedBy: "check", altSolutions: ["a"] }],
-  ["solvedBy check ohne altSolutions", { solvedBy: "check", check: goalCheck }],
-  ["solvedBy check mit leeren altSolutions", { solvedBy: "check", check: goalCheck, altSolutions: [] }],
-  ["altSolutions ohne check-Modus", { check: goalCheck, altSolutions: ["a"] }],
-  ["altSolutions im Modus accept", { solvedBy: "accept", check: goalCheck, altSolutions: ["a"] }],
-  ["unbekannter solvedBy-Wert", { solvedBy: "bogus", check: goalCheck, altSolutions: ["a"] }],
+for (const [label, task, meldung] of [
+  ["solvedBy check ohne check", { solvedBy: "check", altSolutions: ["a"] }, /solvedBy: "check" braucht ein check/],
+  ["solvedBy check ohne altSolutions", { solvedBy: "check", check: goalCheck }, /altSolutions": Array erwartet/],
+  ["solvedBy check mit leeren altSolutions", { solvedBy: "check", check: goalCheck, altSolutions: [] }, /altSolutions": nicht-leeres Array/],
+  ["altSolutions ohne check-Modus", { check: goalCheck, altSolutions: ["a"] }, /altSolutions": nur mit solvedBy: "check" erlaubt/],
+  ["altSolutions im Modus accept", { solvedBy: "accept", check: goalCheck, altSolutions: ["a"] }, /altSolutions": nur mit solvedBy: "check" erlaubt/],
+  ["unbekannter solvedBy-Wert", { solvedBy: "bogus", check: goalCheck, altSolutions: ["a"] }, /unbekannter Lösungsmodus: bogus/],
 ] as const) {
   test(`parseQuests: wirft bei ${label} (#891)`, () => {
-    assert.throws(() => parseQuests(termQuest(task)), ContentValidationError);
+    assert.throws(() => parseQuests(termQuest(task)), validation(meldung));
   });
 }
 

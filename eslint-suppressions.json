@@ -507,9 +507,25 @@
       "count": 5
     }
   },
+  "test/harness/stop-verify-hook.test.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 3
+    }
+  },
+  "test/harness/worktree-guard.test.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 5
+    }
+  },
   "test/loader.test.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 33
+      "count": 6
     }
   },
   "test/lockfile.test.ts": {
@@ -619,14 +635,6 @@
       "count": 2
     }
   },
-  "test/harness/stop-verify-hook.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    }
-  },
   "test/storage-arc-quests.test.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 14
@@ -696,14 +704,6 @@
   },
   "test/werft-drills.test.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 5
-    }
-  },
-  "test/harness/worktree-guard.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
       "count": 5
     }
   }

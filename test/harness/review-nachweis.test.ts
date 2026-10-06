@@ -15,6 +15,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { blockFunktion, workflowBlock } from "./workflow-block";
 
@@ -110,4 +111,65 @@ describe("(e) Texte verweisen auf das Skript", () => {
   for (const datei of [".claude/skills/review-lenses/SKILL.md", ".claude/agents/kubernia-umsetzer.md", "docs/agent-harness.md"]) {
     test(datei, () => assert.match(read(datei), /check-review-nachweis/));
   }
+});
+
+describe("(f) „Cap 2“ heißt immer Fix-Runden (#1309)", () => {
+  /** Zeilen, die „Cap 2“ ohne „Fix-Runde“ nennen: ohne die Präzisierung liest man „2 Pässe“. */
+  const unpraezise = (text: string) => text.split(/\r?\n/).filter((z) => z.includes("Cap 2") && !z.includes("Fix-Runde"));
+
+  test("jede getrackte Agenten-/Harness-/Doku-Zeile mit „Cap 2“ nennt Fix-Runden", () => {
+    const dateien = execFileSync("git", ["ls-files", ".claude", "AGENTS.md", "docs"], { encoding: "utf8" })
+      .split(/\r?\n/)
+      .filter((d) => /\.(md|js)$/.test(d) && !d.startsWith("docs/adr/"));
+    assert.ok(dateien.length > 20, "Dateiliste unerwartet klein: git ls-files fehlgeschlagen?");
+    const treffer = dateien.flatMap((d) => unpraezise(read(d)).map((z) => `${d}: ${z.trim().slice(0, 80)}`));
+    assert.deepEqual(treffer, []);
+  });
+
+  test("Erkennung greift (Red-Green)", () => {
+    assert.equal(unpraezise("Konvergenzschleife (Cap 2)").length, 1);
+    assert.equal(unpraezise("Cap 2 Fix-Runden, höchstens 3 Pässe").length, 0);
+  });
+});
+
+describe("Nachweis-Hilfen des Workflows (#1309)", () => {
+  type Stand = { paesse: number; ersteLenses: string[] | null };
+  const hilfen = workflowBlock("// ── Review-Nachweis (#1270) — Anfang", "// ── Review-Nachweis (#1270) — Ende").block;
+  const nachweisStand = blockFunktion<(s: Stand, e: { modus: string; berichte: { lens: string }[] }) => Stand>(hilfen, "nachweisStand");
+  const nachweisFuerPr = blockFunktion<(e: { konvergiert: boolean; head?: string; stand: Stand; plan: unknown }) => string>(hilfen, "nachweisFuerPr");
+  const reviewKonvergiert = blockFunktion<(e: { verifyGruen: boolean; blockierend: unknown[]; fehlend: string[] }) => boolean>(hilfen, "reviewKonvergiert");
+  const fehlendeLenses = blockFunktion<(erwartet: string[], berichte: { lens: string }[]) => string[]>(hilfen, "fehlendeLenses");
+  const normal = (v: unknown) => JSON.parse(JSON.stringify(v)) as unknown;
+  const DREI3 = ["architektur", "requirement-treue", "test-adaequanz"].map((lens) => ({ lens }));
+
+  test("ein voller Pass merkt die Brillen, ein Delta-Pass ersetzt sie nie, jeder zählt als Pass", () => {
+    const nachVoll = nachweisStand({ paesse: 0, ersteLenses: null }, { modus: "voll", berichte: DREI3 });
+    assert.deepEqual(normal(nachVoll), { paesse: 1, ersteLenses: DREI3.map((b) => b.lens) });
+    const nachDelta = nachweisStand(nachVoll, { modus: "delta", berichte: [{ lens: "architektur" }] });
+    assert.deepEqual(normal(nachDelta), { paesse: 2, ersteLenses: DREI3.map((b) => b.lens) });
+    const nachWiederholung = nachweisStand(nachDelta, { modus: "voll", berichte: [{ lens: "doku" }] });
+    assert.deepEqual(normal(nachWiederholung), { paesse: 3, ersteLenses: ["doku"] }, "ein voller Wiederholungspass ersetzt sie");
+  });
+
+  test("nachweisFuerPr: leer ohne Konvergenz, <SHA> ohne Head, sonst parsebar", () => {
+    const stand = { paesse: 2, ersteLenses: ["doku"] };
+    assert.equal(nachweisFuerPr({ konvergiert: false, head: SHA, stand, plan: "P" }), "");
+    assert.match(nachweisFuerPr({ konvergiert: true, stand, plan: "P" }), /head=<SHA> runden=2 lenses=doku/);
+    const n = parseNachweis(nachweisFuerPr({ konvergiert: true, head: SHA, stand, plan: "P" }));
+    assert.equal(n.review?.head, SHA);
+    assert.equal(n.review?.runden, 2);
+  });
+
+  test("Konvergenz verlangt grünes verify, keine Blocker UND keine fehlende Brille", () => {
+    assert.equal(reviewKonvergiert({ verifyGruen: true, blockierend: [], fehlend: [] }), true);
+    assert.equal(reviewKonvergiert({ verifyGruen: false, blockierend: [], fehlend: [] }), false);
+    assert.equal(reviewKonvergiert({ verifyGruen: true, blockierend: [{}], fehlend: [] }), false);
+    assert.equal(reviewKonvergiert({ verifyGruen: true, blockierend: [], fehlend: ["doku"] }), false);
+  });
+
+  test("fehlendeLenses nennt nur die ohne Bericht (auch bei null-Einträgen)", () => {
+    assert.deepEqual(normal(fehlendeLenses(["a", "b"], [{ lens: "a" }])), ["b"]);
+    assert.deepEqual(normal(fehlendeLenses(["a"], [null as unknown as { lens: string }])), ["a"]);
+    assert.deepEqual(normal(fehlendeLenses(["a"], [{ lens: "a" }])), []);
+  });
 });

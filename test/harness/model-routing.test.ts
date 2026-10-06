@@ -80,6 +80,7 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { blockFunktion, workflowBlock } from "./workflow-block";
 import { workflowLauf } from "./workflow-lauf";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im tsconfig)
@@ -241,7 +242,7 @@ function agentTypeVerstoesse(optionen: string, agenten: Record<string, Record<st
   const out: string[] = [];
   const effort = planEffort(optionen);
   if (effort !== fm.effort) out.push(`${kopf}: effort ${effort ?? "(fehlt)"} ≠ Frontmatter ${fm.effort}`);
-  if (/\bmodel:\s*['"]/.test(optionen)) out.push(`${kopf}: \`model:\` neben agentType überstimmt das Frontmatter`);
+  if (/\bmodel\s*:/.test(optionen)) out.push(`${kopf}: \`model:\` neben agentType überstimmt das Frontmatter`);
   return out;
 }
 
@@ -259,7 +260,7 @@ const istGeroutet = (optionen: string) => /\beffort:/.test(optionen) && /\b(mode
  * ohne Modell-Angabe erbt das Session-Modell" ist die weiterhin GÜLTIGE Warnung, die
  * überhaupt erst zur Konvention geführt hat.
  */
-const RETIRED_ROUTING_CLAIMS: { term: string; home: string }[] = [
+const RETIRED_ROUTING_CLAIMS: { term: string; home: string; nurWenn?: RegExp; ausser?: RegExp }[] = [
   {
     term: "Opus-Standard-Effort",
     home: "die Lenses tragen `effort: high` im Frontmatter von kubernia-lens und laufen auf beiden Pfaden damit (#1209)",
@@ -267,6 +268,14 @@ const RETIRED_ROUTING_CLAIMS: { term: string; home: string }[] = [
   {
     term: "Session-Default",
     home: `die Umsetzung tippt auf beiden Pfaden den Coding-Tier – im Workflow per agent({model}), im Skill-Pfad im Subagenten ${UMSETZER} (Frontmatter, #1280)`,
+  },
+  {
+    // „Projekt-Default sonnet in settings.json" ist seit #1280 abgelegt (#1309). `nurWenn`/`ausser` sparen die
+    // Historien-Absätze aus (model-routing §5, agent-harness Stufe 3/4), die den Begriff mit Datum/Ticket nennen.
+    term: "Projekt-Default",
+    nurWenn: /sonnet/i,
+    ausser: /#1065|#1280|entfernt|ließe|ließ\b|damals/,
+    home: `kein Modell-Pin im Projekt; Umsetzung im Subagenten ${UMSETZER} (#1280)`,
   },
 ];
 
@@ -277,8 +286,11 @@ function retiredRoutingClaims(md: string): { line: number; term: string; home: s
     .split(/\r?\n/)
     .forEach((raw, i) => {
       const line = raw.replace(/`[^`\n]*`/g, "");
-      for (const { term, home } of RETIRED_ROUTING_CLAIMS) {
-        if (line.includes(term)) found.push({ line: i + 1, term, home, text: raw.trim().slice(0, 120) });
+      for (const { term, home, nurWenn, ausser } of RETIRED_ROUTING_CLAIMS) {
+        if (!line.includes(term)) continue;
+        if (nurWenn && !nurWenn.test(raw)) continue;
+        if (ausser?.test(raw)) continue;
+        found.push({ line: i + 1, term, home, text: raw.trim().slice(0, 120) });
       }
     });
   return found;
@@ -318,7 +330,7 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
     );
     assert.doesNotMatch(
       spawn,
-      /\bmodel:\s*["']/,
+      /\bmodel\s*:/,
       "Ein `model:` am Spawn überstimmt das Frontmatter von kubernia-lens – das Modell steht nur dort (#1209).",
     );
     const lens = frontmatter(read(".claude/agents/kubernia-lens.md"));
@@ -476,6 +488,7 @@ describe("Jede Routing-Stelle ist explizit gesetzt (#1065)", () => {
     assert.equal(agentTypeVerstoesse("{ label: 'l', agentType: 'kubernia-lens' }", agenten).length, 1, "Effort fehlt");
     assert.equal(agentTypeVerstoesse("{ label: 'l', agentType: 'gibt-es-nicht', effort: 'high' }", agenten).length, 1, "unbekannter Typ");
     assert.equal(agentTypeVerstoesse("{ label: 'l', agentType: 'kubernia-lens', model: 'opus', effort: 'high' }", agenten).length, 1, "model-Override");
+    assert.equal(agentTypeVerstoesse("{ label: 'l', agentType: 'kubernia-lens', model: opus, effort: 'high' }", agenten).length, 1, "unquotiertes model: überstimmt ebenso (#1309)");
     assert.deepEqual(agentTypeVerstoesse("{ label: 'x', model: 'sonnet', effort: 'medium' }", agenten), [], "ohne agentType nicht betroffen");
   });
 
@@ -606,6 +619,16 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
     assert.deepEqual(userScopeServer("nichts"), []);
   });
 
+  test("Umsetzer-Whitelist ist die vollständige erwartete Menge (#1309): nichts fällt still weg, nichts kommt still dazu", () => {
+    const tools = (frontmatter(read(UMSETZER)).tools ?? "").split(",").map((t) => t.trim());
+    const erwartet = [
+      "Read", "Grep", "Glob", "Bash", "PowerShell", "Edit", "Write", "WebFetch", "WebSearch", "Agent", "Monitor", "TaskStop", "ToolSearch",
+      ...["navigate", "evaluate", "take_screenshot", "snapshot", "press_key", "click", "type", "wait_for", "console_messages", "resize", "tabs", "close", "start_video", "stop_video", "handle_dialog", "file_upload"].map((t) => `mcp__playwright__browser_${t}`),
+      ...["queryMetrics", "getMetricsSchema", "listObservations", "getObservation"].map((t) => `mcp__langfuse__${t}`),
+    ];
+    assert.deepEqual([...tools].sort(), [...erwartet].sort(), "tools: des Umsetzers weicht von der erwarteten Gesamtmenge ab: bewusst ändern = diese Liste mitpflegen");
+  });
+
   test("der kubernia-Skill spawnt den Umsetzer ohne model-Override", () => {
     const spawn = spawnFuer(read(UMSETZUNGS_SKILL), "kubernia-umsetzer");
     assert.notEqual(spawn, "", `${UMSETZUNGS_SKILL} braucht einen \`Agent({ subagent_type: "kubernia-umsetzer", … })\`-Spawn`);
@@ -685,6 +708,17 @@ describe("Keine Doku behauptet mehr den alten Routing-Ist-Zustand (#1035)", () =
       "die alte Lens-Behauptung muss zählen",
     );
     assert.deepEqual(retiredRoutingClaims("Der Begriff `Session-Default` ist abgelegt."), [], "Backticks = Zitat");
+    assert.deepEqual(
+      retiredRoutingClaims("Die Umsetzung läuft über den Projekt-Default `sonnet` in `.claude/settings.json`.").map((v) => v.term),
+      ["Projekt-Default"],
+      "die seit #1280 abgelegte Behauptung muss zählen (#1309)",
+    );
+    assert.deepEqual(
+      retiredRoutingClaims("Der Projekt-Default ließ sich per /model überstimmen, sonnet war nur damals gesetzt (#1280)."),
+      [],
+      "Historienzeilen mit Ticket-Bezug sind keine Behauptung",
+    );
+    assert.deepEqual(retiredRoutingClaims("Ein Projekt-Default für opus wäre denkbar."), [], "ohne sonnet keine Umsetzungs-Behauptung");
     assert.deepEqual(retiredRoutingClaims("```\nSession-Default\n```\n"), [], "im Codeblock zählt nicht");
     assert.deepEqual(
       retiredRoutingClaims("Ein Subagent ohne Modell-Angabe erbt das Session-Modell."),
@@ -734,6 +768,37 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
       "Der Planer-Prompt normaler Tickets darf sich nicht ändern (Resume-Cache)",
     );
     assert.equal(ergebnis, "wartet-auf-klaerung");
+  });
+
+  test("Plan-Weiche „Weiche Epic: ja“ (#1309): aus einem normalen Ticket wird die Aufteilung, kein Pre-Flight, kein Umsetzen", async () => {
+    const { aufrufe, ergebnis } = await workflowLauf({ plan: "PLAN #42\n7. Weichen\nWeiche Epic: ja, weil zu groß" });
+    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "epic-anlegen:#42"]);
+    assert.match(aufrufe[2].prompt, /zu groß/, "Der Anlege-Agent bekommt den Plan mit der Aufteilung");
+    assert.equal(ergebnis, "epic");
+  });
+
+  test("Plan-Weiche greift nie bei einem Sammelticket („(gesammelt)“ im Titel): normaler Weg", async () => {
+    const { aufrufe } = await workflowLauf({ titel: "Harness-Härtung (gesammelt)", plan: "PLAN #42\nWeiche Epic: ja, weil zu groß", preflight: { brauchtKlaerung: true, grund: "Test", offeneFragen: ["?"] } });
+    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "preflight:#42"]);
+  });
+
+  test("Plan-Weiche „Weiche Epic: nein“ oder fehlende Zeile: normaler Weg bis zum Pre-Flight", async () => {
+    for (const plan of ["PLAN #42\nWeiche Epic: nein", "PLAN #42\n(keine Zeile)"]) {
+      const { aufrufe } = await workflowLauf({ plan, preflight: { brauchtKlaerung: true, grund: "Test", offeneFragen: ["?"] } });
+      assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "preflight:#42"], plan);
+    }
+  });
+
+  test("Plan-Weiche: pure Erkennung (Aufzählungszeichen und Fettdruck ja, Prosa und „nein“ nein)", () => {
+    const planSagtEpic = blockFunktion<(p: unknown) => boolean>(workflowBlock("// ── Plan-Weiche Epic (#1309) — Anfang", "// ── Plan-Weiche Epic (#1309) — Ende").block, "planSagtEpic");
+    for (const ja of ["Weiche Epic: ja", "- Weiche Epic: ja, weil x", "- **Weiche Epic:** ja", "* **Weiche Epic**: Ja, weil x", "text\n  Weiche Epic: ja"]) assert.equal(planSagtEpic(ja), true, ja);
+    for (const nein of ["Weiche Epic: nein", "Die Weiche Epic: ja steht oft im Text", "Weiche Epic: jahrelang", "", null, undefined, 42]) assert.equal(planSagtEpic(nein), false, String(nein));
+  });
+
+  test("Prosa-Bindung (#1309): Planer-Rolle und Skill nennen die Pflichtzeile „Weiche Epic“", () => {
+    assert.match(read(".claude/agents/kubernia-planner.md"), /Weiche Epic: nein/);
+    assert.match(read(".claude/agents/kubernia-planner.md"), /Weiche Epic: ja/);
+    assert.match(read(UMSETZUNGS_SKILL), /Weiche Epic: ja/);
   });
 
   test("Planer-Rolle: der vom Workflow-Prompt referenzierte Abschnitt „Bei einem Epic“ existiert und verbietet das Anlegen", () => {

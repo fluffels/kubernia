@@ -32,7 +32,6 @@ type CheckDiffSizeModule = {
   readThresholds: (env?: Env) => Thresholds;
   parseNumstat: (text: string) => { files: { path: string; added: number; deleted: number; binary: boolean }[] } & Sums;
   evaluate: (sums: Sums, t: Thresholds) => Eval;
-  parseOverrideTrailers: (text: string, key: string) => Trailers;
   resolveBase: (runGit: RunGit, env?: Env) => string | null;
   checkDiffSize: (opts: { runGit: RunGit; env?: Env }) => Record<string, unknown>;
   isGeneratedArtifact: (path: string) => boolean;
@@ -44,6 +43,13 @@ type CheckDiffSizeModule = {
 // lauter no-unsafe-member-access.
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkDiffRaw from "../scripts/check-diffsize.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as sliceRaw from "../scripts/slice-override.mjs";
+
+const { parseOverrideTrailers, sliceOverride } = sliceRaw as {
+  parseOverrideTrailers: (text: string, key: string) => Trailers;
+  sliceOverride: (runGit: RunGit, base: string, key: string) => { reason: string | null; invalid: string[] };
+};
 
 const {
   MAX_FILES,
@@ -52,7 +58,6 @@ const {
   readThresholds,
   parseNumstat,
   evaluate,
-  parseOverrideTrailers,
   resolveBase,
   checkDiffSize,
   isGeneratedArtifact,
@@ -236,7 +241,7 @@ describe("Diff-Größenbudget (#533)", () => {
     checkDiffSize({ runGit, env: tightEnv });
     assert.deepEqual(
       gerufen.find((a) => a[0] === "log"),
-      ["log", "--format=%B", "BASE..HEAD"],
+      ["log", "--reverse", "--format=%B", "BASE..HEAD"],
     );
   });
 
@@ -318,5 +323,38 @@ describe("Diff-Größenbudget (#533)", () => {
       assert.ok(text.includes(`${OVERRIDE_KEY}: #<nr>`), `${datei} beschreibt die Commit-Zeile`);
       assert.ok(!text.includes("KQ_DIFFSIZE_OVERRIDE="), `${datei} verspricht keine Env-Variable mehr`);
     }
+  });
+
+  // Bindung je Override-Schlüssel an die Texte, die ihn beschreiben (#1309): fehlt ein Schlüssel in einer
+  // dieser Dateien, driftet die Doku vom Skript weg (vorher war nur Diffsize in AGENTS.md/agent-harness gebunden).
+  const BINDUNG: [string, string[]][] = [
+    ["KQ-Diffsize-Override", ["AGENTS.md", "docs/agent-harness.md", "docs/adr/0009-pr-gating-required-checks.md"]],
+    ["KQ-Diffcov-Override", ["docs/agent-harness.md", "docs/adr/0009-pr-gating-required-checks.md"]],
+  ];
+  for (const [schluessel, dateien] of BINDUNG) {
+    test(`Doku-Bindung: ${schluessel} steht in ${dateien.join(", ")}`, () => {
+      const fehlt = dateien.filter((d) => !readFileSync(new URL(`../${d}`, import.meta.url), "utf8").includes(schluessel));
+      assert.deepEqual(fehlt, []);
+    });
+  }
+
+  test("sliceOverride liest chronologisch (--reverse): die NEUESTE gültige Begründung zählt (#1309)", () => {
+    // Fake-git verlangt --reverse und liefert dann ältesten zuerst; ohne das Flag käme die Reihenfolge
+    // des normalen git log (neueste zuerst) und die ÄLTESTE Begründung würde angezeigt.
+    const runGit: RunGit = (a) => {
+      const chronologisch = a.includes("--reverse");
+      const commits = ["alt\n\nKQ-Diffsize-Override: #1 alte Begründung\n", "neu\n\nKQ-Diffsize-Override: #2 neue Begründung\n"];
+      return (chronologisch ? commits : [...commits].reverse()).join("\n");
+    };
+    assert.equal(sliceOverride(runGit, "BASE", OVERRIDE_KEY).reason, "#2 neue Begründung");
+  });
+
+  test("sliceOverride: git scheitert → kein Override, ungültige Zeilen werden gesammelt", () => {
+    const wirft: RunGit = () => {
+      throw new Error("kaputt");
+    };
+    assert.deepEqual(sliceOverride(wirft, "BASE", OVERRIDE_KEY), { reason: null, invalid: [] });
+    const nurUngueltig: RunGit = () => "x\n\nKQ-Diffsize-Override: ohne nummer\n";
+    assert.deepEqual(sliceOverride(nurUngueltig, "BASE", OVERRIDE_KEY), { reason: null, invalid: ["KQ-Diffsize-Override: ohne nummer"] });
   });
 });

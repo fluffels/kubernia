@@ -29,7 +29,8 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { resolveBase, sliceOverride } from "./check-diffsize.mjs";
+import { resolveBase } from "./check-diffsize.mjs";
+import { meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis } from "./slice-override.mjs";
 
 // layers.cjs ist bewusst CommonJS (der dependency-cruiser-Config `require`t es) —
 // dasselbe createRequire-Muster wie in check-docmap.mjs / vite.config.ts.
@@ -184,7 +185,7 @@ export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS) {
 
 /** Schlüssel des Override-Trailers (#1269): eine Zeile `KQ-Diffcov-Override: #<nr> <warum>`
  *  in einer Commit-Message des Slices. Parser und Slice-Bereich teilt es sich mit
- *  check:diffsize (`sliceOverride`), damit es lokal, im PR und auf main gleich wirkt. */
+ *  check:diffsize (scripts/slice-override.mjs), damit es lokal, im PR und auf main gleich wirkt. */
 export const OVERRIDE_KEY = "KQ-Diffcov-Override";
 
 /** Führt die komplette Prüfung aus (Basis → Diff → lcov → Bewertung → Override).
@@ -213,8 +214,10 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env } = {}) 
   const changed = parseDiffLines(diff);
   const measuredFiles = [...changed.keys()].filter(isMeasured);
   // Kein Spielcode angefasst (reiner Doku-/Tooling-Slice) → nichts zu messen, grün.
+  // Ein Override-Trailer ist dann überflüssig (stale, #1309): es gibt nichts durchzulassen.
   if (measuredFiles.length === 0) {
-    return { skipped: false, failed: false, base, nothingToMeasure: true };
+    const { reason, invalid } = sliceOverride(git, base, OVERRIDE_KEY);
+    return { skipped: false, failed: reason !== null, base, nothingToMeasure: true, stale: reason !== null, reason, invalidOverrides: invalid };
   }
 
   let lcovText;
@@ -278,6 +281,11 @@ function main() {
     console.log(dim("• check:diffcoverage übersprungen — keine Vergleichs-Basis (flacher Checkout / nichts gegenüber main)."));
     return;
   }
+  if (r.nothingToMeasure && r.stale) {
+    meldeUngueltigeOverrides(r.invalidOverrides, { dim });
+    console.error(red(staleOverrideHinweis(OVERRIDE_KEY, "dieser Slice ändert keinen gemessenen Spielcode (src/**/*.ts)")));
+    process.exit(1);
+  }
   if (r.nothingToMeasure) {
     console.log(green("✔ check:diffcoverage ok — dieser Slice ändert keinen gemessenen Spielcode (src/**/*.ts)."));
     return;
@@ -301,14 +309,10 @@ function main() {
   if (r.legacyEnv) {
     console.log(dim("• KQ_DIFFCOV_OVERRIDE wird nicht mehr ausgewertet (kam in der PR-CI nie an) — Commit-Trailer nutzen, s.u."));
   }
-  for (const line of r.invalidOverrides) {
-    console.log(dim(`• ungültige Override-Zeile ignoriert (braucht "#<nr> <warum>"): ${line}`));
-  }
+  meldeUngueltigeOverrides(r.invalidOverrides, { dim });
 
   if (r.stale) {
-    console.error(
-      red(`✖ ${OVERRIDE_KEY} steht im Slice, aber der Slice erfüllt die Floors — stale, den Override-Commit entfernen.`),
-    );
+    console.error(red(staleOverrideHinweis(OVERRIDE_KEY, "der Slice erfüllt die Floors")));
     process.exit(1);
   }
 
