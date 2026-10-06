@@ -170,7 +170,7 @@ test("daysUntilClock: Spielstart 06:00 → 21:00 am selben Tag, 00:00 und 05:59"
 test("daysUntilClock: nur vorwärts – 21:00 → 06:00 ist der Folgetag, gleiche Minute bleibt 0", () => {
   const abends = daysUntilClock(0, "21:00");
   const d = daysUntilClock(abends, "06:00");
-  expect(d * 24).toBeCloseTo(9, 1);
+  expect(d * 24).toBeCloseTo(9, 6);
   expect(gameClock((abends + d) * DAY_CYCLE_MS, DAY_CYCLE_MS).day).toBe(2);
   expect(daysUntilClock(0, "06:00")).toBe(0);
   expect(daysUntilClock(abends, "21:00")).toBe(0);

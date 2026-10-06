@@ -215,7 +215,10 @@ export function bewertePowerShell({ command, cwd, repoRoot, deps = {} }) {
   const kontext = deps.kontext ?? ((dir) => resolveGitContext(dir, repoRoot));
   const vars = new Map();
   let ort = resolve(cwd); // null = nach einem nicht auswertbaren Ortswechsel
-  let ortOk = true; // Ergebnis des letzten Ortswechsels (für && / ||)
+  // Ergebnis des unmittelbar vorangehenden ORTSWECHSELS (für && / ||): true = gelungen, false = fehlgeschlagen, null = der
+  // Vorgänger war kein (auswertbarer) Ortswechsel. Nur ein ausgewerteter Ortswechsel darf einen Nachfolger überspringen;
+  // bei jedem anderen Vorgänger (`git diff --quiet || git commit`) läuft der Nachfolger, im Zweifel wird geblockt.
+  let ortStatus = null;
 
   const blockiert = (dir, was) => {
     const ctx = kontext(dir);
@@ -251,8 +254,8 @@ export function bewertePowerShell({ command, cwd, repoRoot, deps = {} }) {
     if (ziel === undefined) return;
     if (unaufloesbar(ziel)) { ort = null; return; }
     const abs = isAbsolute(ziel) ? ziel : resolve(ort ?? cwd, ziel);
-    if (istOrdner(abs)) ort = abs;
-    else ortOk = false;
+    if (istOrdner(abs)) { ort = abs; ortStatus = true; }
+    else ortStatus = false;
   };
 
   /** Interpreter-Umweg: kommt im Text des Statements git … commit|push vor, gilt das gegen den aktuellen Ort. */
@@ -263,11 +266,11 @@ export function bewertePowerShell({ command, cwd, repoRoot, deps = {} }) {
 
   let vorherSep = ";";
   for (const stmt of zerlege(command)) {
-    // Verkettung: nach fehlgeschlagenem Ortswechsel läuft ein && -Nachfolger nicht, ein || -Nachfolger schon.
-    const ueberspringen = (vorherSep === "&&" && !ortOk) || (vorherSep === "||" && ortOk);
+    // Verkettung: nach fehlgeschlagenem Ortswechsel läuft ein && -Nachfolger nicht, nach gelungenem ein || -Nachfolger nicht.
+    const ueberspringen = (vorherSep === "&&" && ortStatus === false) || (vorherSep === "||" && ortStatus === true);
     vorherSep = stmt.sep;
     if (ueberspringen) continue;
-    ortOk = true;
+    ortStatus = null;
 
     const toks = stmt.tokens;
     if (zuweisung(toks, vars)) continue;

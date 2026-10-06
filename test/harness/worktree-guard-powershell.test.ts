@@ -106,6 +106,15 @@ describe("Haupt-Checkout: commit/push wird geblockt (Z25)", () => {
     laeuft(`cd /gibt/es/nicht && cd ${HAUPT} && git commit -m x`, WT);
   });
 
+  test("nur ein ausgewerteter Ortswechsel überspringt Nachfolger: nach jedem anderen Vorgänger läuft der Nachfolger und wird geprüft", () => {
+    blockt("git diff --quiet || git commit -am x", HAUPT);
+    blockt("Test-Path x || git push", HAUPT);
+    blockt("git status && git commit -m x", HAUPT);
+    blockt("Write-Output hallo || git commit -m x", HAUPT);
+    blockt("cd $unbekannt || git commit -m x", HAUPT); // nicht auswertbarer Ortswechsel: weder gelungen noch gescheitert
+    laeuft(`git diff --quiet || git commit -am x`, WT);
+  });
+
   test("der Ort nach einem fehlgeschlagenen cd bleibt erhalten, ein späteres cd setzt ihn neu (ortOk wird je Statement zurückgesetzt)", () => {
     blockt(`cd /gibt/es/nicht; cd ${HAUPT} && git commit -m x`, WT);
     laeuft(`cd /gibt/es/nicht; cd ${WT} && git commit -m x`, HAUPT);
@@ -119,6 +128,7 @@ describe("Haupt-Checkout: commit/push wird geblockt (Z25)", () => {
   });
 
   test("bekannte Grenze (festgehalten): ein Ortswechsel IM String eines Interpreters wird nicht ausgewertet", () => {
+    // Wer diese Lücke schließt, dreht die erste Zeile um (blockt statt läuft): das ist dann keine Regression.
     // `bash -c "cd <haupt> && git commit"` aus dem Worktree: die grobe Regel prüft gegen den aktuellen Ort (WT) und lässt durch.
     laeuft(`bash -c "cd ${HAUPT} && git commit -m x"`, WT);
     blockt(`bash -c "git commit -m x"`, HAUPT);
