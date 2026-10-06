@@ -185,3 +185,39 @@ describe("resolveTalkTarget – NPC-Routing", () => {
     expect(resolveTalkTarget("pelle", { ...ctx, questStepNpc: "pelle", reviewGatePending: true })).toBe("shop");
   });
 });
+
+/* ---------- evaluateSubmission – solvedBy: "check" (#891) ---------- */
+
+describe("evaluateSubmission – solvedBy: check (#891)", () => {
+  const checkTask = (over: Partial<SubmissionTask> = {}): SubmissionTask =>
+    task({ accept: [/^docker ps$/], solvedBy: "check", ...over });
+
+  test("anderer Weg, Zielzustand erreicht → gelöst (Red-Green: Default-Modus → failed)", () => {
+    const alt = "docker container ls";
+    expect(evaluateSubmission(alt, checkTask(), baseCtx()).outcome).toBe("solved");
+    expect(evaluateSubmission(alt, task(), baseCtx()).outcome).toBe("failed");
+  });
+
+  test("accept trifft, Zielzustand aber nicht erreicht → failed mit 'Fast'", () => {
+    const v = evaluateSubmission("docker ps", checkTask(), baseCtx({ checkOk: false }));
+    expect(v.outcome).toBe("failed");
+    if (v.outcome === "failed") expect(v.feedback).toContain("Fast");
+  });
+
+  test("Sim-Fehler, Zielzustand dennoch erreicht → gelöst (Default-Modus: failed)", () => {
+    expect(evaluateSubmission("docker ps", checkTask(), baseCtx({ simError: true })).outcome).toBe("solved");
+    expect(evaluateSubmission("docker ps", task(), baseCtx({ simError: true })).outcome).toBe("failed");
+  });
+
+  test("Ziel über gesperrtes Kürzel erreicht → locked, kein Fehlversuch", () => {
+    const v = evaluateSubmission("kubectl get po", checkTask({ accept: [/^kubectl get pods$/] }), baseCtx());
+    expect(v.outcome).toBe("locked");
+    expect("failCount" in v).toBe(false);
+  });
+
+  test("Ziel nicht erreicht → Feedback-Kette wie bisher (Nudge ab dem 3. Fehlversuch)", () => {
+    const v = evaluateSubmission("bloedsinn", checkTask(), baseCtx({ checkOk: false, failCount: 2 }));
+    expect(v.outcome).toBe("failed");
+    if (v.outcome === "failed") expect(v.nudge).toBe(true);
+  });
+});

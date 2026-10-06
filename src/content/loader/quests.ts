@@ -68,6 +68,8 @@ function reviveCheck(v: unknown, path: string): ((sim: Sim) => unknown) | undefi
 
 /* Schema-Drift-Wächter (#498): vom Reviver konsumierte JSON-Schlüssel je Objektform (unbekannte scheitern beim Laden; Begründung in parse.ts). */
 const TASK_KEYS = ["id", "text", "accept", "solution", "hint", "why", "check"] as const;
+/** Terminal-Aufgaben kennen zusätzlich den Lösungsmodus (#891); Teach-Befehle nicht (dort IST der Befehl das Lernziel). */
+const TERMINAL_TASK_KEYS = [...TASK_KEYS, "solvedBy", "altSolutions"] as const;
 const OPTION_KEYS = ["t", "ok", "reply"] as const;
 const STEP_BASE_KEYS = ["type", "scenario", "scenarioRef", "unlockAbbrev"] as const;
 /** Typ-spezifische Schritt-Felder; `Record<QuestStep["type"],…>` zwingt bei neuem Schritt-Typ eine Zeile (Type→Loader-Kopplung). */
@@ -81,7 +83,7 @@ const STEP_TYPE_KEYS: Record<QuestStep["type"], readonly string[]> = {
 };
 
 /** Gemeinsame Felder von Teach-Befehl und Terminal-Aufgabe (ohne `intro`). `keys` schließt
- *  die erlaubten Schlüssel (Schema-Drift-Wächter #498): Terminal-Aufgabe = TASK_KEYS,
+ *  die erlaubten Schlüssel (Schema-Drift-Wächter #498): Terminal-Aufgabe = TERMINAL_TASK_KEYS,
  *  Teach-Befehl = TASK_KEYS + `intro`. */
 function reviveTaskCommon(o: Record<string, unknown>, path: string, keys: readonly string[] = TASK_KEYS): QuestTask {
   assertNoUnknownKeys(o, path, keys);
@@ -99,6 +101,28 @@ function reviveTaskCommon(o: Record<string, unknown>, path: string, keys: readon
   const check = reviveCheck(o.check, `${path}.check`);
   if (check) task.check = check;
   return task;
+}
+
+/** Lösungsmodus einer Terminal-Aufgabe (#891): `solvedBy: "check"` verlangt `check` (Zielzustand)
+ *  und mindestens eine dokumentierte `altSolutions`-Zeile; ohne den Modus sind `altSolutions` verboten. */
+function reviveSolveMode(o: Record<string, unknown>, path: string, task: QuestTask): QuestTask {
+  if (o.solvedBy === undefined) {
+    if (o.altSolutions !== undefined) fail(`${path}.altSolutions`, 'nur mit solvedBy: "check" erlaubt');
+    return task;
+  }
+  const mode = asNonEmptyString(o.solvedBy, `${path}.solvedBy`);
+  if (mode !== "accept" && mode !== "check") fail(`${path}.solvedBy`, `unbekannter Lösungsmodus: ${mode}`);
+  if (mode === "accept") {
+    if (o.altSolutions !== undefined) fail(`${path}.altSolutions`, 'nur mit solvedBy: "check" erlaubt');
+    return { ...task, solvedBy: "accept" };
+  }
+  if (!task.check) fail(`${path}.check`, 'solvedBy: "check" braucht ein check (der Zielzustand ist die Aufgabe)');
+  return { ...task, solvedBy: "check", altSolutions: asNonEmptyStringArray(o.altSolutions, `${path}.altSolutions`) };
+}
+
+function reviveTerminalTask(v: unknown, path: string): QuestTask {
+  const o = asRecord(v, path);
+  return reviveSolveMode(o, path, reviveTaskCommon(o, path, TERMINAL_TASK_KEYS));
 }
 
 function reviveTeachCmd(v: unknown, path: string): TeachCommand {
@@ -179,7 +203,7 @@ function reviveStep(v: unknown, path: string): QuestStep {
         ...base,
         type: "terminal",
         brief: asNonEmptyString(o.brief, `${path}.brief`),
-        tasks: asArray(o.tasks, `${path}.tasks`).map((t, i) => reviveTaskCommon(asRecord(t, `${path}.tasks[${i}]`), `${path}.tasks[${i}]`)),
+        tasks: asArray(o.tasks, `${path}.tasks`).map((t, i) => reviveTerminalTask(t, `${path}.tasks[${i}]`)),
       };
     case "minigame": {
       const game = asNonEmptyString(o.game, `${path}.game`);

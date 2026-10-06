@@ -146,6 +146,41 @@ test("Sturm-Szenario: Buchstabendreher-Image lässt sich immer heilen", () => {
   }
 });
 
+/** #891: Wächter-Regeln für Aufgaben im Modus `solvedBy: "check"` (der Zielzustand entscheidet,
+ *  `accept` nur noch Gating/Feedback). Läuft VOR der Lösung auf dem Weltzustand des Story-Schritts
+ *  und führt alles auf Klonen aus (`new KQSim(sim.snapshot())`), die echte Sim bleibt unberührt.
+ *  (a) Das Ziel ist vor der Lösung NICHT schon erfüllt (sonst löst jede Eingabe).
+ *  (b) Jede `altSolutions`-Zeile erreicht das Ziel; mindestens eine geht nicht über `accept`
+ *      (sonst bringt der Modus nichts).
+ *  (c) Keine naheliegende Falscheingabe (#603-Varianten) erreicht das Ziel. */
+function checkModeViolations(
+  sim: KQSim,
+  task: { accept: RegExp[]; check?: (sim: KQSim) => unknown; altSolutions?: string[] },
+  cmd: string,
+  label: string,
+): string[] {
+  const out: string[] = [];
+  const clone = () => new KQSim(sim.snapshot());
+  if (!task.check) return [label + ": solvedBy check ohne check"];
+  if (task.check(clone())) out.push(label + ": Ziel schon VOR der Lösung erfüllt (jede Eingabe würde lösen)");
+  const alts = task.altSolutions ?? [];
+  for (const alt of alts) {
+    const c = clone();
+    const resolved = norm(resolvePlaceholder(alt, c));
+    const result = c.exec(resolved);
+    if (result.error || !task.check(c)) out.push(`${label}: altSolution „${alt}" erreicht das Ziel nicht (${result.output})`);
+  }
+  if (alts.every(alt => task.accept.some(re => re.test(norm(resolvePlaceholder(alt, clone())))))) {
+    out.push(label + ": keine altSolution jenseits von accept – der check-Modus bringt hier nichts");
+  }
+  for (const v of plausibleWrong(cmd)) {
+    const c = clone();
+    c.exec(resolvePlaceholder(v.variant, c));
+    if (task.check(c)) out.push(`${label}: Falscheingabe „${v.variant}" (${v.id}) erreicht das Ziel`);
+  }
+  return out;
+}
+
 /* #603: Gegenstück zum Positiv-Durchspiel oben. Der Durchspiel-Test beweist, dass die
  * Musterlösung akzeptiert wird; hier beweisen wir SYSTEMATISCH JE TERMINAL-AUFGABE, dass
  * eine naheliegende, fachlich falsche Eingabe ABGELEHNT wird (z.B. `delete` statt `get`).
@@ -183,6 +218,8 @@ test("Jede Quest-Terminal-Aufgabe lehnt eine naheliegende Falscheingabe ab (#603
               fehler.push(`${label}: „${v.variant}" (${v.id}) wird zu Unrecht akzeptiert (Lösung: „${cmd}")`);
             }
           }
+          // #891: im Modus check entscheidet der Zielzustand – eigene Wächter-Regeln.
+          if (task.solvedBy === "check") fehler.push(...checkModeViolations(sim, task, cmd, label));
           // Weltzustand wie im echten Spiel fortschreiben.
           const result = sim.exec(cmd);
           assert.ok(!result.error, label + ": Simulator-Fehler: " + result.output);
@@ -208,4 +245,26 @@ test("#603 Negativ-Netz ist scharf: es unterscheidet zu-weit von scharf (Red-Gre
   // Die echte, scharfe Regex akzeptiert KEINE der Falscheingaben.
   const scharf = [/^kubectl\s+get\s+(pods|pod|po)$/];
   assert.ok(variants.every(v => !scharf.some(re => re.test(v))), "scharfe Regex darf keine Falscheingabe akzeptieren");
+});
+
+test("#891 check-Modus-Wächter ist scharf: jede Regel wird bei gezielter Verfälschung rot (Red-Green)", () => {
+  const sim = freshSim();
+  sim.exec("kubectl create deployment kombuese --image=nginx");
+  const accept = [/^kubectl\s+expose\s+deployment\s+kombuese\s+--port[=\s]80$/];
+  const cmd = "kubectl expose deployment kombuese --port=80";
+  const goal = (port: string) => (s: KQSim) => s.services.some(x => x.name === "kombuese" && x.port === port);
+  const good = { accept, check: goal("80"), altSolutions: ["kubectl expose deployment/kombuese --port=80"] };
+  // Referenz: eine saubere Aufgabe meldet nichts.
+  assert.deepEqual(checkModeViolations(sim, good, cmd, "ok"), []);
+  // (c) ohne Port im Ziel würde `--port=9999` das Ziel erreichen.
+  const ohnePort = { ...good, check: (s: KQSim) => s.services.some(x => x.name === "kombuese") };
+  assert.ok(checkModeViolations(sim, ohnePort, cmd, "c").some(m => m.includes("Falscheingabe")));
+  // (a) Ziel schon vorab erfüllt → jede Eingabe würde lösen.
+  const vorab = new KQSim(sim.snapshot());
+  vorab.exec(cmd);
+  assert.ok(checkModeViolations(vorab, good, cmd, "a").some(m => m.includes("VOR der Lösung")));
+  // (b) nur der Musterweg als Alternative → der Modus bringt nichts.
+  assert.ok(checkModeViolations(sim, { ...good, altSolutions: [cmd] }, cmd, "b").some(m => m.includes("jenseits von accept")));
+  // (b) eine kaputte Alternative erreicht das Ziel nicht.
+  assert.ok(checkModeViolations(sim, { ...good, altSolutions: ["kubectl get pods"] }, cmd, "b2").some(m => m.includes("erreicht das Ziel nicht")));
 });

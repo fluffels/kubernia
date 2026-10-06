@@ -728,3 +728,64 @@ test("loader: lazy Sammlungen sind memoisiert – zwei Aufrufe liefern dieselbe 
   assert.equal(getQuizCards(), getQuizCards(), "CRAB_QUIZ nicht memoisiert");
   assert.equal(getQuestTopics(), getQuestTopics(), "QUEST_TOPICS nicht memoisiert");
 });
+
+/* ---------- solvedBy / altSolutions (#891) ---------- */
+
+const termQuest = (task: Record<string, unknown>) => [
+  {
+    ...minimalQuest,
+    steps: [
+      {
+        type: "terminal",
+        brief: "B",
+        tasks: [{ id: "t-y", text: "T", accept: ["^y$"], solution: "y", hint: "H", why: "W", ...task }],
+      },
+    ],
+  },
+];
+const goalCheck = { some: "services", where: { name: "x" } };
+
+test("parseQuests: solvedBy 'check' mit check + altSolutions wird geparst (#891)", () => {
+  const q = parseQuests(termQuest({ solvedBy: "check", check: goalCheck, altSolutions: ["alt y"] }));
+  const step = q[0].steps[0];
+  if (step.type !== "terminal") throw new Error("terminal erwartet");
+  assert.equal(step.tasks[0].solvedBy, "check");
+  assert.deepEqual(step.tasks[0].altSolutions, ["alt y"]);
+  assert.equal(typeof step.tasks[0].check, "function");
+});
+
+test("parseQuests: ohne solvedBy bleibt es beim Default (kein Feld gesetzt) (#891)", () => {
+  const step = parseQuests(termQuest({ check: goalCheck }))[0].steps[0];
+  if (step.type !== "terminal") throw new Error("terminal erwartet");
+  assert.equal(step.tasks[0].solvedBy, undefined);
+  assert.equal(step.tasks[0].altSolutions, undefined);
+});
+
+for (const [label, task] of [
+  ["solvedBy check ohne check", { solvedBy: "check", altSolutions: ["a"] }],
+  ["solvedBy check ohne altSolutions", { solvedBy: "check", check: goalCheck }],
+  ["solvedBy check mit leeren altSolutions", { solvedBy: "check", check: goalCheck, altSolutions: [] }],
+  ["altSolutions ohne check-Modus", { check: goalCheck, altSolutions: ["a"] }],
+  ["altSolutions im Modus accept", { solvedBy: "accept", check: goalCheck, altSolutions: ["a"] }],
+  ["unbekannter solvedBy-Wert", { solvedBy: "bogus", check: goalCheck, altSolutions: ["a"] }],
+] as const) {
+  test(`parseQuests: wirft bei ${label} (#891)`, () => {
+    assert.throws(() => parseQuests(termQuest(task)), ContentValidationError);
+  });
+}
+
+test("parseQuests: solvedBy an einem Teach-Befehl ist verboten (#891)", () => {
+  const teach = [
+    {
+      ...minimalQuest,
+      steps: [
+        {
+          type: "teach",
+          brief: "B",
+          cmd: { id: "t-x", intro: "I", text: "T", accept: ["^x$"], solution: "x", hint: "H", check: "qx/t-x", solvedBy: "check", altSolutions: ["a"] },
+        },
+      ],
+    },
+  ];
+  assert.throws(() => parseQuests(teach), ContentValidationError);
+});

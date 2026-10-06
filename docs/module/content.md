@@ -68,6 +68,17 @@ Eine `teach`/`terminal`-Aufgabe kann ein `check`-Prädikat tragen, das nach der 
 
 **Wann doch Code (`checks.ts`):** nur echte Sonderfälle, die kein deklarativer *Zustand* sind, sondern eine transiente *Aktions-Markierung* (z.B. „der Spieler hat gerade einen Pod gelöscht", `sim.lastDeletedPod`). Im Zweifel zuerst die DSL prüfen — sie deckt Sammlungen/Flags/Pfade ab; nur was wirklich nicht passt, kommt nach `checks.ts` und wird per String-Key referenziert.
 
+## Lösungsmodus je Aufgabe: `solvedBy` / `altSolutions` (#891)
+
+Eine **Terminal-Aufgabe** (nicht ein Teach-Befehl, dort ist genau der Befehl das Lernziel) wählt, wann sie als gelöst gilt:
+
+- **`"solvedBy": "accept"`** (Default, Feld weglassen): der Befehl muss auf `accept` passen, ohne Sim-Fehler und mit erfülltem `check` (bisheriges Verhalten, gezielte Lehr-Schritte bleiben eng).
+- **`"solvedBy": "check"`**: allein der Sim-Zielzustand (`check`) entscheidet, jeder Weg dorthin zählt, auch bei einem Sim-Fehler (Vorarbeit machte die Wiederholung sonst zur AlreadyExists-Sackgasse). `accept` steuert nur noch Feedback („Fast …", Near-Miss, diag/why) und das Abkürzungs-Gating (#299/#366: ein Ziel über ein gesperrtes Kürzel ergibt `locked`, kein Fehlversuch).
+
+Im Modus `check` sind `check` und `altSolutions` (mindestens ein dokumentierter alternativer Weg) **Pflicht**, ohne den Modus sind `altSolutions` verboten (der Loader wirft). **`check` ist dort die vollständige Aufgabenbeschreibung**, inklusive Werten wie Port oder Replicas. Passend für offene Aufgaben mit mehreren Wegen, **nicht** für Aufgaben, deren Text den exakten Befehl vorgibt, und nicht für Lese-Aufgaben, deren Ziel schon vorher erfüllt ist.
+
+Wächter (`checkModeViolations` in `test/quests.test.ts`, läuft im #603-Story-Loop auf Klonen der Sim): (a) das Ziel ist vor der Lösung nicht erfüllt, (b) jede `altSolutions`-Zeile erreicht es und mindestens eine geht nicht über `accept`, (c) keine naheliegende Falscheingabe erreicht es. Pilot: `juno.json` › `t-j24-3`.
+
 ## Loader-Leaves (`src/content/loader/*`, Split #517)
 
 `src/content/loader.ts` ist das Barrel; die einzelnen Datenquellen liegen je als eigenständiges Leaf unter `src/content/loader/`:
@@ -76,7 +87,7 @@ Eine `teach`/`terminal`-Aufgabe kann ein `check`-Prädikat tragen, das nach der 
 |---|---|
 | `src/content/loader/shared.ts` | Generische Loader-Bausteine (#517): `loadGroups`/`assembleUnique`/`makeGlobLoader` (geteiltes glob→parse→dedup-Skelett) + `reviveAccept`. |
 | `src/content/loader/npcs.ts` | NPC-Stammdaten + Smalltalk (`NPCS`/`SMALLTALK`, #348/#517). |
-| `src/content/loader/quests.ts` | Quests: Schritt-Reviver + `parseQuests`/`assembleQuests`/`getQuests` (order-basiert, #348/#517). |
+| `src/content/loader/quests.ts` | Quests: Schritt-Reviver (Terminal-Aufgaben inkl. Lösungsmodus `solvedBy`/`altSolutions`, #891) + `parseQuests`/`assembleQuests`/`getQuests` (order-basiert, #348/#517). |
 | `src/content/loader/topics.ts` | Quest-Themen-Taxonomie fürs Logbuch-Accordion (`getQuestTopics`/`groupQuestsByTopic`, #327/#517). |
 | `src/content/loader/cmdcards.ts` | Befehls-Karten (Spaced-Repetition-Drills), pro Geber (`getCmdCards`, #352/#517). |
 | `src/content/loader/quizcards.ts` | Quiz-Karteikarten (Krabbe Kralle), pro Thema (`getQuizCards`, #368/#517). |

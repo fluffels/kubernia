@@ -203,7 +203,16 @@ export interface QuestTask {
   why?: string;
   /** Optionale Zusatzbedingung gegen den Sim-Zustand – es zählt nur die Truthiness. */
   check?: (sim: Sim) => unknown;
+  /** Lösungsmodus (#891): `accept` (Default) verlangt den Musterbefehl, `check` zählt jeden
+   *  Weg, der den Sim-Zielzustand (`check`) erreicht. Nur an Terminal-Aufgaben, nicht an Teach-Befehlen. */
+  solvedBy?: SolvedBy;
+  /** Dokumentierte alternative Lösungswege im Modus `check` (Pflicht dort, sonst verboten);
+   *  der Story-Wächter führt sie gegen die Sim aus und verlangt, dass sie `check` erfüllen. */
+  altSolutions?: string[];
 }
+
+/** Wann eine Terminal-Aufgabe als gelöst gilt (#891): Musterbefehl oder Sim-Zielzustand. */
+export type SolvedBy = "accept" | "check";
 
 /** Der „neue Befehl" eines Teach-Schritts: eine Aufgabe mit erklärendem Intro. */
 export interface TeachCommand extends QuestTask {

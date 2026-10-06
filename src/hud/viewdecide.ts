@@ -14,6 +14,7 @@
  */
 
 import { fmtCmd } from "./markup";
+import type { SolvedBy } from "../types";
 import {
   lockedAbbrevInInput,
   abbrevLockHint,
@@ -46,8 +47,12 @@ export function funkSessionKind(
  *  strukturell ab. Die Sim-Bedingung (`task.check`) wertet die DOM-Schicht vorab
  *  aus und reicht sie als `checkOk` herein – so bleibt dieses Modul Sim-frei. */
 export interface SubmissionTask {
-  /** Erlaubte Eingaben; mindestens eine Regex muss matchen. */
+  /** Erlaubte Eingaben; im Modus `accept` muss mindestens eine Regex matchen. */
   accept: RegExp[];
+  /** Lösungsmodus (#891): `accept` (Default) verlangt den Musterbefehl, `check`
+   *  zählt jeden Weg, der den Sim-Zielzustand erreicht. `accept` steuert dann
+   *  nur noch Gating und Feedback. */
+  solvedBy?: SolvedBy;
   /** „Warum so?"-Begründung (Drills #233); QuestTasks haben keine → undefined. */
   why?: string;
   /** Diagnose der konkreten Fehleingabe (Drills), Vorrang vor `why`. */
@@ -80,15 +85,36 @@ export type SubmissionVerdict =
   | { outcome: "solved"; longForms: string[] }
   | { outcome: "failed"; failCount: number; feedback: string; nudge?: boolean };
 
+/** Ist die Aufgabe gelöst? Modus `check` (#891): der Zielzustand allein; sonst
+ *  der Musterbefehl ohne Sim-Fehler bei erfüllter Zusatzbedingung. */
+function isReached(task: SubmissionTask, ctx: SubmissionContext, cmdOk: boolean): boolean {
+  if (task.solvedBy === "check") return ctx.checkOk;
+  return cmdOk && !ctx.simError && ctx.checkOk;
+}
+
+/** Begründung für einen Fehlversuch: diag → why → docker-run-Muster → Standardtext. */
+function failureTip(norm: string, task: SubmissionTask): string {
+  return (
+    (task.diag ? task.diag(norm) : null) ??
+    task.why ??
+    (/^docker\s+run\b/.test(norm)
+      ? "Bei <code>docker run</code>: hinter <code>--name</code> steht dein Wunschname, das Image kommt ganz zuletzt – Muster <code>docker run -d --name <name> <image></code>."
+      : "Vergleich ihn mit dem Muster oben – Reihenfolge und Namen genau prüfen.")
+  );
+}
+
 /**
  * Bewertet eine im Funk-Terminal abgesendete Zeile gegen die aktuelle Aufgabe.
  * Reine Entscheidung + fertiger Feedback-Text (die DOM-Schicht umschließt ihn nur
  * mit `<div class="tt-feedback">…</div>` und setzt innerHTML).
  *
  * Reihenfolge wie im bisherigen `termSubmit`:
- * 1. Trifft der Befehl (`accept`), nutzt aber ein gesperrtes Kürzel → `locked`
+ * 1. Ist die Aufgabe gelöst (s.u.), nutzt aber ein gesperrtes Kürzel → `locked`
  *    (freundlicher Hinweis statt „falsch", kein Fehlversuch, #299/#366).
- * 2. Trifft der Befehl, kein Sim-Fehler, Zusatzbedingung erfüllt → `solved`.
+ * 2. Gelöst → `solved`. Modus `accept` (Default): Befehl trifft, kein Sim-Fehler,
+ *    Zusatzbedingung erfüllt. Modus `check` (#891): allein der Sim-Zielzustand
+ *    zählt, auch bei einem Sim-Fehler (Vorarbeit macht die Wiederholung zur
+ *    AlreadyExists-Sackgasse); `accept` steuert hier nur das Gating (1.).
  * 3. Sonst `failed`: erst eine „Beinahe"-Flag-Schreibweise gezielt erklären
  *    (#367), sonst nach dem 3. Fehlversuch zum Hinweis-Knopf lotsen (#233),
  *    sonst die Aufgabe begründen (diag → why → Muster; „nie nur falsch" #233/#307).
@@ -103,14 +129,15 @@ export function evaluateSubmission(
 
   // #299/#366: Befehl trifft, nutzt aber ein noch gesperrtes Profi-Kürzel →
   // Langform-Hinweis, nicht als gelöst UND nicht als Fehlversuch werten.
-  const lockedHit = cmdOk
+  const reached = isReached(task, ctx, cmdOk);
+  const lockedHit = cmdOk || reached
     ? lockedAbbrevInInput(norm, ctx.isAbbrevUnlocked, ctx.unlockAbbrev)
     : undefined;
   if (lockedHit) {
     return { outcome: "locked", feedback: abbrevLockHint(lockedHit) };
   }
 
-  if (cmdOk && !ctx.simError && ctx.checkOk) {
+  if (reached) {
     return { outcome: "solved", longForms: longFormsInInput(norm) };
   }
 
@@ -135,12 +162,7 @@ export function evaluateSubmission(
   }
 
   // Immer begründen (#233/#307), auch wenn der Befehl einen Sim-Fehler warf.
-  const tip =
-    (task.diag ? task.diag(norm) : null) ??
-    task.why ??
-    (/^docker\s+run\b/.test(norm)
-      ? "Bei <code>docker run</code>: hinter <code>--name</code> steht dein Wunschname, das Image kommt ganz zuletzt – Muster <code>docker run -d --name <name> <image></code>."
-      : "Vergleich ihn mit dem Muster oben – Reihenfolge und Namen genau prüfen.");
+  const tip = failureTip(norm, task);
   const prefix = ctx.simError
     ? "❌ "
     : "❌ Fast – der Befehl lief durch, erfüllt die Aufgabe aber noch nicht. ";
