@@ -475,8 +475,14 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
     }
     // Darf NICHT passieren: andere Server (PixelLab bleibt im Hauptchat, Claude in Chrome ist
     // gesperrt) und Node-Code im Serverprozess (steht in settings.json bewusst auf ask).
+    // Langfuse nur lesend: der Server bietet auch create/update/upsert/delete an.
+    const LANGFUSE_LESEN = new Set(["queryMetrics", "getMetricsSchema", "listObservations", "getObservation"]);
     const fremd = tools.filter(
-      (t) => t.startsWith("mcp__") && (!/^mcp__(playwright|langfuse)__\w+$/.test(t) || /run_code_unsafe/.test(t)),
+      (t) =>
+        t.startsWith("mcp__") &&
+        (!/^mcp__(playwright|langfuse)__\w+$/.test(t) ||
+          /run_code_unsafe/.test(t) ||
+          (t.startsWith("mcp__langfuse__") && !LANGFUSE_LESEN.has(t.slice("mcp__langfuse__".length)))),
     );
     assert.deepEqual(fremd, [], "Unzulässige MCP-Tools in der Umsetzer-Whitelist");
     const server = (JSON.parse(read(".mcp.json")) as { mcpServers?: Record<string, unknown> }).mcpServers ?? {};

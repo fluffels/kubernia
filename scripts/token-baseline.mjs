@@ -61,7 +61,7 @@ export function classifySubagent(agentType, description) {
   if (/planner/i.test(t)) return "Planung";
   if (/explore/i.test(t)) return "Recherche";
   if (/lens/i.test(t)) return "Review";
-  // Der Umsetzer (#1280) arbeitet über Umsetzung UND CI/Merge: keine feste Phase, der
+  // Der Umsetzer arbeitet über Umsetzung UND CI/Merge: keine feste Phase, der
   // Zeitschnitt teilt ihn; vor den Beschreibungs-Regeln, damit „Plan“/„Review“ im Text nicht greift.
   if (/umsetzer/i.test(t)) return null;
   for (const [re, phase] of WORKFLOW_LABELS) if (re.test(d)) return phase;
