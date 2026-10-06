@@ -93,8 +93,83 @@ function num(v) {
 }
 
 /**
+ * Preise in $ je Mio Tokens (Stand 2026-10-06, Quelle: Preisliste auf claude.com/pricing,
+ * deckungsgleich mit den Modell-Definitionen der lokalen Langfuse-Instanz). Langfuse
+ * rechnet Kosten nur bei der Ingestion, ein später angelegter Preis gilt nicht
+ * rückwirkend — darum kommen die Kosten im Transkript-Modus aus dieser Tabelle.
+ * Ein Modell ohne Eintrag ist „ohne Preis" (null), nie 0 $.
+ */
+export const PRICES = {
+  "claude-sonnet-5-5": { input: 2, cacheWrite5m: 2.5, cacheWrite1h: 4, cacheRead: 0.2, output: 10 },
+  "claude-opus-5-5": { input: 4, cacheWrite5m: 5, cacheWrite1h: 8, cacheRead: 0.2, output: 20 },
+  "claude-opus-5": { input: 5, cacheWrite5m: 6.25, cacheWrite1h: 10, cacheRead: 0.5, output: 25 },
+  "claude-haiku-4-5": { input: 1, cacheWrite5m: 1.25, cacheWrite1h: 2, cacheRead: 0.1, output: 5 },
+};
+
+/** Exakter Name oder Name mit Datums-Suffix (`-20251001`); `claude-opus-5-5` ist kein Opus 5. */
+function priceFor(model, prices) {
+  const id = String(model ?? "");
+  const key = Object.keys(prices).find((k) => id === k || new RegExp(`^${k}-\\d{8}$`).test(id));
+  return key ? prices[key] : null;
+}
+
+/** Kosten eines Calls je Teil in $; null, wenn das Modell keinen Preis hat. */
+export function priceParts(c, prices = PRICES) {
+  const p = priceFor(c.model, prices);
+  if (!p) return null;
+  const write = num(c.cacheWrite);
+  const write1h = Math.min(num(c.cacheWrite1h), write);
+  // Division statt Multiplikation mit 1e-6: bleibt bei glatten Zahlen exakt.
+  const mio = 1e6;
+  return {
+    input: (num(c.input) * p.input) / mio,
+    cacheWrite: ((write - write1h) * p.cacheWrite5m + write1h * p.cacheWrite1h) / mio,
+    cacheRead: (num(c.cacheRead) * p.cacheRead) / mio,
+    output: (num(c.output) * p.output) / mio,
+  };
+}
+
+/** Gesamtkosten eines Calls in $; null = ohne Preis. */
+export function priceCall(c, prices = PRICES) {
+  const parts = priceParts(c, prices);
+  return parts ? parts.input + parts.cacheWrite + parts.cacheRead + parts.output : null;
+}
+
+const contextOf = (c) => num(c.input) + num(c.cacheWrite) + num(c.cacheRead);
+
+function median(values) {
+  if (values.length === 0) return null;
+  const s = [...values].sort((a, b) => a - b);
+  const mid = s.length >> 1;
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+const subKey = (c) => c.subagent.id ?? c.subagent;
+
+/**
+ * Sockel (#1198/#1206): Kontext des ERSTEN Calls des Hauptagenten (Größe der Session, darum
+ * sessionweit und unabhängig von `--from`) bzw. je Subagent; Planung und Review als Median über
+ * die Subagenten IM Ticket-Fenster (`windowCalls`: nach `--from`, ohne Nachlauf), damit der Planer
+ * eines anderen Tickets derselben Session nicht mitzählt.
+ */
+function sockelOf(allCalls, windowCalls) {
+  const first = (calls) => [...calls].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+  const main = first(allCalls).find((c) => !c.subagent);
+  const firstBySub = new Map();
+  for (const c of first(windowCalls)) if (c.subagent && !firstBySub.has(subKey(c))) firstBySub.set(subKey(c), c);
+  const phaseSockel = (phase) =>
+    median(
+      [...firstBySub.values()]
+        .filter((c) => classifySubagent(c.subagent.agentType, c.subagent.description) === phase)
+        .map(contextOf),
+    );
+  return { main: main ? contextOf(main) : null, planung: phaseSockel("Planung"), review: phaseSockel("Review") };
+}
+
+/**
  * Pure Kernlogik über normalisierte Calls:
- *   calls:     [{ ts, model, input, cacheWrite, cacheRead, output, cost?, subagent?: {id, agentType, description} }]
+ *   calls:     [{ ts, model, input, cacheWrite, cacheWrite1h?, cacheRead, output, cost?, costParts?, subagent?: {id, agentType, description} }]
+ *              (`cost` null/fehlend = ohne Preis; `costParts` = Kosten je Teil, nur aus dem Transkript-Adapter)
  *   questions: Anzahl AskUserQuestion-Aufrufe
  * Review-Runden zählen nur Subagenten mit Calls IM Ticket-Fenster — sonst
  * erbte ein Ticket die Lenses eines früheren Tickets derselben Session.
@@ -102,6 +177,10 @@ function num(v) {
 export function summarize({ calls, questions = 0 }, bounds = {}) {
   const rows = new Map();
   const inWindow = new Map();
+  const windowCalls = [];
+  const contexts = { all: [], main: [] };
+  const costParts = { input: 0, cacheWrite: 0, cacheRead: 0, output: 0 };
+  let unpriced = 0;
   let hasCost = false;
   for (const c of calls) {
     // Vor `from` liegt fremde Arbeit derselben Session (z.B. ein vorheriges Ticket) — weglassen.
@@ -110,7 +189,14 @@ export function summarize({ calls, questions = 0 }, bounds = {}) {
     const afterMerge = bounds.mergedAt && Date.parse(c.ts) >= Date.parse(bounds.mergedAt);
     const subPhase = c.subagent ? classifySubagent(c.subagent.agentType, c.subagent.description) : null;
     const phase = afterMerge ? "Nachlauf" : (subPhase ?? classifyMainByTime(c.ts, bounds));
-    if (c.subagent && phase !== "Nachlauf") inWindow.set(c.subagent.id ?? c.subagent, c.subagent);
+    if (c.subagent && phase !== "Nachlauf") inWindow.set(subKey(c), c.subagent);
+    if (phase !== "Nachlauf") {
+      windowCalls.push(c);
+      contexts.all.push(contextOf(c));
+      if (!c.subagent) contexts.main.push(contextOf(c));
+      if (c.cost === undefined || c.cost === null) unpriced += 1;
+      for (const k of Object.keys(costParts)) costParts[k] += num(c.costParts?.[k]);
+    }
     const model = c.model || "unbekannt";
     const key = `${phase}\u0000${model}`;
     const r = rows.get(key) ?? { phase, model, calls: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0, cost: 0 };
@@ -145,7 +231,17 @@ export function summarize({ calls, questions = 0 }, bounds = {}) {
   const reviewDescriptions = [...inWindow.values()]
     .filter((s) => classifySubagent(s.agentType, s.description) === "Review")
     .map((s) => String(s.description ?? ""));
-  return { rows: sorted, total, hasCost, reviewRounds: countReviewRounds(reviewDescriptions), questions };
+  return {
+    rows: sorted,
+    total,
+    hasCost,
+    reviewRounds: countReviewRounds(reviewDescriptions),
+    questions,
+    unpriced,
+    costParts,
+    medianContext: { all: median(contexts.all), main: median(contexts.main) },
+    sockel: sockelOf(calls, windowCalls),
+  };
 }
 
 // ── Quelle 1: Claude-Code-Transkript ─────────────────────────────────────────
@@ -176,17 +272,24 @@ export function callsFromTranscript(jsonlText, subagent = null) {
     const prev = byId.get(key);
     if (prev) {
       prev.output = Math.max(prev.output, num(u.output_tokens));
+      prev.costParts = priceParts(prev);
+      prev.cost = prev.costParts ? priceCall(prev) : null;
       continue;
     }
-    byId.set(key, {
+    const call = {
       ts: row.timestamp,
       model: msg.model,
       input: num(u.input_tokens),
       cacheWrite: num(u.cache_creation_input_tokens),
+      // Ohne Aufteilung zählt alles als 5m (der günstigere Preis, bewusst nicht geraten).
+      cacheWrite1h: num(u.cache_creation?.ephemeral_1h_input_tokens),
       cacheRead: num(u.cache_read_input_tokens),
       output: num(u.output_tokens),
       subagent,
-    });
+    };
+    call.costParts = priceParts(call);
+    call.cost = call.costParts ? priceCall(call) : null;
+    byId.set(key, call);
   }
   return { calls: [...byId.values()], questions };
 }
@@ -331,6 +434,22 @@ export function renderMarkdown(summary, loop = {}) {
   const ci = loop.failedPushes ?? "–";
   const merged =
     loop.mergedAt === undefined ? "–" : mergedWithoutRework(loop.mergedAt, loop.failedPushes) ? "ja" : "nein";
+  const dash = (v) => (v === null || v === undefined ? "–" : fmt(v));
+  const sk = summary.sockel;
+  const mc = summary.medianContext;
+  lines.push(
+    "",
+    `Sockel Haupt ${dash(sk?.main)} · Planer ${dash(sk?.planung)} · Lens ${dash(sk?.review)} · Median-Kontext Haupt ${dash(mc?.main)} / gesamt ${dash(mc?.all)}`,
+  );
+  const parts = summary.costParts;
+  const sum = parts ? parts.input + parts.cacheWrite + parts.cacheRead + parts.output : 0;
+  if (sum > 0) {
+    const pct = (v) => `${Math.round((v / sum) * 100)} %`;
+    lines.push(
+      `Kostenanteile: Input ${pct(parts.input)} · Cache-Write ${pct(parts.cacheWrite)} · Cache-Read ${pct(parts.cacheRead)} · Output ${pct(parts.output)}`,
+    );
+  }
+  if (summary.unpriced > 0) lines.push(`⚠️ ${summary.unpriced} Call(s) ohne Preis (Transkript: Modell nicht in PRICES; Langfuse: kein Preis für das Modell hinterlegt) — Kosten unvollständig.`);
   lines.push(
     "",
     `Review-Runden: ${summary.reviewRounds} · CI-Fix-Runden: ${ci} · Rückfragen: ${summary.questions} · gemergt ohne Nacharbeit: ${merged}`,
