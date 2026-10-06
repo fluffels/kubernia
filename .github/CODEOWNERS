@@ -54,6 +54,9 @@ AGENTS.md                  @fluffels
 /scripts/gh-guard-hook.mjs @fluffels
 /scripts/hook-io.mjs @fluffels
 /scripts/bash-parser.mjs @fluffels
+/scripts/worktree-guard-eval.mjs @fluffels
+/scripts/worktree-guard-git.mjs @fluffels
+/scripts/worktree-guard-tabellen.mjs @fluffels
 /scripts/pretooluse-hook.mjs @fluffels
 /scripts/worktree-guard-hook.mjs @fluffels
 /scripts/worktree-guard-powershell.mjs @fluffels

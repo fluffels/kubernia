@@ -177,6 +177,11 @@ describe("gh api über Variablen, eval und Interpreter-Strings fragt nach (#1311
     for (const form of ["(gh api", "$(gh api", "@(gh api", "& gh api"]) fragt(`$r = ${form} -X DELETE repos/o/r/issues/1${form.includes("(") ? ")" : ""}`);
     laeuft("$r = @(gh api repos/o/r/issues/1)");
     laeuft("$n = 5; gh api repos/o/r/issues/$n");
+    // typisierte PowerShell-Zuweisungen (Cast vor $)
+    fragt("[array]$r = gh api -X DELETE repos/o/r/issues/1");
+    fragt("[string]$x = (gh api -X DELETE repos/o/r/issues/1)");
+    fragt("[System.Object[]]$r = @(gh api -X DELETE repos/o/r/issues/1)");
+    laeuft("[array]$r = gh api repos/o/r/issues/1");
     fragt('CMD="gh api -X DELETE x"; ${CMD}');
     laeuft(`gh api graphql -f 'query=mutation($i:ID!){ addProjectV2ItemById(input:{projectId:$i}){ item { id } } }' -f i=X`); // Quote vor query=
     const r = hook.bewerte('eval "gh api -X DELETE x"');

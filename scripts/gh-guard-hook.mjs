@@ -1,5 +1,5 @@
-// Kein Shebang: wird über `.claude/settings.json` per `node scripts/gh-guard-hook.mjs` gestartet UND von
-// test/harness/gh-guard.test.ts importiert (ein `#!` bricht den Test-Import, wie bei worktree-guard-hook.mjs).
+// Kein Shebang: wird über den Dispatcher `scripts/pretooluse-hook.mjs` (oder direkt per `node scripts/gh-guard-hook.mjs`)
+// gestartet UND von test/harness/gh-guard.test.ts importiert (ein `#!` bricht den Test-Import, wie bei worktree-guard-hook.mjs).
 /**
  * gh-Guard-Hook (#1311, Z5 aus #1204) — Claude-Code-`PreToolUse`-Hook für `Bash` und `PowerShell`.
  *
@@ -10,11 +10,19 @@
  * Hook den Aufruf an und fragt nur bei den Formen mit Außenwirkung (`permissionDecision: "ask"`, kein `deny`:
  * die Maintainerin soll es ausdrücklich erlauben können).
  *
+ * Er fragt auch, wenn der Aufruf nicht statisch lesbar ist: dynamische Methode (`-X $M`), dynamische GraphQL-Query
+ * (unmaskiertes `$` im `query=`), `--input`/`query=@datei`, ein schreibender Aufruf mit dynamischem Endpunkt, `eval`/
+ * `iex`/`Invoke-Expression`, ein dynamisches Kommando (`$CMD`) und ein Interpreter-String mit Variable neben `gh api`;
+ * der String hinter `bash|sh|pwsh -c`/`cmd /c` wird rekursiv bewertet (Tiefe `MAX_INTERPRETER`).
+ *
+ * Warum kein `parseBash`: der Hook gilt für Bash UND PowerShell und bleibt shell-neutral. PowerShell hat Backtick-
+ * Escapes, Zuweisungen mit Cast (`[array]$r = gh api …`) und `$(…)`/`@(…)` ohne Bash-Entsprechung. Die gemeinsame
+ * Quote-Zerlegung (`quoteFolge` in `hook-io.mjs`) ist die EINE Hilfsfunktion für Segmentierung und Variablen-Suche.
+ *
  * Bewusste Grenzen (ehrlich, wie beim worktree-guard):
- *  - Grobe Textprüfung je Segment (Trenner `&&`/`||`/`;`/`|`/Zeilenumbruch außerhalb von Anführungszeichen,
- *    mehrzeilige Queries bleiben ein Segment), kein Shell-Parsing. Eine über
- *    Variablen oder `eval` zusammengesetzte Mutation sieht er nicht. Er fängt die dokumentierten Formen,
- *    keine absichtliche Umgehung; die eigentliche Durchsetzung bleibt PR-Gate + Review.
+ *  - Textprüfung je Segment (Trenner `&&`/`||`/`;`/`|`/Zeilenumbruch außerhalb von Anführungszeichen, mehrzeilige
+ *    Queries bleiben ein Segment), kein vollständiges Shell-Parsing. Er fängt die dokumentierten Formen, keine
+ *    absichtliche Umgehung; die eigentliche Durchsetzung bleibt PR-Gate + Review.
  *  - Er schaut nur auf `gh api`: `gh issue delete` & Co. stehen als eigene `ask`-Regeln in settings.json.
  *  - Ein Treffer in einem Textargument eines anderen Befehls (`gh issue comment --body "deleteIssue"`,
  *    Commit-Text mit "gh api") zählt nicht: `gh api` muss am Segmentanfang stehen.
@@ -22,7 +30,7 @@
  *
  * Reines Node-Skript (nur Builtins). `bewerte` ist pur und exportiert.
  */
-import { buildAskOutput, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
+import { MAX_INTERPRETER, buildAskOutput, emit, istDirektaufruf, mergeDecisions, parseHookInput, quoteFolge, readStdin } from "./hook-io.mjs";
 
 export { buildAskOutput, parseHookInput };
 
@@ -50,32 +58,38 @@ const REST_PFADE = [
   /\/(dependabot|codespaces)\/secrets\b/,
 ];
 
-/** `gh api` als Befehl am Segmentanfang (auch nach `&`, `$(`, Klammern oder Variablen-Zuweisungen), nicht als Text in einem fremden Befehl. */
-const GH_API_AM_ANFANG = /^[\s(`$&]*(?:\$[\w:]+\s*=\s*[\s(`$@&]*)?(?:\w+=\S*\s+)*gh(?:\.exe)?\s+api\b/;
+/** `gh api` als Befehl am Segmentanfang (auch nach `&`, `$(`, Klammern, Variablen-Zuweisungen, auch mit PowerShell-Cast
+ *  `[array]$r = (gh api …)`), nicht als Text in einem fremden Befehl. */
+const GH_API_AM_ANFANG = /^[\s(`$&]*(?:\[[\w.,[\] ]+\]\s*)*(?:\$[\w:]+\s*=\s*[\s(`$@&]*)?(?:\w+=\S*\s+)*gh(?:\.exe)?\s+api\b/;
 
 /**
  * Zerlegt einen Befehl an `&&`, `||`, `;`, `|` und Zeilenumbrüchen, aber NICHT innerhalb von Anführungszeichen
- * (`'…'`, `"…"`, PowerShell-Backtick als Escape): eine mehrzeilige GraphQL-Query im Argument bleibt ein Segment.
+ * (`'…'`, `"…"`, Escapes mit Backslash oder PowerShell-Backtick): eine mehrzeilige GraphQL-Query im Argument bleibt
+ * ein Segment.
  */
 export function segmente(command) {
+  const text = String(command);
   const out = [];
   let cur = "";
-  let quote = null;
-  const text = String(command);
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (quote) {
-      cur += c;
-      if (c === "`" && quote === '"' && i + 1 < text.length) cur += text[++i];
-      else if (c === "\\" && quote === '"' && i + 1 < text.length) cur += text[++i];
-      else if (c === quote) quote = null;
-      continue;
+  const folge = quoteFolge(text);
+  for (let k = 0; k < folge.length; k++) {
+    const { i, c, q, masked } = folge[k];
+    if (q === null && !masked) {
+      const zwei = text.slice(i, i + 2);
+      if (zwei === "&&" || zwei === "||") {
+        out.push(cur);
+        cur = "";
+        k++;
+        continue;
+      }
+      if (c === ";" || c === "|" || c === "\n") {
+        out.push(cur);
+        cur = "";
+        continue;
+      }
+      if (c === "\r") continue;
     }
-    if (c === "'" || c === '"') { quote = c; cur += c; continue; }
-    const zwei = text.slice(i, i + 2);
-    if (zwei === "&&" || zwei === "||") { out.push(cur); cur = ""; i++; continue; }
-    if (c === ";" || c === "|" || c === "\n") { out.push(cur); cur = ""; continue; }
-    if (c !== "\r") cur += c;
+    cur += c;
   }
   out.push(cur);
   return out;
@@ -106,43 +120,16 @@ function segmentGrund(segment) {
   return null;
 }
 
-const MAX_INTERPRETER = 3; // Rekursionstiefe für Interpreter-Strings
-
 /** Liest ab `von` ein Wort bis zum nächsten unquotierten Leerraum (bzw. bis zum schließenden Quote, wenn `von` schon in
  *  Anführungszeichen steht) und meldet, ob darin ein unmaskiertes `$` außerhalb von `'…'` steht. Maskiert: `\$` (Bash),
  *  `` `$ `` (PowerShell). */
 function dynamischesWort(text, von, quote) {
-  let q = quote;
-  for (let i = von; i < text.length; i++) {
-    const c = text[i];
-    if (q === "'") {
-      if (c === "'") q = null;
-      continue;
-    }
-    if (c === "\\" || c === "`") {
-      i++;
-      continue;
-    }
+  for (const { c, q, masked } of quoteFolge(text, von, quote)) {
+    if (masked || q === "'") continue;
     if (c === "$") return true;
-    if (c === q) q = null;
-    else if (q === null && (c === "'" || c === '"')) q = c;
-    else if (q === null && /\s/.test(c)) return false;
+    if (q === null && /\s/.test(c)) return false;
   }
   return false;
-}
-
-/** Quote-Zustand (`'`, `"` oder null) des Textes direkt vor Position `ende`. */
-function quoteZustand(text, ende) {
-  let q = null;
-  for (let i = 0; i < ende; i++) {
-    const c = text[i];
-    if (q === "'") {
-      if (c === "'") q = null;
-    } else if (c === "\\" || c === "`") i++;
-    else if (c === q) q = null;
-    else if (q === null && (c === "'" || c === '"')) q = c;
-  }
-  return q;
 }
 
 /** Wörter ohne Optionen (und deren Werte) eines gh-api-Segments; das erste ist der Endpunkt. */
@@ -163,7 +150,7 @@ function dynamischerGrund(segment, mutierend) {
   if (/(?:^|\s)(?:-X\s*|--method(?:\s+|=))['"]?\$/.test(segment)) return "die HTTP-Methode von `gh api` ist dynamisch (Variable)";
   if (/(?:^|\s)--input(?:\s|=)/.test(segment) || /query=@/.test(segment)) return "`gh api` liest die Anfrage aus einer Datei (--input / query=@), der Inhalt ist nicht prüfbar";
   const qi = segment.search(/\bquery=/);
-  if (qi >= 0 && dynamischesWort(segment, qi + 6, quoteZustand(segment, qi))) return "die GraphQL-Query von `gh api` ist dynamisch zusammengesetzt (Variable im query=)";
+  if (qi >= 0 && dynamischesWort(segment, qi + 6, quoteFolge(segment.slice(0, qi)).ende)) return "die GraphQL-Query von `gh api` ist dynamisch zusammengesetzt (Variable im query=)";
   const ep = endpunkt(segment);
   if (mutierend && ep && /^["']?\$/.test(ep)) return "schreibender `gh api`-Aufruf mit dynamischem Endpunkt (Variable)";
   return null;
@@ -180,6 +167,28 @@ function interpreterString(segment) {
 }
 
 const REGEL = "Pre-Flight-Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints, Rückfrage bei der Maintainerin.";
+const frage = (grund, nr = "#1311") => ({ ask: true, reason: `gh-Guard (${nr}): ${grund}. ${REGEL}` });
+const hatVariable = (text) => /\$/.test(text.replace(/'[^']*'/g, "").replace(/\\\$|`\$/g, ""));
+
+/** Ein `gh api`-Segment: Außenwirkung (#1204) oder nicht lesbarer Inhalt (#1311), sonst null. */
+function ghApiSegment(segment) {
+  const grund = segmentGrund(segment);
+  if (grund) return frage(grund, "#1204");
+  const m = methode(segment);
+  const dyn = dynamischerGrund(segment, m !== null ? m !== "GET" : hatFelder(segment));
+  return dyn ? frage(dyn) : null;
+}
+
+/** Ein Segment ohne `gh api` am Anfang, in einem Befehl, der `gh api` irgendwo enthält. */
+function umweg(segment, tiefe) {
+  if (/^[\s(]*(?:eval|iex|Invoke-Expression)\b/i.test(segment)) return frage("`eval`/`iex` neben `gh api`: der zusammengesetzte Aufruf ist nicht prüfbar");
+  if (/^[\s(]*\$\{?\w+\}?(?![\w:]|\s*=)/.test(segment)) return frage("dynamisches Kommando ($CMD) neben `gh api`: der Aufruf ist nicht prüfbar");
+  const inner = tiefe < MAX_INTERPRETER ? interpreterString(segment) : null;
+  if (!inner) return null;
+  if (hatVariable(inner)) return frage("Interpreter-String mit Variable neben `gh api`: der Aufruf ist nicht prüfbar");
+  const r = bewerte(inner, tiefe + 1);
+  return r.ask ? r : null;
+}
 
 /** Bewertet einen Befehl: `{ ask: true, reason }` bei einem `gh api`-Segment mit Außenwirkung oder nicht prüfbarem
  *  Inhalt (Variablen, `eval`/`iex`, Interpreter-Strings), sonst `{ ask: false }`. Nie `deny`. */
@@ -187,28 +196,8 @@ export function bewerte(command, tiefe = 0) {
   if (!command || typeof command !== "string") return { ask: false };
   const hatGhApi = /\bgh(?:\.exe)?\b/.test(command) && /\bapi\b/.test(command);
   for (const segment of segmente(command)) {
-    if (GH_API_AM_ANFANG.test(segment)) {
-      const grund = segmentGrund(segment);
-      if (grund) return { ask: true, reason: `gh-Guard (#1204): ${grund}. ${REGEL}` };
-      const methode_ = methode(segment);
-      const dyn = dynamischerGrund(segment, methode_ !== null ? methode_ !== "GET" : hatFelder(segment));
-      if (dyn) return { ask: true, reason: `gh-Guard (#1311): ${dyn}. ${REGEL}` };
-      continue;
-    }
-    if (hatGhApi && /^[\s(]*(?:eval|iex|Invoke-Expression)\b/i.test(segment)) {
-      return { ask: true, reason: `gh-Guard (#1311): \`eval\`/\`iex\` neben \`gh api\`: der zusammengesetzte Aufruf ist nicht prüfbar. ${REGEL}` };
-    }
-    if (hatGhApi && /^[\s(]*\$\{?\w+\}?(?![\w:]|\s*=)/.test(segment)) {
-      return { ask: true, reason: `gh-Guard (#1311): dynamisches Kommando ($CMD) neben \`gh api\`: der Aufruf ist nicht prüfbar. ${REGEL}` };
-    }
-    const inner = hatGhApi && tiefe < MAX_INTERPRETER ? interpreterString(segment) : null;
-    if (inner && /\$/.test(inner.replace(/'[^']*'/g, "").replace(/\\\$|`\$/g, ""))) {
-      return { ask: true, reason: `gh-Guard (#1311): Interpreter-String mit Variable neben \`gh api\`: der Aufruf ist nicht prüfbar. ${REGEL}` };
-    }
-    if (inner) {
-      const r = bewerte(inner, tiefe + 1);
-      if (r.ask) return r;
-    }
+    const r = GH_API_AM_ANFANG.test(segment) ? ghApiSegment(segment) : hatGhApi ? umweg(segment, tiefe) : null;
+    if (r) return r;
   }
   return { ask: false };
 }

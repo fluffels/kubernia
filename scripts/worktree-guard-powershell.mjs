@@ -33,11 +33,10 @@
 import { statSync } from "node:fs";
 import { dirname, resolve, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
-import { protectedGitTargets, resolveGitContext } from "./worktree-guard-hook.mjs"; // eine Quelle für Entscheidung und Bash-Auswertung
-import { emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
+import { analyse, resolveGitContext } from "./worktree-guard-hook.mjs"; // eine Quelle für Entscheidung und Bash-Auswertung
+import { MAX_INTERPRETER, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
 
 export { parseHookInput };
-const MAX_INTERPRETER = 3; // Rekursionstiefe für Interpreter-Strings
 
 const ORT_BEFEHLE = new Set(["set-location", "cd", "sl", "chdir", "push-location", "pushd"]);
 const INTERPRETER = new Set(["iex", "invoke-expression", "pwsh", "pwsh.exe", "powershell", "powershell.exe", "cmd", "cmd.exe", "bash", "sh", "wsl", "start-process", "start", "invoke-command", "icm"]);
@@ -208,10 +207,42 @@ function gitZiel(rest, start, vars, istOrdnerStart) {
   return { sub, dir, unbekannt };
 }
 
+/** Der String hinter `bash|sh -c` läuft durch den Bash-Auswerter (Ziele blocken, nicht bestimmbare Ziele fragen). */
+function bashBruecke(k, skript, name) {
+  const { targets, asks } = analyse(skript, k.ort, { statSync: (p) => ({ isDirectory: () => k.istOrdner(p) }) });
+  for (const ziel of targets) {
+    const b = k.blockiert(ziel, `commit/push (in \`${name} -c\`)`);
+    if (b) return b;
+  }
+  for (const [dir, a] of asks) {
+    const ctx = k.kontext(dir);
+    if (ctx?.relevant && (!a.mainOnly || ctx.isMainWorktree)) return { block: false, ask: true, reason: `Worktree-Guard (PowerShell): ${a.reason} Den Ort literal angeben (\`git -C <worktree-pfad> …\`) oder bestätigen. (#1311)` };
+  }
+  return null;
+}
+
+/** Interpreter-Umweg: der String hinter `bash -c` läuft durch den Bash-Auswerter, der hinter `pwsh -c`/`iex` rekursiv
+ *  durch diesen Guard (Tiefe ≤ MAX_INTERPRETER); zusätzlich die grobe Regel: kommt im Text git … commit|push vor, gilt
+ *  das gegen den aktuellen Ort. `k`: Zustand des umgebenden Aufrufs. */
+function interpreterUmweg(k, raw, toks, cmd) {
+  if (k.ort !== null && k.tiefe < MAX_INTERPRETER) {
+    const rest = toks.slice(1).map((t) => expandiere(t, k.vars));
+    const ci = rest.findIndex((a) => /^-[A-Za-z]*c[A-Za-z]*$/.test(a) || /^-command$/i.test(a));
+    const name = basename(cmd).replace(/\.exe$/, "");
+    const skript = /^(iex|invoke-expression)$/.test(name) ? rest.join(" ") : ci >= 0 ? rest.slice(ci + 1).join(" ") : null;
+    let r = null;
+    if (skript && /^(bash|sh|zsh|dash|ksh)$/.test(name)) r = bashBruecke(k, skript, name);
+    else if (skript && /^(iex|invoke-expression|pwsh|powershell)$/.test(name)) r = bewertePowerShell({ command: skript, cwd: k.ort, repoRoot: k.repoRoot, deps: k.deps, tiefe: k.tiefe + 1 });
+    if (r && (r.block || r.ask)) return r;
+  }
+  if (!/\bgit(\.exe)?\b[^;|]*\b(commit|push)\b/i.test(raw)) return null;
+  return k.ort === null ? k.unklar("commit/push") : k.blockiert(k.ort, "commit/push (über einen Interpreter)");
+}
+
 /**
  * Bewertet einen PowerShell-Befehl. `deps.istOrdner(pfad)` und `deps.kontext(ordner)` sind injizierbar
  * (Tests); Standard: echtes Dateisystem und `resolveGitContext` aus dem Bash-Hook.
- * @returns {{ block: boolean, reason?: string }}
+ * @returns {{ block: boolean, ask?: boolean, reason?: string }} (`ask`: das Ziel eines `bash -c`-Strings ist nicht bestimmbar)
  */
 export function bewertePowerShell({ command, cwd, repoRoot, deps = {}, tiefe = 0 }) {
   if (!command || !cwd) return { block: false }; // nicht entscheidbar → fail-open
@@ -262,32 +293,9 @@ export function bewertePowerShell({ command, cwd, repoRoot, deps = {}, tiefe = 0
     else ortStatus = false;
   };
 
-  /** Interpreter-Umweg: der String hinter `bash -c` läuft durch den Bash-Auswerter, der hinter `pwsh -c`/`iex`
-   *  rekursiv durch diesen Guard (Tiefe ≤ 3); zusätzlich die grobe Regel: kommt im Text git … commit|push vor, gilt
-   *  das gegen den aktuellen Ort. */
-  const interpreter = (raw, toks, cmd) => {
-    if (ort !== null && tiefe < MAX_INTERPRETER) {
-      const rest = toks.slice(1).map((t) => expandiere(t, vars));
-      const ci = rest.findIndex((a) => /^-[A-Za-z]*c[A-Za-z]*$/.test(a) || /^-command$/i.test(a));
-      const name = basename(cmd).replace(/\.exe$/, "");
-      const bashLike = /^(bash|sh|zsh|dash|ksh)$/.test(name);
-      const psLike = /^(iex|invoke-expression|pwsh|powershell)$/.test(name);
-      const skript = /^(iex|invoke-expression)$/.test(name) ? rest.join(" ") : ci >= 0 ? rest.slice(ci + 1).join(" ") : null;
-      if (skript && bashLike) {
-        const stat = (p) => ({ isDirectory: () => istOrdner(p) });
-        for (const ziel of protectedGitTargets(skript, ort, { statSync: stat })) {
-          const b = blockiert(ziel, `commit/push (in \`${name} -c\`)`);
-          if (b) return b;
-        }
-      } else if (skript && psLike) {
-        const r = bewertePowerShell({ command: skript, cwd: ort, repoRoot, deps, tiefe: tiefe + 1 });
-        if (r.block) return r;
-      }
-    }
-    if (!/\bgit(\.exe)?\b[^;|]*\b(commit|push)\b/i.test(raw)) return null;
-    return ort === null ? unklar("commit/push") : blockiert(ort, "commit/push (über einen Interpreter)");
-  };
+  const interpreter = (raw, toks, cmd) => interpreterUmweg({ ort, tiefe, vars, istOrdner, kontext, blockiert, unklar, repoRoot, deps }, raw, toks, cmd);
 
+  let frage = null;
   let vorherSep = ";";
   for (const stmt of zerlege(command)) {
     // Verkettung: nach fehlgeschlagenem Ortswechsel läuft ein && -Nachfolger nicht, nach gelungenem ein || -Nachfolger nicht.
@@ -307,9 +315,10 @@ export function bewertePowerShell({ command, cwd, repoRoot, deps = {}, tiefe = 0
     if (ORT_BEFEHLE.has(cmd.toLowerCase())) ortWechsel(rest);
     else if (kopfTok && istGit(kopfTok.value)) r = gitStatement(rest);
     else if (INTERPRETER.has(cmd.toLowerCase()) || INTERPRETER.has(basename(cmd))) r = interpreter(stmt.raw, toks.slice(aufruf ? 1 : 0), cmd);
-    if (r) return r;
+    if (r?.block) return r;
+    frage ??= r?.ask ? r : null; // eine Rückfrage zählt erst, wenn kein späteres Statement blockt
   }
-  return { block: false };
+  return frage ?? { block: false };
 }
 
 function main() {

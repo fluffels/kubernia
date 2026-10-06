@@ -55,3 +55,29 @@ export const istDirektaufruf = (metaUrl) => Boolean(process.argv[1]) && metaUrl 
 export function emit(output) {
   if (output) console.log(JSON.stringify(output));
 }
+
+/** Rekursionstiefe für Interpreter-Strings (`bash -c`, `pwsh -c`, `eval`, Funktionen, Aliase): EINE Grenze für alle Guards. */
+export const MAX_INTERPRETER = 3;
+
+/**
+ * Quote-Zerlegung für Textprüfungen (gh-Guard): liefert je Zeichen ab `von` den Zustand VOR dem Zeichen
+ * `{ i, c, q, masked }` (`q`: `'`, `"` oder null; `masked`: durch `\` oder PowerShell-Backtick maskiert, außerhalb von
+ * `'…'`). `.ende` ist der Zustand nach dem letzten Zeichen. `q0` setzt den Startzustand (Start mitten in einem Quote).
+ */
+export function quoteFolge(text, von = 0, q0 = null) {
+  const out = [];
+  let q = q0;
+  for (let i = von; i < text.length; i++) {
+    const c = text[i];
+    out.push({ i, c, q, masked: false });
+    if (q === "'") {
+      if (c === "'") q = null;
+    } else if ((c === "\\" || c === "`") && i + 1 < text.length) {
+      out.push({ i: i + 1, c: text[i + 1], q, masked: true });
+      i++;
+    } else if (c === q) q = null;
+    else if (q === null && (c === "'" || c === '"')) q = c;
+  }
+  out.ende = q;
+  return out;
+}

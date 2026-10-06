@@ -134,6 +134,16 @@ describe("Haupt-Checkout: commit/push wird geblockt (Z25)", () => {
     laeuft(`git -C /repo/wt -C kq-1 commit -m x`, HAUPT);
   });
 
+  test("nicht bestimmbares Ziel in einem bash -c-String fragt (ask), blockt nicht (Brücke übernimmt die Rückfragen des Bash-Auswerters)", () => {
+    const r = pruefe(`bash -c 'cd "$X" && git push'`, WT) as { block: boolean; ask?: boolean; reason?: string };
+    assert.equal(r.block, false);
+    assert.equal(r.ask, true);
+    assert.match(r.reason ?? "", /literal/);
+    assert.equal((pruefe(`bash -c 'cd "$X" && git push'`, HAUPT) as { block: boolean }).block, true, "im Haupt-Checkout blockt es");
+    assert.equal((pruefe(`bash -c 'cd "$X" && git status'`, WT) as { ask?: boolean }).ask, undefined, "ohne geschützten git-Aufruf keine Frage");
+    assert.equal((pruefe(`bash -c 'cd "$X" && git push'; git -C ${HAUPT} commit -m x`, WT) as { block: boolean }).block, true, "ein späteres Statement mit deny geht der Frage vor");
+  });
+
   test("Ortswechsel IM String eines Interpreters wird ausgewertet (bash -c, sh -c, pwsh -c, iex)", () => {
     blockt(`bash -c "cd ${HAUPT} && git commit -m x"`, WT);
     blockt(`sh -c 'git -C ${HAUPT} push'`, WT);
