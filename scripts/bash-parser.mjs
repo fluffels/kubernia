@@ -82,15 +82,33 @@ class Parser {
     return t.t === "op" && ops.includes(t.op);
   }
 
-  lex() {
+  /** Leerraum, Zeilenfortsetzung und Kommentare überspringen. */
+  skipBlanks() {
     const { src } = this;
     for (;;) {
       const ch = src[this.pos];
       if (ch === " " || ch === "\t" || ch === "\r") this.pos++;
       else if (ch === "\\" && src[this.pos + 1] === "\n") this.pos += 2;
       else if (ch === "#") while (this.pos < src.length && src[this.pos] !== "\n") this.pos++;
-      else break;
+      else return;
     }
+  }
+
+  /** Operator-Token am Zeiger (`;`, `;;`, `&&`, `&`, `|`, `||`, `|&`, Klammern) oder null. */
+  lexOperator(ch, next) {
+    let op = null;
+    if (ch === ";") op = this.src.startsWith(";;&", this.pos) ? ";;&" : next === ";" ? ";;" : next === "&" ? ";&" : ";";
+    else if (ch === "&" && next !== ">") op = next === "&" ? "&&" : "&";
+    else if (ch === "|") op = next === "|" ? "||" : next === "&" ? "|&" : "|";
+    else if (ch === "(" || ch === ")") op = ch;
+    if (op === null) return null;
+    this.pos += op.length;
+    return { t: "op", op };
+  }
+
+  lex() {
+    const { src } = this;
+    this.skipBlanks();
     if (this.pos >= src.length) {
       if (this.pending.length) this.fail("Heredoc ohne Ende");
       return { t: "eof" };
@@ -102,25 +120,8 @@ class Parser {
       this.readHeredocBodies();
       return { t: "op", op: "\n" };
     }
-    if (ch === ";") {
-      const op = src.startsWith(";;&", this.pos) ? ";;&" : next === ";" ? ";;" : next === "&" ? ";&" : ";";
-      this.pos += op.length;
-      return { t: "op", op };
-    }
-    if (ch === "&" && next !== ">") {
-      const op = next === "&" ? "&&" : "&";
-      this.pos += op.length;
-      return { t: "op", op };
-    }
-    if (ch === "|") {
-      const op = next === "|" ? "||" : next === "&" ? "|&" : "|";
-      this.pos += op.length;
-      return { t: "op", op };
-    }
-    if (ch === "(" || ch === ")") {
-      this.pos++;
-      return { t: "op", op: ch };
-    }
+    const op = this.lexOperator(ch, next);
+    if (op) return op;
     if (ch === "<" && next === "<" && src[this.pos + 2] !== "<") {
       this.pos += 2;
       return { t: "h", ref: this.heredocStart() };
@@ -256,68 +257,80 @@ class Parser {
     }
   }
 
-  readWord() {
+  /** Endet das Wort vor dem Zeichen `ch`? (Trenner, Operatoren, Heredoc hinter einem Wort.) */
+  wortEnde(w, ch, next) {
+    if (" \t\r\n;)".includes(ch)) return true;
+    if (ch === "|") return !w.text.endsWith(">");
+    if (ch === "&") return next === "&" || !(/[<>]$/.test(w.text) || next === ">");
+    if (ch === "(") return !/[<>]$/.test(w.text); // sonst Prozess-Substitution; Funktionsdefinition/Fehler entscheidet der Parser
+    return ch === "<" && next === "<" && this.src[this.pos + 2] !== "<" && w.text !== "" && !w.text.endsWith("<"); // Heredoc hinter einem Wort: eigenes Token
+  }
+
+  /** `$'…'` (ANSI-C), `$"…"`, `$(…)` oder ein einfaches `$`. */
+  wortDollar(w, next) {
     const { src } = this;
-    const w = { t: "w", text: "", dynamic: false, quoted: false, substs: [] };
-    while (this.pos < src.length) {
-      const ch = src[this.pos];
-      const next = src[this.pos + 1];
-      if (ch === " " || ch === "\t" || ch === "\r" || ch === "\n" || ch === ";" || ch === ")") break;
-      if (ch === "|" && !w.text.endsWith(">")) break;
-      if (ch === "&") {
-        if (next === "&" || !(/[<>]$/.test(w.text) || next === ">")) break;
-        w.text += ch;
-        this.pos++;
-      } else if (ch === "(") {
-        if (!/[<>]$/.test(w.text)) break; // sonst Funktionsdefinition oder Fehler (Parser entscheidet)
-        w.text = w.text.slice(0, -1); // <(…) / >(…): Prozess-Substitution
-        w.dynamic = true;
-        this.pos++;
-        w.substs.push(this.subst());
-      } else if (ch === "<" && next === "<" && src[this.pos + 2] !== "<" && w.text !== "" && !w.text.endsWith("<")) {
-        break; // Heredoc hinter einem Wort: eigenes Token
-      } else if (ch === "\\") {
-        if (next === "\n") this.pos += 2; // Zeilenfortsetzung
-        else {
-          if (next !== undefined) w.text += next;
-          w.quoted = true;
-          this.pos += 2;
-        }
-      } else if (ch === "'") {
-        const end = src.indexOf("'", this.pos + 1);
-        if (end < 0) this.fail("Quote offen");
-        w.text += src.slice(this.pos + 1, end);
-        w.quoted = true;
-        this.pos = end + 1;
-      } else if (ch === '"') {
-        w.quoted = true;
-        this.pos++;
-        this.readDouble(w);
-      } else if (ch === "$" && next === "'") {
-        let end = this.pos + 2;
-        while (end < src.length && src[end] !== "'") end += src[end] === "\\" ? 2 : 1;
-        if (end >= src.length) this.fail("Quote offen");
-        w.text += ansiC(src.slice(this.pos + 2, end));
-        w.quoted = true;
-        this.pos = end + 1;
-      } else if (ch === "$" && next === '"') {
-        w.quoted = true;
+    if (next === "'") {
+      let end = this.pos + 2;
+      while (end < src.length && src[end] !== "'") end += src[end] === "\\" ? 2 : 1;
+      if (end >= src.length) this.fail("Quote offen");
+      w.text += ansiC(src.slice(this.pos + 2, end));
+      w.quoted = true;
+      this.pos = end + 1;
+    } else if (next === '"') {
+      w.quoted = true;
+      this.pos += 2;
+      this.readDouble(w);
+    } else {
+      w.dynamic = true;
+      if (next === "(") {
         this.pos += 2;
-        this.readDouble(w);
-      } else if (ch === "`") {
-        this.pos++;
-        w.dynamic = true;
-        w.substs.push(this.backtick());
-      } else if (ch === "$") {
-        w.dynamic = true;
-        if (next === "(") {
-          this.pos += 2;
-          w.substs.push(this.subst());
-        } else this.pos++;
-      } else {
-        w.text += ch;
-        this.pos++;
+        w.substs.push(this.subst());
+      } else this.pos++;
+    }
+  }
+
+  /** Ein Zeichen (bzw. Quote-/Substitutionsblock) des Wortes lesen. */
+  wortZeichen(w, ch, next) {
+    const { src } = this;
+    if (ch === "(") {
+      w.text = w.text.slice(0, -1); // <(…) / >(…): Prozess-Substitution
+      w.dynamic = true;
+      this.pos++;
+      w.substs.push(this.subst());
+    } else if (ch === "\\") {
+      if (next !== "\n") {
+        if (next !== undefined) w.text += next;
+        w.quoted = true;
       }
+      this.pos += 2; // bei Zeilenfortsetzung: nur überspringen
+    } else if (ch === "'") {
+      const end = src.indexOf("'", this.pos + 1);
+      if (end < 0) this.fail("Quote offen");
+      w.text += src.slice(this.pos + 1, end);
+      w.quoted = true;
+      this.pos = end + 1;
+    } else if (ch === '"') {
+      w.quoted = true;
+      this.pos++;
+      this.readDouble(w);
+    } else if (ch === "`") {
+      this.pos++;
+      w.dynamic = true;
+      w.substs.push(this.backtick());
+    } else if (ch === "$") this.wortDollar(w, next);
+    else {
+      w.text += ch;
+      this.pos++;
+    }
+  }
+
+  readWord() {
+    const w = { t: "w", text: "", dynamic: false, quoted: false, substs: [] };
+    while (this.pos < this.src.length) {
+      const ch = this.src[this.pos];
+      const next = this.src[this.pos + 1];
+      if (this.wortEnde(w, ch, next)) break;
+      this.wortZeichen(w, ch, next);
     }
     return w;
   }
