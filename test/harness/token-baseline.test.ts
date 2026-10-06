@@ -27,6 +27,7 @@ type Call = {
   cacheRead?: number;
   output?: number;
   cost?: number | string | null;
+  costParts?: Parts | null;
   subagent?: Sub | null;
 };
 type Run = { calls: Call[]; questions?: number };
