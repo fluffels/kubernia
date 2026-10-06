@@ -28,7 +28,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-/** Lenses pro Review-Runde (Architektur / Requirement-Treue / Test-Adäquanz, #1012). */
+/** Lenses pro Review-Runde für Läufe ohne Runden-Marker (vor #1265 liefen immer alle drei Brillen, #1012). */
 export const LENSES_PER_ROUND = 3;
 
 export const PHASES = [
@@ -75,16 +75,24 @@ export function classifyMainByTime(ts, { claimAt, prCreatedAt, mergedAt } = {}) 
   return "Umsetzung";
 }
 
+/** Runden-Marker einer Lens: Workflow-Label `lens:<brille>:r<n>`, Skill-Beschreibung `… R<n>` (#1265). */
+const ROUND_MARKER = /(?::r|\bR)(\d+)\b/;
+
 /**
- * Review-Runden (Heuristik): je drei Lenses sind eine Runde (#1012), jeder
- * weitere Review-Subagent ohne „Lens" (z.B. „Frischer Kritiker Runde 2") ist
- * eine eigene Runde. Annahme: jede Lens-Runde fährt alle drei Lenses. Der
- * Festgefahren-Review ist keine Konvergenz-Runde und zählt nicht.
+ * Review-Runden. Tragen die Lenses einen Runden-Marker, zählt der höchste Marker (#1265: die
+ * Staffel fährt 1–3 Lenses je Runde, eine feste Lens-Zahl je Runde stimmt nicht mehr; eine Lens
+ * ohne Marker zählt als Runde 1). Ohne Marker die Heuristik für ältere Läufe: je drei Lenses eine
+ * Runde (#1012). Jeder weitere Review-Subagent ohne „Lens" (z.B. „Frischer Kritiker Runde 2") ist
+ * eine eigene Runde. Der Festgefahren-Review ist keine Konvergenz-Runde und zählt nicht.
  */
 export function countReviewRounds(reviewDescriptions) {
   const rounds = reviewDescriptions.filter((d) => !/festgefahren/i.test(d));
-  const lenses = rounds.filter((d) => /\blens\b/i.test(d)).length;
-  return Math.ceil(lenses / LENSES_PER_ROUND) + (rounds.length - lenses);
+  const lenses = rounds.filter((d) => /\blens\b/i.test(d));
+  const markers = lenses.map((d) => Number(ROUND_MARKER.exec(d)?.[1] ?? 1));
+  const lensRounds = lenses.some((d) => ROUND_MARKER.test(d))
+    ? Math.max(...markers)
+    : Math.ceil(lenses.length / LENSES_PER_ROUND);
+  return lensRounds + (rounds.length - lenses.length);
 }
 
 function num(v) {

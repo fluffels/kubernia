@@ -1,6 +1,6 @@
 ---
 name: review-lenses
-description: Gestaffelter Mehr-Perspektiven-Review des kubernia-Diffs: erst `npm run verify`, nur bei Grün drei Lens-Pässe (Architektur, Requirement-Treue, Test-Adäquanz). Auslösen bei "Lens-Review", "Mehr-Augen-Review", "Review mit Lenses", "gestaffelter Review".
+description: Gestaffelter Mehr-Perspektiven-Review des kubernia-Diffs: erst `npm run verify`, nur bei Grün die Lenses (Code: Architektur, Requirement-Treue, Test-Adäquanz; reines Markdown: eine Doku-Lens). Auslösen bei "Lens-Review", "Mehr-Augen-Review", "Review mit Lenses", "gestaffelter Review".
 ---
 
 # Mehr-Perspektiven-Review mit Gate-Short-Circuit
@@ -37,12 +37,12 @@ git rev-parse HEAD                                      # Frische-Guard, s.u.
 Jede Lens bekommt zusätzlich diese drei Regeln — sie kosten keinen Befund:
 
 1. **`AGENTS.md` nicht erneut öffnen.** Unter Claude Code lädt Claude Code sie nativ (#1087), sie liegt also ohnehin vollständig im Kontext; ein `Read` darauf ist reine Duplikation (~30k Tokens pro Lens). Wird eine Regel wörtlich gebraucht: **punktuell greppen**.
-2. **Nur den eigenen Regel-Ausschnitt.** Architektur → Schichtregeln + oberste Regel; Requirement-Treue → Doku-Disziplin + Spielstände; Test-Adäquanz → TDD + Red-Green. Die Ausschnitte der anderen Brillen liest man nicht mit — dafür gibt es ja die anderen Brillen.
-3. **Der Patch ist die Primärquelle.** Eine geänderte Datei nur öffnen, wenn ein konkreter Befund den umgebenden Kontext braucht — und dann gezielt um die Hunk-Zeilen, nicht die ganze Datei.
+2. **Nur den eigenen Regel-Ausschnitt.** Architektur → Schichtregeln + oberste Regel; Requirement-Treue → Doku-Disziplin + Spielstände; Test-Adäquanz → TDD + Red-Green; Doku → SSOT-Kopf + Doku-Disziplin + oberste Regel. Die Ausschnitte der anderen Brillen liest man nicht mit — dafür gibt es ja die anderen Brillen.
+3. **Der Patch ist die Primärquelle — genau einmal vollständig lesen** (sehr große Patches abschnittsweise, jede Zeile einmal), danach nur gezielt per Grep oder offset/limit, kein zweites Volllesen, auch nicht per `cat`/`Get-Content` (#1265). Eine geänderte Datei nur öffnen, wenn ein konkreter Befund den umgebenden Kontext braucht — und dann gezielt um die Hunk-Zeilen, nicht die ganze Datei.
 
 > **Was die Diät ausdrücklich NICHT trifft:** die **Sabotage-/Red-Green-Prüfung** der Test-Lens (Implementierung testweise verfälschen → wird ein Test rot?). Sie ist der teuerste Schritt und der einzige, der harte Fehler statt Stil-Anmerkungen liefert — in der Messsession fand genau sie den einzigen echten Blocker. Sie bleibt vollständig; sie ist auch die eine erlaubte Ausnahme von „die Lens ändert nichts" (danach zurücksetzen und mit leerem `git status --porcelain` belegen).
 
-## Ablauf — Stufe 0 zuerst, dann (nur bei Grün) die drei Lenses
+## Ablauf — Stufe 0 zuerst, dann (nur bei Grün) die Lenses
 
 ### Stufe 0 — deterministische Gates (der Short-Circuit)
 
@@ -57,22 +57,28 @@ npm run verify   # typecheck → lint → check:arch → check:size → check:co
 
 > Warum `npm run verify` statt einer eigenen Kommandokette: es ist die **eine** gepflegte Gate-Quelle (#527) — so kann der Review nicht gegen eine veraltete Teilmenge der Gates prüfen. Fehlt im Worktree `node_modules`, einmal `npm ci` (#1119).
 
-### Die drei Lens-Pässe (nur nach grüner Stufe 0)
+### Die Lens-Pässe (nur nach grüner Stufe 0)
 
-**Jeder Lens ist ein eigener, fokussierter Pass** — nicht ein vermischter „schau mal drüber"-Blick. Jeweils **nur** durch die eine Brille lesen, dann strukturierte Findings ausgeben (Format unten). Reihenfolge ist egal, aber alle drei laufen.
+**Jeder Lens ist ein eigener, fokussierter Pass** — nicht ein vermischter „schau mal drüber"-Blick. Jeweils **nur** durch die eine Brille lesen, dann strukturierte Findings ausgeben (Format unten).
+
+**Welche Lenses laufen — die Review-Staffel (#1265).** Der Sockel je Lens ist fix, gespart wird an der **Zahl** der Lenses. Die Regel ist dieselbe wie `lensPlan` im Workflow:
+
+- **Runde 1:** Listet `git diff --name-only origin/main...HEAD` **nur `*.md`-Dateien** (auch Harness-Markdown), läuft **eine Lens 4 — Doku**. Sonst laufen **Lens 1–3**, ohne Größenschwelle: auch ein kleiner `src`-Diff kann das Save-Format brechen.
+- **Ab Runde 2:** nur die Brillen, die in der Vorrunde **blockiert** haben, auf dem **Delta-Patch** des Fixes (`git diff <Vorrunden-HEAD>..HEAD > "$TMP/kq-<nr>-r<runde>-delta.patch"`), mit ihren Vorrunden-Blockern als Prüfliste; der volle Patch bleibt Referenz für gezielte Zugriffe. Ändert der Fix Nicht-Markdown, läuft **Test-Adäquanz immer mit**.
+- **Fail-closed:** Fehlt die Dateiliste, gab es keinen Vorrunden-Pass (`verify` war rot), fiel eine Lens aus, hat die Diff-Art gewechselt oder wurde `main` in den Branch gemergt bzw. rebased: der volle Satz auf dem vollen Patch.
 
 **Jede Lens läuft als eigener Subagent auf dem starken Tier (#1035)** — nicht inline im Hauptagenten:
 
 ```
 Agent({
   subagent_type: "kubernia-lens",
-  description: "Lens <n>: <Architektur|Requirement-Treue|Test-Adäquanz>",
+  description: "Lens <Architektur|Requirement-Treue|Test-Adäquanz|Doku> R<runde>",   // R<runde> zählt die Messung (token-baseline)
   // kein model/effort am Spawn: beides steht im Frontmatter von .claude/agents/kubernia-lens.md (opus/high, docs/model-routing.md §1)
-  prompt: "<Brille WÖRTLICH> · Arbeitsverzeichnis: <worktree> · Patch: <TMP>/kq-<nr>-r<runde>.patch · erwarteter HEAD: <sha> · <Kontext-Diät WÖRTLICH> · <Findings-Format WÖRTLICH>"
+  prompt: "<Brille WÖRTLICH> · Arbeitsverzeichnis: <worktree> · Patch: <TMP>/kq-<nr>-r<runde>.patch · erwarteter HEAD: <sha> · ab Runde 2: Delta-Patch + Vorrunden-Blocker dieser Brille · <Kontext-Diät WÖRTLICH> · <Findings-Format WÖRTLICH>"
 })
 ```
 
-⚠️ **Die Lenses lesen, sie schreiben nicht — mit genau einer Ausnahme.** Drei parallele Subagenten teilen sich **einen** Worktree. Fährt einer Sabotage-Proben (die Red-Green-Prüfung der Test-Lens, s.o.) oder „hilft" mit einem Edit, prüfen die anderen gegen eine veränderte Basis und melden Findings, die gegen den echten Stand nicht reproduzierbar sind — beim Einführungs-PR dieses Umbaus (#1035) genau so passiert. Darum: **jeder Lens-Prompt sagt ausdrücklich „du liest nur, du änderst nichts"**, und die **Sabotage-Proben der Test-Lens laufen als letzte bzw. allein** — danach `git status --porcelain` als leer belegen. (Der Workflow hat das Problem nicht: dort sind die Lenses schema-gebunden und ändern nichts.)
+⚠️ **Die Lenses lesen, sie schreiben nicht — mit genau einer Ausnahme.** Parallele Subagenten teilen sich **einen** Worktree. Fährt einer Sabotage-Proben (die Red-Green-Prüfung der Test-Lens, s.o.) oder „hilft" mit einem Edit, prüfen die anderen gegen eine veränderte Basis und melden Findings, die gegen den echten Stand nicht reproduzierbar sind — beim Einführungs-PR dieses Umbaus (#1035) genau so passiert. Darum: **jeder Lens-Prompt sagt ausdrücklich „du liest nur, du änderst nichts"**, und die **Sabotage-Proben der Test-Lens laufen als letzte bzw. allein** — danach `git status --porcelain` als leer belegen. (Der Workflow hat das Problem nicht: dort sind die Lenses schema-gebunden und ändern nichts.)
 
 ⚠️ **Die Blöcke wörtlich in den Prompt kopieren, nicht referenzieren.** Ein `kubernia-lens`-Subagent liest diese Datei **nicht** — „die Brille unten", „Kontext-Diät oben" oder „Format wie im Skill" sind für ihn leer, und die #1034-Diät fiele still weg. Der Workflow löst dasselbe durch Interpolation (`${KONTEXT_DIAET}`, `lens.auftrag` — bewacht von `test/harness/review-context.test.ts`); auf diesem Pfad ist es Handarbeit des Orchestrators.
 
@@ -101,25 +107,31 @@ Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket
 - **Kein False Positive (Red-Green):** würde der Test **rot**, wenn man die Logik testweise verfälscht? Wo Zweifel bestehen, den Fix/die Assertion kurz sabotieren → rot sehen → zurücksetzen (vgl. AGENTS.md „Tests gegen False Positives absichern"). Bugfix ⇒ gab es den **fehlschlagenden Repro-Test zuerst**?
 - Präsentations-Code (Phaser/DOM) wird **im Browser** verifiziert statt per Unit-Test — ist das passiert und belegt?
 
+**Lens 4 — Doku** (nur bei reinem Markdown-Diff, dann der **einzige** Pass). Test-Adäquanz entfällt, weil es ohne Code nichts zu sabotieren gibt; die Architektur-Fragen einer Doku stecken in den Punkten 2 und 3:
+1. **Requirement-Treue:** der Diff gegen jedes Akzeptanzkriterium einzeln (erfüllt / offen / darüber hinaus), Scope-Kriechen?
+2. **SSOT/Drift:** steht eine Regel jetzt doppelt (jede harte Regel genau einmal in `AGENTS.md`, die Langfassung in `docs/`)? Widerspricht der Text einer anderen Stelle, einem ADR oder dem Verhalten von Code/Skripten? Ist-Zustand statt Historie? Lösen neue Links und Anker auf?
+3. **Wächter-Kopplung:** ändert der Diff eine Regel, die ein Wächter erzwingt (Regel-Begriff in `test/harness/` und `scripts/` greppen)? Erzwingt er weiter die alte Fassung, ist das **blockierend** — dann fehlt eine Code-Änderung.
+4. **⭐ Oberste Regel:** trägt die Regel noch bei 10× Inhalt, Tickets und parallelen Agenten?
+
 ## Findings-Format (pro Lens)
 
 Je Lens ein kurzer Block. Findings **nach Schwere** sortiert, konkret und belegt — kein „könnte man schöner machen" ohne Ort:
 
 ```
-## Lens: <Architektur | Requirement-Treue | Test-Adäquanz>
+## Lens: <Architektur | Requirement-Treue | Test-Adäquanz | Doku>
 Verdikt: ✅ ok  |  ⚠️ Hinweise  |  ❌ blockierend
 
 - [❌ blockierend] <Befund> — `datei.ts:zeile` — <warum / Beleg>
 - [⚠️ Hinweis]     <Befund> — `datei.ts:zeile` — <warum>
 ```
 
-Am Ende **ein Gesamt-Verdikt** über alle drei Lenses (mergefähig ✅ / erst nachbessern ❌) und, falls beim Review etwas **außerhalb des Ticket-Scopes** aufgefallen ist, eine Vorschlagsliste: je Punkt „echter Defekt → eigenes Issue" oder „Härtung/Kosmetik → Zeile im Sammelticket" (AGENTS.md § Nicht jeder Befund wird ein Ticket). Nicht inline mitfixen — oberste Regel.
+Am Ende **ein Gesamt-Verdikt** über alle gelaufenen Lenses (mergefähig ✅ / erst nachbessern ❌) und, falls beim Review etwas **außerhalb des Ticket-Scopes** aufgefallen ist, eine Vorschlagsliste: je Punkt „echter Defekt → eigenes Issue" oder „Härtung/Kosmetik → Zeile im Sammelticket" (AGENTS.md § Nicht jeder Befund wird ein Ticket). Nicht inline mitfixen — oberste Regel.
 
 ## Als beschränkte Konvergenzschleife im Ticket-Ablauf (#1012)
 
 Im kubernia-Ticket-Ablauf ist dieser Review **Pflicht** vor dem PR — und läuft nicht einmalig, sondern als **beschränkte review↔fix-Konvergenzschleife** (Marktstandard 2026, generator-critic + capped reflexion):
 
-1. Lenses auf den **aktuellen** Diff (frische, unabhängige Kritiker — nicht der Agent, der gefixt hat).
+1. Lenses nach der Staffel oben auf den **aktuellen** Stand (frische, unabhängige Kritiker — nicht der Agent, der gefixt hat): Runde 1 der volle Diff, ab Runde 2 die blockierten Brillen auf dem Delta des Fixes.
 2. Keine blockierenden Findings mehr ⇒ **konvergiert**, weiter zum PR.
 3. Sonst nachbessern, dann **zurück zu 1** — mit einem **frischen** Kritiker, damit der finale „OK"-Blick nie ein Self-Grading des eigenen Fixes ist.
 4. **Cap 2** Fix-Runden (unbeschränktes Iterieren ist schlechter, nicht besser — jenseits echter Fehler werden Stil-Nörgeleien erfunden); danach **Hand-off** an die Maintainerin (Festgefahren), kein PR mit bekannten Blockern.
@@ -129,5 +141,5 @@ Regel-Heimat: [AGENTS.md › Mehr-Perspektiven-Review](../../../AGENTS.md). Dete
 ## Wichtig
 
 - **Short-Circuit ist hart.** Rote Stufe 0 ⇒ **keine** Lens-Pässe. Der Beweis ist der Exit-Code von `npm run verify` (≠ 0), nicht ein Bauchgefühl.
-- **Nicht die CI ersetzen.** Die Gates laufen ohnehin vor dem PR lokal (`npm run verify`) und in der CI als Required-Checks nochmal — dieser Skill hängt sich **davor** und ergänzt die drei LLM-Lenses. **Kein Auto-Merge.**
+- **Nicht die CI ersetzen.** Die Gates laufen ohnehin vor dem PR lokal (`npm run verify`) und in der CI als Required-Checks nochmal — dieser Skill hängt sich **davor** und ergänzt die LLM-Lenses. **Kein Auto-Merge.**
 - **Ablauf-Änderungen** gehören in [docs/agent-harness.md](../../../docs/agent-harness.md) (Harness-Sicht) bzw. [AGENTS.md](../../../AGENTS.md), nicht (nur) in diese Skill-Datei — der Skill ist ein dünner Zeiger auf die Repo-SSOT.

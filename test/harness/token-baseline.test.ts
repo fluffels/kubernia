@@ -139,6 +139,20 @@ describe("token-baseline: Phasen-Zuordnung", () => {
     assert.equal(m.countReviewRounds(["Lens 1", "Lens 2", "Lens 3", "Lens 1 (R2)"]), 2);
     assert.equal(m.countReviewRounds(["Lens 1", "Lens 2", "Lens 3", "review-festgefahren:#12"]), 1);
   });
+
+  test("Review-Runden mit Runden-Marker (#1265): die Lens-Zahl je Runde schwankt, gezählt wird der Marker", () => {
+    // Die Staffel fährt 1–3 Lenses je Runde; die Heuristik „drei = eine Runde" läge dann daneben.
+    assert.equal(m.countReviewRounds(["lens:doku:r1", "lens:doku:r2"]), 2, "Doku-Lens zweimal = zwei Runden");
+    assert.equal(m.countReviewRounds(["lens:doku:r1"]), 1);
+    assert.equal(
+      m.countReviewRounds(["lens:architektur:r1", "lens:requirement-treue:r1", "lens:test-adaequanz:r1", "lens:architektur:r2", "lens:test-adaequanz:r2"]),
+      2,
+      "fünf Lenses über zwei Runden sind zwei Runden, nicht ceil(5/3)",
+    );
+    assert.equal(m.countReviewRounds(["Lens Doku R1", "Lens Doku R2"]), 2, "Skill-Pfad: Marker R<n> in der Beschreibung");
+    assert.equal(m.countReviewRounds(["lens:doku:r1", "review-festgefahren:#12"]), 1, "Festgefahren zählt weiter nicht");
+    assert.equal(m.countReviewRounds(["Lens Architektur", "Lens Requirement"]), 1, "ohne Marker bleibt die Heuristik");
+  });
 });
 
 describe("token-baseline: summarize", () => {
