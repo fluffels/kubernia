@@ -28,7 +28,7 @@ docs/referenz/ ← Nachschlage-Referenz on-demand (Befehle, Repo-Landkarte, Schi
    })
    ```
    Ist der Agent nicht verfügbar, skizziert der Hauptchat den Plan kurz selbst und gibt ihn dem Umsetzer mit.
-3. **Pre-Flight-Klärung** nach AGENTS.md § Human-in-the-Loop-Checkpoints: braucht das Ticket eine menschliche Entscheidung (🎨 Optik, ⚠️ riskante Weiche, offene Weiche im Plan), **jetzt** per `AskUserQuestion` klären. Optik-Iterationen mit PixelLab laufen hier (der Umsetzer hat keine MCP-Tools); das gewählte Asset liegt als Datei im Temp-Ordner, der Umsetzer bekommt den Pfad (eine Job-ID nützt ihm ohne MCP nichts).
+3. **Pre-Flight-Klärung** nach AGENTS.md § Human-in-the-Loop-Checkpoints: braucht das Ticket eine menschliche Entscheidung (🎨 Optik, ⚠️ riskante Weiche, offene Weiche im Plan), **jetzt** per `AskUserQuestion` klären. Optik-Iterationen mit PixelLab laufen hier (der Umsetzer hat PixelLab nicht in seiner Whitelist); das gewählte Asset liegt als Datei im Temp-Ordner, der Umsetzer bekommt den Pfad (eine Job-ID nützt ihm nichts).
 4. **Umsetzer spawnen** (nächster Abschnitt) und sein Ergebnis behandeln.
 
 Solange der Umsetzer läuft, fasst der Hauptchat weder Repo noch Worktree an und startet keinen zweiten Umsetzer.

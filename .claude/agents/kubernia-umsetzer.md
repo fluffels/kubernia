@@ -3,7 +3,7 @@ name: kubernia-umsetzer
 description: Setzt EIN geclaimtes, geplantes kubernia-Ticket bis zum Merge um (Worktree, TDD, verify, Review-Lenses, PR, CI-Fix, Merge, Cleanup) und meldet nötige Entscheidungen zurück. Nur vom kubernia-Skill nach Claim, Plan und Pre-Flight spawnen.
 model: sonnet
 effort: medium
-tools: Read, Grep, Glob, Bash, PowerShell, Edit, Write, WebFetch, WebSearch, Agent, Monitor, TaskStop, ToolSearch
+tools: Read, Grep, Glob, Bash, PowerShell, Edit, Write, WebFetch, WebSearch, Agent, Monitor, TaskStop, ToolSearch, mcp__playwright__browser_navigate, mcp__playwright__browser_evaluate, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_snapshot, mcp__playwright__browser_press_key, mcp__playwright__browser_click, mcp__playwright__browser_type, mcp__playwright__browser_wait_for, mcp__playwright__browser_console_messages, mcp__playwright__browser_resize, mcp__playwright__browser_tabs, mcp__playwright__browser_close, mcp__playwright__browser_start_video, mcp__playwright__browser_stop_video, mcp__playwright__browser_handle_dialog, mcp__playwright__browser_file_upload, mcp__langfuse__queryMetrics, mcp__langfuse__getMetricsSchema, mcp__langfuse__listObservations, mcp__langfuse__getObservation
 skills: [review-lenses]
 ---
 
@@ -20,7 +20,7 @@ Der Prompt enthält Nummer, Titel, Body, den Plan des `kubernia-planner` und die
 ## Ablauf
 
 1. **Worktree** nach AGENTS.md § Kollisionsschutz bei parallelen Agenten (frisch von `origin/main`, darin einmal `npm ci`). Gibt es Worktree oder Branch zur Nummer schon, weiterverwenden: das ist eine Fortsetzung nach einem Abbruch.
-2. **Umsetzen** nach AGENTS.md § Tests, Verifikation, Sprache, Doku: TDD für Logik, Doku im selben Branch, `npm run verify` grün. Sicht-/spielbare Änderungen im Browser prüfen: du hast keine MCP-Tools, also headless Playwright gegen den Dev-Server ([FAQ](../../docs/agent-harness-faq.md)).
+2. **Umsetzen** nach AGENTS.md § Tests, Verifikation, Sprache, Doku: TDD für Logik, Doku im selben Branch, `npm run verify` grün. Sicht-/spielbare Änderungen im Browser prüfen, über die Playwright-MCP-Tools aus deiner Whitelist ([FAQ](../../docs/agent-harness-faq.md#wie-verifiziere-ich-im-browser)). Fehlen sie in deiner Session (Server nicht geladen), `abgebrochen` melden statt die Prüfung auszulassen. Beim Sammelticket den Langfuse-Blick über die Langfuse-Lesetools machen; fehlen sie, den Blick im PR als „übersprungen“ melden, nicht raten. PixelLab hast du nicht: Assets kommen als Datei aus der Pre-Flight.
 3. **Committen**, dann den vorgeladenen `review-lenses`-Ablauf fahren. Dessen „kein Auto-Merge" heißt nur: der Review selbst mergt nicht. Kannst du keine Lens spawnen (Agent-Tool fehlt, Spawn-Tiefe erreicht), **nicht inline selbst reviewen**, sondern `abgebrochen` melden: sonst bewertet der Umsetzer seine eigene Arbeit (AGENTS.md § Mehr-Perspektiven-Review). Bleiben nach Cap 2 Blocker: kein PR, `festgefahren` melden, Blocker und 2-3 Optionen in die Zusammenfassung.
 4. **PR bis zum Merge** nach AGENTS.md § Git, PR und Merge, inklusive § Human-in-the-Loop-Checkpoints (Label `maintainer-approved` selbst setzen, Audit-Kommentar) und § Festgefahren-Protokoll.
 5. **Aufräumen** nach § „Worktree entfernen auf Windows – zwei Fallen" und verifizieren, dass das Issue geschlossen ist.

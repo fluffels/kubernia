@@ -104,6 +104,10 @@ describe("token-baseline: Phasen-Zuordnung", () => {
     // kubernia-lens mit einer Beschreibung ohne Review-Wort: der agentType allein ordnet zu.
     assert.equal(m.classifySubagent("kubernia-lens", "Architektur-Blick auf #1264"), "Review");
     assert.equal(m.classifySubagent("claude-code-guide", "Liest Claude Code AGENTS.md?"), null);
+    // Der Umsetzer (#1280) arbeitet über Umsetzung UND CI/Merge: bewusst keine feste Phase,
+    // der Zeitschnitt an PR-/Merge-Zeitpunkt teilt seine Calls genauer auf (#1291).
+    assert.equal(m.classifySubagent("kubernia-umsetzer", "Umsetzung #1291"), null);
+    assert.equal(m.classifySubagent("kubernia-umsetzer", "Umsetzung #1291 nach Plan inkl. Review-Fix"), null, "der Typ zählt, nicht die Beschreibung");
     assert.equal(m.classifySubagent(undefined, undefined), null);
   });
 
@@ -312,6 +316,20 @@ describe("token-baseline: Quelle Langfuse", () => {
     // Eine Preisquelle (#1239): Kosten aus PRICES, nicht aus Langfuse-totalCost (0.25 im Fixture).
     assert.ok(Math.abs(s.total.cost - 0.000325) < 1e-12, `Kosten aus PRICES, war ${s.total.cost}`);
     assert.equal(s.hasCost, true);
+  });
+
+  test("verschachtelt (#1291): Lens unter dem Umsetzer zählt als Review, der Umsetzer selbst per Zeitschnitt", () => {
+    const r = m.callsFromLangfuse([
+      { id: "u", type: "SPAN", name: "Subagent: Umsetzung #1291", startTime: "x", metadata: { agent_type: "kubernia-umsetzer" } },
+      { id: "l", type: "SPAN", name: "Subagent: Lens Architektur R1", startTime: "x", parentObservationId: "u", metadata: { agent_type: "kubernia-lens" } },
+      gen("gl", "l", { input: 1 }),
+      { ...gen("gu1", "u", { input: 1 }), startTime: "2026-09-29T11:00:00Z" },
+      { ...gen("gu2", "u", { input: 1 }), startTime: "2026-09-29T12:30:00Z" },
+    ]);
+    const nachId = (id: string) => r.calls[["gl", "gu1", "gu2"].indexOf(id)];
+    assert.equal(nachId("gl").subagent?.agentType, "kubernia-lens", "nächster umschließender Subagent, nicht der äußerste");
+    const phasen = m.summarize(r, BOUNDS).rows.map((row) => row.phase).sort();
+    assert.deepEqual(phasen, ["CI/Merge", "Review", "Umsetzung"], "Lens → Review, Umsetzer vor dem PR → Umsetzung, danach → CI/Merge");
   });
 
   test("Zyklus in parentObservationId hängt nicht, Hauptagent bleibt Hauptagent", () => {
