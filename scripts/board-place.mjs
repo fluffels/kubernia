@@ -12,7 +12,7 @@
  * gemeldet und übersprungen: später erneut aufrufen. Bei Rate-Limit sofort stoppen, den Rest melden.
  */
 import { pathToFileURL } from "node:url";
-import { abortMessage, loadItems, planPlacements, setPosition } from "./board-lib.mjs";
+import { isRateLimit, loadItems, planPlacements, setPosition } from "./board-lib.mjs";
 
 const PAUSE_MS = 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -40,7 +40,7 @@ async function main(argv = process.argv.slice(2)) {
   try {
     plan = planPlacements(loadItems(), args.numbers, args.anchor);
   } catch (e) {
-    console.error(`✖ Abbruch: ${abortMessage(e.message)}. Später erneut fahren.`);
+    console.error(`✖ Abbruch${isRateLimit(e.message) ? " (API-Rate-Limit)" : ""}: ${e.message.split("\n")[0]}. Später erneut fahren.`);
     process.exit(1);
   }
   const { steps, missing, anchorMissing } = plan;
@@ -55,7 +55,7 @@ async function main(argv = process.argv.slice(2)) {
       setPosition(item.id, afterId);
     } catch (e) {
       const rest = steps.slice(n).map((s) => `#${s.item.number}`).join(", ");
-      console.error(`✖ Abbruch: ${abortMessage(e.message)}. Offen bleiben ${rest}. Später erneut fahren.`);
+      console.error(`✖ Abbruch${isRateLimit(e.message) ? " (API-Rate-Limit)" : ""}: offen bleiben ${rest}. Später erneut fahren.`);
       process.exit(1);
     }
     await sleep(PAUSE_MS);
