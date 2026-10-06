@@ -144,6 +144,18 @@ describe("Haupt-Checkout: commit/push wird geblockt (Z25)", () => {
     assert.equal((pruefe(`bash -c 'cd "$X" && git push'; git -C ${HAUPT} commit -m x`, WT) as { block: boolean }).block, true, "ein späteres Statement mit deny geht der Frage vor");
   });
 
+  test("jede Shell der gemeinsamen Liste (auch .exe, Pfad, groß geschrieben) führt über die Brücke zum Bash-Auswerter", () => {
+    for (const shell of ["bash", "sh", "zsh", "dash", "ksh", "ash"]) {
+      blockt(`${shell} -c "git commit -m x"`, HAUPT);
+      blockt(`${shell}.exe -c "git commit -m x"`, HAUPT);
+      blockt(`${shell.toUpperCase()}.EXE -c "git push"`, HAUPT);
+      blockt(`${shell} -c "cd ${HAUPT} && git push"`, WT);
+      laeuft(`${shell} -c "git commit -m x"`, WT);
+    }
+    blockt(`& 'C:/Program Files/Git/bin/bash.exe' -c 'git push'`, HAUPT);
+    blockt(`C:/msys/usr/bin/dash.exe -c 'git push'`, HAUPT);
+  });
+
   test("Brücke: unbekannter Inhalt (mainOnly) fragt im Haupt-Checkout, im Worktree und in fremden Repos nicht", () => {
     const frage = (cmd: string, cwd: string) => (pruefe(cmd, cwd) as { ask?: boolean }).ask === true;
     assert.equal(frage(`bash -c 'eval "$Y"'`, HAUPT), true);

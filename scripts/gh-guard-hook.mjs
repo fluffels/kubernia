@@ -160,11 +160,13 @@ function wortWert(roh) {
 /** Basisname des Kommandowortes (`/usr/bin/gh`, `'gh'`, `C:\Windows\cmd.exe`): Quotes außen entfernen, der Rest bleibt roh (ein `\` ist hier ein Pfadtrenner). */
 const kommandoName = (roh) => baseName(roh.replace(/^['"]|['"]$/g, ""));
 
-const GH_BARE = /(^|[^\w.:~\\/-])((?:[\w.:~-]*[\\/])*gh(?:\.exe)?)\s+(?:api\b|(['"])\uE000*\3)/g;
+/** Zeichen vor einem Kommandowort: alles außer den Zeichen, die zu einem Pfad/Namen gehören (`~`, `:` inklusive: sonst quadratisches Backtracking bei `~/~/…`). */
+const WORTANFANG = String.raw`(^|[^\w.:~\\/-])`;
+const GH_BARE = new RegExp(String.raw`${WORTANFANG}((?:[\w.:~-]*[\\/])*gh(?:\.exe)?)\s+(?:api\b|(['"])\uE000*\3)`, "gi");
 const GH_QUOTE = /(^|[^\w])(['"])\uE000*\2\s+(?:api\b|(['"])\uE000*\3)/g;
 const GH_QUOTE_ORIGINAL = /^(['"])(?:[^'"]*[\\/])?gh(?:\.exe)?\1\s/;
-const INTERPRETER_STELLE = new RegExp(String.raw`(^|[^\w.:~\\/-])((?:[\w.:~-]*[\\/])*(?:${INTERPRETER_NAMEN.join("|")})(?:\.exe)?)\s`, "gi");
-const EVAL_STELLE = /(^|[^\w.:~\\/-])(?:eval|iex|Invoke-Expression)\b/i;
+const INTERPRETER_STELLE = new RegExp(String.raw`${WORTANFANG}((?:[\w.:~-]*[\\/])*(?:${INTERPRETER_NAMEN.join("|")})(?:\.exe)?)\s`, "gi");
+const EVAL_STELLE = new RegExp(String.raw`${WORTANFANG}(?:eval|iex|Invoke-Expression)\b`, "i");
 
 /** Startindizes (im Originaltext) von `gh api` an beliebiger Stelle außerhalb von Quotes; das zweite Wort wird geprüft (`gh 'api'`). */
 function ghStellen(text, maske) {
@@ -289,13 +291,19 @@ function interpreterString(aufruf) {
   return v === undefined ? null : { roh: v, wert: wortWert(v) };
 }
 
-/** Dynamisches Kommando neben `gh api`: `$c api …` (die Variable steht für `gh`), `& $c`/`. $c` (PowerShell-Aufruf) oder ein
- *  alleinstehendes `$CMD`, dem im selben Befehl ein String mit `api` zugewiesen wurde (`CMD="gh api …"; $CMD`). In PowerShell
- *  führt ein bloßes `$x` nichts aus, darum zählt es dort ohne Zuweisung eines solchen Strings nicht. */
+/** Kommandoposition am Segmentanfang: Klammern, `!`, Kontrollwörter (`then`, `do`, `try`, `if (…)` …) und Wrapper davor. */
+const KOMMANDOPOS = String.raw`^(?:[\s(!{]|(?:then|do|else|elif|if|while|until|time|env|exec|command|nohup|sudo|doas|xargs|try|catch|finally|ForEach-Object)\s|(?:if|elseif|foreach|while|switch)\s*\([^)]*\))*`;
+
+/** Dynamisches Kommando neben `gh api`: `$c api …` (die Variable steht für `gh`) an beliebiger Stelle, `& $c`/`. $c` (Aufrufoperator)
+ *  und `$X <Argumente>` an Kommandoposition, wenn `X` im Befehl einen String oder eine Ersetzung mit `gh` bekommt (`GH="gh api"; $GH -X …`,
+ *  `x=$(…gh…); $x`). Ein bloßes PowerShell-`$x` (`$items | …`, `$r.title`) führt nichts aus und zählt nicht; `jq . $F` auch nicht. */
 function dynamischesKommando(segment, maske, command) {
-  if (/(^|[\s(!{&.])\$\{?\w+\}?\s+api\b/.test(maske) || /(^|[\s(!{])[&.]\s*\$\{?\w+/.test(maske)) return true;
-  const alleine = /^[\s(!{]*\$\{?(\w+)\}?[\s)}]*$/.exec(maske);
-  return alleine !== null && new RegExp(String.raw`\b${alleine[1]}\s*=\s*['"][^'"]*\bapi\b`).test(command);
+  const quote = String.raw`["']?`;
+  const wort = String.raw`(?:\$\{?\w+\}?|\$\([^)]*\)|\`[^\`]*\`)`; // Variable, Ersetzung oder Backtick als Kommandowort
+  if (new RegExp(String.raw`(^|[\s(!{&.])${quote}${wort}${quote}\s+${quote}api${quote}(?=\s|$)`).test(segment)) return true;
+  if (new RegExp(String.raw`${KOMMANDOPOS}[&.]\s*\$\{?\w+`).test(maske)) return true;
+  const variable = new RegExp(String.raw`${KOMMANDOPOS}\$\{?(\w+)\}?(?=[\s)}]|$)`).exec(maske);
+  return variable !== null && new RegExp(String.raw`\b${variable[1]}\s*=\s*(?:['"][^'"]*\bgh\b|\$\([^)]*\bgh\b|\`[^\`]*\bgh\b)`).test(command);
 }
 
 /** Ein Segment, in einem Befehl, der `gh api` irgendwo enthält: Interpreter-Strings (rekursiv), eval/iex, dynamisches Kommando. */
@@ -338,21 +346,27 @@ function segmentUrteil(segment, command, tiefe) {
 }
 
 const HEREDOC = /<<-?[ \t]*(?:'(\w+)'|"(\w+)"|\\(\w+))/g;
-const KONSUMENT = new RegExp(String.raw`(^|[^\w.:~\\/-])(?:${INTERPRETER_NAMEN.join("|")}|eval|source|iex)(?:\.exe)?\b`, "i");
+const KONSUMENT = new RegExp(String.raw`${WORTANFANG}(?:(?:${INTERPRETER_NAMEN.join("|")}|eval|source|iex)(?:\.exe)?\b|\.(?=\s))`, "i");
+/** Befehle, die einen Heredoc nur als Daten lesen (Commit-/PR-Texte, Dateien schreiben). */
+const DATEN_BEFEHL = /(?:^|[\s("'])(?:cat|tee|git\s+commit|gh\s+(?:pr|issue|release|repo|gist)\s+\w+)\b[^\n<|;&#]*$/;
 
-/** Entfernt die Bodies von Heredocs mit gequotetem Begrenzer (`<<'EOF'`: reiner Text), außer die Zeile reicht ihn an einen
- *  Interpreter weiter (`bash <<'EOF'`, `cat <<'EOF' | sh`, `eval`, `source`). Commit-/PR-Texte, die `gh api` nur erwähnen, fragen so nicht. */
+/** Entfernt die Bodies von Heredocs mit gequotetem Begrenzer (`<<'EOF'`: reiner Text), aber nur in der sicheren Form: der Befehl
+ *  davor ist ein Daten-Befehl (`cat`, `tee`, `git commit`, `gh pr/issue …`), hinter dem Begrenzer steht nichts (außer `)`/`"`), und
+ *  im ganzen Befehl kommt außerhalb von Quotes weder ein Interpreter noch `eval`/`source` vor (`cat > x.sh <<'EOF' … EOF; bash x.sh`).
+ *  Commit-/PR-Texte, die `gh api` nur erwähnen, fragen so nicht; im Zweifel bleibt der Body Befehlstext. */
 function ohneDatenHeredocs(text) {
+  if (!text.includes("<<") || KONSUMENT.test(ohneQuoteInhalt(text))) return text;
   let out = "";
   let pos = 0;
   for (const m of text.matchAll(HEREDOC)) {
     if (m.index < pos) continue;
     const zeilenEnde = text.indexOf("\n", m.index);
     if (zeilenEnde < 0) break;
-    const zeilenStart = text.lastIndexOf("\n", m.index) + 1;
-    if (KONSUMENT.test(text.slice(zeilenStart, zeilenEnde))) continue;
+    const davor = text.slice(text.lastIndexOf("\n", m.index) + 1, m.index);
+    const dahinter = text.slice(m.index + m[0].length, zeilenEnde);
+    if (!DATEN_BEFEHL.test(davor) || !/^[\s)"]*$/.test(dahinter)) continue;
     const ende = new RegExp(String.raw`^\t*${m[1] ?? m[2] ?? m[3]}[ \t]*$`, "m").exec(text.slice(zeilenEnde + 1));
-    if (!ende) continue;
+    if (!ende) break; // ohne Terminator bleibt alles Befehlstext (und die Suche endet: kein quadratischer Aufwand)
     out += text.slice(pos, zeilenEnde + 1);
     pos = zeilenEnde + 1 + ende.index + ende[0].length;
   }
@@ -365,10 +379,10 @@ function ohneDatenHeredocs(text) {
  *  strengere Ergebnis gilt. Fortsetzungen werden vor den Textprüfungen zu Leerzeichen. */
 export function bewerte(command, tiefe = 0) {
   if (!command || typeof command !== "string") return { ask: false };
-  if (!(/\bgh(?:\.exe)?\b/.test(command) && /\bapi\b/.test(command))) return { ask: false }; // ohne gh und api kann nichts davon zutreffen
+  if (!(/\bgh(?:\.exe)?\b/i.test(command) && /\bapi\b/.test(command))) return { ask: false }; // ohne gh und api kann nichts davon zutreffen
   if (command.length > LAENGE_MAX) return frage("der Befehl ist für die Textprüfung zu lang");
   const text = ohneDatenHeredocs(command);
-  for (const roh of new Set([...segmente(text, true), ...segmente(text, false)])) {
+  for (const roh of segmente(text, true)) {
     const r = segmentUrteil(ohneFortsetzung(roh), text, tiefe);
     if (r) return r;
   }
