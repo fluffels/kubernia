@@ -49,6 +49,9 @@
  *     aus einer ausgelagerten Konstante sähe er nicht.
  *   - `routingFiles()` liest das Dateisystem (nicht `git ls-files`, wie `collectMarkdown`, #1091):
  *     untrackte lokale Dateien in .claude/ werden mitgeprüft und können lokal rot machen, die CI nicht.
+ *   - Die Sonderfall-Zweige (Epic, Dependabot) des Workflows werden per `node:vm` gegen Stub-Globals
+ *     AUSGEFÜHRT (Epic-Aufteilung über den Planer, #1207); der Stub kennt nur die frühen Phasen und
+ *     bricht bei unbekannten Labels laut ab. Der Skill-Pfad wird nur auf den Verweis im Text geprüft.
  *   - Das Agent-Tool hat keinen `effort`-Parameter (docs/model-routing.md §2); für Spawns wird
  *     daher nur `model` geprüft.
  *
@@ -68,6 +71,7 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { runInNewContext } from "node:vm";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im tsconfig)
 // – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
@@ -385,5 +389,91 @@ describe("Keine Doku behauptet mehr den alten Routing-Ist-Zustand (#1035)", () =
       [],
       "die weiterhin gültige Warnung darf NICHT rot werden",
     );
+  });
+});
+
+/** Ein aufgezeichneter `agent()`-Aufruf des Workflow-Skripts. */
+type AgentAufruf = { label: string; agentType?: string; model?: string; effort?: string; prompt: string };
+
+/**
+ * Führt das echte Workflow-Skript per `node:vm` gegen Stub-Globals aus (Präzedenz:
+ * test/harness/workflow-args.test.ts) und zeichnet die `agent()`-Aufrufe auf. Das prüft das
+ * VERHALTEN der Sonderfall-Zweige statt ihrer Textreihenfolge. Unbekannte Labels brechen laut ab,
+ * damit ein neuer früher Aufruf den Stub bewusst erweitern muss.
+ */
+async function workflowLauf(art: "epic" | "dependabot" | "normal", opts: { planerDa: boolean }) {
+  const quelle = read(".claude/workflows/kubernia-ticket.js").replace("export const meta", "const meta");
+  const aufrufe: AgentAufruf[] = [];
+  const agent = (prompt: string, o: { label: string; agentType?: string; model?: string; effort?: string }) => {
+    aufrufe.push({ prompt, label: o.label, agentType: o.agentType, model: o.model, effort: o.effort });
+    if (o.label === "auswahl+claim") {
+      return Promise.resolve({ ergebnis: "ticket-geclaimt", claimVerifiziert: true, nummer: 42, titel: "Testticket", body: "Body", art });
+    }
+    if (o.agentType === "kubernia-planner") return Promise.resolve(opts.planerDa ? "PLAN-TEXT" : null);
+    if (o.label.startsWith("preflight")) return Promise.resolve({ brauchtKlaerung: true, grund: "Test", offeneFragen: ["?"] });
+    if (o.label.startsWith("epic-anlegen") || o.label.startsWith("dependabot")) return Promise.resolve("erledigt");
+    return Promise.reject(new Error(`Stub kennt das Label "${o.label}" nicht – in workflowLauf() erweitern.`));
+  };
+  const kontext = { agent, phase: () => undefined, log: () => undefined, args: undefined, parallel: () => { throw new Error("unerwartet"); } };
+  const ergebnis = (await runInNewContext(`(async () => {\n${quelle}\nreturn endstand\n})()`, kontext)) as { ergebnis: string };
+  return { aufrufe, ergebnis: ergebnis.ergebnis };
+}
+
+describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
+  test("Epic: Planer (opus-Rolle, Frontmatter-Effort) schlägt vor, ein sonnet-Agent legt an", async () => {
+    const planer = frontmatter(read(".claude/agents/kubernia-planner.md"));
+    const { aufrufe, ergebnis } = await workflowLauf("epic", { planerDa: true });
+    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "epic-anlegen:#42"]);
+    assert.equal(aufrufe[1].agentType, "kubernia-planner");
+    assert.equal(aufrufe[1].effort, planer.effort, "Effort der Aufteilung = Effort der Planung");
+    assert.match(aufrufe[1].prompt, /Epic/, "Der Planer muss wissen, dass er aufteilen soll");
+    assert.equal(aufrufe[2].model, "sonnet", "Das Anlegen ist Tipparbeit");
+    assert.equal(aufrufe[2].effort, "medium", "Das Anlegen ist Tipparbeit");
+    assert.match(aufrufe[2].prompt, /PLAN-TEXT/, "Der Anlege-Agent bekommt den Plan");
+    assert.equal(ergebnis, "epic");
+  });
+
+  test("Epic ohne verfügbaren Planer: kein Absturz, Anlege-Agent teilt selbst auf", async () => {
+    const { aufrufe, ergebnis } = await workflowLauf("epic", { planerDa: false });
+    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "epic-anlegen:#42"]);
+    assert.doesNotMatch(aufrufe[2].prompt, /PLAN-TEXT/);
+    assert.match(aufrufe[2].prompt, /selbst auf/, "Der Fallback-Auftrag muss im Prompt stehen");
+    assert.equal(ergebnis, "epic");
+  });
+
+  test("Dependabot: darf KEINEN Planer-Lauf verbrennen", async () => {
+    const { aufrufe, ergebnis } = await workflowLauf("dependabot", { planerDa: true });
+    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "dependabot:#42"]);
+    assert.equal(aufrufe[1].model, "sonnet");
+    assert.equal(aufrufe[1].effort, "medium");
+    assert.equal(ergebnis, "dependabot");
+  });
+
+  test("normales Ticket: Plan vor Pre-Flight, Planer-Prompt ohne Epic-Hinweis (Resume-Cache bleibt gültig)", async () => {
+    const { aufrufe, ergebnis } = await workflowLauf("normal", { planerDa: true });
+    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "preflight:#42"]);
+    assert.doesNotMatch(aufrufe[1].prompt, /Epic/);
+    assert.match(
+      aufrufe[1].prompt,
+      /^Ticket #42: Testticket\n[\s\S]*\n\nArbeitsort: [^\n]*\. Liefere den Plan wie in deiner Rolle beschrieben\.$/,
+      "Der Planer-Prompt normaler Tickets darf sich nicht ändern (Resume-Cache)",
+    );
+    assert.equal(ergebnis, "wartet-auf-klaerung");
+  });
+
+  test("Planer-Rolle: der vom Workflow-Prompt referenzierte Abschnitt „Bei einem Epic“ existiert und verbietet das Anlegen", () => {
+    const rolle = read(".claude/agents/kubernia-planner.md");
+    assert.match(rolle, /^## Bei einem Epic/m);
+    assert.match(rolle, /Lege keine Issues selbst an/);
+  });
+
+  test("Skill-Pfad: der Epic-Absatz delegiert die Aufteilung an den kubernia-planner", () => {
+    assert.match(read(UMSETZUNGS_SKILL), /\*\*Sonderfall zu großes Epic[^\n]*kubernia-planner/);
+  });
+
+  test("Doku: die Matrix-Zeile der Epic-Aufteilung trägt opus", () => {
+    const zeile = read(ROUTING_SSOT).split("\n").find((l) => /^\|\s*\*{0,2}Epic-Aufteilung/.test(l));
+    assert.ok(zeile, "§1 braucht eine eigene Zeile „Epic-Aufteilung“");
+    assert.match(zeile, /`opus`/);
   });
 });

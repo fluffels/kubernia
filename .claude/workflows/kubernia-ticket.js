@@ -5,8 +5,8 @@ export const meta = {
     'Nur Claude Code, additive Variante des kubernia-Skills: Phasen-Fortschritt in /workflows, Resume, parallele Lenses, erzwungene Fix-Versuchsgrenze (#710/#904). Ablauf steht in AGENTS.md.',
   phases: [
     { title: 'Auswahl', detail: 'oberstes freies Board-Item claimen + Zuweisung verifizieren' },
-    { title: 'Sonderfall', detail: 'Epic aufteilen bzw. Dependabot-Sammelticket auflösen (kein Code)' },
-    { title: 'Plan', detail: 'Planungs-Subagent vor der ersten Zeile Code', model: 'kubernia-planner (opus) + effort xhigh' },
+    { title: 'Plan', detail: 'Planungs-Subagent vor der ersten Zeile Code bzw. Epic-Aufteilung', model: 'kubernia-planner (opus) + effort xhigh' },
+    { title: 'Sonderfall', detail: 'Epic-Kinder aus dem Plan anlegen bzw. Dependabot-Sammelticket auflösen (kein Code)', model: 'sonnet' },
     { title: 'Pre-Flight', detail: 'Risiko-Klärung vor dem Coden: Optik/Weiche → anhalten + Fragen vorlegen (#1012/#1069)' },
     { title: 'Umsetzen', detail: 'Worktree, TDD, npm run verify, im Browser verifizieren, committen', model: 'sonnet' },
     { title: 'Review', detail: '3 Lenses parallel als Konvergenzschleife (Cap 2, frischer Kritiker, #1012)', model: 'opus' },
@@ -475,11 +475,10 @@ nicht selbst.`,
 ${auswahl.body || '(leer)'}
 --- Ende Issue-Body ---`
 
-  // ── Phase 2: Sonderfälle, die bewusst KEIN Code sind ──────────────────────
-  // Epic und Dependabot-Sammelticket enden hier — kein Worktree, kein PR.
-  if (auswahl.art === 'epic' || auswahl.art === 'dependabot') {
+  // ── Phase 2: Dependabot-Sammelticket — bewusst KEIN Code, kein Plan ─────────
+  // Endet hier — kein Worktree, kein PR, kein Planer-Lauf (kein Opus für Merge-Arbeit).
+  if (auswahl.art === 'dependabot') {
     phase('Sonderfall')
-    const istEpic = auswahl.art === 'epic'
     const sonderfall = await agent(
       `${kopf}
 
@@ -487,44 +486,78 @@ ${ticketKontext}
 
 Dieses Ticket ist bewusst KEIN Code-Ticket. Kein Worktree, kein Branch, kein PR.
 
-${
-  istEpic
-    ? `AUFGABE — Epic aufteilen statt umsetzen, genau nach
-AGENTS.md § „Zu großes Ticket (Epic/Phase) → aufteilen statt umsetzen".
-
-Dazu gehört auch der Pflichtschritt „Neue Issues sofort ins Board einsortieren"
-(beide GraphQL-Calls) — ein neu angelegtes Issue liegt sonst in keinem Board.
-Neue Kindertickets ohne Assignee. Am Ende das Epic auf done schließen und die
-Schließung verifizieren.`
-    : `AUFGABE — das Dependabot-Sammelticket auflösen, genau nach
+AUFGABE — das Dependabot-Sammelticket auflösen, genau nach
 AGENTS.md § „🤖 Dependabot-Sammel-Ticket … → mergen statt implementieren"
 und CONTRIBUTING.md › Dependabot-PRs. Rote PRs nicht blind mergen.
-Am Ende das Sammel-Issue schließen und die Schließung verifizieren.`
-}
+Am Ende das Sammel-Issue schließen und die Schließung verifizieren.
 
-Berichte am Ende knapp, was entstanden bzw. gemergt ist und dass das Issue
-geschlossen und verifiziert wurde.`,
-      { label: istEpic ? `epic-aufteilen:#${nr}` : `dependabot:#${nr}`, phase: 'Sonderfall', model: 'sonnet', effort: 'medium' },
+Berichte am Ende knapp, was gemergt ist und dass das Issue geschlossen und
+verifiziert wurde.`,
+      { label: `dependabot:#${nr}`, phase: 'Sonderfall', model: 'sonnet', effort: 'medium' },
     )
-    log(`Sonderfall ${auswahl.art} für ${ticket} abgeschlossen.`)
-    return { ergebnis: auswahl.art, nummer: nr, titel: auswahl.titel, bericht: sonderfall }
+    log(`Sonderfall dependabot für ${ticket} abgeschlossen.`)
+    return { ergebnis: 'dependabot', nummer: nr, titel: auswahl.titel, bericht: sonderfall }
   }
 
   // ── Phase 3: Plan ─────────────────────────────────────────────────────────
   // Modell-Routing (#1065): JEDER agent()-Aufruf setzt `model` (Tier-Alias) UND `effort`
   // explizit – sonst erbt er das Session-Modell. Matrix + Begründung: docs/model-routing.md.
   // Der Planer trägt sein Modell im Agent-Frontmatter (`opus`), hier nur der Effort.
+  // Die Aufteilung eines Epics ist Planungsarbeit (#1207): sie läuft über DIESELBE eine
+  // Planer-Aufrufstelle, nur mit Zusatz im Prompt. Der Prompt normaler Tickets bleibt
+  // bytegleich, damit Resume-Caches gültig bleiben.
   phase('Plan')
 
+  const istEpic = auswahl.art === 'epic'
   const plan = await agent(
     `${ticketKontext}
 
-Arbeitsort: ${REPO}. Liefere den Plan wie in deiner Rolle beschrieben.`,
+Arbeitsort: ${REPO}. Liefere den Plan wie in deiner Rolle beschrieben.${
+      istEpic
+        ? `
+
+Dieses Ticket ist als Epic klassifiziert: liefere die Aufteilung in session-große Kindertickets
+(Abschnitt „Bei einem Epic" deiner Rolle). Lege selbst nichts an.`
+        : ''
+    }`,
     { label: `plan:#${nr}`, phase: 'Plan', agentType: 'kubernia-planner', effort: 'xhigh' },
   )
 
   if (plan) log(`Plan für ${ticket} liegt vor.`)
+  else if (istEpic) log('Planungs-Agent nicht verfügbar — der Anlege-Agent teilt das Epic selbst auf (dokumentierter Fallback).')
   else log('Planungs-Agent nicht verfügbar — die Umsetzungsphase plant selbst (dokumentierter Fallback).')
+
+  // ── Phase 3a: Epic-Kinder anlegen — bewusst KEIN Code ──────────────────────
+  // Endet hier — kein Worktree, kein PR. Der Plan entscheidet (Opus), der Agent tippt (Sonnet).
+  if (istEpic) {
+    phase('Sonderfall')
+    const sonderfall = await agent(
+      `${kopf}
+
+${ticketKontext}
+
+${plan ? `--- Plan des Planungs-Agenten ---\n${plan}\n--- Ende Plan ---` : '(kein Vorab-Plan vorhanden — teile das Epic selbst auf)'}
+
+Dieses Ticket ist bewusst KEIN Code-Ticket. Kein Worktree, kein Branch, kein PR.
+
+AUFGABE — Epic aufteilen statt umsetzen, genau nach
+AGENTS.md § „Zu großes Ticket (Epic/Phase) → aufteilen statt umsetzen".
+${plan ? 'Lege genau die im Plan vorgeschlagenen Kindertickets an; Abweichungen begründest du im Übersichts-Kommentar.' : 'Zerlege das Epic selbst in session-große Kindertickets.'}
+Offene Weichen aus dem Plan gehören in den Body des betroffenen Kindtickets (sie werden in dessen Pre-Flight geklärt).
+
+Dazu gehört auch der Pflichtschritt „Neue Issues sofort ins Board einsortieren"
+(Mechanik, auch für mehrere Tickets auf einmal: docs/ticket-reihenfolge.md) — ein neu
+angelegtes Issue liegt sonst in keinem Board.
+Neue Kindertickets ohne Assignee. Am Ende das Epic auf done schließen und die
+Schließung verifizieren.
+
+Berichte am Ende knapp, was entstanden ist und dass das Issue geschlossen und
+verifiziert wurde.`,
+      { label: `epic-anlegen:#${nr}`, phase: 'Sonderfall', model: 'sonnet', effort: 'medium' },
+    )
+    log(`Sonderfall epic für ${ticket} abgeschlossen.`)
+    return { ergebnis: 'epic', nummer: nr, titel: auswahl.titel, bericht: sonderfall }
+  }
 
   // ── Phase 3b: Pre-Flight-Klärung (#1012) ──────────────────────────────────
   // Weil das Ticket automatisch gezogen wird, weiß man im Auswahl-Moment noch nicht,
