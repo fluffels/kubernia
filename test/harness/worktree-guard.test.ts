@@ -619,6 +619,21 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(ask('git config alias.p "$X"; git p'), true, "nicht statischer Alias");
   });
 
+  test("Review R4: Tiefe erschöpft ist fail-closed (Funktionen, Aliase), unbekannter Wrapper, -lc, Here-String mit cd, Alias-Aufruf groß geschrieben", () => {
+    const kette = (n: number) => `f0() { git push; }; ${Array.from({ length: n }, (_x, i) => `f${i + 1}() { f${i}; };`).join(" ")} f${n}`;
+    assert.equal(run(kette(2)), true, "innerhalb der Tiefe wird der Rumpf ausgewertet");
+    assert.equal(ask(kette(6)), true, "über der Tiefe fragt der Hook im Haupt-Checkout");
+    assert.equal(ask(kette(6), wt), false, "im Worktree fragt er nie");
+    const aliase = (n: number) => `alias a0='git push'; ${Array.from({ length: n }, (_x, i) => `alias a${i + 1}='a${i}';`).join(" ")} a${n}`;
+    assert.equal(run(aliase(1)), true);
+    assert.equal(ask(aliase(6)), true);
+    assert.equal(run("watch git push"), true, "unbekannter Wrapper: das erste git-Wort zählt");
+    assert.equal(run(`watch git -C '${wt}' push`), false);
+    assert.equal(run(`bash -lc "cd '${repoRoot}' && git push"`, wt), true, "kombinierte Shell-Flags");
+    assert.equal(run(`bash <<< "cd '${repoRoot}' && git push"`, wt), true, "cd im Here-String");
+    assert.equal(run("git config alias.p push && git P"), true, "Alias-Aufruf mit Großbuchstaben");
+  });
+
   test("Review R1: ein rev-parse je Verzeichnis und decide (kontextCache)", () => {
     let aufrufe = 0;
     const base = fsFake([wt]);

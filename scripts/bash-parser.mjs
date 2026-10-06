@@ -274,7 +274,7 @@ class Parser {
         w.dynamic = true;
         this.pos++;
         w.substs.push(this.subst());
-      } else if (ch === "<" && next === "<" && src[this.pos + 2] !== "<" && w.text !== "") {
+      } else if (ch === "<" && next === "<" && src[this.pos + 2] !== "<" && w.text !== "" && !w.text.endsWith("<")) {
         break; // Heredoc hinter einem Wort: eigenes Token
       } else if (ch === "\\") {
         if (next === "\n") this.pos += 2; // Zeilenfortsetzung

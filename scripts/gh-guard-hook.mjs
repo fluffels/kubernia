@@ -60,7 +60,7 @@ const REST_PFADE = [
 
 /** `gh api` als Befehl am Segmentanfang (auch nach `&`, `$(`, Klammern, Variablen-Zuweisungen, auch mit PowerShell-Cast
  *  `[array]$r = (gh api …)`), nicht als Text in einem fremden Befehl. */
-const GH_API_AM_ANFANG = /^[\s(`$&]*(?:\[[\w.,[\] ]+\]\s*)*(?:\$[\w:]+\s*=\s*[\s(`$@&]*)?(?:\w+=\S*\s+)*gh(?:\.exe)?\s+api\b/;
+const GH_API_AM_ANFANG = /^[\s(`$&]*(?:\[[\w.,[\] ]+\]\s*)*[\s(`$@&]*(?:\$[\w:]+\s*=\s*[\s(`$@&]*(?:\[[\w.,[\] ]+\]\s*)*[\s(`$@&]*)?(?:\w+=\S*\s+)*gh(?:\.exe)?\s+api\b/;
 
 /**
  * Zerlegt einen Befehl an `&&`, `||`, `;`, `|` und Zeilenumbrüchen, aber NICHT innerhalb von Anführungszeichen
@@ -71,7 +71,7 @@ export function segmente(command) {
   const text = String(command);
   const out = [];
   let cur = "";
-  const folge = quoteFolge(text);
+  const folge = quoteFolge(text, 0, null, false);
   for (let k = 0; k < folge.length; k++) {
     const { i, c, q, masked } = folge[k];
     if (q === null && !masked) {

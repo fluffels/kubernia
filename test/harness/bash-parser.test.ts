@@ -155,3 +155,11 @@ describe("parseBash — nicht zerlegbar (#1311)", () => {
     assert.equal(ast("  \n # nur Kommentar").items.length, 0);
   });
 });
+
+describe("parseBash — Here-String (#1311)", () => {
+  test("<<< ist ein Wort, kein Heredoc: der Text dahinter bleibt ein eigenes Wort", () => {
+    const n = ast("bash <<< 'git push'").items[0].andor.first.cmds[0];
+    assert.deepEqual((n.words as Word[]).map((w) => w.text), ["bash", "<<<", "git push"]);
+    assert.equal((n.heredocs as unknown[]).length, 0);
+  });
+});

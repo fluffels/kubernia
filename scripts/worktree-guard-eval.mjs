@@ -305,7 +305,14 @@ const nichts = (D) => ({ S: D, F: D });
 function indirektion(cmd, words, pe, D, c, opts) {
   const name = pe.name;
   const args = words.slice(pe.i + 1);
-  if (c.fns.has(name) && c.depth < MAX_INTERPRETER) {
+  if (c.fns.has(name) || c.aliases.has(name)) {
+    if (c.depth >= MAX_INTERPRETER) {
+      // Tiefe erschöpft: fail-closed statt still durchlassen (der Rumpf wird nicht mehr ausgewertet)
+      ask(c, real(D), `Funktion/Alias \`${name}\` ist zu tief verschachtelt, der Inhalt wird nicht mehr ausgewertet.`, true);
+      return nichts(D);
+    }
+  }
+  if (c.fns.has(name)) {
     c.depth++;
     const r = evalCmd(c.fns.get(name), D, c, opts);
     c.depth--;
@@ -315,7 +322,7 @@ function indirektion(cmd, words, pe, D, c, opts) {
     aliasBuiltin(name, args, c);
     return nichts(D);
   }
-  if (!c.aliases.has(name) || c.expanding.has(name) || c.depth >= MAX_INTERPRETER) return undefined;
+  if (!c.aliases.has(name) || c.expanding.has(name)) return undefined;
   const aw = c.aliases.get(name);
   if (aw === null) {
     ask(c, real(D), `Der Alias \`${name}\` ist nicht statisch auflösbar.`, true);

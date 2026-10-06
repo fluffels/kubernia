@@ -81,6 +81,11 @@ describe("Prozess-Start (#1311)", () => {
     assert.equal(ask?.hookSpecificOutput.permissionDecision, "ask");
     assert.equal(start("worktree-guard-hook.mjs", payload("Bash", "ls")).trim(), "");
     assert.equal(start("worktree-guard-powershell.mjs", payload("PowerShell", "ls")).trim(), "");
+    // deny-Payload je Direktaufruf (ein toter main() ergäbe auch bei "ls" eine leere Ausgabe)
+    const mainDir = resolve(WURZEL, execFileSync("git", ["rev-parse", "--git-common-dir"], { cwd: WURZEL, encoding: "utf8" }).trim(), "..");
+    const deny = (skript: string, tool: string) => (JSON.parse(start(skript, payload(tool, "git commit -m x", mainDir))) as Out)?.hookSpecificOutput.permissionDecision;
+    assert.equal(deny("worktree-guard-hook.mjs", "Bash"), "deny");
+    assert.equal(deny("worktree-guard-powershell.mjs", "PowerShell"), "deny");
   });
 });
 

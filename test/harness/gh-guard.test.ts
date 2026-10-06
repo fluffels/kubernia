@@ -182,6 +182,16 @@ describe("gh api über Variablen, eval und Interpreter-Strings fragt nach (#1311
     fragt("[string]$x = (gh api -X DELETE repos/o/r/issues/1)");
     fragt("[System.Object[]]$r = @(gh api -X DELETE repos/o/r/issues/1)");
     laeuft("[array]$r = gh api repos/o/r/issues/1");
+    // Cast rechts vom = und direkt am Segmentanfang
+    fragt("$r = [array](gh api -X DELETE repos/o/r/issues/1)");
+    fragt("$r = [array]@(gh api -X DELETE repos/o/r/issues/1)");
+    fragt("[void](gh api -X DELETE repos/o/r/issues/1)");
+    laeuft("[void](gh api repos/o/r/issues/1)");
+    // Backslash ist außerhalb von Quotes in PowerShell ein Pfadzeichen und maskiert nichts
+    fragt("cd C:\\dev\\; gh api -X DELETE repos/o/r/issues/1");
+    fragt("Set-Location C:\\dev\\\ngh api -X DELETE repos/o/r/issues/1");
+    assert.deepEqual(hook.segmente("a C:\\x\\; b"), ["a C:\\x\\", " b"]);
+    assert.deepEqual(hook.segmente('gh api x -f q="a\\"; b" ; c'), ['gh api x -f q="a\\"; b" ', " c"], "in Double Quotes maskiert der Backslash");
     fragt('CMD="gh api -X DELETE x"; ${CMD}');
     laeuft(`gh api graphql -f 'query=mutation($i:ID!){ addProjectV2ItemById(input:{projectId:$i}){ item { id } } }' -f i=X`); // Quote vor query=
     const r = hook.bewerte('eval "gh api -X DELETE x"');
