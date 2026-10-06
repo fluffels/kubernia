@@ -11,7 +11,7 @@
       "type": "stdio",
       "command": "node",
       "args": [
-        "node_modules/@playwright/mcp/cli.js",
+        "scripts/playwright-mcp.mjs",
         "--isolated",
         "--caps",
         "devtools",
