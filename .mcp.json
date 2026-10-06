@@ -16,7 +16,9 @@
         "--caps",
         "devtools",
         "--output-dir",
-        ".playwright-mcp"
+        ".playwright-mcp",
+        "--allowed-origins",
+        "http://localhost:*;http://127.0.0.1:*"
       ]
     }
   }
