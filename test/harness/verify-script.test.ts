@@ -193,6 +193,7 @@ describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
     expect(schritt, "Schritt „Diff-Basis bestimmen“ muss vor Verify stehen").not.toBe("");
     expect(schritt).toMatch(/BEFORE_SHA:\s*\$\{\{\s*github\.event\.before\s*\}\}/);
     expect(schritt).toContain('KQ_DIFF_BASE=$base" >> "$GITHUB_ENV"');
+    expect(schritt, "die Basis darf nirgends aus pull_request.base.sha kommen").not.toContain("pull_request.base.sha");
   });
 
   it("auf einem PR ist die Diff-Basis der erste Elternteil des Merge-Checkouts, nie die veraltete pull_request.base.sha (#1239)", () => {
