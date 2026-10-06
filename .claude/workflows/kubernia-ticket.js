@@ -47,6 +47,13 @@ export const meta = {
 // Kein absoluter Pfad (#1211): der Repo-Root ist das Arbeitsverzeichnis des Aufrufers.
 const REPO = 'Repo-Root (Arbeitsverzeichnis des Aufrufers, `git rev-parse --show-toplevel`)'
 
+// Modell-Routing als Tier-Konstanten (#1311): JEDER agent()-Aufruf spreadet genau eine davon, damit
+// Modell und Effort je Tier an EINER Stelle stehen (Matrix: docs/model-routing.md). Der Wächter
+// test/harness/model-routing.test.ts löst die Spreads auf und prüft die aufgelösten Optionen.
+const CODING = { model: 'sonnet', effort: 'medium' } // Umsetzung, Pre-Flight, Auswahl, Merge, Cleanup
+const PLANUNG = { agentType: 'kubernia-planner', effort: 'xhigh' } // Modell + Effort-Gleichheit: Frontmatter des Planers
+const REVIEW = { agentType: 'kubernia-lens', effort: 'high' } // Modell + Effort-Gleichheit: Frontmatter der Lens
+
 /** Gemeinsamer Kopf jedes Phasen-Prompts: verankert Arbeitsort + SSOT. */
 const kopf = `Du arbeitest am Repo kubernia im ${REPO}.
 
@@ -93,6 +100,12 @@ const DIFF_DATEIEN = {
   description: 'git diff --name-only origin/main...HEAD, eine Datei je Eintrag (bestimmt den Lens-Satz, #1265)',
 }
 
+/** Der Entscheidungs-Block für Prompts (#1311): Umsetzen- und pr+merge-Prompt bauen ihn aus derselben Quelle. */
+const entscheidungsBlock = (entscheidungen, kopfzeile, auftrag) =>
+  entscheidungen.length
+    ? `\n--- ${kopfzeile} ---\n${entscheidungen.map((e, i) => `${i + 1}. ${e}`).join('\n')}\n${auftrag}\n--- Ende Entscheidungen ---\n`
+    : ''
+
 const UMSETZUNG_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -122,6 +135,12 @@ const UMSETZUNG_SCHEMA = {
       description: 'nicht-nötig nur bei rein nicht-sichtbaren Änderungen (AGENTS.md § Im Browser verifizieren)',
     },
     zusammenfassung: { type: 'string', description: 'was inhaltlich umgesetzt wurde, 2-4 Sätze' },
+    lernkandidaten: {
+      type: 'array',
+      maxItems: 3,
+      items: { type: 'string' },
+      description: 'höchstens 3 Punkte, nur projektübergreifendes Wissen (wie LERNKANDIDATEN des Skill-Pfads); leer, wenn keins',
+    },
     abbruchgrund: { type: 'string' },
   },
 }
@@ -221,7 +240,7 @@ const NACHBESSERN_SCHEMA = {
     diffDateien: DIFF_DATEIEN,
     deltaPfad: {
       type: 'string',
-      description: 'absoluter Pfad des Delta-Patches NUR dieses Fixes (#1265); leer, wenn main in den Branch gemergt/rebased wurde',
+      description: 'absoluter Pfad des Delta-Patches NUR dieses Fixes (#1265); leer, wenn rebased wurde; nach einem Merge von main: Fixes vor + nach dem Merge-Commit, Konfliktauflösung per git show --cc (#1311)',
     },
     deltaDateien: { type: 'array', items: { type: 'string' }, description: 'git diff --name-only des Fixes allein (#1265)' },
     zusammenfassung: { type: 'string', description: 'was behoben, was bewusst liegen gelassen wurde (mit Grund)' },
@@ -259,8 +278,10 @@ const patchAuftrag = (nr, runde, basisHead) => `Zum Schluss, NACH dem Commit —
     ? `
 - Zusätzlich den Fix allein (#1265): git diff ${basisHead}..HEAD in kq-${nr}-r${runde}-delta.patch
   (selber Ordner), den Pfad in deltaPfad, git diff --name-only ${basisHead}..HEAD in deltaDateien.
-  Hast du main in den Branch gemergt oder rebased, lass deltaPfad leer: dann prüft die nächste
-  Runde wieder den vollen Satz.`
+  Hast du main in den Branch GEMERGT (Merge-Commit M), ist der Merge selbst kein Fix-Pass: das Delta
+  ist dann git diff ${basisHead}..M^1 plus git diff M..HEAD in EINER Datei, bei Merge-Konflikten
+  zusätzlich git show --cc M (die Auflösung zählt wie ein Fix). Hast du REBASED, lass deltaPfad
+  leer: dann prüft die nächste Runde wieder den vollen Satz (darum nie mitten in der Schleife rebasen).`
     : ''
 }
 Die Review-Lenses lesen danach diese eine Datei, statt den Diff je selbst zu erheben — das war
@@ -569,7 +590,7 @@ Far-Future ist und nicht in EINER Session vollständig umsetz- und schließbar w
 
 Gib den Issue-Body im Feld body vollständig zurück — die Folgephasen sehen das Issue
 nicht selbst.`,
-    { label: 'auswahl+claim', phase: 'Auswahl', schema: AUSWAHL_SCHEMA, model: 'sonnet', effort: 'medium' },
+    { label: 'auswahl+claim', phase: 'Auswahl', schema: AUSWAHL_SCHEMA, ...CODING },
   )
 
   if (!auswahl || auswahl.ergebnis === 'kein-freies-ticket') {
@@ -610,7 +631,7 @@ Am Ende das Sammel-Issue schließen und die Schließung verifizieren.
 
 Berichte am Ende knapp, was gemergt ist und dass das Issue geschlossen und
 verifiziert wurde.`,
-      { label: `dependabot:#${nr}`, phase: 'Sonderfall', model: 'sonnet', effort: 'medium' },
+      { label: `dependabot:#${nr}`, phase: 'Sonderfall', ...CODING },
     )
     log(`Sonderfall dependabot für ${ticket} abgeschlossen.`)
     return { ergebnis: 'dependabot', nummer: nr, titel: auswahl.titel, bericht: sonderfall }
@@ -637,7 +658,7 @@ Dieses Ticket ist als Epic klassifiziert: liefere die Aufteilung in session-gro�
 (Abschnitt „Bei einem Epic" deiner Rolle). Lege selbst nichts an.`
         : ''
     }`,
-    { label: `plan:#${nr}`, phase: 'Plan', agentType: 'kubernia-planner', effort: 'xhigh' },
+    { label: `plan:#${nr}`, phase: 'Plan', ...PLANUNG },
   )
 
   if (plan) log(`Plan für ${ticket} liegt vor.`)
@@ -670,7 +691,7 @@ Schließung verifizieren.
 
 Berichte am Ende knapp, was entstanden ist und dass das Issue geschlossen und
 verifiziert wurde.`,
-      { label: `epic-anlegen:#${nr}`, phase: 'Sonderfall', model: 'sonnet', effort: 'medium' },
+      { label: `epic-anlegen:#${nr}`, phase: 'Sonderfall', ...CODING },
     )
     log(`Sonderfall epic für ${ticket} abgeschlossen.`)
     return { ergebnis: 'epic', nummer: nr, titel: auswahl.titel, bericht: sonderfall }
@@ -710,7 +731,7 @@ veröffentlichen/posten (Forum) müsste. Dann 1-4 konkrete Fragen in offeneFrage
 Harness-/Gate-Dateien allein sind KEIN Grund (#1069) — der Agent mergt solche Diffs selbst.
 
 Grundlage: AGENTS.md § Human-in-the-Loop-Checkpoints.`,
-    { label: `preflight:#${nr}`, phase: 'Pre-Flight', schema: PREFLIGHT_SCHEMA, model: 'sonnet', effort: 'medium' },
+    { label: `preflight:#${nr}`, phase: 'Pre-Flight', schema: PREFLIGHT_SCHEMA, ...CODING },
   )
 
   if (preflight && preflight.brauchtKlaerung && !klaerungAntworten) {
@@ -751,11 +772,11 @@ ${
   klaerungAntworten
     ? `\n--- Antworten der Maintainerin aus der Pre-Flight-Klärung (verbindlich) ---\n${klaerungAntworten.map((a, i) => `${i + 1}. ${a}`).join('\n')}\n--- Ende Antworten ---\n`
     : ''
-}${
-  entscheidungen.length
-    ? `\n--- Entscheidungen aus Plan/Pre-Flight (verbindlich) ---\n${entscheidungen.map((e, i) => `${i + 1}. ${e}`).join('\n')}\nDokumentiere jede davon im PR-Text als „Entscheidung: X, weil Y“.\n--- Ende Entscheidungen ---\n`
-    : ''
-}
+}${entscheidungsBlock(
+  entscheidungen,
+  'Entscheidungen aus Plan/Pre-Flight (verbindlich)',
+  'Setze sie verbindlich um. Den PR-Text schreibt die PR-Phase; sie bekommt dieselben Entscheidungen.',
+)}
 AUFGABE — das Ticket umsetzen und committen. Noch NICHT pushen, KEINEN PR öffnen:
 der Review läuft bewusst vor dem PR.
 
@@ -779,6 +800,12 @@ Gates: npm run verify muss grün sein (Exit 0). Läuft es rot und du kannst es n
 beheben, gib verifyGruen=false mit der Fehlerausgabe zurück statt es zu verschleiern
 oder ein Gate abzuschwächen (AGENTS.md § Kein Grün-durch-Aufweichen).
 Sichtbare Änderungen zusätzlich im Browser verifizieren.
+Assets (PixelLab): nutze die PixelLab-Tools direkt, wenn das Ticket ein Asset braucht, und lege die
+Quell-PNG nach assets/pixellab/ (AGENTS.md § PixelLab-Grafik ablegen). Stehen die Tools nicht zur
+Verfügung, gib ergebnis="abgebrochen" mit abbruchgrund "PixelLab-Asset fehlt: <welches>" zurück,
+KEIN prozeduraler Platzhalter.
+Lernkandidaten: gib in lernkandidaten höchstens 3 Punkte zurück, nur projektübergreifendes Wissen
+(nichts Kubernia-Spezifisches, das gehört in Befunde), sonst leer. Du legst nichts selbst ab.
 
 Committe mit (#${nr}) in der Nachricht. Gib Branch und absoluten Worktree-Pfad zurück.
 
@@ -790,7 +817,7 @@ demselben Grund wie beim Patch unten: gegen ein lokal veraltetes main klassifizi
 Merge-Phase anhand fremder Dateien.
 
 ${patchAuftrag(nr, 1)}`,
-    { label: `umsetzen:#${nr}`, phase: 'Umsetzen', schema: UMSETZUNG_SCHEMA, model: 'sonnet', effort: 'medium' },
+    { label: `umsetzen:#${nr}`, phase: 'Umsetzen', schema: UMSETZUNG_SCHEMA, ...CODING },
   )
 
   if (!umsetzung || umsetzung.ergebnis !== 'committet') {
@@ -882,7 +909,7 @@ Was dir außerhalb des Ticket-Scopes auffällt, gehört nach ausserhalbScope (Ha
 Sammelticket, Spiel-/Inhalts-Befund oder Notfall → eigenes Issue) — nicht in die Findings.`,
             // Modell und Effort der Lens stehen im Frontmatter von kubernia-lens (#1209), hier nur der Effort
             // (muss gleich sein, bewacht von test/harness/model-routing.test.ts).
-            { label: `lens:${lens.key}:r${runde}`, phase: 'Review', schema: LENS_SCHEMA, agentType: 'kubernia-lens', effort: 'high' },
+            { label: `lens:${lens.key}:r${runde}`, phase: 'Review', schema: LENS_SCHEMA, ...REVIEW },
           ).then((r) => (r ? { ...r, lens: lens.key } : r)),
       ),
     ).then((r) => r.filter(Boolean))
@@ -999,7 +1026,7 @@ Ticket brauchen, nicht inline mitfixen (⭐ oberste Regel). Committe mit (#${nr}
 Melde verifyGruen und was du behoben bzw. bewusst liegen gelassen hast (mit Grund).
 
 ${patchAuftrag(nr, reviewRunden + 1, diff.head)}`,
-      { label: `nachbessern ${reviewRunden}/${MAX_REVIEW_RUNDEN}:#${nr}`, phase: 'Nachbessern', schema: NACHBESSERN_SCHEMA, model: 'sonnet', effort: 'medium' },
+      { label: `nachbessern ${reviewRunden}/${MAX_REVIEW_RUNDEN}:#${nr}`, phase: 'Nachbessern', schema: NACHBESSERN_SCHEMA, ...CODING },
     )
     verifyGruen = nachbesserung ? !!nachbesserung.verifyGruen : false
     letzteVerifyAusgabe = (nachbesserung && nachbesserung.verifyAusgabe) || letzteVerifyAusgabe
@@ -1060,7 +1087,7 @@ am ISSUE statt am PR (es gibt noch keinen): EIN konsolidierter Kommentar auf Iss
 (was versucht wurde, die offenen Punkte, 2-3 Entscheidungsoptionen für die Maintainerin),
 Label status:festgefahren, du bleibst assigned. Räume den Worktree NICHT auf. Melde am
 Ende die zur Entscheidung gestellten Optionen.`,
-      { label: `review-festgefahren:#${nr}`, phase: 'Festgefahren', model: 'sonnet', effort: 'medium' },
+      { label: `review-festgefahren:#${nr}`, phase: 'Festgefahren', ...CODING },
     )
     log(`⛔ ${ticket} ist im Review festgefahren — Entscheidung der Maintainerin nötig. Worktree ${worktree} bleibt stehen.`)
     return {
@@ -1096,11 +1123,11 @@ per PR). Gib die URL des Kommentars im Feld auditKommentar zurück.`
     `${kopf}
 
 ${ticketKontext}
-${
-  entscheidungen.length
-    ? `\n--- Entscheidungen aus Plan/Pre-Flight ---\n${entscheidungen.map((e, i) => `${i + 1}. ${e}`).join('\n')}\nGib jede davon im PR-Text als „Entscheidung: X, weil Y“ wieder (Audit-Spur für das Veto per Revert).\n--- Ende Entscheidungen ---\n`
-    : ''
-}
+${entscheidungsBlock(
+  entscheidungen,
+  'Entscheidungen aus Plan/Pre-Flight',
+  'Gib jede davon im PR-Text als „Entscheidung: X, weil Y“ wieder (Audit-Spur für das Veto per Revert).',
+)}
 Du arbeitest im Worktree ${worktree} auf ${branch} (absolute Pfade, NICHT hinein-cd'en).
 
 Vor dem PR: prüfe kurz gh issue view ${nr} --json state,closedAt. Ist das Issue
@@ -1123,7 +1150,7 @@ Ein Ticket ist erst fertig, wenn sein PR gemergt ist. Ein offener oder grüner,
 aber nicht gemergter PR ist ergebnis="ci-rot" bzw. "fehler", nie "gemergt".
 Ist die CI rot, gib ergebnis="ci-rot" mit roterCheck und den relevanten Log-Zeilen
 zurück — versuche den Fix NICHT selbst, das übernimmt die nächste Runde.`,
-    { label: `pr+merge:#${nr}`, phase: 'PR + Merge', schema: MERGE_SCHEMA, model: 'sonnet', effort: 'medium' },
+    { label: `pr+merge:#${nr}`, phase: 'PR + Merge', schema: MERGE_SCHEMA, ...CODING },
   )
 
   let fixVersuche = 0
@@ -1159,7 +1186,7 @@ ${
     : ''
 }Wird der PR grün und gemergt: ergebnis="gemergt". Bleibt er rot: ergebnis="ci-rot"
 mit dem AKTUELLEN Fehler (auch wenn es derselbe ist wie vorher).`,
-      { label: `ci-fix ${fixVersuche}/${MAX_FIX_VERSUCHE}:#${nr}`, phase: 'PR + Merge', schema: MERGE_SCHEMA, model: 'sonnet', effort: 'medium' },
+      { label: `ci-fix ${fixVersuche}/${MAX_FIX_VERSUCHE}:#${nr}`, phase: 'PR + Merge', schema: MERGE_SCHEMA, ...CODING },
     )
   }
 
@@ -1185,7 +1212,7 @@ und du bleibst assigned — kein De-Assign, kein weiterer Fix-Versuch.
 Räume den Worktree NICHT auf: die Maintainerin braucht ihn für die Entscheidung.
 
 Melde am Ende, welche Optionen du zur Entscheidung gestellt hast.`,
-      { label: `festgefahren:#${nr}`, phase: 'Festgefahren', model: 'sonnet', effort: 'medium' },
+      { label: `festgefahren:#${nr}`, phase: 'Festgefahren', ...CODING },
     )
 
     log(`⛔ ${ticket} ist festgefahren — Entscheidung der Maintainerin nötig. Worktree ${worktree} bleibt stehen.`)
@@ -1250,7 +1277,7 @@ ${ausserhalbScope.map((p) => `- ${p}`).join('\n')}`
 
 
 Melde das Ergebnis jedes Verify-Schritts einzeln${ausserhalbScope.length ? ' sowie die angelegten Issue-Nummern bzw. die Sammelticket-Zeilen' : ''}.`,
-    { label: `cleanup:#${nr}`, phase: 'Cleanup', model: 'sonnet', effort: 'medium' },
+    { label: `cleanup:#${nr}`, phase: 'Cleanup', ...CODING },
   )
 
   log(`✅ ${ticket} fertig — PR #${merge.prNummer} gemergt, aufgeräumt.`)
@@ -1262,6 +1289,7 @@ Melde das Ergebnis jedes Verify-Schritts einzeln${ausserhalbScope.length ? ' sow
     prNummer: merge.prNummer,
     fixVersuche,
     umsetzung: umsetzung.zusammenfassung,
+    lernkandidaten: umsetzung.lernkandidaten || [],
     browserVerifiziert: umsetzung.browserVerifiziert,
     review: lensEndstand().map((b) => ({ lens: b.lens, verdikt: b.verdikt })),
     // Über alle Brillen (#1265): Hinweise einer Brille, die in Runde 2 nicht erneut lief, sind weiter offen.

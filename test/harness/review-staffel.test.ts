@@ -19,10 +19,9 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { runInNewContext } from "node:vm";
 import { blockFunktion, workflowBlock } from "./workflow-block";
+import { workflowLauf, type Bericht } from "./workflow-lauf";
 
-type Bericht = { lens: string; verdikt: string; findings: { schwere: string; befund?: string; ort?: string; begruendung?: string }[]; ausserhalbScope?: string[] };
 type Vorrunde = { erwartet?: string[]; berichte?: Bericht[]; deltaPfad?: string; deltaDateien?: string[] };
 type LensPlan = (e: { dateien?: unknown; vorrunde?: Vorrunde | null }) => { keys: string[]; modus: "voll" | "delta" };
 
@@ -137,7 +136,8 @@ describe("Ab Runde 2: nur die blockierten Brillen auf dem Delta (#1265)", () => 
 
 // ── Verdrahtung im echten Workflow-Lauf ────────────────────────────────────────
 
-type Aufruf = { label: string; agentType?: string; effort?: string; prompt: string };
+const WORKFLOW = fileURLToPath(new URL("../../.claude/workflows/kubernia-ticket.js", import.meta.url));
+
 type Szenario = {
   dateien: string[];
   /** Lens-Berichte je Runde, Schlüssel = Lens-Key. Fehlt eine Lens, liefert der Stub null. */
@@ -145,46 +145,8 @@ type Szenario = {
   nachbessern?: { deltaPfad?: string; deltaDateien?: string[] };
 };
 
-const WORKFLOW = fileURLToPath(new URL("../../.claude/workflows/kubernia-ticket.js", import.meta.url));
-
-async function lauf(s: Szenario) {
-  const quelle = readFileSync(WORKFLOW, "utf8").replace("export const meta", "const meta");
-  const aufrufe: Aufruf[] = [];
-  let runde = 0;
-  let head = 1;
-  const diff = () => ({ diffPfad: `/tmp/kq-42-r${runde + 1}.patch`, diffStat: "stat", diffHead: `h${head}`, diffDateien: s.dateien });
-  const agent = (prompt: string, o: { label: string; agentType?: string; effort?: string }) => {
-    aufrufe.push({ prompt, label: o.label, agentType: o.agentType, effort: o.effort });
-    const l = o.label;
-    if (l === "auswahl+claim") return Promise.resolve({ ergebnis: "ticket-geclaimt", claimVerifiziert: true, nummer: 42, titel: "T", body: "B", art: "normal" });
-    if (l.startsWith("plan:")) return Promise.resolve("PLAN");
-    if (l.startsWith("preflight:")) return Promise.resolve({ brauchtKlaerung: false });
-    if (l.startsWith("umsetzen:")) return Promise.resolve({ ergebnis: "committet", verifyGruen: true, worktree: "/w", branch: "b", zusammenfassung: "z", ...diff() });
-    if (l.startsWith("lens:")) {
-      const key = l.slice("lens:".length).split(":")[0];
-      const b = s.runden[runde]?.[key];
-      return Promise.resolve(b === undefined ? ok(key) : b);
-    }
-    if (l.startsWith("nachbessern")) {
-      runde += 1;
-      head += 1;
-      return Promise.resolve({ verifyGruen: true, zusammenfassung: "fix", ...diff(), ...s.nachbessern });
-    }
-    if (l.startsWith("review-festgefahren")) return Promise.resolve("ok");
-    if (l.startsWith("pr+merge")) return Promise.resolve({ ergebnis: "gemergt", prNummer: 7 });
-    if (l.startsWith("cleanup")) return Promise.resolve("ok");
-    return Promise.reject(new Error(`Stub kennt das Label "${l}" nicht`));
-  };
-  const parallel = (thunks: (() => Promise<unknown>)[]) => Promise.all(thunks.map((t) => t()));
-  const kontext = { agent, parallel, phase: () => undefined, log: () => undefined, args: undefined };
-  const endstand = (await runInNewContext(`(async () => {\n${quelle}\nreturn endstand\n})()`, kontext)) as {
-    ergebnis: string;
-    review?: { lens: string; verdikt: string }[];
-    ausserhalbScope?: string[];
-    hinweiseOffen?: number;
-  };
-  return { aufrufe, lenses: aufrufe.filter((a) => a.label.startsWith("lens:")), endstand: JSON.parse(JSON.stringify(endstand)) as typeof endstand };
-}
+/** Der gemeinsame Vollauf-Stub (workflow-lauf.ts) mit den Szenario-Feldern dieser Datei. */
+const lauf = (s: Szenario) => workflowLauf({ umsetzen: { dateien: s.dateien }, runden: s.runden, nachbessern: s.nachbessern });
 
 describe("Workflow verdrahtet die Staffel (#1265)", () => {
   test("reiner Doku-Diff: genau eine Doku-Lens über kubernia-lens mit effort high", async () => {
@@ -290,5 +252,38 @@ describe("Skill-Pfad und Workflow regeln die Staffel gleich (#1265)", () => {
     assert.ok(!nenntStaffel("immer drei Lenses"));
     assert.ok(liestPatchEinmal("genau einmal vollständig lesen, danach gezielt, kein zweites Volllesen"));
     assert.ok(!liestPatchEinmal("Der Patch ist die Primärquelle."));
+  });
+});
+
+// ── Merge von main in den Branch (#1311) ───────────────────────────────────────
+
+describe("Merge von main ist kein Fix-Pass (#1311)", () => {
+  test("der Nachbessern-Prompt beschreibt Delta aus Fixes vor/nach dem Merge-Commit und die Konfliktauflösung", async () => {
+    const { aufrufe } = await lauf({
+      dateien: ["src/a.ts"],
+      runden: [{ architektur: blockiert("architektur") }, {}],
+      nachbessern: { deltaPfad: "/tmp/d.patch", deltaDateien: ["src/a.ts"] },
+    });
+    const nach = aufrufe.find((a) => a.label.startsWith("nachbessern"))?.prompt ?? "";
+    assert.match(nach, /git diff h1\.\.M\^1 plus git diff M\.\.HEAD/);
+    assert.match(nach, /git show --cc M/);
+    assert.doesNotMatch(nach, /gemergt oder rebased, lass deltaPfad leer/, "der alte Satz erzwang nach jedem Merge den vollen Pass");
+    assert.match(nach, /REBASED, lass deltaPfad\s+leer/, "nur ein Rebase erzwingt weiter den vollen Satz");
+  });
+
+  const SKILL_MD = lies(".claude/skills/review-lenses/SKILL.md");
+  const HARNESS_MD = lies("docs/agent-harness.md");
+  const nenntMergeRegel = (s: string) => /Merge von `main`[^\n]*kein Fix-Pass/.test(s) && /git show --cc/.test(s);
+
+  test("Skill und agent-harness §3a tragen dieselbe Regel; die alte Fail-closed-Klausel ist weg", () => {
+    assert.ok(nenntMergeRegel(SKILL_MD), "review-lenses/SKILL.md");
+    assert.ok(nenntMergeRegel(HARNESS_MD), "docs/agent-harness.md");
+    assert.doesNotMatch(SKILL_MD, /wurde `main` in den Branch gemergt bzw\. rebased/);
+  });
+
+  test("Prädikat greift (Red-Green)", () => {
+    assert.ok(!nenntMergeRegel("Ein Merge von `main` ist ein voller Pass."));
+    assert.ok(!nenntMergeRegel("Merge von `main` ist kein Fix-Pass."), "ohne die Konfliktauflösung unvollständig");
+    assert.ok(nenntMergeRegel("Merge von `main` ist kein Fix-Pass; Auflösung per git show --cc M"));
   });
 });
