@@ -9,7 +9,7 @@
  * Mitternacht (inkl. Off-by-one-Schutz beim ERSTEN Übergang), Saison-/Wochentags-Rollover
  * sowie harte Invarianten und ein Red-Green-Schutz gegen eine konstante Ausgabe. */
 import { test, expect } from "vitest";
-import { gameClock, DAY_CYCLE_MS, START_PHASE, withStartOffset } from "../src/core/clock";
+import { gameClock, daysUntilClock, DAY_CYCLE_MS, START_PHASE, withStartOffset } from "../src/core/clock";
 
 const CYCLE = 1440000; // wie in scenes.ts: 24 min realer Zeit = ein Spieltag
 
@@ -156,4 +156,34 @@ test("verschiedene Zeitpunkte liefern verschiedene Uhrzeiten (keine Konstante)",
   const morgen = gameClock(0.7 * CYCLE, CYCLE).hhmm;
   const abend = gameClock(0.3 * CYCLE, CYCLE).hhmm;
   expect(morgen).not.toBe(abend);
+});
+
+/* ---------- #1311: daysUntilClock (kqDev.setClock) ---------- */
+
+const hhmmAfter = (days: number, add: number) => gameClock((days + add) * DAY_CYCLE_MS, DAY_CYCLE_MS).hhmm;
+
+test("daysUntilClock: Spielstart 06:00 → 21:00 am selben Tag, 00:00 und 05:59", () => {
+  expect(daysUntilClock(0, "21:00") * 24).toBeCloseTo(15, 6);
+  for (const t of ["21:00", "00:00", "05:59", "12:30"]) expect(hhmmAfter(0, daysUntilClock(0, t)), t).toBe(t);
+});
+
+test("daysUntilClock: nur vorwärts – 21:00 → 06:00 ist der Folgetag, gleiche Minute bleibt 0", () => {
+  const abends = daysUntilClock(0, "21:00");
+  const d = daysUntilClock(abends, "06:00");
+  expect(d * 24).toBeCloseTo(9, 6);
+  expect(gameClock((abends + d) * DAY_CYCLE_MS, DAY_CYCLE_MS).day).toBe(2);
+  expect(daysUntilClock(0, "06:00")).toBe(0);
+  expect(daysUntilClock(abends, "21:00")).toBe(0);
+});
+
+test("daysUntilClock: Zielminute wird auch bei krummen Startwerten exakt getroffen (kein Float-Kippen)", () => {
+  for (const start of [0.1234567, 3.3333333, 0.5, 12.999999]) {
+    for (const t of ["00:00", "06:00", "13:37", "23:59"]) expect(hhmmAfter(start, daysUntilClock(start, t)), `${start}→${t}`).toBe(t);
+  }
+});
+
+test("daysUntilClock: ungültiges Format wirft RangeError", () => {
+  for (const bad of ["25:00", "7:5", "", "12:60", "12-30", "ab:cd", "24:00", "12:30 "]) {
+    expect(() => daysUntilClock(0, bad), JSON.stringify(bad)).toThrow(RangeError);
+  }
 });

@@ -29,6 +29,7 @@ export function planAdvance(ms: number, frameMs: number = DEV_FRAME_MS): Advance
   }
   // Epsilon gegen Float-Rauschen: 1000 / (1000/60) darf nicht 59.999… ergeben.
   const frames = Math.floor(ms / frameMs + 1e-9);
-  const remainderMs = Math.max(0, ms - frames * frameMs);
-  return { frames, frameMs, remainderMs: remainderMs < 1e-6 ? 0 : remainderMs };
+  const rest = ms - frames * frameMs;
+  // Eine Klemme für beides: Float-Rauschen (±) und negativer Rest werden zu 0.
+  return { frames, frameMs, remainderMs: rest > 1e-6 ? rest : 0 };
 }

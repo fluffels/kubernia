@@ -6,6 +6,7 @@
  * rohen Werte in eine `DevSnapshotSource`, der Aufbau samt Ableitungen (Kachel, Quest-
  * Ende, Dialog-Art, aktive Gefahren) ist Node-testbar. */
 import { TILE } from "../world/world";
+import { HAZARD_UNLOCK, type HazardKind } from "../world/hazards";
 
 /** Version des Snapshot-Formats; bei inkompatibler Änderung hochzählen. */
 export const DEV_SNAPSHOT_VERSION = 1;
@@ -18,6 +19,15 @@ export interface SnapshotDialogueSource {
   idx: number;
   /** null = Lese-Dialog, `{ menu: true }` = Menü, sonst Auswahl-Frage (`q`). */
   choice: { menu: true } | { q: string } | null;
+}
+
+/** Sicht einer Szene mit Spielfigur auf das, was der Snapshot braucht. Jede solche Szene
+ *  liefert sie über `devView()` selbst (statt dass devapi.ts Szenen-Klassen kennt). */
+export interface SceneDevView { map: string | null; player: SnapshotPlayerSource | null }
+
+/** Typwächter: hat die Szene eine `devView()`-Methode (= Spielfigur-Szene)? */
+export function isDevViewable(scene: unknown): scene is { devView(): SceneDevView } {
+  return typeof scene === "object" && scene !== null && typeof (scene as { devView?: unknown }).devView === "function";
 }
 
 export interface DevSnapshotSource {
@@ -46,7 +56,8 @@ export interface DevSnapshotSource {
   clock: { day: number; hhmm: string; weekday: string; seasonName: string; gameDays: number };
   coins: number;
   xp: number;
-  hazards: { pirate: unknown; kraken: unknown; storm: unknown };
+  /** Je Gefahren-Art der laufende Zustand (null = inaktiv); die Arten kommen aus `HAZARD_UNLOCK`. */
+  hazards: Readonly<Record<HazardKind, unknown>>;
 }
 
 export interface DevSnapshot {
@@ -95,11 +106,8 @@ function buildDialog(d: SnapshotDialogueSource | null): DevSnapshot["dialog"] {
 }
 
 function buildHazards(h: DevSnapshotSource["hazards"]): string[] {
-  const out: string[] = [];
-  if (h.pirate) out.push("pirate");
-  if (h.kraken) out.push("kraken");
-  if (h.storm) out.push("storm");
-  return out;
+  // Die Arten stammen aus der einen Laufzeit-Liste (HAZARD_UNLOCK), nicht aus hartem if je Art.
+  return (Object.keys(HAZARD_UNLOCK) as HazardKind[]).filter((k) => Boolean(h[k]));
 }
 
 /** Baut den JSON-tauglichen Snapshot (nur Primitive/Arrays/Objekte, keine Zyklen). */

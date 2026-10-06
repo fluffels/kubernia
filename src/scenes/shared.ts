@@ -2,6 +2,7 @@
 // die In-Welt-Pixel-Bitmap-Font (#188), Orts-Schilder (#254), schwebende Belohnungstexte und
 // das datengesteuerte Insel-NPC-Rendering (#349). Phaser-Präsentation – darf Phaser anfassen.
 import Phaser from "phaser";
+import type { SceneDevView } from "../devtools/snapshot";
 import { KQContent } from "../content";
 import { type Spawn, type EntityObject } from "../content/entities";
 import { TILE, type Hitbox } from "../world/world";
@@ -153,6 +154,9 @@ export abstract class IslandScene extends Phaser.Scene {
   pSprite!: Phaser.GameObjects.Image;
   ePrev!: boolean;
   returnArmed!: boolean;
+
+  /** Sicht für kqDev.state() (devtools/snapshot); `map` kennt die konkrete Szene. */
+  abstract devView(): SceneDevView;
 
   /** Insel→Welt-Rück-Warp: zurück nach Port Kubernia. In allen drei Region-Szenen
    *  byte-gleich (#426) – hier zentral als Vorarbeit fürs Szenen-Zusammenlegen (#427).

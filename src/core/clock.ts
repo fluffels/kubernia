@@ -90,3 +90,21 @@ export function gameClock(time: number, cycle: number): GameClock {
     title: `${seasonName} – Tag ${dayOfSeason}, ${hhmm} Uhr`,
   };
 }
+
+/** Spieltage (`gameDays`), die nötig sind, damit die HUD-Uhr zum nächsten Mal `hhmm` ("HH:MM")
+ *  zeigt – nur vorwärts: zeigt sie die Zeit schon (gleiche Minute), bleibt es bei 0, sonst
+ *  gilt das nächste Vorkommen (heute noch oder morgen). Zeitabhängige Systeme laufen nie
+ *  rückwärts. Wirft RangeError bei ungültigem Format (nur 00:00 … 23:59, zweistellig). */
+export function daysUntilClock(currentGameDays: number, hhmm: string): number {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(hhmm);
+  if (!m) throw new RangeError(`setClock: "${hhmm}" ist keine Uhrzeit im Format HH:MM`);
+  const target = Number(m[1]) * 60 + Number(m[2]);
+  const now = gameClock(currentGameDays * DAY_CYCLE_MS, DAY_CYCLE_MS).hhmm;
+  const nowMin = Number(now.slice(0, 2)) * 60 + Number(now.slice(3));
+  const diffMin = (target - nowMin + 1440) % 1440;
+  if (diffMin === 0) return 0;
+  // Float-Rauschen darf die Zielminute nicht um eine Minute verfehlen: bei Bedarf winzig nachschieben.
+  let days = diffMin / 1440;
+  for (let i = 0; i < 5 && gameClock((currentGameDays + days) * DAY_CYCLE_MS, DAY_CYCLE_MS).hhmm !== hhmm; i++) days += 1e-7;
+  return days;
+}

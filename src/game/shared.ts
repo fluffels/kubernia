@@ -211,6 +211,7 @@ export interface GameApi extends GameData {
   // ---- clock.ts: persistente Spiel-Zeit / Kalender (#413) ----
   advanceClock(deltaMs: number): void;
   calendar(): GameClock;
+  setClock(hhmm: string): void;
 
   // ---- tick.ts: szenen-neutraler Frame-Takt (#501) ----
   tick(deltaMs: number): void;

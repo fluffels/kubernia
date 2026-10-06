@@ -42,6 +42,13 @@ describe("planAdvance (Dev-Zeit-Stepping)", () => {
     }
   });
 
+  it("Rest-Klemme: Float-Rauschen (positiv wie negativ) wird 0, ein echter Rest bleibt", () => {
+    expect(planAdvance(16 + 5e-7, 16).remainderMs).toBe(0);
+    expect(planAdvance(16 - 1e-10, 16).remainderMs).toBe(0);
+    expect(planAdvance(16 + 1e-3, 16).remainderMs).toBeCloseTo(1e-3, 9);
+    expect(planAdvance(100, 16).remainderMs).toBeCloseTo(4, 10);
+  });
+
   it("der Deckel selbst ist erlaubt", () => {
     expect(() => planAdvance(MAX_ADVANCE_MS)).not.toThrow();
   });

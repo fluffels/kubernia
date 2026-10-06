@@ -5,6 +5,7 @@ import { SFX } from "../sfx";
 import { TALK_RANGE, interiorEAction, interiorEFlank, UNDERDECK_DOOR, type Door } from "../world/world";
 import { keys, setInteriorOpen } from "../runtime";
 import { sanitize } from "../hud/pixelfont";
+import type { SceneDevView } from "../devtools/snapshot";
 import { T, pixelText, renderPlayer, stepSimplePlayer, type ScenePlayer } from "./shared";
 
 /* ===== InteriorScene (#6) – betretbarer Hausinnenraum =====
@@ -64,6 +65,8 @@ export class InteriorScene extends Phaser.Scene {
   hint!: Phaser.GameObjects.BitmapText;
   ePrev!: boolean;
   constructor() { super("Interior"); }
+
+  devView(): SceneDevView { return { map: `interior:${this.door.id}`, player: this.pl }; }
 
   create(data: { door: Door }) {
     const door = data.door;

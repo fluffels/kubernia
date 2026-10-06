@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { buildDevSnapshot, DEV_SNAPSHOT_VERSION, type DevSnapshotSource } from "../src/devtools/snapshot";
+import { buildDevSnapshot, isDevViewable, DEV_SNAPSHOT_VERSION, type DevSnapshotSource } from "../src/devtools/snapshot";
 import { TILE } from "../src/world/world";
+import { HAZARD_UNLOCK } from "../src/world/hazards";
 
 function src(over: Partial<DevSnapshotSource> = {}): DevSnapshotSource {
   return {
@@ -79,7 +80,24 @@ describe("buildDevSnapshot (#1284)", () => {
   it("hazards: nur aktive, in fester Reihenfolge", () => {
     expect(buildDevSnapshot(src()).hazards).toEqual([]);
     const h = buildDevSnapshot(src({ hazards: { pirate: { until: 1 }, kraken: null, storm: { until: 2 } } })).hazards;
-    expect(h).toEqual(["pirate", "storm"]);
+    expect(h).toEqual(["storm", "pirate"]); // Reihenfolge von HAZARD_UNLOCK
+  });
+
+  it("hazards: jede Art einzeln aktiv ergibt genau diese Art (Arten kommen aus HAZARD_UNLOCK)", () => {
+    for (const kind of Object.keys(HAZARD_UNLOCK) as (keyof typeof HAZARD_UNLOCK)[]) {
+      const hazards = { pirate: null, kraken: null, storm: null, [kind]: { until: 1 } };
+      expect(buildDevSnapshot(src({ hazards })).hazards, kind).toEqual([kind]);
+    }
+  });
+
+  it("hazards: unbekannte Zusatzschlüssel tauchen nicht auf, falsy-Werte zählen als inaktiv", () => {
+    const hazards = { pirate: 0, kraken: undefined, storm: null, ufo: { until: 1 } };
+    expect(buildDevSnapshot(src({ hazards })).hazards).toEqual([]);
+  });
+
+  it("isDevViewable erkennt nur Objekte mit devView()-Methode", () => {
+    expect(isDevViewable({ devView: () => ({ map: null, player: null }) })).toBe(true);
+    for (const bad of [null, undefined, 5, "x", {}, { devView: 1 }]) expect(isDevViewable(bad), String(bad)).toBe(false);
   });
 
   it("Vollabbild: jedes Feld kommt aus der passenden Quelle (unterscheidbare Werte)", () => {
