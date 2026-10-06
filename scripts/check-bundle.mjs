@@ -91,7 +91,8 @@ export const BUNDLE_BUDGETS = [
     // #669: +~4 KB — 4 neue Innenraum-Möbel-PNGs (Tisch/Konsole/Buch/Amboss, je 32×32).
     // #690: +~2 KB — lighthouse_ruined.png (4095 B) von Vite base64-inline in den JS-Chunk.
     // #758: +~0.3 KB — DECK_SHAPE-Array + Deck-Render-Methoden für bootsförmiges Schiff-Deck.
-    maxBytes: 1_402_000,
+    // #1139: +~8 KB — YAML-Parser + Manifest-Mapper (src/sim/yaml.ts, src/sim/manifest/*) laufen im Spiel.
+    maxBytes: 1_410_000,
   },
   {
     label: "Phaser-vendor-Chunk in dist/ (#595)",

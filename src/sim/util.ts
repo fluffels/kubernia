@@ -113,3 +113,13 @@ export function multiFlag(raw: string, flag: string): string[] {
   }
   return out;
 }
+
+/** Speicherangabe wie "256Mi", "1Gi", "512M" in Mi umrechnen (null bei Unsinn). */
+export function parseMem(spec: string): number | null {
+  const m = spec.match(/^(\d+)(Mi|Gi|M|G)?$/);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  const unit = m[2] || "Mi";
+  if (unit === "Gi" || unit === "G") return n * 1024;
+  return n; // Mi / M ~ als Mi behandeln (didaktisch genau genug)
+}

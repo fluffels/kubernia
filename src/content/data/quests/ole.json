@@ -1131,7 +1131,8 @@
             "service.yaml": {
               "service": {
                 "name": "funkdienst",
-                "port": "80"
+                "port": 80,
+                "targetPort": 8080
               }
             }
           }

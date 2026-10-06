@@ -368,7 +368,7 @@ export interface ApplyEffect {
     // Ephemeral-Storage aus dem Pod-Template (#240): emptyDir-Volume + ephemeral-storage-Limit/-Nutzung.
     node?: string; emptyDir?: { data?: string; usedMi?: number }; ephemeralLimit?: number; ephemeralUsedMi?: number;
     // initContainer (#485): füllt beim Ausrollen das emptyDir vor; `doubleStage` verdoppelt den Peak.
-    initContainer?: { fillsMi: number; doubleStage?: boolean } };
+    initContainer?: { fillsMi?: number; doubleStage?: boolean } };
   // RBAC-CRDs (#128): vom `kubectl apply -f` der Wachturm-Manifeste angelegt. `cluster`
   // unterscheidet Role/ClusterRole bzw. RoleBinding/ClusterRoleBinding (wie in roles/roleBindings).
   serviceAccount?: { name: string };

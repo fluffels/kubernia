@@ -2,12 +2,13 @@
  * Befehle, die an einem BEREITS bestehenden Workload drehen (statt Ressourcen
  * anzulegen/zu löschen): `scale`, `expose`, `set image|env|resources`, `rollout
  * restart`. Inklusive der set-Unterhelfer (`kubectlSetEnv`/`kubectlSetImage`/
- * `kubectlSetResources`) und des Speicher-Parsers `parseMem`.
+ * `kubectlSetResources`).
  *
  * Phaser-frei (pure Domäne): nutzt nur `makePodName` aus ../util und das
  * KubectlHost-Interface (./host). Aufgerufen aus dem kubectl-Dispatch (../kubectl.ts).
  */
 import { scaleDeployment, replacePods } from "../workload";
+import { parseMem } from "../util";
 import type { Deployment } from "../state";
 import type { KubectlHost } from "./host";
 
@@ -111,17 +112,6 @@ function kubectlSetImage(host: KubectlHost, t: string[]) {
     replacePods(dep, host.clock, host.rng);
   }
   return "deployment.apps/" + depName + " image updated" + (oldBad && newImage === oldBad ? "\n💡 Hmm – das ist exakt dasselbe (kaputte) Image. Schau nochmal genau auf den Namen!" : "");
-}
-
-/** Speicherangabe wie "256Mi", "1Gi", "512M" in Mi umrechnen (null bei Unsinn). */
-
-function parseMem(spec: string): number | null {
-  const m = spec.match(/^(\d+)(Mi|Gi|M|G)?$/);
-  if (!m) return null;
-  const n = parseInt(m[1], 10);
-  const unit = m[2] || "Mi";
-  if (unit === "Gi" || unit === "G") return n * 1024;
-  return n; // Mi / M ~ als Mi behandeln (didaktisch genau genug)
 }
 
 /** Ein Fehler einer Ressourcen-Dimension: [Meldung, Tipp] für `host._err`. `null` = ok. */

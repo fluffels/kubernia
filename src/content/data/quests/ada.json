@@ -30,13 +30,14 @@
               "deployment": {
                 "name": "lager",
                 "image": "redis:7",
-                "replicas": 2
+                "replicas": 2,
+                "containerPort": 6379
               }
             },
             "service.yaml": {
               "service": {
                 "name": "lager",
-                "port": "6379"
+                "port": 6379
               }
             },
             "ingress.yaml": {
@@ -1245,7 +1246,7 @@
             "externalname.yaml": "service-externalname-bank"
           },
           "applyEffects": {
-            "externalname.yaml": { "service": { "name": "bank-extern", "externalName": "api.bank.example.com", "port": "" } }
+            "externalname.yaml": { "service": { "name": "bank-extern", "type": "ExternalName", "externalName": "api.bank.example.com", "port": "" } }
           }
         },
         "lines": [

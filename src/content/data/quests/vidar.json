@@ -79,7 +79,8 @@
                 "name": "wachposten",
                 "image": "wachdienst-api:1.0",
                 "replicas": 1,
-                "serviceAccountName": "wachdienst"
+                "serviceAccountName": "wachdienst",
+                "containerPort": 8080
               }
             }
           }
@@ -640,13 +641,14 @@
           },
           "applyEffects": {
             "spaehposten-roh.yaml": {
-              "deployment": { "name": "spaehposten", "image": "wachturm-spaeher:1.0", "replicas": 1 }
+              "deployment": { "name": "spaehposten", "image": "wachturm-spaeher:1.0", "replicas": 1, "containerPort": 8080 }
             },
             "spaehposten.yaml": {
               "deployment": {
                 "name": "spaehposten",
                 "image": "wachturm-spaeher:1.0",
                 "replicas": 1,
+                "containerPort": 8080,
                 "securityContext": { "runAsNonRoot": true, "allowPrivilegeEscalation": false, "readOnlyRootFilesystem": true }
               }
             }
