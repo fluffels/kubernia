@@ -908,7 +908,7 @@ Sammelticket, Spiel-/Inhalts-Befund oder Notfall → eigenes Issue) — nicht in
   const lensEndstand = () => LENSES.map((l) => lensStand[l.key]).filter(Boolean)
   // Der letzte Lens-Pass (für lensPlan); null nach rotem verify ⇒ die nächste Runde prüft wieder alles.
   let vorrunde = null
-  // Für den Review-Nachweis (#1270): Zahl der Lens-Pässe und die Brillen des ersten Passes.
+  // Für den Review-Nachweis (#1270): Zahl der Lens-Pässe und die Brillen des letzten vollen Passes.
   let reviewPaesse = 0
   let ersteLenses = null
   // Der materialisierte Diff (#1034). Wird nach jeder Nachbesserung ERSETZT, nie
