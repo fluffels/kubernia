@@ -17,7 +17,7 @@
  *
  * Warum kein `parseBash`: der Hook gilt für Bash UND PowerShell und bleibt shell-neutral. PowerShell hat Backtick-
  * Escapes, Zuweisungen mit Cast (`[array]$r = gh api …`) und `$(…)`/`@(…)` ohne Bash-Entsprechung. Die gemeinsame
- * Quote-Zerlegung (`quoteFolge` in `hook-io.mjs`) ist die EINE Hilfsfunktion für Segmentierung und Variablen-Suche.
+ * Quote-Zerlegung (`quoteFolge` in `quote-folge.mjs`) ist die EINE Hilfsfunktion für Segmentierung und Variablen-Suche.
  *
  * Bewusste Grenzen (ehrlich, wie beim worktree-guard):
  *  - Textprüfung je Segment (Trenner `&&`/`||`/`;`/`|`/Zeilenumbruch außerhalb von Anführungszeichen, mehrzeilige
@@ -30,7 +30,8 @@
  *
  * Reines Node-Skript (nur Builtins). `bewerte` ist pur und exportiert.
  */
-import { MAX_INTERPRETER, buildAskOutput, emit, istDirektaufruf, mergeDecisions, parseHookInput, quoteFolge, readStdin } from "./hook-io.mjs";
+import { MAX_INTERPRETER, buildAskOutput, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
+import { quoteFolge } from "./quote-folge.mjs";
 
 export { buildAskOutput, parseHookInput };
 
@@ -60,7 +61,13 @@ const REST_PFADE = [
 
 /** `gh api` als Befehl am Segmentanfang (auch nach `&`, `$(`, Klammern, Variablen-Zuweisungen, auch mit PowerShell-Cast
  *  `[array]$r = (gh api …)`), nicht als Text in einem fremden Befehl. */
-const GH_API_AM_ANFANG = /^[\s(`$&]*(?:\[[\w.,[\] ]+\]\s*)*[\s(`$@&]*(?:\$[\w:]+\s*=\s*[\s(`$@&]*(?:\[[\w.,[\] ]+\]\s*)*[\s(`$@&]*)?(?:\w+=\S*\s+)*gh(?:\.exe)?\s+api\b/;
+const CAST = String.raw`(?:\[[\w.,[\] ]+\]\s*)*`;
+const KL = String.raw`[\s(\`$@&]*`;
+/** Kontroll-Präfixe vor einem Befehl: Bash `then`/`do`/`else`/`time`/`!`/`{`, PowerShell `if (…) {`, `foreach (…) {`, `else {`,
+ *  `ForEach-Object {`. Hinter ihnen steht der Befehl wie am Segmentanfang. */
+const KONTROLLE = String.raw`(?:(?:if|elseif|foreach|while|for|switch|until)\s*\((?:[^()]|\([^()]*\))*\)\s*|(?:if|then|else|elif|do|while|until|time|try|catch|finally|command|exec|nohup|builtin|ForEach-Object|%)\s+|\{(?:[^{}]|\{[^{}]*\})*\}\s*(?=(?:else|elseif|catch|finally)\b)|[{(!]\s*)*`;
+const GH_API_AM_ANFANG = new RegExp(String.raw`^${KL}${KONTROLLE}${CAST}${KL}(?:\$[\w:]+\s*=\s*${KL}${CAST}${KL})?(?:\w+=\S*\s+)*gh(?:\.exe)?\s+api\b`);
+const NACH_KONTROLLE = new RegExp(String.raw`^\s*${KONTROLLE}`);
 
 /**
  * Zerlegt einen Befehl an `&&`, `||`, `;`, `|` und Zeilenumbrüchen, aber NICHT innerhalb von Anführungszeichen
@@ -132,10 +139,24 @@ function dynamischesWort(text, von, quote) {
   return false;
 }
 
-/** Wörter ohne Optionen (und deren Werte) eines gh-api-Segments; das erste ist der Endpunkt. */
+/** Wörter eines Textes (Rohtext inkl. Quotes), getrennt an unquotiertem, unmaskiertem Leerraum. */
+function woerter(text) {
+  const out = [];
+  let cur = "";
+  for (const { c, q, masked } of quoteFolge(text)) {
+    if (q === null && !masked && /\s/.test(c)) {
+      if (cur) out.push(cur);
+      cur = "";
+    } else cur += c;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/** Der erste Nicht-Options-Wert eines gh-api-Segments (nach den Optionen mit Wert) ist der Endpunkt. */
 function endpunkt(segment) {
   const m = /gh(?:\.exe)?\s+api\b(.*)$/s.exec(segment);
-  const tokens = (m?.[1] ?? "").match(/"(?:[^"\\`]|\\.|`.)*"|'[^']*'|\S+/g) ?? [];
+  const tokens = woerter(m?.[1] ?? "");
   const MIT_WERT = new Set(["-X", "--method", "-f", "-F", "--field", "--raw-field", "-H", "--header", "-q", "--jq", "-t", "--template", "--hostname", "--input", "--cache"]);
   for (let i = 0; i < tokens.length; i++) {
     if (tokens[i].startsWith("-")) {
@@ -156,14 +177,28 @@ function dynamischerGrund(segment, mutierend) {
   return null;
 }
 
+/** Entfernt die äußeren Anführungszeichen eines Wortes (und das Escape des Anführungszeichens im Inneren). */
+function ohneQuotes(roh) {
+  const q = roh[0];
+  if (roh.length < 2 || (q !== '"' && q !== "'") || roh.at(-1) !== q) return roh;
+  return roh.slice(1, -1).split(q === '"' ? '\\"' : "''").join(q);
+}
+
 /** Die Skript-Zeichenkette hinter `-c`/`-Command` bzw. `cmd /c` eines Interpreter-Segments, sonst null. */
 function interpreterString(segment) {
-  const m = /^[\s(`$&]*(?:\w+=\S*\s+)*(?:bash|sh|zsh|dash|pwsh|powershell)(?:\.exe)?\s+(?:-\w+\s+)*?-(?:c|lc|ec|Command)\s+(.+)$/is.exec(segment) ?? /^[\s(]*cmd(?:\.exe)?\s+\/c\s+(.+)$/is.exec(segment);
-  if (!m) return null;
-  const rest = m[1].trim();
-  const q = rest[0];
-  if ((q === '"' || q === "'") && rest.lastIndexOf(q) > 0) return rest.slice(1, rest.lastIndexOf(q)).replace(q === '"' ? /\\"/g : /''/g, q);
-  return rest;
+  const t = woerter(segment.replace(NACH_KONTROLLE, ""));
+  while (t.length && /^\w+=/.test(t[0])) t.shift();
+  const name = (t.shift() ?? "").replace(/\\/g, "/").split("/").pop().toLowerCase().replace(/\.exe$/, "");
+  if (name === "cmd") {
+    const k = t.findIndex((x) => /^\/c$/i.test(x));
+    return k >= 0 && t.length > k + 1 ? ohneQuotes(t.slice(k + 1).join(" ")) : null;
+  }
+  if (!["bash", "sh", "zsh", "dash", "pwsh", "powershell"].includes(name)) return null;
+  for (let i = 0; i < t.length; i++) {
+    if (/^-(?:c|lc|ec|command)$/i.test(t[i])) return t[i + 1] === undefined ? null : ohneQuotes(t[i + 1]);
+    if (!t[i].startsWith("-")) return null;
+  }
+  return null;
 }
 
 const REGEL = "Pre-Flight-Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints, Rückfrage bei der Maintainerin.";
@@ -181,8 +216,9 @@ function ghApiSegment(segment) {
 
 /** Ein Segment ohne `gh api` am Anfang, in einem Befehl, der `gh api` irgendwo enthält. */
 function umweg(segment, tiefe) {
-  if (/^[\s(]*(?:eval|iex|Invoke-Expression)\b/i.test(segment)) return frage("`eval`/`iex` neben `gh api`: der zusammengesetzte Aufruf ist nicht prüfbar");
-  if (/^[\s(]*\$\{?\w+\}?(?![\w:]|\s*=)/.test(segment)) return frage("dynamisches Kommando ($CMD) neben `gh api`: der Aufruf ist nicht prüfbar");
+  const rest = segment.replace(NACH_KONTROLLE, "");
+  if (/^(?:eval|iex|Invoke-Expression)\b/i.test(rest)) return frage("`eval`/`iex` neben `gh api`: der zusammengesetzte Aufruf ist nicht prüfbar");
+  if (/^\$\{?\w+\}?(?![\w:]|\s*=)/.test(rest)) return frage("dynamisches Kommando ($CMD) neben `gh api`: der Aufruf ist nicht prüfbar");
   const inner = tiefe < MAX_INTERPRETER ? interpreterString(segment) : null;
   if (!inner) return null;
   if (hatVariable(inner)) return frage("Interpreter-String mit Variable neben `gh api`: der Aufruf ist nicht prüfbar");

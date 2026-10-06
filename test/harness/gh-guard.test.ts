@@ -182,6 +182,20 @@ describe("gh api über Variablen, eval und Interpreter-Strings fragt nach (#1311
     fragt("[string]$x = (gh api -X DELETE repos/o/r/issues/1)");
     fragt("[System.Object[]]$r = @(gh api -X DELETE repos/o/r/issues/1)");
     laeuft("[array]$r = gh api repos/o/r/issues/1");
+    // gh api hinter Kontroll-Präfixen: Bash then/do/else/time/{ und PowerShell if/foreach/else/ForEach-Object
+    fragt("{ gh api -X DELETE repos/o/r/issues/1; }");
+    fragt("if true; then gh api -X DELETE repos/o/r/issues/1; fi");
+    fragt("while true; do gh api -X DELETE repos/o/r/issues/1; done");
+    fragt("time gh api -X DELETE repos/o/r/issues/1");
+    fragt("if gh api -X DELETE repos/o/r/issues/1; then echo ok; fi");
+    fragt("if ($true) { gh api -X DELETE repos/o/r/issues/1 }");
+    fragt("foreach ($i in 1..3) { gh api -X DELETE repos/o/r/issues/$i }");
+    fragt("if ($a) { 1 } else { gh api -X DELETE repos/o/r/issues/1 }");
+    fragt("1..3 | ForEach-Object { gh api -X DELETE repos/o/r/issues/$_ }");
+    fragt("if true; then eval \"gh api -X DELETE x\"; fi");
+    laeuft("if true; then gh issue list; fi");
+    laeuft("if ($true) { gh api repos/o/r/issues/1 }");
+    laeuft("echo { gh api -X DELETE x }");
     // Cast rechts vom = und direkt am Segmentanfang
     fragt("$r = [array](gh api -X DELETE repos/o/r/issues/1)");
     fragt("$r = [array]@(gh api -X DELETE repos/o/r/issues/1)");

@@ -336,30 +336,33 @@ function indirektion(cmd, words, pe, D, c, opts) {
   return r;
 }
 
-/** Kommandos mit Sonderbehandlung: cd, export, git, eval, Shells, find; undefined für alles andere. */
+/** Kommandos mit Sonderbehandlung: cd, export, git, eval, Shells, find. Liefert `{ ergebnis, weiter }` (`weiter`: danach noch das grobe
+ *  Sicherheitsnetz, so bei `eval`) oder null, wenn das grobe Netz allein zuständig ist (Shells, find, nicht statisches eval). */
 function sonderfall(name, ctx) {
   const { words, pe, args, D, c } = ctx;
-  if (CD_LIKE.has(name) && pe.wrappers.every((w) => CD_WRAPPERS.has(w))) return cdEffect(name, args, D, c);
+  if (CD_LIKE.has(name) && pe.wrappers.every((w) => CD_WRAPPERS.has(w))) return fertig(cdEffect(name, args, D, c));
   if (EXPORTERS.has(name)) {
     noteEnv(c, exportZuweisungen(args));
-    return nichts(D);
+    return fertig(nichts(D));
   }
   if (name === "git") {
     gitCall(words, pe.i, pe, D, c, 0);
-    return nichts(D);
+    return fertig(nichts(D));
   }
   if (name === "eval") {
     if (args.some((w) => w.dynamic)) {
       ask(c, real(D), "`eval` mit nicht statischem Text.", true);
-      return undefined;
+      return null;
     }
     const r = evalString(args.map((w) => w.text).join(" "), D, c);
-    return { S: r, F: r, eval: true }; // eval läuft in der aktuellen Shell
+    return { ergebnis: { S: r, F: r }, weiter: true }; // eval läuft in der aktuellen Shell
   }
   if (SHELLS.has(name)) shellCall(args, ctx.cmd, ctx.opts, ctx.hereString, D, c);
   else if (name === "find") findCall(words.slice(pe.i), D, c);
-  return undefined;
+  return null;
 }
+
+const fertig = (ergebnis) => ({ ergebnis, weiter: false });
 
 function evalSimple(cmd, D, c, opts) {
   evalSubsts(cmd, D, c);
@@ -381,8 +384,8 @@ function evalSimple(cmd, D, c, opts) {
   const ind = indirektion(cmd, words, pe, D, c, opts);
   if (ind) return ind;
   const sonder = sonderfall(name, { cmd, words, pe, args, D, c, opts, hereString });
-  if (sonder && !sonder.eval) return sonder;
-  return grobesNetz(name, words, pe, D, c, sonder ? { S: sonder.S, F: sonder.F } : nichts(D));
+  if (sonder && !sonder.weiter) return sonder.ergebnis;
+  return grobesNetz(name, words, pe, D, c, sonder ? sonder.ergebnis : nichts(D));
 }
 
 /** Unbekannter Wrapper mit git-Wort, sonst die grobe Wortregel als Sicherheitsnetz. */
