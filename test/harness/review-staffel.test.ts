@@ -82,6 +82,12 @@ describe("Ab Runde 2: nur die blockierten Brillen auf dem Delta (#1265)", () => 
     assert.deepEqual(r.keys, ["architektur"]);
   });
 
+  test("ein Verdikt 'blockierend' OHNE blockierendes Finding zählt nicht (dieselbe Definition wie die Schleife)", () => {
+    const b: Bericht = { lens: "architektur", verdikt: "blockierend", findings: [] };
+    const r = plan({ dateien: code, vorrunde: vorrunde({ berichte: [b, ok("requirement-treue"), ok("test-adaequanz")] }) });
+    assert.deepEqual(r, { keys: DREI, modus: "voll" }, "ohne echten Blocker: fail-closed auf den vollen Satz");
+  });
+
   test("Delta mit Nicht-Markdown → Test-Adäquanz läuft immer mit", () => {
     const r = plan({
       dateien: code,
@@ -174,6 +180,8 @@ async function lauf(s: Szenario) {
   const endstand = (await runInNewContext(`(async () => {\n${quelle}\nreturn endstand\n})()`, kontext)) as {
     ergebnis: string;
     review?: { lens: string; verdikt: string }[];
+    ausserhalbScope?: string[];
+    hinweiseOffen?: number;
   };
   return { aufrufe, lenses: aufrufe.filter((a) => a.label.startsWith("lens:")), endstand: JSON.parse(JSON.stringify(endstand)) as typeof endstand };
 }
@@ -196,7 +204,13 @@ describe("Workflow verdrahtet die Staffel (#1265)", () => {
   test("Runde 2: nur die blockierte Brille, mit Delta-Patch und Blocker-Prüfliste; Endbericht zeigt jede Brille", async () => {
     const { lenses, aufrufe, endstand } = await lauf({
       dateien: ["src/a.ts"],
-      runden: [{ "requirement-treue": { lens: "x", verdikt: "blockierend", findings: [{ schwere: "blockierend", befund: "AK3 fehlt", ort: "a.ts:1", begruendung: "b" }] } }, {}],
+      runden: [
+        {
+          architektur: { lens: "architektur", verdikt: "hinweise", findings: [{ schwere: "hinweis", befund: "H" }], ausserhalbScope: ["X aus Runde 1"] },
+          "requirement-treue": { lens: "x", verdikt: "blockierend", findings: [{ schwere: "blockierend", befund: "AK3 fehlt", ort: "a.ts:1", begruendung: "b" }] },
+        },
+        {},
+      ],
       nachbessern: { deltaPfad: "/tmp/kq-42-r2-delta.patch", deltaDateien: ["docs/a.md"] },
     });
     assert.deepEqual(lenses.map((a) => a.label), ["lens:architektur:r1", "lens:requirement-treue:r1", "lens:test-adaequanz:r1", "lens:requirement-treue:r2"]);
@@ -206,10 +220,13 @@ describe("Workflow verdrahtet die Staffel (#1265)", () => {
     assert.match(r2, /\/tmp\/kq-42-r2\.patch/, "Der volle Patch bleibt als Referenz");
     const nach = aufrufe.find((a) => a.label.startsWith("nachbessern"));
     assert.ok(nach && /delta\.patch/.test(nach.prompt), "Das Nachbessern muss den Delta-Patch schreiben");
+    assert.match(nach.prompt, /git diff h1\.\.HEAD/, "Basis des Deltas ist der HEAD, den Runde 1 reviewt hat");
+    assert.deepEqual(endstand.ausserhalbScope, ["X aus Runde 1"], "ausserhalbScope einer nicht erneut gelaufenen Brille geht nicht verloren");
+    assert.equal(endstand.hinweiseOffen, 1, "Hinweise einer nicht erneut gelaufenen Brille bleiben offen");
     assert.deepEqual(
       endstand.review,
       [
-        { lens: "architektur", verdikt: "ok" },
+        { lens: "architektur", verdikt: "hinweise" },
         { lens: "requirement-treue", verdikt: "ok" },
         { lens: "test-adaequanz", verdikt: "ok" },
       ],

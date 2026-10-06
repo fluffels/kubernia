@@ -319,8 +319,9 @@ const KONTEXT_DIAET = `Kontext-Ökonomie (#1034) — halte dich daran, sie koste
 // ── Review-Staffel (#1265) — Anfang
 // Welche Lenses eine Review-Runde startet. Der Sockel je Lens ist fix (gemessen ~0,26 $ reiner
 // Cache-Write), darum spart nur eine kleinere ZAHL an Lenses spürbar, nicht sparsameres Lesen.
-// Die Diff-Art ist eine Tabelle (erste Zeile, deren Prüfung ALLE Dateien erfüllen, gewinnt): eine
-// weitere Art (z.B. Content-JSON) ist eine Zeile, kein neues if. Keine Größenschwelle für Code:
+// Die Diff-Art für Runde 1 ist eine Tabelle (erste Zeile, deren Prüfung ALLE Dateien erfüllen,
+// gewinnt): eine weitere Art (z.B. Content-JSON) ist dort eine Zeile. Die Delta-Regel ab Runde 2
+// (Test-Adäquanz läuft bei Code-Fixes mit) bleibt fest in lensPlan und muss dann mitgedacht werden. Keine Größenschwelle für Code:
 // auch ein kleiner src-Diff kann das Save-Format brechen.
 // Fail-closed überall: jede fehlende oder kaputte Angabe ergibt den vollen Satz auf dem vollen
 // Patch. Ein fehlendes Datum darf nie WENIGER Review bedeuten.
@@ -341,8 +342,10 @@ function lensSatz(dateien) {
   return zeile ? zeile.keys : VOLLER_SATZ
 }
 
-const hatBlocker = (b) =>
-  b.verdikt === 'blockierend' || (Array.isArray(b.findings) && b.findings.some((f) => f && f.schwere === 'blockierend'))
+// Ein Blocker ist ein Finding mit schwere=blockierend — dieselbe Definition wie die Schleife, die
+// danach entscheidet, ob nachgebessert wird. Ein Verdikt ohne solches Finding zählt nicht.
+const blockerVon = (b) => (b && Array.isArray(b.findings) ? b.findings.filter((f) => f && f.schwere === 'blockierend') : [])
+const hatBlocker = (b) => blockerVon(b).length > 0
 
 /**
  * Runde 1 (vorrunde = null): der Satz der Diff-Art. Ab Runde 2: nur die Brillen mit Blocker in der
@@ -805,7 +808,7 @@ ${patchAuftrag(nr, 1)}`,
   // ist schlechter, nicht besser. Der Token-Short-Circuit (#532) bleibt: rotes verify ⇒
   // kein Lens-Pass, direkt nachbessern.
 
-  // Ein Review-Pass: die drei Lenses parallel auf den aktuellen Diff (je ein frischer Agent).
+  // Ein Review-Pass: die Lenses des Plans (lensPlan) parallel auf den aktuellen Stand (je ein frischer Agent).
   // Der Diff kommt als einmal geschriebene Patch-DATEI herein (#1034) — nicht als Auftrag, ihn
   // selbst zu erheben. `runde` nummeriert die Patch-Datei, damit eine spätere Runde nie die
   // Fassung der Vorrunde reviewt und Fixes attestiert, die sie nie gesehen hat.
@@ -813,8 +816,7 @@ ${patchAuftrag(nr, 1)}`,
   // Blocker aus `vorrunde`. Der Bericht trägt den Brillen-Schlüssel aus dem Code, nicht die
   // Selbstauskunft des Agenten — daran hängen die Vorrunden-Prüfung und der Endbericht.
   const vorBlocker = (vorrunde, key) => {
-    const b = vorrunde && vorrunde.berichte.find((x) => x.lens === key)
-    const liste = b ? (b.findings || []).filter((f) => f.schwere === 'blockierend') : []
+    const liste = blockerVon(vorrunde && vorrunde.berichte.find((x) => x.lens === key))
     return liste.length
       ? liste.map((f, i) => `${i + 1}. [${f.ort}] ${f.befund}`).join('\n')
       : '(keine eigenen — du läufst mit, weil der Fix Code ändert: prüfe, ob er angemessen getestet ist)'
@@ -853,7 +855,8 @@ Runde ${runde} prüft nur den Fix (#1265). Deine Primärquelle ist der Delta-Pat
 Prüfe zuerst, ob diese Blocker deiner Brille aus der Vorrunde behoben sind:
 ${vorBlocker(vorrunde, lens.key)}
 Prüfe danach, ob der Fix selbst durch deine Brille etwas Neues bricht. Der volle Patch oben ist
-hier nur Referenz für gezielte Zugriffe (Grep, offset/limit), nicht zum Volllesen.
+hier nur Referenz für gezielte Zugriffe (Grep, offset/limit), nicht zum Volllesen: „die
+Patch-Datei" der Kontext-Ökonomie unten ist in dieser Runde der Delta-Patch.
 `
     : ''
 }
@@ -1227,7 +1230,8 @@ Melde das Ergebnis jedes Verify-Schritts einzeln${ausserhalbScope.length ? ' sow
     umsetzung: umsetzung.zusammenfassung,
     browserVerifiziert: umsetzung.browserVerifiziert,
     review: lensEndstand().map((b) => ({ lens: b.lens, verdikt: b.verdikt })),
-    hinweiseOffen: hinweise.length,
+    // Über alle Brillen (#1265): Hinweise einer Brille, die in Runde 2 nicht erneut lief, sind weiter offen.
+    hinweiseOffen: lensEndstand().flatMap((b) => (b.findings || []).filter((f) => f.schwere === 'hinweis')).length,
     ausserhalbScope,
     cleanup,
   }
