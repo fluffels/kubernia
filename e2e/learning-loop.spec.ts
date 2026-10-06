@@ -40,7 +40,7 @@ async function bootDev(page: Page): Promise<void> {
 type KqDev = {
   roadmap(): { id: string; completed: boolean }[];
   advanceTime(ms: number): unknown;
-  state(): { player: { tx: number; ty: number } | null };
+  state(): { player: { tx: number; ty: number } | null; clock: { gameDays: number } };
 };
 type KqGame = { scene: { getScene(k: string): { playerPos: { x: number; y: number } } } };
 
@@ -61,7 +61,7 @@ async function teleport(page: Page, tx: number, ty: number): Promise<void> {
     },
     { x: tx * T, y: ty * T },
   );
-  await page.evaluate(() => (window as unknown as { kqDev: KqDev }).kqDev.advanceTime(200));
+  // advanceTime muss die Spielzeit tatsächlich vorrücken (synchron, kein Wettlauf mit rAF).\n  const advanced = await page.evaluate(() => {\n    const d = (window as unknown as { kqDev: KqDev }).kqDev;\n    const before = d.state().clock.gameDays;\n    return (d.advanceTime(200) as { clock: { gameDays: number } }).clock.gameDays - before;\n  });\n  expect(advanced, "advanceTime(200) rückt die Spielzeit vor").toBeGreaterThan(0);
   const pos = await page.evaluate(() => (window as unknown as { kqDev: KqDev }).kqDev.state().player);
   expect(pos, "Spielfigur steht nach dem Teleport auf der Ziel-Kachel").toMatchObject({ tx, ty });
 }

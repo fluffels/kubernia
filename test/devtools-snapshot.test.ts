@@ -59,7 +59,7 @@ describe("buildDevSnapshot (#1284)", () => {
 
   it("activeQuests sind nach id sortiert", () => {
     const s = buildDevSnapshot(src({ activeQuests: { z: { step: 1, task: 0 }, a: { step: 2, task: 1 }, m: { step: 0, task: 0 } } }));
-    expect(s.activeQuests.map((q) => q.id)).toEqual(["a", "m", "z"]);
+    expect(s.activeQuests).toEqual([{ id: "a", step: 2, task: 1 }, { id: "m", step: 0, task: 0 }, { id: "z", step: 1, task: 0 }]);
   });
 
   it("Dialog: read / choice / menu", () => {
@@ -80,6 +80,33 @@ describe("buildDevSnapshot (#1284)", () => {
     expect(buildDevSnapshot(src()).hazards).toEqual([]);
     const h = buildDevSnapshot(src({ hazards: { pirate: { until: 1 }, kraken: null, storm: { until: 2 } } })).hazards;
     expect(h).toEqual(["pirate", "storm"]);
+  });
+
+  it("Vollabbild: jedes Feld kommt aus der passenden Quelle (unterscheidbare Werte)", () => {
+    const s = buildDevSnapshot(src({
+      scenes: ["Interior", "World"], scene: "Interior", map: "interior:haus",
+      player: { x: 8.6 * TILE, y: 5.4 * TILE, face: "west", moving: true },
+      currentQuestId: "q-x", questIdx: 4, questStep: 2, questTask: 1, stepType: "terminal", taskText: "tippe help",
+      activeQuests: { "q-x": { step: 2, task: 1 } }, completedQuestCount: 3,
+      dialogue: { npcId: "ole", lines: [], idx: 0, choice: { menu: true } },
+      overlays: ["menu", "shop"], blocking: true,
+      clock: { day: 3, hhmm: "14:30", weekday: "Mi", seasonName: "Sommer", gameDays: 2.5 },
+      coins: 77, xp: 7,
+      hazards: { pirate: null, kraken: { until: 1 }, storm: null },
+    }));
+    expect(s).toEqual({
+      v: DEV_SNAPSHOT_VERSION, ready: true,
+      scenes: ["Interior", "World"], scene: "Interior", map: "interior:haus",
+      player: { x: Math.round(8.6 * TILE), y: Math.round(5.4 * TILE), tx: 8, ty: 5, face: "west", moving: true },
+      quest: { id: "q-x", idx: 4, step: 2, task: 1, stepType: "terminal", taskText: "tippe help" },
+      activeQuests: [{ id: "q-x", step: 2, task: 1 }],
+      completedQuests: 3,
+      dialog: { npcId: "ole", line: "", lines: 0, kind: "menu" },
+      overlays: ["menu", "shop"], blocking: true,
+      clock: { day: 3, hhmm: "14:30", weekday: "Mi", season: "Sommer", gameDays: 2.5 },
+      coins: 77, xp: 7,
+      hazards: ["kraken"],
+    });
   });
 
   it("überlebt einen JSON-Roundtrip unverändert", () => {
