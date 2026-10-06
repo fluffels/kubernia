@@ -15,22 +15,18 @@
 import { afterAll, beforeAll, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 
-type ExecDeps = { execFileSync?: (...a: unknown[]) => string; statSync?: (...a: unknown[]) => { isDirectory(): boolean } };
-type Decision = { block: boolean; reason?: string };
-type Word = { text: string; dynamic: boolean };
-type Cmd = { words: Word[]; sep: string; boundary?: string };
+type ExecDeps = { execFileSync?: (...a: unknown[]) => string; statSync?: (...a: unknown[]) => { isDirectory(): boolean }; homedir?: () => string; platform?: string; kontextCache?: Map<string, unknown> };
+type Decision = { block: boolean; ask?: boolean; reason?: string };
 type GuardModule = {
   isProtectedGitCommand: (command: string) => boolean;
   resolveGitContext: (cwd: string, repoRoot: string, deps?: ExecDeps) => Record<string, unknown>;
   decide: (opts: { cwd?: string; command: string; repoRoot: string; deps?: ExecDeps }) => Decision;
   parseHookInput: (text: string) => { cwd?: string; command?: string };
   buildDenyOutput: (reason: string) => Record<string, unknown>;
-  lexShell: (command: string) => { ok: true; cmds: Cmd[] } | { ok: false };
-  gitInvocation: (words: Word[]) => { sub: string | null; cDirs: Word[]; unsure: boolean } | null;
   protectedGitTargets: (command: string, cwd: string, deps?: ExecDeps) => string[];
   fromMsysPath: (p: string, platform?: string) => string;
 };
@@ -40,7 +36,7 @@ type GuardModule = {
 import * as raw from "../../scripts/worktree-guard-hook.mjs";
 const guard = raw as GuardModule;
 
-const { isProtectedGitCommand, resolveGitContext, decide, parseHookInput, buildDenyOutput, lexShell, gitInvocation, protectedGitTargets, fromMsysPath } = guard;
+const { isProtectedGitCommand, resolveGitContext, decide, parseHookInput, buildDenyOutput, protectedGitTargets, fromMsysPath } = guard;
 
 describe("isProtectedGitCommand (#735)", () => {
   test("erkennt git commit / git push in einfachen Kommandos", () => {
@@ -87,8 +83,7 @@ describe("resolveGitContext (#735) — Haupt-Worktree vs. Linked-Worktree", () =
         const dir = (options as { cwd?: string } | undefined)?.cwd ?? "";
         const info = byDir[dir];
         if (!info) throw new Error(`kein Git-Repo simuliert für ${dir}`);
-        if (a.includes("--show-toplevel")) return info.toplevel + "\n";
-        if (a.includes("--git-common-dir")) return info.commonDir + "\n";
+        if (a.includes("--show-toplevel") && a.includes("--git-common-dir")) return `${info.toplevel}\n${info.commonDir}\n`;
         throw new Error(`unerwartete git-Args: ${a.join(" ")}`);
       },
       statSync: (p: unknown) => ({ isDirectory: () => !gitFileDirs.has(String(p)) }),
@@ -157,8 +152,7 @@ describe("decide (#735) — Gesamtentscheidung", () => {
     return {
       execFileSync: (_cmd: unknown, args: unknown) => {
         const a = args as string[];
-        if (a.includes("--show-toplevel")) return toplevel + "\n";
-        if (a.includes("--git-common-dir")) return `${repoRoot}/.git\n`;
+        if (a.includes("--show-toplevel") && a.includes("--git-common-dir")) return `${toplevel}\n${repoRoot}/.git\n`;
         throw new Error("unerwartet");
       },
       statSync: () => ({ isDirectory: () => !gitFileAtToplevel }),
@@ -268,47 +262,8 @@ describe("isProtectedGitCommand (#1308) — Quotes, Heredocs und Substitutionen"
   });
 });
 
-describe("lexShell / gitInvocation (#1308)", () => {
-  const texts = (command: string) => {
-    const r = lexShell(command);
-    assert.equal(r.ok, true, command);
-    return r.ok ? r.cmds.filter((c) => !c.boundary).map((c) => c.words.map((w) => w.text)) : [];
-  };
-
-  test("zerlegt Trenner, Quotes und Escapes", () => {
-    assert.deepEqual(texts('a b && c "d e" | f; g\\ h'), [["a", "b"], ["c", "d e"], ["f"], ["g h"]]);
-    assert.deepEqual(texts("echo 'a;b' \"c&&d\""), [["echo", "a;b", "c&&d"]]);
-    assert.deepEqual(texts("cmd 2>&1 &> out"), [["cmd", "2>&1", "&>", "out"]], "Umleitungen mit & sind keine Trenner");
-  });
-
-  test("Substitutionen sind eigene Kommandos mit Grenzen; Wörter damit sind dynamisch", () => {
-    const r = lexShell("echo $(git push) x");
-    assert.equal(r.ok, true);
-    if (!r.ok) return;
-    assert.deepEqual(r.cmds.map((c) => c.boundary ?? c.words[0].text), ["(", "git", ")", "echo"]);
-    assert.equal(r.cmds[3].words[1].dynamic, true);
-    assert.equal(r.cmds[3].words[2].dynamic, false);
-  });
-
-  test("offenes Quote, offene Substitution und fehlender Heredoc-Delimiter sind nicht zerlegbar", () => {
-    for (const cmd of ['echo "x', "echo 'x", "echo $(x", "echo x)", "cat <<EOF\nx", "f() { x; }"]) {
-      assert.equal(lexShell(cmd).ok, false, cmd);
-    }
-  });
-
-  test("gitInvocation: Unterbefehl, -C-Wörter und unsichere Optionen", () => {
-    const inv = (command: string) => {
-      const r = lexShell(command);
-      return r.ok ? gitInvocation(r.cmds[0].words) : null;
-    };
-    assert.equal(inv("git status")?.sub, "status");
-    assert.deepEqual(inv("git -C a -C b commit")?.cDirs.map((w) => w.text), ["a", "b"]);
-    assert.equal(inv("git -c x=y commit")?.sub, "commit");
-    assert.equal(inv("git --git-dir=/x push")?.unsure, true);
-    assert.equal(inv("git $SUB")?.sub, null);
-  });
-
-  test("fromMsysPath: /c/… wird nur unter Windows umgeschrieben", () => {
+describe("fromMsysPath (#1308)", () => {
+  test("/c/… wird nur unter Windows umgeschrieben", () => {
     assert.equal(fromMsysPath("/c/dev/x", "win32"), "C:/dev/x");
     assert.equal(fromMsysPath("/c/dev/x", "linux"), "/c/dev/x");
   });
@@ -330,11 +285,10 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
         const dir = resolve((options as { cwd?: string }).cwd ?? "");
         if (dir !== repoRoot && !dir.startsWith(repoRoot)) throw new Error(`kein Repo: ${dir}`);
         if (missing.some((m) => resolve(m) === dir)) throw new Error(`ENOENT: ${dir}`); // git in fehlendem cwd scheitert
-        if (a.includes("--show-toplevel")) return topOf(dir) + "\n";
-        if (a.includes("--git-common-dir")) {
+        if (a.includes("--show-toplevel") && a.includes("--git-common-dir")) {
           // wie echtes git: im Haupt-Checkout relativ zum Aufruf-Verzeichnis (`.git`, `../.git`), im Worktree absolut
           const absolut = `${repoRoot}/.git`;
-          return (wts.includes(topOf(dir)) ? absolut : relative(dir, absolut).replace(/\\/g, "/")) + "\n";
+          return `${topOf(dir)}\n${wts.includes(topOf(dir)) ? absolut : relative(dir, absolut).replace(/\\/g, "/")}\n`;
         }
         throw new Error("unerwartet");
       },
@@ -407,8 +361,8 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(run(`if false; then\ncd '${wt}'\nfi\ngit push`), true, "cd in einem Block");
     assert.equal(run(`cd '${wt}' && node scripts/x.mjs && npx vitest run && git commit -m x`), false, "Interpreter in der Kette");
     assert.equal(run(`cd '${wt}' && echo git push`), false, "reiner Text");
-    assert.equal(run(`if true; then cd '${wt}' && git push; fi`), true, "cd hinter then gilt nicht sicher");
-    assert.equal(run("$(".repeat(20000) + "git push" + ")".repeat(20000)), true, "unerwarteter Lexer-Fehler fällt auf die grobe Regel zurück");
+    assert.equal(run(`if true; then cd '${wt}' && git push; fi`), false, "cd und git im selben then-Zweig: exakt ausgewertet");
+    assert.equal(run(`if true; then cd '${wt}'; fi; git push`), true, "cd im Zweig wirkt danach nur bedingt: der Ausgangsort bleibt Ziel");
     assert.equal(run(`cd '${wt}' && git -C sub push && git push`), false);
   });
 
@@ -444,6 +398,265 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.match(r.reason ?? "", /git -C <worktree>.*cd <worktree> && git/s);
     assert.ok((r.reason ?? "").includes(repoRoot));
   });
+
+  // ── #1311: AST-Auswerter (Mengenmodell), Lücken aus den Lens-Reviews und Restlücken ──
+  const ask = (command: string, cwd = repoRoot, deps = fsFake([wt])) => decide({ cwd, command, repoRoot, deps }).ask === true;
+  const withHome = (home: string) => ({ ...fsFake([wt]), homedir: () => home });
+
+  test("Block-Gruppe, if und while mit & am Ende: das Folgekommando läuft im Ausgangsort", () => {
+    for (const bg of ["{ true; } &", "if true; then :; fi &", "while false; do :; done &", "(true) &"]) {
+      assert.equal(run(`cd '${wt}' && ${bg} git push`), true, bg);
+    }
+    assert.equal(run(`cd '${wt}' && { true; } && git push`), false, "Gegenprobe: ohne & wirkt das cd");
+    assert.equal(run(`cd '${wt}' && if true; then :; fi && git push`), false);
+    assert.equal(run(`cd '${wt}' && while false; do :; done; git push`), false);
+  });
+
+  test("git-Optionen mit getrenntem Wert verschieben den Unterbefehl nicht", () => {
+    assert.equal(run("git --attr-source HEAD push"), true);
+    assert.equal(run("git --config-env a=B commit -m x"), true);
+    assert.equal(run(`git --attr-source HEAD -C '${repoRoot}' push`, wt), true);
+    assert.equal(run("git --attr-source HEAD push", wt), false, "im Worktree bleibt es erlaubt");
+  });
+
+  test("nicht existierendes -C-Ziel: xargs-Platzhalter blockt im Haupt-Checkout, im Worktree bleibt es erlaubt", () => {
+    const missing = join(repoRoot, "gibt-es-nicht");
+    assert.equal(decide({ cwd: repoRoot, command: "git -C gibt-es-nicht push", repoRoot, deps: fsFake([wt], [missing]) }).block, true);
+    assert.equal(run("echo . | xargs -I % git -C % push"), true);
+    assert.equal(decide({ cwd: wt, command: "git -C gibt-es-nicht push", repoRoot, deps: fsFake([wt], [join(wt, "gibt-es-nicht")]) }).block, false, "im Worktree selbst bleibt es erlaubt");
+  });
+
+  test("~ wird per os.homedir() aufgelöst (-C und cd), nicht als dynamisch geraten", () => {
+    const home = resolve(repoRoot, "..");
+    const deps = withHome(home);
+    assert.equal(run("git -C ~/kubequest push", wt, deps), true);
+    assert.equal(run("cd ~/kubequest && git push", wt, deps), true);
+    assert.equal(run("cd ~ && git push", wt, withHome(repoRoot)), true);
+    assert.equal(run("git -C ~/anderswo push", wt, deps), false, "Home-Unterordner außerhalb des Repos");
+    assert.equal(run("git -C ~root push", wt, deps), false, "~user ist nicht auflösbar, im Worktree aber kein Haupt-Checkout");
+    assert.equal(ask("git -C ~root push", wt, deps), true, "~user: Ziel unbekannt, deshalb Rückfrage");
+  });
+
+  test("cd mit zu vielen Argumenten schlägt fehl (der Ort bleibt)", () => {
+    assert.equal(run(`cd '${wt}' x; git push`), true);
+    assert.equal(run(`cd '${wt}' x && git push`), true);
+    assert.equal(run(`cd '${wt}'; git push`), false, "Gegenprobe mit einem Argument");
+  });
+
+  test("ANSI-C-Quote $'git' ist git", () => {
+    assert.equal(run(`$'git' -C '${repoRoot}' push`, wt), true);
+    assert.equal(run("$'gi\\x74' push"), true);
+    assert.equal(run("$'echo' $'git push'"), false);
+  });
+
+  test("--work-tree, GIT_WORK_TREE und exportiertes GIT_DIR zeigen auf den Haupt-Checkout", () => {
+    assert.equal(run(`git --work-tree='${repoRoot}' commit -m x`, wt), true);
+    assert.equal(run(`GIT_WORK_TREE='${repoRoot}' git commit -m x`, wt), true);
+    assert.equal(run(`export GIT_WORK_TREE='${repoRoot}'; git commit -m x`, wt), true);
+    assert.equal(run(`export GIT_DIR='${repoRoot}/.git'; git commit -m x`, wt), true);
+    assert.equal(run(`declare -x GIT_DIR='${repoRoot}/.git'; git push`, wt), true);
+    assert.equal(run(`GIT_DIR='${repoRoot}/.git'; export GIT_DIR; git push`, wt), true);
+    assert.equal(run(`git --work-tree='${wt}' commit -m x`, wt), false, "Worktree als Work-Tree bleibt erlaubt");
+    assert.equal(run("export FOO=1; git commit -m x", wt), false);
+  });
+
+  test("Wrapper mit Optionswert: das Kommando dahinter wird gefunden", () => {
+    assert.equal(run('sudo -u git bash -c "git push"'), true);
+    assert.equal(run('env -u echo bash -c "git push"'), true);
+    assert.equal(run("timeout -s KILL 5 git push"), true);
+    assert.equal(run("xargs -I % git push"), true);
+    assert.equal(run(`command -p cd '${repoRoot}' && git push`, wt), true);
+    assert.equal(run(`env -C '${repoRoot}' git push`, wt), true);
+    assert.equal(run(`env --chdir='${repoRoot}' git push`, wt), true);
+    assert.equal(run(`sudo -D '${repoRoot}' git push`, wt), true);
+    assert.equal(run(`nice -n 5 git -C '${wt}' push`), false, "Gegenprobe: Wrapper-Argument ist kein Kommando");
+    assert.equal(run(`env -C '${wt}' git push`), false);
+  });
+
+  test("cd mit Optionen und Verkettungen aus dem Worktree in den Haupt-Checkout", () => {
+    assert.equal(run(`cd -- '${repoRoot}' && git push`, wt), true);
+    assert.equal(run(`cd -P '${repoRoot}' && git push`, wt), true);
+    assert.equal(run(`cd '${repoRoot}' || cd '${wt}' && git push`, wt), true);
+    assert.equal(run(`cd '${repoRoot}' && true | cd '${wt}' && git push`, wt), true);
+    assert.equal(run(`cd '${wt}' || cd '${repoRoot}' && git push`), false, "das erste cd gelingt, das zweite läuft nie");
+    assert.equal(run(`cd '${join(repoRoot, "weg")}' || cd '${wt}' && git push`, repoRoot, fsFake([wt], [join(repoRoot, "weg")])), true, "fehlgeschlagenes cd: Nachfolger gegen die unveränderte Menge");
+  });
+
+  test("voller Pfad zu git, auch mit Leerzeichen und .exe", () => {
+    assert.equal(run(`/usr/bin/git -C '${repoRoot}' push`, wt), true);
+    assert.equal(run(`"C:/Program Files/Git/cmd/git.exe" -C '${repoRoot}' push`, wt), true);
+    assert.equal(run("/usr/bin/git status"), false);
+  });
+
+  test("grep/rg mit Quote-Text sind kein Aufruf, rg --pre und find -exec schon", () => {
+    assert.equal(run('grep "git push" x'), false);
+    assert.equal(run('rg -n "git commit" docs'), false);
+    assert.equal(run('egrep -r "git push" .'), false);
+    assert.equal(run("rg --pre 'sh -c \"git push\"' x"), true);
+    assert.equal(run('find . -name "git push"'), false);
+    assert.equal(run('find . -exec echo {} \\; -exec bash -c "git push" \\;'), true);
+    assert.equal(run(`find . -exec git -C '${wt}' push {} \\;`), false);
+    assert.equal(run("find . -exec git push {} +"), true);
+  });
+
+  test("Zeilenfortsetzung und Prozess-Substitution", () => {
+    assert.equal(run(`git -C '${repoRoot}' \\\n push`, wt), true);
+    assert.equal(run("git \\\n push"), true);
+    assert.equal(run(`cd '${wt}' && git push && diff <(echo a) <(echo b)`), false, "<(…) ist kein Trenner und kein Ortswechsel");
+    assert.equal(run(`cd '${wt}' && diff <(echo a) <(echo b) && git push`), false);
+    assert.equal(run("cat <(git push)"), true);
+    assert.equal(run("diff <(echo a) <(git commit -m x)"), true);
+  });
+
+  test("Interpreter mit Heredoc, Here-String und Pipe als Eingabe wird ausgewertet", () => {
+    assert.equal(run("bash <<'EOF'\ngit push\nEOF"), true);
+    assert.equal(run("sh <<EOF\ngit commit -m x\nEOF"), true);
+    assert.equal(run('echo "git push" | sh'), true);
+    assert.equal(run("printf '%s\\n' 'git push' | bash"), true);
+    assert.equal(run("bash <<< 'git push'"), true);
+    assert.equal(run("cat <<'EOF' | sh\ngit commit -m x\nEOF"), true);
+    assert.equal(run("bash <<'EOF'\ngit push\nEOF", wt), false, "im Worktree bleibt es erlaubt");
+    assert.equal(run("bash <<'EOF'\necho hallo\nEOF"), false);
+    assert.equal(run('echo "git status" | sh'), false);
+    assert.equal(run("bash skript.sh"), false, "Skriptdatei: Inhalt nicht auswertbar, aber auch kein Anlass");
+  });
+
+  test("Interpreter mit nicht statischem Text fragt im Haupt-Checkout, im Worktree nicht", () => {
+    for (const cmd of ["curl x | sh", 'bash -c "$CMD"', 'eval "$(ssh-agent -s)"', "bash <<EOF\n$CMD\nEOF"]) {
+      assert.equal(ask(cmd), true, cmd);
+      assert.equal(ask(cmd, wt), false, `${cmd} (Worktree)`);
+    }
+    assert.equal(run('bash -c "$CMD"'), false, "fragt, blockt nicht");
+  });
+
+  test("git submodule foreach, rebase -x/--exec und subtree push", () => {
+    assert.equal(run("git submodule foreach 'git push'"), true);
+    assert.equal(run("git submodule foreach git commit -am x"), true);
+    assert.equal(run("git rebase -x 'git push' main"), true);
+    assert.equal(run("git rebase --exec='git commit --amend' main"), true);
+    assert.equal(run("git subtree push --prefix=x origin main"), true);
+    assert.equal(run("git submodule foreach 'echo hi'"), false);
+    assert.equal(run("git rebase -x 'make test' main"), false);
+    assert.equal(run("git rebase main"), false);
+    assert.equal(run("git subtree pull --prefix=x origin main"), false);
+    assert.equal(run("git submodule foreach 'git push'", wt), false);
+    assert.equal(ask('git submodule foreach "$CMD"'), true);
+  });
+
+  test("Git-Aliase: -c alias.x=…, Alias aus der git-Konfiguration, Shell-Alias mit !", () => {
+    assert.equal(run("git -c alias.p=push p"), true);
+    assert.equal(run("git -c alias.p=push p", wt), false);
+    assert.equal(run("git -c 'alias.c=!git commit -m' c x"), true);
+    assert.equal(run("git p"), false, "kein Alias bekannt: externer Befehl");
+    const base = fsFake([wt]);
+    const cfg = (v: string): ExecDeps => ({ ...base, execFileSync: (cmd, args, o) => ((args as string[])[0] === "config" ? `${v}\n` : base.execFileSync?.(cmd, args, o) ?? "") });
+    assert.equal(run("git up", repoRoot, cfg("push")), true);
+    assert.equal(run("git up origin", repoRoot, cfg("push --force")), true);
+    assert.equal(run("git up", wt, cfg("push")), false);
+    assert.equal(run("git up", repoRoot, cfg("status")), false);
+    assert.equal(run("git up", repoRoot, cfg("!git commit -am")), true);
+    assert.equal(run("git status", repoRoot, cfg("push")), false, "eingebaute Befehle werden nicht über Aliase aufgelöst");
+  });
+
+  test("Funktionen und Aliase, die im selben Befehl definiert werden", () => {
+    assert.equal(run("f() { git push; }; f"), true);
+    assert.equal(run("function f { git commit -m x; }; f"), true);
+    assert.equal(run("f() { git push; }; f", wt), false);
+    assert.equal(run("f() { git push; }"), false, "nur definiert, nie aufgerufen");
+    assert.equal(run(`f() { git push; }; cd '${wt}' && f`), false, "die Funktion läuft am Aufrufort");
+    assert.equal(run(`f() { cd '${wt}'; }; f && git push`), false, "cd in der Funktion wirkt auf die Shell");
+    assert.equal(run("alias g=git; g push"), true);
+    assert.equal(run("alias g='git -C x'; g push"), true);
+    assert.equal(run("alias g=git; g status"), false);
+    assert.equal(run("alias g=git; unalias g; g push"), false);
+    assert.equal(ask('alias g="$X"; g push'), true, "unauflösbarer Alias");
+  });
+
+  test("dynamisches cd/-C: aus dem Worktree wird gefragt, nur bei einem geschützten git-Aufruf", () => {
+    for (const cmd of ['cd "$X" && git push', 'git -C "$D" push', "cd - && git push", "popd && git commit -m x", "git -C {} push"]) {
+      assert.equal(ask(cmd, wt), true, cmd);
+      assert.equal(run(cmd, wt), false, `${cmd}: fragt statt zu blocken`);
+    }
+    for (const cmd of ['cd "$X" && git status', 'cd "$X" && ls', `git -C '${wt}' push`, `cd '${wt}' && git push`, "git push"]) assert.equal(ask(cmd, wt), false, cmd);
+    assert.equal(run('cd "$X" && git push'), true, "im Haupt-Checkout blockt es");
+    assert.equal(ask('git -C "$D" push', resolve("/c/git/anderes")), false, "fremdes Repo: keine Rückfrage");
+  });
+
+  test("dynamisches Kommando und dynamischer git-Unterbefehl fragen im Haupt-Checkout", () => {
+    assert.equal(ask("$(echo git) push"), true);
+    assert.equal(ask('"$G" commit -m x'), true);
+    assert.equal(ask('git "$SUB"'), true);
+    assert.equal(ask("$EDITOR notizen.txt"), false);
+    assert.equal(ask('git "$SUB"', wt), false);
+  });
+
+  test("Verschachtelung über MAX_TIEFE und Fehler im Auswerter fallen auf die grobe Regel zurück", () => {
+    assert.equal(run("(".repeat(150) + "git push" + ")".repeat(150)), true);
+    assert.equal(run("$(".repeat(150) + "git push" + ")".repeat(150)), true);
+    assert.equal(run("(".repeat(150) + "echo x" + ")".repeat(150)), false);
+    const kaputt = { ...fsFake([wt]), homedir: () => { throw new Error("boom"); } };
+    assert.equal(run("cd ~ && git push", repoRoot, kaputt), true, "werfender Fake: grobe Regel statt Durchwinken");
+    assert.equal(run("cd ~ && echo x", repoRoot, kaputt), false);
+  });
+
+  test("Review R1: -C-Ziel fehlt bei Ausgangsort ≠ Session-cwd, F-Seite, Negation, Rückfrage-Vorrang, Wortfortsetzung", () => {
+    const fehlt = join(wt, "gibt-es-nicht");
+    assert.equal(decide({ cwd: repoRoot, command: `cd '${wt}' && git -C gibt-es-nicht push`, repoRoot, deps: fsFake([wt], [fehlt]) }).block, true, "Session-cwd zusätzlich");
+    assert.equal(run(`cd '${join(repoRoot, "weg")}' || git push`, repoRoot, fsFake([wt], [join(repoRoot, "weg")])), true, "fehlendes cd: der ||-Zweig läuft");
+    assert.equal(run(`! cd '${repoRoot}' || git push`, wt), true, "! tauscht Erfolg und Misserfolg");
+    assert.equal(run(`! cd '${repoRoot}' && git push`, wt), false, "Gegenprobe: nach ! cd läuft && nur bei Misserfolg");
+    assert.equal(ask('bash -c "$C"; git -C "$D" push', wt), true, "die Rückfrage ohne mainOnly gilt auch dort, wo die mainOnly-Frage entfällt");
+    assert.equal(run("gi\\\nt push"), true, "Zeilenfortsetzung mitten im Wort");
+    assert.equal(run("command -v git push"), false, "command -v ist nur eine Abfrage");
+  });
+
+  test("Review R1: git config alias.X im selben Befehl gilt für das folgende git", () => {
+    assert.equal(run("git config alias.p push && git p"), true);
+    assert.equal(run("git config alias.P push && git p"), true, "Alias-Namen sind nicht case-sensitiv");
+    assert.equal(run("git config --global alias.p '!git push'; git p"), true);
+    assert.equal(run("git config alias.p status && git p"), false);
+    assert.equal(run("git config alias.p push && git p", wt), false);
+    assert.equal(ask('git config alias.p "$X"; git p'), true, "nicht statischer Alias");
+  });
+
+  test("Review R4: Tiefe erschöpft ist fail-closed (Funktionen, Aliase), unbekannter Wrapper, -lc, Here-String mit cd, Alias-Aufruf groß geschrieben", () => {
+    const kette = (n: number) => `f0() { git push; }; ${Array.from({ length: n }, (_x, i) => `f${i + 1}() { f${i}; };`).join(" ")} f${n}`;
+    assert.equal(run(kette(2)), true, "innerhalb der Tiefe wird der Rumpf ausgewertet");
+    assert.equal(ask(kette(6)), true, "über der Tiefe fragt der Hook im Haupt-Checkout");
+    assert.equal(ask(kette(6), wt), false, "im Worktree fragt er nie");
+    const aliase = (n: number) => `alias a0='git push'; ${Array.from({ length: n }, (_x, i) => `alias a${i + 1}='a${i}';`).join(" ")} a${n}`;
+    assert.equal(run(aliase(1)), true);
+    assert.equal(ask(aliase(6)), true);
+    assert.equal(run("watch git push"), true, "unbekannter Wrapper: das erste git-Wort zählt");
+    assert.equal(run(`watch git -C '${wt}' push`), false);
+    assert.equal(run(`bash -lc "cd '${repoRoot}' && git push"`, wt), true, "kombinierte Shell-Flags");
+    assert.equal(run(`bash <<< "cd '${repoRoot}' && git push"`, wt), true, "cd im Here-String");
+    assert.equal(run("git config alias.p push && git P"), true, "Alias-Aufruf mit Großbuchstaben");
+  });
+
+  test("MAX_INTERPRETER: drei Ebenen verschachtelter Interpreter-Strings werden ausgewertet, die vierte nur grob", () => {
+    const verschachtelt = (n: number, inner: string): string => (n === 0 ? inner : verschachtelt(n - 1, `bash -c ${JSON.stringify(inner)}`));
+    const haupt = repoRoot.replace(/\\/g, "/");
+    const inner = `cd '${haupt}' && git push`;
+    assert.equal(run(verschachtelt(3, inner), wt), true, "Ebene 3: cd in den Haupt-Checkout wird noch ausgewertet");
+    assert.equal(run(verschachtelt(4, inner), wt), false, "Ebene 4: nur die grobe Wortregel gegen den Ausgangsort (Worktree)");
+    assert.equal(run(verschachtelt(4, "git push")), true, "grob blockt im Haupt-Checkout trotzdem");
+  });
+
+  test("Review R1: ein rev-parse je Verzeichnis und decide (kontextCache)", () => {
+    let aufrufe = 0;
+    const base = fsFake([wt]);
+    const deps: ExecDeps = { ...base, execFileSync: (cmd, args, o) => { aufrufe++; return base.execFileSync?.(cmd, args, o) ?? ""; } };
+    assert.equal(run("git push && git commit -m x && git -C . push", repoRoot, deps), true);
+    assert.equal(aufrufe, 1, "Referenz und Ziel sind dasselbe Verzeichnis: ein einziger rev-parse, nicht einer je Aufruf");
+  });
+
+  test("MSYS-Pfade im Verbund (deps.platform), unabhängig vom Betriebssystem", () => {
+    const deps: ExecDeps = { statSync: () => ({ isDirectory: () => true }), execFileSync: () => { throw new Error("kein git"); }, platform: "win32" };
+    assert.deepEqual(protectedGitTargets("git -C /c/dev/main push", "C:\\work", deps), ["C:\\dev\\main"]);
+    assert.deepEqual(protectedGitTargets("cd /c/dev/wt && git push", "C:\\work", deps), ["C:\\dev\\wt"]);
+    assert.deepEqual(protectedGitTargets("git -C /c/dev/main status", "C:\\work", deps), []);
+  });
 });
 
 describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordner", { timeout: 120_000 }, () => {
@@ -456,7 +669,7 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
   // Ohne GIT_*-Variablen der umgebenden Umgebung (z.B. GIT_DIR im pre-push-Hook): das Temp-Repo bleibt isoliert.
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
   const git = (cwd: string, ...args: string[]) =>
-    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: "pipe", env });
+    execFileSync("git", ["-c", `core.hooksPath=${join(base, "keine-hooks")}`, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: "pipe", env });
 
   // Auch die git-Aufrufe des Hooks selbst erben process.env: GIT_* für die Dauer dieses Blocks entfernen.
   const gitEnvVorher = Object.entries(process.env).filter(([k]) => k.startsWith("GIT_"));
@@ -479,7 +692,8 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
     rmSync(base, { recursive: true, force: true });
   });
 
-  const blockt = (cwd: string, command: string) => decide({ cwd, command, repoRoot: main }).block;
+  const kontextCache = new Map<string, unknown>(); // ein Temp-Repo, ein Zustand: Kontexte je Verzeichnis nur einmal ermitteln
+  const blockt = (cwd: string, command: string) => decide({ cwd, command, repoRoot: main, deps: { kontextCache } }).block;
 
   test("resolveGitContext: Unterordner des Haupt-Checkouts und des Worktrees werden richtig zugeordnet", () => {
     const m = resolveGitContext(sub, main);
@@ -542,7 +756,6 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
     ['bash -c "git push"', false],
     ['timeout 5 git push', false],
     ["xargs -n 1 git push", false],
-    ['grep "git push" x', false],
     ['node -e "git push"', false],
     ["cd - && git push", false],
     ["cd ~ && git push", false],
@@ -550,9 +763,6 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
     ["true || cd 'L' && git push", false],
     ["(true) || cd 'L' && git push", false],
     ["if true; then cd 'L'; fi; git commit", false],
-    ["if true; then cd 'L' && git push; fi", false],
-    ["builtin cd 'L' && git commit -m x", false], // nicht sicher verfolgt: konservativ geblockt
-    ["command cd 'L' && git push", false],
     ["git --git-dir=M/.git commit", false],
     ["cd 'L' && git -C \"$X\" push", false],
     ["cd 'L' && GIT_DIR=x git commit -m x", false],
@@ -564,7 +774,19 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
     ["xargs -I{} git -C {} push", false],
     ["cat <<EOF\n`git push`\nEOF", false],
     ["cd 'L' && (true) & git push", false],
-    // bewusst erlaubt
+    ["cd 'L' && { true; } & git push", false],
+    ["cd 'L' && if true; then :; fi & git push", false],
+    ["git --attr-source HEAD push", false],
+    ["env -u echo bash -c \"git push\"", false],
+    ["bash <<'EOF'\ngit push\nEOF", false],
+    ["git -c alias.p=push p", false],
+    ["f() { git push; }; f", false],
+    // bewusst erlaubt (exakt statt konservativ: der Auswerter kennt jetzt Zweige, Wrapper und Text-Kommandos)
+    ["if true; then cd 'L' && git push; fi", true],
+    ["builtin cd 'L' && git commit -m x", true],
+    ["command cd 'L' && git push", true],
+    ["grep \"git push\" x", true],
+    ["rg -n \"git commit\" docs", true],
     ["cd 'L' && git add -A && git commit -m x", true],
     ["cd 'L'; git commit -m x", true],
     ["cd 'L' && node x.mjs && git commit -m x", true],
@@ -593,15 +815,41 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
     }
   });
 
-  test("Interpreter mit Heredoc/Pipe als Eingabe ist dokumentierte Restlücke (kein Zusicherungsfall)", () => {
-    assert.equal(blockt(main, "bash <<'EOF'\ngit push\nEOF"), false, "Restlücke, siehe FAQ und Kopfkommentar");
+  test("Interpreter mit Heredoc, Funktionen und Aliase gegen echtes git", () => {
+    assert.equal(blockt(main, "bash <<'EOF'\ngit push\nEOF"), true);
+    assert.equal(blockt(linked, `bash <<'EOF'\ngit -C '${slash(main)}' push\nEOF`), true);
+    assert.equal(blockt(linked, "bash <<'EOF'\ngit push\nEOF"), false);
+    assert.equal(blockt(main, "f() { git push; }; f"), true);
+    assert.equal(blockt(linked, `cd '${slash(main)}' && { true; } & git push`), false, "& am Block: das cd gilt dort nicht, der Aufruf läuft im Worktree");
+  });
+
+  test("git config alias.* wird für unbekannte Unterbefehle befragt", () => {
+    git(main, "config", "alias.up", "push");
+    git(main, "config", "alias.st", "status");
+    assert.equal(blockt(main, "git up"), true);
+    assert.equal(blockt(main, "git st"), false);
+    assert.equal(blockt(linked, "git up"), false, "Alias gilt gemeinsam, im Worktree bleibt push erlaubt");
+    git(main, "config", "--unset", "alias.up");
+    git(main, "config", "--unset", "alias.st");
+  });
+
+  test("Junction/Symlink auf den Haupt-Checkout: Kontext über realpath erkannt", () => {
+    const link = join(base, "main-link");
+    symlinkSync(main, link, "junction");
+    const wtLink = join(base, "wt-link");
+    symlinkSync(linked, wtLink, "junction");
+    assert.equal(resolveGitContext(link, main).relevant, true, "git-common-dir über den Link aufgelöst");
+    assert.equal(blockt(link, "git commit -m x"), true);
+    assert.equal(blockt(link, `cd '${slash(wtLink)}' && git commit -m x`), false);
+    assert.equal(blockt(wtLink, "git commit -m x"), false);
+    assert.equal(blockt(wtLink, `git -C '${slash(link)}' push`), true);
   });
 });
 
 describe("parseHookInput / buildDenyOutput (#735) — CLI-Ein-/Ausgabe", () => {
   test("parst gültiges Hook-stdin-JSON (cwd + tool_input.command)", () => {
     const input = JSON.stringify({ cwd: "/c/git/kubequest", tool_name: "Bash", tool_input: { command: "git push" } });
-    assert.deepEqual(parseHookInput(input), { cwd: "/c/git/kubequest", command: "git push" });
+    assert.deepEqual(parseHookInput(input), { tool: "Bash", cwd: "/c/git/kubequest", command: "git push" });
   });
 
   test("kaputtes/leeres JSON liefert leeres Objekt statt zu crashen", () => {
@@ -611,7 +859,7 @@ describe("parseHookInput / buildDenyOutput (#735) — CLI-Ein-/Ausgabe", () => {
 
   test("fehlender tool_input.command liefert command: undefined", () => {
     const input = JSON.stringify({ cwd: "/x", tool_name: "Bash", tool_input: {} });
-    assert.deepEqual(parseHookInput(input), { cwd: "/x", command: undefined });
+    assert.deepEqual(parseHookInput(input), { tool: "Bash", cwd: "/x", command: undefined });
   });
 
   test("buildDenyOutput liefert das dokumentierte hookSpecificOutput-Schema", () => {

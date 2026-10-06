@@ -34,10 +34,10 @@
  */
 
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { diagnoseOrphans, fixOrphans, suspiciousWorktreeEntries } from "./cleanup-worktrees.mjs";
+import { istDirektaufruf, readStdin } from "./hook-io.mjs"; // gemeinsames Hook-I/O (stdin lesen, Direktaufruf erkennen)
 
 /**
  * Pfade **versionierter** Dateien unter `.claude/`, die `git status` als gelöscht
@@ -188,13 +188,7 @@ export function runHook(stdinText, repoRoot, check = checkAndFixOrphanWorktrees)
 
 // ── CLI (vom Stop- und vom SubagentStop-Hook aufgerufen) ─────────────────────
 function main() {
-  let stdinText;
-  try {
-    stdinText = readFileSync(0, "utf8");
-  } catch {
-    stdinText = "";
-  }
-  const r = runHook(stdinText, repoRootFromScriptUrl(import.meta.url));
+  const r = runHook(readStdin(), repoRootFromScriptUrl(import.meta.url));
   if (r.stdout) console.log(r.stdout);
   if (r.stderr) console.error(r.stderr);
   if (r.exit !== 0) process.exit(r.exit);
@@ -202,4 +196,4 @@ function main() {
   // exit(0) nötig, s. worktree-guard-hook.mjs).
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();

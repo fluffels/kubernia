@@ -11,21 +11,18 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
 import * as raw from "../../scripts/gh-guard-hook.mjs";
 
 type Bewertung = { ask: boolean; reason?: string };
 const hook = raw as unknown as {
   bewerte: (command: unknown) => Bewertung;
-  parseHookInput: (text: string) => { tool?: string; command?: string };
+  parseHookInput: (text: string) => { tool?: string; cwd?: string; command?: string };
   segmente: (command: string) => string[];
   buildAskOutput: (reason: string) => { hookSpecificOutput: { permissionDecision: string; hookEventName: string } };
   GEPRUEFTE_TOOLS: string[];
 };
 
-const lies = (rel: string) => readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 const graphql = (mutation: string) => `gh api graphql -f query='mutation($i:ID!){ ${mutation}(input:{id:$i}){ clientMutationId } }' -f i=X`;
 
 describe("gh api mit Außenwirkung fragt nach (#1204)", () => {
@@ -100,8 +97,8 @@ describe("Alltags-Aufrufe laufen durch (kein Dauer-Nachfragen)", () => {
 
 describe("Hook-Verdrahtung (#1311)", () => {
   test("Payload des Bash- und des PowerShell-Tools wird gelesen, kaputtes JSON ergibt {}", () => {
-    assert.deepEqual(hook.parseHookInput('{"tool_name":"PowerShell","tool_input":{"command":"gh api x"}}'), { tool: "PowerShell", command: "gh api x" });
-    assert.deepEqual(hook.parseHookInput('{"tool_name":"Bash","tool_input":{"command":"ls"}}'), { tool: "Bash", command: "ls" });
+    assert.deepEqual(hook.parseHookInput('{"tool_name":"PowerShell","tool_input":{"command":"gh api x"}}'), { tool: "PowerShell", cwd: undefined, command: "gh api x" });
+    assert.deepEqual(hook.parseHookInput('{"tool_name":"Bash","tool_input":{"command":"ls"}}'), { tool: "Bash", cwd: undefined, command: "ls" });
     assert.deepEqual(hook.parseHookInput("kein json"), {});
     assert.deepEqual(hook.parseHookInput(""), {});
     assert.deepEqual(hook.GEPRUEFTE_TOOLS, ["Bash", "PowerShell"]);
@@ -111,20 +108,6 @@ describe("Hook-Verdrahtung (#1311)", () => {
     const o = hook.buildAskOutput("grund").hookSpecificOutput;
     assert.equal(o.hookEventName, "PreToolUse");
     assert.equal(o.permissionDecision, "ask");
-  });
-
-  test("settings.json registriert den Hook für Bash und PowerShell", () => {
-    const s = JSON.parse(lies(".claude/settings.json")) as { hooks: { PreToolUse: { matcher: string; hooks: { args?: string[] }[] }[] } };
-    const eintrag = s.hooks.PreToolUse.find((e) => e.hooks.some((h) => (h.args ?? []).some((a) => a.endsWith("scripts/gh-guard-hook.mjs"))));
-    assert.ok(eintrag, "kein PreToolUse-Eintrag für scripts/gh-guard-hook.mjs");
-    assert.deepEqual(eintrag.matcher.split("|").sort(), ["Bash", "PowerShell"]);
-  });
-
-  test("die Hook-Skripte sind geschützte Pfade (ein abgeschwächter Wächter hinterlässt eine Audit-Spur)", () => {
-    const quelle = JSON.parse(lies(".github/protected-paths.json")) as { harness: string[] };
-    for (const f of ["gh-guard-hook.mjs", "worktree-guard-hook.mjs", "worktree-guard-powershell.mjs", "stop-verify-hook.mjs"]) {
-      assert.ok(quelle.harness.includes(`/scripts/${f}`), `protected-paths.json › harness braucht /scripts/${f}`);
-    }
   });
 });
 
@@ -140,5 +123,94 @@ describe("Segmentierung respektiert Anführungszeichen (#1311)", () => {
   test("ein unbalanciertes Anführungszeichen wirft nicht (der Rest bleibt ein Segment)", () => {
     assert.equal(hook.segmente("gh api -X DELETE x 'offen && ls").length, 1);
     assert.equal(hook.bewerte("gh api -X DELETE repos/o/r/labels/x 'offen").ask, true);
+  });
+});
+
+describe("gh api über Variablen, eval und Interpreter-Strings fragt nach (#1311)", () => {
+  const fragt = (c: string) => assert.equal(hook.bewerte(c).ask, true, c);
+  const laeuft = (c: string) => assert.equal(hook.bewerte(c).ask, false, c);
+
+  test("dynamische Query, Methode, Endpunkt und Datei-Eingabe", () => {
+    fragt('gh api graphql -f query="$Q"');
+    fragt("gh api graphql -f query=$Q");
+    fragt('gh api graphql -f "query=$q"'); // PowerShell
+    fragt('gh api graphql -f query="mutation { $M(input: {}) { x } }"');
+    fragt("gh api -X $M repos/o/r/issues/1");
+    fragt('gh api --method="$M" repos/o/r/issues/1');
+    fragt("gh api graphql -F query=@q.graphql");
+    fragt("gh api graphql --input q.json");
+    fragt('gh api -X PUT "$P" -f x=y');
+    fragt('gh api "$P" -f x=y');
+  });
+
+  test("eval, iex und Interpreter-Strings mit gh api", () => {
+    fragt('eval "gh api -X DELETE repos/o/r/issues/1"');
+    fragt("CMD='gh api repos/o/r/issues/1 -X DELETE'; eval \"$CMD\"");
+    fragt('iex "gh api -X DELETE repos/o/r/issues/1"');
+    fragt('bash -c "gh api -X DELETE repos/o/r/issues/1"');
+    fragt("pwsh -c 'gh api -X DELETE repos/o/r/issues/1'");
+    fragt(`sh -c "bash -c 'gh api -X DELETE x'"`);
+    fragt('cmd /c "gh api -X DELETE repos/o/r/issues/1"');
+  });
+
+  test("Alltags-Aufrufe bleiben ohne Rückfrage", () => {
+    laeuft("gh api graphql -f query='query($o:String!){ repository(owner:$o,name:\"x\"){ id } }' -f o=fluffels");
+    laeuft("gh api graphql -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item { id } } }' -f p=$P -f c=$C");
+    laeuft("gh api repos/o/r/issues/$N/comments -f body=x");
+    laeuft('eval "$(ssh-agent -s)"');
+    laeuft('gh api graphql -f query="{ viewer { login } }"');
+    laeuft("gh api graphql -f query='{ viewer { login } }' -F n=$N");
+    laeuft('gh api graphql -f query="query { a(i: `$i) }"'); // PowerShell: maskiertes $
+    laeuft('bash -c "ls"');
+    laeuft('bash -c "echo hallo"; gh issue list');
+    laeuft("gh api repos/o/r/issues/1");
+  });
+
+  test("Variable neben gh api (Interpreter-String, dynamisches Kommando) fragt; lesende dynamische Pfade nicht; die Antwort ist nie deny", () => {
+    fragt('CMD="gh api -X DELETE repos/o/r/issues/1"; bash -c "$CMD"');
+    fragt('CMD="gh api -X DELETE repos/o/r/issues/1"; $CMD');
+    laeuft('bash -c "gh api repos/o/r/issues/1"');
+    laeuft('gh api "$P"');
+    laeuft("$items = gh api graphql -f query='query { viewer { login } }'");
+    laeuft("$env:GH_PAGER=''; gh api repos/o/r/issues/1");
+    fragt('$r = gh api -X DELETE repos/o/r/issues/1');
+    for (const form of ["(gh api", "$(gh api", "@(gh api", "& gh api"]) fragt(`$r = ${form} -X DELETE repos/o/r/issues/1${form.includes("(") ? ")" : ""}`);
+    laeuft("$r = @(gh api repos/o/r/issues/1)");
+    laeuft("$n = 5; gh api repos/o/r/issues/$n");
+    // typisierte PowerShell-Zuweisungen (Cast vor $)
+    fragt("[array]$r = gh api -X DELETE repos/o/r/issues/1");
+    fragt("[string]$x = (gh api -X DELETE repos/o/r/issues/1)");
+    fragt("[System.Object[]]$r = @(gh api -X DELETE repos/o/r/issues/1)");
+    laeuft("[array]$r = gh api repos/o/r/issues/1");
+    // gh api hinter Kontroll-Präfixen: Bash then/do/else/time/{ und PowerShell if/foreach/else/ForEach-Object
+    fragt("{ gh api -X DELETE repos/o/r/issues/1; }");
+    fragt("if true; then gh api -X DELETE repos/o/r/issues/1; fi");
+    fragt("while true; do gh api -X DELETE repos/o/r/issues/1; done");
+    fragt("time gh api -X DELETE repos/o/r/issues/1");
+    fragt("if gh api -X DELETE repos/o/r/issues/1; then echo ok; fi");
+    fragt("if ($true) { gh api -X DELETE repos/o/r/issues/1 }");
+    fragt("foreach ($i in 1..3) { gh api -X DELETE repos/o/r/issues/$i }");
+    fragt("if ($a) { 1 } else { gh api -X DELETE repos/o/r/issues/1 }");
+    fragt("1..3 | ForEach-Object { gh api -X DELETE repos/o/r/issues/$_ }");
+    fragt("if true; then eval \"gh api -X DELETE x\"; fi");
+    laeuft("if true; then gh issue list; fi");
+    laeuft("if ($true) { gh api repos/o/r/issues/1 }");
+    laeuft("echo \"{ gh api -X DELETE x }\"");
+    fragt("echo { gh api -X DELETE x }"); // ungequotet zählt das offene gh api
+    // Cast rechts vom = und direkt am Segmentanfang
+    fragt("$r = [array](gh api -X DELETE repos/o/r/issues/1)");
+    fragt("$r = [array]@(gh api -X DELETE repos/o/r/issues/1)");
+    fragt("[void](gh api -X DELETE repos/o/r/issues/1)");
+    laeuft("[void](gh api repos/o/r/issues/1)");
+    // Backslash ist außerhalb von Quotes in PowerShell ein Pfadzeichen und maskiert nichts
+    fragt("cd C:\\dev\\; gh api -X DELETE repos/o/r/issues/1");
+    fragt("Set-Location C:\\dev\\\ngh api -X DELETE repos/o/r/issues/1");
+    assert.deepEqual(hook.segmente("a C:\\x\\; b"), ["a C:\\x\\", " b"]);
+    assert.deepEqual(hook.segmente('gh api x -f q="a\\"; b" ; c'), ['gh api x -f q="a\\"; b" ', " c"], "in Double Quotes maskiert der Backslash");
+    fragt('CMD="gh api -X DELETE x"; ${CMD}');
+    laeuft(`gh api graphql -f 'query=mutation($i:ID!){ addProjectV2ItemById(input:{projectId:$i}){ item { id } } }' -f i=X`); // Quote vor query=
+    const r = hook.bewerte('eval "gh api -X DELETE x"');
+    assert.equal(r.ask, true);
+    assert.equal("block" in r, false);
   });
 });

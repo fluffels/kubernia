@@ -30,13 +30,17 @@
  * Ehrliche Grenze: kein vollständiger PowerShell-Parser. Eine zur Laufzeit zusammengesetzte Befehlszeile
  * (`& ([string]'gi'+'t') commit`) sieht er nicht; die Durchsetzung bleibt das PR-Gate.
  */
-import { statSync, readFileSync } from "node:fs";
+import { statSync } from "node:fs";
 import { dirname, resolve, isAbsolute } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { buildDenyOutput, resolveGitContext } from "./worktree-guard-hook.mjs"; // eine Quelle für Entscheidung und Ausgabeform
+import { fileURLToPath } from "node:url";
+import { analyse, resolveGitContext } from "./worktree-guard-hook.mjs"; // eine Quelle für Entscheidung und Bash-Auswertung
+import { INTERPRETER_NAMEN, SHELLS, baseName } from "./shell-tabellen.mjs";
+import { MAX_INTERPRETER, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
+
+export { parseHookInput };
 
 const ORT_BEFEHLE = new Set(["set-location", "cd", "sl", "chdir", "push-location", "pushd"]);
-const INTERPRETER = new Set(["iex", "invoke-expression", "pwsh", "pwsh.exe", "powershell", "powershell.exe", "cmd", "cmd.exe", "bash", "sh", "wsl", "start-process", "start", "invoke-command", "icm"]);
+const INTERPRETER = new Set([...INTERPRETER_NAMEN.flatMap((n) => [n, `${n}.exe`]), "iex", "invoke-expression", "wsl", "start-process", "start", "invoke-command", "icm"]);
 const GESCHUETZT = new Set(["commit", "push"]);
 
 /** Ein Token: `value` ohne Anführungszeichen, `literal` = komplett aus '…' (keine Variablen-Ersetzung). */
@@ -48,95 +52,134 @@ const GESCHUETZT = new Set(["commit", "push"]);
  */
 export function zerlege(src) {
   const text = String(src ?? "");
-  const out = [];
-  let tokens = [];
-  let cur = "";
-  let hat = false; // Token begonnen (auch leer, z.B. '')
-  let nurLiteral = true;
-  let start = 0;
-
-  const tokenEnde = () => {
-    if (hat) tokens.push({ value: cur, literal: nurLiteral });
-    cur = "";
-    hat = false;
-    nurLiteral = true;
-  };
-  const stmtEnde = (sep, i) => {
-    tokenEnde();
-    if (tokens.length > 0) out.push({ tokens, raw: text.slice(start, i).trim(), sep });
-    tokens = [];
-    start = i + sep.length;
-  };
-
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    const n = text[i + 1];
-    if (c === "'" || c === '"') {
-      // Here-String: @' … '@ bzw. @" … "@ (der Opener steht am Tokenanfang, danach Zeilenende)
-      hat = true;
-      if (c === "'") {
-        i++;
-        let s = "";
-        while (i < text.length) {
-          if (text[i] === "'" && text[i + 1] === "'") { s += "'"; i += 2; continue; }
-          if (text[i] === "'") break;
-          s += text[i++];
-        }
-        cur += s;
-      } else {
-        nurLiteral = false;
-        i++;
-        let s = "";
-        while (i < text.length) {
-          if (text[i] === "`" && i + 1 < text.length) { s += text[i + 1]; i += 2; continue; }
-          if (text[i] === '"' && text[i + 1] === '"') { s += '"'; i += 2; continue; }
-          if (text[i] === '"') break;
-          s += text[i++];
-        }
-        cur += s;
-      }
-      continue;
-    }
-    if (c === "@" && (n === "'" || n === '"') && !hat && /^[ \t]*\r?\n/.test(text.slice(i + 2))) {
-      const anfang = text.indexOf("\n", i + 2) + 1; // Inhalt beginnt nach dem Zeilenende des Openers
-      const ende = text.indexOf(`\n${n}@`, anfang - 1);
-      hat = true;
-      nurLiteral = n === "'";
-      cur += ende < 0 ? text.slice(anfang) : text.slice(anfang, ende);
-      i = ende < 0 ? text.length : ende + 2;
-      continue;
-    }
-    if (c === "<" && n === "#") {
-      const ende = text.indexOf("#>", i + 2);
-      i = ende < 0 ? text.length : ende + 1;
-      continue;
-    }
-    if (c === "#" && !hat) {
-      while (i < text.length && text[i] !== "\n") i++;
-      i--; // der Zeilenumbruch trennt das Statement
-      continue;
-    }
-    if (c === "`") {
-      if (n === "\r" || n === "\n") { i += n === "\r" && text[i + 2] === "\n" ? 2 : 1; continue; } // Zeilenfortsetzung
-      if (n !== undefined) { hat = true; cur += n; nurLiteral = false; i++; }
-      continue;
-    }
-    if (c === " " || c === "\t" || c === "\r") { tokenEnde(); continue; }
-    if (c === "\n") { stmtEnde("\n", i); continue; }
-    if (c === ";") { stmtEnde(";", i); continue; }
-    if (c === "&" && n === "&") { stmtEnde("&&", i); i++; continue; }
-    if (c === "|" && n === "|") { stmtEnde("||", i); i++; continue; }
-    if (c === "|") { stmtEnde("|", i); continue; }
-    if (c === "{" || c === "}") { stmtEnde(c, i); continue; }
-    hat = true;
-    cur += c;
-    nurLiteral = false;
-  }
-  stmtEnde("", text.length);
-  return out;
+  const z = { text, out: [], tokens: [], cur: "", hat: false, nurLiteral: true, start: 0 };
+  for (let i = 0; i < text.length; i++) i = schritt(z, i);
+  stmtEnde(z, "", text.length);
+  return z.out;
 }
 
-const basename = (p) => String(p).replace(/\\/g, "/").split("/").pop().toLowerCase();
+// ── Tokenizer-Bausteine (`z`: Zustand, `i`: Index; `schritt` liefert den Index des zuletzt verbrauchten Zeichens) ──
+function tokenEnde(z) {
+  if (z.hat) z.tokens.push({ value: z.cur, literal: z.nurLiteral });
+  z.cur = "";
+  z.hat = false;
+  z.nurLiteral = true;
+}
+
+function stmtEnde(z, sep, i) {
+  tokenEnde(z);
+  if (z.tokens.length > 0) z.out.push({ tokens: z.tokens, raw: z.text.slice(z.start, i).trim(), sep });
+  z.tokens = [];
+  z.start = i + sep.length;
+}
+
+/** `'…'` (verbatim, `''` ist ein Apostroph): liefert den Index des schließenden Quotes. */
+function einfacherString(z, i0) {
+  const { text } = z;
+  z.hat = true;
+  let i = i0 + 1;
+  while (i < text.length) {
+    if (text[i] === "'" && text[i + 1] === "'") {
+      z.cur += "'";
+      i += 2;
+    } else if (text[i] === "'") break;
+    else z.cur += text[i++];
+  }
+  return i;
+}
+
+/** `"…"` (Backtick-Escape, `""` ist ein Anführungszeichen): liefert den Index des schließenden Quotes. */
+function doppelterString(z, i0) {
+  const { text } = z;
+  z.hat = true;
+  z.nurLiteral = false;
+  let i = i0 + 1;
+  while (i < text.length) {
+    if (text[i] === "`" && i + 1 < text.length) {
+      z.cur += text[i + 1];
+      i += 2;
+    } else if (text[i] === '"' && text[i + 1] === '"') {
+      z.cur += '"';
+      i += 2;
+    } else if (text[i] === '"') break;
+    else z.cur += text[i++];
+  }
+  return i;
+}
+
+/** Here-String `@' … '@` / `@" … "@` (Opener am Tokenanfang, danach Zeilenende): Index des Endes oder -1. */
+function hereString(z, i) {
+  const { text } = z;
+  const n = text[i + 1];
+  if (z.hat || !/^[ \t]*\r?\n/.test(text.slice(i + 2))) return -1;
+  const anfang = text.indexOf("\n", i + 2) + 1; // Inhalt beginnt nach dem Zeilenende des Openers
+  const ende = text.indexOf(`\n${n}@`, anfang - 1);
+  z.hat = true;
+  z.nurLiteral = n === "'";
+  z.cur += ende < 0 ? text.slice(anfang) : text.slice(anfang, ende);
+  return ende < 0 ? text.length : ende + 2;
+}
+
+/** Backtick: Zeilenfortsetzung oder Escape des nächsten Zeichens. */
+function backtick(z, i) {
+  const n = z.text[i + 1];
+  if (n === "\r" || n === "\n") return i + (n === "\r" && z.text[i + 2] === "\n" ? 2 : 1);
+  if (n === undefined) return i;
+  z.hat = true;
+  z.cur += n;
+  z.nurLiteral = false;
+  return i + 1;
+}
+
+/** Trenner an Position `i`: `{ sep, len }` oder null. */
+function trenner(text, i) {
+  const c = text[i];
+  const zwei = text.slice(i, i + 2);
+  if (zwei === "&&" || zwei === "||") return { sep: zwei, len: 2 };
+  return c === "\n" || c === ";" || c === "|" || c === "{" || c === "}" ? { sep: c, len: 1 } : null;
+}
+
+/** Kommentar `<# … #>` oder `# …` (nicht mitten in einem Token): Index des zuletzt verbrauchten Zeichens oder -1. */
+function kommentar(z, i) {
+  const { text } = z;
+  if (text[i] === "<" && text[i + 1] === "#") {
+    const ende = text.indexOf("#>", i + 2);
+    return ende < 0 ? text.length : ende + 1;
+  }
+  if (text[i] !== "#" || z.hat) return -1;
+  const nl = text.indexOf("\n", i);
+  return (nl < 0 ? text.length : nl) - 1; // der Zeilenumbruch trennt das Statement
+}
+
+function schritt(z, i) {
+  const { text } = z;
+  const c = text[i];
+  const n = text[i + 1];
+  if (c === "'") return einfacherString(z, i);
+  if (c === '"') return doppelterString(z, i);
+  if (c === "@" && (n === "'" || n === '"')) {
+    const ende = hereString(z, i);
+    if (ende >= 0) return ende;
+  }
+  const k = kommentar(z, i);
+  if (k >= 0) return k;
+  if (c === "`") return backtick(z, i);
+  if (c === " " || c === "\t" || c === "\r") {
+    tokenEnde(z);
+    return i;
+  }
+  const t = trenner(text, i);
+  if (t) {
+    stmtEnde(z, t.sep, i);
+    return i + t.len - 1;
+  }
+  z.hat = true;
+  z.cur += c;
+  z.nurLiteral = false;
+  return i;
+}
+
+const basename = baseName; // Verzeichnis, .exe und Groß-/Kleinschreibung weg (eine Quelle: shell-tabellen.mjs)
 /** Ist das Token der Befehl `git` (auch `git.exe`, voller Pfad)? */
 const istGit = (t) => /^git(\.exe)?$/.test(basename(t));
 /** Klammern und Subexpression-Präfix vom Befehlsnamen lösen: `$(git`, `(git`. */
@@ -204,112 +247,150 @@ function gitZiel(rest, start, vars, istOrdnerStart) {
   return { sub, dir, unbekannt };
 }
 
+/** Zustand eines Bewertungslaufs: `ort` (null = nach einem nicht auswertbaren Ortswechsel), `ortStatus` des unmittelbar
+ *  vorangehenden ORTSWECHSELS (für && / ||: true = gelungen, false = fehlgeschlagen, null = der Vorgänger war kein auswertbarer
+ *  Ortswechsel; nur ein ausgewerteter Ortswechsel darf einen Nachfolger überspringen, bei jedem anderen Vorgänger
+ *  (`git diff --quiet || git commit`) läuft der Nachfolger, im Zweifel wird geblockt). */
+function neuerLauf({ cwd, repoRoot, deps, tiefe }) {
+  return {
+    cwd,
+    repoRoot,
+    deps,
+    tiefe,
+    vars: new Map(),
+    ort: resolve(cwd),
+    ortStatus: null,
+    istOrdner: deps.istOrdner ?? ((p) => { try { return statSync(p).isDirectory(); } catch { return false; } }),
+    kontext: deps.kontext ?? ((dir) => resolveGitContext(dir, repoRoot)),
+  };
+}
+
+function blockiert(k, dir, was) {
+  const ctx = k.kontext(dir);
+  if (!ctx || !ctx.relevant || !ctx.isMainWorktree) return null;
+  return {
+    block: true,
+    reason:
+      `git ${was} ist im geteilten main-Checkout (${ctx.toplevel ?? dir}) blockiert (PowerShell-Tool). ` +
+      "Bitte im eigenen `git worktree` arbeiten (AGENTS.md § Git-Workflow): z.B. `git -C <worktree-pfad> commit …` " +
+      "oder zuerst `Set-Location <worktree-pfad>`. (#735, #1311)",
+  };
+}
+
+const unklar = (was) => ({
+  block: true,
+  reason:
+    `git ${was} mit einem Ziel, das der Guard nicht auswerten kann (Variable oder Ausdruck). Den Worktree-Pfad ` +
+    "literal schreiben (`git -C C:\\pfad\\zum\\worktree …`), damit der Haupt-Checkout-Schutz greift. (#1311)",
+});
+
+/** git-Statement: commit/push gegen das Ziel prüfen; unauswertbares Ziel ist fail-closed. */
+function gitStatement(k, rest) {
+  const { sub, dir, unbekannt } = gitZiel(rest, k.ort, k.vars, k.ort);
+  if (sub && GESCHUETZT.has(sub)) return unbekannt ? unklar(sub) : blockiert(k, dir, sub);
+  if (!unbekannt) return null;
+  // Ziel nicht auswertbar: steht irgendwo commit/push in den Argumenten, ist es zu unklar zum Durchlassen.
+  const was = rest.map((t) => expandiere(t, k.vars)).find((a) => GESCHUETZT.has(a));
+  return was ? unklar(was) : null;
+}
+
+/** Ortswechsel: nur ein existierender Ordner ändert den Ort, sonst bleibt er (und `&&` bricht ab). */
+function ortWechsel(k, rest) {
+  const ziel = ortsZiel(rest, k.vars);
+  if (ziel === undefined) return;
+  if (unaufloesbar(ziel)) {
+    k.ort = null;
+    return;
+  }
+  const zielAbs = isAbsolute(ziel) ? ziel : resolve(k.ort ?? k.cwd, ziel);
+  k.ortStatus = k.istOrdner(zielAbs);
+  if (k.ortStatus) k.ort = zielAbs;
+}
+
+/** Der String hinter `bash|sh -c` läuft durch den Bash-Auswerter (Ziele blocken, nicht bestimmbare Ziele fragen). */
+function bashBruecke(k, skript, name) {
+  const { targets, asks } = analyse(skript, k.ort, { statSync: (p) => ({ isDirectory: () => k.istOrdner(p) }) });
+  for (const ziel of targets) {
+    const b = blockiert(k, ziel, `commit/push (in \`${name} -c\`)`);
+    if (b) return b;
+  }
+  for (const [dir, a] of asks) {
+    const ctx = k.kontext(dir);
+    if (ctx?.relevant && (!a.mainOnly || ctx.isMainWorktree)) return { block: false, ask: true, reason: `Worktree-Guard (PowerShell): ${a.reason} Den Ort literal angeben (\`git -C <worktree-pfad> …\`) oder bestätigen. (#1311)` };
+  }
+  return null;
+}
+
+/** Das Skript hinter `-c`/`-Command` bzw. der Ausdruck hinter `iex`/`Invoke-Expression`; sonst null. */
+function interpreterSkript(k, toks, name) {
+  const rest = toks.slice(1).map((t) => expandiere(t, k.vars));
+  if (/^(iex|invoke-expression)$/.test(name)) return rest.join(" ");
+  const ci = rest.findIndex((a) => /^-[A-Za-z]*c[A-Za-z]*$/.test(a) || /^-command$/i.test(a));
+  return ci >= 0 ? rest.slice(ci + 1).join(" ") : null;
+}
+
+/** Interpreter-Umweg: der String hinter `bash -c` läuft durch den Bash-Auswerter, der hinter `pwsh -c`/`iex` rekursiv
+ *  durch diesen Guard (Tiefe ≤ MAX_INTERPRETER); zusätzlich die grobe Regel: kommt im Text git … commit|push vor, gilt
+ *  das gegen den aktuellen Ort. */
+function interpreterUmweg(k, raw, toks, cmd) {
+  if (k.ort !== null && k.tiefe < MAX_INTERPRETER) {
+    const name = basename(cmd).replace(/\.exe$/, "");
+    const skript = interpreterSkript(k, toks, name);
+    let r = null;
+    if (skript && SHELLS.has(name)) r = bashBruecke(k, skript, name);
+    else if (skript && /^(iex|invoke-expression|pwsh|powershell)$/.test(name)) r = bewertePowerShell({ command: skript, cwd: k.ort, repoRoot: k.repoRoot, deps: k.deps, tiefe: k.tiefe + 1 });
+    if (r && (r.block || r.ask)) return r;
+  }
+  if (!/\bgit(\.exe)?\b[^;|]*\b(commit|push)\b/i.test(raw)) return null;
+  return k.ort === null ? unklar("commit/push") : blockiert(k, k.ort, "commit/push (über einen Interpreter)");
+}
+
+/** Ein Statement bewerten: Ortswechsel, git oder Interpreter; Ergebnis `{ block }`, `{ ask }` oder null. */
+function statement(k, stmt) {
+  const toks = stmt.tokens;
+  if (zuweisung(toks, k.vars)) return null;
+  const aufruf = ["&", "."].includes(befehlsname(toks[0].value));
+  const kopfTok = aufruf ? toks[1] : toks[0];
+  const cmd = kopfTok ? befehlsname(kopfTok.value) : "";
+  if (ORT_BEFEHLE.has(cmd.toLowerCase())) {
+    ortWechsel(k, toks.slice(aufruf ? 2 : 1));
+    return null;
+  }
+  if (kopfTok && istGit(kopfTok.value)) return gitStatement(k, toks.slice(aufruf ? 2 : 1));
+  if (INTERPRETER.has(cmd.toLowerCase()) || INTERPRETER.has(basename(cmd))) return interpreterUmweg(k, stmt.raw, toks.slice(aufruf ? 1 : 0), cmd);
+  return null;
+}
+
+const ueberspringt = (sep, ortStatus) => (sep === "&&" && ortStatus === false) || (sep === "||" && ortStatus === true);
+
 /**
  * Bewertet einen PowerShell-Befehl. `deps.istOrdner(pfad)` und `deps.kontext(ordner)` sind injizierbar
  * (Tests); Standard: echtes Dateisystem und `resolveGitContext` aus dem Bash-Hook.
- * @returns {{ block: boolean, reason?: string }}
+ * @returns {{ block: boolean, ask?: boolean, reason?: string }} (`ask`: das Ziel eines `bash -c`-Strings ist nicht bestimmbar)
  */
-export function bewertePowerShell({ command, cwd, repoRoot, deps = {} }) {
+export function bewertePowerShell({ command, cwd, repoRoot, deps = {}, tiefe = 0 }) {
   if (!command || !cwd) return { block: false }; // nicht entscheidbar → fail-open
-  const istOrdner = deps.istOrdner ?? ((p) => { try { return statSync(p).isDirectory(); } catch { return false; } });
-  const kontext = deps.kontext ?? ((dir) => resolveGitContext(dir, repoRoot));
-  const vars = new Map();
-  let ort = resolve(cwd); // null = nach einem nicht auswertbaren Ortswechsel
-  // Ergebnis des unmittelbar vorangehenden ORTSWECHSELS (für && / ||): true = gelungen, false = fehlgeschlagen, null = der
-  // Vorgänger war kein (auswertbarer) Ortswechsel. Nur ein ausgewerteter Ortswechsel darf einen Nachfolger überspringen;
-  // bei jedem anderen Vorgänger (`git diff --quiet || git commit`) läuft der Nachfolger, im Zweifel wird geblockt.
-  let ortStatus = null;
-
-  const blockiert = (dir, was) => {
-    const ctx = kontext(dir);
-    if (!ctx || !ctx.relevant || !ctx.isMainWorktree) return null;
-    return {
-      block: true,
-      reason:
-        `git ${was} ist im geteilten main-Checkout (${ctx.toplevel ?? dir}) blockiert (PowerShell-Tool). ` +
-        "Bitte im eigenen `git worktree` arbeiten (AGENTS.md § Git-Workflow): z.B. `git -C <worktree-pfad> commit …` " +
-        "oder zuerst `Set-Location <worktree-pfad>`. (#735, #1311)",
-    };
-  };
-  const unklar = (was) => ({
-    block: true,
-    reason:
-      `git ${was} mit einem Ziel, das der Guard nicht auswerten kann (Variable oder Ausdruck). Den Worktree-Pfad ` +
-      "literal schreiben (`git -C C:\\pfad\\zum\\worktree …`), damit der Haupt-Checkout-Schutz greift. (#1311)",
-  });
-
-  /** git-Statement: commit/push gegen das Ziel prüfen; unauswertbares Ziel ist fail-closed. */
-  const gitStatement = (rest) => {
-    const { sub, dir, unbekannt } = gitZiel(rest, ort, vars, ort);
-    if (sub && GESCHUETZT.has(sub)) return unbekannt ? unklar(sub) : blockiert(dir, sub);
-    if (!unbekannt) return null;
-    // Ziel nicht auswertbar: steht irgendwo commit/push in den Argumenten, ist es zu unklar zum Durchlassen.
-    const was = rest.map((t) => expandiere(t, vars)).find((a) => GESCHUETZT.has(a));
-    return was ? unklar(was) : null;
-  };
-
-  /** Ortswechsel: nur ein existierender Ordner ändert den Ort, sonst bleibt er (und `&&` bricht ab). */
-  const ortWechsel = (rest) => {
-    const ziel = ortsZiel(rest, vars);
-    if (ziel === undefined) return;
-    if (unaufloesbar(ziel)) { ort = null; return; }
-    const abs = isAbsolute(ziel) ? ziel : resolve(ort ?? cwd, ziel);
-    if (istOrdner(abs)) { ort = abs; ortStatus = true; }
-    else ortStatus = false;
-  };
-
-  /** Interpreter-Umweg: kommt im Text des Statements git … commit|push vor, gilt das gegen den aktuellen Ort. */
-  const interpreter = (raw) => {
-    if (!/\bgit(\.exe)?\b[^;|]*\b(commit|push)\b/i.test(raw)) return null;
-    return ort === null ? unklar("commit/push") : blockiert(ort, "commit/push (über einen Interpreter)");
-  };
-
+  const k = neuerLauf({ cwd, repoRoot, deps, tiefe });
+  let frage = null;
   let vorherSep = ";";
   for (const stmt of zerlege(command)) {
     // Verkettung: nach fehlgeschlagenem Ortswechsel läuft ein && -Nachfolger nicht, nach gelungenem ein || -Nachfolger nicht.
-    const ueberspringen = (vorherSep === "&&" && ortStatus === false) || (vorherSep === "||" && ortStatus === true);
+    const ueberspringen = ueberspringt(vorherSep, k.ortStatus);
     vorherSep = stmt.sep;
     if (ueberspringen) continue;
-    ortStatus = null;
-
-    const toks = stmt.tokens;
-    if (zuweisung(toks, vars)) continue;
-    const aufruf = ["&", "."].includes(befehlsname(toks[0].value));
-    const kopfTok = aufruf ? toks[1] : toks[0];
-    const rest = toks.slice(aufruf ? 2 : 1);
-    const cmd = kopfTok ? befehlsname(kopfTok.value) : "";
-
-    let r = null;
-    if (ORT_BEFEHLE.has(cmd.toLowerCase())) ortWechsel(rest);
-    else if (kopfTok && istGit(kopfTok.value)) r = gitStatement(rest);
-    else if (INTERPRETER.has(cmd.toLowerCase()) || INTERPRETER.has(basename(cmd))) r = interpreter(stmt.raw);
-    if (r) return r;
+    k.ortStatus = null;
+    const r = statement(k, stmt);
+    if (r?.block) return r;
+    frage ??= r?.ask ? r : null; // eine Rückfrage zählt erst, wenn kein späteres Statement blockt
   }
-  return { block: false };
-}
-
-/** Parst das Hook-stdin-JSON tolerant. */
-export function parseHookInput(text) {
-  try {
-    const data = JSON.parse(text);
-    return { tool: data.tool_name, cwd: data.cwd, command: data.tool_input?.command };
-  } catch {
-    return {};
-  }
+  return frage ?? { block: false };
 }
 
 function main() {
-  let text;
-  try {
-    text = readFileSync(0, "utf8");
-  } catch {
-    text = "";
-  }
-  const { tool, cwd, command } = parseHookInput(text);
+  const { tool, cwd, command } = parseHookInput(readStdin());
   if (tool !== undefined && tool !== "PowerShell") return;
   const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
-  const r = bewertePowerShell({ command, cwd, repoRoot });
-  if (r.block) console.log(JSON.stringify(buildDenyOutput(r.reason)));
+  emit(mergeDecisions([bewertePowerShell({ command, cwd, repoRoot })]));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (istDirektaufruf(import.meta.url)) main();
