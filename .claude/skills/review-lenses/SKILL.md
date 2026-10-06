@@ -100,6 +100,7 @@ Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket
 - **Scope-Kriechen:** ändert der Diff mehr als das Ticket (ein Ein-Ticket-Diff bleibt klein — Aufgefallenes wird festgehalten, nicht inline mitgefixt)?
 - Betrifft es Spielinhalte/Quests/Steuerung → **README mitgezogen**? Neues `src/`-Modul → Backtick-Pfad-Zeile im passenden **`docs/module/`-Tiefendoc** ergänzt (nicht in die [Repo-Landkarte](../../../docs/referenz/repo-landkarte.md), #907)?
 - Berührt es das **Save-Format** → migriert (Version-Bump + Migrationskette), alter Stand bleibt heil?
+- Fügt der Diff **Agenten, Subagenten, MCP-Server, Hooks oder Plugins** hinzu oder konfiguriert er sie um → ist die Langfuse-Erfassung im PR belegt (AGENTS.md § Langfuse-Erfassung erhalten)?
 
 **Lens 3 — Test-Adäquanz.** Deckt der Test das **Verhalten** ab — und ist er echt?
 - Prüft der Test die **öffentliche API / beobachtbares Verhalten** (überlebt Refactoring), nicht Interna?
@@ -112,6 +113,7 @@ Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket
 2. **SSOT/Drift:** steht eine Regel jetzt doppelt (jede harte Regel genau einmal in `AGENTS.md`, die Langfassung in `docs/`)? Widerspricht der Text einer anderen Stelle, einem ADR oder dem Verhalten von Code/Skripten? Ist-Zustand statt Historie? Lösen neue Links und Anker auf?
 3. **Wächter-Kopplung:** ändert der Diff eine Regel, die ein Wächter erzwingt (Regel-Begriff in `test/harness/` und `scripts/` greppen)? Erzwingt er weiter die alte Fassung, ist das **blockierend** — dann fehlt eine Code-Änderung.
 4. **⭐ Oberste Regel:** trägt die Regel noch bei 10× Inhalt, Tickets und parallelen Agenten?
+5. **Langfuse-Erfassung:** konfiguriert der Diff Agenten, Subagenten, MCP-Server, Hooks oder Plugins um → ist die Erfassung im PR belegt (AGENTS.md § Langfuse-Erfassung erhalten)?
 
 ## Findings-Format (pro Lens)
 

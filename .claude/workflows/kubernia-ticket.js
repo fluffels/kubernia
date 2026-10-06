@@ -398,6 +398,8 @@ Prüfe Scope-Kriechen (ein Ein-Ticket-Diff bleibt klein; Aufgefallenes gehört i
 Issue, nicht inline mitgefixt). Spielinhalte/Quests/Steuerung berührt ⇒ README mitgezogen?
 Neues src/-Modul ⇒ Backtick-Pfad-Zeile im passenden docs/module/-Tiefendoc? Save-Format
 berührt ⇒ migriert (Version-Bump + Migrationskette), alter Stand bleibt heil?
+Fügt der Diff Agenten/Subagenten, MCP-Server, Hooks oder Plugins hinzu oder konfiguriert er sie
+um ⇒ ist die Langfuse-Erfassung im PR belegt (AGENTS.md § Langfuse-Erfassung erhalten)?
 Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):
 AGENTS.md § Doku aktuell halten + § Spielstände. Schichtungs- und Test-Fragen gehören den
 anderen beiden Brillen — lies sie nicht mit.`,
@@ -422,7 +424,7 @@ AGENTS.md § TDD ist der Default, § Tests gegen False Positives absichern.`,
     key: 'doku',
     auftrag: `Lens „Doku" — der EINZIGE Pass für einen reinen Markdown-Diff (#1265). Eine Test-Brille
 entfällt, weil es ohne Code nichts zu sabotieren gibt; die Architektur-Fragen einer Doku stecken
-in den Punkten 2 und 3. Prüfe darum alle vier:
+in den Punkten 2 und 3. Prüfe darum alle fünf:
 1. Requirement-Treue: halte den Diff gegen jedes Akzeptanzkriterium einzeln (erfüllt / offen /
    darüber hinaus). Scope-Kriechen?
 2. SSOT/Drift: steht eine Regel jetzt doppelt (jede harte Regel lebt genau einmal in AGENTS.md,
@@ -432,6 +434,8 @@ in den Punkten 2 und 3. Prüfe darum alle vier:
    Regel-Begriff in test/harness/ und scripts/. Erzwingt dort weiter die alte Fassung, ist das
    blockierend — dann fehlt im Diff eine Code-Änderung.
 4. ⭐ Oberste Regel: trägt die Regel noch bei 10× Inhalt, Tickets und parallelen Agenten?
+5. Langfuse-Erfassung: konfiguriert der Diff Agenten/Subagenten, MCP-Server, Hooks oder Plugins
+   um ⇒ ist die Erfassung im PR belegt (AGENTS.md § Langfuse-Erfassung erhalten)?
 Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):
 AGENTS.md Kopf (SSOT) + § Doku aktuell halten + § Oberste Regel.`,
   },

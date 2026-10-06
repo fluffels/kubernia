@@ -43,22 +43,41 @@ Regel: [AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets](../AGENTS.md#w
   ```
   Kein ungeclaimter Treffer → anlegen (unten). Zwei offene **ungeclaimte** (Wettlauf) → das jüngere schließen, seine Zeilen ins ältere übertragen.
 
-- **Anlegen auf Position 7** (fehlt ein ungeclaimtes, auch während ein geclaimtes abgearbeitet wird; vorher mit dem Suchbefehl oben prüfen, nie doppelt anlegen):
-  ```bash
-  NR=$(gh issue create --label area:harness --title "Harness-Härtung (gesammelt)" --body "- [ ] <Befund>" | grep -o '[0-9]*$')
-  NODE=$(gh issue view "$NR" --json id --jq .id)
-  ITEM=$(gh api graphql -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }' \
-    -f p=PVT_kwHOD8746c4Barq_ -f c="$NODE" --jq .data.addProjectV2ItemById.item.id)
-  gh project item-edit --id "$ITEM" --project-id PVT_kwHOD8746c4Barq_ --field-id PVTSSF_lAHOD8746c4Barq_zhVhdTM --single-select-option-id f75ad846   # Status Todo, sonst fehlt das Item in der Auswahl
-  AFTER=$(gh project item-list 1 --owner fluffels --format json --limit 800 \
-    --jq '[.items[] | select((.status // "")=="Todo")][5].id // empty')   # 6. Item → neues landet auf 7
-  # leer (weniger als 6 Todo-Items): afterId weglassen, dann landet es oben
-  gh api graphql -f query='mutation($p:ID!,$i:ID!,$a:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }' \
-    -f p=PVT_kwHOD8746c4Barq_ -f i="$ITEM" -f a="$AFTER"
-  ```
+- **Anlegen auf Position 7** (fehlt ein ungeclaimtes, auch während ein geclaimtes abgearbeitet wird; vorher mit dem Suchbefehl oben prüfen, nie doppelt anlegen). Ablauf und Befehle: [Anlegen auf Position N](#anlegen-auf-position-n), hier mit `N=7` und dem Titel „Harness-Härtung (gesammelt)".
 - **Beim Claimen des Sammeltickets** sofort prüfen, ob ein ungeclaimtes existiert; fehlt es, direkt eines anlegen (unten), damit Befunde nie ohne Ziel sind.
-- **Abarbeiten:** zuerst der feste **Langfuse-Blick** ([docs/model-routing.md › Langfuse-Blick](model-routing.md#langfuse-blick-beim-sammelticket-1199)) — dessen Befunde werden weitere Zeilen. Dann so viele Zeilen umsetzen, wie in **einen** PR passen (`check:diffsize`). **Vor dem PR** die Kommentare erneut lesen; was offen ist, ins **bestehende ungeclaimte** Sammelticket übertragen, sonst eines auf Position 7 anlegen — nur wenn Zeilen übrig sind, kein leeres. Das alte schließt der PR per `Closes`.
+- **Abarbeiten:** so viele Zeilen umsetzen, wie in **einen** PR passen (`check:diffsize`). **Vor dem PR** die Kommentare erneut lesen; was offen ist, ins **bestehende ungeclaimte** Sammelticket übertragen, sonst eines auf Position 7 anlegen — nur wenn Zeilen übrig sind, kein leeres. Das alte schließt der PR per `Closes`.
 - **Konvergenz-Signal:** Zeilenzahl pro Sammelticket-Generation ([ADR 0012](adr/0012-harness-autonomie-audit-spur.md#fortschreibung-1199-2026-10-05-spielquote-sammelticket-abschlusskriterium)).
+
+### Anlegen auf Position N
+
+Gilt für das Sammelticket (`N=7`) und das Status-Ticket (`N=20`, unten). `<Titel>`, Body und `N` einsetzen:
+
+```bash
+N=7   # Sammelticket 7, Langfuse-Status 20
+NR=$(gh issue create --label area:harness --title "<Titel>" --body "<Body>" | grep -o '[0-9]*$')
+NODE=$(gh issue view "$NR" --json id --jq .id)
+ITEM=$(gh api graphql -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }'   -f p=PVT_kwHOD8746c4Barq_ -f c="$NODE" --jq .data.addProjectV2ItemById.item.id)
+gh project item-edit --id "$ITEM" --project-id PVT_kwHOD8746c4Barq_ --field-id PVTSSF_lAHOD8746c4Barq_zhVhdTM --single-select-option-id f75ad846   # Status Todo, sonst fehlt das Item in der Auswahl
+AFTER=$(gh project item-list 1 --owner fluffels --format json --limit 800   --jq "[.items[] | select((.status // \"\")==\"Todo\")] | (.[$N-2] // .[-1]).id // empty")   # (N-1). Todo-Item → neues landet auf N; kürzeres Board: ans Ende
+# leer (kein Todo-Item): afterId weglassen, dann landet es oben
+gh api graphql -f query='mutation($p:ID!,$i:ID!,$a:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }'   -f p=PVT_kwHOD8746c4Barq_ -f i="$ITEM" -f a="$AFTER"
+```
+
+Danach die Position prüfen: das Ticket ist das N. Todo-Item der Board-Liste (Auswahl-Befehl oben).
+
+## Wiederkehrendes Ticket „Langfuse-Status überprüfen" (#1293)
+
+Die breite, regelmäßige Auswertung der Langfuse-Daten. Es gibt **höchstens ein** offenes (vorher suchen: `gh issue list --state open --search 'in:title "Langfuse-Status überprüfen"'`). Neu angelegt wird es beim Abschluss des alten auf **Position 20** ([Anlegen auf Position N](#anlegen-auf-position-n), `N=20`) und rückt so von selbst nach oben (etwa alle 20 Tickets einmal). Die Checkliste steht einmal in [docs/model-routing.md › Langfuse-Status überprüfen](model-routing.md#langfuse-status-überprüfen-1293); hier nur die Mechanik.
+
+**Body-Vorlage:** Zeitraum (ab `closedAt` des Vorgängers, beim ersten Ticket ab dem Merge von #1293) · Link auf die Checkliste · Abschluss: Bericht-Kommentar geschrieben, Folgen angelegt, Nachfolger auf Position 20.
+
+**Abschluss, in dieser Reihenfolge:**
+
+1. Bericht als Kommentar im Ticket (Einzelläufe, Zahlen, Befunde je Checklistenpunkt).
+2. **Große Befunde** (eng: ein struktureller Defekt in Erfassung oder Prozess, der eigene Planung und einen eigenen PR braucht) als eigene Issues, nach Priorität einsortiert.
+3. **Kleine Befunde** gebündelt in **ein** Folgeticket „Langfuse-Folgen aus #<nr>" (`area:harness`, ohne Assignee) **ganz oben** im Board (ohne `afterId`). Gibt es schon ein ungeclaimtes, die Zeilen als Kommentar anhängen und es nach oben schieben. Keine kleinen Befunde, kein Folgeticket.
+4. **Danach** das nächste Status-Ticket auf Position 20 anlegen (auch bei unerreichbarem Langfuse).
+5. PR mit der Verdichtungszeile in model-routing.md und `Closes #<nr>`.
 
 ## Reihenfolge pflegen — im Board, nicht in einer Datei
 
