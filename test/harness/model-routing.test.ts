@@ -428,6 +428,7 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
     assert.equal(aufrufe[1].effort, planer.effort, "Effort der Aufteilung = Effort der Planung");
     assert.match(aufrufe[1].prompt, /Epic/, "Der Planer muss wissen, dass er aufteilen soll");
     assert.equal(aufrufe[2].model, "sonnet", "Das Anlegen ist Tipparbeit");
+    assert.equal(aufrufe[2].effort, "medium", "Das Anlegen ist Tipparbeit");
     assert.match(aufrufe[2].prompt, /PLAN-TEXT/, "Der Anlege-Agent bekommt den Plan");
     assert.equal(ergebnis, "epic");
   });
@@ -436,12 +437,15 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
     const { aufrufe, ergebnis } = await workflowLauf("epic", { planerDa: false });
     assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "epic-anlegen:#42"]);
     assert.doesNotMatch(aufrufe[2].prompt, /PLAN-TEXT/);
+    assert.match(aufrufe[2].prompt, /selbst auf/, "Der Fallback-Auftrag muss im Prompt stehen");
     assert.equal(ergebnis, "epic");
   });
 
   test("Dependabot: darf KEINEN Planer-Lauf verbrennen", async () => {
     const { aufrufe, ergebnis } = await workflowLauf("dependabot", { planerDa: true });
     assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "dependabot:#42"]);
+    assert.equal(aufrufe[1].model, "sonnet");
+    assert.equal(aufrufe[1].effort, "medium");
     assert.equal(ergebnis, "dependabot");
   });
 
@@ -449,7 +453,18 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
     const { aufrufe, ergebnis } = await workflowLauf("normal", { planerDa: true });
     assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "preflight:#42"]);
     assert.doesNotMatch(aufrufe[1].prompt, /Epic/);
+    assert.match(
+      aufrufe[1].prompt,
+      /^Ticket #42: Testticket\n[\s\S]*\n\nArbeitsort: [^\n]*\. Liefere den Plan wie in deiner Rolle beschrieben\.$/,
+      "Der Planer-Prompt normaler Tickets darf sich nicht ändern (Resume-Cache)",
+    );
     assert.equal(ergebnis, "wartet-auf-klaerung");
+  });
+
+  test("Planer-Rolle: der vom Workflow-Prompt referenzierte Abschnitt „Bei einem Epic“ existiert und verbietet das Anlegen", () => {
+    const rolle = read(".claude/agents/kubernia-planner.md");
+    assert.match(rolle, /^## Bei einem Epic/m);
+    assert.match(rolle, /Lege keine Issues selbst an/);
   });
 
   test("Skill-Pfad: der Epic-Absatz delegiert die Aufteilung an den kubernia-planner", () => {

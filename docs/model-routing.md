@@ -9,7 +9,7 @@ Gültige Effort-Stufen: `low`, `medium`, `high`, `xhigh`, `max`. Bei Sonnet 5+ u
 | Phase | Alias | Effort | Workflow (`kubernia-ticket.js`) | Skill-Pfad (`kubernia`) | Loop (`kubernia-loop`) |
 |---|---|---|---|---|---|
 | Auswahl + Claim | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent (Session-Modell) | im Ticket-Subagenten |
-| **Epic-Aufteilung** (Schnitt der Kinder) | `opus` | `xhigh` | dieselbe Plan-Aufrufstelle (`kubernia-planner`) mit Epic-Hinweis im Prompt | Subagent `kubernia-planner` schlägt vor | über den Skill im Subagenten |
+| **Epic-Aufteilung** (Schnitt der Kinder; ohne verfügbaren Planer teilt der Anlege-Agent selbst auf) | `opus` | `xhigh` | dieselbe Plan-Aufrufstelle (`kubernia-planner`) mit Epic-Hinweis im Prompt | Subagent `kubernia-planner` schlägt vor | über den Skill im Subagenten |
 | Epic-Kinder anlegen | `sonnet` | `medium` | `agent()`-Optionen (`epic-anlegen`) | Hauptagent | im Ticket-Subagenten |
 | Dependabot-Sammelticket | `sonnet` | `medium` | `agent()`-Optionen (ohne Planer) | Hauptagent | im Ticket-Subagenten |
 | **Planung** | `opus` | `xhigh` | `agentType: 'kubernia-planner'` + `effort` | Subagent `kubernia-planner` (Frontmatter) | über den Skill im Subagenten |
