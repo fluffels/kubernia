@@ -62,7 +62,7 @@ export function normalizeItems(raw) {
 export function abortMessage(message) {
   const first = String(message ?? "").split("\n")[0];
   if (isRateLimit(first) || /unknown owner type/i.test(first)) {
-    return `API-Rate-Limit (gh meldet das bei erschöpftem GraphQL-Limit teils als „unknown owner type“): ${first}`;
+    return `API-Rate-Limit (oder Owner/Scope: gh meldet ein erschöpftes GraphQL-Limit teils als „unknown owner type“): ${first}`;
   }
   return first;
 }

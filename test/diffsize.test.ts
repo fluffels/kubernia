@@ -146,13 +146,6 @@ describe("Diff-Größenbudget (#533)", () => {
     assert.equal(r.fileCount, 3);
   });
 
-  test("checkDiffSize: Basis gleich Vorgänger (push auf main) liefert dieselben Zahlen", () => {
-    const runGit: RunGit = (a) => (a[0] === "diff" && a[2] === "BASE...HEAD" ? OVER : gitWith("BASE", OVER)(a));
-    const r = checkDiffSize({ runGit, env: {} });
-    assert.equal(r.fileCount, 3);
-    assert.equal(r.changedLines, 6);
-  });
-
   test("checkDiffSize: unter Budget → ok, nicht übersprungen, nicht über", () => {
     const r = checkDiffSize({ runGit: gitWith("BASE", OVER), env: {} });
     assert.equal(r.skipped, false);

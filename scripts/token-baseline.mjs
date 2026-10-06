@@ -246,7 +246,7 @@ function phaseRows(window) {
   const rows = new Map();
   for (const { call: c, phase } of window) {
     const model = c.model || "unbekannt";
-    const key = `${phase} ${model}`;
+    const key = `${phase}\u0000${model}`;
     const r = rows.get(key) ?? { phase, model, calls: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0, cost: 0 };
     r.calls += 1;
     r.input += num(c.input);

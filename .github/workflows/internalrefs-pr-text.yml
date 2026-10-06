@@ -4,6 +4,9 @@ name: Interne Bezüge im PR-Text
 # Der Repo-Lauf in CI deckt Dateien und Commit-Messages ab; Titel/Body stehen nur im PR und
 # bleiben über refs/pull/* dauerhaft öffentlich, auch wenn der PR später editiert wird.
 #
+# Hinweis: meldender Check, kein Required-Check im Ruleset „Main-schutz“ (Repo-Einstellung der
+# Maintainerin). Der Jobname ist ASCII, damit er später Pflicht werden kann.
+#
 # Design:
 #   - Trigger inkl. `edited`, damit auch ein nachträglich geänderter Titel/Body geprüft wird.
 #   - Eigener Workflow statt Schritt in ci.yml: ein Edit startet nicht die ganze Gate-Kette neu.
@@ -16,9 +19,14 @@ on:
 permissions:
   contents: read
 
+# Ein Edit-Lauf ersetzt den veralteten desselben PRs.
+concurrency:
+  group: internalrefs-pr-text-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   pr-text:
-    name: PR-Text auf interne Bezüge prüfen
+    name: PR-Text interne Bezuege pruefen
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

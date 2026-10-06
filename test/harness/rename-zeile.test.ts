@@ -84,3 +84,13 @@ describe("/rename-Zeile ist in Workflow und Skills verankert", () => {
     expect(loop).not.toContain("/rename kq-<nr>")
   })
 })
+
+describe("workflowBlock (gemeinsamer Wächter-Helfer, #1239)", () => {
+  it("wirft mit erklärender Meldung, wenn ein Marker fehlt", () => {
+    expect(() => workflowBlock("// gibt es nicht — Anfang", MARKER_ENDE)).toThrow(/nicht \(mehr\)/)
+  })
+
+  it("wirft bei vertauschten Markern statt einen leeren Block zu liefern", () => {
+    expect(() => workflowBlock(MARKER_ENDE, MARKER_ANFANG)).toThrow(/nicht \(mehr\)/)
+  })
+})

@@ -189,7 +189,20 @@ describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
   it("check:diffsize misst auf push:main gegen den Vorgänger-Commit (github.event.before)", () => {
     // Die verify-Basis muss auf push den Vorgänger heranziehen, damit der gemergte
     // Slice AUCH auf main gemessen wird (sonst No-op-grün wie vor #605).
-    expect(ci).toMatch(/KQ_DIFF_BASE:\s*\$\{\{\s*github\.event\.pull_request\.base\.sha\s*\|\|\s*github\.event\.before\s*\}\}/);
+    const schritt = ci.slice(ci.indexOf("- name: Diff-Basis bestimmen"), ci.indexOf("- name: Verify"));
+    expect(schritt, "Schritt „Diff-Basis bestimmen“ muss vor Verify stehen").not.toBe("");
+    expect(schritt).toMatch(/BEFORE_SHA:\s*\$\{\{\s*github\.event\.before\s*\}\}/);
+    expect(schritt).toContain('KQ_DIFF_BASE=$base" >> "$GITHUB_ENV"');
+  });
+
+  it("auf einem PR ist die Diff-Basis der erste Elternteil des Merge-Checkouts, nie die veraltete pull_request.base.sha (#1239)", () => {
+    // #1240: base.sha liegt hinter main, wenn main nach dem Öffnen weiterging; der Diff zählte
+    // dann fremde, inzwischen gemergte Änderungen mit (832 statt 758 Zeilen, rot).
+    expect(ci).toContain("base=$(git rev-parse HEAD^1)");
+    expect(ci, "KQ_DIFF_BASE darf nicht aus pull_request.base.sha gesetzt werden").not.toMatch(
+      /KQ_DIFF_BASE:\s*\$\{\{[^}]*pull_request\.base\.sha/,
+    );
+    expect(ci, "die Gates erben KQ_DIFF_BASE aus GITHUB_ENV, kein eigenes env überschreibt es").not.toMatch(/^\s+KQ_DIFF_BASE:/m);
   });
 
   it("ein Alarm-Job schlägt bei rotem main an — nur auf push, nicht blockierend", () => {
