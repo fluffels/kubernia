@@ -168,7 +168,8 @@ function sockelOf(allCalls, windowCalls) {
 
 /**
  * Pure Kernlogik über normalisierte Calls:
- *   calls:     [{ ts, model, input, cacheWrite, cacheRead, output, cost?, subagent?: {id, agentType, description} }]
+ *   calls:     [{ ts, model, input, cacheWrite, cacheWrite1h?, cacheRead, output, cost?, costParts?, subagent?: {id, agentType, description} }]
+ *              (`cost` null/fehlend = ohne Preis; `costParts` = Kosten je Teil, nur aus dem Transkript-Adapter)
  *   questions: Anzahl AskUserQuestion-Aufrufe
  * Review-Runden zählen nur Subagenten mit Calls IM Ticket-Fenster — sonst
  * erbte ein Ticket die Lenses eines früheren Tickets derselben Session.

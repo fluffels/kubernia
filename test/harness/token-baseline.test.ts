@@ -622,3 +622,42 @@ describe("token-baseline: Härtung nach Review (#1206)", () => {
     assert.match(md, /Kostenanteile: Input 25 % · Cache-Write 0 % · Cache-Read 0 % · Output 75 %/);
   });
 });
+
+describe("token-baseline: Kontext-Formel und Preistabelle (#1206)", () => {
+  const MIO = 1_000_000;
+
+  test("Kontext je Call = input + cacheWrite + cacheRead (alle drei Felder verschieden)", () => {
+    const mixed = (ts: string, extra: Partial<Call> = {}): Call => ({
+      ts,
+      model: "claude-sonnet-5-5",
+      input: 1,
+      cacheWrite: 10,
+      cacheRead: 100,
+      output: 7, // zählt nicht zum Kontext
+      ...extra,
+    });
+    const plan: Sub = { id: "p", agentType: "kubernia-planner", description: "Planungspass" };
+    const s = m.summarize({ calls: [mixed("2026-10-05T10:00:00Z"), mixed("2026-10-05T10:01:00Z", { subagent: plan })] });
+    assert.equal(s.sockel.main, 111);
+    assert.equal(s.sockel.planung, 111);
+    assert.equal(s.medianContext.all, 111);
+    assert.equal(s.medianContext.main, 111);
+  });
+
+  test("jeder Preis jedes Modells ist festgenagelt (je Mio Tokens: Input / Write 5m / Write 1h / Read / Output)", () => {
+    const expected: Record<string, number[]> = {
+      "claude-sonnet-5-5": [2, 2.5, 4, 0.2, 10],
+      "claude-opus-5-5": [4, 5, 8, 0.2, 20],
+      "claude-opus-5": [5, 6.25, 10, 0.5, 25],
+      "claude-haiku-4-5": [1, 1.25, 2, 0.1, 5],
+    };
+    for (const [model, [input, write5m, write1h, read, output]] of Object.entries(expected)) {
+      const c = (extra: Partial<Call>): Call => ({ ts: "t", model, input: 0, cacheWrite: 0, cacheRead: 0, output: 0, ...extra });
+      assert.equal(m.priceCall(c({ input: MIO })), input, `${model} input`);
+      assert.equal(m.priceCall(c({ cacheWrite: MIO })), write5m, `${model} write 5m`);
+      assert.equal(m.priceCall(c({ cacheWrite: MIO, cacheWrite1h: MIO })), write1h, `${model} write 1h`);
+      assert.equal(m.priceCall(c({ cacheRead: MIO })), read, `${model} read`);
+      assert.equal(m.priceCall(c({ output: MIO })), output, `${model} output`);
+    }
+  });
+});
