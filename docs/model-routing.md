@@ -201,7 +201,7 @@ Planer-Sockel: ² Median über 2 Läufe mit Planer (der Planer fehlt in 1 von 3 
 |---|--:|---|
 | Skill-Listing (73 Skills) | 29,9k | Repo 3,9k, Rest User/claude.ai/Plugins/Claude Code |
 | `AGENTS.md` | 27,0k | Repo (gegated, `check:contextsize`) |
-| Namen der verzögerten Tools (261) | 8,8k | PixelLab 3,2k (Repo `.mcp.json`), Langfuse 2,8k, Chrome 0 (Stand vor `deny`: 0,8k; seit `deny` fehlen die Namen, siehe „Sockel von Lens und Explore“), übrige User |
+| Namen der verzögerten Tools (261) | 8,8k | PixelLab 3,2k und Playwright rund 1,4k (beide Repo `.mcp.json`), Langfuse 2,8k, Chrome 0 (Stand vor `deny`: 0,8k; seit `deny` fehlen die Namen, siehe „Sockel von Lens und Explore“), übrige User |
 | MCP-Instruktionen | 6,6k | User/claude.ai, PixelLab 1,0k |
 | Systemprompt-Snapshot, Agent-Listing, SessionStart-Hook | 12,8k | Claude Code/User |
 

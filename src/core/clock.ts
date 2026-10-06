@@ -101,10 +101,14 @@ export function daysUntilClock(currentGameDays: number, hhmm: string): number {
   const target = Number(m[1]) * 60 + Number(m[2]);
   const now = gameClock(currentGameDays * DAY_CYCLE_MS, DAY_CYCLE_MS).hhmm;
   const nowMin = Number(now.slice(0, 2)) * 60 + Number(now.slice(3));
-  const diffMin = (target - nowMin + 1440) % 1440;
-  if (diffMin === 0) return 0;
-  // Float-Rauschen darf die Zielminute nicht um eine Minute verfehlen: bei Bedarf winzig nachschieben.
-  let days = diffMin / 1440;
-  for (let i = 0; i < 5 && gameClock((currentGameDays + days) * DAY_CYCLE_MS, DAY_CYCLE_MS).hhmm !== hhmm; i++) days += 1e-7;
-  return days;
+  if (target === nowMin) return 0;
+  // Ziel ist die MITTE der Zielminute: so verfehlt Float-Rauschen an der Minutengrenze (ein Start genau auf dem Raster
+  // liest sich als Vorminute) sie weder nach oben noch nach unten. Die Minute vor dem Sprung wird mit derselben Formel
+  // wie `gameClock` als Dezimalzahl bestimmt.
+  const minutenPosition = (gameDays: number): number => {
+    const shifted = withStartOffset(gameDays * DAY_CYCLE_MS, DAY_CYCLE_MS);
+    return ((((shifted % DAY_CYCLE_MS) * 1440) / DAY_CYCLE_MS) + 720) % 1440;
+  };
+  const deltaMin = ((((target + 0.5 - minutenPosition(currentGameDays)) % 1440) + 1440) % 1440);
+  return deltaMin / 1440;
 }

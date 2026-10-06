@@ -10,10 +10,13 @@ import { join } from "node:path";
 
 const SCENES_DIR = join(__dirname, "..", "src", "scenes");
 
+/** Text ohne Block- und Zeilenkommentare: ein `devView(` im Kommentar ersetzt keine Methode. */
+const ohneKommentare = (t: string): string => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+
 /** Dateien (Name → fehlt devView?), die ein Spielfigur-Feld deklarieren, aber keine `devView(` tragen. */
 function ohneDevView(dateien: Record<string, string>): string[] {
   return Object.entries(dateien)
-    .filter(([, text]) => /!\s*:\s*ScenePlayer\b/.test(text) && !/devView\s*\(/.test(text))
+    .filter(([, text]) => /!\s*:\s*ScenePlayer\b/.test(text) && !/devView\s*\(/.test(ohneKommentare(text)))
     .map(([name]) => name);
 }
 
@@ -32,6 +35,8 @@ describe("Spielfigur-Szenen tragen devView() (#1311)", () => {
     expect(ohneDevView({ "X.ts": neu })).toEqual(["X.ts"]);
     expect(ohneDevView({ "X.ts": neu + " devView() { return { map: null, player: this.pl }; }" })).toEqual([]);
     expect(ohneDevView({ "Y.ts": "class Y extends Phaser.Scene { n!: number; }" })).toEqual([]);
+    expect(ohneDevView({ "X.ts": neu + " // devView() folgt" })).toEqual(["X.ts"]);
+    expect(ohneDevView({ "X.ts": neu + " /* devView() */" })).toEqual(["X.ts"]);
   });
 
   it("die echten Szenen: World, Interior und die Insel-Basis tragen devView", () => {

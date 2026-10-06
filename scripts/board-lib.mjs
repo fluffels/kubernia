@@ -91,6 +91,12 @@ export function afterIdForPosition(items, n, ohneNr = null) {
   return (todo[n - 2] ?? todo[todo.length - 1]).id;
 }
 
+/** Anker-Ticketnummer für „Position N“ (für `planPlacements`): die Nummer des Items, hinter das einsortiert wird; null = Spitze. Pur. */
+export function ankerNummerFuerPosition(items, n, ohneNr = null) {
+  const afterId = afterIdForPosition(items, n, ohneNr);
+  return afterId === null ? null : (items.find((i) => i.id === afterId)?.number ?? null);
+}
+
 /** Offene Issue-Nummern, die nicht im Board stehen (Abgleich, nur Bericht). Aufsteigend. */
 export function missingFromBoard(openNumbers, items) {
   const known = new Set(items.map((i) => i.number));

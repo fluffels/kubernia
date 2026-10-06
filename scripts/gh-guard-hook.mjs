@@ -82,7 +82,7 @@ export function segmente(command) {
 
 /** Die ausdrücklich gewählte HTTP-Methode (`-X`/`--method`, auch `--method=DELETE`), sonst null. */
 function methode(segment) {
-  const m = /(?:^|\s)(?:-X|--method)(?:\s+|=)['"]?([A-Za-z]+)['"]?/.exec(segment);
+  const m = /(?:^|\s)(?:-X\s*|--method(?:\s+|=))['"]?([A-Za-z]+)['"]?/.exec(segment);
   return m ? m[1].toUpperCase() : null;
 }
 

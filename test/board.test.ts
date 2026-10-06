@@ -78,6 +78,8 @@ describe("Listen-Normalisierer und Abbruch-Meldung (#1239, REST #1311)", () => {
     abortMessage: (message: string) => string;
     afterIdForPosition: (items: (Item & { status: string })[], n: number, ohneNr?: number | null) => string | null;
     missingFromBoard: (open: number[], items: Item[]) => number[];
+    ankerNummerFuerPosition: (items: (Item & { status: string })[], n: number, ohneNr?: number | null) => number | null;
+    planPlacements: (items: Item[], numbers: number[], after?: number | null) => { steps: { item: Item; afterId: string | null }[]; missing: number[]; anchorMissing: boolean };
   };
 
   test("normalizeItems: nur Issues, über Seiten hinweg in Board-Reihenfolge, mit node_id, Nummer und Status", () => {
@@ -104,6 +106,18 @@ describe("Listen-Normalisierer und Abbruch-Meldung (#1239, REST #1311)", () => {
     expect(N.afterIdForPosition([], 5)).toBeNull();
     expect(() => N.afterIdForPosition(board2, 0)).toThrow(RangeError);
     expect(() => N.afterIdForPosition(board2, 1.5)).toThrow(RangeError);
+  });
+
+  test("ankerNummerFuerPosition + planPlacements: das neue Ticket landet als N. Todo-Item (Glue von board-place --position)", () => {
+    const anker = (n: number, nr: number) => N.ankerNummerFuerPosition(board2, n, nr);
+    expect(anker(1, 99)).toBeNull();
+    expect(anker(2, 99)).toBe(1);
+    expect(anker(3, 99)).toBe(3); // Done-Item #2 zählt nicht
+    expect(anker(50, 99)).toBe(4); // kürzeres Board: ans Ende
+    const neu = [...board2, { id: "I99", number: 99, status: "Todo" }];
+    expect(N.planPlacements(neu, [99], anker(3, 99)).steps.map((s) => [s.item.number, s.afterId])).toEqual([[99, "I3"]]);
+    expect(N.planPlacements(neu, [99], anker(1, 99)).steps.map((s) => [s.item.number, s.afterId])).toEqual([[99, null]]);
+    expect(anker(3, 3)).toBe(4); // das Ticket selbst zählt nicht mit
   });
 
   test("missingFromBoard: offene Issues ohne Board-Item, aufsteigend und ohne Duplikate", () => {

@@ -14,7 +14,7 @@
  * gemeldet und übersprungen: später erneut aufrufen. Bei Rate-Limit sofort stoppen, den Rest melden.
  */
 import { pathToFileURL } from "node:url";
-import { abortMessage, afterIdForPosition, loadItems, loadOpenIssueNumbers, missingFromBoard, planPlacements, setPosition } from "./board-lib.mjs";
+import { abortMessage, ankerNummerFuerPosition, loadItems, loadOpenIssueNumbers, missingFromBoard, planPlacements, setPosition } from "./board-lib.mjs";
 
 const PAUSE_MS = 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -60,9 +60,7 @@ async function main(argv = process.argv.slice(2)) {
   try {
     const items = loadItems();
     if (args.position) {
-      const afterId = afterIdForPosition(items, args.position, args.numbers[0]);
-      const anchor = afterId === null ? null : items.find((i) => i.id === afterId)?.number ?? null;
-      plan = planPlacements(items, args.numbers, anchor);
+      plan = planPlacements(items, args.numbers, ankerNummerFuerPosition(items, args.position, args.numbers[0]));
     } else plan = planPlacements(items, args.numbers, args.anchor);
   } catch (e) {
     console.error(`✖ Abbruch: ${abortMessage(e.message)}. Später erneut fahren.`);

@@ -99,6 +99,31 @@ describe("Haupt-Checkout: commit/push wird geblockt (Z25)", () => {
     laeuft(`cd ${WT} || git commit -m x`, HAUPT);
   });
 
+  test("Verkettung mit Start im Haupt-Checkout: ein fehlgeschlagenes cd überspringt den &&-Nachfolger, ein gelungenes den ||-Nachfolger", () => {
+    // cwd = HAUPT: nur das Überspringen lässt den commit durch (sonst läge er im Haupt-Checkout)
+    laeuft("cd /gibt/es/nicht && git commit -m x", HAUPT);
+    laeuft(`cd ${HAUPT}/src || git commit -m x`, HAUPT);
+    laeuft(`cd /gibt/es/nicht && cd ${HAUPT} && git commit -m x`, WT);
+  });
+
+  test("der Ort nach einem fehlgeschlagenen cd bleibt erhalten, ein späteres cd setzt ihn neu (ortOk wird je Statement zurückgesetzt)", () => {
+    blockt(`cd /gibt/es/nicht; cd ${HAUPT} && git commit -m x`, WT);
+    laeuft(`cd /gibt/es/nicht; cd ${WT} && git commit -m x`, HAUPT);
+  });
+
+  test("relatives und mehrfaches git -C wird gegen den aktuellen Ort aufgelöst", () => {
+    blockt("git -C ../../main commit -m x", WT);
+    laeuft("git -C ../../wt/kq-1 commit -m x", WT);
+    blockt(`git -C /repo -C main commit -m x`, WT);
+    laeuft(`git -C /repo/wt -C kq-1 commit -m x`, HAUPT);
+  });
+
+  test("bekannte Grenze (festgehalten): ein Ortswechsel IM String eines Interpreters wird nicht ausgewertet", () => {
+    // `bash -c "cd <haupt> && git commit"` aus dem Worktree: die grobe Regel prüft gegen den aktuellen Ort (WT) und lässt durch.
+    laeuft(`bash -c "cd ${HAUPT} && git commit -m x"`, WT);
+    blockt(`bash -c "git commit -m x"`, HAUPT);
+  });
+
   test("Interpreter-Umwege: iex, pwsh -c, cmd /c, Start-Process mit git commit/push", () => {
     blockt(`iex "git commit -m x"`);
     blockt(`Invoke-Expression 'git push'`);
