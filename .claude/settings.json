@@ -30,7 +30,8 @@
       "Bash(wc:*)",
       "Bash(sort:*)",
       "Bash(uniq:*)",
-      "Bash(diff:*)"
+      "Bash(diff:*)",
+      "mcp__playwright"
     ],
     "ask": [
       "Bash(curl:*)",
@@ -41,7 +42,8 @@
       "Bash(ssh:*)",
       "Bash(scp:*)",
       "Bash(git push --force-with-lease:*)",
-      "Bash(gh issue delete:*)"
+      "Bash(gh issue delete:*)",
+      "mcp__playwright__browser_run_code_unsafe"
     ],
     "deny": [
       "Bash(rm -rf:*)",
@@ -93,6 +95,7 @@
     "data@synced": false,
     "cowork-plugin-management@synced": false
   },
+  "enabledMcpjsonServers": ["playwright"],
   "disableClaudeAiConnectors": true,
   "skillListingMaxDescChars": 300
 }
