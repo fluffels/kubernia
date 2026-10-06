@@ -8,9 +8,6 @@
  *      und `Monitor` lieferte veraltete „tick“-Meldungen (#1139).
  *   2. Der Nachweis-Commit (`KQ-Plan:`/`KQ-Review:`, lokal geprüft mit `check-review-nachweis`) steht im
  *      Ablauf VOR dem PR-Schritt; ohne ihn wird die PR-CI rot (#1270).
- *
- * Jede Prüfung ist ein benanntes Prädikat, das gegen das echte Artefakt UND ein rotes Gegenbeispiel läuft
- * (Vorbild langfuse-erfassung.test.ts).
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -68,39 +65,21 @@ describe("Umsetzer-Abschluss (#1308)", () => {
     assert.deepEqual(nachweisProbleme(UMSETZER), []);
   });
 
-  test("rot: TaskStop-Satz gestrichen", () => {
-    const ohne = UMSETZER.replace(/Vorher beendest du alle eigenen Hintergrund-Tasks[^\n]*\n/, "");
-    assert.notEqual(ohne, UMSETZER, "Muster muss treffen");
-    assert.ok(abschlussProbleme(ohne).some((p) => p.includes("TaskStop")));
+  test("rot: TaskStop-Satz gestrichen, nur hinter dem Format, Monitor-Regel oder Tools fehlen", () => {
+    const ohneSatz = UMSETZER.replace(/Vorher beendest du alle eigenen Hintergrund-Tasks[^\n]*\n/, "");
+    assert.notEqual(ohneSatz, UMSETZER, "Muster muss treffen");
+    assert.ok(abschlussProbleme(ohneSatz).some((p) => p.includes("TaskStop")));
+    assert.ok(abschlussProbleme(ohneSatz + "\nTaskStop\n").length > 0, "TaskStop hinter dem Format zählt nicht");
+    assert.ok(abschlussProbleme(UMSETZER.replace(/Auf die CI wartest du[^\n]*/, "")).some((p) => p.includes("Monitor-Regel")));
+    assert.ok(abschlussProbleme(UMSETZER.replace(/^(tools:.*)\bTaskStop, /m, "$1")).some((p) => p.includes("Tool TaskStop")));
+    assert.ok(abschlussProbleme(UMSETZER.replace(/^(tools:.*)\bMonitor, /m, "$1")).some((p) => p.includes("Tool Monitor")));
   });
 
-  test("rot: TaskStop nur hinter dem Berichtsformat", () => {
-    const hinten = UMSETZER.replace(/Vorher beendest du[^\n]*\n\n/, "") + "\nTaskStop\n";
-    assert.ok(abschlussProbleme(hinten).length > 0);
-  });
-
-  test("rot: Monitor-Regel ohne until-Schleife / tick", () => {
-    const ohne = UMSETZER.replace(/Auf die CI wartest du[^\n]*/, "");
-    assert.ok(abschlussProbleme(ohne).some((p) => p.includes("Monitor-Regel")));
-  });
-
-  test("rot: Whitelist ohne TaskStop oder Monitor", () => {
-    const ohneStop = UMSETZER.replace(/^(tools:.*)\bTaskStop, /m, "$1");
-    assert.ok(abschlussProbleme(ohneStop).some((p) => p.includes("Tool TaskStop")));
-    const ohneMon = UMSETZER.replace(/^(tools:.*)\bMonitor, /m, "$1");
-    assert.ok(abschlussProbleme(ohneMon).some((p) => p.includes("Tool Monitor")));
-  });
-
-  test("rot: Abschnitt fehlt", () => {
+  test("rot: Abschnitt fehlt, Nachweis hinter dem PR-Schritt oder gestrichen", () => {
     assert.deepEqual(abschlussProbleme("# x\n"), ["Abschnitt „## Letzte Nachricht“ fehlt"]);
     assert.deepEqual(nachweisProbleme("# x\n"), ["Abschnitt „## Ablauf“ fehlt"]);
-  });
-
-  test("rot: Nachweis hinter dem PR-Schritt oder gestrichen", () => {
-    const spaet = "## Ablauf\n\n4. **PR bis zum Merge** x\n3. KQ-Plan: KQ-Review: check-review-nachweis\n";
-    assert.equal(nachweisProbleme(spaet).length, 3);
-    const ohne = UMSETZER.replace(/check-review-nachweis/g, "x");
-    assert.deepEqual(nachweisProbleme(ohne), ["check-review-nachweis steht nicht vor dem PR-Schritt"]);
     assert.deepEqual(nachweisProbleme("## Ablauf\n\n1. nichts\n"), ["Schritt „PR bis zum Merge“ fehlt"]);
+    assert.equal(nachweisProbleme("## Ablauf\n\n4. **PR bis zum Merge** x\n3. KQ-Plan: KQ-Review: check-review-nachweis\n").length, 3);
+    assert.deepEqual(nachweisProbleme(UMSETZER.replace(/check-review-nachweis/g, "x")), ["check-review-nachweis steht nicht vor dem PR-Schritt"]);
   });
 });

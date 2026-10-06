@@ -16,9 +16,9 @@
  *
  * Ausführen mit:  npm test
  */
-import { afterAll, describe, test } from "vitest";
+import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/cleanup-worktrees.mjs).
@@ -63,13 +63,8 @@ describe("planLaunch – Startentscheidung des Launchers", () => {
 describe("readInstalled/readLockVersion – Dateizugriff liefert null/undefined statt zu werfen", () => {
   // Fixture-Checkout in einem Temp-Ordner: genau die Fälle, in denen main() sonst vor der
   // Startentscheidung abstürzte und der Server still fehlte.
-  const dirs: string[] = [];
-  afterAll(() => {
-    for (const d of dirs) rmSync(d, { recursive: true, force: true });
-  });
   const fixture = (files: Record<string, string>): string => {
     const dir = mkdtempSync(join(tmpdir(), "kq-pwmcp-"));
-    dirs.push(dir);
     for (const [rel, content] of Object.entries(files)) {
       mkdirSync(dirname(join(dir, rel)), { recursive: true });
       writeFileSync(join(dir, rel), content);

@@ -24,19 +24,16 @@
  *  - Scoped auf DIESES Repo: `git-common-dir` des cwd wird gegen das eigene `.git`
  *    verglichen (aus dem Skript-Pfad abgeleitet) — ein Bash-Aufruf gegen ein
  *    komplett anderes Repo im selben Claude-Code-Workspace wird nie angefasst.
- *  - Kommando-Erkennung über einen kleinen Shell-Lexer (`lexShell`): Quotes,
- *    Heredocs, Kommentare und Substitutionen werden verstanden, Text darin ist
- *    kein Kommando (ein `gh issue comment --body "…git push…"` blockt nicht).
- *    Ziel ist das Verzeichnis, in dem git liefe: Session-`cwd`, ein vorangestelltes
- *    `cd <pfad> &&` (nur existierender Ordner, nicht in Pipeline/bei `&`, Subshells
- *    isoliert) und `git -C <pfad>`.
- *  - Rückfall auf die alte grobe Regel (Segment-Split, Wortsuche "git" + "commit"/
- *    "push") gegen das Session-`cwd`, wenn der Lexer nicht zerlegen kann (offenes
- *    Quote) oder ein Interpreter den Befehl verbirgt (`bash -c`, `eval`, `source`):
- *    keine neuen False Negatives.
- *  - Nicht erkannt (Grenzen): Aliase/Shell-Funktionen, `pushd`/`popd`, `env -C`;
- *    `--git-dir`/`--work-tree` und dynamische `-C`-Wörter werden gegen das
- *    verfolgte Verzeichnis geprüft; das PowerShell-Tool ist nicht abgedeckt.
+ *  - Kommando-Erkennung über einen kleinen Shell-Lexer (`lexShell`): Text in Quotes,
+ *    Heredocs und Kommentaren ist kein Kommando. Ziel ist das Verzeichnis, in dem
+ *    git liefe: Session-`cwd`, ein vorangestelltes `cd <pfad> &&` (nur existierender
+ *    Ordner, nicht in Pipeline/bei `&`, Subshells isoliert) und `git -C <pfad>`.
+ *  - Rückfall auf die alte grobe Regel (Wortsuche "git" + "commit"/"push" je Segment)
+ *    gegen das Session-`cwd`, wenn der Lexer nicht zerlegen kann oder ein Interpreter
+ *    (`bash -c`, `eval`, `source`) den Befehl verbirgt: keine neuen False Negatives.
+ *  - Nicht erkannt: Aliase/Shell-Funktionen, `pushd`/`popd`, `env -C`; `--git-dir`/
+ *    `--work-tree` und dynamische `-C`-Wörter gelten gegen das verfolgte Verzeichnis;
+ *    das PowerShell-Tool deckt der Hook nicht ab.
  *  - Fail-open bei Unsicherheit (kein cwd im Payload, cwd ist gar kein Git-Repo,
  *    cwd gehört zu einem anderen Repo): NICHT blocken — dieselbe "kein falsches
  *    Rot"-Philosophie wie check-diffsize.mjs bei fehlender Vergleichsbasis.
@@ -98,20 +95,11 @@ function lexer(src) {
 
   /** pos steht hinter dem öffnenden Backtick. */
   function backtick(out) {
-    let inner = "";
-    for (;;) {
-      if (pos >= src.length) fail();
-      const ch = src[pos];
-      if (ch === "`") break;
-      if (ch === "\\" && "`\\$".includes(src[pos + 1] ?? "")) {
-        inner += src[pos + 1];
-        pos += 2;
-        continue;
-      }
-      inner += ch;
-      pos++;
-    }
-    pos++;
+    let end = pos;
+    while (end < src.length && src[end] !== "`") end += src[end] === "\\" ? 2 : 1;
+    if (end >= src.length) fail();
+    const inner = src.slice(pos, end).replace(/\\([`\\$])/g, "$1");
+    pos = end + 1;
     out.push(boundary("("), ...lexer(inner).run(), boundary(")"));
   }
 
@@ -315,10 +303,9 @@ function lexer(src) {
   return { run, scanBody };
 }
 
-/** Zerlegt `command` in Kommandos `{ words: {text, dynamic}[], sep }`; `sep` ist
- *  der Trenner danach (`&&` `||` `;` `|` `&` `\n` oder ""). Substitutionen und
- *  Subshells stehen als eigene Einträge `{ boundary: "(" | ")" }` vor/nach dem
- *  umschließenden Kommando. Offenes Quote/Substitution/Heredoc → `{ ok: false }`. */
+/** Zerlegt `command` in Kommandos `{ words: {text, dynamic}[], sep }` (`sep`: Trenner
+ *  danach). Substitutionen/Subshells stehen als Einträge `{ boundary: "(" | ")" }`
+ *  vor/nach dem umschließenden Kommando. Nicht zerlegbar → `{ ok: false }`. */
 export function lexShell(command) {
   try {
     return { ok: true, cmds: lexer(String(command)).run() };
@@ -354,8 +341,8 @@ function commandIndex(words) {
   return i < words.length ? i : -1;
 }
 
-/** `null`, wenn das Kommando kein git-Aufruf ist, sonst `{ sub, cDirs, unsure }`:
- *  Unterbefehl, gesammelte `-C`-Wörter und ob `--git-dir`/`--work-tree` gesetzt sind. */
+/** `null` ohne git-Aufruf, sonst `{ sub, cDirs, unsure }` (Unterbefehl, `-C`-Wörter,
+ *  `--git-dir`/`--work-tree` gesetzt). */
 export function gitInvocation(words) {
   const i = commandIndex(words);
   if (i < 0 || words[i].dynamic || !GIT_RE.test(words[i].text)) return null;
@@ -427,9 +414,8 @@ function isDirectory(path, stat) {
   }
 }
 
-/** Verzeichnisse, in denen `git commit`/`git push` aus `command` laufen würden
- *  (Session-`cwd`, verfolgtes `cd <pfad> &&` und `git -C <pfad>`). Leer, wenn
- *  kein solcher Aufruf. Nicht zerlegbar/Interpreter: `[cwd]` bei grobem Treffer. */
+/** Verzeichnisse, in denen `git commit`/`git push` aus `command` liefen (Session-`cwd`,
+ *  verfolgtes `cd`, `git -C`); leer ohne solchen Aufruf. Rückfall: `[cwd]` bei grobem Treffer. */
 export function protectedGitTargets(command, cwd, deps = {}) {
   if (!command) return [];
   const lexed = lexShell(command);

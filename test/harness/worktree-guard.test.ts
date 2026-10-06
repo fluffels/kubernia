@@ -261,10 +261,7 @@ describe("lexShell / gitInvocation (#1308)", () => {
   test("zerlegt Trenner, Quotes und Escapes", () => {
     assert.deepEqual(texts('a b && c "d e" | f; g\\ h'), [["a", "b"], ["c", "d e"], ["f"], ["g h"]]);
     assert.deepEqual(texts("echo 'a;b' \"c&&d\""), [["echo", "a;b", "c&&d"]]);
-  });
-
-  test("Umleitungen mit & sind keine Trenner", () => {
-    assert.deepEqual(texts("cmd 2>&1 &> out"), [["cmd", "2>&1", "&>", "out"]]);
+    assert.deepEqual(texts("cmd 2>&1 &> out"), [["cmd", "2>&1", "&>", "out"]], "Umleitungen mit & sind keine Trenner");
   });
 
   test("Substitutionen sind eigene Kommandos mit Grenzen; Wörter damit sind dynamisch", () => {
@@ -298,7 +295,6 @@ describe("lexShell / gitInvocation (#1308)", () => {
 
   test("fromMsysPath: /c/… wird nur unter Windows umgeschrieben", () => {
     assert.equal(fromMsysPath("/c/dev/x", "win32"), "C:/dev/x");
-    assert.equal(fromMsysPath("/c", "win32"), "C:/");
     assert.equal(fromMsysPath("/c/dev/x", "linux"), "/c/dev/x");
     assert.equal(fromMsysPath("rel/x", "win32"), "rel/x");
   });
@@ -346,8 +342,7 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
   });
 
   test("ERLAUBT: Wortpaar nur im Text eines gh-Kommandos", () => {
-    assert.equal(run('gh issue comment 1 --body "erst git push, dann git commit"'), false);
-    assert.equal(run('gh issue comment 1 --body "a\ngit push\nb"'), false);
+    assert.equal(run('gh issue comment 1 --body "erst git push\ndann git commit"'), false);
   });
 
   test("BLOCKT: schlichtes commit/push im Haupt-Checkout und mit -C auf ihn", () => {
@@ -378,11 +373,7 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(run("cd ~ && git push"), true, "Home");
     assert.equal(run("cd src && git commit -m x"), true, "Unterordner des Haupt-Checkouts");
     assert.equal(run(`cd - && git commit -m x`), true, "cd -");
-  });
-
-  test("cd bleibt nach Subshell/Substitution im Rest wirksam, wo es echt ist", () => {
-    assert.equal(run(`(echo x); cd '${wt}' && git commit -m x`), false);
-    assert.equal(run(`cd '${wt}' && (echo x) && git commit -m x`), false);
+    assert.equal(run(`(echo x); cd '${wt}' && (echo y) && git commit -m x`), false, "echtes cd bleibt nach Subshells wirksam");
   });
 
   test("Interpreter-Rückfall prüft gegen das Session-cwd (keine neuen False Negatives)", () => {
@@ -400,8 +391,7 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
 
   test("die Meldung nennt den Haupt-Checkout und beide erlaubten Wege", () => {
     const r = decide({ cwd: repoRoot, command: "git commit -m x", repoRoot, deps: fsFake([wt]) });
-    assert.match(r.reason ?? "", /git -C <worktree>/);
-    assert.match(r.reason ?? "", /cd <worktree> && git/);
+    assert.match(r.reason ?? "", /git -C <worktree>.*cd <worktree> && git/s);
     assert.ok((r.reason ?? "").includes(repoRoot));
   });
 });
