@@ -88,9 +88,9 @@ test("parseNpcs: akzeptiert wohlgeformte Daten", () => {
  * dass die Fehlermeldung den konkreten Feld-PFAD nennt (nicht nur „ungültig"). */
 
 test("parseNpcs: wirft bei Nicht-Objekt", () => {
-  assert.throws(() => parseNpcs([]), validation(/„npcs"/));
-  assert.throws(() => parseNpcs(null), validation(/„npcs"/));
-  assert.throws(() => parseNpcs("nope"), validation(/„npcs"/));
+  assert.throws(() => parseNpcs([]), validation(/„npcs".*Objekt erwartet/));
+  assert.throws(() => parseNpcs(null), validation(/„npcs".*Objekt erwartet/));
+  assert.throws(() => parseNpcs("nope"), validation(/„npcs".*Objekt erwartet/));
 });
 
 test("parseNpcs: wirft bei leerem Katalog", () => {
