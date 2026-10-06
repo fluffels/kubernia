@@ -387,9 +387,11 @@ function lensPlan({ dateien, vorrunde } = {}) {
 // ── Plan-Weiche Epic (#1309) — Anfang
 // Der Planer entscheidet in Abschnitt 7 mit der Pflichtzeile „Weiche Epic: ja, weil …" bzw. „nein“, ob ein
 // als normal eingestuftes Ticket eigentlich ein Epic ist. Pure, damit direkt testbar; ohne Plan oder ohne
-// die Zeile bleibt es bei der Einstufung der Auswahl (kein Plan darf nie ein Ticket zum Epic machen).
+// die Zeile bleibt es bei der Einstufung der Auswahl (kein Plan darf nie ein Ticket zum Epic machen). Erkannt werden
+// die Zeile allein, mit Aufzählungszeichen, Nummerierung (`7. Weiche Epic: ja`) und Fettdruck; eine ZITIERTE Zeile
+// (`> Weiche Epic: ja`) zählt bewusst nicht: ein Zitat aus Ticket oder Prompt darf keinen Epic-Wechsel auslösen.
 function planSagtEpic(plan) {
-  return typeof plan === 'string' && /^[ \t]*[-*]?[ \t]*\**Weiche Epic:?\**[ \t]*:?[ \t]*ja\b/im.test(plan)
+  return typeof plan === 'string' && /^[ \t]*(?:[-*]|\d+[.)])?[ \t]*\**Weiche Epic:?\**[ \t]*:?[ \t]*ja\b/im.test(plan)
 }
 // ── Plan-Weiche Epic (#1309) — Ende
 
@@ -1327,6 +1329,11 @@ ${ausserhalbScope.map((p) => `- ${p}`).join('\n')}`
     : ''
 }
 
+
+Zuletzt räumst du verwaiste Worktree-Ordner auf, wie es auf dem Skill-Pfad der SubagentStop-Hook beim Umsetzer-Ende
+tut (dieser Pfad hat keinen Umsetzer-Subagenten mit Hook): node scripts/cleanup-worktrees.mjs, bei gemeldeten
+Waisen mit --fix. Ordner unter 5 Minuten meldet das Skript nur (eine parallele Session legt gerade ihren Worktree an),
+die löschst du nie von Hand.
 
 Melde das Ergebnis jedes Verify-Schritts einzeln${ausserhalbScope.length ? ' sowie die angelegten Issue-Nummern bzw. die Sammelticket-Zeilen' : ''}.`,
     { label: `cleanup:#${nr}`, phase: 'Cleanup', ...CODING },

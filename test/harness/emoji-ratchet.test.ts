@@ -23,10 +23,19 @@ const listTrackedFiles: (rootDir?: string) => string[] = checkInternalRefs.listT
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const BASELINE = "test/harness/emoji-baseline.json";
 
-const IM_SCOPE = (f: string): boolean =>
-  /^(src\/ui\/|src\/scenes\/|src\/content\/data\/)/.test(f) || f === "src/main.ts"
-    ? !/^src\/content\/data\/quests\//.test(f) && f !== "src/content/data/smalltalk.json" && /\.(ts|json)$/.test(f)
-    : false;
+/**
+ * Im Scope: Präsentationscode (src/ui, src/scenes, src/main.ts) und die Icon-Daten, also die Dateien DIREKT unter
+ * src/content/data (Shop, Ränge …). Unterordner der Daten (Quests, Quiz, Funk-Erklärungen: pro Region oder NPC
+ * aufgeteilte Prosa) und die Dialogdateien (`smalltalk*`, `npcs*`) zählen als Sprache, nicht als Icon. Die Regel hängt
+ * an der Ordnerstruktur statt an Einzeldateinamen, damit eine Aufteilung der Dialoge pro Region/NPC (Stardew-Scope)
+ * den Wächter nicht rot macht.
+ */
+const IM_SCOPE = (f: string): boolean => {
+  if (f === "src/main.ts") return true;
+  if (/^src\/(ui|scenes)\/.+\.ts$/.test(f)) return true;
+  const daten = /^src\/content\/data\/([^/]+\.json)$/.exec(f);
+  return daten !== null && !/^(smalltalk|npcs)/.test(daten[1]);
+};
 
 function zaehle(text: string): number {
   return (text.match(/\p{Extended_Pictographic}/gu) ?? []).length;
@@ -71,6 +80,11 @@ describe("Emoji-Ratchet (#1311)", () => {
     assert.equal(zaehle("kein Icon, nur Prosa äöüß 42"), 0);
     assert.equal(IM_SCOPE("src/content/data/quests/x.json"), false);
     assert.equal(IM_SCOPE("src/content/data/smalltalk.json"), false);
+    assert.equal(IM_SCOPE("src/content/data/smalltalk/hafen.json"), false, "pro Region aufgeteilte Dialoge bleiben draußen");
+    assert.equal(IM_SCOPE("src/content/data/smalltalk-hafen.json"), false);
+    assert.equal(IM_SCOPE("src/content/data/npcs/ole.json"), false);
+    assert.equal(IM_SCOPE("src/content/data/crabquiz/kubernetes.json"), false, "Quiz-Prosa im Unterordner");
+    assert.equal(IM_SCOPE("src/content/data/shop.json"), true, "Icon-Daten direkt unter data");
     assert.equal(IM_SCOPE("src/ui/shop.ts"), true);
     assert.equal(IM_SCOPE("src/main.ts"), true);
     assert.equal(IM_SCOPE("src/core/x.ts"), false);

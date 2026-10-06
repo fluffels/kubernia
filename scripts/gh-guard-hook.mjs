@@ -11,7 +11,8 @@
  * die Maintainerin soll es ausdrücklich erlauben können).
  *
  * Bewusste Grenzen (ehrlich, wie beim worktree-guard):
- *  - Grobe Textprüfung je Segment (Trenner `&&`/`||`/`;`/`|`/Zeilenumbruch), kein Shell-Parsing. Eine über
+ *  - Grobe Textprüfung je Segment (Trenner `&&`/`||`/`;`/`|`/Zeilenumbruch außerhalb von Anführungszeichen,
+ *    mehrzeilige Queries bleiben ein Segment), kein Shell-Parsing. Eine über
  *    Variablen oder `eval` zusammengesetzte Mutation sieht er nicht. Er fängt die dokumentierten Formen,
  *    keine absichtliche Umgehung; die eigentliche Durchsetzung bleibt PR-Gate + Review.
  *  - Er schaut nur auf `gh api`: `gh issue delete` & Co. stehen als eigene `ask`-Regeln in settings.json.
@@ -27,14 +28,16 @@ import { pathToFileURL } from "node:url";
 /** Tools, für die der Hook gilt. */
 export const GEPRUEFTE_TOOLS = ["Bash", "PowerShell"];
 
-/** GraphQL-Mutationen mit Außenwirkung (geschlossene Liste, case-sensitiv wie im Schema). */
+/** GraphQL-Mutationen mit Außenwirkung (geschlossene Liste, case-sensitiv wie im Schema). Gesucht wird der AUFRUF
+ *  `name(` hinter dem Schlüsselwort `mutation`, nicht der bloße Name: ein Lese-Feld wie `deleteBranchOnMerge` in einer
+ *  Query ist kein Aufruf. */
 const MUTATIONEN = [
-  /\bdelete[A-Z]\w*/, // deleteIssue, deleteProjectV2Item, deleteProjectV2, deleteLabel, deleteRef, deleteDiscussion, …
-  /\btransferIssue\b/,
-  /\b(addDiscussionComment|createDiscussion|updateDiscussion|updateDiscussionComment)\b/,
-  /\b(createRepository|updateRepository|archiveRepository|unarchiveRepository)\b/,
-  /\b(create|update)BranchProtectionRule\b/,
-  /\b(create|update)RepositoryRuleset\b/,
+  /\bdelete[A-Z]\w*(?=\s*\()/, // deleteIssue, deleteProjectV2Item, deleteProjectV2, deleteLabel, deleteRef, deleteDiscussion, …
+  /\btransferIssue(?=\s*\()/,
+  /\b(addDiscussionComment|createDiscussion|updateDiscussion|updateDiscussionComment)(?=\s*\()/,
+  /\b(createRepository|updateRepository|archiveRepository|unarchiveRepository)(?=\s*\()/,
+  /\b(create|update)BranchProtectionRule(?=\s*\()/,
+  /\b(create|update)RepositoryRuleset(?=\s*\()/,
 ];
 
 /** REST-Pfade für Einstellungen und Veröffentlichung. */
@@ -49,7 +52,33 @@ const REST_PFADE = [
 /** `gh api` als Befehl am Segmentanfang (auch nach `&`, `$(`, Klammern oder Variablen-Zuweisungen), nicht als Text in einem fremden Befehl. */
 const GH_API_AM_ANFANG = /^[\s(`$&]*(?:\w+=\S*\s+)*gh(?:\.exe)?\s+api\b/;
 
-const SEGMENT_TRENNER = /&&|\|\||;|\||\r?\n/;
+/**
+ * Zerlegt einen Befehl an `&&`, `||`, `;`, `|` und Zeilenumbrüchen, aber NICHT innerhalb von Anführungszeichen
+ * (`'…'`, `"…"`, PowerShell-Backtick als Escape): eine mehrzeilige GraphQL-Query im Argument bleibt ein Segment.
+ */
+export function segmente(command) {
+  const out = [];
+  let cur = "";
+  let quote = null;
+  const text = String(command);
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quote) {
+      cur += c;
+      if (c === "`" && quote === '"' && i + 1 < text.length) cur += text[++i];
+      else if (c === "\\" && quote === '"' && i + 1 < text.length) cur += text[++i];
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === "'" || c === '"') { quote = c; cur += c; continue; }
+    const zwei = text.slice(i, i + 2);
+    if (zwei === "&&" || zwei === "||") { out.push(cur); cur = ""; i++; continue; }
+    if (c === ";" || c === "|" || c === "\n") { out.push(cur); cur = ""; continue; }
+    if (c !== "\r") cur += c;
+  }
+  out.push(cur);
+  return out;
+}
 
 /** Die ausdrücklich gewählte HTTP-Methode (`-X`/`--method`, auch `--method=DELETE`), sonst null. */
 function methode(segment) {
@@ -64,8 +93,9 @@ const hatFelder = (segment) => /(?:^|\s)(?:-f|-F|--field|--raw-field|--input)(?:
 function segmentGrund(segment) {
   const m = methode(segment);
   if (m === "DELETE") return "`gh api` mit Methode DELETE löscht etwas (unumkehrbar)";
+  const nachMutation = segment.includes("mutation") ? segment.slice(segment.indexOf("mutation")) : "";
   for (const muster of MUTATIONEN) {
-    const treffer = muster.exec(segment);
+    const treffer = muster.exec(nachMutation);
     if (treffer) return `GraphQL-Mutation ${treffer[0]} (Außenwirkung oder Löschen)`;
   }
   const mutierend = m !== null ? m !== "GET" : hatFelder(segment);
@@ -78,7 +108,7 @@ function segmentGrund(segment) {
 /** Bewertet einen Befehl: `{ ask: true, reason }` bei einem `gh api`-Segment mit Außenwirkung, sonst `{ ask: false }`. */
 export function bewerte(command) {
   if (!command || typeof command !== "string") return { ask: false };
-  for (const segment of command.split(SEGMENT_TRENNER)) {
+  for (const segment of segmente(command)) {
     if (!GH_API_AM_ANFANG.test(segment)) continue;
     const grund = segmentGrund(segment);
     if (grund) return { ask: true, reason: `gh-Guard (#1204): ${grund}. Pre-Flight-Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints, Rückfrage bei der Maintainerin.` };

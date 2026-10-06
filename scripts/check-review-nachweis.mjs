@@ -29,7 +29,11 @@
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { resolveBase } from "./check-diffsize.mjs";
-import { meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
+import { meldeUngueltigeOverrides, parseNachweis, parseOverrideTrailers } from "./slice-override.mjs";
+
+// parseNachweis lebt im neutralen Modul slice-override.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
+// hier bleibt der Export für die Aufrufer und Tests dieses Gates.
+export { parseNachweis };
 
 /** Obergrenze der Fix-Runden (Cap 2 Fix-Runden, höchstens 3 Pässe); der Workflow trägt dieselbe Zahl (Wächter-Test). */
 export const MAX_FIX_RUNDEN = 2;
@@ -53,46 +57,6 @@ export function pflichtLenses(dateien) {
   if (!Array.isArray(dateien) || dateien.length === 0) return [...CODE_LENSES];
   if (dateien.some((d) => typeof d !== "string" || d.trim() === "")) return [...CODE_LENSES];
   return dateien.every((d) => /\.md$/i.test(d.trim())) ? ["doku"] : [...CODE_LENSES];
-}
-
-function lastLine(text, key) {
-  const re = new RegExp(`^${key}:[ \\t]*(.*)$`, "gm");
-  const all = [...String(text).replace(/\r/g, "").matchAll(re)];
-  return all.length > 0 ? all[all.length - 1][1].trim() : null;
-}
-
-/** Parst die letzte `KQ-Plan:`- und die letzte `KQ-Review:`-Zeile (am Zeilenanfang, nicht
- *  eingerückt) aus beliebigem Message-Text. Pure. Felder, die fehlen oder kaputt sind, bleiben
- *  null bzw. NaN; bewertet wird erst in bewerteNachweis. */
-export function parseNachweis(text) {
-  const planWert = lastLine(text, "KQ-Plan");
-  let plan = null;
-  if (planWert !== null) {
-    const ohne = /^ohne\s*[—–-]+\s*(\S.*)$/.exec(planWert);
-    if (planWert === "kubernia-planner") plan = { art: "planer" };
-    else if (ohne) plan = { art: "ohne", grund: ohne[1].trim() };
-    else plan = { art: "ungueltig", zeile: planWert };
-  }
-  const reviewWert = lastLine(text, "KQ-Review");
-  let review = null;
-  if (reviewWert !== null) {
-    const felder = {};
-    for (const tok of reviewWert.split(/\s+/)) {
-      const m = /^([a-z]+)=(.*)$/.exec(tok);
-      if (m) felder[m[1]] = m[2];
-    }
-    review = {
-      zeile: reviewWert,
-      head: /^[0-9a-f]{7,40}$/i.test(felder.head ?? "") ? felder.head.toLowerCase() : null,
-      runden: /^\d+$/.test(felder.runden ?? "") ? Number(felder.runden) : Number.NaN,
-      lenses: (felder.lenses ?? "")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-      verdikt: felder.verdikt ?? null,
-    };
-  }
-  return { plan, review };
 }
 
 /** Bewertet einen geparsten Nachweis. `headBekannt`: der SHA lässt sich als Commit auflösen;

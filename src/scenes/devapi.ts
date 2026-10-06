@@ -102,12 +102,12 @@ export function installDevApi(game: Phaser.Game): void {
   w.kqDev = {
     /** JSON-Snapshot des Spielzustands (Szene, Spieler/Kachel, Quest, Dialog, Uhr, …). */
     state: (): DevSnapshot => buildDevSnapshot(collect(game, readyLatched)),
-    /** Spielzeit `ms` vorspulen (Frame-Stepping, synchron) und den neuen Snapshot liefern. */
     /** Tageszeit auf die nächste Uhrzeit `"HH:MM"` vorstellen (nur vorwärts) und den Snapshot liefern. */
     setClock: (hhmm: string): DevSnapshot => {
       Game.setClock(hhmm);
       return buildDevSnapshot(collect(game, readyLatched));
     },
+    /** Spielzeit `ms` vorspulen (Frame-Stepping, synchron) und den neuen Snapshot liefern. */
     advanceTime: (ms: number, opts?: { frameMs?: number }): DevSnapshot => {
       advance(game, ms, opts?.frameMs);
       return buildDevSnapshot(collect(game, readyLatched));

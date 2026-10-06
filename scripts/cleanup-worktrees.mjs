@@ -23,7 +23,7 @@
  */
 
 import { execSync } from "node:child_process";
-import { existsSync, lstatSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -145,6 +145,30 @@ export function assertSafeOrphanTarget(mainRoot, worktreesDir, name, deps = {}) 
   return { safe: true };
 }
 
+/** Ordner, die jünger sind, gelten (noch) nicht als verwaist (#1311): eine parallele Session legt ihren Worktree per
+ *  `git worktree add` an, und für kurze Zeit ist der Ordner da, aber noch nicht (vollständig) registriert. Bei vielen
+ *  parallelen Agenten und dem SubagentStop-Hook kommt das häufiger vor. Junge Ordner werden gemeldet, nie gelöscht. */
+export const MIN_ORPHAN_AGE_MS = 5 * 60_000;
+
+/** Teilt Waisen-Kandidaten nach dem Alter des Ordners (mtime) in `alt` (löschbar) und `jung` (nur melden). Ein nicht lesbarer
+ *  Ordner zählt als alt (er ist weg oder gesperrt, das alte Verhalten bleibt). Pure bis auf `deps.statSync`/`deps.now`. */
+export function splitByAge(worktreesDir, names, deps = {}) {
+  const stat = deps.statSync ?? statSync;
+  const now = deps.now ?? Date.now();
+  const alt = [];
+  const jung = [];
+  for (const name of names) {
+    let alter = Number.POSITIVE_INFINITY;
+    try {
+      alter = now - stat(join(worktreesDir, name)).mtimeMs;
+    } catch {
+      /* nicht lesbar → alt */
+    }
+    (alter < MIN_ORPHAN_AGE_MS ? jung : alt).push(name);
+  }
+  return { alt, jung };
+}
+
 /** Pure Berechnung: welche `dirs` (Ordnernamen relativ zu `worktreesDir`) sind
  *  NICHT in `registered` (Set absoluter, `/`-normalisierter Pfade). */
 export function computeOrphans(worktreesDir, dirs, registered) {
@@ -152,7 +176,8 @@ export function computeOrphans(worktreesDir, dirs, registered) {
 }
 
 /**
- * Diagnose: liefert `{ ok, orphans, mainRoot, worktreesDir }`.
+ * Diagnose: liefert `{ ok, orphans, young, mainRoot, worktreesDir }` (`young`: unregistrierte Ordner unter 5 Minuten,
+ * nur melden, nie löschen).
  * `ok:false` bei jedem git-Fehler (z.B. `cwd` ist gar kein Git-Repo) — dann
  * bewusst KEINE Waisen melden, statt bei fehlgeschlagenem `git worktree list`
  * versehentlich JEDEN lokalen Ordner (auch aktive!) als Waise zu behandeln.
@@ -175,8 +200,8 @@ export function diagnoseOrphans(cwd, deps = {}) {
   const worktreesDir = join(mainRoot, ".claude", "worktrees");
   const registered = new Set(allPaths);
   const dirs = localWorktreeDirs(worktreesDir, deps);
-  const orphans = computeOrphans(worktreesDir, dirs, registered);
-  return { ok: true, orphans, mainRoot, worktreesDir };
+  const { alt: orphans, jung: young } = splitByAge(worktreesDir, computeOrphans(worktreesDir, dirs, registered), deps);
+  return { ok: true, orphans, young, mainRoot, worktreesDir };
 }
 
 /**
@@ -234,7 +259,7 @@ function main() {
   console.log("=== Worktree-Diagnose ===\n");
   console.log(`Root: ${ROOT}`);
 
-  const { ok, orphans, mainRoot, worktreesDir } = diagnoseOrphans(ROOT);
+  const { ok, orphans, young, mainRoot, worktreesDir } = diagnoseOrphans(ROOT);
   if (!ok) {
     console.error("git worktree list fehlgeschlagen — Diagnose abgebrochen.");
     process.exit(1);
@@ -260,7 +285,11 @@ function main() {
     process.exit(0);
   }
 
-  const okDirs = dirs.filter((name) => !orphans.includes(name));
+  if (young.length > 0) {
+    console.log(`Zu jung zum Löschen (unter ${MIN_ORPHAN_AGE_MS / 60_000} Minuten, evtl. gerade von einer parallelen Session angelegt): ${young.join(", ")}\n`);
+  }
+
+  const okDirs = dirs.filter((name) => !orphans.includes(name) && !young.includes(name));
   if (okDirs.length > 0) {
     console.log("Aktive Worktrees (git bekannt):");
     for (const name of okDirs) console.log(`  ✓ ${name}`);

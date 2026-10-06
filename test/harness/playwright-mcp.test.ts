@@ -39,6 +39,23 @@ const launcher = launcherModule as unknown as LauncherModule;
 
 const root = join(import.meta.dirname, "..", "..");
 
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as internalrefsModule from "../../scripts/check-internalrefs.mjs";
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+const listTrackedFiles: (rootDir?: string) => string[] = internalrefsModule.listTrackedFiles;
+
+/** Stellen, die zur Laufzeit von einem externen Host laden: CSS `url(http…)`/`@import`, fetch/XHR/WebSocket mit http(s)/ws(s)-Ziel (nicht localhost). */
+function externeLadestellen(text: string): string[] {
+  const extern = String.raw`(?:https?|wss?):\/\/(?!localhost|127\.0\.0\.1)[^\s"'\`)]+`;
+  const muster = [
+    new RegExp(String.raw`url\(\s*["']?${extern}`, "g"),
+    new RegExp(String.raw`@import\s+(?:url\(\s*)?["']?${extern}`, "g"),
+    new RegExp(String.raw`\b(?:fetch|new\s+WebSocket|new\s+EventSource|navigator\.sendBeacon)\(\s*["'\`]${extern}`, "g"),
+    new RegExp(String.raw`\.open\(\s*["'][A-Z]+["']\s*,\s*["'\`]${extern}`, "g"),
+  ];
+  return muster.flatMap((re) => [...text.matchAll(re)].map((m) => m[0].slice(0, 80)));
+}
+
 // Die Temp-Ordner der Fixtures und des Handshakes liegen sonst je Lauf herum (#1309): am Ende alle löschen.
 const angelegt: string[] = [];
 afterAll(() => {
@@ -169,6 +186,25 @@ describe("Verdrahtung im Repo", () => {
     assert.deepEqual(nurLinks, [], "index.html bettet externe Ressourcen ein");
   });
 
+  test("auch Stylesheets und Laufzeit-Code laden keine externen Origins (#1311)", () => {
+    const dateien = listTrackedFiles(root).filter((f) => /\.css$/.test(f) || /^index\.html$/.test(f) || /^src\/.+\.ts$/.test(f));
+    assert.ok(dateien.length > 50, "Scan liest kaum Dateien");
+    const funde = dateien.flatMap((f) => externeLadestellen(readFileSync(join(root, f), "utf8")).map((x) => `${f}: ${x}`));
+    assert.deepEqual(funde, [], "CSS url()/@import oder fetch/XMLHttpRequest/WebSocket auf einen externen Host: bräche unter --allowed-origins");
+  });
+
+  test("Erkennung greift (Red-Green): externe Ladestellen werden gefunden, lokale und Textlinks nicht", () => {
+    assert.ok(externeLadestellen('@font-face { src: url("https://fonts.example.com/a.woff2"); }').length > 0);
+    assert.ok(externeLadestellen("@import url(http://cdn.example.com/x.css);").length > 0);
+    assert.ok(externeLadestellen('@import "https://cdn.example.com/x.css";').length > 0);
+    assert.ok(externeLadestellen('fetch("https://api.example.com/x")').length > 0);
+    assert.ok(externeLadestellen("new XMLHttpRequest(); xhr.open('GET', 'https://x.example.com/')").length > 0);
+    assert.ok(externeLadestellen('new WebSocket("wss://x.example.com/")').length > 0);
+    assert.equal(externeLadestellen("background: url(data:image/png;base64,AAAA)").length, 0, "data: ist lokal");
+    assert.equal(externeLadestellen('fetch("http://localhost:3000/x") ; fetch(url)').length, 0);
+    assert.equal(externeLadestellen('const s = "curl https://example.com/ zeigt Hilfe"').length, 0, "Text mit Link ist keine Ladestelle");
+  });
+
   test("das Ausgabeverzeichnis des Servers ist gitignored", () => {
     const cfg = readJson(".mcp.json") as { mcpServers: Record<string, { args: string[] }> };
     const args = cfg.mcpServers.playwright.args;
@@ -180,7 +216,12 @@ describe("Verdrahtung im Repo", () => {
   });
 });
 
-describe("tools/list-Handshake ohne Browser (#1309)", () => {
+// Der Handshake startet den echten Server EINMAL (nicht je Test). Mit lokaler Installation (npm ci, CI und jeder
+// Worktree) läuft er offline; ohne sie würde der Launcher per npx laden und Netz brauchen, dann entfällt der Test
+// (der Wächter „Lockfile pinnt das Paket …“ oben schlägt in dem Fall ohnehin an).
+const lokalInstalliert = launcher.readInstalled(root) !== null;
+
+describe.skipIf(!lokalInstalliert)("tools/list-Handshake ohne Browser (#1309)", () => {
   /** Startet den Launcher mit den Args aus .mcp.json, spricht initialize + tools/list und beendet ihn. */
   const toolNamen = (): Promise<string[]> =>
     new Promise((resolve, reject) => {
@@ -206,8 +247,10 @@ describe("tools/list-Handshake ohne Browser (#1309)", () => {
             }
             if (o.id === 2) {
               clearTimeout(timer);
-              resolve((o.result?.tools ?? []).map((t) => t.name));
-              child.kill(); // Aufräumen des Ordners übernimmt afterAll (Windows hält ihn kurz offen)
+              const namen = (o.result?.tools ?? []).map((t) => t.name);
+              // Erst nach dem Prozessende auflösen: auf Windows hält der laufende Server sein cwd offen (EBUSY beim Aufräumen).
+              child.once("exit", () => resolve(namen));
+              child.kill();
             }
           } catch {
             /* unvollständige Zeile */
@@ -219,8 +262,11 @@ describe("tools/list-Handshake ohne Browser (#1309)", () => {
       senden({ id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "wachter", version: "1" } } });
     });
 
+  let einmal: Promise<string[]> | null = null;
+  const toolNamenEinmal = (): Promise<string[]> => (einmal ??= toolNamen());
+
   test("der Server nennt die Tools der FAQ und jedes mcp__playwright__-Tool der Umsetzer-Whitelist", async () => {
-    const namen = new Set(await toolNamen());
+    const namen = new Set(await toolNamenEinmal());
     const faq = ["browser_evaluate", "browser_take_screenshot", "browser_press_key", "browser_start_video"];
     const umsetzer = readFileSync(join(root, ".claude/agents/kubernia-umsetzer.md"), "utf8");
     const tools = /^tools:\s*(.+)$/m.exec(umsetzer)?.[1] ?? "";
@@ -231,7 +277,7 @@ describe("tools/list-Handshake ohne Browser (#1309)", () => {
   }, 60_000);
 
   test("Erkennung greift (Red-Green): ein erfundener Tool-Name fehlt im Server", async () => {
-    const namen = new Set(await toolNamen());
+    const namen = new Set(await toolNamenEinmal());
     assert.ok(!namen.has("browser_gibt_es_nicht_1309"), "ein erfundener Name darf nicht vorkommen");
     assert.ok(namen.has("browser_navigate"));
   }, 60_000);

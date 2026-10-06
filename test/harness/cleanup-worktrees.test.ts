@@ -31,7 +31,9 @@ type CleanupModule = {
   diagnoseOrphans: (
     cwd: string,
     deps?: object
-  ) => { ok: boolean; orphans: string[]; mainRoot: string | null; worktreesDir: string | null };
+  ) => { ok: boolean; orphans: string[]; young: string[]; mainRoot: string | null; worktreesDir: string | null };
+  splitByAge: (worktreesDir: string, names: string[], deps?: object) => { alt: string[]; jung: string[] };
+  MIN_ORPHAN_AGE_MS: number;
   fixOrphans: (
     mainRoot: string,
     worktreesDir: string,
@@ -61,6 +63,8 @@ const {
   diagnoseOrphans,
   fixOrphans,
   assertSafeOrphanTarget,
+  splitByAge,
+  MIN_ORPHAN_AGE_MS,
 } = cleanup;
 
 describe("parseWorktreeListPorcelain (#952)", () => {
@@ -498,5 +502,46 @@ describe("fixOrphans (#952)", () => {
     assert.equal(rmCalls, 0);
     assert.deepEqual(result.removed, []);
     assert.equal(result.refused.length, 1);
+  });
+});
+
+describe("Altersgrenze für Waisen (#1311)", () => {
+  const JETZT = 10_000_000_000;
+  const stat = (alter: Record<string, number | "fehlt">) => (p: string) => {
+    const name = p.replace(/\\/g, "/").split("/").pop() ?? "";
+    const a = alter[name];
+    if (a === undefined || a === "fehlt") throw new Error("ENOENT");
+    return { mtimeMs: JETZT - a };
+  };
+
+  test("jünger als die Grenze → jung (nur melden), genau an der Grenze und älter → alt (löschbar)", () => {
+    const r = splitByAge("/root/.claude/worktrees", ["neu", "grenze", "alt"], {
+      now: JETZT,
+      statSync: stat({ neu: 30_000, grenze: MIN_ORPHAN_AGE_MS, alt: 3_600_000 }),
+    });
+    assert.deepEqual(r.jung, ["neu"]);
+    assert.deepEqual(r.alt, ["grenze", "alt"]);
+  });
+
+  test("nicht lesbarer Ordner zählt als alt (altes Verhalten), leere Liste bleibt leer", () => {
+    assert.deepEqual(splitByAge("/w", ["weg"], { now: JETZT, statSync: stat({ weg: "fehlt" }) }), { alt: ["weg"], jung: [] });
+    assert.deepEqual(splitByAge("/w", [], { now: JETZT }), { alt: [], jung: [] });
+  });
+
+  test("diagnoseOrphans: ein junger unregistrierter Ordner landet in young, nicht in orphans (wird nie gelöscht)", () => {
+    const deps = {
+      now: JETZT,
+      execSync: () => "worktree /root\nHEAD abc\nbranch refs/heads/main\n\n",
+      existsSync: () => true,
+      readdirSync: () => [
+        { name: "kq-neu", isDirectory: () => true },
+        { name: "kq-alt", isDirectory: () => true },
+      ],
+      statSync: stat({ "kq-neu": 20_000, "kq-alt": 7_200_000 }),
+    };
+    const r = diagnoseOrphans("/root", deps);
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.orphans, ["kq-alt"]);
+    assert.deepEqual(r.young, ["kq-neu"]);
   });
 });

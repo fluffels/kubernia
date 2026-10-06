@@ -287,6 +287,7 @@ function main() {
     process.exit(1);
   }
   if (r.nothingToMeasure) {
+    meldeUngueltigeOverrides(r.invalidOverrides, { dim });
     console.log(green("✔ check:diffcoverage ok — dieser Slice ändert keinen gemessenen Spielcode (src/**/*.ts)."));
     return;
   }

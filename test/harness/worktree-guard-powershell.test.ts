@@ -6,7 +6,7 @@
  * Commit im geteilten Haupt-Checkout ungeprüft durch (`Set-Location <hauptcheckout>; git commit …`). Der
  * Hook `scripts/worktree-guard-powershell.mjs` bewertet den Befehl mit einem Tokenizer. Die Tests geben
  * Dateisystem und Git-Kontext per Injektion vor (Haupt-Checkout `/repo/main`, Worktree `/repo/wt/kq-1`),
- * damit sie auf Windows und Linux gleich laufen; die Payload-`cwd` folgt laut Probe dem persistenten
+ * damit sie auf Windows und Linux gleich laufen (der Unterordner-Fall mit echtem git steht in worktree-guard.test.ts); die Payload-`cwd` folgt laut Probe dem persistenten
  * `Set-Location` früherer Aufrufe (siehe Hook-Kopf).
  *
  * Ehrliche Grenze: kein vollständiger PowerShell-Parser (siehe Hook-Kopf).
@@ -115,6 +115,15 @@ describe("Haupt-Checkout: commit/push wird geblockt (Z25)", () => {
     assert.match(r.reason ?? "", /literal/);
     blockt("git -C (Join-Path $a b) push", WT);
     blockt("Set-Location $irgendwas; git commit -m x", WT);
+  });
+
+  test("--work-tree und --git-dir zeigen auf den Haupt-Checkout: geblockt, auf den Worktree: durch", () => {
+    blockt(`git --work-tree=${HAUPT} commit -m x`, WT);
+    blockt(`git --work-tree ${HAUPT} push`, WT);
+    blockt(`git --git-dir=${HAUPT}/.git commit -m x`, WT);
+    laeuft(`git --work-tree=${WT} commit -m x`, HAUPT);
+    laeuft(`git --git-dir=${WT}/.git commit -m x`, HAUPT);
+    blockt("git --work-tree=$unbekannt commit -m x", WT);
   });
 
   test("die Meldung nennt den Worktree-Weg", () => {

@@ -14,6 +14,9 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
@@ -215,6 +218,57 @@ describe("parseHookInput / buildDenyOutput (#735) — CLI-Ein-/Ausgabe", () => {
         permissionDecision: "deny",
         permissionDecisionReason: "Testgrund",
       },
+    });
+  });
+});
+
+describe("resolveGitContext mit echtem git: Unterordner des Haupt-Checkouts (#1311)", () => {
+  /** Temp-Repo mit einem Commit, Unterordner `src/lib` und einem Linked Worktree `wt`. */
+  function mitRepo(body: (r: { haupt: string; sub: string; wt: string }) => void) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "kq-wg-")));
+    try {
+      const haupt = join(root, "haupt");
+      mkdirSync(join(haupt, "src", "lib"), { recursive: true });
+      const git = (cwd: string, ...args: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd, stdio: "pipe" });
+      git(haupt, "init", "-q");
+      writeFileSync(join(haupt, "a.txt"), "x");
+      git(haupt, "add", "-A");
+      git(haupt, "commit", "-q", "-m", "init");
+      const wt = join(root, "wt");
+      git(haupt, "worktree", "add", "-q", wt, "-b", "feature/x");
+      body({ haupt, sub: join(haupt, "src", "lib"), wt });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  test("Unterordner des Haupt-Checkouts ist relevant UND Haupt-Checkout (vorher: git liefert ../.git, fail-open)", () => {
+    mitRepo(({ haupt, sub }) => {
+      const ctx = resolveGitContext(sub, haupt);
+      assert.equal(ctx.relevant, true, "Unterordner gehört zum Repo");
+      assert.equal(ctx.isMainWorktree, true);
+      assert.equal(decide({ cwd: sub, command: "git commit -m x", repoRoot: haupt }).block, true, "commit im Unterordner wird geblockt");
+      assert.equal(decide({ cwd: join(haupt, "src"), command: "git push", repoRoot: haupt }).block, true);
+    });
+  });
+
+  test("der Haupt-Checkout selbst bleibt geblockt, der Linked Worktree und sein Unterordner laufen durch", () => {
+    mitRepo(({ haupt, wt }) => {
+      assert.equal(decide({ cwd: haupt, command: "git commit -m x", repoRoot: haupt }).block, true);
+      assert.equal(decide({ cwd: wt, command: "git commit -m x", repoRoot: haupt }).block, false);
+      mkdirSync(join(wt, "src"), { recursive: true });
+      assert.equal(decide({ cwd: join(wt, "src"), command: "git push", repoRoot: haupt }).block, false);
+    });
+  });
+
+  test("ein fremdes Repo und ein Nicht-Repo bleiben unberührt (fail-open)", () => {
+    mitRepo(({ haupt }) => {
+      const fremd = mkdtempSync(join(tmpdir(), "kq-wg-fremd-"));
+      try {
+        assert.equal(decide({ cwd: fremd, command: "git commit -m x", repoRoot: haupt }).block, false);
+      } finally {
+        rmSync(fremd, { recursive: true, force: true });
+      }
     });
   });
 });

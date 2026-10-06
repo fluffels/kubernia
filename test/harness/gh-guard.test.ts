@@ -20,6 +20,7 @@ type Bewertung = { ask: boolean; reason?: string };
 const hook = raw as unknown as {
   bewerte: (command: unknown) => Bewertung;
   parseHookInput: (text: string) => { tool?: string; command?: string };
+  segmente: (command: string) => string[];
   buildAskOutput: (reason: string) => { hookSpecificOutput: { permissionDecision: string; hookEventName: string } };
   GEPRUEFTE_TOOLS: string[];
 };
@@ -48,6 +49,10 @@ describe("gh api mit Außenwirkung fragt nach (#1204)", () => {
     ["REST: Forum per REST", "gh api repos/o/r/discussions/1/comments -f body=hallo"],
     ["nach && verkettet", "git status && gh api graphql -f query='mutation{ deleteIssue(input:{issueId:\"X\"}){ clientMutationId } }'"],
     ["gh.exe (Windows)", "gh.exe api -X DELETE repos/o/r/labels/x"],
+    ["mehrzeilige Mutation im Query-Argument", "gh api graphql -f query='\n  mutation($i:ID!) {\n    deleteIssue(input:{issueId:$i}) {\n      clientMutationId\n    }\n  }' -f i=X"],
+    ["mehrzeilig in doppelten Anführungszeichen (PowerShell)", 'gh api graphql -f query="\nmutation {\n  deleteProjectV2Item(input:{}) { deletedItemId }\n}"'],
+    ["Variablen-Zuweisung vor gh api", "GH_TOKEN=x gh api -X DELETE repos/o/r/labels/y"],
+    ["nach Pipe", "echo x | gh api -X DELETE repos/o/r/labels/z"],
   ])("%s → ask", (_name, command) => {
     const r = hook.bewerte(command);
     assert.equal(r.ask, true, command);
@@ -65,6 +70,9 @@ describe("Alltags-Aufrufe laufen durch (kein Dauer-Nachfragen)", () => {
     ["Rate-Limit", "gh api rate_limit --jq .resources.core"],
     ["GraphQL-Query ohne Mutation", "gh api graphql -f query='{ rateLimit { remaining } }'"],
     ["Text mit Mutationsnamen in einem anderen Befehl", 'gh issue comment 5 --body "deleteIssue ist verboten"'],
+    ["Lese-Query mit einem Feld deleteBranchOnMerge (kein Aufruf, keine Mutation)", "gh api graphql -f query='{ repository(owner:\"o\", name:\"r\") { deleteBranchOnMerge } }'"],
+    ["mehrzeilige Lese-Query", "gh api graphql -f query='\nquery {\n  viewer { login }\n}'"],
+    ["Mutationsname als Wert, ohne Aufruf", "gh api graphql -f query='mutation { __typename }' -f note=deleteIssue"],
     ["Commit-Text", 'git commit -m "feat: deleteIssue-Guard (gh api)"'],
     ["Issue-Kommentar per REST", "gh api repos/o/r/issues/5/comments -f body=hallo"],
     ["leerer Befehl", ""],
@@ -105,5 +113,20 @@ describe("Hook-Verdrahtung (#1311)", () => {
     for (const f of ["gh-guard-hook.mjs", "worktree-guard-hook.mjs", "worktree-guard-powershell.mjs", "stop-verify-hook.mjs"]) {
       assert.ok(quelle.harness.includes(`/scripts/${f}`), `protected-paths.json › harness braucht /scripts/${f}`);
     }
+  });
+});
+
+describe("Segmentierung respektiert Anführungszeichen (#1311)", () => {
+  test("Trenner innerhalb von Quotes teilen nicht, außerhalb schon", () => {
+    assert.deepEqual(hook.segmente("a && b; c | d\ne"), ["a ", " b", " c ", " d", "e"]);
+    assert.deepEqual(hook.segmente("gh api x -f q='a;b\nc' && ls"), ["gh api x -f q='a;b\nc' ", " ls"]);
+    assert.deepEqual(hook.segmente('echo "a && b" || c'), ['echo "a && b" ', " c"]);
+    assert.deepEqual(hook.segmente("echo 'it' ; ls"), ["echo 'it' ", " ls"]);
+    assert.deepEqual(hook.segmente(""), [""]);
+  });
+
+  test("ein unbalanciertes Anführungszeichen wirft nicht (der Rest bleibt ein Segment)", () => {
+    assert.equal(hook.segmente("gh api -X DELETE x 'offen && ls").length, 1);
+    assert.equal(hook.bewerte("gh api -X DELETE repos/o/r/labels/x 'offen").ask, true);
   });
 });

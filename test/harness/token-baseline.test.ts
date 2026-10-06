@@ -930,3 +930,34 @@ describe("token-baseline: Nachweis, Zeitpunkt, Cache-Neuaufbau (#1309)", () => {
     assert.match(m.renderMarkdown(m.summarize({ calls })), /Cache-Neuaufbauten: 1 \(≈ 900 Tokens Cache-Write\)/);
   });
 });
+
+describe("token-baseline: Grenzwerte von countCacheRebuilds (#1311)", () => {
+  const umsetzer = { id: "u1", agentType: "kubernia-umsetzer" };
+  const warm = (ts: string): Call => ({ ts, model: "claude-sonnet-5-5", input: 0, cacheWrite: 0, cacheRead: 1000, output: 1, subagent: umsetzer });
+  const spaeter = (ts: string, cacheRead: number, cacheWrite: number): Call => ({ ts, model: "claude-sonnet-5-5", input: 0, cacheWrite, cacheRead, output: 1, subagent: umsetzer });
+
+  test("Pause genau 5 Minuten zählt nicht, eine Millisekunde mehr schon", () => {
+    const a = warm("2026-10-05T10:00:00.000Z");
+    assert.equal(m.countCacheRebuilds([a, spaeter("2026-10-05T10:05:00.000Z", 0, 900)]).count, 0, "genau die TTL: Cache lebt noch");
+    assert.equal(m.countCacheRebuilds([a, spaeter("2026-10-05T10:05:00.001Z", 0, 900)]).count, 1, "knapp darüber: abgelaufen");
+  });
+
+  test("Cache-Read genau halber Kontext zählt nicht, knapp darunter schon", () => {
+    const a = warm("2026-10-05T10:00:00Z");
+    assert.equal(m.countCacheRebuilds([a, spaeter("2026-10-05T10:09:00Z", 500, 500)]).count, 0, "Read = Kontext/2: gelesen, kein Neuaufbau");
+    assert.equal(m.countCacheRebuilds([a, spaeter("2026-10-05T10:09:00Z", 499, 501)]).count, 1, "Read knapp unter Kontext/2");
+  });
+
+  test("Hauptchat: genau 60 Minuten zählt nicht, eine Millisekunde mehr schon", () => {
+    const haupt = (ts: string, cacheRead: number, cacheWrite: number): Call => ({ ts, model: "claude-opus-5-5", input: 0, cacheWrite, cacheRead, output: 1 });
+    const a = haupt("2026-10-05T10:00:00.000Z", 1000, 0);
+    assert.equal(m.countCacheRebuilds([a, haupt("2026-10-05T11:00:00.000Z", 0, 900)]).count, 0);
+    assert.equal(m.countCacheRebuilds([a, haupt("2026-10-05T11:00:00.001Z", 0, 900)]).count, 1);
+  });
+
+  test("leere Kontexte (alles 0) und ein einzelner Call zählen nie", () => {
+    assert.deepEqual(m.countCacheRebuilds([]), { count: 0, cacheWriteTokens: 0 });
+    assert.equal(m.countCacheRebuilds([warm("2026-10-05T10:00:00Z")]).count, 0);
+    assert.equal(m.countCacheRebuilds([warm("2026-10-05T10:00:00Z"), spaeter("2026-10-05T10:30:00Z", 0, 0)]).count, 0, "Kontext 0: kein Neuaufbau messbar");
+  });
+});

@@ -27,7 +27,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { parseNachweis } from "./check-review-nachweis.mjs";
+import { parseNachweis } from "./slice-override.mjs";
 
 /** Lenses pro Review-Runde für Läufe ohne Runden-Marker (vor #1265 liefen immer alle drei Brillen, #1012). */
 export const LENSES_PER_ROUND = 3;

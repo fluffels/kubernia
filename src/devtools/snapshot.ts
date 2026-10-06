@@ -6,7 +6,7 @@
  * rohen Werte in eine `DevSnapshotSource`, der Aufbau samt Ableitungen (Kachel, Quest-
  * Ende, Dialog-Art, aktive Gefahren) ist Node-testbar. */
 import { TILE } from "../world/world";
-import { HAZARD_UNLOCK, type HazardKind } from "../world/hazards";
+import { HAZARD_KINDS, type HazardKind } from "../world/hazards";
 
 /** Version des Snapshot-Formats; bei inkompatibler Änderung hochzählen. */
 export const DEV_SNAPSHOT_VERSION = 1;
@@ -56,7 +56,7 @@ export interface DevSnapshotSource {
   clock: { day: number; hhmm: string; weekday: string; seasonName: string; gameDays: number };
   coins: number;
   xp: number;
-  /** Je Gefahren-Art der laufende Zustand (null = inaktiv); die Arten kommen aus `HAZARD_UNLOCK`. */
+  /** Je Gefahren-Art der laufende Zustand (null = inaktiv); die Arten kommen aus `HAZARD_KINDS`. */
   hazards: Readonly<Record<HazardKind, unknown>>;
 }
 
@@ -106,8 +106,8 @@ function buildDialog(d: SnapshotDialogueSource | null): DevSnapshot["dialog"] {
 }
 
 function buildHazards(h: DevSnapshotSource["hazards"]): string[] {
-  // Die Arten stammen aus der einen Laufzeit-Liste (HAZARD_UNLOCK), nicht aus hartem if je Art.
-  return (Object.keys(HAZARD_UNLOCK) as HazardKind[]).filter((k) => Boolean(h[k]));
+  // Die Arten stammen aus der einen Laufzeit-Liste (HAZARD_KINDS), nicht aus hartem if je Art.
+  return HAZARD_KINDS.filter((k) => Boolean(h[k]));
 }
 
 /** Baut den JSON-tauglichen Snapshot (nur Primitive/Arrays/Objekte, keine Zyklen). */

@@ -102,7 +102,8 @@ export function resolveGitContext(cwd, repoRoot, deps = {}) {
 
   const commonDirRaw = run(cwd, ["rev-parse", "--git-common-dir"]);
   if (!commonDirRaw) return { relevant: false };
-  const commonDir = resolve(toplevel, commonDirRaw);
+  // Relativ zum Aufruf-Verzeichnis, nicht zum Toplevel: in einem Unterordner liefert git `../.git` (#1311).
+  const commonDir = resolve(cwd, commonDirRaw);
 
   if (normalizePath(commonDir) !== normalizePath(referenceCommonDir)) {
     return { relevant: false }; // cwd gehört zu einem anderen Repo — nicht unsere Sache

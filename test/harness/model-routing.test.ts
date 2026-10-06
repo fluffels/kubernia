@@ -791,13 +791,14 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
 
   test("Plan-Weiche: pure Erkennung (Aufzählungszeichen und Fettdruck ja, Prosa und „nein“ nein)", () => {
     const planSagtEpic = blockFunktion<(p: unknown) => boolean>(workflowBlock("// ── Plan-Weiche Epic (#1309) — Anfang", "// ── Plan-Weiche Epic (#1309) — Ende").block, "planSagtEpic");
-    for (const ja of ["Weiche Epic: ja", "- Weiche Epic: ja, weil x", "- **Weiche Epic:** ja", "* **Weiche Epic**: Ja, weil x", "text\n  Weiche Epic: ja"]) assert.equal(planSagtEpic(ja), true, ja);
-    for (const nein of ["Weiche Epic: nein", "Die Weiche Epic: ja steht oft im Text", "Weiche Epic: jahrelang", "", null, undefined, 42]) assert.equal(planSagtEpic(nein), false, String(nein));
+    for (const ja of ["Weiche Epic: ja", "- Weiche Epic: ja, weil x", "- **Weiche Epic:** ja", "* **Weiche Epic**: Ja, weil x", "text\n  Weiche Epic: ja", "7. Weiche Epic: ja, weil x", "7) **Weiche Epic:** ja", "  12. Weiche Epic: ja"]) assert.equal(planSagtEpic(ja), true, ja);
+    for (const nein of ["Weiche Epic: nein", "7. Weiche Epic: nein", "> Weiche Epic: ja", "> 7. Weiche Epic: ja", "Die Weiche Epic: ja steht oft im Text", "Weiche Epic: jahrelang", "", null, undefined, 42]) assert.equal(planSagtEpic(nein), false, String(nein));
   });
 
   test("Prosa-Bindung (#1309): Planer-Rolle und Skill nennen die Pflichtzeile „Weiche Epic“", () => {
     assert.match(read(".claude/agents/kubernia-planner.md"), /Weiche Epic: nein/);
     assert.match(read(".claude/agents/kubernia-planner.md"), /Weiche Epic: ja/);
+    assert.match(read(".claude/agents/kubernia-planner.md"), /verbindliches Format: eine eigene Zeile, nicht zitiert mit `>`/, "Format der Pflichtzeile ist verbindlich vorgeschrieben (#1311)");
     assert.match(read(UMSETZUNGS_SKILL), /Weiche Epic: ja/);
   });
 
@@ -971,5 +972,15 @@ describe("Weichen-Regel im Skill-Pfad (#1311)", () => {
     assert.ok(!umsetzerRegelOk(umsetzer.replace("`entscheidung-noetig` melden nur bei", "`entscheidung-noetig` melden auch bei")), "Umsetzer");
     assert.ok(!umsetzerRegelOk(umsetzer.replace("entscheidest du selbst", "legst der Maintainerin vor")), "Umsetzer: Ermessen nicht mehr selbst");
     assert.ok(!skillRegelOk("") && !planerRegelOk("") && !umsetzerRegelOk(""), "leerer Text erfüllt keine Regel");
+  });
+});
+
+describe("Workflow-Pfad räumt Waisen auf wie der SubagentStop-Hook auf dem Skill-Pfad (#1311)", () => {
+  test("der cleanup-Agent bekommt den Waisen-Sweep samt Altersgrenze", async () => {
+    const { aufrufe } = await workflowLauf();
+    const prompt = aufrufe.find((a) => a.label === "cleanup:#42")?.prompt ?? "";
+    assert.match(prompt, /node scripts\/cleanup-worktrees\.mjs/);
+    assert.match(prompt, /--fix/);
+    assert.match(prompt, /unter 5 Minuten/);
   });
 });

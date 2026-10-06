@@ -33,7 +33,7 @@
 import { statSync, readFileSync } from "node:fs";
 import { dirname, resolve, isAbsolute } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { resolveGitContext } from "./worktree-guard-hook.mjs";
+import { buildDenyOutput, resolveGitContext } from "./worktree-guard-hook.mjs"; // eine Quelle für Entscheidung und Ausgabeform
 
 const ORT_BEFEHLE = new Set(["set-location", "cd", "sl", "chdir", "push-location", "pushd"]);
 const INTERPRETER = new Set(["iex", "invoke-expression", "pwsh", "pwsh.exe", "powershell", "powershell.exe", "cmd", "cmd.exe", "bash", "sh", "wsl", "start-process", "start", "invoke-command", "icm"]);
@@ -152,6 +152,58 @@ const unaufloesbar = (v) => /[$*~]|^\(/.test(v) || v === "";
 /** Normalisierter Vergleichs-/Schlüsselpfad (Slashes, absolut). */
 export const normPfad = (p) => resolve(p).replace(/\\/g, "/");
 
+/** Lokale Variablen-Zuweisung `$x = 'literal'` bzw. `$x='literal'`: merkt Literale, alles andere bleibt unbekannt. */
+function zuweisung(toks, vars) {
+  const kopf = toks[0].value;
+  if (!kopf.startsWith("$")) return false;
+  const direkt = /^\$(\w+)=(.*)$/s.exec(kopf);
+  const getrennt = toks[1]?.value === "=" ? { name: kopf.slice(1), wert: toks.slice(2).map((t) => t.value).join(" "), literal: false } : null;
+  const z = direkt ? { name: direkt[1], wert: direkt[2], literal: toks[0].literal } : getrennt;
+  if (!z) return false;
+  const ex = expandiere({ value: z.wert, literal: z.literal }, vars);
+  if (!/[$()]/.test(ex)) vars.set(z.name.toLowerCase(), ex);
+  return true;
+}
+
+/** Das Ziel eines Ortswechsels (`Set-Location <pfad>` bzw. `-Path`/`-LiteralPath <pfad>`); undefined ohne Ziel. */
+function ortsZiel(rest, vars) {
+  const args = rest.map((t) => expandiere(t, vars));
+  for (let i = 0; i < args.length; i++) {
+    if (/^-(path|literalpath|pspath)$/i.test(args[i])) return args[i + 1];
+    if (!args[i].startsWith("-")) return args[i];
+  }
+  return undefined;
+}
+
+/**
+ * Wertet die globalen Optionen eines git-Aufrufs aus (`-C <dir>`, `--work-tree`, `--git-dir`) und liefert
+ * Unterbefehl, Zielordner und ob das Ziel unauswertbar ist.
+ */
+function gitZiel(rest, start, vars, istOrdnerStart) {
+  let dir = start;
+  let unbekannt = istOrdnerStart === null;
+  let sub;
+  const setze = (d) => {
+    if (unaufloesbar(d)) unbekannt = true;
+    else if (!unbekannt) dir = isAbsolute(d) ? d : resolve(dir, d);
+  };
+  for (let i = 0; i < rest.length; ) {
+    const a = expandiere(rest[i], vars);
+    const m = /^--(git-dir|work-tree)(?:=(.*))?$/.exec(a);
+    if (a === "-C") { setze(rest[i + 1] ? expandiere(rest[i + 1], vars) : ""); i += 2; }
+    else if (m) {
+      const wert = m[2] ?? (rest[i + 1] ? expandiere(rest[i + 1], vars) : "");
+      // --git-dir=<x>/.git zeigt auf den Checkout daneben, --work-tree direkt auf ihn
+      setze(m[1] === "git-dir" && /[\\/]\.git$/.test(wert) ? wert.replace(/[\\/]\.git$/, "") || "/" : wert);
+      i += m[2] === undefined ? 2 : 1;
+    }
+    else if (a === "-c" || a === "--exec-path" || a === "--namespace") i += 2;
+    else if (a.startsWith("-")) i++;
+    else { sub = a; break; }
+  }
+  return { sub, dir, unbekannt };
+}
+
 /**
  * Bewertet einen PowerShell-Befehl. `deps.istOrdner(pfad)` und `deps.kontext(ordner)` sind injizierbar
  * (Tests); Standard: echtes Dateisystem und `resolveGitContext` aus dem Bash-Hook.
@@ -162,7 +214,7 @@ export function bewertePowerShell({ command, cwd, repoRoot, deps = {} }) {
   const istOrdner = deps.istOrdner ?? ((p) => { try { return statSync(p).isDirectory(); } catch { return false; } });
   const kontext = deps.kontext ?? ((dir) => resolveGitContext(dir, repoRoot));
   const vars = new Map();
-  let ort = resolve(cwd);
+  let ort = resolve(cwd); // null = nach einem nicht auswertbaren Ortswechsel
   let ortOk = true; // Ergebnis des letzten Ortswechsels (für && / ||)
 
   const blockiert = (dir, was) => {
@@ -183,91 +235,52 @@ export function bewertePowerShell({ command, cwd, repoRoot, deps = {} }) {
       "literal schreiben (`git -C C:\\pfad\\zum\\worktree …`), damit der Haupt-Checkout-Schutz greift. (#1311)",
   });
 
+  /** git-Statement: commit/push gegen das Ziel prüfen; unauswertbares Ziel ist fail-closed. */
+  const gitStatement = (rest) => {
+    const { sub, dir, unbekannt } = gitZiel(rest, ort, vars, ort);
+    if (sub && GESCHUETZT.has(sub)) return unbekannt ? unklar(sub) : blockiert(dir, sub);
+    if (!unbekannt) return null;
+    // Ziel nicht auswertbar: steht irgendwo commit/push in den Argumenten, ist es zu unklar zum Durchlassen.
+    const was = rest.map((t) => expandiere(t, vars)).find((a) => GESCHUETZT.has(a));
+    return was ? unklar(was) : null;
+  };
+
+  /** Ortswechsel: nur ein existierender Ordner ändert den Ort, sonst bleibt er (und `&&` bricht ab). */
+  const ortWechsel = (rest) => {
+    const ziel = ortsZiel(rest, vars);
+    if (ziel === undefined) return;
+    if (unaufloesbar(ziel)) { ort = null; return; }
+    const abs = isAbsolute(ziel) ? ziel : resolve(ort ?? cwd, ziel);
+    if (istOrdner(abs)) ort = abs;
+    else ortOk = false;
+  };
+
+  /** Interpreter-Umweg: kommt im Text des Statements git … commit|push vor, gilt das gegen den aktuellen Ort. */
+  const interpreter = (raw) => {
+    if (!/\bgit(\.exe)?\b[^;|]*\b(commit|push)\b/i.test(raw)) return null;
+    return ort === null ? unklar("commit/push") : blockiert(ort, "commit/push (über einen Interpreter)");
+  };
+
   let vorherSep = ";";
   for (const stmt of zerlege(command)) {
     // Verkettung: nach fehlgeschlagenem Ortswechsel läuft ein && -Nachfolger nicht, ein || -Nachfolger schon.
     const ueberspringen = (vorherSep === "&&" && !ortOk) || (vorherSep === "||" && ortOk);
-    const sep = stmt.sep;
-    if (ueberspringen) { vorherSep = sep; continue; }
+    vorherSep = stmt.sep;
+    if (ueberspringen) continue;
     ortOk = true;
 
     const toks = stmt.tokens;
-    const kopf = befehlsname(toks[0].value);
-    const kopfTok = kopf === "&" || kopf === "." ? toks[1] : toks[0];
-    const rest = kopf === "&" || kopf === "." ? toks.slice(2) : toks.slice(1);
+    if (zuweisung(toks, vars)) continue;
+    const aufruf = ["&", "."].includes(befehlsname(toks[0].value));
+    const kopfTok = aufruf ? toks[1] : toks[0];
+    const rest = toks.slice(aufruf ? 2 : 1);
     const cmd = kopfTok ? befehlsname(kopfTok.value) : "";
 
-    // $x = 'literal'  |  $x='literal'
-    const zuw = /^\$(\w+)=(.*)$/s.exec(toks[0].value) ?? (toks[1]?.value === "=" ? [null, toks[0].value.replace(/^\$/, ""), toks.slice(2).map((t) => t.value).join(" ")] : null);
-    if (toks[0].value.startsWith("$") && zuw) {
-      const wert = zuw[2] ?? "";
-      const tokWert = toks[0].value.includes("=") ? { value: wert, literal: toks[0].literal } : { value: wert, literal: false };
-      const ex = expandiere(tokWert, vars);
-      if (!/[$()]/.test(ex)) vars.set(zuw[1].toLowerCase(), ex);
-      vorherSep = sep;
-      continue;
-    }
-
-    if (ORT_BEFEHLE.has(cmd.toLowerCase())) {
-      const args = rest.map((t) => ({ tok: t, v: expandiere(t, vars) }));
-      let ziel;
-      for (let i = 0; i < args.length; i++) {
-        const v = args[i].v;
-        if (/^-(path|literalpath|pspath)$/i.test(v)) { ziel = args[i + 1]?.v; break; }
-        if (v.startsWith("-")) continue;
-        ziel = v;
-        break;
-      }
-      if (ziel !== undefined && !unaufloesbar(ziel)) {
-        const abs = isAbsolute(ziel) ? ziel : resolve(ort, ziel);
-        if (istOrdner(abs)) ort = abs;
-        else ortOk = false; // Fehler: Ort bleibt
-      } else if (ziel !== undefined) {
-        ort = null; // unbekannter Ort: Folge-Statements mit git commit/push sind unklar
-      }
-      vorherSep = sep;
-      continue;
-    }
-
-    if (kopfTok && istGit(kopfTok.value)) {
-      let dir = ort;
-      let unbekannt = ort === null;
-      let i = 0;
-      let sub;
-      while (i < rest.length) {
-        const a = expandiere(rest[i], vars);
-        if (a === "-C") {
-          const d = rest[i + 1] ? expandiere(rest[i + 1], vars) : "";
-          if (unaufloesbar(d)) unbekannt = true;
-          else if (!unbekannt) dir = isAbsolute(d) ? d : resolve(dir, d);
-          i += 2;
-        } else if (a === "-c" || a === "--exec-path" || a === "--namespace") i += 2;
-        else if (/^--(git-dir|work-tree)=/.test(a)) { unbekannt = unbekannt || false; i++; }
-        else if (a.startsWith("-")) i++;
-        else { sub = a; break; }
-      }
-      if (sub && GESCHUETZT.has(sub)) {
-        if (unbekannt) return unklar(sub);
-        const r = blockiert(dir, sub);
-        if (r) return r;
-      } else if (unbekannt) {
-        // Ziel nicht auswertbar: steht irgendwo commit/push in den Argumenten, ist es zu unklar zum Durchlassen.
-        const was = rest.map((t) => expandiere(t, vars)).find((a) => GESCHUETZT.has(a));
-        if (was) return unklar(was);
-      }
-      vorherSep = sep;
-      continue;
-    }
-
-    if (INTERPRETER.has(cmd.toLowerCase()) || INTERPRETER.has(basename(cmd))) {
-      // grobe Regel: im Text des Statements kommt git … commit|push vor → gegen den aktuellen Ort prüfen
-      if (/\bgit(\.exe)?\b[^;|]*\b(commit|push)\b/i.test(stmt.raw)) {
-        if (ort === null) return unklar("commit/push");
-        const r = blockiert(ort, "commit/push (über einen Interpreter)");
-        if (r) return r;
-      }
-    }
-    vorherSep = sep;
+    let r = null;
+    if (ORT_BEFEHLE.has(cmd.toLowerCase())) ortWechsel(rest);
+    else if (kopfTok && istGit(kopfTok.value)) r = gitStatement(rest);
+    else if (INTERPRETER.has(cmd.toLowerCase()) || INTERPRETER.has(basename(cmd))) r = interpreter(stmt.raw);
+    if (r) return r;
   }
   return { block: false };
 }
@@ -280,11 +293,6 @@ export function parseHookInput(text) {
   } catch {
     return {};
   }
-}
-
-/** Die dokumentierte `hookSpecificOutput`-JSON für ein `PreToolUse`-Deny. */
-export function buildDenyOutput(reason) {
-  return { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason } };
 }
 
 function main() {
