@@ -126,3 +126,26 @@ test("Pod-Security-Ablehnung (Handler-Fehler) bleibt auch bei gemappten Dateien 
   expect(r.error).toBeTruthy();
   expect(sim.deployments.find(d => d.name === "web")).toBeUndefined();
 });
+
+test("apply: geänderte serviceAccountName bei gleicher Replikazahl ist configured", () => {
+  sim.files["web.yaml"] = dep(1);
+  sim.exec("kubectl apply -f web.yaml");
+  sim.files["web.yaml"] = dep(1).replace("    spec:\n", "    spec:\n      serviceAccountName: wachdienst\n");
+  expect(sim.exec("kubectl apply -f web.yaml").output).toBe("deployment.apps/web configured");
+  expect(sim.deployments[0].serviceAccountName).toBe("wachdienst");
+});
+
+test("hinterlegter Effekt: apply nach scale setzt auf den Manifest-Wert zurück (configured)", () => {
+  sim.files["app.yaml"] = "x";
+  sim.applyEffects["app.yaml"] = { deployment: { name: "lager", image: "redis", replicas: 2 } };
+  sim.exec("kubectl apply -f app.yaml");
+  sim.exec("kubectl scale deployment lager --replicas=5");
+  expect(sim.exec("kubectl apply -f app.yaml").output).toBe("deployment.apps/lager configured");
+  expect(sim.deployments.find(d => d.name === "lager")?.pods.length).toBe(2);
+});
+
+test("gemapptes Deployment mit initContainers wird ohne fillsMi angelegt (kein NaN)", () => {
+  sim.files["web.yaml"] = dep(1).replace("      containers:", "      initContainers:\n        - name: i\n          image: busybox\n      containers:");
+  expect(sim.exec("kubectl apply -f web.yaml").error).toBeFalsy();
+  expect(sim.deployments[0].initContainer).toStrictEqual({ fillsMi: 0, doubleStage: false });
+});

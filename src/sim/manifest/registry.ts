@@ -26,7 +26,11 @@ export interface ManifestFailure { error: string; hint?: string }
 /** Das Ergebnis: die Effekte in Dokument-Reihenfolge oder ein Fehlschlag. */
 export type ManifestResult = ApplyEffect[] | ManifestFailure;
 
-const SUPPORTED_HINT = "Per Datei versteht dieses Sim zurzeit Deployment (apps/v1) und Service (v1).";
+/** Der Tipp zu unbekannten Kinds, aus dem Register abgeleitet (kein zweiter Pflegeort). */
+function supportedHint(): string {
+  const kinds = Object.keys(MAPPERS).map(k => k.split("|")[1] + " (" + k.split("|")[0] + ")");
+  return "Per Datei versteht dieses Sim zurzeit: " + kinds.join(", ") + ".";
+}
 
 function failure(error: string, hint?: string): ManifestFailure {
   return hint === undefined ? { error } : { error, hint };
@@ -51,10 +55,10 @@ function mapOne(doc: YamlValue, file: string, tag: string): ApplyEffect | Manife
   if (missing.length > 0) return failure(frame + "[" + missing.join(", ") + "]", "Jedes Manifest beginnt mit 'apiVersion:' und 'kind:'.");
   const mapper = MAPPERS[apiVersion + "|" + kind];
   if (!mapper) {
-    const meta = leaf.key("metadata").key("name").value;
-    const name = typeof meta === "string" ? meta : "";
+    const meta = doc.metadata;
+    const name = isMapping(meta) ? textOf(meta.name) : "";
     return failure('error: resource mapping not found for name: "' + name + '" namespace: "" from "' + file + '"' + tag
-      + ': no matches for kind "' + kind + '" in version "' + apiVersion + '"', SUPPORTED_HINT);
+      + ': no matches for kind "' + kind + '" in version "' + apiVersion + '"', supportedHint());
   }
   try {
     return mapper(leaf);

@@ -116,3 +116,15 @@ describe("YAML-Parser: harte Fehler mit Zeile", () => {
     expect(errOf("a: 1\n".repeat(5001)).reason).toMatch(/zu lang/);
   });
 });
+
+describe("YAML-Parser: Quote- und Kommentar-Randfälle", () => {
+  it("Apostroph mitten im Wort öffnet keinen String, Kommentar wird entfernt", () => {
+    expect(one("a: it's # kommentar\n")).toStrictEqual({ a: "it's" });
+  });
+  it("escaptes Anführungszeichen im String, # darin bleibt", () => {
+    expect(one('a: "x\\" # y"\n')).toStrictEqual({ a: 'x" # y' });
+  });
+  it("BOM, --- mit Kommentar, große Ganzzahl bleibt Text", () => {
+    expect(parseYamlDocuments("﻿a: 1\n--- # neu\nb: 12345678901234567890\n")).toStrictEqual([{ a: 1 }, { b: "12345678901234567890" }]);
+  });
+});

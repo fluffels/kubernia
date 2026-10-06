@@ -170,6 +170,13 @@ describe("Registry: effectsFromManifest", () => {
     expect(bad("apiVersion: apps/v1\nkind: Service\n").error).toMatch(/no matches for kind "Service" in version "apps\/v1"/);
   });
 
+  it("unbekanntes kind mit skalarem metadata wirft nicht, sondern meldet kubectl-Text", () => {
+    const f = bad("apiVersion: v1\nkind: ConfigMap\nmetadata: x\n");
+    expect(f.error).toMatch(/no matches for kind "ConfigMap"/);
+    expect(f.error).toMatch(/name: "" namespace/);
+    expect(f.hint).toBe("Per Datei versteht dieses Sim zurzeit: Deployment (apps/v1), Service (v1).");
+  });
+
   it("Dockerfile-Inhalt ist ein Parse-Fehler", () => {
     expect(bad("FROM node:20\nCOPY . .\n").error).toMatch(/^error: error parsing m\.yaml: yaml: line 2:/);
   });

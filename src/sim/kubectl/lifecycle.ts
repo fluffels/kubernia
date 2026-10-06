@@ -10,7 +10,7 @@
  * kubectl-Dispatch (../kubectl.ts).
  */
 import type { ApplyEffect, ArgoApp, Deployment, RbacSubject } from "../state";
-import { addDeployment, removeDeployment, scaleDeployment,addStatefulSet, removeStatefulSet, replaceDeploymentPod, restartStatefulPod } from "../workload";
+import { addDeployment, removeDeployment, scaleDeployment, addStatefulSet, removeStatefulSet, replaceDeploymentPod, restartStatefulPod } from "../workload";
 // Argo-CD-Reconcile/-Klon liegen seit #378 bei der argocd-Familie in ../argocd – `kubectl apply -f`
 // einer Application zieht/kloniert den Soll direkt darüber (statt über eine Host-Methode).
 import { argoReconcile, cloneChildSpec } from "../argocd";
