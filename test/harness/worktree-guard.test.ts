@@ -473,7 +473,7 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
     git(main, "add", "-A");
     git(main, "commit", "-q", "-m", "init");
     git(main, "worktree", "add", "-q", "-b", "wtbranch", linked);
-  });
+  }, 60_000);
   afterAll(() => {
     for (const [k, v] of gitEnvVorher) process.env[k] = v;
     rmSync(base, { recursive: true, force: true });
@@ -557,7 +557,7 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
     ["cd 'L' && git -C \"$X\" push", false],
     ["cd 'L' && GIT_DIR=x git commit -m x", false],
     ["cd 'L' && git --git-dir=x push", false],
-    ['find . -exec echo {} \\; -exec bash -c "git push" \\;', false], // weitere -exec-Ziele zählen
+    ['find . -exec echo {} \\; -exec bash -c "git push" \\;', false], // hinter find gilt die Text-Ausnahme nicht
     ["git --git-dir .git commit -m x", false],
     ["cd 'L' && git --git-dir M/.git commit -m x", false],
     ["git -C ~/x push", false],
@@ -582,7 +582,7 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
     ['command echo "git push"', true],
   ];
 
-  test("Differenz-Matrix aus Haupt-Checkout und Unterordner: nur bewusste Fälle gehen durch", { timeout: 120_000 }, () => {
+  test("Differenz-Matrix aus Haupt-Checkout und Unterordner: nur bewusste Fälle gehen durch", () => {
     const coarse = (c: string) => c.split(/&&|\|\||;|\n/).some((s) => /\bgit\b/.test(s) && /\b(commit|push)\b/.test(s)); // frühere Wortregel
     for (const cwd of [main, sub]) {
       for (const [roh, erlaubt] of MATRIX) {
