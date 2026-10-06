@@ -18,8 +18,9 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/cleanup-worktrees.mjs).
 // @ts-expect-error: kein .d.ts fuer das .mjs-Tooling-Skript.
 import * as launcherModule from "../../scripts/playwright-mcp.mjs";
@@ -59,6 +60,50 @@ describe("planLaunch – Startentscheidung des Launchers", () => {
   });
 });
 
+describe("readInstalled/readLockVersion – Dateizugriff liefert null/undefined statt zu werfen", () => {
+  // Fixture-Checkout in einem Temp-Ordner: genau die Fälle, in denen main() sonst vor der
+  // Startentscheidung abstürzte und der Server still fehlte.
+  const fixture = (files: Record<string, string>): string => {
+    const dir = mkdtempSync(join(tmpdir(), "kq-pwmcp-"));
+    for (const [rel, content] of Object.entries(files)) {
+      mkdirSync(dirname(join(dir, rel)), { recursive: true });
+      writeFileSync(join(dir, rel), content);
+    }
+    return dir;
+  };
+  const pkgJson = (bin: unknown): string => JSON.stringify({ name: launcher.PKG, version: "1.2.3", bin });
+  const pkgDir = `node_modules/${launcher.PKG}`;
+
+  test("Paket nicht installiert (Checkout ohne npm ci) → null", () => {
+    assert.equal(launcher.readInstalled(fixture({})), null);
+  });
+
+  test("package.json ohne passenden bin → null", () => {
+    assert.equal(launcher.readInstalled(fixture({ [`${pkgDir}/package.json`]: pkgJson({ anders: "x.js" }) })), null);
+  });
+
+  test("bin-Eintrag vorhanden, Datei fehlt → null (nicht lokal starten)", () => {
+    assert.equal(launcher.readInstalled(fixture({ [`${pkgDir}/package.json`]: pkgJson({ [launcher.BIN]: "cli.js" }) })), null);
+  });
+
+  test("kaputte package.json → null", () => {
+    assert.equal(launcher.readInstalled(fixture({ [`${pkgDir}/package.json`]: "{kaputt" })), null);
+  });
+
+  test("bin als Objekt- und als String-Eintrag → Version + Pfad", () => {
+    for (const bin of [{ [launcher.BIN]: "cli.js" }, "cli.js"]) {
+      const dir = fixture({ [`${pkgDir}/package.json`]: pkgJson(bin), [`${pkgDir}/cli.js`]: "" });
+      assert.deepEqual(launcher.readInstalled(dir), { version: "1.2.3", binPath: join(dir, pkgDir, "cli.js") });
+    }
+  });
+
+  test("Lockfile fehlt, ist kaputt oder ohne Eintrag → undefined", () => {
+    assert.equal(launcher.readLockVersion(fixture({})), undefined);
+    assert.equal(launcher.readLockVersion(fixture({ "package-lock.json": "{kaputt" })), undefined);
+    assert.equal(launcher.readLockVersion(fixture({ "package-lock.json": JSON.stringify({ packages: {} }) })), undefined);
+  });
+});
+
 describe("Verdrahtung im Repo", () => {
   test(".mcp.json startet den Playwright-Server über den Launcher (kein npx, kein @latest)", () => {
     const cfg = readJson(".mcp.json") as { mcpServers: Record<string, { command: string; args: string[] }> };
@@ -67,7 +112,7 @@ describe("Verdrahtung im Repo", () => {
     assert.equal(server.command, "node");
     assert.equal(server.args[0], "scripts/playwright-mcp.mjs");
     assert.ok(existsSync(join(root, server.args[0])), "Launcher-Datei fehlt");
-    assert.ok(!server.args.some((a) => /@latest/.test(a)), "kein @latest in den Server-Argumenten");
+    assert.ok(!server.args.some((a) => /@latest|^npx$/.test(a)), "kein npx/@latest in den Server-Argumenten");
   });
 
   test("Lockfile pinnt das Paket, und das installierte Paket liefert den erwarteten bin", () => {
@@ -95,8 +140,9 @@ describe("Verdrahtung im Repo", () => {
   test("das Ausgabeverzeichnis des Servers ist gitignored", () => {
     const cfg = readJson(".mcp.json") as { mcpServers: Record<string, { args: string[] }> };
     const args = cfg.mcpServers.playwright.args;
-    const outDir = args[args.indexOf("--output-dir") + 1];
-    assert.ok(outDir, "--output-dir fehlt");
+    const i = args.indexOf("--output-dir");
+    assert.ok(i >= 0 && args[i + 1], "--output-dir mit Wert fehlt in .mcp.json");
+    const outDir = args[i + 1];
     const ignore = readFileSync(join(root, ".gitignore"), "utf8").split(/\r?\n/);
     assert.ok(ignore.includes(`${outDir}/`), `${outDir}/ fehlt in .gitignore`);
   });
