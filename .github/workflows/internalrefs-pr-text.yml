@@ -1,0 +1,36 @@
+name: Interne Bezüge im PR-Text
+
+# check:internalrefs --text (#990/#1239): PR-Titel und -Body gegen die Begriffslisten prüfen.
+# Der Repo-Lauf in CI deckt Dateien und Commit-Messages ab; Titel/Body stehen nur im PR und
+# bleiben über refs/pull/* dauerhaft öffentlich, auch wenn der PR später editiert wird.
+#
+# Design:
+#   - Trigger inkl. `edited`, damit auch ein nachträglich geänderter Titel/Body geprüft wird.
+#   - Eigener Workflow statt Schritt in ci.yml: ein Edit startet nicht die ganze Gate-Kette neu.
+#   - Titel/Body kommen über Umgebungsvariablen, nie per Interpolation in das Skript.
+#   - Das Skript braucht nur Node-Builtins, daher kein `npm ci`.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-text:
+    name: PR-Text auf interne Bezüge prüfen
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Node einrichten
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Titel und Body prüfen
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" | node scripts/check-internalrefs.mjs --text

@@ -28,7 +28,7 @@
  * Herkunftsbegriffe (ENCODED_TERMS) brauchen für Flexionsformen einen eigenen Eintrag (Wortgrenzen:
  * der Grundbegriff trifft z.B. den Genitiv nicht); Namensbezüge (ENCODED_NAME_TERMS) matchen als
  * Wortstamm und decken Flexion/Komposita ab. Geprüft werden getrackte Dateien UND die Commit-Messages
- * des Branches (`origin/main..HEAD`); PR-Titel/-Body nur manuell per `--text` über stdin (keine CI-Verdrahtung). Wer in einem Content-Ticket einen NPC-/Ortsnamen wählt und hier rot wird, wählt
+ * des Branches (`origin/main..HEAD`); PR-Titel/-Body per `--text` über stdin (in der CI: `.github/workflows/internalrefs-pr-text.yml`). Wer in einem Content-Ticket einen NPC-/Ortsnamen wählt und hier rot wird, wählt
  * einen anderen Namen — der Begriff bleibt in der Liste.
  *
  * Liste erweitern, ohne Klartext anzufassen:
@@ -166,13 +166,25 @@ export function listBranchCommitMessages(rootDir = ROOT, exec = execFileSync) {
 }
 
 /** Kompletter Lauf gegen das echte Repo: getrackte Dateien plus Commit-Messages des Branches. */
-export function runCheck(rootDir = ROOT) {
-  const files = listTrackedFiles(rootDir).filter((f) => isCheckable(f));
-  const commits = listBranchCommitMessages(rootDir);
-  const texts = new Map(commits.map((c) => [c.name, c.text]));
-  const readFile = (rel) => (texts.has(rel) ? texts.get(rel) : readFileSync(join(rootDir, rel), "utf8"));
+export function runCheck(rootDir = ROOT, io = {}) {
+  // Injizierbar, damit die Verdrahtung (beide Begriffslisten, Commit-Messages) testbar ist.
+  const {
+    listFiles = listTrackedFiles,
+    listCommits = listBranchCommitMessages,
+    readFile: readDisk = (rel) => readFileSync(join(rootDir, rel), "utf8"),
+    terms = decodeTerms(),
+    nameTerms = decodeTerms(ENCODED_NAME_TERMS),
+  } = io;
+  const files = listFiles(rootDir).filter((f) => isCheckable(f));
+  const texts = new Map(listCommits(rootDir).map((c) => [c.name, c.text]));
+  const readFile = (rel) => (texts.has(rel) ? texts.get(rel) : readDisk(rel));
   const all = [...files, ...texts.keys()];
-  return { files: all, violations: findViolations(all, decodeTerms(), readFile, decodeTerms(ENCODED_NAME_TERMS)) };
+  return { files: all, violations: findViolations(all, terms, readFile, nameTerms) };
+}
+
+/** Was die Erfolgsmeldung als „geprüft" nennt: der Repo-Lauf Dateien und Commits, `--text` nur stdin. */
+export function checkedLabel(kind) {
+  return kind === "text" ? "Text von stdin" : "Dateien, Commit-Messages";
 }
 
 /** Trägt einen neuen Begriff kodiert in DIESE Datei ein (idempotent). Gibt zurück, was passiert
@@ -219,19 +231,19 @@ function main(argv = process.argv.slice(2)) {
   //   gh pr view <nr> --json title,body --jq '.title, .body' | node scripts/check-internalrefs.mjs --text
   if (argv.includes("--text")) {
     const text = readFileSync(0, "utf8");
-    reportAndExit(findViolations(["stdin"], decodeTerms(), () => text, decodeTerms(ENCODED_NAME_TERMS)), 1, red, green);
+    reportAndExit(findViolations(["stdin"], decodeTerms(), () => text, decodeTerms(ENCODED_NAME_TERMS)), 1, red, green, checkedLabel("text"));
     return;
   }
 
   const { files, violations } = runCheck();
-  reportAndExit(violations, files.length, red, green);
+  reportAndExit(violations, files.length, red, green, checkedLabel("repo"));
 }
 
 /** Gemeinsame Ausgabe. Der Begriff selbst wird NICHT ausgegeben — die Fundstelle genügt, und eine
  *  Fehlermeldung landet leicht in Logs/CI-Ausgaben, die wieder öffentlich sind. */
-function reportAndExit(violations, checked, red, green) {
+function reportAndExit(violations, checked, red, green, label) {
   if (violations.length === 0) {
-    console.log(green(`✔ Keine internen Referenzen (${checked} Quellen geprüft: Dateien, Commit-Messages).`));
+    console.log(green(`✔ Keine internen Referenzen (${checked} Quellen geprüft: ${label}).`));
     return;
   }
 

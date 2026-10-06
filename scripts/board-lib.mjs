@@ -42,14 +42,34 @@ export const isRateLimit = (message) => /rate limit/i.test(String(message ?? "")
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
 const gh = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 
-/** Eine Listenabfrage: alle Issue-Items des Boards in Board-Reihenfolge. Bricht laut ab, wenn die
- *  Liste abgeschnitten ist (mehr Items als `--limit`), statt Nummern still als fehlend zu melden. */
-export function loadItems() {
-  const raw = JSON.parse(gh(["project", "item-list", "1", "--owner", "fluffels", "--format", "json", "--limit", "800"]));
+/**
+ * Antwort von `gh project item-list --format json` → Issue-Items in Board-Reihenfolge. Pur, damit
+ * die Form mit einer echten JSON-Probe testbar ist. Bricht laut ab bei unerwarteter Form oder
+ * abgeschnittener Liste (mehr Items als `--limit`), statt Nummern still als fehlend zu melden.
+ */
+export function normalizeItems(raw) {
+  if (!raw || !Array.isArray(raw.items)) throw new Error("Unerwartete Antwortform von gh project item-list (kein items-Array).");
   if (typeof raw.totalCount === "number" && raw.totalCount > raw.items.length) {
     throw new Error(`Board-Liste abgeschnitten (${raw.items.length} von ${raw.totalCount}), --limit erhöhen.`);
   }
   return raw.items.filter((i) => i.content?.type === "Issue").map((i) => ({ id: i.id, number: i.content.number }));
+}
+
+/**
+ * Eine gemeinsame Abbruch-Meldung. `gh` meldet bei erschöpftem GraphQL-Limit auch „unknown owner type“;
+ * das ist irreführend und wird hier als Rate-Limit gezeigt.
+ */
+export function abortMessage(message) {
+  const first = String(message ?? "").split("\n")[0];
+  if (isRateLimit(first) || /unknown owner type/i.test(first)) {
+    return `API-Rate-Limit (gh meldet das bei erschöpftem GraphQL-Limit teils als „unknown owner type“): ${first}`;
+  }
+  return first;
+}
+
+/** Eine Listenabfrage: alle Issue-Items des Boards in Board-Reihenfolge. */
+export function loadItems() {
+  return normalizeItems(JSON.parse(gh(["project", "item-list", "1", "--owner", "fluffels", "--format", "json", "--limit", "800"])));
 }
 
 /** Position setzen: hinter `afterId`, null = an die Spitze. */

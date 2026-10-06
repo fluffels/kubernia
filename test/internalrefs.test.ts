@@ -41,7 +41,17 @@ type InternalRefsApi = {
     readFile: (f: string) => string,
     nameTerms?: string[],
   ) => Violation[];
-  runCheck: () => { files: string[]; violations: Violation[] };
+  runCheck: (
+    root?: string,
+    io?: {
+      listFiles?: (root: string) => string[];
+      listCommits?: (root: string) => { name: string; text: string }[];
+      readFile?: (rel: string) => string;
+      terms?: string[];
+      nameTerms?: string[];
+    },
+  ) => { files: string[]; violations: Violation[] };
+  checkedLabel: (kind: "repo" | "text") => string;
   addTerm: (term: string, selfPath: string, listName?: string) => { ok: boolean; reason?: string; encoded?: string; count?: number };
 };
 
@@ -55,6 +65,7 @@ const {
   isCheckable,
   findViolations,
   runCheck,
+  checkedLabel,
   addTerm,
 } = rawModule as unknown as InternalRefsApi;
 
@@ -182,6 +193,49 @@ describe("Interne-Referenzen-Wächter (#990)", () => {
 
     const keineBasis = () => { throw new Error("unknown revision origin/main"); };
     assert.deepEqual(listBranchCommitMessages("/x", keineBasis), [], "fail-open wie check:diffsize");
+  });
+
+  test("listBranchCommitMessages fragt origin/main..HEAD im übergebenen Verzeichnis ab (#1239)", () => {
+    const aufrufe: { cmd: string; args: string[]; cwd: unknown }[] = [];
+    const exec = ((cmd: string, args: string[], opts: { cwd: unknown }) => {
+      aufrufe.push({ cmd, args, cwd: opts.cwd });
+      return "";
+    }) as unknown as () => string;
+    listBranchCommitMessages("/repo", exec);
+    assert.equal(aufrufe[0].cmd, "git");
+    assert.deepEqual(aufrufe[0].args.slice(0, 2), ["log", "origin/main..HEAD"]);
+    assert.equal(aufrufe[0].cwd, "/repo");
+  });
+
+  test("runCheck verdrahtet Dateien, Commit-Messages und beide Begriffslisten (#1239)", () => {
+    const io = {
+      listFiles: () => ["a.md", "bild.png"],
+      listCommits: () => [{ name: "commit:abc1234", text: `feat: harmlos\n\nBody ${DUMMY}` }],
+      readFile: (rel: string) => (rel === "a.md" ? "Name: zzzname" : ""),
+      terms: [DUMMY],
+      nameTerms: ["zzzname"],
+    };
+    const r = runCheck("/x", io);
+    assert.deepEqual(r.files, ["a.md", "commit:abc1234"], "nicht prüfbare Dateien (png) fallen raus, Commits kommen dazu");
+    assert.deepEqual(
+      r.violations.map((v) => `${v.file}:${v.kind}`).sort(),
+      ["a.md:name", "commit:abc1234:ref"],
+      "Begriffsliste UND Namensliste greifen, auch in Commit-Messages",
+    );
+  });
+
+  test("PR-Text-Workflow prüft Titel/Body per --text, auch nach Edit, ohne Interpolation ins Skript (#1239)", () => {
+    const yml = readRepo(".github/workflows/internalrefs-pr-text.yml");
+    assert.match(yml, /types: \[[^\]]*edited[^\]]*\]/, "ein nachträglich geänderter PR-Text muss neu geprüft werden");
+    assert.match(yml, /check-internalrefs\.mjs --text/);
+    const run = yml.split(/\r?\n/).filter((l) => l.includes("run:")).join("\n");
+    assert.doesNotMatch(run, /\$\{\{/, "Titel/Body nur über env, nie per ${{ }} in den Shell-Befehl (Injection)");
+  });
+
+  test("Erfolgsmeldung nennt die tatsächlich geprüften Quellen (#1239)", () => {
+    assert.match(checkedLabel("repo"), /Dateien, Commit-Messages/);
+    assert.match(checkedLabel("text"), /Text von stdin/);
+    assert.doesNotMatch(checkedLabel("text"), /Dateien/);
   });
 
   test("addTerm trägt in die gewählte Liste ein und lässt die andere unberührt (#1217)", () => {

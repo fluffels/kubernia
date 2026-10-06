@@ -3,8 +3,12 @@
  * SaveStore, slots() leitet die Anzeige (Rang/Quest-Titel) aus den Roh-Zahlen ab. Jeder Test
  * läuft mit frischem Modul + eigenem localStorage-Stub, damit sich die Slots nicht vermischen.
  */
-import { test, expect, vi, afterEach } from "vitest";
+import { test, expect, vi, afterEach, beforeAll } from "vitest";
 import { KQContent } from "../src/content";
+import { warmupGameStack } from "./support/browser-env";
+
+// Kaltimport des Spiel-Stacks einmal vorwärmen (Timeout-Risiko unter Last, #1239).
+beforeAll(warmupGameStack, 60_000);
 
 function freshWindow() {
   const map = new Map<string, string>();
