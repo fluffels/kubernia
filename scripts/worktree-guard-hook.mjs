@@ -32,14 +32,14 @@
  *    `cwd`, wenn der Lexer nicht zerlegen kann; je Kommando als Sicherheitsnetz gegen das
  *    verfolgte Verzeichnis, wenn dessen Worttext sie trifft (`bash -c "git push"`,
  *    `timeout 5 …`); ausgenommen reine Text-Kommandos (gh, echo, printf, cat, git). Text in
- *    Heredoc-Bodies (außer `$(…)`/Backticks bei unquotiertem Delimiter) und Kommentaren zählt nie. Bewusst konservativ: im Zweifel blocken; ein
- *    `cd`-Ziel, das nicht sicher gilt (bedingt, in Blöcken, hinter `then`/`{`), wird
- *    zusätzlich als Ziel geprüft.
- *  - Restlücken (nicht erkannt): Aliase/Shell-Funktionen, `env -C`, Interpreter mit Heredoc/Pipe
- *    als Eingabe (`bash <<EOF`, `echo … | sh`), `git submodule foreach`/`rebase -x`/`subtree push`,
- *    Git-Aliase (`git -c alias.p=push p`), dynamische `cd`/`-C`-Ziele (`cd "$(…)/.."`) aus einem
- *    Worktree, ein vorher exportiertes `GIT_DIR`; das PowerShell-Tool deckt
- *    der Hook nicht ab. `pushd`/`popd`, ein nicht verfolgbares `cd` und `--git-dir`/`GIT_DIR`
+ *    Heredoc-Bodies (außer `$(…)`/Backticks bei unquotiertem Delimiter) und Kommentaren
+ *    zählt nie. Bewusst konservativ: im Zweifel blocken; ein `cd`-Ziel, das nicht sicher
+ *    gilt (bedingt, in Blöcken, hinter `then`/`{`), wird zusätzlich als Ziel geprüft.
+ *  - Restlücken (nicht erkannt): Shell-Aliase/-Funktionen, `env -C`, Interpreter mit
+ *    Heredoc/Pipe als Eingabe (`bash <<EOF`, `echo … | sh`), `git submodule foreach`/
+ *    `rebase -x`/`subtree push`, Git-Aliase (`git -c alias.p=push p`), dynamische `cd`/`-C`-
+ *    Ziele (`cd "$(…)/.."`) aus einem Worktree, ein vorher exportiertes `GIT_DIR`; das
+ *    PowerShell-Tool deckt der Hook nicht ab. `pushd`/`popd`, ein nicht verfolgbares `cd` und `--git-dir`/`GIT_DIR`
  *    wirken über das Session-`cwd` (zurücksetzen bzw. zusätzlich prüfen).
  *  - Fail-open bei Unsicherheit (kein cwd im Payload, cwd ist gar kein Git-Repo,
  *    cwd gehört zu einem anderen Repo): NICHT blocken — dieselbe "kein falsches
@@ -470,7 +470,7 @@ export function protectedGitTargets(command, cwd, deps = {}) {
       const wirksam = cmdWord === "cd" && ci === 0 && pure && depth === 0 && existiert;
       if (existiert && !wirksam) unverfolgt.add(dir);
       cur = wirksam ? dir : cwd;
-    } else if (!inv && !TEXT_COMMANDS.has(cmdWord)) {
+    } else if (!inv && !(TEXT_COMMANDS.has(cmdWord) && !FIND_RE.test(first))) {
       const text = c.words.map((w) => w.text).join(" ");
       if (coarseProtected(text)) targets.add(resolve(cur));
     }

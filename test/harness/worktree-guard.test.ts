@@ -545,6 +545,7 @@ describe("Hook gegen echtes git (#1308) — Temp-Repo mit Worktree und Unterordn
     ["cd 'L' && git -C \"$X\" push", false],
     ["cd 'L' && GIT_DIR=x git commit -m x", false],
     ["cd 'L' && git --git-dir=x push", false],
+    ['find . -exec echo {} \\; -exec bash -c "git push" \\;', false], // weitere -exec-Ziele zählen
     // bewusst erlaubt
     ["cd 'L' && git add -A && git commit -m x", true],
     ["cd 'L'; git commit -m x", true],
