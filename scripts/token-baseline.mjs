@@ -60,6 +60,7 @@ export function classifySubagent(agentType, description) {
   const d = String(description ?? "");
   if (/planner/i.test(t)) return "Planung";
   if (/explore/i.test(t)) return "Recherche";
+  if (/lens/i.test(t)) return "Review";
   for (const [re, phase] of WORKFLOW_LABELS) if (re.test(d)) return phase;
   if (/\blens\b|review|kritiker/i.test(d)) return "Review";
   if (/\bplan/i.test(d)) return "Planung";

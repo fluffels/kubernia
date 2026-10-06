@@ -32,6 +32,10 @@ import {
 } from "../src/content/loader";
 import type { Quest } from "../src/types";
 
+/** Erwartet einen ContentValidationError, dessen Meldung `re` trifft — der Fehlertyp allein
+ *  beweist nicht, dass die richtige Prüfung gegriffen hat. */
+const validation = (re: RegExp) => (e: unknown) => e instanceof ContentValidationError && re.test(e.message);
+
 // #435: Quests/Karten/Quiz/Themen sind im Loader jetzt lazy (memoisierte Getter). Für die
 // „echte Daten"-Tests hier einmalig materialisieren – so bleiben alle Test-Bodies unverändert.
 const QUESTS = getQuests();
@@ -84,13 +88,13 @@ test("parseNpcs: akzeptiert wohlgeformte Daten", () => {
  * dass die Fehlermeldung den konkreten Feld-PFAD nennt (nicht nur „ungültig"). */
 
 test("parseNpcs: wirft bei Nicht-Objekt", () => {
-  assert.throws(() => parseNpcs([]), ContentValidationError);
-  assert.throws(() => parseNpcs(null), ContentValidationError);
-  assert.throws(() => parseNpcs("nope"), ContentValidationError);
+  assert.throws(() => parseNpcs([]), validation(/„npcs".*Objekt erwartet/));
+  assert.throws(() => parseNpcs(null), validation(/„npcs".*Objekt erwartet/));
+  assert.throws(() => parseNpcs("nope"), validation(/„npcs".*Objekt erwartet/));
 });
 
 test("parseNpcs: wirft bei leerem Katalog", () => {
-  assert.throws(() => parseNpcs({}), ContentValidationError);
+  assert.throws(() => parseNpcs({}), validation(/„npcs".*mindestens ein NPC/));
 });
 
 test("parseNpcs: wirft bei fehlendem Pflichtfeld (mit Pfad)", () => {
@@ -103,7 +107,7 @@ test("parseNpcs: wirft bei fehlendem Pflichtfeld (mit Pfad)", () => {
 test("parseNpcs: wirft bei leerem Namen", () => {
   assert.throws(
     () => parseNpcs({ ole: { name: "   ", title: "T", tex: "char_o" } }),
-    ContentValidationError,
+    validation(/npcs\.ole\.name/),
   );
 });
 
@@ -117,7 +121,7 @@ test("parseNpcs: wirft bei fehlender tex (jeder NPC braucht eine PixelLab-Figur,
 test("parseNpcs: wirft bei unbekanntem Feld (Kenney-`sprite` ist mit #670 raus)", () => {
   assert.throws(
     () => parseNpcs({ ole: { name: "Ole", title: "T", tex: "char_o", sprite: 100 } }),
-    ContentValidationError,
+    validation(/npcs\.ole.*sprite/),
   );
 });
 
@@ -133,7 +137,7 @@ test("parseSmalltalk: wirft bei unbekanntem NPC-Schlüssel (mit Pfad)", () => {
 });
 
 test("parseSmalltalk: wirft bei leerer Zeilen-Liste", () => {
-  assert.throws(() => parseSmalltalk({ ole: [] }, known), ContentValidationError);
+  assert.throws(() => parseSmalltalk({ ole: [] }, known), validation(/smalltalk\.ole/));
 });
 
 test("parseSmalltalk: wirft bei nicht-textueller Zeile", () => {

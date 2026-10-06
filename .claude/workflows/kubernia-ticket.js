@@ -1063,7 +1063,7 @@ ein (AGENTS.md § Nicht jeder Befund wird ein Ticket): ein echter Defekt wird ei
 Issue (ohne Assignee, passendes area:-Label, beide GraphQL-Calls zum Einsortieren —
 AGENTS.md § Neue Issues sofort ins Board einsortieren; vorher per gh issue list auf
 Duplikate prüfen). Härtung/Kosmetik wird eine Zeile im ungeclaimten Sammelticket
-„Harness-Härtung (gesammelt)" (fehlt es: anlegen auf Position 5, docs/ticket-reihenfolge.md):
+„Harness-Härtung (gesammelt)" (fehlt es: anlegen auf Position 7, docs/ticket-reihenfolge.md):
 ${ausserhalbScope.map((p) => `- ${p}`).join('\n')}`
     : ''
 }
