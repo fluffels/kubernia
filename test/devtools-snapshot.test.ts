@@ -85,7 +85,7 @@ describe("buildDevSnapshot (#1284)", () => {
   it("Vollabbild: jedes Feld kommt aus der passenden Quelle (unterscheidbare Werte)", () => {
     const s = buildDevSnapshot(src({
       scenes: ["Interior", "World"], scene: "Interior", map: "interior:haus",
-      player: { x: 8.6 * TILE, y: 5.4 * TILE, face: "west", moving: true },
+      player: { x: 8.6 * TILE, y: 5.6 * TILE, face: "west", moving: true },
       currentQuestId: "q-x", questIdx: 4, questStep: 2, questTask: 1, stepType: "terminal", taskText: "tippe help",
       activeQuests: { "q-x": { step: 2, task: 1 } }, completedQuestCount: 3,
       dialogue: { npcId: "ole", lines: [], idx: 0, choice: { menu: true } },
@@ -97,7 +97,7 @@ describe("buildDevSnapshot (#1284)", () => {
     expect(s).toEqual({
       v: DEV_SNAPSHOT_VERSION, ready: true,
       scenes: ["Interior", "World"], scene: "Interior", map: "interior:haus",
-      player: { x: Math.round(8.6 * TILE), y: Math.round(5.4 * TILE), tx: 8, ty: 5, face: "west", moving: true },
+      player: { x: Math.round(8.6 * TILE), y: Math.round(5.6 * TILE), tx: 8, ty: 5, face: "west", moving: true },
       quest: { id: "q-x", idx: 4, step: 2, task: 1, stepType: "terminal", taskText: "tippe help" },
       activeQuests: [{ id: "q-x", step: 2, task: 1 }],
       completedQuests: 3,

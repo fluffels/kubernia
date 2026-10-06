@@ -61,7 +61,13 @@ async function teleport(page: Page, tx: number, ty: number): Promise<void> {
     },
     { x: tx * T, y: ty * T },
   );
-  // advanceTime muss die Spielzeit tatsächlich vorrücken (synchron, kein Wettlauf mit rAF).\n  const advanced = await page.evaluate(() => {\n    const d = (window as unknown as { kqDev: KqDev }).kqDev;\n    const before = d.state().clock.gameDays;\n    return (d.advanceTime(200) as { clock: { gameDays: number } }).clock.gameDays - before;\n  });\n  expect(advanced, "advanceTime(200) rückt die Spielzeit vor").toBeGreaterThan(0);
+  // advanceTime muss die Spielzeit tatsächlich vorrücken (synchron, kein Wettlauf mit rAF).
+  const advanced = await page.evaluate(() => {
+    const d = (window as unknown as { kqDev: KqDev }).kqDev;
+    const before = d.state().clock.gameDays;
+    return (d.advanceTime(200) as { clock: { gameDays: number } }).clock.gameDays - before;
+  });
+  expect(advanced, "advanceTime(200) rückt die Spielzeit vor").toBeGreaterThan(0);
   const pos = await page.evaluate(() => (window as unknown as { kqDev: KqDev }).kqDev.state().player);
   expect(pos, "Spielfigur steht nach dem Teleport auf der Ziel-Kachel").toMatchObject({ tx, ty });
 }
