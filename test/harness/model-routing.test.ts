@@ -718,3 +718,15 @@ describe("Umsetzer-Bericht: LERNKANDIDATEN (#1292, #1276)", () => {
     assert.match(skill, /\*\*`gemergt`\*\*[^\n]*LERNKANDIDATEN/);
   });
 });
+
+describe("Entscheidungen erreichen den PR-Text auch im Workflow (#1276)", () => {
+  test("der pr+merge-Prompt, der den PR öffnet, bekommt die Entscheidungen", () => {
+    const quelle = read(".claude/workflows/kubernia-ticket.js");
+    const von = quelle.indexOf("let merge = await agent(");
+    const bis = quelle.indexOf("label: `pr+merge:#", von);
+    assert.ok(von > 0 && bis > von, "pr+merge-Aufruf nicht gefunden");
+    const prompt = quelle.slice(von, bis);
+    assert.match(prompt, /entscheidungen\.length/);
+    assert.match(prompt, /im PR-Text als „Entscheidung: X, weil Y“/);
+  });
+});

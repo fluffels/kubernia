@@ -98,7 +98,7 @@ describe("Agenten-Permissions in .claude/settings.json (#901)", () => {
       "mcp__langfuse__getObservation",
     ];
     for (const rule of lesen) {
-      assert.ok(allow.includes(rule), `allow muss ${rule} enthalten — Lesezugriff für den Langfuse-Blick (#1276)`);
+      assert.ok(allow.includes(rule), `allow muss ${rule} enthalten — Lesezugriff für die Langfuse-Auswertung (#1276)`);
     }
     const langfuse = allow.filter((r) => r.startsWith("mcp__langfuse"));
     assert.deepEqual(

@@ -1102,7 +1102,11 @@ per PR). Gib die URL des Kommentars im Feld auditKommentar zurück.`
     `${kopf}
 
 ${ticketKontext}
-
+${
+  entscheidungen.length
+    ? `\n--- Entscheidungen aus Plan/Pre-Flight ---\n${entscheidungen.map((e, i) => `${i + 1}. ${e}`).join('\n')}\nGib jede davon im PR-Text als „Entscheidung: X, weil Y“ wieder (Audit-Spur für das Veto per Revert).\n--- Ende Entscheidungen ---\n`
+    : ''
+}
 Du arbeitest im Worktree ${worktree} auf ${branch} (absolute Pfade, NICHT hinein-cd'en).
 
 Vor dem PR: prüfe kurz gh issue view ${nr} --json state,closedAt. Ist das Issue

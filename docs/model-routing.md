@@ -175,28 +175,6 @@ Planer-Sockel: ² Median über 2 Läufe mit Planer (der Planer fehlt in 1 von 3 
 - **Kostenverteilung** (über alle Läufe einer Gruppe summiert): Cache-Write 44–49 % und Cache-Read 41–46 %, Output 8–14 %, Input unter 1 %. Rund 90 % der Kosten hängen am Kontext, der bei jedem Call geschrieben bzw. gelesen wird. Wirksam sind Hebel, die Calls oder den Kontext je Call senken.
 - **Loop-Kennzahlen sind nicht besser, in B teils schlechter.** Gemergt ohne Nacharbeit: 4 von 5 statt 3 von 3 bzw. 6 von 6. #1217 brauchte 2 CI-Fix-Runden und 3 Review-Runden. In #1258 gab es keine Review-Runde, in 4 von 5 B-Läufen keinen Planer. Ein Teil der Ersparnis in B stammt also aus übersprungenen Schritten und ist keine Einsparung im Sinne des Tickets.
 
-### Messung zum Sammelticket #1276 (Gruppe C, 2026-10-06)
-
-Fenster: Merge von #1278 (10:31:47Z) bis zum Claim von #1276, acht gemergte PRs. Gemessen im Transkript-Modus (`--session`, bei Mehr-Ticket-Sessions `--from`), weil Langfuse per `SendMessage` fortgesetzte Subagenten verliert. **Sockel und „Haupt“ meinen ab #1280 den dünnen Hauptchat, die Umsetzung zählt als Subagent**; Vergleiche mit den Gruppen A und B gelten darum nur für Läufe vor #1280.
-
-| Lauf | Gruppe | Art | Calls | Kosten | $ je Call | Review | CI-Fix | Planer | Median-Kontext Haupt |
-|---|---|---|--:|--:|--:|--:|--:|---|--:|
-| #1265 | C | Harness | 120 | 9,28 $ | 0,077 | 1 | 0 | ja | 179k |
-| #1269 | C | Harness | 124 | 7,50 $ | 0,060 | 1 | 0 | ja | 151k |
-| #1283 | C | Harness | 146 | 7,79 $ | 0,053 | 3 | 0 | nein | 164k |
-| #1280 | C | Harness | 210 | 12,76 $ | 0,061 | 2 | 0 | ja | 222k |
-| #1286 | C | Harness | 66 | 2,38 $ | 0,036 | 1 | 0 | nein | 112k |
-| #1289 | C | Harness | 52 | 3,21 $ | 0,062 | 1 | 0 | nein | 284k⁷ |
-| #1291 | C | Harness | 199 | 12,81 $ | 0,064 | 2 | 0 | nein | 387k⁷ |
-| #1284 | C | Harness | 192 | 6,77 $ | 0,035 | 3 | 0 | ja | 75k |
-
-⁷ #1289 und #1291 liefen in Sessions mit mehreren Tickets, ab dem Merge des Vorgängers geschnitten (`--from`); der Median-Kontext wächst über die ganze Session.
-
-**Wirkung:** #1284 ist der erste Lauf mit dem Umsetzer-Subagenten (#1280): Umsetzung zu 70 von 74 Calls auf Sonnet, Planung auf Opus, Review-Lenses darunter auf Opus (die Kette Hauptchat → Umsetzer → Lens funktioniert mit Default-Spawn-Tiefe). Der Median-Kontext des Hauptchats liegt bei 75k statt 112–387k, der Preis je Call bei 0,035 $ (Gruppe B: 0,050 $). Ein Messpunkt, keine Streuung. #1286 lief über das Skill-Frontmatter noch auf Sonnet im Hauptchat (0,036 $). Alle sechs Läufe davor (#1265 bis #1291) setzten auf Opus im Hauptchat um (0,053 bis 0,077 $), auch #1291, das den Umsetzer erst baute.
-**Teuerster Lauf:** #1291 (12,81 $) vor #1280 (12,76 $). Ursache: die Umsetzung lief auf Opus in einer Session, deren Kontext wuchs (Median 387k), Cache-Read macht 62 % der Kosten; 97 Review-Calls in zwei Runden kamen dazu. Hebel: der Umsetzer-Subagent mit frischem, kleinem Kontext.
-**Prozess:** keine CI-Fix-Runde in allen acht Läufen. Drei Review-Runden in #1283 und #1284 (Obergrenze erreicht), jeweils mit gefundenen Blockern. Rückfragen (`AskUserQuestion`): nur eine, in #1265. Gemergt ohne Nacharbeit: 8 von 8.
-**Offen / nicht belegt:** Cache-TTL des Umsetzers (5m) nach CI-Wartezeiten und der Gesamtabgleich Transkript ↔ Langfuse für einen Lauf der Kette bleiben Sammelticket-Zeilen. Grobe Gegenprobe Langfuse im Fenster bis 14:00Z: 200 Sonnet-Calls, 948 Opus-Calls, 26 Haiku-Calls, plus 1.344 Observationen ohne Modellname (Spans/Tools).
-
 ### Grundkontext pro Session (#1198)
 
 **Metrik:** Sockel = `input + cache_creation + cache_read` des ersten Assistant-Calls einer Session bzw. eines Subagenten. Er steht vor jeder Nutzereingabe im Kontext und wird bei jedem der 100–250 Calls neu gelesen.
@@ -255,6 +233,7 @@ Einzelläufe stehen nur im Bericht-Kommentar des Status-Tickets; hierher kommt j
 
 | Zeitraum | Läufe | Median Kosten/Ticket | Preis je Call | Sockel | Review-Runden | CI-Fix-Runden | ohne Nacharbeit | Datenvollständigkeit |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| #1278-Merge bis #1276-Claim (2026-10-06) | 8 | 7,65 $ | 0,061 $ | Hauptchat 64,7k (ab #1280 der dünne Hauptchat, die Umsetzung zählt als Subagent) | 1,5 | 0 | 8/8 | Transkript-Modus, Langfuse nicht je Lauf abgeglichen; Einzelläufe: [Bericht](https://github.com/fluffels/kubernia/issues/1276#issuecomment-6016995875) |
 
 ⚠️ **Langfuse nicht erreichbar** (Keys fehlen, Server aus) ist selbst ein Befund unter Punkt 1. Die übrigen Punkte laufen dann im Transkript-Modus des Skripts, das Status-Ticket wird trotzdem abgeschlossen und der Nachfolger angelegt.
 
