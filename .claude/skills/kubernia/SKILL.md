@@ -38,6 +38,8 @@ Solange der Umsetzer läuft, fasst der Hauptchat weder Repo noch Worktree an und
 
 ## Umsetzung als Subagent
 
+**Vor dem Spawn:** `git fetch origin`, dann `git diff --quiet HEAD origin/main -- .claude/agents .claude/skills`. Weicht der Hauptcheckout ab (Exit 1), ist die Agenten-Definition dieser Session veraltet (laufende Sessions behalten ihre Definitionen): der Umsetzer-Prompt bekommt den Zusatz „Lies deine Definition (`.claude/agents/kubernia-umsetzer.md`) und den Skill `review-lenses` aus deinem Worktree; bei Abweichung gilt diese Fassung.“ Kein `git pull` im Hauptcheckout (geteilter Checkout, andere Sessions arbeiten darin).
+
 ```
 Agent({
   subagent_type: "kubernia-umsetzer",
@@ -52,6 +54,8 @@ Kein `model:` am Spawn: Modell und Effort stehen im Frontmatter des Umsetzers un
 - **`entscheidung-noetig`** — bei einem fehlenden PixelLab-Asset das Asset selbst erzeugen und den Dateipfad per `SendMessage` zurückgeben, sonst die `FRAGEN` per `AskUserQuestion` vorlegen, dann denselben Umsetzer mit der Antwort fortsetzen: `SendMessage({ to: "<agentId aus dem Spawn>", message: "Antwort der Maintainerin: …" })`. Sein Kontext bleibt erhalten. Ist die Session inzwischen verloren, startet ein neuer Umsetzer; er übernimmt vorhandenen Worktree und Branch.
 - **`festgefahren`** — die Optionen vorlegen (aus dem PR-Kommentar bzw. bei Review-Blockern nach Cap 2 Fix-Runden, ohne PR, aus der Zusammenfassung), nicht selbst weiterprobieren.
 - **`abgebrochen`** — Grund melden; das Ticket bleibt zugewiesen.
+
+**Blockade nach dem Umsetzer-Ende:** Blockiert der Stop- bzw. SubagentStop-Hook wegen eines Waisen-Worktree-Ordners, im Hauptchat laufende Dev-Server per PowerShell `Stop-Process` beenden, dann `node scripts/cleanup-worktrees.mjs --fix` und mit `git worktree list` plus `Test-Path` verifizieren. Den Guard nie aufweichen.
 
 **Mehrere Tickets:** Anzahl N aus der Auslöse-Nachricht übernehmen, sonst kurz fragen. Dann nacheinander je Ticket der ganze Ablauf oben mit einem frischen Umsetzer, nie parallel (Merge-Kollision auf `main`); kein freies Ticket mehr ⇒ sofort aufhören. Zum Schluss eine Übersicht: erledigte Tickets, wie viele von N. Der Hauptchat wächst pro Ticket nur um Plan und Bericht.
 
