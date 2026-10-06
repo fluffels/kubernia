@@ -16,9 +16,9 @@
  *
  * Ausführen mit:  npm test
  */
-import { describe, test } from "vitest";
+import { afterAll, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/cleanup-worktrees.mjs).
@@ -63,8 +63,13 @@ describe("planLaunch – Startentscheidung des Launchers", () => {
 describe("readInstalled/readLockVersion – Dateizugriff liefert null/undefined statt zu werfen", () => {
   // Fixture-Checkout in einem Temp-Ordner: genau die Fälle, in denen main() sonst vor der
   // Startentscheidung abstürzte und der Server still fehlte.
+  const dirs: string[] = [];
+  afterAll(() => {
+    for (const d of dirs) rmSync(d, { recursive: true, force: true });
+  });
   const fixture = (files: Record<string, string>): string => {
     const dir = mkdtempSync(join(tmpdir(), "kq-pwmcp-"));
+    dirs.push(dir);
     for (const [rel, content] of Object.entries(files)) {
       mkdirSync(dirname(join(dir, rel)), { recursive: true });
       writeFileSync(join(dir, rel), content);
@@ -135,12 +140,6 @@ describe("Verdrahtung im Repo", () => {
       s.permissions.ask.includes("mcp__playwright__browser_run_code_unsafe"),
       "browser_run_code_unsafe (Node-Code im Serverprozess) muss auf ask stehen",
     );
-  });
-
-  test("Claude in Chrome ist gesperrt: Browser-Verifikation nur über den isolierten Playwright-Browser", () => {
-    // Die Erweiterung arbeitet im echten Browser der Maintainerin mit allen Logins (#1289).
-    const s = readJson(".claude/settings.json") as { permissions: { deny: string[] } };
-    assert.ok(s.permissions.deny.includes("mcp__claude-in-chrome"), "deny ohne mcp__claude-in-chrome");
   });
 
   test("das Ausgabeverzeichnis des Servers ist gitignored", () => {

@@ -698,13 +698,5 @@
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 5
     }
-  },
-  "test/harness/worktree-guard.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 5
-    }
   }
 }

@@ -43,6 +43,11 @@ const ask = perms.ask ?? [];
 const deny = perms.deny ?? [];
 
 describe("Agenten-Permissions in .claude/settings.json (#901)", () => {
+  test("deny sperrt Claude in Chrome: Browser-Verifikation nur über den isolierten Playwright-Browser (#1289)", () => {
+    // Die Erweiterung arbeitet im echten Browser der Maintainerin mit allen Logins.
+    assert.ok(deny.includes("mcp__claude-in-chrome"), "deny ohne mcp__claude-in-chrome");
+  });
+
   test("hat überhaupt einen permissions-Block mit allow/ask/deny", () => {
     assert.ok(settings.permissions, ".claude/settings.json braucht einen `permissions`-Block");
     assert.ok(Array.isArray(perms.allow), "`permissions.allow` muss eine Liste sein");
