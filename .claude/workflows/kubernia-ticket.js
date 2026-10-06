@@ -359,6 +359,15 @@ function lensPlan({ dateien, vorrunde } = {}) {
 }
 // ── Review-Staffel (#1265) — Ende
 
+// ── Plan-Weiche Epic (#1309) — Anfang
+// Der Planer entscheidet in Abschnitt 7 mit der Pflichtzeile „Weiche Epic: ja, weil …" bzw. „nein“, ob ein
+// als normal eingestuftes Ticket eigentlich ein Epic ist. Pure, damit direkt testbar; ohne Plan oder ohne
+// die Zeile bleibt es bei der Einstufung der Auswahl (kein Plan darf nie ein Ticket zum Epic machen).
+function planSagtEpic(plan) {
+  return typeof plan === 'string' && /^[ \t]*[-*]?[ \t]*\**Weiche Epic:?\**[ \t]*:?[ \t]*ja\b/im.test(plan)
+}
+// ── Plan-Weiche Epic (#1309) — Ende
+
 // ── Review-Nachweis (#1270) — Anfang
 // Die zwei Commit-Zeilen, die check-review-nachweis.mjs in der PR-CI verlangt (Format: docs/agent-harness.md
 // §3a). Pure und aus Code-Werten gebaut, nicht vom Agenten formuliert; ein Wächter-Test koppelt die
@@ -398,6 +407,7 @@ function nachweisFuerPr({ konvergiert, head, stand, plan }) {
  * Die Review-Brillen aus dem review-lenses-Skill (#532), je ein eigener Pass. Welche davon eine
  * Runde startet, entscheidet lensPlan (#1265): drei für Code, die Doku-Brille allein für Markdown.
  */
+// ── Lens-Texte (#1309) — Anfang
 const LENSES = [
   {
     key: 'architektur',
@@ -463,6 +473,7 @@ Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht 
 AGENTS.md Kopf (SSOT) + § Doku aktuell halten + § Oberste Regel.`,
   },
 ]
+// ── Lens-Texte (#1309) — Ende
 
 /**
  * Das Festgefahren-Protokoll (#710) ist im Skill eine Verhaltensregel und in
@@ -665,13 +676,15 @@ Dieses Ticket ist als Epic klassifiziert: liefere die Aufteilung in session-gro�
     { label: `plan:#${nr}`, phase: 'Plan', agentType: 'kubernia-planner', effort: 'xhigh' },
   )
 
-  if (plan) log(`Plan für ${ticket} liegt vor.`)
+  const epicAbspalten = istEpic || planSagtEpic(plan)
+  if (!istEpic && epicAbspalten) log(`Plan für ${ticket} meldet „Weiche Epic: ja" — Aufteilung statt Umsetzung (#1309).`)
+  else if (plan) log(`Plan für ${ticket} liegt vor.`)
   else if (istEpic) log('Planungs-Agent nicht verfügbar — der Anlege-Agent teilt das Epic selbst auf (dokumentierter Fallback).')
   else log('Planungs-Agent nicht verfügbar — die Umsetzungsphase plant selbst (dokumentierter Fallback).')
 
   // ── Phase 3a: Epic-Kinder anlegen — bewusst KEIN Code ──────────────────────
   // Endet hier — kein Worktree, kein PR. Der Plan entscheidet (Opus), der Agent tippt (Sonnet).
-  if (istEpic) {
+  if (epicAbspalten) {
     phase('Sonderfall')
     const sonderfall = await agent(
       `${kopf}

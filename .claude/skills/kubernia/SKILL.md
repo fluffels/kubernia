@@ -29,6 +29,7 @@ docs/referenz/ ← Nachschlage-Referenz on-demand (Befehle, Repo-Landkarte, Schi
    ```
    Den Bericht unverändert mit seiner Kopfzeile `PLAN #<nr> · kubernia-planner` an den Umsetzer weitergeben (Planungs-Nachweis, #1270). Nur wenn der Spawn tatsächlich scheitert, skizziert der Hauptchat den Plan kurz selbst und schreibt `Plan ohne Planer: <Grund>` in den Umsetzer-Prompt; ein ausgelassener Planer ist kein Grund.
 3. **Pre-Flight** nach AGENTS.md § Human-in-the-Loop-Checkpoints: Du übernimmst die Entscheidungen aus Abschnitt 7 des Plans (Optik, Weichen) als verbindlich und gibst sie dem Umsetzer mit. `AskUserQuestion` nur, wenn der Plan „Rückfrage nötig“ meldet (Irreversibles oder Außenwirkung), dann **jetzt**. PixelLab-Assets für eine Optik-Entscheidung erzeugt der Hauptchat (der Umsetzer hat PixelLab nicht in seiner Whitelist); das Asset liegt als Datei im Temp-Ordner, der Umsetzer bekommt den Pfad (eine Job-ID nützt ihm nichts).
+   Meldet Abschnitt 7 des Plans `Weiche Epic: ja`, gilt der Sonderfall Epic mit der Aufteilung aus dem Plan; kein Umsetzer.
 4. **Umsetzer spawnen** (nächster Abschnitt) und sein Ergebnis behandeln.
 
 Solange der Umsetzer läuft, fasst der Hauptchat weder Repo noch Worktree an und startet keinen zweiten Umsetzer.
