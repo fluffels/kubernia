@@ -51,7 +51,7 @@ const REST_PFADE = [
 ];
 
 /** `gh api` als Befehl am Segmentanfang (auch nach `&`, `$(`, Klammern oder Variablen-Zuweisungen), nicht als Text in einem fremden Befehl. */
-const GH_API_AM_ANFANG = /^[\s(`$&]*(?:\$[\w:]+\s*=\s*)?(?:\w+=\S*\s+)*gh(?:\.exe)?\s+api\b/;
+const GH_API_AM_ANFANG = /^[\s(`$&]*(?:\$[\w:]+\s*=\s*[\s(`$@&]*)?(?:\w+=\S*\s+)*gh(?:\.exe)?\s+api\b/;
 
 /**
  * Zerlegt einen Befehl an `&&`, `||`, `;`, `|` und Zeilenumbrüchen, aber NICHT innerhalb von Anführungszeichen
