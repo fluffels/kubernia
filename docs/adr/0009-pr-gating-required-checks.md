@@ -44,7 +44,7 @@ Eine Absicherung, die man mit einem Flag umgehen kann, ist bei einem **unzuverl�
 **Negativ / Trade-offs**
 - **PR-Overhead pro Ticket:** Branch pushen → PR → mergen statt eines Pushes. Vollständig per `gh` automatisiert, aber ein zusätzlicher Schritt und etwas CI-Wartezeit vor jedem Merge.
 - **Auch die Maintainerin braucht für `main` einen PR** (`enforce_admins` an) — bewusst in Kauf genommen, weil sonst die Lücke für Admins offenbliebe.
-- **Ein bewusst breiter Slice** (großer God-File-Split) muss den `check:diffsize`-Override (`KQ_DIFFSIZE_OVERRIDE`) tragen, sonst blockt der Required-Check den Merge — dieselbe Slice-Disziplin wie bisher, nur jetzt hart.
+- **Ein bewusst breiter Slice** (großer God-File-Split) muss den `check:diffsize`-Override (Commit-Zeile `KQ-Diffsize-Override: #<nr> warum` im Slice, siehe Fortschreibung #1269) tragen, sonst blockt der Required-Check den Merge — dieselbe Slice-Disziplin wie bisher, nur jetzt hart.
 
 ## Re-Evaluierungs-Trigger
 
@@ -53,3 +53,13 @@ Eine Absicherung, die man mit einem Flag umgehen kann, ist bei einem **unzuverl�
 - **Die Solo-Konstellation ändert sich** (mehrere/fremde Beitragende, oder ein Mensch übernimmt Implementierung) — dann Pflicht-Reviews (`required_approving_review_count > 0`) erwägen.
 
 Tritt ein Trigger ein: diesen ADR fortschreiben oder einen ablösenden `0010-…` schreiben.
+
+## Fortschreibung #1269 (2026-10-06): Override als Commit-Zeile statt Umgebungsvariable
+
+Das Druckventil war eine Umgebungsvariable (`KQ_DIFFSIZE_OVERRIDE`, analog `KQ_DIFFCOV_OVERRIDE`). Die erreichte die PR-CI nie: ein bewusst breiter Slice war lokal grün und als Required Check immer rot, der Konsequenz-Punkt oben lief also ins Leere. Jetzt trägt eine Zeile `KQ-Diffsize-Override: #<nr> warum` (bzw. `KQ-Diffcov-Override:`) am Zeilenanfang einer Commit-Message des Slices die Begründung. Die Wächter lesen `git log <basis>..HEAD` mit derselben Basis wie den Diff, so wirkt derselbe Mechanismus lokal, im PR und im Nachlauf auf `push:main`, ohne Änderung an `ci.yml`.
+
+- **Verworfen: Zeile im PR-Body.** Bräuchte den Trigger `pull_request: edited` (jeder Titel-Edit fährt die volle Kette; ein `if:`-Filter wäre ein Bypass, weil ein übersprungener Required Check als bestanden zählt), auf `push:main` einen API-Lookup, und lokal sähe `verify` den Body nicht.
+- **Verworfen: Label.** Trägt keine Begründung.
+- **Abhängigkeit:** Der Nachlauf auf `main` setzt `squash_merge_commit_message = COMMIT_MESSAGES` voraus (der Squash-Commit enthält die Branch-Messages). Wird die Einstellung geändert, schlägt nach einem Override-Merge der Alarm-Job an.
+- **Audit:** Jede Ausnahme steht dauerhaft in `git log` von `main` (`git log --grep '^KQ-Diffsize-Override:'`), Override-Inflation ist so messbar.
+

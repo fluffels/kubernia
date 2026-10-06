@@ -29,7 +29,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { resolveBase } from "./check-diffsize.mjs";
+import { resolveBase, sliceOverride } from "./check-diffsize.mjs";
 
 // layers.cjs ist bewusst CommonJS (der dependency-cruiser-Config `require`t es) —
 // dasselbe createRequire-Muster wie in check-docmap.mjs / vite.config.ts.
@@ -182,12 +182,10 @@ export function evaluateByLayer(changed, lcov, floors = LAYER_DIFF_FLOORS) {
   return { buckets, missing, below };
 }
 
-/** Eine Override-Begründung zählt nur, wenn sie nicht leer/whitespace ist — so lässt
- *  sich ein ungetesteter Slice NICHT ohne echte Begründung stillstellen. */
-export function overrideReason(env = process.env) {
-  const r = (env.KQ_DIFFCOV_OVERRIDE ?? "").trim();
-  return r === "" ? null : r;
-}
+/** Schlüssel des Override-Trailers (#1269): eine Zeile `KQ-Diffcov-Override: #<nr> <warum>`
+ *  in einer Commit-Message des Slices. Parser und Slice-Bereich teilt es sich mit
+ *  check:diffsize (`sliceOverride`), damit es lokal, im PR und auf main gleich wirkt. */
+export const OVERRIDE_KEY = "KQ-Diffcov-Override";
 
 /** Führt die komplette Prüfung aus (Basis → Diff → lcov → Bewertung → Override).
  *  `runGit`/`readFile`/`env` sind injizierbar, damit der Test ohne git, ohne
@@ -232,7 +230,7 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env } = {}) 
   // MESSfehler — für diese Datei wurde gar nichts gemessen. Ihn durchzuwinken wäre
   // dasselbe „grün ohne Messung", das der noReport-Zweig verbietet: nicht override-bar.
   const violated = verdict.below.length > 0;
-  const reason = overrideReason(env);
+  const { reason, invalid } = sliceOverride(git, base, OVERRIDE_KEY);
   const allowed = violated && reason !== null;
   const stale = !violated && verdict.missing.length === 0 && reason !== null;
 
@@ -243,6 +241,8 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env } = {}) 
     reason,
     allowed,
     stale,
+    invalidOverrides: invalid,
+    legacyEnv: (env.KQ_DIFFCOV_OVERRIDE ?? "").trim() !== "", // alte Env: nur noch Hinweis
     failed: (violated && !allowed) || stale || verdict.missing.length > 0,
   };
 }
@@ -298,8 +298,17 @@ function main() {
     process.exit(1);
   }
 
+  if (r.legacyEnv) {
+    console.log(dim("• KQ_DIFFCOV_OVERRIDE wird nicht mehr ausgewertet (kam in der PR-CI nie an) — Commit-Trailer nutzen, s.u."));
+  }
+  for (const line of r.invalidOverrides) {
+    console.log(dim(`• ungültige Override-Zeile ignoriert (braucht "#<nr> <warum>"): ${line}`));
+  }
+
   if (r.stale) {
-    console.error(red("✖ KQ_DIFFCOV_OVERRIDE gesetzt, aber der Slice erfüllt die Floors — stale, bitte entfernen."));
+    console.error(
+      red(`✖ ${OVERRIDE_KEY} steht im Slice, aber der Slice erfüllt die Floors — stale, den Override-Commit entfernen.`),
+    );
     process.exit(1);
   }
 
@@ -312,8 +321,9 @@ function main() {
   if (r.failed) {
     console.error(
       `\nTests für genau diese Zeilen ergänzen (TDD: erst der fehlschlagende Test, AGENTS.md) —\n` +
-        `ODER, wenn die Lücke bewusst ist, mit Pflicht-Begründung durchlassen:\n` +
-        `  KQ_DIFFCOV_OVERRIDE="#<nr> warum ungetestet" npm run check:diffcoverage`,
+        `ODER, wenn die Lücke bewusst ist, mit Pflicht-Begründung als Commit-Trailer im Slice\n` +
+        `durchlassen (wirkt lokal, im PR und auf main gleich):\n` +
+        `  git commit --allow-empty -m "chore: Lücke bewusst (#<nr>)" -m "${OVERRIDE_KEY}: #<nr> warum ungetestet"`,
     );
     process.exit(1);
   }
