@@ -78,19 +78,19 @@ function sourcePaths(src: ProtectedSource): Set<string> {
 }
 
 /**
- * Leitplanken-Dateien, die über die reine Gate-Config hinaus den sichtbaren Sign-off tragen
+ * Leitplanken-Dateien, die über die reine Gate-Config hinaus als auditpflichtig gelten
  * (Ticket #1012 / Maintainerin-Entscheidung „breit"). In Substring-Form – so wie
  * die Quelle sie nach der Normalisierung führen muss.
  */
 // CLAUDE.md bleibt geschützt, obwohl sie seit #1087 gelöscht ist: ihre Wiederanlage würde
 // AGENTS.md als geladene SSOT verdrängen und muss darum auditpflichtig sein.
 // Dasselbe gilt für CLAUDE.local.md (#1116) – der Abgleich matcht per Substring, `CLAUDE.md` trifft sie nicht.
-const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/", ".agents/", "docs/agent-harness"];
+const LEITPLANKEN = ["AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", ".claude/", ".mcp.json", "scripts/playwright-mcp.mjs", ".agents/", "docs/agent-harness"];
 
 /**
  * Wächter-Tests, die selbst der EINZIGE Durchsetzer ihrer Regel sind (#1156) – ohne eigenes,
  * schon geschütztes `scripts/check-*.mjs` dahinter. Liefen sie ungeschützt, könnte ein PR den
- * Riegel ohne `maintainer-approved` still abschwächen. Seit #1165 liegen sie alle in EINEM Ordner,
+ * Wächter ohne Audit-Spur still abschwächen. Seit #1165 liegen sie alle in EINEM Ordner,
  * der als echtes Präfix geschützt ist: ein neuer Wächter braucht damit keinen eigenen Eintrag mehr
  * (vorher vier: Quelle, CODEOWNERS, diese Liste, Prosa). Ein Präfix statt eines Globs, weil
  * `normalizeProtected` jedes Glob ab dem `*` kürzt (`/test/*harness*` → `test/`).
@@ -340,7 +340,7 @@ describe("Der @harness-waechter-Marker zählt nur als eigene Kommentar-Zeile (#1
  * Job-Bezeichnung (Required-Check-Kontext im Ruleset) und der Pflicht-Begriff. In ADRs bleibt die
  * Historie stehen; sonst darf keine versionierte Datei sie mehr tragen.
  */
-const ABGELOEST = [/maintainer-approved/i, /gate-change-guard/i, /Gate-Config-Aenderungsschutz/i, /Label-Pflicht/i];
+const ABGELOEST = [/maintainer-approved/i, /gate-change-guard/i, /Gate-Config-Aenderungsschutz/i, /Label-Pflicht/i, /Label selbst/i];
 const SCAN_ENDUNGEN = /\.(md|js|mjs|cjs|ts|json|yml|yaml)$/;
 const EIGENE_DATEI = "test/harness/harness-approval.test.ts";
 

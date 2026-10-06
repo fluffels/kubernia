@@ -11,7 +11,7 @@
 
 Der CI-Job `gate-change-guard` hielt jeden PR rot, der einen Pfad der Liste in `.github/protected-paths.json` anfasste, bis das Label `maintainer-approved` gesetzt war. Seit ADR 0012 setzt der Agent das Label **selbst**: erst wenn alle anderen Checks grün sind, und vor jedem weiteren Fix-Push wieder entfernt. Im Single-Account-Modell (Agent und Maintainerin sind derselbe GitHub-Account) schützt das nichts, was die Verhaltensregel und der Audit-Kommentar nicht schon leisten.
 
-Die Kosten fielen bei **jedem** Harness-PR an: Wartezeit auf ein erwartet rotes Gate, ein zusätzlicher CI-Lauf nach dem Label, Token für die Label-Reihenfolge in Umsetzer-, Workflow- und Merge-Prompts, dazu ein eigener Workflow mit sicherheitskritischen `pull_request_target`-Regeln samt rund 600 Zeilen Wächter-Tests. Die Maintainerin hat deshalb am 2026-10-06 entschieden, den Riegel ersatzlos zu entfernen, und im Ruleset `main-schutz` den Required-Check „Gate-Config-Aenderungsschutz“ ausgetragen; „PR-Text interne Bezuege pruefen“ ist dort neu Required.
+Die Kosten fielen bei **jedem** Harness-PR an: Wartezeit auf ein erwartet rotes Gate, ein zusätzlicher CI-Lauf nach dem Label, Token für die Label-Reihenfolge in Umsetzer-, Workflow- und Merge-Prompts, dazu ein eigener Workflow mit sicherheitskritischen `pull_request_target`-Regeln samt rund 400 Zeilen Wächter-Tests. Die Maintainerin hat deshalb am 2026-10-06 entschieden, den Riegel ersatzlos zu entfernen, und im Ruleset `main-schutz` den Required-Check „Gate-Config-Aenderungsschutz“ ausgetragen; „PR-Text interne Bezuege pruefen“ ist dort neu Required.
 
 ## Optionen
 
@@ -32,7 +32,7 @@ Die Kosten fielen bei **jedem** Harness-PR an: Wartezeit auf ein erwartet rotes 
 
 ## Konsequenzen
 
-**Positiv:** schnellerer Merge von Harness-PRs, weniger Prompt-Text und Token, ein Workflow mit besonderen Sicherheitsregeln weniger, rund 600 Zeilen Wächter-Test weniger.
+**Positiv:** schnellerer Merge von Harness-PRs, weniger Prompt-Text und Token, ein Workflow mit besonderen Sicherheitsregeln weniger, rund 400 Zeilen Wächter-Test weniger.
 
 **Negativ / Trade-offs**
 - Gate-Config-Änderungen (Lint-, Arch-, Coverage-Config, `scripts/check-*.mjs`, CI-Workflows) tragen keinen maschinellen Marker mehr im PR-Log. Sichtbar bleibt der Audit-Kommentar nach dem Merge.

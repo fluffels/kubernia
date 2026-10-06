@@ -11,7 +11,7 @@ export const meta = {
     { title: 'Umsetzen', detail: 'Worktree, TDD, npm run verify, im Browser verifizieren, committen', model: 'sonnet' },
     { title: 'Review', detail: 'Lenses parallel als Konvergenzschleife (Cap 2, frischer Kritiker, #1012): 3 für Code, 1 Doku-Lens für reines Markdown, ab Runde 2 nur blockierte Brillen auf dem Delta (#1265)', model: 'kubernia-lens (opus) + effort high' },
     { title: 'Nachbessern', detail: 'nur bei blockierenden Findings oder rotem verify' },
-    { title: 'PR + Merge', detail: 'PR öffnen, Auto-Merge; Harness-Diff → Label selbst + Audit-Kommentar (#1069); rot → max. 3 Fix-Versuche' },
+    { title: 'PR + Merge', detail: 'PR öffnen, Auto-Merge; Harness-Diff → Audit-Kommentar (#1069); rot → max. 3 Fix-Versuche' },
     { title: 'Festgefahren', detail: 'nach 3 erfolglosen Fix-Versuchen: Entscheidungsoptionen + Label, assigned bleiben' },
     { title: 'Cleanup', detail: 'Worktree + Branch entfernen und verifizieren, Issue-Schließung prüfen' },
   ],
