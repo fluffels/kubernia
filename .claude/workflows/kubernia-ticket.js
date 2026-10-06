@@ -63,12 +63,18 @@ E-Mail in Dateien, Commits oder Kommentaren (AGENTS.md § Anonymität wahren).`
 // ── rename-Kurztitel (#1213) — Anfang
 // Kurztitel für die /rename-Zeile (#1213): ASCII-tauglich, höchstens ~40 Zeichen.
 function renameKurztitel(titel) {
-  const ascii = String(titel)
+  const ascii = String(titel ?? '')
+    .replace(/\s+/g, ' ')
     .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/Ä/g, 'Ae').replace(/Ö/g, 'Oe').replace(/Ü/g, 'Ue').replace(/ß/g, 'ss')
     .replace(/[^ -~]/g, '')
-    .replace(/\s+/g, ' ')
+    .replace(/ {2,}/g, ' ')
     .trim()
   return ascii.length > 40 ? ascii.slice(0, 40).trim() : ascii
+}
+// Die kopierfertige Zeile; ohne verwertbaren Kurztitel nur `/rename kq-<nr>` (kein Leerzeichen am Ende).
+function renameZeile(nr, titel) {
+  const kurz = renameKurztitel(titel)
+  return kurz ? `/rename kq-${nr} ${kurz}` : `/rename kq-${nr}`
 }
 // ── rename-Kurztitel (#1213) — Ende
 
@@ -467,7 +473,7 @@ nicht selbst.`,
   const nr = auswahl.nummer
   const ticket = `#${nr} — ${auswahl.titel}`
   log(`Geclaimt: ${ticket} (art: ${auswahl.art})`)
-  log(`Session benennen: /rename kq-${nr} ${renameKurztitel(auswahl.titel)}`)
+  log(`Session benennen: ${renameZeile(nr, auswahl.titel)}`)
 
   const ticketKontext = `Ticket #${nr}: ${auswahl.titel}
 
@@ -1039,7 +1045,7 @@ Zu entfernen: Worktree ${worktree}, Branch ${branch}.
 
 Zwei Dinge, die hier regelmäßig schiefgehen und in der Doku stehen: laufende
 Dev-Server erst per PowerShell Stop-Process beenden (pkill aus Git-Bash erwischt
-Windows-Prozesse nicht), und aus dem Worktree heraus arbeiten statt hinein-cd'en.
+Windows-Prozesse nicht), und aus dem Worktree heraus arbeiten statt hinein-cd'en. Auch Hintergrund-Tasks (Monitor/run_in_background) mit cwd im Worktree halten den Ordner fest: vorher mit TaskStop beenden.
 
 Danach verifizieren — schlägt EINER der Checks fehl, stoppen und laut melden statt
 stillschweigend weitermachen:

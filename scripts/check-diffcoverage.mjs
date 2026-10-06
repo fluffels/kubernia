@@ -202,10 +202,11 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env } = {}) 
 
   let diff;
   try {
-    // Drei-Punkt, NICHT `base HEAD`: KQ_DIFF_BASE ist `pull_request.base.sha`, also der
-    // Kopf von main statt des Branchpunkts. Zwei-Punkt wiese jede Änderung, die main NACH
-    // dem Abzweigen bekam, spiegelverkehrt als Addition dieses Slices aus — fremde Zeilen
-    // im Nenner, potenziell falsches Rot. `A...B` misst gegen die Merge-Base.
+    // Drei-Punkt, NICHT `base HEAD`: KQ_DIFF_BASE ist in der PR-CI der Kopf von main (erster
+    // Elternteil des Merge-Checkouts, ci.yml „Diff-Basis bestimmen“) statt des Branchpunkts.
+    // Zwei-Punkt wiese jede Änderung, die main NACH dem Abzweigen bekam, spiegelverkehrt als
+    // Addition dieses Slices aus — fremde Zeilen im Nenner, potenziell falsches Rot. `A...B`
+    // misst gegen die Merge-Base.
     diff = git(["diff", "-U0", `${base}...HEAD`, "--", "src"]);
   } catch {
     return { skipped: true, failed: false, base };

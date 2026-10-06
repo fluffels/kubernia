@@ -180,7 +180,10 @@ export function checkDiffSize({ runGit, env = process.env } = {}) {
 
   let numstat;
   try {
-    numstat = git(["diff", "--numstat", base, "HEAD"]);
+    // Drei-Punkt wie check:diffcoverage: misst gegen die Merge-Base, nie gegen eine Basis, die
+    // main inzwischen überholt hat. Die PR-CI setzt KQ_DIFF_BASE auf den ersten Elternteil des
+    // Merge-Checkouts (ci.yml „Diff-Basis bestimmen“), nicht auf die veraltete `base.sha` (#1240).
+    numstat = git(["diff", "--numstat", `${base}...HEAD`]);
   } catch {
     // Diff nicht messbar → nicht rot machen, degradieren.
     return { skipped: true, base, ...thresholds, fileCount: 0, changedLines: 0 };

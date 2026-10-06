@@ -8,20 +8,16 @@
  * und per node:vm ausgeführt. Zusätzlich prüft der Test, dass die Skills die Zeile erwähnen.
  */
 import { readFileSync } from "node:fs"
-import { runInNewContext } from "node:vm"
 import { describe, expect, it } from "vitest"
+import { blockFunktion, workflowBlock } from "./workflow-block"
 
 const lies = (pfad: string) => readFileSync(new URL(`../../${pfad}`, import.meta.url), "utf8")
 const MARKER_ANFANG = "// ── rename-Kurztitel (#1213) — Anfang"
 const MARKER_ENDE = "// ── rename-Kurztitel (#1213) — Ende"
 
-const workflow = lies(".claude/workflows/kubernia-ticket.js")
-const start = workflow.indexOf(MARKER_ANFANG)
-const ende = workflow.indexOf(MARKER_ENDE)
-if (start === -1 || ende <= start) {
-  throw new Error(`Marker "${MARKER_ANFANG}" / "${MARKER_ENDE}" fehlen in kubernia-ticket.js`)
-}
-const renameKurztitel = runInNewContext(`${workflow.slice(start, ende)}\nrenameKurztitel`) as (titel: string) => string
+const { quelle: workflow, block } = workflowBlock(MARKER_ANFANG, MARKER_ENDE)
+const renameKurztitel = blockFunktion<(titel: unknown) => string>(block, "renameKurztitel")
+const renameZeile = blockFunktion<(nr: number, titel: unknown) => string>(block, "renameZeile")
 
 describe("renameKurztitel", () => {
   it("lässt kurze ASCII-Titel unverändert", () => {
@@ -36,22 +32,65 @@ describe("renameKurztitel", () => {
     expect(renameKurztitel("🚨  CI   rot – auf main")).toBe("CI rot auf main")
   })
 
-  it("kürzt auf höchstens 40 Zeichen ohne Rand-Leerzeichen", () => {
-    const kurz = renameKurztitel("a".repeat(39) + " " + "b".repeat(30))
-    expect(kurz.length).toBeLessThanOrEqual(40)
-    expect(kurz).toBe(kurz.trim())
+  it("kürzt exakt auf 40 Zeichen ohne Rand-Leerzeichen", () => {
+    expect(renameKurztitel("a".repeat(39) + " " + "b".repeat(30))).toBe("a".repeat(39))
+  })
+
+  it("lässt genau 40 Zeichen unverändert und kürzt 41", () => {
+    expect(renameKurztitel("x".repeat(40))).toBe("x".repeat(40))
+    expect(renameKurztitel("x".repeat(41))).toBe("x".repeat(40))
+  })
+
+  it("verschmilzt Tab/Zeilenumbruch nicht zu einem Wort", () => {
+    expect(renameKurztitel("Fix\tCI\nrot")).toBe("Fix CI rot")
+  })
+
+  it("liefert für fehlenden oder reinen Emoji-Titel den leeren String", () => {
+    expect(renameKurztitel(undefined)).toBe("")
+    expect(renameKurztitel("🚨🔥")).toBe("")
+  })
+})
+
+describe("renameZeile", () => {
+  it("hängt den Kurztitel an", () => {
+    expect(renameZeile(1239, "Harness: Fix")).toBe("/rename kq-1239 Harness: Fix")
+  })
+
+  it("lässt bei leerem Kurztitel kein Leerzeichen am Ende stehen", () => {
+    expect(renameZeile(1239, "🚨🔥")).toBe("/rename kq-1239")
+    expect(renameZeile(1239, undefined)).toBe("/rename kq-1239")
   })
 })
 
 describe("/rename-Zeile ist in Workflow und Skills verankert", () => {
   it("Workflow loggt die Zeile nach dem Claim", () => {
-    expect(workflow).toContain("/rename kq-${nr} ${renameKurztitel(")
+    expect(workflow).toContain("renameZeile(nr, auswahl.titel)")
   })
 
-  it.each([".claude/skills/kubernia/SKILL.md", ".claude/skills/kubernia-loop/SKILL.md"])(
-    "%s nennt /rename kq-<nr>",
-    (pfad) => {
-      expect(lies(pfad)).toContain("/rename kq-<nr> <Kurztitel>")
-    },
-  )
+  it("die Zeile steht hinter der claimVerifiziert-Prüfung", () => {
+    const claim = workflow.indexOf("if (!auswahl.claimVerifiziert)")
+    const zeile = workflow.indexOf("renameZeile(nr, auswahl.titel)")
+    expect(claim).toBeGreaterThan(-1)
+    expect(zeile).toBeGreaterThan(claim)
+  })
+
+  it("kubernia-Skill nennt /rename kq-<nr>", () => {
+    expect(lies(".claude/skills/kubernia/SKILL.md")).toContain("/rename kq-<nr> <Kurztitel>")
+  })
+
+  it("kubernia-loop gibt eine Sammelzeile am Ende statt einer Zeile je Ticket", () => {
+    const loop = lies(".claude/skills/kubernia-loop/SKILL.md")
+    expect(loop).toContain("/rename kq-loop")
+    expect(loop).not.toContain("/rename kq-<nr>")
+  })
+})
+
+describe("workflowBlock (gemeinsamer Wächter-Helfer, #1239)", () => {
+  it("wirft mit erklärender Meldung, wenn ein Marker fehlt", () => {
+    expect(() => workflowBlock("// gibt es nicht — Anfang", MARKER_ENDE)).toThrow(/nicht \(mehr\)/)
+  })
+
+  it("wirft bei vertauschten Markern statt einen leeren Block zu liefern", () => {
+    expect(() => workflowBlock(MARKER_ENDE, MARKER_ANFANG)).toThrow(/nicht \(mehr\)/)
+  })
 })

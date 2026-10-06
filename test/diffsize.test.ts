@@ -134,6 +134,18 @@ describe("Diff-Größenbudget (#533)", () => {
       throw new Error("unerwartet: " + a.join(" "));
     };
 
+  test("checkDiffSize: misst Drei-Punkt gegen die Merge-Base, nicht den Zwei-Punkt-Diff (Branch hinter main)", () => {
+    const AUFGEBLAEHT = Array.from({ length: 30 }, (_, i) => `100\t0\tfremd${i}`).join("\n");
+    const runGit: RunGit = (a) => {
+      if (a[0] === "diff" && a[2] === "BASE...HEAD") return OVER;
+      if (a[0] === "diff") return AUFGEBLAEHT; // Zwei-Punkt zählt main-Änderungen spiegelverkehrt mit
+      return gitWith("BASE", OVER)(a);
+    };
+    const r = checkDiffSize({ runGit, env: {} });
+    assert.equal(r.over, false, "nur der echte Slice zählt");
+    assert.equal(r.fileCount, 3);
+  });
+
   test("checkDiffSize: unter Budget → ok, nicht übersprungen, nicht über", () => {
     const r = checkDiffSize({ runGit: gitWith("BASE", OVER), env: {} });
     assert.equal(r.skipped, false);

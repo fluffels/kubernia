@@ -31,35 +31,16 @@
  * empirisch gemessen (auch ein übergebenes Objekt kommt als JSON-String an);
  * ändert die Laufzeit das, bleibt dieser Test grün und die Realität wandert weg.
  */
-import { readFileSync } from "node:fs"
-import { runInNewContext } from "node:vm"
 import { describe, expect, it } from "vitest"
+import { blockFunktion, workflowBlock } from "./workflow-block"
 
-const WORKFLOW = new URL("../../.claude/workflows/kubernia-ticket.js", import.meta.url)
 const MARKER_ANFANG = "// ── args-Auswertung (#1027) — Anfang"
 const MARKER_ENDE = "// ── args-Auswertung (#1027) — Ende"
 
-const quelle = readFileSync(WORKFLOW, "utf8")
-
-/** Schneidet den echten Funktionsblock aus dem Workflow-Skript. */
-function funktionsBlock(): string {
-  const start = quelle.indexOf(MARKER_ANFANG)
-  const ende = quelle.indexOf(MARKER_ENDE)
-  if (start === -1 || ende === -1 || ende <= start) {
-    throw new Error(
-      `Marker "${MARKER_ANFANG}" / "${MARKER_ENDE}" nicht (mehr) in ` +
-        `.claude/workflows/kubernia-ticket.js gefunden. Wurde argsLesen() umbenannt oder ` +
-        `verschoben? Dann die Marker mitziehen — dieser Test schneidet den Block daran aus.`,
-    )
-  }
-  return quelle.slice(start, ende)
-}
-
 type ArgsErgebnis = { nummer?: number; klaerungAntworten?: unknown[]; fehler?: string }
 
-const block = funktionsBlock()
-// Der Cast nimmt das implizite any von runInNewContext weg (recommendedTypeChecked).
-const argsLesen = runInNewContext(`${block}\nargsLesen`) as (roh: unknown) => ArgsErgebnis
+const { quelle, block } = workflowBlock(MARKER_ANFANG, MARKER_ENDE)
+const argsLesen = blockFunktion<(roh: unknown) => ArgsErgebnis>(block, "argsLesen")
 
 describe("Workflow-args: Extraktion", () => {
   it("schneidet einen echten, nicht-leeren Teil der Datei aus", () => {

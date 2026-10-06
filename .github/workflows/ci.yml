@@ -53,13 +53,26 @@ jobs:
       # auf main nach, statt dort zu Grün zu degradieren (#605, zweite Grenze hinter
       # dem PR-Gate). Ein roter main-Lauf blockiert nichts (main ist schon gepusht),
       # löst aber den Alarm-Job unten aus.
-      - name: Verify – alle Gates in einer SSOT-Kette (#527)
+      # Diff-Basis für check:diffsize/check:diffcoverage (#592/#605/#1239), einmal für beide.
+      # PR → der erste Elternteil des Merge-Checkouts (HEAD ist `refs/pull/N/merge`): das ist
+      # der AKTUELLE Kopf der Basis. `pull_request.base.sha` ist dagegen der Stand beim
+      # Öffnen/Push des PRs und liegt hinter main, sobald main inzwischen weiterging; der Diff
+      # zählte dann die Änderungen fremder, inzwischen gemergter PRs mit (#1240: 832 statt 758).
+      # push:main → der Vorgänger-Commit: der gemergte Slice wird nachgemessen (#605).
+      # workflow_dispatch → leer → interne origin/main-Auflösung (auf main == HEAD → No-op-grün).
+      - name: Diff-Basis bestimmen
         env:
-          # PR → die PR-Basis: check:diffsize misst genau den PR-Slice (#592).
-          # push:main → der Vorgänger-Commit: diffsize misst den gemergten Slice
-          # nach (#605). Bei workflow_dispatch sind beide leer → interne
-          # origin/main-Auflösung (auf main == HEAD → No-op-grün).
-          KQ_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base=$(git rev-parse HEAD^1)
+          else
+            base="$BEFORE_SHA"
+          fi
+          echo "KQ_DIFF_BASE=$base" >> "$GITHUB_ENV"
+
+      - name: Verify – alle Gates in einer SSOT-Kette (#527)
         run: npm run verify
 
       # Coverage-Gate (#495): eigener Schritt, weil die v8-Instrumentierung die Test-Suite
@@ -76,10 +89,8 @@ jobs:
       # dreht den Nenner um und misst NUR die im Slice geänderten Zeilen (coverage/
       # lcov.info aus dem Lauf davor, geschnitten mit dem Diff). Muss darum NACH
       # test:coverage stehen — ohne Report wird er bewusst rot, nicht still grün.
-      # KQ_DIFF_BASE wie bei check:diffsize: PR → PR-Basis, push:main → Vorgänger.
+      # KQ_DIFF_BASE kommt aus dem Schritt „Diff-Basis bestimmen“ oben (wie bei check:diffsize).
       - name: Diff-Coverage-Gate – geänderte Zeilen (#1021)
-        env:
-          KQ_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: npm run check:diffcoverage
 
       - name: Host-Build
