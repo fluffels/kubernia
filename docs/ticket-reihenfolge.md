@@ -34,17 +34,17 @@ Dann nur **dieses eine** Kandidaten-Ticket kurz gegen den Live-Stand prüfen (`g
 
 ## Anlegen auf Position N
 
-Gilt für das Sammelticket (`N=7`) und das Status-Ticket (`N=20`). `<Titel>`, Body und `N` einsetzen:
+Gilt für das Sammelticket (`N` = Position laut AGENTS.md) und das Status-Ticket (`N=20`). `<Titel>`, Body und `N` einsetzen:
 
 ```bash
-N=7   # Sammelticket 7, Langfuse-Status 20
+N=<Position>   # Sammelticket: Position laut AGENTS.md; Langfuse-Status: 20
 NR=$(gh issue create --label area:harness --title "<Titel>" --body "<Body>" | grep -o '[0-9]*$')
 NODE=$(gh issue view "$NR" --json id --jq .id)
 ITEM=$(gh api graphql -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }' \
   -f p=PVT_kwHOD8746c4Barq_ -f c="$NODE" --jq .data.addProjectV2ItemById.item.id)
 gh project item-edit --id "$ITEM" --project-id PVT_kwHOD8746c4Barq_ --field-id PVTSSF_lAHOD8746c4Barq_zhVhdTM --single-select-option-id f75ad846   # Status Todo, sonst fehlt das Item in der Auswahl
 AFTER=$(gh project item-list 1 --owner fluffels --format json --limit 800 \
-  --jq "[.items[] | select((.status // \"\")==\"Todo\")] | (.[$N-2] // .[-1]).id // empty")   # (N-1). Todo-Item → neues landet auf N; kürzeres Board: ans Ende (kein Todo-Item: Mutation überspringen)
+  --jq "[.items[] | select((.status // \"\")==\"Todo\" and .id != \"$ITEM\")] | (.[$N-2] // .[-1]).id // empty")   # (N-1). Todo-Item ohne das neue → es landet auf N; kürzeres Board: ans Ende (kein Todo-Item: Mutation überspringen)
 gh api graphql -f query='mutation($p:ID!,$i:ID!,$a:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }' \
   -f p=PVT_kwHOD8746c4Barq_ -f i="$ITEM" -f a="$AFTER"
 ```
@@ -62,9 +62,9 @@ Regel: [AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets](../AGENTS.md#w
   ```
   Kein ungeclaimter Treffer → anlegen (unten). Zwei offene **ungeclaimte** (Wettlauf) → das jüngere schließen, seine Zeilen ins ältere übertragen.
 
-- **Anlegen auf Position 7** (fehlt ein ungeclaimtes, auch während ein geclaimtes abgearbeitet wird; vorher mit dem Suchbefehl oben prüfen, nie doppelt anlegen). Ablauf und Befehle: [Anlegen auf Position N](#anlegen-auf-position-n), hier mit `N=7` und dem Titel „Harness-Härtung (gesammelt)".
+- **Anlegen auf der Position laut AGENTS.md** (fehlt ein ungeclaimtes, auch während ein geclaimtes abgearbeitet wird; vorher mit dem Suchbefehl oben prüfen, nie doppelt anlegen). Ablauf und Befehle: [Anlegen auf Position N](#anlegen-auf-position-n), hier mit `N` aus AGENTS.md und dem Titel „Harness-Härtung (gesammelt)".
 - **Beim Claimen des Sammeltickets** sofort prüfen, ob ein ungeclaimtes existiert; fehlt es, direkt eines anlegen (unten), damit Befunde nie ohne Ziel sind.
-- **Abarbeiten:** so viele Zeilen umsetzen, wie in **einen** PR passen (`check:diffsize`). **Vor dem PR** die Kommentare erneut lesen; was offen ist, ins **bestehende ungeclaimte** Sammelticket übertragen, sonst eines auf Position 7 anlegen — nur wenn Zeilen übrig sind, kein leeres. Das alte schließt der PR per `Closes`.
+- **Abarbeiten:** so viele Zeilen umsetzen, wie in **einen** PR passen (`check:diffsize`). **Vor dem PR** die Kommentare erneut lesen; was offen ist, ins **bestehende ungeclaimte** Sammelticket übertragen, sonst eines anlegen (Position laut AGENTS.md) — nur wenn Zeilen übrig sind, kein leeres. Das alte schließt der PR per `Closes`.
 - **Konvergenz-Signal:** Zeilenzahl pro Sammelticket-Generation ([ADR 0012](adr/0012-harness-autonomie-audit-spur.md#fortschreibung-1199-2026-10-05-spielquote-sammelticket-abschlusskriterium)).
 
 ## Wiederkehrendes Ticket „Langfuse-Status überprüfen" (#1293)
@@ -98,7 +98,7 @@ Die manuelle Board-Reihenfolge ist die **einzige** Reihenfolge-Quelle; es gibt k
 - **Mehrere Tickets auf einmal einsortieren (z.B. Epic-Aufteilung):** `node scripts/board-place.mjs --top <nr>…` bzw. `--after <ankernr> <nr>…` (`--dry-run` zeigt nur an) lädt die Board-Liste **einmal**, nutzt die Item-IDs wieder und setzt die Positionen nacheinander mit kurzer Pause; nie je Ticket die komplette Liste (`--limit 800`) neu laden. Noch nicht gelistete Nummern meldet das Skript (frische Items kommen verzögert): später erneut aufrufen. Bei `API rate limit exceeded` sofort stoppen, nur REST nutzen (Kommentar, Schließen, Labels) und den Board-Rest als Folgeaufgabe melden statt in einer Schleife weiterzuversuchen.
 - **Abhängigkeit** („A vor B"): als Notiz `blockiert durch #X` in den **Body** des abhängigen Issues. Die Auswahl fängt das am Kandidaten-Check ab (offener Blocker → überspringen).
 - **Unwichtig:** im Board nach unten ziehen, oder schließen bzw. löschen (`gh issue delete` nur mit Rückfrage). Ein Zurückstellen-Label gibt es nicht.
-- **Neues Issue:** wandert per „Auto-add to project"-Board-Workflow automatisch aufs Board — danach an die gewünschte Stelle ziehen.
+- **Neues Issue:** kommt **nicht** von selbst aufs Board (das Projekt hat nur „Auto-add sub-issues"). Nach `gh issue create` selbst hinzufügen (`addProjectV2ItemById`), Status Todo setzen (siehe „Status setzen") und einsortieren (`board-place.mjs` bzw. das Snippet oben).
 - **Forum-Issues schieben sich selbst nach oben:** die Action [`.github/workflows/forum-inbox.yml`](../.github/workflows/forum-inbox.yml) schiebt ein frisch geflaggtes Forum-Ticket beim Anlegen an die **oberste** Board-Position (#747, GraphQL `addProjectV2ItemById` idempotent + `updateProjectV2ItemPosition`). ⚠️ Das braucht ein Repo-Secret **`PROJECT_TOKEN`** (PAT mit `project`-Scope) — das Standard-`GITHUB_TOKEN` kann kein User-Project V2 beschreiben; fehlt es, warnt die Action nur (Issue steht dann irgendwo im Board). Board-Node-ID: `PVT_kwHOD8746c4Barq_`.
 - **Offene Dependabot-PRs sammeln sich selbst ein** (#712): die Action [`.github/workflows/dependabot-inbox.yml`](../.github/workflows/dependabot-inbox.yml) prüft täglich (+ `workflow_dispatch`), ob Dependabot-PRs offen sind, und legt bei Bedarf **ein** Sammel-Issue „🤖 Dependabot-PRs auflösen" an — direkt an die **oberste** Board-Position geschoben (dieselbe GraphQL-Verdrahtung/`PROJECT_TOKEN` wie bei den Forum-Issues), damit es beim nächsten „nächstes Ticket"-Griff sofort oben steht. Bleibt es offen, hängt jeder weitere Lauf nur den aktuellen PR-Stand als Kommentar an (kein Issue-Spam); sind keine Dependabot-PRs mehr offen, schließt die Action das Sammel-Issue automatisch. **Abarbeiten ohne Worktree/Code:** die gelisteten PRs einzeln gegen grüne CI prüfen (`gh pr checks <nr>`) und mergen (`gh pr merge <nr> --squash --delete-branch`), danach das Issue schließen.
 

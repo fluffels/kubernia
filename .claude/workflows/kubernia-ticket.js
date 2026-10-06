@@ -7,7 +7,7 @@ export const meta = {
     { title: 'Auswahl', detail: 'oberstes freies Board-Item claimen + Zuweisung verifizieren' },
     { title: 'Plan', detail: 'Planungs-Subagent vor der ersten Zeile Code bzw. Epic-Aufteilung', model: 'kubernia-planner (opus) + effort xhigh' },
     { title: 'Sonderfall', detail: 'Epic-Kinder aus dem Plan anlegen bzw. Dependabot-Sammelticket auflösen (kein Code)', model: 'sonnet' },
-    { title: 'Pre-Flight', detail: 'Risiko-Klärung vor dem Coden: Optik/Weiche → anhalten + Fragen vorlegen (#1012/#1069)' },
+    { title: 'Pre-Flight', detail: 'Weichen vor dem Coden selbst entscheiden; nur bei Irreversiblem/Außenwirkung anhalten + Fragen vorlegen (#1012/#1279)' },
     { title: 'Umsetzen', detail: 'Worktree, TDD, npm run verify, im Browser verifizieren, committen', model: 'sonnet' },
     { title: 'Review', detail: 'Lenses parallel als Konvergenzschleife (Cap 2, frischer Kritiker, #1012): 3 für Code, 1 Doku-Lens für reines Markdown, ab Runde 2 nur blockierte Brillen auf dem Delta (#1265)', model: 'kubernia-lens (opus) + effort high' },
     { title: 'Nachbessern', detail: 'nur bei blockierenden Findings oder rotem verify' },
@@ -59,24 +59,6 @@ damit keine zweite, veraltende Wahrheit entsteht.
 Commit-Identität ist die lokale Repo-Config (fluffels). Das Repo ist öffentlich und
 bewusst anonym: nie Klarname, externer Benutzername oder dienstliche/private
 E-Mail in Dateien, Commits oder Kommentaren (AGENTS.md § Anonymität wahren).`
-
-// ── rename-Kurztitel (#1213) — Anfang
-// Kurztitel für die /rename-Zeile (#1213): ASCII-tauglich, höchstens ~40 Zeichen.
-function renameKurztitel(titel) {
-  const ascii = String(titel ?? '')
-    .replace(/\s+/g, ' ')
-    .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/Ä/g, 'Ae').replace(/Ö/g, 'Oe').replace(/Ü/g, 'Ue').replace(/ß/g, 'ss')
-    .replace(/[^ -~]/g, '')
-    .replace(/ {2,}/g, ' ')
-    .trim()
-  return ascii.length > 40 ? ascii.slice(0, 40).trim() : ascii
-}
-// Die kopierfertige Zeile; ohne verwertbaren Kurztitel nur `/rename kq-<nr>` (kein Leerzeichen am Ende).
-function renameZeile(nr, titel) {
-  const kurz = renameKurztitel(titel)
-  return kurz ? `/rename kq-${nr} ${kurz}` : `/rename kq-${nr}`
-}
-// ── rename-Kurztitel (#1213) — Ende
 
 const AUSWAHL_SCHEMA = {
   type: 'object',
@@ -206,7 +188,13 @@ const PREFLIGHT_SCHEMA = {
     },
     grund: {
       type: 'string',
-      description: 'welches Signal: 🎨 Optik, ⚠️ riskante Weiche oder eine vom Plan gemeldete offene Weiche',
+      description: 'welches Signal: Irreversibles oder Außenwirkung (Löschen, Ruleset/Secrets/Repo-Einstellungen, Veröffentlichen/Forum)',
+    },
+    entscheidungen: {
+      type: 'array',
+      items: { type: 'string' },
+      description:
+        'je Weiche (Optik, riskante Weiche, offene Plan-Weiche) eine selbst getroffene Entscheidung „Weiche: X, weil Y“ (leer, wenn keine Weiche)',
     },
     offeneFragen: {
       type: 'array',
@@ -597,7 +585,6 @@ nicht selbst.`,
   const nr = auswahl.nummer
   const ticket = `#${nr} — ${auswahl.titel}`
   log(`Geclaimt: ${ticket} (art: ${auswahl.art})`)
-  log(`Session benennen: ${renameZeile(nr, auswahl.titel)}`)
 
   const ticketKontext = `Ticket #${nr}: ${auswahl.titel}
 
@@ -673,7 +660,7 @@ Dieses Ticket ist bewusst KEIN Code-Ticket. Kein Worktree, kein Branch, kein PR.
 AUFGABE — Epic aufteilen statt umsetzen, genau nach
 AGENTS.md § „Zu großes Ticket (Epic/Phase) → aufteilen statt umsetzen".
 ${plan ? 'Lege genau die im Plan vorgeschlagenen Kindertickets an; Abweichungen begründest du im Übersichts-Kommentar.' : 'Zerlege das Epic selbst in session-große Kindertickets.'}
-Offene Weichen aus dem Plan gehören in den Body des betroffenen Kindtickets (sie werden in dessen Pre-Flight geklärt).
+Weichen samt Entscheidung aus dem Plan gehören in den Body des betroffenen Kindtickets.
 
 Dazu gehört auch der Pflichtschritt „Neue Issues sofort ins Board einsortieren"
 (Mechanik, auch für mehrere Tickets auf einmal: docs/ticket-reihenfolge.md) — ein neu
@@ -710,18 +697,19 @@ ${ticketKontext}
 
 ${plan ? `--- Plan des Planungs-Agenten ---\n${plan}\n--- Ende Plan ---` : '(kein Vorab-Plan vorhanden)'}
 
-AUFGABE — klassifiziere, ob dieses Ticket VOR dem Coden eine menschliche Entscheidung
-braucht. Triff selbst KEINE inhaltliche Entscheidung — sammle nur die offenen Fragen.
+AUFGABE — Weichen VOR dem Coden entscheiden. Entscheidungen, die der Plan in Abschnitt 7
+schon trifft, übernimmst du wörtlich in entscheidungen; die übrigen Weichen (🎨 Optik,
+⚠️ riskante Weiche, offene Plan-Weiche) entscheidest du selbst: wäge ab, entscheide und trage je Weiche eine
+Zeile „Weiche: X, weil Y“ in entscheidungen ein. Optik misst du an docs/stardew-referenz.md
+und deren Checkliste; die Maintainerin kann per Revert widersprechen.
 
-brauchtKlaerung = true, wenn EINES zutrifft:
-- das Ticket ist 🎨 Optik/Grafik (das Aussehen legt die Maintainerin fest, AGENTS.md § Grafik-Stil);
-- eine ⚠️ riskante Weiche (z.B. Major-Migration mit Breaking Changes);
-- der Plan meldet eine offene Weiche/Entscheidung, die nicht eindeutig aus dem Ticket folgt.
+brauchtKlaerung = true NUR bei Irreversiblem oder Außenwirkung, also wenn die Umsetzung
+etwas löschen, am Ruleset, an Secrets oder Repo-Einstellungen drehen oder etwas
+veröffentlichen/posten (Forum) müsste. Dann 1-4 konkrete Fragen in offeneFragen, grund nennen.
 
 Harness-/Gate-Dateien allein sind KEIN Grund (#1069) — der Agent mergt solche Diffs selbst.
 
-Grundlage: AGENTS.md § Human-in-the-Loop-Checkpoints. Gib bei brauchtKlaerung=true
-1-4 konkrete Entscheidungsfragen in offeneFragen zurück.`,
+Grundlage: AGENTS.md § Human-in-the-Loop-Checkpoints.`,
     { label: `preflight:#${nr}`, phase: 'Pre-Flight', schema: PREFLIGHT_SCHEMA, model: 'sonnet', effort: 'medium' },
   )
 
@@ -740,6 +728,7 @@ Grundlage: AGENTS.md § Human-in-the-Loop-Checkpoints. Gib bei brauchtKlaerung=t
     }
   }
   if (klaerungAntworten) log(`Pre-Flight-Klärung mit ${klaerungAntworten.length} Antwort(en) fortgesetzt.`)
+  const entscheidungen = (preflight && Array.isArray(preflight.entscheidungen) ? preflight.entscheidungen : []).filter(Boolean)
 
   // ── Phase 4: Umsetzen ─────────────────────────────────────────────────────
   // Bewusst EIN Agent für Worktree + Code + Tests + Commit: Coden und Testen zu
@@ -761,6 +750,10 @@ ${
 ${
   klaerungAntworten
     ? `\n--- Antworten der Maintainerin aus der Pre-Flight-Klärung (verbindlich) ---\n${klaerungAntworten.map((a, i) => `${i + 1}. ${a}`).join('\n')}\n--- Ende Antworten ---\n`
+    : ''
+}${
+  entscheidungen.length
+    ? `\n--- Entscheidungen aus Plan/Pre-Flight (verbindlich) ---\n${entscheidungen.map((e, i) => `${i + 1}. ${e}`).join('\n')}\nDokumentiere jede davon im PR-Text als „Entscheidung: X, weil Y“.\n--- Ende Entscheidungen ---\n`
     : ''
 }
 AUFGABE — das Ticket umsetzen und committen. Noch NICHT pushen, KEINEN PR öffnen:
@@ -1109,7 +1102,11 @@ per PR). Gib die URL des Kommentars im Feld auditKommentar zurück.`
     `${kopf}
 
 ${ticketKontext}
-
+${
+  entscheidungen.length
+    ? `\n--- Entscheidungen aus Plan/Pre-Flight ---\n${entscheidungen.map((e, i) => `${i + 1}. ${e}`).join('\n')}\nGib jede davon im PR-Text als „Entscheidung: X, weil Y“ wieder (Audit-Spur für das Veto per Revert).\n--- Ende Entscheidungen ---\n`
+    : ''
+}
 Du arbeitest im Worktree ${worktree} auf ${branch} (absolute Pfade, NICHT hinein-cd'en).
 
 Vor dem PR: prüfe kurz gh issue view ${nr} --json state,closedAt. Ist das Issue
@@ -1255,7 +1252,7 @@ Notfall (roter main, Security, Datenverlust) wird ein neues Issue (ohne Assignee
 area:-Label, beide GraphQL-Calls zum Einsortieren — AGENTS.md § Neue Issues sofort ins Board
 einsortieren; vorher per gh issue list auf Duplikate prüfen). Alles zum Harness (Defekt,
 Härtung, Kosmetik, Wunsch) wird eine Zeile im ungeclaimten Sammelticket
-„Harness-Härtung (gesammelt)" (fehlt es: anlegen auf Position 7, docs/ticket-reihenfolge.md):
+„Harness-Härtung (gesammelt)" (fehlt es: anlegen auf der Position laut AGENTS.md, docs/ticket-reihenfolge.md):
 ${ausserhalbScope.map((p) => `- ${p}`).join('\n')}`
     : ''
 }

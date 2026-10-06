@@ -13,7 +13,7 @@ Gültige Effort-Stufen: `low`, `medium`, `high`, `xhigh`, `max`. Bei Sonnet 5+ u
 | Epic-Kinder anlegen | `sonnet` | `medium` | `agent()`-Optionen (`epic-anlegen`) | Hauptagent (Session-Modell) |
 | Dependabot-Sammelticket | `sonnet` | `medium` | `agent()`-Optionen (ohne Planer) | Hauptagent (Session-Modell) |
 | **Planung** | `opus` | `xhigh` | `agentType: 'kubernia-planner'` + `effort` | Subagent `kubernia-planner` (Frontmatter) |
-| Pre-Flight | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent (Session-Modell, fragt per `AskUserQuestion`) |
+| Pre-Flight (Weichen selbst entscheiden) | `sonnet` | `medium` | `agent()`-Optionen | Hauptagent (Session-Modell; übernimmt die Entscheidungen des Planers, `AskUserQuestion` nur bei Irreversiblem/Außenwirkung) |
 | Umsetzung | `sonnet` | `medium` | `agent()`-Optionen | Subagent [`kubernia-umsetzer`](../.claude/agents/kubernia-umsetzer.md) (Frontmatter, unabhängig vom Session-Modell) |
 | **Review (1–3 Lenses, [Staffel](#review-staffel-1265))** | `opus` | `high` | `agentType: 'kubernia-lens'` + `effort` | Subagenten `kubernia-lens`, vom Umsetzer über `review-lenses` gespawnt (Frontmatter, `high` wirkt) |
 | Nachbessern, CI-Fix | `sonnet` | `medium` | `agent()`-Optionen | im Umsetzer |
@@ -33,7 +33,7 @@ Der Review war nach #1065 der größte Kostenblock je Ticket (38–40 %, bei kle
 
 **Fail-closed:** Fehlt die Dateiliste, gab es keinen Vorrunden-Pass (`verify` rot), fiel eine Lens aus, wechselte die Diff-Art oder fehlt das Delta (der Nachbesserer lässt es nach Merge/Rebase von `main` leer; vergisst er das, enthält das Delta die `main`-Änderungen, also mehr Review, nicht weniger), läuft der volle Satz auf dem vollen Patch. Implementiert als `lensPlan` in [`.claude/workflows/kubernia-ticket.js`](../.claude/workflows/kubernia-ticket.js), auf dem Skill-Pfad als Regel in [`review-lenses`](../.claude/skills/review-lenses/SKILL.md); bewacht von [`test/harness/review-staffel.test.ts`](../test/harness/review-staffel.test.ts). Die Nachmessung muss Lenses je Ticket und Kosten je Lens getrennt ausweisen, weil #1209 parallel den Sockel je Lens senkt.
 
-**Ehrlich zum Skill-Pfad:** Im Hauptagenten bleiben nur Auswahl, Claim, Pre-Flight (mit Rückfrage), Epic-Kinder und Dependabot, auf dem Session-Modell, das die Maintainerin wählt (`.claude/settings.json` pinnt bewusst keins), im Normalfall also Opus. Bewusst in Kauf genommen: Auswahl und Pre-Flight sind kurz und profitieren vom Abwägen, Epic-Kinder und Dependabot sind selten; wer dort sparen will, stellt vorher `/model sonnet`. Alles Teure von der Umsetzung bis zum Cleanup läuft im Subagenten `kubernia-umsetzer` mit `sonnet`/`medium` aus seinem Frontmatter, egal auf welchem Modell die Session steht.
+**Ehrlich zum Skill-Pfad:** Im Hauptagenten bleiben nur Auswahl, Claim, Pre-Flight (übernimmt die Planer-Entscheidungen, Rückfrage nur bei Irreversiblem/Außenwirkung), Epic-Kinder und Dependabot, auf dem Session-Modell, das die Maintainerin wählt (`.claude/settings.json` pinnt bewusst keins), im Normalfall also Opus. Bewusst in Kauf genommen: Auswahl und Pre-Flight sind kurz und profitieren vom Abwägen, Epic-Kinder und Dependabot sind selten; wer dort sparen will, stellt vorher `/model sonnet`. Alles Teure von der Umsetzung bis zum Cleanup läuft im Subagenten `kubernia-umsetzer` mit `sonnet`/`medium` aus seinem Frontmatter, egal auf welchem Modell die Session steht.
 
 ## 2. Wie das Routing in Claude Code wirkt
 
@@ -233,6 +233,7 @@ Einzelläufe stehen nur im Bericht-Kommentar des Status-Tickets; hierher kommt j
 
 | Zeitraum | Läufe | Median Kosten/Ticket | Preis je Call | Sockel | Review-Runden | CI-Fix-Runden | ohne Nacharbeit | Datenvollständigkeit |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| #1278-Merge bis #1276-Claim (2026-10-06) | 8 | 7,65 $ | 0,061 $ | Hauptchat 64,7k (ab #1280 der dünne Hauptchat, die Umsetzung zählt als Subagent) | 1,5 | 0 | 8/8 | Transkript-Modus, Langfuse nicht je Lauf abgeglichen; Einzelläufe: [Bericht](https://github.com/fluffels/kubernia/issues/1276#issuecomment-6016995875) |
 
 ⚠️ **Langfuse nicht erreichbar** (Keys fehlen, Server aus) ist selbst ein Befund unter Punkt 1. Die übrigen Punkte laufen dann im Transkript-Modus des Skripts, das Status-Ticket wird trotzdem abgeschlossen und der Nachfolger angelegt.
 

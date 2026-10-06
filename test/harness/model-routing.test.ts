@@ -589,7 +589,7 @@ type AgentAufruf = { label: string; agentType?: string; model?: string; effort?:
  * VERHALTEN der Sonderfall-Zweige statt ihrer Textreihenfolge. Unbekannte Labels brechen laut ab,
  * damit ein neuer früher Aufruf den Stub bewusst erweitern muss.
  */
-async function workflowLauf(art: "epic" | "dependabot" | "normal", opts: { planerDa: boolean }) {
+async function workflowLauf(art: "epic" | "dependabot" | "normal", opts: { planerDa: boolean; preflight?: Record<string, unknown> }) {
   const quelle = read(".claude/workflows/kubernia-ticket.js").replace("export const meta", "const meta");
   const aufrufe: AgentAufruf[] = [];
   const agent = (prompt: string, o: { label: string; agentType?: string; model?: string; effort?: string }) => {
@@ -598,7 +598,8 @@ async function workflowLauf(art: "epic" | "dependabot" | "normal", opts: { plane
       return Promise.resolve({ ergebnis: "ticket-geclaimt", claimVerifiziert: true, nummer: 42, titel: "Testticket", body: "Body", art });
     }
     if (o.agentType === "kubernia-planner") return Promise.resolve(opts.planerDa ? "PLAN-TEXT" : null);
-    if (o.label.startsWith("preflight")) return Promise.resolve({ brauchtKlaerung: true, grund: "Test", offeneFragen: ["?"] });
+    if (o.label.startsWith("preflight")) return Promise.resolve(opts.preflight ?? { brauchtKlaerung: true, grund: "Test", offeneFragen: ["?"] });
+    if (o.label.startsWith("umsetzen")) return Promise.resolve({ ergebnis: "abgebrochen", verifyGruen: false, abbruchgrund: "Stub: Test endet nach dem Umsetzen-Prompt" });
     if (o.label.startsWith("epic-anlegen") || o.label.startsWith("dependabot")) return Promise.resolve("erledigt");
     return Promise.reject(new Error(`Stub kennt das Label "${o.label}" nicht – in workflowLauf() erweitern.`));
   };
@@ -663,5 +664,69 @@ describe("Epic-Aufteilung auf dem Planungs-Tier (#1207)", () => {
     const zeile = read(ROUTING_SSOT).split("\n").find((l) => /^\|\s*\*{0,2}Epic-Aufteilung/.test(l));
     assert.ok(zeile, "§1 braucht eine eigene Zeile „Epic-Aufteilung“");
     assert.match(zeile, /`opus`/);
+  });
+});
+
+describe("Pre-Flight-Weichen entscheidet der Agent selbst (#1279, #1276)", () => {
+  test("Weiche ohne Irreversibles: der Lauf hält NICHT an, die Entscheidung geht verbindlich in den Umsetzen-Prompt", async () => {
+    const { aufrufe, ergebnis } = await workflowLauf("normal", {
+      planerDa: true,
+      preflight: { brauchtKlaerung: false, entscheidungen: ["Weiche A: Variante X, weil sie bei 10× Inhalt trägt"] },
+    });
+    assert.deepEqual(aufrufe.map((a) => a.label), ["auswahl+claim", "plan:#42", "preflight:#42", "umsetzen:#42"]);
+    assert.equal(ergebnis, "umsetzung-abgebrochen", "der Stub beendet den Lauf nach dem Umsetzen-Aufruf");
+    const prompt = aufrufe[3].prompt;
+    assert.match(prompt, /Entscheidungen aus Plan\/Pre-Flight \(verbindlich\)/);
+    assert.match(prompt, /Weiche A: Variante X, weil sie bei 10× Inhalt trägt/);
+    assert.match(prompt, /im PR-Text/, "der Umsetzer muss die Entscheidung im PR dokumentieren");
+  });
+
+  test("leere und null-Einträge in entscheidungen werden verworfen", async () => {
+    const { aufrufe } = await workflowLauf("normal", { planerDa: true, preflight: { brauchtKlaerung: false, entscheidungen: ["", null] } });
+    assert.doesNotMatch(aufrufe[3].prompt, /Entscheidungen aus Plan\/Pre-Flight/);
+  });
+
+  test("ohne Entscheidungen kein leerer Block im Umsetzen-Prompt", async () => {
+    const { aufrufe } = await workflowLauf("normal", { planerDa: true, preflight: { brauchtKlaerung: false } });
+    assert.doesNotMatch(aufrufe[3].prompt, /Entscheidungen aus Plan\/Pre-Flight/);
+  });
+
+  test("Pre-Flight-Auftrag: Rückfrage nur bei Irreversiblem/Außenwirkung, Optik und Weichen entscheidet der Agent", () => {
+    const quelle = read(".claude/workflows/kubernia-ticket.js");
+    assert.doesNotMatch(quelle, /Triff selbst KEINE inhaltliche Entscheidung/);
+    assert.match(quelle, /entscheidungen: \{\s*type: 'array'/, "PREFLIGHT_SCHEMA braucht das Feld entscheidungen");
+    assert.match(quelle, /Irreversibles oder Außenwirkung/);
+    assert.match(quelle, /brauchtKlaerung = true NUR bei Irreversiblem oder Außenwirkung/, "die Prompt-Regel selbst");
+  });
+});
+
+describe("Umsetzer-Bericht: LERNKANDIDATEN (#1292, #1276)", () => {
+  const rolle = read(UMSETZER);
+  const skill = read(UMSETZUNGS_SKILL);
+
+  test("das feste Berichtsformat trägt die Zeile LERNKANDIDATEN, nach BEFUNDE", () => {
+    assert.match(rolle, /^LERNKANDIDATEN: <max\. 3 Punkte, nur projektübergreifendes Wissen, oder ->$/m);
+    assert.ok(rolle.indexOf("\nBEFUNDE:") < rolle.indexOf("\nLERNKANDIDATEN:"), "LERNKANDIDATEN steht hinter BEFUNDE");
+  });
+
+  test("Abgrenzung zu BEFUNDE steht in der Rolle, und der Subagent legt nichts selbst ab", () => {
+    assert.match(rolle, /BEFUNDE[^\n]*nur kubernia-Spezifisches/);
+    assert.match(rolle, /legst (es|sie|nichts) [^\n]*selbst[^\n]*ab|legst du nichts selbst ab/);
+  });
+
+  test("der kubernia-Skill reicht LERNKANDIDATEN im Abschlussbericht durch", () => {
+    assert.match(skill, /\*\*`gemergt`\*\*[^\n]*LERNKANDIDATEN/);
+  });
+});
+
+describe("Entscheidungen erreichen den PR-Text auch im Workflow (#1276)", () => {
+  test("der pr+merge-Prompt, der den PR öffnet, bekommt die Entscheidungen", () => {
+    const quelle = read(".claude/workflows/kubernia-ticket.js");
+    const von = quelle.indexOf("let merge = await agent(");
+    const bis = quelle.indexOf("label: `pr+merge:#", von);
+    assert.ok(von > 0 && bis > von, "pr+merge-Aufruf nicht gefunden");
+    const prompt = quelle.slice(von, bis);
+    assert.match(prompt, /entscheidungen\.length/);
+    assert.match(prompt, /im PR-Text als „Entscheidung: X, weil Y“/);
   });
 });
