@@ -101,6 +101,10 @@ describe("workloadSummaries", () => {
     unbind(sim, "-2");
     expect(workloadSummaries(all(sim))).toEqual([expect.objectContaining({ ready: 2, total: 3, problem: "Pending" })]);
   });
+  test("problem ist das Label des ERSTEN nicht bereiten Pods", () => {
+    const v = (name: string, label: string, healthy: boolean) => ({ name, kind: "Deployment" as const, workload: "w", image: "i", label, healthy, restarts: 0, created: 0 });
+    expect(workloadSummaries([v("a", "Running", true), v("b", "Pending", false), v("c", "NotReady", false)])[0].problem).toBe("Pending");
+  });
   test("leer: leer", () => { expect(workloadSummaries([])).toEqual([]); });
   test("gleicher Name bei Deployment und StatefulSet bleibt getrennt", () => {
     const sim = new KQSim({ deployments: [{ name: "x", image: "nginx", replicas: 1 }], statefulSets: [sts({ name: "x", serviceName: "x", replicas: 1 })] });

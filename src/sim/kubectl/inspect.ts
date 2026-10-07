@@ -42,7 +42,7 @@ function aliasMap(entries: { aliases: string[]; render: Renderer }[]): Map<strin
 
 /** Eine Pod-Zeile (NAME READY STATUS RESTARTS AGE) – die EINE Quelle für `get pods` mit und
  *  ohne `-A`. Der Status kommt je Owner aus seiner Wahrheit (Deployment: `_podStatus`,
- *  StatefulSet: PVC-Bindung, #811). */
+ *  StatefulSet: `clusterPodStatus` über `podAddress`). */
 function podRow(host: KubectlHost, c: ClusterPod): string[] {
   const st = clusterPodStatus(host, c);
   return [c.pod.name, st.ready, st.status, String(st.restarts), host._age(c.pod.created)];
@@ -545,7 +545,7 @@ function describeStatefulPod(host: KubectlHost, c: StatefulPod): string {
     "IP:           " + (ip ?? "<none>"),
     "Controlled By: StatefulSet/" + sts.name,
     // StatefulSetRes kennt kein serviceAccountName; ohne spec.serviceAccountName heißt es im
-    // echten Kubernetes `default`. Ein Wert aus dem Pod-Template folgt mit #1142.
+    // echten Kubernetes `default`. Ausblick: siehe #1142.
     "Service Account: default",
     "Containers:",
     "  " + sts.name + ":",
