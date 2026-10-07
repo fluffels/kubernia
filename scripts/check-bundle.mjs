@@ -93,7 +93,8 @@ export const BUNDLE_BUDGETS = [
     // #758: +~0.3 KB — DECK_SHAPE-Array + Deck-Render-Methoden für bootsförmiges Schiff-Deck.
     // #1139: +~8 KB — YAML-Parser + Manifest-Mapper (src/sim/yaml.ts, src/sim/manifest/*) laufen im Spiel.
     // #1299: +~0.3 KB — werft-dienst-/uebung-Manifeste in der Bibliothek, Sonderfeld-Overlay in der Registry.
-    maxBytes: 1_411_000,
+    // #1300: +~3 KB — Deployment-apply-Abgleich (apply-deployment.ts), Workload-Primitive, cpu-/memory-Mapper.
+    maxBytes: 1_414_000,
   },
   {
     label: "Phaser-vendor-Chunk in dist/ (#595)",
