@@ -41,9 +41,11 @@
  *    irreversible Fehlaktion "Commit/Push vom falschen Ort". Er erkennt Haupt- vs. Linked-Worktree über gits
  *    Konvention (am Toplevel eines Linked Worktree ist `.git` eine DATEI, im Haupt-Checkout ein VERZEICHNIS) und
  *    vergleicht `git-common-dir` (per `realpath`, also auch über Junction/Symlink) mit dem des eigenen Checkouts.
- *  - Verbleibende Grenze: eine zur Laufzeit gebaute Befehlszeile aus mehreren Schritten (`X=$(…); $X`), Skripte
- *    (`bash skript.sh`) und Binärprogramme, die selbst git aufrufen (`npm run x`), sieht er nicht.
  *  - Das PowerShell-Tool deckt scripts/worktree-guard-powershell.mjs ab, beide hängen am Dispatcher.
+ *
+ * Bewusste Grenzen:
+ *  - Eine zur Laufzeit gebaute Befehlszeile aus mehreren Schritten (`X=$(…); $X`), Skripte (`bash skript.sh`) und
+ *    Binärprogramme, die selbst git aufrufen (`npm run x`), sieht er nicht.
  *
  * Reines Node-Skript (nur Builtins). Die Entscheidungslogik ist pur/exportiert und testbar
  * (execFile/stat/homedir/platform injizierbar) — EINE Quelle für Hook-CLI und Test.

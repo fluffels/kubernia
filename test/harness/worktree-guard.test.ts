@@ -29,6 +29,7 @@ type GuardModule = {
   buildDenyOutput: (reason: string) => Record<string, unknown>;
   protectedGitTargets: (command: string, cwd: string, deps?: ExecDeps) => string[];
   fromMsysPath: (p: string, platform?: string) => string;
+  coarseProtected: (command: string) => boolean;
 };
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-review-nachweis.mjs).
@@ -598,6 +599,17 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(ask("$b -c 'echo commit'"), false);
     assert.equal(ask("$b -c 'git status'"), false);
     assert.equal(ask("$b -c 'git commit -m x'", wt), false, "im Worktree kein Anlass");
+    assert.equal(ask("$b -c 'GIT commit -m x'"), true, "Groß-/Kleinschreibung egal (eine Regex mit /i, #1322 Z13)");
+    assert.equal(ask("$b -c 'Git.EXE push'"), true);
+  });
+
+  test("grobe Regel ist case-insensitiv und reihenfolgefrei je Segment (#1322 Z13)", () => {
+    assert.equal(guard.coarseProtected("GIT.EXE commit -m x"), true);
+    assert.equal(guard.coarseProtected("Git PUSH"), true);
+    assert.equal(guard.coarseProtected("commit das mit git"), true, "Reihenfolge egal");
+    assert.equal(guard.coarseProtected("git status && echo commit"), false, "verschiedene Segmente");
+    assert.equal(guard.coarseProtected("digit commit"), false, "git nur als Wort");
+    assert.equal(guard.coarseProtected("git status"), false);
   });
 
   test("Verschachtelung über MAX_TIEFE und Fehler im Auswerter fallen auf die grobe Regel zurück", () => {

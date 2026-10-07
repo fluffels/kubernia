@@ -10,7 +10,7 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
@@ -18,10 +18,15 @@ import * as raw from "../../scripts/pretooluse-hook.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
 import * as ioRaw from "../../scripts/hook-io.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
-import * as ghRaw from "../../scripts/gh-guard-hook.mjs";
+import * as ghRaw0 from "../../scripts/gh-guard-hook.mjs";
 
+// @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
+import * as tabRaw from "../../scripts/shell-tabellen.mjs";
+
+const ghRaw = ghRaw0 as unknown as { GEPRUEFTE_TOOLS: string[]; bewerte: (c: string, o: unknown) => unknown };
 type Out = { hookSpecificOutput: { permissionDecision: string; permissionDecisionReason: string } } | null;
 const io = ioRaw as unknown as { mergeDecisions: (d: unknown[]) => Out };
+const tabellen = tabRaw as unknown as { SHELL_VON_TOOL: Record<string, string> };
 const hook = raw as unknown as { dispatch: (text: string, repoRoot: string, guards?: Record<string, (o: never) => unknown>) => Out };
 
 const WURZEL = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -179,5 +184,34 @@ describe("Verdrahtung (#1311)", () => {
     assert.equal(hook.dispatch(payload("Bash", "x"), WURZEL, { decide: blockt, bewertePowerShell: nichts, bewerteGh: wirft })?.hookSpecificOutput.permissionDecision, "deny");
     assert.equal(hook.dispatch(payload("PowerShell", "x"), WURZEL, { decide: wirft, bewertePowerShell: blockt, bewerteGh: fragt })?.hookSpecificOutput.permissionDecision, "deny", "deny vor ask");
     assert.equal(hook.dispatch(payload("PowerShell", "x"), WURZEL, { decide: blockt, bewertePowerShell: wirft, bewerteGh: wirft }), null, "Bash-Guard ist bei PowerShell nicht zuständig");
+  });
+});
+
+describe("Tool→Dialekt-Tabelle und Kopfkommentare der Guards (#1322 Z14, Z16a)", () => {
+  test("SHELL_VON_TOOL ist die eine Tabelle: Dispatcher und gh-Guard-Direktaufruf leiten daraus ab", () => {
+    assert.deepEqual({ ...tabellen.SHELL_VON_TOOL }, { Bash: "bash", PowerShell: "powershell" });
+    assert.equal(Object.isFrozen(tabellen.SHELL_VON_TOOL), true);
+    assert.deepEqual(ghRaw.GEPRUEFTE_TOOLS, Object.keys(tabellen.SHELL_VON_TOOL));
+    for (const quelle of ["scripts/pretooluse-hook.mjs", "scripts/gh-guard-hook.mjs"]) {
+      const text = lies(quelle);
+      assert.match(text, /SHELL_VON_TOOL/, `${quelle} nutzt die Tabelle`);
+      assert.doesNotMatch(text, /tool === "PowerShell" \? "powershell"|tool === "Bash" \? "bash"/, `${quelle}: keine zweite Zuordnung`);
+    }
+  });
+
+  test("Vererbte Objekt-Schlüssel (`constructor`, `__proto__`) sind keine geprüften Tools", () => {
+    const nichts = () => ({ block: false });
+    const guards = { decide: nichts, bewertePowerShell: nichts, bewerteGh: () => ({ ask: true, reason: "x" }) };
+    for (const tool of ["constructor", "toString", "__proto__", "bash"]) assert.equal(hook.dispatch(payload(tool, "x"), WURZEL, guards as never), null, tool);
+  });
+
+  test("jeder Guard mit Direktaufruf trägt im ersten Kommentarblock genau einmal den Abschnitt `Bewusste Grenzen:`", () => {
+    const guards = readdirSync(resolve(WURZEL, "scripts")).filter((n) => /guard.*\.mjs$/.test(n) && lies(`scripts/${n}`).includes("istDirektaufruf(import.meta.url)"));
+    assert.deepEqual(guards.sort(), ["gh-guard-hook.mjs", "worktree-guard-hook.mjs", "worktree-guard-powershell.mjs"]);
+    for (const n of guards) {
+      const kopf = /\/\*\*[\s\S]*?\*\//.exec(lies(`scripts/${n}`))?.[0] ?? "";
+      assert.equal(kopf.split("\n").filter((z) => /^ \* Bewusste Grenzen:\s*$/.test(z)).length, 1, `${n}: Abschnitt „Bewusste Grenzen:“ genau einmal im Kopfkommentar`);
+      assert.doesNotMatch(kopf, /Ehrliche Grenze|Verbleibende Grenze|ehrlich, wie/, `${n}: keine abweichende Überschrift`);
+    }
   });
 });

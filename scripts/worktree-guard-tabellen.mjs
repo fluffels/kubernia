@@ -10,15 +10,22 @@
 import { statSync } from "node:fs";
 import { homedir as osHomedir } from "node:os";
 import path from "node:path";
-import { SHELLS, baseName } from "./shell-tabellen.mjs";
+import { SHELLS, WRAPPERS, baseName } from "./shell-tabellen.mjs";
 
 export { SHELLS, baseName };
 
+/** Benannte Wortteile der groben Regel (eine Quelle für coarseProtected, PowerShell- und Bash-Guard): "git"(.exe) bzw. commit/push als Wort. */
+export const GIT_WORT = /\bgit(\.exe)?\b/i;
+export const COMMIT_PUSH_WORT = /\b(commit|push)\b/i;
+/** `git … commit|push` im selben Statement (Reihenfolge fest, Trenner `;`/`|` beendet). Groß-/Kleinschreibung egal (Windows: `GIT.EXE`). */
+export const GIT_COMMIT_PUSH = new RegExp(`${GIT_WORT.source}[^;|]*${COMMIT_PUSH_WORT.source}`, "i");
+
 /** Grobe Wortregel (Rückfall, wenn der Parser nicht zerlegen kann oder ein Interpreter den eigentlichen
- *  Befehl verbirgt): ein Segment (Split auf `&&`/`||`/`;`/Zeilenumbruch) mit "git" UND "commit"/"push" als Wort. */
+ *  Befehl verbirgt): ein Segment (Split auf `&&`/`||`/`;`/Zeilenumbruch) mit "git" UND "commit"/"push" als Wort, Reihenfolge egal.
+ *  Bewusst grob und fail-closed: kann im Haupt-Checkout auch Text treffen, der nur beide Wörter nennt. */
 export function coarseProtected(command) {
   const segments = String(command).split(/&&|\|\||;|\n/);
-  return segments.some((seg) => /\bgit\b/.test(seg) && /\b(commit|push)\b/.test(seg));
+  return segments.some((seg) => GIT_WORT.test(seg) && COMMIT_PUSH_WORT.test(seg));
 }
 
 export const GIT_RE = /^(?:.*[\\/])?git(?:\.exe)?$/i;
@@ -33,31 +40,6 @@ export const EXEC_FLAGS = new Set(["-exec", "-execdir", "-ok", "-okdir"]);
 export const EXPORTERS = new Set(["export", "declare", "typeset", "readonly", "local"]);
 /** Unbekanntes Verzeichnis (dynamisches `cd`): fragt bei einem folgenden geschützten git-Aufruf nach. */
 export const UNKNOWN = "\0unbekannt";
-
-/** Wrapper-Tabelle: Optionen mit Wert (`val`), Optionen mit Ortswechsel (`chdir`), Positionsargumente (`pos`),
- *  `assign`: NAME=WERT-Argumente, `lookup`: Optionen, die nur nachschlagen (`command -v`). */
-const W = (val = [], extra = {}) => ({ val: new Set(val), chdir: new Set(extra.chdir ?? []), pos: extra.pos ?? 0, assign: extra.assign ?? false, lookup: new Set(extra.lookup ?? []) });
-const WRAPPERS = {
-  time: W(["-f", "-o", "--format", "--output"]),
-  command: W([], { lookup: ["-v", "-V"] }),
-  exec: W(["-a"]),
-  builtin: W(),
-  env: W(["-u", "--unset", "-S", "--split-string", "-C", "--chdir"], { chdir: ["-C", "--chdir"], assign: true }),
-  sudo: W(["-u", "-g", "-p", "-C", "-r", "-t", "-U", "-T", "-R", "-h", "-D", "--user", "--group", "--chdir"], { chdir: ["-D", "--chdir"] }),
-  doas: W(["-u", "-C"]),
-  xargs: W(["-I", "-L", "-n", "-P", "-s", "-d", "-E", "-a", "--max-args", "--max-procs", "--delimiter", "--arg-file"]),
-  nice: W(["-n", "--adjustment"]),
-  timeout: W(["-s", "-k", "--signal", "--kill-after"], { pos: 1 }),
-  stdbuf: W(["-i", "-o", "-e"]),
-  ionice: W(["-c", "-n", "-p"]),
-  nohup: W(),
-  winpty: W(),
-  setsid: W(),
-  unbuffer: W(),
-};
-
-/** Namen der Wrapper (Schlüssel der Wrapper-Tabelle). */
-export const WRAPPER_NAMEN = new Set(Object.keys(WRAPPERS));
 
 /** Eingebaute git-Unterbefehle (Rest: möglicher Alias, wird per `git config` aufgelöst). */
 export const KNOWN_SUBS = new Set(

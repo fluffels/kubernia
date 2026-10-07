@@ -18,6 +18,7 @@ import {
   CD_WRAPPERS,
   EXEC_FLAGS,
   EXPORTERS,
+  GIT_COMMIT_PUSH,
   GIT_RE,
   PROTECTED_SUBS,
   SHELLS,
@@ -377,7 +378,7 @@ function evalSimple(cmd, D, c, opts) {
   }
   const args = words.slice(pe.i + 1);
   if (pe.dynamicCmd) {
-    const imText = args.some((w) => /\bgit(\.exe)?\b[^;|]*\b(commit|push)\b/.test(w.text)); // `$b -c 'git commit …'`: Interpreter über Variable
+    const imText = args.some((w) => GIT_COMMIT_PUSH.test(w.text)); // `$b -c 'git commit …'`: Interpreter über Variable
     if (imText || args.some((w) => !w.dynamic && PROTECTED_SUBS.has(w.text))) ask(c, real(D), "Das Kommando ist dynamisch (`$(…) push`, `$GIT commit`, `$b -c 'git commit …'`): git commit/push im Haupt-Checkout nicht auswertbar.", true);
     return nichts(D);
   }
