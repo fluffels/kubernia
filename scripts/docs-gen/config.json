@@ -13,6 +13,7 @@
       "check:docmap": "jede `src/`-Datei ist in einem Tiefendoc erwähnt, die Landkarte kann nicht leise veralten",
       "check:docdrift": "dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien",
       "check:docgen": "generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein",
+      "check:c4": "LikeC4-Modell: validiert, formatiert; Schichten, Phaser, Schicht-Kanten und Top-Level-Module stimmen mit `scripts/layers.cjs` und `src/` überein",
       "check:internalrefs": "keine internen Bezüge im öffentlichen Repo",
       "check:lockfile": "Lockfile passt zur `package.json`",
       "check:diffsize": "Slice-Größe (Dateien und Zeilen gegen die Merge-Base)",
@@ -90,5 +91,12 @@
     "standplaetze": "src/content/data/entities.json",
     "npcs": "src/content/data/npcs.json",
     "maxQuestsJeDiagramm": 30
+  },
+  "architektur": {
+    "workspace": "docs/architektur",
+    "quelle": "src",
+    "bindungen": { "schicht": "schicht", "bibliothek": "extern", "modul": "modul" },
+    "erzaehlung": ["person", "system", "container", "datenspeicher"],
+    "maxKnotenJeView": 25
   }
 }

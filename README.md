@@ -193,6 +193,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 | 07.10.2026 | [ADR 0017](/docs/adr/0017-lebende-doku-generierte-abschnitte.md): Lebende Doku — generierte Abschnitte, und ein Diagramm ist eine Regel |
 | 07.10.2026 | [ADR 0018](/docs/adr/0018-content-chunks-je-datei.md): Content-Chunks je Datei — der Spielcode-Chunk wächst nicht mehr mit dem Inhalt |
 | 07.10.2026 | [ADR 0019](/docs/adr/0019-langfuse-plugin-im-user-scope.md): Das Langfuse-Plugin bleibt auch im User-Scope aktiv |
+| 08.10.2026 | [ADR 0020](/docs/adr/0020-architekturmodell-likec4.md): Architekturmodell LikeC4 — zweite Ableitung derselben SSOTs |
 
 <!-- GEN:zeitleiste END -->
 
@@ -310,6 +311,7 @@ Kubernia ist bewusst so gebaut, dass es **so groß wie Stardew Valley** werden k
   | `npm run check:docmap` | `verify` | jede `src/`-Datei ist in einem Tiefendoc erwähnt, die Landkarte kann nicht leise veralten |
   | `npm run check:docdrift` | `verify` | dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien |
   | `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein |
+  | `npm run check:c4` | `verify` | LikeC4-Modell: validiert, formatiert; Schichten, Phaser, Schicht-Kanten und Top-Level-Module stimmen mit `scripts/layers.cjs` und `src/` überein |
   | `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo |
   | `npm run check:lockfile` | `verify` | Lockfile passt zur `package.json` |
   | `npm run check:diffsize` | `verify` | Slice-Größe (Dateien und Zeilen gegen die Merge-Base) |

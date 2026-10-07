@@ -255,4 +255,11 @@ describe("Interne-Referenzen-Wächter (#990)", () => {
     assert.equal(addTerm("  ", file).ok, false, "Leerer Begriff wird abgelehnt.");
     assert.equal(addTerm(DUMMY, file, "GIBT_ES_NICHT").ok, false, "Unbekannte Liste wird gemeldet.");
   });
+
+  test("Architekturmodell-Dateien (.c4/.d2) werden geprüft (#1420)", () => {
+    assert.equal(isCheckable("docs/architektur/x.c4"), true);
+    assert.equal(isCheckable("docs/architektur/x.d2"), true);
+    const hits = findViolations(["docs/architektur/spiel.c4"], [DUMMY], () => `x = modul '${DUMMY}'`);
+    assert.equal(hits.length, 1, "Ein Begriff in .c4-Text wird gefunden.");
+  });
 });
