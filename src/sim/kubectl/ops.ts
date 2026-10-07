@@ -7,10 +7,11 @@
  * Phaser-frei (pure Domäne): nutzt nur `makePodName` aus ../util und das
  * KubectlHost-Interface (./host). Aufgerufen aus dem kubectl-Dispatch (../kubectl.ts).
  */
-import { scaleDeployment, replacePods, changeImage, setMemoryLimit, setCpuLimit } from "../workload";
+import { changeImage, setMemoryLimit, setCpuLimit, healsOom, throttlesCpu } from "../workload";
 import { parseMem, parseCpuMilli } from "../util";
 import type { Deployment } from "../state";
 import type { KubectlHost } from "./host";
+import { rollOut, scaleTo } from "./rollout";
 
 /** Den Deployment-Namen aus einer Referenz `deployment/<name>` (Slash) ODER
  *  `deployment <name>` (getrennt) ziehen – egal an welcher Token-Position sie steht.
@@ -34,7 +35,8 @@ export function kubectlScale(host: KubectlHost, t: string[], raw: string) {
   const dep = host.deployments.find(d => d.name === name);
   if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + name + '" not found', "Welche Deployments es gibt: 'kubectl get deployments'");
   const target = parseInt(repMatch[1], 10);
-  scaleDeployment(dep, target, host.clock, host.rng);
+  const denied = scaleTo(host, dep, target);
+  if (denied) return denied;
   return "deployment.apps/" + name + " scaled";
 }
 
@@ -106,7 +108,11 @@ function kubectlSetImage(host: KubectlHost, t: string[]) {
   if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + depName + '" not found');
   const newImage = kv.split("=")[1];
   const oldBad = dep.broken && dep.broken.type === "imagepull" ? dep.broken.badImage : null;
-  if (changeImage(dep, newImage)) replacePods(dep, host.clock, host.rng);
+  // Anderes Image = neues Pod-Template = Rollout (Admission inklusive); gleiches Image: nichts.
+  if (dep.image !== newImage) {
+    const denied = rollOut(host, dep, () => { changeImage(dep, newImage); });
+    if (denied) return denied;
+  }
   return "deployment.apps/" + depName + " image updated" + (oldBad && newImage === oldBad ? "\n💡 Hmm – das ist exakt dasselbe (kaputte) Image. Schau nochmal genau auf den Namen!" : "");
 }
 
@@ -118,44 +124,45 @@ export const MEM_HEALED_NOTE = "💡 Genug Speicher! Die Pods starten neu und bl
 /** Notiz nach weggedrosselter Dauerlast. */
 export const CPU_THROTTLED_NOTE = "💡 CPU-Limit gesetzt! Die Pods werden gedrosselt – der HighPodCPU-Alert fällt auf resolved.";
 
-/** Das Memory-Limit setzen (#240). Ist der Dienst wegen OOMKilled kaputt und das neue Limit
- *  reicht (>= memNeeded), heilt er. Notiz landet in `notes`. */
-function applyMemLimit(host: KubectlHost, dep: Deployment, spec: string | undefined, notes: string[]): ResourceError | null {
-  if (!spec) return null;
-  const newLimit = parseMem(spec);
-  if (newLimit === null) return ['error: invalid resource quantity "' + spec + '"', "Schreib das Limit z.B. als '256Mi' oder '1Gi'."];
-  if (setMemoryLimit(dep, newLimit)) {
-    replacePods(dep, host.clock, host.rng);
-    notes.push("\n" + MEM_HEALED_NOTE);
+/** Geparste, validierte Ressourcen-Angaben von `set resources` (alles vor der ersten Mutation). */
+interface ResourcePlan { mem?: number; cpu: number | null; eph?: number }
+
+/** Memory- und ephemeral-Limit parsen (CPU kommt schon als Milli-Cores). Fehler → [Meldung, Tipp]. */
+function parseResourcePlan(memSpec: string | undefined, cpu: number | null, ephSpec: string | undefined): ResourcePlan | ResourceError {
+  const plan: ResourcePlan = { cpu };
+  if (memSpec) {
+    const mem = parseMem(memSpec);
+    if (mem === null) return ['error: invalid resource quantity "' + memSpec + '"', "Schreib das Limit z.B. als '256Mi' oder '1Gi'."];
+    plan.mem = mem;
   }
-  return null;
+  if (ephSpec) {
+    const eph = parseMem(ephSpec);
+    if (eph === null) return ['error: invalid resource quantity "' + ephSpec + '"', "Schreib das Limit z.B. als '512Mi' oder '1Gi'."];
+    plan.eph = eph;
+  }
+  return plan;
 }
 
-/** Das CPU-Limit setzen: bei < 500 m wird cpuHeavy gelöscht und der HighPodCPU-Alert fällt
- *  auf resolved. `milli` ist das Limit in Milli-Cores (oder null, wenn keins angegeben). */
-function applyCpuLimit(host: KubectlHost, dep: Deployment, milli: number | null, notes: string[]): void {
-  if (milli === null) return;
-  if (setCpuLimit(dep, milli)) {
-    replacePods(dep, host.clock, host.rng);
-    notes.push("\n" + CPU_THROTTLED_NOTE);
-  }
-}
-
-/** Das ephemeral-storage-Limit setzen (#240): analog memory, gegen die flüchtige Disk-Nutzung
- *  des Pods. Die Eviction-Auswertung greift den neuen Wert beim nächsten Befehl auf – reicht der
- *  Platz jetzt, wird der Pod nicht mehr evictet. */
-function applyEphemeralLimit(host: KubectlHost, dep: Deployment, spec: string | undefined, notes: string[]): ResourceError | null {
-  if (!spec) return null;
-  const newEph = parseMem(spec);
-  if (newEph === null) return ['error: invalid resource quantity "' + spec + '"', "Schreib das Limit z.B. als '512Mi' oder '1Gi'."];
+/** Plan anwenden (reine Mutation, Admission/Rollout macht der Aufrufer). Die Notiz-Reihenfolge ist
+ *  Speicher → CPU → ephemeral. Ephemeral analog memory (#240): reicht der PEAK (#485) jetzt, wird
+ *  der Pod nicht mehr evictet. */
+function applyResourcePlan(host: KubectlHost, dep: Deployment, plan: ResourcePlan, notes: string[]): void {
   const wasEvicted = !!dep.evicted;
-  dep.ephemeralLimit = newEph;
-  // Maßgeblich ist der PEAK (#485): reicht das Limit auch für den (evtl. doppelten) initContainer-Peak,
-  // läuft der Pod wieder – sonst würde er beim nächsten Init erneut evictet.
-  if (wasEvicted && host._depEphemeralPeak(dep) <= newEph) {
+  if (plan.mem !== undefined && setMemoryLimit(dep, plan.mem)) notes.push("\n" + MEM_HEALED_NOTE);
+  if (plan.cpu !== null && setCpuLimit(dep, plan.cpu)) notes.push("\n" + CPU_THROTTLED_NOTE);
+  if (plan.eph === undefined) return;
+  dep.ephemeralLimit = plan.eph;
+  if (wasEvicted && host._depEphemeralPeak(dep) <= plan.eph) {
     notes.push("\n💡 Genug ephemeral-storage! Der Pod wird nicht mehr evictet – prüfe mit 'kubectl get pods'.");
   }
-  return null;
+}
+
+/** Plan anwenden. Nur eine Heilung (OOM/CPU) rollt neue Pods aus – dann in EINEM Rollout mit
+ *  Pod-Security-Admission. Fehlertext bei Ablehnung (dann unverändert), sonst `null`. */
+function applyWithRollout(host: KubectlHost, dep: Deployment, plan: ResourcePlan, notes: string[]): string | null {
+  const heals = (plan.mem !== undefined && healsOom(dep, plan.mem)) || (plan.cpu !== null && throttlesCpu(dep, plan.cpu));
+  if (!heals) { applyResourcePlan(host, dep, plan, notes); return null; }
+  return rollOut(host, dep, () => applyResourcePlan(host, dep, plan, notes));
 }
 
 /** Das `--limits=cpu=<N>` als Text ziehen (`250m`, `1`, `0.5`); `undefined`, wenn keins angegeben ist. */
@@ -164,8 +171,8 @@ function cpuLimitSpec(raw: string): string | undefined {
 }
 
 /** kubectl set resources deployment/<name> --limits=memory=256Mi [--requests=memory=128Mi]
- *  Dünner Dispatcher: parst die vier Dimensionen und delegiert je an ihren Applier
- *  (memory-Limit + OOM-Heilung / CPU-Limit / ephemeral-storage-Limit). Die Notiz-Reihenfolge
+ *  Parst und validiert alle Dimensionen vor der ersten Mutation (memory-Limit + OOM-Heilung /
+ *  CPU-Limit / ephemeral-storage-Limit); eine Heilung rollt über ./rollout aus. Die Notiz-Reihenfolge
  *  (Speicher → CPU → ephemeral) bleibt wie zuvor. `--requests=memory` wird akzeptiert, ändert
  *  aber didaktisch nichts – es zählt nur mit, ob überhaupt etwas angegeben wurde. */
 function kubectlSetResources(host: KubectlHost, t: string[], raw: string) {
@@ -180,12 +187,11 @@ function kubectlSetResources(host: KubectlHost, t: string[], raw: string) {
   if (!limitSpec && !requestSpec && cpuLimitMilli === null && !ephSpec) return host._err("kubectl set resources: Kein Limit/Request angegeben.", "Häng z.B. '--limits=memory=256Mi --requests=memory=128Mi', '--limits=cpu=200m' oder '--limits=ephemeral-storage=1Gi' an.");
   const dep = host.deployments.find(d => d.name === depName);
   if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + depName + '" not found', "Welche Deployments es gibt: 'kubectl get deployments'");
+  const plan = parseResourcePlan(limitSpec, cpuLimitMilli, ephSpec);
+  if (!("cpu" in plan)) return host._err(plan[0], plan[1]);
   const notes: string[] = [];
-  const memErr = applyMemLimit(host, dep, limitSpec, notes);
-  if (memErr) return host._err(memErr[0], memErr[1]);
-  applyCpuLimit(host, dep, cpuLimitMilli, notes);
-  const ephErr = applyEphemeralLimit(host, dep, ephSpec, notes);
-  if (ephErr) return host._err(ephErr[0], ephErr[1]);
+  const denied = applyWithRollout(host, dep, plan, notes);
+  if (denied) return denied;
   return "deployment.apps/" + depName + " resource requirements updated" + notes.join("");
 }
 
@@ -198,20 +204,14 @@ export function kubectlRollout(host: KubectlHost, t: string[]) {
   const dep = host.deployments.find(d => d.name === depName);
   if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + depName + '" not found');
   const broken = dep.broken;
-  if (broken && broken.type === "crashloop" && host.secrets.some(s => s.name === broken.needsSecret)) {
-    dep.broken = null;
-  }
+  const secretHealed = !!broken && broken.type === "crashloop" && host.secrets.some(s => s.name === broken.needsSecret);
   // Eigenes Image nachgebaut (#164): ein needsBuild-ImagePullBackOff heilt beim Neustart,
   // sobald das Image lokal verfügbar ist – der klassische „force re-pull"-Griff.
-  let imageHealed = false;
-  if (broken && broken.type === "imagepull" && broken.needsBuild && host._imageAvailable(dep.image)) {
-    dep.broken = null;
-    imageHealed = true;
-  }
-  // Pod-Neustart gibt das flüchtige Scratch-Volume frei (#240): emptyDir-Inhalt ist weg, die
-  // ephemeral-Disk-Bilanz von Pod und Node fällt – ein evicteter Pod kann so wieder anlaufen.
-  host._resetEphemeral(dep);
-  replacePods(dep, host.clock, host.rng);
+  const imageHealed = !!broken && broken.type === "imagepull" && !!broken.needsBuild && host._imageAvailable(dep.image);
+  // Der Neustart gibt das flüchtige Scratch-Volume frei (#240) und läuft über den einen Rollout-Weg
+  // (Pod-Security-Admission inklusive): bei Ablehnung bleibt auch die Heilung aus.
+  const denied = rollOut(host, dep, () => { if (secretHealed || imageHealed) dep.broken = null; });
+  if (denied) return denied;
   return "deployment.apps/" + depName + " restarted" +
     (imageHealed ? "\n💡 Image gefunden – die Pods starten neu und laufen jetzt. Prüfe mit 'kubectl get pods'." : "");
 }

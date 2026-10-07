@@ -26,7 +26,7 @@ Jeweils Geometrie/Kollision + Anleger/Warp + reservierte NPC-/Quest-Trigger-Stan
 | `src/world/regions/flotte.ts` | Expeditions-Flotte: Flaggschiff-Deck-Geometrie + Anleger/Warp (#148). |
 | `src/world/regions/werft.ts` | Heimat-Werft: Werft-Hof-Geometrie + Helling/Anleger/Warp (Phase-10-Capstone, #165). |
 | `src/world/warps.ts` | Region-Übergänge als Daten-Liste (`REGION_WARPS`) + reiner Anti-Pingpong-Kern `armWarps`/`triggeredWarp` (#426). |
-| `src/world/hazards.ts` | Gefahren-Entscheidungskern (#512): `resolveHazardTick` (welche Gefahr startet/löst auf/tickt) + Start-Gate + Opfer-Eignung + `pirateSteal`/`stormFixKind`; dazu die szenen-neutralen `HazardEvent`/`HazardStartInfo`-Typen (#540). |
+| `src/world/hazards.ts` | Gefahren-Entscheidungskern (#512): `resolveHazardTick` (welche Gefahr startet/löst auf/tickt) + Start-Gate + Opfer-Eignung (auch Pod-Security: nur Deployments, deren neue Pods zugelassen würden, sind reparierbar, #1327) + `pirateSteal`/`stormFixKind`; dazu die szenen-neutralen `HazardEvent`/`HazardStartInfo`-Typen (#540). |
 
 ## Tiled-Karten-Pipeline
 

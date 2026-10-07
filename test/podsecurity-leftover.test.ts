@@ -25,6 +25,17 @@ function postPhase6Sim(): KQSim {
   return sim;
 }
 
+/** Wie `postPhase6Sim`, aber mit einem schon vorhandenen, ungehärteten Deployment (angelegt vor dem Härten). */
+function postPhase6SimWithDeployment(oomBroken = false): KQSim {
+  const sim = new KQSim({});
+  sim.exec("kubectl create deployment bestand --image=nginx");
+  // OOM-kaputter Bestand: ein set-resources-Drill heilt ihn und rollt dabei aus (Admission!).
+  if (oomBroken) sim.deployments[0].broken = { type: "oomkilled", memNeeded: 64 };
+  sim.exec("kubectl label namespace default pod-security.kubernetes.io/enforce=restricted");
+  assert.equal(sim.podSecurity, "restricted", "Vorbedingung: Cluster ist gehärtet");
+  return sim;
+}
+
 test("#444: Oles k-create-Drill bleibt nach Phase 6 (restricted) lösbar", () => {
   for (let i = 0; i < 8; i++) {
     const sim = postPhase6Sim();
@@ -52,4 +63,21 @@ test("#444: die Cluster-Härtung bleibt unangetastet – ein roher Pod direkt ü
   const sim = postPhase6Sim();
   const r = sim.exec("kubectl create deployment roh-posten --image=nginx");
   assert.ok(r.error, "ein roh über exec (ohne Drill) angelegter Pod wird unter restricted weiter abgewiesen");
+});
+
+test("#1327: jeder Drill, dessen Lösung neue Pods erzeugt, bleibt nach Phase 6 (restricted) lösbar", () => {
+  const PODS = /^kubectl\s+(scale|rollout\s+restart|set\s+(image|resources)|create\s+deployment|apply)(?![a-z-])/;
+  let geprueft = 0;
+  for (const [id, make] of Object.entries(KQContent.DRILLS)) {
+    for (let i = 0; i < 5; i++) {
+      // Drei Ausgangslagen: leerer Cluster, ungehärteter Bestand, OOM-kaputter ungehärteter Bestand.
+      const sim = i % 3 === 0 ? postPhase6Sim() : postPhase6SimWithDeployment(i % 3 === 2);
+      const t = make(sim);
+      if (!PODS.test(norm(t.solution))) continue;
+      geprueft++;
+      const r = sim.exec(t.solution);
+      assert.ok(!r.error, id + " #" + i + ": Lösung '" + t.solution + "' scheitert unter restricted: " + r.output);
+    }
+  }
+  assert.ok(geprueft > 0, "der Wächter prüft mindestens einen Drill");
 });

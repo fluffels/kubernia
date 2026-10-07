@@ -3,13 +3,12 @@
  * Mechaniken der kubectl-Familie an EINEM Ort.
  *  - `kubectl auth can-i` (RBAC): `subjectKeyOf`/`asKey`/`canI` + `kubectlAuth`.
  *  - Pod-Security-Stufe per Namespace-Label setzen (`kubectlLabel`) und Pods dagegen
- *    prüfen (`admitPod`). `admitPod` wird aus der lifecycle-Familie (create/apply)
- *    gerufen – darum exportiert.
+ *    prüfen (`admitPod`, Kern `podSecurityViolations`). `admitPod` ruft nur ./rollout.
  *
  * Phaser-frei (pure Domäne): hängt nur an den Domänentypen aus ../state und am
  * KubectlHost-Interface (./host). Kein Rückimport (kein Zyklus).
  */
-import type { RbacSubject, SecurityContext } from "../state";
+import type { PodSecurityLevel, RbacSubject, SecurityContext } from "../state";
 import { roleMatchesRef } from "../rbac";
 import { flagValue } from "../util";
 import type { KubectlHost } from "./host";
@@ -81,12 +80,10 @@ export function kubectlLabel(host: KubectlHost, t: string[], raw: string) {
   return "namespace/" + nsName + " labeled";
 }
 
-/** Prüft einen Pod gegen die durchgesetzte Stufe. Rückgabe: null = zugelassen,
- *  sonst die (deutsche) Ablehnungs-Begründung. privileged = nie ablehnen. */
-
-export function admitPod(host: KubectlHost, name: string, sc: SecurityContext | undefined): string | null {
-  const level = host.podSecurity;
-  if (level === "privileged") return null;
+/** Der pure Kern der Pod-Security-Prüfung: die Verstöße eines securityContext gegen eine Stufe
+ *  (leer = zugelassen). privileged = nie ein Verstoß. */
+export function podSecurityViolations(level: PodSecurityLevel, sc: SecurityContext | undefined): string[] {
+  if (level === "privileged") return [];
   const ctx = sc || {};
   const violations: string[] = [];
   // baseline UND restricted: keine privilegierten Container.
@@ -96,6 +93,15 @@ export function admitPod(host: KubectlHost, name: string, sc: SecurityContext | 
     if (ctx.runAsNonRoot !== true) violations.push("runAsNonRoot muss true sein");
     if (ctx.allowPrivilegeEscalation !== false) violations.push("allowPrivilegeEscalation muss false sein");
   }
+  return violations;
+}
+
+/** Prüft einen Pod gegen die durchgesetzte Stufe. Rückgabe: null = zugelassen,
+ *  sonst die (deutsche) Ablehnungs-Begründung. Nur aus ./rollout gerufen (der eine Weg „neue Pods“). */
+
+export function admitPod(host: Pick<KubectlHost, "podSecurity">, name: string, sc: SecurityContext | undefined): string | null {
+  const level = host.podSecurity;
+  const violations = podSecurityViolations(level, sc);
   if (violations.length === 0) return null;
   return 'Error from server (Forbidden): admission webhook "pod-security" denied the request: '
     + "Pod '" + name + "' verletzt die Pod-Security-Stufe '" + level + "': " + violations.join(", ") + ".";

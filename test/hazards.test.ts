@@ -72,6 +72,17 @@ describe("Opfer-Eignung (#512)", () => {
     expect(pirateVictims(deps).map(d => d.name)).toEqual(["b", "c"]);
   });
 
+  it("canRollOut (#1327) filtert Opfer; ohne Prädikat bleibt alles wie vorher", () => {
+    const deps = [
+      { name: "a", replicas: 3, broken: null, ok: true },
+      { name: "b", replicas: 3, broken: null, ok: false },
+    ];
+    expect(stormVictims(deps, d => d.ok).map(d => d.name)).toEqual(["a"]);
+    expect(pirateVictims(deps, d => d.ok).map(d => d.name)).toEqual(["a"]);
+    expect(pirateVictims(deps, () => false)).toEqual([]);
+    expect(pirateVictims(deps).map(d => d.name)).toEqual(["a", "b"]);
+  });
+
   it("keine geeigneten Opfer → leere Liste (kein Start möglich)", () => {
     expect(stormVictims([{ name: "x", broken: { type: "crashloop" } }])).toEqual([]);
     expect(pirateVictims([{ name: "x", replicas: 1 }])).toEqual([]);

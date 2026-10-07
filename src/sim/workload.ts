@@ -147,24 +147,30 @@ export function changeImage(dep: Deployment, image: string): boolean {
   return true;
 }
 
+/** Heilt ein memory-Limit von `mi` einen OOMKilled-Fehler? (pur, `>=` memNeeded) */
+export function healsOom(dep: Deployment, mi: number): boolean {
+  return !!dep.broken && dep.broken.type === "oomkilled" && mi >= (dep.broken.memNeeded || 0);
+}
+
+/** Drosselt ein CPU-Limit von `milli` die Dauerlast weg? (pur, unter `CPU_THROTTLE_MILLI`) */
+export function throttlesCpu(dep: Deployment, milli: number): boolean {
+  return milli < CPU_THROTTLE_MILLI && !!dep.cpuHeavy;
+}
+
 /** Setzt das memory-Limit (Mi). Heilt OOMKilled, wenn es für `memNeeded` reicht (>=). */
 export function setMemoryLimit(dep: Deployment, mi: number): boolean {
+  const heals = healsOom(dep, mi);
   dep.memLimit = mi;
-  if (dep.broken && dep.broken.type === "oomkilled" && mi >= (dep.broken.memNeeded || 0)) {
-    dep.broken = null;
-    return true;
-  }
-  return false;
+  if (heals) dep.broken = null;
+  return heals;
 }
 
 /** Setzt das CPU-Limit (Milli-Cores). Unter `CPU_THROTTLE_MILLI` fällt die Dauerlast weg. */
 export function setCpuLimit(dep: Deployment, milli: number): boolean {
+  const throttles = throttlesCpu(dep, milli);
   dep.cpuLimitMilli = milli;
-  if (milli < CPU_THROTTLE_MILLI && dep.cpuHeavy) {
-    dep.cpuHeavy = false;
-    return true;
-  }
-  return false;
+  if (throttles) dep.cpuHeavy = false;
+  return throttles;
 }
 
 /** Übernimmt die Template-Felder memory-/CPU-Limit und securityContext aus einem Snapshot bzw.

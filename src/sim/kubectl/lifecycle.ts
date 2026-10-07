@@ -2,7 +2,7 @@
  * Die Ressourcen-Lebenszyklus-Befehle: `create` (imperativ anlegen), `apply -f`
  * (deklarativ aus Manifest, größter Block: alle CRDs/Workloads/RBAC/Observability/
  * Storage) und `delete` (löschen, inkl. `-f`). Die drei teilen sich die
- * Pod-Security-Admission (`admitPod` aus ./security) und – beim `apply` einer
+ * Pod-Security-Admission (`admitNewPods` aus ./rollout) und – beim `apply` einer
  * Argo-Application – das Reconcile aus ../argocd.
  *
  * Phaser-frei (pure Domäne): nutzt `makePodName` aus ../util, Domänentypen aus
@@ -17,7 +17,7 @@ import { argoReconcile, cloneChildSpec } from "../argocd";
 import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { sameRbac } from "../rbac";
 import { flagValue, multiFlag } from "../util"; // clusterIP entfällt: Service läuft jetzt über host._makeService (#507)
-import { admitPod } from "./security";
+import { admitNewPods } from "./rollout";
 import { applyDeployment } from "./apply-deployment";
 import { fileEffects, type ManifestVerb } from "../manifest/registry";
 import type { KubectlHost } from "./host";
@@ -201,8 +201,8 @@ const createDeployment: CreateHandler = (host, t, raw) => {
   if (host.deployments.some(d => d.name === name)) return host._err('error: deployment "' + name + '" already exists');
   // Pod-Security-Admission: ein imperativ erzeugtes Deployment hat keinen securityContext.
   // Unter baseline/restricted wird es deshalb abgelehnt (privileged = keine Prüfung).
-  const denied = admitPod(host, name, undefined);
-  if (denied) return host._err(denied, "Setz die Stufe mit 'kubectl label namespace default pod-security.kubernetes.io/enforce=privileged' herab oder liefere einen passenden securityContext per Manifest.");
+  const denied = admitNewPods(host, name, undefined);
+  if (denied) return denied;
   addDeployment(host, host._makeDeployment(name, imgMatch[1], 1));
   return "deployment.apps/" + name + " created";
 };

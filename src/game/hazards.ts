@@ -17,6 +17,8 @@
 import { part, type GameApi } from "./shared";
 import { nextRandom } from "../core/rng";
 import { KQContent } from "../content";
+import { admitsNewPods } from "../sim/kubectl/rollout";
+import type { Deployment } from "../sim/state";
 import { notifyHazard, uiBusy } from "../runtime";
 import {
   hazardStartable, stormVictims, pirateVictims, resolveHazardTick, pirateSteal, stormFixKind,
@@ -73,9 +75,12 @@ function deadlineFor(game: GameApi, kind: HazardKind): number {
  * Gespiegelt aus dem früheren tryStart* (worldscene/events.ts); der Sprite-Spawn liegt jetzt
  * in der Präsentation (reagiert auf das "start"-Event), hier bleibt nur die Domänen-Mutation. */
 
+/** Opfer-Filter (#1327): nur Deployments, deren neue Pods die Pod-Security zuließe, sind reparierbar. */
+const canRollOut = (game: GameApi) => (d: Deployment): boolean => admitsNewPods(game.sim.podSecurity, d.securityContext);
+
 function startStorm(game: GameApi): void {
   if (!startGate(game, "storm")) return;
-  const victims = stormVictims(game.sim.deployments);
+  const victims = stormVictims(game.sim.deployments, canRollOut(game));
   if (victims.length === 0 || uiBusy()) { HZ.nextStorm += 25; return; }
   const dep = pickRandom(victims);
   const fix = stormFixKind(nextRandom());
@@ -96,7 +101,7 @@ function startStorm(game: GameApi): void {
 
 function startPirate(game: GameApi): void {
   if (!startGate(game, "pirate")) return;
-  const victims = pirateVictims(game.sim.deployments);
+  const victims = pirateVictims(game.sim.deployments, canRollOut(game));
   if (victims.length === 0 || uiBusy()) { HZ.nextPirate += 20; return; }
   const dep = pickRandom(victims);
   const want = dep.replicas;
