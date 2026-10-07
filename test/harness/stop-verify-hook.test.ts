@@ -400,7 +400,7 @@ describe("settings.json hängt den Hook auch an das Ende des Umsetzers (#1309)",
     const lies = (p: string) => readFileSync(fileURLToPath(new URL(`../../${p}`, import.meta.url)), "utf8");
     assert.match(lies(".claude/agents/kubernia-umsetzer.md"), /SubagentStop-Hook/);
     assert.match(lies(".claude/skills/kubernia/SKILL.md"), /cleanup-worktrees\.mjs --fix/);
-    assert.match(lies(".claude/skills/kubernia/SKILL.md"), /git diff --quiet HEAD origin\/main -- \.claude\/agents \.claude\/skills/);
+    assert.match(lies(".claude/skills/kubernia/SKILL.md"), /git diff --quiet <Sitzungsbasis> origin\/main -- \.claude\/agents \.claude\/skills/);
     assert.match(lies(".claude/skills/review-lenses/SKILL.md"), /Agent type 'kubernia-lens' not found/);
   });
 });

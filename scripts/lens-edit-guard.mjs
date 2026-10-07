@@ -8,9 +8,10 @@
  * Dieser Hook (Frontmatter von `.claude/agents/kubernia-lens.md`, Matcher `Edit`, gilt nur für diesen Subagenten) erzwingt sie:
  * `Edit` ist erlaubt, wenn der aufgelöste Zielpfad in einem Lens-Worktree liegt, sonst `deny`. Ein fehlender Pfad ist `deny`.
  *
- * Bewusste Grenzen: Bash/PowerShell (`sed -i`, `Set-Content`) fängt er nicht ab; die Lens-Definition verbietet es per Text,
- * der Frische-Guard der Folge-Runde und `git status --porcelain` im Feature-Worktree machen eine Änderung sichtbar.
- * Ein Pfad per Symlink/Junction in einen Lens-Worktree wird nicht aufgelöst (lexikalische Prüfung).
+ * Bewusste Grenzen:
+ *   - Bash/PowerShell (`sed -i`, `Set-Content`) fängt er nicht ab; die Lens-Definition verbietet es per Text, der
+ *     Frische-Guard der Folge-Runde und `git status --porcelain` im Feature-Worktree machen eine Änderung sichtbar.
+ *   - Ein Pfad per Symlink/Junction in einen Lens-Worktree wird nicht aufgelöst (lexikalische Prüfung); jeder Pfad mit einem Segment `.claude/worktrees/kq-<nr>-lens-r<n>/` gilt als Lens-Worktree, auch ein verschachtelter.
  *
  * Nur Node-Builtins.
  */
