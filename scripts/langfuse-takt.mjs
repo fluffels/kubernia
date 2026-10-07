@@ -174,7 +174,7 @@ function main() {
   }
   const token = process.env.PROJECT_TOKEN;
   if (!token) {
-    console.log("::warning::PROJECT_TOKEN fehlt, Board-Position nicht gesetzt (das Ticket steht dann nicht im Board, der nächste Lauf trägt es nach, sofern es ungeclaimt und der Token gesetzt ist, oder sofort per workflow_dispatch).");
+    console.log("::warning::PROJECT_TOKEN fehlt, Board-Position nicht gesetzt (das Ticket steht dann nicht im Board, der nächste Lauf trägt es nach, sofern es ungeclaimt und der Token gesetzt ist; nach dem Setzen des Tokens auch sofort per workflow_dispatch).");
     return;
   }
   try {
