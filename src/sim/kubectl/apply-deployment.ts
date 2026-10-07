@@ -1,6 +1,6 @@
 /* ===== Kubernia – kubectl apply für Deployments (sim/kubectl/apply-deployment.ts, #1300) =====
  * Der apply-Handler für `kind: Deployment`: legt ein neues Deployment aus dem Manifest an oder gleicht
- * ein bestehendes deklarativ ab. Die Pod-Template-Felder stehen in EINER Tabelle (`TEMPLATE_FIELDS`):
+ * ein bestehendes deklarativ ab. Die Pod-Template-Felder stehen in EINER Tabelle (`TEMPLATE_FIELD_TABLE`, typgewacht gegen `PodTemplateSpec`):
  * ein neues Feld = ein Eintrag, Anlegen und Re-apply nutzen dieselbe Tabelle. Jede Template-Änderung
  * rollt neue Pods aus (wie in echtem Kubernetes); eine reine replicas-Änderung skaliert ohne Rollout.
  * Beides läuft über ./rollout (Pod-Security-Admission inklusive).
@@ -12,9 +12,8 @@
  * die Pod-Security-Admission den Wert prüft, den der Pod danach wirklich hat.
  *
  * Phaser-frei (pure Domäne). Aufgerufen aus ./lifecycle (apply-Handler-Registry). */
-import { SECURITY_CONTEXT_KEYS, type ApplyEffect, type Deployment, type SecurityContext } from "../state";
-import { addDeployment, changeImage, setCpuLimit, setMemoryLimit } from "../workload";
-import { CPU_THROTTLED_NOTE, MEM_HEALED_NOTE } from "./ops";
+import { SECURITY_CONTEXT_KEYS, type ApplyEffect, type Deployment, type PodTemplateSpec, type SecurityContext } from "../state";
+import { addDeployment, changeImage, CPU_THROTTLED_NOTE, MEM_HEALED_NOTE, setCpuLimit, setMemoryLimit } from "../workload";
 import { admitNewPods, rollOut, scaleTo } from "./rollout";
 import type { KubectlHost } from "./host";
 
@@ -38,42 +37,71 @@ function flagUnbuiltImage(host: KubectlHost, dep: Deployment, eff: DepEffect, no
   notes.push("💡 Pod im ImagePullBackOff: das Image '" + eff.image + "' gibt es noch nicht. Erst 'docker build -t " + eff.image + " .', dann 'kubectl rollout restart deployment " + eff.name + "'.");
 }
 
-const TEMPLATE_FIELDS: readonly TemplateField[] = [
-  {
+/** Der initContainer, wie ihn Anlegen und Re-apply normalisiert ablegen (fillsMi-Default 0). */
+function normalizedInit(e: DepEffect): Deployment["initContainer"] {
+  return e.initContainer ? { fillsMi: e.initContainer.fillsMi ?? 0, doubleStage: !!e.initContainer.doubleStage } : undefined;
+}
+
+/** Eine Tabelle über ALLE Template-Felder (`image` plus `PodTemplateSpec`). Der Typ-Wächter `satisfies`
+ *  bricht den Typecheck, sobald ein neues Feld hier nicht entschieden ist. `null` = kein Template-Wert:
+ *  `ephemeralUsedMi` ist ein Laufzeitwert, jeder Rollout setzt ihn auf 0 – ein Wertvergleich wäre nie
+ *  idempotent. Das Anlegen setzt den Startwert weiter (siehe `createDeploymentFromManifest`). Beim
+ *  emptyDir zählt nur die Deklaration, nicht der Inhalt. Die Reihenfolge bestimmt die der Notizen. */
+const TEMPLATE_FIELD_TABLE = {
+  image: {
     differs: (d, e) => d.image !== e.image,
     take(host, d, e, notes) {
       changeImage(d, e.image);
       flagUnbuiltImage(host, d, e, notes);
     },
   },
-  {
+  containerPort: {
     differs: (d, e) => e.containerPort !== undefined && d.containerPort !== e.containerPort,
     take(_host, d, e) { d.containerPort = e.containerPort; },
   },
-  {
+  securityContext: {
     differs: (d, e) => !sameSecurityContext(d.securityContext, e.securityContext),
     take(_host, d, e) {
       if (e.securityContext) d.securityContext = { ...e.securityContext };
       else delete d.securityContext;
     },
   },
-  {
+  serviceAccountName: {
     differs: (d, e) => !!e.serviceAccountName && d.serviceAccountName !== e.serviceAccountName,
     take(_host, d, e) { d.serviceAccountName = e.serviceAccountName; },
   },
-  {
+  memLimit: {
     differs: (d, e) => e.memLimit !== undefined && d.memLimit !== e.memLimit,
     take(_host, d, e, notes) { if (e.memLimit !== undefined && setMemoryLimit(d, e.memLimit)) notes.push(MEM_HEALED_NOTE); },
   },
-  {
+  cpuLimitMilli: {
     differs: (d, e) => e.cpuLimitMilli !== undefined && d.cpuLimitMilli !== e.cpuLimitMilli,
     take(_host, d, e, notes) { if (e.cpuLimitMilli !== undefined && setCpuLimit(d, e.cpuLimitMilli)) notes.push(CPU_THROTTLED_NOTE); },
   },
-  {
+  ephemeralLimit: {
     differs: (d, e) => e.ephemeralLimit !== undefined && d.ephemeralLimit !== e.ephemeralLimit,
     take(_host, d, e) { d.ephemeralLimit = e.ephemeralLimit; },
   },
-];
+  node: {
+    differs: (d, e) => e.node !== undefined && d.node !== e.node,
+    take(_host, d, e) { d.node = e.node; },
+  },
+  emptyDir: {
+    // Nur die Deklaration: ein vorhandenes Volume bleibt (sein Inhalt ist Laufzeitwert).
+    differs: (d, e) => !!e.emptyDir && !d.emptyDir,
+    take(_host, d, e) { d.emptyDir = { data: e.emptyDir?.data || "", usedMi: e.emptyDir?.usedMi || 0 }; },
+  },
+  initContainer: {
+    differs: (d, e) => {
+      const want = normalizedInit(e);
+      return !!want && (d.initContainer?.fillsMi !== want.fillsMi || !!d.initContainer?.doubleStage !== !!want.doubleStage);
+    },
+    take(_host, d, e) { d.initContainer = normalizedInit(e); },
+  },
+  ephemeralUsedMi: null,
+} satisfies Record<"image" | keyof PodTemplateSpec, TemplateField | null>;
+
+const TEMPLATE_FIELDS: readonly TemplateField[] = Object.values<TemplateField | null>(TEMPLATE_FIELD_TABLE).filter((f): f is TemplateField => f !== null);
 
 /** Ein bestehendes Deployment deklarativ abgleichen (idempotentes apply): jede abweichende
  *  Template-Eigenschaft wird übernommen und löst EINEN Rollout aus, `spec.replicas` skaliert ohne
@@ -106,12 +134,8 @@ function createDeploymentFromManifest(host: KubectlHost, eff: DepEffect, out: st
   const dep = host._makeDeployment(eff.name, eff.image, eff.replicas);
   const notes: string[] = [];
   for (const f of TEMPLATE_FIELDS) if (f.differs(dep, eff)) f.take(host, dep, eff, notes);
-  // Nur beim Anlegen: Node-Pin, emptyDir, Zusatznutzung (#240) und initContainer (#485), der beim
-  // Ausrollen das emptyDir vorfüllt; der (bei Doppelablage doppelte) Peak entscheidet über die Eviction.
-  if (eff.node !== undefined) dep.node = eff.node;
-  if (eff.emptyDir) dep.emptyDir = { data: eff.emptyDir.data || "", usedMi: eff.emptyDir.usedMi || 0 };
+  // Nur beim Anlegen: die Zusatznutzung (#240) ist ein Laufzeitwert und steht nicht in der Tabelle.
   if (eff.ephemeralUsedMi !== undefined) dep.ephemeralUsedMi = eff.ephemeralUsedMi;
-  if (eff.initContainer) dep.initContainer = { fillsMi: eff.initContainer.fillsMi ?? 0, doubleStage: !!eff.initContainer.doubleStage };
   flagUnbuiltImage(host, dep, eff, notes);
   addDeployment(host, dep);
   out.push("deployment.apps/" + eff.name + " created", ...notes);

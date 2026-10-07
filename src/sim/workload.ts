@@ -21,7 +21,7 @@
  * (./util, ./names) – kein Phaser, kein Rückimport nach sim.ts (kein Zyklus), vom
  * Architektur-Wächter (#347) als Domäne geschützt und im Node-Test prüfbar.
  */
-import type { Deployment, PodInstance, PvcRes, SecurityContext, StatefulSetRes } from "./state";
+import type { Deployment, PodInstance, PodTemplateSpec, PvcRes, StatefulSetRes } from "./state";
 import { makePodName } from "./util";
 import { asPodName } from "./names";
 
@@ -173,10 +173,37 @@ export function setCpuLimit(dep: Deployment, milli: number): boolean {
   return throttles;
 }
 
-/** Übernimmt die Template-Felder memory-/CPU-Limit und securityContext aus einem Snapshot bzw.
- *  Szenario – nur gesetzte Felder (der securityContext als Kopie). */
-export function seedPodTemplate(dep: Deployment, s: { memLimit?: number; cpuLimitMilli?: number; securityContext?: SecurityContext }): void {
-  if (s.memLimit !== undefined) dep.memLimit = s.memLimit;
-  if (s.cpuLimitMilli !== undefined) dep.cpuLimitMilli = s.cpuLimitMilli;
+/** Notiz nach geheiltem OOMKilled (set resources und apply teilen sie). */
+export const MEM_HEALED_NOTE = "💡 Genug Speicher! Die Pods starten neu und bleiben diesmal stehen – kein OOMKilled mehr.";
+/** Notiz nach weggedrosselter Dauerlast. */
+export const CPU_THROTTLED_NOTE = "💡 CPU-Limit gesetzt! Die Pods werden gedrosselt – der HighPodCPU-Alert fällt auf resolved.";
+
+/** Template-Felder, die als einfacher Wert (Zahl/String) gespiegelt werden. Die Objektfelder
+ *  (securityContext, emptyDir, initContainer) laufen einzeln, weil sie als Kopie ankommen. */
+const SCALAR_TEMPLATE_KEYS = ["serviceAccountName", "containerPort", "memLimit", "cpuLimitMilli", "node", "ephemeralLimit", "ephemeralUsedMi"] as const;
+
+/** Kopiert die gesetzten Skalarfelder von `from` nach `to`. */
+function copyScalars(from: PodTemplateSpec, to: PodTemplateSpec): void {
+  for (const k of SCALAR_TEMPLATE_KEYS) {
+    if (from[k] !== undefined) Object.assign(to, { [k]: from[k] });
+  }
+}
+
+/** Übernimmt ALLE Pod-Template-Felder aus einem Snapshot, Szenario oder Manifest-Effekt – nur gesetzte
+ *  Felder, Objektfelder als Kopie, emptyDir/initContainer mit Defaults. Der EINE Seed-Weg. */
+export function seedPodTemplate(dep: Deployment, s: PodTemplateSpec): void {
+  copyScalars(s, dep);
   if (s.securityContext) dep.securityContext = { ...s.securityContext };
+  if (s.emptyDir) dep.emptyDir = { data: s.emptyDir.data || "", usedMi: s.emptyDir.usedMi || 0 };
+  if (s.initContainer) dep.initContainer = { fillsMi: s.initContainer.fillsMi ?? 0, doubleStage: !!s.initContainer.doubleStage };
+}
+
+/** Gegenstück zu `seedPodTemplate`: die Template-Felder eines Deployments für den Snapshot (Kopien). */
+export function snapshotPodTemplate(dep: Deployment): PodTemplateSpec {
+  const out: PodTemplateSpec = {};
+  copyScalars(dep, out);
+  if (dep.securityContext) out.securityContext = { ...dep.securityContext };
+  if (dep.emptyDir) out.emptyDir = { ...dep.emptyDir };
+  if (dep.initContainer) out.initContainer = { ...dep.initContainer };
+  return out;
 }

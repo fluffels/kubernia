@@ -16,7 +16,7 @@
 import { table, flagValue } from "../util";
 import { readyBackends, endpointPort, podAddress } from "../endpoints";
 import type { KubectlHost } from "./host";
-import type { Deployment, PodInstance, PodStatus } from "../state";
+import { SECURITY_CONTEXT_KEYS, type Deployment, type PodInstance, type PodStatus } from "../state";
 import { sameRbac } from "../rbac";
 import { statefulPodVolumePending } from "../workload";
 
@@ -421,6 +421,32 @@ function podDescribeEvents(host: KubectlHost, pod: PodInstance, dep: Deployment)
   return events;
 }
 
+// Limits-Block (EIN Kopf): cpu, ephemeral-storage, memory – jeweils nur, wenn gesetzt. Dazu die
+// ephemeral-storage-Zeilen (#240): sie machen sichtbar, woran ein Evicted-Pod sein Limit gesprengt hat.
+function podLimitLines(host: KubectlHost, dep: Deployment): string[] {
+  const rows: string[] = [];
+  if (dep.cpuLimitMilli !== undefined) rows.push("      cpu:                " + dep.cpuLimitMilli + "m");
+  if (dep.ephemeralLimit !== undefined) rows.push("      ephemeral-storage:  " + dep.ephemeralLimit + "Mi");
+  if (dep.memLimit !== undefined) rows.push("      memory:             " + dep.memLimit + "Mi");
+  if (rows.length === 0) return [];
+  const lines = ["    Limits:", ...rows];
+  if (dep.ephemeralLimit === undefined) return lines;
+  lines.push("    ephemeral-storage verbraucht: " + host._depEphemeralUsed(dep) + "Mi");
+  // Init-Peak (#485): reißt ein Pod sein Limit nur WÄHREND des initContainers, ist genau der Peak
+  // (nicht die Dauer-Belegung) der Eviction-Grund – darum hier gesondert sichtbar.
+  if (dep.initContainer) lines.push("    ephemeral-storage Spitze (initContainer): " + host._depEphemeralPeak(dep) + "Mi");
+  return lines;
+}
+
+// Security Context: nur die gesetzten Schlüssel; ohne Wert keine Kopfzeile (nichts erfinden). Echtes
+// `describe pod` zeigt das nicht – die Sim hat kein `get -o yaml`, hier ist die einzige Sichtstelle.
+function podSecurityLines(dep: Deployment): string[] {
+  const sc = dep.securityContext;
+  const set = SECURITY_CONTEXT_KEYS.filter(k => sc?.[k] !== undefined);
+  if (set.length === 0) return [];
+  return ["    Security Context:", ...set.map(k => "      " + (k + ":").padEnd(26) + String(sc?.[k]))];
+}
+
 // Container-Block: Image/State/Restart-Count + OOM- und ephemeral-storage-Sonderfälle.
 function podContainerBlock(host: KubectlHost, pod: PodInstance, dep: Deployment, st: PodStatus): string[] {
   // OOMKilled zeigt sich NICHT im State (der ist gerade wieder Waiting), sondern im
@@ -434,18 +460,9 @@ function podContainerBlock(host: KubectlHost, pod: PodInstance, dep: Deployment,
       "    Last State:   Terminated",
       "      Reason:     OOMKilled",
       "      Exit Code:  137",
-      "    Limits:",
-      "      memory:     " + (dep.memLimit || 64) + "Mi",
     ] : []),
-    // ephemeral-storage-Limit (#240): macht sichtbar, woran ein Evicted-Pod sein Limit gesprengt hat.
-    ...(dep.ephemeralLimit !== undefined ? [
-      "    Limits:",
-      "      ephemeral-storage:  " + dep.ephemeralLimit + "Mi",
-      "    ephemeral-storage verbraucht: " + host._depEphemeralUsed(dep) + "Mi",
-      // Init-Peak (#485): reißt ein Pod sein Limit nur WÄHREND des initContainers, ist genau der Peak
-      // (nicht die Dauer-Belegung) der Eviction-Grund – darum hier gesondert sichtbar.
-      ...(dep.initContainer ? ["    ephemeral-storage Spitze (initContainer): " + host._depEphemeralPeak(dep) + "Mi"] : []),
-    ] : []),
+    ...podLimitLines(host, dep),
+    ...podSecurityLines(dep),
     "    Restart Count: " + (st.restarts || pod.restarts),
   ];
 }

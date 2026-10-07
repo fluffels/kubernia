@@ -52,7 +52,7 @@ import { makeRng, DEFAULT_SEED } from "./core/rng";
 import { resourceName, InvalidResourceNameError, rfc1123ErrorText, RFC1123_TIP } from "./sim/names";
 import { sameRbac } from "./sim/rbac";
 import { assertClusterInvariants, warnClusterInvariants } from "./sim/invariants";
-import { scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, seedPodTemplate } from "./sim/workload";
+import { scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, seedPodTemplate, snapshotPodTemplate } from "./sim/workload";
 import { provisionNode } from "./sim/nodes";
 import { renderHelp } from "./hud/helptext";
 
@@ -326,9 +326,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     _resetDeployments(sc: Scenario) {
       this.deployments = (sc.deployments || []).map(d => {
         const dep = this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy);
-        if (d.containerPort !== undefined) dep.containerPort = d.containerPort; // #164
-        this._seedEphemeral(dep, d); // node/emptyDir/ephemeral-storage (#240)
-        seedPodTemplate(dep, d); // Limits + securityContext (#1300), nach dem 64er-Default des OOM-Falls
+        seedPodTemplate(dep, d); // alle Template-Felder, nach dem 64er-Default des OOM-Falls
         return dep;
       });
     }
@@ -422,18 +420,6 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
         })),
         deploy: sc.ciDeploy ? Object.assign({}, sc.ciDeploy) : null, // {name, image, replicas}, den die deploy-Stage ausrollt
       };
-    }
-
-    /** Ephemeral-Storage-Felder eines Deployments aus einer (lockeren) Eingabe-Spec setzen (#240):
-     *  Node-Pin, emptyDir-Volume, ephemeral-storage-Limit und -Zusatznutzung. Geteilt von reset()
-     *  und mergeScenario(). */
-    _seedEphemeral(dep: Deployment, s: { node?: string; emptyDir?: { data?: string; usedMi?: number }; ephemeralLimit?: number; ephemeralUsedMi?: number; initContainer?: { fillsMi: number; doubleStage?: boolean } }) {
-      if (s.node !== undefined) dep.node = s.node;
-      if (s.emptyDir) dep.emptyDir = { data: s.emptyDir.data || "", usedMi: s.emptyDir.usedMi || 0 };
-      if (s.ephemeralLimit !== undefined) dep.ephemeralLimit = s.ephemeralLimit;
-      if (s.ephemeralUsedMi !== undefined) dep.ephemeralUsedMi = s.ephemeralUsedMi;
-      // initContainer (#485): der Vorbereitungs-Container samt Doppelablage-Marke.
-      if (s.initContainer) dep.initContainer = { fillsMi: s.initContainer.fillsMi, doubleStage: !!s.initContainer.doubleStage };
     }
 
     _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment {
@@ -729,9 +715,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       for (const d of sc.deployments || []) {
         if (!this.deployments.some(x => x.name === d.name)) {
           const dep = this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy);
-          if (d.containerPort !== undefined) dep.containerPort = d.containerPort; // #164
-          this._seedEphemeral(dep, d); // node/emptyDir/ephemeral-storage (#240)
-          seedPodTemplate(dep, d); // Limits + securityContext (#1300)
+          seedPodTemplate(dep, d);
           addDeployment(this, dep); // #577: über die Workload-Aggregat-SSOT statt roher Push
         }
       }
@@ -781,12 +765,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
         dockerImages: this.docker.pulled.slice(),
         dockerContainers: this.docker.containers.map(c => Object.assign({}, c)),
         nodes: this.nodes.map(n => Object.assign({}, n)),
-        deployments: this.deployments.map(d => ({ name: d.name, image: d.image, replicas: d.replicas, broken: d.broken ? Object.assign({}, d.broken) : null, envFrom: { configMaps: d.envFrom.configMaps.slice(), secrets: d.envFrom.secrets.slice() }, cpuHeavy: !!d.cpuHeavy, containerPort: d.containerPort,
-          // Ephemeral-Storage (#240): emptyDir/Limit/Nutzung/Node-Pin überleben den Reload; `evicted`
-          // wird beim Laden ohnehin neu abgeleitet, daher nicht serialisiert.
-          node: d.node, emptyDir: d.emptyDir ? Object.assign({}, d.emptyDir) : undefined, ephemeralLimit: d.ephemeralLimit, ephemeralUsedMi: d.ephemeralUsedMi,
-          memLimit: d.memLimit, cpuLimitMilli: d.cpuLimitMilli, securityContext: d.securityContext ? { ...d.securityContext } : undefined, // #1300
-          initContainer: d.initContainer ? Object.assign({}, d.initContainer) : undefined })),
+        deployments: this.deployments.map(d => ({ name: d.name, image: d.image, replicas: d.replicas, broken: d.broken ? Object.assign({}, d.broken) : null, envFrom: { configMaps: d.envFrom.configMaps.slice(), secrets: d.envFrom.secrets.slice() }, cpuHeavy: !!d.cpuHeavy, ...snapshotPodTemplate(d) })), // Template-Felder (Ephemeral #240, Limits/securityContext #1300, SA): überleben den Reload; `evicted` wird beim Laden neu abgeleitet
         // services/ingresses/networkPolicies/serviceMonitors/prometheusRules/grafana* über die
         // Resource-Registry serialisieren (#499) – flacher Klon, gespiegelt zu reset/mergeScenario.
         ...snapshotSimple(this),

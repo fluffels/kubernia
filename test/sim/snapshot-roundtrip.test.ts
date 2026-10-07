@@ -21,6 +21,7 @@
 import { test, expect } from "vitest";
 import { KQSim } from "./helpers";
 import type { ClusterState, Scenario } from "../../src/sim/state";
+import { deploymentYaml } from "../factories/manifests";
 
 /** Jedes Feld aus `ClusterState` (state.ts) außer `scenario` (der Input selbst, kein
  *  Rundreise-Ziel) und `clock` (wird nicht serialisiert – jede frische reset() startet bei 0,
@@ -62,7 +63,7 @@ const bigScenario: Scenario = {
   deployments: [{
     name: "kasse", image: "nginx", replicas: 2, broken: null,
     envFrom: { configMaps: ["app-config"], secrets: ["db-secret"] },
-    cpuHeavy: true, containerPort: 8080,
+    cpuHeavy: true, containerPort: 8080, serviceAccountName: "wachtturm-sa",
     memLimit: 300, cpuLimitMilli: 250, securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false },
     node: "ahoi-worker-1", emptyDir: { data: "tmp-data", usedMi: 50 },
     ephemeralLimit: 500, ephemeralUsedMi: 120,
@@ -148,8 +149,8 @@ test("jedes Sim-Feld ist entweder ClusterState (oben geprüft) oder als transien
   ).toEqual([]);
 });
 
-test("Pod-Template-Felder memLimit/cpuLimitMilli/securityContext überleben Szenario, Snapshot und Merge (#1300)", () => {
-  const expected = { memLimit: 300, cpuLimitMilli: 250, securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false } };
+test("Pod-Template-Felder serviceAccountName/memLimit/cpuLimitMilli/securityContext überleben Szenario, Snapshot und Merge (#1300)", () => {
+  const expected = { serviceAccountName: "wachtturm-sa", memLimit: 300, cpuLimitMilli: 250, securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false } };
   const sim = new KQSim(bigScenario);
   expect(sim.deployments[0]).toMatchObject(expected); // das Szenario füllt sie (nicht nur der Roundtrip)
   const snap = JSON.parse(JSON.stringify(sim.snapshot())) as Scenario;
@@ -167,4 +168,22 @@ test("snapshot(): ein Deployment ohne Limits/securityContext serialisiert sie ni
   expect(d?.memLimit).toBeUndefined();
   expect(d?.cpuLimitMilli).toBeUndefined();
   expect(d?.securityContext).toBeUndefined();
+});
+
+test("serviceAccountName übersteht den Reload: Re-apply mit SA bleibt unchanged (kein falsches configured)", () => {
+  const sim = new KQSim();
+  sim.files["web.yaml"] = deploymentYaml({ name: "web", serviceAccountName: "wachtturm-sa" });
+  expect(sim.exec("kubectl apply -f web.yaml").output).toMatch(/created/);
+  const reloaded = new KQSim(JSON.parse(JSON.stringify(sim.snapshot())) as Scenario);
+  expect(reloaded.deployments[0].serviceAccountName).toBe("wachtturm-sa");
+  expect(reloaded.exec("kubectl apply -f web.yaml").output).toMatch(/^deployment\.apps\/web unchanged$/m);
+});
+
+test("Alt-Snapshot ohne serviceAccountName lädt heil und läuft unter der default-SA", () => {
+  const snap = new KQSim({ deployments: [{ name: "web", image: "nginx", replicas: 1 }] }).snapshot();
+  const d = JSON.parse(JSON.stringify(snap.deployments?.[0])) as Record<string, unknown>;
+  expect("serviceAccountName" in d).toBe(false);
+  const sim = new KQSim(JSON.parse(JSON.stringify(snap)) as Scenario);
+  expect(sim.deployments[0].serviceAccountName).toBeUndefined();
+  expect(sim.exec("kubectl describe pod " + sim.deployments[0].pods[0].name).output).toMatch(/Service Account:\s+default/);
 });

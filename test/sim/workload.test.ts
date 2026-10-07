@@ -13,10 +13,11 @@ import {
   newDeploymentPod, newStatefulPod, scaleDeployment, replacePods, replaceDeploymentPod,
   restartStatefulPod, addDeployment, removeDeployment,
   addStatefulSet, removeStatefulSet, statefulPodVolumePending,
-  changeImage, setMemoryLimit, setCpuLimit, seedPodTemplate,
+  changeImage, setMemoryLimit, setCpuLimit, seedPodTemplate, snapshotPodTemplate,
+  MEM_HEALED_NOTE, CPU_THROTTLED_NOTE,
 } from "../../src/sim/workload";
 import { clusterInvariantViolations } from "../../src/sim/invariants";
-import type { Deployment, StatefulSetRes, PodInstance } from "../../src/sim/state";
+import type { Deployment, StatefulSetRes, PodInstance, PodTemplateSpec } from "../../src/sim/state";
 import { asPodName } from "../../src/sim/names";
 import { makeRng } from "../../src/core/rng";
 
@@ -269,4 +270,51 @@ test("seedPodTemplate: übernimmt nur gesetzte Felder und kopiert den securityCo
   assert.notEqual(dep.securityContext, sc, "Kopie statt geteilter Referenz");
   seedPodTemplate(dep, { memLimit: 300 });
   assert.equal(dep.memLimit, 300);
+});
+
+// ALLE Template-Felder gesetzt: `Required` bricht den Typecheck, sobald PodTemplateSpec wächst und
+// diese Probe das neue Feld nicht kennt – dann muss Seed/Snapshot es mitnehmen.
+const FULL: Required<PodTemplateSpec> = {
+  serviceAccountName: "wachtturm-sa", containerPort: 8080, memLimit: 256, cpuLimitMilli: 250,
+  securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false },
+  node: "ahoi-worker-2", emptyDir: { data: "cache", usedMi: 40 }, ephemeralLimit: 512, ephemeralUsedMi: 30,
+  initContainer: { fillsMi: 300, doubleStage: true },
+};
+
+test("seedPodTemplate/snapshotPodTemplate: Roundtrip über ALLE Template-Felder", () => {
+  const dep = makeDep("kasse", 1);
+  seedPodTemplate(dep, FULL);
+  assert.deepEqual(snapshotPodTemplate(dep), FULL);
+});
+
+test("seedPodTemplate/snapshotPodTemplate: Objektfelder kommen als Kopie an, nicht als Referenz", () => {
+  const dep = makeDep("kasse", 1);
+  seedPodTemplate(dep, FULL);
+  assert.notEqual(dep.securityContext, FULL.securityContext);
+  assert.notEqual(dep.emptyDir, FULL.emptyDir);
+  assert.notEqual(dep.initContainer, FULL.initContainer);
+  const snap = snapshotPodTemplate(dep);
+  assert.notEqual(snap.securityContext, dep.securityContext);
+  assert.notEqual(snap.emptyDir, dep.emptyDir);
+  assert.notEqual(snap.initContainer, dep.initContainer);
+});
+
+test("seedPodTemplate: leere Spec ändert nichts; Teilangaben werden normalisiert (kein NaN)", () => {
+  const dep = makeDep("kasse", 1);
+  const before = JSON.stringify(dep);
+  seedPodTemplate(dep, {});
+  assert.equal(JSON.stringify(dep), before);
+  seedPodTemplate(dep, { initContainer: {}, emptyDir: {} });
+  assert.deepEqual(dep.initContainer, { fillsMi: 0, doubleStage: false });
+  assert.deepEqual(dep.emptyDir, { data: "", usedMi: 0 });
+});
+
+test("snapshotPodTemplate: ein nacktes Deployment liefert keine Template-Werte", () => {
+  const snap = snapshotPodTemplate(makeDep("kasse", 1));
+  assert.deepEqual(Object.values(snap).filter(v => v !== undefined), []);
+});
+
+test("Heil-Notizen liegen bei den Primitiven (Wortlaut unverändert)", () => {
+  assert.equal(MEM_HEALED_NOTE, "💡 Genug Speicher! Die Pods starten neu und bleiben diesmal stehen – kein OOMKilled mehr.");
+  assert.equal(CPU_THROTTLED_NOTE, "💡 CPU-Limit gesetzt! Die Pods werden gedrosselt – der HighPodCPU-Alert fällt auf resolved.");
 });
