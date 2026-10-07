@@ -3,6 +3,8 @@
 > Architecture Decision Record. Format: Kontext → Problem → Optionen → Recherche → Entscheidung → Konsequenzen → Re-Evaluierung.
 > Status: **akzeptiert** · Datum: 2026-10-07 · Ticket: #1408
 
+> Offline-Budget präzisiert durch #1411 (PR #1427, 2026-10-07): beide Builds tragen einen Content-Stempel (Hash der Content-Quellen als Meta-Tag `kq-content-stempel`), `check:bundle` vergleicht ihn, ein fehlender oder abweichender Stempel ist rot ([Beschreibung](../agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd-1064)).
+
 ## Status
 
 **Akzeptiert.** Ergänzt [ADR 0004](0004-skalierungs-fundament.md) (Content-as-Data) und [ADR 0005](0005-auslieferungsform.md) (Auslieferungsform) um die Frage, wie der Content ausgeliefert wird. Die Verteilungssicht steht in [arc42 §7](../arc42-architektur.md#7-verteilungssicht), die Gate-Mechanik in [docs/agent-harness.md](../agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd-1064).

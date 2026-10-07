@@ -35,6 +35,12 @@ type CheckDiffCoverageModule = {
   isMeasured: (path: string) => boolean;
   parseDiffLines: (text: string) => Changed;
   parseLcov: (text: string) => Lcov;
+  parseLcovBranches: (text: string) => Map<string, Map<number, { total: number; taken: number }>>;
+  teilweiseGetestet: (
+    changed: Changed,
+    lcov: Lcov,
+    branches: Map<string, Map<number, { total: number; taken: number }>>,
+  ) => { path: string; line: number; taken: number; total: number }[];
   evaluateByLayer: (changed: Changed, lcov: Lcov, floors?: Record<string, number | null>) => Verdict;
   OVERRIDE_KEY: string;
   checkDiffCoverage: (opts: { runGit: RunGit; readFile?: (p: string) => string; env?: Env }) => Record<string, unknown>;
@@ -53,6 +59,8 @@ const {
   isMeasured,
   parseDiffLines,
   parseLcov,
+  parseLcovBranches,
+  teilweiseGetestet,
   evaluateByLayer,
   OVERRIDE_KEY,
   checkDiffCoverage,
@@ -191,6 +199,68 @@ describe("Diff-Coverage: lcov-Parsing", () => {
     assert.deepEqual([...(lcov.get("src/sim/b.ts")?.keys() ?? [])], [2]);
   });
 
+});
+
+describe("Diff-Coverage: Zweig-Sicht, nur berichtend (#1425)", () => {
+  const P = "src/sim/argocd.ts";
+  const lcov = (da: Record<number, number>, brda: string[]) =>
+    [`SF:${P}`, ...Object.entries(da).map(([l, n]) => `DA:${l},${n}`), ...brda, `end_of_record`].join("\n");
+
+  test("BRDA: `-` und 0 sind ungenommen, n > 0 genommen; kaputte Records und Windows-Pfade stören nicht", () => {
+    const text = [
+      lcov({ 5: 3 }, ["BRDA:5,0,0,2", "BRDA:5,0,1,-", "BRDA:5,1,0,0", "BRDA:kaputt", "BRDA:5,0,0", "BRDA:x,0,0,1"]),
+      "SF:src\\sim\\x.ts",
+      "BRDA:9,0,0,1",
+      "end_of_record",
+    ].join("\n");
+    const b = parseLcovBranches(text);
+    assert.deepEqual(b.get(P)?.get(5), { total: 3, taken: 1 });
+    assert.deepEqual(b.get("src/sim/x.ts")?.get(9), { total: 1, taken: 1 });
+    assert.equal(b.get(P)?.size, 1);
+  });
+
+  test("BRDA außerhalb eines SF-Blocks (vor dem ersten SF und nach end_of_record) wird ignoriert", () => {
+    assert.equal(parseLcovBranches("BRDA:1,0,0,1").size, 0);
+    const b = parseLcovBranches(["SF:src/a.ts", "BRDA:1,0,0,1", "end_of_record", "BRDA:2,0,0,1"].join("\n"));
+    assert.deepEqual([...(b.get("src/a.ts")?.keys() ?? [])], [1]);
+  });
+
+  test("meldet geänderte, ausgeführte Zeile mit ungenommenem Zweig", () => {
+    const text = lcov({ 7: 4 }, ["BRDA:7,0,0,4", "BRDA:7,0,1,0"]);
+    const r = teilweiseGetestet(new Map([[P, new Set([7])]]), parseLcov(text), parseLcovBranches(text));
+    assert.deepEqual(r, [{ path: P, line: 7, taken: 1, total: 2 }]);
+  });
+
+  test("meldet NICHT: ungeänderte Zeile, nicht ausgeführte Zeile (DA 0), alle Zweige genommen, .d.ts, außerhalb src", () => {
+    const text = [
+      lcov({ 7: 4, 8: 0, 9: 2 }, ["BRDA:7,0,0,4", "BRDA:7,0,1,0", "BRDA:8,0,0,0", "BRDA:9,0,0,1", "BRDA:9,0,1,1"]),
+      "SF:src/t.d.ts",
+      "DA:1,1",
+      "BRDA:1,0,0,0",
+      "end_of_record",
+      "SF:scripts/x.mjs",
+      "DA:1,1",
+      "BRDA:1,0,0,0",
+      "end_of_record",
+    ].join("\n");
+    const changed: Changed = new Map([
+      [P, new Set([8, 9])], // Zeile 7 nicht geändert
+      ["src/t.d.ts", new Set([1])],
+      ["scripts/x.mjs", new Set([1])],
+    ]);
+    assert.deepEqual(teilweiseGetestet(changed, parseLcov(text), parseLcovBranches(text)), []);
+  });
+
+  test("Ende-zu-Ende: `partial` im Ergebnis, `failed` bleibt unberührt", () => {
+    const text = lcov({ 1: 2 }, ["BRDA:1,0,0,2", "BRDA:1,0,1,0"]).replace(P, "src/sim/pods.ts");
+    const r = checkDiffCoverage({
+      runGit: (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1 @@", "+x"]) : "basesha"),
+      readFile: () => text,
+      env: { KQ_DIFF_BASE: "basesha" },
+    });
+    assert.equal(r.failed, false);
+    assert.deepEqual(r.partial, [{ path: "src/sim/pods.ts", line: 1, taken: 1, total: 2 }]);
+  });
 });
 
 describe("Diff-Coverage: Bewertung pro Schicht", () => {
