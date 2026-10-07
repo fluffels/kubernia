@@ -3,7 +3,9 @@
  * Reines Node-Tooling ohne Declaration-File: Import über `unknown` auf ein lokales Interface (Technik wie test/board-haertung.test.ts). */
 import { describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/sandbox-doctor.mjs";
@@ -181,6 +183,20 @@ describe("pruefeUserSettings", () => {
     expect(r).toHaveLength(1);
     expect(r[0].text).toContain("failIfUnavailable");
   });
+  test("enabled nicht true: rot", () => {
+    const u = kopie();
+    u.sandbox!.enabled = false;
+    const r = rot(D.pruefeUserSettings(u, vorlage));
+    expect(r).toHaveLength(1);
+    expect(r[0].text).toContain("enabled");
+  });
+  test("tlsTerminate fehlt: rot", () => {
+    const u = kopie();
+    delete u.sandbox!.network!.tlsTerminate;
+    const r = rot(D.pruefeUserSettings(u, vorlage));
+    expect(r).toHaveLength(1);
+    expect(r[0].text).toContain("tlsTerminate");
+  });
   test("allowUnsandboxedCommands true: rot", () => {
     const u = kopie();
     (u.sandbox as { allowUnsandboxedCommands: boolean }).allowUnsandboxedCommands = true;
@@ -308,6 +324,23 @@ describe("CLI", () => {
     const r = lauf(["--check"], { CLAUDE_CONFIG_DIR: fileURLToPath(new URL("./nicht-vorhanden", import.meta.url)) });
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/^(OK|FEHLT|HINWEIS)\b/m);
+  });
+  test("--check meldet kaputtes User-Settings-JSON als FEHLT und endet mit Exit 0", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kq-sandbox-doctor-"));
+    try {
+      writeFileSync(join(dir, "settings.json"), "{");
+      const r = lauf(["--check"], { CLAUDE_CONFIG_DIR: dir });
+      expect(r.status).toBe(0);
+      expect(r.stdout).toMatch(/^FEHLT User-Settings: kein gültiges JSON$/m);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  test("--vorlage führt die Projekt-Allowlist und den Langfuse-Host mit", () => {
+    const r = lauf(["--vorlage"], { LANGFUSE_BASE_URL: "https://lf.example" });
+    const json = JSON.parse(r.stdout) as Settings;
+    expect(json.sandbox?.network?.allowedDomains).toContain("registry.npmjs.org");
+    expect(json.sandbox?.network?.allowedDomains).toContain("lf.example");
   });
   test("unbekanntes oder fehlendes Argument: Usage und Exit 2", () => {
     expect(lauf(["--quatsch"]).status).toBe(2);

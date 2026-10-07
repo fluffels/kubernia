@@ -22,9 +22,8 @@ const hinweis = (text) => ({ status: "HINWEIS", text });
 
 /** Token-Variablen, die die Vorlage in jedem Projekt sperrt (die MCP-Header und Tokens laufen außerhalb der Sandbox). */
 const DENY_VARIABLEN = ["PIXELLAB_TOKEN", "GITHUB_TOKEN", "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"];
-/** Namensmuster für Secrets im `env`-Block der User-Settings; die öffentliche Langfuse-Kennung ist kein Secret. */
+/** Namensmuster für Secrets im `env`-Block der User-Settings (die öffentliche Langfuse-Kennung LANGFUSE_PUBLIC_KEY trifft es nicht). */
 const SECRET_MUSTER = /TOKEN|SECRET|PASSWORD|_API_KEY/i;
-const KEIN_SECRET = new Set(["LANGFUSE_PUBLIC_KEY"]);
 
 /** Plattform: natives Windows hat keine Sandbox, WSL1 ebenso nicht (WSL2 braucht echten Linux-Kernel). */
 export function pruefePlattform({ platform, release }) {
@@ -150,7 +149,7 @@ export function pruefeUserSettings(user, vorlage) {
       r.push(sb.credentials?.allowPlaintextInject === true ? ok("User-Settings: allowPlaintextInject (lokales http-Langfuse)") : fehlt("User-Settings: credentials.allowPlaintextInject fehlt (Langfuse läuft über http)"));
     }
   }
-  const secrets = Object.keys(user?.env ?? {}).filter((k) => SECRET_MUSTER.test(k) && !KEIN_SECRET.has(k));
+  const secrets = Object.keys(user?.env ?? {}).filter((k) => SECRET_MUSTER.test(k));
   r.push(secrets.length === 0 ? ok("User-Settings: keine Secrets im env-Block") : fehlt(`User-Settings: Secrets im env-Block (${secrets.join(", ")}); nach ~/.config/agent-secrets.env verschieben`));
   return r;
 }

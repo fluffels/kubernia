@@ -43,6 +43,9 @@ const SECRET_PFADE = [
   "~/.config/agent-secrets.env",
   "./.env",
   "./.env.local",
+  "./.env.development.local",
+  "./.env.production.local",
+  "./.env.test.local",
 ];
 
 /** Schlüssel, die die Sandbox abschwächen; der Block darf sie nicht setzen. */
@@ -141,6 +144,7 @@ describe("Agenten-Sandbox-Konfiguration (#1432)", () => {
     assert.deepEqual(fehlendeDenyRead(sb.filesystem?.denyRead), []);
     assert.ok((sb.filesystem?.denyRead ?? []).includes("/mnt"), "/mnt (Windows-Laufwerke) muss in denyRead stehen");
     assert.deepEqual(fehlendeReadDeny(settings.permissions?.deny), []);
+    assert.ok((settings.permissions?.deny ?? []).includes("Read(/.env.*)"), "Glob-deny für alle .env.*-Varianten im Projekt-Root fehlt");
   });
 
   test("denyWrite deckt Hook-/MCP-Skripte samt Importen, node_modules, Lockfile und .githooks", () => {
