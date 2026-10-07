@@ -89,7 +89,7 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt }) {
   });
   const mitNachweis = zeilen.filter((z) => z.runden !== null);
   const brillen = {};
-  for (const z of zeilen) {
+  for (const z of mitNachweis) {
     for (const b of z.blocker ?? []) {
       const e = (brillen[b.lens] ??= { prs: 0, treffer: 0, summe: 0 });
       e.prs += 1;

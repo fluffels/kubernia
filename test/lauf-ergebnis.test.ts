@@ -146,7 +146,7 @@ describe("bewertePrs und Aggregate", () => {
     });
     assert.equal(k.zeilen[0].runden, null);
     assert.equal(k.kennzahlen.ohneNachweis, 1);
-    assert.equal(k.kennzahlen.brillen.architektur.summe, 0);
+    assert.equal(k.kennzahlen.brillen.architektur, undefined, "ohne Nachweis keine Brillen-Zählung");
   });
   test("ohne Nachweis und ohne blocker-Feld bleiben aus der Trefferquote", () => {
     assert.equal(z(53).runden, null);
@@ -176,7 +176,7 @@ describe("bewertePrs und Aggregate", () => {
 });
 
 describe("laufErgebnis (git und gh injiziert)", () => {
-  const liste = [pr()];
+  const liste = [pr({ headRefName: "feature/kq-40-a&b#c+d" })];
   const log = `${SHA}\x1f${MERGED}\x1f${review("runden=1 lenses=doku")}\x1e`;
   const gh = (o: { liste?: unknown[]; fehler?: string } = {}) => (a: string[]): string => {
     if (o.fehler && a.join(" ").includes(o.fehler)) throw new Error("gh kaputt");
@@ -186,6 +186,7 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     }
     if (a.join(" ").includes("actions/workflows")) {
       assert.ok(a.includes("--paginate") && a.join(" ").includes("status=failure") && a.join(" ").includes("event=pull_request"), "nur rote PR-Läufe, paginiert");
+      assert.ok(a.some((x) => x.includes(`branch=${encodeURIComponent(liste[0].headRefName)}&`)), "Branch-Name URL-kodiert");
     } else {
       assert.ok(a.includes("--paginate") && a.join(" ").includes("status:festgefahren") && a.join(" ").includes('"labeled"'), "Label-Events, paginiert");
     }
