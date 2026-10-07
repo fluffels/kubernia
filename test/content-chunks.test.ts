@@ -96,3 +96,59 @@ function walk(abs: string, rel: string): string[] {
   }
   return out;
 }
+
+describe("contentSourceFiles und Stempel (#1411)", () => {
+  const m = require("../scripts/content-chunks.cjs") as {
+    contentSourceFiles: (io: { listFiles: (rel: string) => string[] | null }) => { file: string; name: string }[];
+    contentStempel: (io: { listFiles: (rel: string) => string[] | null; readFile: (rel: string) => Uint8Array | string }) => string;
+    stempelAusHtml: (html: string) => string | null;
+    CONTENT_STEMPEL_META: string;
+    fsContentIo: (root: string) => { listFiles: (rel: string) => string[] | null; readFile: (rel: string) => Uint8Array };
+  };
+  const quellen = (files: Record<string, string>) => ({
+    listFiles: (p: string) => {
+      const hit = Object.keys(files).filter((f) => f.startsWith(`${p}/`));
+      return hit.length ? hit : null;
+    },
+    readFile: (rel: string) => files[rel],
+  });
+  const BASIS = { "src/content/data/npcs.json": "{}", "src/content/data/quests/knut.json": "[1]", "assets/maps/harbor.tmj": "<map/>", "src/content/loader.ts": "x" };
+
+  test("contentSourceFiles: nur Dateien, die einen Chunk speisen, mit ihrem Namen, beide Quellordner", () => {
+    assert.deepEqual(
+      m.contentSourceFiles(quellen(BASIS)).map((s) => `${s.file} → ${s.name}`),
+      ["src/content/data/npcs.json → content-core", "src/content/data/quests/knut.json → content-quests-knut", "assets/maps/harbor.tmj → content-maps-harbor"],
+    );
+    assert.deepEqual(m.contentSourceFiles({ listFiles: () => null }), [], "fehlende Ordner → leer");
+  });
+
+  test("Stempel: gleicher Inhalt gleicher Hash, unabhängig von der Reihenfolge der Platte", () => {
+    const umgekehrt = Object.fromEntries(Object.entries(BASIS).reverse());
+    assert.equal(m.contentStempel(quellen(BASIS)), m.contentStempel(quellen(umgekehrt)));
+    assert.match(m.contentStempel(quellen(BASIS)), /^[0-9a-f]{64}$/);
+  });
+
+  test("Stempel ändert sich bei geändertem Inhalt, neuer Datei und anderem Namen (Red-Green gegen Verwechslung)", () => {
+    const s0 = m.contentStempel(quellen(BASIS));
+    assert.notEqual(m.contentStempel(quellen({ ...BASIS, "src/content/data/quests/knut.json": "[2]" })), s0, "Inhalt");
+    assert.notEqual(m.contentStempel(quellen({ ...BASIS, "src/content/data/quests/neu.json": "[]" })), s0, "neue Datei");
+    const { "src/content/data/quests/knut.json": knut, ...rest } = BASIS;
+    assert.notEqual(m.contentStempel(quellen({ ...rest, "src/content/data/quests/anna.json": knut })), s0, "gleicher Inhalt unter anderem Namen");
+    assert.equal(m.contentStempel(quellen({ ...BASIS, "src/content/loader.ts": "anderer Code" })), s0, "Code außerhalb der Content-Quellen zählt nicht");
+  });
+
+  test("stempelAusHtml liest das Meta-Tag; ohne Tag oder mit Müll → null", () => {
+    const html = `<head><meta name="${m.CONTENT_STEMPEL_META}" content="abc123"></head>`;
+    assert.equal(m.stempelAusHtml(html), "abc123");
+    assert.equal(m.stempelAusHtml("<head></head>"), null);
+    assert.equal(m.stempelAusHtml(`<meta name="${m.CONTENT_STEMPEL_META}" content="">`), null);
+    assert.equal(m.stempelAusHtml(`<meta name="anderer" content="abc">`), null);
+  });
+
+  test("fsContentIo liest die echten Quellen; der Stempel des Repos ist stabil", () => {
+    const io = m.fsContentIo(process.cwd());
+    assert.ok((io.listFiles("src/content/data") ?? []).length > 20);
+    assert.equal(io.listFiles("gibt/es/nicht"), null);
+    assert.equal(m.contentStempel(io), m.contentStempel(m.fsContentIo(process.cwd())));
+  });
+});

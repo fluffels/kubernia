@@ -60,25 +60,29 @@
  * Ausführen mit:  npm run check:bundle   (oder als Teil von: npm run verify:full)
  */
 
-import { existsSync, statSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, statSync, readdirSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 
 // Namensregel der Content-Chunks: EINE Quelle, dieselbe nutzt vite.config.ts (manualChunks).
-const { CONTENT_CHUNK_DIR, expectedContentChunks, contentChunkCollisions } = createRequire(import.meta.url)("./content-chunks.cjs");
+const { CONTENT_CHUNK_DIR, expectedContentChunks, contentChunkCollisions, stempelAusHtml } = createRequire(import.meta.url)("./content-chunks.cjs");
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Content-Chunk-Ordner relativ zum Repo-Root (dist/ + gemeinsamer Teil aus content-chunks.cjs). */
 const CONTENT_CHUNK_DIR_DIST = `dist/${CONTENT_CHUNK_DIR}`;
 
+/** index.html des Host-Builds: trägt wie die Offline-Datei den Content-Stempel (vite.config.ts, #1411). */
+const HOST_HTML = "dist/index.html";
+
 /**
  * Byte-Budgets je Artefakt. `maxBytes` ist die harte Obergrenze (STRIKT: „über" heißt
  * `> maxBytes`, == Budget ist ok — analog zu check-size `loc > budget`).
  *
  * Kalibrierung (Stand #1408, `npm run build` + `build:offline`; Herleitung und Re-Evaluierung: ADR 0018):
- *   • Spielcode (ohne vendor, ohne Content) 501_798 B → Budget Ist +5 %, auf 10_000 aufgerundet = 530_000.
+ *   • Spielcode (ohne vendor, ohne Content) 501_798 B (gemessen mit #1408; nach dessen Merge 503_687 B) → Budget
+ *     Ist +5 %, auf 10_000 aufgerundet = 530_000 (503_687 B ergäben dieselbe Rundung).
  *   • Content-Chunks: 54 Chunks, 770_281 B zusammen, größter 95_216 B → Deckel je Chunk 128_000,
  *     Summe 2_000_000 als Stufe-2-Auslöser (NICHT anheben: dann Lazy-Load je Region bauen, ADR 0018).
  *   • Offline-HTML ohne Content-Chunks: Offline-Budget 3_300_000 minus Content-Ist (770_281),
@@ -165,6 +169,25 @@ export function fmtBytes(n) {
 }
 
 /**
+ * Vergleicht den Content-Stempel von `dist/index.html` und der Offline-Datei des Budgets. Rückgabe: `{ missing, hinweis }`
+ * (ein Stempel oder eine Datei fehlt → erst bauen), `{ problem }` (verschiedene Stände) oder `{}` (gleich).
+ *   io.readText(relPath) → Dateitext
+ */
+function pruefeContentStempel(budget, io) {
+  const lies = (pfad) => (io.exists(pfad) ? stempelAusHtml(io.readText(pfad)) : null);
+  const host = lies(HOST_HTML);
+  const offline = lies(budget.path);
+  if (host === null || offline === null) {
+    const wo = [host === null ? HOST_HTML : null, offline === null ? budget.path : null].filter(Boolean).join(" und ");
+    return { missing: true, hinweis: `Content-Stempel fehlt in ${wo} (kein Build von diesem Stand oder das Stempel-Plugin in vite.config.ts fehlt): beide Builds neu erzeugen` };
+  }
+  if (host !== offline) {
+    return { problem: `dist/ und dist-offline/ stammen von verschiedenen Content-Ständen (Stempel ${host.slice(0, 12)} gegen ${offline.slice(0, 12)}): beide neu bauen (npm run build && npm run build:offline), sonst ist der Abzug der Content-Chunks falsch` };
+  }
+  return {};
+}
+
+/**
  * Misst EIN Budget über die injizierte `io`-Schnittstelle.
  *   io.exists(relPath) → boolean
  *   io.size(relPath)   → Bytes (Number)
@@ -184,6 +207,13 @@ export function measureBudget(budget, io) {
       const names = (io.list(budget.subtractChunksDir) ?? []).filter(CHUNK_FILTERS["content-chunks"]);
       if (names.length === 0) {
         return { label: budget.label, maxBytes: budget.maxBytes, bytes: 0, files: [], missing: true, over: false };
+      }
+      // Der Abzug gilt nur, wenn dist/ und dist-offline/ denselben Content-Stand haben (#1411): beide index.html
+      // tragen den Stempel der Content-Quellen. Fehlt einer (alter Build, Plugin entfernt), ist nichts verlässlich zu messen.
+      const stempel = pruefeContentStempel(budget, io);
+      if (stempel.missing) return { label: budget.label, maxBytes: budget.maxBytes, bytes: 0, files: [], missing: true, over: false, hinweis: stempel.hinweis };
+      if (stempel.problem) {
+        return { label: budget.label, maxBytes: budget.maxBytes, bytes: 0, files: [], missing: false, over: true, problems: [stempel.problem], stempelProblem: true };
       }
       bytes -= names.reduce((sum, n) => sum + io.size(`${budget.subtractChunksDir}/${n}`), 0);
     }
@@ -256,6 +286,7 @@ export function defaultIo(rootDir = ROOT) {
   return {
     exists: (p) => existsSync(join(rootDir, p)),
     size: (p) => statSync(join(rootDir, p)).size,
+    readText: (p) => readFileSync(join(rootDir, p), "utf8"),
     list: (p) => {
       const abs = join(rootDir, p);
       return existsSync(abs) && statSync(abs).isDirectory() ? readdirSync(abs) : null;
@@ -289,7 +320,7 @@ function main() {
   // fehlendes Artefakt heißt „in falscher Reihenfolge aufgerufen / Build kaputt".
   if (missing) {
     for (const r of results.filter((x) => x.missing))
-      console.error(red(`✖ Artefakt fehlt für „${r.label}" — nichts zu messen.`));
+      console.error(red(r.hinweis ? `✖ ${r.label}: ${r.hinweis}` : `✖ Artefakt fehlt für „${r.label}" — nichts zu messen.`));
     console.error(
       `\nDie Builds fehlen (oder dist/assets/content fehlt: greift manualChunks in vite.config.ts nicht mehr?). Erst bauen, dann prüfen:\n` +
         `  npm run build && npm run build:offline && npm run check:bundle\n` +
@@ -300,7 +331,9 @@ function main() {
 
   for (const r of results) {
     const line = `${r.label}: ${fmtBytes(r.bytes)} / Budget ${fmtBytes(r.maxBytes)}`;
-    if (r.problems) {
+    if (r.stempelProblem) {
+      for (const p of r.problems) console.error(red(`✖ ${p}`));
+    } else if (r.problems) {
       const pct = ((r.bytes / r.maxBytes) * 100).toFixed(0);
       console.log(dim(`• ${line} (${r.bytes} B, ${pct} % der Summe, ${r.files.length} Chunks)`));
       for (const p of r.problems) console.error(red(`✖ ${p}`));

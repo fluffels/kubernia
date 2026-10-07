@@ -13,9 +13,12 @@ const { LAYERS, COVERAGE_GLOBS } = require("./scripts/layers.cjs") as {
   COVERAGE_GLOBS: Record<string, string>;
 };
 // #1408 (ADR 0018): Namensregel der Content-Chunks, dieselbe Quelle nutzt das Gate check-bundle.mjs.
-const { contentChunkName, CONTENT_CHUNK_DIR } = require("./scripts/content-chunks.cjs") as {
+const { contentChunkName, CONTENT_CHUNK_DIR, CONTENT_STEMPEL_META, contentStempel, fsContentIo } = require("./scripts/content-chunks.cjs") as {
   contentChunkName: (id: string) => string | undefined;
   CONTENT_CHUNK_DIR: string;
+  CONTENT_STEMPEL_META: string;
+  contentStempel: (io: { listFiles: (rel: string) => string[] | null; readFile: (rel: string) => Uint8Array | string }) => string;
+  fsContentIo: (rootDir: string) => { listFiles: (rel: string) => string[] | null; readFile: (rel: string) => Uint8Array };
 };
 
 // #495: Coverage MESSEN + PRO SCHICHT gaten statt Repo-Mittelwert.
@@ -88,6 +91,23 @@ export function devNoFullReload(): Plugin {
   };
 }
 
+// #1411: Beide Builds schreiben den Hash ihrer Content-Quellen als Meta-Tag in die index.html. Das Offline-Budget
+// (scripts/check-bundle.mjs) zieht die Content-Chunks des Host-Builds von der Offline-Datei ab und setzt darum
+// voraus, dass dist/ und dist-offline/ vom selben Content-Stand stammen; das Gate vergleicht diese beiden Stempel.
+export function contentStempelPlugin(): Plugin {
+  let root = process.cwd();
+  return {
+    name: "kq-content-stempel",
+    apply: "build",
+    configResolved(c) {
+      root = c.root;
+    },
+    transformIndexHtml() {
+      return [{ tag: "meta", attrs: { name: CONTENT_STEMPEL_META, content: contentStempel(fsContentIo(root)) }, injectTo: "head" }];
+    },
+  };
+}
+
 // Zwei getrennte Build-Wege (Ticket #58) aus derselben Quelle (src/ + assets-data.ts):
 //
 //   • `vite build`                → Prod/Host-Build: normales Vite-Multi-File-Bundle
@@ -123,7 +143,7 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
     // Single-File-Modi (offline/devpanel): alles inline. Sonst: im Dev-Server den
     // störenden Auto-Full-Reload unterbinden (#301); im Prod-Build ist das
     // `apply: "serve"`-Plugin inaktiv und bleibt wirkungslos.
-    plugins: singleFile ? [viteSingleFile()] : [devNoFullReload()],
+    plugins: singleFile ? [contentStempelPlugin(), viteSingleFile()] : [contentStempelPlugin(), devNoFullReload()],
     build: {
       // #594: Browser-Syntax-Floor EXPLIZIT auf es2022 gepinnt statt Vites
       // implizitem, undokumentiertem `modules`-Default (~chrome87/safari14). So

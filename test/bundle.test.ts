@@ -32,6 +32,7 @@ type Budget =
 type Io = {
   exists: (p: string) => boolean;
   size: (p: string) => number;
+  readText: (p: string) => string;
   list: (p: string) => string[] | null;
   listFiles: (p: string) => string[] | null;
 };
@@ -43,6 +44,7 @@ type Measured = {
   missing: boolean;
   over: boolean;
   problems?: string[];
+  hinweis?: string;
 };
 
 const BUNDLE_BUDGETS: Budget[] = checkBundle.BUNDLE_BUDGETS;
@@ -62,8 +64,17 @@ const SOURCES = ["src/content/data/smalltalk.json", "src/content/data/npcs.json"
 const CONTENT_DIR = "dist/assets/content";
 const CONTENT_FILES = ["content-core.aaa.js", "content-quests-knut.bbb.js", "content-maps-harbor.ccc.js"];
 
+// Content-Stempel (#1411): beide index.html tragen ihn als Meta-Tag; Standard ist derselbe Stand in beiden Builds.
+const stempelHtml = (stempel: string) => `<html><head><meta name="kq-content-stempel" content="${stempel}"></head></html>`;
+const HOST_HTML = "dist/index.html";
+const OFFLINE_HTML = "dist-offline/index.html";
+
 // Ein Fake-Dateisystem für die injizierte io: nur die eingetragenen Dateien existieren.
-const fakeIo = (files: Record<string, number>, dirs: Record<string, string[]> = {}): Io => ({
+const fakeIo = (files: Record<string, number>, dirs: Record<string, string[]> = {}, texte: Record<string, string> = {}): Io => ({
+  readText: (p) => {
+    if (!(p in files)) throw new Error(`readText() auf nicht existierende Datei: ${p}`);
+    return texte[p] ?? stempelHtml("aaaa1111");
+  },
   listFiles: (p) => {
     const hit = SOURCES.filter((s) => s.startsWith(`${p}/`));
     return hit.length ? hit : null;
@@ -80,6 +91,7 @@ const fakeIo = (files: Record<string, number>, dirs: Record<string, string[]> = 
 const healthyBuild = (over: { offline?: number; game?: number; vendor?: number; content?: Record<string, number> } = {}) => {
   const files: Record<string, number> = {
     "dist-offline/index.html": over.offline ?? 2_500_000,
+    [HOST_HTML]: 1_000,
     "dist/assets/index-a.js": over.game ?? 400_000,
     "dist/assets/vendor-c.js": over.vendor ?? 1_150_000,
   };
@@ -357,6 +369,7 @@ describe("Bundle-Größenbudget (#503)", () => {
       files[`${CONTENT_DIR}/content-core.aaa.js.map`] = 999_999;
       files[`${CONTENT_DIR}/x.css`] = 999_999;
       files["dist-offline/index.html"] = 1_030_000;
+      files[HOST_HTML] = 1_000;
       const io = fakeIo(files, { [CONTENT_DIR]: [...CONTENT_FILES, "content-core.aaa.js.map", "x.css"] });
       const r = measureBudget(budget(), io);
       assert.deepEqual(r.problems, []);
@@ -413,5 +426,52 @@ describe("Bundle-Größenbudget (#503)", () => {
       [],
       "Gebaute Artefakte überschreiten ihr Budget — verkleinern oder Budget in scripts/check-bundle.mjs anheben (Ratchet).",
     );
+  });
+});
+
+describe("Content-Stempel: dist/ und dist-offline/ vom selben Stand (#1411)", () => {
+  const offline = (): Budget => BUNDLE_BUDGETS.find((b) => b.kind === "file")!;
+  const build = (texte: Record<string, string>, ohneHost = false) => {
+    const files: Record<string, number> = { [OFFLINE_HTML]: 1_030_000, [HOST_HTML]: 1_000 };
+    if (ohneHost) delete files[HOST_HTML];
+    const dateien = CONTENT_FILES.reduce((acc, f) => ({ ...acc, [`${CONTENT_DIR}/${f}`]: 10_000 }), files);
+    return fakeIo(dateien, { [CONTENT_DIR]: CONTENT_FILES }, texte);
+  };
+
+  test("gleicher Stempel in beiden index.html: gemessen wie bisher", () => {
+    const r = measureBudget(offline(), build({ [HOST_HTML]: stempelHtml("ab12"), [OFFLINE_HTML]: stempelHtml("ab12") }));
+    assert.equal(r.missing, false);
+    assert.equal(r.over, false);
+    assert.equal(r.bytes, 1_000_000);
+  });
+
+  test("verschiedene Stempel: rot mit Klartext (beide neu bauen), keine Messung auf falscher Grundlage", () => {
+    const r = measureBudget(offline(), build({ [HOST_HTML]: stempelHtml("aaaa11112222"), [OFFLINE_HTML]: stempelHtml("bbbb33334444") }));
+    assert.equal(r.over, true);
+    assert.equal(r.missing, false);
+    assert.match(r.problems?.[0] ?? "", /verschiedenen Content-Ständen.*aaaa11112222.*bbbb33334444.*neu bauen/);
+    assert.equal(check({ io: build({ [HOST_HTML]: stempelHtml("a1"), [OFFLINE_HTML]: stempelHtml("b2") }) }).over, true, "auch im Gesamt-Gate rot");
+  });
+
+  test("fehlender Stempel in einer der Dateien: missing (rot, erst bauen), nennt die Datei", () => {
+    const ohneOffline = measureBudget(offline(), build({ [HOST_HTML]: stempelHtml("ab12"), [OFFLINE_HTML]: "<html></html>" }));
+    assert.equal(ohneOffline.missing, true);
+    assert.match(ohneOffline.hinweis ?? "", /Content-Stempel fehlt in dist-offline\/index\.html/);
+    const ohneHostTag = measureBudget(offline(), build({ [HOST_HTML]: "<html></html>", [OFFLINE_HTML]: stempelHtml("ab12") }));
+    assert.equal(ohneHostTag.missing, true);
+    assert.match(ohneHostTag.hinweis ?? "", /fehlt in dist\/index\.html/);
+    const ohneHostDatei = measureBudget(offline(), build({ [OFFLINE_HTML]: stempelHtml("ab12") }, true));
+    assert.equal(ohneHostDatei.missing, true, "keine dist/index.html");
+    assert.equal(check({ io: build({ [OFFLINE_HTML]: "<html></html>" }) }).missing, true);
+  });
+
+  test("echte Artefakte (falls gebaut): beide Builds tragen denselben, nicht leeren Stempel", () => {
+    const io = defaultIo();
+    if (!io.exists(HOST_HTML) || !io.exists(OFFLINE_HTML)) return; // nicht gebaut
+    const { stempelAusHtml } = createRequire(import.meta.url)("../scripts/content-chunks.cjs") as { stempelAusHtml: (h: string) => string | null };
+    const host = stempelAusHtml(io.readText(HOST_HTML));
+    const off = stempelAusHtml(io.readText(OFFLINE_HTML));
+    if (host === null || off === null) return; // älterer Build ohne Stempel: das Gate meldet es selbst
+    assert.equal(host, off);
   });
 });

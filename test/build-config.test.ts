@@ -38,6 +38,28 @@ const pluginNames = (plugins: unknown[] | undefined): string[] =>
 
 const SINGLEFILE = "vite:singlefile";
 
+/* #1411: BEIDE Builds (Host und Offline) schreiben den Content-Stempel als Meta-Tag in ihre index.html; das
+ * Bundle-Gate vergleicht sie. Fehlt das Plugin in einem Weg, wäre jeder Build „ohne Stempel" und das Gate rot. */
+describe("Content-Stempel-Plugin (#1411)", () => {
+  const stempelPlugin = (mode: string) =>
+    ((resolve(mode).plugins ?? []).flat() as { name?: string; transformIndexHtml?: () => { tag: string; attrs: { name: string; content: string } }[] }[]).find(
+      (p) => p.name === "kq-content-stempel",
+    );
+
+  it.each(["production", "offline"])("ist im Build-Weg %s aktiv", (mode) => {
+    expect(pluginNames(resolve(mode).plugins)).toContain("kq-content-stempel");
+  });
+
+  it("schreibt ein Meta-Tag mit dem 64-stelligen Hash der Content-Quellen in den Head", () => {
+    const tags = stempelPlugin("production")?.transformIndexHtml?.() ?? [];
+    expect(tags).toHaveLength(1);
+    expect(tags[0].tag).toBe("meta");
+    expect(tags[0].attrs.name).toBe("kq-content-stempel");
+    expect(tags[0].attrs.content).toMatch(/^[0-9a-f]{64}$/);
+    expect(stempelPlugin("offline")?.transformIndexHtml?.()[0].attrs.content).toBe(tags[0].attrs.content);
+  });
+});
+
 describe("Build-Strategie #58: Prod-Build (Multi-File)", () => {
   const cfg = resolve("production");
 
