@@ -9,7 +9,7 @@
 // `ExecResult` liegt seit #390 ebenfalls hier (war in types.ts) – das bricht den Zyklus types ↔ sim.
 import type {
   ExecResult,
-  Broken, PodInstance, Deployment, ServiceRes, ServiceSpec, IngressRes, NetworkPolicyRes,
+  Broken, Deployment, ServiceRes, ServiceSpec, IngressRes, NetworkPolicyRes,
   Secret, ConfigMap, ClusterNode, Container, Release,
   Chart, TfResource, TfProvider, TfModule, TfBackend, TfOutput, GitCommit, GitConflict, GitPending,
   Pipeline, CiDeploy, ArgoApp, ApplyEffect, HelmRepo,
@@ -52,7 +52,7 @@ import { makeRng, DEFAULT_SEED } from "./core/rng";
 import { resourceName, InvalidSpecError } from "./sim/names";
 import { sameRbac } from "./sim/rbac";
 import { assertClusterInvariants, warnClusterInvariants } from "./sim/invariants";
-import { scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, seedPodTemplate, snapshotPodTemplate } from "./sim/workload";
+import { scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, statefulPodClaimName, seedPodTemplate, snapshotPodTemplate } from "./sim/workload";
 import { provisionNode } from "./sim/nodes";
 import { renderHelp } from "./hud/helptext";
 
@@ -526,7 +526,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       };
       for (let i = 0; i < spec.replicas; i++) {
         sts.pods.push(newStatefulPod(spec.name + "-" + i, this.clock));
-        const pvcName = vct + "-" + spec.name + "-" + i;
+        const pvcName = statefulPodClaimName(sts, sts.pods[i]);
         if (!this.pvcs.some(p => p.name === pvcName)) {
           this.pvcs.push(this._makePvc(pvcName, sts.storage, spec.storageClass, "RWO"));
         }
@@ -613,16 +613,6 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       const mins = Math.floor(secs / 60);
       if (mins < 60) return mins + "m";
       return Math.floor(mins / 60) + "h";
-    }
-
-    _allPods(): PodInstance[] {
-      const pods: PodInstance[] = [];
-      for (const d of this.deployments) for (const p of d.pods) pods.push(p);
-      return pods;
-    }
-
-    _findDeploymentOfPod(podName: string): Deployment | undefined {
-      return this.deployments.find(d => d.pods.some(p => p.name === podName));
     }
 
     /** Quest-Szenario in die laufende Welt mischen (Dateien, Aufträge, Beispiel-Pods …).
