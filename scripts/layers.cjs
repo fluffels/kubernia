@@ -68,6 +68,19 @@ function pruefeModell(modell) {
   }
   const auffang = schichten.filter((s) => s.muster === null).length;
   if (schichten.length > 0 && auffang !== 1) probleme.push(`genau eine Auffang-Schicht (muster: null) nötig, gefunden: ${auffang}`);
+  const wurzelBesitzer = new Map();
+  for (const s of schichten) {
+    if (!Array.isArray(s.wurzeln) || s.wurzeln.some((w) => typeof w !== "string")) {
+      probleme.push(`"${s.id}": wurzeln ist kein Array aus Strings`);
+      continue;
+    }
+    for (const w of s.wurzeln) {
+      // Nur schlichte Namen: Regex-Metazeichen würden das abgeleitete Muster verfälschen, eine leere Wurzel träfe alles.
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(w)) probleme.push(`"${s.id}": ungültige Wurzel ${JSON.stringify(w)} (leer oder mit Sonderzeichen)`);
+      else if (wurzelBesitzer.has(w) && wurzelBesitzer.get(w) !== s.id) probleme.push(`Wurzel "${w}" steht in zwei Schichten ("${wurzelBesitzer.get(w)}" und "${s.id}")`);
+      else wurzelBesitzer.set(w, s.id);
+    }
+  }
   for (const s of schichten) {
     if (!Array.isArray(s.darf)) probleme.push(`"${s.id}": darf ist keine Liste`);
     else for (const z of s.darf) if (!ids.has(z)) probleme.push(`"${s.id}" darf unbekanntes Ziel "${z}" importieren`);

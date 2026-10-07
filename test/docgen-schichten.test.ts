@@ -143,6 +143,20 @@ describe("Modell-Prüfung (Negativfälle)", () => {
   test("reservierte ID end", () => wirft((m) => (m.schichten[1].id = "end"), /reservierte ID "end"/));
   test("ungültige ID", () => wirft((m) => (m.schichten[1].id = "Mit Leerzeichen"), /ungültige oder reservierte ID/));
   test('Anführungszeichen im Label', () => wirft((m) => (m.schichten[1].label = 'Ein "Label"'), /ungültiges Label/));
+  test("wurzeln: kein Array / kein String-Array (Z5d)", () => {
+    wirft((m) => ((m.schichten[1] as { wurzeln: unknown }).wurzeln = "scenes"), /wurzeln ist kein Array aus Strings/);
+    wirft((m) => ((m.schichten[1] as { wurzeln: unknown }).wurzeln = ["ui", 3]), /wurzeln ist kein Array aus Strings/);
+    wirft((m) => ((m.schichten[1] as { wurzeln: unknown }).wurzeln = undefined), /wurzeln ist kein Array aus Strings/);
+  });
+  test("wurzeln: leere Wurzel und Regex-Metazeichen (Z5d)", () => {
+    wirft((m) => m.schichten[1].wurzeln.push(""), /ungültige Wurzel ""/);
+    wirft((m) => m.schichten[1].wurzeln.push("a.b"), /ungültige Wurzel "a\.b"/);
+    wirft((m) => m.schichten[1].wurzeln.push("(x|"), /ungültige Wurzel/);
+    wirft((m) => m.schichten[1].wurzeln.push("Gross"), /ungültige Wurzel/);
+  });
+  test("wurzeln: dieselbe Wurzel in zwei Schichten (Z5d)", () => {
+    wirft((m) => m.schichten[2].wurzeln.push(m.schichten[1].wurzeln[0]), /Wurzel "[a-z-]+" steht in zwei Schichten/);
+  });
   test("darf ist keine Liste", () => wirft((m) => ((m.schichten[1] as { darf: unknown }).darf = "domaene"), /darf ist keine Liste/));
   test("ungültige Technik", () => wirft((m) => (m.schichten[0].technik = 'Phaser"DOM'), /ungültige Technik/));
   test("leeres Label", () => wirft((m) => (m.schichten[1].label = ""), /ungültiges Label/));
