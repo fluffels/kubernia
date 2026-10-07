@@ -1206,6 +1206,8 @@ describe("token-baseline: Nachlauf, Tool-Fehler, Lesen, fehlender Marker (#1379)
     const ungepaart = sum(calls, [echo("2026-09-29T11:10:00Z", "start")]);
     assert.equal(ungepaart.pflegeFehlt, false, "ein Marker ohne Gegenstück bekommt nur die Unpaired-Warnung");
     assert.doesNotMatch(m.renderMarkdown(ungepaart), /Kein Pflege-Marker/);
+    const nurNachlauf = [calls[0], call("2026-09-29T14:20:00Z", 4, { subagent: umsetzer, cost: 0.1 })];
+    assert.equal(sum(nurNachlauf, []).pflegeFehlt, false, "ein Umsetzer erst nach dem Merge löst keine Warnung aus");
     assert.equal(sum([calls[0]], []).pflegeFehlt, false, "ohne Umsetzer keine Warnung");
     assert.ok(!sum(calls).pflegeFehlt, "ohne Events keine Warnung");
   });
