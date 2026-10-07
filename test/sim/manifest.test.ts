@@ -3,6 +3,7 @@ import { effectsFromManifest, fileEffects, type ManifestFailure } from "../../sr
 import { mapDeployment } from "../../src/sim/manifest/apps";
 import { Leaf, ManifestError } from "../../src/sim/manifest/fields";
 import type { ApplyEffect } from "../../src/sim";
+import { deploymentYaml, serviceYaml } from "../factories/manifests";
 
 const DEP = `apiVersion: apps/v1
 kind: Deployment
@@ -208,12 +209,75 @@ describe("Registry: effectsFromManifest", () => {
 });
 
 describe("Registry: fileEffects (Vorrang)", () => {
-  it("der hinterlegte Effekt hat Vorrang vor dem Dateiinhalt", () => {
-    const legacy: ApplyEffect = { deployment: { name: "alt", image: "i", replicas: 1 } };
-    expect(fileEffects(legacy, "kaputt: [", "x.yaml")).toStrictEqual([legacy]);
+  const legacyDep = (extra: object = {}): ApplyEffect => ({ deployment: { name: "web", image: "i", replicas: 9, ...extra } });
+  const failOf = (r: ReturnType<typeof fileEffects>): ManifestFailure => {
+    if (Array.isArray(r)) throw new Error("kein Fehlschlag: " + JSON.stringify(r));
+    return r;
+  };
+  const INGRESS = "apiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: i\n";
+
+  it("ein Parse-Fehler gewinnt über den hinterlegten Effekt", () => {
+    expect(failOf(fileEffects(legacyDep(), "kaputt: [", "x.yaml")).error).toMatch(/error parsing x\.yaml/);
+  });
+  it("Deployment im YAML: das Gemappte gewinnt, ein abweichender Legacy-Wert wird ignoriert", () => {
+    const r = fileEffects(legacyDep(), DEP, "x.yaml");
+    expect(r).toStrictEqual([{ deployment: { name: "web", image: "nginx:1.27", replicas: 3 } }]);
+  });
+  it("Typ ohne Mapper (Ingress) läuft über den hinterlegten Effekt", () => {
+    const legacy: ApplyEffect = { ingress: { name: "i", host: "h", service: "s", port: 80 } };
+    expect(fileEffects(legacy, INGRESS, "x.yaml")).toStrictEqual([legacy]);
+  });
+  it("gemischtes Multi-Dokument (Deployment + Ingress) ist alles oder nichts: Legacy", () => {
+    const legacy = legacyDep();
+    expect(fileEffects(legacy, DEP + "---\n" + INGRESS, "x.yaml")).toStrictEqual([legacy]);
+  });
+  it("Platzhalter 'kind: Deployment' ohne apiVersion ergibt trotz Legacy den kubectl-Fehler", () => {
+    expect(failOf(fileEffects(legacyDep(), "kind: Deployment\n", "x.yaml")).error).toMatch(/apiVersion not set/);
+  });
+  it("falsche apiVersion bei Mapper-Kind ergibt 'no matches for kind' statt stillem Legacy", () => {
+    const f = failOf(fileEffects(legacyDep(), DEP.replace("apps/v1", "extensions/v1beta1"), "x.yaml"));
+    expect(f.error).toMatch(/no matches for kind "Deployment" in version "extensions\/v1beta1"/);
+  });
+  it("leere Datei bzw. nur Kommentar ergibt trotz Legacy 'no objects passed to apply'", () => {
+    expect(failOf(fileEffects(legacyDep(), "", "x.yaml")).error).toMatch(/no objects passed to apply/);
+    expect(failOf(fileEffects(legacyDep(), "# nur Kommentar\n", "x.yaml")).error).toMatch(/no objects passed to apply/);
+  });
+  it("Sim-Sonderfelder werden bei gleichem Namen überlagert", () => {
+    const yaml = DEP.replace("      containers:", "      initContainers:\n        - name: i\n          image: busybox\n      volumes:\n        - name: v\n          emptyDir: {}\n      containers:");
+    const legacy = legacyDep({ requireBuiltImage: true, ephemeralUsedMi: 40, emptyDir: { data: "d", usedMi: 700 }, initContainer: { fillsMi: 300, doubleStage: true } });
+    expect(fileEffects(legacy, yaml, "x.yaml")).toStrictEqual([{ deployment: { name: "web", image: "nginx:1.27", replicas: 3,
+      requireBuiltImage: true, ephemeralUsedMi: 40, emptyDir: { data: "d", usedMi: 700 }, initContainer: { fillsMi: 300, doubleStage: true } } }]);
+  });
+  it("kein Overlay bei anderem Ressourcen-Namen", () => {
+    const legacy: ApplyEffect = { deployment: { name: "anders", image: "i", replicas: 1, requireBuiltImage: true, ephemeralUsedMi: 5 } };
+    expect(fileEffects(legacy, DEP, "x.yaml")).toStrictEqual([{ deployment: { name: "web", image: "nginx:1.27", replicas: 3 } }]);
+  });
+  it("kein emptyDir/initContainer aus dem Legacy-Effekt, wenn das YAML keine deklariert", () => {
+    const legacy = legacyDep({ emptyDir: { data: "d", usedMi: 1 }, initContainer: { fillsMi: 2 } });
+    expect(fileEffects(legacy, DEP, "x.yaml")).toStrictEqual([{ deployment: { name: "web", image: "nginx:1.27", replicas: 3 } }]);
+  });
+  it("Legacy ohne Deployment-Schlüssel (nur Service) legt kein Overlay an", () => {
+    const legacy: ApplyEffect = { service: { name: "web", port: 80 } };
+    expect(fileEffects(legacy, DEP, "x.yaml")).toStrictEqual([{ deployment: { name: "web", image: "nginx:1.27", replicas: 3 } }]);
   });
   it("ohne Effekt wird der Inhalt gelesen", () => {
     expect(fileEffects(undefined, DEP, "x.yaml")).toHaveLength(1);
     expect(Array.isArray(fileEffects(undefined, "a: [", "x.yaml"))).toBe(false);
+  });
+});
+
+describe("Factory: deploymentYaml/serviceYaml (Roundtrip)", () => {
+  it("deploymentYaml mit allen Optionen ergibt den erwarteten Effekt", () => {
+    const y = deploymentYaml({ name: "a", image: "busybox", replicas: 2, serviceAccountName: "sa", containerPort: 80, nodeName: "n1",
+      securityContext: { runAsNonRoot: true }, ephemeralLimitMi: 512, emptyDir: true, initContainer: true });
+    expect(ok(y)).toStrictEqual([{ deployment: { name: "a", image: "busybox", replicas: 2, serviceAccountName: "sa", containerPort: 80, node: "n1",
+      ephemeralLimit: 512, emptyDir: {}, initContainer: {}, securityContext: { runAsNonRoot: true } } }]);
+  });
+  it("serviceYaml: Port, targetPort und ExternalName", () => {
+    expect(ok(serviceYaml({ name: "s", port: 80, targetPort: 8080 }))).toStrictEqual([{ service: { name: "s", port: 80, targetPort: 8080 } }]);
+    expect(ok(serviceYaml({ name: "e", port: 0, type: "ExternalName", externalName: "x.example.com" }))[0].service).toMatchObject({ name: "e", externalName: "x.example.com" });
+  });
+  it("Multi-Dokument per Aneinanderhängen", () => {
+    expect(ok(deploymentYaml({ name: "a" }) + "---\n" + serviceYaml({ name: "a", port: 80 }))).toHaveLength(2);
   });
 });

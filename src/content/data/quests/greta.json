@@ -23,9 +23,11 @@
           "podSecurity": "privileged",
           "files": {
             "Dockerfile": "FROM node:20-alpine\nWORKDIR /app\nCOPY server.js .\nEXPOSE 8080\nCMD [\"node\", \"server.js\"]",
-            "server.js": "const http = require(\"http\");\nhttp.createServer((req, res) => {\n  res.writeHead(200, { \"Content-Type\": \"text/plain\" });\n  res.end(\"Ahoi vom Werft-Dienst!\\n\");\n}).listen(8080, () => console.log(\"Werft-Dienst lauscht auf :8080\"));",
-            "deployment.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: werft-dienst\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: werft-dienst\n  template:\n    metadata:\n      labels:\n        app: werft-dienst\n    spec:\n      containers:\n        - name: werft-dienst\n          image: werft-dienst:1.0\n          ports:\n            - containerPort: 8080",
-            "service.yaml": "apiVersion: v1\nkind: Service\nmetadata:\n  name: werft-dienst\nspec:\n  selector:\n    app: werft-dienst\n  ports:\n    - port: 80\n      targetPort: 8080"
+            "server.js": "const http = require(\"http\");\nhttp.createServer((req, res) => {\n  res.writeHead(200, { \"Content-Type\": \"text/plain\" });\n  res.end(\"Ahoi vom Werft-Dienst!\\n\");\n}).listen(8080, () => console.log(\"Werft-Dienst lauscht auf :8080\"));"
+          },
+          "manifests": {
+            "deployment.yaml": "deployment-werft-dienst",
+            "service.yaml": "service-werft-dienst"
           },
           "applyEffects": {
             "deployment.yaml": {
@@ -35,13 +37,6 @@
                 "replicas": 1,
                 "containerPort": 8080,
                 "requireBuiltImage": true
-              }
-            },
-            "service.yaml": {
-              "service": {
-                "name": "werft-dienst",
-                "port": 80,
-                "targetPort": 8080
               }
             }
           }

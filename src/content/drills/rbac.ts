@@ -1,5 +1,5 @@
 import type { Sim } from "../../sim";
-import { pick, rnd, SA_NAMES, ROLE_NAMES, CLUSTERROLE_NAMES, CANI_PAIRS, ensureRole, ROLE_YAML, ROLEBINDING_YAML, CLUSTERROLE_YAML, CLUSTERROLEBINDING_YAML, POD_SECURITY_YAML } from "./shared";
+import { pick, rnd, SA_NAMES, ROLE_NAMES, CLUSTERROLE_NAMES, CANI_PAIRS, ensureRole, ROLE_YAML, ROLEBINDING_YAML, CLUSTERROLE_YAML, CLUSTERROLEBINDING_YAML, renamedManifest } from "./shared";
 import type { DrillTask } from "./shared";
 import { sameRbac } from "../../sim/rbac";
 
@@ -59,7 +59,7 @@ export const RBAC_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     let name = pick(["spaehposten", "wachposten", "torwaechter", "zinnenwache"]);
     while (sim.deployments.some(d => d.name === name)) name = name + rnd(2, 99);
     const file = "spaehposten.yaml";
-    sim.files[file] = POD_SECURITY_YAML;
+    sim.files[file] = renamedManifest("deployment-wachposten-restricted", { wachposten: name });
     sim.applyEffects[file] = { deployment: { name, image: "nginx", replicas: 1, securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true } } };
     return { text: "Roll einen <b>gehärteten</b> Posten aus: wende <code>spaehposten.yaml</code> an – mit securityContext kommt er auch unter <code>restricted</code> durchs Tor.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+spaehposten\.yaml$/], solution: "kubectl apply --filename spaehposten.yaml", hint: "kubectl apply --filename &lt;datei&gt;", why: "Der securityContext im Manifest (runAsNonRoot, allowPrivilegeEscalation: false, readOnlyRootFilesystem) härtet den Pod – genau das verlangt die restricted-Stufe, darum wird er zugelassen, während ein roher Pod abgewiesen würde. Angewandt: kubectl apply --filename &lt;datei&gt;." };
   },

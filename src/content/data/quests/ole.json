@@ -1118,23 +1118,6 @@
           "files": {
             "deployment.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: funkdienst\nspec:\n  replicas: 2\n  selector:\n    matchLabels:\n      app: funkdienst\n  template:\n    metadata:\n      labels:\n        app: funkdienst\n    spec:\n      containers:\n        - name: funkdienst\n          image: funkdienst:2.0\n          ports:\n            - containerPort: 8080",
             "service.yaml": "apiVersion: v1\nkind: Service\nmetadata:\n  name: funkdienst\nspec:\n  selector:\n    app: funkdienst\n  ports:\n    - port: 80\n      targetPort: 8080"
-          },
-          "applyEffects": {
-            "deployment.yaml": {
-              "deployment": {
-                "name": "funkdienst",
-                "image": "funkdienst:2.0",
-                "replicas": 2,
-                "containerPort": 8080
-              }
-            },
-            "service.yaml": {
-              "service": {
-                "name": "funkdienst",
-                "port": 80,
-                "targetPort": 8080
-              }
-            }
           }
         },
         "lines": [

@@ -7,6 +7,7 @@
 import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { Sim as KQSim } from "../src/sim";
+import { deploymentYaml } from "./factories/manifests";
 
 let sim: KQSim;
 beforeEach(() => { sim = new KQSim({}); });
@@ -158,7 +159,7 @@ test("mergeScenario nimmt einen ganz neuen Node auf (per Name nicht vorhanden)",
 
 test("kubectl apply -f mit emptyDir + ephemeral-storage-Limit (apply-Handler mitgetestet)", () => {
   sim.mergeScenario({
-    files: { "kasse.yaml": "kind: Deployment\n" },
+    files: { "kasse.yaml": deploymentYaml({ name: "kasse", emptyDir: true, ephemeralLimitMi: 512 }) },
     applyEffects: { "kasse.yaml": { deployment: { name: "kasse", image: "nginx", replicas: 1, emptyDir: { data: "cache", usedMi: 700 }, ephemeralLimit: 512 } } },
   });
   const r = sim.exec("kubectl apply -f kasse.yaml");
@@ -221,7 +222,7 @@ test("Limit anheben heilt den Doppelablage-Pod (set resources rechnet mit dem Pe
 
 test("apply -f mit initContainer + Doppelablage evictet den Pod (apply-Handler mitgetestet)", () => {
   sim.mergeScenario({
-    files: { "vorbereiter.yaml": "kind: Deployment\n" },
+    files: { "vorbereiter.yaml": deploymentYaml({ name: "vorbereiter", image: "busybox", ephemeralLimitMi: 512, emptyDir: true, initContainer: true }) },
     applyEffects: { "vorbereiter.yaml": { deployment: { name: "vorbereiter", image: "busybox", replicas: 1, ephemeralLimit: 512, emptyDir: { data: "geodaten", usedMi: 300 }, initContainer: { fillsMi: 300, doubleStage: true } } } },
   });
   const r = sim.exec("kubectl apply -f vorbereiter.yaml");

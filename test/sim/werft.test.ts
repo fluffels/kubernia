@@ -8,6 +8,7 @@
 import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./helpers";
+import { deploymentYaml, serviceYaml } from "../factories/manifests";
 
 let sim: ReturnType<typeof freshSim>;
 beforeEach(() => { sim = freshSim(); });
@@ -19,7 +20,7 @@ function werftSzenario(opts: { containerPort?: number; targetPort?: number } = {
   return {
     files: {
       "Dockerfile": "FROM nginx:alpine\nCOPY . /app",
-      "werft.yaml": "kind: Deployment\nname: werft-dienst",
+      "werft.yaml": deploymentYaml({ name: "werft-dienst", image: "werft-dienst:1.0", containerPort }) + "---\n" + serviceYaml({ name: "werft-dienst", port: 80, targetPort }),
     },
     applyEffects: {
       "werft.yaml": {
