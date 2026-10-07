@@ -61,6 +61,9 @@ Das Gate wird rot bei: fehlendem erwartetem Chunk, unerwartetem Chunk (ohne Quel
 - Die globalen Dateien `smalltalk.json`, `entities.json` und `npcs.json` liegen gemeinsam in `content-core`; der Deckel erzwingt dort einen Split nach NPC/Region, bevor sie zum Monolithen werden.
 - Der Offline-Build enthält weiterhin alles; sein Rest-Puffer (28 KB gegenüber dem Gesamtbudget) wird von der PixelLab-Icon-Welle (#1245 bis #1253) aufgebraucht. Dann ist das Offline-Budget eine bewusste Anhebung wert, nicht der Content-Chunk.
 - Die Chunk-Auswertungsreihenfolge hängt am Bundler (Rolldown/Vite); der Host-Boot-Smoke fängt eine Änderung dort.
+- Lockerung ausdrücklich: Das Offline-Budget misst den Offline-Build abzüglich der Chunk-Summe des Host-Builds. Die Offline-Datei darf damit bis etwa Offline-Budget plus Content-Summe wachsen (rund 4,5 MB statt bisher 3,3 MB); dafür trägt der Content seinen eigenen, strengeren Deckel. `dist/` und `dist-offline/` müssen vom selben Stand sein.
+- Messwerte sind lokal unter Windows gemessen; die CI (Linux) liegt etwa 1 KB niedriger.
+- Das Gate erkennt Namenskollisionen der Namensregel (verschiedene Dateien, gleicher Chunk-Name) und begrenzt die Chunk-Zahl auf 200.
 - Keine Save-Migration: Content-IDs und Save-Format bleiben unberührt.
 
 ## Re-Evaluierung

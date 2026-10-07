@@ -36,4 +36,21 @@ function expectedContentChunks(io) {
   return [...names].sort();
 }
 
-module.exports = { CONTENT_CHUNK_DIR, contentChunkName, expectedContentChunks };
+/** Kollisionen der Namensregel: verschiedene Quelldateien, die auf denselben Chunk-Namen fallen
+ *  (verlustbehaftete Bereinigung wie `Knut_DNS` gegen `knut-dns`, oder ein Datenordner `maps/` gegen
+ *  `assets/maps/`). Nur `content-core` darf bewusst mehrere Dateien bündeln. Rollup fasst Module mit
+ *  gleichem `manualChunks`-Namen still zusammen, dann griffe der Deckel je Datei nicht mehr.
+ *  Rückgabe: Liste `{ name, files }`, leer = eindeutig. */
+function contentChunkCollisions(io) {
+  const byName = new Map();
+  for (const root of ["src/content/data", "assets/maps"]) {
+    for (const f of io.listFiles(root) ?? []) {
+      const n = contentChunkName(f);
+      if (!n || n === "content-core") continue;
+      byName.set(n, [...(byName.get(n) ?? []), f]);
+    }
+  }
+  return [...byName].filter(([, files]) => files.length > 1).map(([name, files]) => ({ name, files }));
+}
+
+module.exports = { CONTENT_CHUNK_DIR, contentChunkName, expectedContentChunks, contentChunkCollisions };

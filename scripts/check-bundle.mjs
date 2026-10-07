@@ -66,7 +66,7 @@ import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 
 // Namensregel der Content-Chunks: EINE Quelle, dieselbe nutzt vite.config.ts (manualChunks).
-const { CONTENT_CHUNK_DIR, expectedContentChunks } = createRequire(import.meta.url)("./content-chunks.cjs");
+const { CONTENT_CHUNK_DIR, expectedContentChunks, contentChunkCollisions } = createRequire(import.meta.url)("./content-chunks.cjs");
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -108,6 +108,8 @@ export const BUNDLE_BUDGETS = [
     dir: CONTENT_CHUNK_DIR_DIST,
     // Deckel je Chunk: reißt eine Datei ihn, in Unterdateien splitten (src/content/AGENTS.md), NICHT anheben.
     maxBytesPerChunk: 128_000,
+    // Chunk-Zahl: ab ~200 Chunks (alle per modulepreload beim Boot) ist Stufe 2 fällig (ADR 0018), nicht anheben.
+    maxChunks: 200,
     // Summe: Auslöser für Stufe 2 (Lazy-Load je Region, ADR 0018). Anheben ist verboten, dann Stufe 2 bauen.
     maxBytes: 2_000_000,
   },
@@ -210,11 +212,17 @@ function measureContentChunks(budget, io) {
   const files = built.map((n) => `${budget.dir}/${n}`);
   const sizes = files.map((f) => io.size(f));
   const bytes = sizes.reduce((sum, n) => sum + n, 0);
-  const expected = budget.expected ?? expectedContentChunks(io);
+  const expected = expectedContentChunks(io);
   const builtNames = new Set(built.map(builtChunkName));
   const problems = [];
   for (const e of expected) {
     if (!builtNames.has(e)) problems.push(`Content-Chunk ${e} fehlt (Quelldatei und Namensregel: scripts/content-chunks.cjs, ADR 0018)`);
+  }
+  for (const c of contentChunkCollisions(io)) {
+    problems.push(`Namenskollision: ${c.files.join(" und ")} ergeben beide ${c.name} (Dateien umbenennen, Namensregel: scripts/content-chunks.cjs)`);
+  }
+  if (built.length > budget.maxChunks) {
+    problems.push(`${built.length} Content-Chunks > ${budget.maxChunks}: Stufe-2-Auslöser, Lazy-Load je Region bauen (ADR 0018), Grenze nicht anheben`);
   }
   const expectedSet = new Set(expected);
   for (const n of [...builtNames].sort()) {

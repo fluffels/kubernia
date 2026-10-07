@@ -28,7 +28,7 @@ type Budget =
   | { label: string; kind: "file"; path: string; maxBytes: number; subtractChunksDir?: string }
   | { label: string; kind: "game-chunks"; dir: string; maxBytes: number }
   | { label: string; kind: "vendor-chunk"; dir: string; maxBytes: number }
-  | { label: string; kind: "content-chunks"; dir: string; maxBytes: number; maxBytesPerChunk: number; expected?: string[] };
+  | { label: string; kind: "content-chunks"; dir: string; maxBytes: number; maxBytesPerChunk: number; maxChunks: number };
 type Io = {
   exists: (p: string) => boolean;
   size: (p: string) => number;
@@ -349,6 +349,39 @@ describe("Bundle-Größenbudget (#503)", () => {
       assert.equal(r.bytes, 1_000_001);
       const noContent = fakeIo({ "dist-offline/index.html": 1 }, {});
       assert.equal(measureBudget(offline, noContent).missing, true, "ohne Host-Build nicht verlässlich messbar");
+    });
+
+    test("Nicht-JS-Dateien im Content-Ordner (.js.map, .css) zählen weder als Chunk noch als Bytes", () => {
+      const files: Record<string, number> = {};
+      for (const f of CONTENT_FILES) files[`${CONTENT_DIR}/${f}`] = 10_000;
+      files[`${CONTENT_DIR}/content-core.aaa.js.map`] = 999_999;
+      files[`${CONTENT_DIR}/x.css`] = 999_999;
+      files["dist-offline/index.html"] = 1_030_000;
+      const io = fakeIo(files, { [CONTENT_DIR]: [...CONTENT_FILES, "content-core.aaa.js.map", "x.css"] });
+      const r = measureBudget(budget(), io);
+      assert.deepEqual(r.problems, []);
+      assert.equal(r.bytes, 30_000);
+      const offline: Budget = { label: "o", kind: "file", path: "dist-offline/index.html", subtractChunksDir: CONTENT_DIR, maxBytes: 1_000_000 };
+      assert.equal(measureBudget(offline, io).bytes, 1_000_000, "Offline-Abzug zählt nur .js");
+    });
+
+    test("Namenskollision zweier Quelldateien ist ein Problem im Gate", () => {
+      const io = { ...healthyBuild(), listFiles: (p: string) => [...SOURCES, "src/content/data/quests/Knut_DNS.json", "src/content/data/quests/knut-dns.json"].filter((s) => s.startsWith(`${p}/`)) };
+      const r = measureBudget(budget(), io);
+      assert.ok(r.problems?.some((p) => p.includes("Namenskollision") && p.includes("content-quests-knut-dns")), String(r.problems));
+    });
+
+    test("Chunk-Zahl: genau am Limit ok, +1 rot (Stufe 2)", () => {
+      const b: ContentBudget = { ...budget(), maxChunks: 3 };
+      assert.equal(measureBudget(b, healthyBuild()).over, false);
+      assert.equal(measureBudget({ ...b, maxChunks: 2 }, healthyBuild()).over, true);
+    });
+
+    test("Ratchet: Deckel, Summe und Chunk-Zahl der echten Budgets dürfen nicht wachsen (ADR 0018)", () => {
+      const b = contentBudget();
+      assert.ok(b.maxBytesPerChunk <= 128_000, "Deckel je Chunk nicht anheben, Datei splitten");
+      assert.ok(b.maxBytes <= 2_000_000, "Summe nicht anheben, Stufe 2 bauen");
+      assert.ok(b.maxChunks <= 200, "Chunk-Zahl nicht anheben, Stufe 2 bauen");
     });
 
     test("Red-Green: winziger Deckel greift, riesiger nie", () => {

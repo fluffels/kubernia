@@ -10,10 +10,6 @@
 
 Quests, NPCs, Smalltalk und NPC-Standplätze sind **Daten** (`src/content/data/*`), kein TS mehr. Konkret, damit es auf Stardew-Größe skaliert (kein Monolith – pro Region/NPC eine Datei, wie Stardew):
 
-### Content-Chunks (ADR 0018)
-
-Jede Datei unter `src/content/data/<dir>/` ist im Host-Build ein eigener Chunk mit Deckel (`check:bundle`, 128 KB je Chunk). Reißt eine Datei ihn, in Unterdateien splitten (z.B. `quests/knut-dns.json`); der Loader ist dateinamen-agnostisch. Neue Dateien direkt unter `data/` landen gemeinsam in `content-core`.
-
 ### Neue Quest
 
 - Als Objekt in die passende Regionen-Datei `src/content/data/quests/<giver>.json` (eine Datei je Geber/NPC) – **und** ihre ID an der richtigen Stelle in `src/content/data/quest-order.json` eintragen (die Reihenfolge ist load-bearing: `GameState.questIdx` ist ein Index in diese Sequenz, sie folgt NICHT der ID). **Quest-IDs sind sprechende, kebab-case Slugs** (z.B. `k8s-service`, `gitops-app-of-apps`), keine `qN`-Nummern mehr (#354) – frei semantisch wählbar, da die Reihenfolge aus `quest-order.json` kommt.
@@ -45,3 +41,7 @@ Quiz-Karten liegen pro Thema in `data/crabquiz/<thema>.json`. **Die richtige Ant
 ### Der validierende Loader
 
 `src/content/loader.ts` + `src/content/entities.ts` lädt + prüft alles beim Start und wirft bei kaputten Daten explizit (`ContentValidationError`). **Granularität immer mitdenken:** wird eine Regionen-Datei zu groß, in sinnvolle Unterdateien splitten – eine Umstellung ist nur etwas wert, wenn sie dem Wachstum standhält.
+
+### Content-Chunks (ADR 0018)
+
+Jede Datei unter `src/content/data/<dir>/` ist im Host-Build ein eigener Chunk mit Deckel (`check:bundle`, 128 KB je Chunk). Reißt eine Datei ihn, in Unterdateien splitten (z.B. `quests/knut-dns.json`); der Loader ist dateinamen-agnostisch. Neue Dateien direkt unter `data/` landen gemeinsam in `content-core`. Jede JSON unter `data/` und jede `.tmj` unter `assets/maps/` muss ins Spiel importiert werden (das Gate erwartet für jede einen Chunk); zwei Dateien mit gleichem bereinigten Namen (etwa `Knut_DNS` und `knut-dns`) sind ein Fehler, tiefere Verschachtelung als `data/<dir>/` ist nicht vorgesehen.

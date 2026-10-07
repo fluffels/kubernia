@@ -34,7 +34,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Dev-Panel-Build (#331, Panel MIT, passwortgated, `dist-devpanel/`) | `npm run build:devpanel` |
 | Tests (lokal auf 25 % der Kerne begrenzt, #1331: parallele Läufe von Lenses/Playwright/anderen Worktrees ließen sonst die store-Tests ins Timeout laufen; die CI nutzt den Standard) | `npm test` (Vitest); mehr Worker: `npm test -- --maxWorkers=<n>` |
 | Coverage-Gate (v8, Schwellen PRO Schicht statt Repo-Mittel, #495) | `npm run test:coverage` |
-| Boot-Smoke-Test (headless, gegen den Offline-Build, #391) | `npm run smoke` (baut Offline + Playwright) bzw. `npm run test:smoke` (nur Lauf, Build muss da sein); meldet Playwright `Executable doesn't exist ... chromium_headless_shell-<build>`: `npm ci`, dann `npx playwright install chromium` |
+| Boot-Smoke-Test (headless, gegen Offline- und Host-Build, #391/#1408) | `npm run smoke` (baut Host + Offline + Playwright) bzw. `npm run test:smoke` (nur Lauf, beide Builds müssen da sein); meldet Playwright `Executable doesn't exist ... chromium_headless_shell-<build>`: `npm ci`, dann `npx playwright install chromium` |
 | Typen prüfen (voll strict) | `npm run typecheck` |
 | Linter (ESLint, #389; Komplexitäts-Gates complexity/max-lines-per-function/max-depth #502) | `npm run lint` |
 | Stale Suppressions prunen / Baseline neu aufbauen (Komplexität #502 + Typsicherheit #868) | `npm run lint:prune` / `npm run lint:suppress` |

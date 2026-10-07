@@ -8,9 +8,10 @@ import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const require = createRequire(import.meta.url);
-const { contentChunkName, expectedContentChunks, CONTENT_CHUNK_DIR } = require("../scripts/content-chunks.cjs") as {
+const { contentChunkName, expectedContentChunks, contentChunkCollisions, CONTENT_CHUNK_DIR } = require("../scripts/content-chunks.cjs") as {
   contentChunkName: (id: string) => string | undefined;
   expectedContentChunks: (io: { listFiles: (rel: string) => string[] | null }) => string[];
+  contentChunkCollisions: (io: { listFiles: (rel: string) => string[] | null }) => { name: string; files: string[] }[];
   CONTENT_CHUNK_DIR: string;
 };
 
@@ -49,10 +50,36 @@ describe("contentChunkName (#1408)", () => {
       },
     });
     assert.ok(names.length > 20, "es gibt viele Content-Dateien");
-    assert.equal(new Set(names).size, names.length, "keine Namenskollision");
+    assert.equal(new Set(names).size, names.length, "erwartete Menge ohne Doppelte");
     assert.ok(names.includes("content-core"));
     assert.ok(names.includes("content-quests-knut"));
     assert.ok(names.includes("content-maps-harbor"));
+  });
+  test("Kollision: verlustbehaftete Bereinigung (Knut_DNS gegen knut-dns) wird erkannt", () => {
+    const files = ["src/content/data/quests/Knut_DNS.json", "src/content/data/quests/knut-dns.json"];
+    const c = contentChunkCollisions({ listFiles: (p) => files.filter((f) => f.startsWith(`${p}/`)) });
+    assert.equal(c.length, 1);
+    assert.equal(c[0].name, "content-quests-knut-dns");
+    assert.deepEqual(c[0].files, files);
+  });
+  test("Kollision: Datenordner maps/ gegen Karte assets/maps/ wird erkannt", () => {
+    const files = ["src/content/data/maps/harbor.json", "assets/maps/harbor.tmj"];
+    const c = contentChunkCollisions({ listFiles: (p) => files.filter((f) => f.startsWith(`${p}/`)) });
+    assert.deepEqual(c.map((x) => x.name), ["content-maps-harbor"]);
+  });
+  test("keine Kollision: mehrere Core-Dateien sind gewollt, die echten Quellen sind eindeutig", () => {
+    const core = ["src/content/data/a.json", "src/content/data/b.json"];
+    assert.deepEqual(contentChunkCollisions({ listFiles: (p) => core.filter((f) => f.startsWith(`${p}/`)) }), []);
+    const real = contentChunkCollisions({
+      listFiles: (rel) => {
+        try {
+          return statSync(join(process.cwd(), rel)).isDirectory() ? walk(join(process.cwd(), rel), rel) : null;
+        } catch {
+          return null;
+        }
+      },
+    });
+    assert.deepEqual(real, []);
   });
   test("Chunk-Verzeichnis ist assets/content", () => {
     assert.equal(CONTENT_CHUNK_DIR, "assets/content");

@@ -191,7 +191,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 | 07.10.2026 | [ADR 0015](/docs/adr/0015-projekt-brain.md): Projekt-Brain — `docs/` nach Second-Brain-Prinzipien, token-sparsam und messbar |
 | 07.10.2026 | [ADR 0016](/docs/adr/0016-langfuse-takt-woechentlich.md): Langfuse-Takt — wöchentlicher Workflow statt Board-Position |
 | 07.10.2026 | [ADR 0017](/docs/adr/0017-lebende-doku-generierte-abschnitte.md): Lebende Doku — generierte Abschnitte, und ein Diagramm ist eine Regel |
-| 07.10.2026 | [ADR 0018](/docs/adr/0018-content-chunks-je-region.md): Content-Chunks je Datei — der Spielcode-Chunk wächst nicht mehr mit dem Inhalt |
+| 07.10.2026 | [ADR 0018](/docs/adr/0018-content-chunks-je-datei.md): Content-Chunks je Datei — der Spielcode-Chunk wächst nicht mehr mit dem Inhalt |
 
 <!-- GEN:zeitleiste END -->
 
@@ -412,7 +412,7 @@ kubernia/
 │   ├── scenes.ts      Phaser-Welt: Karte, Cluster-Sync, Piraten, Krake
 │   └── …              ui, world, decor, clock, runtime, store, sfx, types, assets-data
 ├── test/             Test-Suite (Vitest) – Simulator, Inhalte, kompletter Story-Durchlauf u.a.
-├── e2e/              Boot- & Interaktions-Smokes (Playwright, gegen den Offline-Build)
+├── e2e/              Boot- & Interaktions-Smokes (Playwright, gegen Offline- und Host-Build)
 ├── assets/           PixelLab-Grafiken + Lizenzen
 ├── docs/             Konzept-, Architektur- & Harness-Doku (arc42, ADRs, Analysen, Reihenfolge)
 ├── dist/             Host-Build von `npm run build` (Multi-File, nicht eingecheckt)
