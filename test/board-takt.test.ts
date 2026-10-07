@@ -121,9 +121,10 @@ describe("Spielquote im Takt (#1425)", () => {
 
   test("quotenBericht: ein Harness-Merge VOR dem Fenster zählt nicht", () => {
     const alt = c("feat(harness): alt", "fluffels", "2026-10-06T10:00:00Z");
-    const q = T.quotenBericht([alt, alt, spiel], "2026-10-07T00:00:00Z");
+    const altSpiel = c("feat(sim): alt", "fluffels", "2026-10-06T10:00:00Z");
+    const q = T.quotenBericht([alt, alt, altSpiel, spiel], "2026-10-07T00:00:00Z");
     expect(q).toMatchObject({ harness: 0, spiel: 1 });
-    expect(T.quotenBericht([alt, alt, spiel], null).harness).toBe(2);
+    expect(T.quotenBericht([alt, alt, altSpiel, spiel], null)).toMatchObject({ harness: 2, spiel: 2 });
   });
 
   test("Verdrahtung `harnessTaktAusCommits`: fünf Harness-Merges plus ein Spiel-Merge lösen nichts aus, drei Spiel-Merges holen das Sammelticket", () => {
