@@ -253,11 +253,11 @@ Lauf #1303 (Session `21b17653-783a-4c23-a284-a4e16c2fba79`, PR #1310; Hauptchat 
 | Sonnet 5.5, Transkript | 84 | 13.658.333 | 4.190 |
 | Sonnet 5.5, Langfuse | 84 | 13.658.333 | 4.190 |
 
-Calls und Token-Summen stimmen exakt überein, auch für Planer, Umsetzer und beide Lens-Runden (kein Verlust bei der Kette Hauptchat → Umsetzer → Lens). Die Lücken bleiben die bekannten: fortgesetzte Subagenten (`SendMessage`, Befund #1311) schreibt der Hook nicht nach; dieser Lauf hatte keinen. Die Phasenzuordnung kann Langfuse nicht, sie bleibt Sache des Transkript-Modus (Report-Zeile: 2 Review-Runden (Nachweis), Planer ja).
+Calls und Token-Summen stimmen exakt überein, auch für Planer, Umsetzer und beide Lens-Runden (kein Verlust bei der Kette Hauptchat → Umsetzer → Lens). Die Lücken bleiben die bekannten: fortgesetzte Subagenten (`SendMessage`, Befund #1311) schreibt der Hook nicht nach; dieser Lauf hatte keinen. Die Phasenzuordnung ist nicht Teil dieses Abgleichs (er lief per MCP-Metrik ohne Phasen). `token-baseline.mjs --langfuse` ordnet Phasen wie der Transkript-Modus zu: Subagenten über `metadata.agent_type` des umschließenden Subagent-Spans (`callsFromLangfuse` → `spanInfo` → `classifySubagent`), der Hauptagent über die GitHub-Zeitstempel (Report-Zeile: 2 Review-Runden (Nachweis), Planer ja).
 
 ### Projekt-Brain-Kennzahlen (#1205)
 
-Messung für [ADR 0015](adr/0015-projekt-brain.md), Code in `scripts/brain-metrics.mjs`. Die Zeile `Projekt-Brain:` im Report des Skripts (Transkript und `--langfuse` nutzen dieselbe Logik; Ergebnisgrößen weichen je nach Serialisierung leicht ab, ein Zahlenabgleich mit Schlüsseln steht aus) enthält:
+Messung für [ADR 0015](adr/0015-projekt-brain.md), Code in `scripts/brain-metrics.mjs`. Die Zeile `Projekt-Brain:` im Report des Skripts (Transkript und `--langfuse` nutzen dieselbe Logik; Ergebnisgrößen weichen je nach Serialisierung leicht ab, Abgleich siehe unten) enthält:
 
 - **gelesen N× (S Seiten, ≈ T Tokens):** Lesezugriffe auf Brain-Seiten (`docs/**.md`) per `Read` oder Shell (`cat`, `sed`, `head`, `Get-Content` …); Tokens ≈ Zeichen des Ergebnisses / 4.
 - **Suche:** `Grep`, `Glob` und Shell-Suche (`grep`, `rg`, `find`, `git grep`, `Select-String`); `grep … docs/x.md` zählt als Suche.
@@ -275,7 +275,21 @@ Grenzen: Tokens sind eine Größenordnung; Läufe in geteilten Sessions sind nur
 | #1308 (PR #1314, Session `6364f74c`) | 16 / 6 / 14.152 | 162 / 82.692 | 10.853 | 108 | 0 / 3 Seiten (+9/−6) | 9 | 0 |
 | #1311 (PR #1317, Session `3c41607a`) | 10 / 8 / 12.248 | 180 / 76.950 | 0 | 73 | 7 / 2 Seiten (+6/−4) | nicht vergleichbar (geteilte Session) | 0 |
 
-Lesart: Die Läufe liegen bei 10–17 Brain-Lesezugriffen und 81–180 Such-Calls; die Such-Tokens (77–85k) übersteigen die gelesenen Brain-Tokens (12–18k) um ein Mehrfaches, dort liegt die Ersparnis, die das Brain heben soll. #1308 und #1311 teilten Sessions mit anderen Läufen und sind nur nach Fenster getrennt (obere Schranke), #1308 hatte ungewöhnlich viele Review-Runden (Sonderfreigabe). Zählprobe #1303: 17 Lesezugriffe im Skript, gleich dem unabhängig per Muster gezählten Wert (17 `cat`/`sed`/`head` auf `docs/*.md`, 0 `Read`; Grenze der Zählung: Env-Präfixe wie `LANG=C cat` und `(Get-Content …)` in PowerShell erkennt sie nicht, `sed -i` zählt als Lesen); die Langfuse-Seite ist ohne Schlüssel nur über die Form belegt (TOOL-Observation mit `input` und `metadata.output_meta.orig_len`, per MCP am 07.10.2026 geprüft).
+Lesart: Die Läufe liegen bei 10–17 Brain-Lesezugriffen und 81–180 Such-Calls; die Such-Tokens (77–85k) übersteigen die gelesenen Brain-Tokens (12–18k) um ein Mehrfaches, dort liegt die Ersparnis, die das Brain heben soll. #1308 und #1311 teilten Sessions mit anderen Läufen und sind nur nach Fenster getrennt (obere Schranke), #1308 hatte ungewöhnlich viele Review-Runden (Sonderfreigabe). Zählprobe #1303: 17 Lesezugriffe im Skript, gleich dem unabhängig per Muster gezählten Wert (17 `cat`/`sed`/`head` auf `docs/*.md`, 0 `Read`). Seit dem AST-Walker (`einfacheKommandos` in `scripts/bash-parser.mjs`) erkennt die Zählung auch Env-Präfixe (`LANG=C cat …`), Ersetzungen im Heredoc und in PowerShell `(Get-Content …)` samt Quotes; für #1303 ergibt das 17 Lesezugriffe, 82 Such-Calls und 85.379 Such-Tokens (Tabelle oben: Stand vor dem Walker). Grenzen: Wörter in Strings (`bash -c '…'`) bleiben Text, `sed -i` zählt als Lesen.
+
+**Abgleich Transkript gegen Langfuse (#1322)**, Session `21b17653-783a-4c23-a284-a4e16c2fba79` (Lauf #1303, Fenster 2026-10-06 13:35–14:19 UTC, ganze Session inkl. Subagenten), gemessen am 2026-10-07 über die Langfuse-MCP-Tools (`queryMetrics` nach Tool-Name, `listObservations` mit `input`/`metadata`) gegen `readTranscriptSession`:
+
+| Tool | tool_use im Transkript | TOOL-Observations in Langfuse |
+|---|--:|--:|
+| Bash | 138 | 138 |
+| PowerShell | 24 | 24 |
+| Read | 29 | 29 |
+| Write | 10 | 10 |
+| Agent / SubagentHandback | 7 / 7 | 7 / 7 |
+| TaskStop / Monitor | 4 / 2 | 4 / 2 |
+| Edit, Skill, SendMessage, ToolSearch | je 1 | je 1 |
+
+Jede Zählung stimmt, 225 Events auf beiden Seiten. Stichprobe `Read`: Pfad und Zeitstempel (auf die Millisekunde) dreier Lesezugriffe außerhalb des Repos stimmen, `metadata.output_meta.orig_len` (9825, 9506, 6396) liegt bei der Transkript-Ergebnisgröße (9826, 9510, 6396) mit Abweichung höchstens 4 Zeichen. Nicht abgeglichen: die Shell-Eingaben (`Bash`/`PowerShell`, 162 Aufrufe) und die Brain-Zahlen aus der Langfuse-Seite als Ganzes; der HTTP-Pfad von `--langfuse` (zwei Abrufstufen, `name`-Filter) ist über `fetchImpl`-Mock-Tests gedeckt, ein Lauf mit echten Schlüsseln ist für Agenten nicht möglich (die Schlüssel stehen nicht in der Umgebung, sie aus der Plugin-Konfiguration zu lesen wäre Credential-Harvesting). Zum Nachholen durch die Maintainerin: `node scripts/token-baseline.mjs --session 21b17653-783a-4c23-a284-a4e16c2fba79 --langfuse` mit gesetzten `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` und die Zeile `Projekt-Brain:` gegen den Transkript-Lauf halten.
 
 Guard „Read statt cat“ (ADR 0015 Option D): In den drei Baseline-Läufen stehen 40 Shell-Lesezugriffe auf `docs/` gegen 3 `Read`; die Shell-Zugriffe kommen überwiegend aus Subagenten (Umsetzer, Lenses), auch die wenigen `Read` stehen in Subagenten. Darum gehört die Konvention in die Subagenten-Prompts (#1099); sinken die Shell-Zugriffe danach nicht, den Guard bewerten.
 
