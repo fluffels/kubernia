@@ -30,7 +30,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolveBase } from "./check-diffsize.mjs";
-import { meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis } from "./slice-override.mjs";
+import { meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
 
 // layers.cjs ist bewusst CommonJS (der dependency-cruiser-Config `require`t es) —
 // dasselbe createRequire-Muster wie in check-docmap.mjs / vite.config.ts.
@@ -233,7 +233,7 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env } = {}) 
   // MESSfehler — für diese Datei wurde gar nichts gemessen. Ihn durchzuwinken wäre
   // dasselbe „grün ohne Messung", das der noReport-Zweig verbietet: nicht override-bar.
   const violated = verdict.below.length > 0;
-  const { reason, invalid } = sliceOverride(git, base, OVERRIDE_KEY);
+  const { reason, invalid, versetzt } = sliceOverride(git, base, OVERRIDE_KEY);
   const allowed = violated && reason !== null;
   const stale = !violated && verdict.missing.length === 0 && reason !== null;
 
@@ -245,6 +245,7 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env } = {}) 
     allowed,
     stale,
     invalidOverrides: invalid,
+    versetzteOverrides: versetzt,
     legacyEnv: (env.KQ_DIFFCOV_OVERRIDE ?? "").trim() !== "", // alte Env: nur noch Hinweis
     failed: (violated && !allowed) || stale || verdict.missing.length > 0,
   };
@@ -324,6 +325,7 @@ function main() {
   }
 
   if (r.failed) {
+    for (const h of versetzteOverrideHinweis(OVERRIDE_KEY, r.versetzteOverrides)) console.error(h);
     console.error(
       `\nTests für genau diese Zeilen ergänzen (TDD: erst der fehlschlagende Test, AGENTS.md) —\n` +
         `ODER, wenn die Lücke bewusst ist, mit Pflicht-Begründung als Commit-Trailer im Slice\n` +

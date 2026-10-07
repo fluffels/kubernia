@@ -36,6 +36,11 @@
     "/scripts/umsetzer-abschluss.mjs",
     "/scripts/cleanup-worktrees.mjs",
     "/scripts/transkript.mjs",
+    "/scripts/board-lib.mjs",
+    "/scripts/board-place.mjs",
+    "/scripts/langfuse-takt.mjs",
+    "/scripts/haupt-sync.mjs",
+    "/scripts/lens-edit-guard.mjs",
     "/.agents/",
     "/docs/agent-harness*"
   ],

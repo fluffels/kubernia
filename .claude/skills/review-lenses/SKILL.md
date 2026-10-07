@@ -38,7 +38,7 @@ Jede Lens bekommt zusätzlich diese drei Regeln — sie kosten keinen Befund:
 
 1. **`AGENTS.md` nicht erneut öffnen.** Unter Claude Code lädt Claude Code sie nativ (#1087), sie liegt also ohnehin vollständig im Kontext; ein `Read` darauf ist reine Duplikation (~30k Tokens pro Lens). Wird eine Regel wörtlich gebraucht: **punktuell greppen**.
 2. **Nur den eigenen Regel-Ausschnitt.** Architektur → Schichtregeln + oberste Regel; Requirement-Treue → Doku-Disziplin + Spielstände; Test-Adäquanz → TDD + Red-Green; Doku → SSOT-Kopf + Doku-Disziplin + oberste Regel. Die Ausschnitte der anderen Brillen liest man nicht mit — dafür gibt es ja die anderen Brillen.
-3. **Der Patch ist die Primärquelle — genau einmal vollständig lesen** (sehr große Patches abschnittsweise, jede Zeile einmal), danach nur gezielt per Grep oder offset/limit, kein zweites Volllesen, auch nicht per `cat`/`Get-Content` (#1265). Eine geänderte Datei nur öffnen, wenn ein konkreter Befund den umgebenden Kontext braucht — und dann gezielt um die Hunk-Zeilen, nicht die ganze Datei.
+3. **Der Patch ist die Primärquelle — genau einmal vollständig lesen** (in den Abschnitten, die `node <Arbeitsverzeichnis>/scripts/patch-abschnitte.mjs <patch>` nennt, bei kleinem Patch einer; jede Zeile einmal, kein größeres `limit`), danach nur gezielt per Grep oder offset/limit, kein zweites Volllesen, auch nicht per `cat`/`Get-Content` (#1265). Eine geänderte Datei nur öffnen, wenn ein konkreter Befund den umgebenden Kontext braucht — und dann gezielt um die Hunk-Zeilen, nicht die ganze Datei.
 
 > **Was die Diät ausdrücklich NICHT trifft:** die **Sabotage-/Red-Green-Prüfung** der Test-Lens (Implementierung testweise verfälschen → wird ein Test rot?). Sie ist der teuerste Schritt und der einzige, der harte Fehler statt Stil-Anmerkungen liefert — in der Messsession fand genau sie den einzigen echten Blocker. Sie bleibt vollständig; sie ist auch die eine erlaubte Ausnahme von „die Lens ändert nichts" (in einem eigenen Lens-Worktree, nie im Feature-Worktree: siehe den ⚠️-Absatz „Die Lenses lesen“).
 
@@ -49,7 +49,7 @@ Jede Lens bekommt zusätzlich diese drei Regeln — sie kosten keinen Befund:
 **Immer zuerst.** Fahre das SSOT-Aggregat aller Gates (#527):
 
 ```bash
-npm run verify   # typecheck → lint → check:arch → check:size → check:contextsize → check:anysuppress → check:docmap → check:docdrift → check:docgen → check:internalrefs → check:lockfile → check:diffsize → test
+npm run verify   # die Gate-Kette steht in package.json › scripts.verify (nicht hier kopiert)
 ```
 
 - **Exit ≠ 0 (rot):** **HIER STOPPEN.** Berichte, welches Gate rot ist, mit der Fehlerausgabe — und **starte KEINEN Lens-Pass** (das ist der Short-Circuit: kein LLM-Token auf einen Diff, der schon deterministisch scheitert). Das gerötete Gate zuerst grün machen (im normalen Ticket-Ablauf), dann den Review erneut anstoßen.
@@ -98,6 +98,7 @@ Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket
 - **God-Function / zu viel in einer Einheit** (der LOC-Deckel `check:size` sieht nur Dateien, nicht Funktionen)?
 - **Duplizierung** einer schon existierenden Fabrik/Abstraktion statt Wiederverwendung?
 - **Stardew-Scope (oberste Regel):** trägt der Ansatz noch bei 10× Content/NPCs/Welten, oder reproduziert er dasselbe Problem größer? Content als Daten (nicht als TS-Literal), Granularität mitgedacht?
+- **Abfragen und Zählungen:** neue Abfragen oder Zählungen (auch im Delta eines Fixes) auf Standardgrenzen prüfen: `gh issue list` ohne `--limit` liefert nur 30 Treffer, `gh api` ohne `--paginate` nur eine Seite.
 
 **Lens 2 — Requirement-Treue.** Tut der Diff **wirklich, was das Ticket verlangt**?
 - Ticket lesen (`gh issue view <nr>`) und den Diff **gegen die Akzeptanzkriterien** halten — jedes Kriterium einzeln: erfüllt / offen / darüber hinausgegangen.
@@ -111,7 +112,7 @@ Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket
 - Prüft der Test die **öffentliche API / beobachtbares Verhalten** (überlebt Refactoring), nicht Interna?
 - **Negativfälle** dabei (kaputter Zustand, falsche Eingabe, „darf nicht passieren"), nicht nur Happy Path?
 - **Kein False Positive (Red-Green):** würde der Test **rot**, wenn man die Logik testweise verfälscht? Wo Zweifel bestehen, den Fix/die Assertion kurz sabotieren → rot sehen → zurücksetzen (vgl. AGENTS.md „Tests gegen False Positives absichern"). Bugfix ⇒ gab es den **fehlschlagenden Repro-Test zuerst**?
-- Präsentations-Code (Phaser/DOM) wird **im Browser** verifiziert statt per Unit-Test — ist das passiert und belegt?
+- Präsentations-Code (Phaser/DOM) wird **im Browser** verifiziert statt per Unit-Test, ebenso sicht-/spielbare Content-Daten (Quests, Dialoge) — ist das passiert und belegt, wie im Plan vorgesehen (`kqDev.state`-Auszug, Screenshot-Pfad)?
 
 **Lens 4 — Doku** (nur bei reinem Markdown-Diff, dann der **einzige** Pass). Test-Adäquanz entfällt, weil es ohne Code nichts zu sabotieren gibt; die Architektur-Fragen einer Doku stecken in den Punkten 2 und 3:
 1. **Requirement-Treue:** der Diff gegen jedes Akzeptanzkriterium einzeln (erfüllt / offen / darüber hinaus), Scope-Kriechen?

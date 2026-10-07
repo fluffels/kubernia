@@ -68,6 +68,7 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Skill | `review-lenses` | model: Session-Modell | `.claude/skills/review-lenses/SKILL.md` |
 | Workflow | `kubernia-ticket` | — | `.claude/workflows/kubernia-ticket.js` |
 | Hook | `PreToolUse` | matcher: `Bash\|PowerShell\|SubagentHandback`, `node scripts/pretooluse-hook.mjs` | `.claude/settings.json` |
+| Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/haupt-sync.mjs` | `.claude/settings.json` |
 | Hook | `Stop` | `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
 | Hook | `SubagentStop` | matcher: `kubernia-umsetzer`, `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
 | Git-Hook | `pre-push` | — | `.githooks/pre-push` |

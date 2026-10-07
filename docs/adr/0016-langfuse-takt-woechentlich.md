@@ -62,3 +62,14 @@ Weitere Festlegungen:
 - Ein Status-Lauf kostet mehr als 5 % des Wochenbudgets: Checkliste kürzen.
 - GitHub deaktiviert den Schedule nach 60 Tagen Inaktivität: `gh workflow enable`; dann den Takt neu bewerten.
 - Ein natives Routine-/Scheduling-Feature von Claude Code ersetzt den Workflow (Release-Watch, #1350).
+
+## Fortschreibung #1349 (2026-10-07): Auslöser nach Aktivität, Harness-Sammelticket
+
+Bei rund 15 Merges am Tag wäre „wöchentlich“ nur alle 70 bis 100 Tickets ein Lauf. Der Workflow läuft deshalb zusätzlich bei jedem Push auf `main`:
+
+- **Status-Ticket:** ein Push legt das Ticket an bzw. holt es nach oben, sobald seit dem Abschluss des Vorgängers mindestens 8 Ticket-Merges (ohne Bots) dazukamen; weniger tut er nichts. Der Cron bleibt bei 5 Commits (`MIN_MERGES`). Ein Ticket, das schon im Kopf des Boards steht, wird nicht erneut bewegt. Das Status-Ticket darf wie bisher an die Spitze (die benannte Ausnahme oben); nur das Harness-Sammelticket bleibt hinter dem Kopf.
+- **Harness-Sammelticket:** derselbe Lauf holt das ungeclaimte „Harness-Härtung (gesammelt)“ nach 5 Ticket-Merges seit dem Abschluss des letzten Sammeltickets direkt hinter den Kopf (Status-, 🚨-, Dependabot-, Forum-Ticket). „Roter `main` geht vor“ bleibt unberührt; steht es dort schon, passiert nichts. Das ersetzt die feste Position 4 als Auslöser nicht ganz: neue Tickets klemmt `board-place` weiter hinter den Sammelblock.
+- **Zählung ohne Zustand:** Ticket-Merges kommen aus der paginierten Commit-Liste von `main` ab dem Abschluss des Vorgängers (Autoren mit Login auf `[bot]` zählen nicht), die Fenster sind je Ticketart getrennt. Zwei Läufe hintereinander ändern nichts (Concurrency-Group wie bisher).
+- **Kosten:** ein Push-Lauf liest Issues, Commits und die Board-Liste und schreibt nur bei Bedarf; die Concurrency-Group hält höchstens einen wartenden Lauf.
+
+Die Zahlen stehen als `MIN_TICKET_MERGES_PUSH` und `HARNESS_TAKT_MERGES` in `scripts/langfuse-takt.mjs` und sind an diese Doku gebunden (`test/langfuse-takt.test.ts`).

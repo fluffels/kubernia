@@ -327,8 +327,9 @@ const KONTEXT_DIAET = `Kontext-Ökonomie (#1034) — halte dich daran, sie koste
 - AGENTS.md lädt Claude Code nativ – sie liegt BEREITS vollständig in deinem
   Kontext. Öffne sie NICHT erneut mit Read — das ist reine Duplikation. Brauchst du eine
   Stelle wörtlich, greppe punktuell danach (Grep mit dem Regel-Begriff).
-- Die Patch-Datei ist deine Primärquelle. Lies sie genau EINMAL vollständig (ist sie sehr groß:
-  abschnittsweise, jede Zeile einmal); danach nur gezielt per Grep oder offset/limit, kein
+- Die Patch-Datei ist deine Primärquelle. Lies sie genau EINMAL vollständig (in den Abschnitten,
+  die "node <Arbeitsverzeichnis>/scripts/patch-abschnitte.mjs <patch>" nennt, bei kleinem Patch
+  einer; jede Zeile einmal, kein größeres limit); danach nur gezielt per Grep oder offset/limit, kein
   zweites Volllesen, auch nicht per cat/Get-Content (#1265).
 - Öffne eine geänderte Datei nur, wenn ein konkreter Befund den umgebenden Kontext braucht —
   und dann gezielt mit offset/limit um die Hunk-Zeilen, nicht die ganze Datei.
@@ -471,6 +472,7 @@ const LENS_QUELLE = [
       'God-Function / zu viel in einer Einheit (der LOC-Deckel check:size sieht nur Dateien, nicht Funktionen)?',
       'Duplizierung einer schon existierenden Fabrik/Abstraktion statt Wiederverwendung?',
       'Stardew-Scope (oberste Regel): trägt der Ansatz noch bei 10× Content/NPCs/Welten, oder reproduziert er dasselbe Problem größer? Content als Daten (nicht als TS-Literal), Granularität mitgedacht?',
+      'Abfragen und Zählungen: neue Abfragen oder Zählungen (auch im Delta eines Fixes) auf Standardgrenzen prüfen: gh issue list ohne --limit liefert nur 30 Treffer, gh api ohne --paginate nur eine Seite.',
     ],
     hinweis: '',
     regel: 'Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):\nAGENTS.md § Architektur + § Oberste Regel. Die Schicht-Tabelle liegt on-demand (nicht im Kontext)\nin docs/referenz/schichtregeln.md — die darfst du gezielt öffnen. Die Doku-/Test-Regeln\ngehören den anderen beiden Brillen — lies sie nicht mit.',
@@ -496,7 +498,7 @@ const LENS_QUELLE = [
       'Prüft der Test die öffentliche API / beobachtbares Verhalten (überlebt Refactoring), nicht Interna?',
       'Negativfälle dabei (kaputter Zustand, falsche Eingabe, „darf nicht passieren"), nicht nur Happy Path?',
       'Kein False Positive (Red-Green): würde der Test rot, wenn man die Logik testweise verfälscht? Wo Zweifel bestehen, den Fix/die Assertion kurz sabotieren → rot sehen → zurücksetzen (vgl. AGENTS.md „Tests gegen False Positives absichern"). Bugfix ⇒ gab es den fehlschlagenden Repro-Test zuerst?',
-      'Präsentations-Code (Phaser/DOM) wird im Browser verifiziert statt per Unit-Test — ist das passiert und belegt?',
+      'Präsentations-Code (Phaser/DOM) wird im Browser verifiziert statt per Unit-Test, ebenso sicht-/spielbare Content-Daten (Quests, Dialoge) — ist das passiert und belegt, wie im Plan vorgesehen (kqDev.state-Auszug, Screenshot-Pfad)?',
     ],
     hinweis: 'Die Sabotage (Assertion oder Fix kurz verfälschen, rot sehen, zurücksetzen) ist die EINE Ausnahme von „du änderst nichts“: sie ist erlaubt und bei Zweifel Pflicht, denn sie ist der einzige Schritt, der harte Fehler statt Stil-Anmerkungen findet. Sie wird NICHT wegoptimiert. Fahre sie NIE im Feature-Worktree, sondern je Runde in einem eigenen Lens-Worktree: git -C <worktree> worktree add --detach <hauptrepo>/.claude/worktrees/kq-<nr>-lens-r<runde> <erwarteter HEAD>, darin einmal npm ci, Tests mit absoluten Pfaden (npm --prefix <lens-worktree> test -- <datei>, kein cd). Danach git worktree remove --force auf den Lens-Worktree und belege: git worktree list ohne den Pfad, Test-Path False, dazu mit einem leeren git status --porcelain im Feature-Worktree.',
     regel: 'Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):\nAGENTS.md § TDD ist der Default, § Tests gegen False Positives absichern.',
@@ -1388,12 +1390,10 @@ stillschweigend weitermachen:
 ${
   ausserhalbScope.length
     ? `Zusätzlich: der Review hat Punkte AUSSERHALB des Ticket-Scopes gefunden. Ordne jeden
-ein (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets): ein Spiel-/Inhalts-Befund oder
-Notfall (roter main, Security, Datenverlust) wird ein Issue, zusammengehörige Befunde (gleiches
-Subsystem, gleicher Fehlertyp, gemeinsamer Lösungsweg) GEBÜNDELT zu EINEM Issue mit
-Teil-Akzeptanzkriterien, Kleinkram eine Zeile in einem passenden offenen Ticket (AGENTS.md
-§ Oberste Regel; ohne Assignee, passendes area:-Label, beide GraphQL-Calls zum Einsortieren — AGENTS.md § Neue Issues sofort ins Board
-einsortieren; vorher per gh issue list auf Duplikate prüfen). Alles zum Harness (Defekt,
+ein (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets): Spiel-/Inhalts-Befunde und
+Notfälle (roter main, Security, Datenverlust) werden Issues, gebündelt nach den Kriterien in
+AGENTS.md § Oberste Regel (dort nachlesen, hier nicht kopiert; ohne Assignee, passendes area:-Label, beide GraphQL-Calls zum Einsortieren — AGENTS.md § Neue Issues sofort ins Board
+einsortieren; vorher per gh issue list --limit 500 auf Duplikate prüfen). Alles zum Harness (Defekt,
 Härtung, Kosmetik, Wunsch) wird eine Zeile im ungeclaimten Sammelticket
 „Harness-Härtung (gesammelt)" (fehlt es: anlegen auf der Position laut AGENTS.md, docs/ticket-reihenfolge.md):
 ${ausserhalbScope.map((p) => `- ${p}`).join('\n')}`

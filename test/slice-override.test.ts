@@ -16,6 +16,7 @@ const so = raw as unknown as {
   meldeUngueltigeOverrides: (invalid: string[] | undefined, o?: { dim?: (s: string) => string; log?: (s: string) => void }) => void;
   staleOverrideHinweis: (key: string, warum: string) => string;
   parseNachweis: (text: string) => { plan: unknown; review: { runden: number; lenses: string[] } | null };
+  parseOverrideTrailers: (text: string, key: string) => { valid: { nr: number; reason: string }[]; invalid: string[] };
 };
 const gateModul = gate as unknown as { parseNachweis: unknown };
 
@@ -93,5 +94,85 @@ describe("check:diffcoverage CLI im Doku-Slice (nichts zu messen)", () => {
     const r = lauf("ganz normal");
     expect(r.code).toBe(0);
     expect(r.out).not.toContain("ungültige Override-Zeile");
+  });
+});
+
+// Format belegt an Commit 913cf17: GitHub schreibt jeden Commit-Betreff als `* <betreff>`, Body-Zeilen
+// bleiben unverändert (#1383).
+function squash(titel: string, commits: string[]): string {
+  const teile = commits.map((c) => c.split("\n").map((z, i) => (i === 0 ? `* ${z}` : z)).join("\n") + "\n");
+  return [titel, "", ...teile, "---------"].join("\n");
+}
+/** Wie `git log --reverse --format=%B` auf dem Branch. */
+function branchLog(commits: string[]): string {
+  return commits.map((c) => c + "\n").join("\n");
+}
+
+describe("PR-Log und Squash-Commit auf main lesen dasselbe (#1383)", () => {
+  const KEY = "KQ-Diffsize-Override";
+  const NACHWEIS = "KQ-Plan: kubernia-planner\nKQ-Review: head=abc1234 runden=1 lenses=architektur verdikt=ok";
+  const szenarien: [string, string[]][] = [
+    ["Override als Betreff", ["feat: a", `${KEY}: #5 breit`, "fix: b"]],
+    ["Override als Body-Zeile", [`feat: a\n\n${KEY}: #5 breit`, "fix: b"]],
+    ["ungültiger Override als Betreff", ["feat: a", `${KEY}: ohne nummer`]],
+    ["alter als Betreff, neuer als Body", [`${KEY}: #1 alt`, `feat: a\n\n${KEY}: #2 neu`]],
+    ["Nachweis wie im Workflow (KQ-Plan als Betreff)", ["feat: a", NACHWEIS]],
+    ["Nachweis wie im Skill (beide im Body)", ["feat: a", `chore: Nachweis\n\n${NACHWEIS}`]],
+  ];
+  it.each(szenarien)("%s", (_name, commits) => {
+    const pr = branchLog(commits);
+    const main = squash("titel (#9)", commits);
+    expect(so.parseOverrideTrailers(main, KEY)).toEqual(so.parseOverrideTrailers(pr, KEY));
+    expect(so.parseNachweis(main)).toEqual(so.parseNachweis(pr));
+  });
+
+  it("neuester gewinnt in beiden Formen", () => {
+    const commits = [`${KEY}: #1 alt`, `feat: a\n\n${KEY}: #2 neu`];
+    expect(so.parseOverrideTrailers(branchLog(commits), KEY).valid.at(-1)?.nr).toBe(2);
+    expect(so.parseOverrideTrailers(squash("t", commits), KEY).valid.at(-1)?.nr).toBe(2);
+  });
+});
+
+describe("versetzteOverrideZeilen (#1349 Z31): die Zeile steht knapp neben dem Format und wird still ignoriert", () => {
+  const V = raw as unknown as {
+    versetzteOverrideZeilen: (text: string, key: string) => string[];
+    versetzteOverrideHinweis: (key: string, zeilen: string[] | undefined) => string[];
+    sliceOverride: (runGit: (args: string[]) => string, base: string, key: string) => { reason: string | null; versetzt: string[] };
+  };
+  const KEY = "KQ-Diffsize-Override";
+
+  it("eingerückt, mit '- '-Präfix und mitten im Fließtext: gemeldet", () => {
+    const text = [`  ${KEY}: #1 eingerückt`, `- ${KEY}: #1 mit Strich`, `siehe ${KEY}: #1 im Text`].join("\n");
+    expect(V.versetzteOverrideZeilen(text, KEY)).toEqual([`${KEY}: #1 eingerückt`, `- ${KEY}: #1 mit Strich`, `siehe ${KEY}: #1 im Text`]);
+  });
+
+  it("gültige Zeilen (Zeilenanfang und '* '-Betreff aus #1383) und ungültige Werte am Zeilenanfang: kein Hinweis", () => {
+    const text = [`${KEY}: #1 gültig`, `* ${KEY}: #2 Squash-Betreff`, `${KEY}: kaputt ohne Nummer`].join("\n");
+    expect(V.versetzteOverrideZeilen(text, KEY)).toEqual([]);
+  });
+
+  it("anderer Schlüssel und leerer Text: kein Treffer; CRLF stört nicht", () => {
+    expect(V.versetzteOverrideZeilen("KQ-Diffcov-Override: #1 x", KEY)).toEqual([]);
+    expect(V.versetzteOverrideZeilen("", KEY)).toEqual([]);
+    expect(V.versetzteOverrideZeilen(`a\r\n  ${KEY}: #1 x\r\n`, KEY)).toEqual([`${KEY}: #1 x`]);
+  });
+
+  it("sliceOverride liefert die versetzten Zeilen mit, ohne den gültigen Override zu stören", () => {
+    const log = [`- ${KEY}: #5 falsch eingerückt`, `${KEY}: #5 richtig`].join("\n");
+    const r = V.sliceOverride(() => log, "BASE", KEY);
+    expect(r.reason).toBe("#5 richtig");
+    expect(r.versetzt).toEqual([`- ${KEY}: #5 falsch eingerückt`]);
+    const nur = V.sliceOverride(() => `- ${KEY}: #5 falsch`, "BASE", KEY);
+    expect(nur.reason).toBeNull();
+    expect(nur.versetzt).toHaveLength(1);
+  });
+
+  it("der Hinweis nennt Schlüssel, Zeile und das erwartete Format; ohne Zeilen leer", () => {
+    const h = V.versetzteOverrideHinweis(KEY, [`- ${KEY}: #1 x`]);
+    expect(h).toHaveLength(1);
+    expect(h[0]).toContain("nicht am Zeilenanfang");
+    expect(h[0]).toContain(`"${KEY}: #<nr> <warum>"`);
+    expect(V.versetzteOverrideHinweis(KEY, [])).toEqual([]);
+    expect(V.versetzteOverrideHinweis(KEY, undefined)).toEqual([]);
   });
 });

@@ -192,6 +192,22 @@ describe("Harness-Doku-Drift (#529)", () => {
     assert.deepEqual(violations[0]!.missing, ["check:size"]);
   });
 
+  test("auditVerifyChain meldet überzählige Gates der dokumentierten Kette (#1349, Red-Green)", () => {
+    const pkgScripts = { verify: "npm run typecheck && npm run lint && npm test" };
+    const audit = (checkDocDrift as unknown as {
+      auditVerifyChain: (root: string, files: string[], content: Map<string, string>, scripts: Record<string, string>) => { extra: string[]; missing: string[] }[];
+    }).auditVerifyChain;
+    const violations = audit(
+      "",
+      ["alt.md"],
+      new Map([["alt.md", "verify: typecheck → lint → check:gibtsnicht → test"]]),
+      pkgScripts,
+    );
+    assert.equal(violations.length, 1);
+    assert.deepEqual(violations[0].extra, ["check:gibtsnicht"]);
+    assert.deepEqual(violations[0].missing, []);
+  });
+
   test("auditVerifyChain ist still bei vollständiger Kette", () => {
     const pkgScripts = {
       verify: "npm run typecheck && npm run lint && npm run check:arch && npm test",

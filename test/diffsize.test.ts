@@ -48,7 +48,7 @@ import * as sliceRaw from "../scripts/slice-override.mjs";
 
 const { parseOverrideTrailers, sliceOverride } = sliceRaw as {
   parseOverrideTrailers: (text: string, key: string) => Trailers;
-  sliceOverride: (runGit: RunGit, base: string, key: string) => { reason: string | null; invalid: string[] };
+  sliceOverride: (runGit: RunGit, base: string, key: string) => { reason: string | null; invalid: string[]; versetzt: string[] };
 };
 
 const {
@@ -133,6 +133,13 @@ describe("Diff-Größenbudget (#533)", () => {
       "docs: erklärt KQ-Diffsize-Override: #1 im Satz",
       "  KQ-Diffsize-Override: #2 eingerückt",
       "`KQ-Diffsize-Override: #3 backtick`",
+      "  * KQ-Diffsize-Override: #2 x",
+      "- KQ-Diffsize-Override: #3 x",
+      "*KQ-Diffsize-Override: #4 x",
+      "** KQ-Diffsize-Override: #5 x",
+      "*  KQ-Diffsize-Override: #6 x",
+      "* siehe KQ-Diffsize-Override: #7 x",
+      "> KQ-Diffsize-Override: #8 x",
     ].join("\n");
     assert.deepEqual(parseOverrideTrailers(text, OVERRIDE_KEY), { valid: [], invalid: [] });
   });
@@ -230,6 +237,57 @@ describe("Diff-Größenbudget (#533)", () => {
     assert.equal(r.allowed, true);
     assert.equal(r.stale, false);
     assert.equal(r.reason, "#317 Epic-Split");
+  });
+
+  test("checkDiffSize (#1349 Z31): eine knapp danebenliegende Override-Zeile wird gemeldet und nicht still gewertet", () => {
+    const daneben = "chore: x\n\n- KQ-Diffsize-Override: #1349 mit Strich\n  KQ-Diffsize-Override: #1349 eingerückt\n";
+    const r = checkDiffSize({ runGit: gitWith("BASE", OVER, daneben), env: tightEnv });
+    assert.equal(r.over, true);
+    assert.equal(r.allowed, false, "die versetzten Zeilen zählen nicht als Override");
+    assert.deepEqual(r.versetzteOverrides, ["- KQ-Diffsize-Override: #1349 mit Strich", "KQ-Diffsize-Override: #1349 eingerückt"]);
+    // eine gültige Zeile daneben: Override wirkt, die versetzten bleiben nur Information
+    const beides = checkDiffSize({ runGit: gitWith("BASE", OVER, `${daneben}\n${TRAILER}`), env: tightEnv });
+    assert.equal(beides.allowed, true);
+    assert.equal(checkDiffSize({ runGit: gitWith("BASE", OVER, TRAILER), env: tightEnv }).versetzteOverrides instanceof Array, true);
+    assert.deepEqual(checkDiffSize({ runGit: gitWith("BASE", OVER, TRAILER), env: tightEnv }).versetzteOverrides, []);
+  });
+
+  // Format belegt an Commit 913cf17: GitHub schreibt jeden Commit-Betreff als `* <betreff>`.
+  const SQUASH_1342 = [
+    "feat(harness): Sammelticket komplett (#1342) (#1381)",
+    "",
+    "* feat(harness): Handback-Wächter (#1342)",
+    "",
+    "Co-Authored-By: Claude <noreply@anthropic.com>",
+    "",
+    "* KQ-Diffsize-Override: #1342 Sammelticket komplett: rund 45 Dateien",
+    "",
+    "Co-Authored-By: Claude <noreply@anthropic.com>",
+    "",
+    "* chore(review): Nachweis Plan und Review (#1342)",
+    "",
+    "KQ-Plan: kubernia-planner",
+    "KQ-Review: head=2f1025d runden=2 lenses=architektur verdikt=ok",
+    "",
+    "---------",
+    "",
+    "Co-authored-by: Claude <noreply@anthropic.com>",
+  ].join("\n");
+
+  test("push:main: Override als Commit-Betreff erscheint im Squash als `* KQ-…` und lässt den Slice durch (#1383)", () => {
+    const r = checkDiffSize({ runGit: gitWith("BASE", OVER, SQUASH_1342), env: tightEnv });
+    assert.equal(r.over, true);
+    assert.equal(r.allowed, true);
+    assert.match(String(r.reason), /^#1342 /);
+    assert.deepEqual(
+      parseOverrideTrailers(SQUASH_1342, OVERRIDE_KEY).valid.map((v) => v.nr),
+      [1342],
+    );
+  });
+
+  test("parseOverrideTrailers: ungültiger Betreff `* KQ-…` wird ohne Präfix gemeldet (#1383)", () => {
+    const r = parseOverrideTrailers("* KQ-Diffsize-Override: ohne nummer", OVERRIDE_KEY);
+    assert.deepEqual(r, { valid: [], invalid: ["KQ-Diffsize-Override: ohne nummer"] });
   });
 
   test("checkDiffSize: liest die Commit-Messages genau im Slice-Bereich <basis>..HEAD", () => {
@@ -353,8 +411,8 @@ describe("Diff-Größenbudget (#533)", () => {
     const wirft: RunGit = () => {
       throw new Error("kaputt");
     };
-    assert.deepEqual(sliceOverride(wirft, "BASE", OVERRIDE_KEY), { reason: null, invalid: [] });
+    assert.deepEqual(sliceOverride(wirft, "BASE", OVERRIDE_KEY), { reason: null, invalid: [], versetzt: [] });
     const nurUngueltig: RunGit = () => "x\n\nKQ-Diffsize-Override: ohne nummer\n";
-    assert.deepEqual(sliceOverride(nurUngueltig, "BASE", OVERRIDE_KEY), { reason: null, invalid: ["KQ-Diffsize-Override: ohne nummer"] });
+    assert.deepEqual(sliceOverride(nurUngueltig, "BASE", OVERRIDE_KEY), { reason: null, invalid: ["KQ-Diffsize-Override: ohne nummer"], versetzt: [] });
   });
 });

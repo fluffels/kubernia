@@ -2,6 +2,7 @@
 import { defineConfig, type ConfigEnv, type Plugin, type UserConfig } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
 import { createRequire } from "node:module";
+import { availableParallelism } from "node:os";
 
 // Schicht-Grenzen als Glob-Form aus der EINEN Schicht-SSOT (scripts/layers.cjs, #482/#495).
 // createRequire, weil layers.cjs bewusst CommonJS ist (der dependency-cruiser-Config `require`t
@@ -161,8 +162,9 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
       environment: "node",
       include: ["test/**/*.test.ts"],
       // #1331: lokal begrenzt (Überbelegung durch parallele Läufe von Lenses/Playwright/anderen Worktrees ließ die
-      // store-/Git-lastigen Tests ins 5-s-Timeout laufen); die CI bleibt beim Standard. Override: `npm test -- --maxWorkers=<n>`.
-      maxWorkers: process.env.CI ? undefined : "25%",
+      // store-/Git-lastigen Tests ins 5-s-Timeout laufen); die CI bleibt beim Standard. Untergrenze 2 Worker, damit bei
+      // wenigen Kernen (4 Kerne ergäben 1 Worker) nicht alles seriell läuft. Override: `npm test -- --maxWorkers=<n>`.
+      maxWorkers: process.env.CI ? undefined : Math.max(2, Math.floor(availableParallelism() / 4)),
       // #495: Coverage misst nur der `--coverage`-Lauf (npm run test:coverage / CI-Gate);
       // der normale `npm test` bleibt uninstrumentiert und damit schnell.
       coverage: {

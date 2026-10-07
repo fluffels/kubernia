@@ -15,11 +15,12 @@
  * Sammelticket „Harness-Härtung (gesammelt)“ (sonst rückt es nicht nach vorn); die Ausgabe nennt die Klemmung. Nur echte Notfälle
  * (`--notfall <art>`, nur mit `--top`) stehen ganz oben. Das Sammelticket selbst (`--position 4 <nr>`) wird nicht geklemmt.
  *
- * Nummern, die die Board-Liste noch nicht liefert (frische Items kommen verzögert), werden
- * gemeldet und übersprungen: später erneut aufrufen. Bei Rate-Limit sofort stoppen, den Rest melden.
+ * Nummern, die die REST-Board-Liste nicht liefert (frische Items kommen teils lange verzögert), holt ein GraphQL-Fallback
+ * (`issue.projectItems`, eine Abfrage je Nummer); steht ein Issue wirklich nicht im Board, wird es gemeldet und übersprungen.
+ * Bei Rate-Limit sofort stoppen, den Rest melden.
  */
 import { pathToFileURL } from "node:url";
-import { abortMessage, loadItems, loadOpenIssueNumbers, missingFromBoard, planFuerArgs, setPosition } from "./board-lib.mjs";
+import { abortMessage, ergaenzeFehlende, fehlendeNummern, itemIdUeberIssue, loadItems, loadOpenIssueNumbers, missingFromBoard, planFuerArgs, setPosition } from "./board-lib.mjs";
 
 /** Echte Notfälle, die ganz nach oben dürfen: roter main, Security, Dependabot, Forum-Eingang. */
 export const NOTFALL_ARTEN = ["rot-main", "security", "dependabot", "forum"];
@@ -81,7 +82,10 @@ async function main(argv = process.argv.slice(2)) {
   if (args.missing) return reportMissing();
   let plan;
   try {
-    const items = loadItems();
+    let items = loadItems();
+    // Fallback: frisch aufgenommene Items fehlen in der REST-Liste teils lange; ihre Item-ID per GraphQL holen.
+    const fehlend = fehlendeNummern(items, args);
+    if (fehlend.length > 0) items = ergaenzeFehlende(items, fehlend.map((n) => itemIdUeberIssue(n)));
     plan = planFuerArgs(items, args);
     if (plan.klemmung.geklemmt) console.log(`Hinter das ungeclaimte Sammelticket #${plan.klemmung.sammelticket} geklemmt (Notfall: --notfall <art>, nur mit --top, ${NOTFALL_ARTEN.join("|")}).`);
   } catch (e) {
@@ -90,7 +94,7 @@ async function main(argv = process.argv.slice(2)) {
   }
   const { steps, missing, anchorMissing } = plan;
   if (anchorMissing) {
-    console.error(`✖ Anker #${args.anchor} steht nicht in der Board-Liste (frische Items kommen verzögert). Später erneut.`);
+    console.error(`✖ Anker #${args.anchor} steht nicht im Board (weder in der REST-Liste noch per GraphQL gefunden).`);
     process.exit(1);
   }
   for (const [n, { item, afterId }] of steps.entries()) {
@@ -106,7 +110,7 @@ async function main(argv = process.argv.slice(2)) {
     await sleep(PAUSE_MS);
   }
   if (missing.length > 0) {
-    console.error(`⚠ Noch nicht in der Board-Liste: ${missing.map((n) => `#${n}`).join(", ")} — später erneut aufrufen.`);
+    console.error(`⚠ Nicht im Board gefunden (auch nicht per GraphQL): ${missing.map((n) => `#${n}`).join(", ")}.`);
     process.exit(1);
   }
 }

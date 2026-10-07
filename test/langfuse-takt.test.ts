@@ -14,10 +14,15 @@ type Takt = {
   MIN_MERGES: number;
   normalizeOffene: (pages: unknown) => Offen[];
   mergeFensterAb: (letzter: string | null, jetzt: string | Date) => Date;
-  entscheideTakt: (a: { offene: Offen[]; mergesSeit: number }) => Entscheidung;
+  entscheideTakt: (a: { offene: Offen[]; mergesSeit: number; ticketMerges?: number; ausloeser?: string }) => Entscheidung;
+  MIN_TICKET_MERGES_PUSH: number;
+  HARNESS_TAKT_MERGES: number;
+  zaehleTicketMerges: (commits: unknown, seit?: string | Date | null) => number;
+  entscheideHarnessTakt: (a: { items: Item[]; ticketMergesSeitAbschluss: number }) => { aktion: "nach-oben" | "nichts"; nr?: number; afterId?: string | null; grund: string };
   wochenFenster: (jetzt: string | Date) => { letzte: { von: string; bis: string }; davor: { von: string; bis: string } };
   statusBody: (a: { vorgaenger: { number: number; closedAt: string } | null; jetzt: string | Date }) => string;
 };
+type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
 const T = raw as unknown as Takt;
 
 const offen = (number: number, over: Partial<Offen> = {}): Offen => ({
@@ -183,5 +188,118 @@ describe("Bindungen und Sortierung (#1342)", () => {
     const issue = { number: 1, title: T.STATUS_TITEL, assignees: [] };
     expect(() => T.normalizeOffene([[issue]])).toThrow(/Form eines Issues/);
     expect(T.normalizeOffene([[{ ...issue, created_at: "2026-10-01T05:00:00Z" }]])).toHaveLength(1);
+  });
+});
+
+describe("Push-Auslöser nach Aktivität (#1349 Z14)", () => {
+  const push = (ticketMerges: number, offene: Offen[] = []) => T.entscheideTakt({ offene, mergesSeit: 50, ticketMerges, ausloeser: "push" });
+
+  test("Grenze 7/8: unter der Untergrenze nichts, ab 8 anlegen", () => {
+    expect(T.MIN_TICKET_MERGES_PUSH).toBe(8);
+    expect(push(7).aktion).toBe("nichts");
+    expect(push(8).aktion).toBe("anlegen");
+  });
+
+  test("Push mit offenem ungeclaimtem Status-Ticket: unter 8 nichts (kein Hochschieben bei jedem Merge), ab 8 nach oben", () => {
+    expect(push(7, [offen(1304)]).aktion).toBe("nichts");
+    expect(push(8, [offen(1304)])).toMatchObject({ aktion: "nach-oben", nr: 1304 });
+  });
+
+  test("Push mit geclaimtem Status-Ticket: nichts", () => {
+    expect(push(20, [offen(1304, { assignees: ["fluffels"] })]).aktion).toBe("nichts");
+  });
+
+  test("Cron bleibt bei MIN_MERGES und ignoriert ticketMerges", () => {
+    expect(T.entscheideTakt({ offene: [], mergesSeit: T.MIN_MERGES, ticketMerges: 0, ausloeser: "schedule" }).aktion).toBe("anlegen");
+    expect(T.entscheideTakt({ offene: [], mergesSeit: T.MIN_MERGES - 1, ticketMerges: 99, ausloeser: "schedule" }).aktion).toBe("nichts");
+  });
+});
+
+describe("sollBewegen (#1349): ein Status-Ticket im Kopf bleibt liegen", () => {
+  const S = raw as unknown as { sollBewegen: (e: { aktion: string; nr?: number }, items: Item[]) => boolean };
+  const it = (number: number, title: string): Item => ({ id: `I${number}`, number, status: "Todo", title, assignees: [], state: "open" });
+  test("nach-oben: steht im Kopf → nicht bewegen; steht weiter unten → bewegen; fehlt im Board → bewegen", () => {
+    const im = [it(5, T.STATUS_TITEL), it(6, "x")];
+    const unten = [it(6, "x"), it(5, T.STATUS_TITEL)];
+    expect(S.sollBewegen({ aktion: "nach-oben", nr: 5 }, im)).toBe(false);
+    expect(S.sollBewegen({ aktion: "nach-oben", nr: 5 }, unten)).toBe(true);
+    expect(S.sollBewegen({ aktion: "nach-oben", nr: 5 }, [])).toBe(true);
+  });
+  test("anlegen bewegt immer", () => {
+    expect(S.sollBewegen({ aktion: "anlegen" }, [it(5, T.STATUS_TITEL)])).toBe(true);
+  });
+});
+
+describe("zaehleTicketMerges (#1349)", () => {
+  const c = (login: string | null, date = "2026-10-07T10:00:00Z") => ({ author: login === null ? null : { login }, commit: { committer: { date } } });
+
+  test("Bots zählen nicht (dependabot[bot], github-actions[bot]), Menschen und fehlender Autor schon", () => {
+    expect(T.zaehleTicketMerges([c("fluffels"), c("dependabot[bot]"), c("github-actions[bot]"), c(null)])).toBe(2);
+    expect(T.zaehleTicketMerges([])).toBe(0);
+  });
+
+  test("seit: nur Commits ab dem Zeitpunkt, Grenze inklusive, kaputtes Datum zählt nicht", () => {
+    const l = [c("a", "2026-10-07T09:59:59Z"), c("a", "2026-10-07T10:00:00Z"), c("a", "kaputt")];
+    expect(T.zaehleTicketMerges(l, "2026-10-07T10:00:00Z")).toBe(1);
+    expect(() => T.zaehleTicketMerges(l, "morgen")).toThrow();
+  });
+
+  test("keine Liste wirft", () => {
+    expect(() => T.zaehleTicketMerges({})).toThrow();
+  });
+});
+
+describe("entscheideHarnessTakt (#1349 Z15)", () => {
+  const TITEL = "Harness-Härtung (gesammelt)";
+  const it = (number: number, extra: Partial<Item> = {}): Item => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open", ...extra });
+  const sammel = (number: number, extra: Partial<Item> = {}) => it(number, { title: TITEL, ...extra });
+  const status = (number: number) => it(number, { title: T.STATUS_TITEL });
+  const h = (items: Item[], n: number) => T.entscheideHarnessTakt({ items, ticketMergesSeitAbschluss: n });
+
+  test("Grenze 4/5: erst ab 5 Ticket-Merges nach oben", () => {
+    expect(T.HARNESS_TAKT_MERGES).toBe(5);
+    const board = [it(10), it(11), sammel(12)];
+    expect(h(board, 4).aktion).toBe("nichts");
+    expect(h(board, 5)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: null });
+  });
+
+  test("kommt hinter den Kopf, nicht davor: Status-Ticket und roter main bleiben oben", () => {
+    const board = [it(1, { title: "🚨 CI rot auf main" }), status(2), it(10), sammel(12)];
+    expect(h(board, 5)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: "I2" });
+  });
+
+  test("idempotent: steht es schon direkt hinter dem Kopf (auch mit geschlossenem Item dazwischen), passiert nichts", () => {
+    expect(h([status(2), sammel(12), it(10)], 9).aktion).toBe("nichts");
+    expect(h([sammel(12), it(10)], 9).aktion).toBe("nichts");
+    expect(h([status(2), it(9, { state: "closed" }), sammel(12)], 9).aktion).toBe("nichts");
+  });
+
+  test("geclaimtes, geschlossenes oder fehlendes Sammelticket: nichts", () => {
+    expect(h([it(10), sammel(12, { assignees: ["fluffels"] })], 9).aktion).toBe("nichts");
+    expect(h([it(10), sammel(12, { state: "closed" })], 9).aktion).toBe("nichts");
+    expect(h([it(10)], 9).aktion).toBe("nichts");
+  });
+
+  test("ungültige Eingaben werfen", () => {
+    expect(() => h([], -1)).toThrow();
+    expect(() => T.entscheideHarnessTakt({ items: null as unknown as Item[], ticketMergesSeitAbschluss: 5 })).toThrow();
+  });
+});
+
+describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
+  const lies = (rel: string) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
+  test("MIN_TICKET_MERGES_PUSH und HARNESS_TAKT_MERGES stehen in ADR 0016, im Workflow-Kommentar und in ticket-reihenfolge.md", () => {
+    const adr = lies("docs/adr/0016-langfuse-takt-woechentlich.md");
+    const yml = lies(".github/workflows/langfuse-takt.yml");
+    const doc = lies("docs/ticket-reihenfolge.md");
+    expect(Number(/mindestens (\d+) Ticket-Merges/.exec(yml)?.[1])).toBe(T.MIN_TICKET_MERGES_PUSH);
+    expect(Number(/nach (\d+) Ticket-Merges/.exec(yml)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
+    expect(Number(/(\d+) Ticket-Merges \(ohne Bots\)/.exec(adr)?.[1])).toBe(T.MIN_TICKET_MERGES_PUSH);
+    expect(Number(/nach (\d+) Ticket-Merges seit dem Abschluss des letzten Sammeltickets/.exec(adr)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
+    expect(Number(/(\d+) Ticket-Merges \(ohne Bots\)/.exec(doc)?.[1])).toBe(T.MIN_TICKET_MERGES_PUSH);
+    expect(Number(/nach (\d+) Ticket-Merges seit dem Abschluss des letzten Sammeltickets/.exec(doc)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
+  });
+  test("der Workflow löst auf Push nach main aus", () => {
+    expect(lies(".github/workflows/langfuse-takt.yml")).toMatch(/push:\s*\n\s*branches: \[main\]/);
   });
 });

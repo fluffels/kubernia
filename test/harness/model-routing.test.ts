@@ -1052,16 +1052,18 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
   test("Der Merge-Prompt des Workflows verlangt gebündelte Befunde (#1331)", async () => {
     const { aufrufe } = await workflowLauf({ runden: [{ architektur: { lens: "architektur", verdikt: "ok", findings: [], ausserhalbScope: ["Spiel-Befund A", "Spiel-Befund B"] } }] });
     const prompt = aufrufe.find((a) => a.label === "cleanup:#42")?.prompt ?? "";
-    assert.match(prompt, /GEBÜNDELT/);
-    assert.match(prompt, /Teil-Akzeptanzkriterien/);
-    assert.match(prompt, /Kleinkram eine Zeile in einem passenden offenen Ticket/);
+    assert.match(prompt, /gebündelt/);
+    // keine Kopie der Kriterien (#1349 Z8): der Prompt verweist auf die Heimat in AGENTS.md
+    assert.match(prompt, /AGENTS\.md § Oberste Regel/);
+    assert.doesNotMatch(prompt, /Teil-Akzeptanzkriterien|Kleinkram eine Zeile|gleiches\s+Subsystem/);
+    assert.match(prompt, /gh issue list --limit 500/);
   });
 
   test("Planer prüft den Stand des Checkouts gegen origin/main (#1331)", () => {
     const t = read(".claude/agents/kubernia-planner.md");
     assert.match(t, /git diff --name-only HEAD origin\/main/);
     assert.match(t, /MSYS_NO_PATHCONV=1 git show origin\/main:<pfad>/);
-    assert.match(read(".claude/skills/kubernia/SKILL.md"), /git diff --quiet HEAD origin\/main -- \.claude\/agents \.claude\/skills AGENTS\.md/);
+    assert.match(read(".claude/skills/kubernia/SKILL.md"), /git diff --quiet <Sitzungsbasis> origin\/main -- \.claude\/agents \.claude\/skills AGENTS\.md/);
   });
 
   test("Brain-Lese-Konvention steht in Umsetzer, Lens, Umsetzen- und Nachbessern-Prompt", async () => {

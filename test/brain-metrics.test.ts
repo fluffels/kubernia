@@ -3,6 +3,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -10,7 +11,7 @@ import * as bmModule from "../scripts/brain-metrics.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as baselineModule from "../scripts/token-baseline.mjs";
 
-type Ev = { ts: string; tool: string; input: Record<string, unknown>; resultChars: number; agent?: string | null };
+type Ev = { ts: string; tool: string; input: Record<string, unknown>; resultChars: number; agent?: string | null; fehler?: string | null };
 type Metrics = {
   brainReads: number;
   brainPages: number;
@@ -21,7 +22,7 @@ type Metrics = {
   brainWrites: number;
   prBrain: { pages: number; additions: number; deletions: number } | null;
 };
-type Obs = { id?: string; type: string; startTime: string; name?: string; input?: unknown; metadata?: Record<string, unknown> };
+type Obs = { id?: string; type: string; startTime: string; name?: string; input?: unknown; metadata?: Record<string, unknown>; level?: string; statusMessage?: string; output?: string };
 
 /** Modul-Form EINMAL deklarieren und genau hier casten. */
 const bm = bmModule as {
@@ -101,10 +102,20 @@ EOF`).brainReads.length, 1, "Ersetzung im Heredoc");
       "git -C /r/wt show HEAD:docs/module/x.md",
       "git --no-pager -c core.quotepath=off show origin/main:docs/a.md | head",
       "git show --stat origin/main:docs/a.md",
+      "git --exec-path show origin/main:docs/a.md",
+      "git --config-env core.x=ENVVAR show origin/main:docs/a.md",
+      "git --attr-source HEAD --super-prefix x/ --namespace n show origin/main:docs/a.md",
     ])
       assert.deepEqual(classifyShell(c).brainReads, [c.includes("module") ? "docs/module/x.md" : "docs/a.md"], c);
     assert.deepEqual(classifyShell("git show origin/main:docs/a.md origin/main:docs/b.md").brainReads, ["docs/a.md", "docs/b.md"]);
     assert.equal(classifyShell("git show origin/main:docs/a.md", "PowerShell").brainReads.length, 1);
+  });
+  test("die git-Optionstabelle ist EINE: Guard und Metrik teilen sie, --exec-path nimmt keinen Wert (#1349)", async () => {
+    // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+    const tab = (await import("../scripts/worktree-guard-tabellen.mjs")) as { GIT_GLOBAL_MIT_WERT: Set<string> };
+    for (const o of ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env", "--attr-source", "--super-prefix"]) assert.ok(tab.GIT_GLOBAL_MIT_WERT.has(o), o);
+    assert.ok(!tab.GIT_GLOBAL_MIT_WERT.has("--exec-path"));
+    assert.match(readFileSync(new URL("../scripts/brain-metrics.mjs", import.meta.url), "utf8"), /import \{ GIT_GLOBAL_MIT_WERT \} from "\.\/worktree-guard-tabellen\.mjs"/, "brain-metrics importiert die Tabelle");
   });
   test("git show zählt nicht, wenn es keine Brain-Seite liest (#1331)", () => {
     for (const c of ["git show HEAD:src/x.ts", "git show --stat", "git show HEAD", "git status docs/a.md", "git log origin/main:docs/a.md", "git show C:/r/docs/a.md", "git show origin/main:docs/a.ts"])
@@ -136,6 +147,36 @@ describe("toolEventsFromTranscript", () => {
     const e = toolEventsFromTranscript(["{kaputt", multi, use("z", "Bash", { command: "ls" })].join("\n"));
     assert.equal(e.length, 3);
     assert.ok(e.every((x: Ev) => x.resultChars === 0));
+  });
+});
+
+describe("Fehlertext je Event (#1379 Z4)", () => {
+  const use = (id: string, name: string) =>
+    JSON.stringify({ type: "assistant", timestamp: "2026-10-01T10:00:00Z", message: { content: [{ type: "tool_use", id, name, input: {} }] } });
+  const res = (id: string, content: unknown, isError?: boolean) =>
+    JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: id, content, ...(isError ? { is_error: true } : {}) }] } });
+  test("Transkript: nur is_error liefert den Anfang des Texts (höchstens 200 Zeichen), sonst null", () => {
+    const lang = "x".repeat(500);
+    const e = toolEventsFromTranscript([use("a", "Bash"), res("a", "Exit code 1\nfoo", true), use("b", "Bash"), res("b", "Blocked: ok"), use("c", "Read"), res("c", [{ type: "text", text: lang }], true), use("d", "Bash"), res("d", "", true)].join("\n"));
+    assert.equal(e[0].fehler, "Exit code 1\nfoo");
+    assert.equal(e[1].fehler, null);
+    assert.equal(e[2].fehler?.length, 200);
+    assert.ok(e[3].fehler, "leerer Fehlertext bleibt als Fehler sichtbar");
+  });
+  test("Langfuse: Level ERROR liefert statusMessage bzw. output, sonst null", () => {
+    const e = toolEventsFromLangfuse([
+      { type: "TOOL", startTime: "t1", level: "ERROR", statusMessage: "Exit code 2\nx", metadata: { tool_name: "Bash" } },
+      { type: "TOOL", startTime: "t2", level: "ERROR", output: "Blocked: sleep", metadata: { tool_name: "Bash" } },
+      { type: "TOOL", startTime: "t3", level: "ERROR", metadata: { tool_name: "Bash" } },
+      { type: "TOOL", startTime: "t4", level: "DEFAULT", statusMessage: "Exit code 2", metadata: { tool_name: "Bash" } },
+    ]);
+    assert.deepEqual(e.map((x: Ev) => x.fehler), ["Exit code 2\nx", "Blocked: sleep", "ERROR", null]);
+  });
+  test("Langfuse: der Fehlertext aus der io-Stufe (output) kommt über mitEingabe an", () => {
+    const meta = [{ id: "o1", type: "TOOL", startTime: "t1", level: "ERROR", metadata: { tool_name: "Bash" } }];
+    const e = toolEventsFromLangfuse(bm.mitEingabe(meta, [{ id: "o1", input: { command: "x" }, output: "Exit code 3\nboom" } as never]));
+    assert.equal(e[0].fehler, "Exit code 3\nboom");
+    assert.equal(e[0].input.command, "x");
   });
 });
 
