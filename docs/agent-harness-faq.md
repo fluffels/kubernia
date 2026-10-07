@@ -87,7 +87,7 @@ Jede Eingabe im Terminal lässt den Sim-Takt weiterlaufen: `src/sim.ts` zählt `
 
 ## Warum meldet der Perf-Smoke 60 FPS und die CI später 16?
 
-Phasers Zeitgeber klemmt die ersten 120 Frames (`panicMax`) auf 16,7 ms: der `FrameSampler` zeigt dort immer rund 60, egal wie schnell der Rechner ist. Der scheinbare Abfall nach ca. 3,5 s in der CI-Reihe (60, 35, 21, 16, 16) ist das Ende dieses Anlaufs, kein Einbruch im Spiel: der Runner rendert per Software und liegt eingeschwungen bei 16 bis 31 FPS (lokal 60; mit gedrosselter CPU und Software-Rendering reproduzierbar, ein eigener rAF-Zähler zeigt dort von Anfang an den niedrigen Wert). Darum prüft `e2e/perf-smoke.spec.ts` den frühen Wert nur als Lebenszeichen und den eingeschwungenen (nach ≥ 200 Frames, Median aus fünf Werten) gegen einen am Runner kalibrierten Boden.
+Phasers Zeitgeber klemmt die ersten 120 Frames (`panicMax`) auf 16,7 ms: der `FrameSampler` zeigt dort immer rund 60, egal wie schnell der Rechner ist. Der scheinbare Abfall nach ca. 3,5 s in der CI-Reihe (60, 35, 21, 16, 16) ist das Ende dieses Anlaufs, kein Einbruch im Spiel: der Runner rendert per Software und liegt eingeschwungen bei 16 bis 31 FPS (lokal deutlich höher; mit gedrosselter CPU und Software-Rendering reproduzierbar, ein eigener rAF-Zähler zeigt dort von Anfang an den niedrigen Wert). Darum prüft `e2e/perf-smoke.spec.ts` den frühen Wert nur als Lebenszeichen und den eingeschwungenen (nach ≥ 200 Frames, Median aus fünf Werten) gegen einen am Runner kalibrierten Boden.
 
 ## Wie hänge ich ein Bild an einen PR, und wie prüfe ich ein Mermaid-Diagramm?
 
@@ -148,7 +148,7 @@ Der `PreToolUse`-Wächter auf `SubagentHandback` (`scripts/umsetzer-abschluss.mj
 
 ## Warum bekomme ich Test-Timeouts, obwohl der Test einzeln grün ist?
 
-Volle Vitest-Läufe (vor allem die `store.*`-Tests, `game-hazards` und die Git-lastigen Wächter) laufen ins 5-s-Timeout, wenn parallel Lens-, Playwright- oder andere Vitest-Prozesse die Kerne belegen. Darum begrenzt `vite.config.ts` lokal `maxWorkers` auf 25 % der Kerne (mindestens 2) (die CI nutzt den Standard). Gemessen (20 Kerne, drei gleichzeitige `npm test`): Standard 5 und 1 Fehlschläge, 25 % keiner, 50 % 6. Mehr oder weniger Worker: `npm test -- --maxWorkers=<n>`. Ein einmal roter `test/store.slots.test.ts` (Lens-Lauf 2026-10-07) ließ sich nicht nachstellen (30 parallele Läufe, alle grün); der IDB-Test wartet seither per `SaveStore.flush()` den Commit ab, bevor er „neu lädt“ (Race wie #473), und der IDB-Stub gilt nur im IDB-Block.
+Volle Vitest-Läufe (vor allem die `store.*`-Tests, `game-hazards` und die Git-lastigen Wächter) laufen ins 5-s-Timeout, wenn parallel Lens-, Playwright- oder andere Vitest-Prozesse die Kerne belegen. Darum begrenzt `vite.config.ts` lokal `maxWorkers` auf 25 % der Kerne (mindestens 2) (die CI nutzt den Standard). Gemessen (20 Kerne, drei gleichzeitige `npm test`): Standard 5 und 1 Fehlschläge, 25 % keiner, 50 % 6. Mehr oder weniger Worker: `npm test -- --maxWorkers=<n>`.
 
 ## Verwandte Dokumente
 

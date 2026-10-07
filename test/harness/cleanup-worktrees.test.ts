@@ -648,3 +648,29 @@ describe("moeglicheHalter und formatHalter (#1411)", () => {
     assert.match(m.formatHalter([]), /kein Halter/);
   });
 });
+
+describe("fixOrphans: Ordner-Geburt begrenzt die Halter-Kandidaten (#1411)", () => {
+  type Fix = (m: string, w: string, o: string[], d?: object) => { halter: Record<string, { pid: number }[]> };
+  const fix = fixOrphans as unknown as Fix;
+  const proz = (pid: number, startMs: number) => ({ pid, ppid: 999, name: "python3.exe", commandLine: "python3 -", startMs });
+  const base = {
+    lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => false }),
+    execSync: () => "",
+    rmSync: () => {},
+    existsSync: () => true,
+    readdirSync: () => ["x"],
+    platform: "win32",
+    listProcesses: () => [proz(1, 500), proz(2, 5000)],
+  };
+  test("ein verwaister Prozess, der VOR dem Anlegen des Ordners startete, ist kein Halter", () => {
+    const r = fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...base, statSync: () => ({ birthtimeMs: 1000 }) });
+    assert.deepEqual(r.halter["kq-1"].map((h) => h.pid), [2]);
+  });
+  test("ist die Geburt des Ordners unbekannt (statSync wirft), zählt jeder verwaiste Werkzeug-Prozess", () => {
+    const wirft = () => {
+      throw new Error("ENOENT");
+    };
+    const r = fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...base, statSync: wirft });
+    assert.deepEqual(r.halter["kq-1"].map((h) => h.pid), [1, 2]);
+  });
+});

@@ -228,9 +228,9 @@ export function resolveBase(runGit, env = process.env) {
 const SCRIPTS_ORDNER = dirname(fileURLToPath(import.meta.url));
 
 /** Die Wurzeln, die `check:docgen` liest (`markdown` der docs-gen-Config); nicht lesbar → keine (dann zählt alles). */
-function ladeDocgenWurzeln() {
+export function ladeDocgenWurzeln(root = join(SCRIPTS_ORDNER, "..")) {
   try {
-    const roh = leseJson(join(SCRIPTS_ORDNER, ".."), "scripts/docs-gen/config.json", "docs-gen-Config").markdown;
+    const roh = leseJson(root, "scripts/docs-gen/config.json", "docs-gen-Config").markdown;
     return Array.isArray(roh) ? roh.filter((w) => typeof w === "string") : [];
   } catch {
     return [];

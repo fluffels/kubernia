@@ -24,7 +24,7 @@ test.beforeAll(requireOfflineBuild);
 const FPS_FLOOR = 40;
 
 /** Boden für den eingeschwungenen Wert (#1411). Gemessen in der CI (mehrere Läufe, Software-Rendering, 2026-10-07): 16-31 FPS,
- *  lokal 60. Der Boden fängt einen katastrophalen Einbruch (unter 10), keine normale Runner-Streuung: ein höherer Boden wäre
+ *  lokal deutlich höher (37 bis 60). Der Boden fängt einen katastrophalen Einbruch (unter 10), keine normale Runner-Streuung: ein höherer Boden wäre
  *  auf dem Runner dauerhaft rot, ohne dass im Spiel etwas kaputt ist. */
 const STEADY_FLOOR = 10;
 

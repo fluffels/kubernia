@@ -183,7 +183,7 @@ export function checkLockfileSlice({ runGit, env = process.env } = {}) {
   let mails = [];
   if (drift) {
     try {
-      mails = git(["log", "--format=%ae", `${base}..HEAD`]).split(/\r?\n/).map((z) => z.trim()).filter(Boolean);
+      mails = git(["log", "--no-merges", "--format=%ae", `${base}..HEAD`]).split(/\r?\n/).map((z) => z.trim()).filter(Boolean);
     } catch {
       mails = []; // Autoren unbekannt: keine Dependabot-Ausnahme
     }

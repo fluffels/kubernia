@@ -15,7 +15,9 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 type Env = Record<string, string | undefined>;
 type Sums = { fileCount: number; changedLines: number };
@@ -565,5 +567,48 @@ describe("check:diffsize ohne GEN:-Abschnitte (#1411)", () => {
     assert.equal(r.changedLines, 6);
     assert.equal(r.fileCount, 1);
     assert.equal(r.genLines, 0);
+  });
+});
+
+describe("check:diffsize: Verdrahtung der docgen-Wurzeln (#1411)", () => {
+  const m = checkDiffRaw as unknown as {
+    ladeDocgenWurzeln: (root?: string) => string[];
+    checkDiffSize: (o: { runGit: RunGit; env?: Env; docgenWurzeln?: string[] }) => Record<string, unknown>;
+  };
+  const START = "<!-- GEN:demo START -->";
+  const END = "<!-- GEN:demo END -->";
+  const ALT = ["# T", START, "<!-- h -->", "", "| a |", "", END].join("\n");
+  const NEU = ALT.replace("| a |", "| b |");
+  const PATCH = "diff --git a/docs/y.md b/docs/y.md\n--- a/docs/y.md\n+++ b/docs/y.md\n@@ -5 +5 @@\n-| a |\n+| b |\n";
+  const git: RunGit = (a) => {
+    if (a[0] === "diff" && a.includes("-U0")) return PATCH;
+    if (a[0] === "show") return a[1].startsWith("HEAD:") ? NEU : ALT;
+    if (a[0] === "merge-base" && a[1] === "BASE") return "MB\n";
+    if (a[0] === "merge-base" && a[2] === "origin/main") return "BASE\n";
+    if (a[0] === "merge-base") throw new Error("keine Basis");
+    if (a[0] === "rev-parse") return "HEADSHA\n";
+    if (a[0] === "diff") return "1\t1\tdocs/y.md\n";
+    return "";
+  };
+
+  test("die echte Config (scripts/docs-gen/config.json) liefert die Wurzeln, ohne Injektion greift der GEN-Abzug", () => {
+    const wurzeln = m.ladeDocgenWurzeln();
+    assert.ok(wurzeln.includes("docs") && wurzeln.includes("README.md"), `Wurzeln: ${wurzeln.join(", ")}`);
+    const r = m.checkDiffSize({ runGit: git, env: {} });
+    assert.equal(r.genLines, 2, "ohne docgenWurzeln wird die echte Config gelesen");
+    assert.equal(r.fileCount, 0, "die Datei besteht nur aus GEN-Zeilen");
+  });
+
+  test("Config fehlt, kaputt oder ohne `markdown`: keine Wurzeln, dann zählt alles (fail-closed)", () => {
+    const root = mkdtempSync(join(tmpdir(), "kq-cfg-"));
+    assert.deepEqual(m.ladeDocgenWurzeln(root), [], "keine Datei");
+    mkdirSync(join(root, "scripts", "docs-gen"), { recursive: true });
+    writeFileSync(join(root, "scripts", "docs-gen", "config.json"), "{ kaputt");
+    assert.deepEqual(m.ladeDocgenWurzeln(root), [], "kaputtes JSON");
+    writeFileSync(join(root, "scripts", "docs-gen", "config.json"), '{"anders":["docs"]}');
+    assert.deepEqual(m.ladeDocgenWurzeln(root), [], "Schlüssel markdown fehlt");
+    const r = m.checkDiffSize({ runGit: git, env: {}, docgenWurzeln: [] });
+    assert.equal(r.genLines, 0);
+    assert.equal(r.changedLines, 2);
   });
 });

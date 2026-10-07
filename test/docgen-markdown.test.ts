@@ -84,9 +84,9 @@ describe("pruefeMermaid: Größenwächter (#1411)", () => {
     assert.throws(() => m.pruefeMermaid(`graph LR\n${kanten(501)}`), /501 Kanten/);
   });
   test("alle Link-Enden zählen, auch gepunktet, dick und ohne Pfeil", () => {
-    const sieben = ["a --> b", "a ==> b", "a .-> b", "a --- b", "a === b", "a -.- b", "a ~~~ b"].join("\n");
-    assert.throws(() => m.pruefeMermaid(`flowchart TB\n${sieben}\n${kanten(494)}`), /501 Kanten/);
-    m.pruefeMermaid(`flowchart TB\n${sieben}\n${kanten(493)}`);
+    const sieben = ["a --> b", "a ==> b", "a .-> b", "a --- b", "a === b", "a -.- b", "a ~~~ b", "a --x b", "a --o b"].join("\n");
+    assert.throws(() => m.pruefeMermaid(`flowchart TB\n${sieben}\n${kanten(492)}`), /501 Kanten/);
+    m.pruefeMermaid(`flowchart TB\n${sieben}\n${kanten(491)}`);
   });
   test("das --- des Frontmatters zählt nicht; andere Diagrammarten werden nicht nach Kanten gezählt", () => {
     m.pruefeMermaid(`${front}flowchart TB\n${kanten(500)}`);

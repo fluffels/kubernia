@@ -255,3 +255,26 @@ describe("Lockfile-Drift im Slice (#1411)", () => {
     }
   });
 });
+
+describe("Lockfile-Drift: Autoren ohne Merge-Commits (#1411)", () => {
+  test("das Autoren-Log schließt Merge-Commits aus (der synthetische PR-Merge-Commit der CI stammt nicht von Dependabot)", () => {
+    const sliceModul = checkLock as unknown as { checkLockfileSlice: (o: { runGit: (a: string[]) => string; env?: Record<string, string> }) => { over?: boolean; dependabot?: boolean } };
+    const logs: string[][] = [];
+    const r = sliceModul.checkLockfileSlice({
+      runGit: (a) => {
+        if (a[0] === "merge-base") return "BASE\n";
+        if (a[0] === "diff") return "package-lock.json\n";
+        if (a[0] === "log" && a.includes("--format=%ae")) {
+          logs.push(a);
+          // Ohne --no-merges käme der Merge-Commit eines Fremdautors zuerst; mit dem Flag nur die Dependabot-Commits.
+          return a.includes("--no-merges") ? "49699333+dependabot[bot]@users.noreply.github.com\n" : "noreply@github.com\n49699333+dependabot[bot]@users.noreply.github.com\n";
+        }
+        return "";
+      },
+      env: {},
+    });
+    assert.ok(logs[0].includes("--no-merges"));
+    assert.equal(r.dependabot, true);
+    assert.equal(r.over, false);
+  });
+});
