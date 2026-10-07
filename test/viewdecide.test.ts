@@ -10,6 +10,8 @@ import { test, expect, describe } from "vitest";
 import {
   funkSessionKind,
   evaluateSubmission,
+  gateSubmission,
+  execUnlessLocked,
   scoreReview,
   resolveTalkTarget,
   type SubmissionTask,
@@ -219,5 +221,84 @@ describe("evaluateSubmission – solvedBy: check (#891)", () => {
     const v = evaluateSubmission("bloedsinn", checkTask(), baseCtx({ checkOk: false, failCount: 2 }));
     expect(v.outcome).toBe("failed");
     if (v.outcome === "failed") expect(v.nudge).toBe(true);
+  });
+});
+
+/* ---------- gateSubmission / execUnlessLocked (#1297) ---------- */
+
+describe("gateSubmission – Gate vor sim.exec (#1297)", () => {
+  const gctx = (over: Partial<SubmissionContext> = {}) => {
+    const c = baseCtx(over);
+    return { isAbbrevUnlocked: c.isAbbrevUnlocked, unlockAbbrev: c.unlockAbbrev };
+  };
+  const poTask = task({ accept: [/^kubectl get po$/] });
+  const checkTask = task({ accept: [/^kubectl get pods$/], solvedBy: "check" });
+
+  test("accept trifft + gesperrtes Kürzel → locked ohne failCount", () => {
+    const v = gateSubmission("kubectl get po", poTask, gctx());
+    expect(v?.outcome).toBe("locked");
+    expect(v && "failCount" in v).toBe(false);
+  });
+  test("freigeschaltet → undefined", () => {
+    expect(gateSubmission("kubectl get po", poTask, gctx({ isAbbrevUnlocked: () => true }))).toBeUndefined();
+  });
+  test("unlockAbbrev des Lehrschritts → undefined (#366)", () => {
+    expect(gateSubmission("kubectl get po", poTask, gctx({ unlockAbbrev: "kubectl-pods" }))).toBeUndefined();
+  });
+  test("Modus accept, accept trifft nicht → undefined", () => {
+    expect(gateSubmission("kubectl get po -A", poTask, gctx())).toBeUndefined();
+  });
+  test("Modus check, accept trifft nicht, gesperrtes Kürzel → locked", () => {
+    expect(gateSubmission("kubectl get po", checkTask, gctx())?.outcome).toBe("locked");
+  });
+  test("Modus check ohne Kürzel → undefined", () => {
+    expect(gateSubmission("kubectl get pods", checkTask, gctx())).toBeUndefined();
+  });
+  test("leere Eingabe → undefined", () => {
+    expect(gateSubmission("   ", checkTask, gctx())).toBeUndefined();
+  });
+  test("evaluateSubmission Modus check, gesperrtes Kürzel, checkOk false → locked", () => {
+    expect(evaluateSubmission("kubectl get po", checkTask, baseCtx({ checkOk: false })).outcome).toBe("locked");
+  });
+
+  test("Gleichlauf: evaluateSubmission locked ⇔ gateSubmission liefert Urteil", () => {
+    for (const solvedBy of [undefined, "check"] as const) {
+      for (const input of ["kubectl get po", "kubectl get pods", "kubectl get po -A", "docker ps"]) {
+        for (const unlocked of [false, true]) {
+          for (const checkOk of [false, true]) {
+            for (const simError of [false, true]) {
+              const t = task({ accept: [/^kubectl get po$/, /^kubectl get pods$/], solvedBy });
+              const ctx = baseCtx({ isAbbrevUnlocked: () => unlocked, checkOk, simError });
+              const locked = evaluateSubmission(input, t, ctx).outcome === "locked";
+              expect(locked).toBe(gateSubmission(input, t, ctx) !== undefined);
+            }
+          }
+        }
+      }
+    }
+  });
+});
+
+describe("execUnlessLocked (#1297)", () => {
+  const gctx = { isAbbrevUnlocked: () => false };
+  const poTask = task({ accept: [/^kubectl get po$/] });
+
+  test("locked → exec läuft nicht", () => {
+    let calls = 0;
+    const r = execUnlessLocked("kubectl get po", poTask, gctx, () => ++calls);
+    expect("locked" in r).toBe(true);
+    expect(calls).toBe(0);
+  });
+  test("offen → exec läuft genau einmal", () => {
+    let calls = 0;
+    const r = execUnlessLocked("kubectl get po", poTask, { isAbbrevUnlocked: () => true }, () => ++calls);
+    expect(r).toEqual({ result: 1 });
+    expect(calls).toBe(1);
+  });
+  test("ohne Aufgabe (freie Session) wird immer ausgeführt", () => {
+    let calls = 0;
+    const r = execUnlessLocked("kubectl get po", null, gctx, () => ++calls);
+    expect("result" in r).toBe(true);
+    expect(calls).toBe(1);
   });
 });

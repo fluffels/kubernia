@@ -4,10 +4,21 @@ import { SFX } from "../sfx";
 import { ABBREVS } from "../content/abbrev";
 import { pushHistory, navigateHistory } from "../hud/cmdhistory";
 import { pickFunkExplanation } from "../hud/funkexplain";
-import { evaluateSubmission, funkSessionKind, type SubmissionTask } from "../hud/viewdecide";
+import {
+  evaluateSubmission, execUnlessLocked, funkSessionKind, LOCKED_TERMINAL_NOTE,
+  type GateContext, type SubmissionTask,
+} from "../hud/viewdecide";
 import { fmtCmd } from "../hud/markup";
 import type { QuestTask } from "../types";
 import { part, $, esc, NPCS, masteryBadge } from "./shared";
+
+/** Gating-Teil des Bewertungskontexts, von `termSubmit` (vor dem Ausführen) und `_applyVerdict` geteilt (#1297). */
+function gateCtx(): GateContext {
+  return {
+    isAbbrevUnlocked: (id) => Game.isAbbrevUnlocked(id),
+    unlockAbbrev: Game.currentStep()?.unlockAbbrev,
+  };
+}
 
 export const radioUI = part({
   /* ========== Funkgerät ========== */
@@ -134,7 +145,12 @@ export const radioUI = part({
     this.termHistIdx = this.termHistory.length;
     // #358: dem help-Befehl die freigeschalteten Befehlsfamilien mitgeben, damit es
     // nur Gelerntes listet (progressive Aufdeckung statt Komplettliste vorweg).
-    const result = Game.sim.exec(line, Game.unlockedCommandFamilies());
+    // #1297: das Abkürzungs-Gating greift VOR dem Ausführen, ein gesperrter Befehl ändert den Cluster nicht.
+    const task = this.currentTask();
+    const run = execUnlessLocked(line, task as SubmissionTask | null, gateCtx(), () => Game.sim.exec(line, Game.unlockedCommandFamilies()));
+    const locked = "locked" in run ? run.locked : undefined;
+    // Gesperrt: nur Befehlszeile + Notiz ins Log, nichts lief in der Sim.
+    const result = "result" in run ? run.result : { output: LOCKED_TERMINAL_NOTE, error: false, clear: false };
     if (result.clear) { this.termLog = []; this.termRedraw(); return; }
     this._echoCommand(line, result);
     Game.state.stats.commands++;
@@ -150,9 +166,13 @@ export const radioUI = part({
         detail: "Mit ↑/↓ holst du im Terminal vorherige Befehle zurück – wie in einer echten Shell. Jetzt im Shop erhältlich!",
       });
     }
+    if (locked) {
+      const fb = $("tt-feedback");
+      if (fb) fb.innerHTML = '<div class="tt-feedback">' + locked.feedback + '</div>';
+      return;
+    }
     this._maybeFunkExplain(line, result);
 
-    const task = this.currentTask();
     if (!task) return;
     this._applyVerdict(line, task, result);
   },
@@ -189,8 +209,7 @@ export const radioUI = part({
     const verdict = evaluateSubmission(line, task, {
       simError: !!result.error,
       checkOk: !task.check || !!task.check(Game.sim),
-      isAbbrevUnlocked: (id) => Game.isAbbrevUnlocked(id),
-      unlockAbbrev: Game.currentStep()?.unlockAbbrev,
+      ...gateCtx(),
       failCount: this.failCount,
     });
 
