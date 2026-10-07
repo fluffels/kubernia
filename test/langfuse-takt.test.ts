@@ -215,6 +215,21 @@ describe("Push-Auslöser nach Aktivität (#1349 Z14)", () => {
   });
 });
 
+describe("sollBewegen (#1349): ein Status-Ticket im Kopf bleibt liegen", () => {
+  const S = raw as unknown as { sollBewegen: (e: { aktion: string; nr?: number }, items: Item[]) => boolean };
+  const it = (number: number, title: string): Item => ({ id: `I${number}`, number, status: "Todo", title, assignees: [], state: "open" });
+  test("nach-oben: steht im Kopf → nicht bewegen; steht weiter unten → bewegen; fehlt im Board → bewegen", () => {
+    const im = [it(5, T.STATUS_TITEL), it(6, "x")];
+    const unten = [it(6, "x"), it(5, T.STATUS_TITEL)];
+    expect(S.sollBewegen({ aktion: "nach-oben", nr: 5 }, im)).toBe(false);
+    expect(S.sollBewegen({ aktion: "nach-oben", nr: 5 }, unten)).toBe(true);
+    expect(S.sollBewegen({ aktion: "nach-oben", nr: 5 }, [])).toBe(true);
+  });
+  test("anlegen bewegt immer", () => {
+    expect(S.sollBewegen({ aktion: "anlegen" }, [it(5, T.STATUS_TITEL)])).toBe(true);
+  });
+});
+
 describe("zaehleTicketMerges (#1349)", () => {
   const c = (login: string | null, date = "2026-10-07T10:00:00Z") => ({ author: login === null ? null : { login }, commit: { committer: { date } } });
 

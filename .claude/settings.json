@@ -78,7 +78,7 @@
             "args": [
               "${CLAUDE_PROJECT_DIR}/scripts/haupt-sync.mjs"
             ],
-            "timeout": 60
+            "timeout": 120
           }
         ]
       }

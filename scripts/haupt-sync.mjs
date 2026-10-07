@@ -11,9 +11,11 @@
  *   - nur fast-forward (hat `main` lokale Commits, wird nicht angefasst).
  *
  * Sonst bleibt alles liegen, und der Hook meldet „N Commits hinter origin/main“ samt Grund in den Kontext der Session.
- * Er gibt IMMER `Sitzungsbasis: <HEAD vor dem Pull>` aus: der Skill `kubernia` prüft damit vor dem Spawn, ob sich
- * Agenten-Definitionen seit dem Start der Session geändert haben (der Hook-/Definitions-Snapshot wird beim Start
- * eingefroren, ein Pull ändert die laufende Session nicht). Hat der Pull `.claude/` oder `AGENTS.md` geändert, sagt er das
+ * Als SessionStart-Hook gibt er IMMER `Sitzungsbasis: <HEAD vor dem Pull>` aus: der Skill `kubernia` prüft damit vor dem
+ * Spawn, ob sich Agenten-Definitionen seit dem Start der Session geändert haben (der Hook-/Definitions-Snapshot wird beim
+ * Start eingefroren, ein Pull ändert die laufende Session nicht). Nur diese Zeile ist die Sitzungsbasis: der Haupt-Checkout
+ * ist geteilt, ein späterer Aufruf (`--text`, auch aus einer anderen Session) sieht einen schon gehobenen `main` und darum
+ * einen falschen Stand; `--text` nennt deshalb nur „Stand vor diesem Sync“. Hat der Pull `.claude/` oder `AGENTS.md` geändert, sagt er das
  * zusätzlich ausdrücklich. Fail-open: jeder Fehler (kein Netz, kein git) ergibt nur eine kurze Notiz, nie einen Abbruch.
  *
  * Hook-Ausgabe: `hookSpecificOutput.additionalContext` (SessionStart). Wächter: test/harness/haupt-sync.test.ts.
@@ -43,7 +45,7 @@ export function entscheideSync({ istLinkedWorktree, branch, sauber, hinter, vor 
 export const agentenGeaendert = (dateien) => dateien.some((d) => /^\.claude\//.test(d) || /(^|\/)AGENTS\.md$/.test(d));
 
 /** Der Kontext-Text der Session. Pur. `ergebnis` = `{ aktion, grund, hinter, basis, gepullt, agentenGeaendert, notiz }`. */
-export function baueText(ergebnis) {
+export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
   const zeilen = [];
   if (ergebnis.notiz) zeilen.push(`Haupt-Sync: ${ergebnis.notiz}`);
   if (ergebnis.aktion === "melden") zeilen.push(`Haupt-Checkout: ${ergebnis.hinter} Commits hinter origin/main (${ergebnis.grund}).`);
@@ -53,12 +55,12 @@ export function baueText(ergebnis) {
       zeilen.push("Hooks, Agenten, Skills und AGENTS.md dieser Session stammen vom alten Stand (der Snapshot wird beim Start eingefroren): für den neuen Stand die Session neu starten.");
     }
   }
-  if (ergebnis.basis) zeilen.push(`Sitzungsbasis: ${ergebnis.basis}`);
+  if (ergebnis.basis) zeilen.push(sitzungsbasis ? `Sitzungsbasis: ${ergebnis.basis}` : `Stand vor diesem Sync: ${ergebnis.basis} (nicht die Basis dieser Session)`);
   return zeilen.join("\n");
 }
 
 const git = (dir, args, opts = {}) =>
-  execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: opts.timeout ?? 10_000 }).trim();
+  execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: opts.timeout ?? 8_000 }).trim();
 
 /** Die ganze Ablaufkette gegen ein echtes Repo in `dir` (nur CLI). Wirft nie; Fehler landen in `notiz`. */
 export function fuehreSyncAus(dir) {
@@ -88,12 +90,17 @@ export function fuehreSyncAus(dir) {
   return ergebnis;
 }
 
+/** Die Ausgabe des Hooks: Klartext (`--text`, ohne Sitzungsbasis) oder die SessionStart-JSON (mit Sitzungsbasis); leer ohne Text. Pur. */
+export function ausgabe(ergebnis, text) {
+  const t = baueText(ergebnis, { sitzungsbasis: !text });
+  if (!t) return "";
+  return text ? t : JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: t } });
+}
+
 function main() {
   const dir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  const text = baueText(fuehreSyncAus(dir));
-  if (!text) return;
-  if (process.argv.includes("--text")) console.log(text);
-  else console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: text } }));
+  const out = ausgabe(fuehreSyncAus(dir), process.argv.includes("--text"));
+  if (out) console.log(out);
 }
 
 if (istDirektaufruf(import.meta.url)) main();

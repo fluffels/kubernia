@@ -22,6 +22,7 @@ const S = raw as unknown as {
   agentenGeaendert: (d: string[]) => boolean;
   baueText: (e: Partial<Ergebnis>) => string;
   fuehreSyncAus: (dir: string) => Ergebnis;
+  ausgabe: (e: Partial<Ergebnis>, text: boolean) => string;
 };
 
 const basis: Eingabe = { istLinkedWorktree: false, branch: "main", sauber: true, hinter: 3, vor: 0 };
@@ -68,6 +69,23 @@ describe("Hilfsfunktionen", () => {
     expect(gepullt).toContain("Sitzungsbasis: abc");
     expect(S.baueText({ aktion: "pull", gepullt: true, hinter: 4, basis: "abc", agentenGeaendert: false })).not.toContain("neu starten");
     expect(S.baueText({ aktion: "melden", hinter: 2, grund: "Arbeitsbaum nicht sauber", basis: "abc" })).toContain("2 Commits hinter origin/main");
+  });
+});
+
+describe("Ausgabe des Hooks", () => {
+  test("SessionStart-Modus: JSON mit additionalContext und Sitzungsbasis", () => {
+    const o = JSON.parse(S.ausgabe({ aktion: "nichts", basis: "abc" }, false)) as { hookSpecificOutput: { hookEventName: string; additionalContext: string } };
+    expect(o.hookSpecificOutput.hookEventName).toBe("SessionStart");
+    expect(o.hookSpecificOutput.additionalContext).toBe("Sitzungsbasis: abc");
+  });
+  test("--text: Klartext OHNE Sitzungsbasis (ein späterer Aufruf sieht einen schon gehobenen main)", () => {
+    const t = S.ausgabe({ aktion: "nichts", basis: "abc" }, true);
+    expect(t).not.toContain("Sitzungsbasis");
+    expect(t).toContain("Stand vor diesem Sync: abc");
+  });
+  test("ohne Text nichts; Notiz erscheint im Text", () => {
+    expect(S.ausgabe({ aktion: "nichts" }, false)).toBe("");
+    expect(S.baueText({ aktion: "nichts", notiz: "git fetch fehlgeschlagen (x)", basis: "abc" })).toContain("Haupt-Sync: git fetch fehlgeschlagen");
   });
 });
 

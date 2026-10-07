@@ -100,7 +100,7 @@ Der `PreToolUse`-Wächter auf `SubagentHandback` (`scripts/umsetzer-abschluss.mj
 
 ## Warum bekomme ich Test-Timeouts, obwohl der Test einzeln grün ist?
 
-Volle Vitest-Läufe (vor allem die `store.*`-Tests, `game-hazards` und die Git-lastigen Wächter) laufen ins 5-s-Timeout, wenn parallel Lens-, Playwright- oder andere Vitest-Prozesse die Kerne belegen. Darum begrenzt `vite.config.ts` lokal `maxWorkers` auf 25 % (die CI nutzt den Standard). Gemessen (20 Kerne, drei gleichzeitige `npm test`): Standard 5 und 1 Fehlschläge, 25 % keiner, 50 % 6. Mehr oder weniger Worker: `npm test -- --maxWorkers=<n>`.
+Volle Vitest-Läufe (vor allem die `store.*`-Tests, `game-hazards` und die Git-lastigen Wächter) laufen ins 5-s-Timeout, wenn parallel Lens-, Playwright- oder andere Vitest-Prozesse die Kerne belegen. Darum begrenzt `vite.config.ts` lokal `maxWorkers` auf 25 % der Kerne (mindestens 2) (die CI nutzt den Standard). Gemessen (20 Kerne, drei gleichzeitige `npm test`): Standard 5 und 1 Fehlschläge, 25 % keiner, 50 % 6. Mehr oder weniger Worker: `npm test -- --maxWorkers=<n>`.
 
 ## Verwandte Dokumente
 

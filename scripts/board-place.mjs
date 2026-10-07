@@ -20,7 +20,7 @@
  * Bei Rate-Limit sofort stoppen, den Rest melden.
  */
 import { pathToFileURL } from "node:url";
-import { abortMessage, ergaenzeFehlende, itemIdUeberIssue, loadItems, loadOpenIssueNumbers, missingFromBoard, planFuerArgs, setPosition } from "./board-lib.mjs";
+import { abortMessage, ergaenzeFehlende, fehlendeNummern, itemIdUeberIssue, loadItems, loadOpenIssueNumbers, missingFromBoard, planFuerArgs, setPosition } from "./board-lib.mjs";
 
 /** Echte Notfälle, die ganz nach oben dürfen: roter main, Security, Dependabot, Forum-Eingang. */
 export const NOTFALL_ARTEN = ["rot-main", "security", "dependabot", "forum"];
@@ -84,7 +84,7 @@ async function main(argv = process.argv.slice(2)) {
   try {
     let items = loadItems();
     // Fallback: frisch aufgenommene Items fehlen in der REST-Liste teils lange; ihre Item-ID per GraphQL holen.
-    const fehlend = [...args.numbers, ...(args.anchor ? [args.anchor] : [])].filter((n) => !items.some((i) => i.number === n));
+    const fehlend = fehlendeNummern(items, args);
     if (fehlend.length > 0) items = ergaenzeFehlende(items, fehlend.map((n) => itemIdUeberIssue(n)));
     plan = planFuerArgs(items, args);
     if (plan.klemmung.geklemmt) console.log(`Hinter das ungeclaimte Sammelticket #${plan.klemmung.sammelticket} geklemmt (Notfall: --notfall <art>, nur mit --top, ${NOTFALL_ARTEN.join("|")}).`);

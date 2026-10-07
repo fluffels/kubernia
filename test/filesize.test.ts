@@ -120,3 +120,21 @@ describe("Deckel für Workflow-Skripte (#1349)", () => {
     assert.match(pruefeDeckel([{ file: WF, loc: 700 }], deckel).join(" "), /stale.*nicht mehr über 800/);
   });
 });
+
+describe("collectWorkflowSizes: Randfälle (#1349)", () => {
+  test("fehlender Ordner: leere Liste; Nicht-.js-Dateien zählen nicht", async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const wurzel = mkdtempSync(join(tmpdir(), "kq-size-"));
+    try {
+      assert.deepEqual(collectWorkflowSizes(wurzel), []);
+      mkdirSync(join(wurzel, ".claude", "workflows"), { recursive: true });
+      writeFileSync(join(wurzel, ".claude", "workflows", "a.js"), "x\ny\n");
+      writeFileSync(join(wurzel, ".claude", "workflows", "b.md"), "x\n");
+      assert.deepEqual(collectWorkflowSizes(wurzel), [{ file: ".claude/workflows/a.js", loc: 2 }]);
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
+  });
+});

@@ -127,8 +127,8 @@ export function entscheideTakt({ offene, mergesSeit, ticketMerges = 0, ausloeser
 /**
  * Harness-Sammelticket nach Aktivität: `items` = Board in Reihenfolge (board-lib), `ticketMergesSeitAbschluss` = Ticket-Merges
  * seit dem Abschluss des letzten Harness-Sammeltickets. Ab `HARNESS_TAKT_MERGES` kommt das erste ungeclaimte Harness-Sammelticket
- * direkt hinter den Kopf (Status-, Notfall-, Dependabot-, Forum-Ticket), nie vor einen roten main. Steht es dort schon, ist
- * der Lauf idempotent. Liefert `{ aktion: "nach-oben" | "nichts", nr?, afterId?, grund }`. Pur.
+ * direkt hinter den zusammenhängenden Kopf ganz oben (Status-, Notfall-, Dependabot-, Forum-Ticket). Steht es dort schon, ist
+ * der Lauf idempotent. Grenze: ein Kopf-Item, das nicht zusammenhängend oben steht, zählt nicht zum Kopf. Liefert `{ aktion: "nach-oben" | "nichts", nr?, afterId?, grund }`. Pur.
  */
 export function entscheideHarnessTakt({ items, ticketMergesSeitAbschluss }) {
   if (!Array.isArray(items)) throw new Error("items muss eine Liste sein.");
@@ -151,6 +151,11 @@ export function entscheideHarnessTakt({ items, ticketMergesSeitAbschluss }) {
     afterId: ende > 0 ? items[ende - 1].id : null,
     grund: `${ticketMergesSeitAbschluss} Ticket-Merges seit dem letzten Sammelticket, #${ticket.number} kommt hinter den Kopf`,
   };
+}
+
+/** Soll das Status-Ticket bewegt werden? `nach-oben` nur, wenn es nicht schon im Kopf von `items` steht; anlegen bewegt immer. Pur. */
+export function sollBewegen(e, items) {
+  return !(e.aktion === "nach-oben" && imKopf(items, e.nr));
 }
 
 /** Montag 00:00 UTC der Kalenderwoche, in der `d` liegt. */
@@ -261,7 +266,7 @@ function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token }) {
     return true;
   }
   try {
-    if (e.aktion === "nach-oben" && imKopf(loadItems({ token }), e.nr)) {
+    if (!sollBewegen(e, e.aktion === "nach-oben" ? loadItems({ token }) : [])) {
       console.log("Status-Ticket steht schon im Kopf, Position bleibt.");
       return true;
     }

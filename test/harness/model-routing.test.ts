@@ -1056,7 +1056,7 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
     // keine Kopie der Kriterien (#1349 Z8): der Prompt verweist auf die Heimat in AGENTS.md
     assert.match(prompt, /AGENTS\.md § Oberste Regel/);
     assert.doesNotMatch(prompt, /Teil-Akzeptanzkriterien|Kleinkram eine Zeile|gleiches\s+Subsystem/);
-    assert.match(prompt, /gh issue list --limit 200/);
+    assert.match(prompt, /gh issue list --limit 500/);
   });
 
   test("Planer prüft den Stand des Checkouts gegen origin/main (#1331)", () => {

@@ -170,6 +170,12 @@ export function itemAusIssueAntwort(antwort) {
   };
 }
 
+/** Nummern aus `args` (Tickets und Anker), die in der REST-Liste `items` fehlen und per GraphQL nachgeholt werden müssen. Pur. */
+export function fehlendeNummern(items, args) {
+  const bekannt = new Set(items.map((i) => i.number));
+  return [...args.numbers, ...(args.anchor ? [args.anchor] : [])].filter((n) => !bekannt.has(n));
+}
+
 /** True bei GitHubs Rate-Limit-Fehler (Meldung der gh-CLI/GraphQL). */
 export const isRateLimit = (message) => /rate limit/i.test(String(message ?? ""));
 

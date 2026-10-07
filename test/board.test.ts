@@ -330,6 +330,20 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     expect(M.imKopf([b(2)], 99)).toBe(false);
   });
 
+  test("fehlendeNummern (#1349 Z16): fehlende Tickets UND ein fehlender Anker lösen den Fallback aus, Bekannte nicht", () => {
+    const F = rawLib as unknown as { fehlendeNummern: (items: B[], args: { numbers: number[]; anchor?: number | null }) => number[] };
+    const items = [b(10), b(11)];
+    expect(F.fehlendeNummern(items, { numbers: [10, 20], anchor: 99 })).toEqual([20, 99]);
+    expect(F.fehlendeNummern(items, { numbers: [10], anchor: 11 })).toEqual([]);
+    expect(F.fehlendeNummern(items, { numbers: [10], anchor: null })).toEqual([]);
+    expect(F.fehlendeNummern([], { numbers: [5] })).toEqual([5]);
+  });
+
+  test("geclaimtes Kopf-Item zählt zum Kopf (#1349)", () => {
+    const M = rawLib as unknown as { kopfEnde: (items: B[]) => number };
+    expect(M.kopfEnde([b(1, { title: "Langfuse-Status überprüfen", assignees: ["fluffels"] }), b(2)])).toBe(1);
+  });
+
   test("GraphQL-Fallback (#1349 Z16): fehlende Items aus issue.projectItems, nur das eigene Board, fehlende bleiben fehlend", () => {
     const G = rawLib as unknown as {
       PROJECT_ID: string;

@@ -53,7 +53,7 @@ Regel: [AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets](../AGENTS.md#w
 
 - **Befund eintragen:** erst suchen, dann als **Kommentar** anhängen (Kommentare kollidieren bei parallelen Agenten nicht, Body-Edits schon):
   ```bash
-  gh issue list --state open --search 'in:title "Harness-Härtung (gesammelt)"' --json number,assignees --jq '.[] | select((.assignees|length)==0) | .number'
+  gh issue list --state open --search 'in:title "Harness-Härtung (gesammelt)"' --limit 500 --json number,assignees --jq '[.[] | select((.assignees|length)==0) | .number] | max'
   gh issue comment <nr> --body "- [ ] <Befund>"
   ```
   Kein ungeclaimter Treffer → anlegen (unten). Zwei offene **ungeclaimte ohne gegenseitigen Blocker-Bezug** (Wettlauf) → das jüngere schließen, seine Zeilen ins ältere übertragen. Ein **Nachfolger** (Body `blockiert durch #<vorgänger>`, angelegt oder freigegeben, während der Vorgänger geclaimt war oder wegen eines Blockers freigegeben wurde) ist kein Wettlauf: beide bleiben, **neue Zeilen kommen ins jüngste ungeclaimte** Sammelticket (den Nachfolger), das ältere trägt weiter seinen Blocker und kommt zuerst dran, sobald der frei ist.
