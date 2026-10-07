@@ -27,6 +27,7 @@
 | [0018](/docs/adr/0018-content-chunks-je-datei.md) | Content-Chunks je Datei — der Spielcode-Chunk wächst nicht mehr mit dem Inhalt | akzeptiert | 07.10.2026 |
 | [0019](/docs/adr/0019-langfuse-plugin-im-user-scope.md) | Das Langfuse-Plugin bleibt auch im User-Scope aktiv | akzeptiert | 07.10.2026 |
 | [0020](/docs/adr/0020-architekturmodell-likec4.md) | Architekturmodell LikeC4 — zweite Ableitung derselben SSOTs | akzeptiert | 08.10.2026 |
+| [0021](/docs/adr/0021-agenten-sandbox-wsl2.md) | Agenten-Sandbox über eine eigene WSL2-Distribution | akzeptiert | 08.10.2026 |
 
 <!-- GEN:adr-liste END -->
 
