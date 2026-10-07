@@ -6,7 +6,7 @@
 // passende Datei oder eine Zahl ohne Quelle macht den Generator (und damit `check:docgen`) rot.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { MERMAID_FRONTMATTER, parseChain } from "./markdown.mjs";
+import { MERMAID_FRONTMATTER, expandSteps } from "./markdown.mjs";
 import { harnessKatalog } from "./harness-inventar.mjs";
 
 const PLATZHALTER = /\$\{([a-z-]+):([^}]*)\}/g;
@@ -51,7 +51,7 @@ function gatesAnzahl(rootDir, config, kette) {
   if (!g || !(g.chains ?? []).includes(kette)) throw new Error(`Gate-Kette "${kette}" steht nicht in config.gates.chains`);
   const scripts = JSON.parse(readFileSync(join(rootDir, g.package), "utf8")).scripts ?? {};
   if (typeof scripts[kette] !== "string") throw new Error(`Gate-Kette "${kette}" fehlt in ${g.package}`);
-  const schritte = parseChain(scripts[kette]).filter((s) => !g.chains.includes(s));
+  const schritte = expandSteps(scripts[kette], scripts, g.chains, [kette]).filter((s) => !g.chains.includes(s));
   return String(schritte.length);
 }
 

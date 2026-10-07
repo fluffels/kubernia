@@ -2,24 +2,7 @@
 // npm-Ketten (`verify`, `verify:full`, …) plus Beschreibungs-Map und reinen CI-Gates.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseChain, renderTable } from "./markdown.mjs";
-
-/**
- * Schritte einer Kette in Ausführungsreihenfolge. Ein Schritt, dessen Skript selbst eine `&&`-Kette ist und
- * nicht in `chains` steht, wird rekursiv aufgelöst (seine Schritte gehören zur äußeren Kette); ein Zyklus
- * wirft. Einzelbefehl-Aliase (ohne `&&`) bleiben ein Schritt.
- */
-function expandSteps(script, scripts, chains, stack) {
-  const out = [];
-  for (const step of parseChain(script)) {
-    const inner = scripts[step];
-    if (!chains.includes(step) && typeof inner === "string" && inner.includes("&&")) {
-      if (stack.includes(step)) throw new Error(`Zyklus in den Ketten: ${[...stack, step].join(" → ")}`);
-      out.push(...expandSteps(inner, scripts, chains, [...stack, step]));
-    } else out.push(step);
-  }
-  return out;
-}
+import { expandSteps, renderTable } from "./markdown.mjs";
 
 /** Anzeigebefehl eines Kettenschritts. */
 const display = (step, scripts) => (Object.hasOwn(scripts, step) ? (step === "test" ? "npm test" : `npm run ${step}`) : step);

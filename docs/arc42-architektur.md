@@ -259,7 +259,7 @@ Eine erneute doku-freie Runde hat gezielt die harten „erledigt/erzwungen"-Clai
 
 ## 9. Architekturentscheidungen (ADRs)
 
-Die vollständige Liste (Nummer, Titel, Status, Datum) steht generiert in [docs/adr/README.md](adr/README.md); wann welcher ADR zu lesen ist, steht in den [Anlaufstellen](referenz/anlaufstellen.md). Dort liegt auch die Vorlage mit dem Kopf-Format.
+Die vollständige Liste (Nummer, Titel, Status, Datum) steht generiert in [docs/adr/README.md](adr/README.md); wann welcher ADR zu lesen ist, steht in den [Anlaufstellen](referenz/anlaufstellen.md). Die ADR-Vorlage mit dem Kopf-Format liegt in der genannten [adr/README.md](adr/README.md).
 
 iSAQB-konform: jeder ADR trägt einen expliziten **Re-Evaluierungs-Trigger** — Entscheidungen sind an nachprüfbare Bedingungen geknüpft, nicht „für immer".
 

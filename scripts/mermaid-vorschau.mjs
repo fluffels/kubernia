@@ -8,7 +8,7 @@
  *   npm install --prefix <tmp-ordner> mermaid@11          # einmalig, außerhalb des Repos (kein Eintrag in package.json)
  *   node scripts/mermaid-vorschau.mjs <datei.md> --mermaid <tmp-ordner> [--port 4173]
  *
- * Danach `browser_navigate` auf `http://localhost:<port>/`, Screenshot, Server beenden (Strg+C bzw. Prozess stoppen).
+ * Danach `browser_navigate` auf `http://127.0.0.1:<port>/`, Screenshot, Server beenden (Strg+C bzw. Prozess stoppen).
  * Nur Node-Builtins; mermaid selbst kommt aus dem angegebenen Ordner und wird nie mitgeliefert.
  */
 import { createServer } from "node:http";
@@ -59,7 +59,12 @@ const TYPEN = { ".mjs": "text/javascript", ".js": "text/javascript", ".json": "a
 
 /** Löst `/mermaid/<pfad>` auf eine Datei unter `distDir` auf; `null` bei Ausbruch aus dem Ordner (`..`) oder fehlender Datei. Pur bis auf die Dateiprüfung. */
 export function mermaidDatei(distDir, urlPfad) {
-  const rel = decodeURIComponent(urlPfad.replace(/^\/mermaid\//, "").split("?")[0]);
+  let rel;
+  try {
+    rel = decodeURIComponent(urlPfad.replace(/^\/mermaid\//, "").split("?")[0]);
+  } catch {
+    return null; // kaputte Prozent-Kodierung: kein Treffer statt ungefangenem URIError im Server
+  }
   const basis = resolve(distDir);
   const ziel = resolve(basis, normalize(rel));
   if (ziel !== basis && !ziel.startsWith(basis + sep)) return null;

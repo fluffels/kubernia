@@ -48,5 +48,6 @@ describe("mermaidDatei: Pfadschutz", () => {
     expect(M.mermaidDatei(dist, "/mermaid/../geheim.txt")).toBeNull();
     expect(M.mermaidDatei(dist, "/mermaid/fehlt.mjs")).toBeNull();
     expect(M.mermaidDatei(dist, "/mermaid/")).toBeNull();
+    expect(M.mermaidDatei(dist, "/mermaid/%E0")).toBeNull(); // kaputte Prozent-Kodierung
   });
 });

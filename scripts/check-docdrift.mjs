@@ -33,7 +33,7 @@
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, resolve, sep, posix } from "node:path";
-import { collectMarkdown as collectMd, fenceMaske, parseChain } from "./docs-gen/markdown.mjs";
+import { collectMarkdown as collectMd, expandSteps, fenceMaske } from "./docs-gen/markdown.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -165,7 +165,7 @@ export function collectHeadingSlugs(md) {
 /** Liest die verify-Gate-Sequenz aus dem verify-Skript in package.json aus:
  *  alle `npm run <x>`-Aufrufe in Reihenfolge, gefolgt von `npm test` → `"test"`. */
 export function parseVerifyChain(pkgScripts) {
-  return parseChain(pkgScripts["verify"] ?? "").filter((step) => /^[a-zA-Z0-9:_-]+$/.test(step));
+  return expandSteps(pkgScripts["verify"] ?? "", pkgScripts, [], ["verify"]).filter((step) => /^[a-zA-Z0-9:_-]+$/.test(step));
 }
 
 /** Findet alle `typecheck → … → test`-Sequenzen in `md` (roh, inkl. Codeblöcke).

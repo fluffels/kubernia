@@ -94,6 +94,24 @@ export function parseChain(script) {
     });
 }
 
+/**
+ * Schritte einer Kette in Ausführungsreihenfolge. Ein Schritt, dessen Skript selbst eine `&&`-Kette ist und
+ * nicht in `chains` steht, wird rekursiv aufgelöst (seine Schritte gehören zur äußeren Kette); ein Zyklus
+ * wirft. Einzelbefehl-Aliase (ohne `&&`) bleiben ein Schritt. EINE Auflösung für Gate-Tabelle, Diagramm-Zahlen und
+ * den Doku-Drift-Wächter, damit sie nie auseinanderlaufen (#1392).
+ */
+export function expandSteps(script, scripts, chains, stack) {
+  const out = [];
+  for (const step of parseChain(script)) {
+    const inner = scripts[step];
+    if (!chains.includes(step) && typeof inner === "string" && inner.includes("&&")) {
+      if (stack.includes(step)) throw new Error(`Zyklus in den Ketten: ${[...stack, step].join(" → ")}`);
+      out.push(...expandSteps(inner, scripts, chains, [...stack, step]));
+    } else out.push(step);
+  }
+  return out;
+}
+
 /** Prüft, ob `rel` unter `rootDir` existiert; sonst Fehlermeldung in `errors` (Config veraltet?). */
 export function brauche(rootDir, rel, was, errors) {
   if (existsSync(join(rootDir, rel))) return true;

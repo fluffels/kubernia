@@ -15,7 +15,7 @@ Regeltext steht nur in diesen Dateien; alle anderen Seiten erklären oder schlag
 
 ## ⚖️ Entscheidungen — ADRs (historisch, werden nicht umgeschrieben)
 
-Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständiger Index (generiert) und ADR-Vorlage samt Kopf-Format: [adr/README.md](../adr/README.md). Einordnung und Begründungs-Übersicht: [arc42 › Architekturentscheidungen](../arc42-architektur.md#9-architekturentscheidungen-adrs).
+Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständiger Index (generiert) und ADR-Vorlage samt Kopf-Format: [adr/README.md](../adr/README.md). Einordnung im Architekturbild: [arc42 › Architekturentscheidungen](../arc42-architektur.md#9-architekturentscheidungen-adrs).
 
 | ADR | Wann lesen |
 |---|---|
