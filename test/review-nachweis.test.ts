@@ -199,6 +199,8 @@ describe("blocker-Feld (#1123, Runde-1-Blocker je Brille)", () => {
 /** Fake-git: Basis B, HEAD H, Commit-Messages und Dateien frei wählbar. */
 function fakeGit(o: {
   messages: string;
+  /** Commit-Messages chronologisch (ältester zuerst); überschreibt `messages` und macht die Log-Reihenfolge prüfbar. */
+  commits?: string[];
   files?: string;
   inSlice?: string[];
   known?: string[];
@@ -222,7 +224,10 @@ function fakeGit(o: {
     if (cmd === "rev-parse HEAD") return H + "\n";
     // Exakte Bereiche: ein Aufruf mit falschem Bereich (z.B. nur "HEAD" statt "<basis>..HEAD") fällt
     // durch und wirft, statt dieselbe Antwort zu liefern (sonst bewacht der Test den Slice nicht).
-    if (cmd === `log --reverse --format=%B ${B}..HEAD`) return o.messages;
+    // Wie echtes git: ohne `--reverse` kommt der neueste Commit zuerst (Z8a: sonst gewinnt der älteste Nachweis).
+    const chrono = o.commits ?? [o.messages];
+    if (cmd === `log --reverse --format=%B ${B}..HEAD`) return chrono.join("\n\n");
+    if (cmd === `log --format=%B ${B}..HEAD`) return [...chrono].reverse().join("\n\n");
     if (cmd === `diff --name-only ${B}...HEAD`) return o.files ?? "src/x.ts\n";
     // Exakt (#1309): die Basis des Zählens ist der geprüfte head, nicht beliebig; ein anderer Bereich wirft.
     const zaehlen = /^rev-list --count --no-merges ([0-9a-f]{40})\.\.HEAD$/.exec(cmd);
@@ -242,6 +247,14 @@ function fakeGit(o: {
 const env = { KQ_DIFF_BASE: "base" };
 
 describe("checkReviewNachweis (git injiziert)", () => {
+  test("zwei Nachweis-Commits: der jüngste gilt, ein alter mit unbekanntem head stört nicht (Z8a)", () => {
+    const alt = review(`head=${"c".repeat(40)} runden=2 lenses=${DREI} verdikt=ok`);
+    const r = checkReviewNachweis({ runGit: fakeGit({ messages: "", commits: [alt, review()] }), env });
+    assert.deepEqual(r.fehler, []);
+    assert.equal(r.ok, true);
+    // Umgekehrt: ist der jüngste Nachweis der kaputte, ist es rot (nicht der ältere gute).
+    assert.equal(checkReviewNachweis({ runGit: fakeGit({ messages: "", commits: [review(), alt] }), env }).ok, false);
+  });
   test("gültiger Nachweis im Slice ist grün", () => {
     const r = checkReviewNachweis({ runGit: fakeGit({ messages: review() }), env });
     assert.deepEqual(r.fehler, []);

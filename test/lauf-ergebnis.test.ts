@@ -28,6 +28,8 @@ const mod = raw as {
   ciFixRunden: (l: { sha: string; createdAt: string }[], von: string, bis: string) => number;
   bewertePrs: (e: { prs: Pr[]; commits: Commit[]; ci: Record<number, { sha: string; createdAt: string }[]>; festgefahren: Record<number, number>; jetzt: Date }) => Ergebnis;
   formatiere: (e: Ergebnis) => string;
+  labelAbfrage: (n: number[]) => string;
+  festgefahrenAusAntwort: (a: unknown, n: number[]) => Record<number, number>;
   laufErgebnis: (e: { von: string; bis: string; runGit: (a: string[]) => string; runGh: (a: string[]) => string; jetzt?: Date }) => Ergebnis;
 };
 
@@ -175,23 +177,57 @@ describe("bewertePrs und Aggregate", () => {
   });
 });
 
+describe("Label-Events per GraphQL (Z3c)", () => {
+  test("labelAbfrage: ein Alias je PR, nur LABELED_EVENT, pageInfo statt totalCount", () => {
+    const q = mod.labelAbfrage([7, 9]);
+    assert.match(q, /p7: pullRequest\(number: 7\)/);
+    assert.match(q, /p9: pullRequest\(number: 9\)/);
+    assert.match(q, /itemTypes: \[LABELED_EVENT\]/);
+    assert.match(q, /pageInfo \{ hasNextPage \}/);
+    assert.ok(!q.includes("totalCount"), "totalCount zählt alle Timeline-Einträge, nicht nur Label-Events");
+  });
+  const knoten = (...namen: string[]) => ({ pageInfo: { hasNextPage: false }, nodes: namen.map((name) => ({ createdAt: "2026-10-01T10:45:00Z", label: { name } })) });
+  test("festgefahrenAusAntwort zählt nur status:festgefahren, auch mehrfach", () => {
+    const antwort = { data: { repository: { p1: { timelineItems: knoten("status:festgefahren", "x", "status:festgefahren") }, p2: { timelineItems: knoten("dependencies") } } } };
+    assert.deepEqual(mod.festgefahrenAusAntwort(antwort, [1, 2]), { 1: 2, 2: 0 });
+  });
+  test("abgeschnittene Seite, fehlender PR, fehlende pageInfo und fehlendes repository sind Datenfehler", () => {
+    const seite = { data: { repository: { p1: { timelineItems: { pageInfo: { hasNextPage: true }, nodes: [] } } } } };
+    assert.throws(() => mod.festgefahrenAusAntwort(seite, [1]), (e: Error) => e instanceof mod.DatenFehler && /abgeschnitten/.test(e.message));
+    assert.throws(() => mod.festgefahrenAusAntwort({ data: { repository: { p1: null } } }, [1]), mod.DatenFehler);
+    assert.throws(() => mod.festgefahrenAusAntwort({ data: { repository: { p1: { timelineItems: { nodes: [] } } } } }, [1]), mod.DatenFehler);
+    assert.throws(() => mod.festgefahrenAusAntwort({ errors: [{ message: "x" }] }, [1]), mod.DatenFehler);
+  });
+});
+
 describe("laufErgebnis (git und gh injiziert)", () => {
   const liste = [pr({ headRefName: "feature/kq-40-a&b#c+d" })];
   const log = `${SHA}\x1f${MERGED}\x1f${review("runden=1 lenses=doku")}\x1e`;
-  const gh = (o: { liste?: unknown[]; fehler?: string } = {}) => (a: string[]): string => {
+  type Opt = { seit?: string; liste?: unknown[]; fehler?: string; laeufe?: string; label?: (nummern: number[]) => unknown; aufrufe?: string[][] };
+  /** gh-Stub: `pr list`, die EINE paginierte Läufe-Abfrage und GraphQL-Label-Events (Standard: ein festgefahren-Label je PR). */
+  const gh = (o: Opt = {}) => (a: string[]): string => {
+    o.aufrufe?.push(a);
     if (o.fehler && a.join(" ").includes(o.fehler)) throw new Error("gh kaputt");
     if (a[0] === "pr") {
       assert.ok(a.includes("--base") && a.includes("main"), "nur PRs nach main");
       return JSON.stringify(o.liste ?? liste);
     }
     if (a.join(" ").includes("actions/workflows")) {
-      assert.ok(a.includes("--paginate") && a.join(" ").includes("status=failure") && a.join(" ").includes("event=pull_request"), "nur rote PR-Läufe, paginiert");
-      assert.ok(a.some((x) => x.includes(`branch=${encodeURIComponent(liste[0].headRefName)}&`)), "Branch-Name URL-kodiert");
-    } else {
-      assert.ok(a.includes("--paginate") && a.join(" ").includes("status:festgefahren") && a.join(" ").includes('"labeled"'), "Label-Events, paginiert");
+      const pfad = a.find((x) => x.includes("actions/workflows")) ?? "";
+      assert.ok(a.includes("--paginate") && pfad.includes("status=failure") && pfad.includes("event=pull_request"), "nur rote PR-Läufe, paginiert");
+      assert.ok(pfad.includes(`created=%3E%3D${o.seit ?? "2026-10-01"}`), "Zeitfilter ab dem frühesten PR");
+      assert.ok(!pfad.includes("branch="), "keine Abfrage je Branch");
+      return o.laeufe ?? `feature/kq-40-a&b#c+d\tx\t2026-10-01T10:30:00Z\nfeature/kq-40-a&b#c+d\tx\t2026-10-01T10:31:00Z\nfremder/branch\ty\t2026-10-01T10:32:00Z\n`;
     }
-    if (a.join(" ").includes("actions/workflows")) return "x\t2026-10-01T10:30:00Z\nx\t2026-10-01T10:31:00Z\n";
-    return "2026-10-01T10:45:00Z\n";
+    assert.equal(a[1], "graphql");
+    assert.ok(a.includes("owner={owner}") && a.includes("name={repo}"));
+    const query = a.find((x) => x.startsWith("query=")) ?? "";
+    const nummern = [...query.matchAll(/p(\d+): pullRequest/g)].map((m) => Number(m[1]));
+    if (o.label) return JSON.stringify(o.label(nummern));
+    const repository = Object.fromEntries(
+      nummern.map((n) => [`p${n}`, { timelineItems: { pageInfo: { hasNextPage: false }, nodes: [{ createdAt: "2026-10-01T10:45:00Z", label: { name: "status:festgefahren" } }] } }]),
+    );
+    return JSON.stringify({ data: { repository } });
   };
   const git = (l: string) => (a: string[]): string => {
     assert.equal(a[0], "log");
@@ -201,12 +237,54 @@ describe("laufErgebnis (git und gh injiziert)", () => {
   const von = "2026-10-01T00:00:00Z";
   const bis = "2026-10-02T00:00:00Z";
 
-  test("Orchestrierung: ein PR, CI-Läufe dedupliziert, festgefahren gezählt", () => {
+  test("Orchestrierung: ein PR, CI-Läufe dedupliziert und nur der eigene Branch, festgefahren gezählt", () => {
     const e = mod.laufErgebnis({ von, bis, runGit: git(log), runGh: gh(), jetzt: SPAETER });
     assert.equal(e.zeilen.length, 1);
     assert.equal(e.zeilen[0].ciFix, 1);
     assert.equal(e.zeilen[0].festgefahren, 1);
     assert.equal(e.zeilen[0].runden, 1);
+  });
+  test("ohne PRs keine weiteren gh-Aufrufe (nur die Liste)", () => {
+    const aufrufe: string[][] = [];
+    const e = mod.laufErgebnis({ von, bis, runGit: git(""), runGh: gh({ liste: [], aufrufe }), jetzt: SPAETER });
+    assert.equal(e.zeilen.length, 0);
+    assert.equal(aufrufe.length, 1);
+  });
+  test.each([3, 50, 51, 60])("gh-Aufrufe wachsen nicht je PR: bei %i PRs höchstens 1 + 1 + ⌈N/50⌉", (n) => {
+    const prs = Array.from({ length: n }, (_, i) => pr({ number: 100 + i, mergeCommit: { oid: `${(i + 1).toString(16).padStart(40, "0")}` }, headRefName: `feature/kq-${i}` }));
+    const viele = prs.map((p) => `${p.mergeCommit.oid}\x1f${MERGED}\x1f${review("runden=1 lenses=doku")}\x1e`).join("");
+    const aufrufe: string[][] = [];
+    const e = mod.laufErgebnis({ von, bis, runGit: git(viele), runGh: gh({ liste: prs, aufrufe }), jetzt: SPAETER });
+    assert.equal(e.zeilen.length, n);
+    assert.ok(aufrufe.length <= 2 + Math.ceil(n / 50), `${aufrufe.length} Aufrufe bei ${n} PRs`);
+    assert.ok(e.zeilen.every((z) => z.festgefahren === 1), "jeder PR bekommt sein eigenes Label-Ergebnis");
+  });
+  test("rote Läufe zweier PRs werden dem richtigen Branch zugeordnet", () => {
+    const prs = [pr({ number: 50, headRefName: "feature/a" }), pr({ number: 51, headRefName: "feature/b", mergeCommit: { oid: "1".repeat(40) } })];
+    const zwei = `${SHA}\x1f${MERGED}\x1f${review("runden=1 lenses=doku")}\x1e${"1".repeat(40)}\x1f${MERGED}\x1f${review("runden=1 lenses=doku")}\x1e`;
+    const laeufe = "feature/a\tx\t2026-10-01T10:30:00Z\nfeature/b\ty\t2026-10-01T10:31:00Z\nfeature/b\tz\t2026-10-01T10:32:00Z\n";
+    const e = mod.laufErgebnis({ von, bis, runGit: git(zwei), runGh: gh({ liste: prs, laeufe }), jetzt: SPAETER });
+    assert.deepEqual(e.zeilen.map((z) => [z.pr, z.ciFix]), [[50, 1], [51, 2]]);
+  });
+  test("Zeitfilter ab dem FRÜHESTEN PR-Datum: ein roter Lauf des älteren PRs bleibt in der Abfrage und in seinem ciFix (Z3c)", () => {
+    const prs = [
+      pr({ number: 51, headRefName: "feature/neu", createdAt: "2026-10-01T10:00:00Z", mergeCommit: { oid: "1".repeat(40) } }),
+      pr({ number: 50, headRefName: "feature/alt", createdAt: "2026-09-30T08:00:00Z" }), // bewusst nicht aufsteigend
+    ];
+    const zwei = `${SHA}\x1f${MERGED}\x1f${review("runden=1 lenses=doku")}\x1e${"1".repeat(40)}\x1f${MERGED}\x1f${review("runden=1 lenses=doku")}\x1e`;
+    const laeufe = "feature/alt\told\t2026-09-30T10:30:00Z\nfeature/neu\tneu\t2026-10-01T10:30:00Z\n";
+    const e = mod.laufErgebnis({ von: "2026-09-30T00:00:00Z", bis, runGit: git(zwei), runGh: gh({ liste: prs, laeufe, seit: "2026-09-30" }), jetzt: SPAETER });
+    assert.deepEqual(e.zeilen.map((z) => [z.pr, z.ciFix]), [[50, 1], [51, 1]]);
+  });
+  test("API-Kappung bei 1000 roten Läufen ist ein Datenfehler", () => {
+    const laeufe = Array.from({ length: 1000 }, (_, i) => `feature/kq-40-a&b#c+d\tsha${i}\t2026-10-01T10:30:00Z`).join("\n");
+    assert.throws(() => mod.laufErgebnis({ von, bis, runGit: git(log), runGh: gh({ laeufe }) }), (e: Error) => e instanceof mod.DatenFehler && /abgeschnitten/.test(e.message));
+  });
+  test("kaputte GraphQL-Antwort (kein JSON, abgeschnitten) ist ein Datenfehler", () => {
+    const kaputt = () => mod.laufErgebnis({ von, bis, runGit: git(log), runGh: (a) => (a[1] === "graphql" ? "kein json" : gh()(a)) });
+    assert.throws(kaputt, mod.DatenFehler);
+    const mehr = (n: number[]) => ({ data: { repository: Object.fromEntries(n.map((x) => [`p${x}`, { timelineItems: { pageInfo: { hasNextPage: true }, nodes: [] } }])) } });
+    assert.throws(() => mod.laufErgebnis({ von, bis, runGit: git(log), runGh: gh({ label: mehr }) }), mod.DatenFehler);
   });
   test("PR mit mergedAt nach dem Fensterende wird ausgefiltert", () => {
     const e = mod.laufErgebnis({ von, bis: "2026-10-01T11:00:00Z", runGit: git(log), runGh: gh(), jetzt: SPAETER });
@@ -224,7 +302,8 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     assert.throws(() => mod.laufErgebnis({ von, bis, runGit: git(log), runGh: gh({ liste: voll }) }), (err: Error) => err instanceof mod.DatenFehler && /abgeschnitten/.test(err.message));
   });
   test("gh- und git-Fehler werden zum Datenfehler", () => {
-    assert.throws(() => mod.laufErgebnis({ von, bis, runGit: git(log), runGh: gh({ fehler: "events" }) }), mod.DatenFehler);
+    assert.throws(() => mod.laufErgebnis({ von, bis, runGit: git(log), runGh: gh({ fehler: "graphql" }) }), mod.DatenFehler);
+    assert.throws(() => mod.laufErgebnis({ von, bis, runGit: git(log), runGh: gh({ fehler: "actions/workflows" }) }), mod.DatenFehler);
     const kaputtGit = () => {
       throw new Error("kein origin");
     };

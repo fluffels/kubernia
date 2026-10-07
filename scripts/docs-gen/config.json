@@ -50,6 +50,9 @@
       "^(src|node_modules)/[^/]+/"
     ]
   },
+  "adr": {
+    "ordner": "docs/adr"
+  },
   "zeitleiste": {
     "adr": "docs/adr",
     "meilensteine": "docs/meilensteine.json"
@@ -60,12 +63,13 @@
       "agenten-sequenz": "docs/diagramme/agenten-sequenz.mmd",
       "leitplanken-schichten": "docs/diagramme/leitplanken-schichten.mmd"
     },
-    "vollstaendig": ["agenten-sequenz"],
+    "vollstaendig": ["agenten-ablauf", "agenten-sequenz"],
     "konstanten": {
       "lensCap": { "datei": ".claude/workflows/kubernia-ticket.js", "name": "MAX_REVIEW_RUNDEN" },
       "fixVersuche": { "datei": ".claude/workflows/kubernia-ticket.js", "name": "MAX_FIX_VERSUCHE" },
       "festgefahrenCommits": { "datei": "scripts/check-festgefahren.mjs", "name": "MAX_FAILED_PUSHES" }
     },
+    "ruleset": ".github/ruleset-main-schutz.json",
     "ciWorkflows": ".github/workflows"
   },
   "harness": {

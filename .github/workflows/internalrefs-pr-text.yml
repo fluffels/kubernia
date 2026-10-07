@@ -5,8 +5,8 @@ name: Interne Bezüge im PR-Text
 # bleiben über refs/pull/* dauerhaft öffentlich, auch wenn der PR später editiert wird.
 #
 # Hinweis: Required-Check im Ruleset „main-schutz“ (Stand 2026-10-06, #1303). Der Jobname ist ASCII
-# und bleibt wortgleich: wer ihn ändert, zieht Ruleset und REQUIRED_CONTEXTS in
-# test/harness/required-check-shadowing.test.ts nach.
+# und bleibt wortgleich: wer ihn ändert, zieht Ruleset und den Spiegel .github/ruleset-main-schutz.json
+# (Quelle des Shadowing-Wächters test/harness/required-check-shadowing.test.ts) nach.
 #
 # Design:
 #   - Trigger inkl. `edited`, damit auch ein nachträglich geänderter Titel/Body geprüft wird.

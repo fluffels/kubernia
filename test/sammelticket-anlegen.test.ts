@@ -129,10 +129,12 @@ describe("pruefSchritt: der Prüf- und Retry-Kern (#1390 Z10, Lens R1)", () => {
 describe("Verdrahtung der Selbstkorrektur (#1390, Lens R1)", () => {
   const lies = (rel: string) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
   test("board-place korrigiert über planMitKorrektur, board-takt zieht die Liste nach, das Anlege-Skript nutzt pruefSchritt und planMitKorrektur", () => {
-    expect(lies("scripts/board-place.mjs")).toMatch(/planMitKorrektur\(items, args, n\)/);
+    expect(lies("scripts/board-lib.mjs")).toMatch(/function planMitKorrektur\(items, args, n\)/);
+    expect(lies("scripts/board-place.mjs")).toMatch(/planMitKorrektur\(items, args, args\.notfall \? null : positionOderWarnung\(\)\)/);
     expect(lies("scripts/board-takt.mjs")).toMatch(/if \(items\) items = ziehListeNach\(items, r\);/);
     const anlegen = lies("scripts/sammelticket-anlegen.mjs");
     expect(anlegen).toMatch(/pruefSchritt\(\{ items: loadItems\(\)/);
     expect(anlegen).toMatch(/planMitKorrektur\(items, \{ anchor: null, numbers: \[nr\] \}/);
+    expect(anlegen).not.toMatch(/from "\.\/board-place\.mjs"/); // kein Skript importiert aus einem Einstiegsskript (#1398)
   });
 });

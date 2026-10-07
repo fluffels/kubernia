@@ -36,25 +36,36 @@ export function byCodeUnit(a, b) {
 }
 
 /**
- * Markiert je Zeile, ob sie zu einem Code-Fence gehört (``` oder ~~~, die Fence-Zeilen selbst
- * eingeschlossen). Ein mit einem Zeichen geöffneter Fence wird nur vom selben Zeichen geschlossen.
+ * Alle Code-Fences (CommonMark): Start, Ende (Index der letzten Zeile des Blocks, die Fence-Zeilen eingeschlossen),
+ * Info-String und Inhalt. Geöffnet mit ``` oder ~~~ (≥ 3); geschlossen nur vom gleichen Zeichen, mindestens so lang
+ * wie der Anfang und ohne Info-String dahinter (so schließt ein innerer ```-Block einen 4-Backtick-Fence nicht).
+ * Ein nie geschlossener Fence reicht bis zum Textende (`geschlossen: false`).
  */
-export function fenceMaske(lines) {
-  let fence = null;
-  return lines.map((line) => {
-    const m = /^\s*(`{3,}|~{3,})/.exec(line);
-    if (m) {
-      if (fence === null) {
-        fence = m[1][0];
-        return true;
-      }
-      if (fence === m[1][0]) {
-        fence = null;
-        return true;
-      }
+export function fenceBloecke(lines) {
+  const bloecke = [];
+  let offen = null;
+  lines.forEach((line, i) => {
+    if (offen === null) {
+      const m = /^\s*(`{3,}|~{3,})(.*)$/.exec(line);
+      // Backtick-Fences dürfen im Info-String keinen Backtick tragen (sonst ist es Inline-Code).
+      if (m && !(m[1][0] === "`" && m[2].includes("`"))) offen = { zeichen: m[1][0], laenge: m[1].length, start: i, info: m[2].trim(), inhalt: [] };
+      return;
     }
-    return fence !== null;
+    const z = /^\s*(`{3,}|~{3,})\s*$/.exec(line);
+    if (z && z[1][0] === offen.zeichen && z[1].length >= offen.laenge) {
+      bloecke.push({ start: offen.start, ende: i, geschlossen: true, info: offen.info, inhalt: offen.inhalt });
+      offen = null;
+    } else offen.inhalt.push(line);
   });
+  if (offen) bloecke.push({ start: offen.start, ende: lines.length - 1, geschlossen: false, info: offen.info, inhalt: offen.inhalt });
+  return bloecke;
+}
+
+/** Markiert je Zeile, ob sie zu einem Code-Fence gehört (die Fence-Zeilen selbst eingeschlossen), abgeleitet aus `fenceBloecke`. */
+export function fenceMaske(lines) {
+  const maske = lines.map(() => false);
+  for (const b of fenceBloecke(lines)) for (let i = b.start; i <= b.ende; i++) maske[i] = true;
+  return maske;
 }
 
 /**
@@ -88,9 +99,10 @@ export function parseChain(script) {
     .map((s) => s.trim())
     .filter(Boolean)
     .map((step) => {
-      const run = /^npm run ([^\s]+)$/.exec(step);
+      // Argumente hinter `--` (`npm run X -- --flag`) gehören nicht zum Schrittnamen (Z5g).
+      const run = /^npm run ([^\s]+)(?:\s+--(?:\s.*)?)?$/.exec(step);
       if (run) return run[1];
-      return step === "npm test" ? "test" : step;
+      return /^npm test(?:\s+--(?:\s.*)?)?$/.test(step) ? "test" : step;
     });
 }
 

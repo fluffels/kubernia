@@ -2,8 +2,8 @@
 #
 # Kubernia pre-push-Hook (#528, seit #592 nur noch SEKUNDÄR)
 # =================================================================
-# Seit #592 ist `main` server-seitig PR-gegated (Branch-Protection: Merge nur
-# über PR mit grünen Required-Checks, enforce_admins an) — die maßgebliche,
+# Seit #592 ist `main` server-seitig PR-gegated (Ruleset main-schutz: Merge nur
+# über PR mit grünen Required-Checks, ohne Bypass-Akteure) — die maßgebliche,
 # NICHT umgehbare Durchsetzung sind jetzt die CI-Required-Checks auf dem PR,
 # nicht mehr dieser lokale Hook (siehe ADR 0009). Ein Direkt-Push auf `main`
 # wird server-seitig ohnehin abgelehnt; dieser Hook ist damit nur noch ein

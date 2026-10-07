@@ -34,6 +34,7 @@ const api = docsGen as unknown as {
 const mdApi = markdown as unknown as {
   parseChain: (s: string) => string[];
   fenceMaske: (lines: string[]) => boolean[];
+  fenceBloecke: (lines: string[]) => { start: number; ende: number; geschlossen: boolean; info: string; inhalt: string[] }[];
   collectMarkdown: (rootDir: string, roots?: string[], o?: { ueberspringe?: (ent: { name: string; isDirectory: () => boolean }, relDir: string) => boolean }) => string[];
   parseFrontmatter: (t: string) => Record<string, string>;
   brauche: (rootDir: string, rel: string, was: string, errors: string[]) => boolean;
@@ -266,6 +267,9 @@ describe("Generator gates", () => {
   test("parseChain: npm run, npm test, Rohbefehl", () => {
     assert.deepEqual(mdApi.parseChain("npm run a && npm test && node x.mjs --y"), ["a", "test", "node x.mjs --y"]);
   });
+  test("parseChain: Argumente hinter -- fallen weg (Z5g)", () => {
+    assert.deepEqual(mdApi.parseChain("npm run a -- --flag && npm test -- --run && npm run b"), ["a", "test", "b"]);
+  });
   test("Reihenfolge, Kettenspalte, verschachtelte Kette ohne eigene Zeile, CI-Zeile", () => {
     const rows = run(base, conf({ descriptions: { a: "A", b: "B", test: "T", c: "C", "node x.mjs": "X" } }))
       .split("\n")
@@ -385,6 +389,20 @@ describe("markdown-Helfer (#1392)", () => {
   });
   test("fenceMaske: offener Fence bleibt bis zum Ende offen", () => {
     assert.deepEqual(mdApi.fenceMaske(["```", "x"]), [true, true]);
+  });
+  test("fenceMaske (CommonMark, Z5c): 4-Backtick-Fence wird von innerem ``` nicht geschlossen, ein Schluss mit Info-String schließt nicht", () => {
+    assert.deepEqual(mdApi.fenceMaske(["````", "```", "x", "```", "````", "y"]), [true, true, true, true, true, false]);
+    assert.deepEqual(mdApi.fenceMaske(["```", "```ts", "x", "```", "y"]), [true, true, true, true, false]);
+  });
+  test("fenceBloecke: Start, Ende, Info, Inhalt, geschlossen", () => {
+    const b = mdApi.fenceBloecke(["a", "~~~mermaid ", "x", "~~~", "```", "y"]);
+    assert.deepEqual(b, [
+      { start: 1, ende: 3, geschlossen: true, info: "mermaid", inhalt: ["x"] },
+      { start: 4, ende: 5, geschlossen: false, info: "", inhalt: ["y"] },
+    ]);
+  });
+  test("fenceBloecke: ``` mit Backtick im Info-String ist kein Fence (Inline-Code)", () => {
+    assert.deepEqual(mdApi.fenceBloecke(["```a`b", "x"]), []);
   });
   test("parseFrontmatter: CRLF, Unterstrich-Schlüssel, ein Paar Anführungszeichen, kein Frontmatter", () => {
     assert.deepEqual(mdApi.parseFrontmatter("---\r\nname: x\r\nmy_key: 'a b'\r\n---\r\ntext"), { name: "x", my_key: "a b" });

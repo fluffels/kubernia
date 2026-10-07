@@ -7,8 +7,6 @@ import { readFileSync } from "node:fs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as rawPlace from "../scripts/board-place.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawTakt from "../scripts/board-takt.mjs";
 
 type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
@@ -29,7 +27,8 @@ type Lib = {
   ghJson: unknown;
 };
 const L = rawLib as unknown as Lib;
-const place = rawPlace as unknown as {
+// planMitKorrektur und positionOderWarnung liegen in board-lib (ein Skript importiert nicht aus dem anderen, #1398).
+const place = rawLib as unknown as {
   planMitKorrektur: (items: Item[], args: { anchor: number | null; numbers: number[]; notfall?: string }, n: number | null) => { korrektur: unknown; plan: { steps: { item: Item }[] } };
   positionOderWarnung: (lies?: () => number) => number | null;
 };

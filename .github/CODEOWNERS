@@ -32,6 +32,7 @@
 /scripts/content-chunks.cjs @fluffels
 /scripts/check-*.mjs       @fluffels
 /scripts/slice-override.mjs @fluffels
+/scripts/ci-laeufe.mjs     @fluffels
 /scripts/docs-gen*        @fluffels
 /eslint.config.js          @fluffels
 /eslint-suppressions.json  @fluffels
@@ -41,6 +42,7 @@
 /.github/workflows/*.yml   @fluffels
 /.github/CODEOWNERS        @fluffels
 /.github/protected-paths.json @fluffels
+/.github/ruleset-main-schutz.json @fluffels
 
 # Harness/Leitplanken (#1012)
 # AGENTS.md bewusst OHNE fuehrenden '/' (#1168): trifft jede AGENTS.md auf jeder Ebene, auch
@@ -76,6 +78,7 @@ AGENTS.md                  @fluffels
 /scripts/haupt-sync.mjs @fluffels
 /scripts/lens-edit-guard.mjs @fluffels
 /.agents/                  @fluffels
+/.githooks/                @fluffels
 /docs/agent-harness*       @fluffels
 
 # Waechter-Tests (#1156, #1165) - der Test IST hier das Gate (kein geschuetztes check-Skript dahinter).

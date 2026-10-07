@@ -6,7 +6,8 @@
 // passende Datei oder eine Zahl ohne Quelle macht den Generator (und damit `check:docgen`) rot.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { MERMAID_FRONTMATTER, expandSteps, ganzzahlKonstante } from "./markdown.mjs";
+import { MERMAID_FRONTMATTER, ganzzahlKonstante } from "./markdown.mjs";
+import { kettenSchritte } from "./gates.mjs";
 import { harnessKatalog } from "./harness-inventar.mjs";
 
 const PLATZHALTER = /\$\{([a-z-]+):([^}]*)\}/g;
@@ -15,18 +16,80 @@ const UNSICHER = /["<>{};#\r\n]/;
 /** Arten, die einen Subagenten, Skill oder Workflow *nennen* (zählen für die Vollständigkeit). */
 const NAMENSARTEN = ["agent", "agent-modell", "skill", "skill-modell", "workflow"];
 
-/** Liest die Job-Namen (`name:` mit 4 Leerzeichen Einrückung unter `jobs.<id>`, Anführungszeichen erlaubt); Workflow- und Step-Namen zählen nicht. */
+const WERT_OHNE_QUOTES = (roh) => {
+  const quoted = /^(["'])(.*)\1/.exec(roh);
+  return quoted ? quoted[2] : roh.split(/[ \t]#/)[0].trim();
+};
+const einrueckung = (zeile) => /^[ \t]*/.exec(zeile)[0].length;
+const inhaltszeile = (zeile) => zeile.trim() !== "" && !zeile.trim().startsWith("#");
+
+/**
+ * Die Job-Namen eines Workflows aus seiner Struktur, nicht aus fester Einrückung (Z2c): `jobs:` in Spalte 0; die
+ * Einrückung der Job-Schlüssel gilt für die Datei, die der Job-Kinder ergibt sich aus der ersten Zeile unter dem
+ * Job-Schlüssel. Nur ein `name:` genau auf Job-Kind-Ebene zählt; Workflow- und Step-Namen nicht. Anführungszeichen
+ * und ` #`-Kommentare wie im Shadowing-Wächter (test/harness/required-check-shadowing.test.ts).
+ */
+export function jobNamenAus(text) {
+  const namen = [];
+  let inJobs = false;
+  let jobEinr = null;
+  let kindEinr = null;
+  for (const zeile of text.split(/\r?\n/)) {
+    if (!inhaltszeile(zeile)) continue;
+    const einr = einrueckung(zeile);
+    if (einr === 0) {
+      inJobs = /^jobs:\s*(#.*)?$/.test(zeile);
+      jobEinr = null;
+      kindEinr = null;
+      continue;
+    }
+    if (!inJobs) continue;
+    jobEinr ??= einr;
+    if (einr === jobEinr) {
+      kindEinr = null; // nächster Job-Schlüssel
+      continue;
+    }
+    if (einr < jobEinr) continue;
+    kindEinr ??= einr;
+    const m = einr === kindEinr ? /^[ \t]*name:[ \t]*(.*)$/.exec(zeile) : null;
+    if (m) {
+      const wert = WERT_OHNE_QUOTES(m[1].trim());
+      if (wert !== "") namen.push(wert);
+    }
+  }
+  return namen;
+}
+
 function ciJobNamen(rootDir, dir) {
   const abs = join(rootDir, dir);
   if (!existsSync(abs)) throw new Error(`CI-Workflow-Ordner ${dir} nicht gefunden (Config diagramme.ciWorkflows veraltet?)`);
   const namen = new Set();
   for (const f of readdirSync(abs).filter((n) => /\.ya?ml$/.test(n))) {
-    for (const l of readFileSync(join(abs, f), "utf8").split(/\r?\n/)) {
-      const m = /^ {4}name:\s*(.*?)\s*$/.exec(l);
-      if (m) namen.add(m[1].replace(/^(["'])(.*)\1$/, "$2"));
-    }
+    for (const n of jobNamenAus(readFileSync(join(abs, f), "utf8"))) namen.add(n);
   }
   return namen;
+}
+
+/**
+ * Der Spiegel des Rulesets `main-schutz` (`config.diagramme.ruleset`, Datei unter `.github/`, geschützt): Name, die
+ * Required-Check-Kontexte und die Bypass-Akteure, wie sie `gh api repos/{owner}/{repo}/rulesets/<id>` liefert.
+ */
+function ladeRuleset(rootDir, cfg) {
+  const pfad = cfg.ruleset;
+  if (!pfad) throw new Error("config.diagramme.ruleset fehlt (Pfad der Ruleset-Spiegeldatei)");
+  const abs = join(rootDir, pfad);
+  if (!existsSync(abs)) throw new Error(`Ruleset-Spiegel ${pfad} nicht gefunden`);
+  let r;
+  try {
+    r = JSON.parse(readFileSync(abs, "utf8"));
+  } catch (err) {
+    throw new Error(`Ruleset-Spiegel ${pfad} ist kein gültiges JSON: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+  }
+  const textListe = (x) => Array.isArray(x) && x.every((e) => typeof e === "string" && e.trim() !== "");
+  if (typeof r?.name !== "string" || r.name.trim() === "") throw new Error(`Ruleset-Spiegel ${pfad}: name fehlt`);
+  if (!textListe(r.requiredChecks) || r.requiredChecks.length === 0) throw new Error(`Ruleset-Spiegel ${pfad}: requiredChecks muss eine nicht leere Liste aus Texten sein`);
+  if (!Array.isArray(r.bypassActors)) throw new Error(`Ruleset-Spiegel ${pfad}: bypassActors muss eine Liste sein`);
+  return r;
 }
 
 function konstante(rootDir, cfg, schluessel) {
@@ -44,8 +107,7 @@ function gatesAnzahl(rootDir, config, kette) {
   if (!g || !(g.chains ?? []).includes(kette)) throw new Error(`Gate-Kette "${kette}" steht nicht in config.gates.chains`);
   const scripts = JSON.parse(readFileSync(join(rootDir, g.package), "utf8")).scripts ?? {};
   if (typeof scripts[kette] !== "string") throw new Error(`Gate-Kette "${kette}" fehlt in ${g.package}`);
-  const schritte = expandSteps(scripts[kette], scripts, g.chains, [kette]).filter((s) => !g.chains.includes(s));
-  return String(schritte.length);
+  return String(kettenSchritte(scripts, g.chains, kette).length);
 }
 
 const modellText = (eintrag, fallback) => [eintrag.model ?? fallback, eintrag.effort].filter(Boolean).join(" · ");
@@ -64,6 +126,9 @@ export function ersetzePlatzhalter(text, { rootDir, config }) {
   const cfg = config.diagramme ?? {};
   const katalog = harnessKatalog(rootDir, config.harness);
   let ciNamen = null;
+  let ruleset = null;
+  const rulesetDaten = () => (ruleset ??= ladeRuleset(rootDir, cfg));
+  const genannteChecks = new Set();
   const aufloesen = (art, wert) => {
     if (wert.trim() === "") throw new Error(`Platzhalter "${art}" ohne Wert`);
     switch (art) {
@@ -81,10 +146,24 @@ export function ersetzePlatzhalter(text, { rootDir, config }) {
         return konstante(rootDir, cfg, wert);
       case "gates":
         return gatesAnzahl(rootDir, config, wert);
-      case "ci-check": {
+      case "required-check": {
+        // Ein Required Check gilt nur, wenn ihn das Ruleset (Spiegel) UND ein Workflow-Job führt (Z2c).
+        const r = rulesetDaten();
+        if (!r.requiredChecks.includes(wert)) throw new Error(`Required Check "${wert}" steht nicht im Ruleset-Spiegel ${cfg.ruleset} (bekannt: ${r.requiredChecks.join(", ")})`);
         ciNamen ??= ciJobNamen(rootDir, cfg.ciWorkflows ?? ".github/workflows");
-        if (!ciNamen.has(wert)) throw new Error(`CI-Check "${wert}" hat keine passende Job-name:-Zeile in ${cfg.ciWorkflows ?? ".github/workflows"}`);
+        if (!ciNamen.has(wert)) throw new Error(`Required Check "${wert}" hat keine passende Job-name:-Zeile in ${cfg.ciWorkflows ?? ".github/workflows"}`);
+        genannteChecks.add(wert);
         return wert;
+      }
+      case "ruleset": {
+        const r = rulesetDaten();
+        if (wert === "name") return r.name;
+        if (wert === "bypass") {
+          // „ohne Bypass“ ist eine Aussage über die echte Konfiguration: der Spiegel muss sie tragen.
+          if (r.bypassActors.length > 0) throw new Error(`Ruleset ${r.name} hat Bypass-Akteure (${cfg.ruleset}): „ohne Bypass“ wäre falsch`);
+          return "ohne Bypass";
+        }
+        throw new Error(`unbekannter Ruleset-Wert "${wert}" (erlaubt: name, bypass)`);
       }
       default:
         throw new Error(`unbekannte Platzhalter-Art "${art}"`);
@@ -96,6 +175,11 @@ export function ersetzePlatzhalter(text, { rootDir, config }) {
     return ersatz;
   });
   if (ersetzt.includes("${")) throw new Error(`übrig gebliebener Platzhalter-Rest "\${" (Syntax \${art:wert}, ohne } im Wert)`);
+  // Wer einen Required Check nennt, nennt alle: sonst verschwindet ein neuer Kontext still aus dem Diagramm (Z2c).
+  if (genannteChecks.size > 0) {
+    const fehlen = rulesetDaten().requiredChecks.filter((c) => !genannteChecks.has(c));
+    if (fehlen.length) throw new Error(`Required Check ${fehlen.map((c) => `"${c}"`).join(", ")} aus dem Ruleset-Spiegel fehlt in der Vorlage (Fix: \${required-check:NAME} ergänzen)`);
+  }
   return ersetzt;
 }
 
@@ -106,9 +190,13 @@ export function genannteNamen(text) {
   return namen;
 }
 
-/** Wirft, wenn ein Subagent, Skill oder Workflow aus `.claude/` im Vorlagentext nicht vorkommt. */
-export function pruefeVollstaendigkeit(text, katalog, vorlage) {
-  const genannt = genannteNamen(text);
+/**
+ * Wirft, wenn ein Subagent, Skill oder Workflow aus `.claude/` in keiner der Vorlagen vorkommt. `vorlagen` sind
+ * `{ pfad, text }`: geprüft wird die Vereinigung, damit ein Diagramm nur einen Teil zeigen darf, solange alle
+ * zusammen vollständig sind (Z2b); die Meldung nennt alle beteiligten Vorlagen.
+ */
+export function pruefeVollstaendigkeit(vorlagen, katalog) {
+  const genannt = new Set(vorlagen.flatMap((v) => [...genannteNamen(v.text)]));
   const fehlen = [
     ...katalog.agents.map((a) => ["Subagent", a.name, a.datei]),
     ...katalog.skills.map((s) => ["Skill", s.name, s.datei]),
@@ -116,22 +204,29 @@ export function pruefeVollstaendigkeit(text, katalog, vorlage) {
   ].filter(([, name]) => !genannt.has(name));
   if (fehlen.length)
     throw new Error(
-      `${vorlage}: nicht im Diagramm: ${fehlen.map(([art, name, datei]) => `${art} "${name}" (${datei})`).join(", ")}. ` +
-        `Fix: in die Vorlage mit \${agent:NAME}, \${skill:NAME} bzw. \${workflow:NAME} aufnehmen, dann npm run docs:gen`,
+      `${vorlagen.length === 1 ? "Vorlage" : "Vorlagen"} ${vorlagen.map((v) => v.pfad).join(" + ")}: nicht im Diagramm: ${fehlen.map(([art, name, datei]) => `${art} "${name}" (${datei})`).join(", ")}. ` +
+        `Fix: in eine dieser Vorlagen mit \${agent:NAME}, \${skill:NAME} bzw. \${workflow:NAME} aufnehmen, dann npm run docs:gen`,
     );
+}
+
+function liesVorlage(rootDir, cfg, name) {
+  const pfad = cfg?.vorlagen?.[name];
+  if (!pfad) throw new Error(`config.diagramme.vorlagen.${name} fehlt`);
+  const abs = join(rootDir, pfad);
+  if (!existsSync(abs)) throw new Error(`Vorlage ${pfad} nicht gefunden`);
+  return { pfad, text: readFileSync(abs, "utf8").replace(/\r\n/g, "\n").trim() };
 }
 
 /** Erzeugt den Generator für die Vorlage `name` aus `config.diagramme.vorlagen`. */
 export function diagrammGenerator(name) {
   return ({ rootDir, config }) => {
     const cfg = config.diagramme;
-    const pfad = cfg?.vorlagen?.[name];
-    if (!pfad) throw new Error(`config.diagramme.vorlagen.${name} fehlt`);
-    const abs = join(rootDir, pfad);
-    if (!existsSync(abs)) throw new Error(`Vorlage ${pfad} nicht gefunden`);
-    const roh = readFileSync(abs, "utf8").replace(/\r\n/g, "\n").trim();
+    const { pfad, text: roh } = liesVorlage(rootDir, cfg, name);
+    const gruppe = cfg.vollstaendig ?? [];
+    if (gruppe.includes(name)) {
+      pruefeVollstaendigkeit(gruppe.map((n) => (n === name ? { pfad, text: roh } : liesVorlage(rootDir, cfg, n))), harnessKatalog(rootDir, config.harness));
+    }
     try {
-      if ((cfg.vollstaendig ?? []).includes(name)) pruefeVollstaendigkeit(roh, harnessKatalog(rootDir, config.harness), pfad);
       return ["```mermaid", MERMAID_FRONTMATTER, ersetzePlatzhalter(roh, { rootDir, config }), "```"].join("\n");
     } catch (err) {
       throw new Error(`Vorlage ${pfad}: ${err instanceof Error ? err.message.replace(`${pfad}: `, "") : String(err)}`, { cause: err });

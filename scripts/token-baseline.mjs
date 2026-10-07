@@ -30,6 +30,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseNachweis } from "./slice-override.mjs";
+import { zaehleRoteCommits } from "./ci-laeufe.mjs";
 import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { ladeSessionDatei, transkriptZeilen } from "./transkript.mjs";
 import { fehlerArten, wiederlesen } from "./tool-metriken.mjs";
@@ -535,11 +536,6 @@ export async function fetchSessionObservations(
 
 // ── Loop-Kennzahlen aus GitHub ───────────────────────────────────────────────
 
-/** CI-Fix-Runden = distinct head_sha mit failed CI-Lauf (dieselbe Zählung wie #904). */
-export function countFailedPushes(workflowRuns) {
-  return new Set((workflowRuns ?? []).map((r) => r.head_sha)).size;
-}
-
 /** Gemergt ohne CI-Fix = gemergt und kein einziger roter CI-Push. */
 export function mergedWithoutRework(mergedAt, failedPushes) {
   return Boolean(mergedAt) && failedPushes === 0;
@@ -568,16 +564,13 @@ export function nachweisAusCommits(commits) {
   return { runden: review.runden, plan: plan ? plan.art === "planer" : null };
 }
 
+/** CI-Fix-Runden = distinct head_sha mit rotem CI-Lauf zwischen PR-Erstellung und Merge (dieselbe Zählung wie #904, gemeinsamer Abruf: ci-laeufe.mjs). */
 function prInfo(pr) {
   const p = ghJson(["pr", "view", String(pr), "--json", "createdAt,mergedAt,headRefName,commits,files"]);
-  const runs = ghJson([
-    "api",
-    `repos/{owner}/{repo}/actions/workflows/ci.yml/runs?branch=${encodeURIComponent(p.headRefName)}&status=failure&event=pull_request&per_page=100`,
-  ]);
   return {
     prCreatedAt: p.createdAt,
     mergedAt: p.mergedAt,
-    failedPushes: countFailedPushes(runs.workflow_runs),
+    failedPushes: zaehleRoteCommits((args) => execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }), { branch: p.headRefName, createdAt: p.createdAt, mergedAt: p.mergedAt }),
     nachweis: nachweisAusCommits(p.commits),
     files: p.files ?? [],
   };

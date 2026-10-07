@@ -443,8 +443,7 @@ function reviewSchritt({ verifyGruen, blockierend, fehlend, paesse, verifyFixe, 
 
 /** Zähler für den Nachweis: ein Pass mehr; die Brillen merkt nur ein VOLLER Pass, ein Delta-Pass nie; die Blocker nur der allererste Pass (#1123). */
 function nachweisStand(stand, { modus, berichte }) {
-  const zahl = (b) => (b.findings || []).filter((f) => f.schwere === 'blockierend').length
-  const ersteBlocker = stand.paesse === 0 ? Object.fromEntries(berichte.map((b) => [b.lens, zahl(b)])) : stand.ersteBlocker
+  const ersteBlocker = stand.paesse === 0 ? Object.fromEntries(berichte.map((b) => [b.lens, blockerVon(b).length])) : stand.ersteBlocker
   return { paesse: stand.paesse + 1, ersteLenses: modus === 'voll' ? berichte.map((b) => b.lens) : stand.ersteLenses, ersteBlocker }
 }
 
@@ -889,7 +888,7 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
 - Deutsch mit echten Umlauten in Texten und Kommentaren; Dateinamen bleiben ASCII.
 - ${BRAIN_LESEN}
 
-Gates: npm run verify muss grün sein (Exit 0). Läuft es rot und du kannst es nicht
+Gates: vor dem ersten verify git fetch origin, bei weiterem origin/main git merge origin/main (Konflikte jetzt lösen; ein Merge nach der Konvergenz kostet Delta-Lens und neuen Nachweis). npm run verify muss grün sein (Exit 0). Läuft es rot und du kannst es nicht
 beheben, gib verifyGruen=false mit der Fehlerausgabe zurück statt es zu verschleiern
 oder ein Gate abzuschwächen (AGENTS.md § Kein Grün-durch-Aufweichen).
 Sichtbare Änderungen zusätzlich im Browser verifizieren.

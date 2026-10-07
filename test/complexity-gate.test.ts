@@ -121,3 +121,22 @@ describe("Komplexitäts-Gate #502: Suppressions-Baseline ist ehrlich", () => {
     ).toEqual([]);
   });
 });
+
+describe("Switch-Exhaustiveness-Gate (#1398): neue Union-Varianten brechen den Lint", () => {
+  // Der Kopfkommentar von src/sim/pods.ts verspricht einen Fehler bei neuer Variante (ClusterPod.owner); ohne die Regel
+  // meldet ihn weder tsc noch ESLint, wenn der switch ein `default` hat.
+  const bloecke = configs.filter((c) => c.rules && "@typescript-eslint/switch-exhaustiveness-check" in c.rules);
+
+  it("wird an genau EINER Stelle gesetzt, repo-weit auf **/*.ts als Fehler", () => {
+    expect(bloecke).toHaveLength(1);
+    expect(bloecke[0].files).toEqual(["**/*.ts"]);
+    const regel = bloecke[0].rules?.["@typescript-eslint/switch-exhaustiveness-check"];
+    expect(Array.isArray(regel) ? regel[0] : regel).toBe("error");
+  });
+
+  it("zählt ein `default` NICHT als Abdeckung einer Union (considerDefaultExhaustiveForUnions bleibt aus)", () => {
+    const regel = bloecke[0].rules?.["@typescript-eslint/switch-exhaustiveness-check"];
+    const optionen = Array.isArray(regel) ? (regel[1] as { considerDefaultExhaustiveForUnions?: boolean } | undefined) : undefined;
+    expect(optionen?.considerDefaultExhaustiveForUnions ?? false).toBe(false);
+  });
+});

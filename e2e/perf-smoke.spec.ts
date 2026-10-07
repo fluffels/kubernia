@@ -35,5 +35,17 @@ test("Frame-Budget: das Spiel läuft mit gesunder FPS (Perf-HUD-Messwert)", asyn
   await page.waitForTimeout(1_500);
 
   const fps = await page.evaluate(() => Number(document.body.dataset.kqFps));
+
+  // Nur Messdaten, keine Prüfung (#1398): weitere Werte im Abstand von 500 ms für die Auswertung der Runner-Streuung.
+  // Gemessen in der CI (2026-10-07): ein Median über 3-6 s nach dem Intro fiel auf 16-18 FPS (Reihe 60, 35, 21, 16, 16, 16),
+  // der frühe Einzelwert unten lag dagegen bei 36-38; ein längeres Fenster als Prüfgröße würde den Smoke dauerhaft rot machen.
+  // Ob der Abfall nach rund 3,5 s ein echter Einbruch oder ein Runner-Effekt ist, ist offen (Zeile im Sammelticket #1411).
+  const danach: number[] = [];
+  for (let i = 0; i < 5; i++) {
+    await page.waitForTimeout(500);
+    danach.push(await page.evaluate(() => Number(document.body.dataset.kqFps)));
+  }
+  console.log(`FPS-Messwert ${fps}, danach alle 500 ms: ${danach.join(", ")} (Boden ${FPS_FLOOR}, geprüft wird nur der erste Wert)`);
+
   expect(fps).toBeGreaterThanOrEqual(FPS_FLOOR);
 });

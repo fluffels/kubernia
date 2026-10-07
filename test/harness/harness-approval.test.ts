@@ -34,7 +34,7 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkInternalRefs from "../../scripts/check-internalrefs.mjs";
@@ -465,7 +465,11 @@ function hookSkripte(settingsText: string): string[] {
   return [...skripte];
 }
 
-/** Alle lokalen `./x.mjs`-Importe (transitiv) der Wurzel-Skripte, die Wurzeln eingeschlossen. */
+/**
+ * Alle lokalen relativen Importe (`from "./x.mjs"`, `../x.mjs`, `require("./x.cjs")`; transitiv) der Wurzel-Skripte,
+ * die Wurzeln eingeschlossen. Ein Import wird relativ zur IMPORTIERENDEN Datei aufgelöst, damit Module in
+ * Unterordnern (`scripts/docs-gen/*.mjs`) und `../`-Importe nicht aus der Kette fallen (E1).
+ */
 function lokaleImporteTransitiv(wurzeln: string[], lies: (rel: string) => string): string[] {
   const gesehen = new Set<string>();
   const offen = [...wurzeln];
@@ -473,7 +477,8 @@ function lokaleImporteTransitiv(wurzeln: string[], lies: (rel: string) => string
     const rel = offen.pop() as string;
     if (gesehen.has(rel)) continue;
     gesehen.add(rel);
-    for (const m of lies(rel).matchAll(/from\s+["']\.\/([\w.-]+\.mjs)["']/g)) offen.push(`scripts/${m[1]}`);
+    const importe = lies(rel).matchAll(/(?:from\s+|require\(\s*)["'](\.{1,2}\/[\w./-]+\.(?:mjs|cjs))["']/g);
+    for (const m of importe) offen.push(posix.normalize(posix.join(posix.dirname(rel), m[1])));
   }
   return [...gesehen].sort();
 }
@@ -494,11 +499,28 @@ describe("Hook-Abhängigkeiten sind geschützt (#1331)", () => {
     assert.deepEqual(skripte.filter((s) => ![...owners].some((p) => p !== "" && s.startsWith(p))), [], "nicht in .github/CODEOWNERS");
   });
 
+  test("jedes Gate-Skript (scripts/check-*.mjs) und jeder lokale Import davon ist geschützt (E1)", () => {
+    const gates = readdirSync(join(WURZEL, "scripts"))
+      .filter((f) => /^check-.*\.mjs$/.test(f))
+      .map((f) => `scripts/${f}`);
+    assert.ok(gates.length > 5, "die check-Skripte wurden gefunden");
+    const skripte = lokaleImporteTransitiv(gates, read);
+    assert.ok(skripte.includes("scripts/ci-laeufe.mjs"), "check-festgefahren.mjs importiert ci-laeufe.mjs");
+    assert.ok(skripte.includes("scripts/docs-gen/markdown.mjs"), "check-docdrift.mjs importiert docs-gen/markdown.mjs (Unterordner)");
+    assert.deepEqual(ungeschuetzt(skripte, quelle), [], "nicht in .github/protected-paths.json");
+    const owners = codeownersPaths(codeowners);
+    assert.deepEqual(skripte.filter((s) => ![...owners].some((p) => p !== "" && s.startsWith(p))), [], "nicht in .github/CODEOWNERS");
+  });
+
   test("Red-Green: ein ungeschütztes Modul in der Importkette wird gefunden", () => {
     const lies = (rel: string) => (rel === "scripts/a.mjs" ? 'import { x } from "./b.mjs";' : rel === "scripts/b.mjs" ? 'import y from "./c.mjs";' : "");
     const kette = lokaleImporteTransitiv(["scripts/a.mjs"], lies);
     assert.deepEqual(kette, ["scripts/a.mjs", "scripts/b.mjs", "scripts/c.mjs"]);
     assert.deepEqual(ungeschuetzt(kette, { harness: ["/scripts/a.mjs", "/scripts/b.mjs"] }), ["scripts/c.mjs"]);
+    // Unterordner und ../: relativ zur importierenden Datei aufgelöst (E1), nicht zu scripts/.
+    const tief = (rel: string) =>
+      rel === "scripts/a.mjs" ? 'import { x } from "./sub/b.mjs";' : rel === "scripts/sub/b.mjs" ? 'import y from "./c.mjs"; import z from "../d.mjs"; const e = require("../e.cjs");' : "";
+    assert.deepEqual(lokaleImporteTransitiv(["scripts/a.mjs"], tief), ["scripts/a.mjs", "scripts/d.mjs", "scripts/e.cjs", "scripts/sub/b.mjs", "scripts/sub/c.mjs"]);
     assert.deepEqual(hookSkripte(JSON.stringify({ hooks: { Stop: [{ hooks: [{ args: ["${CLAUDE_PROJECT_DIR}/scripts/h.mjs"] }] }] } })), ["scripts/h.mjs"]);
   });
 });

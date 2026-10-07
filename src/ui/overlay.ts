@@ -395,7 +395,7 @@ export const overlayUI = part({
   /** Reaktion auf einen Audio-Regler/-Schalter im Menü. */
   onAudioControl(el: HTMLInputElement) {
     const a = Game.state.audio;
-    switch (el.dataset.audio) {
+    switch (el.dataset.audio ?? "") { // ?? "": ohne data-audio greift das default (switch-exhaustiveness-check kennt sonst undefined)
       case "music": a.music = el.checked; SFX.setMusicEnabled(a.music); break;
       case "sfx": a.sfx = el.checked; SFX.setSfxEnabled(a.sfx); if (a.sfx) SFX.coin(); break;
       case "musicVol": a.musicVol = Number(el.value) / 100; SFX.setMusicVol(a.musicVol); break;

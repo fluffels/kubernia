@@ -328,7 +328,7 @@ describe("#366: Quest-/Lehrtexte nehmen keine gesperrten Abkürzungen vorweg", (
         case "teach": return [step.cmd.intro, step.cmd.text, step.cmd.hint];
         case "terminal": return step.tasks.flatMap((t) => [t.text, t.hint]);
         case "drill": return [step.intro];
-        default: return [];
+        case "minigame": return [];
       }
     };
     const verstoesse: string[] = [];

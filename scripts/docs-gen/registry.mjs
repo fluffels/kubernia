@@ -1,7 +1,8 @@
 // Kein Shebang (siehe docs-gen.mjs). Registry der Generatoren (#1392): Marker-Name → Generator
 // `({rootDir, config}) => string` (wirft bei Datenfehlern). Die Engine importiert nur diese Datei;
 // ein anderes Projekt tauscht sie (oder übergibt `generators`), ohne die Engine anzufassen.
-import { adrListeGenerator, zeitleisteGenerator } from "./zeitleiste.mjs";
+import { adrListeGenerator } from "./adr.mjs";
+import { zeitleisteGenerator } from "./zeitleiste.mjs";
 import { diagrammGenerator } from "./diagramme.mjs";
 import { gatesGenerator } from "./gates.mjs";
 import { harnessInventarGenerator } from "./harness-inventar.mjs";

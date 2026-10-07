@@ -108,7 +108,7 @@ Damit nichts doppelt gepflegt wird, lebt jedes Thema an **genau einer** Stelle:
 
 ## Pull Requests & Abhängigkeits-Updates (Policy)
 
-Dieses Repo ist **öffentlich – aber zur Sichtbarkeit für Kollegen**, nicht als offene Einladung für beliebige Fremdbeiträge. Aktiver Code kommt von der Maintainerin (+ KI-Agent); `main` ist seit #419 geschützt (Force-Push/Löschen blockiert) und seit **#592 PR-gegated**: Merge nur über einen Pull Request mit **grünen Required-Checks**, `enforce_admins` **an** (gilt auch für die Maintainerin und die Agenten – kein Direkt-Push, kein `--no-verify`-Schlupf). Für eingehende PRs gilt:
+Dieses Repo ist **öffentlich – aber zur Sichtbarkeit für Kollegen**, nicht als offene Einladung für beliebige Fremdbeiträge. Aktiver Code kommt von der Maintainerin (+ KI-Agent); `main` ist seit #419 geschützt (Force-Push/Löschen blockiert) und seit **#592 PR-gegated**: Merge nur über einen Pull Request mit **grünen Required-Checks**, das Ruleset `main-schutz` **ohne Bypass-Akteure** (gilt auch für die Maintainerin und die Agenten – kein Direkt-Push, kein `--no-verify`-Schlupf). Für eingehende PRs gilt:
 
 ### Dependabot-PRs (Bot, vertrauenswürdig – kein Fremd-Menschen-Code)
 

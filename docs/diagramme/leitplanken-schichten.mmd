@@ -6,8 +6,8 @@ flowchart LR
     prepush["pre-push-Hook"]
   end
   subgraph mauer["Mauer: Server, nicht umgehbar"]
-    checks["Required Checks<br/>${ci-check:Tests, Typecheck & Builds}<br/>${ci-check:Security-Audit (npm audit)}<br/>${ci-check:PR-Text interne Bezuege pruefen}"]
-    ruleset["Ruleset auf main:<br/>nur per PR, enforce_admins,<br/>kein Direkt-Push"]
+    checks["Required Checks<br/>${required-check:Tests, Typecheck & Builds}<br/>${required-check:Security-Audit (npm audit)}<br/>${required-check:PR-Text interne Bezuege pruefen}"]
+    ruleset["Ruleset ${ruleset:name} auf main:<br/>nur per PR, ${ruleset:bypass},<br/>kein Direkt-Push"]
     wachter["Festgefahren-Wächter:<br/>Label ab ${konstante:festgefahrenCommits} roten CI-Commits"]
     alarm["Alarm-Issue bei rotem main"]
   end

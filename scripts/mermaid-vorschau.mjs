@@ -15,21 +15,13 @@ import { createServer } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
+import { fenceBloecke } from "./docs-gen/markdown.mjs";
 
-/** Alle ```mermaid-Blöcke eines Markdown-Texts (Inhalt ohne die Fence-Zeilen). Pur. */
+/** Alle mermaid-Fences (``` oder ~~~, auch 4+ Zeichen) eines Markdown-Texts (Inhalt ohne die Fence-Zeilen). Pur. */
 export function mermaidBloecke(markdown) {
-  const bloecke = [];
-  const zeilen = String(markdown).split(/\r?\n/);
-  let aktuell = null;
-  for (const z of zeilen) {
-    if (aktuell === null) {
-      if (/^\s*```mermaid\s*$/.test(z)) aktuell = [];
-    } else if (/^\s*```\s*$/.test(z)) {
-      bloecke.push(aktuell.join("\n"));
-      aktuell = null;
-    } else aktuell.push(z);
-  }
-  return bloecke;
+  return fenceBloecke(String(markdown).split(/\r?\n/))
+    .filter((b) => b.info === "mermaid" && b.geschlossen) // ein nie geschlossener Block wird nicht gerendert
+    .map((b) => b.inhalt.join("\n"));
 }
 
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

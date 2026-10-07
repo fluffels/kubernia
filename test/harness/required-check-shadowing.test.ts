@@ -6,7 +6,7 @@
  * Workflow-Pinning; auch mit `integration_id` kämen alle Runs von github-actions). Legt ein PR eine
  * neue Workflow-Datei mit einem gleichnamigen Job daneben (z.B. `sleep 120; exit 0`), wertet GitHub
  * bei gleichem Namen + SHA den zuletzt fertigen Run – ein roter echter Check würde grün überschrieben.
- * Die Kontexte stehen im Ruleset; Gate-Config-Änderungen sind seit ADR 0014 nur noch auditpflichtig.
+ * Die Kontexte stehen im Ruleset (Spiegel: .github/ruleset-main-schutz.json); Gate-Config-Änderungen sind seit ADR 0014 nur noch auditpflichtig.
  *
  * Evaluiert in #1172 und bewusst verworfen: (a) ein Check prüft per API, dass nur ein Run seines
  * Namens existiert – sein Rot würde vom Fake-Run genauso überschrieben; (b) ein Commit-Status mit
@@ -38,14 +38,17 @@ import { fileURLToPath } from "node:url";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const WORKFLOW_DIR = join(ROOT, ".github", "workflows");
 
-/** Die Required-Check-Kontexte **genau so, wie das Ruleset `main-schutz` sie führt** (Stand 2026-10-06, #1303).
- *  SSOT ist das out-of-repo-Ruleset (`gh api repos/fluffels/kubernia/rulesets/20151454`); ändert sich
- *  dort ein Kontext, wird diese Liste beim Ruleset-Handgriff von Hand mitgepflegt. */
-const REQUIRED_CONTEXTS = [
-  "Tests, Typecheck & Builds",
-  "Security-Audit (npm audit)",
-  "PR-Text interne Bezuege pruefen",
-] as const;
+/** Die Required-Check-Kontexte **genau so, wie das Ruleset `main-schutz` sie führt**, gelesen aus dem geschützten Spiegel
+ *  `.github/ruleset-main-schutz.json` (Z1): dieselbe Quelle speist das Leitplanken-Diagramm (docs/diagramme). Die Wahrheit ist das
+ *  out-of-repo-Ruleset (`gh api repos/{owner}/{repo}/rulesets/20151454`); ändert sich dort ein Kontext, zieht der PR den Spiegel nach. */
+const RULESET_SPIEGEL = join(ROOT, ".github", "ruleset-main-schutz.json");
+function leseKontexte(json: string): string[] {
+  const roh = (JSON.parse(json) as { requiredChecks?: unknown }).requiredChecks;
+  assert.ok(Array.isArray(roh) && roh.length > 0, "Ruleset-Spiegel: requiredChecks muss eine nicht leere Liste sein");
+  assert.ok(roh.every((k) => typeof k === "string" && k.trim() !== ""), "Ruleset-Spiegel: requiredChecks darf nur nicht leere Texte enthalten");
+  return roh as string[];
+}
+const REQUIRED_CONTEXTS: readonly string[] = leseKontexte(readFileSync(RULESET_SPIEGEL, "utf8"));
 
 /** Liest die Werte aller eingerückten `name:`-Zeilen so, wie YAML sie sieht: Kommentarzeilen raus,
  *  Listen-Präfix `- ` weg, Quotes abziehen, unquotete Werte an ` #` abschneiden (#984). */
@@ -157,6 +160,22 @@ test("istWorkflowDatei zählt .yml UND .yaml, aber nichts anderes", () => {
   assert.ok(!istWorkflowDatei("ci.yml.bak"));
 });
 
+describe("Ruleset-Spiegel – Form (Z1)", () => {
+  test("leere, fehlende oder nicht-textuelle Kontext-Liste wirft", () => {
+    assert.throws(() => leseKontexte("{}"), /nicht leere Liste/);
+    assert.throws(() => leseKontexte('{"requiredChecks":[]}'), /nicht leere Liste/);
+    assert.throws(() => leseKontexte('{"requiredChecks":"x"}'), /nicht leere Liste/);
+    assert.throws(() => leseKontexte('{"requiredChecks":["a",3]}'), /nur nicht leere Texte/);
+    assert.throws(() => leseKontexte('{"requiredChecks":[" "]}'), /nur nicht leere Texte/);
+    assert.deepEqual(leseKontexte('{"requiredChecks":["a"]}'), ["a"]);
+  });
+  test("der echte Spiegel nennt den Ruleset-Namen und hat die Bypass-Liste", () => {
+    const r = JSON.parse(readFileSync(RULESET_SPIEGEL, "utf8")) as { name?: unknown; bypassActors?: unknown };
+    assert.equal(r.name, "main-schutz");
+    assert.ok(Array.isArray(r.bypassActors));
+  });
+});
+
 describe("echte Workflows – jeder Required-Check-Kontext hat genau eine Quelle", () => {
   test("die Kontext-Liste ist nicht leer und es gibt Workflow-Dateien", () => {
     assert.ok(REQUIRED_CONTEXTS.length > 0);
@@ -170,7 +189,7 @@ describe("echte Workflows – jeder Required-Check-Kontext hat genau eine Quelle
       `Required-Check-Shadowing (#1172): ein Job-Name entspricht einem Required-Check-Kontext des Rulesets ` +
         `\`main-schutz\` mehr (oder weniger) als einmal. Ein gleichnamiger Job könnte den echten Check grün ` +
         `überschreiben. Job umbenennen – oder, bei Umbenennung des echten Checks, Ruleset UND ` +
-        `REQUIRED_CONTEXTS nachziehen.\n${v.join("\n")}`,
+        `den Spiegel .github/ruleset-main-schutz.json nachziehen.\n${v.join("\n")}`,
     );
   });
 });

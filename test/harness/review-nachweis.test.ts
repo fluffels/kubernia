@@ -24,7 +24,7 @@ type Mod = {
   MAX_FIX_RUNDEN: number;
   parseNachweis: (t: string) => Nachweis;
   pflichtLenses: (d: unknown) => string[];
-  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean }) => string[];
+  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[] }) => string[];
 };
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/check-review-nachweis.mjs";
@@ -121,6 +121,21 @@ describe("(e2) Das Feld blocker= ist an allen Stellen benannt (#1123)", () => {
   });
 });
 
+describe("(g) Der Konflikt-Merge nach dem Nachweis wird genau einmal erklärt (#1398)", () => {
+  test("das Skript macht ihn rot (die Aussage „wird der Check rot“ ist verhaltensgedeckt)", () => {
+    const n = parseNachweis(nachweisZeilen({ head: SHA, runden: 2, lenses: ["architektur", "requirement-treue", "test-adaequanz"], plan: "PLAN #1" }));
+    const basis = { nachweis: n, dateien: ["src/a.ts"], headBekannt: true, headImSlice: true };
+    assert.deepEqual(bewerteNachweis({ ...basis, konfliktMerges: [] }), []);
+    assert.ok(bewerteNachweis({ ...basis, konfliktMerges: ["m".repeat(40)] }).length > 0, "ein Konflikt-Merge nach dem Review muss rot sein");
+  });
+  test("die Langfassung (§3a) trägt Erklärung und Folge, der Skill nur den Verweis", () => {
+    const harness = read("docs/agent-harness.md");
+    assert.match(harness, /remerge-diff/);
+    assert.match(harness, /wird der Check rot/);
+    assert.doesNotMatch(read(".claude/skills/review-lenses/SKILL.md"), /remerge-diff/, "keine zweite Kopie der Erklärung im Skill");
+  });
+});
+
 describe("(f) „Cap 2“ heißt immer Fix-Runden (#1309)", () => {
   /** Zeilen, die „Cap 2“ ohne „Fix-Runde“ nennen: ohne die Präzisierung liest man „2 Pässe“. */
   const unpraezise = (text: string) => text.split(/\r?\n/).filter((z) => z.includes("Cap 2") && !z.includes("Fix-Runde"));
@@ -142,7 +157,9 @@ describe("(f) „Cap 2“ heißt immer Fix-Runden (#1309)", () => {
 
 describe("Nachweis-Hilfen des Workflows (#1309)", () => {
   type Stand = { paesse: number; ersteLenses: string[] | null; ersteBlocker?: Record<string, number> | null };
-  const hilfen = workflowBlock("// ── Review-Nachweis (#1270) — Anfang", "// ── Review-Nachweis (#1270) — Ende").block;
+  // `nachweisStand` zählt mit `blockerVon` aus der Review-Staffel (eine Definition von „Blocker“, #1398): beide Blöcke gemeinsam laden.
+  const staffel = workflowBlock("// ── Review-Staffel (#1265) — Anfang", "// ── Review-Staffel (#1265) — Ende").block;
+  const hilfen = `${staffel}\n${workflowBlock("// ── Review-Nachweis (#1270) — Anfang", "// ── Review-Nachweis (#1270) — Ende").block}`;
   const nachweisStand = blockFunktion<(s: Stand, e: { modus: string; berichte: { lens: string; findings?: { schwere: string }[] }[] }) => Stand>(hilfen, "nachweisStand");
   const nachweisFuerPr = blockFunktion<(e: { konvergiert: boolean; head?: string; stand: Stand; plan: unknown }) => string>(hilfen, "nachweisFuerPr");
   const reviewKonvergiert = blockFunktion<(e: { verifyGruen: boolean; blockierend: unknown[]; fehlend: string[] }) => boolean>(hilfen, "reviewKonvergiert");
@@ -175,6 +192,19 @@ describe("Nachweis-Hilfen des Workflows (#1309)", () => {
     const leer = nachweisFuerPr({ konvergiert: true, head: SHA, stand: { paesse: 2, ersteLenses: ["doku"], ersteBlocker: {} }, plan: "P" });
     assert.ok(!leer.includes("blocker="), "ein leeres Objekt (keine Brille lieferte in Pass 1) schreibt kein leeres Feld");
     assert.deepEqual(bewerteNachweis({ nachweis: parseNachweis(leer), dateien: ["docs/a.md"], headBekannt: true, headImSlice: true }), []);
+  });
+
+  test("blocker zählt wie die Schleife (blockerVon): null-Findings und fehlendes Array kippen nicht (#1398)", () => {
+    const berichte = [
+      { lens: "architektur", findings: [null, { schwere: "blockierend" }, undefined, { schwere: "hinweis" }] },
+      { lens: "requirement-treue", findings: "kaputt" },
+      { lens: "test-adaequanz" },
+    ] as unknown as { lens: string; findings?: { schwere: string }[] }[];
+    const s = nachweisStand({ paesse: 0, ersteLenses: null }, { modus: "voll", berichte });
+    assert.deepEqual(normal(s.ersteBlocker), { architektur: 1, "requirement-treue": 0, "test-adaequanz": 0 });
+    // eine Definition: dieselbe Zählung wie die Schleife
+    const blockerVon = blockFunktion<(b: unknown) => unknown[]>(hilfen, "blockerVon");
+    for (const b of berichte) assert.equal((s.ersteBlocker as Record<string, number>)[b.lens], blockerVon(b).length);
   });
 
   test("nachweisFuerPr: leer ohne Konvergenz, <SHA> ohne Head, sonst parsebar", () => {

@@ -5,6 +5,7 @@
     "/scripts/content-chunks.cjs",
     "/scripts/check-*.mjs",
     "/scripts/slice-override.mjs",
+    "/scripts/ci-laeufe.mjs",
     "/scripts/docs-gen*",
     "/eslint.config.js",
     "/eslint-suppressions.json",
@@ -13,7 +14,8 @@
     "/.jscpd.json",
     "/.github/workflows/*.yml",
     "/.github/CODEOWNERS",
-    "/.github/protected-paths.json"
+    "/.github/protected-paths.json",
+    "/.github/ruleset-main-schutz.json"
   ],
   "harness": [
     "AGENTS.md",
@@ -45,6 +47,7 @@
     "/scripts/haupt-sync.mjs",
     "/scripts/lens-edit-guard.mjs",
     "/.agents/",
+    "/.githooks/",
     "/docs/agent-harness*"
   ],
   "waechter": [
