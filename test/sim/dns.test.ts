@@ -189,4 +189,24 @@ describe("Headless Service (#1301)", () => {
     expect(r.output).toContain("NXDOMAIN");
     expect(withSts({ storageClass: "" }).exec("nslookup speicher-0.speicher").error).toBe(true);
   });
+
+  test("Negativ: ein StatefulSet mit anderem serviceName erscheint weder in der Service- noch in der Pod-Antwort", () => {
+    const sim = new KQSim({
+      statefulSets: [sts(), sts({ name: "fremd", serviceName: "anderer", replicas: 2 })],
+      files: { "headless.yaml": HEADLESS },
+    });
+    sim.exec("kubectl apply -f headless.yaml");
+    const r = sim.exec("nslookup speicher");
+    expect(podIps(r.output || "")).toStrictEqual([0, 1, 2].map(i => podIP("speicher-" + i)));
+    expect(r.output).not.toContain(podIP("fremd-0"));
+    expect(sim.exec("nslookup fremd-0.speicher").error).toBe(true);
+  });
+
+  test("Ein nicht bereites Deployment hinter dem headless Service liefert keine Pod-IPs (NXDOMAIN)", () => {
+    const sim = new KQSim({ deployments: [{ name: "speicher", image: "nginx", replicas: 1, broken: { type: "pending" } }], files: { "headless.yaml": HEADLESS } });
+    sim.exec("kubectl apply -f headless.yaml");
+    const r = sim.exec("nslookup speicher");
+    expect(r.error).toBe(true);
+    expect(r.output).toContain("NXDOMAIN");
+  });
 });

@@ -2,7 +2,7 @@
  * Übersetzt ein geparstes Service-Manifest in den `ApplyEffect`. Nur die Felder, die das
  * Sim-Modell kennt (Typ, Port, targetPort, externalName, headless `clusterIP: None`, #1301);
  * eine explizite ClusterIP, Port-Namen und Selector werden ignoriert. Weitere `v1`-Kinds (ConfigMap, Secret, …, #1142) kommen hierher. */
-import type { ApplyEffect } from "../state";
+import { HEADLESS_CLUSTER_IP, type ApplyEffect } from "../state";
 import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { Leaf, ManifestError } from "./fields";
 
@@ -11,7 +11,7 @@ type ServiceEffect = NonNullable<ApplyEffect["service"]>;
 /** `spec.clusterIP: None` (headless, #1301). Wie im echten API ist das nur bei ClusterIP
  *  (bzw. ohne `type`) erlaubt; bei LoadBalancer/NodePort lehnt der Server es ab. */
 function headlessOf(spec: Leaf, type: string | undefined): boolean {
-  if (spec.key("clusterIP").str() !== "None") return false;
+  if (spec.key("clusterIP").str() !== HEADLESS_CLUSTER_IP) return false;
   if (type === "LoadBalancer" || type === "NodePort") {
     throw new ManifestError(spec.key("clusterIP").path + ": may not be set to 'None' for " + type + " services",
       "Ein headless Service (clusterIP: None) ist nur vom Typ ClusterIP möglich.");
@@ -45,7 +45,7 @@ export function mapService(doc: Leaf): ApplyEffect {
   const svc: ServiceEffect = { name, port };
   if (type !== undefined) svc.type = type;
   if (externalName !== undefined) svc.externalName = externalName;
-  if (headlessOf(spec, type)) svc.clusterIP = "None";
+  if (headlessOf(spec, type)) svc.clusterIP = HEADLESS_CLUSTER_IP;
   const target = first ? targetPortOf(first) : undefined;
   if (target !== undefined) svc.targetPort = target;
   return { service: svc };

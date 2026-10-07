@@ -18,7 +18,7 @@ import type {
   RoleBindingRes, PodSecurityLevel, PodStatus, NodeMetrics,
   ScrapeTarget, Alert, Scenario, ClusterState,
 } from "./sim/state";
-import { BROKEN_STATUS } from "./sim/state";
+import { BROKEN_STATUS, HEADLESS_CLUSTER_IP } from "./sim/state";
 export { BROKEN_STATUS } from "./sim/state";
 export type {
   ExecResult,
@@ -456,7 +456,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       const name = resourceName(spec.name);
       if (spec.externalName) return { name, type: "ExternalName", clusterIP: "<none>", port: spec.port, externalName: spec.externalName, created: this.clock };
       return {
-        name, type: spec.type || "ClusterIP", clusterIP: spec.clusterIP === "None" ? "None" : clusterIP(name), port: spec.port,
+        name, type: spec.type || "ClusterIP", clusterIP: spec.clusterIP === HEADLESS_CLUSTER_IP ? HEADLESS_CLUSTER_IP : clusterIP(name), port: spec.port,
         ...(spec.targetPort !== undefined ? { targetPort: spec.targetPort } : {}),
         created: this.clock,
       };
