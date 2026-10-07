@@ -84,6 +84,70 @@ describe("ExternalName-Service – CNAME auf externen Namen", () => {
     expect(r.output).toContain("canonical name");
     expect(r.output).toContain("api.bank.example.com");
   });
+
+  test("curl folgt dem CNAME statt nach Endpoints zu suchen (#1338)", () => {
+    sim.exec("kubectl apply -f externalname.yaml");
+    const r = sim.exec("curl bank-extern");
+    expect(r.error).toBe(false);
+    expect(r.output).toContain("200 OK");
+    expect(r.output).toContain("api.bank.example.com");
+    expect(r.output).toContain("bank-extern:80/");
+    expect(r.output).not.toContain("keine Endpoints");
+    expect(r.output).not.toContain("lauscht auf Port");
+    expect(r.output).not.toContain("Port ,");
+    expect(r.output).not.toMatch(/bank-extern:\//);
+  });
+
+  test("curl mit URL-Port nutzt diesen Port, nie einen leeren Service-Port", () => {
+    sim.exec("kubectl apply -f externalname.yaml");
+    const r = sim.exec("curl bank-extern:8080/status");
+    expect(r.error).toBe(false);
+    expect(r.output).toContain(":8080/status");
+    expect(r.output).not.toContain("lauscht auf Port");
+  });
+
+  test("curl https:// nutzt Port 443", () => {
+    sim.exec("kubectl apply -f externalname.yaml");
+    const r = sim.exec("curl https://bank-extern");
+    expect(r.error).toBe(false);
+    expect(r.output).toContain(":443");
+  });
+
+  test("curl mit FQDN löst identisch auf", () => {
+    sim.exec("kubectl apply -f externalname.yaml");
+    const r = sim.exec("curl bank-extern.default.svc.cluster.local");
+    expect(r.error).toBe(false);
+    expect(r.output).toContain("api.bank.example.com");
+  });
+
+  test("curl mit gleichnamigem Deployment folgt trotzdem dem CNAME", () => {
+    const s2 = new KQSim({
+      deployments: [{ name: "bank-extern", image: "nginx", replicas: 1 }],
+      files: { "externalname.yaml": "apiVersion: v1\nkind: Service\nmetadata:\n  name: bank-extern\nspec:\n  type: ExternalName\n  externalName: api.bank.example.com" },
+    });
+    s2.exec("kubectl apply -f externalname.yaml");
+    const r = s2.exec("curl bank-extern");
+    expect(r.error).toBe(false);
+    expect(r.output).toContain("api.bank.example.com");
+    expect(r.output).not.toContain("Dein Dienst");
+    expect(r.output).not.toContain("keine Endpoints");
+  });
+
+  test("curl ohne externalName: Could not resolve host, kein Port-Text", () => {
+    const s2 = new KQSim({ services: [{ name: "kaputt", type: "ExternalName", clusterIP: "<none>", port: "" }] });
+    const r = s2.exec("curl kaputt");
+    expect(r.error).toBe(true);
+    expect(r.output).toContain("Could not resolve host");
+    expect(r.output).not.toContain("keine Endpoints");
+    expect(r.output).not.toContain("Port ,");
+  });
+
+  test("curl ist rein lesend", () => {
+    sim.exec("kubectl apply -f externalname.yaml");
+    const before = JSON.stringify(sim.services) + sim.deployments.length;
+    sim.exec("curl bank-extern");
+    expect(JSON.stringify(sim.services) + sim.deployments.length).toBe(before);
+  });
 });
 
 describe("nslookup – greift nicht in den Cluster ein (rein lesend)", () => {

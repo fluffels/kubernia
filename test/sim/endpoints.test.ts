@@ -87,6 +87,14 @@ describe("nslookup Pod-Record", () => {
 });
 
 describe("curl", () => {
+  test("Headless-Service vor einem StatefulSet: curl unverändert erreichbar (#1338)", () => {
+    const sim = new KQSim({ statefulSets: [sts()], files: { "h.yaml": HEADLESS } });
+    sim.exec("kubectl apply -f h.yaml");
+    const r = sim.exec("curl speicher");
+    expect(r.error).toBe(false);
+    expect(r.output).toContain("200 OK");
+    expect(r.output).toContain("speicher:5432/");
+  });
   test("ClusterIP-Service vor einem StatefulSet ist erreichbar", () => {
     const sim = new KQSim({ statefulSets: [sts()], files: { "n.yaml": NORMAL_STS } });
     sim.exec("kubectl apply -f n.yaml");
