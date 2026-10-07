@@ -146,6 +146,11 @@ describe("Unterbefehle: echte kubectl-Befehle sind „nicht simuliert“, Tippfe
     expect(r.out).toContain(NICHT_SIMULIERT);
     expect(r.out).toContain("kubectl get");
   });
+  test("describe ohne Typ → Fehlertext statt Absturz", () => {
+    const r = lauf("kubectl describe");
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("You must specify the type of resource to describe");
+  });
   test("kubectl frobnicate → unknown command", () => {
     const r = lauf("kubectl frobnicate");
     expect(r.error).toBe(true);
@@ -278,6 +283,22 @@ describe("(c) get a,b und get all", () => {
     expect(r.out).toContain(`the server doesn't have a resource type "unfug"`);
     expect(r.out).not.toContain("READY");
   });
+  test("leere Segmente in der Komma-Liste werden übergangen", () => {
+    for (const cmd of ["kubectl get deploy,", "kubectl get ,deploy"]) {
+      const r = lauf(cmd);
+      expect(r.error, cmd).toBe(false);
+      expect(r.out, cmd).toMatch(/^web /m);
+      expect(r.out, cmd).not.toContain("deployment.apps/");
+    }
+  });
+  test("ALL und Typ-Großschreibung; gleiche Typen in Slash-Form bilden einen Block ohne Präfix", () => {
+    expect(lauf("kubectl get ALL").out).toContain("deployment.apps/web");
+    expect(lauf("kubectl get FROB").out).toContain('resource type "frob"');
+    const out = lauf("kubectl get deploy/web deploy/api").out;
+    expect(out).not.toContain("deployment.apps/");
+    expect(out).toMatch(/^web /m);
+    expect(out).toMatch(/^api /m);
+  });
   test("doppelte Typen erscheinen einmal", () => {
     const out = lauf("kubectl get deploy,deployments").out;
     expect(out.split(/\r?\n/).filter(l => l.startsWith("web "))).toHaveLength(1);
@@ -378,6 +399,11 @@ describe("(e) Aliase: describe/scale/expose/logs/label", () => {
   });
   test("NEGATIV: scale pods/x und expose pods/x lehnen ab", () => {
     expect(lauf("kubectl scale pods/x --replicas=1").out).toContain(NICHT_SIMULIERT);
+    expect(lauf("kubectl expose pods/x --port=80").out).toContain(NICHT_SIMULIERT);
+  });
+  test("label --overwrite wird akzeptiert", () => {
+    const sim = freshSim();
+    expect(sim.exec("kubectl label namespace default pod-security.kubernetes.io/enforce=baseline --overwrite").error).toBe(false);
   });
 });
 

@@ -645,6 +645,10 @@ describe("#1444: accept-Regexe nennen nur echte kubectl-Ressourcentypen", () => 
   test("der Scan findet Regexe (Wächter ist nicht leer gelaufen)", () => {
     expect(treffer.length).toBeGreaterThan(5);
   });
+  test("jeder kubectl-Kurzname im Abkürzungskatalog löst über die Registry auf", () => {
+    const fehler = ABBREVS.filter(a => a.id.startsWith("kubectl-") && a.kind === "alias").flatMap(a => a.short.filter(s => resolveKind(s) === null).map(s => `${a.id}: „${s}“`));
+    assert.deepEqual(fehler, []);
+  });
   test("jede Alternative löst über die Registry auf", () => {
     const fehler = treffer.flatMap(t => t.alt.filter(a => resolveKind(a) === null).map(a => `${t.f}: „${a}“`));
     assert.deepEqual(fehler, [], "Diese Kürzel kennt die Sim nicht (kein echter kubectl-Kurzname):\n" + fehler.join("\n"));

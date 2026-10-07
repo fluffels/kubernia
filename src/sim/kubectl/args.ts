@@ -7,7 +7,7 @@
  * Die Tabelle nennt NUR Flags, die die Sim wirklich auswertet (echtes kubectl hat Hunderte; „was wir
  * können“ ist endlich und ehrlich). `-n/--namespace` gilt überall, die Semantik regelt namespace.ts.
  *
- * Blattmodul der kubectl-Mappe (pure Domäne): importiert nur den Host-Typ. */
+ * Blattmodul der kubectl-Mappe (pure Domäne): importiert nur den Host-Typ und die Registry (./resources). */
 import type { KubectlHost } from "./host";
 import { RESOURCE_KINDS } from "./resources";
 
@@ -40,7 +40,7 @@ const KNOWN_FLAGS: Readonly<Record<KubectlSub, readonly FlagSpec[]>> = {
   describe: [NS],
   top: [NS],
   rollout: [NS],
-  label: [NS],
+  label: [NS, flag(false, "--overwrite")],
   auth: [NS, flag(true, "--as")],
   logs: [NS, flag(false, "-f", "--follow"), flag(false, "-p", "--previous")],
   delete: [NS, FILE],

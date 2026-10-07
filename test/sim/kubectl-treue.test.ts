@@ -28,15 +28,10 @@ const sorted = (xs: Iterable<string>) => [...xs].sort();
 
 /** „Nicht simuliert“-Text je Befehl (testlokal; die Sanity-Probe unten hält ihn aktuell). */
 const NICHT_SIMULIERT: Record<string, RegExp> = {
-  get: /doesn't have a resource type/,
-  describe: /Der Simulator kann nur 'kubectl describe/,
-  create: /kubectl create deployment\|serviceaccount/,
-  delete: /kennt der Simulator nicht/,
-  top: /kennt nur 'pods' und 'nodes'/,
-  set: /Der Simulator kann 'kubectl set/,
-  rollout: /Der Simulator kann nur 'kubectl rollout/,
-  auth: /Der Simulator kann nur 'kubectl auth/,
-  label: /Der Simulator kann nur 'kubectl label/,
+  ...Object.fromEntries(["get", "describe", "delete", "top", "set", "rollout", "auth"].map(b => [b, /Nicht simuliert:|doesn't have a resource type|unknown command/])),
+  // create/label haben tiefere „nicht simuliert“-Meldungen (Unterart des Secrets, anderes Label), die den Befehl selbst nicht ausschließen.
+  create: /Nicht simuliert: 'kubectl create (?!secret )|doesn't have a resource type/,
+  label: /Nicht simuliert: 'kubectl label/,
 };
 
 /** Unterstützt der Simulator `kubectl <befehl> <wort> …`? */
