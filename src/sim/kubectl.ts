@@ -57,6 +57,9 @@ function unknownSub(host: KubectlHost, sub: string): string {
   return host._err('error: unknown command "' + sub + '" for "kubectl"', "Tippe 'help' für alle Befehle.");
 }
 
+/** Die registrierten Unterbefehle (Treue-Matrix, docs/sim-treue/: ein neuer Unterbefehl braucht eine Zeile). */
+export const KUBECTL_SUBCOMMANDS: readonly string[] = Object.keys(SUBCOMMANDS);
+
 export function kubectlCommand(host: KubectlHost, t: string[], raw: string): string {
   // Eingabe-Prüfung zuerst: unbekannter Unterbefehl und unbekannte Flags prüft auch echtes kubectl
   // clientseitig, noch bevor es den apiserver fragt (also vor dem Control-Plane-Gate).

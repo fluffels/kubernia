@@ -194,6 +194,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 | 07.10.2026 | [ADR 0018](/docs/adr/0018-content-chunks-je-datei.md): Content-Chunks je Datei — der Spielcode-Chunk wächst nicht mehr mit dem Inhalt |
 | 07.10.2026 | [ADR 0019](/docs/adr/0019-langfuse-plugin-im-user-scope.md): Das Langfuse-Plugin bleibt auch im User-Scope aktiv |
 | 08.10.2026 | [ADR 0020](/docs/adr/0020-architekturmodell-likec4.md): Architekturmodell LikeC4 — zweite Ableitung derselben SSOTs |
+| 08.10.2026 | [ADR 0021](/docs/adr/0021-agenten-sandbox-wsl2.md): Agenten-Sandbox über eine eigene WSL2-Distribution |
 
 <!-- GEN:zeitleiste END -->
 
@@ -353,6 +354,8 @@ Spielstand speichert automatisch im Browser.
 | J | 📜 Logbuch (Questlog) |
 | B | 📖 Sammelalbum (Glossar) |
 | Esc | Fenster schließen |
+
+Im Funkgerät-Terminal listet `help` die freigeschalteten Befehle; `help kubectl` zeigt zusätzlich, was der Simulator gegenüber echtem `kubectl` bewusst vereinfacht.
 
 Im 📜 **Logbuch (J)** blätterst du durch alle Quests: abgeschlossene zum **Nachlesen** (Dialoge & Hinweise), deine aktuelle Quest, und noch **gesperrte** als Vorschau (kein Vorausspringen). Es wird freigeschaltet, sobald du deine erste Quest abgeschlossen hast. Eine abgeschlossene Quest kannst du dort auch **🔁 erneut spielen** – in einer Sandbox, die deinen echten Fortschritt nicht anrührt; über **„↩️ Zur aktuellen Quest“** landest du jederzeit wieder genau dort, wo du warst.
 

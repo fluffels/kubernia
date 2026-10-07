@@ -55,6 +55,7 @@ AGENTS.md                  @fluffels
 /.claude/                  @fluffels
 /.mcp.json                 @fluffels
 /scripts/playwright-mcp.mjs @fluffels
+/scripts/sandbox-doctor.mjs @fluffels
 /scripts/gh-guard-hook.mjs @fluffels
 /scripts/hook-io.mjs @fluffels
 /scripts/bash-parser.mjs @fluffels
@@ -76,6 +77,7 @@ AGENTS.md                  @fluffels
 /scripts/langfuse-takt.mjs @fluffels
 /scripts/board-takt.mjs @fluffels
 /scripts/sammelticket-anlegen.mjs @fluffels
+/scripts/fremdtext.mjs @fluffels
 /scripts/haupt-sync.mjs @fluffels
 /scripts/lens-edit-guard.mjs @fluffels
 /.agents/                  @fluffels

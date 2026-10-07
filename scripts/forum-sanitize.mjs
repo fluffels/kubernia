@@ -3,7 +3,7 @@
 // UND von test/forum-sanitize.test.ts importiert. Ein `#!` bricht genau diesen
 // Vitest/esbuild-Import.
 /**
- * Forum-Text-Entschärfung (#531) — die einzige Stelle, an der UNVERTRAUTER,
+ * Forum-Text-Entschärfung (#531) — eine Stelle, an der UNVERTRAUTER,
  * externer Text (Titel/Body einer öffentlichen GitHub-Discussion) automatisiert
  * in die Agenten-Arbeitswarteschlange gelangt: die Action forum-inbox.yml legt
  * daraus ein `forum`-Issue an, das anschließend ein Coding-Agent

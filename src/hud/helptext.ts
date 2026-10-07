@@ -12,9 +12,13 @@
 
 /** Eine Zeile der Hilfe: Aufruf (Unterbefehl + Argumente) + Kurzbeschreibung. */
 interface HelpRow { use: string; desc: string; }
+/** Eine bewusste Vereinfachung des Simulators (#1440). Die `id` verweist aus der Treue-Matrix
+ *  (docs/sim-treue/kubectl.json) auf den Text; ein Test hält beide in Einklang. */
+interface HelpLimit { id: string; text: string; }
 /** Eine Befehlsfamilie: Schlüssel (= erstes Befehls-Token, passend zur Freischalt-
- *  Ableitung in cmdunlock.ts) + ihre Zeilen. Der Anzeigename ist der Schlüssel. */
-interface HelpFamily { key: string; rows: HelpRow[]; }
+ *  Ableitung in cmdunlock.ts) + ihre Zeilen. Der Anzeigename ist der Schlüssel.
+ *  `grenzen`: was der Simulator gegenüber dem echten Werkzeug vereinfacht (`help <familie>`). */
+interface HelpFamily { key: string; rows: HelpRow[]; grenzen?: HelpLimit[]; }
 
 const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
   { key: "docker", rows: [
@@ -41,6 +45,21 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
     { use: "top pods|nodes", desc: "Ressourcenverbrauch zeigen" },
     { use: "auth can-i <verb> <resource>", desc: "Recht prüfen (RBAC)" },
     { use: "label namespace <ns> <label>", desc: "Pod-Security-Stufe setzen" },
+  ], grenzen: [
+    { id: "ein-namespace", text: "Es gibt nur die Namespaces default und kube-system; -n und -A greifen nur dort." },
+    { id: "keine-ausgabeformate", text: "Flags wie -o, -l, -w, --show-labels, --sort-by ignoriert der Simulator; get druckt immer die Tabelle." },
+    { id: "name-ignoriert", text: "get <art> <name> zeigt alle Objekte der Art, nicht nur das genannte." },
+    { id: "apply-umfang", text: "apply -f liest nur Deployment und Service aus der Datei; andere Arten wirken wie im Spiel hinterlegt." },
+    { id: "describe-gekuerzt", text: "describe kennt nur wenige Arten und zeigt gekürzte Abschnitte." },
+    { id: "arten-auswahl", text: "create, delete und scale kennen nur die Arten aus der Hilfe; secret nur generic und tls." },
+    { id: "spalten-gekuerzt", text: "Spalten bei Storage- und Monitoring-Ressourcen sind zum Lernen gewählt, nicht die echten." },
+    { id: "nur-sim-alerts", text: "get alerts gibt es nur im Simulator (echt: Prometheus und Alertmanager)." },
+    { id: "nodes-diskpressure", text: "get nodes hängt DiskPressure an STATUS an; AGE ist fest." },
+    { id: "lernhinweise", text: "Zeilen mit 💡 sind Lernhilfen des Spiels und stehen so nicht in echtem kubectl." },
+    { id: "rbac-vereinfacht", text: "RBAC: nur selbst angelegte Rollen, keine System-Rollen; get roles zeigt AGE statt CREATED AT." },
+    { id: "nur-deployments", text: "scale, expose, set und rollout arbeiten nur mit Deployments, logs nur mit einzelnen Pods." },
+    { id: "label-nur-namespace", text: "label setzt nur die Pod-Security-Stufe an einem Namespace." },
+    { id: "logs-follow", text: "logs -f läuft nicht live weiter, der Strom endet nach dem aktuellen Stand." },
   ] },
   { key: "kubeadm", rows: [
     { use: "init", desc: "Control-Plane hochziehen" },
@@ -111,6 +130,16 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
   { key: "help", rows: [{ use: "", desc: "diese Hilfe anzeigen" }] },
 ];
 
+function isUnlocked(available?: Set<string>): (key: string) => boolean {
+  return available === undefined ? () => true : (k: string) => available.has(k);
+}
+
+/** Die bewussten Vereinfachungen einer Familie (leer, wenn sie keine nennt). Die Treue-Matrix
+ *  (docs/sim-treue/) verweist auf diese IDs. */
+export function simGrenzen(familie: string): ReadonlyArray<HelpLimit> {
+  return HELP_FAMILIES.find(f => f.key === familie)?.grenzen ?? [];
+}
+
 /** Eine fertig zusammengesetzte Zeile (Familienname nur in der ersten Zeile der
  *  Familie) vor dem Ausrichten. */
 interface RenderRow { name: string; use: string; desc: string; }
@@ -122,7 +151,7 @@ interface RenderRow { name: string; use: string; desc: string; }
  * Ohne `available` (Tests/bare Sim) erscheinen wie bisher alle Befehle.
  */
 export function renderHelp(available?: Set<string>): string {
-  const has = available === undefined ? () => true : (k: string) => available.has(k);
+  const has = isUnlocked(available);
 
   // 1) Sichtbare Zeilen einsammeln (Familienname nur in der ersten Zeile je Familie).
   const rows: RenderRow[] = [];
@@ -141,7 +170,27 @@ export function renderHelp(available?: Set<string>): string {
   for (const r of rows) {
     out.push("  " + r.name.padEnd(nameW) + r.use.padEnd(useW) + r.desc);
   }
+  // Hinweis auf die Einzelansicht, solange eine sichtbare Familie Grenzen nennt (#1440).
+  const mitGrenzen = HELP_FAMILIES.find(f => has(f.key) && f.grenzen);
+  if (mitGrenzen) out.push("💡 Was der Simulator vereinfacht: 'help " + mitGrenzen.key + "'.");
   // Gefilterte Liste → Hinweis, dass weitere Befehle im Spielverlauf dazukommen (#358).
   if (available !== undefined) out.push("💡 Weitere Befehle schaltest du nach und nach frei, während du die Mission spielst.");
+  return out.join("\n");
+}
+
+/**
+ * `help <familie>` (#1440): die Zeilen einer Familie plus ihre bewussten Vereinfachungen.
+ * `null` bei unbekannter oder noch nicht freigeschalteter Familie (neutral, verrät nichts, #358).
+ */
+export function renderHelpTopic(topic: string, available?: Set<string>): string | null {
+  const fam = HELP_FAMILIES.find(f => f.key === topic);
+  if (!fam || !isUnlocked(available)(fam.key)) return null;
+  const useW = Math.max(0, ...fam.rows.map(r => r.use.length)) + 2;
+  const out = [fam.key + ":"];
+  for (const r of fam.rows) out.push("  " + r.use.padEnd(useW) + r.desc);
+  if (fam.grenzen) {
+    out.push("Was der Simulator vereinfacht:");
+    for (const g of fam.grenzen) out.push("  - " + g.text);
+  }
   return out.join("\n");
 }
