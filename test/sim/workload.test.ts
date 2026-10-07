@@ -232,6 +232,9 @@ test("statefulPodNode: Round-Robin über die Worker nach Ordinal, Control-Plane 
 test("statefulPodNode: Rückfälle ohne Worker bzw. ohne Nodes (#1404)", () => {
   assert.equal(statefulPodNode([nd("cp", "control-plane")], podN(1)), "cp");
   assert.equal(statefulPodNode([], podN(0)), "");
+  const nodes = [nd("cp", "control-plane"), nd("w1", "<none>")];
+  assert.equal(statefulPodNode(nodes, { name: "kaputt" }), "w1", "Name ohne Ordinal: erster Worker statt Absturz");
+  assert.equal(statefulPodNode(nodes, { name: "" }), "w1");
 });
 
 /* ---------- Pod-Template-Primitive (#1300): Heil-/Drossel-Regeln an einer Stelle ---------- */

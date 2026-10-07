@@ -48,6 +48,15 @@ describe("kubectl get pods -A", () => {
     expect(all).toEqual(plain);
   });
 
+  test("-A als erster Befehl plant ein Pending-Deployment neu ein (genug Nodes) und zeigt Running", () => {
+    const node = (name: string, roles: string) => ({ name, status: "Ready", roles, version: "v1.30.2" });
+    const sim = new KQSim({
+      nodes: [node("cp", "control-plane"), node("w1", "<none>"), node("w2", "<none>"), node("w3", "<none>")],
+      deployments: [{ name: "wartend", image: "nginx", replicas: 1, broken: { type: "pending" } }],
+    });
+    expect(rows(out(sim, "kubectl get pods -A")).find(c => c[1].startsWith("wartend"))!.slice(2, 4)).toEqual(["1/1", "Running"]);
+  });
+
   test("Evicted-Pod erscheint unter -A als Evicted", () => {
     const sim = new KQSim({ deployments: [{ name: "wildwuchs", image: "nginx", replicas: 1, ephemeralLimit: 512, emptyDir: { data: "x", usedMi: 600 } }] });
     const r = rows(out(sim, "kubectl get pods -A")).find(c => c[1].startsWith("wildwuchs"))!;
@@ -181,8 +190,20 @@ describe("kubectl delete pod nach dem Umbau", () => {
     expect(sim.statefulSets[0].pods.map(p => p.name)).toEqual(["speicher-0"]);
     expect(out(sim, "kubectl delete pod " + alt)).toContain("deleted");
     expect(sim.deployments[0].pods[0].name).not.toBe(alt);
+    expect(sim.lastDeletedPod).toBe(alt);
     const r = sim.exec("kubectl delete pod gibt-es-nicht");
     expect(r.error).toBe(true);
     expect(r.output).toContain("NotFound");
+    expect(sim.lastDeletedPod).toBe(alt); // ein Tippfehler-Delete setzt den Marker nicht
+  });
+
+  test("Negativ: NotFound setzt lastDeletedPod nicht; StatefulSet-Delete setzt ihn und tauscht die Pod-Instanz", () => {
+    const sim = new KQSim({ statefulSets: [sts({ replicas: 1 })] });
+    sim.exec("kubectl delete pod gibt-es-nicht");
+    expect(sim.lastDeletedPod).toBeNull();
+    const vorher = sim.statefulSets[0].pods[0];
+    sim.exec("kubectl delete pod speicher-0");
+    expect(sim.lastDeletedPod).toBe("speicher-0");
+    expect(sim.statefulSets[0].pods[0]).not.toBe(vorher);
   });
 });
