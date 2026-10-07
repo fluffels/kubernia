@@ -99,6 +99,28 @@ export interface PodInstance {
   created: number;
   restarts: number;
 }
+/** Die Pod-Template-Felder eines Deployments in Eingabe-Schreibweise (Manifest, Szenario, Snapshot).
+ *  EINE Feldliste für Seed (`seedPodTemplate`), Snapshot (`snapshotPodTemplate`) und apply-Abgleich
+ *  (`TEMPLATE_FIELDS`): ein neues Feld bricht dort den Typecheck, bis es überall entschieden ist.
+ *  Die Eingabe ist locker (emptyDir/initContainer-Teilfelder optional) – seed füllt Defaults. Alles
+ *  optional und additiv serialisiert, ohne Save-Versions-Bump. */
+export interface PodTemplateSpec {
+  /** ServiceAccount der Pods (`spec.serviceAccountName`, #132). */
+  serviceAccountName?: string;
+  /** `containerPort` des Containers (#164). */
+  containerPort?: number;
+  /** memory-Limit in Mi und CPU-Limit in Milli-Cores (#1300). */
+  memLimit?: number;
+  cpuLimitMilli?: number;
+  securityContext?: SecurityContext;
+  /** Node-Pin, emptyDir-Volume, ephemeral-storage-Limit/-Nutzung (#240). */
+  node?: string;
+  emptyDir?: { data?: string; usedMi?: number };
+  ephemeralLimit?: number;
+  ephemeralUsedMi?: number;
+  /** initContainer (#485): füllt beim Ausrollen das emptyDir vor; `doubleStage` verdoppelt den Peak. */
+  initContainer?: { fillsMi?: number; doubleStage?: boolean };
+}
 export interface Deployment {
   name: string;
   image: string;
@@ -385,16 +407,9 @@ export interface ArgoApp {
 }
 /** Wirkung eines `kubectl apply -f <datei>` (was die Datei im Cluster erzeugt). */
 export interface ApplyEffect {
-  deployment?: { name: string; image: string; replicas: number; securityContext?: SecurityContext; serviceAccountName?: string; containerPort?: number;
-    // Limits aus dem Pod-Template (#1300): memory in Mi, cpu in Milli-Cores.
-    memLimit?: number; cpuLimitMilli?: number;
-    // #164 (Werft-Capstone): das eigene Image muss vorher lokal gebaut/gezogen sein,
-    // sonst landet der Pod im ImagePullBackOff (statt – wie sonst im Sim – einfach zu laufen).
-    requireBuiltImage?: boolean;
-    // Ephemeral-Storage aus dem Pod-Template (#240): emptyDir-Volume + ephemeral-storage-Limit/-Nutzung.
-    node?: string; emptyDir?: { data?: string; usedMi?: number }; ephemeralLimit?: number; ephemeralUsedMi?: number;
-    // initContainer (#485): füllt beim Ausrollen das emptyDir vor; `doubleStage` verdoppelt den Peak.
-    initContainer?: { fillsMi?: number; doubleStage?: boolean } };
+  // #164 (Werft-Capstone): `requireBuiltImage` = das eigene Image muss vorher lokal gebaut/gezogen sein,
+  // sonst landet der Pod im ImagePullBackOff (statt – wie sonst im Sim – einfach zu laufen).
+  deployment?: { name: string; image: string; replicas: number; requireBuiltImage?: boolean } & PodTemplateSpec;
   // RBAC-CRDs (#128): vom `kubectl apply -f` der Wachturm-Manifeste angelegt. `cluster`
   // unterscheidet Role/ClusterRole bzw. RoleBinding/ClusterRoleBinding (wie in roles/roleBindings).
   serviceAccount?: { name: string };
@@ -629,13 +644,7 @@ export interface Scenario {
   // (Round-trip über snapshot/reset); ohne sie leitet reset() den Zustand aus `bareMetal` ab.
   bareMetal?: boolean;
   controlPlane?: { up?: boolean; token?: string | null; node?: string | null };
-  deployments?: Array<{ name: string; image: string; replicas: number; broken?: Broken | null; envFrom?: { configMaps: string[]; secrets: string[] }; cpuHeavy?: boolean; containerPort?: number;
-    // Limits und securityContext aus dem Pod-Template (#1300); serialisiert, ohne Save-Versions-Bump.
-    memLimit?: number; cpuLimitMilli?: number; securityContext?: SecurityContext;
-    // Ephemeral-Storage (#240). Eingabe-Schreibweisen locker – reset()/merge füllen Defaults.
-    node?: string; emptyDir?: { data?: string; usedMi?: number }; ephemeralLimit?: number; ephemeralUsedMi?: number;
-    // initContainer (#485): Eingabe-Schreibweise locker – reset()/_seedEphemeral übernehmen es.
-    initContainer?: { fillsMi: number; doubleStage?: boolean } }>;
+  deployments?: Array<{ name: string; image: string; replicas: number; broken?: Broken | null; envFrom?: { configMaps: string[]; secrets: string[] }; cpuHeavy?: boolean } & PodTemplateSpec>;
   services?: ServiceRes[];
   ingresses?: IngressRes[];
   networkPolicies?: NetworkPolicyRes[];

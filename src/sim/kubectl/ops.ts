@@ -7,7 +7,7 @@
  * Phaser-frei (pure Domäne): nutzt nur `makePodName` aus ../util und das
  * KubectlHost-Interface (./host). Aufgerufen aus dem kubectl-Dispatch (../kubectl.ts).
  */
-import { changeImage, setMemoryLimit, setCpuLimit, healsOom, throttlesCpu } from "../workload";
+import { changeImage, setMemoryLimit, setCpuLimit, healsOom, throttlesCpu, MEM_HEALED_NOTE, CPU_THROTTLED_NOTE } from "../workload";
 import { parseMem, parseCpuMilli } from "../util";
 import type { Deployment } from "../state";
 import type { KubectlHost } from "./host";
@@ -118,11 +118,6 @@ function kubectlSetImage(host: KubectlHost, t: string[]) {
 
 /** Ein Fehler einer Ressourcen-Dimension: [Meldung, Tipp] für `host._err`. `null` = ok. */
 type ResourceError = readonly [msg: string, tip: string];
-
-/** Notiz nach geheiltem OOMKilled (set resources und apply teilen sie). */
-export const MEM_HEALED_NOTE = "💡 Genug Speicher! Die Pods starten neu und bleiben diesmal stehen – kein OOMKilled mehr.";
-/** Notiz nach weggedrosselter Dauerlast. */
-export const CPU_THROTTLED_NOTE = "💡 CPU-Limit gesetzt! Die Pods werden gedrosselt – der HighPodCPU-Alert fällt auf resolved.";
 
 /** Geparste, validierte Ressourcen-Angaben von `set resources` (alles vor der ersten Mutation). */
 interface ResourcePlan { mem?: number; cpu: number | null; eph?: number }
