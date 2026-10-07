@@ -12,7 +12,7 @@
       "check:anysuppress": "Ratchet auf die Zahl begründeter `any`-Ausnahmen",
       "check:docmap": "jede `src/`-Datei ist in einem Tiefendoc erwähnt, die Landkarte kann nicht leise veralten",
       "check:docdrift": "dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien",
-      "check:docgen": "generierte Doku-Abschnitte (Gate-Tabelle, Harness-Inventar, Schichtdiagramme) stimmen mit dem Repo überein",
+      "check:docgen": "generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein",
       "check:internalrefs": "keine internen Bezüge im öffentlichen Repo",
       "check:lockfile": "Lockfile passt zur `package.json`",
       "check:diffsize": "Slice-Größe (Dateien und Zeilen gegen die Merge-Base)",
@@ -49,6 +49,10 @@
       "--collapse",
       "^(src|node_modules)/[^/]+/"
     ]
+  },
+  "zeitleiste": {
+    "adr": "docs/adr",
+    "meilensteine": "docs/meilensteine.json"
   },
   "harness": {
     "agents": ".claude/agents",

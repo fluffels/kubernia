@@ -1,5 +1,5 @@
 // Kein Shebang (siehe docs-gen.mjs). Generator `harness-inventar` (#1355): Subagenten, Skills,
-// Workflows, Hooks und MCP-Server aus den versionierten Konfigurationsdateien.
+// Workflows, Hooks, Plugins und MCP-Server aus den versionierten Konfigurationsdateien.
 // Nie ausgegeben: Header, Tokens, Beschreibungstexte. Nie gelesen: settings.local.json.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -58,6 +58,12 @@ function hooks(rootDir, file) {
         rows.push(["Hook", event, `${matcher}${code(cmd)}`, file]);
       }
     }
+  }
+  for (const [id, on] of Object.entries(settings.enabledPlugins ?? {}).sort(([a], [b]) => byCodeUnit(a, b))) {
+    if (on !== true) continue;
+    const at = id.indexOf("@");
+    const name = at < 0 ? id : id.slice(0, at);
+    rows.push(["Plugin", name, at < 0 ? NONE : `Marktplatz: ${id.slice(at + 1)}`, file]);
   }
   return rows;
 }

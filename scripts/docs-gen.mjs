@@ -16,6 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { gatesGenerator } from "./docs-gen/gates.mjs";
 import { harnessInventarGenerator } from "./docs-gen/harness-inventar.mjs";
 import { schichtenIstGenerator, schichtenSollGenerator } from "./docs-gen/schichten.mjs";
+import { zeitleisteGenerator } from "./docs-gen/zeitleiste.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const CONFIG_PATH = "scripts/docs-gen/config.json";
@@ -26,6 +27,7 @@ export const GENERATORS = {
   "harness-inventar": harnessInventarGenerator,
   "schichten-soll": schichtenSollGenerator,
   "schichten-ist": schichtenIstGenerator,
+  zeitleiste: zeitleisteGenerator,
 };
 
 export const HINT = "<!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->";
