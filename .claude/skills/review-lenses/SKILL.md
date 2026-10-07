@@ -110,7 +110,7 @@ Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket
 
 **Lens 3 — Test-Adäquanz.** Deckt der Test das **Verhalten** ab — und ist er echt?
 - Prüft der Test die **öffentliche API / beobachtbares Verhalten** (überlebt Refactoring), nicht Interna?
-- **Negativfälle** dabei (kaputter Zustand, falsche Eingabe, „darf nicht passieren"), nicht nur Happy Path?
+- **Negativfälle** dabei (kaputter Zustand, falsche Eingabe, „darf nicht passieren"), nicht nur Happy Path? Bei Generatoren jede Kantenart und jeden Sortierschlüssel per Fixture abdecken, Substring-Asserts am Zeilenanfang verankern (`ext_q_a` enthält `q_a`).
 - **Kein False Positive (Red-Green):** würde der Test **rot**, wenn man die Logik testweise verfälscht? Wo Zweifel bestehen, den Fix/die Assertion kurz sabotieren → rot sehen → zurücksetzen (vgl. AGENTS.md „Tests gegen False Positives absichern"). Bugfix ⇒ gab es den **fehlschlagenden Repro-Test zuerst**?
 - **Echte Gate-Sabotage bei abgeleiteten Regeln:** leitet der Diff Gate-Regeln aus einem Modell ab (z.B. die Schichtregeln von `check:arch` aus `SCHICHT_MODELL`), verlangt die Lens einen Test, der das **echte Gate** laufen lässt (verbotene Kante in eine Temp-Fixture einschleusen, das Gate muss rot werden, eine erlaubte Kante grün bleiben). Ein Nachbau des Matchers im Test genügt nicht: er beweist nur, dass die Ableitung richtig rechnet, nicht, dass das Gate sie anwendet.
 - Präsentations-Code (Phaser/DOM) wird **im Browser** verifiziert statt per Unit-Test, ebenso sicht-/spielbare Content-Daten (Quests, Dialoge) — ist das passiert und belegt, wie im Plan vorgesehen (`kqDev.state`-Auszug, Screenshot-Pfad)?
