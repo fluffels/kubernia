@@ -8,7 +8,7 @@
  *
  * Nur Node-Builtins und board-lib.mjs (keine Importe aus board-takt.mjs: der Import läuft in die andere Richtung).
  */
-import { LANGFUSE_SAMMELTICKET_TITEL, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, ghJson, imKopf, setPosition } from "./board-lib.mjs";
+import { LANGFUSE_SAMMELTICKET_TITEL, REPO, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, ghJson, imKopf, setPosition } from "./board-lib.mjs";
 
 export { STATUS_TITEL };
 export const SAMMEL_TITEL = LANGFUSE_SAMMELTICKET_TITEL;
@@ -78,7 +78,7 @@ export function wochenFenster(jetzt) {
 }
 
 /** Body des neu angelegten Status-Tickets. `vorgaenger` = `{ number, closedAt, createdAt? }` oder null; war der Vorgänger in derselben Kalenderwoche angelegt, hat er die letzte volle Woche schon gemessen (fehlt `createdAt`, wird gemessen). Pur. */
-export function statusBody({ vorgaenger, jetzt }) {
+export function statusBody({ vorgaenger, jetzt, repo = REPO }) {
   const w = wochenFenster(jetzt);
   const zeitraum = vorgaenger
     ? `seit dem Abschluss von #${vorgaenger.number} (${vorgaenger.closedAt}) bis zum Claim`
@@ -87,14 +87,14 @@ export function statusBody({ vorgaenger, jetzt }) {
   const budget = schonGemessen
     ? `- **Wochenbudget:** entfällt, Woche ${w.letzte.von} bis ${w.letzte.bis} hat #${vorgaenger.number} schon gemessen (Checkliste Punkt 7 überspringen).`
     : `- **Wochenbudget:** letzte volle Woche ${w.letzte.von} bis ${w.letzte.bis} (Mo–So UTC) gegen die Woche davor ${w.davor.von} bis ${w.davor.bis}.`;
-  const repo = "https://github.com/fluffels/kubernia/blob/main/docs";
+  const docs = `https://github.com/${repo}/blob/main/docs`;
   return [
     "Wiederkehrende Auswertung der Langfuse-Daten, vom Wochen-Workflow angelegt (kein Agent legt dieses Ticket an).",
     "",
     `- **Zeitraum:** ${zeitraum}.`,
     budget,
-    `- **Checkliste:** [docs/model-routing.md › Langfuse-Status überprüfen](${repo}/model-routing.md#langfuse-status-überprüfen-1293).`,
-    `- **Mechanik:** [docs/ticket-reihenfolge.md](${repo}/ticket-reihenfolge.md#wiederkehrendes-ticket-langfuse-status-überprüfen-1293).`,
+    `- **Checkliste:** [docs/model-routing.md › Langfuse-Status überprüfen](${docs}/model-routing.md#langfuse-status-überprüfen-1293).`,
+    `- **Mechanik:** [docs/ticket-reihenfolge.md](${docs}/ticket-reihenfolge.md#wiederkehrendes-ticket-langfuse-status-überprüfen-1293).`,
     `- **Abschluss:** Bericht-Kommentar geschrieben, große Befunde als Issues, kleine als Zeilen ins Sammelticket „${SAMMEL_TITEL}“ (danach per \`board-place.mjs --top\` nach oben), PR mit Verdichtungszeile und \`Closes\`.`,
   ].join("\n");
 }
@@ -111,7 +111,7 @@ export function fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items = [] 
   if (e.aktion === "anlegen") {
     const neu = ghJson([
       "api", "-X", "POST", `repos/${repo}/issues`,
-      "-f", `title=${STATUS_TITEL}`, "-f", `body=${statusBody({ vorgaenger, jetzt })}`, "-f", "labels[]=area:harness",
+      "-f", `title=${STATUS_TITEL}`, "-f", `body=${statusBody({ vorgaenger, jetzt, repo })}`, "-f", "labels[]=area:harness",
     ]);
     console.log(`Angelegt: #${neu.number}`);
     node = neu.node_id;

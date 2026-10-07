@@ -6,14 +6,17 @@ import { fixture } from "./support/tmp-fixture";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as zeit from "../scripts/docs-gen/zeitleiste.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as adrModul from "../scripts/docs-gen/adr.mjs";
 
 type Cfg = Record<string, unknown>;
 const api = zeit as unknown as {
   zeitleisteGenerator: (ctx: { rootDir: string; config: Cfg }) => string;
-  adrListeGenerator: (ctx: { rootDir: string; config: Cfg }) => string;
 };
+const adrApi = adrModul as unknown as { adrListeGenerator: (ctx: { rootDir: string; config: Cfg }) => string };
 
 const conf: Cfg = { zeitleiste: { adr: "docs/adr", meilensteine: "docs/meilensteine.json" } };
+const confAdr: Cfg = { adr: { ordner: "docs/adr" } }; // adr-liste liest nur den eigenen Block (#1398)
 const ms = (...e: { datum: unknown; text: unknown }[]) => JSON.stringify({ hinweis: "x", meilensteine: e });
 const adrNeu = (nr: string, titel: string, datum: string) => `# ADR ${nr}: ${titel}\n\n> Status: **akzeptiert** · Datum: ${datum} · Ticket: #1\n\n## Status\nText`;
 const adrAlt = (nr: string, titel: string, datum: string) => `# ADR ${nr}: ${titel}\n\n- **Status:** akzeptiert (${datum})\n\n## Kontext\nText`;
@@ -122,7 +125,7 @@ describe("Generator zeitleiste", () => {
 });
 
 describe("Generator adr-liste (#1392)", () => {
-  const liste = (files: Record<string, string>, c: Cfg = conf) => api.adrListeGenerator({ rootDir: fixture(files), config: c });
+  const liste = (files: Record<string, string>, c: Cfg = confAdr) => adrApi.adrListeGenerator({ rootDir: fixture(files), config: c });
   test("Gutfall: beide Kopfformate, Nummer, Titel, Status, Datum, nach Nummer sortiert", () => {
     const out = liste(base({ "docs/adr/0002-zwei.md": adrAlt("0002", "Zwei", "2026-06-12") }));
     assert.deepEqual(out.split("\n"), [
@@ -146,8 +149,13 @@ describe("Generator adr-liste (#1392)", () => {
   });
   test("ungültiges Datum, fehlender Ordner und fehlender Config-Block sind Fehler", () => {
     assert.throws(() => liste(base({ "docs/adr/0002-x.md": adrNeu("0002", "X", "2026-13-40") })), /ungültiges Datum/);
-    assert.throws(() => liste({}, conf), /nicht gefunden/);
-    assert.throws(() => liste(base(), {}), /Config-Block/);
+    assert.throws(() => liste({}, confAdr), /nicht gefunden/);
+    assert.throws(() => liste(base(), {}), /Config-Block "adr"/);
+  });
+  test("adr-liste braucht keinen zeitleiste-Block, aber den adr-Block (ein Block der Zeitleiste genügt nicht)", () => {
+    assert.match(liste(base(), { adr: { ordner: "docs/adr" } }), /\| \[0001\]/);
+    assert.throws(() => liste(base(), conf), /Config-Block "adr" mit "ordner" fehlt/);
+    assert.throws(() => liste(base(), { adr: {} }), /Config-Block "adr"/);
   });
   test("pipe im Titel wird escaped", () => {
     assert.match(liste(base({ "docs/adr/0002-p.md": adrNeu("0002", "A | B", "2026-07-01") })), /A \\| B/);

@@ -50,6 +50,9 @@
       "^(src|node_modules)/[^/]+/"
     ]
   },
+  "adr": {
+    "ordner": "docs/adr"
+  },
   "zeitleiste": {
     "adr": "docs/adr",
     "meilensteine": "docs/meilensteine.json"

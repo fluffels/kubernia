@@ -17,7 +17,7 @@ type Takt = {
   MIN_ABSTAND_STUNDEN: number;
   MIN_TICKET_MERGES_PUSH: number;
   wochenFenster: (jetzt: string | Date) => { letzte: { von: string; bis: string }; davor: { von: string; bis: string } };
-  statusBody: (a: { vorgaenger: { number: number; closedAt: string; createdAt?: string } | null; jetzt: string | Date }) => string;
+  statusBody: (a: { vorgaenger: { number: number; closedAt: string; createdAt?: string } | null; jetzt: string | Date; repo?: string }) => string;
 };
 type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
 const T = raw as unknown as Takt;
@@ -123,6 +123,12 @@ describe("statusBody", () => {
     expect(body).not.toMatch(/Position\s*:?\s*\d+/);
     expect(body).not.toContain("Langfuse-Folgen");
     expect(body).not.toMatch(/Nachfolger/);
+  });
+  test("die Doku-Links bauen auf dem übergebenen Repo auf (Z5e)", () => {
+    const x = T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z", repo: "x/y" });
+    expect(x).toContain("https://github.com/x/y/blob/main/docs/model-routing.md#");
+    expect(x).toContain("https://github.com/x/y/blob/main/docs/ticket-reihenfolge.md#");
+    expect(x).not.toContain("fluffels/kubernia");
   });
   test("ohne Vorgänger: Bezug auf #1293", () => {
     expect(T.statusBody({ vorgaenger: null, jetzt: "2026-10-07T00:00:00Z" })).toContain("#1293");
