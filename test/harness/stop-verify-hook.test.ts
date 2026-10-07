@@ -494,3 +494,69 @@ describe("Wächter: keine Anleitung zum Kill per Name (#1411)", () => {
     assert.ok(!VERBOTEN.test("nie per Name (Stop-Process -Id <pid>)"));
   });
 });
+
+describe("checkAndFixOrphanWorktrees: Lens-Worktrees ohne Feature-Worktree (#1425)", () => {
+  const MAIN = "/root";
+  const WT = "/root/.claude/worktrees";
+  const JETZT = 50_000_000;
+  const porcelain = (pfade: string[]) => pfade.map((p) => `worktree ${p}\nHEAD abc\n`).join("\n");
+  const check = (hook as unknown as {
+    checkAndFixOrphanWorktrees: (root: string, deps: object) => { blocked: boolean; reason?: string; removed?: string[] };
+  }).checkAndFixOrphanWorktrees;
+
+  function deps(start: string[], opts: { alterMs?: number; klemmt?: boolean } = {}) {
+    const registriert = new Set(start);
+    const befehle: string[] = [];
+    return {
+      befehle,
+      deps: {
+        now: JETZT,
+        execSync: (cmd: string) => {
+          befehle.push(cmd);
+          if (cmd.includes("worktree list")) return porcelain([...registriert]);
+          if (cmd.includes("status --porcelain")) return "";
+          const m = /worktree remove --force "([^"]+)"/.exec(cmd);
+          if (m && opts.klemmt) throw new Error("gesperrt");
+          if (m) registriert.delete(m[1].replace(/\\/g, "/"));
+          return "";
+        },
+        existsSync: (p: string) => p.replace(/\\/g, "/") === WT || registriert.has(p.replace(/\\/g, "/")),
+        readdirSync: () => [...registriert].filter((p) => p.startsWith(`${WT}/`)).map((p) => ({ name: p.slice(WT.length + 1), isDirectory: () => true, isSymbolicLink: () => false })),
+        statSync: () => ({ mtimeMs: JETZT - (opts.alterMs ?? 10 * 60_000), birthtimeMs: 1 }),
+        lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => false }),
+        rmSync: () => {},
+        platform: "linux",
+      },
+    };
+  }
+
+  test("verwaister, alter Lens-Worktree wird entfernt, der Stop bleibt frei", () => {
+    const g = deps([MAIN, `${WT}/kq-7-lens-r1`]);
+    const r = check(MAIN, g.deps);
+    assert.equal(r.blocked, false);
+    assert.deepEqual(r.removed, ["kq-7-lens-r1"]);
+    assert.ok(g.befehle.some((c) => c.includes("worktree remove --force")));
+  });
+
+  test("bleibt unberührt: Lens-Worktree mit Feature-Worktree, junger Lens-Worktree", () => {
+    const mitEltern = deps([MAIN, `${WT}/kq-7`, `${WT}/kq-7-lens-r1`]);
+    assert.equal(check(MAIN, mitEltern.deps).blocked, false);
+    assert.ok(!mitEltern.befehle.some((c) => c.includes("worktree remove")));
+    const jung = deps([MAIN, `${WT}/kq-8-lens-r1`], { alterMs: 60_000 });
+    assert.equal(check(MAIN, jung.deps).blocked, false);
+    assert.ok(!jung.befehle.some((c) => c.includes("worktree remove")));
+  });
+
+  test("scheitert das Entfernen, blockiert der Stop mit Namen und Hinweis auf --fix", () => {
+    const g = deps([MAIN, `${WT}/kq-9-lens-r2`], { klemmt: true });
+    const r = check(MAIN, g.deps);
+    assert.equal(r.blocked, true);
+    assert.match(r.reason ?? "", /kq-9-lens-r2/);
+    assert.match(r.reason ?? "", /cleanup-worktrees\.mjs --fix/);
+  });
+
+  test("git-Fehler bei `worktree list`: fail-open", () => {
+    const r = check(MAIN, { execSync: () => { throw new Error("kein git"); } });
+    assert.equal(r.blocked, false);
+  });
+});

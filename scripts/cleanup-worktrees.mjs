@@ -17,6 +17,13 @@
  * Skript räumt stattdessen über `fs.rmSync` auf (kein Shell-`rm`, `Bash(node:*)`
  * bleibt erlaubt).
  *
+ * Lens-Worktrees (#1425): die Test-Lens sabotiert in `kq-<nr>-lens-r<runde>` (Skill `review-lenses`). Bleibt so ein
+ * Worktree REGISTRIERT stehen, obwohl sein Feature-Worktree `kq-<nr>` weg ist, fehlt er in der Waisen-Sicht oben
+ * (die kennt nur unregistrierte Ordner). `verwaisteLensWorktrees` findet sie, `entferneLensWorktrees` räumt sie per
+ * `git worktree remove --force` und prüft das Ergebnis.
+ * Bewusste Grenzen: ein Feature-Worktree, der nicht `kq-<nr>` heißt, hat keinen erkennbaren Eltern-Worktree; seine
+ * Lens-Worktrees gelten nach 5 Minuten als verwaist. Ein junger Lens-Worktree wird nur gemeldet.
+ *
  * Entscheidungslogik ist pure/exportiert und testbar (execSync/fs injizierbar) —
  * EINE Quelle für dieses CLI-Skript und den automatischen Check in
  * scripts/stop-verify-hook.mjs (#952).
@@ -176,8 +183,9 @@ export function computeOrphans(worktreesDir, dirs, registered) {
 }
 
 /**
- * Diagnose: liefert `{ ok, orphans, young, mainRoot, worktreesDir }` (`young`: unregistrierte Ordner unter 5 Minuten,
- * nur melden, nie löschen).
+ * Diagnose: liefert `{ ok, orphans, young, lensOrphans, lensYoung, mainRoot, worktreesDir }` (`young`: unregistrierte
+ * Ordner unter 5 Minuten, nur melden, nie löschen; `lensOrphans`/`lensYoung`: registrierte Lens-Worktrees ohne
+ * Feature-Worktree, alt bzw. unter 5 Minuten, #1425).
  * `ok:false` bei jedem git-Fehler (z.B. `cwd` ist gar kein Git-Repo) — dann
  * bewusst KEINE Waisen melden, statt bei fehlgeschlagenem `git worktree list`
  * versehentlich JEDEN lokalen Ordner (auch aktive!) als Waise zu behandeln.
@@ -201,7 +209,25 @@ export function diagnoseOrphans(cwd, deps = {}) {
   const registered = new Set(allPaths);
   const dirs = localWorktreeDirs(worktreesDir, deps);
   const { alt: orphans, jung: young } = splitByAge(worktreesDir, computeOrphans(worktreesDir, dirs, registered), deps);
-  return { ok: true, orphans, young, mainRoot, worktreesDir };
+  const { alt: lensOrphans, jung: lensYoung } = splitByAge(worktreesDir, verwaisteLensWorktrees(allPaths, worktreesDir), deps);
+  return { ok: true, orphans, young, lensOrphans, lensYoung, mainRoot, worktreesDir };
+}
+
+/** Name eines Lens-Worktrees: `kq-<nr>-lens-r<runde>` (Skill review-lenses); Gruppe 1 ist der Eltern-Worktree `kq-<nr>`. */
+const LENS_WORKTREE = /^(kq-\d+)-lens-r\d+$/;
+
+/**
+ * Registrierte Lens-Worktrees unter `worktreesDir`, deren Feature-Worktree `kq-<nr>` NICHT mehr registriert ist (#1425).
+ * `registeredPaths` sind die absoluten Pfade aus `git worktree list`. Pure; liefert Ordnernamen (nicht Pfade).
+ */
+export function verwaisteLensWorktrees(registeredPaths, worktreesDir) {
+  const basis = norm(worktreesDir) + "/";
+  const registriert = new Set(registeredPaths.map(norm));
+  const namen = [...registriert].filter((p) => p.startsWith(basis) && !p.slice(basis.length).includes("/")).map((p) => p.slice(basis.length));
+  return namen.filter((name) => {
+    const m = LENS_WORKTREE.exec(name);
+    return m !== null && !registriert.has(basis + m[1]);
+  });
 }
 
 /** Werkzeug-Prozesse, die als vergessene Hilfsserver oder Stubs einen Worktree-Ordner festhalten können (Name ohne `.exe`). */
@@ -335,6 +361,53 @@ export function fixOrphans(mainRoot, worktreesDir, orphans, deps = {}) {
   return { removed, errors, pending, refused, halter };
 }
 
+/**
+ * Entfernt verwaiste Lens-Worktrees (#1425) per `git worktree remove --force` (cwd = Haupt-Checkout) und PRÜFT das
+ * Ergebnis: der Pfad darf nicht mehr registriert sein und der Ordner muss weg. Wirft nie. Buckets: `removed`,
+ * `refused` (Schutzgurt `assertSafeOrphanTarget` lehnte ab, nichts angefasst), `errors` (Entfernen gescheitert;
+ * `halter[name]` nennt unter Windows mögliche Halter mit PID).
+ */
+export function entferneLensWorktrees(mainRoot, worktreesDir, names, deps = {}) {
+  const exec = deps.execSync ?? execSync;
+  const exists = deps.existsSync ?? existsSync;
+  const removed = [];
+  const errors = [];
+  const refused = [];
+  const halter = {};
+  for (const name of names) {
+    const absPath = join(worktreesDir, name);
+    const guard = assertSafeOrphanTarget(mainRoot, worktreesDir, name, deps);
+    if (!guard.safe) {
+      refused.push({ name, reason: guard.reason });
+      continue;
+    }
+    let geburtMs = null;
+    try {
+      geburtMs = (deps.statSync ?? statSync)(absPath).birthtimeMs;
+    } catch {
+      /* unbekannt */
+    }
+    try {
+      exec(`git worktree remove --force "${absPath}"`, { cwd: mainRoot, encoding: "utf-8" });
+    } catch {
+      /* Ergebnis wird unten geprüft, nicht der Exit-Code */
+    }
+    let noch = true;
+    try {
+      noch = registeredWorktreePaths(mainRoot, deps).includes(norm(absPath)) || exists(absPath);
+    } catch {
+      /* nicht prüfbar: als nicht entfernt behandeln */
+    }
+    if (noch) {
+      errors.push(name);
+      halter[name] = findeHalter(absPath, geburtMs, deps);
+    } else {
+      removed.push(name);
+    }
+  }
+  return { removed, errors, refused, halter };
+}
+
 /** True, wenn der Ordner existiert und leer ist; jeder Lesefehler zählt als nicht leer (fail-closed: dann meldet der Hook einen Fehler). */
 function istLeer(absPath, deps = {}) {
   try {
@@ -352,7 +425,7 @@ function main() {
   console.log("=== Worktree-Diagnose ===\n");
   console.log(`Root: ${ROOT}`);
 
-  const { ok, orphans, young, mainRoot, worktreesDir } = diagnoseOrphans(ROOT);
+  const { ok, orphans, young, lensOrphans, lensYoung, mainRoot, worktreesDir } = diagnoseOrphans(ROOT);
   if (!ok) {
     console.error("git worktree list fehlgeschlagen — Diagnose abgebrochen.");
     process.exit(1);
@@ -382,23 +455,34 @@ function main() {
     console.log(`Zu jung zum Löschen (unter ${MIN_ORPHAN_AGE_MS / 60_000} Minuten, evtl. gerade von einer parallelen Session angelegt): ${young.join(", ")}\n`);
   }
 
-  const okDirs = dirs.filter((name) => !orphans.includes(name) && !young.includes(name));
+  if (lensYoung.length > 0) {
+    console.log(`Lens-Worktrees ohne Feature-Worktree, aber unter ${MIN_ORPHAN_AGE_MS / 60_000} Minuten alt (nur gemeldet): ${lensYoung.join(", ")}`);
+  }
+  if (lensOrphans.length > 0) {
+    console.log(`Verwaiste Lens-Worktrees (registriert, Feature-Worktree fehlt, ${lensOrphans.length}):`);
+    for (const name of lensOrphans) console.log(`  ✗ ${name}`);
+    console.log();
+  }
+
+  const okDirs = dirs.filter((name) => !orphans.includes(name) && !young.includes(name) && !lensOrphans.includes(name));
   if (okDirs.length > 0) {
     console.log("Aktive Worktrees (git bekannt):");
     for (const name of okDirs) console.log(`  ✓ ${name}`);
     console.log();
   }
 
-  if (orphans.length === 0) {
+  if (orphans.length === 0 && lensOrphans.length === 0) {
     console.log("Keine verwaisten Ordner — alles sauber.");
     // Ein gemeldeter Reparse-Point ist NICHT "sauber": exit 1, damit die
     // Warnung nicht in einem grünen Lauf untergeht (#1051).
     process.exit(suspicious.length > 0 ? 1 : 0);
   }
 
-  console.log(`Verwaiste Ordner (${orphans.length}):`);
-  for (const name of orphans) console.log(`  ✗ ${name}`);
-  console.log();
+  if (orphans.length > 0) {
+    console.log(`Verwaiste Ordner (${orphans.length}):`);
+    for (const name of orphans) console.log(`  ✗ ${name}`);
+    console.log();
+  }
 
   if (!FIX) {
     console.log(
@@ -408,7 +492,12 @@ function main() {
   }
 
   console.log("Pruning veralteter git-Einträge + Löschen...");
-  const { removed, errors, pending, refused, halter } = fixOrphans(mainRoot, worktreesDir, orphans);
+  const lens = entferneLensWorktrees(mainRoot, worktreesDir, lensOrphans);
+  for (const name of lens.removed) console.log(`  ✓ ${name} (Lens-Worktree) entfernt`);
+  const { removed, errors: ordnerFehler, pending, refused: ordnerRefused, halter: ordnerHalter } = fixOrphans(mainRoot, worktreesDir, orphans);
+  const errors = [...ordnerFehler, ...lens.errors];
+  const refused = [...ordnerRefused, ...lens.refused];
+  const halter = { ...ordnerHalter, ...lens.halter };
   for (const name of removed) console.log(`  ✓ ${name} entfernt`);
   for (const name of pending) console.log(`  … ${name} ist leer, aber gerade gesperrt: kein Fehler, der nächste Lauf versucht es erneut`);
   for (const { name, reason } of refused) {
