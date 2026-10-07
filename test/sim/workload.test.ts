@@ -12,7 +12,7 @@ import { KQSim, freshSim } from "./helpers";
 import {
   newDeploymentPod, newStatefulPod, scaleDeployment, replacePods, replaceDeploymentPod,
   restartStatefulPod, addDeployment, removeDeployment,
-  addStatefulSet, removeStatefulSet, statefulPodVolumePending,
+  addStatefulSet, removeStatefulSet, statefulPodVolumePending, statefulPodClaimName, statefulPodNode,
   changeImage, setMemoryLimit, setCpuLimit, seedPodTemplate, snapshotPodTemplate,
   MEM_HEALED_NOTE, CPU_THROTTLED_NOTE,
 } from "../../src/sim/workload";
@@ -212,6 +212,29 @@ test("statefulPodVolumePending: nur ein Pod mit Pending-PVC wartet (#1301)", () 
   assert.equal(statefulPodVolumePending(sts, pod, pvc("Pending")), true);
   assert.equal(statefulPodVolumePending(sts, pod, pvc("Bound")), false);
   assert.equal(statefulPodVolumePending(sts, pod, []), false, "ohne PVC-Eintrag kein Pending");
+});
+
+test("statefulPodClaimName: stimmt mit dem real angelegten PVC überein (#1404)", () => {
+  const s = new KQSim({ statefulSets: [{ name: "speicher", image: "postgres:16", replicas: 2, serviceName: "speicher", volumeClaimName: "daten" }] });
+  const set = s.statefulSets[0];
+  for (const p of set.pods) assert.equal(s.pvcs.some(v => v.name === statefulPodClaimName(set, p)), true);
+  assert.equal(statefulPodClaimName(set, set.pods[1]), "daten-speicher-1");
+});
+
+const nd = (name: string, roles: string) => ({ name, status: "Ready", roles, version: "v1.30.2" });
+const podN = (i: number) => newStatefulPod("db-" + i, 0);
+
+test("statefulPodNode: Round-Robin über die Worker nach Ordinal, Control-Plane nie (#1404)", () => {
+  const nodes = [nd("cp", "control-plane"), nd("w1", "<none>"), nd("w2", "<none>")];
+  assert.deepEqual([0, 1, 2, 3].map(i => statefulPodNode(nodes, podN(i))), ["w1", "w2", "w1", "w2"]);
+});
+
+test("statefulPodNode: Rückfälle ohne Worker bzw. ohne Nodes (#1404)", () => {
+  assert.equal(statefulPodNode([nd("cp", "control-plane")], podN(1)), "cp");
+  assert.equal(statefulPodNode([], podN(0)), "");
+  const nodes = [nd("cp", "control-plane"), nd("w1", "<none>")];
+  assert.equal(statefulPodNode(nodes, { name: "kaputt" }), "w1", "Name ohne Ordinal: erster Worker statt Absturz");
+  assert.equal(statefulPodNode(nodes, { name: "" }), "w1");
 });
 
 /* ---------- Pod-Template-Primitive (#1300): Heil-/Drossel-Regeln an einer Stelle ---------- */

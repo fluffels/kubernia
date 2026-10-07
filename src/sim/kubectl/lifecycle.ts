@@ -10,9 +10,10 @@
  * kubectl-Dispatch (../kubectl.ts).
  */
 import type { ApplyEffect, ArgoApp, RbacSubject } from "../state";
-import { addDeployment, removeDeployment, addStatefulSet, removeStatefulSet, replaceDeploymentPod, restartStatefulPod } from "../workload";
+import { addDeployment, removeDeployment, addStatefulSet, removeStatefulSet, replaceDeploymentPod, restartStatefulPod, statefulPodClaimName } from "../workload";
 // Argo-CD-Reconcile/-Klon liegen seit #378 bei der argocd-Familie in ../argocd – `kubectl apply -f`
 // einer Application zieht/kloniert den Soll direkt darüber (statt über eine Host-Methode).
+import { findClusterPod } from "../pods";
 import { argoReconcile, cloneChildSpec } from "../argocd";
 import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { sameRbac } from "../rbac";
@@ -278,20 +279,19 @@ function deleteFromFile(host: KubectlHost, t: string[]): string {
  *  flüchtige emptyDir frei, #240) ODER StatefulSet-Pod (kommt mit GLEICHEM Namen + PVC zurück,
  *  Daten überleben, #122). NotFound, wenn der Name zu keinem Workload gehört. */
 function deletePod(host: KubectlHost, name: string): string {
-  const dep = host._findDeploymentOfPod(name);
-  if (dep) {
-    host.lastDeletedPod = name;
-    host._resetEphemeral(dep);
-    replaceDeploymentPod(dep, name, host.clock, host.rng);
-    return 'pod "' + name + '" deleted';
+  const c = findClusterPod(host, name);
+  if (!c) return host._err('Error from server (NotFound): pods "' + name + '" not found', "Pod-Namen siehst du mit 'kubectl get pods'.");
+  host.lastDeletedPod = name;
+  switch (c.owner) {
+    case "Deployment":
+      host._resetEphemeral(c.dep);
+      replaceDeploymentPod(c.dep, name, host.clock, host.rng);
+      break;
+    case "StatefulSet":
+      restartStatefulPod(c.sts, name, host.clock);
+      break;
   }
-  const sts = host.statefulSets.find(s => s.pods.some(p => p.name === name));
-  if (sts) {
-    host.lastDeletedPod = name;
-    restartStatefulPod(sts, name, host.clock);
-    return 'pod "' + name + '" deleted';
-  }
-  return host._err('Error from server (NotFound): pods "' + name + '" not found', "Pod-Namen siehst du mit 'kubectl get pods'.");
+  return 'pod "' + name + '" deleted';
 }
 
 /** `kubectl delete pvc <name>` – gibt das gebundene PV frei: Delete-Policy entfernt es,
@@ -592,7 +592,7 @@ const applyStatefulSet: ApplyHandler = (host, eff, out) => {
   const sts = host._makeStatefulSet(effSts);
   addStatefulSet(host, sts);
   out.push("statefulset.apps/" + effSts.name + " created");
-  out.push("💡 " + sts.replicas + " Pod(s) mit stabiler Identität (" + sts.name + "-0 …), jeder mit eigenem PVC '" + sts.volumeClaimName + "-" + sts.name + "-0' usw.");
+  out.push("💡 " + sts.replicas + " Pod(s) mit stabiler Identität (" + sts.name + "-0 …), jeder mit eigenem PVC '" + statefulPodClaimName(sts, { name: sts.name + "-0" }) + "' usw.");
 };
 
 // RBAC-CRDs (#128): SA / Role(+Cluster) / RoleBinding(+Cluster) deklarativ anlegen,
