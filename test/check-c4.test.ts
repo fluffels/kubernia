@@ -16,7 +16,7 @@ import * as raw from "../scripts/check-c4.mjs";
 import * as schichten from "../scripts/docs-gen/schichten.mjs";
 
 type Schicht = { id: string; label: string; technik?: string; muster: string | null; wurzeln: string[]; darf: string[] };
-type Modell = { schichten: Schicht[]; extern: { id: string; label: string; muster: string }[] };
+type Modell = { quellwurzel: string; schichten: Schicht[]; extern: { id: string; label: string; muster: string }[] };
 type El = { id: string; kind: string; title: string; parentId: string | null; datei: string; zeile: number };
 type Bez = { von: string; nach: string; datei: string; zeile: number };
 type View = { id: string; titel: string; knoten: number; datei: string; zeile: number };
@@ -38,6 +38,7 @@ const echt = req("../scripts/layers.cjs") as { SCHICHT_MODELL: Modell; layerOf: 
 
 const PHASER = "node_modules[/\\\\]phaser[/\\\\]";
 const basis = (): Modell => ({
+  quellwurzel: "src/",
   schichten: [
     { id: "praesentation", label: "Präsentation", technik: "Phaser/DOM", muster: "^src/ui(\\.ts$|/)", wurzeln: ["ui"], darf: ["anwendung", "domaene", "phaser"] },
     { id: "anwendung", label: "Anwendung", muster: "^src/game(\\.ts$|/)", wurzeln: ["game"], darf: ["domaene"] },
