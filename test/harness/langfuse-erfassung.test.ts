@@ -91,7 +91,7 @@ const hatWiederkehrendesTicket = (ticketReihenfolge: string): boolean => {
   return (
     a !== "" &&
     /Position 20/.test(a) &&
-    /ganz oben/.test(a) &&
+    /hinter dem ungeclaimten Sammelticket/.test(a) &&
     /model-routing\.md#langfuse-status-überprüfen-1293/.test(a)
   );
 };
@@ -160,10 +160,10 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatKeineDoppelung(mr, `${CHECKLISTE.slice(0, 3).map((p) => `**${p}:**`).join(" ")}`, agents, um));
   });
 
-  test("ticket-reihenfolge.md: wiederkehrendes Ticket auf Position 20, Folgen ganz oben", () => {
+  test("ticket-reihenfolge.md: wiederkehrendes Ticket auf Position 20, Folgen hinter dem Sammelticket", () => {
     assert.ok(hatWiederkehrendesTicket(tr));
     assert.ok(!hatWiederkehrendesTicket(tr.replace(/Position 20/g, "Position 7")));
-    assert.ok(!hatWiederkehrendesTicket(tr.replace(/ganz oben/g, "irgendwo")));
+    assert.ok(!hatWiederkehrendesTicket(tr.replace(/hinter dem ungeclaimten Sammelticket/g, "irgendwo")));
     assert.ok(!hatWiederkehrendesTicket(""));
   });
 
