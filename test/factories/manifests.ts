@@ -12,6 +12,10 @@ export interface DeploymentYamlOpts {
   /** Container-`securityContext` (nur die vier modellierten Felder). */
   securityContext?: { runAsNonRoot?: boolean; privileged?: boolean; readOnlyRootFilesystem?: boolean; allowPrivilegeEscalation?: boolean };
   ephemeralLimitMi?: number;
+  /** `resources.limits.memory` als Text (z.B. "256Mi"). */
+  memoryLimit?: string;
+  /** `resources.limits.cpu` als Text ("250m") oder YAML-Zahl (0.5). */
+  cpuLimit?: string | number;
   emptyDir?: boolean;
   initContainer?: boolean;
 }
@@ -27,7 +31,11 @@ export function deploymentYaml(o: DeploymentYamlOpts): string {
     c.push("          securityContext:");
     for (const [k, v] of Object.entries(o.securityContext)) c.push(`            ${k}: ${String(v)}`);
   }
-  if (o.ephemeralLimitMi !== undefined) c.push("          resources:", "            limits:", `              ephemeral-storage: ${o.ephemeralLimitMi}Mi`);
+  const limits: string[] = [];
+  if (o.memoryLimit !== undefined) limits.push(`              memory: ${o.memoryLimit}`);
+  if (o.cpuLimit !== undefined) limits.push(`              cpu: ${String(o.cpuLimit)}`);
+  if (o.ephemeralLimitMi !== undefined) limits.push(`              ephemeral-storage: ${o.ephemeralLimitMi}Mi`);
+  if (limits.length > 0) c.push("          resources:", "            limits:", ...limits);
   if (o.emptyDir) c.push("          volumeMounts:", "            - name: scratch", "              mountPath: /scratch");
   const tail = o.emptyDir ? ["      volumes:", "        - name: scratch", "          emptyDir: {}"] : [];
   return [

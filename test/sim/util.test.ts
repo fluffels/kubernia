@@ -3,7 +3,7 @@
  * sichern ihr Verhalten inkl. Grenz-/Negativfälle direkt an der öffentlichen Funktion ab,
  * statt sie nur indirekt über die Befehlsfamilien mitzuprüfen. */
 import { describe, test, expect } from "vitest";
-import { editDistance, suggest, flagValue, multiFlag } from "../../src/sim/util";
+import { editDistance, suggest, flagValue, multiFlag, parseCpuMilli } from "../../src/sim/util";
 
 describe("editDistance – Levenshtein", () => {
   test("gleiche Strings: Distanz 0", () => {
@@ -60,5 +60,17 @@ describe("multiFlag – wiederholbare & kommagetrennte Flags", () => {
   });
   test("Flag fehlt → leeres Array", () => {
     expect(multiFlag("kubectl create role r --resource=pods", "verb")).toEqual([]);
+  });
+});
+
+describe("parseCpuMilli – CPU-Menge in Milli-Cores", () => {
+  test("Milli-Schreibweise, ganze und gebrochene Cores", () => {
+    expect(parseCpuMilli("250m")).toBe(250);
+    expect(parseCpuMilli("1")).toBe(1000);
+    expect(parseCpuMilli("0.5")).toBe(500);
+    expect(parseCpuMilli("0.125")).toBe(125);
+  });
+  test("Unsinn und zu feine Nachkommastellen → null", () => {
+    for (const bad of ["", "zwei", "m", "250M", "-1", "1.5m", "0.0001", "1.", ".5", "1e3"]) expect(parseCpuMilli(bad), bad).toBeNull();
   });
 });

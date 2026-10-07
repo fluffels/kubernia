@@ -3,9 +3,9 @@
  * verstehen. Nur Felder, die das Sim-Modell kennt, werden gesetzt (und nur, wenn sie im YAML
  * stehen); alles Übrige (selector, labels, probes, …) wird ignoriert. Weitere `apps/v1`-Kinds
  * (StatefulSet, #1141) kommen als zusätzlicher Mapper in diese Datei. */
-import type { ApplyEffect, SecurityContext } from "../state";
+import { SECURITY_CONTEXT_KEYS, type ApplyEffect, type SecurityContext } from "../state";
 import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
-import { parseMem } from "../util";
+import { parseCpuMilli, parseMem } from "../util";
 import { Leaf, ManifestError } from "./fields";
 
 type DeploymentEffect = NonNullable<ApplyEffect["deployment"]>;
@@ -14,7 +14,7 @@ type DeploymentEffect = NonNullable<ApplyEffect["deployment"]>;
 function securityOf(pod: Leaf, container: Leaf): SecurityContext | undefined {
   const out: SecurityContext = {};
   for (const sc of [pod.key("securityContext"), container.key("securityContext")]) {
-    for (const k of ["runAsNonRoot", "privileged", "readOnlyRootFilesystem", "allowPrivilegeEscalation"] as const) {
+    for (const k of SECURITY_CONTEXT_KEYS) {
       const v = sc.key(k).bool();
       if (v !== undefined) out[k] = v;
     }
@@ -22,8 +22,9 @@ function securityOf(pod: Leaf, container: Leaf): SecurityContext | undefined {
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-function ephemeralLimitOf(container: Leaf): number | undefined {
-  const leaf = container.key("resources").key("limits").key("ephemeral-storage");
+/** Ein Mengen-Limit unter `resources.limits.<key>` in Mi (memory, ephemeral-storage); ungültig → ManifestError. */
+function memoryLimitOf(container: Leaf, key: string): number | undefined {
+  const leaf = container.key("resources").key("limits").key(key);
   const raw = leaf.str();
   if (raw === undefined) return undefined;
   const mi = parseMem(raw);
@@ -31,7 +32,17 @@ function ephemeralLimitOf(container: Leaf): number | undefined {
   return mi;
 }
 
-/** Pod-Template-Felder: SA, Port, Node, Ephemeral-Storage, emptyDir, initContainer, securityContext. */
+/** `resources.limits.cpu` in Milli-Cores: als Text ("250m", "0.5") oder als YAML-Zahl (0.5, 2). */
+function cpuLimitOf(container: Leaf): number | undefined {
+  const leaf = container.key("resources").key("limits").key("cpu");
+  if (!leaf.present) return undefined;
+  const raw = typeof leaf.value === "number" ? String(leaf.value) : leaf.str();
+  const milli = raw === undefined ? null : parseCpuMilli(raw);
+  if (milli === null) throw new ManifestError(leaf.path + ': ungültige Mengenangabe "' + String(raw) + '" (erwartet z.B. 250m oder 0.5)');
+  return milli;
+}
+
+/** Pod-Template-Felder: SA, Port, Node, Limits (memory/cpu/ephemeral-storage; `requests` bleiben ignoriert), emptyDir, initContainer, securityContext. */
 function podTemplateFields(pod: Leaf, container: Leaf): Partial<DeploymentEffect> {
   const out: Partial<DeploymentEffect> = {};
   const sa = pod.key("serviceAccountName").str();
@@ -40,8 +51,12 @@ function podTemplateFields(pod: Leaf, container: Leaf): Partial<DeploymentEffect
   if (port !== undefined) out.containerPort = port;
   const node = pod.key("nodeName").str();
   if (node !== undefined) out.node = node;
-  const eph = ephemeralLimitOf(container);
+  const eph = memoryLimitOf(container, "ephemeral-storage");
   if (eph !== undefined) out.ephemeralLimit = eph;
+  const mem = memoryLimitOf(container, "memory");
+  if (mem !== undefined) out.memLimit = mem;
+  const cpu = cpuLimitOf(container);
+  if (cpu !== undefined) out.cpuLimitMilli = cpu;
   if (pod.key("volumes").items().some(v => v.has("emptyDir"))) out.emptyDir = {};
   if (pod.key("initContainers").items().length > 0) out.initContainer = {};
   const sec = securityOf(pod, container);

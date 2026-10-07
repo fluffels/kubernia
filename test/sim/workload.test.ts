@@ -13,6 +13,7 @@ import {
   newDeploymentPod, newStatefulPod, scaleDeployment, replacePods, replaceDeploymentPod,
   restartStatefulPod, addDeployment, removeDeployment,
   addStatefulSet, removeStatefulSet, statefulPodVolumePending,
+  changeImage, setMemoryLimit, setCpuLimit, seedPodTemplate,
 } from "../../src/sim/workload";
 import { clusterInvariantViolations } from "../../src/sim/invariants";
 import type { Deployment, StatefulSetRes, PodInstance } from "../../src/sim/state";
@@ -210,4 +211,62 @@ test("statefulPodVolumePending: nur ein Pod mit Pending-PVC wartet (#1301)", () 
   assert.equal(statefulPodVolumePending(sts, pod, pvc("Pending")), true);
   assert.equal(statefulPodVolumePending(sts, pod, pvc("Bound")), false);
   assert.equal(statefulPodVolumePending(sts, pod, []), false, "ohne PVC-Eintrag kein Pending");
+});
+
+/* ---------- Pod-Template-Primitive (#1300): Heil-/Drossel-Regeln an einer Stelle ---------- */
+
+test("changeImage: heilt den imagepull-Fehler nur mit einem anderen Image", () => {
+  const dep = makeDep("kasse", 1);
+  dep.broken = { type: "imagepull", badImage: "ngnix" };
+  assert.equal(changeImage(dep, "ngnix"), false, "gleiches kaputtes Image heilt nicht");
+  assert.deepEqual(dep.broken, { type: "imagepull", badImage: "ngnix" });
+  assert.equal(changeImage(dep, "nginx"), true);
+  assert.equal(dep.broken, null);
+  assert.equal(dep.image, "nginx");
+});
+
+test("changeImage: ohne Fehler wird nur das Image gesetzt (nichts geheilt)", () => {
+  const dep = makeDep("kasse", 1);
+  assert.equal(changeImage(dep, "nginx:2"), false);
+  assert.equal(dep.image, "nginx:2");
+});
+
+test("setMemoryLimit: genau memNeeded heilt OOMKilled, memNeeded-1 nicht", () => {
+  const dep = makeDep("kartograf", 1);
+  dep.broken = { type: "oomkilled", memNeeded: 256 };
+  assert.equal(setMemoryLimit(dep, 255), false);
+  assert.equal(dep.memLimit, 255);
+  assert.notEqual(dep.broken, null);
+  assert.equal(setMemoryLimit(dep, 256), true);
+  assert.equal(dep.broken, null);
+});
+
+test("setMemoryLimit: ohne OOMKilled-Fehler heilt nichts, setzt aber das Limit", () => {
+  const dep = makeDep("kartograf", 1);
+  assert.equal(setMemoryLimit(dep, 512), false);
+  assert.equal(dep.memLimit, 512);
+});
+
+test("setCpuLimit: unter 500 m drosselt die Dauerlast weg, ab 500 m nicht", () => {
+  const dep = makeDep("rechner", 1);
+  dep.cpuHeavy = true;
+  assert.equal(setCpuLimit(dep, 500), false);
+  assert.equal(dep.cpuHeavy, true);
+  assert.equal(dep.cpuLimitMilli, 500);
+  assert.equal(setCpuLimit(dep, 499), true);
+  assert.equal(dep.cpuHeavy, false);
+  assert.equal(setCpuLimit(dep, 100), false, "ohne Dauerlast nichts zu drosseln");
+});
+
+test("seedPodTemplate: übernimmt nur gesetzte Felder und kopiert den securityContext", () => {
+  const dep = makeDep("kasse", 1);
+  dep.memLimit = 64;
+  const sc = { runAsNonRoot: true };
+  seedPodTemplate(dep, { cpuLimitMilli: 250, securityContext: sc });
+  assert.equal(dep.memLimit, 64, "nicht gesetzt = unverändert");
+  assert.equal(dep.cpuLimitMilli, 250);
+  assert.deepEqual(dep.securityContext, sc);
+  assert.notEqual(dep.securityContext, sc, "Kopie statt geteilter Referenz");
+  seedPodTemplate(dep, { memLimit: 300 });
+  assert.equal(dep.memLimit, 300);
 });

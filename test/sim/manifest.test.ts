@@ -5,6 +5,8 @@ import { Leaf, ManifestError } from "../../src/sim/manifest/fields";
 import type { ApplyEffect } from "../../src/sim";
 import { deploymentYaml, serviceYaml } from "../factories/manifests";
 
+/** DEP mit einer Zeile unter `resources.limits`. */
+const withLimit = (line: string) => DEP.replace("          image: nginx:1.27\n", "          image: x\n          resources:\n            limits:\n              " + line + "\n");
 const DEP = `apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -66,12 +68,19 @@ spec:
           resources:
             limits:
               ephemeral-storage: 1Gi
+              memory: 256Mi
+              cpu: 250m
 `;
     expect(ok(yaml)).toStrictEqual([{ deployment: {
       name: "voll", image: "img:1", replicas: 2, serviceAccountName: "wachdienst", containerPort: 8080, node: "worker-1",
-      ephemeralLimit: 1024, emptyDir: {}, initContainer: {},
+      ephemeralLimit: 1024, memLimit: 256, cpuLimitMilli: 250, emptyDir: {}, initContainer: {},
       securityContext: { runAsNonRoot: true, readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, privileged: false },
     } }]);
+  });
+
+  it("cpu als YAML-Zahl: 0.5 Cores = 500 m, 2 Cores = 2000 m", () => {
+    expect(ok(withLimit("cpu: 0.5"))[0].deployment?.cpuLimitMilli).toBe(500);
+    expect(ok(withLimit("cpu: 2"))[0].deployment?.cpuLimitMilli).toBe(2000);
   });
 
   it("Volume ohne emptyDir erzeugt kein emptyDir", () => {
@@ -91,6 +100,9 @@ spec:
     ["Image ist Zahl", DEP.replace("image: nginx:1.27", "image: 5"), /image: erwartet Text, gefunden eine Zahl/],
     ["securityContext falscher Typ", DEP.replace("      containers:", "      securityContext:\n        runAsNonRoot: ja\n      containers:"), /runAsNonRoot: erwartet true oder false/],
     ["ephemeral-storage ungültig", DEP.replace("          image: nginx:1.27\n", "          image: x\n          resources:\n            limits:\n              ephemeral-storage: viel\n"), /ephemeral-storage: ungültige Mengenangabe/],
+    ["memory ungültig", withLimit("memory: viel"), /limits\.memory: ungültige Mengenangabe/],
+    ["memory nackte Zahl", withLimit("memory: 256"), /limits\.memory: erwartet Text, gefunden eine Zahl/],
+    ["cpu ungültig", withLimit("cpu: zwei"), /limits\.cpu: ungültige Mengenangabe/],
     ["containers ist Mapping", DEP.replace(/ {6}containers:[\s\S]*/, "      containers:\n        name: x\n"), /containers: erwartet eine Liste, gefunden ein Mapping/],
   ];
   it.each(errors)("Fehler: %s", (_n, yaml, re) => {

@@ -110,9 +110,14 @@ export interface Deployment {
    *  Feld, laufen die Pods unter der `default`-SA des Namespaces – genau wie in echtem
    *  Kubernetes. Wird per `kubectl apply` aus dem Pod-Template gesetzt. */
   serviceAccountName?: string;
-  /** Aktuelles memory-Limit in Mi (per `kubectl set resources` gesetzt). Laufzeit-Feld,
-   *  nicht serialisiert – relevant nur für die OOMKilled-Diagnose innerhalb einer Sitzung. */
+  /** Aktuelles memory-Limit in Mi (per `kubectl set resources` oder `apply` gesetzt). Wird
+   *  serialisiert (snapshot/reset) – relevant für die OOMKilled-Diagnose und den apply-Abgleich. */
   memLimit?: number;
+  /** Aktuelles CPU-Limit in Milli-Cores (`set resources --limits=cpu=…` bzw. `apply`). Serialisiert. */
+  cpuLimitMilli?: number;
+  /** Wirksamer securityContext des Pod-Templates (Pod + Container zusammengeführt, #1300). Das
+   *  apply-Re-apply vergleicht dagegen und prüft die Pod-Security-Admission mit dem neuen Wert. */
+  securityContext?: SecurityContext;
   /** Eingebundene Config/Geheimnisse (via `kubectl set env --from=…`).
    *  configMaps = harmlose Einstellungen, secrets = Vertrauliches. */
   envFrom: { configMaps: string[]; secrets: string[] };
@@ -381,6 +386,8 @@ export interface ArgoApp {
 /** Wirkung eines `kubectl apply -f <datei>` (was die Datei im Cluster erzeugt). */
 export interface ApplyEffect {
   deployment?: { name: string; image: string; replicas: number; securityContext?: SecurityContext; serviceAccountName?: string; containerPort?: number;
+    // Limits aus dem Pod-Template (#1300): memory in Mi, cpu in Milli-Cores.
+    memLimit?: number; cpuLimitMilli?: number;
     // #164 (Werft-Capstone): das eigene Image muss vorher lokal gebaut/gezogen sein,
     // sonst landet der Pod im ImagePullBackOff (statt – wie sonst im Sim – einfach zu laufen).
     requireBuiltImage?: boolean;
@@ -570,6 +577,8 @@ export interface SecurityContext {
   readOnlyRootFilesystem?: boolean;
   allowPrivilegeEscalation?: boolean;
 }
+/** Die vier modellierten securityContext-Felder – die einzige Schlüsselliste (Mapper und apply-Abgleich). */
+export const SECURITY_CONTEXT_KEYS = ["runAsNonRoot", "privileged", "readOnlyRootFilesystem", "allowPrivilegeEscalation"] as const;
 /** Durchgesetzte Pod-Security-Standards-Stufe (Namespace-Label `pod-security.kubernetes.io/enforce`). */
 export type PodSecurityLevel = "privileged" | "baseline" | "restricted";
 /** Berechneter Anzeige-Status eines Pods (für get/describe). */
@@ -621,6 +630,8 @@ export interface Scenario {
   bareMetal?: boolean;
   controlPlane?: { up?: boolean; token?: string | null; node?: string | null };
   deployments?: Array<{ name: string; image: string; replicas: number; broken?: Broken | null; envFrom?: { configMaps: string[]; secrets: string[] }; cpuHeavy?: boolean; containerPort?: number;
+    // Limits und securityContext aus dem Pod-Template (#1300); serialisiert, ohne Save-Versions-Bump.
+    memLimit?: number; cpuLimitMilli?: number; securityContext?: SecurityContext;
     // Ephemeral-Storage (#240). Eingabe-Schreibweisen locker – reset()/merge füllen Defaults.
     node?: string; emptyDir?: { data?: string; usedMi?: number }; ephemeralLimit?: number; ephemeralUsedMi?: number;
     // initContainer (#485): Eingabe-Schreibweise locker – reset()/_seedEphemeral übernehmen es.

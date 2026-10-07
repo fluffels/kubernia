@@ -7,8 +7,8 @@
  * Phaser-frei (pure Domäne): nutzt nur `makePodName` aus ../util und das
  * KubectlHost-Interface (./host). Aufgerufen aus dem kubectl-Dispatch (../kubectl.ts).
  */
-import { scaleDeployment, replacePods } from "../workload";
-import { parseMem } from "../util";
+import { scaleDeployment, replacePods, changeImage, setMemoryLimit, setCpuLimit } from "../workload";
+import { parseMem, parseCpuMilli } from "../util";
 import type { Deployment } from "../state";
 import type { KubectlHost } from "./host";
 
@@ -106,16 +106,17 @@ function kubectlSetImage(host: KubectlHost, t: string[]) {
   if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + depName + '" not found');
   const newImage = kv.split("=")[1];
   const oldBad = dep.broken && dep.broken.type === "imagepull" ? dep.broken.badImage : null;
-  dep.image = newImage;
-  if (oldBad && newImage !== oldBad) {
-    dep.broken = null;
-    replacePods(dep, host.clock, host.rng);
-  }
+  if (changeImage(dep, newImage)) replacePods(dep, host.clock, host.rng);
   return "deployment.apps/" + depName + " image updated" + (oldBad && newImage === oldBad ? "\n💡 Hmm – das ist exakt dasselbe (kaputte) Image. Schau nochmal genau auf den Namen!" : "");
 }
 
 /** Ein Fehler einer Ressourcen-Dimension: [Meldung, Tipp] für `host._err`. `null` = ok. */
 type ResourceError = readonly [msg: string, tip: string];
+
+/** Notiz nach geheiltem OOMKilled (set resources und apply teilen sie). */
+export const MEM_HEALED_NOTE = "💡 Genug Speicher! Die Pods starten neu und bleiben diesmal stehen – kein OOMKilled mehr.";
+/** Notiz nach weggedrosselter Dauerlast. */
+export const CPU_THROTTLED_NOTE = "💡 CPU-Limit gesetzt! Die Pods werden gedrosselt – der HighPodCPU-Alert fällt auf resolved.";
 
 /** Das Memory-Limit setzen (#240). Ist der Dienst wegen OOMKilled kaputt und das neue Limit
  *  reicht (>= memNeeded), heilt er. Notiz landet in `notes`. */
@@ -123,11 +124,9 @@ function applyMemLimit(host: KubectlHost, dep: Deployment, spec: string | undefi
   if (!spec) return null;
   const newLimit = parseMem(spec);
   if (newLimit === null) return ['error: invalid resource quantity "' + spec + '"', "Schreib das Limit z.B. als '256Mi' oder '1Gi'."];
-  dep.memLimit = newLimit;
-  if (dep.broken && dep.broken.type === "oomkilled" && newLimit >= (dep.broken.memNeeded || 0)) {
-    dep.broken = null;
+  if (setMemoryLimit(dep, newLimit)) {
     replacePods(dep, host.clock, host.rng);
-    notes.push("\n💡 Genug Speicher! Die Pods starten neu und bleiben diesmal stehen – kein OOMKilled mehr.");
+    notes.push("\n" + MEM_HEALED_NOTE);
   }
   return null;
 }
@@ -135,10 +134,10 @@ function applyMemLimit(host: KubectlHost, dep: Deployment, spec: string | undefi
 /** Das CPU-Limit setzen: bei < 500 m wird cpuHeavy gelöscht und der HighPodCPU-Alert fällt
  *  auf resolved. `milli` ist das Limit in Milli-Cores (oder null, wenn keins angegeben). */
 function applyCpuLimit(host: KubectlHost, dep: Deployment, milli: number | null, notes: string[]): void {
-  if (milli !== null && milli < 500 && dep.cpuHeavy) {
-    dep.cpuHeavy = false;
+  if (milli === null) return;
+  if (setCpuLimit(dep, milli)) {
     replacePods(dep, host.clock, host.rng);
-    notes.push("\n💡 CPU-Limit gesetzt! Die Pods werden gedrosselt – der HighPodCPU-Alert fällt auf resolved.");
+    notes.push("\n" + CPU_THROTTLED_NOTE);
   }
 }
 
@@ -161,9 +160,8 @@ function applyEphemeralLimit(host: KubectlHost, dep: Deployment, spec: string | 
 
 /** Das `--limits=cpu=<N>[m]` in Milli-Cores ziehen (ohne `m` = ganze Cores → ×1000). */
 function parseCpuLimitMilli(raw: string): number | null {
-  const m = raw.match(/--limits[=\s][^\s]*cpu=([0-9]+)(m)?/);
-  if (!m) return null;
-  return m[2] ? parseInt(m[1], 10) : parseInt(m[1], 10) * 1000;
+  const m = raw.match(/--limits[=\s][^\s]*cpu=([0-9.]+m?)/);
+  return m ? parseCpuMilli(m[1]) : null;
 }
 
 /** kubectl set resources deployment/<name> --limits=memory=256Mi [--requests=memory=128Mi]

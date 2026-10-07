@@ -21,7 +21,7 @@
  * (./util, ./names) – kein Phaser, kein Rückimport nach sim.ts (kein Zyklus), vom
  * Architektur-Wächter (#347) als Domäne geschützt und im Node-Test prüfbar.
  */
-import type { Deployment, PodInstance, PvcRes, StatefulSetRes } from "./state";
+import type { Deployment, PodInstance, PvcRes, SecurityContext, StatefulSetRes } from "./state";
 import { makePodName } from "./util";
 import { asPodName } from "./names";
 
@@ -127,4 +127,50 @@ export function removeStatefulSet(state: { statefulSets: StatefulSetRes[] }, nam
   const idx = state.statefulSets.findIndex(s => s.name === name);
   if (idx < 0) return undefined;
   return state.statefulSets.splice(idx, 1)[0];
+}
+
+/* ===== Pod-Template-Primitive (#1300) =====
+ * Heil-/Drossel-Regeln für Image und Limits an EINER Stelle: `kubectl set image|resources`
+ * und das Re-apply eines Manifests (sim/kubectl/apply-deployment.ts) gehen beide darüber.
+ * Sie mutieren nur das Deployment und melden, ob dadurch ein Fehler geheilt wurde; den
+ * Pod-Austausch (`replacePods`) und die Notiz entscheidet der Aufrufer. */
+
+/** CPU-Limit-Schwelle in Milli-Cores: darunter werden die Pods gedrosselt (Dauerlast fällt weg). */
+export const CPU_THROTTLE_MILLI = 500;
+
+/** Setzt das Image. Heilt den imagepull-Fehler, wenn das neue Image nicht das kaputte ist. */
+export function changeImage(dep: Deployment, image: string): boolean {
+  const oldBad = dep.broken && dep.broken.type === "imagepull" ? dep.broken.badImage : null;
+  dep.image = image;
+  if (oldBad === null || image === oldBad) return false;
+  dep.broken = null;
+  return true;
+}
+
+/** Setzt das memory-Limit (Mi). Heilt OOMKilled, wenn es für `memNeeded` reicht (>=). */
+export function setMemoryLimit(dep: Deployment, mi: number): boolean {
+  dep.memLimit = mi;
+  if (dep.broken && dep.broken.type === "oomkilled" && mi >= (dep.broken.memNeeded || 0)) {
+    dep.broken = null;
+    return true;
+  }
+  return false;
+}
+
+/** Setzt das CPU-Limit (Milli-Cores). Unter `CPU_THROTTLE_MILLI` fällt die Dauerlast weg. */
+export function setCpuLimit(dep: Deployment, milli: number): boolean {
+  dep.cpuLimitMilli = milli;
+  if (milli < CPU_THROTTLE_MILLI && dep.cpuHeavy) {
+    dep.cpuHeavy = false;
+    return true;
+  }
+  return false;
+}
+
+/** Übernimmt die Template-Felder memory-/CPU-Limit und securityContext aus einem Snapshot bzw.
+ *  Szenario – nur gesetzte Felder (der securityContext als Kopie). */
+export function seedPodTemplate(dep: Deployment, s: { memLimit?: number; cpuLimitMilli?: number; securityContext?: SecurityContext }): void {
+  if (s.memLimit !== undefined) dep.memLimit = s.memLimit;
+  if (s.cpuLimitMilli !== undefined) dep.cpuLimitMilli = s.cpuLimitMilli;
+  if (s.securityContext) dep.securityContext = { ...s.securityContext };
 }
