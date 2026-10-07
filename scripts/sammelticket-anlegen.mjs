@@ -26,11 +26,11 @@ import {
   ergaenzeFehlende,
   loadItems,
   loadOpenIssuePages,
-  planFuerArgs,
   sammelticketKorrektur,
   sammelticketPosition,
   setPosition,
 } from "./board-lib.mjs";
+import { planMitKorrektur } from "./board-place.mjs";
 import { normalizeOffene } from "./board-takt.mjs";
 
 const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL };
@@ -84,19 +84,31 @@ function vorgaengerOffen(nr) {
   }
 }
 
-/** Setzt die Position des Sammeltickets `nr` und prüft sie gegen die frisch geladene Board-Liste. Liefert `ok`, `falsch` oder `unbekannt` (nie in der Liste). */
+/**
+ * Ein Prüfschritt: was ist mit dem Sammelticket `nr` auf der frisch geladenen Board-Liste `items` zu tun? Liefert
+ * `{ art: "ok" }` (steht auf Position `position` oder davor), `{ art: "warte" }` (noch nicht in der Liste), `{ art: "setze", k }`
+ * (neu setzen, `k` aus sammelticketKorrektur) oder `{ art: "falsch" }` (nach `NEU_SETZEN_MAX` Versuchen oder im Trockenlauf noch
+ * falsch). Andere ungeclaimte Harness-Sammeltickets bleiben außen vor, damit die Prüfung die Position von `nr` bewertet und nicht die
+ * des obersten. Pur.
+ */
+export function pruefSchritt({ items, nr, position, neuGesetzt = 0, dry = false }) {
+  if (!items.some((i) => i.number === nr)) return { art: "warte" };
+  const ohneAndere = items.filter((i) => i.number === nr || !(i.title === SAMMELTICKET_TITEL && i.state === "open" && (i.assignees ?? []).length === 0));
+  const k = sammelticketKorrektur(ohneAndere, position);
+  if (!k || k.nr !== nr) return { art: "ok" };
+  if (dry || neuGesetzt >= NEU_SETZEN_MAX) return { art: "falsch" };
+  return { art: "setze", k };
+}
+
+/** Setzt die Position des Sammeltickets `nr` nach `pruefSchritt` und prüft sie gegen die frisch geladene Board-Liste. Liefert `ok`, `falsch` oder `unbekannt` (nie in der Liste). */
 async function setzeUndPruefe(nr, position, dry) {
   let neuGesetzt = 0;
   for (let versuch = 1; versuch <= PRUEF_VERSUCHE; versuch++) {
-    const items = loadItems();
-    const ticket = items.find((i) => i.number === nr);
-    if (ticket) {
-      const k = sammelticketKorrektur(items, position);
-      if (!k || k.nr !== nr) return "ok";
-      if (dry) return "falsch";
-      if (neuGesetzt >= NEU_SETZEN_MAX) return "falsch";
-      console.log(`Position stimmt noch nicht (Rang ${k.vonRang}, Ziel ${k.nachRang}): setze neu (${neuGesetzt + 1}/${NEU_SETZEN_MAX}).`);
-      setPosition(k.id, k.afterId);
+    const schritt = pruefSchritt({ items: loadItems(), nr, position, neuGesetzt, dry });
+    if (schritt.art === "ok" || schritt.art === "falsch") return schritt.art;
+    if (schritt.art === "setze") {
+      console.log(`Position stimmt noch nicht (Rang ${schritt.k.vonRang}, Ziel ${schritt.k.nachRang}): setze neu (${neuGesetzt + 1}/${NEU_SETZEN_MAX}).`);
+      setPosition(schritt.k.id, schritt.k.afterId);
       neuGesetzt++;
     }
     await sleep(PRUEF_PAUSE_MS);
@@ -133,13 +145,17 @@ async function main(argv = process.argv.slice(2)) {
       if (k) setPosition(k.id, k.afterId);
     } else if (args.top) {
       const items = ergaenzeFehlende(loadItems(), [{ id: itemId, number: nr, status: "Todo", title: titel, assignees: [], state: "open" }]);
-      for (const { item, afterId } of planFuerArgs(items, { anchor: null, numbers: [nr] }).steps) setPosition(item.id, afterId);
+      // Wie board-place: ein falsch stehendes Harness-Sammelticket zuerst zurückschieben, sonst klemmt das neue Ticket hinter dessen falschen Platz.
+      const { korrektur, plan } = planMitKorrektur(items, { anchor: null, numbers: [nr] }, positionLautAgentsMd());
+      if (korrektur) setPosition(korrektur.id, korrektur.afterId);
+      for (const { item, afterId } of plan.steps) setPosition(item.id, afterId);
     }
   }
   if (args.art !== "harness") return;
   const stand = await setzeUndPruefe(nr, position, args.dry);
   if (stand === "ok") console.log(`Position geprüft: #${nr} steht auf Position ${position} oder davor.`);
   else if (stand === "unbekannt") console.log(`::warning::#${nr} steht noch nicht in der Board-Liste, die Position ist noch nicht prüfbar: board-place.mjs und der Board-Takt korrigieren sie beim nächsten Lauf.`);
+  else if (args.dry) console.log(`Trockenlauf: #${nr} steht nicht auf Position ${position}, ein echter Lauf würde es neu setzen.`);
   else {
     console.error(`✖ #${nr} steht nach dem Setzen nicht auf Position ${position}. Erneut fahren oder per board-place.mjs --position ${position} ${nr} setzen.`);
     process.exit(1);

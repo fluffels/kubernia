@@ -84,3 +84,54 @@ describe("Verdrahtung (#1390)", () => {
     expect(skript).not.toMatch(/Position\s*:?\s*\d+/);
   });
 });
+
+describe("pruefSchritt: der Prüf- und Retry-Kern (#1390 Z10, Lens R1)", () => {
+  type B = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
+  type Schritt = { art: "ok" | "warte" | "setze" | "falsch"; k?: { nr: number; afterId: string | null } };
+  const P = (raw as unknown as { pruefSchritt: (a: { items: B[]; nr: number; position: number; neuGesetzt?: number; dry?: boolean }) => Schritt }).pruefSchritt;
+  const T = "Harness-Härtung (gesammelt)";
+  const b = (number: number, extra: Partial<B> = {}): B => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open", ...extra });
+  const sammel = (number: number, extra: Partial<B> = {}) => b(number, { title: T, ...extra });
+  const fueller = Array.from({ length: 10 }, (_, i) => b(i + 1));
+
+  test("steht auf Position oder davor → ok", () => {
+    expect(P({ items: [b(1), b(2), b(3), sammel(20), b(4)], nr: 20, position: 4 }).art).toBe("ok");
+  });
+
+  test("(b) noch nicht in der Liste → warte", () => {
+    expect(P({ items: fueller, nr: 20, position: 4 }).art).toBe("warte");
+  });
+
+  test("falsche Position → setze (mit Ziel); nach 2 Neusetzungen → falsch, kein drittes Setzen", () => {
+    const items = [...fueller, sammel(20)];
+    expect(P({ items, nr: 20, position: 4 })).toMatchObject({ art: "setze", k: { nr: 20, afterId: "I3" } });
+    expect(P({ items, nr: 20, position: 4, neuGesetzt: 1 }).art).toBe("setze");
+    expect(P({ items, nr: 20, position: 4, neuGesetzt: 2 }).art).toBe("falsch");
+  });
+
+  test("(c) Trockenlauf bei falscher Position → falsch, nie setze", () => {
+    expect(P({ items: [...fueller, sammel(20)], nr: 20, position: 4, dry: true }).art).toBe("falsch");
+  });
+
+  test("(d) ein anderes ungeclaimtes Sammelticket weiter oben verfälscht die Prüfung nicht: bewertet wird nr", () => {
+    const items = [b(1), sammel(5), ...fueller.slice(1), sammel(20)];
+    expect(P({ items, nr: 20, position: 4 })).toMatchObject({ art: "setze", k: { nr: 20 } });
+    // ein geclaimtes Sammelticket davor zählt ohnehin nicht, dann ist die Lage dieselbe
+    expect(P({ items: [b(1), sammel(5, { assignees: ["fluffels"] }), sammel(20)], nr: 20, position: 4 }).art).toBe("ok");
+  });
+
+  test("geclaimtes Ticket nr: nichts zu korrigieren", () => {
+    expect(P({ items: [...fueller, sammel(20, { assignees: ["fluffels"] })], nr: 20, position: 4 }).art).toBe("ok");
+  });
+});
+
+describe("Verdrahtung der Selbstkorrektur (#1390, Lens R1)", () => {
+  const lies = (rel: string) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
+  test("board-place korrigiert über planMitKorrektur, board-takt zieht die Liste nach, das Anlege-Skript nutzt pruefSchritt und planMitKorrektur", () => {
+    expect(lies("scripts/board-place.mjs")).toMatch(/planMitKorrektur\(items, args, n\)/);
+    expect(lies("scripts/board-takt.mjs")).toMatch(/if \(items\) items = ziehListeNach\(items, r\);/);
+    const anlegen = lies("scripts/sammelticket-anlegen.mjs");
+    expect(anlegen).toMatch(/pruefSchritt\(\{ items: loadItems\(\)/);
+    expect(anlegen).toMatch(/planMitKorrektur\(items, \{ anchor: null, numbers: \[nr\] \}/);
+  });
+});

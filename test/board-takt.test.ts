@@ -146,14 +146,17 @@ describe("entscheideHarnessTakt (#1349 Z15, Positionskorrektur #1390)", () => {
 
   test("Fixpunkt: nach dem Anwenden der Entscheidung (nach-oben wie auf-position) ist der nächste Lauf ein nichts", () => {
     const boards = [[...fueller(1, 10), sammel(20)], [status(1), ...fueller(2, 10), sammel(20)], [it(1), it(2), sammel(20)], [it(30), sammel(20), ...fueller(1, 6)]];
+    let geprueft = 0;
     for (const board of boards) {
       for (const n of [0, 4, 5, 20]) {
         const e = h(board, n);
         if (e.aktion === "nichts") continue;
+        geprueft++;
         const danach = verschiebe(board, `I${e.nr}`, e.afterId ?? null);
         expect(h(danach, n).aktion, `${e.aktion} bei ${n} Merges auf ${board.map((x) => x.number).join(",")}`).toBe("nichts");
       }
     }
+    expect(geprueft, "die Schleife prüft wirklich etwas").toBeGreaterThan(4);
   });
 });
 

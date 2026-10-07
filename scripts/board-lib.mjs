@@ -389,14 +389,27 @@ function graphqlTeilantwort(query, opts) {
   try {
     return JSON.parse(gh(["api", "graphql", "-f", `query=${query}`], opts));
   } catch (e) {
-    try {
-      const antwort = JSON.parse(String(e.stdout ?? ""));
-      if (antwort?.data?.repository && (antwort.errors ?? []).every((x) => x?.type === "NOT_FOUND")) return antwort;
-    } catch {
-      /* keine Teilantwort: der ursprüngliche Fehler gilt */
-    }
+    const antwort = teilantwortAusStdout(e.stdout);
+    if (antwort) return antwort;
     throw e;
   }
+}
+
+/**
+ * Die Teilantwort eines fehlgeschlagenen `gh api graphql`-Aufrufs (stdout) oder null, wenn der Fehler weiterzuwerfen ist: nur eine
+ * parsebare Antwort mit `data.repository`, deren Fehler ALLE `NOT_FOUND` sind (unbekanntes Issue), gilt. Rate-Limit oder jeder andere
+ * Fehler daneben, kaputtes oder fehlendes stdout und eine Antwort ohne `repository` geben null. Pur.
+ */
+export function teilantwortAusStdout(stdout) {
+  let antwort;
+  try {
+    antwort = JSON.parse(String(stdout ?? ""));
+  } catch {
+    return null;
+  }
+  const fehler = Array.isArray(antwort?.errors) ? antwort.errors : [];
+  if (!antwort?.data?.repository || typeof antwort.data.repository !== "object") return null;
+  return fehler.every((x) => x?.type === "NOT_FOUND") ? antwort : null;
 }
 
 /**

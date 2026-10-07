@@ -178,11 +178,14 @@ describe("sammelticketKorrektur (#1390 Z10)", () => {
   });
 
   test("Fixpunkt: nach dem Anwenden der Korrektur meldet sie nichts mehr; ungültiges N wirft", () => {
+    let geprueft = 0;
     for (const items of [[...fueller(1, 10), sammel(20)], [status(1), ...fueller(2, 10), sammel(20)], [b(1), b(2), sammel(20)]]) {
       const k = k4(items);
       if (!k) continue;
+      geprueft++;
       expect(k4(L.verschiebe(items, k.id, k.afterId))).toBeNull();
     }
+    expect(geprueft, "die Schleife prüft wirklich etwas").toBe(2);
     expect(() => L.sammelticketKorrektur([sammel(1)], 0)).toThrow(RangeError);
   });
 });
@@ -219,5 +222,27 @@ describe("planMitKorrektur: Komposition von board-place (#1390 Z10, Form des Vor
   test("geclaimtes Sammelticket am Ende: keine Korrektur", () => {
     const geclaimt = [...Array.from({ length: 10 }, (_, i) => b(i + 1)), sammel(1390, { assignees: ["fluffels"] })];
     expect(plan(["--top", "1400"], [...geclaimt, b(1400)]).korrektur).toBeNull();
+  });
+});
+
+describe("teilantwortAusStdout: wann ein gh-Fehler eine Teilantwort ist (#1390 Z6d, Lens R1)", () => {
+  const T = (rawLib as unknown as { teilantwortAusStdout: (s: unknown) => unknown }).teilantwortAusStdout;
+  const mit = (errors: unknown) => JSON.stringify({ data: { repository: { i0: null } }, errors });
+
+  test("nur NOT_FOUND (auch mehrfach) → die Antwort gilt", () => {
+    expect(T(mit([{ type: "NOT_FOUND" }]))).toMatchObject({ data: { repository: {} } });
+    expect(T(mit([{ type: "NOT_FOUND" }, { type: "NOT_FOUND" }]))).not.toBeNull();
+  });
+
+  test("daneben ein anderer Fehler (Rate-Limit) → null, der Fehler wird weitergeworfen", () => {
+    expect(T(mit([{ type: "NOT_FOUND" }, { type: "RATE_LIMITED" }]))).toBeNull();
+    expect(T(mit([{ type: "RATE_LIMITED" }]))).toBeNull();
+    expect(T(mit([{}]))).toBeNull();
+  });
+
+  test("kein repository, kaputtes oder fehlendes stdout → null", () => {
+    expect(T(JSON.stringify({ data: null, errors: [{ type: "NOT_FOUND" }] }))).toBeNull();
+    expect(T(JSON.stringify({ errors: [{ type: "NOT_FOUND" }] }))).toBeNull();
+    for (const bad of ["kein json", "", undefined, null, "[]"]) expect(T(bad), String(bad)).toBeNull();
   });
 });
