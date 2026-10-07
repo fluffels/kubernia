@@ -85,7 +85,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|PowerShell|SubagentHandback",
+        "matcher": "Bash|PowerShell|SubagentHandback|Agent",
         "hooks": [
           {
             "type": "command",

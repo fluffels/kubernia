@@ -265,3 +265,110 @@ describe("Tool→Dialekt-Tabelle und Kopfkommentare der Guards (#1322 Z14, Z16a)
     }
   });
 });
+
+describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
+  const agent = (prompt: string, subagentType: string | null = "kubernia-lens") =>
+    JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Agent", cwd: WURZEL, tool_input: { ...(subagentType === null ? {} : { subagent_type: subagentType }), description: "Lens X R1", prompt } });
+  const deny = (text: string) => hook.dispatch(text, WURZEL);
+  const grund = (text: string) => deny(text)?.hookSpecificOutput.permissionDecisionReason ?? "";
+
+  // Die ECHTEN Blöcke aus dem Skill, wie der Orchestrator sie wörtlich in den Prompt kopiert (Fehlalarm-Schutz: sie tragen absichtlich `<…>`).
+  const skill = lies(".claude/skills/review-lenses/SKILL.md");
+  const diaet = skill.slice(skill.indexOf("### Kontext-Diät je Lens"), skill.indexOf("> **Was die Diät ausdrücklich NICHT trifft:**"));
+  const format = /## Findings-Format[\s\S]*?```\n([\s\S]*?)```/.exec(skill)?.[1] ?? "";
+  const KOPF = "Brille: Architektur (Schichtregeln)";
+  const gut = (extra = "") =>
+    `${KOPF} · Arbeitsverzeichnis: C:/dev/kubernia/.claude/worktrees/kq-1 · Patch: /tmp/x/kq-1-r1.patch · erwarteter HEAD: abc1234def${extra} · ${diaet} · ${format}`;
+
+  test("die echten Skill-Blöcke tragen `<…>` und gehen trotzdem durch (kein generischer Platzhalter-Test)", () => {
+    assert.match(diaet, /<Arbeitsverzeichnis>/);
+    assert.match(format, /<Befund>/);
+    assert.equal(deny(agent(gut())), null);
+    assert.equal(deny(agent(gut(), "general-purpose")), null);
+  });
+
+  test("R1: ein stehengebliebenes `<… WÖRTLICH>` wird verweigert", () => {
+    for (const rest of ["<Brille WÖRTLICH>", "<Kontext-Diät WÖRTLICH>", "<Findings-Format WÖRTLICH>"]) {
+      const out = deny(agent(`${rest} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc1234`));
+      assert.equal(out?.hookSpecificOutput.permissionDecision, "deny", rest);
+      assert.match(out?.hookSpecificOutput.permissionDecisionReason ?? "", /WÖRTLICH/);
+    }
+  });
+
+  test("R2: Platzhalter in Arbeitsverzeichnis, Patch, Delta-Patch oder HEAD wird verweigert, mit Feldname im Grund", () => {
+    const faelle: [string, RegExp][] = [
+      [`${KOPF} · Arbeitsverzeichnis: <worktree> · Patch: /p.patch · erwarteter HEAD: abc1234`, /Arbeitsverzeichnis/],
+      [`${KOPF} · Arbeitsverzeichnis: /w · Patch: <TMP>/kq-1-r1.patch · erwarteter HEAD: abc1234`, /Patch/],
+      [`${KOPF} · Arbeitsverzeichnis: /w · Patch: /p.patch · Delta-Patch: <TMP>/d.patch · erwarteter HEAD: abc1234`, /Delta-Patch/],
+      [`${KOPF} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: <sha>`, /erwarteter HEAD/],
+      [`${KOPF}\nArbeitsverzeichnis: /w\nPatch: <TMP>/x.patch\nerwarteter HEAD: abc1234`, /Patch/],
+    ];
+    for (const [prompt, feld] of faelle) {
+      assert.match(grund(agent(prompt)), feld, prompt);
+      assert.equal(deny(agent(prompt))?.hookSpecificOutput.permissionDecision, "deny", prompt);
+    }
+  });
+
+  test("R3: `erwarteter HEAD:` ohne Hex-Hash (7 bis 40 Zeichen) wird verweigert, der Workflow-Fallback nicht", () => {
+    for (const head of ["abc", "xyz1234", "HEAD", "a".repeat(41)]) {
+      assert.equal(deny(agent(`${KOPF} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: ${head}`))?.hookSpecificOutput.permissionDecision, "deny", head);
+    }
+    for (const head of ["abc1234", "ABCDEF1234", "a".repeat(40), "der HEAD des Feature-Worktrees (git rev-parse HEAD)"]) {
+      assert.equal(deny(agent(`${KOPF} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: ${head}`)), null, head);
+    }
+  });
+
+  test("Fallback-Spawn (general-purpose oder ohne Typ) wird geprüft, sobald der Prompt `kubernia-lens.md` nennt", () => {
+    const kaputt = "Lies zuerst `.claude/agents/kubernia-lens.md`. Patch: <TMP>/x.patch · erwarteter HEAD: abc1234";
+    assert.equal(deny(agent(kaputt, "general-purpose"))?.hookSpecificOutput.permissionDecision, "deny");
+    assert.equal(deny(agent(kaputt, null))?.hookSpecificOutput.permissionDecision, "deny");
+  });
+
+  test("durchgelassen: Nicht-Lens-Agenten mit `<TMP>`, Workflow-Format ohne Kopf-Felder, kaputtes JSON, fehlendes Prompt-Feld", () => {
+    const mitPlatzhalter = "Patch: <TMP>/x.patch · erwarteter HEAD: <sha> · <Brille WÖRTLICH>";
+    for (const typ of ["Explore", "kubernia-planner", "kubernia-umsetzer", "general-purpose", null]) {
+      assert.equal(deny(agent(mitPlatzhalter, typ)), null, String(typ));
+    }
+    assert.equal(deny(agent(`Prüfe den Patch ${"/p.patch"} mit der Brille Architektur; Findings als <Befund> auflisten.`)), null);
+    assert.equal(deny("{kaputt"), null);
+    assert.equal(deny(JSON.stringify({ tool_name: "Agent", tool_input: { subagent_type: "kubernia-lens" } })), null);
+  });
+
+  test("je Feld zählt der LETZTE Treffer: ein Beispiel in der Brille sperrt den echten Kopf nicht, ein Platzhalter im Kopf wird trotz früherem Treffer gefunden", () => {
+    const beispiel = "Brille mit Beispiel `Patch: <TMP>/x.patch` im Text";
+    assert.equal(deny(agent(`${beispiel} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc1234`)), null);
+    assert.match(grund(agent(`Fall mit Patch: /a/b.patch davor · Arbeitsverzeichnis: /w · Patch: <TMP>/x.patch · erwarteter HEAD: abc1234`)), /Patch/);
+  });
+
+  test("Lookbehind: `Delta-Patch:` ist nicht `Patch:`, ein Platzhalter im echten Patch-Feld hinter dem Delta-Patch wird gefunden", () => {
+    const kopf = `${KOPF} · Arbeitsverzeichnis: /w · Delta-Patch: /d.patch · Patch: <TMP>/x.patch · erwarteter HEAD: abc1234`;
+    assert.match(grund(agent(kopf)), /„Patch:“/);
+    assert.equal(deny(agent(`${KOPF} · Arbeitsverzeichnis: /w · Delta-Patch: /d.patch · Patch: /p.patch · erwarteter HEAD: abc1234`)), null);
+    // Das Delta-Patch-Feld hinter einem kaputten Patch-Feld darf dessen Platzhalter nicht überdecken.
+    assert.match(grund(agent(`${KOPF} · Arbeitsverzeichnis: /w · Patch: <TMP>/x.patch · Delta-Patch: /d.patch · erwarteter HEAD: abc1234`)), /„Patch:“/);
+  });
+
+  test("R3 erlaubt Backticks und einen Zusatz nach dem Hash, verweigert Text vor dem Hash", () => {
+    for (const head of ["`724a5d4`", "724a5d4 (origin/main + Fix)", "`724a5d4` (Runde 2)"]) {
+      assert.equal(deny(agent(`${KOPF} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: ${head}`)), null, head);
+    }
+    for (const head of ["siehe 724a5d4", "(724a5d4)", "``"]) {
+      assert.equal(deny(agent(`${KOPF} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: ${head}`))?.hookSpecificOutput.permissionDecision, "deny", head);
+    }
+  });
+
+  test("Verdrahtung: genau ein PreToolUse-Eintrag trifft Agent, dasselbe Skript wie Bash; das Modul ist geschützt", () => {
+    const settings = JSON.parse(lies(".claude/settings.json")) as { hooks: { PreToolUse: { matcher: string; hooks: { args?: string[] }[] }[] } };
+    const trifft = (tool: string) => settings.hooks.PreToolUse.filter((e) => new RegExp(`^(${e.matcher})$`).test(tool)).flatMap((e) => e.hooks.flatMap((h) => h.args ?? []));
+    assert.equal(trifft("Agent").length, 1);
+    assert.equal(trifft("Agent")[0], trifft("Bash")[0]);
+    assert.match(lies(".github/protected-paths.json"), /"\/scripts\/lens-auftrag-guard\.mjs"/);
+  });
+
+  test("Prozess-Start: ein kaputter Lens-Auftrag erzeugt die Deny-Ausgabe, ein sauberer nichts", () => {
+    const start = (p: string) => execFileSync("node", [resolve(WURZEL, "scripts/pretooluse-hook.mjs")], { input: p, encoding: "utf8" });
+    const out = JSON.parse(start(agent("Patch: <TMP>/x.patch"))) as Out;
+    assert.equal(out?.hookSpecificOutput.permissionDecision, "deny");
+    assert.equal(start(agent(gut())).trim(), "");
+  });
+});
