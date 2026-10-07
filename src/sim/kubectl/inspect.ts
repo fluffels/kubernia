@@ -41,8 +41,8 @@ function aliasMap(entries: { aliases: string[]; render: Renderer }[]): Map<strin
 // ===== kubectl get – ein Renderer je Ressourcentyp =====
 
 /** Eine Pod-Zeile (NAME READY STATUS RESTARTS AGE) – die EINE Quelle für `get pods` mit und
- *  ohne `-A`. Der Status kommt je Owner aus seiner Wahrheit (Deployment: `deploymentPodStatus`,
- *  StatefulSet: `clusterPodStatus` über `podAddress`). */
+ *  ohne `-A`. Der Status kommt aus `clusterPodStatus` (Deployment: `deploymentPodStatus` plus die
+ *  Restarts-Regel, StatefulSet: über `podAddress`). */
 function podRow(host: KubectlHost, c: ClusterPod): string[] {
   const st = clusterPodStatus(host, c);
   return [c.pod.name, st.ready, st.status, String(st.restarts), host._age(c.pod.created)];

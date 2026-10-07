@@ -188,7 +188,7 @@ describe("Konsistenz: Restarts-Regel steht einmal (#1426)", () => {
       expect(cols[3]).toBe(String(s.restarts));
       const d = sim.exec("kubectl describe pod " + c.pod.name).output ?? "";
       expect(d).toContain("Ready:        " + s.ready + "\n");
-      expect(d).toContain("Restart Count: " + s.restarts);
+      expect(d).toContain("Restart Count: " + s.restarts + "\n");
     }
   });
 });
@@ -198,14 +198,14 @@ describe("assertNever in den Workload-Switches (#1426)", () => {
   const sim = () => new KQSim({ deployments: [{ name: "w", image: "nginx", replicas: 1 }] });
   test("clusterPodStatus wirft bei unbekannter Workload-Art", () => {
     const s = sim();
-    expect(() => clusterPodStatus(s, fake(s))).toThrow(/unbehandelte Variante/);
+    expect(() => clusterPodStatus(s, fake(s))).toThrow(/clusterPodStatus: unbehandelte Variante/);
   });
-  test("podView wirft", () => {
+  test("podView wirft (über clusterPodStatus)", () => {
     const s = sim();
     expect(() => podView(s, fake(s))).toThrow(/unbehandelte Variante/);
   });
   test("podAddress wirft", () => {
     const s = sim();
-    expect(() => podAddress(fake(s), s.pvcs)).toThrow(/unbehandelte Variante/);
+    expect(() => podAddress(fake(s), s.pvcs)).toThrow(/podAddress: unbehandelte Variante/);
   });
 });

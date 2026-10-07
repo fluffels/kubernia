@@ -11,6 +11,11 @@ describe("assertNever", () => {
   it("ein Primitiv erscheint in der Meldung", () => {
     expect(() => assertNever("Job" as never, "x")).toThrow(/Job/);
   });
+  it("undefined und Funktion: Meldung statt TypeError", () => {
+    expect(() => assertNever(undefined as never, "x")).toThrow(/x: unbehandelte Variante undefined/);
+    expect(() => assertNever((() => 1) as never, "x")).toThrow(/x: unbehandelte Variante/);
+    expect(() => assertNever(undefined as never, "x")).not.toThrow(TypeError);
+  });
   it("zirkuläres Objekt: trotzdem die assertNever-Meldung, kein TypeError", () => {
     const a: Record<string, unknown> = { owner: "Zyklus" };
     a.self = a;
