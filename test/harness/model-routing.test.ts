@@ -1032,9 +1032,11 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
 
   test("Red-Green: eine um ein Wort abweichende Kopie fällt auf", () => {
     const satz = konvention();
+    const gleich = (text: string) => text.includes(satz);
     for (const datei of [UMSETZER, ".claude/agents/kubernia-lens.md", ".claude/workflows/kubernia-ticket.js"]) {
-      const drift = ohneBackticks(read(datei)).replace(satz, satz.replace("nie per", "nicht per"));
-      assert.ok(!drift.includes(satz), datei);
+      const text = ohneBackticks(read(datei));
+      assert.ok(gleich(text), datei);
+      assert.ok(!gleich(text.replace(satz, satz.replace("nie per", "nicht per"))), datei);
     }
   });
 

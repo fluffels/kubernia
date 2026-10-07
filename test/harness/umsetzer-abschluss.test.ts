@@ -150,6 +150,12 @@ describe("Umsetzer endet nicht bei offenem PR mit Auto-Merge (#1331)", () => {
     assert.equal(blockade(eingabe(bericht("gemergt")), { prStatus: () => { throw new Error("kein gh"); } }), null);
   });
 
+  test("PR-Angabe als URL, #Nummer oder Zahl wird erkannt; Status null gibt frei", () => {
+    for (const pr of ["https://github.com/x/y/pull/7", "#7", "7"])
+      assert.match(blockade(eingabe(bericht("gemergt", pr)), { prStatus: (nr) => { assert.equal(nr, "7"); return offenMitAuto(); } }) ?? "", /PR #7/, pr);
+    assert.equal(blockade(eingabe(bericht("gemergt")), { prStatus: () => null as unknown as Status }), null);
+  });
+
   test("parseAbschlussInput: last_assistant_message, Transkript-Fallback, kaputtes JSON", () => {
     const p = JSON.stringify({ hook_event_name: "SubagentStop", agent_type: "kubernia-umsetzer", last_assistant_message: "A" });
     assert.deepEqual(parseAbschlussInput(p), { hookEvent: "SubagentStop", agentType: "kubernia-umsetzer", lastMessage: "A" });

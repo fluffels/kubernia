@@ -868,12 +868,28 @@ describe("token-baseline: readTranscriptSession (#1311)", () => {
     );
   });
 
-  test("readTranscriptSession kennzeichnet Hauptagent-Calls und -Events mit der Session (#1331)", () => {
+  test("Hauptagent-Marker im Transkript färben genau die Calls ihrer Session (Ende zu Ende, #1331)", () => {
+    const bash = (id: string, ts: string, command: string) =>
+      JSON.stringify({ type: "assistant", timestamp: ts, message: { content: [{ type: "tool_use", id, name: "Bash", input: { command } }] } });
     mitSession(
-      (proj, id) => writeFileSync(join(proj, `${id}.jsonl`), zeile("x", "2026-09-29T11:00:00Z") + "\n"),
+      (proj, id) =>
+        writeFileSync(
+          join(proj, `${id}.jsonl`),
+          [
+            zeile("x0", "2026-09-29T10:30:00Z"),
+            bash("a", "2026-09-29T11:00:00Z", 'echo "pflege: start #1"'),
+            zeile("x1", "2026-09-29T11:05:00Z"),
+            bash("b", "2026-09-29T11:10:00Z", 'echo "pflege: ende #1"'),
+            zeile("x2", "2026-09-29T11:20:00Z"),
+          ].join("\n") + "\n",
+        ),
       (root) => {
-        const r = m.readTranscriptSession("sess-1", root) as Run;
-        assert.deepEqual(r.calls.map((c) => c.session), ["sess-1"]);
+        const r = m.readTranscriptSession("sess-1", root) as Run & { events?: PEv[] };
+        assert.deepEqual([...new Set(r.calls.map((c) => c.session))], ["sess-1"]);
+        assert.ok(r.events?.length && r.events.every((e) => e.agent === "main:sess-1"), "Events tragen denselben Schlüssel wie die Calls");
+        const s = m.summarize(r, BOUNDS);
+        assert.equal(Object.fromEntries(s.rows.map((row) => [row.phase, row.calls]))["Pflege"], 1, "der Call zwischen den Markern");
+        assert.equal(s.pflegeUnpaired, 0);
       },
     );
   });
@@ -966,6 +982,9 @@ describe("token-baseline: Nachweis, Zeitpunkt, Cache-Neuaufbau (#1309)", () => {
     assert.equal(m.countCacheRebuilds(haupt).count, 0, "30 min < 60 min (1h-TTL des Hauptchats)");
     const hauptLang = [lauf("2026-10-05T10:00:00Z"), lauf("2026-10-05T11:30:00Z", { cacheRead: 0, cacheWrite: 500 })];
     assert.equal(m.countCacheRebuilds(hauptLang).count, 1);
+    // #1331: Hauptagent-Calls mit Session-Schlüssel bekommen weiter die 60-Minuten-Grenze, nicht die 5 Minuten der Subagenten.
+    const hauptMitSession = haupt.map((c) => ({ ...c, session: "a" }));
+    assert.equal(m.countCacheRebuilds(hauptMitSession).count, 0, "30 min mit session: weiter Hauptagent");
     const gemischt = [
       lauf("2026-10-05T10:09:00Z", { subagent: umsetzer, cacheRead: 0, cacheWrite: 900 }),
       lauf("2026-10-05T10:00:00Z", { subagent: umsetzer }),

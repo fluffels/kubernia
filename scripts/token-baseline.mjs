@@ -30,7 +30,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseNachweis } from "./slice-override.mjs";
-import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript, transkriptZeilen } from "./brain-metrics.mjs";
+import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
+import { transkriptZeilen } from "./transkript.mjs";
 
 /** Lenses pro Review-Runde für Läufe ohne Runden-Marker (vor #1265 liefen immer alle drei Brillen, #1012). */
 export const LENSES_PER_ROUND = 3;

@@ -404,6 +404,21 @@ describe("ladeLangfuseSession: zwei Stufen mit tatsächlichen Span-Namen (#1322 
     assert.deepEqual([m.brainReads, m.searchCalls], [1, 1]);
   });
 
+  test("Hauptagent ohne Subagent-Span: Events und Calls tragen den Session-Schlüssel (#1331)", async () => {
+    const daten = [
+      { id: "g1", type: "GENERATION", name: "Claude", startTime: T(1), usageDetails: { input: 1, output: 1 }, model: "m" },
+      { id: "b1", type: "TOOL", name: "Tool: Bash", startTime: T(0), metadata: { tool_name: "Bash" }, input: { command: 'echo "pflege: start #1"' } },
+    ];
+    const fetchImpl = (url: string) => {
+      const q = new URL(url).searchParams;
+      const treffer = daten.filter((o) => (!q.get("type") || o.type === q.get("type")) && (!q.get("name") || o.name === q.get("name")));
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: treffer, meta: {} }) });
+    };
+    const part = (await lade("sess-9", { baseUrl: "http://x", publicKey: "p", secretKey: "k", fetchImpl })) as unknown as { events: Ev[]; calls: { session?: string }[] };
+    assert.deepEqual(part.events.map((e) => e.agent), ["main:sess-9"]);
+    assert.deepEqual(part.calls.map((c) => c.session), ["sess-9"]);
+  });
+
   test("kaputte Antwort der zweiten Stufe: der Fehler steigt auf statt leerer Zahlen", async () => {
     let n = 0;
     const fetchImpl = (url: string) => {

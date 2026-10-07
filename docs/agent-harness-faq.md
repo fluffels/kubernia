@@ -79,10 +79,8 @@ Das ist ein bekannter Reibungspunkt des Auto-Mode-Classifiers (nicht des Repos):
 
 ## Windows und Git-Bash: was geht beim Skripten verloren?
 
-- **Backslashes** in Heredocs ohne Anführungszeichen am Delimiter und in `node -e`/`python -c`-Einzeilern werden verschluckt oder umgedeutet (`\s` wird zu `s`, `
-` zu einem echten Umbruch). Ein Regex oder Template-String mit Escapes kommt dann kaputt in der Datei an, ohne Fehlermeldung.
-- **Abhilfe:** mehrzeilige Änderungen mit `
-`/Regex per Edit-Werkzeug machen, nicht per Skript. Muss es ein Skript sein: per Write in den Scratchpad schreiben und dann ausführen; ein Heredoc nur als `<<'EOF'` und danach die Datei gegenlesen.
+- **Backslashes** in Heredocs ohne Anführungszeichen am Delimiter und in `node -e`/`python -c`-Einzeilern werden verschluckt oder umgedeutet (`\s` wird zu `s`, `\n` zu einem echten Umbruch). Ein Regex oder Template-String mit Escapes kommt dann kaputt in der Datei an, ohne Fehlermeldung.
+- **Abhilfe:** mehrzeilige Änderungen mit `\n`/Regex per Edit-Werkzeug machen, nicht per Skript. Muss es ein Skript sein: per Write in den Scratchpad schreiben und dann ausführen; ein Heredoc nur als `<<'EOF'` und danach die Datei gegenlesen.
 - **MSYS-Pfadumwandlung:** `git show origin/main:.claude/agents/x.md` scheitert in Git-Bash (`ambiguous argument 'origin\main;…'`). Abhilfe: `MSYS_NO_PATHCONV=1 git show origin/main:<pfad>` oder das PowerShell-Tool.
 
 ## Warum bekomme ich Test-Timeouts, obwohl der Test einzeln grün ist?

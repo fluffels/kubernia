@@ -178,7 +178,7 @@ const LENS_SCHEMA = {
     },
     ausserhalbScope: {
       type: 'array',
-      description: 'Aufgefallenes außerhalb des Ticket-Scopes, nicht inline gefixt — Harness-Befunde als Zeile im Sammelticket, eigenes Issue nur bei Spiel-/Inhalts-Befund oder Notfall (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets)',
+      description: 'Aufgefallenes außerhalb des Ticket-Scopes, nicht inline gefixt — Harness-Befunde als Zeile im Sammelticket, Issue nur bei Spiel-/Inhalts-Befund (gebündelt) oder Notfall (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets)',
       items: { type: 'string' },
     },
   },
@@ -999,7 +999,7 @@ Du reviewst, du änderst NICHTS und mergst NICHTS. Findings müssen konkret und 
 sein — mit Ort (datei.ts:zeile), kein „könnte man schöner machen" ohne Fundstelle.
 „blockierend" ist für echte Fehler/Regelverstöße reserviert, nicht für Geschmack.
 Was dir außerhalb des Ticket-Scopes auffällt, gehört nach ausserhalbScope (Harness → Zeile im
-Sammelticket, Spiel-/Inhalts-Befund oder Notfall → eigenes Issue) — nicht in die Findings.`,
+Sammelticket, Spiel-/Inhalts-Befund oder Notfall → gebündeltes Issue) — nicht in die Findings.`,
             // Modell und Effort der Lens stehen im Frontmatter von kubernia-lens (#1209), hier nur der Effort
             // (muss gleich sein, bewacht von test/harness/model-routing.test.ts).
             { label: `lens:${lens.key}:r${runde}`, phase: 'Review', schema: LENS_SCHEMA, ...REVIEW },
