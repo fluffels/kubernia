@@ -13,7 +13,8 @@
  * Jeder Ressourcentyp ist ein eigener kleiner Renderer; ein 10× größerer Ressourcensatz
  * wächst als 10× Einträge, ohne dass Dispatcher-Komplexität/-Länge mitwächst.
  */
-import { table, podIP, flagValue } from "../util";
+import { table, flagValue } from "../util";
+import { readyBackends, endpointPort, podAddress } from "../endpoints";
 import type { KubectlHost } from "./host";
 import type { Deployment, PodInstance, PodStatus } from "../state";
 import { sameRbac } from "../rbac";
@@ -108,13 +109,10 @@ function getEndpoints(host: KubectlHost, t: string[]): string {
   }
   if (svcs.length === 0) return "No resources found in default namespace.";
   return table(["NAME", "ENDPOINTS", "AGE"], svcs.map(s => {
-    const dep = host.deployments.find(d => d.name === s.name);
     // Endpoints zeigen den Ziel-Port (targetPort), an den weitergeleitet wird – fehlt er,
     // gilt der Service-Port (#164). So bleibt der Port-Abgleich auch hier sichtbar.
-    const epPort = s.targetPort !== undefined ? s.targetPort : s.port;
-    const ips = dep && host._podReady(dep)
-      ? dep.pods.map((_, i) => "10.244.1." + (20 + i) + ":" + epPort)
-      : [];
+    // Die Pods kommen aus der gemeinsamen Service→Pod-Auflösung (#1318).
+    const ips = readyBackends(host, s).flatMap(b => (b.ip ? [b.ip + ":" + endpointPort(s)] : []));
     return [s.name, ips.length ? ips.join(",") : "<none>", host._age(s.created || 0)];
   }));
 }
@@ -498,7 +496,7 @@ function describePod(host: KubectlHost, t: string[]): string {
     "Status:       " + statusLine,
     ...(dep.evicted ? ["Reason:       Evicted", "Message:      " + dep.evicted.reason] : []),
     "Ready:        " + st.ready,
-    "IP:           " + (dep.broken && dep.broken.type === "pending" ? "<none>" : podIP(pod.name)),
+    "IP:           " + (podAddress(dep, pod) ?? "<none>"),
     "Controlled By: ReplicaSet/" + dep.name,
     // ServiceAccount-Identität des Pods (#132): die per spec.serviceAccountName gesetzte SA,
     // sonst die default-SA des Namespaces – genau wie in echtem `kubectl describe pod`.

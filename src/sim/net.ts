@@ -10,18 +10,13 @@
  * zum docker/kubectl-Split (#346/#397). Phaser-frei: nutzt nur Domänentypen aus ./state
  * über das schmale NetHost-Interface; kein Rückimport nach sim.ts (kein Zyklus).
  */
-import { isHeadlessService, type ServiceRes, type Deployment, type StatefulSetRes, type PvcRes } from "./state";
-import { podIP } from "./util";
-import { statefulPodVolumePending } from "./workload";
+import { isHeadlessService, type ServiceRes } from "./state";
+import { serviceBackends, readyBackends, type EndpointsHost } from "./endpoints";
 
 /** Was die net-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt). */
-export interface NetHost {
+export interface NetHost extends EndpointsHost {
   services: ServiceRes[];
-  deployments: Deployment[];
-  statefulSets: StatefulSetRes[];
-  pvcs: PvcRes[];
   _err(msg: string, tip?: string): string;
-  _podReady(d: Deployment): boolean;
   _reschedulePending(): void;
   _recheckReadiness(): void;
 }
@@ -74,24 +69,12 @@ export function nslookupCommand(host: NetHost, t: string[]): string {
   return header.concat(["Name:\t" + fqdn, "Address: " + svc.clusterIP]).join("\n");
 }
 
-/** Bereite Pods eines StatefulSets (ohne die, deren PVC noch Pending ist). */
-function readyStatefulPods(host: NetHost, sts: StatefulSetRes) {
-  return sts.pods.filter(p => !statefulPodVolumePending(sts, p, host.pvcs));
-}
-
-/** Die Pod-IPs hinter einem headless Service (#1301): das Deployment gleichen Namens (falls
- *  bereit) und die StatefulSets, die ihn als `serviceName` führen. Selektoren sind in der Sim
- *  nicht modelliert; der Name ist die Verdrahtung. Vorher den Cluster nachführen (wie curl). */
+/** Die Pod-IPs hinter einem headless Service (#1301): die bereiten Backends aus der
+ *  gemeinsamen Service→Pod-Auflösung (#1318). Vorher den Cluster nachführen (wie curl). */
 function headlessAnswer(host: NetHost, svc: ServiceRes): string[] {
   host._reschedulePending();
   host._recheckReadiness();
-  const ips: string[] = [];
-  const dep = host.deployments.find(d => d.name === svc.name);
-  if (dep && host._podReady(dep)) for (const p of dep.pods) ips.push(podIP(p.name));
-  for (const sts of host.statefulSets) {
-    if (sts.serviceName === svc.name) for (const p of readyStatefulPods(host, sts)) ips.push(podIP(p.name));
-  }
-  return ips;
+  return readyBackends(host, svc).flatMap(b => (b.ip ? [b.ip] : []));
 }
 
 /** `<pod>.<svc>[.<ns>.svc.cluster.local]`: der stabile DNS-Name eines StatefulSet-Pods hinter
@@ -103,12 +86,8 @@ function podRecordAnswer(host: NetHost, labels: string[]): string[] | null {
   if (!svc || !isHeadlessService(svc)) return null;
   host._reschedulePending();
   host._recheckReadiness();
-  for (const sts of host.statefulSets) {
-    if (sts.serviceName !== svc.name) continue;
-    const pod = readyStatefulPods(host, sts).find(p => p.name === podName);
-    if (pod) return ["Name:\t" + podName + "." + svc.name + ".default.svc.cluster.local", "Address: " + podIP(pod.name)];
-  }
-  return null;
+  const pod = serviceBackends(host, svc).find(b => b.owner === "StatefulSet" && b.ready && b.pod === podName);
+  return pod?.ip ? ["Name:	" + podName + "." + svc.name + ".default.svc.cluster.local", "Address: " + pod.ip] : null;
 }
 
 /** curl [http(s)://]<service>[:port][/pfad]: fragt einen Service im Cluster ab und
@@ -134,6 +113,27 @@ function parseCurlUrl(arg: string): { hostName: string; reqPort: string | null; 
   return { hostName, reqPort, path, svcName };
 }
 
+/** Warum curl ins Leere läuft (Tipp-Text), oder `null`, wenn mindestens ein bereites Backend
+ *  den Service-Verkehr annimmt (#1318, Backends aus ./endpoints). */
+function refusedReason(host: NetHost, svc: ServiceRes): string | null {
+  const backends = serviceBackends(host, svc);
+  if (backends.length === 0) {
+    return "Der Service hat keine Endpoints – kein passendes Deployment/StatefulSet dahinter. Prüfe 'kubectl get endpoints " + svc.name + "' und 'kubectl get deployments'.";
+  }
+  const ready = backends.filter(b => b.ready);
+  if (ready.length === 0) {
+    return "Die Pods sind nicht bereit (READY 0/1). Schau warum mit 'kubectl get pods' und 'kubectl describe pod <pod>' (z.B. ImagePullBackOff/CrashLoopBackOff).";
+  }
+  // Port-Verdrahtung: targetPort des Service ≠ containerPort. Der Service HAT Endpoints (Pod ist
+  // bereit), leitet aber ins Leere – tückisch. Refused nur, wenn KEIN bereites Backend den Port annimmt.
+  const tp = svc.targetPort;
+  const accepts = (b: { containerPort?: number }) => tp === undefined || b.containerPort === undefined || String(tp) === String(b.containerPort);
+  if (!ready.some(accepts)) {
+    return "Der Service leitet auf targetPort " + tp + ", aber dein Container lauscht auf containerPort " + ready[0].containerPort + ". Gleich die Ports im Manifest an (targetPort = containerPort).";
+  }
+  return null;
+}
+
 export function curlCommand(host: NetHost, t: string[]): string {
   // Vor der Abfrage den Cluster nachführen (wie get/top): notready-Pods, die durch ein
   // inzwischen vorhandenes Secret bereit wurden, und nachgeschobene Nodes berücksichtigen.
@@ -155,19 +155,10 @@ export function curlCommand(host: NetHost, t: string[]): string {
     return host._err("curl: (7) Failed to connect to " + hostName + " port " + reqPort + ": Connection refused",
       "Der Service '" + svc.name + "' lauscht auf Port " + svcPort + ", nicht auf " + reqPort + ". Schau mit 'kubectl get services'.");
   }
-  // 2) Keine bereiten Endpoints – kein (gesundes) Deployment hinter dem Service.
-  const dep = host.deployments.find(d => d.name === svc.name);
-  if (!dep || !host._podReady(dep)) {
-    const tip = !dep
-      ? "Der Service hat keine Endpoints – kein passendes Deployment dahinter. Prüfe 'kubectl get endpoints " + svc.name + "' und 'kubectl get deployments'."
-      : "Die Pods sind nicht bereit (READY 0/1). Schau warum mit 'kubectl get pods' und 'kubectl describe pod <pod>' (z.B. ImagePullBackOff/CrashLoopBackOff).";
-    return host._err("curl: (7) Failed to connect to " + hostName + " port " + svcPort + ": Connection refused", tip);
-  }
-  // 3) Port-Verdrahtung im Manifest falsch: targetPort des Service ≠ containerPort des Pods.
-  //    Der Service HAT Endpoints (Pod ist bereit), leitet aber ins Leere – tückisch.
-  if (svc.targetPort !== undefined && dep.containerPort !== undefined && String(svc.targetPort) !== String(dep.containerPort)) {
-    return host._err("curl: (7) Failed to connect to " + hostName + " port " + svcPort + ": Connection refused",
-      "Der Service leitet auf targetPort " + svc.targetPort + ", aber dein Container lauscht auf containerPort " + dep.containerPort + ". Gleich die Ports im Manifest an (targetPort = containerPort).");
+  // 2) + 3) Keine bereiten Endpoints bzw. Port-Verdrahtung im Manifest falsch.
+  const refused = refusedReason(host, svc);
+  if (refused) {
+    return host._err("curl: (7) Failed to connect to " + hostName + " port " + svcPort + ": Connection refused", refused);
   }
   // Erreichbar! Der eigene Dienst antwortet mit HTTP 200.
   return [
