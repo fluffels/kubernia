@@ -193,7 +193,8 @@ test("set resources: CPU-Limit unter Schwelle räumt cpuHeavy aus und löst High
   assert.equal(sim.exec("kubectl set resources deployment/containergrill --limits=cpu=1").output!.includes("updated"), true);
   assert.equal(sim.deployments[0].cpuLimitMilli, 1000, "ganze Cores → Milli-Cores");
   const bad = sim.exec("kubectl set resources deployment/containergrill --limits=cpu=0.0001");
-  assert.ok(bad.error, "zu feine CPU-Menge ist ein Fehler, kein stilles 'updated'");
+  assert.match(bad.output!, /invalid resource quantity "0.0001"/);
+  assert.ok(sim.exec("kubectl set resources deployment/containergrill --limits=cpu=0.0001,memory=256Mi").error, "auch zusammen mit memory kein stilles updated");
   assert.equal(sim.deployments[0].cpuLimitMilli, 1000, "Zustand bleibt");
   // Alert muss jetzt resolved sein
   const resolvedAfter = sim.alerts().some(a => a.name === "HighPodCPU" && a.state === "resolved");

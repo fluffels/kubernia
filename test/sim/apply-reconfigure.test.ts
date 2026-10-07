@@ -224,3 +224,61 @@ test("ungültige Mengenangabe: Fehler und Zustand bleibt unangetastet", () => {
   sim.exec("kubectl get pods");
   expect(JSON.stringify(sim.deployments)).toBe(before);
 });
+
+describe("Härtung aus dem Review (#1300)", () => {
+  test("jede Template-Änderung rollt neue Pods aus, nicht nur image", () => {
+    const base: DeploymentYamlOpts = { name: "web", containerPort: 80, memoryLimit: "128Mi", cpuLimit: "100m", ephemeralLimitMi: 100, securityContext: { runAsNonRoot: true } };
+    const changes: DeploymentYamlOpts[] = [
+      { ...base, containerPort: 81 }, { ...base, memoryLimit: "256Mi" }, { ...base, cpuLimit: "200m" },
+      { ...base, ephemeralLimitMi: 200 }, { ...base, securityContext: { runAsNonRoot: false } },
+    ];
+    for (const next of changes) {
+      sim = freshSim();
+      apply(base);
+      const before = podNames();
+      expect(apply(next).output).toMatch(/configured/);
+      expect(podNames(), JSON.stringify(next)).not.toEqual(before);
+    }
+  });
+
+  test("fehlende serviceAccountName im Manifest löscht die gesetzte SA nicht (konservativ)", () => {
+    sim.exec("kubectl create serviceaccount wachdienst");
+    apply({ name: "web", serviceAccountName: "wachdienst" });
+    expect(apply({ name: "web" }).output).toBe("deployment.apps/web unchanged");
+    expect(web().serviceAccountName).toBe("wachdienst");
+  });
+
+  test("bereits gebautes Image: Re-apply mit requireBuiltImage heilt/landet nicht im ImagePullBackOff", () => {
+    sim.mergeScenario({
+      files: { "Dockerfile": "FROM nginx", "web.yaml": deploymentYaml({ name: "web", image: "web:2" }) },
+      applyEffects: { "web.yaml": { deployment: { name: "web", image: "web:2", replicas: 1, requireBuiltImage: true } } },
+      deployments: [{ name: "web", image: "web:1", replicas: 1 }],
+    });
+    sim.exec("docker build -t web:2 .");
+    const r = sim.exec("kubectl apply -f web.yaml");
+    expect(r.output).toBe("deployment.apps/web configured");
+    expect(web().broken).toBeNull();
+  });
+
+  test("Re-apply mit Template-Änderung gibt das emptyDir-Volume frei", () => {
+    sim.mergeScenario({ deployments: [{ name: "web", image: "nginx", replicas: 1, emptyDir: { data: "alt", usedMi: 50 } }] });
+    expect(web().emptyDir).toMatchObject({ usedMi: 50 });
+    expect(apply({ name: "web", image: "nginx:2" }).output).toMatch(/configured/);
+    expect(web().emptyDir?.usedMi).toBe(0);
+  });
+
+  test("unter restricted: reines Skalieren eines ungehärteten Bestands wird nicht geprüft", () => {
+    apply({ name: "web", securityContext: { privileged: true } });
+    sim.exec("kubectl label namespace default pod-security.kubernetes.io/enforce=restricted");
+    const r = apply({ name: "web", replicas: 2, securityContext: { privileged: true } });
+    expect(r.error).toBeFalsy();
+    expect(r.output).toBe("deployment.apps/web configured");
+  });
+
+  test("snapshot() teilt den securityContext nicht per Referenz", () => {
+    apply({ name: "web", securityContext: { runAsNonRoot: true } });
+    const snap = sim.snapshot().deployments?.[0];
+    expect(snap?.securityContext).toStrictEqual({ runAsNonRoot: true });
+    expect(snap?.securityContext).not.toBe(web().securityContext);
+  });
+});

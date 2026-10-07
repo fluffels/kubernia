@@ -71,6 +71,6 @@ describe("parseCpuMilli – CPU-Menge in Milli-Cores", () => {
     expect(parseCpuMilli("0.125")).toBe(125);
   });
   test("Unsinn und zu feine Nachkommastellen → null", () => {
-    for (const bad of ["", "zwei", "m", "250M", "-1", "1.5m", "0.0001", "1.", ".5", "1e3"]) expect(parseCpuMilli(bad), bad).toBeNull();
+    for (const bad of ["", "zwei", "m", "250M", "250mi", "-1", "1.5m", "0.0001", "1.", ".5", "1e3"]) expect(parseCpuMilli(bad), bad).toBeNull();
   });
 });
