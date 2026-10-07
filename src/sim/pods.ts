@@ -23,3 +23,9 @@ export function clusterPods(host: Pick<ClusterState, "deployments" | "statefulSe
   for (const sts of host.statefulSets) for (const pod of sts.pods) out.push({ owner: "StatefulSet", pod, sts });
   return out;
 }
+
+/** Der Pod mit diesem Namen samt Besitzer, oder `undefined`. Die EINE Namensauflösung für
+ *  `describe pod`, `logs`, `delete pod` und `top` (Pod-Namen sind clusterweit eindeutig). */
+export function findClusterPod(host: Pick<ClusterState, "deployments" | "statefulSets">, name: string): ClusterPod | undefined {
+  return clusterPods(host).find(c => c.pod.name === name);
+}

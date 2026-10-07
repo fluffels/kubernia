@@ -42,11 +42,16 @@ test("kubectl top pods: nicht laufende Pods (ImagePull/Pending) liefern keine Me
   assert.match(one.output!, /Metrics not available/i);
 });
 
-test("kubectl top pod <name>: unbekannter Pod -> NotFound", () => {
-  sim = new KQSim({ deployments: [{ name: "web", image: "nginx", replicas: 1 }] });
+test("kubectl top pod <name>: unbekannter Pod -> NotFound (Deployment und StatefulSet im Cluster)", () => {
+  sim = new KQSim({
+    deployments: [{ name: "web", image: "nginx", replicas: 1 }],
+    statefulSets: [{ name: "speicher", image: "postgres:16", replicas: 1, serviceName: "speicher" }],
+  });
   const r = sim.exec("kubectl top pod gibtsnicht-123");
   assert.ok(r.error);
   assert.match(r.output!, /NotFound/);
+  // ein bekannter, laufender Pod ist dagegen kein NotFound
+  assert.doesNotMatch(sim.exec("kubectl top pod speicher-0").output!, /NotFound/);
 });
 
 /* ===================== kubectl top nodes ===================== */
@@ -237,17 +242,46 @@ test("kubectl top: StatefulSet mit Pending-PVC erscheint nicht, gezielt 'Metrics
   assert.doesNotMatch(r.output!, /NotFound/);
 });
 
-test("kubectl top: unbekannter Pod bleibt NotFound", () => {
-  sim = new KQSim({ statefulSets: [STS()] });
-  assert.match(sim.exec("kubectl top pod gibt-es-nicht").output!, /NotFound/);
-});
-
 test("podMetrics: StatefulSet-Pods deterministisch und unter der HighPodCPU-Schwelle", () => {
   sim = new KQSim({ statefulSets: [STS()] });
   const a = sim.podMetrics();
   assert.equal(a.length, 3);
   assert.deepEqual(sim.podMetrics(), a);
   assert.ok(a.every(m => m.cpuMilli < 500));
+  assert.ok(!sim.alerts().some(x => x.name === "HighPodCPU" && x.state === "firing"));
+});
+
+test("HighPodCPU: feuert nur durch das cpuHeavy-Deployment, nie durch StatefulSet-Pods (Gegenprobe)", () => {
+  const firing = (s: KQSim) => s.alerts().some(x => x.name === "HighPodCPU" && x.state === "firing");
+  assert.equal(firing(new KQSim({ statefulSets: [STS()] })), false, "nur StatefulSet: still");
+  sim = new KQSim({ deployments: [{ name: "hot", image: "python", replicas: 1, cpuHeavy: true }], statefulSets: [STS()] });
+  assert.equal(firing(sim), true, "cpuHeavy-Deployment daneben feuert");
+  const sts = sim.podMetrics().filter(m => m.name.startsWith("speicher-"));
+  assert.equal(sts.length, 3);
+  assert.ok(sts.every(m => m.cpuMilli < 500), "die StatefulSet-Pods selbst bleiben unter der Schwelle");
+});
+
+/* ===================== Evicted-Pods: keine Metriken (#1404) ===================== */
+
+const EVICTED = { name: "wildwuchs", image: "nginx", replicas: 1, ephemeralLimit: 512, emptyDir: { data: "riesig", usedMi: 600 } };
+
+test("Evicted-Pod liefert keine Metriken; gezieltes top meldet 'Metrics not available' statt NotFound", () => {
+  sim = new KQSim({ deployments: [EVICTED, { name: "kasse", image: "nginx", replicas: 1 }] });
+  assert.match(sim.exec("kubectl get pods").output!, /wildwuchs[\w-]*\s+0\/1\s+Evicted/, "Setup: wirklich evictet");
+  const evicted = sim.deployments[0].pods[0].name;
+  const gesund = sim.deployments[1].pods[0].name;
+  assert.deepEqual(sim.podMetrics().map(m => m.name), [gesund], "nur der gesunde Nachbar hat Metriken");
+  const r = sim.exec("kubectl top pod " + evicted);
+  assert.ok(r.error);
+  assert.match(r.output!, /Metrics not available/);
+  assert.doesNotMatch(r.output!, /NotFound/);
+  assert.match(sim.exec("kubectl top pods").output!, new RegExp(gesund));
+});
+
+test("Evicted + cpuHeavy: der evictete Pod lässt HighPodCPU nicht feuern", () => {
+  sim = new KQSim({ deployments: [{ ...EVICTED, cpuHeavy: true }] });
+  assert.match(sim.exec("kubectl get pods").output!, /Evicted/);
+  assert.equal(sim.podMetrics().length, 0);
   assert.ok(!sim.alerts().some(x => x.name === "HighPodCPU" && x.state === "firing"));
 });
 

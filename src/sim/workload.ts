@@ -21,9 +21,10 @@
  * (./util, ./names) – kein Phaser, kein Rückimport nach sim.ts (kein Zyklus), vom
  * Architektur-Wächter (#347) als Domäne geschützt und im Node-Test prüfbar.
  */
-import type { Deployment, PodInstance, PodTemplateSpec, PvcRes, StatefulSetRes } from "./state";
+import type { ClusterNode, Deployment, PodInstance, PodTemplateSpec, PvcRes, StatefulSetRes } from "./state";
 import { makePodName } from "./util";
 import { asPodName } from "./names";
+import { isControlPlane } from "./nodes";
 
 /** Eine frische Pod-Instanz für ein Deployment: neuer Zufallsname im K8s-Stil,
  *  `restarts: 0`, `created` = aktueller Sim-Takt. Die EINE Stelle, an der ein
@@ -44,13 +45,30 @@ export function newStatefulPod(ordinalName: string, clock: number): PodInstance 
 
 /** Wartet das PVC dieses StatefulSet-Pods noch auf Speicher (`Pending`)? Dann läuft der Pod
  *  nicht: `get pods` zeigt ihn `0/1 Pending`, DNS führt ihn nicht als Endpoint (#811, #1301).
- *  Die EINE Stelle für diese Ableitung (PVC-Name `<vct>-<sts>-<ordinal>`). */
+ *  Der PVC-Name kommt aus `statefulPodClaimName`. */
 export function statefulPodVolumePending(
   sts: Pick<StatefulSetRes, "name" | "volumeClaimName">, pod: PodInstance, pvcs: readonly PvcRes[],
 ): boolean {
+  return pvcs.find(pv => pv.name === statefulPodClaimName(sts, pod))?.status === "Pending";
+}
+
+/** Der PVC-Name eines StatefulSet-Pods: `<volumeClaimTemplate>-<sts>-<ordinal>`. Die EINE
+ *  Stelle, die ihn ableitet (Bau, Pending-Prüfung, Apply-Hinweis, `describe pod`). */
+export function statefulPodClaimName(
+  sts: Pick<StatefulSetRes, "name" | "volumeClaimName">, pod: { name: string },
+): string {
   const ordinal = String(pod.name).split("-").pop() ?? "0";
-  const pvcName = sts.volumeClaimName + "-" + sts.name + "-" + ordinal;
-  return pvcs.find(pv => pv.name === pvcName)?.status === "Pending";
+  return sts.volumeClaimName + "-" + sts.name + "-" + ordinal;
+}
+
+/** Der Node eines StatefulSet-Pods: deterministisch Round-Robin über die Worker nach Ordinal
+ *  (Control-Plane nie, solange es Worker gibt). Ohne Worker der erste Node, ohne Nodes `""`
+ *  (wie `nodeOf` für Deployments). Gemeinsame Platzierung je Owner: #1145. */
+export function statefulPodNode(nodes: readonly ClusterNode[], pod: { name: string }): string {
+  const workers = nodes.filter(n => !isControlPlane(n));
+  if (workers.length === 0) return nodes[0]?.name ?? "";
+  const ordinal = Number(String(pod.name).split("-").pop());
+  return workers[(Number.isNaN(ordinal) ? 0 : ordinal) % workers.length].name;
 }
 
 /** Skaliert ein Deployment auf `target` Replicas und hält dabei die Invariante

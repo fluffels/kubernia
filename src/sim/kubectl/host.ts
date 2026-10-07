@@ -8,7 +8,7 @@
  * allen Familien + dem Barrel (../kubectl.ts) importiert. Kein Rückimport (kein Zyklus).
  */
 import type {
-  ClusterState, Deployment, PodInstance, PodStatus, PvcRes, StatefulSetRes,
+  ClusterState, Deployment, PodStatus, PvcRes, StatefulSetRes,
   ServiceRes, ServiceSpec, Broken, NodeMetrics, Alert,
 } from "../state";
 
@@ -38,8 +38,6 @@ export interface KubectlHost extends Pick<ClusterState,
   // Flag-/Vorschlags-Parsing ist seit #499 pure Funktionen in ../util (flagValue/multiFlag/suggest).
   _err(msg: string, tip?: string): string;
   _age(created: number): string;
-  _allPods(): PodInstance[];
-  _findDeploymentOfPod(podName: string): Deployment | undefined;
   _podStatus(d: Deployment): PodStatus;
   _podReady(d: Deployment): boolean;
   _reschedulePending(): void;
