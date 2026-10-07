@@ -118,7 +118,10 @@ jobs:
       # Loader wirft, kaputtes Asset-Manifest) durch. Wir laden den eben gebauten
       # Offline-Build headless in Chromium und prüfen, dass er ohne Konsolen-/
       # Laufzeit-Fehler hochfährt (dist-offline/index.html ist hier schon da).
+      # Timeout (#1425): der Schritt hing einmal 37 Minuten ohne Fortschritt; Normalläufe dauerten
+      # 0:24-4:39 min (letzte 8 Läufe), Obergrenze = rund das Doppelte des Maximums.
       - name: Playwright-Browser installieren (Chromium)
+        timeout-minutes: 10
         run: npx playwright install --with-deps chromium
 
       - name: Boot-Smoke-Test (headless, #391)

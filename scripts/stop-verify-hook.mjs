@@ -25,6 +25,9 @@
  * NICHT die `rm -rf`-Deny aufweichen — der Workaround über `fs.rmSync` (kein
  * Shell-`rm`) bleibt sauber innerhalb der Least-Privilege-Policy (#901).
  *
+ * Lens-Worktrees (#1425): ein registrierter `kq-<nr>-lens-r<runde>` ohne `kq-<nr>` (der Umsetzer hat den Worktree
+ * entfernt, die Sabotage-Probe der Test-Lens aber nicht) wird entfernt, wenn er älter als 5 Minuten ist.
+ *
  * Zweiter Zweck (#1331): beim `SubagentStop` des Umsetzers prüft `umsetzer-abschluss.mjs`, dass ein offener PR mit
  * Auto-Merge nicht als Ende gemeldet wird (`ERGEBNIS: gemergt|abgebrochen`); sonst blockiert der Hook.
  *
@@ -39,7 +42,7 @@
 import { execSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { diagnoseOrphans, fixOrphans, formatHalter, suspiciousWorktreeEntries } from "./cleanup-worktrees.mjs";
+import { diagnoseOrphans, entferneLensWorktrees, fixOrphans, formatHalter, suspiciousWorktreeEntries } from "./cleanup-worktrees.mjs";
 import { istDirektaufruf, readStdin } from "./hook-io.mjs"; // gemeinsames Hook-I/O (stdin lesen, Direktaufruf erkennen)
 import { abschlussBlockade, parseAbschlussInput } from "./umsetzer-abschluss.mjs";
 
@@ -99,7 +102,7 @@ export function repoRootFromScriptUrl(importMetaUrl) {
  *  - git-Fehler (diagnoseOrphans meldet ok:false) → fail-open, { blocked: false }.
  */
 export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
-  const { ok, orphans, mainRoot, worktreesDir } = diagnoseOrphans(repoRoot, deps);
+  const { ok, orphans, lensOrphans = [], mainRoot, worktreesDir } = diagnoseOrphans(repoRoot, deps);
   if (!ok) return { blocked: false };
 
   // Reparse-Point an Worktree-Stelle: wird NIE gelöscht (rekursives Löschen darf
@@ -107,11 +110,30 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
   // `Dirent.isDirectory()` ist für eine Junction false, sie fiel deshalb bisher
   // durch jeden Filter (#1051).
   const suspicious = suspiciousWorktreeEntries(worktreesDir, deps);
-  if (orphans.length === 0 && suspicious.length === 0) return { blocked: false };
+  if (orphans.length === 0 && suspicious.length === 0 && lensOrphans.length === 0) return { blocked: false };
 
   const problems = [];
   let removed = [];
   let pending = [];
+
+  // Registrierte Lens-Worktrees ohne Feature-Worktree (#1425): per `git worktree remove --force`, Ergebnis geprüft.
+  if (lensOrphans.length > 0) {
+    const lens = entferneLensWorktrees(mainRoot, worktreesDir, lensOrphans, deps);
+    removed = [...lens.removed];
+    if (lens.refused.length > 0) {
+      problems.push(
+        `Der Schutzgurt (#1051) hat ${lens.refused.length} Lens-Worktree(s) abgelehnt und NICHTS entfernt: ` +
+          lens.refused.map(({ name, reason }) => `${name} (${reason})`).join("; ")
+      );
+    }
+    if (lens.errors.length > 0) {
+      problems.push(
+        `${lens.errors.length} verwaiste Lens-Worktree(s) (${lens.errors.join(", ")}) konnten nicht entfernt werden. ` +
+          lens.errors.map((n) => `${n}: ${formatHalter(lens.halter?.[n] ?? [])}`).join(" | ") +
+          `. Dann "node scripts/cleanup-worktrees.mjs --fix" erneut versuchen (AGENTS.md § Worktree entfernen).`
+      );
+    }
+  }
 
   if (orphans.length > 0) {
     // Nur wenn es wirklich etwas zu löschen gibt, kostet der Datenverlust-Check
@@ -119,7 +141,7 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
     const before = deletedTrackedPaths(mainRoot, deps);
     const result = fixOrphans(mainRoot, worktreesDir, orphans, deps);
     const after = deletedTrackedPaths(mainRoot, deps);
-    removed = result.removed;
+    removed = [...removed, ...result.removed];
     pending = result.pending ?? [];
 
     if (result.refused.length > 0) {

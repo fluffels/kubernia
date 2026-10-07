@@ -19,7 +19,12 @@ type Takt = {
   harnessVoraussetzung: (a: { items: Item[] | null; position: number | null; positionFehler?: string | null }) => { ok: boolean; fehler?: boolean; meldung?: string };
   mergeFensterAb: (letzter: string | null, jetzt: string | Date) => Date;
   zaehleTicketMerges: (commits: unknown, seit?: string | Date | null) => number;
-  entscheideHarnessTakt: (a: { items: Item[]; ticketMergesSeitAbschluss: number; position: number }) => Harness;
+  istHarnessCommit: (c: unknown) => boolean;
+  zaehleSpielMerges: (commits: unknown, seit?: string | Date | null) => number;
+  quotenBericht: (commits: unknown[], seit?: string | null) => { harness: number; spiel: number; eingehalten: boolean; zeile: string };
+  SPIEL_QUOTE: number;
+  harnessTaktAusCommits: (a: { items: Item[]; commits: unknown[]; seit?: string | null; position: number }) => Harness;
+  entscheideHarnessTakt: (a: { items: Item[]; spielMergesSeitAbschluss: number; position: number }) => Harness;
   ziehListeNach: (items: Item[], ergebnis: { nr: number; itemId?: string | null } | null) => Item[];
 };
 const T = raw as unknown as Takt;
@@ -85,19 +90,67 @@ describe("zaehleTicketMerges (#1349)", () => {
   });
 });
 
+describe("Spielquote im Takt (#1425)", () => {
+  const c = (message: string, login: string | null = "fluffels", date = "2026-10-07T10:00:00Z") => ({ author: login === null ? null : { login }, commit: { message, committer: { date } } });
+  const harness = c("feat(harness): Härtung (#1)\n\nKörper");
+  const spiel = c("feat(sim): Pod (#2)");
+
+  test("Harness-Scope wird am Titel des Squash-Commits erkannt, auch mit Ausrufezeichen und Großschreibung; Körper und andere Scopes nicht", () => {
+    for (const m of ["feat(harness): x", "fix(harness)!: x", "CHORE(HARNESS): x"]) expect(T.istHarnessCommit(c(m)), m).toBe(true);
+    for (const m of ["feat(sim): x", "feat: harness", "feat(harness-x): x", "docs(adr): x\n\nfeat(harness): y", "", "harness"]) expect(T.istHarnessCommit(c(m)), m).toBe(false);
+    expect(T.istHarnessCommit(null)).toBe(false);
+    expect(T.istHarnessCommit({})).toBe(false);
+  });
+
+  test("zaehleSpielMerges: Harness-, Bot- und zu alte Commits zählen nicht", () => {
+    const l = [spiel, harness, c("feat(sim): y", "dependabot[bot]"), c("feat(sim): z", "fluffels", "2026-10-06T10:00:00Z"), c("feat(inhalt): q")];
+    expect(T.zaehleSpielMerges(l)).toBe(3);
+    expect(T.zaehleSpielMerges(l, "2026-10-07T00:00:00Z")).toBe(2);
+    expect(() => T.zaehleSpielMerges({})).toThrow();
+  });
+
+  test("quotenBericht: 1:3 ist eingehalten, 2:3 überschritten, leeres Fenster eingehalten", () => {
+    expect(T.SPIEL_QUOTE).toBe(3);
+    const q = T.quotenBericht([harness, spiel, spiel, spiel]);
+    expect(q).toMatchObject({ harness: 1, spiel: 3, eingehalten: true });
+    expect(q.zeile).toMatch(/1 Harness- auf 3 Spiel-Merges/);
+    expect(T.quotenBericht([harness, harness, spiel, spiel, spiel]).eingehalten).toBe(false);
+    expect(T.quotenBericht([]).eingehalten).toBe(true);
+    expect(T.quotenBericht([c("feat(harness): x", "dependabot[bot]"), spiel], null).harness).toBe(0);
+  });
+
+  test("quotenBericht: ein Harness-Merge VOR dem Fenster zählt nicht", () => {
+    const alt = c("feat(harness): alt", "fluffels", "2026-10-06T10:00:00Z");
+    const altSpiel = c("feat(sim): alt", "fluffels", "2026-10-06T10:00:00Z");
+    const q = T.quotenBericht([alt, alt, altSpiel, spiel], "2026-10-07T00:00:00Z");
+    expect(q).toMatchObject({ harness: 0, spiel: 1 });
+    expect(T.quotenBericht([alt, alt, altSpiel, spiel], null)).toMatchObject({ harness: 2, spiel: 2 });
+  });
+
+  test("Verdrahtung `harnessTaktAusCommits`: fünf Harness-Merges plus ein Spiel-Merge lösen nichts aus, drei Spiel-Merges holen das Sammelticket", () => {
+    const it = (number: number, extra: Partial<Item> = {}): Item => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open", ...extra });
+    const board = [it(10), it(11), it(12, { title: "Harness-Härtung (gesammelt)" })];
+    const nurHarness = [harness, harness, harness, harness, harness, spiel];
+    expect(T.harnessTaktAusCommits({ items: board, commits: nurHarness, position: 4 }).aktion).toBe("nichts");
+    expect(T.harnessTaktAusCommits({ items: board, commits: [spiel, spiel, spiel, harness], position: 4 })).toMatchObject({ aktion: "nach-oben", nr: 12 });
+    expect(T.harnessTaktAusCommits({ items: board, commits: [spiel, spiel, spiel], seit: "2026-10-07T11:00:00Z", position: 4 }).aktion).toBe("nichts");
+    expect(() => T.harnessTaktAusCommits({ items: board, commits: {} as unknown as unknown[], position: 4 })).toThrow();
+  });
+});
+
 describe("entscheideHarnessTakt (#1349 Z15, Positionskorrektur #1390)", () => {
   const TITEL = "Harness-Härtung (gesammelt)";
   const it = (number: number, extra: Partial<Item> = {}): Item => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open", ...extra });
   const sammel = (number: number, extra: Partial<Item> = {}) => it(number, { title: TITEL, ...extra });
   const status = (number: number) => it(number, { title: STATUS_TITEL });
   const fueller = (von: number, bis: number) => Array.from({ length: bis - von + 1 }, (_, i) => it(von + i));
-  const h = (items: Item[], n: number, position = 4) => T.entscheideHarnessTakt({ items, ticketMergesSeitAbschluss: n, position });
+  const h = (items: Item[], n: number, position = 4) => T.entscheideHarnessTakt({ items, spielMergesSeitAbschluss: n, position });
 
-  test("Grenze 4/5: erst ab 5 Ticket-Merges nach oben", () => {
-    expect(T.HARNESS_TAKT_MERGES).toBe(5);
+  test("Grenze 2/3: erst ab 3 Spiel-Merges nach oben", () => {
+    expect(T.HARNESS_TAKT_MERGES).toBe(3);
     const board = [it(10), it(11), sammel(12)];
-    expect(h(board, 4).aktion).toBe("nichts");
-    expect(h(board, 5)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: null });
+    expect(h(board, 2).aktion).toBe("nichts");
+    expect(h(board, 3)).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: null });
   });
 
   test("kommt hinter den Kopf, nicht davor: Status-Ticket und roter main bleiben oben", () => {
@@ -119,7 +172,7 @@ describe("entscheideHarnessTakt (#1349 Z15, Positionskorrektur #1390)", () => {
 
   test("ungültige Eingaben werfen (auch ein ungültiges position)", () => {
     expect(() => h([], -1)).toThrow();
-    expect(() => T.entscheideHarnessTakt({ items: null as unknown as Item[], ticketMergesSeitAbschluss: 5, position: 4 })).toThrow();
+    expect(() => T.entscheideHarnessTakt({ items: null as unknown as Item[], spielMergesSeitAbschluss: 5, position: 4 })).toThrow();
     for (const bad of [0, -1, 1.5, Number.NaN, "4" as unknown as number]) expect(() => h([sammel(1)], 0, bad), String(bad)).toThrow(/position/);
   });
 
@@ -127,10 +180,10 @@ describe("entscheideHarnessTakt (#1349 Z15, Positionskorrektur #1390)", () => {
     const ende = [...fueller(1, 10), sammel(20)];
     expect(h(ende, 0)).toMatchObject({ aktion: "auf-position", nr: 20, afterId: "I3" });
     expect(h(ende, 0).grund).toMatch(/Rang 11, zurück auf Rang 4/);
-    expect(h(ende, 4).aktion).toBe("auf-position");
+    expect(h(ende, 2).aktion).toBe("auf-position");
   });
 
-  test("viel Aktivität hat Vorrang: ≥ 5 Ticket-Merges und nicht hinter dem Kopf → nach-oben, nicht auf-position", () => {
+  test("viel Aktivität hat Vorrang: ≥ 3 Spiel-Merges und nicht hinter dem Kopf → nach-oben, nicht auf-position", () => {
     expect(h([...fueller(1, 10), sammel(20)], 5)).toMatchObject({ aktion: "nach-oben", nr: 20, afterId: null });
   });
 
@@ -187,7 +240,7 @@ describe("ziehListeNach: die Board-Liste wird nach der Status-Aktion im Speicher
   test("Komposition: nach dem Nachziehen entscheidet der Harness-Takt gegen die aktuelle Liste (Sammelticket hinter dem frischen Status-Ticket)", () => {
     const board = [it(1), it(2), it(12, { title: "Harness-Härtung (gesammelt)" })];
     const nachgezogen = T.ziehListeNach(board, { nr: 9, itemId: "PVTI_9" });
-    expect(T.entscheideHarnessTakt({ items: nachgezogen, ticketMergesSeitAbschluss: 5, position: 4 })).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: "PVTI_9" });
+    expect(T.entscheideHarnessTakt({ items: nachgezogen, spielMergesSeitAbschluss: 5, position: 4 })).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: "PVTI_9" });
   });
 });
 
@@ -199,14 +252,16 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     const yml = lies(".github/workflows/board-takt.yml");
     const doc = lies("docs/ticket-reihenfolge.md");
     expect(Number(/mindestens (\d+) Ticket-Merges/.exec(yml)?.[1])).toBe(status.MIN_TICKET_MERGES_PUSH);
-    expect(Number(/nach (\d+) Ticket-Merges/.exec(yml)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
+    expect(Number(/nach (\d+) Spiel-Merges/.exec(yml)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
     expect(Number(/(\d+) Ticket-Merges \(ohne Bots\)/.exec(adr)?.[1])).toBe(status.MIN_TICKET_MERGES_PUSH);
-    expect(Number(/nach (\d+) Ticket-Merges seit dem Abschluss des letzten Sammeltickets/.exec(adr)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
+    expect(Number(/nach (\d+) Spiel-Merges seit dem Abschluss des letzten Sammeltickets/.exec(adr)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
     expect(Number(/(\d+) Ticket-Merges \(ohne Bots\)/.exec(doc)?.[1])).toBe(status.MIN_TICKET_MERGES_PUSH);
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(adr)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(doc)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(yml)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
-    expect(Number(/nach (\d+) Ticket-Merges seit dem Abschluss des letzten Sammeltickets/.exec(doc)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
+    expect(Number(/nach (\d+) Spiel-Merges seit dem Abschluss des letzten Sammeltickets/.exec(doc)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
+    expect(Number(/nach (\d+) Spiel-Merges \(Spielquote 1:\d+\) hinter den Kopf/.exec(lies("AGENTS.md"))?.[1])).toBe(T.HARNESS_TAKT_MERGES);
+    expect(Number(/Spielquote 1:(\d+)\)/.exec(lies("AGENTS.md"))?.[1])).toBe(T.SPIEL_QUOTE);
   });
   test("der Workflow löst auf Push nach main aus und ruft board-takt.mjs", () => {
     const yml = lies(".github/workflows/board-takt.yml");

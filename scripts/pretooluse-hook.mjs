@@ -1,11 +1,12 @@
 // Kein Shebang: wird über `.claude/settings.json` per `node scripts/pretooluse-hook.mjs` gestartet UND von
 // test/harness/pretooluse-hook.test.ts importiert.
 /**
- * PreToolUse-Dispatcher (#1311) für `Bash`, `PowerShell` und `SubagentHandback` (Abschluss-Wächter, #1342): EIN Node-Prozess je Tool-Aufruf statt drei.
+ * PreToolUse-Dispatcher (#1311) für `Bash`, `PowerShell`, `SubagentHandback` (Abschluss-Wächter, #1342) und `Agent` (Lens-Auftrag-Guard, #1425): EIN Node-Prozess je Tool-Aufruf statt drei.
  *
  * Er liest das Payload einmal (`hook-io.mjs`) und fragt die Guards:
  *  - Bash:       Worktree-Guard (`decide`, scripts/worktree-guard-hook.mjs) und gh-Guard (`bewerte`)
  *  - PowerShell: Worktree-Guard für PowerShell (scripts/worktree-guard-powershell.mjs) und gh-Guard
+ *  - SubagentHandback: Abschluss-Wächter des Umsetzers; Agent: Lens-Auftrag-Guard (`lens-auftrag-guard.mjs`)
  * Jeder Guard läuft im eigenen try/catch: ein werfender Guard legt den anderen nicht lahm und blockt nie selbst
  * (fail-open bei internem Fehler). Ausgabe: genau ein JSON, deny vor ask; fremde Tools und kaputtes JSON → nichts.
  *
@@ -17,6 +18,7 @@
 import { SHELL_VON_TOOL } from "./shell-tabellen.mjs";
 import { bewerte as bewerteGh } from "./gh-guard-hook.mjs";
 import { buildDenyOutput, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
+import { lensAuftragBlockade, parseAgentInput } from "./lens-auftrag-guard.mjs";
 import { abschlussBlockade, parseAbschlussInput } from "./umsetzer-abschluss.mjs";
 import { decide, repoRootFromScriptUrl } from "./worktree-guard-hook.mjs";
 import { bewertePowerShell } from "./worktree-guard-powershell.mjs";
@@ -35,6 +37,11 @@ export function dispatch(text, repoRoot, guards = { decide, bewertePowerShell, b
   if (tool === "SubagentHandback") {
     // Abschluss-Wächter des Umsetzers (#1342): vor der Zustellung des Berichts; fremde Agenten und jeder Fehler lassen durch.
     const grund = sicher(() => abschlussBlockade(parseAbschlussInput(text), abschlussDeps));
+    return grund ? buildDenyOutput(grund) : null;
+  }
+  if (tool === "Agent") {
+    // Lens-Auftrag-Guard (#1425): ein kubernia-lens-Spawn mit übrig gebliebenen Platzhaltern wird verweigert; alles andere läuft durch.
+    const grund = sicher(() => lensAuftragBlockade(parseAgentInput(text)));
     return grund ? buildDenyOutput(grund) : null;
   }
   if (tool === undefined || !Object.hasOwn(shellVonTool, tool)) return null;

@@ -674,3 +674,122 @@ describe("fixOrphans: Ordner-Geburt begrenzt die Halter-Kandidaten (#1411)", () 
     assert.deepEqual(r.halter["kq-1"].map((h) => h.pid), [1, 2]);
   });
 });
+
+describe("Lens-Worktrees ohne Feature-Worktree (#1425)", () => {
+  type LensModule = {
+    verwaisteLensWorktrees: (registered: string[], worktreesDir: string) => string[];
+    entferneLensWorktrees: (
+      mainRoot: string,
+      worktreesDir: string,
+      names: string[],
+      deps?: object,
+    ) => { removed: string[]; errors: string[]; refused: { name: string; reason: string }[]; halter: Record<string, unknown[]> };
+  };
+  const lensM = cleanupModule as unknown as LensModule;
+  const MAIN = "/root";
+  const WT = "/root/.claude/worktrees";
+  const porcelain = (pfade: string[]) => pfade.map((p) => `worktree ${p}\nHEAD abc\n`).join("\n");
+
+  test("registrierter `kq-<nr>-lens-r<n>` ohne `kq-<nr>` ist verwaist; mit Feature-Worktree nicht", () => {
+    const reg = [MAIN, `${WT}/kq-12`, `${WT}/kq-12-lens-r1`, `${WT}/kq-13-lens-r2`, `${WT}/kq-14`];
+    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT), ["kq-13-lens-r2"]);
+  });
+
+  test("nie angefasst: `kq-<nr>`, `kq-<nr>-lens-x`, `foo-lens-r1`, fremde Ordner, tiefer verschachtelte Pfade", () => {
+    const reg = [MAIN, `${WT}/kq-12`, `${WT}/kq-12-lens-x`, `${WT}/foo-lens-r1`, `/other/kq-9-lens-r1`, `${WT}/kq-9-lens-r1/sub`, `${WT}/kq-9-lens-r10x`];
+    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT), []);
+  });
+
+  test("Windows-Pfade (Backslashes, gemischte Trenner) werden wie POSIX-Pfade behandelt", () => {
+    const reg = ["C:/root", "C:/root/.claude/worktrees/kq-5-lens-r1", "C:/root/.claude/worktrees/kq-6", "C:/root/.claude/worktrees/kq-6-lens-r1"];
+    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, "C:\\root\\.claude\\worktrees"), ["kq-5-lens-r1"]);
+  });
+
+  test("diagnoseOrphans trennt alte (löschbar) von jungen (nur melden) Lens-Worktrees", () => {
+    const jetzt = 10_000_000;
+    const deps = {
+      now: jetzt,
+      execSync: () => porcelain([MAIN, `${WT}/kq-1-lens-r1`, `${WT}/kq-2-lens-r1`]),
+      existsSync: () => true,
+      readdirSync: () => [
+        { name: "kq-1-lens-r1", isDirectory: () => true },
+        { name: "kq-2-lens-r1", isDirectory: () => true },
+      ],
+      statSync: (p: string) => ({ mtimeMs: p.includes("kq-1-") ? jetzt - MIN_ORPHAN_AGE_MS - 1 : jetzt - 1000 }),
+    };
+    const r = diagnoseOrphans(MAIN, deps) as unknown as { lensOrphans: string[]; lensYoung: string[]; orphans: string[] };
+    assert.deepEqual(r.lensOrphans, ["kq-1-lens-r1"]);
+    assert.deepEqual(r.lensYoung, ["kq-2-lens-r1"]);
+    assert.deepEqual(r.orphans, [], "registrierte Ordner sind keine Geister-Ordner");
+  });
+
+  /** Fake-Git mit Zustand: `worktree remove` nimmt den Pfad aus der Liste, außer `klemmt`. */
+  function fakeGit(start: string[], opts: { klemmt?: boolean; wirftTrotzdem?: boolean } = {}) {
+    const registriert = new Set(start);
+    const befehle: string[] = [];
+    return {
+      befehle,
+      deps: {
+        execSync: (cmd: string) => {
+          befehle.push(cmd);
+          if (cmd.includes("worktree list")) return porcelain([...registriert]);
+          const m = /worktree remove --force "([^"]+)"/.exec(cmd);
+          if (m && !opts.klemmt) registriert.delete(m[1].replace(/\\/g, "/"));
+          if (m && opts.wirftTrotzdem) throw new Error("exit 1");
+          if (m && opts.klemmt) throw new Error("Permission denied");
+          return "";
+        },
+        existsSync: (p: string) => registriert.has(p.replace(/\\/g, "/")),
+        lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => false }),
+        statSync: () => ({ birthtimeMs: 1 }),
+        platform: "linux",
+      },
+    };
+  }
+
+  test("entfernt per `git worktree remove --force` und prüft: nicht mehr registriert, Ordner weg", () => {
+    const g = fakeGit([MAIN, `${WT}/kq-3-lens-r1`]);
+    const r = lensM.entferneLensWorktrees(MAIN, WT, ["kq-3-lens-r1"], g.deps);
+    assert.deepEqual(r.removed, ["kq-3-lens-r1"]);
+    assert.deepEqual(r.errors, []);
+    assert.ok(g.befehle.some((c) => /worktree remove --force ".*kq-3-lens-r1"/.test(c)));
+  });
+
+  test("scheitert das Entfernen (Sperre), steht der Name in `errors`; ein werfender Exit-Code mit Erfolg zählt als entfernt", () => {
+    const klemmt = lensM.entferneLensWorktrees(MAIN, WT, ["kq-3-lens-r1"], fakeGit([MAIN, `${WT}/kq-3-lens-r1`], { klemmt: true }).deps);
+    assert.deepEqual(klemmt.errors, ["kq-3-lens-r1"]);
+    assert.deepEqual(klemmt.removed, []);
+    assert.ok("kq-3-lens-r1" in klemmt.halter);
+    const warnung = lensM.entferneLensWorktrees(MAIN, WT, ["kq-3-lens-r1"], fakeGit([MAIN, `${WT}/kq-3-lens-r1`], { wirftTrotzdem: true }).deps);
+    assert.deepEqual(warnung.removed, ["kq-3-lens-r1"], "geprüft wird das Ergebnis, nicht der Exit-Code");
+  });
+
+  test("git meldet Erfolg, aber der Ordner steht noch (Windows-Sperre): Fehler, nicht entfernt", () => {
+    const g = fakeGit([MAIN, `${WT}/kq-3-lens-r1`]);
+    const deps = { ...g.deps, existsSync: () => true };
+    const r = lensM.entferneLensWorktrees(MAIN, WT, ["kq-3-lens-r1"], deps);
+    assert.deepEqual(r.errors, ["kq-3-lens-r1"]);
+    assert.deepEqual(r.removed, []);
+  });
+
+  test("lässt sich die Worktree-Liste nach dem Entfernen nicht lesen, zählt das fail-closed als nicht entfernt", () => {
+    const g = fakeGit([MAIN, `${WT}/kq-3-lens-r1`]);
+    const deps = {
+      ...g.deps,
+      execSync: (cmd: string) => {
+        if (cmd.includes("worktree list")) throw new Error("kein git");
+        return g.deps.execSync(cmd);
+      },
+    };
+    assert.deepEqual(lensM.entferneLensWorktrees(MAIN, WT, ["kq-3-lens-r1"], deps).errors, ["kq-3-lens-r1"]);
+  });
+
+  test("Schutzgurt: ein Symlink wird nicht angefasst (kein `git worktree remove`)", () => {
+    const g = fakeGit([MAIN, `${WT}/kq-3-lens-r1`]);
+    const deps = { ...g.deps, lstatSync: () => ({ isDirectory: () => false, isSymbolicLink: () => true }) };
+    const r = lensM.entferneLensWorktrees(MAIN, WT, ["kq-3-lens-r1"], deps);
+    assert.equal(r.refused.length, 1);
+    assert.deepEqual(r.removed, []);
+    assert.ok(!g.befehle.some((c) => c.includes("worktree remove")));
+  });
+});

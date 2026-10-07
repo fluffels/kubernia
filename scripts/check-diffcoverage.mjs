@@ -128,6 +128,60 @@ export function parseLcov(text) {
   return byFile;
 }
 
+/** Parst die `BRDA:`-Records eines lcov-Files zu `Datei → (Zeile → { total, taken })` (#1425): je Zeile die
+ *  Zahl der Zweige und wie viele davon mindestens einmal genommen wurden. `BRDA:<zeile>,<block>,<zweig>,<taken>`,
+ *  `taken` = `-` heißt „nie erreicht“ (zählt als nicht genommen). Kaputte Records werden übersprungen. Pure. */
+export function parseLcovBranches(text) {
+  const byFile = new Map();
+  let current = null;
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line.startsWith("SF:")) {
+      current = normalizePath(line.slice(3));
+      if (!byFile.has(current)) byFile.set(current, new Map());
+      continue;
+    }
+    if (line === "end_of_record") {
+      current = null;
+      continue;
+    }
+    if (!line.startsWith("BRDA:") || current === null) continue;
+    const teile = line.slice(5).split(",");
+    if (teile.length !== 4) continue;
+    const lineNo = Number.parseInt(teile[0], 10);
+    if (!Number.isFinite(lineNo)) continue;
+    const taken = teile[3] === "-" ? 0 : Number.parseInt(teile[3], 10);
+    if (!Number.isFinite(taken)) continue;
+    const zeilen = byFile.get(current);
+    const e = zeilen.get(lineNo) ?? { total: 0, taken: 0 };
+    e.total++;
+    if (taken > 0) e.taken++;
+    zeilen.set(lineNo, e);
+  }
+  return byFile;
+}
+
+/** Geänderte Zeilen, die ausgeführt wurden (DA > 0), aber mindestens einen ungenommenen Zweig tragen
+ *  (z. B. ein `catch` mit Weiterwurf auf derselben Zeile): die Zeilen-Coverage zählt sie als getestet,
+ *  der Zweig bleibt unsichtbar. Nur berichtend, kein Gate (v8 meldet implizite Zweige, keine Kalibrierung).
+ *  Gemessen werden nur Dateien, für die `isMeasured` gilt. Pure. */
+export function teilweiseGetestet(changed, lcov, branches) {
+  const partial = [];
+  for (const [path, lines] of changed) {
+    if (!isMeasured(path)) continue;
+    const da = lcov.get(path);
+    const br = branches.get(path);
+    if (da === undefined || br === undefined) continue;
+    for (const line of [...lines].sort((a, b) => a - b)) {
+      const b = br.get(line);
+      if ((da.get(line) ?? 0) > 0 && b !== undefined && b.taken < b.total) {
+        partial.push({ path, line, taken: b.taken, total: b.total });
+      }
+    }
+  }
+  return partial;
+}
+
 /** Ist die Datei überhaupt Gegenstand der Coverage-Messung? Deckungsgleich mit dem
  *  `include: ["src/**\/*.ts"]` in vite.config.ts — Content-JSON, Assets und Skripte
  *  außerhalb von `src` sind kein ausführbarer Spielcode und fallen raus.
@@ -228,7 +282,9 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env } = {}) 
     return { skipped: false, failed: true, base, noReport: true };
   }
 
-  const verdict = evaluateByLayer(changed, parseLcov(lcovText));
+  const lcov = parseLcov(lcovText);
+  const verdict = evaluateByLayer(changed, lcov);
+  const partial = teilweiseGetestet(changed, lcov, parseLcovBranches(lcovText));
   // `below` ist eine COVERAGE-Lücke (bewertbar, darum override-bar), `missing` ein
   // MESSfehler — für diese Datei wurde gar nichts gemessen. Ihn durchzuwinken wäre
   // dasselbe „grün ohne Messung", das der noReport-Zweig verbietet: nicht override-bar.
@@ -241,6 +297,7 @@ export function checkDiffCoverage({ runGit, readFile, env = process.env } = {}) 
     skipped: false,
     base,
     ...verdict,
+    partial,
     reason,
     allowed,
     stale,
@@ -299,6 +356,10 @@ function main() {
   }
 
   renderBuckets(r, colors);
+  if (r.partial.length > 0) {
+    console.log(dim("• Teilweise getestet (ungetesteter Zweig auf ausgeführter geänderter Zeile, nur berichtet):"));
+    for (const p of r.partial) console.log(dim(`    ${p.path}: Zeile ${p.line} (${p.taken} von ${p.total} Zweigen)`));
+  }
 
   // Messfehler, nicht Coverage-Lücke — bewusst NICHT über das Override abkürzbar.
   if (r.missing.length > 0) {

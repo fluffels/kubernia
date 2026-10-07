@@ -90,3 +90,12 @@ Gemessen im Status-Lauf #1395: Das Ticket entstand 2 h 16 min nach dem Abschluss
 
 Verworfen: die Untergrenze 8 anheben (die Aktivität schwankt, der Abstand ist die stabilere Größe).
 
+## Fortschreibung #1425 (2026-10-08): Spielquote im Takt
+
+Anlass wie in [ADR 0012](0012-harness-autonomie-audit-spur.md#fortschreibung-1199-2026-10-05-spielquote-sammelticket-abschlusskriterium): in den 14 Tagen bis 2026-10-07 waren rund 84 von 104 gemergten PRs Harness. Die Maintainerin wünscht höchstens 1 Harness-Ticket auf 3 Spiel-Tickets, **über den bestehenden Takt** statt einer neuen Mechanik.
+
+Entscheidung: die Quote steht in `SPIEL_QUOTE` (`scripts/board-takt.mjs`) und wirkt an der Stelle, die der Takt schon besitzt, dem Auslöser des Harness-Sammeltickets. Der Auslöser holt das Sammelticket nach 3 Spiel-Merges seit dem Abschluss des letzten Sammeltickets hinter den Kopf (präzisiert die 5 Ticket-Merges aus der Fortschreibung #1349) und zählt nur **Spiel-Merges** (Ticket-Merges ohne Bots und ohne Commit-Scope `harness`, `zaehleSpielMerges`) und liegt bei 3 (`HARNESS_TAKT_MERGES = SPIEL_QUOTE`): Harness-Merges verdienen keinen weiteren Harness-Platz. Jeder Lauf schreibt zusätzlich eine Zeile `Spielquote: <h> Harness- auf <s> Spiel-Merges im Fenster`, damit die Einhaltung messbar ist. Notfälle und Security tragen denselben Scope und zählen in dieser Information mit; sie bleiben von der Auswahl her vorrangig (Kopf des Boards).
+
+Bewusst **nicht** gebaut: ein Zurückstufen des Sammeltickets hinter drei Spiel-Tickets. `board-place` und `sammelticket-anlegen` ziehen das Sammelticket auf die Position laut AGENTS.md vor; ein Rückstufen im Takt gegen diese Korrektur wechselte bei jedem Einsortieren hin und her, und die Board-Reihenfolge bliebe nicht mehr rein manuell ([ADR 0012](0012-harness-autonomie-audit-spur.md), #1258). Wer die Quote hart durchsetzen will, braucht eine gemeinsame Positionsregel für alle drei Skripte.
+
+Zusätzlich gibt es im Project zwei Ansichten neben „View 1“: „Spiel“ (Filter `-label:area:harness`) und „Agentic Engineering“ (Filter `label:area:harness`). Die Auswahl bleibt ein Board (View 1, REST-Liste). Harness-Tickets entstehen nur aus Evidenz ([ticket-reihenfolge.md](../ticket-reihenfolge.md#sammelticket-harness-härtung-gesammelt-1199)).
