@@ -147,6 +147,10 @@ describe("pruefLaeufe (#1120)", () => {
       sh("npm run verify", "Bash", "PreToolUse:Bash hook error: [x]: Blocked"),
       sh("npm run verify", "Bash", "Permission to use Bash has been denied"),
       sh("npm run lint"),
+      sh("npm ci"),
+      sh("npm --prefix C:/x/kq-1 ci"),
+      sh("npm test"),
+      sh("npm install"),
       { tool: "Read", input: { file_path: "npm run verify" }, resultChars: 0 },
     ];
     assert.deepEqual(z(evs), { voll: 0, gezielt: 0 });

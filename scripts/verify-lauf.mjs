@@ -125,13 +125,16 @@ function sammleTests(dir = join(WURZEL, "test")) {
   return out;
 }
 
-function ladeEngung() {
+/** Fail-closed: wirft das Laden des Slice (git, Dateisystem), laufen Lint und Test voll, mit Grund. Pur bis auf `lade`. */
+export function engungSicher(lade) {
   try {
-    return ladeEngungUngesichert();
+    return lade();
   } catch (e) {
     return { voll: true, grund: `Slice nicht lesbar: ${String(e?.message ?? e).split("\n")[0]}` };
   }
 }
+
+const ladeEngung = () => engungSicher(ladeEngungUngesichert);
 
 function ladeEngungUngesichert() {
   const base = resolveBase(git);

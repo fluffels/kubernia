@@ -14,6 +14,7 @@ const vl = vlModule as {
   kuerze: (t: string, s: string) => string;
   bericht: (e: Erg[], o?: { modus?: string; hinweis?: string }) => string;
   exitCode: (e: Erg[]) => number;
+  engungSicher: (lade: () => Eng) => Eng;
   statusVon: (r: { status: number | null }) => number;
   laufe: (a: { schritte: string[]; engung?: Eng | null; run: (j: Job) => { status: number; output: string }; jetzt?: () => number }) => Erg[];
 };
@@ -57,6 +58,17 @@ describe("Einengung (--changed)", () => {
     assert.equal(e.voll, false);
     if (e.voll) return;
     assert.deepEqual(e.perName, ["test/c.test.ts"]);
+    assert.deepEqual(e.related, ["docs/foo.md", "test/a.test.ts"]);
+    const l = vl.bestimmeEngung({ base: "abc", dateien: ["src\\x.ts"], tests: [] });
+    if (!l.voll) assert.deepEqual(l.lint, ["src/x.ts"]);
+  });
+  test("Fail-closed: wirft das Laden des Slice, laufen Lint und Test voll mit Grund", () => {
+    const e = vl.engungSicher(() => {
+      throw new Error("git kaputt\nzweite Zeile");
+    });
+    assert.deepEqual(e, { voll: true, grund: "Slice nicht lesbar: git kaputt" });
+    const ok: Eng = { voll: false, lint: [], related: [], perName: [] };
+    assert.equal(vl.engungSicher(() => ok), ok);
   });
   test("Lint ohne lintbare Datei: übersprungen und ok, nicht rot", () => {
     const e = vl.bestimmeEngung({ base: "abc", dateien: ["docs/foo.md"], tests });
