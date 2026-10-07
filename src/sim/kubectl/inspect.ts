@@ -42,8 +42,8 @@ function aliasMap<E extends { aliases: string[] }>(entries: E[]): Map<string, E>
 // ===== kubectl get – ein Renderer je Ressourcentyp =====
 
 /** Eine Pod-Zeile (NAME READY STATUS RESTARTS AGE) – die EINE Quelle für `get pods` mit und
- *  ohne `-A`. Der Status kommt je Owner aus seiner Wahrheit (Deployment: `_podStatus`,
- *  StatefulSet: `clusterPodStatus` über `podAddress`). */
+ *  ohne `-A`. Der Status kommt aus `clusterPodStatus` (Deployment: `deploymentPodStatus` plus die
+ *  Restarts-Regel, StatefulSet: über `podAddress`). */
 function podRow(host: KubectlHost, c: ClusterPod): string[] {
   const st = clusterPodStatus(host, c);
   return [c.pod.name, st.ready, st.status, String(st.restarts), host._age(c.pod.created)];
@@ -461,7 +461,7 @@ function podSecurityLines(dep: Deployment): string[] {
 }
 
 // Container-Block: Image/State/Restart-Count + OOM- und ephemeral-storage-Sonderfälle.
-function podContainerBlock(host: KubectlHost, pod: PodInstance, dep: Deployment, st: PodStatus): string[] {
+function podContainerBlock(host: KubectlHost, dep: Deployment, st: PodStatus): string[] {
   // OOMKilled zeigt sich NICHT im State (der ist gerade wieder Waiting), sondern im
   // Last State + Reason und am memory-Limit – genau das ist die Lern-Pointe.
   const oom = !!dep.broken && dep.broken.type === "oomkilled";
@@ -476,7 +476,7 @@ function podContainerBlock(host: KubectlHost, pod: PodInstance, dep: Deployment,
     ] : []),
     ...podLimitLines(host, dep),
     ...podSecurityLines(dep),
-    "    Restart Count: " + (st.restarts || pod.restarts),
+    "    Restart Count: " + st.restarts,
   ];
 }
 
@@ -514,7 +514,7 @@ type StatefulPod = Extract<ClusterPod, { owner: "StatefulSet" }>;
 
 function describeDeploymentPod(host: KubectlHost, c: DeploymentPod): string {
   const { pod, dep } = c;
-  const st = host._podStatus(dep);
+  const st = clusterPodStatus(host, c);
   // Evictete Pods melden Status Failed / Reason: Evicted – genau so zeigt es echtes Kubernetes (#240).
   const statusLine = dep.evicted ? "Failed" : (st.status === "Running" ? "Running" : st.status === "Pending" ? "Pending" : "Waiting (" + st.status + ")");
   const ip = podAddress(c, host.pvcs);
@@ -532,7 +532,7 @@ function describeDeploymentPod(host: KubectlHost, c: DeploymentPod): string {
     "Service Account: " + (dep.serviceAccountName || "default"),
     ...podInitContainerBlock(host, dep),
     "Containers:",
-    ...podContainerBlock(host, pod, dep, st),
+    ...podContainerBlock(host, dep, st),
     ...podVolumeBlock(dep),
     "Events:",
   ].concat(podDescribeEvents(host, pod, dep)).join("\n");

@@ -15,10 +15,11 @@ import type {
   Pipeline, CiDeploy, ArgoApp, ApplyEffect, HelmRepo,
   ServiceMonitorRes, PrometheusRuleRes, GrafanaDatasourceRes, GrafanaDashboardRes, StatefulSetRes, PvcRes,
   PvRes, StorageClassRes, VolumeSnapshotRes, S3Bucket, ServiceAccountRes, RoleRes,
-  RoleBindingRes, PodSecurityLevel, PodStatus, NodeMetrics,
+  RoleBindingRes, PodSecurityLevel, NodeMetrics,
   ScrapeTarget, Alert, Scenario, ClusterState,
 } from "./sim/state";
-import { DEFAULT_NAMESPACE, BROKEN_STATUS, HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService } from "./sim/state";
+import { deploymentPodStatus, isReady } from "./sim/podstatus";
+import { DEFAULT_NAMESPACE, HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService } from "./sim/state";
 export { BROKEN_STATUS } from "./sim/state";
 export type {
   ExecResult,
@@ -544,21 +545,9 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       };
     }
 
-    /** Pod-Status eines Deployments (für get/describe/logs). Die Zuordnung Broken-Typ
-     *  → Status/Ready/Restarts lebt zentral in `BROKEN_STATUS` (#867) – hier nur noch
-     *  der Evicted-/gesund-Sonderfall plus Tabellen-Lookup. */
-    _podStatus(d: Deployment): PodStatus {
-      // Evicted überschreibt alles (#240): der kubelet hat den Pod wegen Disk-Druck oder
-      // gesprengtem ephemeral-storage-Limit beendet – er läuft nicht und ist nicht bereit.
-      if (d.evicted) return { status: "Evicted", ready: "0/1", restarts: 0 };
-      if (!d.broken) return { status: "Running", ready: "1/1", restarts: 0 };
-      const t = BROKEN_STATUS[d.broken.type];
-      return { status: t.status, ready: t.ready, restarts: t.restarts };
-    }
-
     /** Ein Pod ist bereit (zählt für den Service), wenn er läuft UND ready ist. */
     _podReady(d: Deployment): boolean {
-      return this._podStatus(d).ready === "1/1";
+      return isReady(deploymentPodStatus(d));
     }
 
     /** Pending-Pods bekommen Platz, sobald genug Nodes da sind. */
