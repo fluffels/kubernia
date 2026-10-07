@@ -2,7 +2,7 @@
  * Übersetzt ein geparstes Service-Manifest in den `ApplyEffect`. Nur die Felder, die das
  * Sim-Modell kennt (Typ, Port, targetPort, externalName, headless `clusterIP: None`, #1301);
  * eine explizite ClusterIP, Port-Namen und Selector werden ignoriert. Weitere `v1`-Kinds (ConfigMap, Secret, …, #1142) kommen hierher. */
-import { HEADLESS_CLUSTER_IP, type ApplyEffect } from "../state";
+import { HEADLESS_CLUSTER_IP, isExternalNameService, type ApplyEffect } from "../state";
 import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { Leaf, ManifestError } from "./fields";
 
@@ -32,10 +32,10 @@ export function mapService(doc: Leaf): ApplyEffect {
   const spec = doc.key("spec");
   const type = spec.key("type").str();
   const externalName = spec.key("externalName").str();
-  if (type === "ExternalName" && !externalName) throw new ManifestError(spec.key("externalName").path + ": Pflichtfeld fehlt bei type ExternalName");
+  if (isExternalNameService({ type }) && !externalName) throw new ManifestError(spec.key("externalName").path + ": Pflichtfeld fehlt bei type ExternalName");
   const ports = spec.key("ports").items();
   // Ein ExternalName-Service darf ohne Ports auskommen (reiner CNAME); sonst ist ein Port Pflicht.
-  const first = type === "ExternalName" && ports.length === 0 ? undefined : spec.key("ports").reqItems()[0];
+  const first = isExternalNameService({ type }) && ports.length === 0 ? undefined : spec.key("ports").reqItems()[0];
   let port: number | string = "";
   if (first) {
     const p = first.key("port").int();

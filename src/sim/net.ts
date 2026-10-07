@@ -11,6 +11,7 @@
  * über das schmale NetHost-Interface; kein Rückimport nach sim.ts (kein Zyklus).
  */
 import { isHeadlessService, type ServiceRes } from "./state";
+import { parseServiceName, resolveService } from "./dns";
 import { serviceBackends, readyBackends, type EndpointsHost } from "./endpoints";
 
 /** Was die net-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt). */
@@ -19,14 +20,6 @@ export interface NetHost extends EndpointsHost {
   _err(msg: string, tip?: string): string;
   _reschedulePending(): void;
   _recheckReadiness(): void;
-}
-
-const EXTERNAL_RESOLVE_IP = "203.0.113.55"; // Beispiel-Adresse (TEST-NET-3) hinter dem externen Namen
-
-/** CNAME-Ziel eines ExternalName-Service, sonst `null` (auch bei ExternalName ohne `externalName`).
- *  Gemeinsame Quelle für nslookup und curl (#1338). */
-function externalNameTarget(svc: ServiceRes): string | null {
-  return svc.type === "ExternalName" && svc.externalName ? svc.externalName : null;
 }
 
 /** nslookup <name>: fragt CoreDNS (den Cluster-DNS-Server) nach der Adresse hinter
@@ -44,26 +37,24 @@ export function nslookupCommand(host: NetHost, t: string[]): string {
   }
   const header = ["Server:\t\t" + COREDNS, "Address:\t" + COREDNS + "#53", ""];
   const query = arg.replace(/\.$/, "");      // optionalen abschließenden Punkt entfernen
-  const svcName = query.split(".")[0];       // erstes Label = Service-Name (NS/Domain folgt)
-  const fqdn = svcName + ".default.svc.cluster.local";
   // Der eingebaute kubernetes-API-Service ist immer da und hat eine feste ClusterIP.
-  if (svcName === "kubernetes") {
-    return header.concat(["Name:\t" + "kubernetes.default.svc.cluster.local", "Address: 10.96.0.1"]).join("\n");
+  const parsed = parseServiceName(query);
+  if (parsed?.svc === "kubernetes" && parsed.ns === "default") {
+    return header.concat(["Name:\t" + parsed.fqdn, "Address: 10.96.0.1"]).join("\n");
   }
-  const svc = host.services.find(s => s.name === svcName);
-  if (!svc) {
-    const pod = podRecordAnswer(host, query.split("."));
+  const ans = resolveService(host.services, query);
+  if (!ans.ok) {
+    const pod = podRecordAnswer(host, query);
     if (pod) return header.concat(pod).join("\n");
-    return host._err(header.join("\n") + "\n** server can't find " + fqdn + ": NXDOMAIN",
-      "Kennt CoreDNS den Namen nicht? Prüfe mit 'kubectl get services', ob der Service existiert (richtig geschrieben?).");
+    return host._err(header.join("\n") + "\n** server can't find " + ans.fqdn + ": NXDOMAIN", ans.tip);
   }
-  const cname = externalNameTarget(svc);
+  const { svc, fqdn, cname } = ans;
   if (cname) {
     // ExternalName hat KEINE ClusterIP: CoreDNS antwortet mit einem CNAME auf den externen Namen.
     return header.concat([
-      fqdn + "\tcanonical name = " + cname + ".",
-      "Name:\t" + cname,
-      "Address: " + EXTERNAL_RESOLVE_IP,
+      fqdn + "\tcanonical name = " + cname.name + ".",
+      "Name:\t" + cname.name,
+      "Address: " + cname.ip,
     ]).join("\n");
   }
   if (isHeadlessService(svc)) {
@@ -88,19 +79,20 @@ function headlessAnswer(host: NetHost, svc: ServiceRes): string[] {
 /** `<pod>.<svc>[.<ns>.svc.cluster.local]`: der stabile DNS-Name eines StatefulSet-Pods hinter
  *  einem headless Service (#1301). Nur wenn `<svc>` headless ist, das StatefulSet ihn als
  *  `serviceName` führt und der Pod bereit ist; sonst `null` (→ NXDOMAIN). */
-function podRecordAnswer(host: NetHost, labels: string[]): string[] | null {
-  const [podName, svcName] = labels;
-  const svc = svcName ? host.services.find(s => s.name === svcName) : undefined;
-  if (!svc || !isHeadlessService(svc)) return null;
+function podRecordAnswer(host: NetHost, query: string): string[] | null {
+  const [podName, ...rest] = query.split(".");
+  const parsed = parseServiceName(rest.join("."));
+  const svc = parsed?.ns === "default" ? host.services.find(s => s.name === parsed.svc) : undefined;
+  if (!parsed || !svc || !isHeadlessService(svc)) return null;
   host._reschedulePending();
   host._recheckReadiness();
   const pod = serviceBackends(host, svc).find(b => b.owner === "StatefulSet" && b.ready && b.pod === podName);
-  return pod?.ip ? ["Name:\t" + podName + "." + svc.name + ".default.svc.cluster.local", "Address: " + pod.ip] : null;
+  return pod?.ip ? ["Name:\t" + podName + "." + parsed.fqdn, "Address: " + pod.ip] : null;
 }
 
 /** Zerlegt die curl-Adresse `[http(s)://]<host>[:port][/pfad]` in ihre Teile. Als eigener
  *  Parser gehalten, damit `curlCommand` unter dem Komplexitäts-Budget bleibt (#502). */
-function parseCurlUrl(arg: string): { hostName: string; reqPort: string | null; defaultPort: string; path: string; svcName: string } {
+function parseCurlUrl(arg: string): { hostName: string; reqPort: string | null; defaultPort: string; path: string } {
   const defaultPort = /^https:\/\//.test(arg) ? "443" : "80";
   let rest = arg.replace(/^https?:\/\//, "");
   const slash = rest.indexOf("/");
@@ -109,27 +101,21 @@ function parseCurlUrl(arg: string): { hostName: string; reqPort: string | null; 
   const colon = rest.indexOf(":");
   const reqPort = colon >= 0 ? rest.slice(colon + 1) : null;
   const hostName = colon >= 0 ? rest.slice(0, colon) : rest;
-  const svcName = hostName.split(".")[0]; // erstes Label (svc / svc.ns / FQDN)
-  return { hostName, reqPort, defaultPort, path, svcName };
+  return { hostName, reqPort, defaultPort, path };
 }
 
 /** curl auf einen ExternalName-Service: folgt dem CNAME auf den externen Dienst (#1338). Der Port ist
  *  der aus der URL, sonst der Schema-Default (80/443); der Service-Port spielt keine Rolle. */
 function curlExternalName(
-  host: NetHost, hostName: string, svc: ServiceRes, url: ReturnType<typeof parseCurlUrl>,
+  hostName: string, cname: { name: string; ip: string }, url: ReturnType<typeof parseCurlUrl>,
 ): string {
-  const cname = externalNameTarget(svc);
-  if (!cname) {
-    return host._err("curl: (6) Could not resolve host: " + hostName,
-      "ExternalName-Service '" + svc.name + "' ohne spec.externalName. Prüfe 'kubectl get service " + svc.name + "'.");
-  }
   const port = url.reqPort || url.defaultPort;
   return [
     "HTTP/1.1 200 OK",
-    "server: " + cname,
+    "server: " + cname.name,
     "content-type: text/plain",
     "",
-    hostName + " → " + cname + " (" + EXTERNAL_RESOLVE_IP + "): " + hostName + ":" + port + url.path,
+    hostName + " → " + cname.name + " (" + cname.ip + "): " + hostName + ":" + port + url.path,
   ].join("\n");
 }
 
@@ -173,15 +159,13 @@ export function curlCommand(host: NetHost, t: string[]): string {
   const arg = t.find((tok, i) => i > 0 && !tok.startsWith("-")) || null;
   if (!arg) return host._err("curl: Welche Adresse soll ich abfragen?", "z.B. 'curl http://kasse' oder 'curl kasse:8080'.");
   const url = parseCurlUrl(arg);
-  const { hostName, reqPort, path, svcName } = url;
+  const { hostName, reqPort, path } = url;
 
-  const svc = host.services.find(s => s.name === svcName);
-  if (!svc) {
-    return host._err("curl: (6) Could not resolve host: " + hostName,
-      "Kennt der Cluster-DNS den Namen nicht? Prüfe mit 'kubectl get services', ob der Service '" + svcName + "' existiert (richtig geschrieben?).");
-  }
+  const ans = resolveService(host.services, hostName);
+  if (!ans.ok) return host._err("curl: (6) Could not resolve host: " + hostName, ans.tip);
+  const { svc } = ans;
   // ExternalName ist DNS-Ebene (CNAME, kein Port-Mapping, keine Endpoints): vor Port- und Endpoint-Prüfung.
-  if (svc.type === "ExternalName") return curlExternalName(host, hostName, svc, url);
+  if (ans.cname) return curlExternalName(hostName, ans.cname, url);
   const svcPort = String(svc.port);
   // 1) Falscher Port in der URL – der Service lauscht auf einem anderen Port.
   if (reqPort && reqPort !== svcPort) {

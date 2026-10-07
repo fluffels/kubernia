@@ -16,7 +16,7 @@
 import { table, flagValue } from "../util";
 import { readyBackends, endpointPort, podAddress } from "../endpoints";
 import type { KubectlHost } from "./host";
-import { SECURITY_CONTEXT_KEYS, type Deployment, type PodInstance, type PodStatus } from "../state";
+import { SECURITY_CONTEXT_KEYS, isExternalNameService, type Deployment, type PodInstance, type PodStatus } from "../state";
 import { sameRbac } from "../rbac";
 import { clusterPods } from "../pods";
 import { statefulPodVolumePending } from "../workload";
@@ -91,7 +91,7 @@ function getServices(host: KubectlHost): string {
   for (const s of host.services) {
     // ExternalName-Service (#337): keine ClusterIP, dafür der externe DNS-Name in
     // EXTERNAL-IP – genau so zeigt echtes kubectl einen ExternalName-Service.
-    const isExt = s.type === "ExternalName";
+    const isExt = isExternalNameService(s);
     rows.push([
       s.name, s.type,
       isExt ? "<none>" : s.clusterIP,

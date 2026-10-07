@@ -10,7 +10,7 @@
  * PVC-Ableitung aus ./workload; kein Rückimport nach sim.ts (kein Zyklus). Das Nachführen
  * (`_reschedulePending`/`_recheckReadiness`) bleibt bei den aufrufenden Befehlen.
  */
-import type { ClusterState, Deployment, ServiceRes } from "./state";
+import { isExternalNameService, type ClusterState, type Deployment, type ServiceRes } from "./state";
 import { podIP } from "./util";
 import { statefulPodVolumePending } from "./workload";
 
@@ -37,7 +37,7 @@ export function podAddress(dep: Pick<Deployment, "broken">, pod: { name: string 
 
 /** Alle Pods hinter einem Service, bereit oder nicht. ExternalName hat keine Pods. */
 export function serviceBackends(host: EndpointsHost, svc: ServiceRes): ServiceBackend[] {
-  if (svc.type === "ExternalName") return [];
+  if (isExternalNameService(svc)) return [];
   const out: ServiceBackend[] = [];
   const dep = host.deployments.find(d => d.name === svc.name);
   if (dep) {

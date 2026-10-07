@@ -25,6 +25,8 @@
  * Fabriken in `sim.ts` (#507) rufen `resourceName()` und machen die Grenze damit
  * zentral statt pro Call-Site.
  *
+ * `InvalidSpecError` ist die allgemeine abgelehnte Spezifikation an derselben Grenze (#1403).
+ *
  * Pure Domäne, importfrei – vom Architektur-Wächter (#347) als Domäne geschützt.
  */
 
@@ -57,12 +59,21 @@ export const RFC1123_TIP =
   "Kubernetes-Namen folgen der DNS-1123-Regel: nur Kleinbuchstaben, Ziffern und '-', " +
   "Anfang und Ende alphanumerisch (z.B. 'web-app' statt 'WebApp' oder 'web_app').";
 
+/** Eine an der Anlege-Grenze abgelehnte Spezifikation (#1403): `message` ist die kubectl-Meldung,
+ *  `tip` der deutsche Erklär-Tipp. `Sim.exec` stellt sie als normalen Fehler dar. */
+export class InvalidSpecError extends Error {
+  constructor(message: string, public readonly tip?: string) {
+    super(message);
+    this.name = "InvalidSpecError";
+  }
+}
+
 /** Fehler des prüfenden Smart-Constructors: der Wert verletzt die DNS-1123-Regel.
  *  Trägt den rohen Namen (`raw`), damit die Aggregat-Grenze (`Sim.exec`) daraus die
  *  richtige kubectl-Meldung bauen kann, statt eines generischen „Hoppla". */
-export class InvalidResourceNameError extends Error {
+export class InvalidResourceNameError extends InvalidSpecError {
   constructor(public readonly raw: string) {
-    super(rfc1123ErrorText(raw));
+    super(rfc1123ErrorText(raw), RFC1123_TIP);
     this.name = "InvalidResourceNameError";
   }
 }
