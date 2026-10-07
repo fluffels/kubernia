@@ -72,6 +72,24 @@ describe("kubectl get pods -A", () => {
   });
 });
 
+describe("kubectl get pods -n <fremder Namespace> (#1409)", () => {
+  const sim = () => new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1 }], statefulSets: [sts()] });
+
+  test("Negativ: meldet 'No resources found', listet keine default-Pods (alle Flag-Formen)", () => {
+    for (const flags of ["-n anderer-ns", "--namespace anderer-ns", "-n=anderer-ns"]) {
+      const r = sim().exec("kubectl get pods " + flags);
+      expect(r.output, flags).toBe("No resources found in anderer-ns namespace.");
+      expect(r.error, flags).toBe(false);
+    }
+  });
+
+  test("Positivkontrolle: -n default listet die Pods", () => {
+    const t = out(sim(), "kubectl get pods -n default");
+    expect(t).toContain("kasse-");
+    expect(t).toContain("speicher-0");
+  });
+});
+
 describe("kubectl get pods: RESTARTS", () => {
   const cluster = () => new KQSim({
     deployments: [

@@ -20,7 +20,7 @@
  * Phaser-frei (pure Domäne): die geteilten Ausgabe-/Pod-Namen-Helfer kommen aus
  * ./util, die Domänentypen aus ./state – kein Rückimport nach sim.ts (kein Zyklus).
  */
-import type { ClusterState, Deployment, ServiceRes, ServiceSpec, Broken, HelmRepo } from "./state";
+import { DEFAULT_NAMESPACE, type ClusterState, type Deployment, type ServiceRes, type ServiceSpec, type Broken, type HelmRepo } from "./state";
 import { table } from "./util";
 import { addDeployment, removeDeployment, scaleDeployment } from "./workload";
 
@@ -274,7 +274,7 @@ function helmInstall(host: HelmHost, t: string[], raw: string): string {
   return [
     "NAME: " + release,
     "LAST DEPLOYED: heute",
-    "NAMESPACE: default",
+    "NAMESPACE: " + DEFAULT_NAMESPACE,
     "STATUS: deployed",
     "REVISION: 1",
     "NOTES:",
@@ -287,7 +287,7 @@ function helmInstall(host: HelmHost, t: string[], raw: string): string {
 function helmList(host: HelmHost): string {
   if (host.releases.length === 0) return "NAME   NAMESPACE   REVISION   STATUS   CHART";
   return table(["NAME", "NAMESPACE", "REVISION", "STATUS", "CHART"],
-    host.releases.map(r => [r.name, "default", String(r.revision), "deployed", (r.chart.split("/").pop() || r.chart) + "-18.1.0"]));
+    host.releases.map(r => [r.name, DEFAULT_NAMESPACE, String(r.revision), "deployed", (r.chart.split("/").pop() || r.chart) + "-18.1.0"]));
 }
 
 /** `helm upgrade <release> <chart>` – neue Revision, optional Replicas per `--set`. */
@@ -339,7 +339,7 @@ function helmStatus(host: HelmHost, t: string[]): string {
   const release = t[2];
   const rel = host.releases.find(r => r.name === release);
   if (!rel) return host._err("Error: release: not found");
-  return ["NAME: " + rel.name, "NAMESPACE: default", "STATUS: deployed", "REVISION: " + rel.revision].join("\n");
+  return ["NAME: " + rel.name, "NAMESPACE: " + DEFAULT_NAMESPACE, "STATUS: deployed", "REVISION: " + rel.revision].join("\n");
 }
 
 /** `helm dependency`/`dep update|build|up <chart>` – Chart-Abhängigkeiten aktualisieren. */

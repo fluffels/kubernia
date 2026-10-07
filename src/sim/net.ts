@@ -10,7 +10,7 @@
  * zum docker/kubectl-Split (#346/#397). Phaser-frei: nutzt nur Domänentypen aus ./state
  * über das schmale NetHost-Interface; kein Rückimport nach sim.ts (kein Zyklus).
  */
-import { isHeadlessService, type ServiceRes } from "./state";
+import { DEFAULT_NAMESPACE, isHeadlessService, type ServiceRes } from "./state";
 import { parseServiceName, resolveService } from "./dns";
 import { serviceBackends, readyBackends, type EndpointsHost } from "./endpoints";
 
@@ -27,7 +27,9 @@ export interface NetHost extends EndpointsHost {
  *  vollen FQDN `<svc>.<ns>.svc.cluster.local` zur ClusterIP des Service auf; ein
  *  ExternalName-Service liefert stattdessen den CNAME auf seinen externen DNS-Namen.
  *  Ein headless Service (`clusterIP: None`, #1301) hat keine Service-IP: CoreDNS liefert
- *  die IPs der bereiten Pods dahinter, und `<pod>.<svc>` löst einen einzelnen StatefulSet-Pod auf. */
+ *  die IPs der bereiten Pods dahinter, und `<pod>.<svc>` löst einen einzelnen StatefulSet-Pod auf.
+ *  Die Namespace-Auflösung liegt in `resolveService` (sim/dns.ts): ein Name in einem anderen
+ *  Namespace (`<svc>.<ns>`) ist NXDOMAIN, der Tipp nennt `default`. */
 export function nslookupCommand(host: NetHost, t: string[]): string {
   const COREDNS = "10.96.0.10";          // ClusterIP des CoreDNS-Service (kube-system)
   const arg = t[1];
@@ -39,7 +41,7 @@ export function nslookupCommand(host: NetHost, t: string[]): string {
   const query = arg.replace(/\.$/, "");      // optionalen abschließenden Punkt entfernen
   // Der eingebaute kubernetes-API-Service ist immer da und hat eine feste ClusterIP.
   const parsed = parseServiceName(query);
-  if (parsed?.svc === "kubernetes" && parsed.ns === "default") {
+  if (parsed?.svc === "kubernetes" && parsed.ns === DEFAULT_NAMESPACE) {
     return header.concat(["Name:\t" + parsed.fqdn, "Address: 10.96.0.1"]).join("\n");
   }
   const ans = resolveService(host.services, query);
@@ -81,13 +83,12 @@ function headlessAnswer(host: NetHost, svc: ServiceRes): string[] {
  *  `serviceName` führt und der Pod bereit ist; sonst `null` (→ NXDOMAIN). */
 function podRecordAnswer(host: NetHost, query: string): string[] | null {
   const [podName, ...rest] = query.split(".");
-  const parsed = parseServiceName(rest.join("."));
-  const svc = parsed?.ns === "default" ? host.services.find(s => s.name === parsed.svc) : undefined;
-  if (!parsed || !svc || !isHeadlessService(svc)) return null;
+  const ans = resolveService(host.services, rest.join("."));
+  if (!ans.ok || !isHeadlessService(ans.svc)) return null;
   host._reschedulePending();
   host._recheckReadiness();
-  const pod = serviceBackends(host, svc).find(b => b.owner === "StatefulSet" && b.ready && b.pod === podName);
-  return pod?.ip ? ["Name:\t" + podName + "." + parsed.fqdn, "Address: " + pod.ip] : null;
+  const pod = serviceBackends(host, ans.svc).find(b => b.owner === "StatefulSet" && b.ready && b.pod === podName);
+  return pod?.ip ? ["Name:\t" + podName + "." + ans.fqdn, "Address: " + pod.ip] : null;
 }
 
 /** Zerlegt die curl-Adresse `[http(s)://]<host>[:port][/pfad]` in ihre Teile. Als eigener

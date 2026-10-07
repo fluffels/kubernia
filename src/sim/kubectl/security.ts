@@ -8,7 +8,7 @@
  * Phaser-frei (pure Domäne): hängt nur an den Domänentypen aus ../state und am
  * KubectlHost-Interface (./host). Kein Rückimport (kein Zyklus).
  */
-import type { PodSecurityLevel, RbacSubject, SecurityContext } from "../state";
+import { DEFAULT_NAMESPACE, type PodSecurityLevel, type RbacSubject, type SecurityContext } from "../state";
 import { roleMatchesRef } from "../rbac";
 import { flagValue } from "../util";
 import type { KubectlHost } from "./host";
@@ -19,7 +19,7 @@ import type { KubectlHost } from "./host";
  *  User → "user:<name>", ServiceAccount → "sa:<ns>:<name>". */
 
 function subjectKeyOf(host: KubectlHost, s: RbacSubject): string {
-  return s.kind === "ServiceAccount" ? "sa:" + (s.namespace || "default") + ":" + s.name : "user:" + s.name;
+  return s.kind === "ServiceAccount" ? "sa:" + (s.namespace || DEFAULT_NAMESPACE) + ":" + s.name : "user:" + s.name;
 }
 
 /** `--as`-Wert (oder null) in einen Subjekt-Schlüssel übersetzen.
