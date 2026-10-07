@@ -1,14 +1,8 @@
 {
-  "markdown": [
-    "README.md",
-    "docs"
-  ],
+  "markdown": ["README.md", "docs"],
   "gates": {
     "package": "package.json",
-    "chains": [
-      "verify",
-      "verify:full"
-    ],
+    "chains": ["verify", "verify:full"],
     "descriptions": {
       "typecheck": "voll `strict`, ganzes Projekt",
       "lint": "ESLint typbewusst, `--max-warnings 0`, `any` blockt, Komplexität je Funktion",
@@ -66,22 +60,11 @@
       "agenten-sequenz": "docs/diagramme/agenten-sequenz.mmd",
       "leitplanken-schichten": "docs/diagramme/leitplanken-schichten.mmd"
     },
-    "vollstaendig": [
-      "agenten-sequenz"
-    ],
+    "vollstaendig": ["agenten-sequenz"],
     "konstanten": {
-      "lensCap": {
-        "datei": ".claude/workflows/kubernia-ticket.js",
-        "name": "MAX_REVIEW_RUNDEN"
-      },
-      "fixVersuche": {
-        "datei": ".claude/workflows/kubernia-ticket.js",
-        "name": "MAX_FIX_VERSUCHE"
-      },
-      "festgefahrenCommits": {
-        "datei": "scripts/check-festgefahren.mjs",
-        "name": "MAX_FAILED_PUSHES"
-      }
+      "lensCap": { "datei": ".claude/workflows/kubernia-ticket.js", "name": "MAX_REVIEW_RUNDEN" },
+      "fixVersuche": { "datei": ".claude/workflows/kubernia-ticket.js", "name": "MAX_FIX_VERSUCHE" },
+      "festgefahrenCommits": { "datei": "scripts/check-festgefahren.mjs", "name": "MAX_FAILED_PUSHES" }
     },
     "ciWorkflows": ".github/workflows"
   },
@@ -95,16 +78,14 @@
   },
   "saveVersionen": {
     "beschreibungen": "src/store/save-versionen.json",
-    "version": {
-      "datei": "src/store/versioning.ts",
-      "name": "CURRENT_SAVE_VERSION"
-    }
+    "version": { "datei": "src/store/versioning.ts", "name": "CURRENT_SAVE_VERSION" }
   },
   "quests": {
     "ordner": "src/content/data/quests",
     "reihenfolge": "src/content/data/quest-order.json",
     "themen": "src/content/data/quest-topics.json",
     "standplaetze": "src/content/data/entities.json",
-    "npcs": "src/content/data/npcs.json"
+    "npcs": "src/content/data/npcs.json",
+    "maxQuestsJeDiagramm": 30
   }
 }

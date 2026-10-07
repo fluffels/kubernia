@@ -1,6 +1,6 @@
 // Kein Shebang (siehe docs-gen.mjs). Gemeinsame Markdown-/Frontmatter-Helfer der Generatoren und
 // des Doku-Drift-Wächters (#1355, #1392): Markdown sammeln, Code-Fences erkennen, Frontmatter lesen,
-// npm-Ketten zerlegen. Reines Node-Modul (nur Builtins).
+// npm-Ketten zerlegen; dazu kleine Quelltext-/Daten-Leser (JSON, Ganzzahl-Konstanten) und Mermaid-Escaping (#1370). Reines Node-Modul (nur Builtins).
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
@@ -159,4 +159,15 @@ export function ganzzahlKonstante(rootDir, datei, name) {
   const zahl = new RegExp(`^\\s*(?:export\\s+)?const\\s+${escRegex(name)}\\s*=\\s*(\\d+)\\s*(?:;|//|$)`, "m").exec(text);
   if (!zahl) throw new Error(`${name} in ${datei} ist kein Ganzzahl-Literal`);
   return zahl[1];
+}
+
+/** Liest eine JSON-Datei (relativ zu `rootDir`); wirft mit sprechender Meldung bei fehlender Datei oder kaputtem JSON. */
+export function leseJson(rootDir, rel, was) {
+  const abs = join(rootDir, rel);
+  if (!existsSync(abs)) throw new Error(`${was} ${rel} nicht gefunden (Config veraltet?)`);
+  try {
+    return JSON.parse(readFileSync(abs, "utf8"));
+  } catch (err) {
+    throw new Error(`${rel} ist kein gültiges JSON: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+  }
 }

@@ -149,6 +149,58 @@ describe("quest-graph: rot", () => {
   });
 });
 
+describe("quest-graph: weitere Kanten, Zerlegung und Deckel", () => {
+  test("requires innerhalb einer Region ist eine gestrichelte Kante im Regionsdiagramm", () => {
+    const out = graph(mit({ "d/quests/ole.json": json([q("a-eins", "ole"), q("b-zwei", "ole", { requires: ["a-eins"] })]) }));
+    assert.match(out, /\n {2}q_a_eins -\. requires \.-> q_b_zwei/);
+  });
+  test("Überblick: mehrere requires zwischen denselben Regionen ergeben genau eine gestrichelte Kante", () => {
+    const out = graph(
+      mit({ "d/quests/runa.json": json([q("c-drei", "runa", { topic: "t2", requires: ["a-eins"] }), q("e-vier", "runa", { topic: "t2", requires: ["b-zwei"] })]), "d/quest-order.json": json(["a-eins", "c-drei", "e-vier", "b-zwei"]) }),
+    );
+    assert.equal(out.split("r_harbor -. requires .-> r_werft").length - 1, 1);
+  });
+  test("Kollision der Regions-Bezeichner (Karten a-b und a_b) ist rot", () => {
+    assert.throws(
+      () =>
+        graph(
+          mit({
+            "d/entities.json": json({ npcs: [{ id: "ole", map: "a-b" }, { id: "runa", map: "a_b" }] }),
+          }),
+        ),
+      /Mermaid-Bezeichner "r_a_b" kollidiert/,
+    );
+  });
+  test("ein NPC auf zwei Karten macht die Region unbestimmt: rot", () => {
+    assert.throws(
+      () => graph(mit({ "d/entities.json": json({ npcs: [{ id: "ole", map: "harbor" }, { id: "ole", map: "insel" }, { id: "runa", map: "werft" }] }) })),
+      /NPC "ole" hat mehrere Standplätze/,
+    );
+  });
+  test("große Region wird in Teile zerlegt, Teile sind über Stubs verbunden", () => {
+    const files = mit({
+      "d/quests/ole.json": json([q("a", "ole"), q("b", "ole"), q("c", "ole")]),
+      "d/quests/runa.json": json([]),
+      "d/quest-order.json": json(["a", "b", "c"]),
+    });
+    const c = { quests: { ...(config.quests as object), maxQuestsJeDiagramm: 2 } };
+    const out = api.questGraphGenerator({ rootDir: fixture(files), config: c });
+    assert.match(out, /#### Teil 1 von 2 \(2 Quests\)/);
+    assert.match(out, /#### Teil 2 von 2 \(1 Quest\)/);
+    assert.match(out, /weiter nach harbor, Teil 2/);
+    assert.match(out, /aus harbor, Teil 1/);
+    assert.ok(!graph(files).includes("Teil 1 von"), "unter dem Deckel bleibt es ein Diagramm");
+  });
+  test("Diagramm über dem Zeichen-Deckel ist rot statt still unlesbar", () => {
+    const lang = mit({ "d/quests/ole.json": json([q("a-eins", "ole", { title: "x".repeat(41000) }), q("b-zwei", "ole")]) });
+    assert.throws(() => graph(lang), /Deckel 40000/);
+  });
+  test("quest-order.json oder quest-topics.json kein Array: rot mit sprechender Meldung", () => {
+    assert.throws(() => graph(mit({ "d/quest-order.json": "{}" })), /muss ein Array von Quest-IDs sein/);
+    assert.throws(() => graph(mit({ "d/quest-topics.json": "{}" })), /muss ein Array sein/);
+  });
+});
+
 describe("quests-je-thema", () => {
   test("Zählung je Thema in Themen-Reihenfolge, Geber, Gesamtzeile; Pipe in Label escaped", () => {
     const out = thema(mit({}));

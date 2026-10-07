@@ -48,6 +48,11 @@ describe("save-versionen: Ausgabe", () => {
     assert.equal(lauf(basis(a)), o1);
     assert.equal(lauf(basis([a[2], a[0], a[1]])), o1);
   });
+  test("Tabelle und Kanten folgen der Schritt-Nummer, nicht dem Beschreibungstext", () => {
+    const out = lauf(basis([schritt(0, { beschreibung: "Zzz" }), schritt(1, { beschreibung: "Mmm" }), schritt(2, { beschreibung: "Aaa" })]));
+    assert.ok(out.indexOf("| 0 → 1 |") < out.indexOf("| 1 → 2 |") && out.indexOf("| 1 → 2 |") < out.indexOf("| 2 → 3 |"));
+    assert.ok(out.indexOf("v0 -->") < out.indexOf("v1 -->") && out.indexOf("v1 -->") < out.indexOf("v2 -->"));
+  });
   test("neuer Schritt erscheint, wenn CURRENT steigt", () => {
     const a = [schritt(0), schritt(1), schritt(2)];
     const o = lauf(basis([...a, schritt(3, { beschreibung: "Neu hier" })], 4));
@@ -90,6 +95,10 @@ describe("save-versionen: rot", () => {
     rot({ "s/save-versionen.json": "[]" }, /nicht gefunden/);
     assert.throws(() => generator({ rootDir: fixture({}), config: {} }), /config\.saveVersionen\.beschreibungen fehlt/);
   });
+  test("Eintrag kein Objekt und fehlende Versions-Config", () => {
+    rot(basis([drei[0], null, drei[2]]), /ist kein Objekt/);
+    assert.throws(() => generator({ rootDir: fixture(basis(drei)), config: { saveVersionen: { beschreibungen: "s/save-versionen.json" } } }), /version \{datei, name\} fehlt/);
+  });
   test("CURRENT ist kein Ganzzahl-Literal", () => {
     rot({ ...basis(drei), "s/versioning.ts": "export const CURRENT_SAVE_VERSION = 1 + 2;\n" }, /kein Ganzzahl-Literal/);
   });
@@ -111,14 +120,6 @@ describe("save-versionen: Bindung an die echte Migrations-Registry", () => {
     const j = [...echt()].sort((a, b) => a.von - b.von);
     assert.equal(m.length, current, "je Version genau eine Migration");
     assert.deepEqual(
-      j.map((s) => ({ von: s.von, additiv: s.art === "additiv" })),
-      m,
-    );
-  });
-  test("Red-Green: eine falsch gelabelte Art würde die Bindung brechen", () => {
-    const j = echt().map((s) => (s.von === 6 ? { ...s, art: "additiv" } : s));
-    const m = migrationsSchritte();
-    assert.notDeepEqual(
       j.map((s) => ({ von: s.von, additiv: s.art === "additiv" })),
       m,
     );

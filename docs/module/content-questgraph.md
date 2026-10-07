@@ -44,6 +44,8 @@ flowchart TB
 
 45 Quests · Geber: Ole, Bo, Ada, Runa, Theo, Juno
 
+#### Teil 1 von 2 (30 Quests)
+
 ```mermaid
 ---
 config:
@@ -87,23 +89,7 @@ flowchart TB
   q_git_pipeline["Die Pipeline-Passage<br/>Ada"]
   q_git_merge_branches["Zwei Karten, eine Linie<br/>Ada"]
   q_helm_umbrella_chart["Werft-Ausbau: dein eigenes Chart<br/>Runa"]
-  q_helm_templates["Hinter die Vorlagen schauen<br/>Runa"]
-  q_network_policy["Die Hafenmauer<br/>Juno"]
-  q_secrets_encrypted["Das verschlüsselte Hafentor<br/>Ada"]
-  q_security_cert_manager["Das Tor erneuert sich selbst<br/>Ada"]
-  q_dns_service_discovery["Das Adressbuch des Hafens<br/>Ada"]
-  q_k8s_routing_lotse_minigame["Der Routing-Lotse<br/>Ada"]
-  q_k8s_service_endpoints["Läuft – bedient aber niemanden<br/>Juno"]
-  q_k8s_resource_limits["Der hungrige Kartograf<br/>Juno"]
-  q_k8s_pod_packing["Der Scheduler in Aktion<br/>Juno"]
-  q_aufbau_sturm["Der große Sturm: Port Kubernia in Trümmern<br/>Ole"]
-  q_aufbau_control_plane["Die Kommandobrücke: Control-Plane hochziehen<br/>Ole"]
-  q_aufbau_worker_join["Stege ans Wasser: Worker-Knoten anschließen<br/>Ole"]
-  q_aufbau_dienste["Fracht zurück an Bord: Dienste wieder ausbringen<br/>Ole"]
-  q_aufbau_cluster_als_code["Nie wieder von Hand: Cluster als Code<br/>Ole"]
-  q_platform_addons_overview["Das große Ganze: was einen echten Cluster ausmacht<br/>Ole"]
-  nach_archipel(["weiter nach archipel"])
-  aus_werft(["aus werft"])
+  nach_harbor__Teil_2(["weiter nach harbor, Teil 2"])
   q_onboarding_sign_on --> q_docker_first_container
   q_docker_first_container --> q_docker_common_images
   q_docker_common_images --> q_docker_list_containers
@@ -133,7 +119,45 @@ flowchart TB
   q_git_feature_branch --> q_git_pipeline
   q_git_pipeline --> q_git_merge_branches
   q_git_merge_branches --> q_helm_umbrella_chart
-  q_helm_umbrella_chart --> q_helm_templates
+  q_helm_umbrella_chart --> nach_harbor__Teil_2
+  q_helm_intro -. requires .-> q_helm_umbrella_chart
+```
+
+#### Teil 2 von 2 (15 Quests)
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  layout: dagre
+  themeVariables:
+    lineColor: "#8b949e"
+    primaryColor: "#f3e3c3"
+    primaryTextColor: "#2b2118"
+    primaryBorderColor: "#8a6a3f"
+---
+flowchart TB
+  q_helm_templates["Hinter die Vorlagen schauen<br/>Runa"]
+  q_network_policy["Die Hafenmauer<br/>Juno"]
+  q_secrets_encrypted["Das verschlüsselte Hafentor<br/>Ada"]
+  q_security_cert_manager["Das Tor erneuert sich selbst<br/>Ada"]
+  q_dns_service_discovery["Das Adressbuch des Hafens<br/>Ada"]
+  q_k8s_routing_lotse_minigame["Der Routing-Lotse<br/>Ada"]
+  q_k8s_service_endpoints["Läuft – bedient aber niemanden<br/>Juno"]
+  q_k8s_resource_limits["Der hungrige Kartograf<br/>Juno"]
+  q_k8s_pod_packing["Der Scheduler in Aktion<br/>Juno"]
+  q_aufbau_sturm["Der große Sturm: Port Kubernia in Trümmern<br/>Ole"]
+  q_aufbau_control_plane["Die Kommandobrücke: Control-Plane hochziehen<br/>Ole"]
+  q_aufbau_worker_join["Stege ans Wasser: Worker-Knoten anschließen<br/>Ole"]
+  q_aufbau_dienste["Fracht zurück an Bord: Dienste wieder ausbringen<br/>Ole"]
+  q_aufbau_cluster_als_code["Nie wieder von Hand: Cluster als Code<br/>Ole"]
+  q_platform_addons_overview["Das große Ganze: was einen echten Cluster ausmacht<br/>Ole"]
+  aus_harbor__Teil_1(["aus harbor, Teil 1"])
+  nach_archipel(["weiter nach archipel"])
+  aus_werft(["aus werft"])
+  ext_q_helm_umbrella_chart(["Werft-Ausbau: dein eigenes Chart (harbor, Teil 1)"])
+  aus_harbor__Teil_1 --> q_helm_templates
   q_helm_templates --> q_network_policy
   q_network_policy --> q_secrets_encrypted
   q_secrets_encrypted --> q_security_cert_manager
@@ -149,8 +173,7 @@ flowchart TB
   q_aufbau_worker_join --> q_aufbau_dienste
   q_aufbau_dienste --> q_aufbau_cluster_als_code
   q_aufbau_cluster_als_code --> q_platform_addons_overview
-  q_helm_intro -. requires .-> q_helm_umbrella_chart
-  q_helm_umbrella_chart -. requires .-> q_helm_templates
+  ext_q_helm_umbrella_chart -. requires .-> q_helm_templates
 ```
 
 ### Region `archipel`
@@ -175,9 +198,9 @@ flowchart TB
   q_gitops_drift_detection["Der stille Wächter<br/>Argo"]
   q_gitops_driftheal_minigame["Soll statt Stückzahl<br/>Argo"]
   q_gitops_app_of_apps["Die Flotte aus einer Hand<br/>Argo"]
-  aus_harbor(["aus harbor"])
+  aus_harbor__Teil_2(["aus harbor, Teil 2"])
   nach_lighthouse(["weiter nach lighthouse"])
-  aus_harbor --> q_gitops_argocd_intro
+  aus_harbor__Teil_2 --> q_gitops_argocd_intro
   q_gitops_argocd_intro --> q_gitops_self_sync
   q_gitops_self_sync --> q_gitops_drift_detection
   q_gitops_drift_detection --> q_gitops_driftheal_minigame
@@ -338,9 +361,9 @@ config:
 flowchart TB
   q_werft_eigener_dienst["Vom Stapel gelassen: dein eigener Dienst<br/>Greta"]
   aus_flotte(["aus flotte"])
-  nach_harbor(["weiter nach harbor"])
+  nach_harbor__Teil_2(["weiter nach harbor, Teil 2"])
   aus_flotte --> q_werft_eigener_dienst
-  q_werft_eigener_dienst --> nach_harbor
+  q_werft_eigener_dienst --> nach_harbor__Teil_2
 ```
 
 <!-- GEN:quest-graph END -->

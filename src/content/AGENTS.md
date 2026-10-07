@@ -8,6 +8,8 @@
 
 ## Wie man Inhalt hinzufügt (Stand #348/#349/#353/#354, auf `main`)
 
+**Nach jeder Änderung an Quests, `quest-order.json`, `quest-topics.json`, `entities.json` oder `npcs.json` `npm run docs:gen` fahren:** Quest-Landkarte ([content-questgraph.md](../../docs/module/content-questgraph.md)) und Quest-Zahlen der README entstehen daraus, `check:docgen` ist sonst rot.
+
 Quests, NPCs, Smalltalk und NPC-Standplätze sind **Daten** (`src/content/data/*`), kein TS mehr. Konkret, damit es auf Stardew-Größe skaliert (kein Monolith – pro Region/NPC eine Datei, wie Stardew):
 
 ### Neue Quest

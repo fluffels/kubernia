@@ -3,9 +3,7 @@
 // (`CURRENT_SAVE_VERSION`), die Kurzbeschreibung je Schritt aus `src/store/save-versionen.json`.
 // Eine Migration ohne Beschreibung (oder eine Beschreibung ohne Migration) macht den Generator und damit
 // `check:docgen` rot; ob ein Schritt additiv oder strukturell ist, bindet ein Test an `migrationsSchritte()`.
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { MERMAID_FRONTMATTER, byCodeUnit, ganzzahlKonstante, mermaidText, renderTable } from "./markdown.mjs";
+import { MERMAID_FRONTMATTER, byCodeUnit, ganzzahlKonstante, leseJson, mermaidText, renderTable } from "./markdown.mjs";
 
 const ARTEN = ["additiv", "strukturell"];
 const MAX_BESCHREIBUNG = 100;
@@ -13,14 +11,7 @@ const MAX_BESCHREIBUNG = 100;
 function lies(rootDir, cfg) {
   const pfad = cfg?.beschreibungen;
   if (!pfad) throw new Error("config.saveVersionen.beschreibungen fehlt");
-  const abs = join(rootDir, pfad);
-  if (!existsSync(abs)) throw new Error(`Beschreibungen ${pfad} nicht gefunden (Config veraltet?)`);
-  let roh;
-  try {
-    roh = JSON.parse(readFileSync(abs, "utf8"));
-  } catch (err) {
-    throw new Error(`${pfad} ist kein gültiges JSON: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
-  }
+  const roh = leseJson(rootDir, pfad, "Beschreibungen");
   if (!Array.isArray(roh)) throw new Error(`${pfad} muss ein Array sein`);
   return { pfad, roh };
 }

@@ -17,12 +17,12 @@ export const GENERATORS = {
   zeitleiste: zeitleisteGenerator,
   "agenten-ablauf": diagrammGenerator("agenten-ablauf"),
   "agenten-sequenz": diagrammGenerator("agenten-sequenz"),
+  "leitplanken-schichten": diagrammGenerator("leitplanken-schichten"),
   // Architektur
   "schichten-soll": schichtenSollGenerator,
   "schichten-ist": schichtenIstGenerator,
-  "leitplanken-schichten": diagrammGenerator("leitplanken-schichten"),
-  "save-versionen": saveVersionenGenerator,
   // Spiel (projektspezifisch, Laufzeit wächst mit dem Inhalt)
+  "save-versionen": saveVersionenGenerator,
   "quest-graph": questGraphGenerator,
   "quests-je-thema": questsJeThemaGenerator,
 };

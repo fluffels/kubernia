@@ -220,7 +220,8 @@ const migrations: Record<number, Migration> = {
   },
 };
 
-/** Die Schritte der Kette (von n auf n+1) und ob sie additiv sind; Quelle der generierten Versionskette (#1370). */
+/** Die Schritte der Kette (von n auf n+1) und ob sie additiv sind. Nur für den Bindungstest der generierten
+ *  Versionskette (test/docgen-save-versionen.test.ts) exportiert: er hält die Art in save-versionen.json an `ADDITIV`. */
 export function migrationsSchritte(): { von: number; additiv: boolean }[] {
   return Object.keys(migrations)
     .map(Number)

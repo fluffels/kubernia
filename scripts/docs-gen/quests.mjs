@@ -3,19 +3,9 @@
 // des Gebers (`entities.json`); Kanten sind der Lernpfad (`quest-order.json`) und `requires` (gestrichelt).
 // `ladeQuestDaten` spiegelt die Prüfregeln des Loaders (`src/content/loader/quests.ts`), ohne ihn zu importieren
 // (der Generator ist reines Node); ein Bindungstest hält die Reihenfolge gegen `KQContent.QUESTS`.
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { MERMAID_FRONTMATTER, byCodeUnit, mermaidText, renderTable } from "./markdown.mjs";
-
-function leseJson(rootDir, rel, was) {
-  const abs = join(rootDir, rel);
-  if (!existsSync(abs)) throw new Error(`${was} ${rel} nicht gefunden (Config quests veraltet?)`);
-  try {
-    return JSON.parse(readFileSync(abs, "utf8"));
-  } catch (err) {
-    throw new Error(`${rel} ist kein gültiges JSON: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
-  }
-}
+import { MERMAID_FRONTMATTER, byCodeUnit, leseJson, mermaidText, renderTable } from "./markdown.mjs";
 
 const brauche = (cfg, schluessel) => {
   const v = cfg?.[schluessel];
@@ -24,6 +14,11 @@ const brauche = (cfg, schluessel) => {
 };
 
 const bezeichner = (praefix, s) => `${praefix}${String(s).replace(/[^A-Za-z0-9_]/g, "_")}`;
+
+/** Standard-Obergrenze je Diagramm; größere Regionen werden in Teile zerlegt (Mermaid-Grenze: 50 000 Zeichen, 500 Kanten). */
+const MAX_JE_DIAGRAMM = 30;
+/** Harter Deckel für den Text eines Diagramms (Mermaid `maxTextSize` ist 50 000). */
+const MAX_DIAGRAMM_ZEICHEN = 40000;
 
 /** Zählt `n` mit Singular/Plural-Wort. */
 const quests = (n) => `${n} ${n === 1 ? "Quest" : "Quests"}`;
@@ -67,7 +62,13 @@ export function ladeQuestDaten(rootDir, cfg) {
 
   const standRel = brauche(cfg, "standplaetze");
   const stand = leseJson(rootDir, standRel, "Standplätze");
-  const kartenVon = new Map((stand?.npcs ?? []).map((n) => [n.id, n.map]));
+  const kartenVon = new Map();
+  for (const n of stand?.npcs ?? []) {
+    if (kartenVon.has(n.id) && kartenVon.get(n.id) !== n.map) {
+      throw new Error(`NPC "${n.id}" hat mehrere Standplätze auf verschiedenen Karten in ${standRel} (Region nicht eindeutig)`);
+    }
+    kartenVon.set(n.id, n.map);
+  }
   const npcRel = brauche(cfg, "npcs");
   const npcs = leseJson(rootDir, npcRel, "NPC-Namen");
 
@@ -99,6 +100,7 @@ export function ladeQuestDaten(rootDir, cfg) {
   };
   for (const q of geordnet) pruefeKollision(bezeichner("q_", q.id), q.id);
 
+  const maxTeil = Number.isInteger(cfg.maxQuestsJeDiagramm) && cfg.maxQuestsJeDiagramm > 0 ? cfg.maxQuestsJeDiagramm : MAX_JE_DIAGRAMM;
   const regionen = [];
   for (const q of geordnet) {
     let r = regionen.find((x) => x.map === q.region);
@@ -109,6 +111,17 @@ export function ladeQuestDaten(rootDir, cfg) {
     }
     r.quests.push(q);
     if (!r.geber.includes(q.geberName)) r.geber.push(q.geberName);
+  }
+  // Große Regionen in Teile zerlegen (aufeinanderfolgende Quests der Region), je Teil ein Diagramm.
+  for (const r of regionen) {
+    const anzahl = Math.ceil(r.quests.length / maxTeil);
+    r.teile = [];
+    for (let i = 0; i < anzahl; i++) {
+      const label = anzahl === 1 ? r.map : `${r.map}, Teil ${i + 1}`;
+      const teil = { label, quests: r.quests.slice(i * maxTeil, (i + 1) * maxTeil) };
+      for (const x of teil.quests) x.gruppe = label;
+      r.teile.push(teil);
+    }
   }
   return { quests: geordnet, regionen, themen };
 }
@@ -146,10 +159,10 @@ function ueberblick(daten) {
   return ["```mermaid", MERMAID_FRONTMATTER, ...zeilen, "```"].join("\n");
 }
 
-function regionDiagramm(region, daten) {
+function regionDiagramm(teil, daten) {
   const { quests: geordnet } = daten;
   const qid = (id) => bezeichner("q_", id);
-  const knoten = region.quests.map((q) => `  ${qid(q.id)}["${mermaidText(q.title)}<br/>${mermaidText(q.geberName)}"]`);
+  const knoten = teil.quests.map((q) => `  ${qid(q.id)}["${mermaidText(q.title)}<br/>${mermaidText(q.geberName)}"]`);
   const stubs = new Map();
   const kanten = [];
   const stub = (praefix, text, andere) => {
@@ -160,23 +173,27 @@ function regionDiagramm(region, daten) {
   for (let i = 1; i < geordnet.length; i++) {
     const a = geordnet[i - 1];
     const b = geordnet[i];
-    if (a.region === region.map && b.region === region.map) kanten.push(`  ${qid(a.id)} --> ${qid(b.id)}`);
-    else if (b.region === region.map) kanten.push(`  ${stub("aus", "aus", a.region)} --> ${qid(b.id)}`);
-    else if (a.region === region.map) kanten.push(`  ${qid(a.id)} --> ${stub("nach", "weiter nach", b.region)}`);
+    if (a.gruppe === teil.label && b.gruppe === teil.label) kanten.push(`  ${qid(a.id)} --> ${qid(b.id)}`);
+    else if (b.gruppe === teil.label) kanten.push(`  ${stub("aus", "aus", a.gruppe)} --> ${qid(b.id)}`);
+    else if (a.gruppe === teil.label) kanten.push(`  ${qid(a.id)} --> ${stub("nach", "weiter nach", b.gruppe)}`);
   }
   const extern = new Map();
-  for (const q of region.quests) {
+  for (const q of teil.quests) {
     for (const r of q.requires) {
       const dep = geordnet.find((x) => x.id === r);
-      if (dep.region === region.map) kanten.push(`  ${qid(dep.id)} -. requires .-> ${qid(q.id)}`);
+      if (dep.gruppe === teil.label) kanten.push(`  ${qid(dep.id)} -. requires .-> ${qid(q.id)}`);
       else {
         const eid = bezeichner("ext_q_", dep.id);
-        if (!extern.has(eid)) extern.set(eid, `  ${eid}(["${mermaidText(`${dep.title} (${dep.region})`)}"])`);
+        if (!extern.has(eid)) extern.set(eid, `  ${eid}(["${mermaidText(`${dep.title} (${dep.gruppe})`)}"])`);
         kanten.push(`  ${eid} -. requires .-> ${qid(q.id)}`);
       }
     }
   }
-  return ["```mermaid", MERMAID_FRONTMATTER, "flowchart TB", ...knoten, ...stubs.values(), ...extern.values(), ...kanten, "```"].join("\n");
+  const text = ["```mermaid", MERMAID_FRONTMATTER, "flowchart TB", ...knoten, ...stubs.values(), ...extern.values(), ...kanten, "```"].join("\n");
+  if (text.length > MAX_DIAGRAMM_ZEICHEN) {
+    throw new Error(`Diagramm "${teil.label}" hat ${text.length} Zeichen (Deckel ${MAX_DIAGRAMM_ZEICHEN}, Mermaid rendert ab 50 000 nicht mehr). Fix: config.quests.maxQuestsJeDiagramm senken`);
+  }
+  return text;
 }
 
 /** Generator `quest-graph`: Überblick über alle Regionen und je Region ein Diagramm. */
@@ -185,7 +202,11 @@ export function questGraphGenerator({ rootDir, config }) {
   if (daten.quests.length === 0) throw new Error("keine Quests gefunden (Config quests veraltet?)");
   const teile = ["## Überblick", "", ueberblick(daten), "", "## Regionen"];
   for (const r of daten.regionen) {
-    teile.push("", `### Region \`${r.map}\``, "", `${quests(r.quests.length)} · Geber: ${r.geber.join(", ")}`, "", regionDiagramm(r, daten));
+    teile.push("", `### Region \`${r.map}\``, "", `${quests(r.quests.length)} · Geber: ${r.geber.join(", ")}`);
+    for (const t of r.teile) {
+      if (r.teile.length > 1) teile.push("", `#### Teil ${r.teile.indexOf(t) + 1} von ${r.teile.length} (${quests(t.quests.length)})`);
+      teile.push("", regionDiagramm(t, daten));
+    }
   }
   return teile.join("\n");
 }
