@@ -87,7 +87,7 @@ function podRecordAnswer(host: NetHost, labels: string[]): string[] | null {
   host._reschedulePending();
   host._recheckReadiness();
   const pod = serviceBackends(host, svc).find(b => b.owner === "StatefulSet" && b.ready && b.pod === podName);
-  return pod?.ip ? ["Name:	" + podName + "." + svc.name + ".default.svc.cluster.local", "Address: " + pod.ip] : null;
+  return pod?.ip ? ["Name:\t" + podName + "." + svc.name + ".default.svc.cluster.local", "Address: " + pod.ip] : null;
 }
 
 /** curl [http(s)://]<service>[:port][/pfad]: fragt einen Service im Cluster ab und
