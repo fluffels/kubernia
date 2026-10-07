@@ -29,7 +29,7 @@ export interface NetHost extends EndpointsHost {
  *  Ein headless Service (`clusterIP: None`, #1301) hat keine Service-IP: CoreDNS liefert
  *  die IPs der bereiten Pods dahinter, und `<pod>.<svc>` löst einen einzelnen StatefulSet-Pod auf.
  *  Die Namespace-Auflösung liegt in `resolveService` (sim/dns.ts): ein Name in einem anderen
- *  Namespace (`<svc>.<ns>`) ist NXDOMAIN, der Tipp nennt `default`. */
+ *  Namespace (`<svc>.<ns>`) ist NXDOMAIN; existiert der Service, nennt der Tipp `default`. */
 export function nslookupCommand(host: NetHost, t: string[]): string {
   const COREDNS = "10.96.0.10";          // ClusterIP des CoreDNS-Service (kube-system)
   const arg = t[1];

@@ -615,7 +615,7 @@ export function kubectlTop(host: KubectlHost, t: string[]) {
       if (rows.length === 0) {
         const exists = findClusterPod(host, name) !== undefined;
         return exists
-          ? host._err("error: Metrics not available for pod default/" + name, "Metriken gibt es nur für laufende Pods – Status prüfen mit 'kubectl get pods'.")
+          ? host._err("error: Metrics not available for pod " + DEFAULT_NAMESPACE + "/" + name, "Metriken gibt es nur für laufende Pods – Status prüfen mit 'kubectl get pods'.")
           : host._err('Error from server (NotFound): pods "' + name + '" not found', "Pod-Namen siehst du mit 'kubectl get pods'.");
       }
     }

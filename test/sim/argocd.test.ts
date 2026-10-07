@@ -395,6 +395,23 @@ test("argocd (#1409): manueller Sync meldet die abgelehnte Spezifikation samt Ti
   assert.match(r.output!, /💡 Setze spec\.externalName/);
 });
 
+test("argocd (#1409): kubectl apply einer Auto-Sync-App mit abgelehntem Soll meldet den Fehler, die App bleibt angelegt", () => {
+  const r = legeSollApp(sim, sollKaputt);
+  assert.equal(r.error, true);
+  assert.match(r.output!, /spec\.externalName: Required value/);
+  assert.ok(sim.argoApps.some(a => a.name === "bank"));
+  assert.equal(sim.deployments.some(d => d.name === "bank"), false, "atomar: kein Deployment");
+});
+
+test("argocd (#1409): ein anderer Fehler als InvalidSpecError im Self-Heal wird nicht verschluckt", () => {
+  legeSollApp(sim, { name: "bank", port: 80 });
+  sim.exec("kubectl delete service bank");
+  sim._makeService = () => { throw new TypeError("Sim-Bug"); };
+  const r = sim.exec("kubectl get pods");
+  assert.equal(r.error, true);
+  assert.match(r.output!, /Hoppla.*Sim-Bug/);
+});
+
 test("Fehlernetz in exec (#1409): ein kaputter Argo-Zustand im Vorlauf wirft nicht, sondern meldet Hoppla", () => {
   const s = new KQSim({ argoApps: [{ name: "kaputt", repo: "r", path: "p/", autoSync: true, selfHeal: true, created: 0 }] });
   const r = s.exec("kubectl get pods");
