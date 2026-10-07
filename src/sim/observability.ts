@@ -25,6 +25,7 @@
 import type { ClusterState, Deployment, PodInstance, PodMetrics, NodeMetrics, ScrapeTarget, Alert } from "./state";
 import { hashStr } from "../core/rng";
 import { isControlPlane } from "./nodes";
+import { serviceBackends, endpointPort } from "./endpoints";
 
 /** Was die Observability vom Simulator braucht (von der `Sim`-Klasse erfüllt).
  *  Bewusst schmal: statt des ganzen `ClusterState` (Leaky Abstraction #516) nur die
@@ -33,7 +34,7 @@ import { isControlPlane } from "./nodes";
  *  `_podReady` und der transiente Alert-Sitzungszustand (`_firingAlerts`/
  *  `_resolvedAlerts` – kein Cluster-Zustand, darum NICHT in ClusterState, sondern
  *  Host-Felder wie kubectls `lastDeletedPod`). */
-export interface ObservabilityHost extends Pick<ClusterState, "deployments" | "nodes" | "services"> {
+export interface ObservabilityHost extends Pick<ClusterState, "deployments" | "nodes" | "services" | "statefulSets" | "pvcs"> {
   _podReady(d: Deployment): boolean;
   _firingAlerts: Set<string>;   // brennt gerade
   _resolvedAlerts: Set<string>; // war mal an, Ursache inzwischen behoben
@@ -90,10 +91,12 @@ export function scrapeTargets(host: ObservabilityHost): ScrapeTarget[] {
   for (const nd of host.nodes) {
     targets.push({ job: "kubelet", instance: nd.name + ":10250", health: nd.status === "Ready" ? "up" : "down" });
   }
+  // Ein Target je Endpoint (Pod-IP:targetPort, wie Prometheus' Endpoints-Discovery, #1318):
+  // bereit → up, nicht bereit → down; Pods ohne IP und ExternalName erzeugen kein Target.
   for (const s of host.services) {
-    const dep = host.deployments.find(d => d.name === s.name);
-    const healthy = !!dep && host._podReady(dep);
-    targets.push({ job: s.name, instance: s.clusterIP + ":" + s.port, health: healthy ? "up" : "down" });
+    for (const b of serviceBackends(host, s)) {
+      if (b.ip) targets.push({ job: s.name, instance: b.ip + ":" + endpointPort(s), health: b.ready ? "up" : "down" });
+    }
   }
   return targets;
 }
