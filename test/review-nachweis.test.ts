@@ -222,7 +222,7 @@ function fakeGit(o: {
     if (cmd === "rev-parse HEAD") return H + "\n";
     // Exakte Bereiche: ein Aufruf mit falschem Bereich (z.B. nur "HEAD" statt "<basis>..HEAD") fällt
     // durch und wirft, statt dieselbe Antwort zu liefern (sonst bewacht der Test den Slice nicht).
-    if (cmd === `log --format=%B ${B}..HEAD`) return o.messages;
+    if (cmd === `log --reverse --format=%B ${B}..HEAD`) return o.messages;
     if (cmd === `diff --name-only ${B}...HEAD`) return o.files ?? "src/x.ts\n";
     // Exakt (#1309): die Basis des Zählens ist der geprüfte head, nicht beliebig; ein anderer Bereich wirft.
     const zaehlen = /^rev-list --count --no-merges ([0-9a-f]{40})\.\.HEAD$/.exec(cmd);
