@@ -446,7 +446,7 @@ test("argocd (#1418): get zeigt bei abgelehntem Soll SyncError samt Meldung stat
   const out = sim.exec("argocd app get bank").output!;
   assert.match(out, /Conditions:\s+SyncError/);
   assert.match(out, /spec\.externalName: Required value/);
-  assert.match(out, /git\.hafen\.de\/apps\.git/);
+  assert.match(out, /^▸ Der Sync scheitert am Git-Manifest.*Bei GitOps ist Git die Quelle der Wahrheit.*git\.hafen\.de\/apps\.git/m);
   assert.doesNotMatch(out, /Self-Heal ist an/);
 });
 
@@ -516,7 +516,7 @@ test("argocd (#1418): Wurzel-Sync meldet fehlgeschlagene Kinder statt 'Synced �
   assert.ok(sim.deployments.some(d => d.name === "kasse"));
 });
 
-test("argocd (#1418): bleibt eine Leaf-App nach dem Sync OutOfSync, gibt es kein 'Synced ✅'", () => {
+test("argocd (#1418): scheitert der Sync einer Leaf-App an der Fabrik, meldet er einen Fehler statt 'Synced ✅'", () => {
   legeSollApp(sim, { name: "bank", port: 80 }, "bank", { autoSync: false, selfHeal: false });
   sim._makeService = () => { throw new InvalidSpecError("kaputt"); };
   const r = sim.exec("argocd app sync bank");
@@ -576,11 +576,22 @@ test("argocd (#1418): abweichende, frei gesetzte clusterIP gilt als Synced und w
   assert.equal(sim.services.find(x => x.name === "bank")!.clusterIP, "10.96.1.1");
 });
 
-test("argocd (#1418): explizites targetPort === port gilt bei Spec ohne targetPort als Synced", () => {
+test("argocd (#1418): explizites targetPort === port gilt bei Spec ohne targetPort als Synced und wird nicht ersetzt", () => {
   legeSollApp(sim, { name: "bank", port: 80 });
   sim.exec("kubectl get pods");
   sim.services.find(x => x.name === "bank")!.targetPort = 80;
+  sim.exec("kubectl get pods");
+  assert.equal(sim.services.find(x => x.name === "bank")!.targetPort, 80, "Self-Heal ersetzt nicht");
   assert.match(sim.exec("argocd app get bank").output!, /Sync Status:\s+Synced/);
+});
+
+test("argocd (#1418): ein headless-Soll wird per Self-Heal wiederhergestellt, wenn die clusterIP verfälscht wird", () => {
+  legeSollApp(sim, { name: "bank", port: 80, clusterIP: "None" });
+  sim.exec("kubectl get pods");
+  assert.equal(sim.services.find(x => x.name === "bank")!.clusterIP, "None");
+  sim.services.find(x => x.name === "bank")!.clusterIP = "10.96.9.9";
+  sim.exec("kubectl get pods");
+  assert.equal(sim.services.find(x => x.name === "bank")!.clusterIP, "None");
 });
 
 /* --- Eingangsgrenze buildArgoApp (E2) --- */
@@ -594,6 +605,10 @@ test("argocd (#1418): eine strukturell kaputte Argo-App wird vom Konstruktor abg
     { ...ok, desired: { deployment: dep, service: {} } },
     { ...ok, desired: undefined, childApps: [{ name: "x" }] },
     { ...ok, name: 5 },
+    { ...ok, desired: { deployment: { ...dep, replicas: "2" } } },
+    { ...ok, desired: { deployment: { name: "a", replicas: 1 } } },
+    { ...ok, desired: undefined, childApps: [{ name: "x", deployment: dep, service: {} }] },
+    { ...ok, desired: undefined, childApps: [{ deployment: dep }] },
   ];
   for (const k of kaputt) assert.throws(() => new KQSim({ argoApps: [k as ArgoApp] }), /Kaputte Argo-App/);
   assert.doesNotThrow(() => new KQSim({ argoApps: [ok] }));
