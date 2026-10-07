@@ -4,7 +4,7 @@
  *
  * Zwei Regeln hängen an Prosa, die sonst leise zurückdriftet:
  *   1. Die Checkliste „Langfuse-Status überprüfen" steht genau einmal (docs/model-routing.md), das
- *      wiederkehrende Ticket (Wochen-Workflow langfuse-takt.yml, #1351) und das Sammelticket
+ *      wiederkehrende Ticket (Board-Takt board-takt.yml, #1351/#1390) und das Sammelticket
  *      „Langfuse-Befunde (gesammelt)" in docs/ticket-reihenfolge.md; das Harness-Sammelticket löst keine
  *      Langfuse-Auswertung aus (keine Doppelung). Keine Board-Position als Takt mehr.
  *   2. Harness-Änderungen an Agenten, Subagenten, MCP, Hooks oder Plugins belegen, dass Langfuse sie
@@ -93,7 +93,7 @@ const hatWiederkehrendesTicket = (ticketReihenfolge: string): boolean => {
   const a = abschnitt(ticketReihenfolge, /^## Wiederkehrendes Ticket „Langfuse-Status überprüfen"/);
   return (
     a !== "" &&
-    /langfuse-takt\.yml/.test(a) &&
+    /board-takt\.yml/.test(a) &&
     /wöchentlich/.test(a) &&
     /Langfuse-Befunde \(gesammelt\)/.test(a) &&
     /model-routing\.md#langfuse-status-überprüfen-1293/.test(a) &&
@@ -133,7 +133,7 @@ const taktWorkflowRobust = (yml: string): boolean => {
     /cancel-in-progress:\s*false/.test(yml) &&
     /issues:\s*write/.test(yml) &&
     /secrets\.PROJECT_TOKEN/.test(yml) &&
-    /^\s+run:\s*node scripts\/langfuse-takt\.mjs\s*$/m.test(yml) &&
+    /^\s+run:\s*node scripts\/board-takt\.mjs\s*$/m.test(yml) &&
     !/--dry-run/.test(yml)
   );
 };
@@ -209,7 +209,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
 
   test("ticket-reihenfolge.md: wiederkehrendes Ticket per Wochen-Workflow, ohne Position-20-Regel", () => {
     assert.ok(hatWiederkehrendesTicket(tr));
-    assert.ok(!hatWiederkehrendesTicket(tr.replace(/langfuse-takt\.yml/g, "x")), "ohne Workflow-Verweis");
+    assert.ok(!hatWiederkehrendesTicket(tr.replace(/board-takt\.yml/g, "x")), "ohne Workflow-Verweis");
     assert.ok(!hatWiederkehrendesTicket(tr.replace(/wöchentlich/g, "regelmäßig")), "ohne den Wochentakt");
     assert.ok(!hatWiederkehrendesTicket(tr.replace(/Langfuse-Befunde \(gesammelt\)/g, "Folgeticket")), "ohne Sammelticket");
     assert.ok(!hatWiederkehrendesTicket(tr.replace("**Body-Vorlage:**", "Nachfolger auf Position 20. **Body-Vorlage:**")), "Position 20 kehrt zurück");
@@ -245,21 +245,21 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
   });
 
   test("Takt-Workflow: Cron + Dispatch, feste Concurrency-Group ohne Abbruch, schreibende Rechte, Board-Token, echter Lauf", () => {
-    const yml = read(".github/workflows/langfuse-takt.yml").replace(/\r\n/g, "\n"); // CRLF im Windows-Checkout
+    const yml = read(".github/workflows/board-takt.yml").replace(/\r\n/g, "\n"); // CRLF im Windows-Checkout
     assert.ok(taktWorkflowRobust(yml));
     const sabotagen: [string, string, string][] = [
       ["schedule:", "pull_request:", "Cron"],
       ['- cron: "17 5 * * 1"', "", "Cron-Zeile weg, schedule: bleibt"],
-      ["concurrency:"+"\n  group: langfuse-takt\n  cancel-in-progress: false\n", "", "Concurrency-Block weg"],
-      ["  group: langfuse-takt\n", "", "group: weg"],
-      ["run: node scripts/langfuse-takt.mjs", "run: echo node scripts/langfuse-takt.mjs", "falsche run-Zeile (echo)"],
-      ["run: node scripts/langfuse-takt.mjs", "run: node scripts/anderes.mjs", "falsches Skript"],
+      ["concurrency:"+"\n  group: board-takt\n  cancel-in-progress: false\n", "", "Concurrency-Block weg"],
+      ["  group: board-takt\n", "", "group: weg"],
+      ["run: node scripts/board-takt.mjs", "run: echo node scripts/langfuse-takt.mjs", "falsche run-Zeile (echo)"],
+      ["run: node scripts/board-takt.mjs", "run: node scripts/anderes.mjs", "falsches Skript"],
       ["workflow_dispatch", "x", "Dispatch"],
-      ["group: langfuse-takt", "group: langfuse-${{ github.run_id }}", "variable Group"],
+      ["group: board-takt", "group: board-${{ github.run_id }}", "variable Group"],
       ["cancel-in-progress: false", "cancel-in-progress: true", "Abbruch"],
       ["issues: write", "issues: read", "Rechte"],
       ["secrets.PROJECT_TOKEN", "secrets.X", "Board-Token"],
-      ["run: node scripts/langfuse-takt.mjs", "run: node scripts/langfuse-takt.mjs --dry-run", "Trockenlauf"],
+      ["run: node scripts/board-takt.mjs", "run: node scripts/board-takt.mjs --dry-run", "Trockenlauf"],
     ];
     for (const [alt, neu, was] of sabotagen) {
       assert.ok(yml.includes(alt), `Vorlage enthält ${alt}`);
@@ -268,11 +268,13 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!taktWorkflowRobust(""));
   });
 
-  test("Takt-Skript nutzt keinen Such-Index (eventual consistent), nur REST-Listen", () => {
-    const skript = read("scripts/langfuse-takt.mjs");
-    assert.ok(ohneSuchIndex(skript));
-    assert.ok(!ohneSuchIndex(`${skript}\ngh api search/issues`));
-    assert.ok(!ohneSuchIndex(`${skript}\n--search`));
+  test("Takt- und Anlege-Skripte nutzen keinen Such-Index (eventual consistent), nur REST-Listen", () => {
+    for (const datei of ["scripts/langfuse-takt.mjs", "scripts/board-takt.mjs", "scripts/sammelticket-anlegen.mjs"]) {
+      const skript = read(datei);
+      assert.ok(ohneSuchIndex(skript), datei);
+      assert.ok(!ohneSuchIndex(`${skript}\ngh api search/issues`));
+      assert.ok(!ohneSuchIndex(`${skript}\n--search`));
+    }
   });
 
   test("Sammelticket löst keine Langfuse-Auswertung aus", () => {
@@ -326,24 +328,42 @@ const historieRegel = (text: string): boolean => /Lauf-Historie/.test(text) && /
 
 describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
   const mr = read("docs/model-routing.md");
+  const hp = read("docs/langfuse-hook-patch.md"); // Pflege des Hook-Patches (#1390 Z2)
+
+  test("die Patch-Pflege steht auf der eigenen Brain-Seite, nicht mehr in model-routing.md, und der Index kennt sie", () => {
+    assert.ok(/Langfuse-Hook-Patch pflegen/.test(hp));
+    assert.ok(!/Patch-Teil/.test(mr), "model-routing.md trägt keine Patch-Teile mehr");
+    assert.ok(!/LOCAL PATCH/.test(mr), "die Prüfregel steht auf der Brain-Seite");
+    assert.match(mr, /langfuse-hook-patch\.md/, "model-routing.md verweist auf die Seite");
+    assert.match(read("docs/referenz/anlaufstellen.md"), /langfuse-hook-patch\.md/, "die Seite hängt im Index");
+    // Red-Green: ein zurückgewanderter Patch-Teil fällt auf
+    assert.ok(/Patch-Teil/.test(`${mr}\n- **Patch-Teil x:**`));
+  });
+
+  test("keine Schnappschuss-Belege auf der Brain-Seite: keine Session-IDs, keine Probe-Zählungen (sie stehen in PR und Issue)", () => {
+    const sessionId = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/;
+    assert.doesNotMatch(hp, sessionId);
+    assert.doesNotMatch(hp, /\bSession `[0-9a-f]{8}`/);
+    assert.ok(sessionId.test("Session 14dfbfb5-1f2f-439a-8f23-f2135cfa563a"));
+  });
 
   test("Prüfregel steht auf 26 und fortgesetzte Subagenten sind keine offene Lücke mehr", () => {
-    assert.ok(patchDokuStimmig(mr, 26));
+    assert.ok(patchDokuStimmig(hp, 26));
     // darf NICHT passieren: alte Zahl oder die alte Lücke
-    assert.ok(!patchDokuStimmig(mr.replace("→ `26`", "→ `15`"), 26));
-    assert.ok(!patchDokuStimmig(mr + "\nFür solche Läufe den Transkript-Modus nehmen.", 26));
-    assert.ok(!patchDokuStimmig(mr.replace("Patch-Teil fortgesetzte Subagenten", "Patch-Teil x"), 26));
+    assert.ok(!patchDokuStimmig(hp.replace("→ `26`", "→ `15`"), 26));
+    assert.ok(!patchDokuStimmig(hp + "\nFür solche Läufe den Transkript-Modus nehmen.", 26));
+    assert.ok(!patchDokuStimmig(hp.replace("Patch-Teil fortgesetzte Subagenten", "Patch-Teil x"), 26));
   });
 
   test("Abschluss fortgesetzter Subagenten ist erklärt: task-id-Regel, Selbstheilung, SessionEnd, Diagnose (#1378)", () => {
-    assert.ok(resumeAbschlussDokuStimmig(mr));
+    assert.ok(resumeAbschlussDokuStimmig(hp));
     // darf NICHT passieren: ein Baustein fehlt
-    assert.ok(!resumeAbschlussDokuStimmig(mr.replace("Patch-Teil Abschluss fortgesetzter Subagenten", "Patch-Teil x")));
-    assert.ok(!resumeAbschlussDokuStimmig(mr.replaceAll("Selbstheilung", "Heilung")));
-    assert.ok(!resumeAbschlussDokuStimmig(mr.replaceAll("pending_agent_turns", "x")));
-    assert.ok(!resumeAbschlussDokuStimmig(mr.replaceAll("<task-id>", "x")));
-    assert.ok(!resumeAbschlussDokuStimmig(mr.replace("**Diagnose:** `~/.claude/state/langfuse_state.json`", "**Diagnose:** `x`")));
-    assert.ok(!resumeAbschlussDokuStimmig(mr.replaceAll("nicht garantiert", "garantiert")));
+    assert.ok(!resumeAbschlussDokuStimmig(hp.replace("Patch-Teil Abschluss fortgesetzter Subagenten", "Patch-Teil x")));
+    assert.ok(!resumeAbschlussDokuStimmig(hp.replaceAll("Selbstheilung", "Heilung")));
+    assert.ok(!resumeAbschlussDokuStimmig(hp.replaceAll("pending_agent_turns", "x")));
+    assert.ok(!resumeAbschlussDokuStimmig(hp.replaceAll("<task-id>", "x")));
+    assert.ok(!resumeAbschlussDokuStimmig(hp.replace("**Diagnose:** `~/.claude/state/langfuse_state.json`", "**Diagnose:** `x`")));
+    assert.ok(!resumeAbschlussDokuStimmig(hp.replaceAll("nicht garantiert", "garantiert")));
   });
 
   test("Lens, Review-Skill und Workflow: Messbehauptungen nur gegen Rohwerte", () => {

@@ -293,6 +293,22 @@ describe("Diff-Coverage: Floors + Override (Ratchet-Disziplin)", () => {
     assert.equal(r.allowed, false);
     assert.equal(r.failed, true);
   });
+
+  test("versetzte Override-Zeilen (#1390 Z7): mit Strich oder eingerückt zählen nicht, werden aber gemeldet; eine gültige daneben wirkt", () => {
+    const basis: RunGit = (args) => (args[0] === "diff" ? diffFor("src/sim/pods.ts", ["@@ -0,0 +1,2 @@", "+x", "+y"]) : "basesha");
+    const readFile = () => lcovFor("src/sim/pods.ts", { 1: 1, 2: 0 });
+    const env = { KQ_DIFF_BASE: "basesha" };
+    const versetzt = ["- KQ-Diffcov-Override: #1390 mit Strich", "  KQ-Diffcov-Override: #1390 eingerückt"];
+    const r = checkDiffCoverage({ runGit: mitTrailer(basis, versetzt.join("\n")), readFile, env });
+    assert.equal(r.allowed, false, "die versetzten Zeilen zählen nicht als Override");
+    assert.equal(r.failed, true);
+    assert.deepEqual(r.versetzteOverrides, ["- KQ-Diffcov-Override: #1390 mit Strich", "KQ-Diffcov-Override: #1390 eingerückt"]);
+    const gueltig = "KQ-Diffcov-Override: #1390 bewusst";
+    const beides = checkDiffCoverage({ runGit: mitTrailer(basis, `${versetzt.join("\n")}\n${gueltig}`), readFile, env });
+    assert.equal(beides.allowed, true);
+    assert.equal(beides.failed, false);
+    assert.deepEqual(checkDiffCoverage({ runGit: mitTrailer(basis, gueltig), readFile, env }).versetzteOverrides, []);
+  });
 });
 
 describe("Diff-Coverage: Ende-zu-Ende mit injizierter IO", () => {

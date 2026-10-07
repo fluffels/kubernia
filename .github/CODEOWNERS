@@ -70,6 +70,8 @@ AGENTS.md                  @fluffels
 /scripts/board-lib.mjs @fluffels
 /scripts/board-place.mjs @fluffels
 /scripts/langfuse-takt.mjs @fluffels
+/scripts/board-takt.mjs @fluffels
+/scripts/sammelticket-anlegen.mjs @fluffels
 /scripts/haupt-sync.mjs @fluffels
 /scripts/lens-edit-guard.mjs @fluffels
 /.agents/                  @fluffels

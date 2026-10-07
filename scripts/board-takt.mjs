@@ -1,0 +1,217 @@
+#!/usr/bin/env node
+// Kein weiterer Shebang-Zwang: wird vom Workflow gestartet UND von test/board-takt.test.ts importiert.
+/**
+ * Generischer Board-Takt (#1390, ursprünglich #1351/#1349): der Workflow `.github/workflows/board-takt.yml` ruft dieses Skript. Es pflegt
+ *  1. das Status-Ticket „Langfuse-Status überprüfen“ (Entscheidung und Anlegen: scripts/langfuse-takt.mjs, ADR 0016) und
+ *  2. das ungeclaimte Harness-Sammelticket „Harness-Härtung (gesammelt)“: nach `HARNESS_TAKT_MERGES` Ticket-Merges hinter den Kopf
+ *     holen und, unabhängig von der Aktivität, auf die Position laut AGENTS.md zurückschieben, wenn es dahinter steht (Selbstkorrektur,
+ *     nur nach vorn, nie in den Kopf).
+ * Die Entscheidungen sind pur und getestet (test/board-takt.test.ts, test/langfuse-takt.test.ts), nur die gh-Aufrufe in `main` sind es nicht.
+ *
+ * Idempotent und ohne gespeicherten Zähler: jedes Mal wird aus den offenen Issues, der Commit-Liste von main und der Board-Liste
+ * abgeleitet, was zu tun ist. Zwei Läufe hintereinander (der Workflow serialisiert sie über seine Concurrency-Group) legen darum nie
+ * zwei Tickets an und lassen die Position nicht springen. Die Board-Liste wird je Lauf EINMAL geladen und nach der Status-Aktion im
+ * Speicher nachgezogen.
+ *
+ * Nur Node-Builtins, analog zu board-lib.mjs. `--dry-run` zeigt die Entscheidungen, ändert nichts.
+ */
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+import {
+  SAMMELTICKET_TITEL,
+  STATUS_TITEL,
+  TAG_MS,
+  alsDatum,
+  kopfEnde,
+  loadItems,
+  loadOpenIssuePages,
+  sammelticketItem,
+  sammelticketKorrektur,
+  sammelticketPosition,
+  setPosition,
+  verschiebe,
+} from "./board-lib.mjs";
+import { entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
+
+/** Harness-Sammelticket: so viele Ticket-Merges seit dem Abschluss des letzten Sammeltickets holen das ungeclaimte nach oben (hinter den Kopf). */
+export const HARNESS_TAKT_MERGES = 5;
+
+/**
+ * Antwort von `gh api --paginate --slurp repos/<repo>/issues?state=open` (Liste von Seiten) → offene Issues
+ * `{ number, titel, assignees, createdAt }`. Pull Requests fliegen raus. Wirft bei unerwarteter Form, statt still
+ * ein Ticket zu übersehen (das führte zu einem Doppel-Ticket).
+ */
+export function normalizeOffene(pages) {
+  if (!Array.isArray(pages) || pages.some((p) => !Array.isArray(p))) {
+    throw new Error("Unerwartete Antwortform der offenen Issues (keine Liste von Seiten).");
+  }
+  return pages
+    .flat()
+    .filter((i) => !i?.pull_request)
+    .map((i) => {
+      if (!Number.isInteger(i?.number) || typeof i.title !== "string" || typeof i.created_at !== "string") {
+        throw new Error(`Unerwartete Form eines Issues: ${JSON.stringify(i)?.slice(0, 120)}`);
+      }
+      return {
+        number: i.number,
+        titel: i.title,
+        assignees: Array.isArray(i.assignees) ? i.assignees.map((a) => a?.login).filter((l) => typeof l === "string") : [],
+        createdAt: i.created_at,
+      };
+    });
+}
+
+/**
+ * Beginn des Aktivitätsfensters: 60 s nach dem Abschluss des Vorgängers (dessen eigener Squash-Commit soll nicht
+ * zählen), ohne Vorgänger 7 Tage vor `jetzt`.
+ */
+export function mergeFensterAb(letzterAbschluss, jetzt) {
+  const j = alsDatum(jetzt, "jetzt");
+  if (letzterAbschluss === null || letzterAbschluss === undefined) return new Date(j.getTime() - 7 * TAG_MS);
+  return new Date(alsDatum(letzterAbschluss, "letzterAbschluss").getTime() + 60_000);
+}
+
+/**
+ * Zahl der Ticket-Merges in einer Commit-Liste von main (`repos/<repo>/commits`): Commits, deren Autor kein Bot ist
+ * (Dependabot, github-actions: Login endet auf `[bot]`). Mit `seit` zählen nur Commits ab diesem Zeitpunkt. Pur.
+ */
+export function zaehleTicketMerges(commits, seit = null) {
+  if (!Array.isArray(commits)) throw new Error("commits muss eine Liste sein.");
+  const ab = seit === null ? null : alsDatum(seit, "seit").getTime();
+  return commits.filter((c) => {
+    if (/\[bot\]$/i.test(String(c?.author?.login ?? ""))) return false;
+    if (ab === null) return true;
+    const t = new Date(c?.commit?.committer?.date ?? c?.commit?.author?.date ?? "").getTime();
+    return Number.isFinite(t) && t >= ab;
+  }).length;
+}
+
+/**
+ * Harness-Sammelticket: `items` = Board in Reihenfolge (board-lib), `ticketMergesSeitAbschluss` = Ticket-Merges seit dem Abschluss des
+ * letzten Harness-Sammeltickets, `position` = Position laut AGENTS.md (`sammelticketPosition`). Reihenfolge der Regeln:
+ *  1. Ab `HARNESS_TAKT_MERGES` kommt das erste ungeclaimte Harness-Sammelticket direkt hinter den zusammenhängenden Kopf ganz oben
+ *     (Status-, Notfall-, Dependabot-, Forum-Ticket) → `nach-oben`. Steht es dort schon, ist der Lauf idempotent.
+ *  2. Sonst, und auch bei wenig Aktivität: steht es hinter der Position laut AGENTS.md, geht es dorthin zurück (`sammelticketKorrektur`:
+ *     nur nach vorn, nie in den Kopf) → `auf-position`.
+ *  3. Sonst nichts.
+ * Grenze: ein Kopf-Item, das nicht zusammenhängend oben steht, zählt nicht zum Kopf. Liefert `{ aktion: "nach-oben" | "auf-position" | "nichts", nr?, afterId?, grund }`.
+ * Ungültige Eingaben (auch ein `position` unter 1) werfen. Pur.
+ */
+export function entscheideHarnessTakt({ items, ticketMergesSeitAbschluss, position }) {
+  if (!Array.isArray(items)) throw new Error("items muss eine Liste sein.");
+  if (!Number.isInteger(ticketMergesSeitAbschluss) || ticketMergesSeitAbschluss < 0) {
+    throw new Error(`ticketMergesSeitAbschluss muss eine ganze Zahl ≥ 0 sein, war ${String(ticketMergesSeitAbschluss)}`);
+  }
+  if (!Number.isInteger(position) || position < 1) throw new RangeError(`position muss eine ganze Zahl ≥ 1 sein, war ${String(position)}`);
+  const ticket = sammelticketItem(items);
+  if (!ticket) return { aktion: "nichts", grund: `kein ungeclaimtes „${SAMMELTICKET_TITEL}“` };
+  const ende = kopfEnde(items);
+  const idx = items.findIndex((i) => i.id === ticket.id);
+  const direktHinterKopf = items.slice(ende, idx).every((i) => i.state !== "open");
+  if (ticketMergesSeitAbschluss >= HARNESS_TAKT_MERGES && !direktHinterKopf) {
+    return {
+      aktion: "nach-oben",
+      nr: ticket.number,
+      afterId: ende > 0 ? items[ende - 1].id : null,
+      grund: `${ticketMergesSeitAbschluss} Ticket-Merges seit dem letzten Sammelticket, #${ticket.number} kommt hinter den Kopf`,
+    };
+  }
+  const k = sammelticketKorrektur(items, position);
+  if (k) {
+    return {
+      aktion: "auf-position",
+      nr: k.nr,
+      afterId: k.afterId,
+      grund: `#${k.nr} stand auf Rang ${k.vonRang}, zurück auf Rang ${k.nachRang} (Position ${position} laut AGENTS.md)`,
+    };
+  }
+  if (ticketMergesSeitAbschluss < HARNESS_TAKT_MERGES) {
+    return { aktion: "nichts", grund: `nur ${ticketMergesSeitAbschluss} Ticket-Merges seit dem letzten Sammelticket (Untergrenze ${HARNESS_TAKT_MERGES}), Position stimmt` };
+  }
+  return { aktion: "nichts", grund: `#${ticket.number} steht schon direkt hinter dem Kopf` };
+}
+
+/**
+ * Zieht die im Speicher gehaltene Board-Liste nach einer Status-Aktion nach (statt sie neu zu laden): `ergebnis` = `{ nr, itemId }` aus
+ * `fuehreStatusAus` bzw. null/ohne `itemId` (nichts bewegt). Das Status-Item steht danach an der Spitze, ein noch nicht gelistetes
+ * (frisch angelegt, die REST-Liste liefert es verzögert) wird vorn ergänzt. Pur.
+ */
+export function ziehListeNach(items, ergebnis) {
+  if (!ergebnis?.itemId) return items;
+  const vorhanden = items.find((i) => i.id === ergebnis.itemId || i.number === ergebnis.nr);
+  if (vorhanden) return verschiebe(items, vorhanden.id, null);
+  return [{ id: ergebnis.itemId, number: ergebnis.nr, status: "Todo", title: STATUS_TITEL, assignees: [], state: "open" }, ...items];
+}
+
+// ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
+const gh = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+const ghJson = (args) => JSON.parse(gh(args));
+
+/** Harness-Entscheidung ausführen; true bei Erfolg. */
+function fuehreHarnessAus(h, items, token) {
+  try {
+    setPosition(items.find((i) => i.number === h.nr).id, h.afterId, { token });
+    console.log("Sammelticket-Position gesetzt.");
+    return true;
+  } catch (err) {
+    console.log(`::error::Sammelticket-Position nicht gesetzt: ${String(err.message).split("\n")[0]}. Die Wiederholung ist idempotent.`);
+    return false;
+  }
+}
+
+function main() {
+  const dry = process.argv.includes("--dry-run");
+  const repo = process.env.GITHUB_REPOSITORY || "fluffels/kubernia";
+  const ausloeser = process.env.GITHUB_EVENT_NAME || "schedule";
+  const token = process.env.PROJECT_TOKEN;
+  const jetzt = new Date();
+  const position = sammelticketPosition(readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8"));
+  const offene = normalizeOffene(loadOpenIssuePages(repo));
+  const seit = new Date(jetzt.getTime() - 90 * TAG_MS).toISOString();
+  const geschlossen = ghJson(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=closed&labels=area:harness&since=${seit}&per_page=100`])
+    .flat()
+    .filter((i) => !i.pull_request && typeof i.closed_at === "string")
+    .sort((a, b) => new Date(b.closed_at) - new Date(a.closed_at));
+  const letzter = (titel) => {
+    const g = geschlossen.find((i) => i.title === titel);
+    return g ? { number: g.number, closedAt: g.closed_at } : null;
+  };
+  const vorgaenger = letzter(STATUS_TITEL);
+  const abStatus = mergeFensterAb(vorgaenger?.closedAt ?? null, jetzt).toISOString();
+  const abHarness = mergeFensterAb(letzter(SAMMELTICKET_TITEL)?.closedAt ?? null, jetzt).toISOString();
+  const fruehestens = abStatus < abHarness ? abStatus : abHarness;
+  const commits = ghJson(["api", "--paginate", "--slurp", `repos/${repo}/commits?sha=main&since=${fruehestens}&per_page=100`]).flat();
+  const imFenster = commits.filter((c) => new Date(c?.commit?.committer?.date ?? 0).getTime() >= new Date(abStatus).getTime());
+  // Die Board-Liste einmal je Lauf (braucht den Projekt-Scope des Tokens).
+  let items = token ? loadItems({ token }) : null;
+
+  const e = entscheideTakt({ offene, mergesSeit: imFenster.length, ticketMerges: zaehleTicketMerges(commits, abStatus), ausloeser });
+  for (const w of e.warnungen) console.log(`::warning::${w}`);
+  console.log(`Status-Ticket (${ausloeser}): ${e.aktion}${e.nr ? ` #${e.nr}` : ""} (${e.grund}); Fenster ab ${abStatus}`);
+  let fehler = false;
+  if (!dry && e.aktion !== "nichts") {
+    const r = fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items: items ?? [] });
+    fehler = !r.ok;
+    if (items) items = ziehListeNach(items, r);
+  }
+
+  // Harness-Sammelticket: Aktivität (eigenes Fenster) und Positionskorrektur, auf der nachgezogenen Liste.
+  if (!items) {
+    console.log("::warning::PROJECT_TOKEN fehlt: Harness-Sammelticket-Takt übersprungen (die Board-Liste braucht den Projekt-Scope).");
+  } else {
+    const h = entscheideHarnessTakt({ items, ticketMergesSeitAbschluss: zaehleTicketMerges(commits, abHarness), position });
+    console.log(`Harness-Sammelticket: ${h.aktion}${h.nr ? ` #${h.nr}` : ""} (${h.grund}); Fenster ab ${abHarness}`);
+    if (!dry && h.aktion !== "nichts" && !fuehreHarnessAus(h, items, token)) fehler = true;
+  }
+  if (fehler) process.exitCode = 1;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    main();
+  } catch (err) {
+    console.log(`::error::${String(err.message).split("\n")[0]}`);
+    process.exitCode = 1;
+  }
+}
