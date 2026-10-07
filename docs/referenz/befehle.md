@@ -21,7 +21,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Zweck | Befehl |
 |---|---|
 | One-Command-Setup (Node-Check + install + Git-Hooks + alle Checks, #387/#528) | `npm run setup` |
-| **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (typecheck → lint → check:arch → check:size → check:contextsize → check:anysuppress → check:docmap → check:docdrift → check:internalrefs → check:lockfile → check:diffsize → test; ohne `check:bundle`, das braucht die Builds) |
+| **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (die Kette steht in `package.json` › `scripts.verify`, nicht hier kopiert; ohne `check:bundle`, das braucht die Builds) |
 | Bundle-Budget vorab prüfen (#1331): nötig, wenn der Diff ausgelieferten Code, Assets oder Dependencies hinzufügt (`src/**` ohne reine Tests, `assets/**`, `package.json`); `verify` deckt es nicht ab, erst `verify:full`/CI | `npm run verify:bundle` (= `build` + `build:offline` + `check:bundle`) |
 | Voller Vor-Push-Check inkl. beider Builds + Boot-Smoke (#527) | `npm run verify:full` (= `verify` + `test:coverage` + `check:diffcoverage` + Builds + `check:bundle` + `test:smoke`) |
 | Required-Checks auf dem PR = maßgeblicher Gate (server-seitig, seit #592) | `gh pr merge <nr> --squash --delete-branch --auto` + `gh pr checks <nr> --watch` (Regel-Heimat: [AGENTS.md](../../AGENTS.md#das-wichtigste-zuerst-harte-regeln)) |

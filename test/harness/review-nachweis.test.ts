@@ -230,3 +230,22 @@ KQ-Review: head=${SHA} runden=1 lenses=doku verdikt=ok`;
     assert.deepEqual(parseNachweis(text).review?.lenses, ["doku"]);
   });
 });
+
+describe("(f) BEKANNTE_LENSES == die Brillen-Keys des Workflows (#1349)", () => {
+  const keysDesWorkflows = (quelle: string) => [...quelle.matchAll(/^\s+key: '([a-z-]+)',/gm)].map((m) => m[1]).sort();
+  const lensBlock = workflowBlock("// ── Lens-Texte (#1309) — Anfang", "// ── Lens-Texte (#1309) — Ende").block;
+
+  test("die Menge im Skript gleicht den key:-Werten von LENS_QUELLE", () => {
+    const { BEKANNTE_LENSES } = raw as { BEKANNTE_LENSES: string[] };
+    assert.deepEqual([...BEKANNTE_LENSES].sort(), keysDesWorkflows(lensBlock));
+    assert.ok(keysDesWorkflows(lensBlock).length >= 4, "Key-Extraktion greift (nicht still leer)");
+  });
+
+  test("darf NICHT passieren: eine umbenannte oder zusätzliche Brille im Workflow macht den Abgleich rot", () => {
+    const { BEKANNTE_LENSES } = raw as { BEKANNTE_LENSES: string[] };
+    const umbenannt = lensBlock.replace("key: 'doku',", "key: 'dokumentation',");
+    assert.notDeepEqual([...BEKANNTE_LENSES].sort(), keysDesWorkflows(umbenannt));
+    const zusaetzlich = `${lensBlock}\n  key: 'security',`;
+    assert.notDeepEqual([...BEKANNTE_LENSES].sort(), keysDesWorkflows(zusaetzlich));
+  });
+});

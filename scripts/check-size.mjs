@@ -39,6 +39,16 @@ export const ALLOWLIST = [
   { file: 'src/sim.ts', reason: '#942 (Split offen): God-File-Kern auslagern.' },
 ]
 
+/**
+ * Deckel für Workflow-Skripte unter `.claude/workflows/*.js` (#1349): über `LOC_BUDGET` nur mit Eintrag, und der Eintrag ist
+ * ein Ratchet: wächst die Datei über `max`, ist es rot; schrumpft sie unter `max`, ist es rot mit „Deckel senken“ (der Deckel
+ * folgt der Datei nach unten, nie nach oben ohne reviewten Commit). Aufteilen geht hier nicht: die Workflow-Laufzeit wrappt das
+ * Skript, es hat keine Imports. Neue Workflow-Dateien über dem Budget brauchen einen eigenen Eintrag (mit Begründung).
+ */
+export const DECKEL = [
+  { file: '.claude/workflows/kubernia-ticket.js', max: 1438, reason: '#1349: Workflow-Laufzeit wrappt das Skript, kein Import möglich; Abbau nur über echte Kürzung.' },
+]
+
 /** Zählt physische Zeilen (wie `wc -l`; ein abschließender Zeilenumbruch zählt nicht doppelt). */
 export function countLines(text) {
   const lines = text.split(/\r?\n/)
@@ -61,6 +71,43 @@ export function collectSizes(rootDir = ROOT) {
   }
   walk(join(rootDir, 'src'))
   return out.sort((a, b) => b.loc - a.loc)
+}
+
+/** Zeilenzahl je `.claude/workflows/*.js` (repo-relativer POSIX-Pfad); ohne Ordner leer. */
+export function collectWorkflowSizes(rootDir = ROOT) {
+  let eintraege
+  try {
+    eintraege = readdirSync(join(rootDir, '.claude', 'workflows'), { withFileTypes: true })
+  } catch {
+    return []
+  }
+  return eintraege
+    .filter((e) => e.isFile() && e.name.endsWith('.js'))
+    .map((e) => ({ file: `.claude/workflows/${e.name}`, loc: countLines(readFileSync(join(rootDir, '.claude', 'workflows', e.name), 'utf8')) }))
+    .sort((a, b) => b.loc - a.loc)
+}
+
+/**
+ * Prüft Workflow-Skripte gegen `deckel`: Meldungen (leer = ok). Über `budget` ohne Eintrag, über `max`, unter `max`
+ * (Deckel nachziehen) und Einträge ohne Datei bzw. mit Datei unter Budget (stale) sind Fehler. Pur.
+ */
+export function pruefeDeckel(workflowSizes, deckel = DECKEL, budget = LOC_BUDGET) {
+  const meldungen = []
+  const eintrag = new Map(deckel.map((d) => [d.file, d]))
+  const bekannt = new Map(workflowSizes.map((w) => [w.file, w.loc]))
+  for (const { file, loc } of workflowSizes) {
+    const d = eintrag.get(file)
+    if (loc <= budget) continue
+    if (!d) meldungen.push(`${file}: ${loc} Zeilen > Budget ${budget} ohne Deckel (Eintrag DECKEL in scripts/check-size.mjs mit Begründung, oder kürzen).`)
+    else if (loc > d.max) meldungen.push(`${file}: ${loc} Zeilen > Deckel ${d.max}: kürzen statt wachsen (Anheben nur bewusst per reviewtem Commit mit Begründung).`)
+    else if (loc < d.max) meldungen.push(`${file}: ${loc} Zeilen < Deckel ${d.max}: Deckel auf ${loc} senken (Ratchet, in scripts/check-size.mjs).`)
+  }
+  for (const d of deckel) {
+    const loc = bekannt.get(d.file)
+    if (loc === undefined) meldungen.push(`DECKEL-Eintrag stale: ${d.file} existiert nicht mehr – Eintrag entfernen.`)
+    else if (loc <= budget) meldungen.push(`DECKEL-Eintrag stale: ${d.file} liegt nicht mehr über ${budget} LOC – Eintrag entfernen.`)
+  }
+  return meldungen
 }
 
 /** Module strikt über dem Budget. */
@@ -96,8 +143,11 @@ function main() {
       red(`✖ Allowlist-Eintrag stale: ${s.file} liegt nicht mehr über ${LOC_BUDGET} LOC – Eintrag in scripts/check-size.mjs entfernen.`),
     )
 
-  if (violations.length === 0 && stale.length === 0) {
-    console.log(green(`✔ Dateigröße ok – kein Modul über ${LOC_BUDGET} LOC (außer ${allowed.length} dokumentierte Ausnahme(n)).`))
+  const deckelMeldungen = pruefeDeckel(collectWorkflowSizes())
+  for (const m of deckelMeldungen) console.error(red(`✖ ${m}`))
+
+  if (violations.length === 0 && stale.length === 0 && deckelMeldungen.length === 0) {
+    console.log(green(`✔ Dateigröße ok – kein Modul über ${LOC_BUDGET} LOC (außer ${allowed.length} dokumentierte Ausnahme(n)); Workflow-Deckel eingehalten.`))
     return
   }
 

@@ -51,7 +51,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis } from "./slice-override.mjs";
+import { meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
 import { pathToFileURL } from "node:url";
 
 /** Budget für EINE Änderung. Kalibriert an echten kubequest-Tickets: die letzten
@@ -200,7 +200,7 @@ export function checkDiffSize({ runGit, env = process.env } = {}) {
   const fileCount = files.length;
   const changedLines = files.reduce((s, f) => s + f.added + f.deleted, 0);
   const { overFiles, overLines, over } = evaluate({ fileCount, changedLines }, thresholds);
-  const { reason, invalid } = sliceOverride(git, base, OVERRIDE_KEY);
+  const { reason, invalid, versetzt } = sliceOverride(git, base, OVERRIDE_KEY);
 
   return {
     skipped: false,
@@ -217,6 +217,7 @@ export function checkDiffSize({ runGit, env = process.env } = {}) {
     allowed: over && reason !== null, // bewusst durchgelassen
     stale: !over && reason !== null, // Override unnötig → melden
     invalidOverrides: invalid,
+    versetzteOverrides: versetzt,
     legacyEnv: (env.KQ_DIFFSIZE_OVERRIDE ?? "").trim() !== "", // alte Env: nur noch Hinweis
   };
 }
@@ -275,6 +276,7 @@ function main() {
     if (r.overFiles) parts.push(`${r.fileCount} Dateien > ${r.maxFiles}`);
     if (r.overLines) parts.push(`${r.changedLines} Zeilen > ${r.maxLines}`);
     console.error(red(`✖ Diff-Budget überschritten (${parts.join(", ")}).`));
+    for (const h of versetzteOverrideHinweis(OVERRIDE_KEY, r.versetzteOverrides)) console.error(h);
     console.error(
       `\nDieser Slice ist zu breit für ein reviewbares Ticket. Aufteilen (ein Epic → session-große\n` +
         `Kinder, siehe AGENTS.md) — ODER, wenn die Breite bewusst und begründet ist (z.B. ein großer\n` +

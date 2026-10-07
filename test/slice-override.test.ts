@@ -132,3 +132,47 @@ describe("PR-Log und Squash-Commit auf main lesen dasselbe (#1383)", () => {
     expect(so.parseOverrideTrailers(squash("t", commits), KEY).valid.at(-1)?.nr).toBe(2);
   });
 });
+
+describe("versetzteOverrideZeilen (#1349 Z31): die Zeile steht knapp neben dem Format und wird still ignoriert", () => {
+  const V = raw as unknown as {
+    versetzteOverrideZeilen: (text: string, key: string) => string[];
+    versetzteOverrideHinweis: (key: string, zeilen: string[] | undefined) => string[];
+    sliceOverride: (runGit: (args: string[]) => string, base: string, key: string) => { reason: string | null; versetzt: string[] };
+  };
+  const KEY = "KQ-Diffsize-Override";
+
+  it("eingerückt, mit '- '-Präfix und mitten im Fließtext: gemeldet", () => {
+    const text = [`  ${KEY}: #1 eingerückt`, `- ${KEY}: #1 mit Strich`, `siehe ${KEY}: #1 im Text`].join("\n");
+    expect(V.versetzteOverrideZeilen(text, KEY)).toEqual([`${KEY}: #1 eingerückt`, `- ${KEY}: #1 mit Strich`, `siehe ${KEY}: #1 im Text`]);
+  });
+
+  it("gültige Zeilen (Zeilenanfang und '* '-Betreff aus #1383) und ungültige Werte am Zeilenanfang: kein Hinweis", () => {
+    const text = [`${KEY}: #1 gültig`, `* ${KEY}: #2 Squash-Betreff`, `${KEY}: kaputt ohne Nummer`].join("\n");
+    expect(V.versetzteOverrideZeilen(text, KEY)).toEqual([]);
+  });
+
+  it("anderer Schlüssel und leerer Text: kein Treffer; CRLF stört nicht", () => {
+    expect(V.versetzteOverrideZeilen("KQ-Diffcov-Override: #1 x", KEY)).toEqual([]);
+    expect(V.versetzteOverrideZeilen("", KEY)).toEqual([]);
+    expect(V.versetzteOverrideZeilen(`a\r\n  ${KEY}: #1 x\r\n`, KEY)).toEqual([`${KEY}: #1 x`]);
+  });
+
+  it("sliceOverride liefert die versetzten Zeilen mit, ohne den gültigen Override zu stören", () => {
+    const log = [`- ${KEY}: #5 falsch eingerückt`, `${KEY}: #5 richtig`].join("\n");
+    const r = V.sliceOverride(() => log, "BASE", KEY);
+    expect(r.reason).toBe("#5 richtig");
+    expect(r.versetzt).toEqual([`- ${KEY}: #5 falsch eingerückt`]);
+    const nur = V.sliceOverride(() => `- ${KEY}: #5 falsch`, "BASE", KEY);
+    expect(nur.reason).toBeNull();
+    expect(nur.versetzt).toHaveLength(1);
+  });
+
+  it("der Hinweis nennt Schlüssel, Zeile und das erwartete Format; ohne Zeilen leer", () => {
+    const h = V.versetzteOverrideHinweis(KEY, [`- ${KEY}: #1 x`]);
+    expect(h).toHaveLength(1);
+    expect(h[0]).toContain("nicht am Zeilenanfang");
+    expect(h[0]).toContain(`"${KEY}: #<nr> <warum>"`);
+    expect(V.versetzteOverrideHinweis(KEY, [])).toEqual([]);
+    expect(V.versetzteOverrideHinweis(KEY, undefined)).toEqual([]);
+  });
+});

@@ -9,9 +9,10 @@
  */
 import { execFileSync } from "node:child_process";
 import { MAX_INTERPRETER } from "./hook-io.mjs";
-import { KNOWN_SUBS, PROTECTED_SUBS, abs, ask, isDir, real, tildeOf, UNKNOWN } from "./worktree-guard-tabellen.mjs";
+import { GIT_GLOBAL_MIT_WERT, KNOWN_SUBS, PROTECTED_SUBS, abs, ask, isDir, real, tildeOf, UNKNOWN } from "./worktree-guard-tabellen.mjs";
 
-const VALUE_OPTS = ["--namespace", "--config-env", "--attr-source", "--super-prefix"];
+// Die vier Optionen mit eigener Auswertung (-C, -c, --git-dir, --work-tree) behandelt gitOption selbst; der Rest der Tabelle nimmt nur einen Wert.
+const VALUE_OPTS = [...GIT_GLOBAL_MIT_WERT].filter((o) => !["-C", "-c", "--git-dir", "--work-tree"].includes(o));
 
 /** `-c key=value`: Aliase und `core.worktree` merken. */
 function konfiguration(g, cfg) {

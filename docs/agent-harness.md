@@ -221,10 +221,8 @@ So greifen die Bausteine bei **einem** Ticket ineinander — jeder Schritt ist e
    │                          ▼                                     │
    │  Umsetzen (TDD: rot → grün → aufräumen)                        │
    │                          ▼                                     │
-   │  Gates lokal grün:                                              │  ← Fehler an der Grenze
-   │  typecheck → lint → check:arch → check:size →                  │
-   │  check:contextsize → check:anysuppress → check:docmap →        │
-   │  check:docdrift → check:lockfile → check:diffsize → test       │
+   │  Gates lokal grün: npm run verify                               │  ← Fehler an der Grenze
+   │  (Kette: package.json › scripts.verify)                        │
    │  + smoke · audit + im Browser verifiziert                      │
    │                          ▼                                     │
    │  PR öffnen → CI abwarten → mergt (rot? fixen bis grün)         │  ← blockierende Grenze; fertig erst bei Merge (#618)
