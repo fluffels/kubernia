@@ -293,6 +293,12 @@ describe("Ist-Generator (dependency-cruiser als Prozess)", () => {
     assert.match(out, /s_anwendung --> s_domaene/);
     assert.match(out, /Erlaubt, aber ungenutzt: Präsentation → Anwendung/);
   });
+  test("verbotene Kante über den Generator: die Meldung nennt den Prüfbefehl aus der Config, sonst keinen", () => {
+    const json = JSON.stringify(cruiseJson({ "src/sim/": ["src/game/"] }));
+    const lauf = (extra: Cfg) => () => api.schichtenIstGenerator({ rootDir: fixtureMitModell(basis(), skript(`process.stdout.write(${JSON.stringify(json)});`)), config: cfg({ cruise: ["fake.mjs"], ...extra }) });
+    assert.throws(lauf({ pruefbefehl: "make arch" }), /außerhalb des Solls.*(make arch)/);
+    assert.throws(lauf({}), (e: Error) => /außerhalb des Solls/.test(e.message) && !/make arch|npm run/.test(e.message));
+  });
   test("Exit-Code ungleich 0 wirft ohne npm-Bezug; der Prüfbefehl steht nur, wenn die Config ihn nennt", () => {
     assert.throws(() => gen("process.exit(2);"), (e: Error) => /Schichtprüfung grün/.test(e.message) && !/npm run|check:arch/.test(e.message));
     const mitBefehl = () => api.schichtenIstGenerator({ rootDir: fixtureMitModell(basis(), skript("process.exit(2);")), config: cfg({ cruise: ["fake.mjs"], pruefbefehl: "make arch" }) });
