@@ -27,12 +27,13 @@ import {
   loadItems,
   loadOpenIssuePages,
   normalizeOffene,
+  planMitKorrektur,
   positionLautAgentsMd,
+  positionOderWarnung,
   sammelticketKorrektur,
   setPosition,
   todoItem,
 } from "./board-lib.mjs";
-import { planMitKorrektur, positionOderWarnung } from "./board-place.mjs";
 
 const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL };
 const PRUEF_VERSUCHE = 5;

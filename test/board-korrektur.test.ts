@@ -25,10 +25,11 @@ type Lib = {
 };
 type Place = {
   parseArgs: (argv: string[]) => object | null;
-  planMitKorrektur: (items: B[], args: object, n: number) => { korrektur: Korrektur | null; items: B[]; plan: Plan };
 };
+type MitKorrektur = { planMitKorrektur: (items: B[], args: object, n: number) => { korrektur: Korrektur | null; items: B[]; plan: Plan } };
 const L = rawLib as unknown as Lib;
 const P = rawPlace as unknown as Place;
+const planMitKorrektur = (rawLib as unknown as MitKorrektur).planMitKorrektur; // in board-lib, nicht im Einstiegsskript (#1398)
 
 const TITEL = "Harness-Härtung (gesammelt)";
 const STATUS = "Langfuse-Status überprüfen";
@@ -196,7 +197,7 @@ describe("planMitKorrektur: Komposition von board-place (#1390 Z10, Form des Vor
   const plan = (argv: string[], items = ende) => {
     const args = P.parseArgs(argv);
     expect(args, argv.join(" ")).not.toBeNull();
-    return P.planMitKorrektur(items, args as object, 4);
+    return planMitKorrektur(items, args as object, 4);
   };
 
   test("--top landet hinter dem korrigierten Sammelticket, nicht am Board-Ende; die Korrektur wird gemeldet", () => {
