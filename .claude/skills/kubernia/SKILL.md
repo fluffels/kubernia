@@ -59,7 +59,7 @@ Kein `model:` am Spawn: Modell und Effort stehen im Frontmatter des Umsetzers un
 - **`abgebrochen`** — Grund melden; das Ticket bleibt zugewiesen.
 - **Zwischen-Hand-off ist kein Ende** (Bericht ohne gültiges Token, mit Zusatz wie „(Zwischenstand)“, oder PR offen mit Auto-Merge laut `gh pr view`): denselben Umsetzer per `SendMessage` fortsetzen („weiter bis zum Merge“), nicht selbst auf die CI warten und nicht neu starten.
 
-**Blockade nach dem Umsetzer-Ende:** Blockiert der Stop- bzw. SubagentStop-Hook wegen eines Waisen-Worktree-Ordners, im Hauptchat laufende Dev-Server per PowerShell `Stop-Process` beenden, dann `node scripts/cleanup-worktrees.mjs --fix` und mit `git worktree list` plus `Test-Path` verifizieren. Den Guard nie aufweichen.
+**Blockade nach dem Umsetzer-Ende:** Blockiert der Stop- bzw. SubagentStop-Hook wegen eines Waisen-Worktree-Ordners, im Hauptchat die in der Meldung genannten Halter (Dev-Server, Hilfsserver, Stubs) gezielt per PID mit `Stop-Process -Id` beenden (nie per Name), dann `node scripts/cleanup-worktrees.mjs --fix` und mit `git worktree list` plus `Test-Path` verifizieren. Den Guard nie aufweichen.
 
 **Mehrere Tickets:** Anzahl N aus der Auslöse-Nachricht übernehmen, sonst kurz fragen. Dann nacheinander je Ticket der ganze Ablauf oben mit einem frischen Umsetzer, nie parallel (Merge-Kollision auf `main`); kein freies Ticket mehr ⇒ sofort aufhören. Zum Schluss eine Übersicht: erledigte Tickets, wie viele von N. Der Hauptchat wächst pro Ticket nur um Plan und Bericht.
 

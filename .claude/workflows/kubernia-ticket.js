@@ -1377,7 +1377,7 @@ numerierten Punkte inkl. Verify-Schritt #908) und § „Eigener Worktree von fri
 Zu entfernen: Worktree ${worktree}, Branch ${branch} und alle übrig gebliebenen Lens-Worktrees .claude/worktrees/kq-${nr}-lens-* (Sabotage-Proben der Test-Lens; git worktree list prüft, git worktree remove --force entfernt).
 
 Zwei Dinge, die hier regelmäßig schiefgehen und in der Doku stehen: laufende
-Dev-Server erst per PowerShell Stop-Process beenden (pkill aus Git-Bash erwischt
+Dev-Server und Hilfsserver erst per PID beenden (Stop-Process -Id, nie per Name; pkill aus Git-Bash erwischt
 Windows-Prozesse nicht), und aus dem Worktree heraus arbeiten statt hinein-cd'en. Auch Hintergrund-Tasks (Monitor/run_in_background) mit cwd im Worktree halten den Ordner fest: vorher mit TaskStop beenden.
 
 Danach verifizieren — schlägt EINER der Checks fehl, stoppen und laut melden statt

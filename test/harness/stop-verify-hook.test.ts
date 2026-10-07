@@ -404,3 +404,93 @@ describe("settings.json hängt den Hook auch an das Ende des Umsetzers (#1309)",
     assert.match(lies(".claude/skills/review-lenses/SKILL.md"), /Agent type 'kubernia-lens' not found/);
   });
 });
+
+// ── Leerer gesperrter Ordner warnt nur, nicht leerer nennt Halter (#1411) ─────
+
+describe("Stop-Hook: leerer gesperrter Waisen-Ordner und Halter-Meldung (#1411)", () => {
+  type Deps = Record<string, unknown>;
+  type Check = (root: string, deps?: Deps) => { blocked: boolean; reason?: string; warning?: string; removed?: string[] };
+  const check = (hook as unknown as { checkAndFixOrphanWorktrees: Check }).checkAndFixOrphanWorktrees;
+  const WT = "/root/.claude/worktrees";
+  const basisDeps = (inhalt: string[]): Deps => ({
+    execSync: (cmd: string) => (cmd.includes("worktree list") ? "worktree /root\nHEAD abc\nbranch refs/heads/main\n\n" : ""),
+    existsSync: () => true, // der Ordner bleibt nach dem Löschversuch bestehen
+    // Wurzel-Listing: ein Waisen-Ordner; Listing des Ordners selbst: `inhalt`
+    readdirSync: (p: string) =>
+      String(p).replace(/\\/g, "/") === WT ? [{ name: "kq-1404", isDirectory: () => true, isSymbolicLink: () => false }] : inhalt,
+    rmSync: () => {},
+    lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => false }),
+    platform: "win32",
+    listProcesses: () => [{ pid: 4711, ppid: 999, name: "python3.exe", commandLine: "python3 -", startMs: Date.now() + 10_000 }],
+    statSync: () => ({ birthtimeMs: 0, mtimeMs: 0 }),
+  });
+
+  test("leerer, gesperrter Ordner: kein Block, nur eine Warnung (der nächste Stop versucht es erneut)", () => {
+    const r = check("/root", basisDeps([]));
+    assert.equal(r.blocked, false);
+    assert.match(r.warning ?? "", /kq-1404.*leer.*nächste Stop/);
+  });
+
+  test("nicht leerer, gesperrter Ordner: Block, nennt den möglichen Halter mit PID und rät nie zum Kill per Name", () => {
+    const r = check("/root", basisDeps(["datei.txt"]));
+    assert.equal(r.blocked, true);
+    assert.match(r.reason ?? "", /kq-1404/);
+    assert.match(r.reason ?? "", /PID 4711 python3\.exe/);
+    assert.match(r.reason ?? "", /Stop-Process -Id <pid>/);
+    assert.ok(!/Stop-Process -Name/.test(r.reason ?? ""), "kein pauschaler Kill per Name");
+  });
+
+  test("runHook: Warnung gibt den Stop frei (exit 0) und geht als systemMessage raus, nicht als Block", () => {
+    const warn = () => ({ blocked: false, warning: "Worktree-Ordner kq-1 ist leer, aber gerade gesperrt." });
+    const r = (hook as unknown as { runHook: (s: string, root: string, c: typeof warn) => { exit: number; stdout: string; stderr: string } }).runHook("{}", "/root", warn);
+    assert.equal(r.exit, 0);
+    assert.deepEqual(JSON.parse(r.stdout), { systemMessage: "Worktree-Ordner kq-1 ist leer, aber gerade gesperrt." });
+    assert.equal(r.stderr, "");
+    const still = (hook as unknown as { runHook: (s: string, root: string, c: () => object) => { exit: number; stdout: string } }).runHook("{}", "/root", () => ({ blocked: false }));
+    assert.deepEqual([still.exit, still.stdout], [0, ""]);
+  });
+});
+
+// ── Kein pauschaler Prozess-Kill per Name im Agenten-Kontext (#1411) ───────────
+
+describe("Wächter: keine Anleitung zum Kill per Name (#1411)", () => {
+  // Parallele Agenten laufen in anderen Worktrees; ein Kill per Name (`Stop-Process -Name`, `taskkill /IM`) beendet ihre
+  // Prozesse mit. Erlaubt ist nur der gezielte Kill per PID (`Stop-Process -Id`).
+  const VERBOTEN = /Stop-Process\s+-Name\b|taskkill\s+\/IM\b/i;
+
+  /** Texte der Agenten-Anweisungen, Docs, Hooks und Skripte, in denen eine solche Anleitung stehen könnte. */
+  async function texte(): Promise<Record<string, string>> {
+    const { readFileSync, readdirSync, statSync } = await import("node:fs");
+    const { join, relative } = await import("node:path");
+    const wurzel = fileURLToPath(new URL("../../", import.meta.url));
+    const out: Record<string, string> = { "AGENTS.md": readFileSync(join(wurzel, "AGENTS.md"), "utf8") };
+    const sammle = (rel: string, passt: (n: string) => boolean) => {
+      for (const e of readdirSync(join(wurzel, rel), { withFileTypes: true })) {
+        const p = join(wurzel, rel, e.name);
+        if (e.isDirectory()) {
+          if (e.name !== "worktrees" && e.name !== "node_modules") sammle(relative(wurzel, p), passt); // fremde Worktrees sind nicht dieser Stand
+        }
+        else if (passt(e.name) && e.name !== "settings.local.json" && statSync(p).size < 2_000_000) out[relative(wurzel, p).replace(/\\/g, "/")] = readFileSync(p, "utf8");
+      }
+    };
+    sammle("docs", (n) => /^agent-harness.*\.md$/.test(n));
+    sammle(".claude", (n) => /\.(md|js|mjs|json)$/.test(n));
+    sammle("scripts", (n) => /\.mjs$/.test(n));
+    return out;
+  }
+
+  test("kein Dokument, Skill, Workflow, Agent und Skript rät zu `Stop-Process -Name` oder `taskkill /IM`", async () => {
+    const treffer = Object.entries(await texte())
+      .filter(([, t]) => VERBOTEN.test(t))
+      .map(([pfad]) => pfad);
+    assert.deepEqual(treffer, [], "Kill per Name beendet auch Prozesse paralleler Agenten: gezielt per PID (`Stop-Process -Id`)");
+  });
+
+  test("Red-Green: das Muster erkennt beide Formen und lässt den Kill per PID zu", () => {
+    assert.ok(VERBOTEN.test("pwsh: Stop-Process -Name node -Force"));
+    assert.ok(VERBOTEN.test("cmd: taskkill /IM node.exe /F"));
+    assert.ok(VERBOTEN.test("stop-process  -name python"));
+    assert.ok(!VERBOTEN.test("Stop-Process -Id 4711"));
+    assert.ok(!VERBOTEN.test("nie per Name (Stop-Process -Id <pid>)"));
+  });
+});
