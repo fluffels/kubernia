@@ -57,7 +57,7 @@
     {"befehl":"describe","ziel":"roles","verhalten":"abweichend","ausgabe":"vereinfacht","tickets":[1444],"grenzen":["describe-gekuerzt"]},
     {"befehl":"describe","ziel":"clusterroles","verhalten":"abweichend","ausgabe":"vereinfacht","tickets":[1444],"grenzen":["describe-gekuerzt"]},
     {"befehl":"describe","ziel":"serviceaccounts","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["describe-gekuerzt"]},
-    {"befehl":"describe","flag":"-n","verhalten":"vereinfacht","ausgabe":"gleich","grenzen":["ein-namespace"]},
+    {"befehl":"describe","flag":"-n","verhalten":"abweichend","ausgabe":"abweichend","tickets":[1430]},
     {"befehl":"create","ziel":"deployments","verhalten":"gleich","ausgabe":"gleich"},
     {"befehl":"create","ziel":"secrets","verhalten":"vereinfacht","ausgabe":"gleich","grenzen":["arten-auswahl"]},
     {"befehl":"create","ziel":"configmaps","verhalten":"gleich","ausgabe":"gleich"},
