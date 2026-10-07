@@ -16,6 +16,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import { Sim as KQSim } from "../src/sim";
 import { KQContent } from "../src/content";
+import { podIP } from "../src/sim/util";
 
 const norm = (s: string) => s.trim().replace(/\s+/g, " ");
 
@@ -114,6 +115,10 @@ test("Phase 7: der Storage-Quest-Arc spielt durch und pinnt den End-Zustand", ()
   assert.ok(sts, "StatefulSet speicher-datenbank existiert nach der Quest");
   assert.ok(sts!.pods.some(p => p.name === "speicher-datenbank-0"), "stabiler Pod -0 ist da (auch nach dem Lösch-Beweis)");
   assert.ok(sim.pvcs.some(p => p.name.startsWith("daten-speicher-datenbank-") && p.status === "Bound"), "je Replica ein gebundenes PVC");
+  // #1301: der headless Service zeigt None statt einer ClusterIP, DNS liefert die Pod-IPs.
+  assert.match(sim.exec("kubectl get svc").output!, /speicher-datenbank\s+ClusterIP\s+None\s/);
+  const dns = sim.exec("nslookup speicher-datenbank").output!;
+  for (const i of [0, 1, 2]) assert.ok(dns.includes(podIP("speicher-datenbank-" + i)), "Pod-IP -" + i + " in der DNS-Antwort");
 
   // PVC-Quest: am Ende ist lager-daten Bound und überlebt den Workload-Abriss.
   playQuest(sim, "storage-pvc");

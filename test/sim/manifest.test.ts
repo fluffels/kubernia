@@ -112,9 +112,21 @@ spec:
 describe("Mapper: Service", () => {
   const svc = (spec: string, name = "api") => `apiVersion: v1\nkind: Service\nmetadata:\n  name: ${name}\nspec:\n${spec}`;
 
-  it("Port, targetPort als Zahl und als Name, Port-Name und clusterIP None ignoriert", () => {
+  it("Port, targetPort als Zahl und als Name, Port-Name ignoriert, clusterIP None übernommen", () => {
     expect(ok(svc("  ports:\n    - name: http\n      port: 80\n      targetPort: 8080\n"))).toStrictEqual([{ service: { name: "api", port: 80, targetPort: 8080 } }]);
-    expect(ok(svc("  clusterIP: None\n  ports:\n    - port: 5432\n      targetPort: db\n"))).toStrictEqual([{ service: { name: "api", port: 5432, targetPort: "db" } }]);
+    expect(ok(svc("  clusterIP: None\n  ports:\n    - port: 5432\n      targetPort: db\n"))).toStrictEqual([{ service: { name: "api", port: 5432, targetPort: "db", clusterIP: "None" } }]);
+  });
+
+  it("eine explizite ClusterIP wird weiter ignoriert (nur None wird abgebildet)", () => {
+    expect(ok(svc("  clusterIP: 10.96.7.7\n  ports:\n    - port: 80\n"))[0].service).not.toHaveProperty("clusterIP");
+  });
+
+  it("clusterIP None zusammen mit LoadBalancer/NodePort ist ein Manifest-Fehler (wie im echten API)", () => {
+    for (const type of ["LoadBalancer", "NodePort"]) {
+      const f = bad(svc("  type: " + type + "\n  clusterIP: None\n  ports:\n    - port: 80\n"));
+      expect(f.error, type).toContain("None");
+      expect(f.error, type).toContain(type);
+    }
   });
 
   it("Typ nur, wenn gesetzt", () => {

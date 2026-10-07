@@ -20,7 +20,7 @@
  * Phaser-frei (pure Domäne): die geteilten Ausgabe-/Pod-Namen-Helfer kommen aus
  * ./util, die Domänentypen aus ./state – kein Rückimport nach sim.ts (kein Zyklus).
  */
-import type { ClusterState, Deployment, ServiceRes, Broken, HelmRepo } from "./state";
+import type { ClusterState, Deployment, ServiceRes, ServiceSpec, Broken, HelmRepo } from "./state";
 import { table } from "./util";
 import { addDeployment, removeDeployment, scaleDeployment } from "./workload";
 
@@ -36,7 +36,7 @@ export interface HelmHost extends Pick<ClusterState, "helmRepos" | "charts" | "r
   rng: () => number; // Instanz-eigener Zufallsstrom (#580): scaleDeployment zieht Pod-Namen darüber
   _err(msg: string, tip?: string): string;
   _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment;
-  _makeService(spec: { name: string; type?: string; port: string | number; targetPort?: string | number; externalName?: string }): ServiceRes;
+  _makeService(spec: ServiceSpec): ServiceRes;
 }
 
 /** Liest `--set <key>=<zahl>` aus der rohen Eingabe (helm install/upgrade). */
