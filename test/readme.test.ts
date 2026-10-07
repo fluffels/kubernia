@@ -41,9 +41,20 @@ test("README: jede genannte Phaser-Major-Version entspricht der Abhängigkeit in
   for (const v of found) assert.equal(v, major, `README nennt Phaser ${v}, package.json hat Major ${major}`);
 });
 
-test("README: generierte Abschnitte (gates, harness-inventar, zeitleiste) sind als Marker vorhanden", () => {
-  for (const name of ["gates", "harness-inventar", "zeitleiste"]) {
+test("README: generierte Abschnitte (gates, harness-inventar, zeitleiste, quests-je-thema) sind als Marker vorhanden", () => {
+  for (const name of ["gates", "harness-inventar", "zeitleiste", "quests-je-thema"]) {
     assert.ok(readme.includes(`<!-- GEN:${name} START -->`), `Marker GEN:${name} START fehlt in der README`);
     assert.ok(readme.includes(`<!-- GEN:${name} END -->`), `Marker GEN:${name} END fehlt in der README`);
   }
+});
+
+test("README: Lernpfad-Abschnitt führt keine handgeschriebenen Quest-Zählungen (die kommen aus GEN:quests-je-thema)", () => {
+  const a = readme.indexOf("## Lernpfad");
+  assert.ok(a >= 0, "Abschnitt '## Lernpfad' fehlt in der README");
+  const b = readme.indexOf("\n## ", a + 1);
+  const abschnitt = readme
+    .slice(a, b < 0 ? undefined : b)
+    .replace(/<!-- GEN:([\w-]+) START -->[\s\S]*?<!-- GEN:\1 END -->/g, "");
+  const treffer = abschnitt.match(/\d+\s+Quests?\b/g) ?? [];
+  assert.deepEqual(treffer, [], "Handgeschriebene Quest-Zahl im Lernpfad: sie veraltet still. Weglassen oder den generierten Abschnitt nutzen.");
 });

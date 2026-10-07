@@ -29,6 +29,7 @@
 # Gate-Config
 /.dependency-cruiser.cjs   @fluffels
 /scripts/layers.cjs        @fluffels
+/scripts/content-chunks.cjs @fluffels
 /scripts/check-*.mjs       @fluffels
 /scripts/slice-override.mjs @fluffels
 /scripts/ci-laeufe.mjs     @fluffels

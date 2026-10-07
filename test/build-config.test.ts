@@ -12,7 +12,20 @@ import viteConfig, { devNoFullReload, CODE_CHANGED_EVENT } from "../vite.config"
 type ConfigFn = (env: {
   command: "build" | "serve";
   mode: string;
-}) => { plugins?: unknown[]; build?: { outDir?: string }; define?: Record<string, string> };
+}) => {
+  plugins?: unknown[];
+  build?: {
+    outDir?: string;
+    assetsInlineLimit?: number;
+    rollupOptions?: {
+      output?: {
+        manualChunks?: (id: string) => string | undefined;
+        chunkFileNames?: (chunk: { name: string }) => string;
+      };
+    };
+  };
+  define?: Record<string, string>;
+};
 
 const resolve = (mode: string) =>
   (viteConfig as unknown as ConfigFn)({ command: "build", mode });
@@ -162,5 +175,35 @@ describe("Build-Strategie #58: beide Wege sind wirklich verschieden", () => {
     const prod = pluginNames(resolve("production").plugins).includes(SINGLEFILE);
     const offline = pluginNames(resolve("offline").plugins).includes(SINGLEFILE);
     expect({ prod, offline }).toEqual({ prod: false, offline: true });
+  });
+});
+
+/* #1408 (ADR 0018): Content-Chunks gibt es nur im Host-Build; die Single-File-Wege bleiben unberührt. */
+describe("Content-Chunks #1408: nur der Host-Build splittet", () => {
+  const prod = resolve("production").build;
+  const out = prod?.rollupOptions?.output;
+
+  it("Phaser bleibt im vendor-Chunk, Content-Dateien bekommen content-<dir>-<name>", () => {
+    expect(out?.manualChunks?.("/r/node_modules/phaser/src/x.js")).toBe("vendor");
+    expect(out?.manualChunks?.("/r/src/content/data/quests/knut.json")).toBe("content-quests-knut");
+    expect(out?.manualChunks?.("/r/assets/maps/harbor.tmj?raw")).toBe("content-maps-harbor");
+    expect(out?.manualChunks?.("/r/src/content/loader.ts")).toBeUndefined();
+  });
+
+  it("Content-Chunks landen unter assets/content/, der Rest unter assets/", () => {
+    expect(out?.chunkFileNames?.({ name: "content-quests-knut" })).toBe("assets/content/[name].[hash].js");
+    expect(out?.chunkFileNames?.({ name: "index" })).toBe("assets/[name]-[hash].js");
+  });
+
+  it("PNGs werden im Host-Build nicht inline eingebettet", () => {
+    expect(prod?.assetsInlineLimit).toBe(0);
+  });
+
+  it("Offline und Devpanel behalten den Standard (alles inline per Single-File)", () => {
+    for (const mode of ["offline", "devpanel"]) {
+      const b = resolve(mode).build;
+      expect(b?.rollupOptions, mode).toBeUndefined();
+      expect(b?.assetsInlineLimit, mode).toBeUndefined();
+    }
   });
 });

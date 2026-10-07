@@ -21,8 +21,8 @@
       "check:diffcoverage": "Abdeckung der im Slice geänderten Zeilen",
       "build": "Host-Build (`dist/`) baut fehlerfrei",
       "build:offline": "Offline-Einzeldatei (`dist-offline/index.html`) baut fehlerfrei",
-      "check:bundle": "Byte-Budget für Offline-HTML, Spielcode und Phaser-Chunk",
-      "test:smoke": "Boot- und Interaktions-Smokes headless gegen den Offline-Build (Playwright)"
+      "check:bundle": "Byte-Budget je Chunk-Art: Offline-HTML, Spielcode, Content-Chunks (je Datei), Phaser-Chunk",
+      "test:smoke": "Boot- und Interaktions-Smokes headless gegen Offline- und Host-Build (Playwright)"
     },
     "ci": [
       {
@@ -79,5 +79,17 @@
     "settings": ".claude/settings.json",
     "gitHooks": ".githooks",
     "mcp": ".mcp.json"
+  },
+  "saveVersionen": {
+    "beschreibungen": "src/store/save-versionen.json",
+    "version": { "datei": "src/store/versioning.ts", "name": "CURRENT_SAVE_VERSION" }
+  },
+  "quests": {
+    "ordner": "src/content/data/quests",
+    "reihenfolge": "src/content/data/quest-order.json",
+    "themen": "src/content/data/quest-topics.json",
+    "standplaetze": "src/content/data/entities.json",
+    "npcs": "src/content/data/npcs.json",
+    "maxQuestsJeDiagramm": 30
   }
 }

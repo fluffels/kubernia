@@ -37,7 +37,7 @@ Alle schnellen Gates laufen gebündelt in **`npm run verify`**; `npm run verify:
 - **Jede AGENTS.md hat ein Größen-Gate:** `npm run check:contextsize` misst **Zeichen** (#1064, CR-neutral) der Wurzel und jeder modul-lokalen AGENTS.md (Default-Budget). Wächst eine über ihr Budget: Inhalt nach `docs/` bzw. in eine modul-lokale `AGENTS.md`/ein [`docs/module/`](docs/module/)-Tiefendoc auslagern, nicht das Budget anheben (Ausnahme nur via `ALLOWLIST` mit offenem Auslagerungs-Ticket).
 - **Slice-Größe:** `npm run check:diffsize` wird rot über **20 Dateien oder 800 geänderten Zeilen** gegen die Merge-Base (Drei-Punkt; Lockfiles zählen nicht). Zu breit → aufteilen, oder bewusst breit mit einer Commit-Zeile `KQ-Diffsize-Override: #<nr> warum` im Slice (eigener leerer Commit; eine fremde stale Zeile im eigenen Slice entfernt man vor dem Nachweis-Commit durch Umschreiben des eigenen Branches).
 - **Testabdeckung pro Schicht:** `npm run test:coverage` gatet Floors je Schicht-Bucket ([`vite.config.ts`](vite.config.ts), Domäne hart, Präsentation bewusst niedrig), `npm run check:diffcoverage` die im Slice geänderten Zeilen (Domäne 90 %, Anwendung 80 % hart, Präsentation nur berichtend). Floors werden nur angehoben.
-- **Bundle-Byte-Budget:** `npm run check:bundle` (nach den Builds, in `verify:full`) für Offline-HTML, Spielcode und Phaser-`vendor`-Chunk; ein fehlendes Artefakt ist rot, nicht grün.
+- **Bundle-Byte-Budget:** `npm run check:bundle` (nach den Builds, in `verify:full`) je Chunk-Art (Spielcode, `vendor`, jeder Content-Chunk mit Deckel je Datei, Offline-HTML ohne Content, [ADR 0018](docs/adr/0018-content-chunks-je-datei.md)); ein fehlendes Artefakt oder ein fehlender Chunk ist rot.
 - **Abhängigkeiten:** Dependabot-PRs nach der Policy in [CONTRIBUTING.md](CONTRIBUTING.md#pull-requests--abhängigkeits-updates-policy) behandeln (grün → annehmen, rot/Major → nie blind); nach Hand-Änderung an `package.json` `npm install` und den Lockfile mitcommitten (`npm run check:lockfile`).
 - **Copy-Paste wird berichtet, nicht gegatet** (`npm run check:duplication`, bewusst nicht-blockierend, nicht in `verify`).
 
@@ -88,7 +88,7 @@ Vite + TypeScript + ES-Module, Phaser als npm-Paket; `index.html` lädt nur `src
   - **🤖 Dependabot-Sammel-Ticket:** mit dem Mergen loslegen.
   - **⚠️ riskant** (z.B. Major-Migration): erst evaluieren, die Weiche selbst entscheiden.
   - **„Zuletzt"/„blockiert durch"**: Unwichtiges steht im Board unten, Abhängigkeiten als Body-Notiz „blockiert durch #X".
-- **Spielstände** über die SaveStore-Schicht (`store.ts`, Auto-Save alle 5 s). **Was live geht, darf NIE einen bestehenden Stand brechen – immer migrieren:** Formatänderung ⇒ `version`-Bump + Migration (aktuell `CURRENT_SAVE_VERSION = 3`), alte Stände vorher in den Backup-Slot, `sanitizeState` in `game.ts` härtet kaputte Felder ab. Quest-Fortschritt persistiert per Quest-ID (`currentQuestId`, #353), nicht per Index.
+- **Spielstände** über die SaveStore-Schicht (`store/`, Auto-Save alle 5 s). **Was live geht, darf NIE einen bestehenden Stand brechen – immer migrieren:** Formatänderung ⇒ `version`-Bump + Migration (Kette: [app.md](docs/module/app.md#save-versionskette)), alte Stände vorher in den Backup-Slot, `sanitizeState` in `game/save.ts` härtet kaputte Felder ab. Quest-Fortschritt persistiert per Quest-ID (`currentQuestId`, #353), nicht per Index.
 
 ### Modellwahl nach Phase (#910)
 

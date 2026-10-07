@@ -186,7 +186,7 @@ Diese Einbahn-Kopplung macht Schritt 3–4 in Millisekunden testbar, ganz ohne S
 
 ## 7. Verteilungssicht
 
-Ein Quelltext, über Vite-`mode` konfiguriert → zwei Auslieferungen: **Host-Build** (`dist/`, Multi-File, für Webserver) und **Offline-Build** (`dist-offline/index.html`, self-contained, Doppelklick, offline). Der Boot-Smoke-Test (Playwright, headless) prüft genau den Offline-Pfad per `file://`. Betriebs-Docker gibt es bewusst nicht; ein Dev-Container ist reine Entwickler-Tooling.
+Ein Quelltext, über Vite-`mode` konfiguriert → zwei Auslieferungen: **Host-Build** (`dist/`, Multi-File, für Webserver) und **Offline-Build** (`dist-offline/index.html`, self-contained, Doppelklick, offline). Der Host-Build legt Content-Daten und Karten je Datei in eigene Chunks unter `dist/assets/content/` ([ADR 0018](adr/0018-content-chunks-je-datei.md)), damit der Spielcode-Chunk nicht mit dem Inhalt wächst; der Offline-Build enthält weiterhin alles in einer Datei. Die Boot-Smoke-Tests (Playwright, headless) prüfen beide Pfade: den Offline-Build per `file://`, den Host-Build über einen Preview-Server. Betriebs-Docker gibt es bewusst nicht; ein Dev-Container ist reine Entwickler-Tooling.
 
 ## 8. Querschnittliche Konzepte & DDD-Bewertung
 

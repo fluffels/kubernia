@@ -1,0 +1,11 @@
+[
+  { "von": 0, "ticket": null, "art": "additiv", "beschreibung": "Stand bekommt die Versions-Hülle { v, data }, Inhalt unverändert" },
+  { "von": 1, "ticket": 353, "art": "additiv", "beschreibung": "Quest-Fortschritt zusätzlich als Quest-ID (currentQuestId) statt nur als Index" },
+  { "von": 2, "ticket": 354, "art": "additiv", "beschreibung": "Quest-IDs von numerisch (q5) auf sprechende Slugs umbenannt, Remapping in sanitizeState" },
+  { "von": 3, "ticket": 410, "art": "additiv", "beschreibung": "Menge offener Quests (activeQuests) statt einer fokussierten Quest" },
+  { "von": 4, "ticket": 413, "art": "additiv", "beschreibung": "Spiel-Zeit-Achse gameDays: Tag, Saison und Uhrzeit überleben den Reload" },
+  { "von": 5, "ticket": 559, "art": "additiv", "beschreibung": "Redundante Quest-Arbeitskopie (questIdx, questStep, taskIdx) entfällt" },
+  { "von": 6, "ticket": 574, "art": "strukturell", "beschreibung": "Abkürzungen werden zur Komfort-Kauf-Mechanik: Alt-Werte wandern nach owned und comfortUsage" },
+  { "von": 7, "ticket": 232, "art": "additiv", "beschreibung": "Umbelegbare Aktionstasten als settings.keys, Alt-Stand bekommt die Default-Belegung" },
+  { "von": 8, "ticket": 421, "art": "strukturell", "beschreibung": "Inventar von Zahl pro Gegenstand auf ItemStack { count } gehoben" }
+]

@@ -8,6 +8,8 @@
 
 ## Wie man Inhalt hinzufügt (Stand #348/#349/#353/#354, auf `main`)
 
+**Nach jeder Änderung an Quests, `quest-order.json`, `quest-topics.json`, `entities.json` oder `npcs.json` `npm run docs:gen` fahren:** Quest-Landkarte ([content-questgraph.md](../../docs/module/content-questgraph.md)) und Quest-Zahlen der README entstehen daraus, `check:docgen` ist sonst rot.
+
 Quests, NPCs, Smalltalk und NPC-Standplätze sind **Daten** (`src/content/data/*`), kein TS mehr. Konkret, damit es auf Stardew-Größe skaliert (kein Monolith – pro Region/NPC eine Datei, wie Stardew):
 
 ### Neue Quest
@@ -41,3 +43,7 @@ Quiz-Karten liegen pro Thema in `data/crabquiz/<thema>.json`. **Die richtige Ant
 ### Der validierende Loader
 
 `src/content/loader.ts` + `src/content/entities.ts` lädt + prüft alles beim Start und wirft bei kaputten Daten explizit (`ContentValidationError`). **Granularität immer mitdenken:** wird eine Regionen-Datei zu groß, in sinnvolle Unterdateien splitten – eine Umstellung ist nur etwas wert, wenn sie dem Wachstum standhält.
+
+### Content-Chunks (ADR 0018)
+
+Jede Datei unter `src/content/data/<dir>/` ist im Host-Build ein eigener Chunk mit Deckel (`check:bundle`, 128 KB je Chunk). Reißt eine Datei ihn, in Unterdateien splitten (z.B. `quests/knut-dns.json`); der Loader ist dateinamen-agnostisch. Neue Dateien direkt unter `data/` landen gemeinsam in `content-core`. Jede JSON unter `data/` und jede `.tmj` unter `assets/maps/` muss ins Spiel importiert werden (das Gate erwartet für jede einen Chunk); zwei Dateien mit gleichem bereinigten Namen (etwa `Knut_DNS` und `knut-dns`) sind ein Fehler, tiefere Verschachtelung als `data/<dir>/` ist nicht vorgesehen.
