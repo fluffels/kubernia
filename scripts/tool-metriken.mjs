@@ -110,6 +110,6 @@ function pruefArt(words) {
     if (VOLL.has(args[1])) return "voll";
     return args[1] === "verify:changed" ? "gezielt" : null;
   }
-  if (cmd === "node" && rest.some((w) => /(?:^|[\/])verify-lauf\.mjs$/.test(w))) return rest.includes("--changed") ? "gezielt" : "voll";
+  if (cmd === "node" && rest.some((w) => /(?:^|[/\\])verify-lauf\.mjs$/.test(w))) return rest.includes("--changed") ? "gezielt" : "voll";
   return null;
 }

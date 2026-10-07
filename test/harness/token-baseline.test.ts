@@ -1194,8 +1194,8 @@ describe("token-baseline: Nachlauf, Tool-Fehler, Lesen, fehlender Marker (#1379)
       { ts: "2026-09-29T14:00:00Z", tool: "Bash", input: {}, resultChars: 0, agent: "u", fehler: "Blocked: nach dem Merge" } as PEv,
       rd("2026-09-29T11:02:00Z", "/x/a.md"),
       rd("2026-09-29T11:03:00Z", "/x/a.md"),
-      { ts: "2026-09-29T11:04:00Z", tool: "Bash", input: { command: "npm run verify:kompakt" }, resultChars: 0, agent: "u" } as PEv,
-      { ts: "2026-09-29T14:01:00Z", tool: "Bash", input: { command: "npm run verify" }, resultChars: 0, agent: "u" } as PEv,
+      { ts: "2026-09-29T11:04:00Z", tool: "Bash", input: { command: "npm run verify:kompakt" }, resultChars: 0, agent: "u" },
+      { ts: "2026-09-29T14:01:00Z", tool: "Bash", input: { command: "npm run verify" }, resultChars: 0, agent: "u" },
     ];
     const s = sum(calls, events);
     assert.deepEqual(s.fehler, { guard: 1, exit: 1 });
