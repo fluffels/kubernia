@@ -34,6 +34,8 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { pruefeRulesetSpiegel } from "../../scripts/docs-gen/ruleset-spiegel.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const WORKFLOW_DIR = join(ROOT, ".github", "workflows");
@@ -42,11 +44,9 @@ const WORKFLOW_DIR = join(ROOT, ".github", "workflows");
  *  `.github/ruleset-main-schutz.json` (Z1): dieselbe Quelle speist das Leitplanken-Diagramm (docs/diagramme). Die Wahrheit ist das
  *  out-of-repo-Ruleset (`gh api repos/{owner}/{repo}/rulesets/20151454`); ändert sich dort ein Kontext, zieht der PR den Spiegel nach. */
 const RULESET_SPIEGEL = join(ROOT, ".github", "ruleset-main-schutz.json");
+// Dieselbe Eingangsprüfung wie der Generator `leitplanken-schichten` (#1411): ein Modul statt zweier Kopien.
 function leseKontexte(json: string): string[] {
-  const roh = (JSON.parse(json) as { requiredChecks?: unknown }).requiredChecks;
-  assert.ok(Array.isArray(roh) && roh.length > 0, "Ruleset-Spiegel: requiredChecks muss eine nicht leere Liste sein");
-  assert.ok(roh.every((k) => typeof k === "string" && k.trim() !== ""), "Ruleset-Spiegel: requiredChecks darf nur nicht leere Texte enthalten");
-  return roh as string[];
+  return (pruefeRulesetSpiegel(JSON.parse(json), "Spiegel") as { requiredChecks: string[] }).requiredChecks;
 }
 const REQUIRED_CONTEXTS: readonly string[] = leseKontexte(readFileSync(RULESET_SPIEGEL, "utf8"));
 
@@ -162,12 +162,19 @@ test("istWorkflowDatei zählt .yml UND .yaml, aber nichts anderes", () => {
 
 describe("Ruleset-Spiegel – Form (Z1)", () => {
   test("leere, fehlende oder nicht-textuelle Kontext-Liste wirft", () => {
-    assert.throws(() => leseKontexte("{}"), /nicht leere Liste/);
-    assert.throws(() => leseKontexte('{"requiredChecks":[]}'), /nicht leere Liste/);
-    assert.throws(() => leseKontexte('{"requiredChecks":"x"}'), /nicht leere Liste/);
-    assert.throws(() => leseKontexte('{"requiredChecks":["a",3]}'), /nur nicht leere Texte/);
-    assert.throws(() => leseKontexte('{"requiredChecks":[" "]}'), /nur nicht leere Texte/);
-    assert.deepEqual(leseKontexte('{"requiredChecks":["a"]}'), ["a"]);
+    const mit = (checks: string) => `{"name":"n","bypassActors":[],"requiredChecks":${checks}}`;
+    assert.throws(() => leseKontexte('{"name":"n","bypassActors":[]}'), /nicht leere Liste/);
+    assert.throws(() => leseKontexte(mit("[]")), /nicht leere Liste/);
+    assert.throws(() => leseKontexte(mit('"x"')), /nicht leere Liste/);
+    assert.throws(() => leseKontexte(mit('["a",3]')), /nicht leere Liste aus Texten/);
+    assert.throws(() => leseKontexte(mit('[" "]')), /nicht leere Liste aus Texten/);
+    assert.deepEqual(leseKontexte(mit('["a"]')), ["a"]);
+  });
+  test("Name und Bypass-Liste fehlen oder sind kaputt: wirft (eine Eingangsprüfung für Generator und Wächter)", () => {
+    assert.throws(() => leseKontexte('{"requiredChecks":["a"],"bypassActors":[]}'), /name fehlt/);
+    assert.throws(() => leseKontexte('{"name":" ","requiredChecks":["a"],"bypassActors":[]}'), /name fehlt/);
+    assert.throws(() => leseKontexte('{"name":"n","requiredChecks":["a"]}'), /bypassActors muss eine Liste sein/);
+    assert.throws(() => leseKontexte('{"name":"n","requiredChecks":["a"],"bypassActors":{}}'), /bypassActors muss eine Liste sein/);
   });
   test("der echte Spiegel nennt den Ruleset-Namen und hat die Bypass-Liste", () => {
     const r = JSON.parse(readFileSync(RULESET_SPIEGEL, "utf8")) as { name?: unknown; bypassActors?: unknown };

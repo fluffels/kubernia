@@ -1,6 +1,7 @@
 /* Helfer `mermaidText` und `ganzzahlKonstante` der Doku-Generatoren (#1370). */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { join } from "node:path";
 import { fixture } from "./support/tmp-fixture";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -39,5 +40,60 @@ describe("ganzzahlKonstante", () => {
   });
   test("Namen mit Regex-Sonderzeichen werden wörtlich genommen", () => {
     assert.throws(() => api.ganzzahlKonstante(f("const MAXAX = 1;\n"), "k.ts", "MAX.X"), /fehlt/);
+  });
+});
+
+describe("leseJson (#1411)", () => {
+  const leseJson = (md as unknown as { leseJson: (root: string, rel: string, was: string) => unknown }).leseJson;
+  test("liest relativ und absolut", () => {
+    const root = fixture({ "a.json": '{"x":1}' });
+    assert.deepEqual(leseJson(root, "a.json", "Datei"), { x: 1 });
+    assert.deepEqual(leseJson("/gibt/es/nicht", join(root, "a.json"), "Datei"), { x: 1 });
+  });
+  test("fehlende Datei und kaputtes JSON werfen mit sprechender Meldung", () => {
+    const root = fixture({ "kaputt.json": "{ x" });
+    assert.throws(() => leseJson(root, "weg.json", "Config"), /Config weg\.json nicht gefunden/);
+    assert.throws(() => leseJson(root, "kaputt.json", "Config"), /kaputt\.json ist kein gültiges JSON/);
+    assert.throws(() => leseJson(root, join(root, "kaputt.json"), "Config"), /kein gültiges JSON/);
+  });
+});
+
+describe("kettenSchritte (#1411)", () => {
+  const kettenSchritte = (md as unknown as { kettenSchritte: (s: Record<string, string>, c: string[], k: string) => string[] }).kettenSchritte;
+  test("löst verschachtelte Ketten auf und zählt je Schritt einmal", () => {
+    const scripts = { verify: "npm run a && npm run b && npm test && npm run a", b: "npm run c && npm run d" };
+    assert.deepEqual(kettenSchritte(scripts, ["verify"], "verify"), ["a", "c", "d", "test"]);
+  });
+  test("Kettennamen aus `chains` werden weder aufgelöst noch als Schritt gezählt", () => {
+    assert.deepEqual(kettenSchritte({ verify: "npm run a", full: "npm run verify && npm run z" }, ["verify", "full"], "full"), ["z"]);
+  });
+});
+
+describe("pruefeMermaid: Größenwächter (#1411)", () => {
+  const m = md as unknown as { pruefeMermaid: (t: string, was?: string) => void; mermaidBloecke: (t: string) => string[] };
+  const front = "---\nconfig:\n  theme: base\n---\n";
+  const kanten = (n: number) => Array.from({ length: n }, (_, i) => `  a${i} --> b${i}`).join("\n");
+  test("Zeichengrenze 50_000 gilt, 50_001 wirft", () => {
+    const rumpf = "sequenceDiagram\n";
+    m.pruefeMermaid(rumpf + "x".repeat(50_000 - rumpf.length));
+    assert.throws(() => m.pruefeMermaid(rumpf + "x".repeat(50_001 - rumpf.length)), /50001 Zeichen/);
+  });
+  test("Kantengrenze 500 gilt, 501 wirft (flowchart und graph)", () => {
+    m.pruefeMermaid(`flowchart TB\n${kanten(500)}`);
+    assert.throws(() => m.pruefeMermaid(`flowchart TB\n${kanten(501)}`), /501 Kanten/);
+    assert.throws(() => m.pruefeMermaid(`graph LR\n${kanten(501)}`), /501 Kanten/);
+  });
+  test("alle Link-Enden zählen, auch gepunktet, dick und ohne Pfeil", () => {
+    const sieben = ["a --> b", "a ==> b", "a .-> b", "a --- b", "a === b", "a -.- b", "a ~~~ b"].join("\n");
+    assert.throws(() => m.pruefeMermaid(`flowchart TB\n${sieben}\n${kanten(494)}`), /501 Kanten/);
+    m.pruefeMermaid(`flowchart TB\n${sieben}\n${kanten(493)}`);
+  });
+  test("das --- des Frontmatters zählt nicht; andere Diagrammarten werden nicht nach Kanten gezählt", () => {
+    m.pruefeMermaid(`${front}flowchart TB\n${kanten(500)}`);
+    assert.throws(() => m.pruefeMermaid(`${front}flowchart TB\n${kanten(501)}`), /501 Kanten/);
+    m.pruefeMermaid(`sequenceDiagram\n${kanten(900)}`);
+  });
+  test("mermaidBloecke liefert nur geschlossene mermaid-Fences", () => {
+    assert.deepEqual(m.mermaidBloecke("x\n```mermaid\nflowchart TB\n```\n```ts\nlet a;\n```\n```mermaid\noffen"), ["flowchart TB"]);
   });
 });

@@ -6,9 +6,9 @@
 // passende Datei oder eine Zahl ohne Quelle macht den Generator (und damit `check:docgen`) rot.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { MERMAID_FRONTMATTER, ganzzahlKonstante } from "./markdown.mjs";
-import { kettenSchritte } from "./gates.mjs";
+import { MERMAID_FRONTMATTER, ganzzahlKonstante, kettenSchritte, leseJson } from "./markdown.mjs";
 import { harnessKatalog } from "./harness-inventar.mjs";
+import { ladeRulesetSpiegel } from "./ruleset-spiegel.mjs";
 
 const PLATZHALTER = /\$\{([a-z-]+):([^}]*)\}/g;
 /** Zeichen, die ein Mermaid-Label oder einen Sequenztext brechen können. */
@@ -77,19 +77,7 @@ function ciJobNamen(rootDir, dir) {
 function ladeRuleset(rootDir, cfg) {
   const pfad = cfg.ruleset;
   if (!pfad) throw new Error("config.diagramme.ruleset fehlt (Pfad der Ruleset-Spiegeldatei)");
-  const abs = join(rootDir, pfad);
-  if (!existsSync(abs)) throw new Error(`Ruleset-Spiegel ${pfad} nicht gefunden`);
-  let r;
-  try {
-    r = JSON.parse(readFileSync(abs, "utf8"));
-  } catch (err) {
-    throw new Error(`Ruleset-Spiegel ${pfad} ist kein gültiges JSON: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
-  }
-  const textListe = (x) => Array.isArray(x) && x.every((e) => typeof e === "string" && e.trim() !== "");
-  if (typeof r?.name !== "string" || r.name.trim() === "") throw new Error(`Ruleset-Spiegel ${pfad}: name fehlt`);
-  if (!textListe(r.requiredChecks) || r.requiredChecks.length === 0) throw new Error(`Ruleset-Spiegel ${pfad}: requiredChecks muss eine nicht leere Liste aus Texten sein`);
-  if (!Array.isArray(r.bypassActors)) throw new Error(`Ruleset-Spiegel ${pfad}: bypassActors muss eine Liste sein`);
-  return r;
+  return ladeRulesetSpiegel(rootDir, pfad);
 }
 
 function konstante(rootDir, cfg, schluessel) {
@@ -105,7 +93,7 @@ function konstante(rootDir, cfg, schluessel) {
 function gatesAnzahl(rootDir, config, kette) {
   const g = config.gates;
   if (!g || !(g.chains ?? []).includes(kette)) throw new Error(`Gate-Kette "${kette}" steht nicht in config.gates.chains`);
-  const scripts = JSON.parse(readFileSync(join(rootDir, g.package), "utf8")).scripts ?? {};
+  const scripts = leseJson(rootDir, g.package, "package.json").scripts ?? {};
   if (typeof scripts[kette] !== "string") throw new Error(`Gate-Kette "${kette}" fehlt in ${g.package}`);
   return String(kettenSchritte(scripts, g.chains, kette).length);
 }

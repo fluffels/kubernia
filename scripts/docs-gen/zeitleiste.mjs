@@ -1,17 +1,15 @@
 // Kein Shebang (siehe docs-gen.mjs). Generator `zeitleiste` (#1367): Tabelle „Datum | Was passierte“
 // aus den ADR-Köpfen (docs/adr/NNNN-*.md, gelesen von adr.mjs) und einer kleinen Meilenstein-Datei für Ereignisse ohne ADR.
 // Das Datum kommt aus dem ADR-Kopf, nicht aus `git log` (flacher CI-Klon, Ausgabe bleibt deterministisch).
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { brauche, byCodeUnit, renderTable } from "./markdown.mjs";
+import { brauche, byCodeUnit, leseJson, renderTable } from "./markdown.mjs";
 import { german, readAdrs, validIso } from "./adr.mjs";
 
 function readMeilensteine(rootDir, file, errors) {
   let data;
   try {
-    data = JSON.parse(readFileSync(join(rootDir, file), "utf8"));
+    data = leseJson(rootDir, file, "Meilenstein-Datei");
   } catch (err) {
-    errors.push(`${file}: nicht lesbar (${err instanceof Error ? err.message : err})`);
+    errors.push(err instanceof Error ? err.message : String(err));
     return [];
   }
   if (!Array.isArray(data?.meilensteine)) {
@@ -29,10 +27,12 @@ function readMeilensteine(rootDir, file, errors) {
 
 export function zeitleisteGenerator({ rootDir, config }) {
   const c = config.zeitleiste;
-  if (!c?.adr || !c?.meilensteine) throw new Error('Config-Block "zeitleiste" mit "adr" und "meilensteine" fehlt');
+  const adrOrdner = config.adr?.ordner;
+  if (!c?.meilensteine) throw new Error('Config-Block "zeitleiste" mit "meilensteine" fehlt');
+  if (!adrOrdner) throw new Error('Config-Block "adr" mit "ordner" fehlt (die Zeitleiste liest den ADR-Ordner von dort)');
   const errors = [];
   const rows = [];
-  if (brauche(rootDir, c.adr, "ADR-Ordner", errors)) rows.push(...readAdrs(rootDir, c.adr, errors));
+  if (brauche(rootDir, adrOrdner, "ADR-Ordner", errors)) rows.push(...readAdrs(rootDir, adrOrdner, errors));
   if (brauche(rootDir, c.meilensteine, "Meilenstein-Datei", errors)) rows.push(...readMeilensteine(rootDir, c.meilensteine, errors));
   if (errors.length) throw new Error(errors.join("; "));
   // Array.prototype.sort ist stabil: Gleichstand ADR (order 0, nach Nummer eingelesen) vor Meilenstein (order 1, Dateireihenfolge).

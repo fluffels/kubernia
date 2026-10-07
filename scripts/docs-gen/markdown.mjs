@@ -2,7 +2,7 @@
 // des Doku-Drift-Wächters (#1355, #1392): Markdown sammeln, Code-Fences erkennen, Frontmatter lesen,
 // npm-Ketten zerlegen; dazu kleine Quelltext-/Daten-Leser (JSON, Ganzzahl-Konstanten) und Mermaid-Escaping (#1370). Reines Node-Modul (nur Builtins).
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { isAbsolute, join, relative, sep } from "node:path";
 
 /** Escaped Zellinhalt für eine GFM-Tabelle (`|` und Zeilenumbrüche). */
 export function cell(value) {
@@ -173,13 +173,88 @@ export function ganzzahlKonstante(rootDir, datei, name) {
   return zahl[1];
 }
 
-/** Liest eine JSON-Datei (relativ zu `rootDir`); wirft mit sprechender Meldung bei fehlender Datei oder kaputtem JSON. */
+/** Liest eine JSON-Datei (relativ zu `rootDir` oder absolut); wirft mit sprechender Meldung bei fehlender Datei oder kaputtem JSON. */
 export function leseJson(rootDir, rel, was) {
-  const abs = join(rootDir, rel);
+  const abs = isAbsolute(rel) ? rel : join(rootDir, rel);
   if (!existsSync(abs)) throw new Error(`${was} ${rel} nicht gefunden (Config veraltet?)`);
   try {
     return JSON.parse(readFileSync(abs, "utf8"));
   } catch (err) {
     throw new Error(`${rel} ist kein gültiges JSON: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
   }
+}
+
+/**
+ * Die eigenen Schritte einer Kette: aufgelöst (verschachtelte Ketten), ohne Kettennamen, je Schritt einmal
+ * (erstes Vorkommen). EINE Zählung für Gate-Tabelle, Diagramm-Zahlen und den Doku-Drift-Wächter.
+ */
+export function kettenSchritte(scripts, chains, kette) {
+  const aufgeloest = expandSteps(scripts[kette], scripts, chains, [kette]);
+  return [...new Set(aufgeloest.filter((s) => !chains.includes(s)))];
+}
+
+/** Alle mermaid-Fences (``` oder ~~~, auch 4+ Zeichen) eines Markdown-Texts (Inhalt ohne die Fence-Zeilen). Pur. */
+export function mermaidBloecke(markdown) {
+  return fenceBloecke(String(markdown).split(/\r?\n/))
+    .filter((b) => b.info === "mermaid" && b.geschlossen) // ein nie geschlossener Block wird nicht gerendert
+    .map((b) => b.inhalt.join("\n"));
+}
+
+/** Mermaid-Standardgrenzen (maxTextSize, maxEdges); darüber rendert GitHub das Diagramm nicht. */
+export const MERMAID_MAX_TEXT = 50_000;
+export const MERMAID_MAX_KANTEN = 500;
+
+// Link-Enden von flowchart/graph; bewusst großzügig (zu viel zählen = fail-closed).
+const MERMAID_KANTE = /-->|==>|\.->|---|===|-\.-|~~~|--[xo]/g;
+
+/**
+ * Mermaid-Größenwächter: wirft, wenn `text` (ein Diagramm ohne Fence) die Standardgrenzen reißt. Kanten werden nur in
+ * `flowchart`/`graph` gezählt (nach dem Frontmatter, dessen `---` zählt nicht); andere Diagrammarten nur nach Zeichen.
+ */
+export function pruefeMermaid(text, was = "Diagramm") {
+  const s = String(text);
+  if (s.length > MERMAID_MAX_TEXT) throw new Error(`${was}: ${s.length} Zeichen, Mermaid rendert höchstens ${MERMAID_MAX_TEXT}`);
+  const ohneFront = s.replace(/^\s*---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
+  if (!/^\s*(?:flowchart|graph)\b/.test(ohneFront)) return;
+  const kanten = (ohneFront.match(MERMAID_KANTE) ?? []).length;
+  if (kanten > MERMAID_MAX_KANTEN) throw new Error(`${was}: ${kanten} Kanten, Mermaid rendert höchstens ${MERMAID_MAX_KANTEN}`);
+}
+
+const MARKER = /^(\s*)<!-- GEN:([a-z0-9][a-z0-9-]*) (START|END) -->\s*$/;
+
+/** Findet `GEN:`-Abschnitte; Zeilen in Code-Fences zählen nicht. Zeilen sind 0-basiert. */
+export function parseSections(text) {
+  const lines = text.split(/\r?\n/);
+  const sections = [];
+  const errors = [];
+  let open = null;
+  const imFence = fenceMaske(lines);
+  lines.forEach((line, i) => {
+    if (imFence[i]) return;
+    const m = MARKER.exec(line);
+    if (!m) {
+      if (line.trimStart().startsWith("<!-- GEN:"))
+        errors.push({ section: "?", message: `Zeile ${i + 1}: unlesbarer GEN-Marker "${line.trim()}"` });
+      return;
+    }
+    const [, indent, name, kind] = m;
+    if (kind === "START") {
+      if (open)
+        errors.push({ section: name, message: `Zeile ${i + 1}: START "${name}" innerhalb des offenen Abschnitts "${open.name}"` });
+      else if (sections.some((s) => s.name === name))
+        errors.push({ section: name, message: `Zeile ${i + 1}: Abschnitt "${name}" kommt in dieser Datei doppelt vor` });
+      else open = { name, startLine: i, indent };
+      return;
+    }
+    if (!open) {
+      errors.push({ section: name, message: `Zeile ${i + 1}: END "${name}" ohne START` });
+    } else if (open.name !== name) {
+      errors.push({ section: name, message: `Zeile ${i + 1}: END "${name}" passt nicht zum offenen START "${open.name}"` });
+    } else {
+      sections.push({ ...open, endLine: i });
+      open = null;
+    }
+  });
+  if (open) errors.push({ section: open.name, message: `END-Marker für "${open.name}" fehlt (START in Zeile ${open.startLine + 1})` });
+  return { sections, errors };
 }

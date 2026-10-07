@@ -54,7 +54,6 @@
     "ordner": "docs/adr"
   },
   "zeitleiste": {
-    "adr": "docs/adr",
     "meilensteine": "docs/meilensteine.json"
   },
   "diagramme": {

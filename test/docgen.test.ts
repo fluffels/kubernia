@@ -512,3 +512,41 @@ describe("Echt-Repo", () => {
     for (const n of namen) assert.ok(Object.hasOwn(registryApi.GENERATORS, n), `unbekannter Generator ${n}`);
   });
 });
+
+describe("Mermaid-Größenwächter in der Engine (#1411)", () => {
+  const gross = (n: number) => ["```mermaid", "flowchart TB", ...Array.from({ length: n }, (_, i) => `  a${i} --> b${i}`), "```"].join("\n");
+  const doc = `${S}\n${E}\n`;
+  test("zu großes Diagramm ist ein Generatorfehler und es wird nichts geschrieben (fail-closed)", () => {
+    const root = fixture({ "a.md": doc, "b.md": doc });
+    const res = api.runDocsGen({ rootDir: root, config: { markdown: ["a.md", "b.md"] }, generators: { demo: () => gross(501) }, write: true });
+    assert.equal(res.errors.length, 2);
+    assert.match(res.errors[0].message, /501 Kanten/);
+    assert.deepEqual(res.written, []);
+    assert.equal(readFileSync(join(root, "a.md"), "utf8"), doc);
+  });
+  test("Diagramm an der Grenze (500 Kanten) wird geschrieben", () => {
+    const root = fixture({ "a.md": doc });
+    const res = api.runDocsGen({ rootDir: root, config: { markdown: ["a.md"] }, generators: { demo: () => gross(500) }, write: true });
+    assert.deepEqual(res.errors, []);
+    assert.deepEqual(res.written, ["a.md"]);
+  });
+});
+
+describe("Mermaid-Größenwächter in der Engine (#1411)", () => {
+  const gross = (n: number) => ["```mermaid", "flowchart TB", ...Array.from({ length: n }, (_, i) => `  a${i} --> b${i}`), "```"].join("\n");
+  const doc = `${S}\n${E}\n`;
+  test("zu großes Diagramm ist ein Generatorfehler und es wird nichts geschrieben (fail-closed)", () => {
+    const root = fixture({ "a.md": doc, "b.md": doc });
+    const res = api.runDocsGen({ rootDir: root, config: { markdown: ["a.md", "b.md"] }, generators: { demo: () => gross(501) }, write: true });
+    assert.equal(res.errors.length, 2);
+    assert.match(res.errors[0].message, /501 Kanten/);
+    assert.deepEqual(res.written, []);
+    assert.equal(readFileSync(join(root, "a.md"), "utf8"), doc);
+  });
+  test("Diagramm an der Grenze (500 Kanten) wird geschrieben", () => {
+    const root = fixture({ "a.md": doc });
+    const res = api.runDocsGen({ rootDir: root, config: { markdown: ["a.md"] }, generators: { demo: () => gross(500) }, write: true });
+    assert.deepEqual(res.errors, []);
+    assert.deepEqual(res.written, ["a.md"]);
+  });
+});

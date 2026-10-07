@@ -13,7 +13,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { collectMarkdown, fenceMaske } from "./docs-gen/markdown.mjs";
+import { collectMarkdown, leseJson, mermaidBloecke, parseSections, pruefeMermaid } from "./docs-gen/markdown.mjs";
 import { GENERATORS } from "./docs-gen/registry.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -21,44 +21,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const DEFAULT_CONFIG = "scripts/docs-gen/config.json";
 
 export const HINT = "<!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->";
-const MARKER = /^(\s*)<!-- GEN:([a-z0-9][a-z0-9-]*) (START|END) -->\s*$/;
-
-/** Findet Abschnitte; Zeilen in Code-Fences zählen nicht. Zeilen sind 0-basiert. */
-export function parseSections(text) {
-  const lines = text.split(/\r?\n/);
-  const sections = [];
-  const errors = [];
-  let open = null;
-  const imFence = fenceMaske(lines);
-  lines.forEach((line, i) => {
-    if (imFence[i]) return;
-    const m = MARKER.exec(line);
-    if (!m) {
-      if (line.trimStart().startsWith("<!-- GEN:"))
-        errors.push({ section: "?", message: `Zeile ${i + 1}: unlesbarer GEN-Marker "${line.trim()}"` });
-      return;
-    }
-    const [, indent, name, kind] = m;
-    if (kind === "START") {
-      if (open)
-        errors.push({ section: name, message: `Zeile ${i + 1}: START "${name}" innerhalb des offenen Abschnitts "${open.name}"` });
-      else if (sections.some((s) => s.name === name))
-        errors.push({ section: name, message: `Zeile ${i + 1}: Abschnitt "${name}" kommt in dieser Datei doppelt vor` });
-      else open = { name, startLine: i, indent };
-      return;
-    }
-    if (!open) {
-      errors.push({ section: name, message: `Zeile ${i + 1}: END "${name}" ohne START` });
-    } else if (open.name !== name) {
-      errors.push({ section: name, message: `Zeile ${i + 1}: END "${name}" passt nicht zum offenen START "${open.name}"` });
-    } else {
-      sections.push({ ...open, endLine: i });
-      open = null;
-    }
-  });
-  if (open) errors.push({ section: open.name, message: `END-Marker für "${open.name}" fehlt (START in Zeile ${open.startLine + 1})` });
-  return { sections, errors };
-}
+export { parseSections };
 
 /** Sollinhalt eines Abschnitts als Zeilen: Hinweis, Leerzeile, Ausgabe, Leerzeile (Einrückung des START-Markers). */
 function bodyLines(section, output) {
@@ -84,7 +47,10 @@ export function renderSections(text, outputs) {
 function runGenerator(cache, generators, name, ctx) {
   if (!cache.has(name)) {
     try {
-      cache.set(name, { value: generators[name](ctx) });
+      const value = generators[name](ctx);
+      // Größenwächter für jedes generierte Mermaid-Diagramm (fail-closed: ein Verstoß ist ein Generatorfehler, nichts wird geschrieben).
+      mermaidBloecke(value).forEach((block, i) => pruefeMermaid(block, `Mermaid-Diagramm ${i + 1} von "${name}"`));
+      cache.set(name, { value });
     } catch (err) {
       cache.set(name, { error: err instanceof Error ? err.message : String(err) });
     }
@@ -144,7 +110,7 @@ export function runDocsGen({ rootDir = ROOT, config, generators = GENERATORS, wr
 
 export function loadConfig(rootDir = ROOT, pfad = DEFAULT_CONFIG) {
   const abs = isAbsolute(pfad) ? pfad : resolve(rootDir, pfad);
-  return JSON.parse(readFileSync(abs, "utf8"));
+  return leseJson(rootDir, abs, "Config");
 }
 
 /**
