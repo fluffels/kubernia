@@ -303,6 +303,7 @@ const patchDokuStimmig = (mr: string, zahl: number): boolean =>
 const resumeAbschlussDokuStimmig = (mr: string): boolean =>
   /Patch-Teil Abschluss fortgesetzter Subagenten/.test(mr) &&
   /<task-id>/.test(mr) &&
+  /Diagnose:\*\* `~\/\.claude\/state\/langfuse_state\.json`[\s\S]{0,120}pending_agent_turns/.test(mr) &&
   /Selbstheilung/.test(mr) &&
   /pending_agent_turns/.test(mr) &&
   /SessionEnd[^.]*nicht garantiert/.test(mr);
@@ -334,6 +335,8 @@ describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
     assert.ok(!resumeAbschlussDokuStimmig(mr.replace("Patch-Teil Abschluss fortgesetzter Subagenten", "Patch-Teil x")));
     assert.ok(!resumeAbschlussDokuStimmig(mr.replaceAll("Selbstheilung", "Heilung")));
     assert.ok(!resumeAbschlussDokuStimmig(mr.replaceAll("pending_agent_turns", "x")));
+    assert.ok(!resumeAbschlussDokuStimmig(mr.replaceAll("<task-id>", "x")));
+    assert.ok(!resumeAbschlussDokuStimmig(mr.replace("**Diagnose:** `~/.claude/state/langfuse_state.json`", "**Diagnose:** `x`")));
     assert.ok(!resumeAbschlussDokuStimmig(mr.replaceAll("nicht garantiert", "garantiert")));
   });
 
