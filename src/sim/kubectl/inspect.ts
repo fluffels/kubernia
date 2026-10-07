@@ -19,7 +19,8 @@ import type { KubectlHost } from "./host";
 import { SECURITY_CONTEXT_KEYS, isExternalNameService, type Deployment, type PodInstance, type PodStatus } from "../state";
 import { sameRbac } from "../rbac";
 import { clusterPods, findClusterPod, type ClusterPod } from "../pods";
-import { statefulPodClaimName, statefulPodNode, statefulPodVolumePending } from "../workload";
+import { statefulPodClaimName, statefulPodNode } from "../workload";
+import { clusterPodStatus } from "../podstatus";
 
 // Alle Ingresses teilen sich die Adresse des einen Ingress-Controllers (wie im echten
 // Cluster). Nur die kubectl-Ausgaben (get/describe ingress) brauchen sie, darum hier.
@@ -41,18 +42,10 @@ function aliasMap(entries: { aliases: string[]; render: Renderer }[]): Map<strin
 
 /** Eine Pod-Zeile (NAME READY STATUS RESTARTS AGE) – die EINE Quelle für `get pods` mit und
  *  ohne `-A`. Der Status kommt je Owner aus seiner Wahrheit (Deployment: `_podStatus`,
- *  StatefulSet: PVC-Bindung, #811). */
+ *  StatefulSet: `clusterPodStatus` über `podAddress`). */
 function podRow(host: KubectlHost, c: ClusterPod): string[] {
-  switch (c.owner) {
-    case "Deployment": {
-      const st = host._podStatus(c.dep);
-      return [c.pod.name, st.ready, st.status, String(st.restarts || c.pod.restarts), host._age(c.pod.created)];
-    }
-    case "StatefulSet": {
-      const pending = statefulPodVolumePending(c.sts, c.pod, host.pvcs);
-      return [c.pod.name, pending ? "0/1" : "1/1", pending ? "Pending" : "Running", String(c.pod.restarts), host._age(c.pod.created)];
-    }
-  }
+  const st = clusterPodStatus(host, c);
+  return [c.pod.name, st.ready, st.status, String(st.restarts), host._age(c.pod.created)];
 }
 
 function getPods(host: KubectlHost, t: string[]): string {
@@ -534,6 +527,7 @@ function describeStatefulPod(host: KubectlHost, c: StatefulPod): string {
   const { pod, sts } = c;
   const ip = podAddress(c, host.pvcs);
   const scheduled = ip !== null;
+  const st = clusterPodStatus(host, c);
   const age = host._age(pod.created);
   const events = scheduled
     ? [
@@ -546,10 +540,12 @@ function describeStatefulPod(host: KubectlHost, c: StatefulPod): string {
     "Name:         " + pod.name,
     "Namespace:    default",
     "Node:         " + (scheduled ? statefulPodNode(host.nodes, pod) : "<none>"),
-    "Status:       " + (scheduled ? "Running" : "Pending"),
-    "Ready:        " + (scheduled ? "1/1" : "0/1"),
+    "Status:       " + st.status,
+    "Ready:        " + st.ready,
     "IP:           " + (ip ?? "<none>"),
     "Controlled By: StatefulSet/" + sts.name,
+    // StatefulSetRes kennt kein serviceAccountName; ohne spec.serviceAccountName heißt es im
+    // echten Kubernetes `default`. Ausblick: siehe #1142.
     "Service Account: default",
     "Containers:",
     "  " + sts.name + ":",

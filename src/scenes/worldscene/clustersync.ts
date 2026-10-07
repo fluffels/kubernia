@@ -19,7 +19,8 @@
  */
 import Phaser from "phaser";
 import { Game } from "../../game";
-import { BROKEN_STATUS } from "../../sim";
+import { clusterPods } from "../../sim/pods";
+import { podView, workloadSummaries, type PodView } from "../../sim/podstatus";
 import { SFX } from "../../sfx";
 import { spreadLabelsVertically, type LayoutBox } from "../../hud/labellayout";
 import { selectVisibleTags, expandRect, flagBobOffset, lampFlickerAlpha } from "../../hud/cull";
@@ -98,30 +99,49 @@ function syncHarborDamage(scene: WorldSceneLike) {
   }
 }
 
-/** Pod-Kisten + Signatur-abhängige Deko an den aktuellen Cluster-Zustand angleichen.
- *  Läuft nur bei geänderter Cluster-Revision (#523), nicht mehr pro Frame. */
-function syncPods(scene: WorldSceneLike) {
-  const pods = [];
-  for (const d of Game.sim.deployments) for (const p of d.pods) pods.push({ name: p.name, dep: d.name });
-  const names = new Set<string>(pods.map(p => p.name));
+/** Neue Pod-Kiste an einem freien Steg-Slot absetzen (Drop-Tween + Staub). */
+function spawnPodCrate(scene: WorldSceneLike, v: PodView) {
+  // #523: freien Slot suchen; sind alle belegt, die Belegungsliste dynamisch um
+  // einen Slot wachsen lassen (podSlotPos stapelt darüber sauber) statt auf Slot 0
+  // zurückzufallen und die Kiste zu überlagern.
+  let slot = scene.slotUsed.findIndex((u: boolean) => !u);
+  if (slot === -1) slot = scene.slotUsed.length;
+  scene.slotUsed[slot] = true;
+  const pos = podSlotPos(scene, slot);
+  const hue = hashHue(v.workload);
+  const shadow = scene.addShadow(pos.x, pos.y + 7, 11);
+  const hull = scene.add.image(pos.x, pos.y - 44, "pod_hull").setScale(0.6).setDepth(pos.y + 8);
+  const barrel = scene.add.image(pos.x, pos.y - 44 - 2, "barrel").setScale(0.35).setTint(hueColor(hue)).setDepth(pos.y + 9);
+  dropCrate(scene, [hull, barrel], pos);
+  scene.podSlots[v.name] = { slot, hull, barrel, shadow, workload: v.workload, created: v.created, wx: pos.x, wy: pos.y };
+}
 
-  for (const p of pods) {
-    if (!scene.podSlots[p.name]) {
-      // #523: freien Slot suchen; sind alle belegt, die Belegungsliste dynamisch um
-      // einen Slot wachsen lassen (podSlotPos stapelt darüber sauber) statt auf Slot 0
-      // zurückzufallen und die Kiste zu überlagern.
-      let slot = scene.slotUsed.findIndex((u: boolean) => !u);
-      if (slot === -1) slot = scene.slotUsed.length;
-      scene.slotUsed[slot] = true;
-      const pos = podSlotPos(scene, slot);
-      const hue = hashHue(p.dep);
-      const shadow = scene.addShadow(pos.x, pos.y + 7, 11);
-      const hull = scene.add.image(pos.x, pos.y - 44, "pod_hull").setScale(0.6).setDepth(pos.y + 8);
-      const barrel = scene.add.image(pos.x, pos.y - 44 - 2, "barrel").setScale(0.35).setTint(hueColor(hue)).setDepth(pos.y + 9);
-      scene.tweens.add({ targets: [hull, barrel], y: "+=44", duration: 550, ease: "Bounce.easeOut",
-        onComplete: () => scene.burstAt(pos.x, pos.y + 4, "dust") });
-      scene.podSlots[p.name] = { slot, hull, barrel, shadow, dep: p.dep, wx: pos.x, wy: pos.y };
-    }
+function dropCrate(scene: WorldSceneLike, targets: Phaser.GameObjects.Image[], pos: { x: number; y: number }) {
+  scene.tweens.add({ targets, y: "+=44", duration: 550, ease: "Bounce.easeOut",
+    onComplete: () => scene.burstAt(pos.x, pos.y + 4, "dust") });
+}
+
+/** Gleicher Pod-Name, neue Instanz (StatefulSet-Neustart: stabile Identität, gleicher Platz):
+ *  dieselbe Kiste am selben Platz erneut absetzen, ohne Platschen. */
+function redropPodCrate(scene: WorldSceneLike, v: PodView) {
+  const info = scene.podSlots[v.name];
+  const pos = podSlotPos(scene, info.slot);
+  info.created = v.created;
+  info.hull.y = pos.y - 44;
+  info.barrel.y = pos.y - 44 - 2;
+  dropCrate(scene, [info.hull, info.barrel], pos);
+}
+
+/** Pod-Kisten + Signatur-abhängige Deko an den aktuellen Cluster-Zustand angleichen.
+ *  Läuft nur bei geänderter Cluster-Revision (#523), nicht mehr pro Frame. Pods aller
+ *  Workload-Arten kommen über `clusterPods`/`podView` (#1414). */
+function syncPods(scene: WorldSceneLike) {
+  const views = clusterPods(Game.sim).map(c => podView(Game.sim, c));
+  const names = new Set<string>(views.map(v => v.name));
+
+  for (const v of views) {
+    if (!scene.podSlots[v.name]) spawnPodCrate(scene, v);
+    else if (scene.podSlots[v.name].created !== v.created) redropPodCrate(scene, v);
   }
   for (const name of Object.keys(scene.podSlots)) {
     if (!names.has(name)) {
@@ -135,25 +155,21 @@ function syncPods(scene: WorldSceneLike) {
     }
   }
 
-  // Kaputte Deployments: Rumpf rot einfärben
-  const brokenMap: Record<string, boolean> = {};
-  for (const d of Game.sim.deployments) brokenMap[d.name] = !!d.broken;
-  for (const info of Object.values(scene.podSlots) as { hull: Phaser.GameObjects.Image; dep: string }[]) {
-    info.hull.setTint(brokenMap[info.dep] ? 0xff8d8d : 0xffffff);
-  }
+  // Nicht bereite Pods: Rumpf rot einfärben (je Pod, nicht je Workload)
+  for (const v of views) scene.podSlots[v.name].hull.setTint(v.healthy ? 0xffffff : 0xff8d8d);
 
-  // Signaturen: Fässer / Flaggen / Laternen / Deployment-Labels nur bei Änderung neu bauen
-  const dSig = Game.sim.deployments.map(d => d.name + d.replicas + (d.broken ? d.broken.type : "")).join("|");
+  // Signaturen: Fässer / Flaggen / Laternen / Workload-Labels nur bei Änderung neu bauen
+  const pSig = views.map(v => v.kind + "/" + v.workload + "/" + v.name + ":" + v.label).join("|");
   const bSig = Game.sim.docker.containers.map(c => c.name + c.running).join("|");
   const fSig = Game.sim.releases.map(r => r.name + r.revision).join("|");
   const sSig = Game.sim.services.map(s => s.name).join("|");
-  if (dSig !== scene.dynamic.depSig || bSig !== scene.dynamic.barrelsSig || fSig !== scene.dynamic.flagsSig || sSig !== scene.dynamic.svcSig) {
-    scene.dynamic = { depSig: dSig, barrelsSig: bSig, flagsSig: fSig, svcSig: sSig };
-    rebuildDynamic(scene);
+  if (pSig !== scene.dynamic.podSig || bSig !== scene.dynamic.barrelsSig || fSig !== scene.dynamic.flagsSig || sSig !== scene.dynamic.svcSig) {
+    scene.dynamic = { podSig: pSig, barrelsSig: bSig, flagsSig: fSig, svcSig: sSig };
+    rebuildDynamic(scene, views);
   }
 }
 
-export function rebuildDynamic(scene: WorldSceneLike) {
+export function rebuildDynamic(scene: WorldSceneLike, views: readonly PodView[]) {
   scene.dynGroup.clear(true, true);
   // Tags sind reine Daten (#416): hier nur sammeln, NICHT je einen Container bauen.
   // (lx,ly) = Tag-Position, (ax,ay) = Bezugspunkt des Objekts (Distanz zur Figur +
@@ -167,23 +183,16 @@ export function rebuildDynamic(scene: WorldSceneLike) {
     scene.dynTags.push({ tx: lx, ty: ly, ax, ay, text: str, status, compact });
   };
 
-  // Deployment-Tags AM Rumpf der ersten Kiste (kaputte rot mit Status!)
+  // Workload-Tags AM Rumpf der ersten Kiste (nicht bereite rot mit Status!)
   // #651: Bezugspunkt auf die Kisten-Mitte (pos.y - 44) gesetzt; Label schwebt
   // knapp über der Kiste statt zwischen Kiste und Boden.
-  const seen: Record<string, boolean> = {};
-  for (const d of Game.sim.deployments) {
-    const first = d.pods[0] && scene.podSlots[d.pods[0].name];
-    if (first && !seen[d.name]) {
-      seen[d.name] = true;
-      const pos = podSlotPos(scene, first.slot);
-      const crateY = pos.y - 44;  // Kisten-Mitte (Sprite-Ursprung der Image)
-      // #867: vorher eine eigene Ternärkette, die nur imagepull/crashloop kannte und
-      // notready/oomkilled fälschlich als "Pending" beschriftete – jetzt zentrale Tabelle.
-      const text = d.broken
-        ? d.name + " ⚠ " + BROKEN_STATUS[d.broken.type].label
-        : d.name + " " + d.replicas + "/" + d.replicas;
-      mkTag(pos.x, crateY - 14, text, d.broken ? 0xff7b7b : 0x6fe09a, pos.x, crateY);
-    }
+  for (const w of workloadSummaries(views)) {
+    const first = scene.podSlots[w.firstPod];
+    if (!first) continue;
+    const pos = podSlotPos(scene, first.slot);
+    const crateY = pos.y - 44;  // Kisten-Mitte (Sprite-Ursprung der Image)
+    const text = w.problem ? w.workload + " ⚠ " + w.problem : w.workload + " " + w.ready + "/" + w.total;
+    mkTag(pos.x, crateY - 14, text, w.problem ? 0xff7b7b : 0x6fe09a, pos.x, crateY);
   }
   // Docker-Fässer (max. 10 sichtbar): laufende am Dock bei Bo, gestoppte im
   // Lagerschuppen (#303). Der Ortswechsel macht „gestoppt ≠ gelöscht" (docker ps -a)

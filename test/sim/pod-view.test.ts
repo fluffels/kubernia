@@ -104,6 +104,7 @@ describe("kubectl describe pod (StatefulSet)", () => {
     expect(sim.exec("kubectl describe pod speicher-1").error).toBeFalsy();
     expect(d).toContain("Name:         speicher-1");
     expect(d).toContain("Controlled By: StatefulSet/speicher");
+    expect(d).toContain("Service Account: default");
     expect(d).not.toContain("ReplicaSet/");
     expect(d).toContain("IP:           " + podIP("speicher-1"));
     expect(d).toContain("Status:       Running");

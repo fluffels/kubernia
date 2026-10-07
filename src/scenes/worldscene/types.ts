@@ -50,7 +50,7 @@ export interface DynDecorItem {
   anim?: { kind: "flag" | "lamp"; baseY: number; phase: number };
 }
 /** Pod-Rumpf an einem Steg-Slot (Cluster→Welt-Sync): offener Holzrumpf + sichtbares Container-Fass. */
-export interface PodSlot { slot: number; hull: Phaser.GameObjects.Image; barrel: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; dep: string; wx: number; wy: number; }
+export interface PodSlot { slot: number; hull: Phaser.GameObjects.Image; barrel: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; workload: string; created: number; wx: number; wy: number; }
 /** Über die Wiese flatternder Schmetterling. */
 export interface Butterfly { spr: Phaser.GameObjects.Image; ax: number; ay: number; ph: number; sp: number; }
 
@@ -97,7 +97,7 @@ export interface WorldSceneFields {
   lastControlPlaneUp?: boolean;  // #692: zuletzt angewendeter CP-Zustand (Guard für syncHarborDamage)
   pierDamageImgs: Phaser.GameObjects.Image[];  // #693: pier_ruined-Overlays je Pier
   lastNodesSig?: string;                        // #693: Guard für syncPierDamage
-  dynamic: { barrelsSig: string; flagsSig: string; svcSig: string; depSig: string };
+  dynamic: { barrelsSig: string; flagsSig: string; svcSig: string; podSig: string };
   dynGroup: Phaser.GameObjects.Group;
   // statische Props/Effekte aus scenery.ts (nur für Hafen-Karten gesetzt, #863)
   shipFlag?: Phaser.GameObjects.Image;

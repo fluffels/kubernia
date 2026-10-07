@@ -1,5 +1,6 @@
 import { Game } from "../game";
-import { BROKEN_STATUS } from "../sim";
+import { findClusterPod } from "../sim/pods";
+import { podView, type PodView } from "../sim/podstatus";
 import { SFX } from "../sfx";
 import { worldScene, interiorOpen } from "../runtime";
 import { part, $, esc, NPCS, SMALLTALK } from "./shared";
@@ -11,6 +12,18 @@ import { enqueueAchievement, bundleCelebration, type Achievement } from "../hud/
 /** Signalflaggen-Farben fürs Erfolgs-Feier-Overlay (#223/#314): kräftige, maritime
  *  Palette für die Wimpelkette (dress ship) und den Flaggen-Konfetti-Regen. */
 const SIGNAL_COLORS = ["#e03131", "#ffd43b", "#1971c2", "#f1f3f5", "#4dd0e1", "#2f9e44"];
+
+/** HTML des Pod-Inspect-Panels (#650/#1414): Name, Image, Status, Restarts, Besitzer. */
+function podInspectHtml(v: PodView): string {
+  const statusColor = v.healthy ? "#6fe09a" : "#ff8d8d";
+  return '<table class="podinspect-table">' +
+    '<tr><th>Name</th><td><code>' + esc(v.name) + '</code></td></tr>' +
+    '<tr><th>Image</th><td><code>' + esc(v.image) + '</code></td></tr>' +
+    '<tr><th>Status</th><td style="color:' + statusColor + '">' + esc(v.label) + '</td></tr>' +
+    '<tr><th>Restarts</th><td>' + v.restarts + '</td></tr>' +
+    '<tr><th>Gehört zu</th><td><code>' + esc(v.kind + "/" + v.workload) + '</code></td></tr>' +
+  '</table>';
+}
 
 export const hudUI = part({
   /* ========== HUD, Toasts, Alarm ========== */
@@ -308,26 +321,9 @@ export const hudUI = part({
    *  und Restarts des angegebenen Pods aus Game.sim. */
   openPodInspect(podName: string) {
     if (!Game.sim) return;
-    let dep = null;
-    let pod = null;
-    for (const d of Game.sim.deployments) {
-      for (const p of d.pods) {
-        if (p.name === podName) { dep = d; pod = p; break; }
-      }
-      if (dep) break;
-    }
-    if (!dep || !pod) return;
-
-    const status = dep.broken ? BROKEN_STATUS[dep.broken.type].label : "Running";
-    const statusColor = dep.broken ? "#ff8d8d" : "#6fe09a";
-
-    $("podinspect-body").innerHTML =
-      '<table class="podinspect-table">' +
-        '<tr><th>Name</th><td><code>' + esc(String(podName)) + '</code></td></tr>' +
-        '<tr><th>Image</th><td><code>' + esc(dep.image) + '</code></td></tr>' +
-        '<tr><th>Status</th><td style="color:' + statusColor + '">' + esc(status) + '</td></tr>' +
-        '<tr><th>Restarts</th><td>' + pod.restarts + '</td></tr>' +
-      '</table>';
+    const c = findClusterPod(Game.sim, podName);
+    if (!c) return;
+    $("podinspect-body").innerHTML = podInspectHtml(podView(Game.sim, c));
 
     $("overlay-podinspect").classList.remove("hidden");
     $("overlay-podinspect").focus();
