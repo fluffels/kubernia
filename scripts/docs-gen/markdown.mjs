@@ -88,9 +88,10 @@ export function parseChain(script) {
     .map((s) => s.trim())
     .filter(Boolean)
     .map((step) => {
-      const run = /^npm run ([^\s]+)$/.exec(step);
+      // Argumente hinter `--` (`npm run X -- --flag`) gehören nicht zum Schrittnamen (Z5g).
+      const run = /^npm run ([^\s]+)(?:\s+--(?:\s.*)?)?$/.exec(step);
       if (run) return run[1];
-      return step === "npm test" ? "test" : step;
+      return /^npm test(?:\s+--(?:\s.*)?)?$/.test(step) ? "test" : step;
     });
 }
 

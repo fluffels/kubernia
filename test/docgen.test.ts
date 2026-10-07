@@ -266,6 +266,9 @@ describe("Generator gates", () => {
   test("parseChain: npm run, npm test, Rohbefehl", () => {
     assert.deepEqual(mdApi.parseChain("npm run a && npm test && node x.mjs --y"), ["a", "test", "node x.mjs --y"]);
   });
+  test("parseChain: Argumente hinter -- fallen weg (Z5g)", () => {
+    assert.deepEqual(mdApi.parseChain("npm run a -- --flag && npm test -- --run && npm run b"), ["a", "test", "b"]);
+  });
   test("Reihenfolge, Kettenspalte, verschachtelte Kette ohne eigene Zeile, CI-Zeile", () => {
     const rows = run(base, conf({ descriptions: { a: "A", b: "B", test: "T", c: "C", "node x.mjs": "X" } }))
       .split("\n")

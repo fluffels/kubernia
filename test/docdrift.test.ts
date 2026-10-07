@@ -294,8 +294,14 @@ describe("parseVerifyChain löst verschachtelte Ketten wie der Gate-Generator au
   test("ein zusammengesetzter Schritt zählt mit seinen Teilen, in Reihenfolge", () => {
     assert.deepEqual(parse({ verify: "npm run a && npm run inner && npm test", inner: "npm run b && npm run c", a: "x", b: "x", c: "x", test: "x" }), ["a", "b", "c", "test"]);
   });
-  test("ein Alias ohne && bleibt ein Schritt, ein Rohbefehl fällt heraus", () => {
-    assert.deepEqual(parse({ verify: "npm run a && node x.mjs", a: "npm run b", b: "x" }), ["a"]);
+  test("ein Alias ohne && bleibt ein Schritt", () => {
+    assert.deepEqual(parse({ verify: "npm run a && npm test", a: "npm run b", b: "x", test: "x" }), ["a", "test"]);
+  });
+  test("ein Rohbefehl wirft laut, statt still zu fehlen (Z5g)", () => {
+    assert.throws(() => parse({ verify: "npm run a && node x.mjs", a: "x" }), /ohne Skriptnamen.*node x\.mjs/);
+  });
+  test("Argumente hinter -- gehören nicht zum Schrittnamen (Z5g)", () => {
+    assert.deepEqual(parse({ verify: "npm run a -- --flag && npm test -- --run", a: "x", test: "x" }), ["a", "test"]);
   });
   test("ein Zyklus wirft", () => {
     assert.throws(() => parse({ verify: "npm run x", x: "npm run y && npm run a", y: "npm run x && npm run a", a: "x" }), /Zyklus/);

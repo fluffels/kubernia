@@ -165,7 +165,13 @@ export function collectHeadingSlugs(md) {
 /** Liest die verify-Gate-Sequenz aus dem verify-Skript in package.json aus:
  *  alle `npm run <x>`-Aufrufe in Reihenfolge, gefolgt von `npm test` → `"test"`. */
 export function parseVerifyChain(pkgScripts) {
-  return expandSteps(pkgScripts["verify"] ?? "", pkgScripts, [], ["verify"]).filter((step) => /^[a-zA-Z0-9:_-]+$/.test(step));
+  const steps = expandSteps(pkgScripts["verify"] ?? "", pkgScripts, [], ["verify"]);
+  // Ein Schritt ohne Skriptnamen (Rohbefehl) ließe sich nicht gegen die Doku abgleichen: laut melden statt still fallen lassen (Z5g).
+  const unbenennbar = steps.filter((step) => !/^[a-zA-Z0-9:_-]+$/.test(step));
+  if (unbenennbar.length > 0) {
+    throw new Error(`verify enthält Schritte ohne Skriptnamen (nur \`npm run <x>\` und \`npm test\`, Argumente hinter \`--\` erlaubt): ${unbenennbar.join(" | ")}`);
+  }
+  return steps;
 }
 
 /** Findet alle `typecheck → … → test`-Sequenzen in `md` (roh, inkl. Codeblöcke).
