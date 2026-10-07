@@ -3,8 +3,8 @@
 /**
  * Slice-Override per Commit-Zeile (#1269, #1309) — das gemeinsame Modul der Gate-Skripte.
  *
- * Drei Wächter lassen einen Slice mit Pflicht-Begründung durch (`KQ-Diffsize-Override`,
- * `KQ-Diffcov-Override`, `KQ-Review-Override`): eine Zeile `<KEY>: #<nr> <warum>` am Zeilenanfang einer
+ * Vier Wächter lassen einen Slice mit Pflicht-Begründung durch (`KQ-Diffsize-Override`,
+ * `KQ-Diffcov-Override`, `KQ-Lockfile-Override`, `KQ-Review-Override`): eine Zeile `<KEY>: #<nr> <warum>` am Zeilenanfang einer
  * Commit-Message im Slice (`<basis>..HEAD`, als Betreff oder Body-Zeile). Parser, Slice-Lesen und die Ausgabe-Texte liegen hier genau
  * einmal, damit lokal, im PR und auf main dasselbe gilt und kein Wächter eine eigene Variante pflegt.
  *

@@ -465,8 +465,12 @@ function hookSkripte(settingsText: string): string[] {
   return [...skripte];
 }
 
+// Die Importformen: `from "./x"`, Side-Effect-`import "./x"`, dynamisches `import("./x")`, `require("./x")` und
+// `createRequire(…)("./x")` (Aufruf-Klammer direkt vor dem Literal; bewusst großzügig, fail-closed).
+const IMPORT_FORM = /(?:\bfrom\s+|\bimport\s*\(?\s*|\brequire\(\s*|\)\s*\(\s*)["'](\.{1,2}\/[\w./-]+\.(?:mjs|cjs))["']/g;
+
 /**
- * Alle lokalen relativen Importe (`from "./x.mjs"`, `../x.mjs`, `require("./x.cjs")`; transitiv) der Wurzel-Skripte,
+ * Alle lokalen relativen Importe (`IMPORT_FORM`; transitiv) der Wurzel-Skripte,
  * die Wurzeln eingeschlossen. Ein Import wird relativ zur IMPORTIERENDEN Datei aufgelöst, damit Module in
  * Unterordnern (`scripts/docs-gen/*.mjs`) und `../`-Importe nicht aus der Kette fallen (E1).
  */
@@ -477,7 +481,7 @@ function lokaleImporteTransitiv(wurzeln: string[], lies: (rel: string) => string
     const rel = offen.pop() as string;
     if (gesehen.has(rel)) continue;
     gesehen.add(rel);
-    const importe = lies(rel).matchAll(/(?:from\s+|require\(\s*)["'](\.{1,2}\/[\w./-]+\.(?:mjs|cjs))["']/g);
+    const importe = lies(rel).matchAll(IMPORT_FORM);
     for (const m of importe) offen.push(posix.normalize(posix.join(posix.dirname(rel), m[1])));
   }
   return [...gesehen].sort();
@@ -522,5 +526,20 @@ describe("Hook-Abhängigkeiten sind geschützt (#1331)", () => {
       rel === "scripts/a.mjs" ? 'import { x } from "./sub/b.mjs";' : rel === "scripts/sub/b.mjs" ? 'import y from "./c.mjs"; import z from "../d.mjs"; const e = require("../e.cjs");' : "";
     assert.deepEqual(lokaleImporteTransitiv(["scripts/a.mjs"], tief), ["scripts/a.mjs", "scripts/d.mjs", "scripts/e.cjs", "scripts/sub/b.mjs", "scripts/sub/c.mjs"]);
     assert.deepEqual(hookSkripte(JSON.stringify({ hooks: { Stop: [{ hooks: [{ args: ["${CLAUDE_PROJECT_DIR}/scripts/h.mjs"] }] }] } })), ["scripts/h.mjs"]);
+  });
+
+  test("Red-Green: Side-Effect-, dynamische und createRequire-Importe gehören zur Kette (Z12e)", () => {
+    const formen: Record<string, string> = {
+      "side-effect": 'import "./b.mjs";',
+      dynamisch: 'const m = await import("./b.mjs");',
+      "dynamisch mit Leerraum": 'await import( "./b.mjs" );',
+      createRequire: 'const r = createRequire(import.meta.url); const x = createRequire(import.meta.url)("./b.cjs");',
+    };
+    for (const [name, quelltext] of Object.entries(formen)) {
+      const kette = lokaleImporteTransitiv(["scripts/a.mjs"], (rel) => (rel === "scripts/a.mjs" ? quelltext : ""));
+      assert.ok(kette.length === 2 && kette[1].startsWith("scripts/b."), `${name}: ${kette.join(", ")}`);
+    }
+    // Kein Fehlalarm: ein Paket-Import und ein Ausdruck mit Klammern ohne lokalen Pfad bleiben außen vor.
+    assert.deepEqual(lokaleImporteTransitiv(["scripts/a.mjs"], () => 'import "node:fs"; const x = f(a)("text"); import("pkg");'), ["scripts/a.mjs"]);
   });
 });

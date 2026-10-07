@@ -17,7 +17,7 @@
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { parseNachweis } from "./slice-override.mjs";
-import { distinctRoteShas, holeRoteLaeufe } from "./ci-laeufe.mjs";
+import { distinctRoteShas, ghText, holeRoteLaeufe } from "./ci-laeufe.mjs";
 
 export const NACHARBEIT_TAGE = 14;
 const TAG_MS = 24 * 3600 * 1000;
@@ -233,7 +233,7 @@ function main(argv) {
   }
   try {
     const run = (cmd) => (args) => execFileSync(cmd, args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
-    const ergebnis = laufErgebnis({ von, bis, runGit: run("git"), runGh: run("gh") });
+    const ergebnis = laufErgebnis({ von, bis, runGit: run("git"), runGh: ghText });
     console.log(argv.includes("--json") ? JSON.stringify(ergebnis, null, 2) : formatiere(ergebnis));
   } catch (e) {
     console.error(`✖ lauf-ergebnis: ${e instanceof Error ? e.message : String(e)}`);

@@ -138,3 +138,35 @@ describe("zaehleRoteCommits: die Verdrahtung von Wächter und Messskript (#1398)
     assert.match(lies("token-baseline.mjs"), /createdAt: p\.createdAt, mergedAt: p\.mergedAt/);
   });
 });
+
+describe("ghText: der gemeinsame gh-Runner (#1411)", () => {
+  const ghText = (modul as unknown as { ghText: (a: string[]) => string }).ghText;
+  const holeOhneRunner = (modul as unknown as { holeRoteLaeufe: (r: undefined, o?: object) => Lauf[] }).holeRoteLaeufe;
+  test("ein übergebener Runner hat Vorrang vor dem Default", () => {
+    let gerufen = 0;
+    m.holeRoteLaeufe(() => {
+      gerufen++;
+      return "";
+    });
+    assert.equal(gerufen, 1);
+  });
+  test("ohne Runner greift ghText: der Aufruf geht an das echte gh (hier ohne PATH: ENOENT statt TypeError)", () => {
+    const pfad = process.env.PATH;
+    process.env.PATH = "";
+    try {
+      assert.equal(typeof ghText, "function");
+      assert.throws(() => holeOhneRunner(undefined), (e: NodeJS.ErrnoException) => e.code === "ENOENT");
+      assert.throws(() => ghText(["--version"]), (e: NodeJS.ErrnoException) => e.code === "ENOENT");
+    } finally {
+      process.env.PATH = pfad;
+    }
+  });
+  test("Wächter, Messskript und Ergebnis-Skript nutzen genau diesen Runner (keine eigenen Kopien)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const lies = (f: string) => readFileSync(new URL(`../scripts/${f}`, import.meta.url), "utf8");
+    for (const f of ["check-festgefahren.mjs", "token-baseline.mjs", "lauf-ergebnis.mjs"]) {
+      assert.match(lies(f), /import \{[^}]*\bghText\b[^}]*\} from "\.\/ci-laeufe\.mjs"/, `${f} importiert ghText`);
+    }
+    assert.ok(!/const ghText\s*=/.test(lies("check-festgefahren.mjs")), "keine lokale Kopie mehr");
+  });
+});
