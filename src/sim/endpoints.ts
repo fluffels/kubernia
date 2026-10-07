@@ -13,6 +13,7 @@
 import { isExternalNameService, type ClusterState, type Deployment, type PvcRes, type ServiceRes } from "./state";
 import { clusterPods, type ClusterPod } from "./pods";
 import { podIP } from "./util";
+import { assertNever } from "../core/assert";
 import { statefulPodVolumePending } from "./workload";
 
 /** Was die Auflösung vom Simulator braucht (von `Sim` erfüllt). */
@@ -39,6 +40,8 @@ export function podAddress(c: ClusterPod, pvcs: readonly PvcRes[]): string | nul
       return c.dep.broken && c.dep.broken.type === "pending" ? null : podIP(c.pod.name);
     case "StatefulSet":
       return statefulPodVolumePending(c.sts, c.pod, pvcs) ? null : podIP(c.pod.name);
+    default:
+      return assertNever(c, "podAddress");
   }
 }
 

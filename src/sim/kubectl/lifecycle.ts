@@ -15,6 +15,7 @@ import { addDeployment, removeDeployment, addStatefulSet, removeStatefulSet, rep
 // einer Application zieht/kloniert den Soll direkt darüber (statt über eine Host-Methode).
 import { findClusterPod } from "../pods";
 import { argoReconcile, cloneChildSpec } from "../argocd";
+import { assertNever } from "../../core/assert";
 import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { sameRbac } from "../rbac";
 import { flagValue, multiFlag } from "../util"; // clusterIP entfällt: Service läuft jetzt über host._makeService (#507)
@@ -290,11 +291,9 @@ function deletePod(host: KubectlHost, name: string): string {
     case "StatefulSet":
       restartStatefulPod(c.sts, name, host.clock);
       break;
-    default: {
+    default:
       // Neue Workload-Art ⇒ Compile-Fehler hier statt still ohne Ersatz-Pod (#1414).
-      const unbehandelt: never = c;
-      return unbehandelt;
-    }
+      return assertNever(c, "kubectl delete pod");
   }
   return 'pod "' + name + '" deleted';
 }

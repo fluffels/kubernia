@@ -68,25 +68,13 @@ export type Broken =
       memNeeded?: number;
     };
 
-/** Statuszeile + Anzeige-Label je `Broken`-Typ. */
-export interface BrokenStatusEntry {
-  /** `kubectl get pods` STATUS-Spalte. */
-  status: string;
-  /** `kubectl get pods` READY-Spalte. */
-  ready: string;
-  /** `kubectl get pods` RESTARTS-Spalte. */
-  restarts: number;
-  /** Kurzes Label für HUD/Weltkarte (z.B. Steg-Tag über einem kaputten Deployment). */
-  label: string;
-}
-
 /** Zentrale Status-Tabelle je Broken-Typ (#867): einzige Quelle für die kubectl-
  *  Statuszeile UND das HUD-/Weltkarten-Label – vorher dieselbe Fallunterscheidung
- *  dreifach dupliziert (`sim.ts#_podStatus`, `ui/hud.ts`, `clustersync.ts`), einmal
- *  sogar unvollständig (siehe Kommentar an `Broken` oben). Der Typ als
+ *  dreifach dupliziert, einmal sogar unvollständig (siehe Kommentar an `Broken` oben);
+ *  die Ableitung selbst liegt in `podstatus.ts#deploymentPodStatus`. Der Typ als
  *  `Record<Broken["type"], …>` erzwingt Vollständigkeit: ein neuer Broken-Typ ohne
  *  Eintrag hier ist ein TS-Fehler, keine stillschweigend falsche Anzeige mehr. */
-export const BROKEN_STATUS: Record<Broken["type"], BrokenStatusEntry> = {
+export const BROKEN_STATUS: Record<Broken["type"], PodStatus> = {
   imagepull: { status: "ImagePullBackOff", ready: "0/1", restarts: 0, label: "ImagePullBackOff" },
   crashloop: { status: "CrashLoopBackOff", ready: "0/1", restarts: 5, label: "CrashLoopBackOff" },
   pending: { status: "Pending", ready: "0/1", restarts: 0, label: "Pending" },
@@ -608,11 +596,16 @@ export interface SecurityContext {
 export const SECURITY_CONTEXT_KEYS = ["runAsNonRoot", "privileged", "readOnlyRootFilesystem", "allowPrivilegeEscalation"] as const;
 /** Durchgesetzte Pod-Security-Standards-Stufe (Namespace-Label `pod-security.kubernetes.io/enforce`). */
 export type PodSecurityLevel = "privileged" | "baseline" | "restricted";
-/** Berechneter Anzeige-Status eines Pods (für get/describe). */
+/** Berechneter Anzeige-Status eines Pods (für get/describe, HUD und Welt). */
 export interface PodStatus {
+  /** `kubectl get pods` STATUS-Spalte. */
   status: string;
+  /** `kubectl get pods` READY-Spalte. */
   ready: string;
+  /** `kubectl get pods` RESTARTS-Spalte. */
   restarts: number;
+  /** Kurzes Label für HUD/Weltkarte (z.B. „NotReady“, das `status` als Running führt). */
+  label: string;
 }
 
 /* ---------- Observability (#109) ---------- */
