@@ -13,7 +13,9 @@ import { KQAssets } from "../assets-data";
  *  dieselbe Übung ein eigenes, größeres Ticket.) */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type UISelf = Record<string, any>;
-/** Typisiert ein Methodenbündel so, dass this = UISelf ist, ohne die Methoden-Signaturen zu verlieren. */
+/** Typisiert ein Methodenbündel so, dass this = UISelf ist, ohne die Methoden-Signaturen zu verlieren.
+ *  Neue Logik NICHT als `this.`-Methode (jeder `this.`-Zugriff erhöht die eingefrorenen no-unsafe-Zähler), sondern als
+ *  modul-lokale, typisierte Funktion (docs/module/presentation.md § UI). */
 export function part<T>(b: T & ThisType<UISelf>): T { return b; }
 
 // Die DOM-Knoten liegen alle fest in index.html – darum geben wir hier ein

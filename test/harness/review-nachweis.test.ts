@@ -173,3 +173,41 @@ describe("Nachweis-Hilfen des Workflows (#1309)", () => {
     assert.deepEqual(normal(fehlendeLenses(["a"], [{ lens: "a" }])), []);
   });
 });
+
+describe("Tolerantes Lesen der Brillen (#1331)", () => {
+  const lenses = (wert: string) => parseNachweis(`KQ-Review: head=${SHA} runden=1 lenses=${wert} verdikt=ok`).review?.lenses;
+  const bewerte = (wert: string, dateien = ["src/a.ts"]) =>
+    bewerteNachweis({ nachweis: parseNachweis(`KQ-Plan: kubernia-planner
+KQ-Review: head=${SHA} runden=1 lenses=${wert} verdikt=ok`), dateien, headBekannt: true, headImSlice: true });
+
+  test("Großschreibung, Leerzeichen nach Kommas und Umlaute werden normalisiert", () => {
+    assert.deepEqual(lenses("Architektur, Requirement-Treue, Test-Adäquanz"), ["architektur", "requirement-treue", "test-adaequanz"]);
+    assert.deepEqual(bewerte("Architektur, Requirement-Treue, Test-Adäquanz"), []);
+    assert.deepEqual(lenses("Requirement Treue"), ["requirement-treue"]);
+  });
+
+  test("die Felder dahinter werden nicht in die Brillen gezogen", () => {
+    const n = parseNachweis(`KQ-Review: lenses=architektur, doku verdikt=ok head=${SHA} runden=2`);
+    assert.deepEqual(n.review?.lenses, ["architektur", "doku"]);
+    assert.equal(n.review?.verdikt, "ok");
+    assert.equal(n.review?.runden, 2);
+  });
+
+  test("rot: eine Brille fehlt trotz Normalisierung, Fehlermeldung nennt den Erwartungswert", () => {
+    const f = bewerte("Architektur, Requirement-Treue").join(' ');
+    assert.match(f, /lenses fehlt test-adaequanz/);
+    assert.match(f, /Erwartet: lenses=architektur,requirement-treue,test-adaequanz/);
+    assert.match(bewerte("architektur", ["a.md"]).join(' '), /Erwartet: lenses=doku/);
+  });
+
+  test("rot: unbekannter Brillenname, auch neben vollem Satz", () => {
+    assert.match(bewerte("architektur,requirement-treue,test-adaequanz,foo").join(' '), /unbekannte Brille\(n\) foo/);
+  });
+
+  test("die letzte KQ-Review-Zeile gewinnt (Korrektur per weiterem Nachweis-Commit)", () => {
+    const text = `KQ-Review: head=${SHA} runden=1 lenses=Falsch verdikt=ok
+
+KQ-Review: head=${SHA} runden=1 lenses=doku verdikt=ok`;
+    assert.deepEqual(parseNachweis(text).review?.lenses, ["doku"]);
+  });
+});

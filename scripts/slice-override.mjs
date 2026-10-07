@@ -71,6 +71,28 @@ function lastLine(text, key) {
   return all.length > 0 ? all[all.length - 1][1].trim() : null;
 }
 
+/** Normalisiert einen Brillennamen (#1331): Kleinbuchstaben, Umlaute und ß in ASCII, Leerraum wird `-`. */
+export function normalisiereLens(name) {
+  return String(name)
+    .trim()
+    .toLowerCase()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .replace(/\s+/g, "-");
+}
+
+/** Brillen der `KQ-Review`-Zeile, tolerant (#1331): der Wert reicht bis zum nächsten ` key=`, damit auch
+ *  Leerzeichen nach Kommas gehen; jeder Name wird normalisiert (Groß-/Kleinschreibung, Umlaute). */
+function lensenAus(reviewWert) {
+  const m = /(?:^|\s)lenses=(.*?)(?=\s+[a-z]+=|$)/.exec(reviewWert);
+  return (m ? m[1] : "")
+    .split(",")
+    .map(normalisiereLens)
+    .filter(Boolean);
+}
+
 /** Parst die letzte `KQ-Plan:`- und die letzte `KQ-Review:`-Zeile (am Zeilenanfang, nicht
  *  eingerückt) aus beliebigem Message-Text. Pure. Felder, die fehlen oder kaputt sind, bleiben
  *  null bzw. NaN; bewertet wird erst in bewerteNachweis. */
@@ -95,10 +117,7 @@ export function parseNachweis(text) {
       zeile: reviewWert,
       head: /^[0-9a-f]{7,40}$/i.test(felder.head ?? "") ? felder.head.toLowerCase() : null,
       runden: /^\d+$/.test(felder.runden ?? "") ? Number(felder.runden) : Number.NaN,
-      lenses: (felder.lenses ?? "")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
+      lenses: lensenAus(reviewWert),
       verdikt: felder.verdikt ?? null,
     };
   }

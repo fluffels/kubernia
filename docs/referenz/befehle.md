@@ -21,7 +21,8 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Zweck | Befehl |
 |---|---|
 | One-Command-Setup (Node-Check + install + Git-Hooks + alle Checks, #387/#528) | `npm run setup` |
-| **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (typecheck → lint → check:arch → check:size → check:contextsize → check:anysuppress → check:docmap → check:docdrift → check:internalrefs → check:lockfile → check:diffsize → test) |
+| **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (typecheck → lint → check:arch → check:size → check:contextsize → check:anysuppress → check:docmap → check:docdrift → check:internalrefs → check:lockfile → check:diffsize → test; ohne `check:bundle`, das braucht die Builds) |
+| Bundle-Budget vorab prüfen (#1331): nötig, wenn der Diff ausgelieferten Code, Assets oder Dependencies hinzufügt (`src/**` ohne reine Tests, `assets/**`, `package.json`); `verify` deckt es nicht ab, erst `verify:full`/CI | `npm run verify:bundle` (= `build` + `build:offline` + `check:bundle`) |
 | Voller Vor-Push-Check inkl. beider Builds + Boot-Smoke (#527) | `npm run verify:full` (= `verify` + `test:coverage` + `check:diffcoverage` + Builds + `check:bundle` + `test:smoke`) |
 | Required-Checks auf dem PR = maßgeblicher Gate (server-seitig, seit #592) | `gh pr merge <nr> --squash --delete-branch --auto` + `gh pr checks <nr> --watch` (Regel-Heimat: [AGENTS.md](../../AGENTS.md#das-wichtigste-zuerst-harte-regeln)) |
 | pre-push-Hook (fährt `verify`; seit #592 nur noch sekundäres Netz) | verdrahtet via `npm run setup`; greift nur bei Push auf `main` (server-seitig ohnehin blockiert) |
@@ -30,7 +31,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Host-/Prod-Build (Multi-File nach `dist/`) | `npm run build` |
 | Offline-Build (self-contained `dist-offline/index.html`) | `npm run build:offline` |
 | Dev-Panel-Build (#331, Panel MIT, passwortgated, `dist-devpanel/`) | `npm run build:devpanel` |
-| Tests | `npm test` (Vitest) |
+| Tests (lokal auf 25 % der Kerne begrenzt, #1331: parallele Läufe von Lenses/Playwright/anderen Worktrees ließen sonst die store-Tests ins Timeout laufen; die CI nutzt den Standard) | `npm test` (Vitest); mehr Worker: `npm test -- --maxWorkers=<n>` |
 | Coverage-Gate (v8, Schwellen PRO Schicht statt Repo-Mittel, #495) | `npm run test:coverage` |
 | Boot-Smoke-Test (headless, gegen den Offline-Build, #391) | `npm run smoke` (baut Offline + Playwright) bzw. `npm run test:smoke` (nur Lauf, Build muss da sein); meldet Playwright `Executable doesn't exist ... chromium_headless_shell-<build>`: `npm ci`, dann `npx playwright install chromium` |
 | Typen prüfen (voll strict) | `npm run typecheck` |

@@ -993,7 +993,7 @@ describe("Workflow-Pfad räumt Waisen auf wie der SubagentStop-Hook auf dem Skil
 describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
   /** Marker eines Textes: Code-Spans mit `echo "pflege: …"`, als Bash-Event gewertet. */
   const markerIn = (text: string, nr: string) => {
-    const treffer = [...text.matchAll(/`(echo "pflege: (?:start|ende) #[^"`]*")`/g)].map((m) => m[1].replace("<nr>", nr));
+    const treffer = [...text.matchAll(/`(echo "pflege: [^"`]*")`/g)].map((m) => m[1].replace("<nr>", nr));
     return treffer.map((command) => pflegeMarker({ tool: "Bash", input: { command } }));
   };
 
@@ -1001,8 +1001,11 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
     assert.deepEqual(markerIn(read(UMSETZER), "1"), ["start", "ende"]);
   });
 
-  test("Red-Green: ein verfälschter Marker wird nicht mehr erkannt", () => {
-    assert.notDeepEqual(markerIn(read(UMSETZER).replace('echo "pflege: start #<nr>"', 'echo "pflege: startklar #<nr>"'), "1"), ["start", "ende"]);
+  test("Red-Green: ein verfälschter Marker wird vom Messskript nicht mehr erkannt (#1331)", () => {
+    // Das Extraktionsmuster sortiert nicht mehr vor: allein `pflegeMarker` entscheidet.
+    const verfaelscht = read(UMSETZER).replace('echo "pflege: start #<nr>"', 'echo "pflege: startklar #<nr>"');
+    assert.deepEqual(markerIn(verfaelscht, "1"), [null, "ende"]);
+    assert.equal(pflegeMarker({ tool: "Bash", input: { command: 'echo "pflege: startklar #1"' } }), null);
   });
 
   test("Umsetzen-Prompt des Workflows trägt beide Marker, erkannt vom Messskript", async () => {
