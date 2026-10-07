@@ -70,7 +70,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|PowerShell",
+        "matcher": "Bash|PowerShell|SubagentHandback",
         "hooks": [
           {
             "type": "command",

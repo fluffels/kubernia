@@ -7,6 +7,7 @@
  * Verdikte gegen echte Regressionen abgesichert sind.
  */
 import { test, expect, describe } from "vitest";
+import { erwarteFall } from "./support/erwartungen";
 import {
   funkSessionKind,
   evaluateSubmission,
@@ -51,15 +52,13 @@ const task = (over: Partial<SubmissionTask> = {}): SubmissionTask => ({
 
 describe("evaluateSubmission – gelöst", () => {
   test("Treffer ohne Fehler + erfüllte Bedingung ist gelöst (keine Langform)", () => {
-    const v = evaluateSubmission("docker ps", task(), baseCtx());
-    expect(v.outcome).toBe("solved");
-    if (v.outcome === "solved") expect(v.longForms).toEqual([]);
+    const v = erwarteFall(evaluateSubmission("docker ps", task(), baseCtx()), "solved");
+    expect(v.longForms).toEqual([]);
   });
 
   test("getippte Langform wird für die Freischaltung gemeldet (#313)", () => {
-    const v = evaluateSubmission("docker ps --all", task({ accept: [/^docker ps --all$/] }), baseCtx());
-    expect(v.outcome).toBe("solved");
-    if (v.outcome === "solved") expect(v.longForms).toContain("docker-ps-all");
+    const v = erwarteFall(evaluateSubmission("docker ps --all", task({ accept: [/^docker ps --all$/] }), baseCtx()), "solved");
+    expect(v.longForms).toContain("docker-ps-all");
   });
 });
 
@@ -67,12 +66,9 @@ describe("evaluateSubmission – Abkürzungs-Gating (#299/#366)", () => {
   const poTask = task({ accept: [/^kubectl get po$/] });
 
   test("gesperrtes Profi-Kürzel → locked (Hinweis, KEIN Fehlversuch)", () => {
-    const v = evaluateSubmission("kubectl get po", poTask, baseCtx());
-    expect(v.outcome).toBe("locked");
-    if (v.outcome === "locked") {
-      expect(v.feedback).toContain("🔒");
-      expect(v.feedback).toContain("pods"); // Langform-Vorschlag
-    }
+    const v = erwarteFall(evaluateSubmission("kubectl get po", poTask, baseCtx()), "locked");
+    expect(v.feedback).toContain("🔒");
+    expect(v.feedback).toContain("pods"); // Langform-Vorschlag
     // Red-Green: locked trägt bewusst KEINEN failCount (kein Fehlversuch).
     expect("failCount" in v).toBe(false);
   });
@@ -90,55 +86,42 @@ describe("evaluateSubmission – Abkürzungs-Gating (#299/#366)", () => {
 
 describe("evaluateSubmission – Fehlversuch", () => {
   test("Bedingung nicht erfüllt → failed mit 'Fast'-Prefix, Zähler +1", () => {
-    const v = evaluateSubmission("docker ps", task(), baseCtx({ checkOk: false }));
-    expect(v.outcome).toBe("failed");
-    if (v.outcome === "failed") {
-      expect(v.failCount).toBe(1);
-      expect(v.feedback).toContain("Fast");
-    }
+    const v = erwarteFall(evaluateSubmission("docker ps", task(), baseCtx({ checkOk: false })), "failed");
+    expect(v.failCount).toBe(1);
+    expect(v.feedback).toContain("Fast");
   });
 
   test("Sim-Fehler trotz Treffer → failed, nüchternes ❌ ohne 'Fast'", () => {
-    const v = evaluateSubmission("docker ps", task(), baseCtx({ simError: true }));
-    expect(v.outcome).toBe("failed");
-    if (v.outcome === "failed") expect(v.feedback.startsWith("❌ ") && !v.feedback.includes("Fast")).toBe(true);
+    const v = erwarteFall(evaluateSubmission("docker ps", task(), baseCtx({ simError: true })), "failed");
+    expect(v.feedback.startsWith("❌ ") && !v.feedback.includes("Fast")).toBe(true);
   });
 
   test("Beinahe-Flag (#367) → gezielter Hinweis statt generischer Meldung", () => {
-    const v = evaluateSubmission("docker ps -all", task({ accept: [/^docker ps -a$/] }), baseCtx());
-    expect(v.outcome).toBe("failed");
-    if (v.outcome === "failed") {
-      expect(v.feedback).toContain("gibt es nicht");
-      expect(v.feedback).toContain("--all");
-    }
+    const v = erwarteFall(evaluateSubmission("docker ps -all", task({ accept: [/^docker ps -a$/] }), baseCtx()), "failed");
+    expect(v.feedback).toContain("gibt es nicht");
+    expect(v.feedback).toContain("--all");
   });
 
   test("ab dem 3. Fehlversuch zum Hinweis lotsen + Zähler zurücksetzen (#233)", () => {
-    const v = evaluateSubmission("bloedsinn", task(), baseCtx({ failCount: 2 }));
-    expect(v.outcome).toBe("failed");
-    if (v.outcome === "failed") {
-      expect(v.nudge).toBe(true);
-      expect(v.failCount).toBe(0);
-      expect(v.feedback).toContain("Tippfehler");
-    }
+    const v = erwarteFall(evaluateSubmission("bloedsinn", task(), baseCtx({ failCount: 2 })), "failed");
+    expect(v.nudge).toBe(true);
+    expect(v.failCount).toBe(0);
+    expect(v.feedback).toContain("Tippfehler");
   });
 
   test("diag hat Vorrang vor why (Drill-Diagnose)", () => {
-    const v = evaluateSubmission("falsch", task({ accept: [/^x$/], why: "Prinzip", diag: (i) => "Diag:" + i }), baseCtx());
-    expect(v.outcome).toBe("failed");
-    if (v.outcome === "failed") expect(v.feedback).toContain("Diag:falsch");
+    const v = erwarteFall(evaluateSubmission("falsch", task({ accept: [/^x$/], why: "Prinzip", diag: (i) => "Diag:" + i }), baseCtx()), "failed");
+    expect(v.feedback).toContain("Diag:falsch");
   });
 
   test("ohne diag begründet why das Prinzip (#233)", () => {
-    const v = evaluateSubmission("falsch", task({ accept: [/^x$/], why: "Weil-Prinzip" }), baseCtx());
-    expect(v.outcome).toBe("failed");
-    if (v.outcome === "failed") expect(v.feedback).toContain("Weil-Prinzip");
+    const v = erwarteFall(evaluateSubmission("falsch", task({ accept: [/^x$/], why: "Weil-Prinzip" }), baseCtx()), "failed");
+    expect(v.feedback).toContain("Weil-Prinzip");
   });
 
   test("ohne diag/why fällt der docker-run-Hinweis ein", () => {
-    const v = evaluateSubmission("docker run foo", task({ accept: [/^never$/] }), baseCtx());
-    expect(v.outcome).toBe("failed");
-    if (v.outcome === "failed") expect(v.feedback).toContain("docker run");
+    const v = erwarteFall(evaluateSubmission("docker run foo", task({ accept: [/^never$/] }), baseCtx()), "failed");
+    expect(v.feedback).toContain("docker run");
   });
 });
 
@@ -201,9 +184,8 @@ describe("evaluateSubmission – solvedBy: check (#891)", () => {
   });
 
   test("accept trifft, Zielzustand aber nicht erreicht → failed mit 'Fast'", () => {
-    const v = evaluateSubmission("docker ps", checkTask(), baseCtx({ checkOk: false }));
-    expect(v.outcome).toBe("failed");
-    if (v.outcome === "failed") expect(v.feedback).toContain("Fast");
+    const v = erwarteFall(evaluateSubmission("docker ps", checkTask(), baseCtx({ checkOk: false })), "failed");
+    expect(v.feedback).toContain("Fast");
   });
 
   test("Sim-Fehler, Zielzustand dennoch erreicht → gelöst (Default-Modus: failed)", () => {
@@ -218,9 +200,8 @@ describe("evaluateSubmission – solvedBy: check (#891)", () => {
   });
 
   test("Ziel nicht erreicht → Feedback-Kette wie bisher (Nudge ab dem 3. Fehlversuch)", () => {
-    const v = evaluateSubmission("bloedsinn", checkTask(), baseCtx({ checkOk: false, failCount: 2 }));
-    expect(v.outcome).toBe("failed");
-    if (v.outcome === "failed") expect(v.nudge).toBe(true);
+    const v = erwarteFall(evaluateSubmission("bloedsinn", checkTask(), baseCtx({ checkOk: false, failCount: 2 })), "failed");
+    expect(v.nudge).toBe(true);
   });
 });
 

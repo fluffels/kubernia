@@ -3,6 +3,7 @@
  * Reines Node-Tooling-Skript ohne Declaration-File: Import über `unknown` auf ein lokales Interface
  * (gleiche Technik wie test/board.test.ts). */
 import { describe, expect, test } from "vitest";
+import { readFileSync } from "node:fs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/langfuse-takt.mjs";
 
@@ -157,5 +158,30 @@ describe("normalizeOffene", () => {
     expect(() => T.normalizeOffene({})).toThrow();
     expect(() => T.normalizeOffene([issue(1)])).toThrow();
     expect(() => T.normalizeOffene([[{ number: 1 }]])).toThrow();
+  });
+});
+
+describe("Bindungen und Sortierung (#1342)", () => {
+  const lies = (rel: string) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
+
+  test("MIN_MERGES stimmt mit der Zahl in ADR 0016 und im Workflow-Kommentar überein", () => {
+    const adr = /Untergrenze von (\d+) Commits/.exec(lies("docs/adr/0016-langfuse-takt-woechentlich.md"))?.[1];
+    const yml = /mindestens (\d+) Commits/.exec(lies(".github/workflows/langfuse-takt.yml"))?.[1];
+    expect(Number(adr)).toBe(T.MIN_MERGES);
+    expect(Number(yml)).toBe(T.MIN_MERGES);
+  });
+
+  test("Sortierung: älteres createdAt gewinnt vor der Nummer, bei gleichem createdAt die kleinere Nummer", () => {
+    const aeltererMitHoehererNr = [offen(1400, { createdAt: "2026-10-01T05:00:00Z" }), offen(1304, { createdAt: "2026-10-05T05:00:00Z" })];
+    expect(T.entscheideTakt({ offene: aeltererMitHoehererNr, mergesSeit: 0 })).toMatchObject({ nr: 1400 });
+    const gleich = [offen(1400, { createdAt: "2026-10-01T05:00:00Z" }), offen(1304, { createdAt: "2026-10-01T05:00:00Z" })];
+    expect(T.entscheideTakt({ offene: gleich, mergesSeit: 0 })).toMatchObject({ nr: 1304 });
+    expect(T.entscheideTakt({ offene: [...gleich].reverse(), mergesSeit: 0 })).toMatchObject({ nr: 1304 });
+  });
+
+  test("normalizeOffene ohne created_at wirft (statt still zu sortieren)", () => {
+    const issue = { number: 1, title: T.STATUS_TITEL, assignees: [] };
+    expect(() => T.normalizeOffene([[issue]])).toThrow(/Form eines Issues/);
+    expect(T.normalizeOffene([[{ ...issue, created_at: "2026-10-01T05:00:00Z" }]])).toHaveLength(1);
   });
 });

@@ -13,10 +13,10 @@
  */
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { PROJECT_ID, STATUS_FIELD_NODE_ID, TODO_OPTION_ID } from "./board-lib.mjs";
+import { LANGFUSE_SAMMELTICKET_TITEL, addToBoardTodo, loadOpenIssuePages, setPosition } from "./board-lib.mjs";
 
 export const STATUS_TITEL = "Langfuse-Status überprüfen";
-export const SAMMEL_TITEL = "Langfuse-Befunde (gesammelt)";
+export const SAMMEL_TITEL = LANGFUSE_SAMMELTICKET_TITEL;
 /** Aktivitäts-Untergrenze: so viele Commits auf main seit dem Abschluss des Vorgängers, sonst kein neues Ticket. */
 export const MIN_MERGES = 5;
 
@@ -122,31 +122,19 @@ export function statusBody({ vorgaenger, jetzt }) {
 }
 
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
-const gh = (args, env = {}) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, env: { ...process.env, ...env } });
+const gh = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 const ghJson = (args) => JSON.parse(gh(args));
 
-/** Item hinzufügen (idempotent), Status Todo setzen, an die Spitze schieben. Wirft bei jedem Fehler einer Mutation. */
-function setzeBoardSpitze(nodeId, projectToken) {
-  const env = { GH_TOKEN: projectToken };
-  const mutation = (query, vars) => {
-    const args = ["api", "graphql", "-f", `query=${query}`];
-    for (const [k, v] of Object.entries(vars)) args.push("-f", `${k}=${v}`);
-    return JSON.parse(gh(args, env));
-  };
-  const item = mutation("mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }", { p: PROJECT_ID, c: nodeId });
-  const itemId = item.data.addProjectV2ItemById.item.id;
-  mutation(
-    "mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }",
-    { p: PROJECT_ID, i: itemId, f: STATUS_FIELD_NODE_ID, o: TODO_OPTION_ID },
-  );
-  mutation("mutation($p:ID!,$i:ID!){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i}){ items(first:1){ nodes{ id } } } }", { p: PROJECT_ID, i: itemId });
+/** Item hinzufügen (idempotent), Status Todo setzen, an die Spitze schieben (alles aus board-lib). Wirft bei jedem Fehler einer Mutation. */
+function setzeBoardSpitze(nodeId, token) {
+  setPosition(addToBoardTodo(nodeId, { token }), null, { token });
 }
 
 function main() {
   const dry = process.argv.includes("--dry-run");
   const repo = process.env.GITHUB_REPOSITORY || "fluffels/kubernia";
   const jetzt = new Date();
-  const offene = normalizeOffene(ghJson(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=open&per_page=100`]));
+  const offene = normalizeOffene(loadOpenIssuePages(repo));
   const seit = new Date(jetzt.getTime() - 90 * TAG_MS).toISOString();
   const geschlossen = ghJson(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=closed&labels=area:harness&since=${seit}&per_page=100`])
     .flat()

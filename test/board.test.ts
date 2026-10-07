@@ -144,11 +144,16 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
   type B = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
   const b = (number: number, extra: Partial<B> = {}): B => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open", ...extra });
   const sammel = (number: number, extra: Partial<B> = {}) => b(number, { title: TITEL, ...extra });
+  const LT = "Langfuse-Befunde (gesammelt)";
+  const langfuse = (number: number, extra: Partial<B> = {}) => b(number, { title: LT, ...extra });
   const K = rawLib as unknown as {
     sammelticketItem: (items: B[], ohne?: number[]) => B | null;
     klemmeAnker: (items: B[], anker: number | null, o?: { numbers?: number[]; notfall?: boolean }) => { anker: number | null; geklemmt: boolean; sammelticket: number | null };
     normalizeItems: (raw: unknown) => B[];
     SAMMELTICKET_TITEL: string;
+    LANGFUSE_SAMMELTICKET_TITEL: string;
+    SAMMELTICKET_TITEL_LISTE: string[];
+    sammelblock: (items: B[], ohne?: number[]) => B[];
   };
   // Board-Reihenfolge: 10, 11, 12, Sammelticket 13 (Position 4), 14, 15
   const board3 = [b(10), b(11), b(12), sammel(13), b(14), b(15)];
@@ -202,9 +207,47 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     expect(plan.steps.map((s) => [s.item.number, s.afterId])).toEqual([[20, "I13"], [21, "I20"]]);
   });
 
+  test("Titelliste: Harness und Langfuse; Sammelblock = aufeinanderfolgende ungeclaimte Sammeltickets ab dem Harness-Sammelticket (#1342)", () => {
+    expect(K.SAMMELTICKET_TITEL_LISTE).toEqual([TITEL, LT]);
+    expect(K.LANGFUSE_SAMMELTICKET_TITEL).toBe(LT);
+    const nummern = (items: B[], ohne?: number[]) => K.sammelblock(items, ohne).map((i) => i.number);
+    expect(nummern([sammel(1), langfuse(2), b(3), langfuse(4)])).toEqual([1, 2]);
+    expect(nummern([b(3), sammel(1)]), "Block beginnt am Harness-Sammelticket, wo es steht").toEqual([1]);
+    expect(nummern([sammel(1), b(5, { assignees: ["fluffels"] }), langfuse(2), b(3)]), "geclaimte überspringt der Block").toEqual([1, 2]);
+    expect(nummern([sammel(1), b(5, { state: "closed" }), langfuse(2), b(3)]), "geschlossene überspringt der Block").toEqual([1, 2]);
+    expect(nummern([sammel(1, { assignees: ["x"] }), langfuse(2)]), "geclaimtes Sammelticket zählt nicht").toEqual([2]);
+    expect(nummern([sammel(1), b(20), langfuse(2)], [20]), "gerade einsortiertes Item beendet den Block nicht").toEqual([1, 2]);
+    expect(nummern([b(8, { title: "Langfuse-Status überprüfen" }), sammel(1), langfuse(2), b(3)]), "Status-Ticket davor stört nicht").toEqual([1, 2]);
+    expect(nummern([b(8), sammel(1), langfuse(2), b(3)]), "Notfall/Forum-Ticket davor stört nicht").toEqual([1, 2]);
+    expect(nummern([langfuse(2), b(3)]), "ohne Harness-Sammelticket ab der Spitze").toEqual([2]);
+    expect(nummern([])).toEqual([]);
+  });
+
+  test("Klemmung kennt beide Sammeltickets: der Anker ist das am weitesten hinten stehende (#1342)", () => {
+    const hinter = (items: B[], anker: number | null = null, o = {}) => K.klemmeAnker(items, anker, o).anker;
+    expect(hinter([sammel(1), b(9)]), "[S_H, X]").toBe(1);
+    expect(hinter([sammel(1), langfuse(2), b(9)]), "[S_H, S_L, X]").toBe(2);
+    expect(hinter([sammel(1), b(9), b(10), langfuse(2)]), "S_L am Ende zählt nicht").toBe(1);
+    expect(hinter([sammel(1), b(5, { assignees: ["fluffels"] }), langfuse(2), b(9)]), "geclaimte dazwischen").toBe(2);
+    expect(hinter([b(9), sammel(1)]), "[X, S_H]").toBe(1);
+    expect(hinter([langfuse(2), b(9), sammel(1)]), "[S_L, X, S_H]").toBe(1);
+    expect(hinter([sammel(1), langfuse(2), b(9)], 1), "Anker vor dem Ziel wird geklemmt").toBe(2);
+    expect(hinter([sammel(1), langfuse(2), b(9)], 2), "Anker = Ziel bleibt").toBe(2);
+    expect(hinter([sammel(1), langfuse(2), b(9)], 9), "Anker dahinter bleibt").toBe(9);
+    expect(hinter([sammel(1), langfuse(2), b(9)], null, { numbers: [2] }), "Sammelticket in numbers zählt nicht").toBe(1);
+    expect(hinter([sammel(1), langfuse(2), b(9)], null, { notfall: true }), "Notfall klemmt nicht").toBeNull();
+    expect(hinter([b(8), sammel(1), langfuse(2), b(9)]), "Status-/Notfall-Ticket an der Spitze (#1342, Lens-Befund)").toBe(2);
+    expect(hinter([b(8), sammel(1), langfuse(2), b(9)], 8), "Anker über den Sammeltickets wird geklemmt").toBe(2);
+    expect(hinter([langfuse(2), b(9)]), "nur Langfuse an der Spitze, kein Harness-Sammelticket").toBe(2);
+    expect(hinter([b(9), langfuse(2)]), "Langfuse hinten, kein Harness: keine Klemmung").toBeNull();
+  });
+
   test("der Titel, an dem die Klemmung das Sammelticket erkennt, steht wörtlich in AGENTS.md, Workflow und ticket-reihenfolge.md (keine stille Drift)", () => {
     for (const datei of ["AGENTS.md", ".claude/workflows/kubernia-ticket.js", "docs/ticket-reihenfolge.md"]) {
       expect(readFileSync(new URL(`../${datei}`, import.meta.url), "utf8"), datei).toContain(K.SAMMELTICKET_TITEL);
+    }
+    for (const datei of ["AGENTS.md", "docs/ticket-reihenfolge.md"]) {
+      expect(readFileSync(new URL(`../${datei}`, import.meta.url), "utf8"), datei).toContain(K.LANGFUSE_SAMMELTICKET_TITEL);
     }
   });
 

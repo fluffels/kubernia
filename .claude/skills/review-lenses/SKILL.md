@@ -141,7 +141,7 @@ Im kubernia-Ticket-Ablauf ist dieser Review **Pflicht** vor dem PR — und läuf
 
 1. Lenses nach der Staffel oben auf den **aktuellen** Stand (frische, unabhängige Kritiker — nicht der Agent, der gefixt hat): Runde 1 der volle Diff, ab Runde 2 die blockierten Brillen auf dem Delta des Fixes.
 2. Keine blockierenden Findings mehr ⇒ **konvergiert**, weiter zum PR. Was blockiert, regelt der Blocker-Maßstab (Kurzfassung in `kubernia-lens.md`, Begründung in [docs/agent-harness.md](../../../docs/agent-harness.md#4-die-sichere-autonomie-schleife)): bei Guard-/Parser-Code ist ein neuer Umweg eine „Bekannte Grenze“, kein Blocker.
-3. Sonst nachbessern, erst wenn **alle Berichte der Runde da sind** (solange eine Lens läuft, kein Edit und kein Commit im Feature-Worktree), dann **zurück zu 1** — mit einem **frischen** Kritiker, damit der finale „OK"-Blick nie ein Self-Grading des eigenen Fixes ist.
+3. Sonst nachbessern, erst wenn **alle Berichte der Runde da sind** (solange eine Lens läuft, kein Edit und kein Commit im Feature-Worktree; **warten heißt: den Turn mit einer kurzen Statuszeile beenden, ohne `SubagentHandback`**: laufende eigene Subagenten halten den Lauf offen, jeder Lens-Bericht setzt ihn fort. Kein `Monitor`, kein `sleep`, kein Pollen der `.output`-Dateien), dann **zurück zu 1** — mit einem **frischen** Kritiker, damit der finale „OK"-Blick nie ein Self-Grading des eigenen Fixes ist.
 4. **Cap 2** Fix-Runden, also höchstens 3 Pässe (unbeschränktes Iterieren ist schlechter, nicht besser — jenseits echter Fehler werden Stil-Nörgeleien erfunden); danach **Hand-off** an die Maintainerin (Festgefahren), kein PR mit bekannten Blockern.
 
 ### Nachweis nach Konvergenz (#1270)

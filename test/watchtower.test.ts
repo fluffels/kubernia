@@ -8,6 +8,7 @@
  * wäre das Quartier eine hübsche, aber tote Karte.
  */
 import { test, expect } from "vitest";
+import { erwarteSolidJeBoden } from "./support/erwartungen";
 import { TILE } from "../src/world/world";
 import { objectFootprint } from "../src/content/entities";
 import {
@@ -56,11 +57,11 @@ test("Hof ist rundum von Meer umschlossen (kein Land am Kartenrand)", () => {
 });
 
 test("Wasser ist solide, Pfad + Holz-Steg begehbar (Negativ-/Positivfall der Kollision)", () => {
-  for (let i = 0; i < map.ground.length; i++) {
-    if (map.ground[i] === WATER) expect(map.solid[i]).toBe(1);   // ins Meer läuft man nicht
-    if (map.ground[i] === PATH) expect(map.solid[i]).toBe(0);    // Tor/Pfad begehbar
-    if (map.ground[i] === DOCK) expect(map.solid[i]).toBe(0);    // Steg-Planken begehbar
-  }
+  erwarteSolidJeBoden(map, [
+    { boden: WATER, solid: 1, name: "Wasser" }, // ins Meer läuft man nicht
+    { boden: PATH, solid: 0, name: "Tor/Pfad" }, // Tor/Pfad begehbar
+    { boden: DOCK, solid: 0, name: "Steg-Planken" }, // Steg-Planken begehbar
+  ]);
 });
 
 test("der Hof besteht aus Stein-Wehrmauer + Gras-Bailey (genug von beidem) und hat einen Holz-Steg", () => {

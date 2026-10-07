@@ -126,14 +126,14 @@ const taktWorkflowRobust = (yml: string): boolean => {
   const gruppe = /^concurrency:\s*\n\s+group:\s*(\S+)/m.exec(yml)?.[1] ?? "";
   return (
     /^\s+schedule:/m.test(yml) &&
-    /cron:/.test(yml) &&
+    /^\s+- cron:\s*"[^"]+"/m.test(yml) &&
     /workflow_dispatch/.test(yml) &&
     gruppe !== "" &&
     !gruppe.includes("${{") &&
     /cancel-in-progress:\s*false/.test(yml) &&
     /issues:\s*write/.test(yml) &&
     /secrets\.PROJECT_TOKEN/.test(yml) &&
-    /node scripts\/langfuse-takt\.mjs\s*$/m.test(yml) &&
+    /^\s+run:\s*node scripts\/langfuse-takt\.mjs\s*$/m.test(yml) &&
     !/--dry-run/.test(yml)
   );
 };
@@ -241,13 +241,19 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatLangfuseSammelticket(tr.replace(/--top/g, "--x"), agents));
     assert.ok(!hatLangfuseSammelticket(tr, agents.replace("#langfuse-befunde-gesammelt-1351", "#x")));
     assert.ok(!hatLangfuseSammelticket("", ""));
+    assert.ok(!hatLangfuseSammelticket(tr, agents.replace(/(Ausnahme:\*\*[^\n]*)Langfuse-Befunde \(gesammelt\)/, "$1Anderes")), "Titel fehlt im Ausnahme-Teil von AGENTS.md");
   });
 
   test("Takt-Workflow: Cron + Dispatch, feste Concurrency-Group ohne Abbruch, schreibende Rechte, Board-Token, echter Lauf", () => {
-    const yml = read(".github/workflows/langfuse-takt.yml");
+    const yml = read(".github/workflows/langfuse-takt.yml").replace(/\r\n/g, "\n"); // CRLF im Windows-Checkout
     assert.ok(taktWorkflowRobust(yml));
     const sabotagen: [string, string, string][] = [
       ["schedule:", "pull_request:", "Cron"],
+      ['- cron: "17 5 * * 1"', "", "Cron-Zeile weg, schedule: bleibt"],
+      ["concurrency:"+"\n  group: langfuse-takt\n  cancel-in-progress: false\n", "", "Concurrency-Block weg"],
+      ["  group: langfuse-takt\n", "", "group: weg"],
+      ["run: node scripts/langfuse-takt.mjs", "run: echo node scripts/langfuse-takt.mjs", "falsche run-Zeile (echo)"],
+      ["run: node scripts/langfuse-takt.mjs", "run: node scripts/anderes.mjs", "falsches Skript"],
       ["workflow_dispatch", "x", "Dispatch"],
       ["group: langfuse-takt", "group: langfuse-${{ github.run_id }}", "variable Group"],
       ["cancel-in-progress: false", "cancel-in-progress: true", "Abbruch"],

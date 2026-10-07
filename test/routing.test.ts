@@ -122,17 +122,22 @@ describe("ROUTING_ROUNDS (Content)", () => {
   });
 
   test("jede Anfrage referenziert entweder einen direkten Service ODER einen Pfad mit passender Ingress-Regel", () => {
-    for (const r of ROUTING_ROUNDS) {
+    const ingressRunden = ROUTING_ROUNDS.filter((r) => r.ingressRules.length > 0);
+    const direktRunden = ROUTING_ROUNDS.filter((r) => r.ingressRules.length === 0);
+    expect(ingressRunden.length, "es gibt Ingress-Runden").toBeGreaterThan(0);
+    expect(direktRunden.length, "es gibt Runden ohne Ingress").toBeGreaterThan(0);
+    for (const r of ingressRunden) {
       for (const req of r.requests) {
-        if (r.ingressRules.length > 0) {
-          expect(req.path, `Runde „${r.name}“: Anfrage „${req.label}“ braucht einen Pfad (Ingress-Runde)`).toBeDefined();
-          const rule = r.ingressRules.find((ir) => ir.path === req.path);
-          expect(rule, `Runde „${r.name}“: kein Ingress-Rule für Pfad „${req.path}“`).toBeDefined();
-          expect(r.services.some((s) => s.name === rule!.service)).toBe(true);
-        } else {
-          expect(req.service, `Runde „${r.name}“: Anfrage „${req.label}“ braucht einen direkten Service (keine Ingress-Runde)`).toBeDefined();
-          expect(r.services.some((s) => s.name === req.service)).toBe(true);
-        }
+        expect(req.path, `Runde „${r.name}“: Anfrage „${req.label}“ braucht einen Pfad (Ingress-Runde)`).toBeDefined();
+        const rule = r.ingressRules.find((ir) => ir.path === req.path);
+        expect(rule, `Runde „${r.name}“: kein Ingress-Rule für Pfad „${req.path}“`).toBeDefined();
+        expect(r.services.some((s) => s.name === rule!.service)).toBe(true);
+      }
+    }
+    for (const r of direktRunden) {
+      for (const req of r.requests) {
+        expect(req.service, `Runde „${r.name}“: Anfrage „${req.label}“ braucht einen direkten Service (keine Ingress-Runde)`).toBeDefined();
+        expect(r.services.some((s) => s.name === req.service)).toBe(true);
       }
     }
   });

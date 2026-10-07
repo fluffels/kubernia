@@ -59,8 +59,8 @@
  *   - Die Sonderfall-Zweige (Epic, Dependabot) des Workflows werden per `node:vm` gegen Stub-Globals
  *     AUSGEFÜHRT (Epic-Aufteilung über den Planer, #1207); der Stub kennt nur die frühen Phasen und
  *     bricht bei unbekannten Labels laut ab. Der Skill-Pfad wird nur auf den Verweis im Text geprüft.
- *   - Das Agent-Tool hat keinen `effort`-Parameter (docs/model-routing.md §2): der Effort von
- *     Repo-Agenten (kubernia-lens, Explore) kommt aus ihrem Frontmatter; am Spawn wird geprüft, dass
+ *   - Das Agent-Tool kennt `effort`, die Konvention setzt ihn nicht am Spawn (docs/model-routing.md §2): der
+ *     Effort von Repo-Agenten (kubernia-lens, Explore) kommt aus ihrem Frontmatter; am Spawn wird geprüft, dass
  *     KEIN `model:` das Frontmatter überstimmt. `effort: low` am Explore deklariert nur: Haiku
  *     unterstützt laut Claude-Code-Doku keinen Effort, er wirkt erst bei einem anderen Alias-Ziel.
  *
@@ -329,7 +329,7 @@ describe("Die Umsetzung tippt auf dem Coding-Tier – auch auf dem Skill-Pfad (#
       spawn,
       /subagent_type:\s*"kubernia-lens"/,
       `${REVIEW_SKILL} muss die Lens-Pässe in einem \`Agent({…})\`-Spawn über \`kubernia-lens\` starten: ` +
-        "nur dessen Frontmatter trägt `effort: high`, das Agent-Tool hat keinen effort-Parameter (#1209). " +
+        "nur dessen Frontmatter trägt `effort: high`, ein `effort:` am Spawn überstimmte es (#1209). " +
         "Laufen die Lenses inline im Hauptagenten, reviewt Sonnet, und der finale Blick wäre ein Self-Grading (#1012).",
     );
     assert.doesNotMatch(
@@ -541,7 +541,7 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
       "Der Umsetzer muss im Frontmatter auf dem Coding-Tier stehen – nur das Agent-Frontmatter wirkt unabhängig " +
         "vom Session-Modell (Skill-Frontmatter gilt nur für den Turn, #98898).",
     );
-    assert.equal(fm.effort, "medium", "Matrix §1: Umsetzung sonnet/medium; das Agent-Tool kennt kein effort");
+    assert.equal(fm.effort, "medium", "Matrix §1: Umsetzung sonnet/medium; am Spawn steht kein effort");
     assert.notEqual(fm.omitClaudeMd, "true", "Der Umsetzer braucht AGENTS.md im Kontext");
   });
 
@@ -638,6 +638,15 @@ describe("Skill-Pfad: die Umsetzung läuft im Subagenten kubernia-umsetzer, nich
     const spawn = spawnFuer(read(UMSETZUNGS_SKILL), "kubernia-umsetzer");
     assert.notEqual(spawn, "", `${UMSETZUNGS_SKILL} braucht einen \`Agent({ subagent_type: "kubernia-umsetzer", … })\`-Spawn`);
     assert.doesNotMatch(spawn, /\bmodel:/, "Ein `model:` am Spawn (auch ohne Anführungszeichen) überstimmt das Frontmatter des Umsetzers");
+  });
+
+  test("kein Agent-Spawn in den Skills setzt effort: oder model: (Effort steht im Frontmatter, #1342)", () => {
+    for (const skill of [REVIEW_SKILL, UMSETZUNGS_SKILL]) {
+      const bloecke = spawnBloecke(read(skill));
+      assert.ok(bloecke.length > 0, `${skill} hat Agent-Spawns`);
+      for (const b of bloecke) assert.doesNotMatch(b.replace(/\/\/[^\n]*/g, ""), /\b(effort|model)\s*:/, `${skill}: Spawn setzt effort:/model: und überstimmte das Frontmatter`);
+    }
+    assert.match(spawnBloecke('Agent({ subagent_type: "x", effort: "high" })')[0], /\beffort\s*:/, "Erkennung greift (Red-Green)");
   });
 
   test("Erkennung greift wirklich (Red-Green): spawnFuer trennt Blöcke und erkennt den Override", () => {
