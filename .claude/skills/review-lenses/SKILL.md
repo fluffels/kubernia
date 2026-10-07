@@ -1,6 +1,6 @@
 ---
 name: review-lenses
-description: Gestaffelter Mehr-Perspektiven-Review des kubernia-Diffs: erst `npm run verify`, nur bei Grün die Lenses (Code: Architektur, Requirement-Treue, Test-Adäquanz; reines Markdown: eine Doku-Lens). Auslösen bei "Lens-Review", "Mehr-Augen-Review", "Review mit Lenses", "gestaffelter Review".
+description: Gestaffelter Mehr-Perspektiven-Review des kubernia-Diffs: erst `npm run verify:kompakt`, nur bei Grün die Lenses (Code: Architektur, Requirement-Treue, Test-Adäquanz; reines Markdown: eine Doku-Lens). Auslösen bei "Lens-Review", "Mehr-Augen-Review", "Review mit Lenses", "gestaffelter Review".
 ---
 
 # Mehr-Perspektiven-Review mit Gate-Short-Circuit
@@ -49,13 +49,13 @@ Jede Lens bekommt zusätzlich diese drei Regeln — sie kosten keinen Befund:
 **Immer zuerst.** Vor der ersten Stufe 0: `git fetch origin`; ist `origin/main` weiter, `git merge origin/main` und Konflikte jetzt lösen (ein Merge nach der Konvergenz kostet Delta-Lens und neuen Nachweis). Dann das SSOT-Aggregat aller Gates (#527):
 
 ```bash
-npm run verify   # die Gate-Kette steht in package.json › scripts.verify (nicht hier kopiert)
+npm run verify:kompakt   # Kette aus package.json › scripts.verify, alle Gates, Ausgabe nur bei Rot
 ```
 
 - **Exit ≠ 0 (rot):** **HIER STOPPEN.** Berichte, welches Gate rot ist, mit der Fehlerausgabe — und **starte KEINEN Lens-Pass** (das ist der Short-Circuit: kein LLM-Token auf einen Diff, der schon deterministisch scheitert). Das gerötete Gate zuerst grün machen (im normalen Ticket-Ablauf), dann den Review erneut anstoßen.
 - **Exit == 0 (grün):** weiter zu den Lenses.
 
-> Warum `npm run verify` statt einer eigenen Kommandokette: es ist die **eine** gepflegte Gate-Quelle (#527) — so kann der Review nicht gegen eine veraltete Teilmenge der Gates prüfen. Fehlt im Worktree `node_modules`, einmal `npm ci` (#1119).
+> Warum `verify:kompakt` statt einer eigenen Kommandokette: das Skript liest dieselbe **eine** gepflegte Gate-Quelle (#527) — so kann der Review nicht gegen eine veraltete Teilmenge der Gates prüfen — und läuft nach einem Rot weiter, damit ein Fix alle Funde auf einmal behebt. Es ist der **eine** volle Lauf vor dem Review (AGENTS.md § Zwei-Stufen-Prüfung), kein zweiter. Fehlt im Worktree `node_modules`, einmal `npm ci` (#1119).
 
 ### Die Lens-Pässe (nur nach grüner Stufe 0)
 
@@ -154,6 +154,6 @@ Regel-Heimat: [AGENTS.md › Mehr-Perspektiven-Review](../../../AGENTS.md). Dete
 
 ## Wichtig
 
-- **Short-Circuit ist hart.** Rote Stufe 0 ⇒ **keine** Lens-Pässe. Der Beweis ist der Exit-Code von `npm run verify` (≠ 0), nicht ein Bauchgefühl.
+- **Short-Circuit ist hart.** Rote Stufe 0 ⇒ **keine** Lens-Pässe. Der Beweis ist der Exit-Code von `npm run verify:kompakt` (≠ 0), nicht ein Bauchgefühl.
 - **Nicht die CI ersetzen.** Die Gates laufen ohnehin vor dem PR lokal (`npm run verify`) und in der CI als Required-Checks nochmal — dieser Skill hängt sich **davor** und ergänzt die LLM-Lenses. **Kein Auto-Merge.**
 - **Ablauf-Änderungen** gehören in [docs/agent-harness.md](../../../docs/agent-harness.md) (Harness-Sicht) bzw. [AGENTS.md](../../../AGENTS.md), nicht (nur) in diese Skill-Datei — der Skill ist ein dünner Zeiger auf die Repo-SSOT.

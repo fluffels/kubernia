@@ -4,7 +4,7 @@
  * `brain-metrics.mjs` (`{ tool, input, resultChars, agent, fehler }`; `fehler` = Anfang des Fehlertexts, sonst null).
  * Definition: docs/model-routing.md §5 „Messen“.
  */
-import { CHARS_PER_TOKEN } from "./brain-metrics.mjs";
+import { CHARS_PER_TOKEN, commandsOf } from "./brain-metrics.mjs";
 
 /** `ERROR` allein ist kein Signal (der Hook setzt es bei jedem Exit ≠ 0); die Art steht im Text. */
 const ARTEN = [
@@ -79,4 +79,37 @@ export function wiederlesen(events) {
   }
   out.top = [...proDatei.values()].sort((a, b) => b.n - a.n || b.tokens - a.tokens).slice(0, 5);
   return out;
+}
+
+/**
+ * Prüfläufe (#1120): wie oft ein Agent die volle Gate-Kette (`npm run verify`, `verify:kompakt`, `verify:full`) bzw. die gezielte
+ * (`verify:changed`) gestartet hat. Gezählt nur ein Kommando `npm run <skript>` (oder `node …verify-lauf.mjs`), nie Text in Commit-
+ * Message oder `echo`; von Guard, Hook oder Permission blockierte Events zählen nicht, ein roter Lauf (Exit ≠ 0) schon.
+ */
+const VOLL = new Set(["verify", "verify:kompakt", "verify:full"]);
+const BLOCKIERT = new Set(["guard", "hook", "permission"]);
+
+export function pruefLaeufe(events) {
+  const out = { voll: 0, gezielt: 0 };
+  for (const ev of events ?? []) {
+    if (ev?.tool !== "Bash" && ev?.tool !== "PowerShell") continue;
+    if (BLOCKIERT.has(fehlerArt(ev.fehler))) continue;
+    for (const words of commandsOf(ev.input?.command, ev.tool)) {
+      const art = pruefArt(words);
+      if (art) out[art] += 1;
+    }
+  }
+  return out;
+}
+
+function pruefArt(words) {
+  const [cmd, ...rest] = words;
+  if (cmd === "npm") {
+    const args = rest.filter((w) => !w.startsWith("-"));
+    if (args[0] !== "run" && args[0] !== "run-script") return null;
+    if (VOLL.has(args[1])) return "voll";
+    return args[1] === "verify:changed" ? "gezielt" : null;
+  }
+  if (cmd === "node" && rest.some((w) => /(?:^|[\/])verify-lauf\.mjs$/.test(w))) return rest.includes("--changed") ? "gezielt" : "voll";
+  return null;
 }

@@ -54,7 +54,7 @@ function gitShowBrainPfade(args) {
 }
 
 /** Kommandos als Wortlisten: Bash über den AST, sonst (und für PowerShell) grobe Trennung. */
-function commandsOf(command, tool) {
+export function commandsOf(command, tool) {
   if (tool === "Bash") {
     const r = parseBash(command);
     if (r.ok) return einfacheKommandos(r.ast);
