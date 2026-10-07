@@ -155,9 +155,24 @@ export interface Deployment {
    *  verschwindet die Markierung wieder. */
   evicted?: { reason: string } | null;
 }
+/** Der Sentinel-Wert für einen headless Service (`spec.clusterIP: None`, #1301): keine
+ *  virtuelle IP, DNS liefert direkt die Pod-IPs. Ausschließlich über `isHeadlessService`
+ *  abfragen, nicht an den String-Vergleich streuen. */
+export const HEADLESS_CLUSTER_IP = "None";
+/** Beschreibt einen Service beim Anlegen (Manifest/expose/Helm/Argo → `_makeService`). */
+export interface ServiceSpec {
+  name: string;
+  type?: string;
+  port: string | number;
+  targetPort?: string | number;
+  externalName?: string;
+  /** Nur `"None"` (headless) wird abgebildet; sonst leitet die Sim die ClusterIP ab. */
+  clusterIP?: typeof HEADLESS_CLUSTER_IP;
+}
 export interface ServiceRes {
   name: string;
   type: string;
+  /** Abgeleitete virtuelle IP, `"<none>"` bei ExternalName, `"None"` bei headless (#1301). */
   clusterIP: string;
   port: string | number;
   /** Ziel-Port hinter dem Service (`spec.ports[].targetPort`, #164): an welchen
@@ -170,6 +185,10 @@ export interface ServiceRes {
    *  gesetzt; `type` ist dann "ExternalName" und `clusterIP` ist "<none>". */
   externalName?: string;
   created?: number;
+}
+/** Ist der Service headless (`clusterIP: None`)? Dann gibt es keine Service-IP. */
+export function isHeadlessService(svc: Pick<ServiceRes, "clusterIP">): boolean {
+  return svc.clusterIP === HEADLESS_CLUSTER_IP;
 }
 /** Ingress: leitet eine Außen-Adresse (host/pfad) an einen Service im Cluster. */
 export interface IngressRes {
@@ -376,7 +395,7 @@ export interface ApplyEffect {
   roleBinding?: { name: string; cluster?: boolean; roleRef: { kind: "Role" | "ClusterRole"; name: string }; subjects: RbacSubject[] };
   // `externalName` macht den Service zu einem ExternalName-Service (#337): kein ClusterIP,
   // sondern ein CNAME auf den genannten externen DNS-Namen. `port` darf dann "" sein.
-  service?: { name: string; type?: string; port: string | number; externalName?: string; targetPort?: string | number };
+  service?: ServiceSpec;
   ingress?: { name: string; host: string; path?: string; service: string; port: string | number; className?: string; tls?: { secretName: string } };
   networkPolicy?: { name: string; podSelector?: string; allowFrom?: string };
   // Eine Argo-Application-CRD: legt beim `kubectl apply -f` eine Argo-App im Sim-State an.

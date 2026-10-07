@@ -10,12 +10,16 @@
  * zum docker/kubectl-Split (#346/#397). Phaser-frei: nutzt nur Domänentypen aus ./state
  * über das schmale NetHost-Interface; kein Rückimport nach sim.ts (kein Zyklus).
  */
-import type { ServiceRes, Deployment } from "./state";
+import { isHeadlessService, type ServiceRes, type Deployment, type StatefulSetRes, type PvcRes } from "./state";
+import { podIP } from "./util";
+import { statefulPodVolumePending } from "./workload";
 
 /** Was die net-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt). */
 export interface NetHost {
   services: ServiceRes[];
   deployments: Deployment[];
+  statefulSets: StatefulSetRes[];
+  pvcs: PvcRes[];
   _err(msg: string, tip?: string): string;
   _podReady(d: Deployment): boolean;
   _reschedulePending(): void;
@@ -25,7 +29,9 @@ export interface NetHost {
 /** nslookup <name>: fragt CoreDNS (den Cluster-DNS-Server) nach der Adresse hinter
  *  einem Namen (#337). Löst die Service-Discovery-Formen `<svc>`, `<svc>.<ns>` und den
  *  vollen FQDN `<svc>.<ns>.svc.cluster.local` zur ClusterIP des Service auf; ein
- *  ExternalName-Service liefert stattdessen den CNAME auf seinen externen DNS-Namen. */
+ *  ExternalName-Service liefert stattdessen den CNAME auf seinen externen DNS-Namen.
+ *  Ein headless Service (`clusterIP: None`, #1301) hat keine Service-IP: CoreDNS liefert
+ *  die IPs der bereiten Pods dahinter, und `<pod>.<svc>` löst einen einzelnen StatefulSet-Pod auf. */
 export function nslookupCommand(host: NetHost, t: string[]): string {
   const COREDNS = "10.96.0.10";          // ClusterIP des CoreDNS-Service (kube-system)
   const EXTERNAL_RESOLVE_IP = "203.0.113.55"; // Beispiel-Adresse (TEST-NET-3) hinter dem externen Namen
@@ -44,6 +50,8 @@ export function nslookupCommand(host: NetHost, t: string[]): string {
   }
   const svc = host.services.find(s => s.name === svcName);
   if (!svc) {
+    const pod = podRecordAnswer(host, query.split("."));
+    if (pod) return header.concat(pod).join("\n");
     return host._err(header.join("\n") + "\n** server can't find " + fqdn + ": NXDOMAIN",
       "Kennt CoreDNS den Namen nicht? Prüfe mit 'kubectl get services', ob der Service existiert (richtig geschrieben?).");
   }
@@ -55,7 +63,52 @@ export function nslookupCommand(host: NetHost, t: string[]): string {
       "Address: " + EXTERNAL_RESOLVE_IP,
     ]).join("\n");
   }
+  if (isHeadlessService(svc)) {
+    const ips = headlessAnswer(host, svc);
+    if (ips.length === 0) {
+      return host._err(header.join("\n") + "\n** server can't find " + fqdn + ": NXDOMAIN",
+        "Der headless Service '" + svc.name + "' hat keine bereiten Pods dahinter (kein Deployment/StatefulSet gleichen Namens, oder die Pods sind nicht bereit). Schau mit 'kubectl get pods'.");
+    }
+    return header.concat(ips.flatMap(ip => ["Name:\t" + fqdn, "Address: " + ip])).join("\n");
+  }
   return header.concat(["Name:\t" + fqdn, "Address: " + svc.clusterIP]).join("\n");
+}
+
+/** Bereite Pods eines StatefulSets (ohne die, deren PVC noch Pending ist). */
+function readyStatefulPods(host: NetHost, sts: StatefulSetRes) {
+  return sts.pods.filter(p => !statefulPodVolumePending(sts, p, host.pvcs));
+}
+
+/** Die Pod-IPs hinter einem headless Service (#1301): das Deployment gleichen Namens (falls
+ *  bereit) und die StatefulSets, die ihn als `serviceName` führen. Selektoren sind in der Sim
+ *  nicht modelliert; der Name ist die Verdrahtung. Vorher den Cluster nachführen (wie curl). */
+function headlessAnswer(host: NetHost, svc: ServiceRes): string[] {
+  host._reschedulePending();
+  host._recheckReadiness();
+  const ips: string[] = [];
+  const dep = host.deployments.find(d => d.name === svc.name);
+  if (dep && host._podReady(dep)) for (const p of dep.pods) ips.push(podIP(p.name));
+  for (const sts of host.statefulSets) {
+    if (sts.serviceName === svc.name) for (const p of readyStatefulPods(host, sts)) ips.push(podIP(p.name));
+  }
+  return ips;
+}
+
+/** `<pod>.<svc>[.<ns>.svc.cluster.local]`: der stabile DNS-Name eines StatefulSet-Pods hinter
+ *  einem headless Service (#1301). Nur wenn `<svc>` headless ist, das StatefulSet ihn als
+ *  `serviceName` führt und der Pod bereit ist; sonst `null` (→ NXDOMAIN). */
+function podRecordAnswer(host: NetHost, labels: string[]): string[] | null {
+  const [podName, svcName] = labels;
+  const svc = svcName ? host.services.find(s => s.name === svcName) : undefined;
+  if (!svc || !isHeadlessService(svc)) return null;
+  host._reschedulePending();
+  host._recheckReadiness();
+  for (const sts of host.statefulSets) {
+    if (sts.serviceName !== svc.name) continue;
+    const pod = readyStatefulPods(host, sts).find(p => p.name === podName);
+    if (pod) return ["Name:\t" + podName + "." + svc.name + ".default.svc.cluster.local", "Address: " + podIP(pod.name)];
+  }
+  return null;
 }
 
 /** curl [http(s)://]<service>[:port][/pfad]: fragt einen Service im Cluster ab und

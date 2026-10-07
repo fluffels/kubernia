@@ -421,12 +421,7 @@ const applyService: ApplyHandler = (host, eff, out) => {
   // #507: Service-Anlegen zentral über die Fabrik (DNS-1123-Prüfung inklusive).
   // ExternalName (#337) → CNAME statt ClusterIP; sonst abgeleitete ClusterIP + optionaler
   // targetPort (#164). Die Fallunterscheidung macht jetzt _makeService.
-  host.services.push(host._makeService({
-    name: effSvc.name, type: effSvc.type,
-    port: effSvc.port,
-    ...(effSvc.targetPort !== undefined ? { targetPort: effSvc.targetPort } : {}),
-    ...(effSvc.externalName ? { externalName: effSvc.externalName } : {}),
-  }));
+  host.services.push(host._makeService(effSvc));
   out.push("service/" + effSvc.name + " created");
 };
 
