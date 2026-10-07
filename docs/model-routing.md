@@ -257,7 +257,7 @@ Calls und Token-Summen stimmen exakt überein, auch für Planer, Umsetzer und be
 
 ### Projekt-Brain-Kennzahlen (#1205)
 
-Messung für [ADR 0015](adr/0015-projekt-brain.md), Code in `scripts/brain-metrics.mjs`. Die Zeile `Projekt-Brain:` im Report des Skripts (Transkript und `--langfuse` liefern dieselben Zahlen) enthält:
+Messung für [ADR 0015](adr/0015-projekt-brain.md), Code in `scripts/brain-metrics.mjs`. Die Zeile `Projekt-Brain:` im Report des Skripts (Transkript und `--langfuse` nutzen dieselbe Logik; Ergebnisgrößen weichen je nach Serialisierung leicht ab, ein Zahlenabgleich mit Schlüsseln steht aus) enthält:
 
 - **gelesen N× (S Seiten, ≈ T Tokens):** Lesezugriffe auf Brain-Seiten (`docs/**.md`) per `Read` oder Shell (`cat`, `sed`, `head`, `Get-Content` …); Tokens ≈ Zeichen des Ergebnisses / 4.
 - **Suche:** `Grep`, `Glob` und Shell-Suche (`grep`, `rg`, `find`, `git grep`, `Select-String`); `grep … docs/x.md` zählt als Suche.
@@ -269,15 +269,15 @@ Grenzen: Tokens sind eine Größenordnung; Läufe in geteilten Sessions sind nur
 
 **Baseline vor dem Pflegeschritt (#1099)**, Stand 2026-10-07, Transkript-Modus:
 
-| Lauf | Brain gelesen (Zugriffe / Seiten / ≈Tok) | Suche (Calls / ≈Tok) | Recherche-Subagenten | Calls bis 1. Edit | Brain-Pflege PR | Review-Runden | CI-Fix |
+| Lauf | Brain gelesen (Zugriffe / Seiten / ≈Tok) | Suche (Calls / ≈Tok) | Recherche-Subagenten | Calls bis 1. Edit | Brain-Pflege (Schreibzugriffe / PR) | Review-Runden | CI-Fix |
 |---|---|---|--:|--:|---|--:|--:|
-| #1303 (PR #1310) | 17 / 8 / 17.821 | 81 / 84.776 | 0 | 77 | 5 Seiten (+58/−10) | 2 | 0 |
-| #1308 (PR #1314, Session `6364f74c`) | 16 / 7 / 14.152 | 162 / 82.692 | 10.853 | 108 | 3 Seiten (+9/−6) | 9 | 0 |
-| #1311 (PR #1317, Session `3c41607a`) | 10 / 9 / 12.248 | 180 / 76.950 | 0 | 73 | 2 Seiten (+6/−4) | 10 (Heuristik) | 0 |
+| #1303 (PR #1310) | 17 / 8 / 17.821 | 81 / 84.776 | 0 | 77 | 1 / 5 Seiten (+58/−10) | 2 | 0 |
+| #1308 (PR #1314, Session `6364f74c`) | 16 / 7 / 14.152 | 162 / 82.692 | 10.853 | 108 | 0 / 3 Seiten (+9/−6) | 9 | 0 |
+| #1311 (PR #1317, Session `3c41607a`) | 10 / 9 / 12.248 | 180 / 76.950 | 0 | 73 | 7 / 2 Seiten (+6/−4) | nicht vergleichbar (geteilte Session) | 0 |
 
-Lesart: Die Läufe liegen bei 10–17 Brain-Lesezugriffen und 81–180 Such-Calls; die Such-Tokens (77–85k) übersteigen die gelesenen Brain-Tokens (12–18k) um ein Mehrfaches, dort liegt die Ersparnis, die das Brain heben soll. #1308 und #1311 teilten Sessions mit anderen Läufen und sind nur nach Fenster getrennt (obere Schranke), #1308 hatte ungewöhnlich viele Review-Runden (Sonderfreigabe). Zählprobe #1303: 17 Lesezugriffe im Skript gleich dem unabhängig per Muster gezählten Wert (17 `cat`/`sed`/`head` auf `docs/*.md`, 0 `Read`); die Langfuse-Seite ist ohne Schlüssel nur über die Form belegt (TOOL-Observation mit `input` und `metadata.output_meta.orig_len`, per MCP am 07.10.2026 geprüft).
+Lesart: Die Läufe liegen bei 10–17 Brain-Lesezugriffen und 81–180 Such-Calls; die Such-Tokens (77–85k) übersteigen die gelesenen Brain-Tokens (12–18k) um ein Mehrfaches, dort liegt die Ersparnis, die das Brain heben soll. #1308 und #1311 teilten Sessions mit anderen Läufen und sind nur nach Fenster getrennt (obere Schranke), #1308 hatte ungewöhnlich viele Review-Runden (Sonderfreigabe). Zählprobe #1303: 17 Lesezugriffe im Skript, gleich dem unabhängig per Muster gezählten Wert (17 `cat`/`sed`/`head` auf `docs/*.md`, 0 `Read`; Grenze der Zählung: Env-Präfixe wie `LANG=C cat` und `(Get-Content …)` in PowerShell erkennt sie nicht, `sed -i` zählt als Lesen); die Langfuse-Seite ist ohne Schlüssel nur über die Form belegt (TOOL-Observation mit `input` und `metadata.output_meta.orig_len`, per MCP am 07.10.2026 geprüft).
 
-Re-Evaluierung des Guards „Read statt cat“: Messung 07.10.2026 über 383 Transkripte der letzten vier Tage: 68 `Read` auf `docs/*.md` gegen höchstens 17 Shell-Lesezugriffe; steigen die Shell-Lesezugriffe deutlich, den Guard neu bewerten.
+Guard „Read statt cat“ (ADR 0015 Option D): In den drei Baseline-Läufen stehen 40 Shell-Lesezugriffe auf `docs/` gegen 3 `Read`; die Shell-Zugriffe kommen fast nur aus Subagenten (Umsetzer, Lenses), der Hauptchat liest per `Read`. Darum gehört die Konvention in die Subagenten-Prompts (#1099); sinken die Shell-Zugriffe danach nicht, den Guard bewerten.
 
 ### Nach einer Optimierung vergleichen
 

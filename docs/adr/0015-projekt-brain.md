@@ -22,7 +22,7 @@ Ein Brain lohnt sich nur, wenn es Tokens **spart**: weniger Suchen, weniger fals
 | **A — Umzug/Umbenennung nach `brain/`** | Verworfen. Bricht Links, `check:docdrift`, Wächter und Verweise für einen Namen; der Begriff reicht. |
 | **B — Begriff und Prinzipien auf `docs/`, Messung im versionierten Skript** (gewählt) | Kein Umbau, sofort wirksam; die Messung ist getestet und liest beide Quellen. |
 | **C — Hook-Tagging im lokalen Plugin-Patch als Primärquelle** | Verworfen: unversioniert, User-Scope, mit jedem Plugin-Update weg. Bleibt Ergänzung (Spannenname `[Kubernia-Doku]`, siehe [model-routing.md](../model-routing.md#langfuse-hook-patch-pflegen-10841122)). |
-| **D — Deny-Guard „Read statt cat“ für `docs/`** | Verworfen: Messung vom 07.10.2026 über 383 Transkripte der letzten vier Tage: 68 `Read` auf `docs/*.md` gegen höchstens 17 Shell-Lesezugriffe. Der Befund „664 Bash- gegen 18 Read-Calls“ (Token-Auswertung 05.10.2026) war ein Stand vom 29.09. und gilt nicht mehr. |
+| **D — Deny-Guard „Read statt cat“ für `docs/`** | Vorerst verworfen, nicht erledigt: Der Hauptchat liest Brain-Seiten überwiegend per `Read`, Subagenten (Umsetzer, Lenses) dagegen fast nur per Shell (Baseline vom 07.10.2026: in drei Läufen 40 Shell- gegen 3 `Read`-Zugriffe, siehe model-routing.md §5). Ein Guard greift ohne Baseline blind und ändert Hook-Verhalten für alle Agenten; erst messen, dann die Konvention in die Subagenten-Prompts (#1099), der Guard bleibt Re-Evaluierungs-Option. Der ältere Befund „664 Bash- gegen 18 Read-Calls“ ist ein Stand vom 29.09.2026. |
 | **E — Frontmatter (`description`) je Seite** | Verworfen: doppelt den „wann lesen“-Halbsatz der Landkarte und driftet; die Landkarte bleibt die einzige Beschreibung. |
 
 ## Entscheidung
@@ -36,7 +36,7 @@ Ein Brain lohnt sich nur, wenn es Tokens **spart**: weniger Suchen, weniger fals
    - *Größenschwelle:* 25.000 Zeichen je Brain-Seite (unter dem AGENTS.md-Budget von 28k), darüber wird aufgeteilt; Grund sind die Cache-Read-Kosten jeder gelesenen Seite. Der Wächter kommt mit #1100 (in `check:contextsize`, Bestand per `ALLOWLIST` mit Split-Zeilen).
    - *Selbstpflege:* Pflegeschritt am Ticket-Ende im selben PR (#1099), Erreichbarkeits-Wächter (#1100), „fachlich geprüft am“ (#1111).
    - *Wissensarten* unverändert wie ADR 0013 Punkt 1.
-3. **Messung:** `node scripts/token-baseline.mjs` weist je Lauf die Zeile `Projekt-Brain:` aus (Definition: [model-routing.md §5](../model-routing.md#projekt-brain-kennzahlen-1205)): gelesene Brain-Seiten mit Tokens, Such-Calls mit Tokens, Tokens der Recherche-Subagenten, Calls bis zum ersten Edit, Brain-Schreibzugriffe und Brain-Seiten im PR. Quelle sind Transkript und Langfuse-`TOOL`-Observations, nach derselben Logik (`scripts/brain-metrics.mjs`). Shell-Lesezugriffe (`cat`, `sed` …) auf `docs/` zählt das Skript mit.
+3. **Messung:** `node scripts/token-baseline.mjs` weist je Lauf die Zeile `Projekt-Brain:` aus (Definition: [model-routing.md §5](../model-routing.md#projekt-brain-kennzahlen-1205)): gelesene Brain-Seiten mit Tokens, Such-Calls mit Tokens, Tokens der Recherche-Subagenten, Calls bis zum ersten Edit, Brain-Schreibzugriffe und Brain-Seiten im PR. Quelle sind Transkript und Langfuse-`TOOL`-Observations, nach derselben Logik (Ergebnisgrößen je nach Serialisierung leicht verschieden) (`scripts/brain-metrics.mjs`). Shell-Lesezugriffe (`cat`, `sed` …) auf `docs/` zählt das Skript mit.
 4. **Erfolgskriterium:** Nach #1099 werden 3–5 Läufe gleicher Art gegen die Baseline in model-routing.md §5 gestellt. Erfolg nur, wenn die **Recherche-Last** (Such-Calls und Recherche-Subagenten-Tokens) und die **Calls bis zum ersten Edit** sinken und die Loop-Kennzahlen (CI-Fix, Review-Runden, Rückfragen) nicht schlechter werden. **Pflegekosten** (Marker `pflege:` am Pflegeschritt, Phase „Pflege“) werden je Ticket gegen die Ersparnis gestellt; überwiegen sie, wird der Pflegeschritt verschlankt, nicht das Brain aufgebläht. Der Vergleich läuft über Punkt 5 „Wirkung“ der Checkliste „Langfuse-Status überprüfen“.
 5. **Langfuse-Sicht:** Dashboard und Score je Ticket-Lauf gehören zu #1123 und nutzen die Definition aus Punkt 3. Der Spannenname `Tool: Read [Kubernia-Doku]` (lokaler Hook-Patch) umfasst auch AGENTS.md und Skills; die exakte `docs/`-Zählung liefert das Skript.
 
@@ -50,5 +50,5 @@ Ein Brain lohnt sich nur, wenn es Tokens **spart**: weniger Suchen, weniger fals
 
 - Die Recherche-Last sinkt nach 3–5 Läufen gleicher Art nicht.
 - Die Pflegekosten übersteigen die Ersparnis.
-- Die Shell-Lesezugriffe auf `docs/` steigen deutlich über die heutigen (Baseline in model-routing.md §5): dann den Guard aus Option D neu bewerten.
+- Die Shell-Lesezugriffe auf `docs/` sinken nach der Prompt-Konvention (#1099) nicht unter die Baseline in model-routing.md §5: dann den Guard aus Option D bewerten.
 - Das Brain wächst über 60 Seiten (Trigger aus ADR 0013).
