@@ -25,13 +25,13 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseNachweis } from "./slice-override.mjs";
 import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
-import { transkriptZeilen } from "./transkript.mjs";
+import { ladeSessionDatei, transkriptZeilen } from "./transkript.mjs";
 import { fehlerArten, wiederlesen } from "./tool-metriken.mjs";
 
 /** Lenses pro Review-Runde für Läufe ohne Runden-Marker (vor #1265 liefen immer alle drei Brillen, #1012). */
@@ -427,22 +427,16 @@ export function readTranscriptSession(sessionId, projectsRoot) {
   const candidates = readdirSync(projectsRoot).map((d) => join(projectsRoot, d, `${sessionId}.jsonl`));
   const main = candidates.find((p) => existsSync(p));
   if (!main) throw new Error(`Kein Transkript für Session ${sessionId} unter ${projectsRoot}`);
-  const mainZeilen = transkriptZeilen(readFileSync(main, "utf8"));
-  const all = callsFromTranscript(mainZeilen);
+  const sitzung = ladeSessionDatei(main);
+  const all = callsFromTranscript(sitzung.main);
   for (const c of all.calls) c.session = sessionId;
-  all.events = toolEventsFromTranscript(mainZeilen, `main:${sessionId}`);
-  const dir = main.replace(/\.jsonl$/, "") + "/subagents";
-  if (existsSync(dir)) {
-    for (const f of readdirSync(dir).filter((n) => n.endsWith(".jsonl"))) {
-      const metaPath = join(dir, f.replace(/\.jsonl$/, ".meta.json"));
-      const meta = existsSync(metaPath) ? JSON.parse(readFileSync(metaPath, "utf8")) : {};
-      const sub = { id: f, agentType: meta.agentType, description: meta.description, parentAgentId: meta.parentAgentId };
-      const zeilen = transkriptZeilen(readFileSync(join(dir, f), "utf8"));
-      const r = callsFromTranscript(zeilen, sub);
-      all.events.push(...toolEventsFromTranscript(zeilen, sub.id));
-      all.calls.push(...r.calls);
-      all.questions += r.questions;
-    }
+  all.events = toolEventsFromTranscript(sitzung.main, `main:${sessionId}`);
+  for (const { datei, meta, zeilen } of sitzung.subagents) {
+    const sub = { id: datei, agentType: meta.agentType, description: meta.description, parentAgentId: meta.parentAgentId };
+    const r = callsFromTranscript(zeilen, sub);
+    all.events.push(...toolEventsFromTranscript(zeilen, sub.id));
+    all.calls.push(...r.calls);
+    all.questions += r.questions;
   }
   return all;
 }

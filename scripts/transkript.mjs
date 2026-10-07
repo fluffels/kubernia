@@ -4,6 +4,9 @@
  * `umsetzer-abschluss.mjs`), darum steht es in keinem von ihnen. Reines Node-Skript ohne Abhängigkeiten.
  */
 
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
+
 /** Transkript-JSONL → geparste Zeilen (leere und abgeschnittene Zeilen entfallen). Einmal parsen, dann an die Adapter reichen. */
 export function transkriptZeilen(jsonlText) {
   const rows = [];
@@ -32,4 +35,31 @@ export function letzteErgebnisNachricht(zeilen) {
     for (let j = kandidaten.length - 1; j >= 0; j--) if (hatErgebnis(kandidaten[j])) return kandidaten[j];
   }
   return null;
+}
+
+/**
+ * Eine Session aus ihrer Hauptdatei `<id>.jsonl` laden (#1392): die Zeilen der Hauptdatei und je Subagent
+ * `<id>/subagents/<datei>.jsonl` samt Meta (`<datei>.meta.json`; fehlend oder kaputt ergibt `{}`). Eine EINZIGE Lese-Implementierung
+ * für `token-baseline.mjs` und `hauptchat-zerlegung.mjs`. Liefert `{ id, main, subagents: [{ datei, meta, zeilen }] }`.
+ */
+export function ladeSessionDatei(pfad) {
+  const id = basename(pfad).replace(/\.jsonl$/, "");
+  const main = transkriptZeilen(readFileSync(pfad, "utf8"));
+  const dir = join(dirname(pfad), id, "subagents");
+  const subagents = [];
+  if (existsSync(dir)) {
+    for (const datei of readdirSync(dir).filter((n) => n.endsWith(".jsonl"))) {
+      const metaPfad = join(dir, datei.replace(/\.jsonl$/, ".meta.json"));
+      let meta = {};
+      if (existsSync(metaPfad)) {
+        try {
+          meta = JSON.parse(readFileSync(metaPfad, "utf8")) ?? {};
+        } catch {
+          meta = {}; // kaputtes Meta: der Subagent bleibt lesbar, nur ohne agentType
+        }
+      }
+      subagents.push({ datei, meta, zeilen: transkriptZeilen(readFileSync(join(dir, datei), "utf8")) });
+    }
+  }
+  return { id, main, subagents };
 }
