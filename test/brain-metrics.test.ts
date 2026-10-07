@@ -33,7 +33,11 @@ const bm = bmModule as {
   toolEventsFromLangfuse: (obs: Obs[]) => Ev[];
   brainMetrics: (run: { events?: Ev[]; rows?: Row[] }, bounds?: { from?: string; mergedAt?: string }, prFiles?: { path: string; additions?: number; deletions?: number }[] | null) => Metrics;
 };
-const baseline = baselineModule as { renderMarkdown: (s: object, loop?: object) => string };
+const baseline = baselineModule as {
+  renderMarkdown: (s: object, loop?: object) => string;
+  summarize: (run: object, bounds?: object, prFiles?: object[] | null) => { brain?: Metrics };
+  fetchSessionObservations: (id: string, o: object) => Promise<unknown[]>;
+};
 const { isBrainPage, classifyShell, toolEventsFromTranscript, toolEventsFromLangfuse, brainMetrics } = bm;
 
 const ev = (ts: string, tool: string, input: Record<string, unknown> = {}, resultChars = 0): Ev => ({ ts, tool, input, resultChars });
@@ -171,5 +175,77 @@ describe("renderMarkdown mit Projekt-Brain", () => {
     assert.match(out, /Calls bis erster Edit –/);
     assert.match(out, /PR –/);
     assert.doesNotMatch(baseline.renderMarkdown(summary, {}), /Projekt-Brain/);
+  });
+});
+
+describe("Härtung nach Review", () => {
+  const T = (n: number) => `2026-10-01T10:00:0${n}Z`;
+  const use = (id: string, name: string, input: object) => ({ type: "tool_use", id, name, input });
+  test("Ergebnisse werden über die ID verknüpft, auch bei umgekehrter Reihenfolge und verwaister ID", () => {
+    const lines = [
+      JSON.stringify({ type: "assistant", timestamp: T(0), message: { content: [use("a", "Read", {}), use("b", "Grep", {})] } }),
+      JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "b", content: "22" }, { type: "tool_result", tool_use_id: "zz", content: "999" }, { type: "tool_result", tool_use_id: "a", content: "1" }] } }),
+    ].join("\n");
+    const e = toolEventsFromTranscript(lines);
+    assert.deepEqual(e.map((x) => [x.tool, x.resultChars]), [["Read", 1], ["Grep", 2]]);
+  });
+  test("summarize verdrahtet Events, Fenster und PR-Dateien; ohne events kein brain", () => {
+    const events = [ev(T(0), "Read", { file_path: "docs/a.md" }), ev(T(2), "Read", { file_path: "docs/b.md" }), ev(T(4), "Read", { file_path: "docs/c.md" })];
+    const s = baseline.summarize({ calls: [], events }, { from: T(1), mergedAt: T(3) }, [{ path: "docs/x.md", additions: 2, deletions: 1 }]);
+    assert.equal(s.brain?.brainReads, 1);
+    assert.equal(s.brain?.prBrain?.pages, 1);
+    assert.equal(baseline.summarize({ calls: [] }).brain, undefined);
+  });
+  test("Events werden nach Zeit sortiert (Subagenten-Events kommen hinten an)", () => {
+    const m = brainMetrics({ events: [ev(T(3), "Edit", { file_path: "src/a.ts" }), ev(T(0), "Read", {}), ev(T(1), "Read", {}), ev(T(2), "Read", {})] });
+    assert.equal(m.callsBeforeFirstEdit, 3);
+  });
+  test("Fenster ist halboffen: from zählt, mergedAt nicht", () => {
+    const m = brainMetrics({ events: [ev(T(1), "Read", { file_path: "docs/a.md" }), ev(T(3), "Read", { file_path: "docs/b.md" })] }, { from: T(1), mergedAt: T(3) });
+    assert.equal(m.brainReads, 1);
+  });
+  test("grep auf eine Brain-Seite ist Suche, kein Lesen", () => {
+    assert.deepEqual(classifyShell("grep foo docs/x.md"), { brainReads: [], search: true });
+  });
+  test("AST-Weg: Quotes und Substitution; PowerShell mit &&", () => {
+    assert.equal(classifyShell('cat "docs/a.md"').brainReads.length, 1);
+    assert.equal(classifyShell("x=$(cat docs/a.md)").brainReads.length, 1);
+    assert.equal(classifyShell("cd x && cat docs/a.md", "PowerShell").brainReads.length, 1);
+  });
+  test("Seiten dedupliziert, Mehrfach-Pfade zählen einzeln, Schreibzugriff per notebook_path/MultiEdit", () => {
+    const m = brainMetrics({
+      events: [
+        ev(T(0), "Read", { file_path: "C:\\r\\docs\\a.md" }),
+        ev(T(1), "Bash", { command: "cat C:/r/docs/a.md" }),
+        ev(T(2), "Bash", { command: "cat docs/a.md docs/b.md" }),
+        ev(T(3), "MultiEdit", { file_path: "docs/z.md" }),
+        ev(T(4), "NotebookEdit", { notebook_path: "docs/n.md" }),
+      ],
+    });
+    assert.deepEqual([m.brainReads, m.brainPages, m.brainWrites], [4, 3, 2]);
+  });
+  test("kaputter Langfuse-Input wirft nicht", () => {
+    const e = toolEventsFromLangfuse([{ type: "TOOL", startTime: T(0), input: "{kaputt", metadata: { tool_name: "Read" } }]);
+    assert.deepEqual(e[0].input, {});
+  });
+  test("Report-Zeile vollständig", () => {
+    const brain = brainMetrics(
+      { events: [ev(T(0), "Grep", {}, 40), ev(T(1), "Write", { file_path: "docs/n.md" })], rows: [{ phase: "Recherche", input: 5, cacheWrite: 0, cacheRead: 0, output: 0 }] },
+      {},
+      [{ path: "docs/n.md", additions: 3, deletions: 2 }],
+    );
+    const out = baseline.renderMarkdown({ rows: [], total: { calls: 0, input: 0, cacheWrite: 0, cacheRead: 0, output: 0, cost: 0 }, hasCost: false, reviewRounds: 0, cacheRebuilds: null, questions: 0, unpriced: 0, costParts: null, medianContext: {}, sockel: {}, brain }, {});
+    assert.match(out, /Suche 1 Calls \(≈ 10 Tokens\) · Recherche-Subagenten 5 Tokens · Calls bis erster Edit 1 · Brain-Pflege 1 Schreibzugriffe, PR 1 Seiten \(\+3\/−2\)/);
+  });
+  test("fetchSessionObservations reicht type und fields durch", async () => {
+    const urls: string[] = [];
+    const fetchImpl = (u: string) => {
+      urls.push(u);
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [{ id: "1" }], meta: {} }) });
+    };
+    const r = await baseline.fetchSessionObservations("s", { baseUrl: "http://x", publicKey: "p", secretKey: "k", fetchImpl, type: "TOOL", fields: "core,io" });
+    assert.equal(r.length, 1);
+    assert.match(urls[0], /type=TOOL/);
+    assert.match(urls[0], /fields=core%2Cio/);
   });
 });

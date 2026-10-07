@@ -277,7 +277,7 @@ Grenzen: Tokens sind eine Größenordnung; Läufe in geteilten Sessions sind nur
 
 Lesart: Die Läufe liegen bei 10–17 Brain-Lesezugriffen und 81–180 Such-Calls; die Such-Tokens (77–85k) übersteigen die gelesenen Brain-Tokens (12–18k) um ein Mehrfaches, dort liegt die Ersparnis, die das Brain heben soll. #1308 und #1311 teilten Sessions mit anderen Läufen und sind nur nach Fenster getrennt (obere Schranke), #1308 hatte ungewöhnlich viele Review-Runden (Sonderfreigabe). Zählprobe #1303: 17 Lesezugriffe im Skript, gleich dem unabhängig per Muster gezählten Wert (17 `cat`/`sed`/`head` auf `docs/*.md`, 0 `Read`; Grenze der Zählung: Env-Präfixe wie `LANG=C cat` und `(Get-Content …)` in PowerShell erkennt sie nicht, `sed -i` zählt als Lesen); die Langfuse-Seite ist ohne Schlüssel nur über die Form belegt (TOOL-Observation mit `input` und `metadata.output_meta.orig_len`, per MCP am 07.10.2026 geprüft).
 
-Guard „Read statt cat“ (ADR 0015 Option D): In den drei Baseline-Läufen stehen 40 Shell-Lesezugriffe auf `docs/` gegen 3 `Read`; die Shell-Zugriffe kommen fast nur aus Subagenten (Umsetzer, Lenses), der Hauptchat liest per `Read`. Darum gehört die Konvention in die Subagenten-Prompts (#1099); sinken die Shell-Zugriffe danach nicht, den Guard bewerten.
+Guard „Read statt cat“ (ADR 0015 Option D): In den drei Baseline-Läufen stehen 40 Shell-Lesezugriffe auf `docs/` gegen 3 `Read`; die Shell-Zugriffe kommen überwiegend aus Subagenten (Umsetzer, Lenses), auch die wenigen `Read` stehen in Subagenten. Darum gehört die Konvention in die Subagenten-Prompts (#1099); sinken die Shell-Zugriffe danach nicht, den Guard bewerten.
 
 ### Nach einer Optimierung vergleichen
 
