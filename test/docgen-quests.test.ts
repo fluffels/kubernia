@@ -23,7 +23,7 @@ const api = qm as unknown as {
 const loadConfig = (gen as unknown as { loadConfig: (root: string) => Cfg }).loadConfig;
 
 const config: Cfg = {
-  quests: { ordner: "d/quests", reihenfolge: "d/quest-order.json", themen: "d/quest-topics.json", standplaetze: "d/entities.json", npcs: "d/npcs.json" },
+  quests: { ordner: "d/quests", reihenfolge: "d/quest-order.json", themen: "d/quest-topics.json", standplaetze: "d/entities.json", npcs: "d/npcs.json", maxQuestsJeDiagramm: 30 },
 };
 type Q = { id: string; title: string; giver: string; topic: string; requires?: string[] };
 const q = (id: string, giver: string, extra: Partial<Q> = {}): Q => ({ id, title: `Titel ${id}`, giver, topic: "t1", ...extra });
@@ -190,6 +190,32 @@ describe("quest-graph: weitere Kanten, Zerlegung und Deckel", () => {
     assert.match(out, /weiter nach harbor, Teil 2/);
     assert.match(out, /aus harbor, Teil 1/);
     assert.ok(!graph(files).includes("Teil 1 von"), "unter dem Deckel bleibt es ein Diagramm");
+  });
+  const mitMax = (files: Record<string, string>, max: unknown) =>
+    api.questGraphGenerator({ rootDir: fixture(files), config: { quests: { ...(config.quests as object), maxQuestsJeDiagramm: max } } });
+  const hafen = (ids: string[], extra: Partial<Q> = {}) =>
+    mit({
+      "d/quests/ole.json": json(ids.map((id, i) => q(id, "ole", i === ids.length - 1 ? extra : {}))),
+      "d/quests/runa.json": json([]),
+      "d/quest-order.json": json(ids),
+    });
+  test("genau ein Vielfaches des Deckels ergibt keinen leeren Teil", () => {
+    assert.ok(!mitMax(hafen(["a", "b"]), 2).includes("Teil"), "2 Quests bei max 2: ein Diagramm");
+    const vier = mitMax(hafen(["a", "b", "c", "d"]), 2);
+    assert.match(vier, /#### Teil 2 von 2 \(2 Quests\)/);
+    assert.ok(!vier.includes("Teil 3"));
+  });
+  test("ungültiger maxQuestsJeDiagramm (0, -1, Text, fehlt) ist rot statt Standardwert", () => {
+    for (const v of [0, -1, "x", 1.5, undefined]) assert.throws(() => mitMax(hafen(["a"]), v), /maxQuestsJeDiagramm muss eine Ganzzahl/);
+  });
+  test("requires über eine Teilgrenze derselben Region zeigt auf einen externen Knoten mit Teil-Label", () => {
+    const out = mitMax(hafen(["a", "b", "c"], { requires: ["a"] }), 2);
+    assert.match(out, /ext_q_a\(\["Titel a \(harbor, Teil 1\)"\]\)/);
+    assert.match(out, /ext_q_a -\. requires \.-> q_c/);
+    assert.ok(!out.includes("\n  q_a -. requires"), "kein Phantomknoten im fremden Teil");
+  });
+  test("NPC mit mehreren Standplätzen auf derselben Karte (Tagesablauf) bleibt grün", () => {
+    assert.doesNotThrow(() => graph(mit({ "d/entities.json": json({ npcs: [{ id: "ole", map: "harbor" }, { id: "ole", map: "harbor" }, { id: "runa", map: "werft" }] }) })));
   });
   test("Diagramm über dem Zeichen-Deckel ist rot statt still unlesbar", () => {
     const lang = mit({ "d/quests/ole.json": json([q("a-eins", "ole", { title: "x".repeat(41000) }), q("b-zwei", "ole")]) });

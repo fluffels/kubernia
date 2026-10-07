@@ -15,8 +15,6 @@ const brauche = (cfg, schluessel) => {
 
 const bezeichner = (praefix, s) => `${praefix}${String(s).replace(/[^A-Za-z0-9_]/g, "_")}`;
 
-/** Standard-Obergrenze je Diagramm; größere Regionen werden in Teile zerlegt (Mermaid-Grenze: 50 000 Zeichen, 500 Kanten). */
-const MAX_JE_DIAGRAMM = 30;
 /** Harter Deckel für den Text eines Diagramms (Mermaid `maxTextSize` ist 50 000). */
 const MAX_DIAGRAMM_ZEICHEN = 40000;
 
@@ -100,7 +98,8 @@ export function ladeQuestDaten(rootDir, cfg) {
   };
   for (const q of geordnet) pruefeKollision(bezeichner("q_", q.id), q.id);
 
-  const maxTeil = Number.isInteger(cfg.maxQuestsJeDiagramm) && cfg.maxQuestsJeDiagramm > 0 ? cfg.maxQuestsJeDiagramm : MAX_JE_DIAGRAMM;
+  const maxTeil = cfg.maxQuestsJeDiagramm;
+  if (!Number.isInteger(maxTeil) || maxTeil < 1) throw new Error("config.quests.maxQuestsJeDiagramm muss eine Ganzzahl ≥ 1 sein");
   const regionen = [];
   for (const q of geordnet) {
     let r = regionen.find((x) => x.map === q.region);
@@ -191,7 +190,7 @@ function regionDiagramm(teil, daten) {
   }
   const text = ["```mermaid", MERMAID_FRONTMATTER, "flowchart TB", ...knoten, ...stubs.values(), ...extern.values(), ...kanten, "```"].join("\n");
   if (text.length > MAX_DIAGRAMM_ZEICHEN) {
-    throw new Error(`Diagramm "${teil.label}" hat ${text.length} Zeichen (Deckel ${MAX_DIAGRAMM_ZEICHEN}, Mermaid rendert ab 50 000 nicht mehr). Fix: config.quests.maxQuestsJeDiagramm senken`);
+    throw new Error(`Diagramm "${teil.label}" hat ${text.length} Zeichen (Deckel ${MAX_DIAGRAMM_ZEICHEN}, Mermaid rendert ab 50 000 nicht mehr). Fix: config.quests.maxQuestsJeDiagramm senken oder den längsten Titel kürzen`);
   }
   return text;
 }
