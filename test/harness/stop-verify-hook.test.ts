@@ -364,7 +364,7 @@ PR: https://github.com/x/y/pull/7`, ...extra });
   test("offener PR mit Auto-Merge blockiert den Umsetzer auch bei sauberem Worktree-Cleanup", () => {
     const r = runHook(payload("abgebrochen"), "/x", frei, { prStatus: offen });
     assert.equal(r.exit, 2);
-    assert.match(JSON.parse(r.stdout).reason, /noch offen und hat Auto-Merge/);
+    assert.match((JSON.parse(r.stdout) as { reason: string }).reason, /noch offen und hat Auto-Merge/);
   });
 
   test("beide Gründe werden zusammengeführt", () => {

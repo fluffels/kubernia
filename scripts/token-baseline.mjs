@@ -346,7 +346,7 @@ export function countCacheRebuilds(calls) {
   }
   let count = 0;
   let cacheWriteTokens = 0;
-  for (const [key, list] of byConv) {
+  for (const list of byConv.values()) {
     const pause = list[0].subagent ? CACHE_PAUSE_MS.subagent : CACHE_PAUSE_MS.main;
     const sorted = [...list].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
     for (let i = 1; i < sorted.length; i++) {

@@ -17,15 +17,17 @@ import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as abschluss from "../../scripts/umsetzer-abschluss.mjs";
+import * as abschlussRaw from "../../scripts/umsetzer-abschluss.mjs";
 
 type Status = { state: string; autoMergeRequest: object | null };
-const blockade = abschluss.abschlussBlockade as (
-  i: { hookEvent?: string; agentType?: string; lastMessage?: string | null },
-  d?: { prStatus?: (nr: string) => Status },
-) => string | null;
-const parseErgebnis = abschluss.parseErgebnis as (t: string) => { ergebnis: string | null; pr: string | null };
-const parseAbschlussInput = abschluss.parseAbschlussInput as (t: string, r?: (p: string) => string | null) => { hookEvent?: string; agentType?: string; lastMessage?: string | null };
+type Eingabe = { hookEvent?: string; agentType?: string; lastMessage?: string | null };
+const abschluss = abschlussRaw as unknown as {
+  abschlussBlockade: (i: Eingabe, d?: { prStatus?: (nr: string) => Status }) => string | null;
+  parseErgebnis: (t: string) => { ergebnis: string | null; pr: string | null };
+  parseAbschlussInput: (t: string, r?: (p: string) => string | null) => Eingabe;
+  letzteNachrichtAusTranskript: (p: string) => string | null;
+};
+const { abschlussBlockade: blockade, parseErgebnis, parseAbschlussInput } = abschluss;
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const UMSETZER = readFileSync(resolve(ROOT, ".claude/agents/kubernia-umsetzer.md"), "utf8");
@@ -159,7 +161,7 @@ describe("Umsetzer endet nicht bei offenem PR mit Auto-Merge (#1331)", () => {
 
 describe("Transkript-Fallback des Abschluss-Wächters (#1331)", () => {
   const zeile = (role: string, content: unknown) => JSON.stringify({ type: role, message: { role, content } });
-  const lies = abschluss.letzteNachrichtAusTranskript as (p: string) => string | null;
+  const lies = abschluss.letzteNachrichtAusTranskript;
   const datei = (zeilen: string[]) => {
     const p = join(mkdtempSync(join(tmpdir(), "kq-abschluss-")), "t.jsonl");
     writeFileSync(p, zeilen.join(String.fromCharCode(10)) + String.fromCharCode(10));
