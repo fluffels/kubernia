@@ -14,14 +14,14 @@ import { fileURLToPath } from "node:url";
 import * as schichten from "../scripts/docs-gen/schichten.mjs";
 
 type Schicht = { id: string; label: string; technik?: string; muster: string | null; wurzeln: string[]; darf: string[] };
-type Modell = { schichten: Schicht[]; extern: { id: string; label: string; muster: string }[] };
+type Modell = { quellwurzel: string; schichten: Schicht[]; extern: { id: string; label: string; muster: string }[] };
 type Cfg = Record<string, unknown>;
 type Kante = [string, string];
 const api = schichten as unknown as {
   ladeModell: (rootDir: string, layers: string) => Modell;
   schichtVon: (pfad: string, m: Modell) => string | null;
   sollKanten: (m: Modell) => Kante[];
-  istKanten: (json: unknown, m: Modell) => Kante[];
+  istKanten: (json: unknown, m: Modell, pruefbefehl?: string) => Kante[];
   renderDiagramm: (m: Modell, k: Kante[]) => string;
   ungenutztZeile: (m: Modell, soll: Kante[], ist: Kante[]) => string;
   schichtenSollGenerator: (ctx: { rootDir: string; config: Cfg }) => string;
@@ -34,6 +34,7 @@ const ECHT_PFAD = fileURLToPath(new URL("../scripts/layers.cjs", import.meta.url
 
 const PHASER = "node_modules[/\\\\]phaser[/\\\\]";
 const basis = (): Modell => ({
+  quellwurzel: "src/",
   schichten: [
     { id: "praesentation", label: "Präsentation", technik: "Phaser/DOM", muster: "^src/ui(\\.ts$|/)", wurzeln: ["ui"], darf: ["anwendung", "domaene", "phaser"] },
     { id: "anwendung", label: "Anwendung", muster: "^src/game(\\.ts$|/)", wurzeln: ["game"], darf: ["domaene"] },
@@ -177,7 +178,42 @@ describe("Modell-Prüfung (Negativfälle)", () => {
     assert.throws(() => echt.verbotsRegeln(m), /unbekanntes Ziel "nirgendwo"/);
     assert.ok(echt.verbotsRegeln(basis()).length > 0);
   });
-  test("keine Schichten", () => assert.throws(() => echt.pruefeModell({ schichten: [], extern: [] }), /keine Schichten/));
+  test("keine Schichten", () => assert.throws(() => echt.pruefeModell({ ...basis(), schichten: [], extern: [] }), /keine Schichten/));
+  test("quellwurzel fehlt, ist leer, ohne Slash am Ende oder mit Metazeichen: wirft", () => {
+    const ohne = basis() as unknown as Record<string, unknown>;
+    delete ohne.quellwurzel;
+    assert.throws(() => echt.pruefeModell(ohne as unknown as Modell), /quellwurzel/);
+    for (const w of ["", "src", "(x/", "/", "../x/", "a b/", 7]) {
+      const m = basis();
+      (m as { quellwurzel: unknown }).quellwurzel = w;
+      assert.throws(() => echt.pruefeModell(m), /quellwurzel/, JSON.stringify(w));
+    }
+    for (const w of ["src/", "wetter/", "lib/core/", "app_1/"]) assert.doesNotThrow(() => echt.pruefeModell({ ...basis(), quellwurzel: w }));
+  });
+  test("Generator wirft bei layers-Datei mit trivialem Prüfer ohne quellwurzel", () => {
+    const m = basis() as unknown as Record<string, unknown>;
+    delete m.quellwurzel;
+    const root = fixture({ "scripts/layers.cjs": `module.exports = { SCHICHT_MODELL: ${JSON.stringify(m)}, pruefeModell() {} };` });
+    assert.throws(() => api.schichtenSollGenerator({ rootDir: root, config: cfg() }), /quellwurzel/);
+  });
+  test("Generator wirft bei trivialem Prüfer und quellwurzel ohne Slash am Ende, nur \"/\", leer oder Zahl", () => {
+    for (const w of ["wetter", "/", "", 5]) {
+      const m = { ...basis(), quellwurzel: w };
+      const root = fixture({ "scripts/layers.cjs": `module.exports = { SCHICHT_MODELL: ${JSON.stringify(m)}, pruefeModell() {} };` });
+      assert.throws(() => api.schichtenSollGenerator({ rootDir: root, config: cfg() }), /quellwurzel/, JSON.stringify(w));
+    }
+  });
+  test("schichtVon: die Quellwurzel des Modells bestimmt die Auffang-Schicht, nicht ein festes src/", () => {
+    const lib: Modell = { ...basis(), quellwurzel: "lib/" };
+    assert.equal(api.schichtVon("lib/x/", lib), "domaene");
+    assert.equal(api.schichtVon("src/x/", lib), null);
+    assert.equal(api.schichtVon("lib/x/", basis()), null);
+  });
+  test("Auffang-Text im Diagramm nennt die Quellwurzel", () => {
+    const lib: Modell = { ...basis(), quellwurzel: "wetter/" };
+    assert.match(api.renderDiagramm(lib, []), /alles übrige unter wetter\//);
+    assert.match(api.renderDiagramm(basis(), []), /alles übrige unter src\//);
+  });
   test("fehlende layers-Datei", () => {
     assert.throws(() => api.schichtenSollGenerator({ rootDir: fixture({}), config: cfg() }), /fehlt/);
   });
@@ -224,8 +260,9 @@ describe("Ist-Kanten (Verdichtung)", () => {
     assert.equal(api.schichtVon("node_modules\\phaser\\", m), "phaser");
     assert.equal(api.schichtVon("node_modules/vite/", m), null);
   });
-  test("eine Kante außerhalb des Solls wirft mit Hinweis auf check:arch", () => {
-    assert.throws(() => api.istKanten(cruiseJson({ "src/sim/": ["src/game/"] }), m), /domaene → anwendung.*check:arch/);
+  test("eine Kante außerhalb des Solls wirft; der Prüfbefehl steht nur, wenn die Config ihn nennt", () => {
+    assert.throws(() => api.istKanten(cruiseJson({ "src/sim/": ["src/game/"] }), m, "make arch"), /domaene → anwendung.*\(make arch\)/);
+    assert.throws(() => api.istKanten(cruiseJson({ "src/sim/": ["src/game/"] }), m), (e: Error) => /domaene → anwendung/.test(e.message) && !/npm run|check:arch/.test(e.message));
     assert.throws(() => api.istKanten(cruiseJson({ "src/game/": ["node_modules/phaser/"] }), m), /anwendung → phaser/);
   });
   test("Extern-Quellen (Phaser) werden nicht als Quelle ausgewertet", () => {
@@ -256,8 +293,16 @@ describe("Ist-Generator (dependency-cruiser als Prozess)", () => {
     assert.match(out, /s_anwendung --> s_domaene/);
     assert.match(out, /Erlaubt, aber ungenutzt: Präsentation → Anwendung/);
   });
-  test("Exit-Code ungleich 0 wirft mit Hinweis auf check:arch", () => {
-    assert.throws(() => gen("process.exit(2);"), /check:arch grün/);
+  test("verbotene Kante über den Generator: die Meldung nennt den Prüfbefehl aus der Config, sonst keinen", () => {
+    const json = JSON.stringify(cruiseJson({ "src/sim/": ["src/game/"] }));
+    const lauf = (extra: Cfg) => () => api.schichtenIstGenerator({ rootDir: fixtureMitModell(basis(), skript(`process.stdout.write(${JSON.stringify(json)});`)), config: cfg({ cruise: ["fake.mjs"], ...extra }) });
+    assert.throws(lauf({ pruefbefehl: "make arch" }), /außerhalb des Solls.*(make arch)/);
+    assert.throws(lauf({}), (e: Error) => /außerhalb des Solls/.test(e.message) && !/make arch|npm run/.test(e.message));
+  });
+  test("Exit-Code ungleich 0 wirft ohne npm-Bezug; der Prüfbefehl steht nur, wenn die Config ihn nennt", () => {
+    assert.throws(() => gen("process.exit(2);"), (e: Error) => /Schichtprüfung grün/.test(e.message) && !/npm run|check:arch/.test(e.message));
+    const mitBefehl = () => api.schichtenIstGenerator({ rootDir: fixtureMitModell(basis(), skript("process.exit(2);")), config: cfg({ cruise: ["fake.mjs"], pruefbefehl: "make arch" }) });
+    assert.throws(mitBefehl, /Schichtprüfung \(make arch\) grün/);
   });
   test("kaputtes JSON wirft", () => {
     assert.throws(() => gen('process.stdout.write("{kaputt");'), /kein gültiges JSON/);

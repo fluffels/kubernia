@@ -1,0 +1,28 @@
+// Element-Arten des Architekturmodells (ADR 0020).
+// Gebunden an eine SSOT (check:c4 gleicht ab): schicht, bibliothek, modul.
+// Erzählung (frei, nicht ableitbar): person, system, container, datenspeicher.
+specification {
+  element person {
+    style {
+      shape person
+    }
+  }
+  element system
+  element container
+  element datenspeicher {
+    style {
+      shape storage
+    }
+  }
+  element schicht
+  element bibliothek {
+    style {
+      shape component
+    }
+  }
+  element modul {
+    style {
+      shape component
+    }
+  }
+}

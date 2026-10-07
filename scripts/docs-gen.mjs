@@ -7,7 +7,8 @@
  *   npm run docs:gen      schreibt die Abschnitte (nur wenn alles fehlerfrei ist)
  *   npm run check:docgen  erzeugt im Speicher und vergleicht (Teil von `verify`), schreibt nie
  *
- * Projektneutral: Pfade, Ketten und Beschreibungen stehen in scripts/docs-gen/config.json.
+ * Projektneutral: Pfade, Ketten und Beschreibungen stehen in scripts/docs-gen/config.json; der Befehl, der
+ * Hinweiszeile und Fix-Text nennen, ist der optionale Config-Schlüssel `befehl` (Standard `npm run docs:gen`).
  * Reines Node-Skript (nur Builtins); alle Funktionen nehmen `rootDir` entgegen.
  */
 import { readFileSync, writeFileSync } from "node:fs";
@@ -20,23 +21,35 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 /** Standard-Config; per `--config <pfad>` überschreibbar (Pfad relativ zum Repo-Root oder absolut). */
 export const DEFAULT_CONFIG = "scripts/docs-gen/config.json";
 
-export const HINT = "<!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->";
+export const STANDARD_BEFEHL = "npm run docs:gen";
+const hinweisFuer = (befehl) => `<!-- Generiert von ${befehl} – nicht von Hand ändern. -->`;
+export const HINT = hinweisFuer(STANDARD_BEFEHL);
+
+/** Der Befehl, der den Abschnitt neu erzeugt (Config-Schlüssel `befehl`); wirft bei einem unbrauchbaren Wert.
+ *  Ein `--` oder Zeilenumbruch würde den HTML-Kommentar der Hinweiszeile brechen. */
+export function befehlAus(config) {
+  const b = config?.befehl;
+  if (b === undefined) return STANDARD_BEFEHL;
+  if (typeof b !== "string" || b.trim() === "" || b !== b.trim() || /--|[\r\n]/.test(b))
+    throw new Error(`config.befehl ungültig: ${JSON.stringify(b)} (nicht leer, ohne Zeilenumbruch und ohne "--")`);
+  return b;
+}
 export { parseSections };
 
 /** Sollinhalt eines Abschnitts als Zeilen: Hinweis, Leerzeile, Ausgabe, Leerzeile (Einrückung des START-Markers). */
-function bodyLines(section, output) {
-  const body = [HINT, "", ...String(output).split(/\r?\n/), ""];
+function bodyLines(section, output, hinweis = HINT) {
+  const body = [hinweis, "", ...String(output).split(/\r?\n/), ""];
   return body.map((l) => (l === "" ? "" : section.indent + l));
 }
 
 /** Ersetzt jeden Abschnitt durch Hinweis + Generator-Ausgabe; behält Zeilenende und Einrückung. */
-export function renderSections(text, outputs) {
+export function renderSections(text, outputs, hinweis = HINT) {
   const eol = text.includes("\r\n") ? "\r\n" : "\n";
   const lines = text.split(/\r?\n/);
   const out = [];
   let cursor = 0;
   for (const s of parseSections(text).sections) {
-    out.push(...lines.slice(cursor, s.startLine + 1), ...bodyLines(s, outputs[s.name]));
+    out.push(...lines.slice(cursor, s.startLine + 1), ...bodyLines(s, outputs[s.name], hinweis));
     cursor = s.endLine;
   }
   out.push(...lines.slice(cursor));
@@ -66,6 +79,12 @@ export function runDocsGen({ rootDir = ROOT, config, generators = GENERATORS, wr
   const stale = [];
   const errors = [];
   const written = [];
+  let hinweis;
+  try {
+    hinweis = hinweisFuer(befehlAus(config));
+  } catch (e) {
+    return { stale, errors: [{ file: "config", section: "befehl", message: e instanceof Error ? e.message : String(e) }], written };
+  }
   const cache = new Map();
   const pending = [];
   for (const file of collectMarkdown(rootDir, config.markdown ?? [])) {
@@ -92,12 +111,12 @@ export function runDocsGen({ rootDir = ROOT, config, generators = GENERATORS, wr
     let differs = false;
     for (const s of parsed.sections) {
       const actual = lines.slice(s.startLine + 1, s.endLine).join("\n");
-      if (actual !== bodyLines(s, outputs[s.name]).join("\n")) {
+      if (actual !== bodyLines(s, outputs[s.name], hinweis).join("\n")) {
         stale.push({ file, section: s.name });
         differs = true;
       }
     }
-    if (differs) pending.push({ file, next: renderSections(text, outputs) });
+    if (differs) pending.push({ file, next: renderSections(text, outputs, hinweis) });
   }
   if (write && errors.length === 0) {
     for (const p of pending) {
@@ -135,9 +154,15 @@ export function cli(argv, { rootDir = ROOT, config, generators = GENERATORS, out
     }
   }
   const res = runDocsGen({ rootDir, config: cfg, generators, write });
+  let befehl = STANDARD_BEFEHL;
+  try {
+    befehl = befehlAus(cfg);
+  } catch {
+    // ungültiger Befehl: runDocsGen meldet ihn; der Fix-Text bleibt beim Standard
+  }
   for (const e of res.errors) err(`✖ ${e.file} [${e.section}]: ${e.message}`);
   if (res.errors.length) {
-    err("\nFix: Marker bzw. Generator-Daten korrigieren, dann npm run docs:gen");
+    err(`\nFix: Marker bzw. Generator-Daten korrigieren, dann ${befehl}`);
     return 1;
   }
   if (write) {
@@ -146,7 +171,7 @@ export function cli(argv, { rootDir = ROOT, config, generators = GENERATORS, out
   }
   for (const s of res.stale) err(`✖ ${s.file} [${s.section}]: generierter Abschnitt ist veraltet`);
   if (res.stale.length) {
-    err("\nFix: npm run docs:gen");
+    err(`\nFix: ${befehl}`);
     return 1;
   }
   out("✔ generierte Doku-Abschnitte aktuell");
