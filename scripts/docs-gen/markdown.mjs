@@ -100,3 +100,16 @@ export function brauche(rootDir, rel, was, errors) {
   errors.push(`${was} "${rel}" nicht gefunden (Config veraltet?)`);
   return false;
 }
+
+/** Gemeinsames Mermaid-Frontmatter aller generierten Diagramme (gedämpft-warme Palette). */
+export const MERMAID_FRONTMATTER = `---
+config:
+  theme: base
+  look: classic
+  layout: dagre
+  themeVariables:
+    lineColor: "#8b949e"
+    primaryColor: "#f3e3c3"
+    primaryTextColor: "#2b2118"
+    primaryBorderColor: "#8a6a3f"
+---`;

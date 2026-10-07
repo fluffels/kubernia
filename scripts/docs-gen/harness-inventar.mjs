@@ -10,35 +10,62 @@ const code = (s) => `\`${s}\``;
 
 const listDir = (abs) => readdirSync(abs, { withFileTypes: true }).sort((a, b) => byCodeUnit(a.name, b.name));
 
-function agents(rootDir, dir) {
+/** Subagenten aus `dir`: `{name, model, effort, datei}` (Name wie im Frontmatter, sonst Dateiname). */
+function agentKatalog(rootDir, dir) {
   return listDir(join(rootDir, dir))
     .filter((e) => e.isFile() && e.name.endsWith(".md"))
     .map((e) => {
       const fm = parseFrontmatter(readFileSync(join(rootDir, dir, e.name), "utf8"));
-      const conf = `model: ${fm.model ?? NONE}, effort: ${fm.effort ?? NONE}`;
-      return ["Subagent", fm.name ?? e.name.replace(/\.md$/, ""), conf, `${dir}/${e.name}`];
+      return { name: fm.name ?? e.name.replace(/\.md$/, ""), model: fm.model, effort: fm.effort, datei: `${dir}/${e.name}` };
     });
 }
 
-function skills(rootDir, dir) {
-  const rows = [];
+/** Skills aus `dir/<name>/SKILL.md`: `{name, model, effort, datei}`. */
+function skillKatalog(rootDir, dir) {
+  const items = [];
   for (const e of listDir(join(rootDir, dir))) {
     const rel = `${dir}/${e.name}/SKILL.md`;
     if (!e.isDirectory() || !existsSync(join(rootDir, rel))) continue;
     const fm = parseFrontmatter(readFileSync(join(rootDir, rel), "utf8"));
-    rows.push(["Skill", fm.name ?? e.name, `model: ${fm.model ?? "Session-Modell"}`, rel]);
+    items.push({ name: fm.name ?? e.name, model: fm.model, effort: fm.effort, datei: rel });
   }
-  return rows;
+  return items;
 }
 
-function workflows(rootDir, dir) {
+/** Workflows aus `dir/*.js`: `{name, datei}` (`meta.name`, sonst Dateiname). */
+function workflowKatalog(rootDir, dir) {
   return listDir(join(rootDir, dir))
     .filter((e) => e.isFile() && e.name.endsWith(".js"))
     .map((e) => {
       const src = readFileSync(join(rootDir, dir, e.name), "utf8");
       const m = /export const meta\s*=\s*\{[\s\S]*?\bname:\s*['"]([^'"]+)['"]/.exec(src);
-      return ["Workflow", m ? m[1] : e.name.replace(/\.js$/, ""), NONE, `${dir}/${e.name}`];
+      return { name: m ? m[1] : e.name.replace(/\.js$/, ""), datei: `${dir}/${e.name}` };
     });
+}
+
+/**
+ * Katalog der Harness-Bausteine unter `.claude/` (ein Parser für Inventar und Diagramme, #1369).
+ * Fehlende Verzeichnisse oder nicht konfigurierte Schlüssel ergeben eine leere Liste.
+ */
+export function harnessKatalog(rootDir, harnessCfg) {
+  const lies = (key, fn) => (harnessCfg?.[key] && existsSync(join(rootDir, harnessCfg[key])) ? fn(rootDir, harnessCfg[key]) : []);
+  return {
+    agents: lies("agents", agentKatalog),
+    skills: lies("skills", skillKatalog),
+    workflows: lies("workflows", workflowKatalog),
+  };
+}
+
+function agents(rootDir, dir) {
+  return agentKatalog(rootDir, dir).map((a) => ["Subagent", a.name, `model: ${a.model ?? NONE}, effort: ${a.effort ?? NONE}`, a.datei]);
+}
+
+function skills(rootDir, dir) {
+  return skillKatalog(rootDir, dir).map((s) => ["Skill", s.name, `model: ${s.model ?? "Session-Modell"}`, s.datei]);
+}
+
+function workflows(rootDir, dir) {
+  return workflowKatalog(rootDir, dir).map((w) => ["Workflow", w.name, NONE, w.datei]);
 }
 
 function hooks(rootDir, file) {

@@ -54,6 +54,20 @@
     "adr": "docs/adr",
     "meilensteine": "docs/meilensteine.json"
   },
+  "diagramme": {
+    "vorlagen": {
+      "agenten-ablauf": "docs/diagramme/agenten-ablauf.mmd",
+      "agenten-sequenz": "docs/diagramme/agenten-sequenz.mmd",
+      "leitplanken-schichten": "docs/diagramme/leitplanken-schichten.mmd"
+    },
+    "vollstaendig": ["agenten-sequenz"],
+    "konstanten": {
+      "lensCap": { "datei": ".claude/workflows/kubernia-ticket.js", "name": "MAX_REVIEW_RUNDEN" },
+      "fixVersuche": { "datei": ".claude/workflows/kubernia-ticket.js", "name": "MAX_FIX_VERSUCHE" },
+      "festgefahrenCommits": { "datei": "scripts/check-festgefahren.mjs", "name": "MAX_FAILED_PUSHES" }
+    },
+    "ciWorkflows": ".github/workflows"
+  },
   "harness": {
     "agents": ".claude/agents",
     "skills": ".claude/skills",

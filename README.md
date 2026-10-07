@@ -32,13 +32,76 @@ Die drei Abschnitte darunter erzählen jeden dieser Punkte im Detail.
 
 ## 🤖 Gebaut von KI-Agenten
 
-Der komplette Code von Kubernia entsteht durch **autonome KI-Coding-Agenten** – kein Mensch tippt die Implementierung. Das ist nur deshalb sicher und billig, weil das Repo als **Harness** um die Agenten herum gebaut ist: klare Leitplanken, an denen ein Agent nicht vorbeikommt, statt Vertrauen in einen einzelnen guten Lauf. Die Badges oben (gemergte PRs, geschlossene Issues) zeigen live, in welchem Umfang das tatsächlich passiert – keine feste Zahl hier im Text, die veralten könnte. Alle Tabellen in diesem Abschnitt sind **generiert** und werden bei jedem PR in der CI gegen das Repo geprüft.
+Der komplette Code von Kubernia entsteht durch **autonome KI-Coding-Agenten** – kein Mensch tippt die Implementierung. Das ist nur deshalb sicher und billig, weil das Repo als **Harness** um die Agenten herum gebaut ist: klare Leitplanken, an denen ein Agent nicht vorbeikommt, statt Vertrauen in einen einzelnen guten Lauf. Die Badges oben (gemergte PRs, geschlossene Issues) zeigen live, in welchem Umfang das tatsächlich passiert – keine feste Zahl hier im Text, die veralten könnte. Alle Tabellen und Diagramme in diesem Abschnitt sind **generiert** und werden bei jedem PR in der CI gegen das Repo geprüft.
 
 ### Der Ticket-Lebenszyklus
 
-![Lebenszyklus eines kubernia-Tickets: Board lesen → claimen → eigener Worktree → Umsetzen (TDD) → lokale Gates → Pull Request → CI-Pipeline → CI-Feedback → Merge → Aufräumen. Beide Rückkopplungsschleifen bei roten Gates führen zurück zu „Umsetzen", nicht zu einem neuen Ticket; ein Post-hoc-Alarm öffnet ein Issue, falls main trotz grüner Checks rot wird.](docs/img/agenten-lebenszyklus.png)
+<!-- GEN:agenten-ablauf START -->
+<!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
 
-Ein Agent nimmt **genau ein** Ticket vom Board und bringt es bis zum Merge. Dabei arbeiten mehrere Rollen zusammen: der Hauptchat wählt das Ticket und klärt Rückfragen, ein **Planer** entwirft den Umsetzungsplan, ein **Umsetzer** baut, testet und mergt in einem eigenen Worktree, und unabhängige **Kritiker** prüfen den Diff, bevor er in den PR geht. Beide Rückkopplungsschleifen (lokale Gates und CI) führen zurück zum **Umsetzen**-Schritt, nie zu einem neuen Ticket.
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  layout: dagre
+  themeVariables:
+    lineColor: "#8b949e"
+    primaryColor: "#f3e3c3"
+    primaryTextColor: "#2b2118"
+    primaryBorderColor: "#8a6a3f"
+---
+flowchart TD
+  board["Board: oberstes freies Ticket"]
+  claim["Claim: self-assign, verifizieren"]
+  wt["Worktree von origin/main"]
+  plan["Plan<br/>kubernia-planner"]
+  epic{"zu groß für eine Session?"}
+  kinder["in Kindtickets aufteilen,<br/>Epic schließen"]
+  pre{"Irreversibel oder<br/>Außenwirkung?"}
+  frage["Rückfrage an die Maintainerin"]
+  umsetzen["Umsetzen (TDD)<br/>kubernia-umsetzer"]
+  verify{"npm run verify grün?"}
+  lenses{"Lenses ohne Blocker?<br/>kubernia-lens"}
+  fix["Fix-Runde"]
+  handoff["Hand-off: festgefahren<br/>(Cap erreicht)"]
+  pr["PR + Auto-Merge"]
+  ci{"CI grün?"}
+  fest["Label status:festgefahren,<br/>ein Kommentar mit Optionen"]
+  merge["Merge (squash)"]
+  cleanup["Aufräumen: Issue zu,<br/>Worktree weg"]
+  alarm["Alarm-Issue: CI rot auf main"]
+  forum["Forum-Eingang<br/>Skill forum"]
+
+  board --> claim --> plan --> epic
+  epic -- ja --> kinder --> board
+  epic -- nein --> pre
+  pre -- ja --> frage --> wt
+  pre -- nein --> wt
+  wt --> umsetzen
+  umsetzen --> verify
+  verify -- nein --> umsetzen
+  verify -- ja --> lenses
+  lenses -- "Blocker, Runde unter 2" --> fix --> lenses
+  lenses -- "Cap von 2 Fix-Runden erreicht" --> handoff
+  lenses -- ja --> pr
+  pr --> ci
+  ci -- "rot, Fix-Versuch unter 3" --> umsetzen
+  ci -- "rot nach 3 Fix-Versuchen" --> fest
+  ci -- grün --> merge --> cleanup
+  merge -.->|"Push auf main: verify erneut"| alarm
+  alarm -.->|"Fix per PR, geht vor"| board
+  forum -.-> board
+
+  classDef schleife fill:#f3e3c3,stroke:#8a6a3f,color:#2b2118
+  classDef stopp fill:#f2c9c0,stroke:#9a4a3a,color:#2b2118
+  class verify,lenses,ci schleife
+  class handoff,fest,alarm stopp
+```
+
+<!-- GEN:agenten-ablauf END -->
+
+Ein Agent nimmt **genau ein** Ticket vom Board und bringt es bis zum Merge. Dabei arbeiten mehrere Rollen zusammen: der Hauptchat wählt das Ticket und klärt Rückfragen, ein **Planer** entwirft den Umsetzungsplan, ein **Umsetzer** baut, testet und mergt in einem eigenen Worktree, und drei unabhängige **Kritiker** (Lenses) prüfen den Diff, bevor er in den PR geht. Drei Rückkopplungsschleifen führen zurück zum **Umsetzen**-Schritt, nie zu einem neuen Ticket: die lokalen Gates, die Lenses (höchstens zwei Fix-Runden, danach Hand-off) und die CI (nach drei Fix-Versuchen „festgefahren“). Wer wann welchen Subagenten ruft, zeigt [Wer macht was](docs/agent-harness.md#wer-macht-was), welche Leitplanke eine Bitte und welche eine Mauer ist, [Leitplanken-Schichten](docs/agent-harness.md#leitplanken-schichten-bitte-und-mauer).
 
 ### Die Bausteine
 
