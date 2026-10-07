@@ -29,12 +29,15 @@ const sicher = (fn) => {
 };
 
 /** Entscheidet für ein Payload (Text) und gibt das Hook-Output-Objekt oder null (durchlassen) zurück. */
-export function dispatch(text, repoRoot, guards = { decide, bewertePowerShell, bewerteGh }) {
+export function dispatch(text, repoRoot, guards = { decide, bewertePowerShell, bewerteGh }, shellVonTool = SHELL_VON_TOOL) {
   const { tool, cwd, command } = parseHookInput(text);
-  if (tool === undefined || !Object.hasOwn(SHELL_VON_TOOL, tool)) return null;
-  const shell = SHELL_VON_TOOL[tool]; // Quote-Dialekt für den gh-Guard (Backslash gegen Backtick) UND Wahl des Worktree-Guards
+  if (tool === undefined || !Object.hasOwn(shellVonTool, tool)) return null;
+  const shell = shellVonTool[tool]; // Quote-Dialekt für den gh-Guard (Backslash gegen Backtick) UND Wahl des Worktree-Guards
   const worktreeGuard = { bash: () => guards.decide({ cwd, command, repoRoot }), powershell: () => guards.bewertePowerShell({ command, cwd, repoRoot }) }[shell]; // ein neues Tool braucht hier bewusst einen eigenen Guard
-  const worktree = worktreeGuard ? sicher(worktreeGuard) : null;
+  // Fail-closed (#1331): eine Shell in der Tabelle ohne Worktree-Guard darf nicht still durchlaufen.
+  const worktree = worktreeGuard
+    ? sicher(worktreeGuard)
+    : { block: true, reason: `Dispatcher: für die Shell "${shell}" gibt es keinen Worktree-Guard (SHELL_VON_TOOL und Dispatcher driften auseinander).` };
   if (worktree?.block) return mergeDecisions([worktree]); // deny geht vor ask: ein langsamer gh-Guard darf es nicht aushebeln
   return mergeDecisions([worktree, sicher(() => guards.bewerteGh(command, { shell }))]);
 }

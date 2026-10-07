@@ -12,7 +12,7 @@
  * Dieser verify-Frühindikator wurde entfernt (Maintainerin-Wunsch, 2026-08-05):
  * er lief bei jedem Turn-Ende mit uncommitteten Änderungen (~30 s Latenz) und war
  * gegenüber dem maßgeblichen PR-/CI-Gate + pre-push-Hook redundant. Der billige,
- * stille Waisen-Cleanup bleibt der einzige Zweck dieses Hooks.
+ * stille Waisen-Cleanup bleibt der Hauptzweck dieses Hooks.
  *
  * Waisen-Cleanup (#952): seit #913 ist `rm -rf` hart in `deny` — der frühere
  * Shell-Fallback, wenn `git worktree remove` auf Windows am physischen Löschen
@@ -24,6 +24,9 @@
  * Löschen schlägt fehl (Datei-Lock) → Stop blockieren mit klarer Meldung. Bewusst
  * NICHT die `rm -rf`-Deny aufweichen — der Workaround über `fs.rmSync` (kein
  * Shell-`rm`) bleibt sauber innerhalb der Least-Privilege-Policy (#901).
+ *
+ * Zweiter Zweck (#1331): beim `SubagentStop` des Umsetzers prüft `umsetzer-abschluss.mjs`, dass ein offener PR mit
+ * Auto-Merge nicht als Ende gemeldet wird (`ERGEBNIS: gemergt|abgebrochen`); sonst blockiert der Hook.
  *
  * Läuft auch als `SubagentStop`-Hook mit Matcher `kubernia-umsetzer` (#1309): der Stop-Hook feuert nur am
  * Ende des Hauptchats, das Ende des Umsetzers (der den Worktree anlegt und entfernt) sah er nie.
@@ -38,6 +41,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { diagnoseOrphans, fixOrphans, suspiciousWorktreeEntries } from "./cleanup-worktrees.mjs";
 import { istDirektaufruf, readStdin } from "./hook-io.mjs"; // gemeinsames Hook-I/O (stdin lesen, Direktaufruf erkennen)
+import { abschlussBlockade, parseAbschlussInput } from "./umsetzer-abschluss.mjs";
 
 /**
  * Pfade **versionierter** Dateien unter `.claude/`, die `git status` als gelöscht
@@ -173,17 +177,18 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
  * Die ganze Hook-Entscheidung ohne Prozess-Exit: `{ exit, stdout, stderr }`. Pure bis auf `check`
  * (injizierbar), damit der Test Stop UND SubagentStop ohne echten Worktree-Zustand fährt.
  */
-export function runHook(stdinText, repoRoot, check = checkAndFixOrphanWorktrees) {
+export function runHook(stdinText, repoRoot, check = checkAndFixOrphanWorktrees, abschlussDeps = {}) {
   const { stopHookActive } = parseStopInput(stdinText);
   if (stopHookActive) return { exit: 0, stdout: "", stderr: "" }; // bereits einmal blockiert → diesmal freigeben
-  // Verwaiste Worktree-Ordner automatisch aufräumen (#908/#952)
+  // Verwaiste Worktree-Ordner automatisch aufräumen (#908/#952) und den Umsetzer-Abschluss prüfen (#1331)
+  const gruende = [];
   const orphanResult = check(repoRoot);
-  if (!orphanResult.blocked) return { exit: 0, stdout: "", stderr: "" };
-  return {
-    exit: 2,
-    stdout: JSON.stringify({ decision: "block", reason: orphanResult.reason }),
-    stderr: orphanResult.reason,
-  };
+  if (orphanResult.blocked) gruende.push(orphanResult.reason);
+  const abschluss = abschlussBlockade(parseAbschlussInput(stdinText), abschlussDeps);
+  if (abschluss) gruende.push(abschluss);
+  if (gruende.length === 0) return { exit: 0, stdout: "", stderr: "" };
+  const reason = gruende.join(" | ");
+  return { exit: 2, stdout: JSON.stringify({ decision: "block", reason }), stderr: reason };
 }
 
 // ── CLI (vom Stop- und vom SubagentStop-Hook aufgerufen) ─────────────────────

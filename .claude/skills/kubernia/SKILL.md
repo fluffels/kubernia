@@ -27,7 +27,7 @@ docs/referenz/ ← Nachschlage-Referenz on-demand (Befehle, Repo-Landkarte, Schi
      prompt: "Ticket #<nr>: <Titel>. Body:\n<Volltext des gh issue view>"
    })
    ```
-   Den Bericht unverändert mit seiner Kopfzeile `PLAN #<nr> · kubernia-planner` an den Umsetzer weitergeben (Planungs-Nachweis, #1270). Nur wenn der Spawn tatsächlich scheitert, skizziert der Hauptchat den Plan kurz selbst und schreibt `Plan ohne Planer: <Grund>` in den Umsetzer-Prompt; ein ausgelassener Planer ist kein Grund.
+   Der Planer prüft selbst, ob der Hauptcheckout hinter `origin/main` liegt, und liest dann per `git show origin/main:<pfad>` (Abschnitt „Stand prüfen“ seiner Definition). Den Bericht unverändert mit seiner Kopfzeile `PLAN #<nr> · kubernia-planner` an den Umsetzer weitergeben (Planungs-Nachweis, #1270). Nur wenn der Spawn tatsächlich scheitert, skizziert der Hauptchat den Plan kurz selbst und schreibt `Plan ohne Planer: <Grund>` in den Umsetzer-Prompt; ein ausgelassener Planer ist kein Grund.
 3. **Pre-Flight** nach AGENTS.md § Human-in-the-Loop-Checkpoints: Du übernimmst die Entscheidungen aus Abschnitt 7 des Plans (Optik, Weichen) als verbindlich und gibst sie dem Umsetzer mit. `AskUserQuestion` nur, wenn der Plan „Rückfrage nötig“ meldet (Irreversibles oder Außenwirkung), dann **jetzt**. PixelLab-Assets für eine Optik-Entscheidung erzeugt der Hauptchat (der Umsetzer hat PixelLab nicht in seiner Whitelist); das Asset liegt als Datei im Temp-Ordner, der Umsetzer bekommt den Pfad (eine Job-ID nützt ihm nichts).
    Meldet Abschnitt 7 des Plans `Weiche Epic: ja`, gilt der Sonderfall Epic mit der Aufteilung aus dem Plan; kein Umsetzer.
 4. **Umsetzer spawnen** (nächster Abschnitt) und sein Ergebnis behandeln.
@@ -38,7 +38,7 @@ Solange der Umsetzer läuft, fasst der Hauptchat weder Repo noch Worktree an und
 
 ## Umsetzung als Subagent
 
-**Vor dem Spawn:** `git fetch origin`, dann `git diff --quiet HEAD origin/main -- .claude/agents .claude/skills`. Weicht der Hauptcheckout ab (Exit 1), ist die Agenten-Definition dieser Session veraltet (laufende Sessions behalten ihre Definitionen): der Umsetzer-Prompt bekommt den Zusatz „Lies deine Definition (`.claude/agents/kubernia-umsetzer.md`) und den Skill `review-lenses` aus deinem Worktree; bei Abweichung gilt diese Fassung.“ Kein `git pull` im Hauptcheckout (geteilter Checkout, andere Sessions arbeiten darin).
+**Vor dem Spawn:** `git fetch origin`, dann `git diff --quiet HEAD origin/main -- .claude/agents .claude/skills AGENTS.md`. Weicht der Hauptcheckout ab (Exit 1), ist die Agenten-Definition dieser Session (bzw. die nativ geladene `AGENTS.md`) veraltet (laufende Sessions behalten ihre Definitionen): der Umsetzer-Prompt bekommt den Zusatz „Lies deine Definition (`.claude/agents/kubernia-umsetzer.md`), den Skill `review-lenses` und `AGENTS.md` aus deinem Worktree; bei Abweichung gilt diese Fassung.“ Kein `git pull` im Hauptcheckout (geteilter Checkout, andere Sessions arbeiten darin).
 
 ```
 Agent({

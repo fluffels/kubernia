@@ -94,6 +94,22 @@ EOF`).brainReads.length, 1, "Ersetzung im Heredoc");
     assert.equal(classifyShell('Get-Content "docs/a.md"', "PowerShell").brainReads.length, 1);
     assert.deepEqual(classifyShell("$t = (Get-Date)", "PowerShell"), { brainReads: [], search: false });
   });
+  test("git show <rev>:docs/x.md zählt als Lesezugriff, mit globalen Optionen und Env-Präfix (#1331)", () => {
+    for (const c of [
+      "git show origin/main:docs/a.md",
+      "MSYS_NO_PATHCONV=1 git show origin/main:docs/a.md",
+      "git -C /r/wt show HEAD:docs/module/x.md",
+      "git --no-pager -c core.quotepath=off show origin/main:docs/a.md | head",
+      "git show --stat origin/main:docs/a.md",
+    ])
+      assert.deepEqual(classifyShell(c).brainReads, [c.includes("module") ? "docs/module/x.md" : "docs/a.md"], c);
+    assert.deepEqual(classifyShell("git show origin/main:docs/a.md origin/main:docs/b.md").brainReads, ["docs/a.md", "docs/b.md"]);
+    assert.equal(classifyShell("git show origin/main:docs/a.md", "PowerShell").brainReads.length, 1);
+  });
+  test("git show zählt nicht, wenn es keine Brain-Seite liest (#1331)", () => {
+    for (const c of ["git show HEAD:src/x.ts", "git show --stat", "git show HEAD", "git status docs/a.md", "git log origin/main:docs/a.md", "git show C:/r/docs/a.md", "git show origin/main:docs/a.ts"])
+      assert.deepEqual(classifyShell(c), { brainReads: [], search: false }, c);
+  });
   test("nicht parsebar: Fallback, wirft nicht", () => {
     const r = classifyShell("cat docs/a.md 'offen");
     assert.equal(r.brainReads.length, 1);
@@ -368,6 +384,39 @@ describe("ladeLangfuseSession: zwei Stufen mit tatsächlichen Span-Namen (#1322 
     const part = await lade("s", { baseUrl: "http://x", publicKey: "p", secretKey: "k", fetchImpl });
     assert.equal(anfragen.filter((a) => a.name).length, 0);
     assert.equal(brainMetrics(part.events).searchCalls, 1);
+  });
+
+  test("Namens-Fallback: ein Span ohne metadata.tool_name wird über den Span-Namen als Eingabe-Tool erkannt (#1331)", async () => {
+    const ohneMeta = [
+      { id: "r1", type: "TOOL", name: "Tool: Read [Kubernia-Doku]", startTime: T(1), metadata: { output_meta: { orig_len: 400 } }, input: { file_path: "docs/a.md" } },
+      { id: "x1", type: "TOOL", name: "Tool: Grep", startTime: T(2), metadata: {}, input: { pattern: "x" } },
+    ];
+    const namen: (string | null)[] = [];
+    const fetchImpl = (url: string) => {
+      const q = new URL(url).searchParams;
+      if (q.get("name")) namen.push(q.get("name"));
+      const daten = q.get("type") === "TOOL" ? ohneMeta.filter((o) => !q.get("name") || o.name === q.get("name")) : [];
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: daten, meta: {} }) });
+    };
+    const part = await lade("s", { baseUrl: "http://x", publicKey: "p", secretKey: "k", fetchImpl });
+    assert.deepEqual(namen, ["Tool: Read [Kubernia-Doku]"], "Stufe 2 fragt nur das Eingabe-Tool, erkannt am Namen ohne Präfix und Qualifier");
+    const m = brainMetrics(part.events);
+    assert.deepEqual([m.brainReads, m.searchCalls], [1, 1]);
+  });
+
+  test("Hauptagent ohne Subagent-Span: Events und Calls tragen den Session-Schlüssel (#1331)", async () => {
+    const daten = [
+      { id: "g1", type: "GENERATION", name: "Claude", startTime: T(1), usageDetails: { input: 1, output: 1 }, model: "m" },
+      { id: "b1", type: "TOOL", name: "Tool: Bash", startTime: T(0), metadata: { tool_name: "Bash" }, input: { command: 'echo "pflege: start #1"' } },
+    ];
+    const fetchImpl = (url: string) => {
+      const q = new URL(url).searchParams;
+      const treffer = daten.filter((o) => (!q.get("type") || o.type === q.get("type")) && (!q.get("name") || o.name === q.get("name")));
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: treffer, meta: {} }) });
+    };
+    const part = (await lade("sess-9", { baseUrl: "http://x", publicKey: "p", secretKey: "k", fetchImpl })) as unknown as { events: Ev[]; calls: { session?: string }[] };
+    assert.deepEqual(part.events.map((e) => e.agent), ["main:sess-9"]);
+    assert.deepEqual(part.calls.map((c) => c.session), ["sess-9"]);
   });
 
   test("kaputte Antwort der zweiten Stufe: der Fehler steigt auf statt leerer Zahlen", async () => {

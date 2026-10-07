@@ -30,7 +30,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseNachweis } from "./slice-override.mjs";
-import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript, transkriptZeilen } from "./brain-metrics.mjs";
+import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
+import { transkriptZeilen } from "./transkript.mjs";
 
 /** Lenses pro Review-Runde für Läufe ohne Runden-Marker (vor #1265 liefen immer alle drei Brillen, #1012). */
 export const LENSES_PER_ROUND = 3;
@@ -194,6 +195,12 @@ function median(values) {
 }
 
 const subKey = (c) => c.subagent.id ?? c.subagent;
+/**
+ * Schlüssel der Konversation eines Calls (#1331): Subagent über `subKey`, der Hauptagent über `main:<sessionId>`. Mehrere
+ * Sessions (`--session a --session b`) teilten sonst den Schlüssel `null` und vermischten ihre Pflege-Intervalle. Calls ohne
+ * Session-Angabe (Tests, ältere Aufrufer) behalten `null`; die Events tragen denselben Schlüssel in `agent`.
+ */
+const agentKey = (c) => (c.subagent ? subKey(c) : c.session ? `main:${c.session}` : null);
 
 /**
  * Sockel (#1198/#1206): Kontext des ERSTEN Calls des Hauptagenten (Größe der Session, darum
@@ -274,7 +281,7 @@ export function windowCalls(calls, bounds = {}, intervals = []) {
     const lage = fensterLage(c.ts, bounds);
     if (lage === "vor") continue;
     const afterMerge = lage === "nachlauf";
-    const agent = c.subagent ? subKey(c) : null;
+    const agent = agentKey(c);
     const t = Date.parse(c.ts);
     const inPflege = intervals.some((iv) => iv.agent === agent && t >= Date.parse(iv.from) && t <= Date.parse(iv.to));
     const subPhase = c.subagent ? classifySubagent(c.subagent.agentType, c.subagent.description) : null;
@@ -334,14 +341,14 @@ const CACHE_PAUSE_MS = { subagent: 5 * 60_000, main: 60 * 60_000 };
 export function countCacheRebuilds(calls) {
   const byConv = new Map();
   for (const c of calls) {
-    const key = c.subagent ? String(subKey(c)) : "main";
+    const key = String(agentKey(c) ?? "main");
     if (!byConv.has(key)) byConv.set(key, []);
     byConv.get(key).push(c);
   }
   let count = 0;
   let cacheWriteTokens = 0;
-  for (const [key, list] of byConv) {
-    const pause = key === "main" ? CACHE_PAUSE_MS.main : CACHE_PAUSE_MS.subagent;
+  for (const list of byConv.values()) {
+    const pause = list[0].subagent ? CACHE_PAUSE_MS.subagent : CACHE_PAUSE_MS.main;
     const sorted = [...list].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
     for (let i = 1; i < sorted.length; i++) {
       const gap = Date.parse(sorted[i].ts) - Date.parse(sorted[i - 1].ts);
@@ -415,7 +422,8 @@ export function readTranscriptSession(sessionId, projectsRoot) {
   if (!main) throw new Error(`Kein Transkript für Session ${sessionId} unter ${projectsRoot}`);
   const mainZeilen = transkriptZeilen(readFileSync(main, "utf8"));
   const all = callsFromTranscript(mainZeilen);
-  all.events = toolEventsFromTranscript(mainZeilen);
+  for (const c of all.calls) c.session = sessionId;
+  all.events = toolEventsFromTranscript(mainZeilen, `main:${sessionId}`);
   const dir = main.replace(/\.jsonl$/, "") + "/subagents";
   if (existsSync(dir)) {
     for (const f of readdirSync(dir).filter((n) => n.endsWith(".jsonl"))) {
@@ -687,7 +695,8 @@ export async function ladeLangfuseSession(sessionId, opts) {
   );
   const eingaben = [];
   for (const name of namen) eingaben.push(...(await fetchSessionObservations(sessionId, { ...opts, type: "TOOL", name, fields: "core,io" })));
-  part.events = toolEventsFromLangfuse(mitEingabe(werkzeuge, eingaben), toolAgentResolver(observations));
+  part.events = toolEventsFromLangfuse(mitEingabe(werkzeuge, eingaben), toolAgentResolver(observations)).map((e) => ({ ...e, agent: e.agent ?? `main:${sessionId}` }));
+  for (const c of part.calls) if (!c.subagent) c.session = sessionId;
   return part;
 }
 

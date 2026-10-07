@@ -4,7 +4,7 @@
 
 ## Wie kommt das CI-Ergebnis zum Agenten zurück? Läuft dafür ein GitHub-MCP-Server?
 
-Kein MCP-Server nötig. Der Agent öffnet den PR und ruft danach blockierend `gh pr checks <nr> --watch` auf (normale `gh`-CLI über die Shell) — der Befehl wartet, bis alle Checks durchgelaufen sind, und liefert den Status zurück. Es gibt keinen Push-Mechanismus (die CI meldet sich nicht aktiv beim Agenten); das Warten läuft als blockierendes Polling im selben Aufruf. Ist die CI grün, mergt `gh pr merge --auto` von selbst; ist sie rot, liest der Agent die Fehlerausgabe aus demselben `gh`-Aufruf, fixt auf dem Branch und stößt den nächsten Push + `--watch`-Lauf an. Dieselbe normale Shell + `gh`-CLI reicht für den gesamten Workflow (Issue claimen, Worktree, Board pflegen, PR mergen) — kein projektspezifischer MCP-Server nötig.
+Kein MCP-Server nötig. Der Agent öffnet den PR und ruft danach blockierend `gh pr checks <nr> --watch` auf (normale `gh`-CLI über die Shell) — der Befehl wartet, bis alle Checks durchgelaufen sind, und liefert den Status zurück. Es gibt keinen Push-Mechanismus (die CI meldet sich nicht aktiv beim Agenten); das Warten läuft als blockierendes Polling im selben Aufruf. **Das Bash-Tool bricht einen Vordergrund-Aufruf nach 2 Minuten ab**, die CI braucht aber rund 5: `gh pr checks <nr> --watch` darum mit `timeout: 600000` aufrufen oder per `Monitor`-until-Schleife warten; ein Tool-Timeout ist kein Abbruchgrund, und der `kubernia-umsetzer` meldet erst nach dem Merge (der SubagentStop-Hook blockiert ein Ende bei offenem PR mit Auto-Merge, `scripts/umsetzer-abschluss.mjs`). Ist die CI grün, mergt `gh pr merge --auto` von selbst; ist sie rot, liest der Agent die Fehlerausgabe aus demselben `gh`-Aufruf, fixt auf dem Branch und stößt den nächsten Push + `--watch`-Lauf an. Dieselbe normale Shell + `gh`-CLI reicht für den gesamten Workflow (Issue claimen, Worktree, Board pflegen, PR mergen) — kein projektspezifischer MCP-Server nötig.
 
 ## Ist Kubernia irgendwo deploybar, oder läuft es nur lokal?
 
@@ -76,6 +76,16 @@ Das ist ein bekannter Reibungspunkt des Auto-Mode-Classifiers (nicht des Repos):
 - **Szene gezielt ins Bild holen:** die Szene per `kqGame.scene.getScene("World")` ansteuern, mit `camera.centerOn(...)`/`setZoom(...)` ausrichten und dann den Screenshot machen. (Der SceneManager kennt `getScene`/`getScenes`/`run`, kein `get`.) Bleibt das Bild leer, siehe unten.
 - **Leerer Canvas oder Screenshot-Timeout (#1290):** Ursache ist meist `document.visibilityState === "hidden"` (Fenster minimiert oder verdeckt): Phaser rendert dann nicht, und `kqGame.scene.getScenes(true)` ist leer. Abhilfe: das Browserfenster sichtbar halten. `kqDev.state()` und `kqDev.advanceTime` gehen auch verdeckt. Bleibt eine Taste hängen (ein `keydown` ohne `keyup`), den passenden `keyup` per `browser_evaluate` dispatchen.
 - **Playwright findet den Chromium nicht** (`Executable doesn't exist ... chromium_headless_shell-<build>`): Das `node_modules` des Hauptrepos liegt hinter dem Lockfile, Playwright-Version und installierter Browser passen nicht zusammen. Abhilfe: `npm ci`, danach `npx playwright install chromium`.
+
+## Windows und Git-Bash: was geht beim Skripten verloren?
+
+- **Backslashes** in Heredocs ohne Anführungszeichen am Delimiter und in `node -e`/`python -c`-Einzeilern werden verschluckt oder umgedeutet (`\s` wird zu `s`, `\n` zu einem echten Umbruch). Ein Regex oder Template-String mit Escapes kommt dann kaputt in der Datei an, ohne Fehlermeldung.
+- **Abhilfe:** mehrzeilige Änderungen mit `\n`/Regex per Edit-Werkzeug machen, nicht per Skript. Muss es ein Skript sein: per Write in den Scratchpad schreiben und dann ausführen; ein Heredoc nur als `<<'EOF'` und danach die Datei gegenlesen.
+- **MSYS-Pfadumwandlung:** `git show origin/main:.claude/agents/x.md` scheitert in Git-Bash (`ambiguous argument 'origin\main;…'`). Abhilfe: `MSYS_NO_PATHCONV=1 git show origin/main:<pfad>` oder das PowerShell-Tool.
+
+## Warum bekomme ich Test-Timeouts, obwohl der Test einzeln grün ist?
+
+Volle Vitest-Läufe (vor allem die `store.*`-Tests, `game-hazards` und die Git-lastigen Wächter) laufen ins 5-s-Timeout, wenn parallel Lens-, Playwright- oder andere Vitest-Prozesse die Kerne belegen. Darum begrenzt `vite.config.ts` lokal `maxWorkers` auf 25 % (die CI nutzt den Standard). Gemessen (20 Kerne, drei gleichzeitige `npm test`): Standard 5 und 1 Fehlschläge, 25 % keiner, 50 % 6. Mehr oder weniger Worker: `npm test -- --maxWorkers=<n>`.
 
 ## Verwandte Dokumente
 

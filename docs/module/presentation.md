@@ -62,6 +62,8 @@
 | `src/ui/quiz.ts` | `quizUI` | Krabben-Quiz (Spaced-Repetition). |
 | `src/ui/save.ts` | `saveUI` | Spielstand-Export/Import + `resetGame`. |
 
+**Lint-Falle bei `part()` (#1331):** In den Bündeln ist `this` ein `Record<string, any>` (`UISelf`). Jeder neue `this.`-Zugriff erhöht die eingefrorenen `no-unsafe-*`-Zähler in `eslint-suppressions.json` (rund 1.030 Treffer unter `src/ui/`) und bricht `npm run lint`, ohne dass der Diff einen Fehler zeigt. **Konvention:** Entscheidungslogik als pures Modul in der Domäne (testbar), reine DOM-Hilfen als modul-lokale, explizit typisierte Funktion ausserhalb von `part()` schreiben (Vorbild `resolveTalkTarget` aus `src/hud/viewdecide.ts`, von `src/ui/hud.ts` importiert) und nur noch aus der Methode aufrufen. Die `part()`-Typisierung selbst ist ein eigener Umbau (als Zeile an #1129 festgehalten).
+
 ## Sound & Assets
 
 | Modul | Inhalt |

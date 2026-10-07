@@ -24,10 +24,11 @@ import * as ghRaw0 from "../../scripts/gh-guard-hook.mjs";
 import * as tabRaw from "../../scripts/shell-tabellen.mjs";
 
 const ghRaw = ghRaw0 as unknown as { GEPRUEFTE_TOOLS: string[]; bewerte: (c: string, o: unknown) => unknown };
+type Guards = Record<string, (o: never) => unknown>;
 type Out = { hookSpecificOutput: { permissionDecision: string; permissionDecisionReason: string } } | null;
 const io = ioRaw as unknown as { mergeDecisions: (d: unknown[]) => Out };
 const tabellen = tabRaw as unknown as { SHELL_VON_TOOL: Record<string, string> };
-const hook = raw as unknown as { dispatch: (text: string, repoRoot: string, guards?: Record<string, (o: never) => unknown>) => Out };
+const hook = raw as unknown as { dispatch: (text: string, repoRoot: string, guards?: Guards, shellVonTool?: Record<string, string>) => Out };
 
 const WURZEL = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const lies = (rel: string) => readFileSync(resolve(WURZEL, rel), "utf8");
@@ -45,6 +46,19 @@ describe("Routing und Entscheidung (#1311)", () => {
     assert.equal(hook.dispatch(payload("Read", "gh api -X DELETE x"), WURZEL), null);
     assert.equal(hook.dispatch("{kaputt", WURZEL), null);
     assert.equal(hook.dispatch("", WURZEL), null);
+  });
+
+  test("jede Shell der Tabelle hat einen Worktree-Guard, eine ohne wird verweigert (#1331)", () => {
+    const blockt = () => ({ block: true, reason: "x" });
+    const nichts = () => ({ block: false });
+    for (const tool of Object.keys(tabellen.SHELL_VON_TOOL)) {
+      const mitGuard = hook.dispatch(payload(tool, "x"), WURZEL, { decide: blockt, bewertePowerShell: blockt, bewerteGh: nichts });
+      assert.equal(mitGuard?.hookSpecificOutput.permissionDecision, "deny", `${tool}: ein Worktree-Guard muss gefragt werden`);
+      assert.equal(hook.dispatch(payload(tool, "x"), WURZEL, { decide: nichts, bewertePowerShell: nichts, bewerteGh: nichts }), null, tool);
+    }
+    const fremd = hook.dispatch(payload("Zsh", "x"), WURZEL, { decide: nichts, bewertePowerShell: nichts, bewerteGh: nichts }, { Zsh: "zsh" });
+    assert.equal(fremd?.hookSpecificOutput.permissionDecision, "deny");
+    assert.match(fremd?.hookSpecificOutput.permissionDecisionReason ?? "", /keinen Worktree-Guard/);
   });
 
   test("Routing: Bash geht an den Bash-Guard, PowerShell an den PowerShell-Guard (Attrappen)", () => {

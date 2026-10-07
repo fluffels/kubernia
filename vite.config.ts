@@ -160,6 +160,9 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
       // Die Unit-Tests (sim/content) brauchen kein DOM – laufen schnell auf Node.
       environment: "node",
       include: ["test/**/*.test.ts"],
+      // #1331: lokal begrenzt (Überbelegung durch parallele Läufe von Lenses/Playwright/anderen Worktrees ließ die
+      // store-/Git-lastigen Tests ins 5-s-Timeout laufen); die CI bleibt beim Standard. Override: `npm test -- --maxWorkers=<n>`.
+      maxWorkers: process.env.CI ? undefined : "25%",
       // #495: Coverage misst nur der `--coverage`-Lauf (npm run test:coverage / CI-Gate);
       // der normale `npm test` bleibt uninstrumentiert und damit schnell.
       coverage: {

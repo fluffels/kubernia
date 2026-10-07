@@ -321,7 +321,12 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
 // ── SubagentStop + Ausgabeformat (#1309) ──────────────────────────────────────
 
 type HookErgebnis = { exit: number; stdout: string; stderr: string };
-type RunHook = (stdin: string, root: string, check?: (r: string) => { blocked: boolean; reason?: string }) => HookErgebnis;
+type RunHook = (
+  stdin: string,
+  root: string,
+  check?: (r: string) => { blocked: boolean; reason?: string },
+  abschlussDeps?: { prStatus?: (nr: string) => { state: string; autoMergeRequest: object | null } },
+) => HookErgebnis;
 const runHook = (hook as unknown as { runHook: RunHook }).runHook;
 const geblockt = () => ({ blocked: true, reason: "Waise kq-1" });
 const frei = () => ({ blocked: false });
@@ -347,6 +352,30 @@ describe("runHook – Ausgabe bei Block und Freigabe (#1309)", () => {
 
   test("kaputtes stdin-JSON blockt nicht pauschal frei, sondern prüft", () => {
     assert.equal(runHook("{kaputt", "/x", geblockt).exit, 2);
+  });
+});
+
+describe("runHook – Umsetzer-Abschluss (#1331)", () => {
+  const payload = (ergebnis: string, extra = {}) =>
+    JSON.stringify({ hook_event_name: "SubagentStop", agent_type: "kubernia-umsetzer", last_assistant_message: `ERGEBNIS: ${ergebnis}
+PR: https://github.com/x/y/pull/7`, ...extra });
+  const offen = () => ({ state: "OPEN", autoMergeRequest: { enabledAt: "x" } });
+
+  test("offener PR mit Auto-Merge blockiert den Umsetzer auch bei sauberem Worktree-Cleanup", () => {
+    const r = runHook(payload("abgebrochen"), "/x", frei, { prStatus: offen });
+    assert.equal(r.exit, 2);
+    assert.match((JSON.parse(r.stdout) as { reason: string }).reason, /noch offen und hat Auto-Merge/);
+  });
+
+  test("beide Gründe werden zusammengeführt", () => {
+    const r = runHook(payload("gemergt"), "/x", geblockt, { prStatus: offen });
+    assert.match(r.stderr, /Waise kq-1 \| .*Auto-Merge/);
+  });
+
+  test("frei bei festgefahren, bei stop_hook_active und bei gh-Fehler", () => {
+    assert.equal(runHook(payload("festgefahren"), "/x", frei, { prStatus: offen }).exit, 0);
+    assert.equal(runHook(payload("abgebrochen", { stop_hook_active: true }), "/x", frei, { prStatus: offen }).exit, 0);
+    assert.equal(runHook(payload("abgebrochen"), "/x", frei, { prStatus: () => { throw new Error("x"); } }).exit, 0);
   });
 });
 
