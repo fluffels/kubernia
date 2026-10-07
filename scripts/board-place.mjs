@@ -15,15 +15,36 @@
  * Sammelticket „Harness-Härtung (gesammelt)“ (sonst rückt es nicht nach vorn); die Ausgabe nennt die Klemmung. Nur echte Notfälle
  * (`--notfall <art>`, nur mit `--top`) stehen ganz oben. Das Sammelticket selbst (`--position 4 <nr>`) wird nicht geklemmt.
  *
+ * Selbstkorrektur (#1390): vor jedem Einsortieren (außer `--notfall`) schiebt das Skript ein ungeclaimtes Harness-Sammelticket, das
+ * hinter der Position laut AGENTS.md steht (z.B. am Board-Ende), dorthin zurück (nur nach vorn, nie in den Kopf); sonst klemmte
+ * die Klemmung jedes neue Ticket hinter ein ans Ende gerutschtes Sammelticket. `--dry-run` zeigt es nur an. `--notfall <art>` prüft
+ * außerdem den Titelmarker des Tickets (docs/ticket-reihenfolge.md): ohne ihn zählt es nicht zum Kopf, Exit 2.
+ *
  * Nummern, die die REST-Board-Liste nicht liefert (frische Items kommen teils lange verzögert), holt ein GraphQL-Fallback
- * (`issue.projectItems`, eine Abfrage je Nummer); steht ein Issue wirklich nicht im Board, wird es gemeldet und übersprungen.
+ * (`issue.projectItems`, gebündelte Aliase in einer Abfrage); steht ein Issue wirklich nicht im Board, wird es gemeldet und übersprungen.
  * Bei Rate-Limit sofort stoppen, den Rest melden.
  */
+import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { abortMessage, ergaenzeFehlende, fehlendeNummern, itemIdUeberIssue, loadItems, loadOpenIssueNumbers, missingFromBoard, planFuerArgs, setPosition } from "./board-lib.mjs";
+import {
+  NOTFALL_ARTEN,
+  abortMessage,
+  ergaenzeFehlende,
+  fehlendeNummern,
+  itemsUeberIssues,
+  loadItems,
+  loadOpenIssueNumbers,
+  missingFromBoard,
+  notfallTitelFehler,
+  planFuerArgs,
+  sammelticketItem,
+  sammelticketKorrektur,
+  sammelticketPosition,
+  setPosition,
+  verschiebe,
+} from "./board-lib.mjs";
 
-/** Echte Notfälle, die ganz nach oben dürfen: roter main, Security, Dependabot, Forum-Eingang. */
-export const NOTFALL_ARTEN = ["rot-main", "security", "dependabot", "forum"];
+export { NOTFALL_ARTEN };
 
 const PAUSE_MS = 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -62,6 +83,28 @@ function parseOhneNotfall(rest, dry) {
   return nums.length < 2 ? null : { anchor: nums[0], numbers: nums.slice(1), dry };
 }
 
+/**
+ * Der Planungsweg von main als pure Funktion (#1390): zuerst die Selbstkorrektur des ungeclaimten Harness-Sammeltickets (nicht bei
+ * `--notfall`, nicht wenn das Sammelticket selbst einsortiert wird), dann `planFuerArgs` auf der korrigierten Liste. `n` = Position
+ * laut AGENTS.md. Liefert `{ korrektur, items, plan }` (`korrektur` null, wenn nichts zu korrigieren war).
+ */
+export function planMitKorrektur(items, args, n) {
+  const ticket = args.notfall ? null : sammelticketItem(items, args.numbers);
+  const korrektur = ticket ? sammelticketKorrektur(items, n) : null;
+  const korrigiert = korrektur ? verschiebe(items, korrektur.id, korrektur.afterId) : items;
+  return { korrektur, items: korrigiert, plan: planFuerArgs(korrigiert, args) };
+}
+
+/** Position laut AGENTS.md (SSOT) oder null mit Warnung, wenn die Datei nicht lesbar ist oder die Zahl nicht eindeutig. */
+function positionLautAgentsMd() {
+  try {
+    return sammelticketPosition(readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8"));
+  } catch (e) {
+    console.error(`⚠ Sammelticket-Selbstkorrektur übersprungen: ${String(e.message).split("\n")[0]}`);
+    return null;
+  }
+}
+
 /** Bericht: offene Issues, die nicht auf dem Board stehen (Einsortieren bleibt eine Abwägung der Agentin). */
 function reportMissing() {
   try {
@@ -81,12 +124,22 @@ async function main(argv = process.argv.slice(2)) {
   }
   if (args.missing) return reportMissing();
   let plan;
+  let korrektur = null;
   try {
     let items = loadItems();
-    // Fallback: frisch aufgenommene Items fehlen in der REST-Liste teils lange; ihre Item-ID per GraphQL holen.
+    // Fallback: frisch aufgenommene Items fehlen in der REST-Liste teils lange; ihre Item-ID per GraphQL holen (eine gebündelte Abfrage).
     const fehlend = fehlendeNummern(items, args);
-    if (fehlend.length > 0) items = ergaenzeFehlende(items, fehlend.map((n) => itemIdUeberIssue(n)));
-    plan = planFuerArgs(items, args);
+    if (fehlend.length > 0) items = ergaenzeFehlende(items, itemsUeberIssues(fehlend));
+    if (args.notfall) {
+      const fehler = notfallTitelFehler(items, args.numbers, args.notfall);
+      if (fehler) {
+        console.error(`✖ ${fehler}`);
+        process.exit(2);
+      }
+    }
+    const n = args.notfall ? null : positionLautAgentsMd();
+    const geplant = n === null ? { korrektur: null, items, plan: planFuerArgs(items, args) } : planMitKorrektur(items, args, n);
+    ({ korrektur, plan } = geplant);
     if (plan.klemmung.geklemmt) console.log(`Hinter das ungeclaimte Sammelticket #${plan.klemmung.sammelticket} geklemmt (Notfall: --notfall <art>, nur mit --top, ${NOTFALL_ARTEN.join("|")}).`);
   } catch (e) {
     console.error(`✖ Abbruch: ${abortMessage(e.message)}. Später erneut fahren.`);
@@ -96,6 +149,18 @@ async function main(argv = process.argv.slice(2)) {
   if (anchorMissing) {
     console.error(`✖ Anker #${args.anchor} steht nicht im Board (weder in der REST-Liste noch per GraphQL gefunden).`);
     process.exit(1);
+  }
+  if (korrektur) {
+    console.log(`Sammelticket #${korrektur.nr} stand auf Rang ${korrektur.vonRang}, zurück auf Rang ${korrektur.nachRang} (Position laut AGENTS.md).`);
+    if (!args.dry) {
+      try {
+        setPosition(korrektur.id, korrektur.afterId);
+      } catch (e) {
+        console.error(`✖ Abbruch bei der Sammelticket-Korrektur: ${abortMessage(e.message)}. Später erneut fahren.`);
+        process.exit(1);
+      }
+      await sleep(PAUSE_MS);
+    }
   }
   for (const [n, { item, afterId }] of steps.entries()) {
     console.log(`#${item.number} → ${afterId === null ? "Spitze" : "hinter Vorgänger"}`);

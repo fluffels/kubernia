@@ -11,6 +11,16 @@ import { execFileSync } from "node:child_process";
 
 export const PROJECT_ID = "PVT_kwHOD8746c4Barq_";
 
+/** Ein Tag in Millisekunden (Takt-Fenster in langfuse-takt.mjs und board-takt.mjs). */
+export const TAG_MS = 24 * 60 * 60 * 1000;
+
+/** Datum aus einem Date oder einer Zeichenkette; wirft bei ungültigem Wert (mit dem Namen des Parameters). Pur. */
+export function alsDatum(wert, name) {
+  const d = wert instanceof Date ? wert : new Date(wert);
+  if (Number.isNaN(d.getTime())) throw new Error(`Ungültiges Datum für ${name}: ${String(wert)}`);
+  return d;
+}
+
 /**
  * Einsortieren mehrerer Tickets: `numbers` in der gewünschten Reihenfolge hinter `afterNumber`
  * (oder an die Spitze bei null). Liefert die Positionsschritte [{ item, afterId }], wobei jedes Item
@@ -49,10 +59,39 @@ export const SAMMELTICKET_TITEL_LISTE = [SAMMELTICKET_TITEL, LANGFUSE_SAMMELTICK
 export const STATUS_TITEL = "Langfuse-Status überprüfen";
 
 /**
- * Titel-Marker der Kopf-Items: Tickets, die regelkonform VOR den Sammeltickets stehen (Status-Ticket, roter main, Dependabot,
- * Forum). Gebunden an die `marker=`-Zeilen der Inbox-Workflows (test/board.test.ts).
+ * Die Notfall-Arten (#1390): EINE Tabelle für `board-place --notfall <art>` (Art), die Titelprüfung (Marker) und den Kopf des Boards
+ * (`KOPF_MARKER`). `quelle` ist die Datei, in der der Marker wörtlich steht (Inbox-Workflow bzw. die Doku, wenn ein Mensch oder Agent
+ * das Ticket anlegt); test/board.test.ts bindet jeden Eintrag daran. Security hat keinen Workflow: der Marker steht in docs/ticket-reihenfolge.md.
  */
-export const KOPF_MARKER = ["🚨 CI rot auf main", "🤖 Dependabot-PRs auflösen", "Forum #"];
+export const NOTFAELLE = [
+  { art: "rot-main", marker: "🚨 CI rot auf main", quelle: ".github/workflows/ci.yml" },
+  { art: "security", marker: "🔒 Security:", quelle: "docs/ticket-reihenfolge.md" },
+  { art: "dependabot", marker: "🤖 Dependabot-PRs auflösen", quelle: ".github/workflows/dependabot-inbox.yml" },
+  { art: "forum", marker: "Forum #", quelle: ".github/workflows/forum-inbox.yml" },
+];
+
+/** Arten für `--notfall`, abgeleitet aus `NOTFAELLE`. */
+export const NOTFALL_ARTEN = NOTFAELLE.map((n) => n.art);
+
+/** Titel-Marker der Kopf-Items (Notfälle; das Status-Ticket kommt über `STATUS_TITEL` dazu), abgeleitet aus `NOTFAELLE`. */
+export const KOPF_MARKER = NOTFAELLE.map((n) => n.marker);
+
+/**
+ * Prüft, ob die Tickets `numbers` den Titelmarker der Notfall-Art tragen (sonst endet `kopfEnde` vor ihnen: ein unmarkierter Notfall
+ * oben ließe den Kopf bei 0 enden). Liefert die Fehlermeldung des ersten Verstoßes oder null. Items, die nicht in `items` stehen, kann
+ * die Prüfung nicht beurteilen (der Aufrufer ergänzt sie vorher per GraphQL-Fallback). Pur.
+ */
+export function notfallTitelFehler(items, numbers, art) {
+  const eintrag = NOTFAELLE.find((n) => n.art === art);
+  if (!eintrag) return `Unbekannte Notfall-Art „${String(art)}“.`;
+  for (const nr of numbers) {
+    const i = items.find((x) => x.number === nr);
+    if (i && !String(i.title ?? "").startsWith(eintrag.marker)) {
+      return `#${nr} trägt nicht den Titelmarker „${eintrag.marker}“ der Art ${art} (Titel: „${i.title}“): ohne ihn zählt es nicht zum Kopf. Titel anpassen, dann erneut.`;
+    }
+  }
+  return null;
+}
 
 /** True für ein Kopf-Item: das Status-Ticket oder ein Titel, der mit einem Marker aus `KOPF_MARKER` beginnt. Pur. */
 export function istKopfItem(i) {
@@ -139,6 +178,45 @@ export function planFuerArgs(items, args) {
   const anker = args.position ? ankerNummerFuerPosition(items, args.position, args.numbers[0]) : (args.anchor ?? null);
   const k = klemmeAnker(items, anker, { numbers: args.numbers, notfall: !!args.notfall });
   return { ...planPlacements(items, args.numbers, k.anker), klemmung: { geklemmt: k.geklemmt, sammelticket: k.sammelticket } };
+}
+
+/**
+ * Die Position des Sammeltickets aus dem Text von AGENTS.md (SSOT, #1390): genau ein Treffer von „Position <N>“ (auch mit Doppelpunkt
+ * oder Zeilenumbruch), sonst wirft die Funktion; dieselbe Regel erzwingt test/harness/sammelticket.test.ts. Pur.
+ */
+export function sammelticketPosition(agentsText) {
+  const treffer = [...String(agentsText ?? "").matchAll(/Position\s*:?\s*(\d+)/g)];
+  if (treffer.length !== 1) throw new Error(`AGENTS.md muss die Sammelticket-Position genau einmal nennen („Position <N>“), gefunden: ${treffer.length}`);
+  return Number(treffer[0][1]);
+}
+
+/** Neue Liste, in der das Item `id` hinter `afterId` steht (null = Spitze); die Eingabe bleibt unverändert. Wirft bei unbekannter ID. Pur. */
+export function verschiebe(items, id, afterId) {
+  const item = items.find((i) => i.id === id);
+  if (!item) throw new Error(`Item ${String(id)} steht nicht in der Liste.`);
+  const rest = items.filter((i) => i.id !== id);
+  if (afterId === null) return [item, ...rest];
+  const idx = rest.findIndex((i) => i.id === afterId);
+  if (idx < 0) throw new Error(`Anker ${String(afterId)} steht nicht in der Liste.`);
+  return [...rest.slice(0, idx + 1), item, ...rest.slice(idx + 1)];
+}
+
+/**
+ * Positionskorrektur des ungeclaimten Harness-Sammeltickets (#1390): steht es weiter hinten als `n` (Position laut AGENTS.md),
+ * liefert die Funktion `{ nr, id, afterId, vonRang, nachRang }` (Ränge 1-basiert in der Liste), sonst null. Nur nach vorn, nie in den
+ * Kopf (liegt das Ziel vor dem letzten Kopf-Item, gilt das letzte Kopf-Item als Anker). Ohne ungeclaimtes Sammelticket null. Pur.
+ */
+export function sammelticketKorrektur(items, n) {
+  const ticket = sammelticketItem(items);
+  if (!ticket) return null;
+  let afterId = afterIdForPosition(items, n, ticket.number);
+  const ende = kopfEnde(items);
+  const zielIdx = afterId === null ? -1 : items.findIndex((i) => i.id === afterId);
+  if (zielIdx < ende - 1) afterId = ende > 0 ? items[ende - 1].id : null;
+  const idx = items.findIndex((i) => i.id === ticket.id);
+  const neuIdx = verschiebe(items, ticket.id, afterId).findIndex((i) => i.id === ticket.id);
+  if (neuIdx >= idx) return null;
+  return { nr: ticket.number, id: ticket.id, afterId, vonRang: idx + 1, nachRang: neuIdx + 1 };
 }
 
 /**
@@ -269,22 +347,65 @@ const graphql = (query, vars, opts) => {
   return JSON.parse(gh(args, opts));
 };
 
+/** Höchstzahl Nummern je GraphQL-Abfrage des Fallbacks (Aliase `i0…`). */
+export const ALIAS_MAX = 50;
+
 /**
- * Fallback für Items, die die REST-Liste nicht liefert (frisch aufgenommene Items fehlen dort teils lange): Item-ID des Issues
- * per GraphQL `issue.projectItems`, gefiltert auf das eigene Board. null, wenn das Issue nicht im Board steht.
+ * Gebündelte GraphQL-Abfragen für den Fallback (#1390): je bis zu `ALIAS_MAX` Nummern ein Aliasblock `i0: issue(number: N){…}`.
+ * Liefert `[{ nummern, query }]`. Die Nummern stehen inline und müssen positive Ganzzahlen sein (sonst wirft die Funktion: keine
+ * Injektion), `repo` muss `owner/name` aus Wortzeichen, Punkt und Bindestrich sein. Leere Liste → keine Abfrage. Pur.
  */
-export function itemIdUeberIssue(nr, opts = {}, repo = "fluffels/kubernia") {
+export function aliasAbfrage(nummern, repo = "fluffels/kubernia") {
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error(`Ungültiges Repo: ${String(repo)}`);
+  if (!Array.isArray(nummern) || nummern.some((n) => !Number.isInteger(n) || n <= 0)) {
+    throw new Error(`Nummern müssen positive Ganzzahlen sein: ${JSON.stringify(nummern)}`);
+  }
   const [owner, name] = repo.split("/");
-  const antwort = JSON.parse(
-    gh(
-      [
-        "api", "graphql", "-f", `owner=${owner}`, "-f", `name=${name}`, "-F", `nr=${nr}`, "-f",
-        "query=query($owner:String!,$name:String!,$nr:Int!){ repository(owner:$owner,name:$name){ issue(number:$nr){ number title state assignees(first:5){ nodes{ login } } projectItems(first:20){ nodes{ id project{ id } } } } } } }",
-      ],
-      opts,
-    ),
-  );
-  return itemAusIssueAntwort(antwort);
+  const felder = "number title state assignees(first:5){ nodes{ login } } projectItems(first:20){ nodes{ id project{ id } } }";
+  const bloecke = [];
+  for (let von = 0; von < nummern.length; von += ALIAS_MAX) {
+    const teil = nummern.slice(von, von + ALIAS_MAX);
+    const aliase = teil.map((n, k) => `i${k}: issue(number: ${n}){ ${felder} }`).join(" ");
+    bloecke.push({ nummern: teil, query: `query{ repository(owner:"${owner}",name:"${name}"){ ${aliase} } }` });
+  }
+  return bloecke;
+}
+
+/**
+ * Antwort EINES Alias-Blocks → normalisierte Items in der Reihenfolge von `nummern` (null: Issue unbekannt oder nicht im eigenen Board).
+ * Wirft bei unerwarteter Antwortform, statt Nummern still als fehlend zu melden. Pur.
+ */
+export function itemsAusAliasAntwort(antwort, nummern) {
+  const repository = antwort?.data?.repository;
+  if (!repository || typeof repository !== "object") throw new Error("Unerwartete Antwortform des GraphQL-Fallbacks (kein repository).");
+  return nummern.map((_, k) => itemAusIssueAntwort({ data: { repository: { issue: repository[`i${k}`] } } }));
+}
+
+/**
+ * Eine Abfrage ausführen. `gh` endet bei einem unbekannten Issue (`NOT_FOUND`) mit Exit ≠ 0, liefert aber die Teilantwort auf stdout:
+ * dann zählt diese (das unbekannte Issue ist `null`), sonst wirft der Fehler weiter (Rate-Limit, Netz, kaputte Abfrage).
+ */
+function graphqlTeilantwort(query, opts) {
+  try {
+    return JSON.parse(gh(["api", "graphql", "-f", `query=${query}`], opts));
+  } catch (e) {
+    try {
+      const antwort = JSON.parse(String(e.stdout ?? ""));
+      if (antwort?.data?.repository && (antwort.errors ?? []).every((x) => x?.type === "NOT_FOUND")) return antwort;
+    } catch {
+      /* keine Teilantwort: der ursprüngliche Fehler gilt */
+    }
+    throw e;
+  }
+}
+
+/**
+ * Fallback für Items, die die REST-Liste nicht liefert (frisch aufgenommene Items fehlen dort teils lange): Items der Issues
+ * `nummern` per GraphQL (`issue.projectItems`, gebündelte Aliase), gefiltert auf das eigene Board; null-Einträge für Issues, die
+ * nicht im Board stehen.
+ */
+export function itemsUeberIssues(nummern, opts = {}, repo = "fluffels/kubernia") {
+  return aliasAbfrage(nummern, repo).flatMap((b) => itemsAusAliasAntwort(graphqlTeilantwort(b.query, opts), b.nummern));
 }
 
 /** Position setzen: hinter `afterId`, null = an die Spitze. `opts.token` = anderer GH_TOKEN (Projekt-Scope im Workflow). */

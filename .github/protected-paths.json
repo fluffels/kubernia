@@ -39,6 +39,8 @@
     "/scripts/board-lib.mjs",
     "/scripts/board-place.mjs",
     "/scripts/langfuse-takt.mjs",
+    "/scripts/board-takt.mjs",
+    "/scripts/sammelticket-anlegen.mjs",
     "/scripts/haupt-sync.mjs",
     "/scripts/lens-edit-guard.mjs",
     "/.agents/",

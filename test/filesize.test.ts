@@ -99,11 +99,18 @@ describe("Deckel für Workflow-Skripte (#1349)", () => {
   test("Wachstum über den Deckel: rot", () => {
     const m = pruefeDeckel([{ file: WF, loc: 1001 }], deckel).join(" ");
     assert.match(m, /1001 Zeilen > Deckel 1000/);
+    assert.match(m, /Rebase auf origin\/main/, "Rebase-Hinweis (#1390 Z8)");
   });
 
   test("Schrumpfen ohne den Deckel zu senken: rot mit Zielwert (Ratchet)", () => {
     const m = pruefeDeckel([{ file: WF, loc: 950 }], deckel).join(" ");
     assert.match(m, /Deckel auf 950 senken/);
+    assert.match(m, /Rebase auf origin\/main/, "Rebase-Hinweis (#1390 Z8)");
+  });
+
+  test("Meldungen ohne Deckel und stale tragen den Rebase-Hinweis nicht (#1390 Z8)", () => {
+    assert.doesNotMatch(pruefeDeckel([{ file: ".claude/workflows/neu.js", loc: 801 }], []).join(" "), /Rebase/);
+    assert.doesNotMatch(pruefeDeckel([], deckel).join(" "), /Rebase/);
   });
 
   test("genau auf dem Deckel: ok", () => {

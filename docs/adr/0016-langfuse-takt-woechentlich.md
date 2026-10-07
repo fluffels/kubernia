@@ -73,3 +73,10 @@ Bei rund 15 Merges am Tag wäre „wöchentlich“ nur alle 70 bis 100 Tickets e
 - **Kosten:** ein Push-Lauf liest Issues, Commits und die Board-Liste und schreibt nur bei Bedarf; die Concurrency-Group hält höchstens einen wartenden Lauf.
 
 Die Zahlen stehen als `MIN_TICKET_MERGES_PUSH` und `HARNESS_TAKT_MERGES` in `scripts/langfuse-takt.mjs` und sind an diese Doku gebunden (`test/langfuse-takt.test.ts`).
+
+## Fortschreibung #1390 (2026-10-07): generischer Board-Takt, Positionskorrektur
+
+- **Umbenennung:** der Workflow heißt jetzt `board-takt.yml` (Concurrency-Group `board-takt`), sein Skript `scripts/board-takt.mjs`. Dort liegen der Lauf, die Commit-Fenster und das Harness-Sammelticket; `scripts/langfuse-takt.mjs` behält die Status-Ticket-Logik (Entscheidung, Body, Anlegen). Die Zahlen stehen als `MIN_TICKET_MERGES_PUSH` (`langfuse-takt.mjs`) und `HARNESS_TAKT_MERGES` (`board-takt.mjs`), gebunden an diese Doku in `test/board-takt.test.ts`. Die frühere Actions-Historie läuft unter dem alten Namen „Langfuse-Takt“ weiter.
+- **Positionskorrektur:** steht das ungeclaimte Harness-Sammelticket hinter der Position laut AGENTS.md (Anlass: ein nachträglich angelegtes landete am Board-Ende und klemmte jedes neue `--top`-Ticket dorthin), schiebt der Lauf es zurück, unabhängig von der Aktivität; `board-place.mjs` tut das vor jedem Einsortieren, `sammelticket-anlegen.mjs` beim Anlegen. Die Korrektur geht nur nach vorn und nie in den Kopf. Die Board-Liste lädt der Lauf einmal und zieht sie nach der Status-Aktion im Speicher nach.
+- **Notfall-Tabelle:** Art, Titelmarker und Quelle je Notfall stehen einmal in `scripts/board-lib.mjs` (`NOTFAELLE`), auch für Security (`🔒 Security:`); `board-place --notfall` bricht bei fehlendem Marker ab, weil ein unmarkierter Notfall nicht zum Kopf zählt.
+- **Verworfen:** nur melden statt zurückschieben (ein Hinweis, den niemand liest, ließe das Ticket am Ende liegen); Korrektur ohne Kopf-Klemme (ein großer Kopf würde durchbrochen); Umbenennen von `test/langfuse-takt.test.ts` (er testet weiter die Status-Logik).

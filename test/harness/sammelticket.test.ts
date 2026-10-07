@@ -7,15 +7,16 @@
  * mehrfach (5 → 7 → 6), und jede Verschiebung hätte vier Stellen gebraucht. Regel jetzt:
  *
  *   1. AGENTS.md nennt die Position genau einmal (SSOT).
- *   2. Das Anlegen-Snippet von docs/ticket-reihenfolge.md setzt die Position über
- *      `board-place.mjs --position "$N" "$NR"`; die Zählung (N-1. Todo-Item ohne das neue Item) liegt
- *      getestet in scripts/board-lib.mjs › afterIdForPosition.
+ *   2. Das Anlegen läuft über scripts/sammelticket-anlegen.mjs (#1390): es liest die Zahl per
+ *      `sammelticketPosition` aus AGENTS.md, setzt und prüft die Position; die Zählung (N-1. Todo-Item ohne
+ *      das neue Item) liegt getestet in scripts/board-lib.mjs › afterIdForPosition und sammelticketKorrektur.
+ *      Die Doku nennt das Skript und keine eigene Zahl.
  *   3. Workflow und Sammelticket-Abschnitt von docs/ticket-reihenfolge.md nennen keine eigene Zahl
  *      und verweisen auf AGENTS.md. Das ADR darf die Historie mit Zahlen erzählen.
  *
  * Jede weitere „Position <N>“ (auch „Position: <N>“) in AGENTS.md macht den Test absichtlich rot,
  * auch in anderem Zusammenhang; darum hat das wiederkehrende Status-Ticket keine Position mehr:
- * seinen Takt hält der Wochen-Workflow langfuse-takt.yml (#1351).
+ * seinen Takt hält der Board-Takt board-takt.yml (#1351, #1390).
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
@@ -35,18 +36,18 @@ function positionAusAgentsMd(text: string): number {
   return Number(treffer[0][1]);
 }
 
-/** Der Abschnitt „Sammelticket …" bis zur nächsten H2-Überschrift. */
+/** Der Abschnitt „Sammelticket „Harness-Härtung …“ bis zur nächsten H2-Überschrift. */
 function sammelticketAbschnitt(doc: string): string {
-  const von = doc.indexOf("## Sammelticket");
+  const von = doc.indexOf("## Sammelticket „Harness-Härtung");
   assert.ok(von >= 0, "docs/ticket-reihenfolge.md braucht den Abschnitt „Sammelticket …“");
   const bis = doc.indexOf("\n## ", von + 1);
   return doc.slice(von, bis < 0 ? undefined : bis);
 }
 
-/** Der generische Anlegen-Abschnitt (gilt für Sammelticket und Status-Ticket). */
+/** Der Anlegen-Abschnitt (gilt für beide Sammeltickets). */
 function anlegenAbschnitt(doc: string): string {
-  const von = doc.indexOf("## Anlegen auf Position N");
-  assert.ok(von >= 0, "docs/ticket-reihenfolge.md braucht den Abschnitt „Anlegen auf Position N“");
+  const von = doc.indexOf("## Sammelticket anlegen");
+  assert.ok(von >= 0, "docs/ticket-reihenfolge.md braucht den Abschnitt „Sammelticket anlegen“");
   const bis = doc.indexOf("\n## ", von + 1);
   return doc.slice(von, bis < 0 ? undefined : bis);
 }
@@ -61,13 +62,27 @@ describe("Sammelticket-Position (#1276)", () => {
     assert.ok(positionAusAgentsMd(agents) >= 1);
   });
 
-  test("das Snippet setzt die Position über board-place.mjs mit N als Variable (die Zählung ist in test/board.test.ts getestet)", () => {
-    assert.match(anlegen, /board-place\.mjs --position "\$N" "\$NR"/);
-    assert.match(anlegen, /^N=<Position>/m, "das Snippet trägt keine eigene Zahl für das Sammelticket");
+  test("das Anlegen läuft über das Skript, die Doku trägt keine eigene Zahl und zählt nicht selbst nach (die Zählung ist in test/board-korrektur.test.ts getestet)", () => {
+    assert.match(anlegen, /node scripts\/sammelticket-anlegen\.mjs harness/);
+    assert.match(anlegen, /Position laut AGENTS\.md/);
+    assert.doesNotMatch(anlegen, POSITION_EINZELN, "keine eigene Positions-Zahl im Anlegen-Abschnitt");
+    assert.doesNotMatch(anlegen, /\$N-2|--position "\$N"/, "kein Snippet, das selbst nachzählt");
   });
 
-  test("das Snippet zählt nicht selbst per jq nach (sonst driftet es von der getesteten Logik)", () => {
-    assert.doesNotMatch(anlegen, /\$N-2/);
+  test("das Skript liest die Position aus AGENTS.md per sammelticketPosition statt eine Zahl zu tragen", () => {
+    const skript = lies("scripts/sammelticket-anlegen.mjs");
+    assert.match(skript, /sammelticketPosition\(readFileSync\(new URL\("\.\.\/AGENTS\.md"/);
+    assert.doesNotMatch(skript, POSITION_EINZELN);
+    assert.doesNotMatch(lies("scripts/board-takt.mjs"), POSITION_EINZELN);
+    assert.doesNotMatch(lies("scripts/board-place.mjs"), POSITION_EINZELN);
+  });
+
+  test("der Skill kubernia legt beim Claim eines Sammeltickets den Nachfolger über das Skript an", () => {
+    assert.match(lies(".claude/skills/kubernia/SKILL.md"), /node scripts\/sammelticket-anlegen\.mjs harness --vorgaenger/);
+  });
+
+  test("AGENTS.md verweist für das Anlegen auf das Skript", () => {
+    assert.match(agents, /sammelticket-anlegen\.mjs harness/);
   });
 
   test("der Workflow doppelt die Zahl nicht, sondern verweist auf AGENTS.md", () => {

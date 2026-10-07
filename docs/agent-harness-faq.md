@@ -83,12 +83,24 @@ Das ist ein bekannter Reibungspunkt des Auto-Mode-Classifiers (nicht des Repos):
 
 ## Windows und Git-Bash: was geht beim Skripten verloren?
 
-- **Backslashes** in Heredocs ohne Anführungszeichen am Delimiter und in `node -e`/`python -c`-Einzeilern werden verschluckt oder umgedeutet (`\s` wird zu `s`, `\n` zu einem echten Umbruch). Ein Regex oder Template-String mit Escapes kommt dann kaputt in der Datei an, ohne Fehlermeldung.
-- **Abhilfe:** mehrzeilige Änderungen mit `\n`/Regex per Edit-Werkzeug machen, nicht per Skript. Muss es ein Skript sein: per Write in den Scratchpad schreiben und dann ausführen; ein Heredoc nur als `<<'EOF'` und danach die Datei gegenlesen.
+- **Backslashes** in Heredocs und in `node -e`/`python -c`-Einzeilern werden verschluckt oder umgedeutet (`\s` wird zu `s`, `\n` zu einem echten Umbruch, `\\` wird zu `\`). Das trifft auch Heredocs mit Anführungszeichen am Delimiter (`<<'EOF'`): der Bash-Wrapper des Tool-Aufrufs halbiert `\` auch dort, bei Skripten mit Regex oder Escapes bricht der Aufruf mit „unexpected EOF“ ab oder legt die Datei kaputt an, ohne Fehlermeldung.
+- **Abhilfe:** Änderungen mit `\n`/Regex/Escapes per Edit-Werkzeug machen, nicht per Skript. Muss es ein Skript sein: **immer per Write-Werkzeug** in den Scratchpad schreiben und dann ausführen (ein `<<'EOF'` schützt nicht, s.o.), danach das Ergebnis gegenlesen.
+- **Python schreibt unter Windows CRLF:** `open(p, "w")` wandelt `\n` in `\r\n`, jede Zeile der Datei ändert sich, der Diff wird zum Volldiff. Mit `open(p, encoding="utf-8", newline="")` lesen und schreiben (oder im Binärmodus); das gilt auch für Plugin-Dateien außerhalb des Repos ([Hook-Patch pflegen](langfuse-hook-patch.md#nach-einem-plugin-update)). Node mit `readFileSync`/`writeFileSync` ändert nichts an den Zeilenenden, solange der Text nicht per Regex normalisiert wird.
 - **MSYS-Pfadumwandlung:** `git show origin/main:.claude/agents/x.md` scheitert in Git-Bash (`ambiguous argument 'origin\main;…'`). Abhilfe: `MSYS_NO_PATHCONV=1 git show origin/main:<pfad>` oder das PowerShell-Tool.
 
 - **„unexpected EOF while looking for matching `'`“ bei einem großen Heredoc** (z.B. `gh issue comment --body-file - <<'EOF'` mit Anführungszeichen und Apostrophen im Text): der Fehler kommt aus der Shell bzw. dem Tool-Wrapper, nicht aus dem Bash-Guard (`parseBash` zerlegt solche Befehle, Regressionstest in `test/harness/bash-parser.test.ts`). Ausweg: den Text per Write-Werkzeug in den Scratchpad schreiben (`kommentar-body.txt`) und per `gh issue comment <nr> --body-file <pfad>` bzw. ein Skript per Write ablegen und ausführen.
 - **Write verweigert einen Dateinamen mit „report“, „summary“, „findings“ oder „analysis“ (`.md`):** die Sperre stammt aus der eingebauten Subagenten-Anweisung von Claude Code („keine report/summary/findings/analysis-.md-Dateien schreiben“), nicht aus einem Repo-Hook (ein `grep` in `scripts/` und `.claude/` findet nichts). Sie trifft vor allem Umsetzer-Subagenten. Ausweg: einen neutralen Namen (`kommentar-body.txt`) im Scratchpad und `gh issue comment <nr> --body-file <pfad>`; das Ergebnis gehört ohnehin in PR-Text, Kommentar oder die letzte Nachricht, nicht in eine Datei.
+
+## Wie fahre ich einen Probe-Lauf und warte auf sein Ergebnis?
+
+Für Belege, die einen echten Lauf brauchen (Langfuse-Erfassung, Hook-Verhalten in einem Subagenten):
+
+- **Aufruf:** `claude -p --allowedTools "Agent,SendMessage" "<auftrag>"` statt Bypass-Modus: den lehnt der Auto-Mode ab, und für eine Probe mit Subagent genügen diese zwei Tools. Das Ergebnis per `--output-format json` oder Umleitung in eine Datei im Scratchpad schreiben lassen.
+- **Warten:** nie mit einem Hintergrund-`Monitor`, der `sleep` aufruft: er funktioniert nicht, und ein Hintergrund-Task hält den eigenen Lauf nicht offen (die Laufzeit erzwingt dann die Übergabe). Stattdessen eine Vordergrund-Schleife mit Timeout auf die Zieldatei, z.B. `timeout 590 bash -c 'until [ -s <ziel> ]; do sleep 10; done'` mit Tool-Timeout 600000. Ist die Datei nach dem Timeout noch leer, dieselbe Schleife höchstens noch einmal, danach melden statt endlos zu warten.
+
+## Wirkt ein Hook im Subagent-Frontmatter auch headless?
+
+Ja. Ein `hooks:`-Block (z.B. `PreToolUse`) im Frontmatter eines Subagenten (`.claude/agents/kubernia-lens.md`) feuert auch in `claude -p`, und nur für diesen Subagenten: Hauptagent und andere Subagenten sind nicht betroffen. Schnappschuss (Claude Code 2.1.292, Probe aus PR #1388): Session `1855bfb5-2d5b-40cf-8f1f-daf2081ad0b2` (Edit im Feature-Worktree vom Hook abgelehnt) und `790dd82d-441d-4ff0-96a2-93bfb8f7ea86` (Edit im Lens-Worktree erlaubt). Bei einer neuen Claude-Code-Version gilt der Beleg nicht automatisch weiter; Probe wiederholen, wenn eine Regel daran hängt.
 
 ## Wie belege ich live, dass `deny` auf `SubagentHandback` wirkt?
 

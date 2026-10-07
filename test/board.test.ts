@@ -316,12 +316,24 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     expect(nummern([status(8), b(9, { state: "closed" }), langfuse(2)]), "geschlossene Items zählen nicht").toEqual([2]);
   });
 
-  test("Kopf-Marker stehen wörtlich in den Inbox-Workflows (keine stille Drift)", () => {
-    const M = rawLib as unknown as { KOPF_MARKER: string[]; istKopfItem: (i: { title: string }) => boolean; kopfEnde: (items: B[]) => number; imKopf: (items: B[], nr: number) => boolean };
-    const wf = [".github/workflows/ci.yml", ".github/workflows/dependabot-inbox.yml", ".github/workflows/forum-inbox.yml"]
-      .map((f) => readFileSync(new URL(`../${f}`, import.meta.url), "utf8"))
-      .join("\n");
-    for (const marker of M.KOPF_MARKER) expect(wf, marker).toContain(`marker="${marker}`);
+  test("Notfall-Marker stehen wörtlich in ihrer Quelle (Inbox-Workflow bzw. Doku): keine stille Drift (#1390 Z6a)", () => {
+    const M = rawLib as unknown as {
+      NOTFAELLE: { art: string; marker: string; quelle: string }[];
+      NOTFALL_ARTEN: string[];
+      KOPF_MARKER: string[];
+      istKopfItem: (i: { title: string }) => boolean;
+      kopfEnde: (items: B[]) => number;
+      imKopf: (items: B[], nr: number) => boolean;
+    };
+    expect(M.NOTFALL_ARTEN).toEqual(["rot-main", "security", "dependabot", "forum"]);
+    expect(M.KOPF_MARKER).toEqual(M.NOTFAELLE.map((n) => n.marker));
+    for (const n of M.NOTFAELLE) {
+      const text = readFileSync(new URL(`../${n.quelle}`, import.meta.url), "utf8");
+      // Workflows setzen den Titel als marker="…", die Doku nennt den Marker wörtlich.
+      expect(text, `${n.art}: ${n.marker} in ${n.quelle}`).toContain(n.quelle.endsWith(".yml") ? `marker="${n.marker}` : n.marker);
+    }
+    expect(M.istKopfItem({ title: "🔒 Security: Lücke in X" }), "Security zählt zum Kopf").toBe(true);
+    expect(M.kopfEnde([b(1, { title: "🔒 Security: Lücke" }), b(2, { title: "Langfuse-Status überprüfen" }), b(3)])).toBe(2);
     expect(M.istKopfItem({ title: "Harness-Härtung (gesammelt)" })).toBe(false);
     expect(M.istKopfItem({ title: "Langfuse-Status überprüfen" })).toBe(true);
     expect(M.kopfEnde([b(1), b(2)])).toBe(0);

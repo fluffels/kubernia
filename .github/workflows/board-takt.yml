@@ -1,0 +1,47 @@
+name: Board-Takt (Status-Ticket, Sammelticket)
+
+# Generischer Board-Takt (#1390, zuvor „Langfuse-Takt“ #1351/#1349, ADR 0016). Statt an einer driftenden Board-Position hängt der Takt
+# an der Zeit und an der Aktivität.
+# 1. Status-Ticket „Langfuse-Status überprüfen“: montags legt dieser Lauf das Ticket an (wenn seit dem letzten Abschluss
+#    mindestens 5 Commits auf main liegen) bzw. schiebt ein offenes ungeclaimtes an die Spitze des Boards; ein Push auf main tut
+#    dasselbe, sobald seit dem letzten Abschluss mindestens 8 Ticket-Merges (ohne Bots) dazukamen.
+# 2. Harness-Sammelticket „Harness-Härtung (gesammelt)“: nach 5 Ticket-Merges seit dem Abschluss des letzten holt derselbe Lauf das
+#    ungeclaimte hinter den Kopf (#1349). Außerdem schiebt er es bei jedem Lauf auf die Position laut AGENTS.md zurück, wenn es
+#    dahinter steht (Selbstkorrektur, nur nach vorn, nie in den Kopf).
+# Die Entscheidungen stehen in scripts/board-takt.mjs und scripts/langfuse-takt.mjs (pur, getestet, idempotent: kein gespeicherter
+# Zähler, jedes Mal aus offenen Issues, Commit-Liste und Board-Liste abgeleitet).
+#
+# Die Concurrency-Group serialisiert gleichzeitige Auslösungen (Cron + Dispatch): der zweite Lauf wartet und
+# sieht dann das Ticket des ersten, legt also nie ein zweites an. Braucht wie die Inbox-Workflows das Secret
+# PROJECT_TOKEN (PAT mit project-Scope); fehlt es, wird nur gewarnt.
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: board-takt
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  takt:
+    name: "Board-Takt: Status-Ticket und Sammelticket"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Status-Ticket und Harness-Sammelticket pflegen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+        run: node scripts/board-takt.mjs
