@@ -8,6 +8,8 @@
  * `festgefahren` und `entscheidung-noetig` ist ein offener PR gewollt. Jeder Fehler (kein gh, kein Netz, keine
  * Nachricht) gibt frei: ein kaputter Wächter darf den Umsetzer nie festhalten.
  *
+ * Grenze: die Wirkung von `deny` auf `SubagentHandback` ist live nicht belegt (eine `claude -p`-Probe hat das Tool nicht);
+ * der Matcher ist wirkungslos, wenn er nie feuert, und R1 bis R3 gelten über `SubagentStop` ohnehin.
  * Zwei Abfangpunkte (#1342): `PreToolUse` auf `SubagentHandback` (vor der Zustellung, hier gilt zusätzlich die
  * Formatprüfung R0) und `SubagentStop` (nach der Zustellung, Nachricht aus dem Transkript). Neu: `festgefahren`
  * bei offenem PR geht nur mit dem Label `status:festgefahren` durch (R3).
@@ -46,9 +48,12 @@ export function prNummer(pr) {
   return m ? m[1] : null;
 }
 
+/** `--json`-Felder von `gh pr view`; `labels` braucht R3 (der Test bindet die Liste). */
+export const PR_FELDER = "state,autoMergeRequest,labels";
+
 /** Standard-`prStatus`: `gh pr view <nr> --json state,autoMergeRequest,labels`; wirft bei jedem Fehler. */
 export function ghPrStatus(nummer) {
-  const out = execFileSync("gh", ["pr", "view", nummer, "--json", "state,autoMergeRequest,labels"], {
+  const out = execFileSync("gh", ["pr", "view", nummer, "--json", PR_FELDER], {
     encoding: "utf8",
     timeout: 20000,
     windowsHide: true,

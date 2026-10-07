@@ -25,6 +25,7 @@ const abschluss = abschlussRaw as unknown as {
   abschlussBlockade: (i: Eingabe, d?: { prStatus?: (nr: string) => Status }) => string | null;
   parseErgebnis: (t: string) => { token: string | null; zusatz: string | null; pr: string | null };
   ERGEBNIS_WERTE: string[];
+  PR_FELDER: string;
   parseAbschlussInput: (t: string, r?: (p: string) => string | null) => Eingabe;
   letzteNachrichtAusTranskript: (p: string) => string | null;
 };
@@ -245,6 +246,9 @@ describe("R3: festgefahren bei offenem PR nur mit Label (#1342)", () => {
     assert.ok(readFileSync(resolve(ROOT, "scripts/umsetzer-abschluss.mjs"), "utf8").includes(`"${label}"`), "umsetzer-abschluss nutzt dasselbe Label");
     const format = /^ERGEBNIS: (.+)$/m.exec(abschnitt(UMSETZER, /^## Letzte Nachricht/).split("```")[1])?.[1].split(" | ");
     assert.deepEqual(abschluss.ERGEBNIS_WERTE, format);
+    // gh pr view muss die Felder liefern, die R1 bis R3 lesen; fehlte `labels`, verweigerte R3 jedes festgefahren (alle Tests injizieren prStatus).
+    assert.deepEqual([...abschluss.PR_FELDER.split(",")].sort(), ["autoMergeRequest", "labels", "state"]);
+    assert.match(readFileSync(resolve(ROOT, "scripts/umsetzer-abschluss.mjs"), "utf8"), /"--json", PR_FELDER/);
   });
 });
 
@@ -288,6 +292,13 @@ describe("Transkript-Fallback des Abschluss-Wächters (#1331)", () => {
     assert.equal(lies(datei([text("ERGEBNIS: abgebrochen"), handback("ERGEBNIS: gemergt")])), "ERGEBNIS: gemergt");
     assert.equal(lies(datei([handback("ERGEBNIS: gemergt"), text("ERGEBNIS: festgefahren")])), "ERGEBNIS: festgefahren");
     assert.equal(lies(datei([zeile("assistant", [{ type: "tool_use", name: "Bash", input: { message: "ERGEBNIS: gemergt" } }])])), null, "nur SubagentHandback zählt");
+    // dieselbe Assistant-Zeile: der spätere Block gewinnt, in beide Richtungen
+    const block = [
+      { type: "text", text: "ERGEBNIS: abgebrochen" },
+      { type: "tool_use", name: "SubagentHandback", input: { message: "ERGEBNIS: gemergt" } },
+    ];
+    assert.equal(lies(datei([zeile("assistant", block)])), "ERGEBNIS: gemergt");
+    assert.equal(lies(datei([zeile("assistant", [...block].reverse())])), "ERGEBNIS: abgebrochen");
   });
 
   test("fehlende Datei oder kein Bericht ergeben null (fail-open)", () => {

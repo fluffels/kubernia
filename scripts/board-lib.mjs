@@ -57,13 +57,17 @@ export function sammelticketItem(items, ohne = []) {
 }
 
 /**
- * Der Vorderblock des Boards: die ungeclaimten Sammeltickets (alle Titel aus `SAMMELTICKET_TITEL_LISTE`), die vor dem ersten
- * offenen, ungeclaimten Nicht-Sammelticket stehen. Geschlossene, geclaimte und gerade einsortierte (`ohne`) Items überspringt
- * der Block, sie beenden ihn nicht. In Board-Reihenfolge. Pur.
+ * Der Sammelblock des Boards: die ungeclaimten Sammeltickets (alle Titel aus `SAMMELTICKET_TITEL_LISTE`), die ab dem ungeclaimten
+ * Harness-Sammelticket bis zum nächsten offenen, ungeclaimten Nicht-Sammelticket aufeinander folgen. Ohne ungeclaimtes
+ * Harness-Sammelticket beginnt der Block an der Spitze. Ein Status- oder Notfall-Ticket DAVOR (die stehen regelkonform oben)
+ * stört ihn so nicht. Geschlossene, geclaimte und gerade einsortierte (`ohne`) Items überspringt der Block, sie beenden ihn nicht.
+ * In Board-Reihenfolge. Pur.
  */
-export function vorderblockSammeltickets(items, ohne = []) {
+export function sammelblock(items, ohne = []) {
+  const harness = sammelticketItem(items, ohne);
+  const start = harness ? items.findIndex((i) => i.id === harness.id) : 0;
   const block = [];
-  for (const i of items) {
+  for (const i of items.slice(start)) {
     if (i.state !== "open" || !ungeclaimt(i) || ohne.includes(i.number)) continue;
     if (!SAMMELTICKET_TITEL_LISTE.includes(i.title)) break;
     block.push(i);
@@ -74,7 +78,7 @@ export function vorderblockSammeltickets(items, ohne = []) {
 /**
  * Neue Tickets landen nie VOR den ungeclaimten Sammeltickets (sonst rücken sie nicht nach vorn): der Klemm-Anker ist das am
  * weitesten hinten stehende von (a) dem ungeclaimten Harness-Sammelticket, wo es auch steht, und (b) den ungeclaimten
- * Sammeltickets im Vorderblock (`vorderblockSammeltickets`). Ist der Anker `null` (Spitze) oder steht er im Board davor, wird
+ * Sammeltickets im Sammelblock (`sammelblock`). Ist der Anker `null` (Spitze) oder steht er im Board davor, wird
  * dieser Anker genommen. Der Anker selbst, alles dahinter, ein Anker außerhalb der Liste (meldet der Aufrufer), ein Board ohne
  * ungeclaimtes Sammelticket und `notfall` bleiben unverändert. Das Sammelticket selbst klemmt nicht (es steht in `numbers`).
  * Liefert `{ anker, geklemmt, sammelticket }`. Pur.
@@ -82,7 +86,7 @@ export function vorderblockSammeltickets(items, ohne = []) {
 export function klemmeAnker(items, ankerNr, { numbers = [], notfall = false } = {}) {
   const unveraendert = { anker: ankerNr, geklemmt: false, sammelticket: null };
   if (notfall) return unveraendert;
-  const kandidaten = [sammelticketItem(items, numbers), ...vorderblockSammeltickets(items, numbers)].filter(Boolean);
+  const kandidaten = [sammelticketItem(items, numbers), ...sammelblock(items, numbers)].filter(Boolean);
   if (kandidaten.length === 0) return unveraendert;
   const idx = (item) => items.findIndex((i) => i.id === item.id);
   const ziel = kandidaten.reduce((hinten, k) => (idx(k) > idx(hinten) ? k : hinten));
