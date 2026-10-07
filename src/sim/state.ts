@@ -223,6 +223,12 @@ export const EXTERNAL_NAME_TYPE = "ExternalName";
 export function isExternalNameService(svc: { type?: string }): boolean {
   return svc.type === EXTERNAL_NAME_TYPE;
 }
+/** Der einzige Namespace, den die Sim modelliert. */
+export const DEFAULT_NAMESPACE = "default";
+/** Vergibt der Service-Typ einen NodePort (LoadBalancer | NodePort)? Ausschließlich hierüber abfragen, nicht den Typ-String vergleichen. */
+export function allocatesNodePort(svc: { type?: string }): boolean {
+  return svc.type === "LoadBalancer" || svc.type === "NodePort";
+}
 /** Ingress: leitet eine Außen-Adresse (host/pfad) an einen Service im Cluster. */
 export interface IngressRes {
   name: string;
@@ -382,7 +388,7 @@ export interface CiDeploy {
 /** Soll-Zustand einer Argo-Application: was die Manifeste im „Git"-Repo deklarieren. */
 export interface ArgoDesired {
   deployment: { name: string; image: string; replicas: number };
-  service?: { name: string; type?: string; port: string | number };
+  service?: ServiceSpec;
 }
 /** Eine Kind-Application im App-of-Apps-Muster: was im `flotte/`-Ordner liegt und von
  *  der Wurzel-Application beim Sync angelegt wird. Jede ist selbst eine ganz normale
@@ -391,7 +397,7 @@ export interface ArgoChildSpec {
   name: string;
   path?: string;       // Pfad im Repo (Default: <name>/)
   deployment: { name: string; image: string; replicas: number };
-  service?: { name: string; type?: string; port: string | number };
+  service?: ServiceSpec;
 }
 /** Eine von Argo CD verwaltete Application – das Herzstück von GitOps.
  *  Argo vergleicht den im Git deklarierten Soll-Zustand (`desired`) laufend mit dem
@@ -428,7 +434,7 @@ export interface ApplyEffect {
   networkPolicy?: { name: string; podSelector?: string; allowFrom?: string };
   // Eine Argo-Application-CRD: legt beim `kubectl apply -f` eine Argo-App im Sim-State an.
   // `childApps` macht sie zur App-of-Apps-Wurzel (verwaltet nur weitere Applications, kein eigenes Deployment).
-  application?: { name: string; repo?: string; path?: string; autoSync?: boolean; selfHeal?: boolean; deployment?: { name: string; image: string; replicas: number }; service?: { name: string; type?: string; port: string | number }; childApps?: ArgoChildSpec[] };
+  application?: { name: string; repo?: string; path?: string; autoSync?: boolean; selfHeal?: boolean; deployment?: { name: string; image: string; replicas: number }; service?: ServiceSpec; childApps?: ArgoChildSpec[] };
   // Observability-CRDs (#110): vom `kubectl apply -f` der Monitoring-Manifeste angelegt.
   serviceMonitor?: { name: string; selector: string; port?: string; interval?: string };
   prometheusRule?: { name: string; alert: string; severity?: string; expr?: string; forDuration?: string };

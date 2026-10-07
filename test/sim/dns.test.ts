@@ -302,6 +302,7 @@ describe("ExternalName-Konsistenz (#1403, #1324)", () => {
     const r = sim.exec("kubectl expose deployment x --port=80 --type=ExternalName");
     expect(r.error).toBe(true);
     expect(r.output).toContain('The Service "x" is invalid: spec.externalName: Required value');
+    expect(r.output).toContain("💡 Setze spec.externalName");   // der Tipp aus InvalidSpecError erreicht die Ausgabe (#1409)
     expect(sim.services.length).toBe(before);
     expect(sim.exec("kubectl expose deployment x --port=80 --type=NodePort").error).toBe(false);
   });
@@ -313,6 +314,7 @@ describe("ExternalName-Konsistenz (#1403, #1324)", () => {
     expect(n.error).toBe(true);
     expect(n.output).toContain("NXDOMAIN");
     expect(n.output).not.toContain("<none>");
+    expect(c.error).toBe(true);
     expect(c.output).toContain("(6) Could not resolve host");
     expect(n.output).toContain("spec.externalName");
     expect(c.output).toContain("spec.externalName");
@@ -327,8 +329,16 @@ describe("ExternalName-Konsistenz (#1403, #1324)", () => {
       expect(n.output).toContain("anderer-ns");
       expect(n.output).toContain("'default'");
       const c = sim.exec("curl http://" + name);
+      expect(c.error, name).toBe(true);
       expect(c.output, name).toContain("(6) Could not resolve host");
     }
+  });
+
+  test("(c) Fallback-FQDN: ein unlesbarer Name erscheint ohne Schlusspunkt im NXDOMAIN", () => {
+    const sim = new KQSim({ services: [kasse] });
+    const n = sim.exec("nslookup kasse.default.foo");
+    expect(n.error).toBe(true);
+    expect(n.output).toContain("server can't find kasse.default.foo: NXDOMAIN");
   });
 
   test("(c) Suchpfad <svc>.<ns>.svc löst auf, kubernetes nur in default", () => {
