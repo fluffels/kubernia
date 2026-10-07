@@ -32,6 +32,7 @@ import { pathToFileURL } from "node:url";
 import { parseNachweis } from "./slice-override.mjs";
 import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { transkriptZeilen } from "./transkript.mjs";
+import { fehlerArten, wiederlesen } from "./tool-metriken.mjs";
 
 /** Lenses pro Review-Runde für Läufe ohne Runden-Marker (vor #1265 liefen immer alle drei Brillen, #1012). */
 export const LENSES_PER_ROUND = 3;
@@ -241,6 +242,8 @@ export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles
     rows: sorted,
     // Summe = das Ticket; der Nachlauf nach dem Merge wird gezeigt, aber nicht mitgezählt.
     total: totalOf(sorted.filter((r) => r.phase !== "Nachlauf")),
+    // Invariante: Σ rows = total + nachlauf (Kosten und Calls); der Nachlauf ist die einzige Differenz (#1379).
+    nachlauf: totalOf(sorted.filter((r) => r.phase === "Nachlauf")),
     hasCost: window.some((w) => w.call.cost !== undefined && w.call.cost !== null),
     reviewRounds: countReviewRounds(reviewDescriptions(ticket)),
     cacheRebuilds: countCacheRebuilds(ticket),
@@ -257,6 +260,10 @@ export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles
     // Das Ticket-Fenster besitzt dieser Ort (`fensterLage`); Marker und Brain-Kennzahlen bekommen nur Events darin.
     const recherche = sorted.filter((r) => r.phase === "Recherche");
     out.pflegeUnpaired = unpaired;
+    out.fehler = fehlerArten(imFenster);
+    out.lesen = wiederlesen(imFenster);
+    // Ein Umsetzer lief, aber kein einziger Marker: die Pflegekosten stecken in „Umsetzung“ (#1379).
+    out.pflegeFehlt = intervals.length === 0 && unpaired === 0 && ticket.some((c) => c.subagent?.agentType === "kubernia-umsetzer");
     out.brain = { ...brainMetrics(imFenster, prFiles), rechercheTokens: recherche.reduce((n, r) => n + r.input + r.cacheWrite + r.cacheRead + r.output, 0) };
   }
   return out;
@@ -585,6 +592,27 @@ function prInfo(pr) {
 
 const fmt = (n) => Math.round(n).toLocaleString("de-DE");
 
+const FEHLER_LABEL = [["hook", "Hook"], ["guard", "Guard"], ["permission", "Permission"], ["zuGross", "zu groß"], ["sonst", "sonst"]];
+
+/** Zusatzzeilen zu Tool-Fehlern, Lesen und fehlenden Pflege-Markern (#1379); nur mit Tool-Events. */
+function werkzeugZeilen(summary) {
+  const out = [];
+  if (summary.fehler) {
+    const f = summary.fehler;
+    const teile = FEHLER_LABEL.map(([k, l]) => `${l} ${f[k] ?? 0}`);
+    out.push(`Tool-Fehler: ${teile.join(" · ")} · Exit≠0 ${f.exit ?? 0} (kein Fehlersignal)`);
+  }
+  const l = summary.lesen;
+  if (l) {
+    const top = l.top.length ? ` · Top ${l.top.map((d) => `${d.datei} ${d.n}×`).join(", ")}` : "";
+    out.push(
+      `Lesen: ${l.reads} Reads (${l.abschnittsweise} abschnittsweise) · Wiederlesen voll ${l.voll.n} (≈ ${fmt(l.voll.tokens)} Tok) · gezielt ${l.gezielt.n} (≈ ${fmt(l.gezielt.tokens)} Tok)${top}`,
+    );
+  }
+  if (summary.pflegeFehlt) out.push("⚠️ Kein Pflege-Marker — Pflegekosten stecken in „Umsetzung“.");
+  return out;
+}
+
 /** Markdown-Report (Tabelle Phase × Modell + Loop-Zeile). */
 export function renderMarkdown(summary, loop = {}) {
   const cost = (v) => (summary.hasCost ? v.toFixed(2) : "–");
@@ -592,15 +620,14 @@ export function renderMarkdown(summary, loop = {}) {
     "| Phase | Modell | Calls | Input | Cache-Write | Cache-Read | Output | Kosten $ |",
     "|---|---|--:|--:|--:|--:|--:|--:|",
   ];
-  for (const r of summary.rows) {
-    lines.push(
-      `| ${r.phase} | \`${r.model}\` | ${r.calls} | ${fmt(r.input)} | ${fmt(r.cacheWrite)} | ${fmt(r.cacheRead)} | ${fmt(r.output)} | ${cost(r.cost)} |`,
-    );
-  }
+  const zeile = (r, label) =>
+    `| ${label} | \`${r.model}\` | ${r.calls} | ${fmt(r.input)} | ${fmt(r.cacheWrite)} | ${fmt(r.cacheRead)} | ${fmt(r.output)} | ${cost(r.cost)} |`;
+  for (const r of summary.rows.filter((x) => x.phase !== "Nachlauf")) lines.push(zeile(r, r.phase));
   const t = summary.total;
   lines.push(
     `| **Summe (ohne Nachlauf)** | | ${t.calls} | ${fmt(t.input)} | ${fmt(t.cacheWrite)} | ${fmt(t.cacheRead)} | ${fmt(t.output)} | ${cost(t.cost)} |`,
   );
+  for (const r of summary.rows.filter((x) => x.phase === "Nachlauf")) lines.push(zeile(r, "Nachlauf (nicht in der Summe)"));
   const ci = loop.failedPushes ?? "–";
   const merged =
     loop.mergedAt === undefined ? "–" : mergedWithoutRework(loop.mergedAt, loop.failedPushes) ? "ja" : "nein";
@@ -630,6 +657,7 @@ export function renderMarkdown(summary, loop = {}) {
       `Projekt-Brain: gelesen ${brain.brainReads}× (${brain.brainPages} Seiten, ≈ ${fmt(brain.brainReadTokens)} Tokens) · Suche ${brain.searchCalls} Calls (≈ ${fmt(brain.searchTokens)} Tokens) · Recherche-Subagenten ${fmt(brain.rechercheTokens)} Tokens · Calls bis erster Edit ${dash(brain.callsBeforeFirstEdit)} · Brain-Pflege ${brain.brainWrites} Schreibzugriffe, PR ${pr}`,
     );
   }
+  lines.push(...werkzeugZeilen(summary));
   if (summary.pflegeUnpaired > 0) lines.push(`⚠️ ${summary.pflegeUnpaired} Pflege-Marker ohne Gegenstück — Phase „Pflege“ unvollständig.`);
   lines.push(`Preise Stand ${PRICES_STAND}`);
   if (summary.unpriced > 0) lines.push(`⚠️ ${summary.unpriced} Call(s) ohne Preis (Modell nicht in PRICES oder Zeitpunkt fehlt) — Kosten unvollständig.`);
