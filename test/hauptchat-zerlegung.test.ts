@@ -353,3 +353,15 @@ describe("renderMarkdown", () => {
     assert.doesNotMatch(text, /ohne --brain/);
   });
 });
+
+describe("zerlegeHauptchat: frühester Claim über Hauptchat und Subagent", () => {
+  test("claimt zuerst ein Tiefe-1-Subagent und später der Hauptchat, beginnt das Fenster beim Subagent-Claim", () => {
+    const main = [user(0, "a"), call(1, OPUS), user(10, "b"), call(11, OPUS), user(20, "c"), call(21, OPUS, claim(7))];
+    const subagents: Sub[] = [{ meta: { agentType: "general-purpose", description: "Auswahl" }, zeilen: [call(2, SONNET, claim(7))] }];
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main, subagents }] });
+    assert.equal(r.fenster.length, 1);
+    assert.equal(r.fenster[0].startTs, iso(0));
+    assert.equal(calls(r, "Ticket-Orchestrierung", OPUS), 3);
+    assert.equal(calls(r, "Ad-hoc", OPUS), 0);
+  });
+});
