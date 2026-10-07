@@ -23,37 +23,47 @@ const LAYERS = {
 /** Phaser, egal über welchen aufgelösten Pfad (Pfad beginnt mit `node_modules/…`, kein führender Slash). */
 const PHASER = "node_modules[/\\\\]phaser[/\\\\]";
 
-/** Pfad-Muster einer Schicht aus ihren Wurzel-Namen (Datei- bzw. Verzeichnis-Segmente unter src/).
+/** Quellwurzel dieses Projekts (#1373): das Verzeichnis, unter dem der Code liegt, mit Slash am Ende. Die EINE
+ *  Stelle, an der der Ordnername steht: Muster, Globs, Regeln und Diagramm leiten daraus ab (ein fremdes Repo
+ *  setzt hier z.B. `wetter/`). */
+const QUELLWURZEL = "src/";
+
+/** Pfad-Muster einer Schicht aus ihren Wurzel-Namen (Datei- bzw. Verzeichnis-Segmente unter der Quellwurzel).
  *  Deckt je Wurzel die Einzeldatei (src/ui.ts, src/sfx.ts) UND den Modul-Ordner (src/scenes/*) ab;
  *  `nurDatei` (Einstieg/Assets) nur die Einzeldatei. */
-function musterAus(wurzeln, nurDatei) {
-  return `^src/(${wurzeln.join("|")})${nurDatei ? "\\.ts$" : "(\\.ts$|/)"}`;
+function musterAus(quellwurzel, wurzeln, nurDatei) {
+  return `^${quellwurzel}(${wurzeln.join("|")})${nurDatei ? "\\.ts$" : "(\\.ts$|/)"}`;
 }
 
 /** Schicht-Modell (#1368, #1392): die EINE Quelle für Muster, `layerOf`, `NON_DOMAIN`, Coverage-Globs, die
  *  Regeln von `check:arch` (`verbotsRegeln`) und die Diagramme (`scripts/docs-gen/schichten.mjs`):
  *  Diagramm == geprüfte Regel. Die Reihenfolge ist die Diagramm-Reihenfolge von oben nach unten. Imports
  *  innerhalb einer Schicht sind immer erlaubt; was nicht in `darf` steht, ist verboten (fail-closed).
- *  Eine Schicht besteht aus `wurzeln` (oberste Ebene unter src/; der Ist-Collapse in
+ *  `quellwurzel` ist das Code-Verzeichnis (Pflicht, `src/` hier). Eine Schicht besteht aus `wurzeln` (oberste Ebene unter der Quellwurzel; der Ist-Collapse in
  *  scripts/docs-gen/config.json verdichtet auf genau diese Ebene), `nurDatei` markiert reine Datei-Wurzeln
  *  (Einstieg/Assets, kein Modul-Ordner). `muster` wird daraus abgeleitet; `muster: null` = Auffang-Schicht
- *  (alles übrige unter src/, ohne Wurzeln), genau eine davon. `pruefeModell` prüft das Modell und läuft
+ *  (alles übrige unter der Quellwurzel, ohne Wurzeln), genau eine davon. `pruefeModell` prüft das Modell und läuft
  *  vor jeder Regelableitung. */
 const SCHICHT_MODELL = {
+  quellwurzel: QUELLWURZEL,
   schichten: [
     { id: LAYERS.ENTRY, label: "Einstieg/Assets", wurzeln: ["main", "assets-data"], nurDatei: true, darf: [LAYERS.PRESENTATION, LAYERS.APPLICATION, LAYERS.DOMAIN, "phaser"] },
     { id: LAYERS.PRESENTATION, label: "Präsentation", technik: "Phaser/DOM", wurzeln: ["scenes", "ui", "sfx"], darf: [LAYERS.ENTRY, LAYERS.APPLICATION, LAYERS.DOMAIN, "phaser"] },
     { id: LAYERS.APPLICATION, label: "Anwendung/Persistenz", wurzeln: ["game", "runtime", "devpanel", "store"], darf: [LAYERS.DOMAIN] },
     { id: LAYERS.DOMAIN, label: "pure Domäne", wurzeln: [], darf: [] },
-  ].map((s) => ({ ...s, muster: s.wurzeln.length ? musterAus(s.wurzeln, s.nurDatei === true) : null })),
+  ].map((s) => ({ ...s, muster: s.wurzeln.length ? musterAus(QUELLWURZEL, s.wurzeln, s.nurDatei === true) : null })),
   extern: [{ id: "phaser", label: "Phaser", muster: PHASER }],
 };
 
 const ID = /^[a-z][a-z0-9]*$/;
+/** Schlichte Verzeichnisnamen: Regex-Metazeichen würden die abgeleiteten Muster verfälschen. */
+const QUELLWURZEL_FORM = /^([a-z0-9][a-z0-9_-]*\/)+$/;
 
 /** Wirft bei einem unbrauchbaren Modell (alle Probleme in einer Meldung). */
 function pruefeModell(modell) {
   const probleme = [];
+  if (typeof modell?.quellwurzel !== "string" || !QUELLWURZEL_FORM.test(modell.quellwurzel))
+    probleme.push(`quellwurzel ${JSON.stringify(modell?.quellwurzel)} ungültig (Verzeichnis mit Slash am Ende, z.B. "src/")`);
   const schichten = Array.isArray(modell?.schichten) ? modell.schichten : [];
   const extern = Array.isArray(modell?.extern) ? modell.extern : [];
   if (schichten.length === 0) probleme.push("keine Schichten");
@@ -138,7 +148,7 @@ const _nd = NON_DOMAIN.join("|");
 const _ndTs = NON_DOMAIN.map((n) => `${n}.ts`).join("|");
 
 /** Glob einer Schicht mit Wurzeln: Einzeldatei UND Modul-Ordner (`{.ts,/**}`), bei reinen Datei-Wurzeln nur `.ts`. */
-const globVon = (s) => `src/{${s.wurzeln.join(",")}}${s.nurDatei ? ".ts" : "{.ts,/**}"}`;
+const globVon = (s) => `${QUELLWURZEL}{${s.wurzeln.join(",")}}${s.nurDatei ? ".ts" : "{.ts,/**}"}`;
 
 /** Glob-Form derselben Schicht-Grenzen (#495) — für Vitests Coverage-`thresholds`, deren
  *  Schlüssel Globs (picomatch), keine RegExps sind. Aus dem Modell abgeleitet (#1392), damit beide Formen
@@ -164,16 +174,16 @@ const globVon = (s) => `src/{${s.wurzeln.join(",")}}${s.nurDatei ? ".ts" : "{.ts
  *  Prüfung: `test/coverage-config.test.ts` (reale Dateien + synthetische reservierte-Präfix-Namen). */
 const COVERAGE_GLOBS = {
   ...Object.fromEntries(mitWurzeln.map((s) => [s.id, globVon(s)])),
-  [AUFFANG.id]: `src/{!(${_nd})/**,!(${_ndTs})}`,
+  [AUFFANG.id]: `${QUELLWURZEL}{!(${_nd})/**,!(${_ndTs})}`,
 };
 
 const D_TS = "\\.d\\.ts$";
 
-/** Pfad-Muster einer Schicht als dependency-cruiser-Bedingung; die Auffang-Schicht ist „src/ ohne alle anderen". */
+/** Pfad-Muster einer Schicht als dependency-cruiser-Bedingung; die Auffang-Schicht ist „Quellwurzel ohne alle anderen". */
 function bedingung(modell, ziel, alsQuelle) {
   const andere = modell.schichten.filter((s) => s.muster && s.id !== ziel.id).map((s) => s.muster);
   if (ziel.muster) return alsQuelle ? { path: ziel.muster, pathNot: D_TS } : { path: ziel.muster };
-  return { path: "^src/", pathNot: [...andere, ...(alsQuelle ? [D_TS] : [])].join("|") };
+  return { path: `^${modell.quellwurzel}`, pathNot: [...andere, ...(alsQuelle ? [D_TS] : [])].join("|") };
 }
 
 /** Verbotsregeln für dependency-cruiser: je Paar (Schicht → Schicht/Extern), das nicht in `darf` steht, eine Regel

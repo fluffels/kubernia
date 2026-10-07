@@ -41,7 +41,7 @@ import { createRequire } from "node:module";
 
 type Cond = { path?: string; pathNot?: string };
 type Regel = { name: string; from: Cond; to: Cond };
-type Modell = { schichten: { id: string; label: string; muster: string | null; wurzeln: string[]; darf: string[] }[]; extern: { id: string; label: string; muster: string }[] };
+type Modell = { quellwurzel: string; schichten: { id: string; label: string; muster: string | null; wurzeln: string[]; darf: string[] }[]; extern: { id: string; label: string; muster: string }[] };
 const req = createRequire(import.meta.url);
 const layers = req("../scripts/layers.cjs") as { SCHICHT_MODELL: Modell; verbotsRegeln: (m: Modell) => Regel[] };
 const cruiserConfig = req("../.dependency-cruiser.cjs") as { forbidden: { name: string }[] };
@@ -77,6 +77,7 @@ test("Regel-Matrix des echten Modells: verletzt genau dann, wenn die Richtung ni
 
 test("Fixture-Modell: eine neue Schicht bekommt ihre Regeln, eine gestrichene Richtung erzeugt eine Regel", () => {
   const m: Modell = {
+    quellwurzel: "src/",
     schichten: [
       { id: "oben", label: "Oben", muster: "^src/oben/", wurzeln: ["oben"], darf: ["mitte", "unten"] },
       { id: "mitte", label: "Mitte", muster: "^src/mitte/", wurzeln: ["mitte"], darf: ["unten"] },
@@ -152,3 +153,18 @@ test("echter dependency-cruiser-Lauf: die erlaubte Gegenrichtung und Domäne ←
   });
   assert.deepEqual(v, []);
 }, 60_000);
+
+test("Quellwurzel (#1373): die Regeln folgen dem Modell, nicht einem festen src/", () => {
+  const m: Modell = {
+    quellwurzel: "lib/",
+    schichten: [
+      { id: "oben", label: "Oben", muster: "^lib/oben/", wurzeln: ["oben"], darf: ["unten"] },
+      { id: "unten", label: "Unten", muster: null, wurzeln: [], darf: [] },
+    ],
+    extern: [],
+  };
+  const regeln = layers.verbotsRegeln(m);
+  assert.ok(verletzt(regeln, "lib/x/b.ts", "lib/oben/a.ts"), "Auffang-Schicht unter lib/ darf oben nicht importieren");
+  assert.ok(!verletzt(regeln, "src/x/b.ts", "lib/oben/a.ts"), "ein Pfad außerhalb der Quellwurzel ist keine Quelle");
+  assert.ok(!verletzt(regeln, "lib/oben/a.ts", "lib/x/b.ts"));
+});

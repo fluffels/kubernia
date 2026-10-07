@@ -26,7 +26,7 @@ type Gen = Record<string, (ctx: { rootDir: string; config: Cfg }) => string>;
 
 const api = docsGen as unknown as {
   parseSections: (t: string) => { sections: { name: string; startLine: number; endLine: number; indent: string }[]; errors: Err[] };
-  renderSections: (t: string, o: Record<string, string>) => string;
+  renderSections: (t: string, o: Record<string, string>, hinweis?: string) => string;
   runDocsGen: (a: { rootDir: string; config: Cfg; generators?: Gen; write?: boolean }) => Run;
   loadConfig: (rootDir?: string, pfad?: string) => Cfg;
   cli: (argv: string[], o: { rootDir: string; config?: Cfg; generators?: Gen; out: (s: string) => void; err: (s: string) => void }) => number;
@@ -377,6 +377,46 @@ describe("docs-gen CLI und Registry (#1392)", () => {
     const root = fixture({ "scripts/docs-gen/config.json": '{"markdown":["x"]}', "andere.json": '{"markdown":["y"]}' });
     assert.deepEqual(api.loadConfig(root), { markdown: ["x"] });
     assert.deepEqual(api.loadConfig(root, "andere.json"), { markdown: ["y"] });
+  });
+  test("befehl: Standard bleibt npm run docs:gen, eigener Befehl steht in Hinweiszeile und Fix-Text (#1373)", () => {
+    const eigen = { "a.md": `${S}\n<!-- Generiert von make docs – nicht von Hand ändern. -->\n\n| a |\n|---|\n| 1 |\n\n${E}\n` };
+    const ok = lauf([], eigen, { config: { ...cfg, befehl: "make docs" } });
+    assert.equal(ok.code, 0, ok.err);
+    const alt = lauf([], eigen, { config: { ...cfg, befehl: "make docs" } });
+    assert.equal(alt.code, 0);
+    // dieselbe Datei mit Standard-Befehl: veraltet, Fix nennt npm run docs:gen
+    const std = lauf([], eigen);
+    assert.equal(std.code, 1);
+    assert.match(std.err, /Fix: npm run docs:gen/);
+    // veraltet mit eigenem Befehl: Fix nennt ihn, nicht npm
+    const stale = lauf([], { "a.md": `${S}\n${E}\n` }, { config: { ...cfg, befehl: "make docs" } });
+    assert.equal(stale.code, 1);
+    assert.match(stale.err, /Fix: make docs/);
+    assert.doesNotMatch(stale.err, /npm run/);
+    // Fehlerfall (Marker): Fix-Text nennt ebenfalls den eigenen Befehl
+    const kaputt = lauf([], { "a.md": `${S}\n` }, { config: { ...cfg, befehl: "make docs" } });
+    assert.match(kaputt.err, /dann make docs/);
+    assert.doesNotMatch(kaputt.err, /npm run/);
+  });
+  test("befehl: --write schreibt die Hinweiszeile mit dem eigenen Befehl", () => {
+    const root = fixture({ "a.md": `${S}\n${E}\n` });
+    const code = api.cli(["--write"], { rootDir: root, config: { ...cfg, befehl: "make docs" }, generators: gen, out: () => undefined, err: () => undefined });
+    assert.equal(code, 0);
+    assert.match(readFileSync(join(root, "a.md"), "utf8"), /<!-- Generiert von make docs – nicht von Hand ändern\. -->/);
+  });
+  test.each([["leer", ""], ["nur Leerzeichen", "  "], ["Zahl", 5], ["Zeilenumbruch", "make\ndocs"], ["Bindestriche --", "make -- docs"], ["Kommentar-Ende", "a --> b"]])(
+    "befehl ungültig (%s): Exit 1, nichts geschrieben",
+    (_n, wert) => {
+      const root = fixture({ "a.md": `${S}\n${E}\n` });
+      const fehler: string[] = [];
+      const code = api.cli(["--write"], { rootDir: root, config: { ...cfg, befehl: wert }, generators: gen, out: () => undefined, err: (x) => fehler.push(x) });
+      assert.equal(code, 1);
+      assert.match(fehler.join(""), /befehl/);
+      assert.equal(readFileSync(join(root, "a.md"), "utf8"), `${S}\n${E}\n`);
+    },
+  );
+  test("renderSections nimmt einen eigenen Hinweis entgegen", () => {
+    assert.equal(api.renderSections(`${S}\n${E}`, { demo: "x" }, "<!-- H -->"), `${S}\n<!-- H -->\n\nx\n\n${E}`);
   });
   test("Registry: jeder Eintrag ist eine Funktion", () => {
     for (const [name, g] of Object.entries(registryApi.GENERATORS)) assert.equal(typeof g, "function", name);

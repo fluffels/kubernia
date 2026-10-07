@@ -8,7 +8,6 @@ import { join } from "node:path";
 import { MERMAID_FRONTMATTER } from "./markdown.mjs";
 
 const MIB = 1024 * 1024;
-const AUFFANG_TEXT = "alles übrige unter src/";
 
 /**
  * Lädt SCHICHT_MODELL aus der konfigurierten layers-Datei relativ zu `rootDir` und prüft es mit dem
@@ -21,6 +20,9 @@ export function ladeModell(rootDir, layersPfad) {
   if (!mod.SCHICHT_MODELL) throw new Error(`${layersPfad} exportiert kein SCHICHT_MODELL`);
   if (typeof mod.pruefeModell !== "function") throw new Error(`${layersPfad} exportiert kein pruefeModell`);
   mod.pruefeModell(mod.SCHICHT_MODELL);
+  // Fail-closed auch bei einem trivialen Prüfer der fremden Datei: ohne Quellwurzel gäbe es keine Auffang-Zuordnung.
+  const q = mod.SCHICHT_MODELL.quellwurzel;
+  if (typeof q !== "string" || !q.endsWith("/") || q === "/") throw new Error(`${layersPfad}: SCHICHT_MODELL.quellwurzel fehlt oder ist ungültig (Verzeichnis mit Slash am Ende)`);
   return mod.SCHICHT_MODELL;
 }
 
@@ -30,7 +32,7 @@ export function schichtVon(pfad, modell) {
   for (const x of modell.extern) if (new RegExp(x.muster).test(p)) return x.id;
   for (const s of modell.schichten) if (s.muster && new RegExp(s.muster).test(p)) return s.id;
   const auffang = modell.schichten.find((s) => s.muster === null);
-  return /^src\//.test(p) && auffang ? auffang.id : null;
+  return p.startsWith(modell.quellwurzel) && auffang ? auffang.id : null;
 }
 
 /** Reihenfolge-Index: Schichten in Modell-Reihenfolge, Externe dahinter. */
@@ -80,7 +82,7 @@ export function renderDiagramm(modell, kanten) {
   const zeilen = [];
   for (const s of modell.schichten) {
     const titel = s.technik ? `${s.label} · ${s.technik}` : s.label;
-    const unten = s.muster === null ? AUFFANG_TEXT : s.wurzeln.join(" · ");
+    const unten = s.muster === null ? `alles übrige unter ${modell.quellwurzel}` : s.wurzeln.join(" · ");
     zeilen.push(`  s_${s.id}["${titel}${unten ? `<br/>${unten}` : ""}"]`);
   }
   for (const x of modell.extern) zeilen.push(`  x_${x.id}{{"${x.label}"}}`);
