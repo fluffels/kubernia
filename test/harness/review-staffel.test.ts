@@ -264,6 +264,8 @@ const nenntStaffel = (s: string) =>
   /`\*\.md`/.test(s) && /Doku/.test(s) && /Delta/.test(s) && /Test-Adäquanz immer mit/.test(s) && /[Ff]ail-closed/.test(s);
 /** Verlangt ein Text, den Patch nur einmal vollständig zu lesen? */
 const liestPatchEinmal = (s: string) => /einmal\s+vollständig/i.test(s) && /kein(?:en)?\s+zweites\s+Volllesen/i.test(s);
+/** Nennt der Text den Abschnitts-Helfer (#1379), statt nur „sehr große Patches abschnittsweise“ zu verlangen? */
+const nenntAbschnittsHelfer = (s: string) => /patch-abschnitte\.mjs/.test(s);
 
 describe("Skill-Pfad und Workflow regeln die Staffel gleich (#1265)", () => {
   test("review-lenses nennt Doku-Kriterium, Delta ab Runde 2, Test-Adäquanz-Pflicht und fail-closed", () => {
@@ -280,6 +282,9 @@ describe("Skill-Pfad und Workflow regeln die Staffel gleich (#1265)", () => {
     assert.ok(liestPatchEinmal(diaet), "KONTEXT_DIAET");
     assert.ok(liestPatchEinmal(lies(SKILL)), "review-lenses/SKILL.md");
     assert.ok(liestPatchEinmal(lies(".claude/agents/kubernia-lens.md")), "kubernia-lens.md");
+    assert.ok(nenntAbschnittsHelfer(diaet), "KONTEXT_DIAET nennt patch-abschnitte.mjs nicht");
+    assert.ok(nenntAbschnittsHelfer(lies(SKILL)), "review-lenses/SKILL.md nennt patch-abschnitte.mjs nicht");
+    assert.ok(nenntAbschnittsHelfer(lies(".claude/agents/kubernia-lens.md")), "kubernia-lens.md nennt patch-abschnitte.mjs nicht");
   });
 
   test("Prädikate greifen (Red-Green)", () => {
@@ -288,6 +293,8 @@ describe("Skill-Pfad und Workflow regeln die Staffel gleich (#1265)", () => {
     assert.ok(!nenntStaffel("immer drei Lenses"));
     assert.ok(liestPatchEinmal("genau einmal vollständig lesen, danach gezielt, kein zweites Volllesen"));
     assert.ok(!liestPatchEinmal("Der Patch ist die Primärquelle."));
+    assert.ok(nenntAbschnittsHelfer("node x/scripts/patch-abschnitte.mjs <patch>"));
+    assert.ok(!nenntAbschnittsHelfer("sehr große Patches abschnittsweise, jede Zeile einmal"));
   });
 });
 

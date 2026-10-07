@@ -96,6 +96,12 @@ function textLength(content) {
   return content.reduce((n, p) => n + (p?.type === "text" && typeof p.text === "string" ? p.text.length : 0), 0);
 }
 
+/** Anfang des Ergebnistexts (Fehlerart steht im Präfix, #1379); 200 Zeichen genügen. */
+function textStart(content) {
+  const t = typeof content === "string" ? content : Array.isArray(content) ? content.map((p) => (p?.type === "text" ? p.text : "")).join("") : "";
+  return t.slice(0, 200);
+}
+
 /** Transkript → Tool-Events; `tool_use` und `tool_result` werden über die ID verknüpft. Nimmt den JSONL-Text oder die Zeilen aus `transkriptZeilen`. */
 export function toolEventsFromTranscript(textOderZeilen, agent = null) {
   const events = [];
@@ -106,12 +112,15 @@ export function toolEventsFromTranscript(textOderZeilen, agent = null) {
     if (!Array.isArray(content)) continue;
     for (const c of content) {
       if (row.type === "assistant" && c?.type === "tool_use") {
-        const ev = { ts: row.timestamp, tool: c.name, input: c.input ?? {}, resultChars: 0, agent };
+        const ev = { ts: row.timestamp, tool: c.name, input: c.input ?? {}, resultChars: 0, agent, fehler: null };
         events.push(ev);
         if (c.id) byId.set(c.id, ev);
       } else if (row.type === "user" && c?.type === "tool_result") {
         const ev = byId.get(c.tool_use_id);
-        if (ev) ev.resultChars = textLength(c.content);
+        if (ev) {
+          ev.resultChars = textLength(c.content);
+          if (c.is_error) ev.fehler = textStart(c.content) || "(ohne Text)";
+        }
       }
     }
   }
@@ -128,8 +137,9 @@ export const EINGABE_TOOLS = ["Read", "Bash", "PowerShell", ...EDIT_TOOLS];
  * verwaiste `io`-Einträge ohne Metadaten-Gegenstück entfallen.
  */
 export function mitEingabe(meta, io) {
-  const eingaben = new Map((io ?? []).map((o) => [o?.id, o?.input]));
-  return (meta ?? []).map((o) => (eingaben.has(o?.id) ? { ...o, input: eingaben.get(o.id) } : o));
+  const eingaben = new Map((io ?? []).map((o) => [o?.id, o]));
+  // `output` kommt mit, weil nur `io` den Fehlertext liefert, falls `statusMessage` fehlt (#1379).
+  return (meta ?? []).map((o) => (eingaben.has(o?.id) ? { ...o, input: eingaben.get(o.id).input, output: eingaben.get(o.id).output } : o));
 }
 
 /** Langfuse-Observations (Typ TOOL, Hook `langfuse-observability`) → Tool-Events. */
@@ -152,6 +162,7 @@ export function toolEventsFromLangfuse(observations, agentOf = () => null) {
       input: input && typeof input === "object" ? input : {},
       resultChars: Number.isFinite(len) ? len : 0,
       agent: agentOf(o) ?? null,
+      fehler: o.level === "ERROR" ? textStart(o.statusMessage ?? o.output ?? "") || "ERROR" : null,
     });
   }
   return events;
