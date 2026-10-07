@@ -64,7 +64,7 @@ describe("Einsortieren mehrerer Tickets (#1217)", () => {
 describe("Listen-Normalisierer und Abbruch-Meldung (#1239, REST #1311)", () => {
   // Form wie von `gh api --paginate --slurp users/<owner>/projectsV2/1/items?fields=<Status-ID>` geliefert (Auszug einer echten Antwort).
   const status = (name: string) => [{ data_type: "single_select", id: 358708531, name: "Status", value: { id: "f75ad846", name: { raw: name, html: name } } }];
-  const issue = (node: string, number: number, st = "Todo") => ({ id: 1, node_id: node, content_type: "Issue", content: { number, title: "T" }, fields: status(st) });
+  const issue = (node: string, number: number, st = "Todo") => ({ id: 1, node_id: node, content_type: "Issue", content: { number, title: "T", state: "open", assignees: [{ login: "fluffels" }] }, fields: status(st) });
   const echt = [
     [
       issue("PVTI_a", 12),
@@ -84,9 +84,9 @@ describe("Listen-Normalisierer und Abbruch-Meldung (#1239, REST #1311)", () => {
 
   test("normalizeItems: nur Issues, über Seiten hinweg in Board-Reihenfolge, mit node_id, Nummer und Status", () => {
     expect(N.normalizeItems(echt)).toEqual([
-      { id: "PVTI_a", number: 12, status: "Todo" },
-      { id: "PVTI_d", number: 5, status: "" },
-      { id: "PVTI_e", number: 7, status: "In Progress" },
+      { id: "PVTI_a", number: 12, status: "Todo", title: "T", assignees: ["fluffels"], state: "open" },
+      { id: "PVTI_d", number: 5, status: "", title: "", assignees: [], state: "" },
+      { id: "PVTI_e", number: 7, status: "In Progress", title: "T", assignees: ["fluffels"], state: "open" },
     ]);
   });
 
@@ -135,5 +135,92 @@ describe("Listen-Normalisierer und Abbruch-Meldung (#1239, REST #1311)", () => {
 
   test("abortMessage: andere Fehler bleiben ihre erste Zeile", () => {
     expect(N.abortMessage("HTTP 404\nzweite Zeile")).toBe("HTTP 404");
+  });
+});
+
+describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
+  const TITEL = "Harness-Härtung (gesammelt)";
+  type B = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
+  const b = (number: number, extra: Partial<B> = {}): B => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open", ...extra });
+  const sammel = (number: number, extra: Partial<B> = {}) => b(number, { title: TITEL, ...extra });
+  const K = rawLib as unknown as {
+    sammelticketItem: (items: B[], ohne?: number[]) => B | null;
+    klemmeAnker: (items: B[], anker: number | null, o?: { numbers?: number[]; notfall?: boolean }) => { anker: number | null; geklemmt: boolean; sammelticket: number | null };
+    normalizeItems: (raw: unknown) => B[];
+    SAMMELTICKET_TITEL: string;
+  };
+  // Board-Reihenfolge: 10, 11, 12, Sammelticket 13 (Position 4), 14, 15
+  const board3 = [b(10), b(11), b(12), sammel(13), b(14), b(15)];
+
+  test("sammelticketItem: offen, ohne Assignee, richtiger Titel; geclaimt, geschlossen oder gerade einsortiert zählt nicht", () => {
+    expect(K.SAMMELTICKET_TITEL).toBe(TITEL);
+    expect(K.sammelticketItem(board3)?.number).toBe(13);
+    expect(K.sammelticketItem([b(10), sammel(13, { assignees: ["fluffels"] })])).toBeNull();
+    expect(K.sammelticketItem([b(10), sammel(13, { state: "closed" })])).toBeNull();
+    expect(K.sammelticketItem(board3, [13])).toBeNull();
+    expect(K.sammelticketItem([b(10, { title: "Harness-Härtung" })])).toBeNull();
+    expect(K.sammelticketItem([sammel(7, { assignees: ["x"] }), sammel(8)])?.number).toBe(8);
+    expect(K.sammelticketItem([])).toBeNull();
+  });
+
+  test("--top ohne Notfall wird hinter das Sammelticket geklemmt, mit Notfall bleibt es ganz oben", () => {
+    expect(K.klemmeAnker(board3, null)).toEqual({ anker: 13, geklemmt: true, sammelticket: 13 });
+    expect(K.klemmeAnker(board3, null, { notfall: true })).toEqual({ anker: null, geklemmt: false, sammelticket: null });
+  });
+
+  test("--after: Anker über dem Sammelticket wird geklemmt, Anker gleich oder darunter bleibt", () => {
+    expect(K.klemmeAnker(board3, 11)).toMatchObject({ anker: 13, geklemmt: true });
+    expect(K.klemmeAnker(board3, 12)).toMatchObject({ anker: 13, geklemmt: true });
+    expect(K.klemmeAnker(board3, 13)).toEqual({ anker: 13, geklemmt: false, sammelticket: null });
+    expect(K.klemmeAnker(board3, 14)).toEqual({ anker: 14, geklemmt: false, sammelticket: null });
+    expect(K.klemmeAnker(board3, 99)).toEqual({ anker: 99, geklemmt: false, sammelticket: null }); // unbekannter Anker: der Aufrufer meldet ihn
+  });
+
+  test("--position: bis zur Position des Sammeltickets geklemmt, dahinter nicht; das Sammelticket selbst klemmt nicht", () => {
+    const anker = (n: number, nr: number) => N2.ankerNummerFuerPosition(board3, n, nr);
+    const N2 = rawLib as unknown as { ankerNummerFuerPosition: (items: B[], n: number, ohne?: number | null) => number | null };
+    for (const n of [1, 2, 3, 4]) expect(K.klemmeAnker(board3, anker(n, 99), { numbers: [99] }), `Position ${n}`).toMatchObject({ anker: 13, geklemmt: true });
+    expect(K.klemmeAnker(board3, anker(5, 99), { numbers: [99] })).toMatchObject({ anker: 13, geklemmt: false }); // Anker = Sammelticket selbst: schon dahinter
+    expect(K.klemmeAnker(board3, anker(6, 99), { numbers: [99] })).toMatchObject({ anker: 14, geklemmt: false });
+    // das Sammelticket auf Position 4: nicht geklemmt (steht in numbers)
+    expect(K.klemmeAnker(board3, anker(4, 13), { numbers: [13] })).toEqual({ anker: 12, geklemmt: false, sammelticket: null });
+  });
+
+  test("ohne ungeclaimtes Sammelticket keine Klemmung (geclaimt, geschlossen, nicht vorhanden)", () => {
+    const geclaimt = [b(10), sammel(13, { assignees: ["fluffels"] }), b(14)];
+    expect(K.klemmeAnker(geclaimt, null)).toEqual({ anker: null, geklemmt: false, sammelticket: null });
+    expect(K.klemmeAnker([b(10), sammel(13, { state: "closed" })], null).geklemmt).toBe(false);
+    expect(K.klemmeAnker([b(10), b(11)], null).geklemmt).toBe(false);
+    expect(K.klemmeAnker([], null).geklemmt).toBe(false);
+  });
+
+  test("Klemmung im Zusammenspiel mit planPlacements: neue Tickets hängen hinter dem Sammelticket, in Reihenfolge", () => {
+    const neu = [...board3, b(20), b(21)];
+    const k = K.klemmeAnker(neu, null, { numbers: [20, 21] });
+    const plan = L.planPlacements(neu, [20, 21], k.anker);
+    expect(plan.steps.map((s) => [s.item.number, s.afterId])).toEqual([[20, "I13"], [21, "I20"]]);
+  });
+
+  test("normalizeItems liefert Titel, Assignee-Logins und Zustand (Form einer echten REST-Antwort)", () => {
+    const echt = [[{ node_id: "PVTI_x", content_type: "Issue", content: { number: 1331, title: TITEL, state: "open", assignees: [{ login: "fluffels", id: 1 }, null, { id: 2 }] }, fields: [] }]];
+    expect(K.normalizeItems(echt)).toEqual([{ id: "PVTI_x", number: 1331, status: "", title: TITEL, assignees: ["fluffels"], state: "open" }]);
+    const roh = [[{ node_id: "PVTI_y", content_type: "Issue", content: { number: 2, title: 5, assignees: "x" }, fields: [] }]];
+    expect(K.normalizeItems(roh)).toEqual([{ id: "PVTI_y", number: 2, status: "", title: "", assignees: [], state: "" }]);
+  });
+
+  test("Argumente: --notfall nur mit --top und mit bekannter Art", () => {
+    expect(P.parseArgs(["--notfall", "rot-main", "--top", "5"])).toEqual({ anchor: null, numbers: [5], dry: false, notfall: "rot-main" });
+    expect(P.parseArgs(["--top", "5", "--notfall", "security"])).toMatchObject({ notfall: "security", numbers: [5] });
+    for (const art of ["rot-main", "security", "dependabot", "forum"]) expect(P.parseArgs(["--notfall", art, "--top", "1"])).toMatchObject({ notfall: art });
+    expect(P.parseArgs(["--top", "5"])).not.toHaveProperty("notfall");
+    for (const bad of [
+      ["--notfall", "egal", "--top", "5"], // unbekannte Art
+      ["--notfall", "--top", "5"], // Art fehlt
+      ["--notfall", "forum"], // ohne --top
+      ["--notfall", "forum", "--after", "1", "2"], // nur mit --top
+      ["--notfall", "forum", "--position", "4", "5"],
+      ["--notfall", "forum", "--missing"],
+    ])
+      expect(P.parseArgs(bad), bad.join(" ")).toBeNull();
   });
 });
