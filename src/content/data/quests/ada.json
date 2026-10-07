@@ -26,20 +26,6 @@
             "ingress.yaml": "ingress-hafentor"
           },
           "applyEffects": {
-            "deployment.yaml": {
-              "deployment": {
-                "name": "lager",
-                "image": "redis:7",
-                "replicas": 2,
-                "containerPort": 6379
-              }
-            },
-            "service.yaml": {
-              "service": {
-                "name": "lager",
-                "port": 6379
-              }
-            },
             "ingress.yaml": {
               "ingress": {
                 "name": "hafentor",
@@ -1244,9 +1230,6 @@
           "services": [{ "name": "kasse", "type": "ClusterIP", "clusterIP": "10.96.0.50", "port": 80 }],
           "manifests": {
             "externalname.yaml": "service-externalname-bank"
-          },
-          "applyEffects": {
-            "externalname.yaml": { "service": { "name": "bank-extern", "type": "ExternalName", "externalName": "api.bank.example.com", "port": "" } }
           }
         },
         "lines": [

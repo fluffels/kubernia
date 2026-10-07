@@ -41,7 +41,7 @@ function cases(): [string, string, ApplyEffect][] {
 describe("Parser + Mapper == hinterlegter Effekt (Quests)", () => {
   const all = cases();
   it("es gibt Quest-Dateien zu prüfen", () => {
-    expect(all.length).toBeGreaterThanOrEqual(10);
+    expect(all.length).toBeGreaterThanOrEqual(5);
   });
   it.each(all)("%s", (_n, text, eff) => {
     const mapped = effectsFromManifest(text, "datei.yaml");
@@ -59,7 +59,7 @@ function drillCases(): [string, string, string, ApplyEffect][] {
       for (const [file, eff] of Object.entries(sim.applyEffects)) {
         const keys = Object.keys(eff);
         const text = sim.files[file];
-        if (keys.length === 1 && (keys[0] === "deployment" || keys[0] === "service") && text !== undefined) out.push([id, file, text, eff]);
+        if (keys.length === 1 && (keys[0] === "deployment" || keys[0] === "service") && text !== undefined && !out.some(c => c[0] === id && c[2] === text)) out.push([id, file, text, eff]);
       }
     }
   }
@@ -85,5 +85,20 @@ describe("renamedManifest", () => {
   });
   it("bricht laut ab, wenn ein Quell-Token fehlt", () => {
     expect(() => renamedManifest("deployment-werft-dienst", { "gibt-es-nicht": "y" })).toThrow(/gibt-es-nicht/);
+  });
+});
+
+describe("Sonderfeld-Quelle: initContainer-Effekte tragen fillsMi (sonst würde die Füllmenge still 0)", () => {
+  it("jeder hinterlegte initContainer in Quests und Drills hat ein numerisches fillsMi", () => {
+    const effs: ApplyEffect[] = [];
+    for (const q of KQContent.QUESTS) for (const s of q.steps) effs.push(...Object.values(s.scenario?.applyEffects ?? {}));
+    for (const id of Object.keys(KQContent.DRILLS)) {
+      const sim = freshSim();
+      KQContent.DRILLS[id](sim);
+      effs.push(...Object.values(sim.applyEffects));
+    }
+    const withInit = effs.filter(e => e.deployment?.initContainer);
+    expect(withInit.length).toBeGreaterThan(0);
+    for (const e of withInit) expect(typeof e.deployment!.initContainer!.fillsMi).toBe("number");
   });
 });

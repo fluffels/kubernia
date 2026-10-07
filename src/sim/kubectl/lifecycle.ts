@@ -18,7 +18,7 @@ import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { sameRbac } from "../rbac";
 import { flagValue, multiFlag } from "../util"; // clusterIP entfällt: Service läuft jetzt über host._makeService (#507)
 import { admitPod } from "./security";
-import { fileEffects } from "../manifest/registry";
+import { fileEffects, type ManifestVerb } from "../manifest/registry";
 import type { KubectlHost } from "./host";
 
 /** #489: Lehnt einen vom Spieler getippten Ressourcennamen ab, wenn er die DNS-1123-Regel
@@ -246,16 +246,23 @@ const FILE_DELETABLE: readonly {
   { pick: e => e.volumeSnapshot, remove: (h, n) => spliceByName(h.volumeSnapshots, n), msg: n => 'volumesnapshot.snapshot.storage.k8s.io "' + n + '" deleted' },
 ];
 
+/** Gemeinsamer Vorspann von `apply -f` und `delete -f`: die Datei lesen und zu Effekten auflösen.
+ *  Der Dateiinhalt hat Vorrang (Mapper-Kinds); der hinterlegte Effekt dient als Rückfall und für
+ *  Sim-Sonderfelder (#1299). Ein String ist die fertige Fehlerausgabe. */
+function effectsOfFile(host: KubectlHost, file: string, verb: ManifestVerb): ApplyEffect[] | string {
+  const content = host.files[file];
+  if (typeof content !== "string") return host._err("error: the path \"" + file + "\" does not exist", "Mit 'ls' siehst du, welche Dateien hier liegen.");
+  const effects = fileEffects(host.applyEffects[file], content, file, verb);
+  return Array.isArray(effects) ? effects : host._err(effects.error, effects.hint);
+}
+
 /** `kubectl delete -f <datei>` – löscht alle Ressourcen, die das Manifest angelegt hat
  *  (über die `FILE_DELETABLE`-Tabelle). */
 function deleteFromFile(host: KubectlHost, t: string[]): string {
   const file = filenameArg(t);
   if (!file) return host._err("error: must specify one of -f or -k", "Muster: 'kubectl delete --filename deployment.yaml'");
-  const content = host.files[file];
-  if (typeof content !== "string") return host._err("error: the path \"" + file + "\" does not exist", "Mit 'ls' siehst du, welche Dateien hier liegen.");
-  // Der Dateiinhalt hat Vorrang (Mapper-Kinds); der hinterlegte Effekt dient als Rückfall und für Sim-Sonderfelder (#1299).
-  const effects = fileEffects(host.applyEffects[file], content, file);
-  if (!Array.isArray(effects)) return host._err(effects.error, effects.hint);
+  const effects = effectsOfFile(host, file, "delete");
+  if (typeof effects === "string") return effects;
   const out: string[] = [];
   for (const eff of effects) {
     for (const d of FILE_DELETABLE) {
@@ -716,11 +723,8 @@ const applyHandlers: readonly ApplyHandler[] = [
 export function kubectlApply(host: KubectlHost, t: string[]) {
   const file = filenameArg(t);
   if (!file) return host._err("error: must specify one of -f or -k", "Muster: 'kubectl apply --filename deployment.yaml'");
-  const content = host.files[file];
-  if (typeof content !== "string") return host._err("error: the path \"" + file + "\" does not exist", "Mit 'ls' siehst du, welche Dateien hier liegen.");
-  // Der Dateiinhalt hat Vorrang (Mapper-Kinds); der hinterlegte Effekt dient als Rückfall und für Sim-Sonderfelder (#1299).
-  const effects = fileEffects(host.applyEffects[file], content, file);
-  if (!Array.isArray(effects)) return host._err(effects.error, effects.hint);
+  const effects = effectsOfFile(host, file, "apply");
+  if (typeof effects === "string") return effects;
   const out: string[] = [];
   for (const eff of effects) {
     for (const handler of applyHandlers) {

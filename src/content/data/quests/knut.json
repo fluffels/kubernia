@@ -25,12 +25,6 @@
             "statefulset.yaml": "statefulset-speicher"
           },
           "applyEffects": {
-            "headless-service.yaml": {
-              "service": {
-                "name": "speicher-datenbank",
-                "port": 5432
-              }
-            },
             "statefulset.yaml": {
               "statefulSet": {
                 "name": "speicher-datenbank",

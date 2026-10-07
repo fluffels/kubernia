@@ -38,13 +38,6 @@
                 "containerPort": 8080,
                 "requireBuiltImage": true
               }
-            },
-            "service.yaml": {
-              "service": {
-                "name": "werft-dienst",
-                "port": 80,
-                "targetPort": 8080
-              }
             }
           }
         },

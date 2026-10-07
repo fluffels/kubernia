@@ -6,6 +6,7 @@
 import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./helpers";
+import { deploymentYaml } from "../factories/manifests";
 
 let sim: KQSim;
 beforeEach(() => { sim = freshSim(); });
@@ -28,8 +29,7 @@ test("kubectl: expose erzeugt Service mit fester IP", () => {
 });
 
 test("kubectl apply ist idempotent", () => {
-  sim.files["app.yaml"] = "kind: Deployment …";
-  sim.applyEffects["app.yaml"] = { deployment: { name: "lager", image: "redis", replicas: 2 } };
+  sim.files["app.yaml"] = deploymentYaml({ name: "lager", image: "redis", replicas: 2 });
   assert.match(sim.exec("kubectl apply -f app.yaml").output!, /created/);
   assert.match(sim.exec("kubectl apply -f app.yaml").output!, /unchanged/);
   assert.equal(sim.deployments.filter(d => d.name === "lager").length, 1);

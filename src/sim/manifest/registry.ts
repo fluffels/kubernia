@@ -25,6 +25,9 @@ const MAPPERS: Readonly<Record<string, Mapper>> = {
 /** Ein Fehlschlag der Auflösung: kubectl-Text plus optionaler deutscher Tipp (für `host._err`). */
 export interface ManifestFailure { error: string; hint?: string }
 
+/** Der kubectl-Befehl, der die Datei liest (nur für den Fehlertext „no objects passed to …“). */
+export type ManifestVerb = "apply" | "delete";
+
 /** Das Ergebnis: die Effekte in Dokument-Reihenfolge oder ein Fehlschlag. */
 export type ManifestResult = ApplyEffect[] | ManifestFailure;
 
@@ -81,8 +84,8 @@ function parseDocs(content: string, file: string): YamlValue[] | ManifestFailure
 }
 
 /** Mappt geparste Dokumente. Alles oder nichts: ein Fehler in einem Dokument liefert den Fehlschlag. */
-function mapDocs(docs: YamlValue[], file: string): ManifestResult {
-  if (docs.length === 0) return failure("error: no objects passed to apply", "Die Datei enthält kein Manifest (nur Kommentare oder nichts).");
+function mapDocs(docs: YamlValue[], file: string, verb: ManifestVerb): ManifestResult {
+  if (docs.length === 0) return failure("error: no objects passed to " + verb, "Die Datei enthält kein Manifest (nur Kommentare oder nichts).");
   const effects: ApplyEffect[] = [];
   for (let i = 0; i < docs.length; i++) {
     const r = mapOne(docs[i], file, docs.length > 1 ? " (Dokument " + (i + 1) + ")" : "");
@@ -93,9 +96,9 @@ function mapDocs(docs: YamlValue[], file: string): ManifestResult {
 }
 
 /** Parst und mappt den Inhalt einer Manifest-Datei. Alles oder nichts. */
-export function effectsFromManifest(content: string, file: string): ManifestResult {
+export function effectsFromManifest(content: string, file: string, verb: ManifestVerb = "apply"): ManifestResult {
   const docs = parseDocs(content, file);
-  return Array.isArray(docs) ? mapDocs(docs, file) : docs;
+  return Array.isArray(docs) ? mapDocs(docs, file, verb) : docs;
 }
 
 /** Die `kind`s mit Mapper, aus dem Register abgeleitet (kein zweiter Pflegeort). */
@@ -129,12 +132,12 @@ function withSimFields(effects: ApplyEffect[], legacy: ApplyEffect): ApplyEffect
 
 /** Die Wirkung einer Datei: der Inhalt (Mapper-Pfad) hat Vorrang, der hinterlegte Effekt dient als
  *  Rückfall für Typen ohne Mapper und liefert die Sim-Sonderfelder per Ressourcen-Name. */
-export function fileEffects(legacy: ApplyEffect | undefined, content: string, file: string): ManifestResult {
+export function fileEffects(legacy: ApplyEffect | undefined, content: string, file: string, verb: ManifestVerb = "apply"): ManifestResult {
   const docs = parseDocs(content, file);
   if (!Array.isArray(docs)) return docs;
   const mappable = docs.length > 0 && docs.every(d => isMapping(d) && MAPPED_KINDS.has(textOf(d.kind)));
   if (!legacy || mappable || docs.length === 0) {
-    const r = mapDocs(docs, file);
+    const r = mapDocs(docs, file, verb);
     return legacy && Array.isArray(r) ? withSimFields(r, legacy) : r;
   }
   return [legacy];

@@ -277,7 +277,7 @@ test("#128 apply: securityContext-Manifest besteht restricted, plain wird abgele
 });
 
 test("#135 Quest k8s-pod-security: roh läuft unter privileged, restricted weist ihn ab, gehärtet kommt durch", () => {
-  // Die Quest-Dateien als echtes YAML (roh = kein securityContext, gehärtet = mit).
+  // Eigenes echtes YAML nach dem Muster der Quest-Dateien (die echten deckt test/quests.test.ts ab; roh = kein securityContext, gehärtet = mit).
   sim.files["spaehposten-roh.yaml"] = deploymentYaml({ name: "spaehposten", image: "wachturm-spaeher:1.0" });
   sim.files["spaehposten.yaml"] = deploymentYaml({ name: "spaehposten", image: "wachturm-spaeher:1.0", securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true } });
 

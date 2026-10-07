@@ -72,17 +72,6 @@
         "scenario": {
           "files": {
             "wachposten.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: wachposten\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: wachposten\n  template:\n    metadata:\n      labels:\n        app: wachposten\n    spec:\n      serviceAccountName: wachdienst   # <-- die Identität, unter der die Pods laufen\n      containers:\n        - name: wachposten\n          image: wachdienst-api:1.0\n          ports:\n            - containerPort: 8080"
-          },
-          "applyEffects": {
-            "wachposten.yaml": {
-              "deployment": {
-                "name": "wachposten",
-                "image": "wachdienst-api:1.0",
-                "replicas": 1,
-                "serviceAccountName": "wachdienst",
-                "containerPort": 8080
-              }
-            }
           }
         },
         "tasks": [
@@ -638,20 +627,6 @@
           "files": {
             "spaehposten-roh.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: spaehposten\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: spaehposten\n  template:\n    metadata:\n      labels:\n        app: spaehposten\n    spec:\n      containers:                      # KEIN securityContext -> läuft per Default als root\n        - name: spaehposten\n          image: wachturm-spaeher:1.0\n          ports:\n            - containerPort: 8080",
             "spaehposten.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: spaehposten\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: spaehposten\n  template:\n    metadata:\n      labels:\n        app: spaehposten\n    spec:\n      securityContext:                 # gilt für den ganzen Pod\n        runAsNonRoot: true             # NICHT als root starten\n      containers:\n        - name: spaehposten\n          image: wachturm-spaeher:1.0\n          securityContext:             # gilt für diesen Container\n            allowPrivilegeEscalation: false   # keine Rechte-Eskalation\n            readOnlyRootFilesystem: true      # Dateisystem nur lesbar\n          ports:\n            - containerPort: 8080"
-          },
-          "applyEffects": {
-            "spaehposten-roh.yaml": {
-              "deployment": { "name": "spaehposten", "image": "wachturm-spaeher:1.0", "replicas": 1, "containerPort": 8080 }
-            },
-            "spaehposten.yaml": {
-              "deployment": {
-                "name": "spaehposten",
-                "image": "wachturm-spaeher:1.0",
-                "replicas": 1,
-                "containerPort": 8080,
-                "securityContext": { "runAsNonRoot": true, "allowPrivilegeEscalation": false, "readOnlyRootFilesystem": true }
-              }
-            }
           }
         },
         "tasks": [

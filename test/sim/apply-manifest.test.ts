@@ -1,5 +1,5 @@
-/* Sim-Tests (#1139): `kubectl apply -f` / `delete -f` lesen den Datei-Inhalt, wenn kein
- * `applyEffects`-Eintrag hinterlegt ist. Fahren über sim.exec, Fixtures in ./helpers. */
+/* Sim-Tests (#1139, #1299): `kubectl apply -f` / `delete -f` lesen den Datei-Inhalt; bei Mapper-Kinds
+ * hat er Vorrang vor einem hinterlegten `applyEffects`-Eintrag. Fahren über sim.exec, Fixtures in ./helpers. */
 import { test, beforeEach, expect } from "vitest";
 import { KQSim, freshSim } from "./helpers";
 import { KQContent } from "../../src/content";
@@ -134,6 +134,8 @@ const scenarioOf = (quest: string, step: number) => KQContent.QUESTS.find(q => q
 
 test("ada deployment.yaml: replicas 2 → 4 im Dateiinhalt ergibt nach apply 4 Pods (trotz Legacy-Effekt)", () => {
   sim.mergeScenario(scenarioOf("k8s-apply-manifests", 1));
+  // Die Quest-Daten tragen den redundanten Effekt nicht mehr; ein hinterlegter alter Stand wird hier nachgestellt.
+  sim.applyEffects["deployment.yaml"] = { deployment: { name: "lager", image: "redis:7", replicas: 2 } };
   expect(sim.files["deployment.yaml"]).toMatch(/replicas: 2/);
   sim.files["deployment.yaml"] = sim.files["deployment.yaml"].replace("replicas: 2", "replicas: 4");
   expect(sim.exec("kubectl apply -f deployment.yaml").error).toBeFalsy();
@@ -152,6 +154,7 @@ test("ada deployment.yaml: kaputtes YAML (Tab) ergibt Parse-Fehler, die Sim blei
 
 test("Knut storage-init: Sonderfelder (initContainer, emptyDir-Nutzung) kommen per Name aus dem Legacy-Effekt", () => {
   sim.mergeScenario(scenarioOf("storage-init", 5));
+  expect(sim.applyEffects["doppelt.yaml"]).toBeDefined(); // Vorbedingung: der Legacy-Effekt existiert
   expect(sim.exec("kubectl apply -f doppelt.yaml").error).toBeFalsy();
   const d = sim.deployments.find(x => x.name === "doppelt")!;
   expect(d.initContainer).toStrictEqual({ fillsMi: 300, doubleStage: true });
@@ -194,4 +197,10 @@ test("gemapptes Deployment mit initContainers wird ohne fillsMi angelegt (kein N
   sim.files["web.yaml"] = dep(1).replace("      containers:", "      initContainers:\n        - name: i\n          image: busybox\n      containers:");
   expect(sim.exec("kubectl apply -f web.yaml").error).toBeFalsy();
   expect(sim.deployments[0].initContainer).toStrictEqual({ fillsMi: 0, doubleStage: false });
+});
+
+test("delete -f mit leerer Datei meldet 'no objects passed to delete', apply 'to apply'", () => {
+  sim.files["leer.yaml"] = "# nur ein Kommentar\n";
+  expect(sim.exec("kubectl delete -f leer.yaml").output).toMatch(/no objects passed to delete/);
+  expect(sim.exec("kubectl apply -f leer.yaml").output).toMatch(/no objects passed to apply/);
 });
