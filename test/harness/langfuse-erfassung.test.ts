@@ -299,6 +299,14 @@ const patchDokuStimmig = (mr: string, zahl: number): boolean =>
   !/Für solche Läufe den Transkript-Modus nehmen/.test(mr) &&
   !/\*\*Lücke:\*\* Ein per `SendMessage` fortgesetzter/.test(mr);
 
+/** Erklärt die Doku den Abschluss fortgesetzter Subagenten (#1378): task-id-Notification, Selbstheilung, SessionEnd nicht garantiert, Diagnose hängender Turns? */
+const resumeAbschlussDokuStimmig = (mr: string): boolean =>
+  /Patch-Teil Abschluss fortgesetzter Subagenten/.test(mr) &&
+  /<task-id>/.test(mr) &&
+  /Selbstheilung/.test(mr) &&
+  /pending_agent_turns/.test(mr) &&
+  /SessionEnd[^.]*nicht garantiert/.test(mr);
+
 /** Verlangen Lens-Rolle UND Review-Skill, Messbehauptungen nur gegen mitgelieferte Rohwerte zu prüfen? */
 const messbehauptungsRegel = (text: string): boolean => /Messbehauptung/.test(text) && /Rohwerte/.test(text) && /nicht belegt/.test(text);
 
@@ -312,12 +320,21 @@ const historieRegel = (text: string): boolean => /Lauf-Historie/.test(text) && /
 describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
   const mr = read("docs/model-routing.md");
 
-  test("Prüfregel steht auf 15 und fortgesetzte Subagenten sind keine offene Lücke mehr", () => {
-    assert.ok(patchDokuStimmig(mr, 15));
+  test("Prüfregel steht auf 26 und fortgesetzte Subagenten sind keine offene Lücke mehr", () => {
+    assert.ok(patchDokuStimmig(mr, 26));
     // darf NICHT passieren: alte Zahl oder die alte Lücke
-    assert.ok(!patchDokuStimmig(mr.replace("→ `15`", "→ `4`"), 15));
-    assert.ok(!patchDokuStimmig(mr + "\nFür solche Läufe den Transkript-Modus nehmen.", 15));
-    assert.ok(!patchDokuStimmig(mr.replace("Patch-Teil fortgesetzte Subagenten", "Patch-Teil x"), 15));
+    assert.ok(!patchDokuStimmig(mr.replace("→ `26`", "→ `15`"), 26));
+    assert.ok(!patchDokuStimmig(mr + "\nFür solche Läufe den Transkript-Modus nehmen.", 26));
+    assert.ok(!patchDokuStimmig(mr.replace("Patch-Teil fortgesetzte Subagenten", "Patch-Teil x"), 26));
+  });
+
+  test("Abschluss fortgesetzter Subagenten ist erklärt: task-id-Regel, Selbstheilung, SessionEnd, Diagnose (#1378)", () => {
+    assert.ok(resumeAbschlussDokuStimmig(mr));
+    // darf NICHT passieren: ein Baustein fehlt
+    assert.ok(!resumeAbschlussDokuStimmig(mr.replace("Patch-Teil Abschluss fortgesetzter Subagenten", "Patch-Teil x")));
+    assert.ok(!resumeAbschlussDokuStimmig(mr.replaceAll("Selbstheilung", "Heilung")));
+    assert.ok(!resumeAbschlussDokuStimmig(mr.replaceAll("pending_agent_turns", "x")));
+    assert.ok(!resumeAbschlussDokuStimmig(mr.replaceAll("nicht garantiert", "garantiert")));
   });
 
   test("Lens, Review-Skill und Workflow: Messbehauptungen nur gegen Rohwerte", () => {
