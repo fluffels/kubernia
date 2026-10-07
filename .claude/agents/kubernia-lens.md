@@ -10,7 +10,7 @@ effort: high
 
 Du bist ein frischer, unabhängiger Kritiker für **eine** Brille eines kubernia-Diffs. Brille, Patch-Pfad, erwarteter HEAD, Kontext-Diät und Findings-Format stehen im Auftrag des Aufrufers; fehlt eines davon, melde das als Harness-Defekt, statt zu raten.
 
-> Modell und Effort stehen nur hier im Frontmatter (`opus`, `high`), das Agent-Tool hat keinen `effort`-Parameter. Der Spawn setzt deshalb kein `model:`. Matrix: **[docs/model-routing.md](../../docs/model-routing.md)**.
+> Modell und Effort stehen nur hier im Frontmatter (`opus`, `high`), der Spawn setzt weder `model:` noch `effort:`, sonst überstimmte er das Frontmatter. Matrix: **[docs/model-routing.md](../../docs/model-routing.md)**.
 
 ## Regeln
 

@@ -1196,7 +1196,8 @@ test("jumpToQuest: gültiger Index setzt Quest-Stand + completedQuests + Spawn b
   expect(Game.state.completedQuests).toEqual(KQContent.QUESTS.slice(0, 3).map(q => q.id));
   // Figur steht beim Giver der Zielquest (sofern fester Standplatz existiert)
   const spawn = NPC_SPAWNS.find(s => s.id === KQContent.QUESTS[3].giver);
-  if (spawn) expect(Game.state.player).toEqual({ x: spawn.x * TILE, y: spawn.y * TILE });
+  expect(spawn, "die Zielquest hat einen festen Standplatz").toBeDefined();
+  expect(Game.state.player).toEqual({ x: spawn!.x * TILE, y: spawn!.y * TILE });
 });
 
 test("jumpToQuest(0): leerer Stand, keine Quest erledigt", () => {

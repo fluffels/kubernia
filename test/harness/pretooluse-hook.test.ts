@@ -28,7 +28,7 @@ type Guards = Record<string, (o: never) => unknown>;
 type Out = { hookSpecificOutput: { permissionDecision: string; permissionDecisionReason: string } } | null;
 const io = ioRaw as unknown as { mergeDecisions: (d: unknown[]) => Out };
 const tabellen = tabRaw as unknown as { SHELL_VON_TOOL: Record<string, string> };
-const hook = raw as unknown as { dispatch: (text: string, repoRoot: string, guards?: Guards, shellVonTool?: Record<string, string>) => Out };
+const hook = raw as unknown as { dispatch: (text: string, repoRoot: string, guards?: Guards, shellVonTool?: Record<string, string>, abschlussDeps?: unknown) => Out };
 
 const WURZEL = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const lies = (rel: string) => readFileSync(resolve(WURZEL, rel), "utf8");
@@ -198,6 +198,42 @@ describe("Verdrahtung (#1311)", () => {
     assert.equal(hook.dispatch(payload("Bash", "x"), WURZEL, { decide: blockt, bewertePowerShell: nichts, bewerteGh: wirft })?.hookSpecificOutput.permissionDecision, "deny");
     assert.equal(hook.dispatch(payload("PowerShell", "x"), WURZEL, { decide: wirft, bewertePowerShell: blockt, bewerteGh: fragt })?.hookSpecificOutput.permissionDecision, "deny", "deny vor ask");
     assert.equal(hook.dispatch(payload("PowerShell", "x"), WURZEL, { decide: blockt, bewertePowerShell: wirft, bewerteGh: wirft }), null, "Bash-Guard ist bei PowerShell nicht zuständig");
+  });
+});
+
+describe("SubagentHandback: Abschluss-Wächter des Umsetzers (#1342)", () => {
+  const handback = (message: string, agentType: string | undefined = "kubernia-umsetzer") =>
+    JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "SubagentHandback", agent_type: agentType, cwd: WURZEL, tool_input: { message } });
+  const offen = { prStatus: () => ({ state: "OPEN", autoMergeRequest: { enabledAt: "x" }, labels: [] }) };
+
+  test("ein Handback mit Zusatz wird verweigert, ein exakter Bericht und fremde Agenten gehen durch", () => {
+    const grund = hook.dispatch(handback("ERGEBNIS: abgebrochen (Zwischenstand)\nPR: -"), WURZEL, undefined, undefined, offen);
+    assert.equal(grund?.hookSpecificOutput.permissionDecision, "deny");
+    assert.match(grund?.hookSpecificOutput.permissionDecisionReason ?? "", /Zusatz/);
+    assert.equal(hook.dispatch(handback("ERGEBNIS: abgebrochen\nPR: -"), WURZEL, undefined, undefined, offen), null);
+    assert.equal(hook.dispatch(handback("ERGEBNIS: abgebrochen (x)\nPR: -", "kubernia-lens"), WURZEL, undefined, undefined, offen), null);
+    assert.equal(hook.dispatch(handback("ERGEBNIS: abgebrochen (x)\nPR: -", ""), WURZEL, undefined, undefined, offen), null);
+  });
+
+  test("festgefahren bei offenem PR ohne Label wird verweigert; ein werfender gh gibt frei", () => {
+    const nachricht = "ERGEBNIS: festgefahren\nPR: https://github.com/x/y/pull/9";
+    assert.equal(hook.dispatch(handback(nachricht), WURZEL, undefined, undefined, offen)?.hookSpecificOutput.permissionDecision, "deny");
+    const wirft = { prStatus: () => { throw new Error("kein gh"); } };
+    assert.equal(hook.dispatch(handback(nachricht), WURZEL, undefined, undefined, wirft), null);
+  });
+
+  test("Verdrahtung: genau ein PreToolUse-Eintrag trifft SubagentHandback, dasselbe Skript wie Bash", () => {
+    const settings = JSON.parse(lies(".claude/settings.json")) as { hooks: { PreToolUse: { matcher: string; hooks: { args?: string[] }[] }[] } };
+    const trifft = (tool: string) => settings.hooks.PreToolUse.filter((e) => new RegExp(`^(${e.matcher})$`).test(tool)).flatMap((e) => e.hooks.flatMap((h) => h.args ?? []));
+    assert.equal(trifft("SubagentHandback").length, 1);
+    assert.equal(trifft("SubagentHandback")[0], trifft("Bash")[0]);
+  });
+
+  test("Prozess-Start: ein verweigerter Handback erzeugt die Deny-Ausgabe, ein fremder nichts", () => {
+    const start = (p: string) => execFileSync("node", [resolve(WURZEL, "scripts/pretooluse-hook.mjs")], { input: p, encoding: "utf8" });
+    const out = JSON.parse(start(handback("kein Format"))) as Out;
+    assert.equal(out?.hookSpecificOutput.permissionDecision, "deny");
+    assert.equal(start(handback("kein Format", "kubernia-lens")).trim(), "");
   });
 });
 

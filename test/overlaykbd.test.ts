@@ -6,6 +6,7 @@
  * leeres Overlay, irrelevante Tasten, Wrap), damit kein Maus-only-Knopf bleibt.
  */
 import { test, expect, describe } from "vitest";
+import { erwarteVariante } from "./support/erwartungen";
 import { resolveOverlayKey, dialogueNav, nextFocusIndex, type OverlayButton } from "../src/hud/overlaykbd";
 
 // Kürzel zum Bauen von Button-Listen.
@@ -127,11 +128,9 @@ describe("dialogueNav – mehrzeilige Lese-Dialoge vor/zurück (#310)", () => {
   });
 
   test("Hin und Her ist verlustfrei: vor, dann zurück landet wieder auf derselben Zeile", () => {
-    const fwd = dialogueNav(0, 3, 1);
+    const fwd = erwarteVariante(dialogueNav(0, 3, 1), "show");
     expect(fwd).toEqual({ kind: "show", idx: 1 });
-    if (fwd.kind === "show") {
-      expect(dialogueNav(fwd.idx, 3, -1)).toEqual({ kind: "show", idx: 0 });
-    }
+    expect(dialogueNav(fwd.idx, 3, -1)).toEqual({ kind: "show", idx: 0 });
   });
 });
 

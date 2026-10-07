@@ -8,6 +8,7 @@
  * wirklich begehbar erreichbar sein, sonst wäre das Viertel eine hübsche, aber tote Karte.
  */
 import { test, expect } from "vitest";
+import { erwarteSolidJeBoden } from "./support/erwartungen";
 import { TILE } from "../src/world/world";
 import {
   WW, WH, WATER, DOCK, PATH, STONE_CODES,
@@ -55,11 +56,11 @@ test("Kai ist rundum von Meer umschlossen (kein Land am Kartenrand)", () => {
 });
 
 test("Wasser ist solide, Pfad + Holz-Steg begehbar (Negativ-/Positivfall der Kollision)", () => {
-  for (let i = 0; i < map.ground.length; i++) {
-    if (map.ground[i] === WATER) expect(map.solid[i]).toBe(1);   // ins Meer läuft man nicht
-    if (map.ground[i] === PATH) expect(map.solid[i]).toBe(0);    // Pfad begehbar
-    if (map.ground[i] === DOCK) expect(map.solid[i]).toBe(0);    // Steg-Planken begehbar
-  }
+  erwarteSolidJeBoden(map, [
+    { boden: WATER, solid: 1, name: "Wasser" }, // ins Meer läuft man nicht
+    { boden: PATH, solid: 0, name: "Pfad" }, // Pfad begehbar
+    { boden: DOCK, solid: 0, name: "Steg-Planken" }, // Steg-Planken begehbar
+  ]);
 });
 
 test("der Kai besteht aus Stein-Wand + Gras-Quay (genug von beidem) und hat einen Holz-Steg", () => {

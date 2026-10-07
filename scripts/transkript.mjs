@@ -18,11 +18,18 @@ export function transkriptZeilen(jsonlText) {
   return rows;
 }
 
-/** Text einer Assistant-Zeile (String-Inhalt oder die Text-Blöcke); leer ohne Text. */
-export function assistantText(row) {
-  const msg = row?.message ?? row;
-  if (msg?.role !== "assistant" && row?.type !== "assistant") return "";
-  const c = msg?.content;
-  if (typeof c === "string") return c;
-  return Array.isArray(c) ? c.filter((b) => b?.type === "text").map((b) => b.text).join("\n") : "";
+/**
+ * Jüngste Assistant-Nachricht mit einer `ERGEBNIS:`-Zeile (#1342): entweder die `message` eines
+ * `SubagentHandback`-Aufrufs oder ein Text-Block. `null`, wenn es keine gibt.
+ */
+export function letzteErgebnisNachricht(zeilen) {
+  const hatErgebnis = (t) => typeof t === "string" && /^[ \t]*ERGEBNIS:/im.test(t);
+  for (let i = zeilen.length - 1; i >= 0; i--) {
+    const msg = zeilen[i]?.message ?? zeilen[i];
+    if (msg?.role !== "assistant" && zeilen[i]?.type !== "assistant") continue;
+    const c = msg?.content;
+    const kandidaten = typeof c === "string" ? [c] : Array.isArray(c) ? c.map((b) => (b?.type === "text" ? b.text : b?.type === "tool_use" && b.name === "SubagentHandback" ? b.input?.message : null)) : [];
+    for (let j = kandidaten.length - 1; j >= 0; j--) if (hatErgebnis(kandidaten[j])) return kandidaten[j];
+  }
+  return null;
 }
