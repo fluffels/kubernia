@@ -10,7 +10,7 @@ import * as bmModule from "../scripts/brain-metrics.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as baselineModule from "../scripts/token-baseline.mjs";
 
-type Ev = { ts: string; tool: string; input: Record<string, unknown>; resultChars: number };
+type Ev = { ts: string; tool: string; input: Record<string, unknown>; resultChars: number; agent?: string | null };
 type Metrics = {
   brainReads: number;
   brainPages: number;
@@ -27,8 +27,10 @@ type Obs = { id?: string; type: string; startTime: string; name?: string; input?
 const bm = bmModule as {
   isBrainPage: (p?: string) => boolean;
   classifyShell: (command: string, tool?: string) => { brainReads: string[]; search: boolean };
-  toolEventsFromTranscript: (jsonlOderZeilen: string | object[]) => Ev[];
-  toolEventsFromLangfuse: (obs: Obs[]) => Ev[];
+  toolEventsFromTranscript: (jsonlOderZeilen: string | object[], agent?: string | null) => Ev[];
+  toolEventsFromLangfuse: (obs: Obs[], agentOf?: (o: Obs) => string | null) => Ev[];
+  pflegeMarker: (ev: Ev) => "start" | "ende" | null;
+  pflegeIntervals: (events: Ev[]) => { intervals: { agent: string | null; from: string; to: string }[]; unpaired: number };
   brainMetrics: (events?: Ev[], prFiles?: { path: string; additions?: number; deletions?: number }[] | null) => Metrics;
   transkriptZeilen: (text: string) => object[];
   mitEingabe: (meta: Obs[], io: { id?: string; input?: unknown }[]) => Obs[];
@@ -42,7 +44,7 @@ const baseline = baselineModule as {
   callsFromTranscript: (textOderZeilen: string | object[]) => { calls: unknown[]; questions: number };
   fetchSessionObservations: (id: string, o: object) => Promise<unknown[]>;
 };
-const { isBrainPage, classifyShell, toolEventsFromTranscript, toolEventsFromLangfuse, brainMetrics } = bm;
+const { isBrainPage, classifyShell, toolEventsFromTranscript, toolEventsFromLangfuse, brainMetrics, pflegeMarker, pflegeIntervals } = bm;
 
 const ev = (ts: string, tool: string, input: Record<string, unknown> = {}, resultChars = 0): Ev => ({ ts, tool, input, resultChars });
 
@@ -378,5 +380,60 @@ describe("ladeLangfuseSession: zwei Stufen mit tatsächlichen Span-Namen (#1322 
     };
     await assert.rejects(lade("s", { baseUrl: "http://x", publicKey: "p", secretKey: "k", fetchImpl }), /Langfuse 500/);
     assert.ok(n >= 3);
+  });
+});
+
+describe("Pflege-Marker (#1099)", () => {
+  const T = (n: number) => `2026-10-01T10:00:0${n}Z`;
+  const sh = (command: string, tool = "Bash", agent: string | null = null, ts = T(0)): Ev => ({ ...ev(ts, tool, { command }), agent });
+  test("start/ende per echo, Quotes und angehängt", () => {
+    assert.equal(pflegeMarker(sh('echo "pflege: start #1"')), "start");
+    assert.equal(pflegeMarker(sh("echo 'pflege: ende #1'")), "ende");
+    assert.equal(pflegeMarker(sh('git status && echo "pflege: start #1"')), "start");
+    assert.equal(pflegeMarker(sh("echo pflege: ende #1")), "ende");
+    assert.equal(pflegeMarker(sh('echo "Pflege: START #1"')), "start");
+  });
+  test("PowerShell echo / Write-Output", () => {
+    assert.equal(pflegeMarker(sh('echo "pflege: start #1"', "PowerShell")), "start");
+    assert.equal(pflegeMarker(sh('Write-Output "pflege: ende #1"', "PowerShell")), "ende");
+  });
+  test("Negativ: kein echo, Kunstwort, anderes Tool, Text nur in Argument eines anderen Kommandos", () => {
+    assert.equal(pflegeMarker(sh('grep "pflege: start" x')), null);
+    assert.equal(pflegeMarker(sh('echo "pflege: startklar"')), null);
+    assert.equal(pflegeMarker(sh('echo "kein marker"')), null);
+    assert.equal(pflegeMarker(sh('git commit -m "echo pflege: start"')), null);
+    assert.equal(pflegeMarker({ ...ev(T(0), "Read", { command: 'echo "pflege: start #1"' }) }), null);
+    assert.equal(pflegeMarker(ev(T(0), "Bash", {})), null);
+  });
+  test("Intervalle: je Agent verschränkt gepaart", () => {
+    const e = [
+      sh('echo "pflege: start #1"', "Bash", "a", T(1)),
+      sh('echo "pflege: start #1"', "Bash", "b", T(2)),
+      sh('echo "pflege: ende #1"', "Bash", "a", T(3)),
+      sh('echo "pflege: ende #1"', "Bash", "b", T(4)),
+    ];
+    const r = pflegeIntervals(e);
+    assert.deepEqual(r.intervals, [{ agent: "a", from: T(1), to: T(3) }, { agent: "b", from: T(2), to: T(4) }]);
+    assert.equal(r.unpaired, 0);
+  });
+  test("Start-Start-Ende: zweiter Start ersetzt, der erste zählt ungepaart", () => {
+    const r = pflegeIntervals([sh('echo "pflege: start"', "Bash", null, T(1)), sh('echo "pflege: start"', "Bash", null, T(2)), sh('echo "pflege: ende"', "Bash", null, T(3))]);
+    assert.deepEqual(r.intervals, [{ agent: null, from: T(2), to: T(3) }]);
+    assert.equal(r.unpaired, 1);
+  });
+  test("Ende ohne Start und offener Start sind ungepaart; Eingabe unsortiert", () => {
+    assert.deepEqual(pflegeIntervals([sh('echo "pflege: ende"')]), { intervals: [], unpaired: 1 });
+    assert.deepEqual(pflegeIntervals([sh('echo "pflege: start"')]), { intervals: [], unpaired: 1 });
+    const r = pflegeIntervals([sh('echo "pflege: ende"', "Bash", null, T(5)), sh('echo "pflege: start"', "Bash", null, T(1))]);
+    assert.equal(r.intervals.length, 1);
+    assert.equal(r.unpaired, 0);
+  });
+  test("Event-Adapter setzen agent (Default null)", () => {
+    const line = JSON.stringify({ type: "assistant", timestamp: T(0), message: { content: [{ type: "tool_use", id: "a", name: "Bash", input: {} }] } });
+    assert.equal(toolEventsFromTranscript(line)[0].agent, null);
+    assert.equal(toolEventsFromTranscript(line, "sub.jsonl")[0].agent, "sub.jsonl");
+    const obs: Obs = { id: "t1", type: "TOOL", startTime: T(0), input: {}, metadata: { tool_name: "Bash" } };
+    assert.equal(toolEventsFromLangfuse([obs])[0].agent, null);
+    assert.equal(toolEventsFromLangfuse([obs], (o) => `x-${o.id}`)[0].agent, "x-t1");
   });
 });

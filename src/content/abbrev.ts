@@ -128,7 +128,7 @@ export interface LockedAbbrev {
  *  - Token-genau (`pods` triggert nicht das Kürzel `pod`/`po`).
  *
  *  Pur: `isUnlocked` wird injiziert (keine Game-Kopplung) → im Node-Test prüfbar.
- *  Das UI ruft das VOR der Erfolgswertung auf und ersetzt einen Treffer durch
+ *  Das UI ruft das VOR dem Ausführen auf (`gateSubmission`, #1297) und ersetzt einen Treffer durch
  *  einen freundlichen Hinweis statt eines harten „Falsch".
  *
  *  `exemptId` (#366): die Abkürzung, die der GERADE laufende Lehr-Schritt selbst

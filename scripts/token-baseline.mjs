@@ -30,7 +30,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseNachweis } from "./slice-override.mjs";
-import { EINGABE_TOOLS, brainMetrics, mitEingabe, toolEventsFromLangfuse, toolEventsFromTranscript, transkriptZeilen } from "./brain-metrics.mjs";
+import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript, transkriptZeilen } from "./brain-metrics.mjs";
 
 /** Lenses pro Review-Runde für Läufe ohne Runden-Marker (vor #1265 liefen immer alle drei Brillen, #1012). */
 export const LENSES_PER_ROUND = 3;
@@ -39,6 +39,7 @@ export const PHASES = [
   "Auswahl",
   "Planung",
   "Umsetzung",
+  "Pflege",
   "Review",
   "CI/Merge",
   "Recherche",
@@ -223,7 +224,10 @@ function sockelOf(allCalls, windowCalls) {
  * erbte ein Ticket die Lenses eines früheren Tickets derselben Session.
  */
 export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles = null) {
-  const window = windowCalls(calls, bounds);
+  // Events vor `--from` (früheres Ticket derselben Session) und nach dem Merge zählen nicht (auch nicht die Pflege-Marker).
+  const imFenster = (events ?? []).filter((e) => fensterLage(e.ts, bounds) === "ticket");
+  const { intervals, unpaired } = events ? pflegeIntervals(imFenster) : { intervals: [], unpaired: 0 };
+  const window = windowCalls(calls, bounds, intervals);
   const sorted = phaseRows(window);
   const ticket = window.filter((w) => w.phase !== "Nachlauf").map((w) => w.call);
   const out = {
@@ -243,9 +247,9 @@ export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles
     sockel: sockelOf(calls, ticket),
   };
   if (events) {
-    // Das Ticket-Fenster besitzt dieser Ort (`fensterLage`); die Brain-Kennzahlen bekommen nur Events darin.
-    const imFenster = events.filter((e) => fensterLage(e.ts, bounds) === "ticket");
+    // Das Ticket-Fenster besitzt dieser Ort (`fensterLage`); Marker und Brain-Kennzahlen bekommen nur Events darin.
     const recherche = sorted.filter((r) => r.phase === "Recherche");
+    out.pflegeUnpaired = unpaired;
     out.brain = { ...brainMetrics(imFenster, prFiles), rechercheTokens: recherche.reduce((n, r) => n + r.input + r.cacheWrite + r.cacheRead + r.output, 0) };
   }
   return out;
@@ -261,16 +265,20 @@ export function fensterLage(ts, bounds = {}) {
 /**
  * Calls im Ticket-Fenster samt Phase. Vor `from` liegt fremde Arbeit derselben Session (z.B. ein
  * vorheriges Ticket) — weglassen; nach dem Merge ist alles Nachlauf, auch ein Subagent, den erst
- * das Gespräch danach startet.
+ * das Gespräch danach startet. Calls eines Agenten zwischen seinen Pflege-Markern (#1099, `intervals` aus
+ * `pflegeIntervals`, Grenzen inklusive) sind Pflege; der Nachlauf schlägt sie, sie schlagen die übrigen Regeln.
  */
-export function windowCalls(calls, bounds = {}) {
+export function windowCalls(calls, bounds = {}, intervals = []) {
   const out = [];
   for (const c of calls) {
     const lage = fensterLage(c.ts, bounds);
     if (lage === "vor") continue;
     const afterMerge = lage === "nachlauf";
+    const agent = c.subagent ? subKey(c) : null;
+    const t = Date.parse(c.ts);
+    const inPflege = intervals.some((iv) => iv.agent === agent && t >= Date.parse(iv.from) && t <= Date.parse(iv.to));
     const subPhase = c.subagent ? classifySubagent(c.subagent.agentType, c.subagent.description) : null;
-    out.push({ call: c, phase: afterMerge ? "Nachlauf" : (subPhase ?? classifyMainByTime(c.ts, bounds)) });
+    out.push({ call: c, phase: afterMerge ? "Nachlauf" : inPflege ? "Pflege" : (subPhase ?? classifyMainByTime(c.ts, bounds)) });
   }
   return out;
 }
@@ -416,7 +424,7 @@ export function readTranscriptSession(sessionId, projectsRoot) {
       const sub = { id: f, agentType: meta.agentType, description: meta.description, parentAgentId: meta.parentAgentId };
       const zeilen = transkriptZeilen(readFileSync(join(dir, f), "utf8"));
       const r = callsFromTranscript(zeilen, sub);
-      all.events.push(...toolEventsFromTranscript(zeilen));
+      all.events.push(...toolEventsFromTranscript(zeilen, sub.id));
       all.calls.push(...r.calls);
       all.questions += r.questions;
     }
@@ -444,6 +452,16 @@ export function findSubagentAncestor(obs, byId) {
     cur = cur.parentObservationId ? byId.get(cur.parentObservationId) : undefined;
   }
   return null;
+}
+
+/**
+ * Resolver für `toolEventsFromLangfuse` (#1099): ordnet ein TOOL dem umschließenden Subagent-Span zu
+ * (dieselbe ID wie `subKey` der Calls), der Hauptagent ergibt null. `observations` sind die vollen Observations
+ * der Session (mit Eltern-Verweisen); ein TOOL aus einer schlanken Abfrage wird über seine ID dort nachgeschlagen.
+ */
+export function toolAgentResolver(observations) {
+  const byId = new Map(observations.map((o) => [o.id, o]));
+  return (o) => findSubagentAncestor(byId.get(o.id) ?? o, byId)?.id ?? null;
 }
 
 /** Langfuse-Observations (Hook `langfuse-observability`) → Calls. */
@@ -604,6 +622,7 @@ export function renderMarkdown(summary, loop = {}) {
       `Projekt-Brain: gelesen ${brain.brainReads}× (${brain.brainPages} Seiten, ≈ ${fmt(brain.brainReadTokens)} Tokens) · Suche ${brain.searchCalls} Calls (≈ ${fmt(brain.searchTokens)} Tokens) · Recherche-Subagenten ${fmt(brain.rechercheTokens)} Tokens · Calls bis erster Edit ${dash(brain.callsBeforeFirstEdit)} · Brain-Pflege ${brain.brainWrites} Schreibzugriffe, PR ${pr}`,
     );
   }
+  if (summary.pflegeUnpaired > 0) lines.push(`⚠️ ${summary.pflegeUnpaired} Pflege-Marker ohne Gegenstück — Phase „Pflege“ unvollständig.`);
   lines.push(`Preise Stand ${PRICES_STAND}`);
   if (summary.unpriced > 0) lines.push(`⚠️ ${summary.unpriced} Call(s) ohne Preis (Modell nicht in PRICES oder Zeitpunkt fehlt) — Kosten unvollständig.`);
   const nw = loop.nachweis;
@@ -660,14 +679,15 @@ async function loadRun(args) {
  * Bereichs-Qualifier an (`Tool: Read [Kubernia-Doku]`), ein fester Name träfe sie nie. `fetchImpl` ist für Tests injizierbar.
  */
 export async function ladeLangfuseSession(sessionId, opts) {
-  const part = callsFromLangfuse(await fetchSessionObservations(sessionId, opts));
+  const observations = await fetchSessionObservations(sessionId, opts);
+  const part = callsFromLangfuse(observations);
   const werkzeuge = await fetchSessionObservations(sessionId, { ...opts, type: "TOOL", fields: "core,basic,metadata" });
   const namen = new Set(
     werkzeuge.filter((o) => EINGABE_TOOLS.includes(o?.metadata?.tool_name ?? String(o?.name ?? "").replace(/^Tool:\s*/, "").replace(/\s*\[.*\]$/, ""))).map((o) => o.name),
   );
   const eingaben = [];
   for (const name of namen) eingaben.push(...(await fetchSessionObservations(sessionId, { ...opts, type: "TOOL", name, fields: "core,io" })));
-  part.events = toolEventsFromLangfuse(mitEingabe(werkzeuge, eingaben));
+  part.events = toolEventsFromLangfuse(mitEingabe(werkzeuge, eingaben), toolAgentResolver(observations));
   return part;
 }
 

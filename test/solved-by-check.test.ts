@@ -2,25 +2,11 @@
  * evaluateSubmission. Beweist, dass ein alternativer gültiger Weg zählt und dass der Modus
  * (nicht etwas anderes) dafür verantwortlich ist (Red-Green über solvedBy: undefined). */
 import { test, expect } from "vitest";
-import { KQContent } from "../src/content";
 import { evaluateSubmission, type SubmissionContext, type SubmissionTask } from "../src/hud/viewdecide";
 import { freshSim } from "./factories/sim";
-import type { QuestTask } from "../src/types";
-import type { Scenario } from "../src/sim/state";
+import { findQuestTask } from "./factories/quest-task";
 
-/** Aufgabe + die Szenarien der Quest-Schritte bis zu ihr (der Weltzustand, den der Schritt vorfindet). */
-function findTask(id: string): { task: QuestTask; scenarios: Scenario[] } {
-  for (const q of KQContent.QUESTS) {
-    const scenarios: Scenario[] = [];
-    for (const step of q.steps) {
-      if (step.scenario) scenarios.push(step.scenario);
-      if (step.type !== "terminal") continue;
-      const task = step.tasks.find(t => t.id === id);
-      if (task) return { task, scenarios };
-    }
-  }
-  throw new Error("Aufgabe nicht gefunden: " + id);
-}
+const findTask = findQuestTask;
 
 const ctx = (over: Partial<SubmissionContext>): SubmissionContext => ({
   simError: false,

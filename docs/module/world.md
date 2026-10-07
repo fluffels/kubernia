@@ -57,7 +57,7 @@ Jeweils Geometrie/Kollision + Anleger/Warp + reservierte NPC-/Quest-Trigger-Stan
 | `src/hud/cull.ts` | Off-screen-Culling & FPS-Messung (#82) + Cluster-Tag-Auswahl `selectVisibleTags` (#416). |
 | `src/hud/labellayout.ts` | Entzerrt sich überlappende In-Welt-Beschriftungen (#207): schiebt horizontal kollidierende Cluster-Tags/Schilder vertikal auseinander (`spreadLabelsVertically`). |
 | `src/hud/containeryard.ts` | Container-Hof-Layout (#303): `CONTAINER_DOCK`/`CONTAINER_LAGER` + `containerBarrelTile`; reine Geometrie für clustersync (Fässer) + scenery (Schuppen). |
-| `src/hud/viewdecide.ts` | Reine Präsentations-Entscheidungen (#500), DOM-frei/testbar: Funk-Session-Priorität + `evaluateSubmission` (Terminal-Bewertung, Modus `accept` oder `check` je Aufgabe, #891) + `scoreReview` (Quiz) + `resolveTalkTarget` (NPC-Routing). |
+| `src/hud/viewdecide.ts` | Reine Präsentations-Entscheidungen (#500), DOM-frei/testbar: Funk-Session-Priorität + `evaluateSubmission` (Terminal-Bewertung, Modus `accept` oder `check` je Aufgabe, #891) + `gateSubmission`/`execUnlessLocked` (Abkürzungs-Gating, greift vor `sim.exec`, #1297) + `scoreReview` (Quiz) + `resolveTalkTarget` (NPC-Routing). |
 | `src/hud/toastlife.ts` | Toast-Anzeigedauer-Politik: kurze Belohnung vs. lesbarer Hinweis (>= 15 s) + Fade-Timing (#370). |
 | `src/hud/kralle.ts` | Kralle-Meilenstein-Sprüche: `krallePracticeMilestone(count)` (zählbewusster Spruch an 1/10/25/50/100…, sonst null, #236). |
 | `src/hud/celebrate.ts` | Erfolgs-Feier-Kern (#314): `enqueueAchievement` bündelt aufgelaufene Erfolge, `bundleCelebration`/`celebrationQuip`/`celebrationTitle` bauen die Anzeige-Sicht + deterministischen DevOps-Spruch; Feier-Overlay + Konfetti in `ui/hud.ts`. |

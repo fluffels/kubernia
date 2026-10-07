@@ -92,6 +92,46 @@ function isReached(task: SubmissionTask, ctx: SubmissionContext, cmdOk: boolean)
   return cmdOk && !ctx.simError && ctx.checkOk;
 }
 
+/** Hinweistext im Terminal-Log, wenn ein gesperrter Befehl gar nicht erst ausgeführt wurde. */
+export const LOCKED_TERMINAL_NOTE = "nicht ausgeführt – Profi-Abkürzung noch gesperrt";
+
+/** Teil des Kontexts, den das Gating braucht. */
+export type GateContext = Pick<SubmissionContext, "isAbbrevUnlocked" | "unlockAbbrev">;
+/** Urteil `locked` der Bewertung. */
+export type LockedVerdict = Extract<SubmissionVerdict, { outcome: "locked" }>;
+
+/**
+ * Abkürzungs-Gating (#299/#366), VOR `sim.exec` aufrufbar (#1297): ein abgelehnter Befehl darf
+ * den Cluster-Zustand nicht ändern. Gegated wird, wenn der Befehl trifft (accept) bzw. im Modus
+ * `check` konservativ jede Eingabe (ob der Weg das Ziel erreicht, ist vor dem Lauf offen).
+ */
+export function gateSubmission(
+  input: string,
+  task: SubmissionTask,
+  ctx: GateContext,
+): LockedVerdict | undefined {
+  const norm = input.trim().replace(/\s+/g, " ");
+  if (!norm) return undefined;
+  const cmdOk = task.accept.some((re) => re.test(norm));
+  if (!cmdOk && task.solvedBy !== "check") return undefined;
+  const hit = lockedAbbrevInInput(norm, ctx.isAbbrevUnlocked, ctx.unlockAbbrev);
+  return hit ? { outcome: "locked", feedback: abbrevLockHint(hit) } : undefined;
+}
+
+/**
+ * Führt `exec` nur aus, wenn das Gating nicht greift. Ohne Aufgabe (freie Session) wird
+ * immer ausgeführt. Bei `locked` läuft `exec` nicht, der Zustand bleibt unverändert.
+ */
+export function execUnlessLocked<R>(
+  input: string,
+  task: SubmissionTask | null,
+  ctx: GateContext,
+  exec: () => R,
+): { locked: LockedVerdict } | { result: R } {
+  const locked = task ? gateSubmission(input, task, ctx) : undefined;
+  return locked ? { locked } : { result: exec() };
+}
+
 /** Begründung für einen Fehlversuch: diag → why → docker-run-Muster → Standardtext. */
 function failureTip(norm: string, task: SubmissionTask): string {
   return (
@@ -108,8 +148,9 @@ function failureTip(norm: string, task: SubmissionTask): string {
  * Reine Entscheidung + fertiger Feedback-Text (die DOM-Schicht umschließt ihn nur
  * mit `<div class="tt-feedback">…</div>` und setzt innerHTML).
  *
- * Reihenfolge wie im bisherigen `termSubmit`:
- * 1. Ist die Aufgabe gelöst (s.u.), nutzt aber ein gesperrtes Kürzel → `locked`
+ * Reihenfolge:
+ * 1. Trifft der Befehl (accept, im Modus `check` jede Eingabe) und nutzt ein gesperrtes
+ *    Kürzel → `locked` (`gateSubmission`, greift in der UI schon VOR `sim.exec`, #1297)
  *    (freundlicher Hinweis statt „falsch", kein Fehlversuch, #299/#366).
  * 2. Gelöst → `solved`. Modus `accept` (Default): Befehl trifft, kein Sim-Fehler,
  *    Zusatzbedingung erfüllt. Modus `check` (#891): allein der Sim-Zielzustand
@@ -127,16 +168,12 @@ export function evaluateSubmission(
   const norm = input.trim().replace(/\s+/g, " ");
   const cmdOk = task.accept.some((re) => re.test(norm));
 
-  // #299/#366: Befehl trifft (accept) bzw. erreicht das Ziel (check), nutzt aber ein noch
-  // gesperrtes Profi-Kürzel → Langform-Hinweis, nicht als gelöst UND nicht als Fehlversuch werten.
-  const reached = isReached(task, ctx, cmdOk);
-  const lockedHit = cmdOk || reached
-    ? lockedAbbrevInInput(norm, ctx.isAbbrevUnlocked, ctx.unlockAbbrev)
-    : undefined;
-  if (lockedHit) {
-    return { outcome: "locked", feedback: abbrevLockHint(lockedHit) };
-  }
+  // #299/#366/#1297: gesperrtes Profi-Kürzel → Langform-Hinweis, nicht als gelöst UND nicht
+  // als Fehlversuch werten (dieselbe Regel, die vor `sim.exec` greift: `gateSubmission`).
+  const gate = gateSubmission(norm, task, ctx);
+  if (gate) return gate;
 
+  const reached = isReached(task, ctx, cmdOk);
   if (reached) {
     return { outcome: "solved", longForms: longFormsInInput(norm) };
   }

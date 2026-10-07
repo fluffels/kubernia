@@ -89,7 +89,7 @@ export function transkriptZeilen(jsonlText) {
 }
 
 /** Transkript → Tool-Events; `tool_use` und `tool_result` werden über die ID verknüpft. Nimmt den JSONL-Text oder die Zeilen aus `transkriptZeilen`. */
-export function toolEventsFromTranscript(textOderZeilen) {
+export function toolEventsFromTranscript(textOderZeilen, agent = null) {
   const events = [];
   const byId = new Map();
   const zeilen = Array.isArray(textOderZeilen) ? textOderZeilen : transkriptZeilen(textOderZeilen);
@@ -98,7 +98,7 @@ export function toolEventsFromTranscript(textOderZeilen) {
     if (!Array.isArray(content)) continue;
     for (const c of content) {
       if (row.type === "assistant" && c?.type === "tool_use") {
-        const ev = { ts: row.timestamp, tool: c.name, input: c.input ?? {}, resultChars: 0 };
+        const ev = { ts: row.timestamp, tool: c.name, input: c.input ?? {}, resultChars: 0, agent };
         events.push(ev);
         if (c.id) byId.set(c.id, ev);
       } else if (row.type === "user" && c?.type === "tool_result") {
@@ -125,7 +125,7 @@ export function mitEingabe(meta, io) {
 }
 
 /** Langfuse-Observations (Typ TOOL, Hook `langfuse-observability`) → Tool-Events. */
-export function toolEventsFromLangfuse(observations) {
+export function toolEventsFromLangfuse(observations, agentOf = () => null) {
   const events = [];
   for (const o of observations) {
     if (o?.type !== "TOOL") continue;
@@ -143,9 +143,53 @@ export function toolEventsFromLangfuse(observations) {
       tool: o.metadata?.tool_name ?? String(o.name ?? "").replace(/^Tool:\s*/, "").replace(/\s*\[.*\]$/, ""),
       input: input && typeof input === "object" ? input : {},
       resultChars: Number.isFinite(len) ? len : 0,
+      agent: agentOf(o) ?? null,
     });
   }
   return events;
+}
+
+const ECHO_CMDS = new Set(["echo", "write-output", "write-host"]);
+const PFLEGE_MARKER = /^pflege:\s*(start|ende)\b/i;
+
+/**
+ * Phasen-Marker des Pflegeschritts (#1099): ein einfaches `echo "pflege: start|ende …"` als Shell-Befehl.
+ * Nur Bash/PowerShell, nur als Kommando `echo` (ein `grep "pflege: start"` oder ein Commit-Text zählt nicht).
+ */
+export function pflegeMarker(ev) {
+  if (ev?.tool !== "Bash" && ev?.tool !== "PowerShell") return null;
+  for (const words of commandsOf(ev.input?.command, ev.tool)) {
+    if (!ECHO_CMDS.has((words[0] ?? "").toLowerCase())) continue;
+    const m = PFLEGE_MARKER.exec(words.slice(1).join(" ").replace(/["']/g, "").trim());
+    if (m) return m[1].toLowerCase();
+  }
+  return null;
+}
+
+/**
+ * Pflege-Intervalle je Agent aus den Markern: Start öffnet, Ende schließt. Ein zweiter Start bei offenem
+ * Intervall ersetzt den alten; Ende ohne Start und ein bis zum Schluss offener Start zählen als `unpaired`.
+ */
+export function pflegeIntervals(events) {
+  const sorted = [...events].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+  const open = new Map();
+  const intervals = [];
+  let unpaired = 0;
+  for (const ev of sorted) {
+    const kind = pflegeMarker(ev);
+    if (!kind) continue;
+    const agent = ev.agent ?? null;
+    if (kind === "start") {
+      if (open.has(agent)) unpaired += 1;
+      open.set(agent, ev.ts);
+    } else if (open.has(agent)) {
+      intervals.push({ agent, from: open.get(agent), to: ev.ts });
+      open.delete(agent);
+    } else {
+      unpaired += 1;
+    }
+  }
+  return { intervals, unpaired: unpaired + open.size };
 }
 
 const tokens = (chars) => Math.round(chars / CHARS_PER_TOKEN);

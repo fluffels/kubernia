@@ -8,7 +8,7 @@ export const meta = {
     { title: 'Plan', detail: 'Planungs-Subagent vor der ersten Zeile Code bzw. Epic-Aufteilung', model: 'kubernia-planner (opus) + effort xhigh' },
     { title: 'Sonderfall', detail: 'Epic-Kinder aus dem Plan anlegen bzw. Dependabot-Sammelticket auflösen (kein Code)', model: 'sonnet' },
     { title: 'Pre-Flight', detail: 'Weichen vor dem Coden selbst entscheiden; nur bei Irreversiblem/Außenwirkung anhalten + Fragen vorlegen (#1012/#1279)' },
-    { title: 'Umsetzen', detail: 'Worktree, TDD, npm run verify, im Browser verifizieren, committen', model: 'sonnet' },
+    { title: 'Umsetzen', detail: 'Worktree, TDD, Projekt-Brain pflegen (Marker pflege:), npm run verify, im Browser verifizieren, committen', model: 'sonnet' },
     { title: 'Review', detail: 'Lenses parallel als Konvergenzschleife (Cap 2 Fix-Runden, höchstens 3 Pässe, frischer Kritiker, #1012): 3 für Code, 1 Doku-Lens für reines Markdown, ab Runde 2 nur blockierte Brillen auf dem Delta (#1265)', model: 'kubernia-lens (opus) + effort high' },
     { title: 'Nachbessern', detail: 'nur bei blockierenden Findings oder rotem verify' },
     { title: 'PR + Merge', detail: 'PR öffnen, Auto-Merge; Harness-Diff → Audit-Kommentar (#1069); rot → max. 3 Fix-Versuche' },
@@ -66,6 +66,12 @@ damit keine zweite, veraltende Wahrheit entsteht.
 Commit-Identität ist die lokale Repo-Config (fluffels). Das Repo ist öffentlich und
 bewusst anonym: nie Klarname, externer Benutzername oder dienstliche/private
 E-Mail in Dateien, Commits oder Kommentaren (AGENTS.md § Anonymität wahren).`
+
+/** Phasen-Marker des Pflegeschritts (#1099): je ein eigener Shell-Befehl; `scripts/brain-metrics.mjs` erkennt ihn. */
+const pflegeMarkerBefehl = (nr, art) => `echo "pflege: ${art} #${nr}"`
+
+/** Lese-Konvention für Brain-Seiten (#1205): `Read` statt Shell, damit die Messung und der Kontext stimmen. */
+const BRAIN_LESEN = `Brain-Seiten (docs/**.md) liest du nach dem Kopf von docs/referenz/anlaufstellen.md mit dem Read-Tool, große Seiten abschnittsweise mit offset/limit — nie per cat/sed/head/Get-Content.`
 
 const AUSWAHL_SCHEMA = {
   type: 'object',
@@ -438,6 +444,7 @@ function nachweisFuerPr({ konvergiert, head, stand, plan }) {
 // Die Prüfpunkte stehen EINMAL im Skill (.claude/skills/review-lenses/SKILL.md, Quelle) und hier wörtlich (normalisiert:
 // ohne **, Backticks, Links, Doku-Nummerierung); test/harness/lens-abgleich.test.ts verlangt Gleichheit. Der Auftrag wird
 // aus Einleitung, Prüfliste, Hinweis und Regel-Ausschnitt gebaut; der Block bleibt selbsttragend (kein Modulbezug).
+const BRAIN_PRUEFPUNKT = 'Projekt-Brain: Brain-Änderungen (docs/) wie Code beurteilen: stimmt der Inhalt mit Code und Skripten überein, und liegt jedes Stück nach Wissensart am richtigen Ort (AGENTS.md § Projekt-Brain pflegen)? Eine Fehleinordnung (Regel außerhalb einer AGENTS.md, umgeschriebener ADR, laufender Stand oder Tagebuch-Notiz im Brain, neue Seite nicht im Index) ist blockierend; bleibt offensichtlich Übertragbares ungepflegt, ein Hinweis mit dem konkreten Kandidaten.'
 const LENS_QUELLE = [
   {
     key: 'architektur',
@@ -461,6 +468,7 @@ const LENS_QUELLE = [
       'Betrifft es Spielinhalte/Quests/Steuerung → README mitgezogen? Neues src/-Modul → Backtick-Pfad-Zeile im passenden docs/module/-Tiefendoc ergänzt (nicht in die Repo-Landkarte, #907)?',
       'Berührt es das Save-Format → migriert (Version-Bump + Migrationskette), alter Stand bleibt heil?',
       'Fügt der Diff Agenten, Subagenten, MCP-Server, Hooks oder Plugins hinzu oder konfiguriert er sie um → ist die Langfuse-Erfassung im PR belegt (AGENTS.md § Langfuse-Erfassung erhalten)? Messbehauptungen in Diff, PR oder Zusammenfassung: gib der Lens die Rohwerte mit (Session-IDs, Zeitfenster, Zählung je Quelle), sie hat keine Langfuse-Tools und prüft sonst nur die Transkript-Seite per node scripts/token-baseline.mjs --session <id>; ohne Rohwerte meldet sie „nicht belegt“ (Hinweis).',
+      BRAIN_PRUEFPUNKT,
     ],
     hinweis: '',
     regel: 'Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):\nAGENTS.md § Doku aktuell halten + § Spielstände. Schichtungs- und Test-Fragen gehören den\nanderen beiden Brillen — lies sie nicht mit.',
@@ -486,8 +494,9 @@ const LENS_QUELLE = [
       'Wächter-Kopplung: ändert der Diff eine Regel, die ein Wächter erzwingt (Regel-Begriff in test/harness/ und scripts/ greppen)? Erzwingt er weiter die alte Fassung, ist das blockierend — dann fehlt eine Code-Änderung.',
       '⭐ Oberste Regel: trägt die Regel noch bei 10× Inhalt, Tickets und parallelen Agenten?',
       'Langfuse-Erfassung: konfiguriert der Diff Agenten, Subagenten, MCP-Server, Hooks oder Plugins um → ist die Erfassung im PR belegt (AGENTS.md § Langfuse-Erfassung erhalten)?',
+      BRAIN_PRUEFPUNKT,
     ],
-    hinweis: 'Eine Test-Brille entfällt, weil es ohne Code nichts zu sabotieren gibt; die Architektur-Fragen einer Doku stecken in den Punkten 2 und 3. Prüfe darum alle fünf.',
+    hinweis: 'Eine Test-Brille entfällt, weil es ohne Code nichts zu sabotieren gibt; die Architektur-Fragen einer Doku stecken in den Punkten 2 und 3. Prüfe darum alle sechs.',
     regel: 'Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):\nAGENTS.md Kopf (SSOT) + § Doku aktuell halten + § Oberste Regel.',
   },
 ]
@@ -852,7 +861,12 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
   Was auffällt, aber nicht zum Ticket gehört: nicht inline mitfixen, sondern festhalten
   (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Notfälle ausgenommen), Spiel-/Inhalts-Befund → Issue.
 - § Doku aktuell halten ist Teil von „fertig" — im SELBEN Branch.
+- § Projekt-Brain pflegen (AGENTS.md § Doku aktuell halten), zum Schluss VOR dem abschließenden npm run verify
+  und dem Commit: ist Übertragbares entstanden, nach Wissensart einordnen. Eingerahmt von
+  \`${pflegeMarkerBefehl(nr, 'start')}\` davor und \`${pflegeMarkerBefehl(nr, 'ende')}\` danach (je ein eigener
+  Shell-Befehl, auch wenn nichts entstand; Messung: docs/model-routing.md §5).
 - Deutsch mit echten Umlauten in Texten und Kommentaren; Dateinamen bleiben ASCII.
+- ${BRAIN_LESEN}
 
 Gates: npm run verify muss grün sein (Exit 0). Läuft es rot und du kannst es nicht
 beheben, gib verifyGruen=false mit der Fehlerausgabe zurück statt es zu verschleiern
@@ -863,7 +877,8 @@ Quell-PNG nach assets/pixellab/ (AGENTS.md § PixelLab-Grafik ablegen). Stehen d
 Verfügung, gib ergebnis="abgebrochen" mit abbruchgrund "PixelLab-Asset fehlt: <welches>" zurück,
 KEIN prozeduraler Platzhalter.
 Lernkandidaten: gib in lernkandidaten höchstens 3 Punkte zurück, nur projektübergreifendes Wissen
-(nichts Kubernia-Spezifisches, das gehört in Befunde), sonst leer. Du legst nichts selbst ab.
+(Kubernia-Spezifisches gehört ins Projekt-Brain bzw. als Befund ins Sammelticket/Issue), sonst leer.
+Für Lernkandidaten legst du nichts selbst ab.
 
 Ist das Ticket das Sammelticket „Harness-Härtung (gesammelt)", setze ALLE Zeilen um (auch später
 dazugekommene und beim Arbeiten gefundene Befunde), nichts auslagern (AGENTS.md § Harness-Befunde sind
@@ -1109,6 +1124,7 @@ ${hinweise.map((f) => `- [${f.ort}] ${f.befund}`).join('\n')}
 }
 Danach npm run verify erneut, bis grün. Bleib im Ticket-Scope: Punkte, die ein eigenes
 Ticket brauchen, nicht inline mitfixen (⭐ oberste Regel). Committe mit (#${nr}).
+${BRAIN_LESEN}
 Melde verifyGruen und was du behoben bzw. bewusst liegen gelassen hast (mit Grund).
 
 ${patchAuftrag(nr, reviewRunden + 1, diff.head)}`,
