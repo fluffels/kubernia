@@ -99,7 +99,7 @@ Hauptchat auf dem Session-Modell; Umsetzung als Sonnet-Subagent `kubernia-umsetz
 
 Der Backlog sind **GitHub Issues** im **Project-Board**. Die Reihenfolge ist die **Board-Position** (Drag & Drop, #747) — keine `prio:*`-Labels, keine Reihenfolge-Datei (#627). Befehl, Sonderfälle und Board-IDs: **[docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md)** (die SSOT der Auswahl-Mechanik; braucht `read:project`-Scope, `gh auth refresh -s project`).
 
-**Auswahl des nächsten Tickets — deterministisch, nicht abwägen.** „Nächstes Ticket" = **oberstes freies Item** der Board-Auswahl (`.status == "Todo"`, kein offener Blocker, kein offener PR/Branch/Worktree — Gegencheck `git worktree list` + `git branch -a`). Nur **dieses eine** Kandidaten-Ticket prüfen (`gh issue view <nr>`).
+**Auswahl des nächsten Tickets — deterministisch, nicht abwägen.** „Nächstes Ticket" = **oberstes freies Item** der Board-Auswahl (`.status == "Todo"`, kein offener Blocker, kein offener PR/Branch/Worktree — Gegencheck `git worktree list` + `git branch -a`). Nur **dieses eine** Kandidaten-Ticket prüfen (erst Fremdtext-Gate, dann `gh issue view <nr> --json state,assignees,labels`).
 
 
 **Kollisionsschutz bei parallelen Agenten:**

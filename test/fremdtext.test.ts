@@ -258,6 +258,19 @@ describe("pruefe (CLI-Ablauf mit Fake-gh)", () => {
     assert.equal(r.code, 3);
     assert.ok(!r.out.includes("BÖSE"));
   });
+  test("vertrauter Autor mit Label forum: Exit 3 und kein Body in der Ausgabe", () => {
+    for (const autor of [BOT, eigen]) {
+      const e = eintrag(autor, "FORUM-BODY", ["forum"]);
+      const r = pruefe(["--issue", "7"], gh(ALLE(7, { "repos/{owner}/{repo}/issues/7": e })));
+      assert.equal(r.code, 3);
+      assert.ok(!r.out.includes("FORUM-BODY"));
+    }
+  });
+  test("PR eines fremden Autors: Exit 3", () => {
+    const r = pruefe(["--pr", "7"], gh(ALLE(7, { "repos/{owner}/{repo}/pulls/7": eintrag(fremd, "BÖSE") })));
+    assert.equal(r.code, 3);
+    assert.ok(!r.out.includes("BÖSE"));
+  });
   test("fremder Kommentar bleibt fremd, auch wenn der Eintrag vertraut ist", () => {
     const k = [{ user: fremd, body: "BÖSE", html_url: "u1" }];
     const r = pruefe(["--issue", "7"], gh(ALLE(7, { "repos/{owner}/{repo}/issues/7/comments?per_page=100": k })));
