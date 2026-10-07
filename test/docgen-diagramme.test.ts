@@ -106,20 +106,31 @@ describe("Platzhalter: Rot-Fälle", () => {
     rot("${konstante:keine}", /MAX_X fehlt in leer\.js/);
     rot("${konstante:doppelt}", /steht mehrfach/);
     rot("${konstante:summe}", /kein Ganzzahl-Literal/);
+    // eine auskommentierte Zeile zählt nicht als zweite Deklaration
+    assert.equal(ersetze("${konstante:cap}", basis({ "wf.js": "// const MAX_X = 1\nexport const MAX_X = 2;\n" })), "2");
   });
   test("gates: unbekannte Kette, Kette fehlt im package.json", () => {
     rot("${gates:nix}", /steht nicht in config\.gates\.chains/);
     const f = basis({ "package.json": JSON.stringify({ scripts: { verify: "npm test" } }) });
     rot("${gates:verify:full}", /fehlt in package\.json/, f);
   });
-  test("ci-check: Name ohne passende name:-Zeile, fehlender Ordner", () => {
-    rot("${ci-check:Gibt es nicht}", /CI-Check "Gibt es nicht" hat keine passende name:-Zeile/);
+  test("geschweifte Klammer im Modell (Frontmatter) bricht ab", () => {
+    const f = basis({ ".claude/agents/k.md": "---\nname: k\nmodel: a{b\n---\n" });
+    rot("${agent-modell:k}", /Zeichen, das Mermaid bricht/, f);
+  });
+  test("ci-check: Workflow- und Step-Namen gelten nicht als Required Check", () => {
+    const f = basis({ ".github/workflows/y.yml": "name: Nur Workflow\njobs:\n  t:\n    steps:\n      - name: Nur Step\n" });
+    rot("${ci-check:Nur Workflow}", /Job-name/, f);
+    rot("${ci-check:Nur Step}", /Job-name/, f);
+  });
+  test("ci-check: Name ohne passende Job-name:-Zeile, fehlender Ordner", () => {
+    rot("${ci-check:Gibt es nicht}", /CI-Check "Gibt es nicht" hat keine passende Job-name:-Zeile/);
     const f = basis();
     delete f[".github/workflows/x.yml"];
     rot("${ci-check:CI}", /CI-Workflow-Ordner|nicht gefunden/, f);
   });
-  test("unsicherer Ersatzwert (Anführungszeichen, spitze Klammer, Semikolon) bricht ab", () => {
-    for (const bad of ['a"b', "a<b", "a;b", "a#b"]) {
+  test("unsicherer Ersatzwert (Anführungszeichen, spitze Klammern, Semikolon, Raute) bricht ab", () => {
+    for (const bad of ['a"b', "a<b", "a>b", "a;b", "a#b"]) {
       const f = basis({ ".claude/agents/bad.md": `---\nname: ${bad}\n---\n` });
       rot("${agent:" + bad + "}", /Zeichen, das Mermaid bricht/, f);
     }
@@ -145,6 +156,10 @@ describe("Vollständigkeit (AK4)", () => {
     const f = basis({ ".claude/agents/neu.md": agent("neu", "sonnet") });
     assert.throws(() => erzeuge("voll", f), /Subagent "neu"/);
   });
+  test("ein Subagent nur über agent-modell zählt als genannt", () => {
+    const f = basis({ "docs/diagramme/voll.mmd": VOLL.replace("A ${agent:plan}", "A ${agent-modell:plan}") });
+    assert.ok(erzeuge("voll", f).includes("A opus · xhigh"));
+  });
   test("ein Skill nur über skill-modell zählt als genannt", () => {
     const f = basis({ "docs/diagramme/voll.mmd": VOLL.replace("C ${skill:flow}", "C ${skill-modell:flow}") });
     assert.ok(erzeuge("voll", f).includes("C Session-Modell"));
@@ -162,8 +177,8 @@ describe("Factory", () => {
     assert.equal(lines[1], "---");
     assert.equal(lines.at(-1), "```");
     assert.equal(lines.at(-2), "nur plan");
-    const crlf = erzeuge("frei", basis({ "docs/diagramme/frei.mmd": "nur ${agent:plan}\r\n\r\n" }));
-    assert.equal(crlf, lf);
+    const crlf = erzeuge("frei", basis({ "docs/diagramme/frei.mmd": "nur ${agent:plan}\r\nzweite Zeile\r\n\r\n" }));
+    assert.equal(crlf, erzeuge("frei", basis({ "docs/diagramme/frei.mmd": "nur ${agent:plan}\nzweite Zeile\n" })));
     assert.ok(!crlf.includes("\r"));
   });
   test("fehlende Vorlagen-Datei und fehlender Config-Eintrag sind rot", () => {
@@ -171,6 +186,15 @@ describe("Factory", () => {
     delete f["docs/diagramme/frei.mmd"];
     assert.throws(() => erzeuge("frei", f), /Vorlage docs\/diagramme\/frei\.mmd nicht gefunden/);
     assert.throws(() => erzeuge("unbekannt"), /config\.diagramme\.vorlagen\.unbekannt fehlt/);
+  });
+  test("fehlt .claude/agents ganz, ist die Katalog-Liste leer und der Platzhalter rot (bekannt: keine)", () => {
+    const f = basis();
+    for (const k of Object.keys(f)) if (k.startsWith(".claude/agents/")) delete f[k];
+    assert.throws(() => erzeuge("frei", f), /bekannt: keine/);
+  });
+  test("Vorlagenpfad steht in der Vollständigkeitsmeldung genau einmal", () => {
+    const f = basis({ "docs/diagramme/voll.mmd": VOLL.replace("C ${skill:flow}\n", "") });
+    assert.throws(() => erzeuge("voll", f), (e: Error) => e.message.split("docs/diagramme/voll.mmd").length === 2);
   });
   test("Fehlermeldung nennt die Vorlage", () => {
     const f = basis({ "docs/diagramme/frei.mmd": "${agent:nix}" });

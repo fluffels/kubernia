@@ -5,9 +5,9 @@ sequenceDiagram
   participant P as ${agent:kubernia-planner}<br/>${agent-modell:kubernia-planner}
   participant E as ${agent:Explore}<br/>${agent-modell:Explore}
   participant U as ${agent:kubernia-umsetzer}<br/>${agent-modell:kubernia-umsetzer}
-  participant L1 as ${agent:kubernia-lens}<br/>Brille Architektur
-  participant L2 as ${agent:kubernia-lens}<br/>Brille Requirement-Treue
-  participant L3 as ${agent:kubernia-lens}<br/>Brille Test-Adäquanz
+  participant L1 as ${agent:kubernia-lens} · ${agent-modell:kubernia-lens}<br/>Brille Architektur
+  participant L2 as ${agent:kubernia-lens} · ${agent-modell:kubernia-lens}<br/>Brille Requirement-Treue
+  participant L3 as ${agent:kubernia-lens} · ${agent-modell:kubernia-lens}<br/>Brille Test-Adäquanz
   participant CI as CI und Required Checks
 
   Note over H: alternativ Skill ${skill:kubernia-workflow}:<br/>Workflow ${workflow:kubernia-ticket} fährt denselben Ablauf

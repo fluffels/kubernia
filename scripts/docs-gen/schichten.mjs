@@ -93,8 +93,6 @@ export function istKanten(cruiseJson, modell) {
   return sortiere([...gefunden.values()], modell);
 }
 
-
-
 /** Mermaid-Flowchart (in einem Code-Fence) für die Kantenmenge `kanten`. */
 export function renderDiagramm(modell, kanten) {
   const idx = indexVon(modell);

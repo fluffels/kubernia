@@ -73,11 +73,12 @@ flowchart TD
   alarm["Alarm-Issue: CI rot auf main"]
   forum["Forum-Eingang<br/>Skill forum"]
 
-  board --> claim --> wt --> plan --> epic
+  board --> claim --> plan --> epic
   epic -- ja --> kinder --> board
   epic -- nein --> pre
-  pre -- ja --> frage --> umsetzen
-  pre -- nein --> umsetzen
+  pre -- ja --> frage --> wt
+  pre -- nein --> wt
+  wt --> umsetzen
   umsetzen --> verify
   verify -- nein --> umsetzen
   verify -- ja --> lenses

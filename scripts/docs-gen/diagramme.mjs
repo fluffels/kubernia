@@ -18,14 +18,14 @@ const NAMENSARTEN = ["agent", "agent-modell", "skill", "skill-modell", "workflow
 
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** Liest die Namen der `name:`-Zeilen aller Workflow-Dateien (Anführungszeichen erlaubt). */
+/** Liest die Job-Namen (`name:` mit 4 Leerzeichen Einrückung unter `jobs.<id>`, Anführungszeichen erlaubt); Workflow- und Step-Namen zählen nicht. */
 function ciJobNamen(rootDir, dir) {
   const abs = join(rootDir, dir);
   if (!existsSync(abs)) throw new Error(`CI-Workflow-Ordner ${dir} nicht gefunden (Config diagramme.ciWorkflows veraltet?)`);
   const namen = new Set();
   for (const f of readdirSync(abs).filter((n) => /\.ya?ml$/.test(n))) {
     for (const l of readFileSync(join(abs, f), "utf8").split(/\r?\n/)) {
-      const m = /^\s*(?:-\s+)?name:\s*(.*?)\s*$/.exec(l);
+      const m = /^ {4}name:\s*(.*?)\s*$/.exec(l);
       if (m) namen.add(m[1].replace(/^(["'])(.*)\1$/, "$2"));
     }
   }
@@ -91,7 +91,7 @@ export function ersetzePlatzhalter(text, { rootDir, config }) {
         return gatesAnzahl(rootDir, config, wert);
       case "ci-check": {
         ciNamen ??= ciJobNamen(rootDir, cfg.ciWorkflows ?? ".github/workflows");
-        if (!ciNamen.has(wert)) throw new Error(`CI-Check "${wert}" hat keine passende name:-Zeile in ${cfg.ciWorkflows ?? ".github/workflows"}`);
+        if (!ciNamen.has(wert)) throw new Error(`CI-Check "${wert}" hat keine passende Job-name:-Zeile in ${cfg.ciWorkflows ?? ".github/workflows"}`);
         return wert;
       }
       default:

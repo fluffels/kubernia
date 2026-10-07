@@ -266,11 +266,12 @@ flowchart TD
   alarm["Alarm-Issue: CI rot auf main"]
   forum["Forum-Eingang<br/>Skill forum"]
 
-  board --> claim --> wt --> plan --> epic
+  board --> claim --> plan --> epic
   epic -- ja --> kinder --> board
   epic -- nein --> pre
-  pre -- ja --> frage --> umsetzen
-  pre -- nein --> umsetzen
+  pre -- ja --> frage --> wt
+  pre -- nein --> wt
+  wt --> umsetzen
   umsetzen --> verify
   verify -- nein --> umsetzen
   verify -- ja --> lenses
@@ -332,9 +333,9 @@ sequenceDiagram
   participant P as kubernia-planner<br/>opus · xhigh
   participant E as Explore<br/>haiku · low
   participant U as kubernia-umsetzer<br/>sonnet · medium
-  participant L1 as kubernia-lens<br/>Brille Architektur
-  participant L2 as kubernia-lens<br/>Brille Requirement-Treue
-  participant L3 as kubernia-lens<br/>Brille Test-Adäquanz
+  participant L1 as kubernia-lens · opus · high<br/>Brille Architektur
+  participant L2 as kubernia-lens · opus · high<br/>Brille Requirement-Treue
+  participant L3 as kubernia-lens · opus · high<br/>Brille Test-Adäquanz
   participant CI as CI und Required Checks
 
   Note over H: alternativ Skill kubernia-workflow:<br/>Workflow kubernia-ticket fährt denselben Ablauf
