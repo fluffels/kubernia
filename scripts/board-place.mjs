@@ -4,25 +4,48 @@
  * EINE Listenabfrage, Item-IDs werden wiederverwendet, die Positionen laufen nacheinander mit kurzer
  * Pause — statt je Ticket die komplette Liste neu zu laden (vermeidet das GraphQL-Rate-Limit).
  *
- *   node scripts/board-place.mjs --top 1240 1241 1242        # in dieser Reihenfolge an die Spitze
+ *   node scripts/board-place.mjs --top 1240 1241 1242        # an die Spitze, aber hinter das ungeclaimte Sammelticket geklemmt
+ *   node scripts/board-place.mjs --notfall rot-main --top 1240   # echter Notfall: wirklich ganz oben
  *   node scripts/board-place.mjs --after 1206 1240 1241      # in dieser Reihenfolge hinter #1206
  *   node scripts/board-place.mjs --dry-run --top 1240        # nur anzeigen
- *   node scripts/board-place.mjs --position 6 1312           # als N. Todo-Item (z.B. Sammelticket)
+ *   node scripts/board-place.mjs --position 4 1312           # als N. Todo-Item (z.B. Sammelticket, Position laut AGENTS.md)
  *   node scripts/board-place.mjs --missing                   # offene Issues ohne Board-Item (nur Bericht)
+ *
+ * Nie vor das ungeclaimte Sammelticket: `--top`, `--after` und `--position` klemmen den Anker hinter das offene, nicht zugewiesene
+ * Sammelticket „Harness-Härtung (gesammelt)“ (sonst rückt es nicht nach vorn); die Ausgabe nennt die Klemmung. Nur echte Notfälle
+ * (`--notfall <art>`, nur mit `--top`) stehen ganz oben. Das Sammelticket selbst (`--position 4 <nr>`) wird nicht geklemmt.
  *
  * Nummern, die die Board-Liste noch nicht liefert (frische Items kommen verzögert), werden
  * gemeldet und übersprungen: später erneut aufrufen. Bei Rate-Limit sofort stoppen, den Rest melden.
  */
 import { pathToFileURL } from "node:url";
-import { abortMessage, ankerNummerFuerPosition, loadItems, loadOpenIssueNumbers, missingFromBoard, planPlacements, setPosition } from "./board-lib.mjs";
+import { abortMessage, loadItems, loadOpenIssueNumbers, missingFromBoard, planFuerArgs, setPosition } from "./board-lib.mjs";
+
+/** Echte Notfälle, die ganz nach oben dürfen: roter main, Security, Dependabot, Forum-Eingang. */
+export const NOTFALL_ARTEN = ["rot-main", "security", "dependabot", "forum"];
 
 const PAUSE_MS = 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** Argumente → { anchor, numbers, dry } bzw. { position, numbers, dry } bzw. { missing } oder null bei falscher Benutzung. */
+/**
+ * Argumente → { anchor, numbers, dry } bzw. { position, numbers, dry } bzw. { missing } oder null bei falscher Benutzung.
+ * `--notfall <art>` (Art aus NOTFALL_ARTEN) gilt nur zusammen mit `--top` und setzt `notfall` im Ergebnis.
+ */
 export function parseArgs(argv) {
   const dry = argv.includes("--dry-run");
-  const rest = argv.filter((a) => a !== "--dry-run");
+  let rest = argv.filter((a) => a !== "--dry-run");
+  const nIdx = rest.indexOf("--notfall");
+  let notfall = null;
+  if (nIdx >= 0) {
+    notfall = rest[nIdx + 1];
+    rest = [...rest.slice(0, nIdx), ...rest.slice(nIdx + 2)];
+    if (!NOTFALL_ARTEN.includes(notfall) || rest[0] !== "--top") return null;
+  }
+  const geparst = parseOhneNotfall(rest, dry);
+  return geparst && notfall ? { ...geparst, notfall } : geparst;
+}
+
+function parseOhneNotfall(rest, dry) {
   if (rest.length === 1 && rest[0] === "--missing") return { missing: true, dry };
   if (rest[0] === "--position") {
     const [n, nr, ...more] = rest.slice(1).map((a) => Number(a.replace(/^#/, "")));
@@ -52,16 +75,15 @@ function reportMissing() {
 async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   if (!args) {
-    console.error("Aufruf: board-place.mjs [--dry-run] (--top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing)");
+    console.error("Aufruf: board-place.mjs [--dry-run] ([--notfall <art>] --top <nr>... | --after <ankernr> <nr>... | --position <N> <nr> | --missing)");
     process.exit(2);
   }
   if (args.missing) return reportMissing();
   let plan;
   try {
     const items = loadItems();
-    if (args.position) {
-      plan = planPlacements(items, args.numbers, ankerNummerFuerPosition(items, args.position, args.numbers[0]));
-    } else plan = planPlacements(items, args.numbers, args.anchor);
+    plan = planFuerArgs(items, args);
+    if (plan.klemmung.geklemmt) console.log(`Hinter das ungeclaimte Sammelticket #${plan.klemmung.sammelticket} geklemmt (Notfall: --notfall <art>, nur mit --top, ${NOTFALL_ARTEN.join("|")}).`);
   } catch (e) {
     console.error(`✖ Abbruch: ${abortMessage(e.message)}. Später erneut fahren.`);
     process.exit(1);

@@ -8,6 +8,9 @@
  * quadratisches Backtracking bei `~/~/…`) und die exakten Schranken.
  */
 import { describe, test } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 // @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
 import * as raw from "../../scripts/gh-guard-hook.mjs";
@@ -216,5 +219,20 @@ describe("Absicherung der vier Stellen aus dem Review-Pass (#1316 Z2)", () => {
     fragt("GH=gh; foo 2>&1 && x; & $GH api -X DELETE x");
     fragt("GH=gh; . $GH api -X DELETE x");
     laeuft("jq . $F repos/o/r/issues/1 # gh api");
+  });
+});
+
+describe("Wrapper-Tabelle gehört zu den importfreien Tabellen (#1322 Z15)", () => {
+  const lies = (rel: string) => readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../..", rel), "utf8");
+
+  test("WRAPPER_NAMEN und WRAPPERS kommen aus shell-tabellen.mjs; die Namen sind die Schlüssel der Tabelle", () => {
+    const t = tab as unknown as { WRAPPER_NAMEN: Set<string>; WRAPPERS: Record<string, unknown> };
+    assert.deepEqual([...t.WRAPPER_NAMEN].sort(), Object.keys(t.WRAPPERS).sort());
+    for (const n of ["time", "env", "sudo", "timeout", "xargs"]) assert.ok(t.WRAPPER_NAMEN.has(n), n);
+  });
+
+  test("der gh-Guard hängt nicht am Worktree-Guard (fs/os-Importe), shell-tabellen.mjs ist importfrei", () => {
+    assert.doesNotMatch(lies("scripts/gh-guard-hook.mjs"), /from "\.\/worktree-guard/);
+    for (const datei of ["scripts/shell-tabellen.mjs", "scripts/bash-parser.mjs"]) assert.doesNotMatch(lies(datei), /^\s*import\s/m, datei);
   });
 });

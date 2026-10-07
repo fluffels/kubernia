@@ -401,7 +401,7 @@ class Parser {
 
   /** Umleitungen hinter einem zusammengesetzten Kommando (`done < <(x)`, `} 2>&1`, `fi <<EOF`). */
   redirs(node) {
-    node.substs = [];
+    node.substs = [...(node.substs ?? [])]; // `for x in $(…)`/`case $(…) in` bringen ihre Ersetzungen mit: nicht überschreiben
     node.heredocs = [];
     for (;;) {
       const t = this.peek();
@@ -571,4 +571,36 @@ export function parseBash(command) {
     if (e instanceof RangeError) return { ok: false, reason: "Stack erschöpft" };
     throw e;
   }
+}
+
+/** Führendes Zuweisungswort (`LANG=C`, `X=1`): Umgebungs-Präfix bzw. reine Zuweisung, kein Kommandoname. */
+export const ASSIGN_RE = /^[A-Za-z_]\w*=/;
+
+/**
+ * Alle einfachen Kommandos eines AST als Wortlisten (`w.text`), rekursiv über Listen, Und-Oder, Pipes, `if`/Schleifen/`case`,
+ * Gruppen und über die Ersetzungen (`$(…)`, Backticks, `<(…)`) samt Heredoc-Bodies mit Ersetzungen. Führende Zuweisungswörter
+ * fallen weg (`LANG=C cat x` → `["cat","x"]`); eine reine Zuweisung (`X=1`) ergibt kein Kommando. Reihenfolge: Quelltext-nah,
+ * ein Kommando vor den Kommandos seiner Ersetzungen. Wörter innerhalb von Strings (`bash -c '…'`) sind nicht zerlegt.
+ */
+export function einfacheKommandos(ast) {
+  const out = [];
+  const gehe = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const n of node) gehe(n);
+      return;
+    }
+    if (node.type === "simple") {
+      const worte = node.words.map((w) => w.text);
+      let i = 0;
+      while (i < worte.length && ASSIGN_RE.test(worte[i])) i += 1;
+      if (i < worte.length) out.push(worte.slice(i));
+      gehe(node.substs);
+      for (const h of node.heredocs ?? []) gehe(h.substs);
+      return;
+    }
+    for (const v of Object.values(node)) if (v && typeof v === "object") gehe(v);
+  };
+  gehe(ast);
+  return out;
 }

@@ -3,7 +3,7 @@
  * Board-Helfer (#1217): Einsortieren mehrerer Tickets mit EINER Listenabfrage als pure, getestete
  * Funktion (test/board.test.ts); nur die gh-Aufrufe ganz unten sind ungetestet.
  *
- * Item-Form (normalisiert aus der REST-Liste der Board-Items): { id, number, status }.
+ * Item-Form (normalisiert aus der REST-Liste der Board-Items): { id, number, status, title, assignees (Logins), state (open|closed) }.
  *
  * Nur Node-Builtins, analog zu den anderen scripts/-Wächtern.
  */
@@ -36,6 +36,50 @@ export function planPlacements(items, numbers, afterNumber = null) {
   return { steps, missing, anchorMissing: false };
 }
 
+/** Titel des Sammeltickets für Harness-Befunde (AGENTS.md § Harness-Befunde sind Zeilen). */
+export const SAMMELTICKET_TITEL = "Harness-Härtung (gesammelt)";
+
+/**
+ * Das ungeclaimte Sammelticket: offen, ohne Assignee, Titel `SAMMELTICKET_TITEL`. Ein geclaimtes (zugewiesenes) oder
+ * geschlossenes zählt nicht, ebenso nicht die Nummern aus `ohne` (das Ticket, das gerade einsortiert wird). Bei mehreren
+ * das oberste in Board-Reihenfolge. Pur.
+ */
+export function sammelticketItem(items, ohne = []) {
+  return (
+    items.find(
+      (i) => i.title === SAMMELTICKET_TITEL && i.state === "open" && (i.assignees ?? []).length === 0 && !ohne.includes(i.number),
+    ) ?? null
+  );
+}
+
+/**
+ * Neue Tickets landen nie VOR dem ungeclaimten Sammelticket (sonst rückt es nicht nach vorn): ist der Anker `null` (Spitze)
+ * oder steht er im Board vor dem Sammelticket, wird das Sammelticket der Anker. Der Anker selbst, alles dahinter, ein Anker
+ * außerhalb der Liste (meldet der Aufrufer), ein Board ohne Sammelticket und `notfall` bleiben unverändert. Das Sammelticket
+ * selbst klemmt nicht (es steht in `numbers`). Liefert `{ anker, geklemmt, sammelticket }`. Pur.
+ */
+export function klemmeAnker(items, ankerNr, { numbers = [], notfall = false } = {}) {
+  const unveraendert = { anker: ankerNr, geklemmt: false, sammelticket: null };
+  if (notfall) return unveraendert;
+  const sammel = sammelticketItem(items, numbers);
+  if (!sammel) return unveraendert;
+  const sammelIdx = items.findIndex((i) => i.id === sammel.id);
+  const ankerIdx = ankerNr === null ? -1 : items.findIndex((i) => i.number === ankerNr);
+  if (ankerNr !== null && ankerIdx < 0) return unveraendert;
+  if (ankerIdx >= sammelIdx) return unveraendert;
+  return { anker: sammel.number, geklemmt: true, sammelticket: sammel.number };
+}
+
+/**
+ * Der ganze Planungsweg von board-place (--top/--after/--position, Klemmung, Notfall) als pure Funktion: `args` wie aus parseArgs
+ * (`anchor`, `position`, `numbers`, `notfall`). Liefert den Plan von planPlacements plus `klemmung` (`{ geklemmt, sammelticket }`).
+ */
+export function planFuerArgs(items, args) {
+  const anker = args.position ? ankerNummerFuerPosition(items, args.position, args.numbers[0]) : (args.anchor ?? null);
+  const k = klemmeAnker(items, anker, { numbers: args.numbers, notfall: !!args.notfall });
+  return { ...planPlacements(items, args.numbers, k.anker), klemmung: { geklemmt: k.geklemmt, sammelticket: k.sammelticket } };
+}
+
 /** True bei GitHubs Rate-Limit-Fehler (Meldung der gh-CLI/GraphQL). */
 export const isRateLimit = (message) => /rate limit/i.test(String(message ?? ""));
 
@@ -47,7 +91,7 @@ export const STATUS_FIELD_ID = 358708531;
 
 /**
  * Antwort von `gh api --paginate --slurp users/fluffels/projectsV2/1/items` (Liste von Seiten) →
- * Issue-Items in Board-Reihenfolge als `{ id (node_id PVTI_…), number, status }`. Pur, damit die Form
+ * Issue-Items in Board-Reihenfolge als `{ id (node_id PVTI_…), number, status, title, assignees, state }`. Pur, damit die Form
  * mit einer echten JSON-Probe testbar ist. Bricht laut ab bei unerwarteter Form, statt Nummern still
  * als fehlend zu melden. Drafts und PRs fliegen raus. REST statt GraphQL: das Core-Kontingent ist
  * getrennt vom GraphQL-Kontingent, das bei Board-Arbeit binnen Minuten leer war.
@@ -63,6 +107,9 @@ export function normalizeItems(pages) {
       id: i.node_id,
       number: i.content.number,
       status: i.fields?.find((f) => f?.name === "Status")?.value?.name?.raw ?? "",
+      title: typeof i.content.title === "string" ? i.content.title : "",
+      assignees: Array.isArray(i.content.assignees) ? i.content.assignees.map((a) => a?.login).filter((l) => typeof l === "string") : [],
+      state: typeof i.content.state === "string" ? i.content.state : "",
     }));
 }
 

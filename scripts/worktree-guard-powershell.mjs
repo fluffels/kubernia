@@ -29,14 +29,18 @@
  * `cd (Join-Path …)`) bei commit/push wird geblockt, mit dem Hinweis, den Pfad literal zu schreiben. Sonst
  * fail-open wie der Bash-Hook (kein cwd, kein Git-Repo, anderes Repo).
  *
- * Ehrliche Grenze: kein vollständiger PowerShell-Parser. Eine zur Laufzeit zusammengesetzte Befehlszeile
- * (`& ([string]'gi'+'t') commit`) sieht er nicht; die Durchsetzung bleibt das PR-Gate.
+ * Bewusste Grenzen:
+ *  - Kein vollständiger PowerShell-Parser. Eine zur Laufzeit zusammengesetzte Befehlszeile (`& ([string]'gi'+'t') commit`)
+ *    sieht er nicht; die Durchsetzung bleibt das PR-Gate.
+ *  - Die grobe Regel (`git … commit|push`) ist case-insensitiv und fail-closed: sie kann im Haupt-Checkout auch Text treffen,
+ *    der beide Wörter nennt.
  */
 import { statSync } from "node:fs";
 import { dirname, resolve, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { analyse, resolveGitContext } from "./worktree-guard-hook.mjs"; // eine Quelle für Entscheidung und Bash-Auswertung
 import { INTERPRETER_NAMEN, SHELLS, baseName } from "./shell-tabellen.mjs";
+import { GIT_COMMIT_PUSH } from "./worktree-guard-tabellen.mjs";
 import { MAX_INTERPRETER, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
 
 export { parseHookInput };
@@ -44,7 +48,6 @@ export { parseHookInput };
 const ORT_BEFEHLE = new Set(["set-location", "cd", "sl", "chdir", "push-location", "pushd"]);
 const INTERPRETER = new Set([...INTERPRETER_NAMEN.flatMap((n) => [n, `${n}.exe`]), "iex", "invoke-expression", "wsl", "start-process", "start", "invoke-command", "icm"]);
 const GESCHUETZT = new Set(["commit", "push"]);
-const GIT_COMMIT_PUSH = /\bgit(\.exe)?\b[^;|]*\b(commit|push)\b/i;
 
 /** Ein Token: `value` ohne Anführungszeichen, `literal` = komplett aus '…' (keine Variablen-Ersetzung). */
 /** @typedef {{ value: string, literal: boolean }} Token */

@@ -507,6 +507,24 @@ const LENSES = LENS_QUELLE.map((l) => ({
 }))
 // ── Lens-Texte (#1309) — Ende
 
+// ── Lens-Auftrag einsetzen (#1322) — Anfang
+// LENS_QUELLE trägt die Platzhalter der Skill-Quelle (<nr>, <runde>, <worktree>, <hauptrepo>, <lens-worktree>, <erwarteter HEAD>);
+// beim Spawn setzt diese pure Funktion die Werte des Laufs ein, damit die Lens keinen Pfad aus Platzhaltern bauen muss.
+// Der Lens-Worktree liegt neben dem Feature-Worktree: `${worktree}-lens-r${runde}` (= <hauptrepo>/.claude/worktrees/kq-<nr>-lens-r<runde>).
+// Grenze: ist der Worktree-Pfad nicht absolut oder endet nicht auf kq-<nr>, bleibt <hauptrepo> als Platzhalter stehen (Nummer und Runde sind trotzdem eingesetzt).
+function lensAuftragFuer(auftrag, { nr, runde, worktree, head }) {
+  const wt = String(worktree || '')
+  const absolut = /^(?:[A-Za-z]:[\\/]|\/)/.test(wt) && new RegExp('[\\\\/]kq-' + nr + '$').test(wt)
+  const lensWt = absolut ? `${wt}-lens-r${runde}` : `<hauptrepo>/.claude/worktrees/kq-${nr}-lens-r${runde}`
+  return String(auftrag)
+    .split('<hauptrepo>/.claude/worktrees/kq-<nr>-lens-r<runde>').join(lensWt)
+    .split('<lens-worktree>').join(lensWt)
+    .split('<worktree>').join(wt || '<worktree>')
+    .split('<erwarteter HEAD>').join(head || 'der HEAD des Feature-Worktrees (git rev-parse HEAD)')
+    .split('<nr>').join(String(nr))
+}
+// ── Lens-Auftrag einsetzen (#1322) — Ende
+
 /**
  * Das Festgefahren-Protokoll (#710) ist im Skill eine Verhaltensregel und in
  * .github/workflows/festgefahren.yml ein CI-Wächter. Hier ist es zusätzlich eine
@@ -814,7 +832,7 @@ ${ticketKontext}
 
 ${
   plan
-    ? `--- Plan des Planungs-Agenten (Orientierung, ersetzt dein Urteil nicht) ---\n${plan}\n--- Ende Plan ---`
+    ? `--- Plan des Planungs-Agenten (Orientierung, ersetzt dein Urteil nicht; eine Zahl aus dem Plan übernimmst du nur mit ihren Rohwerten oder nachgemessen mit token-baseline.mjs) ---\n${plan}\n--- Ende Plan ---`
     : 'Es liegt kein Vorab-Plan vor — skizziere dir selbst kurz einen, bevor du anfängst.'
 }
 ${
@@ -957,7 +975,7 @@ ${letzteZusammenfassung || '(keine)'}
 
 Lies NUR durch diese eine Brille, nicht vermischt „mal drüberschauen":
 
-${lens.auftrag}
+${lensAuftragFuer(lens.auftrag, { nr, runde, worktree, head: diff.head })}
 
 ${KONTEXT_DIAET}
 
@@ -983,6 +1001,9 @@ Sammelticket, Spiel-/Inhalts-Befund oder Notfall → eigenes Issue) — nicht in
   let letzteVerifyAusgabe = umsetzung.verifyAusgabe
   let letzteZusammenfassung = umsetzung.zusammenfassung
   let reviewRunden = 0
+  // Fix-Versuche für ein rotes verify VOR dem ersten Lens-Pass (#1322): sie zählen gegen MAX_FIX_VERSUCHE (Festgefahren-Protokoll),
+  // nicht gegen MAX_REVIEW_RUNDEN. Sonst würde der erste volle Lens-Pass zu „Runde 2" und der Cap wäre schon zur Hälfte verbraucht.
+  let verifyFixe = 0
   // Letzter Bericht JEDER Brille (#1265): ab Runde 2 laufen nicht mehr alle, der Endbericht und
   // ausserhalbScope sollen aber den Stand aller zeigen. Blocker/Hinweise kommen dagegen nur aus dem
   // aktuellen Pass: eine Brille, die nicht erneut lief, hatte in der Vorrunde keinen Blocker.
@@ -1051,7 +1072,13 @@ Sammelticket, Spiel-/Inhalts-Befund oder Notfall → eigenes Issue) — nicht in
       log(`⛔ Lens ${fehlend.join(', ')} lieferte zweimal kein Ergebnis (ungeprüft) — Hand-off an die Maintainerin (kein PR).`)
       break
     }
-    if (reviewRunden >= MAX_REVIEW_RUNDEN) {
+    // Vor dem ersten Lens-Pass (paesse === 0) kann nur ein rotes verify hierher führen: eigener Zähler, eigene Grenze.
+    const vorLens = nachweisWerte.paesse === 0
+    if (vorLens && verifyFixe >= MAX_FIX_VERSUCHE) {
+      log(`⛔ verify nach ${MAX_FIX_VERSUCHE} Fix-Versuchen weiter rot, noch kein Lens-Pass — Hand-off an die Maintainerin (kein PR).`)
+      break
+    }
+    if (!vorLens && reviewRunden >= MAX_REVIEW_RUNDEN) {
       log(`⛔ Review nach ${MAX_REVIEW_RUNDEN} Fix-Runden nicht konvergiert — Hand-off an die Maintainerin (kein PR).`)
       break
     }
@@ -1059,7 +1086,8 @@ Sammelticket, Spiel-/Inhalts-Befund oder Notfall → eigenes Issue) — nicht in
     // Nachbessern: EIN Agent für alle Findings zusammen (parallele Fixer im selben Worktree
     // würden sich überschreiben). Frischer Agent, nicht der Kritiker — im nächsten Loop-Durchlauf
     // beurteilt wieder ein frischer Kritiker das Ergebnis.
-    reviewRunden += 1
+    if (vorLens) verifyFixe += 1
+    else reviewRunden += 1
     phase('Nachbessern')
     const nachbesserung = await agent(
       `${kopf}
@@ -1068,7 +1096,11 @@ ${ticketKontext}
 
 Du arbeitest im bestehenden Worktree ${worktree} auf ${branch} (absolute Pfade, NICHT
 hinein-cd'en). AUFGABE — die unten gelisteten Punkte beheben und committen. Das ist
-Fix-Runde ${reviewRunden} von ${MAX_REVIEW_RUNDEN} (danach Hand-off an die Maintainerin, #1012).
+${
+  vorLens
+    ? `Fix-Versuch ${verifyFixe} von ${MAX_FIX_VERSUCHE} für das rote verify (noch kein Lens-Pass; danach Hand-off an die Maintainerin, Festgefahren-Protokoll).`
+    : `Fix-Runde ${reviewRunden} von ${MAX_REVIEW_RUNDEN} (danach Hand-off an die Maintainerin, #1012).`
+}
 
 ${
   verifyGruen
@@ -1096,7 +1128,7 @@ ${BRAIN_LESEN}
 Melde verifyGruen und was du behoben bzw. bewusst liegen gelassen hast (mit Grund).
 
 ${patchAuftrag(nr, reviewRunden + 1, diff.head)}`,
-      { label: `nachbessern ${reviewRunden}/${MAX_REVIEW_RUNDEN}:#${nr}`, phase: 'Nachbessern', schema: NACHBESSERN_SCHEMA, ...CODING },
+      { label: vorLens ? `nachbessern verify ${verifyFixe}/${MAX_FIX_VERSUCHE}:#${nr}` : `nachbessern ${reviewRunden}/${MAX_REVIEW_RUNDEN}:#${nr}`, phase: 'Nachbessern', schema: NACHBESSERN_SCHEMA, ...CODING },
     )
     verifyGruen = nachbesserung ? !!nachbesserung.verifyGruen : false
     letzteVerifyAusgabe = (nachbesserung && nachbesserung.verifyAusgabe) || letzteVerifyAusgabe
@@ -1129,6 +1161,7 @@ ${patchAuftrag(nr, reviewRunden + 1, diff.head)}`,
   // Label, Worktree + Claim bleiben stehen).
   if (!konvergiert) {
     phase('Festgefahren')
+    const vorLensStand = nachweisWerte.paesse === 0
     const offenePunkte = [
       ...(verifyGruen ? [] : ['npm run verify ist rot']),
       ...fehlend.map((k) => `Lens ${k} lieferte zweimal kein Ergebnis (ungeprüft)`),
@@ -1139,7 +1172,7 @@ ${patchAuftrag(nr, reviewRunden + 1, diff.head)}`,
 
 ${ticketKontext}
 
-Der Review zu #${nr} ist nach ${MAX_REVIEW_RUNDEN} Fix-Runden nicht konvergiert. Es gibt
+Der Review zu #${nr} ist nach ${vorLensStand ? `${MAX_FIX_VERSUCHE} Fix-Versuchen für das rote verify (noch kein Lens-Pass)` : `${MAX_REVIEW_RUNDEN} Fix-Runden`} nicht konvergiert. Es gibt
 noch KEINEN PR (bewusst kein PR mit bekannten Blockern). Der Code liegt im Worktree
 ${worktree} auf ${branch}.
 

@@ -14,6 +14,7 @@
  *
  * Reines Node-Skript (nur Builtins).
  */
+import { SHELL_VON_TOOL } from "./shell-tabellen.mjs";
 import { bewerte as bewerteGh } from "./gh-guard-hook.mjs";
 import { emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
 import { decide, repoRootFromScriptUrl } from "./worktree-guard-hook.mjs";
@@ -30,10 +31,11 @@ const sicher = (fn) => {
 /** Entscheidet für ein Payload (Text) und gibt das Hook-Output-Objekt oder null (durchlassen) zurück. */
 export function dispatch(text, repoRoot, guards = { decide, bewertePowerShell, bewerteGh }) {
   const { tool, cwd, command } = parseHookInput(text);
-  if (tool !== "Bash" && tool !== "PowerShell") return null;
-  const worktree = tool === "Bash" ? sicher(() => guards.decide({ cwd, command, repoRoot })) : sicher(() => guards.bewertePowerShell({ command, cwd, repoRoot }));
+  if (tool === undefined || !Object.hasOwn(SHELL_VON_TOOL, tool)) return null;
+  const shell = SHELL_VON_TOOL[tool]; // Quote-Dialekt für den gh-Guard (Backslash gegen Backtick) UND Wahl des Worktree-Guards
+  const worktreeGuard = { bash: () => guards.decide({ cwd, command, repoRoot }), powershell: () => guards.bewertePowerShell({ command, cwd, repoRoot }) }[shell]; // ein neues Tool braucht hier bewusst einen eigenen Guard
+  const worktree = worktreeGuard ? sicher(worktreeGuard) : null;
   if (worktree?.block) return mergeDecisions([worktree]); // deny geht vor ask: ein langsamer gh-Guard darf es nicht aushebeln
-  const shell = tool === "Bash" ? "bash" : "powershell"; // Quote-Dialekt für den gh-Guard (Backslash gegen Backtick)
   return mergeDecisions([worktree, sicher(() => guards.bewerteGh(command, { shell }))]);
 }
 

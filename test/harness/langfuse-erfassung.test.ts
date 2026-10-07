@@ -91,7 +91,7 @@ const hatWiederkehrendesTicket = (ticketReihenfolge: string): boolean => {
   return (
     a !== "" &&
     /Position 20/.test(a) &&
-    /ganz oben/.test(a) &&
+    /hinter dem ungeclaimten Sammelticket/.test(a) &&
     /model-routing\.md#langfuse-status-überprüfen-1293/.test(a)
   );
 };
@@ -160,10 +160,10 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatKeineDoppelung(mr, `${CHECKLISTE.slice(0, 3).map((p) => `**${p}:**`).join(" ")}`, agents, um));
   });
 
-  test("ticket-reihenfolge.md: wiederkehrendes Ticket auf Position 20, Folgen ganz oben", () => {
+  test("ticket-reihenfolge.md: wiederkehrendes Ticket auf Position 20, Folgen hinter dem Sammelticket", () => {
     assert.ok(hatWiederkehrendesTicket(tr));
     assert.ok(!hatWiederkehrendesTicket(tr.replace(/Position 20/g, "Position 7")));
-    assert.ok(!hatWiederkehrendesTicket(tr.replace(/ganz oben/g, "irgendwo")));
+    assert.ok(!hatWiederkehrendesTicket(tr.replace(/hinter dem ungeclaimten Sammelticket/g, "irgendwo")));
     assert.ok(!hatWiederkehrendesTicket(""));
   });
 
@@ -200,6 +200,13 @@ const patchDokuStimmig = (mr: string, zahl: number): boolean =>
 /** Verlangen Lens-Rolle UND Review-Skill, Messbehauptungen nur gegen mitgelieferte Rohwerte zu prüfen? */
 const messbehauptungsRegel = (text: string): boolean => /Messbehauptung/.test(text) && /Rohwerte/.test(text) && /nicht belegt/.test(text);
 
+/** Der Planer kennzeichnet Messbehauptungen ohne Rohwerte als ungeprüfte Hypothese. */
+const planerRohwerteRegel = (text: string): boolean => /Messbehauptungen im Plan/.test(text) && /Rohwerte/.test(text) && /ungeprüfte Hypothese/.test(text);
+/** Wer einen Plan umsetzt, übernimmt Zahlen nur mit Rohwerten oder nachgemessen. */
+const planUebernahmeRegel = (text: string): boolean => /eine Zahl aus dem Plan übernimmst du nur mit ihren Rohwerten oder nachgemessen/i.test(text) && /token-baseline\.mjs/.test(text);
+/** Lauf-Historie aus PR/Issue, ein Transkript nur über bekannte Session-ID, nie per Suche über alle Sessions. */
+const historieRegel = (text: string): boolean => /Lauf-Historie/.test(text) && /gh pr view/.test(text) && /--session/.test(text) && /nie\*{0,2} per Suche quer über `~\/\.claude\/projects`/.test(text);
+
 describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
   const mr = read("docs/model-routing.md");
 
@@ -217,6 +224,24 @@ describe("Hook-Patch, Messbehauptungen, Gruppe C (#1311)", () => {
     assert.ok(messbehauptungsRegel(read(".claude/workflows/kubernia-ticket.js")), "kubernia-ticket.js");
     assert.ok(!messbehauptungsRegel("Prüfe alles."));
     assert.ok(!messbehauptungsRegel("Messbehauptungen prüfst du gegen Rohwerte."), "ohne den Befund „nicht belegt“ unvollständig");
+  });
+
+  test("Planer, Umsetzer und Workflow-Prompt: Zahlen aus dem Plan nur mit Rohwerten (#1322 Z12)", () => {
+    assert.ok(planerRohwerteRegel(read(".claude/agents/kubernia-planner.md")), "kubernia-planner.md");
+    assert.ok(planUebernahmeRegel(read(".claude/agents/kubernia-umsetzer.md")), "kubernia-umsetzer.md");
+    assert.ok(planUebernahmeRegel(read(".claude/workflows/kubernia-ticket.js")), "kubernia-ticket.js (Umsetzen-Prompt)");
+    // darf NICHT passieren: eine Hälfte der Regel fehlt
+    assert.ok(!planerRohwerteRegel("Messbehauptungen im Plan nur mit Rohwerten."), "ohne die Kennzeichnung als Hypothese unvollständig");
+    assert.ok(!planerRohwerteRegel("Zählungen sind schön."));
+    assert.ok(!planUebernahmeRegel("Eine Zahl aus dem Plan übernimmst du nur mit ihren Rohwerten."), "ohne Nachmessen unvollständig");
+    assert.ok(!planUebernahmeRegel("Übernimm Zahlen mit Rohwerten oder per token-baseline.mjs."), "ohne den Satzanfang unvollständig");
+  });
+
+  test("Planer und Lens: Lauf-Historie aus PR/Issue statt Transkript-Suche (#1322 Z18)", () => {
+    assert.ok(historieRegel(read(".claude/agents/kubernia-planner.md")), "kubernia-planner.md");
+    assert.ok(historieRegel(read(".claude/agents/kubernia-lens.md")), "kubernia-lens.md");
+    assert.ok(!historieRegel("Lauf-Historie holst du irgendwoher."));
+    assert.ok(!historieRegel("Lauf-Historie aus gh pr view, Transkripte per --session."), "ohne das Verbot der Suche unvollständig");
   });
 
   test("die Lens hat keine Langfuse-Tools (darum liefert der Auftrag die Rohwerte)", () => {

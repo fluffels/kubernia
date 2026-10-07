@@ -27,7 +27,7 @@
  * Wörter. Laufzeit: Befehle mit `gh api` über `LAENGE_MAX` Zeichen und Befehle mit mehr als `STELLEN_MAX` Fundstellen
  * (gh/Interpreter) fragen pauschal, damit die Prüfung nie zum Timeout des Dispatchers wird.
  *
- * Bewusste Grenzen (ehrlich, wie beim worktree-guard):
+ * Bewusste Grenzen:
  *  - Textprüfung je Segment (Trenner `&&`/`||`/`;`/`|`/Zeilenumbruch außerhalb von Anführungszeichen, mehrzeilige
  *    Queries bleiben ein Segment), kein vollständiges Shell-Parsing. Er fängt die dokumentierten Formen, keine
  *    absichtliche Umgehung (`-X DEL""ETE`, Skripte, andere Interpreter wie `node -e`); die eigentliche Durchsetzung bleibt
@@ -42,8 +42,7 @@
  */
 import { MAX_INTERPRETER, buildAskOutput, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
 import { quoteFolge } from "./quote-folge.mjs";
-import { INTERPRETER_NAMEN, SHELLS, baseName } from "./shell-tabellen.mjs";
-import { WRAPPER_NAMEN } from "./worktree-guard-tabellen.mjs";
+import { INTERPRETER_NAMEN, SHELLS, SHELL_VON_TOOL, WRAPPER_NAMEN, baseName } from "./shell-tabellen.mjs";
 
 export { buildAskOutput, parseHookInput };
 
@@ -56,7 +55,7 @@ const qf = (text, von = 0, q0 = null, escAussen = true) => quoteFolge(text, von,
 const dialektVon = (name) => (SHELLS.has(name) ? "bash" : name === "pwsh" || name === "powershell" ? "powershell" : "neutral");
 
 /** Tools, für die der Hook gilt. */
-export const GEPRUEFTE_TOOLS = ["Bash", "PowerShell"];
+export const GEPRUEFTE_TOOLS = Object.keys(SHELL_VON_TOOL);
 
 /** GraphQL-Mutationen mit Außenwirkung (geschlossene Liste, case-sensitiv wie im Schema). Gesucht wird der AUFRUF
  *  `name(` hinter dem Schlüsselwort `mutation`, nicht der bloße Name: ein Lese-Feld wie `deleteBranchOnMerge` in einer
@@ -397,13 +396,15 @@ function ohneDatenHeredocs(text) {
   if (!text.includes("<<")) return text;
   let out = "";
   let pos = 0;
+  let zeilenEnde = -1;
   for (const m of text.matchAll(HEREDOC)) {
     if (m.index < pos) continue;
-    const zeilenEnde = text.indexOf("\n", m.index);
+    if (zeilenEnde < m.index) zeilenEnde = text.indexOf("\n", m.index); // je Zeile nur einmal suchen (viele Marker auf einer Zeile)
     if (zeilenEnde < 0) break;
-    const davor = text.slice(text.lastIndexOf("\n", m.index) + 1, m.index);
     const dahinter = text.slice(m.index + m[0].length, zeilenEnde);
-    if (!DATEN_BEFEHL.test(davor) || !/^[\s)"]*$/.test(dahinter)) continue;
+    if (!/^[\s)"]*$/.test(dahinter)) continue; // billige Prüfung zuerst: nur der letzte Marker einer Zeile passt, sonst bliebe die Suche quadratisch
+    const davor = text.slice(text.lastIndexOf("\n", m.index) + 1, m.index);
+    if (!DATEN_BEFEHL.test(davor)) continue;
     const ende = new RegExp(String.raw`^\t*${m[1] ?? m[2] ?? m[3]}[ \t]*$`, "m").exec(text.slice(zeilenEnde + 1));
     if (!ende) break; // ohne Terminator bleibt alles Befehlstext (und die Suche endet: kein quadratischer Aufwand)
     out += text.slice(pos, zeilenEnde + 1);
@@ -442,8 +443,8 @@ export function bewerte(command, { shell } = {}) {
 
 function main() {
   const { tool, command } = parseHookInput(readStdin());
-  if (tool !== undefined && !GEPRUEFTE_TOOLS.includes(tool)) return;
-  emit(mergeDecisions([bewerte(command, { shell: tool === "Bash" ? "bash" : tool === "PowerShell" ? "powershell" : undefined })]));
+  if (tool !== undefined && !Object.hasOwn(SHELL_VON_TOOL, tool)) return;
+  emit(mergeDecisions([bewerte(command, { shell: tool === undefined ? undefined : SHELL_VON_TOOL[tool] })]));
 }
 
 if (istDirektaufruf(import.meta.url)) main();

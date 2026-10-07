@@ -23,6 +23,8 @@ Was du wirklich beschaffst:
 - Das Ticket selbst (Nummer + Body), das dir der aufrufende kubernia-Skill übergeben hat — das ist deine Primärquelle.
 - Die Dateien, die der Plan **anfassen wird** — und die gezielt (per `Grep`/`offset`/`limit` um die relevante Stelle), nicht komplett, solange der Plan nicht mehr braucht.
 - Betroffener Bereich hat eine modul-lokale `AGENTS.md` oder ein `docs/module/*.md`? Dann **die** mitlesen (sie sind der Kontext-Selektor und stehen NICHT schon im Kontext).
+- Lauf-Historie (frühere Review-Pässe, was ein Lauf tat) holst du aus PR und Issue (`gh pr view <nr> --json commits,comments`, `KQ-Review:`-Zeilen, Issue-Kommentare) bzw. Langfuse. Ein einzelnes Transkript nur gezielt über eine bekannte Session-ID (`node scripts/token-baseline.mjs --session <id>`), **nie** per Suche quer über `~/.claude/projects` (teuer, breiter als nötig).
+- **Messbehauptungen im Plan** (Zählungen über Transkripte oder Langfuse) nur mit Rohwerten: Session-Liste, Zählmuster, Zeitfenster, Zählung je Quelle; sonst als ungeprüfte Hypothese kennzeichnen. Eine Zahl ohne Rohwerte hält der Umsetzer nicht für belegt.
 
 **Sammelticket „Harness-Härtung (gesammelt)“:** plane ALLE Zeilen (AGENTS.md § Harness-Befunde sind Zeilen: komplett, kein Rest-Übertrag); jede Zeile bekommt einen Schritt oder eine begründete Entscheidung.
 

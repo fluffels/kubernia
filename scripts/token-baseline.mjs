@@ -30,7 +30,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseNachweis } from "./slice-override.mjs";
-import { brainMetrics, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
+import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript, transkriptZeilen } from "./brain-metrics.mjs";
 
 /** Lenses pro Review-Runde für Läufe ohne Runden-Marker (vor #1265 liefen immer alle drei Brillen, #1012). */
 export const LENSES_PER_ROUND = 3;
@@ -224,11 +224,9 @@ function sockelOf(allCalls, windowCalls) {
  * erbte ein Ticket die Lenses eines früheren Tickets derselben Session.
  */
 export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles = null) {
-  // Marker vor `--from` (früheres Ticket derselben Session) und nach dem Merge zählen nicht.
-  const markerEvents = (events ?? []).filter(
-    (e) => !(bounds.from && Date.parse(e.ts) < Date.parse(bounds.from)) && !(bounds.mergedAt && Date.parse(e.ts) >= Date.parse(bounds.mergedAt)),
-  );
-  const { intervals, unpaired } = events ? pflegeIntervals(markerEvents) : { intervals: [], unpaired: 0 };
+  // Events vor `--from` (früheres Ticket derselben Session) und nach dem Merge zählen nicht (auch nicht die Pflege-Marker).
+  const imFenster = (events ?? []).filter((e) => fensterLage(e.ts, bounds) === "ticket");
+  const { intervals, unpaired } = events ? pflegeIntervals(imFenster) : { intervals: [], unpaired: 0 };
   const window = windowCalls(calls, bounds, intervals);
   const sorted = phaseRows(window);
   const ticket = window.filter((w) => w.phase !== "Nachlauf").map((w) => w.call);
@@ -248,9 +246,20 @@ export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles
     },
     sockel: sockelOf(calls, ticket),
   };
-  if (events) out.pflegeUnpaired = unpaired;
-  if (events) out.brain = brainMetrics({ events, rows: sorted }, bounds, prFiles);
+  if (events) {
+    // Das Ticket-Fenster besitzt dieser Ort (`fensterLage`); Marker und Brain-Kennzahlen bekommen nur Events darin.
+    const recherche = sorted.filter((r) => r.phase === "Recherche");
+    out.pflegeUnpaired = unpaired;
+    out.brain = { ...brainMetrics(imFenster, prFiles), rechercheTokens: recherche.reduce((n, r) => n + r.input + r.cacheWrite + r.cacheRead + r.output, 0) };
+  }
   return out;
+}
+
+/** Lage eines Zeitstempels zum Ticket-Fenster: `vor` `from` (fremde Arbeit), `ticket` (halboffen `[from, mergedAt)`), `nachlauf` ab dem Merge. */
+export function fensterLage(ts, bounds = {}) {
+  if (bounds.from && Date.parse(ts) < Date.parse(bounds.from)) return "vor";
+  if (bounds.mergedAt && Date.parse(ts) >= Date.parse(bounds.mergedAt)) return "nachlauf";
+  return "ticket";
 }
 
 /**
@@ -262,8 +271,9 @@ export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles
 export function windowCalls(calls, bounds = {}, intervals = []) {
   const out = [];
   for (const c of calls) {
-    if (bounds.from && Date.parse(c.ts) < Date.parse(bounds.from)) continue;
-    const afterMerge = bounds.mergedAt && Date.parse(c.ts) >= Date.parse(bounds.mergedAt);
+    const lage = fensterLage(c.ts, bounds);
+    if (lage === "vor") continue;
+    const afterMerge = lage === "nachlauf";
     const agent = c.subagent ? subKey(c) : null;
     const t = Date.parse(c.ts);
     const inPflege = intervals.some((iv) => iv.agent === agent && t >= Date.parse(iv.from) && t <= Date.parse(iv.to));
@@ -362,17 +372,11 @@ function reviewDescriptions(ticketCalls) {
  * genau einmal gezählt (Output = Maximum über die Zeilen, weil Zwischenzeilen
  * einen Teilstand tragen).
  */
-export function callsFromTranscript(jsonlText, subagent = null) {
+export function callsFromTranscript(textOderZeilen, subagent = null) {
   const byId = new Map();
   let questions = 0;
-  for (const line of String(jsonlText).split(/\r?\n/)) {
-    if (!line.trim()) continue;
-    let row;
-    try {
-      row = JSON.parse(line);
-    } catch {
-      continue; // abgeschnittene letzte Zeile eines laufenden Transkripts
-    }
+  // Text oder die schon geparsten Zeilen (`transkriptZeilen`): `readTranscriptSession` parst jede Zeile nur einmal.
+  for (const row of Array.isArray(textOderZeilen) ? textOderZeilen : transkriptZeilen(textOderZeilen)) {
     const msg = row?.message;
     if (row?.type !== "assistant" || !msg?.usage) continue;
     // Eine Zeile trägt genau einen Content-Block — jede Rückfrage zählt also einmal.
@@ -409,18 +413,18 @@ export function readTranscriptSession(sessionId, projectsRoot) {
   const candidates = readdirSync(projectsRoot).map((d) => join(projectsRoot, d, `${sessionId}.jsonl`));
   const main = candidates.find((p) => existsSync(p));
   if (!main) throw new Error(`Kein Transkript für Session ${sessionId} unter ${projectsRoot}`);
-  const mainText = readFileSync(main, "utf8");
-  const all = callsFromTranscript(mainText);
-  all.events = toolEventsFromTranscript(mainText);
+  const mainZeilen = transkriptZeilen(readFileSync(main, "utf8"));
+  const all = callsFromTranscript(mainZeilen);
+  all.events = toolEventsFromTranscript(mainZeilen);
   const dir = main.replace(/\.jsonl$/, "") + "/subagents";
   if (existsSync(dir)) {
     for (const f of readdirSync(dir).filter((n) => n.endsWith(".jsonl"))) {
       const metaPath = join(dir, f.replace(/\.jsonl$/, ".meta.json"));
       const meta = existsSync(metaPath) ? JSON.parse(readFileSync(metaPath, "utf8")) : {};
       const sub = { id: f, agentType: meta.agentType, description: meta.description, parentAgentId: meta.parentAgentId };
-      const text = readFileSync(join(dir, f), "utf8");
-      const r = callsFromTranscript(text, sub);
-      all.events.push(...toolEventsFromTranscript(text, sub.id));
+      const zeilen = transkriptZeilen(readFileSync(join(dir, f), "utf8"));
+      const r = callsFromTranscript(zeilen, sub);
+      all.events.push(...toolEventsFromTranscript(zeilen, sub.id));
       all.calls.push(...r.calls);
       all.questions += r.questions;
     }
@@ -498,7 +502,7 @@ export function callsFromLangfuse(observations) {
 /** Alle Observations einer Session über die v2-API holen (cursor-paginiert). */
 export async function fetchSessionObservations(
   sessionId,
-  { baseUrl, publicKey, secretKey, fetchImpl = fetch, type, fields = "core,basic,model,usage,metadata" },
+  { baseUrl, publicKey, secretKey, fetchImpl = fetch, type, name, fields = "core,basic,model,usage,metadata" },
 ) {
   const auth = "Basic " + Buffer.from(`${publicKey}:${secretKey}`).toString("base64");
   const out = [];
@@ -506,6 +510,7 @@ export async function fetchSessionObservations(
   do {
     const q = new URLSearchParams({ sessionId, limit: "1000", fields });
     if (type) q.set("type", type);
+    if (name) q.set("name", name);
     if (cursor) q.set("cursor", cursor);
     const res = await fetchImpl(`${baseUrl.replace(/\/$/, "")}/api/public/v2/observations?${q}`, {
       headers: { Authorization: auth },
@@ -663,15 +668,27 @@ async function loadRun(args) {
   if (!publicKey || !secretKey) throw new Error("--langfuse braucht LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY.");
   const baseUrl = process.env.LANGFUSE_BASE_URL ?? "http://localhost:3000";
   const parts = [];
-  for (const s of args.sessions) {
-    const observations = await fetchSessionObservations(s, { baseUrl, publicKey, secretKey });
-    const part = callsFromLangfuse(observations);
-    // Tool-Events brauchen Input (`io`), die Token-Abfrage bleibt schlank.
-    const tools = await fetchSessionObservations(s, { baseUrl, publicKey, secretKey, type: "TOOL", fields: "core,basic,metadata,io" });
-    part.events = toolEventsFromLangfuse(tools, toolAgentResolver(observations));
-    parts.push(part);
-  }
+  for (const s of args.sessions) parts.push(await ladeLangfuseSession(s, { baseUrl, publicKey, secretKey }));
   return merge(parts);
+}
+
+/**
+ * Eine Session aus Langfuse: Calls aus den GENERATIONs, Tool-Events in zwei Stufen. Stufe 1 holt alle TOOL-Observations schlank
+ * (Name, Zeit, `orig_len`), Stufe 2 die Eingabe (`io`; v2 liefert sie nur samt Ausgabe) nur für die Tools aus `EINGABE_TOOLS`.
+ * Die Namen für Stufe 2 kommen aus Stufe 1 (`metadata.tool_name` → tatsächlicher Span-Name): der Hook hängt Datei-Tools einen
+ * Bereichs-Qualifier an (`Tool: Read [Kubernia-Doku]`), ein fester Name träfe sie nie. `fetchImpl` ist für Tests injizierbar.
+ */
+export async function ladeLangfuseSession(sessionId, opts) {
+  const observations = await fetchSessionObservations(sessionId, opts);
+  const part = callsFromLangfuse(observations);
+  const werkzeuge = await fetchSessionObservations(sessionId, { ...opts, type: "TOOL", fields: "core,basic,metadata" });
+  const namen = new Set(
+    werkzeuge.filter((o) => EINGABE_TOOLS.includes(o?.metadata?.tool_name ?? String(o?.name ?? "").replace(/^Tool:\s*/, "").replace(/\s*\[.*\]$/, ""))).map((o) => o.name),
+  );
+  const eingaben = [];
+  for (const name of namen) eingaben.push(...(await fetchSessionObservations(sessionId, { ...opts, type: "TOOL", name, fields: "core,io" })));
+  part.events = toolEventsFromLangfuse(mitEingabe(werkzeuge, eingaben), toolAgentResolver(observations));
+  return part;
 }
 
 async function main() {

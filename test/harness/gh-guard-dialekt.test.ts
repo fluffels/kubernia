@@ -106,6 +106,12 @@ describe("Dialekt an den Rekursionsstellen (#1316, Review R1)", () => {
     fragt(String.raw`Write-Output "$(Set-Location "C:\dev\"; ${DEL})"`, "powershell");
   });
 
+  test("$( … ) ohne Anführungszeichen drumherum: derselbe Text fragt unter PowerShell und läuft unter Bash (Gegenprobe zum Test davor, #1322 Z17)", () => {
+    const befehl = String.raw`echo $(Set-Location "C:\dev\"; ${DEL})`;
+    fragt(befehl, "powershell"); // `;` trennt, das gh api liegt offen
+    laeuft(befehl, "bash"); // `\"` maskiert das Quote, das gh api bleibt Text im String
+  });
+
   test("der Dialekt leckt nicht aus einer Rekursion in den Rest des Befehls", () => {
     fragt("pwsh -Command 'echo hi'; echo \"`" + DEL + "`\"", "bash");
     fragt(String.raw`pwsh -Command 'echo hi'; gh issue comment 1 --body "a \"; ` + DEL + String.raw`\" b"; ` + DEL, "bash");

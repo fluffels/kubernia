@@ -126,10 +126,23 @@ describe("Groß geschriebenes gh und Laufzeit bei vielen unbeendeten Heredocs", 
     fragt("Gh.exe api -X DELETE repos/o/r/issues/1");
   });
 
-  test("viele Heredoc-Marker ohne Terminator auf einer Zeile bleiben schnell", () => {
-    const t0 = Date.now();
-    hook.bewerte(`${LESEN};` + "<<'A' ".repeat(8000) + "\n");
-    assert.ok(Date.now() - t0 < 1000, `zu langsam: ${Date.now() - t0} ms`);
+  test("viele Heredoc-Marker ohne Terminator auf einer Zeile wachsen höchstens linear (Skalierungsvergleich statt Wanduhr, #1322 Z17)", () => {
+    // Minimum aus 5 Läufen je Größe nach einem Warmlauf; 500 gegen 8000 Marker: linear ≈ 16, quadratisch ≈ 256. Die Größen bleiben unter LAENGE_MAX
+    // (50.000 Zeichen), sonst greift der Frühausstieg und misst nichts.
+    const messe = (n: number) => {
+      const befehl = `${LESEN};` + "<<'A' ".repeat(n) + "\n";
+      hook.bewerte(befehl);
+      let min = Infinity;
+      for (let i = 0; i < 5; i++) {
+        const t0 = performance.now();
+        hook.bewerte(befehl);
+        min = Math.min(min, performance.now() - t0);
+      }
+      return min;
+    };
+    const klein = Math.max(messe(500), 0.05); // Untergrenze gegen die Timer-Auflösung
+    const gross = messe(8000);
+    assert.ok(gross / klein < 80, `Laufzeit wächst überlinear: ${klein.toFixed(2)} ms bei 500, ${gross.toFixed(2)} ms bei 8000 Markern`);
   });
 });
 
