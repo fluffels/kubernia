@@ -2,20 +2,7 @@
 // npm-Ketten (`verify`, `verify:full`, …) plus Beschreibungs-Map und reinen CI-Gates.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { renderTable } from "./markdown.mjs";
-
-/** Zerlegt eine `a && b`-Kette: `npm run X` → X, `npm test` → test, sonst der Rohbefehl. */
-export function parseChain(script) {
-  return script
-    .split("&&")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((step) => {
-      const run = /^npm run ([^\s]+)$/.exec(step);
-      if (run) return run[1];
-      return step === "npm test" ? "test" : step;
-    });
-}
+import { expandSteps, renderTable } from "./markdown.mjs";
 
 /** Anzeigebefehl eines Kettenschritts. */
 const display = (step, scripts) => (Object.hasOwn(scripts, step) ? (step === "test" ? "npm test" : `npm run ${step}`) : step);
@@ -33,7 +20,14 @@ export function gatesGenerator({ rootDir, config }) {
       errors.push(`Kette "${chain}" fehlt in ${cfg.package}`);
       continue;
     }
-    for (const step of parseChain(scripts[chain])) {
+    let schritte;
+    try {
+      schritte = expandSteps(scripts[chain], scripts, cfg.chains, [chain]);
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+      continue;
+    }
+    for (const step of schritte) {
       if (cfg.chains.includes(step) || seen.has(step)) continue;
       seen.add(step);
       steps.add(step);

@@ -12,6 +12,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/haupt-sync.mjs";
 
@@ -261,5 +262,84 @@ describe("Verdrahtung", () => {
     expect(treffer[0].matcher).toBe("startup|resume|clear");
     expect(treffer[0].hooks[0].timeout).toBeGreaterThanOrEqual(30);
     expect(readFileSync(new URL("../../scripts/haupt-sync.mjs", import.meta.url), "utf8")).toContain("--ff-only");
+  });
+});
+
+describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", () => {
+  const X = raw as unknown as { exitCodeFuer: (e: Record<string, unknown>) => number };
+  const cli = (dir: string, ...args: string[]) => {
+    try {
+      const out = execFileSync(process.execPath, [fileURLToPath(new URL("../../scripts/haupt-sync.mjs", import.meta.url)), ...args], {
+        encoding: "utf8",
+        env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      return { code: 0, out };
+    } catch (e) {
+      const err = e as { status: number; stdout: string };
+      return { code: err.status, out: err.stdout };
+    }
+  };
+
+  test("exitCodeFuer: jede Aktion", () => {
+    expect(X.exitCodeFuer({ aktion: "nichts", branch: "main", sauber: true })).toBe(0);
+    expect(X.exitCodeFuer({ aktion: "pull", gepullt: true, branch: "main", sauber: true })).toBe(0);
+    expect(X.exitCodeFuer({ aktion: "melden", branch: "main", sauber: false })).toBe(1);
+    expect(X.exitCodeFuer({ aktion: "nichts", notiz: "Fehler (kein Netz), nichts verändert" })).toBe(1);
+  });
+
+  test("exitCodeFuer: auch ohne Rückstand zählen getrackte Reste und ein anderer Branch; ein Linked Worktree nie", () => {
+    expect(X.exitCodeFuer({ aktion: "nichts", branch: "main", sauber: false })).toBe(1);
+    expect(X.exitCodeFuer({ aktion: "nichts", branch: "feature/x", sauber: true })).toBe(1);
+    expect(X.exitCodeFuer({ aktion: "nichts", grund: "Linked Worktree", branch: "", sauber: undefined })).toBe(0);
+  });
+
+  test("--text: nach einem Pull mit geänderten Skills steht „Skill neu lesen“ statt „Session neu starten“; der Hook-Modus bleibt beim Neustart-Hinweis", () => {
+    const e = { aktion: "pull", gepullt: true, hinter: 3, basis: "abc", agentenGeaendert: true };
+    const text = S.ausgabe(e, true);
+    expect(text).toContain("Skill neu lesen");
+    expect(text).toContain("git diff <Stand vor diesem Sync> HEAD -- AGENTS.md");
+    expect(text).not.toContain("Sitzungsbasis");
+    const hook = (JSON.parse(S.ausgabe(e, false)) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
+    expect(hook).toContain("neu starten");
+    expect(hook).not.toContain("Skill neu lesen");
+  });
+
+  test("CLI: sauberer, aktueller main → Exit 0; dirty → Exit 1 mit Stopp-Text; ohne --streng bleibt es Exit 0", () => {
+    const t = aufbau();
+    try {
+      expect(cli(t.haupt, "--text", "--streng").code).toBe(0);
+      writeFileSync(join(t.haupt, "a.txt"), "lokal geändert\n");
+      const r = cli(t.haupt, "--text", "--streng");
+      expect(r.code).toBe(1);
+      expect(r.out).toContain("STOPP");
+      expect(cli(t.haupt, "--text").code).toBe(0);
+    } finally {
+      t.aufraeumen();
+    }
+  });
+
+  test("CLI: main hinter origin und sauber → Fast-Forward, Exit 0; geänderter Skill-Pfad meldet „Skill neu lesen“", () => {
+    const t = aufbau();
+    try {
+      t.schiebe(".claude/skills/kubernia/SKILL.md", "neu\n");
+      const r = cli(t.haupt, "--text", "--streng");
+      expect(r.code).toBe(0);
+      expect(r.out).toContain("Skill neu lesen");
+      expect(r.out).toContain("Stand vor diesem Sync");
+    } finally {
+      t.aufraeumen();
+    }
+  });
+
+  test("der Skill kubernia beginnt mit Schritt 0 (haupt-sync --streng), nennt Stopp bei Exit 1 und die Neu-Lesen-Regel; kein „nie ein eigenes git pull“ mehr", () => {
+    const skill = readFileSync(new URL("../../.claude/skills/kubernia/SKILL.md", import.meta.url), "utf8");
+    const schritt0 = /^0\. \*\*Hauptcheckout heben[^\n]*\n/m.exec(skill)?.[0] ?? "";
+    expect(schritt0).toContain("node scripts/haupt-sync.mjs --text --streng");
+    expect(schritt0).toMatch(/Exit 1/);
+    expect(schritt0).toMatch(/kein Ticket starten/);
+    expect(schritt0).toMatch(/SKILL\.md[^\n]*neu/);
+    expect(skill.indexOf("0. **Hauptcheckout heben")).toBeLessThan(skill.indexOf("1. **Auswählen und claimen.**"));
+    expect(skill).not.toMatch(/nie ein eigenes `git pull`/);
   });
 });

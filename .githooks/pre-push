@@ -9,9 +9,8 @@
 # wird server-seitig ohnehin abgelehnt; dieser Hook ist damit nur noch ein
 # harmloses Zusatznetz für den Fall, dass die Protection je gelockert wird.
 #
-# Dieser Hook fährt die schnellen Gates (`npm run verify`: typecheck → lint
-# → check:arch → check:size → check:docmap → check:docdrift → check:diffsize
-# → test) LOKAL, falls doch mal auf `main` gepusht wird, und bricht bei Rot ab.
+# Dieser Hook fährt die schnellen Gates (`npm run verify`, Kette:
+# package.json › scripts.verify) LOKAL, falls doch mal auf `main` gepusht wird, und bricht bei Rot ab.
 # Für die schnelle Vorab-Rückmeldung VOR dem PR `npm run verify` einfach manuell
 # fahren (Feature-Branch-Pushes triggern diesen main-only-Hook nicht).
 #

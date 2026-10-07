@@ -11,6 +11,8 @@ import { fixture } from "./support/tmp-fixture";
 import * as dia from "../scripts/docs-gen/diagramme.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as gen from "../scripts/docs-gen.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as reg from "../scripts/docs-gen/registry.mjs";
 
 type Cfg = Record<string, unknown>;
 type Ctx = { rootDir: string; config: Cfg };
@@ -18,7 +20,10 @@ const api = dia as unknown as {
   diagrammGenerator: (name: string) => (ctx: Ctx) => string;
   ersetzePlatzhalter: (text: string, ctx: Ctx) => string;
 };
-const docgen = gen as unknown as { loadConfig: () => Cfg; GENERATORS: Record<string, (ctx: Ctx) => string> };
+const docgen = {
+  loadConfig: (gen as unknown as { loadConfig: () => Cfg }).loadConfig,
+  GENERATORS: (reg as unknown as { GENERATORS: Record<string, (ctx: Ctx) => string> }).GENERATORS,
+};
 
 const agent = (name: string, model?: string, effort?: string) =>
   `---\nname: ${name}\n${model ? `model: ${model}\n` : ""}${effort ? `effort: ${effort}\n` : ""}---\nText`;
@@ -73,6 +78,17 @@ describe("Platzhalter: Gutfälle", () => {
     assert.equal(ersetze("${gates:verify:full}"), "1");
     assert.equal(ersetze("${ci-check:Tests, Typecheck & Builds}"), "Tests, Typecheck & Builds");
     assert.equal(ersetze("${ci-check:Security-Audit (npm audit)}"), "Security-Audit (npm audit)");
+  });
+  test("gates: ein zusammengesetzter Schritt zählt mit seinen Teilen (wie Gate-Tabelle und Drift-Wächter, #1392)", () => {
+    const pkg = (scripts: Record<string, string>) => ({ "package.json": JSON.stringify({ scripts }) });
+    const nested = basis(pkg({ verify: "npm run a && npm run inner && npm test", inner: "npm run b && npm run c", a: "x", b: "x", c: "x" }));
+    assert.equal(ersetze("${gates:verify}", nested), "4"); // flach gezählt wären es 3
+    const alias = basis(pkg({ verify: "npm run a && npm run b", a: "npm run c", b: "x", c: "x" }));
+    assert.equal(ersetze("${gates:verify}", alias), "2"); // ein Alias ohne && bleibt ein Schritt
+  });
+  test("gates: ein Zyklus in den Ketten ist rot", () => {
+    const f = basis({ "package.json": JSON.stringify({ scripts: { verify: "npm run x", x: "npm run y && npm run a", y: "npm run x && npm run a", a: "x" } }) });
+    assert.throws(() => ersetze("${gates:verify}", f), /Zyklus/);
   });
   test("ein Agent ohne Modell zeigt „Session-Modell“, ohne Effort entfällt der Teil", () => {
     const f = basis({ ".claude/agents/o.md": agent("ohne") });

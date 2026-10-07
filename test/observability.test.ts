@@ -214,3 +214,46 @@ test("scrapeTargets(): App-Target up bei bereiten Pods, down bei CrashLoop", () 
   assert.equal(kasse.health, "up", "gesunder Service scrapet up");
   assert.equal(lager.health, "down", "CrashLoop hinter dem Service -> down");
 });
+
+/* ===================== StatefulSet-Pods in top/podMetrics (#1339) ===================== */
+
+const STS = (extra: object = {}) => ({ name: "speicher", image: "postgres:16", replicas: 3, serviceName: "speicher", ...extra });
+const firstCol = (out: string) => out.split("\n").slice(1).map(l => l.split(/\s+/)[0]).filter(Boolean).sort();
+
+test("kubectl top pods: listet StatefulSet-Pods, Namen gleich wie in get pods", () => {
+  sim = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 2 }], statefulSets: [STS()] });
+  const top = sim.exec("kubectl top pods").output!;
+  for (const i of [0, 1, 2]) assert.match(top, new RegExp("speicher-" + i));
+  assert.match(top, /kasse-/);
+  assert.deepEqual(firstCol(top), firstCol(sim.exec("kubectl get pods").output!));
+});
+
+test("kubectl top: StatefulSet mit Pending-PVC erscheint nicht, gezielt 'Metrics not available' statt NotFound", () => {
+  sim = new KQSim({ statefulSets: [STS({ storageClass: "" })] });
+  assert.match(sim.exec("kubectl top pods").output!, /No resources found/);
+  const r = sim.exec("kubectl top pod speicher-0");
+  assert.ok(r.error, "Pod ohne Metriken ist ein Fehler");
+  assert.match(r.output!, /Metrics not available/);
+  assert.doesNotMatch(r.output!, /NotFound/);
+});
+
+test("kubectl top: unbekannter Pod bleibt NotFound", () => {
+  sim = new KQSim({ statefulSets: [STS()] });
+  assert.match(sim.exec("kubectl top pod gibt-es-nicht").output!, /NotFound/);
+});
+
+test("podMetrics: StatefulSet-Pods deterministisch und unter der HighPodCPU-Schwelle", () => {
+  sim = new KQSim({ statefulSets: [STS()] });
+  const a = sim.podMetrics();
+  assert.equal(a.length, 3);
+  assert.deepEqual(sim.podMetrics(), a);
+  assert.ok(a.every(m => m.cpuMilli < 500));
+  assert.ok(!sim.alerts().some(x => x.name === "HighPodCPU" && x.state === "firing"));
+});
+
+test("nodeMetrics: StatefulSet-Pods tragen zur Node-Last bei", () => {
+  const sum = (s: KQSim) => s.nodeMetrics().reduce((n, x) => n + x.cpuMilli, 0);
+  const ohne = sum(new KQSim({}));
+  const mit = sum(new KQSim({ statefulSets: [STS()] }));
+  assert.ok(mit > ohne);
+});

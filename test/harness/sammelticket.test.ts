@@ -71,7 +71,9 @@ describe("Sammelticket-Position (#1276)", () => {
 
   test("das Skript liest die Position aus AGENTS.md per sammelticketPosition statt eine Zahl zu tragen", () => {
     const skript = lies("scripts/sammelticket-anlegen.mjs");
-    assert.match(skript, /sammelticketPosition\(readFileSync\(new URL\("\.\.\/AGENTS\.md"/);
+    assert.match(lies("scripts/board-lib.mjs"), /sammelticketPosition\(readFileSync\(new URL\("\.\.\/AGENTS\.md"/, "die Position wird an EINER Stelle (board-lib) gelesen");
+    assert.match(skript, /positionLautAgentsMd|positionOderWarnung/);
+    assert.doesNotMatch(skript, /readFileSync/);
     assert.doesNotMatch(skript, POSITION_EINZELN);
     assert.doesNotMatch(lies("scripts/board-takt.mjs"), POSITION_EINZELN);
     assert.doesNotMatch(lies("scripts/board-place.mjs"), POSITION_EINZELN);

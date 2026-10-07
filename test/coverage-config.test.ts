@@ -187,3 +187,18 @@ describe("#495 Bindung: Glob-Form ↔ RegExp-Wahrheit (layerOf) deckungsgleich",
     expect(leaked, `Nicht-Domänen-Datei fälschlich im Domänen-Glob:\n${leaked.join("\n")}`).toEqual([]);
   });
 });
+
+// Die Globs werden seit #1392 aus SCHICHT_MODELL abgeleitet. Sie hängen an `vite.config.ts` (Schwellen je Glob):
+// eine stille Änderung würde die Floors an eine andere Dateimenge binden. Darum die bisherigen Literale als Pin.
+describe("COVERAGE_GLOBS bleiben byte-gleich zu den bisherigen Literalen (#1392)", () => {
+  const LITERALE: Record<string, string> = {
+    praesentation: "src/{scenes,ui,sfx}{.ts,/**}",
+    anwendung: "src/{game,runtime,devpanel,store}{.ts,/**}",
+    einstieg: "src/{main,assets-data}.ts",
+    domaene:
+      "src/{!(scenes|ui|sfx|game|runtime|devpanel|store|main|assets-data)/**,!(scenes.ts|ui.ts|sfx.ts|game.ts|runtime.ts|devpanel.ts|store.ts|main.ts|assets-data.ts)}",
+  };
+  it("jeder Bucket-Glob entspricht seinem Literal", () => {
+    expect(COVERAGE_GLOBS).toEqual(LITERALE);
+  });
+});

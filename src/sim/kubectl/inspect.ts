@@ -2,7 +2,7 @@
  * Die lesenden kubectl-Befehle (kein Cluster-Zustand wird verändert): `get` (alle
  * Ressourcen-Listen), `describe` (Detail zu Pod/Ingress/NetworkPolicy/Role/SA),
  * `top` (Pod-/Node-Metriken, #109) und `logs` (#…). Die eigentliche
- * Observability-Mechanik (podMetrics/nodeMetrics/alerts) liegt bewusst in sim.ts –
+ * Observability-Mechanik (podMetrics/nodeMetrics/alerts) liegt in ../observability.ts –
  * `top`/`get` lesen sie nur über das Host-Interface.
  *
  * Phaser-frei (pure Domäne): Tabellen-Ausgabe aus ../util, Zustand über das
@@ -18,6 +18,7 @@ import { readyBackends, endpointPort, podAddress } from "../endpoints";
 import type { KubectlHost } from "./host";
 import { SECURITY_CONTEXT_KEYS, isExternalNameService, type Deployment, type PodInstance, type PodStatus } from "../state";
 import { sameRbac } from "../rbac";
+import { clusterPods } from "../pods";
 import { statefulPodVolumePending } from "../workload";
 
 // Alle Ingresses teilen sich die Adresse des einen Ingress-Controllers (wie im echten
@@ -60,13 +61,17 @@ function getPods(host: KubectlHost, t: string[]): string {
   }
   host._reschedulePending();
   const rows: (string | number)[][] = [];
-  for (const d of host.deployments) {
-    const st = host._podStatus(d);
-    for (const p of d.pods) rows.push([p.name, st.ready, st.status, String(st.restarts || p.restarts), host._age(p.created)]);
-  }
-  // StatefulSet-Pods: Status aus PVC-Bindung ableiten – Pending wenn kein Volume verfügbar (#811)
-  for (const s of host.statefulSets) {
-    for (const p of s.pods) rows.push(statefulPodRow(host, s, p));
+  for (const c of clusterPods(host)) {
+    switch (c.owner) {
+      case "Deployment": {
+        const st = host._podStatus(c.dep);
+        rows.push([c.pod.name, st.ready, st.status, String(st.restarts || c.pod.restarts), host._age(c.pod.created)]);
+        break;
+      }
+      case "StatefulSet": // Status aus PVC-Bindung ableiten – Pending wenn kein Volume verfügbar (#811)
+        rows.push(statefulPodRow(host, c.sts, c.pod));
+        break;
+    }
   }
   if (rows.length === 0) return "No resources found in default namespace.";
   return table(["NAME", "READY", "STATUS", "RESTARTS", "AGE"], rows);
@@ -555,7 +560,7 @@ export function kubectlTop(host: KubectlHost, t: string[]) {
     if (name) {
       rows = rows.filter(r => r.name === name);
       if (rows.length === 0) {
-        const exists = host._allPods().some(p => p.name === name);
+        const exists = clusterPods(host).some(c => c.pod.name === name);
         return exists
           ? host._err("error: Metrics not available for pod default/" + name, "Metriken gibt es nur für laufende Pods – Status prüfen mit 'kubectl get pods'.")
           : host._err('Error from server (NotFound): pods "' + name + '" not found', "Pod-Namen siehst du mit 'kubectl get pods'.");

@@ -19,6 +19,11 @@
  * ist ein CI-Reviewer (#1117). `head` muss im Slice liegen, die Lens-Brillen müssen zur
  * Diff-Art passen (reiner Markdown-Diff → doku, sonst die drei Code-Brillen).
  *
+ * Ein Merge von `main` NACH dem Review mit Konflikt-Auflösung ist ungeprüfter Code im PR: der Wächter holt jeden Merge in
+ * `<head>..HEAD` und prüft ihn mit `git show --remerge-diff` (git ≥ 2.36). Zeigt der Merge eine Auflösung, ist der Check rot:
+ * die Auflösung per Delta-Lens reviewen, dann einen neuen Nachweis setzen (head ≥ Merge). Konfliktfreie Merges (auch der synthetische
+ * Merge-Commit des PR-Checkouts) bleiben grün; andere Commits nach dem Review werden weiter nur gemeldet. Ein git-Fehler ist rot.
+ *
  * Druckventil: `KQ-Review-Override: #<nr> <warum>` (Pflicht-Begründung), z.B. für Revert-PRs.
  * Bewusst KEIN npm-`check:*`-Skript und nicht in `verify`: verify läuft vor dem Review, der
  * Nachweis entsteht erst danach (Vorbild: check-festgefahren.mjs). Lokal:
@@ -87,8 +92,14 @@ function bewerteBlocker(review) {
 
 /** Bewertet einen geparsten Nachweis. `headBekannt`: der SHA lässt sich als Commit auflösen;
  *  `headImSlice`: er liegt in `<basis>..HEAD`. Liefert alle Fehler (leer = ok). Pure. */
-export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice }) {
+export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [] }) {
   const fehler = [];
+  for (const sha of konfliktMerges) {
+    fehler.push(
+      `Konflikt-Merge ${sha} nach dem Review: Auflösung per Delta-Lens prüfen, dann neuer Nachweis (head ≥ ${sha}). ` +
+        `Besser: main VOR Runde 1 oder erst nach dem Nachweis einmergen, wenn der Merge konfliktfrei ist.`,
+    );
+  }
   const { plan, review } = nachweis;
   if (!plan) fehler.push("KQ-Plan-Zeile fehlt (Planungspass nicht nachgewiesen).");
   else if (plan.art === "ungueltig") {
@@ -128,6 +139,16 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice })
   return fehler;
 }
 
+/**
+ * Merges in `<headSha>..HEAD`, deren Auflösung vom automatischen Merge abweicht (Konflikt-Auflösung). `git show --remerge-diff` zeigt
+ * genau diese Abweichung; die Ausgabe ist bei einem konfliktfreien Merge leer. Wirft bei einem git-Fehler (z.B. git < 2.36), der
+ * Aufrufer wertet das als rot (fail-closed).
+ */
+export function konfliktMergesNach(git, headSha) {
+  const merges = git(["rev-list", "--merges", `${headSha}..HEAD`]).split(/\r?\n/).filter((l) => l.trim() !== "");
+  return merges.filter((sha) => git(["show", "--remerge-diff", "--format=", sha]).trim() !== "");
+}
+
 /** Führt die Prüfung gegen git aus. `runGit`/`env` injizierbar (Test). Fail-closed: eine nicht
  *  auflösbare Basis oder ein git-Fehler ist rot. Basis == HEAD ist grün (nichts zu prüfen). */
 export function checkReviewNachweis({ runGit, env = process.env } = {}) {
@@ -149,6 +170,7 @@ export function checkReviewNachweis({ runGit, env = process.env } = {}) {
     let headSha = null;
     let headImSlice = false;
     let commitsNachReview = null;
+    let konfliktMerges = [];
     if (nachweis.review?.head) {
       try {
         headSha = git(["rev-parse", "--verify", "--quiet", `${nachweis.review.head}^{commit}`]).trim() || null;
@@ -157,10 +179,13 @@ export function checkReviewNachweis({ runGit, env = process.env } = {}) {
       }
       if (headSha) {
         headImSlice = git(["rev-list", `${base}..HEAD`]).split(/\r?\n/).includes(headSha);
-        if (headImSlice) commitsNachReview = Number(git(["rev-list", "--count", "--no-merges", `${headSha}..HEAD`]).trim());
+        if (headImSlice) {
+          commitsNachReview = Number(git(["rev-list", "--count", "--no-merges", `${headSha}..HEAD`]).trim());
+          konfliktMerges = konfliktMergesNach(git, headSha);
+        }
       }
     }
-    const fehler = bewerteNachweis({ nachweis, dateien, headBekannt: headSha !== null, headImSlice });
+    const fehler = bewerteNachweis({ nachweis, dateien, headBekannt: headSha !== null, headImSlice, konfliktMerges });
     return {
       ok: fehler.length === 0,
       fehler,

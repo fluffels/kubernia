@@ -161,7 +161,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 | 15.06.2026 | `AGENTS.md` und Kollisionsschutz für parallele Agenten dokumentiert, aber noch eine **Bitte** |
 | 16.06.2026 | [ADR 0002](/docs/adr/0002-kein-backend-keine-db.md): Kein Backend, keine Datenbank, keine Service-Aufteilung fürs Kern-Spiel |
 | 16.06.2026 | [ADR 0003](/docs/adr/0003-multiplayer-coop-out-of-scope.md): Multiplayer/Co-op – aktuell außerhalb Scope |
-| 16.06.2026 | Engine-Wahl als erstes ADR festgehalten (#84); das ADR wurde später aktualisiert, die Zeile unten zeigt dieses spätere Datum |
+| 16.06.2026 | Engine-Wahl als erstes ADR festgehalten (#84); das ADR wurde später aktualisiert, die ADR-0001-Zeile am 10.07.2026 zeigt dieses spätere Datum |
 | 18.06.2026 | erste CI-Pipeline (#200), läuft aber erst nach dem Push |
 | 19.06.2026 | [ADR 0004](/docs/adr/0004-skalierungs-fundament.md): Langfristige Skalierungs-Architektur – Fundament für ein großes Spiel |
 | 21.06.2026 | [ADR 0006](/docs/adr/0006-backend-und-skalierung.md): Braucht Kubernia bei Stardew-Scope ein Backend? — Skalierungs-Review |

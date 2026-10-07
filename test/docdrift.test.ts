@@ -278,3 +278,26 @@ describe("collectMarkdown: versionierte .claude-Ordner ja, Worktrees/Lokales nei
     assert.deepEqual([...VERSIONED_CLAUDE_DIRS].sort(), unignored);
   });
 });
+
+describe("keine Handkopie der verify-Kette in Kommentaren (#1392)", () => {
+  // Die Dokumentations-Prüfung (findDocumentedVerifyChains) sieht nur Markdown; Kommentare in CI und Hook
+  // veralten sonst still (die Kette dort stand schon einmal mit 8 statt der echten Gates).
+  test.each([".github/workflows/ci.yml", ".githooks/pre-push"])("%s verweist auf scripts.verify statt die Kette zu kopieren", (datei) => {
+    const text = readFileSync(fileURLToPath(new URL("../" + datei, import.meta.url)), "utf8");
+    assert.equal(/typecheck\s*→/.test(text), false, datei + ": Kettenkopie gefunden, auf package.json › scripts.verify verweisen");
+    assert.match(text, /scripts\.verify/, datei + ": Verweis auf scripts.verify fehlt");
+  });
+});
+
+describe("parseVerifyChain löst verschachtelte Ketten wie der Gate-Generator auf (#1392)", () => {
+  const parse = (checkDocDrift as { parseVerifyChain: (s: Record<string, string>) => string[] }).parseVerifyChain;
+  test("ein zusammengesetzter Schritt zählt mit seinen Teilen, in Reihenfolge", () => {
+    assert.deepEqual(parse({ verify: "npm run a && npm run inner && npm test", inner: "npm run b && npm run c", a: "x", b: "x", c: "x", test: "x" }), ["a", "b", "c", "test"]);
+  });
+  test("ein Alias ohne && bleibt ein Schritt, ein Rohbefehl fällt heraus", () => {
+    assert.deepEqual(parse({ verify: "npm run a && node x.mjs", a: "npm run b", b: "x" }), ["a"]);
+  });
+  test("ein Zyklus wirft", () => {
+    assert.throws(() => parse({ verify: "npm run x", x: "npm run y && npm run a", y: "npm run x && npm run a", a: "x" }), /Zyklus/);
+  });
+});
