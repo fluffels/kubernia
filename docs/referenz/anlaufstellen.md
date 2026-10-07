@@ -49,6 +49,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [repo-landkarte.md](repo-landkarte.md) | wenn du ein Subsystem suchst: welche Schicht, welches Tiefendoc |
 | [module/sim.md](../module/sim.md) | beim Arbeiten am Cluster-Simulator (`src/sim/*`) |
 | [module/content.md](../module/content.md) | für die Interna von Content-as-Data (Loader, Registry) |
+| [module/content-questgraph.md](../module/content-questgraph.md) | für die Quest-Landkarte: welche Region hat welche Quests, wie hängen sie zusammen (generiert) |
 | [module/world.md](../module/world.md) | bei Welt-, Karten- und HUD-Logik außerhalb der Szenen |
 | [module/app.md](../module/app.md) | bei Spielstand, XP, Wirtschaft, Persistenz und Einstieg |
 | [module/presentation.md](../module/presentation.md) | bei Szenen, UI, SFX und Assets (Phaser/DOM) |

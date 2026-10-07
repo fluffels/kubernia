@@ -37,8 +37,8 @@
 - **IndexedDB ist async, die SaveStore-API bleibt aber synchron:** ein In-Memory-Cache wird beim Boot via `await SaveStore.init()` (in `main.ts` vor `Game.load()`) aus IndexedDB hydriert; Schreibvorgänge spiegeln async dorthin. Darum musste **kein Aufrufer** auf async umgestellt werden.
 - **Storage-Migration statt Versions-Bump:** der Umzug localStorage→IndexedDB hat das **Format nicht geändert** (gleiche `{v,data}`-Hülle), nur den Speicherort. Daher kein `version`-Bump, sondern eine einmalige Storage-Migration in `SaveStore.init()` (alter localStorage-Stand wird beim ersten Start nach IndexedDB gehoben). Ohne IndexedDB (privat/`file:///`/alt) bleibt der synchrone localStorage-Modus aktiv.
 - **Namensraum-Rename KubeQuest→Kubernia (#557):** die persistente Storage-Identität trägt jetzt das `kubernia`-Präfix (Save-Keys **und** IndexedDB-DB-Name `kubernia`). Ebenfalls **kein `version`-Bump** (das `{v,data}`-Format ist unverändert), sondern eine einmalige **Namensraum-Migration** beim Boot: `migrateLegacyLocalStorage()` hebt die `kubequest-*`-localStorage-Keys deterministisch über die Slot-Key-Former in den neuen Namensraum, `migrateLegacyIdb()` (`src/store/legacy-idb.ts`) hebt einen Alt-Bestand aus der IndexedDB `kubequest` in die neue DB `kubernia`. Beide sind **no-clobber** (ein vorhandener Neu-Key/eine befüllte Ziel-DB bleibt unangetastet) und lassen den Alt-Bestand als Sicherheitsnetz stehen — Regel „Spielstände nie brechen". Abgesichert: `test/store.rename.test.ts`.
-- **Format-Version:** aktuell `CURRENT_SAVE_VERSION = 5` (zuletzt #413: persistente Zeit-Achse `gameDays`). Dirty-gegateter Autosave (#869, siehe unten) + JSON-Export/Import.
-- **Zwei Migrations-Mechanismen mit getrennter Zuständigkeit (SSOT, #510):** versionsgetriebene `migrations[n]` (`store.ts`) sind der SSOT für **strukturelle** Format-Sprünge (Feld umbenennen/umdeuten, Wert aktiv transformieren) und laufen genau einmal beim Anheben n→n+1; feldbasiertes `sanitizeState` (`game/save.ts`) macht **nur** Defaulting + Härten (fehlendes additives Feld → Default, unplausibler Wert → Default) und läuft idempotent bei jedem Ladeweg inkl. Import (#493). Faustregel: rein additiv → `sanitizeState` (Migration bleibt No-op mit Begründung); echte Umstrukturierung → `migrations[n]`. Die heutigen No-op-Migrationen 0→5 sind alle der additive Fall; ihr Bump dient trotzdem der Backup-vor-Überschreiben-Sicherung. Ein `CURRENT_SAVE_VERSION`-Bump erzwingt maschinell eine geladene Alt-Stand-Fixture `test/fixtures/savegame-v<N>-*.json` (Fitness-Test in `test/savemigration.test.ts`).
+- **Format-Version:** aktuelle Version und alle Schritte: [Save-Versionskette](#save-versionskette). Dirty-gegateter Autosave (#869, siehe unten) + JSON-Export/Import.
+- **Zwei Migrations-Mechanismen mit getrennter Zuständigkeit (SSOT, #510):** versionsgetriebene `migrations[n]` (`store/versioning.ts`) sind der SSOT für **strukturelle** Format-Sprünge (Feld umbenennen/umdeuten, Wert aktiv transformieren) und laufen genau einmal beim Anheben n→n+1; feldbasiertes `sanitizeState` (`game/save.ts`) macht **nur** Defaulting + Härten (fehlendes additives Feld → Default, unplausibler Wert → Default) und läuft idempotent bei jedem Ladeweg inkl. Import (#493). Faustregel: rein additiv → `sanitizeState` (Migration bleibt No-op mit Begründung); echte Umstrukturierung → `migrations[n]`. Die als „additiv“ geführten Schritte der [Kette](#save-versionskette) sind No-ops; ihr Bump dient trotzdem der Backup-vor-Überschreiben-Sicherung. Ein `CURRENT_SAVE_VERSION`-Bump erzwingt maschinell eine geladene Alt-Stand-Fixture `test/fixtures/savegame-v<N>-*.json` (Fitness-Test in `test/savemigration.test.ts`).
 - **Snapshot am Save-Rand gegen die Sim-Form härten (#586):** `clusterSnapshot` (die serialisierte `Scenario`-Form) war der letzte ungetypte Rand in `sanitizeState` — die alte `isPlainObject`-Prüfung ließ ein plausibles Objekt mit kaputten Feldern (`deployments: "x"` statt Array) roh in `new KQSim(...)` fließen, wo `load()` beim Aufbau riss (der `new KQSim`-Aufruf liegt außerhalb des Lade-`try/catch` → ganzer Ladevorgang crashte, Verstoß gegen „Saves nie brechen"). `sanitizeSnapshot` härtet ihn jetzt gegen die **SSOT** (den Simulator selbst): baut `new KQSim` den Snapshot wurffrei auf → gültig, wird **unverändert** übernommen (kein Re-Snapshot, damit die `files`-basierte Teil-Snapshot-Erkennung in `load()` #436 erhalten bleibt); wirft der Aufbau → verworfen (frischer Default-Cluster + Szenario-Replay). Kein Duplizieren der ~50 `Scenario`-Felder in der Save-Schicht (Stardew-Scope). Abgesichert: `test/game.test.ts` (#586, RED-GREEN).
 - **Eviction-Schutz (#401, ADR 0006 Befund 3):** Browser-Speicher ist „geliehen" – unter Speicherdruck löscht der Browser best-effort-Origins per LRU **komplett** (IndexedDB-Spielstand inklusive). `SaveStore.requestPersistentStorage()` (Boot, in `main.ts` nach `init()`, nicht-blockierend) markiert den Origin über `navigator.storage.persist()` als dauerhaft und misst per `navigator.storage.estimate()` die Belegung. Alles feature-detected und wirft NIE; fehlt die API (alter Browser, `file://`), läuft das Spiel wie bisher (ungeschützt) weiter. Rückgabe ist ein reines Datenobjekt `StorageHealth` (`persistSupported`/`persisted`/`usage`/`quota`/`usageRatio`/`nearQuota`) – die **Schichtung** bleibt gewahrt: store.ts kennt keine UI, den Warn-Toast bei knappem Kontingent (`nearQuota`, ab `QUOTA_WARN_RATIO = 0.8`) feuert `main.ts`. Der JSON-Export bleibt das verlässliche letzte Netz.
 
@@ -52,7 +52,62 @@ Seit #306 trägt SaveStore **mehrere benannte Slots**. Die Spiellogik (`game.ts`
 - **Hydration:** `init()` lädt aus IndexedDB den Slot-Index **und nur den aktiven Slot** (Daten + Backup) in den synchronen Cache. Der **Slot-Wechsel** = aktiven Zeiger setzen + Seite neu laden (UI, wie beim Datei-Import); nach dem Reload hydriert `init()` den jetzt aktiven Slot — so muss der synchrone Pfad nie einen fremden Slot async nachladen.
 - **API:** `listSlots()`/`activeSlotId()`/`createSlot(name)`/`switchSlot(id)`/`renameSlot(id,name)`/`deleteSlot(id)`/`setActiveSlotSummary(summary)`. In `game/save.ts` orchestriert: `slots()` (anzeigefertig, Rang/Quest aus den Roh-Zahlen), `newSlot`/`switchSlot`/`renameSlot`/`deleteSlot`. UI im Menü (`ui/overlay.ts › renderSlots`, `ui/save.ts`). Abgesichert: `test/store.slots.test.ts` (Isolation, Reload-Persistenz, IndexedDB-Modus, kaputter Index, Quota, Löschen-des-aktiven) + `test/game.slots.test.ts`.
 
-> **Grundregel:** Was live (auf `main`) geht, darf NIE einen bestehenden Spielstand brechen — jede Format-Änderung migrieren (Versions-Bump + Migrationskette in `store.ts`, mit echtem Alt-Stand testen). Quest-Fortschritt persistiert seit #353 per **Quest-ID** (`currentQuestId`), nicht per Zahl-Index. Details siehe [AGENTS.md › Spielstände](../../AGENTS.md).
+> **Grundregel:** Was live (auf `main`) geht, darf NIE einen bestehenden Spielstand brechen — jede Format-Änderung migrieren (Versions-Bump + Migrationskette in `store/versioning.ts`, mit echtem Alt-Stand testen). Quest-Fortschritt persistiert seit #353 per **Quest-ID** (`currentQuestId`), nicht per Zahl-Index. Details siehe [AGENTS.md › Spielstände](../../AGENTS.md).
+
+## Save-Versionskette
+
+Die Kette stammt aus den Daten: die Zahl der Version aus `CURRENT_SAVE_VERSION` in `src/store/versioning.ts`, die Kurzbeschreibung je Schritt aus `src/store/save-versionen.json` (Ticket, Art, Text). Eine Migration ohne Beschreibung macht `npm run check:docgen` rot; ob ein Schritt **additiv** (No-op, `sanitizeState` defaultet) oder **strukturell** (echte Transformation, dicker Pfeil) ist, bindet `test/docgen-save-versionen.test.ts` an `migrationsSchritte()`. Eine neue Migration ergänzt also `migrations[n]`, den Eintrag im JSON und danach `npm run docs:gen`.
+
+<!-- GEN:save-versionen START -->
+<!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  layout: dagre
+  themeVariables:
+    lineColor: "#8b949e"
+    primaryColor: "#f3e3c3"
+    primaryTextColor: "#2b2118"
+    primaryBorderColor: "#8a6a3f"
+---
+flowchart TB
+  v0["v0"]
+  v1["v1"]
+  v2["v2"]
+  v3["v3"]
+  v4["v4"]
+  v5["v5"]
+  v6["v6"]
+  v7["v7"]
+  v8["v8"]
+  v9[["v9 · aktuell"]]
+  v0 --> v1
+  v1 -->|"#35;353"| v2
+  v2 -->|"#35;354"| v3
+  v3 -->|"#35;410"| v4
+  v4 -->|"#35;413"| v5
+  v5 -->|"#35;559"| v6
+  v6 ==>|"#35;574"| v7
+  v7 -->|"#35;232"| v8
+  v8 ==>|"#35;421"| v9
+```
+
+| Schritt | Ticket | Art | Kurzbeschreibung |
+|---|---|---|---|
+| 0 → 1 | – | additiv | Stand bekommt die Versions-Hülle { v, data }, Inhalt unverändert |
+| 1 → 2 | #353 | additiv | Quest-Fortschritt zusätzlich als Quest-ID (currentQuestId) statt nur als Index |
+| 2 → 3 | #354 | additiv | Quest-IDs von numerisch (q5) auf sprechende Slugs umbenannt, Remapping in sanitizeState |
+| 3 → 4 | #410 | additiv | Menge offener Quests (activeQuests) statt einer fokussierten Quest |
+| 4 → 5 | #413 | additiv | Spiel-Zeit-Achse gameDays: Tag, Saison und Uhrzeit überleben den Reload |
+| 5 → 6 | #559 | additiv | Redundante Quest-Arbeitskopie (questIdx, questStep, taskIdx) entfällt |
+| 6 → 7 | #574 | strukturell | Abkürzungen werden zur Komfort-Kauf-Mechanik: Alt-Werte wandern nach owned und comfortUsage |
+| 7 → 8 | #232 | additiv | Umbelegbare Aktionstasten als settings.keys, Alt-Stand bekommt die Default-Belegung |
+| 8 → 9 | #421 | strukturell | Inventar von Zahl pro Gegenstand auf ItemStack { count } gehoben |
+
+<!-- GEN:save-versionen END -->
 
 ## Dirty-gegateter, debounced Autosave (#869)
 

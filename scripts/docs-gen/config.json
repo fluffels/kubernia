@@ -75,5 +75,17 @@
     "settings": ".claude/settings.json",
     "gitHooks": ".githooks",
     "mcp": ".mcp.json"
+  },
+  "saveVersionen": {
+    "beschreibungen": "src/store/save-versionen.json",
+    "version": { "datei": "src/store/versioning.ts", "name": "CURRENT_SAVE_VERSION" }
+  },
+  "quests": {
+    "ordner": "src/content/data/quests",
+    "reihenfolge": "src/content/data/quest-order.json",
+    "themen": "src/content/data/quest-topics.json",
+    "standplaetze": "src/content/data/entities.json",
+    "npcs": "src/content/data/npcs.json",
+    "maxQuestsJeDiagramm": 30
   }
 }

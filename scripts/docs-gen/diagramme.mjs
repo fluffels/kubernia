@@ -6,7 +6,7 @@
 // passende Datei oder eine Zahl ohne Quelle macht den Generator (und damit `check:docgen`) rot.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { MERMAID_FRONTMATTER, expandSteps } from "./markdown.mjs";
+import { MERMAID_FRONTMATTER, expandSteps, ganzzahlKonstante } from "./markdown.mjs";
 import { harnessKatalog } from "./harness-inventar.mjs";
 
 const PLATZHALTER = /\$\{([a-z-]+):([^}]*)\}/g;
@@ -14,8 +14,6 @@ const PLATZHALTER = /\$\{([a-z-]+):([^}]*)\}/g;
 const UNSICHER = /["<>{};#\r\n]/;
 /** Arten, die einen Subagenten, Skill oder Workflow *nennen* (zählen für die Vollständigkeit). */
 const NAMENSARTEN = ["agent", "agent-modell", "skill", "skill-modell", "workflow"];
-
-const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Liest die Job-Namen (`name:` mit 4 Leerzeichen Einrückung unter `jobs.<id>`, Anführungszeichen erlaubt); Workflow- und Step-Namen zählen nicht. */
 function ciJobNamen(rootDir, dir) {
@@ -34,16 +32,11 @@ function ciJobNamen(rootDir, dir) {
 function konstante(rootDir, cfg, schluessel) {
   const k = cfg.konstanten?.[schluessel];
   if (!k) throw new Error(`Konstante "${schluessel}" steht nicht in config.diagramme.konstanten`);
-  const abs = join(rootDir, k.datei);
-  if (!existsSync(abs)) throw new Error(`Konstante "${schluessel}": Datei ${k.datei} nicht gefunden`);
-  const text = readFileSync(abs, "utf8");
-  const decl = new RegExp(`^\\s*(?:export\\s+)?const\\s+${esc(k.name)}\\s*=`, "gm");
-  const treffer = text.match(decl) ?? [];
-  if (treffer.length === 0) throw new Error(`Konstante "${schluessel}": ${k.name} fehlt in ${k.datei}`);
-  if (treffer.length > 1) throw new Error(`Konstante "${schluessel}": ${k.name} steht mehrfach in ${k.datei}`);
-  const zahl = new RegExp(`^\\s*(?:export\\s+)?const\\s+${esc(k.name)}\\s*=\\s*(\\d+)\\s*(?:;|//|$)`, "m").exec(text);
-  if (!zahl) throw new Error(`Konstante "${schluessel}": ${k.name} in ${k.datei} ist kein Ganzzahl-Literal`);
-  return zahl[1];
+  try {
+    return ganzzahlKonstante(rootDir, k.datei, k.name);
+  } catch (err) {
+    throw new Error(`Konstante "${schluessel}": ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+  }
 }
 
 function gatesAnzahl(rootDir, config, kette) {

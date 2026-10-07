@@ -88,7 +88,7 @@ Vite + TypeScript + ES-Module, Phaser als npm-Paket; `index.html` lädt nur `src
   - **🤖 Dependabot-Sammel-Ticket:** mit dem Mergen loslegen.
   - **⚠️ riskant** (z.B. Major-Migration): erst evaluieren, die Weiche selbst entscheiden.
   - **„Zuletzt"/„blockiert durch"**: Unwichtiges steht im Board unten, Abhängigkeiten als Body-Notiz „blockiert durch #X".
-- **Spielstände** über die SaveStore-Schicht (`store.ts`, Auto-Save alle 5 s). **Was live geht, darf NIE einen bestehenden Stand brechen – immer migrieren:** Formatänderung ⇒ `version`-Bump + Migration (aktuell `CURRENT_SAVE_VERSION = 3`), alte Stände vorher in den Backup-Slot, `sanitizeState` in `game.ts` härtet kaputte Felder ab. Quest-Fortschritt persistiert per Quest-ID (`currentQuestId`, #353), nicht per Index.
+- **Spielstände** über die SaveStore-Schicht (`store/`, Auto-Save alle 5 s). **Was live geht, darf NIE einen bestehenden Stand brechen – immer migrieren:** Formatänderung ⇒ `version`-Bump + Migration (Kette: [app.md](docs/module/app.md#save-versionskette)), alte Stände vorher in den Backup-Slot, `sanitizeState` in `game/save.ts` härtet kaputte Felder ab. Quest-Fortschritt persistiert per Quest-ID (`currentQuestId`, #353), nicht per Index.
 
 ### Modellwahl nach Phase (#910)
 
