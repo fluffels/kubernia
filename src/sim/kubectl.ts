@@ -43,6 +43,9 @@ const SUBCOMMANDS: Readonly<Record<string, SubCommand>> = {
   label: (host, t, raw) => kubectlLabel(host, t, raw),
 };
 
+/** Die registrierten Unterbefehle (Treue-Matrix, docs/sim-treue/: ein neuer Unterbefehl braucht eine Zeile). */
+export const KUBECTL_SUBCOMMANDS: readonly string[] = Object.keys(SUBCOMMANDS);
+
 export function kubectlCommand(host: KubectlHost, t: string[], raw: string): string {
   // Aufbau-Bogen (#460): Ohne laufende Control-Plane gibt es keinen apiserver, an den kubectl
   // sich wenden könnte – genau wie in echtem Kubernetes vor `kubeadm init`. Das Gate sitzt hier,

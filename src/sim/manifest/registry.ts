@@ -102,7 +102,7 @@ export function effectsFromManifest(content: string, file: string, verb: Manifes
 }
 
 /** Die `kind`s mit Mapper, aus dem Register abgeleitet (kein zweiter Pflegeort). */
-const MAPPED_KINDS = new Set(Object.keys(MAPPERS).map(k => k.split("|")[1]));
+export const MAPPED_KINDS: ReadonlySet<string> = new Set(Object.keys(MAPPERS).map(k => k.split("|")[1]));
 
 /* ---- Übergang bis #1143: Sim-Sonderfelder aus dem hinterlegten Effekt ---- */
 
