@@ -649,19 +649,26 @@ async function loadRun(args) {
   if (!publicKey || !secretKey) throw new Error("--langfuse braucht LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY.");
   const baseUrl = process.env.LANGFUSE_BASE_URL ?? "http://localhost:3000";
   const parts = [];
-  for (const s of args.sessions) {
-    const part = callsFromLangfuse(await fetchSessionObservations(s, { baseUrl, publicKey, secretKey }));
-    // Zwei Stufen: alle TOOL-Observations schlank (Name, Zeit, `orig_len`), die Eingabe (`io`, v2 liefert sie nur samt Ausgabe)
-    // nur für die Tools, deren Pfad/Befehl die Kennzahlen lesen.
-    const werkzeuge = await fetchSessionObservations(s, { baseUrl, publicKey, secretKey, type: "TOOL", fields: "core,basic,metadata" });
-    const eingaben = [];
-    for (const tool of EINGABE_TOOLS) {
-      eingaben.push(...(await fetchSessionObservations(s, { baseUrl, publicKey, secretKey, type: "TOOL", name: `Tool: ${tool}`, fields: "core,io" })));
-    }
-    part.events = toolEventsFromLangfuse(mitEingabe(werkzeuge, eingaben));
-    parts.push(part);
-  }
+  for (const s of args.sessions) parts.push(await ladeLangfuseSession(s, { baseUrl, publicKey, secretKey }));
   return merge(parts);
+}
+
+/**
+ * Eine Session aus Langfuse: Calls aus den GENERATIONs, Tool-Events in zwei Stufen. Stufe 1 holt alle TOOL-Observations schlank
+ * (Name, Zeit, `orig_len`), Stufe 2 die Eingabe (`io`; v2 liefert sie nur samt Ausgabe) nur für die Tools aus `EINGABE_TOOLS`.
+ * Die Namen für Stufe 2 kommen aus Stufe 1 (`metadata.tool_name` → tatsächlicher Span-Name): der Hook hängt Datei-Tools einen
+ * Bereichs-Qualifier an (`Tool: Read [Kubernia-Doku]`), ein fester Name träfe sie nie. `fetchImpl` ist für Tests injizierbar.
+ */
+export async function ladeLangfuseSession(sessionId, opts) {
+  const part = callsFromLangfuse(await fetchSessionObservations(sessionId, opts));
+  const werkzeuge = await fetchSessionObservations(sessionId, { ...opts, type: "TOOL", fields: "core,basic,metadata" });
+  const namen = new Set(
+    werkzeuge.filter((o) => EINGABE_TOOLS.includes(o?.metadata?.tool_name ?? String(o?.name ?? "").replace(/^Tool:\s*/, "").replace(/\s*\[.*\]$/, ""))).map((o) => o.name),
+  );
+  const eingaben = [];
+  for (const name of namen) eingaben.push(...(await fetchSessionObservations(sessionId, { ...opts, type: "TOOL", name, fields: "core,io" })));
+  part.events = toolEventsFromLangfuse(mitEingabe(werkzeuge, eingaben));
+  return part;
 }
 
 async function main() {

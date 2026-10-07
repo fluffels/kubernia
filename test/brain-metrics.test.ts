@@ -38,6 +38,7 @@ const baseline = baselineModule as {
   renderMarkdown: (s: object, loop?: object) => string;
   summarize: (run: object, bounds?: object, prFiles?: object[] | null) => { brain?: Metrics & { rechercheTokens: number } };
   fensterLage: (ts: string, bounds?: object) => string;
+  ladeLangfuseSession: (id: string, o: object) => Promise<{ events: Ev[] }>;
   callsFromTranscript: (textOderZeilen: string | object[]) => { calls: unknown[]; questions: number };
   fetchSessionObservations: (id: string, o: object) => Promise<unknown[]>;
 };
@@ -321,5 +322,61 @@ describe("Langfuse in zwei Stufen: mitEingabe und EINGABE_TOOLS (#1322 Z6)", () 
   });
   test("EINGABE_TOOLS nennt genau die Tools, deren Eingabe die Kennzahlen lesen", () => {
     assert.deepEqual([...bm.EINGABE_TOOLS].sort(), ["Bash", "Edit", "MultiEdit", "NotebookEdit", "PowerShell", "Read", "Write"]);
+  });
+});
+
+describe("ladeLangfuseSession: zwei Stufen mit tatsächlichen Span-Namen (#1322 Z6)", () => {
+  const T = (n: number) => `2026-10-01T10:00:0${n}Z`;
+  type Q = { sessionId: string | null; type: string | null; name: string | null; fields: string | null };
+  // Mock, der `type` und `name` EXAKT filtert wie die v2-API; Datei-Tools tragen den Bereichs-Qualifier des Hooks.
+  const alle = [
+    { id: "g1", type: "GENERATION", name: "Claude", startTime: T(0), usageDetails: { input: 1, output: 1 }, model: "m" },
+    { id: "r1", type: "TOOL", name: "Tool: Read [Kubernia-Doku]", startTime: T(1), metadata: { tool_name: "Read", output_meta: { orig_len: 400 } }, input: { file_path: "docs/a.md" } },
+    { id: "b1", type: "TOOL", name: "Tool: Bash", startTime: T(2), metadata: { tool_name: "Bash", output_meta: { orig_len: 8 } }, input: { command: "cat docs/b.md" } },
+    { id: "g2", type: "TOOL", name: "Tool: Grep", startTime: T(3), metadata: { tool_name: "Grep" }, input: { pattern: "x" } },
+  ];
+  const mock = (anfragen: Q[]) => (url: string) => {
+    const q = new URL(url).searchParams;
+    anfragen.push({ sessionId: q.get("sessionId"), type: q.get("type"), name: q.get("name"), fields: q.get("fields") });
+    const treffer = alle.filter((o) => (!q.get("type") || o.type === q.get("type")) && (!q.get("name") || o.name === q.get("name")));
+    const mitIo = (q.get("fields") ?? "").split(",").includes("io");
+    const daten = treffer.map((o) => (mitIo ? o : { ...o, input: undefined }));
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: daten, meta: {} }) });
+  };
+  const lade = baseline.ladeLangfuseSession;
+
+  test("Datei-Tools mit Qualifier bekommen ihre Eingabe: Brain-Lesezugriffe per Read und per Bash werden gezählt", async () => {
+    const anfragen: Q[] = [];
+    const part = await lade("s1", { baseUrl: "http://x", publicKey: "p", secretKey: "k", fetchImpl: mock(anfragen) });
+    const m = brainMetrics(part.events);
+    assert.deepEqual([m.brainReads, m.brainPages, m.brainReadTokens], [2, 2, 100 + 2], "Read (400 Zeichen) und cat (8 Zeichen)");
+    const stufe2 = anfragen.filter((a) => a.name);
+    assert.deepEqual(stufe2.map((a) => a.name).sort(), ["Tool: Bash", "Tool: Read [Kubernia-Doku]"], "nur Tools aus EINGABE_TOOLS, mit dem echten Namen");
+    assert.ok(stufe2.every((a) => a.fields === "core,io" && a.type === "TOOL" && a.sessionId === "s1"));
+    assert.ok(anfragen.filter((a) => !a.name && a.type === "TOOL").every((a) => a.fields === "core,basic,metadata"), "Stufe 1 holt kein io");
+  });
+
+  test("ohne Eingabe-Tools gibt es keine zweite Stufe; Grep zählt ohne Eingabe", async () => {
+    const anfragen: Q[] = [];
+    const nurGrep = [alle[3]];
+    const fetchImpl = (url: string) => {
+      anfragen.push({ sessionId: null, type: new URL(url).searchParams.get("type"), name: new URL(url).searchParams.get("name"), fields: null });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: new URL(url).searchParams.get("type") === "TOOL" ? nurGrep : [], meta: {} }) });
+    };
+    const part = await lade("s", { baseUrl: "http://x", publicKey: "p", secretKey: "k", fetchImpl });
+    assert.equal(anfragen.filter((a) => a.name).length, 0);
+    assert.equal(brainMetrics(part.events).searchCalls, 1);
+  });
+
+  test("kaputte Antwort der zweiten Stufe: der Fehler steigt auf statt leerer Zahlen", async () => {
+    let n = 0;
+    const fetchImpl = (url: string) => {
+      n += 1;
+      const q = new URL(url).searchParams;
+      if (q.get("name")) return Promise.resolve({ ok: false, status: 500, text: () => Promise.resolve("kaputt") });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: q.get("type") === "TOOL" ? alle.slice(1, 2) : [], meta: {} }) });
+    };
+    await assert.rejects(lade("s", { baseUrl: "http://x", publicKey: "p", secretKey: "k", fetchImpl }), /Langfuse 500/);
+    assert.ok(n >= 3);
   });
 });

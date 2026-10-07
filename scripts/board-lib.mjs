@@ -70,6 +70,16 @@ export function klemmeAnker(items, ankerNr, { numbers = [], notfall = false } = 
   return { anker: sammel.number, geklemmt: true, sammelticket: sammel.number };
 }
 
+/**
+ * Der ganze Planungsweg von board-place (--top/--after/--position, Klemmung, Notfall) als pure Funktion: `args` wie aus parseArgs
+ * (`anchor`, `position`, `numbers`, `notfall`). Liefert den Plan von planPlacements plus `klemmung` (`{ geklemmt, sammelticket }`).
+ */
+export function planFuerArgs(items, args) {
+  const anker = args.position ? ankerNummerFuerPosition(items, args.position, args.numbers[0]) : (args.anchor ?? null);
+  const k = klemmeAnker(items, anker, { numbers: args.numbers, notfall: !!args.notfall });
+  return { ...planPlacements(items, args.numbers, k.anker), klemmung: { geklemmt: k.geklemmt, sammelticket: k.sammelticket } };
+}
+
 /** True bei GitHubs Rate-Limit-Fehler (Meldung der gh-CLI/GraphQL). */
 export const isRateLimit = (message) => /rate limit/i.test(String(message ?? ""));
 

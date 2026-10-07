@@ -19,7 +19,7 @@ export const SHELL_VON_TOOL = Object.freeze({ Bash: "bash", PowerShell: "powersh
 
 /** Wrapper-Tabelle (hier, damit der gh-Guard nicht an den fs/os-Importen des Worktree-Guards hängt): Optionen mit Wert (`val`), Optionen mit Ortswechsel (`chdir`), Positionsargumente (`pos`),
  *  `assign`: NAME=WERT-Argumente, `lookup`: Optionen, die nur nachschlagen (`command -v`). */
-export const W = (val = [], extra = {}) => ({ val: new Set(val), chdir: new Set(extra.chdir ?? []), pos: extra.pos ?? 0, assign: extra.assign ?? false, lookup: new Set(extra.lookup ?? []) });
+const W = (val = [], extra = {}) => ({ val: new Set(val), chdir: new Set(extra.chdir ?? []), pos: extra.pos ?? 0, assign: extra.assign ?? false, lookup: new Set(extra.lookup ?? []) });
 export const WRAPPERS = {
   time: W(["-f", "-o", "--format", "--output"]),
   command: W([], { lookup: ["-v", "-V"] }),

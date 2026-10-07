@@ -2,6 +2,7 @@
  *
  * Reines Node-Tooling-Skript ohne Declaration-File: Namespace einmal über `unknown` auf ein lokales
  * Interface gebracht (gleiche Technik wie test/internalrefs.test.ts, kommt ohne no-unsafe-Suppressions aus). */
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/board-lib.mjs";
@@ -177,8 +178,8 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
   });
 
   test("--position: bis zur Position des Sammeltickets geklemmt, dahinter nicht; das Sammelticket selbst klemmt nicht", () => {
-    const anker = (n: number, nr: number) => N2.ankerNummerFuerPosition(board3, n, nr);
     const N2 = rawLib as unknown as { ankerNummerFuerPosition: (items: B[], n: number, ohne?: number | null) => number | null };
+    const anker = (n: number, nr: number) => N2.ankerNummerFuerPosition(board3, n, nr);
     for (const n of [1, 2, 3, 4]) expect(K.klemmeAnker(board3, anker(n, 99), { numbers: [99] }), `Position ${n}`).toMatchObject({ anker: 13, geklemmt: true });
     expect(K.klemmeAnker(board3, anker(5, 99), { numbers: [99] })).toMatchObject({ anker: 13, geklemmt: false }); // Anker = Sammelticket selbst: schon dahinter
     expect(K.klemmeAnker(board3, anker(6, 99), { numbers: [99] })).toMatchObject({ anker: 14, geklemmt: false });
@@ -199,6 +200,27 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     const k = K.klemmeAnker(neu, null, { numbers: [20, 21] });
     const plan = L.planPlacements(neu, [20, 21], k.anker);
     expect(plan.steps.map((s) => [s.item.number, s.afterId])).toEqual([[20, "I13"], [21, "I20"]]);
+  });
+
+  test("der Titel, an dem die Klemmung das Sammelticket erkennt, steht wörtlich in AGENTS.md, Workflow und ticket-reihenfolge.md (keine stille Drift)", () => {
+    for (const datei of ["AGENTS.md", ".claude/workflows/kubernia-ticket.js", "docs/ticket-reihenfolge.md"]) {
+      expect(readFileSync(new URL(`../${datei}`, import.meta.url), "utf8"), datei).toContain(K.SAMMELTICKET_TITEL);
+    }
+  });
+
+  test("planFuerArgs (die Verdrahtung von board-place): --top klemmt, --notfall nicht, --after und --position klemmen, melden die Klemmung", () => {
+    const F = rawLib as unknown as { planFuerArgs: (items: B[], args: object) => { steps: { item: B; afterId: string | null }[]; klemmung: { geklemmt: boolean; sammelticket: number | null } } };
+    const neu = [...board3, b(20)];
+    const hinter = (args: object) => F.planFuerArgs(neu, args).steps.map((s) => [s.item.number, s.afterId]);
+    expect(hinter({ anchor: null, numbers: [20] })).toEqual([[20, "I13"]]);
+    expect(F.planFuerArgs(neu, { anchor: null, numbers: [20] }).klemmung).toEqual({ geklemmt: true, sammelticket: 13 });
+    expect(hinter({ anchor: null, numbers: [20], notfall: "rot-main" })).toEqual([[20, null]]);
+    expect(F.planFuerArgs(neu, { anchor: null, numbers: [20], notfall: "forum" }).klemmung.geklemmt).toBe(false);
+    expect(hinter({ anchor: 11, numbers: [20] })).toEqual([[20, "I13"]]);
+    expect(hinter({ anchor: 14, numbers: [20] })).toEqual([[20, "I14"]]);
+    expect(hinter({ anchor: null, position: 2, numbers: [20] })).toEqual([[20, "I13"]]);
+    expect(hinter({ anchor: null, position: 6, numbers: [20] })).toEqual([[20, "I14"]]);
+    expect(hinter({ anchor: null, position: 4, numbers: [13] })).toEqual([[13, "I12"]]); // das Sammelticket selbst
   });
 
   test("normalizeItems liefert Titel, Assignee-Logins und Zustand (Form einer echten REST-Antwort)", () => {

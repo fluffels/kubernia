@@ -111,7 +111,7 @@ export function toolEventsFromTranscript(textOderZeilen) {
 }
 
 /** Tools, deren Eingabe (Pfad, Befehl) die Kennzahlen lesen. Nur für sie holt `--langfuse` die `io`-Feldgruppe; Grep/Glob zählen ohne Eingabe. */
-export const EINGABE_TOOLS = ["Read", "Bash", "PowerShell", "Edit", "Write", "MultiEdit", "NotebookEdit"];
+export const EINGABE_TOOLS = ["Read", "Bash", "PowerShell", ...EDIT_TOOLS];
 
 /**
  * Hängt die Eingabe aus `io`-Observations (per `id`) an die Metadaten-Observations. Die v2-API liefert `input` nur zusammen mit

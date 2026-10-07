@@ -62,6 +62,7 @@ export async function workflowLauf(o: LaufOptionen = {}) {
   let fixe = 0;
   const diff = (dateien: string[]) => ({ diffPfad: `/tmp/kq-42-r${runde + 1}.patch`, diffStat: "stat", diffHead: `h${head}`, diffDateien: dateien });
   const agent = (prompt: string, opt: { label: string; agentType?: string; model?: string; effort?: string }) => {
+    if (aufrufe.length >= 80) throw new Error("Stub: mehr als 80 agent()-Aufrufe, der Workflow läuft vermutlich endlos (fehlende Schleifengrenze?).");
     aufrufe.push({ prompt, label: opt.label, agentType: opt.agentType, model: opt.model, effort: opt.effort });
     const l = opt.label;
     if (l === "auswahl+claim") {

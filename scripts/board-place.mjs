@@ -8,7 +8,7 @@
  *   node scripts/board-place.mjs --notfall rot-main --top 1240   # echter Notfall: wirklich ganz oben
  *   node scripts/board-place.mjs --after 1206 1240 1241      # in dieser Reihenfolge hinter #1206
  *   node scripts/board-place.mjs --dry-run --top 1240        # nur anzeigen
- *   node scripts/board-place.mjs --position 6 1312           # als N. Todo-Item (z.B. Sammelticket)
+ *   node scripts/board-place.mjs --position 4 1312           # als N. Todo-Item (z.B. Sammelticket, Position laut AGENTS.md)
  *   node scripts/board-place.mjs --missing                   # offene Issues ohne Board-Item (nur Bericht)
  *
  * Nie vor das ungeclaimte Sammelticket: `--top`, `--after` und `--position` klemmen den Anker hinter das offene, nicht zugewiesene
@@ -19,7 +19,7 @@
  * gemeldet und übersprungen: später erneut aufrufen. Bei Rate-Limit sofort stoppen, den Rest melden.
  */
 import { pathToFileURL } from "node:url";
-import { abortMessage, ankerNummerFuerPosition, klemmeAnker, loadItems, loadOpenIssueNumbers, missingFromBoard, planPlacements, setPosition } from "./board-lib.mjs";
+import { abortMessage, loadItems, loadOpenIssueNumbers, missingFromBoard, planFuerArgs, setPosition } from "./board-lib.mjs";
 
 /** Echte Notfälle, die ganz nach oben dürfen: roter main, Security, Dependabot, Forum-Eingang. */
 export const NOTFALL_ARTEN = ["rot-main", "security", "dependabot", "forum"];
@@ -82,13 +82,8 @@ async function main(argv = process.argv.slice(2)) {
   let plan;
   try {
     const items = loadItems();
-    let anchor = args.anchor;
-    if (args.position) {
-      anchor = ankerNummerFuerPosition(items, args.position, args.numbers[0]);
-    }
-    const k = klemmeAnker(items, anchor, { numbers: args.numbers, notfall: !!args.notfall });
-    if (k.geklemmt) console.log(`Hinter das ungeclaimte Sammelticket #${k.sammelticket} geklemmt (Notfall: --notfall <art>, nur mit --top, ${NOTFALL_ARTEN.join("|")}).`);
-    plan = planPlacements(items, args.numbers, k.anker);
+    plan = planFuerArgs(items, args);
+    if (plan.klemmung.geklemmt) console.log(`Hinter das ungeclaimte Sammelticket #${plan.klemmung.sammelticket} geklemmt (Notfall: --notfall <art>, nur mit --top, ${NOTFALL_ARTEN.join("|")}).`);
   } catch (e) {
     console.error(`✖ Abbruch: ${abortMessage(e.message)}. Später erneut fahren.`);
     process.exit(1);

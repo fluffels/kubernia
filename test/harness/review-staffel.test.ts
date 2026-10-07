@@ -415,6 +415,13 @@ describe("Lens-Auftrag mit eingesetzten Werten (#1322 Z16b)", () => {
     assert.ok(!t.includes("<nr>") && !t.includes("<runde>"));
   });
 
+  test("absoluter Worktree-Pfad, der nicht auf kq-<nr> endet: <hauptrepo>-Platzhalter bleibt, Nummer und Runde sind eingesetzt (Grenze)", async () => {
+    const r = await workflowLauf({ umsetzen: { dateien: ["src/a.ts"], extra: { worktree: "/w/anderer-name" } } });
+    const t = r.lenses.find((a) => a.label === "lens:test-adaequanz:r1")?.prompt ?? "";
+    assert.match(t, /<hauptrepo>\/\.claude\/worktrees\/kq-42-lens-r1/);
+    assert.ok(!t.includes("/w/anderer-name-lens"), "kein erfundener Pfad neben einem fremd benannten Worktree");
+  });
+
   test("die Quelle (LENS_QUELLE) behält die Platzhalter: nur der Spawn setzt ein", () => {
     const text = lies(".claude/workflows/kubernia-ticket.js");
     assert.match(text, /kq-<nr>-lens-r<runde>/);

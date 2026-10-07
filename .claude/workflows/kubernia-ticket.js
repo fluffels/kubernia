@@ -513,7 +513,6 @@ function lensAuftragFuer(auftrag, { nr, runde, worktree, head }) {
     .split('<worktree>').join(wt || '<worktree>')
     .split('<erwarteter HEAD>').join(head || 'der HEAD des Feature-Worktrees (git rev-parse HEAD)')
     .split('<nr>').join(String(nr))
-    .split('<runde>').join(String(runde))
 }
 // ── Lens-Auftrag einsetzen (#1322) — Ende
 

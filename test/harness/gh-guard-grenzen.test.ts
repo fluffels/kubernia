@@ -233,6 +233,6 @@ describe("Wrapper-Tabelle gehört zu den importfreien Tabellen (#1322 Z15)", () 
 
   test("der gh-Guard hängt nicht am Worktree-Guard (fs/os-Importe), shell-tabellen.mjs ist importfrei", () => {
     assert.doesNotMatch(lies("scripts/gh-guard-hook.mjs"), /from "\.\/worktree-guard/);
-    assert.doesNotMatch(lies("scripts/shell-tabellen.mjs"), /^\s*import\s/m);
+    for (const datei of ["scripts/shell-tabellen.mjs", "scripts/bash-parser.mjs"]) assert.doesNotMatch(lies(datei), /^\s*import\s/m, datei);
   });
 });
