@@ -20,6 +20,14 @@ describe("mermaidBloecke", () => {
     expect(b[0]).toContain("a-->b");
     expect(b[1]).toBe("flowchart LR");
   });
+  test("~~~mermaid und 4-Backtick-Fences werden erkannt, ein innerer ```-Block schließt den äußeren nicht (Z5c)", () => {
+    expect(M.mermaidBloecke("~~~mermaid\nflowchart TD\n~~~")).toEqual(["flowchart TD"]);
+    expect(M.mermaidBloecke("````mermaid\nflowchart TD\n```\nB-->C\n````")).toEqual(["flowchart TD\n```\nB-->C"]);
+    expect(M.mermaidBloecke("```mermaid\nflowchart TD\n~~~\nx\n```")).toEqual(["flowchart TD\n~~~\nx"]);
+  });
+  test("ein mermaid-Beispiel innerhalb eines äußeren Fences zählt nicht als Block (Z5c)", () => {
+    expect(M.mermaidBloecke("````md\n```mermaid\nflowchart TD\n```\n````")).toEqual([]);
+  });
   test("kein Block, ungeschlossener Block: leer", () => {
     expect(M.mermaidBloecke("nur Text")).toEqual([]);
     expect(M.mermaidBloecke("```mermaid\nflowchart TD")).toEqual([]);
