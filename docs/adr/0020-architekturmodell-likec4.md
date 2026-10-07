@@ -35,7 +35,7 @@ Entscheidung: **LikeC4-Modell als zweite Ableitung derselben SSOTs, geprüft von
 
 - Wer einen Top-Level-Ordner oder eine `.ts`-Datei unter `src/` anlegt, ergänzt das Modul in `docs/architektur/spiel.c4` unter der Schicht, die `layers.cjs` vorgibt; sonst ist `check:c4` rot (Meldung nennt Datei, Element und Fix).
 - Ein likec4-Bump kann den Formatter ändern: `npm run c4:format`. `likec4` zieht eine eigene Playwright-Version (1.60) verschachtelt mit; die top-level-Version von `@playwright/test` bleibt.
-- `verify` wird um rund 3 bis 4 Sekunden länger. likec4 verlangt Node ab 22.22; ältere 22er melden nur eine Engine-Warnung.
+- `verify` wird um rund 3 bis 4 Sekunden länger. likec4 verlangt Node ab 22.22.3; `engines.node` in der Wurzel-`package.json` steht darum auf `>=22.22.3`, damit der SessionStart-Hook ein zu altes lokales Node meldet.
 - Skript und Config sind Leitplanken-Pfade ([ADR 0014](0014-leitplanken-ohne-label-riegel.md)).
 
 ## Re-Evaluierung

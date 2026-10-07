@@ -122,6 +122,11 @@ describe("srcModule: Top-Level von src/", () => {
     assert.deepEqual(m.find((x) => x.name === "content")?.pfade, ["src/content.ts", "src/content/"], "Barrel und Ordner bilden EIN Modul");
     assert.deepEqual(m.find((x) => x.name === "main")?.pfade, ["src/main.ts"]);
   });
+
+  test("Nicht-.ts-Dateien auf Top-Level (css, json, md) ergeben kein Modul", () => {
+    const root = fixture(srcFiles({ "src/style.css": "", "src/data.json": "", "src/NOTIZ.md": "" }));
+    assert.deepEqual(api.srcModule(root, "src").map((x) => x.name), ["content", "game", "ui"]);
+  });
 });
 
 describe("pruefeArchitektur", () => {
@@ -253,6 +258,14 @@ describe("pruefeArchitektur", () => {
     assert.ok(treffer(lauf(s), /schicht „Präsentation“.*doppelt/).length >= 1);
   });
 
+  test("gleicher Titel in einer Erzählungs-Art oder in zwei verschiedenen gebundenen Arten ist kein Duplikat", () => {
+    const c4 = gueltig();
+    c4.elemente.push(el("a.w", "container", "Worker", "k", 40), el("b.w", "container", "Worker", "k", 41));
+    c4.elemente.push(el("k.app.pr.x", "modul", "Präsentation", "k.app.pr", 42));
+    const t = treffer(lauf(c4), /doppelt/);
+    assert.deepEqual(t, [], t.join("\n"));
+  });
+
   test("Config-Fehler sind rot: Block fehlt, unbekannter Binder, Art zugleich gebunden und Erzählung", () => {
     const ohne = lauf(gueltig(), {}, null);
     assert.ok(treffer(ohne, /config\.json.*architektur/).length >= 1);
@@ -260,6 +273,12 @@ describe("pruefeArchitektur", () => {
     assert.ok(treffer(binder, /gibtsnicht/).length >= 1);
     const doppelt = lauf(gueltig(), {}, { ...CFG, erzaehlung: [...CFG.erzaehlung, "schicht"] });
     assert.ok(treffer(doppelt, /schicht.*zugleich/).length >= 1);
+    for (const kaputt of [{ maxKnotenJeView: undefined }, { maxKnotenJeView: 0 }, { maxKnotenJeView: -1 }, { maxKnotenJeView: "25" }, { maxKnotenJeView: 2.5 }]) {
+      const ms = lauf(gueltig(), {}, { ...CFG, ...kaputt } as unknown as Cfg);
+      assert.ok(treffer(ms, /maxKnotenJeView/).length >= 1, JSON.stringify(kaputt));
+    }
+    assert.ok(treffer(lauf(gueltig(), {}, { ...CFG, workspace: "" }), /workspace oder quelle/).length >= 1);
+    assert.ok(treffer(lauf(gueltig(), {}, { ...CFG, quelle: "" }), /workspace oder quelle/).length >= 1);
   });
 
   test("View-Deckel: genau am Deckel grün, Deckel + 1 rot", () => {
@@ -319,33 +338,97 @@ describe("ladeC4Modell: der Adapter", () => {
 });
 
 const cliConfig = JSON.stringify({ schichten: { layers: "scripts/layers.cjs" }, architektur: CFG });
+const SPEC = "specification {\n  element schicht\n  element bibliothek\n  element modul\n}\n";
+const MODELL = [
+  "model {",
+  "  pr = schicht 'Präsentation' {",
+  "    ui = modul 'ui'",
+  "  }",
+  "  an = schicht 'Anwendung' {",
+  "    game = modul 'game'",
+  "  }",
+  "  do = schicht 'pure Domäne' {",
+  "    content = modul 'content'",
+  "  }",
+  "  ph = bibliothek 'Phaser'",
+  "  pr -> an",
+  "  pr -> do",
+  "  pr -> ph",
+  "  an -> do",
+  "}",
+  "",
+].join("\n");
+const cliFixture = (extra: Record<string, string> = {}) =>
+  fixture(srcFiles({ "scripts/docs-gen/config.json": cliConfig, "docs/architektur/spec.c4": SPEC, "docs/architektur/m.c4": MODELL, ...extra }));
+async function cliLauf(root: string, spawn: (a: string[]) => number) {
+  const out: string[] = [];
+  const err: string[] = [];
+  const code = await api.cli([], { rootDir: root, out: (s) => out.push(s), err: (s) => err.push(s), spawn });
+  return { code, out: out.join("\n"), err: err.join("\n") };
+}
+
 describe("cli", () => {
-  test("ruft validate und format --check; rot, wenn eines scheitert, mit Fix-Text", async () => {
-    const root = fixture(srcFiles({ "scripts/docs-gen/config.json": cliConfig }));
-    const out: string[] = [];
-    const err: string[] = [];
+  test("alles grün: Exit 0 und Erfolgsmeldung, validate dann format --check", async () => {
     const calls: string[][] = [];
-    const code = await api.cli([], {
-      rootDir: root,
-      out: (s) => out.push(s),
-      err: (s) => err.push(s),
-      spawn: (args) => {
-        calls.push(args);
-        return args[0] === "format" ? 1 : 0;
-      },
-    });
-    assert.equal(code, 1);
+    const r = await cliLauf(cliFixture(), (a) => (calls.push(a), 0));
+    assert.equal(r.err, "");
+    assert.equal(r.code, 0);
+    assert.match(r.out, /check:c4: .*überein/);
     assert.deepEqual(calls.map((a) => a[0]), ["validate", "format"]);
-    assert.match(err.join("\n"), /npm run c4:format/);
+    assert.deepEqual(calls[1].slice(0, 2), ["format", "--check"]);
+  }, 30000);
+
+  test("Abgleich-Abweichung (neuer src/-Ordner) macht das Gate rot, auch wenn validate und format grün sind", async () => {
+    const r = await cliLauf(cliFixture({ "src/xyz/a.ts": "" }), () => 0);
+    assert.equal(r.code, 1);
+    assert.match(r.err, /✖ .*\.c4:\d+ modul „xyz“.*Fix: /);
+    assert.equal(r.out, "");
+  }, 30000);
+
+  test("nur format rot (Abgleich grün): Exit 1 mit Fix npm run c4:format", async () => {
+    const r = await cliLauf(cliFixture(), (a) => (a[0] === "format" ? 1 : 0));
+    assert.equal(r.code, 1);
+    assert.match(r.err, /npm run c4:format/);
+    assert.doesNotMatch(r.err, /modul|abgleich/);
+  }, 30000);
+
+  test("der Abgleich wirft (layers.cjs fehlt): Exit 1 mit abgleich-Meldung", async () => {
+    const cfg = JSON.stringify({ schichten: { layers: "scripts/gibtsnicht.cjs" }, architektur: CFG });
+    const r = await cliLauf(cliFixture({ "scripts/docs-gen/config.json": cfg }), () => 0);
+    assert.equal(r.code, 1);
+    assert.match(r.err, /abgleich.*Fix: /);
+  }, 30000);
+
+  test("validate rot bricht ab (kein format, kein Abgleich), Fix nennt die .c4-Datei", async () => {
+    const calls: string[][] = [];
+    const r = await cliLauf(cliFixture(), (a) => (calls.push(a), 1));
+    assert.equal(r.code, 1);
+    assert.equal(calls.length, 1);
+    assert.match(r.err, /Fix: .*\.c4/);
   });
 
-  test("validate rot bricht ab (kein format, kein Abgleich)", async () => {
-    const root = fixture(srcFiles({ "scripts/docs-gen/config.json": cliConfig }));
+  test("likec4 nicht installiert (spawn liefert -1): Exit 1 mit Fix npm ci", async () => {
+    const r = await cliLauf(cliFixture(), () => -1);
+    assert.equal(r.code, 1);
+    assert.match(r.err, /Fix: npm ci/);
+  });
+
+  test("Config fehlt oder ist kaputt: Exit 1, kein likec4-Aufruf", async () => {
     const calls: string[][] = [];
-    const err: string[] = [];
-    const code = await api.cli([], { rootDir: root, out: () => {}, err: (s) => err.push(s), spawn: (a) => (calls.push(a), 1) });
-    assert.equal(code, 1);
-    assert.equal(calls.length, 1);
-    assert.match(err.join("\n"), /Fix: .*\.c4/);
+    const ohne = await cliLauf(fixture(srcFiles()), (a) => (calls.push(a), 0));
+    assert.equal(ohne.code, 1);
+    assert.match(ohne.err, /config\.json/);
+    const kaputt = await cliLauf(fixture(srcFiles({ "scripts/docs-gen/config.json": "{ nicht json" })), (a) => (calls.push(a), 0));
+    assert.equal(kaputt.code, 1);
+    assert.equal(calls.length, 0);
+  });
+
+  test("Block architektur fehlt: Exit 1 mit gezieltem Fix, kein likec4-Aufruf", async () => {
+    const calls: string[][] = [];
+    const cfg = JSON.stringify({ schichten: { layers: "scripts/layers.cjs" } });
+    const r = await cliLauf(fixture(srcFiles({ "scripts/docs-gen/config.json": cfg })), (a) => (calls.push(a), 0));
+    assert.equal(r.code, 1);
+    assert.match(r.err, /Block "architektur" fehlt.*Fix: /);
+    assert.equal(calls.length, 0);
   });
 });
