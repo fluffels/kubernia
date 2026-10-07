@@ -1,0 +1,48 @@
+{
+  "markdown": ["README.md", "docs"],
+  "gates": {
+    "package": "package.json",
+    "chains": ["verify", "verify:full"],
+    "descriptions": {
+      "typecheck": "voll `strict`, ganzes Projekt",
+      "lint": "ESLint typbewusst, `--max-warnings 0`, `any` blockt, Komplexität je Funktion",
+      "check:arch": "Schichtung, keine Zyklen, kein toter Code (dependency-cruiser)",
+      "check:size": "God-File-Frühwarnung (Zeilen-Budget je Modul)",
+      "check:contextsize": "Größenbudget jeder AGENTS.md (Zeichen)",
+      "check:anysuppress": "Ratchet auf die Zahl begründeter `any`-Ausnahmen",
+      "check:docmap": "jede `src/`-Datei ist in einem Tiefendoc erwähnt, die Landkarte kann nicht leise veralten",
+      "check:docdrift": "dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien",
+      "check:docgen": "generierte Doku-Abschnitte (Gate-Tabelle, Harness-Inventar) stimmen mit dem Repo überein",
+      "check:internalrefs": "keine internen Bezüge im öffentlichen Repo",
+      "check:lockfile": "Lockfile passt zur `package.json`",
+      "check:diffsize": "Slice-Größe (Dateien und Zeilen gegen die Merge-Base)",
+      "test": "Verhalten von Domäne, Sim, Wirtschaft und Harness-Wächtern, inkl. Negativ- und Grenzfälle (Vitest)",
+      "test:coverage": "Coverage-Floors je Schicht-Bucket",
+      "check:diffcoverage": "Abdeckung der im Slice geänderten Zeilen",
+      "build": "Host-Build (`dist/`) baut fehlerfrei",
+      "build:offline": "Offline-Einzeldatei (`dist-offline/index.html`) baut fehlerfrei",
+      "check:bundle": "Byte-Budget für Offline-HTML, Spielcode und Phaser-Chunk",
+      "test:smoke": "Boot- und Interaktions-Smokes headless gegen den Offline-Build (Playwright)"
+    },
+    "ci": [
+      {
+        "command": "npm audit --omit=dev --audit-level=high",
+        "source": ".github/workflows/ci.yml",
+        "description": "Security-Gate über die ausgelieferten Produktiv-Abhängigkeiten"
+      },
+      {
+        "command": "node scripts/check-review-nachweis.mjs",
+        "source": ".github/workflows/ci.yml",
+        "description": "Review-Nachweis (`KQ-Plan:`/`KQ-Review:`) im PR"
+      }
+    ]
+  },
+  "harness": {
+    "agents": ".claude/agents",
+    "skills": ".claude/skills",
+    "workflows": ".claude/workflows",
+    "settings": ".claude/settings.json",
+    "gitHooks": ".githooks",
+    "mcp": ".mcp.json"
+  }
+}

@@ -82,23 +82,36 @@ Das eigentliche Sicherheitsnetz: eine Reihe von Prüfungen, die **lokal und in d
 
 ## 3. Die Fitness-Functions im Detail
 
-Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM es existiert · wie es gegen False Positives abgesichert ist. Reihenfolge wie in der CI (nach `npm test` aufsteigend streng).
+Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM es existiert · wie es gegen False Positives abgesichert ist. Reihenfolge wie in den Ketten `verify` und `verify:full`, danach die reinen CI-Gates (Tabelle generiert, siehe unten).
 
-| Gate | Befehl |
-|---|---|
-| Tests | `npm test` (Vitest) |
-| Typecheck (strict) | `npm run typecheck` |
-| Lint | `npm run lint` (`eslint . --max-warnings 0`) |
-| Architektur | `npm run check:arch` (dependency-cruiser) |
-| Dateigröße | `npm run check:size` |
-| Kontextdatei-Größe (jede AGENTS.md) | `npm run check:contextsize` |
-| `any`-Suppression-Ratchet | `npm run check:anysuppress` |
-| Doku↔Code-Drift | `npm run check:docmap` |
-| Harness-Drift (Kommandos + Links + verify-Kette) | `npm run check:docdrift` |
-| Lockfile-Integrität | `npm run check:lockfile` |
-| Diff-Größenbudget | `npm run check:diffsize` |
-| Boot-/Interaktions-Smoke | `npm run smoke` (Playwright, headless) |
-| Security-Audit | `npm audit --omit=dev --audit-level=high` |
+<!-- GEN:gates START -->
+<!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
+
+| Gate | Kette | Was es sichert |
+|---|---|---|
+| `npm run typecheck` | `verify` | voll `strict`, ganzes Projekt |
+| `npm run lint` | `verify` | ESLint typbewusst, `--max-warnings 0`, `any` blockt, Komplexität je Funktion |
+| `npm run check:arch` | `verify` | Schichtung, keine Zyklen, kein toter Code (dependency-cruiser) |
+| `npm run check:size` | `verify` | God-File-Frühwarnung (Zeilen-Budget je Modul) |
+| `npm run check:contextsize` | `verify` | Größenbudget jeder AGENTS.md (Zeichen) |
+| `npm run check:anysuppress` | `verify` | Ratchet auf die Zahl begründeter `any`-Ausnahmen |
+| `npm run check:docmap` | `verify` | jede `src/`-Datei ist in einem Tiefendoc erwähnt, die Landkarte kann nicht leise veralten |
+| `npm run check:docdrift` | `verify` | dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien |
+| `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (Gate-Tabelle, Harness-Inventar) stimmen mit dem Repo überein |
+| `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo |
+| `npm run check:lockfile` | `verify` | Lockfile passt zur `package.json` |
+| `npm run check:diffsize` | `verify` | Slice-Größe (Dateien und Zeilen gegen die Merge-Base) |
+| `npm test` | `verify` | Verhalten von Domäne, Sim, Wirtschaft und Harness-Wächtern, inkl. Negativ- und Grenzfälle (Vitest) |
+| `npm run test:coverage` | `verify:full` | Coverage-Floors je Schicht-Bucket |
+| `npm run check:diffcoverage` | `verify:full` | Abdeckung der im Slice geänderten Zeilen |
+| `npm run build` | `verify:full` | Host-Build (`dist/`) baut fehlerfrei |
+| `npm run build:offline` | `verify:full` | Offline-Einzeldatei (`dist-offline/index.html`) baut fehlerfrei |
+| `npm run check:bundle` | `verify:full` | Byte-Budget für Offline-HTML, Spielcode und Phaser-Chunk |
+| `npm run test:smoke` | `verify:full` | Boot- und Interaktions-Smokes headless gegen den Offline-Build (Playwright) |
+| `npm audit --omit=dev --audit-level=high` | CI | Security-Gate über die ausgelieferten Produktiv-Abhängigkeiten |
+| `node scripts/check-review-nachweis.mjs` | CI | Review-Nachweis (`KQ-Plan:`/`KQ-Review:`) im PR |
+
+<!-- GEN:gates END -->
 
 ### Tests (`npm test`, Vitest)
 - **WAS:** die pure Domäne + Anwendung (Sim, Content, Wirtschaft, Progression, Spaced Repetition) über die öffentliche API; spielt die ganze Story + alle Drills durch (`quests.test.ts`), prüft die Konsistenz aller Inhalte (`content.test.ts`).
@@ -128,6 +141,11 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 ### Doku↔Code-Drift-Wächter (`npm run check:docmap`, #482)
 - **WAS:** meldet jede `src/`-Datei, die in **keinem** [`docs/module/`](module/)-Tiefendoc als Backtick-Pfad auftaucht, sowie jede deklarierte Schicht, die von der dependency-cruiser-Zuordnung abweicht (gemeinsame Schicht-Quelle [`scripts/layers.cjs`](../scripts/layers.cjs)). Auch als `test/docmap.test.ts`.
 - **WARUM:** Landkarte ([`docs/referenz/repo-landkarte.md`](referenz/repo-landkarte.md), Subsystem-granular) + Tiefendocs sind der **Kontext-Selektor** jeder KI-Session (§2.1). Driftet die Abdeckung leise, führt sie Agenten in die Irre — genau das darf nicht passieren, also ist „die Doku stimmt" selbst maschinell geprüft.
+
+### Lebende-Doku-Wächter (`npm run check:docgen`, #1355)
+- **WAS:** Abschnitte zwischen `<!-- GEN:<name> START -->` und `<!-- GEN:<name> END -->` in README und `docs/` erzeugt `npm run docs:gen` aus dem Repo (heute: `gates` = Gate-Tabelle aus den `package.json`-Ketten, `harness-inventar` = Subagenten, Skills, Workflows, Hooks, MCP-Server); `check:docgen` erzeugt sie im Speicher und vergleicht. Rot bei veraltetem Abschnitt (Meldung nennt Datei, Abschnitt und den Fix `npm run docs:gen`), fehlendem END-Marker, unbekanntem oder doppeltem Abschnitt, einem Gate ohne Beschreibung oder einer Beschreibung ohne Gate. Auch als `test/docgen.test.ts`.
+- **WARUM:** handgepflegte Tabellen über Ableitbares veralten still (die Gate-Tabelle hier kannte `check:internalrefs` nicht). Ein Generator macht den Code zur Quelle; Konzept und Entscheidung: [ADR 0017](adr/0017-lebende-doku-generierte-abschnitte.md).
+- **Absicherung:** Engine und Generatoren laufen gegen ein Fixture-Root (Red-Green je Fehlerfall), dazu ein Echt-Repo-Test; Vergleich unabhängig von CRLF/LF, feste Sortierung ohne Locale. Engine und Config liegen unter `scripts/docs-gen*` und sind Leitplanken-Pfade.
 
 ### Harness-Drift-Wächter (`npm run check:docdrift`, #529)
 - **WAS:** hält die Doku jenseits der Datei-Landkarte ehrlich: (1) jedes in einem Markdown erwähnte `npm run <x>` (bzw. `npm test`) existiert als Skript in `package.json`; (2) jedes Kern-Skript (außer bewusst ausgenommener Convenience) ist in AGENTS.md/README/`docs/referenz/befehle.md` dokumentiert; (3) jeder interne, repo-relative Markdown-Link zeigt auf eine existierende Datei; (4) jeder `#anker` trifft eine reale Überschrift (GitHub-Slug-Regel). Gescannt wird jedes Markdown im Repo, unter `.claude/` (#1091) genau die versionierten Ordner `skills`/`agents`/`workflows` (Allowlist `VERSIONED_CLAUDE_DIRS`, gegen `.gitignore` abgeglichen; Worktrees und Lokales bleiben draußen). Auch als `test/docdrift.test.ts`.

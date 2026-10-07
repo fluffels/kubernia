@@ -31,6 +31,7 @@
 /scripts/layers.cjs        @fluffels
 /scripts/check-*.mjs       @fluffels
 /scripts/slice-override.mjs @fluffels
+/scripts/docs-gen*        @fluffels
 /eslint.config.js          @fluffels
 /eslint-suppressions.json  @fluffels
 /any-suppressions.json     @fluffels

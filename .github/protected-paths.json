@@ -4,6 +4,7 @@
     "/scripts/layers.cjs",
     "/scripts/check-*.mjs",
     "/scripts/slice-override.mjs",
+    "/scripts/docs-gen*",
     "/eslint.config.js",
     "/eslint-suppressions.json",
     "/any-suppressions.json",
