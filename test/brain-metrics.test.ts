@@ -42,7 +42,7 @@ describe("isBrainPage", () => {
   test("erkennt Markdown unter docs/", () => {
     for (const p of [
       "docs/x.md",
-      "C:\\dev\\kubernia\\docs\\adr\\0013-a.md",
+      "C:\\r\\docs\\adr\\0013-a.md",
       "/r/.claude/worktrees/kq-1/docs/module/sim.md",
     ])
       assert.equal(isBrainPage(p), true, p);
