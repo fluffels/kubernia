@@ -7,6 +7,7 @@ import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./helpers";
 import { deploymentYaml } from "../factories/manifests";
+import { podIP } from "../../src/sim/util";
 
 let sim: KQSim;
 beforeEach(() => { sim = freshSim(); });
@@ -550,7 +551,8 @@ test("readiness: Secret anlegen macht den Pod von SELBST bereit – ohne rollout
   assert.match(sim.exec("kubectl create secret generic kombuese-menue --from-literal=menue=fisch").output!, /created/);
   // KEIN Neustart! Allein das nächste Abfragen lässt die Probe durchgehen.
   const ep = sim.exec("kubectl get endpoints kombuese");
-  assert.match(ep.output!, /kombuese\s+10\.244\.1\.20:80/, "bereiter Pod taucht als Endpoint auf");
+  const pod = sim.deployments.find(d => d.name === "kombuese")!.pods[0].name;
+  assert.ok(ep.output!.includes(podIP(pod) + ":80"), "bereiter Pod taucht als Endpoint auf");
   assert.match(sim.exec("kubectl get pods").output!, /kombuese-\S+\s+1\/1\s+Running/);
   assert.equal(sim.deployments.find(d => d.name === "kombuese")!.broken, null, "notready ist geheilt");
 });
@@ -568,7 +570,8 @@ test("readiness: ein GESUNDES Deployment liefert echte Endpoints (Gegenprobe)", 
   sim.exec("kubectl create deployment kantine --image=nginx");
   sim.exec("kubectl expose deployment kantine --port=80");
   const ep = sim.exec("kubectl get endpoints kantine");
-  assert.match(ep.output!, /kantine\s+10\.244\.1\.20:80/, "gesunder Pod ist sofort Endpoint");
+  const pod = sim.deployments.find(d => d.name === "kantine")!.pods[0].name;
+  assert.ok(ep.output!.includes(podIP(pod) + ":80"), "gesunder Pod ist sofort Endpoint");
   assert.doesNotMatch(ep.output!, /<none>/);
 });
 
