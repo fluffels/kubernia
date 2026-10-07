@@ -22,14 +22,16 @@
  * #492 aus dem Zufall-/Determinismus-SSOT `src/rng.ts` (vorher hier lokal) – dieselbe
  * FNV-1a-Idee, jetzt an EINER Stelle für alle aus Namen abgeleiteten stabilen Werte.
  */
-import type { ClusterState, Deployment, PodInstance, PodMetrics, NodeMetrics, ScrapeTarget, Alert } from "./state";
+import type { ClusterState, Deployment, PodInstance, PodMetrics, NodeMetrics, ScrapeTarget, Alert, PvcRes } from "./state";
+import { clusterPods, type ClusterPod } from "./pods";
+import { statefulPodVolumePending } from "./workload";
 import { hashStr } from "../core/rng";
 import { isControlPlane } from "./nodes";
 import { serviceBackends, endpointPort } from "./endpoints";
 
 /** Was die Observability vom Simulator braucht (von der `Sim`-Klasse erfüllt).
  *  Bewusst schmal: statt des ganzen `ClusterState` (Leaky Abstraction #516) nur die
- *  berührten Daten-Felder per `Pick` (ISP): `deployments`/`nodes`/`services`;
+ *  berührten Daten-Felder per `Pick` (ISP): `deployments`/`statefulSets`/`pvcs`/`nodes`/`services`;
  *  typgebunden an die SSOT (sim/state.ts, #372). Hinzu kommen der Sim-Helfer
  *  `_podReady` und der transiente Alert-Sitzungszustand (`_firingAlerts`/
  *  `_resolvedAlerts` – kein Cluster-Zustand, darum NICHT in ClusterState, sondern
@@ -43,24 +45,34 @@ export interface ObservabilityHost extends Pick<ClusterState, "deployments" | "n
 /** Momentane Ressourcen-Last eines Pods – oder null, wenn der Container gar nicht
  *  läuft (ImagePull/Pending), dann gibt es schlicht keine Metriken. Deterministisch
  *  aus dem Pod-Namen abgeleitet, damit `kubectl top` über Aufrufe hinweg stabil bleibt. */
-function podMetric(d: Deployment, p: PodInstance): PodMetrics | null {
-  if (d.broken && (d.broken.type === "imagepull" || d.broken.type === "pending")) return null;
+function podMetric(c: ClusterPod, pvcs: readonly PvcRes[]): PodMetrics | null {
+  switch (c.owner) {
+    case "Deployment": {
+      const d = c.dep;
+      if (d.broken && (d.broken.type === "imagepull" || d.broken.type === "pending")) return null;
+      const m = baseLoad(c.pod);
+      if (d.cpuHeavy) m.cpuMilli = 850 + (hashStr(c.pod.name) % 200); // 850..1049m: weit über der HighCPU-Schwelle
+      if (d.broken && d.broken.type === "oomkilled") m.memMi = d.broken.memNeeded || 256; // klettert ans Limit
+      return m;
+    }
+    case "StatefulSet":
+      // PVC Pending ⇒ der Pod läuft nicht, also keine Metriken; sonst nur die Grundlast.
+      return statefulPodVolumePending(c.sts, c.pod, pvcs) ? null : baseLoad(c.pod);
+  }
+}
+
+/** Grundlast eines laufenden Pods, deterministisch aus dem Namen. */
+function baseLoad(p: PodInstance): PodMetrics {
   const h = hashStr(p.name);
-  let cpuMilli = 4 + (h % 36);          // 4..39m Grundlast
-  let memMi = 14 + ((h >>> 7) % 50);    // 14..63Mi Grundverbrauch
-  if (d.cpuHeavy) cpuMilli = 850 + (h % 200); // 850..1049m: weit über der HighCPU-Schwelle
-  if (d.broken && d.broken.type === "oomkilled") memMi = d.broken.memNeeded || 256; // klettert ans Limit
-  return { cpuMilli, memMi };
+  return { cpuMilli: 4 + (h % 36), memMi: 14 + ((h >>> 7) % 50) }; // 4..39m, 14..63Mi
 }
 
 /** Metriken aller laufenden Pods (für `kubectl top pods` + Prometheus + Alerts). */
 export function podMetrics(host: ObservabilityHost): Array<{ name: string; cpuMilli: number; memMi: number }> {
   const out: Array<{ name: string; cpuMilli: number; memMi: number }> = [];
-  for (const d of host.deployments) {
-    for (const p of d.pods) {
-      const m = podMetric(d, p);
-      if (m) out.push({ name: p.name, cpuMilli: m.cpuMilli, memMi: m.memMi });
-    }
+  for (const c of clusterPods(host)) {
+    const m = podMetric(c, host.pvcs);
+    if (m) out.push({ name: c.pod.name, cpuMilli: m.cpuMilli, memMi: m.memMi });
   }
   return out;
 }
