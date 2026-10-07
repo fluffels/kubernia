@@ -29,7 +29,7 @@ export interface ServiceBackend {
   containerPort?: number;
 }
 
-/** Die Pod-IP: `null`, solange das Deployment nicht eingeplant ist (`broken: pending`),
+/** Die Pod-IP eines Deployment-Pods (StatefulSet-Pods kennen kein `pending` und nutzen `podIP` direkt): `null`, solange das Deployment nicht eingeplant ist (`broken: pending`),
  *  sonst die stabile `podIP(name)`. Auch `describe pod` nutzt diese Stelle. */
 export function podAddress(dep: Pick<Deployment, "broken">, pod: { name: string }): string | null {
   return dep.broken && dep.broken.type === "pending" ? null : podIP(pod.name);
