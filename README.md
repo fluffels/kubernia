@@ -12,7 +12,7 @@ Ein **2D-Lernspiel** (gebaut mit **Phaser 4**) für Docker, Kubernetes, Helm, Te
 **Die Spielwelt IST der Cluster:**
 
 - Die drei Stege am Dock = **Nodes**, jede Kiste darauf = ein **Pod** (live!)
-- Pod löschen → Kiste platscht ins Wasser, der Kran stellt sofort Ersatz hin (**Self-Healing zum Zugucken**)
+- Pod löschen → Kiste platscht ins Wasser, der Kran stellt sofort Ersatz hin (**Self-Healing zum Zugucken**); ein StatefulSet-Pod landet mit gleichem Namen wieder auf seinem Platz (stabile Identität)
 - Helm-Releases hissen **Flaggen**, Services leuchten als **Laternen**, Docker-Container stehen als **Fässer** am Dock
 - `terraform apply` baut **sichtbar neues Land** ins Meer
 

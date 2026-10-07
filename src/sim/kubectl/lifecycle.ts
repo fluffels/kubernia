@@ -290,6 +290,11 @@ function deletePod(host: KubectlHost, name: string): string {
     case "StatefulSet":
       restartStatefulPod(c.sts, name, host.clock);
       break;
+    default: {
+      // Neue Workload-Art ⇒ Compile-Fehler hier statt still ohne Ersatz-Pod (#1414).
+      const unbehandelt: never = c;
+      return unbehandelt;
+    }
   }
   return 'pod "' + name + '" deleted';
 }

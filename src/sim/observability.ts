@@ -24,10 +24,9 @@
  */
 import type { ClusterState, Deployment, PodInstance, PodMetrics, NodeMetrics, ScrapeTarget, Alert, PvcRes } from "./state";
 import { clusterPods, type ClusterPod } from "./pods";
-import { statefulPodVolumePending } from "./workload";
 import { hashStr } from "../core/rng";
 import { isControlPlane } from "./nodes";
-import { serviceBackends, endpointPort } from "./endpoints";
+import { serviceBackends, endpointPort, podAddress } from "./endpoints";
 
 /** Was die Observability vom Simulator braucht (von der `Sim`-Klasse erfüllt).
  *  Bewusst schmal: statt des ganzen `ClusterState` (Leaky Abstraction #516) nur die
@@ -57,7 +56,7 @@ function podMetric(c: ClusterPod, pvcs: readonly PvcRes[]): PodMetrics | null {
     }
     case "StatefulSet":
       // PVC Pending ⇒ der Pod läuft nicht, also keine Metriken; sonst nur die Grundlast.
-      return statefulPodVolumePending(c.sts, c.pod, pvcs) ? null : baseLoad(c.pod);
+      return podAddress(c, pvcs) === null ? null : baseLoad(c.pod);
   }
 }
 

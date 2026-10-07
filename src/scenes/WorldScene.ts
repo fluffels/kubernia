@@ -71,7 +71,7 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
   podSlots!: Record<string, PodSlot>;
   slotUsed!: boolean[];
   lastClusterRev!: number;
-  dynamic!: { barrelsSig: string; flagsSig: string; svcSig: string; depSig: string };
+  dynamic!: { barrelsSig: string; flagsSig: string; svcSig: string; podSig: string };
   dynGroup!: Phaser.GameObjects.Group;
   // Per-Karte Konfiguration (worldscene/worldconfig.ts, #863)
   private worldConfig?: WorldSceneConfig;
@@ -159,7 +159,7 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
     this.podSlots = {};
     this.slotUsed = [];            // #523: wächst dynamisch mit der Pod-Zahl (kein fixes 36)
     this.lastClusterRev = -1;      // #523: erzwingt einen vollen Sync im ersten Frame
-    this.dynamic = { barrelsSig: "", flagsSig: "", svcSig: "", depSig: "" };
+    this.dynamic = { barrelsSig: "", flagsSig: "", svcSig: "", podSig: "" };
     // #426: Anti-Pingpong-Gate aller Region-Warps – leer = alle disarmt; updateWarps
     // armiert jeden Warp, sobald man ihn verlassen und die Lauftaste losgelassen hat.
     this.warpArmed = new Set();
