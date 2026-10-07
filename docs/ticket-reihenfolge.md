@@ -46,7 +46,7 @@ Das Skript ist **idempotent**: gibt es schon ein ungeclaimtes Sammelticket diese
 
 Regel: [AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets](../AGENTS.md#wo-die-todos-leben). Es gibt **höchstens ein** ungeclaimtes Sammelticket (`area:harness`); ein geclaimtes (Assignee) läuft daneben weiter.
 
-- **Nur aus Evidenz (#1425):** eine Zeile entsteht aus einem durchgerutschten Fehler, einer Messung (Langfuse, `lauf-ergebnis.mjs`) oder dem Release-/Tooling-Watch, nicht aus der Hypothese „könnte man noch härten“. Die Quote Spiel zu Harness (höchstens 1:3) misst der Board-Takt je Lauf (`Spielquote:` im Protokoll).
+- **Evidenz und Quote (#1425):** die Regel „nur aus Evidenz“ steht in [AGENTS.md › Harness-Befunde sind Zeilen](../AGENTS.md#wo-die-todos-leben). Die Quote Harness zu Spiel (höchstens 1 zu 3) misst der Board-Takt je Lauf (`Spielquote:` im Protokoll).
 - **Ansichten im Project (#1425):** neben „View 1“ (Auswahl, REST-Liste) gibt es „Spiel“ (Filter `-label:area:harness`) und „Agentic Engineering“ (Filter `label:area:harness`), per `createProjectV2View` und `updateProjectV2View(filter)` angelegt; die Auswahlmechanik bleibt ein Board.
 - **Befund eintragen:** erst suchen, dann als **Kommentar** anhängen (Kommentare kollidieren bei parallelen Agenten nicht, Body-Edits schon):
   ```bash

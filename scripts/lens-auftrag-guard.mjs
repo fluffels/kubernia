@@ -12,9 +12,12 @@
  * (`kq-<nr>-lens-r<runde>`) tragen absichtlich Platzhalter. Geprüft werden nur die Kopf-Felder des Auftrags:
  *  R1  `WÖRTLICH>` irgendwo (der Platzhalter `<Brille WÖRTLICH>` / `<Kontext-Diät WÖRTLICH>` blieb stehen),
  *  R2  der Wert von `Arbeitsverzeichnis:`, `Patch:`, `Delta-Patch:` oder `erwarteter HEAD:` enthält noch `<…>`,
- *  R3  `erwarteter HEAD:` ist kein Hex-Wert mit 7 bis 40 Zeichen (der Workflow-Fallback „der HEAD des
- *      Feature-Worktrees …“ ist erlaubt).
+ *  R3  `erwarteter HEAD:` beginnt nicht mit einem Hex-Hash von 7 bis 40 Zeichen (Backticks und ein Zusatz dahinter sind erlaubt;
+ *      der Workflow-Fallback „der HEAD des Feature-Worktrees …“ ebenfalls).
  * Fehlende Felder bleiben Sache der Lens-Definition (`.claude/agents/kubernia-lens.md`).
+ * Bewusste Grenzen: die Feldnamen stehen hier einmal und in der Spawn-Vorlage des Skills `review-lenses` (benennt jemand sie
+ *  um, öffnet der Guard still, fail-open); ausgewertet wird je Feld der letzte Treffer im Prompt; die R3-Ausnahme für den
+ *  Workflow-Fallback ist eine Kopie seines Textes in `.claude/workflows/kubernia-ticket.js`.
  *
  * Reines Node-Skript (nur Builtins), pure Funktionen.
  */
@@ -22,12 +25,13 @@
 /** Kopf-Felder des Auftrags, deren Wert kein `<…>` mehr tragen darf. `(?<![\w-])` trennt `Patch:` von `Delta-Patch:`. */
 const FELDER = ["Arbeitsverzeichnis", "Delta-Patch", "Patch", "erwarteter HEAD"];
 
-/** Liest die Kopf-Felder aus dem Prompt: Wert reicht bis zum Trenner ` · ` oder Zeilenende. Pure. */
+/** Liest die Kopf-Felder aus dem Prompt: Wert reicht bis zum Trenner ` · ` oder Zeilenende. Zählt der LETZTE Treffer je Feld:
+ *  die Brille davor darf ein Feld als Beispiel nennen („… mit `Patch: <TMP>/x.patch`“), der echte Kopf steht dahinter. Pure. */
 export function parseLensAuftrag(text) {
   const felder = {};
   for (const name of FELDER) {
-    const m = new RegExp(String.raw`(?<![\w-])${name}:[ \t]*([^\r\n]*?)(?:[ \t]+·[ \t]|[ \t]*$)`, "im").exec(String(text ?? ""));
-    if (m) felder[name] = m[1].trim();
+    const treffer = [...String(text ?? "").matchAll(new RegExp(String.raw`(?<![\w-])${name}:[ \t]*([^\r\n]*?)(?:[ \t]+·[ \t]|[ \t]*$)`, "gim"))];
+    if (treffer.length > 0) felder[name] = treffer[treffer.length - 1][1].trim();
   }
   return felder;
 }
@@ -67,7 +71,9 @@ export function lensAuftragBlockade({ subagentType, prompt } = {}) {
     }
   }
   const head = felder["erwarteter HEAD"];
-  if (head !== undefined && !/^[0-9a-f]{7,40}$/i.test(head) && !head.startsWith("der HEAD des Feature-Worktrees")) {
+  // Der Hash zählt, nicht die Verzierung: Backticks und ein Zusatz nach dem Hash („abc1234 (origin/main + Fix)“) sind erlaubt.
+  const hash = head?.replace(/^`+/, "").split(/[\s`]/, 1)[0];
+  if (head !== undefined && !/^[0-9a-f]{7,40}$/i.test(hash ?? "") && !head.startsWith("der HEAD des Feature-Worktrees")) {
     return `Lens-Auftrag unvollständig: „erwarteter HEAD:“ ist kein Commit-Hash (7 bis 40 Hex-Zeichen), sondern „${head}“. ${HINWEIS}`;
   }
   return null;

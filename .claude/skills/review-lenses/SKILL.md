@@ -80,7 +80,7 @@ Agent({
 })
 ```
 
-Ein PreToolUse-Guard (`scripts/lens-auftrag-guard.mjs`) verweigert den Spawn, wenn ein Kopf-Feld noch `<…>` trägt oder `… WÖRTLICH>` stehen blieb: Werte einsetzen, Blöcke wörtlich kopieren, neu spawnen.
+Ein PreToolUse-Guard (`scripts/lens-auftrag-guard.mjs`) verweigert den Spawn, wenn ein Kopf-Feld noch `<…>` trägt, `erwarteter HEAD:` nicht mit einem Commit-Hash beginnt oder `… WÖRTLICH>` stehen blieb: Werte einsetzen, Blöcke wörtlich kopieren, neu spawnen.
 
 Kennt das Agent-Tool `kubernia-lens` nicht („Agent type 'kubernia-lens' not found“, eine Session, die vor dem Anlegen der Definition gestartet wurde): einmal mit `general-purpose` und `model: "opus"` spawnen, der Prompt beginnt „Lies zuerst `.claude/agents/kubernia-lens.md` im Worktree und befolge deren Rumpf“, und der Bericht vermerkt den Fallback.
 

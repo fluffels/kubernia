@@ -399,12 +399,12 @@ Was „vermeidbar“ heißt: Arbeit, die ohne bessere Information oder Reihenfol
 
 | Muster | Quelle | Kostenmaß |
 |---|---|---|
-| 1 Veralteter Stand (Arbeit war schon gemergt oder die Basis überholt) | Warnung „Kein Pflege-Marker“ und Kollisionsmeldungen im Bericht von `token-baseline.mjs`; ungemergt geschlossene PRs (`gh pr list --state closed --search "head:feature/kq- -is:merged"`); Sammelticket-Ergebnisse „schon durch #X erledigt“ | Tokens des Laufs |
+| 1 Veralteter Stand (Arbeit war schon gemergt oder die Basis überholt) | ungemergt geschlossene PRs (`gh pr list --state closed --search "head:feature/kq- -is:merged"`); Sammelticket-Ergebnisse „schon durch #X erledigt“ und Kollisionsmeldungen in den Abschlussberichten der Umsetzer | Tokens des Laufs |
 | 2 Wiederlesen | Zeile `Lesen:` aus `token-baseline.mjs` (Wiederlesen voll, gezielt) bzw. `tool-metriken.mjs` | Tokens der Wiederlesen |
 | 3 Späte Info (Fix-Runden durch Wissen, das zur Planzeit schon da war) | Review-Runden > 1 und CI-Fix-Runden je PR aus [`lauf-ergebnis.mjs`](#ergebnis-je-ticket-lauf-1123); je Runde-1-Blocker die Frage: war die Information zur Planzeit verfügbar? | Phasen ab Runde 2 |
 | 4 Abgebrochene Läufe | `node scripts/subagent-laufzeit.mjs --agent kubernia-umsetzer` (offene Läufe), Handbacks `abgebrochen`/`festgefahren`, Traces ohne Abschluss | Tokens bis zum Abbruch |
 
-Ursachen werden nur für Läufe mit mehr als einer Runde oder CI-Fix untersucht (Stichprobe genügt, als solche benannt). Eine neue Gegenmaßnahme wird eine Zeile im Sammelticket „Langfuse-Befunde (gesammelt)“. Erstauswertung 2026-10-05 bis 2026-10-08 (81 PRs): [Rohwerte und Tabelle](https://github.com/fluffels/kubernia/issues/1425#issuecomment-6048048002), Ergebnis: Muster 3 trägt (41 von 51 PRs mit Nachweis liefen mehr als eine Runde, Test-Adäquanz stellt 23 von 39 Runde-1-Blockern), Muster 1, 2 und 4 sind nicht belegt.
+Ursachen werden nur für Läufe mit mehr als einer Runde oder CI-Fix untersucht (Stichprobe genügt, als solche benannt). Eine neue Gegenmaßnahme wird eine Zeile im Sammelticket „Langfuse-Befunde (gesammelt)“. Erstauswertung 2026-10-05 bis 2026-10-08 (81 PRs): [Rohwerte und Tabelle](https://github.com/fluffels/kubernia/issues/1425#issuecomment-6048048002), Ergebnis: Muster 3 trägt (41 von 51 PRs mit Nachweis liefen mehr als eine Runde, Test-Adäquanz stellt 23 von 39 Runde-1-Blockern), Muster 1 ist ein Einzelfall (eine Sammelzeile war durch einen gemergten PR erledigt), Muster 2 und 4 sind nicht belegt.
 
 ### Langfuse-Status überprüfen (#1293)
 

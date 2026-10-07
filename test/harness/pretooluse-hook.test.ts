@@ -334,6 +334,29 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
     assert.equal(deny(JSON.stringify({ tool_name: "Agent", tool_input: { subagent_type: "kubernia-lens" } })), null);
   });
 
+  test("je Feld zählt der LETZTE Treffer: ein Beispiel in der Brille sperrt den echten Kopf nicht, ein Platzhalter im Kopf wird trotz früherem Treffer gefunden", () => {
+    const beispiel = "Brille mit Beispiel `Patch: <TMP>/x.patch` im Text";
+    assert.equal(deny(agent(`${beispiel} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc1234`)), null);
+    assert.match(grund(agent(`Fall mit Patch: /a/b.patch davor · Arbeitsverzeichnis: /w · Patch: <TMP>/x.patch · erwarteter HEAD: abc1234`)), /Patch/);
+  });
+
+  test("Lookbehind: `Delta-Patch:` ist nicht `Patch:`, ein Platzhalter im echten Patch-Feld hinter dem Delta-Patch wird gefunden", () => {
+    const kopf = `${KOPF} · Arbeitsverzeichnis: /w · Delta-Patch: /d.patch · Patch: <TMP>/x.patch · erwarteter HEAD: abc1234`;
+    assert.match(grund(agent(kopf)), /„Patch:“/);
+    assert.equal(deny(agent(`${KOPF} · Arbeitsverzeichnis: /w · Delta-Patch: /d.patch · Patch: /p.patch · erwarteter HEAD: abc1234`)), null);
+    // Das Delta-Patch-Feld hinter einem kaputten Patch-Feld darf dessen Platzhalter nicht überdecken.
+    assert.match(grund(agent(`${KOPF} · Arbeitsverzeichnis: /w · Patch: <TMP>/x.patch · Delta-Patch: /d.patch · erwarteter HEAD: abc1234`)), /„Patch:“/);
+  });
+
+  test("R3 erlaubt Backticks und einen Zusatz nach dem Hash, verweigert Text vor dem Hash", () => {
+    for (const head of ["`724a5d4`", "724a5d4 (origin/main + Fix)", "`724a5d4` (Runde 2)"]) {
+      assert.equal(deny(agent(`${KOPF} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: ${head}`)), null, head);
+    }
+    for (const head of ["siehe 724a5d4", "(724a5d4)", "``"]) {
+      assert.equal(deny(agent(`${KOPF} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: ${head}`))?.hookSpecificOutput.permissionDecision, "deny", head);
+    }
+  });
+
   test("Verdrahtung: genau ein PreToolUse-Eintrag trifft Agent, dasselbe Skript wie Bash; das Modul ist geschützt", () => {
     const settings = JSON.parse(lies(".claude/settings.json")) as { hooks: { PreToolUse: { matcher: string; hooks: { args?: string[] }[] }[] } };
     const trifft = (tool: string) => settings.hooks.PreToolUse.filter((e) => new RegExp(`^(${e.matcher})$`).test(tool)).flatMap((e) => e.hooks.flatMap((h) => h.args ?? []));

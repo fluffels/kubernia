@@ -764,6 +764,26 @@ describe("Lens-Worktrees ohne Feature-Worktree (#1425)", () => {
     assert.deepEqual(warnung.removed, ["kq-3-lens-r1"], "geprüft wird das Ergebnis, nicht der Exit-Code");
   });
 
+  test("git meldet Erfolg, aber der Ordner steht noch (Windows-Sperre): Fehler, nicht entfernt", () => {
+    const g = fakeGit([MAIN, `${WT}/kq-3-lens-r1`]);
+    const deps = { ...g.deps, existsSync: () => true };
+    const r = lensM.entferneLensWorktrees(MAIN, WT, ["kq-3-lens-r1"], deps);
+    assert.deepEqual(r.errors, ["kq-3-lens-r1"]);
+    assert.deepEqual(r.removed, []);
+  });
+
+  test("lässt sich die Worktree-Liste nach dem Entfernen nicht lesen, zählt das fail-closed als nicht entfernt", () => {
+    const g = fakeGit([MAIN, `${WT}/kq-3-lens-r1`]);
+    const deps = {
+      ...g.deps,
+      execSync: (cmd: string) => {
+        if (cmd.includes("worktree list")) throw new Error("kein git");
+        return g.deps.execSync(cmd);
+      },
+    };
+    assert.deepEqual(lensM.entferneLensWorktrees(MAIN, WT, ["kq-3-lens-r1"], deps).errors, ["kq-3-lens-r1"]);
+  });
+
   test("Schutzgurt: ein Symlink wird nicht angefasst (kein `git worktree remove`)", () => {
     const g = fakeGit([MAIN, `${WT}/kq-3-lens-r1`]);
     const deps = { ...g.deps, lstatSync: () => ({ isDirectory: () => false, isSymbolicLink: () => true }) };

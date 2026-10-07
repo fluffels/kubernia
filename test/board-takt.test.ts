@@ -23,7 +23,8 @@ type Takt = {
   zaehleSpielMerges: (commits: unknown, seit?: string | Date | null) => number;
   quotenBericht: (commits: unknown[], seit?: string | null) => { harness: number; spiel: number; eingehalten: boolean; zeile: string };
   SPIEL_QUOTE: number;
-  entscheideHarnessTakt: (a: { items: Item[]; ticketMergesSeitAbschluss: number; position: number }) => Harness;
+  harnessTaktAusCommits: (a: { items: Item[]; commits: unknown[]; seit?: string | null; position: number }) => Harness;
+  entscheideHarnessTakt: (a: { items: Item[]; spielMergesSeitAbschluss: number; position: number }) => Harness;
   ziehListeNach: (items: Item[], ergebnis: { nr: number; itemId?: string | null } | null) => Item[];
 };
 const T = raw as unknown as Takt;
@@ -118,11 +119,21 @@ describe("Spielquote im Takt (#1425)", () => {
     expect(T.quotenBericht([c("feat(harness): x", "dependabot[bot]"), spiel], null).harness).toBe(0);
   });
 
-  test("der Takt zählt für das Sammelticket nur Spiel-Merges: viele Harness-Merges lösen es nicht aus", () => {
-    const commits = [harness, harness, harness, harness, harness, spiel];
-    expect(T.zaehleTicketMerges(commits)).toBe(6);
-    expect(T.zaehleSpielMerges(commits)).toBe(1);
-    expect(T.zaehleSpielMerges(commits)).toBeLessThan(T.HARNESS_TAKT_MERGES);
+  test("quotenBericht: ein Harness-Merge VOR dem Fenster zählt nicht", () => {
+    const alt = c("feat(harness): alt", "fluffels", "2026-10-06T10:00:00Z");
+    const q = T.quotenBericht([alt, alt, spiel], "2026-10-07T00:00:00Z");
+    expect(q).toMatchObject({ harness: 0, spiel: 1 });
+    expect(T.quotenBericht([alt, alt, spiel], null).harness).toBe(2);
+  });
+
+  test("Verdrahtung `harnessTaktAusCommits`: fünf Harness-Merges plus ein Spiel-Merge lösen nichts aus, drei Spiel-Merges holen das Sammelticket", () => {
+    const it = (number: number, extra: Partial<Item> = {}): Item => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open", ...extra });
+    const board = [it(10), it(11), it(12, { title: "Harness-Härtung (gesammelt)" })];
+    const nurHarness = [harness, harness, harness, harness, harness, spiel];
+    expect(T.harnessTaktAusCommits({ items: board, commits: nurHarness, position: 4 }).aktion).toBe("nichts");
+    expect(T.harnessTaktAusCommits({ items: board, commits: [spiel, spiel, spiel, harness], position: 4 })).toMatchObject({ aktion: "nach-oben", nr: 12 });
+    expect(T.harnessTaktAusCommits({ items: board, commits: [spiel, spiel, spiel], seit: "2026-10-07T11:00:00Z", position: 4 }).aktion).toBe("nichts");
+    expect(() => T.harnessTaktAusCommits({ items: board, commits: {} as unknown as unknown[], position: 4 })).toThrow();
   });
 });
 
@@ -132,7 +143,7 @@ describe("entscheideHarnessTakt (#1349 Z15, Positionskorrektur #1390)", () => {
   const sammel = (number: number, extra: Partial<Item> = {}) => it(number, { title: TITEL, ...extra });
   const status = (number: number) => it(number, { title: STATUS_TITEL });
   const fueller = (von: number, bis: number) => Array.from({ length: bis - von + 1 }, (_, i) => it(von + i));
-  const h = (items: Item[], n: number, position = 4) => T.entscheideHarnessTakt({ items, ticketMergesSeitAbschluss: n, position });
+  const h = (items: Item[], n: number, position = 4) => T.entscheideHarnessTakt({ items, spielMergesSeitAbschluss: n, position });
 
   test("Grenze 2/3: erst ab 3 Spiel-Merges nach oben", () => {
     expect(T.HARNESS_TAKT_MERGES).toBe(3);
@@ -160,7 +171,7 @@ describe("entscheideHarnessTakt (#1349 Z15, Positionskorrektur #1390)", () => {
 
   test("ungültige Eingaben werfen (auch ein ungültiges position)", () => {
     expect(() => h([], -1)).toThrow();
-    expect(() => T.entscheideHarnessTakt({ items: null as unknown as Item[], ticketMergesSeitAbschluss: 5, position: 4 })).toThrow();
+    expect(() => T.entscheideHarnessTakt({ items: null as unknown as Item[], spielMergesSeitAbschluss: 5, position: 4 })).toThrow();
     for (const bad of [0, -1, 1.5, Number.NaN, "4" as unknown as number]) expect(() => h([sammel(1)], 0, bad), String(bad)).toThrow(/position/);
   });
 
@@ -228,7 +239,7 @@ describe("ziehListeNach: die Board-Liste wird nach der Status-Aktion im Speicher
   test("Komposition: nach dem Nachziehen entscheidet der Harness-Takt gegen die aktuelle Liste (Sammelticket hinter dem frischen Status-Ticket)", () => {
     const board = [it(1), it(2), it(12, { title: "Harness-Härtung (gesammelt)" })];
     const nachgezogen = T.ziehListeNach(board, { nr: 9, itemId: "PVTI_9" });
-    expect(T.entscheideHarnessTakt({ items: nachgezogen, ticketMergesSeitAbschluss: 5, position: 4 })).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: "PVTI_9" });
+    expect(T.entscheideHarnessTakt({ items: nachgezogen, spielMergesSeitAbschluss: 5, position: 4 })).toMatchObject({ aktion: "nach-oben", nr: 12, afterId: "PVTI_9" });
   });
 });
 
@@ -248,6 +259,8 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(doc)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(yml)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
     expect(Number(/nach (\d+) Spiel-Merges seit dem Abschluss des letzten Sammeltickets/.exec(doc)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
+    expect(Number(/nach (\d+) Spiel-Merges \(Spielquote 1:\d+\) hinter den Kopf/.exec(lies("AGENTS.md"))?.[1])).toBe(T.HARNESS_TAKT_MERGES);
+    expect(Number(/Spielquote 1:(\d+)\)/.exec(lies("AGENTS.md"))?.[1])).toBe(T.SPIEL_QUOTE);
   });
   test("der Workflow löst auf Push nach main aus und ruft board-takt.mjs", () => {
     const yml = lies(".github/workflows/board-takt.yml");

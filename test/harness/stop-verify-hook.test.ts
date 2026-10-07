@@ -504,7 +504,7 @@ describe("checkAndFixOrphanWorktrees: Lens-Worktrees ohne Feature-Worktree (#142
     checkAndFixOrphanWorktrees: (root: string, deps: object) => { blocked: boolean; reason?: string; removed?: string[] };
   }).checkAndFixOrphanWorktrees;
 
-  function deps(start: string[], opts: { alterMs?: number; klemmt?: boolean } = {}) {
+  function deps(start: string[], opts: { alterMs?: number; klemmt?: boolean; symlink?: boolean; geisterOrdner?: string[] } = {}) {
     const registriert = new Set(start);
     const befehle: string[] = [];
     return {
@@ -521,14 +521,35 @@ describe("checkAndFixOrphanWorktrees: Lens-Worktrees ohne Feature-Worktree (#142
           return "";
         },
         existsSync: (p: string) => p.replace(/\\/g, "/") === WT || registriert.has(p.replace(/\\/g, "/")),
-        readdirSync: () => [...registriert].filter((p) => p.startsWith(`${WT}/`)).map((p) => ({ name: p.slice(WT.length + 1), isDirectory: () => true, isSymbolicLink: () => false })),
+        readdirSync: () =>
+          [...[...registriert].filter((p) => p.startsWith(`${WT}/`)).map((p) => p.slice(WT.length + 1)), ...(opts.geisterOrdner ?? [])].map((name) => ({
+            name,
+            isDirectory: () => true,
+            isSymbolicLink: () => false,
+          })),
         statSync: () => ({ mtimeMs: JETZT - (opts.alterMs ?? 10 * 60_000), birthtimeMs: 1 }),
-        lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => false }),
+        lstatSync: () => ({ isDirectory: () => !opts.symlink, isSymbolicLink: () => Boolean(opts.symlink) }),
         rmSync: () => {},
         platform: "linux",
       },
     };
   }
+
+  test("Schutzgurt: ein Lens-Worktree als Symlink blockiert den Stop mit Namen und Schutzgurt, `git worktree remove` läuft nicht", () => {
+    const g = deps([MAIN, `${WT}/kq-7-lens-r1`], { symlink: true });
+    const r = check(MAIN, g.deps);
+    assert.equal(r.blocked, true);
+    assert.match(r.reason ?? "", /Schutzgurt/);
+    assert.match(r.reason ?? "", /kq-7-lens-r1/);
+    assert.ok(!g.befehle.some((c) => c.includes("worktree remove")));
+  });
+
+  test("Lens-Waise und Ordner-Waise im selben Lauf: beide stehen in `removed`", () => {
+    const g = deps([MAIN, `${WT}/kq-7-lens-r1`], { geisterOrdner: ["kq-99"] });
+    const r = check(MAIN, g.deps);
+    assert.equal(r.blocked, false);
+    assert.deepEqual([...(r.removed ?? [])].sort(), ["kq-7-lens-r1", "kq-99"]);
+  });
 
   test("verwaister, alter Lens-Worktree wird entfernt, der Stop bleibt frei", () => {
     const g = deps([MAIN, `${WT}/kq-7-lens-r1`]);

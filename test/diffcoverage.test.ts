@@ -219,8 +219,10 @@ describe("Diff-Coverage: Zweig-Sicht, nur berichtend (#1425)", () => {
     assert.equal(b.get(P)?.size, 1);
   });
 
-  test("BRDA außerhalb eines SF-Blocks wird ignoriert", () => {
+  test("BRDA außerhalb eines SF-Blocks (vor dem ersten SF und nach end_of_record) wird ignoriert", () => {
     assert.equal(parseLcovBranches("BRDA:1,0,0,1").size, 0);
+    const b = parseLcovBranches(["SF:src/a.ts", "BRDA:1,0,0,1", "end_of_record", "BRDA:2,0,0,1"].join("\n"));
+    assert.deepEqual([...(b.get("src/a.ts")?.keys() ?? [])], [1]);
   });
 
   test("meldet geänderte, ausgeführte Zeile mit ungenommenem Zweig", () => {
