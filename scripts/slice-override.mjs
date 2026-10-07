@@ -109,14 +109,35 @@ export function normalisiereLens(name) {
     .replace(/\s+/g, "-");
 }
 
-/** Brillen der `KQ-Review`-Zeile, tolerant (#1331): der Wert reicht bis zum nächsten ` key=`, damit auch
- *  Leerzeichen nach Kommas gehen; jeder Name wird normalisiert (Groß-/Kleinschreibung, Umlaute). */
+/** Wert eines Felds der `KQ-Review`-Zeile, tolerant (#1331): reicht bis zum nächsten ` key=`, damit auch
+ *  Leerzeichen nach Kommas gehen. `null`, wenn das Feld fehlt. */
+function feldWert(reviewWert, key) {
+  const m = new RegExp(`(?:^|\\s)${key}=(.*?)(?=\\s+[a-z]+=|$)`).exec(reviewWert);
+  return m ? m[1] : null;
+}
+
+/** Brillen der `KQ-Review`-Zeile; jeder Name wird normalisiert (Groß-/Kleinschreibung, Umlaute). */
 function lensenAus(reviewWert) {
-  const m = /(?:^|\s)lenses=(.*?)(?=\s+[a-z]+=|$)/.exec(reviewWert);
-  return (m ? m[1] : "")
+  return (feldWert(reviewWert, "lenses") ?? "")
     .split(",")
     .map(normalisiereLens)
     .filter(Boolean);
+}
+
+/** Runde-1-Blocker je Brille (#1123): `name:n,…` → `[{lens, n}]`; `null`, wenn das Feld fehlt (alte Zeilen).
+ *  Eine kaputte Zahl wird NaN, bewertet erst bewerteNachweis. */
+function blockerAus(reviewWert) {
+  const wert = feldWert(reviewWert, "blocker");
+  if (wert === null) return null;
+  return wert
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean)
+    .map((e) => {
+      const i = e.lastIndexOf(":");
+      const zahl = i < 0 ? "" : e.slice(i + 1).trim();
+      return { lens: normalisiereLens(i < 0 ? e : e.slice(0, i)), n: /^\d+$/.test(zahl) ? Number(zahl) : Number.NaN };
+    });
 }
 
 /** Parst die letzte `KQ-Plan:`- und die letzte `KQ-Review:`-Zeile (am Zeilenanfang, nicht
@@ -144,6 +165,7 @@ export function parseNachweis(text) {
       head: /^[0-9a-f]{7,40}$/i.test(felder.head ?? "") ? felder.head.toLowerCase() : null,
       runden: /^\d+$/.test(felder.runden ?? "") ? Number(felder.runden) : Number.NaN,
       lenses: lensenAus(reviewWert),
+      blocker: blockerAus(reviewWert),
       verdikt: felder.verdikt ?? null,
     };
   }
