@@ -5,27 +5,36 @@
  *
  * Drei Wächter lassen einen Slice mit Pflicht-Begründung durch (`KQ-Diffsize-Override`,
  * `KQ-Diffcov-Override`, `KQ-Review-Override`): eine Zeile `<KEY>: #<nr> <warum>` am Zeilenanfang einer
- * Commit-Message im Slice (`<basis>..HEAD`). Parser, Slice-Lesen und die Ausgabe-Texte liegen hier genau
+ * Commit-Message im Slice (`<basis>..HEAD`, als Betreff oder Body-Zeile). Parser, Slice-Lesen und die Ausgabe-Texte liegen hier genau
  * einmal, damit lokal, im PR und auf main dasselbe gilt und kein Wächter eine eigene Variante pflegt.
  *
  * Importiert bewusst nichts aus den check-Skripten (keine Zyklen); ein Wächter-Skript importiert dieses
  * Modul. Pfad steht in `.github/protected-paths.json` (Gate).
  */
 
+/** Regex für eine Zeile `<key>: <wert>` am Zeilenanfang. Eine Definition für Override und Nachweis (#1383):
+ *  toleriert wird genau das Präfix `* ` (Stern + ein Leerzeichen), mit dem GitHub im Squash-Commit auf main
+ *  jeden Commit-BETREFF schreibt; Body-Zeilen bleiben dort unverändert. Gruppe 1 = Zeile ohne Präfix,
+ *  Gruppe 2 = Wert. `key` ist eine feste Konstante ohne Regex-Sonderzeichen. */
+function zeilenRe(key) {
+  return new RegExp(`^(?:\\* )?(${key}:[ \\t]*(.*))$`, "gm");
+}
+
 /** Sucht Zeilen `<key>: <wert>` am ZEILENANFANG (nicht eingerückt, nicht in Prosa) in
- *  beliebigem Message-Text. Bewusst kein git-Trailer-Parser: im Squash-Body steht die
- *  Zeile mitten im Text, gefolgt von weiteren `* commit`-Absätzen. Gültig ist ein Wert nur
+ *  beliebigem Message-Text, als Betreff oder als Body-Zeile. Bewusst kein git-Trailer-Parser: im
+ *  Squash-Commit steht die Zeile mitten im Text; Body-Zeilen unverändert, ein Betreff als
+ *  `* <betreff>` (#1383). Genau dieses Präfix (Stern + ein Leerzeichen) wird toleriert; Einrückung,
+ *  andere Aufzählungszeichen und Prosa zählen nicht. Gültig ist ein Wert nur
  *  mit Ticketnummer UND Begründung (`#<nr> <warum>`, Pflicht-Begründung), sonst landet die
- *  Zeile in `invalid`. `key` ist eine feste Konstante ohne Regex-Sonderzeichen. Pure. */
+ *  Zeile (ohne Präfix) in `invalid`. Pure. */
 export function parseOverrideTrailers(text, key) {
   const valid = [];
   const invalid = [];
-  const re = new RegExp(`^${key}:[ \\t]*(.*)$`, "gm");
-  for (const m of String(text).replace(/\r/g, "").matchAll(re)) {
-    const value = m[1].trim();
+  for (const m of String(text).replace(/\r/g, "").matchAll(zeilenRe(key))) {
+    const value = m[2].trim();
     const ok = /^#(\d+)\s+\S/.exec(value);
     if (ok) valid.push({ nr: Number(ok[1]), reason: value });
-    else invalid.push(m[0].trim());
+    else invalid.push(m[1].trim());
   }
   return { valid, invalid };
 }
@@ -66,9 +75,8 @@ export function staleOverrideHinweis(key, warum) {
 }
 
 function lastLine(text, key) {
-  const re = new RegExp(`^${key}:[ \\t]*(.*)$`, "gm");
-  const all = [...String(text).replace(/\r/g, "").matchAll(re)];
-  return all.length > 0 ? all[all.length - 1][1].trim() : null;
+  const all = [...String(text).replace(/\r/g, "").matchAll(zeilenRe(key))];
+  return all.length > 0 ? all[all.length - 1][2].trim() : null;
 }
 
 /** Normalisiert einen Brillennamen (#1331): Kleinbuchstaben, Umlaute und ß in ASCII, Leerraum wird `-`. */
