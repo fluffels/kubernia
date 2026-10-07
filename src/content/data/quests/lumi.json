@@ -308,12 +308,12 @@
             "id": "t-ds-get",
             "text": "Prüf, dass Grafana die Quelle kennt: <code>kubectl get grafanadatasources</code>. Deine <code>prometheus-quelle</code> taucht jetzt auf.",
             "accept": [
-              "^kubectl\\s+get\\s+(grafanadatasources|grafanadatasource|grafanadatasrc)$"
+              "^kubectl\\s+get\\s+(grafanadatasources|grafanadatasource)$"
             ],
             "check": {"some":"grafanaDatasources","where":{"name":"prometheus-quelle"}},
             "solution": "kubectl get grafanadatasources",
             "why": "<code>get</code> bestätigt, dass Grafana die Quelle jetzt kennt – die Gegenprobe nach dem Anwenden gehört immer dazu, sonst weißt du nur, dass du den Befehl abgeschickt hast, nicht dass er wirkte.",
-            "hint": "kubectl get grafanadatasources (Kurzform: grafanadatasrc)."
+            "hint": "kubectl get grafanadatasources."
           }
         ]
       },
@@ -410,12 +410,12 @@
             "id": "t-gd-get",
             "text": "Prüf, dass das Dashboard registriert ist: <code>kubectl get grafanadashboards</code>. Du siehst <code>hafen-uebersicht</code> mit Titel und Panel-Anzahl.",
             "accept": [
-              "^kubectl\\s+get\\s+(grafanadashboards|grafanadashboard|grafanadash)$"
+              "^kubectl\\s+get\\s+(grafanadashboards|grafanadashboard)$"
             ],
             "check": {"some":"grafanaDashboards","where":{"name":"hafen-uebersicht"}},
             "solution": "kubectl get grafanadashboards",
             "why": "Die Gegenprobe: <code>get</code> zeigt, dass das Dashboard registriert ist. Verifizieren gehört zu jedem Schritt – so entdeckst du sofort, wenn das Manifest gar nicht angekommen ist.",
-            "hint": "kubectl get grafanadashboards (Kurzform: grafanadash)."
+            "hint": "kubectl get grafanadashboards."
           }
         ]
       },
@@ -782,12 +782,12 @@
             "id": "t-pr-get",
             "text": "Prüf, dass die Regel steht: <code>kubectl get prometheusrules</code>. Deine <code>hafen-alarme</code> taucht jetzt auf.",
             "accept": [
-              "^kubectl\\s+get\\s+(prometheusrules|prometheusrule|promrule|promrules)$"
+              "^kubectl\\s+get\\s+(prometheusrules|prometheusrule|promrule)$"
             ],
             "check": {"some":"prometheusRules","where":{"name":"hafen-alarme"}},
             "solution": "kubectl get prometheusrules",
             "why": "Nach dem Anwenden gegenprüfen, dass die Regel wirklich registriert ist: <code>get</code> ist die Bestätigung, bevor du dich darauf verlässt, dass Prometheus im Ernstfall Alarm schlägt.",
-            "hint": "kubectl get prometheusrules (Kurzform: promrules)."
+            "hint": "kubectl get prometheusrules (Kurzform: promrule)."
           }
         ]
       },

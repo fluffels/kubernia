@@ -53,7 +53,7 @@ export const ABBREVS: readonly AbbrevPair[] = [
   // ---- Ressourcen-/Unterbefehl-Kürzel (kubectl/helm/argocd) ----
   // GATING-PRINZIP (#308 + #430): Gegated wird NUR eine ECHTE Kontraktion — ein
   // offizieller kubectl-Kurzname bzw. eine verkürzte Schreibweise (po/no/svc/
-  // netpol/netpols/ing). AUSGESCHRIEBENE Voll-Formen einer Ressource sind KEINE
+  // netpol/ing). AUSGESCHRIEBENE Voll-Formen einer Ressource sind KEINE
   // Profi-Abkürzung und werden NIE gegated — egal ob Singular ODER Plural
   // (pod/pods, node/nodes, service/services, networkpolicy/networkpolicies,
   // ingress/ingresses). Sie stehen darum nicht in `short`. Beispiel: wer vor dem
@@ -69,8 +69,8 @@ export const ABBREVS: readonly AbbrevPair[] = [
   // Gating; nur die echte Kurzform `ing` bleibt freischaltpflichtig.
   { id: "kubectl-ingress",    context: "kubectl get ingress",           kind: "alias", long: "ingress",         short: ["ing"] },
   // #430: `networkpolicy` (Singular-Vollform) ist KEINE Kontraktion → raus aus
-  // dem Gating; nur die echten Kurzformen `netpol`/`netpols` bleiben gegated.
-  { id: "kubectl-netpol",     context: "kubectl get/describe/delete networkpolicies", kind: "alias", long: "networkpolicies", short: ["netpol", "netpols"] },
+  // dem Gating; nur die echte Kurzform `netpol` bleibt gegated.
+  { id: "kubectl-netpol",     context: "kubectl get/describe/delete networkpolicies", kind: "alias", long: "networkpolicies", short: ["netpol"] },
   { id: "helm-list",          context: "helm list",                     kind: "alias", long: "list",            short: ["ls"] },
   { id: "helm-dependency",    context: "helm dependency",               kind: "alias", long: "dependency",      short: ["dep"] },
   { id: "argocd-app-list",    context: "argocd app list",               kind: "alias", long: "list",            short: ["ls"] },

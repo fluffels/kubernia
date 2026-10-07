@@ -5,7 +5,7 @@ import type { DrillTask } from "./shared";
 export const NETWORK_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   "k-get-netpol": sim => {
     ensureNetworkPolicy(sim);
-    return { text: "Zeig alle Hafenmauern (NetworkPolicies) im Cluster.", accept: [/^kubectl\s+get\s+(networkpolicies|networkpolicy|netpol|netpols)$/], solution: "kubectl get networkpolicies", hint: "Schreib es aus: kubectl get networkpolicies (die Kurzform netpol verdienst du dir durch Nutzung).", why: "Gleiches get-Muster: kubectl get networkpolicies listet die Hafenmauern – wer mit wem reden darf. Die Kurzform netpol verdienst du dir, wenn du die Langform oft genug tippst." };
+    return { text: "Zeig alle Hafenmauern (NetworkPolicies) im Cluster.", accept: [/^kubectl\s+get\s+(networkpolicies|networkpolicy|netpol)$/], solution: "kubectl get networkpolicies", hint: "Schreib es aus: kubectl get networkpolicies (die Kurzform netpol verdienst du dir durch Nutzung).", why: "Gleiches get-Muster: kubectl get networkpolicies listet die Hafenmauern – wer mit wem reden darf. Die Kurzform netpol verdienst du dir, wenn du die Langform oft genug tippst." };
   },
   "k-apply-netpol": sim => {
     let name = pick(NETPOL_NAMES);
@@ -17,11 +17,11 @@ export const NETWORK_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   },
   "k-describe-netpol": sim => {
     const np = ensureNetworkPolicy(sim);
-    return { text: "Beschreibe die Hafenmauer <code>" + np.name + "</code> – wer darf rein?", accept: [new RegExp("^kubectl\\s+describe\\s+(networkpolicy|networkpolicies|netpol|netpols)\\s+" + np.name.replace(/[-]/g, "\\-") + "$")], solution: "kubectl describe networkpolicy " + np.name, hint: "kubectl describe networkpolicy &lt;name&gt; (die Kurzform netpol verdienst du dir durch Nutzung)", why: "describe zeigt die Details der Policy: wen sie schützt (podSelector) und wer durchdarf (from) – Muster: kubectl describe networkpolicy &lt;name&gt;." };
+    return { text: "Beschreibe die Hafenmauer <code>" + np.name + "</code> – wer darf rein?", accept: [new RegExp("^kubectl\\s+describe\\s+(networkpolicy|networkpolicies|netpol)\\s+" + np.name.replace(/[-]/g, "\\-") + "$")], solution: "kubectl describe networkpolicy " + np.name, hint: "kubectl describe networkpolicy &lt;name&gt; (die Kurzform netpol verdienst du dir durch Nutzung)", why: "describe zeigt die Details der Policy: wen sie schützt (podSelector) und wer durchdarf (from) – Muster: kubectl describe networkpolicy &lt;name&gt;." };
   },
   "k-delete-netpol": sim => {
     const np = ensureNetworkPolicy(sim);
-    return { text: "Reiß die Hafenmauer <code>" + np.name + "</code> wieder ein.", accept: [new RegExp("^kubectl\\s+delete\\s+(networkpolicy|networkpolicies|netpol|netpols)\\s+" + np.name.replace(/[-]/g, "\\-") + "$")], solution: "kubectl delete networkpolicy " + np.name, hint: "kubectl delete networkpolicy &lt;name&gt; (die Kurzform netpol verdienst du dir durch Nutzung)", why: "delete entfernt die NetworkPolicy wieder – danach ist das Netzwerk an dieser Stelle wieder offen. Muster: kubectl delete networkpolicy &lt;name&gt;." };
+    return { text: "Reiß die Hafenmauer <code>" + np.name + "</code> wieder ein.", accept: [new RegExp("^kubectl\\s+delete\\s+(networkpolicy|networkpolicies|netpol)\\s+" + np.name.replace(/[-]/g, "\\-") + "$")], solution: "kubectl delete networkpolicy " + np.name, hint: "kubectl delete networkpolicy &lt;name&gt; (die Kurzform netpol verdienst du dir durch Nutzung)", why: "delete entfernt die NetworkPolicy wieder – danach ist das Netzwerk an dieser Stelle wieder offen. Muster: kubectl delete networkpolicy &lt;name&gt;." };
   },
   "k-nslookup": sim => {
     const name = pick(DNS_SVC_NAMES);

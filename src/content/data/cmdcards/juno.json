@@ -24,7 +24,7 @@
     "chapter": "network-policy",
     "q": "Zeige alle NetworkPolicies (Hafenmauern) im Cluster an.",
     "accept": [
-      "^kubectl\\s+get\\s+(networkpolicies|networkpolicy|netpol|netpols)$"
+      "^kubectl\\s+get\\s+(networkpolicies|networkpolicy|netpol)$"
     ],
     "solution": "kubectl get networkpolicies",
     "explain": "Gleiches get-Muster: kubectl get networkpolicies (Kurzform netpol) listet die Hafenmauern."
@@ -34,7 +34,7 @@
     "chapter": "network-policy",
     "q": "Beschreibe die NetworkPolicy <code>hafenmauer</code> – wer darf rein?",
     "accept": [
-      "^kubectl\\s+describe\\s+(networkpolicy|networkpolicies|netpol|netpols)\\s+hafenmauer$"
+      "^kubectl\\s+describe\\s+(networkpolicy|networkpolicies|netpol)\\s+hafenmauer$"
     ],
     "solution": "kubectl describe networkpolicy hafenmauer",
     "explain": "describe zeigt, wen die Policy schützt (podSelector) und wer durchdarf (from)."

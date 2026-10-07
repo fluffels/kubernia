@@ -20,6 +20,8 @@ import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { sameRbac } from "../rbac";
 import { flagValue, multiFlag } from "../util"; // clusterIP entfällt: Service läuft jetzt über host._makeService (#507)
 import { admitNewPods } from "./rollout";
+import { resolveKind, qualified } from "./resources";
+import { flagValueOf, notSimulated, positionals, typeAndName, unknownResourceType } from "./args";
 import { applyDeployment } from "./apply-deployment";
 import { fileEffects, type ManifestVerb } from "../manifest/registry";
 import type { KubectlHost } from "./host";
@@ -62,25 +64,19 @@ function spliceByName(arr: { name: string }[], name: string): boolean {
 /* ===== `kubectl delete <typ> <name>` – Tabelle der schlicht löschbaren Ressourcen (#518) =====
  * Alle Ressourcentypen, deren Löschen genau „finde per Name → splice → melde" ist (keine
  * Folgewirkung wie das PV-Freigeben beim PVC oder das PVC-Behalten beim StatefulSet). Ein
- * Eintrag je Typ statt eines eigenen if-Zweigs. `notFoundKind` ist der voll qualifizierte
- * Plural für die NotFound-Meldung (echtes kubectl), `deletedKind` das qualifizierte Objekt
- * für die „… deleted"-Zeile. Die Sonderfälle (pod/deployment/statefulset/pvc) bleiben
- * bewusst eigene Zweige. */
-const SIMPLE_DELETABLE: readonly {
-  aliases: string[];
-  pick: (host: KubectlHost) => { name: string }[];
-  notFoundKind: string;
-  deletedKind: string;
-}[] = [
-  { aliases: ["service", "services", "svc"], pick: h => h.services, notFoundKind: "services", deletedKind: "service" },
-  { aliases: ["configmap", "configmaps", "cm"], pick: h => h.configMaps, notFoundKind: "configmaps", deletedKind: "configmap" },
-  { aliases: ["secret", "secrets"], pick: h => h.secrets, notFoundKind: "secrets", deletedKind: "secret" },
-  { aliases: ["ingress", "ingresses", "ing"], pick: h => h.ingresses, notFoundKind: "ingresses.networking.k8s.io", deletedKind: "ingress.networking.k8s.io" },
-  { aliases: ["networkpolicy", "networkpolicies", "netpol", "netpols"], pick: h => h.networkPolicies, notFoundKind: "networkpolicies.networking.k8s.io", deletedKind: "networkpolicy.networking.k8s.io" },
-  { aliases: ["pv", "persistentvolume", "persistentvolumes"], pick: h => h.pvs, notFoundKind: "persistentvolumes", deletedKind: "persistentvolume" },
-  { aliases: ["storageclass", "storageclasses", "sc"], pick: h => h.storageClasses, notFoundKind: "storageclasses.storage.k8s.io", deletedKind: "storageclass.storage.k8s.io" },
-  { aliases: ["volumesnapshot", "volumesnapshots", "vs"], pick: h => h.volumeSnapshots, notFoundKind: "volumesnapshots.snapshot.storage.k8s.io", deletedKind: "volumesnapshot.snapshot.storage.k8s.io" },
-];
+ * Eintrag je Typ (Schlüssel = Plural aus ./resources) statt eines eigenen if-Zweigs; Aliase und die
+ * qualifizierten Namen der NotFound-/„… deleted"-Zeilen kommen aus der Registry. Die Sonderfälle
+ * (pod/deployment/statefulset/pvc) stehen in `DELETE_SPECIAL`. */
+const SIMPLE_DELETABLE: ReadonlyMap<string, (host: KubectlHost) => { name: string }[]> = new Map<string, (host: KubectlHost) => { name: string }[]>([
+  ["services", (h: KubectlHost) => h.services],
+  ["configmaps", (h: KubectlHost) => h.configMaps],
+  ["secrets", (h: KubectlHost) => h.secrets],
+  ["ingresses", (h: KubectlHost) => h.ingresses],
+  ["networkpolicies", (h: KubectlHost) => h.networkPolicies],
+  ["persistentvolumes", (h: KubectlHost) => h.pvs],
+  ["storageclasses", (h: KubectlHost) => h.storageClasses],
+  ["volumesnapshots", (h: KubectlHost) => h.volumeSnapshots],
+]);
 
 
 /* ===== `kubectl create <typ> …` – ein Handler je Ressourcentyp (#543) =====
@@ -117,10 +113,12 @@ function createSecretGeneric(host: KubectlHost, t: string[], raw: string): strin
   return "secret/" + name + " created";
 }
 
+const CREATE_SECRET_KANN = ["kubectl create secret generic <name> --from-literal=k=v", "kubectl create secret tls <name> --cert=… --key=…"];
+
 const createSecret: CreateHandler = (host, t, raw) => {
   if (t[3] === "tls") return createSecretTls(host, t, raw);
   if (t[3] === "generic") return createSecretGeneric(host, t, raw);
-  return host._err("Der Simulator kann nur 'kubectl create secret generic <name> --from-literal=k=v' und 'kubectl create secret tls <name> --cert=… --key=…'.");
+  return notSimulated(host, "'kubectl create secret " + (t[3] ?? "") + "'.", CREATE_SECRET_KANN);
 };
 
 // kubectl create configmap <name> --from-literal=schluessel=wert
@@ -200,12 +198,15 @@ const createDeployment: CreateHandler = (host, t, raw) => {
   if (!name || name.startsWith("--")) return host._err("kubectl create deployment: Der Name fehlt.", "z.B. 'kubectl create deployment kasse --image=nginx'");
   { const bad = invalidNameError(host, "Deployment", name); if (bad) return bad; }
   if (!imgMatch) return host._err("error: required flag(s) \"image\" not set", "Häng '--image=nginx' an.");
+  const repSpec = flagValueOf(t, ["--replicas"]);
+  const replicas = repSpec === null ? 1 : Number(repSpec);
+  if (!Number.isInteger(replicas) || replicas < 0 || repSpec === "") return host._err('error: invalid argument "' + repSpec + '" for "--replicas" flag', "Die Replica-Zahl ist eine ganze Zahl ab 0, z.B. '--replicas=2'.");
   if (host.deployments.some(d => d.name === name)) return host._err('error: deployment "' + name + '" already exists');
   // Pod-Security-Admission: ein imperativ erzeugtes Deployment hat keinen securityContext.
   // Unter baseline/restricted wird es deshalb abgelehnt (privileged = keine Prüfung).
   const denied = admitNewPods(host, name, undefined);
   if (denied) return denied;
-  addDeployment(host, host._makeDeployment(name, imgMatch[1], 1));
+  addDeployment(host, host._makeDeployment(name, imgMatch[1], replicas));
   return "deployment.apps/" + name + " created";
 };
 
@@ -216,12 +217,12 @@ const CREATE_HANDLERS: Readonly<Record<string, CreateHandler>> = {
   serviceaccount: createServiceAccount, sa: createServiceAccount,
   role: createRole, clusterrole: createRole,
   rolebinding: createRoleBinding, clusterrolebinding: createRoleBinding,
-  deployment: createDeployment,
+  deployment: createDeployment, deploy: createDeployment,
 };
 
 export function kubectlCreate(host: KubectlHost, t: string[], raw: string): string {
   const handler = CREATE_HANDLERS[t[2]];
-  if (!handler) return host._err("Der Simulator kann nur 'kubectl create deployment|serviceaccount|role|clusterrole|rolebinding|clusterrolebinding …', 'kubectl create secret generic|tls …' und 'kubectl create configmap …'.");
+  if (!handler) return notSimulated(host, "'kubectl create " + (t[2] ?? "") + "'.", ["kubectl create deployment|serviceaccount|role|clusterrole|rolebinding|clusterrolebinding …", ...CREATE_SECRET_KANN, "kubectl create configmap …"]);
   return handler(host, t, raw);
 }
 
@@ -312,38 +313,43 @@ function deletePvc(host: KubectlHost, name: string): string {
   return 'persistentvolumeclaim "' + name + '" deleted';
 }
 
+function deleteDeployment(host: KubectlHost, name: string): string {
+  if (!removeDeployment(host, name)) return host._err('Error from server (NotFound): deployments.apps "' + name + '" not found');
+  return 'deployment.apps "' + name + '" deleted';
+}
+
+function deleteStatefulSet(host: KubectlHost, name: string): string {
+  // Die PVCs bleiben absichtlich erhalten – Kern der Datendauerhaftigkeit (#122).
+  if (!removeStatefulSet(host, name)) return host._err('Error from server (NotFound): statefulsets.apps "' + name + '" not found');
+  return 'statefulset.apps "' + name + '" deleted\n💡 Die PVCs bleiben bestehen – die Daten überleben das Löschen des StatefulSets. Skalierst du es wieder hoch, hängen die alten Volumes wieder dran.';
+}
+
+/** Die Sonderfälle mit Folgewirkung (Pod: Self-Healing, PVC: gibt sein PV frei, StatefulSet: behält die
+ *  PVCs, Deployment: Pods) – Schlüssel = Plural aus ./resources. */
+const DELETE_SPECIAL: Readonly<Record<string, (host: KubectlHost, name: string) => string>> = {
+  pods: deletePod,
+  persistentvolumeclaims: deletePvc,
+  deployments: deleteDeployment,
+  statefulsets: deleteStatefulSet,
+};
+
 export function kubectlDelete(host: KubectlHost, t: string[]) {
-  const what = (t[2] || "").toLowerCase();
-  const name = t[3];
-
-  if (what === "-f" || what === "--filename" || /^(?:-f|--filename)=/.test(what)) return deleteFromFile(host, t);
-
-  if (!name) return host._err("kubectl delete: Was und wie heißt es?", "z.B. 'kubectl delete pod <pod-name>'");
-
-  if (["pod", "pods", "po"].includes(what)) return deletePod(host, name);
-  if (["pvc", "persistentvolumeclaim", "persistentvolumeclaims"].includes(what)) return deletePvc(host, name);
-
-  if (["deployment", "deployments", "deploy"].includes(what)) {
-    if (!removeDeployment(host, name)) return host._err('Error from server (NotFound): deployments.apps "' + name + '" not found');
-    return 'deployment.apps "' + name + '" deleted';
-  }
+  if (filenameArg(t) !== null) return deleteFromFile(host, t);
+  const { typ, name } = typeAndName(positionals("delete", t));
+  if (!typ || !name) return host._err("kubectl delete: Was und wie heißt es?", "z.B. 'kubectl delete pod <pod-name>'");
+  const kind = resolveKind(typ);
+  if (!kind) return unknownResourceType(host, typ);
+  const special = DELETE_SPECIAL[kind.plural];
+  if (special) return special(host, name);
 
   // #518: Alle schlicht löschbaren Typen (finde per Name → splice → melde) über die
-  // SIMPLE_DELETABLE-Tabelle statt je eines eigenen if-Zweigs. Die Sonderfälle mit
-  // Folgewirkung (statefulset behält PVCs, pvc gibt sein PV frei) bleiben eigene Zweige.
-  const simple = SIMPLE_DELETABLE.find(s => s.aliases.includes(what));
-  if (simple) {
-    if (!spliceByName(simple.pick(host), name)) return host._err('Error from server (NotFound): ' + simple.notFoundKind + ' "' + name + '" not found');
-    return simple.deletedKind + ' "' + name + '" deleted';
+  // SIMPLE_DELETABLE-Tabelle statt je eines eigenen if-Zweigs.
+  const pick = SIMPLE_DELETABLE.get(kind.plural);
+  if (pick) {
+    if (!spliceByName(pick(host), name)) return host._err('Error from server (NotFound): ' + qualified(kind, "plural") + ' "' + name + '" not found');
+    return qualified(kind, "singular") + ' "' + name + '" deleted';
   }
-
-  if (["statefulset", "statefulsets", "sts"].includes(what)) {
-    // Die PVCs bleiben absichtlich erhalten – Kern der Datendauerhaftigkeit (#122).
-    if (!removeStatefulSet(host, name)) return host._err('Error from server (NotFound): statefulsets.apps "' + name + '" not found');
-    return 'statefulset.apps "' + name + '" deleted\n💡 Die PVCs bleiben bestehen – die Daten überleben das Löschen des StatefulSets. Skalierst du es wieder hoch, hängen die alten Volumes wieder dran.';
-  }
-
-  return host._err("kubectl delete: Ressourcentyp '" + what + "' kennt der Simulator nicht.");
+  return notSimulated(host, "'kubectl delete " + kind.plural + "'.", ["kubectl delete " + [...Object.keys(DELETE_SPECIAL), ...SIMPLE_DELETABLE.keys()].join("|") + " <name>"]);
 }
 
 

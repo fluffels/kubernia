@@ -472,7 +472,7 @@
           "intro": "🆕 Neue Ressource: <code>kubectl get networkpolicies</code> – zeigt alle Hafenmauern. Schreib die Langform aus; die Kurzform <code>netpol</code> verdienst du dir, wenn du <code>networkpolicies</code> oft genug benutzt hast.",
           "text": "Schau nach, welche NetworkPolicies schon stehen – noch ist der Hafen schutzlos!",
           "accept": [
-            "^kubectl\\s+get\\s+(networkpolicies|networkpolicy|netpol|netpols)$"
+            "^kubectl\\s+get\\s+(networkpolicies|networkpolicy|netpol)$"
           ],
           "solution": "kubectl get networkpolicies",
           "why": "Bevor du eine Mauer baust, schaust du, was schon steht – sonst baust du blind. Dass die Liste hier <b>leer</b> ist, ist die eigentliche Lektion: Ohne NetworkPolicy ist der Cluster komplett offen (default-allow).",
@@ -521,7 +521,7 @@
             "id": "t-juno-np-3",
             "text": "Prüf die frische Mauer: <code>kubectl get networkpolicies</code> – jetzt steht <code>hafenmauer</code> in der Liste.",
             "accept": [
-              "^kubectl\\s+get\\s+(networkpolicies|networkpolicy|netpol|netpols)$"
+              "^kubectl\\s+get\\s+(networkpolicies|networkpolicy|netpol)$"
             ],
             "check": {"some":"networkPolicies","where":{"name":"hafenmauer"}},
             "solution": "kubectl get networkpolicies",
@@ -532,7 +532,7 @@
             "id": "t-juno-np-4",
             "text": "Schau genau hin: <code>kubectl describe networkpolicy hafenmauer</code> – die Zeile <b>Allowing ingress traffic</b> verrät, wer durchdarf.",
             "accept": [
-              "^kubectl\\s+describe\\s+(networkpolicy|networkpolicies|netpol|netpols)\\s+hafenmauer$"
+              "^kubectl\\s+describe\\s+(networkpolicy|networkpolicies|netpol)\\s+hafenmauer$"
             ],
             "solution": "kubectl describe networkpolicy hafenmauer",
             "why": "<code>get</code> zeigt nur, <b>dass</b> die Policy existiert; <code>describe</code> zeigt ihren <b>Inhalt</b> – welche from-Regel tatsächlich gilt. Bei Sicherheitsregeln willst du nie raten, sondern die wirksame Regel schwarz auf weiß sehen.",

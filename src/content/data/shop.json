@@ -98,7 +98,7 @@
   },
   {
     "id": "kubectl-netpol", "icon": "☸️", "name": "Kurzform netpol (kubectl NetworkPolicies)", "price": 20, "type": "comfort",
-    "desc": "Schaltet netpol/netpols als Kurzform für networkpolicies bei kubectl frei.",
+    "desc": "Schaltet netpol als Kurzform für networkpolicies bei kubectl frei.",
     "unlockAt": 20
   },
   {

@@ -50,7 +50,7 @@ import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, depEphemeralPeak, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
 import { randSuffix, clusterIP, suggest } from "./sim/util";
 import { makeRng, DEFAULT_SEED } from "./core/rng";
-import { resourceName, InvalidSpecError } from "./sim/names";
+import { resourceName, assertServiceType, InvalidSpecError } from "./sim/names";
 import { sameRbac } from "./sim/rbac";
 import { assertClusterInvariants, warnClusterInvariants } from "./sim/invariants";
 import { scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, statefulPodClaimName, seedPodTemplate, snapshotPodTemplate } from "./sim/workload";
@@ -442,6 +442,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
      *  den Namen (DNS-1123) zentral. ExternalName (#337) → CNAME statt ClusterIP. */
     _makeService(spec: ServiceSpec): ServiceRes {
       const name = resourceName(spec.name);
+      assertServiceType(name, spec.type);
       if (isExternalNameService(spec) && !spec.externalName) {
         throw new InvalidSpecError('The Service "' + name + '" is invalid: spec.externalName: Required value',
           "Setze spec.externalName im Manifest und lege den Service mit kubectl apply -f an.");

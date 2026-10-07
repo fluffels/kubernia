@@ -68,6 +68,18 @@ export class InvalidSpecError extends Error {
   }
 }
 
+/** Die Service-Typen, die Kubernetes kennt (Groß-/Kleinschreibung zählt: `nodeport` ist ungültig). */
+export const SERVICE_TYPES: readonly string[] = ["ClusterIP", "ExternalName", "LoadBalancer", "NodePort"];
+
+/** Lehnt einen unbekannten Service-Typ ab (`kubectl expose --type=Foo`, Manifest `type: Foo`) – wie der
+ *  apiserver mit `spec.type: Unsupported value`. Ohne Typ gilt der Default ClusterIP. */
+export function assertServiceType(serviceName: string, type: string | undefined): void {
+  if (type === undefined || SERVICE_TYPES.includes(type)) return;
+  throw new InvalidSpecError(
+    'The Service "' + serviceName + '" is invalid: spec.type: Unsupported value: "' + type + '": supported values: ' + SERVICE_TYPES.map(s => '"' + s + '"').join(", "),
+    "Gültige Service-Typen: " + SERVICE_TYPES.join(", ") + " (Groß-/Kleinschreibung zählt).");
+}
+
 /** Fehler des prüfenden Smart-Constructors: der Wert verletzt die DNS-1123-Regel.
  *  Trägt den rohen Namen (`raw`), damit die Aggregat-Grenze (`Sim.exec`) daraus die
  *  richtige kubectl-Meldung bauen kann, statt eines generischen „Hoppla". */
