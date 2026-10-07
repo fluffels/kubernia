@@ -28,7 +28,8 @@
             "headless-service.yaml": {
               "service": {
                 "name": "speicher-datenbank",
-                "port": 5432
+                "port": 5432,
+                "clusterIP": "None"
               }
             },
             "statefulset.yaml": {

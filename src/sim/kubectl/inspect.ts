@@ -17,6 +17,7 @@ import { table, podIP, flagValue } from "../util";
 import type { KubectlHost } from "./host";
 import type { Deployment, PodInstance, PodStatus } from "../state";
 import { sameRbac } from "../rbac";
+import { statefulPodVolumePending } from "../workload";
 
 // Alle Ingresses teilen sich die Adresse des einen Ingress-Controllers (wie im echten
 // Cluster). Nur die kubectl-Ausgaben (get/describe ingress) brauchen sie, darum hier.
@@ -37,9 +38,7 @@ function aliasMap(entries: { aliases: string[]; render: Renderer }[]): Map<strin
 // ===== kubectl get – ein Renderer je Ressourcentyp =====
 
 function statefulPodRow(host: KubectlHost, s: { name: string; volumeClaimName: string; pods: PodInstance[] }, p: PodInstance): (string | number)[] {
-  const ordinal = String(p.name).split("-").pop() ?? "0";
-  const pvcName = s.volumeClaimName + "-" + s.name + "-" + ordinal;
-  const pending = host.pvcs.find(pv => pv.name === pvcName)?.status === "Pending";
+  const pending = statefulPodVolumePending(s, p, host.pvcs);
   return [p.name, pending ? "0/1" : "1/1", pending ? "Pending" : "Running", String(p.restarts), host._age(p.created)];
 }
 

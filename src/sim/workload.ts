@@ -21,7 +21,7 @@
  * (./util, ./names) – kein Phaser, kein Rückimport nach sim.ts (kein Zyklus), vom
  * Architektur-Wächter (#347) als Domäne geschützt und im Node-Test prüfbar.
  */
-import type { Deployment, PodInstance, StatefulSetRes } from "./state";
+import type { Deployment, PodInstance, PvcRes, StatefulSetRes } from "./state";
 import { makePodName } from "./util";
 import { asPodName } from "./names";
 
@@ -40,6 +40,17 @@ export function newDeploymentPod(dep: Deployment, clock: number, rng: () => numb
  *  damit die Ordinal-Namensregel (Invariante 8) an einer Stelle lebt statt roh dupliziert. */
 export function newStatefulPod(ordinalName: string, clock: number): PodInstance {
   return { name: asPodName(ordinalName), created: clock, restarts: 0 };
+}
+
+/** Wartet das PVC dieses StatefulSet-Pods noch auf Speicher (`Pending`)? Dann läuft der Pod
+ *  nicht: `get pods` zeigt ihn `0/1 Pending`, DNS führt ihn nicht als Endpoint (#811, #1301).
+ *  Die EINE Stelle für diese Ableitung (PVC-Name `<vct>-<sts>-<ordinal>`). */
+export function statefulPodVolumePending(
+  sts: Pick<StatefulSetRes, "name" | "volumeClaimName">, pod: PodInstance, pvcs: readonly PvcRes[],
+): boolean {
+  const ordinal = String(pod.name).split("-").pop() ?? "0";
+  const pvcName = sts.volumeClaimName + "-" + sts.name + "-" + ordinal;
+  return pvcs.find(pv => pv.name === pvcName)?.status === "Pending";
 }
 
 /** Skaliert ein Deployment auf `target` Replicas und hält dabei die Invariante

@@ -12,7 +12,7 @@ import { KQSim, freshSim } from "./helpers";
 import {
   newDeploymentPod, newStatefulPod, scaleDeployment, replacePods, replaceDeploymentPod,
   restartStatefulPod, addDeployment, removeDeployment,
-  addStatefulSet, removeStatefulSet,
+  addStatefulSet, removeStatefulSet, statefulPodVolumePending,
 } from "../../src/sim/workload";
 import { clusterInvariantViolations } from "../../src/sim/invariants";
 import type { Deployment, StatefulSetRes, PodInstance } from "../../src/sim/state";
@@ -201,4 +201,13 @@ test("aggregat: helm uninstall entfernt das Deployment über den Kanal und läss
   assert.equal(sim.exec("helm uninstall shop").error, false);
   assert.equal(sim.deployments.some(d => d.name === rel.depName), false, "das Deployment ist weg");
   assert.deepEqual(clusterInvariantViolations(sim), []);
+});
+
+test("statefulPodVolumePending: nur ein Pod mit Pending-PVC wartet (#1301)", () => {
+  const sts = { name: "db", volumeClaimName: "data" };
+  const pod = newStatefulPod("db-1", 0);
+  const pvc = (status: "Pending" | "Bound") => [{ name: "data-db-1", status, volume: "", capacity: "1Gi", storageClass: "", accessModes: "RWO", created: 0 }];
+  assert.equal(statefulPodVolumePending(sts, pod, pvc("Pending")), true);
+  assert.equal(statefulPodVolumePending(sts, pod, pvc("Bound")), false);
+  assert.equal(statefulPodVolumePending(sts, pod, []), false, "ohne PVC-Eintrag kein Pending");
 });

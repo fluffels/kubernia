@@ -23,7 +23,7 @@
  * Phaser-frei (pure Domäne): Tabellen-Ausgabe + Pod-Namen kommen aus ./util, die
  * Domänentypen aus ./state – kein Rückimport nach sim.ts (kein Zyklus).
  */
-import type { ClusterState, ArgoApp, ArgoChildSpec, Deployment, ServiceRes, Broken } from "./state";
+import type { ClusterState, ArgoApp, ArgoChildSpec, Deployment, ServiceRes, ServiceSpec, Broken } from "./state";
 import { table } from "./util";
 import { addDeployment, scaleDeployment } from "./workload";
 
@@ -40,7 +40,7 @@ export interface ArgocdHost extends Pick<ClusterState, "argoApps" | "deployments
   _err(msg: string, tip?: string): string;
   _podReady(d: Deployment): boolean;
   _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment;
-  _makeService(spec: { name: string; type?: string; port: string | number; targetPort?: string | number; externalName?: string }): ServiceRes;
+  _makeService(spec: ServiceSpec): ServiceRes;
 }
 
 /** Tiefe Kopie einer Kind-App-Spezifikation (App-of-Apps). */
