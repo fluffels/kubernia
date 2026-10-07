@@ -63,6 +63,8 @@ AGENTS.md                  @fluffels
 /scripts/worktree-guard-hook.mjs @fluffels
 /scripts/worktree-guard-powershell.mjs @fluffels
 /scripts/stop-verify-hook.mjs @fluffels
+/scripts/umsetzer-abschluss.mjs @fluffels
+/scripts/cleanup-worktrees.mjs @fluffels
 /.agents/                  @fluffels
 /docs/agent-harness*       @fluffels
 

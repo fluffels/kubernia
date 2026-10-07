@@ -44,6 +44,8 @@ Befunde außerhalb des Tickets nach AGENTS.md § „Harness-Befunde sind Zeilen,
 
 Vorher beendest du alle eigenen Hintergrund-Tasks (`Monitor`, `run_in_background`, CI-Watch) per `TaskStop`: ein weiterlaufender Task liefert sonst Meldungen nach, und der Bericht kommt mehrfach beim Aufrufer an. Wartest du per `Monitor` auf die CI, dann nur mit einer until-Schleife, die einmal das Endergebnis ausgibt (keine periodischen Zwischenmeldungen wie „tick“), gestartet aus dem Hauptrepo mit absolutem Pfad.
 
+**Ein offener PR mit Auto-Merge ist kein Ende.** `gemergt` oder `abgebrochen` meldest du erst nach dem Merge (bzw. wenn kein PR entstand). Ein Tool-Timeout beim CI-Warten ist kein Abbruchgrund: `gh pr checks <nr> --watch` mit `timeout: 600000` oder per `Monitor`-Wartebefehl, bis der PR `MERGED` ist. Der SubagentStop-Hook prüft das und blockiert dein Ende sonst (`scripts/umsetzer-abschluss.mjs`).
+
 ```
 ERGEBNIS: gemergt | entscheidung-noetig | festgefahren | abgebrochen
 TICKET: #<nr>

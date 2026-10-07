@@ -453,3 +453,52 @@ describe("Die Pre-Flight-Kriterien stehen nur in AGENTS.md (#1311)", () => {
     assert.equal(kriterienKopien({ "x.js": "etwas löschen, am Ruleset, an Secrets oder Repo-Einstellungen drehen" }).length, 1);
   });
 });
+
+// ── Hook-Abhängigkeiten sind geschützt (#1331) ───────────────────────────────
+
+/** Skripte, die `.claude/settings.json` als Hook startet (Argumente auf `scripts/*.mjs`). */
+function hookSkripte(settingsText: string): string[] {
+  const settings = JSON.parse(settingsText) as { hooks?: Record<string, { hooks: { args?: string[] }[] }[]> };
+  const skripte = new Set<string>();
+  for (const eintraege of Object.values(settings.hooks ?? {}))
+    for (const e of eintraege) for (const h of e.hooks) for (const a of h.args ?? []) if (/scripts\/[\w.-]+\.mjs$/.test(a)) skripte.add(a.replace(/^.*?(scripts\/)/, "$1"));
+  return [...skripte];
+}
+
+/** Alle lokalen `./x.mjs`-Importe (transitiv) der Wurzel-Skripte, die Wurzeln eingeschlossen. */
+function lokaleImporteTransitiv(wurzeln: string[], lies: (rel: string) => string): string[] {
+  const gesehen = new Set<string>();
+  const offen = [...wurzeln];
+  while (offen.length > 0) {
+    const rel = offen.pop() as string;
+    if (gesehen.has(rel)) continue;
+    gesehen.add(rel);
+    for (const m of lies(rel).matchAll(/from\s+["']\.\/([\w.-]+\.mjs)["']/g)) offen.push(`scripts/${m[1]}`);
+  }
+  return [...gesehen].sort();
+}
+
+/** Skripte, die kein geschützter Eintrag der Quelle abdeckt (Präfix- oder Gleichheits-Vergleich). */
+function ungeschuetzt(skripte: string[], src: ProtectedSource): string[] {
+  const eintraege = [...sourcePaths(src)];
+  return skripte.filter((s) => !eintraege.some((p) => p !== "" && s.startsWith(p)));
+}
+
+describe("Hook-Abhängigkeiten sind geschützt (#1331)", () => {
+  test("jedes Hook-Skript und jeder lokale Import davon steht in der Quelle UND in CODEOWNERS", () => {
+    const skripte = lokaleImporteTransitiv(hookSkripte(read(".claude/settings.json")), read);
+    assert.ok(skripte.includes("scripts/cleanup-worktrees.mjs"), "der Stop-Hook importiert cleanup-worktrees.mjs");
+    assert.ok(skripte.includes("scripts/umsetzer-abschluss.mjs"), "der Stop-Hook importiert umsetzer-abschluss.mjs");
+    assert.deepEqual(ungeschuetzt(skripte, quelle), [], "nicht in .github/protected-paths.json");
+    const owners = codeownersPaths(codeowners);
+    assert.deepEqual(skripte.filter((s) => ![...owners].some((p) => p !== "" && s.startsWith(p))), [], "nicht in .github/CODEOWNERS");
+  });
+
+  test("Red-Green: ein ungeschütztes Modul in der Importkette wird gefunden", () => {
+    const lies = (rel: string) => (rel === "scripts/a.mjs" ? 'import { x } from "./b.mjs";' : rel === "scripts/b.mjs" ? 'import y from "./c.mjs";' : "");
+    const kette = lokaleImporteTransitiv(["scripts/a.mjs"], lies);
+    assert.deepEqual(kette, ["scripts/a.mjs", "scripts/b.mjs", "scripts/c.mjs"]);
+    assert.deepEqual(ungeschuetzt(kette, { harness: ["/scripts/a.mjs", "/scripts/b.mjs"] }), ["scripts/c.mjs"]);
+    assert.deepEqual(hookSkripte(JSON.stringify({ hooks: { Stop: [{ hooks: [{ args: ["${CLAUDE_PROJECT_DIR}/scripts/h.mjs"] }] }] } })), ["scripts/h.mjs"]);
+  });
+});
