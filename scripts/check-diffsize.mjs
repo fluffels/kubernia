@@ -43,6 +43,12 @@
  * der Diff aber gar nicht über Budget, wird er als STALE gemeldet (rot) — genau wie ein
  * stale check-size-Eintrag.
  *
+ * `GEN:`-Abschnitte (#1411): Zeilen ZWISCHEN den Markern eines generierten Abschnitts in den Dateien, die
+ * `check:docgen` prüft (`markdown` in scripts/docs-gen/config.json), zählen nicht zum Slice. Sie entstehen
+ * maschinell, und `check:docgen` prüft sie gegen das Repo; die Marker-Zeilen selbst und GEN-Blöcke in anderen
+ * Dateien zählen weiter. Zeilengenau (`git diff -U0`, Maske der alten und der neuen Fassung); ist etwas nicht
+ * eindeutig lesbar (kaputte Marker, git-Fehler, Umbenennung), zählt alles.
+ *
  * Reines Node-Skript (nur Builtins). Die Mess-/Bewertungslogik ist als pure,
  * git-freie Funktionen exportiert und wird von test/diffsize.test.ts importiert —
  * EINE Quelle der Wahrheit für Budget, Parsing und Override-Logik.
@@ -52,7 +58,9 @@
 
 import { execFileSync } from "node:child_process";
 import { meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
-import { pathToFileURL } from "node:url";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { leseJson, parseSections } from "./docs-gen/markdown.mjs";
 
 /** Budget für EINE Änderung. Kalibriert an echten kubequest-Tickets: die letzten
  *  liegen bei ~5–8 Dateien und bis ~450 geänderten Zeilen (#529: 8 Dateien / 453).
@@ -122,6 +130,67 @@ export function parseNumstat(text) {
   return { files, fileCount, changedLines };
 }
 
+/** Menge der 1-basierten Zeilennummern ZWISCHEN den Markern gültiger `GEN:`-Abschnitte von `text`
+ *  (die Marker-Zeilen selbst nicht). Kaputte Marker (Parse-Fehler) → leere Menge: dann zählt alles. Pure. */
+export function genKoerperZeilen(text) {
+  const { sections, errors } = parseSections(String(text ?? ""));
+  const maske = new Set();
+  if (errors.length > 0) return maske;
+  // 0-basiert liegt der Körper in startLine+1 … endLine-1, 1-basiert in startLine+2 … endLine.
+  for (const s of sections) for (let z = s.startLine + 2; z <= s.endLine; z++) maske.add(z);
+  return maske;
+}
+
+/** True, wenn `pfad` eine Markdown-Datei unter einer der Wurzeln ist, die `check:docgen` prüft (Datei oder Ordner). Pure. */
+export function istDocgenDatei(pfad, wurzeln) {
+  const p = String(pfad).replaceAll("\\", "/");
+  if (!p.endsWith(".md")) return false;
+  return wurzeln.some((w) => {
+    const r = String(w).replaceAll("\\", "/").replace(/\/+$/, "");
+    return r === "." || p === r || p.startsWith(`${r}/`);
+  });
+}
+
+/**
+ * Zählt je Datei die Zeilen eines `git diff -U0`-Patches, die in einem `GEN:`-Abschnitt liegen: entfernte Zeilen
+ * gegen die Maske der alten, hinzugefügte gegen die der neuen Fassung. `ladeAlt(pfad)`/`ladeNeu(pfad)` liefern den
+ * Dateitext oder null (fehlt → leere Maske, alles zählt). Nur Dateien, für die `prueft(pfad)` gilt. Ergebnis: Map
+ * Pfad (neu, bei Löschung alt) → Zahl. Pure. Gelesen werden nur Datei- und Hunk-Köpfe; eine Inhaltszeile beginnt
+ * immer mit `+`, `-` oder Leerzeichen, nie mit `diff --git` oder `@@ `.
+ */
+export function genAnteil(patch, ladeAlt, ladeNeu, prueft) {
+  const ergebnis = new Map();
+  let alt = null;
+  let neu = null;
+  let imKopf = false;
+  let maskeAlt = null;
+  let maskeNeu = null;
+  const pfadAus = (zeile, praefix) => {
+    const roh = zeile.slice(4).split("\t")[0].trim();
+    return roh === "/dev/null" || roh.startsWith('"') ? null : roh.replace(praefix, "");
+  };
+  for (const zeile of String(patch).split(/\r?\n/)) {
+    if (zeile.startsWith("diff --git ")) {
+      [imKopf, alt, neu, maskeAlt, maskeNeu] = [true, null, null, null, null];
+    } else if (imKopf && zeile.startsWith("--- ")) alt = pfadAus(zeile, /^a\//);
+    else if (imKopf && zeile.startsWith("+++ ")) neu = pfadAus(zeile, /^b\//);
+    else if (zeile.startsWith("@@ ")) {
+      imKopf = false;
+      const ziel = neu ?? alt;
+      const m = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(zeile);
+      if (ziel === null || !m || !prueft(ziel)) continue;
+      maskeAlt ??= genKoerperZeilen(alt === null ? "" : ladeAlt(alt));
+      maskeNeu ??= genKoerperZeilen(neu === null ? "" : ladeNeu(neu));
+      const [, a, b, c, d] = m;
+      let n = 0;
+      for (let i = 0; i < (b === undefined ? 1 : Number(b)); i++) if (maskeAlt.has(Number(a) + i)) n++;
+      for (let i = 0; i < (d === undefined ? 1 : Number(d)); i++) if (maskeNeu.has(Number(c) + i)) n++;
+      ergebnis.set(ziel, (ergebnis.get(ziel) ?? 0) + n);
+    }
+  }
+  return ergebnis;
+}
+
 /** Bewertet Summen gegen das Budget. „Über" heißt STRIKT größer (== Budget ist ok),
  *  analog zu check-size (`loc > budget`). Pure. */
 export function evaluate({ fileCount, changedLines }, { maxFiles, maxLines }) {
@@ -156,10 +225,63 @@ export function resolveBase(runGit, env = process.env) {
   return tryGit(["merge-base", "HEAD", "origin/main"]) ?? tryGit(["merge-base", "HEAD", "main"]);
 }
 
+const SCRIPTS_ORDNER = dirname(fileURLToPath(import.meta.url));
+
+/** Die Wurzeln, die `check:docgen` liest (`markdown` der docs-gen-Config); nicht lesbar → keine (dann zählt alles). */
+function ladeDocgenWurzeln() {
+  try {
+    const roh = leseJson(join(SCRIPTS_ORDNER, ".."), "scripts/docs-gen/config.json", "docs-gen-Config").markdown;
+    return Array.isArray(roh) ? roh.filter((w) => typeof w === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Nimmt aus `files` (numstat-Einträge) die `GEN:`-Zeilen heraus (siehe Kopfkommentar): Zeilen je Datei in
+ * `genLines`, eine Datei nur aus GEN-Zeilen fällt ganz weg. Jeder git-Fehler → unverändert (alles zählt).
+ */
+function ohneGenZeilen(git, base, files, wurzeln) {
+  const kandidaten = files.filter((f) => !f.binary && istDocgenDatei(f.path, wurzeln));
+  if (kandidaten.length === 0) return { files, genLines: 0 };
+  try {
+    const mergeBase = (() => {
+      try {
+        return git(["merge-base", base, "HEAD"]).trim() || base;
+      } catch {
+        return base;
+      }
+    })();
+    const lade = (ref) => (pfad) => {
+      try {
+        return git(["show", `${ref}:${pfad}`]);
+      } catch {
+        return null;
+      }
+    };
+    const patch = git(["diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames", `${base}...HEAD`, "--", ...kandidaten.map((f) => f.path)]);
+    const anteil = genAnteil(patch, lade(mergeBase), lade("HEAD"), (p) => kandidaten.some((f) => f.path === p));
+    let genLines = 0;
+    const rest = [];
+    for (const f of files) {
+      const gen = Math.min(anteil.get(f.path) ?? 0, f.added + f.deleted);
+      genLines += gen;
+      if (gen > 0 && gen === f.added + f.deleted) continue; // nur GEN-Zeilen: keine zu lesende Änderung
+      rest.push(gen > 0 ? { ...f, gen } : f);
+    }
+    return { files: rest, genLines };
+  } catch {
+    return { files, genLines: 0 };
+  }
+}
+
+/** Zeilen einer numstat-Datei, die zum Slice zählen (ohne `GEN:`-Anteil). */
+const zaehlZeilen = (f) => f.added + f.deleted - (f.gen ?? 0);
+
 /** Führt die komplette Prüfung aus (Basis auflösen → Diff messen → bewerten →
  *  Override/stale einordnen). `runGit`/`env` injizierbar für den Test. Rückgabe
  *  ist ein strukturiertes Ergebnis; das CLI rendert es nur noch. */
-export function checkDiffSize({ runGit, env = process.env } = {}) {
+export function checkDiffSize({ runGit, env = process.env, docgenWurzeln } = {}) {
   const git = runGit ?? ((args) => execFileSync("git", args, { encoding: "utf8" }));
   const thresholds = readThresholds(env);
   const base = resolveBase(git, env);
@@ -195,10 +317,12 @@ export function checkDiffSize({ runGit, env = process.env } = {}) {
 
   const parsed = parseNumstat(numstat);
   // Generierte Lockfiles zählen nicht zum reviewbaren Slice (#612).
-  const files = parsed.files.filter((f) => !isGeneratedArtifact(f.path));
-  const excludedCount = parsed.fileCount - files.length;
+  const lockfileFrei = parsed.files.filter((f) => !isGeneratedArtifact(f.path));
+  const excludedCount = parsed.fileCount - lockfileFrei.length;
+  // Zeilen in `GEN:`-Abschnitten zählen nicht (#1411): check:docgen prüft sie; nur Dateien, die er liest.
+  const { files, genLines } = ohneGenZeilen(git, base, lockfileFrei, docgenWurzeln ?? ladeDocgenWurzeln());
   const fileCount = files.length;
-  const changedLines = files.reduce((s, f) => s + f.added + f.deleted, 0);
+  const changedLines = files.reduce((s, f) => s + zaehlZeilen(f), 0);
   const { overFiles, overLines, over } = evaluate({ fileCount, changedLines }, thresholds);
   const { reason, invalid, versetzt } = sliceOverride(git, base, OVERRIDE_KEY);
 
@@ -210,6 +334,7 @@ export function checkDiffSize({ runGit, env = process.env } = {}) {
     fileCount,
     changedLines,
     excludedCount,
+    genLines,
     overFiles,
     overLines,
     over,
@@ -247,6 +372,9 @@ function main() {
 
   if (r.excludedCount > 0) {
     console.log(dim(`• ${r.excludedCount} generierte(s) Lockfile(s) nicht mitgezählt (#612).`));
+  }
+  if (r.genLines > 0) {
+    console.log(dim(`• ${r.genLines} Zeilen in GEN:-Abschnitten nicht mitgezählt (check:docgen prüft sie).`));
   }
 
   if (r.legacyEnv) {
