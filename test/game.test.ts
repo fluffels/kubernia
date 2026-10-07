@@ -1029,6 +1029,24 @@ test("#586 clusterSnapshot: ein GÜLTIGER Plain-Object-Snapshot überlebt unver�
   expect(Game.state.clusterSnapshot?.files?.["Dockerfile"]).toBe("FROM nginx:1.27");
 });
 
+test("#1418 clusterSnapshot: eine Argo-App ohne desired verwirft den Snapshot, load() crasht nicht und Befehle laufen", () => {
+  Game.importData(JSON.stringify({ v: 3, data: { xp: 7, clusterSnapshot: { files: {}, argoApps: [{ name: "kaputt", repo: "r", path: "p/", autoSync: true, selfHeal: true, created: 0 }] } } }));
+  expect(() => Game.load()).not.toThrow();
+  expect(JSON.stringify(Game.state.clusterSnapshot)).not.toContain("kaputt");
+  expect(Game.sim.exec("help").output).not.toMatch(/Hoppla/);
+  expect(Game.state.xp).toBe(7);
+});
+
+test("#1418 clusterSnapshot: gültige Leaf-App und gültige Wurzel überleben (kein Over-Sanitizing)", () => {
+  const dep = { name: "a", image: "nginx", replicas: 1 };
+  const leaf = { name: "a", repo: "r", path: "a/", autoSync: false, selfHeal: false, created: 0, desired: { deployment: dep } };
+  const wurzel = { name: "w", repo: "r", path: "f/", autoSync: false, selfHeal: false, created: 0, childApps: [{ name: "a", deployment: dep }] };
+  Game.importData(JSON.stringify({ v: 3, data: { clusterSnapshot: { files: {}, argoApps: [leaf, wurzel] } } }));
+  Game.load();
+  const namen = (Game.state.clusterSnapshot?.argoApps || []).map(a => a.name);
+  expect(namen).toEqual(["a", "w"]);
+});
+
 test("#511 taskIdx: über der Aufgabenzahl des Schritts wird geklemmt", () => {
   // Derselbe Drill (count 3): ein taskIdx jenseits von count-1 fällt auf den letzten
   // gültigen Aufgaben-Index zurück statt ins Leere zu zeigen.
