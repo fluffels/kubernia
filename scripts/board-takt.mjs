@@ -36,8 +36,12 @@ import {
 } from "./board-lib.mjs";
 import { entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
 
-/** Harness-Sammelticket: so viele Ticket-Merges seit dem Abschluss des letzten Sammeltickets holen das ungeclaimte nach oben (hinter den Kopf). */
-export const HARNESS_TAKT_MERGES = 5;
+/** Spielquote (#1425): höchstens 1 Harness-Ticket auf so viele Spiel-Tickets. */
+export const SPIEL_QUOTE = 3;
+
+/** Harness-Sammelticket: so viele SPIEL-Merges seit dem Abschluss des letzten Sammeltickets holen das ungeclaimte nach oben (hinter den Kopf).
+ *  Gleich der Spielquote: Harness-Merges verdienen keinen weiteren Harness-Platz (#1425). */
+export const HARNESS_TAKT_MERGES = SPIEL_QUOTE;
 
 /**
  * Beginn des Aktivitätsfensters: 60 s nach dem Abschluss des Vorgängers (dessen eigener Squash-Commit soll nicht
@@ -65,7 +69,34 @@ export function zaehleTicketMerges(commits, seit = null) {
 }
 
 /**
- * Harness-Sammelticket: `items` = Board in Reihenfolge (board-lib), `ticketMergesSeitAbschluss` = Ticket-Merges seit dem Abschluss des
+ * Ist dieser Commit von main ein Harness-Merge? Der Squash-Commit trägt den PR-Titel `feat(<scope>): …`; Scope `harness` markiert
+ * Harness-Arbeit (Konvention aus AGENTS.md, in den letzten 14 Tagen 86 von 125 Commits). Bot-Commits sind keine Ticket-Merges. Pur.
+ */
+export function istHarnessCommit(commit) {
+  const kopf = String(commit?.commit?.message ?? "").split(/\r?\n/, 1)[0];
+  return /^[a-z]+\(harness\)!?:/i.test(kopf);
+}
+
+/** Spiel-Merges in einer Commit-Liste: Ticket-Merges (`zaehleTicketMerges`) ohne Harness-Scope; mit `seit` nur ab diesem Zeitpunkt. Pur. */
+export function zaehleSpielMerges(commits, seit = null) {
+  if (!Array.isArray(commits)) throw new Error("commits muss eine Liste sein.");
+  return zaehleTicketMerges(commits.filter((c) => !istHarnessCommit(c)), seit);
+}
+
+/**
+ * Die Spielquote des Fensters als Zahlen und Zeile für das Protokoll: `harness` und `spiel` = Ticket-Merges (ohne Bots) mit bzw. ohne
+ * Harness-Scope, `eingehalten` = höchstens 1 Harness auf `SPIEL_QUOTE` Spiel (Notfälle und Security tragen denselben Scope und
+ * zählen hier mit; das Protokoll ist Information, kein Gate). Pur.
+ */
+export function quotenBericht(commits, seit = null) {
+  const harness = zaehleTicketMerges(commits.filter((c) => istHarnessCommit(c)), seit);
+  const spiel = zaehleSpielMerges(commits, seit);
+  const eingehalten = harness * SPIEL_QUOTE <= spiel;
+  return { harness, spiel, eingehalten, zeile: `Spielquote: ${harness} Harness- auf ${spiel} Spiel-Merges im Fenster (Soll höchstens 1:${SPIEL_QUOTE}), ${eingehalten ? "eingehalten" : "überschritten"}` };
+}
+
+/**
+ * Harness-Sammelticket: `items` = Board in Reihenfolge (board-lib), `ticketMergesSeitAbschluss` = Spiel-Merges (`zaehleSpielMerges`) seit dem Abschluss des
  * letzten Harness-Sammeltickets, `position` = Position laut AGENTS.md (`sammelticketPosition`). Reihenfolge der Regeln:
  *  1. Ab `HARNESS_TAKT_MERGES` kommt das erste ungeclaimte Harness-Sammelticket direkt hinter den zusammenhängenden Kopf ganz oben
  *     (Status-, Notfall-, Dependabot-, Forum-Ticket) → `nach-oben`. Steht es dort schon, ist der Lauf idempotent.
@@ -91,7 +122,7 @@ export function entscheideHarnessTakt({ items, ticketMergesSeitAbschluss, positi
       aktion: "nach-oben",
       nr: ticket.number,
       afterId: ende > 0 ? items[ende - 1].id : null,
-      grund: `${ticketMergesSeitAbschluss} Ticket-Merges seit dem letzten Sammelticket, #${ticket.number} kommt hinter den Kopf`,
+      grund: `${ticketMergesSeitAbschluss} Spiel-Merges seit dem letzten Sammelticket, #${ticket.number} kommt hinter den Kopf`,
     };
   }
   const k = sammelticketKorrektur(items, position);
@@ -104,7 +135,7 @@ export function entscheideHarnessTakt({ items, ticketMergesSeitAbschluss, positi
     };
   }
   if (ticketMergesSeitAbschluss < HARNESS_TAKT_MERGES) {
-    return { aktion: "nichts", grund: `nur ${ticketMergesSeitAbschluss} Ticket-Merges seit dem letzten Sammelticket (Untergrenze ${HARNESS_TAKT_MERGES}), Position stimmt` };
+    return { aktion: "nichts", grund: `nur ${ticketMergesSeitAbschluss} Spiel-Merges seit dem letzten Sammelticket (Untergrenze ${HARNESS_TAKT_MERGES}), Position stimmt` };
   }
   return { aktion: "nichts", grund: `#${ticket.number} steht schon direkt hinter dem Kopf` };
 }
@@ -202,8 +233,9 @@ function main() {
     console.log(voraussetzung.meldung);
     if (voraussetzung.fehler) fehler = true;
   } else {
-    const h = entscheideHarnessTakt({ items, ticketMergesSeitAbschluss: zaehleTicketMerges(commits, abHarness), position });
+    const h = entscheideHarnessTakt({ items, ticketMergesSeitAbschluss: zaehleSpielMerges(commits, abHarness), position });
     console.log(`Harness-Sammelticket: ${h.aktion}${h.nr ? ` #${h.nr}` : ""} (${h.grund}); Fenster ab ${abHarness}`);
+    console.log(quotenBericht(commits, abHarness).zeile);
     if (!dry && h.aktion !== "nichts" && !fuehreHarnessAus(h, items, token)) fehler = true;
   }
   if (fehler) process.exitCode = 1;
