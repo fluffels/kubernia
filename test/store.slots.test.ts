@@ -11,7 +11,7 @@
  * Modul je Test frisch (resetModules) – so ist der "Reload" über einen erneuten Import + init()
  * darstellbar, was Persistenz beweist.
  */
-import { test, expect, vi, afterEach, beforeEach } from "vitest";
+import { test, expect, vi, afterEach, beforeEach, describe } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
 import { ABBREVS } from "../src/content/abbrev";
 
@@ -262,6 +262,8 @@ function stubWindowWithoutLocalStorage() {
   });
 }
 
+describe("IndexedDB-Modus", () => {
+// Der IDB-Stub gilt nur hier (#1411): als Top-Level-beforeEach hätte er auch die localStorage-Tests oben im IDB-Modus laufen lassen.
 beforeEach(() => {
   vi.stubGlobal("indexedDB", new IDBFactory());
 });
@@ -277,6 +279,7 @@ test("IndexedDB: Slots + aktiver Zeiger überleben einen Reload (einziger Speich
     id2 = SaveStore.createSlot("Zweiter");
     SaveStore.switchSlot(id2);
     SaveStore.writeState({ xp: 5 });          // Slot 2
+    await SaveStore.flush();                  // Commit abwarten, sonst racet der „Reload" gegen den Persist (#473, #1411)
   }
   // "Reload": frischer Modul-Stand, leerer In-Memory-Speicher → nur IndexedDB bleibt.
   vi.resetModules();
@@ -286,6 +289,7 @@ test("IndexedDB: Slots + aktiver Zeiger überleben einen Reload (einziger Speich
     expect(SaveStore.activeSlotId()).toBe(id2);
     expect(SaveStore.readState()).toEqual({ xp: 5 });   // aktiver Slot kam aus IndexedDB
     expect(SaveStore.switchSlot(DEFAULT_SLOT_ID)).toBe(true);
+    await SaveStore.flush();
   }
   // Noch ein "Reload" – jetzt muss Slot 1 hydriert werden.
   vi.resetModules();
@@ -293,4 +297,6 @@ test("IndexedDB: Slots + aktiver Zeiger überleben einen Reload (einziger Speich
   await SaveStore.init();
   expect(SaveStore.activeSlotId()).toBe(DEFAULT_SLOT_ID);
   expect(SaveStore.readState()).toEqual({ xp: 100 });
+});
+
 });
