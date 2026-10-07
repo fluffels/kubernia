@@ -49,6 +49,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [glossar.md](../glossar.md) | wenn dir ein Begriff fehlt (Hafen ↔ K8s ↔ Code) oder du wissen willst, welcher Context in welchem Verzeichnis gilt |
 | [repo-landkarte.md](repo-landkarte.md) | wenn du ein Subsystem suchst: welche Schicht, welches Tiefendoc |
 | [module/sim.md](../module/sim.md) | beim Arbeiten am Cluster-Simulator (`src/sim/*`) |
+| [sim-treue.md](../sim-treue.md) | wenn du `kubectl`-Verhalten des Simulators gegen die Doku abgleichst oder einen Befehl bzw. eine Ressourcenart ergänzt (Treue-Matrix) |
 | [module/content.md](../module/content.md) | für die Interna von Content-as-Data (Loader, Registry) |
 | [module/content-questgraph.md](../module/content-questgraph.md) | für die Quest-Landkarte: welche Region hat welche Quests, wie hängen sie zusammen (generiert) |
 | [module/world.md](../module/world.md) | bei Welt-, Karten- und HUD-Logik außerhalb der Szenen |

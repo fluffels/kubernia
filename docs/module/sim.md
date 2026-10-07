@@ -53,6 +53,7 @@ Der Simulator ging bisher von einem **bereits laufenden** Cluster aus. Für den 
 - **`kubeadm init`:** zieht die Control-Plane auf einem Knoten hoch (erzeugt „ahoi-control", sofern noch keiner da ist), macht den Cluster ansprechbar (`up:true`) und erzeugt einen Join-Token. Doppeltes init wird abgelehnt (Cluster läuft schon).
 - **`kubeadm join <token>`:** hängt einen Worker (`ahoi-worker-N`, fortlaufend) an — Token muss zum init-Token passen. Akzeptiert `--token <tok>` UND positional. Ruft `_reschedulePending()`, damit ein neuer Knoten wartende Pods einplant (wie der Terraform-Pfad). Negativfälle: join vor init (Control-Plane down → „connection refused"/„couldn't validate"), fehlender/falscher Token.
 - **`kubeadm reset`:** räumt den Cluster auf „bare metal" zurück (keine Nodes, Control-Plane down) — die Sturm-Lage als Befehl, der Gegenpart zu init.
+- **Treue-Matrix (#1440):** neuer kubectl-Unterbefehl oder neue Ressourcenart ⇒ Zeile in `docs/sim-treue/kubectl.json` (Methode: [sim-treue.md](../sim-treue.md)); bewusste Vereinfachungen stehen als `grenzen` in `src/hud/helptext.ts` und erscheinen im Spiel unter `help kubectl`.
 - **kubectl-Gate:** Vor `kubeadm init` (bzw. `up:false`) scheitert **jeder** kubectl-Unterbefehl mit „The connection to the server … was refused" — das Gate sitzt zentral oben in `kubectlCommand` (`sim/kubectl.ts`), trifft also alle gleichermaßen.
 - **Laufzeit-Sturm (#461):** Eine Quest zerstört den Cluster zur Laufzeit über ihr Szenario (`{ bareMetal: true }`). Der pure Helfer `applyBootstrapScenario(state, sc)` (in `sim/kubeadm.ts`, von `Sim.mergeScenario` gerufen) räumt den laufenden Cluster auf bare metal ab (Nodes/Deployments/Services/Ingresses/NetworkPolicies/StatefulSets weg, Control-Plane down) — die lokalen Baupläne (`files`) bleiben. Bewusst ein gewollter Reset-Punkt (kein additives Merge); reload-sicher, weil seit #436 der Voll-Snapshot den neuen Stand hält und erreichte Szenarien nicht erneut eingemischt werden.
 
@@ -123,5 +124,6 @@ Tests: `test/sim/yaml.test.ts`, `test/sim/manifest.test.ts`, `test/sim/apply-man
 ## Tests
 
 - `test/sim.test.ts` — Kern/`exec`-Dispatch.
+- `test/sim/kubectl-treue.test.ts` — Wächter der Treue-Matrix ([sim-treue.md](../sim-treue.md)): neuer kubectl-Unterbefehl oder neue Ressourcenart ohne Zeile in `docs/sim-treue/kubectl.json` ist rot.
 - `test/sim/*` — die Befehlsfamilien gespiegelt zu den `sim/`-Modulen (docker/kubectl/helm/terraform/git/argocd/glab), gemeinsame Fixtures in `test/sim/helpers.ts` (Split #383); RBAC/Pod-Security (#126/#128) als eigener Schnitt in `test/sim/rbac.test.ts`. Geprüft wird durchweg **über `exec`** (Verhalten der echten Eingabe), nicht die internen Funktionen.
 - `test/observability.test.ts` — Observability-Familie (Metriken/Scrape-Targets/Alerts).
