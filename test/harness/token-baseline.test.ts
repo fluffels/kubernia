@@ -1170,9 +1170,10 @@ describe("token-baseline: Nachlauf, Tool-Fehler, Lesen, fehlender Marker (#1379)
     assert.equal(s.nachlauf.cost, 0.75);
     const md = m.renderMarkdown(s);
     assert.ok(md.indexOf("Summe (ohne Nachlauf)") < md.indexOf("Nachlauf (nicht in der Summe)"));
+    assert.doesNotMatch(md.slice(0, md.indexOf("Summe (ohne Nachlauf)")), /\| Nachlauf \|/, "Nachlauf-Zeilen stehen nicht über der Summe");
   });
 
-  test("ohne Nachlauf ist nachlauf null und es gibt keine Nachlauf-Zeile", () => {
+  test("ohne Nachlauf ist nachlauf.calls 0 und es gibt keine Nachlauf-Zeile", () => {
     const s = sum(calls.slice(0, 2));
     assert.equal(s.nachlauf.calls, 0);
     assert.doesNotMatch(m.renderMarkdown(s), /nicht in der Summe/);
@@ -1202,6 +1203,9 @@ describe("token-baseline: Nachlauf, Tool-Fehler, Lesen, fehlender Marker (#1379)
     const mitMarker = sum(calls, [echo("2026-09-29T11:10:00Z", "start"), echo("2026-09-29T11:20:00Z", "ende")]);
     assert.equal(mitMarker.pflegeFehlt, false);
     assert.doesNotMatch(m.renderMarkdown(mitMarker), /Kein Pflege-Marker/);
+    const ungepaart = sum(calls, [echo("2026-09-29T11:10:00Z", "start")]);
+    assert.equal(ungepaart.pflegeFehlt, false, "ein Marker ohne Gegenstück bekommt nur die Unpaired-Warnung");
+    assert.doesNotMatch(m.renderMarkdown(ungepaart), /Kein Pflege-Marker/);
     assert.equal(sum([calls[0]], []).pflegeFehlt, false, "ohne Umsetzer keine Warnung");
     assert.ok(!sum(calls).pflegeFehlt, "ohne Events keine Warnung");
   });

@@ -263,7 +263,7 @@ export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles
     out.fehler = fehlerArten(imFenster);
     out.lesen = wiederlesen(imFenster);
     // Ein Umsetzer lief, aber kein einziger Marker: die Pflegekosten stecken in „Umsetzung“ (#1379).
-    out.pflegeFehlt = intervals.length === 0 && unpaired === 0 && window.some((w) => w.call.subagent?.agentType === "kubernia-umsetzer");
+    out.pflegeFehlt = intervals.length === 0 && unpaired === 0 && ticket.some((c) => c.subagent?.agentType === "kubernia-umsetzer");
     out.brain = { ...brainMetrics(imFenster, prFiles), rechercheTokens: recherche.reduce((n, r) => n + r.input + r.cacheWrite + r.cacheRead + r.output, 0) };
   }
   return out;

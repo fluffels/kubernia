@@ -58,14 +58,16 @@ export function wiederlesen(events) {
     if (ev.tool !== "Read" || ev.fehler || !datei) continue;
     out.reads += 1;
     const teil = ev.input.offset !== undefined || ev.input.limit !== undefined;
-    if (teil) out.abschnittsweise += 1;
     const von = Number(ev.input.offset) || 1;
     const bis = von + (Number(ev.input.limit) || 2000) - 1;
     const bereiche = gelesen.get(key) ?? [];
     const wieder = bereiche.some(([a, b]) => von <= b && bis >= a);
     bereiche.push([von, bis]);
     gelesen.set(key, bereiche);
-    if (!wieder) continue;
+    if (!wieder) {
+      if (teil) out.abschnittsweise += 1; // nur Erst-Lesen in Abschnitten; gezieltes Wiederlesen zählt unter `gezielt`
+      continue;
+    }
     const tokens = Math.round((ev.resultChars ?? 0) / CHARS_PER_TOKEN);
     const klasse = teil ? out.gezielt : out.voll;
     klasse.n += 1;

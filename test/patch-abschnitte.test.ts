@@ -52,7 +52,14 @@ describe("CLI", () => {
       writeFileSync(f, zeilen(1000, 100));
       const out = execFileSync(process.execPath, ["scripts/patch-abschnitte.mjs", f], { encoding: "utf8" }).trim().split("\n");
       assert.ok(out.length > 1);
-      assert.equal(out[0], "offset=1 limit=" + out[0].split("limit=")[1]);
+      let naechster = 1;
+      for (const z of out) {
+        const m = /^offset=(\d+) limit=(\d+)$/.exec(z);
+        assert.ok(m, z);
+        assert.equal(Number(m[1]), naechster);
+        naechster += Number(m[2]);
+      }
+      assert.equal(naechster, 1001);
       const fehlt = spawnSync(process.execPath, ["scripts/patch-abschnitte.mjs", join(dir, "nein.patch")], { encoding: "utf8" });
       assert.equal(fehlt.status, 2);
       assert.equal(spawnSync(process.execPath, ["scripts/patch-abschnitte.mjs"], { encoding: "utf8" }).status, 2);

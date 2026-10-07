@@ -95,6 +95,20 @@ describe("wiederlesen", () => {
     assert.equal(tm.wiederlesen([rd("C:\\Dev\\X.md"), rd("c:/dev/x.md")]).voll.n, 1);
     assert.equal(tm.wiederlesen([rd("/p", { offset: 0, limit: 10 }), rd("/p", { offset: 1, limit: 10 })]).gezielt.n, 1);
   });
+  test("Überlappung um genau eine Zeile zählt, ein Read nur mit limit ist gezielt", () => {
+    assert.equal(tm.wiederlesen([rd("/p", { offset: 1, limit: 100 }), rd("/p", { offset: 100, limit: 100 })]).gezielt.n, 1);
+    assert.equal(tm.wiederlesen([rd("/p"), rd("/p", { limit: 50 })]).gezielt.n, 1);
+    assert.equal(tm.wiederlesen([rd("/p"), rd("/p", { limit: 50 })]).voll.n, 0);
+  });
+  test("abschnittsweise zählt nur Erst-Lesen, gezieltes Wiederlesen nicht", () => {
+    const r = tm.wiederlesen([rd("/p", { offset: 1, limit: 10 }), rd("/p", { offset: 5, limit: 10 })]);
+    assert.equal(r.abschnittsweise, 1);
+    assert.equal(r.gezielt.n, 1);
+  });
+  test("Top 5 sortiert nach Anzahl, häufigste Datei zuerst", () => {
+    const evs = [rd("/d/a.md"), rd("/d/a.md"), rd("/d/b.md"), rd("/d/b.md"), rd("/d/b.md"), rd("/d/b.md")];
+    assert.deepEqual(tm.wiederlesen(evs).top.map((t) => [t.datei, t.n]), [["b.md", 3], ["a.md", 1]]);
+  });
   test("Top 5 nach Anzahl", () => {
     const evs: Ev[] = [];
     for (let i = 0; i < 7; i++) evs.push(rd(`/d/f${i}.md`), rd(`/d/f${i}.md`));
