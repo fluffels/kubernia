@@ -46,7 +46,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Tiefendoc-Abdeckungs-Wächter (jede `src/`-Datei in einem `docs/module/`-Tiefendoc, #482/#907) | `npm run check:docmap` |
 | Harness-Drift-Wächter (dokumentierte `npm run`-Kommandos + interne Doku-Links/Anker, #529) | `npm run check:docdrift` |
 | Lebende-Doku-Wächter (generierte Abschnitte `<!-- GEN:<name> START/END -->` in README/docs gegen das Repo, #1355, [ADR 0017](../adr/0017-lebende-doku-generierte-abschnitte.md)) | `npm run check:docgen` |
-| Generierte Doku-Abschnitte neu schreiben (nach Änderung an `package.json`-Ketten, `.claude/`, `.mcp.json` oder der Config `scripts/docs-gen/config.json`, #1355) | `npm run docs:gen` |
+| Generierte Doku-Abschnitte neu schreiben (nach Änderung an `package.json`-Ketten, `.claude/`, `.mcp.json`, der Config `scripts/docs-gen/config.json`, einem neuen ADR oder `docs/meilensteine.json`, #1355, #1367) | `npm run docs:gen` |
 | Interne-Referenzen-Wächter (Arbeitgeber-/Kundenbezüge aus dem öffentlichen Repo halten, #990) | `npm run check:internalrefs` (prüft getrackte Dateien und die Commit-Messages des Branches; Herkunftsbegriff ergänzen: `node scripts/check-internalrefs.mjs --add "<begriff>"`, Namensbezug als Wortstamm: `--add-name "<begriff>"`; PR-Titel/-Body (manuell, nicht in CI): `… \| node scripts/check-internalrefs.mjs --text`) |
 | Mehrere Tickets einsortieren, eine Listenabfrage (#1217) | `node scripts/board-place.mjs --top <nr>…` / `--after <ankernr> <nr>…` (klemmt hinter das ungeclaimte Sammelticket; ganz oben nur `--notfall <art> --top`) |
 | Doku-Aktualitäts-Wächter (offen-markierte Roadmap-Tickets gegen den gh-Status, non-blocking, braucht `gh`, #610) | `npm run check:doctickets` |
