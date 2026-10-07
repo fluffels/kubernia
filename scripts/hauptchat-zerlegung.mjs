@@ -142,11 +142,12 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
       ...subs.filter((sa) => !sa.meta.parentAgentId).flatMap((sa) => claimsAus(sa.events, (ev) => turnZu(turns, ev.ts).idx)),
     ].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts) || a.turn - b.turn);
     // Pro Ticket nur der früheste Claim; Fenster ordnen nach Claim-Turn.
-    const erste = [...new Map(claims.map((c) => [c.nr, c])).values()].sort((a, b) => a.turn - b.turn || Date.parse(a.ts) - Date.parse(b.ts));
-    const fenstern = erste.map((c, i) => ({
+    const fruehste = new Map();
+    for (const c of claims) if (!fruehste.has(c.nr)) fruehste.set(c.nr, c); // claims ist nach Zeit sortiert: der erste gewinnt
+    const erste = [...fruehste.values()].sort((a, b) => a.turn - b.turn || Date.parse(a.ts) - Date.parse(b.ts));
+    const fenstern = erste.map((c) => ({
       nr: c.nr,
       turn: c.turn,
-      endTurn: erste[i + 1]?.turn ?? Infinity,
       closedAt: closedAtOf(c.nr),
       startTs: turns[c.turn]?.startTs ?? c.ts,
       art: turns[c.turn]?.art ?? "frei",
@@ -155,7 +156,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
       session: s.id,
     }));
 
-    const fensterVon = (turn) => [...fenstern].reverse().find((w) => turn.idx >= w.turn && turn.idx < w.endTurn);
+    const fensterVon = (turn) => [...fenstern].reverse().find((w) => turn.idx >= w.turn);
     const kategorieFuer = (turn, ts) => {
       if (!gueltig(ts)) return KAT.OHNE_ZEIT;
       if (turn.brain) return KAT.BRAIN;
@@ -199,7 +200,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
     );
   }
   const rows = [...summen.values()].sort((a, b) => a.kategorie.localeCompare(b.kategorie) || a.quelle.localeCompare(b.quelle) || a.modell.localeCompare(b.modell));
-  return { rows, fenster, kubernia, ohnePreis };
+  return { rows, fenster, kubernia, ohnePreis, ohneBrainWurzel: wurzeln.length === 0 };
 }
 
 /** Markdown-Tabelle Kategorie × Modell (Hauptchat und Forks getrennt) plus Fensterliste. */
@@ -211,6 +212,7 @@ export function renderMarkdown(r) {
   const n = r.rows.reduce((s, z) => s + z.calls, 0);
   out.push(`| **Summe** | | | ${n} | ${$(total)} |`, "");
   out.push(`kubernia-Subagenten (nicht Hauptchat): ${r.kubernia.calls} Calls, ${$(r.kubernia.cost)}`);
+  if (r.ohneBrainWurzel) out.push("Hinweis: ohne --brain gemessen, Brain-Arbeit im Notiz-Brain außerhalb des Repos landet in Nachlauf bzw. Ad-hoc (nur der Skill brain-input zählt als Brain).");
   if (r.ohnePreis) out.push(`Hinweis: ${r.ohnePreis} Calls ohne Preis (Modell nicht in PRICES), nicht als 0 $ zu lesen.`);
   out.push("", "| Ticket | Session | Start | Start-Art | Hauptchat-Calls je Modell |", "|---|---|---|---|---|");
   for (const f of r.fenster) {
@@ -262,7 +264,8 @@ function closedAtViaGh(nr) {
   try {
     const out = execFileSync("gh", ["issue", "view", String(nr), "--json", "closedAt"], { encoding: "utf8" });
     return JSON.parse(out).closedAt || null;
-  } catch {
+  } catch (err) {
+    console.error(`Warnung: closedAt für #${nr} nicht lesbar (${String(err.message).split("\n")[0]}); Fenster läuft bis zum nächsten Claim.`);
     return null;
   }
 }

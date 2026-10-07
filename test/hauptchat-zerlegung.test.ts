@@ -39,7 +39,7 @@ const toolResult = (min: number): Row => ({
   message: { role: "user", content: [{ type: "tool_result", tool_use_id: "x", content: "ok" }] },
 });
 const notification = (min: number): Row => user(min, "<task-notification>\n<task-id>abc</task-id>\n</task-notification>");
-/** Ein Assistant-Call: 1 Mio Output-Tokens kosten bei Opus/Sonnet 5.5 je 10 $ (Preis Sonnet; Opus siehe PRICES). */
+/** Ein Assistant-Call (Sonnet: 10 $/Mio Output); `output` steuert die Kosten. */
 const call = (min: number, model: string, tool?: { name: string; input: Record<string, unknown> }, output = 1000): Row => {
   seq += 1;
   return {
@@ -248,5 +248,108 @@ describe("zerlegeHauptchat: Zeitfenster und Randfälle", () => {
   test("Slug-Ableitung Windows und POSIX", () => {
     assert.equal(hc.slugFuerPfad("C:\\dev\\kubernia"), "C--dev-kubernia");
     assert.equal(hc.slugFuerPfad("/home/x/kubernia"), "-home-x-kubernia");
+  });
+});
+
+describe("zerlegeHauptchat: Grenzfälle aus dem Review (R1)", () => {
+  const sub = (meta: Sub["meta"], zeilen: Row[]): Sub => ({ meta, zeilen });
+  // Der Brain-Turn zeigt, ob eine Zeile als Turn-Start zählt: ein zusätzlicher Turn spaltet den Brain-Turn auf.
+  const brainMitZwischenzeile = (zwischen: Row) => {
+    const main = [user(0, "x"), call(1, OPUS, read("/x/notizen/a.md")), zwischen, call(2, OPUS)];
+    return hc.zerlegeHauptchat({ sessions: [{ id: "s", main }], brainRoots: ["/x/notizen"] });
+  };
+
+  test("Zeilen, die keinen Turn eröffnen, spalten den Brain-Turn nicht auf", () => {
+    for (const z of [
+      notification(1.5),
+      toolResult(1.5),
+      user(1.5, "<local-command-stdout>x</local-command-stdout>"),
+      user(1.5, "<system-reminder>x</system-reminder>"),
+      user(1.5, "[Request interrupted by user]"),
+      { ...user(1.5, "meta"), isMeta: true },
+      { type: "user", timestamp: iso(1.5), message: { role: "user", content: [{ type: "tool_result", tool_use_id: "x", content: "ok" }, { type: "text", text: "plus Text" }] } },
+    ]) {
+      const r = brainMitZwischenzeile(z);
+      assert.equal(calls(r, "Brain", OPUS), 2, JSON.stringify(z).slice(0, 80));
+      assert.equal(calls(r, "Ad-hoc", OPUS), 0);
+    }
+  });
+
+  test("eine echte Nutzerzeile eröffnet dagegen einen neuen Turn", () => {
+    const r = brainMitZwischenzeile(user(1.5, "neue Frage"));
+    assert.equal(calls(r, "Brain", OPUS), 1);
+    assert.equal(calls(r, "Ad-hoc", OPUS), 1);
+  });
+
+  test("Slash /brain-input ohne Skill-Tool zählt als Brain", () => {
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [slash(0, "brain-input"), call(1, OPUS)] }] });
+    assert.equal(calls(r, "Brain", OPUS), 1);
+  });
+
+  test("dasselbe Ticket in zwei Turns geclaimt: das Fenster beginnt beim ersten Claim", () => {
+    const main = [user(0, "a"), call(1, OPUS, claim(7)), user(10, "b"), call(11, OPUS), user(20, "c"), call(21, OPUS, claim(7))];
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main }] });
+    assert.equal(r.fenster.length, 1);
+    assert.equal(r.fenster[0].startTs, iso(0));
+    assert.equal(calls(r, "Ticket-Orchestrierung", OPUS), 3);
+    assert.equal(calls(r, "Ad-hoc", OPUS), 0);
+  });
+
+  test("bis schneidet Calls dahinter ab, auch ohne Zeit bleibt der Call sichtbar", () => {
+    const kaputt = call(1, OPUS);
+    kaputt.timestamp = "kein-datum";
+    const main = [user(0, "a"), call(2, OPUS), call(70, OPUS), kaputt];
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main }], von: iso(1), bis: iso(60) });
+    assert.equal(calls(r, "Ad-hoc", OPUS), 1);
+    assert.equal(calls(r, "ohne Zeit", OPUS), 1);
+  });
+
+  test("Grenzen sind einschließlich: Call genau auf von, bis und closedAt", () => {
+    const main = [user(0, "a"), call(1, OPUS, claim(3)), call(10, OPUS), call(20, OPUS), call(30, OPUS)];
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main }], von: iso(1), bis: iso(30), closedAtOf: () => iso(20) });
+    assert.equal(calls(r, "Ticket-Orchestrierung", OPUS), 2); // Minute 1 (von) und 10
+    assert.equal(calls(r, "Nachlauf", OPUS), 2); // Minute 20 (= closedAt) und 30 (= bis)
+  });
+
+  test("ein Fork folgt dem Turn bei seinem ersten Call, auch wenn er später in einen anderen Turn läuft", () => {
+    const main = [user(0, "a"), call(1, OPUS), user(10, "b"), call(11, OPUS, claim(1))];
+    const subagents = [sub({ agentType: "general-purpose", description: "Fork" }, [call(2, OPUS), call(12, OPUS)])];
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main, subagents }] });
+    assert.equal(calls(r, "Ad-hoc", OPUS, "Fork"), 2);
+    assert.equal(calls(r, "Ticket-Orchestrierung", OPUS, "Fork"), 0);
+  });
+
+  test("ein Claim in einem verschachtelten Subagenten eröffnet kein Fenster", () => {
+    const main = [user(0, "a"), call(1, OPUS)];
+    const subagents = [sub({ agentType: "kubernia-lens", description: "x", parentAgentId: "p" }, [call(2, SONNET, claim(9))])];
+    assert.equal(hc.zerlegeHauptchat({ sessions: [{ id: "s", main, subagents }] }).fenster.length, 0);
+  });
+
+  test("ein verschachtelter Subagent zählt als kubernia, auch mit fremdem Typ und ohne ersichtliche Phase", () => {
+    const subagents = [sub({ agentType: "general-purpose", description: "Erkundung", parentAgentId: "p" }, [call(2, OPUS)])];
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "a")], subagents }] });
+    assert.equal(r.kubernia.calls, 1);
+    assert.equal(r.rows.length, 0);
+  });
+
+  test("Calls ohne Preis eines kubernia-Subagenten zählen in ohnePreis", () => {
+    const subagents = [sub({ agentType: "kubernia-planner" }, [call(2, "claude-unbekannt-9")])];
+    assert.equal(hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "a")], subagents }] }).ohnePreis, 1);
+  });
+});
+
+describe("renderMarkdown", () => {
+  const render = (e: Eingabe) => (hcModule as { renderMarkdown: (r: Ergebnis) => string }).renderMarkdown(hc.zerlegeHauptchat(e));
+
+  test("nennt Fenster, warnt bei fehlendem --brain und bei Calls ohne Preis", () => {
+    const text = render({ sessions: [{ id: "abcdef123456", main: [slash(0, "kubernia"), call(1, "claude-unbekannt-9", claim(4))] }] });
+    assert.match(text, /ohne --brain gemessen/);
+    assert.match(text, /1 Calls ohne Preis/);
+    assert.match(text, /\| #4 \| abcdef12 \|/);
+  });
+
+  test("keine Brain-Warnung, wenn eine Wurzel übergeben wurde", () => {
+    const text = render({ sessions: [{ id: "s", main: [user(0, "a"), call(1, OPUS)] }], brainRoots: ["/x/notizen"] });
+    assert.doesNotMatch(text, /ohne --brain/);
   });
 });
