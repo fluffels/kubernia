@@ -2,7 +2,9 @@
 import { describe, test, expect } from "vitest";
 import { KQSim } from "./helpers";
 import { clusterPods, findClusterPod } from "../../src/sim/pods";
-import { clusterPodStatus, podView, workloadSummaries } from "../../src/sim/podstatus";
+import { clusterPodStatus, deploymentPodStatus, isReady, podView, workloadSummaries } from "../../src/sim/podstatus";
+import { BROKEN_STATUS, type Broken } from "../../src/sim/state";
+import type { ClusterPod } from "../../src/sim/pods";
 import { podAddress } from "../../src/sim/endpoints";
 
 const sts = (extra: object = {}) => ({ name: "speicher", image: "postgres:16", replicas: 3, serviceName: "speicher", ...extra });
@@ -19,7 +21,7 @@ const view = (sim: KQSim, name: string) => podView(sim, findClusterPod(sim, name
 describe("clusterPodStatus", () => {
   test("Deployment gesund: Running 1/1, 0 Restarts", () => {
     const sim = new KQSim({ deployments: [{ name: "web", image: "nginx", replicas: 1 }] });
-    expect(st(sim, sim.deployments[0].pods[0].name)).toEqual({ status: "Running", ready: "1/1", restarts: 0 });
+    expect(st(sim, sim.deployments[0].pods[0].name)).toEqual({ status: "Running", ready: "1/1", restarts: 0, label: "Running" });
   });
   test("Deployment: selbst gezählter Neustart zählt", () => {
     const sim = new KQSim({ deployments: [{ name: "web", image: "nginx", replicas: 1 }] });
@@ -32,16 +34,16 @@ describe("clusterPodStatus", () => {
       { name: "weg", image: "nginx", replicas: 1 },
     ] });
     sim.deployments[1].evicted = { reason: "DiskPressure" };
-    expect(st(sim, sim.deployments[0].pods[0].name)).toEqual({ status: "CrashLoopBackOff", ready: "0/1", restarts: 5 });
+    expect(st(sim, sim.deployments[0].pods[0].name)).toEqual({ status: "CrashLoopBackOff", ready: "0/1", restarts: 5, label: "CrashLoopBackOff" });
     expect(st(sim, sim.deployments[1].pods[0].name)).toMatchObject({ status: "Evicted", ready: "0/1" });
   });
   test("StatefulSet gebunden: Running 1/1", () => {
     const sim = new KQSim({ statefulSets: [sts()] });
-    expect(st(sim, "speicher-0")).toEqual({ status: "Running", ready: "1/1", restarts: 0 });
+    expect(st(sim, "speicher-0")).toEqual({ status: "Running", ready: "1/1", restarts: 0, label: "Running" });
   });
   test("StatefulSet ohne StorageClass: Pending 0/1", () => {
     const sim = new KQSim({ statefulSets: [sts({ storageClass: "", replicas: 1 })] });
-    expect(st(sim, "speicher-0")).toEqual({ status: "Pending", ready: "0/1", restarts: 0 });
+    expect(st(sim, "speicher-0")).toEqual({ status: "Pending", ready: "0/1", restarts: 0, label: "Pending" });
   });
   test("StatefulSet: nur der Pod mit Pending-PVC ist Pending", () => {
     const sim = new KQSim({ statefulSets: [sts()] });
@@ -126,5 +128,84 @@ describe("Konsistenz: eine Quelle für StatefulSet-Status", () => {
       expect(clusterPodStatus(sim, c).status === "Pending").toBe(pending);
     }
     expect(clusterPods(sim).some(c => podAddress(c, sim.pvcs) === null)).toBe(true);
+  });
+});
+
+describe("deploymentPodStatus (#1426)", () => {
+  const TYPES = ["imagepull", "crashloop", "pending", "notready", "oomkilled"] as const;
+  const broken = (type: Broken["type"]) => ({ type }) as Broken;
+  test("gesund: Running 1/1 0 Restarts", () => {
+    expect(deploymentPodStatus({ broken: null })).toEqual({ status: "Running", ready: "1/1", restarts: 0, label: "Running" });
+  });
+  test.each(TYPES)("broken %s entspricht BROKEN_STATUS", (type) => {
+    expect(deploymentPodStatus({ broken: broken(type) })).toEqual(BROKEN_STATUS[type]);
+  });
+  test("notready: Status Running, Label NotReady, nicht bereit", () => {
+    const st = deploymentPodStatus({ broken: broken("notready") });
+    expect(st).toMatchObject({ status: "Running", label: "NotReady" });
+    expect(isReady(st)).toBe(false);
+  });
+  test("evicted UND broken: Evicted samt Label gewinnt", () => {
+    expect(deploymentPodStatus({ evicted: { reason: "DiskPressure" }, broken: broken("crashloop") }))
+      .toEqual({ status: "Evicted", ready: "0/1", restarts: 0, label: "Evicted" });
+  });
+  test("Ergebnis ist eine Kopie: Mutation ändert BROKEN_STATUS nicht", () => {
+    const st = deploymentPodStatus({ broken: broken("crashloop") });
+    st.restarts = 99; st.label = "x";
+    expect(BROKEN_STATUS.crashloop).toMatchObject({ restarts: 5, label: "CrashLoopBackOff" });
+  });
+});
+
+describe("isReady (#1426)", () => {
+  test.each(["1/1", "2/2", "10/10"])("%s ist bereit", (ready) => { expect(isReady({ ready })).toBe(true); });
+  test.each(["0/1", "1/2", "0/0", "", "x/y", "1", "1/1/1", "-1/-1"])("%j ist nicht bereit", (ready) => { expect(isReady({ ready })).toBe(false); });
+  test("sim._podReady und podView.healthy folgen isReady", () => {
+    const sim = new KQSim({ deployments: [{ name: "w", image: "nginx", replicas: 1, broken: { type: "notready" } }] });
+    expect(sim._podReady(sim.deployments[0])).toBe(false);
+    expect(view(sim, sim.deployments[0].pods[0].name).healthy).toBe(false);
+  });
+});
+
+describe("Konsistenz: Restarts-Regel steht einmal (#1426)", () => {
+  test("describe pod = get pods = clusterPodStatus für jeden Pod", () => {
+    const sim = new KQSim({
+      deployments: [
+        { name: "ok", image: "nginx", replicas: 1 },
+        { name: "crash", image: "nginx", replicas: 1, broken: { type: "crashloop", needsSecret: "k" } },
+        { name: "oom", image: "nginx", replicas: 1, broken: { type: "oomkilled" } },
+        { name: "weg", image: "nginx", replicas: 1 },
+      ],
+      statefulSets: [sts({ replicas: 1 })],
+    });
+    sim.deployments[0].pods[0].restarts = 2;
+    sim.deployments[3].evicted = { reason: "DiskPressure" };
+    sim.statefulSets[0].pods[0].restarts = 3;
+    const table = sim.exec("kubectl get pods").output ?? "";
+    for (const c of clusterPods(sim)) {
+      const s = clusterPodStatus(sim, c);
+      const cols = table.split("\n").find(l => l.startsWith(c.pod.name + " "))!.split(/\s+/);
+      expect(cols[1]).toBe(s.ready);
+      expect(cols[3]).toBe(String(s.restarts));
+      const d = sim.exec("kubectl describe pod " + c.pod.name).output ?? "";
+      expect(d).toContain("Ready:        " + s.ready + "\n");
+      expect(d).toContain("Restart Count: " + s.restarts);
+    }
+  });
+});
+
+describe("assertNever in den Workload-Switches (#1426)", () => {
+  const fake = (sim: KQSim) => ({ owner: "DaemonSet", pod: sim.deployments[0].pods[0] }) as unknown as ClusterPod;
+  const sim = () => new KQSim({ deployments: [{ name: "w", image: "nginx", replicas: 1 }] });
+  test("clusterPodStatus wirft bei unbekannter Workload-Art", () => {
+    const s = sim();
+    expect(() => clusterPodStatus(s, fake(s))).toThrow(/unbehandelte Variante/);
+  });
+  test("podView wirft", () => {
+    const s = sim();
+    expect(() => podView(s, fake(s))).toThrow(/unbehandelte Variante/);
+  });
+  test("podAddress wirft", () => {
+    const s = sim();
+    expect(() => podAddress(fake(s), s.pvcs)).toThrow(/unbehandelte Variante/);
   });
 });
