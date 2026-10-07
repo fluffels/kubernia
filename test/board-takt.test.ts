@@ -193,7 +193,7 @@ describe("ziehListeNach: die Board-Liste wird nach der Status-Aktion im Speicher
 
 describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
   const lies = (rel: string) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
-  const status = rawStatus as unknown as { MIN_TICKET_MERGES_PUSH: number };
+  const status = rawStatus as unknown as { MIN_TICKET_MERGES_PUSH: number; MIN_ABSTAND_STUNDEN: number };
   test("MIN_TICKET_MERGES_PUSH und HARNESS_TAKT_MERGES stehen in ADR 0016, im Workflow-Kommentar und in ticket-reihenfolge.md", () => {
     const adr = lies("docs/adr/0016-langfuse-takt-woechentlich.md");
     const yml = lies(".github/workflows/board-takt.yml");
@@ -203,6 +203,9 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     expect(Number(/(\d+) Ticket-Merges \(ohne Bots\)/.exec(adr)?.[1])).toBe(status.MIN_TICKET_MERGES_PUSH);
     expect(Number(/nach (\d+) Ticket-Merges seit dem Abschluss des letzten Sammeltickets/.exec(adr)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
     expect(Number(/(\d+) Ticket-Merges \(ohne Bots\)/.exec(doc)?.[1])).toBe(status.MIN_TICKET_MERGES_PUSH);
+    expect(Number(/Mindestabstand von (\d+) Stunden/.exec(adr)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
+    expect(Number(/Mindestabstand von (\d+) Stunden/.exec(doc)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
+    expect(Number(/Mindestabstand von (\d+) Stunden/.exec(yml)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
     expect(Number(/nach (\d+) Ticket-Merges seit dem Abschluss des letzten Sammeltickets/.exec(doc)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
   });
   test("der Workflow löst auf Push nach main aus und ruft board-takt.mjs", () => {

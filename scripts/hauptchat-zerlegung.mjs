@@ -5,7 +5,7 @@
  *
  *   node scripts/hauptchat-zerlegung.mjs --von <ISO> --bis <ISO> [--brain <pfad>]… [--projekt <slug>] [--json]
  *
- * Kategorien je Turn (Vorrang von oben): Brain (Tool berührt eine `--brain`-Wurzel oder Skill `brain-input`),
+ * Kategorien (Vorrang von oben): Brain (ab dem ersten Call, dessen Tool eine `--brain`-Wurzel berührt oder der Skill `brain-input` ist, bis Turn-Ende; ein Turn mit `/brain-input` ganz),
  * Ticket-Orchestrierung (vom Claim-Turn bis `closedAt`), Nachlauf (nach dem Merge bis zum nächsten Claim),
  * Ad-hoc. Turn = Nutzerzeile (kein tool_result, keine Benachrichtigung); Benachrichtigungs-Turns bleiben im Turn davor.
  * Calls ohne gültigen Zeitstempel stehen in „ohne Zeit“. kubernia-Subagenten und verschachtelte zählen nicht zum
@@ -83,8 +83,10 @@ function turnsAus(zeilen, wurzeln) {
     const skillGeladen = events.some((e) => e.tool === "Skill" && e.input?.skill === "kubernia");
     const workflow = events.some((e) => /workflow/i.test(e.tool));
     const art = g.start?.slash === "kubernia" ? "Slash" : skillGeladen ? "Skill-Tool" : workflow ? "Workflow" : "frei";
-    const brain = g.start?.slash === "brain-input" || events.some((e) => eventBeruehrtBrain(e, wurzeln));
-    return { idx, startTs: g.start?.ts ?? null, art, brain, calls, events };
+    // Brain gilt ab dem ersten Brain-Ereignis bis Turn-Ende (#1382); ein Turn mit /brain-input ist ganz Brain.
+    const brainTs = events.filter((e) => eventBeruehrtBrain(e, wurzeln)).map((e) => (gueltig(e.ts) ? Date.parse(e.ts) : -Infinity));
+    const brainAb = g.start?.slash === "brain-input" ? -Infinity : brainTs.length ? Math.min(...brainTs) : null;
+    return { idx, startTs: g.start?.ts ?? null, art, brainAb, calls, events };
   });
 }
 
@@ -163,7 +165,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
     const fensterVon = (turn) => [...fenstern].reverse().find((w) => turn.idx >= w.turn);
     const kategorieFuer = (turn, ts) => {
       if (!gueltig(ts)) return KAT.OHNE_ZEIT;
-      if (turn.brain) return KAT.BRAIN;
+      if (turn.brainAb !== null && Date.parse(ts) >= turn.brainAb) return KAT.BRAIN;
       const f = fensterVon(turn);
       if (!f) return KAT.ADHOC;
       if (f.closedAt && Date.parse(ts) >= Date.parse(f.closedAt)) return KAT.NACHLAUF;
@@ -200,7 +202,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
       }
     }
     fenster.push(
-      ...fenstern.map((w) => ({ nr: w.nr, closedAt: w.closedAt, startTs: w.startTs, art: w.art, modelle: w.modelle, kosten: w.kosten, session: w.session })),
+      ...fenstern.map((w) => ({ hauptchatCalls: Object.values(w.modelle).reduce((a, b) => a + b, 0), nr: w.nr, closedAt: w.closedAt, startTs: w.startTs, art: w.art, modelle: w.modelle, kosten: w.kosten, session: w.session })),
     );
   }
   const rows = [...summen.values()].sort((a, b) => a.kategorie.localeCompare(b.kategorie) || a.quelle.localeCompare(b.quelle) || a.modell.localeCompare(b.modell));
@@ -220,7 +222,7 @@ export function renderMarkdown(r) {
   if (r.ohnePreis) out.push(`Hinweis: ${r.ohnePreis} Calls ohne Preis (Modell nicht in PRICES), nicht als 0 $ zu lesen.`);
   out.push("", "| Ticket | Session | Start | Start-Art | Hauptchat-Calls je Modell |", "|---|---|---|---|---|");
   for (const f of r.fenster) {
-    const m = Object.entries(f.modelle).map(([k, v]) => `${k}: ${v} (${f.kosten[k].toFixed(2)} $)`).join(", ") || "-";
+    const m = Object.entries(f.modelle).map(([k, v]) => `${k}: ${v} (${f.kosten[k].toFixed(2)} $)`).join(", ") || "0 Calls";
     out.push(`| #${f.nr} | ${String(f.session).slice(0, 8)} | ${f.startTs} | ${f.art} | ${m} |`);
   }
   return out.join("\n");

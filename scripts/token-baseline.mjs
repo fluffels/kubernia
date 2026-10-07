@@ -260,6 +260,7 @@ export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles
     // Das Ticket-Fenster besitzt dieser Ort (`fensterLage`); Marker und Brain-Kennzahlen bekommen nur Events darin.
     const recherche = sorted.filter((r) => r.phase === "Recherche");
     out.pflegeUnpaired = unpaired;
+    out.pflegeOhneDauer = intervals.filter((iv) => iv.from === iv.to).length; // Start und Ende im selben Befehl: gepaart, aber ohne Messwert (#1382)
     out.fehler = fehlerArten(imFenster);
     out.lesen = wiederlesen(imFenster);
     // Ein Umsetzer lief, aber kein einziger Marker: die Pflegekosten stecken in „Umsetzung“ (#1379).
@@ -652,6 +653,7 @@ export function renderMarkdown(summary, loop = {}) {
     );
   }
   lines.push(...werkzeugZeilen(summary));
+  if (summary.pflegeOhneDauer > 0) lines.push(`⚠️ ${summary.pflegeOhneDauer} Pflege-Intervall ohne Dauer — Start und Ende standen im selben Befehl (je ein eigener Shell-Befehl nötig), Phase „Pflege“ nicht messbar.`);
   if (summary.pflegeUnpaired > 0) lines.push(`⚠️ ${summary.pflegeUnpaired} Pflege-Marker ohne Gegenstück — Phase „Pflege“ unvollständig.`);
   lines.push(`Preise Stand ${PRICES_STAND}`);
   if (summary.unpriced > 0) lines.push(`⚠️ ${summary.unpriced} Call(s) ohne Preis (Modell nicht in PRICES oder Zeitpunkt fehlt) — Kosten unvollständig.`);

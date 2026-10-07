@@ -1086,6 +1086,20 @@ describe("token-baseline: Phase Pflege (#1099)", () => {
     assert.doesNotMatch(m.renderMarkdown(s), /Pflege-Marker ohne Gegenstück/);
   });
 
+  test("Start und Ende im selben Zeitpunkt (ein Befehl): Pflege ohne Dauer wird gemeldet, nicht als Gegenstück-Fehler (#1382)", () => {
+    const calls = [call("2026-09-29T11:05:00Z", 2, { subagent: umsetzer })];
+    const events = [marker("2026-09-29T11:00:00Z", "start"), marker("2026-09-29T11:00:00Z", "ende")];
+    const s = m.summarize({ calls, events }, BOUNDS) as ReturnType<typeof m.summarize> & { pflegeOhneDauer?: number };
+    assert.equal(s.pflegeUnpaired, 0);
+    assert.equal(s.pflegeOhneDauer, 1);
+    const md = m.renderMarkdown(s);
+    assert.match(md, /1 Pflege-Intervall ohne Dauer/);
+    assert.doesNotMatch(md, /ohne Gegenstück/);
+    const normal = m.summarize({ calls, events: [marker("2026-09-29T11:00:00Z", "start"), marker("2026-09-29T11:10:00Z", "ende")] }, BOUNDS) as typeof s;
+    assert.equal(normal.pflegeOhneDauer, 0);
+    assert.doesNotMatch(m.renderMarkdown(normal), /ohne Dauer/);
+  });
+
   test("ungepaarter Marker: keine Pflege-Zeile, Warnzeile; ohne events keine Warnung", () => {
     const calls = [call("2026-09-29T11:05:00Z", 2, { subagent: umsetzer })];
     const s = m.summarize({ calls, events: [marker("2026-09-29T11:00:00Z", "start")] }, BOUNDS);
