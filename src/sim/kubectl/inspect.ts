@@ -13,10 +13,11 @@
  * Jeder Ressourcentyp ist ein eigener kleiner Renderer; ein 10× größerer Ressourcensatz
  * wächst als 10× Einträge, ohne dass Dispatcher-Komplexität/-Länge mitwächst.
  */
-import { table, flagValue } from "../util";
+import { table } from "../util";
 import { readyBackends, endpointPort, podAddress } from "../endpoints";
 import type { KubectlHost } from "./host";
 import { DEFAULT_NAMESPACE, SECURITY_CONTEXT_KEYS, isExternalNameService, type Deployment, type PodInstance, type PodStatus } from "../state";
+import { requestedNamespace, allNamespaces, foreignNamespace } from "./namespace";
 import { sameRbac } from "../rbac";
 import { clusterPods, findClusterPod, type ClusterPod } from "../pods";
 import { statefulPodClaimName, statefulPodNode } from "../workload";
@@ -32,9 +33,9 @@ type Renderer = (host: KubectlHost, t: string[]) => string;
 
 /** Baut aus einer Liste `{ aliases, render }` die Alias→Renderer-Lookup-Map.
  *  So bleibt der Dispatcher O(1) und alias-agnostisch, egal wie viele Typen dazukommen. */
-function aliasMap(entries: { aliases: string[]; render: Renderer }[]): Map<string, Renderer> {
-  const m = new Map<string, Renderer>();
-  for (const e of entries) for (const a of e.aliases) m.set(a, e.render);
+function aliasMap<E extends { aliases: string[] }>(entries: E[]): Map<string, E> {
+  const m = new Map<string, E>();
+  for (const e of entries) for (const a of e.aliases) m.set(a, e);
   return m;
 }
 
@@ -54,8 +55,8 @@ function noResourcesIn(ns: string = DEFAULT_NAMESPACE): string {
 }
 
 function getPods(host: KubectlHost, t: string[]): string {
-  const ns = flagValue(t, "-n") || flagValue(t, "--namespace");
-  const allNs = t.includes("-A") || t.includes("--all-namespaces");
+  const ns = requestedNamespace(t);
+  const allNs = allNamespaces(t);
   host._reschedulePending();
   if (ns === "kube-system" || allNs) {
     const sysPods = [
@@ -69,7 +70,6 @@ function getPods(host: KubectlHost, t: string[]): string {
       : sysPods;
     return table(allNs ? ["NAMESPACE", "NAME", "READY", "STATUS", "RESTARTS", "AGE"] : ["NAME", "READY", "STATUS", "RESTARTS", "AGE"], rows);
   }
-  if (ns && ns !== DEFAULT_NAMESPACE) return noResourcesIn(ns);   // fremder Namespace: dort liegt nichts
   const rows = clusterPods(host).map(c => podRow(host, c));
   if (rows.length === 0) return noResourcesIn();
   return table(["NAME", "READY", "STATUS", "RESTARTS", "AGE"], rows);
@@ -242,39 +242,49 @@ function getAlerts(host: KubectlHost): string {
     active.map(a => [a.name, a.severity, a.state, a.summary]));
 }
 
-const GET_RENDERERS: { aliases: string[]; render: Renderer }[] = [
-  { aliases: ["pods", "pod", "po"], render: getPods },
-  { aliases: ["deployments", "deployment", "deploy"], render: getDeployments },
-  { aliases: ["services", "service", "svc"], render: getServices },
-  { aliases: ["endpoints", "endpoint", "ep"], render: getEndpoints },
-  { aliases: ["nodes", "node", "no"], render: getNodes },
-  { aliases: ["secrets", "secret"], render: getSecrets },
-  { aliases: ["configmaps", "configmap", "cm"], render: getConfigMaps },
-  { aliases: ["ingress", "ingresses", "ing"], render: getIngress },
-  { aliases: ["networkpolicies", "networkpolicy", "netpol", "netpols"], render: getNetworkPolicies },
-  { aliases: ["servicemonitors", "servicemonitor", "smon"], render: getServiceMonitors },
-  { aliases: ["prometheusrules", "prometheusrule", "promrule", "promrules"], render: getPrometheusRules },
-  { aliases: ["grafanadatasources", "grafanadatasource", "grafanadatasrc"], render: getGrafanaDatasources },
-  { aliases: ["grafanadashboards", "grafanadashboard", "grafanadash"], render: getGrafanaDashboards },
-  { aliases: ["statefulsets", "statefulset", "sts"], render: getStatefulSets },
-  { aliases: ["persistentvolumeclaims", "persistentvolumeclaim", "pvc"], render: getPvcs },
-  { aliases: ["persistentvolumes", "persistentvolume", "pv"], render: getPvs },
-  { aliases: ["storageclasses", "storageclass", "sc"], render: getStorageClasses },
-  { aliases: ["volumesnapshots", "volumesnapshot", "vs"], render: getVolumeSnapshots },
-  { aliases: ["serviceaccounts", "serviceaccount", "sa"], render: getServiceAccounts },
-  { aliases: ["roles", "role"], render: getRoles },
-  { aliases: ["clusterroles", "clusterrole"], render: getClusterRoles },
-  { aliases: ["rolebindings", "rolebinding", "rb"], render: getRoleBindings },
-  { aliases: ["clusterrolebindings", "clusterrolebinding", "crb"], render: getClusterRoleBindings },
-  { aliases: ["alerts", "alert"], render: getAlerts },
+/** `namespaced` = Spalte NAMESPACED von `kubectl api-resources`; `extraNamespaces`: weitere
+ *  Namespaces, in denen die Ressource etwas zeigt (Pods in kube-system). */
+interface GetEntry { aliases: string[]; namespaced: boolean; extraNamespaces?: readonly string[]; render: Renderer }
+
+const GET_RENDERERS: GetEntry[] = [
+  { aliases: ["pods", "pod", "po"], namespaced: true, extraNamespaces: ["kube-system"], render: getPods },
+  { aliases: ["deployments", "deployment", "deploy"], namespaced: true, render: getDeployments },
+  { aliases: ["services", "service", "svc"], namespaced: true, render: getServices },
+  { aliases: ["endpoints", "endpoint", "ep"], namespaced: true, render: getEndpoints },
+  { aliases: ["nodes", "node", "no"], namespaced: false, render: getNodes },
+  { aliases: ["secrets", "secret"], namespaced: true, render: getSecrets },
+  { aliases: ["configmaps", "configmap", "cm"], namespaced: true, render: getConfigMaps },
+  { aliases: ["ingress", "ingresses", "ing"], namespaced: true, render: getIngress },
+  { aliases: ["networkpolicies", "networkpolicy", "netpol", "netpols"], namespaced: true, render: getNetworkPolicies },
+  { aliases: ["servicemonitors", "servicemonitor", "smon"], namespaced: true, render: getServiceMonitors },
+  { aliases: ["prometheusrules", "prometheusrule", "promrule", "promrules"], namespaced: true, render: getPrometheusRules },
+  { aliases: ["grafanadatasources", "grafanadatasource", "grafanadatasrc"], namespaced: true, render: getGrafanaDatasources },
+  { aliases: ["grafanadashboards", "grafanadashboard", "grafanadash"], namespaced: true, render: getGrafanaDashboards },
+  { aliases: ["statefulsets", "statefulset", "sts"], namespaced: true, render: getStatefulSets },
+  { aliases: ["persistentvolumeclaims", "persistentvolumeclaim", "pvc"], namespaced: true, render: getPvcs },
+  { aliases: ["persistentvolumes", "persistentvolume", "pv"], namespaced: false, render: getPvs },
+  { aliases: ["storageclasses", "storageclass", "sc"], namespaced: false, render: getStorageClasses },
+  { aliases: ["volumesnapshots", "volumesnapshot", "vs"], namespaced: true, render: getVolumeSnapshots },
+  { aliases: ["serviceaccounts", "serviceaccount", "sa"], namespaced: true, render: getServiceAccounts },
+  { aliases: ["roles", "role"], namespaced: true, render: getRoles },
+  { aliases: ["clusterroles", "clusterrole"], namespaced: false, render: getClusterRoles },
+  { aliases: ["rolebindings", "rolebinding", "rb"], namespaced: true, render: getRoleBindings },
+  { aliases: ["clusterrolebindings", "clusterrolebinding", "crb"], namespaced: false, render: getClusterRoleBindings },
+  { aliases: ["alerts", "alert"], namespaced: false, render: getAlerts },
 ];
 const GET_BY_ALIAS = aliasMap(GET_RENDERERS);
+
+/** Geltungsbereich je `get`-Ressource (ohne Renderer) – für den Fitness-Test. */
+export const GET_RESOURCE_SCOPES = GET_RENDERERS.map(e => ({ aliases: e.aliases, namespaced: e.namespaced, extraNamespaces: e.extraNamespaces }));
 
 export function kubectlGet(host: KubectlHost, t: string[]) {
   const what = (t[2] || "").toLowerCase();
   host._recheckReadiness();
-  const render = GET_BY_ALIAS.get(what);
-  if (render) return render(host, t);
+  const e = GET_BY_ALIAS.get(what);
+  if (e) {
+    const fremd = foreignNamespace(t, e.namespaced, e.extraNamespaces);   // zentrale Wache: dort liegt nichts
+    return fremd ? noResourcesIn(fremd) : e.render(host, t);
+  }
   if (!what) return host._err("kubectl get: Was möchtest du sehen?", "z.B. 'kubectl get pods' oder 'kubectl get nodes'");
   return host._err('error: the server doesn\'t have a resource type "' + what + '"', "Gemeint war vielleicht: pods, deployments, services, endpoints, ingress, networkpolicies, servicemonitors, prometheusrules, grafanadashboards, alerts, secrets, configmaps, serviceaccounts, roles, rolebindings, pvc, pv, storageclasses, volumesnapshots oder nodes?");
 }
@@ -592,7 +602,7 @@ const DESCRIBE_BY_ALIAS = aliasMap(DESCRIBE_RENDERERS);
 
 export function kubectlDescribe(host: KubectlHost, t: string[]) {
   const what = (t[2] || "").toLowerCase();
-  const render = DESCRIBE_BY_ALIAS.get(what);
+  const render = DESCRIBE_BY_ALIAS.get(what)?.render;
   if (render) return render(host, t);
   return host._err("Der Simulator kann nur 'kubectl describe pod|node|ingress|networkpolicy|role|clusterrole|serviceaccount <name>'.");
 }
