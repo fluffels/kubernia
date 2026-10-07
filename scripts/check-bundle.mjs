@@ -17,14 +17,19 @@
  * Dieser Wächter misst die GEBAUTEN Artefakte und wird ROT, wenn eines sein
  * Byte-Budget überschreitet. Macht die `chunkSizeWarningLimit`-Behauptung wahr.
  *
- * WAS gemessen wird (bewusst drei Ziele):
+ * WAS gemessen wird (bewusst vier Ziele; Begründung der Aufteilung: ADR 0018, #1408):
  *  1. dist-offline/index.html — die self-contained Offline-Datei (Code + ALLE Assets
  *     inline). Das eigentliche Wachstums-Risiko aus dem Ticket.
- *  2. Der Spielcode in dist/ (alle JS-Chunks OHNE den Phaser-`vendor`-Chunk). Phaser
+ *  2. Der Spielcode in dist/ (alle JS-Chunks direkt in dist/assets OHNE den Phaser-`vendor`-
+ *     Chunk und OHNE die Content-Chunks in dist/assets/content/). Phaser
  *     (~1,2 MB) ist bewusst ein eigener, langlebiger Vendor-Chunk (#199) und ändert
  *     sich selten — es NICHT mitzumessen hält DIESES Budget auf UNSEREM Code, der bei
  *     Stardew-Scope wächst.
- *  3. Der Phaser-`vendor`-Chunk in dist/ selbst — sein EIGENES hartes Byte-Gate (#595).
+ *  3. Die Content-Chunks (dist/assets/content/, je Content-Datei und Karte einer): die erwartete
+ *     Menge leitet sich aus den Quellen ab (scripts/content-chunks.cjs), ein fehlender oder
+ *     unerwarteter Chunk ist rot, jeder Chunk hat einen Deckel (`maxBytesPerChunk`), die Summe
+ *     ist der Auslöser für Stufe 2 (Lazy-Load je Region, ADR 0018).
+ *  4. Der Phaser-`vendor`-Chunk in dist/ selbst — sein EIGENES hartes Byte-Gate (#595).
  *     Vorher fiel ein Phaser-Bump, der den Vendor-Chunk aufbläht, nur indirekt übers
  *     Offline-HTML-Budget auf (dort mit dem Code zusammengerechnet), und vite hatte für
  *     ihn nur `chunkSizeWarningLimit` (eine Log-WARNUNG, kein Fail). Ein eigenes,
@@ -58,46 +63,53 @@
 import { existsSync, statSync, readdirSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
+
+// Namensregel der Content-Chunks: EINE Quelle, dieselbe nutzt vite.config.ts (manualChunks).
+const { CONTENT_CHUNK_DIR, expectedContentChunks } = createRequire(import.meta.url)("./content-chunks.cjs");
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** Content-Chunk-Ordner relativ zum Repo-Root (dist/ + gemeinsamer Teil aus content-chunks.cjs). */
+const CONTENT_CHUNK_DIR_DIST = `dist/${CONTENT_CHUNK_DIR}`;
 
 /**
  * Byte-Budgets je Artefakt. `maxBytes` ist die harte Obergrenze (STRIKT: „über" heißt
  * `> maxBytes`, == Budget ist ok — analog zu check-size `loc > budget`).
  *
- * Ist-Werte bei Kalibrierung (2026-07-02/03, `npm run build` + `build:offline`):
- *   • dist-offline/index.html        ~2.91 MiB (3_048_514 B)  → Budget 3_100_000 (seit #690, +~118 KB für 4 Sturm-Trümmer-Assets + pier_ruined #691)
- *   • Spielcode (dist/, ohne vendor) ~1.26 MiB (1_317_022 B)  → Budget 1_380_000 (seit #252, +~66 KB für die 349 why-Begründungen)
- *   • Phaser-vendor-Chunk (dist/)    ~1.14 MiB (1_198_788 B)  → Budget 1_350_000 (~+12 %, #595)
+ * Kalibrierung (Stand #1408, `npm run build` + `build:offline`; Herleitung und Re-Evaluierung: ADR 0018):
+ *   • Spielcode (ohne vendor, ohne Content) 501_798 B → Budget Ist +5 %, auf 10_000 aufgerundet = 530_000.
+ *   • Content-Chunks: 54 Chunks, 770_281 B zusammen, größter 95_216 B → Deckel je Chunk 128_000,
+ *     Summe 2_000_000 als Stufe-2-Auslöser (NICHT anheben: dann Lazy-Load je Region bauen, ADR 0018).
+ *   • Offline-HTML ohne Content-Chunks: Offline-Budget 3_300_000 minus Content-Ist (770_281),
+ *     auf 1_000 abgerundet = 2_529_000. Die Differenz beim Subtrahieren (~70 B Wrapper je Chunk)
+ *     ist Messrauschen. Der Rest-Puffer gegenüber dem alten Budget bleibt so unverändert.
+ *   • Phaser-vendor-Chunk (dist/) 1_450_000 (#595, #474).
  */
 export const BUNDLE_BUDGETS = [
   {
-    label: "Offline-Build (self-contained HTML, alle Assets inline)",
+    label: "Offline-Build (self-contained HTML, alle Assets inline, ohne Content-Chunks)",
     kind: "file",
     path: "dist-offline/index.html",
-    // #645: +30 KB für die 7 gerahmten HUD-Statuszeilen-Pixel-Icons (base64 inline).
-    // #252: +~60 KB — die 349 „why"-Begründungen (Terminal-Tasks + Teach-Befehle) landen als Content-JSON im Bundle.
-    // #647: +~13 KB — die 3 neuen Panel-Kopf-Icons (Shop/Krabbe/Spiel; Logbuch/Album/Terminal/Menü teilen sich #646-Icons, kein Zusatz-Byte).
-    // #474: +~160 KB — Phaser 3→4 (v4 ist groesser als v3, Renderer komplett neu geschrieben).
-    // #690: +~118 KB — 4 Sturm-Trümmer-PixelLab-Assets (lighthouse_ruined, crane_wrecked, house_office_damaged, ship_wrecked) + pier_ruined (#691); base64-inline.
-    // Ist nach #474+#690 zusammen: 3.07 MiB (3_216_743 B) → Budget auf 3_300_000 angehoben.
-    maxBytes: 3_300_000,
+    // Die Offline-Datei enthält den Content inline; er wird über `subtractChunksDir` abgezogen und
+    // zählt allein bei den Content-Chunks (ADR 0018). Gemessen: Offline-HTML minus Summe der Chunks.
+    subtractChunksDir: CONTENT_CHUNK_DIR_DIST,
+    maxBytes: 2_529_000,
   },
   {
-    label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor)",
+    label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor, ohne Content)",
     kind: "game-chunks",
     dir: "dist/assets",
-    // #252: +~66 KB — die 349 „why"-Begründungen im Content-JSON wachsen den Spielcode-Chunk.
-    // #669: +~4 KB — 4 neue Innenraum-Möbel-PNGs (Tisch/Konsole/Buch/Amboss, je 32×32).
-    // #690: +~2 KB — lighthouse_ruined.png (4095 B) von Vite base64-inline in den JS-Chunk.
-    // #758: +~0.3 KB — DECK_SHAPE-Array + Deck-Render-Methoden für bootsförmiges Schiff-Deck.
-    // #1139: +~8 KB — YAML-Parser + Manifest-Mapper (src/sim/yaml.ts, src/sim/manifest/*) laufen im Spiel.
-    // #1299: +~0.3 KB — werft-dienst-/uebung-Manifeste in der Bibliothek, Sonderfeld-Overlay in der Registry.
-    // #1300: +~3 KB — Deployment-apply-Abgleich (apply-deployment.ts), Workload-Primitive, cpu-/memory-Mapper.
-    // #1319: +~2 KB — zwei headless-DNS-Aufgaben (Texte, Checks, why/hint) in knut.json.
-    // #1339: +~0.4 KB — Pod-Inventar (pods.ts), StatefulSet-Pods in top/podMetrics.
-    // #1403: +~0,6 KB — ExternalName-Validierung + Namespace-Auflösung (sim/dns.ts); Verweis #1408.
-    maxBytes: 1_418_000,
+    maxBytes: 530_000,
+  },
+  {
+    label: "Content-Chunks in dist/assets/content/ (je Datei/Karte, ADR 0018)",
+    kind: "content-chunks",
+    dir: CONTENT_CHUNK_DIR_DIST,
+    // Deckel je Chunk: reißt eine Datei ihn, in Unterdateien splitten (src/content/AGENTS.md), NICHT anheben.
+    maxBytesPerChunk: 128_000,
+    // Summe: Auslöser für Stufe 2 (Lazy-Load je Region, ADR 0018). Anheben ist verboten, dann Stufe 2 bauen.
+    maxBytes: 2_000_000,
   },
   {
     label: "Phaser-vendor-Chunk in dist/ (#595)",
@@ -127,7 +139,15 @@ export function isGameChunk(name) {
 export const CHUNK_FILTERS = {
   "game-chunks": isGameChunk,
   "vendor-chunk": isVendorChunk,
+  // Content-Chunks liegen in ihrem eigenen Ordner; dort zählt jede .js-Datei (kein .map).
+  "content-chunks": (name) => name.endsWith(".js") && !name.endsWith(".js.map"),
 };
+
+/** Chunk-Name einer gebauten Content-Datei: Dateiname bis zum ersten Punkt
+ *  (`content-quests-knut.BRXJNzh0.js` → `content-quests-knut`). */
+export function builtChunkName(file) {
+  return file.split(".")[0];
+}
 
 /** Bewertet gemessene Bytes gegen das Budget. STRIKT größer = über (== ist ok). */
 export function evaluateBudget(bytes, maxBytes) {
@@ -155,9 +175,19 @@ export function measureBudget(budget, io) {
     if (!io.exists(budget.path)) {
       return { label: budget.label, maxBytes: budget.maxBytes, bytes: 0, files: [], missing: true, over: false };
     }
-    const bytes = io.size(budget.path);
+    let bytes = io.size(budget.path);
+    if (budget.subtractChunksDir) {
+      // Offline-HTML ohne Content: die Chunk-Summe des Host-Builds abziehen. Fehlt der Host-Build, ist
+      // nichts verlässlich zu messen → missing (Gate rot), nicht ungeprüft die ganze Datei gegen das kleinere Budget.
+      const names = (io.list(budget.subtractChunksDir) ?? []).filter(CHUNK_FILTERS["content-chunks"]);
+      if (names.length === 0) {
+        return { label: budget.label, maxBytes: budget.maxBytes, bytes: 0, files: [], missing: true, over: false };
+      }
+      bytes -= names.reduce((sum, n) => sum + io.size(`${budget.subtractChunksDir}/${n}`), 0);
+    }
     return { label: budget.label, maxBytes: budget.maxBytes, bytes, files: [budget.path], missing: false, over: evaluateBudget(bytes, budget.maxBytes) };
   }
+  if (budget.kind === "content-chunks") return measureContentChunks(budget, io);
   // Chunk-Kinds ("game-chunks"/"vendor-chunk"): die passenden JS-Chunks aufsummieren.
   const pick = CHUNK_FILTERS[budget.kind];
   const names = io.list(budget.dir);
@@ -168,6 +198,37 @@ export function measureBudget(budget, io) {
   const files = chunks.map((n) => `${budget.dir}/${n}`);
   const bytes = files.reduce((sum, f) => sum + io.size(f), 0);
   return { label: budget.label, maxBytes: budget.maxBytes, bytes, files, missing: false, over: evaluateBudget(bytes, budget.maxBytes) };
+}
+
+/** Content-Chunks (ADR 0018): erwartete Menge aus den Quellen gegen die gebaute, Deckel je Chunk, Summe.
+ *  `problems` nennt jeden Verstoß einzeln (fehlend, unerwartet, zu groß, Summe); `over` = mindestens einer. */
+function measureContentChunks(budget, io) {
+  const base = { label: budget.label, maxBytes: budget.maxBytes, bytes: 0, files: [], missing: false, over: false, problems: [] };
+  const names = io.list(budget.dir);
+  if (names === null) return { ...base, missing: true };
+  const built = names.filter(CHUNK_FILTERS["content-chunks"]).sort();
+  const files = built.map((n) => `${budget.dir}/${n}`);
+  const sizes = files.map((f) => io.size(f));
+  const bytes = sizes.reduce((sum, n) => sum + n, 0);
+  const expected = budget.expected ?? expectedContentChunks(io);
+  const builtNames = new Set(built.map(builtChunkName));
+  const problems = [];
+  for (const e of expected) {
+    if (!builtNames.has(e)) problems.push(`Content-Chunk ${e} fehlt (Quelldatei und Namensregel: scripts/content-chunks.cjs, ADR 0018)`);
+  }
+  const expectedSet = new Set(expected);
+  for (const n of [...builtNames].sort()) {
+    if (!expectedSet.has(n)) problems.push(`Unerwarteter Content-Chunk ${n} (keine Quelldatei dazu, Namensregel: scripts/content-chunks.cjs)`);
+  }
+  files.forEach((f, i) => {
+    if (sizes[i] > budget.maxBytesPerChunk) {
+      problems.push(`${f}: ${sizes[i]} B > Deckel ${budget.maxBytesPerChunk} B je Chunk (Datei in Unterdateien splitten, Deckel nicht anheben)`);
+    }
+  });
+  if (evaluateBudget(bytes, budget.maxBytes)) {
+    problems.push(`Content-Summe ${bytes} B > ${budget.maxBytes} B: Stufe-2-Auslöser, Lazy-Load je Region bauen (ADR 0018), Budget nicht anheben`);
+  }
+  return { ...base, bytes, files, problems, over: problems.length > 0 };
 }
 
 /** Prüft alle Budgets. `io`/`budgets` injizierbar (Test). Rückgabe ist rein
@@ -191,6 +252,18 @@ export function defaultIo(rootDir = ROOT) {
       const abs = join(rootDir, p);
       return existsSync(abs) && statSync(abs).isDirectory() ? readdirSync(abs) : null;
     },
+    // Rekursiv alle Dateien (repo-relative Pfade, Posix-Trenner) für die erwartete Content-Chunk-Menge.
+    listFiles: (p) => {
+      const walk = (rel) => {
+        const abs = join(rootDir, rel);
+        if (!existsSync(abs) || !statSync(abs).isDirectory()) return [];
+        return readdirSync(abs).flatMap((n) => {
+          const r = `${rel}/${n}`;
+          return statSync(join(rootDir, r)).isDirectory() ? walk(r) : [r];
+        });
+      };
+      return existsSync(join(rootDir, p)) ? walk(p) : null;
+    },
   };
 }
 
@@ -210,7 +283,7 @@ function main() {
     for (const r of results.filter((x) => x.missing))
       console.error(red(`✖ Artefakt fehlt für „${r.label}" — nichts zu messen.`));
     console.error(
-      `\nDie Builds fehlen. Erst bauen, dann prüfen:\n` +
+      `\nDie Builds fehlen (oder dist/assets/content fehlt: greift manualChunks in vite.config.ts nicht mehr?). Erst bauen, dann prüfen:\n` +
         `  npm run build && npm run build:offline && npm run check:bundle\n` +
         `(im CI läuft check:bundle als Schritt NACH den Builds, in verify:full ebenso).`,
     );
@@ -219,7 +292,11 @@ function main() {
 
   for (const r of results) {
     const line = `${r.label}: ${fmtBytes(r.bytes)} / Budget ${fmtBytes(r.maxBytes)}`;
-    if (r.over) console.error(red(`✖ ${line} — überschritten (${r.bytes} > ${r.maxBytes} B).`));
+    if (r.problems) {
+      const pct = ((r.bytes / r.maxBytes) * 100).toFixed(0);
+      console.log(dim(`• ${line} (${r.bytes} B, ${pct} % der Summe, ${r.files.length} Chunks)`));
+      for (const p of r.problems) console.error(red(`✖ ${p}`));
+    } else if (r.over) console.error(red(`✖ ${line} — überschritten (${r.bytes} > ${r.maxBytes} B).`));
     else console.log(dim(`• ${line} (${r.bytes} B)`));
   }
 

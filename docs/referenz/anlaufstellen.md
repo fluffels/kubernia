@@ -36,6 +36,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [0015 Projekt-Brain](../adr/0015-projekt-brain.md) | wenn es um Prinzipien, Token-Ziel und Messung des Projekt-Brains geht |
 | [0016 Langfuse-Takt](../adr/0016-langfuse-takt-woechentlich.md) | wenn es um den wöchentlichen Takt des Status-Tickets, das Langfuse-Sammelticket oder den Board-Takt (Harness-Sammelticket nach 5 Merges, Positionskorrektur) geht |
 | [0017 Lebende Doku](../adr/0017-lebende-doku-generierte-abschnitte.md) | wenn Doku generiert, ein Gate beschrieben oder ein Diagramm eingeführt wird |
+| [0018 Content-Chunks je Datei](../adr/0018-content-chunks-je-region.md) | wenn der Spielcode-Chunk oder ein Bundle-Budget reißt, Content (Quests, Crabquiz, Karten) wächst oder Lazy-Load je Region zur Debatte steht |
 
 ## 🌱 Evergreen — lebendes Wissen, im selben PR gepflegt
 

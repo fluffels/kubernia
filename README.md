@@ -191,6 +191,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 | 07.10.2026 | [ADR 0015](/docs/adr/0015-projekt-brain.md): Projekt-Brain — `docs/` nach Second-Brain-Prinzipien, token-sparsam und messbar |
 | 07.10.2026 | [ADR 0016](/docs/adr/0016-langfuse-takt-woechentlich.md): Langfuse-Takt — wöchentlicher Workflow statt Board-Position |
 | 07.10.2026 | [ADR 0017](/docs/adr/0017-lebende-doku-generierte-abschnitte.md): Lebende Doku — generierte Abschnitte, und ein Diagramm ist eine Regel |
+| 07.10.2026 | [ADR 0018](/docs/adr/0018-content-chunks-je-region.md): Content-Chunks je Datei — der Spielcode-Chunk wächst nicht mehr mit dem Inhalt |
 
 <!-- GEN:zeitleiste END -->
 
@@ -316,8 +317,8 @@ Kubernia ist bewusst so gebaut, dass es **so groß wie Stardew Valley** werden k
   | `npm run check:diffcoverage` | `verify:full` | Abdeckung der im Slice geänderten Zeilen |
   | `npm run build` | `verify:full` | Host-Build (`dist/`) baut fehlerfrei |
   | `npm run build:offline` | `verify:full` | Offline-Einzeldatei (`dist-offline/index.html`) baut fehlerfrei |
-  | `npm run check:bundle` | `verify:full` | Byte-Budget für Offline-HTML, Spielcode und Phaser-Chunk |
-  | `npm run test:smoke` | `verify:full` | Boot- und Interaktions-Smokes headless gegen den Offline-Build (Playwright) |
+  | `npm run check:bundle` | `verify:full` | Byte-Budget je Chunk-Art: Offline-HTML, Spielcode, Content-Chunks (je Datei), Phaser-Chunk |
+  | `npm run test:smoke` | `verify:full` | Boot- und Interaktions-Smokes headless gegen Offline- und Host-Build (Playwright) |
   | `npm audit --omit=dev --audit-level=high` | CI | Security-Gate über die ausgelieferten Produktiv-Abhängigkeiten |
   | `node scripts/check-review-nachweis.mjs` | CI | Review-Nachweis (`KQ-Plan:`/`KQ-Review:`) im PR |
 

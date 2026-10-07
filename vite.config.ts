@@ -12,6 +12,11 @@ const { LAYERS, COVERAGE_GLOBS } = require("./scripts/layers.cjs") as {
   LAYERS: { PRESENTATION: string; APPLICATION: string; ENTRY: string; DOMAIN: string };
   COVERAGE_GLOBS: Record<string, string>;
 };
+// #1408 (ADR 0018): Namensregel der Content-Chunks, dieselbe Quelle nutzt das Gate check-bundle.mjs.
+const { contentChunkName, CONTENT_CHUNK_DIR } = require("./scripts/content-chunks.cjs") as {
+  contentChunkName: (id: string) => string | undefined;
+  CONTENT_CHUNK_DIR: string;
+};
 
 // #495: Coverage MESSEN + PRO SCHICHT gaten statt Repo-Mittelwert.
 //
@@ -142,17 +147,23 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
       // eigenes hartes, ratchetbares Byte-Gate in scripts/check-bundle.mjs
       // (BUNDLE_BUDGETS, kind "vendor-chunk") – ein Phaser-Bump, der ihn aufbläht,
       // bricht dort die CI statt nur eine Log-Warnung zu drucken.
+      // #1408 (ADR 0018): Content-Daten (Quests, Crabquiz, Manifeste, …) und Karten liegen im Host-Build
+      // je Datei in einem eigenen Chunk unter assets/content/, kleine PNGs bleiben eigene Dateien
+      // (`assetsInlineLimit: 0`). Der Spielcode-Chunk wächst so nicht mehr mit jedem Content-Ticket.
       ...(singleFile
         ? {}
         : {
             chunkSizeWarningLimit: 2200,
+            assetsInlineLimit: 0,
             rollupOptions: {
               output: {
+                chunkFileNames: (chunk: { name: string }) =>
+                  chunk.name.startsWith("content-") ? `${CONTENT_CHUNK_DIR}/[name].[hash].js` : "assets/[name]-[hash].js",
                 // Funktions-Form statt der früheren Objekt-Form `{ vendor: ["phaser"] }`:
                 // Vite 8 / Rollup 4 hat die deprecated Objekt-Form aus dem öffentlichen Typ
                 // entfernt (nur noch `ManualChunksFunction`). Alle Phaser-Module landen
-                // weiterhin im langlebigen `vendor`-Chunk; alles andere bleibt im Spielcode.
-                manualChunks: (id) => (id.includes("node_modules/phaser") ? "vendor" : undefined),
+                // weiterhin im langlebigen `vendor`-Chunk; Content-Dateien bekommen ihren eigenen Chunk (contentChunkName), alles andere bleibt im Spielcode.
+                manualChunks: (id) => (id.includes("node_modules/phaser") ? "vendor" : contentChunkName(id)),
               },
             },
           }),

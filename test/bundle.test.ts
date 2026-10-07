@@ -17,6 +17,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im
 // tsconfig-include) – der Laufzeit-Import genügt, Typen lokal deklariert.
@@ -24,11 +25,25 @@ import assert from "node:assert/strict";
 import * as checkBundle from "../scripts/check-bundle.mjs";
 
 type Budget =
-  | { label: string; kind: "file"; path: string; maxBytes: number }
+  | { label: string; kind: "file"; path: string; maxBytes: number; subtractChunksDir?: string }
   | { label: string; kind: "game-chunks"; dir: string; maxBytes: number }
-  | { label: string; kind: "vendor-chunk"; dir: string; maxBytes: number };
-type Io = { exists: (p: string) => boolean; size: (p: string) => number; list: (p: string) => string[] | null };
-type Measured = { label: string; maxBytes: number; bytes: number; files: string[]; missing: boolean; over: boolean };
+  | { label: string; kind: "vendor-chunk"; dir: string; maxBytes: number }
+  | { label: string; kind: "content-chunks"; dir: string; maxBytes: number; maxBytesPerChunk: number; expected?: string[] };
+type Io = {
+  exists: (p: string) => boolean;
+  size: (p: string) => number;
+  list: (p: string) => string[] | null;
+  listFiles: (p: string) => string[] | null;
+};
+type Measured = {
+  label: string;
+  maxBytes: number;
+  bytes: number;
+  files: string[];
+  missing: boolean;
+  over: boolean;
+  problems?: string[];
+};
 
 const BUNDLE_BUDGETS: Budget[] = checkBundle.BUNDLE_BUDGETS;
 const isVendorChunk: (n: string) => boolean = checkBundle.isVendorChunk;
@@ -41,8 +56,18 @@ const check: (opts?: { io?: Io; budgets?: Budget[] }) => { results: Measured[]; 
   checkBundle.checkBundle;
 const defaultIo: (rootDir?: string) => Io = checkBundle.defaultIo;
 
+// Quelldateien des Fake-Repos: daraus leitet das Gate die erwarteten Content-Chunks ab (content-core,
+// content-quests-knut, content-maps-harbor).
+const SOURCES = ["src/content/data/smalltalk.json", "src/content/data/npcs.json", "src/content/data/quests/knut.json", "assets/maps/harbor.tmj"];
+const CONTENT_DIR = "dist/assets/content";
+const CONTENT_FILES = ["content-core.aaa.js", "content-quests-knut.bbb.js", "content-maps-harbor.ccc.js"];
+
 // Ein Fake-Dateisystem für die injizierte io: nur die eingetragenen Dateien existieren.
 const fakeIo = (files: Record<string, number>, dirs: Record<string, string[]> = {}): Io => ({
+  listFiles: (p) => {
+    const hit = SOURCES.filter((s) => s.startsWith(`${p}/`));
+    return hit.length ? hit : null;
+  },
   exists: (p) => p in files,
   size: (p) => {
     if (!(p in files)) throw new Error(`size() auf nicht existierende Datei: ${p}`);
@@ -50,6 +75,24 @@ const fakeIo = (files: Record<string, number>, dirs: Record<string, string[]> = 
   },
   list: (p) => dirs[p] ?? null,
 });
+
+// Ein gesundes Build: drei Content-Chunks (je 10 KB), Spielcode, Vendor, Offline-HTML (inkl. Content).
+const healthyBuild = (over: { offline?: number; game?: number; vendor?: number; content?: Record<string, number> } = {}) => {
+  const files: Record<string, number> = {
+    "dist-offline/index.html": over.offline ?? 2_500_000,
+    "dist/assets/index-a.js": over.game ?? 400_000,
+    "dist/assets/vendor-c.js": over.vendor ?? 1_150_000,
+  };
+  const contentFiles = Object.keys(over.content ?? {}).length ? Object.keys(over.content ?? {}) : CONTENT_FILES;
+  for (const f of contentFiles) files[`${CONTENT_DIR}/${f}`] = over.content?.[f] ?? 10_000;
+  return fakeIo(files, { "dist/assets": ["index-a.js", "vendor-c.js", "content"], [CONTENT_DIR]: contentFiles });
+};
+const { expectedContentChunks } = createRequire(import.meta.url)("../scripts/content-chunks.cjs") as {
+  expectedContentChunks: (io: { listFiles: (rel: string) => string[] | null }) => string[];
+};
+type ContentBudget = Extract<Budget, { kind: "content-chunks" }>;
+const contentBudget = (): ContentBudget =>
+  BUNDLE_BUDGETS.find((b): b is ContentBudget => b.kind === "content-chunks")!;
 
 describe("Bundle-Größenbudget (#503)", () => {
   test("isVendorChunk / isGameChunk: nur der vendor-Chunk ist Vendor, der Rest ist Spielcode", () => {
@@ -184,33 +227,21 @@ describe("Bundle-Größenbudget (#503)", () => {
   });
 
   test("checkBundle: unter Budget → nicht missing, nicht über", () => {
-    const io = fakeIo(
-      { "dist-offline/index.html": 2_500_000, "dist/assets/index-a.js": 1_100_000, "dist/assets/vendor-c.js": 1_150_000 },
-      { "dist/assets": ["index-a.js", "vendor-c.js"] },
-    );
-    const r = check({ io });
+    const r = check({ io: healthyBuild() });
     assert.equal(r.missing, false);
     assert.equal(r.over, false);
     assert.equal(r.results.length, BUNDLE_BUDGETS.length);
   });
 
   test("checkBundle: ein Artefakt über Budget → over=true", () => {
-    const io = fakeIo(
-      { "dist-offline/index.html": 9_000_000, "dist/assets/index-a.js": 1_100_000, "dist/assets/vendor-c.js": 1_150_000 },
-      { "dist/assets": ["index-a.js", "vendor-c.js"] },
-    );
-    const r = check({ io });
+    const r = check({ io: healthyBuild({ offline: 9_000_000 }) });
     assert.equal(r.over, true, "die aufgeblähte Offline-HTML kippt das Gate");
     assert.equal(r.missing, false);
   });
 
   test("checkBundle: aufgeblähter Vendor-Chunk allein kippt das Gate (#595)", () => {
     // Offline + Spielcode im Budget, nur der Phaser-Vendor läuft weg → over=true.
-    const io = fakeIo(
-      { "dist-offline/index.html": 2_500_000, "dist/assets/index-a.js": 1_100_000, "dist/assets/vendor-c.js": 1_500_000 },
-      { "dist/assets": ["index-a.js", "vendor-c.js"] },
-    );
-    const r = check({ io });
+    const r = check({ io: healthyBuild({ vendor: 1_500_000 }) });
     assert.equal(r.missing, false);
     assert.equal(r.over, true, "der Vendor-Chunk über seinem eigenen Budget kippt das Gate");
     const vendorResult = r.results.find((x) => x.label.includes("(#595)"));
@@ -238,19 +269,99 @@ describe("Bundle-Größenbudget (#503)", () => {
     assert.equal(check({ io: fakeIo(files, dirs), budgets: huge }).over, false, "riesiges Budget darf nie treffen");
   });
 
-  test("BUNDLE_BUDGETS: drei plausible, positive Budgets (offline-Datei + Spielcode- + Vendor-Chunk)", () => {
-    assert.equal(BUNDLE_BUDGETS.length, 3);
+  test("BUNDLE_BUDGETS: vier plausible, positive Budgets (offline-Datei + Spielcode- + Content- + Vendor-Chunk)", () => {
+    assert.equal(BUNDLE_BUDGETS.length, 4);
     const kinds = BUNDLE_BUDGETS.map((b) => b.kind).sort();
-    assert.deepEqual(kinds, ["file", "game-chunks", "vendor-chunk"]);
+    assert.deepEqual(kinds, ["content-chunks", "file", "game-chunks", "vendor-chunk"]);
     for (const b of BUNDLE_BUDGETS) {
       assert.ok(Number.isFinite(b.maxBytes) && b.maxBytes > 0, `${b.label}: maxBytes muss positiv sein`);
       // Grobe Sanity: Budgets liegen im Megabyte-Bereich (nicht versehentlich 0/KB oder GB).
       assert.ok(b.maxBytes > 500_000 && b.maxBytes < 20_000_000, `${b.label}: maxBytes plausibel im MB-Bereich`);
     }
+    // Der Offline-Wert zieht den Content ab (ADR 0018) und zeigt auf den Content-Ordner des Host-Builds.
+    const offline = BUNDLE_BUDGETS.find((b) => b.kind === "file");
+    assert.equal((offline as { subtractChunksDir?: string }).subtractChunksDir, CONTENT_DIR);
     // Jedes Chunk-Budget hat einen Filter in CHUNK_FILTERS (kind-generische Messung).
     for (const b of BUNDLE_BUDGETS.filter((x) => x.kind !== "file")) {
       assert.equal(typeof CHUNK_FILTERS[b.kind], "function", `${b.kind}: Filter in CHUNK_FILTERS vorhanden`);
     }
+  });
+
+  describe("Content-Chunks (#1408, ADR 0018)", () => {
+    const budget = (): ContentBudget => ({ ...contentBudget(), maxBytesPerChunk: 20_000, maxBytes: 60_000 });
+
+    test("alle erwarteten Chunks da und unter den Deckeln → ok", () => {
+      const r = measureBudget(budget(), healthyBuild());
+      assert.deepEqual(r.problems, []);
+      assert.equal(r.over, false);
+      assert.equal(r.bytes, 30_000);
+    });
+
+    test("erwarteter Chunk fehlt → rot mit Namen", () => {
+      const r = measureBudget(budget(), healthyBuild({ content: { "content-core.aaa.js": 10_000, "content-maps-harbor.ccc.js": 10_000 } }));
+      assert.equal(r.over, true);
+      assert.ok(r.problems?.some((p) => p.includes("content-quests-knut") && p.includes("fehlt")), String(r.problems));
+    });
+
+    test("unerwarteter Chunk (keine Quelldatei) → rot", () => {
+      const content = { "content-core.aaa.js": 1, "content-quests-knut.bbb.js": 1, "content-maps-harbor.ccc.js": 1, "content-quests-geist.ddd.js": 1 };
+      const r = measureBudget(budget(), healthyBuild({ content }));
+      assert.equal(r.over, true);
+      assert.ok(r.problems?.some((p) => p.includes("content-quests-geist") && p.includes("Unerwartet")), String(r.problems));
+    });
+
+    test("Deckel je Chunk: genau am Deckel ok, +1 Byte rot", () => {
+      const at = { "content-core.aaa.js": 20_000, "content-quests-knut.bbb.js": 1, "content-maps-harbor.ccc.js": 1 };
+      assert.equal(measureBudget(budget(), healthyBuild({ content: at })).over, false);
+      const over = { ...at, "content-core.aaa.js": 20_001 };
+      const r = measureBudget(budget(), healthyBuild({ content: over }));
+      assert.equal(r.over, true);
+      assert.ok(r.problems?.some((p) => p.includes("content-core") && p.includes("Deckel")), String(r.problems));
+    });
+
+    test("Summe: genau am Auslöser ok, +1 Byte rot (Stufe 2)", () => {
+      const at = { "content-core.aaa.js": 20_000, "content-quests-knut.bbb.js": 20_000, "content-maps-harbor.ccc.js": 20_000 };
+      assert.equal(measureBudget(budget(), healthyBuild({ content: at })).over, false);
+      const r = measureBudget(budget(), healthyBuild({ content: { ...at, "content-maps-harbor.ccc.js": 20_001 } }));
+      assert.equal(r.over, true);
+      assert.ok(r.problems?.some((p) => p.includes("Stufe-2")), String(r.problems));
+    });
+
+    test("Ordner dist/assets/content fehlt → missing, nicht grün", () => {
+      const io = fakeIo({ "dist/assets/index-a.js": 1 }, { "dist/assets": ["index-a.js"] });
+      const r = measureBudget(budget(), io);
+      assert.equal(r.missing, true);
+    });
+
+    test("mehrere Core-Dateien ergeben genau einen content-core", () => {
+      const expected = expectedContentChunks({
+        listFiles: (p: string) => (p === "src/content/data" ? ["src/content/data/a.json", "src/content/data/b.json"] : null),
+      });
+      assert.deepEqual(expected, ["content-core"]);
+    });
+
+    test("Offline-Budget zieht die Content-Chunks ab: Grenze ok, +1 rot, ohne Content-Ordner missing", () => {
+      const offline: Budget = { label: "o", kind: "file", path: "dist-offline/index.html", subtractChunksDir: CONTENT_DIR, maxBytes: 1_000_000 };
+      // Content-Summe der gesunden Fixture: 30_000 → Offline-Rest = HTML − 30_000.
+      assert.equal(measureBudget(offline, healthyBuild({ offline: 1_030_000 })).over, false, "Rest genau am Budget");
+      const r = measureBudget(offline, healthyBuild({ offline: 1_030_001 }));
+      assert.equal(r.over, true, "ein Byte drüber");
+      assert.equal(r.bytes, 1_000_001);
+      const noContent = fakeIo({ "dist-offline/index.html": 1 }, {});
+      assert.equal(measureBudget(offline, noContent).missing, true, "ohne Host-Build nicht verlässlich messbar");
+    });
+
+    test("Red-Green: winziger Deckel greift, riesiger nie", () => {
+      const tiny: Budget = { ...budget(), maxBytesPerChunk: 1 };
+      const huge: Budget = { ...budget(), maxBytesPerChunk: 1e12, maxBytes: 1e12 };
+      assert.equal(measureBudget(tiny, healthyBuild()).over, true);
+      assert.equal(measureBudget(huge, healthyBuild()).over, false);
+    });
+
+    test("Spielcode zählt die Content-Chunks nicht mit (Unterordner)", () => {
+      const r = measureBudget({ label: "c", kind: "game-chunks", dir: "dist/assets", maxBytes: 1e12 }, healthyBuild());
+      assert.equal(r.bytes, 400_000);
+    });
   });
 
   // Optionaler Integrations-Check: NUR wenn die echten Artefakte zufällig vorliegen
@@ -260,6 +371,9 @@ describe("Bundle-Größenbudget (#503)", () => {
     const io = defaultIo();
     const r = check({ io });
     if (r.missing) return; // nicht gebaut → nichts zu prüfen
+    // Gebaute Content-Chunks = erwartete aus den Quellen (nur wenn der Build vorliegt).
+    const content = r.results.find((x) => x.problems);
+    assert.deepEqual(content?.problems, [], "Content-Chunks: erwartete Menge, Deckel, Summe");
     const over = r.results.filter((x) => x.over);
     assert.deepEqual(
       over.map((x) => `${x.label}: ${x.bytes} > ${x.maxBytes}`),

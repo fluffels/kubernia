@@ -24,6 +24,7 @@
 | [0015](/docs/adr/0015-projekt-brain.md) | Projekt-Brain — `docs/` nach Second-Brain-Prinzipien, token-sparsam und messbar | akzeptiert | 07.10.2026 |
 | [0016](/docs/adr/0016-langfuse-takt-woechentlich.md) | Langfuse-Takt — wöchentlicher Workflow statt Board-Position | akzeptiert | 07.10.2026 |
 | [0017](/docs/adr/0017-lebende-doku-generierte-abschnitte.md) | Lebende Doku — generierte Abschnitte, und ein Diagramm ist eine Regel | akzeptiert | 07.10.2026 |
+| [0018](/docs/adr/0018-content-chunks-je-region.md) | Content-Chunks je Datei — der Spielcode-Chunk wächst nicht mehr mit dem Inhalt | akzeptiert | 07.10.2026 |
 
 <!-- GEN:adr-liste END -->
 
