@@ -21,7 +21,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Zweck | Befehl |
 |---|---|
 | One-Command-Setup (Node-Check + install + Git-Hooks + alle Checks, #387/#528) | `npm run setup` |
-| **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (typecheck → lint → check:arch → check:size → check:contextsize → check:anysuppress → check:docmap → check:docdrift → check:internalrefs → check:lockfile → check:diffsize → test; ohne `check:bundle`, das braucht die Builds) |
+| **Alle Gates auf einmal – das eine Kommando vor dem Merge (#527)** | `npm run verify` (typecheck → lint → check:arch → check:size → check:contextsize → check:anysuppress → check:docmap → check:docdrift → check:docgen → check:internalrefs → check:lockfile → check:diffsize → test; ohne `check:bundle`, das braucht die Builds) |
 | Bundle-Budget vorab prüfen (#1331): nötig, wenn der Diff ausgelieferten Code, Assets oder Dependencies hinzufügt (`src/**` ohne reine Tests, `assets/**`, `package.json`); `verify` deckt es nicht ab, erst `verify:full`/CI | `npm run verify:bundle` (= `build` + `build:offline` + `check:bundle`) |
 | Voller Vor-Push-Check inkl. beider Builds + Boot-Smoke (#527) | `npm run verify:full` (= `verify` + `test:coverage` + `check:diffcoverage` + Builds + `check:bundle` + `test:smoke`) |
 | Required-Checks auf dem PR = maßgeblicher Gate (server-seitig, seit #592) | `gh pr merge <nr> --squash --delete-branch --auto` + `gh pr checks <nr> --watch` (Regel-Heimat: [AGENTS.md](../../AGENTS.md#das-wichtigste-zuerst-harte-regeln)) |
@@ -44,6 +44,8 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Kontextdatei-Wächter (Zeichen-Budget für jede AGENTS.md, Wurzel + modul-lokal, #719/#1064/#1088) | `npm run check:contextsize` |
 | Tiefendoc-Abdeckungs-Wächter (jede `src/`-Datei in einem `docs/module/`-Tiefendoc, #482/#907) | `npm run check:docmap` |
 | Harness-Drift-Wächter (dokumentierte `npm run`-Kommandos + interne Doku-Links/Anker, #529) | `npm run check:docdrift` |
+| Lebende-Doku-Wächter (generierte Abschnitte `<!-- GEN:<name> START/END -->` in README/docs gegen das Repo, #1355, [ADR 0017](../adr/0017-lebende-doku-generierte-abschnitte.md)) | `npm run check:docgen` |
+| Generierte Doku-Abschnitte neu schreiben (nach Änderung an `package.json`-Ketten, `.claude/`, `.mcp.json` oder der Config `scripts/docs-gen/config.json`, #1355) | `npm run docs:gen` |
 | Interne-Referenzen-Wächter (Arbeitgeber-/Kundenbezüge aus dem öffentlichen Repo halten, #990) | `npm run check:internalrefs` (prüft getrackte Dateien und die Commit-Messages des Branches; Herkunftsbegriff ergänzen: `node scripts/check-internalrefs.mjs --add "<begriff>"`, Namensbezug als Wortstamm: `--add-name "<begriff>"`; PR-Titel/-Body (manuell, nicht in CI): `… \| node scripts/check-internalrefs.mjs --text`) |
 | Mehrere Tickets einsortieren, eine Listenabfrage (#1217) | `node scripts/board-place.mjs --top <nr>…` / `--after <ankernr> <nr>…` (klemmt hinter das ungeclaimte Sammelticket; ganz oben nur `--notfall <art> --top`) |
 | Doku-Aktualitäts-Wächter (offen-markierte Roadmap-Tickets gegen den gh-Status, non-blocking, braucht `gh`, #610) | `npm run check:doctickets` |

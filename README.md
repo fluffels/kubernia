@@ -51,6 +51,31 @@ Ein Agent nimmt **genau ein** Ticket vom Board, arbeitet es end-to-end ab und r�
 - **🔌 MCP, gezielt statt global.** Nur ein projekt-scoped Server (`pixellab` für Pixel-Art-Generierung) in `.mcp.json`, Token über Umgebungsvariable – kein globales Tooling, das jede Session automatisch mitschleppt.
 - **📐 ADRs statt nachträglicher Rechtfertigung.** Grundsatzentscheidungen (Engine, kein Backend, der Harness selbst, PR-Gating …) werden **vor** der Umsetzung als [Architecture Decision Record](docs/adr/) festgehalten – nachvollziehbar, warum eine Alternative verworfen wurde, nicht nur was am Ende dabei rauskam.
 
+Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdateien, daher immer aktuell):
+
+<!-- GEN:harness-inventar START -->
+<!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
+
+| Art | Name | Konfiguration | Quelle |
+|---|---|---|---|
+| Subagent | `Explore` | model: haiku, effort: low | `.claude/agents/explore.md` |
+| Subagent | `kubernia-lens` | model: opus, effort: high | `.claude/agents/kubernia-lens.md` |
+| Subagent | `kubernia-planner` | model: opus, effort: xhigh | `.claude/agents/kubernia-planner.md` |
+| Subagent | `kubernia-umsetzer` | model: sonnet, effort: medium | `.claude/agents/kubernia-umsetzer.md` |
+| Skill | `forum` | model: Session-Modell | `.claude/skills/forum/SKILL.md` |
+| Skill | `kubernia` | model: sonnet | `.claude/skills/kubernia/SKILL.md` |
+| Skill | `kubernia-workflow` | model: Session-Modell | `.claude/skills/kubernia-workflow/SKILL.md` |
+| Skill | `review-lenses` | model: Session-Modell | `.claude/skills/review-lenses/SKILL.md` |
+| Workflow | `kubernia-ticket` | — | `.claude/workflows/kubernia-ticket.js` |
+| Hook | `PreToolUse` | matcher: `Bash\|PowerShell\|SubagentHandback`, `node scripts/pretooluse-hook.mjs` | `.claude/settings.json` |
+| Hook | `Stop` | `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
+| Hook | `SubagentStop` | matcher: `kubernia-umsetzer`, `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
+| Git-Hook | `pre-push` | — | `.githooks/pre-push` |
+| MCP-Server | `pixellab` | http, api.pixellab.ai | `.mcp.json` |
+| MCP-Server | `playwright` | stdio, node scripts/playwright-mcp.mjs | `.mcp.json` |
+
+<!-- GEN:harness-inventar END -->
+
 ### Wie das gewachsen ist
 
 Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehrenden Muster: Jede neue Leitplanke fängt als **Bitte** an – eine dokumentierte Konvention in `AGENTS.md`, ein lokaler Hook, der sich mit `--no-verify` umgehen lässt – und wird erst zur **Mauer**, sobald sie sich im Alltag bewährt hat: ein serverseitig erzwungenes CI-Gate, an dem kein Agent mehr vorbeikommt. Ganz am Anfang liefen Agenten entsprechend freier (Direkt-Push auf `main` war erlaubt, ein Pflicht-Worktree war noch keine Regel). Der Weg von diesem lockeren Start (**Vibe Coding**) hin zu einem Ablauf, in dem Mauern statt Bitten die Arbeit tragen (**Agentic Engineering**), lässt sich an den eigenen Commits und ADRs nachvollziehen, nicht nur behaupten:
@@ -81,17 +106,34 @@ Kubernia ist bewusst so gebaut, dass es **so groß wie Stardew Valley** werden k
 - **🎯 Taktisches DDD.** Fehlbare Konzepte werden **un-repräsentierbar** gemacht: Value Objects für Ressourcen-Namen (DNS-1123-Regel an einer Stelle) und für Dublonen (nicht-negativ + ganzzahlig by construction), dazu **Cluster-Invarianten** als SSOT für einen legalen Zustand, die der Simulator an der Aggregat-Grenze prüft.
 - **✅ Fitness-Functions als CI-Gates.** Statt auf Review-Disziplin zu vertrauen, hält ein Netz aus automatischen Prüfungen die Architektur ehrlich – jede läuft lokal **und** als CI-Gate:
 
-  | Gate | Was es sichert |
-  |---|---|
-  | `npm test` (Vitest) | Verhalten der Domäne/Sim/Wirtschaft, inkl. Negativ-/Grenzfälle (Red-Green-abgesichert) |
-  | `npm run typecheck` | voll `strict`, ganzes Projekt |
-  | `npm run lint` | ESLint typbewusst, `--max-warnings 0`, `any` blockt |
-  | `npm run check:arch` | Schichtung + keine Zyklen + kein toter Code (dependency-cruiser) |
-  | `npm run check:size` | God-File-Frühwarnung (Zeilen-Budget je Modul) |
-  | `npm run check:docmap` | jede `src/`-Datei ist in einem Tiefendoc erwähnt – die Landkarte kann nicht leise veralten |
-  | `npm run check:docdrift` | dokumentierte `npm run`-Kommandos + interne Doku-Links/Anker können nicht leise veralten |
-  | `npm run smoke` | Boot- & Interaktions-Smokes headless gegen den echten Offline-Build (Playwright) |
-  | `npm audit --omit=dev` | Security-Gate über die ausgelieferten Produktiv-Deps |
+  <!-- GEN:gates START -->
+  <!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
+
+  | Gate | Kette | Was es sichert |
+  |---|---|---|
+  | `npm run typecheck` | `verify` | voll `strict`, ganzes Projekt |
+  | `npm run lint` | `verify` | ESLint typbewusst, `--max-warnings 0`, `any` blockt, Komplexität je Funktion |
+  | `npm run check:arch` | `verify` | Schichtung, keine Zyklen, kein toter Code (dependency-cruiser) |
+  | `npm run check:size` | `verify` | God-File-Frühwarnung (Zeilen-Budget je Modul) |
+  | `npm run check:contextsize` | `verify` | Größenbudget jeder AGENTS.md (Zeichen) |
+  | `npm run check:anysuppress` | `verify` | Ratchet auf die Zahl begründeter `any`-Ausnahmen |
+  | `npm run check:docmap` | `verify` | jede `src/`-Datei ist in einem Tiefendoc erwähnt, die Landkarte kann nicht leise veralten |
+  | `npm run check:docdrift` | `verify` | dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien |
+  | `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (Gate-Tabelle, Harness-Inventar) stimmen mit dem Repo überein |
+  | `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo |
+  | `npm run check:lockfile` | `verify` | Lockfile passt zur `package.json` |
+  | `npm run check:diffsize` | `verify` | Slice-Größe (Dateien und Zeilen gegen die Merge-Base) |
+  | `npm test` | `verify` | Verhalten von Domäne, Sim, Wirtschaft und Harness-Wächtern, inkl. Negativ- und Grenzfälle (Vitest) |
+  | `npm run test:coverage` | `verify:full` | Coverage-Floors je Schicht-Bucket |
+  | `npm run check:diffcoverage` | `verify:full` | Abdeckung der im Slice geänderten Zeilen |
+  | `npm run build` | `verify:full` | Host-Build (`dist/`) baut fehlerfrei |
+  | `npm run build:offline` | `verify:full` | Offline-Einzeldatei (`dist-offline/index.html`) baut fehlerfrei |
+  | `npm run check:bundle` | `verify:full` | Byte-Budget für Offline-HTML, Spielcode und Phaser-Chunk |
+  | `npm run test:smoke` | `verify:full` | Boot- und Interaktions-Smokes headless gegen den Offline-Build (Playwright) |
+  | `npm audit --omit=dev --audit-level=high` | CI | Security-Gate über die ausgelieferten Produktiv-Abhängigkeiten |
+  | `node scripts/check-review-nachweis.mjs` | CI | Review-Nachweis (`KQ-Plan:`/`KQ-Review:`) im PR |
+
+  <!-- GEN:gates END -->
 
 **Mehr Tiefe:** die vollständige Architektur-Gesamtsicht nach **arc42** steht in [docs/arc42-architektur.md](docs/arc42-architektur.md); dazu laufen wiederkehrende, doku-unabhängige **iSAQB-Analysen** — [Runde 1](docs/architektur-analyse-2026-07-iSAQB.md) und [Runde 2](docs/architektur-analyse-2026-07-02-iSAQB.md) (je Schicht) sowie die breitere [Runde 3](docs/architektur-analyse-2026-07-03-iSAQB.md) (ADRs kritisch hinterfragt, DDD, Teststrategie, Harness-Regressions-Matrix). Die bewusst festgehaltenen Grundsatzentscheidungen liegen als **ADRs** unter [docs/adr/](docs/adr/) (Engine Phaser, kein Backend/DB, kein Multiplayer, Skalierungs-Fundament).
 

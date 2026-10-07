@@ -227,6 +227,7 @@ Eine erneute doku-freie Runde hat gezielt die harten „erledigt/erzwungen"-Clai
 | 0014 | **Leitplanken ohne Label-Riegel:** kein CI-Job und kein Label für Gate-/Harness-Änderungen; Audit-Kommentar und Verhaltensregel bleiben, die Pfadquelle löst den Audit-Kommentar aus | **akzeptiert** ([ADR 0014](adr/0014-leitplanken-ohne-label-riegel.md), #1303) — löst den Label-Riegel aus 0012 ab. |
 | 0015 | **Projekt-Brain:** `docs/` nach Second-Brain-Prinzipien (atomare Seiten, Index zuerst, nichts always-loaded, Größenschwelle), Token-Ziel und Messung je Ticket-Lauf | **akzeptiert** ([ADR 0015](adr/0015-projekt-brain.md), #1205) — präzisiert 0013. |
 | 0016 | **Langfuse-Takt:** wöchentlicher Workflow (Cron + Aktivitäts-Untergrenze, idempotent aus `git log`/offenen Issues) statt Board-Position; Sammelticket „Langfuse-Befunde (gesammelt)" | **akzeptiert** ([ADR 0016](adr/0016-langfuse-takt-woechentlich.md), #1351) — löst den Position-Takt aus #1293 ab. |
+| 0017 | **Lebende Doku:** Abschnitte zwischen `GEN`-Markern erzeugt `npm run docs:gen` aus dem Repo, `check:docgen` vergleicht; Mermaid als Diagrammformat, MCP nie Gate-Quelle | **akzeptiert** ([ADR 0017](adr/0017-lebende-doku-generierte-abschnitte.md), #1355) — Teil von #1354. |
 
 iSAQB-konform: jeder ADR trägt einen expliziten **Re-Evaluierungs-Trigger** — Entscheidungen sind an nachprüfbare Bedingungen geknüpft, nicht „für immer".
 
