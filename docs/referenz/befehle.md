@@ -34,7 +34,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Dev-Panel-Build (#331, Panel MIT, passwortgated, `dist-devpanel/`) | `npm run build:devpanel` |
 | Tests (lokal auf 25 % der Kerne begrenzt, #1331: parallele Läufe von Lenses/Playwright/anderen Worktrees ließen sonst die store-Tests ins Timeout laufen; die CI nutzt den Standard) | `npm test` (Vitest); mehr Worker: `npm test -- --maxWorkers=<n>` |
 | Coverage-Gate (v8, Schwellen PRO Schicht statt Repo-Mittel, #495) | `npm run test:coverage` |
-| Boot-Smoke-Test (headless, gegen den Offline-Build, #391) | `npm run smoke` (baut Offline + Playwright) bzw. `npm run test:smoke` (nur Lauf, Build muss da sein); meldet Playwright `Executable doesn't exist ... chromium_headless_shell-<build>`: `npm ci`, dann `npx playwright install chromium` |
+| Boot-Smoke-Test (headless, gegen Offline- und Host-Build, #391/#1408) | `npm run smoke` (baut Host + Offline + Playwright) bzw. `npm run test:smoke` (nur Lauf, beide Builds müssen da sein); meldet Playwright `Executable doesn't exist ... chromium_headless_shell-<build>`: `npm ci`, dann `npx playwright install chromium` |
 | Typen prüfen (voll strict) | `npm run typecheck` |
 | Linter (ESLint, #389; Komplexitäts-Gates complexity/max-lines-per-function/max-depth #502) | `npm run lint` |
 | Stale Suppressions prunen / Baseline neu aufbauen (Komplexität #502 + Typsicherheit #868) | `npm run lint:prune` / `npm run lint:suppress` |
@@ -58,7 +58,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Diff-Coverage-Wächter (geänderte Zeilen pro Slice getestet; **hart** für Domäne/Anwendung, Präsentation/Einstieg nur berichtend; läuft **NACH `test:coverage`**, #1021) | `npm run check:diffcoverage` |
 | `no-explicit-any`-Suppression-Ratchet (per-Datei-Baseline, #604) | `npm run check:anysuppress` (neu ziehen: `node scripts/check-any-suppressions.mjs --write`) |
 | Lockfile-Integritäts-Wächter (package-lock.json ↔ package.json, gegen Lockfile-Drift, #593) | `npm run check:lockfile` |
-| Bundle-Byte-Budget-Wächter (Offline-HTML + Spielcode- + Phaser-vendor-Chunk, NACH den Builds, #503/#595) | `npm run check:bundle` |
+| Bundle-Byte-Budget-Wächter (je Chunk-Art: Offline-HTML ohne Content, Spielcode, Content-Chunks, Phaser-vendor, NACH den Builds, #503/#595/#1408) | `npm run check:bundle` |
 | Duplikations-Report (jscpd, **weich/nicht-blockierend** — kein Gate, nur CI-Artefakt, #612) | `npm run check:duplication` |
 | Security-Audit (Produktiv-Deps, CI-Gate blockt bei high+, #396) | `npm audit --omit=dev --audit-level=high` |
 

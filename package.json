@@ -19,7 +19,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:smoke": "playwright test",
-    "smoke": "npm run build:offline && playwright test",
+    "smoke": "npm run build && npm run build:offline && playwright test",
     "typecheck": "tsc --noEmit",
     "typecheck:strict": "tsc -p tsconfig.strict.json",
     "check:arch": "depcruise src --config .dependency-cruiser.cjs",

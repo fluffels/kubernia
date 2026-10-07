@@ -2,6 +2,7 @@
   "gate": [
     "/.dependency-cruiser.cjs",
     "/scripts/layers.cjs",
+    "/scripts/content-chunks.cjs",
     "/scripts/check-*.mjs",
     "/scripts/slice-override.mjs",
     "/scripts/docs-gen*",

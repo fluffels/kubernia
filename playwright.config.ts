@@ -8,8 +8,9 @@ import { defineConfig, devices } from "@playwright/test";
 // Builds, der Init-Fehler (Phaser, Content-Loader, kaputtes Asset-Manifest)
 // fängt, die erst zur Laufzeit auftreten.
 //
-// Voraussetzung: der Offline-Build muss existieren (dist-offline/index.html).
-// Lokal: `npm run build:offline` davor (oder einfach `npm run smoke`, das beides
+// Voraussetzung: der Offline-Build (dist-offline/index.html) und der Host-Build (dist/, für
+// e2e/host-boot-smoke.spec.ts, #1408) müssen existieren.
+// Lokal: `npm run build && npm run build:offline` davor (oder einfach `npm run smoke`, das beides
 // in einem Rutsch macht). In der CI baut der Schritt davor den Build bereits.
 export default defineConfig({
   testDir: "./e2e",

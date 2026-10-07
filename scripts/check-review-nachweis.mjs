@@ -158,7 +158,7 @@ export function checkReviewNachweis({ runGit, env = process.env } = {}) {
   try {
     const head = git(["rev-parse", "HEAD"]).trim();
     if (head === base) return { ok: true, skipped: true, fehler: [] };
-    const messages = git(["log", "--format=%B", `${base}..HEAD`]);
+    const messages = git(["log", "--reverse", "--format=%B", `${base}..HEAD`]);
     const ov = parseOverrideTrailers(messages, OVERRIDE_KEY);
     if (ov.valid.length > 0) {
       return { ok: true, override: ov.valid[ov.valid.length - 1].reason, fehler: [], invalid: ov.invalid };
