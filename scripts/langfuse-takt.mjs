@@ -16,19 +16,25 @@ export const SAMMEL_TITEL = LANGFUSE_SAMMELTICKET_TITEL;
 export const MIN_MERGES = 5;
 /** Push-Auslöser (Aktivität): so viele Ticket-Merges (ohne Bots) seit dem Abschluss des Vorgängers legen das Status-Ticket an bzw. holen es nach oben. */
 export const MIN_TICKET_MERGES_PUSH = 8;
+/** Mindestabstand in Stunden zwischen dem Abschluss des Vorgängers und einem neu angelegten Status-Ticket (beide Auslöser; „nach-oben“ ist ausgenommen). */
+export const MIN_ABSTAND_STUNDEN = 24;
 
 /**
  * Was tut der Lauf mit dem Status-Ticket? `offene` aus normalizeOffene (board-lib.mjs), `mergesSeit` = Zahl der Commits auf main im Fenster,
  * `ticketMerges` = davon Ticket-Merges ohne Bots, `ausloeser` = Workflow-Event (`push` zählt nur Aktivität: mindestens
  * `MIN_TICKET_MERGES_PUSH` Ticket-Merges, sonst nichts; alles andere ist der Wochen-Cron mit `MIN_MERGES`).
- * Liefert `{ aktion: "anlegen" | "nach-oben" | "nichts", nr?, grund, warnungen }`. Pur.
+ * `stundenSeitAbschluss` = Stunden seit dem Abschluss des Vorgängers (null/fehlt: kein Vorgänger); das Anlegen braucht mindestens
+ * `MIN_ABSTAND_STUNDEN`. Liefert `{ aktion: "anlegen" | "nach-oben" | "nichts", nr?, grund, warnungen }`. Pur.
  */
-export function entscheideTakt({ offene, mergesSeit, ticketMerges = 0, ausloeser = "schedule" }) {
+export function entscheideTakt({ offene, mergesSeit, ticketMerges = 0, ausloeser = "schedule", stundenSeitAbschluss = null }) {
   if (!Array.isArray(offene)) throw new Error("offene muss eine Liste sein.");
   if (!Number.isInteger(mergesSeit) || mergesSeit < 0) throw new Error(`mergesSeit muss eine ganze Zahl ≥ 0 sein, war ${String(mergesSeit)}`);
   const treffer = offene
     .filter((i) => i.titel === STATUS_TITEL)
     .sort((a, b) => alsDatum(a.createdAt, "createdAt") - alsDatum(b.createdAt, "createdAt") || a.number - b.number);
+  if (stundenSeitAbschluss !== null && !(Number.isFinite(stundenSeitAbschluss) && stundenSeitAbschluss >= 0)) {
+    throw new Error(`stundenSeitAbschluss muss null oder eine Zahl ≥ 0 sein, war ${String(stundenSeitAbschluss)}`);
+  }
   const warnungen = [];
   if (treffer.length > 1) {
     warnungen.push(`Mehrere offene „${STATUS_TITEL}“ (${treffer.map((t) => `#${t.number}`).join(", ")}): der Lauf arbeitet mit dem ältesten und schließt nichts selbst.`);
@@ -44,6 +50,9 @@ export function entscheideTakt({ offene, mergesSeit, ticketMerges = 0, ausloeser
   }
   if (mergesSeit < MIN_MERGES) {
     return { aktion: "nichts", grund: `nur ${mergesSeit} Merges seit dem letzten Abschluss (Untergrenze ${MIN_MERGES})`, warnungen };
+  }
+  if (typeof stundenSeitAbschluss === "number" && stundenSeitAbschluss < MIN_ABSTAND_STUNDEN) {
+    return { aktion: "nichts", grund: `erst ${stundenSeitAbschluss.toFixed(1)} h seit dem Abschluss des Vorgängers (Mindestabstand ${MIN_ABSTAND_STUNDEN} h)`, warnungen };
   }
   return { aktion: "anlegen", grund: `${mergesSeit} Merges seit dem letzten Abschluss, kein offenes Status-Ticket`, warnungen };
 }
@@ -68,18 +77,22 @@ export function wochenFenster(jetzt) {
   return { letzte: woche(mo - 7 * TAG_MS), davor: woche(mo - 14 * TAG_MS) };
 }
 
-/** Body des neu angelegten Status-Tickets. `vorgaenger` = `{ number, closedAt }` oder null. Pur. */
+/** Body des neu angelegten Status-Tickets. `vorgaenger` = `{ number, closedAt, createdAt? }` oder null; war der Vorgänger in derselben Kalenderwoche angelegt, hat er die letzte volle Woche schon gemessen (fehlt `createdAt`, wird gemessen). Pur. */
 export function statusBody({ vorgaenger, jetzt }) {
   const w = wochenFenster(jetzt);
   const zeitraum = vorgaenger
     ? `seit dem Abschluss von #${vorgaenger.number} (${vorgaenger.closedAt}) bis zum Claim`
     : "seit dem Merge von #1293 bis zum Claim";
+  const schonGemessen = vorgaenger?.createdAt && wochenFenster(vorgaenger.createdAt).letzte.von === w.letzte.von;
+  const budget = schonGemessen
+    ? `- **Wochenbudget:** entfällt, Woche ${w.letzte.von} bis ${w.letzte.bis} hat #${vorgaenger.number} schon gemessen (Checkliste Punkt 7 überspringen).`
+    : `- **Wochenbudget:** letzte volle Woche ${w.letzte.von} bis ${w.letzte.bis} (Mo–So UTC) gegen die Woche davor ${w.davor.von} bis ${w.davor.bis}.`;
   const repo = "https://github.com/fluffels/kubernia/blob/main/docs";
   return [
     "Wiederkehrende Auswertung der Langfuse-Daten, vom Wochen-Workflow angelegt (kein Agent legt dieses Ticket an).",
     "",
     `- **Zeitraum:** ${zeitraum}.`,
-    `- **Wochenbudget:** letzte volle Woche ${w.letzte.von} bis ${w.letzte.bis} (Mo–So UTC) gegen die Woche davor ${w.davor.von} bis ${w.davor.bis}.`,
+    budget,
     `- **Checkliste:** [docs/model-routing.md › Langfuse-Status überprüfen](${repo}/model-routing.md#langfuse-status-überprüfen-1293).`,
     `- **Mechanik:** [docs/ticket-reihenfolge.md](${repo}/ticket-reihenfolge.md#wiederkehrendes-ticket-langfuse-status-überprüfen-1293).`,
     `- **Abschluss:** Bericht-Kommentar geschrieben, große Befunde als Issues, kleine als Zeilen ins Sammelticket „${SAMMEL_TITEL}“ (danach per \`board-place.mjs --top\` nach oben), PR mit Verdichtungszeile und \`Closes\`.`,

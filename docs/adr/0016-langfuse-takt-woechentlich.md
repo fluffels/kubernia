@@ -80,3 +80,13 @@ Die Zahlen stehen als `MIN_TICKET_MERGES_PUSH` und `HARNESS_TAKT_MERGES` in `scr
 - **Positionskorrektur:** steht das ungeclaimte Harness-Sammelticket hinter der Position laut AGENTS.md (Anlass: ein nachträglich angelegtes landete am Board-Ende und klemmte jedes neue `--top`-Ticket dorthin), schiebt der Lauf es zurück, unabhängig von der Aktivität; `board-place.mjs` tut das vor jedem Einsortieren, `sammelticket-anlegen.mjs` beim Anlegen. Die Korrektur geht nur nach vorn und nie in den Kopf. Die Board-Liste lädt der Lauf einmal und zieht sie nach der Status-Aktion im Speicher nach.
 - **Notfall-Tabelle:** Art, Titelmarker und Quelle je Notfall stehen einmal in `scripts/board-lib.mjs` (`NOTFAELLE`), auch für Security (`🔒 Security:`); `board-place --notfall` bricht bei fehlendem Marker ab, weil ein unmarkierter Notfall nicht zum Kopf zählt.
 - **Verworfen:** nur melden statt zurückschieben (ein Hinweis, den niemand liest, ließe das Ticket am Ende liegen); Korrektur ohne Kopf-Klemme (ein großer Kopf würde durchbrochen); Umbenennen von `test/langfuse-takt.test.ts` (er testet weiter die Status-Logik).
+
+## Fortschreibung #1382 (2026-10-07): Mindestabstand, Wochenbudget nur einmal je Woche
+
+Gemessen im Status-Lauf #1395: Das Ticket entstand 2 h 16 min nach dem Abschluss des Vorgängers #1304, weil der Push-Auslöser bei 11 Ticket-Merges in 4,5 h die Untergrenze von 8 schnell erreicht, und die Wochenbudget-Messung lief doppelt über dieselbe Woche. Zwei Änderungen der Auslöser-Regel, beide mit Rohwerten belegt: #1304 wurde 2026-10-06T12:27:15Z angelegt und 2026-10-07T11:40:04Z geschlossen, #1395 entstand 2026-10-07T13:56:11Z (2,3 h danach). Unter der neuen Regel entstünde #1395 frühestens 2026-10-08T11:40Z, und weil #1304 in derselben Kalenderwoche (ab 2026-10-05) angelegt wurde und die Woche 2026-09-28 bis 10-04 schon gemessen hat, trüge dessen Body „Wochenbudget: entfällt“.
+
+- **Mindestabstand:** ein neues Status-Ticket wird bei beiden Auslösern nur angelegt, wenn der Abschluss des Vorgängers mindestens 24 Stunden zurückliegt (Mindestabstand von 24 Stunden, `MIN_ABSTAND_STUNDEN` in `scripts/langfuse-takt.mjs`). „Nach oben“ eines schon offenen Tickets bleibt davon unberührt. Ohne Vorgänger gibt es keinen Abstand.
+- **Wochenbudget:** war der Vorgänger in derselben Kalenderwoche angelegt wie das neue Ticket, hat er die letzte volle Woche schon gemessen; der Body schreibt dann „Wochenbudget: entfällt“ und die Checkliste überspringt Punkt 7. Fehlt `createdAt` des Vorgängers, wird gemessen (sichere Seite).
+
+Verworfen: die Untergrenze 8 anheben (die Aktivität schwankt, der Abstand ist die stabilere Größe).
+

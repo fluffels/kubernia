@@ -174,13 +174,19 @@ const PFLEGE_MARKER = /^pflege:\s*(start|ende)\b/i;
  * Nur Bash/PowerShell, nur als Kommando `echo` (ein `grep "pflege: start"` oder ein Commit-Text zählt nicht).
  */
 export function pflegeMarker(ev) {
-  if (ev?.tool !== "Bash" && ev?.tool !== "PowerShell") return null;
+  return pflegeMarkers(ev)[0] ?? null;
+}
+
+/** Alle Marker eines Befehls in Reihenfolge: `echo "pflege: start" && echo "pflege: ende"` in EINEM Befehl liefert beide (#1382). */
+export function pflegeMarkers(ev) {
+  if (ev?.tool !== "Bash" && ev?.tool !== "PowerShell") return [];
+  const out = [];
   for (const words of commandsOf(ev.input?.command, ev.tool)) {
     if (!ECHO_CMDS.has((words[0] ?? "").toLowerCase())) continue;
     const m = PFLEGE_MARKER.exec(words.slice(1).join(" ").replace(/["']/g, "").trim());
-    if (m) return m[1].toLowerCase();
+    if (m) out.push(m[1].toLowerCase());
   }
-  return null;
+  return out;
 }
 
 /**
@@ -195,17 +201,17 @@ export function pflegeIntervals(events) {
   const intervals = [];
   let unpaired = 0;
   for (const ev of sorted) {
-    const kind = pflegeMarker(ev);
-    if (!kind) continue;
     const agent = ev.agent ?? null;
-    if (kind === "start") {
-      if (open.has(agent)) unpaired += 1;
-      open.set(agent, ev.ts);
-    } else if (open.has(agent)) {
-      intervals.push({ agent, from: open.get(agent), to: ev.ts });
-      open.delete(agent);
-    } else {
-      unpaired += 1;
+    for (const kind of pflegeMarkers(ev)) {
+      if (kind === "start") {
+        if (open.has(agent)) unpaired += 1;
+        open.set(agent, ev.ts);
+      } else if (open.has(agent)) {
+        intervals.push({ agent, from: open.get(agent), to: ev.ts });
+        open.delete(agent);
+      } else {
+        unpaired += 1;
+      }
     }
   }
   return { intervals, unpaired: unpaired + open.size };

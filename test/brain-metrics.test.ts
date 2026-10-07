@@ -518,6 +518,18 @@ describe("Pflege-Marker (#1099)", () => {
     assert.equal(r.intervals.length, 1);
     assert.equal(r.unpaired, 0);
   });
+  test("Start und Ende in EINEM Befehl (&&, ;): beide Marker zählen, kein Gegenstück fehlt (#1382)", () => {
+    for (const cmd of ['cd x && echo "pflege: start #1" && echo "pflege: ende #1"', 'echo "pflege: start #1"; echo "pflege: ende #1"']) {
+      const r = pflegeIntervals([sh(cmd, "Bash", "a", T(1))]);
+      assert.deepEqual(r, { intervals: [{ agent: "a", from: T(1), to: T(1) }], unpaired: 0 }, cmd);
+    }
+    // Ende vor Start im selben Befehl: bleibt ungepaart (Reihenfolge zählt)
+    assert.equal(pflegeIntervals([sh('echo "pflege: ende #1"; echo "pflege: start #1"', "Bash", "a", T(1))]).unpaired, 2);
+    // ein Marker zwischen zwei getrennten Befehlen und einer kombinierten Folge: gepaart
+    const r = pflegeIntervals([sh('echo "pflege: start #1"', "Bash", "a", T(1)), sh('echo "pflege: ende #1" && echo "pflege: start #2"', "Bash", "a", T(2)), sh('echo "pflege: ende #2"', "Bash", "a", T(3))]);
+    assert.equal(r.intervals.length, 2);
+    assert.equal(r.unpaired, 0);
+  });
   test("Event-Adapter setzen agent (Default null)", () => {
     const line = JSON.stringify({ type: "assistant", timestamp: T(0), message: { content: [{ type: "tool_use", id: "a", name: "Bash", input: {} }] } });
     assert.equal(toolEventsFromTranscript(line)[0].agent, null);

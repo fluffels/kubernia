@@ -174,7 +174,7 @@ function main() {
     .sort((a, b) => new Date(b.closed_at) - new Date(a.closed_at));
   const letzter = (titel) => {
     const g = geschlossen.find((i) => i.title === titel);
-    return g ? { number: g.number, closedAt: g.closed_at } : null;
+    return g ? { number: g.number, closedAt: g.closed_at, createdAt: g.created_at } : null;
   };
   const vorgaenger = letzter(STATUS_TITEL);
   const abStatus = mergeFensterAb(vorgaenger?.closedAt ?? null, jetzt).toISOString();
@@ -185,7 +185,8 @@ function main() {
   // Die Board-Liste einmal je Lauf (braucht den Projekt-Scope des Tokens).
   let items = token ? loadItems({ token }) : null;
 
-  const e = entscheideTakt({ offene, mergesSeit: imFenster.length, ticketMerges: zaehleTicketMerges(commits, abStatus), ausloeser });
+  const stundenSeitAbschluss = vorgaenger ? (jetzt.getTime() - new Date(vorgaenger.closedAt).getTime()) / (TAG_MS / 24) : null;
+  const e = entscheideTakt({ offene, mergesSeit: imFenster.length, ticketMerges: zaehleTicketMerges(commits, abStatus), ausloeser, stundenSeitAbschluss });
   for (const w of e.warnungen) console.log(`::warning::${w}`);
   console.log(`Status-Ticket (${ausloeser}): ${e.aktion}${e.nr ? ` #${e.nr}` : ""} (${e.grund}); Fenster ab ${abStatus}`);
   let fehler = false;

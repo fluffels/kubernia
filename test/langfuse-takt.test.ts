@@ -13,10 +13,11 @@ type Entscheidung = { aktion: "anlegen" | "nach-oben" | "nichts"; nr?: number; g
 type Takt = {
   STATUS_TITEL: string;
   MIN_MERGES: number;
-  entscheideTakt: (a: { offene: Offen[]; mergesSeit: number; ticketMerges?: number; ausloeser?: string }) => Entscheidung;
+  entscheideTakt: (a: { offene: Offen[]; mergesSeit: number; ticketMerges?: number; ausloeser?: string; stundenSeitAbschluss?: number | null }) => Entscheidung;
+  MIN_ABSTAND_STUNDEN: number;
   MIN_TICKET_MERGES_PUSH: number;
   wochenFenster: (jetzt: string | Date) => { letzte: { von: string; bis: string }; davor: { von: string; bis: string } };
-  statusBody: (a: { vorgaenger: { number: number; closedAt: string } | null; jetzt: string | Date }) => string;
+  statusBody: (a: { vorgaenger: { number: number; closedAt: string; createdAt?: string } | null; jetzt: string | Date }) => string;
 };
 type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };
 const T = raw as unknown as Takt;
@@ -192,5 +193,46 @@ describe("Zuständigkeit (#1390): langfuse-takt.mjs ist die Status-Logik, der Ta
     expect(skript).not.toMatch(/function main\b/);
     expect(skript).not.toMatch(/entscheideHarnessTakt|HARNESS_TAKT_MERGES/);
     expect(Object.keys(raw as object)).not.toContain("entscheideHarnessTakt");
+  });
+});
+
+describe("Mindestabstand und Wochenbudget (#1382)", () => {
+  const an = (stundenSeitAbschluss: number | null, ausloeser = "schedule", offene: Offen[] = []) =>
+    T.entscheideTakt({ offene, mergesSeit: 50, ticketMerges: 20, ausloeser, stundenSeitAbschluss });
+
+  test("Grenze 23,9 h / 24 h beim Anlegen, bei beiden Auslösern", () => {
+    expect(T.MIN_ABSTAND_STUNDEN).toBe(24);
+    for (const ausloeser of ["schedule", "push"]) {
+      expect(an(23.9, ausloeser).aktion).toBe("nichts");
+      expect(an(24, ausloeser).aktion).toBe("anlegen");
+    }
+  });
+  test("ohne Vorgänger (null) und ohne Angabe (undefined) wird angelegt", () => {
+    expect(an(null).aktion).toBe("anlegen");
+    expect(T.entscheideTakt({ offene: [], mergesSeit: 50 }).aktion).toBe("anlegen");
+  });
+  test("ungültiger Abstand (NaN, negativ, Text) wirft, statt den Mindestabstand still auszuhebeln", () => {
+    for (const bad of [Number.NaN, -1, "5" as unknown as number]) {
+      expect(() => an(bad)).toThrow();
+    }
+  });
+  test("Abstand 0 h ist gültig und legt nicht an", () => {
+    expect(an(0).aktion).toBe("nichts");
+  });
+  test("nach-oben ignoriert den Abstand", () => {
+    expect(an(1, "schedule", [offen(1304)])).toMatchObject({ aktion: "nach-oben", nr: 1304 });
+  });
+  test("der Grund nennt den Abstand", () => {
+    expect(an(5).grund).toMatch(/24 h/);
+  });
+  test("statusBody: gleiche Woche → Wochenbudget entfällt; andere Woche, fehlendes createdAt → gemessen", () => {
+    const v = (createdAt?: string) => ({ number: 1395, closedAt: "2026-10-07T20:00:00Z", ...(createdAt ? { createdAt } : {}) });
+    const jetzt = "2026-10-08T12:00:00Z";
+    const gleich = T.statusBody({ vorgaenger: v("2026-10-07T13:56:11Z"), jetzt });
+    expect(gleich).toMatch(/Wochenbudget:\*\* entfällt, Woche 2026-09-28 bis 2026-10-04 hat #1395 schon gemessen/);
+    const andere = T.statusBody({ vorgaenger: v("2026-09-30T13:56:11Z"), jetzt });
+    expect(andere).toMatch(/Wochenbudget:\*\* letzte volle Woche 2026-09-28/);
+    expect(T.statusBody({ vorgaenger: v(), jetzt })).toMatch(/Wochenbudget:\*\* letzte volle Woche/);
+    expect(T.statusBody({ vorgaenger: null, jetzt })).toMatch(/Wochenbudget:\*\* letzte volle Woche/);
   });
 });

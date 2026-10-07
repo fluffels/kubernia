@@ -365,3 +365,66 @@ describe("zerlegeHauptchat: frühester Claim über Hauptchat und Subagent", () =
     assert.equal(calls(r, "Ad-hoc", OPUS), 0);
   });
 });
+
+describe("zerlegeHauptchat: Brain ab dem ersten Brain-Ereignis (#1382)", () => {
+  const brainRoots = ["/x/notizen"];
+  const lauf = (main: Row[], closed: string | null = null) =>
+    hc.zerlegeHauptchat({ sessions: [{ id: "s", main }], brainRoots, closedAtOf: () => closed });
+
+  test("Ticket-Turn mit späterem brain-input: Calls davor Ticket, ab dem Ereignis Brain", () => {
+    const r = lauf([slash(0, "kubernia"), call(1, OPUS, claim(9)), call(2, OPUS), call(3, OPUS, skill("brain-input")), call(4, OPUS), call(5, OPUS)]);
+    assert.equal(calls(r, "Ticket-Orchestrierung", OPUS), 2);
+    assert.equal(calls(r, "Brain", OPUS), 3);
+  });
+
+  test("ein Turn, der mit /brain-input beginnt, bleibt ganz Brain", () => {
+    const r = lauf([slash(0, "brain-input"), call(1, OPUS), call(2, OPUS)]);
+    assert.equal(calls(r, "Brain", OPUS), 2);
+  });
+
+  test("Brain-Ereignis nach closedAt: Calls zwischen Merge und Ereignis sind Nachlauf", () => {
+    const r = lauf([slash(0, "kubernia"), call(1, OPUS, claim(9)), call(5, OPUS), call(8, OPUS), call(9, OPUS, read("/x/notizen/a.md"))], iso(4));
+    assert.equal(calls(r, "Ticket-Orchestrierung", OPUS), 1);
+    assert.equal(calls(r, "Nachlauf", OPUS), 2);
+    assert.equal(calls(r, "Brain", OPUS), 1);
+  });
+
+  test("Brain-Wurzel nur als Präfix eines anderen Pfads färbt den Turn nicht ein", () => {
+    const r = lauf([user(0, "x"), call(1, OPUS), call(2, OPUS, read("/x/notizen-alt/a.md")), call(3, OPUS)]);
+    assert.equal(calls(r, "Brain", OPUS), 0);
+  });
+
+  test("zwei Brain-Ereignisse im Turn: Brain beginnt beim ersten, auch die Calls dazwischen sind Brain", () => {
+    const r = lauf([slash(0, "kubernia"), call(1, OPUS, claim(9)), call(2, OPUS, read("/x/notizen/a.md")), call(3, OPUS), call(4, OPUS, read("/x/notizen/b.md")), call(5, OPUS)]);
+    assert.equal(calls(r, "Ticket-Orchestrierung", OPUS), 1);
+    assert.equal(calls(r, "Brain", OPUS), 4);
+  });
+
+  test("Brain-Ereignis ohne gültigen Zeitstempel: der Turn bleibt ganz Brain statt still verloren zu gehen", () => {
+    const ev = call(2, OPUS, read("/x/notizen/a.md"));
+    ev.timestamp = "kein-datum";
+    const r = lauf([user(0, "x"), call(1, OPUS), ev, call(3, OPUS)]);
+    assert.equal(calls(r, "Brain", OPUS), 2);
+    assert.equal(zeile(r, "Brain", OPUS)?.calls, 2);
+    assert.equal(r.rows.find((z) => z.kategorie === "ohne Zeit")?.calls, 1);
+  });
+
+  test("hauptchatCalls ist die Summe über alle Modelle und Calls des Fensters", () => {
+    const main = [slash(0, "kubernia"), call(1, SONNET, claim(5)), call(2, SONNET), call(3, SONNET), call(4, OPUS)];
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main }] }) as Ergebnis & { fenster: { hauptchatCalls: number }[] };
+    assert.equal(r.fenster[0].hauptchatCalls, 4);
+  });
+
+  test("Fenster ohne Hauptchat-Calls: hauptchatCalls 0 und Ausgabe „0 Calls“ statt „-“", () => {
+    const e = { sessions: [{ id: "s", main: [slash(0, "kubernia"), call(1, SONNET, claim(5))] }] };
+    const r = hc.zerlegeHauptchat(e) as Ergebnis & { fenster: (Fenster & { hauptchatCalls: number })[] };
+    assert.equal(r.fenster[0].hauptchatCalls, 1);
+    // Claim-Call in einem Subagent-Claim: Fenster ohne eigene Calls
+    const sub: Sub = { meta: { agentType: "x" }, zeilen: [call(1, SONNET, claim(6))] };
+    const leer = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "x")], subagents: [sub] }] }) as typeof r;
+    assert.equal(leer.fenster[0].hauptchatCalls, 0);
+    const text = (hcModule as { renderMarkdown: (r: Ergebnis) => string }).renderMarkdown(leer);
+    assert.match(text, /\| 0 Calls \|/);
+    assert.doesNotMatch(text, /\| - \|/);
+  });
+});

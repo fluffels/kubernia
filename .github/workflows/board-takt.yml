@@ -4,7 +4,8 @@ name: Board-Takt (Status-Ticket, Sammelticket)
 # an der Zeit und an der Aktivität.
 # 1. Status-Ticket „Langfuse-Status überprüfen“: montags legt dieser Lauf das Ticket an (wenn seit dem letzten Abschluss
 #    mindestens 5 Commits auf main liegen) bzw. schiebt ein offenes ungeclaimtes an die Spitze des Boards; ein Push auf main tut
-#    dasselbe, sobald seit dem letzten Abschluss mindestens 8 Ticket-Merges (ohne Bots) dazukamen.
+#    dasselbe, sobald seit dem letzten Abschluss mindestens 8 Ticket-Merges (ohne Bots) dazukamen. Angelegt wird nur mit einem
+#    Mindestabstand von 24 Stunden zum Abschluss des Vorgängers (#1382).
 # 2. Harness-Sammelticket „Harness-Härtung (gesammelt)“: nach 5 Ticket-Merges seit dem Abschluss des letzten holt derselbe Lauf das
 #    ungeclaimte hinter den Kopf (#1349). Außerdem schiebt er es bei jedem Lauf auf die Position laut AGENTS.md zurück, wenn es
 #    dahinter steht (Selbstkorrektur, nur nach vorn, nie in den Kopf).
