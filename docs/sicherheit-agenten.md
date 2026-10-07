@@ -45,7 +45,7 @@ Spalten: Risiko, vorhandenes Gate, Lücke, Folge, Bezug zu den Agentic Applicati
 | LLM07 | System Prompt Leakage | Anweisungen sind bewusst öffentlich, keine Secrets darin | keine | keine | – |
 | LLM08 | Vector and Embedding Weaknesses | nicht zutreffend: kein RAG, das Brain ist Markdown | keine | keine | ASI06 Memory and Context Poisoning |
 | LLM09 | Misinformation | Tests mit Red-Green, Lenses, `check:docdrift`, Recherche-Regel | didaktische Richtigkeit bleibt menschlich (Veto per Revert) | keine | ASI09 Human-Agent Trust Exploitation |
-| LLM10 | Unbounded Consumption | Cap 2 im Review, Festgefahren-Workflow, Kontext-Budgets, Langfuse-Takt, Längenkappe in `forum-sanitize` | kein hartes Kostenbudget je Lauf | Langfuse-Befunde bei Bedarf | ASI08 Cascading Failures, ASI10 Rogue Agents |
+| LLM10 | Unbounded Consumption | Cap 2 Fix-Runden im Review, Festgefahren-Workflow, Kontext-Budgets, Langfuse-Takt, Längenkappe in `forum-sanitize` | kein hartes Kostenbudget je Lauf | Langfuse-Befunde bei Bedarf | ASI08 Cascading Failures, ASI10 Rogue Agents |
 
 ASI-Namen der Spalte nach der Sekundärquelle (siehe Quellen). Die Gate-Angaben sind Ist-Stand, ein Schnappschuss vom 2026-10-08.
 
