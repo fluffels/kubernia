@@ -11,6 +11,7 @@
  * test/sim/werft.test.ts abgedeckt, #164.)
  */
 import { test, expect } from "vitest";
+import { erwarteSolidJeBoden } from "./support/erwartungen";
 import { TILE } from "../src/world/world";
 import {
   WERFT_W, WERFT_H, WATER, DOCK, QX0, QX1, QY0, QY1,
@@ -56,17 +57,10 @@ test("Hof ist rundum von Meer umschlossen (kein Land am Kartenrand)", () => {
 });
 
 test("Wasser ist solide, Holz-Helling begehbar (Negativ-/Positivfall der Kollision)", () => {
-  for (let i = 0; i < map.ground.length; i++) {
-    if (map.ground[i] === WATER) {
-      // Ausnahme: das im Bau befindliche Schiff steht auf einer Holz-Planke, nicht im Wasser.
-      expect(map.solid[i]).toBe(1);   // ins Meer läuft man nicht
-    }
-  }
-  // Die Helling-Planken sind grundsätzlich begehbar – nur die eine Rumpf-Kachel ist solide.
+  // Das im Bau befindliche Schiff steht auf einer Holz-Planke, nicht im Wasser; nur diese eine Rumpf-Kachel ist solide.
   const hullIdx = map.hull.y * WERFT_W + map.hull.x;
-  for (let i = 0; i < map.ground.length; i++) {
-    if (map.ground[i] === DOCK && i !== hullIdx) expect(map.solid[i]).toBe(0);
-  }
+  erwarteSolidJeBoden(map, [{ boden: WATER, solid: 1, name: "Wasser" }]); // ins Meer läuft man nicht
+  erwarteSolidJeBoden(map, [{ boden: DOCK, solid: 0, name: "Helling-Planken" }], new Set([hullIdx])); // sonst begehbar
 });
 
 test("die Hof-Fläche besteht aus Gras (begehbar) innerhalb des Kai-Rings", () => {

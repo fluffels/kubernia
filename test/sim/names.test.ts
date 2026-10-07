@@ -56,13 +56,8 @@ describe("resourceName – prüfender Smart-Constructor", () => {
   });
 
   test("trägt den beanstandeten Rohwert als `raw` (für die Aggregat-Grenze)", () => {
-    try {
-      resourceName("Bad_Name");
-      throw new Error("hätte werfen müssen");
-    } catch (e) {
-      expect(e).toBeInstanceOf(InvalidResourceNameError);
-      expect((e as InvalidResourceNameError).raw).toBe("Bad_Name");
-    }
+    expect(() => resourceName("Bad_Name")).toThrow(InvalidResourceNameError);
+    expect(() => resourceName("Bad_Name")).toThrow(expect.objectContaining({ raw: "Bad_Name" }));
   });
 });
 

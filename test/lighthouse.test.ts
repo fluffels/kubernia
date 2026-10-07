@@ -9,6 +9,7 @@
  * sein, sonst wäre die Klippe eine hübsche, aber tote Karte.
  */
 import { test, expect } from "vitest";
+import { erwarteSolidJeBoden } from "./support/erwartungen";
 import { TILE } from "../src/world/world";
 import {
   LW, LH, WATER, PATH, STONE_CODES,
@@ -57,10 +58,10 @@ test("Klippe ist rundum von Meer umschlossen (kein Land am Kartenrand)", () => {
 });
 
 test("Wasser ist solide, Pfad begehbar (Negativ-/Positivfall der Kollision)", () => {
-  for (let i = 0; i < map.ground.length; i++) {
-    if (map.ground[i] === WATER) expect(map.solid[i]).toBe(1);   // ins Meer läuft man nicht
-    if (map.ground[i] === PATH) expect(map.solid[i]).toBe(0);    // Aufgangs-Pfad begehbar
-  }
+  erwarteSolidJeBoden(map, [
+    { boden: WATER, solid: 1, name: "Wasser" }, // ins Meer läuft man nicht
+    { boden: PATH, solid: 0, name: "Aufgangs-Pfad" }, // Aufgangs-Pfad begehbar
+  ]);
 });
 
 test("die Klippe besteht aus Fels + Gras (genug Stein-Rand und Gras-Hochebene)", () => {
