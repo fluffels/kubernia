@@ -43,13 +43,13 @@ export interface ObservabilityHost extends Pick<ClusterState, "deployments" | "n
 }
 
 /** Momentane Ressourcen-Last eines Pods – oder null, wenn der Container gar nicht
- *  läuft (ImagePull/Pending), dann gibt es schlicht keine Metriken. Deterministisch
+ *  läuft (ImagePull/Pending/Evicted), dann gibt es schlicht keine Metriken. Deterministisch
  *  aus dem Pod-Namen abgeleitet, damit `kubectl top` über Aufrufe hinweg stabil bleibt. */
 function podMetric(c: ClusterPod, pvcs: readonly PvcRes[]): PodMetrics | null {
   switch (c.owner) {
     case "Deployment": {
       const d = c.dep;
-      if (d.broken && (d.broken.type === "imagepull" || d.broken.type === "pending")) return null;
+      if (d.evicted || (d.broken && (d.broken.type === "imagepull" || d.broken.type === "pending"))) return null;
       const m = baseLoad(c.pod);
       if (d.cpuHeavy) m.cpuMilli = 850 + (hashStr(c.pod.name) % 200); // 850..1049m: weit über der HighCPU-Schwelle
       if (d.broken && d.broken.type === "oomkilled") m.memMi = d.broken.memNeeded || 256; // klettert ans Limit

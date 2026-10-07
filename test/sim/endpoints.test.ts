@@ -3,6 +3,7 @@
 import { describe, test, expect } from "vitest";
 import { KQSim } from "./helpers";
 import { podIP } from "../../src/sim/util";
+import { findClusterPod } from "../../src/sim/pods";
 import { podAddress, serviceBackends, readyBackends, endpointPort } from "../../src/sim/endpoints";
 
 const HEADLESS = "apiVersion: v1\nkind: Service\nmetadata:\n  name: speicher\nspec:\n  clusterIP: None\n  selector:\n    app: speicher\n  ports:\n    - port: 5432\n";
@@ -229,7 +230,41 @@ describe("serviceBackends / podAddress (Einheit)", () => {
     expect(serviceBackends(sim, sim.services[2])).toStrictEqual([]);
     expect(endpointPort(sim.services[1])).toBe(81);
     expect(endpointPort(sim.services[0])).toBe(80);
-    expect(podAddress({ broken: { type: "pending" } }, { name: "p" })).toBeNull();
-    expect(podAddress({ broken: null }, { name: "p" })).toBe(podIP("p"));
+    const pendingDep = findClusterPod(sim, sim.deployments[1].pods[0].name)!;
+    const okDep = findClusterPod(sim, sim.deployments[0].pods[0].name)!;
+    expect(podAddress(pendingDep, sim.pvcs)).toBeNull();
+    expect(podAddress(okDep, sim.pvcs)).toBe(podIP(okDep.pod.name));
+  });
+});
+
+describe("StatefulSet-Pod mit Pending-PVC (#1404)", () => {
+  const pendingSim = () => new KQSim({
+    statefulSets: [sts({ storageClass: "", replicas: 2 })],
+    services: [{ name: "speicher", type: "ClusterIP", clusterIP: "10.96.0.30", port: 5432 }],
+  });
+
+  test("serviceBackends: keine IP, nicht bereit; podAddress ist null", () => {
+    const sim = pendingSim();
+    const b = serviceBackends(sim, sim.services[0]);
+    expect(b.map(x => x.ip)).toStrictEqual([null, null]);
+    expect(b.every(x => !x.ready)).toBe(true);
+    expect(podAddress(findClusterPod(sim, "speicher-0")!, sim.pvcs)).toBeNull();
+  });
+
+  test("scrapeTargets: kein down-Target für Pods ohne IP", () => {
+    const sim = pendingSim();
+    expect(sim.scrapeTargets().filter(t => t.job !== "kubelet")).toStrictEqual([]);
+  });
+
+  test("Negativ: gebundenes PVC bleibt adressiert, bereit und als up-Target sichtbar", () => {
+    const sim = new KQSim({
+      statefulSets: [sts({ replicas: 1 })],
+      services: [{ name: "speicher", type: "ClusterIP", clusterIP: "10.96.0.30", port: 5432 }],
+    });
+    const b = serviceBackends(sim, sim.services[0]);
+    expect(b[0].ip).toBe(podIP("speicher-0"));
+    expect(b[0].ready).toBe(true);
+    expect(podAddress(findClusterPod(sim, "speicher-0")!, sim.pvcs)).toBe(podIP("speicher-0"));
+    expect(sim.scrapeTargets().filter(t => t.job !== "kubelet")).toStrictEqual([{ job: "speicher", instance: podIP("speicher-0") + ":5432", health: "up" }]);
   });
 });

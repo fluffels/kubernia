@@ -18,8 +18,8 @@ import { readyBackends, endpointPort, podAddress } from "../endpoints";
 import type { KubectlHost } from "./host";
 import { SECURITY_CONTEXT_KEYS, isExternalNameService, type Deployment, type PodInstance, type PodStatus } from "../state";
 import { sameRbac } from "../rbac";
-import { clusterPods } from "../pods";
-import { statefulPodVolumePending } from "../workload";
+import { clusterPods, findClusterPod, type ClusterPod } from "../pods";
+import { statefulPodClaimName, statefulPodNode, statefulPodVolumePending } from "../workload";
 
 // Alle Ingresses teilen sich die Adresse des einen Ingress-Controllers (wie im echten
 // Cluster). Nur die kubectl-Ausgaben (get/describe ingress) brauchen sie, darum hier.
@@ -39,14 +39,26 @@ function aliasMap(entries: { aliases: string[]; render: Renderer }[]): Map<strin
 
 // ===== kubectl get – ein Renderer je Ressourcentyp =====
 
-function statefulPodRow(host: KubectlHost, s: { name: string; volumeClaimName: string; pods: PodInstance[] }, p: PodInstance): (string | number)[] {
-  const pending = statefulPodVolumePending(s, p, host.pvcs);
-  return [p.name, pending ? "0/1" : "1/1", pending ? "Pending" : "Running", String(p.restarts), host._age(p.created)];
+/** Eine Pod-Zeile (NAME READY STATUS RESTARTS AGE) – die EINE Quelle für `get pods` mit und
+ *  ohne `-A`. Der Status kommt je Owner aus seiner Wahrheit (Deployment: `_podStatus`,
+ *  StatefulSet: PVC-Bindung, #811). */
+function podRow(host: KubectlHost, c: ClusterPod): string[] {
+  switch (c.owner) {
+    case "Deployment": {
+      const st = host._podStatus(c.dep);
+      return [c.pod.name, st.ready, st.status, String(st.restarts || c.pod.restarts), host._age(c.pod.created)];
+    }
+    case "StatefulSet": {
+      const pending = statefulPodVolumePending(c.sts, c.pod, host.pvcs);
+      return [c.pod.name, pending ? "0/1" : "1/1", pending ? "Pending" : "Running", String(c.pod.restarts), host._age(c.pod.created)];
+    }
+  }
 }
 
 function getPods(host: KubectlHost, t: string[]): string {
   const ns = flagValue(t, "-n") || flagValue(t, "--namespace");
   const allNs = t.includes("-A") || t.includes("--all-namespaces");
+  host._reschedulePending();
   if (ns === "kube-system" || allNs) {
     const sysPods = [
       ["coredns-7db6d8ff4d-x2x9p", "1/1", "Running", "0", "3d"],
@@ -55,24 +67,11 @@ function getPods(host: KubectlHost, t: string[]): string {
       ["kube-scheduler-ahoi-control", "1/1", "Running", "0", "3d"],
     ];
     const rows = allNs
-      ? sysPods.map(r => ["kube-system"].concat(r)).concat(host._allPods().map(p => ["default", p.name, "1/1", "Running", String(p.restarts), host._age(p.created)]))
+      ? sysPods.map(r => ["kube-system"].concat(r)).concat(clusterPods(host).map(c => ["default", ...podRow(host, c)]))
       : sysPods;
     return table(allNs ? ["NAMESPACE", "NAME", "READY", "STATUS", "RESTARTS", "AGE"] : ["NAME", "READY", "STATUS", "RESTARTS", "AGE"], rows);
   }
-  host._reschedulePending();
-  const rows: (string | number)[][] = [];
-  for (const c of clusterPods(host)) {
-    switch (c.owner) {
-      case "Deployment": {
-        const st = host._podStatus(c.dep);
-        rows.push([c.pod.name, st.ready, st.status, String(st.restarts || c.pod.restarts), host._age(c.pod.created)]);
-        break;
-      }
-      case "StatefulSet": // Status aus PVC-Bindung ableiten – Pending wenn kein Volume verfügbar (#811)
-        rows.push(statefulPodRow(host, c.sts, c.pod));
-        break;
-    }
-  }
+  const rows = clusterPods(host).map(c => podRow(host, c));
   if (rows.length === 0) return "No resources found in default namespace.";
   return table(["NAME", "READY", "STATUS", "RESTARTS", "AGE"], rows);
 }
@@ -501,24 +500,23 @@ function podVolumeBlock(dep: Deployment): string[] {
   ] : [];
 }
 
-function describePod(host: KubectlHost, t: string[]): string {
-  const name = t[3];
-  if (!name) return host._err("kubectl describe pod: Welcher Pod?", "Die Namen siehst du mit 'kubectl get pods'.");
-  const pod = host._allPods().find(p => p.name === name);
-  if (!pod) return host._err('Error from server (NotFound): pods "' + name + '" not found', "Tipp: Pod-Namen kannst du aus 'kubectl get pods' kopieren.");
-  // Pod wurde via _allPods() gefunden -> sein Deployment existiert garantiert.
-  const dep = host._findDeploymentOfPod(name)!;
+type DeploymentPod = Extract<ClusterPod, { owner: "Deployment" }>;
+type StatefulPod = Extract<ClusterPod, { owner: "StatefulSet" }>;
+
+function describeDeploymentPod(host: KubectlHost, c: DeploymentPod): string {
+  const { pod, dep } = c;
   const st = host._podStatus(dep);
   // Evictete Pods melden Status Failed / Reason: Evicted – genau so zeigt es echtes Kubernetes (#240).
   const statusLine = dep.evicted ? "Failed" : (st.status === "Running" ? "Running" : st.status === "Pending" ? "Pending" : "Waiting (" + st.status + ")");
+  const ip = podAddress(c, host.pvcs);
   return [
     "Name:         " + pod.name,
     "Namespace:    default",
-    "Node:         " + (dep.broken && dep.broken.type === "pending" ? "<none>" : host._nodeOf(dep)),
+    "Node:         " + (ip === null ? "<none>" : host._nodeOf(dep)),
     "Status:       " + statusLine,
     ...(dep.evicted ? ["Reason:       Evicted", "Message:      " + dep.evicted.reason] : []),
     "Ready:        " + st.ready,
-    "IP:           " + (podAddress(dep, pod) ?? "<none>"),
+    "IP:           " + (ip ?? "<none>"),
     "Controlled By: ReplicaSet/" + dep.name,
     // ServiceAccount-Identität des Pods (#132): die per spec.serviceAccountName gesetzte SA,
     // sonst die default-SA des Namespaces – genau wie in echtem `kubectl describe pod`.
@@ -529,6 +527,55 @@ function describePod(host: KubectlHost, t: string[]): string {
     ...podVolumeBlock(dep),
     "Events:",
   ].concat(podDescribeEvents(host, pod, dep)).join("\n");
+}
+
+// StatefulSet-Pod (#1404): Status aus der PVC-Bindung, Volume ist der Claim des volumeClaimTemplates.
+function describeStatefulPod(host: KubectlHost, c: StatefulPod): string {
+  const { pod, sts } = c;
+  const ip = podAddress(c, host.pvcs);
+  const scheduled = ip !== null;
+  const age = host._age(pod.created);
+  const events = scheduled
+    ? [
+      "  Normal  Scheduled  " + age + "   Successfully assigned default/" + pod.name,
+      "  Normal  Pulled     " + age + "   Container image \"" + sts.image + "\" already present",
+      "  Normal  Started    " + age + "   Started container " + sts.name,
+    ]
+    : ["  Warning  FailedScheduling  " + age + "   0/" + host.nodes.length + " nodes are available: pod has unbound immediate PersistentVolumeClaims."];
+  return [
+    "Name:         " + pod.name,
+    "Namespace:    default",
+    "Node:         " + (scheduled ? statefulPodNode(host.nodes, pod) : "<none>"),
+    "Status:       " + (scheduled ? "Running" : "Pending"),
+    "Ready:        " + (scheduled ? "1/1" : "0/1"),
+    "IP:           " + (ip ?? "<none>"),
+    "Controlled By: StatefulSet/" + sts.name,
+    "Service Account: default",
+    "Containers:",
+    "  " + sts.name + ":",
+    "    Image:        " + sts.image,
+    "    State:        " + (scheduled ? "Running" : "Waiting (Pending)"),
+    "    Restart Count: " + pod.restarts,
+    "Volumes:",
+    "  " + sts.volumeClaimName + ":",
+    "    Type:       PersistentVolumeClaim (a reference to a PersistentVolumeClaim in the same namespace)",
+    "    ClaimName:  " + statefulPodClaimName(sts, pod),
+    "Events:",
+    "  Type    Reason     Age   Message",
+    "  ----    ------     ----  -------",
+    ...events,
+  ].join("\n");
+}
+
+function describePod(host: KubectlHost, t: string[]): string {
+  const name = t[3];
+  if (!name) return host._err("kubectl describe pod: Welcher Pod?", "Die Namen siehst du mit 'kubectl get pods'.");
+  const c = findClusterPod(host, name);
+  if (!c) return host._err('Error from server (NotFound): pods "' + name + '" not found', "Tipp: Pod-Namen kannst du aus 'kubectl get pods' kopieren.");
+  switch (c.owner) {
+    case "Deployment": return describeDeploymentPod(host, c);
+    case "StatefulSet": return describeStatefulPod(host, c);
+  }
 }
 
 const DESCRIBE_RENDERERS: { aliases: string[]; render: Renderer }[] = [
@@ -560,7 +607,7 @@ export function kubectlTop(host: KubectlHost, t: string[]) {
     if (name) {
       rows = rows.filter(r => r.name === name);
       if (rows.length === 0) {
-        const exists = clusterPods(host).some(c => c.pod.name === name);
+        const exists = findClusterPod(host, name) !== undefined;
         return exists
           ? host._err("error: Metrics not available for pod default/" + name, "Metriken gibt es nur für laufende Pods – Status prüfen mit 'kubectl get pods'.")
           : host._err('Error from server (NotFound): pods "' + name + '" not found', "Pod-Namen siehst du mit 'kubectl get pods'.");
@@ -623,6 +670,40 @@ function logsNotStartedError(host: KubectlHost, dep: Deployment, name: string): 
   return null;
 }
 
+/** Was `kubectl logs` über einen Pod wissen muss: Fehler vor dem Start, Log des abgestürzten
+ *  Vorgängers, Containername und der normale Log. Je Owner aus seiner Wahrheit. */
+interface LogSource { notStarted: string | null; crashLog: string | null; container: string; normal: string }
+
+function logSource(host: KubectlHost, c: ClusterPod, name: string): LogSource {
+  switch (c.owner) {
+    case "Deployment":
+      return {
+        notStarted: logsNotStartedError(host, c.dep, name),
+        crashLog: brokenLogText(c.dep),
+        container: c.dep.name,
+        normal: [
+          "10.244.1.1 - - [12/Jun/2026:09:14:02 +0000] \"GET / HTTP/1.1\" 200 615",
+          "10.244.1.1 - - [12/Jun/2026:09:14:05 +0000] \"GET /gesundheit HTTP/1.1\" 200 2",
+          "10.244.2.7 - - [12/Jun/2026:09:14:11 +0000] \"GET /favicon.ico HTTP/1.1\" 404 153",
+        ].join("\n"),
+      };
+    case "StatefulSet":
+      return {
+        notStarted: podAddress(c, host.pvcs) === null
+          ? host._err('Error from server (BadRequest): pod "' + name + '" is not scheduled yet',
+            "Der Pod wartet auf sein Volume. Schau in die Events: kubectl describe pod " + name + " – und prüfe den Claim mit: kubectl get pvc")
+          : null,
+        crashLog: null,
+        container: c.sts.name,
+        normal: [
+          "[start] " + c.sts.name + " startet als " + name + " …",
+          "[info]  Datenverzeichnis ist der Claim " + statefulPodClaimName(c.sts, c.pod),
+          "[info]  Bereit für Verbindungen",
+        ].join("\n"),
+      };
+  }
+}
+
 export function kubectlLogs(host: KubectlHost, t: string[]) {
   // Flags können vor oder hinter dem Pod-Namen stehen: -f/--follow (live folgen),
   // -p/--previous (Logs des abgestürzten Vorgänger-Containers).
@@ -631,27 +712,20 @@ export function kubectlLogs(host: KubectlHost, t: string[]) {
   const previous = args.includes("-p") || args.includes("--previous");
   const name = args.find(a => !a.startsWith("-"));
   if (!name) return host._err("kubectl logs: Welcher Pod?", "Pod-Namen siehst du mit 'kubectl get pods'.");
-  const pod = host._allPods().find(p => p.name === name);
-  if (!pod) return host._err('Error from server (NotFound): pods "' + name + '" not found');
-  // Pod via _allPods() gefunden -> Deployment existiert garantiert.
-  const dep = host._findDeploymentOfPod(name)!;
-  const notStarted = logsNotStartedError(host, dep, name);
-  if (notStarted) return notStarted;
+  const c = findClusterPod(host, name);
+  if (!c) return host._err('Error from server (NotFound): pods "' + name + '" not found');
+  const src = logSource(host, c, name);
+  if (src.notStarted) return src.notStarted;
 
-  const brokenLog = brokenLogText(dep);
   if (previous) {
     // --previous zeigt die Logs des ABGESTÜRZTEN Vorgänger-Containers.
     // Nur sinnvoll, wenn der Pod überhaupt schon neugestartet ist.
-    if (brokenLog) return brokenLog;
-    return host._err('Error from server (BadRequest): previous terminated container "' + dep.name + '" in pod "' + name + '" not found',
+    if (src.crashLog) return src.crashLog;
+    return host._err('Error from server (BadRequest): previous terminated container "' + src.container + '" in pod "' + name + '" not found',
       "--previous zeigt den abgestürzten Vorgänger-Container – dieser Pod ist aber nie neugestartet.");
   }
 
-  let out = brokenLog ?? [
-    "10.244.1.1 - - [12/Jun/2026:09:14:02 +0000] \"GET / HTTP/1.1\" 200 615",
-    "10.244.1.1 - - [12/Jun/2026:09:14:05 +0000] \"GET /gesundheit HTTP/1.1\" 200 2",
-    "10.244.2.7 - - [12/Jun/2026:09:14:11 +0000] \"GET /favicon.ico HTTP/1.1\" 404 153",
-  ].join("\n");
+  let out = src.crashLog ?? src.normal;
   // -f würde im echten Cluster live weiterlaufen; im Simulator endet der Strom hier.
   if (follow) out += "\n^C  (--follow würde live weiterlaufen; im Simulator endet der Stream hier.)";
   return out;

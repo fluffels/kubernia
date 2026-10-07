@@ -7,10 +7,11 @@
  * EndpointSlices genau diese Funktion.
  *
  * Rein lesend und Phaser-frei: nur Domänentypen aus ./state, `podIP` aus ./util und die
- * PVC-Ableitung aus ./workload; kein Rückimport nach sim.ts (kein Zyklus). Das Nachführen
+ * PVC-Ableitung aus ./workload und das Pod-Inventar ./pods; kein Rückimport nach sim.ts (kein Zyklus). Das Nachführen
  * (`_reschedulePending`/`_recheckReadiness`) bleibt bei den aufrufenden Befehlen.
  */
-import { isExternalNameService, type ClusterState, type Deployment, type ServiceRes } from "./state";
+import { isExternalNameService, type ClusterState, type Deployment, type PvcRes, type ServiceRes } from "./state";
+import { clusterPods, type ClusterPod } from "./pods";
 import { podIP } from "./util";
 import { statefulPodVolumePending } from "./workload";
 
@@ -29,30 +30,40 @@ export interface ServiceBackend {
   containerPort?: number;
 }
 
-/** Die Pod-IP eines Deployment-Pods (StatefulSet-Pods kennen kein `pending` und nutzen `podIP` direkt): `null`, solange das Deployment nicht eingeplant ist (`broken: pending`),
- *  sonst die stabile `podIP(name)`. Auch `describe pod` nutzt diese Stelle. */
-export function podAddress(dep: Pick<Deployment, "broken">, pod: { name: string }): string | null {
-  return dep.broken && dep.broken.type === "pending" ? null : podIP(pod.name);
+/** Die Pod-IP eines Pods: `null`, solange er nicht eingeplant ist (Deployment `broken: pending`,
+ *  StatefulSet mit Pending-PVC), sonst die stabile `podIP(name)`. Die EINE Quelle für
+ *  „eingeplant“; auch `describe pod` nutzt sie. */
+export function podAddress(c: ClusterPod, pvcs: readonly PvcRes[]): string | null {
+  switch (c.owner) {
+    case "Deployment":
+      return c.dep.broken && c.dep.broken.type === "pending" ? null : podIP(c.pod.name);
+    case "StatefulSet":
+      return statefulPodVolumePending(c.sts, c.pod, pvcs) ? null : podIP(c.pod.name);
+  }
+}
+
+/** Gehört der Pod hinter diesen Service? Die Verdrahtung über den Namen (siehe Kopf). */
+function selects(svc: ServiceRes, c: ClusterPod): boolean {
+  switch (c.owner) {
+    case "Deployment": return c.dep.name === svc.name;
+    case "StatefulSet": return c.sts.serviceName === svc.name;
+  }
+}
+
+function backendOf(host: EndpointsHost, c: ClusterPod): ServiceBackend {
+  const ip = podAddress(c, host.pvcs);
+  switch (c.owner) {
+    case "Deployment":
+      return { pod: c.pod.name, ip, ready: host._podReady(c.dep), owner: "Deployment", containerPort: c.dep.containerPort };
+    case "StatefulSet":
+      return { pod: c.pod.name, ip, ready: ip !== null, owner: "StatefulSet" };
+  }
 }
 
 /** Alle Pods hinter einem Service, bereit oder nicht. ExternalName hat keine Pods. */
 export function serviceBackends(host: EndpointsHost, svc: ServiceRes): ServiceBackend[] {
   if (isExternalNameService(svc)) return [];
-  const out: ServiceBackend[] = [];
-  const dep = host.deployments.find(d => d.name === svc.name);
-  if (dep) {
-    const ready = host._podReady(dep);
-    for (const p of dep.pods) {
-      out.push({ pod: p.name, ip: podAddress(dep, p), ready, owner: "Deployment", containerPort: dep.containerPort });
-    }
-  }
-  for (const sts of host.statefulSets) {
-    if (sts.serviceName !== svc.name) continue;
-    for (const p of sts.pods) {
-      out.push({ pod: p.name, ip: podIP(p.name), ready: !statefulPodVolumePending(sts, p, host.pvcs), owner: "StatefulSet" });
-    }
-  }
-  return out;
+  return clusterPods(host).filter(c => selects(svc, c)).map(c => backendOf(host, c));
 }
 
 /** Nur die bereiten Backends, also die echten Endpoints. */

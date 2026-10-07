@@ -97,7 +97,8 @@ export const BUNDLE_BUDGETS = [
     // #1319: +~2 KB — zwei headless-DNS-Aufgaben (Texte, Checks, why/hint) in knut.json.
     // #1339: +~0.4 KB — Pod-Inventar (pods.ts), StatefulSet-Pods in top/podMetrics.
     // #1403: +~0,6 KB — ExternalName-Validierung + Namespace-Auflösung (sim/dns.ts); Verweis #1408.
-    maxBytes: 1_418_000,
+    // #1404: +~2 KB (+1 KB Puffer) — einheitliche Pod-Sicht: describe pod und logs für StatefulSet-Pods (Texte), podRow/findClusterPod.
+    maxBytes: 1_421_000,
   },
   {
     label: "Phaser-vendor-Chunk in dist/ (#595)",
