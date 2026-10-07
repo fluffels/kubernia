@@ -24,8 +24,9 @@ const LAYERS = {
 const PHASER = "node_modules[/\\\\]phaser[/\\\\]";
 
 /** Quellwurzel dieses Projekts (#1373): das Verzeichnis, unter dem der Code liegt, mit Slash am Ende. Die EINE
- *  Stelle, an der der Ordnername steht: Muster, Globs, Regeln und Diagramm leiten daraus ab (ein fremdes Repo
- *  setzt hier z.B. `wetter/`). */
+ *  Stelle für Muster, Globs, Regeln und Diagramm (ein fremdes Repo setzt hier z.B. `wetter/`). Cruise-Ziel und
+ *  Collapse (docs-gen-Config), Coverage-`include` (vite.config.ts) und die Waisen-Ausnahmen in
+ *  .dependency-cruiser.cjs nennen den Ordner weiterhin selbst. */
 const QUELLWURZEL = "src/";
 
 /** Pfad-Muster einer Schicht aus ihren Wurzel-Namen (Datei- bzw. Verzeichnis-Segmente unter der Quellwurzel).

@@ -404,7 +404,7 @@ describe("docs-gen CLI und Registry (#1392)", () => {
     assert.equal(code, 0);
     assert.match(readFileSync(join(root, "a.md"), "utf8"), /<!-- Generiert von make docs – nicht von Hand ändern\. -->/);
   });
-  test.each([["leer", ""], ["nur Leerzeichen", "  "], ["Zahl", 5], ["Zeilenumbruch", "make\ndocs"], ["Bindestriche --", "make -- docs"], ["Kommentar-Ende", "a --> b"]])(
+  test.each([["leer", ""], ["nur Leerzeichen", "  "], ["führendes Leerzeichen", " make docs"], ["folgendes Leerzeichen", "make docs "], ["Zahl", 5], ["Zeilenumbruch", "make\ndocs"], ["Bindestriche --", "make -- docs"], ["Kommentar-Ende", "a --> b"]])(
     "befehl ungültig (%s): Exit 1, nichts geschrieben",
     (_n, wert) => {
       const root = fixture({ "a.md": `${S}\n${E}\n` });

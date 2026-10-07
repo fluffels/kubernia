@@ -164,6 +164,7 @@ describe("docs-gen auf einem Fremd-Repo (Python, nicht Kubernia)", () => {
     assert.equal(c.code, 1);
     assert.match(c.err, /außerhalb des Solls/);
     assert.match(c.err, /modell → api/);
+    assert.doesNotMatch(c.err, /npm run|check:arch/);
     assert.equal(readme(root), README, "fail-closed: nichts geschrieben");
   });
 
@@ -179,11 +180,14 @@ describe("docs-gen auf einem Fremd-Repo (Python, nicht Kubernia)", () => {
 });
 
 describe("Kern-Schnitt: übertragbare Module importieren keinen Harness-Stack", () => {
+  // Bekannte Grenze: erkannt werden statische `import`/`export … from` und `import("…")` mit einfachen oder doppelten
+  // Anführungszeichen; `require` und `createRequire` sieht der Wächter nicht.
   const KERN = ["markdown", "adr", "zeitleiste", "schichten"];
-  const importe = (rel: string): string[] => {
-    const text = readFileSync(join(__dirname, "..", rel), "utf8");
-    return [...text.matchAll(/^\s*import\s+(?:[^;]*?\sfrom\s+)?"([^"]+)"/gm)].map((m) => m[1]);
-  };
+  const importeAus = (text: string): string[] => [
+    ...[...text.matchAll(/^\s*(?:import|export)\s+(?:[^;]*?\sfrom\s+)?["']([^"']+)["']/gm)].map((m) => m[1]),
+    ...[...text.matchAll(/\bimport\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
+  ];
+  const importe = (rel: string): string[] => importeAus(readFileSync(join(__dirname, "..", rel), "utf8"));
   test.each(KERN)("scripts/docs-gen/%s.mjs: nur node:* und Kern-Module", (name) => {
     for (const spec of importe(`scripts/docs-gen/${name}.mjs`)) {
       const ok = spec.startsWith("node:") || KERN.some((k) => spec === `./${k}.mjs`);
@@ -196,10 +200,9 @@ describe("Kern-Schnitt: übertragbare Module importieren keinen Harness-Stack", 
       assert.ok(ok, `docs-gen.mjs importiert ${spec}`);
     }
   });
-  test("der Wächter erkennt einen Fremd-Import (Negativfall)", () => {
-    const fremd = 'import { x } from "./quests.mjs";\nimport { y } from "node:fs";';
-    const specs = [...fremd.matchAll(/^\s*import\s+(?:[^;]*?\sfrom\s+)?"([^"]+)"/gm)].map((m) => m[1]);
-    assert.deepEqual(specs, ["./quests.mjs", "node:fs"]);
-    assert.ok(!KERN.some((k) => specs[0] === `./${k}.mjs`));
+  test("der Wächter erkennt Fremd-Importe in allen unterstützten Formen (Negativfall)", () => {
+    const fremd = ['import { x } from "./quests.mjs";', "import { x } from './quests.mjs';", 'import "./quests.mjs";', 'export { x } from "./quests.mjs";', 'const m = await import("./quests.mjs");'];
+    for (const zeile of fremd) assert.deepEqual(importeAus(zeile), ["./quests.mjs"], zeile);
+    assert.deepEqual(importeAus('import { y } from "node:fs";'), ["node:fs"]);
   });
 });

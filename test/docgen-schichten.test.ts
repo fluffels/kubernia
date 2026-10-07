@@ -196,6 +196,13 @@ describe("Modell-Prüfung (Negativfälle)", () => {
     const root = fixture({ "scripts/layers.cjs": `module.exports = { SCHICHT_MODELL: ${JSON.stringify(m)}, pruefeModell() {} };` });
     assert.throws(() => api.schichtenSollGenerator({ rootDir: root, config: cfg() }), /quellwurzel/);
   });
+  test("Generator wirft bei trivialem Prüfer und quellwurzel ohne Slash am Ende, nur \"/\", leer oder Zahl", () => {
+    for (const w of ["wetter", "/", "", 5]) {
+      const m = { ...basis(), quellwurzel: w };
+      const root = fixture({ "scripts/layers.cjs": `module.exports = { SCHICHT_MODELL: ${JSON.stringify(m)}, pruefeModell() {} };` });
+      assert.throws(() => api.schichtenSollGenerator({ rootDir: root, config: cfg() }), /quellwurzel/, JSON.stringify(w));
+    }
+  });
   test("schichtVon: die Quellwurzel des Modells bestimmt die Auffang-Schicht, nicht ein festes src/", () => {
     const lib: Modell = { ...basis(), quellwurzel: "lib/" };
     assert.equal(api.schichtVon("lib/x/", lib), "domaene");
@@ -253,8 +260,9 @@ describe("Ist-Kanten (Verdichtung)", () => {
     assert.equal(api.schichtVon("node_modules\\phaser\\", m), "phaser");
     assert.equal(api.schichtVon("node_modules/vite/", m), null);
   });
-  test("eine Kante außerhalb des Solls wirft mit Hinweis auf check:arch", () => {
-    assert.throws(() => api.istKanten(cruiseJson({ "src/sim/": ["src/game/"] }), m), /domaene → anwendung.*check:arch/);
+  test("eine Kante außerhalb des Solls wirft; der Prüfbefehl steht nur, wenn die Config ihn nennt", () => {
+    assert.throws(() => api.istKanten(cruiseJson({ "src/sim/": ["src/game/"] }), m, "make arch"), /domaene → anwendung.*\(make arch\)/);
+    assert.throws(() => api.istKanten(cruiseJson({ "src/sim/": ["src/game/"] }), m), (e: Error) => /domaene → anwendung/.test(e.message) && !/npm run|check:arch/.test(e.message));
     assert.throws(() => api.istKanten(cruiseJson({ "src/game/": ["node_modules/phaser/"] }), m), /anwendung → phaser/);
   });
   test("Extern-Quellen (Phaser) werden nicht als Quelle ausgewertet", () => {
@@ -285,8 +293,10 @@ describe("Ist-Generator (dependency-cruiser als Prozess)", () => {
     assert.match(out, /s_anwendung --> s_domaene/);
     assert.match(out, /Erlaubt, aber ungenutzt: Präsentation → Anwendung/);
   });
-  test("Exit-Code ungleich 0 wirft mit Hinweis auf check:arch", () => {
-    assert.throws(() => gen("process.exit(2);"), /check:arch grün/);
+  test("Exit-Code ungleich 0 wirft ohne npm-Bezug; der Prüfbefehl steht nur, wenn die Config ihn nennt", () => {
+    assert.throws(() => gen("process.exit(2);"), (e: Error) => /Schichtprüfung grün/.test(e.message) && !/npm run|check:arch/.test(e.message));
+    const mitBefehl = () => api.schichtenIstGenerator({ rootDir: fixtureMitModell(basis(), skript("process.exit(2);")), config: cfg({ cruise: ["fake.mjs"], pruefbefehl: "make arch" }) });
+    assert.throws(mitBefehl, /Schichtprüfung \(make arch\) grün/);
   });
   test("kaputtes JSON wirft", () => {
     assert.throws(() => gen('process.stdout.write("{kaputt");'), /kein gültiges JSON/);

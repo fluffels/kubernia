@@ -1,6 +1,6 @@
 # Harness übertragen: Einführungspfad für ein fremdes Bestands-Repo
 
-> 🧭 **Fachlich geprüft am: 2026-10-07.** Evergreen. Zielgruppe: wer den Harness dieses Repos (Agenten-Regeln, Gates, Lebende Doku, Review) in ein **bestehendes** Repo in beliebiger Sprache holen will. Die Regeltexte stehen nicht hier, sondern in [AGENTS.md](../AGENTS.md) und [agent-harness.md](agent-harness.md); diese Seite sagt, **in welcher Reihenfolge** man sie einführt und **was auf dem Weg weh tut**. Das Leitbild „Bitte → Mauer“ (was als Bitte in `AGENTS.md` beginnt, wird ein Gate): [agent-harness.md › Leitplanken-Schichten](agent-harness.md#leitplanken-schichten-bitte-und-mauer). Warum Doku generiert wird: [ADR 0017](adr/0017-lebende-doku-generierte-abschnitte.md). Wie das gewachsen ist: [README › Wie das gewachsen ist](../README.md#wie-das-gewachsen-ist).
+> 🧭 **Fachlich geprüft am: 2026-10-08.** Evergreen. Zielgruppe: wer den Harness dieses Repos (Agenten-Regeln, Gates, Lebende Doku, Review) in ein **bestehendes** Repo in beliebiger Sprache holen will. Die Regeltexte stehen nicht hier, sondern in [AGENTS.md](../AGENTS.md) und [agent-harness.md](agent-harness.md); diese Seite sagt, **in welcher Reihenfolge** man sie einführt und **was auf dem Weg weh tut**. Das Leitbild „Bitte → Mauer“ (was als Bitte in `AGENTS.md` beginnt, wird ein Gate): [agent-harness.md › Leitplanken-Schichten](agent-harness.md#leitplanken-schichten-bitte-und-mauer). Warum Doku generiert wird: [ADR 0017](adr/0017-lebende-doku-generierte-abschnitte.md). Wie das gewachsen ist: [README › Wie das gewachsen ist](../README.md#wie-das-gewachsen-ist).
 
 ## Grundregel: Bestand einfrieren statt sanieren
 
@@ -56,9 +56,10 @@ Der Generator-Kern hängt nicht an Kubernia. Belegt ist das durch einen Test, de
 - `markdown`: welche Dateien und Ordner nach `GEN:`-Markern durchsucht werden.
 - `adr.ordner`, `zeitleiste.meilensteine`: Quellen für ADR-Liste und Zeitleiste.
 - `schichten.layers` (Pfad zur Schicht-Definition) und `schichten.cruise` (Node-Aufruf, der die Import-Graph-JSON auf stdout liefert).
+- `schichten.pruefbefehl` (optional): der Befehl der Schichtprüfung, den die Fehlermeldungen nennen. Das Code-Verzeichnis steht außerdem im Cruise-Aufruf, im Collapse-Muster, im Coverage-`include` und in den Ausnahmen der Werkzeug-Config; sie ziehen nicht automatisch mit `quellwurzel` mit.
 - `befehl` (optional): der Befehl, den Hinweiszeile und `Fix:`-Text nennen, Standard `npm run docs:gen`.
 
-**Vertrag der Schicht-Definition:** eine CommonJS-Datei, die `SCHICHT_MODELL` und `pruefeModell` exportiert. Das Modell trägt `quellwurzel` (das Code-Verzeichnis mit Slash, etwa `wetter/`), `schichten` (je `id`, `label`, `wurzeln`, `muster`, `darf`; genau eine Auffang-Schicht mit `muster: null`) und `extern`. Alles, was nicht in `darf` steht, ist verboten. Die Engine prüft zusätzlich selbst, dass `quellwurzel` gesetzt ist, auch wenn der mitgelieferte Prüfer es nicht tut. Die Regeln des Werkzeugs (hier die von dependency-cruiser) sollten aus derselben Datei abgeleitet werden, wie [`scripts/layers.cjs`](../scripts/layers.cjs) es vormacht.
+**Vertrag der Schicht-Definition:** eine CommonJS-Datei, die `SCHICHT_MODELL` und `pruefeModell` exportiert. Das Modell trägt `quellwurzel` (das Code-Verzeichnis mit Slash, etwa `wetter/`), `schichten` (je `id`, `label`, `wurzeln`, `muster`, `darf`; genau eine Auffang-Schicht mit `muster: null`) und `extern`. Alles, was nicht in `darf` steht, ist verboten. Der Schichten-Generator prüft zusätzlich selbst, dass `quellwurzel` gesetzt ist und mit `/` endet, auch wenn der mitgelieferte Prüfer es nicht tut. Die Regeln des Werkzeugs (hier die von dependency-cruiser) sollten aus derselben Datei abgeleitet werden, wie [`scripts/layers.cjs`](../scripts/layers.cjs) es vormacht.
 
 ## Offene Entscheidung: Veröffentlichung
 

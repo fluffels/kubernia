@@ -115,18 +115,18 @@ import { join } from "node:path";
 
 const CRUISER = fileURLToPath(new URL("../node_modules/dependency-cruiser/bin/dependency-cruiser.mjs", import.meta.url));
 
-/** Cruist eine Fixture mit den Regeln aus dem echten Modell und gibt die Namen der Verstöße zurück. */
-function cruiseVerstoesse(dateien: Record<string, string>): string[] {
+/** Cruist eine Fixture mit den Regeln aus dem Modell (Standard: das echte) und gibt die Namen der Verstöße zurück. */
+function cruiseVerstoesse(dateien: Record<string, string>, modell: Modell = layers.SCHICHT_MODELL, wurzel = "src"): string[] {
   const root = mkdtempSync(join(tmpdir(), "kq-cruise-"));
   try {
     for (const [rel, inhalt] of Object.entries(dateien)) {
       mkdirSync(join(root, rel, ".."), { recursive: true });
       writeFileSync(join(root, rel), inhalt);
     }
-    writeFileSync(join(root, "cruise.cjs"), `module.exports = { forbidden: ${JSON.stringify(layers.verbotsRegeln(layers.SCHICHT_MODELL))} };\n`);
+    writeFileSync(join(root, "cruise.cjs"), `module.exports = { forbidden: ${JSON.stringify(layers.verbotsRegeln(modell))} };\n`);
     let out: string;
     try {
-      out = execFileSync(process.execPath, [CRUISER, "src", "--config", "cruise.cjs", "--output-type", "json"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+      out = execFileSync(process.execPath, [CRUISER, wurzel, "--config", "cruise.cjs", "--output-type", "json"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     } catch (err) {
       out = (err as { stdout?: string }).stdout ?? ""; // Exit ≠ 0 bei Verstoß; das JSON steht trotzdem auf stdout
     }
@@ -168,3 +168,26 @@ test("Quellwurzel (#1373): die Regeln folgen dem Modell, nicht einem festen src/
   assert.ok(!verletzt(regeln, "src/x/b.ts", "lib/oben/a.ts"), "ein Pfad außerhalb der Quellwurzel ist keine Quelle");
   assert.ok(!verletzt(regeln, "lib/oben/a.ts", "lib/x/b.ts"));
 });
+
+test("echter dependency-cruiser-Lauf: die Auffang-Schicht (Domäne) als Quelle, Domäne → Anwendung ist rot", () => {
+  const v = cruiseVerstoesse({
+    "src/sim/c.js": 'import "../game/a.js";\n',
+    "src/game/a.js": "export const a = 1;\n",
+  });
+  assert.deepEqual(v, ["schicht-domaene-nicht-anwendung"]);
+}, 60_000);
+
+test("echter dependency-cruiser-Lauf mit abweichender Quellwurzel (#1373): lib/ statt src/", () => {
+  const m: Modell = {
+    quellwurzel: "lib/",
+    schichten: [
+      { id: "oben", label: "Oben", muster: "^lib/oben/", wurzeln: ["oben"], darf: ["unten"] },
+      { id: "unten", label: "Unten", muster: null, wurzeln: [], darf: [] },
+    ],
+    extern: [],
+  };
+  const rot = cruiseVerstoesse({ "lib/x/b.js": 'import "../oben/a.js";\n', "lib/oben/a.js": "export const a = 1;\n" }, m, "lib");
+  assert.deepEqual(rot, ["schicht-unten-nicht-oben"]);
+  const gruen = cruiseVerstoesse({ "lib/oben/a.js": 'import "../x/b.js";\n', "lib/x/b.js": "export const b = 1;\n" }, m, "lib");
+  assert.deepEqual(gruen, []);
+}, 60_000);

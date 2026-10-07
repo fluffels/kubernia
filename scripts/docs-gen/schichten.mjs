@@ -52,8 +52,11 @@ export function sollKanten(modell) {
   return sortiere(modell.schichten.flatMap((s) => s.darf.map((z) => [s.id, z])), modell);
 }
 
+/** Optionaler Config-Schlüssel `schichten.pruefbefehl` (z.B. der Befehl des Schicht-Gates) für die Fehlertexte. */
+const hinweisAuf = (befehl) => (typeof befehl === "string" && befehl !== "" ? ` (${befehl})` : "");
+
 /** Verdichtet das JSON von dependency-cruiser auf Schicht-Kanten; wirft bei einer Kante außerhalb des Solls. */
-export function istKanten(cruiseJson, modell) {
+export function istKanten(cruiseJson, modell, pruefbefehl) {
   const darf = new Map(modell.schichten.map((s) => [s.id, new Set(s.darf)]));
   const gefunden = new Map();
   for (const m of cruiseJson?.modules ?? []) {
@@ -70,7 +73,7 @@ export function istKanten(cruiseJson, modell) {
   const verboten = [...gefunden.values()].filter(([v, n]) => !darf.get(v).has(n));
   if (verboten.length)
     throw new Error(
-      `Import-Richtung(en) außerhalb des Solls: ${sortiere(verboten, modell).map(([v, n]) => `${v} → ${n}`).join(", ")} (npm run check:arch müsste rot sein)`,
+      `Import-Richtung(en) außerhalb des Solls: ${sortiere(verboten, modell).map(([v, n]) => `${v} → ${n}`).join(", ")} (die Schichtprüfung des Projekts${hinweisAuf(pruefbefehl)} müsste rot sein)`,
     );
   return sortiere([...gefunden.values()], modell);
 }
@@ -125,24 +128,24 @@ export function schichtenSollGenerator(ctx) {
 }
 
 /** Startet dependency-cruiser (Argumente aus der Config) und liefert dessen JSON. */
-function cruise(rootDir, args) {
+function cruise(rootDir, args, pruefbefehl) {
   if (!Array.isArray(args) || args.length === 0) throw new Error('config.json: "schichten.cruise" fehlt');
   let out;
   try {
     out = execFileSync(process.execPath, args, { cwd: rootDir, encoding: "utf8", maxBuffer: 256 * MIB, stdio: ["ignore", "pipe", "pipe"] });
   } catch (err) {
     const detail = err instanceof Error ? err.message.split(/\r?\n/)[0] : String(err);
-    throw new Error(`dependency-cruiser fehlgeschlagen (erst npm run check:arch grün machen): ${detail}`, { cause: err });
+    throw new Error(`Import-Graph-Aufruf fehlgeschlagen (erst die Schichtprüfung${hinweisAuf(pruefbefehl)} grün machen): ${detail}`, { cause: err });
   }
   try {
     return JSON.parse(out);
   } catch {
-    throw new Error("dependency-cruiser lieferte kein gültiges JSON");
+    throw new Error("Import-Graph-Aufruf lieferte kein gültiges JSON");
   }
 }
 
 export function schichtenIstGenerator(ctx) {
   const { modell, cfg } = geladenesModell(ctx);
-  const ist = istKanten(cruise(ctx.rootDir, cfg.cruise), modell);
+  const ist = istKanten(cruise(ctx.rootDir, cfg.cruise, cfg.pruefbefehl), modell, cfg.pruefbefehl);
   return `${renderDiagramm(modell, ist)}\n\n${ungenutztZeile(modell, sollKanten(modell), ist)}`;
 }
