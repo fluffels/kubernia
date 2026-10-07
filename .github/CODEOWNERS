@@ -31,6 +31,7 @@
 /scripts/layers.cjs        @fluffels
 /scripts/check-*.mjs       @fluffels
 /scripts/slice-override.mjs @fluffels
+/scripts/ci-laeufe.mjs     @fluffels
 /scripts/docs-gen*        @fluffels
 /eslint.config.js          @fluffels
 /eslint-suppressions.json  @fluffels
@@ -76,6 +77,7 @@ AGENTS.md                  @fluffels
 /scripts/haupt-sync.mjs @fluffels
 /scripts/lens-edit-guard.mjs @fluffels
 /.agents/                  @fluffels
+/.githooks/                @fluffels
 /docs/agent-harness*       @fluffels
 
 # Waechter-Tests (#1156, #1165) - der Test IST hier das Gate (kein geschuetztes check-Skript dahinter).

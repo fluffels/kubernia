@@ -17,10 +17,15 @@
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { parseNachweis } from "./slice-override.mjs";
+import { distinctRoteShas, holeRoteLaeufe } from "./ci-laeufe.mjs";
 
 export const NACHARBEIT_TAGE = 14;
 const TAG_MS = 24 * 3600 * 1000;
 const PR_LIMIT = 1000;
+/** PRs je GraphQL-Abfrage (Aliase): hält die Abfrage klein und die Zahl der Aufrufe bei ⌈N/50⌉. */
+const GRAPHQL_BLOCK = 50;
+/** Label-Events je PR, die EINE Abfrage liefert (`first:`); mehr ist abgeschnitten und damit ein Datenfehler. */
+const LABEL_EVENTS_JE_PR = 100;
 
 /** Daten sind unvollständig: das Skript bricht mit Exit 2 ab statt eine schönere Zahl zu liefern. */
 export class DatenFehler extends Error {}
@@ -61,12 +66,36 @@ export function nacharbeitVon({ pr, ticket, mergeSha, mergedAt, commits, jetzt }
   return jetzt.getTime() < bis ? "offen" : "nein";
 }
 
-/** Anzahl distinct Head-SHAs roter CI-Läufe zwischen PR-Erstellung und Merge. Pure. */
+/** Anzahl distinct Head-SHAs roter CI-Läufe zwischen PR-Erstellung und Merge (Zählung: ci-laeufe.mjs). Pure. */
 export function ciFixRunden(laeufe, createdAt, mergedAt) {
-  const von = new Date(createdAt).getTime();
-  const bis = new Date(mergedAt).getTime();
-  const shas = laeufe.filter((l) => new Date(l.createdAt).getTime() >= von && new Date(l.createdAt).getTime() <= bis).map((l) => l.sha);
-  return new Set(shas).size;
+  return distinctRoteShas(laeufe, { von: createdAt, bis: mergedAt }).length;
+}
+
+/** GraphQL-Abfrage der LABELED_EVENTs für einen Block PR-Nummern (ein Alias `p<nr>` je PR). Pure. */
+export function labelAbfrage(nummern) {
+  const je = nummern
+    .map((n) => `p${n}: pullRequest(number: ${n}) { timelineItems(itemTypes: [LABELED_EVENT], first: ${LABEL_EVENTS_JE_PR}) { pageInfo { hasNextPage } nodes { ... on LabeledEvent { createdAt label { name } } } } }`)
+    .join(" ");
+  return `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${je} } }`;
+}
+
+/**
+ * Anzahl der `status:festgefahren`-Label-Events je PR-Nummer aus der GraphQL-Antwort. Wirft DatenFehler, wenn ein PR
+ * fehlt oder seine Label-Events über die erste Seite (`LABEL_EVENTS_JE_PR`) hinausgehen. `totalCount` taugt dafür nicht:
+ * GitHub zählt damit ALLE Timeline-Einträge des PRs (gemessen 2026-10-07: totalCount 19 bei null Label-Events), nur
+ * `nodes` und `pageInfo` folgen dem `itemTypes`-Filter. Pure.
+ */
+export function festgefahrenAusAntwort(antwort, nummern) {
+  const repo = antwort?.data?.repository;
+  if (!repo) throw new DatenFehler("GraphQL-Antwort ohne data.repository.");
+  const out = {};
+  for (const n of nummern) {
+    const items = repo[`p${n}`]?.timelineItems;
+    if (!items) throw new DatenFehler(`GraphQL: PR #${n} ohne Label-Events in der Antwort.`);
+    if (items.pageInfo?.hasNextPage !== false) throw new DatenFehler(`PR #${n}: mehr als ${LABEL_EVENTS_JE_PR} Label-Events (oder pageInfo fehlt): abgeschnitten.`);
+    out[n] = (items.nodes ?? []).filter((e) => e?.label?.name === "status:festgefahren").length;
+  }
+  return out;
 }
 
 /** Bewertet die PRs; `ci`/`festgefahren` sind je PR-Nummer vorab geholt. Pure. Liefert Zeilen und Kennzahlen. */
@@ -161,20 +190,32 @@ export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date() }) {
   }
   const fehlend = prs.filter((p) => !commits.some((c) => c.sha === p.mergeCommit?.oid));
   if (fehlend.length > 0) throw new DatenFehler(`Merge-Commit lokal unbekannt (PR ${fehlend.map((p) => `#${p.number}`).join(", ")}): erst \`git fetch origin\`.`);
+  // Konstante Zahl gh-Aufrufe statt zwei je PR: EINE paginierte Abfrage roter Läufe ab dem frühesten PR-Datum (nach
+  // Branch gruppiert) plus ein GraphQL-Aufruf je 50 PRs für die Label-Events.
   const ci = {};
-  const festgefahren = {};
-  for (const p of prs) {
-    const runs = gh([
-      "api", "--paginate",
-      `repos/{owner}/{repo}/actions/workflows/ci.yml/runs?branch=${encodeURIComponent(p.headRefName)}&event=pull_request&status=failure&per_page=100`,
-      "--jq", ".workflow_runs[] | [.head_sha,.created_at] | @tsv",
-    ]);
-    ci[p.number] = runs.split(/\r?\n/).filter(Boolean).map((l) => ({ sha: l.split("\t")[0], createdAt: l.split("\t")[1] }));
-    const events = gh([
-      "api", "--paginate", `repos/{owner}/{repo}/issues/${p.number}/events`,
-      "--jq", '.[] | select(.event=="labeled" and .label.name=="status:festgefahren") | .created_at',
-    ]);
-    festgefahren[p.number] = events.split(/\r?\n/).filter(Boolean).length;
+  let festgefahren = {};
+  if (prs.length > 0) {
+    const seit = prs.map((p) => p.createdAt).sort()[0];
+    let laeufe;
+    try {
+      laeufe = holeRoteLaeufe(gh, { seit });
+    } catch (e) {
+      throw e instanceof DatenFehler ? e : new DatenFehler(e instanceof Error ? e.message : String(e));
+    }
+    const jeBranch = new Map();
+    for (const l of laeufe) jeBranch.set(l.branch, [...(jeBranch.get(l.branch) ?? []), l]);
+    for (const p of prs) ci[p.number] = jeBranch.get(p.headRefName) ?? [];
+    for (let i = 0; i < prs.length; i += GRAPHQL_BLOCK) {
+      const nummern = prs.slice(i, i + GRAPHQL_BLOCK).map((p) => p.number);
+      const antwort = gh(["api", "graphql", "-F", "owner={owner}", "-F", "name={repo}", "-f", `query=${labelAbfrage(nummern)}`]);
+      let json;
+      try {
+        json = JSON.parse(antwort);
+      } catch {
+        throw new DatenFehler("GraphQL-Antwort ist kein JSON.");
+      }
+      festgefahren = { ...festgefahren, ...festgefahrenAusAntwort(json, nummern) };
+    }
   }
   return bewertePrs({ prs, commits, ci, festgefahren, jetzt });
 }

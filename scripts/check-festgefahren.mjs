@@ -20,11 +20,13 @@
  * ausgelöst von `workflow_run` nach jedem failed CI-Lauf auf einem PR.
  *
  * Manuelle CI-Neustarts (Rerun) inflationieren den Zähler NICHT: gleicher Commit
- * → gleiche head_sha → zählt weiterhin als einer.
+ * → gleiche head_sha → zählt weiterhin als einer. Der Abruf (paginiert, ab Erstellung des PRs)
+ * steht in ci-laeufe.mjs, geteilt mit token-baseline.mjs und lauf-ergebnis.mjs.
  */
 
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { distinctRoteShas, holeRoteLaeufe } from "./ci-laeufe.mjs";
 
 /** Schwelle: 1 initialer Fehlschlag + 3 gescheiterte Fix-Versuche = „dreimal" aus AGENTS.md. */
 export const MAX_FAILED_PUSHES = 4;
@@ -101,7 +103,7 @@ function main() {
     "--repo", repo,
     "--head", headBranch,
     "--state", "open",
-    "--json", "number,labels",
+    "--json", "number,labels,createdAt",
   ]);
 
   if (prs.length === 0) {
@@ -121,22 +123,20 @@ function main() {
 
   // 3. Fehlgeschlagene CI-Läufe auf diesem Branch zählen (distinct head_sha).
   //    Manuelle Reruns haben dieselbe head_sha → zählen einmal, nicht doppelt.
-  //    per_page=10 reicht: Schwelle ist 4 — mehr müssen wir nicht kennen.
-  let failedRuns;
+  //    Nur Läufe ab Erstellung DIESES PRs: ein früherer PR auf einem wiederverwendeten Branch zählt nicht mit.
+  //    Paginiert (ci-laeufe.mjs), damit auch bei vielen alten Läufen kein neuer abgeschnitten wird.
+  let failedCount;
   try {
-    const runsPage = ghJson([
-      "api",
-      `repos/${repo}/actions/workflows/ci.yml/runs` +
-        `?branch=${encodeURIComponent(headBranch)}&status=failure&event=pull_request&per_page=10`,
-    ]);
-    failedRuns = runsPage.workflow_runs ?? [];
+    const laeufe = holeRoteLaeufe((args) => execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }), {
+      branch: headBranch,
+      seit: pr.createdAt,
+      repo,
+    });
+    failedCount = distinctRoteShas(laeufe, { von: pr.createdAt }).length;
   } catch (err) {
     console.error(`gh api fehlgeschlagen (${err.message}) — Wächter übersprungen.`);
     return; // graceful degradation: kein Netz/Token soll nicht fälschlich rot werden
   }
-
-  const distinctShas = new Set(failedRuns.map((r) => r.head_sha));
-  const failedCount = distinctShas.size;
 
   console.log(
     `PR #${prNumber}: ${failedCount} distinct failed CI-Pushes auf Branch '${headBranch}' (Schwelle: ${MAX_FAILED_PUSHES}).`,

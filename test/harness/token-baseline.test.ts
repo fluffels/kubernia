@@ -76,7 +76,6 @@ const m = baselineModule as {
   callsFromTranscript: (jsonl: string, subagent?: Sub | null) => { calls: Call[]; questions: number };
   readTranscriptSession: (sessionId: string, projectsRoot: string) => { calls: Call[]; questions: number };
   callsFromLangfuse: (obs: Obs[]) => Run & { questions: number };
-  countFailedPushes: (runs: { head_sha: string }[] | undefined) => number;
   mergedWithoutRework: (mergedAt: string | null | undefined, failedPushes: number) => boolean;
   renderMarkdown: (s: Summary, loop?: { failedPushes?: number; mergedAt?: string | null; nachweis?: { runden: number; plan: boolean | null } | null }) => string;
   priceCall: (c: Call, prices?: unknown) => number | null;
@@ -387,11 +386,6 @@ describe("token-baseline: Quelle Langfuse", () => {
 });
 
 describe("token-baseline: CI-/Merge-Kennzahlen und CLI", () => {
-  test("CI-Fix-Runden zählen distinct head_sha (Rerun zählt nicht doppelt, wie #904)", () => {
-    assert.equal(m.countFailedPushes([{ head_sha: "a" }, { head_sha: "a" }, { head_sha: "b" }]), 2);
-    assert.equal(m.countFailedPushes(undefined), 0);
-  });
-
   test("gemergt ohne CI-Fix nur bei Merge UND null roten Pushes", () => {
     assert.equal(m.mergedWithoutRework("2026-09-29T12:00:00Z", 0), true);
     assert.equal(m.mergedWithoutRework("2026-09-29T12:00:00Z", 1), false);

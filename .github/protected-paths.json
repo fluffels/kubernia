@@ -4,6 +4,7 @@
     "/scripts/layers.cjs",
     "/scripts/check-*.mjs",
     "/scripts/slice-override.mjs",
+    "/scripts/ci-laeufe.mjs",
     "/scripts/docs-gen*",
     "/eslint.config.js",
     "/eslint-suppressions.json",
@@ -45,6 +46,7 @@
     "/scripts/haupt-sync.mjs",
     "/scripts/lens-edit-guard.mjs",
     "/.agents/",
+    "/.githooks/",
     "/docs/agent-harness*"
   ],
   "waechter": [
