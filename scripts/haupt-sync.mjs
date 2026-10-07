@@ -27,7 +27,8 @@
  * Nur Node-Builtins.
  */
 import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { istDirektaufruf } from "./hook-io.mjs";
 
 /**
@@ -63,6 +64,33 @@ export function exitCodeFuer(ergebnis) {
 /** True, wenn unter den geänderten Dateien Agenten-Definitionen, Hooks, Skills oder AGENTS.md sind (die Session kennt sie nur im Startstand). Pur. */
 export const agentenGeaendert = (dateien) => dateien.some((d) => /^\.claude\//.test(d) || /(^|\/)AGENTS\.md$/.test(d));
 
+/**
+ * Node-Versionsprüfung (#1411): erfüllt `version` (z. B. `process.versions.node`) die Angabe `engines.node`, deren Form `>=X[.Y[.Z]]`
+ * ist? Liefert eine Hinweiszeile, wenn nicht; `null`, wenn ja oder wenn die Angabe nicht lesbar ist (andere Formen werden still
+ * übersprungen, ein SessionStart-Hook darf nie wegen einer exotischen Range stören). Pur.
+ */
+export function pruefeNodeVersion(version, engines) {
+  const soll = /^\s*>=\s*v?(\d+)(?:\.(\d+))?(?:\.(\d+))?\s*$/.exec(String(engines ?? ""));
+  const ist = /^v?(\d+)\.(\d+)\.(\d+)/.exec(String(version ?? ""));
+  if (!soll || !ist) return null;
+  const mindest = [soll[1], soll[2] ?? "0", soll[3] ?? "0"].map(Number);
+  const hat = [ist[1], ist[2], ist[3]].map(Number);
+  for (let i = 0; i < 3; i++) {
+    if (hat[i] > mindest[i]) return null;
+    if (hat[i] < mindest[i]) return `Node ${hat.join(".")} erfüllt engines.node "${String(engines).trim()}" nicht: lokales Node anheben (npm ci warnt sonst mit EBADENGINE, Werkzeuge können fehlschlagen).`;
+  }
+  return null;
+}
+
+/** Hinweis zur Node-Version des laufenden Prozesses gegen `engines.node` der Wurzel-package.json in `dir`; fail-open (`""`). */
+export function nodeHinweisFuer(dir, version = process.versions.node) {
+  try {
+    return pruefeNodeVersion(version, JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).engines?.node) ?? "";
+  } catch {
+    return "";
+  }
+}
+
 /** Der Kontext-Text der Session. Pur. `ergebnis` = `{ aktion, grund, hinter, basis, gepullt, agentenGeaendert, notiz }`. */
 export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
   const zeilen = [];
@@ -76,6 +104,7 @@ export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
       zeilen.push("Skill neu lesen: `.claude/skills`, `.claude/agents` oder AGENTS.md haben sich geändert, der Skill-Text dieser Session stammt vom alten Stand. `.claude/skills/kubernia/SKILL.md` jetzt neu lesen und der neuen Fassung folgen; bei geänderter AGENTS.md zusätzlich `git diff <Stand vor diesem Sync> HEAD -- AGENTS.md` lesen. Hooks und Agent-Definitionen gelten erst nach einem Session-Neustart.");
     }
   }
+  if (ergebnis.nodeHinweis) zeilen.push(`Node-Version: ${ergebnis.nodeHinweis}`);
   if (ergebnis.basis) zeilen.push(sitzungsbasis ? `Sitzungsbasis: ${ergebnis.basis}` : `Stand vor diesem Sync: ${ergebnis.basis} (nicht die Basis dieser Session)`);
   return zeilen.join("\n");
 }
@@ -120,7 +149,7 @@ export function ausgabe(ergebnis, text) {
 
 function main() {
   const dir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  const ergebnis = fuehreSyncAus(dir);
+  const ergebnis = { ...fuehreSyncAus(dir), nodeHinweis: nodeHinweisFuer(dir) };
   const out = ausgabe(ergebnis, process.argv.includes("--text"));
   if (out) console.log(out);
   if (process.argv.includes("--streng") && exitCodeFuer(ergebnis) !== 0) {
