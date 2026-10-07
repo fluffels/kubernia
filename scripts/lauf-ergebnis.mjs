@@ -94,7 +94,7 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt }) {
       const e = (brillen[b.lens] ??= { prs: 0, treffer: 0, summe: 0 });
       e.prs += 1;
       if (b.n > 0) e.treffer += 1;
-      e.summe += b.n;
+      e.summe += Number.isFinite(b.n) ? b.n : 0;
     }
   }
   const zaehle = (art) => zeilen.filter((z) => z.nacharbeit === art).length;
@@ -145,7 +145,7 @@ export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date() }) {
   };
   const liste = JSON.parse(
     gh([
-      "pr", "list", "--state", "merged", "--search", `merged:${von}..${bis}`, "--limit", String(PR_LIMIT),
+      "pr", "list", "--state", "merged", "--base", "main", "--search", `merged:${von}..${bis}`, "--limit", String(PR_LIMIT),
       "--json", "number,title,createdAt,mergedAt,mergeCommit,headRefName,closingIssuesReferences",
     ]),
   );
@@ -166,7 +166,7 @@ export function laufErgebnis({ von, bis, runGit, runGh, jetzt = new Date() }) {
   for (const p of prs) {
     const runs = gh([
       "api", "--paginate",
-      `repos/{owner}/{repo}/actions/workflows/ci.yml/runs?branch=${p.headRefName}&event=pull_request&status=failure&per_page=100`,
+      `repos/{owner}/{repo}/actions/workflows/ci.yml/runs?branch=${encodeURIComponent(p.headRefName)}&event=pull_request&status=failure&per_page=100`,
       "--jq", ".workflow_runs[] | [.head_sha,.created_at] | @tsv",
     ]);
     ci[p.number] = runs.split(/\r?\n/).filter(Boolean).map((l) => ({ sha: l.split("\t")[0], createdAt: l.split("\t")[1] }));

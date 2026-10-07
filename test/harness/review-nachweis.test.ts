@@ -172,6 +172,9 @@ describe("Nachweis-Hilfen des Workflows (#1309)", () => {
     assert.deepEqual(bewerteNachweis({ nachweis: n, dateien: ["src/x.ts"], headBekannt: true, headImSlice: true }), []);
     const ohne = nachweisFuerPr({ konvergiert: true, head: SHA, stand: { paesse: 2, ersteLenses: ["doku"] }, plan: "P" });
     assert.ok(!ohne.includes("blocker="), "ohne ersteBlocker kein Feld");
+    const leer = nachweisFuerPr({ konvergiert: true, head: SHA, stand: { paesse: 2, ersteLenses: ["doku"], ersteBlocker: {} }, plan: "P" });
+    assert.ok(!leer.includes("blocker="), "ein leeres Objekt (keine Brille lieferte in Pass 1) schreibt kein leeres Feld");
+    assert.deepEqual(bewerteNachweis({ nachweis: parseNachweis(leer), dateien: ["docs/a.md"], headBekannt: true, headImSlice: true }), []);
   });
 
   test("nachweisFuerPr: leer ohne Konvergenz, <SHA> ohne Head, sonst parsebar", () => {

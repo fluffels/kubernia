@@ -136,6 +136,18 @@ describe("bewertePrs und Aggregate", () => {
     assert.equal(z(51).nacharbeit, "nein");
     assert.equal(z(50).ticket, 40);
   });
+  test("kaputtes runden in der Squash-Message zählt als ohne Nachweis, kein NaN in den Aggregaten", () => {
+    const k = mod.bewertePrs({
+      prs: [pr({ mergeCommit: { oid: "9".repeat(40) } })],
+      commits: [commit(review("runden=x lenses=architektur blocker=architektur:x"), MERGED, "9".repeat(40))],
+      ci: {},
+      festgefahren: {},
+      jetzt: SPAETER,
+    });
+    assert.equal(k.zeilen[0].runden, null);
+    assert.equal(k.kennzahlen.ohneNachweis, 1);
+    assert.equal(k.kennzahlen.brillen.architektur.summe, 0);
+  });
   test("ohne Nachweis und ohne blocker-Feld bleiben aus der Trefferquote", () => {
     assert.equal(z(53).runden, null);
     assert.equal(z(52).blocker, null);
@@ -168,7 +180,15 @@ describe("laufErgebnis (git und gh injiziert)", () => {
   const log = `${SHA}\x1f${MERGED}\x1f${review("runden=1 lenses=doku")}\x1e`;
   const gh = (o: { liste?: unknown[]; fehler?: string } = {}) => (a: string[]): string => {
     if (o.fehler && a.join(" ").includes(o.fehler)) throw new Error("gh kaputt");
-    if (a[0] === "pr") return JSON.stringify(o.liste ?? liste);
+    if (a[0] === "pr") {
+      assert.ok(a.includes("--base") && a.includes("main"), "nur PRs nach main");
+      return JSON.stringify(o.liste ?? liste);
+    }
+    if (a.join(" ").includes("actions/workflows")) {
+      assert.ok(a.includes("--paginate") && a.join(" ").includes("status=failure") && a.join(" ").includes("event=pull_request"), "nur rote PR-Läufe, paginiert");
+    } else {
+      assert.ok(a.includes("--paginate") && a.join(" ").includes("status:festgefahren") && a.join(" ").includes('"labeled"'), "Label-Events, paginiert");
+    }
     if (a.join(" ").includes("actions/workflows")) return "x\t2026-10-01T10:30:00Z\nx\t2026-10-01T10:31:00Z\n";
     return "2026-10-01T10:45:00Z\n";
   };
@@ -186,6 +206,10 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     assert.equal(e.zeilen[0].ciFix, 1);
     assert.equal(e.zeilen[0].festgefahren, 1);
     assert.equal(e.zeilen[0].runden, 1);
+  });
+  test("PR mit mergedAt nach dem Fensterende wird ausgefiltert", () => {
+    const e = mod.laufErgebnis({ von, bis: "2026-10-01T11:00:00Z", runGit: git(log), runGh: gh(), jetzt: SPAETER });
+    assert.equal(e.zeilen.length, 0);
   });
   test("PR außerhalb des Zeitfensters (nach Tag-Suche) wird ausgefiltert", () => {
     const e = mod.laufErgebnis({ von: "2026-10-01T12:30:00Z", bis, runGit: git(log), runGh: gh(), jetzt: SPAETER });

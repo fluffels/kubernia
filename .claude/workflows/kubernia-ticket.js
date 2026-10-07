@@ -407,7 +407,7 @@ function planSagtEpic(plan) {
 // ein Wächter-Test koppelt sie an den Parser. `lenses`: Brillen des vollen Passes (Runde 1), `runden`: Zahl der Pässe, `blocker` (#1123): Runde-1-Blocker je Brille.
 function nachweisZeilen({ head, runden, lenses, blocker, plan }) {
   const planZeile = plan ? 'KQ-Plan: kubernia-planner' : 'KQ-Plan: ohne — Planer lieferte keinen Plan'
-  const bl = blocker ? ` blocker=${Object.entries(blocker).map(([l, n]) => `${l}:${n}`).join(',')}` : ''
+  const bl = blocker && Object.keys(blocker).length ? ` blocker=${Object.entries(blocker).map(([l, n]) => `${l}:${n}`).join(',')}` : ''
   return `${planZeile}\nKQ-Review: head=${head} runden=${runden} lenses=${lenses.join(',')}${bl} verdikt=ok`
 }
 

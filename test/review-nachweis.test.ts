@@ -156,6 +156,14 @@ describe("blocker-Feld (#1123, Runde-1-Blocker je Brille)", () => {
   test("alte Zeile ohne blocker bleibt gültig", () => {
     assert.deepEqual(bewerteNachweis({ nachweis: parseNachweis(review()), dateien: ["src/x.ts"], headBekannt: true, headImSlice: true }), []);
   });
+  test("checkReviewNachweis meldet blockerFehlt für alte Zeilen, nicht für neue", () => {
+    const lauf = (felder: string) =>
+      checkReviewNachweis({ runGit: fakeGit({ messages: review(felder) }), env: { KQ_DIFF_BASE: "base" } }) as { ok: boolean; blockerFehlt?: boolean };
+    assert.equal(lauf(`head=${SHA} runden=2 lenses=${DREI} verdikt=ok`).blockerFehlt, true);
+    const neu = lauf(`head=${SHA} runden=2 lenses=${DREI} blocker=architektur:1,requirement-treue:0,test-adaequanz:0 verdikt=ok`);
+    assert.equal(neu.ok, true);
+    assert.equal(neu.blockerFehlt, false);
+  });
   test("runden=2 mit Blockern in Runde 1 ist ok", () => {
     assert.deepEqual(mit("architektur:2,requirement-treue:0,test-adaequanz:1"), []);
   });
@@ -165,11 +173,13 @@ describe("blocker-Feld (#1123, Runde-1-Blocker je Brille)", () => {
   test("runden=1 mit Blockern ist rot (kein Fix-Pass)", () => {
     assert.match(mit("architektur:1,requirement-treue:0,test-adaequanz:0", 1).join(), /kein Fix-Pass/);
   });
-  test("runden=1: Brillen von blocker müssen den lenses entsprechen", () => {
+  test("runden=1: Brillen von blocker müssen den lenses entsprechen (auch bei gleicher Anzahl)", () => {
     assert.match(mit("architektur:0", 1).join(), /blocker.*lenses|lenses.*blocker/);
+    assert.match(mit("architektur:0,requirement-treue:0,doku:0", 1).join(), /weichen von lenses/);
+    assert.match(mit("architektur:0", 1, "doku").join(), /weichen von lenses/);
   });
   test("ungültige Werte sind rot: Zahl, negativ, Bruch, unbekannte Brille, Duplikat, leer", () => {
-    for (const b of ["architektur:x", "architektur:-1", "architektur:1.5", "stil:1", "architektur:1,architektur:0", ""]) {
+    for (const b of ["architektur:", "architektur", "architektur:x", "architektur:-1", "architektur:1.5", "stil:1", "architektur:1,architektur:0", ""]) {
       assert.ok(mit(b).length > 0, `"${b}" müsste rot sein`);
       assert.match(mit(b).join(), /blocker/);
     }
