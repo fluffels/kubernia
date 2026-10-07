@@ -545,7 +545,7 @@ export function countFailedPushes(workflowRuns) {
   return new Set((workflowRuns ?? []).map((r) => r.head_sha)).size;
 }
 
-/** Gemergt ohne Nacharbeit = gemergt und kein einziger roter CI-Push. */
+/** Gemergt ohne CI-Fix = gemergt und kein einziger roter CI-Push. */
 export function mergedWithoutRework(mergedAt, failedPushes) {
   return Boolean(mergedAt) && failedPushes === 0;
 }
@@ -666,7 +666,7 @@ export function renderMarkdown(summary, loop = {}) {
   const planer = nw && nw.plan !== null ? ` · Planer: ${nw.plan ? "ja" : "nein"} (KQ-Plan)` : "";
   lines.push(
     "",
-    `Review-Runden: ${runden} · CI-Fix-Runden: ${ci} · Rückfragen: ${summary.questions} · gemergt ohne Nacharbeit: ${merged}${planer}`,
+    `Review-Runden: ${runden} · CI-Fix-Runden: ${ci} · Rückfragen: ${summary.questions} · gemergt ohne CI-Fix: ${merged}${planer}`,
   );
   return lines.join("\n");
 }

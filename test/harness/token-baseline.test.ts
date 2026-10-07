@@ -392,7 +392,7 @@ describe("token-baseline: CI-/Merge-Kennzahlen und CLI", () => {
     assert.equal(m.countFailedPushes(undefined), 0);
   });
 
-  test("gemergt ohne Nacharbeit nur bei Merge UND null roten Pushes", () => {
+  test("gemergt ohne CI-Fix nur bei Merge UND null roten Pushes", () => {
     assert.equal(m.mergedWithoutRework("2026-09-29T12:00:00Z", 0), true);
     assert.equal(m.mergedWithoutRework("2026-09-29T12:00:00Z", 1), false);
     assert.equal(m.mergedWithoutRework(null, 0), false);
@@ -403,8 +403,8 @@ describe("token-baseline: CI-/Merge-Kennzahlen und CLI", () => {
     const md = m.renderMarkdown(s);
     assert.match(md, /\| \*\*Summe \(ohne Nachlauf\)\*\* \|/);
     assert.match(md, /1\.234/);
-    assert.match(md, /CI-Fix-Runden: – · Rückfragen: 0 · gemergt ohne Nacharbeit: –/);
-    assert.match(m.renderMarkdown(s, { failedPushes: 0, mergedAt: "x" }), /gemergt ohne Nacharbeit: ja/);
+    assert.match(md, /CI-Fix-Runden: – · Rückfragen: 0 · gemergt ohne CI-Fix: –/);
+    assert.match(m.renderMarkdown(s, { failedPushes: 0, mergedAt: "x" }), /gemergt ohne CI-Fix: ja/);
   });
 
   test("parseArgs sammelt mehrere Sessions und lehnt Unbekanntes ab", () => {

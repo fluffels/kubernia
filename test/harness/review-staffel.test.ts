@@ -228,7 +228,14 @@ describe("Lens-Ausfall gilt als nicht konvergiert (#1309)", () => {
     assert.equal(endstand.ergebnis, "fertig");
     const pr = aufrufe.find((a) => a.label.startsWith("pr+merge"));
     assert.ok(pr, "pr+merge muss laufen");
-    assert.match(pr.prompt, /KQ-Review: head=h1 runden=1 lenses=architektur,requirement-treue,test-adaequanz verdikt=ok/);
+    assert.match(pr.prompt, /KQ-Review: head=h1 runden=1 lenses=architektur,requirement-treue,test-adaequanz blocker=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok/);
+  });
+
+  test("Runde-1-Blocker (#1123): Runde 1 blockiert bei architektur, Runde 2 ok → der Nachweis nennt die Runde-1-Zahlen", async () => {
+    const { aufrufe, endstand } = await lauf({ dateien: ["src/a.ts"], runden: [{ architektur: blockiert("architektur") }, {}] });
+    assert.equal(endstand.ergebnis, "fertig");
+    const pr = aufrufe.find((a) => a.label.startsWith("pr+merge"));
+    assert.match(pr?.prompt ?? "", /runden=2 lenses=architektur,requirement-treue,test-adaequanz blocker=architektur:1,requirement-treue:0,test-adaequanz:0 verdikt=ok/);
   });
 
   test("zweimal ausgefallen, keine Blocker: Hand-off statt PR", async () => {
