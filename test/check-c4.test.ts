@@ -275,7 +275,7 @@ describe("pruefeArchitektur", () => {
     assert.ok(treffer(doppelt, /schicht.*zugleich/).length >= 1);
     for (const kaputt of [{ maxKnotenJeView: undefined }, { maxKnotenJeView: 0 }, { maxKnotenJeView: -1 }, { maxKnotenJeView: "25" }, { maxKnotenJeView: 2.5 }]) {
       const ms = lauf(gueltig(), {}, { ...CFG, ...kaputt } as unknown as Cfg);
-      assert.ok(treffer(ms, /maxKnotenJeView/).length >= 1, JSON.stringify(kaputt));
+      assert.ok(treffer(ms, /maxKnotenJeView ist keine positive Zahl/).length >= 1, JSON.stringify(kaputt));
     }
     assert.ok(treffer(lauf(gueltig(), {}, { ...CFG, workspace: "" }), /workspace oder quelle/).length >= 1);
     assert.ok(treffer(lauf(gueltig(), {}, { ...CFG, quelle: "" }), /workspace oder quelle/).length >= 1);
