@@ -25,7 +25,7 @@ Das Status-Ticket „Langfuse-Status überprüfen“ sollte „etwa alle 20 Tick
 
 - **Renovate** (`lockFileMaintenance`, „before 4am on monday … to achieve once-per-week semantics“) und sein Dependency-Dashboard als **ein** lebendes Übersichts-Issue: wiederkehrende Wartung läuft in der Praxis zeitgesteuert, wöchentlich, mit einem festen Ziel-Issue. <https://docs.renovatebot.com/configuration-options/>
 - **GitHub Agentic Workflows** fahren Status-Berichte als wöchentliche, zeitlich gestreute Läufe. <https://github.github.com/gh-aw/examples/scheduled>
-- **Google SRE, „Eliminating Toil“**: operative Arbeit unter 50 % der Zeit halten. Übertragen: der Wartungsanteil des Harness wird gedeckelt (hier höchstens ein Status-Ticket und ein Sammelticket je Woche), statt mit dem Durchsatz zu wachsen; passt zur Spielquote aus ADR 0012. <https://sre.google/sre-book/eliminating-toil/>
+- **Google SRE, „Eliminating Toil“**: operative Arbeit unter 50 % der Zeit halten. Übertragen: der Wartungsanteil des Harness wird gedeckelt (hier höchstens ein Status-Ticket und ein Sammelticket je Woche), statt mit dem Durchsatz zu wachsen; passt zum Ziel aus ADR 0012, den Harness-Anteil an der Arbeit zu begrenzen. <https://sre.google/sre-book/eliminating-toil/>
 - **GitHub Actions, Concurrency**: je Group höchstens ein laufender und ein wartender Run, `cancel-in-progress: false` bricht nichts ab. <https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/control-the-concurrency-of-workflows-and-jobs>
 - **GitHub Actions, Schedule**: Läufe können sich um Stunden verzögern, und in öffentlichen Repos wird der Schedule nach 60 Tagen ohne Aktivität deaktiviert. <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows>
 
@@ -52,7 +52,7 @@ Weitere Festlegungen:
 
 **Negativ / Trade-offs**
 - Cron-Läufe kommen verzögert (Stunden); für einen Wochentakt egal.
-- Das Status-Ticket steht am Montag über allem anderen, auch über einem älteren 🚨- oder Forum-Ticket. „Roter `main` geht vor“ gilt unabhängig von der Position.
+- Das Status-Ticket steht am Montag über allem anderen, auch über einem älteren 🚨- oder Forum-Ticket und über dem ungeclaimten Harness-Sammelticket: es ist die benannte Ausnahme von „nie vor das ungeclaimte Sammelticket" (AGENTS.md, `ticket-reihenfolge.md`), weil das Ticket Befunde für das Langfuse-Sammelticket liefert und dieses danach drankommt. „Roter `main` geht vor“ gilt unabhängig von der Position.
 - Die Untergrenze zählt Commits auf `main`, nicht nur Ticket-Merges (auch Dependabot).
 
 ## Re-Evaluierung

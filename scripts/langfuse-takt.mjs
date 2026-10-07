@@ -174,7 +174,7 @@ function main() {
   }
   const token = process.env.PROJECT_TOKEN;
   if (!token) {
-    console.log("::warning::PROJECT_TOKEN fehlt, Board-Position nicht gesetzt (das Ticket steht dann irgendwo im Board).");
+    console.log("::warning::PROJECT_TOKEN fehlt, Board-Position nicht gesetzt (das Ticket steht dann nicht im Board, der nächste Lauf trägt es nach).");
     return;
   }
   try {

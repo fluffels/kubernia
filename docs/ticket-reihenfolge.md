@@ -83,11 +83,11 @@ Das Sammelticket „Langfuse-Befunde (gesammelt)" (`area:harness`) bündelt Befu
 - **Was hinein gehört:** Befunde, die aus Langfuse-Daten oder einem Status-Lauf stammen (Kosten, Tokens, Erfassungslücken, Kandidaten zum Lockern eines Gates, einer Lens oder einer Regel). Alles andere zum Harness bleibt im Harness-Sammelticket.
 - **Höchstens ein** ungeclaimtes; ein geclaimtes (Assignee) läuft daneben weiter. Jeder Agent darf es jederzeit befüllen:
   ```bash
-  gh issue list --state open --search 'in:title "Langfuse-Befunde (gesammelt)"' --json number,assignees --jq '.[] | select((.assignees|length)==0) | .number'
+  gh issue list --state open --json number,title,assignees --jq '.[] | select(.title=="Langfuse-Befunde (gesammelt)" and (.assignees|length)==0) | .number'
   gh issue comment <nr> --body "- [ ] <Befund>"
   ```
   Zwei ungeclaimte (Wettlauf): das jüngere schließen, seine Zeilen ins ältere übertragen.
-- **Anlegen nur bei Bedarf** (kein leeres Ticket, das sonst gezogen würde): wie im Snippet unter [Anlegen auf Position N](#anlegen-auf-position-n), aber ohne die `board-place`-Zeile. Es bleibt bewusst am Board-Ende; der Abschluss des nächsten Status-Laufs holt es mit `--top` nach oben. Wer es beim Abschluss selbst anlegt, schiebt es sofort mit `--top`.
+- **Anlegen nur bei Bedarf** (kein leeres Ticket, das sonst gezogen würde): wie im Snippet unter [Anlegen auf Position N](#anlegen-auf-position-n), aber ohne die `board-place`-Zeile. Es bleibt bewusst am Board-Ende (die „nie einfach ans Ende"-Regel gilt für Tickets, die sofort drankommen sollen); der Abschluss des nächsten Status-Laufs holt es mit `--top` nach oben, dabei klemmt der Anker hinter das ungeclaimte Harness-Sammelticket. Wer es beim Abschluss selbst anlegt, schiebt es sofort mit `--top`.
 - **Abarbeiten:** komplett, wie beim Harness-Sammelticket (alle Zeilen in einem PR, je Zeile ein Ergebnis, nichts still auslagern). Ein **Lockern** (Gate, Lens, Regel) setzt der PR nur mit Messung vorher und nachher um, nie um ein Rot zu verstecken ([AGENTS.md › Kein Grün-durch-Aufweichen](../AGENTS.md#git-pr-und-merge)).
 
 ## Reihenfolge pflegen — im Board, nicht in einer Datei
@@ -95,7 +95,7 @@ Das Sammelticket „Langfuse-Befunde (gesammelt)" (`area:harness`) bündelt Befu
 Die manuelle Board-Reihenfolge ist die **einzige** Reihenfolge-Quelle; es gibt keine `prio:*`-Labels und kein `Prio`-Feld.
 
 - **Reihenfolge ändern:** im Board (View 1) das Item per **Drag & Drop** hoch-/runterziehen. Weiter oben = früher dran. Das ist das „einpriorisieren".
-- **Neues Item an die Spitze schieben** (per CLI, wenn kein UI-Zugriff; die Liste kommt per REST, nur die Positions-Mutation läuft über GraphQL). **Nie vor das ungeclaimte Sammelticket:** `--top`, `--after` und `--position` klemmen den Anker hinter das offene, nicht zugewiesene Sammelticket „Harness-Härtung (gesammelt)“ und melden die Klemmung in der Ausgabe; ein geclaimtes oder geschlossenes Sammelticket zählt nicht, ohne Sammelticket klemmt nichts. Ganz oben stehen nur echte Notfälle, mit `--notfall <art>` (`rot-main`, `security`, `dependabot`, `forum`; nur mit `--top`); unbekannte Art oder andere Kombination ist ein Benutzungsfehler. Das Sammelticket selbst (`--position <N> <nr>`) klemmt nicht:
+- **Neues Item an die Spitze schieben** (per CLI, wenn kein UI-Zugriff; die Liste kommt per REST, nur die Positions-Mutation läuft über GraphQL). **Nie vor das ungeclaimte Sammelticket:** `--top`, `--after` und `--position` klemmen den Anker hinter das offene, nicht zugewiesene Sammelticket „Harness-Härtung (gesammelt)“ und melden die Klemmung in der Ausgabe; ein geclaimtes oder geschlossenes Sammelticket zählt nicht, ohne Sammelticket klemmt nichts. Ganz oben stehen nur echte Notfälle und das Wochen-Status-Ticket, mit `--notfall <art>` (`rot-main`, `security`, `dependabot`, `forum`; nur mit `--top`; das Status-Ticket setzt der Workflow [`langfuse-takt.yml`](../.github/workflows/langfuse-takt.yml) selbst an die Spitze, [ADR 0016](adr/0016-langfuse-takt-woechentlich.md)); unbekannte Art oder andere Kombination ist ein Benutzungsfehler. Das Sammelticket selbst (`--position <N> <nr>`) klemmt nicht:
   ```bash
   node scripts/board-place.mjs --top <NR>                      # landet hinter dem Sammelticket
   node scripts/board-place.mjs --notfall rot-main --top <NR>   # echter Notfall: ganz oben
