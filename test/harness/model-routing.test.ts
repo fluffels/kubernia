@@ -83,6 +83,8 @@ import { fileURLToPath } from "node:url";
 import { blockFunktion, workflowBlock } from "./workflow-block";
 import { workflowLauf } from "./workflow-lauf";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { parseFrontmatter } from "../../scripts/docs-gen/markdown.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as brainMetrics from "../../scripts/brain-metrics.mjs";
 
 const pflegeMarker = (brainMetrics as { pflegeMarker: (ev: { tool: string; input: { command: string } }) => "start" | "ende" | null }).pflegeMarker;
@@ -112,21 +114,8 @@ const REVIEW_SKILL = ".claude/skills/review-lenses/SKILL.md";
 /** Die SSOT-/Checklisten-Datei für Modell-Pins. */
 const ROUTING_SSOT = "docs/model-routing.md";
 
-/**
- * Das YAML-Frontmatter einer Markdown-Datei als flache Key→Value-Map. Bewusst
- * minimal (keine YAML-Abhängigkeit): Frontmatter ist hier immer ein `---`-Block
- * am Dateianfang mit einfachen `key: wert`-Zeilen. Kein Frontmatter ⇒ leere Map.
- */
-function frontmatter(md: string): Record<string, string> {
-  const m = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(md);
-  if (!m) return {};
-  const out: Record<string, string> = {};
-  for (const line of m[1].split(/\r?\n/)) {
-    const kv = /^([A-Za-z_][\w-]*):\s*(.*)$/.exec(line);
-    if (kv) out[kv[1]] = kv[2].trim().replace(/^["']|["']$/g, "");
-  }
-  return out;
-}
+/** Das YAML-Frontmatter als flache Key→Value-Map: dieselbe Implementierung wie die Generatoren (#1392). */
+const frontmatter = parseFrontmatter as (md: string) => Record<string, string>;
 
 /** Pins des Hauptchat-Modells in den Projekt-Settings: der Schlüssel `model` und jeder `env`-Schlüssel mit MODEL (generisch, damit neue Variablennamen nicht durchrutschen). */
 function modellPins(settings: { model?: string; env?: Record<string, string> }): string[] {

@@ -41,9 +41,8 @@ jobs:
       # #527: alle Gates laufen über EINE SSOT-Kette (npm run verify) statt hier
       # als sechs einzeln duplizierte Steps. So kann die lokale Reihenfolge nicht
       # von der CI driften und kein Gate wird beim lokalen Lauf vergessen. Die
-      # Kette ist: typecheck → lint → check:arch → check:size → check:docmap →
-      # check:docdrift → check:diffsize → test (billige Gates fail-fast zuerst,
-      # die volle Test-Suite zuletzt). Builds + Boot-Smoke bleiben eigene Steps,
+      # Kette steht in package.json › scripts.verify (billige Gates fail-fast
+      # zuerst, die volle Test-Suite zuletzt), nicht hier kopiert. Builds + Boot-Smoke bleiben eigene Steps,
       # weil sie Artefakte hochladen (= CI-Sache); zusammen = `npm run verify:full`.
       # Hinweis: check:diffsize (#533) misst den Slice gegen die Basis. Auf einem PR
       # (fetch-depth:0 oben) ist die Basis die PR-Basis — via KQ_DIFF_BASE gesetzt —,

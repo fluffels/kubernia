@@ -30,9 +30,10 @@
  * Ausführen mit:  npm run check:docdrift   (oder als Teil von: npm run verify)
  */
 
-import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
+import { readFileSync, existsSync, statSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, resolve, sep, posix } from "node:path";
+import { collectMarkdown as collectMd, fenceMaske, parseChain } from "./docs-gen/markdown.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -77,21 +78,13 @@ export const VERSIONED_CLAUDE_DIRS = new Set(["agents", "skills", "workflows"]);
  *  dem .claude im Repo-Root nur die VERSIONED_CLAUDE_DIRS (und keine losen Dateien direkt
  *  darin). Anders als früher (Basename-Match) gilt das nur für das Root-.claude. */
 export function collectMarkdown(rootDir = ROOT) {
-  const out = [];
-  const walk = (dir) => {
-    const inClaude = relative(rootDir, dir) === ".claude";
-    for (const ent of readdirSync(dir, { withFileTypes: true })) {
-      if (ent.isDirectory()) {
-        if (IGNORED_DIRS.has(ent.name)) continue;
-        if (inClaude && !VERSIONED_CLAUDE_DIRS.has(ent.name)) continue;
-        walk(join(dir, ent.name));
-      } else if (ent.isFile() && ent.name.endsWith(".md") && !inClaude) {
-        out.push(relative(rootDir, join(dir, ent.name)).split(sep).join("/"));
-      }
-    }
-  };
-  walk(rootDir);
-  return out.sort();
+  return collectMd(rootDir, ["."], {
+    ueberspringe: (ent, relDir) => {
+      const inClaude = relDir === ".claude";
+      if (ent.isDirectory()) return IGNORED_DIRS.has(ent.name) || (inClaude && !VERSIONED_CLAUDE_DIRS.has(ent.name));
+      return inClaude; // lose Dateien direkt in .claude
+    },
+  });
 }
 
 // ── Code-Fences ausblenden ─────────────────────────────────────────────────────
@@ -101,24 +94,8 @@ export function collectMarkdown(rootDir = ROOT) {
  *  Beispiel-Links in Codeblöcken NICHT als echter Link gewertet. */
 export function stripFencedCode(md) {
   const lines = md.split(/\r?\n/);
-  let fence = null; // aktuelles Fence-Zeichen (` oder ~) oder null
-  return lines
-    .map((line) => {
-      const m = line.match(/^\s*(`{3,}|~{3,})/);
-      if (m) {
-        const marker = m[1][0];
-        if (fence === null) {
-          fence = marker;
-          return "";
-        }
-        if (fence === marker) {
-          fence = null;
-          return "";
-        }
-      }
-      return fence === null ? line : "";
-    })
-    .join("\n");
+  const maske = fenceMaske(lines);
+  return lines.map((line, i) => (maske[i] ? "" : line)).join("\n");
 }
 
 // ── Kommandos ───────────────────────────────────────────────────────────────────
@@ -188,11 +165,7 @@ export function collectHeadingSlugs(md) {
 /** Liest die verify-Gate-Sequenz aus dem verify-Skript in package.json aus:
  *  alle `npm run <x>`-Aufrufe in Reihenfolge, gefolgt von `npm test` → `"test"`. */
 export function parseVerifyChain(pkgScripts) {
-  const script = pkgScripts["verify"] ?? "";
-  const steps = [];
-  for (const m of script.matchAll(/\bnpm\s+run\s+([a-zA-Z0-9:_-]+)/g)) steps.push(m[1]);
-  if (/\bnpm\s+test\b/.test(script)) steps.push("test");
-  return steps;
+  return parseChain(pkgScripts["verify"] ?? "").filter((step) => /^[a-zA-Z0-9:_-]+$/.test(step));
 }
 
 /** Findet alle `typecheck → … → test`-Sequenzen in `md` (roh, inkl. Codeblöcke).

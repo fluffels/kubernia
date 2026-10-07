@@ -278,3 +278,13 @@ describe("collectMarkdown: versionierte .claude-Ordner ja, Worktrees/Lokales nei
     assert.deepEqual([...VERSIONED_CLAUDE_DIRS].sort(), unignored);
   });
 });
+
+describe("keine Handkopie der verify-Kette in Kommentaren (#1392)", () => {
+  // Die Dokumentations-Prüfung (findDocumentedVerifyChains) sieht nur Markdown; Kommentare in CI und Hook
+  // veralten sonst still (die Kette dort stand schon einmal mit 8 statt der echten Gates).
+  test.each([".github/workflows/ci.yml", ".githooks/pre-push"])("%s verweist auf scripts.verify statt die Kette zu kopieren", (datei) => {
+    const text = readFileSync(fileURLToPath(new URL("../" + datei, import.meta.url)), "utf8");
+    assert.equal(/typechecks*→/.test(text), false, datei + ": Kettenkopie gefunden, auf package.json › scripts.verify verweisen");
+    assert.match(text, /scripts.verify/, datei + ": Verweis auf scripts.verify fehlt");
+  });
+});

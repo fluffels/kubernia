@@ -2,19 +2,23 @@
 // npm-Ketten (`verify`, `verify:full`, …) plus Beschreibungs-Map und reinen CI-Gates.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { renderTable } from "./markdown.mjs";
+import { parseChain, renderTable } from "./markdown.mjs";
 
-/** Zerlegt eine `a && b`-Kette: `npm run X` → X, `npm test` → test, sonst der Rohbefehl. */
-export function parseChain(script) {
-  return script
-    .split("&&")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((step) => {
-      const run = /^npm run ([^\s]+)$/.exec(step);
-      if (run) return run[1];
-      return step === "npm test" ? "test" : step;
-    });
+/**
+ * Schritte einer Kette in Ausführungsreihenfolge. Ein Schritt, dessen Skript selbst eine `&&`-Kette ist und
+ * nicht in `chains` steht, wird rekursiv aufgelöst (seine Schritte gehören zur äußeren Kette); ein Zyklus
+ * wirft. Einzelbefehl-Aliase (ohne `&&`) bleiben ein Schritt.
+ */
+function expandSteps(script, scripts, chains, stack) {
+  const out = [];
+  for (const step of parseChain(script)) {
+    const inner = scripts[step];
+    if (!chains.includes(step) && typeof inner === "string" && inner.includes("&&")) {
+      if (stack.includes(step)) throw new Error(`Zyklus in den Ketten: ${[...stack, step].join(" → ")}`);
+      out.push(...expandSteps(inner, scripts, chains, [...stack, step]));
+    } else out.push(step);
+  }
+  return out;
 }
 
 /** Anzeigebefehl eines Kettenschritts. */
@@ -33,7 +37,14 @@ export function gatesGenerator({ rootDir, config }) {
       errors.push(`Kette "${chain}" fehlt in ${cfg.package}`);
       continue;
     }
-    for (const step of parseChain(scripts[chain])) {
+    let schritte;
+    try {
+      schritte = expandSteps(scripts[chain], scripts, cfg.chains, [chain]);
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+      continue;
+    }
+    for (const step of schritte) {
       if (cfg.chains.includes(step) || seen.has(step)) continue;
       seen.add(step);
       steps.add(step);

@@ -259,25 +259,7 @@ Eine erneute doku-freie Runde hat gezielt die harten „erledigt/erzwungen"-Clai
 
 ## 9. Architekturentscheidungen (ADRs)
 
-| ADR | Entscheidung | Status |
-|---|---|---|
-| 0001 | Engine Phaser 3 (kein Godot/Unity) | bestätigt |
-| 0002 | Kein Backend, keine DB — client-only | bestätigt |
-| 0003 | Kein Multiplayer / Co-op | bestätigt |
-| 0004 | Skalierungs-Fundament (Content-as-Data, Entity-Registry, IndexedDB) | umgesetzt |
-| 0005 | Auslieferungsform Web vs. Desktop | **offen gehalten** ([ADR 0005](adr/0005-auslieferungsform.md), #355/#606) — ergebnisoffener Grundsatz-ADR + Re-Eval-Trigger; bündelt die Single-File-Präzisierung aus 0006. |
-| 0006 | Persistenz-Präzisierung: Engpass ist Eviction, nicht Kapazität → `storage.persist()` | präzisiert |
-| 0007 | Spielsystem-Fundamente (Quest-Modell, Checks-als-Daten, Zeit-Achse) | umgesetzt |
-| 0008 | **KI-Agenten-Harness** als Entwicklungsmodell (autonomer Ein-Ticket-Worktree-Workflow + Fitness-Functions als Leitplanken + selbstdokumentierendes Repo) | **akzeptiert** ([ADR 0008](adr/0008-ki-agenten-harness.md), #530) — die prägendste Entscheidung, jetzt als ADR festgehalten (Kontext/Alternativen/Re-Eval-Trigger). Kanonische Erklärung des Harness: [agent-harness.md](agent-harness.md) (#526). Integrationsweg seit #592 durch 0009 präzisiert. |
-| 0009 | **PR-Gating mit Required-Checks** auf `main` (`enforce_admins` an) statt Direkt-Push | **akzeptiert** ([ADR 0009](adr/0009-pr-gating-required-checks.md), #592) — der dritte Re-Eval-Trigger von 0008 ist eingetreten; Gate-Durchsetzung jetzt server-seitig und nicht mehr per `--no-verify` umgehbar. |
-| 0010 | **Karten-Modell:** zwei Pipelines bewusst nebeneinander (Tiled-Daten für bespoke Karten, Code-Builder für prozedurale Regionen) statt Konvergenz | **akzeptiert** ([ADR 0010](adr/0010-karten-modell-tiled-vs-code-builder.md), #957) — folgt derselben Content-as-Data-Logik wie 0004 auf die Karten-Ebene. |
-| 0011 | **NPC-System-Fundament:** Datenmodell für lebendige NPCs — statische Design-Daten (Rolle, Verhaltenszustand) additiv im Entity-Schema, dynamischer Zustand (Beziehungslevel) als einzige Save-Migration | **akzeptiert** ([ADR 0011](adr/0011-npc-system-fundament.md), #963) — löst die von 0007 offen gelassene NPC-Scope-Frage (#420) positiv auf, vor den Folge-Tickets #964–#968. |
-| 0012 | **Harness-Autonomie:** Agent merged auch Harness-/Leitplanken-/Gate-PRs selbst, Audit-Kommentar statt Merge-Freigabe; Fokus der Harness-Phase (wenig Loop, wenig Tokens, hohe Qualität) | **akzeptiert** ([ADR 0012](adr/0012-harness-autonomie-audit-spur.md), #1069/#1072) — nimmt den Merge-Checkpoint aus #1012 zurück; präzisiert 0008/0009; Label-Riegel abgelöst durch 0014. |
-| 0013 | **`docs/` als agentengepflegtes Wiki:** kein zweiter Wissensspeicher und kein externes Brain; Wissensarten (Regeln/Entscheidungen/Evergreen/Stand/Schnappschüsse) mit festem Ort, kuratierte Pflege im selben PR, eine Landkarte (`anlaufstellen.md`) + Erreichbarkeits-Wächter | **akzeptiert** ([ADR 0013](adr/0013-docs-als-agentengepflegtes-wiki.md), #1083) — präzisiert 0012. |
-| 0014 | **Leitplanken ohne Label-Riegel:** kein CI-Job und kein Label für Gate-/Harness-Änderungen; Audit-Kommentar und Verhaltensregel bleiben, die Pfadquelle löst den Audit-Kommentar aus | **akzeptiert** ([ADR 0014](adr/0014-leitplanken-ohne-label-riegel.md), #1303) — löst den Label-Riegel aus 0012 ab. |
-| 0015 | **Projekt-Brain:** `docs/` nach Second-Brain-Prinzipien (atomare Seiten, Index zuerst, nichts always-loaded, Größenschwelle), Token-Ziel und Messung je Ticket-Lauf | **akzeptiert** ([ADR 0015](adr/0015-projekt-brain.md), #1205) — präzisiert 0013. |
-| 0016 | **Langfuse-Takt:** wöchentlicher Workflow (Cron + Aktivitäts-Untergrenze, idempotent aus `git log`/offenen Issues) statt Board-Position; Sammelticket „Langfuse-Befunde (gesammelt)" | **akzeptiert** ([ADR 0016](adr/0016-langfuse-takt-woechentlich.md), #1351) — löst den Position-Takt aus #1293 ab. |
-| 0017 | **Lebende Doku:** Abschnitte zwischen `GEN`-Markern erzeugt `npm run docs:gen` aus dem Repo, `check:docgen` vergleicht; Mermaid als Diagrammformat, MCP nie Gate-Quelle | **akzeptiert** ([ADR 0017](adr/0017-lebende-doku-generierte-abschnitte.md), #1355) — Teil von #1354. |
+Die vollständige Liste (Nummer, Titel, Status, Datum) steht generiert in [docs/adr/README.md](adr/README.md); wann welcher ADR zu lesen ist, steht in den [Anlaufstellen](referenz/anlaufstellen.md). Dort liegt auch die Vorlage mit dem Kopf-Format.
 
 iSAQB-konform: jeder ADR trägt einen expliziten **Re-Evaluierungs-Trigger** — Entscheidungen sind an nachprüfbare Bedingungen geknüpft, nicht „für immer".
 

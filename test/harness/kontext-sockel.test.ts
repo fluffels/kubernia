@@ -14,6 +14,8 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { parseFrontmatter } from "../../scripts/docs-gen/markdown.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const lies = (rel: string): string => readFileSync(root + rel, "utf8");
@@ -24,10 +26,9 @@ export const MAX_BESCHREIBUNG = 300;
 /** Liest eine einzeilige Frontmatter-Zeile `key: wert` (ohne Anführungszeichen); `null`, wenn sie fehlt.
  *  Mehrzeilige YAML-Werte (`>`, `|`) würden die Längenprüfung umgehen und werfen deshalb. */
 export function frontmatterZeile(text: string, key: string): string | null {
-  const kopf = /^---\n([\s\S]*?)\n---/.exec(text)?.[1] ?? "";
-  const treffer = new RegExp("^" + key + ": *(.*)$", "m").exec(kopf);
-  if (!treffer) return null;
-  const wert = treffer[1].trim().replace(/^(["'])([\s\S]*)\1$/, "$2");
+  const kopf = parseFrontmatter(text) as Record<string, string>;
+  if (!Object.hasOwn(kopf, key)) return null;
+  const wert = kopf[key];
   if (/^[>|]/.test(wert)) throw new Error(`${key}: mehrzeiliger YAML-Wert nicht erlaubt, einzeilig schreiben`);
   return wert;
 }

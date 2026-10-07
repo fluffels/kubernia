@@ -8,7 +8,10 @@ import { fixture } from "./support/tmp-fixture";
 import * as zeit from "../scripts/docs-gen/zeitleiste.mjs";
 
 type Cfg = Record<string, unknown>;
-const api = zeit as unknown as { zeitleisteGenerator: (ctx: { rootDir: string; config: Cfg }) => string };
+const api = zeit as unknown as {
+  zeitleisteGenerator: (ctx: { rootDir: string; config: Cfg }) => string;
+  adrListeGenerator: (ctx: { rootDir: string; config: Cfg }) => string;
+};
 
 const conf: Cfg = { zeitleiste: { adr: "docs/adr", meilensteine: "docs/meilensteine.json" } };
 const ms = (...e: { datum: unknown; text: unknown }[]) => JSON.stringify({ hinweis: "x", meilensteine: e });
@@ -111,5 +114,42 @@ describe("Generator zeitleiste", () => {
     }
     assert.match(msg, /0002-a\.md/);
     assert.match(msg, /0003-b\.md/);
+  });
+  test("Datum mit Anhängsel („2026-06-12x“) ist ungültig, nicht still ein Datum (ADR)", () => {
+    assert.throws(() => run(base({ "docs/adr/0002-x.md": adrNeu("0002", "X", "2026-06-12x") })), /0002-x\.md.*ungültiges Datum 2026-06-12x/s);
+    assert.throws(() => run(base({ "docs/adr/0002-y.md": adrAlt("0002", "Y", "2026-06-12x") })), /0002-y\.md/);
+  });
+});
+
+describe("Generator adr-liste (#1392)", () => {
+  const liste = (files: Record<string, string>, c: Cfg = conf) => api.adrListeGenerator({ rootDir: fixture(files), config: c });
+  test("Gutfall: beide Kopfformate, Nummer, Titel, Status, Datum, nach Nummer sortiert", () => {
+    const out = liste(base({ "docs/adr/0002-zwei.md": adrAlt("0002", "Zwei", "2026-06-12") }));
+    assert.deepEqual(out.split("\n"), [
+      "| ADR | Titel | Status | Datum |",
+      "|---|---|---|---|",
+      "| [0001](/docs/adr/0001-eins.md) | Eins | akzeptiert | 16.06.2026 |",
+      "| [0002](/docs/adr/0002-zwei.md) | Zwei | akzeptiert | 12.06.2026 |",
+    ]);
+  });
+  test("Listenform mit weiterem Text hinter dem Datum: Status ist nur das Wort davor", () => {
+    const adr = "# ADR 0003: Drei\n\n- **Status:** aktualisiert (2026-06-21) · ergebnisoffen\n\n## Kontext\n";
+    assert.match(liste({ "docs/adr/0003-drei.md": adr }), /\| aktualisiert \| 21\.06\.2026 \|/);
+  });
+  test("Status mit Zusatz im Blockquote bleibt vollständig", () => {
+    const adr = "# ADR 0004: Vier\n\n> Status: **akzeptiert als Grundsatz** · Datum: 2026-07-03\n\n## Status\n";
+    assert.match(liste({ "docs/adr/0004-vier.md": adr }), /\| akzeptiert als Grundsatz \|/);
+  });
+  test("fehlender Status ist ein Fehler mit Dateiname", () => {
+    const adr = "# ADR 0005: Fünf\n\n> Datum: 2026-07-03\n\n## Status\n";
+    assert.throws(() => liste({ "docs/adr/0005-fuenf.md": adr }), /0005-fuenf\.md.*kein Status/s);
+  });
+  test("ungültiges Datum, fehlender Ordner und fehlender Config-Block sind Fehler", () => {
+    assert.throws(() => liste(base({ "docs/adr/0002-x.md": adrNeu("0002", "X", "2026-13-40") })), /ungültiges Datum/);
+    assert.throws(() => liste({}, conf), /nicht gefunden/);
+    assert.throws(() => liste(base(), {}), /Config-Block/);
+  });
+  test("pipe im Titel wird escaped", () => {
+    assert.match(liste(base({ "docs/adr/0002-p.md": adrNeu("0002", "A | B", "2026-07-01") })), /A \\| B/);
   });
 });

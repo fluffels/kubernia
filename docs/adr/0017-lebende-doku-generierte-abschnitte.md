@@ -42,3 +42,11 @@ Entscheidung: **generierte Abschnitte zwischen `GEN`-Markern, geprüft von `chec
 ## Re-Evaluierung
 
 Wenn die Zahl der Generatoren so wächst, dass die Registry unübersichtlich wird (Richtwert: über zehn), oder wenn ein Generator Daten außerhalb des Repos braucht: neu entscheiden, ob dafür ein eigener, nicht blockierender Berichtsweg besser passt als ein Gate.
+
+## Fortschreibung #1392 (2026-10-07): Mermaid-Frontmatter, Registry-Datei, ADR-Liste
+
+- **Theme und Layout über Mermaid-Frontmatter.** Ein generiertes oder von Hand gepflegtes Diagramm setzt Theme, Layout und Farben im Frontmatter seines Mermaid-Codeblocks (`config:` mit `theme`, `layout`, `themeVariables`), nicht über `%%{init: …}%%`-Direktiven. Das Frontmatter ist Teil des Diagramm-Quelltexts und wandert mit dem Generator mit; GitHub rendert es in hell und dunkel.
+- **Registry in eigener Datei, Config wählbar.** Die Generator-Registry liegt in `scripts/docs-gen/registry.mjs`; die Engine importiert nur diese Datei. Die Config ist per `--config <pfad>` wählbar (Standard `scripts/docs-gen/config.json`). Ein anderes Projekt übernimmt Engine und Generatoren und tauscht Registry und Config. Die geteilten Helfer (Markdown sammeln, Fence-Maske, Frontmatter, Kettenzerlegung) liegen in `scripts/docs-gen/markdown.mjs`; `check:docdrift` nutzt dieselben.
+- **Generator `adr-liste`.** `docs/adr/README.md` trägt die ADR-Tabelle (Nummer, Titel, Status, Datum) als generierten Abschnitt; arc42 §9 verweist darauf, statt eine zweite Tabelle von Hand zu führen. Das Kopf-Format (`Status: **…** · Datum: JJJJ-MM-TT`) steht dort samt Vorlage.
+- **Verschachtelte npm-Ketten** (ein Schritt, dessen Skript selbst eine `&&`-Kette ist) löst der Generator `gates` auf; ein Zyklus ist ein Fehler.
+- **Zeitleiste ohne Filter (bewusst).** Spiel- und Harness-ADRs stehen gemischt in einer Tabelle; ein Filter bräuchte ein Pflichtfeld je ADR, und die bestehenden Köpfe nachzurüsten widerspräche „historisch, nie umschreiben“. **Re-Evaluierungs-Trigger:** überdecken Spiel-ADRs die Harness-Geschichte (Richtwert: mehr als 30 ADRs), entscheidet ein neuer ADR über ein Pflichtfeld `Kategorie` für neue ADRs.

@@ -3,16 +3,10 @@
 // Nie ausgegeben: Header, Tokens, Beschreibungstexte. Nie gelesen: settings.local.json.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { byCodeUnit, parseFrontmatter, renderTable } from "./markdown.mjs";
+import { brauche, byCodeUnit, parseFrontmatter, renderTable } from "./markdown.mjs";
 
 const NONE = "—";
 const code = (s) => `\`${s}\``;
-
-function need(rootDir, rel, what, errors) {
-  if (existsSync(join(rootDir, rel))) return true;
-  errors.push(`${what} "${rel}" nicht gefunden (Config veraltet?)`);
-  return false;
-}
 
 const listDir = (abs) => readdirSync(abs, { withFileTypes: true }).sort((a, b) => byCodeUnit(a.name, b.name));
 
@@ -101,7 +95,7 @@ export function harnessInventarGenerator({ rootDir, config }) {
   ];
   for (const [what, key, fn] of parts) {
     if (!h[key]) continue;
-    if (need(rootDir, h[key], `${what} (harness.${key})`, errors)) rows.push(...fn(rootDir, h[key]));
+    if (brauche(rootDir, h[key], `${what} (harness.${key})`, errors)) rows.push(...fn(rootDir, h[key]));
   }
   if (errors.length) throw new Error(errors.join("; "));
   return renderTable(
