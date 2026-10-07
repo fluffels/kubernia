@@ -45,6 +45,41 @@ export const LANGFUSE_SAMMELTICKET_TITEL = "Langfuse-Befunde (gesammelt)";
 /** Alle Sammeltickets, die das Einsortieren kennt (die Klemmung rechnet mit allen, nicht nur mit dem Harness-Sammelticket). */
 export const SAMMELTICKET_TITEL_LISTE = [SAMMELTICKET_TITEL, LANGFUSE_SAMMELTICKET_TITEL];
 
+/** Titel des wiederkehrenden Status-Tickets (Langfuse-Takt, ADR 0016). */
+export const STATUS_TITEL = "Langfuse-Status überprüfen";
+
+/**
+ * Titel-Marker der Kopf-Items: Tickets, die regelkonform VOR den Sammeltickets stehen (Status-Ticket, roter main, Dependabot,
+ * Forum). Gebunden an die `marker=`-Zeilen der Inbox-Workflows (test/board.test.ts).
+ */
+export const KOPF_MARKER = ["🚨 CI rot auf main", "🤖 Dependabot-PRs auflösen", "Forum #"];
+
+/** True für ein Kopf-Item: das Status-Ticket oder ein Titel, der mit einem Marker aus `KOPF_MARKER` beginnt. Pur. */
+export function istKopfItem(i) {
+  const t = String(i?.title ?? "");
+  return t === STATUS_TITEL || KOPF_MARKER.some((m) => t.startsWith(m));
+}
+
+/**
+ * Index des ersten Items hinter dem Kopf: Kopf-Items (offen, auch geclaimt) vorn zählen mit, geschlossene Items dazwischen
+ * überspringt die Zählung; das erste offene Nicht-Kopf-Item beendet den Kopf. Ohne Kopf 0. Pur.
+ */
+export function kopfEnde(items) {
+  let ende = 0;
+  for (const [idx, i] of items.entries()) {
+    if (i.state !== "open") continue;
+    if (!istKopfItem(i)) break;
+    ende = idx + 1;
+  }
+  return ende;
+}
+
+/** True, wenn das Item mit der Nummer schon im Kopf (vor `kopfEnde`) steht: dann muss es nicht mehr nach oben. Pur. */
+export function imKopf(items, nr) {
+  const idx = items.findIndex((i) => i.number === nr);
+  return idx >= 0 && idx < kopfEnde(items);
+}
+
 const ungeclaimt = (i) => (i.assignees ?? []).length === 0;
 
 /**
@@ -59,13 +94,13 @@ export function sammelticketItem(items, ohne = []) {
 /**
  * Der Sammelblock des Boards: die ungeclaimten Sammeltickets (alle Titel aus `SAMMELTICKET_TITEL_LISTE`), die ab dem ungeclaimten
  * Harness-Sammelticket bis zum nächsten offenen, ungeclaimten Nicht-Sammelticket aufeinander folgen. Ohne ungeclaimtes
- * Harness-Sammelticket beginnt der Block an der Spitze. Ein Status- oder Notfall-Ticket DAVOR (die stehen regelkonform oben)
- * stört ihn so nicht. Geschlossene, geclaimte und gerade einsortierte (`ohne`) Items überspringt der Block, sie beenden ihn nicht.
+ * Harness-Sammelticket beginnt der Block hinter dem Kopf (`kopfEnde`: Status-, Notfall-, Dependabot-, Forum-Ticket stehen
+ * regelkonform oben und stören ihn nicht). Geschlossene, geclaimte und gerade einsortierte (`ohne`) Items überspringt der Block, sie beenden ihn nicht.
  * In Board-Reihenfolge. Pur.
  */
 export function sammelblock(items, ohne = []) {
   const harness = sammelticketItem(items, ohne);
-  const start = harness ? items.findIndex((i) => i.id === harness.id) : 0;
+  const start = harness ? items.findIndex((i) => i.id === harness.id) : kopfEnde(items);
   const block = [];
   for (const i of items.slice(start)) {
     if (i.state !== "open" || !ungeclaimt(i) || ohne.includes(i.number)) continue;
@@ -104,6 +139,35 @@ export function planFuerArgs(items, args) {
   const anker = args.position ? ankerNummerFuerPosition(items, args.position, args.numbers[0]) : (args.anchor ?? null);
   const k = klemmeAnker(items, anker, { numbers: args.numbers, notfall: !!args.notfall });
   return { ...planPlacements(items, args.numbers, k.anker), klemmung: { geklemmt: k.geklemmt, sammelticket: k.sammelticket } };
+}
+
+/**
+ * Fehlende Items (aus der verzögerten REST-Liste) hinten anhängen, sofern ihre Nummer noch nicht in der Liste steht.
+ * `gefunden`: normalisierte Items (z.B. aus `itemAusIssueAntwort`), null-Einträge fliegen raus. Pur.
+ */
+export function ergaenzeFehlende(items, gefunden) {
+  const bekannt = new Set(items.map((i) => i.number));
+  const neu = (gefunden ?? []).filter((g) => g && !bekannt.has(g.number));
+  return [...items, ...neu];
+}
+
+/**
+ * Antwort der GraphQL-Abfrage `repository.issue.projectItems` → normalisiertes Item des eigenen Boards (`PROJECT_ID`) oder
+ * null (Issue unbekannt, nicht im Board, nur in fremdem Projekt). Der Status ist leer (nur der Listenfall braucht ihn). Pur.
+ */
+export function itemAusIssueAntwort(antwort) {
+  const issue = antwort?.data?.repository?.issue;
+  if (!issue || !Number.isInteger(issue.number)) return null;
+  const node = (issue.projectItems?.nodes ?? []).find((n) => n?.project?.id === PROJECT_ID && typeof n.id === "string");
+  if (!node) return null;
+  return {
+    id: node.id,
+    number: issue.number,
+    status: "",
+    title: typeof issue.title === "string" ? issue.title : "",
+    assignees: (issue.assignees?.nodes ?? []).map((a) => a?.login).filter((l) => typeof l === "string"),
+    state: typeof issue.state === "string" ? issue.state.toLowerCase() : "",
+  };
 }
 
 /** True bei GitHubs Rate-Limit-Fehler (Meldung der gh-CLI/GraphQL). */
@@ -177,9 +241,9 @@ export function missingFromBoard(openNumbers, items) {
   return [...new Set(openNumbers)].filter((n) => !known.has(n)).sort((a, b) => a - b);
 }
 
-/** Eine Listenabfrage über REST: alle Issue-Items des Boards in Board-Reihenfolge. */
-export function loadItems() {
-  const out = gh(["api", "--paginate", "--slurp", `users/fluffels/projectsV2/1/items?per_page=100&fields=${STATUS_FIELD_ID}`]);
+/** Eine Listenabfrage über REST: alle Issue-Items des Boards in Board-Reihenfolge. `opts.token` = anderer GH_TOKEN (Projekt-Scope im Workflow). */
+export function loadItems(opts = {}) {
+  const out = gh(["api", "--paginate", "--slurp", `users/fluffels/projectsV2/1/items?per_page=100&fields=${STATUS_FIELD_ID}`], opts);
   return normalizeItems(JSON.parse(out));
 }
 
@@ -198,6 +262,24 @@ const graphql = (query, vars, opts) => {
   for (const [k, v] of Object.entries(vars)) if (v !== null && v !== undefined) args.push("-f", `${k}=${v}`);
   return JSON.parse(gh(args, opts));
 };
+
+/**
+ * Fallback für Items, die die REST-Liste nicht liefert (frisch aufgenommene Items fehlen dort teils lange): Item-ID des Issues
+ * per GraphQL `issue.projectItems`, gefiltert auf das eigene Board. null, wenn das Issue nicht im Board steht.
+ */
+export function itemIdUeberIssue(nr, opts = {}, repo = "fluffels/kubernia") {
+  const [owner, name] = repo.split("/");
+  const antwort = JSON.parse(
+    gh(
+      [
+        "api", "graphql", "-f", `owner=${owner}`, "-f", `name=${name}`, "-F", `nr=${nr}`, "-f",
+        "query=query($owner:String!,$name:String!,$nr:Int!){ repository(owner:$owner,name:$name){ issue(number:$nr){ number title state assignees(first:5){ nodes{ login } } projectItems(first:20){ nodes{ id project{ id } } } } } } }",
+      ],
+      opts,
+    ),
+  );
+  return itemAusIssueAntwort(antwort);
+}
 
 /** Position setzen: hinter `afterId`, null = an die Spitze. `opts.token` = anderer GH_TOKEN (Projekt-Scope im Workflow). */
 export function setPosition(itemId, afterId, opts = {}) {

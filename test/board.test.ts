@@ -304,4 +304,48 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     ])
       expect(P.parseArgs(bad), bad.join(" ")).toBeNull();
   });
+
+  test("Kopf (#1349 Z27b): ohne ungeclaimtes Harness-Sammelticket beginnt der Sammelblock hinter dem Kopf, damit ein Status-Ticket oben das Langfuse-Sammelticket nicht verdeckt", () => {
+    const status = (n: number) => b(n, { title: "Langfuse-Status überprüfen" });
+    const nummern = (items: B[]) => K.sammelblock(items).map((i) => i.number);
+    expect(nummern([status(8), langfuse(2), b(3)])).toEqual([2]);
+    expect(K.klemmeAnker([status(8), langfuse(2), b(3)], null)).toMatchObject({ anker: 2, geklemmt: true });
+    expect(nummern([b(1, { title: "🚨 CI rot auf main" }), status(8), langfuse(2), b(3)]), "mehrere Kopf-Items").toEqual([2]);
+    expect(nummern([b(1, { title: "🤖 Dependabot-PRs auflösen" }), b(4, { title: "Forum #12: Frage" }), langfuse(2)])).toEqual([2]);
+    expect(nummern([status(8), b(5), langfuse(2)]), "ein Nicht-Kopf-Ticket dazwischen beendet den Kopf: Block leer").toEqual([]);
+    expect(nummern([status(8), b(9, { state: "closed" }), langfuse(2)]), "geschlossene Items zählen nicht").toEqual([2]);
+  });
+
+  test("Kopf-Marker stehen wörtlich in den Inbox-Workflows (keine stille Drift)", () => {
+    const M = rawLib as unknown as { KOPF_MARKER: string[]; istKopfItem: (i: { title: string }) => boolean; kopfEnde: (items: B[]) => number; imKopf: (items: B[], nr: number) => boolean };
+    const wf = [".github/workflows/ci.yml", ".github/workflows/dependabot-inbox.yml", ".github/workflows/forum-inbox.yml"]
+      .map((f) => readFileSync(new URL(`../${f}`, import.meta.url), "utf8"))
+      .join("\n");
+    for (const marker of M.KOPF_MARKER) expect(wf, marker).toContain(`marker="${marker}`);
+    expect(M.istKopfItem({ title: "Harness-Härtung (gesammelt)" })).toBe(false);
+    expect(M.istKopfItem({ title: "Langfuse-Status überprüfen" })).toBe(true);
+    expect(M.kopfEnde([b(1), b(2)])).toBe(0);
+    expect(M.imKopf([b(1, { title: "Langfuse-Status überprüfen" }), b(2)], 1)).toBe(true);
+    expect(M.imKopf([b(2), b(1, { title: "Langfuse-Status überprüfen" })], 1)).toBe(false);
+    expect(M.imKopf([b(2)], 99)).toBe(false);
+  });
+
+  test("GraphQL-Fallback (#1349 Z16): fehlende Items aus issue.projectItems, nur das eigene Board, fehlende bleiben fehlend", () => {
+    const G = rawLib as unknown as {
+      PROJECT_ID: string;
+      itemAusIssueAntwort: (a: unknown) => B | null;
+      ergaenzeFehlende: (items: B[], gefunden: (B | null)[]) => B[];
+    };
+    const antwort = (nodes: unknown[]) => ({ data: { repository: { issue: { number: 1360, title: "Kind", state: "OPEN", assignees: { nodes: [{ login: "fluffels" }] }, projectItems: { nodes } } } } });
+    expect(G.itemAusIssueAntwort(antwort([{ id: "PVTI_a", project: { id: G.PROJECT_ID } }]))).toEqual({ id: "PVTI_a", number: 1360, status: "", title: "Kind", assignees: ["fluffels"], state: "open" });
+    expect(G.itemAusIssueAntwort(antwort([{ id: "PVTI_x", project: { id: "PVT_fremd" } }])), "fremdes Projekt").toBeNull();
+    expect(G.itemAusIssueAntwort(antwort([])), "nicht im Board").toBeNull();
+    expect(G.itemAusIssueAntwort({ data: { repository: { issue: null } } }), "Issue unbekannt").toBeNull();
+    expect(G.itemAusIssueAntwort(null)).toBeNull();
+    const neu = G.ergaenzeFehlende([b(10)], [{ ...b(1360), id: "PVTI_a" }, null, b(10, { id: "doppelt" })]);
+    expect(neu.map((i) => i.id)).toEqual(["I10", "PVTI_a"]);
+    const plan = L.planPlacements(neu, [1360], 10);
+    expect(plan.missing).toEqual([]);
+    expect(plan.steps.map((s) => [s.item.number, s.afterId])).toEqual([[1360, "I10"]]);
+  });
 });
