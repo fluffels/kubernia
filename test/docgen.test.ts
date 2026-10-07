@@ -340,5 +340,6 @@ describe("Echt-Repo", () => {
     const r = api.runDocsGen({ rootDir: process.cwd(), config: api.loadConfig(process.cwd()) });
     assert.deepEqual(r.errors, []);
     assert.deepEqual(r.stale, []);
-  });
+    // Das Schicht-Ist startet dependency-cruiser (rund 5 s), mehr als das Vitest-Default.
+  }, 60_000);
 });

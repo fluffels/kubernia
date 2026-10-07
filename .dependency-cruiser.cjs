@@ -2,62 +2,17 @@
 // statt sie nur per Review-Disziplin zu hoffen. Befund #292 (game.ts → sfx.ts) hatte
 // gezeigt, dass sich eine Verletzung sonst unbemerkt einschleicht.
 //
-// Schichten (siehe AGENTS.md › Architektur, docs/referenz/schichtregeln.md):
-//   • pure Domäne      – Phaser-frei, im Node-Test prüfbar (sim, content*, world, decor,
-//                        clock, …). Darf NICHT phaser und NICHT die Präsentation importieren.
-//   • Anwendung        – game, runtime, devpanel, store (Persistenz). Wie Domäne: kein
-//                        phaser, keine Präsentation; darf nur nach „unten" (Domäne) greifen.
-//   • Präsentation     – scenes, ui, sfx. Darf alles (nach unten offen) – keine Regel.
-//   • Einstieg/Assets  – main (bootet Phaser + Szenen), assets-data. Bewusst ausgenommen.
-//
-// Umgesetzt als Negativ-Regel ("alles außer Präsentation/Einstieg bleibt rein"), damit der
-// Wächter bei Stardew-Scope mitwächst: jedes NEUE Domänen-Modul ist automatisch geschützt,
-// ohne dass man es hier nachträgt.
-
-// Schicht-Muster (Präsentation/Anwendung/Einstieg) als EINE Quelle der Wahrheit (#482):
-// dieselbe Definition nutzt der Doku↔Code-Wächter (scripts/check-docmap.mjs), damit die
-// Schicht-Zuordnung nicht zweimal nebeneinander gepflegt wird und auseinanderdriftet.
-// Deckung: Präsentation = src/(scenes|ui|sfx)(.ts|/…); Anwendung/Persistenz =
-// src/(game|runtime|devpanel|store)(.ts|/…); Einstieg/Assets = src/(main|assets-data).ts.
-const { PRESENTATION, APPLICATION, ENTRY } = require("./scripts/layers.cjs");
-/** Phaser, egal über welchen aufgelösten Pfad (Pfad beginnt mit `node_modules/…`, kein führender Slash). */
-const PHASER = "node_modules[/\\\\]phaser[/\\\\]";
+// Schichten (siehe AGENTS.md › Architektur, docs/referenz/schichtregeln.md): pure Domäne,
+// Anwendung/Persistenz, Präsentation, Einstieg/Assets. Die erlaubten Import-Richtungen stehen als
+// Positivliste in SCHICHT_MODELL (scripts/layers.cjs); verbotsRegeln() leitet daraus je verbotenem
+// Paar eine Regel ab, und dieselbe Tabelle erzeugt die Schichtdiagramme (npm run docs:gen).
+// Neue Domänen-Module sind automatisch geschützt (Auffang-Schicht „alles übrige unter src/“),
+// eine neue Schicht muss ihre Richtungen im Modell deklarieren.
+const { SCHICHT_MODELL, verbotsRegeln } = require("./scripts/layers.cjs");
 
 module.exports = {
   forbidden: [
-    {
-      name: "domaene-kein-phaser",
-      comment:
-        "Pure Domäne muss Phaser-frei bleiben (im Node-Test prüfbar). Logik gehört nicht " +
-        "in die Präsentationsschicht – siehe AGENTS.md › Architektur.",
-      severity: "error",
-      from: { path: "^src/", pathNot: `${PRESENTATION}|${APPLICATION}|${ENTRY}|\\.d\\.ts$` },
-      to: { path: PHASER },
-    },
-    {
-      name: "domaene-keine-praesentation",
-      comment:
-        "Pure Domäne darf scenes/ui/sfx NICHT importieren (Schichtung von unten nach oben).",
-      severity: "error",
-      from: { path: "^src/", pathNot: `${PRESENTATION}|${APPLICATION}|${ENTRY}|\\.d\\.ts$` },
-      to: { path: PRESENTATION },
-    },
-    {
-      name: "anwendung-kein-phaser",
-      comment:
-        "Anwendung/Persistenz (game/runtime/devpanel/store) muss Phaser-frei bleiben.",
-      severity: "error",
-      from: { path: APPLICATION },
-      to: { path: PHASER },
-    },
-    {
-      name: "anwendung-keine-praesentation",
-      comment:
-        "Anwendung/Persistenz darf scenes/ui/sfx NICHT importieren (nur nach unten in die Domäne).",
-      severity: "error",
-      from: { path: APPLICATION },
-      to: { path: PRESENTATION },
-    },
+    ...verbotsRegeln(SCHICHT_MODELL),
     // ── Architektur-Unit-Tests über die Schichtung hinaus (#390) ──────────────
     {
       name: "keine-zyklen",

@@ -12,7 +12,7 @@
       "check:anysuppress": "Ratchet auf die Zahl begründeter `any`-Ausnahmen",
       "check:docmap": "jede `src/`-Datei ist in einem Tiefendoc erwähnt, die Landkarte kann nicht leise veralten",
       "check:docdrift": "dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien",
-      "check:docgen": "generierte Doku-Abschnitte (Gate-Tabelle, Harness-Inventar) stimmen mit dem Repo überein",
+      "check:docgen": "generierte Doku-Abschnitte (Gate-Tabelle, Harness-Inventar, Schichtdiagramme) stimmen mit dem Repo überein",
       "check:internalrefs": "keine internen Bezüge im öffentlichen Repo",
       "check:lockfile": "Lockfile passt zur `package.json`",
       "check:diffsize": "Slice-Größe (Dateien und Zeilen gegen die Merge-Base)",
@@ -35,6 +35,19 @@
         "source": ".github/workflows/ci.yml",
         "description": "Review-Nachweis (`KQ-Plan:`/`KQ-Review:`) im PR"
       }
+    ]
+  },
+  "schichten": {
+    "layers": "scripts/layers.cjs",
+    "cruise": [
+      "node_modules/dependency-cruiser/bin/dependency-cruiser.mjs",
+      "src",
+      "--config",
+      ".dependency-cruiser.cjs",
+      "--output-type",
+      "json",
+      "--collapse",
+      "^(src|node_modules)/[^/]+/"
     ]
   },
   "harness": {

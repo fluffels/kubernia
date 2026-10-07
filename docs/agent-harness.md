@@ -97,7 +97,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 | `npm run check:anysuppress` | `verify` | Ratchet auf die Zahl begründeter `any`-Ausnahmen |
 | `npm run check:docmap` | `verify` | jede `src/`-Datei ist in einem Tiefendoc erwähnt, die Landkarte kann nicht leise veralten |
 | `npm run check:docdrift` | `verify` | dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien |
-| `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (Gate-Tabelle, Harness-Inventar) stimmen mit dem Repo überein |
+| `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (Gate-Tabelle, Harness-Inventar, Schichtdiagramme) stimmen mit dem Repo überein |
 | `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo |
 | `npm run check:lockfile` | `verify` | Lockfile passt zur `package.json` |
 | `npm run check:diffsize` | `verify` | Slice-Größe (Dateien und Zeilen gegen die Merge-Base) |
@@ -143,7 +143,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **WARUM:** Landkarte ([`docs/referenz/repo-landkarte.md`](referenz/repo-landkarte.md), Subsystem-granular) + Tiefendocs sind der **Kontext-Selektor** jeder KI-Session (§2.1). Driftet die Abdeckung leise, führt sie Agenten in die Irre — genau das darf nicht passieren, also ist „die Doku stimmt" selbst maschinell geprüft.
 
 ### Lebende-Doku-Wächter (`npm run check:docgen`, #1355)
-- **WAS:** Abschnitte zwischen `<!-- GEN:<name> START -->` und `<!-- GEN:<name> END -->` in README und `docs/` erzeugt `npm run docs:gen` aus dem Repo (heute: `gates` = Gate-Tabelle aus den `package.json`-Ketten, `harness-inventar` = Subagenten, Skills, Workflows, Hooks, MCP-Server); `check:docgen` erzeugt sie im Speicher und vergleicht. Rot bei veraltetem Abschnitt (Meldung nennt Datei, Abschnitt und den Fix `npm run docs:gen`), fehlendem END-Marker, unbekanntem oder doppeltem Abschnitt, einem Gate ohne Beschreibung oder einer Beschreibung ohne Gate. Auch als `test/docgen.test.ts`.
+- **WAS:** Abschnitte zwischen `<!-- GEN:<name> START -->` und `<!-- GEN:<name> END -->` in README und `docs/` erzeugt `npm run docs:gen` aus dem Repo (heute: `gates` = Gate-Tabelle aus den `package.json`-Ketten, `harness-inventar` = Subagenten, Skills, Workflows, Hooks, MCP-Server, `schichten-soll`/`schichten-ist` = Schichtdiagramme aus `scripts/layers.cjs` bzw. dem dependency-cruiser-Graphen); `check:docgen` erzeugt sie im Speicher und vergleicht. Rot bei veraltetem Abschnitt (Meldung nennt Datei, Abschnitt und den Fix `npm run docs:gen`), fehlendem END-Marker, unbekanntem oder doppeltem Abschnitt, einem Gate ohne Beschreibung oder einer Beschreibung ohne Gate. Auch als `test/docgen.test.ts`.
 - **WARUM:** handgepflegte Tabellen über Ableitbares veralten still (die Gate-Tabelle hier kannte `check:internalrefs` nicht). Ein Generator macht den Code zur Quelle; Konzept und Entscheidung: [ADR 0017](adr/0017-lebende-doku-generierte-abschnitte.md).
 - **Absicherung:** Engine und Generatoren laufen gegen ein Fixture-Root (Red-Green je Fehlerfall), dazu ein Echt-Repo-Test; Vergleich unabhängig von CRLF/LF, feste Sortierung ohne Locale. Engine und Config liegen unter `scripts/docs-gen*` und sind Leitplanken-Pfade.
 
