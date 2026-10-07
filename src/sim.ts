@@ -258,7 +258,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     // Prod-Build). Dev/Test: wirft ClusterInvariantError → sichtbarer Fehler im Terminal;
     // Prod: console.error, kein Wurf → Verletzung sichtbar in Devtools, Spiel läuft weiter.
     invariantChecks: boolean = true;
-    // Alert-Verlauf der Sitzung (Observability #109). Wie memLimit ein reines
+    // Alert-Verlauf der Sitzung (Observability #109). Ein reines
     // Laufzeit-Feld: NICHT serialisiert – Alerts leiten sich aus dem Cluster-Zustand
     // ab, nur der firing→resolved-Übergang braucht ein kurzes Gedächtnis.
     _firingAlerts!: Set<string>;   // brennt gerade

@@ -158,10 +158,9 @@ function applyEphemeralLimit(host: KubectlHost, dep: Deployment, spec: string | 
   return null;
 }
 
-/** Das `--limits=cpu=<N>[m]` in Milli-Cores ziehen (ohne `m` = ganze Cores → ×1000). */
-function parseCpuLimitMilli(raw: string): number | null {
-  const m = raw.match(/--limits[=\s][^\s]*cpu=([0-9.]+m?)/);
-  return m ? parseCpuMilli(m[1]) : null;
+/** Das `--limits=cpu=<N>` als Text ziehen (`250m`, `1`, `0.5`); `undefined`, wenn keins angegeben ist. */
+function cpuLimitSpec(raw: string): string | undefined {
+  return raw.match(/--limits[=\s][^\s]*cpu=([0-9.]+m?)/)?.[1];
 }
 
 /** kubectl set resources deployment/<name> --limits=memory=256Mi [--requests=memory=128Mi]
@@ -173,9 +172,11 @@ function kubectlSetResources(host: KubectlHost, t: string[], raw: string) {
   const depName = resolveDeploymentRef(t);
   const limitSpec = (raw.match(/--limits[=\s][^\s]*memory=([0-9]+(?:Mi|Gi|M|G)?)/) || [])[1];
   const requestSpec = (raw.match(/--requests[=\s][^\s]*memory=([0-9]+(?:Mi|Gi|M|G)?)/) || [])[1];
-  const cpuLimitMilli = parseCpuLimitMilli(raw);
+  const cpuSpec = cpuLimitSpec(raw);
+  const cpuLimitMilli = cpuSpec === undefined ? null : parseCpuMilli(cpuSpec);
   const ephSpec = (raw.match(/--limits[=\s][^\s]*ephemeral-storage=([0-9]+(?:Mi|Gi|M|G)?)/) || [])[1];
   if (!depName) return host._err("kubectl set resources: Welches Deployment?", "Muster: kubectl set resources deployment/<name> --limits=memory=256Mi --requests=memory=128Mi");
+  if (cpuSpec !== undefined && cpuLimitMilli === null) return host._err('error: invalid resource quantity "' + cpuSpec + '"', "Schreib das CPU-Limit z.B. als '200m' oder '0.5'.");
   if (!limitSpec && !requestSpec && cpuLimitMilli === null && !ephSpec) return host._err("kubectl set resources: Kein Limit/Request angegeben.", "Häng z.B. '--limits=memory=256Mi --requests=memory=128Mi', '--limits=cpu=200m' oder '--limits=ephemeral-storage=1Gi' an.");
   const dep = host.deployments.find(d => d.name === depName);
   if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + depName + '" not found', "Welche Deployments es gibt: 'kubectl get deployments'");
