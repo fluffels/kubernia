@@ -27,3 +27,16 @@ export function parseFrontmatter(text) {
 export function byCodeUnit(a, b) {
   return a < b ? -1 : a > b ? 1 : 0;
 }
+
+/** Gemeinsames Mermaid-Frontmatter aller generierten Diagramme (gedämpft-warme Palette). */
+export const MERMAID_FRONTMATTER = `---
+config:
+  theme: base
+  look: classic
+  layout: dagre
+  themeVariables:
+    lineColor: "#8b949e"
+    primaryColor: "#f3e3c3"
+    primaryTextColor: "#2b2118"
+    primaryBorderColor: "#8a6a3f"
+---`;

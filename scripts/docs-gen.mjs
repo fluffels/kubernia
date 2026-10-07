@@ -13,6 +13,7 @@
 import { readFileSync, readdirSync, statSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { diagrammGenerator } from "./docs-gen/diagramme.mjs";
 import { gatesGenerator } from "./docs-gen/gates.mjs";
 import { harnessInventarGenerator } from "./docs-gen/harness-inventar.mjs";
 import { schichtenIstGenerator, schichtenSollGenerator } from "./docs-gen/schichten.mjs";
@@ -28,6 +29,9 @@ export const GENERATORS = {
   "schichten-soll": schichtenSollGenerator,
   "schichten-ist": schichtenIstGenerator,
   zeitleiste: zeitleisteGenerator,
+  "agenten-ablauf": diagrammGenerator("agenten-ablauf"),
+  "agenten-sequenz": diagrammGenerator("agenten-sequenz"),
+  "leitplanken-schichten": diagrammGenerator("leitplanken-schichten"),
 };
 
 export const HINT = "<!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->";

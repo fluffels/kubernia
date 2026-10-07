@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import { MERMAID_FRONTMATTER } from "./markdown.mjs";
 
 const MIB = 1024 * 1024;
 const ID = /^[a-z][a-z0-9]*$/;
@@ -92,18 +93,6 @@ export function istKanten(cruiseJson, modell) {
   return sortiere([...gefunden.values()], modell);
 }
 
-const FRONTMATTER = `---
-config:
-  theme: base
-  look: classic
-  layout: dagre
-  themeVariables:
-    lineColor: "#8b949e"
-    primaryColor: "#f3e3c3"
-    primaryTextColor: "#2b2118"
-    primaryBorderColor: "#8a6a3f"
----`;
-
 /** Mermaid-Flowchart (in einem Code-Fence) für die Kantenmenge `kanten`. */
 export function renderDiagramm(modell, kanten) {
   const idx = indexVon(modell);
@@ -129,7 +118,7 @@ export function renderDiagramm(modell, kanten) {
   zeilen.push("  classDef extern fill:#e6e1d6,stroke:#6b6455,color:#2b2118,stroke-dasharray:4 3");
   if (engine.length) zeilen.push(`  class ${engine.join(",")} engine`);
   if (modell.extern.length) zeilen.push(`  class ${modell.extern.map((x) => `x_${x.id}`).join(",")} extern`);
-  return ["```mermaid", FRONTMATTER, "flowchart TD", ...zeilen, "```"].join("\n");
+  return ["```mermaid", MERMAID_FRONTMATTER, "flowchart TD", ...zeilen, "```"].join("\n");
 }
 
 /** Satz zu erlaubten, aber im Ist nicht genutzten Richtungen. */
