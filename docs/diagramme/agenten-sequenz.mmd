@@ -1,0 +1,44 @@
+sequenceDiagram
+  autonumber
+  actor M as Maintainerin
+  participant H as Hauptchat<br/>Skill ${skill:kubernia} · ${skill-modell:kubernia}
+  participant P as ${agent:kubernia-planner}<br/>${agent-modell:kubernia-planner}
+  participant E as ${agent:Explore}<br/>${agent-modell:Explore}
+  participant U as ${agent:kubernia-umsetzer}<br/>${agent-modell:kubernia-umsetzer}
+  participant L1 as ${agent:kubernia-lens} · ${agent-modell:kubernia-lens}<br/>Brille Architektur
+  participant L2 as ${agent:kubernia-lens} · ${agent-modell:kubernia-lens}<br/>Brille Requirement-Treue
+  participant L3 as ${agent:kubernia-lens} · ${agent-modell:kubernia-lens}<br/>Brille Test-Adäquanz
+  participant CI as CI und Required Checks
+
+  Note over H: alternativ Skill ${skill:kubernia-workflow}:<br/>Workflow ${workflow:kubernia-ticket} fährt denselben Ablauf
+  H->>H: Ticket wählen und claimen
+  H->>P: Ticket planen
+  opt breite Suche
+    P->>E: Fundstellen suchen
+    E-->>P: Fundstellen
+  end
+  P-->>H: Plan und Pre-Flight-Fragen
+  opt Irreversibel oder Außenwirkung
+    H->>M: Rückfrage vor dem Coden
+    M-->>H: Antwort
+  end
+  H->>U: Ticket, Plan, Entscheidungen
+  U->>U: Worktree, TDD, npm run verify
+  loop höchstens ${konstante:lensCap} Fix-Runden, Skill ${skill:review-lenses}
+    par drei Brillen parallel
+      U->>L1: Patch und Auftrag
+    and
+      U->>L2: Patch und Auftrag
+    and
+      U->>L3: Patch und Auftrag
+    end
+    L1-->>U: Befunde
+    L2-->>U: Befunde
+    L3-->>U: Befunde
+    U->>U: Blocker beheben
+  end
+  U->>CI: PR mit Auto-Merge
+  CI-->>U: grün: Merge, rot: Fix auf demselben Branch
+  U-->>H: Bericht mit Ergebnis
+  H-->>M: Zusammenfassung
+  Note over M,H: Forum: Skill ${skill:forum}. Thread lesen, Antwort als Entwurf zur Freigabe vorlegen, erst nach OK posten, bei Bug ein Ticket
