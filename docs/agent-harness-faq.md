@@ -81,6 +81,27 @@ Das ist ein bekannter Reibungspunkt des Auto-Mode-Classifiers (nicht des Repos):
 - **Leerer Canvas oder Screenshot-Timeout (#1290):** Ursache ist meist `document.visibilityState === "hidden"` (Fenster minimiert oder verdeckt): Phaser rendert dann nicht, und `kqGame.scene.getScenes(true)` ist leer. Abhilfe: das Browserfenster sichtbar halten. `kqDev.state()` und `kqDev.advanceTime` gehen auch verdeckt. Bleibt eine Taste hängen (ein `keydown` ohne `keyup`), den passenden `keyup` per `browser_evaluate` dispatchen.
 - **Playwright findet den Chromium nicht** (`Executable doesn't exist ... chromium_headless_shell-<build>`): Das `node_modules` des Hauptrepos liegt hinter dem Lockfile, Playwright-Version und installierter Browser passen nicht zusammen. Abhilfe: `npm ci`, danach `npx playwright install chromium`.
 
+## Wie hänge ich ein Bild an einen PR, und wie prüfe ich ein Mermaid-Diagramm?
+
+**Bild an den PR (Optik-Tickets verlangen Screenshots).** `gh` kann keine Anhänge an einen PR hängen; der Weg über das Repo selbst:
+
+1. Das Bild (aus `.playwright-mcp/`) als **Zwischen-Commit** auf den PR-Branch legen und pushen, z.B. `docs/pr-bilder/<name>.png`.
+2. Die URL `https://github.com/<owner>/<repo>/raw/<sha>/<pfad>` (`<sha>` = der Commit mit dem Bild) als Markdown-Bild `![Beschreibung](url)` in einen **PR-Kommentar** setzen.
+3. Im **nächsten Commit die Datei löschen**: der Squash-Merge enthält sie nie, und `refs/pull/<nr>/head` hält den Commit mit dem Bild, die URL bleibt also gültig. Belegt (2026-10-07): die Datei am Head-Commit eines gemergten PRs mit gelöschtem Branch liefert `curl -sIL "https://github.com/fluffels/kubernia/raw/<sha>/README.md"` mit `HTTP/1.1 200 OK`.
+
+Der Playwright-MCP kann das nicht prüfen: `github.com` und `file:` sind dort bewusst geblockt (`--allowed-origins` in `.mcp.json` erlaubt nur `localhost`, `ERR_BLOCKED_BY_CLIENT`).
+
+**Mermaid hell und dunkel.** Die GitHub-Vorschau lässt sich im MCP-Browser nicht öffnen. Statt dessen rendert [`scripts/mermaid-vorschau.mjs`](../scripts/mermaid-vorschau.mjs) die `mermaid`-Blöcke einer Markdown-Datei mit mermaid 11 hinter einem localhost-Server, je Block auf hellem und dunklem Grund (GitHub-Farben), und zeigt Parse-Fehler als Text:
+
+```bash
+npm install --prefix <tmp-ordner> mermaid@11     # einmalig, außerhalb des Repos, kein Eintrag in package.json
+node scripts/mermaid-vorschau.mjs README.md --mermaid <tmp-ordner> --port 4173
+```
+
+Dann `browser_navigate` auf `http://127.0.0.1:4173/`, per `browser_evaluate` warten, bis `document.body.dataset.fertig === "ja"` (die Seite zählt `pre.mermaid svg` und `.fehler`), Screenshot, danach den Server beenden. Geprüft am 2026-10-07 mit der README (zwei Blöcke, vier Flächen, keine Fehler).
+
+**Bewusst nicht:** ein Dunkelmodus-Schalter im MCP (`colorScheme: dark` global würde jede Spielprüfung verfälschen) und `browser_run_code_unsafe` (führt beliebigen Node-Code aus). Ob die echte GitHub-Darstellung stimmt, bleibt eine Sichtung der Maintainerin; das Skript prüft nur, dass mermaid den Text parst und die Farben auf beiden Gründen lesbar bleiben.
+
 ## Windows und Git-Bash: was geht beim Skripten verloren?
 
 - **Backslashes** in Heredocs und in `node -e`/`python -c`-Einzeilern werden verschluckt oder umgedeutet (`\s` wird zu `s`, `\n` zu einem echten Umbruch, `\\` wird zu `\`). Das trifft auch Heredocs mit Anführungszeichen am Delimiter (`<<'EOF'`): der Bash-Wrapper des Tool-Aufrufs halbiert `\` auch dort, bei Skripten mit Regex oder Escapes bricht der Aufruf mit „unexpected EOF“ ab oder legt die Datei kaputt an, ohne Fehlermeldung.

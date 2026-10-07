@@ -103,3 +103,52 @@ test(".dependency-cruiser.cjs enthält genau die abgeleiteten Schichtregeln plus
   assert.deepEqual(namen, [...abgeleitet, "keine-zyklen", "keine-verwaisten-module"]);
   assert.deepEqual(cruiserConfig.forbidden.slice(0, abgeleitet.length), layers.verbotsRegeln(layers.SCHICHT_MODELL));
 });
+
+// ── Echte Gate-Sabotage (#1392) ──────────────────────────────────────────────────────────────
+// Der Matcher-Nachbau oben beweist nur, dass `verbotsRegeln` richtig rechnet. Hier läuft dependency-cruiser
+// selbst auf einer Temp-Fixture: eine verbotene Kante muss `check:arch`-Regeln auslösen, eine erlaubte nicht.
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const CRUISER = fileURLToPath(new URL("../node_modules/dependency-cruiser/bin/dependency-cruiser.mjs", import.meta.url));
+
+/** Cruist eine Fixture mit den Regeln aus dem echten Modell und gibt die Namen der Verstöße zurück. */
+function cruiseVerstoesse(dateien: Record<string, string>): string[] {
+  const root = mkdtempSync(join(tmpdir(), "kq-cruise-"));
+  try {
+    for (const [rel, inhalt] of Object.entries(dateien)) {
+      mkdirSync(join(root, rel, ".."), { recursive: true });
+      writeFileSync(join(root, rel), inhalt);
+    }
+    writeFileSync(join(root, "cruise.cjs"), `module.exports = { forbidden: ${JSON.stringify(layers.verbotsRegeln(layers.SCHICHT_MODELL))} };\n`);
+    let out: string;
+    try {
+      out = execFileSync(process.execPath, [CRUISER, "src", "--config", "cruise.cjs", "--output-type", "json"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    } catch (err) {
+      out = (err as { stdout?: string }).stdout ?? ""; // Exit ≠ 0 bei Verstoß; das JSON steht trotzdem auf stdout
+    }
+    const json = JSON.parse(out) as { summary: { violations: { rule: { name: string } }[] } };
+    return json.summary.violations.map((v) => v.rule.name).sort();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test("echter dependency-cruiser-Lauf: Anwendung → Präsentation löst schicht-anwendung-nicht-praesentation aus", () => {
+  const v = cruiseVerstoesse({
+    "src/game/a.js": 'import "../scenes/b.js";\n',
+    "src/scenes/b.js": "export const b = 1;\n",
+  });
+  assert.deepEqual(v, ["schicht-anwendung-nicht-praesentation"]);
+}, 60_000);
+
+test("echter dependency-cruiser-Lauf: die erlaubte Gegenrichtung und Domäne ← Anwendung bleiben grün", () => {
+  const v = cruiseVerstoesse({
+    "src/scenes/b.js": 'import "../game/a.js";\n',
+    "src/game/a.js": 'import "../sim/c.js";\n',
+    "src/sim/c.js": "export const c = 1;\n",
+  });
+  assert.deepEqual(v, []);
+}, 60_000);

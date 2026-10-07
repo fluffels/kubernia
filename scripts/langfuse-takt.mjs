@@ -8,8 +8,7 @@
  *
  * Nur Node-Builtins und board-lib.mjs (keine Importe aus board-takt.mjs: der Import läuft in die andere Richtung).
  */
-import { execFileSync } from "node:child_process";
-import { LANGFUSE_SAMMELTICKET_TITEL, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, imKopf, setPosition } from "./board-lib.mjs";
+import { LANGFUSE_SAMMELTICKET_TITEL, STATUS_TITEL, TAG_MS, addToBoardTodo, alsDatum, ghJson, imKopf, setPosition } from "./board-lib.mjs";
 
 export { STATUS_TITEL };
 export const SAMMEL_TITEL = LANGFUSE_SAMMELTICKET_TITEL;
@@ -19,7 +18,7 @@ export const MIN_MERGES = 5;
 export const MIN_TICKET_MERGES_PUSH = 8;
 
 /**
- * Was tut der Lauf mit dem Status-Ticket? `offene` aus normalizeOffene (board-takt.mjs), `mergesSeit` = Zahl der Commits auf main im Fenster,
+ * Was tut der Lauf mit dem Status-Ticket? `offene` aus normalizeOffene (board-lib.mjs), `mergesSeit` = Zahl der Commits auf main im Fenster,
  * `ticketMerges` = davon Ticket-Merges ohne Bots, `ausloeser` = Workflow-Event (`push` zählt nur Aktivität: mindestens
  * `MIN_TICKET_MERGES_PUSH` Ticket-Merges, sonst nichts; alles andere ist der Wochen-Cron mit `MIN_MERGES`).
  * Liefert `{ aktion: "anlegen" | "nach-oben" | "nichts", nr?, grund, warnungen }`. Pur.
@@ -88,9 +87,6 @@ export function statusBody({ vorgaenger, jetzt }) {
 }
 
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
-const gh = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-const ghJson = (args) => JSON.parse(gh(args));
-
 /**
  * Status-Ticket anlegen bzw. nach oben schieben. `items` = die schon geladene Board-Liste (der Aufrufer lädt sie einmal je Lauf).
  * Liefert `{ ok, nr, itemId }`: `ok` bei Erfolg (oder fehlendem Token, das nur warnt), `itemId` nur, wenn das Item an die Spitze gesetzt

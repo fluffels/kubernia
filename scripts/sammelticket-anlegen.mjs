@@ -16,22 +16,23 @@
  *
  * Nur Node-Builtins und board-lib.mjs, analog zu board-place.mjs.
  */
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import {
   LANGFUSE_SAMMELTICKET_TITEL,
+  REPO,
   SAMMELTICKET_TITEL,
   addToBoardTodo,
   ergaenzeFehlende,
+  ghJson,
   loadItems,
   loadOpenIssuePages,
+  normalizeOffene,
+  positionLautAgentsMd,
   sammelticketKorrektur,
-  sammelticketPosition,
   setPosition,
+  todoItem,
 } from "./board-lib.mjs";
-import { planMitKorrektur } from "./board-place.mjs";
-import { normalizeOffene } from "./board-takt.mjs";
+import { planMitKorrektur, positionOderWarnung } from "./board-place.mjs";
 
 const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL };
 const PRUEF_VERSUCHE = 5;
@@ -50,7 +51,7 @@ export function parseArgs(argv) {
   return rest.length === 2 && rest[0] === "--vorgaenger" && Number.isInteger(nr) && nr > 0 ? { art, vorgaenger: nr, top: false, dry } : null;
 }
 
-/** Body des neuen Sammeltickets (Vorlage wie die der früheren Tickets). `blockiert durch #N` nur bei offenem Vorgänger. Pur. */
+/** Body des neuen Sammeltickets (Vorlage wie die der früheren Tickets). `blockiert durch #N` nur bei offenem Vorgänger, mit dem Zusatz, dass die Sperre nur gilt, solange er offen ist (die Zeile bleibt nach dessen Merge stehen). Pur. */
 export function sammelticketBody({ art, vorgaenger = null, vorgaengerOffen = false }) {
   if (!Object.hasOwn(TITEL, art)) throw new Error(`Unbekannte Art: ${String(art)}`);
   const zeilen =
@@ -58,7 +59,7 @@ export function sammelticketBody({ art, vorgaenger = null, vorgaengerOffen = fal
       ? ["Sammelticket für Harness-Befunde (AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets). Befunde als Kommentar `- [ ] …` anhängen."]
       : ["Sammelticket für Befunde aus Langfuse-Daten (docs/ticket-reihenfolge.md › Langfuse-Befunde (gesammelt)). Befunde als Kommentar `- [ ] …` anhängen."];
   if (vorgaenger !== null) zeilen[0] += ` Nachfolger von #${vorgaenger}${vorgaengerOffen ? " (dort in Arbeit)" : ""}.`;
-  if (vorgaenger !== null && vorgaengerOffen) zeilen.push("", `blockiert durch #${vorgaenger}`);
+  if (vorgaenger !== null && vorgaengerOffen) zeilen.push("", `blockiert durch #${vorgaenger} (nur solange #${vorgaenger} offen ist)`);
   return zeilen.join("\n");
 }
 
@@ -69,16 +70,10 @@ export function vorhandenesSammelticket(offene, titel) {
 }
 
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
-const gh = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-const ghJson = (args) => JSON.parse(gh(args));
-
-/** Position laut AGENTS.md; wirft, wenn die Datei fehlt oder die Zahl nicht eindeutig ist. */
-const positionLautAgentsMd = () => sammelticketPosition(readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8"));
-
 /** Zustand des Vorgängers (offen?) per REST; unlesbar zählt als offen (die Sperre ist die sichere Seite). */
 function vorgaengerOffen(nr) {
   try {
-    return ghJson(["api", `repos/fluffels/kubernia/issues/${nr}`]).state === "open";
+    return ghJson(["api", `repos/${REPO}/issues/${nr}`]).state === "open";
   } catch {
     return true;
   }
@@ -135,18 +130,19 @@ async function main(argv = process.argv.slice(2)) {
   } else {
     const offen = args.vorgaenger === null ? false : vorgaengerOffen(args.vorgaenger);
     const body = sammelticketBody({ art: args.art, vorgaenger: args.vorgaenger, vorgaengerOffen: offen });
-    const neu = ghJson(["api", "-X", "POST", "repos/fluffels/kubernia/issues", "-f", `title=${titel}`, "-f", `body=${body}`, "-f", "labels[]=area:harness"]);
+    const neu = ghJson(["api", "-X", "POST", `repos/${REPO}/issues`, "-f", `title=${titel}`, "-f", `body=${body}`, "-f", "labels[]=area:harness"]);
     nr = neu.number;
     console.log(`Angelegt: #${nr}`);
     const itemId = addToBoardTodo(neu.node_id);
     if (args.art === "harness") {
-      const items = ergaenzeFehlende(loadItems(), [{ id: itemId, number: nr, status: "Todo", title: titel, assignees: [], state: "open" }]);
+      const items = ergaenzeFehlende(loadItems(), [todoItem({ id: itemId, number: nr, title: titel })]);
       const k = sammelticketKorrektur(items, position);
       if (k) setPosition(k.id, k.afterId);
     } else if (args.top) {
-      const items = ergaenzeFehlende(loadItems(), [{ id: itemId, number: nr, status: "Todo", title: titel, assignees: [], state: "open" }]);
+      const items = ergaenzeFehlende(loadItems(), [todoItem({ id: itemId, number: nr, title: titel })]);
       // Wie board-place: ein falsch stehendes Harness-Sammelticket zuerst zurückschieben, sonst klemmt das neue Ticket hinter dessen falschen Platz.
-      const { korrektur, plan } = planMitKorrektur(items, { anchor: null, numbers: [nr] }, positionLautAgentsMd());
+      // Fehlt die Position, warnt das Skript und plant ohne Korrektur (nur `harness` braucht sie zwingend).
+      const { korrektur, plan } = planMitKorrektur(items, { anchor: null, numbers: [nr] }, positionOderWarnung());
       if (korrektur) setPosition(korrektur.id, korrektur.afterId);
       for (const { item, afterId } of plan.steps) setPosition(item.id, afterId);
     }

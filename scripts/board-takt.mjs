@@ -15,52 +15,29 @@
  *
  * Nur Node-Builtins, analog zu board-lib.mjs. `--dry-run` zeigt die Entscheidungen, ändert nichts.
  */
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import {
+  REPO,
   SAMMELTICKET_TITEL,
   STATUS_TITEL,
   TAG_MS,
   alsDatum,
+  ghJson,
   kopfEnde,
   loadItems,
   loadOpenIssuePages,
+  normalizeOffene,
+  positionLautAgentsMd,
   sammelticketItem,
   sammelticketKorrektur,
-  sammelticketPosition,
   setPosition,
+  todoItem,
   verschiebe,
 } from "./board-lib.mjs";
 import { entscheideTakt, fuehreStatusAus } from "./langfuse-takt.mjs";
 
 /** Harness-Sammelticket: so viele Ticket-Merges seit dem Abschluss des letzten Sammeltickets holen das ungeclaimte nach oben (hinter den Kopf). */
 export const HARNESS_TAKT_MERGES = 5;
-
-/**
- * Antwort von `gh api --paginate --slurp repos/<repo>/issues?state=open` (Liste von Seiten) → offene Issues
- * `{ number, titel, assignees, createdAt }`. Pull Requests fliegen raus. Wirft bei unerwarteter Form, statt still
- * ein Ticket zu übersehen (das führte zu einem Doppel-Ticket).
- */
-export function normalizeOffene(pages) {
-  if (!Array.isArray(pages) || pages.some((p) => !Array.isArray(p))) {
-    throw new Error("Unerwartete Antwortform der offenen Issues (keine Liste von Seiten).");
-  }
-  return pages
-    .flat()
-    .filter((i) => !i?.pull_request)
-    .map((i) => {
-      if (!Number.isInteger(i?.number) || typeof i.title !== "string" || typeof i.created_at !== "string") {
-        throw new Error(`Unerwartete Form eines Issues: ${JSON.stringify(i)?.slice(0, 120)}`);
-      }
-      return {
-        number: i.number,
-        titel: i.title,
-        assignees: Array.isArray(i.assignees) ? i.assignees.map((a) => a?.login).filter((l) => typeof l === "string") : [],
-        createdAt: i.created_at,
-      };
-    });
-}
 
 /**
  * Beginn des Aktivitätsfensters: 60 s nach dem Abschluss des Vorgängers (dessen eigener Squash-Commit soll nicht
@@ -141,12 +118,28 @@ export function ziehListeNach(items, ergebnis) {
   if (!ergebnis?.itemId) return items;
   const vorhanden = items.find((i) => i.id === ergebnis.itemId || i.number === ergebnis.nr);
   if (vorhanden) return verschiebe(items, vorhanden.id, null);
-  return [{ id: ergebnis.itemId, number: ergebnis.nr, status: "Todo", title: STATUS_TITEL, assignees: [], state: "open" }, ...items];
+  return [todoItem({ id: ergebnis.itemId, number: ergebnis.nr, title: STATUS_TITEL }), ...items];
 }
 
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
-const gh = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-const ghJson = (args) => JSON.parse(gh(args));
+
+/**
+ * Darf der Harness-Teil des Takts laufen? Er braucht die Board-Liste (Projekt-Scope des Tokens) und die Position laut AGENTS.md.
+ * Fehlt etwas, entfällt NUR dieser Teil (das Status-Ticket braucht beides nicht) und das wird sichtbar gemeldet: ein fehlender Token
+ * ist eine Warnung (Exit 0, der Lauf ohne Token ist bekannt), eine fehlende oder mehrdeutige Position ein Fehler (Exit 1), denn die
+ * Selbstkorrektur ist dann blind. Liefert `{ ok: true }` oder `{ ok: false, meldung, fehler }`. Pur.
+ */
+export function harnessVoraussetzung({ items, position, positionFehler }) {
+  if (!items) return { ok: false, fehler: false, meldung: "::warning::PROJECT_TOKEN fehlt: Harness-Sammelticket-Takt übersprungen (die Board-Liste braucht den Projekt-Scope)." };
+  if (!Number.isInteger(position) || position < 1) {
+    return {
+      ok: false,
+      fehler: true,
+      meldung: `::error::Harness-Sammelticket-Takt übersprungen, die Position laut AGENTS.md fehlt: ${String(positionFehler ?? "keine Position").split("\n")[0]}`,
+    };
+  }
+  return { ok: true };
+}
 
 /** Harness-Entscheidung ausführen; true bei Erfolg. */
 function fuehreHarnessAus(h, items, token) {
@@ -162,11 +155,17 @@ function fuehreHarnessAus(h, items, token) {
 
 function main() {
   const dry = process.argv.includes("--dry-run");
-  const repo = process.env.GITHUB_REPOSITORY || "fluffels/kubernia";
+  const repo = REPO;
   const ausloeser = process.env.GITHUB_EVENT_NAME || "schedule";
   const token = process.env.PROJECT_TOKEN;
   const jetzt = new Date();
-  const position = sammelticketPosition(readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8"));
+  let position = null;
+  let positionFehler = null;
+  try {
+    position = positionLautAgentsMd();
+  } catch (err) {
+    positionFehler = err.message;
+  }
   const offene = normalizeOffene(loadOpenIssuePages(repo));
   const seit = new Date(jetzt.getTime() - 90 * TAG_MS).toISOString();
   const geschlossen = ghJson(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=closed&labels=area:harness&since=${seit}&per_page=100`])
@@ -197,8 +196,10 @@ function main() {
   }
 
   // Harness-Sammelticket: Aktivität (eigenes Fenster) und Positionskorrektur, auf der nachgezogenen Liste.
-  if (!items) {
-    console.log("::warning::PROJECT_TOKEN fehlt: Harness-Sammelticket-Takt übersprungen (die Board-Liste braucht den Projekt-Scope).");
+  const voraussetzung = harnessVoraussetzung({ items, position, positionFehler });
+  if (!voraussetzung.ok) {
+    console.log(voraussetzung.meldung);
+    if (voraussetzung.fehler) fehler = true;
   } else {
     const h = entscheideHarnessTakt({ items, ticketMergesSeitAbschluss: zaehleTicketMerges(commits, abHarness), position });
     console.log(`Harness-Sammelticket: ${h.aktion}${h.nr ? ` #${h.nr}` : ""} (${h.grund}); Fenster ab ${abHarness}`);

@@ -10,33 +10,18 @@
  * Projektneutral: Pfade, Ketten und Beschreibungen stehen in scripts/docs-gen/config.json.
  * Reines Node-Skript (nur Builtins); alle Funktionen nehmen `rootDir` entgegen.
  */
-import { readFileSync, readdirSync, statSync, writeFileSync, existsSync } from "node:fs";
-import { dirname, join, relative, sep } from "node:path";
+import { readFileSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { diagrammGenerator } from "./docs-gen/diagramme.mjs";
-import { gatesGenerator } from "./docs-gen/gates.mjs";
-import { harnessInventarGenerator } from "./docs-gen/harness-inventar.mjs";
-import { schichtenIstGenerator, schichtenSollGenerator } from "./docs-gen/schichten.mjs";
-import { zeitleisteGenerator } from "./docs-gen/zeitleiste.mjs";
+import { collectMarkdown, fenceMaske } from "./docs-gen/markdown.mjs";
+import { GENERATORS } from "./docs-gen/registry.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const CONFIG_PATH = "scripts/docs-gen/config.json";
-
-/** Registry: Marker-Name → Generator `({rootDir, config}) => string` (wirft bei Datenfehlern). */
-export const GENERATORS = {
-  gates: gatesGenerator,
-  "harness-inventar": harnessInventarGenerator,
-  "schichten-soll": schichtenSollGenerator,
-  "schichten-ist": schichtenIstGenerator,
-  zeitleiste: zeitleisteGenerator,
-  "agenten-ablauf": diagrammGenerator("agenten-ablauf"),
-  "agenten-sequenz": diagrammGenerator("agenten-sequenz"),
-  "leitplanken-schichten": diagrammGenerator("leitplanken-schichten"),
-};
+/** Standard-Config; per `--config <pfad>` überschreibbar (Pfad relativ zum Repo-Root oder absolut). */
+export const DEFAULT_CONFIG = "scripts/docs-gen/config.json";
 
 export const HINT = "<!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->";
 const MARKER = /^(\s*)<!-- GEN:([a-z0-9][a-z0-9-]*) (START|END) -->\s*$/;
-const FENCE = /^\s*(```|~~~)/;
 
 /** Findet Abschnitte; Zeilen in Code-Fences zählen nicht. Zeilen sind 0-basiert. */
 export function parseSections(text) {
@@ -44,15 +29,9 @@ export function parseSections(text) {
   const sections = [];
   const errors = [];
   let open = null;
-  let fence = null;
+  const imFence = fenceMaske(lines);
   lines.forEach((line, i) => {
-    const f = FENCE.exec(line);
-    if (f) {
-      if (!fence) fence = f[1];
-      else if (fence === f[1]) fence = null;
-      return;
-    }
-    if (fence) return;
+    if (imFence[i]) return;
     const m = MARKER.exec(line);
     if (!m) {
       if (line.trimStart().startsWith("<!-- GEN:"))
@@ -99,25 +78,6 @@ export function renderSections(text, outputs) {
   }
   out.push(...lines.slice(cursor));
   return out.join(eol);
-}
-
-/** Alle .md-Dateien unter den konfigurierten Wurzeln (Dateien oder Ordner), POSIX, sortiert. */
-export function collectMarkdown(rootDir, roots) {
-  const found = [];
-  const walk = (abs) => {
-    for (const ent of readdirSync(abs, { withFileTypes: true })) {
-      const p = join(abs, ent.name);
-      if (ent.isDirectory()) walk(p);
-      else if (ent.isFile() && ent.name.endsWith(".md")) found.push(relative(rootDir, p).split(sep).join("/"));
-    }
-  };
-  for (const r of roots) {
-    const abs = join(rootDir, r);
-    if (!existsSync(abs)) continue;
-    if (statSync(abs).isDirectory()) walk(abs);
-    else found.push(r);
-  }
-  return [...new Set(found)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
 /** Führt jeden Generator höchstens einmal je Lauf aus (Fehler werden zwischengespeichert). */
@@ -182,28 +142,49 @@ export function runDocsGen({ rootDir = ROOT, config, generators = GENERATORS, wr
   return { stale, errors, written };
 }
 
-export function loadConfig(rootDir = ROOT) {
-  return JSON.parse(readFileSync(join(rootDir, CONFIG_PATH), "utf8"));
+export function loadConfig(rootDir = ROOT, pfad = DEFAULT_CONFIG) {
+  const abs = isAbsolute(pfad) ? pfad : resolve(rootDir, pfad);
+  return JSON.parse(readFileSync(abs, "utf8"));
 }
 
-function main() {
-  const write = process.argv.includes("--write");
-  const res = runDocsGen({ rootDir: ROOT, config: loadConfig(), write });
-  for (const e of res.errors) console.error(`✖ ${e.file} [${e.section}]: ${e.message}`);
+/**
+ * Kommandozeile: `[--write] [--config <pfad>]`. Gibt den Exit-Code zurück (0 ok, 1 Fehler oder veraltet);
+ * `out`/`err` nehmen die Ausgabezeilen entgegen. `config`/`generators` überschreiben Datei und Registry (Tests).
+ */
+export function cli(argv, { rootDir = ROOT, config, generators = GENERATORS, out = console.log, err = console.error } = {}) {
+  const write = argv.includes("--write");
+  const ci = argv.indexOf("--config");
+  let cfg = config;
+  if (!cfg) {
+    const pfad = ci >= 0 ? argv[ci + 1] : undefined;
+    if (ci >= 0 && !pfad) {
+      err("✖ --config braucht einen Pfad\n\nFix: --config <pfad> angeben oder weglassen");
+      return 1;
+    }
+    try {
+      cfg = loadConfig(rootDir, pfad);
+    } catch (e) {
+      err(`✖ Config nicht lesbar: ${e instanceof Error ? e.message : e}\n\nFix: --config <pfad> prüfen (Standard ${DEFAULT_CONFIG})`);
+      return 1;
+    }
+  }
+  const res = runDocsGen({ rootDir, config: cfg, generators, write });
+  for (const e of res.errors) err(`✖ ${e.file} [${e.section}]: ${e.message}`);
   if (res.errors.length) {
-    console.error("\nFix: Marker bzw. Generator-Daten korrigieren, dann npm run docs:gen");
-    process.exit(1);
+    err("\nFix: Marker bzw. Generator-Daten korrigieren, dann npm run docs:gen");
+    return 1;
   }
   if (write) {
-    console.log(res.written.length ? `✔ geschrieben: ${res.written.join(", ")}` : "✔ nichts zu tun, alle generierten Abschnitte aktuell");
-    return;
+    out(res.written.length ? `✔ geschrieben: ${res.written.join(", ")}` : "✔ nichts zu tun, alle generierten Abschnitte aktuell");
+    return 0;
   }
-  for (const s of res.stale) console.error(`✖ ${s.file} [${s.section}]: generierter Abschnitt ist veraltet`);
+  for (const s of res.stale) err(`✖ ${s.file} [${s.section}]: generierter Abschnitt ist veraltet`);
   if (res.stale.length) {
-    console.error("\nFix: npm run docs:gen");
-    process.exit(1);
+    err("\nFix: npm run docs:gen");
+    return 1;
   }
-  console.log("✔ generierte Doku-Abschnitte aktuell");
+  out("✔ generierte Doku-Abschnitte aktuell");
+  return 0;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) main();
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) process.exitCode = cli(process.argv.slice(2));

@@ -16,13 +16,14 @@ type Offen = { number: number; titel: string; assignees: string[]; createdAt: st
 type Harness = { aktion: "nach-oben" | "auf-position" | "nichts"; nr?: number; afterId?: string | null; grund: string };
 type Takt = {
   HARNESS_TAKT_MERGES: number;
-  normalizeOffene: (pages: unknown) => Offen[];
+  harnessVoraussetzung: (a: { items: Item[] | null; position: number | null; positionFehler?: string | null }) => { ok: boolean; fehler?: boolean; meldung?: string };
   mergeFensterAb: (letzter: string | null, jetzt: string | Date) => Date;
   zaehleTicketMerges: (commits: unknown, seit?: string | Date | null) => number;
   entscheideHarnessTakt: (a: { items: Item[]; ticketMergesSeitAbschluss: number; position: number }) => Harness;
   ziehListeNach: (items: Item[], ergebnis: { nr: number; itemId?: string | null } | null) => Item[];
 };
 const T = raw as unknown as Takt;
+const normalizeOffene = (rawLib as unknown as { normalizeOffene: (pages: unknown) => Offen[] }).normalizeOffene;
 const STATUS_TITEL = (rawStatus as unknown as { STATUS_TITEL: string }).STATUS_TITEL;
 const verschiebe = (rawLib as unknown as { verschiebe: (i: Item[], id: string, after: string | null) => Item[] }).verschiebe;
 
@@ -48,20 +49,20 @@ describe("normalizeOffene", () => {
     ...extra,
   });
   test("filtert Pull Requests und liest Assignees", () => {
-    const r = T.normalizeOffene([[issue(1), issue(2, { pull_request: {} })], [issue(3, { assignees: [] })]]);
+    const r = normalizeOffene([[issue(1), issue(2, { pull_request: {} })], [issue(3, { assignees: [] })]]);
     expect(r.map((i) => i.number)).toEqual([1, 3]);
     expect(r[0].assignees).toEqual(["fluffels"]);
     expect(r[1].assignees).toEqual([]);
   });
   test("falsche Form wirft", () => {
-    expect(() => T.normalizeOffene({})).toThrow();
-    expect(() => T.normalizeOffene([issue(1)])).toThrow();
-    expect(() => T.normalizeOffene([[{ number: 1 }]])).toThrow();
+    expect(() => normalizeOffene({})).toThrow();
+    expect(() => normalizeOffene([issue(1)])).toThrow();
+    expect(() => normalizeOffene([[{ number: 1 }]])).toThrow();
   });
   test("ohne created_at wirft (statt still zu sortieren)", () => {
     const i = { number: 1, title: STATUS_TITEL, assignees: [] };
-    expect(() => T.normalizeOffene([[i]])).toThrow(/Form eines Issues/);
-    expect(T.normalizeOffene([[{ ...i, created_at: "2026-10-01T05:00:00Z" }]])).toHaveLength(1);
+    expect(() => normalizeOffene([[i]])).toThrow(/Form eines Issues/);
+    expect(normalizeOffene([[{ ...i, created_at: "2026-10-01T05:00:00Z" }]])).toHaveLength(1);
   });
 });
 

@@ -1,15 +1,18 @@
 // Kein Shebang (siehe docs-gen.mjs). Generator `zeitleiste` (#1367): Tabelle „Datum | Was passierte“
 // aus den ADR-Köpfen (docs/adr/NNNN-*.md) und einer kleinen Meilenstein-Datei für Ereignisse ohne ADR.
 // Das Datum kommt aus dem ADR-Kopf, nicht aus `git log` (flacher CI-Klon, Ausgabe bleibt deterministisch).
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { byCodeUnit, renderTable } from "./markdown.mjs";
+import { brauche, byCodeUnit, renderTable } from "./markdown.mjs";
 
 // Kopf-Formate als Konstanten (projektabhängig, Pfade stehen in der Config).
 const ADR_FILE = /^(\d{4})-.+\.md$/;
 const ADR_H1 = /^# ADR (\d{4}): (.+?)\s*$/;
-const DATE_KEY = /Datum:\s*(\d{4}-\d{2}-\d{2})/;
-const DATE_STATUS = /\*\*Status:\*\*[^\n]*\((\d{4}-\d{2}-\d{2})\)/;
+const DATE_KEY = /Datum:\s*([^\s·]+)/;
+// Status: Blockquote-Kopf "Status: **akzeptiert**" oder Listenform "- **Status:** akzeptiert (JJJJ-MM-TT)".
+const STATUS_QUOTE = /\bStatus:\s*\*\*([^*\n]+)\*\*/;
+const STATUS_LIST = /\*\*Status:\*\*\s*([^(·\n]+?)\s*(?:[(·]|$)/m;
+const DATE_STATUS = /\*\*Status:\*\*[^\n]*\(([^)\s]+)\)/;
 const ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /** Gültiges Kalenderdatum (ohne Locale): UTC-Roundtrip muss die Komponenten zurückgeben. */
@@ -29,7 +32,8 @@ function head(text) {
   return i < 0 ? text : text.slice(0, i);
 }
 
-function readAdrs(rootDir, dir, errors) {
+/** Liest alle ADR-Köpfe (Nummer, Titel, Datum, Status); Formatfehler landen in `errors`. */
+export function readAdrs(rootDir, dir, errors) {
   const adrs = [];
   const seen = new Set();
   const names = readdirSync(join(rootDir, dir), { withFileTypes: true })
@@ -60,7 +64,9 @@ function readAdrs(rootDir, dir, errors) {
     } else if (!validIso(date)) {
       errors.push(`${dir}/${name}: ungültiges Datum ${date}`);
     } else {
-      adrs.push({ date, order: 0, text: `[ADR ${nr}](/${dir}/${name}): ${h1[2]}` });
+      const status = (STATUS_QUOTE.exec(h) ?? STATUS_LIST.exec(h))?.[1].trim();
+      if (!status) errors.push(`${dir}/${name}: kein Status im Kopf (erwartet "Status: **…**" oder "- **Status:** …")`);
+      else adrs.push({ nr, date, status, title: h1[2], link: `/${dir}/${name}`, order: 0, text: `[ADR ${nr}](/${dir}/${name}): ${h1[2]}` });
     }
   }
   return adrs;
@@ -92,12 +98,23 @@ export function zeitleisteGenerator({ rootDir, config }) {
   if (!c?.adr || !c?.meilensteine) throw new Error('Config-Block "zeitleiste" mit "adr" und "meilensteine" fehlt');
   const errors = [];
   const rows = [];
-  if (existsSync(join(rootDir, c.adr))) rows.push(...readAdrs(rootDir, c.adr, errors));
-  else errors.push(`ADR-Ordner "${c.adr}" nicht gefunden (Config veraltet?)`);
-  if (existsSync(join(rootDir, c.meilensteine))) rows.push(...readMeilensteine(rootDir, c.meilensteine, errors));
-  else errors.push(`Meilenstein-Datei "${c.meilensteine}" nicht gefunden (Config veraltet?)`);
+  if (brauche(rootDir, c.adr, "ADR-Ordner", errors)) rows.push(...readAdrs(rootDir, c.adr, errors));
+  if (brauche(rootDir, c.meilensteine, "Meilenstein-Datei", errors)) rows.push(...readMeilensteine(rootDir, c.meilensteine, errors));
   if (errors.length) throw new Error(errors.join("; "));
   // Array.prototype.sort ist stabil: Gleichstand ADR (order 0, nach Nummer eingelesen) vor Meilenstein (order 1, Dateireihenfolge).
   rows.sort((a, b) => byCodeUnit(a.date, b.date) || a.order - b.order);
   return renderTable(["Datum", "Was passierte"], rows.map((r) => [german(r.date), r.text]));
+}
+
+/** Generator `adr-liste` (#1392): Tabelle aller ADRs (Nummer, Titel, Status, Datum) aus den ADR-Köpfen. */
+export function adrListeGenerator({ rootDir, config }) {
+  const dir = config.zeitleiste?.adr;
+  if (!dir) throw new Error('Config-Block "zeitleiste" mit "adr" fehlt');
+  const errors = [];
+  const adrs = brauche(rootDir, dir, "ADR-Ordner", errors) ? readAdrs(rootDir, dir, errors) : [];
+  if (errors.length) throw new Error(errors.join("; "));
+  return renderTable(
+    ["ADR", "Titel", "Status", "Datum"],
+    adrs.map((a) => [`[${a.nr}](${a.link})`, a.title, a.status, german(a.date)]),
+  );
 }

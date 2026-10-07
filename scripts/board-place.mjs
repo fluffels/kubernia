@@ -24,7 +24,6 @@
  * (`issue.projectItems`, gebündelte Aliase in einer Abfrage); steht ein Issue wirklich nicht im Board, wird es gemeldet und übersprungen.
  * Bei Rate-Limit sofort stoppen, den Rest melden.
  */
-import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import {
   NOTFALL_ARTEN,
@@ -37,9 +36,9 @@ import {
   missingFromBoard,
   notfallTitelFehler,
   planFuerArgs,
+  positionLautAgentsMd,
   sammelticketItem,
   sammelticketKorrektur,
-  sammelticketPosition,
   setPosition,
   verschiebe,
 } from "./board-lib.mjs";
@@ -86,19 +85,20 @@ function parseOhneNotfall(rest, dry) {
 /**
  * Der Planungsweg von main als pure Funktion (#1390): zuerst die Selbstkorrektur des ungeclaimten Harness-Sammeltickets (nicht bei
  * `--notfall`, nicht wenn das Sammelticket selbst einsortiert wird), dann `planFuerArgs` auf der korrigierten Liste. `n` = Position
- * laut AGENTS.md. Liefert `{ korrektur, items, plan }` (`korrektur` null, wenn nichts zu korrigieren war).
+ * laut AGENTS.md; `null` heißt „Position unbekannt“: dann entfällt die Korrektur, der Plan läuft ohne sie. Liefert
+ * `{ korrektur, items, plan }` (`korrektur` null, wenn nichts zu korrigieren war).
  */
 export function planMitKorrektur(items, args, n) {
-  const ticket = args.notfall ? null : sammelticketItem(items, args.numbers);
+  const ticket = args.notfall || n === null ? null : sammelticketItem(items, args.numbers);
   const korrektur = ticket ? sammelticketKorrektur(items, n) : null;
   const korrigiert = korrektur ? verschiebe(items, korrektur.id, korrektur.afterId) : items;
   return { korrektur, items: korrigiert, plan: planFuerArgs(korrigiert, args) };
 }
 
-/** Position laut AGENTS.md (SSOT) oder null mit Warnung, wenn die Datei nicht lesbar ist oder die Zahl nicht eindeutig. */
-function positionLautAgentsMd() {
+/** Position laut AGENTS.md (SSOT) oder null mit Warnung, wenn die Datei nicht lesbar ist oder die Zahl nicht eindeutig (nur die Selbstkorrektur entfällt). */
+export function positionOderWarnung(lies = positionLautAgentsMd) {
   try {
-    return sammelticketPosition(readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8"));
+    return lies();
   } catch (e) {
     console.error(`⚠ Sammelticket-Selbstkorrektur übersprungen: ${String(e.message).split("\n")[0]}`);
     return null;
@@ -137,9 +137,7 @@ async function main(argv = process.argv.slice(2)) {
         process.exit(2);
       }
     }
-    const n = args.notfall ? null : positionLautAgentsMd();
-    const geplant = n === null ? { korrektur: null, items, plan: planFuerArgs(items, args) } : planMitKorrektur(items, args, n);
-    ({ korrektur, plan } = geplant);
+    ({ korrektur, plan } = planMitKorrektur(items, args, args.notfall ? null : positionOderWarnung()));
     if (plan.klemmung.geklemmt) console.log(`Hinter das ungeclaimte Sammelticket #${plan.klemmung.sammelticket} geklemmt (Notfall: --notfall <art>, nur mit --top, ${NOTFALL_ARTEN.join("|")}).`);
   } catch (e) {
     console.error(`✖ Abbruch: ${abortMessage(e.message)}. Später erneut fahren.`);

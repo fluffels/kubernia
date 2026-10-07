@@ -15,13 +15,13 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
-import { callsFromTranscript, classifySubagent } from "./token-baseline.mjs";
-import { transkriptZeilen } from "./transkript.mjs";
+import { callsFromTranscript } from "./token-baseline.mjs";
+import { ladeSessionDatei } from "./transkript.mjs";
 
 export const KAT = { BRAIN: "Brain", TICKET: "Ticket-Orchestrierung", NACHLAUF: "Nachlauf", ADHOC: "Ad-hoc", OHNE_ZEIT: "ohne Zeit" };
 
@@ -106,11 +106,15 @@ function claimsAus(events, turnVon) {
   return claims;
 }
 
-const istKubernia = (meta) => Boolean(meta.parentAgentId) || /umsetzer/i.test(meta.agentType ?? "") || classifySubagent(meta.agentType, meta.description) !== null;
+/**
+ * kubernia-Subagent im Sinn der Zerlegung: ein verschachtelter Agent (`parentAgentId`) oder ein `agentType` mit dem Präfix `kubernia-`
+ * (Planer, Umsetzer, Lens). Explore und andere Subagenten, die der Hauptchat selbst startet, sind Arbeit des Hauptchats (Forks).
+ */
+export const istKubernia = (meta) => Boolean(meta?.parentAgentId) || /^kubernia-/.test(meta?.agentType ?? "");
 
 /**
  * Kern: Sessions (Hauptzeilen + Subagenten) → Summen je Kategorie × Modell × Quelle plus Ticket-Fenster.
- * @param {{ sessions: { id: string, main: object[], subagents?: { meta: object, zeilen: object[] }[] }[],
+ * @param {{ sessions: Iterable<{ id: string, main: object[], subagents?: { meta: object, zeilen: object[] }[] }>,
  *   von?: string, bis?: string, brainRoots?: string[], closedAtOf?: (nr: number) => string | null }} e
  */
 export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAtOf = () => null }) {
@@ -237,27 +241,13 @@ export function parseArgs(argv) {
   return a;
 }
 
-function ladeSessions(dir, von) {
-  const sessions = [];
+/** Sessions eines Projektordners, eine nach der anderen (Generator): nur die gerade verarbeitete liegt im Speicher. */
+export function* ladeSessions(dir, von) {
   for (const f of readdirSync(dir).filter((n) => n.endsWith(".jsonl"))) {
     const p = join(dir, f);
     if (von && statSync(p).mtimeMs < Date.parse(von)) continue;
-    const id = f.replace(/\.jsonl$/, "");
-    const subDir = join(dir, id, "subagents");
-    const subagents = existsSync(subDir)
-      ? readdirSync(subDir)
-          .filter((n) => n.endsWith(".jsonl"))
-          .map((n) => {
-            const meta = join(subDir, n.replace(/\.jsonl$/, ".meta.json"));
-            return {
-              meta: existsSync(meta) ? JSON.parse(readFileSync(meta, "utf8")) : {},
-              zeilen: transkriptZeilen(readFileSync(join(subDir, n), "utf8")),
-            };
-          })
-      : [];
-    sessions.push({ id, main: transkriptZeilen(readFileSync(p, "utf8")), subagents });
+    yield ladeSessionDatei(p);
   }
-  return sessions;
 }
 
 function closedAtViaGh(nr) {

@@ -8,40 +8,20 @@ import { join } from "node:path";
 import { MERMAID_FRONTMATTER } from "./markdown.mjs";
 
 const MIB = 1024 * 1024;
-const ID = /^[a-z][a-z0-9]*$/;
 const AUFFANG_TEXT = "alles übrige unter src/";
 
-/** Lädt SCHICHT_MODELL aus der konfigurierten layers-Datei relativ zu `rootDir`. */
+/**
+ * Lädt SCHICHT_MODELL aus der konfigurierten layers-Datei relativ zu `rootDir` und prüft es mit dem
+ * `pruefeModell`, das dieselbe Datei exportiert (die Prüfung lebt bei der Modell-Definition, #1392).
+ */
 export function ladeModell(rootDir, layersPfad) {
   const abs = join(rootDir, layersPfad);
   if (!existsSync(abs)) throw new Error(`Schicht-Definition ${layersPfad} fehlt`);
-  const modell = createRequire(abs)(abs).SCHICHT_MODELL;
-  if (!modell) throw new Error(`${layersPfad} exportiert kein SCHICHT_MODELL`);
-  return modell;
-}
-
-/** Wirft bei einem unbrauchbaren Modell (alle Probleme in einer Meldung). */
-export function pruefeModell(modell) {
-  const probleme = [];
-  const schichten = Array.isArray(modell?.schichten) ? modell.schichten : [];
-  const extern = Array.isArray(modell?.extern) ? modell.extern : [];
-  if (schichten.length === 0) probleme.push("keine Schichten");
-  const alle = [...schichten, ...extern];
-  const ids = new Set();
-  for (const s of alle) {
-    if (typeof s.id !== "string" || !ID.test(s.id) || s.id === "end") probleme.push(`ungültige oder reservierte ID "${String(s.id)}"`);
-    else if (ids.has(s.id)) probleme.push(`doppelte ID "${s.id}"`);
-    ids.add(s.id);
-    if (typeof s.label !== "string" || s.label === "" || /["<>\r\n]/.test(s.label)) probleme.push(`ungültiges Label bei "${String(s.id)}"`);
-    if (s.technik !== undefined && /["<>\r\n]/.test(s.technik)) probleme.push(`ungültige Technik bei "${String(s.id)}"`);
-  }
-  const auffang = schichten.filter((s) => s.muster === null).length;
-  if (schichten.length > 0 && auffang !== 1) probleme.push(`genau eine Auffang-Schicht (muster: null) nötig, gefunden: ${auffang}`);
-  for (const s of schichten) {
-    if (!Array.isArray(s.darf)) probleme.push(`"${s.id}": darf ist keine Liste`);
-    else for (const z of s.darf) if (!ids.has(z)) probleme.push(`"${s.id}" darf unbekanntes Ziel "${z}" importieren`);
-  }
-  if (probleme.length) throw new Error(`SCHICHT_MODELL ungültig: ${probleme.join("; ")}`);
+  const mod = createRequire(abs)(abs);
+  if (!mod.SCHICHT_MODELL) throw new Error(`${layersPfad} exportiert kein SCHICHT_MODELL`);
+  if (typeof mod.pruefeModell !== "function") throw new Error(`${layersPfad} exportiert kein pruefeModell`);
+  mod.pruefeModell(mod.SCHICHT_MODELL);
+  return mod.SCHICHT_MODELL;
 }
 
 /** Ordnet einen (ggf. verdichteten) Pfad einer Schicht-/Extern-ID zu; `null` für alles andere. */
@@ -134,7 +114,6 @@ function geladenesModell({ rootDir, config }) {
   const cfg = config.schichten;
   if (!cfg?.layers) throw new Error('config.json: Block "schichten" mit "layers" fehlt');
   const modell = ladeModell(rootDir, cfg.layers);
-  pruefeModell(modell);
   return { modell, cfg };
 }
 

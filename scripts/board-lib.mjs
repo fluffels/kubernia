@@ -8,8 +8,15 @@
  * Nur Node-Builtins, analog zu den anderen scripts/-Wächtern.
  */
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 export const PROJECT_ID = "PVT_kwHOD8746c4Barq_";
+
+/** Das Repository (`owner/name`): in GitHub Actions `GITHUB_REPOSITORY`, sonst dieses Repo. EINE Quelle für alle Board-Skripte. */
+export const REPO = process.env.GITHUB_REPOSITORY || "fluffels/kubernia";
+
+/** Item-Literal eines frisch angelegten, ungeclaimten Todo-Tickets (die REST-Liste liefert es verzögert; der Aufrufer ergänzt es per `ergaenzeFehlende`). */
+export const todoItem = ({ id, number, title }) => ({ id, number, status: "Todo", title, assignees: [], state: "open" });
 
 /** Ein Tag in Millisekunden (Takt-Fenster in langfuse-takt.mjs und board-takt.mjs). */
 export const TAG_MS = 24 * 60 * 60 * 1000;
@@ -214,6 +221,10 @@ export function sammelticketKorrektur(items, n) {
   const zielIdx = afterId === null ? -1 : items.findIndex((i) => i.id === afterId);
   if (zielIdx < ende - 1) afterId = ende > 0 ? items[ende - 1].id : null;
   const idx = items.findIndex((i) => i.id === ticket.id);
+  // Der Rang zählt freie Todo-Items (ohne geclaimte): steht das Ticket schon auf Position n oder davor, wandert es nicht, auch nicht
+  // vor ein geclaimtes Item, das zwischen den freien steht.
+  const rang = items.slice(0, idx).filter((i) => istFreiesTodo(i, ticket.number)).length + 1;
+  if (rang <= n) return null;
   const neuIdx = verschiebe(items, ticket.id, afterId).findIndex((i) => i.id === ticket.id);
   if (neuIdx >= idx) return null;
   return { nr: ticket.number, id: ticket.id, afterId, vonRang: idx + 1, nachRang: neuIdx + 1 };
@@ -258,8 +269,42 @@ export function fehlendeNummern(items, args) {
 export const isRateLimit = (message) => /rate limit/i.test(String(message ?? ""));
 
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
-const gh = (args, { token } = {}) =>
+/** `gh` aufrufen und stdout liefern; `token` setzt GH_TOKEN (Projekt-Scope im Workflow). */
+export const gh = (args, { token } = {}) =>
   execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, env: token ? { ...process.env, GH_TOKEN: token } : process.env });
+
+/** Wie `gh`, die Ausgabe als JSON geparst. */
+export const ghJson = (args, opts = {}) => JSON.parse(gh(args, opts));
+
+/** Position laut AGENTS.md (SSOT): liest die Datei relativ zu diesem Skript; wirft, wenn sie fehlt oder die Zahl nicht eindeutig ist. */
+export function positionLautAgentsMd() {
+  return sammelticketPosition(readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8"));
+}
+
+/**
+ * Antwort von `gh api --paginate --slurp repos/<repo>/issues?state=open` (Liste von Seiten) → offene Issues
+ * `{ number, titel, assignees, createdAt }`. Pull Requests fliegen raus. Wirft bei unerwarteter Form, statt still
+ * ein Ticket zu übersehen (das führte zu einem Doppel-Ticket). Pur.
+ */
+export function normalizeOffene(pages) {
+  if (!Array.isArray(pages) || pages.some((p) => !Array.isArray(p))) {
+    throw new Error("Unerwartete Antwortform der offenen Issues (keine Liste von Seiten).");
+  }
+  return pages
+    .flat()
+    .filter((i) => !i?.pull_request)
+    .map((i) => {
+      if (!Number.isInteger(i?.number) || typeof i.title !== "string" || typeof i.created_at !== "string") {
+        throw new Error(`Unerwartete Form eines Issues: ${JSON.stringify(i)?.slice(0, 120)}`);
+      }
+      return {
+        number: i.number,
+        titel: i.title,
+        assignees: Array.isArray(i.assignees) ? i.assignees.map((a) => a?.login).filter((l) => typeof l === "string") : [],
+        createdAt: i.created_at,
+      };
+    });
+}
 
 /** Feld-ID von „Status“ im Board (REST braucht sie als `fields=`, sonst fehlt der Status). */
 export const STATUS_FIELD_ID = 358708531;
@@ -300,15 +345,19 @@ export function abortMessage(message) {
   return first;
 }
 
+/** Freies Todo-Item (zählt im Rang): Status „Todo“, offen, ohne Assignee, nicht das Ticket `ohneNr`. Pur. */
+const istFreiesTodo = (i, ohneNr = null) => i.status === "Todo" && i.number !== ohneNr && i.state !== "closed" && ungeclaimt(i);
+
 /**
- * `afterId` für „Ticket landet auf Position N unter den Todo-Items“: das (N-1). Todo-Item ohne das
- * Ticket selbst (`ohneNr`). N=1 → null (Spitze). Ist das Board kürzer, das letzte Todo-Item; ganz ohne
- * Todo-Item null. Pur.
+ * `afterId` für „Ticket landet auf Position N unter den freien Todo-Items“: das (N-1). freie Todo-Item ohne das
+ * Ticket selbst (`ohneNr`). Frei heißt offen und ohne Assignee: ein geclaimtes Ticket ist in Arbeit (der Assignee ist der einzige
+ * In-Arbeit-Marker, AGENTS.md), bleibt im Board aber auf „Todo“ und würde sonst jeden Rang verschieben. N=1 → null (Spitze). Ist das
+ * Board kürzer, das letzte freie Todo-Item; ganz ohne freies Todo-Item null. Pur.
  */
 export function afterIdForPosition(items, n, ohneNr = null) {
   if (!Number.isInteger(n) || n < 1) throw new RangeError(`Position muss eine ganze Zahl ≥ 1 sein, war ${n}`);
   if (n === 1) return null;
-  const todo = items.filter((i) => i.status === "Todo" && i.number !== ohneNr);
+  const todo = items.filter((i) => istFreiesTodo(i, ohneNr));
   if (todo.length === 0) return null;
   return (todo[n - 2] ?? todo[todo.length - 1]).id;
 }
@@ -332,7 +381,7 @@ export function loadItems(opts = {}) {
 }
 
 /** Alle offenen Issues (und PRs) als Liste von Seiten, wie `gh api --paginate --slurp` sie liefert (REST). */
-export function loadOpenIssuePages(repo = "fluffels/kubernia") {
+export function loadOpenIssuePages(repo = REPO) {
   return JSON.parse(gh(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=open&per_page=100`]));
 }
 
@@ -340,6 +389,13 @@ export function loadOpenIssuePages(repo = "fluffels/kubernia") {
 export function loadOpenIssueNumbers() {
   return loadOpenIssuePages().flat().filter((i) => !i.pull_request).map((i) => i.number);
 }
+
+/** Die Mutationen als Konstanten, damit ein Wächter-Test ihre Klammern prüfen kann (eine überzählige `}` machte den Aufruf einmal unbrauchbar). */
+export const MUTATION_POSITION =
+  "mutation($p:ID!,$i:ID!,$a:ID){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }";
+export const MUTATION_ADD = "mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }";
+export const MUTATION_STATUS =
+  "mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }";
 
 const graphql = (query, vars, opts) => {
   const args = ["api", "graphql", "-f", `query=${query}`];
@@ -355,7 +411,7 @@ export const ALIAS_MAX = 50;
  * Liefert `[{ nummern, query }]`. Die Nummern stehen inline und müssen positive Ganzzahlen sein (sonst wirft die Funktion: keine
  * Injektion), `repo` muss `owner/name` aus Wortzeichen, Punkt und Bindestrich sein. Leere Liste → keine Abfrage. Pur.
  */
-export function aliasAbfrage(nummern, repo = "fluffels/kubernia") {
+export function aliasAbfrage(nummern, repo = REPO) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error(`Ungültiges Repo: ${String(repo)}`);
   if (!Array.isArray(nummern) || nummern.some((n) => !Number.isInteger(n) || n <= 0)) {
     throw new Error(`Nummern müssen positive Ganzzahlen sein: ${JSON.stringify(nummern)}`);
@@ -385,9 +441,9 @@ export function itemsAusAliasAntwort(antwort, nummern) {
  * Eine Abfrage ausführen. `gh` endet bei einem unbekannten Issue (`NOT_FOUND`) mit Exit ≠ 0, liefert aber die Teilantwort auf stdout:
  * dann zählt diese (das unbekannte Issue ist `null`), sonst wirft der Fehler weiter (Rate-Limit, Netz, kaputte Abfrage).
  */
-function graphqlTeilantwort(query, opts) {
+export function graphqlTeilantwort(query, opts, run = gh) {
   try {
-    return JSON.parse(gh(["api", "graphql", "-f", `query=${query}`], opts));
+    return JSON.parse(run(["api", "graphql", "-f", `query=${query}`], opts));
   } catch (e) {
     const antwort = teilantwortAusStdout(e.stdout);
     if (antwort) return antwort;
@@ -417,28 +473,20 @@ export function teilantwortAusStdout(stdout) {
  * `nummern` per GraphQL (`issue.projectItems`, gebündelte Aliase), gefiltert auf das eigene Board; null-Einträge für Issues, die
  * nicht im Board stehen.
  */
-export function itemsUeberIssues(nummern, opts = {}, repo = "fluffels/kubernia") {
+export function itemsUeberIssues(nummern, opts = {}, repo = REPO) {
   return aliasAbfrage(nummern, repo).flatMap((b) => itemsAusAliasAntwort(graphqlTeilantwort(b.query, opts), b.nummern));
 }
 
 /** Position setzen: hinter `afterId`, null = an die Spitze. `opts.token` = anderer GH_TOKEN (Projekt-Scope im Workflow). */
 export function setPosition(itemId, afterId, opts = {}) {
-  graphql(
-    "mutation($p:ID!,$i:ID!,$a:ID){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }",
-    { p: PROJECT_ID, i: itemId, a: afterId },
-    opts,
-  );
+  graphql(MUTATION_POSITION, { p: PROJECT_ID, i: itemId, a: afterId }, opts);
 }
 
 /** Issue (node_id) ins Board holen (idempotent) und Status Todo setzen. Liefert die Item-ID `PVTI_…`. */
 export function addToBoardTodo(nodeId, opts = {}) {
-  const item = graphql("mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }", { p: PROJECT_ID, c: nodeId }, opts);
+  const item = graphql(MUTATION_ADD, { p: PROJECT_ID, c: nodeId }, opts);
   const itemId = item.data.addProjectV2ItemById.item.id;
-  graphql(
-    "mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }",
-    { p: PROJECT_ID, i: itemId, f: STATUS_FIELD_NODE_ID, o: TODO_OPTION_ID },
-    opts,
-  );
+  graphql(MUTATION_STATUS, { p: PROJECT_ID, i: itemId, f: STATUS_FIELD_NODE_ID, o: TODO_OPTION_ID }, opts);
   return itemId;
 }
 
