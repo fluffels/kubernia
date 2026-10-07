@@ -5,8 +5,17 @@
  * Logik aus scripts/check-review-nachweis.mjs importiert (eine Quelle der Wahrheit), git
  * ist injiziert.
  */
-import { describe, test } from "vitest";
+import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const dirs: string[] = [];
+afterEach(() => {
+  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+});
 
 type Nachweis = {
   plan: { art: string; grund?: string; zeile?: string } | null;
@@ -17,7 +26,8 @@ type Mod = {
   MAX_REVIEW_PAESSE: number;
   parseNachweis: (text: string) => Nachweis;
   pflichtLenses: (d: unknown) => string[];
-  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean }) => string[];
+  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[] }) => string[];
+  konfliktMergesNach: (git: (a: string[]) => string, headSha: string) => string[];
   checkReviewNachweis: (o: { runGit: (a: string[]) => string; env?: Record<string, string> }) => {
     ok: boolean;
     fehler: string[];
@@ -28,7 +38,7 @@ type Mod = {
 };
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/check-review-nachweis.mjs";
-const { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, parseNachweis, pflichtLenses, bewerteNachweis, checkReviewNachweis } = raw as Mod;
+const { MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, parseNachweis, pflichtLenses, bewerteNachweis, checkReviewNachweis, konfliktMergesNach } = raw as Mod;
 
 const DREI = "architektur,requirement-treue,test-adaequanz";
 const SHA = "a".repeat(40);
@@ -132,7 +142,17 @@ describe("bewerteNachweis", () => {
 });
 
 /** Fake-git: Basis B, HEAD H, Commit-Messages und Dateien frei wählbar. */
-function fakeGit(o: { messages: string; files?: string; inSlice?: string[]; known?: string[]; head?: string; baseOk?: boolean; throws?: string }) {
+function fakeGit(o: {
+  messages: string;
+  files?: string;
+  inSlice?: string[];
+  known?: string[];
+  head?: string;
+  baseOk?: boolean;
+  throws?: string;
+  merges?: string[];
+  remerge?: Record<string, string>;
+}) {
   const H = o.head ?? "h".repeat(40);
   const B = "b".repeat(40);
   return (args: string[]): string => {
@@ -156,6 +176,11 @@ function fakeGit(o: { messages: string; files?: string; inSlice?: string[]; know
       return "1\n";
     }
     if (cmd === `rev-list ${B}..HEAD`) return (o.inSlice ?? [SHA, H]).join("\n") + "\n";
+    // Merges nach dem reviewten Stand (#1392): exakt der Bereich <head>..HEAD, `show --remerge-diff` je Merge.
+    const merges = /^rev-list --merges ([0-9a-f]{40})\.\.HEAD$/.exec(cmd);
+    if (merges) return (o.merges ?? []).join("\n") + "\n";
+    const remerge = /^show --remerge-diff --format= ([0-9a-f]{40})$/.exec(cmd);
+    if (remerge) return o.remerge?.[remerge[1]] ?? "";
     throw new Error(`unerwartet: ${cmd}`);
   };
 }
@@ -220,5 +245,108 @@ describe("checkReviewNachweis (git injiziert)", () => {
     const r = checkReviewNachweis({ runGit: fakeGit({ messages: "", head: "b".repeat(40) }), env });
     assert.equal(r.ok, true);
     assert.equal(r.skipped, true);
+  });
+});
+
+describe("Konflikt-Merge nach dem Review (#1392 Z9)", () => {
+  const M = "c".repeat(40);
+  const M2 = "d".repeat(40);
+
+  test("bewerteNachweis: ein Konflikt-Merge ist ein Fehler mit Fix-Text, ohne Merges bleibt alles beim Alten", () => {
+    const n = parseNachweis(review());
+    const dateien = ["src/x.ts"];
+    assert.deepEqual(bewerteNachweis({ nachweis: n, dateien, headBekannt: true, headImSlice: true }), []);
+    const f = bewerteNachweis({ nachweis: n, dateien, headBekannt: true, headImSlice: true, konfliktMerges: [M, M2] });
+    assert.equal(f.length, 2);
+    assert.match(f[0], new RegExp(`Konflikt-Merge ${M} nach dem Review.*Delta-Lens.*neuer Nachweis \\(head ≥ ${M}\\)`));
+    assert.match(f[1], new RegExp(M2));
+  });
+
+  test("checkReviewNachweis: Merge mit Auflösung (remerge-diff nicht leer) ist rot", () => {
+    const r = checkReviewNachweis({ runGit: fakeGit({ messages: review(), merges: [M], remerge: { [M]: "diff --cc a.txt\n+C" } }), env });
+    assert.equal(r.ok, false);
+    assert.match(r.fehler.join(), /Konflikt-Merge c{40}/);
+  });
+
+  test("checkReviewNachweis: konfliktfreier Merge (remerge-diff leer) bleibt grün", () => {
+    const r = checkReviewNachweis({ runGit: fakeGit({ messages: review(), merges: [M], remerge: {} }), env });
+    assert.deepEqual(r.fehler, []);
+    assert.equal(r.ok, true);
+  });
+
+  test("checkReviewNachweis: ein git-Fehler bei der Merge-Prüfung (z.B. git < 2.36) ist rot", () => {
+    const r = checkReviewNachweis({ runGit: fakeGit({ messages: review(), merges: [M], throws: "show --remerge-diff" }), env });
+    assert.equal(r.ok, false);
+    assert.match(r.fehler.join(), /git-Fehler/);
+  });
+
+  test("konfliktMergesNach: nur Merges mit Auflösung, Reihenfolge bleibt", () => {
+    const git = fakeGit({ messages: "", merges: [M, M2], remerge: { [M2]: "+x" } });
+    assert.deepEqual(konfliktMergesNach(git, SHA), [M2]);
+    assert.deepEqual(konfliktMergesNach(fakeGit({ messages: "" }), SHA), []);
+  });
+});
+
+describe("Konflikt-Merge: echtes git-Repo (#1392 Z9)", () => {
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+
+  /** Repo mit Basis, Feature-Commit (der „reviewte“ Stand) und einem Merge von main; `konflikt` wählt, ob main dieselbe Zeile ändert. */
+  function repoMitMerge(konflikt: boolean) {
+    const dir = mkdtempSync(join(tmpdir(), "kq-nachweis-"));
+    dirs.push(dir);
+    git(dir, "init", "-q", "-b", "main");
+    writeFileSync(join(dir, "a.txt"), "eins\nzwei\ndrei\n");
+    writeFileSync(join(dir, "b.txt"), "b\n");
+    git(dir, "add", "-A");
+    git(dir, "commit", "-q", "-m", "basis");
+    const basis = git(dir, "rev-parse", "HEAD").trim();
+    git(dir, "checkout", "-q", "-b", "feature");
+    writeFileSync(join(dir, "a.txt"), "EINS-feature\nzwei\ndrei\n");
+    git(dir, "commit", "-q", "-am", "feature");
+    const reviewt = git(dir, "rev-parse", "HEAD").trim();
+    git(dir, "checkout", "-q", "main");
+    if (konflikt) writeFileSync(join(dir, "a.txt"), "EINS-main\nzwei\ndrei\n");
+    else writeFileSync(join(dir, "b.txt"), "b-main\n");
+    git(dir, "commit", "-q", "-am", "main-aenderung");
+    git(dir, "checkout", "-q", "feature");
+    try {
+      git(dir, "merge", "-q", "--no-edit", "main");
+    } catch {
+      writeFileSync(join(dir, "a.txt"), "EINS-aufgeloest\nzwei\ndrei\n"); // Konflikt von Hand auflösen
+      git(dir, "add", "a.txt");
+      git(dir, "commit", "-q", "--no-edit");
+    }
+    git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis\n\nKQ-Plan: kubernia-planner\nKQ-Review: head=${reviewt} runden=1 lenses=${DREI} verdikt=ok`);
+    return { dir, basis };
+  }
+  const pruefe = (r: { dir: string; basis: string }) =>
+    checkReviewNachweis({ runGit: (a) => execFileSync("git", a, { cwd: r.dir, encoding: "utf8" }), env: { KQ_DIFF_BASE: r.basis } });
+
+  test("Merge von main mit echtem Konflikt nach dem Review ist rot", () => {
+    const r = pruefe(repoMitMerge(true));
+    assert.equal(r.ok, false);
+    assert.match(r.fehler.join(), /Konflikt-Merge [0-9a-f]{40} nach dem Review/);
+  });
+
+  test("konfliktfreier Merge von main nach dem Review bleibt grün", () => {
+    const r = pruefe(repoMitMerge(false));
+    assert.deepEqual(r.fehler, []);
+    assert.equal(r.ok, true);
+  });
+
+  test("ohne Merge nach dem Review: grün", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kq-nachweis-"));
+    dirs.push(dir);
+    git(dir, "init", "-q", "-b", "main");
+    writeFileSync(join(dir, "a.txt"), "x\n");
+    git(dir, "add", "-A");
+    git(dir, "commit", "-q", "-m", "basis");
+    const basis = git(dir, "rev-parse", "HEAD").trim();
+    writeFileSync(join(dir, "a.txt"), "y\n");
+    git(dir, "commit", "-q", "-am", "feature");
+    const reviewt = git(dir, "rev-parse", "HEAD").trim();
+    git(dir, "commit", "-q", "--allow-empty", "-m", `Nachweis\n\nKQ-Plan: kubernia-planner\nKQ-Review: head=${reviewt} runden=1 lenses=${DREI} verdikt=ok`);
+    assert.equal(pruefe({ dir, basis }).ok, true);
   });
 });

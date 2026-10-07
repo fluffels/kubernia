@@ -18,6 +18,11 @@
  * einen falschen Stand; `--text` nennt deshalb nur „Stand vor diesem Sync“. Hat der Pull `.claude/` oder `AGENTS.md` geändert, sagt er das
  * zusätzlich ausdrücklich. Fail-open: jeder Fehler (kein Netz, kein git) ergibt nur eine kurze Notiz, nie einen Abbruch.
  *
+ * `--text --streng` ist der erste Schritt des Skills `kubernia` (#1392): derselbe Sync (entspricht `git pull --ff-only`, aber mit Stopp
+ * bei getrackten Resten), nur dass jede Abweichung vom sauberen `main` Exit 1 ergibt (`exitCodeFuer`): der Hauptchat startet dann kein
+ * Ticket. Hat der Sync `.claude/skills`, `.claude/agents` oder `AGENTS.md` geändert, sagt der Text „Skill neu lesen“: der Skill-Text
+ * der laufenden Session stammt noch vom alten Stand.
+ *
  * Hook-Ausgabe: `hookSpecificOutput.additionalContext` (SessionStart). Wächter: test/harness/haupt-sync.test.ts.
  * Nur Node-Builtins.
  */
@@ -41,6 +46,20 @@ export function entscheideSync({ istLinkedWorktree, branch, sauber, hinter, vor 
   return { aktion: "pull", grund: "main ist sauber und nur zurück: Fast-Forward" };
 }
 
+/**
+ * Exit-Code des strengen Modus (`--streng`): 1 bei jeder Abweichung, die der Hauptchat vor einem Ticketstart nicht ignorieren darf,
+ * sonst 0. Abweichung = Meldung (anderer Branch, getrackte Reste, kein Fast-Forward) oder ein Fehler (`notiz`, z.B. fetch), und auch
+ * ein anderer Branch als `main` bzw. getrackte Reste, wenn `main` gar nicht zurückliegt (`sauber`/`branch` aus dem Sync). Ein Linked
+ * Worktree (kein `sauber`/`branch` im Ergebnis) ist nie ein Stopp. Pur.
+ */
+export function exitCodeFuer(ergebnis) {
+  if (ergebnis.notiz) return 1;
+  if (ergebnis.aktion === "melden") return 1;
+  if (ergebnis.sauber === false) return 1;
+  if (typeof ergebnis.branch === "string" && ergebnis.branch !== "" && ergebnis.branch !== "main") return 1;
+  return 0;
+}
+
 /** True, wenn unter den geänderten Dateien Agenten-Definitionen, Hooks, Skills oder AGENTS.md sind (die Session kennt sie nur im Startstand). Pur. */
 export const agentenGeaendert = (dateien) => dateien.some((d) => /^\.claude\//.test(d) || /(^|\/)AGENTS\.md$/.test(d));
 
@@ -51,8 +70,10 @@ export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
   if (ergebnis.aktion === "melden") zeilen.push(`Haupt-Checkout: ${ergebnis.hinter} Commits hinter origin/main (${ergebnis.grund}).`);
   if (ergebnis.gepullt) {
     zeilen.push(`Haupt-Checkout: main per Fast-Forward um ${ergebnis.hinter} Commits auf origin/main gehoben.`);
-    if (ergebnis.agentenGeaendert) {
+    if (ergebnis.agentenGeaendert && sitzungsbasis) {
       zeilen.push("Hooks, Agenten, Skills und AGENTS.md dieser Session stammen vom alten Stand (der Snapshot wird beim Start eingefroren): für den neuen Stand die Session neu starten.");
+    } else if (ergebnis.agentenGeaendert) {
+      zeilen.push("Skill neu lesen: `.claude/skills`, `.claude/agents` oder AGENTS.md haben sich geändert, der Skill-Text dieser Session stammt vom alten Stand. `.claude/skills/kubernia/SKILL.md` jetzt neu lesen und der neuen Fassung folgen; bei geänderter AGENTS.md zusätzlich `git diff <Stand vor diesem Sync> HEAD -- AGENTS.md` lesen. Hooks und Agent-Definitionen gelten erst nach einem Session-Neustart.");
     }
   }
   if (ergebnis.basis) zeilen.push(sitzungsbasis ? `Sitzungsbasis: ${ergebnis.basis}` : `Stand vor diesem Sync: ${ergebnis.basis} (nicht die Basis dieser Session)`);
@@ -64,7 +85,7 @@ const git = (dir, args, opts = {}) =>
 
 /** Die ganze Ablaufkette gegen ein echtes Repo in `dir` (nur CLI). Wirft nie; Fehler landen in `notiz`. */
 export function fuehreSyncAus(dir) {
-  const ergebnis = { aktion: "nichts", grund: "", hinter: 0, basis: "", gepullt: false, agentenGeaendert: false, notiz: "" };
+  const ergebnis = { aktion: "nichts", grund: "", hinter: 0, basis: "", gepullt: false, agentenGeaendert: false, notiz: "", branch: "", sauber: undefined };
   try {
     ergebnis.basis = git(dir, ["rev-parse", "HEAD"]);
     const istLinkedWorktree = resolve(dir, git(dir, ["rev-parse", "--git-dir"])) !== resolve(dir, git(dir, ["rev-parse", "--git-common-dir"]));
@@ -78,7 +99,7 @@ export function fuehreSyncAus(dir) {
     const [vor, hinter] = git(dir, ["rev-list", "--left-right", "--count", "HEAD...origin/main"]).split(/\s+/).map(Number);
     const sauber = git(dir, ["status", "--porcelain", "--untracked-files=no"]) === "";
     const e = entscheideSync({ istLinkedWorktree, branch, sauber, hinter, vor });
-    Object.assign(ergebnis, e, { hinter });
+    Object.assign(ergebnis, e, { hinter, branch, sauber });
     if (e.aktion === "pull") {
       git(dir, ["merge", "--ff-only", "origin/main"], { timeout: 30_000 });
       ergebnis.gepullt = true;
@@ -99,8 +120,13 @@ export function ausgabe(ergebnis, text) {
 
 function main() {
   const dir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  const out = ausgabe(fuehreSyncAus(dir), process.argv.includes("--text"));
+  const ergebnis = fuehreSyncAus(dir);
+  const out = ausgabe(ergebnis, process.argv.includes("--text"));
   if (out) console.log(out);
+  if (process.argv.includes("--streng") && exitCodeFuer(ergebnis) !== 0) {
+    console.log("Haupt-Sync (streng): STOPP, den Hauptcheckout hebt erst die Maintainerin (Reste committen oder verwerfen, auf main wechseln). Kein Ticket starten.");
+    process.exitCode = 1;
+  }
 }
 
 if (istDirektaufruf(import.meta.url)) main();

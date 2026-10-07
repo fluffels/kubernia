@@ -26,7 +26,7 @@ export const MAX_BESCHREIBUNG = 300;
 /** Liest eine einzeilige Frontmatter-Zeile `key: wert` (ohne Anführungszeichen); `null`, wenn sie fehlt.
  *  Mehrzeilige YAML-Werte (`>`, `|`) würden die Längenprüfung umgehen und werfen deshalb. */
 export function frontmatterZeile(text: string, key: string): string | null {
-  const kopf = parseFrontmatter(text) as Record<string, string>;
+  const kopf = (parseFrontmatter as (t: string) => Record<string, string>)(text);
   if (!Object.hasOwn(kopf, key)) return null;
   const wert = kopf[key];
   if (/^[>|]/.test(wert)) throw new Error(`${key}: mehrzeiliger YAML-Wert nicht erlaubt, einzeilig schreiben`);

@@ -114,8 +114,8 @@ describe("ladeSessions als Generator (#1392 Z31)", () => {
     expect(Array.isArray(gen)).toBe(false);
     const erste = gen.next();
     expect(erste.done).toBe(false);
-    expect(erste.value.id).toBe("s1");
-    expect(gen.next().value?.id).toBe("s2");
+    expect((erste.value as Sitzung).id).toBe("s1");
+    expect((gen.next().value as Sitzung).id).toBe("s2");
     expect(gen.next().done).toBe(true);
   });
 
