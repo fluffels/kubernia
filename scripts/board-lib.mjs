@@ -170,3 +170,8 @@ export function setPosition(itemId, afterId) {
   if (afterId) args.push("-f", `a=${afterId}`);
   gh(args);
 }
+
+/** Node-ID des Single-Select-Feldes „Status“ (GraphQL-Mutationen; die REST-Liste nutzt `STATUS_FIELD_ID`). */
+export const STATUS_FIELD_NODE_ID = "PVTSSF_lAHOD8746c4Barq_zhVhdTM";
+/** Option „Todo“ des Status-Feldes. */
+export const TODO_OPTION_ID = "f75ad846";

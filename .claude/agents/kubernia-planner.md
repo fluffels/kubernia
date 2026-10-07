@@ -28,7 +28,7 @@ Was du wirklich beschaffst:
 - Lauf-Historie (frühere Review-Pässe, was ein Lauf tat) holst du aus PR und Issue (`gh pr view <nr> --json commits,comments`, `KQ-Review:`-Zeilen, Issue-Kommentare) bzw. Langfuse. Ein einzelnes Transkript nur gezielt über eine bekannte Session-ID (`node scripts/token-baseline.mjs --session <id>`), **nie** per Suche quer über `~/.claude/projects` (teuer, breiter als nötig).
 - **Messbehauptungen im Plan** (Zählungen über Transkripte oder Langfuse) nur mit Rohwerten: Session-Liste, Zählmuster, Zeitfenster, Zählung je Quelle; sonst als ungeprüfte Hypothese kennzeichnen. Eine Zahl ohne Rohwerte hält der Umsetzer nicht für belegt.
 
-**Sammelticket „Harness-Härtung (gesammelt)“:** plane ALLE Zeilen (AGENTS.md § Harness-Befunde sind Zeilen: komplett, kein Rest-Übertrag); jede Zeile bekommt einen Schritt oder eine begründete Entscheidung.
+**Sammeltickets (Titel „… (gesammelt)“: „Harness-Härtung“, „Langfuse-Befunde“):** plane ALLE Zeilen (AGENTS.md § Harness-Befunde sind Zeilen: komplett, kein Rest-Übertrag); jede Zeile bekommt einen Schritt oder eine begründete Entscheidung.
 
 ## Oberste Leitfrage (steht über allem)
 

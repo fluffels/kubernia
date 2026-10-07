@@ -14,8 +14,8 @@
  *      und verweisen auf AGENTS.md. Das ADR darf die Historie mit Zahlen erzählen.
  *
  * Jede weitere „Position <N>“ (auch „Position: <N>“) in AGENTS.md macht den Test absichtlich rot,
- * auch in anderem Zusammenhang; darum steht die Position des wiederkehrenden Status-Tickets (20)
- * nur in docs/ticket-reihenfolge.md.
+ * auch in anderem Zusammenhang; darum hat das wiederkehrende Status-Ticket keine Position mehr:
+ * seinen Takt hält der Wochen-Workflow langfuse-takt.yml (#1351).
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";

@@ -301,7 +301,7 @@ Das Skript für 1–3 neue Läufe fahren, die Zeilen unter die Tabelle der [Nach
 
 ### Langfuse-Status überprüfen (#1293)
 
-Die regelmäßige, breite Auswertung der Langfuse-Daten (Tag `kubernia`) läuft als eigenes wiederkehrendes Ticket „Langfuse-Status überprüfen" (`area:harness`); Takt und Folgen-Mechanik: [ticket-reihenfolge.md](ticket-reihenfolge.md#wiederkehrendes-ticket-langfuse-status-überprüfen-1293). Dies ist die **einzige** Checkliste; jeder Punkt hat eine feste Quelle, kein freies Stöbern. Zeitraum: seit dem letzten Status-Lauf.
+Die regelmäßige, breite Auswertung der Langfuse-Daten (Tag `kubernia`) läuft als eigenes wiederkehrendes Ticket „Langfuse-Status überprüfen" (`area:harness`); der Takt ist wöchentlich (Workflow `langfuse-takt.yml`, [ADR 0016](adr/0016-langfuse-takt-woechentlich.md)), Mechanik und Sammelticket „Langfuse-Befunde (gesammelt)": [ticket-reihenfolge.md](ticket-reihenfolge.md#wiederkehrendes-ticket-langfuse-status-überprüfen-1293). Dies ist die **einzige** Checkliste; jeder Punkt hat eine feste Quelle, kein freies Stöbern. Zeitraum: seit dem letzten Status-Lauf.
 
 1. **Datenvollständigkeit:** Für 1–2 Sessions des Zeitraums Calls und die vier Token-Summen aus Transkript (`node scripts/token-baseline.mjs --session <id>`) und Langfuse (`--langfuse`) vergleichen ([Messen](#messen), Messregel zum verzögerten letzten Call beachten). Sind Haupt-Agent, Subagenten (auch verschachtelte), Workflow-Agenten da, tragen die Traces Tag `kubernia` und das Metadatum `project`? Per `queryMetrics` Usage und Kosten je Modell: Usage ohne Kosten heißt, Langfuse hat keinen Preis; fehlt ein neues Modell in `PRICES` des Skripts? Bekannte Lücken verlinken statt neu melden (#1266 Kosten je Ticket).
 2. **Funktioniert alles?** `claude mcp list` zeigt `langfuse` verbunden (der Name ist Vertrag, siehe [Hook-Patch pflegen](#langfuse-hook-patch-pflegen-10841122)), Hook-Patch intakt (Prüfregel unter [Hook-Patch pflegen](#langfuse-hook-patch-pflegen-10841122)), Observations mit Level `ERROR` nach Tool gruppiert, Traces ohne Abschluss (abgebrochen).
@@ -309,14 +309,16 @@ Die regelmäßige, breite Auswertung der Langfuse-Daten (Tag `kubernia`) läuft 
 4. **Wiederkehrende Fehlschläge:** CI-Fix- und Review-Runden je Ticket, Zahl der `status:festgefahren`-Fälle, immer gleiche Tool-Fehler, Permission-Blockaden.
 5. **Wirkung:** die seit dem letzten Lauf gemergten Harness-PRs gegen die [Baseline](#baseline-stand-2026-09-29-alle-vier-läufe-vor-10651067) bzw. die [Nachmessung](#nachmessung-nach-10651198-1206), mit Preis je Call, Sockel, Review- und CI-Fix-Runden, dazu die Zeile `Projekt-Brain:` gegen die [Projekt-Brain-Baseline](#projekt-brain-kennzahlen-1205) (Recherche-Last und Calls bis zum ersten Edit sinken, Loop-Kennzahlen nicht schlechter) und die Pflegekosten (Phase „Pflege“) gegen die Ersparnis.
 6. **Code-Qualität/Prozess:** was die Läufe über Ticket-Schnitt (`KQ-Diffsize-Override`, zu breite PRs), Nacharbeit, Modellwahl und Rückfragen an die Maintainerin sagen.
+7. **Wochenbudget:** Kosten und Tokens der letzten vollen Kalenderwoche (Mo–So UTC, das Datum nennt der Body des Status-Tickets) gegen die Woche davor. Quelle: `queryMetrics`, View `observations`, Dimensionen `providedModelName` und `name`, Metriken `totalTokens` und `totalCost` (jeweils `sum`), Filter `type = GENERATION` und `tags` any of `kubernia`. Rolle zuerst aus dem Namen, dann aus dem Modell: „LLM Call" ist der Hauptchat (egal welches Modell, er ist nicht gepinnt); „Subagent LLM Call" mit Opus sind Planer, Lenses und Forks, mit Sonnet der Umsetzer, mit Haiku Explore. Die Kosten sind der API-Preis-Äquivalent aus Langfuse (kein Abo-Verbrauch); Usage ohne Kosten ist ein Befund unter Punkt 1. Ergebnis: eine Zeile je Rolle mit Trend gegen die Vorwoche, die Summe in die Verdichtungstabelle.
+8. **Kosten gegen Nutzen je Gate, Lens und Regel:** Was kostet eine Lens-Runde (Subagent-Calls der Review-Phase aus Punkt 7 bzw. den Subagenten-Spans), und wie oft fand Runde 1 einen echten Blocker (Anteil der PRs mit `KQ-Review: … runden≥2` im Zeitraum, aus `git log`)? Für Gates: rote Checks je Name; für Hooks: `ERROR`-Observations je Tool (Punkt 2). **Lockern-Kandidat** ist, was in drei Status-Läufen in Folge Kosten verursacht und nichts findet: als Zeile ins Sammelticket „Langfuse-Befunde (gesammelt)"; umgesetzt wird es nur per reviewtem PR mit Messung vorher und nachher, nie um ein Rot zu verstecken.
 
 Einzelläufe stehen nur im Bericht-Kommentar des Status-Tickets; hierher kommt je Lauf **eine** Verdichtungszeile:
 
-| Zeitraum | Läufe | Median Kosten/Ticket | Preis je Call | Sockel | Review-Runden | CI-Fix-Runden | ohne Nacharbeit | Datenvollständigkeit |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| #1278-Merge bis #1276-Claim (2026-10-06) | 8 | 7,65 $ | 0,061 $ | Hauptchat 64,7k (je Lauf: [Nachtrag](https://github.com/fluffels/kubernia/issues/1276#issuecomment-6019725674)) | 1,5 | 0 | 8/8 | Transkript-Modus, Langfuse nicht je Lauf abgeglichen; Einzelläufe: [Bericht](https://github.com/fluffels/kubernia/issues/1276#issuecomment-6016995875) |
+| Zeitraum | Läufe | Median Kosten/Ticket | Preis je Call | Sockel | Review-Runden | CI-Fix-Runden | ohne Nacharbeit | Woche (Δ Vorwoche) | Datenvollständigkeit |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| #1278-Merge bis #1276-Claim (2026-10-06) | 8 | 7,65 $ | 0,061 $ | Hauptchat 64,7k (je Lauf: [Nachtrag](https://github.com/fluffels/kubernia/issues/1276#issuecomment-6019725674)) | 1,5 | 0 | 8/8 | – | Transkript-Modus, Langfuse nicht je Lauf abgeglichen; Einzelläufe: [Bericht](https://github.com/fluffels/kubernia/issues/1276#issuecomment-6016995875) |
 
-⚠️ **Langfuse nicht erreichbar** (Keys fehlen, Server aus) ist selbst ein Befund unter Punkt 1. Die übrigen Punkte laufen dann im Transkript-Modus des Skripts, das Status-Ticket wird trotzdem abgeschlossen und der Nachfolger angelegt.
+⚠️ **Langfuse nicht erreichbar** (Keys fehlen, Server aus) ist selbst ein Befund unter Punkt 1. Die übrigen Punkte laufen dann im Transkript-Modus des Skripts, das Status-Ticket wird trotzdem abgeschlossen (den Nachfolger legt der Workflow an).
 
 ### Langfuse-Erfassung belegen (#1293)
 
@@ -326,4 +328,4 @@ Einzelläufe stehen nur im Bericht-Kommentar des Status-Tickets; hierher kommt j
 
 Bewacht von [`test/harness/langfuse-erfassung.test.ts`](../test/harness/langfuse-erfassung.test.ts): Regel, Checkliste, Ticket-Mechanik und die Konfiguration, die die Erfassung trägt (Plugin aktiv, Tag `kubernia`, Hooks nicht abgeschaltet).
 
-**Fallback:** Ist ein Probe-Lauf nicht möglich (z.B. Agent-Verschachtelung nur interaktiv), das im PR begründen und eine Zeile als Kommentar ins offene Status-Ticket schreiben; dessen Datenvollständigkeits-Punkt prüft es dann nach.
+**Fallback:** Ist ein Probe-Lauf nicht möglich (z.B. Agent-Verschachtelung nur interaktiv), das im PR begründen und eine Zeile als Kommentar ins offene Status-Ticket (sonst ins Sammelticket „Langfuse-Befunde (gesammelt)") schreiben; dessen Datenvollständigkeits-Punkt prüft es dann nach.
