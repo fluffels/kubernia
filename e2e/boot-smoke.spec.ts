@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { awaitWorldAndIntro } from "./support";
 
 // Boot-Smoke-Test des gebauten Offline-Builds (#391).
 //
@@ -50,9 +51,9 @@ test("Offline-Build bootet headless ohne Konsolen-/Laufzeit-Fehler", async ({ pa
   expect(await page.evaluate(() => "kqDev" in window)).toBe(false);
   expect(await page.evaluate(() => "kqGame" in window)).toBe(false);
 
-  // Kurz weiterlaufen lassen, damit auch ASYNCHRONE Fehler auflaufen, die nach
-  // dem Boot-Flag kommen (BootScene lädt/sliced Assets, Szenen-create, Content).
-  await page.waitForTimeout(2_000);
+  // Weiterlaufen lassen, bis auch die ASYNCHRONEN Schritte nach dem Boot-Flag durch sind (BootScene lädt/sliced Assets,
+  // Szenen-create, Content, Intro): zustandsbasiert statt fester Zeit (#1411), damit ein langsamer Runner nicht flakt.
+  await awaitWorldAndIntro(page);
 
   expect(pageErrors, `Unbehandelte Laufzeit-Fehler beim Boot:\n${pageErrors.join("\n")}`).toEqual([]);
   expect(consoleErrors, `Konsolen-Fehler beim Boot:\n${consoleErrors.join("\n")}`).toEqual([]);

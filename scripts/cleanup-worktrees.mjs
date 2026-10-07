@@ -22,7 +22,7 @@
  * scripts/stop-verify-hook.mjs (#952).
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { existsSync, lstatSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -204,12 +204,82 @@ export function diagnoseOrphans(cwd, deps = {}) {
   return { ok: true, orphans, young, mainRoot, worktreesDir };
 }
 
+/** Werkzeug-Prozesse, die als vergessene Hilfsserver oder Stubs einen Worktree-Ordner festhalten können (Name ohne `.exe`). */
+export const WERKZEUG_PROZESSE = new Set(["node", "python", "python3", "bash", "sh", "pwsh", "powershell", "cmd", "git", "npm", "npx"]);
+
+/** Max. so viele Halter-Kandidaten in der Meldung (der Rest wäre Rauschen). */
+const MAX_HALTER = 8;
+
+/**
+ * Mögliche Halter eines gesperrten Worktree-Ordners (#1411), nur zum NENNEN mit PID, nie zum Beenden. `prozesse` sind
+ * `{ pid, ppid, name, commandLine, startMs }`. Kandidat ist (a) ein Prozess, dessen Kommandozeile den Ordnerpfad enthält
+ * (Schrägstrich-, Backslash- und MSYS-Form `/c/…`, ohne Groß-/Kleinschreibung), oder (b) ein verwaister Prozess
+ * (Elternprozess existiert nicht mehr) eines Werkzeug-Namens, gestartet nach dem Anlegen des Ordners (`ordnerGeburtMs`;
+ * `null` = unbekannt, dann zählt jeder verwaiste Werkzeug-Prozess). Der eigene Prozess ist ausgenommen. Pure.
+ */
+export function moeglicheHalter(prozesse, pfad, ordnerGeburtMs, eigenePid = process.pid) {
+  const slash = norm(pfad).toLowerCase();
+  const laufwerk = /^([a-z]):\/(.*)$/.exec(slash);
+  const formen = [slash, ...(laufwerk ? [`/${laufwerk[1]}/${laufwerk[2]}`] : [])];
+  const pids = new Set(prozesse.map((p) => p.pid));
+  const halter = [];
+  for (const p of prozesse) {
+    if (p.pid === eigenePid) continue;
+    const cmd = String(p.commandLine ?? "").replace(/\\/g, "/").toLowerCase();
+    const name = String(p.name ?? "").toLowerCase().replace(/\.exe$/, "");
+    if (cmd !== "" && formen.some((f) => cmd.includes(f))) {
+      halter.push({ pid: p.pid, name: p.name, commandLine: p.commandLine ?? "", grund: "Kommandozeile liegt im Worktree" });
+    } else if (WERKZEUG_PROZESSE.has(name) && !pids.has(p.ppid) && (ordnerGeburtMs === null || p.startMs >= ordnerGeburtMs)) {
+      halter.push({ pid: p.pid, name: p.name, commandLine: p.commandLine ?? "", grund: "verwaist (Elternprozess beendet), nach dem Anlegen des Ordners gestartet" });
+    }
+  }
+  return halter.slice(0, MAX_HALTER);
+}
+
+/** Prozessliste unter Windows per PowerShell (`Get-CimInstance Win32_Process`); wirft bei Fehler (Aufrufer: fail-open). */
+export function listProcessesWindows() {
+  const skript =
+    "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine," +
+    "@{n='Created';e={if ($_.CreationDate) { $_.CreationDate.ToUniversalTime().ToString('o') } else { '' }}} | ConvertTo-Json -Compress";
+  const out = execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", skript], { encoding: "utf8", timeout: 10_000, maxBuffer: 32 * 1024 * 1024 });
+  const roh = JSON.parse(out);
+  return (Array.isArray(roh) ? roh : [roh]).map((p) => ({
+    pid: p.ProcessId,
+    ppid: p.ParentProcessId,
+    name: p.Name,
+    commandLine: p.CommandLine,
+    startMs: Date.parse(p.Created) || 0,
+  }));
+}
+
+/**
+ * Halter-Kandidaten für einen gesperrten, nicht leeren Ordner. Nur unter Windows; jeder Fehler (PowerShell fehlt, Timeout,
+ * kaputtes JSON) ergibt eine leere Liste, der Hook bleibt fail-open. `deps.listProcesses`/`deps.platform` injizierbar.
+ */
+export function findeHalter(absPath, ordnerGeburtMs, deps = {}) {
+  if ((deps.platform ?? process.platform) !== "win32") return [];
+  try {
+    return moeglicheHalter((deps.listProcesses ?? listProcessesWindows)(), absPath, ordnerGeburtMs);
+  } catch {
+    return [];
+  }
+}
+
+/** Die Halter als Meldungstext: PID, Name, gekürzte Kommandozeile, dazu der Rat (gezielt per PID, nie per Name). */
+export function formatHalter(halter) {
+  if (halter.length === 0) return "kein Halter per Kommandozeile oder Verwaisung gefunden";
+  const zeilen = halter.map((h) => `PID ${h.pid} ${h.name} (${h.grund}): ${String(h.commandLine).slice(0, 140)}`);
+  return `mögliche Halter: ${zeilen.join("; ")}. Nach Prüfung gezielt beenden mit "Stop-Process -Id <pid>" (nie per Name, parallele Agenten laufen)`;
+}
+
 /**
  * Pruned veraltete git-Registrierungen und löscht `orphans` (Ordnernamen unter
- * `worktreesDir`) physisch per `fs.rmSync`. Wirft nie. Drei Ergebnis-Buckets:
+ * `worktreesDir`) physisch per `fs.rmSync` (mit Wiederholung bei kurzen Sperren, #1411). Wirft nie. Vier Ergebnis-Buckets:
  *  - `removed`: erfolgreich gelöscht
- *  - `errors`:  Löschversuch gelaufen, Ordner existiert weiter (Datei-Lock durch
- *               laufenden Dev-Server o.ä., siehe AGENTS.md Windows-Fallen)
+ *  - `pending`: Ordner existiert weiter, ist aber LEER (ein Halter ohne Datei darin, die Sperre ist meist
+ *               vorübergehend): kein Fehler, der nächste Lauf versucht es erneut (#1411)
+ *  - `errors`:  Löschversuch gelaufen, Ordner existiert weiter und ist nicht leer (Datei-Lock durch einen
+ *               Prozess, siehe AGENTS.md Windows-Fallen); `halter[name]` nennt unter Windows mögliche Halter mit PID
  *  - `refused`: `assertSafeOrphanTarget` hat das Ziel abgelehnt — es wurde
  *               **gar nicht** angefasst (#1051). Semantisch bewusst getrennt von
  *               `errors`: „bewusst nicht gelöscht" statt „löschen fehlgeschlagen".
@@ -227,7 +297,9 @@ export function fixOrphans(mainRoot, worktreesDir, orphans, deps = {}) {
 
   const removed = [];
   const errors = [];
+  const pending = [];
   const refused = [];
+  const halter = {};
   for (const name of orphans) {
     // Schutzgurt VOR jedem Löschen (#1051) — bei Zweifel gar nicht anfassen.
     const guard = assertSafeOrphanTarget(mainRoot, worktreesDir, name, deps);
@@ -237,18 +309,39 @@ export function fixOrphans(mainRoot, worktreesDir, orphans, deps = {}) {
     }
 
     const absPath = join(worktreesDir, name);
+    let geburtMs = null;
     try {
-      rm(absPath, { recursive: true, force: true });
-      if (exists(absPath)) {
-        errors.push(name);
-      } else {
-        removed.push(name);
-      }
+      geburtMs = (deps.statSync ?? statSync)(absPath).birthtimeMs;
     } catch {
+      /* unbekannt → jeder verwaiste Werkzeug-Prozess zählt als Kandidat */
+    }
+    let gesperrt;
+    try {
+      // Kurze Sperren (Virenscanner, ein eben beendeter Prozess) lösen sich meist binnen Sekunden: Node wiederholt EBUSY/EPERM/ENOTEMPTY.
+      rm(absPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 300 });
+      gesperrt = exists(absPath);
+      if (!gesperrt) removed.push(name);
+    } catch {
+      gesperrt = true;
+    }
+    if (!gesperrt) continue;
+    if (istLeer(absPath, deps)) {
+      pending.push(name);
+    } else {
       errors.push(name);
+      halter[name] = findeHalter(absPath, geburtMs, deps);
     }
   }
-  return { removed, errors, refused };
+  return { removed, errors, pending, refused, halter };
+}
+
+/** True, wenn der Ordner existiert und leer ist; jeder Lesefehler zählt als nicht leer (fail-closed: dann meldet der Hook einen Fehler). */
+function istLeer(absPath, deps = {}) {
+  try {
+    return (deps.readdirSync ?? readdirSync)(absPath).length === 0;
+  } catch {
+    return false;
+  }
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
@@ -315,13 +408,14 @@ function main() {
   }
 
   console.log("Pruning veralteter git-Einträge + Löschen...");
-  const { removed, errors, refused } = fixOrphans(mainRoot, worktreesDir, orphans);
+  const { removed, errors, pending, refused, halter } = fixOrphans(mainRoot, worktreesDir, orphans);
   for (const name of removed) console.log(`  ✓ ${name} entfernt`);
+  for (const name of pending) console.log(`  … ${name} ist leer, aber gerade gesperrt: kein Fehler, der nächste Lauf versucht es erneut`);
   for (const { name, reason } of refused) {
     console.error(`  VERWEIGERT: ${name} — ${reason} (Schutzgurt #1051, nichts gelöscht)`);
   }
   for (const name of errors) {
-    console.error(`  FEHLER: ${name} noch vorhanden — möglicherweise noch ein Prozess aktiv (Dev-Server?)`);
+    console.error(`  FEHLER: ${name} noch vorhanden und nicht leer — ${formatHalter(halter[name] ?? [])}`);
   }
 
   if (refused.length > 0) {
@@ -333,7 +427,7 @@ function main() {
 
   if (errors.length > 0) {
     console.error(
-      `\n${errors.length} Fehler beim Löschen. Tipp: Dev-Server per PowerShell beenden (Stop-Process -Name node -Force), dann erneut versuchen.`
+      `\n${errors.length} Fehler beim Löschen. Den Halter gezielt per PID beenden (Stop-Process -Id <pid>, nie per Name), dann erneut versuchen.`
     );
     process.exit(1);
   }
@@ -341,7 +435,7 @@ function main() {
   console.log("\nFertig. Verify-Befehle:");
   console.log("  git worktree list");
   console.log(
-    "  pwsh -c \"Test-Path C:\\git\\kubernia\\.claude\\worktrees\" # muss False oder leerer Ordner sein"
+    `  pwsh -c "Test-Path '${worktreesDir}'" # muss False oder leerer Ordner sein`
   );
 
   // Ein gemeldeter Reparse-Point bleibt offen (wird nie automatisch gelöscht,

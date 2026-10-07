@@ -11,6 +11,11 @@
  * `created=>=` wirkt nur tagesgenau; das exakte Zeitfenster eines PRs filtert `distinctRoteShas`.
  */
 
+import { execFileSync } from "node:child_process";
+
+/** Der gemeinsame `gh`-Runner (`gh <args>` → stdout als Text): Default aller Zähler, `runGh` überschreibt ihn im Test. */
+export const ghText = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+
 /** Ab dieser Trefferzahl gilt die Liste als von der API abgeschnitten. */
 export const MAX_TREFFER = 1000;
 
@@ -39,9 +44,9 @@ export function parseLaeufe(tsv) {
     });
 }
 
-/** Holt die roten Läufe über `runGh(args) → stdout`. Wirft bei der API-Kappung (≥ 1000 Treffer). */
+/** Holt die roten Läufe über `runGh(args) → stdout`. Wirft bei der API-Kappung (≥ 1000 Treffer). Ohne `runGh` gilt `ghText`. */
 export function holeRoteLaeufe(runGh, opts = {}) {
-  const laeufe = parseLaeufe(runGh(["api", "--paginate", roteLaeufePfad(opts), "--jq", JQ_LAEUFE]));
+  const laeufe = parseLaeufe((runGh ?? ghText)(["api", "--paginate", roteLaeufePfad(opts), "--jq", JQ_LAEUFE]));
   if (laeufe.length >= MAX_TREFFER) {
     throw new Error(`rote CI-Läufe bei ${MAX_TREFFER} abgeschnitten (GitHub-Kappung): Zeitfenster oder Branch einschränken.`);
   }

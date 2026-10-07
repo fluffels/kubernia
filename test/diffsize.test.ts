@@ -15,7 +15,9 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 type Env = Record<string, string | undefined>;
 type Sums = { fileCount: number; changedLines: number };
@@ -414,5 +416,199 @@ describe("Diff-Größenbudget (#533)", () => {
     assert.deepEqual(sliceOverride(wirft, "BASE", OVERRIDE_KEY), { reason: null, invalid: [], versetzt: [] });
     const nurUngueltig: RunGit = () => "x\n\nKQ-Diffsize-Override: ohne nummer\n";
     assert.deepEqual(sliceOverride(nurUngueltig, "BASE", OVERRIDE_KEY), { reason: null, invalid: ["KQ-Diffsize-Override: ohne nummer"], versetzt: [] });
+  });
+});
+
+// ── GEN:-Abschnitte zählen nicht zum Slice (#1411) ──────────────────────────────
+type GenModule = {
+  genKoerperZeilen: (text: string | null) => Set<number>;
+  istDocgenDatei: (pfad: string, wurzeln: string[]) => boolean;
+  genAnteil: (patch: string, alt: (p: string) => string | null, neu: (p: string) => string | null, prueft: (p: string) => boolean) => Map<string, number>;
+  checkDiffSize: (opts: { runGit: RunGit; env?: Env; docgenWurzeln?: string[] }) => Record<string, unknown>;
+};
+const { genKoerperZeilen, istDocgenDatei, genAnteil } = checkDiffRaw as GenModule;
+const checkMitWurzeln = (checkDiffRaw as GenModule).checkDiffSize;
+
+describe("check:diffsize ohne GEN:-Abschnitte (#1411)", () => {
+  const START = "<!-- GEN:demo START -->";
+  const END = "<!-- GEN:demo END -->";
+  const ALT = ["# Titel", START, "<!-- Hint -->", "", "| a |", "| b |", "", END, "Ende"].join("\n");
+  const NEU = ["# Titel", START, "<!-- Hint -->", "", "| a |", "| b2 |", "", END, "Ende2"].join("\n");
+  const kopf = (p: string) => `diff --git a/${p} b/${p}\nindex 1111111..2222222 100644\n--- a/${p}\n+++ b/${p}\n`;
+  const PATCH = kopf("docs/x.md") + "@@ -6 +6 @@\n-| b |\n+| b2 |\n@@ -9 +9 @@\n-Ende\n+Ende2\n";
+  const text = (t: string) => () => t;
+  const immer = () => true;
+
+  test("genKoerperZeilen: nur die Zeilen zwischen den Markern, 1-basiert, Marker selbst nicht", () => {
+    assert.deepEqual([...genKoerperZeilen(ALT)], [3, 4, 5, 6, 7]);
+    assert.deepEqual([...genKoerperZeilen("kein Abschnitt")], []);
+    assert.deepEqual([...genKoerperZeilen(null)], []);
+  });
+
+  test("genKoerperZeilen: kaputte Marker oder GEN in einem Code-Fence → leer (dann zählt alles)", () => {
+    assert.equal(genKoerperZeilen([START, "x"].join("\n")).size, 0, "END fehlt");
+    assert.equal(genKoerperZeilen(["```", START, "x", END, "```"].join("\n")).size, 0, "im Fence");
+  });
+
+  test("istDocgenDatei: nur Markdown unter den Wurzeln von check:docgen (Datei oder Ordner)", () => {
+    const w = ["README.md", "docs"];
+    assert.equal(istDocgenDatei("README.md", w), true);
+    assert.equal(istDocgenDatei("docs/a/b.md", w), true);
+    assert.equal(istDocgenDatei("docs/a/b.ts", w), false);
+    assert.equal(istDocgenDatei("src/AGENTS.md", w), false);
+    assert.equal(istDocgenDatei("docsx/a.md", w), false, "Präfix ist kein Ordner");
+    assert.equal(istDocgenDatei("irgendwo/a.md", ["."]), true);
+  });
+
+  test("genAnteil: Änderung im Körper zählt als GEN (-/+), die außerhalb nicht", () => {
+    const r = genAnteil(PATCH, text(ALT), text(NEU), immer);
+    assert.equal(r.get("docs/x.md"), 2, "nur `| b |` → `| b2 |`; `Ende` → `Ende2` liegt außerhalb");
+  });
+
+  test("genAnteil: eine Handänderung außerhalb des Abschnitts zählt nicht als GEN", () => {
+    const patch = kopf("docs/x.md") + "@@ -9 +9 @@\n-Ende\n+Ende2\n";
+    assert.equal(genAnteil(patch, text(ALT), text(NEU), immer).get("docs/x.md"), 0);
+  });
+
+  test("genAnteil: die Marker-Zeilen zählen weiter (Änderung am START-Marker ist kein GEN)", () => {
+    const neu = ALT.replace(START, "<!-- GEN:demo START -->  ");
+    const patch = kopf("docs/x.md") + "@@ -2 +2 @@\n-" + START + "\n+" + START + "  \n";
+    assert.equal(genAnteil(patch, text(ALT), text(neu), immer).get("docs/x.md") ?? 0, 0);
+  });
+
+  test("genAnteil: gelöschter Abschnitt zählt die Körperzeilen der alten Fassung, nicht die Marker", () => {
+    const neu = ["# Titel", "Ende"].join("\n");
+    const patch = kopf("docs/x.md") + "@@ -2,7 +1,0 @@\n" + ALT.split("\n").slice(1, 8).map((l) => "-" + l).join("\n") + "\n";
+    assert.equal(genAnteil(patch, text(ALT), text(neu), immer).get("docs/x.md"), 5, "7 gelöschte Zeilen, 5 davon im Körper");
+  });
+
+  test("genAnteil: neuer Abschnitt zählt die Körperzeilen der neuen Fassung, nicht die Marker", () => {
+    const alt = ["# Titel", "Ende"].join("\n");
+    const patch = kopf("docs/x.md") + "@@ -1,0 +2,7 @@\n" + ALT.split("\n").slice(1, 8).map((l) => "+" + l).join("\n") + "\n";
+    assert.equal(genAnteil(patch, text(alt), text(ALT), immer).get("docs/x.md"), 5);
+  });
+
+  test("genAnteil: neue Fassung mit kaputtem Marker → alles zählt (0 GEN)", () => {
+    const kaputt = ALT.replace(END, "");
+    const patch = kopf("docs/x.md") + "@@ -6 +6 @@\n-| b |\n+| b2 |\n";
+    assert.equal(genAnteil(patch, text(ALT), text(kaputt), immer).get("docs/x.md"), 1, "nur die alte Zeile liegt im gültigen Körper");
+    assert.equal(genAnteil(patch, text(kaputt), text(kaputt), immer).get("docs/x.md"), 0);
+  });
+
+  test("genAnteil: Inhaltszeilen, die wie Dateiköpfe aussehen (`--- x`, `+++ y`), verwirren das Parsen nicht", () => {
+    const patch = kopf("docs/x.md") + "@@ -6,2 +6,2 @@\n--- a/anders.md\n-| b |\n+++ b/anders.md\n+| b2 |\n";
+    assert.equal(genAnteil(patch, text(ALT), text(NEU), immer).get("docs/x.md"), 4);
+  });
+
+  test("genAnteil: Datei außerhalb von check:docgen (prueft = false) taucht nicht auf; fehlender Text → 0", () => {
+    assert.equal(genAnteil(PATCH, text(ALT), text(NEU), () => false).size, 0);
+    assert.equal(genAnteil(PATCH, () => null, () => null, immer).get("docs/x.md"), 0);
+  });
+
+  // Integration in checkDiffSize (git injiziert).
+  const zaehlt = { echt: 0 };
+  const gitMitGen = (numstat: string, patch: string | Error, wurzeln = ["docs"]): { runGit: RunGit; wurzeln: string[] } => ({
+    wurzeln,
+    runGit: (a) => {
+      if (a[0] === "diff" && a.includes("-U0")) {
+        zaehlt.echt++;
+        if (patch instanceof Error) throw patch;
+        return patch;
+      }
+      if (a[0] === "show") return a[1].startsWith("HEAD:") ? NEU : ALT;
+      if (a[0] === "merge-base" && a[1] === "BASE") return "MB\n";
+      if (a[0] === "merge-base" && a[2] === "origin/main") return "BASE\n";
+      if (a[0] === "merge-base") throw new Error("keine Basis");
+      if (a[0] === "rev-parse") return "HEADSHA\n";
+      if (a[0] === "diff") return numstat;
+      if (a[0] === "log") return "";
+      throw new Error("unerwartet: " + a.join(" "));
+    },
+  });
+  const messe = (g: ReturnType<typeof gitMitGen>) => checkMitWurzeln({ runGit: g.runGit, env: {}, docgenWurzeln: g.wurzeln });
+
+  test("checkDiffSize: GEN:-Zeilen werden von der Zeilenzahl abgezogen, die Datei bleibt (Handänderung daneben)", () => {
+    const r = messe(gitMitGen("3\t3\tdocs/x.md\n", PATCH));
+    assert.equal(r.genLines, 2);
+    assert.equal(r.changedLines, 4, "6 numstat-Zeilen minus 2 GEN");
+    assert.equal(r.fileCount, 1);
+  });
+
+  test("checkDiffSize: eine Datei nur aus GEN-Zeilen fällt aus Dateizahl und Zeilen", () => {
+    const nurGen = kopf("docs/y.md") + "@@ -6 +6 @@\n-| b |\n+| b2 |\n";
+    const r = messe(gitMitGen("1\t1\tdocs/y.md\n5\t0\tsrc/a.ts\n", nurGen));
+    assert.equal(r.fileCount, 1, "nur src/a.ts");
+    assert.equal(r.changedLines, 5);
+    assert.equal(r.genLines, 2);
+  });
+
+  test("checkDiffSize: ein Slice, der nur wegen GEN-Zeilen über Budget läge, ist im Budget (Red-Green gegen die Wurzel-Liste)", () => {
+    const viele = "4\t4\tdocs/y.md\n";
+    const patch = kopf("docs/y.md") + "@@ -3,4 +3,4 @@\n" + ["-a", "-b", "-c", "-d", "+a", "+b", "+c", "+d"].join("\n") + "\n";
+    const env = { KQ_DIFFSIZE_MAX_LINES: "4" };
+    const mit = (wurzeln: string[]) => {
+      const g = gitMitGen(viele, patch, wurzeln);
+      return checkMitWurzeln({ runGit: g.runGit, env, docgenWurzeln: g.wurzeln });
+    };
+    assert.equal(mit(["docs"]).over, false, "alle 8 Zeilen liegen im GEN-Körper (3..7)");
+    assert.equal(mit(["README.md"]).over, true, "ohne check:docgen-Wurzel zählen die 8 Zeilen");
+  });
+
+  test("checkDiffSize: Datei außerhalb der docgen-Wurzeln → kein zweiter git diff, alles zählt", () => {
+    zaehlt.echt = 0;
+    const r = messe(gitMitGen("3\t3\tsrc/x.md\n", PATCH));
+    assert.equal(zaehlt.echt, 0);
+    assert.equal(r.changedLines, 6);
+    assert.equal(r.genLines, 0);
+  });
+
+  test("checkDiffSize: scheitert der Patch-Diff, zählt alles (fail-closed)", () => {
+    const r = messe(gitMitGen("3\t3\tdocs/x.md\n", new Error("git kaputt")));
+    assert.equal(r.changedLines, 6);
+    assert.equal(r.fileCount, 1);
+    assert.equal(r.genLines, 0);
+  });
+});
+
+describe("check:diffsize: Verdrahtung der docgen-Wurzeln (#1411)", () => {
+  const m = checkDiffRaw as unknown as {
+    ladeDocgenWurzeln: (root?: string) => string[];
+    checkDiffSize: (o: { runGit: RunGit; env?: Env; docgenWurzeln?: string[] }) => Record<string, unknown>;
+  };
+  const START = "<!-- GEN:demo START -->";
+  const END = "<!-- GEN:demo END -->";
+  const ALT = ["# T", START, "<!-- h -->", "", "| a |", "", END].join("\n");
+  const NEU = ALT.replace("| a |", "| b |");
+  const PATCH = "diff --git a/docs/y.md b/docs/y.md\n--- a/docs/y.md\n+++ b/docs/y.md\n@@ -5 +5 @@\n-| a |\n+| b |\n";
+  const git: RunGit = (a) => {
+    if (a[0] === "diff" && a.includes("-U0")) return PATCH;
+    if (a[0] === "show") return a[1].startsWith("HEAD:") ? NEU : ALT;
+    if (a[0] === "merge-base" && a[1] === "BASE") return "MB\n";
+    if (a[0] === "merge-base" && a[2] === "origin/main") return "BASE\n";
+    if (a[0] === "merge-base") throw new Error("keine Basis");
+    if (a[0] === "rev-parse") return "HEADSHA\n";
+    if (a[0] === "diff") return "1\t1\tdocs/y.md\n";
+    return "";
+  };
+
+  test("die echte Config (scripts/docs-gen/config.json) liefert die Wurzeln, ohne Injektion greift der GEN-Abzug", () => {
+    const wurzeln = m.ladeDocgenWurzeln();
+    assert.ok(wurzeln.includes("docs") && wurzeln.includes("README.md"), `Wurzeln: ${wurzeln.join(", ")}`);
+    const r = m.checkDiffSize({ runGit: git, env: {} });
+    assert.equal(r.genLines, 2, "ohne docgenWurzeln wird die echte Config gelesen");
+    assert.equal(r.fileCount, 0, "die Datei besteht nur aus GEN-Zeilen");
+  });
+
+  test("Config fehlt, kaputt oder ohne `markdown`: keine Wurzeln, dann zählt alles (fail-closed)", () => {
+    const root = mkdtempSync(join(tmpdir(), "kq-cfg-"));
+    assert.deepEqual(m.ladeDocgenWurzeln(root), [], "keine Datei");
+    mkdirSync(join(root, "scripts", "docs-gen"), { recursive: true });
+    writeFileSync(join(root, "scripts", "docs-gen", "config.json"), "{ kaputt");
+    assert.deepEqual(m.ladeDocgenWurzeln(root), [], "kaputtes JSON");
+    writeFileSync(join(root, "scripts", "docs-gen", "config.json"), '{"anders":["docs"]}');
+    assert.deepEqual(m.ladeDocgenWurzeln(root), [], "Schlüssel markdown fehlt");
+    const r = m.checkDiffSize({ runGit: git, env: {}, docgenWurzeln: [] });
+    assert.equal(r.genLines, 0);
+    assert.equal(r.changedLines, 2);
   });
 });

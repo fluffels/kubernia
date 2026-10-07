@@ -545,3 +545,132 @@ describe("Altersgrenze für Waisen (#1311)", () => {
     assert.deepEqual(r.young, ["kq-neu"]);
   });
 });
+
+// ── Wiederholung, leer/nicht leer, Halter-Suche (#1411) ──────────────────────────
+
+describe("fixOrphans: Wiederholung und leerer gesperrter Ordner (#1411)", () => {
+  const okDeps = { lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => false }), execSync: () => "" };
+  type Fix = (m: string, w: string, o: string[], d?: object) => { removed: string[]; errors: string[]; pending: string[]; refused: unknown[]; halter: Record<string, unknown[]> };
+  const fix = fixOrphans as unknown as Fix;
+
+  test("rmSync bekommt die Wiederholungs-Optionen (kurze Sperren lösen sich von selbst)", () => {
+    const optionen: object[] = [];
+    fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...okDeps, rmSync: (_p: string, o: object) => optionen.push(o), existsSync: () => false });
+    assert.deepEqual(optionen, [{ recursive: true, force: true, maxRetries: 3, retryDelay: 300 }]);
+  });
+
+  test("Ordner bleibt bestehen und ist LEER → pending (kein Fehler), nicht errors", () => {
+    const r = fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...okDeps, rmSync: () => {}, existsSync: () => true, readdirSync: () => [] });
+    assert.deepEqual(r.pending, ["kq-1"]);
+    assert.deepEqual(r.errors, []);
+    assert.deepEqual(r.removed, []);
+  });
+
+  test("Ordner bleibt bestehen und ist NICHT leer → errors, nicht pending (Red-Green gegen die Leer-Prüfung)", () => {
+    const r = fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...okDeps, rmSync: () => {}, existsSync: () => true, readdirSync: () => ["datei.txt"] });
+    assert.deepEqual(r.errors, ["kq-1"]);
+    assert.deepEqual(r.pending, []);
+  });
+
+  test("rmSync wirft und der Ordner ist leer → ebenfalls pending; nicht lesbarer Ordner → errors (fail-closed)", () => {
+    const wirft = () => {
+      throw new Error("EBUSY");
+    };
+    assert.deepEqual(fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...okDeps, rmSync: wirft, existsSync: () => true, readdirSync: () => [] }).pending, ["kq-1"]);
+    const unlesbar = fix("/root", "/root/.claude/worktrees", ["kq-1"], {
+      ...okDeps,
+      rmSync: wirft,
+      existsSync: () => true,
+      readdirSync: () => {
+        throw new Error("EPERM");
+      },
+    });
+    assert.deepEqual(unlesbar.errors, ["kq-1"]);
+    assert.deepEqual(unlesbar.pending, []);
+  });
+
+  test("bei nicht leerem Ordner nennt `halter` die möglichen Halter mit PID (nur Windows)", () => {
+    const prozesse = [{ pid: 4711, ppid: 1, name: "python3.exe", commandLine: "python3 -m http.server", startMs: 2000 }];
+    const base = { ...okDeps, rmSync: () => {}, existsSync: () => true, readdirSync: () => ["x"], statSync: () => ({ birthtimeMs: 1000 }), listProcesses: () => prozesse };
+    assert.equal((fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...base, platform: "win32" }).halter["kq-1"] as { pid: number }[])[0].pid, 4711);
+    assert.deepEqual(fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...base, platform: "linux" }).halter["kq-1"], [], "nur Windows");
+    const kaputt = { ...base, platform: "win32", listProcesses: () => { throw new Error("powershell fehlt"); } };
+    assert.deepEqual(fix("/root", "/root/.claude/worktrees", ["kq-1"], kaputt).halter["kq-1"], [], "fail-open");
+  });
+});
+
+describe("moeglicheHalter und formatHalter (#1411)", () => {
+  type P = { pid: number; ppid: number; name: string; commandLine: string; startMs: number };
+  type H = { pid: number; grund: string }[];
+  const m = cleanupModule as unknown as {
+    moeglicheHalter: (p: P[], pfad: string, geburt: number | null, eigenePid?: number) => H;
+    formatHalter: (h: unknown[]) => string;
+  };
+  const PFAD = "C:\\dev\\kubernia\\.claude\\worktrees\\kq-1404";
+  const proz = (o: Partial<P> & { pid: number }): P => ({ ppid: 1, name: "node.exe", commandLine: "", startMs: 5000, ...o });
+  const eltern = proz({ pid: 1, ppid: 0, name: "explorer.exe" });
+
+  test("Kommandozeile mit dem Worktree-Pfad: Backslash-, Schrägstrich- und MSYS-Form, ohne Groß-/Kleinschreibung", () => {
+    const liste = [
+      eltern,
+      proz({ pid: 10, commandLine: "node C:\\dev\\kubernia\\.claude\\worktrees\\kq-1404\\server.mjs" }),
+      proz({ pid: 11, commandLine: "node c:/dev/kubernia/.claude/worktrees/kq-1404/a.mjs" }),
+      proz({ pid: 12, name: "bash.exe", commandLine: "bash /c/dev/kubernia/.claude/worktrees/KQ-1404/run.sh" }),
+      proz({ pid: 13, commandLine: "node C:\\dev\\kubernia\\.claude\\worktrees\\kq-1405\\server.mjs" }),
+    ];
+    assert.deepEqual(m.moeglicheHalter(liste, PFAD, 0).map((h) => h.pid), [10, 11, 12], "kq-1405 ist ein anderer Worktree");
+  });
+
+  test("verwaister Werkzeug-Prozess nach dem Anlegen des Ordners ist Kandidat; davor, mit Elternprozess oder fremder Name nicht", () => {
+    const liste = [
+      eltern,
+      proz({ pid: 20, ppid: 999, name: "python3.exe", startMs: 5000 }), // Elternprozess 999 gibt es nicht → verwaist
+      proz({ pid: 21, ppid: 999, name: "python3.exe", startMs: 100 }), // vor dem Ordner gestartet
+      proz({ pid: 22, ppid: 1, name: "python3.exe", startMs: 5000 }), // hat einen lebenden Elternprozess
+      proz({ pid: 23, ppid: 999, name: "chrome.exe", startMs: 5000 }), // kein Werkzeug
+    ];
+    const treffer = m.moeglicheHalter(liste, PFAD, 1000);
+    assert.deepEqual(treffer.map((h) => h.pid), [20]);
+    assert.match(treffer[0].grund, /verwaist/);
+    assert.deepEqual(m.moeglicheHalter(liste, PFAD, null).map((h) => h.pid), [20, 21], "ohne bekannte Ordner-Geburt zählt jeder verwaiste Werkzeug-Prozess");
+  });
+
+  test("der eigene Prozess ist nie Kandidat; ohne Prozesse oder Treffer bleibt die Liste leer", () => {
+    assert.deepEqual(m.moeglicheHalter([proz({ pid: 77, commandLine: "node c:/dev/kubernia/.claude/worktrees/kq-1404/x" })], PFAD, 0, 77), []);
+    assert.deepEqual(m.moeglicheHalter([], PFAD, 0), []);
+  });
+
+  test("formatHalter: PID, Name und Rat per PID; nie ein Kill per Name; leer sagt es klar", () => {
+    const text = m.formatHalter([{ pid: 4711, name: "python3.exe", grund: "verwaist", commandLine: "python3 -" }]);
+    assert.match(text, /PID 4711 python3\.exe/);
+    assert.match(text, /Stop-Process -Id <pid>/);
+    assert.ok(!/Stop-Process -Name/.test(text));
+    assert.match(m.formatHalter([]), /kein Halter/);
+  });
+});
+
+describe("fixOrphans: Ordner-Geburt begrenzt die Halter-Kandidaten (#1411)", () => {
+  type Fix = (m: string, w: string, o: string[], d?: object) => { halter: Record<string, { pid: number }[]> };
+  const fix = fixOrphans as unknown as Fix;
+  const proz = (pid: number, startMs: number) => ({ pid, ppid: 999, name: "python3.exe", commandLine: "python3 -", startMs });
+  const base = {
+    lstatSync: () => ({ isDirectory: () => true, isSymbolicLink: () => false }),
+    execSync: () => "",
+    rmSync: () => {},
+    existsSync: () => true,
+    readdirSync: () => ["x"],
+    platform: "win32",
+    listProcesses: () => [proz(1, 500), proz(2, 5000)],
+  };
+  test("ein verwaister Prozess, der VOR dem Anlegen des Ordners startete, ist kein Halter", () => {
+    const r = fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...base, statSync: () => ({ birthtimeMs: 1000 }) });
+    assert.deepEqual(r.halter["kq-1"].map((h) => h.pid), [2]);
+  });
+  test("ist die Geburt des Ordners unbekannt (statSync wirft), zählt jeder verwaiste Werkzeug-Prozess", () => {
+    const wirft = () => {
+      throw new Error("ENOENT");
+    };
+    const r = fix("/root", "/root/.claude/worktrees", ["kq-1"], { ...base, statSync: wirft });
+    assert.deepEqual(r.halter["kq-1"].map((h) => h.pid), [1, 2]);
+  });
+});

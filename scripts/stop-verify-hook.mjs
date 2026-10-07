@@ -39,7 +39,7 @@
 import { execSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { diagnoseOrphans, fixOrphans, suspiciousWorktreeEntries } from "./cleanup-worktrees.mjs";
+import { diagnoseOrphans, fixOrphans, formatHalter, suspiciousWorktreeEntries } from "./cleanup-worktrees.mjs";
 import { istDirektaufruf, readStdin } from "./hook-io.mjs"; // gemeinsames Hook-I/O (stdin lesen, Direktaufruf erkennen)
 import { abschlussBlockade, parseAbschlussInput } from "./umsetzer-abschluss.mjs";
 
@@ -93,7 +93,9 @@ export function repoRootFromScriptUrl(importMetaUrl) {
  * Prüft `.claude/worktrees/` auf verwaiste Ordner und räumt sie automatisch auf
  * (#908/#952). Siehe Datei-Kopf für die Begründung (rm-rf-Deny seit #913).
  *  - Keine Waisen ODER alle erfolgreich entfernt → { blocked: false }.
- *  - Waisen gefunden, Löschen schlägt fehl (Datei-Lock) → { blocked: true, reason }.
+ *  - Waisen gefunden, Löschen schlägt fehl (Datei-Lock, Ordner nicht leer) → { blocked: true, reason } mit möglichen Haltern (PID).
+ *  - Ordner nach dem Löschversuch noch da, aber LEER (Git-Worktree schon entfernt, meist eine kurze Sperre) →
+ *    { blocked: false, warning }: nur eine Warnung, der nächste Stop versucht es erneut (#1411).
  *  - git-Fehler (diagnoseOrphans meldet ok:false) → fail-open, { blocked: false }.
  */
 export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
@@ -109,6 +111,7 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
 
   const problems = [];
   let removed = [];
+  let pending = [];
 
   if (orphans.length > 0) {
     // Nur wenn es wirklich etwas zu löschen gibt, kostet der Datenverlust-Check
@@ -117,6 +120,7 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
     const result = fixOrphans(mainRoot, worktreesDir, orphans, deps);
     const after = deletedTrackedPaths(mainRoot, deps);
     removed = result.removed;
+    pending = result.pending ?? [];
 
     if (result.refused.length > 0) {
       problems.push(
@@ -128,9 +132,9 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
     if (result.errors.length > 0) {
       problems.push(
         `${result.errors.length} verwaiste Worktree-Ordner (${result.errors.join(", ")}) konnten nicht ` +
-          `gelöscht werden (Datei-Lock? laufender Dev-Server?). Bitte PowerShell ` +
-          `"Stop-Process -Name node -Force" prüfen, dann "node scripts/cleanup-worktrees.mjs --fix" ` +
-          `erneut versuchen (AGENTS.md § Worktree entfernen).`
+          `gelöscht werden (nicht leer: ein Prozess hält Dateien darin). ` +
+          result.errors.map((n) => `${n}: ${formatHalter(result.halter?.[n] ?? [])}`).join(" | ") +
+          `. Dann "node scripts/cleanup-worktrees.mjs --fix" erneut versuchen (AGENTS.md § Worktree entfernen).`
       );
     }
 
@@ -165,7 +169,11 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
     );
   }
 
-  if (problems.length === 0) return { blocked: false, removed };
+  const warning =
+    pending.length > 0
+      ? `Worktree-Ordner ${pending.join(", ")} ist leer, aber gerade gesperrt (Git-Worktree ist schon entfernt). Der nächste Stop versucht das Löschen erneut, nichts zu tun.`
+      : undefined;
+  if (problems.length === 0) return { blocked: false, removed, ...(warning ? { warning } : {}) };
 
   return {
     blocked: true,
@@ -186,7 +194,10 @@ export function runHook(stdinText, repoRoot, check = checkAndFixOrphanWorktrees,
   if (orphanResult.blocked) gruende.push(orphanResult.reason);
   const abschluss = abschlussBlockade(parseAbschlussInput(stdinText), abschlussDeps);
   if (abschluss) gruende.push(abschluss);
-  if (gruende.length === 0) return { exit: 0, stdout: "", stderr: "" };
+  if (gruende.length === 0) {
+    // Nur eine Warnung (leerer, gesperrter Ordner): Stop freigeben, die Meldung geht als systemMessage an die Nutzerin (#1411).
+    return orphanResult.warning ? { exit: 0, stdout: JSON.stringify({ systemMessage: orphanResult.warning }), stderr: "" } : { exit: 0, stdout: "", stderr: "" };
+  }
   const reason = gruende.join(" | ");
   return { exit: 2, stdout: JSON.stringify({ decision: "block", reason }), stderr: reason };
 }

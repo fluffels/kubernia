@@ -3,7 +3,7 @@
 // Nie ausgegeben: Header, Tokens, Beschreibungstexte. Nie gelesen: settings.local.json.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { brauche, byCodeUnit, parseFrontmatter, renderTable } from "./markdown.mjs";
+import { brauche, byCodeUnit, leseJson, parseFrontmatter, renderTable } from "./markdown.mjs";
 
 const NONE = "—";
 const code = (s) => `\`${s}\``;
@@ -69,7 +69,7 @@ function workflows(rootDir, dir) {
 }
 
 function hooks(rootDir, file) {
-  const settings = JSON.parse(readFileSync(join(rootDir, file), "utf8"));
+  const settings = leseJson(rootDir, file, "Hook-Einstellungen");
   const rows = [];
   for (const event of Object.keys(settings.hooks ?? {}).sort(byCodeUnit)) {
     for (const group of settings.hooks[event]) {
@@ -96,7 +96,7 @@ function gitHooks(rootDir, dir) {
 }
 
 function mcp(rootDir, file) {
-  const servers = JSON.parse(readFileSync(join(rootDir, file), "utf8")).mcpServers ?? {};
+  const servers = leseJson(rootDir, file, "MCP-Konfiguration").mcpServers ?? {};
   return Object.keys(servers)
     .sort(byCodeUnit)
     .map((name) => {

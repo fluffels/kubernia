@@ -26,7 +26,7 @@
 
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { zaehleRoteCommits } from "./ci-laeufe.mjs";
+import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
 
 /** Schwelle: 1 initialer Fehlschlag + 3 gescheiterte Fix-Versuche = „dreimal" aus AGENTS.md. */
 export const MAX_FAILED_PUSHES = 4;
@@ -81,9 +81,6 @@ function ghJson(args) {
   });
   return JSON.parse(out);
 }
-
-/** `gh <args>` ausführen und stdout als Text liefern (Runner für ci-laeufe.mjs). */
-const ghText = (args) => execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
 /** `gh <args>` ausführen, Ausgabe an Terminal durchreichen. */
 function ghRun(args) {

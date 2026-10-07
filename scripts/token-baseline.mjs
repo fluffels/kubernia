@@ -30,7 +30,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseNachweis } from "./slice-override.mjs";
-import { zaehleRoteCommits } from "./ci-laeufe.mjs";
+import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
 import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { ladeSessionDatei, transkriptZeilen } from "./transkript.mjs";
 import { fehlerArten, wiederlesen } from "./tool-metriken.mjs";
@@ -570,7 +570,7 @@ function prInfo(pr) {
   return {
     prCreatedAt: p.createdAt,
     mergedAt: p.mergedAt,
-    failedPushes: zaehleRoteCommits((args) => execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }), { branch: p.headRefName, createdAt: p.createdAt, mergedAt: p.mergedAt }),
+    failedPushes: zaehleRoteCommits(ghText, { branch: p.headRefName, createdAt: p.createdAt, mergedAt: p.mergedAt }),
     nachweis: nachweisAusCommits(p.commits),
     files: p.files ?? [],
   };

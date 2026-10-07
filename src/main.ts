@@ -306,6 +306,9 @@ import { resolveAction } from "./core/keybindings";
     }
 
     UI.refreshHud();
+    // Zustands-Marker für die e2e-Smokes (#1411): `geplant` heißt, das Intro erscheint in Kürze (setTimeout unten), `keins` ist
+    // ein Bestandsstand. So warten die Tests auf einen Zustand statt auf eine Zeit.
+    let intro: "geplant" | "keins" = "keins";
     if (Game.state.character === null) {
       // Erster Start: fester Charakter, kein Auswahl-Dialog mehr (#45).
       // Statt nur eines Toasts kommt jetzt die einmalige Begrüßung mit Steuerung
@@ -315,6 +318,7 @@ import { resolveAction } from "./core/keybindings";
       Game.state.introSeen = true;
       Game.save();
       setTimeout(() => UI.showIntro(), 600);
+      intro = "geplant";
     } else if (!Game.state.introSeen) {
       // Bestandsspieler von vor #288 (Charakter schon gesetzt): das Intro nicht
       // nachträglich aufdrängen – sie kennen das Spiel – nur als gesehen merken.
@@ -353,7 +357,9 @@ import { resolveAction } from "./core/keybindings";
     });
     window.addEventListener("pagehide", () => Game.autosaveFlush());
 
-    // Boot-Markierung fürs Sicherheitsnetz in index.html (früher: window.Game)
+    // Boot-Markierung fürs Sicherheitsnetz in index.html (früher: window.Game); kqIntro vorher, damit ein Test, der auf
+    // kqBooted wartet, den Intro-Zustand schon lesen kann (#1411).
+    document.body.dataset.kqIntro = intro;
     document.body.dataset.kqBooted = "1";
 
     // #301: Im Dev-Server unterdrückt das Vite-Plugin `kq-dev-no-full-reload`

@@ -46,17 +46,28 @@ export async function advanceDialogueUntilHidden(page: Page): Promise<void> {
   await expect(dlg).toBeHidden();
 }
 
+/** Der Intro-Zustand, den main.ts als `data-kq-intro` setzt (#1411): `geplant` = das Intro erscheint in Kürze (Erststart),
+ *  `keins` = Bestandsstand. Wartet auf das Attribut, statt eine Zeit zu raten. */
+async function introZustand(page: Page): Promise<"geplant" | "keins"> {
+  const body = page.locator("body");
+  await expect(body).toHaveAttribute("data-kq-intro", /^(geplant|keins)$/, { timeout: 15_000 });
+  return (await body.getAttribute("data-kq-intro")) as "geplant" | "keins";
+}
+
 /** Schließt die einmalige Begrüßung (Intro-Dialog), die beim ersten Start ~600 ms
- *  nach dem Boot erscheint. Tolerant: erscheint sie wider Erwarten nicht, geht es
- *  ohne Fehler weiter. Wichtig: der Intro-Dialog blockiert Tastenkürzel (F/L/B),
- *  darum vor allen anderen Interaktionen sauber wegblättern (nicht nur ausblenden –
- *  das ließe den Dialog-Zustand aktiv und würde spätere R-Eingaben verschlucken). */
+ *  nach dem Boot erscheint. Zustandsbasiert (#1411): `data-kq-intro` sagt, ob sie kommt; bei `geplant` wird auf den
+ *  sichtbaren Dialog gewartet (kein Raten mit fester Zeit), bei `keins` (Bestandsstand) geht es sofort weiter. Wichtig: der
+ *  Intro-Dialog blockiert Tastenkürzel (F/L/B), darum vor allen anderen Interaktionen sauber wegblättern (nicht nur
+ *  ausblenden – das ließe den Dialog-Zustand aktiv und würde spätere R-Eingaben verschlucken). */
 export async function dismissIntro(page: Page): Promise<void> {
-  const dlg = page.locator("#dialogue");
-  try {
-    await expect(dlg).toBeVisible({ timeout: 5_000 });
-  } catch {
-    return; // kein Intro (z.B. Bestandsstand) – nichts zu tun
-  }
+  if ((await introZustand(page)) === "keins") return;
+  await expect(page.locator("#dialogue")).toBeVisible({ timeout: 15_000 });
   await advanceDialogueUntilHidden(page);
+}
+
+/** Wartet, bis die Welt aufgebaut ist (`data-kq-world`, WorldScene.create) und – falls geplant – das Intro erschienen ist.
+ *  Der Boot-Smoke prüft danach, ob dabei Fehler aufgelaufen sind (statt eine feste Zeit zu warten, #1411). */
+export async function awaitWorldAndIntro(page: Page): Promise<void> {
+  await expect(page.locator("body")).toHaveAttribute("data-kq-world", "1", { timeout: 15_000 });
+  if ((await introZustand(page)) === "geplant") await expect(page.locator("#dialogue")).toBeVisible({ timeout: 15_000 });
 }

@@ -15,7 +15,7 @@ const api = zeit as unknown as {
 };
 const adrApi = adrModul as unknown as { adrListeGenerator: (ctx: { rootDir: string; config: Cfg }) => string };
 
-const conf: Cfg = { zeitleiste: { adr: "docs/adr", meilensteine: "docs/meilensteine.json" } };
+const conf: Cfg = { adr: { ordner: "docs/adr" }, zeitleiste: { meilensteine: "docs/meilensteine.json" } }; // den ADR-Ordner liefert der adr-Block (#1411)
 const confAdr: Cfg = { adr: { ordner: "docs/adr" } }; // adr-liste liest nur den eigenen Block (#1398)
 const ms = (...e: { datum: unknown; text: unknown }[]) => JSON.stringify({ hinweis: "x", meilensteine: e });
 const adrNeu = (nr: string, titel: string, datum: string) => `# ADR ${nr}: ${titel}\n\n> Status: **akzeptiert** · Datum: ${datum} · Ticket: #1\n\n## Status\nText`;
@@ -97,14 +97,15 @@ describe("Generator zeitleiste", () => {
     assert.throws(() => run(base({ "docs/meilensteine.json": ms({ datum: "2026-06-12x", text: "a" }) })), /Meilenstein 0.*"datum"/);
   });
   test("kaputtes JSON in der Meilenstein-Datei: wirft mit Dateiname und wird mit ADR-Fehlern gesammelt", () => {
-    assert.throws(() => run(base({ "docs/meilensteine.json": "{ kaputt" })), /meilensteine\.json: nicht lesbar/);
-    assert.throws(() => run(base({ "docs/meilensteine.json": "{ kaputt", "docs/adr/0002-a.md": "# ADR 0002: A\n" })), /0002-a\.md.*meilensteine\.json: nicht lesbar/s);
+    assert.throws(() => run(base({ "docs/meilensteine.json": "{ kaputt" })), /meilensteine\.json ist kein gültiges JSON/);
+    assert.throws(() => run(base({ "docs/meilensteine.json": "{ kaputt", "docs/adr/0002-a.md": "# ADR 0002: A\n" })), /0002-a\.md.*meilensteine\.json ist kein gültiges JSON/s);
   });
   test("meilensteine kein Array wirft", () => {
     assert.throws(() => run(base({ "docs/meilensteine.json": JSON.stringify({ meilensteine: "x" }) })), /Array/);
   });
   test("Config-Block, ADR-Ordner oder Datendatei fehlt: wirft", () => {
     assert.throws(() => run(base(), {}), /zeitleiste/);
+    assert.throws(() => run(base(), { zeitleiste: { meilensteine: "docs/meilensteine.json" } }), /Config-Block "adr" mit "ordner" fehlt/); // Block adr fehlt
     assert.throws(() => run({ "docs/meilensteine.json": ms() }), /docs\/adr/);
     assert.throws(() => run({ "docs/adr/0001-eins.md": adrNeu("0001", "Eins", "2026-06-16") }), /meilensteine\.json/);
   });
@@ -154,7 +155,7 @@ describe("Generator adr-liste (#1392)", () => {
   });
   test("adr-liste braucht keinen zeitleiste-Block, aber den adr-Block (ein Block der Zeitleiste genügt nicht)", () => {
     assert.match(liste(base(), { adr: { ordner: "docs/adr" } }), /\| \[0001\]/);
-    assert.throws(() => liste(base(), conf), /Config-Block "adr" mit "ordner" fehlt/);
+    assert.throws(() => liste(base(), { zeitleiste: { meilensteine: "docs/meilensteine.json" } }), /Config-Block "adr" mit "ordner" fehlt/);
     assert.throws(() => liste(base(), { adr: {} }), /Config-Block "adr"/);
   });
   test("pipe im Titel wird escaped", () => {

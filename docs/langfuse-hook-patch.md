@@ -2,7 +2,7 @@
 
 > Evergreen-Seite zum lokalen Patch am Hook des Plugins `langfuse-observability`: wo er liegt, was er tut, wie man ihn prüft und nach einem Plugin-Update portiert. Wann Langfuse-Erfassung belegt werden muss und wie die Auswertung läuft, steht in [model-routing.md](model-routing.md#langfuse-erfassung-belegen-1293). **Schnappschuss-Belege** (Zählungen, Session-IDs, Red-Green-Zahlen, Probe-Werte) stehen nicht hier, sondern in den PRs und Issues der jeweiligen Zeile (Kommentar „Beleg aus docs/model-routing.md ausgelagert“ in #1187, #1291, #1311, #1378 und #1382).
 
-Der Patch bleibt **bewusst lokal** im Plugin-Cache (`~/.claude/plugins/cache/langfuse-observability/…/hooks/langfuse_hook.py`, Datei-Cache im Benutzerordner; **aktiviert** soll das Plugin nur im Projekt-Scope sein, Soll und Ist-Stand: [Plugin-Scope](model-routing.md#langfuse-hook-patch-pflegen-10841122)), nicht im Repo versioniert und nicht upstream gemeldet (Maintainerin-Entscheidung). Jedes Plugin-Update überschreibt ihn.
+Der Patch bleibt **bewusst lokal** im Plugin-Cache (`~/.claude/plugins/cache/langfuse-observability/…/hooks/langfuse_hook.py`, Datei-Cache im Benutzerordner; das Plugin ist auch im User-Scope aktiv, gewollt: [ADR 0019](adr/0019-langfuse-plugin-im-user-scope.md)), nicht im Repo versioniert und nicht upstream gemeldet (Maintainerin-Entscheidung). Jedes Plugin-Update überschreibt ihn.
 
 ## Prüfregel
 

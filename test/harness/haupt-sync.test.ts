@@ -343,3 +343,44 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", () => {
     expect(skill).not.toMatch(/nie ein eigenes `git pull`/);
   });
 });
+
+describe("Node-Versionsprüfung (#1411)", () => {
+  const N = raw as unknown as {
+    pruefeNodeVersion: (v: string, engines: unknown) => string | null;
+    nodeHinweisFuer: (dir: string, v?: string) => string;
+    baueText: (e: Partial<Ergebnis> & { nodeHinweis?: string }) => string;
+  };
+  test("erfüllt (gleich, höher in Major, Minor oder Patch): kein Hinweis", () => {
+    expect(N.pruefeNodeVersion("22.22.3", ">=22.22.3")).toBeNull();
+    expect(N.pruefeNodeVersion("22.22.4", ">=22.22.3")).toBeNull();
+    expect(N.pruefeNodeVersion("22.23.0", ">=22.22.3")).toBeNull();
+    expect(N.pruefeNodeVersion("24.0.0", ">=22.22.3")).toBeNull();
+    expect(N.pruefeNodeVersion("v22.17.0", ">=22")).toBeNull();
+  });
+  test("nicht erfüllt: Hinweis mit Ist-Version und Soll (Patch, Minor und Major)", () => {
+    expect(N.pruefeNodeVersion("22.17.0", ">=22.22.3")).toMatch(/22\.17\.0.*>=22\.22\.3/);
+    expect(N.pruefeNodeVersion("22.22.2", ">=22.22.3")).not.toBeNull();
+    expect(N.pruefeNodeVersion("20.11.1", ">=22")).not.toBeNull();
+    expect(N.pruefeNodeVersion("22.1.0", ">= 22.2")).not.toBeNull();
+  });
+  test("andere Formen, fehlende Angabe oder kaputte Version werden still übersprungen", () => {
+    for (const e of ["^22.0.0", "22.x", ">=22 <25", "", undefined, null, 22]) expect(N.pruefeNodeVersion("18.0.0", e)).toBeNull();
+    expect(N.pruefeNodeVersion("kaputt", ">=22")).toBeNull();
+  });
+  test("nodeHinweisFuer liest engines.node aus der package.json und ist fail-open", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kq-node-"));
+    try {
+      writeFileSync(join(dir, "package.json"), JSON.stringify({ engines: { node: ">=99" } }));
+      expect(N.nodeHinweisFuer(dir, "22.17.0")).toMatch(/erfüllt engines\.node/);
+      expect(N.nodeHinweisFuer(join(dir, "gibt-es-nicht"), "22.17.0")).toBe("");
+      writeFileSync(join(dir, "package.json"), "{ kaputt");
+      expect(N.nodeHinweisFuer(dir, "22.17.0")).toBe("");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  test("der Hinweis steht im Kontext-Text der Session", () => {
+    expect(N.baueText({ nodeHinweis: "Node 22.17.0 erfüllt nicht" })).toContain("Node-Version: Node 22.17.0 erfüllt nicht");
+    expect(N.baueText({})).toBe("");
+  });
+});

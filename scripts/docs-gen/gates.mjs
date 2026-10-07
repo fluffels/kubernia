@@ -2,23 +2,14 @@
 // npm-Ketten (`verify`, `verify:full`, …) plus Beschreibungs-Map und reinen CI-Gates.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { expandSteps, renderTable } from "./markdown.mjs";
-
-/**
- * Die eigenen Schritte einer Kette: aufgelöst (verschachtelte Ketten), ohne Kettennamen, je Schritt einmal
- * (erstes Vorkommen). EINE Zählung für die Gate-Tabelle und die Diagramm-Zahlen (Z2a).
- */
-export function kettenSchritte(scripts, chains, kette) {
-  const aufgeloest = expandSteps(scripts[kette], scripts, chains, [kette]);
-  return [...new Set(aufgeloest.filter((s) => !chains.includes(s)))];
-}
+import { kettenSchritte, leseJson, renderTable } from "./markdown.mjs";
 
 /** Anzeigebefehl eines Kettenschritts. */
 const display = (step, scripts) => (Object.hasOwn(scripts, step) ? (step === "test" ? "npm test" : `npm run ${step}`) : step);
 
 export function gatesGenerator({ rootDir, config }) {
   const cfg = config.gates;
-  const pkg = JSON.parse(readFileSync(join(rootDir, cfg.package), "utf8"));
+  const pkg = leseJson(rootDir, cfg.package, "package.json");
   const scripts = pkg.scripts ?? {};
   const errors = [];
   const rows = [];
