@@ -143,6 +143,14 @@ describe("Modell-Prüfung (Negativfälle)", () => {
   test("reservierte ID end", () => wirft((m) => (m.schichten[1].id = "end"), /reservierte ID "end"/));
   test("ungültige ID", () => wirft((m) => (m.schichten[1].id = "Mit Leerzeichen"), /ungültige oder reservierte ID/));
   test('Anführungszeichen im Label', () => wirft((m) => (m.schichten[1].label = 'Ein "Label"'), /ungültiges Label/));
+  test("darf ist keine Liste", () => wirft((m) => ((m.schichten[1] as { darf: unknown }).darf = "domaene"), /darf ist keine Liste/));
+  test("ungültige Technik", () => wirft((m) => (m.schichten[0].technik = 'Phaser"DOM'), /ungültige Technik/));
+  test("leeres Label", () => wirft((m) => (m.schichten[1].label = ""), /ungültiges Label/));
+  test("spitze Klammern und Zeilenumbruch im Label", () => {
+    wirft((m) => (m.schichten[1].label = "a<b"), /ungültiges Label/);
+    wirft((m) => (m.schichten[1].label = "a>b"), /ungültiges Label/);
+    wirft((m) => (m.schichten[1].label = "a\nb"),/ungültiges Label/);
+  });
   test("keine Schichten", () => assert.throws(() => api.pruefeModell({ schichten: [], extern: [] }), /keine Schichten/));
   test("fehlende layers-Datei", () => {
     assert.throws(() => api.schichtenSollGenerator({ rootDir: fixture({}), config: cfg() }), /fehlt/);
@@ -184,6 +192,9 @@ describe("Ist-Kanten (Verdichtung)", () => {
   test("eine Kante außerhalb des Solls wirft mit Hinweis auf check:arch", () => {
     assert.throws(() => api.istKanten(cruiseJson({ "src/sim/": ["src/game/"] }), m), /domaene → anwendung.*check:arch/);
     assert.throws(() => api.istKanten(cruiseJson({ "src/game/": ["node_modules/phaser/"] }), m), /anwendung → phaser/);
+  });
+  test("Extern-Quellen (Phaser) werden nicht als Quelle ausgewertet", () => {
+    assert.deepEqual(api.istKanten(cruiseJson({ "node_modules/phaser/": ["src/sim/"] }), m), []);
   });
   test("leeres oder fehlendes modules ergibt keine Kanten", () => {
     assert.deepEqual(api.istKanten({}, m), []);

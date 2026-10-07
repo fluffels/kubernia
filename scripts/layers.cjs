@@ -111,7 +111,9 @@ const COVERAGE_GLOBS = {
  *  die Diagramm-Reihenfolge von oben nach unten. Imports innerhalb einer Schicht sind immer
  *  erlaubt; was nicht in `darf` steht, ist verboten (fail-closed). `verbotsRegeln` leitet daraus die
  *  Regeln von `check:arch` ab, `scripts/docs-gen/schichten.mjs` die Diagramme: Diagramm == geprüfte
- *  Regel. `muster: null` = Auffang-Schicht (alles übrige unter src/); genau eine davon. */
+ *  Regel. `muster: null` = Auffang-Schicht (alles übrige unter src/); genau eine davon. Schichten sind über
+ *  Wurzel-Segmente der obersten Ebene unter src/ definiert (der Ist-Collapse in scripts/docs-gen/config.json
+ *  verdichtet auf genau diese Ebene). `pruefeModell` (scripts/docs-gen/schichten.mjs) prüft das Modell. */
 const SCHICHT_MODELL = {
   schichten: [
     { id: LAYERS.ENTRY, label: "Einstieg/Assets", muster: ENTRY, wurzeln: WURZELN.einstieg, darf: [LAYERS.PRESENTATION, LAYERS.APPLICATION, LAYERS.DOMAIN, "phaser"] },

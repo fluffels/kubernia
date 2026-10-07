@@ -50,7 +50,7 @@ Abhängigkeiten zeigen strikt **nach innen** — auf die reine Domäne, die nich
 
 ### Schichten – Soll (geprüfte Regel)
 
-Erzeugt aus `SCHICHT_MODELL` in [`scripts/layers.cjs`](../scripts/layers.cjs), derselben Tabelle, aus der `check:arch` seine Verbotsregeln ableitet: jede Richtung, die hier fehlt, ist eine Regel, die rot wird. Phaser/DOM gibt es nur in der Präsentation (grün); die Persistenz (`store`) gehört zur Anwendung.
+Erzeugt aus `SCHICHT_MODELL` in [`scripts/layers.cjs`](../scripts/layers.cjs), derselben Tabelle, aus der `check:arch` seine Verbotsregeln ableitet: jede Richtung, die hier fehlt, ist eine Regel, die rot wird. Phaser/DOM ist die Technik der Präsentation (grün), der Einstieg bootet Phaser; die Persistenz (`store`) gehört zur Anwendung.
 
 <!-- GEN:schichten-soll START -->
 <!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->

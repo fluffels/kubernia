@@ -100,7 +100,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 
 Kubernia ist bewusst so gebaut, dass es **so groß wie Stardew Valley** werden könnte (100+ Quests, 50+ NPCs, viele Welten) – ohne dass die Struktur bricht. Das ist die **oberste Regel** über allen Einzelentscheidungen. Was das konkret heißt:
 
-- **🧱 Erzwungene Schichtung.** Der Code ist streng geschichtet – **Präsentation → Anwendung → pure Domäne** (Importe zeigen nur nach unten) – damit die komplette Spiellogik (Cluster-Simulator, Wirtschaft, Content) **ohne Phaser** im Node-Test läuft. Diese Grenze ist nicht nur Konvention, sondern wird von **`dependency-cruiser`** erzwungen: importiert die Domäne versehentlich die Engine, schlägt der Build fehl. Dazu verbietet der Wächter **Import-Zyklen** und **toten Code**.
+- **🧱 Erzwungene Schichtung.** Der Code ist streng geschichtet – **Präsentation → Anwendung → pure Domäne** (Importe zeigen nach unten; nur Einstieg/Assets und Präsentation dürfen sich gegenseitig anfassen, weil `assets-data` und `main` eine Schicht bilden) – damit die komplette Spiellogik (Cluster-Simulator, Wirtschaft, Content) **ohne Phaser** im Node-Test läuft. Diese Grenze ist nicht nur Konvention, sondern wird von **`dependency-cruiser`** erzwungen: importiert die Domäne versehentlich die Engine, schlägt der Build fehl. Dazu verbietet der Wächter **Import-Zyklen** und **toten Code**.
 
   <!-- GEN:schichten-soll START -->
   <!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
