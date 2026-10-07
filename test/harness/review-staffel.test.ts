@@ -323,3 +323,101 @@ describe("Merge von main ist kein Fix-Pass (#1311)", () => {
     assert.ok(nenntMergeRegel("Merge von `main` ist kein Fix-Pass; Auflösung per git show --cc M"));
   });
 });
+
+describe("Rotes verify vor dem ersten Lens-Pass zählt nicht als Fix-Runde (#1322 Z7)", () => {
+  const lensLabels = (a: { label: string }[]) => a.map((x) => x.label);
+  const blocker = (lens: string): Bericht => ({ lens, verdikt: "blockierend", findings: [{ schwere: "blockierend", befund: "B", ort: "a.ts:1", begruendung: "b" }] });
+
+  test("rotes verify, Fix grün, dann zwei Blocker-Pässe: konvergiert im dritten Pass, erstes Lens-Label ist r1, ein PR", async () => {
+    const r = await workflowLauf({
+      umsetzen: { dateien: ["src/a.ts"] },
+      verifyGruen: { umsetzen: false },
+      // Lens-Berichte nach Zahl der Fixes: 0 = verify-Fix (kein Pass), 1 = Pass 1, 2 = Pass 2, 3 = Pass 3
+      runden: [{}, { architektur: blocker("architektur") }, { architektur: blocker("architektur") }, {}],
+    });
+    const lenses = lensLabels(r.lenses);
+    assert.equal(lenses[0], "lens:architektur:r1", "der erste Lens-Pass ist Runde 1, nicht 2");
+    assert.deepEqual(lenses.filter((l) => l.startsWith("lens:architektur")), ["lens:architektur:r1", "lens:architektur:r2", "lens:architektur:r3"]);
+    assert.deepEqual(lenses.slice(0, 3), ["lens:architektur:r1", "lens:requirement-treue:r1", "lens:test-adaequanz:r1"], "Runde 1 hat den vollen Satz");
+    assert.equal(r.ergebnis, "fertig", "konvergiert statt Hand-off");
+    assert.equal(r.aufrufe.filter((a) => a.label.startsWith("pr+merge")).length, 1);
+    const fixe = r.aufrufe.filter((a) => a.label.startsWith("nachbessern")).map((a) => a.label);
+    assert.deepEqual(fixe, ["nachbessern verify 1/3:#42", "nachbessern 1/2:#42", "nachbessern 2/2:#42"]);
+    const erster = r.aufrufe.find((a) => a.label.startsWith("nachbessern"))?.prompt ?? "";
+    assert.match(erster, /Fix-Versuch 1 von 3 für das rote verify/);
+    assert.doesNotMatch(erster, /Fix-Runde \d von 2/, "kein Review-Cap im verify-Fix");
+  });
+
+  test("dreimal rotes verify vor jedem Lens-Pass: Hand-off nach drei Fix-Versuchen, keine Endlosschleife, kein Lens", async () => {
+    const r = await workflowLauf({ umsetzen: { dateien: ["src/a.ts"] }, verifyGruen: { umsetzen: false, nachbessern: [false] } });
+    assert.equal(r.ergebnis, "review-festgefahren");
+    assert.equal(r.lenses.length, 0, "Short-Circuit: kein Lens-Pass");
+    assert.equal(r.aufrufe.filter((a) => a.label.startsWith("nachbessern")).length, 3);
+    assert.equal(r.aufrufe.filter((a) => a.label.startsWith("pr+merge")).length, 0, "kein PR mit rotem verify");
+    const festgefahren = r.aufrufe.find((a) => a.label.startsWith("review-festgefahren"))?.prompt ?? "";
+    assert.match(festgefahren, /3 Fix-Versuchen für das rote verify \(noch kein Lens-Pass\)/);
+    assert.doesNotMatch(festgefahren, /nach 2 Fix-Runden/);
+  });
+
+  test("rotes verify NACH einem Lens-Pass zählt weiter als Fix-Runde (Review-Cap 2 bleibt)", async () => {
+    const r = await workflowLauf({
+      umsetzen: { dateien: ["src/a.ts"] },
+      verifyGruen: { nachbessern: [false, true, true] }, // 1. Fix lässt verify rot, 2. und 3. grün
+      runden: [{ architektur: blocker("architektur") }, {}, { architektur: blocker("architektur") }, { architektur: blocker("architektur") }],
+    });
+    // Pass 1 blockiert → Fix 1 (verify rot, zählt als Fix-Runde 1, weil schon ein Pass lief) → Fix 2 (grün) = Runde 2 → Pass 2 blockiert → Hand-off
+    assert.equal(r.ergebnis, "review-festgefahren");
+    assert.deepEqual(r.aufrufe.filter((a) => a.label.startsWith("nachbessern")).map((a) => a.label), ["nachbessern 1/2:#42", "nachbessern 2/2:#42"]);
+  });
+
+  const SKILL_MD = lies(".claude/skills/review-lenses/SKILL.md");
+  const HARNESS_MD = lies("docs/agent-harness.md");
+  const nenntRundeEins = (s: string) =>
+    /Runde 1 ist der erste Lens-Pass/.test(s) && /einmal auf demselben Stand nachgeholt/.test(s) && /Rote `verify`-Fixe davor zählen nicht als Fix-Runde/.test(s);
+
+  test("der Skill trägt die Regel, agent-harness §3a den Kernsatz", () => {
+    assert.ok(nenntRundeEins(SKILL_MD), "review-lenses/SKILL.md");
+    assert.match(HARNESS_MD, /Fixe für ein rotes `verify` vor dem ersten Lens-Pass zählen nicht als Fix-Runde/);
+  });
+
+  test("Prädikat greift (Red-Green)", () => {
+    assert.ok(!nenntRundeEins("Runde 1 hat alle Brillen."));
+    assert.ok(!nenntRundeEins("Runde 1 ist der erste Lens-Pass. Eine fehlende Brille wird einmal auf demselben Stand nachgeholt."), "ohne die verify-Fix-Klausel unvollständig");
+    assert.ok(nenntRundeEins("Runde 1 ist der erste Lens-Pass; eine Brille wird einmal auf demselben Stand nachgeholt. Rote `verify`-Fixe davor zählen nicht als Fix-Runde."));
+  });
+});
+
+describe("Lens-Auftrag mit eingesetzten Werten (#1322 Z16b)", () => {
+  test("der Test-Lens-Prompt trägt Lens-Worktree-Pfad, HEAD, Nummer und Runde statt Platzhalter", async () => {
+    const r = await workflowLauf({ umsetzen: { dateien: ["src/a.ts"], extra: { worktree: "C:/dev/kubernia/.claude/worktrees/kq-42" } } });
+    const testLens = r.lenses.find((a) => a.label === "lens:test-adaequanz:r1")?.prompt ?? "";
+    assert.match(testLens, /git -C C:\/dev\/kubernia\/\.claude\/worktrees\/kq-42 worktree add --detach C:\/dev\/kubernia\/\.claude\/worktrees\/kq-42-lens-r1 h1\b/);
+    assert.match(testLens, /npm --prefix C:\/dev\/kubernia\/\.claude\/worktrees\/kq-42-lens-r1 test/);
+    for (const p of ["<nr>", "<runde>", "<erwarteter HEAD>", "<lens-worktree>", "<worktree>", "<hauptrepo>"]) assert.ok(!testLens.includes(p), `Platzhalter ${p} bleibt nicht stehen`);
+    const req = r.lenses.find((a) => a.label === "lens:requirement-treue:r1")?.prompt ?? "";
+    assert.match(req, /gh issue view 42/, "<nr> auch in den übrigen Lens-Aufträgen eingesetzt");
+  });
+
+  test("Runde 2 trägt ihre Rundennummer im Lens-Worktree-Pfad", async () => {
+    const r = await workflowLauf({
+      umsetzen: { dateien: ["src/a.ts"], extra: { worktree: "/w/kq-42" } },
+      runden: [{ "test-adaequanz": { lens: "test-adaequanz", verdikt: "blockierend", findings: [{ schwere: "blockierend", befund: "B", ort: "x", begruendung: "y" }] } }, {}],
+      nachbessern: { deltaPfad: "/tmp/d.patch", deltaDateien: ["src/a.ts"] },
+    });
+    const r2 = r.lenses.find((a) => a.label === "lens:test-adaequanz:r2")?.prompt ?? "";
+    assert.match(r2, /\/w\/kq-42-lens-r2 h2\b/);
+  });
+
+  test("relativer Worktree-Pfad: Nummer und Runde sind eingesetzt, <hauptrepo> bleibt als Platzhalter", async () => {
+    const r = await workflowLauf({ umsetzen: { dateien: ["src/a.ts"], extra: { worktree: ".claude/worktrees/kq-42" } } });
+    const t = r.lenses.find((a) => a.label === "lens:test-adaequanz:r1")?.prompt ?? "";
+    assert.match(t, /<hauptrepo>\/\.claude\/worktrees\/kq-42-lens-r1/);
+    assert.ok(!t.includes("<nr>") && !t.includes("<runde>"));
+  });
+
+  test("die Quelle (LENS_QUELLE) behält die Platzhalter: nur der Spawn setzt ein", () => {
+    const text = lies(".claude/workflows/kubernia-ticket.js");
+    assert.match(text, /kq-<nr>-lens-r<runde>/);
+    assert.match(text, /\$\{lensAuftragFuer\(lens\.auftrag, \{ nr, runde, worktree, head: diff\.head \}\)\}/);
+  });
+});

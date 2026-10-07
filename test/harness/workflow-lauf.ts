@@ -37,6 +37,8 @@ export interface LaufOptionen {
   /** Ergebnisse je Lens-Key nach Aufruf-Reihenfolge (Ausfall, dann Erfolg); ersetzt `runden` für diese Lens. */
   versuche?: Record<string, (Bericht | null)[]>;
   nachbessern?: { deltaPfad?: string; deltaDateien?: string[] };
+  /** verify-Ergebnis (Standard überall grün): nach dem Umsetzen und je Nachbessern-Aufruf in Reihenfolge, der letzte Wert wiederholt sich. */
+  verifyGruen?: { umsetzen?: boolean; nachbessern?: boolean[] };
 }
 
 const ok = (lens: string): Bericht => ({ lens, verdikt: "ok", findings: [] });
@@ -57,6 +59,7 @@ export async function workflowLauf(o: LaufOptionen = {}) {
   const versuch: Record<string, number> = {};
   let runde = 0;
   let head = 1;
+  let fixe = 0;
   const diff = (dateien: string[]) => ({ diffPfad: `/tmp/kq-42-r${runde + 1}.patch`, diffStat: "stat", diffHead: `h${head}`, diffDateien: dateien });
   const agent = (prompt: string, opt: { label: string; agentType?: string; model?: string; effort?: string }) => {
     aufrufe.push({ prompt, label: opt.label, agentType: opt.agentType, model: opt.model, effort: opt.effort });
@@ -68,7 +71,7 @@ export async function workflowLauf(o: LaufOptionen = {}) {
     if (l.startsWith("preflight")) return Promise.resolve(o.preflight ?? { brauchtKlaerung: false });
     if (l.startsWith("umsetzen")) {
       if (umsetzen === "abbrechen") return Promise.resolve({ ergebnis: "abgebrochen", verifyGruen: false, abbruchgrund: "Stub: Test endet nach dem Umsetzen-Prompt" });
-      return Promise.resolve({ ergebnis: "committet", verifyGruen: true, worktree: "/w", branch: "b", zusammenfassung: "z", ...diff(umsetzen.dateien), ...umsetzen.extra });
+      return Promise.resolve({ ergebnis: "committet", verifyGruen: o.verifyGruen?.umsetzen ?? true, worktree: "/w", branch: "b", zusammenfassung: "z", ...diff(umsetzen.dateien), ...umsetzen.extra });
     }
     if (l.startsWith("epic-anlegen") || l.startsWith("dependabot")) return Promise.resolve("erledigt");
     if (l.startsWith("lens:")) {
@@ -82,7 +85,10 @@ export async function workflowLauf(o: LaufOptionen = {}) {
       runde += 1;
       head += 1;
       const dateien = umsetzen === "abbrechen" ? [] : umsetzen.dateien;
-      return Promise.resolve({ verifyGruen: true, zusammenfassung: "fix", ...diff(dateien), ...o.nachbessern });
+      const folge = o.verifyGruen?.nachbessern;
+      const gruen = folge?.length ? folge[Math.min(fixe, folge.length - 1)] : true;
+      fixe += 1;
+      return Promise.resolve({ verifyGruen: gruen, zusammenfassung: "fix", ...diff(dateien), ...o.nachbessern });
     }
     if (l.startsWith("review-festgefahren")) return Promise.resolve("ok");
     if (l.startsWith("pr+merge")) return Promise.resolve({ ergebnis: "gemergt", prNummer: 7 });
