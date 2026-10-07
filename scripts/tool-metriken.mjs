@@ -105,10 +105,12 @@ export function pruefLaeufe(events) {
 function pruefArt(words) {
   const [cmd, ...rest] = words;
   if (cmd === "npm") {
-    const args = rest.filter((w) => !w.startsWith("-"));
-    if (args[0] !== "run" && args[0] !== "run-script") return null;
-    if (VOLL.has(args[1])) return "voll";
-    return args[1] === "verify:changed" ? "gezielt" : null;
+    // npm-Flags mit Wert (`--prefix <pfad>`, `-C <pfad>`) stehen vor `run`: ab dem ersten `run`/`run-script` lesen, Flags danach überspringen.
+    const i = rest.findIndex((w) => w === "run" || w === "run-script");
+    if (i < 0) return null;
+    const skript = rest.slice(i + 1).find((w) => !w.startsWith("-"));
+    if (VOLL.has(skript)) return "voll";
+    return skript === "verify:changed" ? "gezielt" : null;
   }
   if (cmd === "node" && rest.some((w) => /(?:^|[/\\])verify-lauf\.mjs$/.test(w))) return rest.includes("--changed") ? "gezielt" : "voll";
   return null;

@@ -126,6 +126,14 @@ function sammleTests(dir = join(WURZEL, "test")) {
 }
 
 function ladeEngung() {
+  try {
+    return ladeEngungUngesichert();
+  } catch (e) {
+    return { voll: true, grund: `Slice nicht lesbar: ${String(e?.message ?? e).split("\n")[0]}` };
+  }
+}
+
+function ladeEngungUngesichert() {
   const base = resolveBase(git);
   if (!base) return bestimmeEngung({ base: null });
   const geaendert = liste(git(["diff", "--name-only", "-z", "--diff-filter=d", base]));
@@ -141,8 +149,14 @@ function echterLauf(job) {
   const r = job.art === "npm"
     ? spawnSync(`npm run -s ${job.schritt}`, { ...opt, shell: true })
     : spawnSync(process.execPath, [join(WURZEL, BIN[job.args[0]]), ...job.args.slice(1)], opt);
-  return { status: r.status ?? 1, output: `${r.stdout ?? ""}${r.stderr ?? ""}${r.error ? String(r.error) : ""}` };
+  return { status: statusVon(r), output: `${r.stdout ?? ""}${r.stderr ?? ""}${r.error ? String(r.error) : ""}` };
 }
+
+/** Exit-Code des Laufs: 0 nur, wenn jeder Schritt ok ist (der Beweis für den Short-Circuit der Review-Stufe 0). Pur. */
+export const exitCode = (ergebnisse) => (ergebnisse.every((e) => e.ok) ? 0 : 1);
+
+/** Status eines beendeten Prozesses; ein Abbruch per Signal oder Timeout (`status` null) gilt als rot, nie als grün. Pur. */
+export const statusVon = (r) => r.status ?? 1;
 
 export function main(argv = process.argv.slice(2)) {
   const changed = argv.includes("--changed");
@@ -152,7 +166,7 @@ export function main(argv = process.argv.slice(2)) {
   const hinweis = engung?.voll ? `Lint und Test voll (${engung.grund})` : "";
   const ergebnisse = laufe({ schritte, engung, run: echterLauf });
   console.log(bericht(ergebnisse, { modus: changed ? "changed" : "kompakt", hinweis }));
-  process.exitCode = ergebnisse.every((e) => e.ok) ? 0 : 1;
+  process.exitCode = exitCode(ergebnisse);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

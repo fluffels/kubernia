@@ -13,6 +13,8 @@ const vl = vlModule as {
   bestimmeEngung: (a: { base: string | null; dateien?: string[]; tests?: { pfad: string; text: string }[] }) => Eng;
   kuerze: (t: string, s: string) => string;
   bericht: (e: Erg[], o?: { modus?: string; hinweis?: string }) => string;
+  exitCode: (e: Erg[]) => number;
+  statusVon: (r: { status: number | null }) => number;
   laufe: (a: { schritte: string[]; engung?: Eng | null; run: (j: Job) => { status: number; output: string }; jetzt?: () => number }) => Erg[];
 };
 const pkg = JSON.parse(readFileSync("package.json", "utf8")) as { scripts: Record<string, string> };
@@ -50,6 +52,12 @@ describe("Einengung (--changed)", () => {
     assert.deepEqual(e.related, ["src/x.ts", "docs/foo.md", "scripts/s.mjs"]);
     assert.deepEqual(e.perName, ["test/a.test.ts"]);
   });
+  test("Windows-Pfade mit Rückwärtsschrägstrich in Tests und Dateien werden normalisiert; Selbst-Ausschluss: eine geänderte Testdatei steht nur einmal im Aufruf", () => {
+    const e = vl.bestimmeEngung({ base: "abc", dateien: ["docs\\foo.md", "test/a.test.ts"], tests: [{ pfad: "test\\a.test.ts", text: "foo.md" }, { pfad: "test\\c.test.ts", text: "foo.md" }] });
+    assert.equal(e.voll, false);
+    if (e.voll) return;
+    assert.deepEqual(e.perName, ["test/c.test.ts"]);
+  });
   test("Lint ohne lintbare Datei: übersprungen und ok, nicht rot", () => {
     const e = vl.bestimmeEngung({ base: "abc", dateien: ["docs/foo.md"], tests });
     const r = vl.laufe({ schritte: ["lint"], engung: e, run: () => assert.fail("kein Lint-Lauf erwartet") });
@@ -67,12 +75,12 @@ describe("Einengung (--changed)", () => {
     assert.equal(vl.bestimmeEngung({ base: "abc", dateien: Array.from({ length: 150 }, (_, i) => `src/f${i}.ts`), tests }).voll, false);
   });
   test("laufe gibt Lint und Test die eingeengten Argumente, alles andere läuft voll", () => {
-    const e = vl.bestimmeEngung({ base: "abc", dateien: ["src/x.ts"], tests });
+    const e = vl.bestimmeEngung({ base: "abc", dateien: ["src/x.ts", "docs/foo.md"], tests });
     const jobs: Job[] = [];
     vl.laufe({ schritte: ["typecheck", "lint", "test"], engung: e, run: (j) => (jobs.push(j), { status: 0, output: "" }) });
     assert.deepEqual(jobs[0], { art: "npm", schritt: "typecheck" });
     assert.deepEqual(jobs[1], { art: "node", args: ["eslint", "--max-warnings", "0", "--no-warn-ignored", "src/x.ts"] });
-    assert.deepEqual(jobs[2], { art: "node", args: ["vitest", "related", "--run", "--passWithNoTests", "src/x.ts"] });
+    assert.deepEqual(jobs[2], { art: "node", args: ["vitest", "related", "--run", "--passWithNoTests", "src/x.ts", "docs/foo.md", "test/a.test.ts"] });
   });
 });
 
@@ -116,6 +124,21 @@ describe("Lauf und Bericht", () => {
     assert.equal(k[100], "z149");
     const kurz = Array.from({ length: 100 }, (_, i) => `z${i}`).join("\n");
     assert.equal(vl.kuerze(kurz, "lint"), kurz);
+  });
+  test("Exit-Code: 0 nur wenn alle ok; ein roter Schritt oder ein übersprungener Lint allein: richtig", () => {
+    const ok = { name: "a", ok: true, ms: 0 };
+    assert.equal(vl.exitCode([ok, { ...ok, uebersprungen: true }]), 0);
+    assert.equal(vl.exitCode([ok, { ...ok, ok: false, exit: 1 }]), 1);
+    assert.equal(vl.exitCode([{ ...ok, ok: false }, ok]), 1);
+  });
+  test("Signal-Abbruch oder Timeout (status null) gilt als rot, nie als grün", () => {
+    assert.equal(vl.statusVon({ status: null }), 1);
+    assert.equal(vl.statusVon({ status: 0 }), 0);
+    assert.equal(vl.statusVon({ status: 3 }), 3);
+  });
+  test("Bericht nennt übersprungene Schritte und ihre Info", () => {
+    const b = vl.bericht([{ name: "lint", ok: true, uebersprungen: true, ms: 0, info: "keine Dateien" }]);
+    assert.match(b, /lint übersprungen 0 s \(keine Dateien\)/);
   });
   test("Hinweis (Fail-closed-Grund) steht in der Summenzeile", () => {
     const r = vl.laufe({ schritte: ["test"], run: () => ({ status: 0, output: "" }) });

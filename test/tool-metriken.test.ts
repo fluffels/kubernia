@@ -131,6 +131,10 @@ describe("pruefLaeufe (#1120)", () => {
     ];
     assert.deepEqual(z(evs), { voll: 6, gezielt: 0 });
   });
+  test("zählt npm mit Flag samt Wert vor run (--prefix, -C) und run-script", () => {
+    const evs = [sh("npm --prefix C:/x/kq-1 run verify:kompakt"), sh("npm -C C:/x run-script verify"), sh("npm --prefix C:/x run verify:changed"), sh("npm --prefix C:/x run lint")];
+    assert.deepEqual(z(evs), { voll: 2, gezielt: 1 });
+  });
   test("zählt gezielte Läufe getrennt", () => {
     assert.deepEqual(z([sh("npm run verify:changed"), sh("node scripts/verify-lauf.mjs --changed"), sh("npm run verify", "PowerShell")]), { voll: 1, gezielt: 2 });
   });

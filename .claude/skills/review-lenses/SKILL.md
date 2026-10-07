@@ -155,5 +155,5 @@ Regel-Heimat: [AGENTS.md › Mehr-Perspektiven-Review](../../../AGENTS.md). Dete
 ## Wichtig
 
 - **Short-Circuit ist hart.** Rote Stufe 0 ⇒ **keine** Lens-Pässe. Der Beweis ist der Exit-Code von `npm run verify:kompakt` (≠ 0), nicht ein Bauchgefühl.
-- **Nicht die CI ersetzen.** Die Gates laufen ohnehin vor dem PR lokal (`npm run verify`) und in der CI als Required-Checks nochmal — dieser Skill hängt sich **davor** und ergänzt die LLM-Lenses. **Kein Auto-Merge.**
+- **Nicht die CI ersetzen.** Die Gates laufen ohnehin vor dem PR lokal (das eine `verify:kompakt` der Stufe 0) und in der CI als Required-Checks nochmal — dieser Skill hängt sich **davor** und ergänzt die LLM-Lenses. **Kein Auto-Merge.**
 - **Ablauf-Änderungen** gehören in [docs/agent-harness.md](../../../docs/agent-harness.md) (Harness-Sicht) bzw. [AGENTS.md](../../../AGENTS.md), nicht (nur) in diese Skill-Datei — der Skill ist ein dünner Zeiger auf die Repo-SSOT.
