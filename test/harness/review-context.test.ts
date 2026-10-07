@@ -411,3 +411,60 @@ describe("Erkennung greift wirklich (Red-Green, #1034)", () => {
     assert.ok(zuweisung().length > 0 && zuweisung().length < 1500, "diff-Zuweisungs-Ausschnitt ist unplausibel groß");
   });
 });
+
+// ── Lens-Worktree und Blocker-Maßstab (#1316) ───────────────────────────────────
+describe("Sabotage im eigenen Lens-Worktree, Fixes erst nach allen Berichten (#1316 Z3)", () => {
+  const harness = read("docs/agent-harness.md");
+  const umsetzer = read(".claude/agents/kubernia-umsetzer.md");
+  /** Der Lens-Worktree ist in Definition, Workflow-Hinweis und Skill beschrieben (Pfadmuster, Detach, Entfernen). */
+  const beschreibtLensWorktree = (s: string) => /kq-<nr>-lens-r<runde>/.test(s) && /worktree add --detach/.test(s) && /worktree remove --force/.test(s);
+
+  test("die Lens-Definition verlangt die Sabotage im Lens-Worktree, nie im Feature-Worktree", () => {
+    assert.ok(beschreibtLensWorktree(lensAgent), "kubernia-lens.md beschreibt den Lens-Worktree nicht");
+    assert.match(lensAgent, /nie im Feature-Worktree/);
+    assert.match(lensAgent, /Test-Path/);
+  });
+
+  test("der Workflow-Hinweis der Test-Lens trägt dieselbe Regel, der Cleanup räumt kq-<nr>-lens-* mit auf", () => {
+    assert.ok(beschreibtLensWorktree(workflow), "kubernia-ticket.js beschreibt den Lens-Worktree nicht");
+    assert.match(workflow, /kq-\$\{nr\}-lens-\*/);
+  });
+
+  test("der Skill: keine falsche Aussage zum Workflow mehr, Lens-Worktree und Nachbessern erst nach allen Berichten", () => {
+    assert.ok(!/Der Workflow hat das Problem nicht/.test(lensSkill), "die falsche Aussage steht noch im Skill");
+    assert.ok(beschreibtLensWorktree(lensSkill), "SKILL.md beschreibt den Lens-Worktree nicht");
+    assert.match(lensSkill, /alle Berichte der Runde da sind/);
+  });
+
+  test("Umsetzer und Harness-Doku ziehen mit", () => {
+    assert.match(umsetzer, /kq-<nr>-lens-\*/);
+    assert.ok(!/keine gemeinsame Datei/.test(harness), "agent-harness.md §2.5 behauptet weiter, die Lenses teilten nichts");
+    assert.match(harness, /eigenen Lens-Worktree/);
+  });
+
+  test("der Wächter schlägt an, wenn eine Stelle die Regel verliert", () => {
+    assert.ok(!beschreibtLensWorktree(lensAgent.replace("worktree remove --force", "worktree remove")));
+    assert.ok(!beschreibtLensWorktree(lensAgent.replace("--detach", "")));
+  });
+});
+
+describe("Blocker-Maßstab für Guard-/Parser-Code (#1316 Z4)", () => {
+  const harness = read("docs/agent-harness.md");
+  /** Der Maßstab trennt Verstöße/Regressionen (blockierend) von neuen Umwegen („Bekannte Grenze“). */
+  const hatMassstab = (s: string) => /Blocker-Maßstab/.test(s) && /Regression/.test(s) && /Bekannte Grenze/.test(s) && /Akzeptanzkriterien/.test(s);
+
+  test("Lens-Definition, Harness-Doku und Skill tragen den Maßstab", () => {
+    assert.ok(hatMassstab(lensAgent), "kubernia-lens.md hat den Abschnitt Blocker-Maßstab verloren");
+    assert.ok(hatMassstab(harness), "agent-harness.md §4 hat den Blocker-Maßstab verloren");
+    assert.match(lensSkill, /Blocker-Maßstab/);
+  });
+
+  test("ein neuer Umweg ist kein Blocker: der Text sagt es ausdrücklich", () => {
+    assert.match(lensAgent, /neu gefundener Umweg[\s\S]{0,200}kein Blocker/);
+  });
+
+  test("hatMassstab fällt, wenn ein Kernbegriff fehlt", () => {
+    assert.ok(!hatMassstab(lensAgent.replace(/Regression/g, "Fehler")));
+    assert.ok(!hatMassstab(lensAgent.replace(/Bekannte Grenze/g, "Hinweis")));
+  });
+});

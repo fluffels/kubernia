@@ -33,7 +33,8 @@ export function dispatch(text, repoRoot, guards = { decide, bewertePowerShell, b
   if (tool !== "Bash" && tool !== "PowerShell") return null;
   const worktree = tool === "Bash" ? sicher(() => guards.decide({ cwd, command, repoRoot })) : sicher(() => guards.bewertePowerShell({ command, cwd, repoRoot }));
   if (worktree?.block) return mergeDecisions([worktree]); // deny geht vor ask: ein langsamer gh-Guard darf es nicht aushebeln
-  return mergeDecisions([worktree, sicher(() => guards.bewerteGh(command))]);
+  const shell = tool === "Bash" ? "bash" : "powershell"; // Quote-Dialekt für den gh-Guard (Backslash gegen Backtick)
+  return mergeDecisions([worktree, sicher(() => guards.bewerteGh(command, { shell }))]);
 }
 
 if (istDirektaufruf(import.meta.url)) emit(dispatch(readStdin(), repoRootFromScriptUrl(import.meta.url)));

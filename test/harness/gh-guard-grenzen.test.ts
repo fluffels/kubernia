@@ -162,3 +162,57 @@ describe("Schranken exakt", () => {
     fragt(`echo \\$(${DEL})`);
   });
 });
+
+describe("Wrapper mit Optionen vor $GH (#1316 Z1d)", () => {
+  const GH_VAR = 'GH="gh api"; ';
+  test("Wrapper aus der Tabelle (eine Quelle) mit Optionen und Werten fragen", () => {
+    for (const w of ["timeout 5", "sudo -u x", "nice -n 5", "xargs -I{}", "env A=1", "sudo -u x timeout 5", "time", "stdbuf -o0", "ionice -c 2"]) {
+      fragt(`${GH_VAR}${w} $GH -X DELETE repos/o/r/issues/1`);
+    }
+  });
+
+  test("Gegenproben: Vergleichs- und Testbefehle mit Variablen sind kein Aufruf", () => {
+    laeuft("n=$(gh api repos/o/r/issues --jq length); [ $n -gt 0 ]");
+    laeuft("n=$(gh api repos/o/r/issues --jq length); test $n -gt 0");
+    laeuft(`${GH_VAR}echo timeout 5 $GH`);
+    laeuft(`${GH_VAR}${LESEN} | sort -u $F`);
+  });
+
+  test("Laufzeit: ein langer Wrapper-Strom bleibt linear", () => {
+    assert.equal(schnell(`${"sudo ".repeat(9_000)}${LESEN}`).ask, false);
+    assert.equal(schnell(`${GH_VAR}${"sudo -u x ".repeat(3_000)}$GH -X DELETE x`, 2000).ask, true);
+  });
+});
+
+describe("Daten-Heredoc mit Interpreter-Wörtern im Text (#1316 Z1e)", () => {
+  const DEL_TEXT = "gh api -X DELETE repos/o/r/issues/1";
+  test("Wörter wie bash/eval im Heredoc-Text eines Commit- oder PR-Textes sind kein Konsument", () => {
+    laeuft(`git commit -F - <<'EOF'\nbash -c und eval bei ${DEL_TEXT}\nEOF`);
+    laeuft(`gh pr create --body-file - <<'EOF'\nsource x, sh -c, ${DEL_TEXT}\nEOF`);
+  });
+  test("ein Konsument außerhalb der Daten-Heredocs hält den Body weiter für Befehlstext", () => {
+    fragt(`cat > x.sh <<'EOF'\n${DEL_TEXT}\nEOF\nbash x.sh`);
+    fragt(`cat <<'EOF' | sh\n${DEL_TEXT}\nEOF`);
+    fragt(`bash <<'EOF'\n${DEL_TEXT}\nEOF`);
+    fragt(`source /dev/stdin <<'EOF'\n${DEL_TEXT}\nEOF`);
+    fragt(`git commit -F - <<'EOF'\nbash\nEOF\nbash <<'X'\n${DEL_TEXT}\nX`);
+  });
+});
+
+describe("Absicherung der vier Stellen aus dem Review-Pass (#1316 Z2)", () => {
+  test("doppelte Segmentierung: ohne Tool-Angabe gilt auch die PowerShell-Lesart (Pfad mit Backslash, dann Semikolon) als Trenner", () => {
+    fragt(String.raw`GH="gh api"; echo C:\dev\; $GH -X DELETE repos/o/r/issues/1`);
+  });
+
+  test("der äußere Befehl ist der Kontext der Interpreter-Rekursion: `GH=…` steht draußen, `$GH` im inneren String", () => {
+    fragt(`GH="gh api"; bash -c '$GH -X DELETE repos/o/r/issues/1'`);
+    fragt(`GH="gh api"; echo "$($GH -X DELETE repos/o/r/issues/1)"`);
+  });
+
+  test("`&` als Aufrufoperator an jeder Stelle, `.` nur an Kommandoposition", () => {
+    fragt("GH=gh; foo | & $GH api -X DELETE x");
+    fragt("GH=gh; foo 2>&1 && x; & $GH api -X DELETE x");
+    fragt("GH=gh; . $GH api -X DELETE x");
+    laeuft("jq . $F repos/o/r/issues/1 # gh api");
+  });
+});

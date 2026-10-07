@@ -19,7 +19,9 @@
  *    EXISTIERENDER Ordner ändert den Ort. Nach `;` läuft der nächste Befehl trotz Fehler weiter (der Ort bleibt),
  *    nach `&&` nicht, nach `||` nur bei Fehler.
  *  - `git -C <dir> …` (auch mehrfach, relativ), `git.exe`, `& git`, voller Pfad zu git.
- *  - Einfache Variablen-Zuweisungen mit Literal (`$W = 'C:\wt'`) für `-C $W` und `Set-Location $W`.
+ *  - Einfache Variablen-Zuweisungen mit Literal (`$W = 'C:\wt'`) für `-C $W` und `Set-Location $W`; hinter `&`/`.` löst eine
+ *    bekannte Variable das Kommando auf (`$g='git'; & $g commit`, `$b='bash'; & $b -c '…'`), eine nicht auflösbare wird bei
+ *    `git … commit|push` im Statement fail-closed geblockt.
  *  - Interpreter-Umwege (`iex`, `Invoke-Expression`, `pwsh -c`, `cmd /c`, `bash -c`, `Start-Process`): grobe
  *    Regel gegen den aktuellen Ort, sobald im Statement `git … commit|push` vorkommt.
  *
@@ -42,6 +44,7 @@ export { parseHookInput };
 const ORT_BEFEHLE = new Set(["set-location", "cd", "sl", "chdir", "push-location", "pushd"]);
 const INTERPRETER = new Set([...INTERPRETER_NAMEN.flatMap((n) => [n, `${n}.exe`]), "iex", "invoke-expression", "wsl", "start-process", "start", "invoke-command", "icm"]);
 const GESCHUETZT = new Set(["commit", "push"]);
+const GIT_COMMIT_PUSH = /\bgit(\.exe)?\b[^;|]*\b(commit|push)\b/i;
 
 /** Ein Token: `value` ohne Anführungszeichen, `literal` = komplett aus '…' (keine Variablen-Ersetzung). */
 /** @typedef {{ value: string, literal: boolean }} Token */
@@ -341,8 +344,14 @@ function interpreterUmweg(k, raw, toks, cmd) {
     else if (skript && /^(iex|invoke-expression|pwsh|powershell)$/.test(name)) r = bewertePowerShell({ command: skript, cwd: k.ort, repoRoot: k.repoRoot, deps: k.deps, tiefe: k.tiefe + 1 });
     if (r && (r.block || r.ask)) return r;
   }
-  if (!/\bgit(\.exe)?\b[^;|]*\b(commit|push)\b/i.test(raw)) return null;
+  if (!GIT_COMMIT_PUSH.test(raw)) return null;
   return k.ort === null ? unklar("commit/push") : blockiert(k, k.ort, "commit/push (über einen Interpreter)");
+}
+
+/** `& $x …` mit nicht auflösbarem Kommando: grobe Regel, kommt im Statement git … commit|push vor, gilt es gegen den aktuellen Ort (fail-closed). */
+function dynamischerAufruf(k, raw) {
+  if (!GIT_COMMIT_PUSH.test(raw)) return null;
+  return k.ort === null ? unklar("commit/push") : blockiert(k, k.ort, "commit/push (über ein dynamisches Kommando)");
 }
 
 /** Ein Statement bewerten: Ortswechsel, git oder Interpreter; Ergebnis `{ block }`, `{ ask }` oder null. */
@@ -351,12 +360,15 @@ function statement(k, stmt) {
   if (zuweisung(toks, k.vars)) return null;
   const aufruf = ["&", "."].includes(befehlsname(toks[0].value));
   const kopfTok = aufruf ? toks[1] : toks[0];
-  const cmd = kopfTok ? befehlsname(kopfTok.value) : "";
+  // Hinter `&`/`.` löst eine bekannte Variable das Kommando auf (`$b='bash'; & $b -c …`, `$g='git'; & $g commit`).
+  const kopfWert = aufruf && kopfTok ? expandiere(kopfTok, k.vars) : (kopfTok?.value ?? "");
+  const cmd = befehlsname(kopfWert);
+  if (aufruf && /^[$(@]/.test(kopfWert)) return dynamischerAufruf(k, stmt.raw);
   if (ORT_BEFEHLE.has(cmd.toLowerCase())) {
     ortWechsel(k, toks.slice(aufruf ? 2 : 1));
     return null;
   }
-  if (kopfTok && istGit(kopfTok.value)) return gitStatement(k, toks.slice(aufruf ? 2 : 1));
+  if (kopfTok && istGit(kopfWert)) return gitStatement(k, toks.slice(aufruf ? 2 : 1));
   if (INTERPRETER.has(cmd.toLowerCase()) || INTERPRETER.has(basename(cmd))) return interpreterUmweg(k, stmt.raw, toks.slice(aufruf ? 1 : 0), cmd);
   return null;
 }
