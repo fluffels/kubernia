@@ -48,6 +48,8 @@ Der fachliche Kontext ist bewusst schmal:
 
 Abhängigkeiten zeigen strikt **nach innen** — auf die reine Domäne, die nichts von der Engine weiß.
 
+> **Architekturmodell:** Kontext, Container, Schichten und Hauptmodule liegen zusätzlich als LikeC4-Modell unter [`docs/architektur/`](architektur/spiel.c4) vor (`npm run c4:serve` zeigt es im Browser). `npm run check:c4` gleicht es gegen `scripts/layers.cjs` und `src/` ab ([ADR 0020](adr/0020-architekturmodell-likec4.md)). Die von Hand gezeichneten C4-Diagramme in diesem Kapitel bleiben, bis die Doku-Seite das Modell ausliefert.
+
 ### Schichten – Soll (geprüfte Regel)
 
 Erzeugt aus `SCHICHT_MODELL` in [`scripts/layers.cjs`](../scripts/layers.cjs), derselben Tabelle, aus der `check:arch` seine Verbotsregeln ableitet: jede Richtung, die hier fehlt, ist eine Regel, die rot wird. Phaser/DOM ist die Technik der Präsentation (grün), der Einstieg bootet Phaser; die Persistenz (`store`) gehört zur Anwendung.

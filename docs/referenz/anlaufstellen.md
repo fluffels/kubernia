@@ -46,6 +46,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 |---|---|
 | [README.md](../../README.md) | wenn du wissen willst, was das Spiel ist: Story, Steuerung, Lernpfad |
 | [arc42-architektur.md](../arc42-architektur.md) | für die Gesamtarchitektur (arc42 + C4/Mermaid-Diagramme §5) |
+| [architektur/spiel.c4](../architektur/spiel.c4) | für das LikeC4-Architekturmodell (Kontext, Container, Schichten, Hauptmodule; ansehen mit `npm run c4:serve`, Wächter `check:c4`) |
 | [glossar.md](../glossar.md) | wenn dir ein Begriff fehlt (Hafen ↔ K8s ↔ Code) oder du wissen willst, welcher Context in welchem Verzeichnis gilt |
 | [repo-landkarte.md](repo-landkarte.md) | wenn du ein Subsystem suchst: welche Schicht, welches Tiefendoc |
 | [module/sim.md](../module/sim.md) | beim Arbeiten am Cluster-Simulator (`src/sim/*`) |
@@ -74,6 +75,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 |---|---|
 | [agent-harness.md](../agent-harness.md) | wenn du verstehen willst, wie und warum der Agenten-Harness funktioniert (inkl. Langfassung der harten Regeln) |
 | [agent-harness-faq.md](../agent-harness-faq.md) | wenn du über eine Harness-Falle stolperst (Worktrees unter Windows, Hooks, Gates) |
+| [harness-transfer.md](../harness-transfer.md) | wenn du den Harness in ein fremdes Bestands-Repo übertragen willst: Reifestufen, Werkzeug je Sprache, docs-gen übernehmen |
 | [model-routing.md](../model-routing.md) | wenn ein neues Modell erscheint oder du wissen willst, welche Phase auf welchem Modell läuft |
 | [langfuse-hook-patch.md](../langfuse-hook-patch.md) | wenn das Plugin `langfuse-observability` aktualisiert wird, der Hook-Patch geprüft oder portiert werden muss oder Langfuse Turns vermisst |
 
