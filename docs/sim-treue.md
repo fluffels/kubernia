@@ -16,7 +16,7 @@ Die Matrix liegt unter `docs/`, nicht unter `src/`: sie wird nie ausgeliefert (k
 
 ```json
 {"befehl":"get","ziel":"pods","verhalten":"gleich","ausgabe":"gleich"}
-{"befehl":"get","flag":"-o","verhalten":"abweichend","ausgabe":"abweichend","tickets":[1444],"grenzen":["keine-ausgabeformate"]}
+{"befehl":"get","flag":"-A","verhalten":"abweichend","ausgabe":"abweichend","tickets":[1430],"grenzen":["ein-namespace"]}
 ```
 
 - `befehl` plus genau eins von `ziel` (Ressourcenart, Unterverb, bei `apply` das `kind`) oder `flag` (Flag oder Aufrufform).
@@ -54,4 +54,4 @@ Die Matrix liegt unter `docs/`, nicht unter `src/`: sie wird nie ausgeliefert (k
 
 ## Bekannte Lücken (Stand 2026-10-08)
 
-Ressourcenarten, die echtes `kubectl` kennt und der Simulator nicht (z.B. `get namespaces`, `describe deployment`, `get all`), stehen nicht in der Matrix: sie ist die Karte des Vorhandenen. Die Lücken sammeln die Sim-Tickets (Namespaces: #1430).
+Ressourcenarten, die echtes `kubectl` kennt und der Simulator nicht (z.B. `get namespaces`, `describe deployment`), stehen nicht in der Matrix: sie ist die Karte des Vorhandenen. Die Lücken sammeln die Sim-Tickets (Namespaces: #1430).
