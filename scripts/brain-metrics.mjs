@@ -34,6 +34,25 @@ export function isBrainPage(path) {
   return /(^|\/)docs\/(.+\/)?[^/]+\.md$/i.test(p);
 }
 
+/** Globale git-Optionen mit eigenem Wert (`git -C <dir> show …`). */
+const GIT_GLOBAL_MIT_WERT = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"]);
+
+/**
+ * Brain-Pfade, die `git [globale Optionen] show <rev>:<pfad>` liest (#1331): der Präfix `<rev>:` fällt weg, damit
+ * `isBrainPage` greift (`origin/main:docs/x.md` hat vor `docs/` ein `:` statt `/`). Andere git-Unterbefehle: leer.
+ * Ein Windows-Laufwerkspfad (`C:\x`, `C:/x`) ist kein `<rev>:`.
+ */
+function gitShowBrainPfade(args) {
+  let i = 0;
+  while (i < args.length && args[i].startsWith("-")) i += GIT_GLOBAL_MIT_WERT.has(args[i]) ? 2 : 1;
+  if (args[i] !== "show") return [];
+  return args
+    .slice(i + 1)
+    .filter((a) => !a.startsWith("-"))
+    .map((a) => /^(?![A-Za-z]:[\\/])[^:\s]+:(.+)$/.exec(a)?.[1])
+    .filter((p) => p && isBrainPage(p));
+}
+
 /** Kommandos als Wortlisten: Bash über den AST, sonst (und für PowerShell) grobe Trennung. */
 function commandsOf(command, tool) {
   if (tool === "Bash") {
@@ -64,6 +83,7 @@ export function classifyShell(command, tool = "Bash") {
       (name === "get-childitem" && args.some((a) => /^-r(ecurse)?$/i.test(a)));
     if (isSearch) search = true;
     else if (READ_CMDS.has(name)) brainReads.push(...args.filter((a) => isBrainPage(a)));
+    else if (name === "git") brainReads.push(...gitShowBrainPfade(args));
   }
   return { brainReads, search };
 }
@@ -169,6 +189,8 @@ export function pflegeMarker(ev) {
 /**
  * Pflege-Intervalle je Agent aus den Markern: Start öffnet, Ende schließt. Ein zweiter Start bei offenem
  * Intervall ersetzt den alten; Ende ohne Start und ein bis zum Schluss offener Start zählen als `unpaired`.
+ * Modulgrenze (#1331): Kommt eine zweite Marker-Phase neben „Pflege“ dazu, wandern Marker-Erkennung und Intervalle in ein
+ * eigenes Modul (dann teilen sich beide `commandsOf`); bis dahin bleibt es hier, weil es die einzige Phase ist.
  */
 export function pflegeIntervals(events) {
   const sorted = [...events].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));

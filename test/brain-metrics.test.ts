@@ -94,6 +94,22 @@ EOF`).brainReads.length, 1, "Ersetzung im Heredoc");
     assert.equal(classifyShell('Get-Content "docs/a.md"', "PowerShell").brainReads.length, 1);
     assert.deepEqual(classifyShell("$t = (Get-Date)", "PowerShell"), { brainReads: [], search: false });
   });
+  test("git show <rev>:docs/x.md zählt als Lesezugriff, mit globalen Optionen und Env-Präfix (#1331)", () => {
+    for (const c of [
+      "git show origin/main:docs/a.md",
+      "MSYS_NO_PATHCONV=1 git show origin/main:docs/a.md",
+      "git -C /r/wt show HEAD:docs/module/x.md",
+      "git --no-pager -c core.quotepath=off show origin/main:docs/a.md | head",
+      "git show --stat origin/main:docs/a.md",
+    ])
+      assert.deepEqual(classifyShell(c).brainReads, [c.includes("module") ? "docs/module/x.md" : "docs/a.md"], c);
+    assert.deepEqual(classifyShell("git show origin/main:docs/a.md origin/main:docs/b.md").brainReads, ["docs/a.md", "docs/b.md"]);
+    assert.equal(classifyShell("git show origin/main:docs/a.md", "PowerShell").brainReads.length, 1);
+  });
+  test("git show zählt nicht, wenn es keine Brain-Seite liest (#1331)", () => {
+    for (const c of ["git show HEAD:src/x.ts", "git show --stat", "git show HEAD", "git status docs/a.md", "git log origin/main:docs/a.md", "git show C:/r/docs/a.md", "git show origin/main:docs/a.ts"])
+      assert.deepEqual(classifyShell(c), { brainReads: [], search: false }, c);
+  });
   test("nicht parsebar: Fallback, wirft nicht", () => {
     const r = classifyShell("cat docs/a.md 'offen");
     assert.equal(r.brainReads.length, 1);

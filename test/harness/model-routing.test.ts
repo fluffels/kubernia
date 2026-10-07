@@ -1015,6 +1015,44 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
     assert.match(prompt, /VOR dem abschließenden npm run verify/);
   });
 
+  /** Der kanonische Satz im Kopf von anlaufstellen.md, ohne Backticks (das Workflow-Template trägt keine). */
+  const konvention = () => {
+    const m = /\*\*Lese-Konvention:\*\* erst hier die eine passende Seite wählen\. (.+?offset`\/`limit`\)\.)/.exec(read("docs/referenz/anlaufstellen.md"));
+    assert.ok(m, "kanonischer Satz in anlaufstellen.md fehlt");
+    return m[1].replace(/`/g, "");
+  };
+  const ohneBackticks = (t: string) => t.replace(/`/g, "");
+
+  test("Die Brain-Lese-Konvention steht wortgleich in Umsetzer, Lens und Workflow-Konstante (#1331)", () => {
+    const satz = konvention();
+    assert.match(satz, /Read-Tool.*nie per cat\/sed\/head\/Get-Content/);
+    for (const datei of [UMSETZER, ".claude/agents/kubernia-lens.md", ".claude/workflows/kubernia-ticket.js"])
+      assert.ok(ohneBackticks(read(datei)).includes(satz), `${datei} trägt den Satz aus anlaufstellen.md nicht wortgleich`);
+  });
+
+  test("Red-Green: eine um ein Wort abweichende Kopie fällt auf", () => {
+    const satz = konvention();
+    for (const datei of [UMSETZER, ".claude/agents/kubernia-lens.md", ".claude/workflows/kubernia-ticket.js"]) {
+      const drift = ohneBackticks(read(datei)).replace(satz, satz.replace("nie per", "nicht per"));
+      assert.ok(!drift.includes(satz), datei);
+    }
+  });
+
+  test("Der Merge-Prompt des Workflows verlangt gebündelte Befunde (#1331)", async () => {
+    const { aufrufe } = await workflowLauf({ runden: [{ architektur: { lens: "architektur", verdikt: "ok", findings: [], ausserhalbScope: ["Spiel-Befund A", "Spiel-Befund B"] } }] });
+    const prompt = aufrufe.find((a) => a.label === "cleanup:#42")?.prompt ?? "";
+    assert.match(prompt, /GEBÜNDELT/);
+    assert.match(prompt, /Teil-Akzeptanzkriterien/);
+    assert.match(prompt, /Kleinkram eine Zeile in einem passenden offenen Ticket/);
+  });
+
+  test("Planer prüft den Stand des Checkouts gegen origin/main (#1331)", () => {
+    const t = read(".claude/agents/kubernia-planner.md");
+    assert.match(t, /git diff --name-only HEAD origin\/main/);
+    assert.match(t, /MSYS_NO_PATHCONV=1 git show origin\/main:<pfad>/);
+    assert.match(read(".claude/skills/kubernia/SKILL.md"), /git diff --quiet HEAD origin\/main -- \.claude\/agents \.claude\/skills AGENTS\.md/);
+  });
+
   test("Brain-Lese-Konvention steht in Umsetzer, Lens, Umsetzen- und Nachbessern-Prompt", async () => {
     for (const datei of [UMSETZER, ".claude/agents/kubernia-lens.md"]) {
       const t = read(datei);

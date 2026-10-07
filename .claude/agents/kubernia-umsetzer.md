@@ -11,7 +11,7 @@ skills: [review-lenses]
 
 Du setzt **ein** kubernia-Ticket um, das der Aufrufer (Skill `kubernia` im Hauptchat) schon geclaimt, geplant und geklärt hat. Der Ablauf steht in `AGENTS.md`, die bereits vollständig in deinem Kontext liegt (nicht erneut mit `Read` öffnen, Regeln punktuell greppen). Diese Datei sagt nur, was als Subagent anders ist.
 
-**Brain-Seiten per `Read` lesen.** Seiten des Projekt-Brain (`docs/**.md`) liest du nach dem Kopf von `docs/referenz/anlaufstellen.md`, also mit dem `Read`-Tool, große Seiten abschnittsweise mit `offset`/`limit`, nie per `cat`/`sed`/`head`/`Get-Content`.
+**Brain-Seiten per `Read` lesen** (Kopf von `docs/referenz/anlaufstellen.md`). Brain-Seiten (`docs/**.md`) liest du mit dem `Read`-Tool, nie per `cat`/`sed`/`head`/`Get-Content`; große Seiten nur abschnittsweise (Überschrift greppen, dann `Read` mit `offset`/`limit`).
 
 > Modell und Effort stehen nur hier im Frontmatter (`sonnet`, `medium`), damit die Umsetzung nicht am Modell der Session hängt. Der Spawn setzt kein `model:`. Matrix: [docs/model-routing.md](../../docs/model-routing.md).
 
@@ -34,7 +34,7 @@ Der Prompt enthält Nummer, Titel, Body, den Plan des `kubernia-planner` und die
 5. **PR bis zum Merge** nach AGENTS.md § Git, PR und Merge, inklusive § Human-in-the-Loop-Checkpoints (Audit-Kommentar nach dem Merge bei Leitplanken-Diffs) und § Festgefahren-Protokoll.
 6. **Aufräumen** (auch übrig gebliebene Lens-Worktrees `.claude/worktrees/kq-<nr>-lens-*`, per `git worktree list` suchen) nach § „Worktree entfernen auf Windows – zwei Fallen" und verifizieren, dass das Issue geschlossen ist. Blockiert der SubagentStop-Hook (Waisen-Ordner): Ursache nach Falle 1/2 der FAQ beheben, dann die letzte Nachricht erneut im festen Format.
 
-Befunde außerhalb des Tickets nach AGENTS.md § „Harness-Befunde sind Zeilen, keine Tickets" festhalten, nicht inline mitfixen.
+Befunde außerhalb des Tickets nach AGENTS.md § „Harness-Befunde sind Zeilen, keine Tickets" und § Oberste Regel (Spiel-/Inhalts-Befunde gebündelt, nicht 1:1 als Issues) festhalten, nicht inline mitfixen.
 
 ## Du kannst nicht fragen
 
@@ -53,7 +53,7 @@ PR: <url oder ->
 WORKTREE: <pfad oder entfernt>
 ZUSAMMENFASSUNG: <1-3 Zeilen>
 FRAGEN: <nur bei entscheidung-noetig: Frage · Optionen · Empfehlung mit Grund>
-BEFUNDE: <neue Issues, Sammelticket-Zeilen oder ->
+BEFUNDE: <neue (gebündelte) Issues, Sammelticket-Zeilen oder ->
 LERNKANDIDATEN: <max. 3 Punkte, nur projektübergreifendes Wissen, oder ->
 ```
 

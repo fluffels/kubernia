@@ -71,7 +71,7 @@ E-Mail in Dateien, Commits oder Kommentaren (AGENTS.md § Anonymität wahren).`
 const pflegeMarkerBefehl = (nr, art) => `echo "pflege: ${art} #${nr}"`
 
 /** Lese-Konvention für Brain-Seiten (#1205): `Read` statt Shell, damit die Messung und der Kontext stimmen. */
-const BRAIN_LESEN = `Brain-Seiten (docs/**.md) liest du nach dem Kopf von docs/referenz/anlaufstellen.md mit dem Read-Tool, große Seiten abschnittsweise mit offset/limit — nie per cat/sed/head/Get-Content.`
+const BRAIN_LESEN = `Brain-Seiten (docs/**.md) liest du mit dem Read-Tool, nie per cat/sed/head/Get-Content; große Seiten nur abschnittsweise (Überschrift greppen, dann Read mit offset/limit). Quelle: Kopf von docs/referenz/anlaufstellen.md.`
 
 const AUSWAHL_SCHEMA = {
   type: 'object',
@@ -859,7 +859,7 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
   § Tests gegen False Positives absichern (Red-Green).
 - ⭐ Oberste Regel (Stardew-Valley-Größe) — sie steht über allen Konventionen.
   Was auffällt, aber nicht zum Ticket gehört: nicht inline mitfixen, sondern festhalten
-  (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Notfälle ausgenommen), Spiel-/Inhalts-Befund → Issue.
+  (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Notfälle ausgenommen), Spiel-/Inhalts-Befund → gebündeltes Issue.
 - § Doku aktuell halten ist Teil von „fertig" — im SELBEN Branch.
 - § Projekt-Brain pflegen (AGENTS.md § Doku aktuell halten), zum Schluss VOR dem abschließenden npm run verify
   und dem Commit: ist Übertragbares entstanden, nach Wissensart einordnen. Eingerahmt von
@@ -1363,8 +1363,10 @@ ${
   ausserhalbScope.length
     ? `Zusätzlich: der Review hat Punkte AUSSERHALB des Ticket-Scopes gefunden. Ordne jeden
 ein (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets): ein Spiel-/Inhalts-Befund oder
-Notfall (roter main, Security, Datenverlust) wird ein neues Issue (ohne Assignee, passendes
-area:-Label, beide GraphQL-Calls zum Einsortieren — AGENTS.md § Neue Issues sofort ins Board
+Notfall (roter main, Security, Datenverlust) wird ein Issue, zusammengehörige Befunde (gleiches
+Subsystem, gleicher Fehlertyp, gemeinsamer Lösungsweg) GEBÜNDELT zu EINEM Issue mit
+Teil-Akzeptanzkriterien, Kleinkram eine Zeile in einem passenden offenen Ticket (AGENTS.md
+§ Oberste Regel; ohne Assignee, passendes area:-Label, beide GraphQL-Calls zum Einsortieren — AGENTS.md § Neue Issues sofort ins Board
 einsortieren; vorher per gh issue list auf Duplikate prüfen). Alles zum Harness (Defekt,
 Härtung, Kosmetik, Wunsch) wird eine Zeile im ungeclaimten Sammelticket
 „Harness-Härtung (gesammelt)" (fehlt es: anlegen auf der Position laut AGENTS.md, docs/ticket-reihenfolge.md):
