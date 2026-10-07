@@ -33,7 +33,7 @@ import { parseNachweis } from "./slice-override.mjs";
 import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
 import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { ladeSessionDatei, transkriptZeilen } from "./transkript.mjs";
-import { fehlerArten, wiederlesen } from "./tool-metriken.mjs";
+import { fehlerArten, pruefLaeufe, wiederlesen } from "./tool-metriken.mjs";
 
 /** Lenses pro Review-Runde für Läufe ohne Runden-Marker (vor #1265 liefen immer alle drei Brillen, #1012). */
 export const LENSES_PER_ROUND = 3;
@@ -264,6 +264,7 @@ export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles
     out.pflegeOhneDauer = intervals.filter((iv) => iv.from === iv.to).length; // Start und Ende im selben Befehl: gepaart, aber ohne Messwert (#1382)
     out.fehler = fehlerArten(imFenster);
     out.lesen = wiederlesen(imFenster);
+    out.pruef = pruefLaeufe(imFenster);
     // Ein Umsetzer lief, aber kein einziger Marker: die Pflegekosten stecken in „Umsetzung“ (#1379).
     out.pflegeFehlt = intervals.length === 0 && unpaired === 0 && ticket.some((c) => c.subagent?.agentType === "kubernia-umsetzer");
     out.brain = { ...brainMetrics(imFenster, prFiles), rechercheTokens: recherche.reduce((n, r) => n + r.input + r.cacheWrite + r.cacheRead + r.output, 0) };
@@ -597,6 +598,7 @@ function werkzeugZeilen(summary) {
       `Lesen: ${l.reads} Reads (${l.abschnittsweise} abschnittsweise) · Wiederlesen voll ${l.voll.n} (≈ ${fmt(l.voll.tokens)} Tok) · gezielt ${l.gezielt.n} (≈ ${fmt(l.gezielt.tokens)} Tok)${top}`,
     );
   }
+  if (summary.pruef) out.push(`Prüfläufe: verify voll ${summary.pruef.voll} · gezielt ${summary.pruef.gezielt}`);
   if (summary.pflegeFehlt) out.push("⚠️ Kein Pflege-Marker — Pflegekosten stecken in „Umsetzung“.");
   return out;
 }

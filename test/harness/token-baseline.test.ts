@@ -1194,6 +1194,8 @@ describe("token-baseline: Nachlauf, Tool-Fehler, Lesen, fehlender Marker (#1379)
       { ts: "2026-09-29T14:00:00Z", tool: "Bash", input: {}, resultChars: 0, agent: "u", fehler: "Blocked: nach dem Merge" } as PEv,
       rd("2026-09-29T11:02:00Z", "/x/a.md"),
       rd("2026-09-29T11:03:00Z", "/x/a.md"),
+      { ts: "2026-09-29T11:04:00Z", tool: "Bash", input: { command: "npm run verify:kompakt" }, resultChars: 0, agent: "u" },
+      { ts: "2026-09-29T14:01:00Z", tool: "Bash", input: { command: "npm run verify" }, resultChars: 0, agent: "u" },
     ];
     const s = sum(calls, events);
     assert.deepEqual(s.fehler, { guard: 1, exit: 1 });
@@ -1201,7 +1203,8 @@ describe("token-baseline: Nachlauf, Tool-Fehler, Lesen, fehlender Marker (#1379)
     const md = m.renderMarkdown(s);
     assert.match(md, /Tool-Fehler: Hook 0 · Guard 1 · Permission 0 · zu groß 0 · sonst 0 · Exit≠0 1 \(kein Fehlersignal\)/);
     assert.match(md, /Lesen: 2 Reads \(0 abschnittsweise\) · Wiederlesen voll 1 \(≈ 100 Tok\) · gezielt 0 \(≈ 0 Tok\) · Top a\.md 1×/);
-    assert.doesNotMatch(m.renderMarkdown(sum(calls)), /Tool-Fehler:|Lesen:/);
+    assert.match(md, /Prüfläufe: verify voll 1 · gezielt 0/);
+    assert.doesNotMatch(m.renderMarkdown(sum(calls)), /Tool-Fehler:|Lesen:|Prüfläufe:/);
   });
 
   test("Warnzeile: Umsetzer ohne jeden Marker; nicht mit Markern, nicht ohne Umsetzer, nicht ohne Events", () => {

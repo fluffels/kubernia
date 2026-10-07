@@ -888,7 +888,7 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
 - Deutsch mit echten Umlauten in Texten und Kommentaren; Dateinamen bleiben ASCII.
 - ${BRAIN_LESEN}
 
-Gates: vor dem ersten verify git fetch origin, bei weiterem origin/main git merge origin/main (Konflikte jetzt lösen; ein Merge nach der Konvergenz kostet Delta-Lens und neuen Nachweis). npm run verify muss grün sein (Exit 0). Läuft es rot und du kannst es nicht
+Gates: vor dem ersten verify git fetch origin, bei weiterem origin/main git merge origin/main (Konflikte jetzt lösen; ein Merge nach der Konvergenz kostet Delta-Lens und neuen Nachweis). Beim Iterieren gezielt prüfen (AGENTS.md § Zwei-Stufen-Prüfung), zum Schluss genau einmal npm run verify:kompakt; es muss grün sein (Exit 0). Läuft es rot und du kannst es nicht
 beheben, gib verifyGruen=false mit der Fehlerausgabe zurück statt es zu verschleiern
 oder ein Gate abzuschwächen (AGENTS.md § Kein Grün-durch-Aufweichen).
 Sichtbare Änderungen zusätzlich im Browser verifizieren.
@@ -1150,7 +1150,7 @@ ${hinweise.map((f) => `- [${f.ort}] ${f.befund}`).join('\n')}
 `
     : ''
 }
-Danach npm run verify erneut, bis grün. Bleib im Ticket-Scope: Punkte, die ein eigenes
+Beim Fixen gezielt prüfen, danach einmal npm run verify:kompakt; rot: fixen, erneut. Bleib im Ticket-Scope: Punkte, die ein eigenes
 Ticket brauchen, nicht inline mitfixen (⭐ oberste Regel). Committe mit (#${nr}).
 ${BRAIN_LESEN}
 Melde verifyGruen und was du behoben bzw. bewusst liegen gelassen hast (mit Grund).
@@ -1301,7 +1301,7 @@ head läge sonst nicht mehr im PR) und kein KQ-Review-Override als Workaround.
 Roter Check: ${merge.roterCheck || 'unbekannt'}
 ${merge.fehlerAusgabe || '(keine Ausgabe übergeben — selbst am PR nachsehen)'}
 
-AUFGABE — die Ursache auf DEMSELBEN Branch beheben, pushen und die CI erneut abwarten.
+AUFGABE — die Ursache auf DEMSELBEN Branch beheben, pushen (lokal nur den roten Check gezielt prüfen, die CI ist der volle Lauf) und die CI erneut abwarten.
 Kein Gate abschwächen, um grün zu werden (AGENTS.md § Kein Grün-durch-Aufweichen) — nur bei
 einer echten, intendierten Gate-Änderung. Behebe die Ursache, nicht das Symptom.
 

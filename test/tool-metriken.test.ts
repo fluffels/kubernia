@@ -10,6 +10,7 @@ const tm = tmModule as {
   fehlerArt: (t?: string | null) => string | null;
   fehlerArten: (e: Ev[]) => Record<string, number>;
   wiederlesen: (e: Ev[]) => Lesen;
+  pruefLaeufe: (e: Ev[]) => { voll: number; gezielt: number };
 };
 
 const rd = (file: string, extra: Record<string, unknown> = {}, agent = "a", chars = 4000, fehler: string | null = null): Ev => ({
@@ -113,5 +114,50 @@ describe("wiederlesen", () => {
     const evs: Ev[] = [];
     for (let i = 0; i < 7; i++) evs.push(rd(`/d/f${i}.md`), rd(`/d/f${i}.md`));
     assert.equal(tm.wiederlesen(evs).top.length, 5);
+  });
+});
+
+describe("pruefLaeufe (#1120)", () => {
+  const z = tm.pruefLaeufe;
+  const sh = (command: string, tool = "Bash", fehler: string | null = null): Ev => ({ tool, input: { command }, resultChars: 0, agent: "u", fehler });
+  test("zählt volle Läufe in jeder Befehlsform", () => {
+    const evs = [
+      sh("npm run verify"),
+      sh("cd x && npm run verify:kompakt 2>&1 | tail -5"),
+      sh("npm run -s verify"),
+      sh("npm run verify:full"),
+      sh("npm run verify", "PowerShell"),
+      sh("node scripts/verify-lauf.mjs"),
+    ];
+    assert.deepEqual(z(evs), { voll: 6, gezielt: 0 });
+  });
+  test("zählt npm mit Flag samt Wert vor run (--prefix, -C) und run-script", () => {
+    const evs = [sh("npm --prefix C:/x/kq-1 run verify:kompakt"), sh("npm -C C:/x run-script verify"), sh("npm --prefix C:/x run verify:changed"), sh("npm --prefix C:/x run lint")];
+    assert.deepEqual(z(evs), { voll: 2, gezielt: 1 });
+  });
+  test("zählt gezielte Läufe getrennt", () => {
+    assert.deepEqual(z([sh("npm run verify:changed"), sh("node scripts/verify-lauf.mjs --changed"), sh("npm run verify", "PowerShell")]), { voll: 1, gezielt: 2 });
+  });
+  test("Negativ: verify:bundle, Text in Commit/echo und blockierte Events zählen nicht", () => {
+    const evs = [
+      sh("npm run verify:bundle"),
+      sh('git commit -m "npm run verify grün"'),
+      sh('echo "npm run verify"'),
+      sh("npm run verify", "Bash", "Blocked: sleep"),
+      sh("npm run verify", "Bash", "PreToolUse:Bash hook error: [x]: Blocked"),
+      sh("npm run verify", "Bash", "Permission to use Bash has been denied"),
+      sh("npm run lint"),
+      sh("npm ci"),
+      sh("npm --prefix C:/x/kq-1 ci"),
+      sh("npm test"),
+      sh("npm install"),
+      sh("npm verify"),
+      sh("npm --prefix verify ci"),
+      { tool: "Read", input: { file_path: "npm run verify" }, resultChars: 0 },
+    ];
+    assert.deepEqual(z(evs), { voll: 0, gezielt: 0 });
+  });
+  test("Ein roter Lauf (Exit code 1) zählt", () => {
+    assert.deepEqual(z([sh("npm run verify", "Bash", "Exit code 1\nfoo")]), { voll: 1, gezielt: 0 });
   });
 });
