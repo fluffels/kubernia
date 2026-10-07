@@ -1,6 +1,7 @@
 import type { Sim } from "../../sim";
 import { pick, rnd, NAMES, ensureDeployment, ensureBarePodAdmission } from "./shared";
 import type { DrillTask } from "./shared";
+import { getManifest } from "../manifest-lib";
 
 export const KUBECTL_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
   "k-get-nodes": () => ({ text: "Zeig die Nodes des Clusters.", accept: [/^kubectl\s+get\s+(nodes|node|no)$/], solution: "kubectl get nodes", hint: "kubectl get &lt;ressourcentyp&gt;", why: "get listet Ressourcen eines Typs – Muster: kubectl get &lt;ressourcentyp&gt;, hier die Nodes (Server) des Clusters." }),
@@ -37,7 +38,7 @@ export const KUBECTL_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     return { text: "Stelle einen Service vor <code>" + d.name + "</code>, Port <b>" + port + "</b>.", accept: [new RegExp("^kubectl\\s+expose\\s+deployment\\s+" + d.name + "\\s+--port[=\\s]" + port + "$")], solution: "kubectl expose deployment " + d.name + " --port=" + port, hint: "Muster: kubectl expose deployment &lt;name&gt; --port=&lt;port&gt;", why: "expose stellt einen Service als feste Adresse vor das Deployment; --port ist der Port, unter dem er erreichbar ist – Muster: kubectl expose deployment &lt;name&gt; --port=&lt;port&gt;." };
   },
   "k-apply": sim => {
-    sim.files["uebung.yaml"] = "# Übungs-Manifest\nkind: Deployment\n…";
+    sim.files["uebung.yaml"] = getManifest("deployment-uebung");
     sim.applyEffects["uebung.yaml"] = { deployment: { name: "uebung", image: "nginx", replicas: 1 } };
     if (sim.deployments.some(d => d.name === "uebung")) sim.exec("kubectl delete deployment uebung");
     return { text: "Wende die Datei <code>uebung.yaml</code> deklarativ an.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+uebung\.yaml$/], solution: "kubectl apply --filename uebung.yaml", hint: "kubectl apply --filename &lt;datei&gt;", why: "apply gleicht den Cluster an die Datei an – deklarativ und idempotent (zweimal apply schadet nicht). Muster: kubectl apply --filename &lt;datei&gt;." };

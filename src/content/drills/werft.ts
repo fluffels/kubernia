@@ -1,5 +1,5 @@
 ﻿import type { Sim } from "../../sim";
-import { ensureDockerfile, ensureBarePodAdmission, freeWerftName } from "./shared";
+import { ensureDockerfile, ensureBarePodAdmission, freeWerftName, renamedManifest } from "./shared";
 import type { DrillTask } from "./shared";
 
 export const WERFT_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
@@ -13,7 +13,7 @@ export const WERFT_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     ensureDockerfile(sim);
     const name = freeWerftName(sim);
     const file = "werft-deploy.yaml";
-    sim.files[file] = "# Deployment für deinen eigenen Dienst\nkind: Deployment\n…";
+    sim.files[file] = renamedManifest("deployment-werft-dienst", { "werft-dienst": name });
     sim.applyEffects[file] = { deployment: { name, image: name + ":1.0", replicas: 1, containerPort: 8080, requireBuiltImage: true } };
     return { text: "Roll dein Deployment <code>" + name + "</code> aus: wende die <code>werft-deploy.yaml</code> an. Das Image ist noch nicht gebaut – schau danach mit <code>kubectl get pods</code>, der Pod landet im <b>ImagePullBackOff</b>.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+werft-deploy\.yaml$/], solution: "kubectl apply --filename werft-deploy.yaml", hint: "kubectl apply --filename &lt;datei&gt; (die Kurzform -f verdienst du dir durch Nutzung)", why: "Der Cluster startet, was im Manifest steht – auch wenn es das Image noch gar nicht gibt. Dann sucht der kubelet ein Image, das nie vom Stapel lief: <b>ImagePullBackOff</b>. Kein fremdes Image fehlt, DEINS fehlt. Heilung: erst <code>docker build</code>, dann <code>kubectl rollout restart</code>. Muster: kubectl apply --filename &lt;datei&gt;." };
   },
@@ -32,7 +32,7 @@ export const WERFT_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
       deployments: [{ name, image: name + ":1.0", replicas: 1, containerPort: 8080 }],
     });
     const file = "werft-service.yaml";
-    sim.files[file] = "# Service für deinen eigenen Dienst\nkind: Service\n…";
+    sim.files[file] = renamedManifest("service-werft-dienst", { "werft-dienst": name });
     sim.applyEffects[file] = { service: { name, port: 80, targetPort: 8080 } };
     return { text: "Dein Dienst <code>" + name + "</code> läuft, ist aber noch nicht erreichbar. Leg den Service davor: wende die <code>werft-service.yaml</code> an (Port 80 → targetPort 8080).", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+werft-service\.yaml$/], solution: "kubectl apply --filename werft-service.yaml", hint: "kubectl apply --filename &lt;datei&gt; (die Kurzform -f verdienst du dir durch Nutzung)", why: "Ein laufender Pod allein ist noch nicht erreichbar. Der Service ist die feste Adresse davor: er nimmt Anfragen auf <code>port</code> 80 an und leitet sie auf <code>targetPort</code> 8080 – genau dahin, wo dein Container lauscht. Stimmt der targetPort nicht mit dem containerPort überein, läuft die Anfrage ins Leere. Muster: kubectl apply --filename &lt;datei&gt;." };
   },

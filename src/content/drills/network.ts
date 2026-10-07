@@ -1,5 +1,5 @@
 import type { Sim } from "../../sim";
-import { pick, rnd, NETPOL_NAMES, NETPOL_APPS, DNS_SVC_NAMES, DNS_EXTERNAL_PAIRS, ensureNetworkPolicy, NETPOL_YAML, EXTERNALNAME_YAML } from "./shared";
+import { pick, rnd, NETPOL_NAMES, NETPOL_APPS, DNS_SVC_NAMES, DNS_EXTERNAL_PAIRS, ensureNetworkPolicy, NETPOL_YAML, renamedManifest } from "./shared";
 import type { DrillTask } from "./shared";
 
 export const NETWORK_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
@@ -34,8 +34,8 @@ export const NETWORK_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     const [name, ext] = pick(DNS_EXTERNAL_PAIRS);
     if (!sim.services.some(s => s.name === name)) {
       const file = "drill-externalname.yaml";
-      sim.files[file] = EXTERNALNAME_YAML;
-      sim.applyEffects[file] = { service: { name, externalName: ext, port: "" } };
+      sim.files[file] = renamedManifest("service-externalname-bank", { "bank-extern": name, "api.bank.example.com": ext });
+      sim.applyEffects[file] = { service: { name, type: "ExternalName", externalName: ext, port: "" } };
       sim.exec("kubectl apply -f " + file);
     }
     return { text: "Löse den <b>ExternalName</b>-Service <code>" + name + "</code> auf – wohin zeigt sein CNAME?", accept: [new RegExp("^nslookup\\s+" + name + "(\\.default(\\.svc\\.cluster\\.local)?)?$")], solution: "nslookup " + name, hint: "Muster: nslookup &lt;service&gt; – hier " + name + ".", why: "Ein ExternalName-Service hat keine eigene ClusterIP – nslookup zeigt stattdessen einen CNAME auf den externen DNS-Namen, auf den er verweist. So sprechen Pods einen Dienst außerhalb des Clusters über den gewohnten Service-Namen an; ändert sich die externe Adresse, fasst man nur den Service an." };
