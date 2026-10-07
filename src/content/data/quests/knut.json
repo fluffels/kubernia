@@ -116,6 +116,28 @@
             "solution": "kubectl get pods",
             "why": "An den durchnummerierten Namen (<code>-0</code>, <code>-1</code>, <code>-2</code>) erkennst du den Kern des StatefulSets: die Identität ist stabil und vorhersehbar, nicht zufällig wie beim Deployment.",
             "hint": "kubectl get pods"
+          },
+          {
+            "id": "t-sts-dns",
+            "text": "Frag den DNS nach dem headless Service: <code>nslookup speicher-datenbank</code>. Statt einer ClusterIP kommen <b>drei</b> Adressen zurück, je Pod eine – ein headless Service hat keine eigene IP.",
+            "accept": [
+              "^nslookup\\s+speicher-datenbank(\\.default(\\.svc\\.cluster\\.local)?)?$"
+            ],
+            "check": {"all":[{"some":"services","where":{"name":"speicher-datenbank","clusterIP":"None"}},{"some":"statefulSets","where":{"name":"speicher-datenbank","serviceName":"speicher-datenbank","pods":{"len":3}}},{"some":"pvcs","where":{"name":"daten-speicher-datenbank-0","status":"Bound"}},{"some":"pvcs","where":{"name":"daten-speicher-datenbank-1","status":"Bound"}},{"some":"pvcs","where":{"name":"daten-speicher-datenbank-2","status":"Bound"}}]},
+            "solution": "nslookup speicher-datenbank",
+            "why": "Eine DB-Replik muss ein <b>bestimmtes</b> Mitglied ansprechen statt eines lastverteilten Ziels – darum liefert der headless Service die einzelnen Pod-Adressen statt einer gemeinsamen IP.",
+            "hint": "nslookup <service> – hier speicher-datenbank. Nur eine 10.96.…-Adresse? Dann ist dein Service nicht headless (clusterIP ist unveränderlich): kubectl delete service speicher-datenbank, danach kubectl apply --filename headless-service.yaml."
+          },
+          {
+            "id": "t-sts-dns-pod",
+            "text": "Jetzt gezielt ein Mitglied: <code>nslookup speicher-datenbank-0.speicher-datenbank</code>. Pod-Name, Punkt, Service-Name ergibt genau <b>eine</b> Adresse – der stabile DNS-Name von Pod -0.",
+            "accept": [
+              "^nslookup\\s+speicher-datenbank-0\\.speicher-datenbank(\\.default(\\.svc\\.cluster\\.local)?)?$"
+            ],
+            "check": {"all":[{"some":"services","where":{"name":"speicher-datenbank","clusterIP":"None"}},{"some":"statefulSets","where":{"name":"speicher-datenbank","serviceName":"speicher-datenbank","pods":{"has":{"name":"speicher-datenbank-0"}}}},{"some":"pvcs","where":{"name":"daten-speicher-datenbank-0","status":"Bound"}}]},
+            "solution": "nslookup speicher-datenbank-0.speicher-datenbank",
+            "why": "Stabil ist der <b>Name</b>: <code>speicher-datenbank-0.speicher-datenbank</code> zeigt immer auf Pod -0, auch nach einem Neustart (die IP dahinter kann sich ändern). So findet sich ein Cluster-Mitglied zuverlässig.",
+            "hint": "nslookup <pod>.<service> – hier speicher-datenbank-0.speicher-datenbank"
           }
         ]
       },
