@@ -41,6 +41,7 @@ Jeweils Geometrie/Kollision + Anleger/Warp + reservierte NPC-/Quest-Trigger-Stan
 | Modul | Inhalt |
 |---|---|
 | `src/core/clock.ts` | Zeit-/Datums-Ableitung für die HUD-Uhr (synchron zum Tag-Nacht-Schleier). |
+| `src/core/assert.ts` | `assertNever(wert, ort)` (#1426): `default`-Zweig vollständiger `switch`es über Unions, Compile-Fehler bei neuer Variante, Wurf mit Ort und gekürzter Variante zur Laufzeit. Für Anzeige-/Befehlslogik; nie im Save-/Validierungspfad (der heilt bzw. sammelt Fehler). |
 | `src/core/coins.ts` | Value Object für Dublonen (#490, Forts. #479): Regel „nicht-negativ + ganzzahlig" + zentrale Arithmetik (Rundung/Multiplikator/Affordability) als `Coins`-Brand + Fabriken/Operationen. |
 | `src/core/rng.ts` | Zufall/Determinismus-SSOT (#492): seedbarer PRNG `mulberry32`/`nextRandom`/`seedGlobalRng` + aus Namen abgeleitete stabile Werte `hashStr`/`hashHex`; ersetzt `Math.random` in `src/sim/**` + `src/content/**`. |
 | `src/core/keybindings.ts` | Umbelegbare Tastatur-Aktionen (#232): diskrete Aktionstasten (Reden/Funkgerät/Logbuch/Album) als frei konfigurierbare Bindings, Phaser-/DOM-frei. |
