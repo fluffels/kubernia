@@ -31,7 +31,7 @@ const NAMEN: Record<string, string> = {
 function voll(): Scenario {
   return {
     deployments: [{ name: "zz-web", image: "web:1", replicas: 1 }],
-    services: [{ name: "zz-svc", type: "ClusterIP", clusterIP: "10.96.0.7", port: 80, selector: "zz-web" } as never],
+    services: [{ name: "zz-svc", type: "ClusterIP", clusterIP: "10.96.0.7", port: 80 }],
     ingresses: [{ name: "zz-ing", className: "nginx", host: "h.de", path: "/", service: "zz-svc", port: 80 }],
     networkPolicies: [{ name: "zz-np", podSelector: "", allowFrom: "" }],
     secrets: [{ name: "zz-secret", keys: ["k"] }],
@@ -90,7 +90,7 @@ describe("namespaced Ressourcen: fremder Namespace → Leermeldung", () => {
     }
     test(`get ${erster(e)} ohne -n listet weiter (Positivkontrolle)`, () => {
       const out = new KQSim(voll()).exec(`kubectl get ${erster(e)}`).output;
-      expect(out ?? "").not.toMatch(/^No resources found/);
+      expect(out ?? "").toContain(NAMEN[erster(e)] ?? "");
     });
   }
 });
