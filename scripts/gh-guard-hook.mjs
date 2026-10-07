@@ -19,8 +19,10 @@
  * (unmaskiertes `$` im `query=`), `--input`/`query=@datei`, ein schreibender Aufruf mit dynamischem Endpunkt, `eval`/
  * `iex`/`Invoke-Expression`, ein dynamisches Kommando (`$CMD`, `& $c`) und ein Interpreter-String mit Variable neben `gh api`.
  *
- * Warum kein `parseBash`: der Hook gilt für Bash UND PowerShell und bleibt shell-neutral. PowerShell hat Backtick-
- * Escapes, Zuweisungen mit Cast (`[array]$r = gh api …`) und `$(…)`/`@(…)` ohne Bash-Entsprechung. Die gemeinsame
+ * Warum kein `parseBash`: der Hook gilt für Bash UND PowerShell mit EINER Implementierung. PowerShell hat Backtick-
+ * Escapes, Zuweisungen mit Cast (`[array]$r = gh api …`) und `$(…)`/`@(…)` ohne Bash-Entsprechung. Der Quote-Dialekt
+ * (Backslash gegen Backtick als Escape) kommt als Parameter `{ shell }` vom Tool (Dispatcher, Direktaufruf); ohne Angabe und für `cmd` gilt
+ * der neutrale (beide). Ein innerer Interpreter-String liest im Dialekt seiner Shell, `$( … )` im äußeren. Die gemeinsame
  * Quote-Zerlegung (`quoteFolge` in `quote-folge.mjs`) ist die EINE Hilfsfunktion für Segmentierung, Variablen-Suche und
  * Wörter. Laufzeit: Befehle mit `gh api` über `LAENGE_MAX` Zeichen und Befehle mit mehr als `STELLEN_MAX` Fundstellen
  * (gh/Interpreter) fragen pauschal, damit die Prüfung nie zum Timeout des Dispatchers wird.
@@ -30,6 +32,9 @@
  *    Queries bleiben ein Segment), kein vollständiges Shell-Parsing. Er fängt die dokumentierten Formen, keine
  *    absichtliche Umgehung (`-X DEL""ETE`, Skripte, andere Interpreter wie `node -e`); die eigentliche Durchsetzung bleibt
  *    PR-Gate + Review.
+ *  - Backtick-Ersetzungen werden nur unter Bash erkannt und nicht geschachtelt; Wrapper vor einer Variablen höchstens mit 4
+ *    Options-/Wertwörtern; neue Umwege (Verschleierung, exotische Shell-Formen) sind Bekannte Grenzen und kein Fehler des Guards
+ *    (Blocker-Maßstab, docs/agent-harness.md §4). Bekannt: `gh api`-Text in Heredocs ohne Daten-Befehl davor bleibt Befehlstext (fragt).
  *  - Er schaut nur auf `gh api`: `gh issue delete` & Co. stehen als eigene `ask`-Regeln in settings.json.
  *  - Fail-open bei kaputtem Payload: der Hook darf nie selbst jeden Aufruf blockieren.
  *
@@ -38,8 +43,17 @@
 import { MAX_INTERPRETER, buildAskOutput, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
 import { quoteFolge } from "./quote-folge.mjs";
 import { INTERPRETER_NAMEN, SHELLS, baseName } from "./shell-tabellen.mjs";
+import { WRAPPER_NAMEN } from "./worktree-guard-tabellen.mjs";
 
 export { buildAskOutput, parseHookInput };
+
+/** Quote-Dialekt der Shell, die den gerade bewerteten Text liest: `"bash"` (Backslash maskiert), `"powershell"` (Backtick
+ *  maskiert, `\` ist ein Pfadzeichen), `"neutral"` (beides; Tool unbekannt). Gesetzt nur von `bewerteIntern` (synchron, mit
+ *  try/finally); alle Zerlegungen laufen über `qf`, damit der Dialekt nicht durch jede Hilfsfunktion gereicht werden muss. */
+let dialekt = "neutral";
+const qf = (text, von = 0, q0 = null, escAussen = true) => quoteFolge(text, von, q0, escAussen, dialekt);
+/** Dialekt des Skripts, das ein Interpreter liest (`bash -c "…"` → bash, `pwsh -Command` → powershell, sonst neutral). */
+const dialektVon = (name) => (SHELLS.has(name) ? "bash" : name === "pwsh" || name === "powershell" ? "powershell" : "neutral");
 
 /** Tools, für die der Hook gilt. */
 export const GEPRUEFTE_TOOLS = ["Bash", "PowerShell"];
@@ -83,7 +97,7 @@ export function segmente(command, escAussen = false) {
   const text = String(command);
   const out = [];
   let cur = "";
-  const folge = quoteFolge(text, 0, null, escAussen);
+  const folge = qf(text, 0, null, escAussen);
   for (let k = 0; k < folge.length; k++) {
     const { i, c, q, masked } = folge[k];
     if (q === null && !masked) {
@@ -109,7 +123,7 @@ export function segmente(command, escAussen = false) {
 
 /** Zeilenfortsetzungen (`\`+Zeilenumbruch in Bash, Backtick+Zeilenumbruch in PowerShell, auch CRLF) außerhalb von `'…'` durch ein Leerzeichen ersetzen. */
 function ohneFortsetzung(text) {
-  const f = quoteFolge(text);
+  const f = qf(text);
   let out = "";
   for (let k = 0; k < f.length; k++) {
     const n = f[k + 1];
@@ -125,7 +139,7 @@ function ohneFortsetzung(text) {
 /** Text derselben Länge, in dem alle Zeichen in Quotes oder hinter einem Escape durch einen Platzhalter ersetzt sind
  *  (ein `gh api` im Argumenttext eines anderen Befehls zählt nicht, ein offenes `gh api` an beliebiger Stelle schon). */
 function ohneQuoteInhalt(text) {
-  return quoteFolge(text, 0, null, false) // Backslash außerhalb von Quotes ist ein Pfadzeichen, kein Escape
+  return qf(text, 0, null, false) // Backslash außerhalb von Quotes ist ein Pfadzeichen, kein Escape
     .map((e) => ((e.q !== null && !(e.c === e.q && !e.masked)) || e.masked ? "\uE000" : e.c)) // Quote-Zeichen selbst bleiben stehen
     .join("");
 }
@@ -134,7 +148,7 @@ function ohneQuoteInhalt(text) {
 function woerter(text) {
   const out = [];
   let cur = "";
-  for (const { c, q, masked } of quoteFolge(text)) {
+  for (const { c, q, masked } of qf(text)) {
     if (q === null && !masked && /\s/.test(c)) {
       if (cur) out.push(cur);
       cur = "";
@@ -146,7 +160,7 @@ function woerter(text) {
 
 /** Wert eines Rohwortes: Anführungszeichen weglassen, maskierte Zeichen übernehmen (auch zusammengesetzte Wörter `'a'"b"c`). */
 function wortWert(roh) {
-  const f = quoteFolge(roh);
+  const f = qf(roh);
   let out = "";
   for (let k = 0; k < f.length; k++) {
     const { c, q, masked } = f[k];
@@ -184,7 +198,7 @@ const interpreterStellen = (maske) => [...maske.matchAll(INTERPRETER_STELLE)].ma
 
 /** Die äußersten `$( … )` außerhalb von `'…'` (die Rekursion in `bewerte` erledigt die tieferen). */
 function ersetzungen(text) {
-  const f = quoteFolge(text);
+  const f = qf(text);
   const out = [];
   for (let k = 0; k < f.length - 1; k++) {
     if (f[k].c !== "$" || f[k].q === "'" || f[k].masked || f[k + 1].c !== "(") continue;
@@ -196,6 +210,23 @@ function ersetzungen(text) {
     }
     out.push(f.slice(k + 2, tiefe === 0 ? j - 1 : j).map((e) => e.c).join(""));
     k = j - 1; // verschachtelte Ersetzungen liefert die Rekursion
+  }
+  if (dialekt === "bash") out.push(...backtickErsetzungen(f));
+  return out;
+}
+
+/** Backtick-Paare (Bash-Befehlsersetzung, auch in `"…"`) außerhalb von `'…'` und ohne `\`-Maskierung; ohne schließenden
+ *  Backtick reicht der Inhalt bis zum Ende. Nur im Bash-Dialekt: in PowerShell ist der Backtick ein Escape. Geschachtelte
+ *  Backticks (`\``) liefert die Rekursion nicht gesondert (bewusste Grenze). */
+function backtickErsetzungen(f) {
+  const offen = (e) => e.c === "`" && e.q !== "'" && !e.masked;
+  const out = [];
+  for (let k = 0; k < f.length; k++) {
+    if (!offen(f[k])) continue;
+    let j = k + 1;
+    while (j < f.length && !offen(f[j])) j++;
+    out.push(f.slice(k + 1, j).map((e) => e.c).join(""));
+    k = j;
   }
   return out;
 }
@@ -229,7 +260,7 @@ function segmentGrund(segment) {
  *  Anführungszeichen steht) und meldet, ob darin ein unmaskiertes `$` außerhalb von `'…'` steht. Maskiert: `\$` (Bash),
  *  `` `$ `` (PowerShell). */
 function dynamischesWort(text, von, quote) {
-  for (const { c, q, masked } of quoteFolge(text, von, quote)) {
+  for (const { c, q, masked } of qf(text, von, quote)) {
     if (masked || q === "'") continue;
     if (c === "$") return true;
     if (q === null && /\s/.test(c)) return false;
@@ -254,7 +285,7 @@ function dynamischerGrund(segment, mutierend) {
   if (/(?:^|\s)(?:-X\s*|--method(?:\s+|=))['"]?\$/.test(segment)) return "die HTTP-Methode von `gh api` ist dynamisch (Variable)";
   if (/(?:^|\s)--input(?:\s|=)/.test(segment) || /query=@/.test(segment)) return "`gh api` liest die Anfrage aus einer Datei (--input / query=@), der Inhalt ist nicht prüfbar";
   const qi = segment.search(/\bquery=/);
-  if (qi >= 0 && dynamischesWort(segment, qi + 6, quoteFolge(segment.slice(0, qi)).ende)) return "die GraphQL-Query von `gh api` ist dynamisch zusammengesetzt (Variable im query=)";
+  if (qi >= 0 && dynamischesWort(segment, qi + 6, qf(segment.slice(0, qi)).ende)) return "die GraphQL-Query von `gh api` ist dynamisch zusammengesetzt (Variable im query=)";
   const ep = endpunkt(segment);
   if (mutierend && ep && /^["']?\$/.test(ep)) return "schreibender `gh api`-Aufruf mit dynamischem Endpunkt (Variable)";
   return null;
@@ -262,7 +293,7 @@ function dynamischerGrund(segment, mutierend) {
 
 const REGEL = "Pre-Flight-Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints, Rückfrage bei der Maintainerin.";
 const frage = (grund, nr = "#1311") => ({ ask: true, reason: `gh-Guard (${nr}): ${grund}. ${REGEL}` });
-const hatVariable = (text) => quoteFolge(text).some(({ c, q, masked }) => c === "$" && q !== "'" && !masked);
+const hatVariable = (text) => qf(text).some(({ c, q, masked }) => c === "$" && q !== "'" && !masked);
 
 /** Ein `gh api`-Aufruf ab seinem Startindex: Außenwirkung (#1204) oder nicht lesbarer Inhalt (#1311), sonst null. */
 function ghApiAufruf(aufruf) {
@@ -282,27 +313,34 @@ function interpreterString(aufruf) {
   if (name === "cmd") {
     const k = rest.findIndex((x) => /^\/c$/i.test(x));
     const roh = rest.slice(k + 1).join(" ");
-    return k >= 0 && roh ? { roh, wert: wortWert(roh) } : null;
+    return k >= 0 && roh ? { roh, wert: wortWert(roh), dialekt: dialektVon(name) } : null;
   }
   const option = SHELLS.has(name) ? /^-[A-Za-z]*c[A-Za-z]*$/ : /^-(?:c|command)$/i;
   if (!SHELLS.has(name) && name !== "pwsh" && name !== "powershell") return null;
   const k = rest.findIndex((x) => option.test(x));
   const v = k < 0 ? undefined : rest[k + 1] === "--" ? rest[k + 2] : rest[k + 1];
-  return v === undefined ? null : { roh: v, wert: wortWert(v) };
+  return v === undefined ? null : { roh: v, wert: wortWert(v), dialekt: dialektVon(name) };
 }
 
-/** Kommandoposition am Segmentanfang: Klammern, `!`, Kontrollwörter (`then`, `do`, `try`, `if (…)` …) und Wrapper davor. */
-const KOMMANDOPOS = String.raw`^(?:[\s(!{]|(?:then|do|else|elif|if|while|until|time|env|exec|command|nohup|sudo|doas|xargs|try|catch|finally|ForEach-Object)\s|(?:if|elseif|foreach|while|switch)\s*\([^)]*\))*`;
+/** Kommandoposition am Segmentanfang: Klammern, `!`, Kontrollwörter (`then`, `do`, `try`, `if (…)` …) davor; Wrapper streift `ohneWrapper` vorher ab. */
+const KOMMANDOPOS = String.raw`^(?:[\s(!{]|(?:then|do|else|elif|if|while|until|try|catch|finally|ForEach-Object)\s|(?:if|elseif|foreach|while|switch)\s*\([^)]*\))*`;
+
+const WRAPPER_ALT = [...WRAPPER_NAMEN].join("|");
+const WRAPPER_VOR_VARIABLE = new RegExp(String.raw`(?<=^|[\s(!{])(?:${WRAPPER_ALT})(?:\s+[^\s$;|&()]+){0,4}(?=\s+(?:\$|(?:${WRAPPER_ALT})\s))`, "g");
+/** Streicht Wrapper (Namen aus `WRAPPER_NAMEN`, eine Quelle mit dem Worktree-Guard) samt bis zu 4 Options-/Wertwörtern, wenn danach eine
+ *  Variable oder ein weiterer Wrapper folgt (`timeout 5 $GH`, `sudo -u x $GH`, `nice -n 5 $GH`). Linear: jede Fundstelle liest höchstens 5 Wörter. */
+const ohneWrapper = (maske) => maske.replace(WRAPPER_VOR_VARIABLE, "");
 
 /** Dynamisches Kommando neben `gh api`: `$c api …` (die Variable steht für `gh`) an beliebiger Stelle, `& $c`/`. $c` (Aufrufoperator)
  *  und `$X <Argumente>` an Kommandoposition, wenn `X` im Befehl einen String oder eine Ersetzung mit `gh` bekommt (`GH="gh api"; $GH -X …`,
  *  `x=$(…gh…); $x`). Ein bloßes PowerShell-`$x` (`$items | …`, `$r.title`) führt nichts aus und zählt nicht; `jq . $F` auch nicht. */
 function dynamischesKommando(segment, maske, command) {
+  const frei = ohneWrapper(maske);
   const quote = String.raw`["']?`;
   const wort = String.raw`(?:\$\{?\w+\}?|\$\([^)]*\)|\`[^\`]*\`)`; // Variable, Ersetzung oder Backtick als Kommandowort
   if (new RegExp(String.raw`(^|[\s(!{&.])${quote}${wort}${quote}\s+${quote}api${quote}(?=\s|$)`).test(segment)) return true;
-  if (/(?:^|[^&>\w])&\s*\$\{?\w+/.test(maske) || new RegExp(String.raw`${KOMMANDOPOS}\.\s*\$\{?\w+`).test(maske)) return true; // `&` an jeder Stelle, `.` nur an Kommandoposition (`jq . $F`)
-  const variable = new RegExp(String.raw`${KOMMANDOPOS}\$\{?(\w+)\}?(?=[\s)}]|$)`).exec(maske);
+  if (/(?:^|[^&>\w])&\s*\$\{?\w+/.test(maske) || new RegExp(String.raw`${KOMMANDOPOS}\.\s*\$\{?\w+`).test(frei)) return true; // `&` an jeder Stelle, `.` nur an Kommandoposition (`jq . $F`)
+  const variable = new RegExp(String.raw`${KOMMANDOPOS}\$\{?(\w+)\}?(?=[\s)}]|$)`).exec(frei);
   return variable !== null && new RegExp(String.raw`\b${variable[1]}\s*=\s*(?:['"][^'"]*\bgh\b|\$\([^)]*\bgh\b|\`[^\`]*\bgh\b)`).test(command);
 }
 
@@ -317,7 +355,7 @@ function umweg(segment, maske, tiefe, command) {
     const ip = interpreterString(segment.slice(start));
     if (!ip) continue;
     if (hatVariable(ip.roh)) return frage("Interpreter-String mit Variable neben `gh api`: der Aufruf ist nicht prüfbar");
-    const r = bewerte(ip.wert, tiefe + 1, command);
+    const r = bewerteIntern(ip.wert, tiefe + 1, command, ip.dialekt);
     if (r.ask) return r;
   }
   return null;
@@ -327,7 +365,7 @@ function umweg(segment, maske, tiefe, command) {
 function ersetzung(segment, tiefe, command) {
   if (tiefe >= MAX_INTERPRETER) return null;
   for (const inner of ersetzungen(segment)) {
-    const r = bewerte(inner, tiefe + 1, command);
+    const r = bewerteIntern(inner, tiefe + 1, command, dialekt);
     if (r.ask) return r;
   }
   return null;
@@ -352,10 +390,11 @@ const DATEN_BEFEHL = /(?:^|[\s("'])(?:cat|tee|git\s+commit|gh\s+(?:pr|issue|rele
 
 /** Entfernt die Bodies von Heredocs mit gequotetem Begrenzer (`<<'EOF'`: reiner Text), aber nur in der sicheren Form: der Befehl
  *  davor ist ein Daten-Befehl (`cat`, `tee`, `git commit`, `gh pr/issue …`), hinter dem Begrenzer steht nichts (außer `)`/`"`), und
- *  im ganzen Befehl kommt außerhalb von Quotes weder ein Interpreter noch `eval`/`source` vor (`cat > x.sh <<'EOF' … EOF; bash x.sh`).
+ *  im Rest des Befehls (ohne diese Bodies) außerhalb von Quotes weder ein Interpreter noch `eval`/`source` vorkommt (`cat > x.sh <<'EOF' … EOF; bash x.sh`);
+ *  Wörter wie `bash` im Heredoc-Text selbst zählen nicht.
  *  Commit-/PR-Texte, die `gh api` nur erwähnen, fragen so nicht; im Zweifel bleibt der Body Befehlstext. */
 function ohneDatenHeredocs(text) {
-  if (!text.includes("<<") || KONSUMENT.test(ohneQuoteInhalt(text))) return text;
+  if (!text.includes("<<")) return text;
   let out = "";
   let pos = 0;
   for (const m of text.matchAll(HEREDOC)) {
@@ -370,29 +409,41 @@ function ohneDatenHeredocs(text) {
     out += text.slice(pos, zeilenEnde + 1);
     pos = zeilenEnde + 1 + ende.index + ende[0].length;
   }
-  return out + text.slice(pos);
+  const rest = out + text.slice(pos);
+  return KONSUMENT.test(ohneQuoteInhalt(rest)) ? text : rest; // zweiter Durchgang: ein Konsument zählt nur außerhalb der Daten-Heredocs
 }
 
 /** Bewertet einen Befehl: `{ ask: true, reason }` bei einem `gh api` mit Außenwirkung oder nicht prüfbarem Inhalt
  *  (Variablen, `eval`/`iex`, Interpreter-Strings, Ersetzungen), sonst `{ ask: false }`. Nie `deny`. Segmentiert wird
  *  zweimal: mit Bash-Escapes (`\`+Zeilenumbruch ist eine Fortsetzung) und ohne (PowerShell-Pfade `C:\dev\;`); das
  *  strengere Ergebnis gilt. Fortsetzungen werden vor den Textprüfungen zu Leerzeichen. */
-export function bewerte(command, tiefe = 0, kontext = command) {
-  if (!command || typeof command !== "string") return { ask: false };
-  if (!(/\bgh(?:\.exe)?\b/i.test(kontext) && /\bapi\b/.test(kontext))) return { ask: false }; // ohne gh und api kann nichts davon zutreffen
-  if (command.length > LAENGE_MAX) return frage("der Befehl ist für die Textprüfung zu lang");
-  const text = ohneDatenHeredocs(command);
-  for (const roh of new Set([...segmente(text, true), ...segmente(text, false)])) {
-    const r = segmentUrteil(ohneFortsetzung(roh), kontext, tiefe);
-    if (r) return r;
+function bewerteIntern(command, tiefe, kontext, d) {
+  const vorher = dialekt;
+  dialekt = d;
+  try {
+    if (!command || typeof command !== "string") return { ask: false };
+    if (!(/\bgh(?:\.exe)?\b/i.test(kontext) && /\bapi\b/.test(kontext))) return { ask: false }; // ohne gh und api kann nichts davon zutreffen
+    if (command.length > LAENGE_MAX) return frage("der Befehl ist für die Textprüfung zu lang");
+    const text = ohneDatenHeredocs(command);
+    for (const roh of new Set([...segmente(text, true), ...segmente(text, false)])) {
+      const r = segmentUrteil(ohneFortsetzung(roh), kontext, tiefe);
+      if (r) return r;
+    }
+    return { ask: false };
+  } finally {
+    dialekt = vorher;
   }
-  return { ask: false };
+}
+
+/** Öffentlicher Einstieg. `shell`: `"bash"` | `"powershell"` (Tool des Hooks), sonst neutral (beide Escape-Arten). */
+export function bewerte(command, { shell } = {}) {
+  return bewerteIntern(command, 0, command, shell === "bash" || shell === "powershell" ? shell : "neutral");
 }
 
 function main() {
   const { tool, command } = parseHookInput(readStdin());
   if (tool !== undefined && !GEPRUEFTE_TOOLS.includes(tool)) return;
-  emit(mergeDecisions([bewerte(command)]));
+  emit(mergeDecisions([bewerte(command, { shell: tool === "Bash" ? "bash" : tool === "PowerShell" ? "powershell" : undefined })]));
 }
 
 if (istDirektaufruf(import.meta.url)) main();

@@ -590,6 +590,16 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(ask('git "$SUB"', wt), false);
   });
 
+  test("Interpreter über Variable mit git commit/push im Skript-String fragt im Haupt-Checkout (#1316)", () => {
+    assert.equal(ask("b=/usr/bin/bash; $b -c 'git commit -m x'"), true);
+    assert.equal(ask('$SH -c "git push"'), true);
+    assert.equal(ask("$b -c 'echo hi'"), false);
+    assert.equal(ask("$b -c 'npm run push'"), false, "ohne git kein Anlass");
+    assert.equal(ask("$b -c 'echo commit'"), false);
+    assert.equal(ask("$b -c 'git status'"), false);
+    assert.equal(ask("$b -c 'git commit -m x'", wt), false, "im Worktree kein Anlass");
+  });
+
   test("Verschachtelung über MAX_TIEFE und Fehler im Auswerter fallen auf die grobe Regel zurück", () => {
     assert.equal(run("(".repeat(150) + "git push" + ")".repeat(150)), true);
     assert.equal(run("$(".repeat(150) + "git push" + ")".repeat(150)), true);

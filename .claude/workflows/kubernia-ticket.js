@@ -474,7 +474,7 @@ const LENS_QUELLE = [
       'Kein False Positive (Red-Green): würde der Test rot, wenn man die Logik testweise verfälscht? Wo Zweifel bestehen, den Fix/die Assertion kurz sabotieren → rot sehen → zurücksetzen (vgl. AGENTS.md „Tests gegen False Positives absichern"). Bugfix ⇒ gab es den fehlschlagenden Repro-Test zuerst?',
       'Präsentations-Code (Phaser/DOM) wird im Browser verifiziert statt per Unit-Test — ist das passiert und belegt?',
     ],
-    hinweis: 'Die Sabotage (Assertion oder Fix kurz verfälschen, rot sehen, zurücksetzen) ist die EINE Ausnahme von „du änderst nichts“: sie ist erlaubt und bei Zweifel Pflicht, denn sie ist der einzige Schritt, der harte Fehler statt Stil-Anmerkungen findet. Sie wird NICHT wegoptimiert. Setz sie danach vollständig zurück und belege das mit einem leeren git status --porcelain.',
+    hinweis: 'Die Sabotage (Assertion oder Fix kurz verfälschen, rot sehen, zurücksetzen) ist die EINE Ausnahme von „du änderst nichts“: sie ist erlaubt und bei Zweifel Pflicht, denn sie ist der einzige Schritt, der harte Fehler statt Stil-Anmerkungen findet. Sie wird NICHT wegoptimiert. Fahre sie NIE im Feature-Worktree, sondern je Runde in einem eigenen Lens-Worktree: git -C <worktree> worktree add --detach <hauptrepo>/.claude/worktrees/kq-<nr>-lens-r<runde> <erwarteter HEAD>, darin einmal npm ci, Tests mit absoluten Pfaden (npm --prefix <lens-worktree> test -- <datei>, kein cd). Danach git worktree remove --force auf den Lens-Worktree und belege: git worktree list ohne den Pfad, Test-Path False, dazu mit einem leeren git status --porcelain im Feature-Worktree.',
     regel: 'Dein Regel-Ausschnitt (schon im Kontext — bei Bedarf punktuell greppen, nicht öffnen):\nAGENTS.md § TDD ist der Default, § Tests gegen False Positives absichern.',
   },
   {
@@ -1297,7 +1297,7 @@ Maßgeblich: AGENTS.md § „Worktree entfernen auf Windows – zwei Fallen" (di
 numerierten Punkte inkl. Verify-Schritt #908) und § „Eigener Worktree von frisch geholtem origin/main"
 (dort: node_modules nie verlinken).
 
-Zu entfernen: Worktree ${worktree}, Branch ${branch}.
+Zu entfernen: Worktree ${worktree}, Branch ${branch} und alle übrig gebliebenen Lens-Worktrees .claude/worktrees/kq-${nr}-lens-* (Sabotage-Proben der Test-Lens; git worktree list prüft, git worktree remove --force entfernt).
 
 Zwei Dinge, die hier regelmäßig schiefgehen und in der Doku stehen: laufende
 Dev-Server erst per PowerShell Stop-Process beenden (pkill aus Git-Bash erwischt

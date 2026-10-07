@@ -17,6 +17,8 @@ import { fileURLToPath } from "node:url";
 import * as raw from "../../scripts/pretooluse-hook.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
 import * as ioRaw from "../../scripts/hook-io.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
+import * as ghRaw from "../../scripts/gh-guard-hook.mjs";
 
 type Out = { hookSpecificOutput: { permissionDecision: string; permissionDecisionReason: string } } | null;
 const io = ioRaw as unknown as { mergeDecisions: (d: unknown[]) => Out };
@@ -49,6 +51,25 @@ describe("Routing und Entscheidung (#1311)", () => {
     assert.equal(hook.dispatch(payload("PowerShell", "x"), WURZEL, nurBash), null);
     assert.equal(hook.dispatch(payload("PowerShell", "x"), WURZEL, nurPs)?.hookSpecificOutput.permissionDecision, "deny");
     assert.equal(hook.dispatch(payload("Bash", "x"), WURZEL, nurPs), null);
+  });
+
+  test("der gh-Guard bekommt die Shell des Tools (Dialekt, #1316)", () => {
+    const gesehen: unknown[] = [];
+    const nichts = () => ({ block: false });
+    const guards = { decide: nichts, bewertePowerShell: nichts, bewerteGh: (_c: unknown, opt: unknown) => (gesehen.push(opt), { ask: false }) };
+    hook.dispatch(payload("Bash", "x"), WURZEL, guards as never);
+    hook.dispatch(payload("PowerShell", "x"), WURZEL, guards as never);
+    assert.deepEqual(gesehen, [{ shell: "bash" }, { shell: "powershell" }]);
+  });
+
+  test("Ende zu Ende: PowerShell-Pfad mit abschließendem Backslash verschluckt das folgende gh api nicht (#1316 Z1a)", () => {
+    const nichts = () => ({ block: false });
+    const gh = (ghRaw as unknown as { bewerte: (c: string, o: unknown) => unknown }).bewerte;
+    const guards = { decide: nichts, bewertePowerShell: nichts, bewerteGh: gh };
+    const cmd = String.raw`Set-Location "C:\dev\"; gh api -X DELETE repos/o/r/issues/1`;
+    assert.equal(hook.dispatch(payload("PowerShell", cmd), WURZEL, guards as never)?.hookSpecificOutput.permissionDecision, "ask");
+    const bash = String.raw`git commit -m "a \"; gh api -X DELETE x\" b"`;
+    assert.equal(hook.dispatch(payload("Bash", bash), WURZEL, guards as never), null, "Bash: maskiertes Quote, der Text bleibt Text");
   });
 
   test("mergeDecisions: deny vor ask, unabhängig von der Reihenfolge", () => {

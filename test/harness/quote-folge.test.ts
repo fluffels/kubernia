@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 type Zeichen = { i: number; c: string; q: string | null; masked: boolean };
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../../scripts/quote-folge.mjs";
-const quoteFolge = (raw as { quoteFolge: (t: string, von?: number, q0?: string | null, escAussen?: boolean) => Zeichen[] & { ende: string | null } }).quoteFolge;
+const quoteFolge = (raw as { quoteFolge: (t: string, von?: number, q0?: string | null, escAussen?: boolean, dialekt?: string) => Zeichen[] & { ende: string | null } }).quoteFolge;
 
 const zustand = (text: string, ...args: [number?, (string | null)?, boolean?]) => quoteFolge(text, ...args).map((z) => `${z.c}${z.q ?? "-"}${z.masked ? "m" : ""}`).join(" ");
 
@@ -40,5 +40,17 @@ describe("quoteFolge (#1311)", () => {
     assert.equal(quoteFolge("a'b'").ende, null);
     assert.equal(quoteFolge("x y", 0, '"').find((z) => z.c === " ")?.q, '"');
     assert.equal(quoteFolge("abc", 1).length, 2, "von: Start hinter dem Anfang");
+  });
+
+  test("Dialekt: powershell maskiert nur mit Backtick, bash nur mit Backslash, neutral beides", () => {
+    const m = (t: string, d: string) => quoteFolge(t, 0, null, true, d).map((z) => (z.masked ? "m" : "-")).join("");
+    const pfad = String.raw`"C:\dev\"; x`;
+    assert.equal(quoteFolge(pfad, 0, null, true, "powershell").ende, null, "PowerShell: Backslash ist ein Pfadzeichen, das Quote schließt");
+    assert.equal(quoteFolge(pfad, 0, null, true, "neutral").ende, '"', "neutral: \\\" maskiert, das Quote bleibt offen");
+    assert.equal(m("\\a", "powershell"), "--");
+    assert.equal(m("\\a", "bash"), "-m");
+    assert.equal(m("`a", "bash"), "--", "ein Backtick maskiert im Bash-Dialekt nicht");
+    assert.equal(m("`a", "powershell"), "-m");
+    assert.equal(m("`a", "neutral"), "-m");
   });
 });

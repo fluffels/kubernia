@@ -5,7 +5,8 @@
  */
 
 /** Maskiert das Zeichen `c` an `i` das nächste (`\` oder Backtick, nicht in `'…'`, ggf. nur innerhalb von `"…"`)? */
-const maskiert = (c, q, hatNaechstes, escAussen) => (c === "\\" || c === "`") && hatNaechstes && (q !== null || escAussen);
+const maskiert = (c, q, hatNaechstes, escAussen, dialekt) =>
+  ((c === "\\" && dialekt !== "powershell") || (c === "`" && dialekt !== "bash")) && hatNaechstes && (q !== null || escAussen);
 
 /** Zustand nach dem Zeichen `c` (das Quote-Zeichen öffnet, schließt oder bleibt unberührt). */
 function naechsterZustand(q, c) {
@@ -20,14 +21,16 @@ function naechsterZustand(q, c) {
  * `'…'`). `.ende` ist der Zustand nach dem letzten Zeichen. `q0` setzt den Startzustand (Start mitten in einem Quote).
  * `escAussen: false`: Backslash und Backtick maskieren nur INNERHALB von `"…"` (Segmentierung; in PowerShell ist `\` außerhalb
  * von Quotes ein Pfadzeichen, `C:\dev\; gh api …` trennt bei `;`).
+ * `dialekt`: `"bash"` (nur Backslash maskiert), `"powershell"` (nur Backtick: `"C:\dev\"` schließt am zweiten Quote) oder
+ * `"neutral"` (Default, beide: unbekanntes Tool).
  */
-export function quoteFolge(text, von = 0, q0 = null, escAussen = true) {
+export function quoteFolge(text, von = 0, q0 = null, escAussen = true, dialekt = "neutral") {
   const out = [];
   let q = q0;
   for (let i = von; i < text.length; i++) {
     const c = text[i];
     out.push({ i, c, q, masked: false });
-    if (q !== "'" && maskiert(c, q, i + 1 < text.length, escAussen)) {
+    if (q !== "'" && maskiert(c, q, i + 1 < text.length, escAussen, dialekt)) {
       out.push({ i: i + 1, c: text[i + 1], q, masked: true });
       i++;
       if (text[i] === "\r" && text[i + 1] === "\n") {
