@@ -60,6 +60,7 @@ describe("Einengung (--changed)", () => {
     assert.deepEqual(e.perName, ["test/c.test.ts"]);
     assert.deepEqual(e.related, ["docs/foo.md", "test/a.test.ts"]);
     const l = vl.bestimmeEngung({ base: "abc", dateien: ["src\\x.ts"], tests: [] });
+    assert.equal(l.voll, false);
     if (!l.voll) assert.deepEqual(l.lint, ["src/x.ts"]);
   });
   test("Fail-closed: wirft das Laden des Slice, laufen Lint und Test voll mit Grund", () => {

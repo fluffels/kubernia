@@ -151,6 +151,8 @@ describe("pruefLaeufe (#1120)", () => {
       sh("npm --prefix C:/x/kq-1 ci"),
       sh("npm test"),
       sh("npm install"),
+      sh("npm verify"),
+      sh("npm --prefix verify ci"),
       { tool: "Read", input: { file_path: "npm run verify" }, resultChars: 0 },
     ];
     assert.deepEqual(z(evs), { voll: 0, gezielt: 0 });
