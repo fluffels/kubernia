@@ -10,6 +10,7 @@
 
 import { einfacheKommandos, parseBash } from "./bash-parser.mjs";
 import { transkriptZeilen } from "./transkript.mjs";
+import { GIT_GLOBAL_MIT_WERT } from "./worktree-guard-tabellen.mjs";
 export { transkriptZeilen }; // bleibt hier erreichbar (Aufrufer und Tests), die Quelle ist transkript.mjs
 
 /** Grobe Umrechnung Zeichen → Tokens (nur Größenordnung, bewusst keine Tokenizer-Abhängigkeit). */
@@ -35,9 +36,6 @@ export function isBrainPage(path) {
   if (p.split("/").includes("node_modules")) return false;
   return /(^|\/)docs\/(.+\/)?[^/]+\.md$/i.test(p);
 }
-
-/** Globale git-Optionen mit eigenem Wert (`git -C <dir> show …`). */
-const GIT_GLOBAL_MIT_WERT = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"]);
 
 /**
  * Brain-Pfade, die `git [globale Optionen] show <rev>:<pfad>` liest (#1331): der Präfix `<rev>:` fällt weg, damit

@@ -39,6 +39,17 @@ export function parseOverrideTrailers(text, key) {
   return { valid, invalid };
 }
 
+/** Zeilen, die `<key>:` enthalten, aber von `zeilenRe` NICHT erkannt werden (eingerückt, mit `- `-Präfix, mitten im Fließtext):
+ *  das Format ist knapp daneben und die Zeile wird still ignoriert (#1349). Liefert die getrimmten Zeilen. Pure. */
+export function versetzteOverrideZeilen(text, key) {
+  const erkannt = (zeile) => new RegExp(zeilenRe(key).source).test(zeile);
+  return String(text)
+    .replace(/\r/g, "")
+    .split("\n")
+    .filter((z) => z.includes(`${key}:`) && !erkannt(z))
+    .map((z) => z.trim());
+}
+
 /** Override für `key` aus den Commit-Messages des Slices (`<basis>..HEAD`, dieselbe Basis
  *  wie der Diff, damit kein fremder main-Commit einen Trailer einschleppt). Die NEUESTE
  *  gültige Zeile zählt: `--reverse` liest chronologisch (ältester zuerst), und im Squash-Body
@@ -53,7 +64,7 @@ export function sliceOverride(runGit, base, key) {
     messages = "";
   }
   const { valid, invalid } = parseOverrideTrailers(messages, key);
-  return { reason: valid.length > 0 ? valid[valid.length - 1].reason : null, invalid };
+  return { reason: valid.length > 0 ? valid[valid.length - 1].reason : null, invalid, versetzt: versetzteOverrideZeilen(messages, key) };
 }
 
 /** Meldet ungültige Override-Zeilen (ohne `#<nr> <warum>`): ignoriert, nur ein Hinweis. */
@@ -61,6 +72,13 @@ export function meldeUngueltigeOverrides(invalid, { dim = (s) => s, log = consol
   for (const line of invalid ?? []) {
     log(dim(`• ungültige Override-Zeile ignoriert (braucht "#<nr> <warum>"): ${line}`));
   }
+}
+
+/** Hinweis im ROTEN Zweig: eine Zeile mit `<key>:` steht im Slice, zählt aber nicht, weil sie nicht am Zeilenanfang steht. */
+export function versetzteOverrideHinweis(key, zeilen) {
+  return (zeilen ?? []).map(
+    (z) => `• Zeile mit ${key}: gefunden, aber nicht am Zeilenanfang (wird ignoriert; erwartet: "${key}: #<nr> <warum>" als eigene Zeile, nicht eingerückt): ${z}`,
+  );
 }
 
 /** Der Hinweis zu einer stale Override-Zeile: der Slice braucht sie nicht. Eine fremde Zeile im eigenen

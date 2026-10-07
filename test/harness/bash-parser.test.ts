@@ -129,6 +129,20 @@ describe("parseBash — Substitutionen und Heredocs (#1311)", () => {
     assert.equal(parseBash('gh pr create --body "$(cat <<\'EOF\'\nText (x)\nEOF\n)"').ok, true);
     assert.equal(parseBash("cat <<A <<B\n1\nA\n2\nB").ok, true);
   });
+
+  test("großer Heredoc mit Anführungszeichen und Apostrophen im Body ist zerlegbar (#1349: „unexpected EOF“ kommt aus der Shell, nicht aus diesem Parser)", () => {
+    const zeilen = Array.from({ length: 200 }, (_, i) => `Zeile ${i}: "zitiert" und it's ein Apostroph, \`code\`, $VAR, (Klammer`).join("\n");
+    for (const cmd of [
+      `gh issue comment 1 --body-file - <<'EOF'\n${zeilen}\nEOF`,
+      `gh issue comment 1 --body-file - <<EOF\n${zeilen.replace(/\$VAR/g, "x").replace(/`/g, "")}\nEOF`,
+      `cat <<-'EOF'\n\t${zeilen}\n\tEOF`,
+      `gh pr create --body "$(cat <<'EOF'\n${zeilen}\nEOF\n)"`,
+    ]) {
+      assert.equal(parseBash(cmd).ok, true, cmd.slice(0, 60));
+    }
+    // darf NICHT passieren: ein fehlendes Heredoc-Ende wird weiter als nicht zerlegbar abgelehnt
+    assert.equal(parseBash(`cat <<'EOF'\n${zeilen}`).ok, false);
+  });
 });
 
 describe("parseBash — nicht zerlegbar (#1311)", () => {

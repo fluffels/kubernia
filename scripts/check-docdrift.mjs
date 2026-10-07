@@ -208,14 +208,17 @@ export function findDocumentedVerifyChains(md) {
 
 /** Prüft alle in Markdown-Dateien dokumentierten verify-Ketten gegen die echte
  *  Kette aus package.json. Gibt je unvollständiger Kette zurück:
- *  { file, chain: string[], missing: string[] }. */
+ *  { file, chain: string[], missing: string[], extra: string[] }: `missing` = Gates der echten Kette, die in der
+ *  Doku fehlen; `extra` = dokumentierte Gates, die es in der echten Kette nicht (mehr) gibt (#1349). Bevorzugt
+ *  steht in der Doku gar keine Handkopie, sondern ein Verweis auf `package.json` › `scripts.verify`. */
 export function auditVerifyChain(rootDir, mdFiles, content, pkgScripts) {
   const real = parseVerifyChain(pkgScripts);
   const violations = [];
   for (const f of mdFiles) {
     for (const chain of findDocumentedVerifyChains(content.get(f))) {
       const missing = real.filter((g) => !chain.includes(g));
-      if (missing.length > 0) violations.push({ file: f, chain, missing });
+      const extra = chain.filter((g) => !real.includes(g));
+      if (missing.length > 0 || extra.length > 0) violations.push({ file: f, chain, missing, extra });
     }
   }
   return violations;
@@ -345,7 +348,7 @@ function main() {
     bad = true;
     console.error(
       red(
-        `✖ Veraltete verify-Kette in ${v.file} — fehlende Gates: ${v.missing.join(", ")}. Kette an package.json angleichen.`,
+        `✖ Veraltete verify-Kette in ${v.file}${v.missing.length ? ` — fehlende Gates: ${v.missing.join(", ")}` : ""}${v.extra.length ? ` — überzählige Gates: ${v.extra.join(", ")}` : ""}. Auf den Verweis „package.json › scripts.verify“ umstellen oder die Kette angleichen.`,
       ),
     );
   }

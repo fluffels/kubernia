@@ -48,7 +48,7 @@ import * as sliceRaw from "../scripts/slice-override.mjs";
 
 const { parseOverrideTrailers, sliceOverride } = sliceRaw as {
   parseOverrideTrailers: (text: string, key: string) => Trailers;
-  sliceOverride: (runGit: RunGit, base: string, key: string) => { reason: string | null; invalid: string[] };
+  sliceOverride: (runGit: RunGit, base: string, key: string) => { reason: string | null; invalid: string[]; versetzt: string[] };
 };
 
 const {
@@ -239,6 +239,19 @@ describe("Diff-Größenbudget (#533)", () => {
     assert.equal(r.reason, "#317 Epic-Split");
   });
 
+  test("checkDiffSize (#1349 Z31): eine knapp danebenliegende Override-Zeile wird gemeldet und nicht still gewertet", () => {
+    const daneben = "chore: x\n\n- KQ-Diffsize-Override: #1349 mit Strich\n  KQ-Diffsize-Override: #1349 eingerückt\n";
+    const r = checkDiffSize({ runGit: gitWith("BASE", OVER, daneben), env: tightEnv });
+    assert.equal(r.over, true);
+    assert.equal(r.allowed, false, "die versetzten Zeilen zählen nicht als Override");
+    assert.deepEqual(r.versetzteOverrides, ["- KQ-Diffsize-Override: #1349 mit Strich", "KQ-Diffsize-Override: #1349 eingerückt"]);
+    // eine gültige Zeile daneben: Override wirkt, die versetzten bleiben nur Information
+    const beides = checkDiffSize({ runGit: gitWith("BASE", OVER, `${daneben}\n${TRAILER}`), env: tightEnv });
+    assert.equal(beides.allowed, true);
+    assert.equal(checkDiffSize({ runGit: gitWith("BASE", OVER, TRAILER), env: tightEnv }).versetzteOverrides instanceof Array, true);
+    assert.deepEqual(checkDiffSize({ runGit: gitWith("BASE", OVER, TRAILER), env: tightEnv }).versetzteOverrides, []);
+  });
+
   // Format belegt an Commit 913cf17: GitHub schreibt jeden Commit-Betreff als `* <betreff>`.
   const SQUASH_1342 = [
     "feat(harness): Sammelticket komplett (#1342) (#1381)",
@@ -398,8 +411,8 @@ describe("Diff-Größenbudget (#533)", () => {
     const wirft: RunGit = () => {
       throw new Error("kaputt");
     };
-    assert.deepEqual(sliceOverride(wirft, "BASE", OVERRIDE_KEY), { reason: null, invalid: [] });
+    assert.deepEqual(sliceOverride(wirft, "BASE", OVERRIDE_KEY), { reason: null, invalid: [], versetzt: [] });
     const nurUngueltig: RunGit = () => "x\n\nKQ-Diffsize-Override: ohne nummer\n";
-    assert.deepEqual(sliceOverride(nurUngueltig, "BASE", OVERRIDE_KEY), { reason: null, invalid: ["KQ-Diffsize-Override: ohne nummer"] });
+    assert.deepEqual(sliceOverride(nurUngueltig, "BASE", OVERRIDE_KEY), { reason: null, invalid: ["KQ-Diffsize-Override: ohne nummer"], versetzt: [] });
   });
 });

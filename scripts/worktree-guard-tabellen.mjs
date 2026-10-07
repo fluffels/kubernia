@@ -42,6 +42,12 @@ export const EXPORTERS = new Set(["export", "declare", "typeset", "readonly", "l
 /** Unbekanntes Verzeichnis (dynamisches `cd`): fragt bei einem folgenden geschützten git-Aufruf nach. */
 export const UNKNOWN = "\0unbekannt";
 
+/**
+ * Globale git-Optionen mit eigenem Wert im nächsten Wort (`git -C <dir> show …`): EINE Tabelle für den Worktree-Guard
+ * und `brain-metrics.mjs`. `--exec-path` gehört nicht dazu (nur `--exec-path=<pfad>`, sonst ein Schalter).
+ */
+export const GIT_GLOBAL_MIT_WERT = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env", "--attr-source", "--super-prefix"]);
+
 /** Eingebaute git-Unterbefehle (Rest: möglicher Alias, wird per `git config` aufgelöst). */
 export const KNOWN_SUBS = new Set(
   ("add am annotate apply archive bisect blame branch bundle cat-file check-attr check-ignore checkout checkout-index cherry cherry-pick clean clone column " +

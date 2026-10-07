@@ -26,6 +26,13 @@ const ALLOWLIST: Allow[] = checkSize.ALLOWLIST;
 const collectSizes: (rootDir?: string) => Sized[] = checkSize.collectSizes;
 const findOversized: (sizes: Sized[], budget?: number) => Sized[] = checkSize.findOversized;
 const countLines: (text: string) => number = checkSize.countLines;
+type Deckel = { file: string; max: number; reason: string };
+const deckelApi = checkSize as unknown as {
+  DECKEL: Deckel[];
+  collectWorkflowSizes: (rootDir?: string) => Sized[];
+  pruefeDeckel: (sizes: Sized[], deckel?: Deckel[], budget?: number) => string[];
+};
+const { DECKEL, collectWorkflowSizes, pruefeDeckel } = deckelApi;
 
 const sizes = collectSizes();
 const allowedFiles = new Set(ALLOWLIST.map((a) => a.file));
@@ -75,5 +82,59 @@ describe("Dateigröße-Budget (#390)", () => {
     assert.equal(countLines("a\nb\nc"), 3, "ohne trailing newline gleich viele Zeilen");
     assert.equal(countLines(""), 0, "leere Datei = 0 Zeilen");
     assert.equal(countLines("a\r\nb\r\n"), 2, "CRLF wird wie LF gezählt");
+  });
+});
+
+describe("Deckel für Workflow-Skripte (#1349)", () => {
+  const WF = ".claude/workflows/kubernia-ticket.js";
+  const deckel: Deckel[] = [{ file: WF, max: 1000, reason: "Test" }];
+
+  test("das Repo hält seine Deckel (Ist-Zustand: Workflow auf den Deckel gemessen)", () => {
+    const wf = collectWorkflowSizes();
+    assert.ok(wf.some((w) => w.file === WF), "Workflow wird gefunden (sonst misst der Wächter nichts)");
+    assert.deepEqual(pruefeDeckel(wf, DECKEL), []);
+    assert.ok(DECKEL.every((d) => d.reason.length > 0));
+  });
+
+  test("Wachstum über den Deckel: rot", () => {
+    const m = pruefeDeckel([{ file: WF, loc: 1001 }], deckel).join(" ");
+    assert.match(m, /1001 Zeilen > Deckel 1000/);
+  });
+
+  test("Schrumpfen ohne den Deckel zu senken: rot mit Zielwert (Ratchet)", () => {
+    const m = pruefeDeckel([{ file: WF, loc: 950 }], deckel).join(" ");
+    assert.match(m, /Deckel auf 950 senken/);
+  });
+
+  test("genau auf dem Deckel: ok", () => {
+    assert.deepEqual(pruefeDeckel([{ file: WF, loc: 1000 }], deckel), []);
+  });
+
+  test("neue Workflow-Datei über dem Budget ohne Eintrag: rot; unter dem Budget: ok", () => {
+    assert.match(pruefeDeckel([{ file: ".claude/workflows/neu.js", loc: 801 }], deckel.slice(0, 0)).join(" "), /ohne Deckel/);
+    assert.deepEqual(pruefeDeckel([{ file: ".claude/workflows/neu.js", loc: 800 }], []), []);
+  });
+
+  test("Eintrag ohne Datei oder mit Datei unter Budget: stale", () => {
+    assert.match(pruefeDeckel([], deckel).join(" "), /stale.*existiert nicht mehr/);
+    assert.match(pruefeDeckel([{ file: WF, loc: 700 }], deckel).join(" "), /stale.*nicht mehr über 800/);
+  });
+});
+
+describe("collectWorkflowSizes: Randfälle (#1349)", () => {
+  test("fehlender Ordner: leere Liste; Nicht-.js-Dateien zählen nicht", async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const wurzel = mkdtempSync(join(tmpdir(), "kq-size-"));
+    try {
+      assert.deepEqual(collectWorkflowSizes(wurzel), []);
+      mkdirSync(join(wurzel, ".claude", "workflows"), { recursive: true });
+      writeFileSync(join(wurzel, ".claude", "workflows", "a.js"), "x\ny\n");
+      writeFileSync(join(wurzel, ".claude", "workflows", "b.md"), "x\n");
+      assert.deepEqual(collectWorkflowSizes(wurzel), [{ file: ".claude/workflows/a.js", loc: 2 }]);
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
   });
 });

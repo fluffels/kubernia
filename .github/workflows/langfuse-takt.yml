@@ -1,9 +1,11 @@
 name: Langfuse-Takt
 
-# Wöchentlicher Takt für das Ticket „Langfuse-Status überprüfen“ (#1351, ADR 0016). Statt an einer
-# driftenden Board-Position hängt der Takt an der Zeit: montags legt dieser Lauf das Ticket an (wenn seit
-# dem letzten Abschluss mindestens 5 Commits auf main liegen) bzw. schiebt ein offenes ungeclaimtes an die
-# Spitze des Boards. Die Entscheidung steht in scripts/langfuse-takt.mjs (pur, getestet, idempotent: kein
+# Takt für das Ticket „Langfuse-Status überprüfen“ (#1351, ADR 0016). Statt an einer driftenden
+# Board-Position hängt der Takt an der Zeit und an der Aktivität: montags legt dieser Lauf das Ticket an
+# (wenn seit dem letzten Abschluss mindestens 5 Commits auf main liegen) bzw. schiebt ein offenes
+# ungeclaimtes an die Spitze des Boards; ein Push auf main tut dasselbe, sobald seit dem letzten Abschluss
+# mindestens 8 Ticket-Merges (ohne Bots) dazukamen. Derselbe Lauf holt das ungeclaimte Sammelticket
+# „Harness-Härtung (gesammelt)“ nach 5 Ticket-Merges seit dem Abschluss des letzten hinter den Kopf (#1349). Die Entscheidung steht in scripts/langfuse-takt.mjs (pur, getestet, idempotent: kein
 # gespeicherter Zähler, jedes Mal aus offenen Issues und der Commit-Liste abgeleitet).
 #
 # Die Concurrency-Group serialisiert gleichzeitige Auslösungen (Cron + Dispatch): der zweite Lauf wartet und
@@ -13,6 +15,8 @@ name: Langfuse-Takt
 on:
   schedule:
     - cron: "17 5 * * 1"
+  push:
+    branches: [main]
   workflow_dispatch: {}
 
 concurrency:
@@ -25,14 +29,14 @@ permissions:
 
 jobs:
   takt:
-    name: "Langfuse-Takt: Status-Ticket"
+    name: "Langfuse-Takt: Status-Ticket und Sammelticket"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
-      - name: Status-Ticket anlegen oder nach oben schieben
+      - name: Status-Ticket und Harness-Sammelticket nach oben
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}

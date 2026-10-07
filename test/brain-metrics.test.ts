@@ -3,6 +3,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -101,10 +102,20 @@ EOF`).brainReads.length, 1, "Ersetzung im Heredoc");
       "git -C /r/wt show HEAD:docs/module/x.md",
       "git --no-pager -c core.quotepath=off show origin/main:docs/a.md | head",
       "git show --stat origin/main:docs/a.md",
+      "git --exec-path show origin/main:docs/a.md",
+      "git --config-env core.x=ENVVAR show origin/main:docs/a.md",
+      "git --attr-source HEAD --super-prefix x/ --namespace n show origin/main:docs/a.md",
     ])
       assert.deepEqual(classifyShell(c).brainReads, [c.includes("module") ? "docs/module/x.md" : "docs/a.md"], c);
     assert.deepEqual(classifyShell("git show origin/main:docs/a.md origin/main:docs/b.md").brainReads, ["docs/a.md", "docs/b.md"]);
     assert.equal(classifyShell("git show origin/main:docs/a.md", "PowerShell").brainReads.length, 1);
+  });
+  test("die git-Optionstabelle ist EINE: Guard und Metrik teilen sie, --exec-path nimmt keinen Wert (#1349)", async () => {
+    // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+    const tab = (await import("../scripts/worktree-guard-tabellen.mjs")) as { GIT_GLOBAL_MIT_WERT: Set<string> };
+    for (const o of ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env", "--attr-source", "--super-prefix"]) assert.ok(tab.GIT_GLOBAL_MIT_WERT.has(o), o);
+    assert.ok(!tab.GIT_GLOBAL_MIT_WERT.has("--exec-path"));
+    assert.match(readFileSync(new URL("../scripts/brain-metrics.mjs", import.meta.url), "utf8"), /import \{ GIT_GLOBAL_MIT_WERT \} from "\.\/worktree-guard-tabellen\.mjs"/, "brain-metrics importiert die Tabelle");
   });
   test("git show zählt nicht, wenn es keine Brain-Seite liest (#1331)", () => {
     for (const c of ["git show HEAD:src/x.ts", "git show --stat", "git show HEAD", "git status docs/a.md", "git log origin/main:docs/a.md", "git show C:/r/docs/a.md", "git show origin/main:docs/a.ts"])

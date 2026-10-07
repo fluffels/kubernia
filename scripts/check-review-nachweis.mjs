@@ -43,7 +43,7 @@ export const MAX_REVIEW_PAESSE = MAX_FIX_RUNDEN + 1;
 export const OVERRIDE_KEY = "KQ-Review-Override";
 
 const CODE_LENSES = ["architektur", "requirement-treue", "test-adaequanz"];
-const BEKANNTE_LENSES = [...CODE_LENSES, "doku"];
+export const BEKANNTE_LENSES = [...CODE_LENSES, "doku"];
 
 /** Die Vorlage, die bei Rot ausgegeben wird (SSOT des Formats: docs/agent-harness.md §3a). */
 export const VORLAGE =

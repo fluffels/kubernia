@@ -66,6 +66,11 @@ AGENTS.md                  @fluffels
 /scripts/umsetzer-abschluss.mjs @fluffels
 /scripts/cleanup-worktrees.mjs @fluffels
 /scripts/transkript.mjs @fluffels
+/scripts/board-lib.mjs @fluffels
+/scripts/board-place.mjs @fluffels
+/scripts/langfuse-takt.mjs @fluffels
+/scripts/haupt-sync.mjs @fluffels
+/scripts/lens-edit-guard.mjs @fluffels
 /.agents/                  @fluffels
 /docs/agent-harness*       @fluffels
 
