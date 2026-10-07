@@ -1,0 +1,40 @@
+name: Langfuse-Takt
+
+# Wöchentlicher Takt für das Ticket „Langfuse-Status überprüfen“ (#1351, ADR 0016). Statt an einer
+# driftenden Board-Position hängt der Takt an der Zeit: montags legt dieser Lauf das Ticket an (wenn seit
+# dem letzten Abschluss mindestens 5 Commits auf main liegen) bzw. schiebt ein offenes ungeclaimtes an die
+# Spitze des Boards. Die Entscheidung steht in scripts/langfuse-takt.mjs (pur, getestet, idempotent: kein
+# gespeicherter Zähler, jedes Mal aus offenen Issues und der Commit-Liste abgeleitet).
+#
+# Die Concurrency-Group serialisiert gleichzeitige Auslösungen (Cron + Dispatch): der zweite Lauf wartet und
+# sieht dann das Ticket des ersten, legt also nie ein zweites an. Braucht wie die Inbox-Workflows das Secret
+# PROJECT_TOKEN (PAT mit project-Scope); fehlt es, wird nur gewarnt.
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch: {}
+
+concurrency:
+  group: langfuse-takt
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  takt:
+    name: "Langfuse-Takt: Status-Ticket"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Status-Ticket anlegen oder nach oben schieben
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+        run: node scripts/langfuse-takt.mjs

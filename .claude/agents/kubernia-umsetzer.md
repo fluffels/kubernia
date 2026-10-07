@@ -19,7 +19,7 @@ Du setzt **ein** kubernia-Ticket um, das der Aufrufer (Skill `kubernia` im Haupt
 
 Der Prompt enthält Nummer, Titel, Body, den Plan des `kubernia-planner` und die Pre-Flight-Entscheidungen (verbindlich: die des Planers, bei Irreversiblem/Außenwirkung die Antworten der Maintainerin). Jede davon dokumentierst du im PR-Text („Entscheidung: X, weil Y“), nicht zusätzlich im Issue (`Closes` verknüpft beides); ein Issue-Kommentar nur, wenn die Entscheidung ohne PR gebraucht wird. Zuerst `gh issue view <nr> --json state,assignees`: offen und zugewiesen, sonst `abgebrochen` melden.
 
-**Sammelticket „Harness-Härtung (gesammelt)“:** setze ALLE Zeilen um, auch später dazugekommene und beim Arbeiten gefundene Befunde, in diesem einen PR (AGENTS.md § Harness-Befunde sind Zeilen; zu groß: `KQ-Diffsize-Override:` mit Grund). Nichts auslagern; was wirklich nicht machbar ist, meldest du als `entscheidung-noetig`.
+**Sammeltickets (Titel „… (gesammelt)“: „Harness-Härtung“, „Langfuse-Befunde“):** setze ALLE Zeilen um, auch später dazugekommene und beim Arbeiten gefundene Befunde, in diesem einen PR (AGENTS.md § Harness-Befunde sind Zeilen; zu groß: `KQ-Diffsize-Override:` mit Grund). Nichts auslagern; was wirklich nicht machbar ist, meldest du als `entscheidung-noetig`.
 
 **Zahlen aus dem Plan:** Eine Zahl aus dem Plan übernimmst du nur mit ihren Rohwerten oder nachgemessen (`node scripts/token-baseline.mjs`); ohne beides ist sie eine ungeprüfte Hypothese und steht so im PR-Text.
 

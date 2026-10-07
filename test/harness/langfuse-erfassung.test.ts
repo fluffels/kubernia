@@ -4,8 +4,9 @@
  *
  * Zwei Regeln hängen an Prosa, die sonst leise zurückdriftet:
  *   1. Die Checkliste „Langfuse-Status überprüfen" steht genau einmal (docs/model-routing.md), das
- *      wiederkehrende Ticket (Position 20) und seine Folgen-Mechanik in docs/ticket-reihenfolge.md;
- *      das Sammelticket löst keine Langfuse-Auswertung mehr aus (keine Doppelung).
+ *      wiederkehrende Ticket (Wochen-Workflow langfuse-takt.yml, #1351) und das Sammelticket
+ *      „Langfuse-Befunde (gesammelt)" in docs/ticket-reihenfolge.md; das Harness-Sammelticket löst keine
+ *      Langfuse-Auswertung aus (keine Doppelung). Keine Board-Position als Takt mehr.
  *   2. Harness-Änderungen an Agenten, Subagenten, MCP, Hooks oder Plugins belegen, dass Langfuse sie
  *      weiter erfasst (AGENTS.md). Dazu der statische Teil: die Konfiguration, die die Erfassung trägt.
  *
@@ -44,6 +45,8 @@ const CHECKLISTE = [
   "Wiederkehrende Fehlschläge",
   "Wirkung",
   "Code-Qualität/Prozess",
+  "Wochenbudget",
+  "Kosten gegen Nutzen",
 ];
 
 /** Der AGENTS.md-Bullet zur Erfassungsregel: nennt die vier Änderungsarten und verlinkt den Ablauf. */
@@ -85,16 +88,58 @@ const hatKeineDoppelung = (
   !/Langfuse-Blick/.test(agentsMd) &&
   !CHECKLISTE.slice(0, 3).every((p) => ticketReihenfolge.includes(`**${p}`));
 
-/** Der Mechanik-Abschnitt des wiederkehrenden Tickets. */
+/** Der Mechanik-Abschnitt des wiederkehrenden Tickets: Wochen-Workflow, keine Board-Position, kein Einweg-Folgeticket. */
 const hatWiederkehrendesTicket = (ticketReihenfolge: string): boolean => {
   const a = abschnitt(ticketReihenfolge, /^## Wiederkehrendes Ticket „Langfuse-Status überprüfen"/);
   return (
     a !== "" &&
-    /Position 20/.test(a) &&
-    /hinter dem ungeclaimten Sammelticket/.test(a) &&
-    /model-routing\.md#langfuse-status-überprüfen-1293/.test(a)
+    /langfuse-takt\.yml/.test(a) &&
+    /wöchentlich/.test(a) &&
+    /Langfuse-Befunde \(gesammelt\)/.test(a) &&
+    /model-routing\.md#langfuse-status-überprüfen-1293/.test(a) &&
+    !/Position 20/.test(a) &&
+    !/Langfuse-Folgen aus/.test(a)
   );
 };
+
+/** Texte, in denen weder die Position-20-Regel noch die Einweg-Folgetickets zurückkehren dürfen (ADRs sind Historie). */
+const keinePositionsRegel = (texte: string[]): boolean => texte.every((t) => !/Position 20/.test(t) && !/Langfuse-Folgen aus/.test(t));
+
+/** Der Abschnitt zum Langfuse-Sammelticket: Kommentar-Zeilen, höchstens eines, komplett, nach oben; AGENTS.md verweist darauf. */
+const hatLangfuseSammelticket = (ticketReihenfolge: string, agentsMd: string): boolean => {
+  const a = abschnitt(ticketReihenfolge, /^### Langfuse-Befunde \(gesammelt\)/);
+  const bullet = agentsMd.split("\n").find((z) => /Harness-Befunde sind Zeilen, keine Tickets/.test(z)) ?? "";
+  const ausnahme = bullet.split("**Ausnahme:**")[1] ?? "";
+  return (
+    a !== "" &&
+    /gh issue comment/.test(a) &&
+    /\*\*Höchstens ein\*\*/.test(a) &&
+    /komplett/.test(a) &&
+    /--top/.test(a) &&
+    /Langfuse-Befunde \(gesammelt\)/.test(ausnahme) &&
+    /#langfuse-befunde-gesammelt-1351/.test(ausnahme)
+  );
+};
+
+/** Die Bedingungen, die den Takt-Workflow robust machen (serialisiert, nicht abbrechend, schreibend, mit Board-Token). */
+const taktWorkflowRobust = (yml: string): boolean => {
+  const gruppe = /^concurrency:\s*\n\s+group:\s*(\S+)/m.exec(yml)?.[1] ?? "";
+  return (
+    /^\s+schedule:/m.test(yml) &&
+    /cron:/.test(yml) &&
+    /workflow_dispatch/.test(yml) &&
+    gruppe !== "" &&
+    !gruppe.includes("${{") &&
+    /cancel-in-progress:\s*false/.test(yml) &&
+    /issues:\s*write/.test(yml) &&
+    /secrets\.PROJECT_TOKEN/.test(yml) &&
+    /node scripts\/langfuse-takt\.mjs\s*$/m.test(yml) &&
+    !/--dry-run/.test(yml)
+  );
+};
+
+/** Das Skript fragt Tickets über die konsistente REST-Liste, nie über den verzögerten Such-Index. */
+const ohneSuchIndex = (skript: string): boolean => !/search\/issues|--search\b/.test(skript);
 
 /** Das Sammelticket verweist nicht mehr auf eine Langfuse-Auswertung beim Abarbeiten. */
 const sammelticketOhneLangfuse = (ticketReihenfolge: string, agentsMd: string): boolean => {
@@ -139,8 +184,10 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatErfassungsRegel(""));
   });
 
-  test("model-routing.md: Checkliste mit allen sechs Punkten", () => {
+  test("model-routing.md: Checkliste mit allen acht Punkten", () => {
     assert.ok(hatChecklisteVollstaendig(mr));
+    assert.ok(!hatChecklisteVollstaendig(mr.replace("**Wochenbudget:**", "Wochenbudget:")));
+    assert.ok(!hatChecklisteVollstaendig(mr.replace("**Kosten gegen Nutzen", "Kosten gegen Nutzen")));
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Tokenfresser:**", "Tokenfresser:")));
     assert.ok(!hatChecklisteVollstaendig("### Langfuse-Status überprüfen (#1293)\n\n**Wirkung**"));
   });
@@ -160,11 +207,66 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatKeineDoppelung(mr, `${CHECKLISTE.slice(0, 3).map((p) => `**${p}:**`).join(" ")}`, agents, um));
   });
 
-  test("ticket-reihenfolge.md: wiederkehrendes Ticket auf Position 20, Folgen hinter dem Sammelticket", () => {
+  test("ticket-reihenfolge.md: wiederkehrendes Ticket per Wochen-Workflow, ohne Position-20-Regel", () => {
     assert.ok(hatWiederkehrendesTicket(tr));
-    assert.ok(!hatWiederkehrendesTicket(tr.replace(/Position 20/g, "Position 7")));
-    assert.ok(!hatWiederkehrendesTicket(tr.replace(/hinter dem ungeclaimten Sammelticket/g, "irgendwo")));
+    assert.ok(!hatWiederkehrendesTicket(tr.replace(/langfuse-takt\.yml/g, "x")), "ohne Workflow-Verweis");
+    assert.ok(!hatWiederkehrendesTicket(tr.replace(/wöchentlich/g, "regelmäßig")), "ohne den Wochentakt");
+    assert.ok(!hatWiederkehrendesTicket(tr.replace(/Langfuse-Befunde \(gesammelt\)/g, "Folgeticket")), "ohne Sammelticket");
+    assert.ok(!hatWiederkehrendesTicket(tr.replace("**Body-Vorlage:**", "Nachfolger auf Position 20. **Body-Vorlage:**")), "Position 20 kehrt zurück");
+    assert.ok(!hatWiederkehrendesTicket(tr.replace("**Body-Vorlage:**", "Langfuse-Folgen aus #1. **Body-Vorlage:**")), "Einweg-Folgeticket kehrt zurück");
     assert.ok(!hatWiederkehrendesTicket(""));
+  });
+
+  test("keine Position-20-Regel und keine Einweg-Folgetickets in Regeltexten (ADRs sind Historie)", () => {
+    const dateien = [
+      "AGENTS.md",
+      "docs/ticket-reihenfolge.md",
+      "docs/model-routing.md",
+      ".claude/agents/kubernia-planner.md",
+      ".claude/agents/kubernia-umsetzer.md",
+      ".claude/skills/kubernia/SKILL.md",
+      ".claude/workflows/kubernia-ticket.js",
+    ];
+    assert.ok(keinePositionsRegel(dateien.map(read)));
+    assert.ok(!keinePositionsRegel(["alles gut", "Nachfolger auf Position 20"]));
+    assert.ok(!keinePositionsRegel(["Langfuse-Folgen aus #1"]));
+  });
+
+  test("Langfuse-Sammelticket: Kommentar-Zeilen, höchstens eines, komplett, nach oben, AGENTS.md verweist darauf", () => {
+    assert.ok(hatLangfuseSammelticket(tr, agents));
+    assert.ok(!hatLangfuseSammelticket(tr.replace("### Langfuse-Befunde (gesammelt)", "### Anderes"), agents));
+    assert.ok(!hatLangfuseSammelticket(tr.replace(/gh issue comment/g, "x"), agents));
+    assert.ok(!hatLangfuseSammelticket(tr.replace("**Höchstens ein**", "Mehrere"), agents));
+    assert.ok(!hatLangfuseSammelticket(tr.replace(/komplett/g, "teilweise"), agents));
+    assert.ok(!hatLangfuseSammelticket(tr.replace(/--top/g, "--x"), agents));
+    assert.ok(!hatLangfuseSammelticket(tr, agents.replace("#langfuse-befunde-gesammelt-1351", "#x")));
+    assert.ok(!hatLangfuseSammelticket("", ""));
+  });
+
+  test("Takt-Workflow: Cron + Dispatch, feste Concurrency-Group ohne Abbruch, schreibende Rechte, Board-Token, echter Lauf", () => {
+    const yml = read(".github/workflows/langfuse-takt.yml");
+    assert.ok(taktWorkflowRobust(yml));
+    const sabotagen: [string, string, string][] = [
+      ["schedule:", "pull_request:", "Cron"],
+      ["workflow_dispatch", "x", "Dispatch"],
+      ["group: langfuse-takt", "group: langfuse-${{ github.run_id }}", "variable Group"],
+      ["cancel-in-progress: false", "cancel-in-progress: true", "Abbruch"],
+      ["issues: write", "issues: read", "Rechte"],
+      ["secrets.PROJECT_TOKEN", "secrets.X", "Board-Token"],
+      ["run: node scripts/langfuse-takt.mjs", "run: node scripts/langfuse-takt.mjs --dry-run", "Trockenlauf"],
+    ];
+    for (const [alt, neu, was] of sabotagen) {
+      assert.ok(yml.includes(alt), `Vorlage enthält ${alt}`);
+      assert.ok(!taktWorkflowRobust(yml.replace(alt, neu)), was);
+    }
+    assert.ok(!taktWorkflowRobust(""));
+  });
+
+  test("Takt-Skript nutzt keinen Such-Index (eventual consistent), nur REST-Listen", () => {
+    const skript = read("scripts/langfuse-takt.mjs");
+    assert.ok(ohneSuchIndex(skript));
+    assert.ok(!ohneSuchIndex(`${skript}\ngh api search/issues`));
+    assert.ok(!ohneSuchIndex(`${skript}\n--search`));
   });
 
   test("Sammelticket löst keine Langfuse-Auswertung aus", () => {

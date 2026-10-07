@@ -33,10 +33,10 @@ Dann nur **dieses eine** Kandidaten-Ticket kurz gegen den Live-Stand prüfen (`g
 
 ## Anlegen auf Position N
 
-Gilt für das Sammelticket (`N` = Position laut AGENTS.md) und das Status-Ticket (`N=20`). `<Titel>`, Body und `N` einsetzen:
+Gilt für das Harness-Sammelticket (`N` = Position laut AGENTS.md). `<Titel>`, Body und `N` einsetzen:
 
 ```bash
-N=<Position>   # Sammelticket: Position laut AGENTS.md; Langfuse-Status: 20
+N=<Position>   # Harness-Sammelticket: Position laut AGENTS.md
 NR=$(gh issue create --label area:harness --title "<Titel>" --body "<Body>" | grep -o '[0-9]*$')
 NODE=$(gh issue view "$NR" --json id --jq .id)
 ITEM=$(gh api graphql -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }' \
@@ -65,17 +65,30 @@ Regel: [AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets](../AGENTS.md#w
 
 ## Wiederkehrendes Ticket „Langfuse-Status überprüfen" (#1293)
 
-Die breite, regelmäßige Auswertung der Langfuse-Daten. Es gibt **höchstens ein** offenes (vorher suchen: `gh issue list --state open --search 'in:title "Langfuse-Status überprüfen"'`; zwei offene durch einen Wettlauf: das jüngere schließen). Neu angelegt wird es beim Abschluss des alten auf **Position 20** ([Anlegen auf Position N](#anlegen-auf-position-n), `N=20`) und rückt so von selbst nach oben (etwa alle 20 Tickets einmal). Die Checkliste steht einmal in [docs/model-routing.md › Langfuse-Status überprüfen](model-routing.md#langfuse-status-überprüfen-1293); hier nur die Mechanik.
+Die breite, regelmäßige Auswertung der Langfuse-Daten. **Den Takt hält ein Workflow, kein Agent und keine Board-Position:** [`.github/workflows/langfuse-takt.yml`](../.github/workflows/langfuse-takt.yml) läuft **wöchentlich** (montags, zusätzlich per `workflow_dispatch`) und ruft [`scripts/langfuse-takt.mjs`](../scripts/langfuse-takt.mjs). Das Skript leitet jedes Mal aus den offenen Issues und der Commit-Liste von `main` ab, was zu tun ist (kein gespeicherter Zähler, idempotent): kein offenes Status-Ticket und mindestens 5 Commits auf `main` seit dem Abschluss des Vorgängers → anlegen (`area:harness`, ohne Assignee) und an die Spitze des Boards schieben; ein offenes ungeclaimtes → an die Spitze schieben; ein geclaimtes oder zu wenig Aktivität → nichts. Eine Concurrency-Group serialisiert gleichzeitige Auslösungen, ein Doppel-Ticket entsteht nicht. Begründung und Verworfenes: [ADR 0016](adr/0016-langfuse-takt-woechentlich.md). Agenten legen das Ticket nie selbst an; es gibt **höchstens ein** offenes (zwei offene durch einen Fehlgriff: das jüngere schließen). Die Checkliste steht einmal in [docs/model-routing.md › Langfuse-Status überprüfen](model-routing.md#langfuse-status-überprüfen-1293); hier nur die Mechanik.
 
-**Body-Vorlage:** Zeitraum (ab `closedAt` des Vorgängers, beim ersten Ticket ab dem Merge von #1293) · Link auf die Checkliste · Abschluss: Bericht-Kommentar geschrieben, Folgen angelegt, Nachfolger auf Position 20.
+**Body-Vorlage:** liefert `statusBody` im Skript (Zeitraum, Wochenfenster, Links, Abschluss); nicht hier doppeln.
 
 **Abschluss, in dieser Reihenfolge:**
 
 1. Bericht als Kommentar im Ticket (Einzelläufe, Zahlen, Befunde je Checklistenpunkt).
 2. **Große Befunde** (eng: ein struktureller Defekt in Erfassung oder Prozess, der eigene Planung und einen eigenen PR braucht) als eigene Issues, nach Priorität einsortiert.
-3. **Kleine Befunde** gebündelt in **ein** Folgeticket „Langfuse-Folgen aus #<nr>" (`area:harness`, ohne Assignee) **unmittelbar hinter dem ungeclaimten Sammelticket** im Board (`board-place.mjs --top` klemmt dorthin; kein Notfall). Gibt es schon ein ungeclaimtes, die Zeilen als Kommentar anhängen und es dort einsortieren. Keine kleinen Befunde, kein Folgeticket.
-4. **Danach** das nächste Status-Ticket auf Position 20 anlegen (auch bei unerreichbarem Langfuse).
-5. PR mit der Verdichtungszeile in model-routing.md und `Closes #<nr>`.
+3. **Kleine Befunde** als Kommentar-Zeilen ins Sammelticket „Langfuse-Befunde (gesammelt)" ([Abschnitt unten](#langfuse-befunde-gesammelt-1351)); danach `node scripts/board-place.mjs --top <nr>`, damit es direkt drankommt. Keine kleinen Befunde, kein Sammelticket.
+4. PR mit der Verdichtungszeile in model-routing.md und `Closes #<nr>`. Einen Nachfolger legt der Workflow an (auch bei unerreichbarem Langfuse).
+
+### Langfuse-Befunde (gesammelt) (#1351)
+
+Das Sammelticket „Langfuse-Befunde (gesammelt)" (`area:harness`) bündelt Befunde aus Langfuse-Daten, analog zum [Harness-Sammelticket](#sammelticket-harness-härtung-gesammelt-1199). Es ersetzt die früheren Einweg-Folgetickets je Status-Lauf.
+
+- **Was hinein gehört:** Befunde, die aus Langfuse-Daten oder einem Status-Lauf stammen (Kosten, Tokens, Erfassungslücken, Kandidaten zum Lockern eines Gates, einer Lens oder einer Regel). Alles andere zum Harness bleibt im Harness-Sammelticket.
+- **Höchstens ein** ungeclaimtes; ein geclaimtes (Assignee) läuft daneben weiter. Jeder Agent darf es jederzeit befüllen:
+  ```bash
+  gh issue list --state open --search 'in:title "Langfuse-Befunde (gesammelt)"' --json number,assignees --jq '.[] | select((.assignees|length)==0) | .number'
+  gh issue comment <nr> --body "- [ ] <Befund>"
+  ```
+  Zwei ungeclaimte (Wettlauf): das jüngere schließen, seine Zeilen ins ältere übertragen.
+- **Anlegen nur bei Bedarf** (kein leeres Ticket, das sonst gezogen würde): wie im Snippet unter [Anlegen auf Position N](#anlegen-auf-position-n), aber ohne die `board-place`-Zeile. Es bleibt bewusst am Board-Ende; der Abschluss des nächsten Status-Laufs holt es mit `--top` nach oben. Wer es beim Abschluss selbst anlegt, schiebt es sofort mit `--top`.
+- **Abarbeiten:** komplett, wie beim Harness-Sammelticket (alle Zeilen in einem PR, je Zeile ein Ergebnis, nichts still auslagern). Ein **Lockern** (Gate, Lens, Regel) setzt der PR nur mit Messung vorher und nachher um, nie um ein Rot zu verstecken ([AGENTS.md › Kein Grün-durch-Aufweichen](../AGENTS.md#git-pr-und-merge)).
 
 ## Reihenfolge pflegen — im Board, nicht in einer Datei
 
