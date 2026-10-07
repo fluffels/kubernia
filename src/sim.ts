@@ -19,7 +19,7 @@ import type {
   ScrapeTarget, Alert, Scenario, ClusterState,
 } from "./sim/state";
 import { deploymentPodStatus, isReady } from "./sim/podstatus";
-import { HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService } from "./sim/state";
+import { DEFAULT_NAMESPACE, HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService } from "./sim/state";
 export { BROKEN_STATUS } from "./sim/state";
 export type {
   ExecResult,
@@ -481,7 +481,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       const sc = pvc.storageClass ? this.storageClasses.find(s => s.name === pvc.storageClass) : null;
       if (sc && sc.provisioner) {
         const pvName = "pvc-" + randSuffix(8, this.rng);
-        this.pvs.push({ name: pvName, capacity: pvc.capacity, status: "Bound", claim: "default/" + pvc.name, storageClass: sc.name, accessModes: pvc.accessModes, reclaimPolicy: sc.reclaimPolicy, created: this.clock });
+        this.pvs.push({ name: pvName, capacity: pvc.capacity, status: "Bound", claim: DEFAULT_NAMESPACE + "/" + pvc.name, storageClass: sc.name, accessModes: pvc.accessModes, reclaimPolicy: sc.reclaimPolicy, created: this.clock });
         pvc.status = "Bound";
         pvc.volume = pvName;
         return;
@@ -489,7 +489,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       const pv = this.pvs.find(p => p.status === "Available" && (!pvc.storageClass || p.storageClass === pvc.storageClass) && p.accessModes === pvc.accessModes);
       if (pv) {
         pv.status = "Bound";
-        pv.claim = "default/" + pvc.name;
+        pv.claim = DEFAULT_NAMESPACE + "/" + pvc.name;
         pvc.status = "Bound";
         pvc.volume = pv.name;
         if (pv.capacity) pvc.capacity = pv.capacity;
