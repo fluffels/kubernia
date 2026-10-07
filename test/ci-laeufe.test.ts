@@ -100,3 +100,41 @@ describe("eine Quelle (Fitness)", () => {
     }
   });
 });
+
+describe("zaehleRoteCommits: die Verdrahtung von Wächter und Messskript (#1398)", () => {
+  const z = (modul as unknown as { zaehleRoteCommits: (r: (a: string[]) => string, o: { branch: string; createdAt: string; mergedAt?: string | null; repo?: string }) => number }).zaehleRoteCommits;
+  // Branch mit 4 roten SHAs: 2 gehören zu einem früheren PR (vor createdAt), 2 zu diesem.
+  const antwort = [
+    "feature/x\ta1\t2026-09-01T10:00:00Z",
+    "feature/x\ta2\t2026-09-01T11:00:00Z",
+    "feature/x\tb1\t2026-10-01T10:30:00Z",
+    "feature/x\tb1\t2026-10-01T10:40:00Z",
+    "feature/x\tb2\t2026-10-01T11:30:00Z",
+    "feature/x\tb3\t2026-10-02T09:00:00Z",
+  ].join("\n");
+  const gh = (gesehen: string[][] = []) => (a: string[]) => {
+    gesehen.push(a);
+    return antwort;
+  };
+
+  test("Läufe eines früheren PRs auf dem wiederverwendeten Branch zählen nicht (Wächter bleibt unter der Schwelle)", () => {
+    assert.equal(z(gh(), { branch: "feature/x", createdAt: "2026-10-01T10:00:00Z", repo: "o/r" }), 3);
+    assert.equal(z(gh(), { branch: "feature/x", createdAt: "2026-09-01T00:00:00Z", repo: "o/r" }), 5, "ohne das Fenster wären es alle");
+  });
+  test("Merge-Zeitpunkt begrenzt nach oben, offener PR (null) nicht", () => {
+    assert.equal(z(gh(), { branch: "feature/x", createdAt: "2026-10-01T10:00:00Z", mergedAt: "2026-10-01T12:00:00Z" }), 2);
+    assert.equal(z(gh(), { branch: "feature/x", createdAt: "2026-10-01T10:00:00Z", mergedAt: null }), 3);
+  });
+  test("der API-Pfad trägt Branch, Repo und das Erstellungsdatum des PRs", () => {
+    const gesehen: string[][] = [];
+    z(gh(gesehen), { branch: "feature/x", createdAt: "2026-10-01T10:00:00Z", repo: "o/r" });
+    const pfad = gesehen[0].find((x) => x.includes("actions/workflows")) ?? "";
+    assert.ok(pfad.startsWith("repos/o/r/") && pfad.includes("branch=feature%2Fx") && pfad.includes("created=%3E%3D2026-10-01"));
+  });
+  test("Wächter und Messskript reichen die PR-Zeitpunkte wirklich durch (Verdrahtung)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const lies = (f: string) => readFileSync(new URL(`../scripts/${f}`, import.meta.url), "utf8");
+    assert.match(lies("check-festgefahren.mjs"), /zaehleRoteCommits\(ghText, \{ branch: headBranch, createdAt: pr\.createdAt, repo \}\)/);
+    assert.match(lies("token-baseline.mjs"), /createdAt: p\.createdAt, mergedAt: p\.mergedAt/);
+  });
+});

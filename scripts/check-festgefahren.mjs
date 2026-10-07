@@ -26,7 +26,7 @@
 
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { distinctRoteShas, holeRoteLaeufe } from "./ci-laeufe.mjs";
+import { zaehleRoteCommits } from "./ci-laeufe.mjs";
 
 /** Schwelle: 1 initialer Fehlschlag + 3 gescheiterte Fix-Versuche = „dreimal" aus AGENTS.md. */
 export const MAX_FAILED_PUSHES = 4;
@@ -82,6 +82,9 @@ function ghJson(args) {
   return JSON.parse(out);
 }
 
+/** `gh <args>` ausführen und stdout als Text liefern (Runner für ci-laeufe.mjs). */
+const ghText = (args) => execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+
 /** `gh <args>` ausführen, Ausgabe an Terminal durchreichen. */
 function ghRun(args) {
   execFileSync("gh", args, { stdio: "inherit" });
@@ -127,12 +130,7 @@ function main() {
   //    Paginiert (ci-laeufe.mjs), damit auch bei vielen alten Läufen kein neuer abgeschnitten wird.
   let failedCount;
   try {
-    const laeufe = holeRoteLaeufe((args) => execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }), {
-      branch: headBranch,
-      seit: pr.createdAt,
-      repo,
-    });
-    failedCount = distinctRoteShas(laeufe, { von: pr.createdAt }).length;
+    failedCount = zaehleRoteCommits(ghText, { branch: headBranch, createdAt: pr.createdAt, repo });
   } catch (err) {
     console.error(`gh api fehlgeschlagen (${err.message}) — Wächter übersprungen.`);
     return; // graceful degradation: kein Netz/Token soll nicht fälschlich rot werden

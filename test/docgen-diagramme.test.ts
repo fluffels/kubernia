@@ -165,6 +165,9 @@ describe("Platzhalter: Rot-Fälle", () => {
     rot(ALLE_CHECKS, /Ruleset-Spiegel \.github\/ruleset-main-schutz\.json nicht gefunden/, ohne);
     rot(ALLE_CHECKS, /kein gültiges JSON/, basis({ ".github/ruleset-main-schutz.json": "{kaputt" }));
     rot(ALLE_CHECKS, /requiredChecks muss eine nicht leere Liste/, basis({ ".github/ruleset-main-schutz.json": JSON.stringify({ ...RULESET, requiredChecks: [] }) }));
+    rot(ALLE_CHECKS, /requiredChecks muss eine nicht leere Liste aus Texten/, basis({ ".github/ruleset-main-schutz.json": JSON.stringify({ ...RULESET, requiredChecks: ["a", 3] }) }));
+    const ohneConfig = { ...config, diagramme: { ...(config.diagramme as Cfg), ruleset: undefined } } as Cfg;
+    assert.throws(() => ersetze(ALLE_CHECKS, basis(), ohneConfig), /config\.diagramme\.ruleset fehlt/);
     rot(ALLE_CHECKS, /bypassActors muss eine Liste/, basis({ ".github/ruleset-main-schutz.json": JSON.stringify({ name: "x", requiredChecks: ["a"] }) }));
     rot("${ruleset:name}", /name fehlt/, basis({ ".github/ruleset-main-schutz.json": JSON.stringify({ requiredChecks: ["a"], bypassActors: [] }) }));
   });

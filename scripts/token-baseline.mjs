@@ -30,7 +30,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseNachweis } from "./slice-override.mjs";
-import { distinctRoteShas, holeRoteLaeufe } from "./ci-laeufe.mjs";
+import { zaehleRoteCommits } from "./ci-laeufe.mjs";
 import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { ladeSessionDatei, transkriptZeilen } from "./transkript.mjs";
 import { fehlerArten, wiederlesen } from "./tool-metriken.mjs";
@@ -567,11 +567,10 @@ export function nachweisAusCommits(commits) {
 /** CI-Fix-Runden = distinct head_sha mit rotem CI-Lauf zwischen PR-Erstellung und Merge (dieselbe Zählung wie #904, gemeinsamer Abruf: ci-laeufe.mjs). */
 function prInfo(pr) {
   const p = ghJson(["pr", "view", String(pr), "--json", "createdAt,mergedAt,headRefName,commits,files"]);
-  const laeufe = holeRoteLaeufe((args) => execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }), { branch: p.headRefName, seit: p.createdAt });
   return {
     prCreatedAt: p.createdAt,
     mergedAt: p.mergedAt,
-    failedPushes: distinctRoteShas(laeufe, { von: p.createdAt, bis: p.mergedAt ?? undefined }).length,
+    failedPushes: zaehleRoteCommits((args) => execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }), { branch: p.headRefName, createdAt: p.createdAt, mergedAt: p.mergedAt }),
     nachweis: nachweisAusCommits(p.commits),
     files: p.files ?? [],
   };

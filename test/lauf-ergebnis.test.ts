@@ -203,7 +203,7 @@ describe("Label-Events per GraphQL (Z3c)", () => {
 describe("laufErgebnis (git und gh injiziert)", () => {
   const liste = [pr({ headRefName: "feature/kq-40-a&b#c+d" })];
   const log = `${SHA}\x1f${MERGED}\x1f${review("runden=1 lenses=doku")}\x1e`;
-  type Opt = { liste?: unknown[]; fehler?: string; laeufe?: string; label?: (nummern: number[]) => unknown; aufrufe?: string[][] };
+  type Opt = { seit?: string; liste?: unknown[]; fehler?: string; laeufe?: string; label?: (nummern: number[]) => unknown; aufrufe?: string[][] };
   /** gh-Stub: `pr list`, die EINE paginierte Läufe-Abfrage und GraphQL-Label-Events (Standard: ein festgefahren-Label je PR). */
   const gh = (o: Opt = {}) => (a: string[]): string => {
     o.aufrufe?.push(a);
@@ -215,7 +215,7 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     if (a.join(" ").includes("actions/workflows")) {
       const pfad = a.find((x) => x.includes("actions/workflows")) ?? "";
       assert.ok(a.includes("--paginate") && pfad.includes("status=failure") && pfad.includes("event=pull_request"), "nur rote PR-Läufe, paginiert");
-      assert.ok(pfad.includes("created=%3E%3D2026-10-01"), "Zeitfilter ab dem frühesten PR");
+      assert.ok(pfad.includes(`created=%3E%3D${o.seit ?? "2026-10-01"}`), "Zeitfilter ab dem frühesten PR");
       assert.ok(!pfad.includes("branch="), "keine Abfrage je Branch");
       return o.laeufe ?? `feature/kq-40-a&b#c+d\tx\t2026-10-01T10:30:00Z\nfeature/kq-40-a&b#c+d\tx\t2026-10-01T10:31:00Z\nfremder/branch\ty\t2026-10-01T10:32:00Z\n`;
     }
@@ -265,6 +265,16 @@ describe("laufErgebnis (git und gh injiziert)", () => {
     const laeufe = "feature/a\tx\t2026-10-01T10:30:00Z\nfeature/b\ty\t2026-10-01T10:31:00Z\nfeature/b\tz\t2026-10-01T10:32:00Z\n";
     const e = mod.laufErgebnis({ von, bis, runGit: git(zwei), runGh: gh({ liste: prs, laeufe }), jetzt: SPAETER });
     assert.deepEqual(e.zeilen.map((z) => [z.pr, z.ciFix]), [[50, 1], [51, 2]]);
+  });
+  test("Zeitfilter ab dem FRÜHESTEN PR-Datum: ein roter Lauf des älteren PRs bleibt in der Abfrage und in seinem ciFix (Z3c)", () => {
+    const prs = [
+      pr({ number: 51, headRefName: "feature/neu", createdAt: "2026-10-01T10:00:00Z", mergeCommit: { oid: "1".repeat(40) } }),
+      pr({ number: 50, headRefName: "feature/alt", createdAt: "2026-09-30T08:00:00Z" }), // bewusst nicht aufsteigend
+    ];
+    const zwei = `${SHA}\x1f${MERGED}\x1f${review("runden=1 lenses=doku")}\x1e${"1".repeat(40)}\x1f${MERGED}\x1f${review("runden=1 lenses=doku")}\x1e`;
+    const laeufe = "feature/alt\told\t2026-09-30T10:30:00Z\nfeature/neu\tneu\t2026-10-01T10:30:00Z\n";
+    const e = mod.laufErgebnis({ von: "2026-09-30T00:00:00Z", bis, runGit: git(zwei), runGh: gh({ liste: prs, laeufe, seit: "2026-09-30" }), jetzt: SPAETER });
+    assert.deepEqual(e.zeilen.map((z) => [z.pr, z.ciFix]), [[50, 1], [51, 1]]);
   });
   test("API-Kappung bei 1000 roten Läufen ist ein Datenfehler", () => {
     const laeufe = Array.from({ length: 1000 }, (_, i) => `feature/kq-40-a&b#c+d\tsha${i}\t2026-10-01T10:30:00Z`).join("\n");

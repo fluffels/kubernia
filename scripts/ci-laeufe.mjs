@@ -61,3 +61,13 @@ export function distinctRoteShas(laeufe, { von, bis } = {}) {
   }).map((l) => l.sha);
   return [...new Set(shas)];
 }
+
+/**
+ * Rote Commits EINES PRs: distinct Head-SHAs roter Läufe auf seinem Branch zwischen Erstellung und Merge (`mergedAt`
+ * fehlt: offen, keine obere Grenze). Läufe eines früheren PRs auf einem wiederverwendeten Branch zählen nicht. Die
+ * Verdrahtung von Festgefahren-Wächter und Messskript, injizierbar (`runGh`) und damit testbar.
+ */
+export function zaehleRoteCommits(runGh, { branch, createdAt, mergedAt, repo }) {
+  const laeufe = holeRoteLaeufe(runGh, { branch, seit: createdAt, repo });
+  return distinctRoteShas(laeufe, { von: createdAt, bis: mergedAt ?? undefined }).length;
+}
