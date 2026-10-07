@@ -94,7 +94,8 @@ export const BUNDLE_BUDGETS = [
     // #1139: +~8 KB — YAML-Parser + Manifest-Mapper (src/sim/yaml.ts, src/sim/manifest/*) laufen im Spiel.
     // #1299: +~0.3 KB — werft-dienst-/uebung-Manifeste in der Bibliothek, Sonderfeld-Overlay in der Registry.
     // #1300: +~3 KB — Deployment-apply-Abgleich (apply-deployment.ts), Workload-Primitive, cpu-/memory-Mapper.
-    maxBytes: 1_414_000,
+    // #1319: +~2 KB — zwei headless-DNS-Aufgaben (Texte, Checks, why/hint) in knut.json.
+    maxBytes: 1_417_000,
   },
   {
     label: "Phaser-vendor-Chunk in dist/ (#595)",

@@ -83,9 +83,9 @@ test("Phase 7: der Diagnose-Drill pvc-pending lässt wirklich ein Pending-PVC zu
 function playQuest(sim: KQSim, questId: string) {
   const quest = KQContent.QUESTS.find(q => q.id === questId);
   assert.ok(quest, "Quest existiert: " + questId);
-  assert.equal(quest!.giver, "knut", questId + ": Geber ist Knut");
-  assert.equal(quest!.topic, "storage", questId + ": Thema ist storage");
-  for (const step of quest!.steps) {
+  assert.equal(quest.giver, "knut", questId + ": Geber ist Knut");
+  assert.equal(quest.topic, "storage", questId + ": Thema ist storage");
+  for (const step of quest.steps) {
     if (step.scenario) sim.mergeScenario(step.scenario);
     if (step.type === "teach") {
       const c = step.cmd;
@@ -113,7 +113,7 @@ test("Phase 7: der Storage-Quest-Arc spielt durch und pinnt den End-Zustand", ()
   playQuest(sim, "storage-statefulset");
   const sts = sim.statefulSets.find(s => s.name === "speicher-datenbank");
   assert.ok(sts, "StatefulSet speicher-datenbank existiert nach der Quest");
-  assert.ok(sts!.pods.some(p => p.name === "speicher-datenbank-0"), "stabiler Pod -0 ist da (auch nach dem Lösch-Beweis)");
+  assert.ok(sts.pods.some(p => p.name === "speicher-datenbank-0"), "stabiler Pod -0 ist da (auch nach dem Lösch-Beweis)");
   assert.ok(sim.pvcs.some(p => p.name.startsWith("daten-speicher-datenbank-") && p.status === "Bound"), "je Replica ein gebundenes PVC");
   // #1301: der headless Service zeigt None statt einer ClusterIP, DNS liefert die Pod-IPs.
   assert.match(sim.exec("kubectl get svc").output!, /speicher-datenbank\s+ClusterIP\s+None\s/);
@@ -130,7 +130,7 @@ test("Phase 7: der Storage-Quest-Arc spielt durch und pinnt den End-Zustand", ()
   playQuest(sim, "storage-backup-restore");
   const restored = sim.pvcs.find(p => p.name === "kai-datenbank");
   assert.ok(restored, "kai-datenbank ist nach dem Restore wieder da");
-  assert.equal(restored!.data, "stammkundenverzeichnis", "die gesicherten Daten sind zurück");
+  assert.equal(restored.data, "stammkundenverzeichnis", "die gesicherten Daten sind zurück");
   assert.ok(sim.volumeSnapshots.some(v => v.name === "kai-datenbank-snap" && v.readyToUse), "der Snapshot überlebte den Verlust des Quell-PVC");
 
   // Die reine Entscheidungs-Quest: nur Struktur (Choices), keine Sim-Aktion.
@@ -158,4 +158,107 @@ test("Red-Green: Knut-Drills lehnen falsche Eingaben ab", () => {
   const restore = KQContent.DRILLS["snap-restore"](new KQSim({}));
   assert.ok(restore.accept.some(re => re.test(norm(restore.solution))), "die snap-restore-Musterlösung gilt");
   assert.ok(!restore.accept.some(re => re.test("kubectl apply --filename snapshot.yaml")), "snapshot.yaml ist kein restore.yaml");
+});
+
+/* #1319: Knuts headless-DNS-Aufgaben (t-sts-dns, t-sts-dns-pod) am Ende von „Stabile Namen erkennen". */
+const STS_QUEST = () => KQContent.QUESTS.find(q => q.id === "storage-statefulset")!;
+type StsTask = { id: string; accept: RegExp[]; solution: string; check?: (s: KQSim) => boolean };
+const stsTasks = (): StsTask[] => {
+  const out: StsTask[] = [];
+  for (const step of STS_QUEST().steps) {
+    if (step.type === "terminal") out.push(...(step.tasks as StsTask[]));
+    else if (step.type === "teach") out.push(step.cmd as unknown as StsTask);
+  }
+  return out;
+};
+const stsTask = (id: string): StsTask => {
+  const t = stsTasks().find(x => x.id === id);
+  assert.ok(t, "Aufgabe existiert: " + id);
+  return t;
+};
+
+/** Spielt die Quest bis einschließlich `lastId` (Szenarien, Musterlösungen) gegen `sim`. */
+function playUntilTask(sim: KQSim, lastId: string) {
+  for (const step of STS_QUEST().steps) {
+    if (step.scenario) sim.mergeScenario(step.scenario);
+    const list: StsTask[] = step.type === "terminal" ? (step.tasks as StsTask[]) : step.type === "teach" ? [step.cmd as unknown as StsTask] : [];
+    for (const t of list) {
+      sim.exec(t.solution);
+      if (t.id === lastId) return;
+    }
+  }
+  assert.fail("Aufgabe nicht gefunden: " + lastId);
+}
+const addrs = (o: string) => [...o.matchAll(/^Address: (10\.244\.\S+)$/gm)].map(m => m[1]);
+const accepts = (t: StsTask, cmd: string) => t.accept.some(re => re.test(norm(cmd)));
+const SVC = "speicher-datenbank";
+
+test("#1319: t-sts-dns und t-sts-dns-pod folgen direkt auf t-sts-pods (Schritt-Indizes unverändert)", () => {
+  for (const step of STS_QUEST().steps) {
+    if (step.type !== "terminal") continue;
+    const ids = step.tasks.map(t => t.id);
+    if (!ids.includes("t-sts-pods")) continue;
+    assert.deepEqual(ids.slice(-3), ["t-sts-pods", "t-sts-dns", "t-sts-dns-pod"]);
+    return;
+  }
+  assert.fail("Schritt mit t-sts-pods fehlt");
+});
+
+test("#1319: headless DNS – Service-Name liefert 3 Pod-IPs, <pod>.<service> genau eine", () => {
+  const sim = new KQSim({});
+  playUntilTask(sim, "t-sts-pods");
+  const svc = stsTask("t-sts-dns");
+  const pod = stsTask("t-sts-dns-pod");
+  const r1 = sim.exec(svc.solution);
+  assert.ok(!r1.error, "kein Sim-Fehler");
+  assert.deepEqual(addrs(r1.output!), [0, 1, 2].map(i => podIP(SVC + "-" + i)));
+  assert.ok(svc.check!(sim), "Check erfüllt");
+  const r2 = sim.exec(pod.solution);
+  assert.ok(!r2.error, "kein Sim-Fehler");
+  assert.deepEqual(addrs(r2.output!), [podIP(SVC + "-0")]);
+  assert.ok(pod.check!(sim), "Check erfüllt");
+});
+
+test("#1319: Alt-Stand mit normalem ClusterIP-Service: Checks false, Ausweg per delete + apply", () => {
+  const sim = new KQSim({ services: [{ name: SVC, type: "ClusterIP", clusterIP: "10.96.7.7", port: 5432 }] });
+  playUntilTask(sim, "t-sts-pods");
+  const svc = stsTask("t-sts-dns");
+  const pod = stsTask("t-sts-dns-pod");
+  assert.ok(!svc.check!(sim), "nicht headless: Check false");
+  assert.ok(!pod.check!(sim), "nicht headless: Check false");
+  assert.deepEqual(addrs(sim.exec(svc.solution).output ?? ""), [], "keine Pod-IPs");
+  assert.ok(sim.exec(pod.solution).error, "Pod-Form: NXDOMAIN");
+  assert.ok(!sim.exec("kubectl delete service " + SVC).error);
+  assert.ok(!sim.exec("kubectl apply --filename headless-service.yaml").error);
+  assert.ok(svc.check!(sim) && pod.check!(sim), "nach Neuanlage beide Checks wahr");
+  assert.deepEqual(addrs(sim.exec(svc.solution).output!), [0, 1, 2].map(i => podIP(SVC + "-" + i)));
+  assert.deepEqual(addrs(sim.exec(pod.solution).output!), [podIP(SVC + "-0")]);
+});
+
+test("#1319: Red-Green – ein ungebundenes PVC macht den t-sts-dns-Check falsch", () => {
+  const sim = new KQSim({});
+  playUntilTask(sim, "t-sts-pods");
+  const svc = stsTask("t-sts-dns");
+  assert.ok(svc.check!(sim));
+  const pvc = sim.pvcs.find(p => p.name === "daten-" + SVC + "-2")!;
+  pvc.status = "Pending";
+  pvc.volume = ""; // Invariante: Pending hat kein Volume
+  assert.ok(!svc.check!(sim), "Check wird falsch");
+  assert.equal(addrs(sim.exec(svc.solution).output ?? "").length, 2, "die Sim liefert dann nur 2 IPs");
+});
+
+test("#1319: accept-Negativfälle und Schreibweisen", () => {
+  const svc = stsTask("t-sts-dns");
+  const pod = stsTask("t-sts-dns-pod");
+  for (const bad of ["nslookup " + SVC + "-0." + SVC, "nslookup " + SVC + "-0", "nslookup speicher", "nslookup " + SVC + "."])
+    assert.ok(!accepts(svc, bad), "Service-Task lehnt ab: " + bad);
+  for (const bad of ["nslookup " + SVC, "nslookup " + SVC + "-0", "nslookup " + SVC + "-0.speicher", "nslookup " + SVC + "-1." + SVC])
+    assert.ok(!accepts(pod, bad), "Pod-Task lehnt ab: " + bad);
+  for (const ok of [SVC, SVC + ".default", SVC + ".default.svc.cluster.local"])
+    assert.ok(accepts(svc, "nslookup " + ok), "Service-Task akzeptiert " + ok);
+  for (const ok of ["", ".default", ".default.svc.cluster.local"])
+    assert.ok(accepts(pod, "nslookup " + SVC + "-0." + SVC + ok), "Pod-Task akzeptiert Form " + ok);
+  const sim = new KQSim({});
+  playUntilTask(sim, "t-sts-pods");
+  assert.ok(sim.exec("nslookup " + SVC + "-0").error, "ohne Service-Namen gibt es NXDOMAIN");
 });
