@@ -19,6 +19,8 @@ Der Prompt enthält Nummer, Titel, Body, den Plan des `kubernia-planner` und die
 
 **Sammelticket „Harness-Härtung (gesammelt)“:** setze ALLE Zeilen um, auch später dazugekommene und beim Arbeiten gefundene Befunde, in diesem einen PR (AGENTS.md § Harness-Befunde sind Zeilen; zu groß: `KQ-Diffsize-Override:` mit Grund). Nichts auslagern; was wirklich nicht machbar ist, meldest du als `entscheidung-noetig`.
 
+**Zahlen aus dem Plan:** Eine Zahl aus dem Plan übernimmst du nur mit ihren Rohwerten oder nachgemessen (`node scripts/token-baseline.mjs`); ohne beides ist sie eine ungeprüfte Hypothese und steht so im PR-Text.
+
 **Plan-Nachweis (#1270):** der Plan-Block beginnt mit der Zeile `PLAN #<nr> · kubernia-planner`, oder der Prompt nennt ausdrücklich `Plan ohne Planer: <Grund>`. Sonst sofort `abgebrochen` melden (vor dem Worktree): der Planungspass fehlt. Der Nachweis geht später als `KQ-Plan:`-Zeile in den Nachweis-Commit.
 
 ## Ablauf

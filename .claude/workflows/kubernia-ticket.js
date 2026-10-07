@@ -824,7 +824,7 @@ ${ticketKontext}
 
 ${
   plan
-    ? `--- Plan des Planungs-Agenten (Orientierung, ersetzt dein Urteil nicht) ---\n${plan}\n--- Ende Plan ---`
+    ? `--- Plan des Planungs-Agenten (Orientierung, ersetzt dein Urteil nicht; eine Zahl aus dem Plan übernimmst du nur mit ihren Rohwerten oder nachgemessen mit token-baseline.mjs) ---\n${plan}\n--- Ende Plan ---`
     : 'Es liegt kein Vorab-Plan vor — skizziere dir selbst kurz einen, bevor du anfängst.'
 }
 ${
