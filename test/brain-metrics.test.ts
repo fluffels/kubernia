@@ -386,6 +386,24 @@ describe("ladeLangfuseSession: zwei Stufen mit tatsächlichen Span-Namen (#1322 
     assert.equal(brainMetrics(part.events).searchCalls, 1);
   });
 
+  test("Namens-Fallback: ein Span ohne metadata.tool_name wird über den Span-Namen als Eingabe-Tool erkannt (#1331)", async () => {
+    const ohneMeta = [
+      { id: "r1", type: "TOOL", name: "Tool: Read [Kubernia-Doku]", startTime: T(1), metadata: { output_meta: { orig_len: 400 } }, input: { file_path: "docs/a.md" } },
+      { id: "x1", type: "TOOL", name: "Tool: Grep", startTime: T(2), metadata: {}, input: { pattern: "x" } },
+    ];
+    const namen: (string | null)[] = [];
+    const fetchImpl = (url: string) => {
+      const q = new URL(url).searchParams;
+      if (q.get("name")) namen.push(q.get("name"));
+      const daten = q.get("type") === "TOOL" ? ohneMeta.filter((o) => !q.get("name") || o.name === q.get("name")) : [];
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: daten, meta: {} }) });
+    };
+    const part = await lade("s", { baseUrl: "http://x", publicKey: "p", secretKey: "k", fetchImpl });
+    assert.deepEqual(namen, ["Tool: Read [Kubernia-Doku]"], "Stufe 2 fragt nur das Eingabe-Tool, erkannt am Namen ohne Präfix und Qualifier");
+    const m = brainMetrics(part.events);
+    assert.deepEqual([m.brainReads, m.searchCalls], [1, 1]);
+  });
+
   test("kaputte Antwort der zweiten Stufe: der Fehler steigt auf statt leerer Zahlen", async () => {
     let n = 0;
     const fetchImpl = (url: string) => {

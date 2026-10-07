@@ -223,6 +223,22 @@ describe("Nie vor das ungeclaimte Sammelticket (#1322 Z19)", () => {
     expect(hinter({ anchor: null, position: 4, numbers: [13] })).toEqual([[13, "I12"]]); // das Sammelticket selbst
   });
 
+  test("Kompositionstest von main: planFuerArgs(items, parseArgs(argv)) aus echten Kommandozeilen (#1331)", () => {
+    const F = rawLib as unknown as { planFuerArgs: (items: B[], args: object) => { steps: { item: B; afterId: string | null }[]; klemmung: { geklemmt: boolean } } };
+    const neu = [...board3, b(20)];
+    const plan = (argv: string[]) => {
+      const args = P.parseArgs(argv);
+      expect(args, argv.join(" ")).not.toBeNull();
+      return F.planFuerArgs(neu, args as object);
+    };
+    expect(plan(["--top", "20"]).steps.map((s) => [s.item.number, s.afterId])).toEqual([[20, "I13"]]);
+    expect(plan(["--top", "20"]).klemmung.geklemmt).toBe(true);
+    expect(plan(["--notfall", "rot-main", "--top", "20"]).steps.map((s) => [s.item.number, s.afterId])).toEqual([[20, null]]);
+    expect(plan(["--after", "14", "20"]).steps.map((s) => [s.item.number, s.afterId])).toEqual([[20, "I14"]]);
+    expect(plan(["--position", "6", "20"]).steps.map((s) => [s.item.number, s.afterId])).toEqual([[20, "I14"]]);
+    expect(P.parseArgs(["--notfall", "unbekannt", "--top", "20"])).toBeNull();
+  });
+
   test("normalizeItems liefert Titel, Assignee-Logins und Zustand (Form einer echten REST-Antwort)", () => {
     const echt = [[{ node_id: "PVTI_x", content_type: "Issue", content: { number: 1331, title: TITEL, state: "open", assignees: [{ login: "fluffels", id: 1 }, null, { id: 2 }] }, fields: [] }]];
     expect(K.normalizeItems(echt)).toEqual([{ id: "PVTI_x", number: 1331, status: "", title: TITEL, assignees: ["fluffels"], state: "open" }]);

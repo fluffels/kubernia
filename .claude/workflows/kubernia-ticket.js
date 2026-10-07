@@ -424,6 +424,22 @@ function reviewKonvergiert({ verifyGruen, blockierend, fehlend }) {
   return !!verifyGruen && (blockierend || []).length === 0 && (fehlend || []).length === 0
 }
 
+/**
+ * Entscheidung der Review-Schleife nach einem Pass (#1331), pure und getestet statt im Schleifenrumpf: `konvergiert` (weiter zum
+ * PR), `lens-ausfall` (nur eine Brille fehlt, nichts zu fixen: Hand-off), `verify-handoff` (vor dem ersten Lens-Pass nach
+ * `maxVerifyFixe` Fix-Versuchen weiter rot), `review-handoff` (nach `maxReviewRunden` Fix-Runden nicht konvergiert),
+ * sonst `nachbessern-verify` (rotes verify vor dem ersten Lens-Pass, zählt gegen den Festgefahren-Cap) bzw.
+ * `nachbessern-review` (Fix-Runde nach einem Lens-Pass). `paesse` = bisher gelaufene Lens-Pässe.
+ */
+function reviewSchritt({ verifyGruen, blockierend, fehlend, paesse, verifyFixe, reviewRunden, maxVerifyFixe, maxReviewRunden }) {
+  if (reviewKonvergiert({ verifyGruen, blockierend, fehlend })) return 'konvergiert'
+  if (verifyGruen && (blockierend || []).length === 0) return 'lens-ausfall'
+  const vorLens = paesse === 0
+  if (vorLens && verifyFixe >= maxVerifyFixe) return 'verify-handoff'
+  if (!vorLens && reviewRunden >= maxReviewRunden) return 'review-handoff'
+  return vorLens ? 'nachbessern-verify' : 'nachbessern-review'
+}
+
 /** Zähler für den Nachweis: ein Pass mehr; die Brillen merkt nur ein VOLLER Pass, ein Delta-Pass nie. */
 function nachweisStand(stand, { modus, berichte }) {
   return { paesse: stand.paesse + 1, ersteLenses: modus === 'voll' ? berichte.map((b) => b.lens) : stand.ersteLenses }
@@ -1063,22 +1079,32 @@ Sammelticket, Spiel-/Inhalts-Befund oder Notfall → eigenes Issue) — nicht in
       )
     }
 
-    if (reviewKonvergiert({ verifyGruen, blockierend, fehlend })) {
+    // Vor dem ersten Lens-Pass (paesse === 0) kann nur ein rotes verify hierher führen: eigener Zähler, eigene Grenze.
+    const schritt = reviewSchritt({
+      verifyGruen,
+      blockierend,
+      fehlend,
+      paesse: nachweisWerte.paesse,
+      verifyFixe,
+      reviewRunden,
+      maxVerifyFixe: MAX_FIX_VERSUCHE,
+      maxReviewRunden: MAX_REVIEW_RUNDEN,
+    })
+    const vorLens = schritt === 'nachbessern-verify'
+    if (schritt === 'konvergiert') {
       log(`Review konvergiert nach ${reviewRunden} Fix-Runde(n): keine blockierenden Findings, verify grün.`)
       break
     }
-    if (verifyGruen && blockierend.length === 0) {
+    if (schritt === 'lens-ausfall') {
       // Nur ein Lens-Ausfall, nichts zu fixen: sofort Hand-off statt einer leeren Fix-Runde.
       log(`⛔ Lens ${fehlend.join(', ')} lieferte zweimal kein Ergebnis (ungeprüft) — Hand-off an die Maintainerin (kein PR).`)
       break
     }
-    // Vor dem ersten Lens-Pass (paesse === 0) kann nur ein rotes verify hierher führen: eigener Zähler, eigene Grenze.
-    const vorLens = nachweisWerte.paesse === 0
-    if (vorLens && verifyFixe >= MAX_FIX_VERSUCHE) {
+    if (schritt === 'verify-handoff') {
       log(`⛔ verify nach ${MAX_FIX_VERSUCHE} Fix-Versuchen weiter rot, noch kein Lens-Pass — Hand-off an die Maintainerin (kein PR).`)
       break
     }
-    if (!vorLens && reviewRunden >= MAX_REVIEW_RUNDEN) {
+    if (schritt === 'review-handoff') {
       log(`⛔ Review nach ${MAX_REVIEW_RUNDEN} Fix-Runden nicht konvergiert — Hand-off an die Maintainerin (kein PR).`)
       break
     }

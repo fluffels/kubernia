@@ -9,6 +9,8 @@
  */
 
 import { einfacheKommandos, parseBash } from "./bash-parser.mjs";
+import { transkriptZeilen } from "./transkript.mjs";
+export { transkriptZeilen }; // bleibt hier erreichbar (Aufrufer und Tests), die Quelle ist transkript.mjs
 
 /** Grobe Umrechnung Zeichen → Tokens (nur Größenordnung, bewusst keine Tokenizer-Abhängigkeit). */
 export const CHARS_PER_TOKEN = 4;
@@ -92,20 +94,6 @@ function textLength(content) {
   if (typeof content === "string") return content.length;
   if (!Array.isArray(content)) return 0;
   return content.reduce((n, p) => n + (p?.type === "text" && typeof p.text === "string" ? p.text.length : 0), 0);
-}
-
-/** Transkript-JSONL → geparste Zeilen (leere und abgeschnittene Zeilen entfallen). Einmal parsen, dann an die Adapter reichen. */
-export function transkriptZeilen(jsonlText) {
-  const rows = [];
-  for (const line of String(jsonlText).split(/\r?\n/)) {
-    if (!line.trim()) continue;
-    try {
-      rows.push(JSON.parse(line));
-    } catch {
-      // abgeschnittene letzte Zeile eines laufenden Transkripts
-    }
-  }
-  return rows;
 }
 
 /** Transkript → Tool-Events; `tool_use` und `tool_result` werden über die ID verknüpft. Nimmt den JSONL-Text oder die Zeilen aus `transkriptZeilen`. */

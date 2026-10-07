@@ -12,6 +12,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { assistantText, transkriptZeilen } from "./transkript.mjs";
 
 /** Liest `ERGEBNIS:` und `PR:` aus der letzten Nachricht; fehlende Zeile → `null`. */
 export function parseErgebnis(text) {
@@ -75,13 +76,9 @@ export function abschlussBlockade({ hookEvent, agentType, lastMessage }, deps = 
 /** Letzter Assistant-Text aus einem JSONL-Transkript; `null` bei jedem Problem. */
 export function letzteNachrichtAusTranskript(pfad) {
   try {
-    const zeilen = readFileSync(pfad, "utf8").split("\n").filter(Boolean);
+    const zeilen = transkriptZeilen(readFileSync(pfad, "utf8"));
     for (let i = zeilen.length - 1; i >= 0; i--) {
-      const e = JSON.parse(zeilen[i]);
-      const msg = e.message ?? e;
-      if (msg.role !== "assistant" && e.type !== "assistant") continue;
-      const c = msg.content;
-      const text = typeof c === "string" ? c : Array.isArray(c) ? c.filter((b) => b.type === "text").map((b) => b.text).join("\n") : "";
+      const text = assistantText(zeilen[i]);
       if (text.trim()) return text;
     }
   } catch {

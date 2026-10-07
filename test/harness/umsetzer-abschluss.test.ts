@@ -10,8 +10,9 @@
  *      Ablauf VOR dem PR-Schritt; ohne ihn wird die PR-CI rot (#1270).
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "vitest";
 
@@ -153,5 +154,31 @@ describe("Umsetzer endet nicht bei offenem PR mit Auto-Merge (#1331)", () => {
     const q = JSON.stringify({ hook_event_name: "SubagentStop", agent_type: "kubernia-umsetzer", agent_transcript_path: "/x" });
     assert.equal(parseAbschlussInput(q, () => "B").lastMessage, "B");
     assert.deepEqual(parseAbschlussInput("{kaputt"), {});
+  });
+});
+
+describe("Transkript-Fallback des Abschluss-Wächters (#1331)", () => {
+  const zeile = (role: string, content: unknown) => JSON.stringify({ type: role, message: { role, content } });
+  const lies = abschluss.letzteNachrichtAusTranskript as (p: string) => string | null;
+  const datei = (zeilen: string[]) => {
+    const p = join(mkdtempSync(join(tmpdir(), "kq-abschluss-")), "t.jsonl");
+    writeFileSync(p, zeilen.join(String.fromCharCode(10)) + String.fromCharCode(10));
+    return p;
+  };
+
+  test("liefert den letzten Assistant-Text, übergeht Tool-Blöcke und abgeschnittene Zeilen", () => {
+    const p = datei([
+      zeile("assistant", [{ type: "text", text: "ERGEBNIS: abgebrochen" }]),
+      zeile("user", "egal"),
+      zeile("assistant", [{ type: "tool_use", name: "Bash" }]),
+      '{"abgeschnitten',
+    ]);
+    assert.equal(lies(p), "ERGEBNIS: abgebrochen");
+    assert.equal(lies(datei([zeile("assistant", "reiner Text")])), "reiner Text");
+  });
+
+  test("fehlende Datei oder kein Assistant-Text ergeben null (fail-open)", () => {
+    assert.equal(lies(join(tmpdir(), "gibt-es-nicht-kq.jsonl")), null);
+    assert.equal(lies(datei([zeile("user", "x")])), null);
   });
 });
