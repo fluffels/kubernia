@@ -52,7 +52,7 @@ Weitere Festlegungen:
 
 **Negativ / Trade-offs**
 - Cron-Läufe kommen verzögert (Stunden); für einen Wochentakt egal.
-- Das Status-Ticket steht am Montag über allem anderen, auch über einem älteren 🚨- oder Forum-Ticket und über dem ungeclaimten Harness-Sammelticket: es ist die benannte Ausnahme von „nie vor das ungeclaimte Sammelticket" (AGENTS.md, `ticket-reihenfolge.md`), weil das Ticket Befunde für das Langfuse-Sammelticket liefert und dieses danach drankommt. „Roter `main` geht vor“ gilt unabhängig von der Position.
+- Das Status-Ticket steht am Montag über allem anderen, auch über einem älteren 🚨- oder Forum-Ticket und über dem ungeclaimten Harness-Sammelticket: es ist die benannte Ausnahme von „nie vor das ungeclaimte Sammelticket" (AGENTS.md, `ticket-reihenfolge.md`), weil das Ticket Befunde für das Langfuse-Sammelticket liefert und dieses nach dem Harness-Sammelticket drankommt. „Roter `main` geht vor“ gilt unabhängig von der Position.
 - Die Untergrenze zählt Commits auf `main`, nicht nur Ticket-Merges (auch Dependabot).
 
 ## Re-Evaluierung

@@ -83,7 +83,7 @@ Das Sammelticket „Langfuse-Befunde (gesammelt)" (`area:harness`) bündelt Befu
 - **Was hinein gehört:** Befunde, die aus Langfuse-Daten oder einem Status-Lauf stammen (Kosten, Tokens, Erfassungslücken, Kandidaten zum Lockern eines Gates, einer Lens oder einer Regel). Alles andere zum Harness bleibt im Harness-Sammelticket.
 - **Höchstens ein** ungeclaimtes; ein geclaimtes (Assignee) läuft daneben weiter. Jeder Agent darf es jederzeit befüllen:
   ```bash
-  gh issue list --state open --json number,title,assignees --jq '.[] | select(.title=="Langfuse-Befunde (gesammelt)" and (.assignees|length)==0) | .number'
+  gh issue list --state open --limit 1000 --json number,title,assignees --jq '.[] | select(.title=="Langfuse-Befunde (gesammelt)" and (.assignees|length)==0) | .number'
   gh issue comment <nr> --body "- [ ] <Befund>"
   ```
   Zwei ungeclaimte (Wettlauf): das jüngere schließen, seine Zeilen ins ältere übertragen.
