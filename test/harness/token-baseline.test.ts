@@ -835,6 +835,38 @@ describe("token-baseline: readTranscriptSession (#1311)", () => {
     );
   });
 
+  test("Pflege-Marker im Subagenten-Transkript färben genau dessen Calls (Transkript-Modus, Ende zu Ende)", () => {
+    const bash = (id: string, ts: string, command: string) =>
+      JSON.stringify({ type: "assistant", timestamp: ts, message: { content: [{ type: "tool_use", id, name: "Bash", input: { command } }] } });
+    mitSession(
+      (proj, id) => {
+        // Marker im Hauptchat darf keinen Subagent-Call einfärben.
+        writeFileSync(join(proj, `${id}.jsonl`), bash("m1", "2026-09-29T11:01:00Z", 'echo "pflege: start #1"') + "\n");
+        const sub = join(proj, id, "subagents");
+        mkdirSync(sub, { recursive: true });
+        writeFileSync(
+          join(sub, "agent-u.jsonl"),
+          [
+            zeile("u0", "2026-09-29T10:30:00Z"),
+            bash("a", "2026-09-29T11:00:00Z", 'echo "pflege: start #1"'),
+            zeile("u1", "2026-09-29T11:05:00Z"),
+            bash("b", "2026-09-29T11:10:00Z", 'echo "pflege: ende #1"'),
+            zeile("u2", "2026-09-29T11:20:00Z"),
+          ].join("\n") + "\n",
+        );
+        writeFileSync(join(sub, "agent-u.meta.json"), JSON.stringify({ agentType: "kubernia-umsetzer", description: "Umsetzung #1" }));
+      },
+      (root) => {
+        const r = m.readTranscriptSession("sess-1", root) as Run & { events?: PEv[] };
+        const s = m.summarize(r, BOUNDS);
+        const phasen = Object.fromEntries(s.rows.map((row) => [row.phase, row.calls]));
+        assert.equal(phasen["Pflege"], 1, "genau der Call zwischen den Markern");
+        assert.equal(phasen["Umsetzung"], 2);
+        assert.equal(s.pflegeUnpaired, 1, "der Haupt-Marker bleibt ungepaart und färbt nichts");
+      },
+    );
+  });
+
   test("fehlende meta.json: der Subagent hat keinen Typ und fällt auf den Zeitschnitt", () => {
     mitSession(
       (proj, id) => {
@@ -1035,6 +1067,13 @@ describe("token-baseline: Phase Pflege (#1099)", () => {
     assert.doesNotMatch(m.renderMarkdown(ohne), /Pflege-Marker ohne Gegenstück/);
   });
 
+  test("Marker vor --from (früheres Ticket) erzeugen weder Intervall noch Warnzeile", () => {
+    const calls = [call("2026-09-29T11:05:00Z", 2, { subagent: umsetzer })];
+    const s = m.summarize({ calls, events: [marker("2026-09-29T09:00:00Z", "start")] }, { ...BOUNDS, from: "2026-09-29T10:00:00Z" });
+    assert.equal(s.pflegeUnpaired, 0);
+    assert.deepEqual(s.rows.map((r) => r.phase), ["Umsetzung"]);
+  });
+
   test("Langfuse-Parität: Marker-TOOL unter dem Subagent-Span ergibt dieselbe Zuordnung", () => {
     const obs: Obs[] = [
       { id: "u", type: "SPAN", name: "Subagent: Umsetzung #12", startTime: "2026-09-29T10:00:00Z", metadata: { agent_type: "kubernia-umsetzer" } },
@@ -1043,7 +1082,9 @@ describe("token-baseline: Phase Pflege (#1099)", () => {
       { id: "t2", type: "TOOL", name: "Tool: Bash", startTime: "2026-09-29T11:10:00Z", parentObservationId: "u", input: { command: 'echo "pflege: ende #12"' }, metadata: { tool_name: "Bash" } } as Obs,
     ];
     const run = m.callsFromLangfuse(obs) as Run;
-    const events = toolEventsFromLangfuse(obs.filter((o) => o.type === "TOOL"), m.toolAgentResolver(obs));
+    // Schlanke Abfrage: die TOOL-Einträge tragen keinen Eltern-Verweis, der Resolver schlägt ihn in der vollen Liste nach.
+    const schlank = obs.filter((o) => o.type === "TOOL").map((o) => ({ ...o, parentObservationId: undefined }));
+    const events = toolEventsFromLangfuse(schlank, m.toolAgentResolver(obs));
     assert.deepEqual(events.map((e) => e.agent), ["u", "u"]);
     const s = m.summarize({ ...run, events }, BOUNDS);
     assert.deepEqual(s.rows.map((r) => r.phase), ["Pflege"]);

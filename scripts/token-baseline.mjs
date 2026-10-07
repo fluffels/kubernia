@@ -224,7 +224,11 @@ function sockelOf(allCalls, windowCalls) {
  * erbte ein Ticket die Lenses eines früheren Tickets derselben Session.
  */
 export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles = null) {
-  const { intervals, unpaired } = events ? pflegeIntervals(events) : { intervals: [], unpaired: 0 };
+  // Marker vor `--from` (früheres Ticket derselben Session) und nach dem Merge zählen nicht.
+  const markerEvents = (events ?? []).filter(
+    (e) => !(bounds.from && Date.parse(e.ts) < Date.parse(bounds.from)) && !(bounds.mergedAt && Date.parse(e.ts) >= Date.parse(bounds.mergedAt)),
+  );
+  const { intervals, unpaired } = events ? pflegeIntervals(markerEvents) : { intervals: [], unpaired: 0 };
   const window = windowCalls(calls, bounds, intervals);
   const sorted = phaseRows(window);
   const ticket = window.filter((w) => w.phase !== "Nachlauf").map((w) => w.call);

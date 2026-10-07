@@ -32,7 +32,7 @@ docs/referenz/ ← Nachschlage-Referenz on-demand (Befehle, Repo-Landkarte, Schi
    Meldet Abschnitt 7 des Plans `Weiche Epic: ja`, gilt der Sonderfall Epic mit der Aufteilung aus dem Plan; kein Umsetzer.
 4. **Umsetzer spawnen** (nächster Abschnitt) und sein Ergebnis behandeln.
 
-Solange der Umsetzer läuft, fasst der Hauptchat weder Repo noch Worktree an und startet keinen zweiten Umsetzer. Sagt die Maintainerin währenddessen „merk dir das“, reicht der Hauptchat es per `SendMessage` an den Umsetzer weiter (landet im Ticket-PR); ohne laufenden Umsetzer gilt AGENTS.md § Projekt-Brain pflegen.
+Solange der Umsetzer läuft, fasst der Hauptchat weder Repo noch Worktree an und startet keinen zweiten Umsetzer. Sagt die Maintainerin „merk dir das“, während der Umsetzer auf eine Antwort wartet (`entscheidung-noetig`), gibt der Hauptchat es mit der Antwort per `SendMessage` an ihn weiter (landet im Ticket-PR); sonst gilt AGENTS.md § Projekt-Brain pflegen.
 
 **Sonderfall zu großes Epic/Phase:** nicht umsetzen. Die Aufteilung ist Planungsarbeit: nach dem Claimen den `kubernia-planner` (Opus) mit dem Aufruf oben rufen, im Prompt der Hinweis „Epic: liefere die Aufteilung“. Du legst genau die vorgeschlagenen session-großen Kindertickets an (ohne Assignee, `area:`-Label, im Board einsortiert; Weichen samt Entscheidung des Plans in den Body des betroffenen Kindes), postest im Epic einen Übersichts-Kommentar mit Reihenfolge und schließt das Epic mit `gh issue close <nr> --reason completed` (nicht löschen), Schließung verifizieren. Kein Worktree, kein Umsetzer. Ist der Planer nicht verfügbar, teilst du selbst auf. **🤖 Dependabot-Sammelticket:** ebenfalls im Hauptchat nach AGENTS.md, ohne Planer und Umsetzer.
 

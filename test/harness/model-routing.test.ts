@@ -1002,7 +1002,7 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
   });
 
   test("Red-Green: ein verfälschter Marker wird nicht mehr erkannt", () => {
-    assert.notDeepEqual(markerIn(read(UMSETZER).replace('echo "pflege: start', 'echo "pflege start'), "1"), ["start", "ende"]);
+    assert.notDeepEqual(markerIn(read(UMSETZER).replace('echo "pflege: start #<nr>"', 'echo "pflege: startklar #<nr>"'), "1"), ["start", "ende"]);
   });
 
   test("Umsetzen-Prompt des Workflows trägt beide Marker, erkannt vom Messskript", async () => {
