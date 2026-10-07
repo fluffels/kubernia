@@ -46,7 +46,7 @@ export const ALLOWLIST = [
  * Skript, es hat keine Imports. Neue Workflow-Dateien über dem Budget brauchen einen eigenen Eintrag (mit Begründung).
  */
 export const DECKEL = [
-  { file: '.claude/workflows/kubernia-ticket.js', max: 1438, reason: '#1349: Workflow-Laufzeit wrappt das Skript, kein Import möglich; Abbau nur über echte Kürzung. #1392: +1 Zeile für den Lens-Prüfpunkt „echte Gate-Sabotage“ (der Skill ist die Quelle, der Wächter lens-abgleich verlangt Gleichheit).' },
+  { file: '.claude/workflows/kubernia-ticket.js', max: 1437, reason: '#1349: Workflow-Laufzeit wrappt das Skript, kein Import möglich; Abbau nur über echte Kürzung. #1392: +1 Zeile für den Lens-Prüfpunkt „echte Gate-Sabotage“ (der Skill ist die Quelle, der Wächter lens-abgleich verlangt Gleichheit). #1398: −1 (nachweisStand nutzt blockerVon); Prüfpunkte je Brille zusammenpacken ist bewusst nicht der Weg: die Workflow-Sandbox liest keine Dateien, die Prüfpunkte müssen wörtlich inline stehen (lens-abgleich), und Packen wäre Goodhart am Deckel statt Kürzung.' },
 ]
 
 /** Zählt physische Zeilen (wie `wc -l`; ein abschließender Zeilenumbruch zählt nicht doppelt). */

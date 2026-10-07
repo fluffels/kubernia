@@ -46,7 +46,7 @@ Jede Lens bekommt zusätzlich diese drei Regeln — sie kosten keinen Befund:
 
 ### Stufe 0 — deterministische Gates (der Short-Circuit)
 
-**Immer zuerst.** Fahre das SSOT-Aggregat aller Gates (#527):
+**Immer zuerst.** Vor der ersten Stufe 0: `git fetch origin`; ist `origin/main` weiter, `git merge origin/main` und Konflikte jetzt lösen (ein Merge nach der Konvergenz kostet Delta-Lens und neuen Nachweis). Dann das SSOT-Aggregat aller Gates (#527):
 
 ```bash
 npm run verify   # die Gate-Kette steht in package.json › scripts.verify (nicht hier kopiert)
@@ -67,7 +67,7 @@ npm run verify   # die Gate-Kette steht in package.json › scripts.verify (nich
 - **Ab Runde 2:** nur die Brillen, die in der Vorrunde **blockiert** haben, auf dem **Delta-Patch** des Fixes (`git diff <Vorrunden-HEAD>..HEAD > "$TMP/kq-<nr>-r<runde>-delta.patch"`), mit ihren Vorrunden-Blockern als Prüfliste; der volle Patch bleibt Referenz für gezielte Zugriffe. Ändert der Fix Nicht-Markdown, läuft **Test-Adäquanz immer mit**.
 - **Runde 1 ist der erste Lens-Pass** und hat immer den vollen Satz der Diff-Art (Code: alle drei Brillen). Liefert eine Brille keinen Bericht, wird sie einmal auf demselben Stand nachgeholt, bevor gefixt wird; das ist kein eigener Pass. Rote `verify`-Fixe davor zählen nicht als Fix-Runde (eigene Grenze: drei Fix-Versuche, dann Hand-off).
 - **Fail-closed:** Fehlt die Dateiliste, gab es keinen Vorrunden-Pass (`verify` war rot), fiel eine Lens aus, hat die Diff-Art gewechselt oder wurde rebased: der volle Satz auf dem vollen Patch.
-- **Merge von `main` in den Branch ist kein Fix-Pass.** Konfliktfrei zählt er nicht als Runde; das Delta der nächsten Runde sind nur die Fixes (`git diff <Vorrunden-HEAD>..<M>^1` plus `git diff <M>..HEAD`, `M` = Merge-Commit). Mit Konflikt kommt die Auflösung (`git show --cc <M>`) ins Delta und zählt wie ein Fix, nicht wie ein voller Pass. Rebase mitten in der Schleife vermeiden (er erzwingt den vollen Satz und macht den Nachweis-`head` ungültig): `main` besser vor Runde 1 oder nach der Konvergenz einmergen. **Ein Merge von `main` NACH dem Nachweis-Commit** lässt `head` hinter dem Branch-Ende zurück. Konfliktfrei bleibt der Check grün (der Merge bringt nur bereits gemergten, geprüften Stand). Hat der Merge eine Konflikt-Auflösung (`git show --remerge-diff <M>` ist nicht leer, git ≥ 2.36), **wird der Check rot** (ein git-Fehler dabei ebenso): die Auflösung per Delta-Lens reviewen, den Nachweis neu setzen (`head` ≥ Merge) und im PR-Text nennen, dass der Merge nach dem Review kam.
+- **Merge von `main` in den Branch ist kein Fix-Pass.** Konfliktfrei zählt er nicht als Runde; das Delta der nächsten Runde sind nur die Fixes (`git diff <Vorrunden-HEAD>..<M>^1` plus `git diff <M>..HEAD`, `M` = Merge-Commit). Mit Konflikt kommt die Auflösung (`git show --cc <M>`) ins Delta und zählt wie ein Fix, nicht wie ein voller Pass. Rebase mitten in der Schleife vermeiden (er erzwingt den vollen Satz und macht den Nachweis-`head` ungültig): `main` vor Runde 1 einmergen (Stufe 0, erster Punkt); den Nachweis direkt nach der Konvergenz setzen und pushen. Ein Merge von `main` NACH dem Nachweis-Commit: Folgen und Weg in [docs/agent-harness.md › §3a](../../../docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd-1064) (ein Konflikt-Merge macht den Check rot).
 
 **Jede Lens läuft als eigener Subagent auf dem starken Tier (#1035)** — nie inline im orchestrierenden Agenten (Hauptagent oder `kubernia-umsetzer`):
 
