@@ -9,7 +9,7 @@
  * ../state und das KubectlHost-Interface (./host). Aufgerufen aus dem
  * kubectl-Dispatch (../kubectl.ts).
  */
-import type { ApplyEffect, ArgoApp, RbacSubject } from "../state";
+import { DEFAULT_NAMESPACE, type ApplyEffect, type ArgoApp, type RbacSubject } from "../state";
 import { addDeployment, removeDeployment, addStatefulSet, removeStatefulSet, replaceDeploymentPod, restartStatefulPod, statefulPodClaimName } from "../workload";
 // Argo-CD-Reconcile/-Klon liegen seit #378 bei der argocd-Familie in ../argocd – `kubectl apply -f`
 // einer Application zieht/kloniert den Soll direkt darüber (statt über eine Host-Methode).
@@ -166,7 +166,7 @@ function collectRbacSubjects(raw: string): RbacSubject[] {
   const subjects: RbacSubject[] = [];
   for (const u of multiFlag(raw, "user")) subjects.push({ kind: "User", name: u });
   for (const sa of multiFlag(raw, "serviceaccount")) {
-    const [ns, n] = sa.includes(":") ? sa.split(":") : ["default", sa];
+    const [ns, n] = sa.includes(":") ? sa.split(":") : [DEFAULT_NAMESPACE, sa];
     subjects.push({ kind: "ServiceAccount", name: n, namespace: ns });
   }
   return subjects;

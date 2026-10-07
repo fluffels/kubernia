@@ -1,11 +1,8 @@
 /* ===== Kubernia – Cluster-DNS-Auflösung (sim/dns.ts) =====
  * Die EINE CoreDNS-Auflösung von Service-Namen (#1403) für `nslookup` und `curl` (sim/net.ts):
  * Suchpfad-Formen, Namespace und ExternalName-CNAME. Rein und ohne Host, nur Domänentypen. */
-import { isExternalNameService, type ServiceRes } from "./state";
+import { DEFAULT_NAMESPACE, isExternalNameService, type ServiceRes } from "./state";
 import { externalIP } from "./util";
-
-/** Der einzige Namespace, den die Sim modelliert. */
-const DEFAULT_NAMESPACE = "default";
 
 /** `<svc>[.<ns>[.svc[.cluster.local]]]` (auch mit Schlusspunkt) → Service, Namespace und FQDN; sonst `null`. */
 export function parseServiceName(query: string): { svc: string; ns: string; fqdn: string } | null {
@@ -30,7 +27,7 @@ export function resolveService(services: ServiceRes[], query: string): ServiceAn
     return { ok: false, fqdn, tip: "Prüfe mit 'kubectl get services', ob der Service existiert." };
   }
   if (p.ns !== DEFAULT_NAMESPACE) {
-    return { ok: false, fqdn, tip: "'" + svc.name + "' liegt im Namespace 'default', nicht in '" + p.ns + "'." };
+    return { ok: false, fqdn, tip: "'" + svc.name + "' liegt im Namespace '" + DEFAULT_NAMESPACE + "', nicht in '" + p.ns + "'." };
   }
   if (!isExternalNameService(svc)) return { ok: true, svc, fqdn };
   if (!svc.externalName) {

@@ -16,7 +16,7 @@
 import { table, flagValue } from "../util";
 import { readyBackends, endpointPort, podAddress } from "../endpoints";
 import type { KubectlHost } from "./host";
-import { SECURITY_CONTEXT_KEYS, isExternalNameService, type Deployment, type PodInstance, type PodStatus } from "../state";
+import { DEFAULT_NAMESPACE, SECURITY_CONTEXT_KEYS, isExternalNameService, type Deployment, type PodInstance, type PodStatus } from "../state";
 import { sameRbac } from "../rbac";
 import { clusterPods, findClusterPod, type ClusterPod } from "../pods";
 import { statefulPodClaimName, statefulPodNode } from "../workload";
@@ -48,6 +48,11 @@ function podRow(host: KubectlHost, c: ClusterPod): string[] {
   return [c.pod.name, st.ready, st.status, String(st.restarts), host._age(c.pod.created)];
 }
 
+/** `kubectl get`-Leermeldung für einen Namespace (echtes kubectl: „No resources found in <ns> namespace."). */
+function noResourcesIn(ns: string = DEFAULT_NAMESPACE): string {
+  return "No resources found in " + ns + " namespace.";
+}
+
 function getPods(host: KubectlHost, t: string[]): string {
   const ns = flagValue(t, "-n") || flagValue(t, "--namespace");
   const allNs = t.includes("-A") || t.includes("--all-namespaces");
@@ -60,17 +65,18 @@ function getPods(host: KubectlHost, t: string[]): string {
       ["kube-scheduler-ahoi-control", "1/1", "Running", "0", "3d"],
     ];
     const rows = allNs
-      ? sysPods.map(r => ["kube-system"].concat(r)).concat(clusterPods(host).map(c => ["default", ...podRow(host, c)]))
+      ? sysPods.map(r => ["kube-system"].concat(r)).concat(clusterPods(host).map(c => [DEFAULT_NAMESPACE, ...podRow(host, c)]))
       : sysPods;
     return table(allNs ? ["NAMESPACE", "NAME", "READY", "STATUS", "RESTARTS", "AGE"] : ["NAME", "READY", "STATUS", "RESTARTS", "AGE"], rows);
   }
+  if (ns && ns !== DEFAULT_NAMESPACE) return noResourcesIn(ns);   // fremder Namespace: dort liegt nichts
   const rows = clusterPods(host).map(c => podRow(host, c));
-  if (rows.length === 0) return "No resources found in default namespace.";
+  if (rows.length === 0) return noResourcesIn();
   return table(["NAME", "READY", "STATUS", "RESTARTS", "AGE"], rows);
 }
 
 function getDeployments(host: KubectlHost): string {
-  if (host.deployments.length === 0) return "No resources found in default namespace.";
+  if (host.deployments.length === 0) return noResourcesIn();
   return table(["NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE"],
     host.deployments.map(d => {
       const ready = host._podReady(d) ? d.pods.length : 0;
@@ -104,7 +110,7 @@ function getEndpoints(host: KubectlHost, t: string[]): string {
   if (wantName && svcs.length === 0) {
     return host._err('Error from server (NotFound): endpoints "' + wantName + '" not found', "Service-Namen siehst du mit 'kubectl get services'.");
   }
-  if (svcs.length === 0) return "No resources found in default namespace.";
+  if (svcs.length === 0) return noResourcesIn();
   return table(["NAME", "ENDPOINTS", "AGE"], svcs.map(s => {
     // Endpoints zeigen den Ziel-Port (targetPort), an den weitergeleitet wird – fehlt er,
     // gilt der Service-Port (#164). So bleibt der Port-Abgleich auch hier sichtbar.
@@ -123,61 +129,61 @@ function getNodes(host: KubectlHost): string {
 }
 
 function getSecrets(host: KubectlHost): string {
-  if (host.secrets.length === 0) return "No resources found in default namespace.";
+  if (host.secrets.length === 0) return noResourcesIn();
   return table(["NAME", "TYPE", "DATA", "AGE"],
     host.secrets.map(s => [s.name, s.type || "Opaque", String(s.keys.length), host._age(s.created || 0)]));
 }
 
 function getConfigMaps(host: KubectlHost): string {
-  if (host.configMaps.length === 0) return "No resources found in default namespace.";
+  if (host.configMaps.length === 0) return noResourcesIn();
   return table(["NAME", "DATA", "AGE"],
     host.configMaps.map(c => [c.name, String(c.keys.length), host._age(c.created || 0)]));
 }
 
 function getIngress(host: KubectlHost): string {
-  if (host.ingresses.length === 0) return "No resources found in default namespace.";
+  if (host.ingresses.length === 0) return noResourcesIn();
   return table(["NAME", "CLASS", "HOSTS", "ADDRESS", "PORTS", "AGE"],
     host.ingresses.map(i => [i.name, i.className, i.host, INGRESS_ADDRESS, i.tls ? "80, 443" : "80", host._age(i.created || 0)]));
 }
 
 function getNetworkPolicies(host: KubectlHost): string {
-  if (host.networkPolicies.length === 0) return "No resources found in default namespace.";
+  if (host.networkPolicies.length === 0) return noResourcesIn();
   return table(["NAME", "POD-SELECTOR", "AGE"],
     host.networkPolicies.map(n => [n.name, n.podSelector ? "app=" + n.podSelector : "<none>", host._age(n.created || 0)]));
 }
 
 function getServiceMonitors(host: KubectlHost): string {
-  if (host.serviceMonitors.length === 0) return "No resources found in default namespace.";
+  if (host.serviceMonitors.length === 0) return noResourcesIn();
   return table(["NAME", "SELECTOR", "ENDPOINT", "AGE"],
     host.serviceMonitors.map(s => [s.name, "app=" + s.selector, s.port + " @ " + s.interval, host._age(s.created || 0)]));
 }
 
 function getPrometheusRules(host: KubectlHost): string {
-  if (host.prometheusRules.length === 0) return "No resources found in default namespace.";
+  if (host.prometheusRules.length === 0) return noResourcesIn();
   return table(["NAME", "ALERT", "SEVERITY", "AGE"],
     host.prometheusRules.map(r => [r.name, r.alert, r.severity, host._age(r.created || 0)]));
 }
 
 function getGrafanaDatasources(host: KubectlHost): string {
-  if (host.grafanaDatasources.length === 0) return "No resources found in default namespace.";
+  if (host.grafanaDatasources.length === 0) return noResourcesIn();
   return table(["NAME", "TYPE", "AGE"],
     host.grafanaDatasources.map(d => [d.name, d.dsType, host._age(d.created || 0)]));
 }
 
 function getGrafanaDashboards(host: KubectlHost): string {
-  if (host.grafanaDashboards.length === 0) return "No resources found in default namespace.";
+  if (host.grafanaDashboards.length === 0) return noResourcesIn();
   return table(["NAME", "TITLE", "PANELS", "AGE"],
     host.grafanaDashboards.map(d => [d.name, d.title, String(d.panels), host._age(d.created || 0)]));
 }
 
 function getStatefulSets(host: KubectlHost): string {
-  if (host.statefulSets.length === 0) return "No resources found in default namespace.";
+  if (host.statefulSets.length === 0) return noResourcesIn();
   return table(["NAME", "READY", "AGE"],
     host.statefulSets.map(s => [s.name, s.pods.length + "/" + s.replicas, host._age(s.created)]));
 }
 
 function getPvcs(host: KubectlHost): string {
-  if (host.pvcs.length === 0) return "No resources found in default namespace.";
+  if (host.pvcs.length === 0) return noResourcesIn();
   return table(["NAME", "STATUS", "VOLUME", "CAPACITY", "ACCESS MODES", "STORAGECLASS", "AGE"],
     host.pvcs.map(p => [p.name, p.status, p.volume || "", p.status === "Bound" ? p.capacity : "", p.accessModes, p.storageClass || "", host._age(p.created)]));
 }
@@ -195,7 +201,7 @@ function getStorageClasses(host: KubectlHost): string {
 }
 
 function getVolumeSnapshots(host: KubectlHost): string {
-  if (host.volumeSnapshots.length === 0) return "No resources found in default namespace.";
+  if (host.volumeSnapshots.length === 0) return noResourcesIn();
   return table(["NAME", "READYTOUSE", "SOURCEPVC", "RESTORESIZE", "AGE"],
     host.volumeSnapshots.map(v => [v.name, String(v.readyToUse), v.sourcePvc, v.restoreSize, host._age(v.created)]));
 }
@@ -207,7 +213,7 @@ function getServiceAccounts(host: KubectlHost): string {
 
 function getRoles(host: KubectlHost): string {
   const rs = host.roles.filter(r => !r.cluster);
-  if (rs.length === 0) return "No resources found in default namespace.";
+  if (rs.length === 0) return noResourcesIn();
   return table(["NAME", "AGE"], rs.map(r => [r.name, host._age(r.created)]));
 }
 
@@ -219,7 +225,7 @@ function getClusterRoles(host: KubectlHost): string {
 
 function getRoleBindings(host: KubectlHost): string {
   const bs = host.roleBindings.filter(b => !b.cluster);
-  if (bs.length === 0) return "No resources found in default namespace.";
+  if (bs.length === 0) return noResourcesIn();
   return table(["NAME", "ROLE", "AGE"], bs.map(b => [b.name, b.roleRef.kind + "/" + b.roleRef.name, host._age(b.created)]));
 }
 
@@ -322,7 +328,7 @@ function describeIngress(host: KubectlHost, t: string[]): string {
   const secretExists = ing.tls ? host.secrets.some(s => s.name === ing.tls!.secretName) : true;
   return [
     "Name:             " + ing.name,
-    "Namespace:        default",
+    "Namespace:        " + DEFAULT_NAMESPACE,
     "Address:          " + INGRESS_ADDRESS,
     "Ingress Class:    " + ing.className,
     ...(ing.tls ? [
@@ -345,7 +351,7 @@ function describeNetworkPolicy(host: KubectlHost, t: string[]): string {
   if (!np) return host._err('Error from server (NotFound): networkpolicies.networking.k8s.io "' + name + '" not found', "Tipp: Namen aus 'kubectl get networkpolicies' kopieren.");
   return [
     "Name:         " + np.name,
-    "Namespace:    default",
+    "Namespace:    " + DEFAULT_NAMESPACE,
     "PodSelector:  " + (np.podSelector ? "app=" + np.podSelector : "<none> (gilt für alle Pods im Namespace)"),
     "PolicyTypes:  Ingress",
     "Allowing ingress traffic:",
@@ -364,7 +370,7 @@ function describeRole(host: KubectlHost, t: string[]): string {
   if (!role) return host._err('Error from server (NotFound): ' + what + 's.rbac.authorization.k8s.io "' + name + '" not found', "Tipp: Namen aus 'kubectl get " + what + "s' kopieren.");
   const lines = [
     "Name:         " + role.name,
-    ...(cluster ? [] : ["Namespace:    default"]),
+    ...(cluster ? [] : ["Namespace:    " + DEFAULT_NAMESPACE]),
     "PolicyRule:",
     "  Resources  Verbs",
     "  ---------  -----",
@@ -378,7 +384,7 @@ function describeServiceAccount(host: KubectlHost, t: string[]): string {
   if (!name) return host._err("kubectl describe serviceaccount: Welche SA?", "Die Namen siehst du mit 'kubectl get sa'.");
   const acc = host.serviceAccounts.find(s => s.name === name);
   if (!acc) return host._err('Error from server (NotFound): serviceaccounts "' + name + '" not found', "Tipp: Namen aus 'kubectl get sa' kopieren.");
-  return ["Name:         " + acc.name, "Namespace:    default", "Mountable secrets:  <none>"].join("\n");
+  return ["Name:         " + acc.name, "Namespace:    " + DEFAULT_NAMESPACE, "Mountable secrets:  <none>"].join("\n");
 }
 
 // --- describe pod: in kohäsive Blöcke zerlegt (Events / Container / Volumes) ---
@@ -389,29 +395,29 @@ function podDescribeEvents(host: KubectlHost, pod: PodInstance, dep: Deployment)
   if (dep.evicted) {
     // Evicted (#240): der kubelet hat den Pod beendet, um Disk freizugeben bzw. weil er sein
     // ephemeral-storage-Limit gesprengt hat. Der Grund steht – wie in echtem K8s – im Event.
-    events.push("  Normal   Scheduled  " + host._age(pod.created) + "   Successfully assigned default/" + pod.name);
+    events.push("  Normal   Scheduled  " + host._age(pod.created) + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
     events.push("  Warning  Evicted    " + host._age(pod.created) + "   " + dep.evicted.reason);
     events.push("  Normal   Killing    " + host._age(pod.created) + "   Stopping container " + dep.name);
   } else if (!dep.broken) {
-    events.push("  Normal  Scheduled  " + host._age(pod.created) + "   Successfully assigned default/" + pod.name);
+    events.push("  Normal  Scheduled  " + host._age(pod.created) + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
     events.push("  Normal  Pulled     " + host._age(pod.created) + "   Container image \"" + dep.image + "\" already present");
     events.push("  Normal  Started    " + host._age(pod.created) + "   Started container " + dep.name);
   } else if (dep.broken.type === "imagepull") {
-    events.push("  Normal   Scheduled  " + host._age(pod.created) + "   Successfully assigned default/" + pod.name);
+    events.push("  Normal   Scheduled  " + host._age(pod.created) + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
     events.push("  Warning  Failed     " + host._age(pod.created) + "   Failed to pull image \"" + dep.image + "\": repository does not exist or may require authorization");
     events.push("  Warning  Failed     " + host._age(pod.created) + "   Error: ImagePullBackOff");
   } else if (dep.broken.type === "crashloop") {
-    events.push("  Normal   Scheduled  " + host._age(pod.created) + "   Successfully assigned default/" + pod.name);
+    events.push("  Normal   Scheduled  " + host._age(pod.created) + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
     events.push("  Normal   Started    " + host._age(pod.created) + "   Started container " + dep.name);
     events.push("  Warning  BackOff    " + host._age(pod.created) + "   Back-off restarting failed container (Tipp: kubectl logs " + pod.name + ")");
   } else if (dep.broken.type === "pending") {
     events.push("  Warning  FailedScheduling  " + host._age(pod.created) + "   0/" + host.nodes.length + " nodes are available: insufficient capacity.");
   } else if (dep.broken.type === "notready") {
-    events.push("  Normal   Scheduled  " + host._age(pod.created) + "   Successfully assigned default/" + pod.name);
+    events.push("  Normal   Scheduled  " + host._age(pod.created) + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
     events.push("  Normal   Started    " + host._age(pod.created) + "   Started container " + dep.name);
     events.push("  Warning  Unhealthy  " + host._age(pod.created) + "   Readiness probe failed: HTTP probe returned statuscode 503 (Liveness probe ok – der Pod LÄUFT, ist aber nicht bereit)");
   } else if (dep.broken.type === "oomkilled") {
-    events.push("  Normal   Scheduled  " + host._age(pod.created) + "   Successfully assigned default/" + pod.name);
+    events.push("  Normal   Scheduled  " + host._age(pod.created) + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name);
     events.push("  Normal   Pulled     " + host._age(pod.created) + "   Container image \"" + dep.image + "\" already present");
     events.push("  Warning  BackOff    " + host._age(pod.created) + "   Back-off restarting failed container (zuletzt OOMKilled – Limit zu knapp)");
   }
@@ -504,7 +510,7 @@ function describeDeploymentPod(host: KubectlHost, c: DeploymentPod): string {
   const ip = podAddress(c, host.pvcs);
   return [
     "Name:         " + pod.name,
-    "Namespace:    default",
+    "Namespace:    " + DEFAULT_NAMESPACE,
     "Node:         " + (ip === null ? "<none>" : host._nodeOf(dep)),
     "Status:       " + statusLine,
     ...(dep.evicted ? ["Reason:       Evicted", "Message:      " + dep.evicted.reason] : []),
@@ -531,14 +537,14 @@ function describeStatefulPod(host: KubectlHost, c: StatefulPod): string {
   const age = host._age(pod.created);
   const events = scheduled
     ? [
-      "  Normal  Scheduled  " + age + "   Successfully assigned default/" + pod.name,
+      "  Normal  Scheduled  " + age + "   Successfully assigned " + DEFAULT_NAMESPACE + "/" + pod.name,
       "  Normal  Pulled     " + age + "   Container image \"" + sts.image + "\" already present",
       "  Normal  Started    " + age + "   Started container " + sts.name,
     ]
     : ["  Warning  FailedScheduling  " + age + "   0/" + host.nodes.length + " nodes are available: pod has unbound immediate PersistentVolumeClaims."];
   return [
     "Name:         " + pod.name,
-    "Namespace:    default",
+    "Namespace:    " + DEFAULT_NAMESPACE,
     "Node:         " + (scheduled ? statefulPodNode(host.nodes, pod) : "<none>"),
     "Status:       " + st.status,
     "Ready:        " + st.ready,
@@ -605,11 +611,11 @@ export function kubectlTop(host: KubectlHost, t: string[]) {
       if (rows.length === 0) {
         const exists = findClusterPod(host, name) !== undefined;
         return exists
-          ? host._err("error: Metrics not available for pod default/" + name, "Metriken gibt es nur für laufende Pods – Status prüfen mit 'kubectl get pods'.")
+          ? host._err("error: Metrics not available for pod " + DEFAULT_NAMESPACE + "/" + name, "Metriken gibt es nur für laufende Pods – Status prüfen mit 'kubectl get pods'.")
           : host._err('Error from server (NotFound): pods "' + name + '" not found', "Pod-Namen siehst du mit 'kubectl get pods'.");
       }
     }
-    if (rows.length === 0) return "No resources found in default namespace.";
+    if (rows.length === 0) return noResourcesIn();
     return table(["NAME", "CPU(cores)", "MEMORY(bytes)"], rows.map(r => [r.name, r.cpuMilli + "m", r.memMi + "Mi"]));
   }
 

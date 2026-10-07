@@ -4,6 +4,7 @@
 import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./helpers";
+import type { ServiceSpec } from "../../src/sim/state";
 
 let sim: KQSim;
 beforeEach(() => { sim = freshSim(); });
@@ -292,4 +293,129 @@ test("App-of-Apps: Snapshot/Reset bewahrt die Wurzel inkl. Kind-Apps", () => {
   assert.equal(root!.childApps!.length, 3, "Kind-Apps bleiben im Snapshot erhalten");
   assert.ok(wieder.argoApps.some(a => a.name === "flotte-lager"), "Kind-App überlebt das Speichern");
   assert.match(wieder.exec("argocd app get hafen-flotte").output!, /Synced/);
+});
+
+/* ===================== Soll-Service als ServiceSpec (#1409) ===================== */
+
+function legeSollApp(s: KQSim, service: ServiceSpec, name = "bank", extra: object = {}) {
+  s.files[name + "-app.yaml"] = "kind: Application …";
+  s.applyEffects[name + "-app.yaml"] = {
+    application: {
+      name, repo: "https://git.hafen.de/apps.git", path: name + "/", autoSync: true, selfHeal: true,
+      deployment: { name, image: "nginx", replicas: 2 }, service, ...extra,
+    },
+  };
+  return s.exec("kubectl apply -f " + name + "-app.yaml");
+}
+const sollKaputt: ServiceSpec = { name: "bank", type: "ExternalName", port: "" };
+
+test("argocd (#1409): ExternalName-Soll samt externalName landet im Cluster und wird per Self-Heal wiederhergestellt", () => {
+  legeSollApp(sim, { name: "bank", type: "ExternalName", port: "", externalName: "api.bank.example.com" });
+  sim.exec("kubectl get pods");
+  const svc = sim.services.find(x => x.name === "bank")!;
+  assert.equal(svc.type, "ExternalName");
+  assert.equal(svc.clusterIP, "<none>");
+  assert.equal(svc.externalName, "api.bank.example.com");
+  assert.match(sim.exec("nslookup bank").output!, /canonical name = api\.bank\.example\.com\./);
+  sim.exec("kubectl delete service bank");
+  sim.exec("kubectl get pods");
+  assert.equal(sim.services.find(x => x.name === "bank")?.externalName, "api.bank.example.com", "Self-Heal stellt den ExternalName-Service wieder her");
+});
+
+test("argocd (#1409): targetPort aus dem Soll bleibt erhalten", () => {
+  legeSollApp(sim, { name: "bank", port: 80, targetPort: 8080 });
+  sim.exec("kubectl get pods");
+  assert.equal(sim.services.find(x => x.name === "bank")?.targetPort, 8080);
+});
+
+test("argocd (#1409): abgelehnter Soll-Service ist im Self-Heal kein Dauerfehler und lässt den Cluster unangetastet", () => {
+  legeSollApp(sim, sollKaputt);
+  sim.exec("argocd app sync bank"); // manuell: meldet bewusst (siehe unten)
+  sim.deployments.length = 0;
+  sim.services.length = 0;
+  sim.argoApps[0].desired!.deployment.replicas = 5;
+  sim.exec("kubectl create deployment web --image=nginx");
+  sim.exec("kubectl scale deployment web --replicas=4");
+  for (let i = 0; i < 2; i++) {
+    const r = sim.exec("kubectl get pods");
+    assert.equal(r.error, false, "Durchlauf " + i);
+    assert.doesNotMatch(r.output!, /Hoppla|invalid/);
+  }
+  assert.equal(sim.deployments.find(d => d.name === "bank"), undefined, "atomar: kein Deployment ohne Service");
+  assert.equal(sim.deployments.find(d => d.name === "web")!.replicas, 4, "fremde Workload unangetastet");
+  assert.match(sim.exec("argocd app get bank").output!, /Sync Status:\s+OutOfSync/);
+});
+
+test("argocd (#1409): atomar – ein gedrifteter Replica-Wert bleibt bei abgelehntem Soll-Service stehen", () => {
+  legeSollApp(sim, { name: "bank", port: 80 });
+  sim.exec("kubectl get pods");
+  sim.argoApps[0].desired!.service = sollKaputt;
+  sim.services.length = 0;
+  sim.exec("kubectl scale deployment bank --replicas=7");
+  const r = sim.exec("kubectl get pods");
+  assert.equal(r.error, false);
+  assert.equal(sim.deployments.find(d => d.name === "bank")!.replicas, 7, "kein Teil-Abgleich");
+});
+
+test("argocd (#1409): eine gesunde Self-Heal-App heilt trotz einer kaputten Nachbarin", () => {
+  legeSollApp(sim, sollKaputt, "bank");
+  legeSollApp(sim, { name: "kasse", port: 80 }, "kasse");
+  sim.exec("kubectl get pods");
+  sim.exec("kubectl scale deployment kasse --replicas=9");
+  const r = sim.exec("kubectl get pods");
+  assert.equal(r.error, false);
+  assert.equal(sim.deployments.find(d => d.name === "kasse")!.replicas, 2, "gesunde App heilt im selben Lauf");
+});
+
+test("argocd (#1409): App-of-Apps – ein kaputtes Kind stoppt die Flotte nicht", () => {
+  sim.files["wurzel.yaml"] = "kind: Application …";
+  sim.applyEffects["wurzel.yaml"] = {
+    application: {
+      name: "wurzel", repo: "r", path: "flotte/", autoSync: false,
+      childApps: [
+        { name: "bank", deployment: { name: "bank", image: "nginx", replicas: 1 }, service: sollKaputt },
+        { name: "kasse", deployment: { name: "kasse", image: "nginx", replicas: 1 } },
+      ],
+    },
+  };
+  sim.exec("kubectl apply -f wurzel.yaml");
+  const r = sim.exec("argocd app sync wurzel");
+  assert.equal(r.error, false, "Wurzel-Sync wirft nicht ins Terminal");
+  assert.ok(sim.deployments.some(d => d.name === "kasse"), "Kind 2 ist ausgerollt");
+  assert.ok(sim.argoApps.some(a => a.name === "bank"), "Kind 1 existiert als App");
+  assert.match(sim.exec("argocd app get bank").output!, /OutOfSync/);
+});
+
+test("argocd (#1409): manueller Sync meldet die abgelehnte Spezifikation samt Tipp (A4)", () => {
+  legeSollApp(sim, sollKaputt);
+  sim.exec("kubectl get pods");
+  const r = sim.exec("argocd app sync bank");
+  assert.equal(r.error, true);
+  assert.match(r.output!, /spec\.externalName: Required value/);
+  assert.match(r.output!, /💡 Setze spec\.externalName/);
+});
+
+test("argocd (#1409): kubectl apply einer Auto-Sync-App mit abgelehntem Soll meldet den Fehler, die App bleibt angelegt", () => {
+  const r = legeSollApp(sim, sollKaputt);
+  assert.equal(r.error, true);
+  assert.match(r.output!, /spec\.externalName: Required value/);
+  assert.ok(sim.argoApps.some(a => a.name === "bank"));
+  assert.equal(sim.deployments.some(d => d.name === "bank"), false, "atomar: kein Deployment");
+});
+
+test("argocd (#1409): ein anderer Fehler als InvalidSpecError im Self-Heal wird nicht verschluckt", () => {
+  legeSollApp(sim, { name: "bank", port: 80 });
+  sim.exec("kubectl delete service bank");
+  sim._makeService = () => { throw new TypeError("Sim-Bug"); };
+  const r = sim.exec("kubectl get pods");
+  assert.equal(r.error, true);
+  assert.match(r.output!, /Hoppla.*Sim-Bug/);
+});
+
+test("Fehlernetz in exec (#1409): ein kaputter Argo-Zustand im Vorlauf wirft nicht, sondern meldet Hoppla", () => {
+  const s = new KQSim({ argoApps: [{ name: "kaputt", repo: "r", path: "p/", autoSync: true, selfHeal: true, created: 0 }] });
+  const r = s.exec("kubectl get pods");
+  assert.equal(r.error, true);
+  assert.match(r.output!, /Hoppla/);
+  assert.doesNotThrow(() => s.exec(""));
 });

@@ -832,17 +832,15 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       this.clock++;
       this.rev++;   // #523: jede Befehls-Transaktion = potenzieller Zustandswechsel (auch
                     // Lesebefehle – harmlos, löst nur EINEN günstigen Resync aus statt pro Frame).
-      this._preStep();
       this.lastError = false;
-      const raw = line.trim();
-      if (!raw) return { output: "", error: false };
-
-      const tokens = raw.split(/\s+/);
-      const cmd = tokens[0];
-      if (cmd === "clear") return { output: null, error: false, clear: true };
-
       let out: string;
       try {
+        this._preStep();   // #1409: im selben Fehlernetz wie der Befehl
+        const raw = line.trim();
+        if (!raw) return { output: "", error: false };
+        const tokens = raw.split(/\s+/);
+        const cmd = tokens[0];
+        if (cmd === "clear") return { output: null, error: false, clear: true };
         out = this._runCommand(cmd, tokens, raw, available);
         // #478/#862: Aggregat-Grenze – nach jeder Befehls-Transaktion invariant bleiben.
         // Dev/Test: wirft ClusterInvariantError → fällt in catch → Fehlermeldung im Terminal.

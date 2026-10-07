@@ -24,6 +24,7 @@
  * Domänentypen aus ./state – kein Rückimport nach sim.ts (kein Zyklus).
  */
 import type { ClusterState, ArgoApp, ArgoChildSpec, Deployment, ServiceRes, ServiceSpec, Broken } from "./state";
+import { InvalidSpecError } from "./names";
 import { table } from "./util";
 import { addDeployment, scaleDeployment } from "./workload";
 
@@ -127,11 +128,15 @@ export function argoReconcile(host: ArgocdHost, app: ArgoApp): void {
         };
         host.argoApps.push(child);
       }
-      argoReconcile(host, child); // Soll-Workload der Kind-App in den Cluster ziehen
+      tryReconcile(host, child); // Soll-Workload der Kind-App in den Cluster ziehen (ein kaputtes Kind stoppt die Flotte nicht)
     }
     return;
   }
   const d = app.desired!.deployment;
+  // Atomar: den Service VOR jeder Mutation bauen. Lehnt die Fabrik die Soll-Spezifikation ab
+  // (InvalidSpecError), bleibt der Cluster unangetastet (wie ein Argo-Dry-Run).
+  const s = app.desired!.service;
+  const svc = s && !host.services.some(x => x.name === s.name) ? host._makeService(s) : null;
   const dep = host.deployments.find(x => x.name === d.name);
   if (!dep) {
     addDeployment(host, host._makeDeployment(d.name, d.image, d.replicas));
@@ -140,12 +145,16 @@ export function argoReconcile(host: ArgocdHost, app: ArgoApp): void {
     scaleDeployment(dep, d.replicas, host.clock, host.rng);
     dep.broken = null; // ein gesundes Git-Manifest heilt auch eine kaputte Workload
   }
-  const s = app.desired!.service;
-  if (s && !host.services.some(x => x.name === s.name)) {
-    // #518: Service zentral über die Fabrik anlegen (ClusterIP-Ableitung inklusive),
-    // statt die clusterIP-Konstruktion hier ein viertes Mal zu kopieren.
-    host.services.push(host._makeService({ name: s.name, type: s.type, port: s.port }));
-  }
+  // #518/#1409: Service zentral über die Fabrik, mit der ganzen Spec (ExternalName, targetPort).
+  if (svc) host.services.push(svc);
+}
+
+/** Abgleich, der eine abgelehnte Soll-Spezifikation (InvalidSpecError) schluckt: die App bleibt
+ *  OutOfSync, der Self-Heal und die Flotte laufen weiter, es gibt keinen Dauerfehler vor jedem
+ *  Befehl. Das manuelle `argocd app sync` ruft `argoReconcile` direkt und meldet den Fehler. Andere
+ *  Fehlertypen sind Sim-Bugs und werden weitergeworfen. */
+function tryReconcile(host: ArgocdHost, app: ArgoApp): void {
+  try { argoReconcile(host, app); } catch (e) { if (!(e instanceof InvalidSpecError)) throw e; }
 }
 
 /** Self-Heal-Schleife: läuft vor jeder Eingabe und korrigiert bei auto-sync-Apps mit
@@ -154,7 +163,7 @@ export function reconcileAutoSync(host: ArgocdHost): void {
   if (!host.argoApps) return; // exec() kann theoretisch vor reset() laufen
   for (const app of host.argoApps) {
     if (app.autoSync && app.selfHeal && argoSyncStatus(host, app) === "OutOfSync") {
-      argoReconcile(host, app);
+      tryReconcile(host, app);
     }
   }
 }

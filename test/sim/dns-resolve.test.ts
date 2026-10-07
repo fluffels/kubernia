@@ -1,6 +1,6 @@
 /* Reine DNS-Auflösung des Simulators (#1403): Prädikat, externalIP, Namens-Parser, Resolver. */
 import { describe, test, expect } from "vitest";
-import { isExternalNameService, type ServiceRes } from "../../src/sim/state";
+import { allocatesNodePort, isExternalNameService, type ServiceRes } from "../../src/sim/state";
 import { externalIP } from "../../src/sim/util";
 import { parseServiceName, resolveService } from "../../src/sim/dns";
 
@@ -15,6 +15,25 @@ describe("isExternalNameService", () => {
     expect(isExternalNameService({ type: "ClusterIP" })).toBe(false);
     expect(isExternalNameService({ type: "externalname" })).toBe(false);
     expect(isExternalNameService({})).toBe(false);
+  });
+});
+
+describe("resolveService: Fallback-FQDN", () => {
+  test("unlesbarer Name: ok false, FQDN ohne Schlusspunkt", () => {
+    const a = resolveService(services, "kasse.default.foo.");
+    expect(a.ok).toBe(false);
+    expect(a.fqdn).toBe("kasse.default.foo");
+  });
+});
+
+describe("allocatesNodePort", () => {
+  test("nur LoadBalancer und NodePort", () => {
+    expect(allocatesNodePort({ type: "LoadBalancer" })).toBe(true);
+    expect(allocatesNodePort({ type: "NodePort" })).toBe(true);
+    expect(allocatesNodePort({ type: "ClusterIP" })).toBe(false);
+    expect(allocatesNodePort({ type: "ExternalName" })).toBe(false);
+    expect(allocatesNodePort({ type: "nodeport" })).toBe(false);
+    expect(allocatesNodePort({})).toBe(false);
   });
 });
 

@@ -86,3 +86,23 @@ describe("kubectl create – #489 bleibt (pre-mutation-Prüfung, gleiche Meldung
     assert.equal(sim.deployments.length, 0);
   });
 });
+
+describe("Argo-Soll-Service – ungültiger Name (#1409)", () => {
+  test("Self-Heal wirft nicht und legt nichts an; manueller Sync meldet DNS-1123 samt Tipp", () => {
+    sim.files["app.yaml"] = "kind: Application …";
+    sim.applyEffects["app.yaml"] = {
+      application: {
+        name: "kasse", repo: "r", path: "kasse/", autoSync: true, selfHeal: true,
+        deployment: { name: "kasse", image: "nginx", replicas: 1 }, service: { name: "Kasse_Svc", port: 80 },
+      },
+    };
+    sim.exec("kubectl apply -f app.yaml");
+    const heal = sim.exec("kubectl get pods");
+    assert.equal(heal.error, false, "kein Dauerfehler im Self-Heal");
+    assert.equal(sim.services.some(s => s.name === "Kasse_Svc"), false);
+    const sync = sim.exec("argocd app sync kasse");
+    assert.equal(sync.error, true);
+    assertRfc1123Error(sync.output, "Kasse_Svc");
+    assert.match(sync.output!, /💡/, "der Tipp erreicht die Ausgabe");
+  });
+});
