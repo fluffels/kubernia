@@ -30,10 +30,11 @@ const ctx = (over: Partial<SubmissionContext>): SubmissionContext => ({
   ...over,
 });
 
-function submit(input: string, task: SubmissionTask) {
+function submit(input: string, task: SubmissionTask, prepare?: (sim: ReturnType<typeof freshSim>) => void) {
   const { task: real, scenarios } = findTask("t-j24-3");
   const sim = freshSim();
   for (const sc of scenarios) sim.mergeScenario(sc);
+  prepare?.(sim);
   const result = sim.exec(input);
   const checkOk = !real.check || Boolean(real.check(sim));
   return evaluateSubmission(input, task, ctx({ simError: Boolean(result.error), checkOk }));
@@ -52,4 +53,39 @@ test("t-j24-3: alternativer Weg (deployment/kombuese) löst im Modus check", () 
 test("t-j24-3: falscher Port erreicht das Ziel nicht → failed", () => {
   const { task } = findTask("t-j24-3");
   expect(submit("kubectl expose deployment kombuese --port=9999", task).outcome).toBe("failed");
+});
+
+const svcYaml = (port: number) => `apiVersion: v1
+kind: Service
+metadata:
+  name: kombuese
+spec:
+  ports:
+    - port: ${port}
+`;
+
+test("t-j24-3: gleicher Zielzustand über zwei Wege wird gleich bewertet (#1296)", () => {
+  const { task: real, scenarios } = findTask("t-j24-3");
+  const portOf = (sim: ReturnType<typeof freshSim>) => sim.services.find(s => s.name === "kombuese")?.port;
+  const run = (input: string, prepare?: (sim: ReturnType<typeof freshSim>) => void) => {
+    const sim = freshSim();
+    for (const sc of scenarios) sim.mergeScenario(sc);
+    prepare?.(sim);
+    const result = sim.exec(input);
+    return { sim, result };
+  };
+  // Weg A: expose → Port als String
+  const a = run("kubectl expose deployment kombuese --port=80");
+  // Vorbedingung des Repros; normalisiert die Sim später selbst, darf sie entfallen
+  expect(typeof portOf(a.sim)).toBe("string");
+  expect(real.check?.(a.sim)).toBe(true);
+  // Weg B: apply -f Manifest → Port als Zahl
+  const b = run("kubectl apply -f kombuese-svc.yaml", sim => { sim.files["kombuese-svc.yaml"] = svcYaml(80); });
+  expect(b.result.error).toBeFalsy();
+  // Vorbedingung des Repros; normalisiert die Sim später selbst, darf sie entfallen
+  expect(typeof portOf(b.sim)).toBe("number");
+  expect(real.check?.(b.sim)).toBe(true);
+  expect(submit("kubectl apply -f kombuese-svc.yaml", real, sim => { sim.files["kombuese-svc.yaml"] = svcYaml(80); }).outcome).toBe("solved");
+  // Negativ: falscher Port im Manifest
+  expect(submit("kubectl apply -f kombuese-svc.yaml", real, sim => { sim.files["kombuese-svc.yaml"] = svcYaml(81); }).outcome).toBe("failed");
 });
