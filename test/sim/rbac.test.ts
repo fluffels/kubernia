@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./helpers";
 import { KQContent } from "../../src/content";
 import { getManifest } from "../../src/content/manifest-lib";
+import { deploymentYaml } from "../factories/manifests";
 
 const SERVICEACCOUNT_YAML = getManifest("serviceaccount-deploy-bot");
 const ROLE_YAML = getManifest("role-pod-leser");
@@ -38,8 +39,7 @@ test("#126 ServiceAccount: anlegen, Default-SA da, auflisten, Duplikat-Fehler", 
 
 test("#132 apply: Deployment-Manifest mit serviceAccountName verknüpft die SA", () => {
   sim.exec("kubectl create serviceaccount wachdienst");
-  sim.files["wp.yaml"] = "kind: Deployment";
-  sim.applyEffects["wp.yaml"] = { deployment: { name: "wachposten", image: "nginx", replicas: 1, serviceAccountName: "wachdienst" } };
+  sim.files["wp.yaml"] = deploymentYaml({ name: "wachposten", serviceAccountName: "wachdienst" });
   const r = sim.exec("kubectl apply -f wp.yaml");
   assert.ok(!r.error, "apply geht durch");
   assert.match(r.output!, /deployment\.apps\/wachposten created/);
@@ -57,11 +57,10 @@ test("#132 describe pod: ohne serviceAccountName läuft der Pod unter der defaul
 });
 
 test("#132 apply idempotent: gleiche SA → unchanged, geänderte SA → configured", () => {
-  sim.files["wp.yaml"] = "kind: Deployment";
-  sim.applyEffects["wp.yaml"] = { deployment: { name: "wp", image: "nginx", replicas: 1, serviceAccountName: "alt" } };
+  sim.files["wp.yaml"] = deploymentYaml({ name: "wp", serviceAccountName: "alt" });
   assert.match(sim.exec("kubectl apply -f wp.yaml").output!, /created/);
   assert.match(sim.exec("kubectl apply -f wp.yaml").output!, /unchanged/, "gleiche SA → unchanged");
-  sim.applyEffects["wp.yaml"] = { deployment: { name: "wp", image: "nginx", replicas: 1, serviceAccountName: "neu" } };
+  sim.files["wp.yaml"] = deploymentYaml({ name: "wp", serviceAccountName: "neu" });
   assert.match(sim.exec("kubectl apply -f wp.yaml").output!, /configured/, "geänderte SA → configured");
   assert.equal(sim.deployments.find(d => d.name === "wp")!.serviceAccountName, "neu");
 });
@@ -116,10 +115,8 @@ test("#126 RBAC: describe role zeigt die Regeln (Lern-Einblick)", () => {
 });
 
 test("#126 Pod-Security: restricted lehnt unsicheren Pod beim Anlegen ab, sicherer kommt durch", () => {
-  sim.files["unsafe.yaml"] = "apiVersion: apps/v1\nkind: Deployment";
-  sim.files["safe.yaml"] = "apiVersion: apps/v1\nkind: Deployment";
-  sim.applyEffects["unsafe.yaml"] = { deployment: { name: "wild", image: "nginx", replicas: 1 } };
-  sim.applyEffects["safe.yaml"] = { deployment: { name: "brav", image: "nginx", replicas: 1, securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false } } };
+  sim.files["unsafe.yaml"] = deploymentYaml({ name: "wild" });
+  sim.files["safe.yaml"] = deploymentYaml({ name: "brav", securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false } });
 
   // Default (privileged): keine Einschränkung – unsafe geht durch
   const beforeLabel = sim.exec("kubectl apply -f unsafe.yaml");
@@ -132,7 +129,7 @@ test("#126 Pod-Security: restricted lehnt unsicheren Pod beim Anlegen ab, sicher
   assert.match(lbl.output!, /labeled/);
 
   // Unsicheres Deployment (kein securityContext) wird jetzt abgelehnt
-  sim.applyEffects["unsafe.yaml"] = { deployment: { name: "wild2", image: "nginx", replicas: 1 } };
+  sim.files["unsafe.yaml"] = deploymentYaml({ name: "wild2" });
   const rej = sim.exec("kubectl apply -f unsafe.yaml");
   assert.ok(rej.error, "restricted lehnt unsicheren Pod ab");
   assert.match(rej.output!, /restricted|runAsNonRoot|Pod Security/i, "klare Begründung in der Fehlermeldung");
@@ -145,10 +142,8 @@ test("#126 Pod-Security: restricted lehnt unsicheren Pod beim Anlegen ab, sicher
 });
 
 test("#126 Pod-Security: baseline blockt nur privileged, sonst frei", () => {
-  sim.files["priv.yaml"] = "kind: Deployment";
-  sim.files["plain.yaml"] = "kind: Deployment";
-  sim.applyEffects["priv.yaml"] = { deployment: { name: "root-pod", image: "nginx", replicas: 1, securityContext: { privileged: true } } };
-  sim.applyEffects["plain.yaml"] = { deployment: { name: "normal-pod", image: "nginx", replicas: 1 } };
+  sim.files["priv.yaml"] = deploymentYaml({ name: "root-pod", securityContext: { privileged: true } });
+  sim.files["plain.yaml"] = deploymentYaml({ name: "normal-pod" });
   sim.exec("kubectl label namespace default pod-security.kubernetes.io/enforce=baseline");
 
   const rej = sim.exec("kubectl apply -f priv.yaml");
@@ -174,8 +169,7 @@ test("#126 Serialisierung: SA/Rollen/Bindings/PSA überleben snapshot→reset", 
   assert.match(wieder.exec("kubectl get sa").output!, /deploy-bot/, "SA überlebt das Speichern");
   assert.equal(wieder.exec("kubectl auth can-i get pods --as=system:serviceaccount:default:deploy-bot").output, "yes", "RBAC-Recht überlebt das Speichern");
   // restricted-Stufe überlebt: ein unsicherer Pod wird nach dem Reload weiter abgelehnt
-  wieder.files["u.yaml"] = "kind: Deployment";
-  wieder.applyEffects["u.yaml"] = { deployment: { name: "x", image: "nginx", replicas: 1 } };
+  wieder.files["u.yaml"] = deploymentYaml({ name: "x" });
   assert.ok(wieder.exec("kubectl apply -f u.yaml").error, "PSA-Stufe überlebt das Speichern");
 });
 
@@ -273,26 +267,21 @@ test("#134 Quest k8s-rbac-clusterrole: namespaced Role reicht nicht für Nodes, 
 
 test("#128 apply: securityContext-Manifest besteht restricted, plain wird abgelehnt", () => {
   sim.files["secure.yaml"] = POD_SECURITY_YAML;
-  sim.applyEffects["secure.yaml"] = { deployment: { name: "wachposten", image: "nginx", replicas: 1, securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true } } };
   sim.exec("kubectl label namespace default pod-security.kubernetes.io/enforce=restricted");
   const ok = sim.exec("kubectl apply -f secure.yaml");
   assert.ok(!ok.error, "der sichere Workload kommt unter restricted durch");
   assert.ok(sim.deployments.some(d => d.name === "wachposten"));
   // Gegenprobe: ein plain Deployment ohne securityContext wird abgelehnt
-  sim.files["plain.yaml"] = "kind: Deployment";
-  sim.applyEffects["plain.yaml"] = { deployment: { name: "barfuss", image: "nginx", replicas: 1 } };
+  sim.files["plain.yaml"] = deploymentYaml({ name: "barfuss" });
   assert.ok(sim.exec("kubectl apply -f plain.yaml").error, "unsicherer Workload bleibt abgelehnt");
 });
 
 test("#135 Quest k8s-pod-security: roh läuft unter privileged, restricted weist ihn ab, gehärtet kommt durch", () => {
-  // Genau die applyEffects der Quest-Szenario-Dateien (roh = kein securityContext, gehärtet = mit).
-  const roh = { deployment: { name: "spaehposten", image: "wachturm-spaeher:1.0", replicas: 1 } };
-  const safe = { deployment: { name: "spaehposten", image: "wachturm-spaeher:1.0", replicas: 1, securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true } } };
-  sim.files["spaehposten-roh.yaml"] = "kind: Deployment";
-  sim.files["spaehposten.yaml"] = "kind: Deployment";
+  // Eigenes echtes YAML nach dem Muster der Quest-Dateien (die echten deckt test/quests.test.ts ab; roh = kein securityContext, gehärtet = mit).
+  sim.files["spaehposten-roh.yaml"] = deploymentYaml({ name: "spaehposten", image: "wachturm-spaeher:1.0" });
+  sim.files["spaehposten.yaml"] = deploymentYaml({ name: "spaehposten", image: "wachturm-spaeher:1.0", securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true } });
 
   // Schritt 1: roh unter privileged (Default) -> läuft (genau das Risiko).
-  sim.applyEffects["spaehposten-roh.yaml"] = roh;
   assert.ok(!sim.exec("kubectl apply -f spaehposten-roh.yaml").error, "unter privileged kommt der ungehärtete Posten durch");
   assert.ok(sim.deployments.some(d => d.name === "spaehposten"), "der rohe Posten läuft");
 
@@ -310,7 +299,6 @@ test("#135 Quest k8s-pod-security: roh läuft unter privileged, restricted weist
   assert.ok(!sim.deployments.some(d => d.name === "spaehposten"), "der abgewiesene Posten entsteht NICHT");
 
   // Schritt 3: der GEHÄRTETE Posten kommt unter restricted durch.
-  sim.applyEffects["spaehposten.yaml"] = safe;
   const ok = sim.exec("kubectl apply -f spaehposten.yaml");
   assert.ok(!ok.error, "der gehärtete Posten (runAsNonRoot + keine Eskalation) wird zugelassen");
   assert.ok(sim.deployments.some(d => d.name === "spaehposten"), "der gehärtete Posten läuft");

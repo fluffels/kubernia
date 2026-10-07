@@ -9,9 +9,20 @@ import { sameRbac } from "../../sim/rbac";
 // mehr aus einem TS-Konstanten-Monolithen. Die vertrauten Namen bleiben als lokale Konstanten
 // erhalten (aus der Bibliothek aufgelöst) + re-exportiert – die Drill-Module ändern sich nicht.
 import { getManifest } from "../manifest-lib";
+import { fail } from "../parse";
+
+/** Ein Bibliotheks-Manifest mit ersetzten Namen (Drills vergeben Zufallsnamen, das YAML muss
+ *  dazu passen, #1299). Bricht laut ab, wenn ein Quell-Token im Manifest fehlt. */
+export function renamedManifest(id: string, replacements: Record<string, string>): string {
+  let yaml = getManifest(id);
+  for (const [from, to] of Object.entries(replacements)) {
+    if (!yaml.includes(from)) fail(`renamedManifest „${id}"`, `Quell-Token „${from}" kommt im Manifest nicht vor`);
+    yaml = yaml.split(from).join(to);
+  }
+  return yaml;
+}
 
 const NETPOL_YAML = getManifest("networkpolicy-hafenmauer");
-const EXTERNALNAME_YAML = getManifest("service-externalname-bank");
 const DOCKERFILE = getManifest("dockerfile-nginx");
 const ARGO_APPLICATION_MANUAL_YAML = getManifest("argo-application-manual");
 const SERVICEMONITOR_YAML = getManifest("servicemonitor-lager");
@@ -20,7 +31,6 @@ const ROLE_YAML = getManifest("role-pod-leser");
 const ROLEBINDING_YAML = getManifest("rolebinding-pod-leser");
 const CLUSTERROLE_YAML = getManifest("clusterrole-knoten-leser");
 const CLUSTERROLEBINDING_YAML = getManifest("clusterrolebinding-knoten-leser");
-const POD_SECURITY_YAML = getManifest("deployment-wachposten-restricted");
 const STATEFULSET_YAML = getManifest("statefulset-speicher");
 const STORAGECLASS_YAML = getManifest("storageclass-kai-ssd");
 const PVC_YAML = getManifest("pvc-lager-daten");
@@ -203,6 +213,6 @@ export function freeWerftName(sim: Sim): string {
   return name;
 }
 
-// Re-export EXTERNALNAME_YAML und VOLUMESNAPSHOT_YAML für Drill-Dateien
-export { NETPOL_YAML, EXTERNALNAME_YAML, ARGO_APPLICATION_MANUAL_YAML, SERVICEMONITOR_YAML, PROMETHEUSRULE_YAML, ROLE_YAML, ROLEBINDING_YAML, CLUSTERROLE_YAML, CLUSTERROLEBINDING_YAML, POD_SECURITY_YAML, STATEFULSET_YAML, STORAGECLASS_YAML, PVC_YAML, VOLUMESNAPSHOT_YAML, PVC_RESTORE_YAML };
+// Re-export VOLUMESNAPSHOT_YAML für Drill-Dateien
+export { NETPOL_YAML, ARGO_APPLICATION_MANUAL_YAML, SERVICEMONITOR_YAML, PROMETHEUSRULE_YAML, ROLE_YAML, ROLEBINDING_YAML, CLUSTERROLE_YAML, CLUSTERROLEBINDING_YAML, STATEFULSET_YAML, STORAGECLASS_YAML, PVC_YAML, VOLUMESNAPSHOT_YAML, PVC_RESTORE_YAML };
 export { pick, rnd };
