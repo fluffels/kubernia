@@ -3,6 +3,8 @@
 > Architecture Decision Record. Format: Kontext → Problem → Optionen → Entscheidung → Konsequenzen → Re-Evaluierung.
 > Status: **akzeptiert** · Datum: 2026-10-07 · Ticket: #1355 (Teil von #1354, Lebende Doku)
 
+> ⚠️ **Präzisiert durch [ADR 0020](0020-architekturmodell-likec4.md) (2026-10-08, #1420):** das LikeC4-Architekturmodell ist eine zweite Ableitung derselben SSOTs und wird von `check:c4` abgeglichen, nicht aus Mermaid-Export generiert.
+
 ## Status
 
 **Akzeptiert.** Die Mechanik steht in [`scripts/docs-gen.mjs`](../../scripts/docs-gen.mjs), die Pfade und Beschreibungen in [`scripts/docs-gen/config.json`](../../scripts/docs-gen/config.json), der Wächter in [docs/agent-harness.md](../agent-harness.md#lebende-doku-wächter-npm-run-checkdocgen-1355).
@@ -59,3 +61,10 @@ Wenn die Zahl der Generatoren so wächst, dass die Registry unübersichtlich wir
 - **Wirtschafts-Loop entfällt.** Die Pod-Einnahmen sind Code (`incomeRate()`), nicht Daten; ein handgemaltes Diagramm ohne Gate gibt es nicht.
 - **Quest-Zahlen je Thema statt je Phase.** Die Phase ist kein Datenfeld; das Thema schon.
 - **Quest-Zahlen der README** (`quests-je-thema`) kommen aus den Daten; ein Wächter-Test in `test/readme.test.ts` hält handgeschriebene Zählungen aus dem Lernpfad-Abschnitt.
+
+## Fortschreibung #1373 (2026-10-08): Kern-Schnitt, Quellwurzel, Fremd-Repo-Beleg
+
+- **Kern-Schnitt.** Übertragbar sind Engine (`scripts/docs-gen.mjs`), `markdown.mjs`, `adr-liste`, `zeitleiste`, `schichten-soll` und `schichten-ist`; die Registry gruppiert danach (Kern, Harness-Stack, Spiel). Die Neubewertung der Registry-Größe steht in Fortschreibung #1370, ein Datei-Split war dafür nicht nötig.
+- **`quellwurzel` im Schichtmodell.** Das Code-Verzeichnis (`src/`) ist ein Feld von `SCHICHT_MODELL`, nicht mehr im Code verstreut; Regeln von `check:arch`, Coverage-Globs und Diagramm leiten daraus ab (Diagramm == Regel).
+- **`befehl` in der Config.** Hinweiszeile und `Fix:`-Text nennen den konfigurierten Befehl (Standard `npm run docs:gen`); `diagramme.ciWorkflows` hat keinen festen Standardpfad mehr.
+- **Beleg.** `test/docgen-fremdrepo.test.ts` fährt ein Python-Mini-Repo durch den Kern und wacht über die Importgrenze des Kerns. Übernahme ist Kopie, kein Paket; Einführungspfad: [harness-transfer.md](../harness-transfer.md).

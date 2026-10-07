@@ -48,6 +48,8 @@ Der fachliche Kontext ist bewusst schmal:
 
 Abhängigkeiten zeigen strikt **nach innen** — auf die reine Domäne, die nichts von der Engine weiß.
 
+> **Architekturmodell:** Kontext, Container, Schichten und Hauptmodule liegen zusätzlich als LikeC4-Modell unter [`docs/architektur/`](architektur/spiel.c4) vor (`npm run c4:serve` zeigt es im Browser). `npm run check:c4` gleicht es gegen `scripts/layers.cjs` und `src/` ab ([ADR 0020](adr/0020-architekturmodell-likec4.md)). Die von Hand gezeichneten C4-Diagramme in diesem Kapitel bleiben, bis die Doku-Seite das Modell ausliefert.
+
 ### Schichten – Soll (geprüfte Regel)
 
 Erzeugt aus `SCHICHT_MODELL` in [`scripts/layers.cjs`](../scripts/layers.cjs), derselben Tabelle, aus der `check:arch` seine Verbotsregeln ableitet: jede Richtung, die hier fehlt, ist eine Regel, die rot wird. Phaser/DOM ist die Technik der Präsentation (grün), der Einstieg bootet Phaser; die Persistenz (`store`) gehört zur Anwendung.
@@ -265,19 +267,28 @@ iSAQB-konform: jeder ADR trägt einen expliziten **Re-Evaluierungs-Trigger** —
 
 ## 10. Qualitätsanforderungen (Qualitätsbaum)
 
-Konkrete Szenarien (Reiz → Reaktion) statt vager Adjektive:
+Gegliedert nach den neun Produktqualitäts-Merkmalen von [ISO/IEC 25010:2023](https://quality.arc42.org/standards/iso-25010) (Functional suitability, Performance efficiency, Compatibility, Interaction capability, Reliability, Security, Maintainability, Flexibility, Safety), je mit konkreten Szenarien (Reiz → Reaktion) statt vager Adjektive, dem Gate, das sie durchsetzt, und dem Status. Stand: 2026-10-08 (#1425).
 
-| Qualität | Szenario | Status |
-|---|---|---|
-| Erweiterbarkeit | Neue Quest → eine JSON-Datei + Reihenfolge-Eintrag, kein Code; Loader validiert beim Start | erfüllt |
-| Testbarkeit | Sim-Regel ändern → Unit-Test gegen pure Domäne ohne Engine; Suite < 3 s | erfüllt |
-| Datensicherheit | Save-Format ändert sich → Migrationskette + Backup-Slot; Alt-Stand bricht nie | erfüllt |
-| Portabilität | Spiel weitergeben → ein Doppelklick-HTML, offline | erfüllt |
-| Wartbarkeit (KI) | Agent ändert Modul → Lint/Arch/Größe/**Doku-Drift** (#482)/Smoke fangen Fehler vor dem Merge | erfüllt |
-| Testbarkeit (Messung) | „Welche Teile sind untertestet?" → Coverage messbar mit Per-Verzeichnis-Schwellen | **offen (#495)** |
-| Determinismus | Domäne + Anwendung reproduzierbar → seedbare RNG, kein `Math.random` in `sim/`/`content/`/`game/`; Präsentation bewusst ausgenommen (Display-only, `core/rng.ts`) | **erfüllt (#492/#876)** |
-| Zuverlässigkeit | Laufzeitfehler/Save-Fehler → sichtbarer Fallback statt schwarzem Canvas / stillem Verlust | Laufzeitfehler abgedeckt (#504); Save-Fehler-Hinweis offen (#497) |
-| Performance | Viele Inseln/Sprites → Culling greift, aber Assets werden noch eager geladen; kein Bundle-Budget | teilweise (#503) |
+| Merkmal | Szenario | Durchsetzendes Gate | Status |
+|---|---|---|---|
+| Functional suitability | Quest-Daten sind fehlerhaft oder unlösbar → der Loader validiert beim Start, `solvedBy`-Prüfungen und Quest-Tests schlagen vor dem Merge an | `npm test` (`quests`, `solved-by-check`), Content-Loader | erfüllt; Treue der Simulation gegenüber echtem `kubectl` nur einzeln abgesichert (Lücke 2) |
+| Performance efficiency | Viele Inseln/Sprites/Content-Dateien → Culling greift, Content-Chunks je Datei, Byte-Budget je Chunk-Art | `check:bundle` ([ADR 0018](adr/0018-content-chunks-je-datei.md)), Perf-Smoke, [performance-budget.md](performance-budget.md) | erfüllt (#503, #1408) |
+| Compatibility | Das Spiel läuft in den Browsern der Spieler:innen; die Smokes laufen bisher nur in Chromium | Boot-Smoke, Perf-Smoke | teilweise: Firefox/WebKit offen (#1131, Lücke 1) |
+| Interaction capability | Farb-unabhängige Statuscodierung, Tastaturbedienung, Kontraste | Browser-Verifikation je Änderung (Präsentation bewusst nicht gegatet), [barrierefreiheit-audit.md](barrierefreiheit-audit.md) | geprüft (#481), kein automatisches Gate (Lücke 3) |
+| Reliability | Laufzeitfehler oder Save-Fehler → sichtbarer Fallback statt schwarzem Canvas oder stillem Verlust; Save-Format ändert sich → Migrationskette plus Backup-Slot, Alt-Stand bricht nie; Domäne reproduzierbar (seedbare RNG, kein `Math.random` in `sim/`/`content/`/`game/`) | `sanitizeState`, Migrationstests, Fallback-Overlay | erfüllt (#492/#876, #497, #504) |
+| Security | Fremdtext, Abhängigkeiten, Container-Image, Agenten-Sandbox | `npm audit` (Produktiv-Deps), Secret-Scanning, geschützter `main`, `check:internalrefs` | in Arbeit: #875 (CodeQL, Scorecard), #1432 (Agenten-Sandbox), #1433 (Prompt-Injection), Herleitung in #1429 |
+| Maintainability | Agent ändert Modul → Lint, Arch, Größe, Doku-Drift, Smoke fangen Fehler vor dem Merge; Sim-Regel ändern → Unit-Test gegen die pure Domäne ohne Engine (Suite unter 3 s); Coverage je Schicht und für die geänderten Zeilen | `npm run verify`, `check:diffcoverage`, `check:diffsize` | erfüllt (#482, #495) |
+| Flexibility | Neue Quest → eine JSON-Datei plus Reihenfolge-Eintrag, kein Code; 10× Inhalt wächst ohne Umbau; Spiel weitergeben → ein Doppelklick-HTML, offline (Installierbarkeit) | Content-as-Data ([ADR 0004](adr/0004-skalierungs-fundament.md)), Loader-Validierung, `build:offline` | erfüllt; i18n bewusst nicht (Randbedingung, §11) |
+| Safety | Kein physisches Risiko: Single-Player-Lernspiel ohne Aktorik; Datenverlust fällt unter Reliability | n. a. | nicht anwendbar |
+
+**Lücken nach Risiko und ihre Folge**
+
+| Nr. | Lücke | Risiko | Folge |
+|---|---|---|---|
+| 2 | Die Simulation bildet `kubectl` nur an einzelnen Stellen nachweislich treu ab; ein Lernspiel vermittelt sonst falsches Verhalten. Einzelabweichungen sind Tickets (#1417, #1430, #1323, #1343), eine systematische Abgleichsmethode fehlt. | hoch | gebündeltes Issue #1440 „Sim-Treue: kubectl-Verhalten systematisch gegen die offizielle Doku abgleichen“ |
+| 1 | Smokes laufen nur in Chromium; Firefox und Safari sind für Spieler:innen realistisch. | mittel | bestehendes Ticket #1131 |
+| 4 | Sicherheit gegen externe Kataloge (CodeQL, Scorecard, OWASP LLM) | mittel | bestehende Tickets #875, #1432, #1433 |
+| 3 | Barrierefreiheit ist geprüft, aber ohne Gate; Regressionen fielen erst bei der nächsten Prüfung auf. | niedrig | akzeptiert, weil Präsentations-Code bewusst im Browser statt per Gate verifiziert wird (AGENTS.md) und das Audit datiert vorliegt |
 
 ## 11. Risiken und technische Schulden
 

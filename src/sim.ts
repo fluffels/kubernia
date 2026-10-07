@@ -19,7 +19,7 @@ import type {
   ScrapeTarget, Alert, Scenario, ClusterState,
 } from "./sim/state";
 import { deploymentPodStatus, isReady } from "./sim/podstatus";
-import { HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService } from "./sim/state";
+import { DEFAULT_NAMESPACE, HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService } from "./sim/state";
 export { BROKEN_STATUS } from "./sim/state";
 export type {
   ExecResult,
@@ -41,7 +41,7 @@ import { kubectlCommand } from "./sim/kubectl";
 import { helmCommand } from "./sim/helm";
 import { terraformCommand } from "./sim/terraform";
 import { gitCommand } from "./sim/git";
-import { argocdCommand, reconcileAutoSync, cloneArgoApp } from "./sim/argocd";
+import { argocdCommand, reconcileAutoSync, cloneArgoApp, buildArgoApp } from "./sim/argocd";
 import { podMetrics as obsPodMetrics, nodeMetrics as obsNodeMetrics, scrapeTargets as obsScrapeTargets, alerts as obsAlerts, evaluateAlerts as obsEvaluateAlerts } from "./sim/observability";
 import { glabCommand } from "./sim/glab";
 import { kubeadmCommand, deriveControlPlane, applyBootstrapScenario } from "./sim/kubeadm";
@@ -55,7 +55,7 @@ import { sameRbac } from "./sim/rbac";
 import { assertClusterInvariants, warnClusterInvariants } from "./sim/invariants";
 import { scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, statefulPodClaimName, seedPodTemplate, snapshotPodTemplate } from "./sim/workload";
 import { provisionNode } from "./sim/nodes";
-import { renderHelp } from "./hud/helptext";
+import { renderHelp, renderHelpTopic } from "./hud/helptext";
 
 /* ---------- Ressourcen-Registry (#499) ----------
  * Eine Reihe von Ressourcentypen ist „einfach additiv": ihr Zustand ist eine flache Liste,
@@ -173,7 +173,7 @@ const BUILDER_RESOURCE_REGISTRY: BuildEntry[] = [
   { key: 'pvs',             build: buildPv },
   { key: 'volumeSnapshots', build: buildVolumeSnapshot },
   { key: 'charts',          build: buildChart },
-  { key: 'argoApps',        build: cloneArgoApp, snap: cloneArgoApp },
+  { key: 'argoApps',        build: buildArgoApp, snap: cloneArgoApp },
 ];
 
 /* ---------- Befehls-Dispatch (#563) ----------
@@ -481,7 +481,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       const sc = pvc.storageClass ? this.storageClasses.find(s => s.name === pvc.storageClass) : null;
       if (sc && sc.provisioner) {
         const pvName = "pvc-" + randSuffix(8, this.rng);
-        this.pvs.push({ name: pvName, capacity: pvc.capacity, status: "Bound", claim: "default/" + pvc.name, storageClass: sc.name, accessModes: pvc.accessModes, reclaimPolicy: sc.reclaimPolicy, created: this.clock });
+        this.pvs.push({ name: pvName, capacity: pvc.capacity, status: "Bound", claim: DEFAULT_NAMESPACE + "/" + pvc.name, storageClass: sc.name, accessModes: pvc.accessModes, reclaimPolicy: sc.reclaimPolicy, created: this.clock });
         pvc.status = "Bound";
         pvc.volume = pvName;
         return;
@@ -489,7 +489,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       const pv = this.pvs.find(p => p.status === "Available" && (!pvc.storageClass || p.storageClass === pvc.storageClass) && p.accessModes === pvc.accessModes);
       if (pv) {
         pv.status = "Bound";
-        pv.claim = "default/" + pvc.name;
+        pv.claim = DEFAULT_NAMESPACE + "/" + pvc.name;
         pvc.status = "Bound";
         pvc.volume = pv.name;
         if (pv.capacity) pvc.capacity = pv.capacity;
@@ -865,7 +865,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     _runCommand(cmd: string, tokens: string[], raw: string, available?: Set<string>): string {
       const handler = COMMAND_HANDLERS[cmd];
       if (handler) return handler(this, tokens, raw);
-      if (cmd === "help") return this._help(available);
+      if (cmd === "help") return this._help(available, tokens[1]);
       return this._unknownCommand(cmd);
     }
 
@@ -900,8 +900,9 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
 
     /** Hilfetext – Katalog + Filtern liegen in cmdunlock.ts (#358), hält den Kern
      *  unter dem God-File-Budget. `available` filtert auf Freigeschaltetes. */
-    _help(available?: Set<string>) {
-      return renderHelp(available);
+    _help(available?: Set<string>, topic?: string) {
+      if (!topic) return renderHelp(available);
+      return renderHelpTopic(topic, available) ?? this._err("help: Zu '" + topic + "' gibt es keine Hilfe.", "Tippe 'help' für alle Befehle.");
     }
 
     // nslookup (#337) + curl (#164) liegen seit #164 in ./sim/net.ts (Erreichbarkeits-

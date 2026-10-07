@@ -15,9 +15,8 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
+import { fixture } from "./support/tmp-fixture";
 
 type Env = Record<string, string | undefined>;
 type Sums = { fileCount: number; changedLines: number };
@@ -599,14 +598,24 @@ describe("check:diffsize: Verdrahtung der docgen-Wurzeln (#1411)", () => {
     assert.equal(r.fileCount, 0, "die Datei besteht nur aus GEN-Zeilen");
   });
 
+  test("nur String-Einträge von `markdown` sind Wurzeln (Zahlen, null, Objekte fallen weg)", () => {
+    const root = fixture({ "scripts/docs-gen/config.json": '{"markdown":["docs",42,null,{"x":1},"README.md"]}' });
+    assert.deepEqual(m.ladeDocgenWurzeln(root), ["docs", "README.md"]);
+  });
+
   test("Config fehlt, kaputt oder ohne `markdown`: keine Wurzeln, dann zählt alles (fail-closed)", () => {
-    const root = mkdtempSync(join(tmpdir(), "kq-cfg-"));
-    assert.deepEqual(m.ladeDocgenWurzeln(root), [], "keine Datei");
-    mkdirSync(join(root, "scripts", "docs-gen"), { recursive: true });
-    writeFileSync(join(root, "scripts", "docs-gen", "config.json"), "{ kaputt");
-    assert.deepEqual(m.ladeDocgenWurzeln(root), [], "kaputtes JSON");
-    writeFileSync(join(root, "scripts", "docs-gen", "config.json"), '{"anders":["docs"]}');
-    assert.deepEqual(m.ladeDocgenWurzeln(root), [], "Schlüssel markdown fehlt");
+    assert.deepEqual(m.ladeDocgenWurzeln(fixture({})), [], "keine Datei");
+    assert.deepEqual(m.ladeDocgenWurzeln(fixture({ "scripts/docs-gen/config.json": "{ kaputt" })), [], "kaputtes JSON");
+    assert.deepEqual(
+      m.ladeDocgenWurzeln(fixture({ "scripts/docs-gen/config.json": '{"anders":["docs"]}' })),
+      [],
+      "Schlüssel markdown fehlt",
+    );
+    assert.deepEqual(
+      m.ladeDocgenWurzeln(fixture({ "scripts/docs-gen/config.json": '{"markdown":"docs"}' })),
+      [],
+      "markdown ist kein Array",
+    );
     const r = m.checkDiffSize({ runGit: git, env: {}, docgenWurzeln: [] });
     assert.equal(r.genLines, 0);
     assert.equal(r.changedLines, 2);
