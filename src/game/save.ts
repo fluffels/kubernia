@@ -250,7 +250,10 @@ function stepTaskCount(step: QuestStep): number {
     case "terminal": return step.tasks.length;
     case "drill": return step.count;
     case "teach": return 1;
-    default: return 0; // dialog / choice / minigame: kein per-Aufgabe-Index
+    // Ausdrücklich statt `default`: eine neue Schritt-Art macht den Lint rot (switch-exhaustiveness-check), statt still 0 zu liefern.
+    case "dialog":
+    case "choice":
+    case "minigame": return 0; // kein per-Aufgabe-Index
   }
 }
 

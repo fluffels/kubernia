@@ -1,6 +1,7 @@
 /* Rote CI-Läufe (#1398): ein gemeinsamer Abruf für Festgefahren-Wächter, Messskript und Ergebnis je Ticket-Lauf. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as modul from "../scripts/ci-laeufe.mjs";
 
 type Lauf = { branch: string; sha: string; createdAt: string };

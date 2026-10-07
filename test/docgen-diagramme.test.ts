@@ -227,7 +227,7 @@ describe("Vollständigkeit (AK4)", () => {
     assert.ok(erzeuge("voll", f).includes("C Session-Modell"));
   });
   describe("Vereinigung mehrerer Vorlagen (Z2b)", () => {
-    const zwei: Cfg = { ...config, diagramme: { ...config.diagramme, vollstaendig: ["a", "b"], vorlagen: { a: "docs/diagramme/a.mmd", b: "docs/diagramme/b.mmd" } } };
+    const zwei: Cfg = { ...config, diagramme: { ...(config.diagramme as Cfg), vollstaendig: ["a", "b"], vorlagen: { a: "docs/diagramme/a.mmd", b: "docs/diagramme/b.mmd" } } };
     const teile = (a: string, b: string) => basis({ "docs/diagramme/a.mmd": a, "docs/diagramme/b.mmd": b });
     test("zwei nur zusammen vollständige Vorlagen sind grün (jede für sich wäre rot)", () => {
       const f = teile("A ${agent:plan}\nC ${skill:flow}", "B ${agent:Explore}\nD ${workflow:wf}");

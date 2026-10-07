@@ -7,7 +7,6 @@ import { readFileSync } from "node:fs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/board-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawTakt from "../scripts/board-takt.mjs";
 
 type Item = { id: string; number: number; status: string; title: string; assignees: string[]; state: string };

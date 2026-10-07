@@ -86,6 +86,12 @@ export default tseslint.config(
       // die Roh-JSON-Korruptions-Fixtures in den Tests) tragen ein begründetes
       // `// eslint-disable-next-line` – das ist der dokumentierte Weg für Ausnahmen.
       "@typescript-eslint/no-explicit-any": "error",
+
+      // Exhaustive Switches über diskriminierte Unions (z.B. ClusterPod.owner in getPods, src/sim/pods.ts): eine neue
+      // Variante macht den Lint rot, statt still im `default` zu landen. Bewusst strikt (Default-Optionen,
+      // `considerDefaultExhaustiveForUnions: false`): ein `default` zählt NICHT als Abdeckung einer Union, die
+      // Varianten stehen ausdrücklich da (#1398).
+      "@typescript-eslint/switch-exhaustiveness-check": "error",
     },
   },
 

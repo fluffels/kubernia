@@ -2,7 +2,7 @@
  * Die EINE Stelle, die alle Pods des Clusters samt Besitzer aufzählt. Verbraucher
  * (`get pods`, `top`, Metriken) lesen von hier statt je eine eigene Schleife über
  * `deployments` zu führen. Eine neue Workload-Art (DaemonSet/Job) ist hier eine neue
- * Union-Variante; jeder `switch (c.owner)` ohne `default` wird dann zum Compile-Fehler
+ * Union-Variante; jeder `switch (c.owner)` wird dann zum Lint-Fehler (`switch-exhaustiveness-check`, auch mit `default`)
  * statt die neuen Pods still auszulassen.
  *
  * Bewusst ohne abgeleiteten Status: Laufen (Metriken), Bereitsein (Endpoints) und
