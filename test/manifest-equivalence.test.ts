@@ -41,7 +41,7 @@ function cases(): [string, string, ApplyEffect][] {
 describe("Parser + Mapper == hinterlegter Effekt (Quests)", () => {
   const all = cases();
   it("es gibt Quest-Dateien zu prüfen", () => {
-    expect(all.length).toBeGreaterThanOrEqual(5);
+    expect(all.length).toBeGreaterThanOrEqual(7);
   });
   it.each(all)("%s", (_n, text, eff) => {
     const mapped = effectsFromManifest(text, "datei.yaml");
