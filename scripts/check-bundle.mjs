@@ -95,7 +95,8 @@ export const BUNDLE_BUDGETS = [
     // #1299: +~0.3 KB — werft-dienst-/uebung-Manifeste in der Bibliothek, Sonderfeld-Overlay in der Registry.
     // #1300: +~3 KB — Deployment-apply-Abgleich (apply-deployment.ts), Workload-Primitive, cpu-/memory-Mapper.
     // #1319: +~2 KB — zwei headless-DNS-Aufgaben (Texte, Checks, why/hint) in knut.json.
-    maxBytes: 1_417_000,
+    // #1339: +~0.4 KB — Pod-Inventar (pods.ts), StatefulSet-Pods in top/podMetrics.
+    maxBytes: 1_418_000,
   },
   {
     label: "Phaser-vendor-Chunk in dist/ (#595)",
