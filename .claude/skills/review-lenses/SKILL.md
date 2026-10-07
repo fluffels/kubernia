@@ -98,6 +98,7 @@ Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket
 - **God-Function / zu viel in einer Einheit** (der LOC-Deckel `check:size` sieht nur Dateien, nicht Funktionen)?
 - **Duplizierung** einer schon existierenden Fabrik/Abstraktion statt Wiederverwendung?
 - **Stardew-Scope (oberste Regel):** trägt der Ansatz noch bei 10× Content/NPCs/Welten, oder reproduziert er dasselbe Problem größer? Content als Daten (nicht als TS-Literal), Granularität mitgedacht?
+- **Abfragen und Zählungen:** neue Abfragen oder Zählungen (auch im Delta eines Fixes) auf Standardgrenzen prüfen: `gh issue list` ohne `--limit` liefert nur 30 Treffer, `gh api` ohne `--paginate` nur eine Seite.
 
 **Lens 2 — Requirement-Treue.** Tut der Diff **wirklich, was das Ticket verlangt**?
 - Ticket lesen (`gh issue view <nr>`) und den Diff **gegen die Akzeptanzkriterien** halten — jedes Kriterium einzeln: erfüllt / offen / darüber hinausgegangen.
@@ -111,7 +112,7 @@ Damit routet der Skill-Pfad wie der Workflow (`.claude/workflows/kubernia-ticket
 - Prüft der Test die **öffentliche API / beobachtbares Verhalten** (überlebt Refactoring), nicht Interna?
 - **Negativfälle** dabei (kaputter Zustand, falsche Eingabe, „darf nicht passieren"), nicht nur Happy Path?
 - **Kein False Positive (Red-Green):** würde der Test **rot**, wenn man die Logik testweise verfälscht? Wo Zweifel bestehen, den Fix/die Assertion kurz sabotieren → rot sehen → zurücksetzen (vgl. AGENTS.md „Tests gegen False Positives absichern"). Bugfix ⇒ gab es den **fehlschlagenden Repro-Test zuerst**?
-- Präsentations-Code (Phaser/DOM) wird **im Browser** verifiziert statt per Unit-Test — ist das passiert und belegt?
+- Präsentations-Code (Phaser/DOM) wird **im Browser** verifiziert statt per Unit-Test, ebenso sicht-/spielbare Content-Daten (Quests, Dialoge) — ist das passiert und belegt, wie im Plan vorgesehen (`kqDev.state`-Auszug, Screenshot-Pfad)?
 
 **Lens 4 — Doku** (nur bei reinem Markdown-Diff, dann der **einzige** Pass). Test-Adäquanz entfällt, weil es ohne Code nichts zu sabotieren gibt; die Architektur-Fragen einer Doku stecken in den Punkten 2 und 3:
 1. **Requirement-Treue:** der Diff gegen jedes Akzeptanzkriterium einzeln (erfüllt / offen / darüber hinaus), Scope-Kriechen?

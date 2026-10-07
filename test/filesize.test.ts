@@ -27,9 +27,12 @@ const collectSizes: (rootDir?: string) => Sized[] = checkSize.collectSizes;
 const findOversized: (sizes: Sized[], budget?: number) => Sized[] = checkSize.findOversized;
 const countLines: (text: string) => number = checkSize.countLines;
 type Deckel = { file: string; max: number; reason: string };
-const DECKEL: Deckel[] = checkSize.DECKEL;
-const collectWorkflowSizes: (rootDir?: string) => Sized[] = checkSize.collectWorkflowSizes;
-const pruefeDeckel: (sizes: Sized[], deckel?: Deckel[], budget?: number) => string[] = checkSize.pruefeDeckel;
+const deckelApi = checkSize as unknown as {
+  DECKEL: Deckel[];
+  collectWorkflowSizes: (rootDir?: string) => Sized[];
+  pruefeDeckel: (sizes: Sized[], deckel?: Deckel[], budget?: number) => string[];
+};
+const { DECKEL, collectWorkflowSizes, pruefeDeckel } = deckelApi;
 
 const sizes = collectSizes();
 const allowedFiles = new Set(ALLOWLIST.map((a) => a.file));
