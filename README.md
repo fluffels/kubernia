@@ -194,6 +194,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 | 07.10.2026 | [ADR 0018](/docs/adr/0018-content-chunks-je-datei.md): Content-Chunks je Datei — der Spielcode-Chunk wächst nicht mehr mit dem Inhalt |
 | 07.10.2026 | [ADR 0019](/docs/adr/0019-langfuse-plugin-im-user-scope.md): Das Langfuse-Plugin bleibt auch im User-Scope aktiv |
 | 08.10.2026 | [ADR 0020](/docs/adr/0020-architekturmodell-likec4.md): Architekturmodell LikeC4 — zweite Ableitung derselben SSOTs |
+| 08.10.2026 | [ADR 0021](/docs/adr/0021-agenten-sandbox-wsl2.md): Agenten-Sandbox über eine eigene WSL2-Distribution |
 
 <!-- GEN:zeitleiste END -->
 

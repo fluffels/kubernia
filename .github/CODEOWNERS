@@ -55,6 +55,7 @@ AGENTS.md                  @fluffels
 /.claude/                  @fluffels
 /.mcp.json                 @fluffels
 /scripts/playwright-mcp.mjs @fluffels
+/scripts/sandbox-doctor.mjs @fluffels
 /scripts/gh-guard-hook.mjs @fluffels
 /scripts/hook-io.mjs @fluffels
 /scripts/bash-parser.mjs @fluffels
