@@ -143,7 +143,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **WARUM:** Landkarte ([`docs/referenz/repo-landkarte.md`](referenz/repo-landkarte.md), Subsystem-granular) + Tiefendocs sind der **Kontext-Selektor** jeder KI-Session (§2.1). Driftet die Abdeckung leise, führt sie Agenten in die Irre — genau das darf nicht passieren, also ist „die Doku stimmt" selbst maschinell geprüft.
 
 ### Lebende-Doku-Wächter (`npm run check:docgen`, #1355)
-- **WAS:** Abschnitte zwischen `<!-- GEN:<name> START -->` und `<!-- GEN:<name> END -->` in README und `docs/` erzeugt `npm run docs:gen` aus dem Repo (welche Generatoren es gibt, steht in der Registry `GENERATORS` in `scripts/docs-gen.mjs`, ihre Pfade in `scripts/docs-gen/config.json`); `check:docgen` erzeugt sie im Speicher und vergleicht. Rot bei veraltetem Abschnitt (Meldung nennt Datei, Abschnitt und den Fix `npm run docs:gen`), fehlendem END-Marker, unbekanntem oder doppeltem Abschnitt, einem Gate ohne Beschreibung oder einer Beschreibung ohne Gate. Die Zeitleiste (`zeitleiste`, aus `docs/adr/*.md` und `docs/meilensteine.json`) ist rot bei einem ADR ohne Datum im Kopf (`Datum: JJJJ-MM-TT` oder `**Status:** … (JJJJ-MM-TT)`), ungültigem Kalenderdatum, falscher Überschrift oder doppelter Nummer und bei einem fehlerhaften Meilenstein; jedes neue ADR macht den Abschnitt veraltet, bis `npm run docs:gen` läuft. Auch als `test/docgen.test.ts`.
+- **WAS:** Abschnitte zwischen `<!-- GEN:<name> START -->` und `<!-- GEN:<name> END -->` in README und `docs/` erzeugt `npm run docs:gen` aus dem Repo (welche Generatoren es gibt, steht in der Registry `GENERATORS` in `scripts/docs-gen.mjs`, ihre Pfade in `scripts/docs-gen/config.json`); `check:docgen` erzeugt sie im Speicher und vergleicht. Rot bei veraltetem Abschnitt (Meldung nennt Datei, Abschnitt und den Fix `npm run docs:gen`), fehlendem END-Marker, unbekanntem oder doppeltem Abschnitt, einem Gate ohne Beschreibung oder einer Beschreibung ohne Gate. Die Zeitleiste (`zeitleiste`, aus `docs/adr/*.md` und `docs/meilensteine.json`) ist rot bei einem ADR ohne Datum im Kopf (`Datum: JJJJ-MM-TT` oder `**Status:** … (JJJJ-MM-TT)`), ungültigem Kalenderdatum, falscher Überschrift oder doppelter Nummer und bei einem fehlerhaften Meilenstein; jedes neue ADR macht den Abschnitt veraltet, bis `npm run docs:gen` läuft. Auch als `test/docgen.test.ts`. Die drei Agenten-Diagramme (`agenten-ablauf`, `agenten-sequenz`, `leitplanken-schichten`, Vorlagen unter `docs/diagramme/*.mmd`) lösen Platzhalter `${art:wert}` gegen ihre Quelle auf (Subagent, Skill, Workflow, Modell/Effort aus dem Frontmatter, Konstanten der Ablauf-Skripte, Gate-Anzahl der `verify`-Kette, CI-Job-Namen) und sind rot bei unbekanntem Namen, unbekannter Art, fehlender oder doppelter Konstante und bei einem Subagenten, Skill oder Workflow unter `.claude/`, den die Sequenz nicht nennt (`test/docgen-diagramme.test.ts`).
 - **WARUM:** handgepflegte Tabellen über Ableitbares veralten still (die Gate-Tabelle hier kannte `check:internalrefs` nicht). Ein Generator macht den Code zur Quelle; Konzept und Entscheidung: [ADR 0017](adr/0017-lebende-doku-generierte-abschnitte.md).
 - **Absicherung:** Engine und Generatoren laufen gegen ein Fixture-Root (Red-Green je Fehlerfall), dazu ein Echt-Repo-Test; Vergleich unabhängig von CRLF/LF, feste Sortierung ohne Locale. Engine und Config liegen unter `scripts/docs-gen*` und sind Leitplanken-Pfade.
 
@@ -229,26 +229,71 @@ Das **Forum** sind die **GitHub Discussions** des Repos. Damit eine Forum-Nachri
 
 So greifen die Bausteine bei **einem** Ticket ineinander — jeder Schritt ist eine Leitplanke, kein Vertrauensvorschuss:
 
+<!-- GEN:agenten-ablauf START -->
+<!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  layout: dagre
+  themeVariables:
+    lineColor: "#8b949e"
+    primaryColor: "#f3e3c3"
+    primaryTextColor: "#2b2118"
+    primaryBorderColor: "#8a6a3f"
+---
+flowchart TD
+  board["Board: oberstes freies Ticket"]
+  claim["Claim: self-assign, verifizieren"]
+  wt["Worktree von origin/main"]
+  plan["Plan<br/>kubernia-planner"]
+  epic{"zu groß für eine Session?"}
+  kinder["in Kindtickets aufteilen,<br/>Epic schließen"]
+  pre{"Irreversibel oder<br/>Außenwirkung?"}
+  frage["Rückfrage an die Maintainerin"]
+  umsetzen["Umsetzen (TDD)<br/>kubernia-umsetzer"]
+  verify{"npm run verify grün?"}
+  lenses{"Lenses ohne Blocker?<br/>kubernia-lens"}
+  fix["Fix-Runde"]
+  handoff["Hand-off: festgefahren<br/>(Cap erreicht)"]
+  pr["PR + Auto-Merge"]
+  ci{"CI grün?"}
+  fest["Label status:festgefahren,<br/>ein Kommentar mit Optionen"]
+  merge["Merge (squash)"]
+  cleanup["Aufräumen: Issue zu,<br/>Worktree weg"]
+  alarm["Alarm-Issue: CI rot auf main"]
+  forum["Forum-Eingang<br/>Skill forum"]
+
+  board --> claim --> wt --> plan --> epic
+  epic -- ja --> kinder --> board
+  epic -- nein --> pre
+  pre -- ja --> frage --> umsetzen
+  pre -- nein --> umsetzen
+  umsetzen --> verify
+  verify -- nein --> umsetzen
+  verify -- ja --> lenses
+  lenses -- "Blocker, Runde unter 2" --> fix --> lenses
+  lenses -- "Cap von 2 Fix-Runden erreicht" --> handoff
+  lenses -- ja --> pr
+  pr --> ci
+  ci -- "rot, Fix-Versuch unter 3" --> umsetzen
+  ci -- "rot nach 3 Fix-Versuchen" --> fest
+  ci -- grün --> merge --> cleanup
+  merge -.->|"Push auf main: verify erneut"| alarm
+  alarm -.->|"Fix per PR, geht vor"| board
+  forum -.-> board
+
+  classDef schleife fill:#f3e3c3,stroke:#8a6a3f,color:#2b2118
+  classDef stopp fill:#f2c9c0,stroke:#9a4a3a,color:#2b2118
+  class verify,lenses,ci schleife
+  class handoff,fest,alarm stopp
 ```
-   ┌─ Doku (SSOT) ────────────────────────────────────────────────┐
-   │  Agent liest AGENTS.md + modul-lokale Regeln                   │
-   │                          ▼                                     │
-   │  Board: oberstes freies Item der Board-Reihenfolge             │  ← kein Abwägen
-   │                          ▼                                     │
-   │  Kollisionsschutz: self-assign (verifiziert) + eigener Worktree│  ← parallel-sicher
-   │                          ▼                                     │
-   │  Umsetzen (TDD: rot → grün → aufräumen)                        │
-   │                          ▼                                     │
-   │  Gates lokal grün: npm run verify                               │  ← Fehler an der Grenze
-   │  (Kette: package.json › scripts.verify)                        │
-   │  + smoke · audit + im Browser verifiziert                      │
-   │                          ▼                                     │
-   │  PR öffnen → CI abwarten → mergt (rot? fixen bis grün)         │  ← blockierende Grenze; fertig erst bei Merge (#618)
-   │                          ▼                                     │
-   │  Issue schließen (verifiziert) → Worktree/Branch weg → Board   │
-   │  (Kopf-/Doku-Pflege im SELBEN PR #618)                         │
-   └───────────────────────────────────────────────────────────────┘
-```
+
+<!-- GEN:agenten-ablauf END -->
+
+Gelb hinterlegt sind die drei Rückkopplungsschleifen (verify, Lenses, CI), rot die Stopps, an denen der Agent nicht weiterschleift. Das Diagramm ist generiert: die Vorlage [`docs/diagramme/agenten-ablauf.mmd`](diagramme/agenten-ablauf.mmd) enthält die Topologie, Namen und Zahlen (Fix-Runden, Fix-Versuche) löst `npm run docs:gen` aus `.claude/` und den Konstanten der Ablauf-Skripte auf und bricht bei einer Abweichung ab.
 
 **Warum das „billig UND sicher" ergibt (arc42-Qualitätsziel §1.4):**
 - **Billig,** weil der Agent nichts sucht (SSOT-Doku als Kontext-Selektor), nichts abwägt (Reihenfolge entscheidet), und ein kleiner Ein-Ticket-Diff wenig Kontext braucht.
@@ -262,6 +307,119 @@ So greifen die Bausteine bei **einem** Ticket ineinander — jeder Schritt ist e
 - Bleibt ein Agent an derselben roten Prüfung auf seinem eigenen Ticket hängen (versteht die Ursache nicht, der Fix greift wiederholt nicht), **greift ein technisch erzwungener Stopp (#904).** Das **Festgefahren-Protokoll** (#710, AGENTS.md: nach drei erfolglosen Fix-Versuchen ein konsolidierter Entscheidungs-Kommentar + Label `status:festgefahren`) ist nicht nur eine Verhaltensregel, sondern ein echter Gate: [`.github/workflows/festgefahren.yml`](../.github/workflows/festgefahren.yml) zählt via `workflow_run` die distinct Commits mit failed CI auf dem PR-Branch (manuelle Reruns zählen dank SHA-Dedup nicht extra) — nach 4 (= 1 initial + 3 Fix-Versuche) setzt der Workflow selbst das Label und postet den Kommentar, unabhängig vom Agentenverhalten. Graceful degradation: kein Netz/Token überspringt den Wächter statt fälschlich zu blocken.
 - **Human-in-the-Loop-Checkpoints für risikoreiche Diffs (#1012).** Der Marktstandard 2026 gate't nicht den ganzen Lauf, sondern die *riskante Entscheidung* („gate the decision, not the run") — **Selbstmodifikation der Leitplanken** ist dafür der Paradefall, wird aber durch eine Audit-Spur statt eines Stopps abgedeckt (s.u.). Ein Stopp ergänzt die obige Schleife, aber nur noch für Irreversibles oder Außenwirkung (#1279; Weichen und Optik entscheidet der Agent selbst, Veto per Revert): die **Pre-Flight-Klärung** — direkt nach Claim + Plan klassifiziert der Ablauf, ob die Umsetzung etwas Unumkehrbares oder nach außen Wirkendes täte; trifft das zu, wird **vor dem Coden** geklärt (im `/kubernia`-Skill live per `AskUserQuestion`; im Workflow per **Halt → `resumeFromRunId`**, weil das Workflow-Tool kein Mid-Run-Ask-Primitiv hat — Auswahl + Plan kommen beim Resume aus dem Cache). **Für Harness-/Leitplanken-Diffs gibt es keinen Merge-Checkpoint** (#1069, möglichst wenig Human-in-the-Loop): der Agent mergt normal und postet danach einen Audit-Kommentar „🛡️ Leitplanken-Änderung selbst gemergt" (was / warum / wie reverten), den die Maintainerin asynchron gegenliest (kein Label und kein CI-Riegel, ADR 0014). [`test/harness/harness-approval.test.ts`](../test/harness/harness-approval.test.ts) bindet CODEOWNERS an die eine Quelle [`.github/protected-paths.json`](../.github/protected-paths.json) (#1157). Wächter-Tests, die selbst der einzige Durchsetzer ihrer Regel sind, stehen als **ein** Ordner-Präfix `/test/harness/` in der Quelle (#1156/#1165): kein Glob, weil der Substring-Abgleich ihn auf den ganzen `test/`-Ordner kürzen und jeden Test-PR auditpflichtig machen würde. Jeder Test dort trägt im Kopf den Marker `@harness-waechter`, und `harness-approval` erzwingt Marker ⇔ Ordner; ein neuer Wächter braucht so keinen eigenen Schutz-Eintrag. Tests mit einem geschützten `scripts/check-*.mjs` dahinter bleiben draußen; die übrigen Wächter ziehen mit #1177 um. **Ehrliche Grenze:** unabhängig von dieser Repo-Regel kann der Auto-Modus-Klassifikator von Claude Code Änderungen an `.claude/`-Dateien, Hooks oder Permissions weiterhin als Self-Modification blocken — solche Tickets brauchen dann kurz die Maintainerin im normalen Modus. Zweischichtig wie die Modellwahl: portable Regel in [AGENTS.md](../AGENTS.md), Claude-Code-Automatik additiv im Workflow.
 - **Review ohne Self-Grading (#1012).** Der agentische Mehr-Perspektiven-Review (`review-lenses`, §2.5) läuft im Ticket-Ablauf als **beschränkte review↔fix-Konvergenzschleife**: ein *frischer*, unabhängiger Kritiker pro Runde beurteilt den aktuellen Diff (Generator-Critic-Trennung), Ausstieg bei null blockierenden Findings, **Cap 2** Fix-Runden (also höchstens 3 Pässe; unbeschränktes Iterieren ist schlechter, nicht besser — jenseits echter Fehler werden Stil-Nörgeleien erfunden), sonst Hand-off. So ist der finale „OK"-Blick nie der Agent, der zuletzt gefixt hat. Grounding bleibt `npm run verify` (rot ⇒ kein Lens-Pass; Fixe für ein rotes `verify` vor dem ersten Lens-Pass zählen nicht als Fix-Runde, sondern gegen die drei Fix-Versuche des Festgefahren-Protokolls, Runde 1 ist immer der erste Lens-Pass mit vollem Satz). **Blocker-Maßstab (#1316):** blockierend ist nur ein Verstoß gegen die Akzeptanzkriterien oder eine harte Regel und eine Regression im Normalgebrauch (ein bisher erkannter Fall fällt durch, ein üblicher Befehl wird fälschlich geblockt oder gefragt). Bei Guard- und Parser-Code ist ein neu gefundener Umweg (Verschleierung, exotische Shell-Form) ein Hinweis „Bekannte Grenze“: Kopfkommentar „Bewusste Grenzen“ des Guards und PR-Text, nicht Sammelticket und keine weitere Fix-Runde. Grund: in #1311 brauchte der Review zehn Pässe, jeder fand einen neuen exotischen Umweg, und die letzten Runden reparierten ihre eigenen Fixes — bei Guards hat die Umgehungsfläche kein Ende, die echte Durchsetzung bleibt PR-Gate und Review. Gilt auch, wenn die Maintainerin den Cap aufhebt. Die Lens-Definition (`.claude/agents/kubernia-lens.md`) trägt die Kurzfassung.
+
+### Wer macht was
+
+<!-- GEN:agenten-sequenz START -->
+<!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  layout: dagre
+  themeVariables:
+    lineColor: "#8b949e"
+    primaryColor: "#f3e3c3"
+    primaryTextColor: "#2b2118"
+    primaryBorderColor: "#8a6a3f"
+---
+sequenceDiagram
+  autonumber
+  actor M as Maintainerin
+  participant H as Hauptchat<br/>Skill kubernia · sonnet · medium
+  participant P as kubernia-planner<br/>opus · xhigh
+  participant E as Explore<br/>haiku · low
+  participant U as kubernia-umsetzer<br/>sonnet · medium
+  participant L1 as kubernia-lens<br/>Brille Architektur
+  participant L2 as kubernia-lens<br/>Brille Requirement-Treue
+  participant L3 as kubernia-lens<br/>Brille Test-Adäquanz
+  participant CI as CI und Required Checks
+
+  Note over H: alternativ Skill kubernia-workflow:<br/>Workflow kubernia-ticket fährt denselben Ablauf
+  H->>H: Ticket wählen und claimen
+  H->>P: Ticket planen
+  opt breite Suche
+    P->>E: Fundstellen suchen
+    E-->>P: Fundstellen
+  end
+  P-->>H: Plan und Pre-Flight-Fragen
+  opt Irreversibel oder Außenwirkung
+    H->>M: Rückfrage vor dem Coden
+    M-->>H: Antwort
+  end
+  H->>U: Ticket, Plan, Entscheidungen
+  U->>U: Worktree, TDD, npm run verify
+  loop höchstens 2 Fix-Runden, Skill review-lenses
+    par drei Brillen parallel
+      U->>L1: Patch und Auftrag
+    and
+      U->>L2: Patch und Auftrag
+    and
+      U->>L3: Patch und Auftrag
+    end
+    L1-->>U: Befunde
+    L2-->>U: Befunde
+    L3-->>U: Befunde
+    U->>U: Blocker beheben
+  end
+  U->>CI: PR mit Auto-Merge
+  CI-->>U: grün: Merge, rot: Fix auf demselben Branch
+  U-->>H: Bericht mit Ergebnis
+  H-->>M: Zusammenfassung
+  Note over M,H: Forum: Skill forum. Thread lesen, Antwort als Entwurf zur Freigabe vorlegen, erst nach OK posten, bei Bug ein Ticket
+```
+
+<!-- GEN:agenten-sequenz END -->
+
+Modell und Effort stammen aus dem Frontmatter von `.claude/agents/*.md` bzw. `.claude/skills/*/SKILL.md` (Begründung der Wahl: [model-routing](model-routing.md)). Die Vorlage [`docs/diagramme/agenten-sequenz.mmd`](diagramme/agenten-sequenz.mmd) muss **jeden** Subagenten, Skill und Workflow unter `.claude/` nennen: ein neuer Baustein ohne Eintrag macht `check:docgen` rot, ein Name ohne passende Datei ebenfalls.
+
+### Leitplanken-Schichten: Bitte und Mauer
+
+<!-- GEN:leitplanken-schichten START -->
+<!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  layout: dagre
+  themeVariables:
+    lineColor: "#8b949e"
+    primaryColor: "#f3e3c3"
+    primaryTextColor: "#2b2118"
+    primaryBorderColor: "#8a6a3f"
+---
+flowchart LR
+  subgraph bitte["Bitte: lokal, umgehbar"]
+    regeln["AGENTS.md: Regeln<br/>und Konventionen"]
+    hooks["Claude-Code-Hooks:<br/>Worktree-Guard, gh-Guard"]
+    verify["npm run verify<br/>13 Gates"]
+    prepush["pre-push-Hook"]
+  end
+  subgraph mauer["Mauer: Server, nicht umgehbar"]
+    checks["Required Checks<br/>Tests, Typecheck & Builds<br/>Security-Audit (npm audit)<br/>PR-Text interne Bezuege pruefen"]
+    ruleset["Ruleset auf main:<br/>nur per PR, enforce_admins,<br/>kein Direkt-Push"]
+    wachter["Festgefahren-Wächter:<br/>Label ab 4 roten CI-Commits"]
+    alarm["Alarm-Issue bei rotem main"]
+  end
+  regeln --> hooks --> verify --> prepush
+  prepush -. "umgehbar (--no-verify, lokal)" .-> checks
+  checks --> ruleset
+  ruleset --> wachter
+  ruleset -.-> alarm
+
+  classDef bittecls fill:#faf3e3,stroke:#8a6a3f,color:#2b2118,stroke-dasharray:5 4
+  classDef mauercls fill:#e2c79a,stroke:#5c3d1a,color:#1f160d,stroke-width:3px
+  class regeln,hooks,verify,prepush bittecls
+  class checks,ruleset,wachter,alarm mauercls
+```
+
+<!-- GEN:leitplanken-schichten END -->
+
+**Bitte** ist alles, was lokal läuft und ein Agent umgehen könnte (Regeln, Hooks, `verify`, pre-push). **Mauer** ist, was der Server durchsetzt: Required Checks, das Ruleset auf `main` (`enforce_admins`), der Festgefahren-Wächter und der Alarm bei rotem `main`. Die Namen der Required Checks stehen wörtlich in der Vorlage [`docs/diagramme/leitplanken-schichten.mmd`](diagramme/leitplanken-schichten.mmd); der Generator prüft nur, dass ein Job mit genau diesem Namen in `.github/workflows` existiert, nicht, dass er im Ruleset als erforderlich eingetragen ist.
 
 ### Belege: der Rot→Fix→Grün-Bogen in echt
 

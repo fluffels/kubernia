@@ -1,0 +1,45 @@
+flowchart TD
+  board["Board: oberstes freies Ticket"]
+  claim["Claim: self-assign, verifizieren"]
+  wt["Worktree von origin/main"]
+  plan["Plan<br/>${agent:kubernia-planner}"]
+  epic{"zu groß für eine Session?"}
+  kinder["in Kindtickets aufteilen,<br/>Epic schließen"]
+  pre{"Irreversibel oder<br/>Außenwirkung?"}
+  frage["Rückfrage an die Maintainerin"]
+  umsetzen["Umsetzen (TDD)<br/>${agent:kubernia-umsetzer}"]
+  verify{"npm run verify grün?"}
+  lenses{"Lenses ohne Blocker?<br/>${agent:kubernia-lens}"}
+  fix["Fix-Runde"]
+  handoff["Hand-off: festgefahren<br/>(Cap erreicht)"]
+  pr["PR + Auto-Merge"]
+  ci{"CI grün?"}
+  fest["Label status:festgefahren,<br/>ein Kommentar mit Optionen"]
+  merge["Merge (squash)"]
+  cleanup["Aufräumen: Issue zu,<br/>Worktree weg"]
+  alarm["Alarm-Issue: CI rot auf main"]
+  forum["Forum-Eingang<br/>Skill ${skill:forum}"]
+
+  board --> claim --> wt --> plan --> epic
+  epic -- ja --> kinder --> board
+  epic -- nein --> pre
+  pre -- ja --> frage --> umsetzen
+  pre -- nein --> umsetzen
+  umsetzen --> verify
+  verify -- nein --> umsetzen
+  verify -- ja --> lenses
+  lenses -- "Blocker, Runde unter ${konstante:lensCap}" --> fix --> lenses
+  lenses -- "Cap von ${konstante:lensCap} Fix-Runden erreicht" --> handoff
+  lenses -- ja --> pr
+  pr --> ci
+  ci -- "rot, Fix-Versuch unter ${konstante:fixVersuche}" --> umsetzen
+  ci -- "rot nach ${konstante:fixVersuche} Fix-Versuchen" --> fest
+  ci -- grün --> merge --> cleanup
+  merge -.->|"Push auf main: verify erneut"| alarm
+  alarm -.->|"Fix per PR, geht vor"| board
+  forum -.-> board
+
+  classDef schleife fill:#f3e3c3,stroke:#8a6a3f,color:#2b2118
+  classDef stopp fill:#f2c9c0,stroke:#9a4a3a,color:#2b2118
+  class verify,lenses,ci schleife
+  class handoff,fest,alarm stopp

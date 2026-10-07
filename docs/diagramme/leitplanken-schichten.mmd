@@ -1,0 +1,23 @@
+flowchart LR
+  subgraph bitte["Bitte: lokal, umgehbar"]
+    regeln["AGENTS.md: Regeln<br/>und Konventionen"]
+    hooks["Claude-Code-Hooks:<br/>Worktree-Guard, gh-Guard"]
+    verify["npm run verify<br/>${gates:verify} Gates"]
+    prepush["pre-push-Hook"]
+  end
+  subgraph mauer["Mauer: Server, nicht umgehbar"]
+    checks["Required Checks<br/>${ci-check:Tests, Typecheck & Builds}<br/>${ci-check:Security-Audit (npm audit)}<br/>${ci-check:PR-Text interne Bezuege pruefen}"]
+    ruleset["Ruleset auf main:<br/>nur per PR, enforce_admins,<br/>kein Direkt-Push"]
+    wachter["Festgefahren-Wächter:<br/>Label ab ${konstante:festgefahrenCommits} roten CI-Commits"]
+    alarm["Alarm-Issue bei rotem main"]
+  end
+  regeln --> hooks --> verify --> prepush
+  prepush -. "umgehbar (--no-verify, lokal)" .-> checks
+  checks --> ruleset
+  ruleset --> wachter
+  ruleset -.-> alarm
+
+  classDef bittecls fill:#faf3e3,stroke:#8a6a3f,color:#2b2118,stroke-dasharray:5 4
+  classDef mauercls fill:#e2c79a,stroke:#5c3d1a,color:#1f160d,stroke-width:3px
+  class regeln,hooks,verify,prepush bittecls
+  class checks,ruleset,wachter,alarm mauercls
