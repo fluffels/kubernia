@@ -21,6 +21,7 @@ export const KUBECTL_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     return { text: "Erstelle ein Deployment <code>" + name + "</code> mit dem Image <code>" + img + "</code>.", accept: [new RegExp("^kubectl\\s+create\\s+deployment\\s+" + name + "\\s+--image[=\\s]" + img + "(:\\S+)?$")], solution: "kubectl create deployment " + name + " --image=" + img, hint: "Muster: kubectl create deployment &lt;name&gt; --image=&lt;image&gt;", why: "create deployment legt den Dauerauftrag an; --image bestimmt, welches Image die Pods fahren – Muster: kubectl create deployment &lt;name&gt; --image=&lt;image&gt;." };
   },
   "k-scale": sim => {
+    ensureBarePodAdmission(sim);
     const d = ensureDeployment(sim);
     let n = rnd(2, 5);
     if (n === d.replicas) n++;
@@ -38,6 +39,7 @@ export const KUBECTL_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     return { text: "Stelle einen Service vor <code>" + d.name + "</code>, Port <b>" + port + "</b>.", accept: [new RegExp("^kubectl\\s+expose\\s+deployment\\s+" + d.name + "\\s+--port[=\\s]" + port + "$")], solution: "kubectl expose deployment " + d.name + " --port=" + port, hint: "Muster: kubectl expose deployment &lt;name&gt; --port=&lt;port&gt;", why: "expose stellt einen Service als feste Adresse vor das Deployment; --port ist der Port, unter dem er erreichbar ist – Muster: kubectl expose deployment &lt;name&gt; --port=&lt;port&gt;." };
   },
   "k-apply": sim => {
+    ensureBarePodAdmission(sim);
     sim.files["uebung.yaml"] = getManifest("deployment-uebung");
     sim.applyEffects["uebung.yaml"] = { deployment: { name: "uebung", image: "nginx", replicas: 1 } };
     if (sim.deployments.some(d => d.name === "uebung")) sim.exec("kubectl delete deployment uebung");
@@ -49,10 +51,12 @@ export const KUBECTL_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     return { text: "Lies die Logs des Pods <code>" + pod + "</code>.", accept: [new RegExp("^kubectl\\s+logs\\s+" + pod.replace(/[-]/g, "\\-") + "$")], solution: "kubectl logs " + pod, hint: "kubectl logs &lt;pod-name&gt; – Name per get pods holen.", why: "logs zeigt die Ausgabe der App im Pod (die App-Sicht) – Muster: kubectl logs &lt;pod-name&gt;; den Namen holst du dir per get pods." };
   },
   "k-rollout": sim => {
+    ensureBarePodAdmission(sim);
     const d = ensureDeployment(sim);
     return { text: "Starte alle Pods von <code>" + d.name + "</code> sauber neu (Rolling Restart).", accept: [new RegExp("^kubectl\\s+rollout\\s+restart\\s+deployment[\\/\\s]" + d.name + "$")], solution: "kubectl rollout restart deployment " + d.name, hint: "Muster: kubectl rollout restart deployment &lt;name&gt;", why: "rollout restart ersetzt alle Pods rollierend (z.B. nachdem die Ursache eines Fehlers behoben ist) – Muster: kubectl rollout restart deployment &lt;name&gt;." };
   },
   "k-set-resources": sim => {
+    ensureBarePodAdmission(sim);
     const d = ensureDeployment(sim);
     const lim = pick([128, 256, 512]);
     const req = lim / 2;

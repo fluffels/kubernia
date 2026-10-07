@@ -53,3 +53,19 @@ test("#444: die Cluster-Härtung bleibt unangetastet – ein roher Pod direkt ü
   const r = sim.exec("kubectl create deployment roh-posten --image=nginx");
   assert.ok(r.error, "ein roh über exec (ohne Drill) angelegter Pod wird unter restricted weiter abgewiesen");
 });
+
+test("#1327: jeder Drill, dessen Lösung neue Pods erzeugt, bleibt nach Phase 6 (restricted) lösbar", () => {
+  const PODS = /^kubectl\s+(scale|rollout\s+restart|set\s+(image|resources)|create\s+deployment|apply)(?![a-z-])/;
+  let geprueft = 0;
+  for (const [id, make] of Object.entries(KQContent.DRILLS)) {
+    for (let i = 0; i < 5; i++) {
+      const sim = postPhase6Sim();
+      const t = make(sim);
+      if (!PODS.test(norm(t.solution))) continue;
+      geprueft++;
+      const r = sim.exec(t.solution);
+      assert.ok(!r.error, id + " #" + i + ": Lösung '" + t.solution + "' scheitert unter restricted: " + r.output);
+    }
+  }
+  assert.ok(geprueft > 0, "der Wächter prüft mindestens einen Drill");
+});

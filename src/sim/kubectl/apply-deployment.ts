@@ -3,6 +3,7 @@
  * ein bestehendes deklarativ ab. Die Pod-Template-Felder stehen in EINER Tabelle (`TEMPLATE_FIELDS`):
  * ein neues Feld = ein Eintrag, Anlegen und Re-apply nutzen dieselbe Tabelle. Jede Template-Änderung
  * rollt neue Pods aus (wie in echtem Kubernetes); eine reine replicas-Änderung skaliert ohne Rollout.
+ * Beides läuft über ./rollout (Pod-Security-Admission inklusive).
  * Heil-/Drossel-Regeln (Image, Limits) kommen als Primitive aus ../workload, genau wie bei
  * `kubectl set image|resources`.
  *
@@ -12,14 +13,12 @@
  *
  * Phaser-frei (pure Domäne). Aufgerufen aus ./lifecycle (apply-Handler-Registry). */
 import { SECURITY_CONTEXT_KEYS, type ApplyEffect, type Deployment, type SecurityContext } from "../state";
-import { addDeployment, changeImage, replacePods, scaleDeployment, setCpuLimit, setMemoryLimit } from "../workload";
+import { addDeployment, changeImage, setCpuLimit, setMemoryLimit } from "../workload";
 import { CPU_THROTTLED_NOTE, MEM_HEALED_NOTE } from "./ops";
-import { admitPod } from "./security";
+import { admitNewPods, rollOut, scaleTo } from "./rollout";
 import type { KubectlHost } from "./host";
 
 type DepEffect = NonNullable<ApplyEffect["deployment"]>;
-
-const PSA_HINT = "Ergänze im Manifest einen passenden securityContext (z.B. runAsNonRoot: true) oder senke die enforce-Stufe.";
 
 /** Ein Pod-Template-Feld: Abweichung erkennen und den Manifest-Wert übernehmen. */
 interface TemplateField {
@@ -82,19 +81,18 @@ const TEMPLATE_FIELDS: readonly TemplateField[] = [
  *  bei Ablehnung wird nichts übernommen. Ohne Änderung: `unchanged`. */
 function reconfigureDeployment(host: KubectlHost, dep: Deployment, eff: DepEffect, out: string[]): string | void {
   const changed = TEMPLATE_FIELDS.filter(f => f.differs(dep, eff));
-  if (changed.length > 0) {
-    const denied = admitPod(host, eff.name, eff.securityContext);
-    if (denied) return host._err(denied, PSA_HINT);
-  }
   const notes: string[] = [];
-  for (const f of changed) f.take(host, dep, eff, notes);
   if (changed.length > 0) {
-    // Neue Pods geben das flüchtige Scratch-Volume frei (#240), wie beim rollout restart.
-    host._resetEphemeral(dep);
-    replacePods(dep, host.clock, host.rng);
+    // Admission mit dem NEUEN securityContext; bei Ablehnung wird nichts übernommen.
+    const denied = rollOut(host, dep, () => { for (const f of changed) f.take(host, dep, eff, notes); }, eff.securityContext);
+    if (denied) return denied;
   }
+  // Hochskalieren erzeugt Pods und wird geprüft (nach einem Rollout mit demselben, schon zugelassenen Kontext).
   const scaled = dep.replicas !== eff.replicas;
-  if (scaled) scaleDeployment(dep, eff.replicas, host.clock, host.rng);
+  if (scaled) {
+    const denied = scaleTo(host, dep, eff.replicas);
+    if (denied) return denied;
+  }
   out.push("deployment.apps/" + eff.name + (changed.length > 0 || scaled ? " configured" : " unchanged"), ...notes);
 }
 
@@ -103,8 +101,8 @@ function reconfigureDeployment(host: KubectlHost, dep: Deployment, eff: DepEffec
 function createDeploymentFromManifest(host: KubectlHost, eff: DepEffect, out: string[]): string | void {
   // Pod-Security-Admission (#126): unsichere Pods werden unter baseline/restricted
   // schon beim Anlegen abgewiesen – der Rest des Manifests wird nicht angewandt.
-  const denied = admitPod(host, eff.name, eff.securityContext);
-  if (denied) return host._err(denied, PSA_HINT);
+  const denied = admitNewPods(host, eff.name, eff.securityContext);
+  if (denied) return denied;
   const dep = host._makeDeployment(eff.name, eff.image, eff.replicas);
   const notes: string[] = [];
   for (const f of TEMPLATE_FIELDS) if (f.differs(dep, eff)) f.take(host, dep, eff, notes);

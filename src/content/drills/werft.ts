@@ -18,6 +18,7 @@ export const WERFT_DRILLS: Record<string, (sim: Sim) => DrillTask> = {
     return { text: "Roll dein Deployment <code>" + name + "</code> aus: wende die <code>werft-deploy.yaml</code> an. Das Image ist noch nicht gebaut – schau danach mit <code>kubectl get pods</code>, der Pod landet im <b>ImagePullBackOff</b>.", accept: [/^kubectl\s+apply\s+(?:-f|--filename)\s+werft-deploy\.yaml$/], solution: "kubectl apply --filename werft-deploy.yaml", hint: "kubectl apply --filename &lt;datei&gt; (die Kurzform -f verdienst du dir durch Nutzung)", why: "Der Cluster startet, was im Manifest steht – auch wenn es das Image noch gar nicht gibt. Dann sucht der kubelet ein Image, das nie vom Stapel lief: <b>ImagePullBackOff</b>. Kein fremdes Image fehlt, DEINS fehlt. Heilung: erst <code>docker build</code>, dann <code>kubectl rollout restart</code>. Muster: kubectl apply --filename &lt;datei&gt;." };
   },
   "werft-rollout-heal": sim => {
+    ensureBarePodAdmission(sim);
     const name = freeWerftName(sim);
     sim.mergeScenario({
       dockerImages: [name + ":1.0"],

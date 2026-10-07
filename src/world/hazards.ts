@@ -62,15 +62,18 @@ export function hazardStartable(
   return gate.enabled && !gate.anyActive && gate.completedQuests.includes(HAZARD_UNLOCK[kind]);
 }
 
-/** Deployments, die der Sturm treffen kann: die (noch) nicht kaputten. */
-export function stormVictims<T extends { broken: unknown }>(deployments: readonly T[]): T[] {
-  return deployments.filter(d => !d.broken);
+/** Deployments, die der Sturm treffen kann: die (noch) nicht kaputten. `canRollOut` (#1327) lässt nur
+ *  Opfer zu, deren neue Pods die Pod-Security zuließe – sonst wäre die Reparatur (set image/rollout
+ *  restart) unlösbar. Default: alle. */
+export function stormVictims<T extends { broken: unknown }>(deployments: readonly T[], canRollOut: (d: T) => boolean = () => true): T[] {
+  return deployments.filter(d => !d.broken && canRollOut(d));
 }
 
 /** Deployments, die die Piraten überfallen können: mit >= 2 Repliken (damit
- *  überhaupt etwas zu klauen bleibt). */
-export function pirateVictims<T extends { replicas: number }>(deployments: readonly T[]): T[] {
-  return deployments.filter(d => d.replicas >= 2);
+ *  überhaupt etwas zu klauen bleibt). `canRollOut` wie bei `stormVictims`: die Reparatur ist ein
+ *  Hochskalieren, das die Pod-Security prüft. */
+export function pirateVictims<T extends { replicas: number }>(deployments: readonly T[], canRollOut: (d: T) => boolean = () => true): T[] {
+  return deployments.filter(d => d.replicas >= 2 && canRollOut(d));
 }
 
 /** Wie viele Repliken die Piraten von einem Opfer klauen: die Hälfte (abgerundet),
