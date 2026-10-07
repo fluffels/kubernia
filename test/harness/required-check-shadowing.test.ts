@@ -35,7 +35,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { pruefeRulesetSpiegel } from "../../scripts/docs-gen/ruleset-spiegel.mjs";
+import * as rulesetSpiegel from "../../scripts/docs-gen/ruleset-spiegel.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const WORKFLOW_DIR = join(ROOT, ".github", "workflows");
@@ -45,8 +45,9 @@ const WORKFLOW_DIR = join(ROOT, ".github", "workflows");
  *  out-of-repo-Ruleset (`gh api repos/{owner}/{repo}/rulesets/20151454`); ändert sich dort ein Kontext, zieht der PR den Spiegel nach. */
 const RULESET_SPIEGEL = join(ROOT, ".github", "ruleset-main-schutz.json");
 // Dieselbe Eingangsprüfung wie der Generator `leitplanken-schichten` (#1411): ein Modul statt zweier Kopien.
+const pruefeRulesetSpiegel = (rulesetSpiegel as unknown as { pruefeRulesetSpiegel: (roh: unknown, pfad: string) => { requiredChecks: string[] } }).pruefeRulesetSpiegel;
 function leseKontexte(json: string): string[] {
-  return (pruefeRulesetSpiegel(JSON.parse(json), "Spiegel") as { requiredChecks: string[] }).requiredChecks;
+  return pruefeRulesetSpiegel(JSON.parse(json), "Spiegel").requiredChecks;
 }
 const REQUIRED_CONTEXTS: readonly string[] = leseKontexte(readFileSync(RULESET_SPIEGEL, "utf8"));
 

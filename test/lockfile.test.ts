@@ -156,8 +156,12 @@ describe("Lockfile-Drift im Slice (#1411)", () => {
     reason?: string | null;
     invalidOverrides?: string[];
   };
-  const checkLockfileSlice = checkLock.checkLockfileSlice as (o: { runGit: (a: string[]) => string; env?: Record<string, string> }) => Slice;
-  const OVERRIDE = checkLock.OVERRIDE_KEY as string;
+  const sliceModul = checkLock as unknown as {
+    checkLockfileSlice: (o: { runGit: (a: string[]) => string; env?: Record<string, string> }) => Slice;
+    OVERRIDE_KEY: string;
+  };
+  const checkLockfileSlice = sliceModul.checkLockfileSlice;
+  const OVERRIDE = sliceModul.OVERRIDE_KEY;
   const DEPENDABOT = "49699333+dependabot[bot]@users.noreply.github.com";
   const MENSCH = "12345+fluffels@users.noreply.github.com";
 

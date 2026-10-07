@@ -315,7 +315,7 @@ export function fixOrphans(mainRoot, worktreesDir, orphans, deps = {}) {
     } catch {
       /* unbekannt → jeder verwaiste Werkzeug-Prozess zählt als Kandidat */
     }
-    let gesperrt = false;
+    let gesperrt;
     try {
       // Kurze Sperren (Virenscanner, ein eben beendeter Prozess) lösen sich meist binnen Sekunden: Node wiederholt EBUSY/EPERM/ENOTEMPTY.
       rm(absPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 300 });

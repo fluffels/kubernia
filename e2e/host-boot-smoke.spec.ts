@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { preview, type PreviewServer } from "vite";
+import { awaitWorldAndIntro } from "./support";
 
 // Boot-Smoke des HOST-Builds (dist/, #1408, ADR 0018): der Offline-Smoke lädt die self-contained Datei
 // und sieht die Content-Chunks nie. Hier läuft der echte Multi-File-Build über einen HTTP-Server (Vites
@@ -49,7 +50,8 @@ test("Host-Build bootet über HTTP, Content-Chunks werden ausgeliefert", async (
   expect(contentResponses.length, "kein Request nach assets/content/ (Content-Chunks nicht geladen?)").toBeGreaterThan(0);
   expect(contentResponses.filter((s) => s !== 200), "Content-Chunk nicht mit 200 ausgeliefert").toEqual([]);
 
-  await page.waitForTimeout(2_000);
+  // Zustandsbasiert statt fester Zeit (#1411): Welt aufgebaut und Intro erschienen, dann erst die Fehler prüfen.
+  await awaitWorldAndIntro(page);
   expect(pageErrors, `Unbehandelte Laufzeit-Fehler beim Boot:\n${pageErrors.join("\n")}`).toEqual([]);
   expect(consoleErrors, `Konsolen-Fehler beim Boot:\n${consoleErrors.join("\n")}`).toEqual([]);
 });

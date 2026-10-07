@@ -247,6 +247,9 @@ export class WorldScene extends Phaser.Scene implements WorldSceneFields {
 
     // Karten-spezifische Hintergrund-Animationen (z.B. Möwen für den Hafen)
     this.worldConfig?.scheduleAmbient?.(this);
+
+    // Zustands-Marker für die e2e-Smokes (#1411): die Welt ist aufgebaut (Boot-Smokes warten darauf statt auf eine feste Zeit).
+    document.body.dataset.kqWorld = "1";
   }
 
   set(x: number, y: number, v: number) { this.ground[y * this.W + x] = v; }
