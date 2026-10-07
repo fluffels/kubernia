@@ -116,12 +116,12 @@ function parseCurlUrl(arg: string): { hostName: string; reqPort: string | null; 
 /** curl auf einen ExternalName-Service: folgt dem CNAME auf den externen Dienst (#1338). Der Port ist
  *  der aus der URL, sonst der Schema-Default (80/443); der Service-Port spielt keine Rolle. */
 function curlExternalName(
-  host: NetHost, hostName: string, svc: ServiceRes, url: { reqPort: string | null; defaultPort: string; path: string },
+  host: NetHost, hostName: string, svc: ServiceRes, url: ReturnType<typeof parseCurlUrl>,
 ): string {
   const cname = externalNameTarget(svc);
   if (!cname) {
     return host._err("curl: (6) Could not resolve host: " + hostName,
-      "Der ExternalName-Service '" + svc.name + "' hat kein spec.externalName – CoreDNS kennt kein CNAME-Ziel. Schau mit 'kubectl get service " + svc.name + "'.");
+      "ExternalName-Service '" + svc.name + "' ohne spec.externalName. Prüfe 'kubectl get service " + svc.name + "'.");
   }
   const port = url.reqPort || url.defaultPort;
   return [
@@ -129,8 +129,7 @@ function curlExternalName(
     "server: " + cname,
     "content-type: text/plain",
     "",
-    svc.name + ".default.svc.cluster.local → " + cname + " (" + EXTERNAL_RESOLVE_IP + "): " + hostName + ":" + port + url.path +
-      " antwortet. Der Dienst liegt außerhalb des Clusters, ohne ClusterIP und ohne Endpoints. ⚓",
+    hostName + " → " + cname + " (" + EXTERNAL_RESOLVE_IP + "): " + hostName + ":" + port + url.path,
   ].join("\n");
 }
 
