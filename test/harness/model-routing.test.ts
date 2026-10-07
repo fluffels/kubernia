@@ -82,6 +82,10 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { blockFunktion, workflowBlock } from "./workflow-block";
 import { workflowLauf } from "./workflow-lauf";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as brainMetrics from "../../scripts/brain-metrics.mjs";
+
+const pflegeMarker = (brainMetrics as { pflegeMarker: (ev: { tool: string; input: { command: string } }) => "start" | "ende" | null }).pflegeMarker;
 
 // Reines Node-Tooling-Skript ohne Declaration-File (allowJs aus, scripts/ nicht im tsconfig)
 // – der Laufzeit-Import genügt, die Typen deklarieren wir hier lokal.
@@ -983,5 +987,50 @@ describe("Workflow-Pfad räumt Waisen auf wie der SubagentStop-Hook auf dem Skil
     assert.match(prompt, /node scripts\/cleanup-worktrees\.mjs/);
     assert.match(prompt, /--fix/);
     assert.match(prompt, /unter 5 Minuten/);
+  });
+});
+
+describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
+  /** Marker eines Textes: Code-Spans mit `echo "pflege: …"`, als Bash-Event gewertet. */
+  const markerIn = (text: string, nr: string) => {
+    const treffer = [...text.matchAll(/`(echo "pflege: (?:start|ende) #[^"`]*")`/g)].map((m) => m[1].replace("<nr>", nr));
+    return treffer.map((command) => pflegeMarker({ tool: "Bash", input: { command } }));
+  };
+
+  test("Umsetzer-Definition nennt beide Marker als Shell-Befehle, die das Messskript erkennt", () => {
+    assert.deepEqual(markerIn(read(UMSETZER), "1"), ["start", "ende"]);
+  });
+
+  test("Red-Green: ein verfälschter Marker wird nicht mehr erkannt", () => {
+    assert.notDeepEqual(markerIn(read(UMSETZER).replace('echo "pflege: start', 'echo "pflege start'), "1"), ["start", "ende"]);
+  });
+
+  test("Umsetzen-Prompt des Workflows trägt beide Marker, erkannt vom Messskript", async () => {
+    const { aufrufe } = await workflowLauf({ umsetzen: "abbrechen" });
+    const prompt = aufrufe.find((a) => a.label === "umsetzen:#42")?.prompt ?? "";
+    assert.deepEqual(markerIn(prompt, "42"), ["start", "ende"]);
+    assert.match(prompt, /VOR dem abschließenden npm run verify/);
+  });
+
+  test("Brain-Lese-Konvention steht in Umsetzer, Lens, Umsetzen- und Nachbessern-Prompt", async () => {
+    for (const datei of [UMSETZER, ".claude/agents/kubernia-lens.md"]) {
+      const t = read(datei);
+      assert.match(t, /anlaufstellen\.md/, datei);
+      assert.match(t, /`Read`/, datei);
+    }
+    const { aufrufe } = await workflowLauf({
+      runden: [{ architektur: { lens: "architektur", verdikt: "blockierend", findings: [{ schwere: "blockierend", befund: "B", ort: "a.ts:1", begruendung: "b" }] } }, {}],
+    });
+    for (const label of ["umsetzen:#42", "nachbessern 1/2:#42"]) {
+      const prompt = aufrufe.find((a) => a.label === label)?.prompt ?? "";
+      assert.match(prompt, /anlaufstellen\.md/, label);
+      assert.match(prompt, /Read-Tool/, label);
+    }
+  });
+
+  test("Messdoku nennt den Marker und ist ohne Platzhalter-Zusage für #1099", () => {
+    const doku = read(ROUTING_SSOT);
+    assert.match(doku, /pflege: start/);
+    assert.doesNotMatch(doku, /kommen mit #1099/);
   });
 });

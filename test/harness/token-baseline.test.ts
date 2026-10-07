@@ -19,6 +19,10 @@ import { join } from "node:path";
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as baselineModule from "../../scripts/token-baseline.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as brainModule from "../../scripts/brain-metrics.mjs";
+
+const toolEventsFromLangfuse = (brainModule as { toolEventsFromLangfuse: (obs: unknown[], agentOf?: (o: never) => string | null) => PEv[] }).toolEventsFromLangfuse;
 
 type Sub = { id?: string; agentType?: string; description?: string; parentAgentId?: string };
 type Call = {
@@ -47,6 +51,7 @@ type Summary = {
   medianContext: { all: number | null; main: number | null };
   sockel: { main: number | null; planung: number | null; review: number | null };
 };
+type PEv = { ts: string; tool: string; input: Record<string, unknown>; resultChars: number; agent: string | null };
 type Bounds = { from?: string; claimAt?: string; prCreatedAt?: string; mergedAt?: string };
 type Obs = {
   id: string;
@@ -65,7 +70,8 @@ const m = baselineModule as {
   classifySubagent: (agentType?: string, description?: string) => string | null;
   classifyMainByTime: (ts: string, bounds?: Bounds) => string;
   countReviewRounds: (descriptions: string[]) => number;
-  summarize: (run: Run, bounds?: Bounds) => Summary;
+  summarize: (run: Run & { events?: PEv[] }, bounds?: Bounds) => Summary & { pflegeUnpaired?: number };
+  toolAgentResolver: (obs: Obs[]) => (o: Obs) => string | null;
   callsFromTranscript: (jsonl: string, subagent?: Sub | null) => { calls: Call[]; questions: number };
   readTranscriptSession: (sessionId: string, projectsRoot: string) => { calls: Call[]; questions: number };
   callsFromLangfuse: (obs: Obs[]) => Run & { questions: number };
@@ -74,7 +80,7 @@ const m = baselineModule as {
   renderMarkdown: (s: Summary, loop?: { failedPushes?: number; mergedAt?: string | null; nachweis?: { runden: number; plan: boolean | null } | null }) => string;
   priceCall: (c: Call, prices?: unknown) => number | null;
   priceParts: (c: Call, prices?: unknown) => Parts | null;
-  windowCalls: (calls: Call[], bounds?: Bounds) => { call: Call; phase: string }[];
+  windowCalls: (calls: Call[], bounds?: Bounds, intervals?: { agent: string | null; from: string; to: string }[]) => { call: Call; phase: string }[];
   PRICES_STAND: string;
   periodAt: (entry: unknown, ts?: string) => Record<string, unknown> | null;
   countCacheRebuilds: (calls: Call[]) => { count: number; cacheWriteTokens: number };
@@ -959,5 +965,87 @@ describe("token-baseline: Grenzwerte von countCacheRebuilds (#1311)", () => {
     assert.deepEqual(m.countCacheRebuilds([]), { count: 0, cacheWriteTokens: 0 });
     assert.equal(m.countCacheRebuilds([warm("2026-10-05T10:00:00Z")]).count, 0);
     assert.equal(m.countCacheRebuilds([warm("2026-10-05T10:00:00Z"), spaeter("2026-10-05T10:30:00Z", 0, 0)]).count, 0, "Kontext 0: kein Neuaufbau messbar");
+  });
+});
+
+describe("token-baseline: Phase Pflege (#1099)", () => {
+  const umsetzer: Sub = { id: "u", agentType: "kubernia-umsetzer", description: "Umsetzung #12" };
+  const wf: Sub = { id: "w", description: "umsetzen:#12" };
+  const marker = (ts: string, art: "start" | "ende", agent: string | null = "u"): PEv => ({
+    ts,
+    tool: "Bash",
+    input: { command: `echo "pflege: ${art} #12"` },
+    resultChars: 0,
+    agent,
+  });
+  const IV = [{ agent: "u", from: "2026-09-29T11:00:00Z", to: "2026-09-29T11:10:00Z" }];
+
+  test("nur Calls des Agenten im Intervall (Grenzen inklusive) sind Pflege", () => {
+    const calls = [
+      call("2026-09-29T10:59:59Z", 1, { subagent: umsetzer }),
+      call("2026-09-29T11:00:00Z", 2, { subagent: umsetzer }),
+      call("2026-09-29T11:05:00Z", 3, { subagent: umsetzer }),
+      call("2026-09-29T11:10:00Z", 4, { subagent: umsetzer }),
+      call("2026-09-29T11:10:01Z", 5, { subagent: umsetzer }),
+    ];
+    const w = m.windowCalls(calls, BOUNDS, IV);
+    assert.deepEqual(w.map((x) => x.phase), ["Umsetzung", "Pflege", "Pflege", "Pflege", "Umsetzung"]);
+  });
+
+  test("Hauptagent im selben Zeitraum bleibt Umsetzung (Agenten-Grenze)", () => {
+    const w = m.windowCalls([call("2026-09-29T11:05:00Z", 1), call("2026-09-29T11:06:00Z", 1, { subagent: { id: "anderer", agentType: "kubernia-umsetzer" } })], BOUNDS, IV);
+    assert.deepEqual(w.map((x) => x.phase), ["Umsetzung", "Umsetzung"]);
+  });
+
+  test("Workflow-Label umsetzen:#12 im Intervall wird Pflege", () => {
+    const w = m.windowCalls([call("2026-09-29T11:05:00Z", 1, { subagent: wf })], BOUNDS, [{ agent: "w", from: IV[0].from, to: IV[0].to }]);
+    assert.equal(w[0].phase, "Pflege");
+  });
+
+  test("Nachlauf schlägt Pflege", () => {
+    const w = m.windowCalls([call("2026-09-29T13:30:00Z", 1, { subagent: umsetzer })], BOUNDS, [{ agent: "u", from: "2026-09-29T13:00:00Z", to: "2026-09-29T14:00:00Z" }]);
+    assert.equal(w[0].phase, "Nachlauf");
+  });
+
+  test("ohne Intervalle unverändert (Default)", () => {
+    assert.equal(m.windowCalls([call("2026-09-29T11:05:00Z", 1, { subagent: umsetzer })], BOUNDS)[0].phase, "Umsetzung");
+  });
+
+  test("summarize: Zeile Pflege zwischen Umsetzung und Review, gepaarte Marker ohne Warnung", () => {
+    const calls = [
+      call("2026-09-29T10:30:00Z", 1, { subagent: umsetzer }),
+      call("2026-09-29T11:05:00Z", 2, { subagent: umsetzer }),
+      call("2026-09-29T11:30:00Z", 3, { model: "claude-opus-5-5", subagent: { id: "l", agentType: "kubernia-lens", description: "Lens Architektur R1" } }),
+    ];
+    const events = [marker("2026-09-29T11:00:00Z", "start"), marker("2026-09-29T11:10:00Z", "ende")];
+    const s = m.summarize({ calls, events }, BOUNDS);
+    assert.deepEqual(s.rows.map((r) => r.phase), ["Umsetzung", "Pflege", "Review"]);
+    assert.equal(s.pflegeUnpaired, 0);
+    assert.doesNotMatch(m.renderMarkdown(s), /Pflege-Marker ohne Gegenstück/);
+  });
+
+  test("ungepaarter Marker: keine Pflege-Zeile, Warnzeile; ohne events keine Warnung", () => {
+    const calls = [call("2026-09-29T11:05:00Z", 2, { subagent: umsetzer })];
+    const s = m.summarize({ calls, events: [marker("2026-09-29T11:00:00Z", "start")] }, BOUNDS);
+    assert.deepEqual(s.rows.map((r) => r.phase), ["Umsetzung"]);
+    assert.equal(s.pflegeUnpaired, 1);
+    assert.match(m.renderMarkdown(s), /1 Pflege-Marker ohne Gegenstück/);
+    const ohne = m.summarize({ calls }, BOUNDS);
+    assert.ok(!ohne.pflegeUnpaired);
+    assert.doesNotMatch(m.renderMarkdown(ohne), /Pflege-Marker ohne Gegenstück/);
+  });
+
+  test("Langfuse-Parität: Marker-TOOL unter dem Subagent-Span ergibt dieselbe Zuordnung", () => {
+    const obs: Obs[] = [
+      { id: "u", type: "SPAN", name: "Subagent: Umsetzung #12", startTime: "2026-09-29T10:00:00Z", metadata: { agent_type: "kubernia-umsetzer" } },
+      { id: "t1", type: "TOOL", name: "Tool: Bash", startTime: "2026-09-29T11:00:00Z", parentObservationId: "u", input: { command: 'echo "pflege: start #12"' }, metadata: { tool_name: "Bash" } } as Obs,
+      { id: "g", type: "GENERATION", name: "LLM Call", startTime: "2026-09-29T11:05:00Z", parentObservationId: "u", providedModelName: "claude-sonnet-5-5", usageDetails: { output: 4 } },
+      { id: "t2", type: "TOOL", name: "Tool: Bash", startTime: "2026-09-29T11:10:00Z", parentObservationId: "u", input: { command: 'echo "pflege: ende #12"' }, metadata: { tool_name: "Bash" } } as Obs,
+    ];
+    const run = m.callsFromLangfuse(obs) as Run;
+    const events = toolEventsFromLangfuse(obs.filter((o) => o.type === "TOOL"), m.toolAgentResolver(obs));
+    assert.deepEqual(events.map((e) => e.agent), ["u", "u"]);
+    const s = m.summarize({ ...run, events }, BOUNDS);
+    assert.deepEqual(s.rows.map((r) => r.phase), ["Pflege"]);
   });
 });
