@@ -128,11 +128,25 @@ describe("set resources", () => {
     level("restricted");
     expect(sim.exec("kubectl set resources deployment/web --limits=memory=512Mi").error).toBeFalsy();
   });
-  test("ungültiges ephemeral-Limit zusammen mit gültigem memory: Fehler, keine Teil-Mutation", () => {
+  test("CPU-Heilung unter restricted ungehärtet: Forbidden, nichts verändert", () => {
     make();
-    const mem = dep().memLimit;
-    const r = sim.exec("kubectl set resources deployment/web --limits=memory=512Mi,ephemeral-storage=0Mi");
-    if (r.error) expect(dep().memLimit).toBe(mem);
+    dep().cpuHeavy = true;
+    const before = pods();
+    level("restricted");
+    const r = sim.exec("kubectl set resources deployment/web --limits=cpu=200m");
+    expect(r.error).toBe(true);
+    expect(r.output).toMatch(/Forbidden/);
+    expect(dep().cpuHeavy).toBe(true);
+    expect(dep().cpuLimitMilli).not.toBe(200);
+    expect(pods()).toEqual(before);
+  });
+  test("CPU-Heilung unter privileged: rollt neue Pods aus und heilt", () => {
+    make();
+    dep().cpuHeavy = true;
+    const before = pods();
+    expect(sim.exec("kubectl set resources deployment/web --limits=cpu=200m").error).toBeFalsy();
+    expect(dep().cpuHeavy).toBe(false);
+    expect(pods()).not.toEqual(before);
   });
 });
 

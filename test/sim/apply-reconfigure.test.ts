@@ -278,6 +278,16 @@ describe("Härtung aus dem Review (#1300)", () => {
     expect(podNames()).toEqual(before);
   });
 
+  test("unter restricted: gehärtetes Template plus Hochskalieren in einem apply ist erlaubt (#1327)", () => {
+    apply({ name: "web", securityContext: { privileged: true } });
+    sim.exec("kubectl label namespace default pod-security.kubernetes.io/enforce=restricted");
+    const good = { runAsNonRoot: true, allowPrivilegeEscalation: false };
+    const r = apply({ name: "web", replicas: 3, securityContext: good });
+    expect(r.error).toBeFalsy();
+    expect(web().replicas).toBe(3);
+    expect(web().securityContext).toStrictEqual(good);
+  });
+
   test("unter restricted: Herunterskalieren per apply wird nicht geprüft", () => {
     apply({ name: "web", replicas: 3, securityContext: { privileged: true } });
     sim.exec("kubectl label namespace default pod-security.kubernetes.io/enforce=restricted");

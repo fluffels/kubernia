@@ -25,6 +25,15 @@ function postPhase6Sim(): KQSim {
   return sim;
 }
 
+/** Wie `postPhase6Sim`, aber mit einem schon vorhandenen, ungehärteten Deployment (angelegt vor dem Härten). */
+function postPhase6SimWithDeployment(): KQSim {
+  const sim = new KQSim({});
+  sim.exec("kubectl create deployment bestand --image=nginx");
+  sim.exec("kubectl label namespace default pod-security.kubernetes.io/enforce=restricted");
+  assert.equal(sim.podSecurity, "restricted", "Vorbedingung: Cluster ist gehärtet");
+  return sim;
+}
+
 test("#444: Oles k-create-Drill bleibt nach Phase 6 (restricted) lösbar", () => {
   for (let i = 0; i < 8; i++) {
     const sim = postPhase6Sim();
@@ -59,7 +68,8 @@ test("#1327: jeder Drill, dessen Lösung neue Pods erzeugt, bleibt nach Phase 6 
   let geprueft = 0;
   for (const [id, make] of Object.entries(KQContent.DRILLS)) {
     for (let i = 0; i < 5; i++) {
-      const sim = postPhase6Sim();
+      // Zwei Ausgangslagen: leerer Cluster, und ein schon vorhandenes ungehärtetes Deployment (Bestand).
+      const sim = i % 2 === 0 ? postPhase6Sim() : postPhase6SimWithDeployment();
       const t = make(sim);
       if (!PODS.test(norm(t.solution))) continue;
       geprueft++;

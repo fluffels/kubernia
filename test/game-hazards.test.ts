@@ -103,6 +103,15 @@ test("unter restricted ist ein ungehärtetes Deployment kein Piraten-Opfer (#132
   expect(Game.sim.deployments.find(d => d.name === "web")?.replicas).toBe(3);
 });
 
+test("unter restricted ist ein ungehärtetes Deployment auch kein Sturm-Opfer (#1327)", () => {
+  Game.state.completedQuests = [HAZARD_UNLOCK.storm];
+  Game.sim.exec("kubectl create deployment web --image=nginx");
+  Game.sim.exec("kubectl label namespace default pod-security.kubernetes.io/enforce=restricted");
+  for (let i = 0; i < 1200; i++) Game.hazardTick(250);
+  expect(captured.some(e => e.type === "start")).toBe(false);
+  expect(Game.sim.deployments.find(d => d.name === "web")?.broken).toBeFalsy();
+});
+
 test("unter restricted wird ein gehärtetes Deployment weiter überfallen (#1327)", () => {
   Game.sim.exec("kubectl create deployment web --image=nginx");
   Game.sim.exec("kubectl scale deployment web --replicas=3");
