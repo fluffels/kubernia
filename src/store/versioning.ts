@@ -27,7 +27,7 @@
  * Faustregel für die Wahl: rein ADDITIV (neues Feld, das bei Fehlen sinnvoll defaultet)
  * → gehört in sanitizeState, die Migration bleibt No-op (dokumentiert warum). ECHTE
  * Umbenennung/Umstrukturierung (Bedeutung ändert sich, Alt-Wert muss aktiv transformiert
- * werden) → gehört in migrations[n]. Die heute No-op-Migrationen 0→5 sind allesamt der
+ * werden) → gehört in migrations[n]. Die No-op-Migrationen (`ADDITIV`) sind der
  * additive Fall (siehe Kommentare unten); ihr Versions-Bump hat trotzdem einen Zweck:
  * er löst die Backup-vor-Überschreiben-Sicherung aus (readState) – kein Spieler verliert
  * beim Update seinen Fortschritt, selbst wenn die eigentliche Anhebung feldbasiert ist.
@@ -36,7 +36,9 @@
  *   1. CURRENT_SAVE_VERSION um 1 erhöhen.
  *   2. Eine Migration migrations[n] ergänzen, die `data` von Version n auf n+1 bringt
  *      (additiver Fall: No-op mit Begründung; struktureller Fall: echte Transformation).
- *   3. Eine VOLLE Alt-Stand-Fixture test/fixtures/savegame-v<n>-*.json anlegen und in
+ *   3. Eine Kurzbeschreibung in src/store/save-versionen.json ergänzen (Ticket, Art, Text): sie speist
+ *      die generierte Versionskette in docs/module/app.md, ein fehlender Eintrag macht check:docgen rot.
+ *   4. Eine VOLLE Alt-Stand-Fixture test/fixtures/savegame-v<n>-*.json anlegen und in
  *      test/savemigration.test.ts einen Lade-Block dafür schreiben. Das ist Pflicht und
  *      wird maschinell erzwungen (#510): der Fitness-Test dort geht rot, sobald es zu
  *      einer Version keine geladene Fixture gibt – der frühere „bitte dran denken"-
@@ -51,6 +53,9 @@ export const CURRENT_SAVE_VERSION = 9;
 
 /** Migration von Format-Version n auf n+1 (reine Funktion auf dem `data`-Objekt). */
 type Migration = (data: unknown) => unknown;
+
+/** Rein additiver Schritt: Daten unverändert, die eigentliche Anhebung macht sanitizeState (siehe Kopf). */
+const ADDITIV: Migration = (data) => data;
 
 /** Akkumulator der migrations[6]-Transformation (#574): owned/unlockedComfort/comfortUsage,
  *  die die beiden Alt-Modell-Schritte unten schrittweise befüllen (Zwischenstände sind noch
@@ -106,7 +111,7 @@ const migrations: Record<number, Migration> = {
   // 0 -> 1: Alt-Stände lagen ohne Hülle als blanker GameState unter dem Key.
   //         Inhaltlich identisch zum heutigen Format – wir übernehmen ihn unverändert
   //         und packen ihn nur in die neue Versions-Hülle.
-  0: (data) => data,
+  0: ADDITIV,
   // 1 -> 2 (#353): Quest-Fortschritt wird zusätzlich als Quest-ID (currentQuestId) statt
   //         nur als Zahl-Index geführt, damit Einfügen/Umsortieren von Quests keinen
   //         Spielstand mehr bricht. Strukturell ein No-op: die Ableitung der ID aus dem
@@ -116,7 +121,7 @@ const migrations: Record<number, Migration> = {
   //         ebenfalls durch migrateParsed + sanitizeState läuft). Der Versions-Bump sorgt hier dafür, dass jeder bestehende
   //         v1-Stand vor dem ersten Überschreiben in den Backup-Slot gesichert wird
   //         (readState) – kein Spieler verliert beim Update seinen Fortschritt.
-  1: (data) => data,
+  1: ADDITIV,
   // 2 -> 3 (#354): Quest-IDs von numerisch (q5, q2b) auf sprechende Slugs umbenannt
   //         (harbor-/k8s-/git-… ). Quest-IDs sind persistiert (completedQuests +
   //         currentQuestId), also remappt die Migration alt -> neu. Wie bei 1->2 strukturell
@@ -124,7 +129,7 @@ const migrations: Record<number, Migration> = {
   //         sanitizeState (LEGACY_QUEST_ID_MAP), damit es ALLE Ladewege trifft (auch der
   //         rohe JSON-Import, der seit #493 durch migrateParsed + sanitizeState läuft).
   //         Der Bump sichert jeden v2-Stand vor dem Überschreiben.
-  2: (data) => data,
+  2: ADDITIV,
   // 3 -> 4 (#410): Quest-Fortschritt von EINER fokussierten Quest (currentQuestId) auf eine
   //         MENGE offener Quests (activeQuests: Quest-ID -> {step,task}) erweitert, damit das
   //         Save-Format mehrere parallel/optional offene Quests trägt. Wie 1->2/2->3 strukturell
@@ -132,7 +137,7 @@ const migrations: Record<number, Migration> = {
   //         Quest liegt ZENTRAL in game.ts › sanitizeState, weil es ALLE Ladewege treffen muss
   //         (auch den rohen JSON-Import, der seit #493 durch migrateParsed + sanitizeState läuft).
   //         Der Bump sichert jeden v3-Stand vor dem ersten Überschreiben in den Backup-Slot.
-  3: (data) => data,
+  3: ADDITIV,
   // 4 -> 5 (#413): persistente Spiel-Zeit-Achse `gameDays` (fraktionale Tageszahl) neu im
   //         GameState, damit Tag/Saison/Uhrzeit einen Reload überleben. Wie 1->2/2->3/3->4
   //         strukturell ein No-op auf store-Ebene: das Ergänzen des Default-Werts (0 = Tag 1,
@@ -140,7 +145,7 @@ const migrations: Record<number, Migration> = {
   //         Ladewege trifft (auch den rohen JSON-Import, der seit #493 durch migrateParsed +
   //         sanitizeState läuft). Verlustfrei – vorher war die Zeit nie gespeichert. Der Bump
   //         sichert jeden v4-Stand vor dem ersten Überschreiben ins Backup.
-  4: (data) => data,
+  4: ADDITIV,
   // 5 -> 6 (#559): die redundante Quest-Arbeitskopie (questIdx/questStep/taskIdx) wird nicht
   //         mehr persistiert – Schritt/Aufgabe/Index werden zur Laufzeit aus der Autorität
   //         activeQuests + currentQuestId abgeleitet. Strukturell ein No-op auf store-Ebene:
@@ -149,7 +154,7 @@ const migrations: Record<number, Migration> = {
   //         gibt die drei Felder schlicht nicht mehr zurück. Ein alter Stand lädt also verlustfrei;
   //         die weggefallenen Felder waren ohnehin nur Spiegel von activeQuests[currentQuestId].
   //         Der Bump sichert jeden v5-Stand vor dem ersten Überschreiben ins Backup.
-  5: (data) => data,
+  5: ADDITIV,
   // 6 -> 7 (#574): additives Abkürzungs-Array (unlockedAbbrev/abbrevUsage, #297/#313) auf die
   //         Komfort-Kauf-Mechanik (#572) gehoben. ANDERS als 0->1..5->6 oben KEIN No-op: das ist
   //         eine ECHTE Umdeutung (Alt-Wert muss aktiv transformiert werden, siehe SSOT-Regel im
@@ -196,7 +201,7 @@ const migrations: Record<number, Migration> = {
   //         sanitizeState läuft). Verlustfrei – vorher war keine Belegung gespeichert, ein
   //         Alt-Stand bekommt schlicht die Default-Belegung. Der Bump sichert jeden v8-Stand
   //         vor dem ersten Überschreiben ins Backup.
-  7: (data) => data,
+  7: ADDITIV,
   // 8 -> 9 (#421): Inventar-Modell von `Record<string, number>` auf `Record<string, ItemStack>`
   //         gehoben. ECHTE Transformation (kein No-op): jede alte Zahl n wird zu { count: n }.
   //         Einträge mit n <= 0 fallen weg (waren schon vorher semantisch leer). Der Bump sichert
@@ -214,6 +219,14 @@ const migrations: Record<number, Migration> = {
     return { ...d, inventory: newInv };
   },
 };
+
+/** Die Schritte der Kette (von n auf n+1) und ob sie additiv sind; Quelle der generierten Versionskette (#1370). */
+export function migrationsSchritte(): { von: number; additiv: boolean }[] {
+  return Object.keys(migrations)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .map((von) => ({ von, additiv: migrations[von] === ADDITIV }));
+}
 
 /** Hebt `data` von `version` schrittweise auf CURRENT_SAVE_VERSION. */
 function migrate(version: number, data: unknown): unknown {

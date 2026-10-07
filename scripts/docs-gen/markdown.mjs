@@ -1,7 +1,7 @@
 // Kein Shebang (siehe docs-gen.mjs). Gemeinsame Markdown-/Frontmatter-Helfer der Generatoren und
 // des Doku-Drift-Wächters (#1355, #1392): Markdown sammeln, Code-Fences erkennen, Frontmatter lesen,
 // npm-Ketten zerlegen. Reines Node-Modul (nur Builtins).
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
 /** Escaped Zellinhalt für eine GFM-Tabelle (`|` und Zeilenumbrüche). */
@@ -131,3 +131,32 @@ config:
     primaryTextColor: "#2b2118"
     primaryBorderColor: "#8a6a3f"
 ---`;
+
+/** Escaped Text für ein Mermaid-Label in Anführungszeichen (Entity-Codes; `#` zuerst, sonst doppelt escaped). */
+export function mermaidText(s) {
+  return String(s)
+    .replace(/#/g, "#35;")
+    .replace(/&/g, "#amp;")
+    .replace(/"/g, "#quot;")
+    .replace(/</g, "#lt;")
+    .replace(/>/g, "#gt;")
+    .replace(/\r?\n/g, " ");
+}
+
+const escRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Liest die Konstante `const <name> = <Ganzzahl>` aus `datei` (relativ zu `rootDir`) als Ziffern-String.
+ * Wirft bei fehlender Datei, fehlender oder mehrfacher Deklaration und bei einem Nicht-Literal.
+ */
+export function ganzzahlKonstante(rootDir, datei, name) {
+  const abs = join(rootDir, datei);
+  if (!existsSync(abs)) throw new Error(`Datei ${datei} nicht gefunden`);
+  const text = readFileSync(abs, "utf8");
+  const treffer = text.match(new RegExp(`^\\s*(?:export\\s+)?const\\s+${escRegex(name)}\\s*=`, "gm")) ?? [];
+  if (treffer.length === 0) throw new Error(`${name} fehlt in ${datei}`);
+  if (treffer.length > 1) throw new Error(`${name} steht mehrfach in ${datei}`);
+  const zahl = new RegExp(`^\\s*(?:export\\s+)?const\\s+${escRegex(name)}\\s*=\\s*(\\d+)\\s*(?:;|//|$)`, "m").exec(text);
+  if (!zahl) throw new Error(`${name} in ${datei} ist kein Ganzzahl-Literal`);
+  return zahl[1];
+}
