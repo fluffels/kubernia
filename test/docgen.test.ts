@@ -79,6 +79,10 @@ describe("parseSections", () => {
     const r = api.parseSections(`${S}\n${E}\n${S}\n${E}`);
     assert.match(r.errors[0].message, /doppelt/);
   });
+  test("ein mit Backticks geöffneter Fence wird nicht von Tildes geschlossen", () => {
+    const r = api.parseSections(`\`\`\`\n~~~\n${S}\n${E}\n\`\`\``);
+    assert.deepEqual(r, { sections: [], errors: [] });
+  });
   test("unlesbare GEN-Zeile: Fehler", () => {
     assert.match(api.parseSections("<!-- GEN:demo BEGIN -->").errors[0].message, /unlesbar/);
   });
@@ -130,6 +134,45 @@ describe("runDocsGen", () => {
     assert.deepEqual(w.written, ["a.md"]);
     assert.equal(readFileSync(join(root, "a.md"), "utf8"), fresh.replace(/\n/g, "\r\n"));
     assert.deepEqual(api.runDocsGen({ rootDir: root, config: cfg, generators: gen, write: true }).written, []);
+  });
+  test("Datei mit zwei Abschnitten: nur der veraltete wird gemeldet, write rendert beide", () => {
+    const two2 = (b: string) => `<!-- GEN:demo START -->
+${HINT}
+
+| a |
+|---|
+| 1 |
+
+<!-- GEN:demo END -->
+
+text
+
+<!-- GEN:demo2 START -->
+${HINT}
+
+${b}
+
+<!-- GEN:demo2 END -->
+`;
+    const g2: Gen = { demo: gen.demo, demo2: () => "neu" };
+    const root = fixture({ "a.md": two2("alt") });
+    const r = api.runDocsGen({ rootDir: root, config: cfg, generators: g2 });
+    assert.deepEqual(r.stale, [{ file: "a.md", section: "demo2" }]);
+    const root2 = fixture({ "a.md": `<!-- GEN:demo START -->
+<!-- GEN:demo END -->
+
+text
+
+<!-- GEN:demo2 START -->
+<!-- GEN:demo2 END -->
+` });
+    api.runDocsGen({ rootDir: root2, config: cfg, generators: g2, write: true });
+    assert.equal(readFileSync(join(root2, "a.md"), "utf8"), two2("neu"));
+    assert.deepEqual(api.runDocsGen({ rootDir: root2, config: cfg, generators: g2 }).stale, []);
+  });
+  test("von Hand geänderte Hinweiszeile gilt als veraltet", () => {
+    const root = fixture({ "a.md": fresh.replace(HINT, "<!-- anders -->") });
+    assert.deepEqual(api.runDocsGen({ rootDir: root, config: cfg, generators: gen }).stale, [{ file: "a.md", section: "demo" }]);
   });
   test("unbekannter Generator: Fehler mit Datei und Abschnitt", () => {
     const root = fixture({ "a.md": `<!-- GEN:nix START -->\n<!-- GEN:nix END -->\n` });
@@ -222,6 +265,12 @@ describe("Generator gates", () => {
   test("konfigurierte Kette fehlt in package.json: rot", () => {
     assert.throws(() => run(base, conf({ chains: ["verify", "nope"] })), /Kette "nope" fehlt/);
   });
+  test("derselbe Schritt in zwei Ketten erscheint nur einmal (erste Kette)", () => {
+    const files = { ...base, "package.json": pkg({ verify: "npm run a", "verify:full": "npm run verify && npm run a && npm run c", a: "x", c: "x" }) };
+    const out = run(files, conf({ descriptions: { a: "A", c: "C" }, ci: [] }));
+    assert.equal(out.split("\n").filter((l) => l.includes("npm run a")).length, 1);
+    assert.ok(out.includes("| `npm run a` | `verify` | A |"));
+  });
   test("CI-Befehl steht nicht in der Quelle: rot; Quelle fehlt: rot", () => {
     const ci = (command: string, source = ".github/ci.yml") => [{ command, source, description: "d" }];
     assert.throws(() => run(base, conf({ ci: ci("npm audit --y") })), /nicht \(mehr\) in/);
@@ -247,7 +296,7 @@ describe("Generator harness-inventar", () => {
     ".mcp.json": JSON.stringify({
       mcpServers: {
         remote: { type: "http", url: "https://api.example.org/mcp", headers: { Authorization: "Bearer GEHEIMTOKEN" } },
-        local: { type: "stdio", command: "node", args: ["scripts/x.mjs", "--isolated"] },
+        local: { type: "stdio", command: "node", args: ["--isolated", "scripts/x.mjs"] },
       },
     }),
   };
@@ -276,6 +325,7 @@ describe("Generator harness-inventar", () => {
     const out = gen(files);
     assert.ok(out.includes("| MCP-Server | `remote` | http, api.example.org |"));
     assert.ok(out.includes("| MCP-Server | `local` | stdio, node scripts/x.mjs |"));
+    assert.ok(out.indexOf("`local`") < out.indexOf("`remote`"));
     assert.ok(!out.includes("GEHEIM"));
   });
   test("konfigurierter Pfad fehlt: rot; nicht konfigurierter Teil entfällt", () => {

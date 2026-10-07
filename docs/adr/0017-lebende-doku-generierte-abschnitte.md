@@ -9,7 +9,7 @@
 
 ## Kontext
 
-Handgepflegte Tabellen über Ableitbares veralten still. Die gepflegte Gate-Tabelle in `docs/agent-harness.md` kannte `check:internalrefs` nicht, die der README kannte weniger als die Hälfte der Gates in `verify`. Die bestehenden Wächter (`check:docdrift`, `check:docmap`) prüfen Kommandos, Links und Abdeckung, aber nicht, ob eine Tabelle den Code vollständig und richtig wiedergibt.
+Handgepflegte Tabellen über Ableitbares veralten still. Die gepflegte Gate-Tabelle in `docs/agent-harness.md` kannte `check:internalrefs` nicht, die der README kannte 7 der 12 Gates in `verify`. Die bestehenden Wächter (`check:docdrift`, `check:docmap`) prüfen Kommandos, Links und Abdeckung, aber nicht, ob eine Tabelle den Code vollständig und richtig wiedergibt.
 
 ## Optionen
 

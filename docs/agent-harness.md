@@ -82,7 +82,7 @@ Das eigentliche Sicherheitsnetz: eine Reihe von Prüfungen, die **lokal und in d
 
 ## 3. Die Fitness-Functions im Detail
 
-Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM es existiert · wie es gegen False Positives abgesichert ist. Reihenfolge wie in der CI (nach `npm test` aufsteigend streng).
+Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM es existiert · wie es gegen False Positives abgesichert ist. Reihenfolge wie in den Ketten `verify` und `verify:full`, danach die reinen CI-Gates (Tabelle generiert, siehe unten).
 
 <!-- GEN:gates START -->
 <!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
