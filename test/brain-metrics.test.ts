@@ -222,7 +222,18 @@ describe("Härtung nach Review", () => {
         ev(T(4), "NotebookEdit", { notebook_path: "docs/n.md" }),
       ],
     });
-    assert.deepEqual([m.brainReads, m.brainPages, m.brainWrites], [4, 3, 2]);
+    assert.deepEqual([m.brainReads, m.brainPages, m.brainWrites], [4, 2, 2]);
+  });
+  test("dieselbe Seite unter Hauptrepo- und Worktree-Pfad ist eine Seite; summarize reicht Recherche-Zeilen durch", () => {
+    const m = brainMetrics({
+      events: [
+        ev(T(0), "Read", { file_path: "C:\\dev\\x\\docs\\a.md" }),
+        ev(T(1), "Read", { file_path: "C:\\dev\\x\\.claude\\worktrees\\kq-1\\docs\\a.md" }),
+      ],
+    });
+    assert.deepEqual([m.brainReads, m.brainPages], [2, 1]);
+    const call = { ts: T(0), model: "m", input: 7, cacheWrite: 0, cacheRead: 0, output: 0, subagent: { id: "s", agentType: "Explore", description: "x" } };
+    assert.equal(baseline.summarize({ calls: [call], events: [] }).brain?.rechercheTokens, 7);
   });
   test("kaputter Langfuse-Input wirft nicht", () => {
     const e = toolEventsFromLangfuse([{ type: "TOOL", startTime: T(0), input: "{kaputt", metadata: { tool_name: "Read" } }]);

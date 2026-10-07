@@ -20,6 +20,9 @@ const SCRATCH = /[\\/](Temp|tmp)[\\/]/i;
 
 const norm = (p) => String(p ?? "").replace(/\\/g, "/");
 
+/** Seitenschlüssel: Pfad ab `docs/`; dieselbe Seite per absolutem, relativem oder Worktree-Pfad ist eine Seite. */
+const pageKey = (p) => norm(p).replace(/^.*?(?:^|\/)docs\//i, "docs/");
+
 /** Brain-Seite = Markdown unter einem `docs/`-Ordner (nicht in node_modules). */
 export function isBrainPage(path) {
   const p = norm(path);
@@ -189,10 +192,10 @@ function countEvent(ev, pages, acc) {
     if (!isBrainPage(filePath(ev))) return;
     acc.reads += 1;
     acc.readChars += ev.resultChars;
-    pages.add(norm(filePath(ev)));
+    pages.add(pageKey(filePath(ev)));
   } else if (ev.tool === "Bash" || ev.tool === "PowerShell") {
     const c = classifyShell(ev.input?.command, ev.tool);
-    for (const p of c.brainReads) pages.add(norm(p));
+    for (const p of c.brainReads) pages.add(pageKey(p));
     if (c.brainReads.length) {
       acc.reads += c.brainReads.length;
       acc.readChars += ev.resultChars;

@@ -272,8 +272,8 @@ Grenzen: Tokens sind eine Größenordnung; Läufe in geteilten Sessions sind nur
 | Lauf | Brain gelesen (Zugriffe / Seiten / ≈Tok) | Suche (Calls / ≈Tok) | Recherche-Subagenten | Calls bis 1. Edit | Brain-Pflege (Schreibzugriffe / PR) | Review-Runden | CI-Fix |
 |---|---|---|--:|--:|---|--:|--:|
 | #1303 (PR #1310) | 17 / 8 / 17.821 | 81 / 84.776 | 0 | 77 | 1 / 5 Seiten (+58/−10) | 2 | 0 |
-| #1308 (PR #1314, Session `6364f74c`) | 16 / 7 / 14.152 | 162 / 82.692 | 10.853 | 108 | 0 / 3 Seiten (+9/−6) | 9 | 0 |
-| #1311 (PR #1317, Session `3c41607a`) | 10 / 9 / 12.248 | 180 / 76.950 | 0 | 73 | 7 / 2 Seiten (+6/−4) | nicht vergleichbar (geteilte Session) | 0 |
+| #1308 (PR #1314, Session `6364f74c`) | 16 / 6 / 14.152 | 162 / 82.692 | 10.853 | 108 | 0 / 3 Seiten (+9/−6) | 9 | 0 |
+| #1311 (PR #1317, Session `3c41607a`) | 10 / 8 / 12.248 | 180 / 76.950 | 0 | 73 | 7 / 2 Seiten (+6/−4) | nicht vergleichbar (geteilte Session) | 0 |
 
 Lesart: Die Läufe liegen bei 10–17 Brain-Lesezugriffen und 81–180 Such-Calls; die Such-Tokens (77–85k) übersteigen die gelesenen Brain-Tokens (12–18k) um ein Mehrfaches, dort liegt die Ersparnis, die das Brain heben soll. #1308 und #1311 teilten Sessions mit anderen Läufen und sind nur nach Fenster getrennt (obere Schranke), #1308 hatte ungewöhnlich viele Review-Runden (Sonderfreigabe). Zählprobe #1303: 17 Lesezugriffe im Skript, gleich dem unabhängig per Muster gezählten Wert (17 `cat`/`sed`/`head` auf `docs/*.md`, 0 `Read`; Grenze der Zählung: Env-Präfixe wie `LANG=C cat` und `(Get-Content …)` in PowerShell erkennt sie nicht, `sed -i` zählt als Lesen); die Langfuse-Seite ist ohne Schlüssel nur über die Form belegt (TOOL-Observation mit `input` und `metadata.output_meta.orig_len`, per MCP am 07.10.2026 geprüft).
 
