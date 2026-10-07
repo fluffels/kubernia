@@ -7,6 +7,7 @@ import { podAddress, serviceBackends, readyBackends, endpointPort } from "../../
 
 const HEADLESS = "apiVersion: v1\nkind: Service\nmetadata:\n  name: speicher\nspec:\n  clusterIP: None\n  selector:\n    app: speicher\n  ports:\n    - port: 5432\n";
 const NORMAL_STS = "apiVersion: v1\nkind: Service\nmetadata:\n  name: speicher\nspec:\n  ports:\n    - port: 5432\n";
+const TARGET_STS = "apiVersion: v1\nkind: Service\nmetadata:\n  name: speicher\nspec:\n  ports:\n    - port: 80\n      targetPort: 5432\n";
 const EXTERNAL = "apiVersion: v1\nkind: Service\nmetadata:\n  name: speicher\nspec:\n  type: ExternalName\n  externalName: db.example.com\n";
 const sts = (extra: object = {}) => ({ name: "speicher", image: "postgres:16", replicas: 3, serviceName: "speicher", ...extra });
 const ep = (sim: KQSim, name: string) => (sim.exec("kubectl get endpoints " + name).output || "").split("\n")[1] ?? "";
@@ -74,6 +75,17 @@ describe("kubectl get endpoints", () => {
   });
 });
 
+describe("nslookup Pod-Record", () => {
+  test("Negativ: ein Deployment-Pod hinter dem headless Service hat keinen Pod-Record", () => {
+    const sim = new KQSim({ deployments: [{ name: "speicher", image: "nginx", replicas: 1 }], files: { "h.yaml": HEADLESS } });
+    sim.exec("kubectl apply -f h.yaml");
+    const pod = sim.deployments[0].pods[0].name;
+    const r = sim.exec("nslookup " + pod + ".speicher");
+    expect(r.error).toBe(true);
+    expect(r.output).toContain("NXDOMAIN");
+  });
+});
+
 describe("curl", () => {
   test("ClusterIP-Service vor einem StatefulSet ist erreichbar", () => {
     const sim = new KQSim({ statefulSets: [sts()], files: { "n.yaml": NORMAL_STS } });
@@ -89,6 +101,24 @@ describe("curl", () => {
     const r = sim.exec("curl speicher");
     expect(r.error).toBe(true);
     expect(r.output).toContain("nicht bereit");
+  });
+
+  test("targetPort gesetzt: ein StatefulSet ohne containerPort nimmt den Verkehr an", () => {
+    const sim = new KQSim({ statefulSets: [sts()], files: { "t.yaml": TARGET_STS } });
+    sim.exec("kubectl apply -f t.yaml");
+    expect(sim.exec("curl speicher").error).toBe(false);
+  });
+
+  test("gemischte Backends: refused nur, wenn KEIN bereites Backend den Port annimmt", () => {
+    const dep = { name: "speicher", image: "nginx", replicas: 1, containerPort: 9000 };
+    const mixed = new KQSim({ deployments: [dep], statefulSets: [sts()], files: { "t.yaml": TARGET_STS } });
+    mixed.exec("kubectl apply -f t.yaml");
+    expect(mixed.exec("curl speicher").error).toBe(false);
+    const depOnly = new KQSim({ deployments: [dep], files: { "t.yaml": TARGET_STS } });
+    depOnly.exec("kubectl apply -f t.yaml");
+    const r = depOnly.exec("curl speicher");
+    expect(r.error).toBe(true);
+    expect(r.output).toContain("targetPort");
   });
 
   test("Service ohne Backend: keine Endpoints", () => {
@@ -131,6 +161,21 @@ describe("scrapeTargets", () => {
     const t = appTargets(sim);
     expect(t.some(x => /^(None|<none>):/.test(x.instance))).toBe(false);
     expect(t.some(x => x.job === "extern")).toBe(false);
+  });
+
+  test("Target nennt den targetPort, nicht den Service-Port", () => {
+    const sim = new KQSim({
+      deployments: [{ name: "kasse", image: "nginx", replicas: 1 }],
+      services: [{ name: "kasse", type: "ClusterIP", clusterIP: "10.96.0.20", port: 80, targetPort: 8080 }],
+    });
+    const pod = sim.deployments[0].pods[0].name;
+    expect(appTargets(sim).map(x => x.instance)).toStrictEqual([podIP(pod) + ":8080"]);
+  });
+
+  test("Negativ: ExternalName neben gleichnamigem Deployment hat kein Target", () => {
+    const sim = new KQSim({ deployments: [{ name: "speicher", image: "nginx", replicas: 1 }], files: { "e.yaml": EXTERNAL } });
+    sim.exec("kubectl apply -f e.yaml");
+    expect(appTargets(sim)).toStrictEqual([]);
   });
 
   test("CrashLoop-Deployment: down-Target mit Pod-IP", () => {
