@@ -1,7 +1,7 @@
 # AGENTS.md – Arbeitsanweisung für KI-Agenten
 
 > Diese Datei ist für dich als Agent (egal welches Tool) und die **SSOT**: Sie sagt dir, **wie** hier gearbeitet wird, und **jede harte Regel steht genau hier — nur hier**, knapp formuliert. Langbegründungen und Historie stehen verlinkt in [docs/agent-harness.md › §3a](docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd-1064) (bei Konflikt gilt diese Datei).
-> **Eine Root-Kontextdatei (#992/#1087):** Claude Code lädt diese Datei nativ; eine `CLAUDE.md`, `.claude/CLAUDE.md` oder `CLAUDE.local.md` im Root (auch ungetrackt) würde das abschalten und ist darum verboten (bewacht von [`test/harness/agents-md-native.test.ts`](test/harness/agents-md-native.test.ts)). Die **Nachschlage-Tabellen** liegen on-demand unter [`docs/referenz/`](docs/referenz/anlaufstellen.md): [Befehle](docs/referenz/befehle.md), [Repo-Landkarte](docs/referenz/repo-landkarte.md), [Schichtregeln](docs/referenz/schichtregeln.md), [Anlaufstellen](docs/referenz/anlaufstellen.md). Steht der **Text einer Regel** dort doppelt, ist das ein Drift-Bug → hierher zurückführen; **bewusst gedoppelt** sind nur die **Gate-Markierungen** in den Tabellen („hart, erzwingt `check:arch`").
+> **Eine Root-Kontextdatei (#992/#1087):** Claude Code lädt diese Datei nativ; eine `CLAUDE.md`, `.claude/CLAUDE.md` oder `CLAUDE.local.md` im Root (auch ungetrackt) würde das abschalten und ist darum verboten (bewacht von [`test/harness/agents-md-native.test.ts`](test/harness/agents-md-native.test.ts)). Das **Projekt-Brain** ist `docs/`, on-demand über den Index [Anlaufstellen](docs/referenz/anlaufstellen.md) (samt Lese-Konvention); Nachschlage-Tabellen: [Befehle](docs/referenz/befehle.md), [Repo-Landkarte](docs/referenz/repo-landkarte.md), [Schichtregeln](docs/referenz/schichtregeln.md). Steht der **Text einer Regel** dort doppelt, ist das ein Drift-Bug → hierher zurückführen; **bewusst gedoppelt** sind nur die **Gate-Markierungen** in den Tabellen („hart, erzwingt `check:arch`").
 > Was das Spiel **ist** (Story, Spielsysteme, Lernpfad), steht in der [README.md](README.md) – nicht doppeln.
 
 ## Das Wichtigste zuerst (harte Regeln)
@@ -50,7 +50,8 @@ Alle schnellen Gates laufen gebündelt in **`npm run verify`**; `npm run verify:
 - **Langfuse-Erfassung erhalten (#1293).** Agenten, Subagenten, MCP-Server, Hooks, Plugins geändert: PR belegt per Probe-Lauf, dass Langfuse sie erfasst; [Ablauf](docs/model-routing.md#langfuse-erfassung-belegen-1293).
 - **Deutsch mit echten Umlauten** (ä/ö/ü/ß) in Code-Kommentaren, Dialogen und Texten. Dateinamen bleiben ASCII (ae/oe/ue/ss).
 - **Backlog/TODOs leben in GitHub** (Issues + Project-Board), nicht im Code und nicht in einem externen Notiz-System (siehe unten).
-- **Doku aktuell halten ist Teil von „fertig".** Sie beschreibt den **Ist-Zustand**; Historie („seit #N", „früher") gehört in ADRs/`git log`, nicht in Agenten-Kontext. Ausnahme: ein knappes Verbot ohne Herkunft, wenn Altes sonst plausibel zurückkäme (z.B. „keine `prio:*`-Labels"). Spielinhalte/Quests/Steuerung geändert → **README** im selben PR (die Quest-Zahl prüft [`test/readme.test.ts`](test/readme.test.ts)). Neues/umbenanntes `src/`-Modul → Backtick-Pfad-Zeile im passenden [`docs/module/`](docs/module/)-Tiefendoc, **nicht** in die [Repo-Landkarte](docs/referenz/repo-landkarte.md) (bleibt Subsystem-granular). Die Datei-Landkarte gibt es nur einmal; `npm run check:docmap` meldet jede unerwähnte `src/`-Datei.
+- **Doku aktuell halten ist Teil von „fertig".** Sie beschreibt den **Ist-Zustand**; Historie („seit #N", „früher") gehört in ADRs/`git log`, nicht in Agenten-Kontext. Ausnahme: ein knappes Verbot ohne Herkunft, wenn Altes sonst plausibel zurückkäme (z.B. „keine `prio:*`-Labels"). Spielinhalte/Quests/Steuerung geändert → **README** im selben PR (die Quest-Zahl prüft [`test/readme.test.ts`](test/readme.test.ts)). Neues/umbenanntes `src/`-Modul → Backtick-Pfad-Zeile im passenden [`docs/module/`](docs/module/)-Tiefendoc, **nicht** in die [Repo-Landkarte](docs/referenz/repo-landkarte.md) (bleibt Subsystem-granular). `npm run check:docmap` meldet jede unerwähnte `src/`-Datei.
+  - **Projekt-Brain pflegen** ([ADR 0013](docs/adr/0013-docs-als-agentengepflegtes-wiki.md), [0015](docs/adr/0015-projekt-brain.md)): am Ticket-Ende im selben PR Übertragbares (*in sechs Monaten noch wahr, nicht aus Code/Git ableitbar*) nach Wissensart ablegen: Regel → AGENTS.md, Entscheidung → ADR (historisch: nie umschreiben, nur „präzisiert/abgelöst durch" verknüpfen), Evergreen → passende oder neue Brain-Seite je Konzept, im Index eingehängt, Schnappschuss → datiert, nicht aktualisiert; laufender Stand → Issue, Erledigtes → PR/Issue-Kommentar. „Merk dir das" ebenso: laufender Ticket-PR, sonst Issue bzw. Sammelticket-Zeile, nie Auto-Memory oder externes Brain.
 
 ## Befehle
 
@@ -58,7 +59,7 @@ Alle schnellen Gates laufen gebündelt in **`npm run verify`**; `npm run verify:
 
 ## Architektur
 
-Vite + TypeScript + ES-Module, Phaser als npm-Paket; `index.html` lädt nur `src/main.ts`. **Zwei Build-Wege aus derselben Quelle** ([`vite.config.ts`](vite.config.ts)): `npm run build` (Multi-File nach `dist/`, zum Hosten) und `npm run build:offline` (self-contained `dist-offline/index.html` via `vite-plugin-singlefile`, nur in diesem Mode aktiv — das Doppelklick-Offline-Feature).
+Vite + TypeScript + ES-Module, Phaser als npm-Paket; `index.html` lädt nur `src/main.ts`. Zwei Build-Wege aus einer Quelle (Host-Build und Offline-Einzeldatei, [arc42 §7](docs/arc42-architektur.md#7-verteilungssicht)).
 
 **Grundsatzentscheidungen als ADR — vor erneuter Diskussion dorthin verweisen:** Engine Phaser statt Godot/Unity ([ADR 0001](docs/adr/0001-engine-phaser.md), native Distribution über einen Wrapper wie #83 Tauri); kein Multiplayer/Co-op ([ADR 0003](docs/adr/0003-multiplayer-coop-out-of-scope.md), bleibt Single-Player ohne Backend — Architektur nicht dafür verbauen, aber nichts proaktiv dafür bauen); Skalierungs-Fundament für Stardew-Scope ([ADR 0004](docs/adr/0004-skalierungs-fundament.md), komplett: Content-as-Data #348, Entity-Registry #349, ID-basierter Quest-Fortschritt #353/#354, IndexedDB-Saves #350).
 
@@ -68,7 +69,7 @@ Vite + TypeScript + ES-Module, Phaser als npm-Paket; `index.html` lädt nur `src
 
 - **pure Domäne** (kein Phaser, voll unit-testbar): Cluster-Simulator, Content-Fassade, Welt-/HUD-Logik — die Grundlage der TDD-Regel.
 - **Anwendung:** Spielstand, XP, Wirtschaft, Spaced Repetition + Laufzeit-Singletons statt globalem `window`-Shim (bricht Import-Zyklen).
-- **Persistenz:** SaveStore über **IndexedDB** (#350), localStorage/In-Memory als Fallback; die API bleibt synchron über einen In-Memory-Cache, der beim Boot per `await SaveStore.init()` hydriert wird.
+- **Persistenz:** SaveStore über **IndexedDB** (#350), Fallback localStorage/In-Memory; synchrone API über einen beim Boot (`await SaveStore.init()`) hydrierten Cache.
 - **Präsentation** (Phaser/DOM): die **einzige** Schicht mit Phaser/DOM; die Übersetzung Hafen ↔ Sim läuft über die Anti-Corruption-Layer ([Glossar](docs/glossar.md)), nicht als verstreute Sim-Zugriffe.
 - **Einstieg/Assets:** Start, Tastatur, Spritesheet-`import`s — bewusst von den Import-Regeln ausgenommen, weil hier Phaser bootet.
 
@@ -90,11 +91,11 @@ Vite + TypeScript + ES-Module, Phaser als npm-Paket; `index.html` lädt nur `src
 
 ### Modellwahl nach Phase (#910)
 
-Der Hauptchat läuft auf dem gewählten Session-Modell (kein Projekt-Pin); die Umsetzung läuft als Sonnet-Subagent `kubernia-umsetzer`, Planung (`kubernia-planner`, auch die Epic-Aufteilung) und Review (Lenses) als Opus-Subagenten, Explore als Haiku. Immer per Alias (`opus`/`sonnet`/`haiku`), nie mit fester Modell-ID. Ohne Modell-Angabe erbt ein Subagent das Session-Modell, darum setzt der Workflow an jedem `agent()` Modell (bzw. `agentType`) und `effort`. SSOT (Phasen-Matrix, Grenzen): [docs/model-routing.md](docs/model-routing.md).
+Hauptchat auf dem Session-Modell (kein Projekt-Pin); Umsetzung als Sonnet-Subagent `kubernia-umsetzer`, Planung (auch Epic-Aufteilung) und Review als Opus-Subagenten, Explore als Haiku. Immer per Alias (`opus`/`sonnet`/`haiku`), nie feste Modell-ID; jedes `agent()` setzt Modell bzw. `agentType` und `effort` (sonst erbt es das Session-Modell). SSOT: [docs/model-routing.md](docs/model-routing.md).
 
 ## Wo die TODOs leben
 
-Der Backlog sind **GitHub Issues** im **Project-Board**. Die Reihenfolge ist die **Board-Position** (Drag & Drop, #747) — keine `prio:*`-Labels, keine Reihenfolge-Datei (#627);. Befehl, Sonderfälle und Board-IDs: **[docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md)** (die SSOT der Auswahl-Mechanik; braucht `read:project`-Scope, `gh auth refresh -s project`).
+Der Backlog sind **GitHub Issues** im **Project-Board**. Die Reihenfolge ist die **Board-Position** (Drag & Drop, #747) — keine `prio:*`-Labels, keine Reihenfolge-Datei (#627). Befehl, Sonderfälle und Board-IDs: **[docs/ticket-reihenfolge.md](docs/ticket-reihenfolge.md)** (die SSOT der Auswahl-Mechanik; braucht `read:project`-Scope, `gh auth refresh -s project`).
 
 **Auswahl des nächsten Tickets — deterministisch, nicht abwägen.** „Nächstes Ticket" = **oberstes freies Item** der Board-Auswahl (`.status == "Todo"`, kein offener Blocker, kein offener PR/Branch/Worktree — Gegencheck `git worktree list` + `git branch -a`). **Kein Vorab-Abgleich der ganzen Liste** — nur **dieses eine** Kandidaten-Ticket prüfen (`gh issue view <nr>`).
 
@@ -104,7 +105,7 @@ Der Backlog sind **GitHub Issues** im **Project-Board**. Die Reihenfolge ist die
 - **Beim Start sofort self-assignen** (`gh issue edit <nr> --add-assignee @me`) und mit `gh issue view <nr>` verifizieren — der einzige für andere sichtbare „in Arbeit"-Marker.
 - **Eigener Worktree von frisch geholtem `origin/main`:** `git fetch origin && git worktree add .claude/worktrees/kq-<nr> -b feature/kq-<nr>-<slug> origin/main` (#772), darin einmal `npm ci` (schreibt den Lockfile nie, #1119). **Nie** das `node_modules` des Hauptrepos verlinken (Junction/Symlink): `git worktree remove` leert sonst das echte.
 - **Assignee ist kein atomares Lock** (alle Agenten laufen als `fluffels`): vor dem De-Assignen `git worktree list` + `gh pr list --head feature/kq-<nr>-*` prüfen; vor dem finalen PR `gh issue view <nr> --json state,closedAt` — extern geschlossen ⇒ Kollision transparent melden statt überschreiben.
-- **Worktree entfernen auf Windows – zwei Fallen** (Details: [FAQ](docs/agent-harness-faq.md)): (1) laufende Dev-Server vorher per PowerShell `Stop-Process` beenden (`pkill` aus Git-Bash greift nicht); (2) nichts mit cwd im Worktree laufen lassen: weder die Shell noch Hintergrund-Tasks (`Monitor`/`run_in_background`, vorher `TaskStop`; Wartebefehle aus dem Hauptrepo mit absolutem Pfad starten), vor dem Entfernen zurück ins Hauptrepo. (3) **Danach verifizieren (#908):** `git worktree list` zeigt den Pfad nicht mehr **und** `Test-Path` liefert `False` — sonst stoppen und melden. Der `Stop`-Hook räumt verwaiste Ordner fail-closed auf; meldet er eine Blockade, die Ursache beheben, **nie** den Guard aufweichen.
+- **Worktree entfernen auf Windows – zwei Fallen** (Details: [FAQ](docs/agent-harness-faq.md)): (1) laufende Dev-Server vorher per PowerShell `Stop-Process` beenden (`pkill` aus Git-Bash greift nicht); (2) nichts mit cwd im Worktree laufen lassen (Shell; Hintergrund-Tasks vorher per `TaskStop` beenden), vor dem Entfernen zurück ins Hauptrepo. (3) **Danach verifizieren (#908):** `git worktree list` zeigt den Pfad nicht mehr **und** `Test-Path` liefert `False` — sonst stoppen und melden. Der `Stop`-Hook räumt verwaiste Ordner fail-closed auf; meldet er eine Blockade, die Ursache beheben, **nie** den Guard aufweichen.
 
 **Der Agent managt das Board (nur kubernia):**
 - **GitHub ist die Single Source of Truth für den Stand:** Erledigtes sofort dort schließen (mit Ergebnis-Kommentar), Board-Status aktuell halten.
@@ -119,7 +120,7 @@ Der Backlog sind **GitHub Issues** im **Project-Board**. Die Reihenfolge ist die
 
 Das Forum sind die **GitHub Discussions**. Zwei Hälften (Details: [docs/agent-harness.md › Forum-Eingang im Detail](docs/agent-harness.md#forum-eingang-discussions-im-detail)):
 
-1. **Automatisch:** [`.github/workflows/forum-inbox.yml`](.github/workflows/forum-inbox.yml) legt je Thread genau **ein** `forum`-Issue „Forum #N: …" an (weitere Aktivität = Kommentar), schiebt es an die oberste Board-Position und antwortet **nicht**. Eingaben laufen gehärtet durch [`scripts/forum-sanitize.mjs`](scripts/forum-sanitize.mjs) (Prompt-Injection, #531/#902).
+1. **Automatisch:** [`.github/workflows/forum-inbox.yml`](.github/workflows/forum-inbox.yml) legt je Thread genau **ein** `forum`-Issue an (ganz oben im Board) und antwortet **nicht**; Eingaben laufen gehärtet durch [`scripts/forum-sanitize.mjs`](scripts/forum-sanitize.mjs).
 2. **Interaktiv, per [`forum`-Skill](.claude/skills/forum/SKILL.md):** Thread lesen → triagieren (Bug / Feature / Frage / Spam) → **Antwort entwerfen und der Maintainerin zur Freigabe vorlegen (verbindlicher Stopp — nie ungefragt posten)** → erst nach OK als `fluffels` posten → bei Bug/Feature ein gelabeltes Ticket ohne Assignee anlegen → Inbox-Issue mit Ergebnis-Kommentar schließen.
 
 Nicht jede Forum-Nachricht wird ein Ticket. Es gelten dieselben Anonymitätsregeln; in externen Forum-Antworten keine Em-Dashes als Satzverbinder.
