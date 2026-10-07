@@ -11,14 +11,24 @@
 // Bewusst .cjs (kein .mjs): der dependency-cruiser-Config ist CommonJS und
 // `require`t das hier direkt; der ESM-Wächter zieht es über `createRequire`.
 
+/** Wurzel-Namen (Datei- bzw. Verzeichnis-Segmente unter src/) der NICHT-Domäne-Schichten: die
+ *  EINE Quelle für Muster, `NON_DOMAIN`, Coverage-Globs und die Diagramm-Labels (#1368). */
+const WURZELN = {
+  praesentation: ["scenes", "ui", "sfx"],
+  anwendung: ["game", "runtime", "devpanel", "store"],
+  einstieg: ["main", "assets-data"],
+};
+
 /** Präsentationsschicht – darf Phaser + alles andere anfassen. Deckt die Einzeldatei
  *  (src/ui.ts, src/sfx.ts) UND den Modul-Ordner (src/scenes/*, src/ui/*) ab. */
-const PRESENTATION = "^src/(scenes|ui|sfx)(\\.ts$|/)";
+const PRESENTATION = `^src/(${WURZELN.praesentation.join("|")})(\\.ts$|/)`;
 /** Anwendungs-/Persistenzschicht – muss phaser- und präsentationsfrei bleiben. Deckt
  *  Einzeldatei (src/game.ts, src/store.ts …) UND Modul-Ordner (src/game/*) ab. */
-const APPLICATION = "^src/(game|runtime|devpanel|store)(\\.ts$|/)";
+const APPLICATION = `^src/(${WURZELN.anwendung.join("|")})(\\.ts$|/)`;
 /** Einstieg/Assets – main bootet bewusst Phaser + Szenen; assets-data hält PNG-Imports. */
-const ENTRY = "^src/(main|assets-data)\\.ts$";
+const ENTRY = `^src/(${WURZELN.einstieg.join("|")})\\.ts$`;
+/** Phaser, egal über welchen aufgelösten Pfad (Pfad beginnt mit `node_modules/…`, kein führender Slash). */
+const PHASER = "node_modules[/\\\\]phaser[/\\\\]";
 
 /** Kanonische Schicht-Buckets — genau die Unterscheidung, die dependency-cruiser trifft
  *  (alles, was nicht Präsentation/Anwendung/Einstieg ist, ist „pure Domäne"). */
@@ -60,7 +70,7 @@ const LABEL_TO_LAYER = {
  *  Quelle für den Domänen-Glob unten: Domäne = „alles unter src, dessen erstes Segment
  *  NICHT hier steht" (Extglob-Ausschluss). Deckungsgleich mit den PRESENTATION/APPLICATION/
  *  ENTRY-RegExps oben — `test/coverage-config.test.ts` beweist die Deckungsgleichheit. */
-const NON_DOMAIN = ["scenes", "ui", "sfx", "game", "runtime", "devpanel", "store", "main", "assets-data"];
+const NON_DOMAIN = [...WURZELN.praesentation, ...WURZELN.anwendung, ...WURZELN.einstieg];
 const _nd = NON_DOMAIN.join("|");
 // Dieselben Namen als vollständige Datei-Token (`ui.ts` statt `ui`) — gebraucht für den
 // prä­fix-sicheren Domänen-Glob unten (#539).
@@ -91,10 +101,56 @@ const _ndTs = NON_DOMAIN.map((n) => `${n}.ts`).join("|");
  *  `test/coverage-config.test.ts` rot laufen (0 Buckets getroffen), genau wie #500 auffiel.
  *  Prüfung: `test/coverage-config.test.ts` (reale Dateien + synthetische reservierte-Präfix-Namen). */
 const COVERAGE_GLOBS = {
-  [LAYERS.PRESENTATION]: "src/{scenes,ui,sfx}{.ts,/**}",
-  [LAYERS.APPLICATION]: "src/{game,runtime,devpanel,store}{.ts,/**}",
-  [LAYERS.ENTRY]: "src/{main,assets-data}.ts",
+  [LAYERS.PRESENTATION]: `src/{${WURZELN.praesentation.join(",")}}{.ts,/**}`,
+  [LAYERS.APPLICATION]: `src/{${WURZELN.anwendung.join(",")}}{.ts,/**}`,
+  [LAYERS.ENTRY]: `src/{${WURZELN.einstieg.join(",")}}.ts`,
   [LAYERS.DOMAIN]: `src/{!(${_nd})/**,!(${_ndTs})}`,
 };
 
-module.exports = { PRESENTATION, APPLICATION, ENTRY, LAYERS, layerOf, LABEL_TO_LAYER, NON_DOMAIN, COVERAGE_GLOBS };
+/** Schicht-Modell (#1368): die erlaubten Import-Richtungen als Positivliste. Die Reihenfolge ist
+ *  die Diagramm-Reihenfolge von oben nach unten. Imports innerhalb einer Schicht sind immer
+ *  erlaubt; was nicht in `darf` steht, ist verboten (fail-closed). `verbotsRegeln` leitet daraus die
+ *  Regeln von `check:arch` ab, `scripts/docs-gen/schichten.mjs` die Diagramme: Diagramm == geprüfte
+ *  Regel. `muster: null` = Auffang-Schicht (alles übrige unter src/); genau eine davon. Schichten sind über
+ *  Wurzel-Segmente der obersten Ebene unter src/ definiert (der Ist-Collapse in scripts/docs-gen/config.json
+ *  verdichtet auf genau diese Ebene). `pruefeModell` (scripts/docs-gen/schichten.mjs) prüft das Modell. */
+const SCHICHT_MODELL = {
+  schichten: [
+    { id: LAYERS.ENTRY, label: "Einstieg/Assets", muster: ENTRY, wurzeln: WURZELN.einstieg, darf: [LAYERS.PRESENTATION, LAYERS.APPLICATION, LAYERS.DOMAIN, "phaser"] },
+    { id: LAYERS.PRESENTATION, label: "Präsentation", technik: "Phaser/DOM", muster: PRESENTATION, wurzeln: WURZELN.praesentation, darf: [LAYERS.ENTRY, LAYERS.APPLICATION, LAYERS.DOMAIN, "phaser"] },
+    { id: LAYERS.APPLICATION, label: "Anwendung/Persistenz", muster: APPLICATION, wurzeln: WURZELN.anwendung, darf: [LAYERS.DOMAIN] },
+    { id: LAYERS.DOMAIN, label: "pure Domäne", muster: null, wurzeln: [], darf: [] },
+  ],
+  extern: [{ id: "phaser", label: "Phaser", muster: PHASER }],
+};
+
+const D_TS = "\\.d\\.ts$";
+
+/** Pfad-Muster einer Schicht als dependency-cruiser-Bedingung; die Auffang-Schicht ist „src/ ohne alle anderen". */
+function bedingung(modell, ziel, alsQuelle) {
+  const andere = modell.schichten.filter((s) => s.muster && s.id !== ziel.id).map((s) => s.muster);
+  if (ziel.muster) return alsQuelle ? { path: ziel.muster, pathNot: D_TS } : { path: ziel.muster };
+  return { path: "^src/", pathNot: [...andere, ...(alsQuelle ? [D_TS] : [])].join("|") };
+}
+
+/** Verbotsregeln für dependency-cruiser: je Paar (Schicht → Schicht/Extern), das nicht in `darf` steht, eine Regel
+ *  `schicht-<von>-nicht-<nach>`. `.d.ts`-Quellen lösen nie eine Regel aus (reine Typdeklarationen). */
+function verbotsRegeln(modell) {
+  const regeln = [];
+  const ziele = [...modell.schichten, ...modell.extern];
+  for (const von of modell.schichten) {
+    for (const nach of ziele) {
+      if (nach.id === von.id || von.darf.includes(nach.id)) continue;
+      regeln.push({
+        name: `schicht-${von.id}-nicht-${nach.id}`,
+        comment: `${von.label} darf ${nach.label} nicht importieren (erlaubte Richtungen: SCHICHT_MODELL in scripts/layers.cjs).`,
+        severity: "error",
+        from: bedingung(modell, von, true),
+        to: bedingung(modell, nach, false),
+      });
+    }
+  }
+  return regeln;
+}
+
+module.exports = { PRESENTATION, APPLICATION, ENTRY, PHASER, LAYERS, layerOf, LABEL_TO_LAYER, NON_DOMAIN, COVERAGE_GLOBS, SCHICHT_MODELL, verbotsRegeln };

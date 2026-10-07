@@ -37,6 +37,19 @@
       }
     ]
   },
+  "schichten": {
+    "layers": "scripts/layers.cjs",
+    "cruise": [
+      "node_modules/dependency-cruiser/bin/dependency-cruiser.mjs",
+      "src",
+      "--config",
+      ".dependency-cruiser.cjs",
+      "--output-type",
+      "json",
+      "--collapse",
+      "^(src|node_modules)/[^/]+/"
+    ]
+  },
   "zeitleiste": {
     "adr": "docs/adr",
     "meilensteine": "docs/meilensteine.json"

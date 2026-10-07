@@ -48,19 +48,89 @@ Der fachliche Kontext ist bewusst schmal:
 
 Abhängigkeiten zeigen strikt **nach innen** — auf die reine Domäne, die nichts von der Engine weiß.
 
+### Schichten – Soll (geprüfte Regel)
+
+Erzeugt aus `SCHICHT_MODELL` in [`scripts/layers.cjs`](../scripts/layers.cjs), derselben Tabelle, aus der `check:arch` seine Verbotsregeln ableitet: jede Richtung, die hier fehlt, ist eine Regel, die rot wird. Phaser/DOM ist die Technik der Präsentation (grün), der Einstieg bootet Phaser; die Persistenz (`store`) gehört zur Anwendung.
+
+<!-- GEN:schichten-soll START -->
+<!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  layout: dagre
+  themeVariables:
+    lineColor: "#8b949e"
+    primaryColor: "#f3e3c3"
+    primaryTextColor: "#2b2118"
+    primaryBorderColor: "#8a6a3f"
+---
+flowchart TD
+  s_einstieg["Einstieg/Assets<br/>main · assets-data"]
+  s_praesentation["Präsentation · Phaser/DOM<br/>scenes · ui · sfx"]
+  s_anwendung["Anwendung/Persistenz<br/>game · runtime · devpanel · store"]
+  s_domaene["pure Domäne<br/>alles übrige unter src/"]
+  x_phaser{{"Phaser"}}
+  s_einstieg <--> s_praesentation
+  s_einstieg --> s_anwendung
+  s_einstieg --> s_domaene
+  s_praesentation --> s_anwendung
+  s_praesentation --> s_domaene
+  s_anwendung --> s_domaene
+  s_einstieg -.-> x_phaser
+  s_praesentation -.-> x_phaser
+  classDef engine fill:#d7e8c6,stroke:#4f7a3a,color:#1f2a17
+  classDef extern fill:#e6e1d6,stroke:#6b6455,color:#2b2118,stroke-dasharray:4 3
+  class s_praesentation engine
+  class x_phaser extern
 ```
-Einstieg/Assets:  main.ts · assets-data.ts   (index.html lädt nur main.ts, Vite bündelt)
-────────────────────────────────────────────────────────────────────────────
-Präsentation      scenes.ts + scenes/worldscene/* · ui.ts + ui/* · sfx.ts     (Phaser · DOM)
-      │  (Abhängigkeit nach unten)
-Anwendung         game.ts + game/* (Wirtschaft/XP/Progression/Spaced Repetition) · runtime.ts · devpanel.ts
-      │
-╌╌╌╌╌╌╌╌╌ dependency-cruiser: Phaser & DOM kommen hier nicht durch ╌╌╌╌╌╌╌╌╌
-pure Domäne       sim.ts + sim/* (docker/kubectl/helm/…) · content.ts + content/* (Quests, Checks-DSL, Registry)
-                  world · clock · decor · pixelfont …
-────────────────────────────────────────────────────────────────────────────
-Persistenz (seitlich, von Anwendung genutzt):  store.ts — SaveStore, IndexedDB, sync API via In-Memory-Cache
+
+<!-- GEN:schichten-soll END -->
+
+### Schichten – Ist (dependency-cruiser)
+
+Aus dem Import-Graphen von `src/`, auf Schichten verdichtet. Weil `check:arch` jede Kante außerhalb des Solls verbietet, zeigt das Diagramm immer einen legalen Stand.
+
+<!-- GEN:schichten-ist START -->
+<!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
+
+```mermaid
+---
+config:
+  theme: base
+  look: classic
+  layout: dagre
+  themeVariables:
+    lineColor: "#8b949e"
+    primaryColor: "#f3e3c3"
+    primaryTextColor: "#2b2118"
+    primaryBorderColor: "#8a6a3f"
+---
+flowchart TD
+  s_einstieg["Einstieg/Assets<br/>main · assets-data"]
+  s_praesentation["Präsentation · Phaser/DOM<br/>scenes · ui · sfx"]
+  s_anwendung["Anwendung/Persistenz<br/>game · runtime · devpanel · store"]
+  s_domaene["pure Domäne<br/>alles übrige unter src/"]
+  x_phaser{{"Phaser"}}
+  s_einstieg <--> s_praesentation
+  s_einstieg --> s_anwendung
+  s_einstieg --> s_domaene
+  s_praesentation --> s_anwendung
+  s_praesentation --> s_domaene
+  s_anwendung --> s_domaene
+  s_einstieg -.-> x_phaser
+  s_praesentation -.-> x_phaser
+  classDef engine fill:#d7e8c6,stroke:#4f7a3a,color:#1f2a17
+  classDef extern fill:#e6e1d6,stroke:#6b6455,color:#2b2118,stroke-dasharray:4 3
+  class s_praesentation engine
+  class x_phaser extern
 ```
+
+Alle 9 erlaubten Richtungen sind genutzt.
+
+<!-- GEN:schichten-ist END -->
 
 ### Systemkontext (C4 Level 1)
 
@@ -72,26 +142,6 @@ C4Context
     System_Ext(browser, "Browser-Plattform", "Canvas/WebGL · DOM · WebAudio · IndexedDB")
     Rel(spieler, kubernia, "tippt Befehle, löst Quests")
     Rel(kubernia, browser, "Rendering, Sounds, Spielstand-Persistenz")
-```
-
-### Container-Sicht (C4 Level 2)
-
-```mermaid
-C4Container
-    title Container-Sicht – Kubernia (Browser-Bundle)
-    Person(spieler, "Spieler:in")
-    Container_Boundary(b, "Kubernia — statische HTML/JS-Datei") {
-        Container(pres, "Präsentation", "Phaser 3 + DOM", "Szenen (WorldScene …), UI-Overlays (Terminal, Quiz …), Sounds")
-        Container(app, "Anwendung", "TypeScript", "Spielstand, Wirtschaft, Progression, Spaced Repetition, Gefahren (game/*)")
-        Container(dom, "pure Domäne", "TypeScript — Phaser-frei, unit-testbar", "Cluster-Sim (sim/*), Content-as-Data (content/*), Welt (world/*)")
-        Container(store, "Persistenz", "TypeScript + IndexedDB", "SaveStore (store/*): versionierte Hülle {v,data}, Migrationskette, sync API via In-Memory-Cache")
-    }
-    System_Ext(idb, "IndexedDB", "Browser-nativer Key-Value-Store")
-    Rel(spieler, pres, "Tastatur / Maus")
-    Rel(pres, app, "Dispatch + State-Abfragen")
-    Rel(app, dom, "reine Domänen-Aufrufe — kein Phaser-Objekt überquert die Grenze")
-    Rel(app, store, "load / save (sync API via In-Memory-Cache)")
-    Rel(store, idb, "async r/w")
 ```
 
 ### Komponentensicht – sim/* (C4 Level 3)
@@ -122,7 +172,7 @@ C4Component
     Rel(exec, obs, "dispatcht")
 ```
 
-Die gestrichelte Linie ist eine **erzwungene Fitness Function**, keine Konvention. Große Familien sind hinter einer **Fassade/Barrel** gesplittet (`sim.ts`, `ui.ts`, `scenes.ts`, `game.ts` spreaden je ihre `*/`-Bündel): öffentliche API stabil, Innenstruktur skaliert. Ein Datei-Budget (800 LOC) meldet neue God-Files früh.
+Die Schichtgrenzen sind **erzwungene Fitness Functions**, keine Konvention: jede im Soll fehlende Richtung ist eine Regel von `check:arch`. Große Familien sind hinter einer **Fassade/Barrel** gesplittet (`sim.ts`, `ui.ts`, `scenes.ts`, `game.ts` spreaden je ihre `*/`-Bündel): öffentliche API stabil, Innenstruktur skaliert. Ein Datei-Budget (800 LOC) meldet neue God-Files früh.
 
 ## 6. Laufzeitsicht — „Self-Healing zum Zugucken"
 

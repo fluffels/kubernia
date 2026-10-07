@@ -143,7 +143,88 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 
 Kubernia ist bewusst so gebaut, dass es **so groß wie Stardew Valley** werden könnte (100+ Quests, 50+ NPCs, viele Welten) – ohne dass die Struktur bricht. Das ist die **oberste Regel** über allen Einzelentscheidungen. Was das konkret heißt:
 
-- **🧱 Erzwungene Schichtung.** Der Code ist streng geschichtet – **pure Domäne → Anwendung → Präsentation** – damit die komplette Spiellogik (Cluster-Simulator, Wirtschaft, Content) **ohne Phaser** im Node-Test läuft. Diese Grenze ist nicht nur Konvention, sondern wird von **`dependency-cruiser`** erzwungen: importiert die Domäne versehentlich die Engine, schlägt der Build fehl. Dazu verbietet der Wächter **Import-Zyklen** und **toten Code**.
+- **🧱 Erzwungene Schichtung.** Der Code ist streng geschichtet – **Präsentation → Anwendung → pure Domäne** (Importe zeigen nach unten; nur Einstieg/Assets und Präsentation dürfen sich gegenseitig anfassen, weil `assets-data` und `main` eine Schicht bilden) – damit die komplette Spiellogik (Cluster-Simulator, Wirtschaft, Content) **ohne Phaser** im Node-Test läuft. Diese Grenze ist nicht nur Konvention, sondern wird von **`dependency-cruiser`** erzwungen: importiert die Domäne versehentlich die Engine, schlägt der Build fehl. Dazu verbietet der Wächter **Import-Zyklen** und **toten Code**.
+
+  <!-- GEN:schichten-soll START -->
+  <!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
+
+  ```mermaid
+  ---
+  config:
+    theme: base
+    look: classic
+    layout: dagre
+    themeVariables:
+      lineColor: "#8b949e"
+      primaryColor: "#f3e3c3"
+      primaryTextColor: "#2b2118"
+      primaryBorderColor: "#8a6a3f"
+  ---
+  flowchart TD
+    s_einstieg["Einstieg/Assets<br/>main · assets-data"]
+    s_praesentation["Präsentation · Phaser/DOM<br/>scenes · ui · sfx"]
+    s_anwendung["Anwendung/Persistenz<br/>game · runtime · devpanel · store"]
+    s_domaene["pure Domäne<br/>alles übrige unter src/"]
+    x_phaser{{"Phaser"}}
+    s_einstieg <--> s_praesentation
+    s_einstieg --> s_anwendung
+    s_einstieg --> s_domaene
+    s_praesentation --> s_anwendung
+    s_praesentation --> s_domaene
+    s_anwendung --> s_domaene
+    s_einstieg -.-> x_phaser
+    s_praesentation -.-> x_phaser
+    classDef engine fill:#d7e8c6,stroke:#4f7a3a,color:#1f2a17
+    classDef extern fill:#e6e1d6,stroke:#6b6455,color:#2b2118,stroke-dasharray:4 3
+    class s_praesentation engine
+    class x_phaser extern
+  ```
+
+  <!-- GEN:schichten-soll END -->
+
+  <details>
+  <summary>Ist-Stand laut dependency-cruiser</summary>
+
+  <!-- GEN:schichten-ist START -->
+  <!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
+
+  ```mermaid
+  ---
+  config:
+    theme: base
+    look: classic
+    layout: dagre
+    themeVariables:
+      lineColor: "#8b949e"
+      primaryColor: "#f3e3c3"
+      primaryTextColor: "#2b2118"
+      primaryBorderColor: "#8a6a3f"
+  ---
+  flowchart TD
+    s_einstieg["Einstieg/Assets<br/>main · assets-data"]
+    s_praesentation["Präsentation · Phaser/DOM<br/>scenes · ui · sfx"]
+    s_anwendung["Anwendung/Persistenz<br/>game · runtime · devpanel · store"]
+    s_domaene["pure Domäne<br/>alles übrige unter src/"]
+    x_phaser{{"Phaser"}}
+    s_einstieg <--> s_praesentation
+    s_einstieg --> s_anwendung
+    s_einstieg --> s_domaene
+    s_praesentation --> s_anwendung
+    s_praesentation --> s_domaene
+    s_anwendung --> s_domaene
+    s_einstieg -.-> x_phaser
+    s_praesentation -.-> x_phaser
+    classDef engine fill:#d7e8c6,stroke:#4f7a3a,color:#1f2a17
+    classDef extern fill:#e6e1d6,stroke:#6b6455,color:#2b2118,stroke-dasharray:4 3
+    class s_praesentation engine
+    class x_phaser extern
+  ```
+
+  Alle 9 erlaubten Richtungen sind genutzt.
+
+  <!-- GEN:schichten-ist END -->
+
+  </details>
 - **📦 Content-as-Data + Check-DSL.** Quests, Dialoge, NPCs und Quiz-Karten sind **Daten** (JSON), kein hartcodiertes TypeScript – pro Region/NPC eine Datei statt eines Monolithen. Quest-Bedingungen werden über eine deklarative **Check-DSL** ausgedrückt. So kostet neuer Inhalt keinen Code-Eingriff und der Build bleibt schnell.
 - **💾 Versionierte Persistenz – der Save bricht nie.** Spielstände laufen über eine SaveStore-Schicht auf **IndexedDB** (kein 5-MB-localStorage-Limit mehr). Jede Formatänderung bekommt einen `version`-Bump + Migrationskette; Quest-Fortschritt persistiert per **sprechender ID**, nicht per Index, sodass eingeschobene oder umsortierte Quests keinen bestehenden Stand verschieben. „Was live geht, darf nie einen Spielstand kaputtmachen" ist eine harte Regel.
 - **🔒 `strict` TypeScript, kein `any`.** Die ganze Codebasis (inkl. Tests und Build-Config) steht auf `"strict": true`; `@typescript-eslint/no-explicit-any` ist ein **Fehler**, der den Build blockt. Die wenigen bewusst nötigen Ausnahmen tragen eine begründete Disable-Zeile.

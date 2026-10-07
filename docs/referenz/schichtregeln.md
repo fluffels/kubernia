@@ -4,8 +4,8 @@ Die [Repo-Landkarte](repo-landkarte.md) sagt, **wo** ein Modul liegt; diese Tabe
 
 | Wenn du hier arbeitest | Schicht | Darf importieren | ❌ Verboten (hart, `check:arch`) |
 |---|---|---|---|
-| `src/sim/*`, `src/content/*`, `src/world/*`, `src/core/*`, `src/hud/*`, `src/types.ts` … (= alles unter `src/`, das **nicht** in den drei Zeilen darunter steht) | **pure Domäne** | nur andere pure Domäne | `phaser`, `scenes`/`ui`/`sfx` |
-| `src/game/*`, `src/runtime.ts`, `src/devpanel.ts`, `src/store/*` | **Anwendung/Persistenz** | pure Domäne (nur „nach unten") | `phaser`, `scenes`/`ui`/`sfx` |
+| `src/sim/*`, `src/content/*`, `src/world/*`, `src/core/*`, `src/hud/*`, `src/types.ts` … (= alles unter `src/`, das **nicht** in den drei Zeilen darunter steht) | **pure Domäne** | nur andere pure Domäne | `phaser`, `scenes`/`ui`/`sfx`, Anwendung/Persistenz, Einstieg |
+| `src/game/*`, `src/runtime.ts`, `src/devpanel.ts`, `src/store/*` | **Anwendung/Persistenz** | pure Domäne (nur „nach unten") | `phaser`, `scenes`/`ui`/`sfx`, Einstieg |
 | `src/scenes/*`, `src/ui/*`, `src/sfx.ts` | **Präsentation** | alles (nach unten offen) | *(keine Import-Regel — aber ACL beachten, s.u.)* |
 | `src/main.ts`, `src/assets-data.ts` | **Einstieg/Assets** | alles (bootet Phaser + Szenen) | *(bewusst ausgenommen)* |
 
