@@ -9,8 +9,8 @@
  * ../state und das KubectlHost-Interface (./host). Aufgerufen aus dem
  * kubectl-Dispatch (../kubectl.ts).
  */
-import type { ApplyEffect, ArgoApp, Deployment, RbacSubject } from "../state";
-import { addDeployment, removeDeployment, scaleDeployment, addStatefulSet, removeStatefulSet, replaceDeploymentPod, restartStatefulPod } from "../workload";
+import type { ApplyEffect, ArgoApp, RbacSubject } from "../state";
+import { addDeployment, removeDeployment, addStatefulSet, removeStatefulSet, replaceDeploymentPod, restartStatefulPod } from "../workload";
 // Argo-CD-Reconcile/-Klon liegen seit #378 bei der argocd-Familie in ../argocd – `kubectl apply -f`
 // einer Application zieht/kloniert den Soll direkt darüber (statt über eine Host-Methode).
 import { argoReconcile, cloneChildSpec } from "../argocd";
@@ -18,6 +18,7 @@ import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { sameRbac } from "../rbac";
 import { flagValue, multiFlag } from "../util"; // clusterIP entfällt: Service läuft jetzt über host._makeService (#507)
 import { admitPod } from "./security";
+import { applyDeployment } from "./apply-deployment";
 import { fileEffects, type ManifestVerb } from "../manifest/registry";
 import type { KubectlHost } from "./host";
 
@@ -358,64 +359,6 @@ export function kubectlDelete(host: KubectlHost, t: string[]) {
  * Pod-Security-Sonderfälle). Gibt er `void`/`undefined` zurück, läuft die Kette weiter.
  */
 type ApplyHandler = (host: KubectlHost, eff: ApplyEffect, out: string[]) => string | void;
-
-/** Ein bereits bestehendes Deployment deklarativ nach-konfigurieren (idempotentes apply).
- *  Eine geänderte SA-Zuordnung (spec.serviceAccountName, #132) oder Replikazahl (spec.replicas,
- *  #1139, über `scaleDeployment`) ist „configured", sonst „unchanged". */
-function reconfigureDeployment(host: KubectlHost, existing: Deployment, effDep: NonNullable<ApplyEffect["deployment"]>, out: string[]): void {
-  let changed = false;
-  if (effDep.serviceAccountName && existing.serviceAccountName !== effDep.serviceAccountName) {
-    existing.serviceAccountName = effDep.serviceAccountName;
-    changed = true;
-  }
-  if (existing.replicas !== effDep.replicas) {
-    scaleDeployment(existing, effDep.replicas, host.clock, host.rng);
-    changed = true;
-  }
-  out.push("deployment.apps/" + effDep.name + (changed ? " configured" : " unchanged"));
-}
-
-/** Ein neues Deployment aus dem Manifest bauen und die optionalen Pod-Template-Felder
- *  (SA / Container-Port / Ephemeral-Storage / eigenes Image) übernehmen. Gibt bei
- *  Pod-Security-Abweisung (#126) den Fehlertext zurück (early return in `kubectlApply`). */
-function createDeploymentFromManifest(host: KubectlHost, effDep: NonNullable<ApplyEffect["deployment"]>, out: string[]): string | void {
-  // Pod-Security-Admission (#126): unsichere Pods werden unter baseline/restricted
-  // schon beim Anlegen abgewiesen – der Rest des Manifests wird nicht angewandt.
-  const denied = admitPod(host, effDep.name, effDep.securityContext);
-  if (denied) return host._err(denied, "Ergänze im Manifest einen passenden securityContext (z.B. runAsNonRoot: true) oder senke die enforce-Stufe.");
-  const dep = host._makeDeployment(effDep.name, effDep.image, effDep.replicas);
-  // ServiceAccount-Identität aus dem Pod-Template übernehmen (#132); fehlt sie, bleibt
-  // es die default-SA (Feld undefined).
-  if (effDep.serviceAccountName) dep.serviceAccountName = effDep.serviceAccountName;
-  // Container-Port aus dem Pod-Template (#164): nötig für den targetPort-Abgleich beim curl.
-  if (effDep.containerPort !== undefined) dep.containerPort = effDep.containerPort;
-  // Ephemeral-Storage aus dem Pod-Template (#240): emptyDir-Volume, Limit, Zusatznutzung, Node-Pin.
-  if (effDep.node !== undefined) dep.node = effDep.node;
-  if (effDep.emptyDir) dep.emptyDir = { data: effDep.emptyDir.data || "", usedMi: effDep.emptyDir.usedMi || 0 };
-  if (effDep.ephemeralLimit !== undefined) dep.ephemeralLimit = effDep.ephemeralLimit;
-  if (effDep.ephemeralUsedMi !== undefined) dep.ephemeralUsedMi = effDep.ephemeralUsedMi;
-  // initContainer aus dem Pod-Template (#485): füllt beim Ausrollen das emptyDir vor; der (bei
-  // Doppelablage doppelte) Vorbereitungs-Peak entscheidet über die ephemeral-storage-Eviction.
-  if (effDep.initContainer) dep.initContainer = { fillsMi: effDep.initContainer.fillsMi ?? 0, doubleStage: !!effDep.initContainer.doubleStage };
-  // Eigenes Image (#164, Werft-Capstone): ist es noch nicht lokal gebaut/gezogen, landet
-  // der Pod im ImagePullBackOff – genau wie im echten Cluster. needsBuild markiert: heilt
-  // von selbst, sobald 'docker build'/'docker pull' das Image bereitstellt.
-  if (effDep.requireBuiltImage && !host._imageAvailable(effDep.image)) {
-    dep.broken = { type: "imagepull", badImage: effDep.image, needsBuild: true };
-  }
-  addDeployment(host, dep);
-  out.push("deployment.apps/" + effDep.name + " created");
-  if (dep.broken) out.push("💡 Pod im ImagePullBackOff: das Image '" + effDep.image + "' gibt es noch nicht. Erst 'docker build -t " + effDep.image + " .', dann 'kubectl rollout restart deployment " + effDep.name + "'.");
-}
-
-const applyDeployment: ApplyHandler = (host, eff, out) => {
-  const effDep = eff.deployment;
-  if (!effDep) return;
-  const existing = host.deployments.find(d => d.name === effDep.name);
-  // Deklarativ: bestehendes Deployment nach-konfigurieren, sonst neu aus dem Manifest bauen.
-  if (existing) return reconfigureDeployment(host, existing, effDep, out);
-  return createDeploymentFromManifest(host, effDep, out);
-};
 
 const applyService: ApplyHandler = (host, eff, out) => {
   const effSvc = eff.service;

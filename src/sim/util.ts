@@ -123,3 +123,13 @@ export function parseMem(spec: string): number | null {
   if (unit === "Gi" || unit === "G") return n * 1024;
   return n; // Mi / M ~ als Mi behandeln (didaktisch genau genug)
 }
+
+/** CPU-Angabe wie "250m", "1", "0.5" in Milli-Cores umrechnen (null bei Unsinn). Ganze und
+ *  gebrochene Cores (höchstens 3 Nachkommastellen, kleiner geht nicht) werden ×1000 genommen. */
+export function parseCpuMilli(spec: string): number | null {
+  const milli = spec.match(/^(\d+)m$/);
+  if (milli) return parseInt(milli[1], 10);
+  const cores = spec.match(/^(\d+)(?:\.(\d{1,3}))?$/);
+  if (!cores) return null;
+  return parseInt(cores[1], 10) * 1000 + (cores[2] ? parseInt(cores[2].padEnd(3, "0"), 10) : 0);
+}

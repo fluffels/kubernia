@@ -63,6 +63,7 @@ const bigScenario: Scenario = {
     name: "kasse", image: "nginx", replicas: 2, broken: null,
     envFrom: { configMaps: ["app-config"], secrets: ["db-secret"] },
     cpuHeavy: true, containerPort: 8080,
+    memLimit: 300, cpuLimitMilli: 250, securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false },
     node: "ahoi-worker-1", emptyDir: { data: "tmp-data", usedMi: 50 },
     ephemeralLimit: 500, ephemeralUsedMi: 120,
     initContainer: { fillsMi: 80, doubleStage: true },
@@ -145,4 +146,25 @@ test("jedes Sim-Feld ist entweder ClusterState (oben geprüft) oder als transien
     "neues Sim-Feld gefunden, das weder in CLUSTER_STATE_FIELDS noch in TRANSIENT_SIM_FIELDS " +
     "einsortiert ist – snapshot()/reset() darauf prüfen und hier einordnen",
   ).toEqual([]);
+});
+
+test("Pod-Template-Felder memLimit/cpuLimitMilli/securityContext überleben Szenario, Snapshot und Merge (#1300)", () => {
+  const expected = { memLimit: 300, cpuLimitMilli: 250, securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false } };
+  const sim = new KQSim(bigScenario);
+  expect(sim.deployments[0]).toMatchObject(expected); // das Szenario füllt sie (nicht nur der Roundtrip)
+  const snap = JSON.parse(JSON.stringify(sim.snapshot())) as Scenario;
+  expect(snap.deployments?.[0]).toMatchObject(expected);
+  expect(new KQSim(snap).deployments[0]).toMatchObject(expected);
+  // mergeScenario legt ein fehlendes Deployment mit denselben Feldern an
+  const merged = new KQSim();
+  merged.mergeScenario({ deployments: [{ name: "kasse", image: "nginx", replicas: 1, ...expected }] });
+  expect(merged.deployments[0]).toMatchObject(expected);
+});
+
+test("snapshot(): ein Deployment ohne Limits/securityContext serialisiert sie nicht als Werte", () => {
+  const sim = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1 }] });
+  const d = sim.snapshot().deployments?.[0];
+  expect(d?.memLimit).toBeUndefined();
+  expect(d?.cpuLimitMilli).toBeUndefined();
+  expect(d?.securityContext).toBeUndefined();
 });

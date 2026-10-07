@@ -52,7 +52,7 @@ import { makeRng, DEFAULT_SEED } from "./core/rng";
 import { resourceName, InvalidResourceNameError, rfc1123ErrorText, RFC1123_TIP } from "./sim/names";
 import { sameRbac } from "./sim/rbac";
 import { assertClusterInvariants, warnClusterInvariants } from "./sim/invariants";
-import { scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod } from "./sim/workload";
+import { scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, seedPodTemplate } from "./sim/workload";
 import { provisionNode } from "./sim/nodes";
 import { renderHelp } from "./hud/helptext";
 
@@ -258,7 +258,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     // Prod-Build). Dev/Test: wirft ClusterInvariantError → sichtbarer Fehler im Terminal;
     // Prod: console.error, kein Wurf → Verletzung sichtbar in Devtools, Spiel läuft weiter.
     invariantChecks: boolean = true;
-    // Alert-Verlauf der Sitzung (Observability #109). Wie memLimit ein reines
+    // Alert-Verlauf der Sitzung (Observability #109). Ein reines
     // Laufzeit-Feld: NICHT serialisiert – Alerts leiten sich aus dem Cluster-Zustand
     // ab, nur der firing→resolved-Übergang braucht ein kurzes Gedächtnis.
     _firingAlerts!: Set<string>;   // brennt gerade
@@ -328,6 +328,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
         const dep = this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy);
         if (d.containerPort !== undefined) dep.containerPort = d.containerPort; // #164
         this._seedEphemeral(dep, d); // node/emptyDir/ephemeral-storage (#240)
+        seedPodTemplate(dep, d); // Limits + securityContext (#1300), nach dem 64er-Default des OOM-Falls
         return dep;
       });
     }
@@ -730,6 +731,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
           const dep = this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy);
           if (d.containerPort !== undefined) dep.containerPort = d.containerPort; // #164
           this._seedEphemeral(dep, d); // node/emptyDir/ephemeral-storage (#240)
+          seedPodTemplate(dep, d); // Limits + securityContext (#1300)
           addDeployment(this, dep); // #577: über die Workload-Aggregat-SSOT statt roher Push
         }
       }
@@ -783,6 +785,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
           // Ephemeral-Storage (#240): emptyDir/Limit/Nutzung/Node-Pin überleben den Reload; `evicted`
           // wird beim Laden ohnehin neu abgeleitet, daher nicht serialisiert.
           node: d.node, emptyDir: d.emptyDir ? Object.assign({}, d.emptyDir) : undefined, ephemeralLimit: d.ephemeralLimit, ephemeralUsedMi: d.ephemeralUsedMi,
+          memLimit: d.memLimit, cpuLimitMilli: d.cpuLimitMilli, securityContext: d.securityContext ? { ...d.securityContext } : undefined, // #1300
           initContainer: d.initContainer ? Object.assign({}, d.initContainer) : undefined })),
         // services/ingresses/networkPolicies/serviceMonitors/prometheusRules/grafana* über die
         // Resource-Registry serialisieren (#499) – flacher Klon, gespiegelt zu reset/mergeScenario.
