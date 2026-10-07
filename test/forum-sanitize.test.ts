@@ -1,8 +1,8 @@
 /* Forum-Text-Entschärfung (#531/#902) — Prompt-Injection-/Supply-Chain-Härtung des
  * Harness. Die Action forum-inbox.yml erzeugt aus JEDER neuen GitHub-Discussion
  * automatisch ein `forum`-Issue, das ein Coding-Agent (per /forum-Skill) abarbeitet
- * — der EINZIGE Pfad, auf dem unvertrauter externer Text automatisiert in die
- * Agenten-Warteschlange gelangt. Dieser Test sichert die Sanitize-Funktionen gegen
+ * — ein Pfad, auf dem unvertrauter externer Text automatisiert in die
+ * Agenten-Warteschlange gelangt (weitere Kanäle: docs/sicherheit-agenten.md). Dieser Test sichert die Sanitize-Funktionen gegen
  * die konkreten Injection-/Aufbläh-Muster ab (Red-Green: verfälscht man die Regeln,
  * wird er rot).
  *

@@ -44,6 +44,7 @@
     "/scripts/langfuse-takt.mjs",
     "/scripts/board-takt.mjs",
     "/scripts/sammelticket-anlegen.mjs",
+    "/scripts/fremdtext.mjs",
     "/scripts/haupt-sync.mjs",
     "/scripts/lens-edit-guard.mjs",
     "/.agents/",
