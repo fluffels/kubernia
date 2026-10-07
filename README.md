@@ -115,7 +115,7 @@ Ein Agent nimmt **genau ein** Ticket vom Board und bringt es bis zum Merge. Dabe
 - **🔌 MCP, gezielt statt global.** Nur projektbezogene Server, etwa für Pixel-Art und die Browser-Prüfung; die vollständige Liste steht im Inventar.
 - **🚧 Leitplanken ohne Freigabe-Schritt.** Auch Änderungen an Harness und Gates mergt der Agent selbst, sobald CI und Review grün sind. Die Kontrolle läuft über eine Audit-Spur: ein Audit-Kommentar nennt Was, Warum und den Revert-Weg ([ADR 0014](docs/adr/0014-leitplanken-ohne-label-riegel.md)).
 - **📏 Messen mit Langfuse.** Ein Plugin erfasst jeden Agentenlauf, ein Messskript und ein wöchentlicher Takt ([ADR 0016](docs/adr/0016-langfuse-takt-woechentlich.md)) machen Kosten und Auffälligkeiten sichtbar.
-- **♻️ Lebende Doku.** Zählbares und Aufzählungen stehen nicht von Hand im Text, sondern kommen aus Generatoren und werden vom Gate `check:docgen` geprüft ([ADR 0017](docs/adr/0017-lebende-doku-generierte-abschnitte.md)).
+- **♻️ Lebende Doku.** Zählbares und Aufzählungen stehen nicht von Hand im Text, sondern kommen aus Generatoren und werden vom Gate `check:docgen` geprüft ([ADR 0017](docs/adr/0017-lebende-doku-generierte-abschnitte.md)); wie man das in ein fremdes Repo überträgt, steht in [harness-transfer.md](docs/harness-transfer.md).
 - **📐 ADRs statt nachträglicher Rechtfertigung.** Grundsatzentscheidungen werden als [Architecture Decision Record](docs/adr/) festgehalten, mit den verworfenen Alternativen; die Zeitleiste unten wird aus ihnen erzeugt.
 
 Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdateien, daher immer aktuell):
@@ -193,6 +193,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 | 07.10.2026 | [ADR 0017](/docs/adr/0017-lebende-doku-generierte-abschnitte.md): Lebende Doku — generierte Abschnitte, und ein Diagramm ist eine Regel |
 | 07.10.2026 | [ADR 0018](/docs/adr/0018-content-chunks-je-datei.md): Content-Chunks je Datei — der Spielcode-Chunk wächst nicht mehr mit dem Inhalt |
 | 07.10.2026 | [ADR 0019](/docs/adr/0019-langfuse-plugin-im-user-scope.md): Das Langfuse-Plugin bleibt auch im User-Scope aktiv |
+| 08.10.2026 | [ADR 0020](/docs/adr/0020-architekturmodell-likec4.md): Architekturmodell LikeC4 — zweite Ableitung derselben SSOTs |
 
 <!-- GEN:zeitleiste END -->
 
@@ -310,6 +311,7 @@ Kubernia ist bewusst so gebaut, dass es **so groß wie Stardew Valley** werden k
   | `npm run check:docmap` | `verify` | jede `src/`-Datei ist in einem Tiefendoc erwähnt, die Landkarte kann nicht leise veralten |
   | `npm run check:docdrift` | `verify` | dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien |
   | `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein |
+  | `npm run check:c4` | `verify` | LikeC4-Modell: validiert, formatiert; Schichten, Phaser, Schicht-Kanten und Top-Level-Module stimmen mit `scripts/layers.cjs` und `src/` überein |
   | `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo |
   | `npm run check:lockfile` | `verify` | Lockfile passt zur `package.json` |
   | `npm run check:diffsize` | `verify` | Slice-Größe (Dateien und Zeilen gegen die Merge-Base) |

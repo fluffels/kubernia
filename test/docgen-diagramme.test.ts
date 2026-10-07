@@ -171,6 +171,11 @@ describe("Platzhalter: Rot-Fälle", () => {
     rot(ALLE_CHECKS, /bypassActors muss eine Liste/, basis({ ".github/ruleset-main-schutz.json": JSON.stringify({ name: "x", requiredChecks: ["a"] }) }));
     rot("${ruleset:name}", /name fehlt/, basis({ ".github/ruleset-main-schutz.json": JSON.stringify({ requiredChecks: ["a"], bypassActors: [] }) }));
   });
+  test("required-check: ohne config.diagramme.ciWorkflows gibt es keinen festen Standardpfad (#1373)", () => {
+    const ohne = { ...config, diagramme: { ...(config.diagramme as Cfg), ciWorkflows: undefined } } as Cfg;
+    assert.throws(() => ersetze(ALLE_CHECKS, basis(), ohne), /config\.diagramme\.ciWorkflows fehlt/);
+    assert.equal(ersetze("kein Check genannt", basis(), ohne), "kein Check genannt");
+  });
   test("required-check: wer einen nennt, nennt alle (neuer Kontext im Ruleset macht die Vorlage rot)", () => {
     rot("${required-check:Tests, Typecheck & Builds}", /Required Check "Security-Audit \(npm audit\)" aus dem Ruleset-Spiegel fehlt in der Vorlage/);
     assert.equal(ersetze("kein Check genannt"), "kein Check genannt");
