@@ -94,3 +94,20 @@ describe("Matrix: Kernfälle in beiden Dialekten (Produktion gegen Tests)", () =
     });
   }
 });
+
+describe("Dialekt an den Rekursionsstellen (#1316, Review R1)", () => {
+  test("bash -c liest seinen String im Bash-Dialekt, auch wenn das Tool PowerShell ist", () => {
+    fragt("bash -c 'echo \"`" + DEL + "`\"'", "powershell");
+    fragt("bash -c 'GH=\"gh api\"; r=`$GH -X DELETE repos/o/r/issues/1`'", "powershell");
+    laeuft(String.raw`bash -c 'gh issue comment 1 --body "a \"; ` + DEL + String.raw`\" b"'`, "powershell");
+  });
+
+  test("$( … ) behält den äußeren Dialekt: PowerShell-Pfad mit Backslash im Ersetzungsausdruck", () => {
+    fragt(String.raw`Write-Output "$(Set-Location "C:\dev\"; ${DEL})"`, "powershell");
+  });
+
+  test("der Dialekt leckt nicht aus einer Rekursion in den Rest des Befehls", () => {
+    fragt("pwsh -Command 'echo hi'; echo \"`" + DEL + "`\"", "bash");
+    fragt(String.raw`pwsh -Command 'echo hi'; gh issue comment 1 --body "a \"; ` + DEL + String.raw`\" b"; ` + DEL, "bash");
+  });
+});

@@ -427,6 +427,7 @@ describe("Sabotage im eigenen Lens-Worktree, Fixes erst nach allen Berichten (#1
 
   test("der Workflow-Hinweis der Test-Lens trägt dieselbe Regel, der Cleanup räumt kq-<nr>-lens-* mit auf", () => {
     assert.ok(beschreibtLensWorktree(workflow), "kubernia-ticket.js beschreibt den Lens-Worktree nicht");
+    assert.match(workflow, /NIE im Feature-Worktree/);
     assert.match(workflow, /kq-\$\{nr\}-lens-\*/);
   });
 

@@ -211,6 +211,8 @@ describe("Absicherung der vier Stellen aus dem Review-Pass (#1316 Z2)", () => {
 
   test("`&` als Aufrufoperator an jeder Stelle, `.` nur an Kommandoposition", () => {
     fragt("GH=gh; foo | & $GH api -X DELETE x");
+    fragt('GH="gh api"; $r = & $GH -X DELETE repos/o/r/issues/1'); // ohne `api` hinter der Variablen: nur die `&`-Regel greift
+    fragt('GH="gh api"; echo hi 2>&1 & $GH -X DELETE repos/o/r/issues/1');
     fragt("GH=gh; foo 2>&1 && x; & $GH api -X DELETE x");
     fragt("GH=gh; . $GH api -X DELETE x");
     laeuft("jq . $F repos/o/r/issues/1 # gh api");

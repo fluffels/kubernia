@@ -594,6 +594,8 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(ask("b=/usr/bin/bash; $b -c 'git commit -m x'"), true);
     assert.equal(ask('$SH -c "git push"'), true);
     assert.equal(ask("$b -c 'echo hi'"), false);
+    assert.equal(ask("$b -c 'npm run push'"), false, "ohne git kein Anlass");
+    assert.equal(ask("$b -c 'echo commit'"), false);
     assert.equal(ask("$b -c 'git status'"), false);
     assert.equal(ask("$b -c 'git commit -m x'", wt), false, "im Worktree kein Anlass");
   });

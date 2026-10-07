@@ -281,6 +281,7 @@ describe("Aufrufoperator mit Variable: `& $b -c '…'`, `& $g commit` (#1316 Z1b
   });
 
   test("eine nicht auflösbare Variable als Kommando ist fail-closed, sobald git commit/push im Statement steht", () => {
+    blockt(`$g='echo'; $g=(Get-Command bash).Source; & $g -c 'git commit -m x'`);
     blockt(`$b=(Get-Command bash).Source; & $b -c 'git commit -m x'`);
     blockt("& $unbekannt git commit -m x");
     blockt(`. $b -c 'git push'`);
@@ -291,6 +292,10 @@ describe("Aufrufoperator mit Variable: `& $b -c '…'`, `& $g commit` (#1316 Z1b
     laeuft(`$b='bash'; & $b -c 'git commit -m x'`, WT);
     laeuft(`$g='git'; & $g commit -m x`, WT);
     laeuft(`& $x --version`);
+    laeuft(`& $unbekannt git commit -m x`, WT);
+    laeuft(`& $x -c 'npm run push'`);
+    laeuft(`& $x -c 'echo commit'`);
+    laeuft(`$g='echo'; $g=(Get-Command bash).Source; & $g -c 'git status'`);
     laeuft(`$x='Get-ChildItem'; & $x`);
     laeuft(`$b='bash'; & $b -c 'git status'`);
     laeuft(`$g='git'; & $g status`);

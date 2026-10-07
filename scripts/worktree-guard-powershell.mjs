@@ -208,6 +208,7 @@ function zuweisung(toks, vars) {
   if (!z) return false;
   const ex = expandiere({ value: z.wert, literal: z.literal }, vars);
   if (!/[$()]/.test(ex)) vars.set(z.name.toLowerCase(), ex);
+  else vars.delete(z.name.toLowerCase()); // eine spätere nicht auflösbare Zuweisung überschreibt den alten Literalwert
   return true;
 }
 
