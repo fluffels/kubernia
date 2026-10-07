@@ -17,6 +17,8 @@
  *      (für #1064 der Großteil), mit Patch Calls und Tokens identisch. Die Baseline misst
  *      deshalb über das Transkript (docs/model-routing.md §5).
  *
+ * Projekt-Brain-Kennzahlen (#1205): Tool-Events beider Quellen → `brain` (scripts/brain-metrics.mjs).
+ *
  * Bewusst NICHT in `npm run verify` (liest lokale Transkripte bzw. braucht Netz
  * und gh-Auth). Die Auswertung ist pure/exportiert und ohne IO getestet; die
  * dünnen IO-Helfer (Dateisuche, gh) sind bewusst ungetestet.
@@ -28,6 +30,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseNachweis } from "./slice-override.mjs";
+import { brainMetrics, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
 
 /** Lenses pro Review-Runde für Läufe ohne Runden-Marker (vor #1265 liefen immer alle drei Brillen, #1012). */
 export const LENSES_PER_ROUND = 3;
@@ -219,11 +222,11 @@ function sockelOf(allCalls, windowCalls) {
  * Review-Runden zählen nur Subagenten mit Calls IM Ticket-Fenster — sonst
  * erbte ein Ticket die Lenses eines früheren Tickets derselben Session.
  */
-export function summarize({ calls, questions = 0 }, bounds = {}) {
+export function summarize({ calls, questions = 0, events }, bounds = {}, prFiles = null) {
   const window = windowCalls(calls, bounds);
   const sorted = phaseRows(window);
   const ticket = window.filter((w) => w.phase !== "Nachlauf").map((w) => w.call);
-  return {
+  const out = {
     rows: sorted,
     // Summe = das Ticket; der Nachlauf nach dem Merge wird gezeigt, aber nicht mitgezählt.
     total: totalOf(sorted.filter((r) => r.phase !== "Nachlauf")),
@@ -239,6 +242,8 @@ export function summarize({ calls, questions = 0 }, bounds = {}) {
     },
     sockel: sockelOf(calls, ticket),
   };
+  if (events) out.brain = brainMetrics({ events, rows: sorted }, bounds, prFiles);
+  return out;
 }
 
 /**
@@ -393,14 +398,18 @@ export function readTranscriptSession(sessionId, projectsRoot) {
   const candidates = readdirSync(projectsRoot).map((d) => join(projectsRoot, d, `${sessionId}.jsonl`));
   const main = candidates.find((p) => existsSync(p));
   if (!main) throw new Error(`Kein Transkript für Session ${sessionId} unter ${projectsRoot}`);
-  const all = callsFromTranscript(readFileSync(main, "utf8"));
+  const mainText = readFileSync(main, "utf8");
+  const all = callsFromTranscript(mainText);
+  all.events = toolEventsFromTranscript(mainText);
   const dir = main.replace(/\.jsonl$/, "") + "/subagents";
   if (existsSync(dir)) {
     for (const f of readdirSync(dir).filter((n) => n.endsWith(".jsonl"))) {
       const metaPath = join(dir, f.replace(/\.jsonl$/, ".meta.json"));
       const meta = existsSync(metaPath) ? JSON.parse(readFileSync(metaPath, "utf8")) : {};
       const sub = { id: f, agentType: meta.agentType, description: meta.description, parentAgentId: meta.parentAgentId };
-      const r = callsFromTranscript(readFileSync(join(dir, f), "utf8"), sub);
+      const text = readFileSync(join(dir, f), "utf8");
+      const r = callsFromTranscript(text, sub);
+      all.events.push(...toolEventsFromTranscript(text));
       all.calls.push(...r.calls);
       all.questions += r.questions;
     }
@@ -466,12 +475,16 @@ export function callsFromLangfuse(observations) {
 }
 
 /** Alle Observations einer Session über die v2-API holen (cursor-paginiert). */
-export async function fetchSessionObservations(sessionId, { baseUrl, publicKey, secretKey, fetchImpl = fetch }) {
+export async function fetchSessionObservations(
+  sessionId,
+  { baseUrl, publicKey, secretKey, fetchImpl = fetch, type, fields = "core,basic,model,usage,metadata" },
+) {
   const auth = "Basic " + Buffer.from(`${publicKey}:${secretKey}`).toString("base64");
   const out = [];
   let cursor;
   do {
-    const q = new URLSearchParams({ sessionId, limit: "1000", fields: "core,basic,model,usage,metadata" });
+    const q = new URLSearchParams({ sessionId, limit: "1000", fields });
+    if (type) q.set("type", type);
     if (cursor) q.set("cursor", cursor);
     const res = await fetchImpl(`${baseUrl.replace(/\/$/, "")}/api/public/v2/observations?${q}`, {
       headers: { Authorization: auth },
@@ -520,7 +533,7 @@ export function nachweisAusCommits(commits) {
 }
 
 function prInfo(pr) {
-  const p = ghJson(["pr", "view", String(pr), "--json", "createdAt,mergedAt,headRefName,commits"]);
+  const p = ghJson(["pr", "view", String(pr), "--json", "createdAt,mergedAt,headRefName,commits,files"]);
   const runs = ghJson([
     "api",
     `repos/{owner}/{repo}/actions/workflows/ci.yml/runs?branch=${encodeURIComponent(p.headRefName)}&status=failure&event=pull_request&per_page=100`,
@@ -530,6 +543,7 @@ function prInfo(pr) {
     mergedAt: p.mergedAt,
     failedPushes: countFailedPushes(runs.workflow_runs),
     nachweis: nachweisAusCommits(p.commits),
+    files: p.files ?? [],
   };
 }
 
@@ -557,6 +571,7 @@ export function renderMarkdown(summary, loop = {}) {
   const merged =
     loop.mergedAt === undefined ? "–" : mergedWithoutRework(loop.mergedAt, loop.failedPushes) ? "ja" : "nein";
   const dash = (v) => (v === null || v === undefined ? "–" : fmt(v));
+  const brain = summary.brain;
   const sk = summary.sockel;
   const mc = summary.medianContext;
   lines.push(
@@ -574,6 +589,12 @@ export function renderMarkdown(summary, loop = {}) {
   if (summary.cacheRebuilds) {
     const cr = summary.cacheRebuilds;
     lines.push(`Cache-Neuaufbauten: ${cr.count} (≈ ${fmt(cr.cacheWriteTokens)} Tokens Cache-Write)`);
+  }
+  if (brain) {
+    const pr = brain.prBrain ? `${brain.prBrain.pages} Seiten (+${brain.prBrain.additions}/−${brain.prBrain.deletions})` : "–";
+    lines.push(
+      `Projekt-Brain: gelesen ${brain.brainReads}× (${brain.brainPages} Seiten, ≈ ${fmt(brain.brainReadTokens)} Tokens) · Suche ${brain.searchCalls} Calls (≈ ${fmt(brain.searchTokens)} Tokens) · Recherche-Subagenten ${fmt(brain.rechercheTokens)} Tokens · Calls bis erster Edit ${dash(brain.callsBeforeFirstEdit)} · Brain-Pflege ${brain.brainWrites} Schreibzugriffe, PR ${pr}`,
+    );
   }
   lines.push(`Preise Stand ${PRICES_STAND}`);
   if (summary.unpriced > 0) lines.push(`⚠️ ${summary.unpriced} Call(s) ohne Preis (Modell nicht in PRICES oder Zeitpunkt fehlt) — Kosten unvollständig.`);
@@ -607,6 +628,7 @@ function merge(parts) {
   return {
     calls: parts.flatMap((p) => p.calls),
     questions: parts.reduce((n, p) => n + p.questions, 0),
+    events: parts.some((p) => p.events) ? parts.flatMap((p) => p.events ?? []) : undefined,
   };
 }
 
@@ -619,8 +641,13 @@ async function loadRun(args) {
   if (!publicKey || !secretKey) throw new Error("--langfuse braucht LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY.");
   const baseUrl = process.env.LANGFUSE_BASE_URL ?? "http://localhost:3000";
   const parts = [];
-  for (const s of args.sessions)
-    parts.push(callsFromLangfuse(await fetchSessionObservations(s, { baseUrl, publicKey, secretKey })));
+  for (const s of args.sessions) {
+    const part = callsFromLangfuse(await fetchSessionObservations(s, { baseUrl, publicKey, secretKey }));
+    // Tool-Events brauchen Input (`io`), die Token-Abfrage bleibt schlank.
+    const tools = await fetchSessionObservations(s, { baseUrl, publicKey, secretKey, type: "TOOL", fields: "core,basic,metadata,io" });
+    part.events = toolEventsFromLangfuse(tools);
+    parts.push(part);
+  }
   return merge(parts);
 }
 
@@ -640,7 +667,7 @@ async function main() {
     prCreatedAt: loop.prCreatedAt,
     mergedAt: loop.mergedAt,
   };
-  const summary = summarize(run, bounds);
+  const summary = summarize(run, bounds, loop.files ?? null);
   if (args.json) console.log(JSON.stringify({ bounds, loop, ...summary }, null, 2));
   else console.log(renderMarkdown(summary, loop));
 }

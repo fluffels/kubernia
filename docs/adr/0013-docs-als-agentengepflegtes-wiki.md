@@ -5,7 +5,7 @@
 
 ## Status
 
-**Akzeptiert.** Präzisiert [ADR 0012](0012-harness-autonomie-audit-spur.md) an einer Stelle: ADR 0012 hielt fest, dass kein separates „Projekt-Brain“ neben dem Repo angelegt wird und das Repo selbst der Wissensspeicher ist. Dieser ADR bleibt dabei, schließt aber die Lücke, die das offen ließ: **wie** das Repo als Wissensspeicher gepflegt wird, nachdem die repo-externe Brain-Pflege entfallen ist. Die Umsetzung läuft über Folgetickets (siehe unten); dieser ADR selbst ändert noch keine Regel. **Sobald die Regeln in [AGENTS.md](../../AGENTS.md) stehen, ist AGENTS.md maßgeblich** — dieser ADR dokumentiert dann nur noch das *Warum*, keine zweite Regelquelle.
+**Akzeptiert.** Präzisiert durch [ADR 0015](0015-projekt-brain.md) (#1205): Begriff Projekt-Brain, Prinzipien, Token-Ziel, Messung. Präzisiert [ADR 0012](0012-harness-autonomie-audit-spur.md) an einer Stelle: ADR 0012 hielt fest, dass kein separates „Projekt-Brain“ neben dem Repo angelegt wird und das Repo selbst der Wissensspeicher ist. Dieser ADR bleibt dabei, schließt aber die Lücke, die das offen ließ: **wie** das Repo als Wissensspeicher gepflegt wird, nachdem die repo-externe Brain-Pflege entfallen ist. Die Umsetzung läuft über Folgetickets (siehe unten); dieser ADR selbst ändert noch keine Regel. **Sobald die Regeln in [AGENTS.md](../../AGENTS.md) stehen, ist AGENTS.md maßgeblich** — dieser ADR dokumentiert dann nur noch das *Warum*, keine zweite Regelquelle.
 
 ## Kontext
 
