@@ -32,6 +32,9 @@
     "/scripts/worktree-guard-hook.mjs",
     "/scripts/worktree-guard-powershell.mjs",
     "/scripts/stop-verify-hook.mjs",
+    "/scripts/umsetzer-abschluss.mjs",
+    "/scripts/cleanup-worktrees.mjs",
+    "/scripts/transkript.mjs",
     "/.agents/",
     "/docs/agent-harness*"
   ],

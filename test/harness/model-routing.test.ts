@@ -993,7 +993,7 @@ describe("Workflow-Pfad räumt Waisen auf wie der SubagentStop-Hook auf dem Skil
 describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
   /** Marker eines Textes: Code-Spans mit `echo "pflege: …"`, als Bash-Event gewertet. */
   const markerIn = (text: string, nr: string) => {
-    const treffer = [...text.matchAll(/`(echo "pflege: (?:start|ende) #[^"`]*")`/g)].map((m) => m[1].replace("<nr>", nr));
+    const treffer = [...text.matchAll(/`(echo "pflege: [^"`]*")`/g)].map((m) => m[1].replace("<nr>", nr));
     return treffer.map((command) => pflegeMarker({ tool: "Bash", input: { command } }));
   };
 
@@ -1001,8 +1001,11 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
     assert.deepEqual(markerIn(read(UMSETZER), "1"), ["start", "ende"]);
   });
 
-  test("Red-Green: ein verfälschter Marker wird nicht mehr erkannt", () => {
-    assert.notDeepEqual(markerIn(read(UMSETZER).replace('echo "pflege: start #<nr>"', 'echo "pflege: startklar #<nr>"'), "1"), ["start", "ende"]);
+  test("Red-Green: ein verfälschter Marker wird vom Messskript nicht mehr erkannt (#1331)", () => {
+    // Das Extraktionsmuster sortiert nicht mehr vor: allein `pflegeMarker` entscheidet.
+    const verfaelscht = read(UMSETZER).replace('echo "pflege: start #<nr>"', 'echo "pflege: startklar #<nr>"');
+    assert.deepEqual(markerIn(verfaelscht, "1"), [null, "ende"]);
+    assert.equal(pflegeMarker({ tool: "Bash", input: { command: 'echo "pflege: startklar #1"' } }), null);
   });
 
   test("Umsetzen-Prompt des Workflows trägt beide Marker, erkannt vom Messskript", async () => {
@@ -1010,6 +1013,46 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
     const prompt = aufrufe.find((a) => a.label === "umsetzen:#42")?.prompt ?? "";
     assert.deepEqual(markerIn(prompt, "42"), ["start", "ende"]);
     assert.match(prompt, /VOR dem abschließenden npm run verify/);
+  });
+
+  /** Der kanonische Satz im Kopf von anlaufstellen.md, ohne Backticks (das Workflow-Template trägt keine). */
+  const konvention = () => {
+    const m = /\*\*Lese-Konvention:\*\* erst hier die eine passende Seite wählen\. (.+?offset`\/`limit`\)\.)/.exec(read("docs/referenz/anlaufstellen.md"));
+    assert.ok(m, "kanonischer Satz in anlaufstellen.md fehlt");
+    return m[1].replace(/`/g, "");
+  };
+  const ohneBackticks = (t: string) => t.replace(/`/g, "");
+
+  test("Die Brain-Lese-Konvention steht wortgleich in Umsetzer, Lens und Workflow-Konstante (#1331)", () => {
+    const satz = konvention();
+    assert.match(satz, /Read-Tool.*nie per cat\/sed\/head\/Get-Content/);
+    for (const datei of [UMSETZER, ".claude/agents/kubernia-lens.md", ".claude/workflows/kubernia-ticket.js"])
+      assert.ok(ohneBackticks(read(datei)).includes(satz), `${datei} trägt den Satz aus anlaufstellen.md nicht wortgleich`);
+  });
+
+  test("Red-Green: eine um ein Wort abweichende Kopie fällt auf", () => {
+    const satz = konvention();
+    const gleich = (text: string) => text.includes(satz);
+    for (const datei of [UMSETZER, ".claude/agents/kubernia-lens.md", ".claude/workflows/kubernia-ticket.js"]) {
+      const text = ohneBackticks(read(datei));
+      assert.ok(gleich(text), datei);
+      assert.ok(!gleich(text.replace(satz, satz.replace("nie per", "nicht per"))), datei);
+    }
+  });
+
+  test("Der Merge-Prompt des Workflows verlangt gebündelte Befunde (#1331)", async () => {
+    const { aufrufe } = await workflowLauf({ runden: [{ architektur: { lens: "architektur", verdikt: "ok", findings: [], ausserhalbScope: ["Spiel-Befund A", "Spiel-Befund B"] } }] });
+    const prompt = aufrufe.find((a) => a.label === "cleanup:#42")?.prompt ?? "";
+    assert.match(prompt, /GEBÜNDELT/);
+    assert.match(prompt, /Teil-Akzeptanzkriterien/);
+    assert.match(prompt, /Kleinkram eine Zeile in einem passenden offenen Ticket/);
+  });
+
+  test("Planer prüft den Stand des Checkouts gegen origin/main (#1331)", () => {
+    const t = read(".claude/agents/kubernia-planner.md");
+    assert.match(t, /git diff --name-only HEAD origin\/main/);
+    assert.match(t, /MSYS_NO_PATHCONV=1 git show origin\/main:<pfad>/);
+    assert.match(read(".claude/skills/kubernia/SKILL.md"), /git diff --quiet HEAD origin\/main -- \.claude\/agents \.claude\/skills AGENTS\.md/);
   });
 
   test("Brain-Lese-Konvention steht in Umsetzer, Lens, Umsetzen- und Nachbessern-Prompt", async () => {

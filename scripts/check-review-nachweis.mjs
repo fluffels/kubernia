@@ -43,12 +43,13 @@ export const MAX_REVIEW_PAESSE = MAX_FIX_RUNDEN + 1;
 export const OVERRIDE_KEY = "KQ-Review-Override";
 
 const CODE_LENSES = ["architektur", "requirement-treue", "test-adaequanz"];
+const BEKANNTE_LENSES = [...CODE_LENSES, "doku"];
 
 /** Die Vorlage, die bei Rot ausgegeben wird (SSOT des Formats: docs/agent-harness.md §3a). */
 export const VORLAGE =
   `KQ-Plan: kubernia-planner\n` +
   `KQ-Review: head=<sha-des-zuletzt-reviewten-Stands> runden=<1..${MAX_REVIEW_PAESSE}> ` +
-  `lenses=<Brillen des vollen Passes (Runde 1), kommagetrennt> verdikt=ok`;
+  `lenses=architektur,requirement-treue,test-adaequanz verdikt=ok  (bei reinem Markdown-Diff: lenses=doku)`;
 
 /** Welche Brillen Runde 1 mindestens abdecken muss: nur `*.md` → doku, sonst die drei
  *  Code-Brillen. Leere oder kaputte Dateiliste → voller Code-Satz (fail-closed). Gleiche
@@ -88,7 +89,14 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice })
   const fehlend = pflicht.filter((l) => !review.lenses.includes(l));
   const codeVoll = CODE_LENSES.every((l) => review.lenses.includes(l));
   if (fehlend.length > 0 && !codeVoll) {
-    fehler.push(`KQ-Review: lenses fehlt ${fehlend.join(", ")} (Pflicht für diese Diff-Art: ${pflicht.join(", ")}).`);
+    fehler.push(
+      `KQ-Review: lenses fehlt ${fehlend.join(", ")} (Pflicht für diese Diff-Art: ${pflicht.join(", ")}). ` +
+        `Erwartet: lenses=${pflicht.join(",")} (kleingeschrieben, ASCII, ae/oe/ue statt Umlaute).`,
+    );
+  }
+  const unbekannt = review.lenses.filter((l) => !BEKANNTE_LENSES.includes(l));
+  if (unbekannt.length > 0) {
+    fehler.push(`KQ-Review: lenses enthält unbekannte Brille(n) ${unbekannt.join(", ")} (bekannt: ${BEKANNTE_LENSES.join(", ")}).`);
   }
   if (review.verdikt !== "ok") fehler.push(`KQ-Review: verdikt=${review.verdikt ?? "(fehlt)"} ist nicht ok.`);
   return fehler;

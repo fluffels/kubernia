@@ -36,6 +36,7 @@ type Call = {
   cost?: number | string | null;
   costParts?: Parts | null;
   subagent?: Sub | null;
+  session?: string;
 };
 type Run = { calls: Call[]; questions?: number };
 type Row = { phase: string; model: string; calls: number; input: number; cacheWrite: number; cacheRead: number; output: number; cost: number };
@@ -867,6 +868,32 @@ describe("token-baseline: readTranscriptSession (#1311)", () => {
     );
   });
 
+  test("Hauptagent-Marker im Transkript färben genau die Calls ihrer Session (Ende zu Ende, #1331)", () => {
+    const bash = (id: string, ts: string, command: string) =>
+      JSON.stringify({ type: "assistant", timestamp: ts, message: { content: [{ type: "tool_use", id, name: "Bash", input: { command } }] } });
+    mitSession(
+      (proj, id) =>
+        writeFileSync(
+          join(proj, `${id}.jsonl`),
+          [
+            zeile("x0", "2026-09-29T10:30:00Z"),
+            bash("a", "2026-09-29T11:00:00Z", 'echo "pflege: start #1"'),
+            zeile("x1", "2026-09-29T11:05:00Z"),
+            bash("b", "2026-09-29T11:10:00Z", 'echo "pflege: ende #1"'),
+            zeile("x2", "2026-09-29T11:20:00Z"),
+          ].join("\n") + "\n",
+        ),
+      (root) => {
+        const r = m.readTranscriptSession("sess-1", root) as Run & { events?: PEv[] };
+        assert.deepEqual([...new Set(r.calls.map((c) => c.session))], ["sess-1"]);
+        assert.ok(r.events?.length && r.events.every((e) => e.agent === "main:sess-1"), "Events tragen denselben Schlüssel wie die Calls");
+        const s = m.summarize(r, BOUNDS);
+        assert.equal(Object.fromEntries(s.rows.map((row) => [row.phase, row.calls]))["Pflege"], 1, "der Call zwischen den Markern");
+        assert.equal(s.pflegeUnpaired, 0);
+      },
+    );
+  });
+
   test("fehlende meta.json: der Subagent hat keinen Typ und fällt auf den Zeitschnitt", () => {
     mitSession(
       (proj, id) => {
@@ -955,6 +982,9 @@ describe("token-baseline: Nachweis, Zeitpunkt, Cache-Neuaufbau (#1309)", () => {
     assert.equal(m.countCacheRebuilds(haupt).count, 0, "30 min < 60 min (1h-TTL des Hauptchats)");
     const hauptLang = [lauf("2026-10-05T10:00:00Z"), lauf("2026-10-05T11:30:00Z", { cacheRead: 0, cacheWrite: 500 })];
     assert.equal(m.countCacheRebuilds(hauptLang).count, 1);
+    // #1331: Hauptagent-Calls mit Session-Schlüssel bekommen weiter die 60-Minuten-Grenze, nicht die 5 Minuten der Subagenten.
+    const hauptMitSession = haupt.map((c) => ({ ...c, session: "a" }));
+    assert.equal(m.countCacheRebuilds(hauptMitSession).count, 0, "30 min mit session: weiter Hauptagent");
     const gemischt = [
       lauf("2026-10-05T10:09:00Z", { subagent: umsetzer, cacheRead: 0, cacheWrite: 900 }),
       lauf("2026-10-05T10:00:00Z", { subagent: umsetzer }),
@@ -1072,6 +1102,34 @@ describe("token-baseline: Phase Pflege (#1099)", () => {
     const s = m.summarize({ calls, events: [marker("2026-09-29T09:00:00Z", "start")] }, { ...BOUNDS, from: "2026-09-29T10:00:00Z" });
     assert.equal(s.pflegeUnpaired, 0);
     assert.deepEqual(s.rows.map((r) => r.phase), ["Umsetzung"]);
+  });
+
+  test("Marker nach dem Merge (mergedAt) erzeugen kein Intervall und keine Warnzeile (#1331)", () => {
+    const calls = [call("2026-09-29T11:05:00Z", 2, { subagent: umsetzer })];
+    const s = m.summarize({ calls, events: [marker("2026-09-29T13:00:00Z", "start")] }, BOUNDS);
+    assert.equal(s.pflegeUnpaired, 0, "ein Start ab mergedAt (halboffen) liegt außerhalb des Ticket-Fensters");
+    const davor = m.summarize({ calls, events: [marker("2026-09-29T12:59:59Z", "start")] }, BOUNDS);
+    assert.equal(davor.pflegeUnpaired, 1, "Gegenprobe: eine Sekunde früher zählt");
+  });
+
+  test("zwei Hauptagent-Sessions mit verschränkten Markern ergeben zwei saubere Intervalle (#1331)", () => {
+    const hauptMarker = (session: string, ts: string, art: "start" | "ende"): PEv => marker(ts, art, `main:${session}`);
+    const events = [
+      hauptMarker("a", "2026-09-29T11:00:00Z", "start"),
+      hauptMarker("b", "2026-09-29T11:02:00Z", "start"),
+      hauptMarker("a", "2026-09-29T11:10:00Z", "ende"),
+      hauptMarker("b", "2026-09-29T11:12:00Z", "ende"),
+    ];
+    const calls = [
+      call("2026-09-29T11:05:00Z", 1, { session: "a" }),
+      call("2026-09-29T11:11:00Z", 1, { session: "b" }),
+      call("2026-09-29T11:11:00Z", 1, { session: "a" }), // a ist hier schon aus dem Intervall
+    ];
+    const s = m.summarize({ calls, events }, BOUNDS);
+    assert.equal(s.pflegeUnpaired, 0);
+    const phasen = Object.fromEntries(s.rows.map((r) => [r.phase, r.calls]));
+    assert.equal(phasen["Pflege"], 2);
+    assert.equal(phasen["Umsetzung"], 1);
   });
 
   test("Langfuse-Parität: Marker-TOOL unter dem Subagent-Span ergibt dieselbe Zuordnung", () => {

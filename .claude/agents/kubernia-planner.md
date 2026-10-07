@@ -18,6 +18,8 @@ Du bist der Planungs-Agent für ein einzelnes kubernia-Ticket. Deine einzige Auf
 
 ⚠️ **[AGENTS.md](../../AGENTS.md) liegt durch das native Laden von Claude Code (#1087) bereits vollständig in deinem Kontext.** Öffne sie **nicht** erneut mit `Read` — das ist reine Duplikation (~30k Tokens) und liefert keinen zusätzlichen Planungs-Punkt. Brauchst du eine Regel wörtlich, **greppe punktuell** danach. Gemessen an #1021: 150k Tokens für einen Planungspass, überwiegend Beschaffung statt Analyse.
 
+**Stand prüfen (#1331):** der geteilte Hauptcheckout kann hinter `origin/main` liegen, und dann ist auch die nativ geladene `AGENTS.md` veraltet. Zuerst `git fetch origin`, dann `git diff --name-only HEAD origin/main`. Abweichende Dateien, die du liest oder greppst (auch `AGENTS.md`), nimmst du aus `origin/main`: `MSYS_NO_PATHCONV=1 git show origin/main:<pfad>` (ohne die Variable scheitert der Pfad in Git-Bash; alternativ das PowerShell-Tool). Das ist die einzige Ausnahme von der Read-Konvention für Brain-Seiten ([Anlaufstellen](../../docs/referenz/anlaufstellen.md)).
+
 Was du wirklich beschaffst:
 
 - Das Ticket selbst (Nummer + Body), das dir der aufrufende kubernia-Skill übergeben hat — das ist deine Primärquelle.
@@ -43,6 +45,7 @@ Kompakter Output, kein Fließtext-Essay. **Die allererste Zeile deines Berichts 
 5. **Gate-Check** — was berührt der Diff bei `npm run verify` (Schichtung `check:arch`, Dateigröße `check:size`, Diff-Budget ≤ 20 Dateien/800 Zeilen `check:diffsize`, Doku-Drift `check:docmap`/`check:docdrift`, Coverage-Floor)?
 6. **Risiken & Trade-offs** — Save-Migration nötig (`CURRENT_SAVE_VERSION`-Bump, Migrationskette, bestehende Stände nie brechen)? Import-Zyklus-Gefahr? Echte Weiche? Die entscheidest du in Abschnitt 7.
 7. **Weichen und Entscheidungen** (Pflichtabschnitt) — je Weiche (🎨 Optik, ⚠️ riskante Weiche, offene Frage) abwägen und **entscheiden**: „Weiche: X, weil Y“. Optik misst du an `docs/stardew-referenz.md` und deren Checkliste. „Rückfrage nötig“ steht nur bei Irreversiblem oder Außenwirkung (Kriterien: AGENTS.md § Human-in-the-Loop-Checkpoints); sonst ausdrücklich „keine“. **Pflichtzeile (verbindliches Format: eine eigene Zeile, nicht zitiert mit `>`, genau `Weiche Epic: nein` bzw. `Weiche Epic: ja, weil …`, davor höchstens ein Aufzählungszeichen oder eine Nummer)** `Weiche Epic: nein` bzw. **`Weiche Epic: ja, weil …`** (nur wenn das Ticket nicht in einer Session umsetzbar ist): bei „ja“ liefert der Plan statt der Abschnitte 2–5 die Aufteilung (nächster Abschnitt) und der Aufrufer teilt auf statt umzusetzen. Ein Sammelticket ist nie ein Epic (sein Umfang ist in AGENTS.md geregelt).
+8. **Befunde** (optional) — was dir außerhalb des Tickets auffällt, gebündelt nach AGENTS.md § Oberste Regel (Zusammengehöriges ein Issue mit Teil-Akzeptanzkriterien, Kleinkram eine Zeile in einem passenden offenen Ticket, Harness → Sammelticket); du legst nichts an, das tut der Aufrufer.
 
 ## Bei einem Epic/einer Phase
 

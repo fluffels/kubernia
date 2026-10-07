@@ -167,9 +167,66 @@ describe("Nachweis-Hilfen des Workflows (#1309)", () => {
     assert.equal(reviewKonvergiert({ verifyGruen: true, blockierend: [], fehlend: ["doku"] }), false);
   });
 
+  type SchrittIn = { verifyGruen: boolean; blockierend: unknown[]; fehlend: string[]; paesse: number; verifyFixe: number; reviewRunden: number; maxVerifyFixe: number; maxReviewRunden: number };
+  const reviewSchritt = blockFunktion<(e: SchrittIn) => string>(hilfen, "reviewSchritt");
+  const MAX = { maxVerifyFixe: 3, maxReviewRunden: MAX_FIX_RUNDEN };
+  const schritt = (e: Partial<SchrittIn>) => reviewSchritt({ verifyGruen: true, blockierend: [], fehlend: [], paesse: 1, verifyFixe: 0, reviewRunden: 0, ...MAX, ...e });
+
+  test("reviewSchritt (#1331): die Schleifenentscheidung als Tabelle, Cap 2 Fix-Runden und 3 verify-Fixes", () => {
+    assert.equal(schritt({}), "konvergiert");
+    assert.equal(schritt({ blockierend: [{}] }), "nachbessern-review");
+    assert.equal(schritt({ blockierend: [{}], reviewRunden: 1 }), "nachbessern-review", "die zweite Fix-Runde ist erlaubt");
+    assert.equal(schritt({ blockierend: [{}], reviewRunden: 2 }), "review-handoff", "nach Cap 2 Hand-off, kein dritter Fix");
+    assert.equal(schritt({ fehlend: ["doku"] }), "lens-ausfall", "nur ein Lens-Ausfall: keine leere Fix-Runde");
+    assert.equal(schritt({ verifyGruen: false, paesse: 0 }), "nachbessern-verify", "rotes verify vor dem ersten Lens-Pass");
+    assert.equal(schritt({ verifyGruen: false, paesse: 0, verifyFixe: 2 }), "nachbessern-verify");
+    assert.equal(schritt({ verifyGruen: false, paesse: 0, verifyFixe: 3 }), "verify-handoff");
+    assert.equal(schritt({ verifyGruen: false, paesse: 0, reviewRunden: 2 }), "nachbessern-verify", "vor dem ersten Pass zählt der Review-Cap nicht");
+    assert.equal(schritt({ verifyGruen: false, paesse: 1, reviewRunden: 2 }), "review-handoff", "rotes verify nach einem Pass zählt gegen den Review-Cap");
+    assert.equal(schritt({ verifyGruen: false, paesse: 1, blockierend: [{}], reviewRunden: 0 }), "nachbessern-review");
+  });
+
   test("fehlendeLenses nennt nur die ohne Bericht (auch bei null-Einträgen)", () => {
     assert.deepEqual(normal(fehlendeLenses(["a", "b"], [{ lens: "a" }])), ["b"]);
     assert.deepEqual(normal(fehlendeLenses(["a"], [null as unknown as { lens: string }])), ["a"]);
     assert.deepEqual(normal(fehlendeLenses(["a"], [{ lens: "a" }])), []);
+  });
+});
+
+describe("Tolerantes Lesen der Brillen (#1331)", () => {
+  const lenses = (wert: string) => parseNachweis(`KQ-Review: head=${SHA} runden=1 lenses=${wert} verdikt=ok`).review?.lenses;
+  const bewerte = (wert: string, dateien = ["src/a.ts"]) =>
+    bewerteNachweis({ nachweis: parseNachweis(`KQ-Plan: kubernia-planner
+KQ-Review: head=${SHA} runden=1 lenses=${wert} verdikt=ok`), dateien, headBekannt: true, headImSlice: true });
+
+  test("Großschreibung, Leerzeichen nach Kommas und Umlaute werden normalisiert", () => {
+    assert.deepEqual(lenses("Architektur, Requirement-Treue, Test-Adäquanz"), ["architektur", "requirement-treue", "test-adaequanz"]);
+    assert.deepEqual(bewerte("Architektur, Requirement-Treue, Test-Adäquanz"), []);
+    assert.deepEqual(lenses("Requirement Treue"), ["requirement-treue"]);
+  });
+
+  test("die Felder dahinter werden nicht in die Brillen gezogen", () => {
+    const n = parseNachweis(`KQ-Review: lenses=architektur, doku verdikt=ok head=${SHA} runden=2`);
+    assert.deepEqual(n.review?.lenses, ["architektur", "doku"]);
+    assert.equal(n.review?.verdikt, "ok");
+    assert.equal(n.review?.runden, 2);
+  });
+
+  test("rot: eine Brille fehlt trotz Normalisierung, Fehlermeldung nennt den Erwartungswert", () => {
+    const f = bewerte("Architektur, Requirement-Treue").join(' ');
+    assert.match(f, /lenses fehlt test-adaequanz/);
+    assert.match(f, /Erwartet: lenses=architektur,requirement-treue,test-adaequanz/);
+    assert.match(bewerte("architektur", ["a.md"]).join(' '), /Erwartet: lenses=doku/);
+  });
+
+  test("rot: unbekannter Brillenname, auch neben vollem Satz", () => {
+    assert.match(bewerte("architektur,requirement-treue,test-adaequanz,foo").join(' '), /unbekannte Brille\(n\) foo/);
+  });
+
+  test("die letzte KQ-Review-Zeile gewinnt (Korrektur per weiterem Nachweis-Commit)", () => {
+    const text = `KQ-Review: head=${SHA} runden=1 lenses=Falsch verdikt=ok
+
+KQ-Review: head=${SHA} runden=1 lenses=doku verdikt=ok`;
+    assert.deepEqual(parseNachweis(text).review?.lenses, ["doku"]);
   });
 });

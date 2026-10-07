@@ -71,7 +71,7 @@ E-Mail in Dateien, Commits oder Kommentaren (AGENTS.md § Anonymität wahren).`
 const pflegeMarkerBefehl = (nr, art) => `echo "pflege: ${art} #${nr}"`
 
 /** Lese-Konvention für Brain-Seiten (#1205): `Read` statt Shell, damit die Messung und der Kontext stimmen. */
-const BRAIN_LESEN = `Brain-Seiten (docs/**.md) liest du nach dem Kopf von docs/referenz/anlaufstellen.md mit dem Read-Tool, große Seiten abschnittsweise mit offset/limit — nie per cat/sed/head/Get-Content.`
+const BRAIN_LESEN = `Brain-Seiten (docs/**.md) liest du mit dem Read-Tool, nie per cat/sed/head/Get-Content; große Seiten nur abschnittsweise (Überschrift greppen, dann Read mit offset/limit). Quelle: Kopf von docs/referenz/anlaufstellen.md.`
 
 const AUSWAHL_SCHEMA = {
   type: 'object',
@@ -178,7 +178,7 @@ const LENS_SCHEMA = {
     },
     ausserhalbScope: {
       type: 'array',
-      description: 'Aufgefallenes außerhalb des Ticket-Scopes, nicht inline gefixt — Harness-Befunde als Zeile im Sammelticket, eigenes Issue nur bei Spiel-/Inhalts-Befund oder Notfall (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets)',
+      description: 'Aufgefallenes außerhalb des Ticket-Scopes, nicht inline gefixt — Harness-Befunde als Zeile im Sammelticket, Issue nur bei Spiel-/Inhalts-Befund (gebündelt) oder Notfall (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets)',
       items: { type: 'string' },
     },
   },
@@ -422,6 +422,22 @@ function fehlendeLenses(erwartet, berichte) {
  */
 function reviewKonvergiert({ verifyGruen, blockierend, fehlend }) {
   return !!verifyGruen && (blockierend || []).length === 0 && (fehlend || []).length === 0
+}
+
+/**
+ * Entscheidung der Review-Schleife nach einem Pass (#1331), pure und getestet statt im Schleifenrumpf: `konvergiert` (weiter zum
+ * PR), `lens-ausfall` (nur eine Brille fehlt, nichts zu fixen: Hand-off), `verify-handoff` (vor dem ersten Lens-Pass nach
+ * `maxVerifyFixe` Fix-Versuchen weiter rot), `review-handoff` (nach `maxReviewRunden` Fix-Runden nicht konvergiert),
+ * sonst `nachbessern-verify` (rotes verify vor dem ersten Lens-Pass, zählt gegen den Festgefahren-Cap) bzw.
+ * `nachbessern-review` (Fix-Runde nach einem Lens-Pass). `paesse` = bisher gelaufene Lens-Pässe.
+ */
+function reviewSchritt({ verifyGruen, blockierend, fehlend, paesse, verifyFixe, reviewRunden, maxVerifyFixe, maxReviewRunden }) {
+  if (reviewKonvergiert({ verifyGruen, blockierend, fehlend })) return 'konvergiert'
+  if (verifyGruen && (blockierend || []).length === 0) return 'lens-ausfall'
+  const vorLens = paesse === 0
+  if (vorLens && verifyFixe >= maxVerifyFixe) return 'verify-handoff'
+  if (!vorLens && reviewRunden >= maxReviewRunden) return 'review-handoff'
+  return vorLens ? 'nachbessern-verify' : 'nachbessern-review'
 }
 
 /** Zähler für den Nachweis: ein Pass mehr; die Brillen merkt nur ein VOLLER Pass, ein Delta-Pass nie. */
@@ -859,7 +875,7 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
   § Tests gegen False Positives absichern (Red-Green).
 - ⭐ Oberste Regel (Stardew-Valley-Größe) — sie steht über allen Konventionen.
   Was auffällt, aber nicht zum Ticket gehört: nicht inline mitfixen, sondern festhalten
-  (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Notfälle ausgenommen), Spiel-/Inhalts-Befund → Issue.
+  (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Notfälle ausgenommen), Spiel-/Inhalts-Befund → gebündeltes Issue.
 - § Doku aktuell halten ist Teil von „fertig" — im SELBEN Branch.
 - § Projekt-Brain pflegen (AGENTS.md § Doku aktuell halten), zum Schluss VOR dem abschließenden npm run verify
   und dem Commit: ist Übertragbares entstanden, nach Wissensart einordnen. Eingerahmt von
@@ -983,7 +999,7 @@ Du reviewst, du änderst NICHTS und mergst NICHTS. Findings müssen konkret und 
 sein — mit Ort (datei.ts:zeile), kein „könnte man schöner machen" ohne Fundstelle.
 „blockierend" ist für echte Fehler/Regelverstöße reserviert, nicht für Geschmack.
 Was dir außerhalb des Ticket-Scopes auffällt, gehört nach ausserhalbScope (Harness → Zeile im
-Sammelticket, Spiel-/Inhalts-Befund oder Notfall → eigenes Issue) — nicht in die Findings.`,
+Sammelticket, Spiel-/Inhalts-Befund oder Notfall → gebündeltes Issue) — nicht in die Findings.`,
             // Modell und Effort der Lens stehen im Frontmatter von kubernia-lens (#1209), hier nur der Effort
             // (muss gleich sein, bewacht von test/harness/model-routing.test.ts).
             { label: `lens:${lens.key}:r${runde}`, phase: 'Review', schema: LENS_SCHEMA, ...REVIEW },
@@ -1063,22 +1079,32 @@ Sammelticket, Spiel-/Inhalts-Befund oder Notfall → eigenes Issue) — nicht in
       )
     }
 
-    if (reviewKonvergiert({ verifyGruen, blockierend, fehlend })) {
+    // Vor dem ersten Lens-Pass (paesse === 0) kann nur ein rotes verify hierher führen: eigener Zähler, eigene Grenze.
+    const schritt = reviewSchritt({
+      verifyGruen,
+      blockierend,
+      fehlend,
+      paesse: nachweisWerte.paesse,
+      verifyFixe,
+      reviewRunden,
+      maxVerifyFixe: MAX_FIX_VERSUCHE,
+      maxReviewRunden: MAX_REVIEW_RUNDEN,
+    })
+    const vorLens = schritt === 'nachbessern-verify'
+    if (schritt === 'konvergiert') {
       log(`Review konvergiert nach ${reviewRunden} Fix-Runde(n): keine blockierenden Findings, verify grün.`)
       break
     }
-    if (verifyGruen && blockierend.length === 0) {
+    if (schritt === 'lens-ausfall') {
       // Nur ein Lens-Ausfall, nichts zu fixen: sofort Hand-off statt einer leeren Fix-Runde.
       log(`⛔ Lens ${fehlend.join(', ')} lieferte zweimal kein Ergebnis (ungeprüft) — Hand-off an die Maintainerin (kein PR).`)
       break
     }
-    // Vor dem ersten Lens-Pass (paesse === 0) kann nur ein rotes verify hierher führen: eigener Zähler, eigene Grenze.
-    const vorLens = nachweisWerte.paesse === 0
-    if (vorLens && verifyFixe >= MAX_FIX_VERSUCHE) {
+    if (schritt === 'verify-handoff') {
       log(`⛔ verify nach ${MAX_FIX_VERSUCHE} Fix-Versuchen weiter rot, noch kein Lens-Pass — Hand-off an die Maintainerin (kein PR).`)
       break
     }
-    if (!vorLens && reviewRunden >= MAX_REVIEW_RUNDEN) {
+    if (schritt === 'review-handoff') {
       log(`⛔ Review nach ${MAX_REVIEW_RUNDEN} Fix-Runden nicht konvergiert — Hand-off an die Maintainerin (kein PR).`)
       break
     }
@@ -1363,8 +1389,10 @@ ${
   ausserhalbScope.length
     ? `Zusätzlich: der Review hat Punkte AUSSERHALB des Ticket-Scopes gefunden. Ordne jeden
 ein (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets): ein Spiel-/Inhalts-Befund oder
-Notfall (roter main, Security, Datenverlust) wird ein neues Issue (ohne Assignee, passendes
-area:-Label, beide GraphQL-Calls zum Einsortieren — AGENTS.md § Neue Issues sofort ins Board
+Notfall (roter main, Security, Datenverlust) wird ein Issue, zusammengehörige Befunde (gleiches
+Subsystem, gleicher Fehlertyp, gemeinsamer Lösungsweg) GEBÜNDELT zu EINEM Issue mit
+Teil-Akzeptanzkriterien, Kleinkram eine Zeile in einem passenden offenen Ticket (AGENTS.md
+§ Oberste Regel; ohne Assignee, passendes area:-Label, beide GraphQL-Calls zum Einsortieren — AGENTS.md § Neue Issues sofort ins Board
 einsortieren; vorher per gh issue list auf Duplikate prüfen). Alles zum Harness (Defekt,
 Härtung, Kosmetik, Wunsch) wird eine Zeile im ungeclaimten Sammelticket
 „Harness-Härtung (gesammelt)" (fehlt es: anlegen auf der Position laut AGENTS.md, docs/ticket-reihenfolge.md):
