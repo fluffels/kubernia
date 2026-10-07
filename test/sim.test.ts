@@ -138,7 +138,7 @@ test("#867 BROKEN_STATUS: alle fünf Broken-Typen haben ein eigenes, korrektes L
   assert.notEqual(BROKEN_STATUS.oomkilled.label, "Pending");
 });
 
-test("#867 BROKEN_STATUS treibt _podStatus (kubectl get pods) für alle fünf Typen", () => {
+test("#867 BROKEN_STATUS treibt deploymentPodStatus (kubectl get pods) für alle fünf Typen", () => {
   const brokens: Broken[] = [
     { type: "imagepull" }, { type: "crashloop" }, { type: "pending" },
     // needsSecret auf ein fehlendes Secret gesetzt – sonst heilt "kubectl get pods"

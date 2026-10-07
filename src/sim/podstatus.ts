@@ -3,27 +3,48 @@
  * `describe pod`, Welt-Kisten und HUD-Inspect lesen alle von hier. Der Status eines
  * StatefulSet-Pods kommt aus `podAddress` (eingeplant ja/nein, dieselbe Quelle wie Endpoints
  * und Metriken), nicht aus einer eigenen PVC-Abfrage. Eine neue Workload-Art ist hier eine
- * neue `switch`-Variante ohne `default`: der Rückgabetyp erzwingt die Behandlung.
+ * neue `switch`-Variante; `default: assertNever` erzwingt sie beim Kompilieren und wirft zur
+ * Laufzeit statt still `undefined` zu liefern. Die Ableitung je Deployment (Evicted, gesund,
+ * `BROKEN_STATUS`) und die Restarts-Regel stehen je genau einmal hier.
  *
- * Phaser-frei (pure Domäne): ./state, ./pods (nur Typ), ./endpoints; kein Zyklus. */
+ * Phaser-frei (pure Domäne): ./state, ./pods (nur Typ), ./endpoints, ../core/assert; kein Zyklus. */
 import { BROKEN_STATUS, type ClusterState, type Deployment, type PodStatus } from "./state";
+import { assertNever } from "../core/assert";
 import type { ClusterPod } from "./pods";
 import { podAddress } from "./endpoints";
 
-/** Was die Ableitung braucht: PVCs und die Deployment-Statustabelle (Sim und KubectlHost erfüllen es). */
-export type PodStatusHost = Pick<ClusterState, "pvcs"> & { _podStatus(d: Deployment): PodStatus };
+/** Was die Ableitung braucht: die PVCs (Sim und KubectlHost erfüllen es). */
+export type PodStatusHost = Pick<ClusterState, "pvcs">;
+
+/** Status, Ready, Restarts und Label der Pods eines Deployments. Evicted überschreibt alles (#240):
+ *  der kubelet hat den Pod beendet, er läuft nicht und ist nicht bereit. Sonst gesund oder der
+ *  `BROKEN_STATUS`-Eintrag (eine Kopie: Aufrufer dürfen sie ändern). */
+export function deploymentPodStatus(d: Pick<Deployment, "evicted" | "broken">): PodStatus {
+  if (d.evicted) return { status: "Evicted", ready: "0/1", restarts: 0, label: "Evicted" };
+  if (!d.broken) return { status: "Running", ready: "1/1", restarts: 0, label: "Running" };
+  return { ...BROKEN_STATUS[d.broken.type] };
+}
+
+/** Bereit, wenn alle Container bereit sind (`n/n` mit n > 0, auch bei Sidecars). */
+export function isReady(st: Pick<PodStatus, "ready">): boolean {
+  const m = /^(\d+)\/(\d+)$/.exec(st.ready);
+  return m !== null && m[1] === m[2] && Number(m[2]) > 0;
+}
 
 /** Status, Ready und Restarts eines Pods, wie `kubectl get pods` sie zeigt. */
 export function clusterPodStatus(host: PodStatusHost, c: ClusterPod): PodStatus {
   switch (c.owner) {
     case "Deployment": {
-      const st = host._podStatus(c.dep);
-      return { status: st.status, ready: st.ready, restarts: st.restarts || c.pod.restarts };
+      const st = deploymentPodStatus(c.dep);
+      return { ...st, restarts: st.restarts || c.pod.restarts };
     }
     case "StatefulSet": {
       const pending = podAddress(c, host.pvcs) === null;
-      return { status: pending ? "Pending" : "Running", ready: pending ? "0/1" : "1/1", restarts: c.pod.restarts };
+      const status = pending ? "Pending" : "Running";
+      return { status, ready: pending ? "0/1" : "1/1", restarts: c.pod.restarts, label: status };
     }
+    default:
+      return assertNever(c, "clusterPodStatus");
   }
 }
 
@@ -42,15 +63,15 @@ export interface PodView {
 
 export function podView(host: PodStatusHost, c: ClusterPod): PodView {
   const st = clusterPodStatus(host, c);
-  const healthy = st.ready === "1/1";
+  const healthy = isReady(st);
   const base = { name: c.pod.name as string, healthy, restarts: st.restarts, created: c.pod.created };
   switch (c.owner) {
-    case "Deployment": {
-      const label = !c.dep.evicted && c.dep.broken ? BROKEN_STATUS[c.dep.broken.type].label : st.status;
-      return { ...base, kind: "Deployment", workload: c.dep.name, image: c.dep.image, label };
-    }
+    case "Deployment":
+      return { ...base, kind: "Deployment", workload: c.dep.name, image: c.dep.image, label: st.label };
     case "StatefulSet":
-      return { ...base, kind: "StatefulSet", workload: c.sts.name, image: c.sts.image, label: st.status };
+      return { ...base, kind: "StatefulSet", workload: c.sts.name, image: c.sts.image, label: st.label };
+    default:
+      return assertNever(c, "podView");
   }
 }
 
