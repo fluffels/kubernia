@@ -11,7 +11,8 @@
  * Zeilen am Zeilenanfang einer Commit-Message, gleiches Muster wie `KQ-Diffsize-Override`:
  *
  *   KQ-Plan: kubernia-planner            |  KQ-Plan: ohne — <Begründung>
- *   KQ-Review: head=<sha> runden=<1..3> lenses=<Brillen des vollen Passes (Runde 1), kommagetrennt> verdikt=ok
+ *   KQ-Review: head=<sha> runden=<1..3> lenses=<Brillen des vollen Passes (Runde 1), kommagetrennt>
+ *                 blocker=<brille>:<n>,… verdikt=ok   (blocker optional, #1123: Runde-1-Blocker je Brille)
  *
  * Geprüft wird Konsistenz und Existenz, nicht Wahrheit: der Nachweis ist Selbstauskunft.
  * Aus einer stillen Auslassung wird so eine bewusste Falschangabe; die unabhängige Prüfung
@@ -54,7 +55,9 @@ export const BEKANNTE_LENSES = [...CODE_LENSES, "doku"];
 export const VORLAGE =
   `KQ-Plan: kubernia-planner\n` +
   `KQ-Review: head=<sha-des-zuletzt-reviewten-Stands> runden=<1..${MAX_REVIEW_PAESSE}> ` +
-  `lenses=architektur,requirement-treue,test-adaequanz verdikt=ok  (bei reinem Markdown-Diff: lenses=doku)`;
+  `lenses=architektur,requirement-treue,test-adaequanz ` +
+  `blocker=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> verdikt=ok  ` +
+  `(bei reinem Markdown-Diff: lenses=doku blocker=doku:<n>)`;
 
 /** Welche Brillen Runde 1 mindestens abdecken muss: nur `*.md` → doku, sonst die drei
  *  Code-Brillen. Leere oder kaputte Dateiliste → voller Code-Satz (fail-closed). Gleiche
@@ -63,6 +66,28 @@ export function pflichtLenses(dateien) {
   if (!Array.isArray(dateien) || dateien.length === 0) return [...CODE_LENSES];
   if (dateien.some((d) => typeof d !== "string" || d.trim() === "")) return [...CODE_LENSES];
   return dateien.every((d) => /\.md$/i.test(d.trim())) ? ["doku"] : [...CODE_LENSES];
+}
+
+/** Prüft das optionale Feld `blocker=` (#1123): je Brille die Zahl der Runde-1-Blocker. Fehlt es, ist die
+ *  Zeile gültig (alte Zeilen). Pure. */
+function bewerteBlocker(review) {
+  const fehler = [];
+  const eintraege = review.blocker;
+  if (eintraege.length === 0) return ["KQ-Review: blocker ist leer (erwartet: blocker=<brille>:<n>,… je Brille der Runde 1)."];
+  const gesehen = new Set();
+  for (const { lens, n } of eintraege) {
+    if (!BEKANNTE_LENSES.includes(lens)) fehler.push(`KQ-Review: blocker nennt unbekannte Brille "${lens}" (bekannt: ${BEKANNTE_LENSES.join(", ")}).`);
+    if (!Number.isInteger(n) || n < 0) fehler.push(`KQ-Review: blocker=${lens}:${n} ist keine ganze Zahl ≥ 0.`);
+    if (gesehen.has(lens)) fehler.push(`KQ-Review: blocker nennt die Brille ${lens} doppelt.`);
+    gesehen.add(lens);
+  }
+  if (review.runden === 1) {
+    const summe = eintraege.reduce((a, e) => a + (Number.isInteger(e.n) ? e.n : 0), 0);
+    if (summe > 0) fehler.push("KQ-Review: Runde 1 meldete Blocker, aber es gab kein Fix-Pass (runden=1).");
+    const gleich = eintraege.length === review.lenses.length && review.lenses.every((l) => gesehen.has(l));
+    if (!gleich) fehler.push(`KQ-Review: runden=1, aber die Brillen von blocker (${[...gesehen].join(",")}) weichen von lenses (${review.lenses.join(",")}) ab.`);
+  }
+  return fehler;
 }
 
 /** Bewertet einen geparsten Nachweis. `headBekannt`: der SHA lässt sich als Commit auflösen;
@@ -109,6 +134,7 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
   if (unbekannt.length > 0) {
     fehler.push(`KQ-Review: lenses enthält unbekannte Brille(n) ${unbekannt.join(", ")} (bekannt: ${BEKANNTE_LENSES.join(", ")}).`);
   }
+  if (review.blocker !== null) fehler.push(...bewerteBlocker(review));
   if (review.verdikt !== "ok") fehler.push(`KQ-Review: verdikt=${review.verdikt ?? "(fehlt)"} ist nicht ok.`);
   return fehler;
 }
@@ -160,7 +186,13 @@ export function checkReviewNachweis({ runGit, env = process.env } = {}) {
       }
     }
     const fehler = bewerteNachweis({ nachweis, dateien, headBekannt: headSha !== null, headImSlice, konfliktMerges });
-    return { ok: fehler.length === 0, fehler, invalid: ov.invalid, commitsNachReview };
+    return {
+      ok: fehler.length === 0,
+      fehler,
+      invalid: ov.invalid,
+      commitsNachReview,
+      blockerFehlt: nachweis.review?.blocker === null,
+    };
   } catch (e) {
     return { ok: false, fehler: [`git-Fehler beim Prüfen des Nachweises: ${e instanceof Error ? e.message : String(e)}`] };
   }
@@ -183,6 +215,7 @@ function main() {
     if (typeof r.commitsNachReview === "number") {
       console.log(`• ${r.commitsNachReview} Commit(s) nach dem reviewten Stand (inkl. Nachweis-Commit).`);
     }
+    if (r.blockerFehlt) console.log("• Hinweis: blocker= fehlt (Messung #1123).");
     console.log("✔ Review-/Plan-Nachweis ok.");
     return;
   }

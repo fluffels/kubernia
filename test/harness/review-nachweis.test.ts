@@ -113,6 +113,14 @@ describe("(e) Texte verweisen auf das Skript", () => {
   }
 });
 
+describe("(e2) Das Feld blocker= ist an allen Stellen benannt (#1123)", () => {
+  test("Format-SSOT und Skill nennen das Feld, die Vorlage des Prüfskripts auch", () => {
+    assert.match(read("docs/agent-harness.md"), /blocker=architektur:<n>/);
+    assert.match(read(".claude/skills/review-lenses/SKILL.md"), /`blocker`/);
+    assert.match(read("scripts/check-review-nachweis.mjs"), /blocker=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n>/);
+  });
+});
+
 describe("(f) „Cap 2“ heißt immer Fix-Runden (#1309)", () => {
   /** Zeilen, die „Cap 2“ ohne „Fix-Runde“ nennen: ohne die Präzisierung liest man „2 Pässe“. */
   const unpraezise = (text: string) => text.split(/\r?\n/).filter((z) => z.includes("Cap 2") && !z.includes("Fix-Runde"));
@@ -133,9 +141,9 @@ describe("(f) „Cap 2“ heißt immer Fix-Runden (#1309)", () => {
 });
 
 describe("Nachweis-Hilfen des Workflows (#1309)", () => {
-  type Stand = { paesse: number; ersteLenses: string[] | null };
+  type Stand = { paesse: number; ersteLenses: string[] | null; ersteBlocker?: Record<string, number> | null };
   const hilfen = workflowBlock("// ── Review-Nachweis (#1270) — Anfang", "// ── Review-Nachweis (#1270) — Ende").block;
-  const nachweisStand = blockFunktion<(s: Stand, e: { modus: string; berichte: { lens: string }[] }) => Stand>(hilfen, "nachweisStand");
+  const nachweisStand = blockFunktion<(s: Stand, e: { modus: string; berichte: { lens: string; findings?: { schwere: string }[] }[] }) => Stand>(hilfen, "nachweisStand");
   const nachweisFuerPr = blockFunktion<(e: { konvergiert: boolean; head?: string; stand: Stand; plan: unknown }) => string>(hilfen, "nachweisFuerPr");
   const reviewKonvergiert = blockFunktion<(e: { verifyGruen: boolean; blockierend: unknown[]; fehlend: string[] }) => boolean>(hilfen, "reviewKonvergiert");
   const fehlendeLenses = blockFunktion<(erwartet: string[], berichte: { lens: string }[]) => string[]>(hilfen, "fehlendeLenses");
@@ -144,11 +152,29 @@ describe("Nachweis-Hilfen des Workflows (#1309)", () => {
 
   test("ein voller Pass merkt die Brillen, ein Delta-Pass ersetzt sie nie, jeder zählt als Pass", () => {
     const nachVoll = nachweisStand({ paesse: 0, ersteLenses: null }, { modus: "voll", berichte: DREI3 });
-    assert.deepEqual(normal(nachVoll), { paesse: 1, ersteLenses: DREI3.map((b) => b.lens) });
+    assert.deepEqual(normal(nachVoll), { paesse: 1, ersteLenses: DREI3.map((b) => b.lens), ersteBlocker: { architektur: 0, "requirement-treue": 0, "test-adaequanz": 0 } });
     const nachDelta = nachweisStand(nachVoll, { modus: "delta", berichte: [{ lens: "architektur" }] });
-    assert.deepEqual(normal(nachDelta), { paesse: 2, ersteLenses: DREI3.map((b) => b.lens) });
+    assert.deepEqual(normal(nachDelta), normal({ ...nachVoll, paesse: 2 }));
     const nachWiederholung = nachweisStand(nachDelta, { modus: "voll", berichte: [{ lens: "doku" }] });
-    assert.deepEqual(normal(nachWiederholung), { paesse: 3, ersteLenses: ["doku"] }, "ein voller Wiederholungspass ersetzt sie");
+    assert.deepEqual(normal(nachWiederholung), { paesse: 3, ersteLenses: ["doku"], ersteBlocker: normal(nachVoll.ersteBlocker) }, "ein voller Wiederholungspass ersetzt die Brillen, nie die Runde-1-Blocker");
+  });
+
+  test("blocker (#1123): nur der erste Pass zählt, nur [blockierend]-Findings, Roundtrip ist gültig", () => {
+    const f = (schwere: string) => ({ schwere });
+    const r1 = DREI3.map((b) => ({ ...b, findings: b.lens === "architektur" ? [f("blockierend"), f("hinweis"), f("blockierend")] : [f("hinweis")] }));
+    const s1 = nachweisStand({ paesse: 0, ersteLenses: null }, { modus: "voll", berichte: r1 });
+    assert.deepEqual(normal(s1.ersteBlocker), { architektur: 2, "requirement-treue": 0, "test-adaequanz": 0 });
+    const s2 = nachweisStand(s1, { modus: "delta", berichte: [{ lens: "architektur", findings: [f("blockierend")] }] });
+    assert.deepEqual(normal(s2.ersteBlocker), normal(s1.ersteBlocker), "ein Delta-Pass überschreibt Runde 1 nie");
+    const text = nachweisFuerPr({ konvergiert: true, head: SHA, stand: s2, plan: "P" });
+    assert.match(text, /lenses=architektur,requirement-treue,test-adaequanz blocker=architektur:2,requirement-treue:0,test-adaequanz:0 verdikt=ok/);
+    const n = parseNachweis(text);
+    assert.deepEqual(bewerteNachweis({ nachweis: n, dateien: ["src/x.ts"], headBekannt: true, headImSlice: true }), []);
+    const ohne = nachweisFuerPr({ konvergiert: true, head: SHA, stand: { paesse: 2, ersteLenses: ["doku"] }, plan: "P" });
+    assert.ok(!ohne.includes("blocker="), "ohne ersteBlocker kein Feld");
+    const leer = nachweisFuerPr({ konvergiert: true, head: SHA, stand: { paesse: 2, ersteLenses: ["doku"], ersteBlocker: {} }, plan: "P" });
+    assert.ok(!leer.includes("blocker="), "ein leeres Objekt (keine Brille lieferte in Pass 1) schreibt kein leeres Feld");
+    assert.deepEqual(bewerteNachweis({ nachweis: parseNachweis(leer), dateien: ["docs/a.md"], headBekannt: true, headImSlice: true }), []);
   });
 
   test("nachweisFuerPr: leer ohne Konvergenz, <SHA> ohne Head, sonst parsebar", () => {

@@ -403,12 +403,12 @@ function planSagtEpic(plan) {
 // ── Plan-Weiche Epic (#1309) — Ende
 
 // ── Review-Nachweis (#1270) — Anfang
-// Die zwei Commit-Zeilen, die check-review-nachweis.mjs in der PR-CI verlangt (Format: docs/agent-harness.md
-// §3a). Pure und aus Code-Werten gebaut, nicht vom Agenten formuliert; ein Wächter-Test koppelt die
-// Ausgabe an den Parser des Prüfskripts. `lenses` sind die Brillen des vollen Passes (Runde 1), `runden` die Zahl der Pässe.
-function nachweisZeilen({ head, runden, lenses, plan }) {
+// Die zwei Commit-Zeilen der PR-CI (Format: docs/agent-harness.md §3a), aus Code-Werten gebaut, nicht vom Agenten formuliert;
+// ein Wächter-Test koppelt sie an den Parser. `lenses`: Brillen des vollen Passes (Runde 1), `runden`: Zahl der Pässe, `blocker` (#1123): Runde-1-Blocker je Brille.
+function nachweisZeilen({ head, runden, lenses, blocker, plan }) {
   const planZeile = plan ? 'KQ-Plan: kubernia-planner' : 'KQ-Plan: ohne — Planer lieferte keinen Plan'
-  return `${planZeile}\nKQ-Review: head=${head} runden=${runden} lenses=${lenses.join(',')} verdikt=ok`
+  const bl = blocker && Object.keys(blocker).length ? ` blocker=${Object.entries(blocker).map(([l, n]) => `${l}:${n}`).join(',')}` : ''
+  return `${planZeile}\nKQ-Review: head=${head} runden=${runden} lenses=${lenses.join(',')}${bl} verdikt=ok`
 }
 
 /** Welche der erwarteten Brillen im Pass keinen Bericht geliefert haben (#1309): ein Ausfall ist ungeprüft, nicht ok. */
@@ -441,15 +441,17 @@ function reviewSchritt({ verifyGruen, blockierend, fehlend, paesse, verifyFixe, 
   return vorLens ? 'nachbessern-verify' : 'nachbessern-review'
 }
 
-/** Zähler für den Nachweis: ein Pass mehr; die Brillen merkt nur ein VOLLER Pass, ein Delta-Pass nie. */
+/** Zähler für den Nachweis: ein Pass mehr; die Brillen merkt nur ein VOLLER Pass, ein Delta-Pass nie; die Blocker nur der allererste Pass (#1123). */
 function nachweisStand(stand, { modus, berichte }) {
-  return { paesse: stand.paesse + 1, ersteLenses: modus === 'voll' ? berichte.map((b) => b.lens) : stand.ersteLenses }
+  const zahl = (b) => (b.findings || []).filter((f) => f.schwere === 'blockierend').length
+  const ersteBlocker = stand.paesse === 0 ? Object.fromEntries(berichte.map((b) => [b.lens, zahl(b)])) : stand.ersteBlocker
+  return { paesse: stand.paesse + 1, ersteLenses: modus === 'voll' ? berichte.map((b) => b.lens) : stand.ersteLenses, ersteBlocker }
 }
 
 /** Die Nachweis-Zeilen für den pr+merge-Prompt; leer ohne Konvergenz, `<SHA>` als Platzhalter ohne diffHead. */
 function nachweisFuerPr({ konvergiert, head, stand, plan }) {
   if (!konvergiert) return ''
-  return nachweisZeilen({ head: head || '<SHA>', runden: stand.paesse, lenses: stand.ersteLenses || [], plan })
+  return nachweisZeilen({ head: head || '<SHA>', runden: stand.paesse, lenses: stand.ersteLenses || [], blocker: stand.ersteBlocker || undefined, plan })
 }
 // ── Review-Nachweis (#1270) — Ende
 
@@ -1031,7 +1033,7 @@ Sammelticket, Spiel-/Inhalts-Befund oder Notfall → gebündeltes Issue) — nic
   // Der letzte Lens-Pass (für lensPlan); null nach rotem verify ⇒ die nächste Runde prüft wieder alles.
   let vorrunde = null
   // Für den Review-Nachweis (#1270): Zahl der Lens-Pässe und die Brillen des letzten vollen Passes.
-  let nachweisWerte = { paesse: 0, ersteLenses: null }
+  let nachweisWerte = { paesse: 0, ersteLenses: null, ersteBlocker: null }
   let fehlend
   // Der materialisierte Diff (#1034). Wird nach jeder Nachbesserung ERSETZT, nie
   // weiterverwendet — ein Patch aus der Vorrunde würde einen Review vortäuschen.
@@ -1060,10 +1062,8 @@ Sammelticket, Spiel-/Inhalts-Befund oder Notfall → gebündeltes Issue) — nic
         if (fehlend.length > 0) log(`⚠ Lens ${fehlend.join(', ')} lieferte zweimal kein Ergebnis — ungeprüft.`)
       }
       vorrunde = { erwartet: staffel.keys, berichte: lensBerichte }
-      // Nachweis (#1270): die Brillen, die WIRKLICH geliefert haben, nicht die geplanten, und zwar vom
-      // letzten VOLLEN Pass (Runde 1; ein voller Wiederholungspass nach einem Lens-Ausfall ersetzt ihn,
-      // ein Delta-Pass nie). Fiel eine aus und blieb ungeprüft, fehlt sie im Nachweis und die PR-CI wird
-      // rot, statt eine ungeprüfte Brille zu bescheinigen.
+      // Nachweis (#1270): die Brillen, die WIRKLICH geliefert haben, vom letzten VOLLEN Pass (ein Delta-Pass nie); fiel eine
+      // aus und blieb ungeprüft, fehlt sie im Nachweis und die PR-CI wird rot, statt sie zu bescheinigen.
       nachweisWerte = nachweisStand(nachweisWerte, { modus: staffel.modus, berichte: lensBerichte })
       for (const b of lensBerichte) lensStand[b.lens] = b
     } else {
