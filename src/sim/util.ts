@@ -36,6 +36,12 @@ export function podIP(name: string): string {
   return "10.244.1." + (10 + (hashStr(name) % 200));
 }
 
+/** Deterministische Adresse (`203.0.113.100–249`, TEST-NET-3) hinter einem ExternalName-CNAME-Ziel:
+ *  je Ziel stabil, `.10` bleibt dem Ingress vorbehalten (#1403). */
+export function externalIP(name: string): string {
+  return "203.0.113." + (100 + (hashStr(name) % 150));
+}
+
 /** Pod-Name im echten Kubernetes-Stil: `<deployment>-<replicaset-hash>-<pod-suffix>`
  *  (z.B. `web-7d8f9c6b54-x2k9p`). Von `sim.ts` (reset/Helm/Argo) UND `sim/kubectl.ts`
  *  (scale/rollout/apply/delete-Self-Healing) gebraucht – darum hier als geteilter Helfer. */

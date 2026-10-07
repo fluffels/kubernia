@@ -18,7 +18,7 @@ import type {
   RoleBindingRes, PodSecurityLevel, PodStatus, NodeMetrics,
   ScrapeTarget, Alert, Scenario, ClusterState,
 } from "./sim/state";
-import { BROKEN_STATUS, HEADLESS_CLUSTER_IP } from "./sim/state";
+import { BROKEN_STATUS, HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService } from "./sim/state";
 export { BROKEN_STATUS } from "./sim/state";
 export type {
   ExecResult,
@@ -49,7 +49,7 @@ import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, depEphemeralPeak, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
 import { randSuffix, clusterIP, suggest } from "./sim/util";
 import { makeRng, DEFAULT_SEED } from "./core/rng";
-import { resourceName, InvalidResourceNameError, rfc1123ErrorText, RFC1123_TIP } from "./sim/names";
+import { resourceName, InvalidSpecError } from "./sim/names";
 import { sameRbac } from "./sim/rbac";
 import { assertClusterInvariants, warnClusterInvariants } from "./sim/invariants";
 import { scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, seedPodTemplate, snapshotPodTemplate } from "./sim/workload";
@@ -441,7 +441,11 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
      *  den Namen (DNS-1123) zentral. ExternalName (#337) → CNAME statt ClusterIP. */
     _makeService(spec: ServiceSpec): ServiceRes {
       const name = resourceName(spec.name);
-      if (spec.externalName) return { name, type: "ExternalName", clusterIP: "<none>", port: spec.port, externalName: spec.externalName, created: this.clock };
+      if (isExternalNameService(spec) && !spec.externalName) {
+        throw new InvalidSpecError('The Service "' + name + '" is invalid: spec.externalName: Required value',
+          "Setze spec.externalName im Manifest und lege den Service mit kubectl apply -f an.");
+      }
+      if (spec.externalName) return { name, type: EXTERNAL_NAME_TYPE, clusterIP: "<none>", port: spec.port, externalName: spec.externalName, created: this.clock };
       return {
         name, type: spec.type || "ClusterIP", clusterIP: spec.clusterIP === HEADLESS_CLUSTER_IP ? HEADLESS_CLUSTER_IP : clusterIP(name), port: spec.port,
         ...(spec.targetPort !== undefined ? { targetPort: spec.targetPort } : {}),
@@ -898,7 +902,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     _handleExecError(e: unknown): string {
       // #507: ein ungültiger Ressourcenname (aus einer _make*-Fabrik) ist eine abgelehnte
       // Nutzereingabe, kein interner Fehler → als richtige kubectl-Meldung ausgeben.
-      if (e instanceof InvalidResourceNameError) return this._err(rfc1123ErrorText(e.raw), RFC1123_TIP);
+      if (e instanceof InvalidSpecError) return this._err(e.message, e.tip);
       this.lastError = true;
       return "Hoppla, da ist im Simulator etwas schiefgegangen: " + (e instanceof Error ? e.message : String(e));
     }

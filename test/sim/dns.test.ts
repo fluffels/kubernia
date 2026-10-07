@@ -250,6 +250,14 @@ describe("Headless Service (#1301)", () => {
     expect(sim.exec("nslookup speicher-2.speicher").output).toContain("Address: " + podIP("speicher-2"));
   });
 
+  test("Pro-Pod-DNS (#1403): <svc>.<ns> nur mit Namespace default", () => {
+    const sim = withSts();
+    expect(sim.exec("nslookup speicher-0.speicher.default").error).toBe(false);
+    const r = sim.exec("nslookup speicher-0.speicher.anderer-ns.svc.cluster.local");
+    expect(r.error).toBe(true);
+    expect(r.output).toContain("NXDOMAIN");
+  });
+
   test("Pro-Pod-DNS: unbekanntes Ordinal, nicht-headless Service und Pending-Pod sind NXDOMAIN", () => {
     const sim = withSts();
     expect(sim.exec("nslookup speicher-7.speicher").error).toBe(true);
@@ -279,5 +287,61 @@ describe("Headless Service (#1301)", () => {
     const r = sim.exec("nslookup speicher");
     expect(r.error).toBe(true);
     expect(r.output).toContain("NXDOMAIN");
+  });
+});
+
+describe("ExternalName-Konsistenz (#1403, #1324)", () => {
+  const kaputt = { name: "kaputt", type: "ExternalName", clusterIP: "<none>", port: "" };
+  const kasse = { name: "kasse", type: "ClusterIP", clusterIP: "10.96.0.50", port: 80 };
+  const ext = (name: string, externalName: string) => ({ name, type: "ExternalName", clusterIP: "<none>", port: "", externalName });
+
+  test("(a) expose --type=ExternalName wird abgelehnt, nichts angelegt", () => {
+    const sim = freshSim();
+    sim.exec("kubectl create deployment x --image=nginx");
+    const before = sim.services.length;
+    const r = sim.exec("kubectl expose deployment x --port=80 --type=ExternalName");
+    expect(r.error).toBe(true);
+    expect(r.output).toContain('The Service "x" is invalid: spec.externalName: Required value');
+    expect(sim.services.length).toBe(before);
+    expect(sim.exec("kubectl expose deployment x --port=80 --type=NodePort").error).toBe(false);
+  });
+
+  test("(b) ExternalName ohne Ziel: nslookup NXDOMAIN, curl (6), gleicher Tipp", () => {
+    const sim = new KQSim({ services: [kaputt] });
+    const n = sim.exec("nslookup kaputt");
+    const c = sim.exec("curl http://kaputt");
+    expect(n.error).toBe(true);
+    expect(n.output).toContain("NXDOMAIN");
+    expect(n.output).not.toContain("<none>");
+    expect(c.output).toContain("(6) Could not resolve host");
+    expect(n.output).toContain("spec.externalName");
+    expect(c.output).toContain("spec.externalName");
+  });
+
+  test("(c) fremder Namespace: nslookup und curl lehnen ab, Tipp nennt default", () => {
+    const sim = new KQSim({ services: [kasse, ext("bank-extern", "api.bank.example.com")] });
+    for (const name of ["kasse.anderer-ns", "kasse.anderer-ns.svc.cluster.local", "bank-extern.anderer-ns"]) {
+      const n = sim.exec("nslookup " + name);
+      expect(n.error, name).toBe(true);
+      expect(n.output).toContain("NXDOMAIN");
+      expect(n.output).toContain("anderer-ns");
+      expect(n.output).toContain("'default'");
+      const c = sim.exec("curl http://" + name);
+      expect(c.output, name).toContain("(6) Could not resolve host");
+    }
+  });
+
+  test("(c) Suchpfad <svc>.<ns>.svc löst auf, kubernetes nur in default", () => {
+    const sim = new KQSim({ services: [kasse] });
+    expect(sim.exec("nslookup kasse.default.svc").output).toContain("10.96.0.50");
+    expect(sim.exec("nslookup kubernetes.default").output).toContain("10.96.0.1");
+    expect(sim.exec("nslookup kubernetes.anderer-ns").error).toBe(true);
+  });
+
+  test("(d) je Ziel eine eigene IP, in nslookup und curl identisch", () => {
+    const sim = new KQSim({ services: [ext("a", "api.bank.example.com"), ext("b", "api.post.example.com")] });
+    const ip = (cmd: string) => /203\.0\.113\.\d+/.exec(sim.exec(cmd).output ?? "")![0];
+    expect(ip("nslookup a")).not.toBe(ip("nslookup b"));
+    expect(ip("curl http://a")).toBe(ip("nslookup a"));
   });
 });

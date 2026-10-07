@@ -217,6 +217,12 @@ export interface ServiceRes {
 export function isHeadlessService(svc: Pick<ServiceRes, "clusterIP">): boolean {
   return svc.clusterIP === HEADLESS_CLUSTER_IP;
 }
+/** Der Service-Typ für einen reinen DNS-CNAME auf einen externen Namen (#337). */
+export const EXTERNAL_NAME_TYPE = "ExternalName";
+/** Ist der Service ein ExternalName-Service? Ausschließlich hierüber abfragen, nicht den Typ-String vergleichen. */
+export function isExternalNameService(svc: { type?: string }): boolean {
+  return svc.type === EXTERNAL_NAME_TYPE;
+}
 /** Ingress: leitet eine Außen-Adresse (host/pfad) an einen Service im Cluster. */
 export interface IngressRes {
   name: string;
