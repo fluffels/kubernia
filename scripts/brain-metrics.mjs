@@ -8,7 +8,7 @@
  * (Claude-Code-Transkript, Langfuse-TOOL-Observations). Importiert nichts aus token-baseline.mjs (kein Zyklus).
  */
 
-import { parseBash } from "./bash-parser.mjs";
+import { einfacheKommandos, parseBash } from "./bash-parser.mjs";
 
 /** Grobe Umrechnung Zeichen → Tokens (nur Größenordnung, bewusst keine Tokenizer-Abhängigkeit). */
 export const CHARS_PER_TOKEN = 4;
@@ -20,8 +20,12 @@ const SCRATCH = /[\\/](Temp|tmp)[\\/]/i;
 
 const norm = (p) => String(p ?? "").replace(/\\/g, "/");
 
-/** Seitenschlüssel: Pfad ab `docs/`; dieselbe Seite per absolutem, relativem oder Worktree-Pfad ist eine Seite. */
-const pageKey = (p) => norm(p).replace(/^.*?(?:^|\/)docs\//i, "docs/");
+/**
+ * Seitenschlüssel: Pfad ab dem LETZTEN `docs/`-Segment, klein geschrieben; dieselbe Seite per absolutem, relativem, Worktree- oder
+ * Windows-Pfad (`C:\Dev\X\Docs\Model-Routing.md`) ist eine Seite. Bekannte Grenze: Liegt unterhalb von `docs/` nochmals ein Ordner
+ * `docs/` (`docs/module/docs/x.md`), gewinnt der innere; Brain-Seiten tragen das nicht.
+ */
+const pageKey = (p) => norm(p).toLowerCase().replace(/^.*(?:^|\/)docs\//, "docs/");
 
 /** Brain-Seite = Markdown unter einem `docs/`-Ordner (nicht in node_modules). */
 export function isBrainPage(path) {
@@ -30,33 +34,18 @@ export function isBrainPage(path) {
   return /(^|\/)docs\/(.+\/)?[^/]+\.md$/i.test(p);
 }
 
-function collectSimple(node, out) {
-  if (!node || typeof node !== "object") return;
-  if (Array.isArray(node)) {
-    for (const n of node) collectSimple(n, out);
-    return;
-  }
-  if (node.type === "simple") {
-    out.push(node.words.map((w) => w.text));
-    for (const s of node.substs ?? []) collectSimple(s, out);
-    return;
-  }
-  for (const v of Object.values(node)) if (v && typeof v === "object") collectSimple(v, out);
-}
-
 /** Kommandos als Wortlisten: Bash über den AST, sonst (und für PowerShell) grobe Trennung. */
 function commandsOf(command, tool) {
   if (tool === "Bash") {
     const r = parseBash(command);
-    if (r.ok) {
-      const out = [];
-      collectSimple(r.ast, out);
-      return out;
-    }
+    if (r.ok) return einfacheKommandos(r.ast);
   }
+  // Rückfall (PowerShell, nicht zerlegbares Bash): grobe Trennung auch an Klammern, umschließende Quotes der Wörter weg
+  // (`$t = (Get-Content 'docs/a.md' -Raw)` → `Get-Content`, `docs/a.md`, `-Raw`). Bekannte Grenze: Wörter in Strings bleiben Text.
   return String(command ?? "")
-    .split(/[;|\n]|&&|\|\|/)
-    .map((s) => s.trim().split(/\s+/).filter(Boolean));
+    .split(/[;|\n(){}]|&&|\|\|/)
+    .map((s) => s.trim().split(/\s+/).map((w) => w.replace(/^['"]+|['"]+$/g, "")).filter(Boolean))
+    .filter((words) => words.length);
 }
 
 /**
@@ -85,18 +74,26 @@ function textLength(content) {
   return content.reduce((n, p) => n + (p?.type === "text" && typeof p.text === "string" ? p.text.length : 0), 0);
 }
 
-/** Transkript-JSONL → Tool-Events; `tool_use` und `tool_result` werden über die ID verknüpft. */
-export function toolEventsFromTranscript(jsonlText) {
-  const events = [];
-  const byId = new Map();
+/** Transkript-JSONL → geparste Zeilen (leere und abgeschnittene Zeilen entfallen). Einmal parsen, dann an die Adapter reichen. */
+export function transkriptZeilen(jsonlText) {
+  const rows = [];
   for (const line of String(jsonlText).split(/\r?\n/)) {
     if (!line.trim()) continue;
-    let row;
     try {
-      row = JSON.parse(line);
+      rows.push(JSON.parse(line));
     } catch {
-      continue;
+      // abgeschnittene letzte Zeile eines laufenden Transkripts
     }
+  }
+  return rows;
+}
+
+/** Transkript → Tool-Events; `tool_use` und `tool_result` werden über die ID verknüpft. Nimmt den JSONL-Text oder die Zeilen aus `transkriptZeilen`. */
+export function toolEventsFromTranscript(textOderZeilen) {
+  const events = [];
+  const byId = new Map();
+  const zeilen = Array.isArray(textOderZeilen) ? textOderZeilen : transkriptZeilen(textOderZeilen);
+  for (const row of zeilen) {
     const content = row?.message?.content;
     if (!Array.isArray(content)) continue;
     for (const c of content) {
@@ -111,6 +108,20 @@ export function toolEventsFromTranscript(jsonlText) {
     }
   }
   return events;
+}
+
+/** Tools, deren Eingabe (Pfad, Befehl) die Kennzahlen lesen. Nur für sie holt `--langfuse` die `io`-Feldgruppe; Grep/Glob zählen ohne Eingabe. */
+export const EINGABE_TOOLS = ["Read", "Bash", "PowerShell", "Edit", "Write", "MultiEdit", "NotebookEdit"];
+
+/**
+ * Hängt die Eingabe aus `io`-Observations (per `id`) an die Metadaten-Observations. Die v2-API liefert `input` nur zusammen mit
+ * `output` (Feldgruppe `io`); darum zwei Abrufstufen: alle TOOL-Observations schlank (`core,basic,metadata`), `io` nur für
+ * die Tools aus `EINGABE_TOOLS`. Grenze: ohne passenden `io`-Eintrag bleibt das Event ohne Eingabe (zählt dann nicht als Lesezugriff);
+ * verwaiste `io`-Einträge ohne Metadaten-Gegenstück entfallen.
+ */
+export function mitEingabe(meta, io) {
+  const eingaben = new Map((io ?? []).map((o) => [o?.id, o?.input]));
+  return (meta ?? []).map((o) => (eingaben.has(o?.id) ? { ...o, input: eingaben.get(o.id) } : o));
 }
 
 /** Langfuse-Observations (Typ TOOL, Hook `langfuse-observability`) → Tool-Events. */
@@ -139,26 +150,20 @@ export function toolEventsFromLangfuse(observations) {
 
 const tokens = (chars) => Math.round(chars / CHARS_PER_TOKEN);
 
-function inWindow(ts, bounds) {
-  if (bounds.from && Date.parse(ts) < Date.parse(bounds.from)) return false;
-  if (bounds.mergedAt && Date.parse(ts) >= Date.parse(bounds.mergedAt)) return false;
-  return true;
-}
-
 /** Pfad des Datei-Tools (Read/Edit/Write/…) eines Events. */
 const filePath = (ev) => ev.input?.file_path ?? ev.input?.notebook_path ?? "";
 
 /**
- * Kennzahlen eines Laufs. `events`: Tool-Events, `rows`: Phasenzeilen aus `summarize` (für die Recherche-Tokens),
- * `prFiles`: Dateien des PR (`gh pr view --json files`) — die verlässliche Pflege-Zahl, weil Shell-Schreibzugriffe
+ * Kennzahlen eines Laufs. `events`: Tool-Events, bereits auf das Ticket-Fenster gefiltert (`summarize` in
+ * token-baseline.mjs besitzt das Fenster und die Recherche-Tokens). `prFiles`: Dateien des PR (`gh pr view --json files`) — die verlässliche Pflege-Zahl, weil Shell-Schreibzugriffe
  * (`sed -i`, Skripte) das Tool-Zählen nicht sieht.
  */
-export function brainMetrics({ events = [], rows = [] }, bounds = {}, prFiles = null) {
+export function brainMetrics(events = [], prFiles = null) {
   const pages = new Set();
   const acc = { reads: 0, readChars: 0, searches: 0, searchChars: 0, writes: 0 };
   let calls = 0;
   let callsBeforeFirstEdit = null;
-  const sorted = events.filter((e) => inWindow(e.ts, bounds)).sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+  const sorted = [...events].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
   for (const ev of sorted) {
     if (callsBeforeFirstEdit === null) {
       if (EDIT_TOOLS.has(ev.tool) && !SCRATCH.test(filePath(ev))) callsBeforeFirstEdit = calls;
@@ -166,7 +171,6 @@ export function brainMetrics({ events = [], rows = [] }, bounds = {}, prFiles = 
     }
     countEvent(ev, pages, acc);
   }
-  const research = rows.filter((r) => r.phase === "Recherche");
   const brainFiles = (prFiles ?? []).filter((f) => isBrainPage(f.path));
   return {
     brainReads: acc.reads,
@@ -174,7 +178,6 @@ export function brainMetrics({ events = [], rows = [] }, bounds = {}, prFiles = 
     brainReadTokens: tokens(acc.readChars),
     searchCalls: acc.searches,
     searchTokens: tokens(acc.searchChars),
-    rechercheTokens: research.reduce((n, r) => n + r.input + r.cacheWrite + r.cacheRead + r.output, 0),
     callsBeforeFirstEdit,
     brainWrites: acc.writes,
     prBrain: prFiles

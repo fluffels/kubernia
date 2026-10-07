@@ -583,6 +583,13 @@ describe("decide (#1308) — cd und git -C aus dem Befehl auswerten", () => {
     assert.equal(ask('git -C "$D" push', resolve("/c/git/anderes")), false, "fremdes Repo: keine Rückfrage");
   });
 
+  test("Ersetzungen in der for-Liste und im case-Subjekt werden ausgewertet (#1322 Z4)", () => {
+    const blockt = (command: string) => decide({ cwd: repoRoot, command, repoRoot, deps: fsFake([wt]) }).block;
+    assert.equal(blockt("for i in $(git push); do :; done"), true);
+    assert.equal(blockt("case $(git commit -m x) in *) :;; esac"), true);
+    assert.equal(blockt("for i in $(git status); do :; done"), false, "Gegenprobe: nur git status");
+  });
+
   test("dynamisches Kommando und dynamischer git-Unterbefehl fragen im Haupt-Checkout", () => {
     assert.equal(ask("$(echo git) push"), true);
     assert.equal(ask('"$G" commit -m x'), true);

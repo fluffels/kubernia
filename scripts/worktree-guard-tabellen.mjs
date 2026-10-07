@@ -10,6 +10,7 @@
 import { statSync } from "node:fs";
 import { homedir as osHomedir } from "node:os";
 import path from "node:path";
+import { ASSIGN_RE } from "./bash-parser.mjs";
 import { SHELLS, WRAPPERS, baseName } from "./shell-tabellen.mjs";
 
 export { SHELLS, baseName };
@@ -29,7 +30,7 @@ export function coarseProtected(command) {
 }
 
 export const GIT_RE = /^(?:.*[\\/])?git(?:\.exe)?$/i;
-export const ASSIGN_RE = /^[A-Za-z_]\w*=/;
+export { ASSIGN_RE }; // eine Quelle: bash-parser.mjs
 export const PROTECTED_SUBS = new Set(["commit", "push"]);
 /** Reine Text-Kommandos: ein Wortpaar "git commit/push" darin ist kein Aufruf. */
 export const TEXT_COMMANDS = new Set(["gh", "echo", "printf", "cat", "grep", "egrep", "fgrep", "rg"]);

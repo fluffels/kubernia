@@ -163,3 +163,49 @@ describe("parseBash — Here-String (#1311)", () => {
     assert.equal((n.heredocs as unknown[]).length, 0);
   });
 });
+
+describe("einfacheKommandos — alle einfachen Kommandos eines AST (#1322 Z4)", () => {
+  const mod = raw as { einfacheKommandos: (ast: unknown) => string[][]; ASSIGN_RE: RegExp };
+  const kommandos = (command: string) => mod.einfacheKommandos(ast(command));
+
+  test("Env-Präfixe fallen weg, eine reine Zuweisung ergibt kein Kommando", () => {
+    assert.deepEqual(kommandos("LANG=C cat docs/a.md"), [["cat", "docs/a.md"]]);
+    assert.deepEqual(kommandos("A=1 B=2 grep x f"), [["grep", "x", "f"]]);
+    assert.deepEqual(kommandos("X=1"), []);
+    assert.deepEqual(kommandos("X=1; Y=$(echo hi)"), [["echo", "hi"]], "nur die Ersetzung ist ein Kommando");
+    assert.deepEqual(kommandos("cat a=b"), [["cat", "a=b"]], "Zuweisung nur am Anfang");
+  });
+
+  test("Liste, Und-Oder, Pipe, if/for/case, Gruppen und Funktionen werden durchlaufen", () => {
+    assert.deepEqual(kommandos("a x && b | c; (d) ; { e; }"), [["a", "x"], ["b"], ["c"], ["d"], ["e"]]);
+    assert.deepEqual(kommandos("if t; then u; else v; fi").map((k) => k[0]), ["t", "u", "v"]);
+    assert.deepEqual(kommandos("for i in $(ls); do echo $i; done").map((k) => k[0]).sort(), ["echo", "ls"], "for-Liste mit Ersetzung");
+    assert.deepEqual(kommandos("case $(pwd) in x) p;; esac").map((k) => k[0]).sort(), ["p", "pwd"], "case-Subjekt mit Ersetzung");
+    assert.deepEqual(kommandos("case x in a) p;; b) q;; esac").map((k) => k[0]), ["p", "q"]);
+    assert.deepEqual(kommandos("f() { g; }; h").map((k) => k[0]), ["g", "h"]);
+  });
+
+  test("Ersetzungen (`$(…)`, Backticks, `<(…)`) und Heredoc-Bodies mit Ersetzungen zählen", () => {
+    assert.deepEqual(kommandos("echo $(cat docs/a.md)"), [["echo", ""], ["cat", "docs/a.md"]], "dynamische Wörter tragen keinen Text");
+    assert.deepEqual(kommandos("echo `ls`").map((k) => k[0]), ["echo", "ls"]);
+    assert.deepEqual(kommandos("diff <(sort a) b").map((k) => k[0]), ["diff", "sort"]);
+    const heredoc = kommandos("cat <<EOF\n$(cat docs/a.md)\nEOF");
+    assert.deepEqual(heredoc.map((k) => k[0]), ["cat", "cat"], "Ersetzung im Heredoc-Body");
+    assert.deepEqual(kommandos("cat <<'EOF'\n$(cat docs/a.md)\nEOF"), [["cat"]], "gequotetes Heredoc ist Text");
+  });
+
+  test("Randfälle: leere Eingabe, Nicht-AST", () => {
+    assert.deepEqual(kommandos(""), []);
+    assert.deepEqual(mod.einfacheKommandos(null), []);
+    assert.deepEqual(mod.einfacheKommandos(undefined), []);
+  });
+
+  test("ASSIGN_RE ist die eine Quelle: der Worktree-Guard re-exportiert sie", async () => {
+    // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+    const tab = (await import("../../scripts/worktree-guard-tabellen.mjs")) as { ASSIGN_RE: RegExp };
+    assert.equal(tab.ASSIGN_RE, mod.ASSIGN_RE);
+    assert.equal(mod.ASSIGN_RE.test("LANG=C"), true);
+    assert.equal(mod.ASSIGN_RE.test("=x"), false);
+    assert.equal(mod.ASSIGN_RE.test("a-b=1"), false);
+  });
+});
