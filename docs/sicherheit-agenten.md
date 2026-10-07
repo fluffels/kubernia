@@ -5,7 +5,7 @@
 ## Quellen
 
 - OWASP Top 10 for LLM Applications 2025, Kategorienamen wörtlich nach <https://genai.owasp.org/llm-top-10/> (LLM01–LLM10).
-- OWASP Top 10 for Agentic Applications 2026 (ASI01–ASI10), Seite <https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/>. Die Kategorienamen stehen nur im Download, nicht auf der Seite; die Zuordnung unten nutzt die Namen aus einer Sekundärquelle ([Cycode-Überblick](https://cycode.com/blog/owasp-top-10-agentic-applications/)) und ist am Original-PDF noch zu prüfen. Maßgeblich bleibt der OWASP-Text.
+- OWASP Top 10 for Agentic Applications 2026 (ASI01–ASI10), Seite <https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/>. Die Kategorienamen stehen nur im Download, nicht auf der Seite; die Zuordnung unten nutzt die Namen aus einer Sekundärquelle ([Cycode-Überblick](https://cycode.com/blog/owasp-top-10-agentic-applications/)) und ist am Original-PDF noch zu prüfen (#1447 h). Maßgeblich bleibt der OWASP-Text.
 
 ## Vertrauensmodell
 
@@ -28,7 +28,7 @@ Das Repo ist öffentlich: jeder darf Issues eröffnen und kommentieren, es gibt 
 | WebFetch/WebSearch | kein deterministisches Gate; Rahmung und Exfiltration per URL offen (#1447 a) |
 | npm-Pakete inkl. Lifecycle-Skripte | Dependabot-Policy, `npm audit`, `check:lockfile`; keine `.npmrc`, Lifecycle-Skripte laufen bei `npm ci` (#1447 b) |
 | Dependabot-PR-Texte | der Autor ist vertraut, die Release-Notes darin sind Text Dritter; der Ablauf liest nur Checks, erzwungen ist das nicht (#1447 c) |
-| MCP-Antworten | Whitelist je Agent (`tools`), `claude-in-chrome` gesperrt; Antworttext selbst ungefiltert |
+| MCP-Antworten | Whitelist je Agent (`tools`), `claude-in-chrome` gesperrt; Antworttext selbst ungefiltert (#1447 g) |
 
 ## OWASP-Abgleich
 
@@ -45,13 +45,13 @@ Spalten: Risiko, vorhandenes Gate, Lücke, Folge, Bezug zu den Agentic Applicati
 | LLM07 | System Prompt Leakage | Anweisungen sind bewusst öffentlich, keine Secrets darin | keine | keine | – |
 | LLM08 | Vector and Embedding Weaknesses | nicht zutreffend: kein RAG, das Brain ist Markdown | keine | keine | ASI06 Memory and Context Poisoning |
 | LLM09 | Misinformation | Tests mit Red-Green, Lenses, `check:docdrift`, Recherche-Regel | didaktische Richtigkeit bleibt menschlich (Veto per Revert) | keine | ASI09 Human-Agent Trust Exploitation |
-| LLM10 | Unbounded Consumption | Cap 2 Fix-Runden im Review, Festgefahren-Workflow, Kontext-Budgets, Langfuse-Takt, Längenkappe in `forum-sanitize` | kein hartes Kostenbudget je Lauf | Langfuse-Befunde bei Bedarf | ASI08 Cascading Failures, ASI10 Rogue Agents |
+| LLM10 | Unbounded Consumption | Cap 2 Fix-Runden im Review, Festgefahren-Workflow, Kontext-Budgets, Langfuse-Takt, Längenkappe in `forum-sanitize` | kein hartes Kostenbudget je Lauf | keine, bewusst: Langfuse-Takt und Cap 2 begrenzen genug, ein hartes Budget wäre zusätzliche Mechanik ohne beobachteten Schaden | ASI08 Cascading Failures, ASI10 Rogue Agents |
 
 ASI-Namen der Spalte nach der Sekundärquelle (siehe Quellen). Die Gate-Angaben sind Ist-Stand, ein Schnappschuss vom 2026-10-08.
 
 ## Grenzen (ehrlich)
 
 - Das Gate prüft den **Autor**, nicht den Inhalt. Eine vertraute Instanz, die Fremdtext zitiert (Zitat-Laundering), umgeht es; dagegen hilft nur Disziplin und das Review, bis #1447 d es löst.
-- Die Workflow-Variante (`kubernia-ticket.js`) hat keine harte Autor-Prüfung; der Haken ist der Planer, der bei Fremdeingang verweigert.
+- Die Workflow-Variante (`kubernia-ticket.js`) hat keine harte Autor-Prüfung; der Haken ist der Planer, der bei Fremdeingang verweigert. Folgen: der Auswahl-Agent claimt das fremde Issue vor dem Gate (der Claim bleibt stehen), und der rohe Body steht schon im Planer-Prompt (#1447 e).
 - Ein Skript kann eine Agenten-Anweisung nicht erzwingen: ein Agent, der Kommentare doch roh liest, wird nur vom Wächter-Test (Anweisungstext) und vom Review erwischt, nicht zur Laufzeit.
 - Rule-of-Two (kein Teilsystem verarbeitet zugleich unvertrauten Input, hält Secrets und ändert Zustand oder kommuniziert nach außen) ist im [Forum-Skill](../.claude/skills/forum/SKILL.md) beschrieben und wird hier nicht wiederholt.

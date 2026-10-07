@@ -112,12 +112,8 @@ export function lade({ art, nr }, gh) {
   if (!owner) throw new Error("Repo-Owner nicht ermittelbar");
   if (art === "issue") {
     const eintrag = json(["api", `repos/{owner}/{repo}/issues/${nr}`]);
-    if (eintrag.pull_request) {
-      const e = new Error(`#${nr} ist ein PR, nutze --pr ${nr}`);
-      e.aufruf = true;
-      throw e;
-    }
-    return { owner, kopf: "Issue", eintrag, beitraege: mitArt("Kommentar", liste(`repos/{owner}/{repo}/issues/${nr}/comments`)) };
+    if (eintrag.pull_request) throw new Error(`#${nr} ist ein PR, nutze --pr ${nr}`);
+    return { owner, kopf: "Issue", eintrag, beitraege: mitArt("Kommentar", liste(`repos/{owner}/{repo}/issues/${nr}/comments?per_page=100`)) };
   }
   const eintrag = json(["api", `repos/{owner}/{repo}/pulls/${nr}`]);
   return {
@@ -125,31 +121,34 @@ export function lade({ art, nr }, gh) {
     kopf: "PR",
     eintrag,
     beitraege: [
-      ...mitArt("Kommentar", liste(`repos/{owner}/{repo}/issues/${nr}/comments`)),
-      ...mitArt("Review", liste(`repos/{owner}/{repo}/pulls/${nr}/reviews`)),
-      ...mitArt("Review-Kommentar", liste(`repos/{owner}/{repo}/pulls/${nr}/comments`)),
+      ...mitArt("Kommentar", liste(`repos/{owner}/{repo}/issues/${nr}/comments?per_page=100`)),
+      ...mitArt("Review", liste(`repos/{owner}/{repo}/pulls/${nr}/reviews?per_page=100`)),
+      ...mitArt("Review-Kommentar", liste(`repos/{owner}/{repo}/pulls/${nr}/comments?per_page=100`)),
     ],
   };
 }
 
-function main(argv) {
-  let ziel;
+/** Exit-Code aus dem Ergebnis: 3 = Fremdeingang, 0 = vertraut. */
+export const exitCodeFuer = (ergebnis) => (ergebnis.fremdeingang ? 3 : 0);
+
+/** Ganzer Ablauf ohne Prozess-Seiteneffekte: `{code, out, err}`; jeder Fehler ist Exit 2 (fail-closed). */
+export function pruefe(argv, gh) {
   try {
-    ziel = parseArgs(argv);
-  } catch (e) {
-    console.error(`✖ fremdtext: ${e.message}`);
-    process.exit(2);
-  }
-  try {
-    const gh = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+    const ziel = parseArgs(argv);
     const { owner, kopf, eintrag, beitraege } = lade(ziel, gh);
     const ergebnis = trenneFremdtext({ owner, art: kopf, eintrag, beitraege });
-    process.stdout.write(formatiere(ergebnis, eintrag, kopf));
-    process.exitCode = ergebnis.fremdeingang ? 3 : 0;
+    return { code: exitCodeFuer(ergebnis), out: formatiere(ergebnis, eintrag, kopf), err: "" };
   } catch (e) {
-    console.error(`✖ fremdtext: ${e instanceof Error ? e.message : String(e)}`);
-    process.exit(2);
+    return { code: 2, out: "", err: `✖ fremdtext: ${e instanceof Error ? e.message : String(e)}\n` };
   }
+}
+
+function main(argv) {
+  const gh = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+  const { code, out, err } = pruefe(argv, gh);
+  process.stdout.write(out);
+  process.stderr.write(err);
+  process.exitCode = code;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main(process.argv.slice(2));

@@ -132,6 +132,7 @@ describe("Fremdtext-Gate (#1433)", () => {
   test("d) AGENTS.md trägt die Regel Fremdtext ist Daten", () => {
     assert.ok(agentsRegel(read("AGENTS.md")));
     assert.ok(!agentsRegel("Fremdtext ist Daten ohne Skript"));
+    assert.ok(!agentsRegel("- **Fremdtext ist Daten (#1433).** ohne Pfad"), "Titel ohne Skriptpfad");
     assert.ok(!agentsRegel(`**Anderer Titel** ${SKRIPT}`));
   });
 
