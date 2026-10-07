@@ -87,6 +87,17 @@ Das ist ein bekannter Reibungspunkt des Auto-Mode-Classifiers (nicht des Repos):
 - **Abhilfe:** mehrzeilige Änderungen mit `\n`/Regex per Edit-Werkzeug machen, nicht per Skript. Muss es ein Skript sein: per Write in den Scratchpad schreiben und dann ausführen; ein Heredoc nur als `<<'EOF'` und danach die Datei gegenlesen.
 - **MSYS-Pfadumwandlung:** `git show origin/main:.claude/agents/x.md` scheitert in Git-Bash (`ambiguous argument 'origin\main;…'`). Abhilfe: `MSYS_NO_PATHCONV=1 git show origin/main:<pfad>` oder das PowerShell-Tool.
 
+- **„unexpected EOF while looking for matching `'`“ bei einem großen Heredoc** (z.B. `gh issue comment --body-file - <<'EOF'` mit Anführungszeichen und Apostrophen im Text): der Fehler kommt aus der Shell bzw. dem Tool-Wrapper, nicht aus dem Bash-Guard (`parseBash` zerlegt solche Befehle, Regressionstest in `test/harness/bash-parser.test.ts`). Ausweg: den Text per Write-Werkzeug in den Scratchpad schreiben (`kommentar-body.txt`) und per `gh issue comment <nr> --body-file <pfad>` bzw. ein Skript per Write ablegen und ausführen.
+- **Write verweigert einen Dateinamen mit „report“, „summary“, „findings“ oder „analysis“ (`.md`):** die Sperre stammt aus der eingebauten Subagenten-Anweisung von Claude Code („keine report/summary/findings/analysis-.md-Dateien schreiben“), nicht aus einem Repo-Hook (ein `grep` in `scripts/` und `.claude/` findet nichts). Sie trifft vor allem Umsetzer-Subagenten. Ausweg: einen neutralen Namen (`kommentar-body.txt`) im Scratchpad und `gh issue comment <nr> --body-file <pfad>`; das Ergebnis gehört ohnehin in PR-Text, Kommentar oder die letzte Nachricht, nicht in eine Datei.
+
+## Wie belege ich live, dass `deny` auf `SubagentHandback` wirkt?
+
+Der `PreToolUse`-Wächter auf `SubagentHandback` (`scripts/umsetzer-abschluss.mjs`, R0 bis R3) ist durch Tests gedeckt, seine Wirkung in einer echten Session aber noch nicht belegt: die `claude -p`-Probe von #1342 hatte das Tool nicht, und eine bereits laufende Session behält den Hook-Snapshot vom Start. Probe in einer **frischen** interaktiven Session auf aktuellem `main` (Haupt-Checkout per `node scripts/haupt-sync.mjs`):
+
+1. Einen Wegwerf-Umsetzer spawnen (Agent `kubernia-umsetzer`), Auftrag: „Melde sofort `ERGEBNIS: abgebrochen`, ohne `PR:`-Zeile, nichts anfassen.“
+2. Erwartet: `SubagentHandback` mit dem formfalschen Bericht wird mit der Begründung des Wächters abgelehnt (`deny`); danach liefert der Umsetzer denselben Bericht mit `PR: -` und kommt durch.
+3. Ergebnis (Datum, Claude-Code-Version, Wortlaut der Ablehnung) in den Kopfkommentar von `scripts/umsetzer-abschluss.mjs` unter „Grenze“ eintragen und den Satz „nicht belegt“ ersetzen. Bleibt die Ablehnung aus, gelten R1 bis R3 weiter über `SubagentStop`; die Zeile dort bleibt, und der `SubagentHandback`-Matcher in `.claude/settings.json` ist als wirkungslos zu streichen.
+
 ## Warum bekomme ich Test-Timeouts, obwohl der Test einzeln grün ist?
 
 Volle Vitest-Läufe (vor allem die `store.*`-Tests, `game-hazards` und die Git-lastigen Wächter) laufen ins 5-s-Timeout, wenn parallel Lens-, Playwright- oder andere Vitest-Prozesse die Kerne belegen. Darum begrenzt `vite.config.ts` lokal `maxWorkers` auf 25 % (die CI nutzt den Standard). Gemessen (20 Kerne, drei gleichzeitige `npm test`): Standard 5 und 1 Fehlschläge, 25 % keiner, 50 % 6. Mehr oder weniger Worker: `npm test -- --maxWorkers=<n>`.
