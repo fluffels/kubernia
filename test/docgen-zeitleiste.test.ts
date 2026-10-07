@@ -58,18 +58,18 @@ describe("Generator zeitleiste", () => {
   test("Datum nur im Rumpf (nach der ersten ##-Überschrift) zählt als fehlend", () => {
     assert.throws(
       () => run(base({ "docs/adr/0002-rumpf.md": "# ADR 0002: Rumpf\n\n## Status\nDatum: 2026-01-01" })),
-      /0002-rumpf\.md/,
+      /0002-rumpf\.md.*kein Datum im Kopf/s,
     );
   });
   test("„Datum:“ gewinnt gegen andere Daten im Kopf", () => {
     const out = run(
-      base({ "docs/adr/0002-x.md": "# ADR 0002: X\n\n> Status: **ok** (2026-01-01) · Datum: 2026-07-03 · Ticket: #5\n\n## Status\n" }),
+      base({ "docs/adr/0002-x.md": "# ADR 0002: X\n\n- **Status:** ok (2026-01-01) · Datum: 2026-07-03 · Ticket: #5\n\n## Status\n" }),
     );
     assert.ok(out.includes("| 03.07.2026 | [ADR 0002]"));
     assert.ok(!out.includes("01.01.2026"));
   });
   test("ungültiges Kalenderdatum wirft (ADR und Meilenstein)", () => {
-    assert.throws(() => run(base({ "docs/adr/0002-x.md": adrNeu("0002", "X", "2026-02-30") })), /0002-x\.md.*2026-02-30/s);
+    assert.throws(() => run(base({ "docs/adr/0002-x.md": adrNeu("0002", "X", "2026-02-30") })), /0002-x\.md.*ungültiges Datum 2026-02-30/s);
     assert.throws(() => run(base({ "docs/meilensteine.json": ms({ datum: "2026-02-30", text: "t" }) })), /Meilenstein 0/);
   });
   test("H1 fehlt oder Nummer passt nicht zum Dateinamen: wirft", () => {
@@ -84,9 +84,15 @@ describe("Generator zeitleiste", () => {
     assert.equal(out.split("\n").length, 3);
   });
   test("Meilenstein ohne text/datum oder falscher Typ: wirft mit Index", () => {
-    assert.throws(() => run(base({ "docs/meilensteine.json": ms({ datum: "2026-01-01", text: "a" }, { datum: "2026-01-02", text: "" }) })), /Meilenstein 1/);
-    assert.throws(() => run(base({ "docs/meilensteine.json": ms({ datum: undefined, text: "a" }) })), /Meilenstein 0/);
-    assert.throws(() => run(base({ "docs/meilensteine.json": ms({ datum: "2026-01-01", text: 5 }) })), /Meilenstein 0/);
+    assert.throws(() => run(base({ "docs/meilensteine.json": ms({ datum: "2026-01-01", text: "a" }, { datum: "2026-01-02", text: "" }) })), /Meilenstein 1.*"text"/);
+    assert.throws(() => run(base({ "docs/meilensteine.json": ms({ datum: undefined, text: "a" }) })), /Meilenstein 0.*"datum"/);
+    assert.throws(() => run(base({ "docs/meilensteine.json": ms({ datum: "2026-01-01", text: 5 }) })), /Meilenstein 0.*"text"/);
+    assert.throws(() => run(base({ "docs/meilensteine.json": ms({ datum: "2026-01-01", text: "   " }) })), /Meilenstein 0.*"text"/);
+    assert.throws(() => run(base({ "docs/meilensteine.json": ms({ datum: "2026-06-12x", text: "a" }) })), /Meilenstein 0.*"datum"/);
+  });
+  test("kaputtes JSON in der Meilenstein-Datei: wirft mit Dateiname und wird mit ADR-Fehlern gesammelt", () => {
+    assert.throws(() => run(base({ "docs/meilensteine.json": "{ kaputt" })), /meilensteine\.json: nicht lesbar/);
+    assert.throws(() => run(base({ "docs/meilensteine.json": "{ kaputt", "docs/adr/0002-a.md": "# ADR 0002: A\n" })), /0002-a\.md.*meilensteine\.json: nicht lesbar/s);
   });
   test("meilensteine kein Array wirft", () => {
     assert.throws(() => run(base({ "docs/meilensteine.json": JSON.stringify({ meilensteine: "x" }) })), /Array/);

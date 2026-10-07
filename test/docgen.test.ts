@@ -323,6 +323,10 @@ describe("Generator harness-inventar", () => {
     assert.ok(out.includes("| Plugin | `ohne-markt` | — | `.claude/settings.json` |"));
     assert.ok(!out.includes("aus"));
     assert.ok(!gen(files).includes("| Plugin |"));
+    const unsorted = { ...files, ".claude/settings.json": JSON.stringify({ enabledPlugins: { "z@m": true, "a@m": true, "x@m": "true", "y@m": 1 } }) };
+    const o2 = gen(unsorted);
+    assert.ok(o2.indexOf("`a`") > 0 && o2.indexOf("`a`") < o2.indexOf("`z`"));
+    assert.ok(!o2.includes("`x`") && !o2.includes("`y`"));
   });
   test("konfigurierter Pfad fehlt: rot; nicht konfigurierter Teil entfällt", () => {
     assert.throws(() => gen({ ".mcp.json": "{}" }, { harness: { mcp: ".mcp.json", agents: "weg" } }), /weg.*nicht gefunden/);

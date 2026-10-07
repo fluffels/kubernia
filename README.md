@@ -32,7 +32,7 @@ Die drei Abschnitte darunter erzählen jeden dieser Punkte im Detail.
 
 ## 🤖 Gebaut von KI-Agenten
 
-Der komplette Code von Kubernia entsteht durch **autonome KI-Coding-Agenten** – kein Mensch tippt die Implementierung. Das ist nur deshalb sicher und billig, weil das Repo als **Harness** um die Agenten herum gebaut ist: klare Leitplanken, an denen ein Agent nicht vorbeikommt, statt Vertrauen in einen einzelnen guten Lauf. Die Badges oben (gemergte PRs, geschlossene Issues) zeigen live, in welchem Umfang das tatsächlich passiert – keine feste Zahl hier im Text, die veralten könnte. Alle Tabellen in diesem Abschnitt sind **generiert** und werden bei jedem Build gegen das Repo geprüft.
+Der komplette Code von Kubernia entsteht durch **autonome KI-Coding-Agenten** – kein Mensch tippt die Implementierung. Das ist nur deshalb sicher und billig, weil das Repo als **Harness** um die Agenten herum gebaut ist: klare Leitplanken, an denen ein Agent nicht vorbeikommt, statt Vertrauen in einen einzelnen guten Lauf. Die Badges oben (gemergte PRs, geschlossene Issues) zeigen live, in welchem Umfang das tatsächlich passiert – keine feste Zahl hier im Text, die veralten könnte. Alle Tabellen in diesem Abschnitt sind **generiert** und werden bei jedem PR in der CI gegen das Repo geprüft.
 
 ### Der Ticket-Lebenszyklus
 
@@ -44,13 +44,13 @@ Ein Agent nimmt **genau ein** Ticket vom Board und bringt es bis zum Merge. Dabe
 
 - **📖 Selbstdokumentierendes Repo.** Ein Agent findet alles im Repo selbst, auch in einem frischen Clone. [AGENTS.md](AGENTS.md) ist die einzige Quelle der harten Regeln und wird von Claude Code nativ geladen (eine `CLAUDE.md` gibt es bewusst nicht); alles andere liegt on-demand unter [`docs/`](docs/referenz/anlaufstellen.md), damit der Kontext klein bleibt.
 - **🗂️ Board, ein Ticket je Agent, Kollisionsschutz.** Der Backlog sind GitHub Issues im Project-Board, die [Auswahl](docs/ticket-reihenfolge.md) ist deterministisch. Parallele Agenten kommen sich nicht in die Quere: der Assignee markiert „in Arbeit", jeder arbeitet in einem eigenen `git worktree`.
-- **🧠 Rollen-Agenten und Modell-Routing.** Planen, Umsetzen, Reviewen und Erkunden sind eigene Subagenten, jeweils mit dem Modell, das für die Phase reicht (günstig zum Suchen, stark zum Planen und Reviewen). Welches Modell wo läuft, zeigt das Inventar unten; die Begründung steht in [docs/model-routing.md](docs/model-routing.md).
+- **🧠 Rollen-Agenten und Modell-Routing.** Planen, Umsetzen, Reviewen und Erkunden sind eigene Subagenten (vollständig im Inventar unten), jeweils mit dem Modell, das für die Phase reicht (günstig zum Suchen, stark zum Planen und Reviewen). Welches Modell wo läuft, zeigt das Inventar unten; die Begründung steht in [docs/model-routing.md](docs/model-routing.md).
 - **🔍 Mehr-Perspektiven-Review statt Selbstbewertung.** Vor jedem PR prüfen frische Kritiker den Diff durch getrennte Brillen (Architektur, Anforderungen, Tests, bei reiner Doku die Doku). Eine begrenzte Fix-Schleife sorgt für Konvergenz, und ein Nachweis im Commit (`KQ-Plan:`, `KQ-Review:`) wird von der CI erzwungen: wer nicht reviewt hat, kommt nicht durch.
 - **🛡️ Automatische Gates.** Die [Fitness-Functions unten](#-architektur--qualität) sichern die Autonomie ab: kein Schichtbruch, kein `any`, keine veraltete Doku, keine gebrochene Save-Migration schleicht sich unbemerkt ein, der Build wird rot.
 - **🪝 Hooks.** Vor jedem Shell-Befehl läuft ein Dispatcher mit Wächtern (Worktree-Pflicht, Guards für `gh`), vor der Übergabe des Umsetzers ein Abschluss-Wächter: ein offener PR ist kein Ende. Beim Sitzungsstart gleicht ein Hook den Hauptcheckout ab, am Ende räumt der Stop-Hook verwaiste Worktrees auf. Der lokale pre-push-Hook bleibt ein Zusatznetz; maßgeblich sind die Required Checks auf dem PR.
-- **🧩 Skills und Workflow.** Der immer gleiche Ticket-Ablauf ist als Skill kodifiziert, ebenso Review und Forum, dazu ein orchestrierter Workflow, der dieselben Phasen deterministisch fährt.
+- **🧩 Skills und Workflow.** Der immer gleiche Ticket-Ablauf ist als Skill kodifiziert, ebenso Review und Forum, dazu ein orchestrierter Workflow, der dieselben Phasen deterministisch fährt (vollständig im Inventar unten).
 - **🔌 MCP, gezielt statt global.** Nur projektbezogene Server, etwa für Pixel-Art und die Browser-Prüfung; die vollständige Liste steht im Inventar.
-- **🚧 Leitplanken ohne Label-Riegel.** Auch Änderungen an Harness und Gates mergt der Agent selbst, sobald CI und Review grün sind. Die Kontrolle liegt in der Spur: ein Audit-Kommentar nennt Was, Warum und den Revert-Weg ([ADR 0014](docs/adr/0014-leitplanken-ohne-label-riegel.md)).
+- **🚧 Leitplanken ohne Freigabe-Schritt.** Auch Änderungen an Harness und Gates mergt der Agent selbst, sobald CI und Review grün sind. Die Kontrolle läuft über eine Audit-Spur: ein Audit-Kommentar nennt Was, Warum und den Revert-Weg ([ADR 0014](docs/adr/0014-leitplanken-ohne-label-riegel.md)).
 - **📏 Messen mit Langfuse.** Ein Plugin erfasst jeden Agentenlauf, ein Messskript und ein wöchentlicher Takt ([ADR 0016](docs/adr/0016-langfuse-takt-woechentlich.md)) machen Kosten und Auffälligkeiten sichtbar.
 - **♻️ Lebende Doku.** Zählbares und Aufzählungen stehen nicht von Hand im Text, sondern kommen aus Generatoren und werden vom Gate `check:docgen` geprüft ([ADR 0017](docs/adr/0017-lebende-doku-generierte-abschnitte.md)).
 - **📐 ADRs statt nachträglicher Rechtfertigung.** Grundsatzentscheidungen werden als [Architecture Decision Record](docs/adr/) festgehalten, mit den verworfenen Alternativen; die Zeitleiste unten wird aus ihnen erzeugt.
@@ -98,6 +98,7 @@ Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehren
 | 15.06.2026 | `AGENTS.md` und Kollisionsschutz für parallele Agenten dokumentiert, aber noch eine **Bitte** |
 | 16.06.2026 | [ADR 0002](/docs/adr/0002-kein-backend-keine-db.md): Kein Backend, keine Datenbank, keine Service-Aufteilung fürs Kern-Spiel |
 | 16.06.2026 | [ADR 0003](/docs/adr/0003-multiplayer-coop-out-of-scope.md): Multiplayer/Co-op – aktuell außerhalb Scope |
+| 16.06.2026 | Engine-Wahl als erstes ADR festgehalten (#84); das ADR wurde später aktualisiert, die Zeile unten zeigt dieses spätere Datum |
 | 18.06.2026 | erste CI-Pipeline (#200), läuft aber erst nach dem Push |
 | 19.06.2026 | [ADR 0004](/docs/adr/0004-skalierungs-fundament.md): Langfristige Skalierungs-Architektur – Fundament für ein großes Spiel |
 | 21.06.2026 | [ADR 0006](/docs/adr/0006-backend-und-skalierung.md): Braucht Kubernia bei Stardew-Scope ein Backend? — Skalierungs-Review |
