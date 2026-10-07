@@ -100,7 +100,19 @@ function readPath(sim: Sim, path: string[]): unknown {
   return cur;
 }
 
-function asScalar(v: unknown, path: string): string | number | boolean {
+type Scalar = string | number | boolean;
+
+/** Fachliche Skalar-Gleichheit (#1296): Zahl und String sind gleich, wenn die Zahl dezimal
+ *  geschrieben genau dem String entspricht (80 ≙ "80"); sonst hinge ein Ziel-Check vom
+ *  Lösungsweg ab (expose → "80", apply-Manifest → 80). Booleans werden nie umgedeutet. */
+function scalarEq(actual: unknown, want: Scalar): boolean {
+  if (actual === want) return true;
+  if (typeof actual === "number" && typeof want === "string") return Number.isFinite(actual) && String(actual) === want;
+  if (typeof actual === "string" && typeof want === "number") return Number.isFinite(want) && actual === String(want);
+  return false;
+}
+
+function asScalar(v: unknown, path: string): Scalar {
   if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return v;
   return fail(path, "String, Zahl oder Boolean erwartet");
 }
@@ -108,14 +120,14 @@ function asScalar(v: unknown, path: string): string | number | boolean {
 /* ----------------------------------------------------------------------------
  * Matcher: prüft EIN Sammlungs-Element gegen eine Feld→Bedingung-Map. Alle Felder
  * müssen passen (implizites UND). Eine Feld-Bedingung ist entweder ein Literal
- * (=== ) oder ein Objekt mit genau einer der Formen truthy/len/includes/has/match.
+ * (fachliche Skalar-Gleichheit, scalarEq) oder ein Objekt mit genau einer der Formen truthy/len/includes/has/match.
  * -------------------------------------------------------------------------- */
 type ElPred = (el: unknown) => boolean;
 
 function compileFieldMatch(key: string, spec: unknown, path: string): ElPred {
-  // Literal: strikte Gleichheit (deckt Namen, Zahlen wie replicas, Booleans wie running ab).
+  // Literal: Skalar-Gleichheit, Zahl ≙ String (deckt Namen, Zahlen wie replicas, Booleans wie running ab).
   if (typeof spec === "string" || typeof spec === "number" || typeof spec === "boolean") {
-    return (el) => field(el, key) === spec;
+    return (el) => scalarEq(field(el, key), spec);
   }
   const o = asRecord(spec, path);
   const forms = ["truthy", "len", "includes", "has", "match"].filter((k) => k in o);
@@ -134,7 +146,7 @@ function compileFieldMatch(key: string, spec: unknown, path: string): ElPred {
     }
     case "includes": {
       const want = asScalar(o.includes, `${path}.includes`);
-      return (el) => { const v = field(el, key); return Array.isArray(v) && v.includes(want); };
+      return (el) => { const v = field(el, key); return Array.isArray(v) && v.some((x) => scalarEq(x, want)); };
     }
     case "has": {
       const sub = compileMatcher(o.has, `${path}.has`);
@@ -222,14 +234,14 @@ const RULE_COMPILERS: Record<RuleKind, (o: RuleObj, path: string) => CompiledChe
     const segs = asNonEmptyStringArray(o.flag, `${path}.flag`);
     if (o.eq !== undefined) {
       const want = asScalar(o.eq, `${path}.eq`);
-      return (sim) => readPath(sim, segs) === want;
+      return (sim) => scalarEq(readPath(sim, segs), want);
     }
     return (sim) => Boolean(readPath(sim, segs));
   },
   includes: (o, path) => {
     const segs = asNonEmptyStringArray(o.includes, `${path}.includes`);
     const want = asScalar(o.value, `${path}.value`);
-    return (sim) => { const v = readPath(sim, segs); return Array.isArray(v) && v.includes(want); };
+    return (sim) => { const v = readPath(sim, segs); return Array.isArray(v) && v.some((x) => scalarEq(x, want)); };
   },
 };
 

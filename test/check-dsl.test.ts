@@ -310,3 +310,49 @@ test("roles + roleBindings sind adressierbar (#133)", () => {
   assert.equal(evalRule(rb, { roleBindings: [{ name: "wachdienst-darf-lesen", subjects: [{ kind: "ServiceAccount", name: "wachdienst" }] }] }), true);
   assert.equal(evalRule(rb, { roleBindings: [{ name: "wachdienst-darf-lesen", subjects: [{ kind: "ServiceAccount", name: "andere" }] }] }), false);
 });
+
+/* ===================== Skalar-Gleichheit Zahl↔String (#1296) ===================== */
+
+test("Skalar-Gleichheit (#1296): where-Literal gleicht Zahl und String beidseitig", () => {
+  const rule = { some: "services", where: { name: "kombuese", port: "80" } };
+  assert.equal(evalRule(rule, { services: [{ name: "kombuese", port: 80 }] }), true);
+  assert.equal(evalRule(rule, { services: [{ name: "kombuese", port: "80" }] }), true);
+  const num = { some: "services", where: { port: 80 } };
+  assert.equal(evalRule(num, { services: [{ port: "80" }] }), true);
+  assert.equal(evalRule(num, { services: [{ port: 81 }] }), false);
+  assert.equal(evalRule(num, { services: [{ port: "81" }] }), false);
+});
+
+test("Skalar-Gleichheit (#1296): Grenzfälle bleiben ungleich", () => {
+  const num = { some: "services", where: { port: 80 } };
+  assert.equal(evalRule(num, { services: [{ port: "080" }] }), false);
+  assert.equal(evalRule(num, { services: [{ port: " 80" }] }), false);
+  assert.equal(evalRule({ some: "services", where: { port: 0 } }, { services: [{ port: "" }] }), false);
+  assert.equal(evalRule({ some: "services", where: { port: "80" } }, { services: [{ name: "x" }] }), false);
+  assert.equal(evalRule({ some: "services", where: { port: "NaN" } }, { services: [{ port: NaN }] }), false);
+  assert.equal(evalRule({ some: "services", where: { port: Infinity } }, { services: [{ port: "Infinity" }] }), false);
+});
+
+test("Skalar-Gleichheit (#1296): Booleans werden nie umgedeutet", () => {
+  assert.equal(evalRule({ some: "services", where: { running: true } }, { services: [{ running: "true" }] }), false);
+  assert.equal(evalRule({ some: "services", where: { running: "true" } }, { services: [{ running: true }] }), false);
+  assert.equal(evalRule({ some: "services", where: { replicas: 1 } }, { services: [{ replicas: true }] }), false);
+});
+
+test("Skalar-Gleichheit (#1296): flag/eq", () => {
+  assert.equal(evalRule({ flag: ["x", "port"], eq: 80 }, { x: { port: "80" } }), true);
+  assert.equal(evalRule({ flag: ["x", "port"], eq: "0" }, { x: { port: 0 } }), true);
+  assert.equal(evalRule({ flag: ["x", "port"], eq: 0 }, { x: { port: "" } }), false);
+  assert.equal(evalRule({ flag: ["x", "port"], eq: 0 }, { x: { port: false } }), false);
+});
+
+test("Skalar-Gleichheit (#1296): includes (Regel und Matcher)", () => {
+  assert.equal(evalRule({ includes: ["l"], value: 80 }, { l: ["80"] }), true);
+  assert.equal(evalRule({ includes: ["l"], value: "80" }, { l: [80] }), true);
+  assert.equal(evalRule({ includes: ["l"], value: 1 }, { l: [true] }), false);
+  assert.equal(evalRule({ includes: ["l"], value: 1 }, { l: [] }), false);
+  const m = { some: "services", where: { ports: { includes: 80 } } };
+  assert.equal(evalRule(m, { services: [{ ports: ["80"] }] }), true);
+  assert.equal(evalRule(m, { services: [{ ports: [true] }] }), false);
+  assert.equal(evalRule({ some: "services", where: { ports: { includes: "80" } } }, { services: [{ ports: [80] }] }), true);
+});
