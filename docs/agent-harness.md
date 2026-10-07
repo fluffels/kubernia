@@ -98,6 +98,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 | `npm run check:docmap` | `verify` | jede `src/`-Datei ist in einem Tiefendoc erwähnt, die Landkarte kann nicht leise veralten |
 | `npm run check:docdrift` | `verify` | dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien |
 | `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein |
+| `npm run check:c4` | `verify` | LikeC4-Modell: validiert, formatiert; Schichten, Phaser, Schicht-Kanten und Top-Level-Module stimmen mit `scripts/layers.cjs` und `src/` überein |
 | `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo |
 | `npm run check:lockfile` | `verify` | Lockfile passt zur `package.json` |
 | `npm run check:diffsize` | `verify` | Slice-Größe (Dateien und Zeilen gegen die Merge-Base) |
@@ -147,6 +148,11 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **WARUM:** handgepflegte Tabellen über Ableitbares veralten still (die Gate-Tabelle hier kannte `check:internalrefs` nicht). Ein Generator macht den Code zur Quelle; Konzept und Entscheidung: [ADR 0017](adr/0017-lebende-doku-generierte-abschnitte.md).
 - **Spiel-Generatoren (#1370):** `save-versionen` ist rot bei einer Migration ohne Beschreibung in `src/store/save-versionen.json` (und bei einer Beschreibung ohne Migration), `quest-graph` und `quests-je-thema` bei einer Quest, die in `quest-order.json` fehlt, einem Geber ohne Standplatz oder einem unbekannten `requires`/Thema; ein Content-Ticket läuft danach `npm run docs:gen`.
 - **Absicherung:** Engine und Generatoren laufen gegen ein Fixture-Root (Red-Green je Fehlerfall), dazu ein Echt-Repo-Test; Vergleich unabhängig von CRLF/LF, feste Sortierung ohne Locale. Engine und Config liegen unter `scripts/docs-gen*` und sind Leitplanken-Pfade.
+
+### Architekturmodell-Wächter (`npm run check:c4`, #1420)
+- **WAS:** das LikeC4-Modell unter [`docs/architektur/`](architektur/spiel.c4) (Element-Arten in `spezifikation.c4`, Views Kontext, Container, Schichten, Hauptmodule in `spiel.c4`) ist rot, wenn `likec4 validate` oder `likec4 format --check` scheitern (Fix: `npm run c4:format`) oder der Abgleich in `scripts/check-c4.mjs` etwas findet. Gebunden wird über **Art + Titel**: `schicht` und `bibliothek` gegen die Labels von `SCHICHT_MODELL` in `scripts/layers.cjs`, Beziehungen zwischen ihnen gegen `sollKanten` (rot in beide Richtungen: verbotene und fehlende), `modul` gegen die Top-Level-Einträge von `src/` (Ordner plus `.ts` ohne gleichnamigen Ordner, ohne `.d.ts`) unter der Schicht, die `schichtVon` liefert. Eine Beziehung mit Modul-Ende ist rot (nicht ableitbar), eine Art ohne Bindung und ohne Eintrag in `erzaehlung` ebenso (fail-closed), ein doppelter Titel in einer gebundenen Art ebenso, eine View über `architektur.maxKnotenJeView` Knoten (nur senken) ebenso. Pfade und Bindungen stehen im Block `architektur` von `scripts/docs-gen/config.json`. Jede Meldung nennt Datei:Zeile, Element und Fix. Ansehen: `npm run c4:serve`.
+- **WARUM:** das Modell ist eine zweite Ableitung derselben SSOTs wie die generierten Schichtdiagramme ([ADR 0020](adr/0020-architekturmodell-likec4.md)). Ein handgeschriebenes Modell ohne Abgleich würde still driften; ein neuer Top-Level-Ordner in `src/` macht `check:c4` rot, bis das Modul im Modell steht.
+- **Absicherung:** `test/check-c4.test.ts` (Fixture-Root, Red-Green je Regel; der Adapter `ladeC4Modell`, der einzige Zugriff auf die LikeC4-Model-API, läuft gegen einen gültigen und einen kaputten Fixture-Workspace). `likec4` ist exakt gepinnt (`1.59.4`), weil sich der Formatter zwischen Minor-Versionen ändern kann; ein Bump macht `check:c4` ggf. rot, Fix `npm run c4:format`. Skript und Config sind Leitplanken-Pfade.
 
 ### Harness-Drift-Wächter (`npm run check:docdrift`, #529)
 - **WAS:** hält die Doku jenseits der Datei-Landkarte ehrlich: (1) jedes in einem Markdown erwähnte `npm run <x>` (bzw. `npm test`) existiert als Skript in `package.json`; (2) jedes Kern-Skript (außer bewusst ausgenommener Convenience) ist in AGENTS.md/README/`docs/referenz/befehle.md` dokumentiert; (3) jeder interne, repo-relative Markdown-Link zeigt auf eine existierende Datei; (4) jeder `#anker` trifft eine reale Überschrift (GitHub-Slug-Regel). Gescannt wird jedes Markdown im Repo, unter `.claude/` (#1091) genau die versionierten Ordner `skills`/`agents`/`workflows` (Allowlist `VERSIONED_CLAUDE_DIRS`, gegen `.gitignore` abgeglichen; Worktrees und Lokales bleiben draußen). Auch als `test/docdrift.test.ts`.
@@ -399,7 +405,7 @@ flowchart LR
   subgraph bitte["Bitte: lokal, umgehbar"]
     regeln["AGENTS.md: Regeln<br/>und Konventionen"]
     hooks["Claude-Code-Hooks:<br/>Worktree-Guard, gh-Guard"]
-    verify["npm run verify<br/>13 Gates"]
+    verify["npm run verify<br/>14 Gates"]
     prepush["pre-push-Hook"]
   end
   subgraph mauer["Mauer: Server, nicht umgehbar"]

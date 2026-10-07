@@ -1,0 +1,91 @@
+// Spiel-Sichten von Kubernia. Titel der Arten schicht/bibliothek stammen aus scripts/layers.cjs,
+// Titel der Art modul sind die Top-Level-Einträge von src/ (Abgleich: npm run check:c4).
+model {
+  spielerin = person 'Spielerin' {
+    description 'Lernt Kubernetes spielerisch'
+  }
+  browser = system 'Browser-Plattform' {
+    description 'Führt das Spiel aus und stellt IndexedDB bereit'
+  }
+  kubernia = system 'Kubernia' {
+    description 'Lernspiel: Kubernetes als Hafenstadt'
+
+    spielApp = container 'Spiel-App' {
+      description 'Vite und TypeScript, Phaser als Bibliothek'
+
+      einstieg = schicht 'Einstieg/Assets' {
+        main = modul 'main'
+        assetsData = modul 'assets-data'
+      }
+      praesentation = schicht 'Präsentation' {
+        scenes = modul 'scenes'
+        ui = modul 'ui'
+        sfx = modul 'sfx'
+      }
+      anwendung = schicht 'Anwendung/Persistenz' {
+        game = modul 'game'
+        runtime = modul 'runtime'
+        devpanel = modul 'devpanel'
+        store = modul 'store'
+      }
+      domaene = schicht 'pure Domäne' {
+        content = modul 'content'
+        core = modul 'core'
+        crashreport = modul 'crashreport'
+        devtools = modul 'devtools'
+        hud = modul 'hud'
+        sim = modul 'sim'
+        types = modul 'types'
+        world = modul 'world'
+      }
+      phaser = bibliothek 'Phaser'
+
+      einstieg -> praesentation
+      einstieg -> anwendung
+      einstieg -> domaene
+      einstieg -> phaser
+      praesentation -> einstieg
+      praesentation -> anwendung
+      praesentation -> domaene
+      praesentation -> phaser
+      anwendung -> domaene
+    }
+
+    spielstand = datenspeicher 'Spielstand' {
+      technology 'IndexedDB, Fallback localStorage/In-Memory'
+    }
+
+    spielApp.anwendung -> spielstand 'speichert'
+  }
+
+  spielerin -> kubernia 'spielt'
+  kubernia -> browser 'läuft in'
+}
+
+views {
+  view index {
+    title 'Kontext'
+    include *
+  }
+
+  view container of kubernia {
+    title 'Container'
+    include *
+  }
+
+  view schichten of kubernia.spielApp {
+    title 'Schichten'
+    include *
+  }
+
+  view hauptmodule of kubernia.spielApp {
+    title 'Hauptmodule'
+    include
+      kubernia.spielApp.*,
+      kubernia.spielApp.einstieg.*,
+      kubernia.spielApp.praesentation.*,
+      kubernia.spielApp.anwendung.*,
+      kubernia.spielApp.domaene.*
+    exclude kubernia.spielApp.phaser
+  }
+}

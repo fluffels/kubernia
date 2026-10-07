@@ -3,6 +3,8 @@
 > Architecture Decision Record. Format: Kontext → Problem → Optionen → Entscheidung → Konsequenzen → Re-Evaluierung.
 > Status: **akzeptiert** · Datum: 2026-10-07 · Ticket: #1355 (Teil von #1354, Lebende Doku)
 
+> ⚠️ **Präzisiert durch [ADR 0020](0020-architekturmodell-likec4.md) (2026-10-08, #1420):** das LikeC4-Architekturmodell ist eine zweite Ableitung derselben SSOTs und wird von `check:c4` abgeglichen, nicht aus Mermaid-Export generiert.
+
 ## Status
 
 **Akzeptiert.** Die Mechanik steht in [`scripts/docs-gen.mjs`](../../scripts/docs-gen.mjs), die Pfade und Beschreibungen in [`scripts/docs-gen/config.json`](../../scripts/docs-gen/config.json), der Wächter in [docs/agent-harness.md](../agent-harness.md#lebende-doku-wächter-npm-run-checkdocgen-1355).
