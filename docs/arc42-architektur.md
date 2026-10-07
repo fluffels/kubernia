@@ -225,6 +225,7 @@ Eine erneute doku-freie Runde hat gezielt die harten „erledigt/erzwungen"-Clai
 | 0012 | **Harness-Autonomie:** Agent merged auch Harness-/Leitplanken-/Gate-PRs selbst, Audit-Kommentar statt Merge-Freigabe; Fokus der Harness-Phase (wenig Loop, wenig Tokens, hohe Qualität) | **akzeptiert** ([ADR 0012](adr/0012-harness-autonomie-audit-spur.md), #1069/#1072) — nimmt den Merge-Checkpoint aus #1012 zurück; präzisiert 0008/0009; Label-Riegel abgelöst durch 0014. |
 | 0013 | **`docs/` als agentengepflegtes Wiki:** kein zweiter Wissensspeicher und kein externes Brain; Wissensarten (Regeln/Entscheidungen/Evergreen/Stand/Schnappschüsse) mit festem Ort, kuratierte Pflege im selben PR, eine Landkarte (`anlaufstellen.md`) + Erreichbarkeits-Wächter | **akzeptiert** ([ADR 0013](adr/0013-docs-als-agentengepflegtes-wiki.md), #1083) — präzisiert 0012. |
 | 0014 | **Leitplanken ohne Label-Riegel:** kein CI-Job und kein Label für Gate-/Harness-Änderungen; Audit-Kommentar und Verhaltensregel bleiben, die Pfadquelle löst den Audit-Kommentar aus | **akzeptiert** ([ADR 0014](adr/0014-leitplanken-ohne-label-riegel.md), #1303) — löst den Label-Riegel aus 0012 ab. |
+| 0015 | **Projekt-Brain:** `docs/` nach Second-Brain-Prinzipien (atomare Seiten, Index zuerst, nichts always-loaded, Größenschwelle), Token-Ziel und Messung je Ticket-Lauf | **akzeptiert** ([ADR 0015](adr/0015-projekt-brain.md), #1205) — präzisiert 0013. |
 
 iSAQB-konform: jeder ADR trägt einen expliziten **Re-Evaluierungs-Trigger** — Entscheidungen sind an nachprüfbare Bedingungen geknüpft, nicht „für immer".
 
