@@ -43,7 +43,7 @@ describe("sammelticketBody", () => {
   test("offener Vorgänger: Nachfolger-Zeile UND „blockiert durch #N“", () => {
     const b = A.sammelticketBody({ art: "harness", vorgaenger: 1390, vorgaengerOffen: true });
     expect(b).toContain("Nachfolger von #1390 (dort in Arbeit).");
-    expect(b).toMatch(/^blockiert durch #1390$/m);
+    expect(b).toMatch(/^blockiert durch #1390 \(nur solange #1390 offen ist\)$/m);
   });
 
   test("geschlossener Vorgänger: genannt, aber ohne Blocker (kein stale „blockiert durch“)", () => {
@@ -79,7 +79,8 @@ describe("vorhandenesSammelticket", () => {
 describe("Verdrahtung (#1390)", () => {
   const skript = readFileSync(new URL("../scripts/sammelticket-anlegen.mjs", import.meta.url), "utf8");
   test("das Skript liest die Position aus AGENTS.md (keine eigene Zahl) und nutzt keinen Such-Index", () => {
-    expect(skript).toMatch(/sammelticketPosition\(readFileSync\(new URL\("\.\.\/AGENTS\.md"/);
+    expect(skript).toMatch(/positionLautAgentsMd|positionOderWarnung/);
+    expect(skript).not.toMatch(/readFileSync/);
     expect(skript).not.toMatch(/search\/issues|--search\b/);
     expect(skript).not.toMatch(/Position\s*:?\s*\d+/);
   });
