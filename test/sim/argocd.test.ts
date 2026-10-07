@@ -4,7 +4,8 @@
 import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./helpers";
-import type { ServiceSpec } from "../../src/sim/state";
+import { InvalidSpecError } from "../../src/sim/names";
+import type { ArgoApp, ServiceRes, ServiceSpec } from "../../src/sim/state";
 
 let sim: KQSim;
 beforeEach(() => { sim = freshSim(); });
@@ -380,7 +381,8 @@ test("argocd (#1409): App-of-Apps – ein kaputtes Kind stoppt die Flotte nicht"
   };
   sim.exec("kubectl apply -f wurzel.yaml");
   const r = sim.exec("argocd app sync wurzel");
-  assert.equal(r.error, false, "Wurzel-Sync wirft nicht ins Terminal");
+  assert.equal(r.error, true, "Wurzel-Sync meldet das fehlgeschlagene Kind (#1418)");
+  assert.doesNotMatch(r.output!, /Hoppla/, "Wurzel-Sync wirft nicht ins Terminal");
   assert.ok(sim.deployments.some(d => d.name === "kasse"), "Kind 2 ist ausgerollt");
   assert.ok(sim.argoApps.some(a => a.name === "bank"), "Kind 1 existiert als App");
   assert.match(sim.exec("argocd app get bank").output!, /OutOfSync/);
@@ -392,7 +394,9 @@ test("argocd (#1409): manueller Sync meldet die abgelehnte Spezifikation samt Ti
   const r = sim.exec("argocd app sync bank");
   assert.equal(r.error, true);
   assert.match(r.output!, /spec\.externalName: Required value/);
-  assert.match(r.output!, /💡 Setze spec\.externalName/);
+  assert.match(r.output!, /💡 Bei GitOps ist Git die Quelle der Wahrheit/);
+  assert.match(r.output!, /https:\/\/git\.hafen\.de\/apps\.git \(Pfad bank\/\)/);
+  assert.doesNotMatch(r.output!, /kubectl apply -f/, "kein kubectl-Tipp im GitOps-Kontext");
 });
 
 test("argocd (#1409): kubectl apply einer Auto-Sync-App mit abgelehntem Soll meldet den Fehler, die App bleibt angelegt", () => {
@@ -413,9 +417,202 @@ test("argocd (#1409): ein anderer Fehler als InvalidSpecError im Self-Heal wird 
 });
 
 test("Fehlernetz in exec (#1409): ein kaputter Argo-Zustand im Vorlauf wirft nicht, sondern meldet Hoppla", () => {
-  const s = new KQSim({ argoApps: [{ name: "kaputt", repo: "r", path: "p/", autoSync: true, selfHeal: true, created: 0 }] });
+  const s = new KQSim();
+  s.argoApps.push({ name: "kaputt", repo: "r", path: "p/", autoSync: true, selfHeal: true, created: 0 });
   const r = s.exec("kubectl get pods");
   assert.equal(r.error, true);
   assert.match(r.output!, /Hoppla/);
   assert.doesNotThrow(() => s.exec(""));
+});
+
+/* ===================== Sync-Fehler sichtbar (#1418) ===================== */
+
+function legeKaputteWurzel(s: KQSim) {
+  s.files["wurzel.yaml"] = "kind: Application …";
+  s.applyEffects["wurzel.yaml"] = {
+    application: {
+      name: "wurzel", repo: "r", path: "flotte/", autoSync: false,
+      childApps: [
+        { name: "bank", deployment: { name: "bank", image: "nginx", replicas: 1 }, service: sollKaputt },
+        { name: "kasse", deployment: { name: "kasse", image: "nginx", replicas: 1 } },
+      ],
+    },
+  };
+  s.exec("kubectl apply -f wurzel.yaml");
+}
+
+test("argocd (#1418): get zeigt bei abgelehntem Soll SyncError samt Meldung statt des Self-Heal-Hinweises", () => {
+  legeSollApp(sim, sollKaputt);
+  const out = sim.exec("argocd app get bank").output!;
+  assert.match(out, /Conditions:\s+SyncError/);
+  assert.match(out, /spec\.externalName: Required value/);
+  assert.match(out, /git\.hafen\.de\/apps\.git/);
+  assert.doesNotMatch(out, /Self-Heal ist an/);
+});
+
+test("argocd (#1418): manuelle App mit abgelehntem Soll zeigt SyncError, aber keinen 'argocd app sync'-Hinweis", () => {
+  legeSollApp(sim, sollKaputt, "bank", { autoSync: false, selfHeal: false });
+  const out = sim.exec("argocd app get bank").output!;
+  assert.match(out, /SyncError/);
+  assert.doesNotMatch(out, /Bring den Cluster/);
+});
+
+test("argocd (#1418): gültige manuelle OutOfSync-App und Synced-App zeigen keine Conditions-Zeile", () => {
+  legeSollApp(sim, { name: "bank", port: 80 }, "bank", { autoSync: false, selfHeal: false });
+  const oos = sim.exec("argocd app get bank").output!;
+  assert.doesNotMatch(oos, /Conditions|SyncError/);
+  assert.match(oos, /Bring den Cluster/);
+  sim.exec("argocd app sync bank");
+  assert.doesNotMatch(sim.exec("argocd app get bank").output!, /Conditions|SyncError/);
+});
+
+test("argocd (#1418): wird das Soll repariert, heilt der nächste Befehl und get zeigt Synced ohne SyncError", () => {
+  legeSollApp(sim, sollKaputt);
+  sim.argoApps[0].desired!.service!.externalName = "api.bank.example.com";
+  sim.exec("kubectl get pods");
+  const out = sim.exec("argocd app get bank").output!;
+  assert.match(out, /Sync Status:\s+Synced/);
+  assert.doesNotMatch(out, /SyncError/);
+});
+
+test("argocd (#1418): ungültiger Deployment-Name im Soll ist ein SyncError, es wird nichts angelegt", () => {
+  legeSollApp(sim, { name: "bank", port: 80 }, "bank");
+  sim.deployments.length = 0;
+  sim.services.length = 0;
+  sim.argoApps[0].desired!.deployment.name = "Bank_Kasse";
+  const out = sim.exec("argocd app get bank").output!;
+  assert.match(out, /SyncError/);
+  assert.match(out, /Bank_Kasse/);
+  assert.equal(sim.deployments.length, 0);
+});
+
+test("argocd (#1418): get ist ein Dry-Run ohne Seitenwirkung", () => {
+  legeSollApp(sim, sollKaputt);
+  const a = sim.exec("argocd app get bank").output;
+  const nS = sim.services.length, nD = sim.deployments.length;
+  assert.equal(sim.exec("argocd app get bank").output, a);
+  assert.equal(sim.services.length, nS);
+  assert.equal(sim.deployments.length, nD);
+});
+
+test("argocd (#1418): Wurzel-get markiert das kaputte Kind und verweist auf dessen Details", () => {
+  legeKaputteWurzel(sim);
+  sim.exec("argocd app sync wurzel");
+  const out = sim.exec("argocd app get wurzel").output!;
+  assert.match(out, /• bank .*❌ SyncError/);
+  assert.doesNotMatch(out, /• kasse .*SyncError/);
+  assert.match(out, /argocd app get bank/);
+  assert.doesNotMatch(out, /Self-Heal ist an/);
+});
+
+test("argocd (#1418): Wurzel-Sync meldet fehlgeschlagene Kinder statt 'Synced ✅', gesunde Kinder rollen aus", () => {
+  legeKaputteWurzel(sim);
+  const r = sim.exec("argocd app sync wurzel");
+  assert.equal(r.error, true);
+  assert.doesNotMatch(r.output!, /Synced ✅/);
+  assert.doesNotMatch(r.output!, /Hoppla/);
+  assert.match(r.output!, /1 von 2 Kind-Apps/);
+  assert.match(r.output!, /bank: .*spec\.externalName: Required value/);
+  assert.ok(sim.deployments.some(d => d.name === "kasse"));
+});
+
+test("argocd (#1418): bleibt eine Leaf-App nach dem Sync OutOfSync, gibt es kein 'Synced ✅'", () => {
+  legeSollApp(sim, { name: "bank", port: 80 }, "bank", { autoSync: false, selfHeal: false });
+  sim._makeService = () => { throw new InvalidSpecError("kaputt"); };
+  const r = sim.exec("argocd app sync bank");
+  assert.equal(r.error, true);
+  assert.doesNotMatch(r.output!, /Synced ✅/);
+});
+
+test("argocd (#1418): kubectl apply einer Auto-Sync-App mit kaputtem Soll nennt den Git-Tipp", () => {
+  const r = legeSollApp(sim, sollKaputt);
+  assert.match(r.output!, /Bei GitOps ist Git die Quelle der Wahrheit/);
+  assert.doesNotMatch(r.output!, /kubectl apply -f an/);
+});
+
+test("argocd (#1418): ein abgelehnter Soll bei vorhandenem gleichnamigem Service ist OutOfSync, der Live-Service bleibt", () => {
+  legeSollApp(sim, { name: "bank", port: 80 });
+  sim.exec("kubectl get pods");
+  sim.argoApps[0].desired!.service = sollKaputt;
+  const live = JSON.stringify(sim.services.find(x => x.name === "bank"));
+  sim.exec("kubectl get pods");
+  assert.equal(JSON.stringify(sim.services.find(x => x.name === "bank")), live);
+  const out = sim.exec("argocd app get bank").output!;
+  assert.match(out, /Sync Status:\s+OutOfSync/);
+  assert.match(out, /SyncError/);
+});
+
+/* --- Service-Drift über alle Spec-Felder (E1) --- */
+
+const DRIFT: [string, (v: ServiceRes) => void][] = [
+  ["type", v => { v.type = "NodePort"; }],
+  ["port", v => { v.port = 81; }],
+  ["targetPort", v => { v.targetPort = 9999; }],
+  ["externalName", v => { v.externalName = "evil.example.com"; }],
+];
+for (const [feld, mutiere] of DRIFT) {
+  test("argocd (#1418): Self-Heal stellt das Soll wieder her, wenn am Live-Service " + feld + " verfälscht wird", () => {
+    legeSollApp(sim, feld === "externalName"
+      ? { name: "bank", type: "ExternalName", port: "", externalName: "api.bank.example.com" }
+      : { name: "bank", port: 80, targetPort: 8080 });
+    sim.exec("kubectl get pods");
+    const soll = JSON.stringify(sim.services.find(x => x.name === "bank"));
+    const created = sim.services.find(x => x.name === "bank")!.created;
+    sim.clock += 5;
+    mutiere(sim.services.find(x => x.name === "bank")!);
+    sim.exec("kubectl get pods"); // Self-Heal läuft vor jedem Befehl
+    const geheilt = sim.services.find(x => x.name === "bank")!;
+    assert.equal(geheilt.created, created, "Patch-Semantik: created bleibt");
+    assert.equal(JSON.stringify(geheilt), soll);
+  });
+}
+
+test("argocd (#1418): abweichende, frei gesetzte clusterIP gilt als Synced und wird nicht ersetzt", () => {
+  legeSollApp(sim, { name: "bank", port: 80 });
+  sim.exec("kubectl get pods");
+  sim.services.find(x => x.name === "bank")!.clusterIP = "10.96.1.1";
+  assert.match(sim.exec("argocd app get bank").output!, /Sync Status:\s+Synced/);
+  sim.exec("kubectl get pods");
+  assert.equal(sim.services.find(x => x.name === "bank")!.clusterIP, "10.96.1.1");
+});
+
+test("argocd (#1418): explizites targetPort === port gilt bei Spec ohne targetPort als Synced", () => {
+  legeSollApp(sim, { name: "bank", port: 80 });
+  sim.exec("kubectl get pods");
+  sim.services.find(x => x.name === "bank")!.targetPort = 80;
+  assert.match(sim.exec("argocd app get bank").output!, /Sync Status:\s+Synced/);
+});
+
+/* --- Eingangsgrenze buildArgoApp (E2) --- */
+
+test("argocd (#1418): eine strukturell kaputte Argo-App wird vom Konstruktor abgelehnt", () => {
+  const dep = { name: "a", image: "nginx", replicas: 1 };
+  const ok = { name: "a", repo: "r", path: "p/", autoSync: true, selfHeal: true, created: 0, desired: { deployment: dep } };
+  const kaputt: unknown[] = [
+    { name: "k", repo: "r", path: "p/", autoSync: true, selfHeal: true, created: 0 },
+    { ...ok, desired: { deployment: undefined } },
+    { ...ok, desired: { deployment: dep, service: {} } },
+    { ...ok, desired: undefined, childApps: [{ name: "x" }] },
+    { ...ok, name: 5 },
+  ];
+  for (const k of kaputt) assert.throws(() => new KQSim({ argoApps: [k as ArgoApp] }), /Kaputte Argo-App/);
+  assert.doesNotThrow(() => new KQSim({ argoApps: [ok] }));
+  const wurzel = { ...ok, name: "w", desired: undefined, childApps: [{ name: "a", deployment: dep }] };
+  assert.doesNotThrow(() => new KQSim({ argoApps: [wurzel] }));
+});
+
+/* --- E3: erneutes kubectl apply einer App mit abgelehntem Soll --- */
+
+test("argocd (#1418): erneutes kubectl apply mit umgestellter Policy meldet den Fehler, ohne Änderung ist es unchanged", () => {
+  legeSollApp(sim, sollKaputt, "bank", { autoSync: false, selfHeal: false });
+  const r = legeSollApp(sim, sollKaputt, "bank", { autoSync: true, selfHeal: true });
+  assert.equal(r.error, true);
+  assert.match(r.output!, /Bei GitOps ist Git die Quelle der Wahrheit/);
+  assert.equal(sim.argoApps.length, 1);
+  assert.equal(sim.argoApps[0].autoSync, true);
+  assert.equal(sim.deployments.some(d => d.name === "bank"), false);
+  assert.match(sim.exec("argocd app get bank").output!, /SyncError/);
+  const again = sim.exec("kubectl apply -f bank-app.yaml");
+  assert.equal(again.error, false);
+  assert.match(again.output!, /unchanged/);
 });

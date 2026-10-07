@@ -40,7 +40,7 @@ import { kubectlCommand } from "./sim/kubectl";
 import { helmCommand } from "./sim/helm";
 import { terraformCommand } from "./sim/terraform";
 import { gitCommand } from "./sim/git";
-import { argocdCommand, reconcileAutoSync, cloneArgoApp } from "./sim/argocd";
+import { argocdCommand, reconcileAutoSync, cloneArgoApp, buildArgoApp } from "./sim/argocd";
 import { podMetrics as obsPodMetrics, nodeMetrics as obsNodeMetrics, scrapeTargets as obsScrapeTargets, alerts as obsAlerts, evaluateAlerts as obsEvaluateAlerts } from "./sim/observability";
 import { glabCommand } from "./sim/glab";
 import { kubeadmCommand, deriveControlPlane, applyBootstrapScenario } from "./sim/kubeadm";
@@ -172,7 +172,7 @@ const BUILDER_RESOURCE_REGISTRY: BuildEntry[] = [
   { key: 'pvs',             build: buildPv },
   { key: 'volumeSnapshots', build: buildVolumeSnapshot },
   { key: 'charts',          build: buildChart },
-  { key: 'argoApps',        build: cloneArgoApp, snap: cloneArgoApp },
+  { key: 'argoApps',        build: buildArgoApp, snap: cloneArgoApp },
 ];
 
 /* ---------- Befehls-Dispatch (#563) ----------
