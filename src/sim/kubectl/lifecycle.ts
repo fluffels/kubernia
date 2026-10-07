@@ -253,7 +253,7 @@ function deleteFromFile(host: KubectlHost, t: string[]): string {
   if (!file) return host._err("error: must specify one of -f or -k", "Muster: 'kubectl delete --filename deployment.yaml'");
   const content = host.files[file];
   if (typeof content !== "string") return host._err("error: the path \"" + file + "\" does not exist", "Mit 'ls' siehst du, welche Dateien hier liegen.");
-  // Hinterlegter Effekt hat Vorrang; sonst wird der Dateiinhalt geparst und gemappt (#1139).
+  // Der Dateiinhalt hat Vorrang (Mapper-Kinds); der hinterlegte Effekt dient als Rückfall und für Sim-Sonderfelder (#1299).
   const effects = fileEffects(host.applyEffects[file], content, file);
   if (!Array.isArray(effects)) return host._err(effects.error, effects.hint);
   const out: string[] = [];
@@ -718,7 +718,7 @@ export function kubectlApply(host: KubectlHost, t: string[]) {
   if (!file) return host._err("error: must specify one of -f or -k", "Muster: 'kubectl apply --filename deployment.yaml'");
   const content = host.files[file];
   if (typeof content !== "string") return host._err("error: the path \"" + file + "\" does not exist", "Mit 'ls' siehst du, welche Dateien hier liegen.");
-  // Hinterlegter Effekt hat Vorrang; sonst wird der Dateiinhalt geparst und gemappt (#1139).
+  // Der Dateiinhalt hat Vorrang (Mapper-Kinds); der hinterlegte Effekt dient als Rückfall und für Sim-Sonderfelder (#1299).
   const effects = fileEffects(host.applyEffects[file], content, file);
   if (!Array.isArray(effects)) return host._err(effects.error, effects.hint);
   const out: string[] = [];

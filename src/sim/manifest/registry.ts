@@ -3,9 +3,11 @@
  * je Dokument `apiVersion|kind` im Mapper-Register nachschlagen, alles-oder-nichts. Fehlertexte
  * folgen kubectl (englischer Rahmen), die Ursache steht deutsch dahinter, der Tipp separat.
  *
- * Vorrang: Eine Datei MIT `applyEffects`-Eintrag (Quests/Drills mit hinterlegter Wirkung) nutzt
- * diesen Effekt wie bisher; erst eine Datei OHNE Eintrag wird geparst und gemappt. Ein neuer
- * Ressourcentyp = ein Eintrag in `MAPPERS` (+ Mapper in der Datei der API-Gruppe, #1141/#1142). */
+ * Vorrang (#1299): Der Dateiinhalt ist die Wahrheit. Ein Parse-Fehler gewinnt immer. Haben alle
+ * Dokumente ein Mapper-Kind, gilt der Mapper-Pfad (der hinterlegte `applyEffects`-Eintrag liefert
+ * nur die Sim-Sonderfelder, siehe `withSimFields`). Sonst gilt der hinterlegte Effekt, falls
+ * vorhanden, ansonsten `no matches for kind`. Ein neuer Ressourcentyp = ein Eintrag in `MAPPERS`
+ * (+ Mapper in der Datei der API-Gruppe, #1141/#1142). */
 import type { ApplyEffect } from "../state";
 import { parseYamlDocuments, YamlError, type YamlValue } from "../yaml";
 import { Leaf, ManifestError } from "./fields";
@@ -69,16 +71,17 @@ function mapOne(doc: YamlValue, file: string, tag: string): ApplyEffect | Manife
   }
 }
 
-/** Parst und mappt den Inhalt einer Manifest-Datei. Alles oder nichts: ein Fehler in einem
- *  Dokument liefert den Fehlschlag und keinen einzigen Effekt. */
-export function effectsFromManifest(content: string, file: string): ManifestResult {
-  let docs: YamlValue[];
+function parseDocs(content: string, file: string): YamlValue[] | ManifestFailure {
   try {
-    docs = parseYamlDocuments(content);
+    return parseYamlDocuments(content);
   } catch (e) {
     if (!(e instanceof YamlError)) throw e;
     return failure("error: error parsing " + file + ": " + e.message, "Prüfe Einrückung (nur Leerzeichen) und das Muster 'key: wert' in der genannten Zeile.");
   }
+}
+
+/** Mappt geparste Dokumente. Alles oder nichts: ein Fehler in einem Dokument liefert den Fehlschlag. */
+function mapDocs(docs: YamlValue[], file: string): ManifestResult {
   if (docs.length === 0) return failure("error: no objects passed to apply", "Die Datei enthält kein Manifest (nur Kommentare oder nichts).");
   const effects: ApplyEffect[] = [];
   for (let i = 0; i < docs.length; i++) {
@@ -89,7 +92,50 @@ export function effectsFromManifest(content: string, file: string): ManifestResu
   return effects;
 }
 
-/** Die Wirkung einer Datei: der hinterlegte Effekt (Vorrang) oder der aus dem Inhalt gemappte. */
+/** Parst und mappt den Inhalt einer Manifest-Datei. Alles oder nichts. */
+export function effectsFromManifest(content: string, file: string): ManifestResult {
+  const docs = parseDocs(content, file);
+  return Array.isArray(docs) ? mapDocs(docs, file) : docs;
+}
+
+/** Die `kind`s mit Mapper, aus dem Register abgeleitet (kein zweiter Pflegeort). */
+const MAPPED_KINDS = new Set(Object.keys(MAPPERS).map(k => k.split("|")[1]));
+
+/* ---- Übergang bis #1143: Sim-Sonderfelder aus dem hinterlegten Effekt ---- */
+
+type DeploymentEffect = NonNullable<ApplyEffect["deployment"]>;
+
+/** Überlagert die Sonderfelder des hinterlegten Deployments (geschlossene Feldliste), nur bei
+ *  gleichem Namen und nur in Strukturen, die das YAML deklariert. */
+function overlayDeployment(mapped: DeploymentEffect, legacy: DeploymentEffect): DeploymentEffect {
+  if (mapped.name !== legacy.name) return mapped;
+  const out: DeploymentEffect = { ...mapped };
+  if (legacy.requireBuiltImage !== undefined) out.requireBuiltImage = legacy.requireBuiltImage;
+  if (legacy.ephemeralUsedMi !== undefined) out.ephemeralUsedMi = legacy.ephemeralUsedMi;
+  if (out.emptyDir && legacy.emptyDir) {
+    out.emptyDir = { ...out.emptyDir, ...(legacy.emptyDir.data !== undefined && { data: legacy.emptyDir.data }), ...(legacy.emptyDir.usedMi !== undefined && { usedMi: legacy.emptyDir.usedMi }) };
+  }
+  if (out.initContainer && legacy.initContainer) {
+    out.initContainer = { ...out.initContainer, ...(legacy.initContainer.fillsMi !== undefined && { fillsMi: legacy.initContainer.fillsMi }), ...(legacy.initContainer.doubleStage !== undefined && { doubleStage: legacy.initContainer.doubleStage }) };
+  }
+  return out;
+}
+
+function withSimFields(effects: ApplyEffect[], legacy: ApplyEffect): ApplyEffect[] {
+  const ld = legacy.deployment;
+  if (!ld) return effects;
+  return effects.map(e => (e.deployment ? { ...e, deployment: overlayDeployment(e.deployment, ld) } : e));
+}
+
+/** Die Wirkung einer Datei: der Inhalt (Mapper-Pfad) hat Vorrang, der hinterlegte Effekt dient als
+ *  Rückfall für Typen ohne Mapper und liefert die Sim-Sonderfelder per Ressourcen-Name. */
 export function fileEffects(legacy: ApplyEffect | undefined, content: string, file: string): ManifestResult {
-  return legacy ? [legacy] : effectsFromManifest(content, file);
+  const docs = parseDocs(content, file);
+  if (!Array.isArray(docs)) return docs;
+  const mappable = docs.length > 0 && docs.every(d => isMapping(d) && MAPPED_KINDS.has(textOf(d.kind)));
+  if (!legacy || mappable || docs.length === 0) {
+    const r = mapDocs(docs, file);
+    return legacy && Array.isArray(r) ? withSimFields(r, legacy) : r;
+  }
+  return [legacy];
 }

@@ -54,8 +54,7 @@ describe("ExternalName-Service – CNAME auf externen Namen", () => {
   let sim: KQSim;
   beforeEach(() => {
     sim = new KQSim({
-      files: { "externalname.yaml": "kind: Service\nmetadata:\n  name: bank-extern\nspec:\n  type: ExternalName\n  externalName: api.bank.example.com" },
-      applyEffects: { "externalname.yaml": { service: { name: "bank-extern", externalName: "api.bank.example.com", port: "" } } },
+      files: { "externalname.yaml": "apiVersion: v1\nkind: Service\nmetadata:\n  name: bank-extern\nspec:\n  type: ExternalName\n  externalName: api.bank.example.com" },
     });
   });
 
