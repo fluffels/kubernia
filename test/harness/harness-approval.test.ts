@@ -34,7 +34,8 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, posix } from "node:path";
+import { join } from "node:path";
+import { hookSkripte, lokaleImporteTransitiv } from "./hook-importe";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkInternalRefs from "../../scripts/check-internalrefs.mjs";
@@ -455,37 +456,6 @@ describe("Die Pre-Flight-Kriterien stehen nur in AGENTS.md (#1311)", () => {
 });
 
 // ── Hook-Abhängigkeiten sind geschützt (#1331) ───────────────────────────────
-
-/** Skripte, die `.claude/settings.json` als Hook startet (Argumente auf `scripts/*.mjs`). */
-function hookSkripte(settingsText: string): string[] {
-  const settings = JSON.parse(settingsText) as { hooks?: Record<string, { hooks: { args?: string[] }[] }[]> };
-  const skripte = new Set<string>();
-  for (const eintraege of Object.values(settings.hooks ?? {}))
-    for (const e of eintraege) for (const h of e.hooks) for (const a of h.args ?? []) if (/scripts\/[\w.-]+\.mjs$/.test(a)) skripte.add(a.replace(/^.*?(scripts\/)/, "$1"));
-  return [...skripte];
-}
-
-// Die Importformen: `from "./x"`, Side-Effect-`import "./x"`, dynamisches `import("./x")`, `require("./x")` und
-// `createRequire(…)("./x")` (Aufruf-Klammer direkt vor dem Literal; bewusst großzügig, fail-closed).
-const IMPORT_FORM = /(?:\bfrom\s+|\bimport\s*\(?\s*|\brequire\(\s*|\)\s*\(\s*)["'](\.{1,2}\/[\w./-]+\.(?:mjs|cjs))["']/g;
-
-/**
- * Alle lokalen relativen Importe (`IMPORT_FORM`; transitiv) der Wurzel-Skripte,
- * die Wurzeln eingeschlossen. Ein Import wird relativ zur IMPORTIERENDEN Datei aufgelöst, damit Module in
- * Unterordnern (`scripts/docs-gen/*.mjs`) und `../`-Importe nicht aus der Kette fallen (E1).
- */
-function lokaleImporteTransitiv(wurzeln: string[], lies: (rel: string) => string): string[] {
-  const gesehen = new Set<string>();
-  const offen = [...wurzeln];
-  while (offen.length > 0) {
-    const rel = offen.pop() as string;
-    if (gesehen.has(rel)) continue;
-    gesehen.add(rel);
-    const importe = lies(rel).matchAll(IMPORT_FORM);
-    for (const m of importe) offen.push(posix.normalize(posix.join(posix.dirname(rel), m[1])));
-  }
-  return [...gesehen].sort();
-}
 
 /** Skripte, die kein geschützter Eintrag der Quelle abdeckt (Präfix- oder Gleichheits-Vergleich). */
 function ungeschuetzt(skripte: string[], src: ProtectedSource): string[] {

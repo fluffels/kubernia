@@ -64,8 +64,58 @@
       "Bash(git push -f:*)",
       "Bash(npm publish:*)",
       "Bash(gh repo delete:*)",
-      "mcp__claude-in-chrome"
+      "mcp__claude-in-chrome",
+      "Read(~/.ssh/**)",
+      "Read(~/.config/gh/**)",
+      "Read(~/.claude/.credentials.json)",
+      "Read(~/.claude.json)",
+      "Read(~/.config/agent-secrets.env)",
+      "Read(/.env)",
+      "Read(/.env.local)"
     ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "allowUnsandboxedCommands": false,
+    "network": {
+      "allowedDomains": [
+        "registry.npmjs.org",
+        "github.com",
+        "api.github.com",
+        "codeload.github.com",
+        "objects.githubusercontent.com",
+        "raw.githubusercontent.com",
+        "*.pixellab.ai",
+        "cdn.playwright.dev",
+        "playwright.download.prss.microsoft.com"
+      ]
+    },
+    "filesystem": {
+      "denyRead": [
+        "/mnt",
+        "~/.ssh",
+        "~/.config/gh",
+        "~/.claude/.credentials.json",
+        "~/.claude.json",
+        "~/.config/agent-secrets.env",
+        "./.env",
+        "./.env.local"
+      ],
+      "denyWrite": [
+        "./scripts",
+        "./.githooks",
+        "./node_modules",
+        "./package-lock.json"
+      ]
+    },
+    "credentials": {
+      "envVars": [
+        { "name": "PIXELLAB_TOKEN", "mode": "deny" },
+        { "name": "GITHUB_TOKEN", "mode": "deny" },
+        { "name": "ANTHROPIC_API_KEY", "mode": "deny" },
+        { "name": "CLAUDE_CODE_OAUTH_TOKEN", "mode": "deny" }
+      ]
+    }
   },
   "hooks": {
     "SessionStart": [

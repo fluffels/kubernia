@@ -27,6 +27,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Required-Checks auf dem PR = maßgeblicher Gate (server-seitig, seit #592) | `gh pr merge <nr> --squash --delete-branch --auto` + `gh pr checks <nr> --watch` (Regel-Heimat: [AGENTS.md](../../AGENTS.md#das-wichtigste-zuerst-harte-regeln)) |
 | pre-push-Hook (fährt `verify`; seit #592 nur noch sekundäres Netz) | verdrahtet via `npm run setup`; greift nur bei Push auf `main` (server-seitig ohnehin blockiert) |
 | `gh`-Abfragen und Zählungen: Standardgrenzen beachten (#1349) | `gh issue list` ohne `--limit` liefert nur 30 Treffer (`--limit 500`), `gh api` ohne `--paginate` nur die erste Seite (`--paginate --slurp`); jede neue Abfrage oder Zählung darauf prüfen, auch im Delta eines Fixes (Architektur-Lens) |
+| Agenten-Sandbox prüfen (#1432, berichtend, Exit 0): Plattform, `bwrap`/`socat`, `wsl.conf`, User-Settings, Verhaltensprobe; `--vorlage` druckt die User-Settings-Vorlage (ohne Secret-Werte) | `node scripts/sandbox-doctor.mjs --check` / `--vorlage` ([Doku](../agent-harness.md#agenten-sandbox-wsl2)) |
 | Erstinstallation | `npm install` |
 | Dev-Server | `npm run dev` |
 | Host-/Prod-Build (Multi-File nach `dist/`) | `npm run build` |
