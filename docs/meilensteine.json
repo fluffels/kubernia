@@ -1,0 +1,22 @@
+{
+  "hinweis": "Meilensteine ohne eigenes ADR für die Zeitleiste in der README (Generator zeitleiste, npm run docs:gen). Ereignisse mit ADR stehen nicht hier, sie kommen aus docs/adr. Format je Eintrag: datum (JJJJ-MM-TT, Tag des Merges) und text.",
+  "meilensteine": [
+    { "datum": "2026-06-12", "text": "Projektstart: Agenten pushen frei auf `main` (Vibe Coding)" },
+    { "datum": "2026-06-15", "text": "`AGENTS.md` und Kollisionsschutz für parallele Agenten dokumentiert, aber noch eine **Bitte**" },
+    { "datum": "2026-06-16", "text": "Engine-Wahl als erstes ADR festgehalten (#84); das ADR wurde später aktualisiert, die Zeile unten zeigt dieses spätere Datum" },
+    { "datum": "2026-06-18", "text": "erste CI-Pipeline (#200), läuft aber erst nach dem Push" },
+    { "datum": "2026-06-30", "text": "Worktree-Konvention vereinheitlicht (#382), weil paralleles Arbeiten längst Alltag war" },
+    { "datum": "2026-07-01", "text": "lokaler pre-push-Hook fährt `npm run verify` (#528), umgehbar, also eine **Bitte**" },
+    { "datum": "2026-07-01", "text": "Review-Skill mit mehreren Perspektiven (#532)" },
+    { "datum": "2026-07-09", "text": "erster Claude-Code-Hook: blockt Commit und Push außerhalb eines Worktrees (#735)" },
+    { "datum": "2026-07-10", "text": "Planungs-Subagent vor dem Code (#745)" },
+    { "datum": "2026-07-13", "text": "Langfuse-Plugin erfasst jeden Lauf (#825)" },
+    { "datum": "2026-07-21", "text": "Modell-Routing nach Phase (#910)" },
+    { "datum": "2026-08-04", "text": "Ticket-Ablauf zusätzlich als orchestrierter Workflow (#996)" },
+    { "datum": "2026-08-05", "text": "Mehr-Perspektiven-Review als Konvergenzschleife (#1012), noch eine **Bitte**" },
+    { "datum": "2026-09-29", "text": "`AGENTS.md` als einzige, nativ geladene Kontextdatei (#1087)" },
+    { "datum": "2026-10-06", "text": "Review- und Plan-Nachweis in der PR-CI erzwungen (#1270): aus der Bitte wird eine **Mauer**" },
+    { "datum": "2026-10-06", "text": "Umsetzung im eigenen Subagenten bis zum Merge (#1280)" },
+    { "datum": "2026-10-06", "text": "Browser-Verifikation über den Playwright-MCP (#1283)" }
+  ]
+}

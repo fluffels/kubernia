@@ -2,11 +2,11 @@
  * `harness-inventar`. Engine und Generatoren laufen gegen ein Fixture-Root (mkdtemp), dazu ein
  * Echt-Repo-Test: die eingecheckten Abschnitte müssen aktuell sein (dasselbe prüft `check:docgen`).
  */
-import { afterEach, describe, test } from "vitest";
+import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fixture } from "./support/tmp-fixture";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as docsGen from "../scripts/docs-gen.mjs";
@@ -31,21 +31,6 @@ const gatesApi = gates as unknown as {
   gatesGenerator: (ctx: { rootDir: string; config: Cfg }) => string;
 };
 const inventarApi = inventar as unknown as { harnessInventarGenerator: (ctx: { rootDir: string; config: Cfg }) => string };
-
-const dirs: string[] = [];
-function fixture(files: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), "kq-docgen-"));
-  dirs.push(root);
-  for (const [rel, content] of Object.entries(files)) {
-    const abs = join(root, rel);
-    mkdirSync(join(abs, ".."), { recursive: true });
-    writeFileSync(abs, content);
-  }
-  return root;
-}
-afterEach(() => {
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
-});
 
 const S = "<!-- GEN:demo START -->";
 const E = "<!-- GEN:demo END -->";
@@ -327,6 +312,21 @@ describe("Generator harness-inventar", () => {
     assert.ok(out.includes("| MCP-Server | `local` | stdio, node scripts/x.mjs |"));
     assert.ok(out.indexOf("`local`") < out.indexOf("`remote`"));
     assert.ok(!out.includes("GEHEIM"));
+  });
+  test("Plugin: nur enabledPlugins mit true; Name und Marktplatz getrennt; ohne enabledPlugins keine Zeile", () => {
+    const withPlugins = {
+      ...files,
+      ".claude/settings.json": JSON.stringify({ enabledPlugins: { "an@markt": true, "aus@markt": false, "ohne-markt": true } }),
+    };
+    const out = gen(withPlugins);
+    assert.ok(out.includes("| Plugin | `an` | Marktplatz: markt | `.claude/settings.json` |"));
+    assert.ok(out.includes("| Plugin | `ohne-markt` | — | `.claude/settings.json` |"));
+    assert.ok(!out.includes("aus"));
+    assert.ok(!gen(files).includes("| Plugin |"));
+    const unsorted = { ...files, ".claude/settings.json": JSON.stringify({ enabledPlugins: { "z@m": true, "a@m": true, "x@m": "true", "y@m": 1 } }) };
+    const o2 = gen(unsorted);
+    assert.ok(o2.indexOf("`a`") > 0 && o2.indexOf("`a`") < o2.indexOf("`z`"));
+    assert.ok(!o2.includes("`x`") && !o2.includes("`y`"));
   });
   test("konfigurierter Pfad fehlt: rot; nicht konfigurierter Teil entfällt", () => {
     assert.throws(() => gen({ ".mcp.json": "{}" }, { harness: { mcp: ".mcp.json", agents: "weg" } }), /weg.*nicht gefunden/);

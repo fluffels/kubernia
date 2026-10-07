@@ -32,24 +32,28 @@ Die drei Abschnitte darunter erzählen jeden dieser Punkte im Detail.
 
 ## 🤖 Gebaut von KI-Agenten
 
-Der komplette Code von Kubernia entsteht durch **autonome KI-Coding-Agenten** – kein Mensch tippt die Implementierung. Das ist nur deshalb sicher und billig, weil das Repo als **Harness** um die Agenten herum gebaut ist: klare Leitplanken, an denen ein Agent nicht vorbeikommt, statt Vertrauen in einen einzelnen guten Lauf. Die Badges oben (gemergte PRs, geschlossene Issues) zeigen live, in welchem Umfang das tatsächlich passiert – keine feste Zahl hier im Text, die veralten könnte.
+Der komplette Code von Kubernia entsteht durch **autonome KI-Coding-Agenten** – kein Mensch tippt die Implementierung. Das ist nur deshalb sicher und billig, weil das Repo als **Harness** um die Agenten herum gebaut ist: klare Leitplanken, an denen ein Agent nicht vorbeikommt, statt Vertrauen in einen einzelnen guten Lauf. Die Badges oben (gemergte PRs, geschlossene Issues) zeigen live, in welchem Umfang das tatsächlich passiert – keine feste Zahl hier im Text, die veralten könnte. Alle Tabellen in diesem Abschnitt sind **generiert** und werden bei jedem PR in der CI gegen das Repo geprüft.
 
 ### Der Ticket-Lebenszyklus
 
 ![Lebenszyklus eines kubernia-Tickets: Board lesen → claimen → eigener Worktree → Umsetzen (TDD) → lokale Gates → Pull Request → CI-Pipeline → CI-Feedback → Merge → Aufräumen. Beide Rückkopplungsschleifen bei roten Gates führen zurück zu „Umsetzen", nicht zu einem neuen Ticket; ein Post-hoc-Alarm öffnet ein Issue, falls main trotz grüner Checks rot wird.](docs/img/agenten-lebenszyklus.png)
 
-Ein Agent nimmt **genau ein** Ticket vom Board, arbeitet es end-to-end ab und räumt danach auf. Beide Rückkopplungsschleifen – lokale Gates und CI – führen zurück zum **Umsetzen**-Schritt, nie zu einem neuen Ticket.
+Ein Agent nimmt **genau ein** Ticket vom Board und bringt es bis zum Merge. Dabei arbeiten mehrere Rollen zusammen: der Hauptchat wählt das Ticket und klärt Rückfragen, ein **Planer** entwirft den Umsetzungsplan, ein **Umsetzer** baut, testet und mergt in einem eigenen Worktree, und unabhängige **Kritiker** prüfen den Diff, bevor er in den PR geht. Beide Rückkopplungsschleifen (lokale Gates und CI) führen zurück zum **Umsetzen**-Schritt, nie zu einem neuen Ticket.
 
 ### Die Bausteine
 
-- **📖 Selbstdokumentierendes Repo (SSOT im Code).** Ein Agent findet alles, was er braucht, im Repo selbst – auch ohne externes Wissen (frischer Clone, Cloud-Agent). [AGENTS.md](AGENTS.md) ist die **SSOT** (harte Regeln, Board-Workflow, Konventionen – jede Regel genau einmal) und wird von Claude Code nativ geladen (eine `CLAUDE.md` gibt es bewusst nicht, #1087), die Nachschlage-Tabellen (Befehle, Subsystem-Landkarte, Schichtregeln, Anlaufstellen) liegen on-demand unter [`docs/referenz/`](docs/referenz/anlaufstellen.md), dazu **modul-lokale** `AGENTS.md` (z.B. in `src/content/`), die nur gelesen werden, wenn man im jeweiligen Bereich arbeitet (Kontext als Token-Grenze).
-- **🗂️ Board-getriebener Ein-Ticket-Workflow.** Der Backlog lebt als **GitHub Issues** + Project-Board; eine [deterministische Auswahl-Regel](docs/ticket-reihenfolge.md) (oberstes freies Item der manuellen Board-Reihenfolge) sagt, was als Nächstes dran ist. Ein Agent nimmt **genau ein** Ticket, arbeitet es end-to-end ab (umsetzen → Gates grün → im Browser verifizieren → nach `main` → Issue schließen) und pflegt danach das Board.
-- **🚦 Kollisionsschutz für parallele Agenten.** Mehrere Agenten können gleichzeitig laufen, ohne sich in die Quere zu kommen: Ein Ticket wird per **Assignee** als „in Arbeit" markiert (der einzige Zustand, den ein paralleler Agent sieht) und in einem **eigenen `git worktree`** auf eigenem Branch bearbeitet – so teilen sich zwei Chats nie dasselbe Arbeitsverzeichnis.
-- **🛡️ Automatische Gates als Sicherheitsnetz.** Genau die [Fitness-Functions unten](#-architektur--qualität) (typecheck/lint/arch/size/docmap/docdrift/test/smoke/audit) sind das, was autonome Entwicklung absichert: Ein Agent kann keinen Schichtbruch, keinen `any`, kein God-File, keine veraltete Doku-Landkarte und keine gebrochene Save-Migration unbemerkt einschleusen – der Build wird rot. **Determinismus** (seedbare Zufälligkeit statt `Math.random` in der Domäne) und die **Save-nie-brechen-Regel** gehören zum selben Netz.
-- **🪝 Hooks.** Kein Claude-Code-natives Hook-System im Einsatz, sondern ein klassischer Git-Hook (`.githooks/pre-push`, über `core.hooksPath`): fährt `npm run verify` lokal vor jedem Push auf `main`. Seit **serverseitiges PR-Gating** greift (Required Checks, `enforce_admins`), ist der Hook nur noch ein *sekundäres* Netz – die eigentliche Durchsetzung liegt auf dem PR, nicht mehr lokal.
-- **🧩 Skills für wiederkehrende Abläufe.** Der immer gleiche Ticket-Ablauf ist als **Skill** kodifiziert (`kubernia`), ebenso das Bearbeiten des Forums (`forum`, GitHub Discussions mit Freigabe-Stopp vor dem Posten) – reproduzierbare Abläufe statt freihändiger Improvisation.
-- **🔌 MCP, gezielt statt global.** Nur ein projekt-scoped Server (`pixellab` für Pixel-Art-Generierung) in `.mcp.json`, Token über Umgebungsvariable – kein globales Tooling, das jede Session automatisch mitschleppt.
-- **📐 ADRs statt nachträglicher Rechtfertigung.** Grundsatzentscheidungen (Engine, kein Backend, der Harness selbst, PR-Gating …) werden **vor** der Umsetzung als [Architecture Decision Record](docs/adr/) festgehalten – nachvollziehbar, warum eine Alternative verworfen wurde, nicht nur was am Ende dabei rauskam.
+- **📖 Selbstdokumentierendes Repo.** Ein Agent findet alles im Repo selbst, auch in einem frischen Clone. [AGENTS.md](AGENTS.md) ist die einzige Quelle der harten Regeln und wird von Claude Code nativ geladen (eine `CLAUDE.md` gibt es bewusst nicht); alles andere liegt on-demand unter [`docs/`](docs/referenz/anlaufstellen.md), damit der Kontext klein bleibt.
+- **🗂️ Board, ein Ticket je Agent, Kollisionsschutz.** Der Backlog sind GitHub Issues im Project-Board, die [Auswahl](docs/ticket-reihenfolge.md) ist deterministisch. Parallele Agenten kommen sich nicht in die Quere: der Assignee markiert „in Arbeit", jeder arbeitet in einem eigenen `git worktree`.
+- **🧠 Rollen-Agenten und Modell-Routing.** Planen, Umsetzen, Reviewen und Erkunden sind eigene Subagenten (vollständig im Inventar unten), jeweils mit dem Modell, das für die Phase reicht (günstig zum Suchen, stark zum Planen und Reviewen). Welches Modell wo läuft, zeigt das Inventar unten; die Begründung steht in [docs/model-routing.md](docs/model-routing.md).
+- **🔍 Mehr-Perspektiven-Review statt Selbstbewertung.** Vor jedem PR prüfen frische Kritiker den Diff durch getrennte Brillen (Architektur, Anforderungen, Tests, bei reiner Doku die Doku). Eine begrenzte Fix-Schleife sorgt für Konvergenz, und ein Nachweis im Commit (`KQ-Plan:`, `KQ-Review:`) wird von der CI erzwungen: wer nicht reviewt hat, kommt nicht durch.
+- **🛡️ Automatische Gates.** Die [Fitness-Functions unten](#-architektur--qualität) sichern die Autonomie ab: kein Schichtbruch, kein `any`, keine veraltete Doku, keine gebrochene Save-Migration schleicht sich unbemerkt ein, der Build wird rot.
+- **🪝 Hooks.** Vor jedem Shell-Befehl läuft ein Dispatcher mit Wächtern (Worktree-Pflicht, Guards für `gh`), vor der Übergabe des Umsetzers ein Abschluss-Wächter: ein offener PR ist kein Ende. Beim Sitzungsstart gleicht ein Hook den Hauptcheckout ab, am Ende räumt der Stop-Hook verwaiste Worktrees auf. Der lokale pre-push-Hook bleibt ein Zusatznetz; maßgeblich sind die Required Checks auf dem PR.
+- **🧩 Skills und Workflow.** Der immer gleiche Ticket-Ablauf ist als Skill kodifiziert, ebenso Review und Forum, dazu ein orchestrierter Workflow, der dieselben Phasen deterministisch fährt (vollständig im Inventar unten).
+- **🔌 MCP, gezielt statt global.** Nur projektbezogene Server, etwa für Pixel-Art und die Browser-Prüfung; die vollständige Liste steht im Inventar.
+- **🚧 Leitplanken ohne Freigabe-Schritt.** Auch Änderungen an Harness und Gates mergt der Agent selbst, sobald CI und Review grün sind. Die Kontrolle läuft über eine Audit-Spur: ein Audit-Kommentar nennt Was, Warum und den Revert-Weg ([ADR 0014](docs/adr/0014-leitplanken-ohne-label-riegel.md)).
+- **📏 Messen mit Langfuse.** Ein Plugin erfasst jeden Agentenlauf, ein Messskript und ein wöchentlicher Takt ([ADR 0016](docs/adr/0016-langfuse-takt-woechentlich.md)) machen Kosten und Auffälligkeiten sichtbar.
+- **♻️ Lebende Doku.** Zählbares und Aufzählungen stehen nicht von Hand im Text, sondern kommen aus Generatoren und werden vom Gate `check:docgen` geprüft ([ADR 0017](docs/adr/0017-lebende-doku-generierte-abschnitte.md)).
+- **📐 ADRs statt nachträglicher Rechtfertigung.** Grundsatzentscheidungen werden als [Architecture Decision Record](docs/adr/) festgehalten, mit den verworfenen Alternativen; die Zeitleiste unten wird aus ihnen erzeugt.
 
 Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdateien, daher immer aktuell):
 
@@ -71,6 +75,7 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/haupt-sync.mjs` | `.claude/settings.json` |
 | Hook | `Stop` | `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
 | Hook | `SubagentStop` | matcher: `kubernia-umsetzer`, `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
+| Plugin | `langfuse-observability` | Marktplatz: langfuse-observability | `.claude/settings.json` |
 | Git-Hook | `pre-push` | — | `.githooks/pre-push` |
 | MCP-Server | `pixellab` | http, api.pixellab.ai | `.mcp.json` |
 | MCP-Server | `playwright` | stdio, node scripts/playwright-mcp.mjs | `.mcp.json` |
@@ -79,16 +84,54 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 
 ### Wie das gewachsen ist
 
-Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehrenden Muster: Jede neue Leitplanke fängt als **Bitte** an – eine dokumentierte Konvention in `AGENTS.md`, ein lokaler Hook, der sich mit `--no-verify` umgehen lässt – und wird erst zur **Mauer**, sobald sie sich im Alltag bewährt hat: ein serverseitig erzwungenes CI-Gate, an dem kein Agent mehr vorbeikommt. Ganz am Anfang liefen Agenten entsprechend freier (Direkt-Push auf `main` war erlaubt, ein Pflicht-Worktree war noch keine Regel). Der Weg von diesem lockeren Start (**Vibe Coding**) hin zu einem Ablauf, in dem Mauern statt Bitten die Arbeit tragen (**Agentic Engineering**), lässt sich an den eigenen Commits und ADRs nachvollziehen, nicht nur behaupten:
+Der Harness war nicht von Tag 1 fertig geplant, sondern folgt einem wiederkehrenden Muster: Jede neue Leitplanke fängt als **Bitte** an – eine dokumentierte Konvention in `AGENTS.md`, ein lokaler Hook, der sich mit `--no-verify` umgehen lässt – und wird erst zur **Mauer**, sobald sie sich im Alltag bewährt hat: ein serverseitig erzwungenes CI-Gate, an dem kein Agent mehr vorbeikommt. Ganz am Anfang liefen Agenten entsprechend freier (Direkt-Push auf `main` war erlaubt, ein Pflicht-Worktree war noch keine Regel). Der Weg von diesem lockeren Start (**Vibe Coding**) hin zu einem Ablauf, in dem Mauern statt Bitten die Arbeit tragen (**Agentic Engineering**), lässt sich an den eigenen Commits und ADRs nachvollziehen, nicht nur behaupten. Die Zeitleiste ist generiert aus den ADRs und einer kleinen Meilenstein-Datei.
+
+<details>
+<summary>Zeitleiste aufklappen (generiert)</summary>
+
+<!-- GEN:zeitleiste START -->
+<!-- Generiert von npm run docs:gen – nicht von Hand ändern. -->
 
 | Datum | Was passierte |
 |---|---|
-| 12.06.2026 | Projektstart |
-| 15.06.2026 | `AGENTS.md` + Kollisionsschutz für parallele Agenten dokumentiert – schon am dritten Tag, aber noch **Bitte** |
-| 16.06.2026 | erste ADRs (Engine, kein Backend, kein Multiplayer) |
-| 30.06.2026 | Worktree-Konvention vereinheitlicht, weil paralleles Arbeiten längst Alltag war |
-| 01.07.2026 | der Harness selbst wird explizite Architekturentscheidung ([ADR 0008](docs/adr/0008-ki-agenten-harness.md)) – erst nachdem er sich wochenlang informell bewährt hatte |
-| 03.07.2026 | Direkt-Push auf `main` abgeschafft, PR-Gating mit Required Checks serverseitig erzwungen ([ADR 0009](docs/adr/0009-pr-gating-required-checks.md)) – aus der Bitte wird **Mauer** |
+| 12.06.2026 | Projektstart: Agenten pushen frei auf `main` (Vibe Coding) |
+| 15.06.2026 | `AGENTS.md` und Kollisionsschutz für parallele Agenten dokumentiert, aber noch eine **Bitte** |
+| 16.06.2026 | [ADR 0002](/docs/adr/0002-kein-backend-keine-db.md): Kein Backend, keine Datenbank, keine Service-Aufteilung fürs Kern-Spiel |
+| 16.06.2026 | [ADR 0003](/docs/adr/0003-multiplayer-coop-out-of-scope.md): Multiplayer/Co-op – aktuell außerhalb Scope |
+| 16.06.2026 | Engine-Wahl als erstes ADR festgehalten (#84); das ADR wurde später aktualisiert, die Zeile unten zeigt dieses spätere Datum |
+| 18.06.2026 | erste CI-Pipeline (#200), läuft aber erst nach dem Push |
+| 19.06.2026 | [ADR 0004](/docs/adr/0004-skalierungs-fundament.md): Langfristige Skalierungs-Architektur – Fundament für ein großes Spiel |
+| 21.06.2026 | [ADR 0006](/docs/adr/0006-backend-und-skalierung.md): Braucht Kubernia bei Stardew-Scope ein Backend? — Skalierungs-Review |
+| 21.06.2026 | [ADR 0007](/docs/adr/0007-spielsystem-fundamente.md): Spielsystem-Fundamente für Content-Skalierung (Quest-Modell, Checks, Zeit) |
+| 30.06.2026 | Worktree-Konvention vereinheitlicht (#382), weil paralleles Arbeiten längst Alltag war |
+| 01.07.2026 | [ADR 0008](/docs/adr/0008-ki-agenten-harness.md): KI-Agenten-Harness als Entwicklungsmodell |
+| 01.07.2026 | lokaler pre-push-Hook fährt `npm run verify` (#528), umgehbar, also eine **Bitte** |
+| 01.07.2026 | Review-Skill mit mehreren Perspektiven (#532) |
+| 03.07.2026 | [ADR 0005](/docs/adr/0005-auslieferungsform.md): Auslieferungsform bei Stardew-Scope — Web-App vs. Desktop-Download (bewusst offen gehalten) |
+| 03.07.2026 | [ADR 0009](/docs/adr/0009-pr-gating-required-checks.md): PR-Gating mit Required-Checks auf `main` (statt Direkt-Push) |
+| 09.07.2026 | erster Claude-Code-Hook: blockt Commit und Push außerhalb eines Worktrees (#735) |
+| 10.07.2026 | [ADR 0001](/docs/adr/0001-engine-phaser.md): Engine-Wahl – Phaser (vs. Godot/Unity/MonoGame) |
+| 10.07.2026 | Planungs-Subagent vor dem Code (#745) |
+| 13.07.2026 | Langfuse-Plugin erfasst jeden Lauf (#825) |
+| 21.07.2026 | Modell-Routing nach Phase (#910) |
+| 23.07.2026 | [ADR 0010](/docs/adr/0010-karten-modell-tiled-vs-code-builder.md): Zwei Karten-Modelle bewusst nebeneinander (Tiled-Daten vs. Code-Builder) |
+| 24.07.2026 | [ADR 0011](/docs/adr/0011-npc-system-fundament.md): NPC-System-Fundament — Datenmodell für lebendige NPCs (Zustand, Routinen, Beziehungen) |
+| 04.08.2026 | Ticket-Ablauf zusätzlich als orchestrierter Workflow (#996) |
+| 05.08.2026 | Mehr-Perspektiven-Review als Konvergenzschleife (#1012), noch eine **Bitte** |
+| 28.09.2026 | [ADR 0012](/docs/adr/0012-harness-autonomie-audit-spur.md): Harness-Autonomie — Audit-Spur statt Merge-Freigabe, Fokus der Harness-Phase |
+| 29.09.2026 | [ADR 0013](/docs/adr/0013-docs-als-agentengepflegtes-wiki.md): `docs/` als agentengepflegtes Wiki — kein zweiter Wissensspeicher, kein externes Brain |
+| 29.09.2026 | `AGENTS.md` als einzige, nativ geladene Kontextdatei (#1087) |
+| 06.10.2026 | [ADR 0014](/docs/adr/0014-leitplanken-ohne-label-riegel.md): Leitplanken ohne Label-Riegel — Audit-Kommentar und Verhaltensregel statt CI-Job |
+| 06.10.2026 | Review- und Plan-Nachweis in der PR-CI erzwungen (#1270): aus der Bitte wird eine **Mauer** |
+| 06.10.2026 | Umsetzung im eigenen Subagenten bis zum Merge (#1280) |
+| 06.10.2026 | Browser-Verifikation über den Playwright-MCP (#1283) |
+| 07.10.2026 | [ADR 0015](/docs/adr/0015-projekt-brain.md): Projekt-Brain — `docs/` nach Second-Brain-Prinzipien, token-sparsam und messbar |
+| 07.10.2026 | [ADR 0016](/docs/adr/0016-langfuse-takt-woechentlich.md): Langfuse-Takt — wöchentlicher Workflow statt Board-Position |
+| 07.10.2026 | [ADR 0017](/docs/adr/0017-lebende-doku-generierte-abschnitte.md): Lebende Doku — generierte Abschnitte, und ein Diagramm ist eine Regel |
+
+<!-- GEN:zeitleiste END -->
+
+</details>
 
 **Warum das funktioniert:** Nicht ein einzelner cleverer Prompt macht autonome KI-Entwicklung sicher, sondern die **Leitplanken drumherum** – SSOT-Doku, ein enger Ticket-Fokus, Kollisionsschutz und ein Gate-Netz, das jeden Fehler an der Grenze abfängt. Genau diese Kombination ist selbst ein Architekturziel (siehe [arc42 §8](docs/arc42-architektur.md)).
 
@@ -120,7 +163,7 @@ Kubernia ist bewusst so gebaut, dass es **so groß wie Stardew Valley** werden k
   | `npm run check:anysuppress` | `verify` | Ratchet auf die Zahl begründeter `any`-Ausnahmen |
   | `npm run check:docmap` | `verify` | jede `src/`-Datei ist in einem Tiefendoc erwähnt, die Landkarte kann nicht leise veralten |
   | `npm run check:docdrift` | `verify` | dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien |
-  | `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (Gate-Tabelle, Harness-Inventar) stimmen mit dem Repo überein |
+  | `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein |
   | `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo |
   | `npm run check:lockfile` | `verify` | Lockfile passt zur `package.json` |
   | `npm run check:diffsize` | `verify` | Slice-Größe (Dateien und Zeilen gegen die Merge-Base) |
@@ -209,7 +252,7 @@ Die volle Einordnung des Lernpfads (Phasen 1–10, „Von 0 zu Senior DevOps") s
 
 ## Projektstruktur
 
-Gebaut mit **Vite** + **TypeScript** (ES-Module) und **Phaser 3** (als npm-Paket, nicht mehr als Datei im Repo). `index.html` lädt nur `src/main.ts`; Vite bündelt den Rest. Es gibt zwei Build-Wege aus derselben Quelle: den Standard-Build (`npm run build` → `dist/`, gehostet, Assets als eigene Dateien) und den Offline-Export (`npm run build:offline` → self-contained `dist-offline/index.html` für den Doppelklick). Der Code ist in Schichten geordnet (pure Domäne → Anwendung → Präsentation), damit die Spiellogik ohne Phaser testbar bleibt.
+Gebaut mit **Vite** + **TypeScript** (ES-Module) und **Phaser 4** (als npm-Paket, nicht mehr als Datei im Repo). `index.html` lädt nur `src/main.ts`; Vite bündelt den Rest. Es gibt zwei Build-Wege aus derselben Quelle: den Standard-Build (`npm run build` → `dist/`, gehostet, Assets als eigene Dateien) und den Offline-Export (`npm run build:offline` → self-contained `dist-offline/index.html` für den Doppelklick). Der Code ist in Schichten geordnet (pure Domäne → Anwendung → Präsentation), damit die Spiellogik ohne Phaser testbar bleibt.
 
 Grobe Aufteilung:
 
@@ -243,7 +286,7 @@ Tests ausführen: `npm test` (Vitest). Typen prüfen: `npm run typecheck` (voll 
 
 Verwendete Fremd-Bausteine mit eigener Lizenz:
 
-- **Phaser 3** – MIT-Lizenz (kostenlos, auch kommerziell): https://phaser.io
+- **Phaser 4** – MIT-Lizenz (kostenlos, auch kommerziell): https://phaser.io
 - **Grafiken** – mit **[PixelLab AI](https://pixellab.ai)** im Top-down-Pixel-Art-Look erzeugt. Asset-Liste, IDs & Workflow: [`assets/pixellab/README.md`](assets/pixellab/README.md).
 - Sounds werden zur Laufzeit synthetisiert (WebAudio) – keine Audio-Dateien nötig.
 
