@@ -12,7 +12,8 @@
     "/.jscpd.json",
     "/.github/workflows/*.yml",
     "/.github/CODEOWNERS",
-    "/.github/protected-paths.json"
+    "/.github/protected-paths.json",
+    "/.github/ruleset-main-schutz.json"
   ],
   "harness": [
     "AGENTS.md",

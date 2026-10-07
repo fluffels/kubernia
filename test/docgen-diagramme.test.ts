@@ -19,6 +19,7 @@ type Ctx = { rootDir: string; config: Cfg };
 const api = dia as unknown as {
   diagrammGenerator: (name: string) => (ctx: Ctx) => string;
   ersetzePlatzhalter: (text: string, ctx: Ctx) => string;
+  jobNamenAus: (yaml: string) => string[];
 };
 const docgen = {
   loadConfig: (gen as unknown as { loadConfig: () => Cfg }).loadConfig,
@@ -42,9 +43,11 @@ const config: Cfg = {
       weg: { datei: "nix.js", name: "MAX_X" },
       keine: { datei: "leer.js", name: "MAX_X" },
     },
+    ruleset: ".github/ruleset-main-schutz.json",
     ciWorkflows: ".github/workflows",
   },
 };
+const RULESET = { name: "main-schutz", requiredChecks: ["Tests, Typecheck & Builds", "Security-Audit (npm audit)"], bypassActors: [] };
 
 const VOLL = "A ${agent:plan}\nB ${agent:Explore}\nC ${skill:flow}\nD ${workflow:wf}";
 const basis = (extra: Record<string, string> = {}): Record<string, string> => ({
@@ -54,6 +57,7 @@ const basis = (extra: Record<string, string> = {}): Record<string, string> => ({
   ".claude/workflows/wf.js": "export const meta = {\n  name: 'wf',\n}\n",
   "package.json": JSON.stringify({ scripts: { verify: "npm run a && npm run b && npm test", "verify:full": "npm run verify && npm run c", a: "x", b: "x", c: "x" } }),
   ".github/workflows/x.yml": 'name: CI\njobs:\n  t:\n    name: "Tests, Typecheck & Builds"\n  s:\n    name: Security-Audit (npm audit)\n',
+  ".github/ruleset-main-schutz.json": JSON.stringify(RULESET),
   "wf.js": "export const MAX_X = 2;\n",
   "dop.js": "const MAX_X = 1;\nconst MAX_X = 2;\n",
   "sum.js": "const MAX_X = 1 + 2;\n",
@@ -62,6 +66,7 @@ const basis = (extra: Record<string, string> = {}): Record<string, string> => ({
   "docs/diagramme/frei.mmd": "nur ${agent:plan}",
   ...extra,
 });
+const ALLE_CHECKS = "${required-check:Tests, Typecheck & Builds} ${required-check:Security-Audit (npm audit)}";
 const ersetze = (text: string, files = basis(), c: Cfg = config) => api.ersetzePlatzhalter(text, { rootDir: fixture(files), config: c });
 const erzeuge = (name: string, files = basis(), c: Cfg = config) => api.diagrammGenerator(name)({ rootDir: fixture(files), config: c });
 
@@ -76,8 +81,9 @@ describe("Platzhalter: Gutfälle", () => {
     assert.equal(ersetze("${konstante:cap}"), "2");
     assert.equal(ersetze("${gates:verify}"), "3");
     assert.equal(ersetze("${gates:verify:full}"), "1");
-    assert.equal(ersetze("${ci-check:Tests, Typecheck & Builds}"), "Tests, Typecheck & Builds");
-    assert.equal(ersetze("${ci-check:Security-Audit (npm audit)}"), "Security-Audit (npm audit)");
+    assert.equal(ersetze(ALLE_CHECKS), "Tests, Typecheck & Builds Security-Audit (npm audit)");
+    assert.equal(ersetze("${ruleset:name}"), "main-schutz");
+    assert.equal(ersetze("${ruleset:bypass}"), "ohne Bypass");
   });
   test("gates: ein zusammengesetzter Schritt zählt mit seinen Teilen (wie Gate-Tabelle und Drift-Wächter, #1392)", () => {
     const pkg = (scripts: Record<string, string>) => ({ "package.json": JSON.stringify({ scripts }) });
@@ -138,16 +144,52 @@ describe("Platzhalter: Rot-Fälle", () => {
     const f = basis({ ".claude/agents/k.md": "---\nname: k\nmodel: a{b\n---\n" });
     rot("${agent-modell:k}", /Zeichen, das Mermaid bricht/, f);
   });
-  test("ci-check: Workflow- und Step-Namen gelten nicht als Required Check", () => {
-    const f = basis({ ".github/workflows/y.yml": "name: Nur Workflow\njobs:\n  t:\n    steps:\n      - name: Nur Step\n" });
-    rot("${ci-check:Nur Workflow}", /Job-name/, f);
-    rot("${ci-check:Nur Step}", /Job-name/, f);
+  const mitRuleset = (checks: string[], extra: Record<string, string> = {}) =>
+    basis({ ".github/ruleset-main-schutz.json": JSON.stringify({ ...RULESET, requiredChecks: checks }), ...extra });
+  test("required-check: Workflow- und Step-Namen gelten nicht als Required Check (auch wenn das Ruleset sie führt)", () => {
+    const f = mitRuleset(["Nur Workflow", "Nur Step"], { ".github/workflows/y.yml": "name: Nur Workflow\njobs:\n  t:\n    steps:\n      - name: Nur Step\n" });
+    rot("${required-check:Nur Workflow} ${required-check:Nur Step}", /Required Check "Nur Workflow" hat keine passende Job-name:-Zeile/, f);
+    rot("${required-check:Nur Step} ${required-check:Nur Workflow}", /Required Check "Nur Step" hat keine passende Job-name:-Zeile/, f);
   });
-  test("ci-check: Name ohne passende Job-name:-Zeile, fehlender Ordner", () => {
-    rot("${ci-check:Gibt es nicht}", /CI-Check "Gibt es nicht" hat keine passende Job-name:-Zeile/);
+  test("required-check: Name nicht im Ruleset-Spiegel ist rot, auch wenn ein Job so heißt", () => {
+    const f = basis({ ".github/workflows/y.yml": "jobs:\n  z:\n    name: Nur im Workflow\n" });
+    rot("${required-check:Nur im Workflow}", /Required Check "Nur im Workflow" steht nicht im Ruleset-Spiegel/, f);
+    rot("${required-check:Gibt es nicht}", /steht nicht im Ruleset-Spiegel .*bekannt: Tests, Typecheck & Builds, Security-Audit/);
+  });
+  test("required-check: fehlender Workflow-Ordner, fehlender oder kaputter Spiegel", () => {
     const f = basis();
     delete f[".github/workflows/x.yml"];
-    rot("${ci-check:CI}", /CI-Workflow-Ordner|nicht gefunden/, f);
+    rot(ALLE_CHECKS, /CI-Workflow-Ordner|nicht gefunden/, f);
+    const ohne = basis();
+    delete ohne[".github/ruleset-main-schutz.json"];
+    rot(ALLE_CHECKS, /Ruleset-Spiegel \.github\/ruleset-main-schutz\.json nicht gefunden/, ohne);
+    rot(ALLE_CHECKS, /kein gültiges JSON/, basis({ ".github/ruleset-main-schutz.json": "{kaputt" }));
+    rot(ALLE_CHECKS, /requiredChecks muss eine nicht leere Liste/, basis({ ".github/ruleset-main-schutz.json": JSON.stringify({ ...RULESET, requiredChecks: [] }) }));
+    rot(ALLE_CHECKS, /bypassActors muss eine Liste/, basis({ ".github/ruleset-main-schutz.json": JSON.stringify({ name: "x", requiredChecks: ["a"] }) }));
+    rot("${ruleset:name}", /name fehlt/, basis({ ".github/ruleset-main-schutz.json": JSON.stringify({ requiredChecks: ["a"], bypassActors: [] }) }));
+  });
+  test("required-check: wer einen nennt, nennt alle (neuer Kontext im Ruleset macht die Vorlage rot)", () => {
+    rot("${required-check:Tests, Typecheck & Builds}", /Required Check "Security-Audit \(npm audit\)" aus dem Ruleset-Spiegel fehlt in der Vorlage/);
+    assert.equal(ersetze("kein Check genannt"), "kein Check genannt");
+  });
+  test("required-check: ein CI-Job in 2er-Einrückung wird gefunden (Struktur statt fester 4 Leerzeichen)", () => {
+    const f = basis({ ".github/workflows/x.yml": 'name: CI\njobs:\n  t:\n    name: Tests, Typecheck & Builds\n    steps:\n      - name: Step\n  s:\n    name: "Security-Audit (npm audit)"\n' });
+    assert.equal(ersetze(ALLE_CHECKS, f), "Tests, Typecheck & Builds Security-Audit (npm audit)");
+    const vier = basis({ ".github/workflows/x.yml": "name: CI\njobs:\n    t:\n        name: Tests, Typecheck & Builds # Kommentar\n    s:\n        name: Security-Audit (npm audit)\n" });
+    assert.equal(ersetze(ALLE_CHECKS, vier), "Tests, Typecheck & Builds Security-Audit (npm audit)");
+  });
+  test("jobNamenAus: nur name: genau auf Job-Kind-Ebene; Workflow-, Step-, verschachtelte und Kommentarnamen nicht", () => {
+    const y =
+      "name: Workflow\non: push\njobs:\n  # name: Kommentar\n  a:\n    name: Eins\n    steps:\n      - name: Step\n        with:\n          name: tief\n  b:\n    runs-on: x\n    name: 'Zwei'\nandere:\n  c:\n    name: Nicht in jobs\n";
+    assert.deepEqual(api.jobNamenAus(y), ["Eins", "Zwei"]);
+    assert.deepEqual(api.jobNamenAus("jobs:\n  a:\n    steps: []\n"), []);
+    assert.deepEqual(api.jobNamenAus(""), []);
+    assert.deepEqual(api.jobNamenAus("jobs:\r\n  a:\r\n    name: CRLF\r\n"), ["CRLF"]);
+  });
+  test("ruleset:bypass wirft bei Bypass-Akteuren (die Aussage „ohne Bypass“ wäre falsch); unbekannter Wert", () => {
+    const f = basis({ ".github/ruleset-main-schutz.json": JSON.stringify({ ...RULESET, bypassActors: [{ actor_type: "RepositoryRole" }] }) });
+    rot("${ruleset:bypass}", /Bypass-Akteure.*„ohne Bypass“ wäre falsch/, f);
+    rot("${ruleset:id}", /unbekannter Ruleset-Wert "id"/);
   });
   test("unsicherer Ersatzwert (Anführungszeichen, spitze Klammern, Semikolon, Raute) bricht ab", () => {
     for (const bad of ['a"b', "a<b", "a>b", "a;b", "a#b"]) {
@@ -183,6 +225,26 @@ describe("Vollständigkeit (AK4)", () => {
   test("ein Skill nur über skill-modell zählt als genannt", () => {
     const f = basis({ "docs/diagramme/voll.mmd": VOLL.replace("C ${skill:flow}", "C ${skill-modell:flow}") });
     assert.ok(erzeuge("voll", f).includes("C Session-Modell"));
+  });
+  describe("Vereinigung mehrerer Vorlagen (Z2b)", () => {
+    const zwei: Cfg = { ...config, diagramme: { ...config.diagramme, vollstaendig: ["a", "b"], vorlagen: { a: "docs/diagramme/a.mmd", b: "docs/diagramme/b.mmd" } } };
+    const teile = (a: string, b: string) => basis({ "docs/diagramme/a.mmd": a, "docs/diagramme/b.mmd": b });
+    test("zwei nur zusammen vollständige Vorlagen sind grün (jede für sich wäre rot)", () => {
+      const f = teile("A ${agent:plan}\nC ${skill:flow}", "B ${agent:Explore}\nD ${workflow:wf}");
+      assert.ok(erzeuge("a", f, zwei).includes("A plan"));
+      assert.ok(erzeuge("b", f, zwei).includes("B Explore"));
+    });
+    test("fehlt ein Name in beiden, ist es rot und die Meldung nennt beide Vorlagen", () => {
+      const f = teile("A ${agent:plan}\nC ${skill:flow}", "D ${workflow:wf}");
+      for (const n of ["a", "b"]) {
+        assert.throws(() => erzeuge(n, f, zwei), (e: Error) => /Vorlagen docs\/diagramme\/a\.mmd \+ docs\/diagramme\/b\.mmd/.test(e.message) && /Subagent "Explore"/.test(e.message));
+      }
+    });
+    test("eine in vollstaendig genannte, aber fehlende Vorlage ist rot", () => {
+      const f = teile("A ${agent:plan}", "x");
+      delete f["docs/diagramme/b.mmd"];
+      assert.throws(() => erzeuge("a", f, zwei), /Vorlage docs\/diagramme\/b\.mmd nicht gefunden/);
+    });
   });
   test("Vorlage außerhalb von vollstaendig braucht nicht alles", () => {
     assert.ok(erzeuge("frei").includes("nur plan"));

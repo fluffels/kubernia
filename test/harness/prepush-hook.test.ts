@@ -3,7 +3,7 @@
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  *
  * Motivation (Ticket #528, seit #592 nur noch Zusatznetz): `main` ist
- * server-seitig PR-gegated (Branch-Protection, enforce_admins, ADR 0009) — der
+ * server-seitig PR-gegated (Ruleset main-schutz ohne Bypass-Akteure, ADR 0009) — der
  * maßgebliche, nicht umgehbare Riegel sind die Required-Checks auf dem PR. Das
  * frühe lokale Feedback vor dem PR holt sich der Agent per manuellem
  * `npm run verify`. Der committete, per `npm run setup` via `core.hooksPath`

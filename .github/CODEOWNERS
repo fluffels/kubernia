@@ -40,6 +40,7 @@
 /.github/workflows/*.yml   @fluffels
 /.github/CODEOWNERS        @fluffels
 /.github/protected-paths.json @fluffels
+/.github/ruleset-main-schutz.json @fluffels
 
 # Harness/Leitplanken (#1012)
 # AGENTS.md bewusst OHNE fuehrenden '/' (#1168): trifft jede AGENTS.md auf jeder Ebene, auch
