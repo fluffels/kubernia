@@ -54,6 +54,7 @@ Kein `model:` am Spawn: Modell und Effort stehen im Frontmatter des Umsetzers un
 - **`entscheidung-noetig`** — bei einem fehlenden PixelLab-Asset das Asset selbst erzeugen und den Dateipfad per `SendMessage` zurückgeben, sonst die `FRAGEN` per `AskUserQuestion` vorlegen, dann denselben Umsetzer mit der Antwort fortsetzen: `SendMessage({ to: "<agentId aus dem Spawn>", message: "Antwort der Maintainerin: …" })`. Sein Kontext bleibt erhalten. Ist die Session inzwischen verloren, startet ein neuer Umsetzer; er übernimmt vorhandenen Worktree und Branch.
 - **`festgefahren`** — die Optionen vorlegen (aus dem PR-Kommentar bzw. bei Review-Blockern nach Cap 2 Fix-Runden, ohne PR, aus der Zusammenfassung), nicht selbst weiterprobieren.
 - **`abgebrochen`** — Grund melden; das Ticket bleibt zugewiesen.
+- **Zwischen-Hand-off ist kein Ende** (Bericht ohne gültiges Token, mit Zusatz wie „(Zwischenstand)“, oder PR offen mit Auto-Merge laut `gh pr view`): denselben Umsetzer per `SendMessage` fortsetzen („weiter bis zum Merge“), nicht selbst auf die CI warten und nicht neu starten.
 
 **Blockade nach dem Umsetzer-Ende:** Blockiert der Stop- bzw. SubagentStop-Hook wegen eines Waisen-Worktree-Ordners, im Hauptchat laufende Dev-Server per PowerShell `Stop-Process` beenden, dann `node scripts/cleanup-worktrees.mjs --fix` und mit `git worktree list` plus `Test-Path` verifizieren. Den Guard nie aufweichen.
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ASSET_MANIFEST, KQAssets, COMMON_ASSETS, assetsForScene } from "../src/assets-data";
+import { ASSET_MANIFEST, KQAssets, COMMON_ASSETS, assetsForScene, type AssetEntry } from "../src/assets-data";
 
 /* Sichert das Asset-Manifest (#59) ab: Es ist die EINE Datenquelle, aus der
  * BootScene laden + Frame-Slicing ableitet und KQAssets erzeugt wird. Diese Tests
@@ -20,23 +20,24 @@ describe("ASSET_MANIFEST", () => {
   });
 
   it("Sheets haben eine sinnvolle Spalten- und Frame-Größe (>=1)", () => {
-    for (const a of ASSET_MANIFEST) {
-      if (a.kind !== "sheet") continue;
+    const sheets = ASSET_MANIFEST.filter((a): a is Extract<AssetEntry, { kind: "sheet" }> => a.kind === "sheet");
+    expect(sheets.length).toBeGreaterThan(0);
+    for (const a of sheets) {
       expect(a.cols, a.key).toBeGreaterThanOrEqual(1);
       expect(Number.isInteger(a.cols), a.key).toBe(true);
-      if (a.frame !== undefined) {
-        expect(a.frame, a.key).toBeGreaterThanOrEqual(1);
-        expect(Number.isInteger(a.frame), a.key).toBe(true);
-      }
+    }
+    const mitFrame = sheets.filter((a) => a.frame !== undefined);
+    expect(mitFrame.length, "mindestens ein Sheet nennt eine Frame-Größe").toBeGreaterThan(0);
+    for (const a of mitFrame) {
+      expect(a.frame, a.key).toBeGreaterThanOrEqual(1);
+      expect(Number.isInteger(a.frame), a.key).toBe(true);
     }
   });
 
   it("plains tragen keine Slicing-Parameter (cols nur bei sheets)", () => {
-    for (const a of ASSET_MANIFEST) {
-      if (a.kind === "plain") {
-        expect("cols" in a, a.key).toBe(false);
-      }
-    }
+    const plains = ASSET_MANIFEST.filter((a) => a.kind === "plain");
+    expect(plains.length).toBeGreaterThan(0);
+    for (const a of plains) expect("cols" in a, a.key).toBe(false);
   });
 
   it("kennt die geschnittenen Tilesets als sheet mit erwarteter Spaltenzahl", () => {

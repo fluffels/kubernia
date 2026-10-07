@@ -34,8 +34,8 @@ describe("Map-Registry – jeder Eintrag ist konsistent zu seinem .tmj", () => {
     expect(layerNames).toContain(entry.groundLayer);
     expect(layerNames).toContain(entry.collisionLayer);
     // Optionale Objektlayer (Türen #194 / NPCs #195) müssen existieren, wenn deklariert.
-    if (entry.warpLayer) expect(layerNames).toContain(entry.warpLayer);
-    if (entry.npcLayer) expect(layerNames).toContain(entry.npcLayer);
+    const optional = [entry.warpLayer, entry.npcLayer].filter((n): n is string => Boolean(n));
+    expect(layerNames).toEqual(expect.arrayContaining(optional));
   });
 
   it.each(ids)("Spawn von \"%s\" liegt innerhalb der Karte", (id) => {

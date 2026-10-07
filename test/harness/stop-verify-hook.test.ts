@@ -372,8 +372,12 @@ PR: https://github.com/x/y/pull/7`, ...extra });
     assert.match(r.stderr, /Waise kq-1 \| .*Auto-Merge/);
   });
 
-  test("frei bei festgefahren, bei stop_hook_active und bei gh-Fehler", () => {
-    assert.equal(runHook(payload("festgefahren"), "/x", frei, { prStatus: offen }).exit, 0);
+  test("festgefahren bei offenem PR: nur mit Label status:festgefahren frei (#1342)", () => {
+    assert.equal(runHook(payload("festgefahren"), "/x", frei, { prStatus: offen }).exit, 2);
+    assert.equal(runHook(payload("festgefahren"), "/x", frei, { prStatus: () => ({ state: "OPEN", autoMergeRequest: null, labels: [{ name: "status:festgefahren" }] }) }).exit, 0);
+  });
+
+  test("frei bei stop_hook_active und bei gh-Fehler", () => {
     assert.equal(runHook(payload("abgebrochen", { stop_hook_active: true }), "/x", frei, { prStatus: offen }).exit, 0);
     assert.equal(runHook(payload("abgebrochen"), "/x", frei, { prStatus: () => { throw new Error("x"); } }).exit, 0);
   });

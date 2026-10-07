@@ -39,35 +39,61 @@ export function planPlacements(items, numbers, afterNumber = null) {
 /** Titel des Sammeltickets für Harness-Befunde (AGENTS.md § Harness-Befunde sind Zeilen). */
 export const SAMMELTICKET_TITEL = "Harness-Härtung (gesammelt)";
 
+/** Titel des Sammeltickets für Langfuse-Befunde (Mechanik: docs/ticket-reihenfolge.md). */
+export const LANGFUSE_SAMMELTICKET_TITEL = "Langfuse-Befunde (gesammelt)";
+
+/** Alle Sammeltickets, die das Einsortieren kennt (die Klemmung rechnet mit allen, nicht nur mit dem Harness-Sammelticket). */
+export const SAMMELTICKET_TITEL_LISTE = [SAMMELTICKET_TITEL, LANGFUSE_SAMMELTICKET_TITEL];
+
+const ungeclaimt = (i) => (i.assignees ?? []).length === 0;
+
 /**
  * Das ungeclaimte Sammelticket: offen, ohne Assignee, Titel `SAMMELTICKET_TITEL`. Ein geclaimtes (zugewiesenes) oder
  * geschlossenes zählt nicht, ebenso nicht die Nummern aus `ohne` (das Ticket, das gerade einsortiert wird). Bei mehreren
  * das oberste in Board-Reihenfolge. Pur.
  */
 export function sammelticketItem(items, ohne = []) {
-  return (
-    items.find(
-      (i) => i.title === SAMMELTICKET_TITEL && i.state === "open" && (i.assignees ?? []).length === 0 && !ohne.includes(i.number),
-    ) ?? null
-  );
+  return items.find((i) => i.title === SAMMELTICKET_TITEL && i.state === "open" && ungeclaimt(i) && !ohne.includes(i.number)) ?? null;
 }
 
 /**
- * Neue Tickets landen nie VOR dem ungeclaimten Sammelticket (sonst rückt es nicht nach vorn): ist der Anker `null` (Spitze)
- * oder steht er im Board vor dem Sammelticket, wird das Sammelticket der Anker. Der Anker selbst, alles dahinter, ein Anker
- * außerhalb der Liste (meldet der Aufrufer), ein Board ohne Sammelticket und `notfall` bleiben unverändert. Das Sammelticket
- * selbst klemmt nicht (es steht in `numbers`). Liefert `{ anker, geklemmt, sammelticket }`. Pur.
+ * Der Sammelblock des Boards: die ungeclaimten Sammeltickets (alle Titel aus `SAMMELTICKET_TITEL_LISTE`), die ab dem ungeclaimten
+ * Harness-Sammelticket bis zum nächsten offenen, ungeclaimten Nicht-Sammelticket aufeinander folgen. Ohne ungeclaimtes
+ * Harness-Sammelticket beginnt der Block an der Spitze. Ein Status- oder Notfall-Ticket DAVOR (die stehen regelkonform oben)
+ * stört ihn so nicht. Geschlossene, geclaimte und gerade einsortierte (`ohne`) Items überspringt der Block, sie beenden ihn nicht.
+ * In Board-Reihenfolge. Pur.
+ */
+export function sammelblock(items, ohne = []) {
+  const harness = sammelticketItem(items, ohne);
+  const start = harness ? items.findIndex((i) => i.id === harness.id) : 0;
+  const block = [];
+  for (const i of items.slice(start)) {
+    if (i.state !== "open" || !ungeclaimt(i) || ohne.includes(i.number)) continue;
+    if (!SAMMELTICKET_TITEL_LISTE.includes(i.title)) break;
+    block.push(i);
+  }
+  return block;
+}
+
+/**
+ * Neue Tickets landen nie VOR den ungeclaimten Sammeltickets (sonst rücken sie nicht nach vorn): der Klemm-Anker ist das am
+ * weitesten hinten stehende von (a) dem ungeclaimten Harness-Sammelticket, wo es auch steht, und (b) den ungeclaimten
+ * Sammeltickets im Sammelblock (`sammelblock`). Ist der Anker `null` (Spitze) oder steht er im Board davor, wird
+ * dieser Anker genommen. Der Anker selbst, alles dahinter, ein Anker außerhalb der Liste (meldet der Aufrufer), ein Board ohne
+ * ungeclaimtes Sammelticket und `notfall` bleiben unverändert. Das Sammelticket selbst klemmt nicht (es steht in `numbers`).
+ * Liefert `{ anker, geklemmt, sammelticket }`. Pur.
  */
 export function klemmeAnker(items, ankerNr, { numbers = [], notfall = false } = {}) {
   const unveraendert = { anker: ankerNr, geklemmt: false, sammelticket: null };
   if (notfall) return unveraendert;
-  const sammel = sammelticketItem(items, numbers);
-  if (!sammel) return unveraendert;
-  const sammelIdx = items.findIndex((i) => i.id === sammel.id);
+  const kandidaten = [sammelticketItem(items, numbers), ...sammelblock(items, numbers)].filter(Boolean);
+  if (kandidaten.length === 0) return unveraendert;
+  const idx = (item) => items.findIndex((i) => i.id === item.id);
+  const ziel = kandidaten.reduce((hinten, k) => (idx(k) > idx(hinten) ? k : hinten));
   const ankerIdx = ankerNr === null ? -1 : items.findIndex((i) => i.number === ankerNr);
   if (ankerNr !== null && ankerIdx < 0) return unveraendert;
-  if (ankerIdx >= sammelIdx) return unveraendert;
-  return { anker: sammel.number, geklemmt: true, sammelticket: sammel.number };
+  if (ankerIdx >= idx(ziel)) return unveraendert;
+  return { anker: ziel.number, geklemmt: true, sammelticket: ziel.number };
 }
 
 /**
@@ -84,7 +110,8 @@ export function planFuerArgs(items, args) {
 export const isRateLimit = (message) => /rate limit/i.test(String(message ?? ""));
 
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
-const gh = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+const gh = (args, { token } = {}) =>
+  execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, env: token ? { ...process.env, GH_TOKEN: token } : process.env });
 
 /** Feld-ID von „Status“ im Board (REST braucht sie als `fields=`, sonst fehlt der Status). */
 export const STATUS_FIELD_ID = 358708531;
@@ -156,19 +183,41 @@ export function loadItems() {
   return normalizeItems(JSON.parse(out));
 }
 
-/** Nummern aller offenen Issues (REST; PRs herausgefiltert). */
-export function loadOpenIssueNumbers() {
-  const pages = JSON.parse(gh(["api", "--paginate", "--slurp", "repos/fluffels/kubernia/issues?state=open&per_page=100"]));
-  return pages.flat().filter((i) => !i.pull_request).map((i) => i.number);
+/** Alle offenen Issues (und PRs) als Liste von Seiten, wie `gh api --paginate --slurp` sie liefert (REST). */
+export function loadOpenIssuePages(repo = "fluffels/kubernia") {
+  return JSON.parse(gh(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=open&per_page=100`]));
 }
 
-/** Position setzen: hinter `afterId`, null = an die Spitze. */
-export function setPosition(itemId, afterId) {
-  const query =
-    "mutation($p:ID!,$i:ID!,$a:ID){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }";
-  const args = ["api", "graphql", "-f", `query=${query}`, "-f", `p=${PROJECT_ID}`, "-f", `i=${itemId}`];
-  if (afterId) args.push("-f", `a=${afterId}`);
-  gh(args);
+/** Nummern aller offenen Issues (REST; PRs herausgefiltert). */
+export function loadOpenIssueNumbers() {
+  return loadOpenIssuePages().flat().filter((i) => !i.pull_request).map((i) => i.number);
+}
+
+const graphql = (query, vars, opts) => {
+  const args = ["api", "graphql", "-f", `query=${query}`];
+  for (const [k, v] of Object.entries(vars)) if (v !== null && v !== undefined) args.push("-f", `${k}=${v}`);
+  return JSON.parse(gh(args, opts));
+};
+
+/** Position setzen: hinter `afterId`, null = an die Spitze. `opts.token` = anderer GH_TOKEN (Projekt-Scope im Workflow). */
+export function setPosition(itemId, afterId, opts = {}) {
+  graphql(
+    "mutation($p:ID!,$i:ID!,$a:ID){ updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){ items(first:1){ nodes{ id } } } }",
+    { p: PROJECT_ID, i: itemId, a: afterId },
+    opts,
+  );
+}
+
+/** Issue (node_id) ins Board holen (idempotent) und Status Todo setzen. Liefert die Item-ID `PVTI_…`. */
+export function addToBoardTodo(nodeId, opts = {}) {
+  const item = graphql("mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }", { p: PROJECT_ID, c: nodeId }, opts);
+  const itemId = item.data.addProjectV2ItemById.item.id;
+  graphql(
+    "mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }",
+    { p: PROJECT_ID, i: itemId, f: STATUS_FIELD_NODE_ID, o: TODO_OPTION_ID },
+    opts,
+  );
+  return itemId;
 }
 
 /** Node-ID des Single-Select-Feldes „Status“ (GraphQL-Mutationen; die REST-Liste nutzt `STATUS_FIELD_ID`). */

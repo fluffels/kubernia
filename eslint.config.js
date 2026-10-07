@@ -14,6 +14,7 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import globals from "globals";
+import vitest from "@vitest/eslint-plugin";
 
 export default tseslint.config(
   // 1) Was der Linter NIE anfasst: Build-Artefakte. node_modules ignoriert ESLint 9
@@ -161,5 +162,17 @@ export default tseslint.config(
         },
       ],
     },
+  },
+
+  // 6) Test-Wächter (#1342): `vitest/no-conditional-expect`. Ein `expect` im if-/catch-/?:-Zweig
+  //    wird nie rot, wenn der Zweig nie läuft: der Test ist dann ein falsches Grün (die
+  //    Red-Green-Regel aus AGENTS.md, maschinell). Nur diese EINE Regel aus dem Plugin, nur
+  //    für Tests, ohne Baseline (der Bestand ist gefixt, nicht in eslint-suppressions.json
+  //    eingefroren). Bewacht von test/harness/conditional-expect-gate.test.ts. Bekannte
+  //    Grenze: `assert.*` aus `node:assert` kennt die Regel nicht.
+  {
+    files: ["test/**/*.ts"],
+    plugins: { vitest },
+    rules: { "vitest/no-conditional-expect": "error" },
   },
 );

@@ -133,6 +133,13 @@ describe("Diff-Größenbudget (#533)", () => {
       "docs: erklärt KQ-Diffsize-Override: #1 im Satz",
       "  KQ-Diffsize-Override: #2 eingerückt",
       "`KQ-Diffsize-Override: #3 backtick`",
+      "  * KQ-Diffsize-Override: #2 x",
+      "- KQ-Diffsize-Override: #3 x",
+      "*KQ-Diffsize-Override: #4 x",
+      "** KQ-Diffsize-Override: #5 x",
+      "*  KQ-Diffsize-Override: #6 x",
+      "* siehe KQ-Diffsize-Override: #7 x",
+      "> KQ-Diffsize-Override: #8 x",
     ].join("\n");
     assert.deepEqual(parseOverrideTrailers(text, OVERRIDE_KEY), { valid: [], invalid: [] });
   });
@@ -230,6 +237,44 @@ describe("Diff-Größenbudget (#533)", () => {
     assert.equal(r.allowed, true);
     assert.equal(r.stale, false);
     assert.equal(r.reason, "#317 Epic-Split");
+  });
+
+  // Format belegt an Commit 913cf17: GitHub schreibt jeden Commit-Betreff als `* <betreff>`.
+  const SQUASH_1342 = [
+    "feat(harness): Sammelticket komplett (#1342) (#1381)",
+    "",
+    "* feat(harness): Handback-Wächter (#1342)",
+    "",
+    "Co-Authored-By: Claude <noreply@anthropic.com>",
+    "",
+    "* KQ-Diffsize-Override: #1342 Sammelticket komplett: rund 45 Dateien",
+    "",
+    "Co-Authored-By: Claude <noreply@anthropic.com>",
+    "",
+    "* chore(review): Nachweis Plan und Review (#1342)",
+    "",
+    "KQ-Plan: kubernia-planner",
+    "KQ-Review: head=2f1025d runden=2 lenses=architektur verdikt=ok",
+    "",
+    "---------",
+    "",
+    "Co-authored-by: Claude <noreply@anthropic.com>",
+  ].join("\n");
+
+  test("push:main: Override als Commit-Betreff erscheint im Squash als `* KQ-…` und lässt den Slice durch (#1383)", () => {
+    const r = checkDiffSize({ runGit: gitWith("BASE", OVER, SQUASH_1342), env: tightEnv });
+    assert.equal(r.over, true);
+    assert.equal(r.allowed, true);
+    assert.match(String(r.reason), /^#1342 /);
+    assert.deepEqual(
+      parseOverrideTrailers(SQUASH_1342, OVERRIDE_KEY).valid.map((v) => v.nr),
+      [1342],
+    );
+  });
+
+  test("parseOverrideTrailers: ungültiger Betreff `* KQ-…` wird ohne Präfix gemeldet (#1383)", () => {
+    const r = parseOverrideTrailers("* KQ-Diffsize-Override: ohne nummer", OVERRIDE_KEY);
+    assert.deepEqual(r, { valid: [], invalid: ["KQ-Diffsize-Override: ohne nummer"] });
   });
 
   test("checkDiffSize: liest die Commit-Messages genau im Slice-Bereich <basis>..HEAD", () => {

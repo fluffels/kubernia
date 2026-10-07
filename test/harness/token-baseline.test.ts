@@ -1148,3 +1148,67 @@ describe("token-baseline: Phase Pflege (#1099)", () => {
     assert.deepEqual(s.rows.map((r) => r.phase), ["Pflege"]);
   });
 });
+
+describe("token-baseline: Nachlauf, Tool-Fehler, Lesen, fehlender Marker (#1379)", () => {
+  type Sum = Summary & { nachlauf: { calls: number; cost: number }; fehler?: Record<string, number>; lesen?: { reads: number; voll: { n: number } }; pflegeFehlt?: boolean };
+  const umsetzer: Sub = { id: "u", agentType: "kubernia-umsetzer", description: "Umsetzung #12" };
+  const sum = (c: Call[], events?: unknown[]) => m.summarize({ calls: c, events: events as PEv[] }, BOUNDS) as unknown as Sum;
+  const calls = [
+    call("2026-09-29T11:00:00Z", 50, { cost: 1.5 }),
+    call("2026-09-29T11:30:00Z", 7, { subagent: umsetzer, cost: 0.5 }),
+    call("2026-09-29T14:00:00Z", 999, { cost: 0.25 }), // Nachlauf
+    call("2026-09-29T14:10:00Z", 1, { model: "claude-opus-5-5", cost: 0.5 }),
+  ];
+  const rd = (ts: string, file: string): PEv => ({ ts, tool: "Read", input: { file_path: file }, resultChars: 400, agent: "u" });
+
+  test("Invariante: Σ rows = total + nachlauf (Calls und Kosten), Nachlauf-Zeilen stehen unter der Summe", () => {
+    const s = sum(calls);
+    const rows = s.rows.reduce((a, r) => ({ calls: a.calls + r.calls, cost: a.cost + r.cost }), { calls: 0, cost: 0 });
+    assert.equal(rows.calls, s.total.calls + s.nachlauf.calls);
+    assert.ok(Math.abs(rows.cost - (s.total.cost + s.nachlauf.cost)) < 1e-9);
+    assert.equal(s.nachlauf.calls, 2);
+    assert.equal(s.nachlauf.cost, 0.75);
+    const md = m.renderMarkdown(s);
+    assert.ok(md.indexOf("Summe (ohne Nachlauf)") < md.indexOf("Nachlauf (nicht in der Summe)"));
+    assert.doesNotMatch(md.slice(0, md.indexOf("Summe (ohne Nachlauf)")), /\| Nachlauf \|/, "Nachlauf-Zeilen stehen nicht über der Summe");
+  });
+
+  test("ohne Nachlauf ist nachlauf.calls 0 und es gibt keine Nachlauf-Zeile", () => {
+    const s = sum(calls.slice(0, 2));
+    assert.equal(s.nachlauf.calls, 0);
+    assert.doesNotMatch(m.renderMarkdown(s), /nicht in der Summe/);
+  });
+
+  test("Tool-Fehler und Lesen: Zeilen im Report, nur mit Events und nur im Ticket-Fenster", () => {
+    const events: PEv[] = [
+      { ts: "2026-09-29T11:00:00Z", tool: "Bash", input: {}, resultChars: 0, agent: "u", fehler: "Blocked: sleep 1" } as PEv,
+      { ts: "2026-09-29T11:01:00Z", tool: "Bash", input: {}, resultChars: 0, agent: "u", fehler: "Exit code 1" } as PEv,
+      { ts: "2026-09-29T14:00:00Z", tool: "Bash", input: {}, resultChars: 0, agent: "u", fehler: "Blocked: nach dem Merge" } as PEv,
+      rd("2026-09-29T11:02:00Z", "/x/a.md"),
+      rd("2026-09-29T11:03:00Z", "/x/a.md"),
+    ];
+    const s = sum(calls, events);
+    assert.deepEqual(s.fehler, { guard: 1, exit: 1 });
+    assert.equal(s.lesen?.voll.n, 1);
+    const md = m.renderMarkdown(s);
+    assert.match(md, /Tool-Fehler: Hook 0 · Guard 1 · Permission 0 · zu groß 0 · sonst 0 · Exit≠0 1 \(kein Fehlersignal\)/);
+    assert.match(md, /Lesen: 2 Reads \(0 abschnittsweise\) · Wiederlesen voll 1 \(≈ 100 Tok\) · gezielt 0 \(≈ 0 Tok\) · Top a\.md 1×/);
+    assert.doesNotMatch(m.renderMarkdown(sum(calls)), /Tool-Fehler:|Lesen:/);
+  });
+
+  test("Warnzeile: Umsetzer ohne jeden Marker; nicht mit Markern, nicht ohne Umsetzer, nicht ohne Events", () => {
+    const echo = (ts: string, art: string): PEv => ({ ts, tool: "Bash", input: { command: `echo "pflege: ${art} #12"` }, resultChars: 0, agent: "u" });
+    assert.equal(sum(calls, []).pflegeFehlt, true);
+    assert.match(m.renderMarkdown(sum(calls, [])), /Kein Pflege-Marker — Pflegekosten stecken in „Umsetzung“/);
+    const mitMarker = sum(calls, [echo("2026-09-29T11:10:00Z", "start"), echo("2026-09-29T11:20:00Z", "ende")]);
+    assert.equal(mitMarker.pflegeFehlt, false);
+    assert.doesNotMatch(m.renderMarkdown(mitMarker), /Kein Pflege-Marker/);
+    const ungepaart = sum(calls, [echo("2026-09-29T11:10:00Z", "start")]);
+    assert.equal(ungepaart.pflegeFehlt, false, "ein Marker ohne Gegenstück bekommt nur die Unpaired-Warnung");
+    assert.doesNotMatch(m.renderMarkdown(ungepaart), /Kein Pflege-Marker/);
+    const nurNachlauf = [calls[0], call("2026-09-29T14:20:00Z", 4, { subagent: umsetzer, cost: 0.1 })];
+    assert.equal(sum(nurNachlauf, []).pflegeFehlt, false, "ein Umsetzer erst nach dem Merge löst keine Warnung aus");
+    assert.equal(sum([calls[0]], []).pflegeFehlt, false, "ohne Umsetzer keine Warnung");
+    assert.ok(!sum(calls).pflegeFehlt, "ohne Events keine Warnung");
+  });
+});

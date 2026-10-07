@@ -1,7 +1,7 @@
 // Kein Shebang: wird über `.claude/settings.json` per `node scripts/pretooluse-hook.mjs` gestartet UND von
 // test/harness/pretooluse-hook.test.ts importiert.
 /**
- * PreToolUse-Dispatcher (#1311) für `Bash` und `PowerShell`: EIN Node-Prozess je Tool-Aufruf statt drei.
+ * PreToolUse-Dispatcher (#1311) für `Bash`, `PowerShell` und `SubagentHandback` (Abschluss-Wächter, #1342): EIN Node-Prozess je Tool-Aufruf statt drei.
  *
  * Er liest das Payload einmal (`hook-io.mjs`) und fragt die Guards:
  *  - Bash:       Worktree-Guard (`decide`, scripts/worktree-guard-hook.mjs) und gh-Guard (`bewerte`)
@@ -16,7 +16,8 @@
  */
 import { SHELL_VON_TOOL } from "./shell-tabellen.mjs";
 import { bewerte as bewerteGh } from "./gh-guard-hook.mjs";
-import { emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
+import { buildDenyOutput, emit, istDirektaufruf, mergeDecisions, parseHookInput, readStdin } from "./hook-io.mjs";
+import { abschlussBlockade, parseAbschlussInput } from "./umsetzer-abschluss.mjs";
 import { decide, repoRootFromScriptUrl } from "./worktree-guard-hook.mjs";
 import { bewertePowerShell } from "./worktree-guard-powershell.mjs";
 
@@ -29,8 +30,13 @@ const sicher = (fn) => {
 };
 
 /** Entscheidet für ein Payload (Text) und gibt das Hook-Output-Objekt oder null (durchlassen) zurück. */
-export function dispatch(text, repoRoot, guards = { decide, bewertePowerShell, bewerteGh }, shellVonTool = SHELL_VON_TOOL) {
+export function dispatch(text, repoRoot, guards = { decide, bewertePowerShell, bewerteGh }, shellVonTool = SHELL_VON_TOOL, abschlussDeps = {}) {
   const { tool, cwd, command } = parseHookInput(text);
+  if (tool === "SubagentHandback") {
+    // Abschluss-Wächter des Umsetzers (#1342): vor der Zustellung des Berichts; fremde Agenten und jeder Fehler lassen durch.
+    const grund = sicher(() => abschlussBlockade(parseAbschlussInput(text), abschlussDeps));
+    return grund ? buildDenyOutput(grund) : null;
+  }
   if (tool === undefined || !Object.hasOwn(shellVonTool, tool)) return null;
   const shell = shellVonTool[tool]; // Quote-Dialekt für den gh-Guard (Backslash gegen Backtick) UND Wahl des Worktree-Guards
   const worktreeGuard = { bash: () => guards.decide({ cwd, command, repoRoot }), powershell: () => guards.bewertePowerShell({ command, cwd, repoRoot }) }[shell]; // ein neues Tool braucht hier bewusst einen eigenen Guard

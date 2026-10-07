@@ -327,8 +327,9 @@ const KONTEXT_DIAET = `Kontext-Ökonomie (#1034) — halte dich daran, sie koste
 - AGENTS.md lädt Claude Code nativ – sie liegt BEREITS vollständig in deinem
   Kontext. Öffne sie NICHT erneut mit Read — das ist reine Duplikation. Brauchst du eine
   Stelle wörtlich, greppe punktuell danach (Grep mit dem Regel-Begriff).
-- Die Patch-Datei ist deine Primärquelle. Lies sie genau EINMAL vollständig (ist sie sehr groß:
-  abschnittsweise, jede Zeile einmal); danach nur gezielt per Grep oder offset/limit, kein
+- Die Patch-Datei ist deine Primärquelle. Lies sie genau EINMAL vollständig (in den Abschnitten,
+  die "node <Arbeitsverzeichnis>/scripts/patch-abschnitte.mjs <patch>" nennt, bei kleinem Patch
+  einer; jede Zeile einmal, kein größeres limit); danach nur gezielt per Grep oder offset/limit, kein
   zweites Volllesen, auch nicht per cat/Get-Content (#1265).
 - Öffne eine geänderte Datei nur, wenn ein konkreter Befund den umgebenden Kontext braucht —
   und dann gezielt mit offset/limit um die Hunk-Zeilen, nicht die ganze Datei.
