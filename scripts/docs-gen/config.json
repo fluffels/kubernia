@@ -39,6 +39,7 @@
   },
   "schichten": {
     "layers": "scripts/layers.cjs",
+    "pruefbefehl": "npm run check:arch",
     "cruise": [
       "node_modules/dependency-cruiser/bin/dependency-cruiser.mjs",
       "src",

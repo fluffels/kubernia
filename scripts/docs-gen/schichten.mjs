@@ -8,7 +8,6 @@ import { join } from "node:path";
 import { MERMAID_FRONTMATTER } from "./markdown.mjs";
 
 const MIB = 1024 * 1024;
-const AUFFANG_TEXT = "alles übrige unter src/";
 
 /**
  * Lädt SCHICHT_MODELL aus der konfigurierten layers-Datei relativ zu `rootDir` und prüft es mit dem
@@ -21,6 +20,9 @@ export function ladeModell(rootDir, layersPfad) {
   if (!mod.SCHICHT_MODELL) throw new Error(`${layersPfad} exportiert kein SCHICHT_MODELL`);
   if (typeof mod.pruefeModell !== "function") throw new Error(`${layersPfad} exportiert kein pruefeModell`);
   mod.pruefeModell(mod.SCHICHT_MODELL);
+  // Fail-closed auch bei einem trivialen Prüfer der fremden Datei: ohne Quellwurzel gäbe es keine Auffang-Zuordnung.
+  const q = mod.SCHICHT_MODELL.quellwurzel;
+  if (typeof q !== "string" || !q.endsWith("/") || q === "/") throw new Error(`${layersPfad}: SCHICHT_MODELL.quellwurzel fehlt oder ist ungültig (Verzeichnis mit Slash am Ende)`);
   return mod.SCHICHT_MODELL;
 }
 
@@ -30,7 +32,7 @@ export function schichtVon(pfad, modell) {
   for (const x of modell.extern) if (new RegExp(x.muster).test(p)) return x.id;
   for (const s of modell.schichten) if (s.muster && new RegExp(s.muster).test(p)) return s.id;
   const auffang = modell.schichten.find((s) => s.muster === null);
-  return /^src\//.test(p) && auffang ? auffang.id : null;
+  return p.startsWith(modell.quellwurzel) && auffang ? auffang.id : null;
 }
 
 /** Reihenfolge-Index: Schichten in Modell-Reihenfolge, Externe dahinter. */
@@ -50,8 +52,11 @@ export function sollKanten(modell) {
   return sortiere(modell.schichten.flatMap((s) => s.darf.map((z) => [s.id, z])), modell);
 }
 
+/** Optionaler Config-Schlüssel `schichten.pruefbefehl` (z.B. der Befehl des Schicht-Gates) für die Fehlertexte. */
+const hinweisAuf = (befehl) => (typeof befehl === "string" && befehl !== "" ? ` (${befehl})` : "");
+
 /** Verdichtet das JSON von dependency-cruiser auf Schicht-Kanten; wirft bei einer Kante außerhalb des Solls. */
-export function istKanten(cruiseJson, modell) {
+export function istKanten(cruiseJson, modell, pruefbefehl) {
   const darf = new Map(modell.schichten.map((s) => [s.id, new Set(s.darf)]));
   const gefunden = new Map();
   for (const m of cruiseJson?.modules ?? []) {
@@ -68,7 +73,7 @@ export function istKanten(cruiseJson, modell) {
   const verboten = [...gefunden.values()].filter(([v, n]) => !darf.get(v).has(n));
   if (verboten.length)
     throw new Error(
-      `Import-Richtung(en) außerhalb des Solls: ${sortiere(verboten, modell).map(([v, n]) => `${v} → ${n}`).join(", ")} (npm run check:arch müsste rot sein)`,
+      `Import-Richtung(en) außerhalb des Solls: ${sortiere(verboten, modell).map(([v, n]) => `${v} → ${n}`).join(", ")} (die Schichtprüfung des Projekts${hinweisAuf(pruefbefehl)} müsste rot sein)`,
     );
   return sortiere([...gefunden.values()], modell);
 }
@@ -80,7 +85,7 @@ export function renderDiagramm(modell, kanten) {
   const zeilen = [];
   for (const s of modell.schichten) {
     const titel = s.technik ? `${s.label} · ${s.technik}` : s.label;
-    const unten = s.muster === null ? AUFFANG_TEXT : s.wurzeln.join(" · ");
+    const unten = s.muster === null ? `alles übrige unter ${modell.quellwurzel}` : s.wurzeln.join(" · ");
     zeilen.push(`  s_${s.id}["${titel}${unten ? `<br/>${unten}` : ""}"]`);
   }
   for (const x of modell.extern) zeilen.push(`  x_${x.id}{{"${x.label}"}}`);
@@ -123,24 +128,24 @@ export function schichtenSollGenerator(ctx) {
 }
 
 /** Startet dependency-cruiser (Argumente aus der Config) und liefert dessen JSON. */
-function cruise(rootDir, args) {
+function cruise(rootDir, args, pruefbefehl) {
   if (!Array.isArray(args) || args.length === 0) throw new Error('config.json: "schichten.cruise" fehlt');
   let out;
   try {
     out = execFileSync(process.execPath, args, { cwd: rootDir, encoding: "utf8", maxBuffer: 256 * MIB, stdio: ["ignore", "pipe", "pipe"] });
   } catch (err) {
     const detail = err instanceof Error ? err.message.split(/\r?\n/)[0] : String(err);
-    throw new Error(`dependency-cruiser fehlgeschlagen (erst npm run check:arch grün machen): ${detail}`, { cause: err });
+    throw new Error(`Import-Graph-Aufruf fehlgeschlagen (erst die Schichtprüfung${hinweisAuf(pruefbefehl)} grün machen): ${detail}`, { cause: err });
   }
   try {
     return JSON.parse(out);
   } catch {
-    throw new Error("dependency-cruiser lieferte kein gültiges JSON");
+    throw new Error("Import-Graph-Aufruf lieferte kein gültiges JSON");
   }
 }
 
 export function schichtenIstGenerator(ctx) {
   const { modell, cfg } = geladenesModell(ctx);
-  const ist = istKanten(cruise(ctx.rootDir, cfg.cruise), modell);
+  const ist = istKanten(cruise(ctx.rootDir, cfg.cruise, cfg.pruefbefehl), modell, cfg.pruefbefehl);
   return `${renderDiagramm(modell, ist)}\n\n${ungenutztZeile(modell, sollKanten(modell), ist)}`;
 }

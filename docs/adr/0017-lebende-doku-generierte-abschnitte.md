@@ -59,3 +59,10 @@ Wenn die Zahl der Generatoren so wächst, dass die Registry unübersichtlich wir
 - **Wirtschafts-Loop entfällt.** Die Pod-Einnahmen sind Code (`incomeRate()`), nicht Daten; ein handgemaltes Diagramm ohne Gate gibt es nicht.
 - **Quest-Zahlen je Thema statt je Phase.** Die Phase ist kein Datenfeld; das Thema schon.
 - **Quest-Zahlen der README** (`quests-je-thema`) kommen aus den Daten; ein Wächter-Test in `test/readme.test.ts` hält handgeschriebene Zählungen aus dem Lernpfad-Abschnitt.
+
+## Fortschreibung #1373 (2026-10-08): Kern-Schnitt, Quellwurzel, Fremd-Repo-Beleg
+
+- **Kern-Schnitt.** Übertragbar sind Engine (`scripts/docs-gen.mjs`), `markdown.mjs`, `adr-liste`, `zeitleiste`, `schichten-soll` und `schichten-ist`; die Registry gruppiert danach (Kern, Harness-Stack, Spiel). Die Neubewertung der Registry-Größe steht in Fortschreibung #1370, ein Datei-Split war dafür nicht nötig.
+- **`quellwurzel` im Schichtmodell.** Das Code-Verzeichnis (`src/`) ist ein Feld von `SCHICHT_MODELL`, nicht mehr im Code verstreut; Regeln von `check:arch`, Coverage-Globs und Diagramm leiten daraus ab (Diagramm == Regel).
+- **`befehl` in der Config.** Hinweiszeile und `Fix:`-Text nennen den konfigurierten Befehl (Standard `npm run docs:gen`); `diagramme.ciWorkflows` hat keinen festen Standardpfad mehr.
+- **Beleg.** `test/docgen-fremdrepo.test.ts` fährt ein Python-Mini-Repo durch den Kern und wacht über die Importgrenze des Kerns. Übernahme ist Kopie, kein Paket; Einführungspfad: [harness-transfer.md](../harness-transfer.md).

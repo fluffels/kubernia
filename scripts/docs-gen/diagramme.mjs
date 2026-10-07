@@ -138,8 +138,9 @@ export function ersetzePlatzhalter(text, { rootDir, config }) {
         // Ein Required Check gilt nur, wenn ihn das Ruleset (Spiegel) UND ein Workflow-Job führt (Z2c).
         const r = rulesetDaten();
         if (!r.requiredChecks.includes(wert)) throw new Error(`Required Check "${wert}" steht nicht im Ruleset-Spiegel ${cfg.ruleset} (bekannt: ${r.requiredChecks.join(", ")})`);
-        ciNamen ??= ciJobNamen(rootDir, cfg.ciWorkflows ?? ".github/workflows");
-        if (!ciNamen.has(wert)) throw new Error(`Required Check "${wert}" hat keine passende Job-name:-Zeile in ${cfg.ciWorkflows ?? ".github/workflows"}`);
+        if (!cfg.ciWorkflows) throw new Error("config.diagramme.ciWorkflows fehlt (Ordner der CI-Workflows, kein fester Standardpfad)");
+        ciNamen ??= ciJobNamen(rootDir, cfg.ciWorkflows);
+        if (!ciNamen.has(wert)) throw new Error(`Required Check "${wert}" hat keine passende Job-name:-Zeile in ${cfg.ciWorkflows}`);
         genannteChecks.add(wert);
         return wert;
       }
