@@ -106,6 +106,14 @@ describe("ExternalName-Service – CNAME auf externen Namen", () => {
     expect(r.output).not.toContain("lauscht auf Port");
   });
 
+  test("curl mit leerem URL-Port (host:/pfad) fällt auf Port 80 zurück", () => {
+    sim.exec("kubectl apply -f externalname.yaml");
+    const r = sim.exec("curl bank-extern:/status");
+    expect(r.error).toBe(false);
+    expect(r.output).toContain("bank-extern:80/status");
+    expect(r.output).not.toMatch(/bank-extern:\//);
+  });
+
   test("curl https:// nutzt Port 443", () => {
     sim.exec("kubectl apply -f externalname.yaml");
     const r = sim.exec("curl https://bank-extern");
