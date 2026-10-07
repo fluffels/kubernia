@@ -24,7 +24,8 @@
  * Domänentypen aus ./state – kein Rückimport nach sim.ts (kein Zyklus).
  */
 import type { ClusterState, ArgoApp, ArgoChildSpec, Deployment, ServiceRes, ServiceSpec, Broken } from "./state";
-import { InvalidSpecError } from "./names";
+import { HEADLESS_CLUSTER_IP } from "./state";
+import { InvalidSpecError, resourceName } from "./names";
 import { table } from "./util";
 import { addDeployment, scaleDeployment } from "./workload";
 
@@ -68,6 +69,76 @@ export function cloneArgoApp(a: ArgoApp): ArgoApp {
   };
 }
 
+/** Strukturprüfung einer Workload-Spezifikation (Name/Image String, Replikas Zahl). */
+function isWorkloadSpec(w: unknown): boolean {
+  const d = w as { name?: unknown; image?: unknown; replicas?: unknown } | null | undefined;
+  return !!d && typeof d.name === "string" && typeof d.image === "string" && typeof d.replicas === "number";
+}
+
+/** Ein optionaler Soll-Service muss ein Objekt mit String-Namen sein. */
+function isServiceShape(sv: unknown): boolean {
+  return sv === undefined || (!!sv && typeof (sv as { name?: unknown }).name === "string");
+}
+
+/** Eingangsgrenze für Argo-Apps aus Szenario/Spielstand (#1418): lehnt eine strukturell kaputte App
+ *  ab, statt sie in den Cluster zu lassen und jeden Befehl mit „Hoppla“ enden zu lassen. Gültig ist
+ *  eine Wurzel (Kind-Apps mit Name + Workload) oder eine Leaf-App mit `desired.deployment`. */
+export function buildArgoApp(a: ArgoApp): ArgoApp {
+  const kinder = a?.childApps;
+  const kinderOk = Array.isArray(kinder) && kinder.every(c => typeof c?.name === "string" && isWorkloadSpec(c.deployment) && isServiceShape(c.service));
+  const leafOk = !!a?.desired && isWorkloadSpec(a.desired.deployment) && isServiceShape(a.desired.service);
+  if (typeof a?.name !== "string" || !(Array.isArray(kinder) ? kinderOk : leafOk)) {
+    throw new Error("Kaputte Argo-App '" + String(a?.name) + "': weder Kind-Apps noch ein gültiger Soll (desired.deployment)");
+  }
+  return cloneArgoApp(a);
+}
+
+/** Tipp im GitOps-Kontext: die Wahrheit liegt im Git-Manifest, nicht im Cluster. */
+function gitManifestTip(app: ArgoApp): string {
+  return "Bei GitOps ist Git die Quelle der Wahrheit: korrigiere das Manifest im Repo " + app.repo + " (Pfad " + app.path +
+    "), die Meldung oben nennt das Feld. Danach zieht Argo den Soll von selbst in den Cluster.";
+}
+
+/** Vergleichbare Sicht auf einen Service. Der Record-Typ über `keyof ServiceSpec` bricht beim
+ *  Typecheck, sobald ein neues ServiceSpec-Feld nicht mitverglichen wird. */
+function specView(svc: ServiceRes): Record<Exclude<keyof ServiceSpec, "name">, string> {
+  return {
+    type: svc.type,
+    port: String(svc.port),
+    targetPort: String(svc.targetPort ?? svc.port), // Kubernetes setzt targetPort auf port, wenn er fehlt
+    externalName: svc.externalName || "",
+    clusterIP: svc.clusterIP === HEADLESS_CLUSTER_IP ? HEADLESS_CLUSTER_IP : "", // die vergebene ClusterIP gehört dem Cluster
+  };
+}
+
+/** Service, der angewendet werden muss (fehlt oder weicht in der Spec ab), sonst null. Wirft
+ *  InvalidSpecError, wenn die Fabrik den Soll ablehnt. */
+function serviceToApply(host: ArgocdHost, app: ArgoApp): ServiceRes | null {
+  const spec = app.desired!.service;
+  if (!spec) return null;
+  const want = host._makeService(spec);
+  const live = host.services.find(x => x.name === want.name);
+  if (!live) return want;
+  const a = specView(want), b = specView(live);
+  return (Object.keys(a) as (keyof typeof a)[]).some(k => a[k] !== b[k]) ? want : null;
+}
+
+/** Dry-Run einer Leaf-App ohne Mutation (wie `argocd app sync --dry-run`). Neue Prüfungen in
+ *  `_makeDeployment` hier mitziehen. Ein abgelehnter Soll wird mit dem Git-Tipp neu geworfen. */
+function planLeaf(host: ArgocdHost, app: ArgoApp): { svc: ServiceRes | null } {
+  try {
+    const d = app.desired!.deployment;
+    if (!host.deployments.some(x => x.name === d.name)) resourceName(d.name);
+    return { svc: serviceToApply(host, app) };
+  } catch (e) { throw e instanceof InvalidSpecError ? new InvalidSpecError(e.message, gitManifestTip(app)) : e; }
+}
+
+/** Sync-Fehler einer Leaf-App (abgelehnter Soll), sonst null. Wurzeln haben keinen eigenen. */
+function argoSyncError(host: ArgocdHost, app: ArgoApp): InvalidSpecError | null {
+  if (app.childApps) return null;
+  try { planLeaf(host, app); return null; } catch (e) { if (e instanceof InvalidSpecError) return e; throw e; }
+}
+
 /** Sync-Status: stimmt der Cluster mit dem im Git deklarierten Soll überein?
  *  Wird IMMER live aus dem Cluster-Zustand berechnet – ein manuelles `kubectl scale`
  *  (Drift) oder ein gelöschtes Deployment macht die App damit sofort OutOfSync. */
@@ -83,8 +154,8 @@ function argoSyncStatus(host: ArgocdHost, app: ArgoApp): "Synced" | "OutOfSync" 
   const dep = host.deployments.find(x => x.name === d.name);
   if (!dep) return "OutOfSync";                 // Soll-Ressource fehlt im Cluster
   if (dep.image !== d.image || dep.replicas !== d.replicas) return "OutOfSync"; // Drift
-  if (app.desired!.service && !host.services.some(s => s.name === app.desired!.service!.name)) return "OutOfSync";
-  return "Synced";
+  if (argoSyncError(host, app)) return "OutOfSync"; // abgelehnter Soll
+  return planLeaf(host, app).svc ? "OutOfSync" : "Synced"; // Service fehlt oder driftet
 }
 
 /** Health-Status: läuft die ausgerollte Workload gesund? */
@@ -133,10 +204,9 @@ export function argoReconcile(host: ArgocdHost, app: ArgoApp): void {
     return;
   }
   const d = app.desired!.deployment;
-  // Atomar: den Service VOR jeder Mutation bauen. Lehnt die Fabrik die Soll-Spezifikation ab
-  // (InvalidSpecError), bleibt der Cluster unangetastet (wie ein Argo-Dry-Run).
-  const s = app.desired!.service;
-  const svc = s && !host.services.some(x => x.name === s.name) ? host._makeService(s) : null;
+  // Atomar: den Plan VOR jeder Mutation bauen. Lehnt die Fabrik die Soll-Spezifikation ab
+  // (InvalidSpecError, mit Git-Tipp), bleibt der Cluster unangetastet (wie ein Argo-Dry-Run).
+  const { svc } = planLeaf(host, app);
   const dep = host.deployments.find(x => x.name === d.name);
   if (!dep) {
     addDeployment(host, host._makeDeployment(d.name, d.image, d.replicas));
@@ -146,7 +216,11 @@ export function argoReconcile(host: ArgocdHost, app: ArgoApp): void {
     dep.broken = null; // ein gesundes Git-Manifest heilt auch eine kaputte Workload
   }
   // #518/#1409: Service zentral über die Fabrik, mit der ganzen Spec (ExternalName, targetPort).
-  if (svc) host.services.push(svc);
+  if (svc) {
+    const i = host.services.findIndex(x => x.name === svc.name);
+    if (i < 0) host.services.push(svc);
+    else host.services[i] = { ...svc, created: host.services[i].created }; // Patch-Semantik: Alter bleibt
+  }
 }
 
 /** Abgleich, der eine abgelehnte Soll-Spezifikation (InvalidSpecError) schluckt: die App bleibt
@@ -188,11 +262,43 @@ function argoAppList(host: ArgocdHost): string {
     host.argoApps.map(a => [a.name, argoSyncStatus(host, a), argoHealth(host, a), a.repo, a.path]));
 }
 
+/** Zeile einer Kind-App in der Wurzel-Ansicht, mit SyncError-Marke bei abgelehntem Soll. */
+function childLine(host: ArgocdHost, name: string): string {
+  const child = host.argoApps.find(a => a.name === name);
+  if (!child) return "  • " + name + "  OutOfSync/Missing";
+  return "  • " + name + "  " + argoSyncStatus(host, child) + "/" + argoHealth(host, child) + (argoSyncError(host, child) ? "  ❌ SyncError" : "");
+}
+
+/** Namen der Kind-Apps einer Wurzel, deren Sync an einem abgelehnten Soll scheitert. */
+function failedChildren(host: ArgocdHost, app: ArgoApp): { name: string; err: InvalidSpecError }[] {
+  const out: { name: string; err: InvalidSpecError }[] = [];
+  for (const c of app.childApps || []) {
+    const child = host.argoApps.find(a => a.name === c.name);
+    const err = child && argoSyncError(host, child);
+    if (err) out.push({ name: c.name, err });
+  }
+  return out;
+}
+
+/** Hinweis unter einer OutOfSync-App: Fehler im Git-Manifest, Self-Heal oder manueller Sync. */
+function outOfSyncHint(host: ArgocdHost, app: ArgoApp): string {
+  const err = argoSyncError(host, app);
+  if (err) return "▸ Der Sync scheitert am Git-Manifest selbst, Self-Heal und ein erneutes 'argocd app sync' helfen hier nicht. " + gitManifestTip(app);
+  const failed = failedChildren(host, app);
+  if (failed.length > 0) {
+    return "▸ Kind-App(s) " + failed.map(f => "'" + f.name + "'").join(", ") + " scheitern am Git-Manifest, Details: 'argocd app get " + failed[0].name + "'.";
+  }
+  return app.autoSync && app.selfHeal
+    ? "▸ Self-Heal ist an – Argo dreht den Drift beim nächsten Abgleich von selbst auf den Git-Stand zurück."
+    : "▸ Bring den Cluster auf den Git-Soll: 'argocd app sync " + app.name + "'. (Git ist die Quelle der Wahrheit, nicht der Cluster.)";
+}
+
 /** `argocd app get <name>` – Detailansicht einer Application (inkl. App-of-Apps-Kinder). */
 function argoAppGet(host: ArgocdHost, t: string[]): string {
   const app = resolveArgoApp(host, "get", t[3]);
   if (typeof app === "string") return app;
   const sync = argoSyncStatus(host, app);
+  const err = argoSyncError(host, app);
   const lines = [
     "Name:               " + app.name,
     "Project:            default",
@@ -202,19 +308,25 @@ function argoAppGet(host: ArgocdHost, t: string[]): string {
     "Sync Status:        " + sync + (sync === "Synced" ? " ✅" : " ⚠️  (der Cluster weicht vom Git-Soll ab)"),
     "Health Status:      " + argoHealth(host, app),
   ];
+  if (err) lines.push("Conditions:         SyncError ❌ one or more objects failed to apply, reason: " + err.message);
   if (app.childApps) {
     lines.push("Managed Apps:       " + app.childApps.length + " (App-of-Apps – eine Wurzel verwaltet die ganze Flotte)");
-    for (const c of app.childApps) {
-      const child = host.argoApps.find(a => a.name === c.name);
-      lines.push("  • " + c.name + "  " + (child ? argoSyncStatus(host, child) + "/" + argoHealth(host, child) : "OutOfSync/Missing"));
-    }
+    for (const c of app.childApps) lines.push(childLine(host, c.name));
   }
-  if (sync === "OutOfSync") {
-    lines.push(app.autoSync && app.selfHeal
-      ? "▸ Self-Heal ist an – Argo dreht den Drift beim nächsten Abgleich von selbst auf den Git-Stand zurück."
-      : "▸ Bring den Cluster auf den Git-Soll: 'argocd app sync " + app.name + "'. (Git ist die Quelle der Wahrheit, nicht der Cluster.)");
-  }
+  if (sync === "OutOfSync") lines.push(outOfSyncHint(host, app));
   return lines.join("\n");
+}
+
+/** Fehlerausgabe eines Wurzel-Syncs, dessen Kinder am Git-Manifest scheitern. */
+function rootSyncFailure(host: ArgocdHost, app: ArgoApp, failed: { name: string; err: InvalidSpecError }[]): string {
+  const total = app.childApps!.length;
+  const head = [
+    "Synchronisiere Application '" + app.name + "' …",
+    "Sync Status: OutOfSync ⚠️   Health: " + argoHealth(host, app),
+    "❌ " + failed.length + " von " + total + " Kind-Apps konnten nicht synchronisiert werden:",
+    ...failed.map(f => "  • " + f.name + ": " + f.err.message),
+  ].join("\n");
+  return host._err(head, "Details mit 'argocd app get " + failed[0].name + "'.");
 }
 
 /** `argocd app sync <name>` – zieht den Git-Soll in den Cluster (Pull-Prinzip). */
@@ -226,12 +338,15 @@ function argoAppSync(host: ArgocdHost, t: string[]): string {
   if (before === "Synced") {
     return "Application '" + app.name + "' ist bereits Synced ✅ – Cluster und Git-Soll stimmen überein, nichts zu tun. 🧘";
   }
+  const failed = failedChildren(host, app);
+  if (failed.length > 0) return rootSyncFailure(host, app, failed);
+  const after = argoSyncStatus(host, app);
   return [
     "Synchronisiere Application '" + app.name + "' …",
     app.childApps
       ? "App-of-Apps: Argo legt aus dem '" + app.path + "'-Ordner jede Kind-Application an (eine Wurzel → die ganze Flotte)."
       : "Argo zieht den im Git deklarierten Soll-Zustand in den Cluster (Pull-Prinzip).",
-    "Sync Status: Synced ✅   Health: " + argoHealth(host, app),
+    "Sync Status: " + after + (after === "Synced" ? " ✅" : " ⚠️") + "   Health: " + argoHealth(host, app),
     app.childApps
       ? "▸ Schau mit 'argocd app list' – die ganze Flotte ist jetzt da."
       : "▸ Schau mit 'kubectl get deployments' – der Cluster entspricht jetzt wieder dem Git-Stand.",
