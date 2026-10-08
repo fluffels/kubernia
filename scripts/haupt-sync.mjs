@@ -15,7 +15,7 @@
  * Spawn, ob sich Agenten-Definitionen seit dem Start der Session geändert haben (der Hook-/Definitions-Snapshot wird beim
  * Start eingefroren, ein Pull ändert die laufende Session nicht). Nur diese Zeile ist die Sitzungsbasis: der Haupt-Checkout
  * ist geteilt, ein späterer Aufruf (`--text`, auch aus einer anderen Session) sieht einen schon gehobenen `main` und darum
- * einen falschen Stand; `--text` nennt deshalb nur „Stand vor diesem Sync“. Hat der Pull `.claude/` oder `AGENTS.md` geändert, sagt er das
+ * einen falschen Stand; `--text` nennt deshalb nur „Stand vor diesem Sync“ (HEAD des Checkouts beim Aufruf) und behauptet nichts über die Basis der Session, die nur der SessionStart-Kontext nennt. Hat der Pull `.claude/` oder `AGENTS.md` geändert, sagt er das
  * zusätzlich ausdrücklich. Fail-open: jeder Fehler (kein Netz, kein git) ergibt nur eine kurze Notiz, nie einen Abbruch.
  *
  * `--text --streng` ist der erste Schritt des Skills `kubernia` (#1392): derselbe Sync (entspricht `git pull --ff-only`, aber mit Stopp
@@ -152,7 +152,7 @@ export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
   }
   if (ergebnis.nodeHinweis) zeilen.push(`Node-Version: ${ergebnis.nodeHinweis}`);
   if (ergebnis.nodeModulesHinweis) zeilen.push(`Abhängigkeiten: ${ergebnis.nodeModulesHinweis}`);
-  if (ergebnis.basis) zeilen.push(sitzungsbasis ? `Sitzungsbasis: ${ergebnis.basis}` : `Stand vor diesem Sync: ${ergebnis.basis} (nicht die Basis dieser Session)`);
+  if (ergebnis.basis) zeilen.push(sitzungsbasis ? `Sitzungsbasis: ${ergebnis.basis}` : `Stand vor diesem Sync: ${ergebnis.basis} (Stand des geteilten Checkouts bei diesem Aufruf; die Basis dieser Session nennt nur der SessionStart-Kontext)`);
   return zeilen.join("\n");
 }
 

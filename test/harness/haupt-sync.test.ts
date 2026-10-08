@@ -84,6 +84,15 @@ describe("Ausgabe des Hooks", () => {
     expect(t).not.toContain("Sitzungsbasis");
     expect(t).toContain("Stand vor diesem Sync: abc");
   });
+  test("--text behauptet nichts über die Session-Basis (#1537)", () => {
+    for (const e of [{ aktion: "nichts", basis: "abc" }, { aktion: "pull", gepullt: true, hinter: 2, basis: "abc", agentenGeaendert: false }]) {
+      const t = S.ausgabe(e, true);
+      expect(t).toContain("Stand vor diesem Sync: abc");
+      expect(t).not.toMatch(/nicht die Basis/);
+      expect(t).toContain("SessionStart-Kontext");
+      expect(t).not.toContain("Sitzungsbasis");
+    }
+  });
   test("ohne Text nichts; Notiz erscheint im Text", () => {
     expect(S.ausgabe({ aktion: "nichts" }, false)).toBe("");
     expect(S.baueText({ aktion: "nichts", notiz: "git fetch fehlgeschlagen (x)", basis: "abc" })).toContain("Haupt-Sync: git fetch fehlgeschlagen");
@@ -321,6 +330,21 @@ describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_0
       expect(r.code).toBe(1);
       expect(r.out).toContain("STOPP");
       expect(cli(t.haupt, "--text").code).toBe(0);
+    } finally {
+      t.aufraeumen();
+    }
+  });
+
+  test("CLI: --text behauptet nicht, der Stand sei nicht die Basis der Session (#1537)", () => {
+    const t = aufbau();
+    try {
+      const hook = cli(t.haupt);
+      const basis = /Sitzungsbasis: ([0-9a-f]+)/.exec(hook.out)?.[1];
+      expect(basis).toBeTruthy();
+      const r = cli(t.haupt, "--text", "--streng");
+      expect(r.code).toBe(0);
+      expect(r.out).toContain(`Stand vor diesem Sync: ${basis}`);
+      expect(r.out).not.toMatch(/nicht die Basis/);
     } finally {
       t.aufraeumen();
     }
