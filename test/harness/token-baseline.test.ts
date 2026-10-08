@@ -622,6 +622,7 @@ describe("token-baseline: Härtung nach Review (#1206)", () => {
     ].join("\n");
     const s = m.summarize(m.callsFromTranscript(text), { mergedAt: "2026-10-05T11:00:00Z" });
     assert.equal(s.unpriced, 0);
+    assert.deepEqual(s.unpricedModels, {}, "Nachlauf zählt auch nicht in die Modell-Liste");
     assert.equal(s.costParts.input, 2);
     assert.equal(s.costParts.output, 0);
   });
@@ -727,6 +728,10 @@ describe("token-baseline: Preisstufen, Sonnet-Periode, Modelle ohne Preis, Langf
     assert.equal(m.priceCall(haiku({ cacheRead: 100_001 })), (100_001 * 0.05) / MIO);
     assert.equal(m.priceCall(haiku({ cacheWrite: 100_001 })), (100_001 * 0.625) / MIO);
     assert.equal(m.priceCall(haiku({ cacheWrite: 100_001, cacheWrite1h: 100_001 })), (100_001 * 1) / MIO);
+    // Grundpreise bis 100.000 Prompt-Tokens (Read, Write 5m, Write 1h; Input und Output stehen oben).
+    assert.equal(m.priceCall(haiku({ cacheRead: 100_000 })), (100_000 * 0.01) / MIO);
+    assert.equal(m.priceCall(haiku({ cacheWrite: 100_000 })), (100_000 * 0.125) / MIO);
+    assert.equal(m.priceCall(haiku({ cacheWrite: 100_000, cacheWrite1h: 100_000 })), (100_000 * 0.2) / MIO);
     // Der Prompt setzt sich aus allen drei Feldern zusammen.
     assert.equal(m.priceCall(haiku({ input: 40_000, cacheWrite: 30_000, cacheRead: 30_001 })), (40_000 * 0.5 + 30_000 * 0.625 + 30_001 * 0.05) / MIO);
   });
@@ -737,7 +742,7 @@ describe("token-baseline: Preisstufen, Sonnet-Periode, Modelle ohne Preis, Langf
     const mk = (input: number): Call => ({ ts: "2026-10-08T00:00:00Z", model: "claude-x", input, cacheWrite: 0, cacheRead: 0, output: 0 });
     assert.equal(m.priceCall(mk(500_000), ohne), 0.5);
     const stufig = {
-      "claude-x": { ...basis, stufen: [{ ueberPrompt: 200_000, input: 3 }, { ueberPrompt: 100_000, input: 2 }] },
+      "claude-x": { ...basis, stufen: [{ ueberPrompt: 100_000, input: 2 }, { ueberPrompt: 200_000, input: 3 }] },
     };
     assert.equal(m.priceCall(mk(150_000), stufig), 0.3);
     assert.equal(m.priceCall(mk(250_000), stufig), 0.75);

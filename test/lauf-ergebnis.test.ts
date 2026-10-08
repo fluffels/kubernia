@@ -138,7 +138,7 @@ describe("bewertePrs und Aggregate", () => {
     assert.equal(z(51).nacharbeit, "nein");
     assert.equal(z(50).ticket, 40);
   });
-  test("Blocker je PR: Σ Blocker / PRs der Brille, ohne PRs der Brille kein NaN und keine Division durch 0", () => {
+  test("Blocker je PR: Σ Blocker / PRs der Brille; ohne PRs gibt es keine Brillen-Einträge", () => {
     const k = mod.bewertePrs({
       prs: [pr({ mergeCommit: { oid: "9".repeat(40) } })],
       commits: [commit(review("runden=1 lenses=architektur blocker=architektur:3"), MERGED, "9".repeat(40))],

@@ -65,4 +65,4 @@ BEFUNDE: <neue (gebündelte) Issues, Sammelticket-Zeilen oder ->
 LERNKANDIDATEN: <max. 3 Punkte, nur projektübergreifendes Wissen, oder ->
 ```
 
-`BEFUNDE` ist nur kubernia-Spezifisches, das nicht ins Projekt-Brain gehört (Tickets, Sammelzeilen); `LERNKANDIDATEN` ist Wissen, das über kubernia hinaus gilt. Kubernia-Wissen pflegst du in Schritt 3 selbst ins Projekt-Brain; für LERNKANDIDATEN legst du nichts selbst ab (keine Memory- oder Wissensdatei), der Aufrufer entscheidet.
+`BEFUNDE` ist nur kubernia-Spezifisches, das nicht ins Projekt-Brain gehört (Tickets, Sammelzeilen); `LERNKANDIDATEN` ist Wissen, das über kubernia hinaus gilt. Kubernia-Wissen pflegst du in Schritt 3 selbst ins Projekt-Brain; einen Lernkandidaten prüfst du vor dem Eintragen gegen gemergte PRs und das Brain (`gh pr list --state merged --limit 1000 --search "<Stichwort>"`), Erledigtes entfällt; für LERNKANDIDATEN legst du nichts selbst ab (keine Memory- oder Wissensdatei), der Aufrufer entscheidet.

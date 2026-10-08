@@ -226,7 +226,7 @@ export function renderMarkdown(r) {
   out.push(`| **Summe** | | | ${n} | ${$(total)} |`, "");
   out.push(`kubernia-Subagenten (nicht Hauptchat): ${r.kubernia.calls} Calls, ${$(r.kubernia.cost)}`);
   if (r.ohneBrainWurzel) out.push("Hinweis: ohne --brain gemessen, Brain-Arbeit im Notiz-Brain außerhalb des Repos landet in Nachlauf bzw. Ad-hoc (nur der Skill brain-input zählt als Brain).");
-  if (r.ohnePreis) out.push(`Hinweis: ${r.ohnePreis} Calls ohne Preis: ${Object.entries(r.ohnePreisModelle ?? {}).map(([k, n]) => `${k} (${n})`).join(", ")} (Modell in PRICES nachtragen), nicht als 0 $ zu lesen.`);
+  if (r.ohnePreis) out.push(`Hinweis: ${r.ohnePreis} Calls ohne Preis: ${Object.entries(r.ohnePreisModelle ?? {}).map(([k, n]) => `${k} (${n})`).join(", ")} (Modell in PRICES nachtragen oder Zeitpunkt fehlt), nicht als 0 $ zu lesen.`);
   out.push("", "| Ticket | Session | Start | Start-Art | Hauptchat-Calls je Modell |", "|---|---|---|---|---|");
   for (const f of r.fenster) {
     const m = Object.entries(f.modelle).map(([k, v]) => `${k}: ${v} (${f.kosten[k].toFixed(2)} $)`).join(", ") || "0 Calls";

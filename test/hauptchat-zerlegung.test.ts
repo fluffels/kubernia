@@ -249,7 +249,7 @@ describe("zerlegeHauptchat: Zeitfenster und Randfälle", () => {
   test("Hinweis nennt die Modelle ohne Preis (#1441); ohne solche Calls keine Hinweiszeile", () => {
     const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "a"), call(1, "claude-unbekannt-9"), call(2, "claude-unbekannt-9"), call(3, OPUS)] }] });
     assert.deepEqual(r.ohnePreisModelle, { "claude-unbekannt-9": 2 });
-    assert.match(hc.renderMarkdown(r), /2 Calls ohne Preis: claude-unbekannt-9 \(2\) \(Modell in PRICES nachtragen\)/);
+    assert.match(hc.renderMarkdown(r), /2 Calls ohne Preis: claude-unbekannt-9 \(2\) \(Modell in PRICES nachtragen oder Zeitpunkt fehlt\)/);
     const ok = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "a"), call(1, OPUS)] }] });
     assert.doesNotMatch(hc.renderMarkdown(ok), /ohne Preis/);
   });
@@ -343,7 +343,9 @@ describe("zerlegeHauptchat: Grenzfälle aus dem Review (R1)", () => {
 
   test("Calls ohne Preis eines kubernia-Subagenten zählen in ohnePreis", () => {
     const subagents = [sub({ agentType: "kubernia-planner" }, [call(2, "claude-unbekannt-9")])];
-    assert.equal(hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "a")], subagents }] }).ohnePreis, 1);
+    const r = hc.zerlegeHauptchat({ sessions: [{ id: "s", main: [user(0, "a")], subagents }] });
+    assert.equal(r.ohnePreis, 1);
+    assert.deepEqual(r.ohnePreisModelle, { "claude-unbekannt-9": 1 });
   });
 });
 
