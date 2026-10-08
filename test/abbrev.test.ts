@@ -16,7 +16,7 @@ import { resolveKind } from "../src/sim/kubectl/resources";
 import { ABBREVS, findAbbrevByShort, lockedAbbrevInInput, abbrevLockHint, flagNearMiss, flagNearMissHint, longFormsInInput } from "../src/content/abbrev";
 import { KQContent } from "../src/content";
 import { Sim as KQSim } from "../src/sim";
-import type { QuestStep } from "../src/types";
+import { questAnzeigeFelder } from "./support/anzeigetexte";
 
 /** Alle accept-Regex-Quellen des Spiel-Contents einsammeln: Befehlskarten,
  *  Drills (instanziiert – die Alternationen stehen unabhängig von Zufallsnamen
@@ -323,25 +323,14 @@ describe("#366: Quest-/Lehrtexte nehmen keine gesperrten Abkürzungen vorweg", (
       }
       return out;
     };
-    const stepTexts = (step: QuestStep): string[] => {
-      switch (step.type) {
-        case "dialog": return step.lines;
-        case "choice": return [step.q, ...step.options.flatMap((o) => [o.t, o.reply])];
-        case "teach": return [step.cmd.intro, step.cmd.text, step.cmd.hint];
-        case "terminal": return step.tasks.flatMap((t) => [t.text, t.hint]);
-        case "drill": return [step.intro];
-        case "minigame": return [];
-      }
-    };
     const verstoesse: string[] = [];
     quests.forEach((quest, qi) => {
       const frei = unlockedThrough[qi];
-      for (const step of quest.steps) {
-        for (const text of stepTexts(step)) {
-          for (const snippet of codeSnippets(text)) {
-            const hit = lockedAbbrevInInput(snippet, (id) => frei.has(id));
-            if (hit) verstoesse.push(`${quest.id}: „${snippet}" zeigt „${hit.used}" (${hit.pair.id}), erst später freigeschaltet`);
-          }
+      // Die EINE Feldliste aller Anzeigetexte (test/support/anzeigetexte.ts, #1526): auch Titel, `brief` und `why`.
+      for (const [label, text] of questAnzeigeFelder([quest])) {
+        for (const snippet of codeSnippets(text)) {
+          const hit = lockedAbbrevInInput(snippet, (id) => frei.has(id));
+          if (hit) verstoesse.push(`${label}: „${snippet}" zeigt „${hit.used}" (${hit.pair.id}), erst später freigeschaltet`);
         }
       }
     });
