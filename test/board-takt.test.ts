@@ -102,6 +102,16 @@ describe("Spielquote im Takt (#1425)", () => {
     expect(T.istHarnessCommit({})).toBe(false);
   });
 
+  test("Label-Zuordnung (#1460 Z6): nur die Issue-Nummer macht einen Commit zu Harness, eine PR-Nummer allein nicht (keine PR→Issue-Auflösung)", () => {
+    const menge = new Set([1428]);
+    // Titel mit Issue UND PR (die Regel bei jedem Ticket-Merge): Harness
+    expect(T.istHarnessCommit(c("feat(harness): x (#1428) (#1500)"), menge)).toBe(true);
+    // Titel nur mit PR-Nummer: zählt als Spiel, auch mit Scope harness (Grenze, gemessen: 128 von 139 Commits tragen Issue und PR, 11 nur Dependabot)
+    expect(T.istHarnessCommit(c("feat(harness): x (#1500)"), menge)).toBe(false);
+    // ohne Menge bleibt der Rückfall auf den Scope
+    expect(T.istHarnessCommit(c("feat(harness): x (#1500)"), null)).toBe(true);
+  });
+
   test("zaehleSpielMerges: Harness-, Bot- und zu alte Commits zählen nicht", () => {
     const l = [spiel, harness, c("feat(sim): y", "dependabot[bot]"), c("feat(sim): z", "fluffels", "2026-10-06T10:00:00Z"), c("feat(inhalt): q")];
     expect(T.zaehleSpielMerges(l)).toBe(3);

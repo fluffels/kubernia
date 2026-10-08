@@ -105,3 +105,9 @@ Zusätzlich gibt es im Project zwei Ansichten neben „View 1“: „Spiel“ (F
 Anlass: die Zählung nach Commit-Scope (`(harness)`) verfehlte Harness-Arbeit mit anderem Scope (`docs(adr)`, `fix(ci)`) und zählte `feat(harness)` zu einem Spiel-Issue falsch; die Board-Ansichten und AGENTS.md nutzen dagegen das Label `area:harness`.
 
 Entscheidung: `istHarnessCommit` ordnet einen Commit über die `#N`-Referenzen seiner Titelzeile den geschlossenen `area:harness`-Issues zu (Menge der letzten 90 Tage; `main` lädt sie für die Fenster ohnehin, kein zusätzlicher Aufruf je Merge). Eine Referenz in der Menge heißt Harness, Referenzen ohne Treffer heißen Spiel. Fehlt jede Referenz, bleibt der Rückfall auf den Scope `(harness)`; diese Grenze gilt für Handarbeit ohne `#N`. Die Verdrahtung von `main` steht als `fuehreTaktAus` mit injizierter I/O und ist mit Fakes getestet. Die Bindungstests an diesen ADR lesen den jeweils letzten Treffer, damit Fortschreibungen die Zahlen nur am Ende ändern dürfen.
+
+## Fortschreibung #1460 (2026-10-08): keine Auflösung von PR-Nummern auf Issues
+
+Frage: soll `istHarnessCommit` eine PR-Nummer im Titel auf das verknüpfte Issue auflösen, damit auch der Scope-Rückfall bei Titeln ohne Issue-Nummer wirkt? Messung auf `origin/main` seit 2026-09-08: 139 Commits, davon 128 mit Issue- und PR-Nummer im Titel, 11 mit genau einer Nummer (alle Dependabot, ohnehin keine Ticket-Merges), keiner ohne.
+
+Entscheidung: nein. Der Rückfall auf den Commit-Scope greift in der Praxis nie, eine Auflösung kostete je Merge einen API-Aufruf und brächte keine andere Zählung. Die Grenze steht im Kopfkommentar von `istHarnessCommit` und ist in `test/board-takt.test.ts` festgehalten: ein Titel nur mit PR-Nummer zählt als Spiel.
