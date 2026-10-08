@@ -73,6 +73,19 @@
     "explain": "Ein ExternalName-Service hat keinen Selector und keine ClusterIP – nur einen CNAME auf einen externen Namen (z.B. api.bank.example.com). So sprechen Pods einen externen Dienst über den gewohnten Service-Namen an; ändert sich die externe Adresse, fasst man nur den einen Service an. Von außen erreichbar macht man Dienste dagegen über Ingress/LoadBalancer."
   },
   {
+    "id": "q-ingress-nginx-retired",
+    "chapter": "secrets-encrypted",
+    "q": "Dein Hafentor nutzt <code>ingressClassName: nginx</code> mit <b>Ingress-NGINX</b>. Was bedeutet dessen Einstellung seit März 2026?",
+    "options": [
+      "Bestehende Tore laufen weiter, bekommen aber keine Updates und Sicherheits-Fixes mehr; Neues plant man mit der Gateway API oder einem gepflegten Controller.",
+      "Alle Ingress-Objekte werden ab sofort vom Cluster abgelehnt.",
+      "Das nginx-Webserver-Image ist ebenfalls eingestellt.",
+      "Es reicht, <code>ingressClassName</code> umzubenennen, dann ist alles wieder gepflegt."
+    ],
+    "correct": 0,
+    "explain": "Das Kubernetes-Projekt hat Ingress-NGINX eingestellt (Wartung bis März 2026, danach keine Releases und keine Sicherheits-Fixes). Bestehende Installationen laufen weiter, sind aber ein wachsendes Risiko. Die Ingress-API selbst bleibt gültig, ist aber eingefroren; der Webserver nginx ist ein anderes Projekt. Welcher Controller dahintersteckt, zeigt: kubectl get pods --all-namespaces --selector app.kubernetes.io/name=ingress-nginx. Beim Umzug hilft ingress2gateway."
+  },
+  {
     "id": "q-gateway-why",
     "chapter": "dns-service-discovery",
     "q": "Es gibt doch schon <b>Ingress</b> – warum gibt es zusätzlich die <b>Gateway API</b>?",
@@ -83,7 +96,7 @@
       "Gateway API ist nur ein neuer Name für genau dasselbe Ingress-Objekt."
     ],
     "correct": 0,
-    "explain": "Ingress deckte nur HTTP grob ab; alles Feinere (Header, Gewichtung, viele TLS-Details) musste über controller-spezifische Annotationen geregelt werden – jeder Hersteller anders. Die Gateway API ist der portable Nachfolger: dasselbe Ziel wie das Hafentor (Verkehr von außen herein), aber als saubere, herstellerübergreifende Ressourcen aufgeteilt. Ingress bleibt gültig; Neues baut man heute mit der Gateway API."
+    "explain": "Ingress deckte nur HTTP grob ab; alles Feinere (Header, Gewichtung, viele TLS-Details) musste über controller-spezifische Annotationen geregelt werden – jeder Hersteller anders. Die Gateway API ist der portable Nachfolger: dasselbe Ziel wie das Hafentor (Verkehr von außen herein), aber als saubere, herstellerübergreifende Ressourcen aufgeteilt. Ingress bleibt gültig, die API ist aber eingefroren und der verbreitete Controller Ingress-NGINX ist seit März 2026 eingestellt; Neues baut man heute mit der Gateway API."
   },
   {
     "id": "q-gateway-class",

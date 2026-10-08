@@ -661,8 +661,9 @@ describe("moeglicheHalter und formatHalter (#1411)", () => {
   test("formatHalter: PID, Name und Rat per PID; nie ein Kill per Name; leer sagt es klar", () => {
     const text = m.formatHalter([{ pid: 4711, name: "python3.exe", grund: "verwaist", commandLine: "python3 -" }]);
     assert.match(text, /PID 4711 python3\.exe/);
-    assert.match(text, /Stop-Process -Id <pid>/);
-    assert.match(text, /taskkill \/\/PID <pid> \/\/F/, "Git-Bash-Weg (das PowerShell-Tool kann per Policy blockiert sein)");
+    assert.match(text, /taskkill \/PID <pid> \/T \/F/, "PowerShell-Weg samt Baum (#1501)");
+    assert.match(text, /taskkill \/\/PID <pid> \/\/T \/\/F/, "Git-Bash-Weg (das PowerShell-Tool kann per Policy blockiert sein)");
+    assert.doesNotMatch(text, /Stop-Process -Id/, "Stop-Process beendet keinen Baum");
     assert.ok(!/Stop-Process -Name/.test(text));
     assert.match(m.formatHalter([]), /kein Halter/);
   });

@@ -8,7 +8,7 @@
 import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./sim/helpers";
-import { BROKEN_STATUS, type Broken } from "../src/sim";
+import { BROKEN_POD, type Broken } from "../src/sim";
 
 let sim: KQSim;
 beforeEach(() => { sim = freshSim(); });
@@ -119,10 +119,10 @@ test("#307 Szenario: Subcommand-Vertauscher produziert Sim-Fehler", () => {
 // und OHNE Exhaustiveness-Check. `clustersync.ts` hatte dadurch tatsächlich einen Bug:
 // notready/oomkilled zeigten auf der Weltkarte fälschlich "Pending" an, weil die eigene
 // Ternärkette dort nur imagepull/crashloop kannte. Jetzt ist `Broken` eine echte
-// discriminated union + `BROKEN_STATUS` die eine zentrale Tabelle, aus der sim.ts,
+// discriminated union + `BROKEN_POD` die eine zentrale Tabelle, aus der sim.ts,
 // ui/hud.ts UND clustersync.ts ihr Label ziehen – als `Record<Broken["type"], …>`
 // erzwingt der Compiler Vollständigkeit bei einer neuen Variante.
-test("#867 BROKEN_STATUS: alle fünf Broken-Typen haben ein eigenes, korrektes Label", () => {
+test("#867 BROKEN_POD: alle fünf Broken-Typen haben ein eigenes, korrektes Label", () => {
   const labels: Record<Broken["type"], string> = {
     imagepull: "ImagePullBackOff",
     crashloop: "CrashLoopBackOff",
@@ -131,14 +131,14 @@ test("#867 BROKEN_STATUS: alle fünf Broken-Typen haben ein eigenes, korrektes L
     oomkilled: "OOMKilled",
   };
   for (const type of Object.keys(labels) as Broken["type"][]) {
-    assert.equal(BROKEN_STATUS[type].label, labels[type], `Label für "${type}" muss "${labels[type]}" sein`);
+    assert.equal(BROKEN_POD[type].status.label, labels[type], `Label für "${type}" muss "${labels[type]}" sein`);
   }
   // Die eigentliche Regression: notready/oomkilled dürfen NICHT auf "Pending" fallen.
-  assert.notEqual(BROKEN_STATUS.notready.label, "Pending");
-  assert.notEqual(BROKEN_STATUS.oomkilled.label, "Pending");
+  assert.notEqual(BROKEN_POD.notready.status.label, "Pending");
+  assert.notEqual(BROKEN_POD.oomkilled.status.label, "Pending");
 });
 
-test("#867 BROKEN_STATUS treibt deploymentPodStatus (kubectl get pods) für alle fünf Typen", () => {
+test("#867 BROKEN_POD treibt deploymentPodStatus (kubectl get pods) für alle fünf Typen", () => {
   const brokens: Broken[] = [
     { type: "imagepull" }, { type: "crashloop" }, { type: "pending" },
     // needsSecret auf ein fehlendes Secret gesetzt – sonst heilt "kubectl get pods"
@@ -149,7 +149,7 @@ test("#867 BROKEN_STATUS treibt deploymentPodStatus (kubectl get pods) für alle
     const s = freshSim();
     s.mergeScenario({ deployments: [{ name: "app", image: "nginx", replicas: 1, broken }] });
     const out = s.exec("kubectl get pods").output!;
-    const t = BROKEN_STATUS[broken.type];
+    const t = BROKEN_POD[broken.type].status;
     assert.match(out, new RegExp(t.ready.replace("/", "\\/") + "\\s+" + t.status), `"${broken.type}" muss READY=${t.ready} + STATUS=${t.status} zeigen`);
   }
 });

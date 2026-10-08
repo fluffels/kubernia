@@ -144,6 +144,7 @@
   "q-imggc-in-use": "Die Image-GC gibt nur ungenutzte Images frei. Sind alle vorhandenen Images von laufenden Pods in-use , ist nichts löschbar – der Platzdruck kommt dann von den In-use-Images selbst (plus emptyDirs/Logs), und dagegen hilft die Image-GC gar nicht.",
   "q-imggc-two-sources": "Aus zwei Quellen: den Container-Images und dem flüchtigen Speicher der Pods (emptyDir + Writable-Layer/Logs). Die Image-GC kann nur ungenutzte Images freigeben – In-use-Images und der ephemeral-Verbrauch bleiben liegen.",
   "q-imggc-what": "Steigt die Belegung der Image-Disk über eine Schwelle (High-Threshold, Default ~85%), löscht der kubelet ungenutzte Images (am längsten nicht gebraucht zuerst), bis wieder unter die Low-Schwelle – laufende, referenzierte Images rührt er nie an.",
+  "q-ingress-nginx-retired": "Bestehende Tore laufen weiter, bekommen aber keine Updates und Sicherheits-Fixes mehr; Neues plant man mit der Gateway API oder einem gepflegten Controller.",
   "q-init-peak": "Weil die Daten während der Vorbereitung kurz doppelt auf der Disk liegen (in /tmp und im emptyDir) – der Peak ist ~600Mi und sprengt das 512Mi-Limit. Fürs Limit zählt der Peak, nicht der Endstand.",
   "q-init-what": "Ein Container, der vor den Hauptcontainern läuft und fertig sein muss, bevor sie starten – typisch, um ein gemeinsames emptyDir mit Daten/Config vorzubereiten.",
   "q-job-cronjob-deployment": "(a) Job, (b) CronJob, (c) Deployment – Aufgabe mit Ende, geplante Aufgabe, Dauerdienst.",

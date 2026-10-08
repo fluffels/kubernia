@@ -10,22 +10,23 @@ import type { YamlValue } from "../../yaml";
 import type { YamlMap } from "../../yaml-emit";
 import type { KubectlHost } from "../host";
 import type { Deployment, StatefulSetRes } from "../../state";
-import { replicaSetsOf, type ReplicaSetView } from "../../replicasets";
+import { podTemplateLabels, replicaSetsOf, type ReplicaSetView } from "../../replicasets";
+import { workloadLabels, type Labels } from "../../util";
 import { clusterPods } from "../../pods";
 import { clusterPodStatus } from "../../podstatus";
 import { availableReplicas } from "../inspect";
-import { accessModesLong, appLabels, compact, deploymentPodSpec, metaOf, podSpecOf, type ObjectsOf } from "./core";
+import { accessModesLong, compact, deploymentPodSpec, metaOf, podSpecOf, type ObjectsOf } from "./core";
 
 /** Ein Zähler, der bei 0 fehlt (`omitempty`). */
 const omitZero = (n: number): number | undefined => (n === 0 ? undefined : n);
 
-const matchLabels = (labels: Record<string, string>): YamlMap => ({ matchLabels: labels });
-const template = (labels: Record<string, string>, spec: YamlValue): YamlMap => ({ metadata: { labels }, spec });
+const matchLabels = (labels: Labels): YamlMap => ({ matchLabels: labels });
+const template = (labels: Labels, spec: YamlValue): YamlMap => ({ metadata: { labels }, spec });
 
 // ===== Deployment =====
 
 function deploymentObject(host: KubectlHost, d: Deployment): YamlMap {
-  const labels = appLabels(d.name);
+  const labels = workloadLabels(d.name);
   const available = availableReplicas(host, d);
   const total = d.pods.length;
   return {
@@ -47,7 +48,7 @@ export const deploymentObjects: ObjectsOf = host => new Map(host.deployments.map
 
 /** Ein ReplicaSet des Deployments (aktuell oder alt, #1471): ein altes hat `replicas: 0`, sein eigenes Template und die Revision als Annotation. */
 function replicaSetObject(host: KubectlHost, d: Deployment, rs: ReplicaSetView): YamlMap {
-  const labels = { ...appLabels(d.name), "pod-template-hash": rs.hash };
+  const labels = podTemplateLabels(d, rs.hash);
   const ready = rs.current ? availableReplicas(host, d) : 0;
   const total = rs.current ? d.pods.length : 0;
   return {
@@ -70,7 +71,7 @@ export const replicaSetObjects: ObjectsOf = host => new Map(host.deployments.fla
 // ===== StatefulSet =====
 
 function statefulSetObject(host: KubectlHost, s: StatefulSetRes): YamlMap {
-  const labels = appLabels(s.name);
+  const labels = workloadLabels(s.name);
   const running = clusterPods(host).filter(c => c.owner === "StatefulSet" && c.sts.name === s.name && clusterPodStatus(host, c).status === "Running").length;
   const claim = compact({
     accessModes: accessModesLong("RWO"),

@@ -53,3 +53,16 @@ test("nackter Pod: keine erfundenen Limits oder Security-Angaben", () => {
 test("leerer securityContext {} erzeugt keine Kopfzeile", () => {
   expect(describePod({ securityContext: {} })).not.toMatch(/Security Context:/);
 });
+
+test("OOMKilled: State Waiting, Last State Terminated mit Reason und Exit Code (Golden-Zeilen)", () => {
+  const lines = describePod({ broken: { type: "oomkilled", memNeeded: 256 } }).split("\n");
+  const i = lines.indexOf("    State:        Waiting (CrashLoopBackOff)");
+  expect(i).toBeGreaterThan(-1);
+  expect(lines.slice(i + 1, i + 4)).toEqual(["    Last State:   Terminated", "      Reason:     OOMKilled", "      Exit Code:  137"]);
+});
+
+test("crashloop: State aus dem Status, kein Last State", () => {
+  const out = describePod({ broken: { type: "crashloop" } });
+  expect(out).toContain("    State:        CrashLoopBackOff\n");
+  expect(out).not.toContain("Last State:");
+});

@@ -17,7 +17,7 @@
  */
 import { hashStr } from "../core/rng";
 import { SECURITY_CONTEXT_KEYS, type Deployment, type PodTemplateSpec, type ReplicaSetRecord, type RsTemplate } from "./state";
-import { safeEncode } from "./util";
+import { safeEncode, workloadLabels, type Labels } from "./util";
 
 /** `spec.revisionHistoryLimit` von Kubernetes (Default 10): so viele alte ReplicaSets bleiben. */
 export const REVISION_HISTORY_LIMIT = 10;
@@ -122,3 +122,9 @@ export function maxRestartedAt(dep: Deployment): number {
   const alte = (dep.oldReplicaSets ?? []).map(r => r.template.spec.restartedAt ?? -1);
   return Math.max(dep.restartedAt ?? -1, dep.replicaSet?.template.spec.restartedAt ?? -1, ...alte);
 }
+
+/** Die Labels der Pods (und der Selektor) eines ReplicaSets (Default das aktuelle): Workload-Label plus `pod-template-hash`. */
+export function podTemplateLabels(dep: Deployment, hash: string = currentReplicaSet(dep).hash): Labels {
+  return { ...workloadLabels(dep.name), "pod-template-hash": hash };
+}
+
