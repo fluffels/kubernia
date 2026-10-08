@@ -484,6 +484,14 @@ describe("Wächter: keine Anleitung zum Kill per Name (#1411)", () => {
     return out;
   }
 
+  test("texte() scannt alle Docs außer den ADRs (#1508)", async () => {
+    const pfade = Object.keys(await texte());
+    for (const pflicht of ["docs/referenz/befehle.md", "docs/model-routing.md", "docs/sicherheit-agenten.md", "docs/agent-harness-faq.md"]) {
+      assert.ok(pfade.includes(pflicht), `${pflicht} fehlt im Scan`);
+    }
+    assert.deepEqual(pfade.filter((p) => p.startsWith("docs/adr/")), [], "ADRs sind historisch und zählen nicht");
+  });
+
   test("kein Dokument, Skill, Workflow, Agent und Skript rät zu `Stop-Process -Name` oder `taskkill /IM`", async () => {
     const treffer = Object.entries(await texte())
       .filter(([, t]) => VERBOTEN.test(t))

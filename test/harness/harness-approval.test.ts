@@ -358,6 +358,8 @@ const ABGELOEST = [
 ];
 /** Eine Alternation über alle Muster: die meisten Dateien treffen keins, dann entfallen die Einzelläufe. */
 const ABGELOEST_VORFILTER = new RegExp(ABGELOEST.map((m) => m.source).join("|"), "i");
+// Der Vorfilter über `source` verliert Flags und nummeriert Gruppen um: die Muster müssen schlicht bleiben.
+if (!ABGELOEST.every((m) => m.flags === "i")) throw new Error("Vorfilter: ABGELOEST nur mit Flag i");
 const SCAN_ENDUNGEN = /\.(md|js|mjs|cjs|ts|json|yml|yaml)$/;
 const EIGENE_DATEI = "test/harness/harness-approval.test.ts";
 
@@ -435,6 +437,7 @@ describe("Die abgelöste Label-Mechanik kommt nicht zurück (ADR 0014, #1303)", 
 /** Die Kriterien des Pflicht-Stopps stehen nur in AGENTS.md; alle anderen Stellen verweisen darauf (#1311). */
 const KRITERIEN = [/Ruleset\/Secrets\/Repo-Einstellungen/, /am Ruleset, an Secrets/, /Löschen, Ruleset/];
 
+if (!KRITERIEN.every((m) => m.flags === "")) throw new Error("Vorfilter: KRITERIEN ohne Flags");
 const KRITERIEN_VORFILTER = new RegExp(KRITERIEN.map((m) => m.source).join("|"));
 
 /** Fundstellen der ausgeschriebenen Kriterienliste außerhalb von AGENTS.md; ADRs (Historie) und diese Datei zählen nicht. */
