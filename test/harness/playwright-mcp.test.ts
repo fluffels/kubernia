@@ -39,10 +39,7 @@ const launcher = launcherModule as unknown as LauncherModule;
 
 const root = join(import.meta.dirname, "..", "..");
 
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as internalrefsModule from "../../scripts/check-internalrefs.mjs";
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-const listTrackedFiles: (rootDir?: string) => string[] = internalrefsModule.listTrackedFiles;
+import { lies, repoDateien } from "./repo-texte";
 
 /** Stellen, die zur Laufzeit von einem externen Host laden: CSS `url(http…)`/`@import`, fetch/XHR/WebSocket mit http(s)/ws(s)-Ziel (nicht localhost). */
 function externeLadestellen(text: string): string[] {
@@ -181,9 +178,9 @@ describe("Verdrahtung im Repo", () => {
   });
 
   test("auch Stylesheets und Laufzeit-Code laden keine externen Origins (#1311)", () => {
-    const dateien = listTrackedFiles(root).filter((f) => /\.css$/.test(f) || /^index\.html$/.test(f) || /^src\/.+\.ts$/.test(f));
+    const dateien = repoDateien().filter((f) => /\.css$/.test(f) || /^index\.html$/.test(f) || /^src\/.+\.ts$/.test(f));
     assert.ok(dateien.length > 50, "Scan liest kaum Dateien");
-    const funde = dateien.flatMap((f) => externeLadestellen(readFileSync(join(root, f), "utf8")).map((x) => `${f}: ${x}`));
+    const funde = dateien.flatMap((f) => externeLadestellen(lies(f)).map((x) => `${f}: ${x}`));
     assert.deepEqual(funde, [], "CSS url()/@import oder fetch/XMLHttpRequest/WebSocket auf einen externen Host: bräche unter --allowed-origins");
   });
 
@@ -214,6 +211,9 @@ describe("Verdrahtung im Repo", () => {
 // Worktree) läuft er offline; ohne sie würde der Launcher per npx laden und Netz brauchen, dann entfällt der Test
 // (der Wächter „Lockfile pinnt das Paket …“ oben schlägt in dem Fall ohnehin an).
 const lokalInstalliert = launcher.readInstalled(root) !== null;
+// Ein Budget für den Handshake: der innere Timer bricht mit klarer Meldung ab, das Test-Timeout (doppelt) fängt nur noch,
+// was der Timer nicht fängt. Gemessen: kalt ~2,7 s, warm ~0,5 s; die Reserve gilt der Parallellast (#1526).
+const HANDSHAKE_MS = 30_000;
 
 describe.skipIf(!lokalInstalliert)("tools/list-Handshake ohne Browser (#1309)", () => {
   /** Startet den Launcher mit den Args aus .mcp.json, spricht initialize + tools/list und beendet ihn. */
@@ -226,8 +226,8 @@ describe.skipIf(!lokalInstalliert)("tools/list-Handshake ohne Browser (#1309)", 
       const child = spawn(process.execPath, args, { cwd, stdio: ["pipe", "pipe", "ignore"] });
       const timer = setTimeout(() => {
         child.kill();
-        reject(new Error("tools/list-Handshake nach 30 s ohne Antwort"));
-      }, 30_000);
+        reject(new Error(`tools/list-Handshake nach ${HANDSHAKE_MS / 1000} s ohne Antwort`));
+      }, HANDSHAKE_MS);
       let buf = "";
       const senden = (o: object) => child.stdin.write(JSON.stringify({ jsonrpc: "2.0", ...o }) + "\n");
       child.stdout.on("data", (d: Buffer) => {
@@ -268,11 +268,11 @@ describe.skipIf(!lokalInstalliert)("tools/list-Handshake ohne Browser (#1309)", 
     assert.ok(whitelist.length >= 10, "Whitelist des Umsetzers enthält keine Playwright-Tools mehr?");
     const fehlt = [...faq, ...whitelist].filter((n) => !namen.has(n));
     assert.deepEqual(fehlt, [], "Der Server kennt diese Tools nicht mehr (Umbenennung bei einem Dependabot-Bump?): die Whitelist fiele still aus");
-  }, 60_000);
+  }, HANDSHAKE_MS * 2);
 
   test("Erkennung greift (Red-Green): ein erfundener Tool-Name fehlt im Server", async () => {
     const namen = new Set(await toolNamenEinmal());
     assert.ok(!namen.has("browser_gibt_es_nicht_1309"), "ein erfundener Name darf nicht vorkommen");
     assert.ok(namen.has("browser_navigate"));
-  }, 60_000);
+  }, HANDSHAKE_MS * 2);
 });

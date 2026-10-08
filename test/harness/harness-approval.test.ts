@@ -37,12 +37,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { hookSkripte, lokaleImporteTransitiv } from "./hook-importe";
 import { fileURLToPath } from "node:url";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as checkInternalRefs from "../../scripts/check-internalrefs.mjs";
-
-// Begründete Ausnahme wie in test/harness/agents-refs.test.ts: das .mjs hat kein Declaration-File.
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-const listTrackedFiles: (rootDir?: string) => string[] = checkInternalRefs.listTrackedFiles;
+import { AGENTEN_KONTEXT, baueVorfilter, lies, repoDateien, vorfilterProbleme } from "./repo-texte";
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const read = (rel: string) => readFileSync(WURZEL + rel, "utf8");
@@ -356,28 +351,25 @@ const ABGELOEST = [
   /zweite Hälfte[^.\n]{0,80}(Sammelticket|übertrag)/i,
   /erste Hälfte[^.\n]{0,80}(PR|Sammelticket)/i,
 ];
-/** Eine Alternation über alle Muster: die meisten Dateien treffen keins, dann entfallen die Einzelläufe. */
-const ABGELOEST_VORFILTER = new RegExp(ABGELOEST.map((m) => m.source).join("|"), "i");
-// Der Vorfilter über `source` verliert Flags und nummeriert Gruppen um: die Muster müssen schlicht bleiben.
-if (!ABGELOEST.every((m) => m.flags === "i")) throw new Error("Vorfilter: ABGELOEST nur mit Flag i");
+/**
+ * Eine Alternation über alle Muster: die meisten Dateien treffen keins, dann entfallen die Einzelläufe. Lässt sie sich nicht
+ * sicher bauen (abweichende Flags, Rückverweise), ist der Vorfilter `null` und jedes Muster läuft einzeln (fail-safe);
+ * der Test „Vorfilter: Muster sind kombinierbar“ meldet das als Rot, damit niemand unbemerkt langsamer wird.
+ */
+const ABGELOEST_VORFILTER = baueVorfilter(ABGELOEST);
 const SCAN_ENDUNGEN = /\.(md|js|mjs|cjs|ts|json|yml|yaml)$/;
 const EIGENE_DATEI = "test/harness/harness-approval.test.ts";
 
-let scanCache: Record<string, string> | undefined;
-
 /**
- * Alle versionierten Textdateien (Pfad → Inhalt), die die Text-Wächter unten durchsuchen. Einmal je Testdatei geladen
- * und geteilt: der Scan liest ~750 Dateien (8 MB) und lief zuvor je Wächter neu, unter Last riss das den 5-s-Timeout (#1508).
+ * Alle versionierten Textdateien im Agenten-Kontext (Pfad → Inhalt), die die Text-Wächter unten durchsuchen: Doku, Prompts,
+ * Skills, Workflows, Hooks, Skripte, Wächter und jede `*.md`, nicht der Spiel-Code (Umfang: `AGENTEN_KONTEXT`). Einmal je
+ * Testdatei geladen und geteilt: die Dateiliste und die Inhalte kommen aus dem gecachten Scan-Helfer.
  */
-function gescannteDateien(): Record<string, string> {
-  if (scanCache) return scanCache;
+function agentenKontextDateien(): Record<string, string> {
   const dateien: Record<string, string> = {};
-  for (const f of listTrackedFiles(WURZEL)) {
-    if (!(SCAN_ENDUNGEN.test(f) || f === ".github/CODEOWNERS")) continue;
-    if (!existsSync(WURZEL + f)) continue; // gelöscht, aber noch im Index
-    dateien[f] = read(f);
+  for (const f of repoDateien().filter(AGENTEN_KONTEXT)) {
+    if (SCAN_ENDUNGEN.test(f) || f === ".github/CODEOWNERS") dateien[f] = lies(f);
   }
-  scanCache = dateien;
   return dateien;
 }
 
@@ -386,7 +378,7 @@ function abgeloesteFundstellen(dateien: Record<string, string>): string[] {
   const funde: string[] = [];
   for (const [pfad, inhalt] of Object.entries(dateien)) {
     if (pfad.startsWith("docs/adr/") || pfad === EIGENE_DATEI) continue;
-    if (!ABGELOEST_VORFILTER.test(inhalt)) continue;
+    if (ABGELOEST_VORFILTER && !ABGELOEST_VORFILTER.test(inhalt)) continue;
     for (const muster of ABGELOEST) if (muster.test(inhalt)) funde.push(`${pfad}: ${String(muster)}`);
   }
   return funde;
@@ -404,8 +396,8 @@ describe("Die abgelöste Label-Mechanik kommt nicht zurück (ADR 0014, #1303)", 
     assert.equal(abgeloesteFundstellen({ "README.md": "harmlos" }).length, 0);
   });
 
-  test("keine versionierte Datei außerhalb von docs/adr/ nennt Label, Guard oder veraltete HITL-/Sammelticket-Aussagen", () => {
-    const dateien = gescannteDateien();
+  test("keine versionierte Datei des Agenten-Kontexts außerhalb von docs/adr/ nennt Label, Guard oder veraltete HITL-/Sammelticket-Aussagen", () => {
+    const dateien = agentenKontextDateien();
     assert.ok(Object.keys(dateien).length > 50, "Scan liest kaum Dateien – listTrackedFiles liefert nichts?");
     assert.deepEqual(abgeloesteFundstellen(dateien), [], "Abgelöste Mechanik taucht wieder auf (ADR 0014, #1279, #1311)");
   });
@@ -437,24 +429,54 @@ describe("Die abgelöste Label-Mechanik kommt nicht zurück (ADR 0014, #1303)", 
 /** Die Kriterien des Pflicht-Stopps stehen nur in AGENTS.md; alle anderen Stellen verweisen darauf (#1311). */
 const KRITERIEN = [/Ruleset\/Secrets\/Repo-Einstellungen/, /am Ruleset, an Secrets/, /Löschen, Ruleset/];
 
-if (!KRITERIEN.every((m) => m.flags === "")) throw new Error("Vorfilter: KRITERIEN ohne Flags");
-const KRITERIEN_VORFILTER = new RegExp(KRITERIEN.map((m) => m.source).join("|"));
+const KRITERIEN_VORFILTER = baueVorfilter(KRITERIEN);
 
 /** Fundstellen der ausgeschriebenen Kriterienliste außerhalb von AGENTS.md; ADRs (Historie) und diese Datei zählen nicht. */
 function kriterienKopien(dateien: Record<string, string>): string[] {
   const funde: string[] = [];
   for (const [pfad, inhalt] of Object.entries(dateien)) {
     if (pfad === "AGENTS.md" || pfad.startsWith("docs/adr/") || pfad === EIGENE_DATEI) continue;
-    if (!KRITERIEN_VORFILTER.test(inhalt)) continue;
+    if (KRITERIEN_VORFILTER && !KRITERIEN_VORFILTER.test(inhalt)) continue;
     for (const muster of KRITERIEN) if (muster.test(inhalt)) funde.push(`${pfad}: ${String(muster)}`);
   }
   return funde;
 }
 
+describe("Scan-Vorfilter und Scan-Umfang (#1526)", () => {
+  test("Vorfilter: Muster sind kombinierbar (ABGELOEST, KRITERIEN)", () => {
+    assert.deepEqual(vorfilterProbleme(ABGELOEST), [], "ABGELOEST nur mit gleichen Flags und ohne Rückverweise");
+    assert.deepEqual(vorfilterProbleme(KRITERIEN), [], "KRITERIEN nur mit gleichen Flags und ohne Rückverweise");
+    assert.ok(ABGELOEST_VORFILTER, "Vorfilter über ABGELOEST baubar");
+    assert.ok(KRITERIEN_VORFILTER, "Vorfilter über KRITERIEN baubar");
+  });
+
+  test("Red-Green: Rückverweise, gemischte Flags und Bau-Fehler werden gemeldet, schlichte Muster nicht", () => {
+    assert.equal(vorfilterProbleme([/(a)\1/i]).length, 1, "Rückverweis \\1");
+    assert.equal(vorfilterProbleme([/(?<x>a)\k<x>/i]).length, 1, "benannter Rückverweis");
+    assert.equal(vorfilterProbleme([/a/i, /b/]).length, 1, "gemischte Flags");
+    const kaputt = { source: "(", flags: "i" } as RegExp; // einzeln nie entstehbar, die Alternation wäre nicht baubar
+    assert.equal(vorfilterProbleme([kaputt]).length, 1, "Alternation nicht baubar");
+    assert.deepEqual(vorfilterProbleme([/a\\1/i]), [], "maskierter Backslash vor der Ziffer ist kein Rückverweis");
+    assert.deepEqual(vorfilterProbleme([/a/i, /b[^.\n]{0,5}c/i]), []);
+    assert.equal(baueVorfilter([/(a)\1/i]), null, "ohne sichere Alternation kein Vorfilter (fail-safe: alle Muster einzeln)");
+    assert.ok(baueVorfilter([/a/i, /b/i])?.test("xB"));
+  });
+
+  test("Scan-Umfang: Agenten-Kontext ja (auch modul-lokale AGENTS.md), Spiel-Code und Spiel-Tests nein", () => {
+    for (const drin of ["AGENTS.md", "src/content/AGENTS.md", ".github/workflows/x.yml", "docs/x.md", ".claude/skills/a/SKILL.md", "scripts/a.mjs", "test/harness/a.test.ts", "package.json"]) {
+      assert.ok(AGENTEN_KONTEXT(drin), drin);
+    }
+    for (const draussen of ["src/sim/a.ts", "test/sim/b.test.ts", "assets/a.png", "package-lock.json"]) {
+      assert.ok(!AGENTEN_KONTEXT(draussen), draussen);
+    }
+    assert.ok(agentenKontextDateien()["src/content/AGENTS.md"] !== undefined, "modul-lokale AGENTS.md wird gescannt");
+  });
+});
+
 describe("Die Pre-Flight-Kriterien stehen nur in AGENTS.md (#1311)", () => {
   test("keine Kopie der Kriterienliste in Agenten, Skills, Workflow oder Doku", () => {
     assert.deepEqual(
-      kriterienKopien(gescannteDateien()),
+      kriterienKopien(agentenKontextDateien()),
       [],
       "Die Liste „Löschen, Ruleset/Secrets/Repo-Einstellungen, Veröffentlichen/Forum“ steht nur in AGENTS.md § Human-in-the-Loop-Checkpoints; hier verweisen statt kopieren",
     );
