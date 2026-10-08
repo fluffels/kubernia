@@ -31,12 +31,93 @@ type Doktor = {
   pruefeUserSettings: (user: Settings | null, vorlage: Settings) => Ergebnis[];
   verhaltensprobe: (io: { home: string; schreibe: (p: string) => void; loesche: (p: string) => void }) => Ergebnis[];
   projektDomains: (settingsText: string) => string[];
+  pruefeWindowsSperre: (a: { platform: string; projektText: string | null; lokalText: string | null }) => boolean;
+  sessionStartAusgabe: (a: { platform: string; projektText: string | null; lokalText: string | null }) => string;
+  main: (argv: string[], env?: Record<string, string | undefined>, out?: (t: string) => void, err?: (t: string) => void, io?: { platform?: string; projektText?: string | null; lokalText?: string | null }) => number;
 };
 const D = raw as unknown as Doktor;
 
 const SKRIPT = fileURLToPath(new URL("../scripts/sandbox-doctor.mjs", import.meta.url));
 const stati = (r: Ergebnis[]) => r.map((e) => e.status);
 const rot = (r: Ergebnis[]) => r.filter((e) => e.status === "FEHLT");
+
+const STRIKT = JSON.stringify({ sandbox: { enabled: true, allowUnsandboxedCommands: false } });
+const sperre = (platform: string, projektText: string | null, lokalText: string | null) => D.pruefeWindowsSperre({ platform, projektText, lokalText });
+
+describe("pruefeWindowsSperre (#1486)", () => {
+  test("natives Windows, strikter Projekt-Block, kein lokales Override: Sperre", () => {
+    expect(sperre("win32", STRIKT, null)).toBe(true);
+  });
+  test("lokal enabled:false hebt die Sperre auf", () => {
+    expect(sperre("win32", STRIKT, JSON.stringify({ sandbox: { enabled: false } }))).toBe(false);
+  });
+  test("lokal allowUnsandboxedCommands:true hebt die Sperre auf", () => {
+    expect(sperre("win32", STRIKT, JSON.stringify({ sandbox: { allowUnsandboxedCommands: true } }))).toBe(false);
+  });
+  test("lokales Override ohne Bezug (andere Schlüssel) lässt die Sperre stehen", () => {
+    expect(sperre("win32", STRIKT, JSON.stringify({ permissions: { allow: [] } }))).toBe(true);
+  });
+  test("Linux/WSL2 und macOS: nie Sperre", () => {
+    expect(sperre("linux", STRIKT, null)).toBe(false);
+    expect(sperre("darwin", STRIKT, null)).toBe(false);
+  });
+  test("Projekt ohne sandbox-Block, mit enabled:false oder ohne allowUnsandboxedCommands:false: keine Sperre", () => {
+    expect(sperre("win32", "{}", null)).toBe(false);
+    expect(sperre("win32", JSON.stringify({ sandbox: { enabled: false, allowUnsandboxedCommands: false } }), null)).toBe(false);
+    expect(sperre("win32", JSON.stringify({ sandbox: { enabled: true } }), null)).toBe(false);
+    expect(sperre("win32", JSON.stringify({ sandbox: { allowUnsandboxedCommands: false } }), null)).toBe(false);
+  });
+  test("kaputtes lokales JSON: Sperre (Override unlesbar); kaputtes oder fehlendes Projekt-JSON: keine", () => {
+    expect(sperre("win32", STRIKT, "{")).toBe(true);
+    expect(sperre("win32", "{", null)).toBe(false);
+    expect(sperre("win32", null, null)).toBe(false);
+  });
+});
+
+describe("sessionStartAusgabe (#1486)", () => {
+  test("bei Sperre: JSON mit systemMessage und additionalContext samt Abhilfe", () => {
+    const j = JSON.parse(D.sessionStartAusgabe({ platform: "win32", projektText: STRIKT, lokalText: null })) as {
+      systemMessage: string;
+      hookSpecificOutput: { hookEventName: string; additionalContext: string };
+    };
+    expect(j.hookSpecificOutput.hookEventName).toBe("SessionStart");
+    expect(j.systemMessage).toContain("settings.local.json");
+    expect(j.systemMessage).toContain('"enabled":false');
+    expect(j.hookSpecificOutput.additionalContext).toContain("Override nicht selbst eintragen");
+  });
+  test("ohne Sperre: leere Ausgabe", () => {
+    expect(D.sessionStartAusgabe({ platform: "linux", projektText: STRIKT, lokalText: null })).toBe("");
+    expect(D.sessionStartAusgabe({ platform: "win32", projektText: STRIKT, lokalText: JSON.stringify({ sandbox: { enabled: false } }) })).toBe("");
+  });
+});
+
+describe("--sessionstart (#1486)", () => {
+  test("endet immer mit Exit 0, auch ohne lesbare Settings, und druckt bei Sperre die Meldung", () => {
+    const aus: string[] = [];
+    expect(D.main(["--sessionstart"], {}, (t) => aus.push(t), () => undefined, { platform: "win32", projektText: STRIKT, lokalText: null })).toBe(0);
+    expect(aus.join("")).toContain("systemMessage");
+    const leer: string[] = [];
+    expect(D.main(["--sessionstart"], {}, (t) => leer.push(t), () => undefined, { platform: "win32", projektText: null, lokalText: null })).toBe(0);
+    expect(leer).toEqual([]);
+  });
+  test("--check meldet unter Linux/WSL2 nichts zu natives Windows und ohne strikten Projekt-Block nichts unter win32", () => {
+    const zeilen = (io: { platform: string; projektText: string | null; lokalText: string | null }) => {
+      const aus: string[] = [];
+      D.main(["--check"], { CLAUDE_CONFIG_DIR: "/nicht/vorhanden" }, (t) => aus.push(t), () => undefined, io);
+      return aus.join(String.fromCharCode(10));
+    };
+    expect(zeilen({ platform: "linux", projektText: STRIKT, lokalText: null })).not.toMatch(/natives Windows: (Projekt|lokaler)/);
+    expect(zeilen({ platform: "win32", projektText: "{}", lokalText: null })).not.toMatch(/natives Windows: (Projekt|lokaler)/);
+  });
+  test("--check unter win32 meldet FEHLT ohne und OK mit lokalem Override", () => {
+    const ohne: string[] = [];
+    D.main(["--check"], { CLAUDE_CONFIG_DIR: "/nicht/vorhanden" }, (t) => ohne.push(t), () => undefined, { platform: "win32", projektText: STRIKT, lokalText: null });
+    expect(ohne.join(String.fromCharCode(10))).toMatch(/^FEHLT natives Windows: Projekt-Block sperrt/m);
+    const mit: string[] = [];
+    D.main(["--check"], { CLAUDE_CONFIG_DIR: "/nicht/vorhanden" }, (t) => mit.push(t), () => undefined, { platform: "win32", projektText: STRIKT, lokalText: JSON.stringify({ sandbox: { enabled: false } }) });
+    expect(mit.join(String.fromCharCode(10))).toMatch(/^OK natives Windows: lokaler Override aktiv/m);
+  });
+});
 
 describe("pruefePlattform", () => {
   test("natives Windows ist rot und verweist auf ADR 0021", () => {

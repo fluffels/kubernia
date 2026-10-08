@@ -1046,6 +1046,9 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
     assert.match(prompt, /AGENTS\.md § Oberste Regel/);
     assert.doesNotMatch(prompt, /Teil-Akzeptanzkriterien|Kleinkram eine Zeile|gleiches\s+Subsystem/);
     assert.match(prompt, /gh issue list --limit 500/);
+    // die Ausnahmen zu „Harness-Befunde sind Zeilen“ stehen nur in AGENTS.md (#1486 Z3)
+    assert.match(prompt, /AGENTS.md § Harness-Befunde sind Zeilen/);
+    assert.doesNotMatch(prompt, /roter main|Datenverlust|allein nicht in eine Session/);
   });
 
   test("Planer prüft den Stand des Checkouts gegen origin/main (#1331)", () => {

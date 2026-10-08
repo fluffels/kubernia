@@ -133,6 +133,13 @@ describe("Agenten-Sandbox-Konfiguration (#1432)", () => {
     assert.deepEqual(abschwaechendeSchluessel(sb), []);
   });
 
+  test("SessionStart meldet die Windows-Sperre über den Sandbox-Doktor (#1486)", () => {
+    const hooks = (JSON.parse(read(".claude/settings.json")) as { hooks?: { SessionStart?: { hooks?: { args?: string[]; command?: string }[] }[] } }).hooks;
+    const eintraege = (hooks?.SessionStart ?? []).flatMap((g) => g.hooks ?? []);
+    const treffer = eintraege.filter((h) => (h.args ?? []).some((a) => a.endsWith("scripts/sandbox-doctor.mjs")) && (h.args ?? []).includes("--sessionstart"));
+    assert.equal(treffer.length, 1, "SessionStart braucht genau einen Hook `sandbox-doctor.mjs --sessionstart`");
+  });
+
   test("Allowlist eng und deckungsgleich mit der Doku-Tabelle", () => {
     const domains = sb.network?.allowedDomains;
     assert.deepEqual(allowlistVerstoesse(domains), []);

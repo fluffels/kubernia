@@ -19,7 +19,7 @@
  * per `kubeadmCommand(this, …)`.
  */
 import type { ClusterState, ClusterNode, Scenario } from "./state";
-import { randSuffix, suggest, CONTROL_PLANE_IP } from "./util";
+import { randSuffix, suggest, CONTROL_PLANE_IP, CONTROL_PLANE_NODE, workerNodeName } from "./util";
 import { flag, isFlagToken, notSimulated, parseCall, specOfSub, subEntry, type Call, type SubEntry } from "./cliargs";
 import { provisionNode, isControlPlane, NODE_VERSION } from "./nodes";
 
@@ -131,8 +131,8 @@ function kubeadmInit(host: KubeadmHost, c: Call): string {
   }
   const token = genToken(host.rng);
   // Der Knoten, auf dem init läuft, wird die Control-Plane. Gibt es schon einen Control-Plane-
-  // Knoten (z.B. aus dem Szenario), nimm ihn; sonst lege "ahoi-control" an. Idempotent über Name.
-  const cpName = host.nodes.find(isControlPlane)?.name ?? "ahoi-control";
+  // Knoten (z.B. aus dem Szenario), nimm ihn; sonst lege den Standard-Control-Plane-Knoten an. Idempotent über Name.
+  const cpName = host.nodes.find(isControlPlane)?.name ?? CONTROL_PLANE_NODE;
   provisionNode(host, { name: cpName, roles: "control-plane" }); // idempotent per Name
   host.controlPlane = { up: true, token, node: cpName };
   return [
@@ -190,7 +190,7 @@ function kubeadmJoin(host: KubeadmHost, c: Call): string {
   }
   // Nächster freier Worker-Name: ahoi-worker-<n>, fortlaufend über die schon vorhandenen Worker.
   const workerCount = host.nodes.filter(n => !isControlPlane(n)).length;
-  const name = "ahoi-worker-" + (workerCount + 1);
+  const name = workerNodeName(workerCount + 1);
   provisionNode(host, { name }); // Worker-Default: roles "<none>", version NODE_VERSION
   // Ein neuer Knoten kann wartende (Pending) Pods einplanen – wie ein echter Worker, der dazukommt.
   host._reschedulePending();

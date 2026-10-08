@@ -11,11 +11,12 @@
  * Jeder Ressourcentyp ist ein eigener kleiner Renderer; ein 10× größerer Ressourcensatz
  * wächst als 10× Einträge, ohne dass Dispatcher-Komplexität/-Länge mitwächst.
  */
-import { podIP, CONTROL_PLANE_IP, CONTROL_PLANE_NODE } from "../util";
+import { podIP, CONTROL_PLANE_IP, CONTROL_PLANE_NODE, BUILTIN_AGE, workloadSelector } from "../util";
 import { endpointAddresses, podAddress, servicesWithDefault, serviceSelector, isKubernetesService } from "../endpoints";
 import type { KubectlHost } from "./host";
 import { DEFAULT_NAMESPACE, isExternalNameService, type Deployment } from "../state";
 import { currentReplicaSet } from "../replicasets";
+import { nodeInternalIP, NODE_SYSTEM_INFO } from "../nodes";
 import { requestedNamespace, allNamespaces } from "./namespace";
 import { RESOURCE_KINDS, type ResourcePlural } from "./resources";
 import { clusterPods, type ClusterPod } from "../pods";
@@ -75,13 +76,13 @@ function podRow(host: KubectlHost, c: ClusterPod): string[] {
  *  Control-Plane (dieselbe Adresse nennt `kubeadm join`); CoreDNS ist ein normaler Pod im Pod-Netz. */
 const SYSTEM_PODS: readonly { name: string; hostNetwork: boolean }[] = [
   { name: "coredns-7db6d8ff4d-x2x9p", hostNetwork: false },
-  { name: "etcd-ahoi-control", hostNetwork: true },
-  { name: "kube-apiserver-ahoi-control", hostNetwork: true },
-  { name: "kube-scheduler-ahoi-control", hostNetwork: true },
+  { name: "etcd-" + CONTROL_PLANE_NODE, hostNetwork: true },
+  { name: "kube-apiserver-" + CONTROL_PLANE_NODE, hostNetwork: true },
+  { name: "kube-scheduler-" + CONTROL_PLANE_NODE, hostNetwork: true },
 ];
 
 function systemPodRow(p: { name: string; hostNetwork: boolean }): string[] {
-  return [p.name, "1/1", "Running", "0", "3d", ...wideCells(p.hostNetwork ? CONTROL_PLANE_IP : podIP(p.name), CONTROL_PLANE_NODE)];
+  return [p.name, "1/1", "Running", "0", BUILTIN_AGE, ...wideCells(p.hostNetwork ? CONTROL_PLANE_IP : podIP(p.name), CONTROL_PLANE_NODE)];
 }
 
 /** `kubectl get`-Leermeldung für einen Namespace (echtes kubectl: „No resources found in <ns> namespace."). */
@@ -113,17 +114,18 @@ function getDeployments(host: KubectlHost): GetTable {
   return withWide(tableOf(["NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE", "CONTAINERS", "IMAGES", "SELECTOR"],
     host.deployments.map(d => {
       const ready = availableReplicas(host, d);
-      return [d.name, ready + "/" + d.replicas, String(d.replicas), String(ready), host._age(d.created), d.name, d.image, "app=" + d.name];
+      return [d.name, ready + "/" + d.replicas, String(d.replicas), String(ready), host._age(d.created), d.name, d.image, workloadSelector(d.name)];
     })), 3);
 }
 
 /** ReplicaSets (#1468): abgeleitet, je Deployment das aktuelle (`sim/replicasets.ts`). */
 function getReplicaSets(host: KubectlHost): GetTable {
-  return tableOf(["NAME", "DESIRED", "CURRENT", "READY", "AGE"],
+  return withWide(tableOf(["NAME", "DESIRED", "CURRENT", "READY", "AGE", "CONTAINERS", "IMAGES", "SELECTOR"],
     host.deployments.map(d => {
       const rs = currentReplicaSet(d);
-      return [rs.name, String(d.replicas), String(d.pods.length), String(host._podReady(d) ? d.pods.length : 0), host._age(rs.created)];
-    }));
+      return [rs.name, String(d.replicas), String(d.pods.length), String(host._podReady(d) ? d.pods.length : 0), host._age(rs.created),
+        d.name, d.image, workloadSelector(d.name) + ",pod-template-hash=" + rs.hash];
+    })), 3);
 }
 
 function getServices(host: KubectlHost): GetTable {
@@ -137,7 +139,7 @@ function getServices(host: KubectlHost): GetTable {
       isExt ? "<none>" : s.clusterIP,
       isExt ? (s.externalName || "<none>") : "<none>",
       isExt ? "<none>" : (s.port + "/TCP"),
-      isKubernetesService(s) ? "3d" : host._age(s.created || 0),
+      isKubernetesService(s) ? BUILTIN_AGE : host._age(s.created || 0),
       serviceSelector(host, s) ?? "<none>",
     ]);
   }
@@ -153,7 +155,7 @@ function getEndpoints(host: KubectlHost): GetTable {
     // gilt der Service-Port (#164). So bleibt der Port-Abgleich auch hier sichtbar.
     // Die Pods kommen aus der gemeinsamen Service→Pod-Auflösung (#1318).
     const ips = endpointAddresses(host, s);
-    return [s.name, ips.length ? ips.join(",") : "<none>", isKubernetesService(s) ? "3d" : host._age(s.created || 0)];
+    return [s.name, ips.length ? ips.join(",") : "<none>", isKubernetesService(s) ? BUILTIN_AGE : host._age(s.created || 0)];
   }));
 }
 
@@ -161,8 +163,10 @@ function getNodes(host: KubectlHost): GetTable {
   // Echtes `kubectl get nodes` zeigt unter Disk-Druck weiter STATUS "Ready" (DiskPressure ist eine
   // eigene Condition, sichtbar erst per describe). Im Lernspiel hängen wir sie sichtbar an die
   // STATUS-Spalte, damit der Druck im Überblick auffällt – Detail dann in `describe node` (#240).
-  return tableOf(["NAME", "STATUS", "ROLES", "AGE", "VERSION"],
-    host.nodes.map(n => [n.name, n.diskPressure ? n.status + ",DiskPressure" : n.status, n.roles, "3d", n.version]));
+  const { osImage, kernelVersion, containerRuntimeVersion } = NODE_SYSTEM_INFO;
+  return withWide(tableOf(["NAME", "STATUS", "ROLES", "AGE", "VERSION", "INTERNAL-IP", "EXTERNAL-IP", "OS-IMAGE", "KERNEL-VERSION", "CONTAINER-RUNTIME"],
+    host.nodes.map(n => [n.name, n.diskPressure ? n.status + ",DiskPressure" : n.status, n.roles, BUILTIN_AGE, n.version,
+      nodeInternalIP(n), "<none>", osImage, kernelVersion, containerRuntimeVersion])), 5);
 }
 
 function getSecrets(host: KubectlHost): GetTable {
@@ -182,12 +186,12 @@ function getIngress(host: KubectlHost): GetTable {
 
 function getNetworkPolicies(host: KubectlHost): GetTable {
   return tableOf(["NAME", "POD-SELECTOR", "AGE"],
-    host.networkPolicies.map(n => [n.name, n.podSelector ? "app=" + n.podSelector : "<none>", host._age(n.created || 0)]));
+    host.networkPolicies.map(n => [n.name, n.podSelector ? workloadSelector(n.podSelector) : "<none>", host._age(n.created || 0)]));
 }
 
 function getServiceMonitors(host: KubectlHost): GetTable {
   return tableOf(["NAME", "SELECTOR", "ENDPOINT", "AGE"],
-    host.serviceMonitors.map(s => [s.name, "app=" + s.selector, s.port + " @ " + s.interval, host._age(s.created || 0)]));
+    host.serviceMonitors.map(s => [s.name, workloadSelector(s.selector), s.port + " @ " + s.interval, host._age(s.created || 0)]));
 }
 
 function getPrometheusRules(host: KubectlHost): GetTable {

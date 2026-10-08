@@ -18,6 +18,7 @@ import type { KubectlHost } from "./host";
 import { DEFAULT_NAMESPACE, isExternalNameService, isHeadlessService, type Deployment, type PvcRes, type ServiceRes, type StatefulSetRes } from "../state";
 import { RESOURCE_KINDS, resolveKind, qualified, type ResourceKind, type ResourcePlural } from "./resources";
 import { positionals, typeAndName, notSimulated, unknownResourceType } from "./args";
+import { workloadSelector } from "../util";
 import { clusterPods } from "../pods";
 import { clusterPodStatus } from "../podstatus";
 import { endpointAddresses, serviceSelector, servicesWithDefault } from "../endpoints";
@@ -69,7 +70,7 @@ function deploymentEnvFrom(dep: Deployment): string[] {
 function deploymentTemplate(host: KubectlHost, dep: Deployment): string[] {
   return [
     "Pod Template:",
-    "  Labels:  app=" + dep.name,
+    "  Labels:  " + workloadSelector(dep.name),
     ...(dep.serviceAccountName ? ["  Service Account:  " + dep.serviceAccountName] : []),
     "  Containers:",
     "   " + dep.name + ":",
@@ -92,7 +93,7 @@ function describeDeployment(host: KubectlHost, name: string, kind: ResourceKind)
   return [
     kv("Name", dep.name, 24),
     kv("Namespace", DEFAULT_NAMESPACE, 24),
-    kv("Selector", "app=" + dep.name, 24),
+    kv("Selector", workloadSelector(dep.name), 24),
     kv("Replicas", dep.replicas + " desired | " + total + " updated | " + total + " total | " + available + " available | " + Math.max(0, dep.replicas - available) + " unavailable", 24),
     kv("StrategyType", "RollingUpdate", 24),
     ...deploymentTemplate(host, dep),
@@ -177,13 +178,13 @@ function describeStatefulSet(host: KubectlHost, name: string, kind: ResourceKind
   return [
     kv("Name", sts.name, 24),
     kv("Namespace", DEFAULT_NAMESPACE, 24),
-    kv("Selector", "app=" + sts.name, 24),
+    kv("Selector", workloadSelector(sts.name), 24),
     kv("Replicas", sts.replicas + " desired | " + sts.pods.length + " total", 24),
     kv("Update Strategy", "RollingUpdate", 24),
     "  Partition:  0",
     kv("Pods Status", podsStatus(host, sts), 24),
     "Pod Template:",
-    "  Labels:  app=" + sts.name,
+    "  Labels:  " + workloadSelector(sts.name),
     "  Containers:",
     "   " + sts.name + ":",
     "    Image:  " + sts.image,
@@ -263,11 +264,11 @@ export function describeNetworkPolicy(host: KubectlHost, name: string): string {
   return [
     "Name:         " + np.name,
     "Namespace:    " + DEFAULT_NAMESPACE,
-    "PodSelector:  " + (np.podSelector ? "app=" + np.podSelector : "<none> (gilt für alle Pods im Namespace)"),
+    "PodSelector:  " + (np.podSelector ? workloadSelector(np.podSelector) : "<none> (gilt für alle Pods im Namespace)"),
     "PolicyTypes:  Ingress",
     "Allowing ingress traffic:",
     np.allowFrom
-      ? "  From: Pods mit Label app=" + np.allowFrom
+      ? "  From: Pods mit Label " + workloadSelector(np.allowFrom)
       : "  <none> (default-deny: niemand darf rein, bis du eine Quelle erlaubst)",
   ].join("\n");
 }

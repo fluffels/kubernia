@@ -9,6 +9,7 @@ import { KUBECTL_SUBCOMMANDS } from "../../src/sim/kubectl";
 import { GET_RESOURCE_SCOPES } from "../../src/sim/kubectl/inspect";
 import { MAPPED_KINDS } from "../../src/sim/manifest/registry";
 import { simGrenzen } from "../../src/hud/helptext";
+import { NODE_VERSION } from "../../src/sim/nodes";
 
 const STATUS = ["gleich", "vereinfacht", "abweichend"];
 const ZEILEN_SCHLUESSEL = ["befehl", "ziel", "flag", "verhalten", "ausgabe", "tickets", "grenzen", "doku"];
@@ -18,10 +19,16 @@ interface Zeile {
   befehl: string; ziel?: string; flag?: string; verhalten: string; ausgabe: string;
   tickets?: number[]; grenzen?: string[]; doku?: string;
 }
-interface Matrix { befehle: Record<string, { doku: string; dokuZiele?: string[] }>; zeilen: Zeile[] }
+interface Matrix { clusterVersion: string; befehle: Record<string, { doku: string; dokuZiele?: string[] }>; zeilen: Zeile[] }
 
 const matrix = JSON.parse(readFileSync("docs/sim-treue/kubectl.json", "utf8")) as Matrix;
 const rows = matrix.zeilen;
+
+describe("Versionsbasis (#1483)", () => {
+  test("clusterVersion der Matrix ist die simulierte NODE_VERSION: Serververhalten (Warnungen, Deprecations) folgt ihr", () => {
+    expect(matrix.clusterVersion).toBe(NODE_VERSION);
+  });
+});
 const ofBefehl = (b: string) => rows.filter(r => r.befehl === b);
 const zieleOf = (b: string) => ofBefehl(b).filter(r => r.ziel !== undefined).map(r => r.ziel!);
 const sorted = (xs: Iterable<string>) => [...xs].sort();

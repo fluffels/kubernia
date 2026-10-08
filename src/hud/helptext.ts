@@ -50,7 +50,7 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
     { id: "keine-ausgabeformate", text: "Flags wie -l, -w, --show-labels, --sort-by und Formate wie -o json lehnt der Simulator ab." },
     { id: "yaml-auswahl", text: "-o yaml: pods, deployments, replicasets, services, statefulsets, pvcs; sonst nur leer, nie System-Pods." },
     { id: "yaml-gekuerzt", text: "-o yaml zeigt nur die modellierten Felder und einen Status-Auszug, ohne uid, Zeitstempel und managedFields." },
-    { id: "wide-auswahl", text: "-o wide zeigt Zusatzspalten nur bei pods, deployments, services, statefulsets; sonst die normale Tabelle." },
+    { id: "wide-auswahl", text: "-o wide: Zusatzspalten nur bei pods, deployments, replicasets, services, statefulsets, nodes." },
     { id: "rs-nur-aktuell", text: "get rs und get all zeigen je Deployment nur das aktuelle ReplicaSet, keine alten aus früheren Rollouts." },
     { id: "apply-umfang", text: "apply -f liest nur Deployment und Service aus der Datei; andere Arten wirken wie im Spiel hinterlegt." },
     { id: "describe-gekuerzt", text: "describe kennt nur wenige Arten und zeigt gekürzte Abschnitte." },
