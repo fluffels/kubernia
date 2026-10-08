@@ -39,7 +39,7 @@ export function metaOf(name: string, labels?: Record<string, string>): YamlMap {
   return compact({ labels, name, namespace: DEFAULT_NAMESPACE });
 }
 
-/** `labels.app` ist die Namensverdrahtung der Sim (siehe ../../endpoints.ts). */
+/** `labels.app` ist die Namensverdrahtung der Sim (siehe ../../endpoints.ts); der Schlüssel `app` steht auch in `workloadSelector` (../../util.ts), beide zusammen ändern. */
 export const appLabels = (app: string): Record<string, string> => ({ app });
 
 // ===== Mengenangaben =====
