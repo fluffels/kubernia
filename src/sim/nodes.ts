@@ -12,7 +12,7 @@
  * nach sim.ts (kein Zyklus), vom Architektur-Wächter (#347) als Domäne geschützt und im
  * Node-Test prüfbar.
  */
-import type { ClusterNode } from "./state";
+import type { ClusterNode, NodeSpec } from "./state";
 import { hashStr } from "../core/rng";
 
 /** Adresse und Name der Control-Plane: kubeadm-Static-Pods laufen mit hostNetwork und teilen sich ihre IP (#1466);
@@ -36,7 +36,7 @@ export function workerIndex(name: string): number | undefined {
 
 /** Einheitliche Kubernetes-Version aller simulierten Knoten. EINE Wahrheit statt der
  *  inline wiederholten `"v1.30.2"` in kubeadm/terraform/sim-Default (#534). */
-export const NODE_VERSION = "v1.30.2";
+export const NODE_VERSION = "v1.37.1";
 
 /** Ist dieser Knoten (auch) eine Control-Plane? Das EINE Rollen-Prädikat (#534) – vorher
  *  gab es zwei Schreibweisen nebeneinander (`/control-plane/.test(n.roles)` in kubeadm/
@@ -56,7 +56,7 @@ export function isControlPlane(node: ClusterNode): boolean {
  *  „war schon da"). */
 export function provisionNode(
   state: { nodes: ClusterNode[] },
-  spec: Partial<ClusterNode> & { name: string },
+  spec: NodeSpec,
 ): ClusterNode | undefined {
   if (state.nodes.some(n => n.name === spec.name)) return undefined;
   const node: ClusterNode = { status: "Ready", roles: "<none>", version: NODE_VERSION, ...spec };
@@ -95,19 +95,23 @@ export function nodeInternalIP(node: ClusterNode): string {
   return "10.0." + (128 + (h % 127)) + "." + (10 + ((h >>> 8) % 240));
 }
 
-/** Systeminfo aller simulierten Knoten (`OS-IMAGE`, `KERNEL-VERSION`, `CONTAINER-RUNTIME`): eine Quelle neben
- *  `NODE_VERSION`, damit `get nodes -o wide` und künftig `describe node` dieselben Werte zeigen. */
+/** Systeminfo aller simulierten Knoten (`OS-IMAGE`, `KERNEL-VERSION`, `CONTAINER-RUNTIME`, Betriebssystem, Architektur):
+ *  eine Quelle neben `NODE_VERSION`, damit `get nodes -o wide` und `describe node` dieselben Werte zeigen. */
 export const NODE_SYSTEM_INFO = Object.freeze({
   osImage: "Ubuntu 22.04.4 LTS",
   kernelVersion: "5.15.0-112-generic",
-  containerRuntimeVersion: "containerd://1.7.18",
-  operatingSystem: "linux",
+  /** Seit Kubernetes v1.36 hängt `get nodes -o wide` die Architektur an die KERNEL-VERSION (#132402). */
   architecture: "amd64",
+  /** containerd 1.x wird ab Kubernetes v1.36 nicht mehr unterstützt; 2.3 ist die LTS-Linie (bis 04/2028). */
+  containerRuntimeVersion: "containerd://2.3.6",
+  operatingSystem: "linux",
 });
 
 /** Knoten für den gespeicherten Schnappschuss: ohne `created` (Sim-Tick des Beitritts gilt nur im laufenden Lauf;
- *  nach dem Laden zählt der Takt ab 0, ein gespeicherter Stempel ergäbe ein negatives Alter). */
-export function nodeSnapshot(node: ClusterNode): ClusterNode {
-  const { created: _created, ...rest } = node;
-  return rest;
+ *  nach dem Laden zählt der Takt ab 0, ein gespeicherter Stempel ergäbe ein negatives Alter) und ohne `version`,
+ *  solange sie `NODE_VERSION` ist (#1496): sonst bliebe die Version eines alten Stands für immer im Spielstand und
+ *  die Knoten folgten nie einer neuen Sim-Version. Eine bewusste Abweichung bleibt erhalten. */
+export function nodeSnapshot(node: ClusterNode): NodeSpec {
+  const { created: _created, version, ...rest } = node;
+  return version === NODE_VERSION ? rest : { ...rest, version };
 }

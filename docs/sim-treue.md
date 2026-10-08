@@ -72,8 +72,13 @@ Zeilen mit 💡 an einer **Fehlermeldung** zählen nicht als Abweichung (Lernhil
 
 - Neuer Unterbefehl oder neue Ressourcenart im Simulator: Zeile in der Matrix, sonst ist der Test rot. Neue Aufrufform oder neues Flag eines Einzelbefehls: Zeile von Hand eintragen (der Wächter sieht sie nicht).
 - **Neue Befehlsfamilie** (Eintrag in `COMMAND_HANDLERS`): Matrix `sim-treue/<familie>.json` nach demselben Muster, ihre `grenzen` in `helptext.ts`, ein Eintrag im Spec-Objekt des Tests (bei einer Unterbefehls-Familie mit exportierter Registry). Ohne Matrix ist der Familien-Wächter rot; wer sie bewusst später baut, trägt sie mit offenem Ticket in `OHNE_MATRIX` ein.
-- Neue Doku-Version: die Referenzseiten der Zeilen mit Status `gleich` erneut ansehen; `stand` in der JSON mitziehen.
-- Zwei Versionen bei `kubectl`: Clientseitiges (Flags, Spalten) prüfst du gegen die aktuelle Doku, Serverseitiges (Warnungen, Deprecations, entfernte APIs) folgt `clusterVersion` in der JSON, und die ist `NODE_VERSION` (`src/sim/nodes.ts`, ein Test koppelt beide). Beim Anheben versionsabhängiges Verhalten prüfen, z.B. die Deprecation-Warnung für v1 Endpoints ab v1.33 (der Wächter in `test/sim/kubectl-ausgabe.test.ts` zeigt die Stelle).
+- Zwei Versionen bei `kubectl`: Clientseitiges (Flags, Spalten) prüfst du gegen die aktuelle Doku, Serverseitiges (Warnungen, Deprecations, entfernte APIs) folgt `clusterVersion` in der JSON, und die ist `NODE_VERSION` (`src/sim/nodes.ts`, ein Test koppelt beide).
+- Neue K8s-Version anheben, in dieser Reihenfolge:
+  1. Die Druckspalten gegen die Matrix prüfen: `pkg/printers/internalversion/printers.go` zwischen den Release-Branches diffen (alle simulierten Arten, auch `-o wide`).
+  2. Release-Blog und CHANGELOG, Abschnitt „Deprecations and removals“, auf Arten und Verhalten der Sim lesen.
+  3. Laufzeit-Support prüfen (containerd, Kernel) und `NODE_SYSTEM_INFO` in `src/sim/nodes.ts` nachziehen.
+  4. `NODE_VERSION` und `clusterVersion` anheben; die `hafen_cluster`-Version in den Quest-Daten (`version = "x.y.z"` in Terraform-Texten) zieht ein Wächter in `test/sim/nodes.test.ts` mit. Node-Specs der Quests tragen keine Version, sie folgt `NODE_VERSION`; der Snapshot speichert die Version nur bei Abweichung (`nodeSnapshot`), ein Anheben braucht darum keinen Save-Format-Bump.
+  5. Serverwarnungen als Feld `deprecationWarning` in der Registry (`src/sim/kubectl/resources.ts`) pflegen; `stand` in der JSON mitziehen.
 
 ## Bekannte Lücken (Stand 2026-10-08)
 

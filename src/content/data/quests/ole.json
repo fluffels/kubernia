@@ -417,7 +417,7 @@
         "lines": [
           "DAS ist Kubernetes! Soll: 3. Ist: 2. → Differenz sofort behoben. Ein letztes Puzzlestück fehlt: Neue Pods bekommen neue Namen und Adressen. Wie sollen Kund:innen die Kasse finden?",
           "Mit einem <b>Service</b> – einer festen Adresse vor den wechselnden Pods. Wie ein Empfangstresen: Die Person dahinter wechselt, der Tresen bleibt.",
-          "Der Tresen steht aber <b>im</b> Hafen. Und wenn jemand vom <b>offenen Meer</b> – dem Internet – zur Kasse will? Dafür kommt später das <b>Hafentor</b>: ein <b>Ingress</b>. Er lauscht auf eine Adresse wie <code>hafen.de/kasse</code> und lotst Besucher an den richtigen Service. Im Job ist das ein <b>Ingress-Controller</b> (oft auf nginx- oder Gateway-Basis) – merk dir den Namen schon mal."
+          "Der Tresen steht aber <b>im</b> Hafen. Und wenn jemand vom <b>offenen Meer</b> – dem Internet – zur Kasse will? Dafür kommt später das <b>Hafentor</b>: ein <b>Ingress</b>. Er lauscht auf eine Adresse wie <code>hafen.de/kasse</code> und lotst Besucher an den richtigen Service. Im Job steckt dahinter ein <b>Ingress-Controller</b>; sein moderner Nachfolger heißt <b>Gateway API</b> – merk dir beide Namen schon mal."
         ]
       },
       {
@@ -949,7 +949,6 @@
               "name": "ahoi-control",
               "status": "Ready",
               "roles": "control-plane",
-              "version": "v1.30.2",
               "diskPressure": false
             }
           ]
@@ -1098,21 +1097,18 @@
               "name": "ahoi-control",
               "status": "Ready",
               "roles": "control-plane",
-              "version": "v1.30.2",
               "diskPressure": false
             },
             {
               "name": "ahoi-worker-1",
               "status": "Ready",
               "roles": "<none>",
-              "version": "v1.30.2",
               "diskPressure": false
             },
             {
               "name": "ahoi-worker-2",
               "status": "Ready",
               "roles": "<none>",
-              "version": "v1.30.2",
               "diskPressure": false
             }
           ],
@@ -1293,10 +1289,10 @@
         "scenario": {
           "bareMetal": true,
           "files": {
-            "cluster.tf": "# Der ganze Cluster als CODE – das deklarative Gegenstück zu kubeadm.\n# Statt 'kubeadm init', dann jedes 'kubeadm join' von Hand: EINMAL beschreiben,\n# beliebig oft reproduzierbar bauen. Diese Datei kann in Git liegen, reviewt werden,\n# und beim nächsten Sturm baut EIN 'terraform apply' den ganzen Cluster zurück.\n\n# Die Kommandobrücke (Control-Plane) – was sonst 'kubeadm init' macht.\nresource \"hafen_cluster\" \"kommandobruecke\" {\n  name    = \"ahoi-control\"\n  version = \"1.30.2\"\n}\n\n# Drei Stege (Worker) – je einer ist ein 'kubeadm join', hier nur deklariert.\nresource \"hafen_worker\" \"steg1\" {\n  cluster = hafen_cluster.kommandobruecke.name\n}\n\nresource \"hafen_worker\" \"steg2\" {\n  cluster = hafen_cluster.kommandobruecke.name\n}\n\nresource \"hafen_worker\" \"steg3\" {\n  cluster = hafen_cluster.kommandobruecke.name\n}\n\n# Die Adresse, unter der kubectl den Cluster erreicht.\noutput \"apiserver\" {\n  value = \"https://ahoi-control:6443\"\n}\n"
+            "cluster.tf": "# Der ganze Cluster als CODE – das deklarative Gegenstück zu kubeadm.\n# Statt 'kubeadm init', dann jedes 'kubeadm join' von Hand: EINMAL beschreiben,\n# beliebig oft reproduzierbar bauen. Diese Datei kann in Git liegen, reviewt werden,\n# und beim nächsten Sturm baut EIN 'terraform apply' den ganzen Cluster zurück.\n\n# Die Kommandobrücke (Control-Plane) – was sonst 'kubeadm init' macht.\nresource \"hafen_cluster\" \"kommandobruecke\" {\n  name    = \"ahoi-control\"\n  version = \"1.37.1\"\n}\n\n# Drei Stege (Worker) – je einer ist ein 'kubeadm join', hier nur deklariert.\nresource \"hafen_worker\" \"steg1\" {\n  cluster = hafen_cluster.kommandobruecke.name\n}\n\nresource \"hafen_worker\" \"steg2\" {\n  cluster = hafen_cluster.kommandobruecke.name\n}\n\nresource \"hafen_worker\" \"steg3\" {\n  cluster = hafen_cluster.kommandobruecke.name\n}\n\n# Die Adresse, unter der kubectl den Cluster erreicht.\noutput \"apiserver\" {\n  value = \"https://ahoi-control:6443\"\n}\n"
           },
           "tfResources": [
-            { "addr": "hafen_cluster.kommandobruecke", "desc": "name = \"ahoi-control\", version = \"1.30.2\"" },
+            { "addr": "hafen_cluster.kommandobruecke", "desc": "name = \"ahoi-control\", version = \"1.37.1\"" },
             { "addr": "hafen_worker.steg1", "desc": "cluster = ahoi-control" },
             { "addr": "hafen_worker.steg2", "desc": "cluster = ahoi-control" },
             { "addr": "hafen_worker.steg3", "desc": "cluster = ahoi-control" }
@@ -1469,7 +1465,7 @@
         "npc": "ole",
         "lines": [
           "Schauen wir uns die Grundausstattung an – jedes Add-on löst <b>eine</b> Aufgabe:",
-          "🚪 <b>Rein-Kommen:</b> ein <b>Ingress-Controller</b> (oder Gateway) – das Hafentor, das Besucher aus dem Internet an den richtigen Service lotst.<br>🔐 <b>Zertifikate:</b> <b>cert-manager</b> – stellt TLS-Zertifikate automatisch aus und erneuert sie, bevor sie ablaufen.<br>🧭 <b>DNS:</b> <b>external-dns</b> – trägt für deine Dienste automatisch die passenden DNS-Namen ein.",
+          "🚪 <b>Rein-Kommen:</b> ein Controller für die <b>Gateway API</b> (klassisch: ein Ingress-Controller) – das Hafentor, das Besucher aus dem Internet an den richtigen Service lotst.<br>🔐 <b>Zertifikate:</b> <b>cert-manager</b> – stellt TLS-Zertifikate automatisch aus und erneuert sie, bevor sie ablaufen.<br>🧭 <b>DNS:</b> <b>external-dns</b> – trägt für deine Dienste automatisch die passenden DNS-Namen ein.",
           "📜 <b>Logging:</b> ein Log-Stack (z.B. <b>ECK</b>, der Elastic-Operator) – sammelt die Ausgaben aller Pods an einem durchsuchbaren Ort.<br>📈 <b>Monitoring:</b> <b>Prometheus + Grafana</b> – Metriken und Dashboards (die kennst du schon vom Leuchtturm bei Lumi).<br>💾 <b>Backups</b> und 🛡️ <b>Image-Scanning</b> – Sicherungen und die Prüfung, dass keine löchrigen Images einlaufen.",
           "Der rote Faden: Das sind alles <b>Operatoren und Helm-Charts</b>, die man in den Cluster installiert. Kein Add-on ist von Hand gebautes Sonderwerk – jedes ist ein <b>Paket</b>, das man einspielt und pflegt. Genau das macht das Plattform-Team."
         ]
@@ -1478,22 +1474,22 @@
         "type": "teach",
         "brief": "Ein Add-on im Katalog finden",
         "cmd": {
-          "id": "t-platform-search-ingress",
+          "id": "t-platform-search-gateway",
           "intro": "🔁 Kein neuer Befehl – das <code>helm search repo</code> von Runa. Beweis, dass ein Add-on wirklich nur ein Chart ist: such das Hafentor im Katalog.",
-          "text": "Such nach dem Ingress-Add-on: <code>helm search repo ingress</code>. Es taucht als ganz gewöhnliches Chart auf – <code>nginx-ingress-controller</code>, bereit zum Installieren wie jede andere App.",
+          "text": "Such nach dem Tor-Add-on: <code>helm search repo gateway</code>. Es taucht als ganz gewöhnliches Chart auf – <code>envoy-gateway</code>, ein Controller für die Gateway API, bereit zum Installieren wie jede andere App.",
           "accept": [
-            "^helm\\s+search\\s+repo\\s+ingress$"
+            "^helm\\s+search\\s+repo\\s+gateway$"
           ],
-          "solution": "helm search repo ingress",
-          "hint": "helm search repo <begriff> – der Begriff ist 'ingress'.",
-          "why": "Der Beweis fürs große Ganze: ein Plattform-Add-on ist kein Sonderwerk, sondern ein ganz normales <b>Helm-Chart</b> im Katalog – hier der <code>nginx-ingress-controller</code>. Genau darum installiert und pflegt das Plattform-Team Ingress, cert-manager & Co. als Charts/Operatoren, statt sie je Cluster von Hand zu bauen."
+          "solution": "helm search repo gateway",
+          "hint": "helm search repo <begriff> – der Begriff ist 'gateway'.",
+          "why": "Der Beweis fürs große Ganze: ein Plattform-Add-on ist kein Sonderwerk, sondern ein ganz normales <b>Helm-Chart</b> im Katalog – hier der <code>envoy-gateway</code>. Genau darum installiert und pflegt das Plattform-Team Gateway-Controller, cert-manager & Co. als Charts/Operatoren, statt sie je Cluster von Hand zu bauen. Früher griff man an dieser Stelle zu Ingress-NGINX – das ist seit März 2026 eingestellt; auch das Ablösen alter Add-ons ist Plattform-Arbeit."
         }
       },
       {
         "type": "dialog",
         "npc": "ole",
         "lines": [
-          "Siehst du? Der Ingress-Controller ist im Katalog nichts Besonderes – ein Chart wie <code>nginx</code> oder <code>postgresql</code>. Genau darum liefert man Add-ons als Charts/Operatoren aus: einmal installiert, halten sie ihre Aufgabe per <b>Reconcile-Loop</b> selbst in Ordnung – dasselbe Prinzip wie Argo CD und das Self-Healing, nur je für eine Spezialaufgabe."
+          "Siehst du? Der Gateway-Controller ist im Katalog nichts Besonderes – ein Chart wie <code>nginx</code> oder <code>postgresql</code>. Genau darum liefert man Add-ons als Charts/Operatoren aus: einmal installiert, halten sie ihre Aufgabe per <b>Reconcile-Loop</b> selbst in Ordnung – dasselbe Prinzip wie Argo CD und das Self-Healing, nur je für eine Spezialaufgabe."
         ]
       },
       {

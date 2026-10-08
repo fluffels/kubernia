@@ -10,7 +10,7 @@
       "Mit kubectl logs."
     ],
     "correct": 0,
-    "explain": "Service = Empfangstresen IM Hafen. Ingress = das Tor nach draußen: eine Adresse + HTTPS-Route von außen auf die passenden Services. Im Job erledigt das ein Ingress-Controller (oft nginx- oder Gateway-basiert)."
+    "explain": "Service = Empfangstresen IM Hafen. Ingress = das Tor nach draußen: eine Adresse + HTTPS-Route von außen auf die passenden Services. Im Job erledigt das ein Ingress-Controller; neue Tore baut man heute mit der Gateway API, denn Ingress-NGINX ist seit März 2026 eingestellt."
   },
   {
     "id": "q-tools-keycloak",

@@ -35,9 +35,21 @@ export function podIP(name: string): string {
   return "10.244.1." + (10 + (hashStr(name) % 200));
 }
 
-/** Label und Selektor sind in der Sim dieselbe Zeichenkette `app=<name>` (Grenze `selektor-ueber-namen`):
- *  der EINE Helfer statt der handgeschriebenen Konvention (#1483). */
-export const workloadSelector = (name: string): string => "app=" + name;
+/** Labels und Selektoren sind Maps (Schlüssel → Wert); jeder Text (`app=x,tier=y`) wird daraus abgeleitet (#1500). */
+export type Labels = Readonly<Record<string, string>>;
+
+/** Das Label (und der Selektor), das ein Workload in der Sim trägt: `{ app: <name> }` (Grenze `selektor-ueber-namen`). */
+export const workloadLabels = (name: string): Labels => ({ app: name });
+
+/** Labels als Text, wie `kubectl` sie zeigt (`labels.FormatLabels`): Schlüssel sortiert, `k=v` mit Komma verbunden,
+ *  `null` oder leer als `<none>`. Der Wert darf `=` enthalten, er wird nicht zerlegt. */
+export function formatLabels(labels: Labels | null): string {
+  const keys = labels ? Object.keys(labels).sort() : [];
+  return keys.length === 0 ? "<none>" : keys.map(k => k + "=" + labels![k]).join(",");
+}
+
+/** Label und Selektor eines Workloads als Text `app=<name>`: der EINE Helfer statt der handgeschriebenen Konvention (#1483). */
+export const workloadSelector = (name: string): string => formatLabels(workloadLabels(name));
 
 /** Alter der eingebauten Objekte (kubeadm-Static-Pods, CoreDNS, Service und Endpoints `kubernetes`, Nodes):
  *  sie existieren seit Clusteraufbau, nicht seit dem Spielstart (#1483). */
@@ -138,4 +150,10 @@ export function parseCpuMilli(spec: string): number | null {
   const cores = spec.match(/^(\d+)(?:\.(\d{1,3}))?$/);
   if (!cores) return null;
   return parseInt(cores[1], 10) * 1000 + (cores[2] ? parseInt(cores[2].padEnd(3, "0"), 10) : 0);
+}
+
+/** Die effektive Default-StorageClass: die zuletzt angelegte als Default markierte, bei gleichem Zeitstempel der
+ *  kleinere Name (wie der PVC-Admission-Controller seit v1.26). Die EINE Regel für `get sc` und für PVCs ohne Klasse. */
+export function effectiveDefaultStorageClass<T extends { name: string; isDefault: boolean; created: number }>(classes: readonly T[]): T | undefined {
+  return classes.filter(s => s.isDefault).sort((a, b) => b.created - a.created || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))[0];
 }

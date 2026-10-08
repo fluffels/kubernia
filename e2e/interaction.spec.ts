@@ -32,6 +32,18 @@ test("Terminal: Befehl eintippen zeigt ein Ergebnis", async ({ page }) => {
   const out = page.locator("#term-out");
   await expect(out).toContainText("crew@hafen:~$ help");
   await expect(out).toContainText("Hilfe");
+
+  // Breite CLI-Tabellen brechen nicht um, sondern scrollen horizontal (#1484).
+  await input.fill("kubectl get nodes -o wide");
+  await input.press("Enter");
+  const tabelle = out.locator(".t-table").first();
+  await expect(tabelle).toBeVisible();
+  expect(await tabelle.evaluate(el => getComputedStyle(el).whiteSpace)).toBe("pre");
+  expect(await tabelle.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+  // Wirklich scrollbar für den Nutzer (nicht nur überstehend, nicht `overflow: hidden`): Mausrad wirkt.
+  await tabelle.hover();
+  await page.mouse.wheel(200, 0);
+  await expect.poll(() => tabelle.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
 });
 
 test("Dialoge lassen sich mit Leertaste und Enter weiterschalten (#312)", async ({ page }) => {

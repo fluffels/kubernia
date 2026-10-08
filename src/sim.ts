@@ -20,7 +20,7 @@ import type {
 } from "./sim/state";
 import { deploymentPodStatus, isReady } from "./sim/podstatus";
 import { DEFAULT_NAMESPACE, HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService, assertServiceType } from "./sim/state";
-export { BROKEN_STATUS } from "./sim/state";
+export { BROKEN_POD } from "./sim/podstatus";
 export type {
   ExecResult,
   Broken, PodInstance, Deployment, ServiceRes, IngressRes, NetworkPolicyRes,
@@ -48,7 +48,7 @@ import { kubeadmCommand, deriveControlPlane, applyBootstrapScenario } from "./si
 import { nslookupCommand, curlCommand } from "./sim/net";
 import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, depEphemeralPeak, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
-import { randSuffix, clusterIP, suggest } from "./sim/util";
+import { effectiveDefaultStorageClass, randSuffix, clusterIP, suggest } from "./sim/util";
 import { shellTokens, subEntry } from "./sim/cliargs";
 import { makeRng, DEFAULT_SEED } from "./core/rng";
 import { resourceName, InvalidSpecError } from "./sim/names";
@@ -470,8 +470,7 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
     /** Name der Default-StorageClass (oder "", wenn keine als Default markiert ist).
      *  Ein PVC ohne eigene StorageClass bekommt im echten Cluster genau diese. */
     _defaultStorageClassName(): string {
-      const def = this.storageClasses.find(s => s.isDefault);
-      return def ? def.name : "";
+      return effectiveDefaultStorageClass(this.storageClasses)?.name ?? "";
     }
 
     /** Bindet ein PVC an Speicher: erst dynamisch über seine StorageClass (legt on-demand
