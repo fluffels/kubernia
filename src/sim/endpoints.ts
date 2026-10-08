@@ -53,6 +53,17 @@ function selects(svc: ServiceRes, c: ClusterPod): boolean {
   }
 }
 
+/** Der Selektor, den ein Service in `describe` zeigt (`app=<workload>`), oder `null` (ExternalName).
+ *  Dieselbe Namensverdrahtung wie `selects`: ein StatefulSet, das den Service als `serviceName` führt,
+ *  nennt seinen eigenen Namen, sonst gilt der Service-Name (Deployment gleichen Namens). Hängen ein
+ *  StatefulSet mit fremdem Namen und ein gleichnamiges Deployment am selben Service, nennt der
+ *  Selektor nur das StatefulSet (bewusster Randfall). */
+export function serviceSelector(host: Pick<ClusterState, "statefulSets">, svc: ServiceRes): string | null {
+  if (isExternalNameService(svc)) return null;
+  const sts = host.statefulSets.find(s => s.serviceName === svc.name);
+  return "app=" + (sts ? sts.name : svc.name);
+}
+
 function backendOf(host: EndpointsHost, c: ClusterPod): ServiceBackend {
   const ip = podAddress(c, host.pvcs);
   switch (c.owner) {
@@ -77,4 +88,9 @@ export function readyBackends(host: EndpointsHost, svc: ServiceRes): ServiceBack
 /** Der Ziel-Port der Endpoints: `targetPort`, sonst der Service-Port (#164). */
 export function endpointPort(svc: ServiceRes): number | string {
   return svc.targetPort !== undefined ? svc.targetPort : svc.port;
+}
+
+/** Die Adressen der bereiten Endpoints (`ip:Zielport`), die EINE Quelle für `get endpoints` und `describe service`. */
+export function endpointAddresses(host: EndpointsHost, svc: ServiceRes): string[] {
+  return readyBackends(host, svc).flatMap(b => (b.ip ? [b.ip + ":" + endpointPort(svc)] : []));
 }

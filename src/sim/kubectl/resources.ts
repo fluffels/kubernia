@@ -38,6 +38,7 @@ const KINDS = [
   kind("pods", "pod", ["po"], "", true, true),
   kind("services", "service", ["svc"], "", true, true),
   kind("deployments", "deployment", ["deploy"], "apps", true, true),
+  kind("replicasets", "replicaset", ["rs"], "apps", true, true),
   kind("statefulsets", "statefulset", ["sts"], "apps", true, true),
   kind("endpoints", "endpoint", ["ep"], "", true),
   kind("nodes", "node", ["no"], "", false),

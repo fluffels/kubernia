@@ -234,7 +234,8 @@ export function kubectlRollout(host: KubectlHost, t: string[]) {
   const imageHealed = !!broken && broken.type === "imagepull" && !!broken.needsBuild && host._imageAvailable(dep.image);
   // Der Neustart gibt das flüchtige Scratch-Volume frei (#240) und läuft über den einen Rollout-Weg
   // (Pod-Security-Admission inklusive): bei Ablehnung bleibt auch die Heilung aus.
-  const denied = rollOut(host, dep, () => { if (secretHealed || imageHealed) dep.broken = null; });
+  // restartedAt: jeder Neustart ergibt einen neuen pod-template-hash, auch im selben Takt (#1468).
+  const denied = rollOut(host, dep, () => { dep.restartedAt = Math.max(host.clock, (dep.restartedAt ?? -1) + 1); if (secretHealed || imageHealed) dep.broken = null; });
   if (denied) return denied;
   return "deployment.apps/" + depName + " restarted" +
     (imageHealed ? "\n💡 Image gefunden – die Pods starten neu und laufen jetzt. Prüfe mit 'kubectl get pods'." : "");

@@ -33,7 +33,7 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
   ] },
   { key: "kubectl", rows: [
     { use: "get <resource>", desc: "Ressourcen auflisten (pods, deployments, services, nodes …)" },
-    { use: "describe <resource> <name>", desc: "Details einer Ressource zeigen" },
+    { use: "describe <resource> [<name>]", desc: "Details einer Ressource zeigen" },
     { use: "create <art> <name>", desc: "Ressource anlegen (deployment, secret, configmap, role …)" },
     { use: "apply -f <datei>", desc: "Manifest anwenden (deklarativer Soll-Zustand)" },
     { use: "delete <resource> <name>", desc: "Ressource löschen" },
@@ -48,9 +48,10 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
   ], grenzen: [
     { id: "ein-namespace", text: "Es gibt nur die Namespaces default und kube-system; -n und -A greifen nur dort." },
     { id: "keine-ausgabeformate", text: "Flags wie -o, -l, -w, --show-labels, --sort-by lehnt der Simulator ab; get druckt immer die Tabelle." },
-    { id: "get-all-gekuerzt", text: "get all zeigt nur Pods, Services, Deployments, StatefulSets, Grafana; ReplicaSets, Jobs fehlen." },
+    { id: "rs-nur-aktuell", text: "get rs und get all zeigen je Deployment nur das aktuelle ReplicaSet, keine alten aus früheren Rollouts." },
     { id: "apply-umfang", text: "apply -f liest nur Deployment und Service aus der Datei; andere Arten wirken wie im Spiel hinterlegt." },
     { id: "describe-gekuerzt", text: "describe kennt nur wenige Arten und zeigt gekürzte Abschnitte." },
+    { id: "selektor-ueber-namen", text: "Selektoren gibt es nicht: ein Service wählt Pods über den Namen; describe zeigt das als app=<name>." },
     { id: "arten-auswahl", text: "create, delete und scale kennen nur die Arten aus der Hilfe; secret nur generic und tls." },
     { id: "spalten-gekuerzt", text: "Spalten bei Storage- und Monitoring-Ressourcen sind zum Lernen gewählt, nicht die echten." },
     { id: "nur-sim-alerts", text: "get alerts gibt es nur im Simulator (echt: Prometheus und Alertmanager)." },
