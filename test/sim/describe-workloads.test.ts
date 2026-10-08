@@ -198,7 +198,7 @@ describe("ohne Namen und Namenspräfix", () => {
     expect(d).toMatch(/^Name:\s+kasse$/m);
   });
 
-  test.each(["deployments", "services", "pvc", "sts", "pods", "clusterroles"])("leere Art %s: Leermeldung ohne Fehler", typ => {
+  test.each(["deployments", "pvc", "sts", "pods", "clusterroles"])("leere Art %s: Leermeldung ohne Fehler", typ => {
     const r = run(new KQSim({}), "describe " + typ);
     expect(r.error).toBeFalsy();
     expect(r.output).toBe("No resources found in default namespace.");

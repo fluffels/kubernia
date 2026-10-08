@@ -35,6 +35,11 @@ export function podIP(name: string): string {
   return "10.244.1." + (10 + (hashStr(name) % 200));
 }
 
+/** Adresse und Name der Control-Plane: kubeadm-Static-Pods laufen mit hostNetwork und teilen sich ihre IP (#1466);
+ *  dieselbe Adresse nennt `kubeadm join` als API-Server. */
+export const CONTROL_PLANE_IP = "10.0.0.10";
+export const CONTROL_PLANE_NODE = "ahoi-control";
+
 /** Deterministische Adresse (`203.0.113.100–249`, TEST-NET-3) hinter einem ExternalName-CNAME-Ziel:
  *  je Ziel stabil, `.10` bleibt dem Ingress vorbehalten (#1403). */
 export function externalIP(name: string): string {

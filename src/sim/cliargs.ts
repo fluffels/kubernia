@@ -19,10 +19,19 @@ export interface ErrHost { _err(msg: string, tip?: string): string }
 
 export type FlagStyle = "pflag" | "goflag";
 
-export interface FlagSpec { readonly names: readonly string[]; readonly takesValue: boolean }
+export interface FlagSpec {
+  readonly names: readonly string[];
+  readonly takesValue: boolean;
+  /** Wertprüfung (#1466): `null` = Wert gültig, sonst die fertige Fehlerausgabe. Läuft in `checkFlags`
+   *  mit dem Wert in jeder Schreibweise (`-o x`, `-o=x`, `-ox`, `--output=x`, `-Aox`). */
+  readonly check?: (host: ErrHost, value: string) => string | null;
+}
 
 /** Ein Flag der Tabelle (`flag(true, "-n", "--namespace")`). */
 export const flag = (takesValue: boolean, ...names: string[]): FlagSpec => ({ names, takesValue });
+
+/** Ein Wert-Flag mit Wertprüfung. */
+export const checkedFlag = (check: NonNullable<FlagSpec["check"]>, ...names: string[]): FlagSpec => ({ names, takesValue: true, check });
 
 /** Die Flag-Tabelle EINES Unterbefehls. */
 export interface ArgSpec {
@@ -82,21 +91,25 @@ function findSpec(specs: readonly FlagSpec[], name: string): FlagSpec | undefine
   return specs.find(s => s.names.includes(name));
 }
 
-interface Scan { unknown: string | null; needsNext: boolean; name: string }
+/** `spec` und `attached` (der angeklebte Wert, `null` = keiner) füllt der Scan nur für Wert-Flags. */
+interface Scan { unknown: string | null; needsNext: boolean; name: string; spec?: FlagSpec; attached?: string | null }
 
 /** Kette kurzer Flags (`-aq`): jedes Zeichen muss ein bekanntes Bool-Flag sein; ein Wert-Flag schluckt den Rest. */
 function scanShortChain(specs: readonly FlagSpec[], tok: string): Scan {
   const first = flagNameOf(tok, "pflag");
   const spec = findSpec(specs, first);
   if (!spec) return { unknown: first, needsNext: false, name: first };
-  if (spec.takesValue) return { unknown: null, needsNext: attachedValueOf(tok, "pflag") === null, name: first };
+  if (spec.takesValue) { const attached = attachedValueOf(tok, "pflag"); return { unknown: null, needsNext: attached === null, name: first, spec, attached }; }
   const rest = tok.slice(2);
   for (let k = 0; k < rest.length; k++) {
     if (k === 0 && rest[0] === "=") return { unknown: null, needsNext: false, name: first };
     const name = "-" + rest[k];
     const s = findSpec(specs, name);
     if (!s) return { unknown: name, needsNext: false, name };
-    if (s.takesValue) return { unknown: null, needsNext: k === rest.length - 1, name };
+    if (s.takesValue) {
+      const tail = rest.slice(k + 1);
+      return { unknown: null, needsNext: tail === "", name, spec: s, attached: tail === "" ? null : tail.replace(/^=/, "") };
+    }
   }
   return { unknown: null, needsNext: false, name: first };
 }
@@ -106,7 +119,8 @@ function scanToken(specs: readonly FlagSpec[], tok: string, style: FlagStyle): S
   const name = flagNameOf(tok, style);
   const spec = findSpec(specs, name);
   if (!spec) return { unknown: name, needsNext: false, name };
-  return { unknown: null, needsNext: spec.takesValue && attachedValueOf(tok, style) === null, name };
+  const attached = spec.takesValue ? attachedValueOf(tok, style) : null;
+  return { unknown: null, needsNext: spec.takesValue && attached === null, name, spec, attached };
 }
 
 function missingValue(host: ErrHost, name: string, style: FlagStyle): string {
@@ -134,9 +148,11 @@ export function checkFlags(host: ErrHost, spec: ArgSpec, t: readonly string[], f
     if (!isFlagToken(tok)) { if (spec.stopAtPositional) break; continue; }
     const scan = scanToken(spec.flags, tok, style);
     if (scan.unknown) return rejectFlag(host, spec, scan.unknown);
-    if (!scan.needsNext) continue;
-    if (t[i + 1] === undefined) return missingValue(host, scan.name, style);
-    i++; // der Wert gehört zum Flag
+    if (scan.needsNext && t[i + 1] === undefined) return missingValue(host, scan.name, style);
+    const value = scan.needsNext ? t[i + 1] : scan.attached;
+    const invalid = value != null && scan.spec?.check?.(host, value);
+    if (invalid) return invalid;
+    if (scan.needsNext) i++; // der Wert gehört zum Flag
   }
   return null;
 }

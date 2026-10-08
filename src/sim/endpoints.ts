@@ -12,7 +12,7 @@
  */
 import { isExternalNameService, type ClusterState, type Deployment, type PvcRes, type ServiceRes } from "./state";
 import { clusterPods, type ClusterPod } from "./pods";
-import { podIP } from "./util";
+import { podIP, CONTROL_PLANE_IP } from "./util";
 import { assertNever } from "../core/assert";
 import { statefulPodVolumePending } from "./workload";
 
@@ -45,6 +45,21 @@ export function podAddress(c: ClusterPod, pvcs: readonly PvcRes[]): string | nul
   }
 }
 
+/** Der eingebaute API-Service `kubernetes` (#1466): immer da, nie im Spielstand (`host.services` bleibt
+ *  unverändert), also braucht er keine Migration. Er hat keinen Selektor; seine Endpoints sind die
+ *  Control-Plane selbst, kein Pod der Spieler-Workloads (ein Deployment namens `kubernetes` gerät nicht dahinter). */
+export const KUBERNETES_SERVICE: ServiceRes = Object.freeze({ name: "kubernetes", type: "ClusterIP", clusterIP: "10.96.0.1", port: 443, targetPort: 6443 });
+
+/** Ist es der eingebaute API-Service? (Identität, nicht der Name: ein Spieler-Service gleichen Namens zählt nicht.) */
+export function isKubernetesService(svc: ServiceRes): boolean {
+  return svc === KUBERNETES_SERVICE;
+}
+
+/** Alle Services, die `get`/`describe` zeigen: der eingebaute `kubernetes` zuerst, dann die des Spielstands. */
+export function servicesWithDefault(host: Pick<ClusterState, "services">): ServiceRes[] {
+  return [KUBERNETES_SERVICE, ...host.services];
+}
+
 /** Gehört der Pod hinter diesen Service? Die Verdrahtung über den Namen (siehe Kopf). */
 function selects(svc: ServiceRes, c: ClusterPod): boolean {
   switch (c.owner) {
@@ -59,7 +74,7 @@ function selects(svc: ServiceRes, c: ClusterPod): boolean {
  *  StatefulSet mit fremdem Namen und ein gleichnamiges Deployment am selben Service, nennt der
  *  Selektor nur das StatefulSet (bewusster Randfall). */
 export function serviceSelector(host: Pick<ClusterState, "statefulSets">, svc: ServiceRes): string | null {
-  if (isExternalNameService(svc)) return null;
+  if (isExternalNameService(svc) || isKubernetesService(svc)) return null;
   const sts = host.statefulSets.find(s => s.serviceName === svc.name);
   return "app=" + (sts ? sts.name : svc.name);
 }
@@ -76,7 +91,7 @@ function backendOf(host: EndpointsHost, c: ClusterPod): ServiceBackend {
 
 /** Alle Pods hinter einem Service, bereit oder nicht. ExternalName hat keine Pods. */
 export function serviceBackends(host: EndpointsHost, svc: ServiceRes): ServiceBackend[] {
-  if (isExternalNameService(svc)) return [];
+  if (isExternalNameService(svc) || isKubernetesService(svc)) return [];
   return clusterPods(host).filter(c => selects(svc, c)).map(c => backendOf(host, c));
 }
 
@@ -92,5 +107,6 @@ export function endpointPort(svc: ServiceRes): number | string {
 
 /** Die Adressen der bereiten Endpoints (`ip:Zielport`), die EINE Quelle für `get endpoints` und `describe service`. */
 export function endpointAddresses(host: EndpointsHost, svc: ServiceRes): string[] {
+  if (isKubernetesService(svc)) return [CONTROL_PLANE_IP + ":" + endpointPort(svc)];
   return readyBackends(host, svc).flatMap(b => (b.ip ? [b.ip + ":" + endpointPort(svc)] : []));
 }

@@ -89,10 +89,9 @@ describe("(d) erfundene Kurznamen sind weg, echte gehen weiter", () => {
 /* ---------- (a) nicht simulierte Flags ---------- */
 describe("(a) nicht simulierte Flags werden abgelehnt", () => {
   test.each([
-    ["get pods -o yaml", "-o"], ["get pods -o=wide", "-o"], ["get pods --output json", "--output"], ["get pods -owide", "-o"],
     ["get pods -l app=web", "-l"], ["get pods --selector=app=web", "--selector"], ["get pods -w", "-w"],
     ["get pods --watch", "--watch"], ["get pods --show-labels", "--show-labels"], ["get pods --sort-by=.metadata.name", "--sort-by"],
-    ["logs web-x -c app", "-c"], ["delete pod web-x --force", "--force"], ["describe pod x --show-events", "--show-events"],
+    ["describe pod x -o yaml", "-o"], ["logs web-x -c app", "-c"], ["delete pod web-x --force", "--force"], ["describe pod x --show-events", "--show-events"],
     ["create deployment x --image=nginx --dry-run=client", "--dry-run"], ["scale deployment web --replicas=2 --timeout=5s", "--timeout"],
   ])("kubectl %s → Nicht simuliert (%s)", (cmd, flag) => {
     const r = lauf("kubectl " + cmd);
@@ -101,11 +100,15 @@ describe("(a) nicht simulierte Flags werden abgelehnt", () => {
     expect(r.out).toContain("'" + flag + "'");
     expect(r.out).toContain("Der Simulator kann:");
   });
-  test("-o liefert den Lernhinweis, was stattdessen geht", () => {
-    expect(lauf("kubectl get pods -o yaml").out).toContain("kubectl describe");
+  test("-o bei anderen Unterbefehlen liefert den Lernhinweis, was stattdessen geht", () => {
+    expect(lauf("kubectl describe pod x -o json").out).toContain("-o wide");
+    expect(lauf("kubectl describe pod x -o json").out).toContain("kubectl describe");
   });
-  test("der abgelehnte get druckt keine Tabelle", () => {
-    expect(lauf("kubectl get pods -o yaml").out).not.toContain("READY");
+  // Die Formate bei get prüfen die Tests in kubectl-ausgabe.test.ts; -o yaml dreht #1467 um.
+  test("-o yaml ist (bis #1467) nicht simuliert und druckt keine Tabelle", () => {
+    const r = lauf("kubectl get pods -o yaml");
+    expect(r.out).toContain(NICHT_SIMULIERT);
+    expect(r.out).not.toContain("READY");
   });
   test("NEGATIV: --dry-run legt NICHTS an", () => {
     const sim = freshSim();
@@ -113,6 +116,7 @@ describe("(a) nicht simulierte Flags werden abgelehnt", () => {
     expect(sim.deployments.map(d => d.name)).not.toContain("x");
   });
   test.each([
+    "get pods -o wide", "get pods -o=wide", "get pods -owide", "get pods --output wide", "get pods --output=wide", "get -o wide pods", "get pods -Ao wide",
     "get pods -n kube-system", "get pods -nkube-system", "get pods -n=kube-system", "get pods --namespace=default",
     "get pods -A", "get pods --all-namespaces", "logs web-x -f", "logs web-x --follow", "logs web-x -p",
     "scale deployment web --replicas 3", "scale deployment web --replicas=3", "create deployment z --image=nginx --replicas=2",
@@ -134,7 +138,9 @@ describe("(a) nicht simulierte Flags werden abgelehnt", () => {
   });
   test("die Flag-Prüfung greift VOR dem Control-Plane-Gate (clientseitig wie in echtem kubectl)", () => {
     const sim = new KQSim({ ...szenario(), controlPlane: { up: false } });
-    expect(sim.exec("kubectl get pods -o yaml").output).toContain(NICHT_SIMULIERT);
+    expect(sim.exec("kubectl get pods -o json").output).toContain(NICHT_SIMULIERT);
+    expect(sim.exec("kubectl get pods -o foo").output).toContain("unable to match a printer");
+    expect(sim.exec("kubectl get pods -o wide").output).toContain("connection to the server");
     expect(sim.exec("kubectl get pods").output).toContain("connection to the server");
   });
 });
