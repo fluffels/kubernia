@@ -19,8 +19,9 @@ import {
 } from "../../state";
 import { servicesWithDefault, serviceSelector, isKubernetesService } from "../../endpoints";
 import { clusterPods, type ClusterPod } from "../../pods";
-import { clusterPodStatus } from "../../podstatus";
-import { currentReplicaSet } from "../../replicasets";
+import { BROKEN_POD, clusterPodStatus, isReady } from "../../podstatus";
+import { podTemplateLabels } from "../../replicasets";
+import { workloadLabels, type Labels } from "../../util";
 import { statefulPodClaimName, snapshotPodTemplate } from "../../workload";
 import { podPlacement } from "../inspect";
 
@@ -35,12 +36,9 @@ export function compact(o: Record<string, YamlValue | undefined>): YamlMap {
 }
 
 /** `metadata` mit Name, Namespace und optionalen Labels. */
-export function metaOf(name: string, labels?: Record<string, string>): YamlMap {
+export function metaOf(name: string, labels?: Labels): YamlMap {
   return compact({ labels, name, namespace: DEFAULT_NAMESPACE });
 }
-
-/** `labels.app` ist die Namensverdrahtung der Sim (siehe ../../endpoints.ts); der Schlüssel `app` steht auch in `workloadSelector` (../../util.ts), beide zusammen ändern. */
-export const appLabels = (app: string): Record<string, string> => ({ app });
 
 // ===== Mengenangaben =====
 
@@ -116,14 +114,18 @@ interface PodShape { phase: string; ready: boolean; state?: YamlMap; lastState?:
 
 const WAITING = (reason: string): YamlMap => ({ waiting: { reason } });
 
-/** EIN Eintrag je `Broken`-Typ (erschöpfend; ein neuer Typ bricht den Typecheck). */
-const BROKEN_SHAPE: Record<Broken["type"], PodShape> = {
-  imagepull: { phase: "Pending", ready: false, state: WAITING("ImagePullBackOff") },
-  crashloop: { phase: "Running", ready: false, state: WAITING("CrashLoopBackOff") },
-  pending: { phase: "Pending", ready: false, noContainer: true },
-  notready: { phase: "Running", ready: false, state: { running: {} } },
-  oomkilled: { phase: "Running", ready: false, state: WAITING("CrashLoopBackOff"), lastState: { terminated: { exitCode: 137, reason: "OOMKilled" } } },
-};
+/** Die Form eines kaputten Pods, abgeleitet aus dem EINEN Eintrag in `BROKEN_POD` (../../podstatus.ts). */
+function brokenShape(type: Broken["type"]): PodShape {
+  const e = BROKEN_POD[type];
+  const c = e.container;
+  return {
+    phase: e.phase,
+    ready: isReady(e.status),
+    noContainer: c === null,
+    state: c === null ? undefined : c.waiting ? WAITING(c.waiting) : { running: {} },
+    lastState: c?.lastTerminated ? { terminated: { exitCode: c.lastTerminated.exitCode, reason: c.lastTerminated.reason } } : undefined,
+  };
+}
 const HEALTHY_SHAPE: PodShape = { phase: "Running", ready: true, state: { running: {} } };
 const EVICTED_SHAPE: PodShape = { phase: "Failed", ready: false, noContainer: true };
 const STS_PENDING_SHAPE: PodShape = { phase: "Pending", ready: false, noContainer: true };
@@ -131,7 +133,7 @@ const STS_PENDING_SHAPE: PodShape = { phase: "Pending", ready: false, noContaine
 function podShape(c: ClusterPod, scheduled: boolean): PodShape {
   if (c.owner === "StatefulSet") return scheduled ? HEALTHY_SHAPE : STS_PENDING_SHAPE;
   if (c.dep.evicted) return EVICTED_SHAPE;
-  return c.dep.broken ? BROKEN_SHAPE[c.dep.broken.type] : HEALTHY_SHAPE;
+  return c.dep.broken ? brokenShape(c.dep.broken.type) : HEALTHY_SHAPE;
 }
 
 function podStatus(host: KubectlHost, c: ClusterPod, ip: string | null): YamlMap {
@@ -163,9 +165,7 @@ function podSpec(c: ClusterPod, node: string | null): YamlMap {
 
 function podObject(host: KubectlHost, c: ClusterPod): YamlMap {
   const { ip, node } = podPlacement(host, c);
-  const labels = c.owner === "Deployment"
-    ? { ...appLabels(c.dep.name), "pod-template-hash": currentReplicaSet(c.dep).hash }
-    : appLabels(c.sts.name);
+  const labels = c.owner === "Deployment" ? podTemplateLabels(c.dep) : workloadLabels(c.sts.name);
   return {
     apiVersion: "v1", kind: "Pod", metadata: metaOf(c.pod.name, labels),
     spec: podSpec(c, node), status: podStatus(host, c, ip),
@@ -175,14 +175,6 @@ function podObject(host: KubectlHost, c: ClusterPod): YamlMap {
 export const podObjects: ObjectsOf = host => new Map(clusterPods(host).map(c => [c.pod.name, podObject(host, c)]));
 
 // ===== Service =====
-
-/** `app=x` (aus `serviceSelector`) als Mapping. */
-function selectorMap(host: KubectlHost, svc: ServiceRes): YamlMap | undefined {
-  const sel = serviceSelector(host, svc);
-  if (sel === null) return undefined;
-  const [k, v] = sel.split("=");
-  return { [k]: v };
-}
 
 function servicePorts(svc: ServiceRes): YamlValue[] | undefined {
   if (isExternalNameService(svc)) return undefined;
@@ -203,7 +195,7 @@ function serviceObject(host: KubectlHost, svc: ServiceRes): YamlMap {
       clusterIP: external ? undefined : svc.clusterIP,
       externalName: external ? svc.externalName : undefined,
       ports: servicePorts(svc),
-      selector: selectorMap(host, svc),
+      selector: serviceSelector(host, svc) ?? undefined,
       type: svc.type,
     }),
     status: { loadBalancer: {} },

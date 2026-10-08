@@ -29,7 +29,7 @@ export interface ExecResult {
 /** Art einer absichtlich kaputten Workload (für die Troubleshooting-Quests). Echte
  *  discriminated union (#867 – vorher ein Kommentar-„Union" über `type: string`, mit
  *  allen Feldern alle Typen hindurch optional): der Compiler kennt jetzt je Variante
- *  genau ihre eigenen Felder, und die zentrale `BROKEN_STATUS`-Tabelle unten erzwingt
+ *  genau ihre eigenen Felder, und die zentrale Tabelle `BROKEN_POD` (./podstatus.ts) erzwingt
  *  bei einer neuen Variante einen Typfehler statt einer klammheimlich falschen Anzeige
  *  – genau das ist vorher passiert (`clustersync.ts` zeigte notready/oomkilled
  *  fälschlich als "Pending", weil ihre eigene Ternärkette die beiden Typen nicht
@@ -68,19 +68,6 @@ export type Broken =
       memNeeded?: number;
     };
 
-/** Zentrale Status-Tabelle je Broken-Typ (#867): einzige Quelle für die kubectl-
- *  Statuszeile UND das HUD-/Weltkarten-Label – vorher dieselbe Fallunterscheidung
- *  dreifach dupliziert, einmal sogar unvollständig (siehe Kommentar an `Broken` oben);
- *  die Ableitung selbst liegt in `podstatus.ts#deploymentPodStatus`. Der Typ als
- *  `Record<Broken["type"], …>` erzwingt Vollständigkeit: ein neuer Broken-Typ ohne
- *  Eintrag hier ist ein TS-Fehler, keine stillschweigend falsche Anzeige mehr. */
-export const BROKEN_STATUS: Record<Broken["type"], PodStatus> = {
-  imagepull: { status: "ImagePullBackOff", ready: "0/1", restarts: 0, label: "ImagePullBackOff" },
-  crashloop: { status: "CrashLoopBackOff", ready: "0/1", restarts: 5, label: "CrashLoopBackOff" },
-  pending: { status: "Pending", ready: "0/1", restarts: 0, label: "Pending" },
-  notready: { status: "Running", ready: "0/1", restarts: 0, label: "NotReady" },
-  oomkilled: { status: "OOMKilled", ready: "0/1", restarts: 4, label: "OOMKilled" },
-};
 /** Eine einzelne Pod-Instanz eines Deployments. */
 export interface PodInstance {
   name: PodName;   // Value Object (#479): ein Pod-Name ist kein beliebiger String, sondern DNS-1123.

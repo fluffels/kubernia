@@ -12,7 +12,7 @@
  */
 import { isExternalNameService, type ClusterState, type Deployment, type PvcRes, type ServiceRes } from "./state";
 import { clusterPods, type ClusterPod } from "./pods";
-import { podIP, CONTROL_PLANE_IP, workloadSelector } from "./util";
+import { podIP, CONTROL_PLANE_IP, workloadLabels, type Labels } from "./util";
 import { assertNever } from "../core/assert";
 import { statefulPodVolumePending } from "./workload";
 
@@ -68,15 +68,16 @@ function selects(svc: ServiceRes, c: ClusterPod): boolean {
   }
 }
 
-/** Der Selektor, den ein Service in `describe` zeigt (`app=<workload>`), oder `null` (ExternalName).
+/** Der Selektor eines Service als Map (`{ app: <workload> }`), oder `null` (ExternalName, `kubernetes`). Tabelle, `describe` und
+ *  `-o yaml` leiten ihre Darstellung daraus ab (Text: `formatLabels`).
  *  Dieselbe Namensverdrahtung wie `selects`: ein StatefulSet, das den Service als `serviceName` führt,
  *  nennt seinen eigenen Namen, sonst gilt der Service-Name (Deployment gleichen Namens). Hängen ein
  *  StatefulSet mit fremdem Namen und ein gleichnamiges Deployment am selben Service, nennt der
  *  Selektor nur das StatefulSet (bewusster Randfall). */
-export function serviceSelector(host: Pick<ClusterState, "statefulSets">, svc: ServiceRes): string | null {
+export function serviceSelector(host: Pick<ClusterState, "statefulSets">, svc: ServiceRes): Labels | null {
   if (isExternalNameService(svc) || isKubernetesService(svc)) return null;
   const sts = host.statefulSets.find(s => s.serviceName === svc.name);
-  return workloadSelector(sts ? sts.name : svc.name);
+  return workloadLabels(sts ? sts.name : svc.name);
 }
 
 function backendOf(host: EndpointsHost, c: ClusterPod): ServiceBackend {

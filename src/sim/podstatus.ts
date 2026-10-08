@@ -5,10 +5,10 @@
  * und Metriken), nicht aus einer eigenen PVC-Abfrage. Eine neue Workload-Art ist hier eine
  * neue `switch`-Variante; `default: assertNever` erzwingt sie beim Kompilieren und wirft zur
  * Laufzeit statt still `undefined` zu liefern. Die Ableitung je Deployment (Evicted, gesund,
- * `BROKEN_STATUS`) und die Restarts-Regel stehen je genau einmal hier.
+ * `BROKEN_POD`) und die Restarts-Regel stehen je genau einmal hier.
  *
  * Phaser-frei (pure Domäne): ./state, ./pods (nur Typ), ./endpoints, ../core/assert; kein Zyklus. */
-import { BROKEN_STATUS, type ClusterState, type Deployment, type PodStatus } from "./state";
+import type { Broken, ClusterState, Deployment, PodStatus } from "./state";
 import { assertNever } from "../core/assert";
 import type { ClusterPod } from "./pods";
 import { podAddress } from "./endpoints";
@@ -16,13 +16,42 @@ import { podAddress } from "./endpoints";
 /** Was die Ableitung braucht: die PVCs (Sim und KubectlHost erfüllen es). */
 export type PodStatusHost = Pick<ClusterState, "pvcs">;
 
+/** Der Container-Zustand eines kaputten Pods: `waiting` = Grund im Zustand Waiting (sonst läuft er); `lastTerminated` = der
+ *  letzte beendete Lauf (Last State in `describe pod`, `lastState` in YAML). */
+export interface ContainerState {
+  waiting?: string;
+  lastTerminated?: { reason: string; exitCode: number };
+}
+
+/** Alles, was ein `Broken`-Typ an einem Pod sichtbar macht. */
+export interface BrokenPod {
+  status: PodStatus;
+  phase: "Pending" | "Running";
+  /** `null`: der Pod ist nicht eingeplant, es gibt keinen Container-Status. */
+  container: ContainerState | null;
+}
+
+/** Zentrale Tabelle je Broken-Typ (#867, #1500): die EINE Quelle für `get pods` (Status, Ready, Restarts), HUD-/Weltkarten-Label,
+ *  `describe pod` (State, Last State) und `-o yaml` (Phase, Container-Zustand). Als `Record<Broken["type"], …>` erzwingt sie
+ *  Vollständigkeit: ein neuer Broken-Typ ohne Eintrag ist ein TS-Fehler, keine stillschweigend falsche Anzeige. */
+export const BROKEN_POD: Record<Broken["type"], BrokenPod> = {
+  imagepull: { status: { status: "ImagePullBackOff", ready: "0/1", restarts: 0, label: "ImagePullBackOff" }, phase: "Pending", container: { waiting: "ImagePullBackOff" } },
+  crashloop: { status: { status: "CrashLoopBackOff", ready: "0/1", restarts: 5, label: "CrashLoopBackOff" }, phase: "Running", container: { waiting: "CrashLoopBackOff" } },
+  pending: { status: { status: "Pending", ready: "0/1", restarts: 0, label: "Pending" }, phase: "Pending", container: null },
+  notready: { status: { status: "Running", ready: "0/1", restarts: 0, label: "NotReady" }, phase: "Running", container: {} },
+  oomkilled: {
+    status: { status: "OOMKilled", ready: "0/1", restarts: 4, label: "OOMKilled" }, phase: "Running",
+    container: { waiting: "CrashLoopBackOff", lastTerminated: { reason: "OOMKilled", exitCode: 137 } },
+  },
+};
+
 /** Status, Ready, Restarts und Label der Pods eines Deployments. Evicted überschreibt alles (#240):
  *  der kubelet hat den Pod beendet, er läuft nicht und ist nicht bereit. Sonst gesund oder der
- *  `BROKEN_STATUS`-Eintrag (eine Kopie: Aufrufer dürfen sie ändern). */
+ *  `BROKEN_POD`-Eintrag (eine Kopie: Aufrufer dürfen sie ändern). */
 export function deploymentPodStatus(d: Pick<Deployment, "evicted" | "broken">): PodStatus {
   if (d.evicted) return { status: "Evicted", ready: "0/1", restarts: 0, label: "Evicted" };
   if (!d.broken) return { status: "Running", ready: "1/1", restarts: 0, label: "Running" };
-  return { ...BROKEN_STATUS[d.broken.type] };
+  return { ...BROKEN_POD[d.broken.type].status };
 }
 
 /** Bereit, wenn alle Container bereit sind (`n/n` mit n > 0, auch bei Sidecars). */
