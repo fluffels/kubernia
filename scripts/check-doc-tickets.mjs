@@ -35,6 +35,8 @@ import { readFileSync } from "node:fs";
 import { ghText } from "./gh-cli.mjs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
+import { ALLOWLIST as SIZE_ALLOWLIST } from "./check-size.mjs";
+import { ALLOWLIST as CONTEXT_ALLOWLIST } from "./check-context-size.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -64,6 +66,21 @@ export function parseOpenHarnessTickets(md) {
     for (const m of bold[1].matchAll(/#(\d+)/g)) nums.add(Number(m[1]));
   }
   return [...nums].sort((a, b) => a - b);
+}
+
+/** Die Ausnahme-Listen, die ein offenes Ticket nennen müssen (#1460 Z1). DECKEL in check-size sind Ratchet-Historie,
+ *  kein Ticket-Versprechen, und gehören bewusst nicht dazu. */
+export const AUSNAHME_LISTEN = [
+  { skript: "scripts/check-size.mjs", eintraege: SIZE_ALLOWLIST },
+  { skript: "scripts/check-context-size.mjs", eintraege: CONTEXT_ALLOWLIST },
+];
+
+/** Je Ausnahme die Ticket-Nummer: das erste `#N` der Begründung, sonst null. Rein, offline. */
+export function ausnahmeTickets(eintraege) {
+  return eintraege.map((e) => {
+    const m = /#(\d+)/.exec(e.reason ?? "");
+    return { file: e.file, nr: m ? Number(m[1]) : null };
+  });
 }
 
 // ── gh-Abgleich (nur in der CLI, nicht im Test) ─────────────────────────────────
@@ -98,8 +115,9 @@ function main() {
 
   const md = readFileSync(join(ROOT, HARNESS_DOC), "utf8");
   const open = parseOpenHarnessTickets(md);
+  const ausnahmen = AUSNAHME_LISTEN.flatMap((l) => ausnahmeTickets(l.eintraege).map((e) => ({ ...e, skript: l.skript })));
 
-  if (open.length === 0) {
+  if (open.length === 0 && ausnahmen.length === 0) {
     console.log(green(`✔ Keine offen-markierten Roadmap-Tickets in ${HARNESS_DOC} (nichts abzugleichen).`));
     return;
   }
@@ -117,6 +135,15 @@ function main() {
 
   const closed = [];
   const unknown = [];
+  for (const a of ausnahmen) {
+    const state = a.nr === null ? "CLOSED" : ghStateOf(a.nr);
+    if (state !== "CLOSED") continue;
+    const wer = a.nr === null ? "keine Ticket-Nummer" : `#${a.nr} ist CLOSED`;
+    console.error(
+      red(`✖ ${a.skript}: die Ausnahme für ${a.file} trägt ${wer}: offenes Ticket eintragen oder die Ausnahme abbauen.`),
+    );
+    closed.push(a.nr ?? a.file);
+  }
   for (const n of open) {
     const state = ghStateOf(n);
     if (state === "CLOSED") closed.push(n);
@@ -141,7 +168,7 @@ function main() {
   }
 
   console.log(
-    green(`✔ Harness-Roadmap aktuell: alle ${open.length} als „offen" markierten Tickets sind auf GitHub offen.`),
+    green(`✔ Harness-Roadmap aktuell: ${open.length} als „offen" markierte Tickets und ${ausnahmen.length} Größen-Ausnahmen mit offenem Ticket.`),
   );
 }
 

@@ -57,7 +57,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Board-Takt (Status-Ticket, Harness-Sammelticket, Positionskorrektur) ansehen, ohne zu ändern (#1390) | `PROJECT_TOKEN=$(gh auth token) node scripts/board-takt.mjs --dry-run` |
 | Oberstes freies Ticket der Board-Auswahl samt übersprungenen Kandidaten (Assignee, Blocker, Branch, Worktree, PR; #1428) | `node scripts/naechstes-ticket.mjs [--json]` (Exit 0 gefunden, 1 keins frei, 2 Fehler) |
 | Mehrere Tickets einsortieren, eine Listenabfrage (#1217) | `node scripts/board-place.mjs --top <nr>…` / `--after <ankernr> <nr>…` (klemmt hinter das ungeclaimte Sammelticket; ganz oben nur `--notfall <art> --top`) |
-| Doku-Aktualitäts-Wächter (offen-markierte Roadmap-Tickets gegen den gh-Status, non-blocking, braucht `gh`, #610) | `npm run check:doctickets` |
+| Doku-Aktualitäts-Wächter (offen-markierte Roadmap-Tickets und `ALLOWLIST`-Ausnahmen gegen den gh-Status, non-blocking, braucht `gh`, #610) | `npm run check:doctickets` |
 | TS-7-Freigabe-Wächter (npm-Registry: erlaubt typescript-eslint schon TS 7? non-blocking, braucht Netz, #847) | `npm run check:tseslint-ts7` |
 | Diff-Größenbudget-Wächter (max. 20 Dateien / 800 geänderte Zeilen gegen main, #533) | `npm run check:diffsize` |
 | Review-/Plan-Nachweis prüfen (Commit-Zeilen `KQ-Plan:`/`KQ-Review:`, #1270; kein `npm run`, nicht in `verify`) | `node scripts/check-review-nachweis.mjs` |

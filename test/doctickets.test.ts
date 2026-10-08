@@ -27,6 +27,9 @@ const parseOpenHarnessTickets: (md: string) => number[] = checkDocTickets.parseO
 const OPEN_TICKETS_START: string = checkDocTickets.OPEN_TICKETS_START;
 const OPEN_TICKETS_END: string = checkDocTickets.OPEN_TICKETS_END;
 const HARNESS_DOC: string = checkDocTickets.HARNESS_DOC;
+const ausnahmeTickets: (eintraege: { file: string; reason: string }[]) => { file: string; nr: number | null }[] =
+  checkDocTickets.ausnahmeTickets;
+const AUSNAHME_LISTEN: { skript: string; eintraege: { file: string; reason: string }[] }[] = checkDocTickets.AUSNAHME_LISTEN;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -95,5 +98,28 @@ describe("Doku-Aktualitäts-Wächter (#610)", () => {
     );
     // Regressions-Lock auf den Auslöser-Befund: das erledigte #492 darf nie als offen gelten.
     assert.ok(!open.includes(492), "#492 ist erledigt und darf nicht als offen markiert sein.");
+  });
+  // ── Ausnahme-Listen (check:size, check:contextsize): jede Ausnahme nennt ein Ticket (#1460 Z1) ──
+
+  test("ausnahmeTickets: erstes #N der Begründung, null ohne Nummer", () => {
+    assert.deepEqual(
+      ausnahmeTickets([
+        { file: "a.ts", reason: "#893 (Split offen), vorher #942." },
+        { file: "b.ts", reason: "ohne Ticket" },
+      ]),
+      [
+        { file: "a.ts", nr: 893 },
+        { file: "b.ts", nr: null },
+      ],
+    );
+  });
+
+  test("die echten ALLOWLISTs nennen je Eintrag eine Ticket-Nummer", () => {
+    assert.ok(AUSNAHME_LISTEN.length >= 2, "check-size und check-context-size müssen erfasst sein");
+    for (const liste of AUSNAHME_LISTEN) {
+      for (const e of ausnahmeTickets(liste.eintraege)) {
+        assert.ok(e.nr !== null, `${liste.skript}: Ausnahme ${e.file} nennt kein #N`);
+      }
+    }
   });
 });
