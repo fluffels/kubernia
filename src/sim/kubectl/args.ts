@@ -1,13 +1,12 @@
-/* ===== Kubernia – kubectl-Argumente: Flag-Tabelle je Unterbefehl (sim/kubectl/args.ts, #1444) =====
- * Die Eingabegrenze von `kubectl`: Welche Flags wertet die Sim je Unterbefehl aus? Alles andere wurde
- * früher still ignoriert (`get pods -l app=x` druckte die Tabelle) und wird jetzt ehrlich abgelehnt –
- * mit dem Lernhinweis, was der Simulator stattdessen kann. Parser und `notSimulated` sind seit #1459
- * generisch in ../cliargs (alle Familien); hier liegen nur die kubectl-Tabellen (re-exportiert).
+/* ===== Kubernia – kubectl-Argumente: Flag-Bausteine, Wertprüfer und Parser-Helfer (sim/kubectl/args.ts, #1444) =====
+ * Die Eingabegrenze von `kubectl`. Die Dispatch-Tabelle (Handler + Flags je Unterbefehl) liegt in ../kubectl.ts; hier
+ * liegen ihre Bausteine: `NS`, `FILE`, die `checkedFlag`-Konstanten, `FLAG_HINTS` (Lernhinweise zu Flags, die Spieler
+ * aus dem echten kubectl kennen) und `REAL_KUBECTL_COMMANDS`. Parser und `notSimulated` sind generisch in ../cliargs.
  *
  * Die Tabelle nennt NUR Flags, die die Sim wirklich auswertet (echtes kubectl hat Hunderte; „was wir
  * können“ ist endlich und ehrlich). `-n/--namespace` gilt überall, die Semantik regelt namespace.ts.
  *
- * Blattmodul der kubectl-Mappe (pure Domäne): importiert den Host-Typ, die Registry (./resources), ./output, die Mengen-Parser aus ../util und das Blattmodul ../cliargs. */
+ * Blattmodul der kubectl-Mappe (pure Domäne): importiert den Host-Typ, die Registry (./resources), die Mengen-Parser aus ../util und das Blattmodul ../cliargs. */
 import type { KubectlHost } from "./host";
 import { flag, checkedFlag, notSimulated, subEntry, type Call } from "../cliargs";
 export { notSimulated } from "../cliargs";

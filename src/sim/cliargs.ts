@@ -29,7 +29,7 @@ export type FlagStyle = "pflag" | "goflag";
 export interface FlagSpec {
   readonly names: readonly string[];
   readonly takesValue: boolean;
-  /** Wertprüfung (#1466): `null` = Wert gültig, sonst die fertige Fehlerausgabe. Läuft in `checkFlags`/`parseCall`
+  /** Wertprüfung (#1466): `null` = Wert gültig, sonst die fertige Fehlerausgabe. Läuft in `parseCall`
    *  mit dem Wert in jeder Schreibweise (`-o x`, `-o=x`, `-ox`, `--output=x`, in einer Kette `-Ao wide`). */
   readonly check?: (host: ErrHost, value: string) => string | null;
 }
