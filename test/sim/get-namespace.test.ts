@@ -58,6 +58,8 @@ function voll(): Scenario {
 }
 
 const LEER = (ns: string) => "No resources found in " + ns + " namespace.";
+/** Serverwarnungen (z.B. v1 Endpoints, #1496) stehen vor der Antwort und gehören nicht zur Namespace-Prüfung. */
+const ohneWarnung = (out: string | null | undefined) => (out ?? "").replace(/^Warning:.*\n/gm, "");
 const FLAGS = (ns: string) => [`-n ${ns}`, `--namespace ${ns}`, `-n=${ns}`, `--namespace=${ns}`];
 const erster = (e: { aliases: string[] }) => e.aliases[0];
 const namespaced = GET_RESOURCE_SCOPES.filter(e => e.namespaced);
@@ -85,7 +87,7 @@ describe("namespaced Ressourcen: fremder Namespace → Leermeldung", () => {
         const sim = new KQSim(voll());
         const r = sim.exec(`kubectl get ${alias} ${flag}`);
         expect(r.error).toBe(false);
-        expect(r.output).toBe(LEER("anderer-ns"));
+        expect(ohneWarnung(r.output)).toBe(LEER("anderer-ns"));
       });
     }
     test(`get ${erster(e)} ohne -n listet weiter (Positivkontrolle)`, () => {
@@ -110,7 +112,7 @@ describe("Negativtests je Ressourcenfamilie: kein Objekt aus default im fremden 
       expect(sim.exec(`kubectl get ${res}`).output).toContain(NAMEN[res]);
       const out = sim.exec(`kubectl get ${res} -n anderer-ns`).output;
       expect(out).not.toContain(NAMEN[res]);
-      expect(out).toBe(LEER("anderer-ns"));
+      expect(ohneWarnung(out)).toBe(LEER("anderer-ns"));
     });
   });
   test("services zeigt im fremden Namespace auch die kubernetes-Zeile nicht", () => {

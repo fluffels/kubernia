@@ -49,7 +49,7 @@ import { readActiveRaw, writeActiveRaw, backupActive } from "./slots";
 import { ABBREVS } from "../content/abbrev";
 import { ALL_ABBREV_UNLOCKED } from "../game/shared";
 
-export const CURRENT_SAVE_VERSION = 9;
+export const CURRENT_SAVE_VERSION = 10;
 
 /** Migration von Format-Version n auf n+1 (reine Funktion auf dem `data`-Objekt). */
 type Migration = (data: unknown) => unknown;
@@ -217,6 +217,26 @@ const migrations: Record<number, Migration> = {
       if (typeof n === "number" && n > 0) newInv[id] = { count: Math.floor(n) };
     }
     return { ...d, inventory: newInv };
+  },
+  // 9 -> 10 (#1496): die Node-Version im Cluster-Snapshot wird abgeleitet statt gespeichert (nodeSnapshot in
+  //         sim/nodes.ts lässt sie weg, solange sie `NODE_VERSION` ist). Ein v9-Stand trägt sie bei jedem Knoten und
+  //         hielte den Cluster für immer auf der alten Sim-Version (v1.30.2 ohne Support). ECHTE Transformation:
+  //         jede Version, die genau dem alten Default entspricht, fällt weg; eine bewusst abweichende Version
+  //         (Quest-Szenario mit Skew) bleibt stehen. Das Literal steht fest hier, kein Import aus `sim`: die Kette
+  //         darf nicht mit der aktuellen Sim-Version mitwandern. Wirft nie (kaputte Snapshots härtet sanitizeSnapshot).
+  9: (data) => {
+    if (typeof data !== "object" || data === null) return data;
+    const d = data as Record<string, unknown>;
+    const snap = d.clusterSnapshot;
+    if (typeof snap !== "object" || snap === null || Array.isArray(snap)) return d;
+    const s = snap as Record<string, unknown>;
+    if (!Array.isArray(s.nodes)) return d;
+    const nodes = s.nodes.map((n: unknown) => {
+      if (typeof n !== "object" || n === null || Array.isArray(n)) return n;
+      const { version, ...rest } = n as Record<string, unknown>;
+      return version === "v1.30.2" ? rest : n;
+    });
+    return { ...d, clusterSnapshot: { ...s, nodes } };
   },
 };
 

@@ -17,7 +17,7 @@ import { DEFAULT_NAMESPACE } from "../state";
 import type { KubectlHost } from "./host";
 import { GET_RENDERERS, noResourcesIn, type GetTable } from "./inspect";
 import { allNamespaces, foreignNamespace, requestedNamespace } from "./namespace";
-import { qualified, type ResourceKind } from "./resources";
+import { qualified, serverWarnings, type ResourceKind } from "./resources";
 import { notSimulated } from "./args";
 import { readTargets, type Target } from "./targets";
 import type { Call } from "../cliargs";
@@ -89,7 +89,7 @@ function withNotFound(host: KubectlHost, text: string, blocks: Block[]): string 
 /** `-o yaml`: die Objekte der gefundenen Namen. Genau eine Anfrage mit genau einem Namen ergibt das Einzelobjekt
  *  (fehlt er, nur die NotFound-Zeile), sonst eine `kind: List` mit den NotFound-Zeilen dahinter (wie `printGeneric`).
  *  Kann eine Art nicht vollständig abgebildet werden (kein Baustein, System-Pods), lehnt die Sim ehrlich ab. */
-function yamlOutput(host: KubectlHost, requests: Target[], blocks: Block[]): string {
+function yamlOutput(host: KubectlHost, requests: Target[], blocks: Block[], warn: (text: string) => string): string {
   const found = blocks.map(b => yamlObjects(host, b.kind, b.table.names));
   if (found.some(o => o === null)) {
     return notSimulated(host, "'kubectl get -o yaml' für diese Art (oder die System-Pods).", ["kubectl get " + yamlKinds().join("|") + " [<name>] -o yaml"]);
@@ -97,9 +97,9 @@ function yamlOutput(host: KubectlHost, requests: Target[], blocks: Block[]): str
   const items = found.flatMap(o => o ?? []);
   const errors = blocks.flatMap(notFoundLines);
   const single = requests.length === 1 && requests[0].names.length === 1;
-  if (single && items.length === 1) return emitYaml(items[0]);
+  if (single && items.length === 1) return warn(emitYaml(items[0]));
   const text = single ? errors.join("\n") : [emitYaml(yamlList(items)), ...errors].join("\n");
-  return errors.length > 0 ? withNotFound(host, text, blocks) : text;
+  return warn(errors.length > 0 ? withNotFound(host, text, blocks) : text);
 }
 
 export function kubectlGet(host: KubectlHost, c: Call): string {
@@ -114,7 +114,10 @@ export function kubectlGet(host: KubectlHost, c: Call): string {
   }
 
   const blocks = parsed.targets.map(r => renderBlock(host, c, r, isWide(c)));
-  if (isYaml(c)) return yamlOutput(host, parsed.targets, blocks);
+  // Die Warnungen des API-Servers stehen vor jeder Antwort, die er wirklich gibt (nicht vor Client-Fehlern oder "Nicht simuliert").
+  const warnings = serverWarnings(parsed.targets.map(r => r.kind));
+  const warn = (text: string): string => (warnings.length > 0 ? warnings.join("\n") + "\n" + text : text);
+  if (isYaml(c)) return yamlOutput(host, parsed.targets, blocks, warn);
   const prefixed = blocks.length > 1;
   const parts: string[] = [];
   const errors: string[] = [];
@@ -127,5 +130,5 @@ export function kubectlGet(host: KubectlHost, c: Call): string {
     if (lines.length > 0) parts.push(lines.join("\n"));
   }
   const text = parts.length > 0 ? parts.join("\n\n") : emptyMessage(blocks[0], c);
-  return errors.length > 0 ? withNotFound(host, text, blocks) : text;
+  return warn(errors.length > 0 ? withNotFound(host, text, blocks) : text);
 }

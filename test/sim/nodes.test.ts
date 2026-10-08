@@ -83,7 +83,7 @@ test("kubeadm init/join/reset provisionieren & räumen Knoten über den Kanal (m
   sim.exec("kubeadm init");
   const cp = sim.nodes.find(isControlPlane);
   assert.ok(cp, "init zieht eine Control-Plane hoch");
-  assert.equal(cp!.version, NODE_VERSION);
+  assert.equal(cp.version, NODE_VERSION);
   assert.equal(sim.controlPlane.up, true);
 
   const token = sim.controlPlane.token!;
@@ -103,14 +103,14 @@ test("mergeScenario (#577): ein Teil-Node-Spec {name} bekommt die Cluster-Defaul
   // Ein Szenario, das nur den Namen liefert (die Sim-Fabrik soll die Pflichtfelder füllen).
   // Vor #577 landete das per rohem `nodes.push(Object.assign({},n))` als strukturell
   // illegaler ClusterNode (status/roles/version === undefined); jetzt über provisionNode.
-  sim.mergeScenario({ nodes: [{ name: "ahoi-lonely" } as ClusterNode] });
+  sim.mergeScenario({ nodes: [{ name: "ahoi-lonely" }] });
   const node = sim.nodes.find(n => n.name === "ahoi-lonely");
   assert.ok(node, "der Teil-Node wurde aufgenommen");
-  assert.equal(node!.status, "Ready", "status-Default gefüllt");
-  assert.equal(node!.roles, "<none>", "roles-Default gefüllt");
-  assert.equal(node!.version, NODE_VERSION, "version-Default gefüllt");
+  assert.equal(node.status, "Ready", "status-Default gefüllt");
+  assert.equal(node.roles, "<none>", "roles-Default gefüllt");
+  assert.equal(node.version, NODE_VERSION, "version-Default gefüllt");
   // Der Knoten ist damit ein legaler ClusterNode: isControlPlane greift ohne TypeError.
-  assert.equal(isControlPlane(node!), false, "gefüllte roles sind auswertbar (kein undefined)");
+  assert.equal(isControlPlane(node), false, "gefüllte roles sind auswertbar (kein undefined)");
 });
 
 test("mergeScenario (#577): ein voll spezifizierter Node bleibt unverändert (Defaults überschrieben)", () => {
@@ -127,14 +127,14 @@ test("reset (#596): ein Teil-Node-Spec {name} im Szenario bekommt die Cluster-De
   // strukturell illegaler ClusterNode (status/roles/version === undefined) – deriveControlPlane
   // wertet dann direkt danach `roles.includes(...)` auf undefined aus (TypeError). Jetzt über
   // provisionNode, das die Pflichtfelder mit den Cluster-Defaults füllt.
-  const s = new KQSim({ nodes: [{ name: "ahoi-lonely" } as ClusterNode] });
+  const s = new KQSim({ nodes: [{ name: "ahoi-lonely" }] });
   const node = s.nodes.find(n => n.name === "ahoi-lonely");
   assert.ok(node, "der Teil-Node wurde aufgenommen");
-  assert.equal(node!.status, "Ready", "status-Default gefüllt");
-  assert.equal(node!.roles, "<none>", "roles-Default gefüllt");
-  assert.equal(node!.version, NODE_VERSION, "version-Default gefüllt");
+  assert.equal(node.status, "Ready", "status-Default gefüllt");
+  assert.equal(node.roles, "<none>", "roles-Default gefüllt");
+  assert.equal(node.version, NODE_VERSION, "version-Default gefüllt");
   // Der Knoten ist damit ein legaler ClusterNode: isControlPlane greift ohne TypeError.
-  assert.equal(isControlPlane(node!), false, "gefüllte roles sind auswertbar (kein undefined)");
+  assert.equal(isControlPlane(node), false, "gefüllte roles sind auswertbar (kein undefined)");
 });
 
 test("reset (#596): ein voll spezifizierter Szenario-Node bleibt unverändert, Control-Plane wird abgeleitet", () => {
@@ -191,6 +191,65 @@ test("NODE_SYSTEM_INFO: eingefroren, mit OS, Kernel und Container-Runtime", () =
   assert.match(NODE_SYSTEM_INFO.osImage, /Ubuntu/);
   assert.match(NODE_SYSTEM_INFO.kernelVersion, /^\d+\.\d+\.\d+/);
   assert.match(NODE_SYSTEM_INFO.containerRuntimeVersion, /^containerd:\/\//);
+  assert.equal(NODE_SYSTEM_INFO.architecture, "amd64");
+});
+
+/* ---------- (d) Die Node-Version ist abgeleitet statt gespeichert (#1496) ---------- */
+
+test("nodeSnapshot: die Standardversion steht nicht im Snapshot, eine bewusste Abweichung schon", () => {
+  const n: ClusterNode = { name: "ahoi-worker-1", status: "Ready", roles: "<none>", version: NODE_VERSION, diskPressure: true };
+  const snap = nodeSnapshot(n);
+  assert.equal("version" in snap, false);
+  assert.deepEqual(snap, { name: "ahoi-worker-1", status: "Ready", roles: "<none>", diskPressure: true });
+  assert.equal(nodeSnapshot({ ...n, version: "v1.29.0" }).version, "v1.29.0");
+  assert.notEqual(snap, n, "eine Kopie, nicht das Original");
+});
+
+test("Snapshot → neue Sim: die Knoten tragen NODE_VERSION, eine abweichende Version überlebt", () => {
+  const sim = new KQSim({ nodes: [{ name: "ahoi-control", roles: "control-plane" }, { name: "alt", version: "v1.29.0" }] });
+  assert.equal(sim.nodes[0].version, NODE_VERSION, "ein Spec ohne Version bekommt den Cluster-Default");
+  const snap = sim.snapshot();
+  assert.deepEqual(snap.nodes?.map(n => n.version), [undefined, "v1.29.0"]);
+  assert.deepEqual(new KQSim(snap).nodes.map(n => n.version), [NODE_VERSION, "v1.29.0"]);
+});
+
+/** Alle Werte eines JSON-Baums, die ein Objekt oder String sind, samt Pfad der Schlüssel. */
+function laufe(v: unknown, pfad: string, besuche: (v: unknown, pfad: string) => void): void {
+  besuche(v, pfad);
+  if (Array.isArray(v)) v.forEach((x, i) => laufe(x, pfad + "[" + i + "]", besuche));
+  else if (typeof v === "object" && v !== null) for (const [k, x] of Object.entries(v)) laufe(x, pfad + "." + k, besuche);
+}
+const questDateien = () => readdirSync("src/content/data/quests").map(f => ({ f, json: JSON.parse(readFileSync("src/content/data/quests/" + f, "utf8")) as unknown }));
+
+test("INHALT: kein Node-Spec in den Quest-Daten trägt eine eigene `version` (sie folgt NODE_VERSION)", () => {
+  for (const { f, json } of questDateien()) {
+    laufe(json, f, (v, pfad) => {
+      if (!pfad.endsWith(".nodes") || !Array.isArray(v)) return;
+      for (const n of v as Record<string, unknown>[]) assert.equal("version" in n, false, pfad + ": " + String(n.name) + " trägt eine Version");
+    });
+  }
+});
+
+test("INHALT: jede hafen_cluster-Version in den Quest-Daten (cluster.tf und desc der tfResource) ist NODE_VERSION", () => {
+  let gefunden = 0;
+  const pruefe = (text: string, pfad: string) => {
+    for (const m of text.matchAll(/version\s*=\s*"(\d+\.\d+\.\d+)"/g)) {
+      gefunden++;
+      assert.equal("v" + m[1], NODE_VERSION, pfad + ": " + m[0]);
+    }
+  };
+  for (const { f, json } of questDateien()) {
+    laufe(json, f, (v, pfad) => {
+      if (typeof v === "string") {
+        // Nur der hafen_cluster-Block, nicht andere Versionen (Provider-Pins, Charts).
+        for (const m of v.matchAll(/resource "hafen_cluster"[^}]*}/g)) pruefe(m[0], pfad);
+      } else if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+        const o = v as { addr?: unknown; desc?: unknown };
+        if (typeof o.addr === "string" && o.addr.startsWith("hafen_cluster.") && typeof o.desc === "string") pruefe(o.desc, pfad + ".desc");
+      }
+    });
+  }
+  assert.ok(gefunden >= 2, "der Wächter sieht die hafen_cluster-Versionen (cluster.tf und desc), sonst prüft er nichts");
 });
 
 /* ---------- (d) Worker-IPs kollisionsfrei, workerIndex (#1497) ---------- */
@@ -290,7 +349,7 @@ test("describe node: Addresses (InternalIP, Hostname) und System Info aus NODE_S
     assert.match(d, /^ {2}OS Image: +Ubuntu 22\.04\.4 LTS$/m);
     assert.match(d, /^ {2}Operating System: +linux$/m);
     assert.match(d, /^ {2}Architecture: +amd64$/m);
-    assert.match(d, /^ {2}Container Runtime Version: +containerd:\/\/1\.7\.18$/m);
+    assert.match(d, /^ {2}Container Runtime Version: +containerd:\/\/2\.3\.6$/m);
     assert.ok(d.includes("\n  Kubelet Version:            " + NODE_VERSION + "\n"));
     assert.ok(d.includes("\n  Kube-Proxy Version:         " + NODE_VERSION));
     assert.ok(d.indexOf("Conditions:") < d.indexOf("Addresses:") && d.indexOf("Addresses:") < d.indexOf("System Info:"));

@@ -11,7 +11,7 @@
  * Jeder Ressourcentyp ist ein eigener kleiner Renderer; ein 10× größerer Ressourcensatz
  * wächst als 10× Einträge, ohne dass Dispatcher-Komplexität/-Länge mitwächst.
  */
-import { podIP, BUILTIN_AGE, workloadSelector, formatLabels } from "../util";
+import { effectiveDefaultStorageClass, podIP, BUILTIN_AGE, workloadSelector, formatLabels } from "../util";
 import { endpointAddresses, podAddress, servicesWithDefault, serviceSelector, isKubernetesService } from "../endpoints";
 import type { KubectlHost } from "./host";
 import type { Call } from "../cliargs";
@@ -164,10 +164,10 @@ function getNodes(host: KubectlHost): GetTable {
   // Echtes `kubectl get nodes` zeigt unter Disk-Druck weiter STATUS "Ready" (DiskPressure ist eine
   // eigene Condition, sichtbar erst per describe). Im Lernspiel hängen wir sie sichtbar an die
   // STATUS-Spalte, damit der Druck im Überblick auffällt – Detail dann in `describe node` (#240).
-  const { osImage, kernelVersion, containerRuntimeVersion } = NODE_SYSTEM_INFO;
+  const { osImage, kernelVersion, architecture, containerRuntimeVersion } = NODE_SYSTEM_INFO;
   return withWide(tableOf(["NAME", "STATUS", "ROLES", "AGE", "VERSION", "INTERNAL-IP", "EXTERNAL-IP", "OS-IMAGE", "KERNEL-VERSION", "CONTAINER-RUNTIME"],
     host.nodes.map(n => [n.name, n.diskPressure ? n.status + ",DiskPressure" : n.status, n.roles, n.created === undefined ? BUILTIN_AGE : host._age(n.created), n.version,
-      nodeInternalIP(n), "<none>", osImage, kernelVersion, containerRuntimeVersion])), 5);
+      nodeInternalIP(n), "<none>", osImage, kernelVersion + " (" + architecture + ")", containerRuntimeVersion])), 5);
 }
 
 function getSecrets(host: KubectlHost): GetTable {
@@ -225,9 +225,11 @@ function getPvs(host: KubectlHost): GetTable {
     host.pvs.map(p => [p.name, p.capacity, p.accessModes, p.reclaimPolicy, p.status, p.claim || "", p.storageClass || "", host._age(p.created), VOLUME_MODE])), 1);
 }
 
+/** Ab Kubernetes v1.37 trägt nur die effektive Default-StorageClass „(default)“ (#135964), Regel: `effectiveDefaultStorageClass`. */
 function getStorageClasses(host: KubectlHost): GetTable {
+  const standard = effectiveDefaultStorageClass(host.storageClasses)?.name;
   return tableOf(["NAME", "PROVISIONER", "RECLAIMPOLICY", "AGE"],
-    host.storageClasses.map(s => [s.name + (s.isDefault ? " (default)" : ""), s.provisioner, s.reclaimPolicy, host._age(s.created)]),
+    host.storageClasses.map(s => [s.name + (s.name === standard ? " (default)" : ""), s.provisioner, s.reclaimPolicy, host._age(s.created)]),
     host.storageClasses.map(s => s.name));
 }
 
@@ -237,8 +239,9 @@ function getVolumeSnapshots(host: KubectlHost): GetTable {
 }
 
 function getServiceAccounts(host: KubectlHost): GetTable {
-  return tableOf(["NAME", "SECRETS", "AGE"],
-    host.serviceAccounts.map(s => [s.name, "0", host._age(s.created)]));
+  // Die Spalte SECRETS fiel mit Kubernetes v1.35 weg (#117160): ServiceAccounts tragen keine Token-Secrets mehr.
+  return tableOf(["NAME", "AGE"],
+    host.serviceAccounts.map(s => [s.name, host._age(s.created)]));
 }
 
 function getRoles(host: KubectlHost): GetTable {

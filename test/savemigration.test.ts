@@ -42,6 +42,7 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 let Game: typeof import("../src/game").Game;
 let SaveStore: typeof import("../src/store").SaveStore;
 let CURRENT_SAVE_VERSION: number;
+let NODE_VERSION: string;
 let lsMap: Map<string, string>;
 
 beforeAll(async () => {
@@ -59,6 +60,7 @@ beforeAll(async () => {
   const store = await import("../src/store");
   SaveStore = store.SaveStore;
   CURRENT_SAVE_VERSION = store.CURRENT_SAVE_VERSION;
+  ({ NODE_VERSION } = await import("../src/sim/nodes"));
 });
 
 beforeEach(() => {
@@ -540,19 +542,71 @@ test("v8 → v9: Inventar-Zahlen werden zu ItemStack-Objekten migriert", () => {
 });
 
 /* ============================================================================
- * v9 (aktuelles Format, #421): ItemStack-Inventar lädt verlustfrei, kein Backup.
+ * v9 (#421): ItemStack-Inventar lädt verlustfrei (wird seit #1496 auf v10 migriert, Backup).
  * ========================================================================== */
 
-test("v9 (aktueller Stand): ItemStack-Inventar lädt verlustfrei, kein Backup", () => {
+test("v9 (wird auf v10 migriert): ItemStack-Inventar lädt verlustfrei, Original im Backup", () => {
   loadFixture("savegame-v9-current.json");
 
   expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
   expect(Game.state.gameDays).toBe(47.625);
   expect(Game.state.inventory).toEqual({ fernrohr: { count: 2 } });
 
-  // Aktuelle Version → kein Herauf-Migrieren → kein Sichern ins Backup.
-  expect(SaveStore.readBackup()).toBeNull();
+  // v9 < CURRENT (10) → herauf-migriert → Original vor dem Überschreiben ins Backup gesichert.
+  expect(SaveStore.readBackup()).toBe(fixtureRaw("savegame-v9-current.json"));
 
+  expectRoundTripFixedPoint();
+});
+
+/* ============================================================================
+ * v9 → v10 (#1496): die Node-Version im Cluster-Snapshot wird abgeleitet statt gespeichert.
+ * ========================================================================== */
+
+/** Der v9-Fixture-Stand mit einem eigenen Cluster-Snapshot (inline: der Snapshot ist der Gegenstand der Migration). */
+function v9MitSnapshot(clusterSnapshot: unknown): string {
+  const env = JSON.parse(fixtureRaw("savegame-v9-current.json")) as { v: number; data: Record<string, unknown> };
+  env.data.clusterSnapshot = clusterSnapshot;
+  return JSON.stringify(env);
+}
+
+function ladeRoh(raw: string): void {
+  const lastSeen = (JSON.parse(raw) as { data: { lastSeen: number } }).data.lastSeen;
+  vi.setSystemTime(lastSeen);
+  lsMap.set(SAVE_KEY, raw);
+  Game.load();
+}
+
+const knoten = (name: string, version: string, roles = "<none>") => ({ name, status: "Ready", roles, version });
+/** Die Versionen der Knoten im gespeicherten (nach dem Laden neu geschriebenen) Cluster-Snapshot. */
+function gespeicherteVersionen(): (string | undefined)[] {
+  const env = JSON.parse(SaveStore.read()!) as { data: { clusterSnapshot: { nodes: { version?: string }[] } } };
+  return env.data.clusterSnapshot.nodes.map(n => n.version);
+}
+
+test("v9 → v10: Knoten auf dem alten Default v1.30.2 folgen danach NODE_VERSION, abweichende Versionen bleiben", () => {
+  const roh = v9MitSnapshot({ nodes: [knoten("ahoi-control", "v1.30.2", "control-plane"), knoten("ahoi-worker-1", "v1.30.2"), knoten("ahoi-worker-2", "v1.29.0")], files: {} });
+  ladeRoh(roh);
+  expect(Game.sim.nodes.map(n => n.version)).toEqual([NODE_VERSION, NODE_VERSION, "v1.29.0"]);
+  // Gespeichert wird nur die Abweichung; der Default ist abgeleitet.
+  expect(gespeicherteVersionen()).toEqual([undefined, undefined, "v1.29.0"]);
+  // Das Original liegt vor dem Überschreiben im Backup.
+  expect(SaveStore.readBackup()).toBe(roh);
+  expectRoundTripFixedPoint();
+});
+
+test("v9 → v10 NEGATIV: ohne Cluster-Snapshot (null) und mit kaputtem `nodes` wirft die Migration nicht", () => {
+  for (const snap of [null, { nodes: "kaputt", files: {} }, { nodes: [7, null, ["x"]], files: {} }, { files: {} }, ["x"]]) {
+    lsMap.clear();
+    expect(() => ladeRoh(v9MitSnapshot(snap)), JSON.stringify(snap)).not.toThrow();
+    expect(Game.state.currentQuestId, JSON.stringify(snap)).toBe("gitops-argocd-intro");
+  }
+});
+
+test("v10 (aktueller Stand): Cluster-Snapshot ohne Knoten-Version lädt mit NODE_VERSION, eine bewusste Abweichung bleibt, kein Backup", () => {
+  loadFixture("savegame-v10-current.json");
+  expect(Game.state.currentQuestId).toBe("gitops-argocd-intro");
+  expect(Game.sim.nodes.map(n => n.version)).toEqual([NODE_VERSION, NODE_VERSION, "v1.29.0"]);
+  expect(SaveStore.readBackup()).toBeNull();
   expectRoundTripFixedPoint();
 });
 
@@ -736,10 +790,10 @@ const ALL_FIXTURES = [
   "savegame-v2-stale-index.json", "savegame-v2-allquests.json",
   "savegame-v3-current.json", "savegame-v4-current.json", "savegame-v5-current.json",
   "savegame-v6-current.json", "savegame-v7-current.json", "savegame-v8-current.json",
-  "savegame-v9-current.json",
+  "savegame-v9-current.json", "savegame-v10-current.json",
 ];
 
-test("#493 Import-Pfad: jeder Fixture-Stand (v1..v9) wird in der AKTUELLEN Versions-Hülle abgelegt (nicht hüllenlos/alt)", () => {
+test("#493 Import-Pfad: jeder Fixture-Stand (v1..v10) wird in der AKTUELLEN Versions-Hülle abgelegt (nicht hüllenlos/alt)", () => {
   for (const f of ALL_FIXTURES) {
     lsMap.clear();
     Game.importData(fixtureRaw(f));
