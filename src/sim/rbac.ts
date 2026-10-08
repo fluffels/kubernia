@@ -10,7 +10,7 @@
  *
  * Vorher rieten Merge-Dedup (`sim.ts` `_mergeRbac`), die Eindeutigkeits-Invariante
  * (`sim/invariants.ts`), das create/apply-„already exists" (`sim/kubectl/lifecycle.ts`),
- * die describe-Suche (`sim/kubectl/inspect.ts`), die roleRef-Auflösung
+ * die describe-Suche (`sim/kubectl/describe.ts`), die roleRef-Auflösung
  * (`sim/kubectl/security.ts`) und die Drill-Namensvergabe (`content/drills/*`) diese
  * Definition je EINZELN – sie standen nur zufällig im Einklang (die Merge/Invariante-
  * Divergenz war der Auslöser #578). Hier steht sie einmal; Stardew-Scope: eine neue

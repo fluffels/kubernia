@@ -4,8 +4,9 @@
  * sim.ts-Split #346 und zum WorldScene.ts-Split #393) – kleine, je-für-sich testbare
  * Module statt eines 1220-LOC-God-Files (Befund #390):
  *   - kubectl/get.ts       – get (Anfrage lesen: Komma-Liste, all, typ/name, Namensfilter)
- *   - kubectl/inspect.ts   – die get-Renderer je Ressourcentyp + top / logs (lesend)
- *   - kubectl/describe.ts  – describe: Dispatcher (ohne Namen, Namenspräfix) + Renderer-Registry
+ *   - kubectl/inspect.ts   – die get-Renderer je Ressourcentyp (lesend)
+ *   - kubectl/describe.ts  – describe: Dispatcher (ohne Namen, Namenspräfix) + Renderer-Registry (Pod: describe-pod.ts)
+ *   - kubectl/top.ts, kubectl/logs.ts – top (Metriken) und logs
  *   - kubectl/args.ts      – Flag-Tabelle je Unterbefehl, Parser, der eine „nicht simuliert“-Text (#1444)
  *   - kubectl/resources.ts – die Ressourcentyp-Registry (Plural, Singular, echte Kurznamen)
  *   - kubectl/lifecycle.ts – create / apply -f / delete (Ressourcen-Lebenszyklus)
@@ -16,7 +17,8 @@
  * Phaser-frei (pure Domäne): kein Rückimport nach sim.ts (kein Zyklus). Aufgerufen aus
  * dem `exec`-Dispatch in `sim.ts` per `kubectlCommand(this, …)`.
  */
-import { kubectlTop, kubectlLogs } from "./kubectl/inspect";
+import { kubectlTop } from "./kubectl/top";
+import { kubectlLogs } from "./kubectl/logs";
 import { kubectlDescribe } from "./kubectl/describe";
 import { kubectlGet } from "./kubectl/get";
 import { checkArgs, isKubectlSub, notSimulated, KUBECTL_SUBS, REAL_KUBECTL_COMMANDS, type KubectlSub } from "./kubectl/args";
