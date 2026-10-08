@@ -24,6 +24,11 @@
  * Bewusste Grenzen: ein Feature-Worktree, der nicht `kq-<nr>` heißt, hat keinen erkennbaren Eltern-Worktree; seine
  * Lens-Worktrees gelten nach 5 Minuten als verwaist. Ein junger Lens-Worktree wird nur gemeldet.
  *
+ * Lose Dateien (#1476): direkt unter `.claude/worktrees/` liegende reguläre Dateien (z.B. eine Sicherungskopie
+ * `kq-<nr>-…-orig.bak`, die eine Lens neben ihren Worktree legte) hält `git worktree remove` nicht auf. Verwaist ist
+ * eine Datei `kq-<nr>[-.]…`, deren `kq-<nr>` nicht mehr registriert und die älter als 5 Minuten ist; nur sie wird
+ * entfernt (nicht rekursiv, keine Links, Schutzgurt wie bei Ordnern). Junge und fremd benannte Dateien werden nur gemeldet.
+ *
  * Entscheidungslogik ist pure/exportiert und testbar (execSync/fs injizierbar) —
  * EINE Quelle für dieses CLI-Skript und den automatischen Check in
  * scripts/stop-verify-hook.mjs (#952).
@@ -75,6 +80,63 @@ export function localWorktreeDirs(worktreesDir, deps = {}) {
     .map((e) => e.name);
 }
 
+/** Namen regulärer Dateien (keine Ordner, keine Links) direkt unter `worktreesDir` (#1476). Fake-Dirents ohne `isFile` zählen nicht. */
+export function localWorktreeFiles(worktreesDir, deps = {}) {
+  const exists = deps.existsSync ?? existsSync;
+  const readdir = deps.readdirSync ?? readdirSync;
+  if (!exists(worktreesDir)) return [];
+  return readdir(worktreesDir, { withFileTypes: true })
+    .filter((e) => typeof e.isFile === "function" && e.isFile())
+    .map((e) => e.name);
+}
+
+/** Dateiname `kq-<nr>` gefolgt von `-`, `.` oder Ende: Gruppe 1 ist der Eltern-Worktree (`kq-13610-x` gehört zu `kq-13610`, nicht `kq-1361`). */
+const KQ_DATEI = /^(kq-\d+)(?=[-.]|$)/;
+
+/**
+ * Teilt lose Dateien (#1476): `verwaist` (`kq-<nr>` nicht registriert, älter als 5 Minuten, löschbar), `jung` (verwaist,
+ * aber jünger, nur melden) und `fremd` (Name nicht `kq-<nr>…`, nur melden). Dateien eines registrierten Worktrees fehlen.
+ */
+export function sortiereDateien(worktreesDir, dateien, registered, deps = {}) {
+  const kandidaten = [];
+  const fremd = [];
+  for (const name of dateien) {
+    const m = KQ_DATEI.exec(name);
+    if (!m) fremd.push(name);
+    else if (!registered.has(join(worktreesDir, m[1]).replace(/\\/g, "/"))) kandidaten.push(name);
+  }
+  const { alt, jung } = splitByAge(worktreesDir, kandidaten, deps);
+  return { verwaist: alt, jung, fremd };
+}
+
+/**
+ * Entfernt verwaiste lose Dateien (#1476) mit `rmSync` OHNE `recursive`, nur nach dem Schutzgurt (reguläre Datei, kein
+ * Link, direktes Kind von `<mainRoot>/.claude/worktrees`). Wirft nie. Buckets: `removed`, `refused` (Gurt lehnte ab,
+ * nichts angefasst), `errors` (Datei nach dem Löschversuch noch da).
+ */
+export function entferneVerwaisteDateien(mainRoot, worktreesDir, names, deps = {}) {
+  const rm = deps.rmSync ?? rmSync;
+  const exists = deps.existsSync ?? existsSync;
+  const removed = [];
+  const errors = [];
+  const refused = [];
+  for (const name of names) {
+    const guard = assertSafeOrphanTarget(mainRoot, worktreesDir, name, deps, "file");
+    if (!guard.safe) {
+      refused.push({ name, reason: guard.reason });
+      continue;
+    }
+    const absPath = join(worktreesDir, name);
+    try {
+      rm(absPath, { force: true });
+    } catch {
+      /* Ergebnis wird unten geprüft */
+    }
+    (exists(absPath) ? errors : removed).push(name);
+  }
+  return { removed, errors, refused };
+}
+
 /**
  * Einträge unter `worktreesDir`, die ein **Symlink/Reparse-Point** sind (#1051).
  *
@@ -102,7 +164,7 @@ export function suspiciousWorktreeEntries(worktreesDir, deps = {}) {
  * `<mainRoot>/.claude/worktrees/` ist. Dieser Pfad läuft unbeaufsichtigt bei
  * jedem Turn-Ende (#952) und träfe sonst die Dateien, die den Agenten steuern.
  */
-export function assertSafeOrphanTarget(mainRoot, worktreesDir, name, deps = {}) {
+export function assertSafeOrphanTarget(mainRoot, worktreesDir, name, deps = {}, art = "dir") {
   const lstat = deps.lstatSync ?? lstatSync;
 
   if (!mainRoot || !worktreesDir) {
@@ -145,8 +207,8 @@ export function assertSafeOrphanTarget(mainRoot, worktreesDir, name, deps = {}) 
   if (st.isSymbolicLink()) {
     return { safe: false, reason: `Ziel ist ein Symlink/Junction (Reparse-Point), wird nicht gelöscht: ${target}` };
   }
-  if (!st.isDirectory()) {
-    return { safe: false, reason: `Ziel ist kein Verzeichnis: ${target}` };
+  if (art === "file" ? !st.isFile() : !st.isDirectory()) {
+    return { safe: false, reason: `Ziel ist ${art === "file" ? "keine reguläre Datei" : "kein Verzeichnis"}: ${target}` };
   }
 
   return { safe: true };
@@ -183,9 +245,9 @@ export function computeOrphans(worktreesDir, dirs, registered) {
 }
 
 /**
- * Diagnose: liefert `{ ok, orphans, young, lensOrphans, lensYoung, mainRoot, worktreesDir }` (`young`: unregistrierte
+ * Diagnose: liefert `{ ok, orphans, young, lensOrphans, lensYoung, orphanFiles, youngFiles, foreignFiles, mainRoot, worktreesDir }` (`young`: unregistrierte
  * Ordner unter 5 Minuten, nur melden, nie löschen; `lensOrphans`/`lensYoung`: registrierte Lens-Worktrees ohne
- * Feature-Worktree, alt bzw. unter 5 Minuten, #1425).
+ * Feature-Worktree, alt bzw. unter 5 Minuten, #1425; `orphanFiles`/`youngFiles`/`foreignFiles`: lose Dateien, #1476).
  * `ok:false` bei jedem git-Fehler (z.B. `cwd` ist gar kein Git-Repo) — dann
  * bewusst KEINE Waisen melden, statt bei fehlgeschlagenem `git worktree list`
  * versehentlich JEDEN lokalen Ordner (auch aktive!) als Waise zu behandeln.
@@ -210,7 +272,8 @@ export function diagnoseOrphans(cwd, deps = {}) {
   const dirs = localWorktreeDirs(worktreesDir, deps);
   const { alt: orphans, jung: young } = splitByAge(worktreesDir, computeOrphans(worktreesDir, dirs, registered), deps);
   const { alt: lensOrphans, jung: lensYoung } = splitByAge(worktreesDir, verwaisteLensWorktrees(allPaths, worktreesDir), deps);
-  return { ok: true, orphans, young, lensOrphans, lensYoung, mainRoot, worktreesDir };
+  const dateien = sortiereDateien(worktreesDir, localWorktreeFiles(worktreesDir, deps), registered, deps);
+  return { ok: true, orphans, young, lensOrphans, lensYoung, orphanFiles: dateien.verwaist, youngFiles: dateien.jung, foreignFiles: dateien.fremd, mainRoot, worktreesDir };
 }
 
 /** Name eines Lens-Worktrees: `kq-<nr>-lens-r<runde>` (Skill review-lenses); Gruppe 1 ist der Eltern-Worktree `kq-<nr>`. */
@@ -433,7 +496,7 @@ function main() {
   console.log("=== Worktree-Diagnose ===\n");
   console.log(`Root: ${ROOT}`);
 
-  const { ok, orphans, young, lensOrphans, lensYoung, mainRoot, worktreesDir } = diagnoseOrphans(ROOT);
+  const { ok, orphans, young, lensOrphans, lensYoung, orphanFiles, youngFiles, foreignFiles, mainRoot, worktreesDir } = diagnoseOrphans(ROOT);
   if (!ok) {
     console.error("git worktree list fehlgeschlagen — Diagnose abgebrochen.");
     process.exit(1);
@@ -454,7 +517,7 @@ function main() {
     console.error();
   }
 
-  if (dirs.length === 0 && suspicious.length === 0) {
+  if (dirs.length === 0 && suspicious.length === 0 && orphanFiles.length + youngFiles.length + foreignFiles.length === 0) {
     console.log(".claude/worktrees/ ist leer — alles sauber.");
     process.exit(0);
   }
@@ -479,7 +542,19 @@ function main() {
     console.log();
   }
 
-  if (orphans.length === 0 && lensOrphans.length === 0) {
+  if (youngFiles.length > 0) {
+    console.log(`Lose Dateien, verwaist, aber unter ${MIN_ORPHAN_AGE_MS / 60_000} Minuten alt (nur gemeldet): ${youngFiles.join(", ")}`);
+  }
+  if (foreignFiles.length > 0) {
+    console.log(`Fremde lose Dateien (Name nicht kq-<nr>…, nie automatisch gelöscht): ${foreignFiles.join(", ")}`);
+  }
+  if (orphanFiles.length > 0) {
+    console.log(`Verwaiste lose Dateien (kq-<nr> nicht mehr registriert, ${orphanFiles.length}):`);
+    for (const name of orphanFiles) console.log(`  ✗ ${name}`);
+    console.log();
+  }
+
+  if (orphans.length === 0 && lensOrphans.length === 0 && orphanFiles.length === 0) {
     console.log("Keine verwaisten Ordner — alles sauber.");
     // Ein gemeldeter Reparse-Point ist NICHT "sauber": exit 1, damit die
     // Warnung nicht in einem grünen Lauf untergeht (#1051).
@@ -501,10 +576,12 @@ function main() {
 
   console.log("Pruning veralteter git-Einträge + Löschen...");
   const lens = entferneLensWorktrees(mainRoot, worktreesDir, lensOrphans);
+  const dateien = entferneVerwaisteDateien(mainRoot, worktreesDir, orphanFiles);
+  for (const name of dateien.removed) console.log(`  ✓ ${name} (lose Datei) entfernt`);
   for (const name of lens.removed) console.log(`  ✓ ${name} (Lens-Worktree) entfernt`);
   const { removed, errors: ordnerFehler, pending, refused: ordnerRefused, halter: ordnerHalter } = fixOrphans(mainRoot, worktreesDir, orphans);
-  const errors = [...ordnerFehler, ...lens.errors];
-  const refused = [...ordnerRefused, ...lens.refused];
+  const errors = [...ordnerFehler, ...lens.errors, ...dateien.errors];
+  const refused = [...ordnerRefused, ...lens.refused, ...dateien.refused];
   const halter = { ...ordnerHalter, ...lens.halter };
   for (const name of removed) console.log(`  ✓ ${name} entfernt`);
   for (const name of pending) console.log(`  … ${name} ist leer, aber gerade gesperrt: kein Fehler, der nächste Lauf versucht es erneut`);

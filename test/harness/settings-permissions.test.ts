@@ -54,6 +54,12 @@ describe("Agenten-Permissions in .claude/settings.json (#901)", () => {
     assert.ok(deny.includes("mcp__claude-in-chrome"), "deny ohne mcp__claude-in-chrome");
   });
 
+  test("deny sperrt PixelLab list_projects: der Server bewirbt darüber Git-Clone-URLs und einen Push-Weg (#1476)", () => {
+    assert.ok(deny.includes("mcp__pixellab__list_projects"), "deny ohne mcp__pixellab__list_projects");
+    // Erzeugungs-Tools bleiben bewusst frei (kubernia braucht sie für Assets, #1476).
+    assert.ok(!deny.includes("mcp__pixellab"), "PixelLab darf nicht komplett gesperrt sein");
+  });
+
   test("hat überhaupt einen permissions-Block mit allow/ask/deny", () => {
     assert.ok(settings.permissions, ".claude/settings.json braucht einen `permissions`-Block");
     assert.ok(Array.isArray(perms.allow), "`permissions.allow` muss eine Liste sein");

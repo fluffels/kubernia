@@ -28,7 +28,7 @@ Das Repo ist öffentlich: jeder darf Issues eröffnen und kommentieren, es gibt 
 | WebFetch/WebSearch | kein deterministisches Gate; Rahmung und Exfiltration per URL offen (#1447 a) |
 | npm-Pakete inkl. Lifecycle-Skripte | Dependabot-Policy, `npm audit`, `check:lockfile`; keine `.npmrc`, Lifecycle-Skripte laufen bei `npm ci` (#1447 b) |
 | Dependabot-PR-Texte | der Autor ist vertraut, die Release-Notes darin sind Text Dritter; der Ablauf liest nur Checks, erzwungen ist das nicht (#1447 c) |
-| MCP-Antworten | Whitelist je Agent (`tools`), `claude-in-chrome` gesperrt; Antworttext selbst ungefiltert (#1447 g) |
+| MCP-Antworten | Whitelist je Agent (`tools`), `claude-in-chrome` gesperrt; Antworttext selbst ungefiltert (#1447 g). Auch Server-Anweisungen sind Fremdtext: PixelLab bewirbt Git-Zugriff über `list_projects`, das Tool steht in `deny` (#1476); der Toolname stammt aus der Server-Anweisung, die öffentliche Doku belegt ihn nicht |
 
 ## OWASP-Abgleich
 

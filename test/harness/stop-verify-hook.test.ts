@@ -584,3 +584,85 @@ describe("checkAndFixOrphanWorktrees: Lens-Worktrees ohne Feature-Worktree (#142
     assert.equal(r.blocked, false);
   });
 });
+
+describe("checkAndFixOrphanWorktrees: lose Dateien unter .claude/worktrees (#1476)", () => {
+  const MAIN = "/root";
+  const WT = "/root/.claude/worktrees";
+  const JETZT = 50_000_000;
+  type Ergebnis = { blocked: boolean; reason?: string; removed?: string[]; warning?: string };
+  const check = (hook as unknown as { checkAndFixOrphanWorktrees: (root: string, deps: object) => Ergebnis }).checkAndFixOrphanWorktrees;
+
+  function deps(dateien: string[], opts: { rmWirft?: boolean; link?: boolean; alterMs?: number } = {}) {
+    const befehle: string[] = [];
+    const geloescht: string[] = [];
+    return {
+      befehle,
+      geloescht,
+      deps: {
+        now: JETZT,
+        execSync: (cmd: string) => {
+          befehle.push(cmd);
+          return cmd.includes("worktree list") ? `worktree ${MAIN}\nHEAD abc\n` : "";
+        },
+        existsSync: (p: string) => p.replace(/\\/g, "/") === WT || (dateien.some((d) => p.replace(/\\/g, "/").endsWith(`/${d}`)) && !geloescht.includes(p)),
+        readdirSync: () => dateien.map((name) => ({ name, isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false })),
+        statSync: () => ({ mtimeMs: JETZT - (opts.alterMs ?? 10 * 60_000), birthtimeMs: 1 }),
+        lstatSync: () => ({ isFile: () => !opts.link, isDirectory: () => false, isSymbolicLink: () => Boolean(opts.link) }),
+        rmSync: (p: string) => {
+          if (opts.rmWirft) throw new Error("EBUSY");
+          geloescht.push(p);
+        },
+        platform: "linux",
+      },
+    };
+  }
+
+  test("verwaiste, alte Datei wird still entfernt: kein Block, keine Warnung", () => {
+    const g = deps(["kq-1361-lens-r2-orig.bak"]);
+    const r = check(MAIN, g.deps);
+    assert.equal(r.blocked, false);
+    assert.deepEqual(r.removed, ["kq-1361-lens-r2-orig.bak"]);
+    assert.equal(r.warning, undefined);
+    assert.equal(g.geloescht.length, 1);
+  });
+
+  test("fremde Datei: nur Warnung mit Namen, nichts gelöscht, kein Block", () => {
+    const g = deps(["notizen.txt"]);
+    const r = check(MAIN, g.deps);
+    assert.equal(r.blocked, false);
+    assert.match(r.warning ?? "", /notizen\.txt/);
+    assert.equal(g.geloescht.length, 0);
+  });
+
+  test("gescheiterte Löschung und Schutzgurt-Ablehnung sind nur Warnungen, nie ein Block", () => {
+    const wirft = check(MAIN, deps(["kq-7-x.bak"], { rmWirft: true }).deps);
+    assert.equal(wirft.blocked, false);
+    assert.match(wirft.warning ?? "", /kq-7-x\.bak.*nicht gelöscht/);
+    const g = deps(["kq-7-x.bak"], { link: true });
+    const link = check(MAIN, g.deps);
+    assert.equal(link.blocked, false);
+    assert.match(link.warning ?? "", /Schutzgurt/);
+    assert.equal(g.geloescht.length, 0);
+  });
+
+  test("junge verwaiste Datei bleibt unberührt und ohne Meldung", () => {
+    const g = deps(["kq-8-x.bak"], { alterMs: 60_000 });
+    const r = check(MAIN, g.deps);
+    assert.deepEqual(r, { blocked: false });
+    assert.equal(g.geloescht.length, 0);
+  });
+
+  test("nichts gefunden: Frühausstieg ohne weiteren git-Aufruf (kein status)", () => {
+    const g = deps([]);
+    assert.deepEqual(check(MAIN, g.deps), { blocked: false });
+    assert.ok(!g.befehle.some((c) => c.includes("status --porcelain")));
+  });
+
+  test("runHook gibt die Warnung als systemMessage aus (Exit 0)", () => {
+    const g = deps(["notizen.txt"]);
+    const r = (hook as unknown as { runHook: (s: string, root: string, c: (root: string) => Ergebnis) => { exit: number; stdout: string } }).runHook("{}", MAIN, (root) => check(root, g.deps));
+    assert.equal(r.exit, 0);
+    assert.match(r.stdout, /systemMessage/);
+    assert.match(r.stdout, /notizen\.txt/);
+  });
+});

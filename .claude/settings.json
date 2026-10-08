@@ -65,6 +65,7 @@
       "Bash(npm publish:*)",
       "Bash(gh repo delete:*)",
       "mcp__claude-in-chrome",
+      "mcp__pixellab__list_projects",
       "Read(~/.ssh/**)",
       "Read(~/.config/gh/**)",
       "Read(~/.claude/.credentials.json)",

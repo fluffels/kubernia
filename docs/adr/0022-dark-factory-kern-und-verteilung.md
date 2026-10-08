@@ -148,3 +148,7 @@ Reihenfolge: F1 → F2 → (F7, F9, F12, F14, F15) → F3 → F4 → F5/F6/F8 �
 - Das Sync-Werkzeug wächst über 800 Zeilen: copier neu prüfen.
 - Das erste nicht deutschsprachige Projekt.
 - Die Nacharbeitsquote steigt nach F13 vier Wochen in Folge.
+
+## Fortschreibung #1476 (2026-10-08): F11 vor F10, Zwischenzustand
+
+Die Reihenfolge bleibt (F11 vor F10), obwohl F10 das Factory-Repo anlegt. Ein GitHub Project gehört dem Konto oder der Organisation, nicht einem Repository ([About Projects](https://docs.github.com/en/issues/planning-and-tracking-with-projects/learning-about-projects/about-projects): „at the user or organization level“), und die Items sind Issues; das Produkt-Board führt heute schon Items per Filter aus einem Repository. Darum legt F11 das Factory-Board vor dem Factory-Repo an. Bis F10 bleiben Factory-Items (Sammel- und Status-Ticket, `area:harness`) Issues in kubernia und wechseln nur das Board. Ob und wann sie ins Factory-Repo übertragen werden, entscheidet F10 im Pre-Flight (Außenwirkung). F11 bekommt keinen Blocker F10; der Body von F11 nennt diesen Zwischenzustand. Der FAQ-Verweis auf diesen ADR steht schon; F10 ergänzt nur den Repo-Link.

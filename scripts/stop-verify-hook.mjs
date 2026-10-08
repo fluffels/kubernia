@@ -28,6 +28,10 @@
  * Lens-Worktrees (#1425): ein registrierter `kq-<nr>-lens-r<runde>` ohne `kq-<nr>` (der Umsetzer hat den Worktree
  * entfernt, die Sabotage-Probe der Test-Lens aber nicht) wird entfernt, wenn er älter als 5 Minuten ist.
  *
+ * Lose Dateien (#1476): eine reguläre Datei `kq-<nr>…` direkt unter `.claude/worktrees/`, deren `kq-<nr>` nicht mehr
+ * registriert und älter als 5 Minuten ist (z.B. eine Lens-Sicherungskopie), wird still entfernt. Fremde Dateien und eine
+ * gescheiterte Löschung erzeugen nur eine Warnung (`systemMessage`), nie einen Block.
+ *
  * Zweiter Zweck (#1331): beim `SubagentStop` des Umsetzers prüft `umsetzer-abschluss.mjs`, dass ein offener PR mit
  * Auto-Merge nicht als Ende gemeldet wird (`ERGEBNIS: gemergt|abgebrochen`); sonst blockiert der Hook.
  *
@@ -42,7 +46,7 @@
 import { execSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { diagnoseOrphans, entferneLensWorktrees, fixOrphans, formatHalter, suspiciousWorktreeEntries } from "./cleanup-worktrees.mjs";
+import { diagnoseOrphans, entferneLensWorktrees, entferneVerwaisteDateien, fixOrphans, formatHalter, suspiciousWorktreeEntries } from "./cleanup-worktrees.mjs";
 import { istDirektaufruf, readStdin } from "./hook-io.mjs"; // gemeinsames Hook-I/O (stdin lesen, Direktaufruf erkennen)
 import { abschlussBlockade, parseAbschlussInput } from "./umsetzer-abschluss.mjs";
 
@@ -102,7 +106,7 @@ export function repoRootFromScriptUrl(importMetaUrl) {
  *  - git-Fehler (diagnoseOrphans meldet ok:false) → fail-open, { blocked: false }.
  */
 export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
-  const { ok, orphans, lensOrphans = [], mainRoot, worktreesDir } = diagnoseOrphans(repoRoot, deps);
+  const { ok, orphans, lensOrphans = [], orphanFiles = [], foreignFiles = [], mainRoot, worktreesDir } = diagnoseOrphans(repoRoot, deps);
   if (!ok) return { blocked: false };
 
   // Reparse-Point an Worktree-Stelle: wird NIE gelöscht (rekursives Löschen darf
@@ -110,16 +114,30 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
   // `Dirent.isDirectory()` ist für eine Junction false, sie fiel deshalb bisher
   // durch jeden Filter (#1051).
   const suspicious = suspiciousWorktreeEntries(worktreesDir, deps);
-  if (orphans.length === 0 && suspicious.length === 0 && lensOrphans.length === 0) return { blocked: false };
+  if (orphans.length === 0 && suspicious.length === 0 && lensOrphans.length === 0 && orphanFiles.length === 0 && foreignFiles.length === 0) return { blocked: false };
 
   const problems = [];
+  const warnungen = [];
   let removed = [];
   let pending = [];
+
+  // Lose Dateien (#1476): verwaiste still entfernen, alles andere nur warnen (nie blockieren).
+  if (orphanFiles.length > 0) {
+    const dateien = entferneVerwaisteDateien(mainRoot, worktreesDir, orphanFiles, deps);
+    removed = [...dateien.removed];
+    if (dateien.errors.length > 0) warnungen.push(`Lose Datei(en) ${dateien.errors.join(", ")} unter .claude/worktrees/ konnten nicht gelöscht werden.`);
+    if (dateien.refused.length > 0) {
+      warnungen.push(`Lose Datei(en) vom Schutzgurt abgelehnt, nichts gelöscht: ${dateien.refused.map(({ name, reason }) => `${name} (${reason})`).join("; ")}`);
+    }
+  }
+  if (foreignFiles.length > 0) {
+    warnungen.push(`Fremde lose Datei(en) unter .claude/worktrees/ (nicht kq-<nr>…, nie automatisch gelöscht): ${foreignFiles.join(", ")}. Herkunft klären und von Hand entfernen.`);
+  }
 
   // Registrierte Lens-Worktrees ohne Feature-Worktree (#1425): per `git worktree remove --force`, Ergebnis geprüft.
   if (lensOrphans.length > 0) {
     const lens = entferneLensWorktrees(mainRoot, worktreesDir, lensOrphans, deps);
-    removed = [...lens.removed];
+    removed = [...removed, ...lens.removed];
     if (lens.refused.length > 0) {
       problems.push(
         `Der Schutzgurt (#1051) hat ${lens.refused.length} Lens-Worktree(s) abgelehnt und NICHTS entfernt: ` +
@@ -191,10 +209,10 @@ export function checkAndFixOrphanWorktrees(repoRoot, deps = {}) {
     );
   }
 
-  const warning =
-    pending.length > 0
-      ? `Worktree-Ordner ${pending.join(", ")} ist leer, aber gerade gesperrt (Git-Worktree ist schon entfernt). Der nächste Stop versucht das Löschen erneut, nichts zu tun.`
-      : undefined;
+  if (pending.length > 0) {
+    warnungen.push(`Worktree-Ordner ${pending.join(", ")} ist leer, aber gerade gesperrt (Git-Worktree ist schon entfernt). Der nächste Stop versucht das Löschen erneut, nichts zu tun.`);
+  }
+  const warning = warnungen.length > 0 ? warnungen.join(" ") : undefined;
   if (problems.length === 0) return { blocked: false, removed, ...(warning ? { warning } : {}) };
 
   return {
