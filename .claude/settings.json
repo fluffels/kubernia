@@ -137,6 +137,15 @@
               "${CLAUDE_PROJECT_DIR}/scripts/haupt-sync.mjs"
             ],
             "timeout": 120
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/sandbox-doctor.mjs",
+              "--sessionstart"
+            ],
+            "timeout": 10
           }
         ]
       }

@@ -1390,12 +1390,9 @@ stillschweigend weitermachen:
 ${
   ausserhalbScope.length
     ? `Zusätzlich: der Review hat Punkte AUSSERHALB des Ticket-Scopes gefunden. Ordne jeden
-ein (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets): Spiel-/Inhalts-Befunde und
-Notfälle (roter main, Security, Datenverlust) und Harness-Befunde, die allein nicht in eine Session passen, werden Issues, gebündelt nach den Kriterien in
-AGENTS.md § Oberste Regel (dort nachlesen, hier nicht kopiert; ohne Assignee, passendes area:-Label, beide GraphQL-Calls zum Einsortieren — AGENTS.md § Neue Issues sofort ins Board
-einsortieren; vorher per gh issue list --limit 500 auf Duplikate prüfen). Alles zum Harness (Defekt,
-Härtung, Kosmetik, Wunsch) wird eine Zeile im ungeclaimten Sammelticket
-„Harness-Härtung (gesammelt)" (fehlt es: anlegen auf der Position laut AGENTS.md, docs/ticket-reihenfolge.md):
+ein nach AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets (die Ausnahmen dort nachlesen, hier nicht kopiert): Harness → eine Zeile im ungeclaimten Sammelticket
+„Harness-Härtung (gesammelt)" (fehlt es: anlegen auf der Position laut AGENTS.md, docs/ticket-reihenfolge.md), sonst ein Issue, gebündelt nach den Kriterien in
+AGENTS.md § Oberste Regel (ohne Assignee, passendes area:-Label, beide GraphQL-Calls zum Einsortieren — AGENTS.md § Neue Issues sofort ins Board einsortieren; vorher per gh issue list --limit 500 auf Duplikate prüfen):
 ${ausserhalbScope.map((p) => `- ${p}`).join('\n')}`
     : ''
 }

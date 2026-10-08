@@ -322,7 +322,7 @@ Gelb hinterlegt sind die drei Rückkopplungsschleifen (verify, Lenses, CI), rot 
 
 ### Agenten-Sandbox (WSL2)
 
-Shell-Befehle des Agenten (Bash, PowerShell, Monitor) laufen unter **WSL2 in bubblewrap** mit Domain-Allowlist; auf nativem Windows startet Claude Code Befehle ungesandboxt (Entscheidung, Probe und Alternativen: [ADR 0021](adr/0021-agenten-sandbox-wsl2.md)); Beobachtung 2026-10-08: dort kann das PowerShell-Tool per Enterprise-Policy blockiert sein, das Bash-Tool läuft ([FAQ](agent-harness-faq.md#windows-und-git-bash-was-geht-beim-skripten-verloren)); die Anleitungen im Repo nennen darum beide Wege. Der `sandbox`-Block in [`.claude/settings.json`](../.claude/settings.json) wirkt darum nur dort, wo die Sandbox verfügbar ist; ein Wächter ([`test/harness/sandbox-settings.test.ts`](../test/harness/sandbox-settings.test.ts)) hält ihn fest, [`scripts/sandbox-doctor.mjs`](../scripts/sandbox-doctor.mjs) prüft die Maschine (`--check`) und druckt die User-Vorlage (`--vorlage`).
+Shell-Befehle des Agenten (Bash, PowerShell, Monitor) laufen unter **WSL2 in bubblewrap** mit Domain-Allowlist; auf nativem Windows gibt es keine Sandbox, der strikte Projekt-Block sperrt dort Shell-Befehle ([Natives Windows](#natives-windows); Entscheidung, Probe und Alternativen: [ADR 0021](adr/0021-agenten-sandbox-wsl2.md)); die Anleitungen im Repo nennen beide Shell-Wege. Der `sandbox`-Block in [`.claude/settings.json`](../.claude/settings.json) wirkt darum nur dort, wo die Sandbox verfügbar ist; ein Wächter ([`test/harness/sandbox-settings.test.ts`](../test/harness/sandbox-settings.test.ts)) hält ihn fest, [`scripts/sandbox-doctor.mjs`](../scripts/sandbox-doctor.mjs) prüft die Maschine (`--check`) und druckt die User-Vorlage (`--vorlage`).
 
 **Netz-Allowlist** (`sandbox.network.allowedDomains`; die Tabelle ist die Doku-Seite des Wächters, Zeilen mit Quelle „Projekt“ müssen der Liste in `.claude/settings.json` entsprechen). Anthropic-Hosts stehen bewusst nicht drin: kein Shell-Befehl braucht sie, die Session selbst läuft außerhalb der Sandbox.
 
@@ -354,6 +354,15 @@ Shell-Befehle des Agenten (Bash, PowerShell, Monitor) laufen unter **WSL2 in bub
 10. `node scripts/sandbox-doctor.mjs --check` **aus einer Claude-Session heraus** ausführen lassen; im eigenen Terminal ist die Verhaltensprobe naturgemäß rot.
 
 **Grenzen (ehrlich):** Die Sandbox deckt nur Shell-Befehle. Read/Edit/WebFetch, Hooks und MCP-Server laufen außerhalb; dafür stehen Read-deny und `denyWrite` oben, die Hook-Skripte schützt zusätzlich `protected-paths.json`. `failIfUnavailable: true` steht nur in der User-Vorlage (im Projekt würde es native Windows-Sessions aussperren); die Durchsetzung kommt erst nach erfolgreicher Probe (#1437), bis dahin ist der Doktor berichtend (Exit 0). Notausgang bei Sandbox-Problemen: `claude --settings '{"sandbox":{"enabled":false}}'`. Ob die Token-Maskierung bei Basic-Auth (`git push` per HTTPS) greift, belegt #1434; ein Fehlschlag wäre sicher (der Aufruf scheitert).
+
+### Natives Windows
+
+Probe 2026-10-08 (Claude Code 2.1.294, `claude -p` in Scratch-Repos): Unter nativem Windows gibt es keine Sandbox. Mit nur dem Projekt-Block (`enabled: true`, `allowUnsandboxedCommands: false`) läuft das Bash-Tool mit der Warnung „Sandbox disabled“, das **PowerShell-Tool wird blockiert** („Enterprise policy requires sandboxing … Shell command execution is blocked by policy“), und die Shell-Sperre kann je nach Version auch das Bash-Tool treffen. Mit lokalem `allowUnsandboxedCommands: true` laufen beide (Warnung bleibt), mit lokalem `enabled: false` laufen beide ohne Warnung.
+
+- **Der Projekt-Block bleibt strikt**, damit der WSL2-Schutz ([ADR 0021](adr/0021-agenten-sandbox-wsl2.md)) nicht aufgeweicht wird.
+- **Abhilfe, einmal je Checkout:** `{"sandbox":{"enabled":false}}` in `.claude/settings.local.json` (ungetrackt, wirkt nur in diesem Checkout; eine WSL2-Distribution hat ihren eigenen Klon und bleibt gesandboxt; ein neuer Worktree braucht sie erneut), danach die Session neu starten. Eingetragen wird sie von der Maintainerin, nicht vom Agenten (Leitplanke).
+- **Hinweis beim Sitzungsstart:** ein zweiter `SessionStart`-Hook (`node scripts/sandbox-doctor.mjs --sessionstart`) meldet die Sperre samt Abhilfe, solange kein lokales Override sie aufhebt; er endet immer mit Exit 0. `--check` meldet dasselbe als Zeile. Grenze: ein Override, das erst beim Start per `--settings` kommt, sieht der Hinweis nicht (Fehlalarm).
+- **Notweg:** greift die Sperre, das jeweils andere Shell-Tool nehmen ([FAQ](agent-harness-faq.md#windows-und-git-bash-was-geht-beim-skripten-verloren)).
 
 ### Wer macht was
 
