@@ -29,8 +29,7 @@
  * nach sim.ts (kein Zyklus).
  */
 import type { ClusterState } from "./state";
-import { provisionNode, removeNode, isControlPlane } from "./nodes";
-import { workerNodeName, CONTROL_PLANE_NODE } from "./util";
+import { provisionNode, removeNode, isControlPlane, workerNodeName, CONTROL_PLANE_NODE } from "./nodes";
 import { flag, notSimulated, parseCall, specOfSub, subEntry, type Call, type FlagStyle, type SubEntry } from "./cliargs";
 
 /** Was die terraform-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
@@ -40,7 +39,7 @@ import { flag, notSimulated, parseCall, specOfSub, subEntry, type Call, type Fla
  *  #516) nur die berührten Daten-Felder per `Pick` (ISP): `tf`/`controlPlane`/`nodes`/`files`;
  *  die Feld-Typen bleiben so an die SSOT (sim/state.ts, #372) gebunden. Hinzu kommen
  *  die in `sim.ts` verbleibenden Helfer, die terraform ruft. */
-export interface TerraformHost extends Pick<ClusterState, "tf" | "controlPlane" | "nodes" | "files"> {
+export interface TerraformHost extends Pick<ClusterState, "tf" | "controlPlane" | "nodes" | "files" | "clock"> {
   _err(msg: string, tip?: string): string;
   _reschedulePending(): void;
 }
@@ -169,12 +168,12 @@ function tfPlan(host: TerraformHost, c: Call): string {
 function provisionClusterFromCode(host: TerraformHost): void {
   if (!host.controlPlane.up) {
     const cpName = host.nodes.find(isControlPlane)?.name || CONTROL_PLANE_NODE;
-    provisionNode(host, { name: cpName, roles: "control-plane" }); // idempotent per Name
+    provisionNode(host, { name: cpName, roles: "control-plane", created: host.clock }); // idempotent per Name
     host.controlPlane = { up: true, token: "abcdef.0123456789abcdef", node: cpName };
   }
   const workers = host.tf.resources.filter(r => r.addr.startsWith("hafen_worker."));
   workers.forEach((_, i) => {
-    provisionNode(host, { name: workerNodeName(i + 1) });
+    provisionNode(host, { name: workerNodeName(i + 1), created: host.clock });
   });
   host._reschedulePending();
 }
@@ -192,7 +191,7 @@ function tfApply(host: TerraformHost, c: Call): string {
   // Neue Server werden echte Cluster-Nodes – wartende Pods bekommen Platz!
   if (tf.resources.some(r => r.addr.includes("hafen_server"))) {
     for (const name of [workerNodeName(3), workerNodeName(4)]) {
-      provisionNode(host, { name }); // idempotent per Name (Worker-Default: roles "<none>")
+      provisionNode(host, { name, created: host.clock }); // idempotent per Name (Worker-Default: roles "<none>")
     }
     host._reschedulePending();
   }

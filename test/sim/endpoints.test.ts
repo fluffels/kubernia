@@ -4,6 +4,7 @@ import { describe, test, expect } from "vitest";
 import { KQSim } from "./helpers";
 import { podIP } from "../../src/sim/util";
 import { findClusterPod } from "../../src/sim/pods";
+import { formatLabels } from "../../src/sim/util";
 import { podAddress, serviceBackends, readyBackends, endpointPort, serviceSelector, endpointAddresses } from "../../src/sim/endpoints";
 
 const HEADLESS = "apiVersion: v1\nkind: Service\nmetadata:\n  name: speicher\nspec:\n  clusterIP: None\n  selector:\n    app: speicher\n  ports:\n    - port: 5432\n";
@@ -274,7 +275,7 @@ describe("serviceSelector und endpointAddresses (#1465)", () => {
 
   test("Service vor einem Deployment: app=<service>", () => {
     const sim = new KQSim({ deployments: [{ name: "kasse", image: "nginx", replicas: 1 }], services: [{ name: "kasse", type: "ClusterIP", clusterIP: "10.96.0.20", port: 80 }] });
-    expect(serviceSelector(sim, svc(sim, "kasse"))).toBe("app=kasse");
+    expect(serviceSelector(sim, svc(sim, "kasse"))).toEqual({ app: "kasse" });
   });
 
   test("ExternalName hat keinen Selektor", () => {
@@ -285,7 +286,7 @@ describe("serviceSelector und endpointAddresses (#1465)", () => {
 
   test("StatefulSet mit fremdem Namen am Service: app=<statefulset>", () => {
     const sim = new KQSim({ statefulSets: [sts({ name: "speicher", serviceName: "db" })], services: [{ name: "db", type: "ClusterIP", clusterIP: "None", port: 5432 }] });
-    expect(serviceSelector(sim, svc(sim, "db"))).toBe("app=speicher");
+    expect(serviceSelector(sim, svc(sim, "db"))).toEqual({ app: "speicher" });
   });
 
   test("Konsistenz: der Workload-Name jedes Backends ist der Selektorwert", () => {
@@ -298,7 +299,7 @@ describe("serviceSelector und endpointAddresses (#1465)", () => {
       ],
     });
     for (const s of sim.services) {
-      const sel = serviceSelector(sim, s)!.replace("app=", "");
+      const sel = serviceSelector(sim, s)!.app;
       const backends = serviceBackends(sim, s);
       expect(backends.length).toBeGreaterThan(0);
       for (const b of backends) {
@@ -320,5 +321,18 @@ describe("serviceSelector und endpointAddresses (#1465)", () => {
       services: [{ name: "kasse", type: "ClusterIP", clusterIP: "10.96.0.20", port: 80 }],
     });
     expect(endpointAddresses(kaputt, kaputt.services[0])).toEqual([]);
+  });
+});
+
+describe("formatLabels (#1500)", () => {
+  test("mehrere Labels: Schlüssel sortiert, mit Komma verbunden", () => {
+    expect(formatLabels({ tier: "web", app: "kasse" })).toBe("app=kasse,tier=web");
+  });
+  test("ein = im Wert bleibt erhalten", () => {
+    expect(formatLabels({ app: "a=b" })).toBe("app=a=b");
+  });
+  test("leer oder null: <none>", () => {
+    expect(formatLabels({})).toBe("<none>");
+    expect(formatLabels(null)).toBe("<none>");
   });
 });

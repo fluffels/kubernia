@@ -316,12 +316,29 @@ describe("Gleichlauf Umsetzer-Definition und Workflow (#1460 Z10)", () => {
     "nie über stdin", // Skripte nie über stdin starten
     "eigenen Negativtest, der genau diese Regel verfälscht", // je neue Guard-/Gate-Regel ein Negativtest
     "das betroffene Gate erneut", // Gate verschärft: origin/main einmergen (#1449)
+    "git checkout <datei>", // Red-Green-Probe nie so zurücknehmen (verwirft ungesicherte Änderungen)
   ];
 
   test("jede Kernphrase steht in der Agenten-Definition und im Workflow", () => {
     for (const phrase of KERNPHRASEN) {
       assert.ok(UMSETZER.includes(phrase), `kubernia-umsetzer.md ohne „${phrase}“`);
       assert.ok(WORKFLOW.includes(phrase), `kubernia-ticket.js ohne „${phrase}“`);
+    }
+  });
+
+  test("der Merge vor dem Push übernimmt den Verschobener-Code-Prüfschritt aus review-lenses (#1501)", () => {
+    const von = WORKFLOW.indexOf("Vor dem Push: verschärft der Diff ein Gate oder Schema");
+    const bis = WORKFLOW.indexOf("Nachweis-Commit", von);
+    assert.ok(von >= 0 && bis > von, "Merge-Absatz vor dem Push nicht gefunden");
+    const absatz = WORKFLOW.slice(von, bis);
+    assert.match(absatz, /verschob/, "Prüfung auf verschobene Funktionen fehlt");
+    assert.match(absatz, /git diff <basis> <M>\^2 -- <alte datei>/, "Diff der alten Datei gegen die Merge-Basis fehlt");
+    assert.match(absatz, /ergebnis="fehler"/);
+  });
+
+  test("Red-Green-Rücknahme per git checkout gehört auch in AGENTS.md und die Langfassung (#1501)", () => {
+    for (const datei of ["AGENTS.md", "docs/agent-harness.md"]) {
+      assert.ok(readFileSync(resolve(ROOT, datei), "utf8").includes("git checkout <datei>"), `${datei} ohne die Rücknahme-Regel`);
     }
   });
 });
