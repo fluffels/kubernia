@@ -18,8 +18,7 @@
  */
 import type { ClusterState, Deployment, Broken } from "./state";
 import { runPipeline } from "./glab";
-import { suggest } from "./util";
-import { flag, isFlagToken, notSimulated, parseCall, specOfSub, subEntry, type Call, type SubEntry } from "./cliargs";
+import { flag, notSimulated, dispatchSub, type Dispatch, type Call, type SubEntry } from "./cliargs";
 
 /** Was die git-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
  *  Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es dokumentiert
@@ -54,7 +53,7 @@ const PUSH_HINTS: Readonly<Record<string, string>> = {
 /** Alias → Eintrag (Handler + Flag-Tabelle; alle NACH der `git init`-Wache, also im initialisierten Repo, `init`
  *  selbst läuft davor). Ein neuer git-Unterbefehl ist ein Eintrag hier + eine Funktion unten – der Dispatcher
  *  (`gitCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz (Stardew-Scope). */
-const GIT_SUBCOMMANDS: Record<string, SubEntry<GitHandler>> = {
+const GIT: Dispatch<SubEntry<GitHandler>> = { cmd: "git", table: {
   init: { run: gitInit },
   status: { run: gitStatus },
   add: { run: gitAdd, flags: [flag(false, "-A", "--all")] },
@@ -66,29 +65,19 @@ const GIT_SUBCOMMANDS: Record<string, SubEntry<GitHandler>> = {
   push: { run: gitPush, flags: [flag(false, "-u", "--set-upstream")], hints: PUSH_HINTS },
   fetch: { run: gitFetch },
   pull: { run: gitPull },
+},
+  // Echte git-Unterbefehle, die die Sim nicht kann.
+  real: ["stash", "rebase", "reset", "diff", "remote", "clone", "tag", "show", "switch", "restore", "rm", "mv", "cherry-pick", "revert"],
 };
 
-/** Echte git-Unterbefehle, die die Sim nicht kann. */
-const NOT_SIMULATED = ["stash", "rebase", "reset", "diff", "remote", "clone", "tag", "show", "switch", "restore", "rm", "mv", "cherry-pick", "revert"];
-const KANN = ["git init", "status", "add", "commit", "log", "branch", "checkout", "merge", "push", "fetch", "pull"];
-
-export function gitCommand(host: GitHost, t: string[], _raw?: string): string {
-  const sub = t[1];
-  const g = host.git;
-  if (sub && isFlagToken(sub)) return notSimulated(host, "das Flag '" + sub + "' vor dem Unterbefehl.", KANN);
-  const entry = sub ? subEntry(GIT_SUBCOMMANDS, sub) : undefined;
+export function gitCommand(host: GitHost, t: string[]): string {
+  const r = dispatchSub(host, GIT, t, 1);
+  if (typeof r === "string") return r;
   // `git init` läuft VOR der „ist ein Repo?"-Wache – es legt das Repo überhaupt erst an.
-  if (!g.initialized && sub !== "init") {
+  if (!host.git.initialized && r.sub !== "init") {
     return host._err("⚠️ Das hier ist (noch) kein Git-Repository.", "Starte eins mit 'git init'.");
   }
-  if (!entry) {
-    if (sub && NOT_SIMULATED.includes(sub)) return notSimulated(host, "'git " + sub + "'.", KANN);
-    const guess = suggest(sub || "", Object.keys(GIT_SUBCOMMANDS));
-    return host._err("⚠️ 'git " + (sub || "") + "' kenne ich hier nicht.",
-      guess ? "Meintest du 'git " + guess + "'?" : "Versuch's mit status, add, commit, log, branch, checkout, merge oder push.");
-  }
-  const call = parseCall(host, specOfSub("git " + sub, entry), t, 2);
-  return typeof call === "string" ? call : entry.run(host, call);
+  return r.entry.run(host, r.call);
 }
 
 function gitInit(host: GitHost): string {

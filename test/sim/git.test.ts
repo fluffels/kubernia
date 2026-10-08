@@ -271,14 +271,15 @@ test("git: echte, nicht simulierte Unterbefehle und Flags vor dem Unterbefehl; T
     assert.match(r.output!, /Nicht simuliert:/, cmd);
     assert.match(r.output!, /Der Simulator kann: git init/, cmd);
   }
-  assert.match(s.exec("git stauts").output!, /kenne ich hier nicht[\s\S]*Meintest du 'git status'\?/);
+  assert.match(s.exec("git stauts").output!, /unbekannter Unterbefehl 'stauts'[\s\S]*Meintest du 'git status'\?/);
   for (const cmd of ["git constructor", "git toString", "git __proto__"]) {
     const r = s.exec(cmd);
     assert.equal(r.error, true, cmd);
-    assert.match(r.output!, /kenne ich hier nicht/, cmd);
+    assert.match(r.output!, /unbekannter Unterbefehl/, cmd);
   }
   assert.match(s.exec("git status -s").output!, /das Flag '-s' bei 'git status'/);
-  assert.match(freshSim().exec("git constructor").output!, /kein Git-Repository/, "ohne Repo gilt zuerst die Repo-Wache");
+  assert.match(freshSim().exec("git constructor").output!, /unbekannter Unterbefehl/, "die Eingabe gilt vor der Repo-Wache");
+  assert.match(freshSim().exec("git status").output!, /kein Git-Repository/, "ein gültiger Befehl ohne Repo trifft die Wache");
 });
 
 test("git init: Flags lehnen ab, das Repo entsteht nicht", () => {

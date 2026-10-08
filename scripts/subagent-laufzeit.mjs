@@ -7,7 +7,7 @@
  * Liest nur `<session>/subagents/*.meta.json` mit passendem `agentType` und deren JSONL (nicht alle Haupttranskripte).
  * Je Lauf: Ticket (erstes `#<nr>` im Prompt), Sammelticket (`(gesammelt)` im Prompt, Heuristik), Start, Ende, Dauer, Requests,
  * Toolzeit (Vereinigung der Intervalle von `tool_use` bis `tool_result`), Modellzeit (Dauer minus Toolzeit), größter Kontext und
- * Zahl der parallel laufenden Läufe desselben Typs. Aggregat: Median je UTC-Tag (alle Läufe, `sammelN` = darin enthaltene Sammeltickets), alt/neu am Schnitt (Start ab Schnitt = neu,
+ * Sekunden Modellzeit je Request (`sProRequest`, `null` ohne Request) und Zahl der parallel laufenden Läufe desselben Typs. Aggregat: Median je UTC-Tag (alle Läufe, `sammelN` = darin enthaltene Sammeltickets), alt/neu am Schnitt (Start ab Schnitt = neu,
  * alle Läufe; Sammeltickets zusätzlich getrennt). Ein Lauf ohne Ende (letzter `tool_use` ohne Ergebnis) gilt als offen und zählt nicht in die Mediane.
  *
  * Pur und ohne IO bis auf das CLI; der Kern ist getestet. Importiert token-baseline.mjs, nicht umgekehrt.
@@ -94,6 +94,7 @@ export function laufAus({ meta, zeilen }) {
     requests: calls.length,
     toolMin: tool / MIN,
     modellMin: (dauer - tool) / MIN,
+    sProRequest: calls.length ? ((dauer - tool) / 1000) / calls.length : null,
     maxKontext: Math.max(0, ...calls.map((c) => (c.input ?? 0) + (c.cacheWrite ?? 0) + (c.cacheRead ?? 0))),
     parallel: 0,
     offen: offeneTools > 0,
@@ -107,6 +108,9 @@ const stat = (laeufe) => ({
   modellMin: median(laeufe.map((l) => l.modellMin)),
   toolMin: median(laeufe.map((l) => l.toolMin)),
   requests: median(laeufe.map((l) => l.requests)),
+  // Läufe ohne Request haben keinen Wert je Request (kein Infinity/NaN im Median).
+  sProRequest: median(laeufe.map((l) => l.sProRequest).filter((x) => x !== null)),
+  parallel: median(laeufe.map((l) => l.parallel)),
   maxKontext: median(laeufe.map((l) => l.maxKontext)),
   maxDauerMin: laeufe.length ? Math.max(...laeufe.map((l) => l.dauerMin)) : null,
 });
@@ -140,6 +144,8 @@ export function laufzeiten({ laeufe, agent = "kubernia-planner", von, bis, schni
     aggregat.neu = je(gemessen.filter((l) => l.start >= s));
     aggregat.neuSammel = je(gemessen.filter((l) => l.sammel && l.start >= s));
     aggregat.altSammel = je(gemessen.filter((l) => l.sammel && l.start < s));
+    aggregat.altOhneSammel = je(ohneSammel.filter((l) => l.start < s));
+    aggregat.neuOhneSammel = je(ohneSammel.filter((l) => l.start >= s));
   }
   return { agent, laeufe: alle.map((l) => ({ ...l, start: new Date(l.start).toISOString(), ende: new Date(l.ende).toISOString() })), aggregat };
 }
@@ -149,8 +155,8 @@ const f1 = (x) => (x === null ? "-" : x.toFixed(1));
 /** Markdown: Aggregat-Tabelle und Läufe. */
 export function renderMarkdown(r) {
   const out = [`Subagent-Typ \`${r.agent}\`: ${r.laeufe.length} Läufe (${r.aggregat.offen} offen, nicht in den Medianen)`, ""];
-  out.push("| Gruppe | n | Dauer (min, Median) | Modell (min) | Tool (min) | Requests | max. Kontext | längster (min) |", "|---|--:|--:|--:|--:|--:|--:|--:|");
-  const z = (name, s) => out.push(`| ${name} | ${s.n} | ${f1(s.dauerMin)} | ${f1(s.modellMin)} | ${f1(s.toolMin)} | ${s.requests ?? "-"} | ${s.maxKontext === null ? "-" : Math.round(s.maxKontext)} | ${f1(s.maxDauerMin)} |`);
+  out.push("| Gruppe | n | Dauer (min, Median) | Modell (min) | Tool (min) | Requests | s/Req (Modell) | parallel | max. Kontext | längster (min) |", "|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|");
+  const z = (name, s) => out.push(`| ${name} | ${s.n} | ${f1(s.dauerMin)} | ${f1(s.modellMin)} | ${f1(s.toolMin)} | ${s.requests ?? "-"} | ${f1(s.sProRequest)} | ${f1(s.parallel)} | ${s.maxKontext === null ? "-" : Math.round(s.maxKontext)} | ${f1(s.maxDauerMin)} |`);
   z("alle gemessenen", r.aggregat.gesamt);
   z("ohne Sammeltickets", r.aggregat.ohneSammel);
   z("Sammeltickets", r.aggregat.sammel);
@@ -158,12 +164,14 @@ export function renderMarkdown(r) {
   if (r.aggregat.alt) {
     z("alle vor Schnitt", r.aggregat.alt);
     z("alle ab Schnitt", r.aggregat.neu);
+    z("ohne Sammel vor Schnitt", r.aggregat.altOhneSammel);
+    z("ohne Sammel ab Schnitt", r.aggregat.neuOhneSammel);
     z("Sammel vor Schnitt", r.aggregat.altSammel);
     z("Sammel ab Schnitt", r.aggregat.neuSammel);
   }
-  out.push("", "| Start | Ticket | Sammel | Dauer | Modell | Tool | Requests | max. Kontext | parallel |", "|---|--:|---|--:|--:|--:|--:|--:|--:|");
+  out.push("", "| Start | Ticket | Sammel | Dauer | Modell | Tool | Requests | s/Req | max. Kontext | parallel |", "|---|--:|---|--:|--:|--:|--:|--:|--:|--:|");
   for (const l of r.laeufe) {
-    out.push(`| ${l.start} | ${l.ticket ? `#${l.ticket}` : "-"} | ${l.sammel ? "ja" : ""} | ${f1(l.dauerMin)}${l.offen ? " (offen)" : ""} | ${f1(l.modellMin)} | ${f1(l.toolMin)} | ${l.requests} | ${Math.round(l.maxKontext)} | ${l.parallel} |`);
+    out.push(`| ${l.start} | ${l.ticket ? `#${l.ticket}` : "-"} | ${l.sammel ? "ja" : ""} | ${f1(l.dauerMin)}${l.offen ? " (offen)" : ""} | ${f1(l.modellMin)} | ${f1(l.toolMin)} | ${l.requests} | ${f1(l.sProRequest ?? null)} | ${Math.round(l.maxKontext)} | ${l.parallel} |`);
   }
   return out.join("\n");
 }

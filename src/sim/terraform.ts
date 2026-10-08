@@ -21,7 +21,7 @@
  * **Aufbau (Schnitt #545, aus #502):** `terraformCommand` war ein 133-Zeilen-Dispatcher
  * (complexity 47) mit substanzieller Inline-Logik je Unterbefehl. Jetzt ist jeder
  * Unterbefehl eine eigene kohäsive Funktion (`tfGet`/`tfInit`/…), und `terraformCommand`
- * ist ein dünner Dispatcher über die Daten-Tabelle `TERRAFORM_SUBCOMMANDS` (Alias→Handler)
+ * ist ein dünner Dispatcher über die Daten-Tabelle `TERRAFORM` (Alias→Handler)
  * – gespiegelt zum helm-/docker-Schnitt (#544/#545). Die querschnittlichen Guards
  * (init-nötig, unbekannter Provider) bleiben als Preamble im Dispatcher.
  *
@@ -30,7 +30,7 @@
  */
 import type { ClusterState } from "./state";
 import { provisionNode, removeNode, isControlPlane, workerNodeName, CONTROL_PLANE_NODE } from "./nodes";
-import { flag, notSimulated, parseCall, specOfSub, subEntry, type Call, type FlagStyle, type SubEntry } from "./cliargs";
+import { flag, notSimulated, dispatchSub, type Dispatch, type Call, type FlagStyle, type SubEntry } from "./cliargs";
 
 /** Was die terraform-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
  *  Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es dokumentiert
@@ -286,10 +286,9 @@ const OUTPUT_HINT = "Der benannte Output ('terraform output <name>') kommt im Si
 /** Familien-Stil: terraform liest wie das Go-Paket `flag` (`-x=v`, `--x` ≙ `-x`); gilt für JEDEN Eintrag. */
 const STYLE: FlagStyle = "goflag";
 
-/** Alias → Eintrag (Handler + Flag-Tabelle, terraform nutzt Go-`flag`-Schreibweise). Ein neuer Unterbefehl ist
- *  ein Eintrag hier + eine Funktion oben – der Dispatcher (`terraformCommand`) bleibt dünn und wächst nicht
- *  mit dem Befehlssatz. */
-const TERRAFORM_SUBCOMMANDS: Record<string, SubEntry<TerraformHandler>> = {
+/** Die Dispatch-Tabelle (terraform nutzt Go-`flag`-Schreibweise). Ein neuer Unterbefehl ist ein Eintrag hier + eine
+ *  Funktion oben – der Dispatcher (`terraformCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz. */
+const TERRAFORM: Dispatch<SubEntry<TerraformHandler>> = { cmd: "terraform", style: STYLE, table: {
   get: { run: tfGet },
   init: { run: tfInit },
   plan: { run: tfPlan, flags: [VAR_FILE] },
@@ -300,6 +299,8 @@ const TERRAFORM_SUBCOMMANDS: Record<string, SubEntry<TerraformHandler>> = {
   "force-unlock": { run: tfForceUnlock, flags: [flag(false, "-force")] },
   fmt: { run: () => "main.tf" },
   validate: { run: () => "Success! The configuration is valid." },
+},
+  real: ["console", "graph", "import", "login", "logout", "metadata", "modules", "providers", "refresh", "show", "taint", "test", "untaint", "version", "workspace"],
 };
 
 /** `-var-file` muss auf eine Datei zeigen, die es im Ordner gibt (sonst bricht echtes Terraform ab). */
@@ -310,15 +311,11 @@ function varFileError(host: TerraformHost, c: Call): string | null {
 }
 
 /** Dünner `terraform`-Dispatcher: erst die querschnittlichen Guards (init-nötig,
- *  unbekannter Provider), dann Handler aus `TERRAFORM_SUBCOMMANDS`. */
-export function terraformCommand(host: TerraformHost, t: string[], _raw?: string): string {
-  const sub = t[1];
-  if (!sub) return host._err("terraform: Unterbefehl fehlt.", "Probier 'terraform init'.");
-
-  const entry = subEntry(TERRAFORM_SUBCOMMANDS, sub);
-  if (!entry) return host._err("terraform: unbekannter Unterbefehl '" + sub + "'", "Tippe 'help' für alle Befehle.");
-  const call = parseCall(host, specOfSub("terraform " + sub, entry, STYLE), t, 2);
-  if (typeof call === "string") return call;
+ *  unbekannter Provider), dann Handler aus `TERRAFORM`. */
+export function terraformCommand(host: TerraformHost, t: string[]): string {
+  const r = dispatchSub(host, TERRAFORM, t, 1);
+  if (typeof r === "string") return r;
+  const { sub } = r;
 
   // init/get laufen ohne Vor-Guards; plan/apply/destroy brauchen ein initialisiertes Verzeichnis.
   if (!host.tf.initialized && needsInit(sub)) {
@@ -334,5 +331,5 @@ export function terraformCommand(host: TerraformHost, t: string[], _raw?: string
     }
   }
 
-  return entry.run(host, call);
+  return r.entry.run(host, r.call);
 }

@@ -48,6 +48,7 @@ type Summary = {
   reviewRounds: number;
   questions: number;
   unpriced: number;
+  unpricedModels?: Record<string, number>;
   costParts: Parts;
   medianContext: { all: number | null; main: number | null };
   sockel: { main: number | null; planung: number | null; review: number | null };
@@ -82,6 +83,7 @@ const m = baselineModule as {
   priceParts: (c: Call, prices?: unknown) => Parts | null;
   windowCalls: (calls: Call[], bounds?: Bounds, intervals?: { agent: string | null; from: string; to: string }[]) => { call: Call; phase: string }[];
   PRICES_STAND: string;
+  langfuseZugang: (env: Record<string, string | undefined>) => { baseUrl: string; publicKey: string; secretKey: string };
   periodAt: (entry: unknown, ts?: string) => Record<string, unknown> | null;
   countCacheRebuilds: (calls: Call[]) => { count: number; cacheWriteTokens: number };
   nachweisAusCommits: (commits: unknown) => { runden: number; plan: boolean | null } | null;
@@ -620,6 +622,7 @@ describe("token-baseline: Härtung nach Review (#1206)", () => {
     ].join("\n");
     const s = m.summarize(m.callsFromTranscript(text), { mergedAt: "2026-10-05T11:00:00Z" });
     assert.equal(s.unpriced, 0);
+    assert.deepEqual(s.unpricedModels, {}, "Nachlauf zählt auch nicht in die Modell-Liste");
     assert.equal(s.costParts.input, 2);
     assert.equal(s.costParts.output, 0);
   });
@@ -696,19 +699,90 @@ describe("token-baseline: Kontext-Formel und Preistabelle (#1206)", () => {
 
   test("jeder Preis jedes Modells ist festgenagelt (je Mio Tokens: Input / Write 5m / Write 1h / Read / Output)", () => {
     const expected: Record<string, number[]> = {
-      "claude-sonnet-5-5": [2, 2.5, 4, 0.2, 10],
+      "claude-sonnet-5-5": [2, 2.5, 4, 0.1, 10], // Cache-Read ab 2026-10-07 0,10 (davor 0,20, eigener Test) // Haiku 5.5 hat Stufen: eigener Test
       "claude-opus-5-5": [4, 5, 8, 0.2, 20],
       "claude-opus-5": [5, 6.25, 10, 0.5, 25],
       "claude-haiku-4-5": [1, 1.25, 2, 0.1, 5],
     };
     for (const [model, [input, write5m, write1h, read, output]] of Object.entries(expected)) {
-      const c = (extra: Partial<Call>): Call => ({ ts: "t", model, input: 0, cacheWrite: 0, cacheRead: 0, output: 0, ...extra });
+      const c = (extra: Partial<Call>): Call => ({ ts: "2026-10-08T00:00:00Z", model, input: 0, cacheWrite: 0, cacheRead: 0, output: 0, ...extra });
       assert.equal(m.priceCall(c({ input: MIO })), input, `${model} input`);
       assert.equal(m.priceCall(c({ cacheWrite: MIO })), write5m, `${model} write 5m`);
       assert.equal(m.priceCall(c({ cacheWrite: MIO, cacheWrite1h: MIO })), write1h, `${model} write 1h`);
       assert.equal(m.priceCall(c({ cacheRead: MIO })), read, `${model} read`);
       assert.equal(m.priceCall(c({ output: MIO })), output, `${model} output`);
     }
+  });
+});
+
+describe("token-baseline: Preisstufen, Sonnet-Periode, Modelle ohne Preis, Langfuse-Zugang (#1441)", () => {
+  const MIO = 1_000_000;
+  const row = (id: string, model: string, usage: Record<string, unknown>, ts = "2026-10-05T10:00:00Z") =>
+    JSON.stringify({ type: "assistant", timestamp: ts, message: { id, model, usage } });
+  const haiku = (extra: Partial<Call>): Call => ({ ts: "2026-10-08T00:00:00Z", model: "claude-haiku-5-5", input: 0, cacheWrite: 0, cacheRead: 0, output: 0, ...extra });
+
+  test("Haiku 5.5: ab mehr als 100.000 Prompt-Tokens gelten die Stufenpreise (Input, Write, Read, Output)", () => {
+    // Prompt = input + cacheWrite + cacheRead; 100.000 ist noch Standard, 100.001 schon Stufe.
+    assert.equal(m.priceCall(haiku({ input: 100_000, output: MIO })), 0.01 + 0.5);
+    assert.equal(m.priceCall(haiku({ input: 100_001, output: MIO })), (100_001 * 0.5) / MIO + 2.5);
+    assert.equal(m.priceCall(haiku({ cacheRead: 100_001 })), (100_001 * 0.05) / MIO);
+    assert.equal(m.priceCall(haiku({ cacheWrite: 100_001 })), (100_001 * 0.625) / MIO);
+    assert.equal(m.priceCall(haiku({ cacheWrite: 100_001, cacheWrite1h: 100_001 })), (100_001 * 1) / MIO);
+    // Grundpreise bis 100.000 Prompt-Tokens (Read, Write 5m, Write 1h; Input und Output stehen oben).
+    assert.equal(m.priceCall(haiku({ cacheRead: 100_000 })), (100_000 * 0.01) / MIO);
+    assert.equal(m.priceCall(haiku({ cacheWrite: 100_000 })), (100_000 * 0.125) / MIO);
+    assert.equal(m.priceCall(haiku({ cacheWrite: 100_000, cacheWrite1h: 100_000 })), (100_000 * 0.2) / MIO);
+    // Der Prompt setzt sich aus allen drei Feldern zusammen.
+    assert.equal(m.priceCall(haiku({ input: 40_000, cacheWrite: 30_000, cacheRead: 30_001 })), (40_000 * 0.5 + 30_000 * 0.625 + 30_001 * 0.05) / MIO);
+  });
+
+  test("Stufen: ohne `stufen` unverändert, unsortiert gilt die höchste zutreffende Schwelle, mit Perioden zusammen", () => {
+    const basis = { input: 1, cacheWrite5m: 1, cacheWrite1h: 1, cacheRead: 1, output: 1 };
+    const ohne = { "claude-x": basis };
+    const mk = (input: number): Call => ({ ts: "2026-10-08T00:00:00Z", model: "claude-x", input, cacheWrite: 0, cacheRead: 0, output: 0 });
+    assert.equal(m.priceCall(mk(500_000), ohne), 0.5);
+    const stufig = {
+      "claude-x": { ...basis, stufen: [{ ueberPrompt: 100_000, input: 2 }, { ueberPrompt: 200_000, input: 3 }] },
+    };
+    assert.equal(m.priceCall(mk(150_000), stufig), 0.3);
+    assert.equal(m.priceCall(mk(250_000), stufig), 0.75);
+    const periode = {
+      "claude-x": [
+        { validFrom: null, ...basis, stufen: [{ ueberPrompt: 100, input: 2 }] },
+        { validFrom: "2026-11-01T00:00:00Z", ...basis, input: 10, stufen: [{ ueberPrompt: 100, input: 20 }] },
+      ],
+    };
+    assert.equal(m.priceCall({ ...mk(1_000_000), ts: "2026-10-31T00:00:00Z" }, periode), 2);
+    assert.equal(m.priceCall({ ...mk(1_000_000), ts: "2026-11-02T00:00:00Z" }, periode), 20);
+    assert.equal(m.priceCall({ ...mk(50), ts: "2026-11-02T00:00:00Z" }, periode), 50 * 10 / MIO);
+  });
+
+  test("Sonnet 5.5: Cache-Read vor 2026-10-07 0,20 $, ab dann 0,10 $; ungültiger Zeitstempel ist ohne Preis", () => {
+    const sonnet = (ts: string): Call => ({ ts, model: "claude-sonnet-5-5", input: 0, cacheWrite: 0, cacheRead: MIO, output: 0 });
+    assert.equal(m.priceCall(sonnet("2026-10-06T23:59:59Z")), 0.2);
+    assert.equal(m.priceCall(sonnet("2026-10-07T00:00:00Z")), 0.1);
+    assert.equal(m.priceCall(sonnet("kein-zeitpunkt")), null);
+  });
+
+  test("Wächter: die Warnzeile nennt die Modelle ohne Preis mit Anzahl; ohne solche Calls keine Zeile", () => {
+    const text = [
+      row("a", "claude-haiku-9-9", { input_tokens: 5 }),
+      row("b", "claude-haiku-9-9", { input_tokens: 5 }),
+      row("c", "claude-neu-1", { input_tokens: 5 }),
+    ].join("\n");
+    const s = m.summarize(m.callsFromTranscript(text));
+    assert.deepEqual(s.unpricedModels, { "claude-haiku-9-9": 2, "claude-neu-1": 1 });
+    const md = m.renderMarkdown(s);
+    assert.match(md, /3 Call\(s\) ohne Preis: claude-haiku-9-9 \(2\), claude-neu-1 \(1\) — Modell in PRICES nachtragen/);
+    const ok = m.renderMarkdown(m.summarize(m.callsFromTranscript(row("d", "claude-sonnet-5-5", { input_tokens: 5 }))));
+    assert.doesNotMatch(ok, /ohne Preis/);
+  });
+
+  test("langfuseZugang: ohne Secret-Key Wurf mit Hinweis auf queryMetrics, mit beiden Keys Default-Base-URL", () => {
+    assert.throws(() => m.langfuseZugang({ LANGFUSE_PUBLIC_KEY: "pk" }), /queryMetrics.*usageByType/);
+    assert.throws(() => m.langfuseZugang({ LANGFUSE_SECRET_KEY: "sk" }), /LANGFUSE_PUBLIC_KEY/);
+    assert.deepEqual(m.langfuseZugang({ LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" }), { baseUrl: "http://localhost:3000", publicKey: "pk", secretKey: "sk" });
+    assert.equal(m.langfuseZugang({ LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", LANGFUSE_BASE_URL: "http://lf" }).baseUrl, "http://lf");
   });
 });
 

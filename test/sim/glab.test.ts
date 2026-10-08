@@ -52,9 +52,9 @@ test("#385 glab/CI: auf einem Feature-Branch wird deploy übersprungen (only: ma
 test("#385 glab/CI: Negativfälle (kein 'ci', keine Pipeline, unbekannte Aktion, leere Liste)", () => {
   const s = ciSim("main");
   // Nur 'glab ci ...' wird unterstützt.
-  const noCi = s.exec("glab status");
+  const noCi = s.exec("glab mr list");
   assert.ok(noCi.error);
-  assert.match(noCi.output!, /Nicht simuliert: 'glab status'/);
+  assert.match(noCi.output!, /Nicht simuliert: 'glab mr'/);
   // Vor dem ersten Push gibt es keine Pipeline.
   const noPipe = s.exec("glab ci status");
   assert.ok(noPipe.error);
@@ -64,7 +64,7 @@ test("#385 glab/CI: Negativfälle (kein 'ci', keine Pipeline, unbekannte Aktion,
   // Unbekannte Unteraktion wird abgefangen.
   const bogus = s.exec("glab ci wackelpudding");
   assert.ok(bogus.error);
-  assert.match(bogus.output!, /Nicht simuliert: 'glab ci wackelpudding'/);
+  assert.match(bogus.output!, /unbekannter Unterbefehl 'wackelpudding'/);
 });
 
 test("#385 glab/CI: ohne .gitlab-ci.yml startet ein push keine Pipeline", () => {

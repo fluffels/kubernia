@@ -20,8 +20,7 @@
  * S3Host-Interface; kein Rückimport nach sim.ts (kein Zyklus).
  */
 import type { S3Bucket, S3Object } from "./state";
-import { suggest } from "./util";
-import { flag, isFlagToken, notSimulated, parseCall, specOfSub, subEntry, type Call, type SubEntry } from "./cliargs";
+import { flag, dispatchSub, type Dispatch, type Call, type SubEntry } from "./cliargs";
 
 /** Was die aws-s3-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt). */
 export interface S3Host {
@@ -47,17 +46,23 @@ const RECURSIVE_HINT: Readonly<Record<string, string>> = {
 };
 
 // `ls --recursive` wird angenommen, aber nicht ausgewertet: die Sim listet ohnehin flach alle Keys mit dem Präfix.
-const S3_SUBCOMMANDS: Record<string, SubEntry<S3Handler>> = {
+const S3: Dispatch<SubEntry<S3Handler>> = { cmd: "aws s3", table: {
   mb: { run: s3MakeBucket, hints: GLOBAL_HINTS },
   rb: { run: s3RemoveBucket, flags: [flag(false, "--force")], hints: GLOBAL_HINTS },
   ls: { run: s3List, flags: [flag(false, "--recursive")], hints: GLOBAL_HINTS },
   cp: { run: s3Copy, hints: RECURSIVE_HINT },
   rm: { run: s3Remove, hints: RECURSIVE_HINT },
+},
+  // Echte `aws s3`-Verben, die die Sim nicht kann.
+  real: ["sync", "mv", "presign", "website"],
 };
-const VERBS = Object.keys(S3_SUBCOMMANDS);
-/** Echte `aws s3`-Verben, die die Sim nicht kann. */
-const NOT_SIMULATED = ["sync", "mv", "presign", "website"];
-const KANN = ["aws s3 mb|rb|ls|cp|rm …"];
+
+/** Die `aws`-Ebene: nur der Dienst `s3` ist simuliert, die anderen echten Dienste sind „nicht simuliert“. */
+const AWS: Dispatch<SubEntry<S3Handler>> = {
+  cmd: "aws",
+  table: { s3: { group: S3 } },
+  real: ["ec2", "iam", "sts", "s3api", "lambda", "ecr", "ecs", "eks", "dynamodb", "rds", "sqs", "sns", "cloudformation", "cloudwatch", "logs", "route53", "kms", "secretsmanager", "ssm", "configure"],
+};
 
 /** Zerlegt eine `s3://bucket/key…`-Adresse. Gibt null, wenn es keine s3-Adresse ist
  *  (dann ist es ein lokaler Pfad). `key` ist "" für `s3://bucket` bzw. `s3://bucket/`. */
@@ -81,27 +86,9 @@ function findBucket(host: S3Host, name: string): S3Bucket | undefined {
 
 /** Object Store als „aws s3"-Befehlsfamilie. `t` sind die Tokens (Quotes schon aufgelöst); Flags und Positionsargumente
  *  liest die gemeinsame Eingabegrenze (`parseCall`). */
-export function awsCommand(host: S3Host, t: string[], _raw?: string): string {
-  // tokens: aws s3 <verb> …
-  if (!t[1]) return host._err("aws: Unterbefehl fehlt.", "z.B. 'aws s3 ls' oder 'aws s3 mb s3://hafen-backup'.");
-  if (t[1] !== "s3") {
-    const guess = isFlagToken(t[1]) ? null : suggest(t[1], ["s3"]);
-    return notSimulated(host, isFlagToken(t[1]) ? "das Flag '" + t[1] + "' vor dem Dienst." : "'aws " + t[1] + "'.", KANN, guess ? "Meintest du 'aws s3'?" : undefined);
-  }
-  const verb = t[2];
-  if (!verb) {
-    return host._err("aws s3: Welcher Befehl?",
-      "Verfügbar: mb (Bucket anlegen), rb (Bucket löschen), ls (auflisten), cp (kopieren/up-/download), rm (Objekt löschen).");
-  }
-  const entry = subEntry(S3_SUBCOMMANDS, verb);
-  if (!entry) {
-    if (NOT_SIMULATED.includes(verb) || isFlagToken(verb)) return notSimulated(host, "'aws s3 " + verb + "'.", KANN);
-    const guess = suggest(verb, VERBS);
-    return host._err("aws s3: Den Unterbefehl '" + verb + "' gibt es hier nicht.",
-      guess ? "Meintest du 'aws s3 " + guess + "'?" : "Verfügbar: " + VERBS.join(", ") + ".");
-  }
-  const call = parseCall(host, specOfSub("aws s3 " + verb, entry), t, 3);
-  return typeof call === "string" ? call : entry.run(host, call);
+export function awsCommand(host: S3Host, t: string[]): string {
+  const r = dispatchSub(host, AWS, t, 1);
+  return typeof r === "string" ? r : r.entry.run(host, r.call);
 }
 
 /** aws s3 mb s3://<bucket> – Bucket anlegen. */

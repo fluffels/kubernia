@@ -126,6 +126,12 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
   const fenster = [];
   const kubernia = { calls: 0, cost: 0 };
   let ohnePreis = 0;
+  const ohnePreisModelle = {};
+  const zaehleOhnePreis = (c) => {
+    ohnePreis += 1;
+    const name = String(c.model ?? "unbekannt");
+    ohnePreisModelle[name] = (ohnePreisModelle[name] ?? 0) + 1;
+  };
   const imFenster = (ts) => !gueltig(ts) || ((!von || Date.parse(ts) >= Date.parse(von)) && (!bis || Date.parse(ts) <= Date.parse(bis)));
 
   const buche = (kategorie, quelle, c) => {
@@ -133,7 +139,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
     const z = summen.get(key) ?? { kategorie, quelle, modell: c.model, calls: 0, cost: 0 };
     z.calls += 1;
     z.cost += c.cost ?? 0;
-    if (c.cost == null) ohnePreis += 1;
+    if (c.cost == null) zaehleOhnePreis(c);
     summen.set(key, z);
   };
 
@@ -193,7 +199,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
         if (istKubernia(sa.meta)) {
           kubernia.calls += 1;
           kubernia.cost += c.cost ?? 0;
-          if (c.cost == null) ohnePreis += 1;
+          if (c.cost == null) zaehleOhnePreis(c);
           continue;
         }
         // Fork: Kategorie des Turns beim ersten Call des Forks (ohne gültige Zeit: eigene Zeile).
@@ -207,7 +213,7 @@ export function zerlegeHauptchat({ sessions, von, bis, brainRoots = [], closedAt
     );
   }
   const rows = [...summen.values()].sort((a, b) => a.kategorie.localeCompare(b.kategorie) || a.quelle.localeCompare(b.quelle) || a.modell.localeCompare(b.modell));
-  return { rows, fenster, kubernia, ohnePreis, ohneBrainWurzel: wurzeln.length === 0 };
+  return { rows, fenster, kubernia, ohnePreis, ohnePreisModelle, ohneBrainWurzel: wurzeln.length === 0 };
 }
 
 /** Markdown-Tabelle Kategorie × Modell (Hauptchat und Forks getrennt) plus Fensterliste. */
@@ -220,7 +226,7 @@ export function renderMarkdown(r) {
   out.push(`| **Summe** | | | ${n} | ${$(total)} |`, "");
   out.push(`kubernia-Subagenten (nicht Hauptchat): ${r.kubernia.calls} Calls, ${$(r.kubernia.cost)}`);
   if (r.ohneBrainWurzel) out.push("Hinweis: ohne --brain gemessen, Brain-Arbeit im Notiz-Brain außerhalb des Repos landet in Nachlauf bzw. Ad-hoc (nur der Skill brain-input zählt als Brain).");
-  if (r.ohnePreis) out.push(`Hinweis: ${r.ohnePreis} Calls ohne Preis (Modell nicht in PRICES), nicht als 0 $ zu lesen.`);
+  if (r.ohnePreis) out.push(`Hinweis: ${r.ohnePreis} Calls ohne Preis: ${Object.entries(r.ohnePreisModelle ?? {}).map(([k, n]) => `${k} (${n})`).join(", ")} (Modell in PRICES nachtragen oder Zeitpunkt fehlt), nicht als 0 $ zu lesen.`);
   out.push("", "| Ticket | Session | Start | Start-Art | Hauptchat-Calls je Modell |", "|---|---|---|---|---|");
   for (const f of r.fenster) {
     const m = Object.entries(f.modelle).map(([k, v]) => `${k}: ${v} (${f.kosten[k].toFixed(2)} $)`).join(", ") || "0 Calls";

@@ -7,11 +7,23 @@ import { describe, test, expect } from "vitest";
 import { freshSim, KQSim } from "./helpers";
 import { KQContent } from "../../src/content";
 import {
-  flag, checkedFlag, checkFlags, positionalArgs, parseCall, shellTokens, subEntry, notSimulated, specOfSub, type ArgSpec, type FlagStyle,
+  flag, checkedFlag, parseCall, shellTokens, subEntry, notSimulated, dispatchSub, kannOf, type ArgSpec, type Dispatch, type FlagStyle, type SubEntry,
 } from "../../src/sim/cliargs";
 
 const NS = "Nicht simuliert:";
 const host = { _err: (m: string, tip?: string) => m + (tip ? "\n" + tip : "") };
+
+/** Die Prüfung über `parseCall`: `null` = alles bekannt, sonst die fertige Fehlerausgabe. */
+function checkFlags(h: typeof host, spec: ArgSpec, t: readonly string[], from: number): string | null {
+  const r = parseCall(h, spec, t, from);
+  return typeof r === "string" ? r : null;
+}
+/** Die Positionsargumente über `parseCall` (ein Fehlertext lässt den Test scheitern). */
+function positionalArgs(spec: ArgSpec, t: readonly string[], from: number): string[] {
+  const r = parseCall(host, spec, t, from);
+  if (typeof r === "string") throw new Error(r);
+  return [...r.args];
+}
 
 /** Der Wert eines Flags über `parseCall` (die EINE Stelle, an der Flags gelesen werden); `null` ohne das Flag oder ohne Wert. */
 function valueOf(t: string[], names: string[], style: FlagStyle = "pflag"): string | null {
@@ -160,8 +172,9 @@ describe("cliargs: Flag-Werte über parseCall und Helfer", () => {
     expect(subEntry({ a: 1 }, "constructor")).toBeUndefined();
     expect(subEntry({ a: 1 }, "toString")).toBeUndefined();
   });
-  test("specOfSub: Eintrag ohne Flags wird zur leeren Tabelle", () => {
-    expect(specOfSub("x y", { run: () => "" }).flags).toEqual([]);
+  test("dispatchSub: Eintrag ohne Flags lehnt jedes Flag ab", () => {
+    const d: Dispatch<SubEntry<string>> = { cmd: "x", table: { y: { run: "" } } };
+    expect(dispatchSub(host, d, ["x", "y", "-q"], 1)).toContain("'x y' ohne Flags");
   });
 });
 
@@ -274,10 +287,11 @@ describe("argocd und glab", () => {
     const a = lauf("argocd cluster list");
     expect(a.error).toBe(true);
     expect(a.out).toContain("Nicht simuliert: 'argocd cluster'.");
-    expect(a.out).toContain("Der Simulator kann: argocd app list · argocd app get <name> · argocd app sync <name>");
+    expect(a.out).toContain("Der Simulator kann: argocd app list, get, sync");
     expect(lauf("argocd app delete x").out).toContain("Nicht simuliert: 'argocd app delete'.");
     expect(lauf("glab mr list").out).toContain("Nicht simuliert: 'glab mr'.");
-    expect(lauf("glab ci wackelpudding").out).toContain("Der Simulator kann: glab ci status · glab ci list");
+    expect(lauf("glab ci wackelpudding").out).toContain("unbekannter Unterbefehl 'wackelpudding'");
+    expect(lauf("glab ci wackelpudding").out).toContain("Der Simulator kann: glab ci status, list");
   });
   test("fehlender Unterbefehl/Aktion: eigener Fehler, kein 'nicht simuliert'", () => {
     for (const c of ["argocd", "argocd app", "glab", "glab ci"]) {
@@ -296,8 +310,8 @@ describe("argocd und glab", () => {
     }
   });
   test("Namen wie Object-Prototyp-Schlüssel sind keine Aktionen", () => {
-    expect(lauf("argocd app constructor").out).toContain("Nicht simuliert: 'argocd app constructor'.");
-    expect(lauf("glab ci toString").out).toContain("Nicht simuliert: 'glab ci toString'.");
+    expect(lauf("argocd app constructor").out).toContain("unbekannter Unterbefehl 'constructor'");
+    expect(lauf("glab ci toString").out).toContain("unbekannter Unterbefehl 'toString'");
   });
 });
 
@@ -420,11 +434,7 @@ describe("parseCall: Scanner", () => {
     expect(c.args).toEqual(["img", "-d", "--wirr"]);
     expect(c.has("-d")).toBe(false);
   });
-  test("specOfSub: Familien-Stil als Default, ein Eintrag überschreibt ihn", () => {
-    expect(specOfSub("x y", { run: () => "" }, "goflag").style).toBe("goflag");
-    expect(specOfSub("x y", { run: () => "", style: "pflag" }, "goflag").style).toBe("pflag");
-    expect(specOfSub("x y", { run: () => "" }).style).toBe("pflag");
-  });
+
 });
 
 describe("shellTokens", () => {
@@ -688,5 +698,154 @@ describe("Inventur: jede Lösung aus Karten, Quests und Drills läuft ohne 'Nich
   test("keine Lösung wird als 'nicht simuliert' abgelehnt", () => {
     const abgelehnt = lösungen.filter(l => freshSim().exec(l.cmd).output?.includes(NS)).map(l => l.label + ": " + l.cmd);
     expect(abgelehnt).toEqual([]);
+  });
+});
+
+/* ---------- dispatchSub: der EINE Familien-Kopf (#1489) ---------- */
+describe("dispatchSub: reiner Helfer", () => {
+  const LIST: SubEntry<string> = { run: "list", flags: [flag(true, "-n")] };
+  const inner: Dispatch<SubEntry<string>> = { cmd: "x grp", table: { mb: { run: "mb" }, rb: { run: "rb" } }, real: ["sync"] };
+  const d: Dispatch<SubEntry<string>> = {
+    cmd: "x",
+    table: { list: LIST, ls: LIST, get: { run: "get" }, grp: { group: inner } },
+    real: ["exec"],
+    hints: { "-q": "Familien-Hinweis." },
+  };
+  const lauf2 = (...t: string[]) => dispatchSub(host, d, ["x", ...t], 1);
+
+  test("fehlender Unterbefehl: eigener Fehler mit abgeleiteter Liste, kein 'Nicht simuliert'", () => {
+    const r = lauf2() as string;
+    expect(r).toContain("x: Unterbefehl fehlt.");
+    expect(r).toContain("Der Simulator kann: x list, get · x grp mb, rb");
+    expect(r).not.toContain(NS);
+  });
+  test("Flag vor dem Unterbefehl: nur der Name, ohne =wert und Kette; goflag mit einem Strich", () => {
+    for (const [tok, name] of [["-x", "-x"], ["--output=json", "--output"], ["-nfoo", "-n"], ["--", "--"]] as const) {
+      expect(lauf2(tok, "list"), tok).toContain(NS + " das Flag '" + name + "' vor dem Unterbefehl. Setz Flags hinter den Unterbefehl.");
+    }
+    expect(dispatchSub(host, { ...d, style: "goflag" }, ["x", "--out=plan", "list"], 1)).toContain("das Flag '-out' vor");
+    expect(lauf2("-")).toContain("unbekannter Unterbefehl '-'");
+  });
+  test("echter, nicht simulierter Unterbefehl: 'Nicht simuliert' mit der abgeleiteten Liste", () => {
+    const r = lauf2("exec") as string;
+    expect(r).toContain(NS + " 'x exec'.");
+    expect(r).toContain("Der Simulator kann: x list, get · x grp mb, rb");
+    expect(r).not.toContain("Meintest du");
+  });
+  test("Tippfehler: Vorschlag aus Schlüsseln und real; ohne Vorschlag die Liste, Aliase nur einmal", () => {
+    expect(lauf2("gett")).toContain("x: unbekannter Unterbefehl 'gett'");
+    expect(lauf2("gett")).toContain("Meintest du 'x get'?");
+    expect(lauf2("exe")).toContain("Meintest du 'x exec'?");
+    const r = lauf2("wackelpudding") as string;
+    expect(r).toContain("Der Simulator kann: x list, get");
+    expect(r).not.toContain("ls");
+    expect(r).not.toContain(NS);
+  });
+  test("Tippfehler-Zeile je Familie einstellbar", () => {
+    const r = dispatchSub(host, { ...d, unknown: s => 'error: unknown command "' + s + '" for "x"' }, ["x", "gett"], 1) as string;
+    expect(r).toContain('error: unknown command "gett" for "x"');
+  });
+  test("Prototyp-Schlüssel sind Tippfehler, kein Wurf", () => {
+    for (const k of ["constructor", "__proto__", "toString", "hasOwnProperty"]) {
+      expect(lauf2(k), k).toContain("unbekannter Unterbefehl '" + k + "'");
+    }
+  });
+  test("Gruppe: die zweite Ebene hat ihren eigenen cmd, real und ihre Liste", () => {
+    expect(lauf2("grp")).toContain("x grp: Unterbefehl fehlt.");
+    expect(lauf2("grp", "sync")).toContain(NS + " 'x grp sync'.");
+    expect(lauf2("grp", "mbb")).toContain("Meintest du 'x grp mb'?");
+    expect(lauf2("grp", "-x", "mb")).toContain("das Flag '-x' vor dem Unterbefehl");
+    const r = lauf2("grp", "rb", "a", "b");
+    expect(typeof r).toBe("object");
+    if (typeof r === "string") return;
+    expect(r.sub).toBe("rb");
+    expect(r.call.args).toEqual(["a", "b"]);
+  });
+  test("Treffer: sub, entry und der Call ab dem Token hinter dem Unterbefehl", () => {
+    const r = lauf2("ls", "-n", "kube", "a");
+    expect(typeof r).toBe("object");
+    if (typeof r === "string") return;
+    expect(r.sub).toBe("ls");
+    expect(r.entry).toBe(LIST);
+    expect(r.call.value("-n")).toBe("kube");
+    expect(r.call.args).toEqual(["a"]);
+  });
+  test("Flags des Eintrags werden geprüft; Familien-Hinweise gelten, ein Eintrag überschreibt sie", () => {
+    expect(lauf2("list", "-q")).toContain("Familien-Hinweis.");
+    const own = dispatchSub(host, { ...d, table: { list: { run: "l", hints: { "-q": "Eigener Hinweis." } } } }, ["x", "list", "-q"], 1) as string;
+    expect(own).toContain("Eigener Hinweis.");
+    expect(own).not.toContain("Familien-Hinweis.");
+    expect(lauf2("get", "-q")).toContain("'x get' ohne Flags");
+  });
+  test("Familien-Stil gilt je Eintrag, der Eintrag überschreibt ihn", () => {
+    const tf: Dispatch<SubEntry<string>> = { cmd: "t", style: "goflag", table: { a: { run: "", flags: [flag(true, "-var-file")] }, b: { run: "", style: "pflag", flags: [flag(true, "--x")] } } };
+    const a = dispatchSub(host, tf, ["t", "a", "--var-file=f"], 1);
+    expect(typeof a === "string" ? a : a.call.value("-var-file")).toBe("f");
+    const b = dispatchSub(host, tf, ["t", "b", "--x=1"], 1);
+    expect(typeof b === "string" ? b : b.call.value("--x")).toBe("1");
+  });
+  test("kannOf: Aliase entdoppelt, Gruppen expandiert, eine Ebene ohne eigene Einträge nennt nur die Gruppen", () => {
+    expect(kannOf(d)).toEqual(["x list, get", "x grp mb, rb"]);
+    expect(kannOf({ cmd: "aws", table: { s3: { group: inner } } })).toEqual(["x grp mb, rb"]);
+  });
+});
+
+/* ---------- Alle Familien, eine Tabelle: dieselben vier Eingabefälle ---------- */
+describe("Familien-Köpfe: Flag davor, Tippfehler, echter nicht simulierter Unterbefehl, fehlender Unterbefehl", () => {
+  interface Fam { cmd: string; flag: [string, string]; tipp: [string, string]; echt: [string, string] }
+  const FAMILIEN: Fam[] = [
+    { cmd: "kubectl", flag: ["kubectl -n x get pods", "-n"], tipp: ["kubectl gett", "kubectl get"], echt: ["kubectl exec", "kubectl exec"] },
+    { cmd: "docker", flag: ["docker -H x ps", "-H"], tipp: ["docker pss", "docker ps"], echt: ["docker exec", "docker exec"] },
+    { cmd: "helm", flag: ["helm -n x list", "-n"], tipp: ["helm instal", "helm install"], echt: ["helm show", "helm show"] },
+    { cmd: "git", flag: ["git -C . status", "-C"], tipp: ["git stauts", "git status"], echt: ["git stash", "git stash"] },
+    { cmd: "aws s3", flag: ["aws s3 --x ls", "--x"], tipp: ["aws s3 mbb", "aws s3 mb"], echt: ["aws s3 sync", "aws s3 sync"] },
+    { cmd: "kubeadm", flag: ["kubeadm -v 5 init", "-v"], tipp: ["kubeadm joim", "kubeadm join"], echt: ["kubeadm token", "kubeadm token"] },
+    { cmd: "terraform", flag: ["terraform -chdir=x plan", "-chdir"], tipp: ["terraform plam", "terraform plan"], echt: ["terraform show", "terraform show"] },
+    { cmd: "argocd app", flag: ["argocd app --x list", "--x"], tipp: ["argocd app synk", "argocd app sync"], echt: ["argocd app delete", "argocd app delete"] },
+    { cmd: "glab ci", flag: ["glab ci --x status", "--x"], tipp: ["glab ci stats", "glab ci status"], echt: ["glab ci retry", "glab ci retry"] },
+  ];
+  test.each(FAMILIEN)("$cmd: fehlender Unterbefehl", ({ cmd }) => {
+    const r = lauf(cmd);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("Unterbefehl fehlt.");
+    expect(r.out).toContain("Der Simulator kann: ");
+    expect(r.out).not.toContain(NS);
+  });
+  test.each(FAMILIEN)("$cmd: Flag vor dem Unterbefehl", ({ flag: [zeile, name] }) => {
+    const r = lauf(zeile);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain(NS + " das Flag '" + name + "' vor dem Unterbefehl.");
+  });
+  test.each(FAMILIEN)("$cmd: Tippfehler mit Vorschlag", ({ tipp: [zeile, vorschlag] }) => {
+    const r = lauf(zeile);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("Meintest du '" + vorschlag + "'?");
+    expect(r.out).not.toContain(NS);
+  });
+  test.each(FAMILIEN)("$cmd: echter, nicht simulierter Unterbefehl", ({ echt: [zeile, text] }) => {
+    const r = lauf(zeile);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain(NS + " '" + text + "'.");
+    expect(r.out).toContain("Der Simulator kann: ");
+  });
+
+  test("die Eingabe gilt vor den Familien-Wachen (Control-Plane, init, Repo)", () => {
+    const bare = () => new KQSim({ bareMetal: true });
+    expect(lauf("kubectl gett", bare()).out).toContain("Meintest du 'kubectl get'?");
+    expect(lauf("kubectl", bare()).out).toContain("Unterbefehl fehlt");
+    expect(lauf("kubectl get pods", bare()).out).toContain("connection to the server");
+    expect(lauf("git stauts").out).toContain("Meintest du 'git status'?");
+    expect(lauf("terraform plam").out).toContain("Meintest du 'terraform plan'?");
+    expect(lauf("terraform plan").out).toContain("Backend initialization required");
+  });
+  test("Gruppen-Ebene: andere Dienste/Befehle sind nicht simuliert, ein Tippfehler schlägt die Gruppe vor", () => {
+    expect(lauf("aws ec2 describe-instances").out).toContain(NS + " 'aws ec2'.");
+    expect(lauf("argocd cluster list").out).toContain(NS + " 'argocd cluster'.");
+    expect(lauf("glab mr list").out).toContain(NS + " 'glab mr'.");
+    expect(lauf("aws s4 ls").out).toContain("Meintest du 'aws s3'?");
+    expect(lauf("argocd ap list").out).toContain("Meintest du 'argocd app'?");
+  });
+  test("kubeadm unterscheidet Groß- und Kleinschreibung (wie cobra)", () => {
+    expect(lauf("kubeadm INIT").out).toContain("unbekannter Unterbefehl 'INIT'");
   });
 });
