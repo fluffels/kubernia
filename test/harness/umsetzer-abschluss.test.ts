@@ -326,19 +326,33 @@ describe("Gleichlauf Umsetzer-Definition und Workflow (#1460 Z10)", () => {
     }
   });
 
-  test("der Merge vor dem Push übernimmt den Verschobener-Code-Prüfschritt aus review-lenses (#1501)", () => {
+  test("Verschobener-Code-Prüfung: eine Konstante, Gates- und Push-Absatz interpolieren sie, Skill trägt dieselben Befehle (#1501, #1508)", () => {
+    const diffBefehl = "git diff <basis> <M>^2 -- <alte datei>";
+    const basisBefehl = "git merge-base <M>^1 <M>^2";
+    const def = WORKFLOW.match(/^const VERSCHOBEN_DIFF = `(.*)`/m)?.[1] ?? "";
+    assert.ok(def.includes(diffBefehl), "Konstante ohne Diff der alten Datei gegen die Merge-Basis");
+    assert.ok(def.includes(basisBefehl), "Konstante ohne Merge-Basis-Befehl");
+    // der Befehl steht im Workflow genau einmal (keine Literal-Kopie neben der Konstante)
+    assert.equal(WORKFLOW.split(diffBefehl).length - 1, 1, "Diff-Befehl außerhalb der Konstante kopiert");
+    const gates = WORKFLOW.slice(WORKFLOW.indexOf("Gates: vor dem ersten verify"), WORKFLOW.indexOf("Beim Iterieren gezielt prüfen"));
+    assert.match(gates, /\$\{VERSCHOBEN_DIFF\}/, "Gates-Absatz ohne die Konstante");
     const von = WORKFLOW.indexOf("Vor dem Push: verschärft der Diff ein Gate oder Schema");
     const bis = WORKFLOW.indexOf("Nachweis-Commit", von);
     assert.ok(von >= 0 && bis > von, "Merge-Absatz vor dem Push nicht gefunden");
     const absatz = WORKFLOW.slice(von, bis);
-    assert.match(absatz, /verschob/, "Prüfung auf verschobene Funktionen fehlt");
-    assert.match(absatz, /git diff <basis> <M>\^2 -- <alte datei>/, "Diff der alten Datei gegen die Merge-Basis fehlt");
-    assert.match(absatz, /ergebnis="fehler"/);
+    assert.match(absatz, /\$\{VERSCHOBEN_DIFF\}/, "Push-Absatz ohne die Konstante");
+    assert.match(absatz, /verschobene Funktion, ergebnis="fehler"/, "Fehler-Ergebnis für die geänderte verschobene Funktion fehlt");
+    const skill = readFileSync(resolve(ROOT, ".claude/skills/review-lenses/SKILL.md"), "utf8");
+    assert.ok(skill.includes(diffBefehl) && skill.includes(basisBefehl), "review-lenses trägt andere Befehle als der Workflow");
   });
 
   test("Red-Green-Rücknahme per git checkout gehört auch in AGENTS.md und die Langfassung (#1501)", () => {
     for (const datei of ["AGENTS.md", "docs/agent-harness.md"]) {
-      assert.ok(readFileSync(resolve(ROOT, datei), "utf8").includes("git checkout <datei>"), `${datei} ohne die Rücknahme-Regel`);
+      const text = readFileSync(resolve(ROOT, datei), "utf8");
+      // beide Dateien nennen dieselben Befehle und die Ausnahme für den sauberen Lens-Worktree
+      for (const teil of ["git checkout <datei>", "git restore <datei>", "Lens-Worktree", "git -C <lens-worktree> checkout -- <datei>"]) {
+        assert.ok(text.includes(teil), `${datei} ohne „${teil}“`);
+      }
     }
   });
 });

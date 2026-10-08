@@ -356,17 +356,28 @@ const ABGELOEST = [
   /zweite Hälfte[^.\n]{0,80}(Sammelticket|übertrag)/i,
   /erste Hälfte[^.\n]{0,80}(PR|Sammelticket)/i,
 ];
+/** Eine Alternation über alle Muster: die meisten Dateien treffen keins, dann entfallen die Einzelläufe. */
+const ABGELOEST_VORFILTER = new RegExp(ABGELOEST.map((m) => m.source).join("|"), "i");
+// Der Vorfilter über `source` verliert Flags und nummeriert Gruppen um: die Muster müssen schlicht bleiben.
+if (!ABGELOEST.every((m) => m.flags === "i")) throw new Error("Vorfilter: ABGELOEST nur mit Flag i");
 const SCAN_ENDUNGEN = /\.(md|js|mjs|cjs|ts|json|yml|yaml)$/;
 const EIGENE_DATEI = "test/harness/harness-approval.test.ts";
 
-/** Alle versionierten Textdateien (Pfad → Inhalt), die die Text-Wächter unten durchsuchen. */
+let scanCache: Record<string, string> | undefined;
+
+/**
+ * Alle versionierten Textdateien (Pfad → Inhalt), die die Text-Wächter unten durchsuchen. Einmal je Testdatei geladen
+ * und geteilt: der Scan liest ~750 Dateien (8 MB) und lief zuvor je Wächter neu, unter Last riss das den 5-s-Timeout (#1508).
+ */
 function gescannteDateien(): Record<string, string> {
+  if (scanCache) return scanCache;
   const dateien: Record<string, string> = {};
   for (const f of listTrackedFiles(WURZEL)) {
     if (!(SCAN_ENDUNGEN.test(f) || f === ".github/CODEOWNERS")) continue;
     if (!existsSync(WURZEL + f)) continue; // gelöscht, aber noch im Index
     dateien[f] = read(f);
   }
+  scanCache = dateien;
   return dateien;
 }
 
@@ -375,6 +386,7 @@ function abgeloesteFundstellen(dateien: Record<string, string>): string[] {
   const funde: string[] = [];
   for (const [pfad, inhalt] of Object.entries(dateien)) {
     if (pfad.startsWith("docs/adr/") || pfad === EIGENE_DATEI) continue;
+    if (!ABGELOEST_VORFILTER.test(inhalt)) continue;
     for (const muster of ABGELOEST) if (muster.test(inhalt)) funde.push(`${pfad}: ${String(muster)}`);
   }
   return funde;
@@ -425,11 +437,15 @@ describe("Die abgelöste Label-Mechanik kommt nicht zurück (ADR 0014, #1303)", 
 /** Die Kriterien des Pflicht-Stopps stehen nur in AGENTS.md; alle anderen Stellen verweisen darauf (#1311). */
 const KRITERIEN = [/Ruleset\/Secrets\/Repo-Einstellungen/, /am Ruleset, an Secrets/, /Löschen, Ruleset/];
 
+if (!KRITERIEN.every((m) => m.flags === "")) throw new Error("Vorfilter: KRITERIEN ohne Flags");
+const KRITERIEN_VORFILTER = new RegExp(KRITERIEN.map((m) => m.source).join("|"));
+
 /** Fundstellen der ausgeschriebenen Kriterienliste außerhalb von AGENTS.md; ADRs (Historie) und diese Datei zählen nicht. */
 function kriterienKopien(dateien: Record<string, string>): string[] {
   const funde: string[] = [];
   for (const [pfad, inhalt] of Object.entries(dateien)) {
     if (pfad === "AGENTS.md" || pfad.startsWith("docs/adr/") || pfad === EIGENE_DATEI) continue;
+    if (!KRITERIEN_VORFILTER.test(inhalt)) continue;
     for (const muster of KRITERIEN) if (muster.test(inhalt)) funde.push(`${pfad}: ${String(muster)}`);
   }
   return funde;
