@@ -70,13 +70,23 @@ describe("neues Template ergibt neuen Hash", () => {
     expect(hash(sim)).not.toBe(alt);
   });
 
-  test("rollout restart, auch zweimal im selben Takt", () => {
+  test("rollout restart, mehrfach hintereinander", () => {
     const sim = neu(); const h0 = hash(sim);
     expect(sim.exec("kubectl rollout restart deployment/web").error).toBe(false);
     const h1 = hash(sim);
     sim.exec("kubectl rollout restart deployment/web");
     const h2 = hash(sim);
     expect(new Set([h0, h1, h2]).size).toBe(3);
+  });
+
+  test("rollout restart nach Reload: der Takt fällt zurück, der Hash ändert sich trotzdem", () => {
+    const sim = neu();
+    sim.exec("kubectl rollout restart deployment/web");
+    const geladen = new KQSim(JSON.parse(JSON.stringify(sim.snapshot())) as Scenario);
+    const h = hash(geladen);
+    geladen.clock = dep(geladen).restartedAt! - 1; // exec zählt den Takt hoch: der nächste Neustart fällt in den Takt des gespeicherten restartedAt
+    geladen.exec("kubectl rollout restart deployment/web");
+    expect(hash(geladen)).not.toBe(h);
   });
 
   test("das neue ReplicaSet ist jünger als das Deployment", () => {
@@ -92,11 +102,13 @@ describe("Hash bleibt", () => {
     ["scale hoch", "kubectl scale deployment/web --replicas=5"],
     ["scale runter", "kubectl scale deployment/web --replicas=1"],
     ["set image auf dasselbe Image", "kubectl set image deployment/web nginx=nginx"],
-    ["set env (kein Rollout)", "kubectl set env deployment/web --from=configmap/x"],
+    ["set env (kein Rollout)", "kubectl set env deployment/web --from=configmap/cfg"],
   ])("%s", (_t, cmd) => {
-    const sim = neu(); const h = hash(sim);
-    sim.exec(cmd);
+    const sim = neu({ configMaps: [{ name: "cfg", keys: ["k"] }] }); const h = hash(sim);
+    const rs = currentReplicaSet(dep(sim)).created;
+    expect(sim.exec(cmd).error).toBe(false);
     expect(hash(sim)).toBe(h);
+    expect(currentReplicaSet(dep(sim)).created).toBe(rs);
   });
 
   test("scale auf 0 und zurück behält das ReplicaSet", () => {
@@ -136,12 +148,14 @@ describe("Hash bleibt", () => {
     });
     sim.exec("kubectl apply -f web.yaml");
     expect(dep(sim).broken).not.toBeNull();
-    const h = hash(sim); const vorher = namen(sim);
+    const h = hash(sim); const vorher = namen(sim); const rsCreated = currentReplicaSet(dep(sim)).created;
+    sim.clock += 10;
     sim.exec("docker build -t eigen:1 .");
     sim.exec("kubectl get pods"); // der kubelet zieht das Image beim nächsten Schritt nach
     expect(dep(sim).broken).toBeNull();
     expect(namen(sim)).not.toEqual(vorher);
     expect(hash(sim)).toBe(h);
+    expect(currentReplicaSet(dep(sim)).created).toBe(rsCreated); // gleiches Template: das ReplicaSet bleibt
   });
 });
 
@@ -236,6 +250,15 @@ describe("Invariante (9)", () => {
     expect(clusterInvariantViolations(sim).join("\n")).toContain("pod-template-hash");
   });
 
+  test("richtiger Präfix, aber falsche Suffix-Länge wird gemeldet", () => {
+    const sim = neu();
+    const p = namen(sim)[0];
+    dep(sim).pods[0].name = (p.slice(0, p.lastIndexOf("-") + 1) + "abcdefghi") as never;
+    expect(clusterInvariantViolations(sim).join(" ")).toContain("pod-template-hash");
+    dep(sim).pods[0].name = (p.slice(0, p.lastIndexOf("-") + 1) + "abcd") as never;
+    expect(clusterInvariantViolations(sim).join(" ")).toContain("pod-template-hash");
+  });
+
   test("Befehlskette bleibt verletzungsfrei", () => {
     const sim = neu();
     sim.files["w.yaml"] = deploymentYaml({ name: "web", image: "nginx:9", replicas: 2 });
@@ -260,6 +283,36 @@ describe("Namenskollision", () => {
 
   test("makePodName: Hash und Suffix im Namen", () => {
     expect(makePodName("web", "7d8f", () => 0)).toBe("web-7d8f-bbbbb");
+  });
+});
+
+describe("podTemplateHash: welche Felder eingehen", () => {
+  const basis = () => new KQSim({ deployments: [{ name: "web", image: "a", replicas: 1 }] }).deployments[0];
+  test.each<[string, (d: ReturnType<typeof basis>) => void]>([
+    ["envFrom.configMaps", d => { d.envFrom.configMaps.push("c"); }],
+    ["envFrom.secrets", d => { d.envFrom.secrets.push("s"); }],
+    ["serviceAccountName", d => { d.serviceAccountName = "sa"; }],
+    ["containerPort", d => { d.containerPort = 8080; }],
+    ["memLimit", d => { d.memLimit = 128; }],
+    ["cpuLimitMilli", d => { d.cpuLimitMilli = 250; }],
+    ["securityContext", d => { d.securityContext = { runAsNonRoot: true }; }],
+    ["node", d => { d.node = "n1"; }],
+    ["emptyDir", d => { d.emptyDir = { data: "", usedMi: 0 }; }],
+    ["ephemeralLimit", d => { d.ephemeralLimit = 64; }],
+    ["initContainer", d => { d.initContainer = { fillsMi: 10 }; }],
+    ["restartedAt", d => { d.restartedAt = 3; }],
+  ])("%s ändert den Hash", (_f, mutiere) => {
+    const d = basis(); const h = podTemplateHash(d);
+    mutiere(d);
+    expect(podTemplateHash(d)).not.toBe(h);
+  });
+
+  test("Laufzeitinhalt des emptyDir und der Zusatznutzung ändert den Hash nicht", () => {
+    const d = basis(); d.emptyDir = { data: "", usedMi: 0 };
+    const h = podTemplateHash(d);
+    d.emptyDir = { data: "viel", usedMi: 99 };
+    d.ephemeralUsedMi = 7;
+    expect(podTemplateHash(d)).toBe(h);
   });
 });
 

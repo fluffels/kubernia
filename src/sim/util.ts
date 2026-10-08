@@ -44,6 +44,8 @@ export function externalIP(name: string): string {
 /** Das Alphabet, aus dem Kubernetes Pod-Suffixe und pod-template-hashes zieht (`rand.alphanums`):
  *  keine Vokale und keine Ziffern 0, 1, 3 – so entstehen keine lesbaren Wörter. */
 export const K8S_ALPHANUMS = "bcdfghjklmnpqrstvwxz2456789";
+/** Länge des zufälligen Pod-Suffixes (`<dep>-<hash>-<suffix>`). */
+export const POD_SUFFIX_LEN = 5;
 
 /** Kodiert einen Hash-Wert wie `rand.SafeEncodeString`: je Zeichen des Dezimaltexts
  *  (Zeichen-Code mod 27) ein Zeichen aus `K8S_ALPHANUMS`. Pur und deterministisch. */
@@ -59,7 +61,7 @@ export function safeEncode(s: string): string {
  *  `sim/workload.ts` (scale/rollout/heal) gebraucht – darum hier als geteilter Helfer. */
 export function makePodName(depName: string, hash: string, rng: () => number): PodName {
   // Intern erzeugt → vertrauenswürdig: ungeprüft branden (der Name ist per Konstruktion gültig).
-  return asPodName(depName + "-" + hash + "-" + randSuffix(5, rng, K8S_ALPHANUMS));
+  return asPodName(depName + "-" + hash + "-" + randSuffix(POD_SUFFIX_LEN, rng, K8S_ALPHANUMS));
 }
 
 /** Mit Leerzeichen auf Mindestbreite `n` auffüllen (Spalten-Ausrichtung der CLI-Tabellen). */

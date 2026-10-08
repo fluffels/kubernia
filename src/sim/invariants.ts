@@ -17,6 +17,7 @@
  */
 import type { ClusterState } from "./state";
 import { rbacKey, roleKind } from "./rbac";
+import { POD_SUFFIX_LEN } from "./util";
 
 /** (1)/(2) Replica Ist/Soll konsistent: ein Deployment/StatefulSet hält genau so viele
  *  Pods, wie sein `replicas`-Soll sagt. Das gilt auch bei kaputten Workloads (die Pods
@@ -213,7 +214,7 @@ function checkPodTemplateHash(s: ClusterState): string[] {
     const prefix = `${d.name}-${d.replicaSet.hash}-`;
     for (const p of d.pods) {
       const name = String(p.name);
-      if (!(name.startsWith(prefix) && name.length === prefix.length + 5)) {
+      if (!(name.startsWith(prefix) && name.length === prefix.length + POD_SUFFIX_LEN)) {
         v.push(`Deployment "${d.name}": Pod "${name}" trägt nicht den pod-template-hash "${d.replicaSet.hash}" seines ReplicaSets`);
       }
     }
