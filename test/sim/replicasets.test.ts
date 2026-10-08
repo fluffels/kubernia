@@ -213,9 +213,11 @@ describe("get rs", () => {
   test("AGE nach einem Rollout jünger als das Deployment", () => {
     const sim = neu();
     sim.clock += 20;
-    const alt = letzteSpalte(sim.exec("kubectl get rs").output!.split("\n")[1]);
+    const zeile = (name: string) => sim.exec("kubectl get rs").output!.split("\n").find(z => z.startsWith(name + " "))!;
+    const altName = currentReplicaSet(dep(sim)).name;
+    const alt = letzteSpalte(zeile(altName));
     sim.exec("kubectl rollout restart deployment/web");
-    const jung = letzteSpalte(sim.exec("kubectl get rs").output!.split("\n")[1]);
+    const jung = letzteSpalte(zeile(currentReplicaSet(dep(sim)).name));
     expect(jung).not.toBe(alt);
   });
 
