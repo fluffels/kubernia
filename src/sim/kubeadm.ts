@@ -19,11 +19,11 @@
  * per `kubeadmCommand(this, …)`.
  */
 import type { ClusterState, ClusterNode, Scenario } from "./state";
-import { randSuffix } from "./util";
+import { randSuffix, CONTROL_PLANE_IP } from "./util";
 import { flagValueOf } from "./cliargs";
 import { provisionNode, isControlPlane, NODE_VERSION } from "./nodes";
 
-const APISERVER = "10.0.0.10:6443";
+const APISERVER = CONTROL_PLANE_IP + ":6443";
 
 /** Was die kubeadm-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt). Schmales
  *  Interface statt der ganzen Klasse – dokumentiert die Kopplung und vermeidet den

@@ -1,6 +1,6 @@
 /* ===== Kubernia – kubectl-Argumente: Flag-Tabelle je Unterbefehl (sim/kubectl/args.ts, #1444) =====
  * Die Eingabegrenze von `kubectl`: Welche Flags wertet die Sim je Unterbefehl aus? Alles andere wurde
- * früher still ignoriert (`get pods -o yaml` druckte die Tabelle) und wird jetzt ehrlich abgelehnt –
+ * früher still ignoriert (`get pods -l app=x` druckte die Tabelle) und wird jetzt ehrlich abgelehnt –
  * mit dem Lernhinweis, was der Simulator stattdessen kann. Parser und `notSimulated` sind seit #1459
  * generisch in ../cliargs (alle Familien); hier liegen nur die kubectl-Tabellen (re-exportiert).
  *
@@ -12,6 +12,7 @@ import type { KubectlHost } from "./host";
 import { flag, checkFlags, positionalArgs, type ArgSpec, type FlagSpec } from "../cliargs";
 export { notSimulated, flagValueOf } from "../cliargs";
 import { RESOURCE_KINDS } from "./resources";
+import { OUTPUT_FLAG } from "./output";
 
 /** Die Unterbefehle, die die Sim implementiert (Schlüssel der Dispatch-Tabelle in ../kubectl.ts). */
 export const KUBECTL_SUBS = ["get", "describe", "create", "scale", "expose", "delete", "apply", "logs", "top", "set", "rollout", "auth", "label"] as const;
@@ -35,7 +36,7 @@ const FILE = flag(true, "-f", "--filename");
 
 /** Die ausgewerteten Flags je Unterbefehl. */
 const KNOWN_FLAGS: Readonly<Record<KubectlSub, readonly FlagSpec[]>> = {
-  get: [NS, flag(false, "-A", "--all-namespaces")],
+  get: [NS, flag(false, "-A", "--all-namespaces"), OUTPUT_FLAG],
   describe: [NS],
   top: [NS],
   rollout: [NS],
@@ -52,8 +53,8 @@ const KNOWN_FLAGS: Readonly<Record<KubectlSub, readonly FlagSpec[]>> = {
 
 /** Lernhinweise zu den Flags, die Spieler aus dem echten kubectl kennen. */
 const FLAG_HINTS: Readonly<Record<string, string>> = {
-  "-o": "Ausgabeformate wie yaml, json oder wide gibt es im Simulator nicht – lies die Tabelle, Details zeigt 'kubectl describe'.",
-  "--output": "Ausgabeformate wie yaml, json oder wide gibt es im Simulator nicht – lies die Tabelle, Details zeigt 'kubectl describe'.",
+  "-o": "Ausgabeformate gibt es im Simulator nur bei 'kubectl get' (-o wide); Details zeigt 'kubectl describe'.",
+  "--output": "Ausgabeformate gibt es im Simulator nur bei 'kubectl get' (-o wide); Details zeigt 'kubectl describe'.",
   "-w": "Live-Beobachtung gibt es nicht – wiederhole den Befehl einfach.",
   "--watch": "Live-Beobachtung gibt es nicht – wiederhole den Befehl einfach.",
   "-l": "Label-Selektoren gibt es nicht – filtere über den Namen, z.B. 'kubectl get pods <name>'.",

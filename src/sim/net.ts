@@ -12,7 +12,7 @@
  */
 import { DEFAULT_NAMESPACE, isHeadlessService, type ServiceRes } from "./state";
 import { parseServiceName, resolveService } from "./dns";
-import { serviceBackends, readyBackends, type EndpointsHost } from "./endpoints";
+import { serviceBackends, readyBackends, KUBERNETES_SERVICE, type EndpointsHost } from "./endpoints";
 
 /** Was die net-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt). */
 export interface NetHost extends EndpointsHost {
@@ -42,7 +42,7 @@ export function nslookupCommand(host: NetHost, t: string[]): string {
   // Der eingebaute kubernetes-API-Service ist immer da und hat eine feste ClusterIP.
   const parsed = parseServiceName(query);
   if (parsed?.svc === "kubernetes" && parsed.ns === DEFAULT_NAMESPACE) {
-    return header.concat(["Name:\t" + parsed.fqdn, "Address: 10.96.0.1"]).join("\n");
+    return header.concat(["Name:\t" + parsed.fqdn, "Address: " + KUBERNETES_SERVICE.clusterIP]).join("\n");
   }
   const ans = resolveService(host.services, query);
   if (!ans.ok) {

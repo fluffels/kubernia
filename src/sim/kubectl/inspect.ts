@@ -13,8 +13,8 @@
  * Jeder Ressourcentyp ist ein eigener kleiner Renderer; ein 10× größerer Ressourcensatz
  * wächst als 10× Einträge, ohne dass Dispatcher-Komplexität/-Länge mitwächst.
  */
-import { table } from "../util";
-import { endpointAddresses, podAddress } from "../endpoints";
+import { table, podIP, CONTROL_PLANE_IP, CONTROL_PLANE_NODE } from "../util";
+import { endpointAddresses, podAddress, servicesWithDefault, serviceSelector, isKubernetesService } from "../endpoints";
 import type { KubectlHost } from "./host";
 import { DEFAULT_NAMESPACE, SECURITY_CONTEXT_KEYS, isExternalNameService, type Deployment, type PodInstance, type PodStatus } from "../state";
 import { currentReplicaSet } from "../replicasets";
@@ -35,7 +35,16 @@ const INGRESS_ADDRESS = "203.0.113.10";
 // Namespace-Wache und Mehrfach-Typen macht der Dispatcher in ./get.ts über die Registry (./resources).
 
 /** Was ein get-Renderer liefert. `names[i]` ist der Objektname von `rows[i]` (für `get <typ> <name>`). */
-export interface GetTable { header: string[]; rows: string[][]; names: string[] }
+export interface GetTable {
+  header: string[]; rows: string[][]; names: string[];
+  /** Anzahl der Endspalten, die nur `-o wide` zeigt (#1466); `get.ts` entfernt sie sonst. */
+  wide?: number;
+}
+
+/** Die Tabelle mit `n` Endspalten, die nur `-o wide` zeigt. */
+function withWide(t: GetTable, n: number): GetTable {
+  return { ...t, wide: n };
+}
 
 /** Tabelle aus Kopf + Zeilen; die Objektnamen kommen aus der NAME-Spalte, außer sie werden mitgegeben
  *  (StorageClass zeigt `name (default)` in der Zelle). */
@@ -46,12 +55,37 @@ function tableOf(header: string[], rows: string[][], names?: string[]): GetTable
 
 type GetRenderer = (host: KubectlHost, t: string[]) => GetTable;
 
-/** Eine Pod-Zeile (NAME READY STATUS RESTARTS AGE) – die EINE Quelle für `get pods` mit und
+/** Wo ein Pod läuft: IP und Node, beide `null`, solange er nicht eingeplant ist. Die EINE Quelle für
+ *  `get pods -o wide` und `describe pod` (Deployment: `_nodeOf`, StatefulSet: `statefulPodNode`). */
+function podPlacement(host: KubectlHost, c: ClusterPod): { ip: string | null; node: string | null } {
+  const ip = podAddress(c, host.pvcs);
+  if (ip === null) return { ip, node: null };
+  return { ip, node: c.owner === "Deployment" ? host._nodeOf(c.dep) : statefulPodNode(host.nodes, c.pod) };
+}
+
+/** Die vier Zusatzspalten von `get pods -o wide`: IP, NODE, NOMINATED NODE, READINESS GATES. */
+const wideCells = (ip: string | null, node: string | null): string[] => [ip ?? "<none>", node ?? "<none>", "<none>", "<none>"];
+
+/** Eine Pod-Zeile (NAME READY STATUS RESTARTS AGE + wide) – die EINE Quelle für `get pods` mit und
  *  ohne `-A`. Der Status kommt aus `clusterPodStatus` (Deployment: `deploymentPodStatus` plus die
  *  Restarts-Regel, StatefulSet: über `podAddress`). */
 function podRow(host: KubectlHost, c: ClusterPod): string[] {
   const st = clusterPodStatus(host, c);
-  return [c.pod.name, st.ready, st.status, String(st.restarts), host._age(c.pod.created)];
+  const { ip, node } = podPlacement(host, c);
+  return [c.pod.name, st.ready, st.status, String(st.restarts), host._age(c.pod.created), ...wideCells(ip, node)];
+}
+
+/** Die System-Pods von kube-system. kubeadm-Static-Pods laufen mit hostNetwork: sie teilen die IP der
+ *  Control-Plane (dieselbe Adresse nennt `kubeadm join`); CoreDNS ist ein normaler Pod im Pod-Netz. */
+const SYSTEM_PODS: readonly { name: string; hostNetwork: boolean }[] = [
+  { name: "coredns-7db6d8ff4d-x2x9p", hostNetwork: false },
+  { name: "etcd-ahoi-control", hostNetwork: true },
+  { name: "kube-apiserver-ahoi-control", hostNetwork: true },
+  { name: "kube-scheduler-ahoi-control", hostNetwork: true },
+];
+
+function systemPodRow(p: { name: string; hostNetwork: boolean }): string[] {
+  return [p.name, "1/1", "Running", "0", "3d", ...wideCells(p.hostNetwork ? CONTROL_PLANE_IP : podIP(p.name), CONTROL_PLANE_NODE)];
 }
 
 /** `kubectl get`-Leermeldung für einen Namespace (echtes kubectl: „No resources found in <ns> namespace."). */
@@ -59,24 +93,19 @@ export function noResourcesIn(ns: string = DEFAULT_NAMESPACE): string {
   return "No resources found in " + ns + " namespace.";
 }
 
-const POD_HEADER = ["NAME", "READY", "STATUS", "RESTARTS", "AGE"];
+const POD_HEADER = ["NAME", "READY", "STATUS", "RESTARTS", "AGE", "IP", "NODE", "NOMINATED NODE", "READINESS GATES"];
 
 function getPods(host: KubectlHost, t: string[]): GetTable {
   const ns = requestedNamespace(t);
   const allNs = allNamespaces(t);
   host._reschedulePending();
   if (ns === "kube-system" || allNs) {
-    const sysPods = [
-      ["coredns-7db6d8ff4d-x2x9p", "1/1", "Running", "0", "3d"],
-      ["etcd-ahoi-control", "1/1", "Running", "0", "3d"],
-      ["kube-apiserver-ahoi-control", "1/1", "Running", "0", "3d"],
-      ["kube-scheduler-ahoi-control", "1/1", "Running", "0", "3d"],
-    ];
-    if (!allNs) return tableOf(POD_HEADER, sysPods);
-    const rows = sysPods.map(r => ["kube-system"].concat(r)).concat(clusterPods(host).map(c => [DEFAULT_NAMESPACE, ...podRow(host, c)]));
-    return tableOf(["NAMESPACE", ...POD_HEADER], rows);
+    const sysPods = SYSTEM_PODS.map(systemPodRow);
+    if (!allNs) return withWide(tableOf(POD_HEADER, sysPods), 4);
+    const rows = sysPods.map(r => ["kube-system", ...r]).concat(clusterPods(host).map(c => [DEFAULT_NAMESPACE, ...podRow(host, c)]));
+    return withWide(tableOf(["NAMESPACE", ...POD_HEADER], rows), 4);
   }
-  return tableOf(POD_HEADER, clusterPods(host).map(c => podRow(host, c)));
+  return withWide(tableOf(POD_HEADER, clusterPods(host).map(c => podRow(host, c))), 4);
 }
 
 /** Die verfügbaren Replicas eines Deployments: alle Pods, solange sie bereit sind, sonst keiner. */
@@ -85,11 +114,11 @@ export function availableReplicas(host: Pick<KubectlHost, "_podReady">, d: Deplo
 }
 
 function getDeployments(host: KubectlHost): GetTable {
-  return tableOf(["NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE"],
+  return withWide(tableOf(["NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE", "CONTAINERS", "IMAGES", "SELECTOR"],
     host.deployments.map(d => {
       const ready = availableReplicas(host, d);
-      return [d.name, ready + "/" + d.replicas, String(d.replicas), String(ready), host._age(d.created)];
-    }));
+      return [d.name, ready + "/" + d.replicas, String(d.replicas), String(ready), host._age(d.created), d.name, d.image, "app=" + d.name];
+    })), 3);
 }
 
 /** ReplicaSets (#1468): abgeleitet, je Deployment das aktuelle (`sim/replicasets.ts`). */
@@ -102,8 +131,8 @@ function getReplicaSets(host: KubectlHost): GetTable {
 }
 
 function getServices(host: KubectlHost): GetTable {
-  const rows = [["kubernetes", "ClusterIP", "10.96.0.1", "<none>", "443/TCP", "3d"]];
-  for (const s of host.services) {
+  const rows: string[][] = [];
+  for (const s of servicesWithDefault(host)) {
     // ExternalName-Service (#337): keine ClusterIP, dafür der externe DNS-Name in
     // EXTERNAL-IP – genau so zeigt echtes kubectl einen ExternalName-Service.
     const isExt = isExternalNameService(s);
@@ -112,22 +141,23 @@ function getServices(host: KubectlHost): GetTable {
       isExt ? "<none>" : s.clusterIP,
       isExt ? (s.externalName || "<none>") : "<none>",
       isExt ? "<none>" : (s.port + "/TCP"),
-      host._age(s.created || 0),
+      isKubernetesService(s) ? "3d" : host._age(s.created || 0),
+      serviceSelector(host, s) ?? "<none>",
     ]);
   }
-  return tableOf(["NAME", "TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE"], rows);
+  return withWide(tableOf(["NAME", "TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE", "SELECTOR"], rows), 1);
 }
 
 function getEndpoints(host: KubectlHost): GetTable {
   // Endpoints = die IPs der BEREITEN Pods hinter einem Service. Genau hier
   // wird die Readiness-Probe sichtbar: ein nicht-bereiter Pod fehlt in der
   // Liste, der Service leitet keinen Verkehr an ihn weiter.
-  return tableOf(["NAME", "ENDPOINTS", "AGE"], host.services.map(s => {
+  return tableOf(["NAME", "ENDPOINTS", "AGE"], servicesWithDefault(host).map(s => {
     // Endpoints zeigen den Ziel-Port (targetPort), an den weitergeleitet wird – fehlt er,
     // gilt der Service-Port (#164). So bleibt der Port-Abgleich auch hier sichtbar.
     // Die Pods kommen aus der gemeinsamen Service→Pod-Auflösung (#1318).
     const ips = endpointAddresses(host, s);
-    return [s.name, ips.length ? ips.join(",") : "<none>", host._age(s.created || 0)];
+    return [s.name, ips.length ? ips.join(",") : "<none>", isKubernetesService(s) ? "3d" : host._age(s.created || 0)];
   }));
 }
 
@@ -180,8 +210,8 @@ function getGrafanaDashboards(host: KubectlHost): GetTable {
 }
 
 function getStatefulSets(host: KubectlHost): GetTable {
-  return tableOf(["NAME", "READY", "AGE"],
-    host.statefulSets.map(s => [s.name, s.pods.length + "/" + s.replicas, host._age(s.created)]));
+  return withWide(tableOf(["NAME", "READY", "AGE", "CONTAINERS", "IMAGES"],
+    host.statefulSets.map(s => [s.name, s.pods.length + "/" + s.replicas, host._age(s.created), s.name, s.image])), 2);
 }
 
 function getPvcs(host: KubectlHost): GetTable {
@@ -484,11 +514,11 @@ function describeDeploymentPod(host: KubectlHost, c: DeploymentPod): string {
   const st = clusterPodStatus(host, c);
   // Evictete Pods melden Status Failed / Reason: Evicted – genau so zeigt es echtes Kubernetes (#240).
   const statusLine = dep.evicted ? "Failed" : (st.status === "Running" ? "Running" : st.status === "Pending" ? "Pending" : "Waiting (" + st.status + ")");
-  const ip = podAddress(c, host.pvcs);
+  const { ip, node } = podPlacement(host, c);
   return [
     "Name:         " + pod.name,
     "Namespace:    " + DEFAULT_NAMESPACE,
-    "Node:         " + (ip === null ? "<none>" : host._nodeOf(dep)),
+    "Node:         " + (node ?? "<none>"),
     "Status:       " + statusLine,
     ...(dep.evicted ? ["Reason:       Evicted", "Message:      " + dep.evicted.reason] : []),
     "Ready:        " + st.ready,
@@ -508,7 +538,7 @@ function describeDeploymentPod(host: KubectlHost, c: DeploymentPod): string {
 // StatefulSet-Pod (#1404): Status aus der PVC-Bindung, Volume ist der Claim des volumeClaimTemplates.
 function describeStatefulPod(host: KubectlHost, c: StatefulPod): string {
   const { pod, sts } = c;
-  const ip = podAddress(c, host.pvcs);
+  const { ip, node } = podPlacement(host, c);
   const scheduled = ip !== null;
   const st = clusterPodStatus(host, c);
   const age = host._age(pod.created);
@@ -522,7 +552,7 @@ function describeStatefulPod(host: KubectlHost, c: StatefulPod): string {
   return [
     "Name:         " + pod.name,
     "Namespace:    " + DEFAULT_NAMESPACE,
-    "Node:         " + (scheduled ? statefulPodNode(host.nodes, pod) : "<none>"),
+    "Node:         " + (node ?? "<none>"),
     "Status:       " + st.status,
     "Ready:        " + st.ready,
     "IP:           " + (ip ?? "<none>"),
