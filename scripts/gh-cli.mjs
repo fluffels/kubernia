@@ -2,7 +2,7 @@
 /**
  * Der EINE `gh`-Aufruf der Skripte (#1428 Z32): utf8, großer Puffer, stdin zu, windowsHide. Bis dahin hatte jedes
  * Skript eine eigene Kopie mit abweichenden Grenzen. Neue Skripte importieren `ghText`/`ghJson` von hier; der
- * Wächter `test/gh-cli.test.ts` verbietet einen direkten `execFileSync("gh"` außerhalb dieser Datei.
+ * Wächter `test/harness/gh-cli.test.ts` verbietet einen direkten `execFileSync("gh"` außerhalb dieser Datei.
  */
 import { execFileSync } from "node:child_process";
 
