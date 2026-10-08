@@ -646,6 +646,14 @@ describe("#1487: ungültige Werte werden abgelehnt statt verbogen", () => {
     expect(lauf1487("kubectl expose deployment api --port=80,443", s).out).toContain(NICHT_SIMULIERT);
     expect(s.services.some(x => x.name === "api")).toBe(false);
   });
+  test.each([["1", "1"], ["65535", "65535"], ["+80", "80"], ["080", "80"]])("expose --port=%s: gültiger Grenzwert, der Service-Port ist %s", (eingabe, port) => {
+    const s = new KQSim(szenario());
+    expect(lauf1487(`kubectl expose deployment api --port=${eingabe}`, s).error).toBe(false);
+    expect(String(s.services.find(x => x.name === "api")!.port)).toBe(port);
+    const s2 = new KQSim(szenario());
+    expect(lauf1487("kubectl expose deployment api --port=65536", s2).error).toBe(true);
+    expect(s2.services.some(x => x.name === "api")).toBe(false);
+  });
   test("expose: --port wird vor dem Control-Plane-Gate geprüft; fehlender Port bleibt der alte Fehler", () => {
     const s = new KQSim(szenario());
     expect(lauf1487("kubectl expose deployment api", s).out).toContain("couldn't find port");

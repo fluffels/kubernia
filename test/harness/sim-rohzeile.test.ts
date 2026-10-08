@@ -6,7 +6,8 @@
  * `src/sim/**` verboten (Kommentare ausgenommen). Ein Treffer ist rot; die Handler bekommen die Rohzeile gar nicht erst.
  * Bewusste Grenzen: Die Prüfung ist textuell. Ein umbenanntes Rohzeilen-Argument (`line.match(…)`) oder ein Regex, den
  * jemand aus Teilen baut, fängt sie nicht; dagegen steht das Review (der Handler bekommt `Call`, nicht die Zeile).
- * Das Zeichen-Modell kennt `"`, `'` und Backtick-Strings, aber keine Regex-Literale (ein Anführungszeichen darin
+ * Die Regel `[=\s]` schlägt auf jede solche Zeichenklasse an, auch ohne Flag-Präfix. Ein `/*` oder `//` in einem
+ * Regex-Literal öffnet einen Kommentar (heute gibt es keinen solchen Fall in `src/sim`). Das Zeichen-Modell kennt `"`, `'` und Backtick-Strings, aber keine Regex-Literale (ein Anführungszeichen darin
  * verdeckt höchstens den Rest dieser Zeile; Strings enden am Zeilenende). */
 import { describe, expect, test } from "vitest";
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";

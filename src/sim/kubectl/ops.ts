@@ -183,6 +183,7 @@ function kubectlSetResources(host: KubectlHost, c: Call) {
   if (error) return error;
   const limits = parseResourceList(host, c.value("--limits"));
   const requests = parseResourceList(host, c.value("--requests"));
+  // Die Flag-Tabelle (checkedFlag) hat beide Werte schon geprüft; der Typ-Zweig ist nur die Verengung.
   if (typeof limits === "string") return limits;
   if (typeof requests === "string") return requests;
   if (!depName) return host._err("kubectl set resources: Welches Deployment?", "Muster: kubectl set resources deployment/<name> --limits=memory=256Mi --requests=memory=128Mi");
