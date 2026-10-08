@@ -10,13 +10,13 @@
  * ist Daten); ein Fremdeingang (Autor nicht vertraut oder Label `forum`) wird übersprungen und als „Befund melden“ ausgewiesen.
  *
  * Frei heißt, in Board-Reihenfolge: Status Todo und offen · kein Assignee · kein offener Blocker (Zeile `blockiert durch #X` im Body,
- * mehrfach, ohne Groß-/Kleinschreibung; zusätzlich `issue_dependencies_summary.blocked_by > 0`: GitHubs Zähler offener Blocker, in diesem
- * Repo noch nie genutzt, darum nicht an echten Daten belegt, im Zweifel wird übersprungen) · kein Branch, Worktree oder offener PR
+ * mehrfach, ohne Groß-/Kleinschreibung; zusätzlich `issue_dependencies_summary.blocked_by > 0`: GitHubs Zähler offener Blocker; die Feldform ist an
+ * echten Daten belegt (Probe 2026-10-08, 151 von 151 Items), ein Wert über 0 noch nie beobachtet, im Zweifel wird übersprungen) · kein Branch, Worktree oder offener PR
  * `feature/kq-<nr>-*`. I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`, ein `gh pr list`; kein GraphQL.
  */
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { REPO, loadItemPages, loadOpenIssuePages, normalizeOffene } from "./board-lib.mjs";
+import { REPO, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene } from "./board-lib.mjs";
 import { FREMDEINGANG_LABELS, istVertraut } from "./fremdtext.mjs";
 import { ghJson } from "./gh-cli.mjs";
 
@@ -42,10 +42,8 @@ export function belegteNummern({ refs = [], worktrees = [], prHeads = [] }) {
   return new Set([...refs, ...worktrees, ...prHeads].map(ticketAusRef).filter((n) => n !== null));
 }
 
-const labelNamen = (labels) => (labels ?? []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
-
 /**
- * Wählt das oberste freie Ticket. `items`: rohe Board-Items (REST, flach, Board-Reihenfolge), `offene`: Menge offener Issue-Nummern,
+ * Wählt das oberste freie Ticket. `items`: normalisierte Board-Items (`normalizeItems` aus board-lib, Board-Reihenfolge), `offene`: Menge offener Issue-Nummern,
  * `refs`/`worktrees`/`prHeads`: Texte (Branch-Namen, Worktree-Pfade bzw. -Branches, PR-Branches), `owner` für die Vertrauensprüfung.
  * Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
  */
@@ -53,26 +51,21 @@ export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHe
   const belegt = belegteNummern({ refs, worktrees, prHeads });
   const uebersprungen = [];
   for (const item of items) {
-    const c = item?.content;
-    if (item?.content_type !== "Issue" || !Number.isInteger(c?.number)) continue;
-    const status = item.fields?.find((f) => f?.name === "Status")?.value?.name?.raw ?? "";
-    if (status !== "Todo" || c.state !== "open") continue;
-    const nr = c.number;
-    const grund = ueberspringGrund(c, { offene, belegt, owner });
-    if (grund) uebersprungen.push({ nr, grund });
-    else return { ticket: { nr, titel: String(c.title ?? "") }, uebersprungen };
+    if (item.status !== "Todo" || item.state !== "open") continue;
+    const grund = ueberspringGrund(item, { offene, belegt, owner });
+    if (grund) uebersprungen.push({ nr: item.number, grund });
+    else return { ticket: { nr: item.number, titel: item.title }, uebersprungen };
   }
   return { ticket: null, uebersprungen };
 }
 
 function ueberspringGrund(c, { offene, belegt, owner }) {
-  const assignees = (c.assignees ?? []).map((a) => a?.login).filter(Boolean);
-  if (assignees.length > 0) return `Assignee ${assignees.map((a) => `@${a}`).join(", ")}`;
-  const label = labelNamen(c.labels).find((l) => FREMDEINGANG_LABELS.includes(l));
-  if (!istVertraut(c.user, owner) || label) return "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden";
+  if (c.assignees.length > 0) return `Assignee ${c.assignees.map((a) => `@${a}`).join(", ")}`;
+  const label = c.labels.find((l) => FREMDEINGANG_LABELS.includes(l));
+  if (!istVertraut(c.autor, owner) || label) return "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden";
   const offeneBlocker = blockerNummern(c.body).filter((n) => offene.has(n) && n !== c.number);
   if (offeneBlocker.length > 0) return `offener Blocker ${offeneBlocker.map((n) => `#${n}`).join(", ")}`;
-  if (Number(c.issue_dependencies_summary?.blocked_by) > 0) return "offener Blocker laut GitHub-Abhängigkeit";
+  if (c.blockedBy > 0) return "offener Blocker laut GitHub-Abhängigkeit";
   if (belegt.has(c.number)) return "Branch, Worktree oder offener PR vorhanden";
   return "";
 }
@@ -98,7 +91,7 @@ export function fuehreAus(argv, io) {
 const git = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
 
 function ladeEcht() {
-  const items = loadItemPages().flat();
+  const items = normalizeItems(loadItemPages());
   const offene = new Set(normalizeOffene(loadOpenIssuePages()).map((i) => i.number));
   try {
     git(["fetch", "--prune", "origin"]); // fail-open: ohne Netz zählen die lokalen Remote-Refs
