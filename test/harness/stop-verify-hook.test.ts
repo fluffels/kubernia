@@ -13,14 +13,33 @@
  *
  * Ausführen mit: npm test
  */
-import { describe, test } from "vitest";
+import { describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { lies, repoDateien } from "./repo-texte";
 
+// Zähler der PowerShell-Starts (#1526): bei einem gesperrten Waisen-Ordner fragt `checkAndFixOrphanWorktrees` unter Windows
+// die Prozessliste per `powershell` (WMI) ab; ein Start kostet ~600 ms und riss unter Parallellast den Timeout. Die Tests
+// injizieren darum `listProcesses` (`ohnePowershell`); der letzte Test dieser Datei belegt, dass nie ein echter Start passiert.
+const powershellStarts = vi.hoisted(() => ({ n: 0 }));
+vi.mock("node:child_process", async (importOriginal) => {
+  const echt = await importOriginal<typeof import("node:child_process")>();
+  const execFileSync = (file: string, ...rest: unknown[]): unknown => {
+    if (/^powershell/i.test(file)) powershellStarts.n++;
+    return (echt.execFileSync as unknown as (...a: unknown[]) => unknown)(file, ...rest);
+  };
+  return { ...echt, execFileSync };
+});
+
 // Reines Node-Tooling-Skript ohne Declaration-File (wie scripts/check-diffsize.mjs).
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as hook from "../../scripts/stop-verify-hook.mjs";
+
+const checkRoh = (hook as unknown as { checkAndFixOrphanWorktrees: unknown }).checkAndFixOrphanWorktrees;
+
+/** Gibt `checkAndFixOrphanWorktrees` mit leerer Prozessliste als Vorgabe zurück; eigene `listProcesses`-Fakes der Tests gewinnen. */
+const ohnePowershell = <F>(f: unknown): F =>
+  ((root: string, deps?: object) => (f as (r: string, d: object) => unknown)(root, { listProcesses: () => [], ...deps })) as unknown as F;
 
 const parseStopInput: (text: string) => { stopHookActive: boolean } = hook.parseStopInput;
 const repoRootFromScriptUrl: (url: string) => string = hook.repoRootFromScriptUrl;
@@ -130,7 +149,7 @@ describe("checkAndFixOrphanWorktrees (#908/#952)", () => {
     blocked: boolean;
     reason?: string;
     removed?: string[];
-  } = hook.checkAndFixOrphanWorktrees;
+  } = ohnePowershell(checkRoh);
 
   test("keine Waisen-Ordner vorhanden, blocked false", () => {
     const result = checkAndFixOrphanWorktrees(
@@ -411,7 +430,7 @@ describe("settings.json hängt den Hook auch an das Ende des Umsetzers (#1309)",
 describe("Stop-Hook: leerer gesperrter Waisen-Ordner und Halter-Meldung (#1411)", () => {
   type Deps = Record<string, unknown>;
   type Check = (root: string, deps?: Deps) => { blocked: boolean; reason?: string; warning?: string; removed?: string[] };
-  const check = (hook as unknown as { checkAndFixOrphanWorktrees: Check }).checkAndFixOrphanWorktrees;
+  const check = ohnePowershell<Check>(checkRoh);
   const WT = "/root/.claude/worktrees";
   const basisDeps = (inhalt: string[]): Deps => ({
     execSync: (cmd: string) => (cmd.includes("worktree list") ? "worktree /root\nHEAD abc\nbranch refs/heads/main\n\n" : ""),
@@ -592,9 +611,7 @@ describe("checkAndFixOrphanWorktrees: Lens-Worktrees ohne Feature-Worktree (#142
   const WT = "/root/.claude/worktrees";
   const JETZT = 50_000_000;
   const porcelain = (pfade: string[]) => pfade.map((p) => `worktree ${p}\nHEAD abc\n`).join("\n");
-  const check = (hook as unknown as {
-    checkAndFixOrphanWorktrees: (root: string, deps: object) => { blocked: boolean; reason?: string; removed?: string[] };
-  }).checkAndFixOrphanWorktrees;
+  const check = ohnePowershell<(root: string, deps: object) => { blocked: boolean; reason?: string; removed?: string[] }>(checkRoh);
 
   function deps(start: string[], opts: { alterMs?: number; klemmt?: boolean; symlink?: boolean; geisterOrdner?: string[] } = {}) {
     const registriert = new Set(start);
@@ -679,7 +696,7 @@ describe("checkAndFixOrphanWorktrees: lose Dateien unter .claude/worktrees (#147
   const WT = "/root/.claude/worktrees";
   const JETZT = 50_000_000;
   type Ergebnis = { blocked: boolean; reason?: string; removed?: string[]; warning?: string };
-  const check = (hook as unknown as { checkAndFixOrphanWorktrees: (root: string, deps: object) => Ergebnis }).checkAndFixOrphanWorktrees;
+  const check = ohnePowershell<(root: string, deps: object) => Ergebnis>(checkRoh);
 
   function deps(dateien: string[], opts: { rmWirft?: boolean; link?: boolean; alterMs?: number } = {}) {
     const befehle: string[] = [];
@@ -793,5 +810,11 @@ HEAD abc
     assert.equal(r.exit, 0);
     assert.match(r.stdout, /systemMessage/);
     assert.match(r.stdout, /notizen\.txt/);
+  });
+});
+
+describe("keine echten Prozessstarts (#1526)", () => {
+  test("kein Test dieser Datei hat PowerShell gestartet (listProcesses ist überall injiziert)", () => {
+    assert.equal(powershellStarts.n, 0, "ein deps-Objekt ohne `listProcesses` löst unter Windows einen echten PowerShell/WMI-Start aus (~600 ms)");
   });
 });
