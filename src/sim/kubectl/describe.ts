@@ -23,10 +23,10 @@ import { readTargets, type Target } from "./targets";
 import type { Call } from "../cliargs";
 import { workloadSelector, formatLabels } from "../util";
 import { clusterPods } from "../pods";
-import { clusterPodStatus } from "../podstatus";
 import { endpointAddresses, serviceSelector, servicesWithDefault } from "../endpoints";
-import { statefulPodClaimName } from "../workload";
-import { availableReplicas, noResourcesIn, INGRESS_ADDRESS } from "./inspect";
+import { statefulPodClaimName, STATEFUL_CLAIM_ACCESS_MODES } from "../workload";
+import { availableReplicas, statefulSetReadyReplicas, noResourcesIn, INGRESS_ADDRESS } from "./inspect";
+import { accessModesLong, pvcPendingEvent } from "../pv-controller";
 import { describePod, podLimitLines, podSecurityLines } from "./describe-pod";
 import { sameRbac } from "../rbac";
 import { nodeInternalIP, NODE_SYSTEM_INFO } from "../nodes";
@@ -131,21 +131,17 @@ function describeService(host: KubectlHost, name: string, kind: ResourceKind): s
 
 // ===== PersistentVolumeClaim =====
 
-const eventRow = (type: string, reason: string, age: string, message: string): string =>
-  "  " + type.padEnd(9) + reason.padEnd(20) + age.padEnd(6) + message;
+/** Die Event-Tabelle eines PVC: Spaltenbreite = längste Zelle + 2, wie der tabwriter von `kubectl describe`. */
+function eventTable(rows: string[][]): string[] {
+  const widths = rows[0].slice(0, 3).map((_, i) => Math.max(...rows.map(r => r[i].length)) + 2);
+  return rows.map(r => "  " + r.map((c, i) => (i < 3 ? c.padEnd(widths[i]) : c)).join(""));
+}
 
-/** Die Events eines Pending-PVC, je nach Ursache (Wortlaut aus dem Kubernetes-PV-Controller). */
+/** Die Events eines noch ungebundenen PVC; der Grund kommt aus dem PV-Controller (`pvcPendingEvent`). */
 function pvcEvents(host: KubectlHost, pvc: PvcRes): string[] {
-  if (pvc.status !== "Pending") return [];
-  const age = host._age(pvc.created);
-  const head = [eventRow("Type", "Reason", "Age", "Message"), eventRow("----", "------", "----", "-------")];
-  if (pvc.storageClass === "") {
-    return [...head, eventRow("Normal", "FailedBinding", age, "no persistent volumes available for this claim and no storage class is set")];
-  }
-  if (!host.storageClasses.some(c => c.name === pvc.storageClass)) {
-    return [...head, eventRow("Warning", "ProvisioningFailed", age, 'storageclass.storage.k8s.io "' + pvc.storageClass + '" not found')];
-  }
-  return [];
+  const ev = pvcPendingEvent(host, pvc);
+  if (!ev) return [];
+  return eventTable([["Type", "Reason", "Age", "Message"], ["----", "------", "----", "-------"], [ev.type, ev.reason, host._age(pvc.created), ev.message]]);
 }
 
 function describePvc(host: KubectlHost, name: string, kind: ResourceKind): string {
@@ -171,9 +167,9 @@ function describePvc(host: KubectlHost, name: string, kind: ResourceKind): strin
 // ===== StatefulSet =====
 
 function podsStatus(host: KubectlHost, sts: StatefulSetRes): string {
-  const pods = clusterPods(host).filter(c => c.owner === "StatefulSet" && c.sts.name === sts.name);
-  const running = pods.filter(c => clusterPodStatus(host, c).status === "Running").length;
-  return running + " Running / " + (pods.length - running) + " Waiting / 0 Succeeded / 0 Failed";
+  const total = clusterPods(host).filter(c => c.owner === "StatefulSet" && c.sts.name === sts.name).length;
+  const running = statefulSetReadyReplicas(host, sts);
+  return running + " Running / " + (total - running) + " Waiting / 0 Succeeded / 0 Failed";
 }
 
 function describeStatefulSet(host: KubectlHost, name: string, kind: ResourceKind): string {
@@ -197,7 +193,7 @@ function describeStatefulSet(host: KubectlHost, name: string, kind: ResourceKind
     kv("  Name", sts.volumeClaimName, 17),
     kv("  StorageClass", sts.storageClass ?? "", 17),
     kv("  Capacity", sts.storage, 17),
-    kv("  Access Modes", "[ReadWriteOnce]", 17),
+    kv("  Access Modes", "[" + accessModesLong(STATEFUL_CLAIM_ACCESS_MODES).join(" ") + "]", 17),
     kv("Events", "<none>", 24),
   ].join("\n");
 }

@@ -1,7 +1,7 @@
 /* help <familie> und die bewussten Vereinfachungen des Simulators (#1440). Über sim.exec, wie im Spiel. */
 import { test, expect, describe } from "vitest";
 import { freshSim } from "./sim/helpers";
-import { simGrenzen, renderHelpTopic } from "../src/hud/helptext";
+import { simGrenzen, renderHelpTopic, familienMitGrenzen } from "../src/hud/helptext";
 
 const OFFEN = new Set(["help", "clear", "kubectl", "docker"]);
 const help = (cmd: string, av?: Set<string>) => freshSim().exec(cmd, av);
@@ -27,15 +27,27 @@ describe("help kubectl", () => {
     expect(r.output).toBe(help("help quatsch", new Set(["help", "clear"])).output!.replace("quatsch", "kubectl"));
   });
 
-  test("Grenztexte bleiben kurz (Terminalbreite)", () => {
-    for (const g of simGrenzen("kubectl")) expect(g.text.length, g.id).toBeLessThanOrEqual(110);
+  test.each(familienMitGrenzen())("%s: Grenztexte bleiben kurz (Terminalbreite)", f => {
+    for (const g of simGrenzen(f)) expect(g.text.length, g.id).toBeLessThanOrEqual(110);
+  });
+
+  test.each(familienMitGrenzen())("help %s zeigt alle Grenztexte (#1461)", f => {
+    const out = help("help " + f).output!;
+    for (const g of simGrenzen(f)) expect(out).toContain("  - " + g.text);
+  });
+
+  test("familienMitGrenzen: kubectl, kubeadm, curl und nslookup sind dabei, kubectl zuerst", () => {
+    const fam = familienMitGrenzen();
+    expect(fam[0]).toBe("kubectl");
+    expect(fam).toEqual(expect.arrayContaining(["kubeadm", "curl", "nslookup"]));
+    expect(fam).not.toContain("ls");
   });
 });
 
 describe("help <andere>", () => {
   test("Familie ohne Grenzen: keine Vereinfachungs-Rubrik", () => {
-    const out = help("help docker").output!;
-    expect(out).toMatch(/^docker:/);
+    const out = help("help ls").output!;
+    expect(out).toMatch(/^ls:/);
     expect(out).not.toContain("vereinfacht");
   });
 
@@ -46,20 +58,32 @@ describe("help <andere>", () => {
   });
 
   test("simGrenzen und renderHelpTopic: unbekannte Familie leer bzw. null", () => {
-    expect(simGrenzen("docker")).toEqual([]);
+    expect(simGrenzen("ls")).toEqual([]);
     expect(simGrenzen("quatsch")).toEqual([]);
     expect(renderHelpTopic("quatsch")).toBeNull();
   });
 });
 
 describe("Fußzeile in help", () => {
-  test("zeigt auf help kubectl, wenn kubectl sichtbar ist", () => {
-    expect(help("help").output).toContain("'help kubectl'");
-    expect(help("help", OFFEN).output).toContain("'help kubectl'");
+  const FUSS = "💡 Was der Simulator vereinfacht: 'help <befehl>', z.B. 'help ";
+
+  test("ungefiltert: ein Platzhalter-Satz mit der ersten Familie mit Grenzen als Beispiel", () => {
+    expect(help("help").output).toContain(FUSS + "kubectl'.");
+    expect(help("help", OFFEN).output).toContain(FUSS + "kubectl'.");
+  });
+
+  test("die Fußzeile wächst nicht mit der Familienzahl: genau eine Zeile", () => {
+    const zeilen = help("help").output!.split("\n");
+    expect(zeilen.filter(l => l.includes("Was der Simulator vereinfacht"))).toHaveLength(1);
+  });
+
+  test("Beispiel ist die erste freigeschaltete Familie mit Grenzen (auch ohne kubectl)", () => {
+    expect(help("help", new Set(["help", "clear", "curl"])).output).toContain(FUSS + "curl'.");
+    expect(help("help", new Set(["help", "clear", "nslookup", "curl"])).output).toContain(FUSS + "nslookup'.");
   });
 
   test("ohne freigeschaltete Familie mit Grenzen keine Fußzeile und kein kubectl (#358)", () => {
-    const out = help("help", new Set(["help", "clear", "docker"])).output!;
+    const out = help("help", new Set(["help", "clear", "docker", "ls"])).output!;
     expect(out).not.toContain("vereinfacht");
     expect(out).not.toMatch(/\bkubectl\b/);
   });

@@ -132,7 +132,7 @@
             "id": "t-sa-describe",
             "text": "Der Beweis: <code>kubectl describe pod <pod-name></code> (Name aus der Liste oben). In der Zeile <code>Service Account:</code> steht <code>wachdienst</code> – nicht mehr <code>default</code>. Der Ausweis sitzt.",
             "accept": [
-              "^kubectl\\s+describe\\s+pod\\s+wachposten-\\S+$"
+              "^kubectl\\s+describe\\s+pod\\s+wachposten(-\\S*)?$"
             ],
             "check": {"some":"deployments","where":{"name":"wachposten","serviceAccountName":"wachdienst"}},
             "solution": "kubectl describe pod <wachposten-pod>",

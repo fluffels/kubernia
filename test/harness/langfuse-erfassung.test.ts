@@ -47,6 +47,7 @@ const CHECKLISTE = [
   "Code-Qualität/Prozess",
   "Wochenbudget",
   "Kosten gegen Nutzen",
+  "Vermeidbare Arbeit",
 ];
 
 /** Der AGENTS.md-Bullet zur Erfassungsregel: nennt die vier Änderungsarten und verlinkt den Ablauf. */
@@ -63,7 +64,7 @@ const hatErfassungsRegel = (agentsMd: string): boolean => {
   );
 };
 
-/** Der Checklisten-Abschnitt trägt alle sechs fetten Punkte. */
+/** Der Checklisten-Abschnitt trägt alle fetten Punkte der CHECKLISTE. */
 const hatChecklisteVollstaendig = (modelRouting: string): boolean => {
   const a = abschnitt(modelRouting, /^### Langfuse-Status überprüfen \(#1293\)/);
   return a !== "" && CHECKLISTE.every((p) => a.includes(`**${p}`));
@@ -184,12 +185,26 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatErfassungsRegel(""));
   });
 
-  test("model-routing.md: Checkliste mit allen acht Punkten", () => {
+  test("model-routing.md: Checkliste mit allen neun Punkten", () => {
     assert.ok(hatChecklisteVollstaendig(mr));
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Wochenbudget:**", "Wochenbudget:")));
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Kosten gegen Nutzen", "Kosten gegen Nutzen")));
     assert.ok(!hatChecklisteVollstaendig(mr.replace("**Tokenfresser:**", "Tokenfresser:")));
+    assert.ok(!hatChecklisteVollstaendig(mr.replace("**Vermeidbare Arbeit (#1425):**", "Vermeidbare Arbeit (#1425):")));
     assert.ok(!hatChecklisteVollstaendig("### Langfuse-Status überprüfen (#1293)\n\n**Wirkung**"));
+  });
+
+  test("model-routing.md: die Checkliste hat genau so viele nummerierte Punkte wie CHECKLISTE", () => {
+    const zaehle = (text: string): number =>
+      abschnitt(text, /^### Langfuse-Status überprüfen \(#1293\)/)
+        .split("\n")
+        .filter((z) => /^\d+\. \*\*/.test(z)).length;
+    assert.equal(zaehle(mr), CHECKLISTE.length);
+    // Drift: ein zehnter Punkt ohne Eintrag in CHECKLISTE muss auffallen
+    const punkt9 = mr.indexOf("9. **Vermeidbare Arbeit");
+    const zeilenEnde = mr.indexOf("\n", punkt9);
+    const mitZehn = `${mr.slice(0, zeilenEnde)}\n10. **Neu:** x${mr.slice(zeilenEnde)}`;
+    assert.notEqual(zaehle(mitZehn), CHECKLISTE.length);
   });
 
   test("model-routing.md: Beleg-Ablauf mit Probe-Lauf und Usage", () => {

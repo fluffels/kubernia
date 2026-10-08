@@ -800,12 +800,75 @@ function invisiblePlaceholders(text: string): string[] {
   return out;
 }
 
+/** Echte Anzeige-Tags (`CONTENT_HTML_TAGS` ohne das leere `br`), die nicht sauber geschlossen sind: offene Tags
+ *  (`<b>x`), verwaiste Schließer (`x</b>`) und falsche Verschachtelung (`<b><i>x</b></i>`). Ein offenes `<b>` färbt
+ *  beim innerHTML-Rendern den Rest des Panels um (#1508). Tags mit Attributen zählen mit (`<span class="x">`). */
+function offeneTags(text: string): string[] {
+  const stack: string[] = [];
+  const out: string[] = [];
+  for (const m of text.matchAll(/<(\/?)([A-Za-z][A-Za-z0-9]*)(?:\s[^<>]*)?>/g)) {
+    const name = m[2].toLowerCase();
+    if (name === "br" || !CONTENT_HTML_TAGS.has(name)) continue;
+    if (m[1] === "") stack.push(name);
+    else if (stack.pop() !== name) out.push(`</${name}> ohne passenden Öffner`);
+  }
+  for (const name of stack) out.push(`<${name}> nicht geschlossen`);
+  return out;
+}
+
 /** Sammelt alle Anzeige-Textfelder eines Content-Bereichs mit Label für die Wächter. */
 function scanFields(pairs: [string, string][]): string[] {
   const out: string[] = [];
-  for (const [label, text] of pairs) for (const bad of invisiblePlaceholders(text)) out.push(`${label}: ${bad}`);
+  for (const [label, text] of pairs) {
+    for (const bad of invisiblePlaceholders(text)) out.push(`${label}: ${bad}`);
+    for (const bad of offeneTags(text)) out.push(`${label}: ${bad}`);
+  }
   return out;
 }
+
+test("Quest-Texte: keine unsichtbaren Platzhalter, alle Tags geschlossen (#1508)", () => {
+  const problems = scanFields(questAnzeigeFelder(KQContent.QUESTS));
+  assert.deepEqual(problems, [], "Quest-Felder mit unsichtbarem Platzhalter oder offenem Tag:\n" + problems.join("\n"));
+});
+
+/** Weitere Sammlungen, die im Spiel per `fmtCmd` gerendert werden (Quest-Texte, Drills und Quiz prüfen die Tests daneben). */
+const ANZEIGE_QUELLEN: [string, () => [string, string][]][] = [
+  ["SMALLTALK", () => Object.entries(KQContent.SMALLTALK)
+    .flatMap(([npc, zeilen]) => zeilen.map((t, i): [string, string] => [`${npc}[${i}]`, t]))],
+  ["CMD_CARDS", () => KQContent.CMD_CARDS.flatMap((c): [string, string][] => [[`${c.id}.q`, c.q], [`${c.id}.explain`, c.explain]])],
+  ["FUNK_EXPLAINS", () => KQContent.FUNK_EXPLAINS.map((f): [string, string] => [`${f.id}.text`, f.text])],
+];
+
+for (const [name, felder] of ANZEIGE_QUELLEN) {
+  test(`${name}: keine unsichtbaren Platzhalter, alle Tags geschlossen (#1508)`, () => {
+    const pairs = felder();
+    assert.ok(pairs.length > 0, `${name}: keine Felder gesammelt – die Quelle ist leer?`);
+    const problems = scanFields(pairs);
+    assert.deepEqual(problems, [], `${name}-Felder mit unsichtbarem Platzhalter oder offenem Tag:\n` + problems.join("\n"));
+  });
+}
+
+test("Red-Green (#1508): Platzhalter und offenes Tag in einer Quest-Dialogzeile werden gemeldet", () => {
+  const dialogIdx = (q: (typeof KQContent.QUESTS)[number]) => q.steps.findIndex(s => s.type === "dialog");
+  const basis = KQContent.QUESTS.find(q => dialogIdx(q) >= 0);
+  assert.ok(basis, "keine Quest mit Dialog");
+  const klon = (zeile: string): typeof KQContent.QUESTS => [{
+    ...basis,
+    steps: basis.steps.map((s, i) => (i === dialogIdx(basis) && s.type === "dialog" ? { ...s, lines: [zeile, ...s.lines] } : s)),
+  }];
+  assert.ok(scanFields(questAnzeigeFelder(klon("Starte <pod_name> neu"))).length > 0, "unbekannter Platzhalter nicht gemeldet");
+  assert.ok(scanFields(questAnzeigeFelder(klon("Das ist <b>wichtig"))).length > 0, "offenes <b> nicht gemeldet");
+  assert.deepEqual(scanFields(questAnzeigeFelder(klon("<code>kubectl</code> und <b>fett</b><br>neu"))), [], "gültiges Markup gemeldet");
+});
+
+test("Red-Green (#1508): offeneTags meldet offen, verwaist und falsch verschachtelt, nicht gültiges Markup", () => {
+  assert.equal(offeneTags("<b>x").length, 1);
+  assert.equal(offeneTags("x</b>").length, 1);
+  assert.ok(offeneTags("<b><i>x</b></i>").length >= 1);
+  assert.equal(offeneTags('<span class="a">x').length, 1);
+  assert.deepEqual(offeneTags("<code>a</code> <br> <b>b</b>"), []);
+  assert.deepEqual(offeneTags("<br/> &lt;b&gt; <pod-name>"), []);
+});
 
 test("Drills: why/hint enthalten keine unsichtbaren Platzhalter (fmtCmd macht <token> sichtbar, #311/#320)", () => {
   const pairs: [string, string][] = [];
@@ -1427,24 +1490,37 @@ test("#139 Wachturm-Quests (k8s-serviceaccount–k8s-pod-security): von Vidar, T
  * die nur einmal im Spiel auftaucht. Der Wächter sammelt ALLE spielersichtbaren
  * Quest-Texte und stellt sicher, dass „Kisten-Supermarkt" nicht zurückkehrt. */
 
-/** Sammelt alle vom Spieler gelesenen Texte einer Quest-Liste (Titel, Dialoge,
- *  Choices, Teach-/Terminal-Panels samt Hints, Drill-Intros). */
-function playerVisibleQuestText(quests: typeof KQContent.QUESTS): string[] {
-  const out: string[] = [];
+/** Sammelt alle vom Spieler gelesenen Textfelder einer Quest-Liste mit Label `<quest>#<schritt>.<feld>`
+ *  (Titel, Dialoge, Choices, Teach-/Terminal-Panels samt Hints und `why`, Drill-Intros). Die EINE Feldliste:
+ *  Wording-Wächter und Platzhalter-/Tag-Wächter (#1508) lesen beide hieraus. */
+function questAnzeigeFelder(quests: typeof KQContent.QUESTS): [string, string][] {
+  const out: [string, string][] = [];
   for (const quest of quests) {
-    out.push(quest.title);
-    for (const step of quest.steps) {
-      if ("brief" in step && step.brief) out.push(step.brief);
-      if (step.type === "dialog") out.push(...step.lines);
+    out.push([`${quest.id}.title`, quest.title]);
+    quest.steps.forEach((step, i) => {
+      const l = `${quest.id}#${i}`;
+      if ("brief" in step && step.brief) out.push([`${l}.brief`, step.brief]);
+      if (step.type === "dialog") step.lines.forEach((t, k) => out.push([`${l}.lines[${k}]`, t]));
       else if (step.type === "choice") {
-        out.push(step.q);
-        for (const o of step.options) out.push(o.t, o.reply);
-      } else if (step.type === "teach") out.push(step.cmd.intro, step.cmd.text, step.cmd.hint);
-      else if (step.type === "terminal") for (const t of step.tasks) out.push(t.text, t.hint);
-      else if (step.type === "drill") out.push(step.intro);
-    }
+        out.push([`${l}.q`, step.q]);
+        step.options.forEach((o, k) => out.push([`${l}.options[${k}].t`, o.t], [`${l}.options[${k}].reply`, o.reply]));
+      } else if (step.type === "teach") {
+        out.push([`${l}.intro`, step.cmd.intro], [`${l}.text`, step.cmd.text], [`${l}.hint`, step.cmd.hint]);
+        if (step.cmd.why) out.push([`${l}.why`, step.cmd.why]);
+      } else if (step.type === "terminal") {
+        for (const t of step.tasks) {
+          out.push([`${l}/${t.id}.text`, t.text], [`${l}/${t.id}.hint`, t.hint]);
+          if (t.why) out.push([`${l}/${t.id}.why`, t.why]);
+        }
+      } else if (step.type === "drill") out.push([`${l}.intro`, step.intro]);
+    });
   }
   return out;
+}
+
+/** Nur die Texte (ohne Label) für den Wording-Wächter. */
+function playerVisibleQuestText(quests: typeof KQContent.QUESTS): string[] {
+  return questAnzeigeFelder(quests).map(([, text]) => text);
 }
 
 test("#447 Wording: kein 'Kisten-Supermarkt' (spielwelt-interne Metapher) mehr in spielersichtbaren Quest-Texten", () => {

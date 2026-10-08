@@ -271,7 +271,7 @@ Gegliedert nach den neun Produktqualitäts-Merkmalen von [ISO/IEC 25010:2023](ht
 
 | Merkmal | Szenario | Durchsetzendes Gate | Status |
 |---|---|---|---|
-| Functional suitability | Quest-Daten sind fehlerhaft oder unlösbar → der Loader validiert beim Start, `solvedBy`-Prüfungen und Quest-Tests schlagen vor dem Merge an | `npm test` (`quests`, `solved-by-check`), Content-Loader | erfüllt; Treue der Simulation gegenüber echtem `kubectl` über eine Matrix mit Wächter-Test abgesichert ([sim-treue.md](sim-treue.md), `test/sim/kubectl-treue.test.ts`, #1440), die Lücken sammeln Sim-Tickets (Lücke 2) |
+| Functional suitability | Quest-Daten sind fehlerhaft oder unlösbar → der Loader validiert beim Start, `solvedBy`-Prüfungen und Quest-Tests schlagen vor dem Merge an | `npm test` (`quests`, `solved-by-check`), Content-Loader | erfüllt; Treue der Simulation gegenüber den echten Werkzeugen über je eine Matrix je Befehlsfamilie mit Wächter-Test abgesichert ([sim-treue.md](sim-treue.md), `test/sim/sim-treue.test.ts`, #1440, #1461), die Lücken sammeln Sim-Tickets (Lücke 2) |
 | Performance efficiency | Viele Inseln/Sprites/Content-Dateien → Culling greift, Content-Chunks je Datei, Byte-Budget je Chunk-Art | `check:bundle` ([ADR 0018](adr/0018-content-chunks-je-datei.md)), Perf-Smoke, [performance-budget.md](performance-budget.md) | erfüllt (#503, #1408) |
 | Compatibility | Das Spiel läuft in den Browsern der Spieler:innen; die Smokes laufen bisher nur in Chromium | Boot-Smoke, Perf-Smoke | teilweise: Firefox/WebKit offen (#1131, Lücke 1) |
 | Interaction capability | Farb-unabhängige Statuscodierung, Tastaturbedienung, Kontraste | Browser-Verifikation je Änderung (Präsentation bewusst nicht gegatet), [barrierefreiheit-audit.md](barrierefreiheit-audit.md) | geprüft (#481), kein automatisches Gate (Lücke 3) |
@@ -285,7 +285,7 @@ Gegliedert nach den neun Produktqualitäts-Merkmalen von [ISO/IEC 25010:2023](ht
 
 | Nr. | Lücke | Risiko | Folge |
 |---|---|---|---|
-| 2 | Die Simulation bildet `kubectl` für die Befehle der Treue-Matrix ([sim-treue.md](sim-treue.md)) mit Wächter-Test und Vereinfachungen in `help kubectl` ab (#1440, #1444 geschlossen); Ressourcenarten und Befehlsfamilien außerhalb der Matrix (z.B. Namespaces #1430) und Einzelabweichungen (#1323, #1343) sind offene Sim-Tickets. | mittel | Matrix wächst mit den Sim-Tickets, der Wächter-Test hält sie an den Code gebunden |
+| 2 | Die Simulation bildet die Befehlsfamilien mit Treue-Matrix (kubectl, kubeadm, curl, nslookup; Abbauliste `OHNE_MATRIX` im Wächter, [sim-treue.md](sim-treue.md)) mit Wächter-Test und Vereinfachungen in `help <befehl>` ab (#1440, #1444 geschlossen); Ressourcenarten und Befehlsfamilien außerhalb der Matrix (z.B. Namespaces #1430) und Einzelabweichungen (#1323, #1343) sind offene Sim-Tickets. | mittel | Matrix wächst mit den Sim-Tickets, der Wächter-Test hält sie an den Code gebunden |
 | 1 | Smokes laufen nur in Chromium; Firefox und Safari sind für Spieler:innen realistisch. | mittel | bestehendes Ticket #1131 |
 | 4 | Sicherheit gegen externe Kataloge: CodeQL und Scorecard fehlen (#875); Agenten-Sandbox (#1432) und OWASP-LLM-Abgleich (#1433) sind gemergt | mittel | bestehendes Ticket #875 |
 | 3 | Barrierefreiheit ist geprüft, aber ohne Gate; Regressionen fielen erst bei der nächsten Prüfung auf. | niedrig | akzeptiert, weil Präsentations-Code bewusst im Browser statt per Gate verifiziert wird (AGENTS.md) und das Audit datiert vorliegt |

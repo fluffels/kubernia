@@ -128,13 +128,25 @@ describe("describe pvc", () => {
     expect(out(sim, "describe pvc lose")).toMatch(/^Used By:\s+<none>$/m);
   });
 
-  test("Pending mit vorhandener StorageClass: kein ProvisioningFailed, Events <none>", () => {
-    const sim = new KQSim({});
-    sim.storageClasses.push({ name: "schnell", provisioner: "x", reclaimPolicy: "Delete", isDefault: false, created: 0 });
-    sim.pvcs.push({ name: "wartend", status: "Pending", volume: "", capacity: "1Gi", storageClass: "schnell", accessModes: "RWO", created: 0 });
+  test("PVC bindet nach, wenn die StorageClass später entsteht (#1494)", () => {
+    const sim = new KQSim({ pvcs: [{ name: "wartend", storage: "1Gi", storageClass: "spaet" }] });
+    expect(out(sim, "describe pvc wartend")).toMatch(/Warning\s+ProvisioningFailed\s+\S+\s+storageclass\.storage\.k8s\.io "spaet" not found/);
+    sim.mergeScenario({ files: { "sc.yaml": "x" }, applyEffects: { "sc.yaml": { storageClass: { name: "spaet" } } } });
+    expect(run(sim, "apply -f sc.yaml").error).toBeFalsy();
     const d = out(sim, "describe pvc wartend");
-    expect(d).not.toContain("ProvisioningFailed");
+    expect(d).toMatch(/^Status:\s+Bound$/m);
+    expect(d).toMatch(/^Volume:\s+pvc-\S+$/m);
     expect(d).toMatch(/^Events:\s+<none>$/m);
+  });
+
+  test("ExternalProvisioning: exakter Text, Reason mit Abstand zur Age-Spalte (#1494)", () => {
+    const sim = new KQSim({});
+    // Direkt in die Arrays, ohne exec: sonst bindet der Resync das PVC vor dem Rendern.
+    sim.storageClasses.push({ name: "schnell", provisioner: "ebs.csi.example", reclaimPolicy: "Delete", isDefault: false, created: 0 });
+    sim.pvcs.push({ name: "wartend", status: "Pending", volume: "", capacity: "1Gi", storageClass: "schnell", accessModes: "RWO", created: 0 });
+    const d = DESCRIBE_ENTRIES.get("persistentvolumeclaims")!.render(sim, "wartend", RESOURCE_KINDS.find(k => k.plural === "persistentvolumeclaims")!);
+    expect(d).toContain("Waiting for a volume to be created either by the external provisioner 'ebs.csi.example' or manually by the system administrator. If volume creation is delayed, please verify that the provisioner is running and correctly registered.");
+    expect(d).toMatch(/Normal\s+ExternalProvisioning\s{2,}\S+\s+Waiting/);
   });
 
   test("Pending ohne StorageClass: Capacity leer, FailedBinding mit Originaltext", () => {

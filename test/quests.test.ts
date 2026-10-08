@@ -7,6 +7,8 @@ import assert from "node:assert/strict";
 import { Sim as KQSim } from "../src/sim";
 import { KQContent } from "../src/content";
 import { freshSim } from "./factories/sim";
+import { evaluateSubmission } from "../src/hud/viewdecide";
+import type { SolvedBy } from "../src/types";
 
 function resolvePlaceholder(cmd: string, sim: KQSim) {
   if (!cmd.includes("<")) return cmd;
@@ -47,7 +49,24 @@ function runTask(sim: KQSim, task: RunnableTask, label: string) {
   assert.ok(task.accept.some((re: RegExp) => re.test(norm)), label + ": Lösung matcht Regex nicht: " + norm);
   assert.ok(!result.error, label + ": Simulator-Fehler: " + result.output);
   assert.ok(!task.check || task.check(sim), label + ": check() nicht erfüllt");
+  return result.output ?? "";
 }
+
+/** #1508: Eine Teach-Lösung soll etwas Sichtbares zeigen. Leere Ausgabe oder ein Kein-Treffer-/Fehlermuster
+ *  (`helm search repo zzz` → „No results found“) lässt `runTask` sonst als bestanden durch. Bewusst NICHT
+ *  „nicht gefunden“: das steht legitim in Crashloop-Logs. Gibt das Problem zurück, null wenn die Ausgabe in Ordnung ist. */
+function teachAusgabeProblem(output: string): string | null {
+  if (output.trim() === "") return "leere Ausgabe";
+  const m = /^\s*(error|fehler)\b|\bNo (results|resources) found\b|^\s*Error from server/im.exec(output);
+  return m ? `Kein-Treffer-/Fehlermuster „${m[0].trim()}“` : null;
+}
+
+/** Teach-Lösungen, deren leere bzw. Kein-Treffer-Ausgabe gewollt ist (Label `quest/teach-id` → Begründung).
+ *  Jeder Eintrag muss weiter ein Problem auslösen, sonst ist er veraltet und fliegt raus (Stale-Prüfung unten). */
+const TEACH_AUSGABE_AUSNAHMEN = new Map<string, string>([
+  ["docker-build-image/t-tag", "`docker tag` ist wie echtes Docker still"],
+  ["network-policy/t-get-netpol", "die leere Liste ist laut `why` die Lektion (noch keine Policy)"],
+]);
 
 const norm = (s: string) => s.trim().replace(/\s+/g, " ");
 
@@ -102,11 +121,14 @@ function plausibleWrong(cmd: string): { id: string; variant: string }[] {
 
 test("Komplette Story ist mit den Musterlösungen durchspielbar", () => {
   const sim = new KQSim({});
+  const teachProbleme = new Map<string, string>();
   for (const quest of KQContent.QUESTS) {
     for (const step of quest.steps) {
       if (step.scenario) sim.mergeScenario(step.scenario);
       if (step.type === "teach") {
-        runTask(sim, step.cmd, quest.id + "/" + step.cmd.id);
+        const label = quest.id + "/" + step.cmd.id;
+        const problem = teachAusgabeProblem(runTask(sim, step.cmd, label));
+        if (problem) teachProbleme.set(label, problem);
       } else if (step.type === "terminal") {
         for (const task of step.tasks) runTask(sim, task, quest.id + "/" + task.id);
       } else if (step.type === "drill") {
@@ -117,6 +139,26 @@ test("Komplette Story ist mit den Musterlösungen durchspielbar", () => {
       }
     }
   }
+  // #1508: jede Teach-Lösung zeigt etwas Sichtbares, außer den begründeten Ausnahmen
+  const ungewollt = [...teachProbleme].filter(([label]) => !TEACH_AUSGABE_AUSNAHMEN.has(label)).map(([l, p]) => l + ": " + p);
+  assert.deepEqual(ungewollt, [], "Teach-Lösung ohne sichtbare Ausgabe oder mit Kein-Treffer-/Fehlermuster (Lösung ändern oder begründete Ausnahme eintragen)");
+  const veraltet = [...TEACH_AUSGABE_AUSNAHMEN.keys()].filter(label => !teachProbleme.has(label));
+  assert.deepEqual(veraltet, [], "Ausnahme löst kein Problem mehr aus oder existiert nicht: Eintrag entfernen");
+});
+
+test("Red-Green (#1508): teachAusgabeProblem meldet leere und Kein-Treffer-Ausgaben, nicht echte Tabellen und Logs", () => {
+  for (const schlecht of ["", "  \n", "No results found", "No resources found in default namespace.", "Error from server (NotFound): pods \"x\" not found", "error: unknown command"]) {
+    assert.notEqual(teachAusgabeProblem(schlecht), null, JSON.stringify(schlecht));
+  }
+  for (const gut of ["NAME READY STATUS\nweb-1 1/1 Running", "FATAL: Konfigurationsdatei nicht gefunden\nContainer beendet", "deployment.apps/web created"]) {
+    assert.equal(teachAusgabeProblem(gut), null, gut);
+  }
+});
+
+test("Red-Green (#1508): eine Teach-Lösung ohne Treffer fällt auf (die Stale-Prüfung der Story deckt erfundene Ausnahmen)", () => {
+  const sim = new KQSim({});
+  const ausgabe = runTask(sim, { accept: [/^kubectl get pods$/], solution: "kubectl get pods" }, "sabotage");
+  assert.notEqual(teachAusgabeProblem(ausgabe), null, "kubectl get pods ohne Pods: " + ausgabe);
 });
 
 test("Alle Drill-Generatoren liefern lösbare Zufallsaufgaben (je 5x)", () => {
@@ -181,6 +223,49 @@ function checkModeViolations(
   return out;
 }
 
+/** #1521: Oles Lehre „ein Präfix geht auch“ gilt für JEDE describe-pod-Aufgabe. Die Sim beschreibt
+ *  bei `describe pod <dep>` alle Pods des Deployments ohne Fehler; die Aufgabe muss das dann auch
+ *  als gelöst werten (sonst „falsch“ trotz korrekter Ausgabe). Geprüft wird mit dem echten
+ *  `evaluateSubmission` auf der Live-Sim (ein Snapshot-Klon würfelt die Pod-Suffixe neu).
+ *  Negativ: ein geratener Name (`<dep>-geraten`) trifft keinen Pod und ist nie gelöst. */
+function describePrefixViolations(
+  sim: KQSim,
+  task: { accept: RegExp[]; solution: string; solvedBy?: SolvedBy; check?: (sim: KQSim) => unknown },
+  label: string,
+): string[] {
+  const cmd = norm(resolvePlaceholder(task.solution, sim));
+  const m = cmd.match(/^kubectl describe pods? (\S+)$/);
+  if (!m) return [];
+  const pod = m[1];
+  const dep = sim.deployments.find(d => d.pods.some(p => p.name === pod));
+  if (!dep) return []; // nackter Pod: kein Präfix-Versprechen
+  const out: string[] = [];
+  // describe ist rein lesend: die zusätzlichen exec-Läufe verändern den Weltzustand des Durchspiels nicht.
+  const solved = (input: string) => {
+    const verdict = evaluateSubmission(input, task, {
+      simError: !!sim.exec(input).error,
+      checkOk: !task.check || !!task.check(sim),
+      isAbbrevUnlocked: () => true,
+      failCount: 0,
+    });
+    return verdict.outcome === "solved";
+  };
+  const rsPrefix = pod.replace(/-[^-]+$/, "");
+  for (const praefix of [dep.name, rsPrefix]) {
+    if (!solved("kubectl describe pod " + praefix)) {
+      out.push(`${label}: Präfix „${praefix}“ wird nicht als gelöst gewertet (accept muss ${dep.name}(-\\S*)? erlauben)`);
+    }
+  }
+  // Zu weite Regex (<dep>\S*): `<dep>x` ginge als Pod durch, den es nicht gibt (kantinen-lager).
+  if (task.solvedBy !== "check" && task.accept.some(re => re.test("kubectl describe pod " + dep.name + "x"))) {
+    out.push(`${label}: accept ist zu weit, „${dep.name}x“ wird angenommen (erlaubt ist nur ${dep.name}(-\\S*)?)`);
+  }
+  if (solved("kubectl describe pod " + dep.name + "-geraten")) {
+    out.push(`${label}: geratener Name „${dep.name}-geraten“ gilt als gelöst`);
+  }
+  return out;
+}
+
 /* #603: Gegenstück zum Positiv-Durchspiel oben. Der Durchspiel-Test beweist, dass die
  * Musterlösung akzeptiert wird; hier beweisen wir SYSTEMATISCH JE TERMINAL-AUFGABE, dass
  * eine naheliegende, fachlich falsche Eingabe ABGELEHNT wird (z.B. `delete` statt `get`).
@@ -198,6 +283,7 @@ test("Jede Quest-Terminal-Aufgabe lehnt eine naheliegende Falscheingabe ab (#603
     for (const step of quest.steps) {
       if (step.scenario) sim.mergeScenario(step.scenario);
       if (step.type === "teach") {
+        fehler.push(...describePrefixViolations(sim, step.cmd, quest.id + "/" + step.cmd.id));
         runTask(sim, step.cmd, quest.id + "/" + step.cmd.id);
       } else if (step.type === "drill") {
         for (let i = 0; i < step.count; i++) {
@@ -207,6 +293,7 @@ test("Jede Quest-Terminal-Aufgabe lehnt eine naheliegende Falscheingabe ab (#603
       } else if (step.type === "terminal") {
         for (const task of step.tasks) {
           const label = quest.id + "/" + task.id;
+          fehler.push(...describePrefixViolations(sim, task, label));
           const cmd = norm(resolvePlaceholder(task.solution, sim));
           // Sanity: die aufgelöste Lösung gilt (sonst wäre die Verfälschung nicht aussagekräftig).
           assert.ok(task.accept.some(re => re.test(cmd)), label + ": Lösung matcht Regex nicht: " + cmd);
@@ -267,4 +354,35 @@ test("#891 check-Modus-Wächter ist scharf: jede Regel wird bei gezielter Verfä
   assert.ok(checkModeViolations(sim, { ...good, altSolutions: [cmd] }, cmd, "b").some(m => m.includes("jenseits von accept")));
   // (b) eine kaputte Alternative erreicht das Ziel nicht.
   assert.ok(checkModeViolations(sim, { ...good, altSolutions: ["kubectl get pods"] }, cmd, "b2").some(m => m.includes("erreicht das Ziel nicht")));
+});
+
+test("#1521 describe-Präfix-Wächter ist scharf (Red-Green)", () => {
+  const sim = freshSim();
+  sim.exec("kubectl create deployment kantine --image=nginx");
+  const pod = sim.deployments[0].pods[0].name;
+  const mk = (re: RegExp, extra: Partial<{ solvedBy: "check"; check: () => boolean }> = {}) => ({
+    accept: [re],
+    solution: "kubectl describe pod " + pod,
+    ...extra,
+  });
+  // Alte Regex verlangt `kantine-S+`: der blanke Präfix wird zu Unrecht abgelehnt.
+  const alt = mk(/^kubectl\s+describe\s+pods?\s+kantine-\S+$/);
+  assert.ok(describePrefixViolations(sim, alt, "alt").some(m => m.includes("„kantine“ wird nicht")));
+  // Neue Regex: sauber, auch der geratene Name bleibt ungelöst (Sim-Fehler NotFound).
+  const neu = mk(/^kubectl\s+describe\s+pods?\s+kantine(-\S*)?$/);
+  assert.deepEqual(describePrefixViolations(sim, neu, "neu"), []);
+  // Zu weit (<dep>\S*): `kantinex` würde angenommen.
+  const zuWeit = mk(/^kubectl\s+describe\s+pods?\s+kantine\S*$/);
+  assert.ok(describePrefixViolations(sim, zuWeit, "weit").some(m => m.includes("zu weit")));
+  // Regex ohne ReplicaSet-Präfix: der RS-Zweig muss das melden.
+  const ohneRs = mk(/^kubectl\s+describe\s+pods?\s+kantine(-\S+-\S+)?$/);
+  assert.ok(describePrefixViolations(sim, ohneRs, "rs").some(m => m.includes("Präfix „kantine-")));
+  // Im Modus check steuert accept nur das Gating: eine weite Regex ist dort keine Meldung wert.
+  const weitCheck = mk(/^kubectl\s+describe\s+pods?\s+kantine\S*$/, { solvedBy: "check", check: () => false });
+  assert.ok(!describePrefixViolations(sim, weitCheck, "weitcheck").some(m => m.includes("zu weit")));
+  // Negativ-Zweig scharf: im Modus check mit immer wahrem Ziel gilt jede Eingabe, auch der geratene Name.
+  const immer = mk(/^kubectl\s+describe\s+pods?\s+kantine(-\S*)?$/, { solvedBy: "check", check: () => true });
+  assert.ok(describePrefixViolations(sim, immer, "immer").some(m => m.includes("geraten")));
+  // Kein Deployment-Pod (nackter Name): kein Präfix-Versprechen.
+  assert.deepEqual(describePrefixViolations(sim, { accept: [/^x$/], solution: "kubectl describe pod nackt" }, "nackt"), []);
 });

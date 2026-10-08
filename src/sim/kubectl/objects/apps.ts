@@ -12,10 +12,10 @@ import type { KubectlHost } from "../host";
 import type { Deployment, StatefulSetRes } from "../../state";
 import { podTemplateLabels, replicaSetsOf, type ReplicaSetView } from "../../replicasets";
 import { workloadLabels, type Labels } from "../../util";
-import { clusterPods } from "../../pods";
-import { clusterPodStatus } from "../../podstatus";
-import { availableReplicas } from "../inspect";
-import { accessModesLong, compact, deploymentPodSpec, metaOf, podSpecOf, type ObjectsOf } from "./core";
+import { availableReplicas, statefulSetReadyReplicas } from "../inspect";
+import { accessModesLong } from "../../pv-controller";
+import { STATEFUL_CLAIM_ACCESS_MODES } from "../../workload";
+import { compact, deploymentPodSpec, metaOf, podSpecOf, type ObjectsOf } from "./core";
 
 /** Ein Zähler, der bei 0 fehlt (`omitempty`). */
 const omitZero = (n: number): number | undefined => (n === 0 ? undefined : n);
@@ -72,9 +72,9 @@ export const replicaSetObjects: ObjectsOf = host => new Map(host.deployments.fla
 
 function statefulSetObject(host: KubectlHost, s: StatefulSetRes): YamlMap {
   const labels = workloadLabels(s.name);
-  const running = clusterPods(host).filter(c => c.owner === "StatefulSet" && c.sts.name === s.name && clusterPodStatus(host, c).status === "Running").length;
+  const running = statefulSetReadyReplicas(host, s);
   const claim = compact({
-    accessModes: accessModesLong("RWO"),
+    accessModes: accessModesLong(STATEFUL_CLAIM_ACCESS_MODES),
     resources: { requests: { storage: s.storage } },
     storageClassName: s.storageClass,
   });

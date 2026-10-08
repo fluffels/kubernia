@@ -466,20 +466,31 @@ describe("Wächter: keine Anleitung zum Kill per Name (#1411)", () => {
     const { join, relative } = await import("node:path");
     const wurzel = fileURLToPath(new URL("../../", import.meta.url));
     const out: Record<string, string> = { "AGENTS.md": readFileSync(join(wurzel, "AGENTS.md"), "utf8") };
-    const sammle = (rel: string, passt: (n: string) => boolean) => {
+    // passt bekommt den Pfad relativ zur Wurzel (Schrägstriche), damit docs/ als Ganzes gescannt werden kann
+    const sammle = (rel: string, passt: (pfad: string) => boolean) => {
       for (const e of readdirSync(join(wurzel, rel), { withFileTypes: true })) {
         const p = join(wurzel, rel, e.name);
+        const relPfad = relative(wurzel, p).replace(/\\/g, "/");
         if (e.isDirectory()) {
-          if (e.name !== "worktrees" && e.name !== "node_modules") sammle(relative(wurzel, p), passt); // fremde Worktrees sind nicht dieser Stand
+          if (e.name !== "worktrees" && e.name !== "node_modules") sammle(relPfad, passt); // fremde Worktrees sind nicht dieser Stand
         }
-        else if (passt(e.name) && e.name !== "settings.local.json" && statSync(p).size < 2_000_000) out[relative(wurzel, p).replace(/\\/g, "/")] = readFileSync(p, "utf8");
+        else if (passt(relPfad) && e.name !== "settings.local.json" && statSync(p).size < 2_000_000) out[relPfad] = readFileSync(p, "utf8");
       }
     };
-    sammle("docs", (n) => /^agent-harness.*\.md$/.test(n));
-    sammle(".claude", (n) => /\.(md|js|mjs|json)$/.test(n));
-    sammle("scripts", (n) => /\.mjs$/.test(n));
+    // alle Docs außer den ADRs (historisch, nie umgeschrieben): auch docs/referenz/, model-routing.md, sicherheit-agenten.md
+    sammle("docs", (pfad) => pfad.endsWith(".md") && !pfad.startsWith("docs/adr/"));
+    sammle(".claude", (pfad) => /\.(md|js|mjs|json)$/.test(pfad));
+    sammle("scripts", (pfad) => /\.mjs$/.test(pfad));
     return out;
   }
+
+  test("texte() scannt alle Docs außer den ADRs (#1508)", async () => {
+    const pfade = Object.keys(await texte());
+    for (const pflicht of ["docs/referenz/befehle.md", "docs/model-routing.md", "docs/sicherheit-agenten.md", "docs/agent-harness-faq.md"]) {
+      assert.ok(pfade.includes(pflicht), `${pflicht} fehlt im Scan`);
+    }
+    assert.deepEqual(pfade.filter((p) => p.startsWith("docs/adr/")), [], "ADRs sind historisch und zählen nicht");
+  });
 
   test("kein Dokument, Skill, Workflow, Agent und Skript rät zu `Stop-Process -Name` oder `taskkill /IM`", async () => {
     const treffer = Object.entries(await texte())
@@ -502,10 +513,19 @@ describe("Wächter: keine Anleitung zum Kill per Name (#1411)", () => {
   // `Stop-Process` kann keinen Baum beenden. Jeder Rat zum Kill per PID nennt darum `taskkill … /T`.
   const OHNE_BAUM = (text: string): string[] => {
     const treffer: string[] = [];
-    for (const m of text.matchAll(/taskkill((?:\s+\/{1,2}\w+(?:\s+<?\w+>?)?)*)/gi)) {
+    // Wert-Teil `\S+` (auch `$pid`, `<PID-Nr>`), aber nie ein folgender Schalter; `taskkill.exe` zählt mit
+    for (const m of text.matchAll(/\btaskkill(?:\.exe)?((?:\s+\/{1,2}\w+(?:\s+(?!\/)\S+)?)*)/gi)) {
       if (/\/{1,2}PID\b/i.test(m[1]) && !/\/{1,2}T\b/i.test(m[1])) treffer.push(m[0].trim());
     }
-    if (/Stop-Process\s+-Id\b/i.test(text)) treffer.push("Stop-Process -Id");
+    // PowerShell kann keinen Baum beenden: `-Id` an beliebiger Stelle (`-Force -Id`), Aliase `spps`/`kill`, positionale PID.
+    // Stopp an Backtick, `|` und `;`: Prosa wie "`Stop-Process` (…) -Id" ist kein Rat.
+    for (const re of [
+      /\b(?:Stop-Process|spps)\b[^\n`|;]*?\s-Id\b/gi,
+      /(?<![\w-])kill\s+(?:-\w+\s+)*-Id\b/gi,
+      /\b(?:Stop-Process|spps)\s+(?:\d+|\$\w+|<[^>\s]+>)/gi,
+    ]) {
+      for (const m of text.matchAll(re)) treffer.push(m[0].trim());
+    }
     return treffer;
   };
 
@@ -524,6 +544,25 @@ describe("Wächter: keine Anleitung zum Kill per Name (#1411)", () => {
     assert.deepEqual(OHNE_BAUM("taskkill /PID <pid> /T /F"), []);
     assert.deepEqual(OHNE_BAUM("taskkill /F /T /PID 1"), []);
     assert.deepEqual(OHNE_BAUM("PowerShells `Stop-Process` kann keinen Baum beenden"), []);
+    // erweiterte Formen: sollen treffen
+    for (const roh of [
+      "taskkill.exe /PID 4711 /F",
+      "Stop-Process -Force -Id 4711",
+      "Stop-Process -Id $pid -Force",
+      "spps -Id 4711",
+      "kill -Id 4711",
+      "Stop-Process 4711",
+      "taskkill /PID $pid /F",
+    ]) assert.equal(OHNE_BAUM(roh).length, 1, roh);
+    // Platzhalter und Prosa: sollen nicht treffen
+    for (const ok of [
+      "taskkill /PID $pid /T /F",
+      "taskkill //PID <PID-Nr> //T //F",
+      "taskkill.exe /PID 1 /T /F",
+      "PowerShells `Stop-Process` (es kann keinen Baum beenden)",
+      "kill %1",
+      "Bash: kill -9 $pid",
+    ]) assert.deepEqual(OHNE_BAUM(ok), [], ok);
   });
 });
 

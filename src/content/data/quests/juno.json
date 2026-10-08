@@ -46,7 +46,7 @@
             "id": "t-j15-2",
             "text": "<code>ImagePullBackOff</code>! Zweite Regel: <b>describe lesen.</b> Beschreibe den <code>leuchtfeuer</code>-Pod und lies die Events ganz unten.",
             "accept": [
-              "^kubectl\\s+describe\\s+pods?\\s+leuchtfeuer-\\S+$"
+              "^kubectl\\s+describe\\s+pods?\\s+leuchtfeuer(-\\S*)?$"
             ],
             "solution": "kubectl describe pod <leuchtfeuer-pod>",
             "why": "Der STATUS nennt nur das <i>Was</i>; das <i>Warum</i> steht in den <b>Events</b> ganz unten in <code>describe</code>. Das ist Kubernetes' eigene Sicht auf den Pod – hier steht schwarz auf weiß, welches Image nicht geladen werden konnte.",
@@ -335,7 +335,7 @@
             "id": "t-j17-2",
             "text": "<code>Pending</code> – die Pods warten auf einen Platz. Warum? describe verrät es in den Events!",
             "accept": [
-              "^kubectl\\s+describe\\s+pods?\\s+frachtplaner-\\S+$"
+              "^kubectl\\s+describe\\s+pods?\\s+frachtplaner(-\\S*)?$"
             ],
             "solution": "kubectl describe pod <frachtplaner-pod>",
             "why": "Warum ein Pod <i>wartet</i>, steht wieder in den Events von <code>describe</code>. Bei Pending ist das fast immer eine Scheduling-Meldung – „insufficient capacity“ heißt: Der Scheduler findet keinen Node mit Platz.",
@@ -626,7 +626,7 @@
             "id": "t-j24-2",
             "text": "<code>Running</code>, aber <code>0/1</code> READY – er läuft, ist aber nicht <b>bereit</b>. Schritt 2: <code>describe</code> den kombuese-Pod und lies die Events unten.",
             "accept": [
-              "^kubectl\\s+describe\\s+pods?\\s+kombuese-\\S+$"
+              "^kubectl\\s+describe\\s+pods?\\s+kombuese(-\\S*)?$"
             ],
             "solution": "kubectl describe pod <kombuese-pod>",
             "why": "<code>0/1 READY</code> bei Running: Der Grund steht in den Events – hier eine fehlgeschlagene <b>Readiness-Probe</b>. describe ist die einzige Stelle, die dir verrät, welcher Wächter Alarm schlägt.",
@@ -797,7 +797,7 @@
             "id": "t-j26-2",
             "text": "Schritt 2: <code>describe</code> den kartograf-Pod. Achte auf <b>Last State</b>, <b>Reason</b> und das <b>memory-Limit</b> unten!",
             "accept": [
-              "^kubectl\\s+describe\\s+pods?\\s+kartograf-\\S+$"
+              "^kubectl\\s+describe\\s+pods?\\s+kartograf(-\\S*)?$"
             ],
             "solution": "kubectl describe pod <kartograf-pod>",
             "why": "Der Beweis für OOMKilled steht <b>nie</b> in den App-Logs, sondern in <code>describe</code> unter <b>Last State / Reason</b> samt dem gesetzten memory-Limit. Der Kernel killt den Container von außen – die App selbst merkt davon nichts, kann also nichts loggen.",

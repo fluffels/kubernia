@@ -73,6 +73,7 @@ const pflegeMarkerBefehl = (nr, art) => `echo "pflege: ${art} #${nr}"`
 /** Lese-Konvention für Brain-Seiten (#1205): `Read` statt Shell, damit die Messung und der Kontext stimmen. */
 const BRAIN_LESEN = `Brain-Seiten (docs/**.md) liest du mit dem Read-Tool, nie per cat/sed/head/Get-Content; große Seiten nur abschnittsweise (Überschrift greppen, dann Read mit offset/limit). Quelle: Kopf von docs/referenz/anlaufstellen.md.`
 
+const VERSCHOBEN_DIFF = `lies nach dem Merge \`git diff <basis> <M>^2 -- <alte datei>\` (M = Merge-Commit, basis = \`git merge-base <M>^1 <M>^2\`)` // #1508: eine Quelle für Gates- und Push-Absatz, Gleichlauf mit review-lenses › Nach jedem Merge von main
 const AUSWAHL_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -888,7 +889,7 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
 - Deutsch mit echten Umlauten in Texten und Kommentaren; Dateinamen bleiben ASCII.
 - ${BRAIN_LESEN}
 
-Gates: vor dem ersten verify git fetch origin, bei weiterem origin/main git merge origin/main (Konflikte jetzt lösen; ein Merge nach der Konvergenz kostet Delta-Lens und neuen Nachweis); verschiebt der Branch Funktionen in neue Dateien: nach dem Merge \`git diff <basis> <M>^2 -- <alte datei>\` (basis = git merge-base <M>^1 <M>^2) lesen und Änderungen an verschobenen Funktionen in die neuen Dateien übertragen. Beim Iterieren gezielt prüfen (AGENTS.md § Zwei-Stufen-Prüfung), zum Schluss genau einmal npm run verify:kompakt; es muss grün sein (Exit 0). Läuft es rot und du kannst es nicht
+Gates: vor dem ersten verify git fetch origin, bei weiterem origin/main git merge origin/main (Konflikte jetzt lösen; ein Merge nach der Konvergenz kostet Delta-Lens und neuen Nachweis); verschiebt der Branch Funktionen in neue Dateien: ${VERSCHOBEN_DIFF} und übertrage Änderungen an verschobenen Funktionen in die neuen Dateien. Beim Iterieren gezielt prüfen (AGENTS.md § Zwei-Stufen-Prüfung), zum Schluss genau einmal npm run verify:kompakt; es muss grün sein (Exit 0). Läuft es rot und du kannst es nicht
 beheben, gib verifyGruen=false mit der Fehlerausgabe zurück statt es zu verschleiern
 oder ein Gate abzuschwächen (AGENTS.md § Kein Grün-durch-Aufweichen).
 Sichtbare Änderungen zusätzlich im Browser verifizieren.
@@ -1264,7 +1265,7 @@ AGENTS.md § Git-Workflow — PR-gegated (erste harte Regel) und § Kollisionssc
 letzter Punkt. Kurz: Branch pushen, gh pr create mit "Closes #${nr}" im Body,
 Auto-Merge setzen, CI abwarten.
 ${harnessDiff ? `\n${harnessMergeAuftrag}\n` : ''}
-Vor dem Push: verschärft der Diff ein Gate oder Schema, merge einmal origin/main ein (nur konfliktfrei, sonst ergebnis="fehler"); verschiebt der Branch Funktionen in neue Dateien, lies danach \`git diff <basis> <M>^2 -- <alte datei>\` (M = Merge-Commit, basis = git merge-base <M>^1 <M>^2): ändert main eine verschobene Funktion, ergebnis="fehler" mit der Funktion in meldung (die Übertragung braucht eine Delta-Lens); dann fahre das betroffene Gate erneut (#1449). Dann setze einen leeren Nachweis-Commit, den die PR-CI verlangt (#1270). Genau diese
+Vor dem Push: verschärft der Diff ein Gate oder Schema, merge einmal origin/main ein (nur konfliktfrei, sonst ergebnis="fehler"); verschiebt der Branch Funktionen in neue Dateien, ${VERSCHOBEN_DIFF}: ändert main eine verschobene Funktion, ergebnis="fehler" mit der Funktion in meldung (die Übertragung braucht eine Delta-Lens); dann fahre das betroffene Gate erneut (#1449). Dann setze einen leeren Nachweis-Commit, den die PR-CI verlangt (#1270). Genau diese
 zwei Zeilen als Commit-Message, unverändert${shaHinweis}:
 ${nachweis}
 (leerer Commit mit --allow-empty, die Zeilen am Zeilenanfang). Prüfe ihn lokal mit
