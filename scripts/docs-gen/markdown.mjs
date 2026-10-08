@@ -1,6 +1,6 @@
 // Kein Shebang (siehe docs-gen.mjs). Gemeinsame Markdown-/Frontmatter-Helfer der Generatoren und
 // des Doku-Drift-Wächters (#1355, #1392): Markdown sammeln, Code-Fences erkennen, Frontmatter lesen,
-// npm-Ketten zerlegen; dazu kleine Quelltext-/Daten-Leser (JSON, Ganzzahl-Konstanten) und Mermaid-Escaping (#1370). Reines Node-Modul (nur Builtins).
+// dazu kleine Quelltext-/Daten-Leser (JSON, Ganzzahl-Konstanten) und Mermaid-Escaping (#1370). Reines Node-Modul (nur Builtins).
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, sep } from "node:path";
 
@@ -92,38 +92,6 @@ export function collectMarkdown(rootDir, roots = ["."], { ueberspringe = () => f
   return [...new Set(found)].sort(byCodeUnit);
 }
 
-/** Zerlegt eine `a && b`-Kette: `npm run X` → X, `npm test` → test, sonst der Rohbefehl. */
-export function parseChain(script) {
-  return script
-    .split("&&")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((step) => {
-      // Argumente hinter `--` (`npm run X -- --flag`) gehören nicht zum Schrittnamen (Z5g).
-      const run = /^npm run ([^\s]+)(?:\s+--(?:\s.*)?)?$/.exec(step);
-      if (run) return run[1];
-      return /^npm test(?:\s+--(?:\s.*)?)?$/.test(step) ? "test" : step;
-    });
-}
-
-/**
- * Schritte einer Kette in Ausführungsreihenfolge. Ein Schritt, dessen Skript selbst eine `&&`-Kette ist und
- * nicht in `chains` steht, wird rekursiv aufgelöst (seine Schritte gehören zur äußeren Kette); ein Zyklus
- * wirft. Einzelbefehl-Aliase (ohne `&&`) bleiben ein Schritt. EINE Auflösung für Gate-Tabelle, Diagramm-Zahlen und
- * den Doku-Drift-Wächter, damit sie nie auseinanderlaufen (#1392).
- */
-export function expandSteps(script, scripts, chains, stack) {
-  const out = [];
-  for (const step of parseChain(script)) {
-    const inner = scripts[step];
-    if (!chains.includes(step) && typeof inner === "string" && inner.includes("&&")) {
-      if (stack.includes(step)) throw new Error(`Zyklus in den Ketten: ${[...stack, step].join(" → ")}`);
-      out.push(...expandSteps(inner, scripts, chains, [...stack, step]));
-    } else out.push(step);
-  }
-  return out;
-}
-
 /** Prüft, ob `rel` unter `rootDir` existiert; sonst Fehlermeldung in `errors` (Config veraltet?). */
 export function brauche(rootDir, rel, was, errors) {
   if (existsSync(join(rootDir, rel))) return true;
@@ -185,12 +153,15 @@ export function leseJson(rootDir, rel, was) {
 }
 
 /**
- * Die eigenen Schritte einer Kette: aufgelöst (verschachtelte Ketten), ohne Kettennamen, je Schritt einmal
- * (erstes Vorkommen). EINE Zählung für Gate-Tabelle, Diagramm-Zahlen und den Doku-Drift-Wächter.
+ * Wie `leseJson`, verlangt aber ein JSON-OBJEKT (#1428 Z19): `null`, eine Liste, eine Zahl oder ein String als Wurzel einer Config
+ * liefen sonst bis in die Generatoren und endeten in einem TypeError statt in einer Meldung. Wirft „<was> <rel> ist kein JSON-Objekt“.
  */
-export function kettenSchritte(scripts, chains, kette) {
-  const aufgeloest = expandSteps(scripts[kette], scripts, chains, [kette]);
-  return [...new Set(aufgeloest.filter((s) => !chains.includes(s)))];
+export function leseConfigObjekt(rootDir, rel, was) {
+  const wert = leseJson(rootDir, rel, was);
+  if (wert === null || typeof wert !== "object" || Array.isArray(wert)) {
+    throw new Error(`${was} ${rel} ist kein JSON-Objekt (gefunden: ${wert === null ? "null" : Array.isArray(wert) ? "Liste" : typeof wert})`);
+  }
+  return wert;
 }
 
 /** Alle mermaid-Fences (``` oder ~~~, auch 4+ Zeichen) eines Markdown-Texts (Inhalt ohne die Fence-Zeilen). Pur. */

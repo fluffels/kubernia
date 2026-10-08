@@ -6,7 +6,7 @@ name: Board-Takt (Status-Ticket, Sammelticket)
 #    mindestens 5 Commits auf main liegen) bzw. schiebt ein offenes ungeclaimtes an die Spitze des Boards; ein Push auf main tut
 #    dasselbe, sobald seit dem letzten Abschluss mindestens 8 Ticket-Merges (ohne Bots) dazukamen. Angelegt wird nur mit einem
 #    Mindestabstand von 24 Stunden zum Abschluss des Vorgängers (#1382).
-# 2. Harness-Sammelticket „Harness-Härtung (gesammelt)“: nach 3 Spiel-Merges (ohne Scope `harness`) seit dem Abschluss des letzten holt derselbe Lauf das
+# 2. Harness-Sammelticket „Harness-Härtung (gesammelt)“: nach 3 Spiel-Merges (ohne Issues mit Label `area:harness`) seit dem Abschluss des letzten holt derselbe Lauf das
 #    ungeclaimte hinter den Kopf (#1349). Außerdem schiebt er es bei jedem Lauf auf die Position laut AGENTS.md zurück, wenn es
 #    dahinter steht (Selbstkorrektur, nur nach vorn, nie in den Kopf).
 # Die Entscheidungen stehen in scripts/board-takt.mjs und scripts/langfuse-takt.mjs (pur, getestet, idempotent: kein gespeicherter

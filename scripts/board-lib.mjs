@@ -7,8 +7,10 @@
  *
  * Nur Node-Builtins, analog zu den anderen scripts/-Wächtern.
  */
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { ghJson, ghText } from "./gh-cli.mjs";
+
+const gh = ghText;
 
 export const PROJECT_ID = "PVT_kwHOD8746c4Barq_";
 
@@ -270,11 +272,7 @@ export const isRateLimit = (message) => /rate limit/i.test(String(message ?? "")
 
 // ── gh-Anbindung (nur CLI, nicht Teil der getesteten Logik) ─────────────────
 /** `gh` aufrufen und stdout liefern; `token` setzt GH_TOKEN (Projekt-Scope im Workflow). */
-export const gh = (args, { token } = {}) =>
-  execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, env: token ? { ...process.env, GH_TOKEN: token } : process.env });
-
-/** Wie `gh`, die Ausgabe als JSON geparst. */
-export const ghJson = (args, opts = {}) => JSON.parse(gh(args, opts));
+export { ghText as gh, ghJson };
 
 /** Position laut AGENTS.md (SSOT): liest die Datei relativ zu diesem Skript; wirft, wenn sie fehlt oder die Zahl nicht eindeutig ist. */
 export function positionLautAgentsMd() {
@@ -368,6 +366,27 @@ export function ankerNummerFuerPosition(items, n, ohneNr = null) {
   return afterId === null ? null : (items.find((i) => i.id === afterId)?.number ?? null);
 }
 
+/**
+ * Aufnahme-Plan für Nummern, die weder die REST-Liste noch der GraphQL-Fallback im Board fand (#1428 Z37): ein frisch angelegtes Issue
+ * stand nie im Board, `board-place` meldete nur „nicht gefunden“. `issues`: Nummer → REST-Antwort von `repos/<repo>/issues/<nr>` (oder
+ * null/fehlend, wenn nicht ladbar). Aufgenommen werden nur offene Issues (keine PRs) mit `node_id`; der `--after`-Anker (`ankerNr`) nie
+ * automatisch. Liefert `{ aufnehmen: [{ number, nodeId, title }], abgelehnt: [{ number, grund }] }`. Pur.
+ */
+export function aufnahmePlan(fehlend, issues, ankerNr = null) {
+  const aufnehmen = [];
+  const abgelehnt = [];
+  for (const nr of fehlend) {
+    const i = issues?.[nr] ?? null;
+    if (nr === ankerNr) abgelehnt.push({ number: nr, grund: "Anker wird nie automatisch aufgenommen" });
+    else if (!i || i.number !== nr) abgelehnt.push({ number: nr, grund: "Issue nicht ladbar oder unbekannt" });
+    else if (i.pull_request) abgelehnt.push({ number: nr, grund: "ist ein Pull Request" });
+    else if (i.state !== "open") abgelehnt.push({ number: nr, grund: "Issue ist geschlossen" });
+    else if (typeof i.node_id !== "string" || i.node_id === "") abgelehnt.push({ number: nr, grund: "Antwort ohne node_id" });
+    else aufnehmen.push({ number: nr, nodeId: i.node_id, title: typeof i.title === "string" ? i.title : "" });
+  }
+  return { aufnehmen, abgelehnt };
+}
+
 /** Offene Issue-Nummern, die nicht im Board stehen (Abgleich, nur Bericht). Aufsteigend. */
 export function missingFromBoard(openNumbers, items) {
   const known = new Set(items.map((i) => i.number));
@@ -376,8 +395,12 @@ export function missingFromBoard(openNumbers, items) {
 
 /** Eine Listenabfrage über REST: alle Issue-Items des Boards in Board-Reihenfolge. `opts.token` = anderer GH_TOKEN (Projekt-Scope im Workflow). */
 export function loadItems(opts = {}) {
-  const out = gh(["api", "--paginate", "--slurp", `users/fluffels/projectsV2/1/items?per_page=100&fields=${STATUS_FIELD_ID}`], opts);
-  return normalizeItems(JSON.parse(out));
+  return normalizeItems(loadItemPages(opts));
+}
+
+/** Die rohen Board-Seiten (REST, Liste von Seiten): enthalten auch Body, Autor und Labels der Issues, für die Ticket-Auswahl (naechstes-ticket.mjs). */
+export function loadItemPages(opts = {}) {
+  return JSON.parse(gh(["api", "--paginate", "--slurp", `users/fluffels/projectsV2/1/items?per_page=100&fields=${STATUS_FIELD_ID}`], opts));
 }
 
 /** Alle offenen Issues (und PRs) als Liste von Seiten, wie `gh api --paginate --slurp` sie liefert (REST). */

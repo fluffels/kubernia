@@ -105,6 +105,24 @@ test(".dependency-cruiser.cjs enthält genau die abgeleiteten Schichtregeln plus
   assert.deepEqual(cruiserConfig.forbidden.slice(0, abgeleitet.length), layers.verbotsRegeln(layers.SCHICHT_MODELL));
 });
 
+// ── Quellwurzel nur an einer Stelle (#1428 Z13) ─────────────────────────────────────────────
+// Abgeleitet im Code: die Waisen-Ausnahmen in .dependency-cruiser.cjs und der Coverage-`include` in vite.config.ts. Statisch in Dateien
+// ohne Code-Zugriff auf das Modell (package.json, docs-gen-Config, check:c4): diese Tests halten sie fail-closed an der Quellwurzel.
+
+test("Quellwurzel: Waisen-Ausnahmen und Coverage-include sind aus dem Modell abgeleitet, check:arch und docs-gen-Config nennen dasselbe Verzeichnis", () => {
+  const ohneSlash = layers.SCHICHT_MODELL.quellwurzel.replace(/\/$/, "");
+  const waisen = (cruiserConfig as unknown as { forbidden: { name: string; from: { pathNot?: string[] } }[] }).forbidden.find((r) => r.name === "keine-verwaisten-module");
+  const ausnahmen = (waisen?.from.pathNot ?? []).filter((p) => p.includes("content/"));
+  assert.deepEqual(ausnahmen, [`^${ohneSlash}/content/learnorder\\.ts$`, `^${ohneSlash}/content/quizcheck\\.ts$`]);
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { scripts: Record<string, string> };
+  assert.match(pkg.scripts["check:arch"], new RegExp(`^depcruise ${ohneSlash} `), "check:arch cruist ein anderes Verzeichnis als die Quellwurzel");
+  const cfg = JSON.parse(readFileSync(new URL("../scripts/docs-gen/config.json", import.meta.url), "utf8")) as { architektur: { quelle: string }; schichten: { cruise: string[] } };
+  assert.equal(cfg.architektur.quelle, ohneSlash);
+  assert.equal(cfg.schichten.cruise[1], ohneSlash);
+  const vite = readFileSync(new URL("../vite.config.ts", import.meta.url), "utf8");
+  assert.match(vite, /include: \[`\$\{SCHICHT_MODELL\.quellwurzel\}\*\*\/\*\.ts`\]/, "Coverage-include nicht aus der Quellwurzel abgeleitet");
+});
+
 // ── Echte Gate-Sabotage (#1392) ──────────────────────────────────────────────────────────────
 // Der Matcher-Nachbau oben beweist nur, dass `verbotsRegeln` richtig rechnet. Hier läuft dependency-cruiser
 // selbst auf einer Temp-Fixture: eine verbotene Kante muss `check:arch`-Regeln auslösen, eine erlaubte nicht.
@@ -175,6 +193,27 @@ test("echter dependency-cruiser-Lauf: die Auffang-Schicht (Domäne) als Quelle, 
     "src/game/a.js": "export const a = 1;\n",
   });
   assert.deepEqual(v, ["schicht-domaene-nicht-anwendung"]);
+}, 60_000);
+
+test("echter dependency-cruiser-Lauf: die Auffang-Schicht als ZIEL (pathNot der anderen Schichten, #1428 Z14)", () => {
+  const m: Modell = {
+    quellwurzel: "lib/",
+    schichten: [
+      { id: "oben", label: "Oben", muster: "^lib/oben/", wurzeln: ["oben"], darf: ["mitte"] },
+      { id: "mitte", label: "Mitte", muster: "^lib/mitte/", wurzeln: ["mitte"], darf: [] },
+      { id: "unten", label: "Unten", muster: null, wurzeln: [], darf: [] },
+    ],
+    extern: [],
+  };
+  // Import in die Auffang-Schicht (lib/x/…) ist für „oben“ verboten …
+  const rot = cruiseVerstoesse({ "lib/oben/a.js": 'import "../x/b.js";\n', "lib/x/b.js": "export const b = 1;\n" }, m, "lib");
+  assert.deepEqual(rot, ["schicht-oben-nicht-unten"]);
+  // … ein Import in eine ANDERE benannte Schicht (erlaubt) darf die Auffang-Regel nicht auslösen: sonst fehlte das pathNot des Ziels.
+  const gruen = cruiseVerstoesse({ "lib/oben/a.js": 'import "../mitte/c.js";\n', "lib/mitte/c.js": "export const c = 1;\n" }, m, "lib");
+  assert.deepEqual(gruen, []);
+  // Ein Import in dieselbe Schicht bleibt ebenfalls grün.
+  const selbst = cruiseVerstoesse({ "lib/oben/a.js": 'import "./d.js";\n', "lib/oben/d.js": "export const d = 1;\n" }, m, "lib");
+  assert.deepEqual(selbst, []);
 }, 60_000);
 
 test("echter dependency-cruiser-Lauf mit abweichender Quellwurzel (#1373): lib/ statt src/", () => {

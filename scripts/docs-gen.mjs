@@ -14,7 +14,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { collectMarkdown, leseJson, mermaidBloecke, parseSections, pruefeMermaid } from "./docs-gen/markdown.mjs";
+import { collectMarkdown, leseConfigObjekt, mermaidBloecke, parseSections, pruefeMermaid } from "./docs-gen/markdown.mjs";
 import { GENERATORS } from "./docs-gen/registry.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -129,7 +129,7 @@ export function runDocsGen({ rootDir = ROOT, config, generators = GENERATORS, wr
 
 export function loadConfig(rootDir = ROOT, pfad = DEFAULT_CONFIG) {
   const abs = isAbsolute(pfad) ? pfad : resolve(rootDir, pfad);
-  return leseJson(rootDir, abs, "Config");
+  return leseConfigObjekt(rootDir, abs, "Config");
 }
 
 /**

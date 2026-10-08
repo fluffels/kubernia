@@ -69,7 +69,7 @@ Diese Punkte sind der Kern des Auftrags: Stellen, an denen die Doku einen Anspru
 - **C8 — ESLint nutzt `recommended` statt `recommendedTypeChecked`**: zahlt die Kosten des typed-lint, nutzt nur `no-floating-promises`; `no-unsafe-*`/`no-misused-promises` sind aus. → [#868](https://github.com/fluffels/kubernia/issues/868)
 - **C9 — Copy-Paste der 6 Minispiele** (~1080 LOC) + dreifache Label-Quelle; jscpd ist bewusst zahnlos, fängt es nicht. Skalierungsversagen der UI im Kleinen. → [#873](https://github.com/fluffels/kubernia/issues/873)
 - **C10 — Präsentation faktisch ungetestet** (Coverage-Floor 3 %, ~7 E2E-Smokes, nur Chromium). Größte Codemenge im schwächsten Netz — ohne verteidigenden ADR. → [#874](https://github.com/fluffels/kubernia/issues/874)
-- **C11 — Fehlend: SAST/CodeQL + Secret-Scanning**; UI baut per `innerHTML` mit uneinheitlichem Escaping (XSS-Smell, heute autorenkontrolliert). → [#875](https://github.com/fluffels/kubernia/issues/875)
+- **C11 — Fehlend: SAST/CodeQL + Secret-Scanning** (Stand 2026-10-08: Secret-Scanning samt Push-Schutz ist aktiv, CodeQL fehlt weiter); UI baut per `innerHTML` mit uneinheitlichem Escaping (XSS-Smell, heute autorenkontrolliert). → [#875](https://github.com/fluffels/kubernia/issues/875)
 
 ### Niedrig
 

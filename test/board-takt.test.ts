@@ -244,6 +244,19 @@ describe("ziehListeNach: die Board-Liste wird nach der Status-Aktion im Speicher
   });
 });
 
+/** Erste Gruppe des LETZTEN Treffers eines globalen Musters (der jüngste Abschnitt eines wachsenden ADR) oder undefined. */
+function letzterTreffer(re: RegExp, text: string): string | undefined {
+  return [...text.matchAll(re)].at(-1)?.[1];
+}
+
+describe("letzterTreffer (#1428 Z21)", () => {
+  test("alte Zahl vorn, aktuelle hinten: die aktuelle zählt; umgekehrt die hintere", () => {
+    expect(letzterTreffer(/(\d+) Merges/g, "5 Merges ... 3 Merges")).toBe("3");
+    expect(letzterTreffer(/(\d+) Merges/g, "3 Merges ... 5 Merges")).toBe("5");
+    expect(letzterTreffer(/(\d+) Merges/g, "keine Zahl")).toBeUndefined();
+  });
+});
+
 describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
   const lies = (rel: string) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
   const status = rawStatus as unknown as { MIN_TICKET_MERGES_PUSH: number; MIN_ABSTAND_STUNDEN: number };
@@ -253,8 +266,9 @@ describe("Bindung der Aktivitäts-Zahlen an die Doku (#1349)", () => {
     const doc = lies("docs/ticket-reihenfolge.md");
     expect(Number(/mindestens (\d+) Ticket-Merges/.exec(yml)?.[1])).toBe(status.MIN_TICKET_MERGES_PUSH);
     expect(Number(/nach (\d+) Spiel-Merges/.exec(yml)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
-    expect(Number(/(\d+) Ticket-Merges \(ohne Bots\)/.exec(adr)?.[1])).toBe(status.MIN_TICKET_MERGES_PUSH);
-    expect(Number(/nach (\d+) Spiel-Merges seit dem Abschluss des letzten Sammeltickets/.exec(adr)?.[1])).toBe(T.HARNESS_TAKT_MERGES);
+    // #1428 Z21: der ADR wächst durch Fortschreibungen nur am Ende; die Bindung gilt dem LETZTEN Treffer (dem jüngsten Stand).
+    expect(Number(letzterTreffer(/(\d+) Ticket-Merges \(ohne Bots\)/g, adr))).toBe(status.MIN_TICKET_MERGES_PUSH);
+    expect(Number(letzterTreffer(/nach (\d+) Spiel-Merges seit dem Abschluss des letzten Sammeltickets/g, adr))).toBe(T.HARNESS_TAKT_MERGES);
     expect(Number(/(\d+) Ticket-Merges \(ohne Bots\)/.exec(doc)?.[1])).toBe(status.MIN_TICKET_MERGES_PUSH);
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(adr)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);
     expect(Number(/Mindestabstand von (\d+) Stunden/.exec(doc)?.[1])).toBe(status.MIN_ABSTAND_STUNDEN);

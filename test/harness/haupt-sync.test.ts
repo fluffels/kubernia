@@ -90,8 +90,14 @@ describe("Ausgabe des Hooks", () => {
   });
 });
 
+/** Umgebung ohne geerbte Git-Variablen (`GIT_DIR` & Co. aus einem Hook- oder Worktree-Lauf würden die Temp-Repos umlenken, #1428 Z36). */
+const sauberEnv = (extra: Record<string, string> = {}) => {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_(DIR|WORK_TREE|INDEX_FILE|OBJECT_DIRECTORY|COMMON_DIR|PREFIX|NAMESPACE)$/.test(k)));
+  return { ...env, ...extra };
+};
+
 const git = (cwd: string, ...args: string[]) =>
-  execFileSync("git", ["-c", "user.name=test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "-C", cwd, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  execFileSync("git", ["-c", "user.name=test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "-C", cwd, ...args], { encoding: "utf8", env: sauberEnv(), stdio: ["ignore", "pipe", "pipe"] }).trim();
 
 /** Bare-Remote + Haupt-Klon (main) + zweiter Klon, der Commits auf origin schiebt. */
 function aufbau() {
@@ -265,13 +271,14 @@ describe("Verdrahtung", () => {
   });
 });
 
-describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", () => {
+// #1428 Z10/Z36: die CLI-Tests starten echte Git-Prozesse (2,4–2,8 s); unter Last riss der Vitest-Standard (5 s) beim Fast-Forward-Test.
+describe("--streng: Exit-Code des Skill-Schritts 0 (#1392 Z32)", { timeout: 30_000 }, () => {
   const X = raw as unknown as { exitCodeFuer: (e: Record<string, unknown>) => number };
   const cli = (dir: string, ...args: string[]) => {
     try {
       const out = execFileSync(process.execPath, [fileURLToPath(new URL("../../scripts/haupt-sync.mjs", import.meta.url)), ...args], {
         encoding: "utf8",
-        env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+        env: sauberEnv({ CLAUDE_PROJECT_DIR: dir }),
         stdio: ["ignore", "pipe", "pipe"],
       });
       return { code: 0, out };
@@ -384,3 +391,49 @@ describe("Node-Versionsprüfung (#1411)", () => {
     expect(N.baueText({})).toBe("");
   });
 });
+
+describe("node_modules gegen package-lock.json (#1428 Z2)", () => {
+  const N = raw as unknown as {
+    pruefeNodeModules: (lock: string, hidden: string | null) => string | null;
+    nodeModulesHinweisFuer: (dir: string) => string;
+    baueText: (e: Partial<Ergebnis> & { nodeModulesHinweis?: string }) => string;
+  };
+  const lock = (packages: Record<string, unknown>) => JSON.stringify({ packages: { "": { name: "x" }, ...packages } });
+  const hidden = (packages: Record<string, unknown>) => JSON.stringify({ packages });
+  const L = lock({ "node_modules/a": { version: "1.0.0" }, "node_modules/b": { version: "2.0.0" }, "node_modules/opt": { version: "3.0.0", optional: true } });
+
+  test("gleich: kein Hinweis (fehlendes optionales Paket ist ok)", () => {
+    expect(N.pruefeNodeModules(L, hidden({ "node_modules/a": { version: "1.0.0" }, "node_modules/b": { version: "2.0.0" } }))).toBeNull();
+  });
+  test("abweichende Version und fehlendes Pflichtpaket werden gezählt", () => {
+    const h = hidden({ "node_modules/a": { version: "1.0.1" } });
+    expect(N.pruefeNodeModules(L, h)).toMatch(/\(2 Pakete\).*npm ci/);
+    expect(N.pruefeNodeModules(L, hidden({ "node_modules/a": { version: "1.0.0" } }))).toMatch(/\(1 Pakete\)/);
+  });
+  test("kein Install-Stand: eigener Hinweis", () => {
+    expect(N.pruefeNodeModules(L, null)).toMatch(/keinen Install-Stand/);
+  });
+  test("kaputtes JSON in Lock oder Install-Stand: fail-open (null)", () => {
+    expect(N.pruefeNodeModules("{ kaputt", hidden({}))).toBeNull();
+    expect(N.pruefeNodeModules(L, "{ kaputt")).toBeNull();
+    expect(N.pruefeNodeModules(JSON.stringify({}), hidden({}))).toBeNull();
+  });
+  test("nodeModulesHinweisFuer liest beide Dateien; ohne Lock fail-open", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kq-nm-"));
+    try {
+      expect(N.nodeModulesHinweisFuer(dir)).toBe("");
+      writeFileSync(join(dir, "package-lock.json"), L);
+      expect(N.nodeModulesHinweisFuer(dir)).toMatch(/Install-Stand/);
+      mkdirSync(join(dir, "node_modules"));
+      writeFileSync(join(dir, "node_modules", ".package-lock.json"), hidden({ "node_modules/a": { version: "9.9.9" }, "node_modules/b": { version: "2.0.0" } }));
+      expect(N.nodeModulesHinweisFuer(dir)).toMatch(/\(1 Pakete\)/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  test("der Hinweis steht im Kontext-Text, ändert aber den Exit-Code von --streng nicht", () => {
+    expect(N.baueText({ nodeModulesHinweis: "node_modules passt nicht" })).toContain("Abhängigkeiten: node_modules passt nicht");
+    expect(X0.exitCodeFuer({ aktion: "nichts", branch: "main", sauber: true, nodeModulesHinweis: "x" })).toBe(0);
+  });
+});
+const X0 = raw as unknown as { exitCodeFuer: (e: Record<string, unknown>) => number };

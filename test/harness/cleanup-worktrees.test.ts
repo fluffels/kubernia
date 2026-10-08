@@ -635,6 +635,24 @@ describe("moeglicheHalter und formatHalter (#1411)", () => {
     assert.deepEqual(m.moeglicheHalter(liste, PFAD, null).map((h) => h.pid), [20, 21], "ohne bekannte Ordner-Geburt zählt jeder verwaiste Werkzeug-Prozess");
   });
 
+  test("Regel (c): ein Interpreter, der ein Skript von stdin liest (`python -`), nach dem Anlegen des Ordners gestartet, wird genannt (#1428 Z16)", () => {
+    const liste = [
+      eltern,
+      proz({ pid: 30, name: "python.exe", commandLine: "python -", startMs: 5000 }), // lebender Elternprozess: (b) greift nicht, (a) auch nicht
+      proz({ pid: 31, name: "python3.exe", commandLine: "C:\\Python\\python3.exe -", startMs: 5000 }),
+      proz({ pid: 32, name: "py.exe", commandLine: "py -", startMs: 5000 }),
+      proz({ pid: 33, name: "node.exe", commandLine: "node -", startMs: 5000 }),
+      proz({ pid: 34, name: "python.exe", commandLine: "python -", startMs: 100 }), // vor dem Ordner gestartet
+      proz({ pid: 35, name: "python.exe", commandLine: "python build.py", startMs: 5000 }), // kein stdin-Skript
+      proz({ pid: 36, name: "python.exe", commandLine: "python -m http.server", startMs: 5000 }), // `-m`, nicht `-`
+      proz({ pid: 37, name: "chrome.exe", commandLine: "chrome -", startMs: 5000 }), // kein Interpreter
+    ];
+    const treffer = m.moeglicheHalter(liste, PFAD, 1000);
+    assert.deepEqual(treffer.map((h) => h.pid), [30, 31, 32, 33]);
+    assert.match(treffer[0].grund, /stdin/);
+    assert.deepEqual(m.moeglicheHalter(liste, PFAD, null).map((h) => h.pid), [30, 31, 32, 33, 34], "ohne bekannte Ordner-Geburt zählt auch der frühere");
+  });
+
   test("der eigene Prozess ist nie Kandidat; ohne Prozesse oder Treffer bleibt die Liste leer", () => {
     assert.deepEqual(m.moeglicheHalter([proz({ pid: 77, commandLine: "node c:/dev/kubernia/.claude/worktrees/kq-1404/x" })], PFAD, 0, 77), []);
     assert.deepEqual(m.moeglicheHalter([], PFAD, 0), []);

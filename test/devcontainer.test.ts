@@ -149,3 +149,55 @@ describe("Dev-Panel-Docker: Laufzeit-Passwort statt Build-Zeit (#334)", () => {
     );
   });
 });
+
+// ── engines.node der Wurzel gegen die Abhängigkeiten (#1428 Z18) ─────────────────────────────
+// Anlass: likec4 verlangt eine höhere Node-Version als die Wurzel-`engines.node`; `npm ci` warnt dann nur (EBADENGINE), und
+// Werkzeuge schlagen erst später fehl. Der Test hält die Wurzel-Angabe auf dem Maximum aller einfachen `>=X[.Y[.Z]]`-Minima im Lockfile.
+// Bekannte Grenze: komplexere Ranges (`^`, `||`, `<`) werden übersprungen.
+
+type LockPaket = { engines?: { node?: string } };
+
+/** `>=X[.Y[.Z]]` → [X, Y, Z] oder null (andere Formen). */
+const mindest = (range: string | undefined): [number, number, number] | null => {
+  const m = /^\s*>=\s*v?(\d+)(?:\.(\d+))?(?:\.(\d+))?\s*$/.exec(String(range ?? ""));
+  return m ? [Number(m[1]), Number(m[2] ?? 0), Number(m[3] ?? 0)] : null;
+};
+const kleiner = (a: number[], b: number[]) => a[0] < b[0] || (a[0] === b[0] && (a[1] < b[1] || (a[1] === b[1] && a[2] < b[2])));
+
+/** Pakete im Lock, deren einfaches `engines.node`-Minimum über dem der Wurzel liegt. Pur. */
+function enginesVerstoesse(packages: Record<string, LockPaket>, wurzelEngines: string | undefined): string[] {
+  const wurzel = mindest(wurzelEngines);
+  if (!wurzel) return [`Wurzel-engines.node „${String(wurzelEngines)}“ hat nicht die Form >=X[.Y[.Z]]`];
+  return Object.entries(packages)
+    .filter(([pfad]) => pfad !== "")
+    .flatMap(([pfad, p]) => {
+      const m = mindest(p.engines?.node);
+      return m && kleiner(wurzel, m) ? [`${pfad} verlangt node ${p.engines?.node}, die Wurzel nur ${wurzelEngines}`] : [];
+    });
+}
+
+describe("engines.node der Wurzel deckt die Abhängigkeiten ab (#1428 Z18)", () => {
+  const lock = JSON.parse(read("package-lock.json")) as { packages: Record<string, LockPaket> };
+
+  test("kein Paket im Lockfile verlangt ein höheres einfaches Node-Minimum als package.json engines.node", () => {
+    assert.deepEqual(enginesVerstoesse(lock.packages, pkg.engines?.node), []);
+  });
+
+  test("likec4 steht im Lockfile (sonst prüfte der Test ihr Minimum nicht mit)", () => {
+    assert.ok(lock.packages["node_modules/likec4"], "node_modules/likec4 fehlt im package-lock.json");
+  });
+
+  test("Negativ: ein Fixture-Lock mit höherem Minimum wird gemeldet, gleiche oder niedrigere nicht, komplexe Ranges werden übersprungen", () => {
+    const fixture = {
+      "": {},
+      "node_modules/hoch": { engines: { node: ">=24.0.0" } },
+      "node_modules/gleich": { engines: { node: ">=22.22.3" } },
+      "node_modules/minor": { engines: { node: ">=22.23" } },
+      "node_modules/major": { engines: { node: ">=23" } },
+      "node_modules/niedrig": { engines: { node: ">=18" } },
+      "node_modules/komplex": { engines: { node: "^24 || ^26" } },
+    };
+    assert.deepEqual(enginesVerstoesse(fixture, ">=22.22.3").map((v) => v.split(" ")[0]), ["node_modules/hoch", "node_modules/minor", "node_modules/major"]);
+    assert.equal(enginesVerstoesse({ x: { engines: { node: ">=24" } } }, "^22").length, 1, "nicht auswertbare Wurzel-Angabe ist selbst ein Verstoß");
+  });
+});

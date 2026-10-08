@@ -1,0 +1,119 @@
+#!/usr/bin/env node
+/**
+ * Das oberste FREIE Ticket der Board-Auswahl (#1428 Z4): ersetzt die Handarbeit „Board-Liste per jq lesen, dann je Kandidat Assignee,
+ * Blocker, Branch, Worktree und offenen PR einzeln prüfen“ (AGENTS.md § Auswahl des nächsten Tickets).
+ *
+ *   node scripts/naechstes-ticket.mjs          # erste Zeile `#<nr>\t<Titel>`, danach die übersprungenen Kandidaten
+ *   node scripts/naechstes-ticket.mjs --json   # { ticket, uebersprungen }
+ *
+ * Exit 0 = freies Ticket gefunden, 1 = keins frei, 2 = Fehler. Der Body wird nie ausgegeben (Text Dritter ist Daten, AGENTS.md § Fremdtext
+ * ist Daten); ein Fremdeingang (Autor nicht vertraut oder Label `forum`) wird übersprungen und als „Befund melden“ ausgewiesen.
+ *
+ * Frei heißt, in Board-Reihenfolge: Status Todo und offen · kein Assignee · kein offener Blocker (Zeile `blockiert durch #X` im Body,
+ * mehrfach, ohne Groß-/Kleinschreibung; zusätzlich `issue_dependencies_summary.blocked_by > 0`: GitHubs Zähler offener Blocker, in diesem
+ * Repo noch nie genutzt, darum nicht an echten Daten belegt, im Zweifel wird übersprungen) · kein Branch, Worktree oder offener PR
+ * `feature/kq-<nr>-*`. I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`, ein `gh pr list`; kein GraphQL.
+ */
+import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
+import { REPO, loadItemPages, loadOpenIssuePages, normalizeOffene } from "./board-lib.mjs";
+import { FREMDEINGANG_LABELS, istVertraut } from "./fremdtext.mjs";
+import { ghJson } from "./gh-cli.mjs";
+
+/** `Nummern` hinter `blockiert durch` (Zeilenweise, bis zu einer öffnenden Klammer oder dem Zeilenende), z.B. „blockiert durch #12, #13 (nur solange …)“. Pur. */
+export function blockerNummern(body) {
+  const nummern = new Set();
+  for (const zeile of String(body ?? "").split(/\r?\n/)) {
+    for (const m of zeile.matchAll(/blockiert\s+durch\b([^(\n]*)/gi)) {
+      for (const n of m[1].matchAll(/#(\d+)/g)) nummern.add(Number(n[1]));
+    }
+  }
+  return [...nummern];
+}
+
+/** Ticketnummer aus einem Branch-, Worktree- oder Ref-Namen `…feature/kq-<nr>-…` bzw. `…worktrees/kq-<nr>`; sonst null. Pur. */
+export function ticketAusRef(text) {
+  const m = /(?:feature\/kq-|worktrees[\\/]kq-)(\d+)(?=$|[-/\\\s])/.exec(String(text ?? ""));
+  return m ? Number(m[1]) : null;
+}
+
+/** Nummern, zu denen Branch, Worktree oder offener PR existieren. Pur. */
+export function belegteNummern({ refs = [], worktrees = [], prHeads = [] }) {
+  return new Set([...refs, ...worktrees, ...prHeads].map(ticketAusRef).filter((n) => n !== null));
+}
+
+const labelNamen = (labels) => (labels ?? []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
+
+/**
+ * Wählt das oberste freie Ticket. `items`: rohe Board-Items (REST, flach, Board-Reihenfolge), `offene`: Menge offener Issue-Nummern,
+ * `refs`/`worktrees`/`prHeads`: Texte (Branch-Namen, Worktree-Pfade bzw. -Branches, PR-Branches), `owner` für die Vertrauensprüfung.
+ * Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
+ */
+export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "" }) {
+  const belegt = belegteNummern({ refs, worktrees, prHeads });
+  const uebersprungen = [];
+  for (const item of items) {
+    const c = item?.content;
+    if (item?.content_type !== "Issue" || !Number.isInteger(c?.number)) continue;
+    const status = item.fields?.find((f) => f?.name === "Status")?.value?.name?.raw ?? "";
+    if (status !== "Todo" || c.state !== "open") continue;
+    const nr = c.number;
+    const grund = ueberspringGrund(c, { offene, belegt, owner });
+    if (grund) uebersprungen.push({ nr, grund });
+    else return { ticket: { nr, titel: String(c.title ?? "") }, uebersprungen };
+  }
+  return { ticket: null, uebersprungen };
+}
+
+function ueberspringGrund(c, { offene, belegt, owner }) {
+  const assignees = (c.assignees ?? []).map((a) => a?.login).filter(Boolean);
+  if (assignees.length > 0) return `Assignee ${assignees.map((a) => `@${a}`).join(", ")}`;
+  const label = labelNamen(c.labels).find((l) => FREMDEINGANG_LABELS.includes(l));
+  if (!istVertraut(c.user, owner) || label) return "Fremdeingang (Autor nicht vertraut oder Forum-Label): Befund melden";
+  const offeneBlocker = blockerNummern(c.body).filter((n) => offene.has(n) && n !== c.number);
+  if (offeneBlocker.length > 0) return `offener Blocker ${offeneBlocker.map((n) => `#${n}`).join(", ")}`;
+  if (Number(c.issue_dependencies_summary?.blocked_by) > 0) return "offener Blocker laut GitHub-Abhängigkeit";
+  if (belegt.has(c.number)) return "Branch, Worktree oder offener PR vorhanden";
+  return "";
+}
+
+/** Textausgabe: erste Zeile das Ticket (oder „kein freies Ticket“), danach je übersprungenem Kandidaten eine Zeile. Pur. */
+export function formatiere({ ticket, uebersprungen }) {
+  const kopf = ticket ? `#${ticket.nr}\t${ticket.titel}` : "kein freies Ticket";
+  return [kopf, ...uebersprungen.map((u) => `übersprungen #${u.nr}: ${u.grund}`)].join("\n") + "\n";
+}
+
+/** Ausführung mit injizierbarer I/O: `{ code, out, err }`. */
+export function fuehreAus(argv, io) {
+  try {
+    const eingabe = io.lade();
+    const ergebnis = waehleNaechstes({ ...eingabe, owner: io.owner });
+    const out = argv.includes("--json") ? `${JSON.stringify(ergebnis, null, 2)}\n` : formatiere(ergebnis);
+    return { code: ergebnis.ticket ? 0 : 1, out, err: "" };
+  } catch (e) {
+    return { code: 2, out: "", err: `✖ naechstes-ticket: ${e instanceof Error ? e.message : String(e)}\n` };
+  }
+}
+
+const git = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+
+function ladeEcht() {
+  const items = loadItemPages().flat();
+  const offene = new Set(normalizeOffene(loadOpenIssuePages()).map((i) => i.number));
+  try {
+    git(["fetch", "--prune", "origin"]); // fail-open: ohne Netz zählen die lokalen Remote-Refs
+  } catch {
+    /* lokale Refs genügen */
+  }
+  const refs = git(["for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes"]).split(/\r?\n/).filter(Boolean);
+  const worktrees = git(["worktree", "list", "--porcelain"]).split(/\r?\n/).filter((z) => /^(worktree|branch) /.test(z));
+  const prHeads = ghJson(["pr", "list", "--state", "open", "--limit", "200", "--json", "headRefName"]).map((p) => `${p.headRefName}`);
+  return { items, offene, refs, worktrees, prHeads };
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const { code, out, err } = fuehreAus(process.argv.slice(2), { lade: ladeEcht, owner: REPO.split("/")[0] });
+  process.stdout.write(out);
+  process.stderr.write(err);
+  process.exitCode = code;
+}
