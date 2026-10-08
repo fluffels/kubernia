@@ -436,8 +436,9 @@ describe("Stop-Hook: leerer gesperrter Waisen-Ordner und Halter-Meldung (#1411)"
     assert.equal(r.blocked, true);
     assert.match(r.reason ?? "", /kq-1404/);
     assert.match(r.reason ?? "", /PID 4711 python3\.exe/);
-    assert.match(r.reason ?? "", /Stop-Process -Id <pid>/);
-    assert.match(r.reason ?? "", /taskkill \/\/PID <pid> \/\/F/, "Git-Bash-Weg");
+    assert.match(r.reason ?? "", /taskkill \/PID <pid> \/T \/F/, "PowerShell-Weg samt Baum (#1501)");
+    assert.match(r.reason ?? "", /taskkill \/\/PID <pid> \/\/T \/\/F/, "Git-Bash-Weg");
+    assert.doesNotMatch(r.reason ?? "", /Stop-Process -Id/);
     assert.ok(!/Stop-Process -Name/.test(r.reason ?? ""), "kein pauschaler Kill per Name");
   });
 
@@ -456,7 +457,7 @@ describe("Stop-Hook: leerer gesperrter Waisen-Ordner und Halter-Meldung (#1411)"
 
 describe("Wächter: keine Anleitung zum Kill per Name (#1411)", () => {
   // Parallele Agenten laufen in anderen Worktrees; ein Kill per Name (`Stop-Process -Name`, `taskkill /IM`) beendet ihre
-  // Prozesse mit. Erlaubt ist nur der gezielte Kill per PID (`Stop-Process -Id`).
+  // Prozesse mit. Erlaubt ist nur der gezielte Kill per PID samt Baum (`taskkill /PID … /T`).
   const VERBOTEN = /Stop-Process\s+-Name\b|taskkill\s+\/{1,2}IM\b/i;
 
   /** Texte der Agenten-Anweisungen, Docs, Hooks und Skripte, in denen eine solche Anleitung stehen könnte. */
@@ -484,7 +485,7 @@ describe("Wächter: keine Anleitung zum Kill per Name (#1411)", () => {
     const treffer = Object.entries(await texte())
       .filter(([, t]) => VERBOTEN.test(t))
       .map(([pfad]) => pfad);
-    assert.deepEqual(treffer, [], "Kill per Name beendet auch Prozesse paralleler Agenten: gezielt per PID (`Stop-Process -Id`)");
+    assert.deepEqual(treffer, [], "Kill per Name beendet auch Prozesse paralleler Agenten: gezielt per PID (`taskkill /PID … /T`)");
   });
 
   test("Red-Green: das Muster erkennt beide Formen und lässt den Kill per PID zu", () => {
@@ -495,6 +496,34 @@ describe("Wächter: keine Anleitung zum Kill per Name (#1411)", () => {
     assert.ok(!VERBOTEN.test("Stop-Process -Id 4711"));
     assert.ok(!VERBOTEN.test("taskkill //PID 4711 //F"));
     assert.ok(!VERBOTEN.test("nie per Name (Stop-Process -Id <pid>)"));
+  });
+
+  // #1501: Die PID ist oft nur die npx-/npm-Hülle; ein Kill ohne Baum (`/T`) lässt den node.exe-Listener stehen, und
+  // `Stop-Process` kann keinen Baum beenden. Jeder Rat zum Kill per PID nennt darum `taskkill … /T`.
+  const OHNE_BAUM = (text: string): string[] => {
+    const treffer: string[] = [];
+    for (const m of text.matchAll(/taskkill((?:\s+\/{1,2}\w+(?:\s+<?\w+>?)?)*)/gi)) {
+      if (/\/{1,2}PID\b/i.test(m[1]) && !/\/{1,2}T\b/i.test(m[1])) treffer.push(m[0].trim());
+    }
+    if (/Stop-Process\s+-Id\b/i.test(text)) treffer.push("Stop-Process -Id");
+    return treffer;
+  };
+
+  test("kein Rat zum Kill per PID ohne Baum: weder `taskkill /PID` ohne `/T` noch `Stop-Process -Id` (#1501)", async () => {
+    const treffer = Object.entries(await texte())
+      .map(([pfad, t]) => [pfad, OHNE_BAUM(t)] as const)
+      .filter(([, t]) => t.length > 0);
+    assert.deepEqual(treffer, [], "Hülle statt Listener beendet: `taskkill /PID <pid> /T /F` (PowerShell) bzw. `taskkill //PID <pid> //T //F` (Git-Bash)");
+  });
+
+  test("Red-Green (#1501): der Matcher erkennt den Kill ohne Baum und lässt den Baum-Kill zu", () => {
+    assert.deepEqual(OHNE_BAUM("taskkill //PID 4711 //F"), ["taskkill //PID 4711 //F"]);
+    assert.equal(OHNE_BAUM("taskkill /PID <pid> /F").length, 1);
+    assert.equal(OHNE_BAUM("pwsh: Stop-Process -Id <pid>").length, 1);
+    assert.deepEqual(OHNE_BAUM("taskkill //PID <pid> //T //F"), []);
+    assert.deepEqual(OHNE_BAUM("taskkill /PID <pid> /T /F"), []);
+    assert.deepEqual(OHNE_BAUM("taskkill /F /T /PID 1"), []);
+    assert.deepEqual(OHNE_BAUM("PowerShells `Stop-Process` kann keinen Baum beenden"), []);
   });
 });
 

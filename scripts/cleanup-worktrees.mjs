@@ -366,7 +366,7 @@ export function findeHalter(absPath, ordnerGeburtMs, deps = {}) {
 export function formatHalter(halter) {
   if (halter.length === 0) return "kein Halter per Kommandozeile oder Verwaisung gefunden";
   const zeilen = halter.map((h) => `PID ${h.pid} ${h.name} (${h.grund}): ${String(h.commandLine).slice(0, 140)}`);
-  return `mögliche Halter: ${zeilen.join("; ")}. Nach Prüfung gezielt beenden mit "Stop-Process -Id <pid>" (PowerShell) oder "taskkill //PID <pid> //F" (Git-Bash), nie per Name (parallele Agenten laufen)`;
+  return `mögliche Halter: ${zeilen.join("; ")}. Nach Prüfung gezielt beenden mit "taskkill /PID <pid> /T /F" (PowerShell) oder "taskkill //PID <pid> //T //F" (Git-Bash), nie per Name (parallele Agenten laufen)`;
 }
 
 /**
@@ -601,7 +601,7 @@ function main() {
 
   if (errors.length > 0) {
     console.error(
-      `\n${errors.length} Fehler beim Löschen. Den Halter gezielt per PID beenden (Stop-Process -Id <pid> oder taskkill //PID <pid> //F, nie per Name), dann erneut versuchen.`
+      `\n${errors.length} Fehler beim Löschen. Den Halter gezielt per PID beenden (taskkill /PID <pid> /T /F bzw. in Git-Bash taskkill //PID <pid> //T //F, nie per Name), dann erneut versuchen.`
     );
     process.exit(1);
   }
