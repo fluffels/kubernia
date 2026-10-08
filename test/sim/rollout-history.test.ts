@@ -318,3 +318,138 @@ describe("YAML und Invariante (10)", () => {
     expect(meldungen(d => { d.oldReplicaSets![0].template.image = "anderes"; })).toContain("nicht zum Template passt");
   });
 });
+
+describe("Rollback heilt und stellt alle Felder her (Lens R1)", () => {
+  const mit = (d: Record<string, unknown>, extra: Partial<Scenario> = {}) => new KQSim({
+    deployments: [{ name: "web", image: "web:2", replicas: 1, revision: 2, rsHistory: [{ revision: 1, image: "web:1" }], ...d }],
+    ...extra,
+  });
+
+  test("undo ohne Historie mit --to-revision: wie kubectl (aktuelle = skipped, andere = unbekannt, nie no history)", () => {
+    const sim = neu();
+    expect(out(sim, "kubectl rollout undo deployment/web --to-revision=1")).toContain("skipped rollback (current template already matches revision 1)");
+    expect(out(sim, "kubectl rollout undo deployment/web --to-revision=5")).toContain("unable to find specified revision 5 in history");
+    expect(out(sim, "kubectl rollout undo deployment/web --to-revision=-1")).toContain("unable to find specified revision -1 in history");
+    expect(out(sim, "kubectl rollout undo deployment/web --to-revision=0")).toContain("no rollout history found");
+  });
+
+  test("ImagePull wird durch das alte Image geheilt", () => {
+    const sim = mit({ broken: { type: "imagepull", badImage: "web:2" } });
+    expect(dep(sim).broken).not.toBeNull();
+    expect(sim.exec("kubectl rollout undo deployment/web").error).toBe(false);
+    expect(dep(sim).broken).toBeNull();
+  });
+
+  test("envFrom kommt zurück (set env zwischen den Revisionen)", () => {
+    const sim = neu({ configMaps: [{ name: "cfg", keys: ["k"] }] });
+    sim.exec("kubectl set env deployment/web --from=configmap/cfg");
+    expect(dep(sim).envFrom.configMaps).toEqual(["cfg"]);
+    setImage(sim, "nginx:2");
+    expect(sim.exec("kubectl rollout undo deployment/web --to-revision=1").error).toBe(false);
+    expect(dep(sim).envFrom.configMaps).toEqual([]);
+  });
+
+  test("OOM-Heilung durch ein ausreichendes memLimit der alten Revision, mit Notiz", () => {
+    const sim = mit({ broken: { type: "oomkilled", memNeeded: 256 }, rsHistory: [{ revision: 1, image: "web:1", memLimit: 512 }] });
+    const r = sim.exec("kubectl rollout undo deployment/web");
+    expect(r.output).toContain("Genug Speicher");
+    expect(dep(sim).broken).toBeNull();
+    expect(dep(sim).memLimit).toBe(512);
+  });
+
+  test("CPU-Drosselung durch das cpu-Limit der alten Revision, mit Notiz", () => {
+    const sim = mit({ cpuHeavy: true, rsHistory: [{ revision: 1, image: "web:1", cpuLimitMilli: 100 }] });
+    const r = sim.exec("kubectl rollout undo deployment/web");
+    expect(r.output).toContain("gedrosselt");
+    expect(dep(sim).cpuHeavy).toBe(false);
+  });
+
+  test("crashloop mit inzwischen vorhandenem Secret ist nach undo geheilt", () => {
+    const sim = mit({ broken: { type: "crashloop", needsSecret: "sec" } }, { secrets: [{ name: "sec", keys: ["k"] }] });
+    expect(dep(sim).broken).not.toBeNull();
+    expect(sim.exec("kubectl rollout undo deployment/web").error).toBe(false);
+    expect(dep(sim).broken).toBeNull();
+  });
+
+  test("lokal gebautes needsBuild-Image: undo heilt mit Hinweis", () => {
+    const sim = mit({}, { files: { Dockerfile: "FROM nginx" } });
+    sim.exec("docker build -t web:1 .");
+    dep(sim).broken = { type: "imagepull", badImage: "web:1", needsBuild: true };
+    const r = sim.exec("kubectl rollout undo deployment/web");
+    expect(r.output).toContain("Image gefunden");
+    expect(dep(sim).broken).toBeNull();
+  });
+
+  test("restart nach undo und Takt-Rücksprung: das neue ReplicaSet ist nie ein altes (maxRestartedAt)", () => {
+    const sim = neu(); setImage(sim, "nginx:2");
+    const c0 = sim.clock;
+    sim.exec("kubectl rollout restart deployment/web");
+    sim.exec("kubectl rollout undo deployment/web --to-revision=2");
+    sim.clock = c0;
+    const alte = new Set(replicaSetsOf(dep(sim)).map(r => r.name));
+    sim.exec("kubectl rollout restart deployment/web");
+    expect(alte.has(currentReplicaSet(dep(sim)).name)).toBe(false);
+  });
+
+  test("Persistenz mit envFrom und Template-Feldern: dieselben ReplicaSet-Namen nach dem Laden", () => {
+    const sim = new KQSim({ deployments: [{ name: "web", image: "web:1", replicas: 1, envFrom: { configMaps: ["cfg"], secrets: [] }, memLimit: 128, containerPort: 80 }], configMaps: [{ name: "cfg", keys: ["k"] }] });
+    expect(sim.exec("kubectl set image deployment/web web=web:2").error).toBe(false);
+    const geladen = new KQSim(JSON.parse(JSON.stringify(sim.snapshot())) as Scenario);
+    expect(replicaSetsOf(dep(geladen)).map(r => r.name)).toEqual(replicaSetsOf(dep(sim)).map(r => r.name));
+    expect(geladen.exec("kubectl rollout undo deployment/web").error).toBe(false);
+    expect(dep(geladen).memLimit).toBe(128);
+    expect(dep(geladen).envFrom.configMaps).toEqual(["cfg"]);
+  });
+
+  test("Deployment mit 0 Replicas von Anfang an: Revision 1 hält das alte Image", () => {
+    const sim = new KQSim({});
+    sim.exec("kubectl create deployment web --image=nginx --replicas=0");
+    setImage(sim, "nginx:2");
+    expect(replicaSetsOf(dep(sim)).find(r => r.revision === 1)!.image).toBe("nginx");
+  });
+
+  test("get rs: Zeilen nach Namen sortiert", () => {
+    const namen = rsZeilen(dreiRevisionen()).map(z => z.split(/\s+/)[0]);
+    expect(namen).toEqual([...namen].sort());
+  });
+
+  test("YAML eines alten ReplicaSets: status ohne laufende Replicas", () => {
+    const sim = dreiRevisionen();
+    const rev1 = replicaSetsOf(dep(sim)).find(r => r.revision === 1)!;
+    const status = out(sim, "kubectl get rs " + rev1.name + " -o yaml").split("status:")[1];
+    expect(status).toMatch(/replicas: 0/);
+    expect(status).not.toMatch(/(ready|available|fullyLabeled)Replicas|replicas: [1-9]/i);
+  });
+});
+
+describe("Gehärtetes Laden und Invariante (10), Zweige (Lens R1)", () => {
+  const eintrag = (r: unknown, image: unknown = "img", extra: object = {}) => ({ revision: r, image, ...extra });
+  const lade = (d: Record<string, unknown>) => new KQSim({ deployments: [{ name: "web", image: "web", replicas: 1, ...d }] });
+
+  test("Eintrag mit kaputtem envFrom wirft nicht und wird verworfen", () => {
+    const sim = lade({ revision: 3, rsHistory: [eintrag(1, "i", { envFrom: { configMaps: 5 } }), eintrag(2)] });
+    expect(revisionen(sim)).toEqual([2, 3]);
+  });
+
+  test("Eintrag mit dem Template des aktuellen ReplicaSets wird verworfen", () => {
+    expect(revisionen(lade({ revision: 3, rsHistory: [eintrag(1, "web"), eintrag(2, "x")] }))).toEqual([2, 3]);
+  });
+
+  test("Revision im Eintrag nicht ganzzahlig: verworfen", () => {
+    expect(revisionen(lade({ revision: 4, rsHistory: [eintrag(1.5), eintrag(2)] }))).toEqual([2, 4]);
+  });
+
+  test("ungültige Revision des Deployments: aus der Historie abgeleitet", () => {
+    expect(revisionen(lade({ revision: 1.5, rsHistory: [eintrag(2)] }))).toEqual([2, 3]);
+    expect(revisionen(lade({ revision: -3, rsHistory: [eintrag(2)] }))).toEqual([2, 3]);
+  });
+
+  test("Invariante (10): Hash gleich dem aktuellen und fremdes Template am aktuellen werden gemeldet", () => {
+    const meld = (mutiere: (d: ReturnType<typeof dep>) => void) => {
+      const sim = dreiRevisionen(); mutiere(dep(sim));
+      return clusterInvariantViolations(sim).join("\n");
+    };
+    expect(meld(d => { d.oldReplicaSets![0].hash = d.replicaSet!.hash; d.oldReplicaSets![0].template = d.replicaSet!.template; })).toContain("doppelte Hashes");
+    expect(meld(d => { d.replicaSet!.template.image = "x"; })).toContain("nicht zum Template passt");
+  });
+});

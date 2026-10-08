@@ -44,10 +44,15 @@ export function newDeploymentPod(dep: Deployment, clock: number, rng: () => numb
 /** Das Template, das ein ReplicaSet besitzt: Kopie von Image, envFrom und den Template-Feldern des Deployments
  *  (ohne Laufzeitwert `ephemeralUsedMi`; ein emptyDir zählt nur als Deklaration). */
 export function rsTemplateOf(dep: Deployment): RsTemplate {
-  const spec = snapshotPodTemplate(dep);
+  return { image: dep.image, envFrom: { configMaps: dep.envFrom.configMaps.slice(), secrets: dep.envFrom.secrets.slice() }, spec: rsSpecOf(dep) };
+}
+
+/** Die Template-Felder, die ein ReplicaSet besitzt: Kopie ohne Laufzeitwert `ephemeralUsedMi`, ein emptyDir nur als Deklaration. Die EINE Normalisierung (Deployment und Historien-Eintrag). */
+function rsSpecOf(src: PodTemplateSpec): PodTemplateSpec {
+  const spec = snapshotPodTemplate(src);
   delete spec.ephemeralUsedMi;
   if (spec.emptyDir) spec.emptyDir = {};
-  return { image: dep.image, envFrom: { configMaps: dep.envFrom.configMaps.slice(), secrets: dep.envFrom.secrets.slice() }, spec };
+  return spec;
 }
 
 /** Stellt sicher, dass das Deployment sein aktuelles ReplicaSet (Revision 1, Template des Deployments) kennt.
@@ -123,9 +128,10 @@ export function scaleDeployment(dep: Deployment, target: number, clock: number, 
  *  gilt vor und nach dem Neustart. */
 export function replacePods(dep: Deployment, clock: number, rng: () => number): void {
   // Neues Template → neues ReplicaSet (neuer Hash); gleiches Template behält es (#1468).
-  const hash = podTemplateHash(dep);
   ensureReplicaSet(dep, clock); // das bisherige ReplicaSet behält sein Template, bevor es abgelöst wird
-  if (dep.replicaSet?.hash !== hash) switchReplicaSet(dep, { hash, created: clock, template: rsTemplateOf(dep) });
+  const template = rsTemplateOf(dep);
+  const hash = templateHash(dep.name, template); // EIN Hash-Weg: derselbe wie im Eintrag
+  if (dep.replicaSet?.hash !== hash) switchReplicaSet(dep, { hash, created: clock, template });
   const fresh: PodInstance[] = [];
   for (let i = 0; i < dep.pods.length; i++) fresh.push(newDeploymentPod(dep, clock, rng, [...dep.pods, ...fresh]));
   dep.pods = fresh;
@@ -277,13 +283,11 @@ export function snapshotPodTemplate(dep: PodTemplateSpec): PodTemplateSpec {
  *  Limit-Heilung wie `set resources`; die Notizen der Heilungen kommen zurück. */
 export function restoreRsTemplate(dep: Deployment, t: RsTemplate): string[] {
   const notes: string[] = [];
-  const emptyDir = dep.emptyDir;
   for (const k of POD_TEMPLATE_KEYS) if (k !== "ephemeralUsedMi") Reflect.deleteProperty(dep, k);
   dep.envFrom = { configMaps: t.envFrom.configMaps.slice(), secrets: t.envFrom.secrets.slice() };
   changeImage(dep, t.image);
   const { memLimit, cpuLimitMilli, ...rest } = t.spec;
   seedPodTemplate(dep, rest);
-  if (emptyDir && dep.emptyDir) dep.emptyDir = emptyDir; // der Inhalt des Scratch-Volumes bleibt (der Rollout gibt ihn frei)
   if (memLimit !== undefined && setMemoryLimit(dep, memLimit)) notes.push("\n" + MEM_HEALED_NOTE);
   if (cpuLimitMilli !== undefined && setCpuLimit(dep, cpuLimitMilli)) notes.push("\n" + CPU_THROTTLED_NOTE);
   return notes;
@@ -299,10 +303,9 @@ function validHistoryEntry(e: unknown): e is NonNullable<RolloutHistorySpec["rsH
 /** Ein Historien-Eintrag als ReplicaSet (Template normalisiert); `null` bei kaputtem Inhalt (wirft nie). */
 function recordFromEntry(dep: Deployment, e: NonNullable<RolloutHistorySpec["rsHistory"]>[number]): ReplicaSetRecord | null {
   try {
-    const spec: PodTemplateSpec = {};
-    seedPodTemplate(spec, e);
-    delete spec.ephemeralUsedMi;
-    if (spec.emptyDir) spec.emptyDir = {};
+    const geseedet: PodTemplateSpec = {};
+    seedPodTemplate(geseedet, e);
+    const spec = rsSpecOf(geseedet);
     const envFrom = { configMaps: [...(e.envFrom?.configMaps ?? [])].map(String), secrets: [...(e.envFrom?.secrets ?? [])].map(String) };
     const template: RsTemplate = { image: e.image, envFrom, spec };
     return { hash: templateHash(dep.name, template), created: dep.created, revision: e.revision, template };

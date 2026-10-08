@@ -96,7 +96,8 @@ export type UndoTarget =
 /** Wohin `rollout undo [--to-revision=N]` zurückgeht. `0`/fehlend = die vorherige Revision (die höchste alte). */
 export function undoTarget(dep: Deployment, toRevision?: number): UndoTarget {
   const alte = dep.oldReplicaSets ?? [];
-  if (alte.length === 0) return { error: "keine-historie" };
+  // Wie kubectl: „keine Historie“ nur ohne Ziel; mit `--to-revision` zählt, ob die Revision die aktuelle ist oder fehlt.
+  if (alte.length === 0 && !toRevision) return { error: "keine-historie" };
   const rev = toRevision || Math.max(...alte.map(r => r.revision));
   if (rev === currentReplicaSet(dep).revision) return { skip: true, revision: rev };
   const record = alte.find(r => r.revision === rev);
