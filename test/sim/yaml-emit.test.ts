@@ -52,6 +52,7 @@ describe("emitYaml – Schlüsselordnung (go-yaml)", () => {
   it("Null hinter einer Ziffer ungleich null gehört zur Zahl: a19 vor a100, a1009 vor a1010", () => {
     expect(sortedKeys({ a100: 1, a19: 1 })).toEqual(["a19", "a100"]);
     expect(sortedKeys({ a1010: 1, a1009: 1 })).toEqual(["a1009", "a1010"]);
+    expect(sortedKeys({ a10009: 1, a1015: 1 })).toEqual(["a1015", "a10009"]); // die Nullfolge zählt rückwärts bis zur ersten Ziffer ungleich null
   });
   it("ein Präfix kommt vor dem längeren Schlüssel", () => {
     expect(sortedKeys({ app2: 1, app: 1 })).toEqual(["app", "app2"]);

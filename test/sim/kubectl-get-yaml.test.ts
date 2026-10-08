@@ -358,6 +358,11 @@ describe("Pod", () => {
     expect(cs(p).ready).toBe(false);
   });
 
+  test("broken pending mit Node-Pin im Template: der Pod zeigt keinen nodeName (nicht eingeplant)", () => {
+    const p = podOf({ broken: { type: "pending" }, node: "ahoi-worker-2" });
+    expect((p.spec as Obj).nodeName).toBeUndefined();
+  });
+
   test("broken pending: Phase Pending, weder Container-Status noch podIP noch nodeName", () => {
     const p = podOf({ broken: { type: "pending" } });
     expect(p.status).toEqual({ phase: "Pending" });
@@ -386,6 +391,7 @@ describe("Pod", () => {
     expect((ok[0].status as Obj).phase).toBe("Running");
     const wait = items(new KQSim({ statefulSets: [sts({ storageClass: "", replicas: 1 })] }), "get pods -o yaml")[0];
     expect(wait.status).toEqual({ phase: "Pending" });
+    expect(((ok[0].status as Obj).containerStatuses as Obj[])).toEqual([{ image: "postgres:16", lastState: {}, name: "speicher", ready: true, restartCount: 0, state: { running: {} } }]);
   });
 });
 
