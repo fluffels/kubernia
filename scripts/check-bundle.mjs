@@ -98,13 +98,13 @@ export const BUNDLE_BUDGETS = [
     // Die Offline-Datei enthält den Content inline; er wird über `subtractChunksDir` abgezogen und
     // zählt allein bei den Content-Chunks (ADR 0018). Gemessen: Offline-HTML minus Summe der Chunks.
     subtractChunksDir: CONTENT_CHUNK_DIR_DIST,
-    maxBytes: 2_529_000,
+    maxBytes: 2_539_000, // #1469: +7_249 B für den Call-Vertrag der CLI-Familien (cliargs, kubeadm/git/aws-Tabellen), Stand 2_535_491 B
   },
   {
     label: "Spielcode-Chunks in dist/ (ohne Phaser-vendor, ohne Content)",
     kind: "game-chunks",
     dir: "dist/assets",
-    maxBytes: 530_000,
+    maxBytes: 540_000, // #1469: +7_225 B (528_073 → 535_298) für denselben Vertrag; eine Quelle statt Handler-eigener Parser
   },
   {
     label: "Content-Chunks in dist/assets/content/ (je Datei/Karte, ADR 0018)",
