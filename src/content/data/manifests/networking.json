@@ -1,12 +1,13 @@
 [
   {
     "id": "ingress-hafentor",
-    "yaml": "apiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: hafentor\nspec:\n  ingressClassName: nginx\n  rules:\n    - host: hafen.de\n      http:\n        paths:\n          - path: /lager\n            pathType: Prefix\n            backend:\n              service:\n                name: lager\n                port:\n                  number: 6379"
+    "note": "Nur Autoren: ingressClassName: nginx bleibt bewusst (#1506). Ingress-NGINX ist seit 03/2026 eingestellt, die Klasse ist aber realistisch für Bestandscluster; der gepflegte F5 NGINX Ingress Controller nutzt dieselbe Klasse. Die Einstellung lehren Quest secrets-encrypted und das Quiz, ein Umbenennen brächte keinen Lerngewinn.",
+    "yaml": "apiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: hafentor\nspec:\n  ingressClassName: nginx   # wählt den Controller, der dieses Tor betreibt\n  rules:\n    - host: hafen.de\n      http:\n        paths:\n          - path: /lager\n            pathType: Prefix\n            backend:\n              service:\n                name: lager\n                port:\n                  number: 6379"
   },
   {
     "id": "ingress-hafentor-tls",
     "note": "Dasselbe Hafentor mit TLS: spec.tls referenziert das Zertifikats-Secret, der Controller terminiert HTTPS für hafen.de.",
-    "yaml": "apiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: hafentor\nspec:\n  ingressClassName: nginx\n  tls:\n    - hosts:\n        - hafen.de\n      secretName: hafen-tls\n  rules:\n    - host: hafen.de\n      http:\n        paths:\n          - path: /lager\n            pathType: Prefix\n            backend:\n              service:\n                name: lager\n                port:\n                  number: 6379"
+    "yaml": "apiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: hafentor\nspec:\n  ingressClassName: nginx   # wählt den Controller, der dieses Tor betreibt\n  tls:\n    - hosts:\n        - hafen.de\n      secretName: hafen-tls\n  rules:\n    - host: hafen.de\n      http:\n        paths:\n          - path: /lager\n            pathType: Prefix\n            backend:\n              service:\n                name: lager\n                port:\n                  number: 6379"
   },
   {
     "id": "service-externalname-bank",

@@ -1129,7 +1129,8 @@
         "type": "dialog",
         "npc": "ada",
         "lines": [
-          "Merke: <b>Zertifikat als TLS-Secret ablegen, im Ingress unter spec.tls referenzieren – fertig ist HTTPS am Tor.</b> Die Verschlüsselung endet am Hafentor, dahinter bleibt's einfach. Und DNS sorgt dafür, dass der Name überhaupt bei uns ankommt. Hervorragende Arbeit, Lotse! 🔒⚓"
+          "Merke: <b>Zertifikat als TLS-Secret ablegen, im Ingress unter spec.tls referenzieren – fertig ist HTTPS am Tor.</b> Die Verschlüsselung endet am Hafentor, dahinter bleibt's einfach. Und DNS sorgt dafür, dass der Name überhaupt bei uns ankommt.",
+          "Noch ein Hinweis aus der Praxis: <b>Ingress-NGINX</b>, der Controller hinter <code>ingressClassName: nginx</code>, ist seit März 2026 <b>eingestellt</b> – keine Updates und keine Sicherheits-Fixes mehr; bestehende Tore laufen nur weiter. Die Ingress-API selbst bleibt gültig, ist aber eingefroren. Neue Tore baut man mit der <b>Gateway API</b> (<code>Gateway</code> + <code>HTTPRoute</code>). Siehst du in einem Bestandscluster <code>ingressClassName: nginx</code>, prüf, welcher Controller dahintersteckt. Der Webserver <code>nginx</code> aus Bos Kisten ist ein anderes Projekt und lebt weiter. Hervorragende Arbeit, Lotse! 🔒⚓"
         ]
       }
     ]
