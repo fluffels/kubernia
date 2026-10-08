@@ -173,9 +173,26 @@ export interface Deployment {
   evicted?: { reason: string } | null;
   /** Annotation `restartedAt` des Pod-Templates (#1468), siehe `PodTemplateSpec`. */
   restartedAt?: number;
-  /** Das ReplicaSet der laufenden Pods (#1468, `sim/replicasets.ts`): Hash und Erzeugungszeit. Laufzeitwert,
-   *  NICHT serialisiert; ändert sich nur beim Ausrollen eines neuen Templates. */
-  replicaSet?: { hash: string; created: number };
+  /** Das ReplicaSet der laufenden Pods (#1468, `sim/replicasets.ts`): Hash, Erzeugungszeit, Revision und
+   *  das eigene Template. Laufzeitwert, NICHT serialisiert (nur `revision` über `RolloutHistorySpec`);
+   *  ändert sich nur beim Ausrollen eines neuen Templates. */
+  replicaSet?: ReplicaSetRecord;
+  /** Die alten ReplicaSets (0/0/0, #1471), aufsteigend nach Revision, höchstens `REVISION_HISTORY_LIMIT`. */
+  oldReplicaSets?: ReplicaSetRecord[];
+}
+/** Das Pod-Template, das ein ReplicaSet besitzt (Image, envFrom, Template-Felder ohne Laufzeitwerte). */
+export interface RsTemplate {
+  image: string;
+  envFrom: { configMaps: string[]; secrets: string[] };
+  spec: PodTemplateSpec;
+}
+/** Ein ReplicaSet-Eintrag eines Deployments (#1471). `hash` ist aus dem Template abgeleitet und wird nie persistiert. */
+export interface ReplicaSetRecord { hash: string; created: number; revision: number; template: RsTemplate }
+/** Die persistierte Rollout-Historie eines Deployments (optional, additiv, ohne Save-Bump, #1471):
+ *  `revision` = Revision des aktuellen ReplicaSets, `rsHistory` = die alten ReplicaSets mit ihrem Template. */
+export interface RolloutHistorySpec {
+  revision?: number;
+  rsHistory?: Array<{ revision: number; image: string; envFrom?: { configMaps: string[]; secrets: string[] } } & PodTemplateSpec>;
 }
 /** Der Sentinel-Wert für einen headless Service (`spec.clusterIP: None`, #1301): keine
  *  virtuelle IP, DNS liefert direkt die Pod-IPs. Ausschließlich über `isHeadlessService`
@@ -668,7 +685,7 @@ export interface Scenario {
   // (Round-trip über snapshot/reset); ohne sie leitet reset() den Zustand aus `bareMetal` ab.
   bareMetal?: boolean;
   controlPlane?: { up?: boolean; token?: string | null; node?: string | null };
-  deployments?: Array<{ name: string; image: string; replicas: number; broken?: Broken | null; envFrom?: { configMaps: string[]; secrets: string[] }; cpuHeavy?: boolean } & PodTemplateSpec>;
+  deployments?: Array<{ name: string; image: string; replicas: number; broken?: Broken | null; envFrom?: { configMaps: string[]; secrets: string[] }; cpuHeavy?: boolean } & PodTemplateSpec & RolloutHistorySpec>;
   services?: ServiceRes[];
   ingresses?: IngressRes[];
   networkPolicies?: NetworkPolicyRes[];

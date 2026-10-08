@@ -15,7 +15,7 @@ import type { YamlMap } from "../../yaml-emit";
 import type { KubectlHost } from "../host";
 import {
   DEFAULT_NAMESPACE, SECURITY_CONTEXT_KEYS, isExternalNameService,
-  type Broken, type Deployment, type PodTemplateSpec, type PvcRes, type ServiceRes,
+  type Broken, type Deployment, type PodTemplateSpec, type PvcRes, type RsTemplate, type ServiceRes,
 } from "../../state";
 import { servicesWithDefault, serviceSelector, isKubernetesService } from "../../endpoints";
 import { clusterPods, type ClusterPod } from "../../pods";
@@ -34,9 +34,9 @@ export function compact(o: Record<string, YamlValue | undefined>): YamlMap {
   return out;
 }
 
-/** `metadata` mit Name, Namespace und optionalen Labels. */
-export function metaOf(name: string, labels?: Record<string, string>): YamlMap {
-  return compact({ labels, name, namespace: DEFAULT_NAMESPACE });
+/** `metadata` mit Name, Namespace und optionalen Labels und Annotationen. */
+export function metaOf(name: string, labels?: Record<string, string>, annotations?: Record<string, string>): YamlMap {
+  return compact({ annotations, labels, name, namespace: DEFAULT_NAMESPACE });
 }
 
 /** `labels.app` ist die Namensverdrahtung der Sim (siehe ../../endpoints.ts); der Schlüssel `app` steht auch in `workloadSelector` (../../util.ts), beide zusammen ändern. */
@@ -66,7 +66,7 @@ interface SpecParts { pod: YamlMap; container: YamlMap; limits: YamlMap }
 type FieldWriter = (tpl: PodTemplateSpec, parts: SpecParts) => void;
 
 /** EIN Eintrag je `PodTemplateSpec`-Feld (`satisfies` bricht den Typecheck, sobald ein neues Feld hier
- *  nicht entschieden ist, Muster `IM_HASH` in ../../replicasets.ts). Laufzeitwerte (`ephemeralUsedMi`,
+ *  nicht entschieden ist, Muster `HASH_FORM` in ../../replicasets.ts). Laufzeitwerte (`ephemeralUsedMi`,
  *  `restartedAt`) und Sim-Sonderfelder gehören nicht in ein Manifest-YAML. */
 const FIELD_WRITERS = {
   serviceAccountName: (t, p) => { if (t.serviceAccountName !== undefined) p.pod.serviceAccountName = t.serviceAccountName; },
@@ -86,24 +86,29 @@ const FIELD_WRITERS = {
 } satisfies Record<keyof PodTemplateSpec, FieldWriter>;
 
 /** `envFrom` des Containers aus den eingebundenen ConfigMaps und Secrets (leer → fehlt). */
-function envFromOf(dep: Deployment): YamlValue | undefined {
+function envFromOf(envFrom: RsTemplate["envFrom"]): YamlValue | undefined {
   const refs: YamlValue[] = [
-    ...dep.envFrom.configMaps.map(name => ({ configMapRef: { name } })),
-    ...dep.envFrom.secrets.map(name => ({ secretRef: { name } })),
+    ...envFrom.configMaps.map(name => ({ configMapRef: { name } })),
+    ...envFrom.secrets.map(name => ({ secretRef: { name } })),
   ];
   return refs.length > 0 ? refs : undefined;
 }
 
-/** Die Pod-Spec eines Deployments (Template des Deployments und des ReplicaSets, Grundlage der Pods). */
+/** Die Pod-Spec eines Deployments (Template des Deployments und seines aktuellen ReplicaSets, Grundlage der Pods). */
 export function deploymentPodSpec(dep: Deployment): YamlMap {
-  const tpl = snapshotPodTemplate(dep);
+  return podSpecOf(dep.name, { image: dep.image, envFrom: dep.envFrom, spec: snapshotPodTemplate(dep) });
+}
+
+/** Die Pod-Spec aus einem Template (auch dem eines alten ReplicaSets, #1471); `name` ist der Container-Name. */
+export function podSpecOf(name: string, t: RsTemplate): YamlMap {
+  const tpl = t.spec;
   const parts: SpecParts = { pod: {}, container: {}, limits: {} };
   for (const write of Object.values(FIELD_WRITERS) as FieldWriter[]) write(tpl, parts);
   const container = compact({
     ...parts.container,
-    envFrom: envFromOf(dep),
-    image: dep.image,
-    name: dep.name,
+    envFrom: envFromOf(t.envFrom),
+    image: t.image,
+    name,
     resources: Object.keys(parts.limits).length > 0 ? { limits: parts.limits } : undefined,
   });
   return { ...parts.pod, containers: [container] };

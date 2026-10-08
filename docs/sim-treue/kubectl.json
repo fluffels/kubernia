@@ -20,7 +20,7 @@
   "zeilen": [
     {"befehl":"get","ziel":"pods","verhalten":"gleich","ausgabe":"gleich"},
     {"befehl":"get","ziel":"deployments","verhalten":"gleich","ausgabe":"gleich"},
-    {"befehl":"get","ziel":"replicasets","verhalten":"vereinfacht","ausgabe":"gleich","grenzen":["rs-nur-aktuell"]},
+    {"befehl":"get","ziel":"replicasets","verhalten":"gleich","ausgabe":"gleich"},
     {"befehl":"get","ziel":"services","verhalten":"gleich","ausgabe":"gleich"},
     {"befehl":"get","ziel":"endpoints","verhalten":"gleich","ausgabe":"gleich"},
     {"befehl":"get","ziel":"nodes","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["nodes-diskpressure"]},
@@ -54,7 +54,7 @@
     {"befehl":"get","flag":"--sort-by","verhalten":"vereinfacht","ausgabe":"vereinfacht","grenzen":["keine-ausgabeformate"]},
     {"befehl":"get","flag":"NAME","verhalten":"gleich","ausgabe":"gleich"},
     {"befehl":"get","flag":"TYP,TYP","verhalten":"gleich","ausgabe":"gleich"},
-    {"befehl":"get","flag":"all","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["rs-nur-aktuell"]},
+    {"befehl":"get","flag":"all","verhalten":"gleich","ausgabe":"gleich"},
     {"befehl":"describe","ziel":"pods","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["describe-gekuerzt"]},
     {"befehl":"describe","ziel":"nodes","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["describe-gekuerzt"]},
     {"befehl":"describe","ziel":"ingresses","verhalten":"gleich","ausgabe":"vereinfacht","grenzen":["describe-gekuerzt"]},
@@ -119,6 +119,8 @@
     {"befehl":"set","ziel":"env","verhalten":"abweichend","ausgabe":"gleich","tickets":[1343],"grenzen":["nur-deployments"]},
     {"befehl":"set","ziel":"resources","verhalten":"abweichend","ausgabe":"gleich","tickets":[1343],"grenzen":["nur-deployments"]},
     {"befehl":"rollout","ziel":"restart","verhalten":"vereinfacht","ausgabe":"gleich","grenzen":["nur-deployments"]},
+    {"befehl":"rollout","ziel":"history","verhalten":"vereinfacht","ausgabe":"gleich","grenzen":["nur-deployments","rollout-historie"]},
+    {"befehl":"rollout","ziel":"undo","verhalten":"abweichend","ausgabe":"gleich","tickets":[1146],"grenzen":["nur-deployments","undo-ohne-fehler"]},
     {"befehl":"auth","ziel":"can-i","verhalten":"gleich","ausgabe":"gleich"},
     {"befehl":"label","ziel":"namespace","verhalten":"vereinfacht","ausgabe":"gleich","grenzen":["label-nur-namespace"]}
   ]

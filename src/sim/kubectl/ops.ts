@@ -7,7 +7,8 @@
  * Phaser-frei (pure Domäne): nutzt nur `makePodName` aus ../util und das
  * KubectlHost-Interface (./host). Aufgerufen aus dem kubectl-Dispatch (../kubectl.ts).
  */
-import { changeImage, setMemoryLimit, setCpuLimit, healsOom, throttlesCpu, MEM_HEALED_NOTE, CPU_THROTTLED_NOTE } from "../workload";
+import { changeImage, setMemoryLimit, setCpuLimit, healsOom, throttlesCpu, restoreRsTemplate, MEM_HEALED_NOTE, CPU_THROTTLED_NOTE } from "../workload";
+import { maxRestartedAt, rolloutRevisions, undoTarget } from "../replicasets";
 import type { Deployment } from "../state";
 import type { KubectlHost } from "./host";
 import { rollOut, scaleTo } from "./rollout";
@@ -197,9 +198,11 @@ function kubectlSetResources(host: KubectlHost, c: Call) {
   return "deployment.apps/" + depName + " resource requirements updated" + notes.join("");
 }
 
-/** Die `rollout`-Aktionen (#1487): ein Eintrag je Aktion; `history|undo` (#1471) werden ein weiterer Eintrag. */
+/** Die `rollout`-Aktionen (#1487): ein Eintrag je Aktion. */
 const ROLLOUT_ACTIONS: Readonly<Record<string, (host: KubectlHost, c: Call) => string>> = {
   restart: (host, c) => kubectlRolloutRestart(host, c),
+  history: (host, c) => kubectlRolloutHistory(host, c),
+  undo: (host, c) => kubectlRolloutUndo(host, c),
 };
 
 export function kubectlRollout(host: KubectlHost, c: Call) {
@@ -209,24 +212,74 @@ export function kubectlRollout(host: KubectlHost, c: Call) {
   return notSimulated(host, "'kubectl rollout " + action + "'.", Object.keys(ROLLOUT_ACTIONS).map(a => "kubectl rollout " + a + " deployment <name>"));
 }
 
-/** kubectl rollout restart deployment <name> */
-
-function kubectlRolloutRestart(host: KubectlHost, c: Call) {
-  const { name: depName, error } = resolveDeploymentRef(host, "rollout", c.args.slice(1));
+/** Das Deployment einer `rollout`-Aktion (Referenz auflösen, „Welches?“, NotFound) – oder der fertige Fehlertext. */
+function rolloutTarget(host: KubectlHost, c: Call, action: string): Deployment | string {
+  const { name, error } = resolveDeploymentRef(host, "rollout", c.args.slice(1));
   if (error) return error;
-  if (!depName) return host._err("kubectl rollout restart: Welches Deployment?", "Muster: kubectl rollout restart deployment <name>");
-  const dep = host.deployments.find(d => d.name === depName);
-  if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + depName + '" not found');
+  if (!name) return host._err("kubectl rollout " + action + ": Welches Deployment?", "Muster: kubectl rollout " + action + " deployment <name>");
+  return host.deployments.find(d => d.name === name) ?? host._err('Error from server (NotFound): deployments.apps "' + name + '" not found');
+}
+
+/** `--to-revision` kennt nur `undo`; bei `restart`/`history` ist es für kubectl ein unbekanntes Flag. */
+function rejectToRevision(host: KubectlHost, c: Call): string | null {
+  return c.has("--to-revision") ? host._err("error: unknown flag: --to-revision", "Ein bestimmtes Ziel kennt nur 'kubectl rollout undo deployment <name> --to-revision=<n>'.") : null;
+}
+
+/** Heilt frisch erzeugte Pods wie ein Neustart: ein Secret, das dem crashloop fehlte, ist inzwischen da; ein
+ *  needsBuild-Image ist lokal gebaut (der klassische „force re-pull“-Griff, #164). `true` bei geheiltem Image. */
+function freshPodHeal(host: KubectlHost, dep: Deployment): boolean {
   const broken = dep.broken;
   const secretHealed = !!broken && broken.type === "crashloop" && host.secrets.some(s => s.name === broken.needsSecret);
-  // Eigenes Image nachgebaut (#164): ein needsBuild-ImagePullBackOff heilt beim Neustart,
-  // sobald das Image lokal verfügbar ist – der klassische „force re-pull"-Griff.
   const imageHealed = !!broken && broken.type === "imagepull" && !!broken.needsBuild && host._imageAvailable(dep.image);
+  if (secretHealed || imageHealed) dep.broken = null;
+  return imageHealed;
+}
+
+const IMAGE_FOUND_NOTE = "\n💡 Image gefunden – die Pods starten neu und laufen jetzt. Prüfe mit 'kubectl get pods'.";
+
+/** kubectl rollout restart deployment <name> */
+function kubectlRolloutRestart(host: KubectlHost, c: Call) {
+  const unknown = rejectToRevision(host, c);
+  if (unknown) return unknown;
+  const dep = rolloutTarget(host, c, "restart");
+  if (typeof dep === "string") return dep;
   // Der Neustart gibt das flüchtige Scratch-Volume frei (#240) und läuft über den einen Rollout-Weg
   // (Pod-Security-Admission inklusive): bei Ablehnung bleibt auch die Heilung aus.
-  // restartedAt: jeder Neustart ergibt einen neuen pod-template-hash, auch im selben Takt (#1468).
-  const denied = rollOut(host, dep, () => { dep.restartedAt = Math.max(host.clock, (dep.restartedAt ?? -1) + 1); if (secretHealed || imageHealed) dep.broken = null; });
+  // restartedAt: jeder Neustart ergibt einen neuen pod-template-hash, auch im selben Takt und gegenüber der Historie (#1468, #1471).
+  let imageHealed = false;
+  const denied = rollOut(host, dep, () => { dep.restartedAt = Math.max(host.clock, maxRestartedAt(dep) + 1); imageHealed = freshPodHeal(host, dep); });
   if (denied) return denied;
-  return "deployment.apps/" + depName + " restarted" +
-    (imageHealed ? "\n💡 Image gefunden – die Pods starten neu und laufen jetzt. Prüfe mit 'kubectl get pods'." : "");
+  return "deployment.apps/" + dep.name + " restarted" + (imageHealed ? IMAGE_FOUND_NOTE : "");
+}
+
+/** kubectl rollout history deployment <name>: die Revisionen (ohne `--revision`-Detail, ohne CHANGE-CAUSE). */
+function kubectlRolloutHistory(host: KubectlHost, c: Call) {
+  const unknown = rejectToRevision(host, c);
+  if (unknown) return unknown;
+  const dep = rolloutTarget(host, c, "history");
+  if (typeof dep === "string") return dep;
+  const revs = rolloutRevisions(dep);
+  const breite = Math.max("REVISION".length, ...revs.map(r => String(r).length)) + 2;
+  return ["deployment.apps/" + dep.name, "REVISION".padEnd(breite) + "CHANGE-CAUSE", ...revs.map(r => String(r).padEnd(breite) + "<none>")].join("\n");
+}
+
+/** kubectl rollout undo deployment <name> [--to-revision=N]: das Template eines alten ReplicaSets zurückholen.
+ *  Läuft über den einen Rollout-Weg; die Admission prüft das ALTE Template. */
+function kubectlRolloutUndo(host: KubectlHost, c: Call) {
+  const dep = rolloutTarget(host, c, "undo");
+  if (typeof dep === "string") return dep;
+  const raw = c.value("--to-revision");
+  const target = undoTarget(dep, raw === null ? undefined : Number(raw));
+  if ("error" in target) {
+    return host._err(target.error === "keine-historie"
+      ? 'error: no rollout history found for deployment "' + dep.name + '"'
+      : "error: unable to find specified revision " + target.revision + " in history", "Die Revisionen zeigt 'kubectl rollout history deployment " + dep.name + "'.");
+  }
+  if ("skip" in target) return "deployment.apps/" + dep.name + " skipped rollback (current template already matches revision " + target.revision + ")";
+  const tpl = target.record.template;
+  const notes: string[] = [];
+  let imageHealed = false;
+  const denied = rollOut(host, dep, () => { notes.push(...restoreRsTemplate(dep, tpl)); imageHealed = freshPodHeal(host, dep); }, tpl.spec.securityContext ?? {});
+  if (denied) return denied;
+  return "deployment.apps/" + dep.name + " rolled back" + notes.join("") + (imageHealed ? IMAGE_FOUND_NOTE : "");
 }

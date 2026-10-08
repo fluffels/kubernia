@@ -15,7 +15,7 @@ import { podIP, CONTROL_PLANE_IP, CONTROL_PLANE_NODE, BUILTIN_AGE, workloadSelec
 import { endpointAddresses, podAddress, servicesWithDefault, serviceSelector, isKubernetesService } from "../endpoints";
 import type { KubectlHost } from "./host";
 import { DEFAULT_NAMESPACE, isExternalNameService, type Deployment } from "../state";
-import { currentReplicaSet } from "../replicasets";
+import { replicaSetsOf } from "../replicasets";
 import { nodeInternalIP, NODE_SYSTEM_INFO } from "../nodes";
 import { requestedNamespace, allNamespaces } from "./namespace";
 import { RESOURCE_KINDS, type ResourcePlural } from "./resources";
@@ -118,14 +118,13 @@ function getDeployments(host: KubectlHost): GetTable {
     })), 3);
 }
 
-/** ReplicaSets (#1468): abgeleitet, je Deployment das aktuelle (`sim/replicasets.ts`). */
+/** ReplicaSets (#1468, #1471): je Deployment das aktuelle plus die alten (0 0 0), abgeleitet in `sim/replicasets.ts`. */
 function getReplicaSets(host: KubectlHost): GetTable {
   return withWide(tableOf(["NAME", "DESIRED", "CURRENT", "READY", "AGE", "CONTAINERS", "IMAGES", "SELECTOR"],
-    host.deployments.map(d => {
-      const rs = currentReplicaSet(d);
-      return [rs.name, String(d.replicas), String(d.pods.length), String(host._podReady(d) ? d.pods.length : 0), host._age(rs.created),
-        d.name, d.image, workloadSelector(d.name) + ",pod-template-hash=" + rs.hash];
-    })), 3);
+    host.deployments.flatMap(d => replicaSetsOf(d).map(rs => {
+      const zahlen = rs.current ? [d.replicas, d.pods.length, host._podReady(d) ? d.pods.length : 0] : [0, 0, 0];
+      return [rs.name, ...zahlen.map(String), host._age(rs.created), d.name, rs.image, workloadSelector(d.name) + ",pod-template-hash=" + rs.hash];
+    }))), 3);
 }
 
 function getServices(host: KubectlHost): GetTable {

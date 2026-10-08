@@ -10,11 +10,11 @@ import type { YamlValue } from "../../yaml";
 import type { YamlMap } from "../../yaml-emit";
 import type { KubectlHost } from "../host";
 import type { Deployment, StatefulSetRes } from "../../state";
-import { currentReplicaSet } from "../../replicasets";
+import { replicaSetsOf, type ReplicaSetView } from "../../replicasets";
 import { clusterPods } from "../../pods";
 import { clusterPodStatus } from "../../podstatus";
 import { availableReplicas } from "../inspect";
-import { accessModesLong, appLabels, compact, deploymentPodSpec, metaOf, type ObjectsOf } from "./core";
+import { accessModesLong, appLabels, compact, deploymentPodSpec, metaOf, podSpecOf, type ObjectsOf } from "./core";
 
 /** Ein Zähler, der bei 0 fehlt (`omitempty`). */
 const omitZero = (n: number): number | undefined => (n === 0 ? undefined : n);
@@ -45,26 +45,27 @@ export const deploymentObjects: ObjectsOf = host => new Map(host.deployments.map
 
 // ===== ReplicaSet =====
 
-function replicaSetObject(host: KubectlHost, d: Deployment): YamlMap {
-  const rs = currentReplicaSet(d);
+/** Ein ReplicaSet des Deployments (aktuell oder alt, #1471): ein altes hat `replicas: 0`, sein eigenes Template und die Revision als Annotation. */
+function replicaSetObject(host: KubectlHost, d: Deployment, rs: ReplicaSetView): YamlMap {
   const labels = { ...appLabels(d.name), "pod-template-hash": rs.hash };
-  const ready = availableReplicas(host, d);
+  const ready = rs.current ? availableReplicas(host, d) : 0;
+  const total = rs.current ? d.pods.length : 0;
   return {
-    apiVersion: "apps/v1", kind: "ReplicaSet", metadata: metaOf(rs.name, labels),
-    spec: { replicas: d.replicas, selector: matchLabels(labels), template: template(labels, deploymentPodSpec(d)) },
+    apiVersion: "apps/v1", kind: "ReplicaSet", metadata: metaOf(rs.name, labels, { "deployment.kubernetes.io/revision": String(rs.revision) }),
+    spec: {
+      replicas: rs.current ? d.replicas : 0, selector: matchLabels(labels),
+      template: template(labels, rs.template ? podSpecOf(d.name, rs.template) : deploymentPodSpec(d)),
+    },
     status: compact({
       availableReplicas: omitZero(ready),
-      fullyLabeledReplicas: omitZero(d.pods.length),
+      fullyLabeledReplicas: omitZero(total),
       readyReplicas: omitZero(ready),
-      replicas: d.pods.length,
+      replicas: total,
     }),
   };
 }
 
-export const replicaSetObjects: ObjectsOf = host => new Map(host.deployments.map(d => {
-  const o = replicaSetObject(host, d);
-  return [currentReplicaSet(d).name, o];
-}));
+export const replicaSetObjects: ObjectsOf = host => new Map(host.deployments.flatMap(d => replicaSetsOf(d).map(rs => [rs.name, replicaSetObject(host, d, rs)] as const)));
 
 // ===== StatefulSet =====
 

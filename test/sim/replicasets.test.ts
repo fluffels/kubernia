@@ -321,7 +321,8 @@ describe("podTemplateHash", () => {
     const d = new KQSim({ deployments: [{ name: "web", image: "a", replicas: 1 }] }).deployments[0];
     const h = podTemplateHash(d);
     expect(podTemplateHash(d)).toBe(h);
-    expect(podTemplateHash({ ...d, replicas: 9 })).toBe(h);
+    const mehr = { ...d, replicas: 9 };
+    expect(podTemplateHash(mehr)).toBe(h);
     expect(podTemplateHash({ ...d, image: "b" })).not.toBe(h);
     expect(podTemplateHash({ ...d, memLimit: 100 })).not.toBe(h);
     expect(podTemplateHash({ ...d, ephemeralUsedMi: 5 })).toBe(h);

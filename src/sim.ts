@@ -16,7 +16,7 @@ import type {
   ServiceMonitorRes, PrometheusRuleRes, GrafanaDatasourceRes, GrafanaDashboardRes, StatefulSetRes, PvcRes,
   PvRes, StorageClassRes, VolumeSnapshotRes, S3Bucket, ServiceAccountRes, RoleRes,
   RoleBindingRes, PodSecurityLevel, NodeMetrics,
-  ScrapeTarget, Alert, Scenario, ClusterState, PodTemplateSpec,
+  ScrapeTarget, Alert, Scenario, ClusterState, PodTemplateSpec, RolloutHistorySpec,
 } from "./sim/state";
 import { deploymentPodStatus, isReady } from "./sim/podstatus";
 import { DEFAULT_NAMESPACE, HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService, assertServiceType } from "./sim/state";
@@ -54,7 +54,7 @@ import { makeRng, DEFAULT_SEED } from "./core/rng";
 import { resourceName, InvalidSpecError } from "./sim/names";
 import { sameRbac } from "./sim/rbac";
 import { assertClusterInvariants, warnClusterInvariants } from "./sim/invariants";
-import { assertReplicas, scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, statefulPodClaimName, seedPodTemplate, snapshotPodTemplate } from "./sim/workload";
+import { assertReplicas, scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, statefulPodClaimName, seedPodTemplate, snapshotPodTemplate, seedRolloutHistory, snapshotRolloutHistory } from "./sim/workload";
 import { provisionNode, NODE_VERSION } from "./sim/nodes";
 import { renderHelp, renderHelpTopic } from "./hud/helptext";
 
@@ -422,7 +422,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       };
     }
 
-    _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean, template?: PodTemplateSpec): Deployment {
+    _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean, template?: PodTemplateSpec & RolloutHistorySpec): Deployment {
       // #507: Namensprüfung zentral an der Fabrik – jeder Anlege-Weg läuft hier durch.
       const d: Deployment = {
         name: resourceName(name), image, replicas, created: this.clock, pods: [], broken: broken ? Object.assign({}, broken) : null,
@@ -432,7 +432,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       // OOMKilled startet mit einem zu knappen Limit – das ist ja die Ursache.
       if (d.broken && d.broken.type === "oomkilled") d.memLimit = 64;
       // Template vor den Pods (#1468): der pod-template-hash der Pods hängt am fertigen Template.
-      if (template) seedPodTemplate(d, template);
+      if (template) { seedPodTemplate(d, template); seedRolloutHistory(d, template, this.clock); }
       // Pods über die Aggregat-Mutation erzeugen (#488): hält `pods.length === replicas`
       // schon bei der Konstruktion (d.replicas ist bereits `replicas`, hier nur die Pods).
       scaleDeployment(d, replicas, this.clock, this.rng);
@@ -749,7 +749,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
         dockerImages: this.docker.pulled.slice(),
         dockerContainers: this.docker.containers.map(c => Object.assign({}, c)),
         nodes: this.nodes.map(n => Object.assign({}, n)),
-        deployments: this.deployments.map(d => ({ name: d.name, image: d.image, replicas: d.replicas, broken: d.broken ? Object.assign({}, d.broken) : null, envFrom: { configMaps: d.envFrom.configMaps.slice(), secrets: d.envFrom.secrets.slice() }, cpuHeavy: !!d.cpuHeavy, ...snapshotPodTemplate(d) })), // Template-Felder (Ephemeral #240, Limits/securityContext #1300, SA): überleben den Reload; `evicted` wird beim Laden neu abgeleitet
+        deployments: this.deployments.map(d => ({ name: d.name, image: d.image, replicas: d.replicas, broken: d.broken ? Object.assign({}, d.broken) : null, envFrom: { configMaps: d.envFrom.configMaps.slice(), secrets: d.envFrom.secrets.slice() }, cpuHeavy: !!d.cpuHeavy, ...snapshotPodTemplate(d), ...snapshotRolloutHistory(d) })), // Template-Felder (Ephemeral #240, Limits/securityContext #1300, SA): überleben den Reload; `evicted` wird beim Laden neu abgeleitet
         // services/ingresses/networkPolicies/serviceMonitors/prometheusRules/grafana* über die
         // Resource-Registry serialisieren (#499) – flacher Klon, gespiegelt zu reset/mergeScenario.
         ...snapshotSimple(this),
