@@ -416,11 +416,6 @@
       "count": 7
     }
   },
-  "test/devcontainer.test.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "test/docdrift.test.ts": {
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 9
@@ -542,11 +537,6 @@
     }
   },
   "test/observability.test.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
-  "test/readme.test.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }

@@ -1,3 +1,4 @@
+/* @harness-waechter – Fitness-Function, im geschützten test/harness/ (#1460 Z4). */
 /* Doku-Sync: hält die README ehrlich gegenüber dem Code.
  *
  * Die README ist die spielerseitige Quelle für Story/Lernpfad/Quest-Zahl
@@ -12,16 +13,16 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { KQContent } from "../src/content";
+import { KQContent } from "../../src/content";
 
-const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8");
+const readme = readFileSync(fileURLToPath(new URL("../../README.md", import.meta.url)), "utf8");
 
 test("README: Headline-Quest-Zahl stimmt mit KQContent.QUESTS überein", () => {
   // Headline-Form: "**24 Quests:** Einstieg (1) → Docker (3) → …"
   const match = readme.match(/\*\*(\d+) Quests:\*\*/);
   assert.ok(match, "Keine Quest-Zahl der Form '**N Quests:**' in der README gefunden");
 
-  const stated = Number(match![1]);
+  const stated = Number(match[1]);
   const actual = KQContent.QUESTS.length;
   assert.equal(
     stated,
@@ -32,7 +33,7 @@ test("README: Headline-Quest-Zahl stimmt mit KQContent.QUESTS überein", () => {
 });
 
 test("README: jede genannte Phaser-Major-Version entspricht der Abhängigkeit in package.json", () => {
-  const pkg = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")) as {
+  const pkg = JSON.parse(readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8")) as {
     dependencies: Record<string, string>;
   };
   const major = /(\d+)/.exec(pkg.dependencies.phaser)?.[1];

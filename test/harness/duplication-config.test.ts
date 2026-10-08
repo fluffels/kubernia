@@ -1,3 +1,4 @@
+/* @harness-waechter – Fitness-Function, im geschützten test/harness/ (#1460 Z4). */
 /* Duplikations-Detektor-Wächter (#612) — hält die BEWUSST WEICHE Auslegung des
  * jscpd-Copy-Paste-Reports ehrlich. Struktureller Wächter (wie docdrift/bundle/
  * coverage-config), kein Verhaltens-Test.
@@ -24,7 +25,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 
 const pkg = JSON.parse(read("package.json")) as {

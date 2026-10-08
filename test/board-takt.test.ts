@@ -19,7 +19,7 @@ type Takt = {
   harnessVoraussetzung: (a: { items: Item[] | null; position: number | null; positionFehler?: string | null }) => { ok: boolean; fehler?: boolean; meldung?: string };
   mergeFensterAb: (letzter: string | null, jetzt: string | Date) => Date;
   zaehleTicketMerges: (commits: unknown, seit?: string | Date | null) => number;
-  istHarnessCommit: (c: unknown) => boolean;
+  istHarnessCommit: (c: unknown, harnessIssues?: Set<number> | null) => boolean;
   zaehleSpielMerges: (commits: unknown, seit?: string | Date | null) => number;
   quotenBericht: (commits: unknown[], seit?: string | null) => { harness: number; spiel: number; eingehalten: boolean; zeile: string };
   SPIEL_QUOTE: number;

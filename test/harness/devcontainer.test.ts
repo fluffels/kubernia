@@ -1,3 +1,4 @@
+/* @harness-waechter – Fitness-Function, im geschützten test/harness/ (#1460 Z4). */
 /* Konsistenz-Wächter für die containerisierte Dev-Umgebung (#388).
  *
  * Es gibt jetzt DREI Stellen, die dieselbe Node-Version und denselben Dev-Port
@@ -15,7 +16,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const read = (rel: string) => readFileSync(fileURLToPath(new URL("../" + rel, import.meta.url)), "utf8");
+const read = (rel: string) => readFileSync(fileURLToPath(new URL("../../" + rel, import.meta.url)), "utf8");
 
 const nvmrc = read(".nvmrc").trim();
 const pkg = JSON.parse(read("package.json")) as { engines?: { node?: string } };
@@ -44,7 +45,7 @@ describe("Dev-Umgebung: Node-Version & Port halten zusammen (#388)", () => {
     const m = engines.match(/(\d+)/);
     assert.ok(m, `engines.node fehlt/unlesbar in package.json: '${engines}'`);
     assert.equal(
-      Number(m![1]),
+      Number(m[1]),
       nodeMajor,
       `engines.node ('${engines}') und .nvmrc ('${nvmrc}') nennen verschiedene Major-Versionen.`,
     );

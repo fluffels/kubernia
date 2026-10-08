@@ -1,3 +1,4 @@
+/* @harness-waechter – Fitness-Function, im geschützten test/harness/ (#1460 Z4). */
 /* Fitness-Function (#541): ESLint MUSS `.claude/worktrees/` global ignorieren.
  * Sonst scannt ein `eslint .` im Haupt-Checkout jeden Parallel-Worktree mit; die
  * #502-Komplexitäts-Suppressions (repo-relative Pfade) greifen dort nicht, und
@@ -9,7 +10,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 test("#541: eslint.config.js ignoriert .claude/worktrees (kein Scan fremder Parallel-Checkouts)", () => {
-  const cfg = readFileSync(new URL("../eslint.config.js", import.meta.url), "utf8");
+  const cfg = readFileSync(new URL("../../eslint.config.js", import.meta.url), "utf8");
   assert.match(
     cfg,
     /ignores:\s*\[[^\]]*"\.claude\/worktrees\/"/,
