@@ -331,13 +331,16 @@ test("#1521 describe-Präfix-Wächter ist scharf (Red-Green)", () => {
   // Neue Regex: sauber, auch der geratene Name bleibt ungelöst (Sim-Fehler NotFound).
   const neu = mk(/^kubectl\s+describe\s+pods?\s+kantine(-\S*)?$/);
   assert.deepEqual(describePrefixViolations(sim, neu, "neu"), []);
-  // Negativ-Zweig scharf: im Modus check mit immer wahrem Ziel gilt jede Eingabe, auch der geratene Name.
   // Zu weit (<dep>\S*): `kantinex` würde angenommen.
   const zuWeit = mk(/^kubectl\s+describe\s+pods?\s+kantine\S*$/);
   assert.ok(describePrefixViolations(sim, zuWeit, "weit").some(m => m.includes("zu weit")));
   // Regex ohne ReplicaSet-Präfix: der RS-Zweig muss das melden.
   const ohneRs = mk(/^kubectl\s+describe\s+pods?\s+kantine(-\S+-\S+)?$/);
   assert.ok(describePrefixViolations(sim, ohneRs, "rs").some(m => m.includes("Präfix „kantine-")));
+  // Im Modus check steuert accept nur das Gating: eine weite Regex ist dort keine Meldung wert.
+  const weitCheck = mk(/^kubectl\s+describe\s+pods?\s+kantine\S*$/, { solvedBy: "check", check: () => false });
+  assert.ok(!describePrefixViolations(sim, weitCheck, "weitcheck").some(m => m.includes("zu weit")));
+  // Negativ-Zweig scharf: im Modus check mit immer wahrem Ziel gilt jede Eingabe, auch der geratene Name.
   const immer = mk(/^kubectl\s+describe\s+pods?\s+kantine(-\S*)?$/, { solvedBy: "check", check: () => true });
   assert.ok(describePrefixViolations(sim, immer, "immer").some(m => m.includes("geraten")));
   // Kein Deployment-Pod (nackter Name): kein Präfix-Versprechen.
