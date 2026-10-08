@@ -240,7 +240,7 @@ test("created: init, join und terraform apply stempeln den Knoten mit der Uhr; e
   bare.exec(JOIN(bare));
   const w = bare.nodes.find(n => n.name === "ahoi-worker-1")!;
   assert.equal(w.created, bare.clock);
-  assert.ok(w.created! > cp.created!, "der Worker kam später");
+  assert.ok(w.created > cp.created, "der Worker kam später");
   assert.equal(sim.nodes.every(n => n.created === undefined), true, "Default-Cluster: kein Stempel");
   sim.mergeScenario({ tfResources: [{ addr: "hafen_server.worker[0]", desc: "neue Server" }] });
   sim.exec("terraform init");
@@ -271,8 +271,8 @@ test("snapshot().nodes ohne created; nach dem Laden zählt der Knoten zum Cluste
   bare.exec(JOIN(bare));
   for (let i = 0; i < 30; i++) bare.exec("kubectl get pods");
   const snap = bare.snapshot();
-  assert.ok(snap.nodes!.length >= 2);
-  assert.equal(snap.nodes!.some(n => "created" in n), false);
+  assert.ok(snap.nodes.length >= 2);
+  assert.equal(snap.nodes.some(n => "created" in n), false);
   const geladen = new KQSim(snap);
   const zeile = geladen.exec("kubectl get nodes").output!.split("\n").find(l => l.startsWith("ahoi-worker-1 "))!;
   assert.match(zeile, /\s3d\s/);

@@ -57,7 +57,7 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
     { id: "arten-auswahl", text: "create, delete und scale kennen nur die Arten aus der Hilfe; secret nur generic und tls." },
     { id: "spalten-gekuerzt", text: "Spalten bei Storage- und Monitoring-Ressourcen sind zum Lernen gewählt, nicht die echten." },
     { id: "nur-sim-alerts", text: "get alerts gibt es nur im Simulator (echt: Prometheus und Alertmanager)." },
-    { id: "nodes-diskpressure", text: "get nodes hängt DiskPressure an STATUS an; AGE der eingebauten Knoten ist fest 3d, ein angehängter zählt ab dem Beitritt (nach dem Laden ab Clusteraufbau)." },
+    { id: "nodes-diskpressure", text: "get nodes hängt DiskPressure an STATUS an; AGE zählt ab dem Beitritt (nach dem Laden ab Aufbau)." },
     { id: "lernhinweise", text: "Zeilen mit 💡 sind Lernhilfen des Spiels und stehen so nicht in echtem kubectl." },
     { id: "rbac-vereinfacht", text: "RBAC: nur selbst angelegte Rollen, keine System-Rollen; get roles zeigt AGE statt CREATED AT." },
     { id: "nur-deployments", text: "scale, expose, set und rollout arbeiten nur mit Deployments, logs: Pods und deploy/<name>." },
