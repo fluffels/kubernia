@@ -876,7 +876,7 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
 - § Worktree entfernen auf Windows, Falle 2: arbeite mit absoluten Pfaden und cd NICHT
   in den Worktree hinein — die Shell behält ihre cwd und blockiert später das Entfernen. Skripte nie über stdin starten (python -, node -): per Write ablegen und node <pfad> starten.
 - § TDD ist der Default für Logik, § Alles wird abgetestet – auch Negativfälle,
-  § Tests gegen False Positives absichern (Red-Green). Bei Guard- oder Gate-Code bekommt jede neue Regel einen eigenen Negativtest, der genau diese Regel verfälscht.
+  § Tests gegen False Positives absichern (Red-Green). Bei Guard- oder Gate-Code bekommt jede neue Regel einen eigenen Negativtest, der genau diese Regel verfälscht. Die Red-Green-Probe nimmst du nie per git checkout <datei> zurück (verwirft ungesicherte Fixes): vorher committen oder die Datei sichern und zurückspielen.
 - ⭐ Oberste Regel (Stardew-Valley-Größe) — sie steht über allen Konventionen.
   Was auffällt, aber nicht zum Ticket gehört: nicht inline mitfixen, sondern festhalten
   (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Ausnahmen: Regeltext), Spiel-/Inhalts-Befund → gebündeltes Issue.
@@ -888,7 +888,7 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
 - Deutsch mit echten Umlauten in Texten und Kommentaren; Dateinamen bleiben ASCII.
 - ${BRAIN_LESEN}
 
-Gates: vor dem ersten verify git fetch origin, bei weiterem origin/main git merge origin/main (Konflikte jetzt lösen; ein Merge nach der Konvergenz kostet Delta-Lens und neuen Nachweis). Beim Iterieren gezielt prüfen (AGENTS.md § Zwei-Stufen-Prüfung), zum Schluss genau einmal npm run verify:kompakt; es muss grün sein (Exit 0). Läuft es rot und du kannst es nicht
+Gates: vor dem ersten verify git fetch origin, bei weiterem origin/main git merge origin/main (Konflikte jetzt lösen; ein Merge nach der Konvergenz kostet Delta-Lens und neuen Nachweis); verschiebt der Branch Funktionen in neue Dateien: nach dem Merge \`git diff <basis> <M>^2 -- <alte datei>\` (basis = git merge-base <M>^1 <M>^2) lesen und Änderungen an verschobenen Funktionen in die neuen Dateien übertragen. Beim Iterieren gezielt prüfen (AGENTS.md § Zwei-Stufen-Prüfung), zum Schluss genau einmal npm run verify:kompakt; es muss grün sein (Exit 0). Läuft es rot und du kannst es nicht
 beheben, gib verifyGruen=false mit der Fehlerausgabe zurück statt es zu verschleiern
 oder ein Gate abzuschwächen (AGENTS.md § Kein Grün-durch-Aufweichen).
 Sichtbare Änderungen zusätzlich im Browser verifizieren.
@@ -1377,7 +1377,7 @@ numerierten Punkte inkl. Verify-Schritt #908) und § „Eigener Worktree von fri
 Zu entfernen: Worktree ${worktree}, Branch ${branch} und alle übrig gebliebenen Lens-Worktrees .claude/worktrees/kq-${nr}-lens-* (Sabotage-Proben der Test-Lens; git worktree list prüft, git worktree remove --force entfernt).
 
 Zwei Dinge, die hier regelmäßig schiefgehen und in der Doku stehen: laufende
-Dev-Server und Hilfsserver erst per PID beenden (Stop-Process -Id <pid> oder aus Git-Bash taskkill //PID <pid> //F, nie per Name; pkill aus Git-Bash erwischt
+Dev-Server und Hilfsserver erst per PID beenden (Stop-Process -Id <pid> oder aus Git-Bash taskkill //PID <pid> //T //F, nie per Name; pkill aus Git-Bash erwischt
 Windows-Prozesse nicht), und aus dem Worktree heraus arbeiten statt hinein-cd'en. Auch Hintergrund-Tasks (Monitor/run_in_background) mit cwd im Worktree halten den Ordner fest: vorher mit TaskStop beenden.
 
 Danach verifizieren — schlägt EINER der Checks fehl, stoppen und laut melden statt
