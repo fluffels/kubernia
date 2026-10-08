@@ -99,6 +99,8 @@ const TEMPLATE_FIELD_TABLE = {
     take(_host, d, e) { d.initContainer = normalizedInit(e); },
   },
   ephemeralUsedMi: null,
+  // Die Annotation `restartedAt` setzt nur `rollout restart`; apply verwaltet sie nicht.
+  restartedAt: null,
 } satisfies Record<"image" | keyof PodTemplateSpec, TemplateField | null>;
 
 const TEMPLATE_FIELDS: readonly TemplateField[] = Object.values<TemplateField | null>(TEMPLATE_FIELD_TABLE).filter((f): f is TemplateField => f !== null);
@@ -131,12 +133,15 @@ function createDeploymentFromManifest(host: KubectlHost, eff: DepEffect, out: st
   // schon beim Anlegen abgewiesen – der Rest des Manifests wird nicht angewandt.
   const denied = admitNewPods(host, eff.name, eff.securityContext);
   if (denied) return denied;
-  const dep = host._makeDeployment(eff.name, eff.image, eff.replicas);
+  // Erst ohne Pods bauen, Template übernehmen, dann hochskalieren: die Pods tragen den Hash des fertigen
+  // Templates (#1468). Die Admission oben hat den Kontext schon zugelassen.
+  const dep = host._makeDeployment(eff.name, eff.image, 0);
   const notes: string[] = [];
   for (const f of TEMPLATE_FIELDS) if (f.differs(dep, eff)) f.take(host, dep, eff, notes);
   // Nur beim Anlegen: die Zusatznutzung (#240) ist ein Laufzeitwert und steht nicht in der Tabelle.
   if (eff.ephemeralUsedMi !== undefined) dep.ephemeralUsedMi = eff.ephemeralUsedMi;
   flagUnbuiltImage(host, dep, eff, notes);
+  scaleTo(host, dep, eff.replicas);
   addDeployment(host, dep);
   out.push("deployment.apps/" + eff.name + " created", ...notes);
 }

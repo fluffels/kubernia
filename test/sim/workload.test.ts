@@ -301,7 +301,7 @@ const FULL: Required<PodTemplateSpec> = {
   serviceAccountName: "wachtturm-sa", containerPort: 8080, memLimit: 256, cpuLimitMilli: 250,
   securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false },
   node: "ahoi-worker-2", emptyDir: { data: "cache", usedMi: 40 }, ephemeralLimit: 512, ephemeralUsedMi: 30,
-  initContainer: { fillsMi: 300, doubleStage: true },
+  initContainer: { fillsMi: 300, doubleStage: true }, restartedAt: 12,
 };
 
 test("seedPodTemplate/snapshotPodTemplate: Roundtrip über ALLE Template-Felder", () => {

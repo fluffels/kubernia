@@ -3,7 +3,7 @@
  *   - `get pods`            ein Typ (Plural, Singular oder echter Kurzname, ./resources)
  *   - `get pods web db`     Typ + Namen: nur diese Objekte, fehlende melden NotFound
  *   - `get pods,svc`        Komma-Liste: ein Block je Typ, NAME mit `kind[.group]/`-Präfix
- *   - `get all`             die Kategorie `all` (Pods, Services, Deployments, StatefulSets, Grafana-CRDs)
+ *   - `get all`             die Kategorie `all` (Pods, Services, Deployments, ReplicaSets, StatefulSets, Grafana-CRDs)
  *   - `get pod/web svc/db`  Slash-Form
  * Die Tabellen selbst liefern die Renderer aus ./inspect (`GET_RENDERERS`); hier liegen nur Lesen der
  * Anfrage, Namespace-Wache, Namensfilter und das Zusammensetzen. inspect.ts importiert dieses Modul nie.

@@ -43,7 +43,7 @@ test("StatefulSet anlegen: Pods heißen stabil <name>-0/-1, je Replica ein gebun
   const pods = sim.exec("kubectl get pods").output!;
   assert.match(pods, /datenbank-0/, "Pod -0 existiert");
   assert.match(pods, /datenbank-1/, "Pod -1 existiert");
-  assert.doesNotMatch(pods, /datenbank-[a-z0-9]{9}-/, "KEIN Deployment-artiger Zufallsname (False-Positive-Schutz)");
+  assert.doesNotMatch(pods, /datenbank-[a-z0-9]{6,10}-[a-z0-9]{5}/, "KEIN Deployment-artiger Zufallsname (False-Positive-Schutz)");
 
   // get statefulset zeigt READY
   assert.match(sim.exec("kubectl get statefulset").output!, /datenbank\s+2\/2/);

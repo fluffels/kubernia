@@ -17,6 +17,7 @@ import { table } from "../util";
 import { endpointAddresses, podAddress } from "../endpoints";
 import type { KubectlHost } from "./host";
 import { DEFAULT_NAMESPACE, SECURITY_CONTEXT_KEYS, isExternalNameService, type Deployment, type PodInstance, type PodStatus } from "../state";
+import { currentReplicaSet } from "../replicasets";
 import { requestedNamespace, allNamespaces } from "./namespace";
 import { RESOURCE_KINDS, resolveKind, qualified, type ResourceKind, type ResourcePlural } from "./resources";
 import { positionals, slashRef, notSimulated, unknownResourceType } from "./args";
@@ -88,6 +89,15 @@ function getDeployments(host: KubectlHost): GetTable {
     host.deployments.map(d => {
       const ready = availableReplicas(host, d);
       return [d.name, ready + "/" + d.replicas, String(d.replicas), String(ready), host._age(d.created)];
+    }));
+}
+
+/** ReplicaSets (#1468): abgeleitet, je Deployment das aktuelle (`sim/replicasets.ts`). */
+function getReplicaSets(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "DESIRED", "CURRENT", "READY", "AGE"],
+    host.deployments.map(d => {
+      const rs = currentReplicaSet(d);
+      return [rs.name, String(d.replicas), String(d.pods.length), String(host._podReady(d) ? d.pods.length : 0), host._age(rs.created)];
     }));
 }
 
@@ -228,6 +238,7 @@ interface GetEntry { extraNamespaces?: readonly string[]; render: GetRenderer }
 export const GET_RENDERERS: ReadonlyMap<ResourcePlural, GetEntry> = new Map<ResourcePlural, GetEntry>([
   ["pods", { extraNamespaces: ["kube-system"], render: getPods }],
   ["deployments", { render: getDeployments }],
+  ["replicasets", { render: getReplicaSets }],
   ["services", { render: getServices }],
   ["endpoints", { render: getEndpoints }],
   ["nodes", { render: getNodes }],
@@ -482,7 +493,7 @@ function describeDeploymentPod(host: KubectlHost, c: DeploymentPod): string {
     ...(dep.evicted ? ["Reason:       Evicted", "Message:      " + dep.evicted.reason] : []),
     "Ready:        " + st.ready,
     "IP:           " + (ip ?? "<none>"),
-    "Controlled By: ReplicaSet/" + dep.name,
+    "Controlled By: ReplicaSet/" + currentReplicaSet(dep).name,
     // ServiceAccount-Identität des Pods (#132): die per spec.serviceAccountName gesetzte SA,
     // sonst die default-SA des Namespaces – genau wie in echtem `kubectl describe pod`.
     "Service Account: " + (dep.serviceAccountName || "default"),

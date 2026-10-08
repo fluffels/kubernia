@@ -108,6 +108,8 @@ export interface PodTemplateSpec {
   ephemeralUsedMi?: number;
   /** initContainer (#485): füllt beim Ausrollen das emptyDir vor; `doubleStage` verdoppelt den Peak. */
   initContainer?: { fillsMi?: number; doubleStage?: boolean };
+  /** Annotation `kubectl.kubernetes.io/restartedAt` (#1468): `rollout restart` setzt sie und ergibt so einen neuen pod-template-hash. */
+  restartedAt?: number;
 }
 export interface Deployment {
   name: string;
@@ -169,6 +171,11 @@ export interface Deployment {
    *  bei jedem Befehl neu): fällt der Grund weg (Limit erhöht / Disk freigegeben / Pod neugestartet),
    *  verschwindet die Markierung wieder. */
   evicted?: { reason: string } | null;
+  /** Annotation `restartedAt` des Pod-Templates (#1468), siehe `PodTemplateSpec`. */
+  restartedAt?: number;
+  /** Das ReplicaSet der laufenden Pods (#1468, `sim/replicasets.ts`): Hash und Erzeugungszeit. Laufzeitwert,
+   *  NICHT serialisiert; ändert sich nur beim Ausrollen eines neuen Templates. */
+  replicaSet?: { hash: string; created: number };
 }
 /** Der Sentinel-Wert für einen headless Service (`spec.clusterIP: None`, #1301): keine
  *  virtuelle IP, DNS liefert direkt die Pod-IPs. Ausschließlich über `isHeadlessService`
