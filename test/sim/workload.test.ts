@@ -354,6 +354,19 @@ test("#1459 scaleDeployment lehnt nicht ganzzahlige Replicas ab (2.5, NaN, Infin
   assert.equal(dep.replicas, vorher);
 });
 
+test("#1459 scaleDeployment: negative Replicas werfen (statt endlos zu poppen) und mutieren nichts", () => {
+  const dep = sim.deployments[0] ?? sim._makeDeployment("web", "nginx", 2);
+  assert.throws(() => scaleDeployment(dep, -1, sim.clock, rng), InvalidSpecError);
+  assert.equal(dep.pods.length, dep.replicas);
+  assert.throws(() => new KQSim({ deployments: [{ name: "a", image: "nginx", replicas: -1 }] }), InvalidSpecError);
+});
+
+test("#1459 Grund-Texte: negativ → 'greater than or equal to 0', Bruchzahl → 'whole number'", () => {
+  const dep = sim.deployments[0] ?? sim._makeDeployment("web", "nginx", 2);
+  assert.throws(() => scaleDeployment(dep, -1, sim.clock, rng), /Invalid value: -1: must be greater than or equal to 0/);
+  assert.throws(() => scaleDeployment(dep, 2.5, sim.clock, rng), /Invalid value: 2\.5: must be a whole number/);
+});
+
 test("#1459 scaleDeployment: 0 und 3 sind gültige Grenzfälle, die Invariante bleibt", () => {
   const dep = sim.deployments[0] ?? sim._makeDeployment("web", "nginx", 2);
   scaleDeployment(dep, 0, sim.clock, rng);

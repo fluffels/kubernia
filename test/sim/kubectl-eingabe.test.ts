@@ -511,6 +511,10 @@ describe("slashRef: eine Zerlegung für get, describe, delete, scale/expose/set/
     expect(lauf("kubectl scale deploy/web --replicas=3").out).toContain("scaled");
     expect(lauf("kubectl get deploy/web").error).toBe(false);
     expect(lauf("kubectl set image deployment/web nginx=reg.io/img:1").error).toBe(false);
+    // Ein Image-Token mit mehreren Slashes VOR der Referenz ist keine Referenz, sondern wird übersprungen.
+    const r = lauf("kubectl set image nginx=ghcr.io/org/img:1 deployment/web");
+    expect(r.out).not.toContain("more than one slash");
+    expect(r.error).toBe(false);
   });
 });
 

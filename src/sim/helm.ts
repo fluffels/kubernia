@@ -22,7 +22,7 @@
  */
 import { DEFAULT_NAMESPACE, type ClusterState, type Deployment, type ServiceRes, type ServiceSpec, type Broken, type HelmRepo } from "./state";
 import { table } from "./util";
-import { flag, checkFlags, positionalArgs, specOfSub, type SubEntry } from "./cliargs";
+import { flag, checkFlags, positionalArgs, specOfSub, subEntry, type SubEntry } from "./cliargs";
 import { addDeployment, removeDeployment, scaleDeployment } from "./workload";
 
 /** Was die helm-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
@@ -370,6 +370,9 @@ const VALUES = flag(true, "--values", "-f");
 
 /** Alias → Eintrag (Handler + Flag-Tabelle). Ein neuer Unterbefehl ist ein Eintrag hier + eine Funktion oben –
  *  der Dispatcher (`helmCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz. */
+const LIST: SubEntry<HelmHandler> = { run: helmList, hints: { "-A": "Der Simulator kennt nur einen Namespace – 'helm list' zeigt alle Releases." } };
+const UNINSTALL: SubEntry<HelmHandler> = { run: helmUninstall };
+const DEPENDENCY: SubEntry<HelmHandler> = { run: helmDependency };
 const HELM_SUBCOMMANDS: Record<string, SubEntry<HelmHandler>> = {
   repo: { run: helmRepo },
   search: { run: helmSearch },
@@ -378,15 +381,15 @@ const HELM_SUBCOMMANDS: Record<string, SubEntry<HelmHandler>> = {
   lint: { run: helmLint },
   package: { run: helmPackage },
   install: { run: helmInstall, flags: [SET, VALUES] },
-  list: { run: helmList, hints: { "-A": "Der Simulator kennt nur einen Namespace – 'helm list' zeigt alle Releases." } },
-  ls: { run: helmList },
+  list: LIST,
+  ls: LIST,
   upgrade: { run: helmUpgrade, flags: [SET, VALUES] },
   rollback: { run: helmRollback },
-  uninstall: { run: helmUninstall },
-  delete: { run: helmUninstall },
+  uninstall: UNINSTALL,
+  delete: UNINSTALL,
   status: { run: helmStatus },
-  dependency: { run: helmDependency },
-  dep: { run: helmDependency },
+  dependency: DEPENDENCY,
+  dep: DEPENDENCY,
 };
 
 /** Die Nicht-Flag-Argumente eines Unterbefehls (ohne die Werte seiner Flags). */
@@ -398,7 +401,7 @@ function helmArgs(sub: string, t: string[]): string[] {
 export function helmCommand(host: HelmHost, t: string[], raw: string): string {
   const sub = t[1];
   if (!sub) return host._err("helm: Unterbefehl fehlt.", "Probier z.B. 'helm list'.");
-  const entry = Object.hasOwn(HELM_SUBCOMMANDS, sub) ? HELM_SUBCOMMANDS[sub] : undefined;
+  const entry = subEntry(HELM_SUBCOMMANDS, sub);
   if (!entry) return host._err("helm: unbekannter Unterbefehl '" + sub + "'", "Tippe 'help' für alle Befehle.");
   return checkFlags(host, specOfSub("helm " + sub, entry), t, 2) ?? entry.run(host, t, raw);
 }

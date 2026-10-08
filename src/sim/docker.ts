@@ -21,7 +21,7 @@
  */
 import type { Container } from "./state";
 import { randSuffix, table, suggest } from "./util";
-import { flag, checkFlags, flagValueOf, positionalArgs, specOfSub, type SubEntry } from "./cliargs";
+import { flag, checkFlags, firstPositionalIndex, flagValueOf, hasFlag, positionalArgs, specOfSub, subEntry, type SubEntry } from "./cliargs";
 import { hashStr, hashHex } from "../core/rng";
 
 // Bekannte Container-Images – Grundlage für die „Meintest du …?"-Tippfehlerhilfe.
@@ -132,7 +132,7 @@ function dockerBuild(sim: DockerHost, t: string[]): string {
   if (!sim.docker.pulled.includes(full)) sim.docker.pulled.push(full);
   return [
     "[+] Building 2.4s (" + total + "/" + total + ") FINISHED",
-    " => [internal] load build definition from Dockerfile",
+    " => [internal] load build definition from " + dockerfile,
     " => [internal] load metadata for " + base,
     " => [1/" + Math.max(1, copyLines + 1) + "] FROM " + base,
     copyLines ? " => [2/" + (copyLines + 1) + "] COPY/RUN-Schritte aus dem Dockerfile" : " => (keine weiteren Schichten)",
@@ -179,17 +179,11 @@ function dockerImages(sim: DockerHost): string {
  *  `flagAfterImage` (falsche Reihenfolge, Issue #17). Als eigener Parser gehalten, damit
  *  `dockerRun` unter dem Komplexitäts-Budget bleibt. */
 function parseRunArgs(t: string[]): { name: string | null; image: string | null; flagAfterImage: boolean } {
-  let name: string | null = null, image: string | null = null, flagAfterImage = false;
-  for (let i = 2; i < t.length; i++) {
-    if (image) {                                   // alles nach dem Image = Container-Befehl
-      if (t[i].startsWith("-")) flagAfterImage = true;
-      continue;
-    }
-    if (t[i] === "--name") { name = t[i + 1]; i++; }
-    else if (t[i] === "-d" || t[i] === "--detach") { /* ok */ }
-    else if (!t[i].startsWith("-")) image = t[i];
-  }
-  return { name, image, flagAfterImage };
+  // Dieselbe Tabelle wie die Flag-Prüfung (alle Schreibweisen, auch `--name=web`); alles ab dem Image = Container-Befehl.
+  const spec = specOfSub("docker run", DOCKER_SUBCOMMANDS.run);
+  const at = firstPositionalIndex(spec, t, 2);
+  if (at < 0) return { name: flagValueOf(t, ["--name"]), image: null, flagAfterImage: false };
+  return { name: flagValueOf(t.slice(0, at), ["--name"]), image: t[at], flagAfterImage: t.slice(at + 1).some(a => a.startsWith("-")) };
 }
 
 /** `docker run [-d] [--name X] [-p a:b] IMAGE [BEFEHL ...]` – startet einen Container. */
@@ -212,7 +206,7 @@ function dockerRun(sim: DockerHost, t: string[]): string {
 
 /** `docker ps [-a]` – laufende (mit -a: auch gestoppte) Container listen. */
 function dockerPs(sim: DockerHost, t: string[]): string {
-  const all = t.includes("-a") || t.includes("--all");
+  const all = hasFlag(t, ["-a", "--all"]);
   const list = sim.docker.containers.filter(c => all || c.running);
   if (list.length === 0) return "CONTAINER ID   IMAGE   COMMAND   CREATED   STATUS   PORTS   NAMES" + (all ? "" : "\n💡 Keine laufenden Container. Mit 'docker ps --all' siehst du auch gestoppte.");
   return table(
@@ -262,7 +256,7 @@ const DOCKER_SUBCOMMANDS: Record<string, DockerEntry> = {
 export function dockerCommand(sim: DockerHost, t: string[], _raw?: string): string {
   const sub = t[1];
   if (!sub) return sim._err("docker: Unterbefehl fehlt.", "Probier z.B. 'docker ps'.");
-  const entry = DOCKER_SUBCOMMANDS[sub];
+  const entry = subEntry(DOCKER_SUBCOMMANDS, sub);
   if (!entry) return sim._err("docker: unbekannter Unterbefehl '" + sub + "'", "Tippe 'help' für alle Befehle.");
   return checkFlags(sim, specOfSub("docker " + sub, entry), t, 2) ?? entry.run(sim, t);
 }

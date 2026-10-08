@@ -23,7 +23,7 @@
 import type { ClusterState, Pipeline, Broken, Deployment } from "./state";
 import { pad, table } from "./util";
 import { addDeployment } from "./workload";
-import { checkFlags, notSimulated, specOfSub, type SubEntry } from "./cliargs";
+import { checkFlags, notSimulated, specOfSub, subEntry, type SubEntry } from "./cliargs";
 
 /** Was die glab/CI-Funktionen vom Simulator brauchen (von der `Sim`-Klasse
  *  erfüllt). Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es
@@ -90,9 +90,10 @@ function glabCiList(host: GlabHost): string {
 type GlabCiHandler = (host: GlabHost) => string;
 
 /** Aktion → Eintrag (Handler + Flag-Tabelle, #1459: die Sim wertet bei `glab ci` keine Flags aus). */
+const STATUS: SubEntry<GlabCiHandler> = { run: glabCiStatus };
 const GLAB_CI_ACTIONS: Record<string, SubEntry<GlabCiHandler>> = {
-  status: { run: glabCiStatus },
-  view: { run: glabCiStatus },
+  status: STATUS,
+  view: STATUS,
   list: { run: glabCiList },
 };
 
@@ -103,7 +104,7 @@ export function glabCommand(host: GlabHost, t: string[]): string {
   if (t[1] !== "ci") return notSimulated(host, "'glab " + t[1] + "'.", GLAB_KANN);
   const action = t[2];
   if (!action) return host._err("glab ci: Aktion fehlt.", "z.B. 'glab ci status' oder 'glab ci list'.");
-  const entry = Object.hasOwn(GLAB_CI_ACTIONS, action) ? GLAB_CI_ACTIONS[action] : undefined;
+  const entry = subEntry(GLAB_CI_ACTIONS, action);
   if (!entry) return notSimulated(host, "'glab ci " + action + "'.", GLAB_KANN);
   return checkFlags(host, specOfSub("glab ci " + action, entry), t, 3) ?? entry.run(host);
 }

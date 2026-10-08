@@ -28,7 +28,7 @@ import { HEADLESS_CLUSTER_IP } from "./state";
 import { InvalidSpecError, resourceName } from "./names";
 import { table } from "./util";
 import { addDeployment, scaleDeployment } from "./workload";
-import { checkFlags, notSimulated, specOfSub, type SubEntry } from "./cliargs";
+import { checkFlags, notSimulated, specOfSub, subEntry, type SubEntry } from "./cliargs";
 
 /** Was die argocd-Befehle/Reconcile vom Simulator brauchen (von der `Sim`-Klasse
  *  erfüllt). Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es
@@ -357,9 +357,10 @@ function argoAppSync(host: ArgocdHost, t: string[]): string {
 /** Alias → Eintrag (Handler + Flag-Tabelle, #1459: die Sim wertet bei `argocd app` keine Flags aus). Ein neuer
  *  `argocd app`-Verb ist ein Eintrag hier + eine Funktion oben – der Dispatcher (`argocdCommand`) bleibt dünn
  *  und wächst nicht mit dem Befehlssatz. */
+const LIST: SubEntry<ArgocdAppHandler> = { run: argoAppList };
 const ARGOCD_APP_ACTIONS: Record<string, SubEntry<ArgocdAppHandler>> = {
-  list: { run: argoAppList },
-  ls: { run: argoAppList },
+  list: LIST,
+  ls: LIST,
   get: { run: argoAppGet },
   sync: { run: argoAppSync },
 };
@@ -371,7 +372,7 @@ export function argocdCommand(host: ArgocdHost, t: string[]): string {
   if (t[1] !== "app") return notSimulated(host, "'argocd " + t[1] + "'.", ARGOCD_KANN);
   const action = t[2];
   if (!action) return host._err("argocd app: Aktion fehlt.", "z.B. 'argocd app list', 'argocd app get <name>' oder 'argocd app sync <name>'.");
-  const entry = Object.hasOwn(ARGOCD_APP_ACTIONS, action) ? ARGOCD_APP_ACTIONS[action] : undefined;
+  const entry = subEntry(ARGOCD_APP_ACTIONS, action);
   if (!entry) return notSimulated(host, "'argocd app " + action + "'.", ARGOCD_KANN);
   return checkFlags(host, specOfSub("argocd app " + action, entry), t, 3) ?? entry.run(host, t);
 }

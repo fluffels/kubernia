@@ -30,7 +30,7 @@
  */
 import type { ClusterState } from "./state";
 import { provisionNode, removeNode, isControlPlane } from "./nodes";
-import { flag, checkFlags, flagValueOf, notSimulated, positionalArgs, specOfSub, type SubEntry } from "./cliargs";
+import { flag, checkFlags, flagValueOf, notSimulated, positionalArgs, specOfSub, subEntry, type SubEntry } from "./cliargs";
 
 /** Was die terraform-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
  *  Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es dokumentiert
@@ -145,7 +145,9 @@ function tfInit(host: TerraformHost): string {
 }
 
 /** `terraform plan` – geplante Ressourcen (Top-Level + aus Modulen expandiert). */
-function tfPlan(host: TerraformHost): string {
+function tfPlan(host: TerraformHost, t: string[]): string {
+  const varFile = varFileError(host, t);
+  if (varFile) return varFile;
   const tf = host.tf;
   if (tf.applied) {
     return "No changes. Your infrastructure matches the configuration.\n\n" +
@@ -177,7 +179,9 @@ function provisionClusterFromCode(host: TerraformHost): void {
 }
 
 /** `terraform apply` – Ressourcen erzeugen, ggf. Nodes/Cluster provisionieren. */
-function tfApply(host: TerraformHost): string {
+function tfApply(host: TerraformHost, t: string[]): string {
+  const varFile = varFileError(host, t);
+  if (varFile) return varFile;
   const tf = host.tf;
   if (tf.applied) return "No changes. Your infrastructure matches the configuration.\n\nApply complete! Resources: 0 added, 0 changed, 0 destroyed.";
   const locked = lockError(host);
@@ -306,7 +310,7 @@ export function terraformCommand(host: TerraformHost, t: string[], _raw?: string
   const sub = t[1];
   if (!sub) return host._err("terraform: Unterbefehl fehlt.", "Probier 'terraform init'.");
 
-  const entry = Object.hasOwn(TERRAFORM_SUBCOMMANDS, sub) ? TERRAFORM_SUBCOMMANDS[sub] : undefined;
+  const entry = subEntry(TERRAFORM_SUBCOMMANDS, sub);
   if (!entry) return host._err("terraform: unbekannter Unterbefehl '" + sub + "'", "Tippe 'help' für alle Befehle.");
   const flagErr = checkFlags(host, specOfSub("terraform " + sub, entry), t, 2);
   if (flagErr) return flagErr;
@@ -325,5 +329,5 @@ export function terraformCommand(host: TerraformHost, t: string[], _raw?: string
     }
   }
 
-  return (sub === "plan" || sub === "apply" ? varFileError(host, t) : null) ?? entry.run(host, t);
+  return entry.run(host, t);
 }

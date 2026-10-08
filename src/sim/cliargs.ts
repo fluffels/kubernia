@@ -141,22 +141,47 @@ export function checkFlags(host: ErrHost, spec: ArgSpec, t: readonly string[], f
   return null;
 }
 
-/** Die Nicht-Flag-Tokens ab `from` (ohne die Werte der Wert-Flags). Mit `stopAtPositional` gehört alles ab dem
- *  ersten Nicht-Flag dazu (der Container-Befehl hinter dem Image). */
-export function positionalArgs(spec: ArgSpec, t: readonly string[], from: number): string[] {
+/** Die Nicht-Flag-Tokens ab `from` mit ihrem Index (ohne die Werte der Wert-Flags). Mit `stopAtPositional`
+ *  gehört alles ab dem ersten Nicht-Flag dazu (der Container-Befehl hinter dem Image). */
+function positionalEntries(spec: ArgSpec, t: readonly string[], from: number): { tok: string; at: number }[] {
   const style = styleOf(spec);
-  const out: string[] = [];
+  const out: { tok: string; at: number }[] = [];
   for (let i = from; i < t.length; i++) {
     const tok = t[i];
     if (!isFlagToken(tok)) {
-      if (spec.stopAtPositional) { out.push(...t.slice(i)); break; }
-      out.push(tok);
+      if (spec.stopAtPositional) { for (let k = i; k < t.length; k++) out.push({ tok: t[k], at: k }); break; }
+      out.push({ tok, at: i });
       continue;
     }
     const scan = scanToken(spec.flags, tok, style);
     if (!scan.unknown && scan.needsNext) i++;
   }
   return out;
+}
+
+/** Die Nicht-Flag-Tokens ab `from` (ohne die Werte der Wert-Flags). */
+export function positionalArgs(spec: ArgSpec, t: readonly string[], from: number): string[] {
+  return positionalEntries(spec, t, from).map(e => e.tok);
+}
+
+/** Der Index des ersten Nicht-Flag-Tokens ab `from` (ohne Flag-Werte), `-1` ohne eines. */
+export function firstPositionalIndex(spec: ArgSpec, t: readonly string[], from: number): number {
+  return positionalEntries(spec, t, from)[0]?.at ?? -1;
+}
+
+/** Steht ein Bool-Flag (`-a`/`--all`, auch `-a=true`, in einer Kette `-ad`)? Nur für Tabellen ohne Wert-Flag
+ *  vor dem Zeichen gedacht (z.B. `docker ps`). */
+export function hasFlag(t: readonly string[], names: readonly string[]): boolean {
+  return t.some(tok => {
+    if (!isFlagToken(tok)) return false;
+    if (tok.startsWith("--")) return names.includes(flagNameOf(tok, "pflag"));
+    return names.some(n => n.length === 2 && tok.slice(1).split("=")[0].includes(n[1]));
+  });
+}
+
+/** Der Eintrag einer Dispatch-Tabelle zu `key` – ohne Treffer auf Prototyp-Schlüsseln (`constructor`, `toString`). */
+export function subEntry<E>(table: Readonly<Record<string, E>>, key: string): E | undefined {
+  return Object.hasOwn(table, key) ? table[key] : undefined;
 }
 
 /** Ein Eintrag einer Dispatch-Tabelle: Handler + Flag-Tabelle. Ein neuer Unterbefehl bleibt EIN Eintrag. */

@@ -7,7 +7,7 @@
  * Die Tabelle nennt NUR Flags, die die Sim wirklich auswertet (echtes kubectl hat Hunderte; „was wir
  * können“ ist endlich und ehrlich). `-n/--namespace` gilt überall, die Semantik regelt namespace.ts.
  *
- * Blattmodul der kubectl-Mappe (pure Domäne): importiert nur den Host-Typ und die Registry (./resources). */
+ * Blattmodul der kubectl-Mappe (pure Domäne): importiert den Host-Typ, die Registry (./resources) und das Blattmodul ../cliargs. */
 import type { KubectlHost } from "./host";
 import { flag, checkFlags, positionalArgs, type ArgSpec, type FlagSpec } from "../cliargs";
 export { notSimulated, flagValueOf } from "../cliargs";

@@ -7,7 +7,7 @@ import { describe, test, expect } from "vitest";
 import { freshSim, KQSim } from "./helpers";
 import { KQContent } from "../../src/content";
 import {
-  flag, checkFlags, positionalArgs, flagValueOf, notSimulated, specOfSub, type ArgSpec,
+  flag, checkFlags, positionalArgs, flagValueOf, hasFlag, firstPositionalIndex, subEntry, notSimulated, specOfSub, type ArgSpec,
 } from "../../src/sim/cliargs";
 
 const NS = "Nicht simuliert:";
@@ -101,6 +101,24 @@ describe("cliargs: flagValueOf und Helfer", () => {
   test("notSimulated: Meldung, Hinweis und Liste", () => {
     expect(notSimulated(host, "'a b'.", ["a c", "a d"], "Hinweis.")).toBe("Nicht simuliert: 'a b'. Hinweis.\nDer Simulator kann: a c · a d");
   });
+  test("Wert-Flag mit angeklebtem Wert in einer Kette schluckt kein nächstes Token", () => {
+    expect(checkFlags(host, PF, ["x", "run", "-adnfoo"], 2)).toBeNull();
+    expect(positionalArgs(PF, ["x", "run", "-adnfoo", "a"], 2)).toEqual(["a"]);
+    expect(positionalArgs(PF, ["x", "run", "-adn", "foo", "a"], 2)).toEqual(["a"]);
+  });
+  test("hasFlag: kurz, lang, Kette, mit =; nicht bei fremdem Flag", () => {
+    for (const t of [["-a"], ["--all"], ["-ad"], ["-a=true"], ["--all=true"]]) expect(hasFlag(["x", ...t], ["-a", "--all"]), t.join()).toBe(true);
+    for (const t of [["-d"], ["--detach"], ["x"], ["--allx"]]) expect(hasFlag(["x", ...t], ["-a", "--all"]), t.join()).toBe(false);
+  });
+  test("firstPositionalIndex: Index im Original, -1 ohne", () => {
+    expect(firstPositionalIndex(PF, ["x", "run", "-n", "ns", "img"], 2)).toBe(4);
+    expect(firstPositionalIndex(PF, ["x", "run", "-d"], 2)).toBe(-1);
+  });
+  test("subEntry: eigene Schlüssel ja, Prototyp-Schlüssel nein", () => {
+    expect(subEntry({ a: 1 }, "a")).toBe(1);
+    expect(subEntry({ a: 1 }, "constructor")).toBeUndefined();
+    expect(subEntry({ a: 1 }, "toString")).toBeUndefined();
+  });
   test("specOfSub: Eintrag ohne Flags wird zur leeren Tabelle", () => {
     expect(specOfSub("x y", { run: () => "" }).flags).toEqual([]);
   });
@@ -142,6 +160,29 @@ describe("docker", () => {
     expect(fehlt.error).toBe(true);
     expect(fehlt.out).toContain("open nix: no such file");
   });
+  test("docker run: --name=web und -a=true gelten wirklich (nicht nur durchgelassen)", () => {
+    const r = lauf("docker run --name=web nginx");
+    expect(r.error).toBe(false);
+    expect(r.sim.docker.containers.map(c => c.name)).toEqual(["web"]);
+    r.sim.exec("docker stop web");
+    expect(r.sim.exec("docker ps -a=true").output).toContain("web");
+    expect(r.sim.exec("docker ps --all").output).toContain("web");
+    expect(r.sim.exec("docker ps").output).not.toContain("web");
+  });
+  test("docker run: ein Wert-Flag, der wie das Image heißt, ist nicht das Image", () => {
+    const r = lauf("docker run --name nginx nginx");
+    expect(r.sim.docker.containers.map(c => c.name)).toEqual(["nginx"]);
+  });
+  test("docker build -f ohne Build-Kontext: der Wert von -f ist nicht der Kontext", () => {
+    const sim = new KQSim({ files: { "App.dockerfile": "FROM redis" } });
+    const r = lauf("docker build -t a -f App.dockerfile", sim);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("requires exactly 1 argument");
+  });
+  test("docker build -f: die Ausgabe nennt die gelesene Datei", () => {
+    const sim = new KQSim({ files: { "App.dockerfile": "FROM redis" } });
+    expect(lauf("docker build -t a -f App.dockerfile .", sim).out).toContain("load build definition from App.dockerfile");
+  });
   test("andere Unterbefehle: jedes Flag abgelehnt", () => {
     for (const c of ["docker images -q", "docker pull -a nginx", "docker stop -t 1 x", "docker rm -f x", "docker tag -x a b"]) {
       expect(lauf(c).out, c).toContain(NS);
@@ -172,6 +213,10 @@ describe("helm", () => {
     expect(r.out).toContain("das Flag '--set' bei 'helm template'");
     expect(lauf("helm install web bitnami/nginx --wait", sim()).out).toContain("das Flag '--wait' bei 'helm install'");
   });
+  test("Alias teilen den Eintrag: helm ls -A trägt denselben Hinweis wie helm list -A", () => {
+    expect(lauf("helm ls -A").out).toContain("Der Simulator kennt nur einen Namespace");
+    expect(lauf("helm delete x -q").out).toContain("das Flag '-q' bei 'helm delete'");
+  });
   test("--set ohne Wert", () => {
     expect(lauf("helm upgrade web bitnami/nginx --set").out).toContain("flag needs an argument: --set");
   });
@@ -199,6 +244,14 @@ describe("argocd und glab", () => {
       expect(r.error, c).toBe(true);
       expect(r.out, c).toContain("fehlt");
       expect(r.out, c).not.toContain(NS);
+    }
+  });
+  test("Namen wie Object-Prototyp-Schlüssel sind für docker und helm unbekannte Unterbefehle, kein Absturz", () => {
+    for (const c of ["docker constructor", "docker toString", "helm constructor", "helm toString"]) {
+      const r = lauf(c);
+      expect(r.error, c).toBe(true);
+      expect(r.out, c).toContain("unbekannter Unterbefehl");
+      expect(r.out, c).not.toContain("Hoppla");
     }
   });
   test("Namen wie Object-Prototyp-Schlüssel sind keine Aktionen", () => {
