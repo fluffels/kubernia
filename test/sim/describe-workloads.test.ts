@@ -44,6 +44,12 @@ describe("describe deployment", () => {
     expect(d).toMatch(/Progressing\s+True\s+ReplicaSetUpdated/);
   });
 
+  test("0 Replicas: Available True, 0 unavailable", () => {
+    const d = out(new KQSim({ deployments: [dep("web", { replicas: 0 })] }), "describe deploy web");
+    expect(d).toMatch(/0 desired \| 0 updated \| 0 total \| 0 available \| 0 unavailable/);
+    expect(d).toMatch(/Available\s+True\s+MinimumReplicasAvailable/);
+  });
+
   test("nichts erfunden: ohne Port, Limits, Service Account, Volumes", () => {
     const d = out(new KQSim({ deployments: [dep("web")] }), "describe deploy web");
     expect(d).toMatch(/Port:\s+<none>/);
@@ -106,6 +112,22 @@ describe("describe pvc", () => {
     expect(d).toMatch(/^Access Modes:\s+RWO$/m);
     expect(d).toMatch(/^VolumeMode:\s+Filesystem$/m);
     expect(d).toMatch(/^Used By:\s+speicher-0$/m);
+    expect(d).not.toMatch(/speicher-[12]/);
+    expect(d).toMatch(/^Events:\s+<none>$/m);
+  });
+
+  test("loses PVC: Used By <none>", () => {
+    const sim = new KQSim({ statefulSets: [sts()] });
+    sim.pvcs.push({ name: "lose", status: "Pending", volume: "", capacity: "1Gi", storageClass: "", accessModes: "RWO", created: 0 });
+    expect(out(sim, "describe pvc lose")).toMatch(/^Used By:\s+<none>$/m);
+  });
+
+  test("Pending mit vorhandener StorageClass: kein ProvisioningFailed, Events <none>", () => {
+    const sim = new KQSim({});
+    sim.storageClasses.push({ name: "schnell", provisioner: "x", reclaimPolicy: "Delete", isDefault: false, created: 0 });
+    sim.pvcs.push({ name: "wartend", status: "Pending", volume: "", capacity: "1Gi", storageClass: "schnell", accessModes: "RWO", created: 0 });
+    const d = out(sim, "describe pvc wartend");
+    expect(d).not.toContain("ProvisioningFailed");
     expect(d).toMatch(/^Events:\s+<none>$/m);
   });
 
@@ -115,7 +137,7 @@ describe("describe pvc", () => {
     expect(d).toMatch(/^Status:\s+Pending$/m);
     expect(d).toMatch(/^Capacity:$/m);
     expect(d).toMatch(/^Access Modes:$/m);
-    expect(d).toMatch(/FailedBinding\s+\S+\s+no persistent volumes available for this claim and no storage class is set/);
+    expect(d).toMatch(/^\s+Normal\s+FailedBinding\s+\S+\s+no persistent volumes available for this claim and no storage class is set/m);
   });
 
   test("Pending mit unbekannter StorageClass: ProvisioningFailed statt FailedBinding", () => {
@@ -132,8 +154,9 @@ describe("describe statefulset", () => {
     expect(d).toMatch(/^Replicas:\s+3 desired \| 3 total$/m);
     expect(d).toMatch(/^Update Strategy:\s+RollingUpdate$/m);
     expect(d).toMatch(/^Pods Status:\s+3 Running \/ 0 Waiting \/ 0 Succeeded \/ 0 Failed$/m);
-    expect(d).toMatch(/Name:\s+data/);
-    expect(d).toMatch(/Capacity:\s+1Gi/);
+    expect(d).toMatch(/^\s+Name:\s+data$/m);
+    expect(d).toMatch(/^\s+StorageClass:$/m);
+    expect(d).toMatch(/^\s+Capacity:\s+1Gi$/m);
     expect(d).toMatch(/Access Modes:\s+\[ReadWriteOnce\]/);
   });
 
@@ -196,6 +219,10 @@ describe("ohne Namen und Namenspräfix", () => {
     expect(d).not.toContain("kasse");
   });
 
+  test("Präfix, nicht Teilstring: `api` trifft `web-api` nicht", () => {
+    expect(out(world(), "describe deploy api")).toContain('deployments.apps "api" not found');
+  });
+
   test("Präfix ohne Treffer: NotFound; Slash-Form gilt nur exakt; kaputte Slash-Form", () => {
     const sim = world();
     expect(out(sim, "describe deploy zz")).toContain('deployments.apps "zz" not found');
@@ -214,7 +241,7 @@ describe("ohne Namen und Namenspräfix", () => {
     const sim = new KQSim({
       deployments: [dep("web")], services: [svc("web")], statefulSets: [sts({ replicas: 1 })],
       networkPolicies: [{ name: "mauer", podSelector: "web" }], ingresses: [{ name: "tor", host: "a.example", path: "/", service: "web", port: 80, className: "nginx" }],
-      serviceAccounts: [{ name: "robo", created: 0 }],
+      serviceAccounts: ["robo"],
       roles: [{ name: "leser", cluster: false, rules: [], created: 0 }, { name: "weit", cluster: true, rules: [], created: 0 }],
     } as never);
     for (const [plural, entry] of DESCRIBE_ENTRIES) {
@@ -223,7 +250,7 @@ describe("ohne Namen und Namenspräfix", () => {
       expect(names.length, plural + ": Namensliste nicht leer").toBeGreaterThan(0);
       const r = sim.exec("kubectl describe " + plural);
       expect(r.error, plural).toBeFalsy();
-      for (const n of names) expect(r.output, plural + " " + n).toContain(n);
+      for (const n of names) expect(r.output, plural + " " + n).toMatch(new RegExp("^Name:\\s+" + n + "$", "m"));
     }
   });
 });
