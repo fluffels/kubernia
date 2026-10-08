@@ -22,7 +22,7 @@ interface KindOf<P extends string> {
   readonly inAll: boolean;
   /** Pseudoressource der Sim (`alerts`), gibt es in echtem kubectl nicht. */
   readonly pseudo?: boolean;
-  /** Abkündigung, die der API-Server bei jeder Anfrage auf diese Art als `Warning:`-Zeile mitschickt (nur der Text). */
+  /** Abkündigung, die der API-Server als `Warning:`-Zeile vor die Antwort setzt (nur der Text). Ausgewertet nur von `kubectl get` (`serverWarnings`); weitere Befehle, die die Art unterstützen, müssen sie ebenfalls vorn anhängen. */
   readonly deprecationWarning?: string;
 }
 

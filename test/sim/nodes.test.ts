@@ -230,14 +230,22 @@ test("INHALT: kein Node-Spec in den Quest-Daten trägt eine eigene `version` (si
   }
 });
 
-test("INHALT: jede Kubernetes-Version in den Terraform-Texten der Quests (`version = \"x.y.z\"`) ist NODE_VERSION", () => {
+test("INHALT: jede hafen_cluster-Version in den Quest-Daten (cluster.tf und desc der tfResource) ist NODE_VERSION", () => {
   let gefunden = 0;
+  const pruefe = (text: string, pfad: string) => {
+    for (const m of text.matchAll(/version\s*=\s*"(\d+\.\d+\.\d+)"/g)) {
+      gefunden++;
+      assert.equal("v" + m[1], NODE_VERSION, pfad + ": " + m[0]);
+    }
+  };
   for (const { f, json } of questDateien()) {
     laufe(json, f, (v, pfad) => {
-      if (typeof v !== "string") return;
-      for (const m of v.matchAll(/version\s*=\s*"(\d+\.\d+\.\d+)"/g)) {
-        gefunden++;
-        assert.equal("v" + m[1], NODE_VERSION, pfad + ": " + m[0]);
+      if (typeof v === "string") {
+        // Nur der hafen_cluster-Block, nicht andere Versionen (Provider-Pins, Charts).
+        for (const m of v.matchAll(/resource "hafen_cluster"[^}]*}/g)) pruefe(m[0], pfad);
+      } else if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+        const o = v as { addr?: unknown; desc?: unknown };
+        if (typeof o.addr === "string" && o.addr.startsWith("hafen_cluster.") && typeof o.desc === "string") pruefe(o.desc, pfad + ".desc");
       }
     });
   }

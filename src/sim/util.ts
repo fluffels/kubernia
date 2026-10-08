@@ -147,3 +147,9 @@ export function parseCpuMilli(spec: string): number | null {
   if (!cores) return null;
   return parseInt(cores[1], 10) * 1000 + (cores[2] ? parseInt(cores[2].padEnd(3, "0"), 10) : 0);
 }
+
+/** Die effektive Default-StorageClass: die zuletzt angelegte als Default markierte, bei gleichem Zeitstempel der
+ *  kleinere Name (wie der PVC-Admission-Controller seit v1.26). Die EINE Regel für `get sc` und für PVCs ohne Klasse. */
+export function effectiveDefaultStorageClass<T extends { name: string; isDefault: boolean; created: number }>(classes: readonly T[]): T | undefined {
+  return classes.filter(s => s.isDefault).sort((a, b) => b.created - a.created || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))[0];
+}

@@ -45,6 +45,14 @@ describe("get storageclasses: „(default)“ nur an der effektiven Default-Klas
     sim.storageClasses.push(sc("eins", true, 100), sc("zwei", false, 900));
     expect(markiert(sim)).toEqual(["eins"]);
   });
+  test("ein PVC ohne storageClassName bindet an genau die Klasse, die get sc als Default zeigt", () => {
+    const sim = new KQSim({});
+    sim.storageClasses.length = 0;
+    sim.storageClasses.push(sc("alt", true, 100), sc("neu", true, 200));
+    sim.mergeScenario({ pvcs: [{ name: "daten" }] });
+    expect(markiert(sim)).toEqual(["neu"]);
+    expect(sim.pvcs.find(p => p.name === "daten")?.storageClass).toBe("neu");
+  });
   test("kein Default: keine Markierung", () => {
     const sim = new KQSim({});
     sim.storageClasses.length = 0;

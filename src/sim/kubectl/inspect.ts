@@ -11,7 +11,7 @@
  * Jeder Ressourcentyp ist ein eigener kleiner Renderer; ein 10× größerer Ressourcensatz
  * wächst als 10× Einträge, ohne dass Dispatcher-Komplexität/-Länge mitwächst.
  */
-import { podIP, CONTROL_PLANE_IP, CONTROL_PLANE_NODE, BUILTIN_AGE, workloadSelector } from "../util";
+import { effectiveDefaultStorageClass, podIP, CONTROL_PLANE_IP, CONTROL_PLANE_NODE, BUILTIN_AGE, workloadSelector } from "../util";
 import { endpointAddresses, podAddress, servicesWithDefault, serviceSelector, isKubernetesService } from "../endpoints";
 import type { KubectlHost } from "./host";
 import { DEFAULT_NAMESPACE, isExternalNameService, type Deployment } from "../state";
@@ -224,16 +224,9 @@ function getPvs(host: KubectlHost): GetTable {
     host.pvs.map(p => [p.name, p.capacity, p.accessModes, p.reclaimPolicy, p.status, p.claim || "", p.storageClass || "", host._age(p.created)]));
 }
 
-/** Ab Kubernetes v1.37 trägt nur die effektive Default-StorageClass „(default)“ (#135964): die zuletzt angelegte,
- *  bei gleichem Zeitstempel gewinnt der kleinere Name (so wählt auch der PVC-Admission-Controller). */
-function effectiveDefault(host: KubectlHost): string | undefined {
-  const defaults = host.storageClasses.filter(s => s.isDefault);
-  defaults.sort((a, b) => b.created - a.created || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  return defaults[0]?.name;
-}
-
+/** Ab Kubernetes v1.37 trägt nur die effektive Default-StorageClass „(default)“ (#135964), Regel: `effectiveDefaultStorageClass`. */
 function getStorageClasses(host: KubectlHost): GetTable {
-  const standard = effectiveDefault(host);
+  const standard = effectiveDefaultStorageClass(host.storageClasses)?.name;
   return tableOf(["NAME", "PROVISIONER", "RECLAIMPOLICY", "AGE"],
     host.storageClasses.map(s => [s.name + (s.name === standard ? " (default)" : ""), s.provisioner, s.reclaimPolicy, host._age(s.created)]),
     host.storageClasses.map(s => s.name));
