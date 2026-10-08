@@ -153,11 +153,10 @@ test("Red-Green (#1508): teachAusgabeProblem meldet leere und Kein-Treffer-Ausga
   }
 });
 
-test("Red-Green (#1508): eine Teach-Lösung ohne Treffer fällt auf, ein erfundener Ausnahme-Eintrag auch", () => {
+test("Red-Green (#1508): eine Teach-Lösung ohne Treffer fällt auf (die Stale-Prüfung der Story deckt erfundene Ausnahmen)", () => {
   const sim = new KQSim({});
   const ausgabe = runTask(sim, { accept: [/^kubectl get pods$/], solution: "kubectl get pods" }, "sabotage");
   assert.notEqual(teachAusgabeProblem(ausgabe), null, "kubectl get pods ohne Pods: " + ausgabe);
-  assert.ok(!TEACH_AUSGABE_AUSNAHMEN.has("erfunden/t-x"), "die Stale-Prüfung der Story verlangt, dass jeder Eintrag ein Problem auslöst");
 });
 
 test("Alle Drill-Generatoren liefern lösbare Zufallsaufgaben (je 5x)", () => {
