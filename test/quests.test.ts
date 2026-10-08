@@ -189,7 +189,7 @@ function checkModeViolations(
  *  Negativ: ein geratener Name (`<dep>-geraten`) trifft keinen Pod und ist nie gelöst. */
 function describePrefixViolations(
   sim: KQSim,
-  task: { accept: RegExp[]; solution: string; check?: (sim: KQSim) => unknown },
+  task: { accept: RegExp[]; solution: string; solvedBy?: string; check?: (sim: KQSim) => unknown },
   label: string,
 ): string[] {
   const cmd = norm(resolvePlaceholder(task.solution, sim));
