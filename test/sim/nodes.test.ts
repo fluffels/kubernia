@@ -9,7 +9,7 @@
 import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./helpers";
-import { provisionNode, removeNode, isControlPlane, nodeInternalIP, NODE_SYSTEM_INFO, NODE_VERSION } from "../../src/sim/nodes";
+import { provisionNode, removeNode, isControlPlane, nodeInternalIP, snapshotNode, NODE_SYSTEM_INFO, NODE_VERSION } from "../../src/sim/nodes";
 import { readdirSync, readFileSync } from "node:fs";
 import { CONTROL_PLANE_IP } from "../../src/sim/util";
 import type { ClusterNode } from "../../src/sim/state";
@@ -191,4 +191,55 @@ test("NODE_SYSTEM_INFO: eingefroren, mit OS, Kernel und Container-Runtime", () =
   assert.match(NODE_SYSTEM_INFO.osImage, /Ubuntu/);
   assert.match(NODE_SYSTEM_INFO.kernelVersion, /^\d+\.\d+\.\d+/);
   assert.match(NODE_SYSTEM_INFO.containerRuntimeVersion, /^containerd:\/\//);
+  assert.equal(NODE_SYSTEM_INFO.architecture, "amd64");
+});
+
+/* ---------- (d) Die Node-Version ist abgeleitet statt gespeichert (#1496) ---------- */
+
+test("snapshotNode: die Standardversion steht nicht im Snapshot, eine bewusste Abweichung schon", () => {
+  const n: ClusterNode = { name: "ahoi-worker-1", status: "Ready", roles: "<none>", version: NODE_VERSION, diskPressure: true };
+  const snap = snapshotNode(n);
+  assert.equal("version" in snap, false);
+  assert.deepEqual(snap, { name: "ahoi-worker-1", status: "Ready", roles: "<none>", diskPressure: true });
+  assert.equal(snapshotNode({ ...n, version: "v1.29.0" }).version, "v1.29.0");
+  assert.notEqual(snap, n, "eine Kopie, nicht das Original");
+});
+
+test("Snapshot → neue Sim: die Knoten tragen NODE_VERSION, eine abweichende Version überlebt", () => {
+  const sim = new KQSim({ nodes: [{ name: "ahoi-control", roles: "control-plane" }, { name: "alt", version: "v1.29.0" }] });
+  assert.equal(sim.nodes[0].version, NODE_VERSION, "ein Spec ohne Version bekommt den Cluster-Default");
+  const snap = sim.snapshot();
+  assert.deepEqual(snap.nodes?.map(n => n.version), [undefined, "v1.29.0"]);
+  assert.deepEqual(new KQSim(snap).nodes.map(n => n.version), [NODE_VERSION, "v1.29.0"]);
+});
+
+/** Alle Werte eines JSON-Baums, die ein Objekt oder String sind, samt Pfad der Schlüssel. */
+function laufe(v: unknown, pfad: string, besuche: (v: unknown, pfad: string) => void): void {
+  besuche(v, pfad);
+  if (Array.isArray(v)) v.forEach((x, i) => laufe(x, pfad + "[" + i + "]", besuche));
+  else if (typeof v === "object" && v !== null) for (const [k, x] of Object.entries(v)) laufe(x, pfad + "." + k, besuche);
+}
+const questDateien = () => readdirSync("src/content/data/quests").map(f => ({ f, json: JSON.parse(readFileSync("src/content/data/quests/" + f, "utf8")) as unknown }));
+
+test("INHALT: kein Node-Spec in den Quest-Daten trägt eine eigene `version` (sie folgt NODE_VERSION)", () => {
+  for (const { f, json } of questDateien()) {
+    laufe(json, f, (v, pfad) => {
+      if (!pfad.endsWith(".nodes") || !Array.isArray(v)) return;
+      for (const n of v as Record<string, unknown>[]) assert.equal("version" in n, false, pfad + ": " + String(n.name) + " trägt eine Version");
+    });
+  }
+});
+
+test("INHALT: jede Kubernetes-Version in den Terraform-Texten der Quests (`version = \"x.y.z\"`) ist NODE_VERSION", () => {
+  let gefunden = 0;
+  for (const { f, json } of questDateien()) {
+    laufe(json, f, (v, pfad) => {
+      if (typeof v !== "string") return;
+      for (const m of v.matchAll(/version\s*=\s*"(\d+\.\d+\.\d+)"/g)) {
+        gefunden++;
+        assert.equal("v" + m[1], NODE_VERSION, pfad + ": " + m[0]);
+      }
+    });
+  }
+  assert.ok(gefunden >= 2, "der Wächter sieht die hafen_cluster-Versionen (cluster.tf und desc), sonst prüft er nichts");
 });

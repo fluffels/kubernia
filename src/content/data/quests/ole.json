@@ -948,7 +948,6 @@
               "name": "ahoi-control",
               "status": "Ready",
               "roles": "control-plane",
-              "version": "v1.30.2",
               "diskPressure": false
             }
           ]
@@ -1097,21 +1096,18 @@
               "name": "ahoi-control",
               "status": "Ready",
               "roles": "control-plane",
-              "version": "v1.30.2",
               "diskPressure": false
             },
             {
               "name": "ahoi-worker-1",
               "status": "Ready",
               "roles": "<none>",
-              "version": "v1.30.2",
               "diskPressure": false
             },
             {
               "name": "ahoi-worker-2",
               "status": "Ready",
               "roles": "<none>",
-              "version": "v1.30.2",
               "diskPressure": false
             }
           ],
@@ -1292,10 +1288,10 @@
         "scenario": {
           "bareMetal": true,
           "files": {
-            "cluster.tf": "# Der ganze Cluster als CODE – das deklarative Gegenstück zu kubeadm.\n# Statt 'kubeadm init', dann jedes 'kubeadm join' von Hand: EINMAL beschreiben,\n# beliebig oft reproduzierbar bauen. Diese Datei kann in Git liegen, reviewt werden,\n# und beim nächsten Sturm baut EIN 'terraform apply' den ganzen Cluster zurück.\n\n# Die Kommandobrücke (Control-Plane) – was sonst 'kubeadm init' macht.\nresource \"hafen_cluster\" \"kommandobruecke\" {\n  name    = \"ahoi-control\"\n  version = \"1.30.2\"\n}\n\n# Drei Stege (Worker) – je einer ist ein 'kubeadm join', hier nur deklariert.\nresource \"hafen_worker\" \"steg1\" {\n  cluster = hafen_cluster.kommandobruecke.name\n}\n\nresource \"hafen_worker\" \"steg2\" {\n  cluster = hafen_cluster.kommandobruecke.name\n}\n\nresource \"hafen_worker\" \"steg3\" {\n  cluster = hafen_cluster.kommandobruecke.name\n}\n\n# Die Adresse, unter der kubectl den Cluster erreicht.\noutput \"apiserver\" {\n  value = \"https://ahoi-control:6443\"\n}\n"
+            "cluster.tf": "# Der ganze Cluster als CODE – das deklarative Gegenstück zu kubeadm.\n# Statt 'kubeadm init', dann jedes 'kubeadm join' von Hand: EINMAL beschreiben,\n# beliebig oft reproduzierbar bauen. Diese Datei kann in Git liegen, reviewt werden,\n# und beim nächsten Sturm baut EIN 'terraform apply' den ganzen Cluster zurück.\n\n# Die Kommandobrücke (Control-Plane) – was sonst 'kubeadm init' macht.\nresource \"hafen_cluster\" \"kommandobruecke\" {\n  name    = \"ahoi-control\"\n  version = \"1.37.1\"\n}\n\n# Drei Stege (Worker) – je einer ist ein 'kubeadm join', hier nur deklariert.\nresource \"hafen_worker\" \"steg1\" {\n  cluster = hafen_cluster.kommandobruecke.name\n}\n\nresource \"hafen_worker\" \"steg2\" {\n  cluster = hafen_cluster.kommandobruecke.name\n}\n\nresource \"hafen_worker\" \"steg3\" {\n  cluster = hafen_cluster.kommandobruecke.name\n}\n\n# Die Adresse, unter der kubectl den Cluster erreicht.\noutput \"apiserver\" {\n  value = \"https://ahoi-control:6443\"\n}\n"
           },
           "tfResources": [
-            { "addr": "hafen_cluster.kommandobruecke", "desc": "name = \"ahoi-control\", version = \"1.30.2\"" },
+            { "addr": "hafen_cluster.kommandobruecke", "desc": "name = \"ahoi-control\", version = \"1.37.1\"" },
             { "addr": "hafen_worker.steg1", "desc": "cluster = ahoi-control" },
             { "addr": "hafen_worker.steg2", "desc": "cluster = ahoi-control" },
             { "addr": "hafen_worker.steg3", "desc": "cluster = ahoi-control" }

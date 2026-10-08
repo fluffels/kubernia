@@ -11,7 +11,7 @@ const NORMAL_STS = "apiVersion: v1\nkind: Service\nmetadata:\n  name: speicher\n
 const TARGET_STS = "apiVersion: v1\nkind: Service\nmetadata:\n  name: speicher\nspec:\n  ports:\n    - port: 80\n      targetPort: 5432\n";
 const EXTERNAL = "apiVersion: v1\nkind: Service\nmetadata:\n  name: speicher\nspec:\n  type: ExternalName\n  externalName: db.example.com\n";
 const sts = (extra: object = {}) => ({ name: "speicher", image: "postgres:16", replicas: 3, serviceName: "speicher", ...extra });
-const ep = (sim: KQSim, name: string) => (sim.exec("kubectl get endpoints " + name).output || "").split("\n")[1] ?? "";
+const ep = (sim: KQSim, name: string) => (sim.exec("kubectl get endpoints " + name).output || "").split("\n").find(l => l.startsWith(name + " ")) ?? "";
 
 describe("kubectl get endpoints", () => {
   test("Deployment: podIP(pod.name):port je Pod", () => {

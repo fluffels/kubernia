@@ -22,6 +22,8 @@ interface KindOf<P extends string> {
   readonly inAll: boolean;
   /** Pseudoressource der Sim (`alerts`), gibt es in echtem kubectl nicht. */
   readonly pseudo?: boolean;
+  /** Abkündigung, die der API-Server bei jeder Anfrage auf diese Art als `Warning:`-Zeile mitschickt (nur der Text). */
+  readonly deprecationWarning?: string;
 }
 
 function kind<P extends string>(plural: P, singular: string, short: readonly string[], group: string, namespaced: boolean, inAll = false, pseudo = false): KindOf<P> {
@@ -40,7 +42,8 @@ const KINDS = [
   kind("deployments", "deployment", ["deploy"], "apps", true, true),
   kind("replicasets", "replicaset", ["rs"], "apps", true, true),
   kind("statefulsets", "statefulset", ["sts"], "apps", true, true),
-  kind("endpoints", "endpoint", ["ep"], "", true),
+  // KEP-4974: ab v1.33 warnt der API-Server bei jeder Anfrage auf v1 Endpoints (die Sim simuliert >= v1.33, ./nodes).
+  { ...kind("endpoints", "endpoint", ["ep"], "", true), deprecationWarning: "v1 Endpoints is deprecated in v1.33+; use discovery.k8s.io/v1 EndpointSlice" },
   kind("nodes", "node", ["no"], "", false),
   kind("namespaces", "namespace", ["ns"], "", false),
   kind("secrets", "secret", [], "", true),
@@ -98,4 +101,10 @@ export function qualified(k: ResourceKind, form: "plural" | "singular"): string 
 /** Alle Typen der Kategorie `all`, in Anzeigereihenfolge. */
 export function allKinds(): readonly ResourceKind[] {
   return RESOURCE_KINDS.filter(k => k.inAll);
+}
+
+/** Die `Warning:`-Zeilen, die der API-Server vor die Antwort auf eine Anfrage dieser Typen setzt (ohne Doppelte). */
+export function serverWarnings(kinds: readonly ResourceKind[]): string[] {
+  const texts = kinds.flatMap(k => (k.deprecationWarning ? [k.deprecationWarning] : []));
+  return [...new Set(texts)].map(t => "Warning: " + t);
 }

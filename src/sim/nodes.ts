@@ -12,13 +12,13 @@
  * nach sim.ts (kein Zyklus), vom Architektur-Wächter (#347) als Domäne geschützt und im
  * Node-Test prüfbar.
  */
-import type { ClusterNode } from "./state";
+import type { ClusterNode, NodeSpec } from "./state";
 import { hashStr } from "../core/rng";
 import { CONTROL_PLANE_IP } from "./util";
 
 /** Einheitliche Kubernetes-Version aller simulierten Knoten. EINE Wahrheit statt der
  *  inline wiederholten `"v1.30.2"` in kubeadm/terraform/sim-Default (#534). */
-export const NODE_VERSION = "v1.30.2";
+export const NODE_VERSION = "v1.37.1";
 
 /** Ist dieser Knoten (auch) eine Control-Plane? Das EINE Rollen-Prädikat (#534) – vorher
  *  gab es zwei Schreibweisen nebeneinander (`/control-plane/.test(n.roles)` in kubeadm/
@@ -38,12 +38,19 @@ export function isControlPlane(node: ClusterNode): boolean {
  *  „war schon da"). */
 export function provisionNode(
   state: { nodes: ClusterNode[] },
-  spec: Partial<ClusterNode> & { name: string },
+  spec: NodeSpec,
 ): ClusterNode | undefined {
   if (state.nodes.some(n => n.name === spec.name)) return undefined;
   const node: ClusterNode = { status: "Ready", roles: "<none>", version: NODE_VERSION, ...spec };
   state.nodes.push(node);
   return node;
+}
+
+/** Der Knoten für den Snapshot: die Cluster-Version steht nur drin, wenn sie von `NODE_VERSION` abweicht. Sonst
+ *  bliebe die Version eines alten Stands für immer im Spielstand und die Knoten folgten nie einer neuen Sim-Version. */
+export function snapshotNode(n: ClusterNode): NodeSpec {
+  const { version, ...rest } = n;
+  return version === NODE_VERSION ? { ...rest } : { ...rest, version };
 }
 
 /** Entfernt einen Knoten (per Name) aus dem Cluster – der EINE Austrittspunkt (spiegelt
@@ -75,5 +82,8 @@ export function nodeInternalIP(node: ClusterNode): string {
 export const NODE_SYSTEM_INFO = Object.freeze({
   osImage: "Ubuntu 22.04.4 LTS",
   kernelVersion: "5.15.0-112-generic",
-  containerRuntimeVersion: "containerd://1.7.18",
+  /** Seit Kubernetes v1.36 hängt `get nodes -o wide` die Architektur an die KERNEL-VERSION (#132402). */
+  architecture: "amd64",
+  /** containerd 1.x wird ab Kubernetes v1.36 nicht mehr unterstützt; 2.3 ist die LTS-Linie (bis 04/2028). */
+  containerRuntimeVersion: "containerd://2.3.6",
 });
