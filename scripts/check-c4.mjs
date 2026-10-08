@@ -17,7 +17,7 @@ import { readdirSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { leseJson } from "./docs-gen/markdown.mjs";
+import { leseConfigObjekt } from "./docs-gen/markdown.mjs";
 import { ladeModell, schichtVon, sollKanten } from "./docs-gen/schichten.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -240,7 +240,7 @@ export async function cli(argv, { rootDir = ROOT, out = console.log, err = conso
   const run = spawn ?? likec4Cli(rootDir);
   let config;
   try {
-    config = leseJson(rootDir, CONFIG, "Config");
+    config = leseConfigObjekt(rootDir, CONFIG, "Config");
   } catch (e) {
     err(`✖ ${CONFIG}:1 config „config“: ${e instanceof Error ? e.message : e}. Fix: Datei prüfen`);
     return 1;
@@ -264,6 +264,8 @@ export async function cli(argv, { rootDir = ROOT, out = console.log, err = conso
   }
   try {
     const modell = ladeModell(rootDir, config.schichten.layers);
+    // #1428 Z13: die Quellwurzel steht im Modell; `architektur.quelle` muss dasselbe Verzeichnis nennen (sonst vergliche der Wächter das falsche).
+    if (`${cfg.quelle}/` !== modell.quellwurzel) throw new Error(`architektur.quelle „${cfg.quelle}“ passt nicht zur Quellwurzel „${modell.quellwurzel}“ des Schicht-Modells`);
     const ms = pruefeArchitektur({ modell, module: srcModule(rootDir, cfg.quelle), c4: await ladeC4Modell(rootDir, ws), cfg });
     for (const m of ms) err(formatiere(m));
     if (ms.length) rot = true;

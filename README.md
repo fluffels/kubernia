@@ -313,7 +313,7 @@ Kubernia ist bewusst so gebaut, dass es **so groß wie Stardew Valley** werden k
   | `npm run check:docdrift` | `verify` | dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien |
   | `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein |
   | `npm run check:c4` | `verify` | LikeC4-Modell: validiert, formatiert; Schichten, Phaser, Schicht-Kanten und Top-Level-Module stimmen mit `scripts/layers.cjs` und `src/` überein |
-  | `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo |
+  | `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo, keine Steuerbytes (NUL) in Textdateien |
   | `npm run check:lockfile` | `verify` | Lockfile passt zur `package.json` |
   | `npm run check:diffsize` | `verify` | Slice-Größe (Dateien und Zeilen gegen die Merge-Base) |
   | `npm test` | `verify` | Verhalten von Domäne, Sim, Wirtschaft und Harness-Wächtern, inkl. Negativ- und Grenzfälle (Vitest) |
@@ -347,17 +347,19 @@ Spielstand speichert automatisch im Browser.
 | Taste | Aktion |
 |---|---|
 | WASD / Pfeile | Laufen |
-| E | Reden / Benutzen |
-| Leer / Enter | Im Dialog weiter (auch E) |
+| R | Reden / Benutzen |
+| Leer / Enter | Im Dialog weiter (auch R) |
 | ← / Backspace | Im Dialog eine Zeile zurück (nachlesen) |
-| T | 💻 Terminal |
-| J | 📜 Logbuch (Questlog) |
+| F | 💻 Funkgerät-Terminal |
+| L | 📜 Logbuch (Questlog) |
 | B | 📖 Sammelalbum (Glossar) |
-| Esc | Fenster schließen |
+| Esc | Fenster schließen, Menü |
+
+Reden (R), Funkgerät (F), Logbuch (L) und Sammelalbum (B) lassen sich im ⚓ Menü (Esc) auf andere Buchstaben umbelegen; die Tabelle zeigt die Standardbelegung.
 
 Im Funkgerät-Terminal listet `help` die freigeschalteten Befehle; `help kubectl` zeigt zusätzlich, was der Simulator gegenüber echtem `kubectl` bewusst vereinfacht.
 
-Im 📜 **Logbuch (J)** blätterst du durch alle Quests: abgeschlossene zum **Nachlesen** (Dialoge & Hinweise), deine aktuelle Quest, und noch **gesperrte** als Vorschau (kein Vorausspringen). Es wird freigeschaltet, sobald du deine erste Quest abgeschlossen hast. Eine abgeschlossene Quest kannst du dort auch **🔁 erneut spielen** – in einer Sandbox, die deinen echten Fortschritt nicht anrührt; über **„↩️ Zur aktuellen Quest“** landest du jederzeit wieder genau dort, wo du warst.
+Im 📜 **Logbuch (L)** blätterst du durch alle Quests: abgeschlossene zum **Nachlesen** (Dialoge & Hinweise), deine aktuelle Quest, und noch **gesperrte** als Vorschau (kein Vorausspringen). Es wird freigeschaltet, sobald du deine erste Quest abgeschlossen hast. Eine abgeschlossene Quest kannst du dort auch **🔁 erneut spielen** – in einer Sandbox, die deinen echten Fortschritt nicht anrührt; über **„↩️ Zur aktuellen Quest“** landest du jederzeit wieder genau dort, wo du warst.
 
 Im 📖 **Sammelalbum (B)** sammelst du wie in einem Sticker-Album alles, was du lernst: **jeden Befehl** (z.B. `docker pull`, `kubectl get`) und **jedes Wissens-Stück** aus den Quiz-Karten. Einträge starten **verdeckt** und werden freigeschaltet, sobald du sie im Spiel kennengelernt hast – mit Fortschrittsanzeige „X von Y gesammelt“, gruppiert nach Themen-Seiten (Docker, Kubernetes, Helm …). Auch das Album wird nach deiner ersten abgeschlossenen Quest frei.
 
@@ -443,7 +445,7 @@ Verwendete Fremd-Bausteine mit eigener Lizenz:
 
 ## Spielstand
 
-Wird **automatisch alle 5 Sekunden** im Browser gespeichert (IndexedDB). Im 📜 Logbuch (Taste J) gibt es zusätzlich **„Spielstand sichern“** (lädt eine JSON-Datei herunter) und **„Spielstand laden“** – für Backups oder den Umzug auf einen anderen Rechner/Browser.
+Wird **automatisch alle 5 Sekunden** im Browser gespeichert (IndexedDB). Im 📜 Logbuch (Taste L) gibt es zusätzlich **„Spielstand sichern“** (lädt eine JSON-Datei herunter) und **„Spielstand laden“** – für Backups oder den Umzug auf einen anderen Rechner/Browser.
 
 **Mehrere Spielstände:** Im ⚓ Menü (Taste Esc) kannst du unter **„Spielstände“** mehrere Stände nebeneinander halten und zwischen ihnen wechseln – z.B. einen eigenen zum Weiterspielen und einen frischen zum Ausprobieren/Vorführen, oder pro Person ein Profil. Neue Stände anlegen, umbenennen und löschen geht dort ebenfalls; ein bereits vorhandener Einzel-Spielstand wird automatisch zum ersten Slot.
 

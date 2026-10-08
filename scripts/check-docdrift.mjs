@@ -33,7 +33,8 @@
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, resolve, sep, posix } from "node:path";
-import { collectMarkdown as collectMd, fenceMaske, kettenSchritte } from "./docs-gen/markdown.mjs";
+import { collectMarkdown as collectMd, fenceMaske } from "./docs-gen/markdown.mjs";
+import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 

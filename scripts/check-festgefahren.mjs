@@ -24,9 +24,9 @@
  * steht in ci-laeufe.mjs, geteilt mit token-baseline.mjs und lauf-ergebnis.mjs.
  */
 
-import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
+import { ghJson } from "./gh-cli.mjs";
 
 /** Schwelle: 1 initialer Fehlschlag + 3 gescheiterte Fix-Versuche = „dreimal" aus AGENTS.md. */
 export const MAX_FAILED_PUSHES = 4;
@@ -73,18 +73,9 @@ export function buildStuckComment(failedCount, runUrl) {
 
 // ── CLI (läuft nur als CI-Job in festgefahren.yml) ───────────────────────────
 
-/** `gh <args>` ausführen und stdout als JSON parsen. Wirft bei Fehler. */
-function ghJson(args) {
-  const out = execFileSync("gh", args, {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  return JSON.parse(out);
-}
-
 /** `gh <args>` ausführen, Ausgabe an Terminal durchreichen. */
 function ghRun(args) {
-  execFileSync("gh", args, { stdio: "inherit" });
+  ghText(args, { stdio: "inherit" });
 }
 
 function main() {

@@ -8,7 +8,7 @@ export const meta = {
     { title: 'Plan', detail: 'Planungs-Subagent vor der ersten Zeile Code bzw. Epic-Aufteilung', model: 'kubernia-planner (opus) + effort xhigh' },
     { title: 'Sonderfall', detail: 'Epic-Kinder aus dem Plan anlegen bzw. Dependabot-Sammelticket auflösen (kein Code)', model: 'sonnet' },
     { title: 'Pre-Flight', detail: 'Weichen vor dem Coden selbst entscheiden; nur bei Irreversiblem/Außenwirkung anhalten + Fragen vorlegen (#1012/#1279)' },
-    { title: 'Umsetzen', detail: 'Worktree, TDD, Projekt-Brain pflegen (Marker pflege:), npm run verify, im Browser verifizieren, committen', model: 'sonnet' },
+    { title: 'Umsetzen', detail: 'Worktree, TDD, Projekt-Brain pflegen (Marker pflege:), npm run verify:kompakt, im Browser verifizieren, committen', model: 'sonnet' },
     { title: 'Review', detail: 'Lenses parallel als Konvergenzschleife (Cap 2 Fix-Runden, höchstens 3 Pässe, frischer Kritiker, #1012): 3 für Code, 1 Doku-Lens für reines Markdown, ab Runde 2 nur blockierte Brillen auf dem Delta (#1265)', model: 'kubernia-lens (opus) + effort high' },
     { title: 'Nachbessern', detail: 'nur bei blockierenden Findings oder rotem verify' },
     { title: 'PR + Merge', detail: 'PR öffnen, Auto-Merge; Harness-Diff → Audit-Kommentar (#1069); rot → max. 3 Fix-Versuche' },
@@ -120,7 +120,7 @@ const UMSETZUNG_SCHEMA = {
     ergebnis: { type: 'string', enum: ['committet', 'abgebrochen'] },
     branch: { type: 'string' },
     worktree: { type: 'string', description: 'absoluter Pfad des Worktrees' },
-    verifyGruen: { type: 'boolean', description: 'npm run verify mit Exit-Code 0 gelaufen' },
+    verifyGruen: { type: 'boolean', description: 'npm run verify:kompakt mit Exit-Code 0 gelaufen' },
     verifyAusgabe: { type: 'string', description: 'bei rotem verify: die relevante Fehlerausgabe' },
     diffPfad: {
       type: 'string',
@@ -238,7 +238,7 @@ const NACHBESSERN_SCHEMA = {
   additionalProperties: false,
   required: ['verifyGruen'],
   properties: {
-    verifyGruen: { type: 'boolean', description: 'npm run verify nach dem Nachbessern mit Exit-Code 0' },
+    verifyGruen: { type: 'boolean', description: 'npm run verify:kompakt nach dem Nachbessern mit Exit-Code 0' },
     verifyAusgabe: { type: 'string', description: 'bei weiterhin rotem verify: die relevante Fehlerausgabe' },
     diffPfad: {
       type: 'string',
@@ -659,10 +659,10 @@ ${
     ? `Die Maintainerin hat Ticket #${gewuenscht} vorgegeben — nimm dieses statt der Board-Auswahl,
 prüfe es aber genauso (offen? kein Assignee? kein offener Blocker?).
 Ist es nicht frei, gib ergebnis="kein-freies-ticket" zurück und unternimm nichts weiter.`
-    : `Nimm das oberste freie Item der Board-Reihenfolge. Wähle NICHT nach Inhalt aus und
-sortiere NICHT nach. Prüfe nur dieses eine Kandidaten-Ticket gegen den Live-Stand,
-nicht die ganze Liste. Zeigt es einen Assignee: sofort weiter zum nächsten, ohne
-Worktree-Inspektion und ohne Weiterarbeit an fremder Arbeit.`
+    : `Nimm das oberste freie Item: node scripts/naechstes-ticket.mjs (Assignee, Blocker, Branch,
+Worktree, offener PR in einem Lauf; erste Zeile = dran). Wähle NICHT nach Inhalt aus und
+sortiere NICHT nach. Prüfe nur dieses eine Ticket gegen den Live-Stand, nicht die ganze
+Liste; ohne Worktree-Inspektion und ohne Weiterarbeit an fremder Arbeit.`
 }
 
 Claimen ist blockierende Pflicht: gh issue edit <nr> --add-assignee @me, danach mit
@@ -881,7 +881,7 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
   Was auffällt, aber nicht zum Ticket gehört: nicht inline mitfixen, sondern festhalten
   (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Notfälle ausgenommen), Spiel-/Inhalts-Befund → gebündeltes Issue.
 - § Doku aktuell halten ist Teil von „fertig" — im SELBEN Branch.
-- § Projekt-Brain pflegen (AGENTS.md § Doku aktuell halten), zum Schluss VOR dem abschließenden npm run verify
+- § Projekt-Brain pflegen (AGENTS.md § Doku aktuell halten), zum Schluss VOR dem abschließenden npm run verify:kompakt
   und dem Commit: ist Übertragbares entstanden, nach Wissensart einordnen. Eingerahmt von
   \`${pflegeMarkerBefehl(nr, 'start')}\` davor und \`${pflegeMarkerBefehl(nr, 'ende')}\` danach (je ein eigener
   Shell-Befehl, auch wenn nichts entstand; Messung: docs/model-routing.md §5).
@@ -1066,7 +1066,7 @@ Sammelticket, Spiel-/Inhalts-Befund oder Notfall → gebündeltes Issue) — nic
       nachweisWerte = nachweisStand(nachweisWerte, { modus: staffel.modus, berichte: lensBerichte })
       for (const b of lensBerichte) lensStand[b.lens] = b
     } else {
-      log('npm run verify ist rot — Short-Circuit (#532): keine Lens-Pässe, direkt zum Nachbessern.')
+      log('npm run verify:kompakt ist rot — Short-Circuit (#532): keine Lens-Pässe, direkt zum Nachbessern.')
       lensBerichte = []
       vorrunde = null
       fehlend = []
@@ -1133,7 +1133,7 @@ ${
 ${
   verifyGruen
     ? ''
-    : `ZUERST: npm run verify ist rot. Zuletzt gemeldet:
+    : `ZUERST: npm run verify:kompakt ist rot. Zuletzt gemeldet:
 ${letzteVerifyAusgabe || '(keine Ausgabe übergeben — selbst nachfahren)'}
 Bring es grün, ohne ein Gate abzuschwächen (AGENTS.md § Kein Grün-durch-Aufweichen).
 `
@@ -1191,7 +1191,7 @@ ${patchAuftrag(nr, reviewRunden + 1, diff.head)}`,
     phase('Festgefahren')
     const vorLensStand = nachweisWerte.paesse === 0
     const offenePunkte = [
-      ...(verifyGruen ? [] : ['npm run verify ist rot']),
+      ...(verifyGruen ? [] : ['npm run verify:kompakt ist rot']),
       ...fehlend.map((k) => `Lens ${k} lieferte zweimal kein Ergebnis (ungeprüft)`),
       ...blockierend.map((f) => `[${f.ort}] ${f.befund}`),
     ]

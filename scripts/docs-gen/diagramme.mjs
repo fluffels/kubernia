@@ -6,7 +6,8 @@
 // passende Datei oder eine Zahl ohne Quelle macht den Generator (und damit `check:docgen`) rot.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { MERMAID_FRONTMATTER, ganzzahlKonstante, kettenSchritte, leseJson } from "./markdown.mjs";
+import { MERMAID_FRONTMATTER, ganzzahlKonstante, leseJson } from "./markdown.mjs";
+import { kettenSchritte } from "./npm-ketten.mjs";
 import { harnessKatalog } from "./harness-inventar.mjs";
 import { ladeRulesetSpiegel } from "./ruleset-spiegel.mjs";
 

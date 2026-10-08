@@ -17,6 +17,8 @@ import * as inventar from "../scripts/docs-gen/harness-inventar.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as markdown from "../scripts/docs-gen/markdown.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as npmKetten from "../scripts/docs-gen/npm-ketten.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as registry from "../scripts/docs-gen/registry.mjs";
 
 type Err = { file?: string; section: string; message: string };
@@ -31,8 +33,8 @@ const api = docsGen as unknown as {
   loadConfig: (rootDir?: string, pfad?: string) => Cfg;
   cli: (argv: string[], o: { rootDir: string; config?: Cfg; generators?: Gen; out: (s: string) => void; err: (s: string) => void }) => number;
 };
+const kettenApi = npmKetten as unknown as { parseChain: (s: string) => string[] };
 const mdApi = markdown as unknown as {
-  parseChain: (s: string) => string[];
   fenceMaske: (lines: string[]) => boolean[];
   fenceBloecke: (lines: string[]) => { start: number; ende: number; geschlossen: boolean; info: string; inhalt: string[] }[];
   collectMarkdown: (rootDir: string, roots?: string[], o?: { ueberspringe?: (ent: { name: string; isDirectory: () => boolean }, relDir: string) => boolean }) => string[];
@@ -265,10 +267,10 @@ describe("Generator gates", () => {
     gatesApi.gatesGenerator({ rootDir: fixture(files), config });
 
   test("parseChain: npm run, npm test, Rohbefehl", () => {
-    assert.deepEqual(mdApi.parseChain("npm run a && npm test && node x.mjs --y"), ["a", "test", "node x.mjs --y"]);
+    assert.deepEqual(kettenApi.parseChain("npm run a && npm test && node x.mjs --y"), ["a", "test", "node x.mjs --y"]);
   });
   test("parseChain: Argumente hinter -- fallen weg (Z5g)", () => {
-    assert.deepEqual(mdApi.parseChain("npm run a -- --flag && npm test -- --run && npm run b"), ["a", "test", "b"]);
+    assert.deepEqual(kettenApi.parseChain("npm run a -- --flag && npm test -- --run && npm run b"), ["a", "test", "b"]);
   });
   test("Reihenfolge, Kettenspalte, verschachtelte Kette ohne eigene Zeile, CI-Zeile", () => {
     const rows = run(base, conf({ descriptions: { a: "A", b: "B", test: "T", c: "C", "node x.mjs": "X" } }))
@@ -372,6 +374,14 @@ describe("docs-gen CLI und Registry (#1392)", () => {
     assert.match(ausgabe.join(""), /Config nicht lesbar/);
     const ohneWert = api.cli(["--config"], { rootDir: fixture(f), generators: gen, out: () => undefined, err: (x) => ausgabe.push(x) });
     assert.equal(ohneWert, 1);
+  });
+  test("--config mit einer Datei, die kein JSON-Objekt ist (null, Liste, Zahl): Exit 1 mit Meldung statt TypeError (#1428 Z19)", () => {
+    for (const roh of ["null", "[]", "7"]) {
+      const ausgabe: string[] = [];
+      const code = api.cli(["--config", "x/leer.json"], { rootDir: fixture({ ...files, "x/leer.json": roh }), generators: gen, out: () => undefined, err: (x) => ausgabe.push(x) });
+      assert.equal(code, 1, roh);
+      assert.match(ausgabe.join(""), /Config nicht lesbar.*kein JSON-Objekt/, roh);
+    }
   });
   test("loadConfig liest den Standardpfad und einen übergebenen Pfad", () => {
     const root = fixture({ "scripts/docs-gen/config.json": '{"markdown":["x"]}', "andere.json": '{"markdown":["y"]}' });

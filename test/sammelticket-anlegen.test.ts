@@ -131,7 +131,7 @@ describe("Verdrahtung der Selbstkorrektur (#1390, Lens R1)", () => {
   test("board-place korrigiert über planMitKorrektur, board-takt zieht die Liste nach, das Anlege-Skript nutzt pruefSchritt und planMitKorrektur", () => {
     expect(lies("scripts/board-lib.mjs")).toMatch(/function planMitKorrektur\(items, args, n\)/);
     expect(lies("scripts/board-place.mjs")).toMatch(/planMitKorrektur\(items, args, args\.notfall \? null : positionOderWarnung\(\)\)/);
-    expect(lies("scripts/board-takt.mjs")).toMatch(/if \(items\) items = ziehListeNach\(items, r\);/);
+    // Der Listen-Nachzug des Takts ist mit Fakes in test/board-takt-lauf.test.ts getestet (#1428 Z23), keine Quelltext-Regex mehr.
     const anlegen = lies("scripts/sammelticket-anlegen.mjs");
     expect(anlegen).toMatch(/pruefSchritt\(\{ items: loadItems\(\)/);
     expect(anlegen).toMatch(/planMitKorrektur\(items, \{ anchor: null, numbers: \[nr\] \}/);

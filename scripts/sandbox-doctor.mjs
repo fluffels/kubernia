@@ -25,15 +25,26 @@ const DENY_VARIABLEN = ["PIXELLAB_TOKEN", "GITHUB_TOKEN", "ANTHROPIC_API_KEY", "
 /** Namensmuster für Secrets im `env`-Block der User-Settings (die öffentliche Langfuse-Kennung LANGFUSE_PUBLIC_KEY trifft es nicht). */
 const SECRET_MUSTER = /TOKEN|SECRET|PASSWORD|_API_KEY/i;
 
+/**
+ * Welche WSL-Art meldet der Kernel-Release (#1428 Z26)? WSL2 trägt `microsoft-standard` (neu: `5.15.x-microsoft-standard-WSL2`, ältere WSL2-Kernel
+ * ohne das Suffix: `4.19.104-microsoft-standard`), WSL1 `Microsoft` ohne diese Merkmale (`4.4.0-19041-Microsoft`). Bewusst der Kernel-Release und
+ * nicht WSLInterop: die empfohlene wsl.conf schaltet Interop ab. Liefert `"wsl2"`, `"wsl1"` oder `null` (kein WSL). Pur.
+ */
+export function wslArt(release) {
+  const r = String(release ?? "");
+  if (/microsoft-standard|wsl2/i.test(r)) return "wsl2";
+  return /microsoft/i.test(r) ? "wsl1" : null;
+}
+
 /** Plattform: natives Windows hat keine Sandbox, WSL1 ebenso nicht (WSL2 braucht echten Linux-Kernel). */
 export function pruefePlattform({ platform, release }) {
   if (platform === "win32") {
     return [fehlt("natives Windows: Claude Code führt Befehle ungesandboxt aus; die Sandbox läuft nur unter WSL2 (ADR 0021, docs/agent-harness.md#agenten-sandbox-wsl2)")];
   }
-  if (/microsoft/i.test(release) && !/wsl2/i.test(release)) {
+  if (wslArt(release) === "wsl1") {
     return [fehlt(`WSL1 (Kernel ${release}): die Sandbox braucht WSL2 (wsl --set-version <Name> 2)`)];
   }
-  return [ok(`Plattform ${platform === "linux" && /wsl2/i.test(release) ? "WSL2" : platform} unterstützt die Sandbox`)];
+  return [ok(`Plattform ${platform === "linux" && wslArt(release) === "wsl2" ? "WSL2" : platform} unterstützt die Sandbox`)];
 }
 
 /** bwrap und socat müssen im PATH liegen. `which(name)` liefert true, wenn vorhanden. */
@@ -196,10 +207,10 @@ function pruefeAlles(env) {
   const platform = process.platform;
   const rel = osRelease();
   const alle = [...pruefePlattform({ platform, release: rel, env })];
-  const sandboxMoeglich = platform !== "win32" && !(/microsoft/i.test(rel) && !/wsl2/i.test(rel));
+  const sandboxMoeglich = platform !== "win32" && wslArt(rel) !== "wsl1";
   if (sandboxMoeglich) {
     alle.push(...pruefeWerkzeuge(vorhanden));
-    alle.push(...(/microsoft/i.test(rel) ? pruefeWslConf(lies("/etc/wsl.conf")) : [hinweis("wsl.conf: nur unter WSL2 relevant")]));
+    alle.push(...(wslArt(rel) === "wsl2" ? pruefeWslConf(lies("/etc/wsl.conf")) : [hinweis("wsl.conf: nur unter WSL2 relevant")]));
   } else {
     alle.push(hinweis("bwrap/socat, wsl.conf und Verhaltensprobe werden hier nicht geprüft (keine Sandbox-Plattform)"));
   }
