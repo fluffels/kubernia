@@ -70,6 +70,11 @@ describe("(a) -o: Formate werden wie in kubectl geprüft", () => {
     expect(r.error).toBeFalsy();
     expect(r.out).toContain("NOMINATED NODE");
   });
+  test("kubectl get pods -o json -w: der unbekannte Schalter wird zuerst gemeldet, nicht das Format", () => {
+    const r = lauf("kubectl get pods -o json -w");
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("das Flag '-w'");
+  });
   test("-Ao yaml in einer Kette: das Format wird geprüft und abgelehnt", () => {
     const r = lauf("kubectl get pods -Ao yaml");
     expect(r.error).toBe(true);

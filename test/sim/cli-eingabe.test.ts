@@ -43,6 +43,12 @@ describe("cliargs: Wertprüfung (FlagSpec.check, #1466)", () => {
     expect(seen).toEqual(["x"]);
     expect(run("-Ao", "bad")).toBe("FEHLER");
   });
+  test("Reihenfolge: ein Scan-Fehler (unbekanntes Flag, fehlender Wert) kommt VOR der Wertprüfung, wie bei pflag", () => {
+    expect(run("-o", "bad", "--nope")).toContain("das Flag '--nope'");
+    expect(run("-o", "bad", "--nope")).not.toContain("FEHLER");
+    expect(run("-Ao")).toContain("flag needs an argument: 'o' in -o");
+    expect(run("-o", "bad")).toBe("FEHLER");
+  });
   test("ein Wert-Flag OHNE Prüfung bleibt in der Kette erlaubt (-An x)", () => {
     const s: ArgSpec = { cmd: "x", flags: [flag(true, "-n"), flag(false, "-A")] };
     expect(checkFlags(host, s, ["x", "get", "-An", "a"], 2)).toBeNull();

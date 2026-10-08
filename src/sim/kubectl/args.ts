@@ -67,7 +67,7 @@ const FLAG_HINTS: Readonly<Record<string, string>> = {
 /** Die Prüf-Tabelle eines Unterbefehls (Flags + Lernhinweise) für die gemeinsame Eingabegrenze. */
 const specFor = (sub: KubectlSub): ArgSpec => ({ cmd: "kubectl " + sub, flags: KNOWN_FLAGS[sub], hints: FLAG_HINTS });
 
-/** Prüft alle Flags eines Unterbefehls: unbekannte (nicht simulierte) und Wert-Flags ohne Wert.
+/** Prüft alle Flags eines Unterbefehls: unbekannte (nicht simulierte), Wert-Flags ohne Wert, ungültige Bool-Werte und abgelehnte `check`-Werte (`-o`).
  *  `null` = alles bekannt; sonst die fertige Fehlerausgabe. */
 export function checkArgs(host: Pick<KubectlHost, "_err">, sub: KubectlSub, t: string[]): string | null {
   return checkFlags(host, specFor(sub), t, 2);
