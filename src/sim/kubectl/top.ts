@@ -8,12 +8,12 @@ import { table } from "../util";
 import type { KubectlHost } from "./host";
 import { DEFAULT_NAMESPACE } from "../state";
 import { resolveKind } from "./resources";
-import { positionals } from "./args";
+import type { Call } from "../cliargs";
 import { findClusterPod } from "../pods";
 import { noResourcesIn } from "./inspect";
 
-export function kubectlTop(host: KubectlHost, t: string[]) {
-  const [what = "", name = null] = positionals("top", t);
+export function kubectlTop(host: KubectlHost, c: Call) {
+  const [what = "", name = null] = c.args;
   const kind = resolveKind(what)?.plural;
   host._reschedulePending();
   host._recheckReadiness();

@@ -460,6 +460,17 @@ describe("(d) Version: v1 Endpoints (#1483, #1496)", () => {
   ])("NEGATIV %s: keine Warnung", cmd => {
     expect(warnungen(lauf(cmd).out)).toBe(0);
   });
+  test("-o yaml: die Warnung steht vor der leeren Liste und vor der NotFound-Zeile (je genau einmal)", () => {
+    const leer = lauf("kubectl get ep -n anderer-ns -o yaml").out;
+    expect(leer.split("\n")[0]).toBe(WARNUNG);
+    expect(warnungen(leer)).toBe(1);
+    expect(leer).toContain("kind: List");
+    const fehlt = lauf("kubectl get ep gibtsnicht -o yaml");
+    expect(fehlt.error).toBe(true);
+    expect(fehlt.out.split("\n")[0]).toBe(WARNUNG);
+    expect(warnungen(fehlt.out)).toBe(1);
+    expect(fehlt.out).toContain('Error from server (NotFound): endpoints "gibtsnicht" not found');
+  });
   test("NEGATIV: im Bare-Metal-Cluster (connection refused) kommt keine Warnung", () => {
     const out = lauf("kubectl get ep", new KQSim({ bareMetal: true })).out;
     expect(warnungen(out)).toBe(0);

@@ -20,8 +20,9 @@ import { assertNever } from "../../core/assert";
 import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { sameRbac } from "../rbac";
 import { admitNewPods } from "./rollout";
-import { resolveKind, qualified, type ResourcePlural } from "./resources";
-import { exactlyOneName, notSimulated, positionals, replicasArg, typeAndName, unknownResourceType } from "./args";
+import { qualified, type ResourceKind, type ResourcePlural } from "./resources";
+import { exactlyOneName, notSimulated, replicasArg } from "./args";
+import { readTargets, targetOutcome, type Target } from "./targets";
 import { subEntry, type Call } from "../cliargs";
 import { applyDeployment } from "./apply-deployment";
 import { fileEffects, type ManifestVerb } from "../manifest/registry";
@@ -38,19 +39,6 @@ function invalidNameError(host: KubectlHost, kind: string, name: string): string
   // Meldungstext + Tipp liegen zentral in ../names (#507), damit create, apply, expose
   // und helm bei einem ungültigen Namen exakt dieselbe Meldung geben.
   return host._err(rfc1123ErrorText(name, kind), RFC1123_TIP);
-}
-
-/** Den Dateinamen hinter `-f`/`--filename` herausziehen (beide Formen gleichwertig,
- *  wie echtes kubectl und wie die accept-Regex; #380). Unterstützt Leerzeichen
- *  (`-f datei`) und `=` (`--filename=datei`). `null`, wenn kein Filename-Flag dasteht. */
-function filenameArg(t: string[]): string | null {
-  for (let i = 0; i < t.length; i++) {
-    const tok = t[i];
-    if (tok === "-f" || tok === "--filename") return t[i + 1] ?? null;
-    const m = /^(?:-f|--filename)=(.+)$/.exec(tok);
-    if (m) return m[1];
-  }
-  return null;
 }
 
 /** Ein benanntes Element aus einer Ressourcen-Liste entfernen; `true`, wenn es da war.
@@ -276,8 +264,7 @@ function effectsOfFile(host: KubectlHost, file: string, verb: ManifestVerb): App
 
 /** `kubectl delete -f <datei>` – löscht alle Ressourcen, die das Manifest angelegt hat
  *  (über die `FILE_DELETABLE`-Tabelle). */
-function deleteFromFile(host: KubectlHost, t: string[]): string {
-  const file = filenameArg(t);
+function deleteFromFile(host: KubectlHost, file: string): string {
   if (!file) return host._err("error: must specify one of -f or -k", "Muster: 'kubectl delete --filename deployment.yaml'");
   const effects = effectsOfFile(host, file, "delete");
   if (typeof effects === "string") return effects;
@@ -291,12 +278,15 @@ function deleteFromFile(host: KubectlHost, t: string[]): string {
   return out.join("\n") || "nothing deleted";
 }
 
+/** Ein Löscher: `null` = es gibt kein Objekt dieses Namens, sonst die Erfolgszeile. */
+type Deleter = (host: KubectlHost, name: string) => string | null;
+
 /** `kubectl delete pod <name>` – Deployment-Pod (Self-Healing mit neuem Namen, #488; gibt das
  *  flüchtige emptyDir frei, #240) ODER StatefulSet-Pod (kommt mit GLEICHEM Namen + PVC zurück,
- *  Daten überleben, #122). NotFound, wenn der Name zu keinem Workload gehört. */
-function deletePod(host: KubectlHost, name: string): string {
+ *  Daten überleben, #122). `null`, wenn der Name zu keinem Workload gehört. */
+function deletePod(host: KubectlHost, name: string): string | null {
   const c = findClusterPod(host, name);
-  if (!c) return host._err('Error from server (NotFound): pods "' + name + '" not found', "Pod-Namen siehst du mit 'kubectl get pods'.");
+  if (!c) return null;
   host.lastDeletedPod = name;
   switch (c.owner) {
     case "Deployment":
@@ -315,9 +305,9 @@ function deletePod(host: KubectlHost, name: string): string {
 
 /** `kubectl delete pvc <name>` – gibt das gebundene PV frei: Delete-Policy entfernt es,
  *  Retain hinterlässt es als "Released". */
-function deletePvc(host: KubectlHost, name: string): string {
+function deletePvc(host: KubectlHost, name: string): string | null {
   const idx = host.pvcs.findIndex(p => p.name === name);
-  if (idx === -1) return host._err('Error from server (NotFound): persistentvolumeclaims "' + name + '" not found');
+  if (idx === -1) return null;
   const [removed] = host.pvcs.splice(idx, 1);
   const pv = host.pvs.find(p => p.name === removed.volume);
   if (pv) {
@@ -327,44 +317,78 @@ function deletePvc(host: KubectlHost, name: string): string {
   return 'persistentvolumeclaim "' + name + '" deleted';
 }
 
-function deleteDeployment(host: KubectlHost, name: string): string {
-  if (!removeDeployment(host, name)) return host._err('Error from server (NotFound): deployments.apps "' + name + '" not found');
-  return 'deployment.apps "' + name + '" deleted';
+function deleteDeployment(host: KubectlHost, name: string): string | null {
+  return removeDeployment(host, name) ? 'deployment.apps "' + name + '" deleted' : null;
 }
 
-function deleteStatefulSet(host: KubectlHost, name: string): string {
+function deleteStatefulSet(host: KubectlHost, name: string): string | null {
   // Die PVCs bleiben absichtlich erhalten – Kern der Datendauerhaftigkeit (#122).
-  if (!removeStatefulSet(host, name)) return host._err('Error from server (NotFound): statefulsets.apps "' + name + '" not found');
+  if (!removeStatefulSet(host, name)) return null;
   return 'statefulset.apps "' + name + '" deleted\n💡 Die PVCs bleiben bestehen – die Daten überleben das Löschen des StatefulSets. Skalierst du es wieder hoch, hängen die alten Volumes wieder dran.';
 }
 
 /** Die Sonderfälle mit Folgewirkung (Pod: Self-Healing, PVC: gibt sein PV frei, StatefulSet: behält die
  *  PVCs, Deployment: Pods) – Schlüssel = Plural aus ./resources. */
-const DELETE_SPECIAL: Readonly<Partial<Record<ResourcePlural, (host: KubectlHost, name: string) => string>>> = {
+const DELETE_SPECIAL: Readonly<Partial<Record<ResourcePlural, Deleter>>> = {
   pods: deletePod,
   persistentvolumeclaims: deletePvc,
   deployments: deleteDeployment,
   statefulsets: deleteStatefulSet,
 };
 
-export function kubectlDelete(host: KubectlHost, t: string[]) {
-  if (filenameArg(t) !== null) return deleteFromFile(host, t);
-  const { typ, name, error } = typeAndName(positionals("delete", t));
-  if (error) return host._err(error);
-  if (!typ || !name) return host._err("kubectl delete: Was und wie heißt es?", "z.B. 'kubectl delete pod <pod-name>'");
-  const kind = resolveKind(typ);
-  if (!kind) return unknownResourceType(host, typ);
+/** Der Löscher einer Art (#518: die schlicht löschbaren Typen über `SIMPLE_DELETABLE` statt je eines eigenen
+ *  Zweigs); `undefined`, wenn die Sim die Art nicht löschen kann. */
+function deleterOf(kind: ResourceKind): Deleter | undefined {
   const special = DELETE_SPECIAL[kind.plural];
-  if (special) return special(host, name);
-
-  // #518: Alle schlicht löschbaren Typen (finde per Name → splice → melde) über die
-  // SIMPLE_DELETABLE-Tabelle statt je eines eigenen if-Zweigs.
+  if (special) return special;
   const pick = SIMPLE_DELETABLE.get(kind.plural);
-  if (pick) {
-    if (!spliceByName(pick(host), name)) return host._err('Error from server (NotFound): ' + qualified(kind, "plural") + ' "' + name + '" not found');
-    return qualified(kind, "singular") + ' "' + name + '" deleted';
+  if (!pick) return undefined;
+  return (host, name) => (spliceByName(pick(host), name) ? qualified(kind, "singular") + ' "' + name + '" deleted' : null);
+}
+
+/** Die Löscher aller Ziele; eine Art, die die Sim nicht löschen kann, lehnt den ganzen Befehl ab (vor der ersten Löschung). */
+function deletePlan(host: KubectlHost, targets: Target[]): Array<{ target: Target; del: Deleter }> | string {
+  const plan: Array<{ target: Target; del: Deleter }> = [];
+  for (const target of targets) {
+    const del = deleterOf(target.kind);
+    if (!del) return notSimulated(host, "'kubectl delete " + target.kind.plural + "'.", ["kubectl delete " + [...Object.keys(DELETE_SPECIAL), ...SIMPLE_DELETABLE.keys()].join("|") + " <name>"]);
+    plan.push({ target, del });
   }
-  return notSimulated(host, "'kubectl delete " + kind.plural + "'.", ["kubectl delete " + [...Object.keys(DELETE_SPECIAL), ...SIMPLE_DELETABLE.keys()].join("|") + " <name>"]);
+  return plan;
+}
+
+/** Je Ziel eine Zeile (kubectl `ContinueOnError`): ein fehlendes Objekt stoppt die übrigen Löschungen nicht, seine
+ *  NotFound-Zeile steht erst hinter allen Erfolgen. */
+function deleteAll(host: KubectlHost, plan: Array<{ target: Target; del: Deleter }>): string {
+  const ok: string[] = [];
+  const failed: string[] = [];
+  let firstMissing: ResourceKind | null = null;
+  for (const { target, del } of plan) {
+    for (const name of target.names) {
+      const done = del(host, name);
+      if (done !== null) { ok.push(done); continue; }
+      failed.push('Error from server (NotFound): ' + qualified(target.kind, "plural") + ' "' + name + '" not found');
+      firstMissing ??= target.kind;
+    }
+  }
+  return targetOutcome(host, ok, failed, "Namen siehst du mit 'kubectl get " + (firstMissing?.plural ?? "pods") + "'.");
+}
+
+/** Der Builder lehnt `-f` zusammen mit Art und Name ab (nichts wird gelöscht). */
+const DELETE_FILE_AND_ARGS_ERROR = "error: when paths, URLs, or stdin is provided as input, you may not specify a resource by arguments as well";
+
+export function kubectlDelete(host: KubectlHost, c: Call): string {
+  const file = c.value("-f", "--filename");
+  if (file !== null) {
+    return c.args.length > 0 ? host._err(DELETE_FILE_AND_ARGS_ERROR, "Entweder '-f <datei>' oder Art und Name, nicht beides.") : deleteFromFile(host, file);
+  }
+  const parsed = readTargets(host, c.args);
+  if ("error" in parsed) return parsed.error;
+  if (parsed.targets.length === 0 || parsed.targets.some(t => t.names.length === 0)) {
+    return host._err("kubectl delete: Was und wie heißt es?", "z.B. 'kubectl delete pod <pod-name>'");
+  }
+  const plan = deletePlan(host, parsed.targets);
+  return typeof plan === "string" ? plan : deleteAll(host, plan);
 }
 
 
@@ -689,8 +713,8 @@ const applyHandlers: readonly ApplyHandler[] = [
   applyRoleBinding,
 ];
 
-export function kubectlApply(host: KubectlHost, t: string[]) {
-  const file = filenameArg(t);
+export function kubectlApply(host: KubectlHost, c: Call) {
+  const file = c.value("-f", "--filename");
   if (!file) return host._err("error: must specify one of -f or -k", "Muster: 'kubectl apply --filename deployment.yaml'");
   const effects = effectsOfFile(host, file, "apply");
   if (typeof effects === "string") return effects;
