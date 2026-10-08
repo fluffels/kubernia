@@ -5,6 +5,7 @@
 > ⚠️ **Integrationsweg teilweise abgelöst durch [ADR 0009](0009-pr-gating-required-checks.md) (2026-07-03, #592):** Der hier bewusst beibehaltene **Direkt-Push auf `main`** ist auf **PR-Gating mit Required-Checks** (`enforce_admins` an) umgestellt — der dritte Re-Eval-Trigger unten ist eingetreten. Das **Entwicklungsmodell** dieses ADR (Harness, Ein-Ticket-Worktree, Fitness-Functions, Kollisionsschutz) bleibt unverändert gültig; nur wie der Slice auf `main` landet, regelt jetzt 0009.
 > ⚠️ **Prompt-Injection-Vektor präzisiert durch [Sicherheit der Agenten](../sicherheit-agenten.md) (#1433):** der Forum-Eingang ist nicht der einzige Fremdtext-Pfad.
 > ⚠️ **Merge-Recht für Leitplanken-Änderungen präzisiert durch [ADR 0012](0012-harness-autonomie-audit-spur.md) (2026-09-28, #1069):** Harness-/Leitplanken-/Gate-PRs merged der Agent seitdem selbst (Label selbst gesetzt, Audit-Kommentar statt Merge-Freigabe); der Merge-Checkpoint aus #1012 ist zurückgenommen.
+> ⚠️ **Ziel des Harness präzisiert durch [ADR 0022](0022-dark-factory-kern-und-verteilung.md) (2026-10-08, #1366):** der spielunabhängige Kern wird als wiederverwendbare Dark Factory herausgelöst, kubernia ist ihr erster Nutzer; das Entwicklungsmodell dieses ADR bleibt.
 
 ## Status
 

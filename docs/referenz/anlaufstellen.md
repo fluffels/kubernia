@@ -40,6 +40,7 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [0019 Langfuse-Plugin im User-Scope](../adr/0019-langfuse-plugin-im-user-scope.md) | wenn die Langfuse-Erfassung (Plugin, Hooks, User- vs. Projekt-Scope) geändert oder verdächtigt wird, nichts zu erfassen |
 | [0020 Architekturmodell LikeC4](../adr/0020-architekturmodell-likec4.md) | wenn das Architekturmodell unter `docs/architektur/`, `check:c4` oder die Ableitung der Architekturbilder aus `scripts/layers.cjs` angefasst wird |
 | [0021 Agenten-Sandbox über WSL2](../adr/0021-agenten-sandbox-wsl2.md) | wenn Sandbox, WSL2, Devcontainer oder die Netz-Allowlist der Agenten-Shell zur Debatte steht |
+| [0022 Dark Factory](../adr/0022-dark-factory-kern-und-verteilung.md) | wenn der Harness-Kern als Vorlage für andere Projekte herausgelöst, eine Datei als Kern, Modul oder Projekt eingeordnet, ein zweites Board oder Verifikation ohne Mensch (Holdout, Spezifikations-Gate) zur Debatte steht |
 
 ## 🌱 Evergreen — lebendes Wissen, im selben PR gepflegt
 
