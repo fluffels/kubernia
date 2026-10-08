@@ -7,5 +7,6 @@
   { "von": 5, "ticket": 559, "art": "additiv", "beschreibung": "Redundante Quest-Arbeitskopie (questIdx, questStep, taskIdx) entfällt" },
   { "von": 6, "ticket": 574, "art": "strukturell", "beschreibung": "Abkürzungen werden zur Komfort-Kauf-Mechanik: Alt-Werte wandern nach owned und comfortUsage" },
   { "von": 7, "ticket": 232, "art": "additiv", "beschreibung": "Umbelegbare Aktionstasten als settings.keys, Alt-Stand bekommt die Default-Belegung" },
-  { "von": 8, "ticket": 421, "art": "strukturell", "beschreibung": "Inventar von Zahl pro Gegenstand auf ItemStack { count } gehoben" }
+  { "von": 8, "ticket": 421, "art": "strukturell", "beschreibung": "Inventar von Zahl pro Gegenstand auf ItemStack { count } gehoben" },
+  { "von": 9, "ticket": 1496, "art": "strukturell", "beschreibung": "Node-Version im Cluster-Snapshot wird abgeleitet: der alte Default v1.30.2 entfällt" }
 ]
