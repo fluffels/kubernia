@@ -1,7 +1,6 @@
 /* ===== Kubernia – kubectl describe (sim/kubectl/describe.ts, #1465) =====
  * Der `describe`-Dispatcher und die Renderer für Deployment, Service, PVC und StatefulSet. Die
- * älteren Renderer (Pod, Node, Ingress, NetworkPolicy, Role, ServiceAccount) bleiben in ./inspect.ts
- * und hängen hier nur in der Registry.
+ * Renderer für Node, Ingress, NetworkPolicy, Role und ServiceAccount; der Pod-Renderer liegt in ./describe-pod.ts.
  *
  * Echtes `kubectl describe TYPE [NAME_PREFIX]`: ohne Namen alle Objekte der Art, mit einem Namen der
  * exakte Treffer, sonst jedes Objekt mit diesem Präfix; die Slash-Form `typ/name` gilt nur exakt. Die
@@ -13,7 +12,7 @@
  * der Dispatcher wächst nicht mit. Nur modellierte Felder: nichts wird erfunden (Selektoren gibt es
  * nicht, der Name ist die Verdrahtung, siehe ../endpoints.ts).
  *
- * Phaser-frei (pure Domäne); importiert nie zurück nach ./inspect (kein Zyklus: inspect → describe gibt es nicht).
+ * Phaser-frei (pure Domäne); importiert nur die get-Hilfen aus ./inspect; inspect importiert nie describe*, top oder logs (kein Zyklus).
  */
 import type { KubectlHost } from "./host";
 import { DEFAULT_NAMESPACE, isExternalNameService, isHeadlessService, type Deployment, type PvcRes, type ServiceRes, type StatefulSetRes } from "../state";
@@ -24,10 +23,9 @@ import { clusterPods } from "../pods";
 import { clusterPodStatus } from "../podstatus";
 import { endpointAddresses, serviceSelector, servicesWithDefault } from "../endpoints";
 import { statefulPodClaimName } from "../workload";
-import {
-  availableReplicas, describeNode, describeIngress, describeNetworkPolicy, describeRole, describeServiceAccount, describePod,
-  noResourcesIn, podLimitLines, podSecurityLines,
-} from "./inspect";
+import { availableReplicas, noResourcesIn, INGRESS_ADDRESS } from "./inspect";
+import { describePod, podLimitLines, podSecurityLines } from "./describe-pod";
+import { sameRbac } from "../rbac";
 
 /** Eine beschreibbare Art: ihre Objektnamen (ohne Nebenwirkung) und der Renderer für ein Objekt. */
 interface DescribeEntry {
@@ -198,6 +196,102 @@ function describeStatefulSet(host: KubectlHost, name: string, kind: ResourceKind
     kv("  Access Modes", "[ReadWriteOnce]", 17),
     kv("Events", "<none>", 24),
   ].join("\n");
+}
+
+// ===== Node, Ingress, NetworkPolicy, Role, ServiceAccount =====
+
+export function describeNode(host: KubectlHost, name: string): string {
+  const node = host.nodes.find(n => n.name === name);
+  if (!node) return host._err('Error from server (NotFound): nodes "' + name + '" not found', "Tipp: Namen aus 'kubectl get nodes' kopieren.");
+  const lines = [
+    "Name:               " + node.name,
+    "Roles:              " + node.roles,
+    "Conditions:",
+    "  Type             Status",
+    "  ----             ------",
+    "  MemoryPressure   False",
+    // DiskPressure ist die Lern-Pointe (#240): True = der kubelet evictet Pods, um Disk zu schaffen.
+    "  DiskPressure     " + (node.diskPressure ? "True" : "False"),
+    "  Ready            True",
+  ];
+  // Ephemeral-Storage-Bilanz nur zeigen, wenn der Knoten eine Kapazität hat (sonst „unbegrenzt").
+  if (node.ephemeralCapacityMi !== undefined) {
+    const used = host._nodeEphemeralUsed(node.name);
+    lines.push(
+      "Capacity:",
+      "  ephemeral-storage:  " + node.ephemeralCapacityMi + "Mi",
+      "Allocated resources:",
+      "  Resource           Used",
+      "  --------           ----",
+      "  ephemeral-storage  " + used + "Mi" + (node.diskPressure ? "  (über der Schwelle – DiskPressure!)" : ""),
+    );
+  }
+  // Evictete Pods dieses Knotens auflisten – so wird sichtbar, wen der Druck getroffen hat.
+  const evicted = host.deployments.filter(d => d.evicted && host._nodeOf(d) === node.name);
+  if (evicted.length) {
+    lines.push("Evicted pods:");
+    for (const d of evicted) for (const p of d.pods) lines.push("  " + p.name + "  (" + d.evicted!.reason + ")");
+  }
+  return lines.join("\n");
+}
+
+export function describeIngress(host: KubectlHost, name: string): string {
+  const ing = host.ingresses.find(i => i.name === name);
+  if (!ing) return host._err('Error from server (NotFound): ingresses.networking.k8s.io "' + name + '" not found', "Tipp: Namen aus 'kubectl get ingress' kopieren.");
+  const svcExists = host.services.some(s => s.name === ing.service);
+  const secretExists = ing.tls ? host.secrets.some(s => s.name === ing.tls!.secretName) : true;
+  return [
+    "Name:             " + ing.name,
+    "Namespace:        " + DEFAULT_NAMESPACE,
+    "Address:          " + INGRESS_ADDRESS,
+    "Ingress Class:    " + ing.className,
+    ...(ing.tls ? [
+      "TLS:",
+      "  " + ing.tls.secretName + " terminates " + ing.host +
+        (secretExists ? "" : "  (⚠ Secret '" + ing.tls.secretName + "' gibt es nicht – HTTPS bleibt zu!)"),
+    ] : []),
+    "Rules:",
+    "  Host        Path  Backends",
+    "  ----        ----  --------",
+    "  " + ing.host + "  " + ing.path + "   " + ing.service + ":" + ing.port +
+      (svcExists ? "" : "  (⚠ Service '" + ing.service + "' gibt es nicht – der Ingress lotst ins Leere!)"),
+  ].join("\n");
+}
+
+export function describeNetworkPolicy(host: KubectlHost, name: string): string {
+  const np = host.networkPolicies.find(n => n.name === name);
+  if (!np) return host._err('Error from server (NotFound): networkpolicies.networking.k8s.io "' + name + '" not found', "Tipp: Namen aus 'kubectl get networkpolicies' kopieren.");
+  return [
+    "Name:         " + np.name,
+    "Namespace:    " + DEFAULT_NAMESPACE,
+    "PodSelector:  " + (np.podSelector ? workloadSelector(np.podSelector) : "<none> (gilt für alle Pods im Namespace)"),
+    "PolicyTypes:  Ingress",
+    "Allowing ingress traffic:",
+    np.allowFrom
+      ? "  From: Pods mit Label " + workloadSelector(np.allowFrom)
+      : "  <none> (default-deny: niemand darf rein, bis du eine Quelle erlaubst)",
+  ].join("\n");
+}
+
+export function describeRole(host: KubectlHost, name: string, kind: ResourceKind): string {
+  const cluster = kind.plural === "clusterroles";
+  const role = host.roles.find(r => sameRbac(r, { name, cluster }));
+  if (!role) return host._err('Error from server (NotFound): ' + qualified(kind, "plural") + ' "' + name + '" not found', "Tipp: Namen aus 'kubectl get " + kind.plural + "' kopieren.");
+  const lines = [
+    "Name:         " + role.name,
+    ...(cluster ? [] : ["Namespace:    " + DEFAULT_NAMESPACE]),
+    "PolicyRule:",
+    "  Resources  Verbs",
+    "  ---------  -----",
+  ];
+  for (const rule of role.rules) lines.push("  " + rule.resources.join(",") + "  [" + rule.verbs.join(" ") + "]");
+  return lines.join("\n");
+}
+
+export function describeServiceAccount(host: KubectlHost, name: string): string {
+  const acc = host.serviceAccounts.find(s => s.name === name);
+  if (!acc) return host._err('Error from server (NotFound): serviceaccounts "' + name + '" not found', "Tipp: Namen aus 'kubectl get sa' kopieren.");
+  return ["Name:         " + acc.name, "Namespace:    " + DEFAULT_NAMESPACE, "Mountable secrets:  <none>"].join("\n");
 }
 
 // ===== Registry + Dispatcher =====

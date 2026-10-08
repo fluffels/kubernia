@@ -6,6 +6,8 @@
  *   - `get all`             die Kategorie `all` (Pods, Services, Deployments, ReplicaSets, StatefulSets, Grafana-CRDs)
  *   - `get pod/web svc/db`  Slash-Form
  *   - `-o wide`             die Zusatzspalten (`GetTable.wide`), geprüft in ./output
+ *   - `-o yaml`             die Objekte statt der Tabelle (Bausteine in ./get-yaml): ein Name ergibt das Einzelobjekt,
+ *                           sonst eine `kind: List`; NotFound-Zeilen wie bei der Tabelle
  * Die Tabellen selbst liefern die Renderer aus ./inspect (`GET_RENDERERS`); hier liegen nur Lesen der
  * Anfrage, Namespace-Wache, Namensfilter und das Zusammensetzen. inspect.ts importiert dieses Modul nie.
  *
@@ -17,7 +19,9 @@ import { GET_RENDERERS, noResourcesIn, type GetTable } from "./inspect";
 import { allNamespaces, foreignNamespace, requestedNamespace } from "./namespace";
 import { allKinds, qualified, resolveKind, type ResourceKind } from "./resources";
 import { callOf, notSimulated, positionals, slashRef, SLASH_SINGLE_ERROR, unknownResourceType } from "./args";
-import { isWide } from "./output";
+import { isWide, isYaml } from "./output";
+import { emitYaml } from "../yaml-emit";
+import { yamlKinds, yamlList, yamlObjects } from "./get-yaml";
 
 /** Was verlangt wurde: ein Typ mit den (möglicherweise leeren) gewünschten Namen. */
 interface Request { kind: ResourceKind; names: string[] }
@@ -118,6 +122,27 @@ function rendererMissing(host: KubectlHost, requests: Request[]): string | null 
   return notSimulated(host, "'kubectl get " + bad.kind.plural + "'.", ["kubectl get " + [...GET_RENDERERS.keys()].join(", ")]);
 }
 
+/** Der Fehlerrahmen der NotFound-Zeilen samt Tipp (Tabelle und `-o yaml` teilen ihn). */
+function withNotFound(host: KubectlHost, text: string, blocks: Block[]): string {
+  return host._err(text, "Namen siehst du mit 'kubectl get " + blocks.find(b => b.missing.length)!.kind.plural + "'.");
+}
+
+/** `-o yaml`: die Objekte der gefundenen Namen. Genau eine Anfrage mit genau einem Namen ergibt das Einzelobjekt
+ *  (fehlt er, nur die NotFound-Zeile), sonst eine `kind: List` mit den NotFound-Zeilen dahinter (wie `printGeneric`).
+ *  Kann eine Art nicht vollständig abgebildet werden (kein Baustein, System-Pods), lehnt die Sim ehrlich ab. */
+function yamlOutput(host: KubectlHost, requests: Request[], blocks: Block[]): string {
+  const found = blocks.map(b => yamlObjects(host, b.kind, b.table.names));
+  if (found.some(o => o === null)) {
+    return notSimulated(host, "'kubectl get -o yaml' für diese Art (oder die System-Pods).", ["kubectl get " + yamlKinds().join("|") + " [<name>] -o yaml"]);
+  }
+  const items = found.flatMap(o => o ?? []);
+  const errors = blocks.flatMap(notFoundLines);
+  const single = requests.length === 1 && requests[0].names.length === 1;
+  if (single && items.length === 1) return emitYaml(items[0]);
+  const text = single ? errors.join("\n") : [emitYaml(yamlList(items)), ...errors].join("\n");
+  return errors.length > 0 ? withNotFound(host, text, blocks) : text;
+}
+
 export function kubectlGet(host: KubectlHost, t: string[]): string {
   host._recheckReadiness();
   const pos = positionals("get", t);
@@ -130,8 +155,9 @@ export function kubectlGet(host: KubectlHost, t: string[]): string {
     return host._err("error: a resource cannot be retrieved by name across all namespaces");
   }
 
-  const wide = isWide(callOf("get", t));
-  const blocks = parsed.requests.map(r => renderBlock(host, t, r, wide));
+  const call = callOf("get", t);
+  const blocks = parsed.requests.map(r => renderBlock(host, t, r, isWide(call)));
+  if (isYaml(call)) return yamlOutput(host, parsed.requests, blocks);
   const prefixed = blocks.length > 1;
   const parts: string[] = [];
   const errors: string[] = [];
@@ -144,5 +170,5 @@ export function kubectlGet(host: KubectlHost, t: string[]): string {
     if (lines.length > 0) parts.push(lines.join("\n"));
   }
   const text = parts.length > 0 ? parts.join("\n\n") : emptyMessage(blocks[0], t);
-  return errors.length > 0 ? host._err(text, "Namen siehst du mit 'kubectl get " + blocks.find(b => b.missing.length)!.kind.plural + "'.") : text;
+  return errors.length > 0 ? withNotFound(host, text, blocks) : text;
 }

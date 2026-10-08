@@ -41,7 +41,7 @@ const kopf = (out: string) => out.split("\n")[0].trim().split(/\s{2,}/);
 /* ---------- (a) die Wertprüfung ---------- */
 describe("(a) -o: Formate werden wie in kubectl geprüft", () => {
   test.each([
-    "json", "JSON", "yaml", "Yaml", "kyaml", "name", "NAME", "jsonpath={.items[0].metadata.name}", "jsonpath", "jsonpath-as-json={.x}",
+    "json", "JSON", "kyaml", "name", "NAME", "jsonpath={.items[0].metadata.name}", "jsonpath", "jsonpath-as-json={.x}",
     "jsonpath-file=f", "go-template={{.x}}", "go-template-file=f", "template={{.x}}", "templatefile=f", "custom-columns=A:.x", "custom-columns-file=f",
   ])("-o %s → Nicht simuliert, mit Lernhinweis", fmt => {
     const r = lauf("kubectl get pods -o " + fmt);
@@ -49,6 +49,7 @@ describe("(a) -o: Formate werden wie in kubectl geprüft", () => {
     expect(r.out).toContain(NICHT_SIMULIERT);
     expect(r.out).toContain("'-o " + fmt + "'");
     expect(r.out).toContain("-o wide");
+    expect(r.out).toContain("-o yaml");
     expect(r.out).toContain("kubectl describe");
     expect(r.out).not.toContain("READY");
   });
@@ -78,8 +79,8 @@ describe("(a) -o: Formate werden wie in kubectl geprüft", () => {
     expect(r.error).toBe(true);
     expect(r.out).toContain("das Flag '-w'");
   });
-  test("-Ao yaml in einer Kette: das Format wird geprüft und abgelehnt", () => {
-    const r = lauf("kubectl get pods -Ao yaml");
+  test("-Ao json in einer Kette: das Format wird geprüft und abgelehnt", () => {
+    const r = lauf("kubectl get pods -Ao json");
     expect(r.error).toBe(true);
     expect(r.out).toContain("Nicht simuliert");
   });
@@ -98,6 +99,8 @@ describe("(a) -o: Formate werden wie in kubectl geprüft", () => {
     const host = { _err: (m: string) => m };
     expect(checkOutputFormat(host, "")).toBeNull();
     expect(checkOutputFormat(host, "wide")).toBeNull();
+    expect(checkOutputFormat(host, "yaml")).toBeNull();
+    expect(checkOutputFormat(host, "YAML")).toBeNull();
     expect(checkOutputFormat(host, "json")).toContain(NICHT_SIMULIERT);
     expect(checkOutputFormat(host, "x")).toContain("unable to match");
   });
