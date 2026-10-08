@@ -12,10 +12,11 @@ export const GH_MAX_BUFFER = 256 * 1024 * 1024;
 /**
  * `gh <args>` ausführen und stdout als Text liefern; wirft bei Fehler.
  * `token` setzt `GH_TOKEN` (Projekt-Scope im Workflow), `timeout` in ms, `stdio` überschreibt den Standard
- * (`["ignore", "pipe", "pipe"]`; `"inherit"` reicht die Ausgabe ans Terminal durch und liefert dann null).
+ * (`["ignore", "pipe", "pipe"]`; `"inherit"` reicht die Ausgabe ans Terminal durch und liefert dann null), `exec` ersetzt den
+ * Prozessaufruf (Tests injizieren einen Spy; ein Fake-gh auf dem PATH scheitert unter Windows an `.cmd`-Shims).
  */
-export function ghText(args, { token, timeout, stdio = ["ignore", "pipe", "pipe"] } = {}) {
-  const out = execFileSync("gh", args, {
+export function ghText(args, { token, timeout, stdio = ["ignore", "pipe", "pipe"], exec = execFileSync } = {}) {
+  const out = exec("gh", args, {
     encoding: "utf8",
     maxBuffer: GH_MAX_BUFFER,
     stdio,

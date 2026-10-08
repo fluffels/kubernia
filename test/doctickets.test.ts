@@ -27,9 +27,10 @@ const parseOpenHarnessTickets: (md: string) => number[] = checkDocTickets.parseO
 const OPEN_TICKETS_START: string = checkDocTickets.OPEN_TICKETS_START;
 const OPEN_TICKETS_END: string = checkDocTickets.OPEN_TICKETS_END;
 const HARNESS_DOC: string = checkDocTickets.HARNESS_DOC;
-const ausnahmeTickets: (eintraege: { file: string; reason: string }[]) => { file: string; nr: number | null }[] =
-  checkDocTickets.ausnahmeTickets;
-const AUSNAHME_LISTEN: { skript: string; eintraege: { file: string; reason: string }[] }[] = checkDocTickets.AUSNAHME_LISTEN;
+const { ausnahmeTickets, AUSNAHME_LISTEN } = checkDocTickets as unknown as {
+  ausnahmeTickets: (eintraege: { file: string; reason: string }[]) => { file: string; nr: number | null }[];
+  AUSNAHME_LISTEN: { skript: string; eintraege: { file: string; reason: string }[] }[];
+};
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
