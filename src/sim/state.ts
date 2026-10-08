@@ -232,6 +232,8 @@ export function assertServiceType(serviceName: string, type: string | undefined)
 }
 /** Der einzige Namespace, den die Sim modelliert. */
 export const DEFAULT_NAMESPACE = "default";
+/** Volume-Modus aller simulierten PV/PVC (`get -o wide`, `describe pvc`, YAML): Block-Volumes gibt es nicht. */
+export const VOLUME_MODE = "Filesystem";
 /** Vergibt der Service-Typ einen NodePort (LoadBalancer | NodePort)? Ausschließlich hierüber abfragen, nicht den Typ-String vergleichen. */
 export function allocatesNodePort(svc: { type?: string }): boolean {
   return svc.type === "LoadBalancer" || svc.type === "NodePort";

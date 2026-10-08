@@ -21,7 +21,7 @@ export const CONTROL_PLANE_IP = "10.0.0.10";
 export const CONTROL_PLANE_NODE = "ahoi-control";
 
 /** Namenskonvention der Worker (`ahoi-worker-<n>`, ab 1): die EINE der Sim (#1483). */
-export const WORKER_PREFIX = "ahoi-worker-";
+const WORKER_PREFIX = "ahoi-worker-";
 export const workerNodeName = (n: number): string => WORKER_PREFIX + n;
 
 /** Umkehrung von `workerNodeName`: der Index n (ab 1) eines Namens der Konvention, sonst `undefined`

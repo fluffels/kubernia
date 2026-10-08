@@ -14,7 +14,7 @@ import type { YamlValue } from "../../yaml";
 import type { YamlMap } from "../../yaml-emit";
 import type { KubectlHost } from "../host";
 import {
-  DEFAULT_NAMESPACE, SECURITY_CONTEXT_KEYS, isExternalNameService,
+  DEFAULT_NAMESPACE, VOLUME_MODE, SECURITY_CONTEXT_KEYS, isExternalNameService,
   type Broken, type Deployment, type PodTemplateSpec, type PvcRes, type ServiceRes,
 } from "../../state";
 import { servicesWithDefault, serviceSelector, isKubernetesService } from "../../endpoints";
@@ -22,7 +22,7 @@ import { clusterPods, type ClusterPod } from "../../pods";
 import { clusterPodStatus } from "../../podstatus";
 import { currentReplicaSet } from "../../replicasets";
 import { statefulPodClaimName, snapshotPodTemplate } from "../../workload";
-import { podPlacement, VOLUME_MODE } from "../inspect";
+import { podPlacement } from "../inspect";
 
 /** Ein Objekt-Baustein: alle Objekte einer Art, nach Name (in der Reihenfolge der Tabelle). */
 export type ObjectsOf = (host: KubectlHost) => Map<string, YamlMap>;

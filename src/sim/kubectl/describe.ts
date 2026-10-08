@@ -15,7 +15,7 @@
  * Phaser-frei (pure Domäne); importiert nur die get-Hilfen aus ./inspect; inspect importiert nie describe*, top oder logs (kein Zyklus).
  */
 import type { KubectlHost } from "./host";
-import { DEFAULT_NAMESPACE, isExternalNameService, type ClusterNode, isHeadlessService, type Deployment, type PvcRes, type ServiceRes, type StatefulSetRes } from "../state";
+import { DEFAULT_NAMESPACE, VOLUME_MODE, isExternalNameService, type ClusterNode, isHeadlessService, type Deployment, type PvcRes, type ServiceRes, type StatefulSetRes } from "../state";
 import { RESOURCE_KINDS, resolveKind, qualified, type ResourceKind, type ResourcePlural } from "./resources";
 import { positionals, typeAndName, notSimulated, unknownResourceType } from "./args";
 import { workloadSelector } from "../util";
@@ -23,7 +23,7 @@ import { clusterPods } from "../pods";
 import { clusterPodStatus } from "../podstatus";
 import { endpointAddresses, serviceSelector, servicesWithDefault } from "../endpoints";
 import { statefulPodClaimName } from "../workload";
-import { availableReplicas, noResourcesIn, INGRESS_ADDRESS, VOLUME_MODE } from "./inspect";
+import { availableReplicas, noResourcesIn, INGRESS_ADDRESS } from "./inspect";
 import { describePod, podLimitLines, podSecurityLines } from "./describe-pod";
 import { sameRbac } from "../rbac";
 import { nodeInternalIP, NODE_SYSTEM_INFO } from "../nodes";

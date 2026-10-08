@@ -14,7 +14,7 @@
 import { podIP, BUILTIN_AGE, workloadSelector } from "../util";
 import { endpointAddresses, podAddress, servicesWithDefault, serviceSelector, isKubernetesService } from "../endpoints";
 import type { KubectlHost } from "./host";
-import { DEFAULT_NAMESPACE, isExternalNameService, type Deployment, type RbacSubject } from "../state";
+import { DEFAULT_NAMESPACE, VOLUME_MODE, isExternalNameService, type Deployment, type RbacSubject } from "../state";
 import { currentReplicaSet } from "../replicasets";
 import { nodeInternalIP, NODE_SYSTEM_INFO, CONTROL_PLANE_IP, CONTROL_PLANE_NODE } from "../nodes";
 import { requestedNamespace, allNamespaces } from "./namespace";
@@ -213,9 +213,6 @@ function getStatefulSets(host: KubectlHost): GetTable {
   return withWide(tableOf(["NAME", "READY", "AGE", "CONTAINERS", "IMAGES"],
     host.statefulSets.map(s => [s.name, s.pods.length + "/" + s.replicas, host._age(s.created), s.name, s.image])), 2);
 }
-
-/** Der Volume-Modus aller simulierten Volumes (`-o wide`, `describe pv`/`pvc`, YAML): Block-Volumes gibt es nicht. */
-export const VOLUME_MODE = "Filesystem";
 
 function getPvcs(host: KubectlHost): GetTable {
   return withWide(tableOf(["NAME", "STATUS", "VOLUME", "CAPACITY", "ACCESS MODES", "STORAGECLASS", "AGE", "VOLUMEMODE"],

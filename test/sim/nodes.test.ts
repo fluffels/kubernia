@@ -304,3 +304,35 @@ test("describe node: System Info steht zwischen Capacity und Allocated resources
   assert.ok(d.indexOf("Capacity:") < d.indexOf("System Info:") && d.indexOf("System Info:") < d.indexOf("Allocated resources:"));
   assert.doesNotMatch(d, /Machine ID|System UUID|Boot ID/);
 });
+
+/* ---------- (g) Review-Nachträge (#1497) ---------- */
+
+test("Node-AGE: ein später beigetretener Worker ist jünger als die Control-Plane und zeigt genau das Alter ab seinem Stempel", () => {
+  const bare = new KQSim({ bareMetal: true });
+  bare.exec("kubeadm init");
+  for (let i = 0; i < 12; i++) bare.exec("kubectl get pods");
+  bare.exec(JOIN(bare));
+  const out = bare.exec("kubectl get nodes").output!;
+  const alter = (n: string) => out.split("\n").find(l => l.startsWith(n + " "))!.trim().split(/\s+/)[3];
+  const w = bare.nodes.find(n => n.name === "ahoi-worker-1")!;
+  assert.equal(alter("ahoi-worker-1"), bare._age(w.created!), "Alter ab dem Beitritts-Stempel");
+  assert.notEqual(alter("ahoi-worker-1"), alter("ahoi-control"), "die Control-Plane ist älter");
+});
+
+test("created: terraform apply im Bootstrap-Pfad (hafen_cluster + hafen_worker) stempelt Control-Plane und Worker", () => {
+  const bare = new KQSim({ bareMetal: true, tfResources: [
+    { addr: "hafen_cluster.kommandobruecke", desc: "control-plane" },
+    { addr: "hafen_worker.steg1", desc: "worker" },
+  ] });
+  bare.exec("terraform init");
+  bare.exec("terraform apply");
+  assert.equal(bare.nodes.length, 2);
+  for (const n of bare.nodes) assert.equal(n.created, bare.clock, n.name);
+});
+
+test("describe node: Kubelet- und Kube-Proxy-Version kommen von der Knoten-Version, nicht von der Cluster-Konstante", () => {
+  sim.nodes[1].version = "v1.29.9";
+  const d = sim.exec("kubectl describe node ahoi-worker-1").output!;
+  assert.match(d, /Kubelet Version: +v1\.29\.9\n/);
+  assert.match(d, /Kube-Proxy Version: +v1\.29\.9$/);
+});

@@ -246,7 +246,7 @@ describe("(b) wide: replicasets und nodes (#1483)", () => {
     aufbau();
     expect(zeile(lauf("kubectl get nodes -o wide", sim).out, "ahoi-worker-1")![5]).toBe(ip);
   });
-  test("Hilfe: die Grenze wide-auswahl ist entfallen, jede Art mit Renderer hat wide-Spalten oder bewusst keine", () => {
+  test("Hilfe: die Grenze wide-auswahl ist entfallen", () => {
     expect(simGrenzen("kubectl").some(g => g.id === "wide-auswahl")).toBe(false);
   });
 });
@@ -320,6 +320,9 @@ describe("(c) ohne wide bleibt jede Ausgabe wie zuvor; Arten ohne wide-Spalten Ã
     ["pods", ["NAME", "READY", "STATUS", "RESTARTS", "AGE"]], ["deployments", ["NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE"]],
     ["services", ["NAME", "TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE"]], ["statefulsets", ["NAME", "READY", "AGE"]],
     ["replicasets", ["NAME", "DESIRED", "CURRENT", "READY", "AGE"]], ["nodes", ["NAME", "STATUS", "ROLES", "AGE", "VERSION"]],
+    ["rolebindings", ["NAME", "ROLE", "AGE"]], ["clusterrolebindings", ["NAME", "ROLE", "AGE"]],
+    ["persistentvolumes", ["NAME", "CAPACITY", "ACCESS MODES", "RECLAIM POLICY", "STATUS", "CLAIM", "STORAGECLASS", "AGE"]],
+    ["persistentvolumeclaims", ["NAME", "STATUS", "VOLUME", "CAPACITY", "ACCESS MODES", "STORAGECLASS", "AGE"]],
   ])("ohne -o wide hat %s den bisherigen Kopf (keine wide-Spalte sickert durch)", (plural, header) => {
     expect(kopf(lauf("kubectl get " + plural).out)).toEqual(header);
   });
