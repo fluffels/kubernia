@@ -136,6 +136,7 @@ Was davon aktuell im Repo konfiguriert ist (generiert aus den Konfigurationsdate
 | Workflow | `kubernia-ticket` | — | `.claude/workflows/kubernia-ticket.js` |
 | Hook | `PreToolUse` | matcher: `Bash\|PowerShell\|SubagentHandback\|Agent`, `node scripts/pretooluse-hook.mjs` | `.claude/settings.json` |
 | Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/haupt-sync.mjs` | `.claude/settings.json` |
+| Hook | `SessionStart` | matcher: `startup\|resume\|clear`, `node scripts/sandbox-doctor.mjs --sessionstart` | `.claude/settings.json` |
 | Hook | `Stop` | `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
 | Hook | `SubagentStop` | matcher: `kubernia-umsetzer`, `node scripts/stop-verify-hook.mjs` | `.claude/settings.json` |
 | Hook | `PreToolUse` | matcher: `Edit`, `node scripts/lens-edit-guard.mjs` | `.claude/agents/kubernia-lens.md` |
