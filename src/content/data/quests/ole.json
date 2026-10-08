@@ -174,7 +174,7 @@
         "cmd": {
           "id": "t-describe",
           "intro": "🆕 Neuer Befehl: <code>kubectl describe pod <name></code> – alle Details + Ereignisse.",
-          "text": "Beschreibe einen <code>kantine</code>-Pod. (Name per <code>kubectl get pods</code> holen und abtippen – das Abtippen trainiert!) Nur der Anfang (etwa <code>kantine</code>) geht auch, dann bekommst du alle kantine-Pods.",
+          "text": "Beschreibe einen <code>kantine</code>-Pod. (Name per <code>kubectl get pods</code> holen und abtippen – das Abtippen trainiert!) Nur der Anfang bis zum Deployment-Namen (also <code>kantine</code>) geht auch, dann bekommst du alle kantine-Pods.",
           "accept": [
             "^kubectl\\s+describe\\s+pods?\\s+kantine(-\\S*)?$"
           ],

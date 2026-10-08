@@ -199,6 +199,7 @@ function describePrefixViolations(
   const dep = sim.deployments.find(d => d.pods.some(p => p.name === pod));
   if (!dep) return []; // nackter Pod: kein Präfix-Versprechen
   const out: string[] = [];
+  // describe ist rein lesend: die zusätzlichen exec-Läufe verändern den Weltzustand des Durchspiels nicht.
   const solved = (input: string) => {
     const verdict = evaluateSubmission(input, task, {
       simError: !!sim.exec(input).error,
@@ -213,6 +214,10 @@ function describePrefixViolations(
     if (!solved("kubectl describe pod " + praefix)) {
       out.push(`${label}: Präfix „${praefix}“ wird nicht als gelöst gewertet (accept muss ${dep.name}(-\\S*)? erlauben)`);
     }
+  }
+  // Zu weite Regex (<dep>\S*): `<dep>x` ginge als Pod durch, den es nicht gibt (kantinen-lager).
+  if (task.solvedBy !== "check" && task.accept.some(re => re.test("kubectl describe pod " + dep.name + "x"))) {
+    out.push(`${label}: accept ist zu weit, „${dep.name}x“ wird angenommen (erlaubt ist nur ${dep.name}(-\\S*)?)`);
   }
   if (solved("kubectl describe pod " + dep.name + "-geraten")) {
     out.push(`${label}: geratener Name „${dep.name}-geraten“ gilt als gelöst`);
@@ -326,6 +331,12 @@ test("#1521 describe-Präfix-Wächter ist scharf (Red-Green)", () => {
   const neu = mk(/^kubectl\s+describe\s+pods?\s+kantine(-\S*)?$/);
   assert.deepEqual(describePrefixViolations(sim, neu, "neu"), []);
   // Negativ-Zweig scharf: im Modus check mit immer wahrem Ziel gilt jede Eingabe, auch der geratene Name.
+  // Zu weit (<dep>\S*): `kantinex` würde angenommen.
+  const zuWeit = mk(/^kubectl\s+describe\s+pods?\s+kantine\S*$/);
+  assert.ok(describePrefixViolations(sim, zuWeit, "weit").some(m => m.includes("zu weit")));
+  // Regex ohne ReplicaSet-Präfix: der RS-Zweig muss das melden.
+  const ohneRs = mk(/^kubectl\s+describe\s+pods?\s+kantine(-\S+-\S+)?$/);
+  assert.ok(describePrefixViolations(sim, ohneRs, "rs").some(m => m.includes("Präfix „kantine-")));
   const immer = mk(/^kubectl\s+describe\s+pods?\s+kantine(-\S*)?$/, { solvedBy: "check", check: () => true });
   assert.ok(describePrefixViolations(sim, immer, "immer").some(m => m.includes("geraten")));
   // Kein Deployment-Pod (nackter Name): kein Präfix-Versprechen.
