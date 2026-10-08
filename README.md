@@ -361,7 +361,7 @@ Spielstand speichert automatisch im Browser.
 
 Reden (R), Funkgerät (F), Logbuch (L) und Sammelalbum (B) lassen sich im ⚓ Menü (Esc) auf andere Buchstaben umbelegen; die Tabelle zeigt die Standardbelegung.
 
-Im Funkgerät-Terminal listet `help` die freigeschalteten Befehle; `help kubectl` zeigt zusätzlich, was der Simulator gegenüber echtem `kubectl` bewusst vereinfacht.
+Im Funkgerät-Terminal listet `help` die freigeschalteten Befehle; `help <befehl>` (z.B. `help kubectl`) zeigt zusätzlich, was der Simulator gegenüber dem echten Werkzeug bewusst vereinfacht.
 
 Im 📜 **Logbuch (L)** blätterst du durch alle Quests: abgeschlossene zum **Nachlesen** (Dialoge & Hinweise), deine aktuelle Quest, und noch **gesperrte** als Vorschau (kein Vorausspringen). Es wird freigeschaltet, sobald du deine erste Quest abgeschlossen hast. Eine abgeschlossene Quest kannst du dort auch **🔁 erneut spielen** – in einer Sandbox, die deinen echten Fortschritt nicht anrührt; über **„↩️ Zur aktuellen Quest“** landest du jederzeit wieder genau dort, wo du warst.
 
