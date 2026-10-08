@@ -12,12 +12,14 @@
  * Ketten kurzer Bool-Flags `-aq`) und `goflag` (terraform, Go-Paket `flag`: `-x=v`, `-x v`, `--x` ≙ `-x`,
  * der Name ist alles vor dem `=`, also `-out=plan` ≠ `-o`).
  *
- * Ein Scanner (`walk`) speist alles: `checkFlags` (Prüfung), `positionalArgs`, `parseCall` (Prüfung + `Call` mit
- * `args`/`has`/`value`/`values`/`list`, #1469: kein Handler indiziert mehr feste Tokens). Regeln:
+ * Ein Scanner (`walk`) speist `parseCall` (Prüfung + `Call` mit
+ * `args`/`has`/`value`/`values`/`list`, #1469: kein Handler indiziert mehr feste Tokens); `dispatchSub` wählt davor
+ * den Unterbefehl (fehlt, Flag davor, echt aber nicht simuliert, Tippfehler mit Vorschlag). Regeln:
  * `--` beendet die Flags, Bool-Flags werten `=true|false` aus (`strconv.ParseBool`), Ketten `-fp` werden je Zeichen
  * gelesen, ein Wert-Flag in der Kette schluckt den Rest (`-nfoo` setzt kein `-f`), der LETZTE Wert gewinnt.
  *
- * Blattmodul (pure Domäne, importfrei): jede Familie darf es importieren, ohne Zyklus. */
+ * Blattmodul (pure Domäne, importiert nur ./util): jede Familie darf es importieren, ohne Zyklus. */
+import { suggest } from "./util";
 
 /** Was die Prüfung vom Host braucht: die Fehlerausgabe. */
 export interface ErrHost { _err(msg: string, tip?: string): string }
@@ -27,7 +29,7 @@ export type FlagStyle = "pflag" | "goflag";
 export interface FlagSpec {
   readonly names: readonly string[];
   readonly takesValue: boolean;
-  /** Wertprüfung (#1466): `null` = Wert gültig, sonst die fertige Fehlerausgabe. Läuft in `checkFlags`/`parseCall`
+  /** Wertprüfung (#1466): `null` = Wert gültig, sonst die fertige Fehlerausgabe. Läuft in `parseCall`
    *  mit dem Wert in jeder Schreibweise (`-o x`, `-o=x`, `-ox`, `--output=x`, in einer Kette `-Ao wide`). */
   readonly check?: (host: ErrHost, value: string) => string | null;
 }
@@ -174,18 +176,6 @@ function firstError(host: ErrHost, spec: ArgSpec, w: Walk): string | null {
   return null;
 }
 
-/** Prüft alle Flags eines Unterbefehls ab Token `from`: unbekannte (nicht simulierte), Wert-Flags ohne Wert,
- *  ungültige Bool-Werte und Werte, die eine `check`-Funktion ablehnt. `null` = alles bekannt; sonst die fertige
- *  Fehlerausgabe. */
-export function checkFlags(host: ErrHost, spec: ArgSpec, t: readonly string[], from: number): string | null {
-  return firstError(host, spec, walk(spec, t, from));
-}
-
-/** Die Nicht-Flag-Tokens ab `from` (ohne die Werte der Wert-Flags; hinter `--` alles). */
-export function positionalArgs(spec: ArgSpec, t: readonly string[], from: number): string[] {
-  return walk(spec, t, from).entries.map(e => e.tok);
-}
-
 /** Die ausgelesene Eingabe EINES Unterbefehls: Positionsargumente und Flag-Werte (alle Aliase eines Flags zählen
  *  gleich). Kein Handler liest Tokens per Index oder Flags per Regex aus der Rohzeile. */
 export interface Call {
@@ -217,7 +207,7 @@ function makeCall(w: Walk): Call {
   };
 }
 
-/** Prüft die Flags (wie `checkFlags`) und liest dann die Eingabe: `Call` oder die fertige Fehlerausgabe. */
+/** Prüft die Flags (unbekannt, ohne Wert, ungültiger Bool, abgelehnter Wert) und liest dann die Eingabe: `Call` oder die fertige Fehlerausgabe. */
 export function parseCall(host: ErrHost, spec: ArgSpec, t: readonly string[], from: number): Call | string {
   const w = walk(spec, t, from);
   return firstError(host, spec, w) ?? makeCall(w);
@@ -265,8 +255,65 @@ export function subEntry<E>(table: Readonly<Record<string, E>>, key: string): E 
 /** Ein Eintrag einer Dispatch-Tabelle: Handler + Flag-Tabelle. Ein neuer Unterbefehl bleibt EIN Eintrag. */
 export interface SubEntry<H> extends Omit<ArgSpec, "cmd" | "flags"> { readonly run: H; readonly flags?: readonly FlagSpec[] }
 
+/** Eine Ebene tiefer (`aws s3`, `argocd app`, `glab ci`): die verschachtelte Tabelle statt einer handgeschriebenen Zeile. */
+export interface Group<E extends SubEntry<unknown>> { readonly group: Dispatch<E> }
+
+/** Eine Dispatch-Tabelle EINER Befehlsebene: alles, was ein Familien-Kopf braucht, als Daten. */
+export interface Dispatch<E extends SubEntry<unknown>> {
+  /** Der Befehl für Meldungen: `kubectl`, `aws s3`, `argocd app`. */
+  readonly cmd: string;
+  readonly table: Readonly<Record<string, E | Group<E>>>;
+  /** Echte Unterbefehle, die die Sim nicht kann (Daten): „Nicht simuliert“ und Vorschlags-Kandidaten. */
+  readonly real?: readonly string[];
+  /** Die Tippfehler-Zeile (Standard: `<cmd>: unbekannter Unterbefehl '<x>'`). */
+  readonly unknown?: (sub: string) => string;
+  /** Familien-Stil und -Hinweise; ein Eintrag mit eigenem Wert überschreibt sie. */
+  readonly style?: FlagStyle;
+  readonly hints?: Readonly<Record<string, string>>;
+}
+
 /** Die Flag-Tabelle eines Dispatch-Eintrags als `ArgSpec` (`cmd` = der volle Befehl für Meldungen); `defaultStyle`
- *  ist der Familien-Stil (terraform: `goflag`), ein Eintrag mit eigenem `style` überschreibt ihn. */
-export function specOfSub(cmd: string, e: SubEntry<unknown>, defaultStyle: FlagStyle = "pflag"): ArgSpec {
-  return { cmd, flags: e.flags ?? [], style: e.style ?? defaultStyle, hints: e.hints, stopAtPositional: e.stopAtPositional };
+ *  und `defaultHints` sind die Familien-Werte, ein Eintrag mit eigenem Wert überschreibt sie. */
+function specOfSub(cmd: string, e: SubEntry<unknown>, defaultStyle?: FlagStyle, defaultHints?: Dispatch<SubEntry<unknown>>["hints"]): ArgSpec {
+  return { cmd, flags: e.flags ?? [], style: e.style ?? defaultStyle ?? "pflag", hints: e.hints ?? defaultHints, stopAtPositional: e.stopAtPositional };
+}
+
+const isGroup = <E extends SubEntry<unknown>>(e: E | Group<E>): e is Group<E> => "group" in e;
+
+/** „Der Simulator kann“, aus den Tabellenschlüsseln abgeleitet: je Ebene `<cmd> a, b, c` (Aliase desselben Eintrags
+ *  nur einmal, mit dem ersten Schlüssel), Gruppen rekursiv. */
+export function kannOf<E extends SubEntry<unknown>>(d: Dispatch<E>): string[] {
+  const seen = new Set<unknown>();
+  const own: string[] = [];
+  const nested: string[] = [];
+  for (const [key, e] of Object.entries(d.table)) {
+    if (isGroup(e)) { nested.push(...kannOf(e.group)); continue; }
+    if (seen.has(e)) continue;
+    seen.add(e);
+    own.push(key);
+  }
+  return own.length ? [d.cmd + " " + own.join(", "), ...nested] : nested;
+}
+
+/** Der EINE Kopf jeder Befehlsfamilie: wählt den Eintrag zu `t[at]` und liest dessen Eingabe (`parseCall`).
+ *  Reihenfolge: Unterbefehl fehlt, Flag vor dem Unterbefehl, Gruppe (rekursiv), echter aber nicht simulierter
+ *  Unterbefehl, Tippfehler mit Vorschlag, dann `parseCall`. Ergebnis: `{ sub, entry, call }` oder die fertige
+ *  Fehlerausgabe. Familien-Wachen (Control-Plane, init, Repo) laufen danach im Familien-Dispatcher. */
+export function dispatchSub<E extends SubEntry<unknown>>(host: ErrHost, d: Dispatch<E>, t: readonly string[], at: number): { sub: string; entry: E; call: Call } | string {
+  const sub = t[at];
+  const kann = kannOf(d);
+  if (!sub) return host._err(d.cmd + ": Unterbefehl fehlt.", "Der Simulator kann: " + kann.join(" · "));
+  if (isFlagToken(sub)) {
+    return notSimulated(host, "das Flag '" + flagNameOf(sub, d.style ?? "pflag") + "' vor dem Unterbefehl.", kann, "Setz Flags hinter den Unterbefehl.");
+  }
+  const entry = subEntry(d.table, sub);
+  if (entry && isGroup(entry)) return dispatchSub(host, entry.group, t, at + 1);
+  if (!entry) {
+    if (d.real?.includes(sub)) return notSimulated(host, "'" + d.cmd + " " + sub + "'.", kann);
+    const guess = suggest(sub, [...Object.keys(d.table), ...(d.real ?? [])]);
+    return host._err(d.unknown?.(sub) ?? d.cmd + ": unbekannter Unterbefehl '" + sub + "'",
+      guess ? "Meintest du '" + d.cmd + " " + guess + "'?" : "Der Simulator kann: " + kann.join(" · "));
+  }
+  const call = parseCall(host, specOfSub(d.cmd + " " + sub, entry, d.style, d.hints), t, at + 1);
+  return typeof call === "string" ? call : { sub, entry, call };
 }

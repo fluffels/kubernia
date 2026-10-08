@@ -23,7 +23,7 @@
 import type { ClusterState, Pipeline, Broken, Deployment } from "./state";
 import { pad, table } from "./util";
 import { addDeployment } from "./workload";
-import { checkFlags, notSimulated, specOfSub, subEntry, type SubEntry } from "./cliargs";
+import { dispatchSub, type Dispatch, type Call, type SubEntry } from "./cliargs";
 
 /** Was die glab/CI-Funktionen vom Simulator brauchen (von der `Sim`-Klasse
  *  erfüllt). Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es
@@ -87,24 +87,25 @@ function glabCiList(host: GlabHost): string {
     host.ci.pipelines.slice().reverse().map(p => ["#" + p.id, p.ref, p.status]));
 }
 
-type GlabCiHandler = (host: GlabHost) => string;
+type GlabCiHandler = (host: GlabHost, c: Call) => string;
 
 /** Aktion → Eintrag (Handler + Flag-Tabelle, #1459: die Sim wertet bei `glab ci` keine Flags aus). */
 const STATUS: SubEntry<GlabCiHandler> = { run: glabCiStatus };
-const GLAB_CI_ACTIONS: Record<string, SubEntry<GlabCiHandler>> = {
-  status: STATUS,
-  view: STATUS,
-  list: { run: glabCiList },
+const GLAB_CI: Dispatch<SubEntry<GlabCiHandler>> = {
+  cmd: "glab ci",
+  table: { status: STATUS, view: STATUS, list: { run: glabCiList } },
+  // Echte `glab ci`-Aktionen, die die Sim nicht kann.
+  real: ["artifact", "cancel", "delete", "get", "lint", "retry", "run", "trace", "trigger"],
 };
 
-const GLAB_KANN = ["glab ci status", "glab ci list"];
+/** Die `glab`-Ebene: nur `ci` ist simuliert; die übrigen Befehlsgruppen des echten CLI sind „nicht simuliert“. */
+const GLAB: Dispatch<SubEntry<GlabCiHandler>> = {
+  cmd: "glab",
+  table: { ci: { group: GLAB_CI } },
+  real: ["alias", "api", "auth", "changelog", "cluster", "completion", "config", "deploy-key", "incident", "issue", "job", "label", "mr", "release", "repo", "schedule", "snippet", "ssh-key", "user", "variable", "version"],
+};
 
 export function glabCommand(host: GlabHost, t: string[]): string {
-  if (!t[1]) return host._err("glab: Unterbefehl fehlt.", "z.B. 'glab ci status'.");
-  if (t[1] !== "ci") return notSimulated(host, "'glab " + t[1] + "'.", GLAB_KANN);
-  const action = t[2];
-  if (!action) return host._err("glab ci: Aktion fehlt.", "z.B. 'glab ci status' oder 'glab ci list'.");
-  const entry = subEntry(GLAB_CI_ACTIONS, action);
-  if (!entry) return notSimulated(host, "'glab ci " + action + "'.", GLAB_KANN);
-  return checkFlags(host, specOfSub("glab ci " + action, entry), t, 3) ?? entry.run(host);
+  const r = dispatchSub(host, GLAB, t, 1);
+  return typeof r === "string" ? r : r.entry.run(host, r.call);
 }

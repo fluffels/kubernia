@@ -28,7 +28,7 @@ import { HEADLESS_CLUSTER_IP } from "./state";
 import { InvalidSpecError, resourceName } from "./names";
 import { table } from "./util";
 import { addDeployment, scaleDeployment } from "./workload";
-import { notSimulated, parseCall, specOfSub, subEntry, type Call, type SubEntry } from "./cliargs";
+import { dispatchSub, type Dispatch, type Call, type SubEntry } from "./cliargs";
 
 /** Was die argocd-Befehle/Reconcile vom Simulator brauchen (von der `Sim`-Klasse
  *  erfüllt). Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es
@@ -358,22 +358,24 @@ function argoAppSync(host: ArgocdHost, c: Call): string {
  *  `argocd app`-Verb ist ein Eintrag hier + eine Funktion oben – der Dispatcher (`argocdCommand`) bleibt dünn
  *  und wächst nicht mit dem Befehlssatz. */
 const LIST: SubEntry<ArgocdAppHandler> = { run: argoAppList };
-const ARGOCD_APP_ACTIONS: Record<string, SubEntry<ArgocdAppHandler>> = {
+const ARGOCD_APP: Dispatch<SubEntry<ArgocdAppHandler>> = { cmd: "argocd app", table: {
   list: LIST,
   ls: LIST,
   get: { run: argoAppGet },
   sync: { run: argoAppSync },
+},
+  // Echte `argocd app`-Aktionen, die die Sim nicht kann.
+  real: ["actions", "create", "delete", "delete-resource", "diff", "edit", "history", "logs", "manifests", "patch", "patch-resource", "resources", "rollback", "set", "terminate-op", "unset", "wait"],
 };
 
-const ARGOCD_KANN = ["argocd app list", "argocd app get <name>", "argocd app sync <name>"];
+/** Die `argocd`-Ebene: nur `app` ist simuliert; die übrigen Befehlsgruppen des echten CLI sind „nicht simuliert“. */
+const ARGOCD: Dispatch<SubEntry<ArgocdAppHandler>> = {
+  cmd: "argocd",
+  table: { app: { group: ARGOCD_APP } },
+  real: ["account", "admin", "appset", "cert", "cluster", "completion", "context", "gpg", "login", "logout", "proj", "relogin", "repo", "repocreds", "version"],
+};
 
 export function argocdCommand(host: ArgocdHost, t: string[]): string {
-  if (!t[1]) return host._err("argocd: Unterbefehl fehlt.", "z.B. 'argocd app list'.");
-  if (t[1] !== "app") return notSimulated(host, "'argocd " + t[1] + "'.", ARGOCD_KANN);
-  const action = t[2];
-  if (!action) return host._err("argocd app: Aktion fehlt.", "z.B. 'argocd app list', 'argocd app get <name>' oder 'argocd app sync <name>'.");
-  const entry = subEntry(ARGOCD_APP_ACTIONS, action);
-  if (!entry) return notSimulated(host, "'argocd app " + action + "'.", ARGOCD_KANN);
-  const call = parseCall(host, specOfSub("argocd app " + action, entry), t, 3);
-  return typeof call === "string" ? call : entry.run(host, call);
+  const r = dispatchSub(host, ARGOCD, t, 1);
+  return typeof r === "string" ? r : r.entry.run(host, r.call);
 }

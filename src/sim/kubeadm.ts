@@ -19,8 +19,8 @@
  * per `kubeadmCommand(this, …)`.
  */
 import type { ClusterState, ClusterNode, Scenario } from "./state";
-import { randSuffix, suggest } from "./util";
-import { flag, isFlagToken, notSimulated, parseCall, specOfSub, subEntry, type Call, type SubEntry } from "./cliargs";
+import { randSuffix } from "./util";
+import { flag, notSimulated, dispatchSub, type Dispatch, type Call, type SubEntry } from "./cliargs";
 import { provisionNode, isControlPlane, NODE_VERSION, CONTROL_PLANE_IP, CONTROL_PLANE_NODE, workerNodeName } from "./nodes";
 
 const APISERVER = CONTROL_PLANE_IP + ":6443";
@@ -77,32 +77,21 @@ type KubeadmHandler = (host: KubeadmHost, c: Call) => string;
 
 // `--discovery-token-ca-cert-hash` wird angenommen, aber nicht ausgewertet: der von `init` gedruckte Join-Befehl trägt
 // ihn, und die Sim hat nur EINE Control-Plane – es gibt nichts, wogegen der Hash zu prüfen wäre.
-const SUB: Record<string, SubEntry<KubeadmHandler>> = {
+const KUBEADM: Dispatch<SubEntry<KubeadmHandler>> = { cmd: "kubeadm", table: {
   init: { run: kubeadmInit, flags: [flag(true, "--pod-network-cidr")] },
   join: { run: kubeadmJoin, flags: [flag(true, "--token"), flag(true, "--discovery-token-ca-cert-hash")] },
   reset: { run: kubeadmReset, flags: [flag(false, "-f", "--force")] },
+},
+  // Echte kubeadm-Unterbefehle, die die Sim nicht kann.
+  real: ["token", "upgrade", "certs", "config", "kubeconfig", "version", "completion", "alpha"],
 };
 
 /** Die registrierten Unterbefehle (Treue-Matrix, docs/sim-treue/: ein neuer Unterbefehl braucht eine Zeile). */
-export const KUBEADM_SUBCOMMANDS: readonly string[] = Object.keys(SUB);
-
-/** Echte kubeadm-Unterbefehle, die die Sim nicht kann. */
-const NOT_SIMULATED = ["token", "upgrade", "certs", "config", "kubeconfig", "version", "completion", "alpha"];
-const KANN = ["kubeadm init [--pod-network-cidr <cidr>]", "kubeadm join <token>", "kubeadm reset [-f]"];
+export const KUBEADM_SUBCOMMANDS: readonly string[] = Object.keys(KUBEADM.table);
 
 export function kubeadmCommand(host: KubeadmHost, t: string[]): string {
-  const sub = (t[1] || "").toLowerCase();
-  if (!sub) return host._err("kubeadm: Unterbefehl fehlt.", "Probier 'kubeadm init', dann 'kubeadm join <token>'.");
-  if (isFlagToken(sub)) return notSimulated(host, "das Flag '" + sub + "' vor dem Unterbefehl.", KANN);
-  const entry = subEntry(SUB, sub);
-  if (!entry) {
-    if (NOT_SIMULATED.includes(sub)) return notSimulated(host, "'kubeadm " + sub + "'.", KANN);
-    const guess = suggest(sub, [...Object.keys(SUB), ...NOT_SIMULATED]);
-    return host._err("kubeadm: unbekannter Unterbefehl '" + sub + "'",
-      (guess ? "Meintest du 'kubeadm " + guess + "'? " : "") + "Es gibt 'kubeadm init', 'kubeadm join <token>' und 'kubeadm reset'.");
-  }
-  const call = parseCall(host, specOfSub("kubeadm " + sub, entry), t, 2);
-  return typeof call === "string" ? call : entry.run(host, call);
+  const r = dispatchSub(host, KUBEADM, t, 1);
+  return typeof r === "string" ? r : r.entry.run(host, r.call);
 }
 
 /** Ein IPv4-CIDR (`10.244.0.0/16`)? */

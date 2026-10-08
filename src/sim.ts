@@ -180,22 +180,22 @@ const BUILDER_RESOURCE_REGISTRY: BuildEntry[] = [
 
 /* ---------- Befehls-Dispatch (#563) ----------
  * Statt eines wachsenden switch in exec() (jeder Fall = +1 zyklomatische Komplexität) dispatcht
- * exec() über diese Handler-Tabelle (Alias → Handler), wie helm/docker (HELM_/DOCKER_SUBCOMMANDS).
+ * exec() über diese Handler-Tabelle (Alias → Handler), wie helm/docker (HELM/DOCKER).
  * `clear` (früher Rücksprung mit Sonder-Rückgabe) und `help` (braucht die freigeschalteten
  * Familien) bleiben Sonderfälle in exec()/_runCommand. Bei Stardew-Scope wächst der Befehlssatz –
  * ein neuer Befehl ist EIN Tabelleneintrag, kein weiterer switch-Zweig. */
-const COMMAND_HANDLERS: Record<string, (sim: Sim, tokens: string[], raw: string) => string> = {
-  docker: (s, t, raw) => dockerCommand(s, t, raw),
+const COMMAND_HANDLERS: Record<string, (sim: Sim, tokens: string[]) => string> = {
+  docker: (s, t) => dockerCommand(s, t),
   kubectl: (s, t) => kubectlCommand(s, t),
   kubeadm: (s, t) => kubeadmCommand(s, t),
-  helm: (s, t, raw) => helmCommand(s, t, raw),
-  terraform: (s, t, raw) => terraformCommand(s, t, raw),
-  git: (s, t, raw) => gitCommand(s, t, raw),
+  helm: (s, t) => helmCommand(s, t),
+  terraform: (s, t) => terraformCommand(s, t),
+  git: (s, t) => gitCommand(s, t),
   argocd: (s, t) => argocdCommand(s, t),
   glab: (s, t) => glabCommand(s, t),
   nslookup: (s, t) => nslookupCommand(s, t),
   curl: (s, t) => curlCommand(s, t),
-  aws: (s, t, raw) => awsCommand(s, t, raw),
+  aws: (s, t) => awsCommand(s, t),
   ls: (s) => s._ls(),
   cat: (s, t) => s._cat(t),
 };
@@ -807,7 +807,7 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
         if (!tokens) return { output: this._err("bash: unexpected EOF while looking for matching quote", "Ein Anführungszeichen (\" oder ') wurde geöffnet, aber nicht wieder geschlossen."), error: true };
         const cmd = tokens[0];
         if (cmd === "clear") return { output: null, error: false, clear: true };
-        out = this._runCommand(cmd, tokens, raw, available);
+        out = this._runCommand(cmd, tokens, available);
         // #478/#862: Aggregat-Grenze – nach jeder Befehls-Transaktion invariant bleiben.
         // Dev/Test: wirft ClusterInvariantError → fällt in catch → Fehlermeldung im Terminal.
         // Prod: console.error, kein Wurf → Verletzung sichtbar in Devtools, Spiel läuft weiter.
@@ -841,9 +841,9 @@ const KNOWN_COMMANDS = [...SIM_COMMANDS, "clear", "help"];
 
     /** Dispatch einer erkannten Befehlszeile über die Handler-Tabelle (#563); `help` braucht
      *  die freigeschalteten Familien, Unbekanntes bekommt eine Meintest-du-Meldung. */
-    _runCommand(cmd: string, tokens: string[], raw: string, available?: Set<string>): string {
+    _runCommand(cmd: string, tokens: string[], available?: Set<string>): string {
       const handler = subEntry(COMMAND_HANDLERS, cmd);
-      if (handler) return handler(this, tokens, raw);
+      if (handler) return handler(this, tokens);
       if (cmd === "help") return this._help(available, tokens[1]);
       return this._unknownCommand(cmd);
     }
