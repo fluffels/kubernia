@@ -19,7 +19,7 @@ import type {
   ScrapeTarget, Alert, Scenario, ClusterState, PodTemplateSpec,
 } from "./sim/state";
 import { deploymentPodStatus, isReady } from "./sim/podstatus";
-import { DEFAULT_NAMESPACE, HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService, assertServiceType } from "./sim/state";
+import { HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService, assertServiceType } from "./sim/state";
 export { BROKEN_POD } from "./sim/podstatus";
 export type {
   ExecResult,
@@ -41,6 +41,7 @@ import { kubectlCommand } from "./sim/kubectl";
 import { helmCommand } from "./sim/helm";
 import { terraformCommand } from "./sim/terraform";
 import { gitCommand } from "./sim/git";
+import { bindPvc, resyncPendingPvcs } from "./sim/pv-controller";
 import { argocdCommand, reconcileAutoSync, cloneArgoApp, buildArgoApp } from "./sim/argocd";
 import { podMetrics as obsPodMetrics, nodeMetrics as obsNodeMetrics, scrapeTargets as obsScrapeTargets, alerts as obsAlerts, evaluateAlerts as obsEvaluateAlerts } from "./sim/observability";
 import { glabCommand } from "./sim/glab";
@@ -48,13 +49,13 @@ import { kubeadmCommand, deriveControlPlane, applyBootstrapScenario } from "./si
 import { nslookupCommand, curlCommand } from "./sim/net";
 import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, depEphemeralPeak, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
-import { effectiveDefaultStorageClass, randSuffix, clusterIP, suggest } from "./sim/util";
+import { effectiveDefaultStorageClass, clusterIP, suggest } from "./sim/util";
 import { shellTokens, subEntry } from "./sim/cliargs";
 import { makeRng, DEFAULT_SEED } from "./core/rng";
 import { resourceName, InvalidSpecError } from "./sim/names";
 import { sameRbac } from "./sim/rbac";
 import { assertClusterInvariants, warnClusterInvariants } from "./sim/invariants";
-import { assertReplicas, scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, statefulPodClaimName, seedPodTemplate, snapshotPodTemplate } from "./sim/workload";
+import { assertReplicas, scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, statefulPodClaimName, STATEFUL_CLAIM_ACCESS_MODES, seedPodTemplate, snapshotPodTemplate } from "./sim/workload";
 import { provisionNode, NODE_VERSION, CONTROL_PLANE_NODE, workerNodeName, nodeSnapshot } from "./sim/nodes";
 import { renderHelp, renderHelpTopic } from "./hud/helptext";
 
@@ -472,33 +473,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       return effectiveDefaultStorageClass(this.storageClasses)?.name ?? "";
     }
 
-    /** Bindet ein PVC an Speicher: erst dynamisch über seine StorageClass (legt on-demand
-     *  ein passendes PV an), sonst statisch an ein vorhandenes freies PV – das aber zur
-     *  Anforderung passen muss (gleiche StorageClass UND gleicher AccessMode; ein RWO-PV
-     *  erfüllt keine RWX-Anforderung). Findet sich beides nicht, bleibt das PVC `Pending`
-     *  – genau das Lehrbild „kein passender Speicher da". */
-    _bindPvc(pvc: PvcRes) {
-      if (pvc.status === "Bound" && pvc.volume) return;
-      const sc = pvc.storageClass ? this.storageClasses.find(s => s.name === pvc.storageClass) : null;
-      if (sc && sc.provisioner) {
-        const pvName = "pvc-" + randSuffix(8, this.rng);
-        this.pvs.push({ name: pvName, capacity: pvc.capacity, status: "Bound", claim: DEFAULT_NAMESPACE + "/" + pvc.name, storageClass: sc.name, accessModes: pvc.accessModes, reclaimPolicy: sc.reclaimPolicy, created: this.clock });
-        pvc.status = "Bound";
-        pvc.volume = pvName;
-        return;
-      }
-      const pv = this.pvs.find(p => p.status === "Available" && (!pvc.storageClass || p.storageClass === pvc.storageClass) && p.accessModes === pvc.accessModes);
-      if (pv) {
-        pv.status = "Bound";
-        pv.claim = DEFAULT_NAMESPACE + "/" + pvc.name;
-        pvc.status = "Bound";
-        pvc.volume = pv.name;
-        if (pv.capacity) pvc.capacity = pv.capacity;
-      }
-      // sonst: bleibt Pending (volume "")
-    }
-
-    /** Legt ein PVC an und bindet es sofort (siehe _bindPvc). Ohne StorageClass-Angabe
+    /** Legt ein PVC an und bindet es sofort (siehe bindPvc). Ohne StorageClass-Angabe
      *  greift die Default-StorageClass; ein leeres "" erzwingt statische Bindung. */
     _makePvc(name: string, storage: string, storageClass?: string, accessModes?: string): PvcRes {
       const pvc: PvcRes = {
@@ -510,7 +485,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
         accessModes: accessModes || "RWO",
         created: this.clock,
       };
-      this._bindPvc(pvc);
+      bindPvc(this, pvc);
       return pvc;
     }
 
@@ -531,7 +506,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
         sts.pods.push(newStatefulPod(spec.name + "-" + i, this.clock));
         const pvcName = statefulPodClaimName(sts, sts.pods[i]);
         if (!this.pvcs.some(p => p.name === pvcName)) {
-          this.pvcs.push(this._makePvc(pvcName, sts.storage, spec.storageClass, "RWO"));
+          this.pvcs.push(this._makePvc(pvcName, sts.storage, spec.storageClass, STATEFUL_CLAIM_ACCESS_MODES));
         }
       }
       return sts;
@@ -850,6 +825,8 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       // Argo CD reconciliert vor jeder Eingabe: Self-Heal-Apps drehen zwischenzeitlichen
       // Drift (z.B. ein `kubectl scale` aus dem letzten Befehl) von selbst auf den Git-Soll zurück.
       reconcileAutoSync(this);
+      // PV-Controller-Resync: wartende PVCs binden nach, wenn StorageClass/PV später entstanden sind.
+      resyncPendingPvcs(this);
       // Alert-Regeln gegen den (ggf. gerade reconcilten) Zustand auswerten, damit der
       // firing→resolved-Verlauf mitläuft, während gespielt wird (Observability #109).
       obsEvaluateAlerts(this);

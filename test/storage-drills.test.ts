@@ -243,6 +243,7 @@ test("#1319: Red-Green – ein ungebundenes PVC macht den t-sts-dns-Check falsch
   const pvc = sim.pvcs.find(p => p.name === "daten-" + SVC + "-2")!;
   pvc.status = "Pending";
   pvc.volume = ""; // Invariante: Pending hat kein Volume
+  pvc.storageClass = "gibt-es-nicht"; // sonst bindet der PV-Resync es vor dem nächsten Befehl nach
   assert.ok(!svc.check!(sim), "Check wird falsch");
   assert.equal(addrs(sim.exec(svc.solution).output ?? "").length, 2, "die Sim liefert dann nur 2 IPs");
 });

@@ -23,6 +23,7 @@ import { BROKEN_POD, clusterPodStatus, isReady } from "../../podstatus";
 import { podTemplateLabels } from "../../replicasets";
 import { workloadLabels, type Labels } from "../../util";
 import { statefulPodClaimName, snapshotPodTemplate } from "../../workload";
+import { accessModesLong } from "../../pv-controller";
 import { podPlacement } from "../inspect";
 
 /** Ein Objekt-Baustein: alle Objekte einer Art, nach Name (in der Reihenfolge der Tabelle). */
@@ -205,15 +206,6 @@ function serviceObject(host: KubectlHost, svc: ServiceRes): YamlMap {
 export const serviceObjects: ObjectsOf = host => new Map(servicesWithDefault(host).map(s => [s.name, serviceObject(host, s)]));
 
 // ===== PersistentVolumeClaim =====
-
-const ACCESS_MODES: Readonly<Record<string, string>> = {
-  RWO: "ReadWriteOnce", ROX: "ReadOnlyMany", RWX: "ReadWriteMany", RWOP: "ReadWriteOncePod",
-};
-
-/** Die Access-Modes als Langform (`RWO` → `ReadWriteOnce`); Langformen und Unbekanntes bleiben. */
-export function accessModesLong(modes: string): string[] {
-  return modes.split(",").map(m => m.trim()).filter(m => m !== "").map(m => ACCESS_MODES[m] ?? m);
-}
 
 function pvcObject(pvc: PvcRes): YamlMap {
   const bound = pvc.status === "Bound";
