@@ -1,6 +1,6 @@
 /* kubectl get -o wide und die Prüfung der Ausgabeformate (#1466), dazu der eingebaute Service `kubernetes`.
  *   (a) der Wert von -o wird clientseitig geprüft (bekannt, aber nicht simuliert / unbekannt / leer),
- *   (b) wide hängt die Zusatzspalten an (pods, deployments, services, statefulsets), alle anderen Arten bleiben gleich,
+ *   (b) wide hängt die Zusatzspalten an (pods, deployments, replicasets, services, statefulsets, nodes), alle anderen Arten bleiben gleich,
  *   (c) wide mit -A, Komma-Liste, all und Namensfilter,
  *   (d) der Service `kubernetes`: get endpoints, describe, SELECTOR.
  * Tabellengetrieben, mit Negativfällen; die Sabotage-Nachweise (Red-Green) stehen im PR-Text. */
@@ -9,6 +9,9 @@ import { KQSim } from "./helpers";
 import { checkOutputFormat, OUTPUT_FORMATS } from "../../src/sim/kubectl/output";
 import { GET_RENDERERS } from "../../src/sim/kubectl/inspect";
 import { podIP } from "../../src/sim/util";
+import { NODE_SYSTEM_INFO, NODE_VERSION } from "../../src/sim/nodes";
+import { currentReplicaSet } from "../../src/sim/replicasets";
+import { simGrenzen } from "../../src/hud/helptext";
 import { KUBERNETES_SERVICE, isKubernetesService, serviceBackends, serviceSelector } from "../../src/sim/endpoints";
 import type { ResourcePlural } from "../../src/sim/kubectl/resources";
 import type { Scenario } from "../../src/sim/state";
@@ -185,8 +188,61 @@ describe("(b) wide: deployments, services, statefulsets", () => {
 });
 
 /* ---------- (c) Regression und übrige Arten ---------- */
+describe("(b) wide: replicasets und nodes (#1483)", () => {
+  const hashIm = (out: string) => out.match(/pod-template-hash=(\w+)/)![1];
+  test("replicasets: CONTAINERS IMAGES SELECTOR mit pod-template-hash", () => {
+    const sim = new KQSim(szenario());
+    const out = lauf("kubectl get rs -o wide", sim).out;
+    expect(kopf(out)).toEqual(["NAME", "DESIRED", "CURRENT", "READY", "AGE", "CONTAINERS", "IMAGES", "SELECTOR"]);
+    const rs = currentReplicaSet(sim.deployments.find(d => d.name === "web")!);
+    expect(zeile(out, rs.name)!.slice(5)).toEqual(["web", "nginx:1.27", "app=web,pod-template-hash=" + rs.hash]);
+  });
+  test("der Hash im SELECTOR ist der im ReplicaSet- und im Pod-Namen und wechselt mit einem Rollout", () => {
+    const sim = new KQSim(szenario());
+    const vorher = hashIm(lauf("kubectl get rs -o wide", sim).out);
+    expect(lauf("kubectl get pods", sim).out).toContain("web-" + vorher + "-");
+    expect(lauf("kubectl get rs", sim).out).toContain("web-" + vorher);
+    sim.exec("kubectl set image deployment/web web=nginx:1.28");
+    expect(hashIm(lauf("kubectl get rs -o wide", sim).out)).not.toBe(vorher);
+  });
+  test("nodes: INTERNAL-IP EXTERNAL-IP OS-IMAGE KERNEL-VERSION CONTAINER-RUNTIME", () => {
+    const out = lauf("kubectl get nodes -o wide").out;
+    expect(kopf(out)).toEqual(["NAME", "STATUS", "ROLES", "AGE", "VERSION", "INTERNAL-IP", "EXTERNAL-IP", "OS-IMAGE", "KERNEL-VERSION", "CONTAINER-RUNTIME"]);
+    const cp = zeile(out, "ahoi-control")!;
+    expect(cp.slice(4)).toEqual([NODE_VERSION, "10.0.0.10", "<none>", NODE_SYSTEM_INFO.osImage, NODE_SYSTEM_INFO.kernelVersion, NODE_SYSTEM_INFO.containerRuntimeVersion]);
+    expect(zeile(out, "ahoi-worker-1")!.slice(6)).toEqual(["<none>", NODE_SYSTEM_INFO.osImage, NODE_SYSTEM_INFO.kernelVersion, NODE_SYSTEM_INFO.containerRuntimeVersion]);
+  });
+  test("die CP-Adresse ist die des Endpoints kubernetes; Worker-IPs sind stabil über Sims und verschieden", () => {
+    const sim = new KQSim(szenario());
+    const ep = zeile(lauf("kubectl get endpoints", sim).out, "kubernetes")![1];
+    expect(ep.split(":")[0]).toBe(zeile(lauf("kubectl get nodes -o wide", sim).out, "ahoi-control")![5]);
+    const ip = (s: KQSim, n: string) => zeile(lauf("kubectl get nodes -o wide", s).out, n)![5];
+    expect(ip(new KQSim(szenario()), "ahoi-worker-1")).toBe(ip(sim, "ahoi-worker-1"));
+    expect(ip(sim, "ahoi-worker-1")).not.toBe(ip(sim, "ahoi-worker-2"));
+  });
+  test("DiskPressure bleibt in STATUS", () => {
+    const sim = new KQSim(szenario());
+    sim.nodes[1].ephemeralCapacityMi = 0;
+    expect(zeile(lauf("kubectl get nodes -o wide", sim).out, "ahoi-worker-1")![1]).toBe("Ready,DiskPressure");
+  });
+  test("Bare-Metal: nach init und join hat der Worker eine IP, nach reset und neuem init/join dieselbe", () => {
+    const sim = new KQSim({ bareMetal: true });
+    const aufbau = () => { sim.exec("kubeadm init"); sim.exec("kubeadm join 10.0.0.10:6443 --token " + sim.controlPlane.token! + " --discovery-token-ca-cert-hash sha256:deadbeef"); };
+    aufbau();
+    const ip = zeile(lauf("kubectl get nodes -o wide", sim).out, "ahoi-worker-1")![5];
+    expect(ip).toMatch(/^10\.0\./);
+    sim.exec("kubeadm reset");
+    aufbau();
+    expect(zeile(lauf("kubectl get nodes -o wide", sim).out, "ahoi-worker-1")![5]).toBe(ip);
+  });
+  test("Hilfe: wide-auswahl nennt jede Art mit wide-Spalten", () => {
+    const text = simGrenzen("kubectl").find(g => g.id === "wide-auswahl")!.text;
+    for (const art of ["pods", "deployments", "replicasets", "services", "statefulsets", "nodes"]) expect(text).toContain(art);
+  });
+});
+
 describe("(c) ohne wide bleibt jede Ausgabe wie zuvor; Arten ohne wide-Spalten ändern sich nicht", () => {
-  const MIT_WIDE: ResourcePlural[] = ["pods", "deployments", "services", "statefulsets"];
+  const MIT_WIDE: ResourcePlural[] = ["pods", "deployments", "replicasets", "services", "statefulsets", "nodes"];
   const ohneZeit = (s?: string | null) => (s ?? "").replace(/\b\d+[smhd]\b/g, "T");   // jeder exec lässt die Uhr weiterlaufen
   const beide = (plural: string) => {
     const sim = new KQSim({ ...szenario(), secrets: [{ name: "s", keys: ["k"] }] });
@@ -204,6 +260,7 @@ describe("(c) ohne wide bleibt jede Ausgabe wie zuvor; Arten ohne wide-Spalten �
   test.each([
     ["pods", ["NAME", "READY", "STATUS", "RESTARTS", "AGE"]], ["deployments", ["NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE"]],
     ["services", ["NAME", "TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE"]], ["statefulsets", ["NAME", "READY", "AGE"]],
+    ["replicasets", ["NAME", "DESIRED", "CURRENT", "READY", "AGE"]], ["nodes", ["NAME", "STATUS", "ROLES", "AGE", "VERSION"]],
   ])("ohne -o wide hat %s den bisherigen Kopf (keine wide-Spalte sickert durch)", (plural, header) => {
     expect(kopf(lauf("kubectl get " + plural).out)).toEqual(header);
   });
@@ -221,11 +278,11 @@ describe("(c) wide mit Komma-Liste, all und Namensfilter", () => {
     expect(out).toContain("NOMINATED NODE");
     expect(out).toContain("SELECTOR");
   });
-  test("get all -o wide: ReplicaSets ohne Zusatzspalten", () => {
+  test("get all -o wide: ReplicaSets mit CONTAINERS IMAGES SELECTOR", () => {
     const out = lauf("kubectl get all -o wide").out;
     const rs = out.split("\n\n").find(b => b.startsWith("NAME") && b.includes("replicaset.apps/"))!;
     expect(rs).toBeDefined();
-    expect(kopf(rs)).toEqual(["NAME", "DESIRED", "CURRENT", "READY", "AGE"]);
+    expect(kopf(rs)).toEqual(["NAME", "DESIRED", "CURRENT", "READY", "AGE", "CONTAINERS", "IMAGES", "SELECTOR"]);
     expect(out).toContain("IMAGES");
   });
   test("get svc web bank -o wide (Namensfilter) und get deploy web -o wide", () => {
@@ -295,5 +352,15 @@ describe("(d) Service kubernetes: get endpoints, describe, Selektor", () => {
   test("der eingebaute Service ist 3d alt (get svc und get endpoints)", () => {
     expect(zeile(lauf("kubectl get svc", new KQSim({})).out, "kubernetes")![5]).toBe("3d");
     expect(zeile(lauf("kubectl get endpoints", new KQSim({})).out, "kubernetes")![2]).toBe("3d");
+  });
+});
+
+describe("(d) Version: v1 Endpoints (#1483)", () => {
+  test("get endpoints druckt keine Deprecation-Warnung, solange die Sim unter v1.33 bleibt", () => {
+    expect(lauf("kubectl get endpoints", new KQSim({})).out).not.toMatch(/^Warning:/m);
+  });
+  test("WÄCHTER: ab v1.33 warnt der API-Server vor v1 Endpoints (KEP-4974); dann die Warnung nachbilden", () => {
+    const minor = Number(NODE_VERSION.split(".")[1]);
+    expect(minor, "NODE_VERSION " + NODE_VERSION + " ist >= v1.33: Warnung nachbilden (KEP-4974: 'Warning: v1 Endpoints is deprecated in v1.33+; use discovery.k8s.io/v1 EndpointSlice'), Matrixzeile get endpoints prüfen").toBeLessThan(33);
   });
 });

@@ -5,6 +5,7 @@
  * Hier extrahiert, damit Unit-Tests die pure Logik ohne Phaser-Import prüfen können.
  */
 
+import { CONTROL_PLANE_NODE, workerNodeName } from "../../sim/util";
 /** Heile Textur-Key → Trümmer-Variante bei CP-Ausfall. */
 export const HARBOR_DAMAGE: Record<string, string> = {
   lighthouse:   "lighthouse_ruined",
@@ -20,7 +21,7 @@ export function harborTexture(base: string, controlPlaneUp: boolean): string {
 }
 
 /** Steg-Namen in derselben Reihenfolge wie scene.piers (#693). */
-export const PIER_NAMES = ["ahoi-control", "ahoi-worker-1", "ahoi-worker-2"] as const;
+export const PIER_NAMES = [CONTROL_PLANE_NODE, workerNodeName(1), workerNodeName(2)] as const;
 
 /** Ist ein einzelner Steg bereits repariert?
  *  Control-Plane-Steg: heil sobald controlPlane.up === true (kubeadm init).
@@ -30,5 +31,5 @@ export function pierHealed(
   controlPlaneUp: boolean,
   nodeNames: ReadonlyArray<string>,
 ): boolean {
-  return name === "ahoi-control" ? controlPlaneUp : nodeNames.includes(name);
+  return name === CONTROL_PLANE_NODE ? controlPlaneUp : nodeNames.includes(name);
 }

@@ -8,11 +8,13 @@
  * und ZWEI verschiedenen Schreibweisen für „ist Control-Plane?". Das reproduziert sich bei
  * Stardew-Scope (mehr Aufbau-Quests/Cluster-Topologien) – darum die EINE Stelle hier.
  *
- * Reine Domäne: hängt nur an den Domänentypen aus ./state – kein Phaser, kein Rückimport
+ * Reine Domäne: hängt nur an den Domänentypen aus ./state, ./util und core/rng – kein Phaser, kein Rückimport
  * nach sim.ts (kein Zyklus), vom Architektur-Wächter (#347) als Domäne geschützt und im
  * Node-Test prüfbar.
  */
 import type { ClusterNode } from "./state";
+import { hashStr } from "../core/rng";
+import { CONTROL_PLANE_IP } from "./util";
 
 /** Einheitliche Kubernetes-Version aller simulierten Knoten. EINE Wahrheit statt der
  *  inline wiederholten `"v1.30.2"` in kubeadm/terraform/sim-Default (#534). */
@@ -56,3 +58,22 @@ export function removeNode(state: { nodes: ClusterNode[] }, name: string): Clust
   if (idx < 0) return undefined;
   return state.nodes.splice(idx, 1)[0];
 }
+
+/** Node-Adresse (`INTERNAL-IP` in `get nodes -o wide`). Die Control-Plane trägt `CONTROL_PLANE_IP` (die Adresse,
+ *  die `kubeadm join` nennt); ein Worker bekommt eine aus dem Namen abgeleitete Adresse im Node-Netz 10.0.0.0/16
+ *  (drittes Oktett ab 1, nie 10.0.0.10; kein Überlapp mit Pods 10.244/16, Services 10.96/16, 203.0.113/24).
+ *  Abgeleitet statt gespeichert: kein Save-Format, nach `kubeadm reset` und erneutem join dieselbe Adresse.
+ *  Grenze: mehrere Control-Planes (HA) teilten sich die CP-Adresse; das modelliert die Sim heute nicht. */
+export function nodeInternalIP(node: ClusterNode): string {
+  if (isControlPlane(node)) return CONTROL_PLANE_IP;
+  const h = hashStr(node.name);
+  return "10.0." + (1 + (h % 254)) + "." + (10 + ((h >>> 8) % 240));
+}
+
+/** Systeminfo aller simulierten Knoten (`OS-IMAGE`, `KERNEL-VERSION`, `CONTAINER-RUNTIME`): eine Quelle neben
+ *  `NODE_VERSION`, damit `get nodes -o wide` und künftig `describe node` dieselben Werte zeigen. */
+export const NODE_SYSTEM_INFO = Object.freeze({
+  osImage: "Ubuntu 22.04.4 LTS",
+  kernelVersion: "5.15.0-112-generic",
+  containerRuntimeVersion: "containerd://1.7.18",
+});

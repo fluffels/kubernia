@@ -48,14 +48,14 @@ import { kubeadmCommand, deriveControlPlane, applyBootstrapScenario } from "./si
 import { nslookupCommand, curlCommand } from "./sim/net";
 import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, depEphemeralPeak, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
-import { randSuffix, clusterIP, suggest } from "./sim/util";
+import { randSuffix, clusterIP, suggest, CONTROL_PLANE_NODE, workerNodeName } from "./sim/util";
 import { shellTokens, subEntry } from "./sim/cliargs";
 import { makeRng, DEFAULT_SEED } from "./core/rng";
 import { resourceName, InvalidSpecError } from "./sim/names";
 import { sameRbac } from "./sim/rbac";
 import { assertClusterInvariants, warnClusterInvariants } from "./sim/invariants";
 import { assertReplicas, scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, statefulPodClaimName, seedPodTemplate, snapshotPodTemplate } from "./sim/workload";
-import { provisionNode } from "./sim/nodes";
+import { provisionNode, NODE_VERSION } from "./sim/nodes";
 import { renderHelp, renderHelpTopic } from "./hud/helptext";
 
 /* ---------- Ressourcen-Registry (#499) ----------
@@ -147,9 +147,9 @@ function buildChart(c: ChartSpec): Chart {
 /** Default-Cluster (kein `bareMetal`, keine expliziten `nodes`): der klassische 3-Knoten-Cluster
  *  wie kind/minikube. Elemente werden beim reset() geklont – die Konstante bleibt unangetastet. */
 const DEFAULT_NODES: ClusterNode[] = [
-  { name: "ahoi-control", status: "Ready", roles: "control-plane", version: "v1.30.2" },
-  { name: "ahoi-worker-1", status: "Ready", roles: "<none>", version: "v1.30.2" },
-  { name: "ahoi-worker-2", status: "Ready", roles: "<none>", version: "v1.30.2" },
+  { name: CONTROL_PLANE_NODE, status: "Ready", roles: "control-plane", version: NODE_VERSION },
+  { name: workerNodeName(1), status: "Ready", roles: "<none>", version: NODE_VERSION },
+  { name: workerNodeName(2), status: "Ready", roles: "<none>", version: NODE_VERSION },
 ];
 /** Ohne Vorgabe genau eine Default-StorageClass "standard", die PVCs dynamisch ein PV beschafft. */
 const DEFAULT_STORAGE_CLASS: StorageClassSpec = { name: "standard", provisioner: "rancher.io/local-path", reclaimPolicy: "Delete", isDefault: true };

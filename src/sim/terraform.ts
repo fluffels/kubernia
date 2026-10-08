@@ -30,6 +30,7 @@
  */
 import type { ClusterState } from "./state";
 import { provisionNode, removeNode, isControlPlane } from "./nodes";
+import { workerNodeName, CONTROL_PLANE_NODE } from "./util";
 import { flag, notSimulated, parseCall, specOfSub, subEntry, type Call, type FlagStyle, type SubEntry } from "./cliargs";
 
 /** Was die terraform-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
@@ -167,13 +168,13 @@ function tfPlan(host: TerraformHost, c: Call): string {
  *  hochziehen (wie `kubeadm init`) + je `hafen_worker`-Ressource einen Worker anhängen. */
 function provisionClusterFromCode(host: TerraformHost): void {
   if (!host.controlPlane.up) {
-    const cpName = host.nodes.find(isControlPlane)?.name || "ahoi-control";
+    const cpName = host.nodes.find(isControlPlane)?.name || CONTROL_PLANE_NODE;
     provisionNode(host, { name: cpName, roles: "control-plane" }); // idempotent per Name
     host.controlPlane = { up: true, token: "abcdef.0123456789abcdef", node: cpName };
   }
   const workers = host.tf.resources.filter(r => r.addr.startsWith("hafen_worker."));
   workers.forEach((_, i) => {
-    provisionNode(host, { name: "ahoi-worker-" + (i + 1) });
+    provisionNode(host, { name: workerNodeName(i + 1) });
   });
   host._reschedulePending();
 }
@@ -190,7 +191,7 @@ function tfApply(host: TerraformHost, c: Call): string {
   tf.applied = true;
   // Neue Server werden echte Cluster-Nodes – wartende Pods bekommen Platz!
   if (tf.resources.some(r => r.addr.includes("hafen_server"))) {
-    for (const name of ["ahoi-worker-3", "ahoi-worker-4"]) {
+    for (const name of [workerNodeName(3), workerNodeName(4)]) {
       provisionNode(host, { name }); // idempotent per Name (Worker-Default: roles "<none>")
     }
     host._reschedulePending();
@@ -220,8 +221,8 @@ function tfDestroy(host: TerraformHost, c: Call): string {
   if (locked) return locked;
   const addrs = allAddrs(host);
   tf.applied = false;
-  removeNode(host, "ahoi-worker-3");
-  removeNode(host, "ahoi-worker-4");
+  removeNode(host, workerNodeName(3));
+  removeNode(host, workerNodeName(4));
   // Aufbau-Capstone (#465): ein als Code gebauter Cluster wird per destroy wieder abgeräumt –
   // alle Knoten weg, Control-Plane down (zurück auf bare metal), das Gegenstück zum apply oben.
   // Das komplette Leeren des Node-Aggregats ist bewusst eine distinkte „Aggregat leeren"-
