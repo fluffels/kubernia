@@ -137,7 +137,8 @@ describe("(g) Der Konflikt-Merge nach dem Nachweis wird genau einmal erklärt (#
     assert.doesNotMatch(skill, /wird der Check rot/, "keine zweite Kopie der Erklärung im Skill");
     assert.doesNotMatch(skill, /git ≥ 2\.36/, "keine zweite Kopie der Erklärung im Skill");
     assert.match(skill, /git show --remerge-diff --format= <M>/, "der Skill trägt das Rezept");
-    assert.match(read(".claude/agents/kubernia-umsetzer.md"), /Nach jedem Merge von `main`/, "der Umsetzer verweist auf den Skill-Abschnitt");
+    assert.match(read(".claude/agents/kubernia-umsetzer.md"), /`review-lenses` › Nach jedem Merge von `main`/, "der Umsetzer verweist auf den Skill-Abschnitt");
+    assert.match(skill, /git diff <basis> <M>\^2 -- <alte datei>/, "der Skill trägt den Prüfschritt für verschobenen Code");
   });
   test("das Rezept im Skill ist an die Erkennung im Skript gekoppelt", () => {
     assert.match(read("scripts/check-review-nachweis.mjs"), /\["show", "--remerge-diff", "--format=", sha\]/);
