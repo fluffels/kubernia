@@ -233,24 +233,34 @@ export function lenientCall(spec: ArgSpec, t: readonly string[], from: number): 
  *  von Quotes ist `x`, ein alleinstehendes `\` (Zeilenfortsetzung) fällt weg. `null` bei unbalancierten Quotes. */
 export function shellTokens(raw: string): string[] | null {
   const out: string[] = [];
-  let cur = "", open = false, quote = "";
+  let cur = "", open = false;
   for (let i = 0; i < raw.length; i++) {
     const c = raw[i];
-    if (quote === "'") { if (c === "'") quote = ""; else cur += c; continue; }
-    if (quote === '"') {
-      if (c === '"') quote = "";
-      else if (c === "\\" && (raw[i + 1] === '"' || raw[i + 1] === "\\")) cur += raw[++i];
-      else cur += c;
-      continue;
-    }
-    if (c === '"' || c === "'") { quote = c; open = true; continue; }
-    if (/\s/.test(c)) { if (open) { out.push(cur); cur = ""; open = false; } continue; }
-    if (c === "\\") { if (i + 1 < raw.length && !/\s/.test(raw[i + 1])) { cur += raw[++i]; open = true; } continue; }
-    cur += c; open = true;
+    if (c === '"' || c === "'") {
+      const q = scanQuoted(raw, i + 1, c);
+      if (!q) return null;
+      cur += q.text; i = q.end; open = true;
+    } else if (/\s/.test(c)) {
+      if (open) { out.push(cur); cur = ""; open = false; }
+    } else if (c === "\\") {
+      if (i + 1 < raw.length && !/\s/.test(raw[i + 1])) { cur += raw[++i]; open = true; }
+    } else { cur += c; open = true; }
   }
-  if (quote) return null;
   if (open) out.push(cur);
   return out;
+}
+
+/** Der Inhalt eines Quote-Paars ab `from` (hinter dem öffnenden Zeichen): Text und Index des schließenden Zeichens,
+ *  `null` ohne schließendes. In `"…"` gelten `\"` und `\\`, in `'…'` nichts. */
+function scanQuoted(raw: string, from: number, quote: string): { text: string; end: number } | null {
+  let text = "";
+  for (let i = from; i < raw.length; i++) {
+    const c = raw[i];
+    if (c === quote) return { text, end: i };
+    if (quote === '"' && c === "\\" && (raw[i + 1] === '"' || raw[i + 1] === "\\")) text += raw[++i];
+    else text += c;
+  }
+  return null;
 }
 
 /** Der Eintrag einer Dispatch-Tabelle zu `key` – ohne Treffer auf Prototyp-Schlüsseln (`constructor`, `toString`). */

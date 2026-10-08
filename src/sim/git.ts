@@ -119,21 +119,25 @@ function gitStatus(host: GitHost): string {
   return s.trimEnd();
 }
 
+/** `git add` auf die Konfliktdatei: nur ohne Marker gilt der Konflikt als gelöst. */
+function gitResolveConflict(host: GitHost): string {
+  const g = host.git;
+  const file = g.conflict!.file;
+  if (host.files[file] && /^(<{7}|={7}|>{7})/m.test(host.files[file])) {
+    return host._err("git add: In '" + file + "' stecken noch Konfliktmarker (<<<<<<<, =======, >>>>>>>).",
+      "Wähle erst eine Seite: 'git checkout --ours " + file + "' oder '--theirs " + file + "'.");
+  }
+  if (!g.staged.includes(file)) g.staged.push(file);
+  g.conflict = null;
+  return "Konflikt in '" + file + "' als gelöst markiert (vorgemerkt). ▸ Schließe den Merge jetzt mit 'git commit --message \"…\"' ab.";
+}
+
 function gitAdd(host: GitHost, c: Call): string {
   const g = host.git;
   const arg = c.has("-A", "--all") ? "." : c.args[0]; // -A/--all gilt wie `.` (der Sim-Arbeitsordner ist flach)
   if (!arg) return host._err("git add: Welche Datei?", "z.B. 'git add seekarte.md' – oder 'git add .' für alles.");
   // Mitten im Konflikt markiert 'git add <konfliktdatei>' (oder 'git add .') ihn als gelöst.
-  if (g.conflict && (arg === "." || arg === g.conflict.file)) {
-    if (host.files[g.conflict.file] && /^(<{7}|={7}|>{7})/m.test(host.files[g.conflict.file])) {
-      return host._err("git add: In '" + g.conflict.file + "' stecken noch Konfliktmarker (<<<<<<<, =======, >>>>>>>).",
-        "Wähle erst eine Seite: 'git checkout --ours " + g.conflict.file + "' oder '--theirs " + g.conflict.file + "'.");
-    }
-    const file = g.conflict.file;
-    if (!g.staged.includes(file)) g.staged.push(file);
-    g.conflict = null;
-    return "Konflikt in '" + file + "' als gelöst markiert (vorgemerkt). ▸ Schließe den Merge jetzt mit 'git commit --message \"…\"' ab.";
-  }
+  if (g.conflict && (arg === "." || arg === g.conflict.file)) return gitResolveConflict(host);
   let toAdd: string[];
   if (arg === ".") {
     toAdd = gitUntracked(host);
@@ -179,20 +183,22 @@ function gitBranch(host: GitHost, c: Call): string {
   return "Branch '" + name + "' angelegt. (Wechseln mit 'git checkout " + name + "'.)";
 }
 
+/** Konflikt-Auflösung: eine Seite wählen, 'git checkout --ours/--theirs [--] <datei>'. */
+function gitCheckoutSide(host: GitHost, c: Call): string {
+  const g = host.git;
+  const ours = c.has("--ours");
+  const flagName = ours ? "--ours" : "--theirs";
+  const file = c.args[0];
+  if (!g.conflict) return host._err("git checkout " + flagName + ": Gerade ist kein Konflikt offen.", "Diese Form wählt im Konflikt eine Seite aus.");
+  if (!file || file !== g.conflict.file) return host._err("git checkout " + flagName + ": Welche Konfliktdatei?", "Im Konflikt steckt: " + g.conflict.file + ". Also: 'git checkout " + flagName + " " + g.conflict.file + "'.");
+  host.files[file] = ours ? g.conflict.ours : g.conflict.theirs;
+  const wer = ours ? "deine eigene (HEAD)" : "die hereinkommende (" + g.conflict.from + ")";
+  return "'" + file + "' auf " + wer + " Version gesetzt. ▸ Markier die Lösung mit 'git add " + file + "', dann 'git commit'.";
+}
+
 function gitCheckout(host: GitHost, c: Call): string {
   const g = host.git;
-  // Konflikt-Auflösung: eine Seite wählen. 'git checkout --ours/--theirs [--] <datei>'
-  const ours = c.has("--ours"), theirs = c.has("--theirs");
-  if (ours || theirs) {
-    const flagName = ours ? "--ours" : "--theirs";
-    const side = ours ? "ours" : "theirs";
-    const file = c.args[0];
-    if (!g.conflict) return host._err("git checkout " + flagName + ": Gerade ist kein Konflikt offen.", "Diese Form wählt im Konflikt eine Seite aus.");
-    if (!file || file !== g.conflict.file) return host._err("git checkout " + flagName + ": Welche Konfliktdatei?", "Im Konflikt steckt: " + g.conflict.file + ". Also: 'git checkout " + flagName + " " + g.conflict.file + "'.");
-    host.files[file] = side === "ours" ? g.conflict.ours : g.conflict.theirs;
-    const wer = side === "ours" ? "deine eigene (HEAD)" : "die hereinkommende (" + g.conflict.from + ")";
-    return "'" + file + "' auf " + wer + " Version gesetzt. ▸ Markier die Lösung mit 'git add " + file + "', dann 'git commit'.";
-  }
+  if (c.has("--ours") || c.has("--theirs")) return gitCheckoutSide(host, c);
   const create = c.value("-b") !== null;
   const name = create ? c.value("-b") : c.args[0];
   if (create && c.args.length) return notSimulated(host, "einen Startpunkt bei 'git checkout -b' (" + c.args[0] + ").", ["git checkout -b <name>"], "Wechsle erst auf den Ausgangs-Branch, dann leg den neuen an.");

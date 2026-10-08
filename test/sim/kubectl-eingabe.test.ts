@@ -569,7 +569,7 @@ describe("kubectl: logs -f/-p, -A, --replicas über cliargs", () => {
     expect(frac.error).toBe(true);
     expect(frac.output).toContain('invalid argument "3.5" for "--replicas" flag: strconv.ParseInt: parsing "3.5": invalid syntax');
     expect(s.exec("kubectl scale deployment web --replicas=abc").error).toBe(true);
-    expect(s.exec("kubectl scale deployment web --replicas=-1").output).toContain("must be greater than or equal to 0");
+    expect(s.exec("kubectl scale deployment web --replicas=-1").output).toContain("The --replicas=COUNT flag is required, and COUNT must be greater than or equal to 0");
     expect(rep()).toBe(2);
     expect(s.exec("kubectl scale deployment web --replicas=0").error).toBe(false);
     expect(rep()).toBe(0);

@@ -46,7 +46,7 @@ function resolveDeploymentRef(host: KubectlHost, sub: KubectlSub, t: string[], f
 }
 
 
-export function kubectlScale(host: KubectlHost, t: string[], raw: string) {
+export function kubectlScale(host: KubectlHost, t: string[]) {
   const { name, error } = resolveDeploymentRef(host, "scale", t, 2);
   if (error) return error;
   const rep = replicasArg(host, "scale", t);
