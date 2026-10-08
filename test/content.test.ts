@@ -851,8 +851,8 @@ const ANZEIGE_QUELLEN = {
     return [[`${id}.hint`, task.hint], [`${id}.why`, task.why ?? ""]];
   }),
   RANKS: { ohneScan: KLARTEXT },
-  SHOP: { ohneScan: KLARTEXT },
-  NPCS: { ohneScan: KLARTEXT },
+  SHOP: () => KQContent.SHOP.flatMap((i): [string, string][] => [[`${i.id}.name`, i.name], [`${i.id}.desc`, i.desc]]), // src/ui/shop.ts setzt beide unescaped in innerHTML
+  NPCS: () => Object.entries(KQContent.NPCS).flatMap(([id, n]): [string, string][] => [[`${id}.name`, n.name], [`${id}.title`, n.title]]), // src/ui/hud.ts ebenso
   PRACTICE: { ohneScan: "Drill-Verweise je NPC (IDs), keine Texte" },
   QUEST_TOPICS: { ohneScan: KLARTEXT },
   TF_CONFIGS: { ohneScan: "Terraform-Konfig-Quelltext im Code-Block (Daten, kein Markup)" },

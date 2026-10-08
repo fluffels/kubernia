@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 
 // Zähler der PowerShell-Starts (#1526): `fixOrphans` fragt unter Windows bei einem gesperrten Ordner die Prozessliste per
 // `powershell` (WMI) ab; ein Start kostet ~600 ms und riss unter Parallellast den Timeout. Die Tests injizieren darum
-// `listProcesses` (siehe `fixOrphans` unten); der letzte Test dieser Datei belegt, dass nie ein echter Start passiert.
+// `listProcesses` (siehe `fixOrphans` unten); der letzte Test dieser Datei belegt, dass nie ein echter Start passiert (nur unter Windows aussagekräftig, `listProcessesWindows` läuft sonst nie; bewusst der letzte Test, mit `-t`-Filter läuft er leer).
 const powershellStarts = vi.hoisted(() => ({ n: 0 }));
 vi.mock("node:child_process", async (importOriginal) => {
   const echt = await importOriginal<typeof import("node:child_process")>();

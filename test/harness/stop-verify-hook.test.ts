@@ -20,7 +20,7 @@ import { lies, repoDateien } from "./repo-texte";
 
 // Zähler der PowerShell-Starts (#1526): bei einem gesperrten Waisen-Ordner fragt `checkAndFixOrphanWorktrees` unter Windows
 // die Prozessliste per `powershell` (WMI) ab; ein Start kostet ~600 ms und riss unter Parallellast den Timeout. Die Tests
-// injizieren darum `listProcesses` (`ohnePowershell`); der letzte Test dieser Datei belegt, dass nie ein echter Start passiert.
+// injizieren darum `listProcesses` (`ohnePowershell`); der letzte Test dieser Datei belegt, dass nie ein echter Start passiert (nur unter Windows aussagekräftig, `listProcessesWindows` läuft sonst nie; bewusst der letzte Test, mit `-t`-Filter läuft er leer).
 const powershellStarts = vi.hoisted(() => ({ n: 0 }));
 vi.mock("node:child_process", async (importOriginal) => {
   const echt = await importOriginal<typeof import("node:child_process")>();

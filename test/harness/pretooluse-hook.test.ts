@@ -107,7 +107,7 @@ describe("Routing und Entscheidung (#1311)", () => {
 });
 
 // Jeder Test startet echte node-Prozesse (~60-100 ms je Start, unter Parallellast ein Vielfaches). Darum je Skript ein Test
-// mit höchstens zwei Starts und ein großzügigeres Describe-Timeout statt des globalen 5-s-Limits (#1526; Präzedenz haupt-sync).
+// mit wenigen Starts und ein großzügigeres Describe-Timeout statt des globalen 5-s-Limits (#1526; Präzedenz haupt-sync).
 describe("Prozess-Start (#1311)", { timeout: 30_000 }, () => {
   const start = (skript: string, eingabe: string) => execFileSync("node", [resolve(WURZEL, "scripts", skript)], { input: eingabe, encoding: "utf8", cwd: WURZEL });
   // Haupt-Checkout (für die deny-Payloads der Direktaufrufe): ein git-Start je Datei statt je Test.

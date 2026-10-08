@@ -42,7 +42,7 @@ export function lies(pfad: string): string {
 /**
  * Der Agenten-Kontext: Dateien, die ein Agent liest oder ausführt und in denen eine Anleitung stehen kann (Doku, Prompts,
  * Skills, Workflows, Hooks, Skripte, Wächter). Alle `*.md` überall (auch modul-lokale AGENTS.md), die Wurzeldateien und
- * die Harness-Ordner. Nicht dazu: Spiel-Code (`src/`), Spiel-Tests (`test/` außer `test/harness/`), Assets, Lockfile.
+ * die Harness-Ordner. Nicht dazu: Spiel-Code (`src/`), Spiel-Tests (`test/` außer `test/harness/`; Grenze wie `.github/protected-paths.json`), Assets, Lockfile.
  */
 export const AGENTEN_KONTEXT = (pfad: string): boolean => {
   if (pfad === "package-lock.json") return false;
@@ -59,6 +59,8 @@ export function vorfilterProbleme(muster: readonly RegExp[]): string[] {
   if (muster.length === 0) return ["keine Muster"];
   const flags = muster[0].flags;
   for (const m of muster) {
+    // `g`/`y` machen `.test()` zustandsbehaftet (lastIndex): der Vorfilter könnte bei der nächsten Datei falsch-negativ werden.
+    if (/[gy]/.test(m.flags)) probleme.push(`Flag g/y zustandsbehaftet: ${String(m)}`);
     if (m.flags !== flags) probleme.push(`Flags weichen ab: ${String(m)} (erwartet "${flags}")`);
     // Rückverweis nur, wenn der Backslash nicht selbst maskiert ist (gerade Zahl Backslashes davor).
     if (/(?<!\\)(?:\\\\)*\\(?:[1-9]|k<)/.test(m.source)) probleme.push(`Rückverweis im Muster: ${String(m)}`);
