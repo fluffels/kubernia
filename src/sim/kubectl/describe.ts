@@ -15,7 +15,7 @@
  * Phaser-frei (pure Domäne); importiert nur die get-Hilfen aus ./inspect; inspect importiert nie describe*, top oder logs (kein Zyklus).
  */
 import type { KubectlHost } from "./host";
-import { DEFAULT_NAMESPACE, isExternalNameService, isHeadlessService, type Deployment, type PvcRes, type ServiceRes, type StatefulSetRes } from "../state";
+import { DEFAULT_NAMESPACE, VOLUME_MODE, isExternalNameService, type ClusterNode, isHeadlessService, type Deployment, type PvcRes, type ServiceRes, type StatefulSetRes } from "../state";
 import { RESOURCE_KINDS, resolveKind, qualified, type ResourceKind, type ResourcePlural } from "./resources";
 import { positionals, typeAndName, notSimulated, unknownResourceType } from "./args";
 import { workloadSelector, formatLabels } from "../util";
@@ -26,6 +26,7 @@ import { statefulPodClaimName } from "../workload";
 import { availableReplicas, noResourcesIn, INGRESS_ADDRESS } from "./inspect";
 import { describePod, podLimitLines, podSecurityLines } from "./describe-pod";
 import { sameRbac } from "../rbac";
+import { nodeInternalIP, NODE_SYSTEM_INFO } from "../nodes";
 
 /** Eine beschreibbare Art: ihre Objektnamen (ohne Nebenwirkung) und der Renderer für ein Objekt. */
 interface DescribeEntry {
@@ -158,7 +159,7 @@ function describePvc(host: KubectlHost, name: string, kind: ResourceKind): strin
     kv("Volume", pvc.volume, 15),
     kv("Capacity", bound ? pvc.capacity : "", 15),
     kv("Access Modes", bound ? pvc.accessModes : "", 15),
-    kv("VolumeMode", "Filesystem", 15),
+    kv("VolumeMode", VOLUME_MODE, 15),
     kv("Used By", usedBy.length ? usedBy.join("\n" + " ".repeat(15)) : "<none>", 15),
     ...(events.length ? ["Events:", ...events] : [kv("Events", "<none>", 15)]),
   ].join("\n");
@@ -200,6 +201,21 @@ function describeStatefulSet(host: KubectlHost, name: string, kind: ResourceKind
 
 // ===== Node, Ingress, NetworkPolicy, Role, ServiceAccount =====
 
+/** Addresses-Block von `describe node`: InternalIP (dieselbe Adresse wie `get nodes -o wide`) und Hostname. */
+function nodeAddressLines(node: ClusterNode): string[] {
+  return ["Addresses:", "  InternalIP:  " + nodeInternalIP(node), "  Hostname:    " + node.name];
+}
+
+/** System-Info-Block von `describe node`, aus `NODE_SYSTEM_INFO` und der Knoten-Version. Machine ID, System UUID und
+ *  Boot ID fehlen bewusst (Grenze `describe-gekuerzt`). */
+function nodeSystemInfoLines(node: ClusterNode): string[] {
+  const i = NODE_SYSTEM_INFO;
+  const row = (k: string, v: string) => "  " + (k + ":").padEnd(28) + v;
+  return ["System Info:", row("Kernel Version", i.kernelVersion), row("OS Image", i.osImage), row("Operating System", i.operatingSystem),
+    row("Architecture", i.architecture), row("Container Runtime Version", i.containerRuntimeVersion),
+    row("Kubelet Version", node.version), row("Kube-Proxy Version", node.version)];
+}
+
 export function describeNode(host: KubectlHost, name: string): string {
   const node = host.nodes.find(n => n.name === name);
   if (!node) return host._err('Error from server (NotFound): nodes "' + name + '" not found', "Tipp: Namen aus 'kubectl get nodes' kopieren.");
@@ -213,13 +229,15 @@ export function describeNode(host: KubectlHost, name: string): string {
     // DiskPressure ist die Lern-Pointe (#240): True = der kubelet evictet Pods, um Disk zu schaffen.
     "  DiskPressure     " + (node.diskPressure ? "True" : "False"),
     "  Ready            True",
+    ...nodeAddressLines(node),
   ];
   // Ephemeral-Storage-Bilanz nur zeigen, wenn der Knoten eine Kapazität hat (sonst „unbegrenzt").
-  if (node.ephemeralCapacityMi !== undefined) {
+  const capacity = node.ephemeralCapacityMi !== undefined;
+  if (capacity) lines.push("Capacity:", "  ephemeral-storage:  " + node.ephemeralCapacityMi + "Mi");
+  lines.push(...nodeSystemInfoLines(node));
+  if (capacity) {
     const used = host._nodeEphemeralUsed(node.name);
     lines.push(
-      "Capacity:",
-      "  ephemeral-storage:  " + node.ephemeralCapacityMi + "Mi",
       "Allocated resources:",
       "  Resource           Used",
       "  --------           ----",

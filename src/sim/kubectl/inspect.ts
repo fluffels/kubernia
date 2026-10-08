@@ -11,12 +11,12 @@
  * Jeder Ressourcentyp ist ein eigener kleiner Renderer; ein 10× größerer Ressourcensatz
  * wächst als 10× Einträge, ohne dass Dispatcher-Komplexität/-Länge mitwächst.
  */
-import { podIP, CONTROL_PLANE_IP, CONTROL_PLANE_NODE, BUILTIN_AGE, workloadSelector, formatLabels } from "../util";
+import { podIP, BUILTIN_AGE, workloadSelector, formatLabels } from "../util";
 import { endpointAddresses, podAddress, servicesWithDefault, serviceSelector, isKubernetesService } from "../endpoints";
 import type { KubectlHost } from "./host";
-import { DEFAULT_NAMESPACE, isExternalNameService, type Deployment } from "../state";
+import { DEFAULT_NAMESPACE, VOLUME_MODE, isExternalNameService, type Deployment, type RbacSubject } from "../state";
 import { currentReplicaSet, podTemplateLabels } from "../replicasets";
-import { nodeInternalIP, NODE_SYSTEM_INFO } from "../nodes";
+import { nodeInternalIP, NODE_SYSTEM_INFO, CONTROL_PLANE_IP, CONTROL_PLANE_NODE } from "../nodes";
 import { requestedNamespace, allNamespaces } from "./namespace";
 import { RESOURCE_KINDS, type ResourcePlural } from "./resources";
 import { clusterPods, type ClusterPod } from "../pods";
@@ -165,7 +165,7 @@ function getNodes(host: KubectlHost): GetTable {
   // STATUS-Spalte, damit der Druck im Überblick auffällt – Detail dann in `describe node` (#240).
   const { osImage, kernelVersion, containerRuntimeVersion } = NODE_SYSTEM_INFO;
   return withWide(tableOf(["NAME", "STATUS", "ROLES", "AGE", "VERSION", "INTERNAL-IP", "EXTERNAL-IP", "OS-IMAGE", "KERNEL-VERSION", "CONTAINER-RUNTIME"],
-    host.nodes.map(n => [n.name, n.diskPressure ? n.status + ",DiskPressure" : n.status, n.roles, BUILTIN_AGE, n.version,
+    host.nodes.map(n => [n.name, n.diskPressure ? n.status + ",DiskPressure" : n.status, n.roles, n.created === undefined ? BUILTIN_AGE : host._age(n.created), n.version,
       nodeInternalIP(n), "<none>", osImage, kernelVersion, containerRuntimeVersion])), 5);
 }
 
@@ -215,13 +215,13 @@ function getStatefulSets(host: KubectlHost): GetTable {
 }
 
 function getPvcs(host: KubectlHost): GetTable {
-  return tableOf(["NAME", "STATUS", "VOLUME", "CAPACITY", "ACCESS MODES", "STORAGECLASS", "AGE"],
-    host.pvcs.map(p => [p.name, p.status, p.volume || "", p.status === "Bound" ? p.capacity : "", p.accessModes, p.storageClass || "", host._age(p.created)]));
+  return withWide(tableOf(["NAME", "STATUS", "VOLUME", "CAPACITY", "ACCESS MODES", "STORAGECLASS", "AGE", "VOLUMEMODE"],
+    host.pvcs.map(p => [p.name, p.status, p.volume || "", p.status === "Bound" ? p.capacity : "", p.accessModes, p.storageClass || "", host._age(p.created), VOLUME_MODE])), 1);
 }
 
 function getPvs(host: KubectlHost): GetTable {
-  return tableOf(["NAME", "CAPACITY", "ACCESS MODES", "RECLAIM POLICY", "STATUS", "CLAIM", "STORAGECLASS", "AGE"],
-    host.pvs.map(p => [p.name, p.capacity, p.accessModes, p.reclaimPolicy, p.status, p.claim || "", p.storageClass || "", host._age(p.created)]));
+  return withWide(tableOf(["NAME", "CAPACITY", "ACCESS MODES", "RECLAIM POLICY", "STATUS", "CLAIM", "STORAGECLASS", "AGE", "VOLUMEMODE"],
+    host.pvs.map(p => [p.name, p.capacity, p.accessModes, p.reclaimPolicy, p.status, p.claim || "", p.storageClass || "", host._age(p.created), VOLUME_MODE])), 1);
 }
 
 function getStorageClasses(host: KubectlHost): GetTable {
@@ -248,13 +248,20 @@ function getClusterRoles(host: KubectlHost): GetTable {
   return tableOf(["NAME", "AGE"], host.roles.filter(r => r.cluster).map(r => [r.name, host._age(r.created)]));
 }
 
-function getRoleBindings(host: KubectlHost): GetTable {
-  return tableOf(["NAME", "ROLE", "AGE"], host.roleBindings.filter(b => !b.cluster).map(b => [b.name, b.roleRef.kind + "/" + b.roleRef.name, host._age(b.created)]));
+/** Die Subjekt-Spalten von `-o wide` (USERS, GROUPS, SERVICEACCOUNTS): SubjectsStrings des echten kubectl, die
+ *  ServiceAccounts als `<namespace>/<name>`. GROUPS bleibt leer (die Sim kennt nur User und ServiceAccounts). */
+function subjectCells(subjects: RbacSubject[]): string[] {
+  const join = (kind: RbacSubject["kind"], f: (s: RbacSubject) => string) => subjects.filter(s => s.kind === kind).map(f).join(", ");
+  return [join("User", s => s.name), "", join("ServiceAccount", s => (s.namespace ?? DEFAULT_NAMESPACE) + "/" + s.name)];
 }
 
-function getClusterRoleBindings(host: KubectlHost): GetTable {
-  return tableOf(["NAME", "ROLE", "AGE"], host.roleBindings.filter(b => b.cluster).map(b => [b.name, b.roleRef.kind + "/" + b.roleRef.name, host._age(b.created)]));
+function getBindings(host: KubectlHost, cluster: boolean): GetTable {
+  return withWide(tableOf(["NAME", "ROLE", "AGE", "USERS", "GROUPS", "SERVICEACCOUNTS"],
+    host.roleBindings.filter(b => b.cluster === cluster).map(b => [b.name, b.roleRef.kind + "/" + b.roleRef.name, host._age(b.created), ...subjectCells(b.subjects)])), 3);
 }
+
+const getRoleBindings = (host: KubectlHost): GetTable => getBindings(host, false);
+const getClusterRoleBindings = (host: KubectlHost): GetTable => getBindings(host, true);
 
 function getAlerts(host: KubectlHost): GetTable {
   return tableOf(["NAME", "SEVERITY", "STATE", "SUMMARY"], host.alerts().map(a => [a.name, a.severity, a.state, a.summary]));

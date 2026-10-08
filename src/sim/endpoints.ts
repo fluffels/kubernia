@@ -12,7 +12,8 @@
  */
 import { isExternalNameService, type ClusterState, type Deployment, type PvcRes, type ServiceRes } from "./state";
 import { clusterPods, type ClusterPod } from "./pods";
-import { podIP, CONTROL_PLANE_IP, workloadLabels, type Labels } from "./util";
+import { podIP, workloadLabels, type Labels } from "./util";
+import { CONTROL_PLANE_IP } from "./nodes";
 import { assertNever } from "../core/assert";
 import { statefulPodVolumePending } from "./workload";
 
