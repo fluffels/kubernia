@@ -99,7 +99,8 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 | `npm run check:docdrift` | `verify` | dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien |
 | `npm run check:docgen` | `verify` | generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein |
 | `npm run check:c4` | `verify` | LikeC4-Modell: validiert, formatiert; Schichten, Phaser, Schicht-Kanten und Top-Level-Module stimmen mit `scripts/layers.cjs` und `src/` überein |
-| `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo, keine Steuerbytes (NUL) in Textdateien |
+| `npm run check:internalrefs` | `verify` | keine internen Bezüge im öffentlichen Repo |
+| `npm run check:steuerbytes` | `verify` | keine Steuerbytes (NUL) in Textdateien |
 | `npm run check:lockfile` | `verify` | Lockfile passt zur `package.json` |
 | `npm run check:diffsize` | `verify` | Slice-Größe (Dateien und Zeilen gegen die Merge-Base) |
 | `npm test` | `verify` | Verhalten von Domäne, Sim, Wirtschaft und Harness-Wächtern, inkl. Negativ- und Grenzfälle (Vitest) |
@@ -442,7 +443,7 @@ flowchart LR
   subgraph bitte["Bitte: lokal, umgehbar"]
     regeln["AGENTS.md: Regeln<br/>und Konventionen"]
     hooks["Claude-Code-Hooks:<br/>Worktree-Guard, gh-Guard"]
-    verify["npm run verify<br/>14 Gates"]
+    verify["npm run verify<br/>15 Gates"]
     prepush["pre-push-Hook"]
   end
   subgraph mauer["Mauer: Server, nicht umgehbar"]

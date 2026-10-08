@@ -147,39 +147,6 @@ export function findViolations(files, terms, readFile, nameTerms = []) {
   return hits;
 }
 
-/** Erste Zeile (1-basiert) mit einem Steuerbyte (C0 außer Tab, LF und CR) oder `null`. Pur. */
-export function ersteSteuerzeile(content) {
-  let zeile = 1;
-  for (let i = 0; i < content.length; i++) {
-    const c = content.charCodeAt(i);
-    if (c === 10) zeile += 1;
-    else if (c < 32 && c !== 9 && c !== 13) return zeile;
-  }
-  return null;
-}
-
-/**
- * Steuerbyte-Wächter (#1428 Z17): eine getrackte Textdatei mit NUL oder einem anderen C0-Steuerbyte außer Tab/LF/CR wird sonst bei der
- * Begriffsprüfung still übersprungen (`findViolations` hält sie für binär) und hielte auch git für eine Binärdatei: Diffs, Review und
- * dieses Gate sähen sie nicht mehr (Anlass: ein Skript schrieb unter Git Bash ein echtes NUL-Byte in eine Datei). Liefert je Datei einen
- * Treffer `{ file, line, term: "", kind: "steuerbyte" }`. Nur für Dateien, nicht für Commit-Messages oder stdin. Nicht lesbare Dateien
- * werden übersprungen (wie in `findViolations`).
- */
-export function findSteuerbytes(files, readFile) {
-  const hits = [];
-  for (const file of files) {
-    let content;
-    try {
-      content = readFile(file);
-    } catch {
-      continue;
-    }
-    const line = ersteSteuerzeile(content);
-    if (line !== null) hits.push({ file, line, term: "", kind: "steuerbyte", excerpt: "" });
-  }
-  return hits;
-}
-
 /** Commit-Messages des Branches gegen die Merge-Base (`origin/main..HEAD`) als Pseudo-Dateien
  *  `commit:<sha7>`. Ohne Vergleichs-Basis (flacher Checkout, kein origin/main) leer — fail-open
  *  wie check:diffsize. Die Anonymitätsregel nennt Commits/PR-Metadaten ausdrücklich; `refs/pull/*`
@@ -212,7 +179,7 @@ export function runCheck(rootDir = ROOT, io = {}) {
   const texts = new Map(listCommits(rootDir).map((c) => [c.name, c.text]));
   const readFile = (rel) => (texts.has(rel) ? texts.get(rel) : readDisk(rel));
   const all = [...files, ...texts.keys()];
-  return { files: all, violations: [...findSteuerbytes(files, readFile), ...findViolations(all, terms, readFile, nameTerms)] };
+  return { files: all, violations: findViolations(all, terms, readFile, nameTerms) };
 }
 
 /** Was die Erfolgsmeldung als „geprüft" nennt: der Repo-Lauf Dateien und Commits, `--text` nur stdin. */
@@ -281,7 +248,7 @@ function reportAndExit(violations, checked, red, green, label) {
   }
 
   for (const v of violations) {
-    const what = v.kind === "steuerbyte" ? "Steuerbyte in der Textdatei (NUL oder C0-Zeichen; Skript per Write schreiben, Steuerzeichen nur als Escape)" : v.kind === "name" ? "Namensbezug im Text" : "interner Bezug im Text";
+    const what = v.kind === "name" ? "Namensbezug im Text" : "interner Bezug im Text";
     console.error(red(`✖ ${v.file}:${v.line} — ${what}`));
   }
 
