@@ -19,7 +19,7 @@ import type {
   ScrapeTarget, Alert, Scenario, ClusterState,
 } from "./sim/state";
 import { deploymentPodStatus, isReady } from "./sim/podstatus";
-import { DEFAULT_NAMESPACE, HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService } from "./sim/state";
+import { DEFAULT_NAMESPACE, HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService, assertServiceType } from "./sim/state";
 export { BROKEN_STATUS } from "./sim/state";
 export type {
   ExecResult,
@@ -50,10 +50,10 @@ import { awsCommand, objectByteLength } from "./sim/s3";
 import { depEphemeralUsed, depEphemeralPeak, nodeOf, nodeEphemeralUsed, resetEphemeral, evaluateEviction } from "./sim/eviction";
 import { randSuffix, clusterIP, suggest } from "./sim/util";
 import { makeRng, DEFAULT_SEED } from "./core/rng";
-import { resourceName, assertServiceType, InvalidSpecError } from "./sim/names";
+import { resourceName, InvalidSpecError } from "./sim/names";
 import { sameRbac } from "./sim/rbac";
 import { assertClusterInvariants, warnClusterInvariants } from "./sim/invariants";
-import { scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, statefulPodClaimName, seedPodTemplate, snapshotPodTemplate } from "./sim/workload";
+import { assertReplicas, scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, statefulPodClaimName, seedPodTemplate, snapshotPodTemplate } from "./sim/workload";
 import { provisionNode } from "./sim/nodes";
 import { renderHelp, renderHelpTopic } from "./hud/helptext";
 
@@ -517,6 +517,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     /** Baut ein StatefulSet: Pods mit STABILER Identität (<name>-0 …) plus je Replica
      *  ein PVC aus dem volumeClaimTemplate (<vct>-<name>-<ordinal>), das gleich gebunden wird. */
     _makeStatefulSet(spec: { name: string; image: string; replicas: number; serviceName?: string; volumeClaimName?: string; storage?: string; storageClass?: string }): StatefulSetRes {
+      assertReplicas("StatefulSet", spec.name, spec.replicas);
       const vct = spec.volumeClaimName || "data";
       const sts: StatefulSetRes = {
         name: resourceName(spec.name), image: spec.image, replicas: spec.replicas, // #507: DNS-1123 zentral
@@ -896,7 +897,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     touch() { this.rev++; }
 
     // Eingabe-Parsing (Vorschläge/Flags) liegt seit #499 als pure Funktionen in ./sim/util.ts
-    // (editDistance/suggest/flagValue/multiFlag) – sie brauchen keinen Cluster-Zustand, hielten
+    // (editDistance/suggest/multiFlag) – sie brauchen keinen Cluster-Zustand, hielten
     // den Kern nur künstlich groß und mussten durch jedes Host-Interface gereicht werden.
 
     /** Hilfetext – Katalog + Filtern liegen in cmdunlock.ts (#358), hält den Kern

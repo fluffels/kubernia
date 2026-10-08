@@ -8,8 +8,9 @@ import { availableParallelism } from "node:os";
 // createRequire, weil layers.cjs bewusst CommonJS ist (der dependency-cruiser-Config `require`t
 // es ebenfalls) — dasselbe Muster wie scripts/check-docmap.mjs.
 const require = createRequire(import.meta.url);
-const { LAYERS, COVERAGE_GLOBS } = require("./scripts/layers.cjs") as {
+const { LAYERS, COVERAGE_GLOBS, SCHICHT_MODELL } = require("./scripts/layers.cjs") as {
   LAYERS: { PRESENTATION: string; APPLICATION: string; ENTRY: string; DOMAIN: string };
+  SCHICHT_MODELL: { quellwurzel: string };
   COVERAGE_GLOBS: Record<string, string>;
 };
 // #1408 (ADR 0018): Namensregel der Content-Chunks, dieselbe Quelle nutzt das Gate check-bundle.mjs.
@@ -192,6 +193,8 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
       // Die Unit-Tests (sim/content) brauchen kein DOM – laufen schnell auf Node.
       environment: "node",
       include: ["test/**/*.test.ts"],
+      // #1428: Temp-Git-Repos in Tests ohne CRLF-Warnungen (core.safecrlf=false per GIT_CONFIG_*).
+      setupFiles: ["test/support/git-umgebung.ts"],
       // #1331: lokal begrenzt (Überbelegung durch parallele Läufe von Lenses/Playwright/anderen Worktrees ließ die
       // store-/Git-lastigen Tests ins 5-s-Timeout laufen); die CI bleibt beim Standard. Untergrenze 2 Worker, damit bei
       // wenigen Kernen (4 Kerne ergäben 1 Worker) nicht alles seriell läuft. Override: `npm test -- --maxWorkers=<n>`.
@@ -203,7 +206,8 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         // Nur den ausgelieferten Spielcode messen (nur .ts; kein Markdown/JSON unter src);
         // `all: true` (v8-Default) zählt auch NICHT importierte Dateien mit → untestete
         // Präsentation wird sichtbar statt still 0.
-        include: ["src/**/*.ts"],
+        // Aus der Quellwurzel des Schicht-Modells abgeleitet (#1428 Z13), nicht als zweites festes `src/`.
+        include: [`${SCHICHT_MODELL.quellwurzel}**/*.ts`],
         // `lcovonly` (nicht `lcov`) neben den beiden bestehenden Reportern: #1021 wertet
         // coverage/lcov.info gegen den PR-Diff aus (Diff-Coverage). Bewusst NICHT `lcov`,
         // denn das ist `lcovonly` PLUS ein kompletter HTML-Baum unter coverage/.

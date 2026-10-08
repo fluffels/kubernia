@@ -11,7 +11,7 @@ import { saveVersionenGenerator } from "./save-versionen.mjs";
 import { schichtenIstGenerator, schichtenSollGenerator } from "./schichten.mjs";
 
 // Gruppen (#1373): Kern = übertragbar, braucht nur Node und die Config (Fremd-Repo-Beleg: test/docgen-fremdrepo.test.ts);
-// Harness-Stack = setzt Claude Code, GitHub und npm voraus; Spiel = nur Kubernia.
+// Harness-Stack = setzt Claude Code, GitHub und npm voraus (die npm-Ketten-Auflösung dafür steht in npm-ketten.mjs, nicht im Kern); Spiel = nur Kubernia.
 export const GENERATORS = {
   // Kern (übertragbar)
   "adr-liste": adrListeGenerator,

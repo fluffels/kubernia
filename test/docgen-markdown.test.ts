@@ -6,6 +6,8 @@ import { fixture } from "./support/tmp-fixture";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as md from "../scripts/docs-gen/markdown.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as ketten from "../scripts/docs-gen/npm-ketten.mjs";
 
 const api = md as unknown as {
   mermaidText: (s: string) => string;
@@ -59,7 +61,7 @@ describe("leseJson (#1411)", () => {
 });
 
 describe("kettenSchritte (#1411)", () => {
-  const kettenSchritte = (md as unknown as { kettenSchritte: (s: Record<string, string>, c: string[], k: string) => string[] }).kettenSchritte;
+  const kettenSchritte = (ketten as unknown as { kettenSchritte: (s: Record<string, string>, c: string[], k: string) => string[] }).kettenSchritte;
   test("löst verschachtelte Ketten auf und zählt je Schritt einmal", () => {
     const scripts = { verify: "npm run a && npm run b && npm test && npm run a", b: "npm run c && npm run d" };
     assert.deepEqual(kettenSchritte(scripts, ["verify"], "verify"), ["a", "c", "d", "test"]);

@@ -18,9 +18,9 @@ import { argoReconcile, cloneChildSpec } from "../argocd";
 import { assertNever } from "../../core/assert";
 import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { sameRbac } from "../rbac";
-import { flagValue, multiFlag } from "../util"; // clusterIP entfällt: Service läuft jetzt über host._makeService (#507)
+import { multiFlag } from "../util"; // clusterIP entfällt: Service läuft jetzt über host._makeService (#507)
 import { admitNewPods } from "./rollout";
-import { resolveKind, qualified } from "./resources";
+import { resolveKind, qualified, type ResourcePlural } from "./resources";
 import { flagValueOf, notSimulated, positionals, typeAndName, unknownResourceType } from "./args";
 import { applyDeployment } from "./apply-deployment";
 import { fileEffects, type ManifestVerb } from "../manifest/registry";
@@ -67,7 +67,7 @@ function spliceByName(arr: { name: string }[], name: string): boolean {
  * Eintrag je Typ (Schlüssel = Plural aus ./resources) statt eines eigenen if-Zweigs; Aliase und die
  * qualifizierten Namen der NotFound-/„… deleted"-Zeilen kommen aus der Registry. Die Sonderfälle
  * (pod/deployment/statefulset/pvc) stehen in `DELETE_SPECIAL`. */
-const SIMPLE_DELETABLE: ReadonlyMap<string, (host: KubectlHost) => { name: string }[]> = new Map<string, (host: KubectlHost) => { name: string }[]>([
+const SIMPLE_DELETABLE: ReadonlyMap<ResourcePlural, (host: KubectlHost) => { name: string }[]> = new Map<ResourcePlural, (host: KubectlHost) => { name: string }[]>([
   ["services", (h: KubectlHost) => h.services],
   ["configmaps", (h: KubectlHost) => h.configMaps],
   ["secrets", (h: KubectlHost) => h.secrets],
@@ -177,8 +177,8 @@ const createRoleBinding: CreateHandler = (host, t, raw) => {
   const name = t[3];
   if (!name || name.startsWith("--")) return host._err("kubectl create " + t[2] + ": Der Name fehlt.", "Muster: kubectl create " + t[2] + " <name> --role=<rolle> --serviceaccount=<ns>:<sa>");
   { const bad = invalidNameError(host, cluster ? "ClusterRoleBinding" : "RoleBinding", name); if (bad) return bad; }
-  const roleName = flagValue(t, "--role");
-  const clusterRoleName = flagValue(t, "--clusterrole");
+  const roleName = flagValueOf(t, ["--role"]);
+  const clusterRoleName = flagValueOf(t, ["--clusterrole"]);
   // ClusterRoleBinding kann sich nur auf eine ClusterRole beziehen.
   if (cluster && roleName) return host._err("error: a ClusterRoleBinding can only reference a ClusterRole", "Nutze '--clusterrole=<name>' statt '--role'.");
   if (!roleName && !clusterRoleName) return host._err("error: exactly one of --role or --clusterrole must be specified", cluster ? "Häng '--clusterrole=<name>' an." : "Häng '--role=<name>' oder '--clusterrole=<name>' an.");
@@ -326,7 +326,7 @@ function deleteStatefulSet(host: KubectlHost, name: string): string {
 
 /** Die Sonderfälle mit Folgewirkung (Pod: Self-Healing, PVC: gibt sein PV frei, StatefulSet: behält die
  *  PVCs, Deployment: Pods) – Schlüssel = Plural aus ./resources. */
-const DELETE_SPECIAL: Readonly<Record<string, (host: KubectlHost, name: string) => string>> = {
+const DELETE_SPECIAL: Readonly<Partial<Record<ResourcePlural, (host: KubectlHost, name: string) => string>>> = {
   pods: deletePod,
   persistentvolumeclaims: deletePvc,
   deployments: deleteDeployment,
@@ -335,7 +335,8 @@ const DELETE_SPECIAL: Readonly<Record<string, (host: KubectlHost, name: string) 
 
 export function kubectlDelete(host: KubectlHost, t: string[]) {
   if (filenameArg(t) !== null) return deleteFromFile(host, t);
-  const { typ, name } = typeAndName(positionals("delete", t));
+  const { typ, name, error } = typeAndName(positionals("delete", t));
+  if (error) return host._err(error);
   if (!typ || !name) return host._err("kubectl delete: Was und wie heißt es?", "z.B. 'kubectl delete pod <pod-name>'");
   const kind = resolveKind(typ);
   if (!kind) return unknownResourceType(host, typ);

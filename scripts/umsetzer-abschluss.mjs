@@ -16,7 +16,7 @@
  *
  * Reines Node-Skript (nur Builtins); `prStatus` ist injizierbar.
  */
-import { execFileSync } from "node:child_process";
+import { ghJson } from "./gh-cli.mjs";
 import { readFileSync } from "node:fs";
 import { letzteErgebnisNachricht, transkriptZeilen } from "./transkript.mjs";
 
@@ -53,12 +53,7 @@ export const PR_FELDER = "state,autoMergeRequest,labels";
 
 /** Standard-`prStatus`: `gh pr view <nr> --json state,autoMergeRequest,labels`; wirft bei jedem Fehler. */
 export function ghPrStatus(nummer) {
-  const out = execFileSync("gh", ["pr", "view", nummer, "--json", PR_FELDER], {
-    encoding: "utf8",
-    timeout: 20000,
-    windowsHide: true,
-  });
-  return JSON.parse(out);
+  return ghJson(["pr", "view", nummer, "--json", PR_FELDER], { timeout: 20000 });
 }
 
 const FORMAT =

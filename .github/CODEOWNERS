@@ -33,6 +33,7 @@
 /scripts/check-*.mjs       @fluffels
 /scripts/slice-override.mjs @fluffels
 /scripts/ci-laeufe.mjs     @fluffels
+/scripts/verify-lauf.mjs   @fluffels
 /scripts/docs-gen*        @fluffels
 /eslint.config.js          @fluffels
 /eslint-suppressions.json  @fluffels
@@ -78,6 +79,8 @@ AGENTS.md                  @fluffels
 /scripts/board-takt.mjs @fluffels
 /scripts/sammelticket-anlegen.mjs @fluffels
 /scripts/fremdtext.mjs @fluffels
+/scripts/gh-cli.mjs @fluffels
+/scripts/naechstes-ticket.mjs @fluffels
 /scripts/haupt-sync.mjs @fluffels
 /scripts/lens-edit-guard.mjs @fluffels
 /.agents/                  @fluffels

@@ -4,7 +4,7 @@
  */
 import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -335,5 +335,33 @@ describe("Bindung an die echte Schicht-Zuordnung", () => {
   });
   test("ladeModell lädt das echte Modell relativ zu rootDir", () => {
     assert.deepEqual(api.ladeModell(process.cwd(), "scripts/layers.cjs"), echt.SCHICHT_MODELL);
+  });
+});
+
+describe("pruefeCruiseArgs: Cruise-Ziel und Collapse folgen der Quellwurzel (#1428 Z13)", () => {
+  const pruefe = (schichten as unknown as { pruefeCruiseArgs: (a: unknown, m: Modell) => string | null }).pruefeCruiseArgs;
+  const m = basis();
+  const gut = ["node_modules/dependency-cruiser/bin/dependency-cruiser.mjs", "src", "--config", "c.cjs", "--collapse", "^(src|node_modules)/[^/]+/"];
+  test("die echte Config des Repos passt zur echten Quellwurzel", () => {
+    const config = JSON.parse(readFileSync(new URL("../scripts/docs-gen/config.json", import.meta.url), "utf8")) as { schichten: { cruise: string[] } };
+    assert.equal(pruefe(config.schichten.cruise, echt.SCHICHT_MODELL), null);
+  });
+  test("passende Argumente: kein Problem; ohne Cruiser und ohne Collapse (Fremd-Adapter) wird nichts geprüft", () => {
+    assert.equal(pruefe(gut, m), null);
+    assert.equal(pruefe(["werkzeug/importgraph.mjs"], m), null);
+    assert.equal(pruefe(undefined, m), null);
+  });
+  test("Negativ: abweichendes Cruise-Ziel wird gemeldet", () => {
+    assert.match(pruefe([gut[0], "lib", ...gut.slice(2)], m) ?? "", /Ziel „lib“ passt nicht zur Quellwurzel „src\/“/);
+    assert.match(pruefe([gut[0]], m) ?? "", /\(fehlt\)/);
+  });
+  test("Negativ: abweichendes Collapse-Muster wird gemeldet; eine andere Quellwurzel im Modell kippt das Ergebnis", () => {
+    assert.match(pruefe([...gut.slice(0, 5), "^(lib|node_modules)/[^/]+/"], m) ?? "", /--collapse/);
+    assert.match(pruefe(gut, { ...m, quellwurzel: "lib/" }) ?? "", /passt nicht/);
+    assert.equal(pruefe([gut[0], "lib", "--collapse", "^(lib|node_modules)/[^/]+/"], { ...m, quellwurzel: "lib/" }), null);
+  });
+  test("der Ist-Generator bricht bei einer unpassenden Config ab, bevor er cruist", () => {
+    const root = fixtureMitModell(m);
+    assert.throws(() => api.schichtenIstGenerator({ rootDir: root, config: cfg({ cruise: [gut[0], "lib"] }) }), /passt nicht zur Quellwurzel/);
   });
 });

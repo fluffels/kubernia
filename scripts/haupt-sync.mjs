@@ -91,6 +91,52 @@ export function nodeHinweisFuer(dir, version = process.versions.node) {
   }
 }
 
+/**
+ * node_modules gegen package-lock.json (#1428 Z2): das versteckte Lock `node_modules/.package-lock.json` listet, was wirklich installiert
+ * ist. Gezählt werden Pakete des Locks (ohne Wurzel und ohne optionale, plattformabhängige), deren Version im Install-Stand abweicht
+ * oder fehlt. Liefert die Hinweiszeile oder `null` (alles passt oder ein Text ist nicht lesbar: fail-open, ein SessionStart-Hook darf
+ * nie stören); `hiddenText === null` heißt „kein Install-Stand“. Prüft den ZUSTAND, nicht den Diff des Pulls. Pur.
+ */
+export function pruefeNodeModules(lockText, hiddenText) {
+  let lock;
+  try {
+    lock = JSON.parse(String(lockText ?? ""))?.packages;
+  } catch {
+    return null;
+  }
+  if (!lock || typeof lock !== "object") return null;
+  if (hiddenText === null || hiddenText === undefined) return "node_modules hat keinen Install-Stand (.package-lock.json fehlt): vor npm-Skripten im Hauptcheckout einmal `npm ci`.";
+  let installiert;
+  try {
+    installiert = JSON.parse(String(hiddenText))?.packages;
+  } catch {
+    return null;
+  }
+  if (!installiert || typeof installiert !== "object") return null;
+  let abweichend = 0;
+  for (const [pfad, p] of Object.entries(lock)) {
+    if (pfad === "" || !pfad.startsWith("node_modules/") || p?.optional || p?.link) continue;
+    if (installiert[pfad]?.version !== p?.version) abweichend += 1;
+  }
+  return abweichend === 0 ? null : `node_modules passt nicht zu package-lock.json (${abweichend} Pakete): vor npm-Skripten im Hauptcheckout einmal \`npm ci\`.`;
+}
+
+/** Hinweis zu node_modules in `dir` (siehe `pruefeNodeModules`); ohne package-lock.json oder bei Lesefehlern `""` (fail-open). */
+export function nodeModulesHinweisFuer(dir) {
+  try {
+    const lockText = readFileSync(join(dir, "package-lock.json"), "utf8");
+    let hiddenText = null;
+    try {
+      hiddenText = readFileSync(join(dir, "node_modules", ".package-lock.json"), "utf8");
+    } catch {
+      /* kein Install-Stand */
+    }
+    return pruefeNodeModules(lockText, hiddenText) ?? "";
+  } catch {
+    return "";
+  }
+}
+
 /** Der Kontext-Text der Session. Pur. `ergebnis` = `{ aktion, grund, hinter, basis, gepullt, agentenGeaendert, notiz }`. */
 export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
   const zeilen = [];
@@ -105,6 +151,7 @@ export function baueText(ergebnis, { sitzungsbasis = true } = {}) {
     }
   }
   if (ergebnis.nodeHinweis) zeilen.push(`Node-Version: ${ergebnis.nodeHinweis}`);
+  if (ergebnis.nodeModulesHinweis) zeilen.push(`Abhängigkeiten: ${ergebnis.nodeModulesHinweis}`);
   if (ergebnis.basis) zeilen.push(sitzungsbasis ? `Sitzungsbasis: ${ergebnis.basis}` : `Stand vor diesem Sync: ${ergebnis.basis} (nicht die Basis dieser Session)`);
   return zeilen.join("\n");
 }
@@ -149,7 +196,7 @@ export function ausgabe(ergebnis, text) {
 
 function main() {
   const dir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  const ergebnis = { ...fuehreSyncAus(dir), nodeHinweis: nodeHinweisFuer(dir) };
+  const ergebnis = { ...fuehreSyncAus(dir), nodeHinweis: nodeHinweisFuer(dir), nodeModulesHinweis: nodeModulesHinweisFuer(dir) };
   const out = ausgabe(ergebnis, process.argv.includes("--text"));
   if (out) console.log(out);
   if (process.argv.includes("--streng") && exitCodeFuer(ergebnis) !== 0) {

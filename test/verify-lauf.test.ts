@@ -1,5 +1,5 @@
 /* Zwei-Stufen-Prüfung (#1120): Verhalten von scripts/verify-lauf.mjs (Kette, Einengung, Bericht, Exit). Spawn/git sind injiziert. */
-import { describe, test } from "vitest";
+import { describe, expect, test } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -156,5 +156,69 @@ describe("Lauf und Bericht", () => {
   test("Hinweis (Fail-closed-Grund) steht in der Summenzeile", () => {
     const r = vl.laufe({ schritte: ["test"], run: () => ({ status: 0, output: "" }) });
     assert.match(vl.bericht(r, { modus: "changed", hinweis: "Lint und Test voll (keine Vergleichs-Basis)" }), /^verify:changed grün .*keine Vergleichs-Basis/);
+  });
+});
+
+describe("main und IO-Verdrahtung (#1428 Z9)", () => {
+  type Zugriffe = { git: (a: string[]) => string; existiert: (d: string) => boolean; sammleTests: () => { pfad: string; text: string }[] };
+  const io = vlModule as unknown as {
+    main: (argv: string[], deps: { pkg: unknown; ladeEngung?: () => Eng; run: (j: Job) => { status: number; output: string }; log: (z: string) => void }) => number;
+    ergebnisAusProzess: (r: { status: number | null; stdout?: string; stderr?: string; error?: Error }) => { status: number; output: string };
+    ladeEngung: (z: Zugriffe) => Eng;
+  };
+  const kleinesPkg = { scripts: { verify: "npm run lint && npm run test", lint: "x", test: "y" } };
+  const lauf = (argv: string[], run: (j: Job) => { status: number; output: string }, ladeEngung?: () => Eng) => {
+    const log: string[] = [];
+    const code = io.main(argv, { pkg: kleinesPkg, run, ladeEngung, log: (z) => log.push(z) });
+    return { code, log: log.join("\n") };
+  };
+
+  test("main: ein roter Schritt gibt Exit 1 (und alle Schritte laufen), alles grün Exit 0", () => {
+    const gesehen: string[] = [];
+    const rot = lauf([], (j) => (gesehen.push(j.art === "npm" ? j.schritt : "x"), { status: j.art === "npm" && j.schritt === "lint" ? 2 : 0, output: "boom" }));
+    expect(rot.code).toBe(1);
+    expect(gesehen).toEqual(["lint", "test"]);
+    expect(rot.log).toMatch(/verify:kompakt ROT/);
+    expect(lauf([], () => ({ status: 0, output: "" })).code).toBe(0);
+  });
+
+  test("ergebnisAusProzess: status null (Signal, Timeout, Startfehler) ist rot und nennt den Fehler", () => {
+    const r = io.ergebnisAusProzess({ status: null, stdout: "a", error: new Error("ETIMEDOUT") });
+    expect(r.status).toBe(1);
+    expect(r.output).toContain("ETIMEDOUT");
+    expect(io.ergebnisAusProzess({ status: 0, stdout: "ok" })).toEqual({ status: 0, output: "ok" });
+  });
+
+  test("--changed mit werfendem git: Lint und Test voll, Grund im Bericht", () => {
+    const zugriffe: Zugriffe = {
+      git: (a) => {
+        if (a[0] === "merge-base") return "abc123";
+        throw new Error("git kaputt");
+      },
+      existiert: () => true,
+      sammleTests: () => [],
+    };
+    const e = io.ladeEngung(zugriffe);
+    expect(e).toMatchObject({ voll: true });
+    expect((e as { grund: string }).grund).toMatch(/Slice nicht lesbar: git kaputt/);
+    const r = lauf(["--changed"], () => ({ status: 0, output: "" }), () => e);
+    expect(r.log).toContain("Lint und Test voll (Slice nicht lesbar");
+  });
+
+  test("--changed ohne Vergleichs-Basis: voll; mit Basis eingeengt", () => {
+    const ohne: Zugriffe = { git: () => { throw new Error("kein git"); }, existiert: () => true, sammleTests: () => [] };
+    const saved = process.env.KQ_DIFF_BASE;
+    delete process.env.KQ_DIFF_BASE;
+    try {
+      expect(io.ladeEngung(ohne)).toEqual({ voll: true, grund: "keine Vergleichs-Basis" });
+      const mit: Zugriffe = {
+        git: (a) => (a[0] === "merge-base" ? "abc" : a[0] === "diff" ? "src/a.ts\0" : ""),
+        existiert: () => true,
+        sammleTests: () => [{ pfad: "test/a.test.ts", text: "import a.ts" }],
+      };
+      expect(io.ladeEngung(mit)).toMatchObject({ voll: false, lint: ["src/a.ts"], perName: ["test/a.test.ts"] });
+    } finally {
+      if (saved !== undefined) process.env.KQ_DIFF_BASE = saved;
+    }
   });
 });

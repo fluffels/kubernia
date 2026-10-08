@@ -71,30 +71,33 @@ export function zaehleTicketMerges(commits, seit = null) {
 /**
  * Ist dieser Commit von main ein Harness-Merge? Der Squash-Commit trägt den PR-Titel `feat(<scope>): …`; Scope `harness` markiert
  * Harness-Arbeit (Konvention aus AGENTS.md, in den letzten 14 Tagen 86 von 125 Commits). Bot-Commits sind keine Ticket-Merges. Pur.
- * Bewusste Grenzen: Harness ist hier der COMMIT-SCOPE, die Board-Ansichten und AGENTS.md nutzen das Label `area:harness`; alles
- * ohne `(harness)` zählt als Spiel, auch Doku-Scopes (`docs`, `adr`, `wiki`, `bundle`) und ein Notfall-Fix mit anderem Scope (`fix(ci)`),
- * und ein `Revert "feat(harness): …"` zählt als Spiel. Die Zählung ist eine Näherung ohne Netz je Commit; ein Label-Abgleich
- * wäre ein Issue-Aufruf je Merge.
+ * Seit #1428 zählt das Label: `harnessIssues` ist die Menge der Nummern geschlossener `area:harness`-Issues (90 Tage, lädt `main` ohnehin).
+ * Nennt die Titelzeile `#N`-Referenzen, entscheiden sie allein: eine davon in der Menge = Harness, sonst Spiel (so zählen `docs(adr)`
+ * und `fix(ci)` zu einem Harness-Issue als Harness, ein `feat(harness)` zu einem Spiel-Issue als Spiel). Ohne Referenz oder ohne Menge
+ * (null) bleibt der Rückfall auf den COMMIT-SCOPE `(harness)`. Bewusste Grenze: ein Commit ohne `#N` im Titel (Handarbeit) zählt nur
+ * über den Scope.
  */
-export function istHarnessCommit(commit) {
+export function istHarnessCommit(commit, harnessIssues = null) {
   const kopf = String(commit?.commit?.message ?? "").split(/\r?\n/, 1)[0];
+  const refs = [...kopf.matchAll(/#(\d+)/g)].map((m) => Number(m[1]));
+  if (harnessIssues && refs.length > 0) return refs.some((n) => harnessIssues.has(n));
   return /^[a-z]+\(harness\)!?:/i.test(kopf);
 }
 
-/** Spiel-Merges in einer Commit-Liste: Ticket-Merges (`zaehleTicketMerges`) ohne Harness-Scope; mit `seit` nur ab diesem Zeitpunkt. Pur. */
-export function zaehleSpielMerges(commits, seit = null) {
+/** Spiel-Merges in einer Commit-Liste: Ticket-Merges (`zaehleTicketMerges`) ohne Harness-Commits (`istHarnessCommit`); mit `seit` nur ab diesem Zeitpunkt. Pur. */
+export function zaehleSpielMerges(commits, seit = null, harnessIssues = null) {
   if (!Array.isArray(commits)) throw new Error("commits muss eine Liste sein.");
-  return zaehleTicketMerges(commits.filter((c) => !istHarnessCommit(c)), seit);
+  return zaehleTicketMerges(commits.filter((c) => !istHarnessCommit(c, harnessIssues)), seit);
 }
 
 /**
  * Die Spielquote des Fensters als Zahlen und Zeile für das Protokoll: `harness` und `spiel` = Ticket-Merges (ohne Bots) mit bzw. ohne
- * Harness-Scope, `eingehalten` = höchstens 1 Harness auf `SPIEL_QUOTE` Spiel (Notfälle und Security tragen denselben Scope und
+ * Harness-Zuordnung (`istHarnessCommit`), `eingehalten` = höchstens 1 Harness auf `SPIEL_QUOTE` Spiel (Notfälle und Security gelten als Harness, sofern ihr Issue `area:harness` trägt, und
  * zählen hier mit; das Protokoll ist Information, kein Gate). Pur.
  */
-export function quotenBericht(commits, seit = null) {
-  const harness = zaehleTicketMerges(commits.filter((c) => istHarnessCommit(c)), seit);
-  const spiel = zaehleSpielMerges(commits, seit);
+export function quotenBericht(commits, seit = null, harnessIssues = null) {
+  const harness = zaehleTicketMerges(commits.filter((c) => istHarnessCommit(c, harnessIssues)), seit);
+  const spiel = zaehleSpielMerges(commits, seit, harnessIssues);
   const eingehalten = harness * SPIEL_QUOTE <= spiel;
   return { harness, spiel, eingehalten, zeile: `Spielquote: ${harness} Harness- auf ${spiel} Spiel-Merges im Fenster (Soll höchstens 1:${SPIEL_QUOTE}), ${eingehalten ? "eingehalten" : "überschritten"}` };
 }
@@ -149,8 +152,8 @@ export function entscheideHarnessTakt({ items, spielMergesSeitAbschluss, positio
  * Sammeltickets) und fragt damit `entscheideHarnessTakt`. Eigene pure Funktion, damit die Verdrahtung (Spiel- statt aller Merges)
  * getestet ist und `main` nichts anderes tut als sie aufzurufen. Pur.
  */
-export function harnessTaktAusCommits({ items, commits, seit, position }) {
-  return entscheideHarnessTakt({ items, spielMergesSeitAbschluss: zaehleSpielMerges(commits, seit), position });
+export function harnessTaktAusCommits({ items, commits, seit, position, harnessIssues = null }) {
+  return entscheideHarnessTakt({ items, spielMergesSeitAbschluss: zaehleSpielMerges(commits, seit, harnessIssues), position });
 }
 
 /**
@@ -197,25 +200,37 @@ function fuehreHarnessAus(h, items, token) {
   }
 }
 
-function main() {
-  const dry = process.argv.includes("--dry-run");
-  const repo = REPO;
-  const ausloeser = process.env.GITHUB_EVENT_NAME || "schedule";
-  const token = process.env.PROJECT_TOKEN;
-  const jetzt = new Date();
+/** Die echte I/O des Takts (gh, Board, Dateien); `fuehreTaktAus` nimmt sie injiziert, damit die Verdrahtung ohne Netz testbar ist. */
+const ECHTE_IO = {
+  ghJson,
+  loadItems,
+  loadOpenIssuePages,
+  positionLautAgentsMd,
+  fuehreStatusAus,
+  fuehreHarnessAus,
+  log: (z) => console.log(z),
+};
+
+/**
+ * Der ganze Lauf (#1428 Z23, vorher `main`): Fenster berechnen, Status-Ticket und Harness-Sammelticket entscheiden und ausführen.
+ * `io` bündelt jeden Zugriff nach außen (siehe `ECHTE_IO`). Liefert `{ fehler }`; der Aufrufer setzt daraus den Exit-Code.
+ */
+export function fuehreTaktAus({ jetzt, dry = false, repo = REPO, ausloeser = "schedule", token, io = ECHTE_IO }) {
   let position = null;
   let positionFehler = null;
   try {
-    position = positionLautAgentsMd();
+    position = io.positionLautAgentsMd();
   } catch (err) {
     positionFehler = err.message;
   }
-  const offene = normalizeOffene(loadOpenIssuePages(repo));
+  const offene = normalizeOffene(io.loadOpenIssuePages(repo));
   const seit = new Date(jetzt.getTime() - 90 * TAG_MS).toISOString();
-  const geschlossen = ghJson(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=closed&labels=area:harness&since=${seit}&per_page=100`])
+  const geschlossen = io.ghJson(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=closed&labels=area:harness&since=${seit}&per_page=100`])
     .flat()
     .filter((i) => !i.pull_request && typeof i.closed_at === "string")
     .sort((a, b) => new Date(b.closed_at) - new Date(a.closed_at));
+  // Die Nummern aller geschlossenen Harness-Issues: die Spielquote ordnet einen Commit über seine `#N`-Referenz zu (istHarnessCommit).
+  const harnessIssues = new Set(geschlossen.map((i) => i.number));
   const letzter = (titel) => {
     const g = geschlossen.find((i) => i.title === titel);
     return g ? { number: g.number, closedAt: g.closed_at, createdAt: g.created_at } : null;
@@ -224,18 +239,18 @@ function main() {
   const abStatus = mergeFensterAb(vorgaenger?.closedAt ?? null, jetzt).toISOString();
   const abHarness = mergeFensterAb(letzter(SAMMELTICKET_TITEL)?.closedAt ?? null, jetzt).toISOString();
   const fruehestens = abStatus < abHarness ? abStatus : abHarness;
-  const commits = ghJson(["api", "--paginate", "--slurp", `repos/${repo}/commits?sha=main&since=${fruehestens}&per_page=100`]).flat();
+  const commits = io.ghJson(["api", "--paginate", "--slurp", `repos/${repo}/commits?sha=main&since=${fruehestens}&per_page=100`]).flat();
   const imFenster = commits.filter((c) => new Date(c?.commit?.committer?.date ?? 0).getTime() >= new Date(abStatus).getTime());
   // Die Board-Liste einmal je Lauf (braucht den Projekt-Scope des Tokens).
-  let items = token ? loadItems({ token }) : null;
+  let items = token ? io.loadItems({ token }) : null;
 
   const stundenSeitAbschluss = vorgaenger ? (jetzt.getTime() - new Date(vorgaenger.closedAt).getTime()) / (TAG_MS / 24) : null;
   const e = entscheideTakt({ offene, mergesSeit: imFenster.length, ticketMerges: zaehleTicketMerges(commits, abStatus), ausloeser, stundenSeitAbschluss });
-  for (const w of e.warnungen) console.log(`::warning::${w}`);
-  console.log(`Status-Ticket (${ausloeser}): ${e.aktion}${e.nr ? ` #${e.nr}` : ""} (${e.grund}); Fenster ab ${abStatus}`);
+  for (const w of e.warnungen) io.log(`::warning::${w}`);
+  io.log(`Status-Ticket (${ausloeser}): ${e.aktion}${e.nr ? ` #${e.nr}` : ""} (${e.grund}); Fenster ab ${abStatus}`);
   let fehler = false;
   if (!dry && e.aktion !== "nichts") {
-    const r = fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items: items ?? [] });
+    const r = io.fuehreStatusAus(e, { repo, vorgaenger, jetzt, token, items: items ?? [] });
     fehler = !r.ok;
     if (items) items = ziehListeNach(items, r);
   }
@@ -243,14 +258,25 @@ function main() {
   // Harness-Sammelticket: Aktivität (eigenes Fenster) und Positionskorrektur, auf der nachgezogenen Liste.
   const voraussetzung = harnessVoraussetzung({ items, position, positionFehler });
   if (!voraussetzung.ok) {
-    console.log(voraussetzung.meldung);
+    io.log(voraussetzung.meldung);
     if (voraussetzung.fehler) fehler = true;
   } else {
-    const h = harnessTaktAusCommits({ items, commits, seit: abHarness, position });
-    console.log(`Harness-Sammelticket: ${h.aktion}${h.nr ? ` #${h.nr}` : ""} (${h.grund}); Fenster ab ${abHarness}`);
-    console.log(quotenBericht(commits, abHarness).zeile);
-    if (!dry && h.aktion !== "nichts" && !fuehreHarnessAus(h, items, token)) fehler = true;
+    const h = harnessTaktAusCommits({ items, commits, seit: abHarness, position, harnessIssues });
+    io.log(`Harness-Sammelticket: ${h.aktion}${h.nr ? ` #${h.nr}` : ""} (${h.grund}); Fenster ab ${abHarness}`);
+    io.log(quotenBericht(commits, abHarness, harnessIssues).zeile);
+    if (!dry && h.aktion !== "nichts" && !io.fuehreHarnessAus(h, items, token)) fehler = true;
   }
+  return { fehler };
+}
+
+function main() {
+  const { fehler } = fuehreTaktAus({
+    jetzt: new Date(),
+    dry: process.argv.includes("--dry-run"),
+    repo: REPO,
+    ausloeser: process.env.GITHUB_EVENT_NAME || "schedule",
+    token: process.env.PROJECT_TOKEN,
+  });
   if (fehler) process.exitCode = 1;
 }
 

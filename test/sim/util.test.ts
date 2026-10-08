@@ -1,9 +1,9 @@
 /* Reine Sim-Helfer (sim/util.ts) – seit #499 sind die früheren `_editDistance`/`_suggest`/
- * `_flagValue`/`_multiFlag`-Methoden pure Funktionen (kein Cluster-Zustand). Diese Tests
+ * `_multiFlag`-Methoden pure Funktionen (kein Cluster-Zustand). Diese Tests
  * sichern ihr Verhalten inkl. Grenz-/Negativfälle direkt an der öffentlichen Funktion ab,
  * statt sie nur indirekt über die Befehlsfamilien mitzuprüfen. */
 import { describe, test, expect } from "vitest";
-import { editDistance, suggest, flagValue, multiFlag, parseCpuMilli } from "../../src/sim/util";
+import { editDistance, suggest, multiFlag, parseCpuMilli } from "../../src/sim/util";
 
 describe("editDistance – Levenshtein", () => {
   test("gleiche Strings: Distanz 0", () => {
@@ -30,21 +30,6 @@ describe("suggest – Meintest-du-Vorschlag", () => {
   });
   test("längere Wörter erlauben Distanz bis 2", () => {
     expect(suggest("terrafrm", cmds)).toBe("terraform"); // 1 fehlend
-  });
-});
-
-describe("flagValue – Wert hinter einer Flag", () => {
-  test("getrennte Form '-n wert'", () => {
-    expect(flagValue(["kubectl", "get", "pods", "-n", "kube-system"], "-n")).toBe("kube-system");
-  });
-  test("Gleichheits-Form '-n=wert'", () => {
-    expect(flagValue(["kubectl", "get", "pods", "-n=kube-system"], "-n")).toBe("kube-system");
-  });
-  test("Flag fehlt → null", () => {
-    expect(flagValue(["kubectl", "get", "pods"], "-n")).toBeNull();
-  });
-  test("Flag am Ende ohne Wert → null", () => {
-    expect(flagValue(["kubectl", "get", "-n"], "-n")).toBeNull();
   });
 });
 

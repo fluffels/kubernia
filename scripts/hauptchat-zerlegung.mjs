@@ -20,6 +20,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
+import { ghText } from "./gh-cli.mjs";
 import { callsFromTranscript } from "./token-baseline.mjs";
 import { ladeSessionDatei } from "./transkript.mjs";
 
@@ -254,7 +255,7 @@ export function* ladeSessions(dir, von) {
 
 function closedAtViaGh(nr) {
   try {
-    const out = execFileSync("gh", ["issue", "view", String(nr), "--json", "closedAt"], { encoding: "utf8" });
+    const out = ghText(["issue", "view", String(nr), "--json", "closedAt"]);
     return JSON.parse(out).closedAt || null;
   } catch (err) {
     console.error(`Warnung: closedAt für #${nr} nicht lesbar (${String(err.message).split("\n")[0]}); Fenster läuft bis zum nächsten Claim.`);

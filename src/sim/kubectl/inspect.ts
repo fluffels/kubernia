@@ -18,8 +18,8 @@ import { endpointAddresses, podAddress } from "../endpoints";
 import type { KubectlHost } from "./host";
 import { DEFAULT_NAMESPACE, SECURITY_CONTEXT_KEYS, isExternalNameService, type Deployment, type PodInstance, type PodStatus } from "../state";
 import { requestedNamespace, allNamespaces } from "./namespace";
-import { RESOURCE_KINDS, resolveKind, qualified, type ResourceKind } from "./resources";
-import { positionals, notSimulated, unknownResourceType } from "./args";
+import { RESOURCE_KINDS, resolveKind, qualified, type ResourceKind, type ResourcePlural } from "./resources";
+import { positionals, slashRef, notSimulated, unknownResourceType } from "./args";
 import { sameRbac } from "../rbac";
 import { clusterPods, findClusterPod, type ClusterPod } from "../pods";
 import { statefulPodClaimName, statefulPodNode } from "../workload";
@@ -225,7 +225,7 @@ function getAlerts(host: KubectlHost): GetTable {
  *  (`namespaces`) kennt die Registry, aber der Simulator kann sie nicht auflisten. */
 interface GetEntry { extraNamespaces?: readonly string[]; render: GetRenderer }
 
-export const GET_RENDERERS: ReadonlyMap<string, GetEntry> = new Map<string, GetEntry>([
+export const GET_RENDERERS: ReadonlyMap<ResourcePlural, GetEntry> = new Map<ResourcePlural, GetEntry>([
   ["pods", { extraNamespaces: ["kube-system"], render: getPods }],
   ["deployments", { render: getDeployments }],
   ["services", { render: getServices }],
@@ -657,10 +657,10 @@ function logSource(host: KubectlHost, c: ClusterPod, name: string): LogSource {
  *  Pod des Deployments; bei mehreren sagt `note`, welcher es ist – wie das echte „Found N pods, using …“).
  *  Ein String als `error` ist die fertige Fehlerausgabe. */
 function logsTarget(host: KubectlHost, tok: string): { name: string; note?: string } | { error: string } {
-  const slash = tok.indexOf("/");
-  if (slash < 0) return { name: tok };
-  const typ = tok.slice(0, slash);
-  const name = tok.slice(slash + 1);
+  const ref = slashRef(tok);
+  if (!ref) return { name: tok };
+  if ("error" in ref) return { error: host._err(ref.error) };
+  const { typ, name } = ref;
   const kind = resolveKind(typ);
   if (!kind) return { error: unknownResourceType(host, typ) };
   if (kind.plural === "pods") return { name };

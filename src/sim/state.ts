@@ -9,13 +9,13 @@
  *
  * Warum zuerst: die Folge-Schritte (#373 docker, #374 kubectl … #378 argocd) lagern
  * die Befehls-Handler in eigene Module aus – die brauchen genau diese Typen + den
- * State-Vertrag als gemeinsame Basis. Reine Typen, kein Laufzeit-Code → Phaser-frei,
- * importfrei, vom Architektur-Wächter (#347) automatisch als Domäne geschützt.
+ * State-Vertrag als gemeinsame Basis. Reine Typen und wenige Konstanten/Prüfungen → Phaser-frei,
+ * nur vom Blattmodul ./names abhängig, vom Architektur-Wächter (#347) automatisch als Domäne geschützt.
  *
  * Echte Interfaces für die simulierten Ressourcen (Pod/Deployment/Service …) statt
  * `any`. Sie sichern Felder + Mutationen im ganzen Simulator ab.
  */
-import type { PodName } from "./names"; // Value Object (#479); reiner Typ-Import → state.ts bleibt Laufzeit-importfrei.
+import { InvalidSpecError, type PodName } from "./names"; // Value Object (#479) + abgelehnte Spezifikation (assertServiceType); names.ts ist ein Blattmodul → kein Zyklus.
 
 /** Ergebnis einer simulierten Befehlszeile (`Sim.exec`). Lebt hier (Sim-Domänentyp)
  *  und nicht in `types.ts`, damit `sim.ts` nicht zurück auf `types.ts` zeigen muss –
@@ -210,6 +210,18 @@ export const EXTERNAL_NAME_TYPE = "ExternalName";
 /** Ist der Service ein ExternalName-Service? Ausschließlich hierüber abfragen, nicht den Typ-String vergleichen. */
 export function isExternalNameService(svc: { type?: string }): boolean {
   return svc.type === EXTERNAL_NAME_TYPE;
+}
+/** Die Service-Typen, die Kubernetes kennt (Groß-/Kleinschreibung zählt: `nodeport` ist ungültig). */
+export const SERVICE_TYPES = ["ClusterIP", EXTERNAL_NAME_TYPE, "LoadBalancer", "NodePort"] as const;
+export type ServiceType = typeof SERVICE_TYPES[number];
+
+/** Lehnt einen unbekannten Service-Typ ab (`kubectl expose --type=Foo`, Manifest `type: Foo`) – wie der
+ *  apiserver mit `spec.type: Unsupported value`. Ohne Typ gilt der Default ClusterIP. */
+export function assertServiceType(serviceName: string, type: string | undefined): asserts type is ServiceType | undefined {
+  if (type === undefined || (SERVICE_TYPES as readonly string[]).includes(type)) return;
+  throw new InvalidSpecError(
+    'The Service "' + serviceName + '" is invalid: spec.type: Unsupported value: "' + type + '": supported values: ' + SERVICE_TYPES.map(s => '"' + s + '"').join(", "),
+    "Gültige Service-Typen: " + SERVICE_TYPES.join(", ") + " (Groß-/Kleinschreibung zählt).");
 }
 /** Der einzige Namespace, den die Sim modelliert. */
 export const DEFAULT_NAMESPACE = "default";

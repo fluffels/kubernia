@@ -15,8 +15,8 @@
  */
 import type { KubectlHost } from "./host";
 import { DEFAULT_NAMESPACE, isExternalNameService, isHeadlessService, type Deployment, type PvcRes, type ServiceRes, type StatefulSetRes } from "../state";
-import { RESOURCE_KINDS, resolveKind, qualified, type ResourceKind } from "./resources";
-import { positionals, typeAndName, notSimulated, unknownResourceType, SLASH_FORM_ERROR } from "./args";
+import { RESOURCE_KINDS, resolveKind, qualified, type ResourceKind, type ResourcePlural } from "./resources";
+import { positionals, typeAndName, notSimulated, unknownResourceType } from "./args";
 import { clusterPods } from "../pods";
 import { clusterPodStatus } from "../podstatus";
 import { endpointAddresses, serviceSelector } from "../endpoints";
@@ -203,7 +203,7 @@ const fromList = (list: (host: KubectlHost) => readonly { name: string }[]) =>
   (host: KubectlHost): string[] => list(host).map(o => o.name);
 
 /** Die beschreibbaren Typen (Schlüssel = Plural aus ./resources). */
-export const DESCRIBE_ENTRIES: ReadonlyMap<string, DescribeEntry> = new Map<string, DescribeEntry>([
+export const DESCRIBE_ENTRIES: ReadonlyMap<ResourcePlural, DescribeEntry> = new Map<ResourcePlural, DescribeEntry>([
   ["nodes", { names: fromList(h => h.nodes), render: describeNode }],
   ["ingresses", { names: fromList(h => h.ingresses), render: describeIngress }],
   ["networkpolicies", { names: fromList(h => h.networkPolicies), render: describeNetworkPolicy }],
@@ -229,14 +229,15 @@ function renderAll(host: KubectlHost, entry: DescribeEntry, kind: ResourceKind, 
 
 export function kubectlDescribe(host: KubectlHost, t: string[]) {
   const pos = positionals("describe", t);
-  const { typ, name } = typeAndName(pos);
+  const { typ, name, error } = typeAndName(pos);
+  if (error) return host._err(error);
   if (!typ) return host._err("error: You must specify the type of resource to describe.", "z.B. 'kubectl describe pod <name>'.");
   const kind = resolveKind(typ);
   if (!kind) return unknownResourceType(host, typ);
   const entry = DESCRIBE_ENTRIES.get(kind.plural);
   if (!entry) return notSimulated(host, "'kubectl describe " + kind.plural + "'.", ["kubectl describe " + describableTypes() + " [<name>]"]);
   host._recheckReadiness();
-  if (pos[0].includes("/")) return name ? entry.render(host, name, kind) : host._err(SLASH_FORM_ERROR);
+  if (pos[0].includes("/")) return entry.render(host, name!, kind); // Slash-Form: nur exakt (typeAndName lieferte sonst error)
   const names = entry.names(host, kind);
   if (!name) return names.length ? renderAll(host, entry, kind, names, "\n\n\n") : noResourcesIn(DEFAULT_NAMESPACE);
   if (names.includes(name)) return entry.render(host, name, kind);

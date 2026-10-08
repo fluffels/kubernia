@@ -180,12 +180,15 @@ describe("docs-gen auf einem Fremd-Repo (Python, nicht Kubernia)", () => {
 });
 
 describe("Kern-Schnitt: übertragbare Module importieren keinen Harness-Stack", () => {
-  // Bekannte Grenze: erkannt werden statische `import`/`export … from` und `import("…")` mit einfachen oder doppelten
-  // Anführungszeichen; `require` und `createRequire` sieht der Wächter nicht.
+  // Bekannte Grenze: erkannt werden statische `import`/`export … from`, `import("…")`, `require("…")` und `createRequire(…)("…")` mit
+  // einfachen oder doppelten Anführungszeichen (#1428 Z12). Nicht erkannt: ein dynamischer Pfad (z.B. die Layers-Datei, die schichten.mjs
+  // aus der Config lädt, bleibt erlaubt) und ein `createRequire`-Ergebnis, das erst in einer Variablen steht.
   const KERN = ["markdown", "adr", "zeitleiste", "schichten"];
   const importeAus = (text: string): string[] => [
     ...[...text.matchAll(/^\s*(?:import|export)\s+(?:[^;]*?\sfrom\s+)?["']([^"']+)["']/gm)].map((m) => m[1]),
     ...[...text.matchAll(/\bimport\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
+    ...[...text.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
+    ...[...text.matchAll(/\bcreateRequire\([^)]*\)\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
   ];
   const importe = (rel: string): string[] => importeAus(readFileSync(join(__dirname, "..", rel), "utf8"));
   test.each(KERN)("scripts/docs-gen/%s.mjs: nur node:* und Kern-Module", (name) => {
@@ -204,5 +207,12 @@ describe("Kern-Schnitt: übertragbare Module importieren keinen Harness-Stack", 
     const fremd = ['import { x } from "./quests.mjs";', "import { x } from './quests.mjs';", 'import "./quests.mjs";', 'export { x } from "./quests.mjs";', 'const m = await import("./quests.mjs");'];
     for (const zeile of fremd) assert.deepEqual(importeAus(zeile), ["./quests.mjs"], zeile);
     assert.deepEqual(importeAus('import { y } from "node:fs";'), ["node:fs"]);
+  });
+  test("der Wächter erkennt require und createRequire mit literalem Pfad; ein dynamischer Pfad bleibt erlaubt (#1428 Z12)", () => {
+    assert.deepEqual(importeAus('const q = require("./quests.cjs");'), ["./quests.cjs"]);
+    assert.deepEqual(importeAus("const q = require('./quests.cjs');"), ["./quests.cjs"]);
+    assert.deepEqual(importeAus('const q = createRequire(import.meta.url)("./quests.cjs");'), ["./quests.cjs"]);
+    assert.deepEqual(importeAus("const q = require(pfad);"), []);
+    assert.deepEqual(importeAus("const q = createRequire(import.meta.url)(layersPfad);"), []);
   });
 });

@@ -424,6 +424,23 @@ describe("cli", () => {
     assert.equal(calls.length, 0);
   });
 
+  test("Config ist kein JSON-Objekt (null, Liste, Zahl): Exit 1 mit Meldung statt TypeError, kein likec4-Aufruf (#1428 Z19)", async () => {
+    for (const roh of ["null", "[]", "42", '"text"']) {
+      const calls: string[][] = [];
+      const r = await cliLauf(fixture(srcFiles({ "scripts/docs-gen/config.json": roh })), (a) => (calls.push(a), 0));
+      assert.equal(r.code, 1, roh);
+      assert.match(r.err, /kein JSON-Objekt/, roh);
+      assert.equal(calls.length, 0, roh);
+    }
+  });
+
+  test("architektur.quelle weicht von der Quellwurzel des Schicht-Modells ab: Exit 1 mit abgleich-Meldung (#1428 Z13)", async () => {
+    const cfg = JSON.stringify({ schichten: { layers: "scripts/layers.cjs" }, architektur: { ...CFG, quelle: "lib" } });
+    const r = await cliLauf(cliFixture({ "scripts/docs-gen/config.json": cfg }), () => 0);
+    assert.equal(r.code, 1);
+    assert.match(r.err, /architektur\.quelle „lib“ passt nicht zur Quellwurzel „src\/“/);
+  }, 30000);
+
   test("Block architektur fehlt: Exit 1 mit gezieltem Fix, kein likec4-Aufruf", async () => {
     const calls: string[][] = [];
     const cfg = JSON.stringify({ schichten: { layers: "scripts/layers.cjs" } });
