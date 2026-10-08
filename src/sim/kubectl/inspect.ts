@@ -12,7 +12,7 @@
  * wächst als 10× Einträge, ohne dass Dispatcher-Komplexität/-Länge mitwächst.
  */
 import { effectiveDefaultStorageClass, podIP, BUILTIN_AGE, workloadSelector, formatLabels } from "../util";
-import { endpointAddresses, podAddress, servicesWithDefault, serviceSelector, isKubernetesService } from "../endpoints";
+import { endpointAddresses, endpointSliceOf, podAddress, servicesWithDefault, serviceSelector, isKubernetesService } from "../endpoints";
 import type { KubectlHost } from "./host";
 import type { Call } from "../cliargs";
 import { DEFAULT_NAMESPACE, VOLUME_MODE, isExternalNameService, type Deployment, type RbacSubject, type StatefulSetRes } from "../state";
@@ -165,6 +165,25 @@ function getEndpoints(host: KubectlHost): GetTable {
   }));
 }
 
+/** `a,b,c + N more...` wie die Drucker von kubectl (höchstens `max` Einträge), leer: `<unset>`. */
+function listWithMore(items: readonly (string | number)[], max = 3): string {
+  if (items.length === 0) return "<unset>";
+  const shown = items.slice(0, max).join(",");
+  return items.length > max ? shown + " + " + (items.length - max) + " more..." : shown;
+}
+
+function getEndpointSlices(host: KubectlHost): GetTable {
+  // Anders als `get endpoints` filtert die Tabelle die Readiness nicht: nicht bereite Pods stehen drin
+  // (ihr `conditions.ready=false` steht nur im Objekt). ENDPOINTS zeigt nur die IPs, ohne Port.
+  const rows = servicesWithDefault(host).flatMap(s => {
+    const slice = endpointSliceOf(host, s);
+    if (!slice) return [];
+    return [[slice.name, slice.addressType, listWithMore(slice.ports), listWithMore(slice.endpoints.map(e => e.address)),
+      isKubernetesService(s) ? BUILTIN_AGE : host._age(s.created || 0)]];
+  });
+  return tableOf(["NAME", "ADDRESSTYPE", "PORTS", "ENDPOINTS", "AGE"], rows);
+}
+
 function getNodes(host: KubectlHost): GetTable {
   // Echtes `kubectl get nodes` zeigt unter Disk-Druck weiter STATUS "Ready" (DiskPressure ist eine
   // eigene Condition, sichtbar erst per describe). Im Lernspiel hängen wir sie sichtbar an die
@@ -287,6 +306,7 @@ export const GET_RENDERERS: ReadonlyMap<ResourcePlural, GetEntry> = new Map<Reso
   ["replicasets", { render: getReplicaSets }],
   ["services", { render: getServices }],
   ["endpoints", { render: getEndpoints }],
+  ["endpointslices", { render: getEndpointSlices }],
   ["nodes", { render: getNodes }],
   ["secrets", { render: getSecrets }],
   ["configmaps", { render: getConfigMaps }],
