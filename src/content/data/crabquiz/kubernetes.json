@@ -90,7 +90,7 @@
   {
     "id": "q-ch2-5",
     "chapter": "k8s-inspect-pods",
-    "q": "Ein Pod heißt <code>kantine-9f4c2-x7k1</code>. Woher kommt das kryptische Anhängsel?",
+    "q": "Ein Pod heißt <code>kantine-5c689d88bb-x7k2p</code>. Woher kommt das kryptische Anhängsel?",
     "options": [
       "Kubernetes vergibt es automatisch, damit jeder Pod einen eindeutigen Namen hat.",
       "Der Admin hat es von Hand eingetippt.",

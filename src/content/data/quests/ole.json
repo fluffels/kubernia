@@ -112,7 +112,7 @@
         "type": "dialog",
         "npc": "ole",
         "lines": [
-          "Fällt dir was an den Pod-Namen auf? <code>kantine-9f4c2-x7k1</code> – die kryptischen Anhängsel hat niemand getippt. Die hängt <b>Kubernetes automatisch dran</b>, damit jeder Pod garantiert einen <b>eindeutigen</b> Namen hat. Steckt ein <b>Deployment</b> dahinter, kommt der mittlere Block vom ReplicaSet, der hintere wird pro Pod gewürfelt – darum darfst du beim <code>describe</code> nicht raten, sondern den vollen Namen aus der Liste abtippen."
+          "Fällt dir was an den Pod-Namen auf? <code>kantine-5c689d88bb-x7k2p</code> – die kryptischen Anhängsel hat niemand getippt. Die hängt <b>Kubernetes automatisch dran</b>, damit jeder Pod garantiert einen <b>eindeutigen</b> Namen hat. Steckt ein <b>Deployment</b> dahinter, ist der mittlere Block der Hash seines ReplicaSets (<code>kubectl get rs</code> zeigt es als <code>kantine-5c689d88bb</code>), der hintere wird pro Pod gewürfelt – darum darfst du beim <code>describe</code> nicht raten, sondern den vollen Namen aus der Liste abtippen."
         ]
       },
       {
