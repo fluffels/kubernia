@@ -18,7 +18,7 @@ type Pr = {
   closingIssuesReferences: { number: number }[];
 };
 type Zeile = { pr: number; ticket: number | null; runden: number | null; blocker: { lens: string; n: number }[] | null; ciFix: number; festgefahren: number; nacharbeit: string };
-type Ergebnis = { zeilen: Zeile[]; kennzahlen: Record<string, unknown> & { brillen: Record<string, { prs: number; treffer: number; summe: number }> } };
+type Ergebnis = { zeilen: Zeile[]; kennzahlen: Record<string, unknown> & { brillen: Record<string, { prs: number; treffer: number; summe: number; jePr: number | null }> } };
 const mod = raw as {
   NACHARBEIT_TAGE: number;
   DatenFehler: new (m: string) => Error;
