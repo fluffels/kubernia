@@ -568,7 +568,7 @@
         "brief": "Zwei Frachtbücher lesen",
         "scenario": {
           "nodes": [
-            { "name": "ahoi-worker-1", "status": "Ready", "roles": "<none>", "version": "v1.30.2", "ephemeralCapacityMi": 1024, "ephemeralBaseMi": 700 }
+            { "name": "ahoi-worker-1", "status": "Ready", "roles": "<none>", "ephemeralCapacityMi": 1024, "ephemeralBaseMi": 700 }
           ],
           "files": {
             "protokoll.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: protokoll\nspec:\n  replicas: 1\n  template:\n    spec:\n      nodeName: ahoi-worker-1        # laeuft auf dem fast vollen Westkai-Knoten\n      containers:\n        - name: app\n          image: busybox\n          resources:\n            limits:\n              ephemeral-storage: 256Mi   # DISZIPLINIERT: gedeckelter fluechtiger Speicher\n          volumeMounts:\n            - name: scratch\n              mountPath: /var/log\n      volumes:\n        - name: scratch\n          emptyDir: {}",
