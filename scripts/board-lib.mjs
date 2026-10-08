@@ -334,7 +334,7 @@ export function normalizeItems(pages) {
       body: typeof i.content.body === "string" ? i.content.body : "",
       labels: Array.isArray(i.content.labels) ? i.content.labels.map((l) => (typeof l === "string" ? l : l?.name)).filter((n) => typeof n === "string" && n !== "") : [],
       autor: typeof i.content.user?.login === "string" && i.content.user.login !== "" ? { login: i.content.user.login, type: i.content.user.type ?? "" } : null,
-      blockedBy: Number.isFinite(Number(i.content.issue_dependencies_summary?.blocked_by)) ? Number(i.content.issue_dependencies_summary.blocked_by) : 0,
+      blockedBy: Number.isFinite(i.content.issue_dependencies_summary?.blocked_by) ? i.content.issue_dependencies_summary.blocked_by : 0,
     }));
 }
 
