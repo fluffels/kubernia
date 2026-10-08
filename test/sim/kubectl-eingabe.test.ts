@@ -175,7 +175,7 @@ describe("Unterbefehle: echte kubectl-Befehle sind „nicht simuliert“, Tippfe
 /* ---------- (f) EIN Text für „nicht simuliert“ ---------- */
 describe("(f) alle früheren Fundstellen nutzen den einen Helfer", () => {
   test.each([
-    "describe configmap web", "create frobnicate x", "create secret docker-registry x", "set frobnicate x", "rollout undo deployment web",
+    "describe configmap web", "create frobnicate x", "create secret docker-registry x", "set frobnicate x", "rollout status deployment web",
     "auth reconcile", "label pods x a=b", "label namespaces default foo=bar", "delete nodes x", "logs statefulset/db",
     "scale pods/x --replicas=2", "expose pods/x --port=80",
   ])("kubectl %s", cmd => {
@@ -873,9 +873,11 @@ describe("#1487: Arität mit echten kubectl-Texten", () => {
   });
 
   test("rollout/set: unbekannte Aktion nicht simuliert, die Liste kommt aus der Ziel-Tabelle", () => {
-    const r = lauf1487("kubectl rollout undo deployment web");
+    const r = lauf1487("kubectl rollout status deployment web");
     expect(r.out).toContain(NICHT_SIMULIERT);
     expect(r.out).toContain("kubectl rollout restart deployment <name>");
+    expect(r.out).toContain("kubectl rollout history deployment <name>");
+    expect(r.out).toContain("kubectl rollout undo deployment <name>");
     const set = lauf1487("kubectl set selector x");
     expect(set.out).toContain("kubectl set image …");
     expect(set.out).toContain("kubectl set env …");

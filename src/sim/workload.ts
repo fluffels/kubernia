@@ -17,13 +17,14 @@
  * bleibt das Netz für alles Un-Kanalisierte. Das ist der skalierende (Stardew-Scope)
  * Weg: die Workload-Regel wird an EINER Stelle gepflegt, nicht in jeder Familie neu.
  *
- * Reine Domäne: hängt nur an den Domänentypen aus ./state und den Namens-Helfern
- * (./util, ./names) – kein Phaser, kein Rückimport nach sim.ts (kein Zyklus), vom
+ * Reine Domäne: hängt nur an den Domänentypen aus ./state, den Namens-Helfern
+ * (./util, ./names), ./replicasets (pod-template-hash, ReplicaSet-Historie) und ./nodes
+ * (isControlPlane) – kein Phaser, kein Rückimport nach sim.ts (kein Zyklus), vom
  * Architektur-Wächter (#347) als Domäne geschützt und im Node-Test prüfbar.
  */
-import type { ClusterNode, Deployment, PodInstance, PodTemplateSpec, PvcRes, StatefulSetRes } from "./state";
+import type { ClusterNode, Deployment, PodInstance, PodTemplateSpec, PvcRes, ReplicaSetRecord, RolloutHistorySpec, RsTemplate, StatefulSetRes } from "./state";
 import { makePodName } from "./util";
-import { podTemplateHash } from "./replicasets";
+import { POD_TEMPLATE_KEYS, REVISION_HISTORY_LIMIT, switchReplicaSet, templateHash } from "./replicasets";
 import { asPodName, InvalidSpecError } from "./names";
 import { isControlPlane } from "./nodes";
 
@@ -33,11 +34,35 @@ import { isControlPlane } from "./nodes";
  *  `rng` kommt von der Sim-Instanz durch (wie der `clock`), damit die Pod-Namen
  *  instanz-lokal reproduzierbar sind (#580). */
 export function newDeploymentPod(dep: Deployment, clock: number, rng: () => number, taken: readonly PodInstance[] = dep.pods): PodInstance {
-  dep.replicaSet ??= { hash: podTemplateHash(dep), created: clock };
+  const { hash } = ensureReplicaSet(dep, clock);
   // Nur 5 Zufallszeichen im Namen (wie in Kubernetes): bei einer Kollision neu würfeln.
-  let name = makePodName(dep.name, dep.replicaSet.hash, rng);
-  for (let i = 0; i < 8 && taken.some(p => p.name === name); i++) name = makePodName(dep.name, dep.replicaSet.hash, rng);
+  let name = makePodName(dep.name, hash, rng);
+  for (let i = 0; i < 8 && taken.some(p => p.name === name); i++) name = makePodName(dep.name, hash, rng);
   return { name, created: clock, restarts: 0 };
+}
+
+/** Das Template, das ein ReplicaSet besitzt: Kopie von Image, envFrom und den Template-Feldern des Deployments
+ *  (ohne Laufzeitwert `ephemeralUsedMi`; ein emptyDir zählt nur als Deklaration). */
+export function rsTemplateOf(dep: Deployment): RsTemplate {
+  return { image: dep.image, envFrom: { configMaps: dep.envFrom.configMaps.slice(), secrets: dep.envFrom.secrets.slice() }, spec: rsSpecOf(dep) };
+}
+
+/** Die Template-Felder, die ein ReplicaSet besitzt: Kopie ohne Laufzeitwert `ephemeralUsedMi`, ein emptyDir nur als Deklaration. Die EINE Normalisierung (Deployment und Historien-Eintrag). */
+function rsSpecOf(src: PodTemplateSpec): PodTemplateSpec {
+  const spec = snapshotPodTemplate(src);
+  delete spec.ephemeralUsedMi;
+  if (spec.emptyDir) spec.emptyDir = {};
+  return spec;
+}
+
+/** Stellt sicher, dass das Deployment sein aktuelles ReplicaSet (Revision 1, Template des Deployments) kennt.
+ *  Muss VOR jeder Template-Änderung laufen, damit das ReplicaSet sein altes Template behält. */
+export function ensureReplicaSet(dep: Deployment, clock: number): ReplicaSetRecord {
+  if (!dep.replicaSet) {
+    const template = rsTemplateOf(dep);
+    dep.replicaSet = { hash: templateHash(dep.name, template), created: clock, revision: 1, template };
+  }
+  return dep.replicaSet;
 }
 
 /** Eine StatefulSet-Pod-Instanz mit STABILER Identität (`<sts>-<ordinal>`), anders als
@@ -106,8 +131,10 @@ export function scaleDeployment(dep: Deployment, target: number, clock: number, 
  *  gilt vor und nach dem Neustart. */
 export function replacePods(dep: Deployment, clock: number, rng: () => number): void {
   // Neues Template → neues ReplicaSet (neuer Hash); gleiches Template behält es (#1468).
-  const hash = podTemplateHash(dep);
-  if (dep.replicaSet?.hash !== hash) dep.replicaSet = { hash, created: clock };
+  ensureReplicaSet(dep, clock); // das bisherige ReplicaSet behält sein Template, bevor es abgelöst wird
+  const template = rsTemplateOf(dep);
+  const hash = templateHash(dep.name, template); // EIN Hash-Weg: derselbe wie im Eintrag
+  if (dep.replicaSet?.hash !== hash) switchReplicaSet(dep, { hash, created: clock, template });
   const fresh: PodInstance[] = [];
   for (let i = 0; i < dep.pods.length; i++) fresh.push(newDeploymentPod(dep, clock, rng, [...dep.pods, ...fresh]));
   dep.pods = fresh;
@@ -235,7 +262,7 @@ function copyScalars(from: PodTemplateSpec, to: PodTemplateSpec): void {
 
 /** Übernimmt ALLE Pod-Template-Felder aus einem Snapshot, Szenario oder Manifest-Effekt – nur gesetzte
  *  Felder, Objektfelder als Kopie, emptyDir/initContainer mit Defaults. Der EINE Seed-Weg. */
-export function seedPodTemplate(dep: Deployment, s: PodTemplateSpec): void {
+export function seedPodTemplate(dep: PodTemplateSpec, s: PodTemplateSpec): void {
   copyScalars(s, dep);
   if (s.securityContext) dep.securityContext = { ...s.securityContext };
   if (s.emptyDir) dep.emptyDir = { data: s.emptyDir.data || "", usedMi: s.emptyDir.usedMi || 0 };
@@ -243,11 +270,91 @@ export function seedPodTemplate(dep: Deployment, s: PodTemplateSpec): void {
 }
 
 /** Gegenstück zu `seedPodTemplate`: die Template-Felder eines Deployments für den Snapshot (Kopien). */
-export function snapshotPodTemplate(dep: Deployment): PodTemplateSpec {
+export function snapshotPodTemplate(dep: PodTemplateSpec): PodTemplateSpec {
   const out: PodTemplateSpec = {};
   copyScalars(dep, out);
   if (dep.securityContext) out.securityContext = { ...dep.securityContext };
   if (dep.emptyDir) out.emptyDir = { ...dep.emptyDir };
   if (dep.initContainer) out.initContainer = { ...dep.initContainer };
   return out;
+}
+
+/* ===== Rollout-Historie: Rollback, Laden, Speichern (#1471) ===== */
+
+/** Rollback: legt das Template eines alten ReplicaSets wieder auf das Deployment (Mutation, Admission und Rollout
+ *  macht der Aufrufer). Felder, die das alte Template nicht hatte, fallen weg. Image-Heilung wie `set image`,
+ *  Limit-Heilung wie `set resources`; die Notizen der Heilungen kommen zurück. */
+export function restoreRsTemplate(dep: Deployment, t: RsTemplate): string[] {
+  const notes: string[] = [];
+  for (const k of POD_TEMPLATE_KEYS) if (k !== "ephemeralUsedMi") Reflect.deleteProperty(dep, k);
+  dep.envFrom = { configMaps: t.envFrom.configMaps.slice(), secrets: t.envFrom.secrets.slice() };
+  changeImage(dep, t.image);
+  const { memLimit, cpuLimitMilli, ...rest } = t.spec;
+  seedPodTemplate(dep, rest);
+  if (memLimit !== undefined && setMemoryLimit(dep, memLimit)) notes.push("\n" + MEM_HEALED_NOTE);
+  if (cpuLimitMilli !== undefined && setCpuLimit(dep, cpuLimitMilli)) notes.push("\n" + CPU_THROTTLED_NOTE);
+  return notes;
+}
+
+/** Ein Historien-Eintrag aus einem Szenario/Save: nur gültig mit ganzzahliger Revision ≥ 1 und Image. */
+function validHistoryEntry(e: unknown): e is NonNullable<RolloutHistorySpec["rsHistory"]>[number] {
+  if (typeof e !== "object" || e === null) return false;
+  const { revision, image } = e as { revision?: unknown; image?: unknown };
+  return typeof revision === "number" && Number.isInteger(revision) && revision >= 1 && typeof image === "string" && image !== "";
+}
+
+/** Ein Historien-Eintrag als ReplicaSet (Template normalisiert); `null` bei kaputtem Inhalt (wirft nie). */
+function recordFromEntry(dep: Deployment, e: NonNullable<RolloutHistorySpec["rsHistory"]>[number]): ReplicaSetRecord | null {
+  try {
+    const geseedet: PodTemplateSpec = {};
+    seedPodTemplate(geseedet, e);
+    const spec = rsSpecOf(geseedet);
+    const envFrom = { configMaps: [...(e.envFrom?.configMaps ?? [])].map(String), secrets: [...(e.envFrom?.secrets ?? [])].map(String) };
+    const template: RsTemplate = { image: e.image, envFrom, spec };
+    return { hash: templateHash(dep.name, template), created: dep.created, revision: e.revision, template };
+  } catch {
+    return null;
+  }
+}
+
+/** Die gültigen Historien-Einträge: eindeutige Revision und eindeutiger Hash (≠ aktuell), Revision unter der aktuellen. */
+function validRecords(dep: Deployment, entries: unknown[], currentHash: string, maxRevision: number): ReplicaSetRecord[] {
+  const out: ReplicaSetRecord[] = [];
+  for (const e of entries) {
+    const rec = validHistoryEntry(e) ? recordFromEntry(dep, e) : null;
+    if (!rec || rec.revision >= maxRevision || rec.hash === currentHash) continue;
+    if (out.some(o => o.revision === rec.revision || o.hash === rec.hash)) continue;
+    out.push(rec);
+  }
+  return out.sort((a, b) => a.revision - b.revision).slice(-REVISION_HISTORY_LIMIT);
+}
+
+/** Übernimmt die Rollout-Historie aus einem Szenario/Save (nach dem Template-Seed, vor den Pods). Wirft NIE:
+ *  ein kaputter Eintrag wird verworfen, sonst verwürfe `sanitizeSnapshot` den ganzen Cluster. Ohne
+ *  `revision`/`rsHistory` (Alt-Stand, unberührtes Deployment) passiert nichts. */
+export function seedRolloutHistory(dep: Deployment, s: RolloutHistorySpec, clock: number): void {
+  if (s.revision === undefined && s.rsHistory === undefined) return;
+  const entries: unknown[] = Array.isArray(s.rsHistory) ? s.rsHistory : [];
+  const gesetzt = typeof s.revision === "number" && Number.isInteger(s.revision) && s.revision >= 1 ? s.revision : null;
+  const template = rsTemplateOf(dep);
+  const hash = templateHash(dep.name, template);
+  const alle = validRecords(dep, entries, hash, gesetzt ?? Infinity);
+  const revision = gesetzt ?? Math.max(0, ...alle.map(r => r.revision)) + 1;
+  dep.replicaSet = { hash, created: clock, revision, template };
+  if (alle.length > 0) dep.oldReplicaSets = alle;
+}
+
+/** Gegenstück zu `seedRolloutHistory`: nur, was von Revision 1 ohne Historie abweicht (sonst `{}`, unberührte Stände bleiben unverändert). */
+export function snapshotRolloutHistory(dep: Deployment): RolloutHistorySpec {
+  const alte = dep.oldReplicaSets ?? [];
+  const revision = dep.replicaSet?.revision ?? 1;
+  if (alte.length === 0 && revision === 1) return {};
+  return {
+    revision,
+    rsHistory: alte.map(r => ({
+      revision: r.revision, image: r.template.image,
+      envFrom: { configMaps: r.template.envFrom.configMaps.slice(), secrets: r.template.envFrom.secrets.slice() },
+      ...snapshotPodTemplate(r.template.spec),
+    })),
+  };
 }

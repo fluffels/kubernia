@@ -40,7 +40,7 @@ const KNOWN_FLAGS: Readonly<Record<KubectlSub, readonly FlagSpec[]>> = {
   get: [NS, flag(false, "-A", "--all-namespaces"), OUTPUT_FLAG],
   describe: [NS],
   top: [NS],
-  rollout: [NS],
+  rollout: [NS, checkedFlag(checkRevision, "--to-revision")],
   label: [NS, flag(false, "--overwrite")],
   auth: [NS, flag(true, "--as")],
   logs: [NS, flag(false, "-f", "--follow"), flag(false, "-p", "--previous")],
@@ -65,6 +65,7 @@ const FLAG_HINTS: Readonly<Record<string, string>> = {
   "--selector": "Label-Selektoren gibt es nicht – filtere über den Namen, z.B. 'kubectl get pods <name>'.",
   "--show-labels": "Labels zeigt der Simulator nicht an.",
   "--sort-by": "Sortieren kann der Simulator nicht – die Liste kommt in fester Reihenfolge.",
+  "--revision": "Einzelne Revisionen zeigt der Simulator nicht; welches Image ein ReplicaSet hat, zeigt 'kubectl get rs -o wide'.",
   "--dry-run": "Trockenläufe gibt es nicht; der Befehl legt sonst wirklich etwas an, darum lehnt der Simulator ihn ab.",
 };
 
@@ -121,6 +122,11 @@ function checkPort(host: ErrOnly, v: string): string | null {
   const parts = v.split(",");
   for (const p of parts) if (!/^[+-]?\d+$/.test(p)) return host._err('error: strconv.Atoi: parsing "' + p + '": invalid syntax', "Der Port ist eine ganze Zahl, z.B. '--port=80'.");
   return parts.length > 1 ? notSimulated(host, "mehrere Ports in '--port=" + v + "'.", ["kubectl expose deployment <name> --port=80"]) : null;
+}
+
+/** `--to-revision=<n>`: eine ganze Zahl (negativ ist gültig, findet aber keine Revision). */
+function checkRevision(host: ErrOnly, v: string): string | null {
+  return /^[+-]?\d+$/.test(v) ? null : host._err('error: invalid argument "' + v + '" for "--to-revision" flag: strconv.ParseInt: parsing "' + v + '": invalid syntax', "Die Revision ist eine ganze Zahl, z.B. '--to-revision=1'.");
 }
 
 /** `--from-literal=<key>=<value>`: ohne `=` oder mit leerem Schlüssel lehnt kubectl die Angabe ab. */

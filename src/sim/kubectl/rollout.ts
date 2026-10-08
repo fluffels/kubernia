@@ -10,7 +10,7 @@
  *
  * Phaser-frei (pure Domäne): hängt nur an ../workload, ./security und ./host (Typ). */
 import type { Deployment, PodSecurityLevel, SecurityContext } from "../state";
-import { replacePods, scaleDeployment } from "../workload";
+import { ensureReplicaSet, replacePods, scaleDeployment } from "../workload";
 import { admitPod, podSecurityViolations } from "./security";
 import type { KubectlHost } from "./host";
 
@@ -36,6 +36,8 @@ export function admitsNewPods(level: PodSecurityLevel, sc: SecurityContext | und
 export function rollOut(host: RolloutHost, dep: Deployment, change?: () => void, sc: SecurityContext | undefined = dep.securityContext): string | null {
   const denied = admitNewPods(host, dep.name, sc);
   if (denied) return denied;
+  // Das ReplicaSet erfasst sein Template, BEVOR change() es ändert (auch ein Deployment mit 0 Replicas hält Revision 1).
+  ensureReplicaSet(dep, host.clock);
   change?.();
   // Neue Pods geben das flüchtige Scratch-Volume frei (#240).
   host._resetEphemeral(dep);

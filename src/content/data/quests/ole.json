@@ -112,8 +112,8 @@
         "type": "dialog",
         "npc": "ole",
         "lines": [
-          "Fällt dir was an den Pod-Namen auf? <code>kantine-9f4c2-x7k1</code> – die kryptischen Anhängsel hat niemand getippt. Die hängt <b>Kubernetes automatisch dran</b>, damit jeder Pod garantiert einen <b>eindeutigen</b> Namen hat. Steckt ein <b>Deployment</b> dahinter, kommt der mittlere Block vom ReplicaSet, der hintere wird pro Pod gewürfelt.",
-          "Für <code>describe</code> heißt das: nicht raten, sondern den Namen aus <code>kubectl get pods</code> übernehmen. Der <b>volle Name</b> trifft genau einen Pod. Ein <b>Präfix</b>, also nur der Anfang, geht auch – aber <code>kantine-9f4c2</code> beschreibt dann <b>jeden</b> Pod, dessen Name so beginnt, hier also alle aus diesem ReplicaSet."
+          "Fällt dir was an den Pod-Namen auf? <code>kantine-5c689d88bb-x7k2p</code> – die kryptischen Anhängsel hat niemand getippt. Die hängt <b>Kubernetes automatisch dran</b>, damit jeder Pod garantiert einen <b>eindeutigen</b> Namen hat. Steckt ein <b>Deployment</b> dahinter, ist der mittlere Block der Hash seines ReplicaSets (<code>kubectl get rs</code> zeigt es als <code>kantine-5c689d88bb</code>), der hintere wird pro Pod gewürfelt.",
+          "Für <code>describe</code> heißt das: nicht raten, sondern den Namen aus <code>kubectl get pods</code> übernehmen. Der <b>volle Name</b> trifft genau einen Pod. Ein <b>Präfix</b>, also nur der Anfang, geht auch – aber <code>kantine-5c689d88bb</code> beschreibt dann <b>jeden</b> Pod, dessen Name so beginnt, hier also alle aus diesem ReplicaSet."
         ]
       },
       {

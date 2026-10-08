@@ -12,12 +12,13 @@
  * Befehlsfamilien sind automatisch bewacht, ohne Disziplin pro Modul.
  *
  * Reine Domäne: importiert Typen aus ./state + die RBAC-Identitäts-Helfer aus ./rbac
- * (#609), kein Phaser, vom Architektur-Wächter (#347) als Domäne geschützt und im
+ * (#609) und die ReplicaSet-Historie aus ./replicasets (#1471), kein Phaser, vom Architektur-Wächter (#347) als Domäne geschützt und im
  * Node-Test prüfbar.
  */
 import type { ClusterState } from "./state";
 import { rbacKey, roleKind } from "./rbac";
 import { POD_SUFFIX_LEN } from "./util";
+import { REVISION_HISTORY_LIMIT, templateHash } from "./replicasets";
 
 /** (1)/(2) Replica Ist/Soll konsistent: ein Deployment/StatefulSet hält genau so viele
  *  Pods, wie sein `replicas`-Soll sagt. Das gilt auch bei kaputten Workloads (die Pods
@@ -222,6 +223,23 @@ function checkPodTemplateHash(s: ClusterState): string[] {
   return v;
 }
 
+/** (10) ReplicaSet-Historie (#1471): höchstens `REVISION_HISTORY_LIMIT` alte ReplicaSets; Revisionen eindeutig und
+ *  unter der aktuellen, Hashes eindeutig und ≠ dem aktuellen; der Hash jedes Eintrags ist der seines Templates. */
+function checkRolloutHistory(s: ClusterState): string[] {
+  const v: string[] = [];
+  for (const d of s.deployments) {
+    const alte = d.oldReplicaSets ?? [];
+    const aktuell = d.replicaSet?.revision ?? 1;
+    const fehler = (grund: string) => v.push(`Deployment "${d.name}": ReplicaSet-Historie ${grund}`);
+    if (alte.length > REVISION_HISTORY_LIMIT) fehler(`hat ${alte.length} alte ReplicaSets (höchstens ${REVISION_HISTORY_LIMIT})`);
+    if (new Set(alte.map(r => r.revision)).size !== alte.length) fehler("hat doppelte Revisionen");
+    if (alte.some(r => r.revision >= aktuell)) fehler(`hat eine Revision, die nicht unter der aktuellen (${aktuell}) liegt`);
+    if (new Set(alte.map(r => r.hash)).size !== alte.length || alte.some(r => r.hash === d.replicaSet?.hash)) fehler("hat doppelte Hashes");
+    if ([...alte, ...(d.replicaSet ? [d.replicaSet] : [])].some(r => r.hash !== templateHash(d.name, r.template))) fehler("trägt einen Hash, der nicht zum Template passt");
+  }
+  return v;
+}
+
 /** Die Invarianten-Prüfer, je einer pro Regel. Stardew-Scope: eine neue Invariante ist ein
  *  neuer Prüfer + ein Eintrag hier – `clusterInvariantViolations` bleibt ein dünner Sammler,
  *  der nicht mit der Regelzahl wächst (analog zum #546-Schnitt von `validateContent`). */
@@ -234,6 +252,7 @@ const INVARIANT_CHECKS: ReadonlyArray<(s: ClusterState) => string[]> = [
   checkReferentialIntegrity,   // (7)
   checkStatefulSetOrdinals,    // (8)
   checkPodTemplateHash,        // (9)
+  checkRolloutHistory,         // (10)
 ];
 
 /** Alle verletzten Invarianten des Cluster-Zustands als lesbare Meldungen
@@ -242,7 +261,7 @@ const INVARIANT_CHECKS: ReadonlyArray<(s: ClusterState) => string[]> = [
  *  Geprüft werden (#478/#509): (1)/(2) Replica Ist/Soll je Deployment/StatefulSet,
  *  (3) Pods auf realen Nodes, (4)/(5) PVC-/PV-Bindungsstatus, (6) Namens-Eindeutigkeit
  *  je Ressourcentyp, (7) referenzielle Integrität der PVC↔PV-Bindung, (8) die stabilen
- *  StatefulSet-Ordinalnamen <name>-0 …, (9) der gemeinsame pod-template-hash der Deployment-Pods. Bewusst NICHT geprüft: Service→Deployment (ein
+ *  StatefulSet-Ordinalnamen <name>-0 …, (9) der gemeinsame pod-template-hash der Deployment-Pods, (10) die ReplicaSet-Historie. Bewusst NICHT geprüft: Service→Deployment (ein
  *  ServiceRes trägt in diesem Simulator keinen Selektor/keine Deployment-Referenz, die
  *  Zuordnung ist rein namensbasiert an der Abfrage-Grenze – kein persistenter Verweis, der
  *  ins Leere zeigen könnte) und roleBinding.roleRef→Role (eine Bindung auf eine noch nicht

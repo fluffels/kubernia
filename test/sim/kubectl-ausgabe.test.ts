@@ -215,7 +215,7 @@ describe("(b) wide: replicasets und nodes (#1483)", () => {
     expect(lauf("kubectl get pods", sim).out).toContain("web-" + vorher + "-");
     expect(lauf("kubectl get rs", sim).out).toContain("web-" + vorher);
     sim.exec("kubectl set image deployment/web web=nginx:1.28");
-    expect(hashIm(lauf("kubectl get rs -o wide", sim).out)).not.toBe(vorher);
+    expect(lauf("kubectl get pods", sim).out).not.toContain("web-" + vorher + "-"); // die Pods tragen den neuen Hash; das alte ReplicaSet bleibt in der Liste (#1471)
   });
   test("nodes: INTERNAL-IP EXTERNAL-IP OS-IMAGE KERNEL-VERSION CONTAINER-RUNTIME", () => {
     const out = lauf("kubectl get nodes -o wide").out;
