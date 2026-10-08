@@ -9,7 +9,9 @@
 import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./helpers";
-import { provisionNode, removeNode, isControlPlane, NODE_VERSION } from "../../src/sim/nodes";
+import { provisionNode, removeNode, isControlPlane, nodeInternalIP, NODE_SYSTEM_INFO, NODE_VERSION } from "../../src/sim/nodes";
+import { readdirSync, readFileSync } from "node:fs";
+import { CONTROL_PLANE_IP } from "../../src/sim/util";
 import type { ClusterNode } from "../../src/sim/state";
 
 let sim: KQSim;
@@ -152,4 +154,41 @@ test("terraform destroy entfernt die per apply provisionierten Worker über remo
   sim.exec("terraform destroy");
   assert.equal(sim.nodes.some(n => n.name === "ahoi-worker-3"), false, "destroy entfernt ahoi-worker-3");
   assert.equal(sim.nodes.some(n => n.name === "ahoi-worker-4"), false, "destroy entfernt ahoi-worker-4");
+});
+
+/* ---------- (c) Node-Modell: INTERNAL-IP und Systeminfo (#1483) ---------- */
+
+test("nodeInternalIP: die Control-Plane trägt die CP-Adresse, auch unter fremdem Namen", () => {
+  assert.equal(nodeInternalIP({ name: "ahoi-control", status: "Ready", roles: "control-plane", version: NODE_VERSION }), CONTROL_PLANE_IP);
+  assert.equal(nodeInternalIP({ name: "cp-sonder", status: "Ready", roles: "control-plane", version: NODE_VERSION }), CONTROL_PLANE_IP);
+});
+
+test("nodeInternalIP: ein Worker bekommt nie die CP-Adresse, auch nicht unter dem Namen ahoi-control (Negativ)", () => {
+  const w: ClusterNode = { name: "ahoi-control", status: "Ready", roles: "<none>", version: NODE_VERSION };
+  assert.notEqual(nodeInternalIP(w), CONTROL_PLANE_IP);
+  for (let i = 1; i <= 2000; i++) {
+    assert.notEqual(nodeInternalIP({ ...w, name: "ahoi-worker-" + i }), CONTROL_PLANE_IP);
+  }
+});
+
+test("nodeInternalIP: deterministisch, im Node-Netz 10.0.0.0/16 und eindeutig für alle bekannten Namen", () => {
+  const quests = readdirSync("src/content/data/quests").map(f => readFileSync("src/content/data/quests/" + f, "utf8")).join("\n");
+  const namen = new Set<string>([...quests.matchAll(/ahoi-worker-\d+/g)].map(m => m[0]));
+  for (let i = 1; i <= 100; i++) namen.add("ahoi-worker-" + i);
+  const ips = new Map<string, string>();
+  for (const name of namen) {
+    const node: ClusterNode = { name, status: "Ready", roles: "<none>", version: NODE_VERSION };
+    const ip = nodeInternalIP(node);
+    assert.equal(nodeInternalIP({ ...node }), ip, "deterministisch");
+    assert.match(ip, /^10\.0\.\d{1,3}\.\d{1,3}$/);
+    assert.ok(!ips.has(ip), name + " kollidiert mit " + ips.get(ip) + " (" + ip + ")");
+    ips.set(ip, name);
+  }
+});
+
+test("NODE_SYSTEM_INFO: eingefroren, mit OS, Kernel und Container-Runtime", () => {
+  assert.ok(Object.isFrozen(NODE_SYSTEM_INFO));
+  assert.match(NODE_SYSTEM_INFO.osImage, /Ubuntu/);
+  assert.match(NODE_SYSTEM_INFO.kernelVersion, /^\d+\.\d+\.\d+/);
+  assert.match(NODE_SYSTEM_INFO.containerRuntimeVersion, /^containerd:\/\//);
 });

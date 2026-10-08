@@ -12,7 +12,7 @@
  */
 import { isExternalNameService, type ClusterState, type Deployment, type PvcRes, type ServiceRes } from "./state";
 import { clusterPods, type ClusterPod } from "./pods";
-import { podIP, CONTROL_PLANE_IP } from "./util";
+import { podIP, CONTROL_PLANE_IP, workloadSelector } from "./util";
 import { assertNever } from "../core/assert";
 import { statefulPodVolumePending } from "./workload";
 
@@ -76,7 +76,7 @@ function selects(svc: ServiceRes, c: ClusterPod): boolean {
 export function serviceSelector(host: Pick<ClusterState, "statefulSets">, svc: ServiceRes): string | null {
   if (isExternalNameService(svc) || isKubernetesService(svc)) return null;
   const sts = host.statefulSets.find(s => s.serviceName === svc.name);
-  return "app=" + (sts ? sts.name : svc.name);
+  return workloadSelector(sts ? sts.name : svc.name);
 }
 
 function backendOf(host: EndpointsHost, c: ClusterPod): ServiceBackend {

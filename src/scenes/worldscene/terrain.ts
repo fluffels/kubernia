@@ -22,6 +22,7 @@ import { PIER_XS } from "../../world/maps/harbormap";
 import { T, DIRT } from "../shared";
 import { renderGround as renderGroundShared } from "./renderground";
 import type { WorldSceneLike } from "./types";
+import { PIER_NAMES } from "./harbordamage";
 
 /** Sichtbare Hafen-Objekte (Bäume, Stege-Schilder, Schiff, Markt, Gebäude,
  *  Deko, Leuchtturm, Türen) + die davon abhängigen Szenen-Felder (piers, ship,
@@ -39,7 +40,7 @@ export function placeHarborObjects(scene: WorldSceneLike) {
 
   // Stege = Cluster-Knoten (Steg-Geometrie liegt in harborGeometry; hier nur
   // die Knoten-Daten + Schilder, an denselben Spalten PIER_XS).
-  scene.piers = PIER_XS.map((x, i) => ({ x, name: ["ahoi-control", "ahoi-worker-1", "ahoi-worker-2"][i] }));
+  scene.piers = PIER_XS.map((x, i) => ({ x, name: PIER_NAMES[i] }));
   for (const p of scene.piers) scene.labels.push({ x: p.x + 1.5, y: 27.4, text: p.name, color: "#ffd97a" });
   scene.labels.push({ x: 6.5, y: 23.4, text: "Bos Dock", color: "#ffffff" });
   // #303: Lagerschuppen für gestoppte Container (docker ps -a) östlich des Docks.

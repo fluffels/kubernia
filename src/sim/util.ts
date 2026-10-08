@@ -40,6 +40,17 @@ export function podIP(name: string): string {
 export const CONTROL_PLANE_IP = "10.0.0.10";
 export const CONTROL_PLANE_NODE = "ahoi-control";
 
+/** Name des n-ten Worker-Knotens (`ahoi-worker-<n>`, ab 1): die EINE Namenskonvention der Sim (#1483). */
+export const workerNodeName = (n: number): string => "ahoi-worker-" + n;
+
+/** Label und Selektor sind in der Sim dieselbe Zeichenkette `app=<name>` (Grenze `selektor-ueber-namen`):
+ *  der EINE Helfer statt der handgeschriebenen Konvention (#1483). */
+export const workloadSelector = (name: string): string => "app=" + name;
+
+/** Alter der eingebauten Objekte (kubeadm-Static-Pods, CoreDNS, Service und Endpoints `kubernetes`, Nodes):
+ *  sie existieren seit Clusteraufbau, nicht seit dem Spielstart (#1483). */
+export const BUILTIN_AGE = "3d";
+
 /** Deterministische Adresse (`203.0.113.100–249`, TEST-NET-3) hinter einem ExternalName-CNAME-Ziel:
  *  je Ziel stabil, `.10` bleibt dem Ingress vorbehalten (#1403). */
 export function externalIP(name: string): string {

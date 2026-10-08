@@ -51,6 +51,7 @@ Die Matrix liegt unter `docs/`, nicht unter `src/`: sie wird nie ausgeliefert (k
 - Neuer Unterbefehl oder neue Ressourcenart im Simulator: Zeile in der Matrix, sonst ist der Test rot.
 - Weitere Befehlsfamilien (helm, docker, git, terraform, argocd, glab, aws, kubeadm, curl, nslookup): je eine Datei `sim-treue/<familie>.json` nach demselben Muster, der Test wird dann um die Familie erweitert.
 - Neue K8s-Version: die Referenzseiten der Zeilen mit Status `gleich` erneut ansehen; `stand` in der JSON mitziehen.
+- Zwei Versionen: Clientseitiges (Flags, Spalten) prüfst du gegen die aktuelle Doku, Serverseitiges (Warnungen, Deprecations, entfernte APIs) folgt `clusterVersion` in der JSON, und die ist `NODE_VERSION` (`src/sim/nodes.ts`, ein Test koppelt beide). Beim Anheben versionsabhängiges Verhalten prüfen, z.B. die Deprecation-Warnung für v1 Endpoints ab v1.33 (der Wächter in `test/sim/kubectl-ausgabe.test.ts` zeigt die Stelle).
 
 ## Bekannte Lücken (Stand 2026-10-08)
 
