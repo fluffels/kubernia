@@ -58,6 +58,8 @@ describe("get storageclasses: „(default)“ nur an der effektiven Default-Klas
     sim.storageClasses.length = 0;
     sim.storageClasses.push(sc("eins", false, 100));
     expect(markiert(sim)).toEqual([]);
+    sim.mergeScenario({ pvcs: [{ name: "daten" }] });
+    expect(sim.pvcs.find(p => p.name === "daten")?.storageClass, "ohne Default bindet ein PVC ohne Klasse an keine").toBe("");
   });
 });
 
