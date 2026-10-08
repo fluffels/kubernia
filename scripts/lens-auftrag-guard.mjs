@@ -67,7 +67,7 @@ export function lensAuftragBlockade({ subagentType, prompt } = {}) {
   const felder = parseLensAuftrag(text);
   for (const [name, wert] of Object.entries(felder)) {
     if (/<[^<>\r\n]*>/.test(wert)) {
-      return `Lens-Auftrag unvollständig: das Feld „${name}:“ trägt noch einen Platzhalter (${wert}). ${HINWEIS}`;
+      return `Lens-Auftrag unvollständig: das Feld „${name}:“ trägt noch einen Platzhalter (${wert}). Ein Zusatz in derselben Zeile zählt mit, auch ein erklärendes „<…>“: Erklärungen in eine eigene Zeile schreiben. ${HINWEIS}`;
     }
   }
   const head = felder["erwarteter HEAD"];

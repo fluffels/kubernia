@@ -309,6 +309,14 @@ describe("Agent: Lens-Auftrag-Guard (#1425)", () => {
     }
   });
 
+  test("R2: ein `<…>` im erklärenden Zusatz derselben Zeile zählt mit, die Meldung nennt das (#1460 Z2)", () => {
+    const prompt = `${KOPF} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc1234 (statt <sha>)`;
+    assert.equal(deny(agent(prompt))?.hookSpecificOutput.permissionDecision, "deny");
+    assert.match(grund(agent(prompt)), /Zusatz in derselben Zeile zählt mit.*eigene Zeile/);
+    // derselbe Zusatz ohne `<…>` bleibt erlaubt (Guard-Logik nicht gelockert)
+    assert.equal(deny(agent(`${KOPF} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: abc1234 (statt sha)`)), null);
+  });
+
   test("R3: `erwarteter HEAD:` ohne Hex-Hash (7 bis 40 Zeichen) wird verweigert, der Workflow-Fallback nicht", () => {
     for (const head of ["abc", "xyz1234", "HEAD", "a".repeat(41)]) {
       assert.equal(deny(agent(`${KOPF} · Arbeitsverzeichnis: /w · Patch: /p.patch · erwarteter HEAD: ${head}`))?.hookSpecificOutput.permissionDecision, "deny", head);

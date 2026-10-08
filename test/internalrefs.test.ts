@@ -82,7 +82,9 @@ describe("Interne-Referenzen-Wächter (#990)", () => {
       [],
       "Interne Referenz(en) gefunden — neutral umformulieren (die Sache benennen, nicht die Herkunft).",
     );
-  });
+    // Eigener Timeout (FAQ § Test-Timeouts): runCheck() startet echte Git-Kindprozesse und liest ~760 Quellen; unter Last
+    // riss der 5-s-Default (#1460 Z3).
+  }, 30_000);
 
   test("Detektion greift wirklich (Red-Green)", () => {
     // No-op-Schutz: ein Wächter, der nie anschlägt, wäre wertlos.
