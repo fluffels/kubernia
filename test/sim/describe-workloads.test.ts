@@ -44,6 +44,12 @@ describe("describe deployment", () => {
     expect(d).toMatch(/Progressing\s+True\s+ReplicaSetUpdated/);
   });
 
+  test("Selektor-Zeilen: Selector und Pod-Template-Labels tragen app=<name> (workloadSelector)", () => {
+    const d = out(full(), "describe deploy web");
+    expect(d).toMatch(/^Selector:\s+app=web$/m);
+    expect(d).toMatch(/^Pod Template:\n\s+Labels:\s+app=web$/m);
+  });
+
   test("0 Replicas: Available True, 0 unavailable", () => {
     const d = out(new KQSim({ deployments: [dep("web", { replicas: 0 })] }), "describe deploy web");
     expect(d).toMatch(/0 desired \| 0 updated \| 0 total \| 0 available \| 0 unavailable/);
@@ -158,6 +164,12 @@ describe("describe statefulset", () => {
     expect(d).toMatch(/^\s+StorageClass:$/m);
     expect(d).toMatch(/^\s+Capacity:\s+1Gi$/m);
     expect(d).toMatch(/Access Modes:\s+\[ReadWriteOnce\]/);
+  });
+
+  test("Selektor-Zeilen: Selector und Pod-Template-Labels tragen app=<statefulset>", () => {
+    const d = out(new KQSim({ statefulSets: [sts()] }), "describe sts speicher");
+    expect(d).toMatch(/^Selector:\s+app=speicher$/m);
+    expect(d).toMatch(/^Pod Template:\n\s+Labels:\s+app=speicher$/m);
   });
 
   test("Pending-PVC: 0 Running / 1 Waiting", () => {
@@ -293,5 +305,23 @@ describe("describe <typ> a b: mehrere Namen", () => {
     const s = new KQSim({ deployments: [dep("web")], services: [svc("web"), svc("api")], statefulSets: [sts({ replicas: 1 })] });
     expect(out(s, "describe svc web api").match(/^Name:/gm)).toHaveLength(2);
     expect(run(s, "describe sts speicher nope").error).toBe(true);
+  });
+});
+
+describe("describe networkpolicy: Selektor-Zeile", () => {
+  const mitRichtlinie = (np: object) => {
+    const sim = new KQSim({});
+    sim.files["np.yaml"] = "kind: NetworkPolicy";
+    sim.applyEffects["np.yaml"] = { networkPolicy: np as never };
+    sim.exec("kubectl apply -f np.yaml");
+    return sim;
+  };
+  test("mit podSelector: PodSelector app=<name>", () => {
+    expect(out(mitRichtlinie({ name: "mauer", podSelector: "lager" }), "describe networkpolicy mauer")).toMatch(/^PodSelector:\s+app=lager$/m);
+  });
+  test("ohne podSelector: <none> (gilt für alle Pods), kein app=", () => {
+    const d = out(mitRichtlinie({ name: "offen" }), "describe networkpolicy offen");
+    expect(d).toMatch(/^PodSelector:\s+<none> \(gilt für alle Pods im Namespace\)$/m);
+    expect(d).not.toMatch(/PodSelector:\s+app=/);
   });
 });
