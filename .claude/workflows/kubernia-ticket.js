@@ -874,9 +874,9 @@ AGENTS.md (§ Das Wichtigste zuerst + § Wo die TODOs leben), insbesondere:
   .claude/worktrees/kq-${nr}, Branch feature/kq-${nr}-<slug>. Im frischen Worktree
   einmal npm ci (schreibt den Lockfile nie, #1119). Kein Junction/Symlink auf fremde node_modules.
 - § Worktree entfernen auf Windows, Falle 2: arbeite mit absoluten Pfaden und cd NICHT
-  in den Worktree hinein — die Shell behält ihre cwd und blockiert später das Entfernen.
+  in den Worktree hinein — die Shell behält ihre cwd und blockiert später das Entfernen. Skripte nie über stdin starten (python -, node -): per Write ablegen und node <pfad> starten.
 - § TDD ist der Default für Logik, § Alles wird abgetestet – auch Negativfälle,
-  § Tests gegen False Positives absichern (Red-Green).
+  § Tests gegen False Positives absichern (Red-Green). Bei Guard- oder Gate-Code bekommt jede neue Regel einen eigenen Negativtest, der genau diese Regel verfälscht.
 - ⭐ Oberste Regel (Stardew-Valley-Größe) — sie steht über allen Konventionen.
   Was auffällt, aber nicht zum Ticket gehört: nicht inline mitfixen, sondern festhalten
   (§ Harness-Befunde sind Zeilen, keine Tickets): Harness → Sammelticket (Notfälle ausgenommen), Spiel-/Inhalts-Befund → gebündeltes Issue.
@@ -1264,7 +1264,7 @@ AGENTS.md § Git-Workflow — PR-gegated (erste harte Regel) und § Kollisionssc
 letzter Punkt. Kurz: Branch pushen, gh pr create mit "Closes #${nr}" im Body,
 Auto-Merge setzen, CI abwarten.
 ${harnessDiff ? `\n${harnessMergeAuftrag}\n` : ''}
-Vor dem Push: setze einen leeren Nachweis-Commit, den die PR-CI verlangt (#1270). Genau diese
+Vor dem Push: verschärft der Diff ein Gate oder Schema, merge einmal origin/main ein (nur konfliktfrei, sonst ergebnis="fehler") und fahre das betroffene Gate erneut (#1449). Dann setze einen leeren Nachweis-Commit, den die PR-CI verlangt (#1270). Genau diese
 zwei Zeilen als Commit-Message, unverändert${shaHinweis}:
 ${nachweis}
 (leerer Commit mit --allow-empty, die Zeilen am Zeilenanfang). Prüfe ihn lokal mit
