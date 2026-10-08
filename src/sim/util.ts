@@ -15,8 +15,7 @@ import { hashStr } from "../core/rng";
  *  jede `Sim`-Instanz reicht ihren EIGENEN, in `reset()` geseedeten Strom durch (wie den
  *  `clock`), damit Pod-Namen/IDs nur an der Instanz hängen, nicht an der globalen Ausführungs-
  *  reihenfolge. Kein `Math.random` (Determinismus-SSOT, #492). */
-export function randSuffix(len: number, rng: () => number): string {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+export function randSuffix(len: number, rng: () => number, chars = "abcdefghijklmnopqrstuvwxyz0123456789"): string {
   let s = "";
   for (let i = 0; i < len; i++) s += chars[Math.floor(rng() * chars.length)];
   return s;
@@ -42,12 +41,25 @@ export function externalIP(name: string): string {
   return "203.0.113." + (100 + (hashStr(name) % 150));
 }
 
-/** Pod-Name im echten Kubernetes-Stil: `<deployment>-<replicaset-hash>-<pod-suffix>`
- *  (z.B. `web-7d8f9c6b54-x2k9p`). Von `sim.ts` (reset/Helm/Argo) UND `sim/kubectl.ts`
- *  (scale/rollout/apply/delete-Self-Healing) gebraucht – darum hier als geteilter Helfer. */
-export function makePodName(depName: string, rng: () => number): PodName {
+/** Das Alphabet, aus dem Kubernetes Pod-Suffixe und pod-template-hashes zieht (`rand.alphanums`):
+ *  keine Vokale und keine Ziffern 0, 1, 3 – so entstehen keine lesbaren Wörter. */
+export const K8S_ALPHANUMS = "bcdfghjklmnpqrstvwxz2456789";
+
+/** Kodiert einen Hash-Wert wie `rand.SafeEncodeString`: je Zeichen des Dezimaltexts
+ *  (Zeichen-Code mod 27) ein Zeichen aus `K8S_ALPHANUMS`. Pur und deterministisch. */
+export function safeEncode(s: string): string {
+  let out = "";
+  for (let i = 0; i < s.length; i++) out += K8S_ALPHANUMS[s.charCodeAt(i) % K8S_ALPHANUMS.length];
+  return out;
+}
+
+/** Pod-Name im echten Kubernetes-Stil: `<deployment>-<pod-template-hash>-<pod-suffix>`
+ *  (z.B. `web-7d8f9c6b54-x2k9p`). Der Hash gehört dem ReplicaSet und ist für alle Pods eines
+ *  Deployments gleich (`sim/replicasets.ts`), nur der 5-stellige Suffix ist zufällig. Von
+ *  `sim/workload.ts` (scale/rollout/heal) gebraucht – darum hier als geteilter Helfer. */
+export function makePodName(depName: string, hash: string, rng: () => number): PodName {
   // Intern erzeugt → vertrauenswürdig: ungeprüft branden (der Name ist per Konstruktion gültig).
-  return asPodName(depName + "-" + randSuffix(9, rng) + "-" + randSuffix(5, rng));
+  return asPodName(depName + "-" + hash + "-" + randSuffix(5, rng, K8S_ALPHANUMS));
 }
 
 /** Mit Leerzeichen auf Mindestbreite `n` auffüllen (Spalten-Ausrichtung der CLI-Tabellen). */

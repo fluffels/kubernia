@@ -71,7 +71,7 @@ describe("asPodName – ungeprüfte Brand-Fabrik für vertrauenswürdige, intern
 describe("makePodName rechtfertigt den ungeprüften Brand", () => {
   test("erzeugt für einen gültigen Deployment-Namen einen gültigen Ressourcen-Namen", () => {
     for (const dep of ["web", "kasse", "my-app-1"]) {
-      const name = makePodName(dep, makeRng(1));
+      const name = makePodName(dep, "7d8f9c6b54", makeRng(1));
       expect(isResourceName(name), name).toBe(true);
       expect(name.startsWith(dep + "-")).toBe(true);
     }

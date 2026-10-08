@@ -23,6 +23,7 @@
  */
 import type { ClusterNode, Deployment, PodInstance, PodTemplateSpec, PvcRes, StatefulSetRes } from "./state";
 import { makePodName } from "./util";
+import { podTemplateHash } from "./replicasets";
 import { asPodName } from "./names";
 import { isControlPlane } from "./nodes";
 
@@ -31,8 +32,12 @@ import { isControlPlane } from "./nodes";
  *  Deployment-Pod entsteht – scale/rollout/heal gehen alle darüber. Der Zufallsstrom
  *  `rng` kommt von der Sim-Instanz durch (wie der `clock`), damit die Pod-Namen
  *  instanz-lokal reproduzierbar sind (#580). */
-export function newDeploymentPod(dep: Deployment, clock: number, rng: () => number): PodInstance {
-  return { name: makePodName(dep.name, rng), created: clock, restarts: 0 };
+export function newDeploymentPod(dep: Deployment, clock: number, rng: () => number, taken: readonly PodInstance[] = dep.pods): PodInstance {
+  dep.replicaSet ??= { hash: podTemplateHash(dep), created: clock };
+  // Nur 5 Zufallszeichen im Namen (wie in Kubernetes): bei einer Kollision neu würfeln.
+  let name = makePodName(dep.name, dep.replicaSet.hash, rng);
+  for (let i = 0; i < 8 && taken.some(p => p.name === name); i++) name = makePodName(dep.name, dep.replicaSet.hash, rng);
+  return { name, created: clock, restarts: 0 };
 }
 
 /** Eine StatefulSet-Pod-Instanz mit STABILER Identität (`<sts>-<ordinal>`), anders als
@@ -84,7 +89,12 @@ export function scaleDeployment(dep: Deployment, target: number, clock: number, 
  *  Die Anzahl bleibt erhalten, `replicas` unberührt – `pods.length === replicas`
  *  gilt vor und nach dem Neustart. */
 export function replacePods(dep: Deployment, clock: number, rng: () => number): void {
-  dep.pods = dep.pods.map(() => newDeploymentPod(dep, clock, rng));
+  // Neues Template → neues ReplicaSet (neuer Hash); gleiches Template behält es (#1468).
+  const hash = podTemplateHash(dep);
+  if (dep.replicaSet?.hash !== hash) dep.replicaSet = { hash, created: clock };
+  const fresh: PodInstance[] = [];
+  for (let i = 0; i < dep.pods.length; i++) fresh.push(newDeploymentPod(dep, clock, rng, [...dep.pods, ...fresh]));
+  dep.pods = fresh;
 }
 
 /** Ersetzt genau EINEN Pod (per Name) durch einen frischen – die Selbstheilung eines
@@ -198,7 +208,7 @@ export const CPU_THROTTLED_NOTE = "💡 CPU-Limit gesetzt! Die Pods werden gedro
 
 /** Template-Felder, die als einfacher Wert (Zahl/String) gespiegelt werden. Die Objektfelder
  *  (securityContext, emptyDir, initContainer) laufen einzeln, weil sie als Kopie ankommen. */
-const SCALAR_TEMPLATE_KEYS = ["serviceAccountName", "containerPort", "memLimit", "cpuLimitMilli", "node", "ephemeralLimit", "ephemeralUsedMi"] as const;
+const SCALAR_TEMPLATE_KEYS = ["serviceAccountName", "containerPort", "memLimit", "cpuLimitMilli", "node", "ephemeralLimit", "ephemeralUsedMi", "restartedAt"] as const;
 
 /** Kopiert die gesetzten Skalarfelder von `from` nach `to`. */
 function copyScalars(from: PodTemplateSpec, to: PodTemplateSpec): void {

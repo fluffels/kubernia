@@ -32,7 +32,7 @@ function lauf(cmd: string, sim: KQSim = new KQSim(szenario())) {
 /* ---------- Registry (SSOT) ---------- */
 describe("Registry: nur echte Kurznamen (kubectl api-resources / CRD-Manifeste)", () => {
   const ECHT: Record<string, string[]> = {
-    pods: ["po"], deployments: ["deploy"], services: ["svc"], endpoints: ["ep"], nodes: ["no"], namespaces: ["ns"],
+    pods: ["po"], deployments: ["deploy"], replicasets: ["rs"], services: ["svc"], endpoints: ["ep"], nodes: ["no"], namespaces: ["ns"],
     configmaps: ["cm"], ingresses: ["ing"], networkpolicies: ["netpol"], statefulsets: ["sts"],
     persistentvolumeclaims: ["pvc"], persistentvolumes: ["pv"], storageclasses: ["sc"], volumesnapshots: ["vs"],
     serviceaccounts: ["sa"], servicemonitors: ["smon"], prometheusrules: ["promrule"],
@@ -59,8 +59,8 @@ describe("Registry: nur echte Kurznamen (kubectl api-resources / CRD-Manifeste)"
     expect(qualified(dep, "singular")).toBe("deployment.apps");
     expect(qualified(resolveKind("po")!, "plural")).toBe("pods");
   });
-  test("Kategorie all: Pods, Services, Deployments, StatefulSets und die Grafana-CRDs", () => {
-    expect(allKinds().map(k => k.plural)).toEqual(["pods", "services", "deployments", "statefulsets", "grafanadatasources", "grafanadashboards"]);
+  test("Kategorie all: Pods, Services, Deployments, ReplicaSets, StatefulSets und die Grafana-CRDs", () => {
+    expect(allKinds().map(k => k.plural)).toEqual(["pods", "services", "deployments", "replicasets", "statefulsets", "grafanadatasources", "grafanadashboards"]);
   });
   test("jeder Typ außer namespaces hat einen get-Renderer (Registry und Renderer driften nicht)", () => {
     expect(RESOURCE_KINDS.filter(k => !GET_RENDERERS.has(k.plural)).map(k => k.plural)).toEqual(["namespaces"]);
@@ -80,7 +80,7 @@ describe("(d) erfundene Kurznamen sind weg, echte gehen weiter", () => {
     expect(r.error).toBe(true);
     expect(r.out).toContain("doesn't have a resource type");
   });
-  test.each(["po", "svc", "deploy", "ep", "cm", "ing", "netpol", "sts", "pvc", "pv", "sc", "vs", "sa", "smon", "promrule", "no"])("get %s geht", tok => {
+  test.each(["po", "svc", "deploy", "rs", "ep", "cm", "ing", "netpol", "sts", "pvc", "pv", "sc", "vs", "sa", "smon", "promrule", "no"])("get %s geht", tok => {
     const r = lauf("kubectl get " + tok);
     expect(r.out).not.toContain("doesn't have a resource type");
   });

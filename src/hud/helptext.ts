@@ -48,7 +48,7 @@ const HELP_FAMILIES: ReadonlyArray<HelpFamily> = [
   ], grenzen: [
     { id: "ein-namespace", text: "Es gibt nur die Namespaces default und kube-system; -n und -A greifen nur dort." },
     { id: "keine-ausgabeformate", text: "Flags wie -o, -l, -w, --show-labels, --sort-by lehnt der Simulator ab; get druckt immer die Tabelle." },
-    { id: "get-all-gekuerzt", text: "get all zeigt nur Pods, Services, Deployments, StatefulSets, Grafana; ReplicaSets, Jobs fehlen." },
+    { id: "rs-nur-aktuell", text: "get rs und get all zeigen je Deployment nur das aktuelle ReplicaSet, keine alten aus früheren Rollouts." },
     { id: "apply-umfang", text: "apply -f liest nur Deployment und Service aus der Datei; andere Arten wirken wie im Spiel hinterlegt." },
     { id: "describe-gekuerzt", text: "describe kennt nur wenige Arten und zeigt gekürzte Abschnitte." },
     { id: "arten-auswahl", text: "create, delete und scale kennen nur die Arten aus der Hilfe; secret nur generic und tls." },

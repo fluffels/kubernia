@@ -204,6 +204,23 @@ function checkStatefulSetOrdinals(s: ClusterState): string[] {
   return v;
 }
 
+/** (9) pod-template-hash: ist das ReplicaSet des Deployments bekannt (`replicaSet` gesetzt), trägt jeder
+ *  Pod genau `<dep>-<hash>-` plus 5 Zeichen. Ohne Laufzeitfeld (nie ein Pod gebaut) gibt es nichts zu prüfen. */
+function checkPodTemplateHash(s: ClusterState): string[] {
+  const v: string[] = [];
+  for (const d of s.deployments) {
+    if (!d.replicaSet) continue;
+    const prefix = `${d.name}-${d.replicaSet.hash}-`;
+    for (const p of d.pods) {
+      const name = String(p.name);
+      if (!(name.startsWith(prefix) && name.length === prefix.length + 5)) {
+        v.push(`Deployment "${d.name}": Pod "${name}" trägt nicht den pod-template-hash "${d.replicaSet.hash}" seines ReplicaSets`);
+      }
+    }
+  }
+  return v;
+}
+
 /** Die Invarianten-Prüfer, je einer pro Regel. Stardew-Scope: eine neue Invariante ist ein
  *  neuer Prüfer + ein Eintrag hier – `clusterInvariantViolations` bleibt ein dünner Sammler,
  *  der nicht mit der Regelzahl wächst (analog zum #546-Schnitt von `validateContent`). */
@@ -215,6 +232,7 @@ const INVARIANT_CHECKS: ReadonlyArray<(s: ClusterState) => string[]> = [
   checkNameUniqueness,         // (6)
   checkReferentialIntegrity,   // (7)
   checkStatefulSetOrdinals,    // (8)
+  checkPodTemplateHash,        // (9)
 ];
 
 /** Alle verletzten Invarianten des Cluster-Zustands als lesbare Meldungen
@@ -223,7 +241,7 @@ const INVARIANT_CHECKS: ReadonlyArray<(s: ClusterState) => string[]> = [
  *  Geprüft werden (#478/#509): (1)/(2) Replica Ist/Soll je Deployment/StatefulSet,
  *  (3) Pods auf realen Nodes, (4)/(5) PVC-/PV-Bindungsstatus, (6) Namens-Eindeutigkeit
  *  je Ressourcentyp, (7) referenzielle Integrität der PVC↔PV-Bindung, (8) die stabilen
- *  StatefulSet-Ordinalnamen <name>-0 … . Bewusst NICHT geprüft: Service→Deployment (ein
+ *  StatefulSet-Ordinalnamen <name>-0 …, (9) der gemeinsame pod-template-hash der Deployment-Pods. Bewusst NICHT geprüft: Service→Deployment (ein
  *  ServiceRes trägt in diesem Simulator keinen Selektor/keine Deployment-Referenz, die
  *  Zuordnung ist rein namensbasiert an der Abfrage-Grenze – kein persistenter Verweis, der
  *  ins Leere zeigen könnte) und roleBinding.roleRef→Role (eine Bindung auf eine noch nicht

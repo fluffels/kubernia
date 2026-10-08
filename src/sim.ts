@@ -16,7 +16,7 @@ import type {
   ServiceMonitorRes, PrometheusRuleRes, GrafanaDatasourceRes, GrafanaDashboardRes, StatefulSetRes, PvcRes,
   PvRes, StorageClassRes, VolumeSnapshotRes, S3Bucket, ServiceAccountRes, RoleRes,
   RoleBindingRes, PodSecurityLevel, NodeMetrics,
-  ScrapeTarget, Alert, Scenario, ClusterState,
+  ScrapeTarget, Alert, Scenario, ClusterState, PodTemplateSpec,
 } from "./sim/state";
 import { deploymentPodStatus, isReady } from "./sim/podstatus";
 import { DEFAULT_NAMESPACE, HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService } from "./sim/state";
@@ -326,9 +326,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
 
     _resetDeployments(sc: Scenario) {
       this.deployments = (sc.deployments || []).map(d => {
-        const dep = this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy);
-        seedPodTemplate(dep, d); // alle Template-Felder, nach dem 64er-Default des OOM-Falls
-        return dep;
+        return this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy, d);
       });
     }
 
@@ -423,7 +421,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       };
     }
 
-    _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean): Deployment {
+    _makeDeployment(name: string, image: string, replicas: number, broken?: Broken | null, envFrom?: { configMaps: string[]; secrets: string[] }, cpuHeavy?: boolean, template?: PodTemplateSpec): Deployment {
       // #507: Namensprüfung zentral an der Fabrik – jeder Anlege-Weg läuft hier durch.
       const d: Deployment = {
         name: resourceName(name), image, replicas, created: this.clock, pods: [], broken: broken ? Object.assign({}, broken) : null,
@@ -432,6 +430,8 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       };
       // OOMKilled startet mit einem zu knappen Limit – das ist ja die Ursache.
       if (d.broken && d.broken.type === "oomkilled") d.memLimit = 64;
+      // Template vor den Pods (#1468): der pod-template-hash der Pods hängt am fertigen Template.
+      if (template) seedPodTemplate(d, template);
       // Pods über die Aggregat-Mutation erzeugen (#488): hält `pods.length === replicas`
       // schon bei der Konstruktion (d.replicas ist bereits `replicas`, hier nur die Pods).
       scaleDeployment(d, replicas, this.clock, this.rng);
@@ -698,9 +698,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
       }
       for (const d of sc.deployments || []) {
         if (!this.deployments.some(x => x.name === d.name)) {
-          const dep = this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy);
-          seedPodTemplate(dep, d);
-          addDeployment(this, dep); // #577: über die Workload-Aggregat-SSOT statt roher Push
+          addDeployment(this, this._makeDeployment(d.name, d.image, d.replicas, d.broken, d.envFrom, d.cpuHeavy, d)); // #577: über die Workload-Aggregat-SSOT statt roher Push
         }
       }
       for (const cm of sc.configMaps || []) {
