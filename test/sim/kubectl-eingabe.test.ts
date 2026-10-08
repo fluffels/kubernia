@@ -5,7 +5,7 @@
  * Tabellengetrieben; jede Gruppe hat ihre Negativfälle. */
 import { describe, test, expect } from "vitest";
 import { KQSim, freshSim } from "./helpers";
-import { RESOURCE_KINDS, resolveKind, qualified, allKinds, type ResourcePlural } from "../../src/sim/kubectl/resources";
+import { RESOURCE_KINDS, resolveKind, qualified, allKinds, serverWarnings, type ResourcePlural } from "../../src/sim/kubectl/resources";
 import { parseKubectlCall, slashRef, type KubectlSub } from "../../src/sim/kubectl/args";
 import type { Call } from "../../src/sim/cliargs";
 import { GET_RENDERERS } from "../../src/sim/kubectl/inspect";
@@ -42,7 +42,7 @@ describe("Registry: nur echte Kurznamen (kubectl api-resources / CRD-Manifeste)"
     expect([...short]).toEqual(ECHT[plural] ?? []);
   });
   test("Typen ohne Kurznamen: secrets, roles, clusterroles, rolebindings, clusterrolebindings, Grafana", () => {
-    for (const n of ["secrets", "roles", "clusterroles", "rolebindings", "clusterrolebindings", "grafanadatasources", "grafanadashboards"]) {
+    for (const n of ["endpointslices", "secrets", "roles", "clusterroles", "rolebindings", "clusterrolebindings", "grafanadatasources", "grafanadashboards"]) {
       expect(resolveKind(n)?.short, n).toEqual([]);
     }
   });
@@ -53,6 +53,14 @@ describe("Registry: nur echte Kurznamen (kubectl api-resources / CRD-Manifeste)"
     for (const tok of ["deployments", "Deployment", "DEPLOY", "deployment.apps", "deploy.apps"]) expect(resolveKind(tok)?.plural, tok).toBe("deployments");
     expect(resolveKind("deployment.falsch")).toBeNull();
     expect(resolveKind("pods.apps")).toBeNull();   // pods liegen in der Core-Gruppe
+  });
+  test("endpointslices: Singular und Gruppenform lösen auf, falsche Gruppe nicht, kein all, keine Warnung (#1505)", () => {
+    for (const tok of ["endpointslices", "endpointslice", "EndpointSlice", "endpointslices.discovery.k8s.io"]) expect(resolveKind(tok)?.plural, tok).toBe("endpointslices");
+    expect(resolveKind("endpointslices.apps")).toBeNull();
+    const k = resolveKind("endpointslices")!;
+    expect(qualified(k, "plural")).toBe("endpointslices.discovery.k8s.io");
+    expect(allKinds().map(x => x.plural)).not.toContain("endpointslices");
+    expect(serverWarnings([k])).toEqual([]);
   });
   test("qualified liefert die Formen mit Gruppe", () => {
     const dep = resolveKind("deploy")!;

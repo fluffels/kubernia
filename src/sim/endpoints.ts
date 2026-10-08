@@ -3,8 +3,8 @@
  * hinter einem Service? `kubectl get endpoints`, `curl`, `nslookup` (headless + Pod-Record)
  * und die Prometheus-Scrape-Targets lesen nur noch hieraus. Selektoren sind in der Sim nicht
  * modelliert; der Name ist die Verdrahtung: das Deployment gleichen Namens plus jedes
- * StatefulSet, das den Service als `serviceName` führt (#1301). Später ändern Selektoren/
- * EndpointSlices genau diese Funktion.
+ * StatefulSet, das den Service als `serviceName` führt (#1301). Später ändern Selektoren
+ * genau diese Funktion; die EndpointSlice (`endpointSliceOf`) ist eine Sicht auf dieselben Backends.
  *
  * Rein lesend und Phaser-frei: nur Domänentypen aus ./state, `podIP` aus ./util und die
  * PVC-Ableitung aus ./workload und das Pod-Inventar ./pods; kein Rückimport nach sim.ts (kein Zyklus). Das Nachführen
@@ -12,7 +12,7 @@
  */
 import { isExternalNameService, type ClusterState, type Deployment, type PvcRes, type ServiceRes } from "./state";
 import { clusterPods, type ClusterPod } from "./pods";
-import { podIP, workloadLabels, type Labels } from "./util";
+import { podIP, workloadLabels, generatedName, type Labels } from "./util";
 import { CONTROL_PLANE_IP } from "./nodes";
 import { assertNever } from "../core/assert";
 import { statefulPodVolumePending } from "./workload";
@@ -111,4 +111,33 @@ export function endpointPort(svc: ServiceRes): number | string {
 export function endpointAddresses(host: EndpointsHost, svc: ServiceRes): string[] {
   if (isKubernetesService(svc)) return [CONTROL_PLANE_IP + ":" + endpointPort(svc)];
   return readyBackends(host, svc).flatMap(b => (b.ip ? [b.ip + ":" + endpointPort(svc)] : []));
+}
+
+/** Die EndpointSlice eines Services (discovery.k8s.io/v1), abgeleitet und nie gespeichert. */
+export interface EndpointSliceView {
+  name: string;
+  addressType: "IPv4";
+  ports: (number | string)[];
+  endpoints: { address: string; ready: boolean }[];
+}
+
+/** Die EndpointSlice des Services, oder `null` (ExternalName: der Controller legt keine an).
+ *  Anders als `get endpoints` führt sie auch NICHT bereite Pods (`ready: false`); Pods ohne IP
+ *  (nicht eingeplant) und evictete Deployment-Pods fehlen. Ohne Endpunkte bleibt eine Platzhalter-Slice
+ *  mit leeren Ports. Der API-Server führt die Slice von `kubernetes` unter genau diesem Namen. */
+export function endpointSliceOf(host: EndpointsHost, svc: ServiceRes): EndpointSliceView | null {
+  if (isExternalNameService(svc)) return null;
+  if (isKubernetesService(svc)) {
+    return { name: svc.name, addressType: "IPv4", ports: [endpointPort(svc)], endpoints: [{ address: CONTROL_PLANE_IP, ready: true }] };
+  }
+  const endpoints = clusterPods(host).filter(c => selects(svc, c) && !(c.owner === "Deployment" && c.dep.evicted)).flatMap(c => {
+    const b = backendOf(host, c);
+    return b.ip ? [{ address: b.ip, ready: b.ready }] : [];
+  });
+  return {
+    name: generatedName(svc.name + "-", "endpointslice/" + svc.name),
+    addressType: "IPv4",
+    ports: endpoints.length ? [endpointPort(svc)] : [],
+    endpoints,
+  };
 }
