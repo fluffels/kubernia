@@ -53,7 +53,7 @@ import { makeRng, DEFAULT_SEED } from "./core/rng";
 import { resourceName, assertServiceType, InvalidSpecError } from "./sim/names";
 import { sameRbac } from "./sim/rbac";
 import { assertClusterInvariants, warnClusterInvariants } from "./sim/invariants";
-import { scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, statefulPodClaimName, seedPodTemplate, snapshotPodTemplate } from "./sim/workload";
+import { assertReplicas, scaleDeployment, replacePods, addDeployment, addStatefulSet, newStatefulPod, statefulPodClaimName, seedPodTemplate, snapshotPodTemplate } from "./sim/workload";
 import { provisionNode } from "./sim/nodes";
 import { renderHelp, renderHelpTopic } from "./hud/helptext";
 
@@ -517,6 +517,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     /** Baut ein StatefulSet: Pods mit STABILER Identität (<name>-0 …) plus je Replica
      *  ein PVC aus dem volumeClaimTemplate (<vct>-<name>-<ordinal>), das gleich gebunden wird. */
     _makeStatefulSet(spec: { name: string; image: string; replicas: number; serviceName?: string; volumeClaimName?: string; storage?: string; storageClass?: string }): StatefulSetRes {
+      assertReplicas("StatefulSet", spec.name, spec.replicas);
       const vct = spec.volumeClaimName || "data";
       const sts: StatefulSetRes = {
         name: resourceName(spec.name), image: spec.image, replicas: spec.replicas, // #507: DNS-1123 zentral

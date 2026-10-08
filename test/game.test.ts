@@ -1029,6 +1029,14 @@ test("#586 clusterSnapshot: ein GÜLTIGER Plain-Object-Snapshot überlebt unver�
   expect(Game.state.clusterSnapshot?.files?.["Dockerfile"]).toBe("FROM nginx:1.27");
 });
 
+test("#1459 clusterSnapshot: ein Snapshot mit ungültigen Replicas fällt auf den Default-Cluster, load() hängt nicht", () => {
+  const bad = { files: {}, deployments: [{ name: "x", image: "nginx", replicas: 2.5 }] };
+  Game.importData(JSON.stringify({ v: 3, data: { xp: 3, clusterSnapshot: bad } }));
+  expect(() => Game.load()).not.toThrow();
+  expect(JSON.stringify(Game.state.clusterSnapshot)).not.toContain('"replicas":2.5');
+  expect(Game.state.xp).toBe(3);
+});
+
 test("#1418 clusterSnapshot: eine Argo-App ohne desired verwirft den Snapshot, load() crasht nicht und Befehle laufen", () => {
   Game.importData(JSON.stringify({ v: 3, data: { xp: 7, clusterSnapshot: { files: {}, argoApps: [{ name: "kaputt", repo: "r", path: "p/", autoSync: true, selfHeal: true, created: 0 }] } } }));
   expect(() => Game.load()).not.toThrow();
