@@ -455,6 +455,7 @@ describe("Scan-Vorfilter und Scan-Umfang (#1526)", () => {
     assert.equal(vorfilterProbleme([/(?<x>a)\k<x>/i]).length, 1, "benannter Rückverweis");
     assert.equal(vorfilterProbleme([/a/i, /b/]).length, 1, "gemischte Flags");
     assert.equal(vorfilterProbleme([/a/gi, /b/gi]).length, 2, "g macht .test() zustandsbehaftet");
+    assert.equal(vorfilterProbleme([/a/iy, /b/iy]).length, 2, "y ebenso");
     const kaputt = { source: "(", flags: "i" } as RegExp; // einzeln nie entstehbar, die Alternation wäre nicht baubar
     assert.equal(vorfilterProbleme([kaputt]).length, 1, "Alternation nicht baubar");
     assert.deepEqual(vorfilterProbleme([/a\\1/i]), [], "maskierter Backslash vor der Ziffer ist kein Rückverweis");

@@ -277,9 +277,6 @@ export function diagnoseOrphans(cwd, deps = {}) {
   return { ok: true, orphans, young, lensOrphans, lensYoung, orphanFiles: dateien.verwaist, youngFiles: dateien.jung, foreignFiles: dateien.fremd, mainRoot, worktreesDir };
 }
 
-/** Name eines Lens-Worktrees: `kq-<nr>-lens-r<runde>` oder `kq-<nr>-lens-m<n>` (Skill review-lenses); Gruppe 1 ist der Eltern-Worktree `kq-<nr>`. */
-
-
 /**
  * Registrierte Lens-Worktrees unter `worktreesDir`, deren Feature-Worktree `kq-<nr>` NICHT mehr registriert ist (#1425).
  * `registeredPaths` sind die absoluten Pfade aus `git worktree list`. Pure; liefert Ordnernamen (nicht Pfade).

@@ -104,6 +104,7 @@ describe("Doku↔Code-Drift (#482/#907)", () => {
     assert.deepEqual(eintragsProbleme("- `src/sim/a.ts`: kein Schritt, `top pods|nodes`."), []);
     assert.ok(eintragsProbleme("- `src/sim/a.ts` (Status (#1414): die Regel `restarts):  | pod.restarts`; weiter.").length > 0);
     assert.ok(eintragsProbleme("- `src/sim/a.ts` (#12): Text | Rest").length > 0);
+    assert.deepEqual(eintragsProbleme("- `src/sim/a.ts` (#12): Regel `x):  | y`"), ["Spalten-Rest nach Klammer"], "Rest innerhalb einer Code-Spanne bei heilem Kopf");
     assert.ok(eintragsProbleme("- src/sim/a.ts: ohne Backticks").length > 0);
   });
 

@@ -62,6 +62,11 @@ describe("bewerteLensEdit", () => {
     }
   });
 
+  test("Pfadform ignoriert Groß-/Kleinschreibung (Windows), der Ordnername selbst nicht (Aufräumen)", () => {
+    expect(G.bewerteLensEdit("C:/Dev/X/.Claude/Worktrees/KQ-1-Lens-R1/a.ts").block).toBe(false);
+    expect(G.bewerteLensEdit("C:/Dev/X/.Claude/Worktrees/KQ-1-Lens-M2/a.ts").block).toBe(false);
+  });
+
   test("relativer Pfad wird gegen cwd aufgelöst", () => {
     expect(G.bewerteLensEdit("src/a.ts", LENS).block).toBe(false);
     expect(G.bewerteLensEdit("src/a.ts", FEATURE).block).toBe(true);

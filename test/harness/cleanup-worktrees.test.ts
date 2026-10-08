@@ -736,6 +736,11 @@ describe("Lens-Worktrees ohne Feature-Worktree (#1425)", () => {
     assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT), ["kq-13-lens-m1"]);
   });
 
+  test("Großgeschriebener Ordnername `KQ-13-lens-r1` wird nicht mit `kq-13` verwechselt (kein Flag i, sonst fälschlich verwaist)", () => {
+    const reg = [MAIN, `${WT}/kq-13`, `${WT}/KQ-13-lens-r1`];
+    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT), []);
+  });
+
   test("nie angefasst: `kq-<nr>`, `kq-<nr>-lens-x`, `foo-lens-r1`, fremde Ordner, tiefer verschachtelte Pfade", () => {
     const reg = [MAIN, `${WT}/kq-12`, `${WT}/kq-12-lens-x`, `${WT}/foo-lens-r1`, `/other/kq-9-lens-r1`, `${WT}/kq-9-lens-r1/sub`, `${WT}/kq-9-lens-r10x`];
     assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT), []);
