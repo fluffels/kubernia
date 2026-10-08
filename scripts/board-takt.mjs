@@ -84,7 +84,7 @@ export function istHarnessCommit(commit, harnessIssues = null) {
   return /^[a-z]+\(harness\)!?:/i.test(kopf);
 }
 
-/** Spiel-Merges in einer Commit-Liste: Ticket-Merges (`zaehleTicketMerges`) ohne Harness-Scope; mit `seit` nur ab diesem Zeitpunkt. Pur. */
+/** Spiel-Merges in einer Commit-Liste: Ticket-Merges (`zaehleTicketMerges`) ohne Harness-Commits (`istHarnessCommit`); mit `seit` nur ab diesem Zeitpunkt. Pur. */
 export function zaehleSpielMerges(commits, seit = null, harnessIssues = null) {
   if (!Array.isArray(commits)) throw new Error("commits muss eine Liste sein.");
   return zaehleTicketMerges(commits.filter((c) => !istHarnessCommit(c, harnessIssues)), seit);
@@ -92,7 +92,7 @@ export function zaehleSpielMerges(commits, seit = null, harnessIssues = null) {
 
 /**
  * Die Spielquote des Fensters als Zahlen und Zeile für das Protokoll: `harness` und `spiel` = Ticket-Merges (ohne Bots) mit bzw. ohne
- * Harness-Scope, `eingehalten` = höchstens 1 Harness auf `SPIEL_QUOTE` Spiel (Notfälle und Security tragen denselben Scope und
+ * Harness-Zuordnung (`istHarnessCommit`), `eingehalten` = höchstens 1 Harness auf `SPIEL_QUOTE` Spiel (Notfälle und Security gelten als Harness, sofern ihr Issue `area:harness` trägt, und
  * zählen hier mit; das Protokoll ist Information, kein Gate). Pur.
  */
 export function quotenBericht(commits, seit = null, harnessIssues = null) {

@@ -1,4 +1,7 @@
-/* Projekt-Brain-Index (#1428 Z5): `docs/referenz/anlaufstellen.md` ist der Einstieg ins Brain (ADR 0015). Zwei Dinge dürfen nicht still
+/* Projekt-Brain-Index (#1428 Z5).
+ *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ * `docs/referenz/anlaufstellen.md` ist der Einstieg ins Brain (ADR 0015). Zwei Dinge dürfen nicht still
  * driften: (1) jedes ADR steht im Index (0019 und 0020 fehlten ein Ticket lang), (2) jede Brain-Seite unter docs/ ist über Links vom
  * Index aus erreichbar (eine Seite, die niemand verlinkt, wird nie gelesen). Fitness-Function über die echten Dateien, mit Negativfällen
  * gegen die Hilfsfunktionen. */

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { mitSafecrlfAus } from "./support/git-umgebung";
+import { mitSafecrlfAus } from "./support/git-umgebung-env";
 
 describe("mitSafecrlfAus (#1428 Z1)", () => {
   test("ohne Zähler: Eintrag 0", () => {

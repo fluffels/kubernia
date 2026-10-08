@@ -410,6 +410,11 @@ describe("node_modules gegen package-lock.json (#1428 Z2)", () => {
     expect(N.pruefeNodeModules(L, h)).toMatch(/\(2 Pakete\).*npm ci/);
     expect(N.pruefeNodeModules(L, hidden({ "node_modules/a": { version: "1.0.0" } }))).toMatch(/\(1 Pakete\)/);
   });
+  test("Workspace-Einträge außerhalb von node_modules/ und Links zählen nicht als fehlend", () => {
+    const l = lock({ "packages/x": { version: "1.0.0" }, "node_modules/x": { version: "1.0.0", link: true } });
+    expect(N.pruefeNodeModules(l, hidden({}))).toBeNull();
+    expect(N.pruefeNodeModules(lock({ "node_modules/y": { version: "1.0.0" } }), hidden({}))).toMatch(/\(1 Pakete\)/);
+  });
   test("kein Install-Stand: eigener Hinweis", () => {
     expect(N.pruefeNodeModules(L, null)).toMatch(/keinen Install-Stand/);
   });

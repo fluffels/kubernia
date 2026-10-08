@@ -1,8 +1,13 @@
+/* Wrapper-Wächter (#1428 Z32): alle gh-Aufrufe der Skripte laufen über scripts/gh-cli.mjs.
+ *
+ * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
+ *
+ * Bewusste Grenzen: erkannt werden nur literale `execFileSync|execFile|spawnSync|spawn("gh"`; nicht `execSync("gh …")`, kein Template-Literal
+ * und keine Variable als Kommando. */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
-// #1428 Z32: alle gh-Aufrufe der Skripte laufen über scripts/gh-cli.mjs.
 const DIREKT = /\b(?:execFileSync|execFile|spawnSync|spawn)\(\s*["']gh["']/;
 
 /** Dateien (relativ) mit einem direkten gh-Prozessaufruf. Pur. */

@@ -230,10 +230,10 @@ export function verwaisteLensWorktrees(registeredPaths, worktreesDir) {
   });
 }
 
-/** Werkzeug-Prozesse, die als vergessene Hilfsserver oder Stubs einen Worktree-Ordner festhalten können (Name ohne `.exe`). */
 /** Interpreter-Namen (ohne `.exe`), die ein Skript von stdin lesen können (#1428 Z16), und die Kommandozeile mit dem Argument `-` am Ende. */
 const STDIN_INTERPRETER = /^(?:python[\d.]*|py|node)$/;
 const STDIN_SKRIPT = /\s-\s*$/;
+/** Werkzeug-Prozesse, die als vergessene Hilfsserver oder Stubs einen Worktree-Ordner festhalten können (Name ohne `.exe`). */
 export const WERKZEUG_PROZESSE = new Set(["node", "python", "python3", "bash", "sh", "pwsh", "powershell", "cmd", "git", "npm", "npx"]);
 
 /** Max. so viele Halter-Kandidaten in der Meldung (der Rest wäre Rauschen). */

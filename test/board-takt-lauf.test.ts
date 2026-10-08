@@ -105,6 +105,22 @@ describe("fuehreTaktAus: Verdrahtung mit Fakes (#1428 Z23)", () => {
     expect(r.fehler).toBe(false);
   });
 
+  test("schlagen die Aktionen fehl (Status ok=false, Harness false), ist der Lauf ein Fehler", () => {
+    const mk = (statusOk: boolean, harnessOk: boolean): Io => ({
+      ghJson: (a) => (a.join(" ").includes("state=closed") ? [[]] : [[spiel(1), spiel(2), spiel(3)]]),
+      loadItems: () => [it(10), it(11), sammel],
+      loadOpenIssuePages: () => [[{ number: 50, title: STATUS, created_at: "2026-10-02T00:00:00Z", assignees: [] }]],
+      positionLautAgentsMd: () => 4,
+      fuehreStatusAus: () => ({ ok: statusOk }),
+      fuehreHarnessAus: () => harnessOk,
+      log: () => undefined,
+    });
+    const jetzt = new Date("2026-10-08T12:00:00Z");
+    expect(T.fuehreTaktAus({ jetzt, token: "t", io: mk(true, true) }).fehler).toBe(false);
+    expect(T.fuehreTaktAus({ jetzt, token: "t", io: mk(false, true) }).fehler).toBe(true);
+    expect(T.fuehreTaktAus({ jetzt, token: "t", io: mk(true, false) }).fehler).toBe(true);
+  });
+
   test("--dry-run führt nichts aus", () => {
     const log: string[] = [];
     let gerufen = 0;
