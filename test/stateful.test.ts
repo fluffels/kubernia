@@ -427,3 +427,22 @@ test("#1494: get sts zeigt READY nach bereiten Pods (0/1 bei Pending-PVC, 1/1 na
   assert.match(sim.exec("kubectl get sts").output!, /db\s+1\/1/);
   assert.match(sim.exec("kubectl describe sts db").output!, /1 Running \/ 0 Waiting/);
 });
+
+test("#1494: StatefulSet mit 3 Replicas ohne StorageClass: alle PVCs binden nach, drei Hinweise, 3/3", () => {
+  applyStatefulSet({ name: "db", replicas: 3, storageClass: "spaet" });
+  assert.match(sim.exec("kubectl get sts").output!, /db\s+0\/3/);
+  const r = applyStorage({ storageClass: { name: "spaet" } });
+  assert.equal((r.output!.match(/ist Bound/g) ?? []).length, 3);
+  assert.ok(sim.pvcs.every(p => p.status === "Bound"));
+  assert.match(sim.exec("kubectl get sts").output!, /db\s+3\/3/);
+});
+
+test("#1494: READY zählt nur die Pods des eigenen StatefulSet", () => {
+  applyStatefulSet({ name: "a", replicas: 1 });
+  applyStatefulSet({ name: "b", replicas: 1, storageClass: "fehlt" });
+  const o = sim.exec("kubectl get sts").output!;
+  assert.match(o, /^a\s+1\/1/m);
+  assert.match(o, /^b\s+0\/1/m);
+  assert.match(sim.exec("kubectl describe sts b").output!, /0 Running \/ 1 Waiting/);
+  assert.match(sim.exec("kubectl describe sts a").output!, /1 Running \/ 0 Waiting/);
+});

@@ -69,7 +69,8 @@ export function decidePvcBinding(view: BindingView, pvc: PvcRes): PvcBindingDeci
   return { kind: "provision", storageClass };
 }
 
-/** Das Event, das `describe pvc` für ein noch ungebundenes PVC zeigt; sonst `null`.
+/** (Der `provision`-Zweig ist im Spiel kaum sichtbar: der Resync läuft vor jedem Befehl und bindet vorher; er spiegelt den echten Controller.)
+ * Das Event, das `describe pvc` für ein noch ungebundenes PVC zeigt; sonst `null`.
  *  `provision` bei noch Pending = der externe Provisioner ist am Zug (ExternalProvisioning). */
 export function pvcPendingEvent(view: BindingView, pvc: PvcRes): PvcEvent | null {
   if (pvc.status !== "Pending") return null;

@@ -53,6 +53,10 @@ describe("decidePvcBinding", () => {
     expect(decidePvcBinding(world({ pvs: [pvRes({ accessModes: "RWO" })] }), pvcRes({ accessModes: "RWX" })).kind).toBe("pending");
     expect(decidePvcBinding(world({ pvs: [pvRes({ accessModes: "ReadWriteMany" })] }), pvcRes({ accessModes: "RWX" })).kind).toBe("bind");
   });
+  test("Access Modes: fordert das PVC zwei Modi, muss das PV beide bieten", () => {
+    expect(decidePvcBinding(world({ pvs: [pvRes({ accessModes: "RWO" })] }), pvcRes({ accessModes: "RWO,RWX" })).kind).toBe("pending");
+    expect(decidePvcBinding(world({ pvs: [pvRes({ accessModes: "RWX,RWO" })] }), pvcRes({ accessModes: "RWO,RWX" })).kind).toBe("bind");
+  });
   test("StorageClass fehlt und kein PV: ProvisioningFailed; vorhanden: provision", () => {
     const pvc = pvcRes({ storageClass: "schnell" });
     expect(decidePvcBinding(world(), pvc)).toEqual({ kind: "pending", event: { type: "Warning", reason: "ProvisioningFailed", message: 'storageclass.storage.k8s.io "schnell" not found' } });
