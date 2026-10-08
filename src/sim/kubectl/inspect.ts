@@ -14,6 +14,7 @@
 import { effectiveDefaultStorageClass, podIP, BUILTIN_AGE, workloadSelector, formatLabels } from "../util";
 import { endpointAddresses, podAddress, servicesWithDefault, serviceSelector, isKubernetesService } from "../endpoints";
 import type { KubectlHost } from "./host";
+import type { Call } from "../cliargs";
 import { DEFAULT_NAMESPACE, VOLUME_MODE, isExternalNameService, type Deployment, type RbacSubject } from "../state";
 import { podTemplateLabels, replicaSetsOf } from "../replicasets";
 import { nodeInternalIP, NODE_SYSTEM_INFO, CONTROL_PLANE_IP, CONTROL_PLANE_NODE } from "../nodes";
@@ -50,7 +51,7 @@ function tableOf(header: string[], rows: string[][], names?: string[]): GetTable
   return { header, rows, names: names ?? rows.map(r => r[col]) };
 }
 
-type GetRenderer = (host: KubectlHost, t: string[]) => GetTable;
+type GetRenderer = (host: KubectlHost, c: Call) => GetTable;
 
 /** Wo ein Pod läuft: IP und Node, beide `null`, solange er nicht eingeplant ist. Die EINE Quelle für
  *  `get pods -o wide` und `describe pod` (Deployment: `_nodeOf`, StatefulSet: `statefulPodNode`). */
@@ -92,9 +93,9 @@ export function noResourcesIn(ns: string = DEFAULT_NAMESPACE): string {
 
 const POD_HEADER = ["NAME", "READY", "STATUS", "RESTARTS", "AGE", "IP", "NODE", "NOMINATED NODE", "READINESS GATES"];
 
-function getPods(host: KubectlHost, t: string[]): GetTable {
-  const ns = requestedNamespace(t);
-  const allNs = allNamespaces(t);
+function getPods(host: KubectlHost, c: Call): GetTable {
+  const ns = requestedNamespace(c);
+  const allNs = allNamespaces(c);
   host._reschedulePending();
   if (ns === "kube-system" || allNs) {
     const sysPods = SYSTEM_PODS.map(systemPodRow);

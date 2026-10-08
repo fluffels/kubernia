@@ -13,7 +13,7 @@
  * der Name ist alles vor dem `=`, also `-out=plan` ≠ `-o`).
  *
  * Ein Scanner (`walk`) speist alles: `checkFlags` (Prüfung), `positionalArgs`, `parseCall` (Prüfung + `Call` mit
- * `args`/`has`/`value`/`values`/`list`, #1469: kein Handler indiziert mehr feste Tokens) und die kubectl-Leser. Regeln:
+ * `args`/`has`/`value`/`values`/`list`, #1469: kein Handler indiziert mehr feste Tokens). Regeln:
  * `--` beendet die Flags, Bool-Flags werten `=true|false` aus (`strconv.ParseBool`), Ketten `-fp` werden je Zeichen
  * gelesen, ein Wert-Flag in der Kette schluckt den Rest (`-nfoo` setzt kein `-f`), der LETZTE Wert gewinnt.
  *
@@ -70,30 +70,6 @@ function flagNameOf(tok: string, style: FlagStyle): string {
   }
   if (tok.startsWith("--")) { const eq = tok.indexOf("="); return eq < 0 ? tok : tok.slice(0, eq); }
   return tok.slice(0, 2);
-}
-
-/** Der Wert, der direkt am Token klebt (`--type=x`, `-n=x`, `-nx`, goflag `-out=x`), sonst null. */
-function attachedValueOf(tok: string, style: FlagStyle): string | null {
-  const eq = tok.indexOf("=");
-  if (style === "goflag" || tok.startsWith("--")) return eq < 0 ? null : tok.slice(eq + 1);
-  const rest = tok.slice(2);
-  if (!rest) return null;
-  return rest.startsWith("=") ? rest.slice(1) : rest;
-}
-
-/** Wert eines Flags mit seinen Schreibweisen (`-n x`, `-n=x`, `-nx`, `--namespace x`, `--namespace=x`; goflag
- *  `-var-file=x`, `-var-file x`). `null` = Flag fehlt oder ohne Wert. Der LETZTE Treffer gewinnt (pflag). Ohne
- *  Tabelle: für Stellen, die nur ein einzelnes Flag aus fertigen Tokens brauchen; sonst `parseCall`. */
-export function flagValueOf(t: readonly string[], names: readonly string[], style: FlagStyle = "pflag"): string | null {
-  let found: string | null = null;
-  for (let i = 0; i < t.length; i++) {
-    const tok = t[i];
-    if (!isFlagToken(tok) || !names.includes(flagNameOf(tok, style))) continue;
-    const attached = attachedValueOf(tok, style);
-    found = attached ?? t[i + 1] ?? null;
-    if (attached === null) i++; // der nächste Token war der Wert
-  }
-  return found;
 }
 
 /** `strconv.ParseBool`: die sechs wahren und sechs falschen Schreibweisen, sonst `null`. */
@@ -245,11 +221,6 @@ function makeCall(w: Walk): Call {
 export function parseCall(host: ErrHost, spec: ArgSpec, t: readonly string[], from: number): Call | string {
   const w = walk(spec, t, from);
   return firstError(host, spec, w) ?? makeCall(w);
-}
-
-/** Wie `parseCall`, aber ohne Fehlerpfad: für Stellen, an denen die Prüfung schon gelaufen ist (kubectl). */
-export function lenientCall(spec: ArgSpec, t: readonly string[], from: number): Call {
-  return makeCall(walk(spec, t, from));
 }
 
 /** Zerlegt eine Eingabezeile wie die Shell: `"…"` und `'…'` gruppieren (in `"…"` gelten `\"` und `\\`), `\x` außerhalb

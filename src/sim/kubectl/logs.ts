@@ -7,7 +7,8 @@
 import type { KubectlHost } from "./host";
 import type { Deployment } from "../state";
 import { resolveKind, qualified } from "./resources";
-import { callOf, positionals, slashRef, notSimulated, unknownResourceType } from "./args";
+import { slashRef, notSimulated, unknownResourceType } from "./args";
+import type { Call } from "../cliargs";
 import { podAddress } from "../endpoints";
 import { clusterPods, findClusterPod, type ClusterPod } from "../pods";
 import { statefulPodClaimName } from "../workload";
@@ -103,13 +104,12 @@ function logsTarget(host: KubectlHost, tok: string): { name: string; note?: stri
   return { name: first, ...(pods.length > 1 ? { note: "Found " + pods.length + " pods, using pod/" + first } : {}) };
 }
 
-export function kubectlLogs(host: KubectlHost, t: string[]) {
+export function kubectlLogs(host: KubectlHost, c: Call) {
   // Flags können vor oder hinter dem Pod-Namen stehen: -f/--follow (live folgen),
   // -p/--previous (Logs des abgestürzten Vorgänger-Containers).
-  const call = callOf("logs", t);
-  const follow = call.has("-f", "--follow");
-  const previous = call.has("-p", "--previous");
-  const tok = positionals("logs", t)[0];
+  const follow = c.has("-f", "--follow");
+  const previous = c.has("-p", "--previous");
+  const tok = c.args[0];
   if (!tok) return host._err("kubectl logs: Welcher Pod?", "Pod-Namen siehst du mit 'kubectl get pods'.");
   const target = logsTarget(host, tok);
   if ("error" in target) return target.error;
