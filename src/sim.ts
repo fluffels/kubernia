@@ -185,7 +185,7 @@ const BUILDER_RESOURCE_REGISTRY: BuildEntry[] = [
  * ein neuer Befehl ist EIN Tabelleneintrag, kein weiterer switch-Zweig. */
 const COMMAND_HANDLERS: Record<string, (sim: Sim, tokens: string[], raw: string) => string> = {
   docker: (s, t, raw) => dockerCommand(s, t, raw),
-  kubectl: (s, t, raw) => kubectlCommand(s, t, raw),
+  kubectl: (s, t) => kubectlCommand(s, t),
   kubeadm: (s, t) => kubeadmCommand(s, t),
   helm: (s, t, raw) => helmCommand(s, t, raw),
   terraform: (s, t, raw) => terraformCommand(s, t, raw),
@@ -896,8 +896,8 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
      *  Pods), damit der Cluster→Welt-Sync sie sieht und die Kisten färbt/entfernt. */
     touch() { this.rev++; }
 
-    // Eingabe-Parsing (Vorschläge/Flags) liegt seit #499 als pure Funktionen in ./sim/util.ts
-    // (editDistance/suggest/multiFlag) – sie brauchen keinen Cluster-Zustand, hielten
+    // Eingabe-Parsing (Vorschläge) liegt seit #499 als pure Funktionen in ./sim/util.ts
+    // (editDistance/suggest) – sie brauchen keinen Cluster-Zustand, hielten
     // den Kern nur künstlich groß und mussten durch jedes Host-Interface gereicht werden.
 
     /** Hilfetext – Katalog + Filtern liegen in cmdunlock.ts (#358), hält den Kern

@@ -384,6 +384,16 @@ describe("parseCall: Scanner", () => {
     expect(call(FOLLOW).value("-n")).toBeNull();
     expect(call(FOLLOW).values("-n")).toEqual([]);
   });
+  test("list (#1487): pflag-StringSlice – Komma-Split je Angabe, leerer Wert ergibt nichts, `a,,b` behält das leere Feld", () => {
+    const SL: ArgSpec = { cmd: "x c", flags: [flag(true, "--verb", "-v"), flag(true, "--user")] };
+    expect(call(SL, "--verb=get,list", "--verb", "watch", "-v", "x").list("--verb", "-v")).toEqual(["get", "list", "watch", "x"]);
+    expect(call(SL, "--verb=").list("--verb")).toEqual([]);
+    expect(call(SL, "--verb=a,,b").list("--verb")).toEqual(["a", "", "b"]);
+    expect(call(SL).list("--verb")).toEqual([]);
+    // StringArray bleibt ungesplittet: values liest dasselbe Flag ohne Komma-Split
+    expect(call(SL, "--user=a,b").values("--user")).toEqual(["a,b"]);
+    expect(call(PF, "-a").list("-a")).toEqual([]); // Bool-Flag: kein Listenwert
+  });
   test("ungültiger Bool-Wert: pflag-artiger Fehler; unbekanntes Flag und fehlender Wert bleiben Fehler", () => {
     expect(parseCall(host, FOLLOW, ["x", "logs", "--follow=maybe"], 2)).toContain('invalid argument "maybe" for "-f, --follow" flag: strconv.ParseBool: parsing "maybe": invalid syntax');
     expect(parseCall(host, FOLLOW, ["x", "logs", "-o"], 2)).toContain("das Flag '-o'");

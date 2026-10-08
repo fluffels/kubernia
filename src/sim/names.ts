@@ -37,9 +37,9 @@ const LABEL = "[a-z0-9]([-a-z0-9]*[a-z0-9])?";
 const RESOURCE_NAME_RE = new RegExp("^" + LABEL + "(\\." + LABEL + ")*$");
 const MAX_LEN = 253;
 
-/** Die EINE Regel: Ist `raw` ein gültiger Kubernetes-Ressourcenname (DNS-1123)? */
-export function isResourceName(raw: string): boolean {
-  return raw.length >= 1 && raw.length <= MAX_LEN && RESOURCE_NAME_RE.test(raw);
+/** Die EINE Regel: Ist `name` ein gültiger Kubernetes-Ressourcenname (DNS-1123)? */
+export function isResourceName(name: string): boolean {
+  return name.length >= 1 && name.length <= MAX_LEN && RESOURCE_NAME_RE.test(name);
 }
 
 /** Die kubectl-Server-Fehlermeldung für einen DNS-1123-verletzenden Namen (englischer
