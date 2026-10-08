@@ -47,7 +47,24 @@ function runTask(sim: KQSim, task: RunnableTask, label: string) {
   assert.ok(task.accept.some((re: RegExp) => re.test(norm)), label + ": Lösung matcht Regex nicht: " + norm);
   assert.ok(!result.error, label + ": Simulator-Fehler: " + result.output);
   assert.ok(!task.check || task.check(sim), label + ": check() nicht erfüllt");
+  return result.output;
 }
+
+/** #1508: Eine Teach-Lösung soll etwas Sichtbares zeigen. Leere Ausgabe oder ein Kein-Treffer-/Fehlermuster
+ *  (`helm search repo zzz` → „No results found“) lässt `runTask` sonst als bestanden durch. Bewusst NICHT
+ *  „nicht gefunden“: das steht legitim in Crashloop-Logs. Gibt das Problem zurück, null wenn die Ausgabe in Ordnung ist. */
+function teachAusgabeProblem(output: string): string | null {
+  if (output.trim() === "") return "leere Ausgabe";
+  const m = /^\s*(error|fehler)\b|\bNo (results|resources) found\b|^\s*Error from server/im.exec(output);
+  return m ? `Kein-Treffer-/Fehlermuster „${m[0].trim()}“` : null;
+}
+
+/** Teach-Lösungen, deren leere bzw. Kein-Treffer-Ausgabe gewollt ist (Label `quest/teach-id` → Begründung).
+ *  Jeder Eintrag muss weiter ein Problem auslösen, sonst ist er veraltet und fliegt raus (Stale-Prüfung unten). */
+const TEACH_AUSGABE_AUSNAHMEN = new Map<string, string>([
+  ["docker-build-image/t-tag", "`docker tag` ist wie echtes Docker still"],
+  ["network-policy/t-get-netpol", "die leere Liste ist laut `why` die Lektion (noch keine Policy)"],
+]);
 
 const norm = (s: string) => s.trim().replace(/\s+/g, " ");
 
@@ -102,11 +119,14 @@ function plausibleWrong(cmd: string): { id: string; variant: string }[] {
 
 test("Komplette Story ist mit den Musterlösungen durchspielbar", () => {
   const sim = new KQSim({});
+  const teachProbleme = new Map<string, string>();
   for (const quest of KQContent.QUESTS) {
     for (const step of quest.steps) {
       if (step.scenario) sim.mergeScenario(step.scenario);
       if (step.type === "teach") {
-        runTask(sim, step.cmd, quest.id + "/" + step.cmd.id);
+        const label = quest.id + "/" + step.cmd.id;
+        const problem = teachAusgabeProblem(runTask(sim, step.cmd, label));
+        if (problem) teachProbleme.set(label, problem);
       } else if (step.type === "terminal") {
         for (const task of step.tasks) runTask(sim, task, quest.id + "/" + task.id);
       } else if (step.type === "drill") {
@@ -117,6 +137,27 @@ test("Komplette Story ist mit den Musterlösungen durchspielbar", () => {
       }
     }
   }
+  // #1508: jede Teach-Lösung zeigt etwas Sichtbares, außer den begründeten Ausnahmen
+  const ungewollt = [...teachProbleme].filter(([label]) => !TEACH_AUSGABE_AUSNAHMEN.has(label)).map(([l, p]) => l + ": " + p);
+  assert.deepEqual(ungewollt, [], "Teach-Lösung ohne sichtbare Ausgabe oder mit Kein-Treffer-/Fehlermuster (Lösung ändern oder begründete Ausnahme eintragen)");
+  const veraltet = [...TEACH_AUSGABE_AUSNAHMEN.keys()].filter(label => !teachProbleme.has(label));
+  assert.deepEqual(veraltet, [], "Ausnahme löst kein Problem mehr aus oder existiert nicht: Eintrag entfernen");
+});
+
+test("Red-Green (#1508): teachAusgabeProblem meldet leere und Kein-Treffer-Ausgaben, nicht echte Tabellen und Logs", () => {
+  for (const schlecht of ["", "  \n", "No results found", "No resources found in default namespace.", "Error from server (NotFound): pods \"x\" not found", "error: unknown command"]) {
+    assert.notEqual(teachAusgabeProblem(schlecht), null, JSON.stringify(schlecht));
+  }
+  for (const gut of ["NAME READY STATUS\nweb-1 1/1 Running", "FATAL: Konfigurationsdatei nicht gefunden\nContainer beendet", "deployment.apps/web created"]) {
+    assert.equal(teachAusgabeProblem(gut), null, gut);
+  }
+});
+
+test("Red-Green (#1508): eine Teach-Lösung ohne Treffer fällt auf, ein erfundener Ausnahme-Eintrag auch", () => {
+  const sim = new KQSim({});
+  const ausgabe = runTask(sim, { accept: [/^kubectl get pods$/], solution: "kubectl get pods" }, "sabotage");
+  assert.notEqual(teachAusgabeProblem(ausgabe), null, "kubectl get pods ohne Pods: " + ausgabe);
+  assert.ok(!TEACH_AUSGABE_AUSNAHMEN.has("erfunden/t-x"), "die Stale-Prüfung der Story verlangt, dass jeder Eintrag ein Problem auslöst");
 });
 
 test("Alle Drill-Generatoren liefern lösbare Zufallsaufgaben (je 5x)", () => {
