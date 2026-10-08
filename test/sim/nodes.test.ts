@@ -83,7 +83,7 @@ test("kubeadm init/join/reset provisionieren & räumen Knoten über den Kanal (m
   sim.exec("kubeadm init");
   const cp = sim.nodes.find(isControlPlane);
   assert.ok(cp, "init zieht eine Control-Plane hoch");
-  assert.equal(cp!.version, NODE_VERSION);
+  assert.equal(cp.version, NODE_VERSION);
   assert.equal(sim.controlPlane.up, true);
 
   const token = sim.controlPlane.token!;
@@ -103,14 +103,14 @@ test("mergeScenario (#577): ein Teil-Node-Spec {name} bekommt die Cluster-Defaul
   // Ein Szenario, das nur den Namen liefert (die Sim-Fabrik soll die Pflichtfelder füllen).
   // Vor #577 landete das per rohem `nodes.push(Object.assign({},n))` als strukturell
   // illegaler ClusterNode (status/roles/version === undefined); jetzt über provisionNode.
-  sim.mergeScenario({ nodes: [{ name: "ahoi-lonely" } as ClusterNode] });
+  sim.mergeScenario({ nodes: [{ name: "ahoi-lonely" }] });
   const node = sim.nodes.find(n => n.name === "ahoi-lonely");
   assert.ok(node, "der Teil-Node wurde aufgenommen");
-  assert.equal(node!.status, "Ready", "status-Default gefüllt");
-  assert.equal(node!.roles, "<none>", "roles-Default gefüllt");
-  assert.equal(node!.version, NODE_VERSION, "version-Default gefüllt");
+  assert.equal(node.status, "Ready", "status-Default gefüllt");
+  assert.equal(node.roles, "<none>", "roles-Default gefüllt");
+  assert.equal(node.version, NODE_VERSION, "version-Default gefüllt");
   // Der Knoten ist damit ein legaler ClusterNode: isControlPlane greift ohne TypeError.
-  assert.equal(isControlPlane(node!), false, "gefüllte roles sind auswertbar (kein undefined)");
+  assert.equal(isControlPlane(node), false, "gefüllte roles sind auswertbar (kein undefined)");
 });
 
 test("mergeScenario (#577): ein voll spezifizierter Node bleibt unverändert (Defaults überschrieben)", () => {
@@ -127,14 +127,14 @@ test("reset (#596): ein Teil-Node-Spec {name} im Szenario bekommt die Cluster-De
   // strukturell illegaler ClusterNode (status/roles/version === undefined) – deriveControlPlane
   // wertet dann direkt danach `roles.includes(...)` auf undefined aus (TypeError). Jetzt über
   // provisionNode, das die Pflichtfelder mit den Cluster-Defaults füllt.
-  const s = new KQSim({ nodes: [{ name: "ahoi-lonely" } as ClusterNode] });
+  const s = new KQSim({ nodes: [{ name: "ahoi-lonely" }] });
   const node = s.nodes.find(n => n.name === "ahoi-lonely");
   assert.ok(node, "der Teil-Node wurde aufgenommen");
-  assert.equal(node!.status, "Ready", "status-Default gefüllt");
-  assert.equal(node!.roles, "<none>", "roles-Default gefüllt");
-  assert.equal(node!.version, NODE_VERSION, "version-Default gefüllt");
+  assert.equal(node.status, "Ready", "status-Default gefüllt");
+  assert.equal(node.roles, "<none>", "roles-Default gefüllt");
+  assert.equal(node.version, NODE_VERSION, "version-Default gefüllt");
   // Der Knoten ist damit ein legaler ClusterNode: isControlPlane greift ohne TypeError.
-  assert.equal(isControlPlane(node!), false, "gefüllte roles sind auswertbar (kein undefined)");
+  assert.equal(isControlPlane(node), false, "gefüllte roles sind auswertbar (kein undefined)");
 });
 
 test("reset (#596): ein voll spezifizierter Szenario-Node bleibt unverändert, Control-Plane wird abgeleitet", () => {

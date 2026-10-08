@@ -589,11 +589,6 @@
       "count": 3
     }
   },
-  "test/sim/nodes.test.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 9
-    }
-  },
   "test/sim/rbac.test.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
