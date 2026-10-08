@@ -35,7 +35,7 @@ export interface KubectlHost extends Pick<ClusterState,
   // nicht mehr aus dem globalen Strom (transient, wie lastDeletedPod – kein ClusterState).
   rng: () => number;
   // Geteilte Sim-Helfer (bleiben in sim.ts): Fehler, Alter, Pods/Readiness, Fabriken.
-  // Flag-/Vorschlags-Parsing ist seit #499 pure Funktionen in ../util (multiFlag/suggest; Flag-Prüfung: ../cliargs).
+  // Flag-/Vorschlags-Parsing ist seit #499 pure Funktionen in ../util (suggest; Flag-Prüfung und -Lesen: ../cliargs).
   _err(msg: string, tip?: string): string;
   _age(created: number): string;
   _podReady(d: Deployment): boolean;

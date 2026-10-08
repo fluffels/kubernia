@@ -13,7 +13,7 @@
  * der Name ist alles vor dem `=`, also `-out=plan` ≠ `-o`).
  *
  * Ein Scanner (`walk`) speist alles: `checkFlags` (Prüfung), `positionalArgs`, `parseCall` (Prüfung + `Call` mit
- * `args`/`has`/`value`/`values`, #1469: kein Handler indiziert mehr feste Tokens) und die kubectl-Leser. Regeln:
+ * `args`/`has`/`value`/`values`/`list`, #1469: kein Handler indiziert mehr feste Tokens) und die kubectl-Leser. Regeln:
  * `--` beendet die Flags, Bool-Flags werten `=true|false` aus (`strconv.ParseBool`), Ketten `-fp` werden je Zeichen
  * gelesen, ein Wert-Flag in der Kette schluckt den Rest (`-nfoo` setzt kein `-f`), der LETZTE Wert gewinnt.
  *
@@ -221,6 +221,9 @@ export interface Call {
   value(...names: string[]): string | null;
   /** Alle Werte eines Wert-Flags in Eingabereihenfolge (`--set a=1 --set b=2`). */
   values(...names: string[]): string[];
+  /** Ein pflag-StringSlice-Flag (`--verb=get,list --verb=watch`): jede Angabe wird an Kommas gesplittet, ein leerer Wert
+   *  ergibt keinen Eintrag, `a,,b` behält das leere Feld; ohne das Flag `[]`. StringArray-Flags (`--user`) lesen `values`. */
+  list(...names: string[]): string[];
 }
 
 function makeCall(w: Walk): Call {
@@ -234,6 +237,7 @@ function makeCall(w: Walk): Call {
     },
     value: (...names) => match(names).filter(h => h.spec.takesValue).pop()?.value ?? null,
     values: (...names) => match(names).filter(h => h.spec.takesValue).map(h => h.value ?? ""),
+    list: (...names) => match(names).filter(h => h.spec.takesValue).flatMap(h => (h.value ?? "") === "" ? [] : (h.value ?? "").split(",")),
   };
 }
 
