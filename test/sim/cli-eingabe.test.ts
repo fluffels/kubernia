@@ -278,6 +278,12 @@ describe("terraform", () => {
     expect(r.out).toContain("Error: Failed to read variables file");
     expect(r.out).toContain("Given variables file x.tfvars does not exist.");
   });
+  test("terraform plan -var-file mit fehlender Datei bricht ebenfalls ab", () => {
+    const r = lauf("terraform plan -var-file=fehlt.tfvars", initSim());
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("Error: Failed to read variables file");
+    expect(r.out).toContain("Given variables file fehlt.tfvars does not exist.");
+  });
   test("-var-file ohne Init: zuerst der Init-Wächter", () => {
     expect(lauf("terraform apply -var-file=x").out).toContain("Backend initialization required");
   });
