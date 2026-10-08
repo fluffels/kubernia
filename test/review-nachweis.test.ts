@@ -328,6 +328,7 @@ describe("Konflikt-Merge nach dem Review (#1392 Z9)", () => {
     assert.equal(f.length, 2);
     assert.match(f[0], new RegExp(`Konflikt-Merge ${M} nach dem Review.*Delta-Lens.*neuer Nachweis \\(head ≥ ${M}\\)`));
     assert.match(f[1], new RegExp(M2));
+    assert.match(f[0], /review-lenses › Nach jedem Merge von main/);
   });
 
   test("checkReviewNachweis: Merge mit Auflösung (remerge-diff nicht leer) ist rot", () => {

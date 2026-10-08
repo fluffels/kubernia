@@ -97,7 +97,8 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
   for (const sha of konfliktMerges) {
     fehler.push(
       `Konflikt-Merge ${sha} nach dem Review: Auflösung per Delta-Lens prüfen, dann neuer Nachweis (head ≥ ${sha}). ` +
-        `Besser: main VOR Runde 1 oder erst nach dem Nachweis einmergen, wenn der Merge konfliktfrei ist.`,
+        `Besser: main VOR Runde 1 oder erst nach dem Nachweis einmergen, wenn der Merge konfliktfrei ist. ` +
+        `Schritte: Skill review-lenses › Nach jedem Merge von main.`,
     );
   }
   const { plan, review } = nachweis;

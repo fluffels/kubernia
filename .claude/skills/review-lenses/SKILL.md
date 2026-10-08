@@ -46,7 +46,7 @@ Jede Lens bekommt zusätzlich diese drei Regeln — sie kosten keinen Befund:
 
 ### Stufe 0 — deterministische Gates (der Short-Circuit)
 
-**Immer zuerst.** Vor der ersten Stufe 0: `git fetch origin`; ist `origin/main` weiter, `git merge origin/main` und Konflikte jetzt lösen (ein Merge nach der Konvergenz kostet Delta-Lens und neuen Nachweis). Dann das SSOT-Aggregat aller Gates (#527):
+**Immer zuerst.** Vor der ersten Stufe 0: `git fetch origin`; ist `origin/main` weiter, `git merge origin/main` und Konflikte jetzt lösen (ein Merge nach der Konvergenz kostet Delta-Lens und neuen Nachweis); danach [Nach jedem Merge von `main`](#nach-jedem-merge-von-main). Dann das SSOT-Aggregat aller Gates (#527):
 
 ```bash
 npm run verify:kompakt   # Kette aus package.json › scripts.verify, alle Gates, Ausgabe nur bei Rot
@@ -67,7 +67,7 @@ npm run verify:kompakt   # Kette aus package.json › scripts.verify, alle Gates
 - **Ab Runde 2:** nur die Brillen, die in der Vorrunde **blockiert** haben, auf dem **Delta-Patch** des Fixes (`git diff <Vorrunden-HEAD>..HEAD > "$TMP/kq-<nr>-r<runde>-delta.patch"`), mit ihren Vorrunden-Blockern als Prüfliste; der volle Patch bleibt Referenz für gezielte Zugriffe. Ändert der Fix Nicht-Markdown, läuft **Test-Adäquanz immer mit**.
 - **Runde 1 ist der erste Lens-Pass** und hat immer den vollen Satz der Diff-Art (Code: alle drei Brillen). Liefert eine Brille keinen Bericht, wird sie einmal auf demselben Stand nachgeholt, bevor gefixt wird; das ist kein eigener Pass. Rote `verify`-Fixe davor zählen nicht als Fix-Runde (eigene Grenze: drei Fix-Versuche, dann Hand-off).
 - **Fail-closed:** Fehlt die Dateiliste, gab es keinen Vorrunden-Pass (`verify` war rot), fiel eine Lens aus, hat die Diff-Art gewechselt oder wurde rebased: der volle Satz auf dem vollen Patch.
-- **Merge von `main` in den Branch ist kein Fix-Pass.** Konfliktfrei zählt er nicht als Runde; das Delta der nächsten Runde sind nur die Fixes (`git diff <Vorrunden-HEAD>..<M>^1` plus `git diff <M>..HEAD`, `M` = Merge-Commit). Mit Konflikt kommt die Auflösung (`git show --cc <M>`) ins Delta und zählt wie ein Fix, nicht wie ein voller Pass. Rebase mitten in der Schleife vermeiden (er erzwingt den vollen Satz und macht den Nachweis-`head` ungültig): `main` vor Runde 1 einmergen (Stufe 0, erster Punkt); den Nachweis direkt nach der Konvergenz setzen und pushen. Danach nur bei einem echten Konflikt erneut einmergen (`gh pr view <nr> --json mergeable`): das Ruleset verlangt keinen aktuellen Stand. Ein Merge von `main` NACH dem Nachweis-Commit: Folgen und Weg in [docs/agent-harness.md › §3a](../../../docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd-1064) (ein Konflikt-Merge macht den Check rot).
+- **Merge von `main` in den Branch ist kein Fix-Pass.** Konfliktfrei zählt er nicht als Runde; das Delta der nächsten Runde sind nur die Fixes (`git diff <Vorrunden-HEAD>..<M>^1` plus `git diff <M>..HEAD`, `M` = Merge-Commit). Mit Konflikt kommt die Auflösung (`git show --cc <M>`) ins Delta und zählt wie ein Fix, nicht wie ein voller Pass. Rebase mitten in der Schleife vermeiden (er erzwingt den vollen Satz und macht den Nachweis-`head` ungültig): `main` vor Runde 1 einmergen (Stufe 0, erster Punkt); den Nachweis direkt nach der Konvergenz setzen und pushen. Danach nur bei einem echten Konflikt erneut einmergen (`gh pr view <nr> --json mergeable`): das Ruleset verlangt keinen aktuellen Stand. Ein Merge von `main` NACH dem Nachweis-Commit: Weg im Abschnitt [Nach jedem Merge von `main`](#nach-jedem-merge-von-main), Begründung in [docs/agent-harness.md › §3a](../../../docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd-1064).
 
 **Jede Lens läuft als eigener Subagent auf dem starken Tier (#1035)** — nie inline im orchestrierenden Agenten (Hauptagent oder `kubernia-umsetzer`):
 
@@ -147,6 +147,17 @@ Im kubernia-Ticket-Ablauf ist dieser Review **Pflicht** vor dem PR — und läuf
 2. Keine blockierenden Findings mehr ⇒ **konvergiert**, weiter zum PR. Was blockiert, regelt der Blocker-Maßstab (Kurzfassung in `kubernia-lens.md`, Begründung in [docs/agent-harness.md](../../../docs/agent-harness.md#4-die-sichere-autonomie-schleife)): bei Guard-/Parser-Code ist ein neuer Umweg eine „Bekannte Grenze“, kein Blocker.
 3. Sonst nachbessern, erst wenn **alle Berichte der Runde da sind** (solange eine Lens läuft, kein Edit und kein Commit im Feature-Worktree; **warten heißt: den Turn mit einer kurzen Statuszeile beenden, ohne `SubagentHandback`**: laufende eigene Subagenten halten den Lauf offen, jeder Lens-Bericht setzt ihn fort. Kein `Monitor`, kein `sleep`, kein Pollen der `.output`-Dateien), dann **zurück zu 1** — mit einem **frischen** Kritiker, damit der finale „OK"-Blick nie ein Self-Grading des eigenen Fixes ist.
 4. **Cap 2** Fix-Runden, also höchstens 3 Pässe (unbeschränktes Iterieren ist schlechter, nicht besser — jenseits echter Fehler werden Stil-Nörgeleien erfunden); danach **Hand-off** an die Maintainerin (Festgefahren), kein PR mit bekannten Blockern.
+
+### Nach jedem Merge von `main`
+
+Gilt für jeden Merge von `origin/main` in den Branch (Stufe 0, echter Konflikt, Merge vor dem Auto-Merge bei einer Gate-Verschärfung); `M` = Merge-Commit.
+
+1. **Verschobener Code:** Hat der Branch Funktionen aus einer Datei in neue Dateien verschoben, landen parallele `main`-Änderungen an ihnen in der alten Datei oder fallen bei der Auflösung weg. Je Quell-Datei `<basis>` = `git merge-base <M>^1 <M>^2`, dann `git diff <basis> <M>^2 -- <alte datei>` lesen (beim Auflösen vor dem Commit mit `MERGE_HEAD` statt `<M>^2`). Jede Änderung an einer verschobenen Funktion in die neue Datei übertragen, betroffene Tests gezielt fahren. Die Übertragung zählt als Fix (Delta der nächsten Runde bzw. der Merge-Delta-Lens).
+2. **Konflikt-Merge nach dem Nachweis-Commit:** Ist `git show --remerge-diff --format= <M>` nicht leer, ist der Nachweis-Check rot (Warum: §3a). Weg:
+   1. Einmal `npm run verify:kompakt` (Short-Circuit-Regel wie in Stufe 0).
+   2. Patch schreiben: `git show --remerge-diff --format= <M> > "$TMP/kq-<nr>-merge.patch"`, bei späteren Commits `git diff <M>..HEAD` anhängen.
+   3. Delta-Lens: reine `*.md`-Auflösung eine Doku-Brille, sonst die drei Code-Brillen; je mit `Patch:`, `Delta-Patch:`, `erwarteter HEAD:` und dem Auftrag „prüfe die Konflikt-Auflösung“, Spawn-Vorlage und Kontext-Diät wie oben. Blockiert eine Brille: fixen, dieselbe Brille einmal auf dem Fix-Delta; blockiert sie weiter, Hand-off `festgefahren`.
+   4. Neuer leerer Nachweis-Commit hinter dem Merge: `KQ-Plan:` unverändert, `KQ-Review:` mit `head` = zuletzt reviewter Stand (≥ `M`), `runden`, `lenses`, `blocker` wie im bisherigen Nachweis (die Merge-Lens ist kein Pass der Schleife). Lokal `node scripts/check-review-nachweis.mjs`, im PR-Text nennen, dass der Merge nach dem Review kam.
 
 ### Nachweis nach Konvergenz (#1270)
 
