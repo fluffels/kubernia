@@ -11,7 +11,7 @@
  *
  * Frei heißt, in Board-Reihenfolge: Status Todo und offen · kein Assignee · kein offener Blocker (Zeile `blockiert durch #X` im Body,
  * mehrfach, ohne Groß-/Kleinschreibung; zusätzlich `issue_dependencies_summary.blocked_by > 0`: GitHubs Zähler offener Blocker; die Feldform ist an
- * echten Daten belegt (Probe 2026-10-08, 151 von 151 Items), ein Wert über 0 noch nie beobachtet, im Zweifel wird übersprungen) · kein Branch, Worktree oder offener PR
+ * echten Daten belegt (Probe 2026-10-08, 151 von 151 Items), ein Wert über 0 noch nie beobachtet; ein Wert, der keine Zahl ist, zählt als 0) · kein Branch, Worktree oder offener PR
  * `feature/kq-<nr>-*`. I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`, ein `gh pr list`; kein GraphQL.
  */
 import { execFileSync } from "node:child_process";

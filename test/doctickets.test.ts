@@ -27,7 +27,11 @@ const parseOpenHarnessTickets: (md: string) => number[] = checkDocTickets.parseO
 const OPEN_TICKETS_START: string = checkDocTickets.OPEN_TICKETS_START;
 const OPEN_TICKETS_END: string = checkDocTickets.OPEN_TICKETS_END;
 const HARNESS_DOC: string = checkDocTickets.HARNESS_DOC;
-const { ausnahmeTickets, AUSNAHME_LISTEN } = checkDocTickets as unknown as {
+const { ausnahmeTickets, AUSNAHME_LISTEN, bewerteAusnahmen } = checkDocTickets as unknown as {
+  bewerteAusnahmen: (
+    a: { file: string; nr: number | null; skript: string }[],
+    stateOf: (nr: number) => string | null,
+  ) => { rot: { file: string; grund: string }[]; unbekannt: { file: string; nr: number | null }[] };
   ausnahmeTickets: (eintraege: { file: string; reason: string }[]) => { file: string; nr: number | null }[];
   AUSNAHME_LISTEN: { skript: string; eintraege: { file: string; reason: string }[] }[];
 };
@@ -113,6 +117,19 @@ describe("Doku-Aktualitäts-Wächter (#610)", () => {
         { file: "b.ts", nr: null },
       ],
     );
+  });
+
+  test("ausnahmeTickets: nur `#N` zählt als Ticket, eine bloße Zahl nicht", () => {
+    assert.deepEqual(ausnahmeTickets([{ file: "a.ts", reason: "Split bis 2027" }]), [{ file: "a.ts", nr: null }]);
+  });
+
+  test("bewerteAusnahmen: CLOSED und fehlende Nummer sind rot, OPEN grün, nicht ermittelbar unbekannt (nie rot)", () => {
+    const eintrag = (file: string, nr: number | null) => ({ file, nr, skript: "scripts/check-size.mjs" });
+    const stand: Record<number, string | null> = { 1: "OPEN", 2: "CLOSED", 3: null };
+    const r = bewerteAusnahmen([eintrag("a", 1), eintrag("b", 2), eintrag("c", 3), eintrag("d", null)], (nr) => stand[nr]);
+    assert.deepEqual(r.rot.map((x) => `${x.file}:${x.grund}`), ["b:#2 ist CLOSED", "d:keine Ticket-Nummer"]);
+    assert.deepEqual(r.unbekannt.map((x) => x.file), ["c"]);
+    assert.deepEqual(bewerteAusnahmen([], () => "OPEN"), { rot: [], unbekannt: [] });
   });
 
   test("die echten ALLOWLISTs nennen je Eintrag eine Ticket-Nummer", () => {

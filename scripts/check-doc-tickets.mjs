@@ -83,6 +83,25 @@ export function ausnahmeTickets(eintraege) {
   });
 }
 
+/**
+ * Urteil über die Ausnahmen (`{ file, nr, skript }`): `stateOf(nr)` liefert "OPEN" | "CLOSED" | null (nicht ermittelbar). Rot ist eine
+ * Ausnahme ohne Nummer oder mit CLOSED-Ticket, unbekannt eine mit nicht ermittelbarem Status (kein Rot aus dem falschen Grund). Rein.
+ */
+export function bewerteAusnahmen(ausnahmen, stateOf) {
+  const rot = [];
+  const unbekannt = [];
+  for (const a of ausnahmen) {
+    if (a.nr === null) {
+      rot.push({ ...a, grund: "keine Ticket-Nummer" });
+      continue;
+    }
+    const state = stateOf(a.nr);
+    if (state === "CLOSED") rot.push({ ...a, grund: `#${a.nr} ist CLOSED` });
+    else if (state == null) unbekannt.push(a);
+  }
+  return { rot, unbekannt };
+}
+
 // ── gh-Abgleich (nur in der CLI, nicht im Test) ─────────────────────────────────
 
 /** true, wenn `gh` als ausführbares Kommando verfügbar ist. */
@@ -127,7 +146,7 @@ function main() {
       yellow(
         `… gh nicht verfügbar — Doku-Aktualitäts-Abgleich übersprungen (${open.length} als „offen" markierte Tickets: ${open
           .map((n) => `#${n}`)
-          .join(", ")}).`,
+          .join(", ")}; ${ausnahmen.length} Größen-Ausnahmen).`,
       ),
     );
     return; // graceful skip: offline/kein Token darf nicht rot aus dem falschen Grund sein
@@ -135,14 +154,14 @@ function main() {
 
   const closed = [];
   const unknown = [];
-  for (const a of ausnahmen) {
-    const state = a.nr === null ? "CLOSED" : ghStateOf(a.nr);
-    if (state !== "CLOSED") continue;
-    const wer = a.nr === null ? "keine Ticket-Nummer" : `#${a.nr} ist CLOSED`;
+  const urteil = bewerteAusnahmen(ausnahmen, ghStateOf);
+  for (const a of urteil.unbekannt) {
+    console.error(yellow(`… #${a.nr}: gh-Status der Ausnahme für ${a.file} nicht ermittelbar — übersprungen (transient/kein Zugriff).`));
+  }
+  for (const a of urteil.rot) {
     console.error(
-      red(`✖ ${a.skript}: die Ausnahme für ${a.file} trägt ${wer}: offenes Ticket eintragen oder die Ausnahme abbauen.`),
+      red(`✖ ${a.skript}: die Ausnahme für ${a.file}: ${a.grund}; offenes Ticket eintragen oder die Ausnahme abbauen.`),
     );
-    closed.push(a.nr ?? a.file);
   }
   for (const n of open) {
     const state = ghStateOf(n);
@@ -152,6 +171,11 @@ function main() {
 
   for (const n of unknown) {
     console.error(yellow(`… #${n}: gh-Status nicht ermittelbar — übersprungen (transient/kein Zugriff).`));
+  }
+
+  if (urteil.rot.length && closed.length === 0) {
+    console.error(`\nAusnahme-Drift: eine Größen-Ausnahme nennt kein offenes Ticket.`);
+    process.exit(1);
   }
 
   if (closed.length) {

@@ -334,7 +334,7 @@ export function normalizeItems(pages) {
       body: typeof i.content.body === "string" ? i.content.body : "",
       labels: Array.isArray(i.content.labels) ? i.content.labels.map((l) => (typeof l === "string" ? l : l?.name)).filter((n) => typeof n === "string" && n !== "") : [],
       autor: typeof i.content.user?.login === "string" && i.content.user.login !== "" ? { login: i.content.user.login, type: i.content.user.type ?? "" } : null,
-      blockedBy: Number.isFinite(i.content.issue_dependencies_summary?.blocked_by) ? i.content.issue_dependencies_summary.blocked_by : 0,
+      blockedBy: Number.isFinite(Number(i.content.issue_dependencies_summary?.blocked_by)) ? Number(i.content.issue_dependencies_summary.blocked_by) : 0,
     }));
 }
 
@@ -405,7 +405,7 @@ export function loadItems(opts = {}) {
   return normalizeItems(loadItemPages(opts));
 }
 
-/** Die rohen Board-Seiten (REST, Liste von Seiten): enthalten auch Body, Autor und Labels der Issues, für die Ticket-Auswahl (naechstes-ticket.mjs). */
+/** Die rohen Board-Seiten (REST, Liste von Seiten): enthalten auch Body, Autor und Labels der Issues; `normalizeItems` macht daraus die Items (auch für naechstes-ticket.mjs). */
 export function loadItemPages(opts = {}) {
   return JSON.parse(gh(["api", "--paginate", "--slurp", `users/fluffels/projectsV2/1/items?per_page=100&fields=${STATUS_FIELD_ID}`], opts));
 }
