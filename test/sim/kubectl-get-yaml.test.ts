@@ -581,16 +581,14 @@ describe("BROKEN_POD treibt alle Ausgaben (#1500)", () => {
     const status = p.status as Obj;
     expect(status.phase).toBe(e.phase);
     const states = status.containerStatuses as Obj[] | undefined;
-    if (e.container === null) {
-      expect(states).toBeUndefined();
-      expect(status.podIP).toBeUndefined();
-    } else {
-      const c = states![0];
-      expect(c.ready).toBe(isReady(e.status));
-      expect(c.state).toEqual(e.container.waiting ? { waiting: { reason: e.container.waiting } } : { running: {} });
-      expect(c.lastState).toEqual(e.container.lastTerminated ? { terminated: { exitCode: e.container.lastTerminated.exitCode, reason: e.container.lastTerminated.reason } } : {});
-      expect(status.podIP).toBeDefined();
-    }
+    const c = e.container;
+    const last = c?.lastTerminated;
+    // Ohne Container (nicht eingeplant): weder Container-Status noch podIP; sonst alles aus dem Tabelleneintrag.
+    expect(states === undefined).toBe(c === null);
+    expect(status.podIP === undefined).toBe(c === null);
+    expect(states?.[0]?.ready).toEqual(c === null ? undefined : isReady(e.status));
+    expect(states?.[0]?.state).toEqual(c === null ? undefined : c.waiting ? { waiting: { reason: c.waiting } } : { running: {} });
+    expect(states?.[0]?.lastState).toEqual(c === null ? undefined : last ? { terminated: { exitCode: last.exitCode, reason: last.reason } } : {});
     const name = (p.metadata as Obj).name as string;
     expect(out(sim, "describe pod " + name).includes("Last State:   Terminated")).toBe(e.container?.lastTerminated !== undefined);
   });
