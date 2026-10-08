@@ -95,8 +95,8 @@ export function nodeInternalIP(node: ClusterNode): string {
   return "10.0." + (128 + (h % 127)) + "." + (10 + ((h >>> 8) % 240));
 }
 
-/** Systeminfo aller simulierten Knoten (`OS-IMAGE`, `KERNEL-VERSION`, `CONTAINER-RUNTIME`): eine Quelle neben
- *  `NODE_VERSION`, damit `get nodes -o wide` und künftig `describe node` dieselben Werte zeigen. */
+/** Systeminfo aller simulierten Knoten (`OS-IMAGE`, `KERNEL-VERSION`, `CONTAINER-RUNTIME`, Betriebssystem, Architektur):
+ *  eine Quelle neben `NODE_VERSION`, damit `get nodes -o wide` und `describe node` dieselben Werte zeigen. */
 export const NODE_SYSTEM_INFO = Object.freeze({
   osImage: "Ubuntu 22.04.4 LTS",
   kernelVersion: "5.15.0-112-generic",
