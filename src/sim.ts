@@ -20,7 +20,7 @@ import type {
 } from "./sim/state";
 import { deploymentPodStatus, isReady } from "./sim/podstatus";
 import { DEFAULT_NAMESPACE, HEADLESS_CLUSTER_IP, EXTERNAL_NAME_TYPE, isExternalNameService, assertServiceType } from "./sim/state";
-export { BROKEN_STATUS } from "./sim/state";
+export { BROKEN_POD } from "./sim/podstatus";
 export type {
   ExecResult,
   Broken, PodInstance, Deployment, ServiceRes, IngressRes, NetworkPolicyRes,
