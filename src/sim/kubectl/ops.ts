@@ -11,58 +11,64 @@ import { changeImage, setMemoryLimit, setCpuLimit, healsOom, throttlesCpu, MEM_H
 import type { Deployment } from "../state";
 import type { KubectlHost } from "./host";
 import { rollOut, scaleTo } from "./rollout";
-import { resolveKind, type ResourceKind } from "./resources";
-import { notSimulated, parseFromRef, parseResourceList, replicasArg, slashRef, type KubectlSub, type ResourceList } from "./args";
+import { notSimulated, parseFromRef, parseResourceList, replicasArg, type ResourceList } from "./args";
+import { readTargets, targetOutcome } from "./targets";
 import { subEntry, type Call } from "../cliargs";
 
-/** Eine Objekt-Referenz `<typ>/<name>` (Slash) ODER `<typ> <name>` (getrennt) – egal an welcher Position
- *  sie steht. Der Typ löst über die Registry auf (`deploy`, `deployments`, `Deployment` …); Tokens, die
- *  kein Typ sind (z.B. `web=nginx:1`), werden übersprungen. `null`, wenn keine Referenz dasteht. */
-function resolveRef(pos: readonly string[]): { kind: ResourceKind; name: string } | { error: string } | null {
-  for (let i = 0; i < pos.length; i++) {
-    const ref = slashRef(pos[i]);
-    // Ein Token mit kaputter Slash-Form ist nur dann ein Fehler, wenn es mit einem Typ beginnt
-    // (`deploy/a/b`); `web=reg/img:1` ist keine Referenz und wird übersprungen.
-    if (ref && "error" in ref && !resolveKind(pos[i].split("/")[0])) continue;
-    if (ref && "error" in ref) return ref;
-    const kind = resolveKind(ref ? ref.typ : pos[i]);
-    if (!kind) continue;
-    const name = ref ? ref.name : pos[i + 1];
-    return name ? { kind, name } : null;
+/** Die NotFound-Zeile eines Deployments (ohne Fehlerrahmen: die Mehrfachziel-Befehle sammeln sie in `failed`). */
+const deploymentNotFound = (name: string): string => 'Error from server (NotFound): deployments.apps "' + name + '" not found';
+
+const DEPLOYMENTS_TIP = "Welche Deployments es gibt: 'kubectl get deployments'";
+
+/** Die Deployment-Namen der Ziele, die scale/expose/set/rollout gemeinsam annehmen (`deploy/a deploy/b`, `deployment a b`;
+ *  Zerlegung und Fehlertexte: ./targets). Eine andere Art als Deployment (`scale pods/x`) ist „nicht simuliert“ und
+ *  lehnt den ganzen Befehl ab, bevor etwas geändert wird. Ohne Ziel ist die Liste leer. */
+function deploymentNames(host: KubectlHost, sub: string, args: readonly string[]): { names: string[] } | { error: string } {
+  const parsed = readTargets(host, args);
+  if ("error" in parsed) return parsed;
+  const other = parsed.targets.find(t => t.kind.plural !== "deployments");
+  if (other) return { error: notSimulated(host, "'kubectl " + sub + " " + other.kind.plural + "/<name>' – das geht nur für Deployments.", ["kubectl " + sub + " deployment <name> …"]) };
+  return { names: parsed.targets.flatMap(t => t.names) };
+}
+
+/** Wie `deploymentNames`, aber für Befehle, die genau EIN Deployment ändern (expose, set): weitere Ziele lehnt die Sim ab,
+ *  statt sie still zu ignorieren. `name` ist `null` ohne Ziel. */
+function singleDeployment(host: KubectlHost, sub: string, args: readonly string[]): { name: string | null } | { error: string } {
+  const r = deploymentNames(host, sub, args);
+  if ("error" in r) return r;
+  if (r.names.length > 1) return { error: notSimulated(host, "mehrere Ziele bei 'kubectl " + sub + "'.", ["kubectl " + sub + " deployment <name> …"]) };
+  return { name: r.names[0] ?? null };
+}
+
+/** Auf mehrere Deployments skalieren: je Name eine Zeile, ein fehlendes oder abgewiesenes Ziel stoppt die übrigen nicht. */
+function scaleAll(host: KubectlHost, names: readonly string[], replicas: number): string {
+  const ok: string[] = [];
+  const failed: string[] = [];
+  let missing = false;
+  for (const name of names) {
+    const dep = host.deployments.find(d => d.name === name);
+    if (!dep) { failed.push(deploymentNotFound(name)); missing = true; continue; }
+    const denied = scaleTo(host, dep, replicas);
+    if (denied) failed.push(denied); else ok.push("deployment.apps/" + name + " scaled");
   }
-  return null;
+  return targetOutcome(host, ok, failed, missing ? DEPLOYMENTS_TIP : undefined);
 }
-
-/** Den Deployment-Namen aus der Referenz ziehen, die scale/expose/set/rollout gemeinsam annehmen
- *  (ersetzt die früher 6× kopierte Ad-hoc-Zerlegung). `name` ist null, wenn keine Referenz dasteht;
- *  eine andere Art als Deployment (`scale pods/x`) ergibt den „nicht simuliert“-Fehler in `error`. */
-function resolveDeploymentRef(host: KubectlHost, sub: KubectlSub, args: readonly string[]): { name: string | null; error?: string } {
-  const ref = resolveRef(args);
-  if (!ref) return { name: null };
-  if ("error" in ref) return { name: null, error: host._err(ref.error) };
-  if (ref.kind.plural === "deployments") return { name: ref.name };
-  return { name: null, error: notSimulated(host, "'kubectl " + sub + " " + ref.kind.plural + "/<name>' – das geht nur für Deployments.", ["kubectl " + sub + " deployment <name> …"]) };
-}
-
 
 export function kubectlScale(host: KubectlHost, c: Call) {
-  const { name, error } = resolveDeploymentRef(host, "scale", c.args);
-  if (error) return error;
+  const dn = deploymentNames(host, "scale", c.args);
+  if ("error" in dn) return dn.error;
   const rep = replicasArg(host, c);
   if ("error" in rep) return rep.error;
-  if (!name || rep.replicas === null) return host._err("kubectl scale: So nicht ganz.", "Muster: 'kubectl scale deployment <name> --replicas=3'");
-  const dep = host.deployments.find(d => d.name === name);
-  if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + name + '" not found', "Welche Deployments es gibt: 'kubectl get deployments'");
+  if (dn.names.length === 0 || rep.replicas === null) return host._err("kubectl scale: So nicht ganz.", "Muster: 'kubectl scale deployment <name> --replicas=3'");
   if (rep.replicas < 0) return host._err("error: The --replicas=COUNT flag is required, and COUNT must be greater than or equal to 0");
-  const denied = scaleTo(host, dep, rep.replicas);
-  if (denied) return denied;
-  return "deployment.apps/" + name + " scaled";
+  return scaleAll(host, dn.names, rep.replicas);
 }
 
 
 export function kubectlExpose(host: KubectlHost, c: Call) {
-  const { name, error } = resolveDeploymentRef(host, "expose", c.args);
-  if (error) return error;
+  const one = singleDeployment(host, "expose", c.args);
+  if ("error" in one) return one.error;
+  const name = one.name;
   const port = c.value("--port");
   if (!name) return host._err("kubectl expose: Welches Deployment?", "Muster: 'kubectl expose deployment <name> --port=80'");
   const dep = host.deployments.find(d => d.name === name);
@@ -103,11 +109,14 @@ export function kubectlSet(host: KubectlHost, c: Call) {
  *  Umgebungsvariablen in ein Deployment ein. */
 
 function kubectlSetEnv(host: KubectlHost, c: Call) {
-  const { name: depName, error } = resolveDeploymentRef(host, "set", c.args.slice(1));
-  if (error) return error;
+  const rest = c.args.slice(1);
+  if (rest.some(x => x.includes("="))) return notSimulated(host, "'KEY=wert' bei 'kubectl set env'.", ["kubectl set env deployment/<name> --from=configmap/<name>|secret/<name>"]);
+  const one = singleDeployment(host, "set", rest);
+  if ("error" in one) return one.error;
+  const depName = one.name;
   if (!depName) return host._err("kubectl set env: Welches Deployment?", "Muster: kubectl set env deployment/<name> --from=configmap/<name>");
   const dep = host.deployments.find(d => d.name === depName);
-  if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + depName + '" not found', "Welche Deployments es gibt: 'kubectl get deployments'");
+  if (!dep) return host._err(deploymentNotFound(depName), DEPLOYMENTS_TIP);
   const from = c.value("--from");
   if (!from) return host._err("kubectl set env: Womit einbinden?", "Muster: kubectl set env deployment/<name> --from=configmap/<name> (oder --from=secret/<name>)");
   const ref = parseFromRef(host, from);
@@ -126,12 +135,14 @@ function kubectlSetEnv(host: KubectlHost, c: Call) {
 /** kubectl set image deployment/<name> <container>=<image> */
 
 function kubectlSetImage(host: KubectlHost, c: Call) {
+  // Der Deployment-Name enthält nie ein "=": Tokens mit "=" sind <container>=<image>-Paare, die übrigen die Ziele.
   const rest = c.args.slice(1);
-  const { name: depName, error } = resolveDeploymentRef(host, "set", rest);
-  if (error) return error;
-  // Der Deployment-Name enthält nie ein "=", darum findet die kv-Suche ausschließlich das
-  // <container>=<image>-Paar (kein Herausschneiden des Namens-Tokens mehr nötig).
-  const kv = rest.find(x => x.includes("="));
+  const pairs = rest.filter(x => x.includes("="));
+  if (pairs.length > 1) return notSimulated(host, "mehrere Container in 'kubectl set image'.", ["kubectl set image deployment/<name> <container>=<image>"]);
+  const one = singleDeployment(host, "set", rest.filter(x => !x.includes("=")));
+  if ("error" in one) return one.error;
+  const depName = one.name;
+  const kv = pairs[0];
   if (!depName || !kv) return host._err("kubectl set image: So nicht ganz.", "Muster: kubectl set image deployment/<name> <container>=<image>");
   const dep = host.deployments.find(d => d.name === depName);
   if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + depName + '" not found');
@@ -179,8 +190,9 @@ const anySpecGiven = (...lists: ResourceList[]): boolean => lists.some(l => Obje
  *  (Speicher → CPU → ephemeral) bleibt wie zuvor. `--requests` wird akzeptiert, ändert
  *  aber didaktisch nichts – es zählt nur mit, ob überhaupt etwas angegeben wurde. */
 function kubectlSetResources(host: KubectlHost, c: Call) {
-  const { name: depName, error } = resolveDeploymentRef(host, "set", c.args.slice(1));
-  if (error) return error;
+  const one = singleDeployment(host, "set", c.args.slice(1));
+  if ("error" in one) return one.error;
+  const depName = one.name;
   const limits = parseResourceList(host, c.value("--limits"));
   const requests = parseResourceList(host, c.value("--requests"));
   // Die Flag-Tabelle (checkedFlag) hat beide Werte schon geprüft; der Typ-Zweig ist nur die Verengung.
@@ -189,7 +201,7 @@ function kubectlSetResources(host: KubectlHost, c: Call) {
   if (!depName) return host._err("kubectl set resources: Welches Deployment?", "Muster: kubectl set resources deployment/<name> --limits=memory=256Mi --requests=memory=128Mi");
   if (!anySpecGiven(limits, requests)) return host._err("kubectl set resources: Kein Limit/Request angegeben.", "Häng z.B. '--limits=memory=256Mi --requests=memory=128Mi', '--limits=cpu=200m' oder '--limits=ephemeral-storage=1Gi' an.");
   const dep = host.deployments.find(d => d.name === depName);
-  if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + depName + '" not found', "Welche Deployments es gibt: 'kubectl get deployments'");
+  if (!dep) return host._err(deploymentNotFound(depName), DEPLOYMENTS_TIP);
   const plan: ResourcePlan = { mem: limits.memory, cpu: limits.cpu ?? null, eph: limits.ephemeral };
   const notes: string[] = [];
   const denied = applyWithRollout(host, dep, plan, notes);
@@ -209,14 +221,8 @@ export function kubectlRollout(host: KubectlHost, c: Call) {
   return notSimulated(host, "'kubectl rollout " + action + "'.", Object.keys(ROLLOUT_ACTIONS).map(a => "kubectl rollout " + a + " deployment <name>"));
 }
 
-/** kubectl rollout restart deployment <name> */
-
-function kubectlRolloutRestart(host: KubectlHost, c: Call) {
-  const { name: depName, error } = resolveDeploymentRef(host, "rollout", c.args.slice(1));
-  if (error) return error;
-  if (!depName) return host._err("kubectl rollout restart: Welches Deployment?", "Muster: kubectl rollout restart deployment <name>");
-  const dep = host.deployments.find(d => d.name === depName);
-  if (!dep) return host._err('Error from server (NotFound): deployments.apps "' + depName + '" not found');
+/** Ein Deployment neu starten: die Erfolgszeile oder der Fehlertext der Pod-Security-Admission. */
+function restartDeployment(host: KubectlHost, dep: Deployment): { ok: string } | { denied: string } {
   const broken = dep.broken;
   const secretHealed = !!broken && broken.type === "crashloop" && host.secrets.some(s => s.name === broken.needsSecret);
   // Eigenes Image nachgebaut (#164): ein needsBuild-ImagePullBackOff heilt beim Neustart,
@@ -226,7 +232,25 @@ function kubectlRolloutRestart(host: KubectlHost, c: Call) {
   // (Pod-Security-Admission inklusive): bei Ablehnung bleibt auch die Heilung aus.
   // restartedAt: jeder Neustart ergibt einen neuen pod-template-hash, auch im selben Takt (#1468).
   const denied = rollOut(host, dep, () => { dep.restartedAt = Math.max(host.clock, (dep.restartedAt ?? -1) + 1); if (secretHealed || imageHealed) dep.broken = null; });
-  if (denied) return denied;
-  return "deployment.apps/" + depName + " restarted" +
-    (imageHealed ? "\n💡 Image gefunden – die Pods starten neu und laufen jetzt. Prüfe mit 'kubectl get pods'." : "");
+  if (denied) return { denied };
+  return { ok: "deployment.apps/" + dep.name + " restarted" +
+    (imageHealed ? "\n💡 Image gefunden – die Pods starten neu und laufen jetzt. Prüfe mit 'kubectl get pods'." : "") };
+}
+
+/** kubectl rollout restart deployment <name> [<name> …] – je Ziel eine Zeile, ein fehlendes Ziel stoppt die übrigen nicht. */
+
+function kubectlRolloutRestart(host: KubectlHost, c: Call) {
+  const dn = deploymentNames(host, "rollout", c.args.slice(1));
+  if ("error" in dn) return dn.error;
+  if (dn.names.length === 0) return host._err("kubectl rollout restart: Welches Deployment?", "Muster: kubectl rollout restart deployment <name>");
+  const ok: string[] = [];
+  const failed: string[] = [];
+  let missing = false;
+  for (const name of dn.names) {
+    const dep = host.deployments.find(d => d.name === name);
+    if (!dep) { failed.push(deploymentNotFound(name)); missing = true; continue; }
+    const r = restartDeployment(host, dep);
+    if ("ok" in r) ok.push(r.ok); else failed.push(r.denied);
+  }
+  return targetOutcome(host, ok, failed, missing ? DEPLOYMENTS_TIP : undefined);
 }

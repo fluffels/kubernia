@@ -5,8 +5,9 @@
  * Echtes `kubectl describe TYPE [NAME_PREFIX]`: ohne Namen alle Objekte der Art, mit einem Namen der
  * exakte Treffer, sonst jedes Objekt mit diesem Präfix; die Slash-Form `typ/name` gilt nur exakt. Die
  * Trenner folgen dem kubectl-Quelltext: ohne Namen zwei Leerzeilen zwischen den Objekten, beim Präfix eine.
- * Mehrere Namen (`describe pods a b`): jeder Name gilt exakt (die Präfix-Suche nur bei genau einem), die Treffer stehen
- * hintereinander, je fehlendem Namen folgt am Ende ein NotFound.
+ * Mehrere Ziele (`describe pods a b`, `pod/a svc/b`, `pods,svc web`, #1488; Zerlegung: ./targets): jeder Name gilt exakt
+ * (die Präfix-Suche nur bei `typ name`), die Treffer stehen in Eingabereihenfolge hintereinander, je fehlendem Namen
+ * folgt am Ende ein NotFound; eine Art ohne Renderer lehnt den ganzen Befehl vor dem Rendern ab.
  *
  * Ein neuer beschreibbarer Typ ist ein neuer Eintrag in `DESCRIBE_ENTRIES` (Namensliste + Renderer);
  * der Dispatcher wächst nicht mit. Nur modellierte Felder: nichts wird erfunden (Selektoren gibt es
@@ -16,8 +17,10 @@
  */
 import type { KubectlHost } from "./host";
 import { DEFAULT_NAMESPACE, isExternalNameService, isHeadlessService, type Deployment, type PvcRes, type ServiceRes, type StatefulSetRes } from "../state";
-import { RESOURCE_KINDS, resolveKind, qualified, type ResourceKind, type ResourcePlural } from "./resources";
-import { positionals, typeAndName, notSimulated, unknownResourceType } from "./args";
+import { RESOURCE_KINDS, qualified, type ResourceKind, type ResourcePlural } from "./resources";
+import { notSimulated } from "./args";
+import { readTargets, type Target } from "./targets";
+import type { Call } from "../cliargs";
 import { workloadSelector } from "../util";
 import { clusterPods } from "../pods";
 import { clusterPodStatus } from "../podstatus";
@@ -319,34 +322,61 @@ function describableTypes(): string {
   return RESOURCE_KINDS.filter(k => DESCRIBE_ENTRIES.has(k.plural)).map(k => k.singular).join("|");
 }
 
-/** Mehrere Namen: ohne Namen zwei Leerzeilen zwischen den Objekten, beim Präfix eine (wie kubectl). */
-function renderAll(host: KubectlHost, entry: DescribeEntry, kind: ResourceKind, names: string[], separator: string): string {
-  return names.map(n => entry.render(host, n, kind)).join(separator);
+/** Ein Ziel mit seinem Renderer. */
+interface Described { target: Target; entry: DescribeEntry }
+
+/** Die Renderer aller Ziele; eine Art ohne Renderer ist „nicht simuliert“ (bevor etwas gerendert wird). */
+function describedTargets(host: KubectlHost, targets: Target[]): Described[] | string {
+  const out: Described[] = [];
+  for (const target of targets) {
+    const entry = DESCRIBE_ENTRIES.get(target.kind.plural);
+    if (!entry) return notSimulated(host, "'kubectl describe " + target.kind.plural + "'.", ["kubectl describe " + describableTypes() + " [<name>]"]);
+    out.push({ target, entry });
+  }
+  return out;
 }
 
-/** `describe <typ> a b …`: jeder Name exakt, Treffer hintereinander, am Ende je fehlendem Namen ein NotFound. */
-function describeMany(host: KubectlHost, entry: DescribeEntry, kind: ResourceKind, wanted: string[]): string {
-  const have = entry.names(host, kind);
-  const found = wanted.filter(n => have.includes(n));
-  const missing = wanted.filter(n => !have.includes(n)).map(n => notFound(host, kind, n));
-  return [renderAll(host, entry, kind, found, "\n\n"), ...missing].filter(Boolean).join("\n");
+/** Ohne Namen: alle Objekte aller Arten, drei Zeilenumbrüche dazwischen (zwei Leerzeilen, wie kubectl). */
+function describeEverything(host: KubectlHost, all: Described[]): string {
+  const texts = all.flatMap(({ target, entry }) => entry.names(host, target.kind).map(n => entry.render(host, n, target.kind)));
+  return texts.length ? texts.join("\n\n\n") : noResourcesIn(DEFAULT_NAMESPACE);
 }
 
-export function kubectlDescribe(host: KubectlHost, t: string[]) {
-  const pos = positionals("describe", t);
-  const { typ, name, error } = typeAndName(pos);
-  if (error) return host._err(error);
-  if (!typ) return host._err("error: You must specify the type of resource to describe.", "z.B. 'kubectl describe pod <name>'.");
-  const kind = resolveKind(typ);
-  if (!kind) return unknownResourceType(host, typ);
-  const entry = DESCRIBE_ENTRIES.get(kind.plural);
-  if (!entry) return notSimulated(host, "'kubectl describe " + kind.plural + "'.", ["kubectl describe " + describableTypes() + " [<name>]"]);
-  host._recheckReadiness();
-  if (pos[0].includes("/")) return entry.render(host, name!, kind); // Slash-Form: nur exakt (typeAndName lieferte sonst error)
-  if (pos.length > 2) return describeMany(host, entry, kind, pos.slice(1));
-  const names = entry.names(host, kind);
-  if (!name) return names.length ? renderAll(host, entry, kind, names, "\n\n\n") : noResourcesIn(DEFAULT_NAMESPACE);
-  if (names.includes(name)) return entry.render(host, name, kind);
+/** `describe <typ> <name>`: der exakte Treffer, sonst jedes Objekt mit diesem Präfix (eine Leerzeile dazwischen),
+ *  sonst der NotFound des Renderers. */
+function describeByPrefix(host: KubectlHost, { target, entry }: Described): string {
+  const name = target.names[0];
+  const names = entry.names(host, target.kind);
+  if (names.includes(name)) return entry.render(host, name, target.kind);
   const prefixed = names.filter(n => n.startsWith(name));
-  return prefixed.length ? renderAll(host, entry, kind, prefixed, "\n\n") : entry.render(host, name, kind);
+  return prefixed.length ? prefixed.map(n => entry.render(host, n, target.kind)).join("\n\n") : entry.render(host, name, target.kind);
+}
+
+/** Mehrere Namen oder die Slash-Form: jeder Name exakt, die Treffer in Eingabereihenfolge hintereinander, am Ende je
+ *  fehlendem Namen ein NotFound. Ein einzelner Name lässt den Renderer melden (eigener Tipp je Art). */
+function describeNamed(host: KubectlHost, all: Described[]): string {
+  const single = all.length === 1 && all[0].target.names.length === 1;
+  const found: string[] = [];
+  const missing: string[] = [];
+  for (const { target, entry } of all) {
+    const have = entry.names(host, target.kind);
+    for (const n of target.names) {
+      if (have.includes(n)) found.push(entry.render(host, n, target.kind));
+      else missing.push(single ? entry.render(host, n, target.kind) : notFound(host, target.kind, n));
+    }
+  }
+  return [found.join("\n\n"), ...missing].filter(Boolean).join("\n");
+}
+
+export function kubectlDescribe(host: KubectlHost, c: Call): string {
+  const parsed = readTargets(host, c.args);
+  if ("error" in parsed) return parsed.error;
+  if (parsed.targets.length === 0) return host._err("error: You must specify the type of resource to describe.", "z.B. 'kubectl describe pod <name>'.");
+  const all = describedTargets(host, parsed.targets);
+  if (typeof all === "string") return all;
+  host._recheckReadiness();
+  if (parsed.targets.every(t => t.names.length === 0)) return describeEverything(host, all);
+  // Die Präfix-Suche gilt nur bei `typ name` (genau zwei Argumente, ohne Slash und Komma).
+  const typAndName = c.args.length === 2 && c.args.every(a => !a.includes("/") && !a.includes(","));
+  return typAndName ? describeByPrefix(host, all[0]) : describeNamed(host, all);
 }

@@ -54,7 +54,7 @@ export function checkOutputFormat(host: ErrHost, value: string): string | null {
 /** Das Flag `-o/--output` mit Wertprüfung (in der Flag-Tabelle von `get`). */
 export const OUTPUT_FLAG = checkedFlag(checkOutputFormat, "-o", "--output");
 
-/** Verlangt die Anfrage `-o wide`? (Nach `checkArgs` ist jeder andere Wert leer oder ausgewertet.) */
+/** Verlangt die Anfrage `-o wide`? (Nach dem Parse ist jeder andere Wert leer oder ausgewertet.) */
 export function isWide(c: Call): boolean {
   return c.value(...OUTPUT_FLAG.names) === "wide";
 }
