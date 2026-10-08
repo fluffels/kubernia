@@ -149,7 +149,11 @@ describe("kubectl describe pod (StatefulSet)", () => {
     const sim = new KQSim({ statefulSets: [sts()] });
     expect(sim.exec("kubectl describe pod speicher-9").error).toBe(true);
     expect(out(sim, "kubectl describe pod speicher-9")).toContain("NotFound");
-    expect(sim.exec("kubectl describe pod").error).toBe(true);
+    // Ohne Namen beschreibt describe alle Pods (kein Fehler); ein Präfix trifft alle StatefulSet-Pods.
+    for (const cmd of ["kubectl describe pod", "kubectl describe pod speicher"]) {
+      expect(sim.exec(cmd).error).toBeFalsy();
+      for (const i of [0, 1, 2]) expect(out(sim, cmd)).toContain("Name:         speicher-" + i);
+    }
   });
 
   test("Deployment-Pod bleibt ein ReplicaSet-Pod (unverändert)", () => {

@@ -133,6 +133,9 @@ export function positionals(sub: KubectlSub, t: string[], from = 2): string[] {
   return out;
 }
 
+/** Fehlertext für eine kaputte Slash-Form (`pod/`, `a/b/c`) – get und describe teilen ihn. */
+export const SLASH_FORM_ERROR = "error: arguments in resource/name form must have a single resource and name";
+
 /** Typ und Name aus den Argumenten: `pod <name>` oder die Slash-Form `pod/<name>`. */
 export function typeAndName(pos: string[]): { typ: string | undefined; name: string | undefined } {
   const slash = pos[0]?.indexOf("/") ?? -1;

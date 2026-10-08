@@ -15,13 +15,12 @@ import type { KubectlHost } from "./host";
 import { GET_RENDERERS, noResourcesIn, type GetTable } from "./inspect";
 import { allNamespaces, foreignNamespace, requestedNamespace } from "./namespace";
 import { allKinds, qualified, resolveKind, type ResourceKind } from "./resources";
-import { notSimulated, positionals, unknownResourceType } from "./args";
+import { notSimulated, positionals, unknownResourceType, SLASH_FORM_ERROR } from "./args";
 
 /** Was verlangt wurde: ein Typ mit den (möglicherweise leeren) gewünschten Namen. */
 interface Request { kind: ResourceKind; names: string[] }
 type Parsed = { requests: Request[] } | { error: string };
 
-const SLASH_FORM_ERROR = "error: arguments in resource/name form must have a single resource and name";
 const NO_TYPE_NEEDED_ERROR = "error: there is no need to specify a resource type as a separate argument when passing arguments in resource/name form (e.g. 'kubectl get resource/<resource_name>' instead of 'kubectl get resource resource/<resource_name>'";
 
 /** Die Typen einer Komma-Liste (`pods,svc`, `all`), ohne Doppelte, in Eingabereihenfolge. */

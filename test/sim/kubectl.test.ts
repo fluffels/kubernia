@@ -284,13 +284,13 @@ test("ingress: describe zeigt Backend – und warnt, wenn der Ziel-Service fehlt
 });
 
 test("ingress: describe spricht echtes K8s statt Hafen-Metapher (#608)", () => {
-  // Fehlender Name: fragt nach dem „Ingress", nicht nach dem „Hafentor".
+  // Ohne Namen beschreibt describe alle Objekte der Art; gibt es keine, kommt die Leermeldung (kein Fehler).
   // Die Sim-Domäne bleibt metaphern-frei – die Hafen-Übersetzung lebt nur in
-  // Präsentation/Content (Glossar §2), nicht in den Fehlertexten des Simulators.
+  // Präsentation/Content (Glossar §2), nicht in den Ausgaben des Simulators.
   const ohneName = sim.exec("kubectl describe ingress");
-  assert.ok(ohneName.error, "fehlender Name ist ein Fehler");
-  assert.match(ohneName.output!, /Welcher Ingress\?/, "fragt mit dem echten K8s-Begriff nach");
-  assert.doesNotMatch(ohneName.output!, /Hafentor/i, "keine Hafen-Metapher in der Sim-Domäne");
+  assert.ok(!ohneName.error, "ohne Namen ist kein Fehler");
+  assert.equal(ohneName.output, "No resources found in default namespace.");
+  assert.doesNotMatch(ohneName.output, /Hafentor/i, "keine Hafen-Metapher in der Sim-Domäne");
 
   // Fehlender Ziel-Service: die Lern-Warnung benennt den „Ingress", nicht „das Tor".
   legeIngressManifest(sim);
@@ -457,12 +457,12 @@ test("networkpolicy: describe nennt Selektor + erlaubte Quelle; Unbekanntes meld
 });
 
 test("networkpolicy: describe spricht echtes K8s statt Hafen-Metapher (#608)", () => {
-  // Fehlender Name: fragt nach der „NetworkPolicy", nicht nach der „Hafenmauer".
+  // Ohne Namen: alle Objekte der Art, hier keine – die Leermeldung, kein Fehler.
   // Sim-Domäne bleibt metaphern-frei (Glossar §2) – die Hafen-Übersetzung lebt in Content.
   const ohneName = sim.exec("kubectl describe networkpolicy");
-  assert.ok(ohneName.error, "fehlender Name ist ein Fehler");
-  assert.match(ohneName.output!, /Welche NetworkPolicy\?/, "fragt mit dem echten K8s-Begriff nach");
-  assert.doesNotMatch(ohneName.output!, /Hafenmauer/i, "keine Hafen-Metapher in der Sim-Domäne");
+  assert.ok(!ohneName.error, "ohne Namen ist kein Fehler");
+  assert.equal(ohneName.output, "No resources found in default namespace.");
+  assert.doesNotMatch(ohneName.output, /Hafenmauer/i, "keine Hafen-Metapher in der Sim-Domäne");
 });
 
 test("networkpolicy: default-deny – eine Policy ganz ohne erlaubte Quelle macht dicht", () => {
@@ -621,7 +621,7 @@ test("#811 kubectl get pods: StatefulSet-Pod mit Pending-PVC zeigt Pending, nich
   sim.mergeScenario({ statefulSets: [{ name: "mysql", image: "mysql", replicas: 1, storageClass: "" }] });
   const pvc = sim.pvcs.find(p => p.name === "data-mysql-0");
   assert.ok(pvc, "PVC muss angelegt worden sein");
-  assert.equal(pvc!.status, "Pending", "PVC bleibt Pending ohne verfügbares PV");
+  assert.equal(pvc.status, "Pending", "PVC bleibt Pending ohne verfügbares PV");
   const out = sim.exec("kubectl get pods").output!;
   assert.match(out, /mysql-0/, "Pod erscheint in der Liste");
   assert.doesNotMatch(out, /1\/1/, "kein 1/1 Ready bei Pending-PVC");
@@ -632,7 +632,7 @@ test("#811 kubectl get pods: StatefulSet-Pod mit gebundenem PVC zeigt Running (N
   sim.mergeScenario({ statefulSets: [{ name: "redis", image: "redis", replicas: 1 }] });
   const pvc = sim.pvcs.find(p => p.name === "data-redis-0");
   assert.ok(pvc, "PVC muss angelegt worden sein");
-  assert.equal(pvc!.status, "Bound", "Standard-StorageClass mit Provisioner → Bound");
+  assert.equal(pvc.status, "Bound", "Standard-StorageClass mit Provisioner → Bound");
   const out = sim.exec("kubectl get pods").output!;
   assert.match(out, /redis-0/, "Pod erscheint in der Liste");
   assert.match(out, /1\/1.*Running/, "laufender Pod zeigt 1/1 Running");
