@@ -3,6 +3,8 @@
  *
  *   node scripts/sandbox-doctor.mjs --vorlage   druckt die User-Settings-Vorlage (JSON, nie Secret-Werte)
  *   node scripts/sandbox-doctor.mjs --check     prüft Plattform, bwrap/socat, wsl.conf, User-Settings, Verhaltensprobe
+ *   node scripts/sandbox-doctor.mjs --sessionstart   SessionStart-Hook (#1486): meldet unter nativem Windows die Shell-Sperre des
+ *                                               Projekt-Blocks samt Abhilfe; endet immer mit Exit 0, blockiert nie
  *
  * Berichtend: `--check` endet immer mit Exit 0 (eine strenge Variante kommt mit #1437). Unbekannte Argumente: Exit 2.
  * Die Vorlage führt die Projekt-Allowlist aus `.claude/settings.json` vollständig mit, weil `strictAllowlist` im
@@ -39,12 +41,57 @@ export function wslArt(release) {
 /** Plattform: natives Windows hat keine Sandbox, WSL1 ebenso nicht (WSL2 braucht echten Linux-Kernel). */
 export function pruefePlattform({ platform, release }) {
   if (platform === "win32") {
-    return [fehlt("natives Windows: Claude Code führt Befehle ungesandboxt aus; die Sandbox läuft nur unter WSL2 (ADR 0021, docs/agent-harness.md#agenten-sandbox-wsl2)")];
+    return [fehlt("natives Windows: keine Sandbox, der strikte Projekt-Block sperrt hier Shell-Befehle; gesandboxt nur unter WSL2 (ADR 0021, docs/agent-harness.md#natives-windows)")];
   }
   if (wslArt(release) === "wsl1") {
     return [fehlt(`WSL1 (Kernel ${release}): die Sandbox braucht WSL2 (wsl --set-version <Name> 2)`)];
   }
   return [ok(`Plattform ${platform === "linux" && wslArt(release) === "wsl2" ? "WSL2" : platform} unterstützt die Sandbox`)];
+}
+
+/** Der empfohlene lokale Override (Inhalt von .claude/settings.local.json). */
+const LOKAL_OVERRIDE = '{"sandbox":{"enabled":false}}';
+
+function jsonOderUndefined(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Sperrt der strikte Projekt-Block (#1486) auf dieser Plattform Shell-Befehle? Nur unter nativem Windows (keine Sandbox),
+ * wenn `.claude/settings.json` `enabled: true` mit `allowUnsandboxedCommands: false` setzt und `.claude/settings.local.json`
+ * (Vorrang) das nicht aufhebt. Kaputtes lokales JSON zählt als Sperre (Override unlesbar), kaputtes oder fehlendes Projekt-JSON nicht. Pur.
+ */
+export function pruefeWindowsSperre({ platform, projektText, lokalText }) {
+  if (platform !== "win32" || projektText === null || projektText === undefined) return false;
+  const projekt = jsonOderUndefined(projektText)?.sandbox;
+  if (!projekt) return false;
+  let lokal = {};
+  if (lokalText !== null && lokalText !== undefined) {
+    const l = jsonOderUndefined(lokalText);
+    if (l === undefined) lokal = {};
+    else lokal = l?.sandbox ?? {};
+  }
+  const enabled = lokal.enabled ?? projekt.enabled;
+  const erlaubt = lokal.allowUnsandboxedCommands ?? projekt.allowUnsandboxedCommands;
+  return enabled === true && erlaubt === false;
+}
+
+const WINDOWS_ABHILFE = `Natives Windows: der Projekt-Block (.claude/settings.json) sperrt hier Shell-Befehle (sicher das PowerShell-Tool), weil es unter Windows keine Sandbox gibt. Abhilfe einmal je Checkout: ${LOKAL_OVERRIDE} in .claude/settings.local.json (ungetrackt, wirkt nur hier), dann die Session neu starten. Gesandboxt arbeitet man nur unter WSL2 (docs/agent-harness.md#natives-windows).`;
+
+/** Die SessionStart-Ausgabe (JSON für Claude Code) bei Sperre, sonst leer. Pur. */
+export function sessionStartAusgabe(eingabe) {
+  if (!pruefeWindowsSperre(eingabe)) return "";
+  return JSON.stringify({
+    systemMessage: WINDOWS_ABHILFE,
+    hookSpecificOutput: {
+      hookEventName: "SessionStart",
+      additionalContext: `${WINDOWS_ABHILFE} Override nicht selbst eintragen (Leitplanke), der Maintainerin melden; bis dahin das Bash-Tool nehmen.`,
+    },
+  });
 }
 
 /** bwrap und socat müssen im PATH liegen. `which(name)` liefert true, wenn vorhanden. */
@@ -179,7 +226,7 @@ export function verhaltensprobe({ home, schreibe, loesche }) {
   return [fehlt("Verhaltensprobe: Schreiben ins Home gelang, die Sandbox greift hier nicht (im eigenen Terminal statt in einer Claude-Session?)")];
 }
 
-const USAGE = "Usage: node scripts/sandbox-doctor.mjs --vorlage | --check";
+const USAGE = "Usage: node scripts/sandbox-doctor.mjs --vorlage | --check | --sessionstart";
 
 function projektSettingsText() {
   return readFileSync(fileURLToPath(new URL("../.claude/settings.json", import.meta.url)), "utf8");
@@ -203,10 +250,17 @@ function lies(pfad) {
 }
 
 /** Der volle Lauf mit echten Quellen (Dateisystem, Prozess). */
-function pruefeAlles(env) {
-  const platform = process.platform;
+function windowsErgebnis(io) {
+  if (io.platform !== "win32") return [];
+  return pruefeWindowsSperre(io)
+    ? [fehlt(`natives Windows: Projekt-Block sperrt Shell-Befehle; Abhilfe: ${LOKAL_OVERRIDE} in .claude/settings.local.json, Session neu starten`)]
+    : [ok("natives Windows: lokaler Override aktiv, Shell-Befehle laufen ungesandboxt")];
+}
+
+function pruefeAlles(env, io) {
+  const platform = io.platform;
   const rel = osRelease();
-  const alle = [...pruefePlattform({ platform, release: rel, env })];
+  const alle = [...pruefePlattform({ platform, release: rel, env }), ...windowsErgebnis(io)];
   const sandboxMoeglich = platform !== "win32" && wslArt(rel) !== "wsl1";
   if (sandboxMoeglich) {
     alle.push(...pruefeWerkzeuge(vorhanden));
@@ -230,16 +284,31 @@ function pruefeAlles(env) {
 }
 
 /** CLI. Gibt den Exit-Code zurück; schreibt über `out`/`err`, damit kein process.exit() Ausgaben abschneidet. */
-export function main(argv, env = process.env, out = console.log, err = console.error) {
-  if (argv.length !== 1 || !["--vorlage", "--check"].includes(argv[0])) {
+export function main(argv, env = process.env, out = console.log, err = console.error, io = {}) {
+  if (argv.length !== 1 || !["--vorlage", "--check", "--sessionstart"].includes(argv[0])) {
     err(USAGE);
     return 2;
+  }
+  const wurzel = env.CLAUDE_PROJECT_DIR || fileURLToPath(new URL("..", import.meta.url));
+  const quellen = {
+    platform: io.platform ?? process.platform,
+    projektText: "projektText" in io ? io.projektText : lies(join(wurzel, ".claude", "settings.json")),
+    lokalText: "lokalText" in io ? io.lokalText : lies(join(wurzel, ".claude", "settings.local.json")),
+  };
+  if (argv[0] === "--sessionstart") {
+    try {
+      const ausgabe = sessionStartAusgabe(quellen);
+      if (ausgabe) out(ausgabe);
+    } catch {
+      // Der Hinweis darf den Start nie blockieren.
+    }
+    return 0;
   }
   if (argv[0] === "--vorlage") {
     out(JSON.stringify(vorlageAusUmgebung(env), null, 2));
     return 0;
   }
-  for (const e of pruefeAlles(env)) out(`${e.status} ${e.text}`);
+  for (const e of pruefeAlles(env, quellen)) out(`${e.status} ${e.text}`);
   return 0;
 }
 
