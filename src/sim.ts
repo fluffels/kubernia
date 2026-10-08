@@ -897,7 +897,7 @@ const KNOWN_COMMANDS = [...Object.keys(COMMAND_HANDLERS), "clear", "help"];
     touch() { this.rev++; }
 
     // Eingabe-Parsing (Vorschläge/Flags) liegt seit #499 als pure Funktionen in ./sim/util.ts
-    // (editDistance/suggest/flagValue/multiFlag) – sie brauchen keinen Cluster-Zustand, hielten
+    // (editDistance/suggest/multiFlag) – sie brauchen keinen Cluster-Zustand, hielten
     // den Kern nur künstlich groß und mussten durch jedes Host-Interface gereicht werden.
 
     /** Hilfetext – Katalog + Filtern liegen in cmdunlock.ts (#358), hält den Kern

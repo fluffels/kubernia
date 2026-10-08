@@ -1,14 +1,16 @@
-/* ===== Kubernia – kubectl-Argumente: Flag-Tabelle, Parser, „nicht simuliert“ (sim/kubectl/args.ts, #1444) =====
+/* ===== Kubernia – kubectl-Argumente: Flag-Tabelle je Unterbefehl (sim/kubectl/args.ts, #1444) =====
  * Die Eingabegrenze von `kubectl`: Welche Flags wertet die Sim je Unterbefehl aus? Alles andere wurde
  * früher still ignoriert (`get pods -o yaml` druckte die Tabelle) und wird jetzt ehrlich abgelehnt –
- * mit dem Lernhinweis, was der Simulator stattdessen kann. Ein einheitlicher Helfer `notSimulated`
- * ersetzt die fünf verschiedenen „nicht simuliert“-Texte der Unterbefehle.
+ * mit dem Lernhinweis, was der Simulator stattdessen kann. Parser und `notSimulated` sind seit #1459
+ * generisch in ../cliargs (alle Familien); hier liegen nur die kubectl-Tabellen (re-exportiert).
  *
  * Die Tabelle nennt NUR Flags, die die Sim wirklich auswertet (echtes kubectl hat Hunderte; „was wir
  * können“ ist endlich und ehrlich). `-n/--namespace` gilt überall, die Semantik regelt namespace.ts.
  *
  * Blattmodul der kubectl-Mappe (pure Domäne): importiert nur den Host-Typ und die Registry (./resources). */
 import type { KubectlHost } from "./host";
+import { flag, checkFlags, positionalArgs, type ArgSpec, type FlagSpec } from "../cliargs";
+export { notSimulated, flagValueOf } from "../cliargs";
 import { RESOURCE_KINDS } from "./resources";
 
 /** Die Unterbefehle, die die Sim implementiert (Schlüssel der Dispatch-Tabelle in ../kubectl.ts). */
@@ -28,9 +30,6 @@ export const REAL_KUBECTL_COMMANDS: readonly string[] = [
   "version", "help",
 ];
 
-interface FlagSpec { readonly names: readonly string[]; readonly takesValue: boolean }
-
-const flag = (takesValue: boolean, ...names: string[]): FlagSpec => ({ names, takesValue });
 const NS = flag(true, "-n", "--namespace");
 const FILE = flag(true, "-f", "--filename");
 
@@ -64,73 +63,18 @@ const FLAG_HINTS: Readonly<Record<string, string>> = {
   "--dry-run": "Trockenläufe gibt es nicht; der Befehl legt sonst wirklich etwas an, darum lehnt der Simulator ihn ab.",
 };
 
-/** Der EINE Text für „das kann der Simulator nicht“: Meldung + Liste, was er stattdessen kann. */
-export function notSimulated(host: Pick<KubectlHost, "_err">, was: string, kann: readonly string[], hint?: string): string {
-  return host._err("Nicht simuliert: " + was + (hint ? " " + hint : ""), "Der Simulator kann: " + kann.join(" · "));
-}
-
-/** Das Flag eines Tokens (`--type=x` → `--type`, `-nkube-system` → `-n`). */
-function flagName(tok: string): string {
-  if (tok.startsWith("--")) { const eq = tok.indexOf("="); return eq < 0 ? tok : tok.slice(0, eq); }
-  return tok.slice(0, 2);
-}
-
-function isFlagToken(tok: string): boolean {
-  return tok.length > 1 && tok.startsWith("-");
-}
-
-/** Der Wert, der direkt am Token klebt (`--type=x`, `-n=x`, `-nx`), sonst null. */
-function attachedValue(tok: string): string | null {
-  if (tok.startsWith("--")) { const eq = tok.indexOf("="); return eq < 0 ? null : tok.slice(eq + 1); }
-  const rest = tok.slice(2);
-  if (!rest) return null;
-  return rest.startsWith("=") ? rest.slice(1) : rest;
-}
-
-function specOf(specs: readonly FlagSpec[], tok: string): FlagSpec | undefined {
-  const name = flagName(tok);
-  return specs.find(s => s.names.includes(name));
-}
-
-function flagList(specs: readonly FlagSpec[]): string[] {
-  return specs.map(s => s.names.join("/") + (s.takesValue ? " <wert>" : ""));
-}
-
-function missingValue(host: Pick<KubectlHost, "_err">, name: string): string {
-  return host._err("error: flag needs an argument: " + (name.startsWith("--") ? name : "'" + name.slice(1) + "' in " + name));
-}
+/** Die Prüf-Tabelle eines Unterbefehls (Flags + Lernhinweise) für die gemeinsame Eingabegrenze. */
+const specFor = (sub: KubectlSub): ArgSpec => ({ cmd: "kubectl " + sub, flags: KNOWN_FLAGS[sub], hints: FLAG_HINTS });
 
 /** Prüft alle Flags eines Unterbefehls: unbekannte (nicht simulierte) und Wert-Flags ohne Wert.
  *  `null` = alles bekannt; sonst die fertige Fehlerausgabe. */
 export function checkArgs(host: Pick<KubectlHost, "_err">, sub: KubectlSub, t: string[]): string | null {
-  const specs = KNOWN_FLAGS[sub];
-  for (let i = 2; i < t.length; i++) {
-    const tok = t[i];
-    if (!isFlagToken(tok)) continue;
-    const spec = specOf(specs, tok);
-    if (!spec) {
-      const name = flagName(tok);
-      return notSimulated(host, "das Flag '" + name + "' bei 'kubectl " + sub + "'.", ["Flags: " + flagList(specs).join(", ")], FLAG_HINTS[name]);
-    }
-    if (!spec.takesValue || attachedValue(tok) !== null) continue;
-    const next = t[i + 1];
-    if (next === undefined) return missingValue(host, flagName(tok));
-    i++; // der Wert gehört zum Flag
-  }
-  return null;
+  return checkFlags(host, specFor(sub), t, 2);
 }
 
 /** Die Nicht-Flag-Tokens ab `from` (ohne die Werte der Wert-Flags). */
 export function positionals(sub: KubectlSub, t: string[], from = 2): string[] {
-  const specs = KNOWN_FLAGS[sub];
-  const out: string[] = [];
-  for (let i = from; i < t.length; i++) {
-    const tok = t[i];
-    if (!isFlagToken(tok)) { out.push(tok); continue; }
-    const spec = specOf(specs, tok);
-    if (spec?.takesValue && attachedValue(tok) === null) i++;
-  }
-  return out;
+  return positionalArgs(specFor(sub), t, from);
 }
 
 /** Typ und Name aus den Argumenten: `pod <name>` oder die Slash-Form `pod/<name>`. */
@@ -138,16 +82,6 @@ export function typeAndName(pos: string[]): { typ: string | undefined; name: str
   const slash = pos[0]?.indexOf("/") ?? -1;
   if (slash > 0) return { typ: pos[0].slice(0, slash), name: pos[0].slice(slash + 1) || undefined };
   return { typ: pos[0], name: pos[1] };
-}
-
-/** Wert eines Flags mit seinen Schreibweisen (`-n x`, `-n=x`, `-nx`, `--namespace x`, `--namespace=x`). */
-export function flagValueOf(t: string[], names: readonly string[]): string | null {
-  for (let i = 0; i < t.length; i++) {
-    const tok = t[i];
-    if (!isFlagToken(tok) || !names.includes(flagName(tok))) continue;
-    return attachedValue(tok) ?? t[i + 1] ?? null;
-  }
-  return null;
 }
 
 /** `error: the server doesn't have a resource type "x"` samt Hinweis auf die Typen, die die Sim kennt. */

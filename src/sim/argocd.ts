@@ -28,6 +28,7 @@ import { HEADLESS_CLUSTER_IP } from "./state";
 import { InvalidSpecError, resourceName } from "./names";
 import { table } from "./util";
 import { addDeployment, scaleDeployment } from "./workload";
+import { checkFlags, notSimulated, specOfSub, type SubEntry } from "./cliargs";
 
 /** Was die argocd-Befehle/Reconcile vom Simulator brauchen (von der `Sim`-Klasse
  *  erfüllt). Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es
@@ -353,19 +354,24 @@ function argoAppSync(host: ArgocdHost, t: string[]): string {
   ].join("\n");
 }
 
-/** Alias → Handler. Ein neuer `argocd app`-Verb ist ein Eintrag hier + eine Funktion oben –
- *  der Dispatcher (`argocdCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz. */
-const ARGOCD_APP_ACTIONS: Record<string, ArgocdAppHandler> = {
-  list: argoAppList,
-  ls: argoAppList,
-  get: argoAppGet,
-  sync: argoAppSync,
+/** Alias → Eintrag (Handler + Flag-Tabelle, #1459: die Sim wertet bei `argocd app` keine Flags aus). Ein neuer
+ *  `argocd app`-Verb ist ein Eintrag hier + eine Funktion oben – der Dispatcher (`argocdCommand`) bleibt dünn
+ *  und wächst nicht mit dem Befehlssatz. */
+const ARGOCD_APP_ACTIONS: Record<string, SubEntry<ArgocdAppHandler>> = {
+  list: { run: argoAppList },
+  ls: { run: argoAppList },
+  get: { run: argoAppGet },
+  sync: { run: argoAppSync },
 };
 
+const ARGOCD_KANN = ["argocd app list", "argocd app get <name>", "argocd app sync <name>"];
+
 export function argocdCommand(host: ArgocdHost, t: string[]): string {
-  if (t[1] !== "app") return host._err("Der Simulator kann nur 'argocd app ...'.", "z.B. 'argocd app list', 'argocd app get <name>' oder 'argocd app sync <name>'.");
+  if (!t[1]) return host._err("argocd: Unterbefehl fehlt.", "z.B. 'argocd app list'.");
+  if (t[1] !== "app") return notSimulated(host, "'argocd " + t[1] + "'.", ARGOCD_KANN);
   const action = t[2];
-  const handler = action ? ARGOCD_APP_ACTIONS[action] : undefined;
-  if (!handler) return host._err("argocd app: unbekannte Aktion '" + (action || "") + "'", "z.B. 'argocd app list', 'argocd app get <name>' oder 'argocd app sync <name>'.");
-  return handler(host, t);
+  if (!action) return host._err("argocd app: Aktion fehlt.", "z.B. 'argocd app list', 'argocd app get <name>' oder 'argocd app sync <name>'.");
+  const entry = Object.hasOwn(ARGOCD_APP_ACTIONS, action) ? ARGOCD_APP_ACTIONS[action] : undefined;
+  if (!entry) return notSimulated(host, "'argocd app " + action + "'.", ARGOCD_KANN);
+  return checkFlags(host, specOfSub("argocd app " + action, entry), t, 3) ?? entry.run(host, t);
 }

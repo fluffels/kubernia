@@ -18,7 +18,7 @@ import { argoReconcile, cloneChildSpec } from "../argocd";
 import { assertNever } from "../../core/assert";
 import { isResourceName, rfc1123ErrorText, RFC1123_TIP } from "../names";
 import { sameRbac } from "../rbac";
-import { flagValue, multiFlag } from "../util"; // clusterIP entfällt: Service läuft jetzt über host._makeService (#507)
+import { multiFlag } from "../util"; // clusterIP entfällt: Service läuft jetzt über host._makeService (#507)
 import { admitNewPods } from "./rollout";
 import { resolveKind, qualified } from "./resources";
 import { flagValueOf, notSimulated, positionals, typeAndName, unknownResourceType } from "./args";
@@ -177,8 +177,8 @@ const createRoleBinding: CreateHandler = (host, t, raw) => {
   const name = t[3];
   if (!name || name.startsWith("--")) return host._err("kubectl create " + t[2] + ": Der Name fehlt.", "Muster: kubectl create " + t[2] + " <name> --role=<rolle> --serviceaccount=<ns>:<sa>");
   { const bad = invalidNameError(host, cluster ? "ClusterRoleBinding" : "RoleBinding", name); if (bad) return bad; }
-  const roleName = flagValue(t, "--role");
-  const clusterRoleName = flagValue(t, "--clusterrole");
+  const roleName = flagValueOf(t, ["--role"]);
+  const clusterRoleName = flagValueOf(t, ["--clusterrole"]);
   // ClusterRoleBinding kann sich nur auf eine ClusterRole beziehen.
   if (cluster && roleName) return host._err("error: a ClusterRoleBinding can only reference a ClusterRole", "Nutze '--clusterrole=<name>' statt '--role'.");
   if (!roleName && !clusterRoleName) return host._err("error: exactly one of --role or --clusterrole must be specified", cluster ? "Häng '--clusterrole=<name>' an." : "Häng '--role=<name>' oder '--clusterrole=<name>' an.");

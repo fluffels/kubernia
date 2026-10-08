@@ -54,7 +54,7 @@ test("#385 glab/CI: Negativfälle (kein 'ci', keine Pipeline, unbekannte Aktion,
   // Nur 'glab ci ...' wird unterstützt.
   const noCi = s.exec("glab status");
   assert.ok(noCi.error);
-  assert.match(noCi.output!, /nur 'glab ci \.\.\.'/);
+  assert.match(noCi.output!, /Nicht simuliert: 'glab status'/);
   // Vor dem ersten Push gibt es keine Pipeline.
   const noPipe = s.exec("glab ci status");
   assert.ok(noPipe.error);
@@ -64,7 +64,7 @@ test("#385 glab/CI: Negativfälle (kein 'ci', keine Pipeline, unbekannte Aktion,
   // Unbekannte Unteraktion wird abgefangen.
   const bogus = s.exec("glab ci wackelpudding");
   assert.ok(bogus.error);
-  assert.match(bogus.output!, /unbekannte Aktion 'wackelpudding'/);
+  assert.match(bogus.output!, /Nicht simuliert: 'glab ci wackelpudding'/);
 });
 
 test("#385 glab/CI: ohne .gitlab-ci.yml startet ein push keine Pipeline", () => {
