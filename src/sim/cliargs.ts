@@ -23,7 +23,8 @@ export interface FlagSpec {
   readonly names: readonly string[];
   readonly takesValue: boolean;
   /** Wertprüfung (#1466): `null` = Wert gültig, sonst die fertige Fehlerausgabe. Läuft in `checkFlags`
-   *  mit dem Wert in jeder Schreibweise (`-o x`, `-o=x`, `-ox`, `--output=x`, `-Aox`). */
+   *  mit dem Wert in jeder Schreibweise (`-o x`, `-o=x`, `-ox`, `--output=x`). Steht das Flag mitten in einer Kette
+   *  (`-Ao wide`), lehnt `checkFlags` es ab: die Leser (`flagValueOf`, `-A`) sehen Ketten nicht (#1469). */
   readonly check?: (host: ErrHost, value: string) => string | null;
 }
 
@@ -92,7 +93,7 @@ function findSpec(specs: readonly FlagSpec[], name: string): FlagSpec | undefine
 }
 
 /** `spec` und `attached` (der angeklebte Wert, `null` = keiner) füllt der Scan nur für Wert-Flags. */
-interface Scan { unknown: string | null; needsNext: boolean; name: string; spec?: FlagSpec; attached?: string | null }
+interface Scan { unknown: string | null; needsNext: boolean; name: string; spec?: FlagSpec; attached?: string | null; chained?: boolean }
 
 /** Kette kurzer Flags (`-aq`): jedes Zeichen muss ein bekanntes Bool-Flag sein; ein Wert-Flag schluckt den Rest. */
 function scanShortChain(specs: readonly FlagSpec[], tok: string): Scan {
@@ -106,6 +107,7 @@ function scanShortChain(specs: readonly FlagSpec[], tok: string): Scan {
     const name = "-" + rest[k];
     const s = findSpec(specs, name);
     if (!s) return { unknown: name, needsNext: false, name };
+    if (s.takesValue && s.check) return { unknown: null, needsNext: false, name, chained: true };
     if (s.takesValue) {
       const tail = rest.slice(k + 1);
       return { unknown: null, needsNext: tail === "", name, spec: s, attached: tail === "" ? null : tail.replace(/^=/, "") };
@@ -139,6 +141,12 @@ function rejectFlag(host: ErrHost, spec: ArgSpec, name: string): string {
   return notSimulated(host, "das Flag '" + name + "' bei '" + spec.cmd + "'.", [kann], hint);
 }
 
+/** Ein geprüftes Wert-Flag mitten in einer Kette (`-Ao wide`): die Leser (`flagValueOf`, `-A`) sehen Ketten
+ *  nicht, der Wert würde still verloren gehen – darum ehrlich ablehnen (#1466, Ketten-Fix: #1469). */
+function rejectChain(host: ErrHost, spec: ArgSpec, tok: string, name: string): string {
+  return notSimulated(host, "das Flag '" + name + "' innerhalb der Kette '" + tok + "' bei '" + spec.cmd + "'.", ["jedes Flag einzeln, z.B. '-A -o wide'"]);
+}
+
 /** Prüft alle Flags eines Unterbefehls ab Token `from`: unbekannte (nicht simulierte) und Wert-Flags ohne Wert.
  *  `null` = alles bekannt; sonst die fertige Fehlerausgabe. */
 export function checkFlags(host: ErrHost, spec: ArgSpec, t: readonly string[], from: number): string | null {
@@ -148,6 +156,7 @@ export function checkFlags(host: ErrHost, spec: ArgSpec, t: readonly string[], f
     if (!isFlagToken(tok)) { if (spec.stopAtPositional) break; continue; }
     const scan = scanToken(spec.flags, tok, style);
     if (scan.unknown) return rejectFlag(host, spec, scan.unknown);
+    if (scan.chained) return rejectChain(host, spec, tok, scan.name);
     if (scan.needsNext && t[i + 1] === undefined) return missingValue(host, scan.name, style);
     const value = scan.needsNext ? t[i + 1] : scan.attached;
     const invalid = value != null && scan.spec?.check?.(host, value);

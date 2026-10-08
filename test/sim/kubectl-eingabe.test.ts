@@ -89,7 +89,7 @@ describe("(d) erfundene Kurznamen sind weg, echte gehen weiter", () => {
 /* ---------- (a) nicht simulierte Flags ---------- */
 describe("(a) nicht simulierte Flags werden abgelehnt", () => {
   test.each([
-    ["get pods -l app=web", "-l"], ["get pods --selector=app=web", "--selector"], ["get pods -w", "-w"],
+    ["get pods -Ao wide", "-o"], ["get pods -Aowide", "-o"], ["get pods -l app=web", "-l"], ["get pods --selector=app=web", "--selector"], ["get pods -w", "-w"],
     ["get pods --watch", "--watch"], ["get pods --show-labels", "--show-labels"], ["get pods --sort-by=.metadata.name", "--sort-by"],
     ["describe pod x -o yaml", "-o"], ["logs web-x -c app", "-c"], ["delete pod web-x --force", "--force"], ["describe pod x --show-events", "--show-events"],
     ["create deployment x --image=nginx --dry-run=client", "--dry-run"], ["scale deployment web --replicas=2 --timeout=5s", "--timeout"],
@@ -116,7 +116,7 @@ describe("(a) nicht simulierte Flags werden abgelehnt", () => {
     expect(sim.deployments.map(d => d.name)).not.toContain("x");
   });
   test.each([
-    "get pods -o wide", "get pods -o=wide", "get pods -owide", "get pods --output wide", "get pods --output=wide", "get -o wide pods", "get pods -Ao wide",
+    "get pods -o wide", "get pods -o=wide", "get pods -owide", "get pods --output wide", "get pods --output=wide", "get -o wide pods",
     "get pods -n kube-system", "get pods -nkube-system", "get pods -n=kube-system", "get pods --namespace=default",
     "get pods -A", "get pods --all-namespaces", "logs web-x -f", "logs web-x --follow", "logs web-x -p",
     "scale deployment web --replicas 3", "scale deployment web --replicas=3", "create deployment z --image=nginx --replicas=2",

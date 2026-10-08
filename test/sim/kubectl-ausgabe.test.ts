@@ -65,6 +65,12 @@ describe("(a) -o: Formate werden wie in kubectl geprüft", () => {
     const out = lauf("kubectl get pods " + flag).out;
     expect(kopf(out)).toEqual(["NAME", "READY", "STATUS", "RESTARTS", "AGE"]);
   });
+  test.each(["-Ao wide", "-Aowide", "-Ao=wide"])("NEGATIV: %s (Wert-Flag in einer Kette) wird abgelehnt statt still als normale Tabelle gedruckt", flag => {
+    const r = lauf("kubectl get pods " + flag);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("innerhalb der Kette");
+    expect(r.out).not.toContain("READY");
+  });
   test.each(["-o wide", "-o=wide", "-owide", "--output wide", "--output=wide"])("%s ist ein Flag mit Wert (wide, nicht ein Positionsargument)", flag => {
     const r = lauf("kubectl get pods " + flag);
     expect(r.error).toBeFalsy();
@@ -272,7 +278,13 @@ describe("(d) Service kubernetes: get endpoints, describe, Selektor", () => {
     sim.exec("kubectl describe svc kubernetes");
     expect(sim.services).toEqual([]);
   });
-  test("nslookup und kubeadm join bleiben bei ihren Adressen", () => {
+  test("nslookup bleibt bei 10.96.0.1, kubeadm init nennt weiter den API-Server 10.0.0.10:6443", () => {
     expect(lauf("nslookup kubernetes.default.svc.cluster.local", new KQSim({})).out).toContain("10.96.0.1");
+    const bare = new KQSim({ bareMetal: true });
+    expect(bare.exec("kubeadm init").output).toContain("kubeadm join 10.0.0.10:6443");
+  });
+  test("der eingebaute Service ist 3d alt (get svc und get endpoints)", () => {
+    expect(zeile(lauf("kubectl get svc", new KQSim({})).out, "kubernetes")![5]).toBe("3d");
+    expect(zeile(lauf("kubectl get endpoints", new KQSim({})).out, "kubernetes")![2]).toBe("3d");
   });
 });

@@ -29,7 +29,7 @@ describe("cliargs: Wertprüfung (FlagSpec.check, #1466)", () => {
 
   test.each([
     [["-o", "x"], "x"], [["-o=x"], "x"], [["-ox"], "x"], [["--output", "x"], "x"], [["--output=x"], "x"],
-    [["-Ao", "x"], "x"], [["-Aox"], "x"], [["-Ao=x"], "x"], [["-o="], ""], [["--output="], ""],
+    [["-o="], ""], [["--output="], ""],
   ])("der Wert kommt in jeder Schreibweise an: %j", (t, wert) => {
     expect(run(...t)).toBeNull();
     expect(seen).toEqual([wert]);
@@ -37,7 +37,16 @@ describe("cliargs: Wertprüfung (FlagSpec.check, #1466)", () => {
   test("ein Fehler der Prüfung wird wörtlich durchgereicht (auch in Kette und mit Folgetoken)", () => {
     expect(run("-o", "bad")).toBe("FEHLER");
     expect(run("--output=bad")).toBe("FEHLER");
-    expect(run("-Aobad")).toBe("FEHLER");
+  });
+  test.each(["-Ao", "-Aox", "-Ao=x"])("NEGATIV: ein geprüftes Wert-Flag mitten in einer Kette (%s) wird abgelehnt, nie still verworfen", tok => {
+    const r = run(tok, "x")!;
+    expect(r).toContain("Nicht simuliert: das Flag '-o' innerhalb der Kette '" + tok + "'");
+    expect(r).toContain("'-A -o wide'");
+    expect(seen).toEqual([]);
+  });
+  test("ein Wert-Flag OHNE Prüfung bleibt in der Kette erlaubt (-An x)", () => {
+    const s: ArgSpec = { cmd: "x", flags: [flag(true, "-n"), flag(false, "-A")] };
+    expect(checkFlags(host, s, ["x", "get", "-An", "a"], 2)).toBeNull();
   });
   test("ohne das Flag kein Aufruf; ein fehlender Wert bleibt 'flag needs an argument' ohne Aufruf", () => {
     expect(run("-A", "pods")).toBeNull();
