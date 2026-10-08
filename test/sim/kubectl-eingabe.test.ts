@@ -5,8 +5,8 @@
  * Tabellengetrieben; jede Gruppe hat ihre Negativfälle. */
 import { describe, test, expect } from "vitest";
 import { KQSim, freshSim } from "./helpers";
-import { RESOURCE_KINDS, resolveKind, qualified, allKinds } from "../../src/sim/kubectl/resources";
-import { checkArgs, positionals, flagValueOf, typeAndName } from "../../src/sim/kubectl/args";
+import { RESOURCE_KINDS, resolveKind, qualified, allKinds, type ResourcePlural } from "../../src/sim/kubectl/resources";
+import { checkArgs, positionals, flagValueOf, typeAndName, slashRef } from "../../src/sim/kubectl/args";
 import { GET_RENDERERS } from "../../src/sim/kubectl/inspect";
 import type { Scenario } from "../../src/sim/state";
 
@@ -469,5 +469,61 @@ describe("args: positionals / flagValueOf / checkArgs / typeAndName", () => {
     expect(typeAndName(["pod/x"])).toEqual({ typ: "pod", name: "x" });
     expect(typeAndName(["pod", "x"])).toEqual({ typ: "pod", name: "x" });
     expect(typeAndName([])).toEqual({ typ: undefined, name: undefined });
+  });
+});
+
+/* ---------- #1459: die Slash-Form `typ/name` wird an EINER Stelle zerlegt ---------- */
+describe("slashRef: eine Zerlegung für get, describe, delete, scale/expose/set/rollout und logs", () => {
+  const MEHR = "error: arguments in resource/name form may not have more than one slash";
+  const EINZEL = "error: arguments in resource/name form must have a single resource and name";
+
+  test("slashRef: kein Slash → null, gültig → Typ und Name, kaputt → kubectl-Text", () => {
+    expect(slashRef("pods")).toBeNull();
+    expect(slashRef("pod/x")).toEqual({ typ: "pod", name: "x" });
+    expect(slashRef("a/b/c")).toEqual({ error: MEHR });
+    for (const bad of ["pod/", "/x", "/", "pods,svc/x"]) expect(slashRef(bad), bad).toEqual({ error: EINZEL });
+  });
+  test("typeAndName reicht den Fehler durch", () => {
+    expect(typeAndName(["pod/a/b"])).toEqual({ error: MEHR });
+    expect(typeAndName(["pod/"])).toEqual({ error: EINZEL });
+  });
+  test.each([
+    ["kubectl describe pod/", EINZEL],
+    ["kubectl describe pod/a/b", MEHR],
+    ["kubectl delete pod/", EINZEL],
+    ["kubectl delete pod/a/b", MEHR],
+    ["kubectl get pods/", EINZEL],
+    ["kubectl get pods/a/b", MEHR],
+    ["kubectl scale deploy/a/b --replicas=1", MEHR],
+    ["kubectl scale deploy/ --replicas=1", EINZEL],
+    ["kubectl logs /x", EINZEL],
+    ["kubectl logs pod/a/b", MEHR],
+  ])("%s → Fehler, nichts angefasst", (cmd, text) => {
+    const sim = new KQSim(szenario());
+    const vorher = JSON.stringify(sim.snapshot());
+    const r = lauf(cmd, sim);
+    expect(r.error, cmd).toBe(true);
+    expect(r.out).toContain(text);
+    expect(JSON.stringify(sim.snapshot()), cmd).toBe(vorher);
+  });
+  test("gültige Slash-Formen bleiben unverändert", () => {
+    expect(lauf("kubectl describe node/ahoi-control").error).toBe(false);
+    expect(lauf("kubectl scale deploy/web --replicas=3").out).toContain("scaled");
+    expect(lauf("kubectl get deploy/web").error).toBe(false);
+    expect(lauf("kubectl set image deployment/web nginx=reg.io/img:1").error).toBe(false);
+    // Ein Image-Token mit mehreren Slashes VOR der Referenz ist keine Referenz, sondern wird übersprungen.
+    const r = lauf("kubectl set image nginx=ghcr.io/org/img:1 deployment/web");
+    expect(r.out).not.toContain("more than one slash");
+    expect(r.error).toBe(false);
+  });
+});
+
+/* ---------- #1459: Plural-Schlüssel der Renderer-Tabellen sind eine Literal-Union ---------- */
+describe("ResourcePlural: getippte Schlüssel statt freier Strings", () => {
+  test("Tippfehler im Plural ist ein Typfehler (@ts-expect-error), ein echter Plural nicht", () => {
+    const ok: ResourcePlural = "deployments";
+    // @ts-expect-error – "deploymnets" ist kein Plural der Registry
+    const bad: ResourcePlural = "deploymnets";
+    expect([ok, bad]).toHaveLength(2);
   });
 });

@@ -19,7 +19,8 @@
  * per `kubeadmCommand(this, …)`.
  */
 import type { ClusterState, ClusterNode, Scenario } from "./state";
-import { randSuffix, flagValue } from "./util";
+import { randSuffix } from "./util";
+import { flagValueOf } from "./cliargs";
 import { provisionNode, isControlPlane, NODE_VERSION } from "./nodes";
 
 const APISERVER = "10.0.0.10:6443";
@@ -126,7 +127,7 @@ function kubeadmJoin(host: KubeadmHost, t: string[]): string {
       "Es läuft noch keine Control-Plane, an die sich der Worker hängen könnte. Zieh sie zuerst mit 'kubeadm init' hoch.");
   }
   // Token akzeptieren als `--token <tok>` ODER positional `kubeadm join <tok>` (beide Schreibweisen).
-  const flagToken = flagValue(t, "--token");
+  const flagToken = flagValueOf(t, ["--token"]);
   const positional = t.slice(2).find(a => !a.startsWith("-") && /^\w+\.\w+$/.test(a));
   const token = flagToken || positional || null;
   if (!token) {
