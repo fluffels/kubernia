@@ -453,3 +453,29 @@ describe("Gehärtetes Laden und Invariante (10), Zweige (Lens R1)", () => {
     expect(meld(d => { d.replicaSet!.template.image = "x"; })).toContain("nicht zum Template passt");
   });
 });
+
+describe("Laufzeitwerte und Untergrenze in der Historie (Lens R2)", () => {
+  const gespeichert = (sim: KQSim) => JSON.stringify(sim.snapshot().deployments[0].rsHistory);
+
+  test("rsHistory speichert weder den emptyDir-Inhalt noch ephemeralUsedMi", () => {
+    const sim = new KQSim({ deployments: [{ name: "web", image: "web:1", replicas: 1, emptyDir: { data: "GEHEIM", usedMi: 50 }, ephemeralUsedMi: 7 }] });
+    expect(sim.exec("kubectl set image deployment/web web=web:2").error).toBe(false);
+    const roh = gespeichert(sim);
+    expect(roh).toContain('"emptyDir"');
+    expect(roh).not.toContain("GEHEIM");
+    expect(roh).not.toContain("usedMi");
+    expect(roh).not.toContain("ephemeralUsedMi");
+  });
+
+  test("ein geladener Eintrag mit Laufzeitwerten gibt sie beim nächsten Speichern nicht wieder aus", () => {
+    const sim = new KQSim({ deployments: [{ name: "web", image: "web:2", replicas: 1, revision: 2, rsHistory: [{ revision: 1, image: "web:1", emptyDir: { data: "GEHEIM", usedMi: 50 }, ephemeralUsedMi: 7 }] }] });
+    const roh = gespeichert(sim);
+    expect(roh).not.toContain("GEHEIM");
+    expect(roh).not.toContain("usedMi");
+  });
+
+  test("Revision 0 oder negativ im Eintrag: verworfen", () => {
+    const sim = new KQSim({ deployments: [{ name: "web", image: "web", replicas: 1, revision: 5, rsHistory: [{ revision: 0, image: "a" }, { revision: -2, image: "b" }, { revision: 2, image: "c" }] }] });
+    expect(revisionen(sim)).toEqual([2, 5]);
+  });
+});
