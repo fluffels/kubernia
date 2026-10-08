@@ -35,14 +35,6 @@ export function podIP(name: string): string {
   return "10.244.1." + (10 + (hashStr(name) % 200));
 }
 
-/** Adresse und Name der Control-Plane: kubeadm-Static-Pods laufen mit hostNetwork und teilen sich ihre IP (#1466);
- *  dieselbe Adresse nennt `kubeadm join` als API-Server. */
-export const CONTROL_PLANE_IP = "10.0.0.10";
-export const CONTROL_PLANE_NODE = "ahoi-control";
-
-/** Name des n-ten Worker-Knotens (`ahoi-worker-<n>`, ab 1): die EINE Namenskonvention der Sim (#1483). */
-export const workerNodeName = (n: number): string => "ahoi-worker-" + n;
-
 /** Label und Selektor sind in der Sim dieselbe Zeichenkette `app=<name>` (Grenze `selektor-ueber-namen`):
  *  der EINE Helfer statt der handgeschriebenen Konvention (#1483). */
 export const workloadSelector = (name: string): string => "app=" + name;

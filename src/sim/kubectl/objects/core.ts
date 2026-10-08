@@ -14,7 +14,7 @@ import type { YamlValue } from "../../yaml";
 import type { YamlMap } from "../../yaml-emit";
 import type { KubectlHost } from "../host";
 import {
-  DEFAULT_NAMESPACE, SECURITY_CONTEXT_KEYS, isExternalNameService,
+  DEFAULT_NAMESPACE, VOLUME_MODE, SECURITY_CONTEXT_KEYS, isExternalNameService,
   type Broken, type Deployment, type PodTemplateSpec, type PvcRes, type ServiceRes,
 } from "../../state";
 import { servicesWithDefault, serviceSelector, isKubernetesService } from "../../endpoints";
@@ -224,7 +224,7 @@ function pvcObject(pvc: PvcRes): YamlMap {
       accessModes: modes.length > 0 ? modes : undefined,
       resources: { requests: { storage: pvc.capacity } },
       storageClassName: pvc.storageClass,
-      volumeMode: "Filesystem",
+      volumeMode: VOLUME_MODE,
       volumeName: pvc.volume !== "" ? pvc.volume : undefined,
     }),
     status: compact({
