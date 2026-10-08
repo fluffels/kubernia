@@ -9,9 +9,10 @@
  *
  * Blattmodul der kubectl-Mappe (pure Domäne): importiert den Host-Typ, die Registry (./resources) und das Blattmodul ../cliargs. */
 import type { KubectlHost } from "./host";
-import { flag, checkFlags, lenientCall, positionalArgs, type ArgSpec, type Call, type FlagSpec } from "../cliargs";
+import { flag, checkedFlag, checkFlags, lenientCall, notSimulated, positionalArgs, subEntry, type ArgSpec, type Call, type FlagSpec } from "../cliargs";
 export { notSimulated, flagValueOf } from "../cliargs";
-import { RESOURCE_KINDS } from "./resources";
+import { parseMem, parseCpuMilli } from "../util";
+import { RESOURCE_KINDS, resolveKind } from "./resources";
 import { OUTPUT_FLAG } from "./output";
 
 /** Die Unterbefehle, die die Sim implementiert (Schlüssel der Dispatch-Tabelle in ../kubectl.ts). */
@@ -46,9 +47,12 @@ const KNOWN_FLAGS: Readonly<Record<KubectlSub, readonly FlagSpec[]>> = {
   delete: [NS, FILE],
   apply: [NS, FILE],
   scale: [NS, flag(true, "--replicas")],
-  expose: [NS, flag(true, "--port"), flag(true, "--target-port"), flag(true, "--type")],
-  create: [NS, ...["--image", "--replicas", "--from-literal", "--cert", "--key", "--verb", "--resource", "--role", "--clusterrole", "--serviceaccount", "--user"].map(n => flag(true, n))],
-  set: [NS, flag(true, "--from"), flag(true, "--limits"), flag(true, "--requests")],
+  expose: [NS, checkedFlag(checkPort, "--port"), flag(true, "--target-port"), flag(true, "--type")],
+  create: [
+    NS, checkedFlag(checkLiteral, "--from-literal"), checkedFlag(checkServiceAccount, "--serviceaccount"),
+    ...["--image", "--replicas", "--cert", "--key", "--verb", "--resource", "--role", "--clusterrole", "--user"].map(n => flag(true, n)),
+  ],
+  set: [NS, checkedFlag(checkFromRef, "--from"), checkedFlag(checkResourceList, "--limits"), checkedFlag(checkResourceList, "--requests")],
 };
 
 /** Lernhinweise zu den Flags, die Spieler aus dem echten kubectl kennen. */
@@ -81,8 +85,8 @@ export function callOf(sub: KubectlSub, t: string[]): Call {
 
 /** `--replicas`: `null` = nicht angegeben, sonst die ganze Zahl (auch negativ: den Wertebereich prüft der Aufrufer, die
  *  Meldung unterscheidet sich je Befehl). Keine ganze Zahl: der pflag-Fehler wie bei echtem kubectl. */
-export function replicasArg(host: Pick<KubectlHost, "_err">, sub: KubectlSub, t: string[]): { replicas: number | null } | { error: string } {
-  const v = callOf(sub, t).value("--replicas");
+export function replicasArg(host: Pick<KubectlHost, "_err">, c: Call): { replicas: number | null } | { error: string } {
+  const v = c.value("--replicas");
   if (v === null) return { replicas: null };
   if (!/^[+-]?\d+$/.test(v)) {
     return { error: host._err('error: invalid argument "' + v + '" for "--replicas" flag: strconv.ParseInt: parsing "' + v + '": invalid syntax', "Die Replica-Zahl ist eine ganze Zahl ab 0, z.B. '--replicas=2'.") };
@@ -121,4 +125,84 @@ export function typeAndName(pos: string[]): { typ?: string; name?: string; error
 export function unknownResourceType(host: Pick<KubectlHost, "_err">, token: string): string {
   const typen = RESOURCE_KINDS.filter(k => !k.pseudo).map(k => k.plural).join(", ");
   return host._err('error: the server doesn\'t have a resource type "' + token.toLowerCase() + '"', "Gemeint war vielleicht: " + typen + "?");
+}
+
+/* ---- Wertprüfer der Flag-Tabelle (#1487): lehnen ungültige Werte ab, statt sie still zu verbiegen ---- */
+
+type ErrOnly = Pick<KubectlHost, "_err">;
+
+/** `--port`: ein String (kubectl `expose.go`), den `strconv.Atoi` je Eintrag der Komma-Liste liest; der Fehler wird
+ *  unverändert durchgereicht. Mehrere Ports legt die Sim nicht an. Leer = nicht angegeben (der Handler meldet es). */
+function checkPort(host: ErrOnly, v: string): string | null {
+  if (v === "") return null;
+  const parts = v.split(",");
+  for (const p of parts) if (!/^[+-]?\d+$/.test(p)) return host._err('error: strconv.Atoi: parsing "' + p + '": invalid syntax', "Der Port ist eine ganze Zahl, z.B. '--port=80'.");
+  return parts.length > 1 ? notSimulated(host, "mehrere Ports in '--port=" + v + "'.", ["kubectl expose deployment <name> --port=80"]) : null;
+}
+
+/** `--from-literal=<key>=<value>`: ohne `=` oder mit leerem Schlüssel lehnt kubectl die Angabe ab. */
+function checkLiteral(host: ErrOnly, v: string): string | null {
+  return v.indexOf("=") > 0 ? null : host._err("error: invalid literal source " + v + ", expected key=value", "Muster: '--from-literal=schluessel=wert'.");
+}
+
+/** `--serviceaccount=<namespace>:<name>`: genau zwei nicht-leere Teile. */
+function checkServiceAccount(host: ErrOnly, v: string): string | null {
+  const parts = v.split(":");
+  return parts.length === 2 && parts[0] !== "" && parts[1] !== "" ? null : host._err("error: serviceaccount must be <namespace>:<name>", "Muster: '--serviceaccount=default:deploy-bot'.");
+}
+
+/** Die Dimensionen von `set resources`, die die Sim kennt: Mengen-Parser und Beispiel-Tipp je Schlüssel. */
+const RESOURCE_KEYS: Readonly<Record<string, { parse: (v: string) => number | null; tip: string }>> = {
+  memory: { parse: parseMem, tip: "Schreib die Menge z.B. als '256Mi' oder '1Gi'." },
+  cpu: { parse: parseCpuMilli, tip: "Schreib die CPU z.B. als '200m' oder '0.5'." },
+  "ephemeral-storage": { parse: parseMem, tip: "Schreib die Menge z.B. als '512Mi' oder '1Gi'." },
+};
+
+/** Die geparste Mengenliste von `--limits`/`--requests`: Memory und ephemeral-storage in Mi, CPU in Milli-Cores. */
+export interface ResourceList { memory?: number; cpu?: number; ephemeral?: number }
+
+/** `memory=256Mi,cpu=200m` wie `parseResourceList` in kubectl (`set_resources.go`): jede Angabe `<ressource>=<menge>`,
+ *  sonst `invalid argument syntax`; eine ungültige Menge ist `invalid resource quantity`, eine unbekannte Ressource
+ *  „nicht simuliert“. Leer/`null` = keine Angabe. Ein String ist die fertige Fehlerausgabe. */
+export function parseResourceList(host: ErrOnly, spec: string | null): ResourceList | string {
+  const out: ResourceList = {};
+  if (!spec) return out;
+  for (const stmt of spec.split(",")) {
+    const parts = stmt.split("=");
+    if (parts.length !== 2) return host._err("error: invalid argument syntax " + stmt + ", expected <resource>=<value>", "Muster: '--limits=memory=256Mi,cpu=200m'.");
+    const [key, qty] = parts;
+    const dim = subEntry(RESOURCE_KEYS, key);
+    if (!dim) return notSimulated(host, "die Ressource '" + key + "' bei 'kubectl set resources'.", ["--limits/--requests mit " + Object.keys(RESOURCE_KEYS).join(", ")]);
+    const n = dim.parse(qty);
+    if (n === null) return host._err('error: invalid resource quantity "' + qty + '"', dim.tip);
+    if (key === "memory") out.memory = n; else if (key === "cpu") out.cpu = n; else out.ephemeral = n;
+  }
+  return out;
+}
+
+function checkResourceList(host: ErrOnly, v: string): string | null {
+  const r = parseResourceList(host, v);
+  return typeof r === "string" ? r : null;
+}
+
+/** `set env --from=<art>/<name>`: nur configmap und secret (Kurz- und Pluralformen der Registry). */
+export function parseFromRef(host: ErrOnly, v: string): { kind: "configmaps" | "secrets"; name: string } | string {
+  const ref = slashRef(v);
+  const kann = ["kubectl set env deployment/<name> --from=configmap/<name>|secret/<name>"];
+  if (!ref) return notSimulated(host, "'--from=" + v + "' ohne Art.", kann, "Muster: kubectl set env deployment/<name> --from=configmap/<name>");
+  if ("error" in ref) return host._err(ref.error);
+  const plural = resolveKind(ref.typ)?.plural;
+  if (plural !== "configmaps" && plural !== "secrets") return notSimulated(host, "'--from=" + ref.typ + "/…': nur configmap oder secret.", kann);
+  return { kind: plural, name: ref.name };
+}
+
+function checkFromRef(host: ErrOnly, v: string): string | null {
+  const r = parseFromRef(host, v);
+  return typeof r === "string" ? r : null;
+}
+
+/** Genau ein NAME (`create deployment a b` → `error: exactly one NAME is required, got 2`); `null` = passt, sonst die
+ *  fertige Fehlerausgabe mit dem deutschen Muster als Tipp. */
+export function exactlyOneName(host: ErrOnly, names: readonly string[], muster: string): string | null {
+  return names.length === 1 ? null : host._err("error: exactly one NAME is required, got " + names.length, muster);
 }

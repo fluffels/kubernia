@@ -590,3 +590,287 @@ describe("kubectl: logs -f/-p, -A, --replicas über cliargs", () => {
     expect(s.exec("kubectl create deployment a --image=nginx --replicas=2").error).toBe(false);
   });
 });
+
+/* ---------- #1487: create, set, expose, rollout, auth und label lesen den Call ---------- */
+const lauf1487 = (cmd: string, sim: KQSim = freshSim()) => { const r = sim.exec(cmd); return { out: r.output ?? "", error: r.error, sim }; };
+
+describe("#1487: Flags vor dem Ziel – jede Befehlsart liest c.args", () => {
+  test.each([
+    ["kubectl create -n default deployment neu --image=nginx", "deployment.apps/neu created"],
+    ["kubectl create -n default secret generic s1 --from-literal=k=v", "secret/s1 created"],
+    ["kubectl create -n default secret tls t1 --cert=a.crt --key=a.key", "secret/t1 created"],
+    ["kubectl create -n default configmap c1 --from-literal=k=v", "configmap/c1 created"],
+    ["kubectl create -n default serviceaccount sa1", "serviceaccount/sa1 created"],
+    ["kubectl create -n default role r1 --verb=get --resource=pods", "role.rbac.authorization.k8s.io/r1 created"],
+    ["kubectl create -n default clusterrole cr1 --verb=get --resource=nodes", "clusterrole.rbac.authorization.k8s.io/cr1 created"],
+    ["kubectl create -n default rolebinding rb1 --role=r --user=alice", "rolebinding.rbac.authorization.k8s.io/rb1 created"],
+    ["kubectl create -n default clusterrolebinding crb1 --clusterrole=cr --user=alice", "clusterrolebinding.rbac.authorization.k8s.io/crb1 created"],
+    ["kubectl rollout -n default restart deployment web", "deployment.apps/web restarted"],
+    ["kubectl set -n default image deployment/web web=nginx:2", "image updated"],
+    ["kubectl set -n default resources deployment/web --limits=memory=256Mi", "resource requirements updated"],
+    ["kubectl auth -n default can-i get pods", "yes"],
+    ["kubectl label -n default namespace default pod-security.kubernetes.io/enforce=baseline", "namespace/default labeled"],
+  ])("%s", (cmd, erwartet) => {
+    const r = lauf1487(cmd, new KQSim(szenario()));
+    expect(r.error).toBe(false);
+    expect(r.out).toContain(erwartet);
+  });
+  test("set env und expose mit -n vor dem Ziel", () => {
+    const s = new KQSim({ ...szenario(), configMaps: [{ name: "cfg", keys: ["a"] }] });
+    expect(lauf1487("kubectl set -n default env deployment/web --from=configmap/cfg", s).out).toContain("env updated");
+    expect(s.deployments.find(d => d.name === "web")!.envFrom.configMaps).toEqual(["cfg"]);
+    expect(lauf1487("kubectl expose -n default deployment api --port=80", s).out).toContain("service/api exposed");
+  });
+  test("scale: -n vor dem Ziel und die Flags in jeder Reihenfolge", () => {
+    const s = new KQSim(szenario());
+    expect(lauf1487("kubectl scale -n default --replicas=4 deployment web", s).error).toBe(false);
+    expect(s.deployments.find(d => d.name === "web")!.replicas).toBe(4);
+  });
+});
+
+describe("#1487: ungültige Werte werden abgelehnt statt verbogen", () => {
+  test("expose --port: Atoi-Fehler wie kubectl, nichts angelegt; gültige Schreibweisen bleiben", () => {
+    const s = new KQSim(szenario());
+    for (const bad of ["80x", "http", "8o"]) {
+      const r = lauf1487(`kubectl expose deployment api --port=${bad}`, s);
+      expect(r.error).toBe(true);
+      expect(r.out).toContain('error: strconv.Atoi: parsing "' + bad + '": invalid syntax');
+    }
+    expect(s.services.some(x => x.name === "api")).toBe(false);
+    expect(lauf1487("kubectl expose deployment api --port 80", s).error).toBe(false);
+  });
+  test("expose --port: außerhalb 1-65535 und mehrere Ports werden nicht still verbogen", () => {
+    const s = new KQSim(szenario());
+    expect(lauf1487("kubectl expose deployment api --port=70000", s).out).toContain("must be between 1 and 65535");
+    expect(lauf1487("kubectl expose deployment api --port=0", s).out).toContain("must be between 1 and 65535");
+    expect(lauf1487("kubectl expose deployment api --port=80,443", s).out).toContain(NICHT_SIMULIERT);
+    expect(s.services.some(x => x.name === "api")).toBe(false);
+  });
+  test("expose: --port wird vor dem Control-Plane-Gate geprüft; fehlender Port bleibt der alte Fehler", () => {
+    const s = new KQSim(szenario());
+    expect(lauf1487("kubectl expose deployment api", s).out).toContain("couldn't find port");
+    expect(lauf1487("kubectl expose deployment api --port=", s).out).toContain("couldn't find port");
+    s.controlPlane.up = false;
+    expect(lauf1487("kubectl expose deployment api --port=80x", s).out).toContain("strconv.Atoi");
+  });
+  test("expose --target-port und --type werden aus dem Call gelesen", () => {
+    const s = new KQSim(szenario());
+    lauf1487("kubectl expose deployment api --port=80 --target-port=8080 --type=NodePort", s);
+    const svc = s.services.find(x => x.name === "api")!;
+    expect(String(svc.targetPort)).toBe("8080");
+    expect(svc.type).toBe("NodePort");
+  });
+
+  test.each([
+    ["kubectl create configmap c --from-literal=foo", "error: invalid literal source foo, expected key=value"],
+    ["kubectl create configmap c --from-literal==x", "error: invalid literal source =x, expected key=value"],
+    ["kubectl create secret generic s --from-literal=ok=1 --from-literal=kaputt", "error: invalid literal source kaputt, expected key=value"],
+  ])("from-literal: %s", (cmd, text) => {
+    const r = lauf1487(cmd);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain(text);
+    expect(r.sim.configMaps.some(c => c.name === "c")).toBe(false);
+    expect(r.sim.secrets.some(c => c.name === "s")).toBe(false);
+  });
+  test("from-literal: k= ist ein gültiger Eintrag mit leerem Wert, der Wert darf = enthalten", () => {
+    const s = freshSim();
+    expect(lauf1487("kubectl create configmap c --from-literal=k= --from-literal=url=a=b", s).error).toBe(false);
+    expect(s.configMaps.find(c => c.name === "c")!.keys).toEqual(["k", "url"]);
+  });
+
+  test.each(["deploy-bot", "a:b:c", ":bot", "default:", ":"])("--serviceaccount=%s ist ein Fehler, nichts angelegt", (sa) => {
+    const s = freshSim();
+    const r = lauf1487(`kubectl create rolebinding rb --role=r --serviceaccount=${sa}`, s);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("error: serviceaccount must be <namespace>:<name>");
+    expect(s.roleBindings.some(b => b.name === "rb")).toBe(false);
+  });
+  test("--serviceaccount=ns:sa und --user (StringArray, ungesplittet) legen die Subjekte an", () => {
+    const s = freshSim();
+    expect(lauf1487("kubectl create rolebinding rb --role=r --serviceaccount=default:bot --serviceaccount=prod:ci --user=a,b", s).error).toBe(false);
+    expect(s.roleBindings.find(b => b.name === "rb")!.subjects).toEqual([
+      { kind: "User", name: "a,b" }, { kind: "ServiceAccount", name: "bot", namespace: "default" }, { kind: "ServiceAccount", name: "ci", namespace: "prod" },
+    ]);
+  });
+
+  test("--verb: Komma-Liste und Wiederholung (StringSlice); ein unbekanntes Verb warnt und legt die Rolle trotzdem an", () => {
+    const s = freshSim();
+    expect(lauf1487("kubectl create role r --verb=get,list --verb=watch --resource=pods,services", s).out).toBe("role.rbac.authorization.k8s.io/r created");
+    expect(s.roles.find(r => r.name === "r")!.rules[0]).toEqual({ verbs: ["get", "list", "watch"], resources: ["pods", "services"] });
+    const warn = lauf1487("kubectl create role r2 --verb=gett --resource=pods", s);
+    expect(warn.error).toBe(false);
+    expect(warn.out).toBe("Warning: 'gett' is not a standard resource verb\nrole.rbac.authorization.k8s.io/r2 created");
+    expect(s.roles.some(r => r.name === "r2")).toBe(true);
+    expect(lauf1487("kubectl create role r3 --verb=* --resource=pods", s).out).not.toContain("Warning");
+  });
+  test("create role: ohne Verb/Ressource die echten kubectl-Texte, nichts angelegt", () => {
+    const s = freshSim();
+    expect(lauf1487("kubectl create role r --resource=pods", s).out).toContain("error: at least one verb must be specified");
+    expect(lauf1487("kubectl create role r --verb=get", s).out).toContain("error: at least one resource must be specified");
+    expect(lauf1487("kubectl create role r --verb= --resource=pods", s).out).toContain("at least one verb must be specified");
+    expect(s.roles.some(r => r.name === "r")).toBe(false);
+  });
+  test("create secret tls: cert und key nötig (kubectl-Text), ein leerer Wert zählt als fehlend", () => {
+    const s = freshSim();
+    for (const cmd of ["kubectl create secret tls t", "kubectl create secret tls t --cert=a.crt", "kubectl create secret tls t --key=a.key", "kubectl create secret tls t --cert= --key=a.key"]) {
+      expect(lauf1487(cmd, s).out, cmd).toContain("error: key and cert must be specified");
+    }
+    expect(s.secrets.some(x => x.name === "t")).toBe(false);
+    expect(lauf1487("kubectl create secret tls t --cert a.crt --key a.key", s).error).toBe(false);
+  });
+
+  test("set resources: Syntaxfehler, ungültige Menge, unbekannter Schlüssel; das Deployment bleibt unverändert", () => {
+    const s = new KQSim(szenario());
+    const web = () => s.deployments.find(d => d.name === "web")!;
+    const vorher = JSON.stringify(web());
+    expect(lauf1487("kubectl set resources deployment/web --limits=memory", s).out).toContain("error: invalid argument syntax memory, expected <resource>=<value>");
+    expect(lauf1487("kubectl set resources deployment/web --limits=memory=256Mi,cpu", s).out).toContain("invalid argument syntax cpu,");
+    expect(lauf1487("kubectl set resources deployment/web --limits=memory=1=2", s).out).toContain("invalid argument syntax memory=1=2");
+    expect(lauf1487("kubectl set resources deployment/web --limits=memory=256Mix", s).out).toContain('error: invalid resource quantity "256Mix"');
+    expect(lauf1487("kubectl set resources deployment/web --limits=cpu=2x", s).out).toContain('error: invalid resource quantity "2x"');
+    expect(lauf1487("kubectl set resources deployment/web --requests=ephemeral-storage=1Q", s).out).toContain('invalid resource quantity "1Q"');
+    expect(lauf1487("kubectl set resources deployment/web --limits=nvidia.com/gpu=1", s).out).toContain(NICHT_SIMULIERT);
+    expect(JSON.stringify(web())).toBe(vorher);
+  });
+  test("set resources: mehrere Dimensionen, --requests (auch cpu) wird akzeptiert, ohne Angabe der alte Fehler", () => {
+    const s = new KQSim(szenario());
+    expect(lauf1487("kubectl set resources deployment/web --limits=memory=256Mi,cpu=200m,ephemeral-storage=1Gi --requests=memory=128Mi", s).error).toBe(false);
+    const d = s.deployments.find(x => x.name === "web")!;
+    expect([d.memLimit, d.cpuLimitMilli, d.ephemeralLimit]).toEqual([256, 200, 1024]);
+    expect(lauf1487("kubectl set resources deployment/api --requests=cpu=1", s).out).toContain("resource requirements updated");
+    expect(s.deployments.find(x => x.name === "api")!.cpuLimitMilli).toBeUndefined();
+    expect(lauf1487("kubectl set resources deployment/api", s).out).toContain("Kein Limit/Request angegeben");
+    expect(lauf1487("kubectl set resources deployment/api --limits=", s).out).toContain("Kein Limit/Request angegeben");
+  });
+  test("set resources: der letzte --limits gewinnt (String-Flag)", () => {
+    const s = new KQSim(szenario());
+    lauf1487("kubectl set resources deployment/web --limits=memory=100Mi --limits=memory=300Mi", s);
+    expect(s.deployments.find(d => d.name === "web")!.memLimit).toBe(300);
+  });
+
+  test.each(["secret/x", "cm/x", "configmaps/x"])("set env --from=%s: Registry-Schreibweisen", (from) => {
+    const s = new KQSim({ ...szenario(), configMaps: [{ name: "x", keys: ["a"] }], secrets: [{ name: "x", keys: ["a"] }] });
+    expect(lauf1487("kubectl set env deployment/web --from=" + from, s).error).toBe(false);
+  });
+  test.each([
+    ["pods/x", NICHT_SIMULIERT],
+    ["foo/x", NICHT_SIMULIERT],
+    ["x", NICHT_SIMULIERT],
+    ["a/b/c", "may not have more than one slash"],
+  ])("set env --from=%s wird abgelehnt", (from, text) => {
+    const s = new KQSim(szenario());
+    const r = lauf1487("kubectl set env deployment/web --from=" + from, s);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain(text);
+    expect(s.deployments.find(d => d.name === "web")!.envFrom).toEqual({ configMaps: [], secrets: [] });
+  });
+  test("set image: das Paar steht in c.args; das Image darf = enthalten", () => {
+    const s = new KQSim(szenario());
+    lauf1487("kubectl set image web=nginx:9 deployment/web", s);
+    expect(s.deployments.find(d => d.name === "web")!.image).toBe("nginx:9");
+    lauf1487("kubectl set image deployment/web web=reg.io/x=y", s);
+    expect(s.deployments.find(d => d.name === "web")!.image).toBe("reg.io/x=y");
+  });
+});
+
+describe("#1487: Arität mit echten kubectl-Texten", () => {
+  const bestand = (s: KQSim) => s.deployments.length + s.configMaps.length + s.secrets.length + s.serviceAccounts.length + s.roles.length + s.roleBindings.length;
+
+  test.each([
+    "kubectl create deployment a b --image=nginx",
+    "kubectl create configmap a b --from-literal=k=v",
+    "kubectl create secret generic a b --from-literal=k=v",
+    "kubectl create secret tls a b --cert=x --key=y",
+    "kubectl create serviceaccount a b",
+    "kubectl create role a b --verb=get --resource=pods",
+    "kubectl create clusterrole a b --verb=get --resource=pods",
+    "kubectl create rolebinding a b --role=r --user=u",
+    "kubectl create clusterrolebinding a b --clusterrole=r --user=u",
+  ])("zwei Namen: %s", (cmd) => {
+    const s = freshSim();
+    const vorher = bestand(s);
+    const r = lauf1487(cmd, s);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("error: exactly one NAME is required, got 2");
+    expect(bestand(s)).toBe(vorher);
+  });
+
+  test.each([
+    ["kubectl create deployment --image=nginx", "z.B. 'kubectl create deployment kasse --image=nginx'"],
+    ["kubectl create serviceaccount", "Muster: kubectl create serviceaccount <name>"],
+    ["kubectl create secret generic --from-literal=k=v", "Muster: kubectl create secret generic <name>"],
+    ["kubectl create configmap", "Muster: kubectl create configmap <name>"],
+    ["kubectl create role --verb=get --resource=pods", "Muster: kubectl create role <name>"],
+    ["kubectl create clusterrolebinding --clusterrole=r --user=u", "Muster: kubectl create clusterrolebinding <name>"],
+  ])("kein Name: %s → got 0 mit deutschem Muster", (cmd, tipp) => {
+    const r = lauf1487(cmd);
+    expect(r.error).toBe(true);
+    expect(r.out).toContain("error: exactly one NAME is required, got 0");
+    expect(r.out).toContain(tipp);
+  });
+  test("ein Flag ist kein Name: `create deployment --image=x web` legt web an", () => {
+    expect(lauf1487("kubectl create deployment --image=nginx web").out).toBe("deployment.apps/web created");
+  });
+  test("mehrfaches --image (zwei Flags oder Komma) ist nicht simuliert, nichts angelegt", () => {
+    const s = freshSim();
+    for (const cmd of ["kubectl create deployment w --image=a --image=b", "kubectl create deployment w --image=a,b"]) {
+      expect(lauf1487(cmd, s).out, cmd).toContain(NICHT_SIMULIERT);
+    }
+    expect(s.deployments.some(d => d.name === "w")).toBe(false);
+    expect(lauf1487("kubectl create deployment w --image=", s).out).toContain('required flag(s) "image" not set');
+  });
+  test("create ohne Typ / unbekannter Typ / secret ohne Art bleiben nicht simuliert", () => {
+    expect(lauf1487("kubectl create").out).toContain(NICHT_SIMULIERT);
+    expect(lauf1487("kubectl create pod x").out).toContain(NICHT_SIMULIERT);
+    expect(lauf1487("kubectl create secret").out).toContain(NICHT_SIMULIERT);
+    expect(lauf1487("kubectl create secret docker-registry x").out).toContain(NICHT_SIMULIERT);
+  });
+
+  test("auth can-i: nicht zwei Argumente → der echte Text, auch bei null und einem Argument", () => {
+    for (const cmd of ["kubectl auth can-i get pods x", "kubectl auth can-i get", "kubectl auth can-i"]) {
+      const r = lauf1487(cmd);
+      expect(r.error, cmd).toBe(true);
+      expect(r.out, cmd).toContain("error: you must specify two arguments: verb resource or verb resource/resourceName.");
+    }
+  });
+  test("auth can-i get pods/web wertet den Typ der Slash-Form aus (früher immer „no“)", () => {
+    const s = freshSim();
+    lauf1487("kubectl create serviceaccount bot", s);
+    lauf1487("kubectl create role leser --verb=get --resource=pods", s);
+    lauf1487("kubectl create rolebinding b --role=leser --serviceaccount=default:bot", s);
+    const as = "--as=system:serviceaccount:default:bot";
+    expect(lauf1487(`kubectl auth can-i get pods ${as}`, s).out).toBe("yes");
+    expect(lauf1487(`kubectl auth can-i get pods/web ${as}`, s).out).toBe("yes");
+    expect(lauf1487(`kubectl auth can-i get ${as} pods/web`, s).out).toBe("yes");
+    expect(lauf1487(`kubectl auth can-i get secrets/web ${as}`, s).out).toBe("no");
+    expect(lauf1487(`kubectl auth can-i delete pods/web ${as}`, s).out).toBe("no");
+    expect(lauf1487("kubectl auth can-i delete pods/web", s).out).toBe("yes");
+  });
+  test("auth can-i: ein führendes / ist eine Non-Resource-URL (nicht simuliert); andere Aktionen sind nicht simuliert", () => {
+    expect(lauf1487("kubectl auth can-i get /healthz").out).toContain(NICHT_SIMULIERT);
+    expect(lauf1487("kubectl auth whoami").out).toContain(NICHT_SIMULIERT);
+    expect(lauf1487("kubectl auth").out).toContain(NICHT_SIMULIERT);
+  });
+
+  test("rollout/set: unbekannte Aktion nicht simuliert, die Liste kommt aus der Ziel-Tabelle", () => {
+    const r = lauf1487("kubectl rollout undo deployment web");
+    expect(r.out).toContain(NICHT_SIMULIERT);
+    expect(r.out).toContain("kubectl rollout restart deployment <name>");
+    const set = lauf1487("kubectl set selector x");
+    expect(set.out).toContain("kubectl set image …");
+    expect(set.out).toContain("kubectl set env …");
+    expect(set.out).toContain("kubectl set resources …");
+    expect(lauf1487("kubectl set -n default").out).toContain(NICHT_SIMULIERT);
+    expect(lauf1487("kubectl rollout constructor deployment web").out).toContain(NICHT_SIMULIERT);
+  });
+  test("label: Namespace-Name und Label kommen aus c.args; ein anderes Label ist nicht simuliert", () => {
+    const s = freshSim();
+    expect(lauf1487("kubectl label namespace default team=a", s).out).toContain(NICHT_SIMULIERT);
+    expect(lauf1487("kubectl label namespace default team=a pod-security.kubernetes.io/enforce=restricted", s).out).toBe("namespace/default labeled");
+    expect(s.podSecurity).toBe("restricted");
+    expect(lauf1487("kubectl label namespace default pod-security.kubernetes.io/enforce=hoch", s).out).toContain("unbekannte Pod-Security-Stufe");
+    expect(s.podSecurity).toBe("restricted");
+    expect(lauf1487("kubectl label namespace", s).out).toContain("Welcher Namespace?");
+    expect(lauf1487("kubectl label pods web x=y", s).out).toContain(NICHT_SIMULIERT);
+  });
+});

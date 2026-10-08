@@ -1,9 +1,9 @@
-/* Reine Sim-Helfer (sim/util.ts) – seit #499 sind die früheren `_editDistance`/`_suggest`/
- * `_multiFlag`-Methoden pure Funktionen (kein Cluster-Zustand). Diese Tests
+/* Reine Sim-Helfer (sim/util.ts) – seit #499 sind die früheren `_editDistance`/`_suggest`-
+ * Methoden pure Funktionen (kein Cluster-Zustand). Diese Tests
  * sichern ihr Verhalten inkl. Grenz-/Negativfälle direkt an der öffentlichen Funktion ab,
  * statt sie nur indirekt über die Befehlsfamilien mitzuprüfen. */
 import { describe, test, expect } from "vitest";
-import { editDistance, suggest, multiFlag, parseCpuMilli } from "../../src/sim/util";
+import { editDistance, suggest, parseCpuMilli } from "../../src/sim/util";
 
 describe("editDistance – Levenshtein", () => {
   test("gleiche Strings: Distanz 0", () => {
@@ -30,21 +30,6 @@ describe("suggest – Meintest-du-Vorschlag", () => {
   });
   test("längere Wörter erlauben Distanz bis 2", () => {
     expect(suggest("terrafrm", cmds)).toBe("terraform"); // 1 fehlend
-  });
-});
-
-describe("multiFlag – wiederholbare & kommagetrennte Flags", () => {
-  test("kommagetrennt", () => {
-    expect(multiFlag("kubectl create role r --verb=get,list", "verb")).toEqual(["get", "list"]);
-  });
-  test("wiederholt UND kommagetrennt zusammengeführt", () => {
-    expect(multiFlag("--verb=get,list --verb=watch", "verb")).toEqual(["get", "list", "watch"]);
-  });
-  test("getrennte Form '--verb watch'", () => {
-    expect(multiFlag("kubectl create role r --verb create", "verb")).toEqual(["create"]);
-  });
-  test("Flag fehlt → leeres Array", () => {
-    expect(multiFlag("kubectl create role r --resource=pods", "verb")).toEqual([]);
   });
 });
 

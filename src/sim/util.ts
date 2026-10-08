@@ -99,9 +99,8 @@ export function table(headers: string[], rows: (string | number)[][]): string {
   return lines.join("\n");
 }
 
-/* ---------- Eingabe-Parsing: Vorschläge & Flags (#499) ----------
- * Reine, zustandslose Helfer, die vorher als `_editDistance`/`_suggest`/
- * `_multiFlag`-Methoden in sim.ts hingen. Da sie kein bisschen Cluster-Zustand brauchen,
+/* ---------- Eingabe-Parsing: Vorschläge (#499) ----------
+ * Reine, zustandslose Helfer, die vorher als `_editDistance`/`_suggest`-Methoden in sim.ts hingen. Da sie kein bisschen Cluster-Zustand brauchen,
  * gehören sie hierher zu den geteilten Sim-Helfern – das hält den sim.ts-Kern unter dem
  * God-File-Budget und verschmälert die Host-Interfaces (KubectlHost/DockerHost/…), die
  * sie sonst als Methode durchreichen mussten. */
@@ -127,18 +126,6 @@ export function suggest(word: string, list: string[]): string | null {
   }
   const limit = word.length <= 4 ? 1 : 2; // bei kurzen Wörtern strenger
   return bestD <= limit && bestD > 0 ? best : null;
-}
-
-/** Alle Werte eines (wiederholbaren UND kommagetrennten) Flags einsammeln, z.B.
- *  `--verb=get,list --verb=watch` → ["get","list","watch"]. Für RBAC-Befehle (#126). */
-export function multiFlag(raw: string, flag: string): string[] {
-  const re = new RegExp("--" + flag + "[=\\s]([^\\s]+)", "g");
-  const out: string[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(raw)) !== null) {
-    for (const part of m[1].split(",")) if (part) out.push(part);
-  }
-  return out;
 }
 
 /** Speicherangabe wie "256Mi", "1Gi", "512M" in Mi umrechnen (null bei Unsinn). */
