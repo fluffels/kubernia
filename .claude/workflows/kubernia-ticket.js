@@ -899,7 +899,7 @@ Verfügung, gib ergebnis="abgebrochen" mit abbruchgrund "PixelLab-Asset fehlt: <
 KEIN prozeduraler Platzhalter.
 Lernkandidaten: gib in lernkandidaten höchstens 3 Punkte zurück, nur projektübergreifendes Wissen
 (Kubernia-Spezifisches gehört ins Projekt-Brain bzw. als Befund ins Sammelticket/Issue), sonst leer.
-Für Lernkandidaten legst du nichts selbst ab.
+Prüfe jeden vor dem Eintragen gegen gemergte PRs (gh pr list --state merged --limit 1000 --search "<Stichwort>"), Erledigtes entfällt. Für Lernkandidaten legst du nichts selbst ab.
 
 Ist das Ticket ein Sammelticket (Titel „… (gesammelt)": „Harness-Härtung" oder „Langfuse-Befunde"), setze ALLE Zeilen um (auch später
 dazugekommene und beim Arbeiten gefundene Befunde), nichts auslagern (AGENTS.md § Harness-Befunde sind
