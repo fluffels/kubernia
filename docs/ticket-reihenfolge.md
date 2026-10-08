@@ -10,7 +10,7 @@ Bevor irgendein Ticket angefasst wird, **zuerst zweifeln** — das steht über d
 
 1. **Stardew-Scope-Frage:** „Ist das, was ich hier mache, noch sinnvoll, wenn Kubernia **so groß wie Stardew Valley** wird?" Nur umsetzen, wenn ja.
 2. **Bisherige Entscheidungen aktiv anzweifeln** — auch abgeschlossene Tickets, ADRs, „gesetzte" Annahmen dürfen falsch sein.
-3. **Auffälliges → sofort festhalten:** Spiel-/Inhalts-Befund jeder Art als neues Issue an die richtige Board-Stelle; alles zum Harness (Defekt, Härtung, Kosmetik, Wunsch) als Zeile ins Sammelticket, ein eigenes Harness-Issue nur bei Notfall (roter `main`, Security, Datenverlust) ([AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets](../AGENTS.md#wo-die-todos-leben)) — nicht inline mitfixen, nicht „im Kopf" behalten.
+3. **Auffälliges → sofort festhalten:** Spiel-/Inhalts-Befund jeder Art als neues Issue an die richtige Board-Stelle; alles zum Harness (Defekt, Härtung, Kosmetik, Wunsch) als Zeile ins Sammelticket, ein eigenes Harness-Issue nur in den Ausnahmefällen der Regel ([AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets](../AGENTS.md#wo-die-todos-leben)) — nicht inline mitfixen, nicht „im Kopf" behalten.
 
 ## Was „nächstes Ticket" heißt
 

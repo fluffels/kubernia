@@ -141,8 +141,11 @@ describe(".claude/ wird mit LF ausgecheckt (#1026)", () => {
     for (const zeile of png) expect(zeile.startsWith("i/-text")).toBe(true);
     // `i/-text` ist nur die Inhaltserkennung des Blobs; dass Git die Dateien auch künftig nicht als Text
     // normalisiert, hängt an `text=auto` (ein `* text` würde sie beim nächsten `git add` anfassen).
-    const pfade = png.map((z) => z.split("\t")[1]);
-    for (const wert of attrWerte("text", pfade).values()) expect(wert).toBe("auto");
+    const pfade = git(["ls-files", "-z", "--", "assets/pixellab/*.png"]).split("\0").filter(Boolean);
+    expect(pfade.length).toBe(png.length);
+    const werte = attrWerte("text", pfade);
+    expect(werte.size).toBe(pfade.length);
+    for (const wert of werte.values()) expect(wert).toBe("auto");
   });
 
   it("der Index enthält keine CRLF-Datei (#1476)", () => {

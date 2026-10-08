@@ -598,9 +598,12 @@ describe("Generator harness-inventar", () => {
       "      hooks:",
       "        - type: command",
       "          command: node ${CLAUDE_PROJECT_DIR}/scripts/a.mjs",
+      "        - type: command",
+      "          command: node ${CLAUDE_PROJECT_DIR}/scripts/a2.mjs",
       "    - matcher: Write",
       "      hooks:",
       "        - command: node ${CLAUDE_PROJECT_DIR}/scripts/b.mjs",
+      "        - command: node ${CLAUDE_PROJECT_DIR}/scripts/b2.mjs",
       "  PostToolUse:",
       "    - hooks:",
       "        - type: command",
@@ -616,9 +619,11 @@ describe("Generator harness-inventar", () => {
     assert.ok(out.includes("| Hook | `PostToolUse` | `node scripts/c.mjs` | `.claude/agents/m.md` |"));
     assert.ok(out.includes("| Hook | `PreToolUse` | matcher: `Edit`, `node scripts/a.mjs` | `.claude/agents/m.md` |"));
     assert.ok(out.includes("| Hook | `PreToolUse` | matcher: `Write`, `node scripts/b.mjs` | `.claude/agents/m.md` |"));
+    assert.ok(out.includes("matcher: `Edit`, `node scripts/a2.mjs` | `.claude/agents/m.md` |"));
+    assert.ok(out.includes("matcher: `Write`, `node scripts/b2.mjs` | `.claude/agents/m.md` |"));
     assert.ok(!out.includes("nicht-ein-hook"));
     assert.ok(out.includes("| Subagent | `multi` | model: opus,"));
-    assert.equal(out.split("`.claude/agents/m.md` |").length - 1, 4, "ein Subagent plus drei Hooks");
+    assert.equal(out.split("`.claude/agents/m.md` |").length - 1, 6, "ein Subagent plus fünf Hooks");
   });
   test("konfigurierter Pfad fehlt: rot; nicht konfigurierter Teil entfällt", () => {
     assert.throws(() => gen({ ".mcp.json": "{}" }, { harness: { mcp: ".mcp.json", agents: "weg" } }), /weg.*nicht gefunden/);
