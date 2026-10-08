@@ -41,7 +41,7 @@ export function wslArt(release) {
 /** Plattform: natives Windows hat keine Sandbox, WSL1 ebenso nicht (WSL2 braucht echten Linux-Kernel). */
 export function pruefePlattform({ platform, release }) {
   if (platform === "win32") {
-    return [fehlt("natives Windows: keine Sandbox, der strikte Projekt-Block sperrt hier Shell-Befehle; gesandboxt nur unter WSL2 (ADR 0021, docs/agent-harness.md#natives-windows)")];
+    return [fehlt("natives Windows: keine Sandbox; gesandboxt arbeitet man nur unter WSL2 (ADR 0021, docs/agent-harness.md#natives-windows)")];
   }
   if (wslArt(release) === "wsl1") {
     return [fehlt(`WSL1 (Kernel ${release}): die Sandbox braucht WSL2 (wsl --set-version <Name> 2)`)];
@@ -69,12 +69,7 @@ export function pruefeWindowsSperre({ platform, projektText, lokalText }) {
   if (platform !== "win32" || projektText === null || projektText === undefined) return false;
   const projekt = jsonOderUndefined(projektText)?.sandbox;
   if (!projekt) return false;
-  let lokal = {};
-  if (lokalText !== null && lokalText !== undefined) {
-    const l = jsonOderUndefined(lokalText);
-    if (l === undefined) lokal = {};
-    else lokal = l?.sandbox ?? {};
-  }
+  const lokal = (lokalText === null || lokalText === undefined ? undefined : jsonOderUndefined(lokalText))?.sandbox ?? {};
   const enabled = lokal.enabled ?? projekt.enabled;
   const erlaubt = lokal.allowUnsandboxedCommands ?? projekt.allowUnsandboxedCommands;
   return enabled === true && erlaubt === false;
@@ -249,14 +244,16 @@ function lies(pfad) {
   }
 }
 
-/** Der volle Lauf mit echten Quellen (Dateisystem, Prozess). */
 function windowsErgebnis(io) {
   if (io.platform !== "win32") return [];
+  // Ohne strikten Projekt-Block gibt es weder Sperre noch Override zu melden.
+  if (!pruefeWindowsSperre({ ...io, lokalText: null })) return [];
   return pruefeWindowsSperre(io)
     ? [fehlt(`natives Windows: Projekt-Block sperrt Shell-Befehle; Abhilfe: ${LOKAL_OVERRIDE} in .claude/settings.local.json, Session neu starten`)]
     : [ok("natives Windows: lokaler Override aktiv, Shell-Befehle laufen ungesandboxt")];
 }
 
+/** Der volle Lauf mit echten Quellen (Dateisystem, Prozess). */
 function pruefeAlles(env, io) {
   const platform = io.platform;
   const rel = osRelease();

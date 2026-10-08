@@ -65,6 +65,7 @@ describe("pruefeWindowsSperre (#1486)", () => {
     expect(sperre("win32", "{}", null)).toBe(false);
     expect(sperre("win32", JSON.stringify({ sandbox: { enabled: false, allowUnsandboxedCommands: false } }), null)).toBe(false);
     expect(sperre("win32", JSON.stringify({ sandbox: { enabled: true } }), null)).toBe(false);
+    expect(sperre("win32", JSON.stringify({ sandbox: { allowUnsandboxedCommands: false } }), null)).toBe(false);
   });
   test("kaputtes lokales JSON: Sperre (Override unlesbar); kaputtes oder fehlendes Projekt-JSON: keine", () => {
     expect(sperre("win32", STRIKT, "{")).toBe(true);
@@ -98,6 +99,15 @@ describe("--sessionstart (#1486)", () => {
     const leer: string[] = [];
     expect(D.main(["--sessionstart"], {}, (t) => leer.push(t), () => undefined, { platform: "win32", projektText: null, lokalText: null })).toBe(0);
     expect(leer).toEqual([]);
+  });
+  test("--check meldet unter Linux/WSL2 nichts zu natives Windows und ohne strikten Projekt-Block nichts unter win32", () => {
+    const zeilen = (io: { platform: string; projektText: string | null; lokalText: string | null }) => {
+      const aus: string[] = [];
+      D.main(["--check"], { CLAUDE_CONFIG_DIR: "/nicht/vorhanden" }, (t) => aus.push(t), () => undefined, io);
+      return aus.join(String.fromCharCode(10));
+    };
+    expect(zeilen({ platform: "linux", projektText: STRIKT, lokalText: null })).not.toMatch(/natives Windows: (Projekt|lokaler)/);
+    expect(zeilen({ platform: "win32", projektText: "{}", lokalText: null })).not.toMatch(/natives Windows: (Projekt|lokaler)/);
   });
   test("--check unter win32 meldet FEHLT ohne und OK mit lokalem Override", () => {
     const ohne: string[] = [];
