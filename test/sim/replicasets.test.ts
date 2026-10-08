@@ -327,3 +327,32 @@ describe("podTemplateHash", () => {
     expect(podTemplateHash({ ...d, ephemeralUsedMi: 5 })).toBe(h);
   });
 });
+
+describe("Hash-Kanonisierung (Golden, doubleStage, Schlüsselreihenfolge)", () => {
+  const voll = () => new KQSim({
+    deployments: [{
+      name: "web", image: "web:2", replicas: 1, envFrom: { configMaps: ["cfg"], secrets: ["sec"] },
+      serviceAccountName: "sa", containerPort: 8080, memLimit: 256, cpuLimitMilli: 250,
+      securityContext: { runAsNonRoot: true, privileged: false, readOnlyRootFilesystem: true, allowPrivilegeEscalation: false },
+      node: "n1", emptyDir: { data: "", usedMi: 0 }, ephemeralLimit: 64, initContainer: { fillsMi: 10, doubleStage: true }, restartedAt: 3,
+    }],
+  }).deployments[0];
+
+  test("Golden: der Hash eines Templates mit allen Feldern ist fest (Umbau darf ihn nicht verschieben)", () => {
+    expect(podTemplateHash(voll())).toBe("dd977f587");
+  });
+
+  test("doubleStage ändert den Hash", () => {
+    const d = voll(); const h = podTemplateHash(d);
+    d.initContainer = { fillsMi: 10, doubleStage: false };
+    expect(podTemplateHash(d)).not.toBe(h);
+  });
+
+  test("securityContext: andere Einfüge-Reihenfolge, gleiche Werte → gleicher Hash", () => {
+    const d = voll(); const h = podTemplateHash(d);
+    d.securityContext = { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, privileged: false, runAsNonRoot: true };
+    expect(podTemplateHash(d)).toBe(h);
+    d.securityContext = { ...d.securityContext, privileged: true };
+    expect(podTemplateHash(d)).not.toBe(h);
+  });
+});
