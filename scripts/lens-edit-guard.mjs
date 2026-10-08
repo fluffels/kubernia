@@ -2,7 +2,7 @@
 /**
  * Lens-Sabotage-Guard (#1349): `kubernia-lens` hat das Tool `Edit`, ausschließlich für die Sabotage-Probe der Test-Lens
  * (Implementierung testweise verfälschen, Test wird rot?). Die Probe gehört in einen eigenen Lens-Worktree
- * (`.claude/worktrees/kq-<nr>-lens-r<runde>`); ein Edit im Feature-Worktree verfälscht die Basis der parallel lesenden
+ * (`.claude/worktrees/kq-<nr>-lens-r<runde>`, bei der Merge-Delta-Lens `kq-<nr>-lens-m<n>`); ein Edit im Feature-Worktree verfälscht die Basis der parallel lesenden
  * anderen Lenses (so passiert im Review von #1331). Die Regel stand bisher nur als Text in der Lens-Definition.
  *
  * Dieser Hook (Frontmatter von `.claude/agents/kubernia-lens.md`, Matcher `Edit`, gilt nur für diesen Subagenten) erzwingt sie:
@@ -18,7 +18,12 @@
 import { posix } from "node:path";
 import { buildDenyOutput, emit, istDirektaufruf, readStdin } from "./hook-io.mjs";
 
-const LENS_WORKTREE = /\/\.claude\/worktrees\/kq-\d+-lens-r\d+\//i;
+/**
+ * Name eines Lens-Worktrees (SSOT, auch für cleanup-worktrees): `kq-<nr>-lens-r<runde>` (Lens-Runde) oder
+ * `kq-<nr>-lens-m<n>` (Merge-Delta-Lens nach einem Konflikt-Merge von main, n = laufende Merge-Nummer). Gruppe 1 ist `kq-<nr>`.
+ */
+export const LENS_WORKTREE_NAME = /^(kq-\d+)-lens-[rm]\d+$/i;
+const LENS_WORKTREE = new RegExp(`/\\.claude/worktrees/${LENS_WORKTREE_NAME.source.slice(1, -1)}/`, "i");
 
 /** Pfad lexikalisch normalisieren (Backslashes → Slashes, `..` auflösen), relative Pfade gegen `cwd`. */
 const normalisiere = (pfad, cwd) => {
@@ -42,7 +47,7 @@ export function bewerteLensEdit(filePath, cwd = "") {
     block: true,
     reason:
       "kubernia-lens ändert nichts im Feature-Worktree: Edit ist nur im eigenen Lens-Worktree erlaubt " +
-      "(.claude/worktrees/kq-<nr>-lens-r<runde>, siehe Regel „Sabotage nur im Lens-Worktree“ in kubernia-lens.md). " +
+      "(.claude/worktrees/kq-<nr>-lens-r<runde> bzw. kq-<nr>-lens-m<n>, siehe Regel „Sabotage nur im Lens-Worktree“ in kubernia-lens.md). " +
       "Ist der Lens-Worktree nicht anlegbar: Befund „Sabotage nicht möglich“ melden, kein Ersatz.",
   };
 }

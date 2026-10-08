@@ -50,6 +50,18 @@ describe("bewerteLensEdit", () => {
     }
   });
 
+  test("Merge-Delta-Lens `kq-<nr>-lens-m<n>` ist ein Lens-Worktree, ähnliche Namen nicht", () => {
+    expect(G.bewerteLensEdit("C:/dev/kubernia/.claude/worktrees/kq-1496-lens-m1/a.ts").block).toBe(false);
+    expect(G.bewerteLensEdit("C:/dev/kubernia/.claude/worktrees/kq-1496-lens-m12/a.ts").block).toBe(false);
+    for (const p of [
+      "C:/dev/kubernia/.claude/worktrees/kq-1-lens-m/a.ts",
+      "C:/dev/kubernia/.claude/worktrees/kq-1-lens-x1/a.ts",
+      "C:/dev/kubernia/.claude/worktrees/kq-lens-m1/a.ts",
+    ]) {
+      expect(G.bewerteLensEdit(p).block, p).toBe(true);
+    }
+  });
+
   test("relativer Pfad wird gegen cwd aufgelöst", () => {
     expect(G.bewerteLensEdit("src/a.ts", LENS).block).toBe(false);
     expect(G.bewerteLensEdit("src/a.ts", FEATURE).block).toBe(true);

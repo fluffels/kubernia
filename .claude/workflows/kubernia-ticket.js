@@ -251,7 +251,7 @@ const NACHBESSERN_SCHEMA = {
     diffDateien: DIFF_DATEIEN,
     deltaPfad: {
       type: 'string',
-      description: 'absoluter Pfad des Delta-Patches NUR dieses Fixes (#1265); leer, wenn rebased wurde; nach einem Merge von main: Fixes vor + nach dem Merge-Commit, Konfliktauflösung per git show --cc (#1311)',
+      description: 'absoluter Pfad des Delta-Patches NUR dieses Fixes (#1265); leer, wenn rebased wurde; nach einem Merge von main: Fixes vor + nach dem Merge-Commit, Konfliktauflösung per git show --remerge-diff (#1311)',
     },
     deltaDateien: { type: 'array', items: { type: 'string' }, description: 'git diff --name-only des Fixes allein (#1265)' },
     zusammenfassung: { type: 'string', description: 'was behoben, was bewusst liegen gelassen wurde (mit Grund)' },
@@ -291,7 +291,7 @@ const patchAuftrag = (nr, runde, basisHead) => `Zum Schluss, NACH dem Commit —
   (selber Ordner), den Pfad in deltaPfad, git diff --name-only ${basisHead}..HEAD in deltaDateien.
   Hast du main in den Branch GEMERGT (Merge-Commit M), ist der Merge selbst kein Fix-Pass: das Delta
   ist dann git diff ${basisHead}..M^1 plus git diff M..HEAD in EINER Datei, bei Merge-Konflikten
-  zusätzlich git show --cc M (die Auflösung zählt wie ein Fix). Hast du REBASED, lass deltaPfad
+  zusätzlich git show --remerge-diff M (die Auflösung zählt wie ein Fix). Hast du REBASED, lass deltaPfad
   leer: dann prüft die nächste Runde wieder den vollen Satz (darum nie mitten in der Schleife rebasen).`
     : ''
 }

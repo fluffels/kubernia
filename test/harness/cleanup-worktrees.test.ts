@@ -715,6 +715,11 @@ describe("Lens-Worktrees ohne Feature-Worktree (#1425)", () => {
     assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT), ["kq-13-lens-r2"]);
   });
 
+  test("Merge-Delta-Lens `kq-<nr>-lens-m<n>` ohne `kq-<nr>` ist verwaist, mit Feature-Worktree nicht", () => {
+    const reg = [MAIN, `${WT}/kq-13-lens-m1`, `${WT}/kq-14`, `${WT}/kq-14-lens-m2`, `${WT}/kq-15-lens-m`];
+    assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT), ["kq-13-lens-m1"]);
+  });
+
   test("nie angefasst: `kq-<nr>`, `kq-<nr>-lens-x`, `foo-lens-r1`, fremde Ordner, tiefer verschachtelte Pfade", () => {
     const reg = [MAIN, `${WT}/kq-12`, `${WT}/kq-12-lens-x`, `${WT}/foo-lens-r1`, `/other/kq-9-lens-r1`, `${WT}/kq-9-lens-r1/sub`, `${WT}/kq-9-lens-r10x`];
     assert.deepEqual(lensM.verwaisteLensWorktrees(reg, WT), []);

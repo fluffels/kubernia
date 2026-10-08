@@ -12,6 +12,7 @@
  */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
 // Reine Node-Tooling-Skripte ohne Declaration-File (allowJs aus, scripts/ nicht im tsconfig)
@@ -70,6 +71,21 @@ describe("Doku↔Code-Drift (#482/#907)", () => {
     assert.ok(covered.has("src/scenes/WorldScene.ts"), "WorldScene.ts muss in presentation.md stehen");
     assert.ok(covered.has("src/store.ts"), "store.ts muss in app.md stehen");
     assert.ok(covered.size >= 163, `Alle 163 Module müssen abgedeckt sein, got ${covered.size}`);
+  });
+
+  // Z11 (#1526): sim.md ist die Hauptkonfliktquelle paralleler PRs. Modul-Einträge als Tabellenzeilen ohne Leerzeile
+  // dazwischen konfliktieren bei jeder Nachbaränderung; ein Listeneintrag je Modul mit Leerzeile mergt sauber.
+  test("sim.md: Modul-Einträge sind Listeneinträge mit Leerzeile dazwischen, keine Tabellenzeilen", () => {
+    const zeilen = readFileSync("docs/module/sim.md", "utf8").split(/\r?\n/);
+    assert.deepEqual(
+      zeilen.filter((z) => /^\|\s*`src\//.test(z)).slice(0, 3),
+      [],
+      "Modul-Einträge nicht als Tabellenzeile `| `src/…` |`, sondern als `- `src/…`: …` mit Leerzeile dazwischen",
+    );
+    const eintraege = zeilen.map((z, i) => ({ z, i })).filter(({ z }) => /^- `src\/sim\/[^`]+`/.test(z));
+    assert.ok(eintraege.length >= 40, `erwartet ≥ 40 Modul-Einträge, got ${eintraege.length}`);
+    const klebend = eintraege.filter(({ i }) => /^- `src\//.test(zeilen[i + 1] ?? ""));
+    assert.deepEqual(klebend.map((e) => e.z.slice(0, 60)), [], "Modul-Einträge brauchen eine Leerzeile zwischen sich");
   });
 
   test("layerOf klassifiziert repräsentative Pfade wie der dependency-cruiser", () => {
