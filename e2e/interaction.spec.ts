@@ -32,6 +32,14 @@ test("Terminal: Befehl eintippen zeigt ein Ergebnis", async ({ page }) => {
   const out = page.locator("#term-out");
   await expect(out).toContainText("crew@hafen:~$ help");
   await expect(out).toContainText("Hilfe");
+
+  // Breite CLI-Tabellen brechen nicht um, sondern scrollen horizontal (#1484).
+  await input.fill("kubectl get nodes -o wide");
+  await input.press("Enter");
+  const tabelle = out.locator(".t-table").first();
+  await expect(tabelle).toBeVisible();
+  expect(await tabelle.evaluate(el => getComputedStyle(el).whiteSpace)).toBe("pre");
+  expect(await tabelle.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
 });
 
 test("Dialoge lassen sich mit Leertaste und Enter weiterschalten (#312)", async ({ page }) => {

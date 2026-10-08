@@ -639,6 +639,14 @@ button:focus-visible, select:focus-visible {
 .term-out .t-cmd { color: #fff; font-weight: bold; }
 .term-out .t-err { color: #ff9b9b; }
 .term-out .t-tip { color: #ffd97a; }
+/* Erkannte CLI-Tabellen (hud/termblocks.ts): kein Umbruch, je Tabelle horizontal scrollbar (wie `less -S`, #1484).
+   inline-block + max-width, damit das "
+" zwischen den Blöcken keine Leerzeile erzeugt. */
+.term-out .t-table {
+  display: inline-block; vertical-align: top; max-width: 100%;
+  white-space: pre; overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: thin; scrollbar-color: var(--frame) var(--term-bg);
+}
 .term-inputrow { display: flex; align-items: center; gap: 8px; }
 .term-prompt { color: var(--accent); font-weight: bold; }
 .term-inputrow input {
@@ -966,5 +974,6 @@ button.danger:hover { filter: brightness(1.2); background: linear-gradient(#b345
    Die Terminal-Ausgabe (.term-out) NICHT: sie zeigt echte CLI-Tabellen (docker ps,
    kubectl get), deren Spalten mit Leerzeichen auf feste Breiten gepaddet sind (sim/util.ts › table()).
    Das richtet sich nur in einer Monospace-Schrift bündig aus – darum erbt .term-out
-   bewusst das `font-family: …monospace` von .terminal und steht hier NICHT mehr drin (#365). */
+   bewusst das `font-family: …monospace` von .terminal und steht hier NICHT mehr drin (#365).
+   Dieselben Tabellen brechen nicht um, sondern scrollen horizontal (`.term-out .t-table`, #1484). */
 .dlg-text, .panel-body p, .quiz-explain { font-family: "Segoe UI", system-ui, sans-serif; }
