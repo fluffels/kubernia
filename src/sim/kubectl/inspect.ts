@@ -14,7 +14,7 @@
 import { podIP, CONTROL_PLANE_IP, CONTROL_PLANE_NODE, BUILTIN_AGE, workloadSelector } from "../util";
 import { endpointAddresses, podAddress, servicesWithDefault, serviceSelector, isKubernetesService } from "../endpoints";
 import type { KubectlHost } from "./host";
-import { DEFAULT_NAMESPACE, isExternalNameService, type Deployment } from "../state";
+import { DEFAULT_NAMESPACE, isExternalNameService, type Deployment, type StatefulSetRes } from "../state";
 import { currentReplicaSet } from "../replicasets";
 import { nodeInternalIP, NODE_SYSTEM_INFO } from "../nodes";
 import { requestedNamespace, allNamespaces } from "./namespace";
@@ -108,6 +108,12 @@ function getPods(host: KubectlHost, t: string[]): GetTable {
 /** Die verfügbaren Replicas eines Deployments: alle Pods, solange sie bereit sind, sonst keiner. */
 export function availableReplicas(host: Pick<KubectlHost, "_podReady">, d: Deployment): number {
   return host._podReady(d) ? d.pods.length : 0;
+}
+
+/** Die bereiten Pods eines StatefulSet (Running; ein Pod mit Pending-PVC läuft nicht). Die
+ *  EINE Quelle für `get sts` (READY), `describe sts` (Pods Status) und `-o yaml`. */
+export function statefulSetReadyReplicas(host: KubectlHost, s: StatefulSetRes): number {
+  return clusterPods(host).filter(c => c.owner === "StatefulSet" && c.sts.name === s.name && clusterPodStatus(host, c).status === "Running").length;
 }
 
 function getDeployments(host: KubectlHost): GetTable {
@@ -211,7 +217,7 @@ function getGrafanaDashboards(host: KubectlHost): GetTable {
 
 function getStatefulSets(host: KubectlHost): GetTable {
   return withWide(tableOf(["NAME", "READY", "AGE", "CONTAINERS", "IMAGES"],
-    host.statefulSets.map(s => [s.name, s.pods.length + "/" + s.replicas, host._age(s.created), s.name, s.image])), 2);
+    host.statefulSets.map(s => [s.name, statefulSetReadyReplicas(host, s) + "/" + s.replicas, host._age(s.created), s.name, s.image])), 2);
 }
 
 function getPvcs(host: KubectlHost): GetTable {

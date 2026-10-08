@@ -9,7 +9,8 @@
  * ../state und das KubectlHost-Interface (./host). Aufgerufen aus dem
  * kubectl-Dispatch (../kubectl.ts).
  */
-import { type ApplyEffect, type ArgoApp, type RbacSubject } from "../state";
+import { type ApplyEffect, type ArgoApp, type PvcRes, type RbacSubject } from "../state";
+import { resyncPendingPvcs } from "../pv-controller";
 import { addDeployment, removeDeployment, addStatefulSet, removeStatefulSet, replaceDeploymentPod, restartStatefulPod, statefulPodClaimName } from "../workload";
 // Argo-CD-Reconcile/-Klon liegen seit #378 bei der argocd-Familie in ../argocd – `kubectl apply -f`
 // einer Application zieht/kloniert den Soll direkt darüber (statt über eine Host-Methode).
@@ -535,6 +536,12 @@ const applyGrafanaDashboard: ApplyHandler = (host, eff, out) => {
 
 // Stateful-Workload-CRDs (#122). Reihenfolge (siehe applyHandlers): StorageClass + PV
 // vor PVC/StatefulSet, damit das Binden im selben apply schon greift.
+/** Bound-Hinweis für ein PVC (Anlegen und nachträgliches Binden teilen ihn). */
+const boundHint = (pvc: PvcRes): string => "💡 PVC '" + pvc.name + "' ist Bound – es hat Speicher bekommen (PV " + pvc.volume + ").";
+
+/** Resync nach neuer StorageClass/neuem PV: wartende PVCs binden nach, je eins eine Hinweiszeile. */
+const lateBindHints = (host: KubectlHost): string[] => resyncPendingPvcs(host).map(boundHint);
+
 const applyStorageClass: ApplyHandler = (host, eff, out) => {
   const effSc = eff.storageClass;
   if (!effSc) return;
@@ -543,7 +550,7 @@ const applyStorageClass: ApplyHandler = (host, eff, out) => {
     return;
   }
   host.storageClasses.push({ name: effSc.name, provisioner: effSc.provisioner || "rancher.io/local-path", reclaimPolicy: effSc.reclaimPolicy || "Delete", isDefault: !!effSc.isDefault, created: host.clock });
-  out.push("storageclass.storage.k8s.io/" + effSc.name + " created");
+  out.push("storageclass.storage.k8s.io/" + effSc.name + " created", ...lateBindHints(host));
 };
 
 const applyPv: ApplyHandler = (host, eff, out) => {
@@ -554,7 +561,7 @@ const applyPv: ApplyHandler = (host, eff, out) => {
     return;
   }
   host.pvs.push({ name: effPv.name, capacity: effPv.capacity || "1Gi", status: "Available", claim: "", storageClass: effPv.storageClass || "", accessModes: effPv.accessModes || "RWO", reclaimPolicy: effPv.reclaimPolicy || "Retain", created: host.clock });
-  out.push("persistentvolume/" + effPv.name + " created");
+  out.push("persistentvolume/" + effPv.name + " created", ...lateBindHints(host));
 };
 
 const applyPvc: ApplyHandler = (host, eff, out) => {
@@ -584,7 +591,7 @@ const applyPvc: ApplyHandler = (host, eff, out) => {
     out.push("💡 PVC '" + pvc.name + "' aus Snapshot '" + effPvc.dataSource + "' wiederhergestellt – die gesicherten Daten sind zurück auf dem Volume.");
   } else {
     out.push(pvc.status === "Bound"
-      ? "💡 PVC '" + pvc.name + "' ist Bound – es hat Speicher bekommen (PV " + pvc.volume + ")."
+      ? boundHint(pvc)
       : "💡 PVC '" + pvc.name + "' ist Pending – kein passendes PV da und keine StorageClass, die eins anlegt.");
   }
 };

@@ -136,6 +136,7 @@ describe("(b) wide: pods", () => {
   test("StatefulSet-Pod: IP und Node aus der Platzierung, mit Pending-PVC <none>", () => {
     const bound = new KQSim(szenario());
     const pvc = bound.pvcs.find(v => v.name === "daten-db-1")!;
+    pvc.storageClass = "gibt-es-nicht"; // sonst bindet der PV-Resync es vor dem Befehl nach
     pvc.status = "Pending";
     pvc.volume = "";
     const out = lauf("kubectl get pods -o wide", bound).out;

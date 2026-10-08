@@ -57,6 +57,9 @@ export function statefulPodVolumePending(
   return pvcs.find(pv => pv.name === statefulPodClaimName(sts, pod))?.status === "Pending";
 }
 
+/** Die Access-Modes der PVCs aus dem volumeClaimTemplate (Kurzform). */
+export const STATEFUL_CLAIM_ACCESS_MODES = "RWO";
+
 /** Der PVC-Name eines StatefulSet-Pods: `<volumeClaimTemplate>-<sts>-<ordinal>`. Die EINE
  *  Stelle, die ihn ableitet (Bau, Pending-Prüfung, Apply-Hinweis, `describe pod`). */
 export function statefulPodClaimName(

@@ -6,6 +6,7 @@
 import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { Sim as KQSim } from "../src/sim";
+import type { ApplyEffect } from "../src/sim/state";
 
 let sim: KQSim;
 beforeEach(() => { sim = new KQSim({}); });
@@ -365,4 +366,64 @@ test("snapshot/Reload: VolumeSnapshot + PVC-Daten überleben den Roundtrip", () 
   assert.equal(sim2.volumeSnapshots[0].data, "stammkundenverzeichnis");
   assert.equal(sim2.volumeSnapshots[0].readyToUse, true);
   assert.equal(sim2.pvcs.find(p => p.name === "kai-datenbank")!.data, "stammkundenverzeichnis", "PVC-Inhalt überlebt Reload");
+});
+
+/* ===================== PV-Controller-Resync (#1494) ===================== */
+
+/** Legt StorageClass bzw. PV per echtem `kubectl apply -f` an (Handler + Resync). */
+function applyStorage(effect: ApplyEffect) {
+  const file = "speicher-" + Object.keys(effect)[0] + ".yaml";
+  sim.mergeScenario({ files: { [file]: "x" }, applyEffects: { [file]: effect } });
+  return sim.exec("kubectl apply -f " + file);
+}
+const pvcStatus = (name: string) => sim.pvcs.find(p => p.name === name)!.status;
+
+test("#1494: StorageClass entsteht später -> wartendes PVC bindet nach, mit Hinweiszeile", () => {
+  sim = new KQSim({ pvcs: [{ name: "spaet", storage: "1Gi", storageClass: "spaet" }] });
+  assert.equal(pvcStatus("spaet"), "Pending");
+  const r = applyStorage({ storageClass: { name: "spaet" } });
+  assert.ok(!r.error);
+  assert.match(r.output!, /PVC 'spaet' ist Bound/);
+  assert.equal(pvcStatus("spaet"), "Bound");
+  assert.match(sim.pvs.find(p => p.name === sim.pvcs[0].volume)!.claim, /^default\/spaet$/);
+});
+
+test("#1494: StorageClass mit anderem Namen lässt das PVC Pending", () => {
+  sim = new KQSim({ pvcs: [{ name: "spaet", storage: "1Gi", storageClass: "spaet" }] });
+  const r = applyStorage({ storageClass: { name: "andere" } });
+  assert.doesNotMatch(r.output!, /Bound/);
+  assert.equal(pvcStatus("spaet"), "Pending");
+});
+
+test("#1494: PV entsteht später -> PVC (Klasse '') bindet genau an dieses PV", () => {
+  sim = new KQSim({ pvcs: [{ name: "wartet", storage: "1Gi", storageClass: "" }] });
+  const r = applyStorage({ pv: { name: "pv-spaet", capacity: "2Gi", storageClass: "", accessModes: "RWO" } });
+  assert.match(r.output!, /PVC 'wartet' ist Bound.*pv-spaet/);
+  const claim = sim.pvcs[0];
+  assert.equal(claim.volume, "pv-spaet");
+  assert.equal(sim.pvs.find(p => p.name === "pv-spaet")!.claim, "default/wartet");
+});
+
+test("#1494: zu kleines, falsches oder unpassendes PV lässt das PVC Pending und das PV frei", () => {
+  sim = new KQSim({ pvcs: [{ name: "wartet", storage: "5Gi", storageClass: "" }] });
+  applyStorage({ pv: { name: "pv-klein", capacity: "1Gi", storageClass: "" } });
+  applyStorage({ pv: { name: "pv-klasse", capacity: "9Gi", storageClass: "manuell" } });
+  applyStorage({ pv: { name: "pv-modus", capacity: "9Gi", storageClass: "", accessModes: "ROX" } });
+  assert.equal(pvcStatus("wartet"), "Pending");
+  assert.ok(sim.pvs.filter(p => p.name.startsWith("pv-")).every(p => p.status === "Available"));
+});
+
+test("#1494: Merge-Pfad – eine per mergeScenario ergänzte StorageClass bindet beim nächsten exec", () => {
+  sim = new KQSim({ pvcs: [{ name: "spaet", storage: "1Gi", storageClass: "spaet" }] });
+  sim.mergeScenario({ storageClasses: [{ name: "spaet", provisioner: "x.io/p" }] });
+  sim.exec("kubectl get pvc");
+  assert.equal(pvcStatus("spaet"), "Bound");
+});
+
+test("#1494: get sts zeigt READY nach bereiten Pods (0/1 bei Pending-PVC, 1/1 nach der StorageClass)", () => {
+  applyStatefulSet({ name: "db", replicas: 1, storageClass: "spaet" });
+  assert.match(sim.exec("kubectl get sts").output!, /db\s+0\/1/);
+  applyStorage({ storageClass: { name: "spaet" } });
+  assert.match(sim.exec("kubectl get sts").output!, /db\s+1\/1/);
+  assert.match(sim.exec("kubectl describe sts db").output!, /1 Running \/ 0 Waiting/);
 });
