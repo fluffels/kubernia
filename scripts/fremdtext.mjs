@@ -12,7 +12,7 @@
  * Exit 0 = Eingang vertraut, 3 = Fremdeingang (nicht automatisch umsetzen), 2 = Aufruf- oder gh-Fehler
  * (fail-closed). Brain-Seite: docs/sicherheit-agenten.md. Der Kern ist pur, gh ist injizierbar (Test).
  */
-import { execFileSync } from "node:child_process";
+import { ghText } from "./gh-cli.mjs";
 import { pathToFileURL } from "node:url";
 
 /** REST-Logins vertrauter Bots (zusätzlich zum Repo-Owner); gelten nur mit `type === "Bot"`. */
@@ -144,8 +144,7 @@ export function pruefe(argv, gh) {
 }
 
 function main(argv) {
-  const gh = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
-  const { code, out, err } = pruefe(argv, gh);
+  const { code, out, err } = pruefe(argv, (args) => ghText(args));
   process.stdout.write(out);
   process.stderr.write(err);
   process.exitCode = code;

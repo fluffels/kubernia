@@ -84,7 +84,7 @@ export function table(headers: string[], rows: (string | number)[][]): string {
 }
 
 /* ---------- Eingabe-Parsing: Vorschläge & Flags (#499) ----------
- * Reine, zustandslose Helfer, die vorher als `_editDistance`/`_suggest`/`_flagValue`/
+ * Reine, zustandslose Helfer, die vorher als `_editDistance`/`_suggest`/
  * `_multiFlag`-Methoden in sim.ts hingen. Da sie kein bisschen Cluster-Zustand brauchen,
  * gehören sie hierher zu den geteilten Sim-Helfern – das hält den sim.ts-Kern unter dem
  * God-File-Budget und verschmälert die Host-Interfaces (KubectlHost/DockerHost/…), die
@@ -111,15 +111,6 @@ export function suggest(word: string, list: string[]): string | null {
   }
   const limit = word.length <= 4 ? 1 : 2; // bei kurzen Wörtern strenger
   return bestD <= limit && bestD > 0 ? best : null;
-}
-
-/** Wert hinter einer Flag finden: unterstützt "-n wert" und "-n=wert". */
-export function flagValue(tokens: string[], flag: string): string | null {
-  for (let i = 0; i < tokens.length; i++) {
-    if (tokens[i] === flag) return tokens[i + 1] || null;
-    if (tokens[i].startsWith(flag + "=")) return tokens[i].slice(flag.length + 1);
-  }
-  return null;
 }
 
 /** Alle Werte eines (wiederholbaren UND kommagetrennten) Flags einsammeln, z.B.

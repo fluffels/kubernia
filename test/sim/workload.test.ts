@@ -18,7 +18,7 @@ import {
 } from "../../src/sim/workload";
 import { clusterInvariantViolations } from "../../src/sim/invariants";
 import type { Deployment, StatefulSetRes, PodInstance, PodTemplateSpec } from "../../src/sim/state";
-import { asPodName } from "../../src/sim/names";
+import { asPodName, InvalidSpecError } from "../../src/sim/names";
 import { makeRng } from "../../src/core/rng";
 
 let sim: KQSim;
@@ -340,4 +340,54 @@ test("snapshotPodTemplate: ein nacktes Deployment liefert keine Template-Werte",
 test("Heil-Notizen liegen bei den Primitiven (Wortlaut unverändert)", () => {
   assert.equal(MEM_HEALED_NOTE, "💡 Genug Speicher! Die Pods starten neu und bleiben diesmal stehen – kein OOMKilled mehr.");
   assert.equal(CPU_THROTTLED_NOTE, "💡 CPU-Limit gesetzt! Die Pods werden gedrosselt – der HighPodCPU-Alert fällt auf resolved.");
+});
+
+/* ---------- #1459: Replica-Guard an der Fabrik ---------- */
+
+test("#1459 scaleDeployment lehnt nicht ganzzahlige Replicas ab (2.5, NaN, Infinity) und mutiert nichts", () => {
+  const dep = sim.deployments[0] ?? sim._makeDeployment("web", "nginx", 2);
+  const vorher = dep.pods.length;
+  for (const bad of [2.5, NaN, Infinity]) {
+    assert.throws(() => scaleDeployment(dep, bad, sim.clock, rng), InvalidSpecError, String(bad));
+  }
+  assert.equal(dep.pods.length, vorher);
+  assert.equal(dep.replicas, vorher);
+});
+
+test("#1459 scaleDeployment: negative Replicas werfen (statt endlos zu poppen) und mutieren nichts", () => {
+  const dep = sim.deployments[0] ?? sim._makeDeployment("web", "nginx", 2);
+  assert.throws(() => scaleDeployment(dep, -1, sim.clock, rng), InvalidSpecError);
+  assert.equal(dep.pods.length, dep.replicas);
+  assert.throws(() => new KQSim({ deployments: [{ name: "a", image: "nginx", replicas: -1 }] }), InvalidSpecError);
+});
+
+test("#1459 Grund-Texte: negativ → 'greater than or equal to 0', Bruchzahl → 'whole number'", () => {
+  const dep = sim.deployments[0] ?? sim._makeDeployment("web", "nginx", 2);
+  assert.throws(() => scaleDeployment(dep, -1, sim.clock, rng), /Invalid value: -1: must be greater than or equal to 0/);
+  assert.throws(() => scaleDeployment(dep, 2.5, sim.clock, rng), /Invalid value: 2\.5: must be a whole number/);
+});
+
+test("#1459 scaleDeployment: 0 und 3 sind gültige Grenzfälle, die Invariante bleibt", () => {
+  const dep = sim.deployments[0] ?? sim._makeDeployment("web", "nginx", 2);
+  scaleDeployment(dep, 0, sim.clock, rng);
+  assert.equal(dep.pods.length, 0);
+  scaleDeployment(dep, 3, sim.clock, rng);
+  assert.equal(dep.pods.length, 3);
+  assert.equal(dep.replicas, 3);
+});
+
+test("#1459 Fehlertext im apiserver-Stil mit Tipp", () => {
+  const dep = sim.deployments[0] ?? sim._makeDeployment("web", "nginx", 2);
+  try { scaleDeployment(dep, 2.5, sim.clock, rng); assert.fail("sollte werfen"); } catch (e) {
+    assert.ok(e instanceof InvalidSpecError);
+    assert.match(e.message, /The Deployment "[a-z0-9-]+" is invalid: spec\.replicas: Invalid value: 2\.5/);
+    assert.ok(e.tip);
+  }
+});
+
+test("#1459 die Fabriken lehnen ungültige Replicas ab (Deployment und StatefulSet, Szenario-Aufbau)", () => {
+  assert.throws(() => new KQSim({ deployments: [{ name: "a", image: "nginx", replicas: 2.5 }] }), InvalidSpecError);
+  assert.throws(() => new KQSim({ statefulSets: [{ name: "db", image: "postgres", replicas: 2.5 }] }), InvalidSpecError);
+  assert.throws(() => new KQSim({ statefulSets: [{ name: "db", image: "postgres", replicas: -1 }] }), InvalidSpecError);
+  assert.doesNotThrow(() => new KQSim({ statefulSets: [{ name: "db", image: "postgres", replicas: 0 }] }));
 });

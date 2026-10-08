@@ -24,7 +24,7 @@
 import type { ClusterNode, Deployment, PodInstance, PodTemplateSpec, PvcRes, StatefulSetRes } from "./state";
 import { makePodName } from "./util";
 import { podTemplateHash } from "./replicasets";
-import { asPodName } from "./names";
+import { asPodName, InvalidSpecError } from "./names";
 import { isControlPlane } from "./nodes";
 
 /** Eine frische Pod-Instanz für ein Deployment: neuer Zufallsname im K8s-Stil,
@@ -76,10 +76,23 @@ export function statefulPodNode(nodes: readonly ClusterNode[], pod: { name: stri
   return workers[(Number.isNaN(ordinal) ? 0 : ordinal) % workers.length].name;
 }
 
+/** Der Replica-Guard (#1459): nur ganze Zahlen ≥ 0 sind ein gültiges Soll. Eine negative Zahl ließe
+ *  `scaleDeployment` endlos `pop()`en, eine Bruchzahl bräche `pods.length === replicas`. Wirft vor jeder
+ *  Mutation (wie der apiserver: `spec.replicas: Invalid value`); jede Fabrik und jeder künftige Aufrufer
+ *  läuft hier durch, nicht nur der Rand von `kubectl scale`. */
+export function assertReplicas(kind: "Deployment" | "StatefulSet", name: string, replicas: number): void {
+  if (Number.isInteger(replicas) && replicas >= 0) return;
+  const grund = Number.isInteger(replicas) ? "must be greater than or equal to 0" : "must be a whole number";
+  throw new InvalidSpecError(
+    "The " + kind + ' "' + name + '" is invalid: spec.replicas: Invalid value: ' + replicas + ": " + grund,
+    "Replicas sind eine ganze Zahl ab 0, z.B. 'kubectl scale deployment " + name + " --replicas=3'.");
+}
+
 /** Skaliert ein Deployment auf `target` Replicas und hält dabei die Invariante
  *  `pods.length === replicas`: fehlende Pods kommen frisch dazu, überzählige fallen
  *  weg, und `replicas` wird gemeinsam gesetzt – nie das eine ohne das andere. */
 export function scaleDeployment(dep: Deployment, target: number, clock: number, rng: () => number): void {
+  assertReplicas("Deployment", dep.name, target);
   while (dep.pods.length < target) dep.pods.push(newDeploymentPod(dep, clock, rng));
   while (dep.pods.length > target) dep.pods.pop();
   dep.replicas = target;

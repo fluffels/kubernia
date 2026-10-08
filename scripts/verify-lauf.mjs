@@ -16,7 +16,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolveBase } from "./check-diffsize.mjs";
-import { kettenSchritte } from "./docs-gen/markdown.mjs";
+import { kettenSchritte } from "./docs-gen/npm-ketten.mjs";
 
 const WURZEL = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -134,15 +134,21 @@ export function engungSicher(lade) {
   }
 }
 
-const ladeEngung = () => engungSicher(ladeEngungUngesichert);
+/** Die echten Zugriffe auf git und das Dateisystem; `ladeEngung` nimmt sie injiziert (Test ohne Repo). */
+const ECHTE_ZUGRIFFE = { git, existiert: (d) => existsSync(join(WURZEL, d)), sammleTests: () => sammleTests() };
 
-function ladeEngungUngesichert() {
-  const base = resolveBase(git);
+/** Der Slice als Einengung; jeder Fehler beim Laden (git, Dateisystem) endet fail-closed bei „voll“ mit Grund. */
+export function ladeEngung(zugriffe = ECHTE_ZUGRIFFE) {
+  return engungSicher(() => ladeEngungUngesichert(zugriffe));
+}
+
+function ladeEngungUngesichert({ git: g, existiert, sammleTests: tests }) {
+  const base = resolveBase(g);
   if (!base) return bestimmeEngung({ base: null });
-  const geaendert = liste(git(["diff", "--name-only", "-z", "--diff-filter=d", base]));
-  const neu = liste(git(["ls-files", "-z", "--others", "--exclude-standard"]));
-  const dateien = [...new Set([...geaendert, ...neu])].filter((d) => existsSync(join(WURZEL, d)));
-  return bestimmeEngung({ base, dateien, tests: sammleTests() });
+  const geaendert = liste(g(["diff", "--name-only", "-z", "--diff-filter=d", base]));
+  const neu = liste(g(["ls-files", "-z", "--others", "--exclude-standard"]));
+  const dateien = [...new Set([...geaendert, ...neu])].filter((d) => existiert(d));
+  return bestimmeEngung({ base, dateien, tests: tests() });
 }
 
 const BIN = { eslint: "node_modules/eslint/bin/eslint.js", vitest: "node_modules/vitest/vitest.mjs" };
@@ -152,6 +158,11 @@ function echterLauf(job) {
   const r = job.art === "npm"
     ? spawnSync(`npm run -s ${job.schritt}`, { ...opt, shell: true })
     : spawnSync(process.execPath, [join(WURZEL, BIN[job.args[0]]), ...job.args.slice(1)], opt);
+  return ergebnisAusProzess(r);
+}
+
+/** Ergebnis `{ status, output }` aus dem Rückgabewert von `spawnSync`; Signal, Timeout und Startfehler (`status` null) sind rot. Pur. */
+export function ergebnisAusProzess(r) {
   return { status: statusVon(r), output: `${r.stdout ?? ""}${r.stderr ?? ""}${r.error ? String(r.error) : ""}` };
 }
 
@@ -161,15 +172,19 @@ export const exitCode = (ergebnisse) => (ergebnisse.every((e) => e.ok) ? 0 : 1);
 /** Status eines beendeten Prozesses; ein Abbruch per Signal oder Timeout (`status` null) gilt als rot, nie als grün. Pur. */
 export const statusVon = (r) => r.status ?? 1;
 
-export function main(argv = process.argv.slice(2)) {
+/**
+ * Der Lauf als Funktion (#1428 Z9): liefert den Exit-Code statt `process.exitCode` zu setzen, die Zugriffe sind injizierbar
+ * (`deps.pkg`, `deps.ladeEngung`, `deps.run`, `deps.log`). Der Direktaufruf unten setzt `process.exitCode`.
+ */
+export function main(argv = process.argv.slice(2), deps = {}) {
+  const { pkg = JSON.parse(readFileSync(join(WURZEL, "package.json"), "utf8")), ladeEngung: lade = ladeEngung, run = echterLauf, log = console.log } = deps;
   const changed = argv.includes("--changed");
-  const pkg = JSON.parse(readFileSync(join(WURZEL, "package.json"), "utf8"));
   const schritte = ketteAusPackage(pkg);
-  const engung = changed ? ladeEngung() : null;
+  const engung = changed ? lade() : null;
   const hinweis = engung?.voll ? `Lint und Test voll (${engung.grund})` : "";
-  const ergebnisse = laufe({ schritte, engung, run: echterLauf });
-  console.log(bericht(ergebnisse, { modus: changed ? "changed" : "kompakt", hinweis }));
-  process.exitCode = exitCode(ergebnisse);
+  const ergebnisse = laufe({ schritte, engung, run });
+  log(bericht(ergebnisse, { modus: changed ? "changed" : "kompakt", hinweis }));
+  return exitCode(ergebnisse);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = main();

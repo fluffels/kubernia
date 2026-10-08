@@ -32,7 +32,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { ghText } from "./gh-cli.mjs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -71,7 +71,7 @@ export function parseOpenHarnessTickets(md) {
 /** true, wenn `gh` als ausführbares Kommando verfügbar ist. */
 function ghAvailable() {
   try {
-    execFileSync("gh", ["--version"], { stdio: "ignore" });
+    ghText(["--version"], { stdio: "ignore" });
     return true;
   } catch {
     return false;
@@ -81,10 +81,7 @@ function ghAvailable() {
 /** GitHub-Status EINER Nummer: "OPEN" | "CLOSED" | null (nicht ermittelbar). */
 function ghStateOf(number) {
   try {
-    const out = execFileSync("gh", ["issue", "view", String(number), "--json", "state", "-q", ".state"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const out = ghText(["issue", "view", String(number), "--json", "state", "-q", ".state"]);
     return out.trim().toUpperCase();
   } catch {
     return null;

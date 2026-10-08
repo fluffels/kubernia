@@ -230,6 +230,9 @@ export function verwaisteLensWorktrees(registeredPaths, worktreesDir) {
   });
 }
 
+/** Interpreter-Namen (ohne `.exe`), die ein Skript von stdin lesen können (#1428 Z16), und die Kommandozeile mit dem Argument `-` am Ende. */
+const STDIN_INTERPRETER = /^(?:python[\d.]*|py|node)$/;
+const STDIN_SKRIPT = /\s-\s*$/;
 /** Werkzeug-Prozesse, die als vergessene Hilfsserver oder Stubs einen Worktree-Ordner festhalten können (Name ohne `.exe`). */
 export const WERKZEUG_PROZESSE = new Set(["node", "python", "python3", "bash", "sh", "pwsh", "powershell", "cmd", "git", "npm", "npx"]);
 
@@ -241,7 +244,10 @@ const MAX_HALTER = 8;
  * `{ pid, ppid, name, commandLine, startMs }`. Kandidat ist (a) ein Prozess, dessen Kommandozeile den Ordnerpfad enthält
  * (Schrägstrich-, Backslash- und MSYS-Form `/c/…`, ohne Groß-/Kleinschreibung), oder (b) ein verwaister Prozess
  * (Elternprozess existiert nicht mehr) eines Werkzeug-Namens, gestartet nach dem Anlegen des Ordners (`ordnerGeburtMs`;
- * `null` = unbekannt, dann zählt jeder verwaiste Werkzeug-Prozess). Der eigene Prozess ist ausgenommen. Pure.
+ * `null` = unbekannt, dann zählt jeder verwaiste Werkzeug-Prozess), oder (c, #1428) ein Interpreter-Prozess, der ein Skript von stdin
+ * liest (`python -`, `python3 -`, `py -`, `node -`; ein Heredoc im Bash-Tool), gestartet nach dem Anlegen des Ordners: der Bash-Wrapper
+ * des Tools (`bash.exe -c "… eval '<Befehl>' < /dev/null && pwd -P"`) nennt den Ordner nicht, (a) und (b) verfehlen ihn. Nur NENNEN,
+ * nie beenden. Der eigene Prozess ist ausgenommen. Pure.
  */
 export function moeglicheHalter(prozesse, pfad, ordnerGeburtMs, eigenePid = process.pid) {
   const slash = norm(pfad).toLowerCase();
@@ -257,6 +263,8 @@ export function moeglicheHalter(prozesse, pfad, ordnerGeburtMs, eigenePid = proc
       halter.push({ pid: p.pid, name: p.name, commandLine: p.commandLine ?? "", grund: "Kommandozeile liegt im Worktree" });
     } else if (WERKZEUG_PROZESSE.has(name) && !pids.has(p.ppid) && (ordnerGeburtMs === null || p.startMs >= ordnerGeburtMs)) {
       halter.push({ pid: p.pid, name: p.name, commandLine: p.commandLine ?? "", grund: "verwaist (Elternprozess beendet), nach dem Anlegen des Ordners gestartet" });
+    } else if (STDIN_INTERPRETER.test(name) && STDIN_SKRIPT.test(cmd) && (ordnerGeburtMs === null || p.startMs >= ordnerGeburtMs)) {
+      halter.push({ pid: p.pid, name: p.name, commandLine: p.commandLine ?? "", grund: "liest ein Skript von stdin (z.B. `python -`), nach dem Anlegen des Ordners gestartet" });
     }
   }
   return halter.slice(0, MAX_HALTER);

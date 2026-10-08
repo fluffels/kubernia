@@ -21,15 +21,21 @@
  * außerdem den Titelmarker des Tickets (docs/ticket-reihenfolge.md): ohne ihn zählt es nicht zum Kopf, Exit 2.
  *
  * Nummern, die die REST-Board-Liste nicht liefert (frische Items kommen teils lange verzögert), holt ein GraphQL-Fallback
- * (`issue.projectItems`, gebündelte Aliase in einer Abfrage); steht ein Issue wirklich nicht im Board, wird es gemeldet und übersprungen.
+ * (`issue.projectItems`, gebündelte Aliase in einer Abfrage); steht ein OFFENES Issue wirklich nicht im Board (frisch per `gh issue create`
+ * angelegt, nie aufgenommen), nimmt das Skript es selbst auf (Status Todo, #1428; `--dry-run`: „würde aufnehmen“). Geschlossene, PRs, unbekannte
+ * Nummern und der `--after`-Anker werden nie aufgenommen: „fehlt im Board, nicht aufgenommen: <Grund>“, Exit 1.
  * Bei Rate-Limit sofort stoppen, den Rest melden.
  */
 import { pathToFileURL } from "node:url";
 import {
   NOTFALL_ARTEN,
+  REPO,
   abortMessage,
+  addToBoardTodo,
+  aufnahmePlan,
   ergaenzeFehlende,
   fehlendeNummern,
+  ghJson,
   itemsUeberIssues,
   loadItems,
   loadOpenIssueNumbers,
@@ -38,6 +44,7 @@ import {
   planMitKorrektur,
   positionOderWarnung,
   setPosition,
+  todoItem,
 } from "./board-lib.mjs";
 
 export { NOTFALL_ARTEN };
@@ -79,6 +86,35 @@ function parseOhneNotfall(rest, dry) {
   return nums.length < 2 ? null : { anchor: nums[0], numbers: nums.slice(1), dry };
 }
 
+/**
+ * Z37 (#1428): Tickets, die auch der GraphQL-Fallback nicht im Board fand (frisch per `gh issue create` angelegt, nie aufgenommen), nimmt das
+ * Skript selbst auf (`addProjectV2ItemById` + Status Todo; `--dry-run`: nur Meldung). Nur offene Issues; geschlossene, PRs, unbekannte und der
+ * `--after`-Anker nicht (Meldung „fehlt im Board, nicht aufgenommen: <Grund>“, am Ende Exit 1).
+ */
+function nimmFehlendeAuf(items, args) {
+  const fehlend = fehlendeNummern(items, args);
+  if (fehlend.length === 0) return items;
+  const issues = {};
+  for (const nr of fehlend) {
+    try {
+      issues[nr] = ghJson(["api", `repos/${REPO}/issues/${nr}`]);
+    } catch {
+      issues[nr] = null;
+    }
+  }
+  const { aufnehmen, abgelehnt } = aufnahmePlan(fehlend, issues, args.anchor);
+  for (const a of abgelehnt) console.error(`⚠ #${a.number} fehlt im Board, nicht aufgenommen: ${a.grund}.`);
+  const neu = aufnehmen.map((a) => {
+    if (args.dry) {
+      console.log(`#${a.number} fehlt im Board: würde aufnehmen (Status Todo).`);
+      return todoItem({ id: `(neu #${a.number})`, number: a.number, title: a.title });
+    }
+    console.log(`#${a.number} fehlte im Board: aufgenommen (Status Todo).`);
+    return todoItem({ id: addToBoardTodo(a.nodeId), number: a.number, title: a.title });
+  });
+  return ergaenzeFehlende(items, neu);
+}
+
 /** Bericht: offene Issues, die nicht auf dem Board stehen (Einsortieren bleibt eine Abwägung der Agentin). */
 function reportMissing() {
   try {
@@ -104,6 +140,7 @@ async function main(argv = process.argv.slice(2)) {
     // Fallback: frisch aufgenommene Items fehlen in der REST-Liste teils lange; ihre Item-ID per GraphQL holen (eine gebündelte Abfrage).
     const fehlend = fehlendeNummern(items, args);
     if (fehlend.length > 0) items = ergaenzeFehlende(items, itemsUeberIssues(fehlend));
+    items = nimmFehlendeAuf(items, args);
     if (args.notfall) {
       const fehler = notfallTitelFehler(items, args.numbers, args.notfall);
       if (fehler) {

@@ -14,7 +14,7 @@
       "check:docdrift": "dokumentierte `npm run`-Kommandos, interne Doku-Links und Anker, verify-Ketten-Kopien",
       "check:docgen": "generierte Doku-Abschnitte (`GEN:`-Marker) stimmen mit dem Repo überein",
       "check:c4": "LikeC4-Modell: validiert, formatiert; Schichten, Phaser, Schicht-Kanten und Top-Level-Module stimmen mit `scripts/layers.cjs` und `src/` überein",
-      "check:internalrefs": "keine internen Bezüge im öffentlichen Repo",
+      "check:internalrefs": "keine internen Bezüge im öffentlichen Repo, keine Steuerbytes (NUL) in Textdateien",
       "check:lockfile": "Lockfile passt zur `package.json`",
       "check:diffsize": "Slice-Größe (Dateien und Zeilen gegen die Merge-Base)",
       "test": "Verhalten von Domäne, Sim, Wirtschaft und Harness-Wächtern, inkl. Negativ- und Grenzfälle (Vitest)",

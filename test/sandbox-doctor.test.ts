@@ -23,6 +23,7 @@ type Settings = {
   };
 };
 type Doktor = {
+  wslArt: (release: string) => "wsl1" | "wsl2" | null;
   pruefePlattform: (a: { platform: string; release: string; env?: Record<string, string | undefined> }) => Ergebnis[];
   pruefeWerkzeuge: (which: (name: string) => boolean) => Ergebnis[];
   pruefeWslConf: (text: string | null) => Ergebnis[];
@@ -48,6 +49,17 @@ describe("pruefePlattform", () => {
   });
   test("WSL2 ist ok", () => {
     expect(stati(D.pruefePlattform({ platform: "linux", release: "5.15.153.1-microsoft-standard-WSL2", env: {} }))).toEqual(["OK"]);
+  });
+  test("WSL2-Kernel ohne WSL2-Suffix (microsoft-standard) ist ok, nicht WSL1 (#1428 Z26)", () => {
+    expect(stati(D.pruefePlattform({ platform: "linux", release: "4.19.104-microsoft-standard", env: {} }))).toEqual(["OK"]);
+    expect(D.pruefePlattform({ platform: "linux", release: "4.19.104-microsoft-standard", env: {} })[0].text).toContain("WSL2");
+  });
+  test("wslArt unterscheidet WSL2, WSL1 und kein WSL am Kernel-Release (#1428 Z26)", () => {
+    expect(D.wslArt("5.15.153.1-microsoft-standard-WSL2")).toBe("wsl2");
+    expect(D.wslArt("4.19.104-microsoft-standard")).toBe("wsl2");
+    expect(D.wslArt("4.4.0-19041-Microsoft")).toBe("wsl1");
+    expect(D.wslArt("6.8.0-45-generic")).toBeNull();
+    expect(D.wslArt(undefined as unknown as string)).toBeNull();
   });
   test("reines Linux ist ok", () => {
     expect(stati(D.pruefePlattform({ platform: "linux", release: "6.8.0-45-generic", env: {} }))).toEqual(["OK"]);

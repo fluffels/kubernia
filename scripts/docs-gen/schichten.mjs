@@ -144,8 +144,33 @@ function cruise(rootDir, args, pruefbefehl) {
   }
 }
 
+const escRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Konsistenz der `schichten.cruise`-Argumente mit der Quellwurzel des Modells (#1428 Z13): die Config nennt das Cruise-Ziel und das
+ * `--collapse`-Muster als Text; stünde dort ein anderes Verzeichnis als `SCHICHT_MODELL.quellwurzel`, verdichtete das Diagramm
+ * still das Falsche. Prüft nur, was vorhanden ist: ein `dependency-cruiser`-Aufruf braucht das Ziel `<quellwurzel ohne Slash>` als
+ * erstes Argument danach, ein `--collapse` das Muster `^(<quellwurzel>|node_modules)/[^/]+/`. Liefert die Meldung oder `null`. Pur.
+ */
+export function pruefeCruiseArgs(args, modell) {
+  const q = modell.quellwurzel.replace(/\/$/, "");
+  const liste = Array.isArray(args) ? args.map(String) : [];
+  const bin = liste.findIndex((a) => /dependency-cruiser/.test(a));
+  if (bin >= 0 && liste[bin + 1] !== q) {
+    return `schichten.cruise: Ziel „${liste[bin + 1] ?? "(fehlt)"}“ passt nicht zur Quellwurzel „${modell.quellwurzel}“ des Schicht-Modells (erwartet: ${q})`;
+  }
+  const c = liste.indexOf("--collapse");
+  const soll = `^(${escRegex(q)}|node_modules)/[^/]+/`;
+  if (c >= 0 && liste[c + 1] !== soll) {
+    return `schichten.cruise: --collapse „${liste[c + 1] ?? "(fehlt)"}“ passt nicht zur Quellwurzel „${modell.quellwurzel}“ (erwartet: ${soll})`;
+  }
+  return null;
+}
+
 export function schichtenIstGenerator(ctx) {
   const { modell, cfg } = geladenesModell(ctx);
+  const passt = pruefeCruiseArgs(cfg.cruise, modell);
+  if (passt) throw new Error(passt);
   const ist = istKanten(cruise(ctx.rootDir, cfg.cruise, cfg.pruefbefehl), modell, cfg.pruefbefehl);
   return `${renderDiagramm(modell, ist)}\n\n${ungenutztZeile(modell, sollKanten(modell), ist)}`;
 }

@@ -11,10 +11,10 @@
  * `created=>=` wirkt nur tagesgenau; das exakte Zeitfenster eines PRs filtert `distinctRoteShas`.
  */
 
-import { execFileSync } from "node:child_process";
+import { ghText } from "./gh-cli.mjs";
 
 /** Der gemeinsame `gh`-Runner (`gh <args>` → stdout als Text): Default aller Zähler, `runGh` überschreibt ihn im Test. */
-export const ghText = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+export { ghText };
 
 /** Ab dieser Trefferzahl gilt die Liste als von der API abgeschnitten. */
 export const MAX_TREFFER = 1000;

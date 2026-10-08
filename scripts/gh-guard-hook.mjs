@@ -68,6 +68,13 @@ const MUTATIONEN = [
   /\b(create|update)BranchProtectionRule(?=\s*\()/,
   /\b(create|update)RepositoryRuleset(?=\s*\()/,
   /\bupdateRefs?(?=\s*\()/,
+  // Project-Einstellungen (#1428 Z24): Ansichten, Felder, Sichtbarkeit, Zusammenarbeit. NICHT die Alltags-Mutationen auf Items
+  // (addProjectV2ItemById, updateProjectV2ItemPosition, updateProjectV2ItemFieldValue): `Item` folgt dort auf `ProjectV2`.
+  /\b(create|update)ProjectV2(?=\s*\()/,
+  /\b(create|update)ProjectV2(Field|View|Collaborators)(?=\s*\()/,
+  /\bcopyProjectV2(?=\s*\()/,
+  /\b(link|unlink)ProjectV2(To|From)\w+(?=\s*\()/,
+  /\b(un)?markProjectV2AsTemplate(?=\s*\()/,
 ];
 
 /** REST-Pfade für Einstellungen und Veröffentlichung. */

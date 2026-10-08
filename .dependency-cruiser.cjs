@@ -10,6 +10,9 @@
 // eine neue Schicht muss ihre Richtungen im Modell deklarieren.
 const { SCHICHT_MODELL, verbotsRegeln } = require("./scripts/layers.cjs");
 
+// Die Quellwurzel (z.B. "src/") steht nur im Modell (#1428 Z13): die Waisen-Ausnahmen unten leiten sich daraus ab, regex-escaped.
+const QUELLE = SCHICHT_MODELL.quellwurzel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 module.exports = {
   forbidden: [
     ...verbotsRegeln(SCHICHT_MODELL),
@@ -38,11 +41,11 @@ module.exports = {
           // Lernpfad-Wächter: enthält Domänenlogik (lernpfadVerstoesse + introOrderFromContent), die
           // bewusst NUR der Test-Wächter test/learnorder.test.ts aufruft – kein src-Laufzeit-Import. Da
           // check:arch nur `src` cruist, gilt das Modul sonst fälschlich als verwaist (#390).
-          "^src/content/learnorder\\.ts$",
+          `^${QUELLE}content/learnorder\\.ts$`,
           // Quiz-Korrektheits-Wächter (#597): reine Prüflogik (correctAnswers/snapshotViolations/
           // indexConventionViolations), die bewusst NUR der Test-Wächter test/quizcheck.test.ts
           // aufruft – kein src-Laufzeit-Import, genau wie learnorder.ts darüber.
-          "^src/content/quizcheck\\.ts$",
+          `^${QUELLE}content/quizcheck\\.ts$`,
         ],
       },
       to: {},

@@ -24,13 +24,13 @@
  * dünnen IO-Helfer (Dateisuche, gh) sind bewusst ungetestet.
  */
 
-import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseNachweis } from "./slice-override.mjs";
 import { ghText, zaehleRoteCommits } from "./ci-laeufe.mjs";
+import { ghJson } from "./gh-cli.mjs";
 import { EINGABE_TOOLS, brainMetrics, mitEingabe, pflegeIntervals, toolEventsFromLangfuse, toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { ladeSessionDatei, transkriptZeilen } from "./transkript.mjs";
 import { fehlerArten, pruefLaeufe, wiederlesen } from "./tool-metriken.mjs";
@@ -540,10 +540,6 @@ export async function fetchSessionObservations(
 /** Gemergt ohne CI-Fix = gemergt und kein einziger roter CI-Push. */
 export function mergedWithoutRework(mergedAt, failedPushes) {
   return Boolean(mergedAt) && failedPushes === 0;
-}
-
-function ghJson(args) {
-  return JSON.parse(execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }));
 }
 
 /** Claim-Zeitpunkt = erstes `assigned`-Event im Issue-Verlauf. */

@@ -99,3 +99,9 @@ Entscheidung: die Quote steht in `SPIEL_QUOTE` (`scripts/board-takt.mjs`) und wi
 Bewusst **nicht** gebaut: ein Zurückstufen des Sammeltickets hinter drei Spiel-Tickets. `board-place` und `sammelticket-anlegen` ziehen das Sammelticket auf die Position laut AGENTS.md vor; ein Rückstufen im Takt gegen diese Korrektur wechselte bei jedem Einsortieren hin und her, und die Board-Reihenfolge bliebe nicht mehr rein manuell ([ADR 0012](0012-harness-autonomie-audit-spur.md), #1258). Wer die Quote hart durchsetzen will, braucht eine gemeinsame Positionsregel für alle drei Skripte.
 
 Zusätzlich gibt es im Project zwei Ansichten neben „View 1“: „Spiel“ (Filter `-label:area:harness`) und „Agentic Engineering“ (Filter `label:area:harness`). Die Auswahl bleibt ein Board (View 1, REST-Liste). Harness-Tickets entstehen nur aus Evidenz ([ticket-reihenfolge.md](../ticket-reihenfolge.md#sammelticket-harness-härtung-gesammelt-1199)).
+
+## Fortschreibung #1428 (2026-10-08): Spielquote nach Issue-Label
+
+Anlass: die Zählung nach Commit-Scope (`(harness)`) verfehlte Harness-Arbeit mit anderem Scope (`docs(adr)`, `fix(ci)`) und zählte `feat(harness)` zu einem Spiel-Issue falsch; die Board-Ansichten und AGENTS.md nutzen dagegen das Label `area:harness`.
+
+Entscheidung: `istHarnessCommit` ordnet einen Commit über die `#N`-Referenzen seiner Titelzeile den geschlossenen `area:harness`-Issues zu (Menge der letzten 90 Tage; `main` lädt sie für die Fenster ohnehin, kein zusätzlicher Aufruf je Merge). Eine Referenz in der Menge heißt Harness, Referenzen ohne Treffer heißen Spiel. Fehlt jede Referenz, bleibt der Rückfall auf den Scope `(harness)`; diese Grenze gilt für Handarbeit ohne `#N`. Die Verdrahtung von `main` steht als `fuehreTaktAus` mit injizierter I/O und ist mit Fakes getestet. Die Bindungstests an diesen ADR lesen den jeweils letzten Treffer, damit Fortschreibungen die Zahlen nur am Ende ändern dürfen.

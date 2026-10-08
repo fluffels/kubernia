@@ -13,18 +13,22 @@ import type { Deployment } from "../state";
 import type { KubectlHost } from "./host";
 import { rollOut, scaleTo } from "./rollout";
 import { resolveKind, type ResourceKind } from "./resources";
-import { positionals, notSimulated, type KubectlSub } from "./args";
+import { positionals, notSimulated, slashRef, type KubectlSub } from "./args";
 
 /** Eine Objekt-Referenz `<typ>/<name>` (Slash) ODER `<typ> <name>` (getrennt) – egal an welcher Position
  *  sie steht. Der Typ löst über die Registry auf (`deploy`, `deployments`, `Deployment` …); Tokens, die
  *  kein Typ sind (z.B. `web=nginx:1`), werden übersprungen. `null`, wenn keine Referenz dasteht. */
-function resolveRef(sub: KubectlSub, t: string[], from: number): { kind: ResourceKind; name: string } | null {
+function resolveRef(sub: KubectlSub, t: string[], from: number): { kind: ResourceKind; name: string } | { error: string } | null {
   const pos = positionals(sub, t, from);
   for (let i = 0; i < pos.length; i++) {
-    const slash = pos[i].indexOf("/");
-    const kind = resolveKind(slash > 0 ? pos[i].slice(0, slash) : pos[i]);
+    const ref = slashRef(pos[i]);
+    // Ein Token mit kaputter Slash-Form ist nur dann ein Fehler, wenn es mit einem Typ beginnt
+    // (`deploy/a/b`); `web=reg/img:1` ist keine Referenz und wird übersprungen.
+    if (ref && "error" in ref && !resolveKind(pos[i].split("/")[0])) continue;
+    if (ref && "error" in ref) return ref;
+    const kind = resolveKind(ref ? ref.typ : pos[i]);
     if (!kind) continue;
-    const name = slash > 0 ? pos[i].slice(slash + 1) : pos[i + 1];
+    const name = ref ? ref.name : pos[i + 1];
     return name ? { kind, name } : null;
   }
   return null;
@@ -36,6 +40,7 @@ function resolveRef(sub: KubectlSub, t: string[], from: number): { kind: Resourc
 function resolveDeploymentRef(host: KubectlHost, sub: KubectlSub, t: string[], from: number): { name: string | null; error?: string } {
   const ref = resolveRef(sub, t, from);
   if (!ref) return { name: null };
+  if ("error" in ref) return { name: null, error: host._err(ref.error) };
   if (ref.kind.plural === "deployments") return { name: ref.name };
   return { name: null, error: notSimulated(host, "'kubectl " + sub + " " + ref.kind.plural + "/<name>' – das geht nur für Deployments.", ["kubectl " + sub + " deployment <name> …"]) };
 }

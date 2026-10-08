@@ -2,7 +2,8 @@
 // npm-Ketten (`verify`, `verify:full`, …) plus Beschreibungs-Map und reinen CI-Gates.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { kettenSchritte, leseJson, renderTable } from "./markdown.mjs";
+import { leseJson, renderTable } from "./markdown.mjs";
+import { kettenSchritte } from "./npm-ketten.mjs";
 
 /** Anzeigebefehl eines Kettenschritts. */
 const display = (step, scripts) => (Object.hasOwn(scripts, step) ? (step === "test" ? "npm test" : `npm run ${step}`) : step);

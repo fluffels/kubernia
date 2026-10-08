@@ -22,6 +22,7 @@
  */
 import { DEFAULT_NAMESPACE, type ClusterState, type Deployment, type ServiceRes, type ServiceSpec, type Broken, type HelmRepo } from "./state";
 import { table } from "./util";
+import { flag, checkFlags, positionalArgs, specOfSub, subEntry, type SubEntry } from "./cliargs";
 import { addDeployment, removeDeployment, scaleDeployment } from "./workload";
 
 /** Was die helm-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
@@ -41,7 +42,7 @@ export interface HelmHost extends Pick<ClusterState, "helmRepos" | "charts" | "r
 
 /** Liest `--set <key>=<zahl>` aus der rohen Eingabe (helm install/upgrade). */
 export function setValue(raw: string, key: string): number | null {
-  const m = raw.match(new RegExp("--set\\s+" + key + "=(\\d+)"));
+  const m = raw.match(new RegExp("--set(?:=|\\s+)" + key + "=(\\d+)"));
   return m ? parseInt(m[1], 10) : null;
 }
 
@@ -176,7 +177,7 @@ function helmCreate(host: HelmHost, t: string[]): string {
 
 /** `helm template [RELEASE] <chart>` – Vorlagen + Werte zu fertigen Manifesten rendern (ohne Install, #273). */
 function helmTemplate(host: HelmHost, t: string[]): string {
-  const args = t.slice(2).filter(a => !a.startsWith("-"));
+  const args = helmArgs("template", t);
   if (args.length === 0) return host._err("helm template: Welches Chart?", "Muster: 'helm template <chart>' – z.B. das von 'helm create'.");
   const ref = args[args.length - 1];
   const release = args.length >= 2 ? args[0] : "release-name";
@@ -253,8 +254,8 @@ function helmPackage(host: HelmHost, t: string[]): string {
 
 /** `helm install <release> <chart>` – lokales oder Repo-Chart als Release ausrollen. */
 function helmInstall(host: HelmHost, t: string[], raw: string): string {
-  const release = t[2], chart = t[3];
-  if (!release || !chart || release.startsWith("-")) return host._err("helm install: Release-Name und Chart fehlen.", "Muster: 'helm install <mein-name> bitnami/nginx' oder '<mein-name> ./<eigenes-chart>'");
+  const [release, chart] = helmArgs("install", t);
+  if (!release || !chart) return host._err("helm install: Release-Name und Chart fehlen.", "Muster: 'helm install <mein-name> bitnami/nginx' oder '<mein-name> ./<eigenes-chart>'");
   // Lokales Chart (eigenes, mit 'helm create' gebautes) vs. Repo-Chart unterscheiden.
   const localName = chartNameOf(chart);
   const isLocal = chart.startsWith(".") || chart.startsWith("/") || host.charts.some(c => c.name === localName);
@@ -292,7 +293,7 @@ function helmList(host: HelmHost): string {
 
 /** `helm upgrade <release> <chart>` – neue Revision, optional Replicas per `--set`. */
 function helmUpgrade(host: HelmHost, t: string[], raw: string): string {
-  const release = t[2], chart = t[3];
+  const [release, chart] = helmArgs("upgrade", t);
   if (!release || !chart) return host._err("helm upgrade: Release und Chart fehlen.", "Muster: 'helm upgrade <release> bitnami/nginx --set replicaCount=3'");
   const rel = host.releases.find(r => r.name === release);
   if (!rel) return host._err('Error: UPGRADE FAILED: "' + release + '" has no deployed releases', "Welche Releases es gibt: 'helm list'");
@@ -362,32 +363,45 @@ function helmDependency(host: HelmHost, t: string[]): string {
   return host._err("helm dependency: unbekannte Aktion '" + (action || "") + "'", "Gültig: update, build, up");
 }
 
-/** Alias → Handler. Ein neuer Unterbefehl ist ein Eintrag hier + eine Funktion oben –
+// `--set` wird ausgewertet (nur `replicaCount=<n>`); `--values/-f` wird angenommen, aber nicht ausgewertet:
+// die Quest und der Drill lehren die Schichtung mehrerer Werte-Dateien, der Simulator liest sie nicht.
+const SET = flag(true, "--set");
+const VALUES = flag(true, "--values", "-f");
+
+/** Alias → Eintrag (Handler + Flag-Tabelle). Ein neuer Unterbefehl ist ein Eintrag hier + eine Funktion oben –
  *  der Dispatcher (`helmCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz. */
-const HELM_SUBCOMMANDS: Record<string, HelmHandler> = {
-  repo: helmRepo,
-  search: helmSearch,
-  create: helmCreate,
-  template: helmTemplate,
-  lint: helmLint,
-  package: helmPackage,
-  install: helmInstall,
-  list: helmList,
-  ls: helmList,
-  upgrade: helmUpgrade,
-  rollback: helmRollback,
-  uninstall: helmUninstall,
-  delete: helmUninstall,
-  status: helmStatus,
-  dependency: helmDependency,
-  dep: helmDependency,
+const LIST: SubEntry<HelmHandler> = { run: helmList, hints: { "-A": "Der Simulator kennt nur einen Namespace – 'helm list' zeigt alle Releases." } };
+const UNINSTALL: SubEntry<HelmHandler> = { run: helmUninstall };
+const DEPENDENCY: SubEntry<HelmHandler> = { run: helmDependency };
+const HELM_SUBCOMMANDS: Record<string, SubEntry<HelmHandler>> = {
+  repo: { run: helmRepo },
+  search: { run: helmSearch },
+  create: { run: helmCreate },
+  template: { run: helmTemplate },
+  lint: { run: helmLint },
+  package: { run: helmPackage },
+  install: { run: helmInstall, flags: [SET, VALUES] },
+  list: LIST,
+  ls: LIST,
+  upgrade: { run: helmUpgrade, flags: [SET, VALUES] },
+  rollback: { run: helmRollback },
+  uninstall: UNINSTALL,
+  delete: UNINSTALL,
+  status: { run: helmStatus },
+  dependency: DEPENDENCY,
+  dep: DEPENDENCY,
 };
 
-/** Dünner `helm`-Dispatcher: wählt den Unterbefehl-Handler aus `HELM_SUBCOMMANDS`. */
+/** Die Nicht-Flag-Argumente eines Unterbefehls (ohne die Werte seiner Flags). */
+function helmArgs(sub: string, t: string[]): string[] {
+  return positionalArgs(specOfSub("helm " + sub, HELM_SUBCOMMANDS[sub]), t, 2);
+}
+
+/** Dünner `helm`-Dispatcher: wählt den Eintrag aus `HELM_SUBCOMMANDS`, prüft dessen Flags, ruft den Handler. */
 export function helmCommand(host: HelmHost, t: string[], raw: string): string {
   const sub = t[1];
   if (!sub) return host._err("helm: Unterbefehl fehlt.", "Probier z.B. 'helm list'.");
-  const handler = HELM_SUBCOMMANDS[sub];
-  if (!handler) return host._err("helm: unbekannter Unterbefehl '" + sub + "'", "Tippe 'help' für alle Befehle.");
-  return handler(host, t, raw);
+  const entry = subEntry(HELM_SUBCOMMANDS, sub);
+  if (!entry) return host._err("helm: unbekannter Unterbefehl '" + sub + "'", "Tippe 'help' für alle Befehle.");
+  return checkFlags(host, specOfSub("helm " + sub, entry), t, 2) ?? entry.run(host, t, raw);
 }

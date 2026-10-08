@@ -92,7 +92,8 @@ describe("#495 Coverage-Config: Form & Governance", () => {
 
   it("Provider v8, misst nur src-.ts, kein maschinelles Absenken", () => {
     expect(viteConfig).toMatch(/provider:\s*["']v8["']/);
-    expect(viteConfig).toMatch(/include:\s*\[\s*["']src\/\*\*\/\*\.ts["']/);
+    // #1428 Z13: aus der Quellwurzel des Schicht-Modells abgeleitet (SCHICHT_MODELL.quellwurzel = "src/"; die Bindung prüft test/layering.test.ts).
+    expect(viteConfig).toMatch(/include:\s*\[`\$\{SCHICHT_MODELL\.quellwurzel\}\*\*\/\*\.ts`\]/);
     // autoUpdate darf NICHT eingeschaltet sein — Floors werden nur per Commit angehoben.
     expect(viteConfig).not.toMatch(/autoUpdate:\s*true/);
   });

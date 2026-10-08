@@ -23,6 +23,7 @@
 import type { ClusterState, Pipeline, Broken, Deployment } from "./state";
 import { pad, table } from "./util";
 import { addDeployment } from "./workload";
+import { checkFlags, notSimulated, specOfSub, subEntry, type SubEntry } from "./cliargs";
 
 /** Was die glab/CI-Funktionen vom Simulator brauchen (von der `Sim`-Klasse
  *  erfüllt). Bewusst ein schmales Interface statt der ganzen `Sim`-Klasse: es
@@ -61,31 +62,49 @@ export function runPipeline(host: GlabHost): Pipeline {
 }
 
 /* ===================== glab (GitLab CLI) ===================== */
+
+/** `glab ci status|view` – die jüngste Pipeline mit ihren Stages. */
+function glabCiStatus(host: GlabHost): string {
+  const p = host.ci.pipelines[host.ci.pipelines.length - 1];
+  if (!p) return host._err("Keine Pipeline gefunden.", "Eine Pipeline entsteht beim 'git push' – wenn eine .gitlab-ci.yml im Repo liegt.");
+  const icon = (s: string) => (s === "passed" ? "✓" : s === "skipped" ? "–" : "•");
+  const lines = [
+    "Pipeline #" + p.id + "  (Branch " + p.ref + ")   Status: " + (p.status === "passed" ? "passed ✅" : p.status),
+  ];
+  for (const s of p.stages) lines.push("  " + icon(s.status) + " " + pad(s.name, 8) + s.status);
+  if (p.stages.some(s => s.name === "deploy" && s.status === "passed")) {
+    lines.push("🚀 Die deploy-Stage hat den Dienst automatisch ausgerollt – schau mit 'kubectl get pods'.");
+  } else if (p.ref !== "main") {
+    lines.push("ℹ️  deploy übersprungen ('only: main') – auf diesem Branch wird gebaut & getestet, aber nicht deployt.");
+  }
+  return lines.join("\n");
+}
+
+/** `glab ci list` – alle Pipelines, neueste zuerst. */
+function glabCiList(host: GlabHost): string {
+  if (!host.ci.pipelines.length) return "Keine Pipelines. (Entstehen beim 'git push' mit .gitlab-ci.yml im Repo.)";
+  return table(["ID", "BRANCH", "STATUS"],
+    host.ci.pipelines.slice().reverse().map(p => ["#" + p.id, p.ref, p.status]));
+}
+
+type GlabCiHandler = (host: GlabHost) => string;
+
+/** Aktion → Eintrag (Handler + Flag-Tabelle, #1459: die Sim wertet bei `glab ci` keine Flags aus). */
+const STATUS: SubEntry<GlabCiHandler> = { run: glabCiStatus };
+const GLAB_CI_ACTIONS: Record<string, SubEntry<GlabCiHandler>> = {
+  status: STATUS,
+  view: STATUS,
+  list: { run: glabCiList },
+};
+
+const GLAB_KANN = ["glab ci status", "glab ci list"];
+
 export function glabCommand(host: GlabHost, t: string[]): string {
-  if (t[1] !== "ci") return host._err("Der Simulator kann nur 'glab ci ...'.", "z.B. 'glab ci status' oder 'glab ci list'.");
+  if (!t[1]) return host._err("glab: Unterbefehl fehlt.", "z.B. 'glab ci status'.");
+  if (t[1] !== "ci") return notSimulated(host, "'glab " + t[1] + "'.", GLAB_KANN);
   const action = t[2];
-
-  if (action === "status" || action === "view") {
-    const p = host.ci.pipelines[host.ci.pipelines.length - 1];
-    if (!p) return host._err("Keine Pipeline gefunden.", "Eine Pipeline entsteht beim 'git push' – wenn eine .gitlab-ci.yml im Repo liegt.");
-    const icon = (s: string) => (s === "passed" ? "✓" : s === "skipped" ? "–" : "•");
-    const lines = [
-      "Pipeline #" + p.id + "  (Branch " + p.ref + ")   Status: " + (p.status === "passed" ? "passed ✅" : p.status),
-    ];
-    for (const s of p.stages) lines.push("  " + icon(s.status) + " " + pad(s.name, 8) + s.status);
-    if (p.stages.some(s => s.name === "deploy" && s.status === "passed")) {
-      lines.push("🚀 Die deploy-Stage hat den Dienst automatisch ausgerollt – schau mit 'kubectl get pods'.");
-    } else if (p.ref !== "main") {
-      lines.push("ℹ️  deploy übersprungen ('only: main') – auf diesem Branch wird gebaut & getestet, aber nicht deployt.");
-    }
-    return lines.join("\n");
-  }
-
-  if (action === "list") {
-    if (!host.ci.pipelines.length) return "Keine Pipelines. (Entstehen beim 'git push' mit .gitlab-ci.yml im Repo.)";
-    return table(["ID", "BRANCH", "STATUS"],
-      host.ci.pipelines.slice().reverse().map(p => ["#" + p.id, p.ref, p.status]));
-  }
-
-  return host._err("glab ci: unbekannte Aktion '" + (action || "") + "'", "z.B. 'glab ci status' oder 'glab ci list'.");
+  if (!action) return host._err("glab ci: Aktion fehlt.", "z.B. 'glab ci status' oder 'glab ci list'.");
+  const entry = subEntry(GLAB_CI_ACTIONS, action);
+  if (!entry) return notSimulated(host, "'glab ci " + action + "'.", GLAB_KANN);
+  return checkFlags(host, specOfSub("glab ci " + action, entry), t, 3) ?? entry.run(host);
 }
