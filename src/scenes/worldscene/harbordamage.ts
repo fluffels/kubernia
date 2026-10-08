@@ -5,7 +5,7 @@
  * Hier extrahiert, damit Unit-Tests die pure Logik ohne Phaser-Import prüfen können.
  */
 
-import { CONTROL_PLANE_NODE, workerNodeName } from "../../sim/util";
+import { CONTROL_PLANE_NODE, workerNodeName } from "../../sim/nodes";
 /** Heile Textur-Key → Trümmer-Variante bei CP-Ausfall. */
 export const HARBOR_DAMAGE: Record<string, string> = {
   lighthouse:   "lighthouse_ruined",
