@@ -1,12 +1,12 @@
 // Namespace-Bewusstsein von `kubectl get`: welcher Namespace wurde verlangt, und liegt dort
 // überhaupt etwas? Die Sim kennt nur `default` (plus kube-system für Pods), alles andere ist leer.
 
-import { flagValue } from "../util";
+import { flagValueOf } from "./args";
 import { DEFAULT_NAMESPACE } from "../state";
 
-/** Der per `-n x`, `--namespace x` oder `-n=x` verlangte Namespace, sonst null. */
+/** Der per `-n x`, `-nx`, `--namespace x` oder `-n=x` verlangte Namespace, sonst null. */
 export function requestedNamespace(t: string[]): string | null {
-  return flagValue(t, "-n") || flagValue(t, "--namespace");
+  return flagValueOf(t, ["-n", "--namespace"]) || null;
 }
 
 /** `-A` / `--all-namespaces` gesetzt? */

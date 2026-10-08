@@ -10,8 +10,9 @@
  */
 import { DEFAULT_NAMESPACE, type PodSecurityLevel, type RbacSubject, type SecurityContext } from "../state";
 import { roleMatchesRef } from "../rbac";
-import { flagValue } from "../util";
 import type { KubectlHost } from "./host";
+import { flagValueOf, notSimulated, positionals } from "./args";
+import { resolveKind } from "./resources";
 
 /* ---- RBAC-Auswertung (#126) ---- */
 
@@ -51,13 +52,13 @@ function canI(host: KubectlHost, verb: string, resource: string, subjectKey: str
 
 
 export function kubectlAuth(host: KubectlHost, t: string[], _raw: string) {
-  if (t[2] !== "can-i") return host._err("Der Simulator kann nur 'kubectl auth can-i <verb> <resource> [--as=…]'.");
-  // can-i <verb> <resource>; --as ignorieren wir bei der Positions-Suche.
-  const positional = t.slice(3).filter(tok => !tok.startsWith("-"));
+  if (t[2] !== "can-i") return notSimulated(host, "'kubectl auth " + (t[2] ?? "") + "'.", ["kubectl auth can-i <verb> <resource> [--as=…]"]);
+  // can-i <verb> <resource>; den Wert von --as überspringt die Positions-Suche.
+  const positional = positionals("auth", t, 3);
   const verb = positional[0];
   const resource = positional[1];
   if (!verb || !resource) return host._err("kubectl auth can-i: Es fehlt verb oder resource.", "Muster: kubectl auth can-i get pods --as=system:serviceaccount:default:deploy-bot");
-  const subjectKey = asKey(flagValue(t, "--as"));
+  const subjectKey = asKey(flagValueOf(t, ["--as"]));
   return canI(host, verb, resource, subjectKey) ? "yes" : "no";
 }
 
@@ -67,11 +68,12 @@ export function kubectlAuth(host: KubectlHost, t: string[], _raw: string) {
  *  `kubectl label namespace default pod-security.kubernetes.io/enforce=restricted`. */
 
 export function kubectlLabel(host: KubectlHost, t: string[], raw: string) {
-  if (t[2] !== "namespace" && t[2] !== "ns") return host._err("Der Simulator kann nur 'kubectl label namespace <ns> pod-security.kubernetes.io/enforce=<stufe>'.");
-  const nsName = t[3];
-  if (!nsName || nsName.startsWith("-")) return host._err("kubectl label namespace: Welcher Namespace?", "Muster: kubectl label namespace default pod-security.kubernetes.io/enforce=restricted");
+  const LABEL_USAGE = "kubectl label namespaces <ns> pod-security.kubernetes.io/enforce=<stufe>";
+  if (resolveKind(t[2] ?? "")?.plural !== "namespaces") return notSimulated(host, "'kubectl label " + (t[2] ?? "") + "'.", [LABEL_USAGE]);
+  const nsName = positionals("label", t, 3)[0];
+  if (!nsName) return host._err("kubectl label namespace: Welcher Namespace?", "Muster: kubectl label namespace default pod-security.kubernetes.io/enforce=restricted");
   const m = raw.match(/pod-security\.kubernetes\.io\/enforce=(\S+)/);
-  if (!m) return host._err("Der Simulator versteht hier nur das Label 'pod-security.kubernetes.io/enforce=<stufe>'.", "z.B. '…/enforce=baseline' oder '…/enforce=restricted'.");
+  if (!m) return notSimulated(host, "dieses Label.", [LABEL_USAGE], "Nur 'pod-security.kubernetes.io/enforce=<stufe>' wertet der Simulator aus (z.B. baseline oder restricted).");
   const level = m[1];
   if (level !== "privileged" && level !== "baseline" && level !== "restricted") {
     return host._err('error: unbekannte Pod-Security-Stufe "' + level + '"', "Erlaubt sind: privileged, baseline, restricted.");

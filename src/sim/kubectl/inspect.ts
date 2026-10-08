@@ -1,6 +1,6 @@
 /* ===== Kubernia – kubectl Inspect (sim/kubectl/inspect.ts) =====
- * Die lesenden kubectl-Befehle (kein Cluster-Zustand wird verändert): `get` (alle
- * Ressourcen-Listen), `describe` (Detail zu Pod/Ingress/NetworkPolicy/Role/SA),
+ * Die lesenden kubectl-Befehle (kein Cluster-Zustand wird verändert): die `get`-Renderer
+ * (alle Ressourcen-Listen; der `get`-Dispatcher liegt in ./get.ts), `describe` (Detail zu Pod/Ingress/NetworkPolicy/Role/SA),
  * `top` (Pod-/Node-Metriken, #109) und `logs` (#…). Die eigentliche
  * Observability-Mechanik (podMetrics/nodeMetrics/alerts) liegt in ../observability.ts –
  * `top`/`get` lesen sie nur über das Host-Interface.
@@ -9,7 +9,7 @@
  * KubectlHost-Interface (./host). Aufgerufen aus dem kubectl-Dispatch (../kubectl.ts).
  *
  * Aufbau gegen God-Functions (#542, Burn-down #502): `get` und `describe` sind dünne
- * Dispatcher über eine **Renderer-Registry** (Ressourcen-Alias → Renderer-Funktion).
+ * Dispatcher über eine **Renderer-Registry** (Ressourcentyp aus ./resources → Renderer-Funktion).
  * Jeder Ressourcentyp ist ein eigener kleiner Renderer; ein 10× größerer Ressourcensatz
  * wächst als 10× Einträge, ohne dass Dispatcher-Komplexität/-Länge mitwächst.
  */
@@ -17,7 +17,9 @@ import { table } from "../util";
 import { readyBackends, endpointPort, podAddress } from "../endpoints";
 import type { KubectlHost } from "./host";
 import { DEFAULT_NAMESPACE, SECURITY_CONTEXT_KEYS, isExternalNameService, type Deployment, type PodInstance, type PodStatus } from "../state";
-import { requestedNamespace, allNamespaces, foreignNamespace } from "./namespace";
+import { requestedNamespace, allNamespaces } from "./namespace";
+import { RESOURCE_KINDS, resolveKind, qualified, type ResourceKind } from "./resources";
+import { positionals, typeAndName, notSimulated, unknownResourceType } from "./args";
 import { sameRbac } from "../rbac";
 import { clusterPods, findClusterPod, type ClusterPod } from "../pods";
 import { statefulPodClaimName, statefulPodNode } from "../workload";
@@ -27,19 +29,21 @@ import { clusterPodStatus } from "../podstatus";
 // Cluster). Nur die kubectl-Ausgaben (get/describe ingress) brauchen sie, darum hier.
 const INGRESS_ADDRESS = "203.0.113.10";
 
-// Gemeinsame Signatur aller Renderer: sie bekommen den Host + die zerlegte Befehlszeile
-// und geben die fertige Terminal-Ausgabe zurück.
-type Renderer = (host: KubectlHost, t: string[]) => string;
+// ===== kubectl get – ein Renderer je Ressourcentyp =====
+// Die Renderer liefern eine `GetTable` (Kopf, Zeilen, Objektnamen); Leermeldung, Namensfilter,
+// Namespace-Wache und Mehrfach-Typen macht der Dispatcher in ./get.ts über die Registry (./resources).
 
-/** Baut aus einer Liste `{ aliases, render }` die Alias→Renderer-Lookup-Map.
- *  So bleibt der Dispatcher O(1) und alias-agnostisch, egal wie viele Typen dazukommen. */
-function aliasMap<E extends { aliases: string[] }>(entries: E[]): Map<string, E> {
-  const m = new Map<string, E>();
-  for (const e of entries) for (const a of e.aliases) m.set(a, e);
-  return m;
+/** Was ein get-Renderer liefert. `names[i]` ist der Objektname von `rows[i]` (für `get <typ> <name>`). */
+export interface GetTable { header: string[]; rows: string[][]; names: string[] }
+
+/** Tabelle aus Kopf + Zeilen; die Objektnamen kommen aus der NAME-Spalte, außer sie werden mitgegeben
+ *  (StorageClass zeigt `name (default)` in der Zelle). */
+function tableOf(header: string[], rows: string[][], names?: string[]): GetTable {
+  const col = header.indexOf("NAME");
+  return { header, rows, names: names ?? rows.map(r => r[col]) };
 }
 
-// ===== kubectl get – ein Renderer je Ressourcentyp =====
+type GetRenderer = (host: KubectlHost, t: string[]) => GetTable;
 
 /** Eine Pod-Zeile (NAME READY STATUS RESTARTS AGE) – die EINE Quelle für `get pods` mit und
  *  ohne `-A`. Der Status kommt aus `clusterPodStatus` (Deployment: `deploymentPodStatus` plus die
@@ -50,11 +54,13 @@ function podRow(host: KubectlHost, c: ClusterPod): string[] {
 }
 
 /** `kubectl get`-Leermeldung für einen Namespace (echtes kubectl: „No resources found in <ns> namespace."). */
-function noResourcesIn(ns: string = DEFAULT_NAMESPACE): string {
+export function noResourcesIn(ns: string = DEFAULT_NAMESPACE): string {
   return "No resources found in " + ns + " namespace.";
 }
 
-function getPods(host: KubectlHost, t: string[]): string {
+const POD_HEADER = ["NAME", "READY", "STATUS", "RESTARTS", "AGE"];
+
+function getPods(host: KubectlHost, t: string[]): GetTable {
   const ns = requestedNamespace(t);
   const allNs = allNamespaces(t);
   host._reschedulePending();
@@ -65,26 +71,22 @@ function getPods(host: KubectlHost, t: string[]): string {
       ["kube-apiserver-ahoi-control", "1/1", "Running", "0", "3d"],
       ["kube-scheduler-ahoi-control", "1/1", "Running", "0", "3d"],
     ];
-    const rows = allNs
-      ? sysPods.map(r => ["kube-system"].concat(r)).concat(clusterPods(host).map(c => [DEFAULT_NAMESPACE, ...podRow(host, c)]))
-      : sysPods;
-    return table(allNs ? ["NAMESPACE", "NAME", "READY", "STATUS", "RESTARTS", "AGE"] : ["NAME", "READY", "STATUS", "RESTARTS", "AGE"], rows);
+    if (!allNs) return tableOf(POD_HEADER, sysPods);
+    const rows = sysPods.map(r => ["kube-system"].concat(r)).concat(clusterPods(host).map(c => [DEFAULT_NAMESPACE, ...podRow(host, c)]));
+    return tableOf(["NAMESPACE", ...POD_HEADER], rows);
   }
-  const rows = clusterPods(host).map(c => podRow(host, c));
-  if (rows.length === 0) return noResourcesIn();
-  return table(["NAME", "READY", "STATUS", "RESTARTS", "AGE"], rows);
+  return tableOf(POD_HEADER, clusterPods(host).map(c => podRow(host, c)));
 }
 
-function getDeployments(host: KubectlHost): string {
-  if (host.deployments.length === 0) return noResourcesIn();
-  return table(["NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE"],
+function getDeployments(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE"],
     host.deployments.map(d => {
       const ready = host._podReady(d) ? d.pods.length : 0;
       return [d.name, ready + "/" + d.replicas, String(d.replicas), String(ready), host._age(d.created)];
     }));
 }
 
-function getServices(host: KubectlHost): string {
+function getServices(host: KubectlHost): GetTable {
   const rows = [["kubernetes", "ClusterIP", "10.96.0.1", "<none>", "443/TCP", "3d"]];
   for (const s of host.services) {
     // ExternalName-Service (#337): keine ClusterIP, dafür der externe DNS-Name in
@@ -98,20 +100,14 @@ function getServices(host: KubectlHost): string {
       host._age(s.created || 0),
     ]);
   }
-  return table(["NAME", "TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE"], rows);
+  return tableOf(["NAME", "TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE"], rows);
 }
 
-function getEndpoints(host: KubectlHost, t: string[]): string {
+function getEndpoints(host: KubectlHost): GetTable {
   // Endpoints = die IPs der BEREITEN Pods hinter einem Service. Genau hier
   // wird die Readiness-Probe sichtbar: ein nicht-bereiter Pod fehlt in der
   // Liste, der Service leitet keinen Verkehr an ihn weiter.
-  const wantName = t[3] && !t[3].startsWith("-") ? t[3] : null;
-  const svcs = wantName ? host.services.filter(s => s.name === wantName) : host.services.slice();
-  if (wantName && svcs.length === 0) {
-    return host._err('Error from server (NotFound): endpoints "' + wantName + '" not found', "Service-Namen siehst du mit 'kubectl get services'.");
-  }
-  if (svcs.length === 0) return noResourcesIn();
-  return table(["NAME", "ENDPOINTS", "AGE"], svcs.map(s => {
+  return tableOf(["NAME", "ENDPOINTS", "AGE"], host.services.map(s => {
     // Endpoints zeigen den Ziel-Port (targetPort), an den weitergeleitet wird – fehlt er,
     // gilt der Service-Port (#164). So bleibt der Port-Abgleich auch hier sichtbar.
     // Die Pods kommen aus der gemeinsamen Service→Pod-Auflösung (#1318).
@@ -120,180 +116,145 @@ function getEndpoints(host: KubectlHost, t: string[]): string {
   }));
 }
 
-function getNodes(host: KubectlHost): string {
+function getNodes(host: KubectlHost): GetTable {
   // Echtes `kubectl get nodes` zeigt unter Disk-Druck weiter STATUS "Ready" (DiskPressure ist eine
   // eigene Condition, sichtbar erst per describe). Im Lernspiel hängen wir sie sichtbar an die
   // STATUS-Spalte, damit der Druck im Überblick auffällt – Detail dann in `describe node` (#240).
-  return table(["NAME", "STATUS", "ROLES", "AGE", "VERSION"],
+  return tableOf(["NAME", "STATUS", "ROLES", "AGE", "VERSION"],
     host.nodes.map(n => [n.name, n.diskPressure ? n.status + ",DiskPressure" : n.status, n.roles, "3d", n.version]));
 }
 
-function getSecrets(host: KubectlHost): string {
-  if (host.secrets.length === 0) return noResourcesIn();
-  return table(["NAME", "TYPE", "DATA", "AGE"],
+function getSecrets(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "TYPE", "DATA", "AGE"],
     host.secrets.map(s => [s.name, s.type || "Opaque", String(s.keys.length), host._age(s.created || 0)]));
 }
 
-function getConfigMaps(host: KubectlHost): string {
-  if (host.configMaps.length === 0) return noResourcesIn();
-  return table(["NAME", "DATA", "AGE"],
+function getConfigMaps(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "DATA", "AGE"],
     host.configMaps.map(c => [c.name, String(c.keys.length), host._age(c.created || 0)]));
 }
 
-function getIngress(host: KubectlHost): string {
-  if (host.ingresses.length === 0) return noResourcesIn();
-  return table(["NAME", "CLASS", "HOSTS", "ADDRESS", "PORTS", "AGE"],
+function getIngress(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "CLASS", "HOSTS", "ADDRESS", "PORTS", "AGE"],
     host.ingresses.map(i => [i.name, i.className, i.host, INGRESS_ADDRESS, i.tls ? "80, 443" : "80", host._age(i.created || 0)]));
 }
 
-function getNetworkPolicies(host: KubectlHost): string {
-  if (host.networkPolicies.length === 0) return noResourcesIn();
-  return table(["NAME", "POD-SELECTOR", "AGE"],
+function getNetworkPolicies(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "POD-SELECTOR", "AGE"],
     host.networkPolicies.map(n => [n.name, n.podSelector ? "app=" + n.podSelector : "<none>", host._age(n.created || 0)]));
 }
 
-function getServiceMonitors(host: KubectlHost): string {
-  if (host.serviceMonitors.length === 0) return noResourcesIn();
-  return table(["NAME", "SELECTOR", "ENDPOINT", "AGE"],
+function getServiceMonitors(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "SELECTOR", "ENDPOINT", "AGE"],
     host.serviceMonitors.map(s => [s.name, "app=" + s.selector, s.port + " @ " + s.interval, host._age(s.created || 0)]));
 }
 
-function getPrometheusRules(host: KubectlHost): string {
-  if (host.prometheusRules.length === 0) return noResourcesIn();
-  return table(["NAME", "ALERT", "SEVERITY", "AGE"],
+function getPrometheusRules(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "ALERT", "SEVERITY", "AGE"],
     host.prometheusRules.map(r => [r.name, r.alert, r.severity, host._age(r.created || 0)]));
 }
 
-function getGrafanaDatasources(host: KubectlHost): string {
-  if (host.grafanaDatasources.length === 0) return noResourcesIn();
-  return table(["NAME", "TYPE", "AGE"],
+function getGrafanaDatasources(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "TYPE", "AGE"],
     host.grafanaDatasources.map(d => [d.name, d.dsType, host._age(d.created || 0)]));
 }
 
-function getGrafanaDashboards(host: KubectlHost): string {
-  if (host.grafanaDashboards.length === 0) return noResourcesIn();
-  return table(["NAME", "TITLE", "PANELS", "AGE"],
+function getGrafanaDashboards(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "TITLE", "PANELS", "AGE"],
     host.grafanaDashboards.map(d => [d.name, d.title, String(d.panels), host._age(d.created || 0)]));
 }
 
-function getStatefulSets(host: KubectlHost): string {
-  if (host.statefulSets.length === 0) return noResourcesIn();
-  return table(["NAME", "READY", "AGE"],
+function getStatefulSets(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "READY", "AGE"],
     host.statefulSets.map(s => [s.name, s.pods.length + "/" + s.replicas, host._age(s.created)]));
 }
 
-function getPvcs(host: KubectlHost): string {
-  if (host.pvcs.length === 0) return noResourcesIn();
-  return table(["NAME", "STATUS", "VOLUME", "CAPACITY", "ACCESS MODES", "STORAGECLASS", "AGE"],
+function getPvcs(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "STATUS", "VOLUME", "CAPACITY", "ACCESS MODES", "STORAGECLASS", "AGE"],
     host.pvcs.map(p => [p.name, p.status, p.volume || "", p.status === "Bound" ? p.capacity : "", p.accessModes, p.storageClass || "", host._age(p.created)]));
 }
 
-function getPvs(host: KubectlHost): string {
-  if (host.pvs.length === 0) return "No resources found.";
-  return table(["NAME", "CAPACITY", "ACCESS MODES", "RECLAIM POLICY", "STATUS", "CLAIM", "STORAGECLASS", "AGE"],
+function getPvs(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "CAPACITY", "ACCESS MODES", "RECLAIM POLICY", "STATUS", "CLAIM", "STORAGECLASS", "AGE"],
     host.pvs.map(p => [p.name, p.capacity, p.accessModes, p.reclaimPolicy, p.status, p.claim || "", p.storageClass || "", host._age(p.created)]));
 }
 
-function getStorageClasses(host: KubectlHost): string {
-  if (host.storageClasses.length === 0) return "No resources found.";
-  return table(["NAME", "PROVISIONER", "RECLAIMPOLICY", "AGE"],
-    host.storageClasses.map(s => [s.name + (s.isDefault ? " (default)" : ""), s.provisioner, s.reclaimPolicy, host._age(s.created)]));
+function getStorageClasses(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "PROVISIONER", "RECLAIMPOLICY", "AGE"],
+    host.storageClasses.map(s => [s.name + (s.isDefault ? " (default)" : ""), s.provisioner, s.reclaimPolicy, host._age(s.created)]),
+    host.storageClasses.map(s => s.name));
 }
 
-function getVolumeSnapshots(host: KubectlHost): string {
-  if (host.volumeSnapshots.length === 0) return noResourcesIn();
-  return table(["NAME", "READYTOUSE", "SOURCEPVC", "RESTORESIZE", "AGE"],
+function getVolumeSnapshots(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "READYTOUSE", "SOURCEPVC", "RESTORESIZE", "AGE"],
     host.volumeSnapshots.map(v => [v.name, String(v.readyToUse), v.sourcePvc, v.restoreSize, host._age(v.created)]));
 }
 
-function getServiceAccounts(host: KubectlHost): string {
-  return table(["NAME", "SECRETS", "AGE"],
+function getServiceAccounts(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "SECRETS", "AGE"],
     host.serviceAccounts.map(s => [s.name, "0", host._age(s.created)]));
 }
 
-function getRoles(host: KubectlHost): string {
-  const rs = host.roles.filter(r => !r.cluster);
-  if (rs.length === 0) return noResourcesIn();
-  return table(["NAME", "AGE"], rs.map(r => [r.name, host._age(r.created)]));
+function getRoles(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "AGE"], host.roles.filter(r => !r.cluster).map(r => [r.name, host._age(r.created)]));
 }
 
-function getClusterRoles(host: KubectlHost): string {
-  const rs = host.roles.filter(r => r.cluster);
-  if (rs.length === 0) return "No resources found.";
-  return table(["NAME", "AGE"], rs.map(r => [r.name, host._age(r.created)]));
+function getClusterRoles(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "AGE"], host.roles.filter(r => r.cluster).map(r => [r.name, host._age(r.created)]));
 }
 
-function getRoleBindings(host: KubectlHost): string {
-  const bs = host.roleBindings.filter(b => !b.cluster);
-  if (bs.length === 0) return noResourcesIn();
-  return table(["NAME", "ROLE", "AGE"], bs.map(b => [b.name, b.roleRef.kind + "/" + b.roleRef.name, host._age(b.created)]));
+function getRoleBindings(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "ROLE", "AGE"], host.roleBindings.filter(b => !b.cluster).map(b => [b.name, b.roleRef.kind + "/" + b.roleRef.name, host._age(b.created)]));
 }
 
-function getClusterRoleBindings(host: KubectlHost): string {
-  const bs = host.roleBindings.filter(b => b.cluster);
-  if (bs.length === 0) return "No resources found.";
-  return table(["NAME", "ROLE", "AGE"], bs.map(b => [b.name, b.roleRef.kind + "/" + b.roleRef.name, host._age(b.created)]));
+function getClusterRoleBindings(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "ROLE", "AGE"], host.roleBindings.filter(b => b.cluster).map(b => [b.name, b.roleRef.kind + "/" + b.roleRef.name, host._age(b.created)]));
 }
 
-function getAlerts(host: KubectlHost): string {
-  const active = host.alerts();
-  if (active.length === 0) return "No alerts firing.";
-  return table(["NAME", "SEVERITY", "STATE", "SUMMARY"],
-    active.map(a => [a.name, a.severity, a.state, a.summary]));
+function getAlerts(host: KubectlHost): GetTable {
+  return tableOf(["NAME", "SEVERITY", "STATE", "SUMMARY"], host.alerts().map(a => [a.name, a.severity, a.state, a.summary]));
 }
 
-/** `namespaced` = Spalte NAMESPACED von `kubectl api-resources`; `extraNamespaces`: weitere
- *  Namespaces, in denen die Ressource etwas zeigt (Pods in kube-system). */
-interface GetEntry { aliases: string[]; namespaced: boolean; extraNamespaces?: readonly string[]; render: Renderer }
+/** Der Renderer je Ressourcentyp (Schlüssel = Plural aus ./resources); `extraNamespaces`: weitere
+ *  Namespaces, in denen die Ressource etwas zeigt (Pods in kube-system). Typen ohne Eintrag
+ *  (`namespaces`) kennt die Registry, aber der Simulator kann sie nicht auflisten. */
+interface GetEntry { extraNamespaces?: readonly string[]; render: GetRenderer }
 
-const GET_RENDERERS: GetEntry[] = [
-  { aliases: ["pods", "pod", "po"], namespaced: true, extraNamespaces: ["kube-system"], render: getPods },
-  { aliases: ["deployments", "deployment", "deploy"], namespaced: true, render: getDeployments },
-  { aliases: ["services", "service", "svc"], namespaced: true, render: getServices },
-  { aliases: ["endpoints", "endpoint", "ep"], namespaced: true, render: getEndpoints },
-  { aliases: ["nodes", "node", "no"], namespaced: false, render: getNodes },
-  { aliases: ["secrets", "secret"], namespaced: true, render: getSecrets },
-  { aliases: ["configmaps", "configmap", "cm"], namespaced: true, render: getConfigMaps },
-  { aliases: ["ingress", "ingresses", "ing"], namespaced: true, render: getIngress },
-  { aliases: ["networkpolicies", "networkpolicy", "netpol", "netpols"], namespaced: true, render: getNetworkPolicies },
-  { aliases: ["servicemonitors", "servicemonitor", "smon"], namespaced: true, render: getServiceMonitors },
-  { aliases: ["prometheusrules", "prometheusrule", "promrule", "promrules"], namespaced: true, render: getPrometheusRules },
-  { aliases: ["grafanadatasources", "grafanadatasource", "grafanadatasrc"], namespaced: true, render: getGrafanaDatasources },
-  { aliases: ["grafanadashboards", "grafanadashboard", "grafanadash"], namespaced: true, render: getGrafanaDashboards },
-  { aliases: ["statefulsets", "statefulset", "sts"], namespaced: true, render: getStatefulSets },
-  { aliases: ["persistentvolumeclaims", "persistentvolumeclaim", "pvc"], namespaced: true, render: getPvcs },
-  { aliases: ["persistentvolumes", "persistentvolume", "pv"], namespaced: false, render: getPvs },
-  { aliases: ["storageclasses", "storageclass", "sc"], namespaced: false, render: getStorageClasses },
-  { aliases: ["volumesnapshots", "volumesnapshot", "vs"], namespaced: true, render: getVolumeSnapshots },
-  { aliases: ["serviceaccounts", "serviceaccount", "sa"], namespaced: true, render: getServiceAccounts },
-  { aliases: ["roles", "role"], namespaced: true, render: getRoles },
-  { aliases: ["clusterroles", "clusterrole"], namespaced: false, render: getClusterRoles },
-  { aliases: ["rolebindings", "rolebinding", "rb"], namespaced: true, render: getRoleBindings },
-  { aliases: ["clusterrolebindings", "clusterrolebinding", "crb"], namespaced: false, render: getClusterRoleBindings },
-  { aliases: ["alerts", "alert"], namespaced: false, render: getAlerts },
-];
-const GET_BY_ALIAS = aliasMap(GET_RENDERERS);
+export const GET_RENDERERS: ReadonlyMap<string, GetEntry> = new Map<string, GetEntry>([
+  ["pods", { extraNamespaces: ["kube-system"], render: getPods }],
+  ["deployments", { render: getDeployments }],
+  ["services", { render: getServices }],
+  ["endpoints", { render: getEndpoints }],
+  ["nodes", { render: getNodes }],
+  ["secrets", { render: getSecrets }],
+  ["configmaps", { render: getConfigMaps }],
+  ["ingresses", { render: getIngress }],
+  ["networkpolicies", { render: getNetworkPolicies }],
+  ["servicemonitors", { render: getServiceMonitors }],
+  ["prometheusrules", { render: getPrometheusRules }],
+  ["grafanadatasources", { render: getGrafanaDatasources }],
+  ["grafanadashboards", { render: getGrafanaDashboards }],
+  ["statefulsets", { render: getStatefulSets }],
+  ["persistentvolumeclaims", { render: getPvcs }],
+  ["persistentvolumes", { render: getPvs }],
+  ["storageclasses", { render: getStorageClasses }],
+  ["volumesnapshots", { render: getVolumeSnapshots }],
+  ["serviceaccounts", { render: getServiceAccounts }],
+  ["roles", { render: getRoles }],
+  ["clusterroles", { render: getClusterRoles }],
+  ["rolebindings", { render: getRoleBindings }],
+  ["clusterrolebindings", { render: getClusterRoleBindings }],
+  ["alerts", { render: getAlerts }],
+]);
 
-/** Geltungsbereich je `get`-Ressource (ohne Renderer) – für den Fitness-Test. */
-export const GET_RESOURCE_SCOPES = GET_RENDERERS.map(e => ({ aliases: e.aliases, namespaced: e.namespaced, extraNamespaces: e.extraNamespaces }));
-
-export function kubectlGet(host: KubectlHost, t: string[]) {
-  const what = (t[2] || "").toLowerCase();
-  host._recheckReadiness();
-  const e = GET_BY_ALIAS.get(what);
-  if (e) {
-    const fremd = foreignNamespace(t, e.namespaced, e.extraNamespaces);   // zentrale Wache: dort liegt nichts
-    return fremd ? noResourcesIn(fremd) : e.render(host, t);
-  }
-  if (!what) return host._err("kubectl get: Was möchtest du sehen?", "z.B. 'kubectl get pods' oder 'kubectl get nodes'");
-  return host._err('error: the server doesn\'t have a resource type "' + what + '"', "Gemeint war vielleicht: pods, deployments, services, endpoints, ingress, networkpolicies, servicemonitors, prometheusrules, grafanadashboards, alerts, secrets, configmaps, serviceaccounts, roles, rolebindings, pvc, pv, storageclasses, volumesnapshots oder nodes?");
-}
-
+/** Geltungsbereich je `get`-Ressource (Registry + Renderer) – für den Fitness-Test. */
+export const GET_RESOURCE_SCOPES = RESOURCE_KINDS.filter(k => GET_RENDERERS.has(k.plural)).map(k => ({
+  aliases: [k.plural, k.singular, ...k.short], namespaced: k.namespaced, extraNamespaces: GET_RENDERERS.get(k.plural)?.extraNamespaces,
+}));
 
 // ===== kubectl describe – ein Renderer je Ressourcentyp =====
 
-function describeNode(host: KubectlHost, t: string[]): string {
-  const name = t[3];
+function describeNode(host: KubectlHost, name: string | undefined): string {
   if (!name) return host._err("kubectl describe node: Welcher Knoten?", "Die Namen siehst du mit 'kubectl get nodes'.");
   const node = host.nodes.find(n => n.name === name);
   if (!node) return host._err('Error from server (NotFound): nodes "' + name + '" not found', "Tipp: Namen aus 'kubectl get nodes' kopieren.");
@@ -329,8 +290,7 @@ function describeNode(host: KubectlHost, t: string[]): string {
   return lines.join("\n");
 }
 
-function describeIngress(host: KubectlHost, t: string[]): string {
-  const name = t[3];
+function describeIngress(host: KubectlHost, name: string | undefined): string {
   if (!name) return host._err("kubectl describe ingress: Welcher Ingress?", "Die Namen siehst du mit 'kubectl get ingress'.");
   const ing = host.ingresses.find(i => i.name === name);
   if (!ing) return host._err('Error from server (NotFound): ingresses.networking.k8s.io "' + name + '" not found', "Tipp: Namen aus 'kubectl get ingress' kopieren.");
@@ -354,8 +314,7 @@ function describeIngress(host: KubectlHost, t: string[]): string {
   ].join("\n");
 }
 
-function describeNetworkPolicy(host: KubectlHost, t: string[]): string {
-  const name = t[3];
+function describeNetworkPolicy(host: KubectlHost, name: string | undefined): string {
   if (!name) return host._err("kubectl describe networkpolicy: Welche NetworkPolicy?", "Die Namen siehst du mit 'kubectl get networkpolicies'.");
   const np = host.networkPolicies.find(n => n.name === name);
   if (!np) return host._err('Error from server (NotFound): networkpolicies.networking.k8s.io "' + name + '" not found', "Tipp: Namen aus 'kubectl get networkpolicies' kopieren.");
@@ -371,13 +330,11 @@ function describeNetworkPolicy(host: KubectlHost, t: string[]): string {
   ].join("\n");
 }
 
-function describeRole(host: KubectlHost, t: string[]): string {
-  const what = (t[2] || "").toLowerCase();
-  const name = t[3];
-  const cluster = what === "clusterrole";
-  if (!name) return host._err("kubectl describe " + what + ": Welche Rolle?", "Die Namen siehst du mit 'kubectl get " + what + "s'.");
+function describeRole(host: KubectlHost, name: string | undefined, kind: ResourceKind): string {
+  const cluster = kind.plural === "clusterroles";
+  if (!name) return host._err("kubectl describe " + kind.singular + ": Welche Rolle?", "Die Namen siehst du mit 'kubectl get " + kind.plural + "'.");
   const role = host.roles.find(r => sameRbac(r, { name, cluster }));
-  if (!role) return host._err('Error from server (NotFound): ' + what + 's.rbac.authorization.k8s.io "' + name + '" not found', "Tipp: Namen aus 'kubectl get " + what + "s' kopieren.");
+  if (!role) return host._err('Error from server (NotFound): ' + qualified(kind, "plural") + ' "' + name + '" not found', "Tipp: Namen aus 'kubectl get " + kind.plural + "' kopieren.");
   const lines = [
     "Name:         " + role.name,
     ...(cluster ? [] : ["Namespace:    " + DEFAULT_NAMESPACE]),
@@ -389,8 +346,7 @@ function describeRole(host: KubectlHost, t: string[]): string {
   return lines.join("\n");
 }
 
-function describeServiceAccount(host: KubectlHost, t: string[]): string {
-  const name = t[3];
+function describeServiceAccount(host: KubectlHost, name: string | undefined): string {
   if (!name) return host._err("kubectl describe serviceaccount: Welche SA?", "Die Namen siehst du mit 'kubectl get sa'.");
   const acc = host.serviceAccounts.find(s => s.name === name);
   if (!acc) return host._err('Error from server (NotFound): serviceaccounts "' + name + '" not found', "Tipp: Namen aus 'kubectl get sa' kopieren.");
@@ -579,8 +535,7 @@ function describeStatefulPod(host: KubectlHost, c: StatefulPod): string {
   ].join("\n");
 }
 
-function describePod(host: KubectlHost, t: string[]): string {
-  const name = t[3];
+function describePod(host: KubectlHost, name: string | undefined): string {
   if (!name) return host._err("kubectl describe pod: Welcher Pod?", "Die Namen siehst du mit 'kubectl get pods'.");
   const c = findClusterPod(host, name);
   if (!c) return host._err('Error from server (NotFound): pods "' + name + '" not found', "Tipp: Pod-Namen kannst du aus 'kubectl get pods' kopieren.");
@@ -590,31 +545,38 @@ function describePod(host: KubectlHost, t: string[]): string {
   }
 }
 
-const DESCRIBE_RENDERERS: { aliases: string[]; render: Renderer }[] = [
-  { aliases: ["node", "nodes", "no"], render: describeNode },
-  { aliases: ["ingress", "ingresses", "ing"], render: describeIngress },
-  { aliases: ["networkpolicy", "networkpolicies", "netpol", "netpols"], render: describeNetworkPolicy },
-  { aliases: ["role", "clusterrole"], render: describeRole },
-  { aliases: ["serviceaccount", "serviceaccounts", "sa"], render: describeServiceAccount },
-  { aliases: ["pod", "pods"], render: describePod },
-];
-const DESCRIBE_BY_ALIAS = aliasMap(DESCRIBE_RENDERERS);
+/** Ein describe-Renderer bekommt den Objektnamen (oder undefined) und den aufgelösten Typ. */
+type DescribeRenderer = (host: KubectlHost, name: string | undefined, kind: ResourceKind) => string;
+
+/** Die beschreibbaren Typen (Schlüssel = Plural aus ./resources). */
+const DESCRIBE_RENDERERS: ReadonlyMap<string, DescribeRenderer> = new Map<string, DescribeRenderer>([
+  ["nodes", describeNode],
+  ["ingresses", describeIngress],
+  ["networkpolicies", describeNetworkPolicy],
+  ["roles", describeRole],
+  ["clusterroles", describeRole],
+  ["serviceaccounts", describeServiceAccount],
+  ["pods", describePod],
+]);
 
 export function kubectlDescribe(host: KubectlHost, t: string[]) {
-  const what = (t[2] || "").toLowerCase();
-  const render = DESCRIBE_BY_ALIAS.get(what)?.render;
-  if (render) return render(host, t);
-  return host._err("Der Simulator kann nur 'kubectl describe pod|node|ingress|networkpolicy|role|clusterrole|serviceaccount <name>'.");
+  const { typ, name } = typeAndName(positionals("describe", t));
+  if (!typ) return host._err("error: You must specify the type of resource to describe.", "z.B. 'kubectl describe pod <name>'.");
+  const kind = resolveKind(typ);
+  if (!kind) return unknownResourceType(host, typ);
+  const render = DESCRIBE_RENDERERS.get(kind.plural);
+  if (!render) return notSimulated(host, "'kubectl describe " + kind.plural + "'.", ["kubectl describe pod|node|ingress|networkpolicy|role|clusterrole|serviceaccount <name>"]);
+  return render(host, name, kind);
 }
 
 
 export function kubectlTop(host: KubectlHost, t: string[]) {
-  const what = (t[2] || "").toLowerCase();
-  const name = t[3] && !t[3].startsWith("-") ? t[3] : null;
+  const [what = "", name = null] = positionals("top", t);
+  const kind = resolveKind(what)?.plural;
   host._reschedulePending();
   host._recheckReadiness();
 
-  if (["pods", "pod", "po"].includes(what)) {
+  if (kind === "pods") {
     let rows = host.podMetrics();
     if (name) {
       rows = rows.filter(r => r.name === name);
@@ -629,7 +591,7 @@ export function kubectlTop(host: KubectlHost, t: string[]) {
     return table(["NAME", "CPU(cores)", "MEMORY(bytes)"], rows.map(r => [r.name, r.cpuMilli + "m", r.memMi + "Mi"]));
   }
 
-  if (["nodes", "node", "no"].includes(what)) {
+  if (kind === "nodes") {
     let nodes = host.nodeMetrics();
     if (name) {
       nodes = nodes.filter(nd => nd.name === name);
@@ -640,7 +602,8 @@ export function kubectlTop(host: KubectlHost, t: string[]) {
   }
 
   if (!what) return host._err("kubectl top: pods oder nodes?", "z.B. 'kubectl top pods' oder 'kubectl top nodes'");
-  return host._err("kubectl top kennt nur 'pods' und 'nodes'.", "z.B. 'kubectl top nodes'");
+  // Echtes `kubectl top` kennt nur pod und node als Unterbefehle, alles andere ist ein unbekannter Befehl.
+  return host._err('error: unknown command "' + what + '" for "kubectl top"', "z.B. 'kubectl top nodes'");
 }
 
 
@@ -716,14 +679,39 @@ function logSource(host: KubectlHost, c: ClusterPod, name: string): LogSource {
   }
 }
 
+/** Das Log-Ziel eines Tokens: `<pod>`, `pod/<pod>` oder `deploy|deployment|deployments/<name>` (der erste
+ *  Pod des Deployments; bei mehreren sagt `note`, welcher es ist – wie das echte „Found N pods, using …“).
+ *  Ein String als `error` ist die fertige Fehlerausgabe. */
+function logsTarget(host: KubectlHost, tok: string): { name: string; note?: string } | { error: string } {
+  const slash = tok.indexOf("/");
+  if (slash < 0) return { name: tok };
+  const typ = tok.slice(0, slash);
+  const name = tok.slice(slash + 1);
+  const kind = resolveKind(typ);
+  if (!kind) return { error: unknownResourceType(host, typ) };
+  if (kind.plural === "pods") return { name };
+  if (kind.plural !== "deployments") return { error: notSimulated(host, "'kubectl logs " + kind.plural + "/<name>'.", ["kubectl logs <pod>", "kubectl logs pod/<pod>", "kubectl logs deploy/<deployment>"]) };
+  if (!host.deployments.some(d => d.name === name)) return { error: host._err('Error from server (NotFound): ' + qualified(kind, "plural") + ' "' + name + '" not found', "Welche Deployments es gibt: 'kubectl get deployments'") };
+  const pods = clusterPods(host).filter(c => c.owner === "Deployment" && c.dep.name === name);
+  if (pods.length === 0) return { error: host._err("error: timed out waiting for the condition", "Das Deployment '" + name + "' hat keine Pods (Replicas 0?). Prüfe 'kubectl get pods'.") };
+  const first = pods[0].pod.name;
+  return { name: first, ...(pods.length > 1 ? { note: "Found " + pods.length + " pods, using pod/" + first } : {}) };
+}
+
 export function kubectlLogs(host: KubectlHost, t: string[]) {
   // Flags können vor oder hinter dem Pod-Namen stehen: -f/--follow (live folgen),
   // -p/--previous (Logs des abgestürzten Vorgänger-Containers).
-  const args = t.slice(2);
-  const follow = args.includes("-f") || args.includes("--follow");
-  const previous = args.includes("-p") || args.includes("--previous");
-  const name = args.find(a => !a.startsWith("-"));
-  if (!name) return host._err("kubectl logs: Welcher Pod?", "Pod-Namen siehst du mit 'kubectl get pods'.");
+  const follow = t.includes("-f") || t.includes("--follow");
+  const previous = t.includes("-p") || t.includes("--previous");
+  const tok = positionals("logs", t)[0];
+  if (!tok) return host._err("kubectl logs: Welcher Pod?", "Pod-Namen siehst du mit 'kubectl get pods'.");
+  const target = logsTarget(host, tok);
+  if ("error" in target) return target.error;
+  const out = logsOf(host, target.name, previous, follow);
+  return target.note ? target.note + "\n" + out : out;
+}
+
+function logsOf(host: KubectlHost, name: string, previous: boolean, follow: boolean): string {
   const c = findClusterPod(host, name);
   if (!c) return host._err('Error from server (NotFound): pods "' + name + '" not found');
   const src = logSource(host, c, name);

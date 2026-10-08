@@ -10,7 +10,7 @@ import type { Scenario } from "../../src/sim/state";
 // `alerts` ist eine Pseudoressource (eingebaute Regeln), also cluster-weit.
 const API_RESOURCES: Record<string, boolean> = {
   pods: true, deployments: true, services: true, endpoints: true, nodes: false,
-  secrets: true, configmaps: true, ingress: true, networkpolicies: true,
+  secrets: true, configmaps: true, ingresses: true, networkpolicies: true,
   servicemonitors: true, prometheusrules: true, grafanadatasources: true, grafanadashboards: true,
   statefulsets: true, persistentvolumeclaims: true, persistentvolumes: false, storageclasses: false,
   volumesnapshots: true, serviceaccounts: true, roles: true, clusterroles: false,
@@ -20,7 +20,7 @@ const API_RESOURCES: Record<string, boolean> = {
 /** Name eines Objekts je Ressource (erster Alias), das im Szenario in `default` liegt. */
 const NAMEN: Record<string, string> = {
   pods: "zz-web", deployments: "zz-web", services: "zz-svc", endpoints: "zz-svc",
-  secrets: "zz-secret", configmaps: "zz-cm", ingress: "zz-ing", networkpolicies: "zz-np",
+  secrets: "zz-secret", configmaps: "zz-cm", ingresses: "zz-ing", networkpolicies: "zz-np",
   servicemonitors: "zz-smon", prometheusrules: "zz-rule", grafanadatasources: "zz-ds",
   grafanadashboards: "zz-dash", statefulsets: "zz-db", persistentvolumeclaims: "zz-pvc",
   persistentvolumes: "zz-pv", storageclasses: "zz-sc", volumesnapshots: "zz-snap",
@@ -98,7 +98,7 @@ describe("namespaced Ressourcen: fremder Namespace → Leermeldung", () => {
 describe("Negativtests je Ressourcenfamilie: kein Objekt aus default im fremden Namespace", () => {
   const FAMILIEN: Record<string, string[]> = {
     Workloads: ["deployments", "statefulsets", "pods"],
-    Netz: ["services", "endpoints", "ingress", "networkpolicies"],
+    Netz: ["services", "endpoints", "ingresses", "networkpolicies"],
     Konfiguration: ["secrets", "configmaps"],
     Observability: ["servicemonitors", "prometheusrules", "grafanadatasources", "grafanadashboards"],
     Speicher: ["persistentvolumeclaims", "volumesnapshots"],
@@ -150,7 +150,9 @@ describe("Grenzfälle", () => {
     const r = new KQSim(voll()).exec("kubectl get unfug -n anderer-ns");
     expect(r.output).toContain("doesn't have a resource type");
   });
-  test("benannter get im fremden Namespace → Leermeldung", () => {
-    expect(new KQSim(voll()).exec("kubectl get endpoints zz-svc -n anderer-ns").output).toBe(LEER("anderer-ns"));
+  test("benannter get im fremden Namespace → NotFound wie echtes kubectl (#1444)", () => {
+    const r = new KQSim(voll()).exec("kubectl get endpoints zz-svc -n anderer-ns");
+    expect(r.error).toBe(true);
+    expect(r.output).toContain('Error from server (NotFound): endpoints "zz-svc" not found');
   });
 });

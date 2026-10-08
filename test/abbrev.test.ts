@@ -10,6 +10,9 @@
  */
 import { test, expect, describe } from "vitest";
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { resolveKind } from "../src/sim/kubectl/resources";
 import { ABBREVS, findAbbrevByShort, lockedAbbrevInInput, abbrevLockHint, flagNearMiss, flagNearMissHint, longFormsInInput } from "../src/content/abbrev";
 import { KQContent } from "../src/content";
 import { Sim as KQSim } from "../src/sim";
@@ -190,7 +193,7 @@ describe("lockedAbbrevInInput – Regressionsfixes #308", () => {
  * keine Profi-Abkürzung) gilt jetzt einheitlich für ALLE Ressourcen, Singular wie
  * Plural. Konkret entschieden:
  *  - networkpolicy (Singular-Vollform) und ingresses (Plural-Vollform) sind NICHT
- *    mehr gegated – nur die echten Kontraktionen netpol/netpols bzw. ing bleiben es.
+ *    mehr gegated – nur die echten Kontraktionen netpol bzw. ing bleiben es.
  *  - Bewusste Ausnahme: secret bleibt gegated, weil `secrets` keinen offiziellen
  *    kubectl-Kurznamen hat und die Singularform als verdienbarer Stellvertreter
  *    dient (siehe Kommentar in abbrev.ts; mögliches Folgeticket). */
@@ -208,7 +211,6 @@ describe("lockedAbbrevInInput – #430: kanonische Voll-Formen (Singular/Plural)
 
   test("die echten Kontraktionen bleiben gegated (Red-Green-Gegenprobe)", () => {
     expect(lockedAbbrevInInput("kubectl get netpol", NICHTS_FREI)?.pair.id).toBe("kubectl-netpol");
-    expect(lockedAbbrevInInput("kubectl get netpols", NICHTS_FREI)?.pair.id).toBe("kubectl-netpol");
     expect(lockedAbbrevInInput("kubectl get ing", NICHTS_FREI)?.pair.id).toBe("kubectl-ingress");
   });
 
@@ -624,5 +626,31 @@ describe("Langform-zuerst durchgängig (Abschluss #379/#380/#381)", () => {
       if (hit) fehler.push(`${it.label}: „${it.solution}" → gesperrte Kurzform „${hit.used}" (${hit.pair.id})`);
     }
     assert.deepEqual(fehler, [], "Frischer Spieler kann diese Lösungen NICHT tippen (Kurzform gesperrt):\n" + fehler.join("\n"));
+  });
+});
+
+/* #1444: Content-Wache – jede Ressourcen-Alternative in einer kubectl-accept-Regex
+ * (`kubectl\s+get|describe|delete\s+(a|b|c)`) muss ein echter Ressourcentyp der Sim sein
+ * (Plural, Singular oder echter Kurzname). So kann kein erfundenes Kürzel (`netpols`, `rb`,
+ * `grafanadash`) mehr in den Content zurückkommen, das die Sim ablehnt. Rohtext-Scan über
+ * `src/content/**` (JSON mit doppeltem, TS mit einfachem Backslash vor dem `s`). */
+describe("#1444: accept-Regexe nennen nur echte kubectl-Ressourcentypen", () => {
+  function dateien(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap(e =>
+      e.isDirectory() ? dateien(join(dir, e.name)) : /\.(json|ts)$/.test(e.name) ? [join(dir, e.name)] : []);
+  }
+  const RE = /kubectl\\{1,2}s\+(?:get|describe|delete)\\{1,2}s\+\(([a-z|-]+)\)/g;
+  const treffer = dateien("src/content").flatMap(f => [...readFileSync(f, "utf8").matchAll(RE)].map(m => ({ f, alt: m[1].split("|") })));
+
+  test("der Scan findet Regexe (Wächter ist nicht leer gelaufen)", () => {
+    expect(treffer.length).toBeGreaterThan(5);
+  });
+  test("jeder kubectl-Kurzname im Abkürzungskatalog löst über die Registry auf", () => {
+    const fehler = ABBREVS.filter(a => a.id.startsWith("kubectl-") && a.kind === "alias").flatMap(a => a.short.filter(s => resolveKind(s) === null).map(s => `${a.id}: „${s}“`));
+    assert.deepEqual(fehler, []);
+  });
+  test("jede Alternative löst über die Registry auf", () => {
+    const fehler = treffer.flatMap(t => t.alt.filter(a => resolveKind(a) === null).map(a => `${t.f}: „${a}“`));
+    assert.deepEqual(fehler, [], "Diese Kürzel kennt die Sim nicht (kein echter kubectl-Kurzname):\n" + fehler.join("\n"));
   });
 });
