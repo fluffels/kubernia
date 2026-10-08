@@ -77,11 +77,26 @@ export function positionals(sub: KubectlSub, t: string[], from = 2): string[] {
   return positionalArgs(specFor(sub), t, from);
 }
 
-/** Typ und Name aus den Argumenten: `pod <name>` oder die Slash-Form `pod/<name>`. */
-export function typeAndName(pos: string[]): { typ: string | undefined; name: string | undefined } {
-  const slash = pos[0]?.indexOf("/") ?? -1;
-  if (slash > 0) return { typ: pos[0].slice(0, slash), name: pos[0].slice(slash + 1) || undefined };
-  return { typ: pos[0], name: pos[1] };
+/** Die zwei Fehlertexte der Slash-Form `typ/name` – wörtlich wie `splitResourceTypeName` in kubectl. */
+const SLASH_MULTI_ERROR = "error: arguments in resource/name form may not have more than one slash";
+export const SLASH_SINGLE_ERROR = "error: arguments in resource/name form must have a single resource and name";
+
+/** Die EINE Zerlegung der Slash-Form `typ/name`: `null` ohne Slash (kein Slash-Token), sonst Typ und Name
+ *  oder der kubectl-Fehlertext (mehr als ein Slash; leerer Typ oder Name; mehrere Typen mit Komma). */
+export function slashRef(tok: string): { typ: string; name: string } | { error: string } | null {
+  if (!tok.includes("/")) return null;
+  const seg = tok.split("/");
+  if (seg.length !== 2) return { error: SLASH_MULTI_ERROR };
+  const [typ, name] = seg;
+  return !typ || !name || typ.includes(",") ? { error: SLASH_SINGLE_ERROR } : { typ, name };
+}
+
+/** Typ und Name aus den Argumenten: `pod <name>` oder die Slash-Form `pod/<name>`; eine kaputte Slash-Form
+ *  liefert `error` (Text wie kubectl). */
+export function typeAndName(pos: string[]): { typ?: string; name?: string; error?: string } {
+  const ref = pos[0] === undefined ? null : slashRef(pos[0]);
+  if (!ref) return { typ: pos[0], name: pos[1] };
+  return "error" in ref ? { error: ref.error } : ref;
 }
 
 /** `error: the server doesn't have a resource type "x"` samt Hinweis auf die Typen, die die Sim kennt. */

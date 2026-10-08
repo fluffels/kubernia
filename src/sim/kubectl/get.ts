@@ -15,13 +15,12 @@ import type { KubectlHost } from "./host";
 import { GET_RENDERERS, noResourcesIn, type GetTable } from "./inspect";
 import { allNamespaces, foreignNamespace, requestedNamespace } from "./namespace";
 import { allKinds, qualified, resolveKind, type ResourceKind } from "./resources";
-import { notSimulated, positionals, unknownResourceType } from "./args";
+import { notSimulated, positionals, slashRef, SLASH_SINGLE_ERROR, unknownResourceType } from "./args";
 
 /** Was verlangt wurde: ein Typ mit den (möglicherweise leeren) gewünschten Namen. */
 interface Request { kind: ResourceKind; names: string[] }
 type Parsed = { requests: Request[] } | { error: string };
 
-const SLASH_FORM_ERROR = "error: arguments in resource/name form must have a single resource and name";
 const NO_TYPE_NEEDED_ERROR = "error: there is no need to specify a resource type as a separate argument when passing arguments in resource/name form (e.g. 'kubectl get resource/<resource_name>' instead of 'kubectl get resource resource/<resource_name>'";
 
 /** Die Typen einer Komma-Liste (`pods,svc`, `all`), ohne Doppelte, in Eingabereihenfolge. */
@@ -41,12 +40,12 @@ function expandTypes(host: KubectlHost, list: string): ResourceKind[] | string {
 function parsePairs(host: KubectlHost, pos: string[]): Parsed {
   const requests: Request[] = [];
   for (const tok of pos) {
-    const parts = tok.split("/");
-    if (parts.length !== 2 || !parts[0] || !parts[1]) return { error: host._err(SLASH_FORM_ERROR) };
-    const kind = resolveKind(parts[0]);
-    if (!kind) return { error: unknownResourceType(host, parts[0]) };
+    const ref = slashRef(tok) ?? { error: SLASH_SINGLE_ERROR }; // ein Token ohne Slash mitten in der Slash-Form
+    if ("error" in ref) return { error: host._err(ref.error) };
+    const kind = resolveKind(ref.typ);
+    if (!kind) return { error: unknownResourceType(host, ref.typ) };
     const existing = requests.find(r => r.kind === kind);
-    if (existing) existing.names.push(parts[1]); else requests.push({ kind, names: [parts[1]] });
+    if (existing) existing.names.push(ref.name); else requests.push({ kind, names: [ref.name] });
   }
   return { requests };
 }

@@ -7,9 +7,10 @@
  *
  * Blattmodul der kubectl-Mappe (pure Domäne): importiert nichts. */
 
-export interface ResourceKind {
+/** Die Felder eines Ressourcentyps; `P` ist der Plural als Literal (so leitet sich `ResourcePlural` aus der Registry ab). */
+interface KindOf<P extends string> {
   /** Kleingeschriebener Plural, zugleich der Schlüssel des Typs. */
-  readonly plural: string;
+  readonly plural: P;
   readonly singular: string;
   /** Nur echte kubectl-Kurznamen. Kein Kurzname → leer (z.B. `secrets`, `roles`). */
   readonly short: readonly string[];
@@ -23,7 +24,7 @@ export interface ResourceKind {
   readonly pseudo?: boolean;
 }
 
-function kind(plural: string, singular: string, short: readonly string[], group: string, namespaced: boolean, inAll = false, pseudo = false): ResourceKind {
+function kind<P extends string>(plural: P, singular: string, short: readonly string[], group: string, namespaced: boolean, inAll = false, pseudo = false): KindOf<P> {
   return { plural, singular, short, group, namespaced, inAll, ...(pseudo ? { pseudo } : {}) };
 }
 
@@ -33,7 +34,7 @@ const MONITORING = "monitoring.coreos.com";
 const GRAFANA = "grafana.integreatly.org";
 
 /** Reihenfolge = Reihenfolge der Blöcke bei `get all` und bei `get a,b`. */
-export const RESOURCE_KINDS: readonly ResourceKind[] = [
+const KINDS = [
   kind("pods", "pod", ["po"], "", true, true),
   kind("services", "service", ["svc"], "", true, true),
   kind("deployments", "deployment", ["deploy"], "apps", true, true),
@@ -61,6 +62,12 @@ export const RESOURCE_KINDS: readonly ResourceKind[] = [
   kind("clusterrolebindings", "clusterrolebinding", [], RBAC, false),
   kind("alerts", "alert", [], "", false, false, true),
 ];
+
+/** Die Plurale der Registry als Literal-Union: Tabellen, die nach Typ schlüsseln (Renderer, Löschen), tippen
+ *  ihre Schlüssel damit – ein Tippfehler im Plural ist ein Typfehler statt eines stillen Nichttreffers. */
+export type ResourcePlural = typeof KINDS[number]["plural"];
+export type ResourceKind = KindOf<ResourcePlural>;
+export const RESOURCE_KINDS: readonly ResourceKind[] = KINDS;
 
 const BY_TOKEN: ReadonlyMap<string, ResourceKind> = (() => {
   const m = new Map<string, ResourceKind>();
