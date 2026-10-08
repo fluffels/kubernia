@@ -9,19 +9,11 @@
  *
  * Blattmodul der kubectl-Mappe (pure Domäne): importiert den Host-Typ, die Registry (./resources), ./output, die Mengen-Parser aus ../util und das Blattmodul ../cliargs. */
 import type { KubectlHost } from "./host";
-import { flag, checkedFlag, notSimulated, parseCall, subEntry, type ArgSpec, type Call, type FlagSpec } from "../cliargs";
+import { flag, checkedFlag, notSimulated, subEntry, type Call } from "../cliargs";
 export { notSimulated } from "../cliargs";
 import { parseMem, parseCpuMilli } from "../util";
 import { RESOURCE_KINDS, resolveKind } from "./resources";
 import { OUTPUT_FLAG } from "./output";
-
-/** Die Unterbefehle, die die Sim implementiert (Schlüssel der Dispatch-Tabelle in ../kubectl.ts). */
-export const KUBECTL_SUBS = ["get", "describe", "create", "scale", "expose", "delete", "apply", "logs", "top", "set", "rollout", "auth", "label"] as const;
-export type KubectlSub = typeof KUBECTL_SUBS[number];
-
-export function isKubectlSub(sub: string): sub is KubectlSub {
-  return (KUBECTL_SUBS as readonly string[]).includes(sub);
-}
 
 /** Top-Level-Befehle von echtem kubectl: sie gibt es, die Sim kann sie nur (noch) nicht. */
 export const REAL_KUBECTL_COMMANDS: readonly string[] = [
@@ -32,31 +24,20 @@ export const REAL_KUBECTL_COMMANDS: readonly string[] = [
   "version", "help",
 ];
 
-const NS = flag(true, "-n", "--namespace");
-const FILE = flag(true, "-f", "--filename");
+export const NS = flag(true, "-n", "--namespace");
+export const FILE = flag(true, "-f", "--filename");
 
-/** Die ausgewerteten Flags je Unterbefehl. */
-const KNOWN_FLAGS: Readonly<Record<KubectlSub, readonly FlagSpec[]>> = {
-  get: [NS, flag(false, "-A", "--all-namespaces"), OUTPUT_FLAG],
-  describe: [NS],
-  top: [NS],
-  rollout: [NS, checkedFlag(checkRevision, "--to-revision")],
-  label: [NS, flag(false, "--overwrite")],
-  auth: [NS, flag(true, "--as")],
-  logs: [NS, flag(false, "-f", "--follow"), flag(false, "-p", "--previous")],
-  delete: [NS, FILE],
-  apply: [NS, FILE],
-  scale: [NS, flag(true, "--replicas")],
-  expose: [NS, checkedFlag(checkPort, "--port"), flag(true, "--target-port"), flag(true, "--type")],
-  create: [
-    NS, checkedFlag(checkLiteral, "--from-literal"), checkedFlag(checkServiceAccount, "--serviceaccount"),
-    ...["--image", "--replicas", "--cert", "--key", "--verb", "--resource", "--role", "--clusterrole", "--user"].map(n => flag(true, n)),
-  ],
-  set: [NS, checkedFlag(checkFromRef, "--from"), checkedFlag(checkResourceList, "--limits"), checkedFlag(checkResourceList, "--requests")],
-};
+/* Flags mit Wertprüfer (unten): die Tabelle in ../kubectl.ts baut daraus die Flag-Listen je Unterbefehl. */
+export const REVISION_FLAG = checkedFlag(checkRevision, "--to-revision");
+export const PORT_FLAG = checkedFlag(checkPort, "--port");
+export const LITERAL_FLAG = checkedFlag(checkLiteral, "--from-literal");
+export const SERVICEACCOUNT_FLAG = checkedFlag(checkServiceAccount, "--serviceaccount");
+export const FROM_FLAG = checkedFlag(checkFromRef, "--from");
+export const LIMITS_FLAG = checkedFlag(checkResourceList, "--limits");
+export const REQUESTS_FLAG = checkedFlag(checkResourceList, "--requests");
 
 /** Lernhinweise zu den Flags, die Spieler aus dem echten kubectl kennen. */
-const FLAG_HINTS: Readonly<Record<string, string>> = {
+export const FLAG_HINTS: Readonly<Record<string, string>> = {
   "-o": "Ausgabeformate gibt es im Simulator nur bei 'kubectl get' (-o wide); Details zeigt 'kubectl describe'.",
   "--output": "Ausgabeformate gibt es im Simulator nur bei 'kubectl get' (-o wide); Details zeigt 'kubectl describe'.",
   "-w": "Live-Beobachtung gibt es nicht – wiederhole den Befehl einfach.",
@@ -68,17 +49,6 @@ const FLAG_HINTS: Readonly<Record<string, string>> = {
   "--revision": "Einzelne Revisionen zeigt der Simulator nicht; welches Image ein ReplicaSet hat, zeigt 'kubectl get rs -o wide'.",
   "--dry-run": "Trockenläufe gibt es nicht; der Befehl legt sonst wirklich etwas an, darum lehnt der Simulator ihn ab.",
 };
-
-/** Die Prüf-Tabelle eines Unterbefehls (Flags + Lernhinweise) für die gemeinsame Eingabegrenze. */
-const specFor = (sub: KubectlSub): ArgSpec => ({ cmd: "kubectl " + sub, flags: KNOWN_FLAGS[sub], hints: FLAG_HINTS });
-
-/** Der EINE Parse eines Unterbefehls (der Dispatcher in ../kubectl.ts ruft ihn einmal): prüft alle Flags (unbekannte
- *  = nicht simuliert, Wert-Flags ohne Wert, ungültige Bool-Werte, abgelehnte `check`-Werte wie `-o`) und liest dann
- *  `args`/`has`/`value`/`values`/`list` (#1469). Flags liest kubectl nur über den `Call`, nie per `t.includes` oder
- *  Regex auf der Rohzeile. Ein String ist die fertige Fehlerausgabe. */
-export function parseKubectlCall(host: Pick<KubectlHost, "_err">, sub: KubectlSub, t: readonly string[]): Call | string {
-  return parseCall(host, specFor(sub), t, 2);
-}
 
 /** `--replicas`: `null` = nicht angegeben, sonst die ganze Zahl (auch negativ: den Wertebereich prüft der Aufrufer, die
  *  Meldung unterscheidet sich je Befehl). Keine ganze Zahl: der pflag-Fehler wie bei echtem kubectl. */

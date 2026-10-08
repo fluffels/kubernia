@@ -12,7 +12,7 @@
  * (complexity 65) mit substanzieller Inline-Logik je Unterbefehl. Jetzt ist jeder
  * Unterbefehl eine eigene kohäsive Funktion (`dockerPull`/`dockerBuild`/…), und
  * `dockerCommand` ist ein dünner Dispatcher über die Daten-Tabelle
- * `DOCKER_SUBCOMMANDS` (Alias→Handler) – gespiegelt zum helm-/kubectl-Schnitt
+ * `DOCKER` (Alias→Handler) – gespiegelt zum helm-/kubectl-Schnitt
  * (#544/#543). Ein neuer Unterbefehl ist ein neuer Handler + ein Tabellen-Eintrag;
  * der Dispatcher wächst nicht mehr mit dem Befehlssatz (Stardew-Scope).
  *
@@ -21,7 +21,7 @@
  */
 import type { Container } from "./state";
 import { randSuffix, table, suggest } from "./util";
-import { flag, isFlagToken, parseCall, specOfSub, subEntry, type Call, type SubEntry } from "./cliargs";
+import { flag, isFlagToken, dispatchSub, type Dispatch, type Call, type SubEntry } from "./cliargs";
 import { hashStr, hashHex } from "../core/rng";
 
 // Bekannte Container-Images – Grundlage für die „Meintest du …?"-Tippfehlerhilfe.
@@ -228,26 +228,27 @@ function dockerRm(sim: DockerHost, call: Call): string {
 
 const ALL = flag(false, "-a", "--all");
 
-/** Alias → Eintrag (Handler + Flag-Tabelle). Ein neuer Unterbefehl ist ein Eintrag hier + eine Funktion oben –
- *  der Dispatcher (`dockerCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz. */
-const DOCKER_SUBCOMMANDS: Record<string, DockerEntry> = {
-  pull: { run: dockerPull },
-  build: { run: dockerBuild, flags: [flag(true, "-t", "--tag"), flag(true, "-f", "--file")] },
-  tag: { run: dockerTag },
-  images: { run: dockerImages },
-  run: { run: dockerRun, flags: [flag(true, "--name"), flag(false, "-d", "--detach")], hints: RUN_HINTS, stopAtPositional: true },
-  ps: { run: dockerPs, flags: [ALL], hints: { "-q": "Nur die IDs zeigt der Simulator nicht – 'docker ps' zeigt die Tabelle mit ID und Namen." } },
-  stop: { run: dockerStop },
-  rm: { run: dockerRm, hints: { "-f": "Erzwingen gibt es nicht – erst 'docker stop <name>', dann 'docker rm <name>'." } },
+/** Die Dispatch-Tabelle: Alias → Eintrag (Handler + Flag-Tabelle). Ein neuer Unterbefehl ist ein Eintrag hier + eine
+ *  Funktion oben – der Dispatcher (`dockerCommand`) bleibt ein Aufruf und wächst nicht mit dem Befehlssatz. `real` sind
+ *  echte docker-Unterbefehle, die die Sim nicht kann. */
+const DOCKER: Dispatch<DockerEntry> = {
+  cmd: "docker",
+  table: {
+    pull: { run: dockerPull },
+    build: { run: dockerBuild, flags: [flag(true, "-t", "--tag"), flag(true, "-f", "--file")] },
+    tag: { run: dockerTag },
+    images: { run: dockerImages },
+    run: { run: dockerRun, flags: [flag(true, "--name"), flag(false, "-d", "--detach")], hints: RUN_HINTS, stopAtPositional: true },
+    ps: { run: dockerPs, flags: [ALL], hints: { "-q": "Nur die IDs zeigt der Simulator nicht – 'docker ps' zeigt die Tabelle mit ID und Namen." } },
+    stop: { run: dockerStop },
+    rm: { run: dockerRm, hints: { "-f": "Erzwingen gibt es nicht – erst 'docker stop <name>', dann 'docker rm <name>'." } },
+  },
+  real: ["exec", "logs", "inspect", "start", "restart", "kill", "rmi", "push", "login", "logout", "network", "volume", "compose", "cp", "commit", "save", "load", "export", "import", "history", "info", "version", "search", "top", "stats", "pause", "unpause", "rename", "wait", "attach", "events", "diff", "port", "update", "create", "system", "container", "image", "builder", "buildx", "context", "manifest", "plugin", "swarm", "service", "stack", "node", "secret", "config", "trust"],
 };
 
-/** Dünner `docker`-Dispatcher: wählt den Eintrag aus `DOCKER_SUBCOMMANDS`, prüft dessen Flags, ruft den Handler.
+/** `docker`-Dispatcher: der Kopf ist `dispatchSub`, danach läuft der Handler.
  *  pull | build -t <name> . | tag <quelle> <ziel> | images | run | ps [-a] | stop | rm. */
-export function dockerCommand(sim: DockerHost, t: string[], _raw?: string): string {
-  const sub = t[1];
-  if (!sub) return sim._err("docker: Unterbefehl fehlt.", "Probier z.B. 'docker ps'.");
-  const entry = subEntry(DOCKER_SUBCOMMANDS, sub);
-  if (!entry) return sim._err("docker: unbekannter Unterbefehl '" + sub + "'", "Tippe 'help' für alle Befehle.");
-  const call = parseCall(sim, specOfSub("docker " + sub, entry), t, 2);
-  return typeof call === "string" ? call : entry.run(sim, call);
+export function dockerCommand(sim: DockerHost, t: string[]): string {
+  const r = dispatchSub(sim, DOCKER, t, 1);
+  return typeof r === "string" ? r : r.entry.run(sim, r.call);
 }

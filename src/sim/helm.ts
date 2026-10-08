@@ -13,7 +13,7 @@
  * **Aufbau (Schnitt #544, aus #502):** `helmCommand` war ein 277-Zeilen-Dispatcher
  * mit substanzieller Inline-Logik je Unterbefehl. Jetzt ist jeder Unterbefehl eine
  * eigene kohäsive Funktion (`helmRepo`/`helmSearch`/…), und `helmCommand` ist ein
- * dünner Dispatcher über die Daten-Tabelle `HELM_SUBCOMMANDS` (Alias→Handler). Ein
+ * dünner Dispatcher über die Daten-Tabelle `HELM` (Alias→Handler). Ein
  * neuer Unterbefehl ist damit ein neuer Handler + ein Tabellen-Eintrag – der
  * Dispatcher wächst nicht mehr mit dem Befehlssatz (Stardew-Scope).
  *
@@ -22,7 +22,7 @@
  */
 import { DEFAULT_NAMESPACE, type ClusterState, type Deployment, type ServiceRes, type ServiceSpec, type Broken, type HelmRepo } from "./state";
 import { table } from "./util";
-import { flag, notSimulated, parseCall, specOfSub, subEntry, type Call, type SubEntry } from "./cliargs";
+import { flag, notSimulated, dispatchSub, type Dispatch, type Call, type SubEntry } from "./cliargs";
 import { addDeployment, removeDeployment, scaleDeployment } from "./workload";
 
 /** Was die helm-Befehle vom Simulator brauchen (von der `Sim`-Klasse erfüllt).
@@ -387,12 +387,12 @@ function helmDependency(host: HelmHost, c: Call): string {
 const SET = flag(true, "--set");
 const VALUES = flag(true, "--values", "-f");
 
-/** Alias → Eintrag (Handler + Flag-Tabelle). Ein neuer Unterbefehl ist ein Eintrag hier + eine Funktion oben –
- *  der Dispatcher (`helmCommand`) bleibt dünn und wächst nicht mit dem Befehlssatz. */
+/** Die Dispatch-Tabelle: Alias → Eintrag (Handler + Flag-Tabelle). Ein neuer Unterbefehl ist ein Eintrag hier + eine
+ *  Funktion oben – der Dispatcher (`helmCommand`) bleibt ein Aufruf und wächst nicht mit dem Befehlssatz. */
 const LIST: SubEntry<HelmHandler> = { run: helmList, hints: { "-A": "Der Simulator kennt nur einen Namespace – 'helm list' zeigt alle Releases." } };
 const UNINSTALL: SubEntry<HelmHandler> = { run: helmUninstall };
 const DEPENDENCY: SubEntry<HelmHandler> = { run: helmDependency };
-const HELM_SUBCOMMANDS: Record<string, SubEntry<HelmHandler>> = {
+const HELM: Dispatch<SubEntry<HelmHandler>> = { cmd: "helm", table: {
   repo: { run: helmRepo },
   search: { run: helmSearch },
   create: { run: helmCreate },
@@ -409,14 +409,12 @@ const HELM_SUBCOMMANDS: Record<string, SubEntry<HelmHandler>> = {
   status: { run: helmStatus },
   dependency: DEPENDENCY,
   dep: DEPENDENCY,
+},
+  real: ["show", "pull", "push", "get", "history", "test", "verify", "env", "version", "plugin", "registry", "login", "logout", "completion", "help"],
 };
 
-/** Dünner `helm`-Dispatcher: wählt den Eintrag aus `HELM_SUBCOMMANDS`, prüft dessen Flags, ruft den Handler. */
-export function helmCommand(host: HelmHost, t: string[], _raw?: string): string {
-  const sub = t[1];
-  if (!sub) return host._err("helm: Unterbefehl fehlt.", "Probier z.B. 'helm list'.");
-  const entry = subEntry(HELM_SUBCOMMANDS, sub);
-  if (!entry) return host._err("helm: unbekannter Unterbefehl '" + sub + "'", "Tippe 'help' für alle Befehle.");
-  const call = parseCall(host, specOfSub("helm " + sub, entry), t, 2);
-  return typeof call === "string" ? call : entry.run(host, call);
+/** `helm`-Dispatcher: der Kopf ist `dispatchSub`, danach läuft der Handler. */
+export function helmCommand(host: HelmHost, t: string[]): string {
+  const r = dispatchSub(host, HELM, t, 1);
+  return typeof r === "string" ? r : r.entry.run(host, r.call);
 }

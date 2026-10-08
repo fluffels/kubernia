@@ -233,11 +233,11 @@ describe("aws s3 – Eingabetreue", () => {
     const ec2 = sim.exec("aws ec2 describe-instances");
     expect(ec2.error).toBe(true);
     expect(ec2.output).toContain("Nicht simuliert: 'aws ec2'.");
-    expect(ec2.output).toContain("Der Simulator kann: aws s3 mb|rb|ls|cp|rm");
+    expect(ec2.output).toContain("Der Simulator kann: aws s3 mb, rb, ls, cp, rm");
     expect(ec2.output).not.toContain("Meintest du");
     expect(sim.exec("aws s4 ls").output).toContain("Meintest du 'aws s3'?");
     expect(sim.exec("aws").output).toContain("Unterbefehl fehlt");
-    expect(sim.exec("aws --region x s3 ls").output).toContain("das Flag '--region' vor dem Dienst");
+    expect(sim.exec("aws --region x s3 ls").output).toContain("das Flag '--region' vor dem Unterbefehl");
   });
 
   test("rb --force: Bool-Flag statt Regex, vor und hinter dem Bucket, =false hebt es auf", () => {

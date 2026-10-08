@@ -6,12 +6,19 @@
 import { describe, test, expect } from "vitest";
 import { KQSim, freshSim } from "./helpers";
 import { RESOURCE_KINDS, resolveKind, qualified, allKinds, type ResourcePlural } from "../../src/sim/kubectl/resources";
-import { parseKubectlCall, slashRef, type KubectlSub } from "../../src/sim/kubectl/args";
-import type { Call } from "../../src/sim/cliargs";
+import { slashRef } from "../../src/sim/kubectl/args";
+import { KUBECTL } from "../../src/sim/kubectl";
+import { dispatchSub, type Call, type ErrHost } from "../../src/sim/cliargs";
 import { GET_RENDERERS } from "../../src/sim/kubectl/inspect";
 import type { Scenario } from "../../src/sim/state";
 
 const NICHT_SIMULIERT = "Nicht simuliert:";
+
+/** Die Eingabegrenze eines kubectl-Befehls (`t` = alle Tokens samt `kubectl`): `Call` oder die fertige Fehlerausgabe. */
+function parseKubectlCall(host: ErrHost, _sub: string, t: readonly string[]): Call | string {
+  const r = dispatchSub(host, KUBECTL, t, 1);
+  return typeof r === "string" ? r : r.call;
+}
 
 function szenario(): Scenario {
   return {
@@ -466,7 +473,7 @@ describe("args: parseKubectlCall (Positionsargumente, Flag-Werte, Prüfung)", ()
   const host = { _err: (m: string) => m };
   /** Der Call; ein Fehlertext lässt den Test scheitern. */
   const callOf = (...t: string[]): Call => {
-    const r = parseKubectlCall(host, t[0] as KubectlSub, ["kubectl", ...t]);
+    const r = parseKubectlCall(host, t[0], ["kubectl", ...t]);
     if (typeof r === "string") throw new Error(r);
     return r;
   };
