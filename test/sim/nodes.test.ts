@@ -9,9 +9,9 @@
 import { test, beforeEach } from "vitest";
 import assert from "node:assert/strict";
 import { KQSim, freshSim } from "./helpers";
-import { provisionNode, removeNode, isControlPlane, nodeInternalIP, NODE_SYSTEM_INFO, NODE_VERSION } from "../../src/sim/nodes";
+import { provisionNode, removeNode, isControlPlane, nodeInternalIP, nodeSnapshot, workerIndex, workerNodeName, NODE_SYSTEM_INFO, NODE_VERSION } from "../../src/sim/nodes";
 import { readdirSync, readFileSync } from "node:fs";
-import { CONTROL_PLANE_IP } from "../../src/sim/util";
+import { CONTROL_PLANE_IP } from "../../src/sim/nodes";
 import type { ClusterNode } from "../../src/sim/state";
 
 let sim: KQSim;
@@ -191,4 +191,116 @@ test("NODE_SYSTEM_INFO: eingefroren, mit OS, Kernel und Container-Runtime", () =
   assert.match(NODE_SYSTEM_INFO.osImage, /Ubuntu/);
   assert.match(NODE_SYSTEM_INFO.kernelVersion, /^\d+\.\d+\.\d+/);
   assert.match(NODE_SYSTEM_INFO.containerRuntimeVersion, /^containerd:\/\//);
+});
+
+/* ---------- (d) Worker-IPs kollisionsfrei, workerIndex (#1497) ---------- */
+
+const worker = (name: string): ClusterNode => ({ name, status: "Ready", roles: "<none>", version: NODE_VERSION });
+const IP_RE = /^10\.0\.(\d+)\.(\d+)$/;
+
+test("workerIndex: Rundlauf mit workerNodeName, Negativfälle für alles außerhalb der Konvention", () => {
+  for (const n of [1, 2, 9, 10, 240, 241, 30480, 99999]) assert.equal(workerIndex(workerNodeName(n)), n);
+  for (const name of ["ahoi-worker-0", "ahoi-worker-01", "ahoi-worker-x", "ahoi-worker-", "ahoi-worker-1.5", "ahoi-worker--1", "ahoi-worker-1x",
+    "node-1", "worker-1", "ahoi-control", "", "ahoi-worker-99999999999999999999"]) assert.equal(workerIndex(name), undefined, name);
+});
+
+test("nodeInternalIP: alle Konventions-Worker bis zur Kapazität sind eindeutig, im Bereich 10.0.1-127 und nie 10.0.0.x", () => {
+  const gesehen = new Set<string>();
+  for (let i = 1; i <= 30480; i++) {
+    const ip = nodeInternalIP(worker(workerNodeName(i)));
+    const [, c, d] = ip.match(IP_RE)!.map(Number);
+    assert.ok(c >= 1 && c <= 127 && d >= 10 && d <= 249, ip);
+    assert.ok(!gesehen.has(ip), workerNodeName(i) + " kollidiert (" + ip + ")");
+    gesehen.add(ip);
+  }
+  assert.equal(nodeInternalIP(worker(workerNodeName(1))), "10.0.1.10");
+});
+
+test("nodeInternalIP: fremde Namen und Indizes über der Kapazität liegen im getrennten Hash-Bereich 10.0.128-254", () => {
+  const konvention = new Set<string>();
+  for (let i = 1; i <= 30480; i++) konvention.add(nodeInternalIP(worker(workerNodeName(i))));
+  for (const name of ["node-1", "worker", "ahoi-worker-0", "ahoi-worker-01", "ahoi-worker-x", workerNodeName(30481), workerNodeName(1e6)]) {
+    const ip = nodeInternalIP(worker(name));
+    const c = Number(ip.match(IP_RE)![1]);
+    assert.ok(c >= 128 && c <= 254, name + " → " + ip);
+    assert.ok(!konvention.has(ip), name + " kollidiert mit der Konvention");
+    assert.equal(nodeInternalIP(worker(name)), ip, "deterministisch");
+  }
+});
+
+/* ---------- (e) created: Beitritts-Stempel, nicht gespeichert (#1497) ---------- */
+
+const JOIN = (s: KQSim) => "kubeadm join 10.0.0.10:6443 --token " + s.controlPlane.token! + " --discovery-token-ca-cert-hash sha256:deadbeef";
+
+test("created: init, join und terraform apply stempeln den Knoten mit der Uhr; eingebaute Knoten tragen keinen Stempel", () => {
+  const bare = new KQSim({ bareMetal: true });
+  bare.exec("kubeadm init");
+  const cp = bare.nodes.find(isControlPlane)!;
+  assert.equal(cp.created, bare.clock);
+  bare.exec(JOIN(bare));
+  const w = bare.nodes.find(n => n.name === "ahoi-worker-1")!;
+  assert.equal(w.created, bare.clock);
+  assert.ok(w.created! > cp.created!, "der Worker kam später");
+  assert.equal(sim.nodes.every(n => n.created === undefined), true, "Default-Cluster: kein Stempel");
+  sim.mergeScenario({ tfResources: [{ addr: "hafen_server.worker[0]", desc: "neue Server" }] });
+  sim.exec("terraform init");
+  sim.exec("terraform apply");
+  assert.equal(sim.nodes.find(n => n.name === "ahoi-worker-3")!.created, sim.clock);
+  assert.equal(sim.nodes.find(n => n.name === "ahoi-worker-1")!.created, undefined);
+});
+
+test("created: ein erneutes provisionNode stempelt einen vorhandenen Knoten nicht neu", () => {
+  const state = { nodes: [] as ClusterNode[] };
+  provisionNode(state, { name: "ahoi-worker-1", created: 5 });
+  assert.equal(provisionNode(state, { name: "ahoi-worker-1", created: 99 }), undefined);
+  assert.equal(state.nodes[0].created, 5);
+});
+
+test("nodeSnapshot: Kopie ohne created, das Original bleibt unberührt", () => {
+  const n: ClusterNode = { ...worker("ahoi-worker-1"), created: 7, diskPressure: true };
+  const snap = nodeSnapshot(n);
+  assert.equal("created" in snap, false);
+  assert.equal(snap.diskPressure, true, "übrige Felder bleiben");
+  assert.notEqual(snap, n);
+  assert.equal(n.created, 7);
+});
+
+test("snapshot().nodes ohne created; nach dem Laden zählt der Knoten zum Clusteraufbau (3d), nie ein negatives Alter", () => {
+  const bare = new KQSim({ bareMetal: true });
+  bare.exec("kubeadm init");
+  bare.exec(JOIN(bare));
+  for (let i = 0; i < 30; i++) bare.exec("kubectl get pods");
+  const snap = bare.snapshot();
+  assert.ok(snap.nodes!.length >= 2);
+  assert.equal(snap.nodes!.some(n => "created" in n), false);
+  const geladen = new KQSim(snap);
+  const zeile = geladen.exec("kubectl get nodes").output!.split("\n").find(l => l.startsWith("ahoi-worker-1 "))!;
+  assert.match(zeile, /\s3d\s/);
+  assert.doesNotMatch(zeile, /-\d+[smh]/);
+});
+
+/* ---------- (f) describe node: Addresses und System Info (#1497) ---------- */
+
+test("describe node: Addresses (InternalIP, Hostname) und System Info aus NODE_SYSTEM_INFO und der Knoten-Version, in kubectl-Reihenfolge", () => {
+  for (const name of ["ahoi-control", "ahoi-worker-1"]) {
+    const d = sim.exec("kubectl describe node " + name).output!;
+    const knoten = sim.nodes.find(n => n.name === name)!;
+    assert.ok(d.includes("\nAddresses:\n  InternalIP:  " + nodeInternalIP(knoten) + "\n  Hostname:    " + name + "\n"), d);
+    assert.ok(d.includes("\n  Kernel Version:             " + NODE_SYSTEM_INFO.kernelVersion + "\n"));
+    assert.match(d, /^ {2}OS Image: +Ubuntu 22\.04\.4 LTS$/m);
+    assert.match(d, /^ {2}Operating System: +linux$/m);
+    assert.match(d, /^ {2}Architecture: +amd64$/m);
+    assert.match(d, /^ {2}Container Runtime Version: +containerd:\/\/1\.7\.18$/m);
+    assert.ok(d.includes("\n  Kubelet Version:            " + NODE_VERSION + "\n"));
+    assert.ok(d.includes("\n  Kube-Proxy Version:         " + NODE_VERSION));
+    assert.ok(d.indexOf("Conditions:") < d.indexOf("Addresses:") && d.indexOf("Addresses:") < d.indexOf("System Info:"));
+  }
+  assert.match(sim.exec("kubectl describe node ahoi-control").output!, /InternalIP: +10\.0\.0\.10\n/);
+});
+
+test("describe node: System Info steht zwischen Capacity und Allocated resources; Machine ID & Co. fehlen bewusst", () => {
+  sim.nodes[1].ephemeralCapacityMi = 1000;
+  const d = sim.exec("kubectl describe node ahoi-worker-1").output!;
+  assert.ok(d.indexOf("Capacity:") < d.indexOf("System Info:") && d.indexOf("System Info:") < d.indexOf("Allocated resources:"));
+  assert.doesNotMatch(d, /Machine ID|System UUID|Boot ID/);
 });

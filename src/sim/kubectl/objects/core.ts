@@ -22,7 +22,7 @@ import { clusterPods, type ClusterPod } from "../../pods";
 import { clusterPodStatus } from "../../podstatus";
 import { currentReplicaSet } from "../../replicasets";
 import { statefulPodClaimName, snapshotPodTemplate } from "../../workload";
-import { podPlacement } from "../inspect";
+import { podPlacement, VOLUME_MODE } from "../inspect";
 
 /** Ein Objekt-Baustein: alle Objekte einer Art, nach Name (in der Reihenfolge der Tabelle). */
 export type ObjectsOf = (host: KubectlHost) => Map<string, YamlMap>;
@@ -232,7 +232,7 @@ function pvcObject(pvc: PvcRes): YamlMap {
       accessModes: modes.length > 0 ? modes : undefined,
       resources: { requests: { storage: pvc.capacity } },
       storageClassName: pvc.storageClass,
-      volumeMode: "Filesystem",
+      volumeMode: VOLUME_MODE,
       volumeName: pvc.volume !== "" ? pvc.volume : undefined,
     }),
     status: compact({

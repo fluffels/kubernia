@@ -281,6 +281,8 @@ export interface ClusterNode {
   /** Abgeleitet (`_evaluateEviction`): Disk über der Kapazitätsschwelle → der kubelet setzt
    *  die Node-Condition `DiskPressure` und evictet Pods, bis wieder Platz ist (#240). */
   diskPressure?: boolean;
+  /** Sim-Tick des Beitritts (nur init/join/terraform, nie gespeichert); fehlt er, gehört der Knoten zum Clusteraufbau. */
+  created?: number;
 }
 export interface Container {
   name: string;

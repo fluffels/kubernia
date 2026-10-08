@@ -8,13 +8,31 @@
  * und ZWEI verschiedenen Schreibweisen für „ist Control-Plane?". Das reproduziert sich bei
  * Stardew-Scope (mehr Aufbau-Quests/Cluster-Topologien) – darum die EINE Stelle hier.
  *
- * Reine Domäne: hängt nur an den Domänentypen aus ./state, ./util und core/rng – kein Phaser, kein Rückimport
+ * Reine Domäne: hängt nur an den Domänentypen aus ./state und core/rng – kein Phaser, kein Rückimport
  * nach sim.ts (kein Zyklus), vom Architektur-Wächter (#347) als Domäne geschützt und im
  * Node-Test prüfbar.
  */
 import type { ClusterNode } from "./state";
 import { hashStr } from "../core/rng";
-import { CONTROL_PLANE_IP } from "./util";
+
+/** Adresse und Name der Control-Plane: kubeadm-Static-Pods laufen mit hostNetwork und teilen sich ihre IP (#1466);
+ *  dieselbe Adresse nennt `kubeadm join` als API-Server. */
+export const CONTROL_PLANE_IP = "10.0.0.10";
+export const CONTROL_PLANE_NODE = "ahoi-control";
+
+/** Namenskonvention der Worker (`ahoi-worker-<n>`, ab 1): die EINE der Sim (#1483). */
+export const WORKER_PREFIX = "ahoi-worker-";
+export const workerNodeName = (n: number): string => WORKER_PREFIX + n;
+
+/** Umkehrung von `workerNodeName`: der Index n (ab 1) eines Namens der Konvention, sonst `undefined`
+ *  (`ahoi-worker-0`, `-01`, `-x`, `-1.5`, Namen ohne Präfix und unsichere Ganzzahlen zählen nicht). */
+export function workerIndex(name: string): number | undefined {
+  if (!name.startsWith(WORKER_PREFIX)) return undefined;
+  const rest = name.slice(WORKER_PREFIX.length);
+  if (!/^[1-9]\d*$/.test(rest)) return undefined;
+  const n = Number(rest);
+  return Number.isSafeInteger(n) ? n : undefined;
+}
 
 /** Einheitliche Kubernetes-Version aller simulierten Knoten. EINE Wahrheit statt der
  *  inline wiederholten `"v1.30.2"` in kubeadm/terraform/sim-Default (#534). */
@@ -59,15 +77,22 @@ export function removeNode(state: { nodes: ClusterNode[] }, name: string): Clust
   return state.nodes.splice(idx, 1)[0];
 }
 
+/** Kapazität der Konventions-Adressen: 240 Hosts je /24 (.10-.249), dritte Oktette 1-127. */
+const WORKER_IP_SLOTS = 127 * 240;
+
 /** Node-Adresse (`INTERNAL-IP` in `get nodes -o wide`). Die Control-Plane trägt `CONTROL_PLANE_IP` (die Adresse,
- *  die `kubeadm join` nennt); ein Worker bekommt eine aus dem Namen abgeleitete Adresse im Node-Netz 10.0.0.0/16
- *  (drittes Oktett ab 1, nie 10.0.0.10; kein Überlapp mit Pods 10.244/16, Services 10.96/16, 203.0.113/24).
+ *  die `kubeadm join` nennt); `10.0.0.x` bleibt ihr vorbehalten. Ein Worker der Namenskonvention (`workerIndex`)
+ *  bekommt eine aus dem Index abgeleitete Adresse, die bis 30.480 Knoten eindeutig ist (`ahoi-worker-1` → 10.0.1.10);
+ *  jeder andere Name fällt auf einen Hash im getrennten Bereich 10.0.128-254 (Kollisionen dort möglich, aber nie
+ *  mit der Konvention). Kein Überlapp mit Pods 10.244/16, Services 10.96/16, 203.0.113/24.
  *  Abgeleitet statt gespeichert: kein Save-Format, nach `kubeadm reset` und erneutem join dieselbe Adresse.
  *  Grenze: mehrere Control-Planes (HA) teilten sich die CP-Adresse; das modelliert die Sim heute nicht. */
 export function nodeInternalIP(node: ClusterNode): string {
   if (isControlPlane(node)) return CONTROL_PLANE_IP;
+  const i = workerIndex(node.name);
+  if (i !== undefined && i <= WORKER_IP_SLOTS) return "10.0." + (1 + Math.floor((i - 1) / 240)) + "." + (10 + ((i - 1) % 240));
   const h = hashStr(node.name);
-  return "10.0." + (1 + (h % 254)) + "." + (10 + ((h >>> 8) % 240));
+  return "10.0." + (128 + (h % 127)) + "." + (10 + ((h >>> 8) % 240));
 }
 
 /** Systeminfo aller simulierten Knoten (`OS-IMAGE`, `KERNEL-VERSION`, `CONTAINER-RUNTIME`): eine Quelle neben
@@ -76,4 +101,13 @@ export const NODE_SYSTEM_INFO = Object.freeze({
   osImage: "Ubuntu 22.04.4 LTS",
   kernelVersion: "5.15.0-112-generic",
   containerRuntimeVersion: "containerd://1.7.18",
+  operatingSystem: "linux",
+  architecture: "amd64",
 });
+
+/** Knoten für den gespeicherten Schnappschuss: ohne `created` (Sim-Tick des Beitritts gilt nur im laufenden Lauf;
+ *  nach dem Laden zählt der Takt ab 0, ein gespeicherter Stempel ergäbe ein negatives Alter). */
+export function nodeSnapshot(node: ClusterNode): ClusterNode {
+  const { created: _created, ...rest } = node;
+  return rest;
+}
